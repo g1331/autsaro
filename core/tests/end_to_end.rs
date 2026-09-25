@@ -423,3 +423,81 @@ fn unsupported_imported_transport_padding_blocks_diagnostic_generation() {
     assert!(generator::generate(&mut imported, &generated).is_err());
     assert!(!generated.exists());
 }
+
+#[cfg(windows)]
+#[test]
+fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restarts() {
+    let temp = Scratch::new();
+    let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
+    let tx = project.add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(1000), None).unwrap().frames[0].path.clone();
+    let did_signal = project.add_signal(tx, "LiveValue".into(), 0, 32, 7).unwrap().signals[0].path.clone();
+    let rx = project.add_frame("Heartbeat".into(), 0x456, 2, Direction::Rx, None, Some(50)).unwrap()
+        .frames.into_iter().find(|frame| frame.name == "Heartbeat").unwrap().path;
+    project.add_signal(rx.clone(), "HeartbeatValue".into(), 0, 8, 0).unwrap();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, vec![did_signal]).unwrap();
+    project.configure_dtc(0x123456, rx.clone()).unwrap();
+    project.save().unwrap();
+    let source = temp.0.join("Diag/Diag.arxml");
+    let original = fs::read_to_string(&source).unwrap();
+    fs::write(&source, original.replace("</ELEMENTS>", "<!-- retained by owner --></ELEMENTS>")).unwrap();
+    let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
+    let dtc = reopened.view().diagnostic.unwrap().dtc.unwrap();
+    assert_eq!((dtc.code, dtc.monitor_frame_path), (0x123456, rx));
+    let generated = temp.0.join("GeneratedDiag");
+    generator::generate(&mut reopened, &generated).unwrap();
+    let binary = generator::build(&generated).unwrap().binary_path;
+    let without_storage = Command::new(&binary).output().unwrap();
+    assert!(!without_storage.status.success());
+    assert!(String::from_utf8_lossy(&without_storage.stdout).contains("E CONFIG"));
+    let storage = temp.0.join("dtc.nvm");
+    let run = |input: &[u8]| {
+        let mut ecu = Command::new(&binary).arg("--nvm").arg(&storage)
+            .stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
+        ecu.stdin.take().unwrap().write_all(input).unwrap();
+        let result = ecu.wait_with_output().unwrap();
+        assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stdout));
+        String::from_utf8(result.stdout).unwrap()
+    };
+    let first = run(b"R 1110 2 0100\nR 1792 4 03190208\nT 51\nR 1792 4 03190208\nR 1792 4 03190200\n");
+    let first: Vec<_> = first.lines().map(|line| line.trim_end_matches('\r')).collect();
+    assert!(first.contains(&"X 1800 4 0359027F"), "{first:?}");
+    assert_eq!(first.iter().filter(|line| **line == "X 1800 4 0359027F").count(), 2, "{first:?}");
+    assert!(first.contains(&"X 1800 8 0759027F1234562F"), "{first:?}");
+    assert!(storage.is_file());
+
+    let second = run(b"R 1792 4 03190208\nR 1792 5 0414FFFFFF\nR 1110 2 0200\nR 1792 4 03190208\nR 1792 3 021003\nR 1792 5 0414FFFFFF\nR 1792 4 03190208\n");
+    let second: Vec<_> = second.lines().map(|line| line.trim_end_matches('\r')).collect();
+    assert!(second.contains(&"X 1800 8 0759027F1234566D"), "{second:?}");
+    assert!(second.contains(&"X 1800 4 037F147F"), "{second:?}");
+    assert!(second.contains(&"X 1800 8 0759027F1234562C"), "{second:?}");
+    assert!(second.contains(&"X 1800 2 0154"), "{second:?}");
+    assert_eq!(second.iter().filter(|line| **line == "X 1800 4 0359027F").count(), 1, "{second:?}");
+
+    let third = run(b"R 1792 4 03190208\n");
+    assert_eq!(third.lines().map(|line| line.trim_end_matches('\r')).collect::<Vec<_>>(), ["X 1800 4 0359027F"]);
+    let mut slots = fs::read(&storage).unwrap();
+    assert_eq!(slots.len(), 64);
+    let first_sequence = u64::from_le_bytes(slots[4..12].try_into().unwrap());
+    let second_sequence = u64::from_le_bytes(slots[36..44].try_into().unwrap());
+    let newest = if first_sequence > second_sequence { 0 } else { 1 };
+    slots[newest * 32 + 16] ^= 1;
+    fs::write(&storage, slots).unwrap();
+    let torn = Command::new(&binary).arg("--nvm").arg(&storage).output().unwrap();
+    assert!(!torn.status.success());
+    assert!(String::from_utf8_lossy(&torn.stdout).contains("E NVM"));
+    fs::write(&storage, [0u8; 64]).unwrap();
+    let failed = Command::new(&binary).arg("--nvm").arg(&storage).output().unwrap();
+    assert!(!failed.status.success());
+    assert!(String::from_utf8_lossy(&failed.stdout).contains("E NVM"));
+    reopened.clear_dtc().unwrap();
+    reopened.save().unwrap();
+    assert!(fs::read_to_string(&source).unwrap().contains("<!-- retained by owner -->"));
+    let mut without_dtc = Workspace::open(vec![source], archive()).unwrap();
+    let diagnostic = without_dtc.view().diagnostic.unwrap();
+    assert!(diagnostic.dtc.is_none());
+    assert_eq!(diagnostic.did, 0x1234);
+    let simple = temp.0.join("GeneratedWithoutDtc");
+    generator::generate(&mut without_dtc, &simple).unwrap();
+    generator::build(&simple).unwrap();
+    assert!(host::run_diagnostic(&simple).unwrap().passed);
+}

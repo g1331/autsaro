@@ -1,4 +1,5 @@
 #include "Dcm.h"
+#include "Dem.h"
 #include "PduR.h"
 #include "Rte.h"
 
@@ -107,6 +108,52 @@ EcuStatus Dcm_RxIndication(const uint8_t *request, size_t length, uint64_t now_m
             response[6u + 4u * i] = (uint8_t)value;
         }
         return PduR_DcmTransmit(response, 3u + 4u * active_config->did_signal_count, now_ms);
+    case 0x19u:
+        if (active_config->dtc == NULL) {
+            return NegativeResponse(0x19u, 0x11u, now_ms);
+        }
+        if (length < 2u) {
+            return NegativeResponse(0x19u, 0x13u, now_ms);
+        }
+        if (request[1] != 0x02u) {
+            return NegativeResponse(0x19u, 0x12u, now_ms);
+        }
+        if (length != 3u) {
+            return NegativeResponse(0x19u, 0x13u, now_ms);
+        }
+        response[0] = 0x59u;
+        response[1] = 0x02u;
+        response[2] = 0x7fu;
+        {
+            uint32_t code;
+            uint8_t status;
+            if (Dem_FilterDtc(request[2], &code, &status) != 0u) {
+                response[3] = (uint8_t)(code >> 16u);
+                response[4] = (uint8_t)(code >> 8u);
+                response[5] = (uint8_t)code;
+                response[6] = status;
+                return PduR_DcmTransmit(response, 7u, now_ms);
+            }
+        }
+        return PduR_DcmTransmit(response, 3u, now_ms);
+    case 0x14u:
+        if (active_config->dtc == NULL) {
+            return NegativeResponse(0x14u, 0x11u, now_ms);
+        }
+        if (length != 4u) {
+            return NegativeResponse(0x14u, 0x13u, now_ms);
+        }
+        if (active_session != 0x03u) {
+            return NegativeResponse(0x14u, 0x7fu, now_ms);
+        }
+        if (request[1] != 0xffu || request[2] != 0xffu || request[3] != 0xffu) {
+            return NegativeResponse(0x14u, 0x31u, now_ms);
+        }
+        if (Dem_ClearAll() != ECU_OK) {
+            return NegativeResponse(0x14u, 0x72u, now_ms);
+        }
+        response[0] = 0x54u;
+        return PduR_DcmTransmit(response, 1u, now_ms);
     default:
         return NegativeResponse(request[0], 0x11u, now_ms);
     }

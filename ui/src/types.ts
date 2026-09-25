@@ -25,6 +25,12 @@ export type Signal = {
   initialValue: number;
 };
 
+export type DtcView = {
+  path: string;
+  code: number;
+  monitorFramePath: string;
+};
+
 export type DiagnosticView = {
   path: string;
   requestId: number;
@@ -34,6 +40,7 @@ export type DiagnosticView = {
   nCrMs: number;
   did: number;
   signalPaths: string[];
+  dtc: DtcView | null;
 };
 
 export type WorkspaceView = {

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { ArrowRight, Boxes, Cable, CircleAlert, CircleCheck, FileCode2, FileInput, FolderOpen, FolderPlus, Hammer, HardDrive, ListChecks, MonitorPlay, Plus, Save, Waypoints } from 'lucide-react';
-import type { BuildResult, DiagnosticView, Frame, GenerateResult, Issue, Signal, VirtualResult, WorkspaceView } from './types';
+import type { BuildResult, DiagnosticView, DtcView, Frame, GenerateResult, Issue, Signal, VirtualResult, WorkspaceView } from './types';
 
 type Stage = 'save' | 'validate' | 'generate' | 'build' | 'virtual';
 type StageState = 'pending' | 'running' | 'done' | 'failed' | 'stale';
@@ -15,6 +15,7 @@ type SignalChanges = Pick<Signal, 'name' | 'startBit' | 'length' | 'initialValue
 type Draft = { kind: 'frame'; path: string; fields: FrameFields } | { kind: 'signal'; path: string; fields: SignalFields } | null;
 type DiagnosticFields = { requestId: string; responseId: string; s3Ms: string; nBsMs: string; nCrMs: string; did: string; signalPaths: string[] };
 type DiagnosticChanges = Pick<DiagnosticView, 'requestId' | 'responseId' | 's3Ms' | 'nBsMs' | 'nCrMs' | 'did' | 'signalPaths'>;
+type DtcFields = { code: string; monitorFramePath: string };
 type Notice = { tone: 'error' | 'info'; text: string } | null;
 type Page = 'editor' | 'diagnostics' | 'build' | 'virtual';
 
@@ -55,6 +56,20 @@ const diagnosticFields = (diagnostic: DiagnosticView | null): DiagnosticFields =
   did: `0x${diagnostic.did.toString(16).toUpperCase().padStart(4, '0')}`,
   signalPaths: [...diagnostic.signalPaths],
 } : { ...newDiagnostic, signalPaths: [] };
+const dtcFields = (dtc: DtcView | null): DtcFields => dtc
+  ? { code: `0x${dtc.code.toString(16).toUpperCase().padStart(6, '0')}`, monitorFramePath: dtc.monitorFramePath }
+  : { code: '', monitorFramePath: '' };
+
+function dtcChanges(fields: DtcFields, view: WorkspaceView): { code: number; monitorFramePath: string } {
+  const code = canNumber(fields.code, 'DTC 代码', 0xFFFFFE);
+  if (code < 0x100) throw new Error('DTC 代码须为 0x000100–0xFFFFFE 的 24-bit 整数');
+  const frame = view.frames.find(item => item.path === fields.monitorFramePath);
+  if (!frame || frame.direction !== 'rx' || !frame.timeoutMs || frame.timeoutMs <= 0
+    || !view.signals.some(signal => signal.framePath === frame.path)) {
+    throw new Error('监测帧须为当前项目中含至少一个信号、接收超时大于 0 的 Rx CAN 帧');
+  }
+  return { code, monitorFramePath: frame.path };
+}
 
 function canNumber(value: string, label: string, max: number): number {
   const input = value.trim();
@@ -166,6 +181,8 @@ export default function App() {
   const [diagnosticDraft, setDiagnosticDraft] = useState<DiagnosticFields>(() => diagnosticFields(null));
   const [diagnosticSignal, setDiagnosticSignal] = useState('');
   const [diagnosticError, setDiagnosticError] = useState('');
+  const [dtcDraft, setDtcDraft] = useState<DtcFields>(() => dtcFields(null));
+  const [dtcError, setDtcError] = useState('');
   const [source, setSource] = useState<'empty' | 'import'>('empty');
   const [projectName, setProjectName] = useState('');
   const [projectDirectory, setProjectDirectory] = useState('');
@@ -191,8 +208,11 @@ export default function App() {
   const focusedFrame = currentFrame ?? signalFrame;
   const frameUnapplied = hasUnapplied(workspace, draft);
   const diagnosticUnapplied = Boolean(workspace && JSON.stringify(diagnosticDraft) !== JSON.stringify(diagnosticFields(workspace.diagnostic)));
-  const unapplied = frameUnapplied || diagnosticUnapplied;
+  const dtcUnapplied = Boolean(workspace?.diagnostic && JSON.stringify(dtcDraft) !== JSON.stringify(dtcFields(workspace.diagnostic.dtc)));
+  const unapplied = frameUnapplied || diagnosticUnapplied || dtcUnapplied;
   const eligibleSignals = workspace?.signals.filter(signal => signal.length === 32 && workspace.frames.some(frame => frame.path === signal.framePath && frame.direction === 'tx')) ?? [];
+  const eligibleMonitorFrames = workspace?.frames.filter(frame => frame.direction === 'rx' && (frame.timeoutMs ?? 0) > 0
+    && workspace.signals.some(signal => signal.framePath === frame.path)) ?? [];
   const issues = [...(workspace?.issues ?? []), ...operationIssues];
   const errorCount = issues.filter(issue => issue.severity === 'error').length;
 
@@ -204,6 +224,8 @@ export default function App() {
     setDiagnosticDraft(diagnosticFields(view.diagnostic));
     setDiagnosticSignal('');
     setDiagnosticError('');
+    setDtcDraft(dtcFields(view.diagnostic?.dtc ?? null));
+    setDtcError('');
   }
   function invalidateAfterEdit() {
     setStages({
@@ -219,12 +241,13 @@ export default function App() {
   function markStage(key: Stage, state: StageState, detail: string) {
     setStages(previous => ({ ...previous, [key]: { state, detail } }));
   }
-  function requireReady(allowed?: 'frame' | 'diagnostic') {
+  function requireReady(allowed?: 'frame' | 'diagnostic' | 'dtc') {
     if (!native) throw new Error('需要桌面运行环境');
     if (frameUnapplied && allowed !== 'frame') throw new Error('检查器中有未应用的更改，请先应用或还原');
     if (diagnosticUnapplied && allowed !== 'diagnostic') throw new Error('DoCAN 配置有未应用的更改，请先应用或还原');
+    if (dtcUnapplied && allowed !== 'dtc') throw new Error('故障记忆有未应用的更改，请先应用或还原');
   }
-  async function run<T>(label: string, job: () => Promise<T>, onSuccess: (result: T) => void, stage?: Stage, allowed?: 'frame' | 'diagnostic') {
+  async function run<T>(label: string, job: () => Promise<T>, onSuccess: (result: T) => void, stage?: Stage, allowed?: 'frame' | 'diagnostic' | 'dtc') {
     if (busy) return;
     try {
       requireReady(allowed);
@@ -272,6 +295,7 @@ export default function App() {
   function openCreator(kind: 'frame' | 'signal') {
     if (!native || busy || !workspace) return;
     if (diagnosticUnapplied) { setDiagnosticError('请先应用或还原 DoCAN 配置草稿，再添加帧或信号'); return; }
+    if (dtcUnapplied) { setDtcError('请先应用或还原故障记忆草稿，再添加帧或信号'); return; }
     if (frameUnapplied && !window.confirm('检查器中有未应用的更改，确定放弃并创建对象？')) return;
     if (workspace) setDraft(draftFor(workspace, selection));
     setCreating(kind);
@@ -298,6 +322,8 @@ export default function App() {
     setDiagnosticDraft(diagnosticFields(null));
     setDiagnosticSignal('');
     setDiagnosticError('');
+    setDtcDraft(dtcFields(null));
+    setDtcError('');
     setDraft(null);
     setSource('empty');
     setProjectName('');
@@ -374,8 +400,35 @@ export default function App() {
       acceptView(view);
     }, undefined, 'diagnostic');
   }
-  function clearDiagnostic() {
+  function configureDtc() {
     if (!workspace?.diagnostic || diagnosticUnapplied || frameUnapplied) return;
+    let values: { code: number; monitorFramePath: string };
+    try {
+      values = dtcChanges(dtcDraft, workspace);
+      setDtcError('');
+    } catch (error) {
+      setDtcError(errorText(error));
+      return;
+    }
+    void run('配置故障记忆', () => invoke<WorkspaceView>('configure_dtc', values).catch(error => {
+      setDtcError(errorText(error));
+      throw error;
+    }), view => {
+      invalidateAfterEdit();
+      acceptView(view);
+    }, undefined, 'dtc');
+  }
+  function clearDtc() {
+    if (!workspace?.diagnostic?.dtc || unapplied) return;
+    if (!window.confirm('移除当前故障记忆配置？应用后仍需保存 ARXML 才会写入文件。')) return;
+    void run('移除故障记忆', () => invoke<WorkspaceView>('clear_dtc'), view => {
+      invalidateAfterEdit();
+      acceptView(view);
+    });
+  }
+
+  function clearDiagnostic() {
+    if (!workspace?.diagnostic || diagnosticUnapplied || dtcUnapplied || frameUnapplied) return;
     if (!window.confirm('移除当前工程的诊断配置？应用后仍需保存 ARXML 才会写入文件。')) return;
     void run('移除 DoCAN', () => invoke<WorkspaceView>('clear_diagnostic'), view => {
       invalidateAfterEdit();
@@ -567,7 +620,25 @@ export default function App() {
                     </div>
                   </div>
                   {diagnosticError && <p className="diagnostic-error" role="alert">{diagnosticError}</p>}
-                  <div className="diagnostic-actions"><button type="button" className="primary-button compact" onClick={configureDiagnostic} disabled={disabled || !diagnosticUnapplied || frameUnapplied}>{workspace.diagnostic ? '应用诊断更改' : '创建诊断配置'}</button><button type="button" className="quiet-button" onClick={() => { setDiagnosticDraft(diagnosticFields(workspace.diagnostic)); setDiagnosticSignal(''); setDiagnosticError(''); }} disabled={disabled || !diagnosticUnapplied}>还原草稿</button>{workspace.diagnostic && <button type="button" className="quiet-button" onClick={clearDiagnostic} disabled={disabled || diagnosticUnapplied || frameUnapplied}>移除诊断配置</button>}{diagnosticUnapplied && <span role="status">未应用的诊断草稿</span>}</div>
+                  <div className="diagnostic-actions"><button type="button" className="primary-button compact" onClick={configureDiagnostic} disabled={disabled || !diagnosticUnapplied || dtcUnapplied || frameUnapplied}>{workspace.diagnostic ? '应用诊断更改' : '创建诊断配置'}</button><button type="button" className="quiet-button" onClick={() => { setDiagnosticDraft(diagnosticFields(workspace.diagnostic)); setDiagnosticSignal(''); setDiagnosticError(''); }} disabled={disabled || !diagnosticUnapplied}>还原草稿</button>{workspace.diagnostic && <button type="button" className="quiet-button" onClick={clearDiagnostic} disabled={disabled || diagnosticUnapplied || dtcUnapplied || frameUnapplied}>移除诊断配置</button>}{diagnosticUnapplied && <span role="status">未应用的诊断草稿</span>}</div>
+                  <section className="dtc-editor" aria-labelledby="dtc-editor-title">
+                    <div className="dtc-heading"><div><p className="eyebrow">HOST VIRTUAL / DEM + NVM</p><h3 id="dtc-editor-title">故障记忆 <span className="dtc-optional">可选 · 单个 DTC</span></h3></div><span className="diagnostic-state">{workspace.diagnostic?.dtc ? '已配置' : '未配置'}</span></div>
+                    <p className="dtc-copy">有效 Rx 帧首次到达后，若该帧超时，Dem 记录真实故障状态；主机 NvM 文件持久化状态，独立测试器使用隔离存储并重启 ECU 验证。仅支持 0x19/0x02 状态掩码读取与扩展会话 0x14/0xFFFFFF 清除；不代表完整 Dem/NvM、硬件或标准符合性。</p>
+                    {!workspace.diagnostic ? <p className="field-help">先应用上方 DoCAN 配置，再添加故障记忆。</p> : <>
+                      {workspace.diagnostic.dtc && <p className="diagnostic-path">配置路径 <span className="mono path-text">{workspace.diagnostic.dtc.path}</span></p>}
+                      <div className="dtc-fields form-fields">
+                        <label>DTC 代码 <small>24-bit · 0x000100–0xFFFFFE · 十进制或 0x 十六进制</small><input value={dtcDraft.code} onChange={event => { setDtcDraft({ ...dtcDraft, code: event.target.value }); setDtcError(''); }} placeholder="例如 0x123456" disabled={disabled} autoComplete="off" aria-invalid={Boolean(dtcError)} aria-describedby={dtcError ? 'dtc-error' : undefined} /></label>
+                        <label>监测 Rx CAN 帧 <small>至少一个信号 · 接收超时大于 0</small><select value={dtcDraft.monitorFramePath} onChange={event => { setDtcDraft({ ...dtcDraft, monitorFramePath: event.target.value }); setDtcError(''); }} disabled={disabled || !eligibleMonitorFrames.length} aria-invalid={Boolean(dtcError)} aria-describedby={dtcError ? 'dtc-error' : undefined}>
+                          <option value="">选择监测帧</option>
+                          {dtcDraft.monitorFramePath && !eligibleMonitorFrames.some(frame => frame.path === dtcDraft.monitorFramePath) && <option value={dtcDraft.monitorFramePath}>原监测帧已不符合条件 · 请重新选择</option>}
+                          {eligibleMonitorFrames.map(frame => <option key={frame.path} value={frame.path}>{frame.name} · 0x{frame.id.toString(16).toUpperCase().padStart(3, '0')} · {frame.timeoutMs} ms</option>)}
+                        </select></label>
+                      </div>
+                      {!eligibleMonitorFrames.length && <p className="field-help">先添加一条接收超时大于 0 的 Rx 帧，并在帧中添加至少一个信号。</p>}
+                      {dtcError && <p id="dtc-error" className="diagnostic-error" role="alert">{dtcError}</p>}
+                      <div className="diagnostic-actions"><button type="button" className="primary-button compact" onClick={configureDtc} disabled={disabled || !dtcUnapplied || diagnosticUnapplied || frameUnapplied}>{workspace.diagnostic.dtc ? '应用故障记忆更改' : '配置故障记忆'}</button><button type="button" className="quiet-button" onClick={() => { setDtcDraft(dtcFields(workspace.diagnostic?.dtc ?? null)); setDtcError(''); }} disabled={disabled || !dtcUnapplied}>还原草稿</button>{workspace.diagnostic.dtc && <button type="button" className="quiet-button" onClick={clearDtc} disabled={disabled || unapplied}>移除故障记忆</button>}{dtcUnapplied && <span role="status">未应用的故障记忆草稿</span>}</div>
+                    </>}
+                  </section>
                 </section>
               </>}
               {page === 'diagnostics' && <div className="workflow-page diagnostic-view">
@@ -581,19 +652,19 @@ export default function App() {
               </div>}
               {page === 'build' && <div className="workflow-page delivery-view">
                 <div className="section-header"><div><p className="eyebrow">GENERATION / BUILD</p><h2>生成与构建</h2><p>从已保存、无阻断错误的配置生成独立 C99 工程，再构建主机目标。</p></div></div>
-                <ol className="stage-list">{buildSteps.map(step => <li key={step.key} className={`stage ${stages[step.key].state}`}><span className="stage-number">{step.number}</span><div className="stage-copy"><strong>{step.label}</strong><small title={stages[step.key].detail}>{stages[step.key].detail}</small></div><span className="stage-pill">{stages[step.key].state === 'done' && <CircleCheck aria-hidden="true" size={13} />}{stageLabels[stages[step.key].state]}</span></li>)}</ol>
+                <ol className="stage-list">{buildSteps.map(step => { const state = unapplied && stages[step.key].state === 'done' ? 'stale' : stages[step.key].state; return <li key={step.key} className={`stage ${state}`}><span className="stage-number">{step.number}</span><div className="stage-copy"><strong>{step.label}</strong><small title={stages[step.key].detail}>{state === 'stale' && unapplied ? '草稿未应用，需重新保存并校验' : stages[step.key].detail}</small></div><span className="stage-pill">{state === 'done' && <CircleCheck aria-hidden="true" size={13} />}{stageLabels[state]}</span></li>; })}</ol>
                 {(unapplied || workspace.dirty || stages.validate.state !== 'done') && <div className="page-guidance">生成前须应用更改、保存配置并完成无阻断错误的校验。<button type="button" onClick={() => setPage(unapplied || workspace.dirty ? 'editor' : 'diagnostics')}>前往{unapplied || workspace.dirty ? '配置' : '诊断'}</button></div>}
                 <div className="delivery-actions"><button type="button" className="primary-button compact" onClick={generateProject} disabled={disabled || unapplied || workspace.dirty || stages.validate.state !== 'done'}><Boxes aria-hidden="true" size={15} />选择目录并生成工程</button><button type="button" className="outline-button" onClick={buildProject} disabled={disabled || unapplied || stages.generate.state !== 'done'}><Hammer aria-hidden="true" size={15} />构建生成工程</button></div>
-                {generated && <div className="result-section"><h3>生成工程位置</h3><p className="mono path-text">{generated.outputDirectory}</p><details><summary>工程文件 · {generated.files.length}</summary><ul>{generated.files.map((file, index) => <li key={`${file}-${index}`} className="mono">{file}</li>)}</ul></details></div>}
-                {built && <div className="result-section"><h3>构建二进制</h3><p className="mono path-text">{built.binaryPath}</p><details><summary>构建日志</summary><pre>{built.log}</pre></details></div>}
+                {generated && !unapplied && !workspace.dirty && stages.generate.state === 'done' && <div className="result-section"><h3>生成工程位置</h3><p className="mono path-text">{generated.outputDirectory}</p><details><summary>工程文件 · {generated.files.length}</summary><ul>{generated.files.map((file, index) => <li key={`${file}-${index}`} className="mono">{file}</li>)}</ul></details></div>}
+                {built && !unapplied && !workspace.dirty && stages.build.state === 'done' && <div className="result-section"><h3>构建二进制</h3><p className="mono path-text">{built.binaryPath}</p><details><summary>构建日志</summary><pre>{built.log}</pre></details></div>}
               </div>}
               {page === 'virtual' && <div className="workflow-page virtual-view">
                 <div className="section-header"><div><p className="eyebrow">HOST VIRTUAL BUS</p><h2>主机虚拟运行</h2><p>双 ECU 信号闭环与独立测试器诊断验证分别运行；结果不代表真实硬件符合性。</p></div></div>
-                <div className={`virtual-status stage ${stages.virtual.state}`}><span className="stage-number">05</span><div className="stage-copy"><strong>主机虚拟验证</strong><small>{stages.virtual.detail}</small></div><span className="stage-pill">{stages.virtual.state === 'done' && <CircleCheck aria-hidden="true" size={13} />}{stageLabels[stages.virtual.state]}</span></div>
+                <div className={`virtual-status stage ${unapplied && stages.virtual.state === 'done' ? 'stale' : stages.virtual.state}`}><span className="stage-number">05</span><div className="stage-copy"><strong>主机虚拟验证</strong><small>{unapplied && stages.virtual.state === 'done' ? '草稿未应用，结果已过期' : stages.virtual.detail}</small></div><span className="stage-pill">{!unapplied && stages.virtual.state === 'done' && <CircleCheck aria-hidden="true" size={13} />}{unapplied && stages.virtual.state === 'done' ? stageLabels.stale : stageLabels[stages.virtual.state]}</span></div>
                 {(!built || stages.build.state !== 'done' || unapplied) && <div className="page-guidance">当前配置尚未完成可运行的主机目标构建。<button type="button" onClick={() => setPage(unapplied ? 'editor' : 'build')}>前往{unapplied ? '配置' : '生成与构建'}</button></div>}
                 <div className="peer-section"><h3>对端 ECU 工程</h3><p>选择另一份已生成并构建的 ECU 工程目录；当前工程与对端在虚拟总线上运行。</p><div className="path-picker"><input readOnly value={peerDirectory} placeholder="选择对端生成工程目录" aria-label="对端生成工程目录" /><button type="button" onClick={() => void chooseDirectory(setPeerDirectory)} disabled={disabled || stages.build.state !== 'done'}><FolderOpen aria-hidden="true" size={15} />选择对端目录</button></div><button type="button" className="primary-button compact" onClick={runVirtual} disabled={disabled || unapplied || stages.build.state !== 'done' || !peerDirectory}><MonitorPlay aria-hidden="true" size={15} />运行虚拟闭环</button></div>
-                {workspace.diagnostic && <div className="peer-section"><h3>诊断独立测试器</h3><p>对当前生成 ECU 注入物理诊断 CAN 帧，核对会话、实时 DID、流控、超时与故障恢复；无需对端 ECU 工程。</p><button type="button" className="primary-button compact" onClick={runDiagnostic} disabled={disabled || unapplied || stages.build.state !== 'done'}><MonitorPlay aria-hidden="true" size={15} />验证诊断连接</button></div>}
-                {virtualResult && <div className="result-section"><h3>{virtualKind === 'diagnostic' ? '诊断独立测试器' : '双 ECU 信号闭环'} · {virtualResult.passed ? '通过' : '未通过'}</h3><ul className="events-list">{virtualResult.events.map((event, index) => <li key={index} className="mono">{event}</li>)}</ul><details><summary>完整运行日志</summary><pre>{virtualResult.log}</pre></details></div>}
+                {workspace.diagnostic && <div className="peer-section"><h3>诊断独立测试器</h3><p>对当前生成 ECU 注入物理诊断 CAN 帧，核对会话、实时 DID、流控、超时与故障恢复；无需对端 ECU 工程。{workspace.diagnostic.dtc && '配置故障记忆时，还核对有效 Rx 后的超时 DTC、0x19/0x02 查询、扩展会话 0x14/0xFFFFFF 清除及隔离主机存储中的跨进程重启持久化。'}</p><button type="button" className="primary-button compact" onClick={runDiagnostic} disabled={disabled || unapplied || stages.build.state !== 'done'}><MonitorPlay aria-hidden="true" size={15} />验证诊断连接</button></div>}
+                {virtualResult && !unapplied && !workspace.dirty && (stages.virtual.state === 'done' || stages.virtual.state === 'failed') && <div className="result-section"><h3>{virtualKind === 'diagnostic' ? '诊断独立测试器' : '双 ECU 信号闭环'} · {virtualResult.passed ? '通过' : '未通过'}</h3><ul className="events-list">{virtualResult.events.map((event, index) => <li key={index} className="mono">{event}</li>)}</ul><details><summary>完整运行日志</summary><pre>{virtualResult.log}</pre></details></div>}
                 <div className="hardware-note"><CircleAlert aria-hidden="true" size={16} /><span>真实硬件未验证；主机虚拟运行结果不代表已上板。</span></div>
               </div>}
             </section>

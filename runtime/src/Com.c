@@ -1,4 +1,5 @@
 #include "Com.h"
+#include "Dem.h"
 #include "PduR.h"
 
 static const EcuConfig *active_config;
@@ -94,6 +95,10 @@ EcuStatus Com_RxIndication(size_t frame_index, const uint8_t data[8], uint64_t n
 {
     const EcuFrameConfig *frame = &active_config->frames[frame_index];
     size_t i;
+    EcuStatus result = Dem_ReportPassed((uint16_t)frame_index);
+    if (result != ECU_OK) {
+        return result;
+    }
     for (i = frame->first_signal; i < (size_t)frame->first_signal + frame->signal_count; ++i) {
         const EcuSignalConfig *signal = &active_config->signals[i];
         uint32_t value = 0;
@@ -110,17 +115,23 @@ EcuStatus Com_RxIndication(size_t frame_index, const uint8_t data[8], uint64_t n
     return ECU_OK;
 }
 
-void Com_AdvanceTime(uint64_t now_ms)
+EcuStatus Com_AdvanceTime(uint64_t now_ms)
 {
     size_t i;
     for (i = 0; i < active_config->frame_count; ++i) {
         const EcuFrameConfig *frame = &active_config->frames[i];
         if (frame->direction == 0u && rx_seen[i] &&
+            signal_valid[frame->first_signal] != 0u &&
             now_ms - rx_at_ms[i] >= frame->timeout_ms) {
             size_t j;
+            EcuStatus result = Dem_ReportFailed((uint16_t)i);
+            if (result != ECU_OK) {
+                return result;
+            }
             for (j = frame->first_signal; j < (size_t)frame->first_signal + frame->signal_count; ++j) {
                 signal_valid[j] = 0u;
             }
         }
     }
+    return ECU_OK;
 }

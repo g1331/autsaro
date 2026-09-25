@@ -2,11 +2,12 @@ use crate::model::RunReport;
 use std::fmt::Write as _;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::{self, Receiver};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Clone)]
 struct Signal { id: u16, frame: String, start: u8, length: u8 }
@@ -21,13 +22,15 @@ struct DiagnosticProfile {
     did: u16,
     signal_ids: Vec<u16>,
 }
-struct Profile { frames: Vec<Frame>, signals: Vec<Signal>, diagnostic: Option<DiagnosticProfile>, text: String }
+struct DtcProfile { code: u32, frame_index: usize, id: u32, dlc: u8, timeout: u32 }
+struct Profile { frames: Vec<Frame>, signals: Vec<Signal>, diagnostic: Option<DiagnosticProfile>, dtc: Option<DtcProfile>, text: String }
 
 fn profile(dir: &Path) -> Result<Profile, String> {
     let text = fs::read_to_string(dir.join("profile.txt")).map_err(|e| format!("配置清单缺失: {e}"))?;
     let mut frames = Vec::new();
     let mut signals = Vec::new();
     let mut diagnostic = None;
+    let mut dtc = None;
     for line in text.lines() {
         let cols: Vec<_> = line.split_whitespace().collect();
         match cols.first().copied() {
@@ -64,11 +67,44 @@ fn profile(dir: &Path) -> Result<Profile, String> {
                 if diagnostic.replace(config).is_some() { return Err("诊断清单含多个连接".into()); }
             }
             Some("DIAGNOSTIC") => return Err("诊断清单字段数量错误".into()),
+            Some("DTC") if cols.len() == 6 => {
+                let field = |name: &str| cols.iter().find_map(|column| column.strip_prefix(name));
+                let config = DtcProfile {
+                    code: field("code=").ok_or("DTC 编码缺失")?.parse().map_err(|_| "DTC 编码无效")?,
+                    frame_index: field("frame=").ok_or("DTC 监控帧索引缺失")?.parse().map_err(|_| "DTC 监控帧索引无效")?,
+                    id: field("id=").ok_or("DTC 监控 CAN ID 缺失")?.parse().map_err(|_| "DTC 监控 CAN ID 无效")?,
+                    dlc: field("dlc=").ok_or("DTC 监控帧 DLC 缺失")?.parse().map_err(|_| "DTC 监控帧 DLC 无效")?,
+                    timeout: field("timeout=").ok_or("DTC 监控超时缺失")?.parse().map_err(|_| "DTC 监控超时无效")?,
+                };
+                if dtc.replace(config).is_some() { return Err("诊断清单含多个 DTC".into()); }
+            }
+            Some("DTC") => return Err("DTC 清单字段数量错误".into()),
             _ => {}
         }
     }
     if frames.is_empty() || signals.is_empty() { return Err("生成配置缺少帧或信号".into()); }
-    Ok(Profile { frames, signals, diagnostic, text })
+    if let Some(config) = &dtc {
+        let frame = frames.get(config.frame_index).ok_or("DTC 监控帧不存在")?;
+        if diagnostic.is_none() || config.code < 0x100 || config.code >= 0xFFFFFF ||
+            frame.tx || frame.id != config.id || frame.dlc != config.dlc || frame.timeout == 0 ||
+            frame.timeout != config.timeout || !signals.iter().any(|signal| signal.frame == frame.path) {
+            return Err("DTC 清单与受支持的 Rx 超时监控配置不一致".into());
+        }
+    }
+    Ok(Profile { frames, signals, diagnostic, dtc, text })
+}
+
+struct TempNvm { path: PathBuf }
+impl TempNvm {
+    fn new() -> Self {
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let stamp = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time before epoch").as_nanos();
+        let path = std::env::temp_dir().join(format!("autosar-dtc-{}-{stamp}-{}.nvm", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+        Self { path }
+    }
+}
+impl Drop for TempNvm {
+    fn drop(&mut self) { let _ = fs::remove_file(&self.path); }
 }
 
 struct EcuProcess {
@@ -77,8 +113,11 @@ struct EcuProcess {
     lines: Receiver<String>,
 }
 impl EcuProcess {
-    fn start(path: &Path) -> Result<Self, String> {
-        let mut child = Command::new(path).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| format!("无法启动 ECU {}: {e}", path.display()))?;
+    fn start(path: &Path, nvm_path: Option<&Path>) -> Result<Self, String> {
+        let mut command = Command::new(path);
+        if let Some(storage) = nvm_path { command.arg("--nvm").arg(storage); }
+        let mut child = command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()
+            .map_err(|e| format!("无法启动 ECU {}: {e}", path.display()))?;
         let stdin = child.stdin.take().ok_or("ECU stdin 不可用")?;
         let stdout = child.stdout.take().ok_or("ECU stdout 不可用")?;
         let (sender, lines) = mpsc::channel();
@@ -200,8 +239,10 @@ pub fn run(first: &Path, second: &Path) -> Result<RunReport, String> {
     let binary_a = first.join(if cfg!(windows) { "ecu_host.exe" } else { "ecu_host" });
     let binary_b = second.join(if cfg!(windows) { "ecu_host.exe" } else { "ecu_host" });
     if !binary_a.is_file() || !binary_b.is_file() { return Err("两个生成目录均须先完成 C99 构建".into()); }
-    let mut ecu_a = EcuProcess::start(&binary_a)?;
-    let mut ecu_b = EcuProcess::start(&binary_b)?;
+    let a_nvm = a.dtc.as_ref().map(|_| TempNvm::new());
+    let b_nvm = b.dtc.as_ref().map(|_| TempNvm::new());
+    let mut ecu_a = EcuProcess::start(&binary_a, a_nvm.as_ref().map(|state| state.path.as_path()))?;
+    let mut ecu_b = EcuProcess::start(&binary_b, b_nvm.as_ref().map(|state| state.path.as_path()))?;
     let mut events = Vec::new();
     let outcome = (|| -> Result<(), String> {
         let max_period = a.frames.iter().chain(&b.frames).filter(|f| f.tx).map(|f| f.period).max().ok_or("没有周期发送帧")? as u64;
@@ -301,7 +342,8 @@ pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
     let binary = dir.join(if cfg!(windows) { "ecu_host.exe" } else { "ecu_host" });
     if !binary.is_file() { return Err("诊断虚拟 ECU 尚未完成 C99 构建".into()); }
     let salt = 0x1357_9BDF;
-    let mut ecu = EcuProcess::start(&binary)?;
+    let initial_nvm = profile.dtc.as_ref().map(|_| TempNvm::new());
+    let mut ecu = EcuProcess::start(&binary, initial_nvm.as_ref().map(|state| state.path.as_path()))?;
     let mut events = Vec::new();
     let outcome = (|| -> Result<(), String> {
         let fence = profile.signals[0].id;
@@ -384,8 +426,78 @@ pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
         events.push("S3 超时恢复默认会话".into());
         Ok(())
     })();
+    let outcome = outcome.and_then(|()| match &profile.dtc {
+        Some(dtc) => verify_persistent_dtc(&binary, &profile, diagnostic, dtc, salt, &mut events),
+        None => Ok(()),
+    });
     match outcome {
-        Ok(()) => Ok(RunReport { passed: true, log: "独立测试器验证 CAN 诊断会话、实时 DID、传输流控与故障恢复".into(), events }),
+        Ok(()) => Ok(RunReport { passed: true, log: if profile.dtc.is_some() {
+            "独立测试器验证 CAN 诊断会话、实时 DID、流控及 Dem/NvM DTC 跨进程保持".into()
+        } else {
+            "独立测试器验证 CAN 诊断会话、实时 DID、传输流控与故障恢复".into()
+        }, events }),
         Err(error) => Ok(RunReport { passed: false, log: error, events }),
     }
+}
+
+fn verify_persistent_dtc(
+    binary: &Path, profile: &Profile, diagnostic: &DiagnosticProfile, dtc: &DtcProfile,
+    salt: u32, events: &mut Vec<String>,
+) -> Result<(), String> {
+    let state = TempNvm::new();
+    let fence = profile.signals[0].id;
+    let request = diagnostic.request_id;
+    let read_dtc = format!("R {request} 4 03190208");
+    let empty = vec![0x03, 0x59, 0x02, 0x7F];
+    let reported = |status| vec![0x07, 0x59, 0x02, 0x7F,
+        (dtc.code >> 16) as u8, (dtc.code >> 8) as u8, dtc.code as u8, status];
+    {
+        let mut ecu = EcuProcess::start(binary, Some(&state.path))?;
+        prepare(&mut ecu, profile, salt)?;
+        let before = diagnostic_request(&mut ecu, fence, read_dtc.clone())?;
+        diagnostic_frames(&before, &[empty.clone()], profile, diagnostic, salt)?;
+        let received = diagnostic_request(&mut ecu, fence,
+            format!("R {} {} {}", dtc.id, dtc.dlc, "00".repeat(dtc.dlc as usize)))?;
+        diagnostic_frames(&received, &[], profile, diagnostic, salt)?;
+        let timed = diagnostic_request(&mut ecu, fence, format!("T {}", dtc.timeout as u64 + 1))?;
+        diagnostic_frames(&timed, &[], profile, diagnostic, salt)?;
+        let failed = diagnostic_request(&mut ecu, fence, read_dtc.clone())?;
+        diagnostic_frames(&failed, &[reported(0x2F)], profile, diagnostic, salt)?;
+    }
+    events.push("接收帧超时产生真实 Dem DTC，进程结束前写入 NvM".into());
+    {
+        let mut ecu = EcuProcess::start(binary, Some(&state.path))?;
+        prepare(&mut ecu, profile, salt)?;
+        let recovered = diagnostic_request(&mut ecu, fence, read_dtc.clone())?;
+        diagnostic_frames(&recovered, &[reported(0x6D)], profile, diagnostic, salt)?;
+        let passed = diagnostic_request(&mut ecu, fence,
+            format!("R {} {} {}", dtc.id, dtc.dlc, "00".repeat(dtc.dlc as usize)))?;
+        diagnostic_frames(&passed, &[], profile, diagnostic, salt)?;
+        let recovered_pass = diagnostic_request(&mut ecu, fence, read_dtc.clone())?;
+        diagnostic_frames(&recovered_pass, &[reported(0x2C)], profile, diagnostic, salt)?;
+        let denied = diagnostic_request(&mut ecu, fence, format!("R {request} 5 0414FFFFFF"))?;
+        diagnostic_frames(&denied, &[vec![0x03, 0x7F, 0x14, 0x7F]], profile, diagnostic, salt)?;
+        let session = diagnostic_request(&mut ecu, fence, format!("R {request} 3 021003"))?;
+        diagnostic_frames(&session, &[vec![0x06, 0x50, 0x03, 0x00, 0x32, 0x00, 0x32]], profile, diagnostic, salt)?;
+        let wrong_group = diagnostic_request(&mut ecu, fence, format!("R {request} 5 0414000001"))?;
+        diagnostic_frames(&wrong_group, &[vec![0x03, 0x7F, 0x14, 0x31]], profile, diagnostic, salt)?;
+        let cleared = diagnostic_request(&mut ecu, fence, format!("R {request} 5 0414FFFFFF"))?;
+        diagnostic_frames(&cleared, &[vec![0x01, 0x54]], profile, diagnostic, salt)?;
+        let now_empty = diagnostic_request(&mut ecu, fence, read_dtc.clone())?;
+        diagnostic_frames(&now_empty, &[empty.clone()], profile, diagnostic, salt)?;
+    }
+    {
+        let mut ecu = EcuProcess::start(binary, Some(&state.path))?;
+        let after_restart = diagnostic_request(&mut ecu, fence, read_dtc)?;
+        diagnostic_frames(&after_restart, &[empty], profile, diagnostic, salt)?;
+    }
+    events.push("重启后 DTC 保持、默认会话拒绝清除、扩展会话清除跨重启生效".into());
+    fs::write(&state.path, [0u8; 64]).map_err(|e| format!("故障注入 NvM 损坏失败: {e}"))?;
+    let corrupt = Command::new(binary).arg("--nvm").arg(&state.path).output()
+        .map_err(|e| format!("无法验证 NvM 完整性拒绝路径: {e}"))?;
+    if corrupt.status.success() || !String::from_utf8_lossy(&corrupt.stdout).lines().any(|line| line.trim_end_matches('\r') == "E NVM") {
+        return Err("损坏的 NvM 状态未在启动时被明确拒绝".into());
+    }
+    events.push("双份 NvM 状态损坏在启动时被拒绝，未伪造空 DTC".into());
+    Ok(())
 }

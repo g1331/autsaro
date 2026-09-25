@@ -56,6 +56,116 @@ fn module(name: &str, definition: &str, children: &str) -> String {
     format!("<ECUC-MODULE-CONFIGURATION-VALUES><SHORT-NAME>{name}</SHORT-NAME><DEFINITION-REF DEST=\"ECUC-MODULE-DEF\">/AUTOSAR/EcucDefs/{definition}</DEFINITION-REF><CONTAINERS>{children}</CONTAINERS></ECUC-MODULE-CONFIGURATION-VALUES>")
 }
 
+fn render_dtc(project: &str, diagnostic: &DiagnosticView, elements: &mut String) {
+    let dtc = diagnostic.dtc.as_ref().unwrap();
+    let base = "/AUTOSAR/EcucDefs/Dem/DemConfigSet";
+    let attrs = format!("{base}/DemDTCAttributes");
+    let dtc_def = format!("{base}/DemDTC");
+    let event = format!("{base}/DemEventParameter");
+    let general = "/AUTOSAR/EcucDefs/Dem/DemGeneral";
+    let memory = format!("{general}/DemEventMemorySet");
+    let primary = format!("{memory}/DemPrimaryMemory");
+    let cycle = format!("{general}/DemOperationCycle");
+    let client = format!("{general}/DemClient");
+    let block_ref = format!("{general}/DemNvRamBlockId");
+    let nv_block = ref_path(project, "NvMCfg/EventStatus");
+    let primary_ref = ref_path(project, "DemCfg/DemGeneral/Memory/Primary");
+    let memory_ref = ref_path(project, "DemCfg/DemGeneral/Memory");
+    let cycle_ref = ref_path(project, "DemCfg/DemGeneral/OperationCycle");
+    let attrs_ref = ref_path(project, "DemCfg/DemConfigSet/Attributes");
+    let dtc_ref = ref_path(project, "DemCfg/DemConfigSet/DTC");
+    let mut general_params = String::new();
+    for (name, value) in [
+        ("DemAgingRequiresNotFailedCycle", false), ("DemAgingRequiresTestedCycle", false),
+        ("DemDebounceCounterBasedSupport", false), ("DemDebounceTimeBasedSupport", false),
+        ("DemDevErrorDetect", false), ("DemGeneralInterfaceSupport", false),
+        ("DemPTOSupport", false), ("DemResetConfirmedBitOnOverflow", false),
+        ("DemResetPendingBitOnOverflow", false), ("DemStatusBitStorageTestFailed", true),
+        ("DemTriggerFiMReports", false), ("DemTriggerMonitorInitBeforeClearOk", false),
+        ("DemVersionInfoApi", false),
+    ] {
+        general_params.push_str(&boolean(general, name, value));
+    }
+    for (name, value) in [
+        ("DemAvailabilitySupport", "DEM_NO_AVAILABILITY"),
+        ("DemClearDTCBehavior", "DEM_CLRRESP_NONVOLATILE_FINISH"),
+        ("DemClearDTCLimitation", "DEM_ONLY_CLEAR_ALL_DTCS"),
+        ("DemDataElementDefaultEndianness", "BIG_ENDIAN"),
+        ("DemEventCombinationSupport", "DEM_EVCOMB_DISABLED"),
+        ("DemOBDSupport", "DEM_OBD_NO_OBD_SUPPORT"),
+        ("DemStatusBitHandlingTestFailedSinceLastClear", "DEM_STATUS_BIT_NORMAL"),
+        ("DemSuppressionSupport", "DEM_NO_SUPPRESSION"),
+    ] {
+        general_params.push_str(&choice(general, name, value));
+    }
+    general_params.push_str(&number(general, "DemMaxNumberPrestoredFF", 0));
+    general_params.push_str(&decimal(general, "DemTaskTime", 1));
+    let primary_params = number(&primary, "DemDtcStatusAvailabilityMask", 0x7f)
+        + &choice(&primary, "DemEventDisplacementStrategy", "DEM_DISPLACEMENT_NONE")
+        + &choice(&primary, "DemEventMemoryEntryStorageTrigger", "DEM_TRIGGER_ON_TEST_FAILED")
+        + &number(&primary, "DemMaxNumberEventEntryPrimary", 1)
+        + &choice(&primary, "DemOccurrenceCounterProcessing", "DEM_PROCESS_OCCCTR_TF")
+        + &choice(&primary, "DemTypeOfFreezeFrameRecordNumeration", "DEM_FF_RECNUM_CALCULATED");
+    let primary_value = container("Primary", &primary, &primary_params, "", "");
+    let memory_params = number(&memory, "DemMaxNumberEventEntryPermanent", 0)
+        + &choice(&memory, "DemTypeOfDTCSupported", "DEM_DTC_TRANSLATION_ISO14229_1");
+    let memory_value = container("Memory", &memory, &memory_params, "", &primary_value);
+    let cycle_value = container("OperationCycle", &cycle, &number(&cycle, "DemOperationCycleId", 0), "", "");
+    let client_params = choice(&client, "DemClientFunctionality", "DEM_CLIENT_USES_FULL_FUNCTIONALITY")
+        + &number(&client, "DemClientId", 0) + &boolean(&client, "DemClientUsesRte", false);
+    let client_value = container("DcmClient", &client, &client_params,
+        &reference(&client, "DemEventMemorySetRef", "ECUC-CONTAINER-VALUE", &memory_ref), "");
+    let block_value = container("StatusBlock", &block_ref, "",
+        &reference(&block_ref, "DemNvRamBlockIdRef", "ECUC-CONTAINER-VALUE", &nv_block), "");
+    let general_value = container("DemGeneral", general, &general_params, "",
+        &(client_value + &memory_value + &cycle_value + &block_value));
+    let attrs_value = container("Attributes", &attrs, &number(&attrs, "DemDTCPriority", 1),
+        &reference(&attrs, "DemMemoryDestinationRef", "ECUC-CONTAINER-VALUE", &primary_ref), "");
+    let dtc_params = number(&dtc_def, "DemDtcValue", dtc.code)
+        + &choice(&dtc_def, "DemNvStorageStrategy", "IMMEDIATE_AT_FIRST_OCCURRENCE");
+    let dtc_value = container("DTC", &dtc_def, &dtc_params,
+        &reference(&dtc_def, "DemDTCAttributesRef", "ECUC-CONTAINER-VALUE", &attrs_ref), "");
+    let event_params = boolean(&event, "DemEventAvailable", true)
+        + &number(&event, "DemEventConfirmationThreshold", 1)
+        + &number(&event, "DemEventId", 1)
+        + &choice(&event, "DemEventKind", "DEM_EVENT_KIND_BSW")
+        + &choice(&event, "DemEventReportingType", "STANDARD_REPORTING")
+        + &boolean(&event, "DemFFPrestorageSupported", false);
+    let event_refs = reference(&event, "DemDTCRef", "ECUC-CONTAINER-VALUE", &dtc_ref)
+        + &reference(&event, "DemOperationCycleRef", "ECUC-CONTAINER-VALUE", &cycle_ref);
+    let debounce = format!("{event}/DemDebounceAlgorithmClass/DemDebounceMonitorInternal");
+    let event_value = container("RxFrameTimeout", &event, &event_params, &event_refs,
+        &container("Debounce", &debounce, "", "", ""));
+    // The ECUC event has no standardized Rx CAN-frame reference. This one SDG
+    // identifies the host-only monitor binding without claiming a ComM/MemIf link.
+    let admin = format!("<ADMIN-DATA><SDGS><SDG GID=\"AutosarWorkbenchDtc\"><SD GID=\"MonitorFrameRef\">{}</SD></SDG></SDGS></ADMIN-DATA>", dtc.monitor_frame_path);
+    let event_value = event_value.replacen("</SHORT-NAME>", &format!("</SHORT-NAME>{admin}"), 1);
+    elements.push_str(&module("DemCfg", "Dem",
+        &(container("DemConfigSet", base, "", "", &(attrs_value + &dtc_value + &event_value)) + &general_value)));
+
+    let nv = "/AUTOSAR/EcucDefs/NvM/NvMBlockDescriptor";
+    let mut nv_params = String::new();
+    for (name, value) in [
+        ("NvMBlockJobPriority", 1), ("NvMMaxNumOfReadRetries", 0),
+        ("NvMMaxNumOfWriteRetries", 0), ("NvMNvBlockBaseNumber", 1),
+        ("NvMNvBlockLength", 1), ("NvMNvBlockNum", 2),
+        ("NvMNvramBlockIdentifier", 2), ("NvMNvramDeviceId", 0),
+        ("NvMRomBlockNum", 0), ("NvMWriteVerificationDataSize", 1),
+    ] { nv_params.push_str(&number(nv, name, value)); }
+    for (name, value) in [
+        ("NvMBlockUseAutoValidation", false), ("NvMBlockUseCompression", false),
+        ("NvMBlockUseCrc", true), ("NvMBlockUseCRCCompMechanism", false),
+        ("NvMBlockUsePort", false), ("NvMBlockUseSetRamBlockStatus", false),
+        ("NvMBlockUseSyncMechanism", false), ("NvMBlockWriteProt", false),
+        ("NvMBswMBlockStatusInformation", false), ("NvMResistantToChangedSw", false),
+        ("NvMStaticBlockIDCheck", true), ("NvMWriteBlockOnce", false),
+        ("NvMWriteVerification", true),
+    ] { nv_params.push_str(&boolean(nv, name, value)); }
+    nv_params.push_str(&choice(nv, "NvMBlockCrcType", "NVM_CRC32"));
+    nv_params.push_str(&choice(nv, "NvMBlockManagementType", "NVM_BLOCK_REDUNDANT"));
+    elements.push_str(&module("NvMCfg", "NvM", &container("EventStatus", nv, &nv_params, "", "")));
+}
+
 fn render_diagnostic(project: &str, diagnostic: &DiagnosticView, frame_count: usize, elements: &mut String, canif_children: &mut String) {
     let request = ref_path(project, "NPdu_DiagRequest");
     let response = ref_path(project, "NPdu_DiagResponse");
@@ -112,6 +222,18 @@ fn render_diagnostic(project: &str, diagnostic: &DiagnosticView, frame_count: us
     for (name, sid, subfunction) in [("SessionControl", 0x10, true), ("ReadDataByIdentifier", 0x22, false), ("TesterPresent", 0x3e, true)] {
         let params = format!("{}{}{}", number(&service_path, "DcmDsdSidTabServiceId", sid), boolean(&service_path, "DcmDsdServiceUsed", true), boolean(&service_path, "DcmDsdSidTabSubfuncAvail", subfunction));
         services.push_str(&container(name, &service_path, &params, "", ""));
+    }
+    if diagnostic.dtc.is_some() {
+        for (name, sid, subfunction) in [("ClearDiagnosticInformation", 0x14, false), ("ReadDTCInformation", 0x19, true)] {
+            let params = format!("{}{}{}", number(&service_path, "DcmDsdSidTabServiceId", sid),
+                boolean(&service_path, "DcmDsdServiceUsed", true),
+                boolean(&service_path, "DcmDsdSidTabSubfuncAvail", subfunction));
+            let refs = if sid == 0x14 {
+                reference(&service_path, "DcmDsdSidTabSessionLevelRef", "ECUC-CONTAINER-VALUE",
+                    &ref_path(project, "DcmCfg/DcmConfigSet/DcmDsp/Sessions/Extended"))
+            } else { String::new() };
+            services.push_str(&container(name, &service_path, &params, &refs, ""));
+        }
     }
     let table_value = container("Services", &table, &number(&table, "DcmDsdSidTabId", 0), "", &services);
     let dsd_value = container("DcmDsd", &dsd, "", "", &table_value);
@@ -173,7 +295,12 @@ fn render_diagnostic(project: &str, diagnostic: &DiagnosticView, frame_count: us
     };
     let sessions = container("Sessions", &sessions_path, "", "", &(session("Default", 1) + &session("Extended", 3)));
     let dsp_params = choice(&dsp, "DcmDspDataDefaultEndianness", "BIG_ENDIAN") + &boolean(&dsp, "DcmDspEnableObdMirror", false);
-    let dsp_value = container("DcmDsp", &dsp, &dsp_params, "", &(did_value + &info_value + &data_values + &sessions));
+    let mut dsp_children = did_value + &info_value + &data_values + &sessions;
+    if diagnostic.dtc.is_some() {
+        dsp_children.push_str(&container("ClearDTC", &format!("{dsp}/DcmDspClearDTC"), "", "", ""));
+        dsp_children.push_str(&container("ReadDTCInformation", &format!("{dsp}/DcmDspReadDTCInformation"), "", "", ""));
+    }
+    let dsp_value = container("DcmDsp", &dsp, &dsp_params, "", &dsp_children);
     let page_path = format!("{base}/DcmPageBufferCfg");
     let page_value = container("PageBuffer", &page_path, &boolean(&page_path, "DcmPagedBufferEnabled", false), "", "");
     let config = container("DcmConfigSet", base, "", "", &(dsd_value + &dsl_value + &dsp_value + &page_value));
@@ -181,6 +308,9 @@ fn render_diagnostic(project: &str, diagnostic: &DiagnosticView, frame_count: us
     let general_params = format!("{}{}{}{}{}{}", boolean(general_path, "DcmDevErrorDetect", false), boolean(general_path, "DcmEnableSecurityEventReporting", false), boolean(general_path, "DcmRespondAllRequest", false), boolean(general_path, "DcmVersionInfoApi", false), decimal(general_path, "DcmTaskTime", 1), decimal(general_path, "DcmS3ServerTimeoutOverwrite", diagnostic.s3_ms));
     let general = container("DcmGeneral", general_path, &general_params, "", "");
     elements.push_str(&module("DcmCfg", "Dcm", &(config + &general)));
+    if diagnostic.dtc.is_some() {
+        render_dtc(project, diagnostic, elements);
+    }
 }
 
 pub fn render_profile(project: &str, frames: &[FrameView], signals: &[SignalView], diagnostic: Option<&DiagnosticView>) -> String {

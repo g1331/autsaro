@@ -18,6 +18,7 @@ const char *Ecu_StatusName(EcuStatus status)
     case ECU_ERR_TP_FLOW: return "TP_FLOW";
     case ECU_ERR_TP_BUSY: return "TP_BUSY";
     case ECU_ERR_IO: return "IO";
+    case ECU_ERR_NVM: return "NVM";
     default: return "INTERNAL";
     }
 }

@@ -27,7 +27,12 @@ EcuStatus Os_Advance(uint64_t now_ms)
         return ECU_ERR_TIME;
     }
     current_ms = now_ms;
-    Com_AdvanceTime(now_ms);
+    {
+        EcuStatus result = Com_AdvanceTime(now_ms);
+        if (result != ECU_OK) {
+            return result;
+        }
+    }
     Dcm_AdvanceTime(now_ms);
     transport_status = CanTp_AdvanceTime(now_ms);
     if (transport_status != ECU_OK) {

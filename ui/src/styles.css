@@ -86,6 +86,17 @@ button svg,.stage-pill svg{flex:none}
 .diagnostic-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:20px}
 .diagnostic-actions span{color:var(--warning);font-size:11px}
 .diagnostic-error{margin:12px 0;color:var(--danger);font-size:12px;line-height:1.5}
+.dtc-editor{max-width:670px;margin-top:28px;padding-top:22px;border-top:1px solid var(--line)}
+.dtc-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px}
+.dtc-heading .eyebrow{margin-bottom:8px}
+.dtc-heading h3{font-size:15px;margin:0}
+.dtc-optional{margin-left:8px;color:var(--muted);font-size:11px;font-weight:400}
+.dtc-copy{max-width:620px;color:var(--soft);font-size:11px;line-height:1.75;margin:0 0 18px}
+.dtc-fields{max-width:480px}
+.dtc-fields label small{margin-left:0}
+.dtc-editor .diagnostic-path{margin-bottom:16px}
+.dtc-editor .field-help{margin:8px 0 16px}
+.dtc-editor .diagnostic-actions{margin-top:10px}
 @media(max-width:760px){.diagnostic-editor{margin-left:12px;margin-right:12px}.diagnostic-timers{grid-template-columns:1fr 1fr}}
 @media(max-width:900px){.workbench{grid-template-columns:184px minmax(0,1fr)}.workspace-grid{grid-template-columns:minmax(0,1fr)}.inspector{border-left:0;border-top:1px solid var(--line)}.workspace-content .notice{left:204px}}
 @media(max-width:1000px){.source-page{padding:20px}}

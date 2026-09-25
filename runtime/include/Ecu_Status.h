@@ -16,7 +16,8 @@ typedef enum {
     ECU_ERR_TP_LENGTH,
     ECU_ERR_TP_FLOW,
     ECU_ERR_TP_BUSY,
-    ECU_ERR_IO
+    ECU_ERR_IO,
+    ECU_ERR_NVM
 } EcuStatus;
 
 const char *Ecu_StatusName(EcuStatus status);

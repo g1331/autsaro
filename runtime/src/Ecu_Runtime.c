@@ -1,4 +1,5 @@
 #include "Ecu_Runtime.h"
+#include "Dem.h"
 #include "CanIf.h"
 #include "Com.h"
 #include "Os.h"
@@ -111,15 +112,29 @@ static EcuStatus ValidateConfig(const EcuConfig *config)
                 }
             }
         }
+        if (diagnostic->dtc != NULL) {
+            const EcuDtcConfig *dtc = diagnostic->dtc;
+            if (dtc->code < 0x100u || dtc->code > 0xfffffeu ||
+                dtc->monitor_frame_index >= config->frame_count ||
+                config->frames[dtc->monitor_frame_index].direction != 0u ||
+                config->frames[dtc->monitor_frame_index].signal_count == 0u ||
+                config->frames[dtc->monitor_frame_index].timeout_ms == 0u) {
+                return ECU_ERR_CONFIG;
+            }
+        }
     }
     return ECU_OK;
 }
 
-EcuStatus Ecu_Init(const EcuConfig *config, CanTxSink sink)
+EcuStatus Ecu_Init(const EcuConfig *config, CanTxSink sink, const char *nvm_path)
 {
     EcuStatus result = ValidateConfig(config);
     if (result != ECU_OK || sink == NULL) {
         return ECU_ERR_CONFIG;
+    }
+    result = Dem_Init(config, nvm_path);
+    if (result != ECU_OK) {
+        return result;
     }
     Com_Init(config);
     CanIf_Init(config);

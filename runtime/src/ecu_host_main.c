@@ -79,12 +79,23 @@ static int Report(EcuStatus result)
     return printf("E %s\n", Ecu_StatusName(result)) < 0 ? 3 : 0;
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
     char line[256];
     EcuStatus result;
+    const char *nvm_path = NULL;
     (void)setvbuf(stdout, NULL, _IONBF, 0);
-    result = Ecu_Init(&Ecu_Config, EmitFrame);
+    if (Ecu_Config.diagnostic != NULL && Ecu_Config.diagnostic->dtc != NULL) {
+        if (argc != 3 || strcmp(argv[1], "--nvm") != 0 || argv[2][0] == '\0') {
+            (void)Report(ECU_ERR_CONFIG);
+            return 1;
+        }
+        nvm_path = argv[2];
+    } else if (argc != 1) {
+        (void)Report(ECU_ERR_CONFIG);
+        return 1;
+    }
+    result = Ecu_Init(&Ecu_Config, EmitFrame, nvm_path);
     if (result != ECU_OK) {
         (void)Report(result);
         return 1;

@@ -22,6 +22,11 @@ typedef struct {
     uint32_t initial_value;
 } EcuSignalConfig;
 
+typedef struct {
+    uint32_t code;
+    uint16_t monitor_frame_index;
+} EcuDtcConfig;
+
 /* Single physical DoCAN connection; DIDs read live, configured Com signals. */
 typedef struct {
     uint32_t request_can_id;
@@ -32,6 +37,7 @@ typedef struct {
     uint16_t did;
     const uint16_t *did_signal_ids;
     uint8_t did_signal_count;
+    const EcuDtcConfig *dtc;
 } EcuDiagnosticConfig;
 
 typedef struct {

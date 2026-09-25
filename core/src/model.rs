@@ -81,6 +81,15 @@ pub struct DiagnosticView {
     pub n_cr_ms: u32,
     pub did: u16,
     pub signal_paths: Vec<String>,
+    pub dtc: Option<DtcView>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DtcView {
+    pub path: String,
+    pub code: u32,
+    pub monitor_frame_path: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -188,6 +197,16 @@ pub fn validate_diagnostic(diagnostic: &DiagnosticView, frames: &[FrameView], si
             signal.length == 32 && frames.iter().any(|frame| frame.path == signal.frame_path && matches!(frame.direction, Direction::Tx)));
         if !valid {
             issues.push(Issue::error("DIAG_SIGNAL", "诊断 DID 只支持存在的 32 位 Tx Com 信号", Some(signal_path.clone())));
+        }
+    }
+    if let Some(dtc) = &diagnostic.dtc {
+        if !(0x100..=0xfffffe).contains(&dtc.code) {
+            issues.push(Issue::error("DTC_RANGE", "UDS DTC 须为 0x000100–0xFFFFFE，低于 0x100 或全 DTC 组代码不可用", Some(dtc.path.clone())));
+        }
+        if !frames.iter().any(|frame| frame.path == dtc.monitor_frame_path &&
+            matches!(frame.direction, Direction::Rx) && frame.timeout_ms.unwrap_or(0) > 0 &&
+            signals.iter().any(|signal| signal.frame_path == frame.path)) {
+            issues.push(Issue::error("DTC_MONITOR", "DTC 须绑定至少含一个信号且有正超时的 Rx CAN 帧", Some(dtc.monitor_frame_path.clone())));
         }
     }
     issues

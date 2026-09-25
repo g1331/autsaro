@@ -60,7 +60,14 @@ fn config_source(name: &str, frames: &[crate::model::FrameView], signals: &[Sign
         }
         source.push_str(" };\n");
         map.push('\n');
-        writeln!(source, "static const EcuDiagnosticConfig diagnostic = {{ {}u, {}u, {}u, {}u, {}u, {}u, diagnostic_signal_ids, {}u }};\n",
+        let dtc_ref = if let Some(dtc) = &diagnostic.dtc {
+            let (index, frame) = frames.iter().enumerate().find(|(_, frame)| frame.path == dtc.monitor_frame_path)
+                .ok_or_else(|| format!("DTC 监控帧未生成: {}", dtc.monitor_frame_path))?;
+            writeln!(map, "DTC code={} frame={} id={} dlc={} timeout={}", dtc.code, index, frame.id, frame.dlc, frame.timeout_ms.unwrap_or(0)).unwrap();
+            writeln!(source, "static const EcuDtcConfig dtc = {{ {}u, {}u }};", dtc.code, index).unwrap();
+            "&dtc"
+        } else { "NULL" };
+        writeln!(source, "static const EcuDiagnosticConfig diagnostic = {{ {}u, {}u, {}u, {}u, {}u, {}u, diagnostic_signal_ids, {}u, {dtc_ref} }};\n",
             diagnostic.request_id, diagnostic.response_id, diagnostic.s3_ms, diagnostic.n_bs_ms, diagnostic.n_cr_ms, diagnostic.did, diagnostic.signal_paths.len()).unwrap();
         "&diagnostic"
     } else { "NULL" };

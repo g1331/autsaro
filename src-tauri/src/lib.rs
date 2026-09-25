@@ -65,6 +65,16 @@ fn clear_diagnostic(state: State<'_, Arc<AppState>>) -> Result<WorkspaceView, St
 }
 
 #[tauri::command]
+fn configure_dtc(state: State<'_, Arc<AppState>>, code: u32, monitor_frame_path: String) -> Result<WorkspaceView, String> {
+    with_workspace(&state, |w| w.configure_dtc(code, monitor_frame_path))
+}
+
+#[tauri::command]
+fn clear_dtc(state: State<'_, Arc<AppState>>) -> Result<WorkspaceView, String> {
+    with_workspace(&state, Workspace::clear_dtc)
+}
+
+#[tauri::command]
 fn save_project(state: State<'_, Arc<AppState>>) -> Result<WorkspaceView, String> {
     with_workspace(&state, Workspace::save)
 }
@@ -104,7 +114,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Arc::new(AppState::default()))
-        .invoke_handler(tauri::generate_handler![create_project, open_project, add_frame, add_signal, update_frame, update_signal, configure_diagnostic, clear_diagnostic, save_project, validate_project, generate_project, build_project, run_virtual, run_diagnostic])
+        .invoke_handler(tauri::generate_handler![create_project, open_project, add_frame, add_signal, update_frame, update_signal, configure_diagnostic, clear_diagnostic, configure_dtc, clear_dtc, save_project, validate_project, generate_project, build_project, run_virtual, run_diagnostic])
         .run(tauri::generate_context!())
         .expect("Tauri 桌面工作台无法启动");
 }

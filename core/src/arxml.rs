@@ -1,9 +1,10 @@
 use crate::arxml_render::render_profile;
-use crate::model::{validate_diagnostic, validate_profile, DiagnosticView, Direction, FileView, FrameView, Issue, Severity, SignalView, WorkspaceView};
+use crate::model::{validate_diagnostic, validate_profile, DiagnosticView, Direction, DtcView, FileView, FrameView, Issue, Severity, SignalView, WorkspaceView};
 use crate::schema;
 use roxmltree::{Document, Node};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -203,13 +204,40 @@ fn install_staged(file: &SourceFile, stage: &Path, backup: &Path) -> Result<(), 
     Ok(())
 }
 
-type DiagnosticShape = BTreeMap<String, (String, String, Vec<(String, String, String, String)>)>;
+fn structural_node(node: Node<'_, '_>) -> String {
+    fn append(node: Node<'_, '_>, out: &mut String) {
+        if node.is_comment() {
+            out.push_str("<!--");
+            out.push_str(node.text().unwrap_or(""));
+            out.push_str("-->");
+        } else if node.is_element() {
+            out.push('<');
+            out.push_str(node.tag_name().name());
+            let mut attributes: Vec<_> = node.attributes().map(|a| (a.namespace().unwrap_or(""), a.name(), a.value())).collect();
+            attributes.sort_unstable();
+            for attribute in attributes { write!(out, " {:?}", attribute).unwrap(); }
+            out.push('>');
+            for child in node.children() { append(child, out); }
+            out.push_str("</");
+            out.push_str(node.tag_name().name());
+            out.push('>');
+        } else if node.is_text() {
+            let text = node.text().unwrap_or("").trim();
+            if !text.is_empty() { out.push_str(text); }
+        }
+    }
+    let mut out = String::new();
+    append(node, &mut out);
+    out
+}
+
+type DiagnosticShape = BTreeMap<String, (String, String, Vec<(String, String, String, String)>, String)>;
 
 fn diagnostic_shape(docs: &[Document<'_>]) -> Result<DiagnosticShape, String> {
     let mut shape = BTreeMap::new();
     for doc in docs {
         for module in doc.descendants().filter(|n| n.is_element() && n.tag_name().name() == "ECUC-MODULE-CONFIGURATION-VALUES"
-            && matches!(definition(*n).as_deref(), Some("/AUTOSAR/EcucDefs/Dcm" | "/AUTOSAR/EcucDefs/CanTp"))) {
+            && matches!(definition(*n).as_deref(), Some("/AUTOSAR/EcucDefs/Dcm" | "/AUTOSAR/EcucDefs/CanTp" | "/AUTOSAR/EcucDefs/Dem" | "/AUTOSAR/EcucDefs/NvM"))) {
             for node in module.descendants().filter(|n| n.is_element()
                 && matches!(n.tag_name().name(), "ECUC-MODULE-CONFIGURATION-VALUES" | "ECUC-CONTAINER-VALUE")) {
                 let mut values = Vec::new();
@@ -229,7 +257,9 @@ fn diagnostic_shape(docs: &[Document<'_>]) -> Result<DiagnosticShape, String> {
                 let path = path_of(node);
                 let definition_dest = node.children().find(|n| n.is_element() && n.tag_name().name() == "DEFINITION-REF")
                     .and_then(|n| n.attribute("DEST")).unwrap_or("").to_owned();
-                if shape.insert(path.clone(), (definition(node).unwrap_or_default(), definition_dest, values)).is_some() {
+                let strict = matches!(definition(module).as_deref(), Some("/AUTOSAR/EcucDefs/Dem" | "/AUTOSAR/EcucDefs/NvM"));
+                if shape.insert(path.clone(), (definition(node).unwrap_or_default(), definition_dest, values,
+                    if strict { structural_node(node) } else { String::new() })).is_some() {
                     return Err(format!("重复的诊断 ECUC 容器 {path}"));
                 }
             }
@@ -338,9 +368,41 @@ fn parse_diagnostic(files: &[SourceFile], project: &str, frames: &[FrameView], s
     if bindings.is_empty() || bindings.iter().enumerate().any(|(i, (offset, _))| *offset != i as u32 * 4) {
         return Err("诊断 DID 数据字节偏移必须是从零开始的连续 32 位信号".into());
     }
+    let dem_dtc_def = "/AUTOSAR/EcucDefs/Dem/DemConfigSet/DemDTC";
+    let dem_event_def = "/AUTOSAR/EcucDefs/Dem/DemConfigSet/DemEventParameter";
+    let dtc_nodes: Vec<_> = nodes.iter().copied().filter(|n| n.tag_name().name() == "ECUC-CONTAINER-VALUE"
+        && definition(*n).as_deref() == Some(dem_dtc_def)).collect();
+    let dtc = if dtc_nodes.is_empty() {
+        None
+    } else {
+        if dtc_nodes.len() != 1 { return Err("仅支持一个 Dem UDS DTC".into()); }
+        let node = dtc_nodes[0];
+        let code = parse_u32(param(node, "DemDtcValue"), "DemDtcValue", &path_of(node)).map_err(|e| e.message)?;
+        let event_nodes: Vec<_> = nodes.iter().copied().filter(|n| n.tag_name().name() == "ECUC-CONTAINER-VALUE"
+            && definition(*n).as_deref() == Some(dem_event_def)).collect();
+        if event_nodes.len() != 1 || ref_value(event_nodes[0], "DemDTCRef").as_deref() != Some(path_of(node).as_str()) {
+            return Err("Dem 事件须唯一地关联 UDS DTC".into());
+        }
+        let event = event_nodes[0];
+        let metadata: Vec<_> = event.descendants().filter(|n| n.is_element() && n.tag_name().name() == "SDG"
+            && n.attribute("GID") == Some("AutosarWorkbenchDtc")).collect();
+        if metadata.len() != 1 { return Err("Dem 事件缺少唯一的工具域 Rx 帧绑定".into()); }
+        let refs: Vec<_> = metadata[0].children().filter(|n| n.is_element()).collect();
+        if refs.len() != 1 || refs[0].tag_name().name() != "SD"
+            || refs[0].attribute("GID") != Some("MonitorFrameRef") {
+            return Err("Dem 事件须有唯一 MonitorFrameRef 工具域绑定".into());
+        }
+        let monitor_frame_path = refs[0].text().filter(|s| !s.is_empty())
+            .ok_or("Dem 事件缺少监控 Rx 帧绝对路径")?.to_owned();
+        Some(DtcView { path: path_of(node), code, monitor_frame_path })
+    };
+    if dtc.is_none() && nodes.iter().any(|n| n.tag_name().name() == "ECUC-MODULE-CONFIGURATION-VALUES"
+        && matches!(definition(*n).as_deref(), Some("/AUTOSAR/EcucDefs/Dem" | "/AUTOSAR/EcucDefs/NvM"))) {
+        return Err("Dem/NvM 配置存在但缺少受支持的单个 UDS DTC".into());
+    }
     let diagnostic = DiagnosticView {
         path: path_of(did_node), request_id: ids[0], response_id: ids[1], s3_ms, n_bs_ms, n_cr_ms, did,
-        signal_paths: bindings.into_iter().map(|(_, path)| path).collect(),
+        signal_paths: bindings.into_iter().map(|(_, path)| path).collect(), dtc,
     };
     if let Some(issue) = validate_diagnostic(&diagnostic, frames, signals).first() {
         return Err(format!("{}: {}", issue.code, issue.message));
@@ -348,7 +410,7 @@ fn parse_diagnostic(files: &[SourceFile], project: &str, frames: &[FrameView], s
     let expected = render_profile(project, frames, signals, Some(&diagnostic));
     let expected_doc = Document::parse(&expected).map_err(|e| e.to_string())?;
     if actual != diagnostic_shape(&[expected_doc])? {
-        return Err("CanTp/Dcm 配置含未知、不一致或不受支持的参数、引用、方向、会话或变体".into());
+        return Err("CanTp/Dcm/Dem/NvM 配置含未知、不一致或不受支持的参数、引用、方向、会话或变体".into());
     }
     Ok(Some(diagnostic))
 }
@@ -727,10 +789,75 @@ impl Workspace {
         let diagnostic = DiagnosticView {
             path: format!("/{}/DcmCfg/DcmConfigSet/DcmDsp/Did", self.name),
             request_id, response_id, s3_ms, n_bs_ms, n_cr_ms, did, signal_paths,
+            dtc: self.diagnostic.as_ref().and_then(|existing| existing.dtc.clone()),
         };
         self.replace_managed(self.frames.clone(), self.signals.clone(), Some(diagnostic))?;
         Ok(self.view())
     }
+    pub fn configure_dtc(&mut self, code: u32, monitor_frame_path: String) -> Result<WorkspaceView, String> {
+        let mut diagnostic = self.diagnostic.clone().ok_or("须先配置诊断服务，再配置 UDS DTC")?;
+        diagnostic.dtc = Some(DtcView {
+            path: format!("/{}/DemCfg/DemConfigSet/DTC", self.name), code, monitor_frame_path,
+        });
+        if let Some(issue) = validate_diagnostic(&diagnostic, &self.frames, &self.signals).first() {
+            return Err(format!("{}: {}", issue.code, issue.message));
+        }
+        self.replace_managed(self.frames.clone(), self.signals.clone(), Some(diagnostic))?;
+        Ok(self.view())
+    }
+
+    pub fn clear_dtc(&mut self) -> Result<WorkspaceView, String> {
+        let mut diagnostic = self.diagnostic.clone().ok_or("当前工程没有诊断配置")?;
+        if diagnostic.dtc.is_none() { return Err("当前工程没有可移除的受支持 DTC".into()); }
+        diagnostic.dtc = None;
+        if self.files.iter().any(|file| self.is_managed_file(file)) {
+            self.replace_managed(self.frames.clone(), self.signals.clone(), Some(diagnostic))?;
+            return Ok(self.view());
+        }
+        let targets: BTreeSet<_> = [
+            format!("/{}/DemCfg", self.name),
+            format!("/{}/NvMCfg", self.name),
+            format!("/{}/DcmCfg/DcmConfigSet/DcmDsd/Services/ClearDiagnosticInformation", self.name),
+            format!("/{}/DcmCfg/DcmConfigSet/DcmDsd/Services/ReadDTCInformation", self.name),
+            format!("/{}/DcmCfg/DcmConfigSet/DcmDsp/ClearDTC", self.name),
+            format!("/{}/DcmCfg/DcmConfigSet/DcmDsp/ReadDTCInformation", self.name),
+        ].into_iter().collect();
+        let expected = render_profile(&self.name, &self.frames, &self.signals, self.diagnostic.as_ref());
+        let expected_doc = Document::parse(&expected).map_err(|e| e.to_string())?;
+        let expected_nodes: BTreeMap<_, _> = expected_doc.descendants().filter(|n| n.is_element()
+            && child_text(*n, "SHORT-NAME").is_some() && targets.contains(&path_of(*n)))
+            .map(|n| (path_of(n), structural_node(n))).collect();
+        let mut patches: Vec<Vec<Patch>> = (0..self.files.len()).map(|_| Vec::new()).collect();
+        let mut removed = BTreeSet::new();
+        let mut owned_paths = BTreeSet::new();
+        for (index, file) in self.files.iter().enumerate() {
+            let doc = Document::parse(&file.text).map_err(|e| e.to_string())?;
+            for node in doc.descendants().filter(|n| n.is_element()
+                && child_text(*n, "SHORT-NAME").is_some() && targets.contains(&path_of(*n))) {
+                let path = path_of(node);
+                if expected_nodes.get(&path) != Some(&structural_node(node)) {
+                    return Err(format!("{path} 含未知或非工具所有的内容，拒绝删除"));
+                }
+                if !removed.insert(path.clone()) { return Err(format!("重复的 DTC 元素 {path}")); }
+                owned_paths.extend(node.descendants().filter(|n| n.is_element() && child_text(*n, "SHORT-NAME").is_some()).map(path_of));
+                patches[index].push(Patch { range: node.range(), value: String::new() });
+            }
+        }
+        if removed != targets { return Err("DTC ARXML 节点不完整，拒绝部分删除".into()); }
+        for file in &self.files {
+            let doc = Document::parse(&file.text).map_err(|e| e.to_string())?;
+            for node in doc.descendants().filter(|n| n.is_element() && n.tag_name().name().ends_with("-REF") && n.tag_name().name() != "DEFINITION-REF") {
+                if let Some(target) = node.text() {
+                    if owned_paths.contains(target) && !node.ancestors().any(|ancestor| removed.contains(&path_of(ancestor))) {
+                        return Err(format!("外部引用 {target} 仍依赖 DTC 配置，拒绝删除"));
+                    }
+                }
+            }
+        }
+        self.commit_patches(patches, |workspace| workspace.diagnostic.as_ref().is_some_and(|d| d.dtc.is_none()))?;
+        Ok(self.view())
+    }
+
 
     pub fn clear_diagnostic(&mut self) -> Result<WorkspaceView, String> {
         if self.diagnostic.is_none() { return Err("当前工程没有可移除的受支持诊断配置".into()); }
@@ -740,20 +867,33 @@ impl Workspace {
         }
         let mut patches: Vec<Vec<Patch>> = (0..self.files.len()).map(|_| Vec::new()).collect();
         let mut removed = BTreeSet::new();
-        let targets: BTreeSet<_> = [
+        let mut owned_paths = BTreeSet::new();
+        let mut targets: BTreeSet<_> = [
             format!("/{}/DcmCfg", self.name), format!("/{}/CanTpCfg", self.name),
             format!("/{}/NPdu_DiagRequest", self.name), format!("/{}/NPdu_DiagResponse", self.name),
             format!("/{}/DcmPdu_DiagRequest", self.name), format!("/{}/DcmPdu_DiagResponse", self.name),
         ].into_iter().collect();
-        let mut owned_paths = BTreeSet::new();
+        if self.diagnostic.as_ref().is_some_and(|d| d.dtc.is_some()) {
+            targets.insert(format!("/{}/DemCfg", self.name));
+            targets.insert(format!("/{}/NvMCfg", self.name));
+        }
+        let canif_targets: BTreeSet<_> = [
+            format!("/{}/CanIfCfg/CanIfInitCfg/Can_DiagRequest", self.name),
+            format!("/{}/CanIfCfg/CanIfInitCfg/Can_DiagResponse", self.name),
+        ].into_iter().collect();
+        let expected = render_profile(&self.name, &self.frames, &self.signals, self.diagnostic.as_ref());
+        let expected_doc = Document::parse(&expected).map_err(|e| e.to_string())?;
+        let expected_nodes: BTreeMap<_, _> = expected_doc.descendants().filter(|n| n.is_element()
+            && child_text(*n, "SHORT-NAME").is_some()
+            && (targets.contains(&path_of(*n)) || canif_targets.contains(&path_of(*n))))
+            .map(|n| (path_of(n), structural_node(n))).collect();
         for file in &self.files {
             let doc = Document::parse(&file.text).map_err(|e| e.to_string())?;
             for node in doc.descendants().filter(|n| n.is_element()) {
                 let path = path_of(node);
                 if (matches!(node.tag_name().name(), "ECUC-MODULE-CONFIGURATION-VALUES" | "N-PDU" | "DCM-I-PDU") &&
                     targets.contains(&path)) || (node.tag_name().name() == "ECUC-CONTAINER-VALUE" &&
-                    (path == format!("/{}/CanIfCfg/CanIfInitCfg/Can_DiagRequest", self.name) ||
-                        path == format!("/{}/CanIfCfg/CanIfInitCfg/Can_DiagResponse", self.name))) {
+                    canif_targets.contains(&path)) {
                     owned_paths.extend(node.descendants().filter(|n| n.is_element() && child_text(*n, "SHORT-NAME").is_some()).map(path_of));
                 }
             }
@@ -764,23 +904,16 @@ impl Workspace {
                 let path = path_of(node);
                 let owned = (matches!(node.tag_name().name(), "ECUC-MODULE-CONFIGURATION-VALUES" | "N-PDU" | "DCM-I-PDU") &&
                     targets.contains(&path)) || (node.tag_name().name() == "ECUC-CONTAINER-VALUE" &&
-                    (path == format!("/{}/CanIfCfg/CanIfInitCfg/Can_DiagRequest", self.name) ||
-                        path == format!("/{}/CanIfCfg/CanIfInitCfg/Can_DiagResponse", self.name)));
+                    canif_targets.contains(&path));
                 if !owned { continue; }
-                if node.descendants().any(|n| n.is_comment() || n.is_element() &&
-                    (!matches!(n.tag_name().name(), "ECUC-MODULE-CONFIGURATION-VALUES" | "ECUC-CONTAINER-VALUE" |
-                        "N-PDU" | "DCM-I-PDU" | "SHORT-NAME" | "DEFINITION-REF" | "CONTAINERS" |
-                        "PARAMETER-VALUES" | "ECUC-NUMERICAL-PARAM-VALUE" | "ECUC-TEXTUAL-PARAM-VALUE" |
-                        "REFERENCE-VALUES" | "ECUC-REFERENCE-VALUE" | "VALUE" | "VALUE-REF" |
-                        "SUB-CONTAINERS" | "HAS-DYNAMIC-LENGTH" | "LENGTH" | "ADMIN-DATA" | "SDGS" | "SDG" | "SD") ||
-                        n.tag_name().name() == "SDG" && n.attribute("GID") != Some("AutosarWorkbenchDiagnostic"))) {
+                if expected_nodes.get(&path) != Some(&structural_node(node)) {
                     return Err(format!("{path} 含非工具所有的 ARXML 内容，拒绝删除"));
                 }
                 if !removed.insert(path.clone()) { return Err(format!("重复的诊断元素 {path}")); }
                 patches[index].push(Patch { range: node.range(), value: String::new() });
             }
         }
-        if removed.len() != 8 { return Err("诊断 ARXML 节点不完整，拒绝部分删除".into()); }
+        if removed.len() != targets.len() + canif_targets.len() { return Err("诊断 ARXML 节点不完整，拒绝部分删除".into()); }
         for file in &self.files {
             let doc = Document::parse(&file.text).map_err(|e| e.to_string())?;
             for node in doc.descendants().filter(|n| n.is_element() && n.tag_name().name().ends_with("-REF") && n.tag_name().name() != "DEFINITION-REF") {
