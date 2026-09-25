@@ -458,23 +458,39 @@ fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restarts() {
         assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stdout));
         String::from_utf8(result.stdout).unwrap()
     };
-    let first = run(b"R 1110 2 0100\nR 1792 4 03190208\nT 51\nR 1792 4 03190208\nR 1792 4 03190200\n");
-    let first: Vec<_> = first.lines().map(|line| line.trim_end_matches('\r')).collect();
-    assert!(first.contains(&"X 1800 4 0359027F"), "{first:?}");
-    assert_eq!(first.iter().filter(|line| **line == "X 1800 4 0359027F").count(), 2, "{first:?}");
-    assert!(first.contains(&"X 1800 8 0759027F1234562F"), "{first:?}");
+    let first = run(b"R 1110 2 0100\nR 1792 4 03190208\nR 1792 4 03190108\nR 1792 4 03190100\nR 1792 3 021901\nR 1792 4 03190308\nT 51\nR 1792 4 03190208\nR 1792 4 03190108\nR 1792 4 03190110\nR 1792 4 03190200\n");
+    let first: Vec<_> = first.lines().map(|line| line.trim_end_matches('\r')).filter(|line| line.starts_with("X 1800 ")).collect();
+    assert_eq!(first, [
+        "X 1800 4 0359027F",
+        "X 1800 7 0659017F010000",
+        "X 1800 7 0659017F010000",
+        "X 1800 4 037F1913",
+        "X 1800 4 037F1912",
+        "X 1800 8 0759027F1234562F",
+        "X 1800 7 0659017F010001",
+        "X 1800 7 0659017F010000",
+        "X 1800 4 0359027F",
+    ], "{first:?}");
     assert!(storage.is_file());
 
-    let second = run(b"R 1792 4 03190208\nR 1792 5 0414FFFFFF\nR 1110 2 0200\nR 1792 4 03190208\nR 1792 3 021003\nR 1792 5 0414FFFFFF\nR 1792 4 03190208\n");
-    let second: Vec<_> = second.lines().map(|line| line.trim_end_matches('\r')).collect();
-    assert!(second.contains(&"X 1800 8 0759027F1234566D"), "{second:?}");
-    assert!(second.contains(&"X 1800 4 037F147F"), "{second:?}");
-    assert!(second.contains(&"X 1800 8 0759027F1234562C"), "{second:?}");
-    assert!(second.contains(&"X 1800 2 0154"), "{second:?}");
-    assert_eq!(second.iter().filter(|line| **line == "X 1800 4 0359027F").count(), 1, "{second:?}");
+    let second = run(b"R 1792 4 03190208\nR 1792 4 03190108\nR 1792 4 03190110\nR 1110 2 0200\nR 1792 4 03190208\nR 1792 4 03190108\nR 1792 5 0414FFFFFF\nR 1792 3 021003\nR 1792 5 0414000001\nR 1792 5 0414FFFFFF\nR 1792 4 03190208\nR 1792 4 03190108\n");
+    let second: Vec<_> = second.lines().map(|line| line.trim_end_matches('\r')).filter(|line| line.starts_with("X 1800 ")).collect();
+    assert_eq!(second, [
+        "X 1800 8 0759027F1234566D",
+        "X 1800 7 0659017F010001",
+        "X 1800 7 0659017F010000",
+        "X 1800 8 0759027F1234562C",
+        "X 1800 7 0659017F010001",
+        "X 1800 4 037F147F",
+        "X 1800 7 06500300320032",
+        "X 1800 4 037F1431",
+        "X 1800 2 0154",
+        "X 1800 4 0359027F",
+        "X 1800 7 0659017F010000",
+    ], "{second:?}");
 
-    let third = run(b"R 1792 4 03190208\n");
-    assert_eq!(third.lines().map(|line| line.trim_end_matches('\r')).collect::<Vec<_>>(), ["X 1800 4 0359027F"]);
+    let third = run(b"R 1792 4 03190208\nR 1792 4 03190108\n");
+    assert_eq!(third.lines().map(|line| line.trim_end_matches('\r')).collect::<Vec<_>>(), ["X 1800 4 0359027F", "X 1800 7 0659017F010000"]);
     let mut slots = fs::read(&storage).unwrap();
     assert_eq!(slots.len(), 64);
     let first_sequence = u64::from_le_bytes(slots[4..12].try_into().unwrap());
@@ -498,7 +514,11 @@ fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restarts() {
     assert_eq!(diagnostic.did, 0x1234);
     let simple = temp.0.join("GeneratedWithoutDtc");
     generator::generate(&mut without_dtc, &simple).unwrap();
-    generator::build(&simple).unwrap();
+    let binary = generator::build(&simple).unwrap().binary_path;
+    let mut ecu = Command::new(binary).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
+    ecu.stdin.take().unwrap().write_all(b"R 1792 4 03190108\n").unwrap();
+    let output = ecu.wait_with_output().unwrap();
+    assert_eq!(String::from_utf8(output.stdout).unwrap().lines().map(|line| line.trim_end_matches('\r')).collect::<Vec<_>>(), ["X 1800 4 037F1911"]);
     assert!(host::run_diagnostic(&simple).unwrap().passed);
 }
 

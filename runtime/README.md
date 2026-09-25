@@ -35,7 +35,7 @@ Dcm 提供 0x10 默认/扩展会话、0x3E TesterPresent（子功能 0x80 抑制
 
 可选 0x31/0x01 StartRoutine 只能在已启用 0x2E 时配置一个 RID；`profile.txt` 增加 `RESET_ROUTINE id=<十进制>` 行，未配置时不输出该行且服务返回 NRC 0x11。请求载荷为 `31 01 <RID 高字节> <RID 低字节>`，扩展会话中生成的 `Ecu_DcmRestoreDid` 回调按 DID 配置顺序经 Rte → Com 将绑定的 Tx 信号写回各自的初始值；成功响应 `71 01 <RID 高字节> <RID 低字节>`，0x22 与周期 CAN 均能观察到恢复。默认会话或 RID 不匹配返回 NRC 0x31，StopRoutine/RequestRoutineResults 返回 NRC 0x12，长度错误返回 NRC 0x13，回调写入失败返回 NRC 0x22。没有选项/状态记录、持久化、0x27 安全访问或失败时的事务回滚；例程只作用于当前进程的易失状态。
 
-可选单 DTC：`profile.txt` 的 `DTC code=<十进制> frame=<生成帧索引> id=<CAN ID> dlc=<字节数> timeout=<ms>` 指定一个带信号的 Rx 帧（超时为正），DTC 范围 `0x000100–0xFFFFFE`。首次有效 Rx 帧令监控测试完成；其后第一次达到超时阈值，Com → Dem 记故障并持久化。Dcm 在默认/扩展会话支持 0x19/0x02，返回状态可用掩码 `0x7F` 与按请求掩码过滤的单条 DTC；0x14 仅扩展会话和 `0xFFFFFF` 全部清除，默认会话返回 NRC 0x7F，其他组返回 NRC 0x31，持久化失败返回 NRC 0x72。未配置 DTC 时这两个服务不可用（NRC 0x11）。
+可选单 DTC：`profile.txt` 的 `DTC code=<十进制> frame=<生成帧索引> id=<CAN ID> dlc=<字节数> timeout=<ms>` 指定一个带信号的 Rx 帧（超时为正），DTC 范围 `0x000100–0xFFFFFE`。首次有效 Rx 帧令监控测试完成；其后第一次达到超时阈值，Com → Dem 记故障并持久化。Dcm 在默认/扩展会话支持 0x19/0x01，按状态掩码返回匹配 DTC 数量及状态可用掩码 `0x7F`；当前最多一个 DTC，因此数量为 0 或 1。支持单 DTC 的 0x19/0x02，按请求掩码读取；其他 0x19 子功能返回 NRC 0x12。0x14 仅扩展会话和 `0xFFFFFF` 全部清除，默认会话返回 NRC 0x7F，其他组返回 NRC 0x31，持久化失败返回 NRC 0x72。未配置 DTC 时 0x19/0x01、0x19/0x02 与 0x14 返回 NRC 0x11。
 
 配置 DTC 的 `ecu_host` **必须**以 `--nvm <独占的文件路径>` 启动；无 DTC 的旧工程仍不带参数运行。缺少参数返回 `E CONFIG`，既有文件损坏、配置指纹不匹配或写入失败返回 `E NVM`，不降级成空 DTC。不存在的文件会创建两个 32 字节 CRC32 保护槽位；每次状态改变交替写槽并 `fflush`、`fsync`/`_commit` 后才确认，启动要求两个槽位均完整，任一损坏即拒绝使用以避免旧状态覆盖最新故障。主机进程启动作为新的操作周期：初始/清除状态 `0x50`，有效 Rx 首次测试通过 `0x00`，首次超时 `0x2F`，故障后重启 `0x6D`，该周期再收到有效帧 `0x2C`；后续周期才清除 pending 标志。独立测试器为每次验证分配隔离文件，不复用实际 ECU 状态。
 
