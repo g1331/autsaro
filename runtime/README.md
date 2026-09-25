@@ -31,11 +31,13 @@ cl /TC /W4 /I runtime\include runtime\src\Can.c runtime\src\CanIf.c runtime\src\
 
 Dcm 提供 0x10 默认/扩展会话、0x3E TesterPresent（子功能 0x80 抑制正响应）和 0x22 一个有序实时 DID。0x10 的会话切换仅在正响应发送确认后提交；扩展会话 S3 超时回默认。一个 DID 从 1–8 个 32-bit Tx Com 信号读取并以每项大端 4 字节拼接；默认会话或 DID 不匹配返回 `7F 22 31`，长度错误返回 NRC 0x13，当前值不可读返回 NRC 0x22。P2=50 ms、P2*=500 ms 写在 0x10 响应中；S3 配置不得小于 5000 ms。`profile.txt` 的 `DIAGNOSTIC` 行记录生成 ID、计时器与 DID 信号 ID 顺序，供独立主机测试器驱动。
 
+可选 0x2E WriteDataByIdentifier 仅作用于当前诊断配置的一个 DID，须显式启用；`profile.txt` 增加 `WRITE_DID did=<十进制>` 行，未启用时不输出该行并返回 NRC 0x11。Dcm 只在扩展会话接受与 DID 的 1–8 个 32-bit Tx 信号相符的完整数据记录，每项按大端 4 字节传入生成的 `Ecu_DcmWrite_<index>` 回调，回调经 Rte → Com 修改当前值；0x22 读回与周期 CAN 帧立即可见。默认会话或 DID 不匹配返回 NRC 0x31，记录长度不符返回 NRC 0x13。写入可以是单帧或多帧请求，S3 回默认会话后不能继续写；ECU 进程重启后值恢复配置初值。此功能只写易失的主机虚拟应用状态，不使用 NvM/Flash，也没有 0x27 安全访问级别；会话限制不能当作认证。
+
 可选单 DTC：`profile.txt` 的 `DTC code=<十进制> frame=<生成帧索引> id=<CAN ID> dlc=<字节数> timeout=<ms>` 指定一个带信号的 Rx 帧（超时为正），DTC 范围 `0x000100–0xFFFFFE`。首次有效 Rx 帧令监控测试完成；其后第一次达到超时阈值，Com → Dem 记故障并持久化。Dcm 在默认/扩展会话支持 0x19/0x02，返回状态可用掩码 `0x7F` 与按请求掩码过滤的单条 DTC；0x14 仅扩展会话和 `0xFFFFFF` 全部清除，默认会话返回 NRC 0x7F，其他组返回 NRC 0x31，持久化失败返回 NRC 0x72。未配置 DTC 时这两个服务不可用（NRC 0x11）。
 
 配置 DTC 的 `ecu_host` **必须**以 `--nvm <独占的文件路径>` 启动；无 DTC 的旧工程仍不带参数运行。缺少参数返回 `E CONFIG`，既有文件损坏、配置指纹不匹配或写入失败返回 `E NVM`，不降级成空 DTC。不存在的文件会创建两个 32 字节 CRC32 保护槽位；每次状态改变交替写槽并 `fflush`、`fsync`/`_commit` 后才确认，启动要求两个槽位均完整，任一损坏即拒绝使用以避免旧状态覆盖最新故障。主机进程启动作为新的操作周期：初始/清除状态 `0x50`，有效 Rx 首次测试通过 `0x00`，首次超时 `0x2F`，故障后重启 `0x6D`，该周期再收到有效帧 `0x2C`；后续周期才清除 pending 标志。独立测试器为每次验证分配隔离文件，不复用实际 ECU 状态。
 
-这是有边界的主机虚拟实现：未实现多事件 Dem、真实 NvM 设备与 Ea/Fee/MemIf 目标、0x27/0x2E/0x31、其他 0x19 子功能和 0x14 清除组、功能寻址、跨连接并发、实车确认时序或完整 ECUC 外部 ComM 引用；不以 XSD 通过代替 AUTOSAR/ISO 语义与互操作认证。Dem 事件到监测 Rx 帧只在工具专属 SDG 中绑定，操作周期只是进程启动。
+这是有边界的主机虚拟实现：未实现多事件 Dem、真实 NvM 设备与 Ea/Fee/MemIf 目标、0x27/0x31、其他写入 DID/持久写入、其他 0x19 子功能和 0x14 清除组、功能寻址、跨连接并发、实车确认时序或完整 ECUC 外部 ComM 引用；不以 XSD 通过代替 AUTOSAR/ISO 语义与互操作认证。Dem 事件到监测 Rx 帧只在工具专属 SDG 中绑定，操作周期只是进程启动。
 
 ## 逐行 stdin/stdout 协议
 

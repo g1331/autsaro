@@ -55,8 +55,8 @@ fn update_signal(state: State<'_, Arc<AppState>>, path: String, changes: serde_j
 }
 
 #[tauri::command]
-fn configure_diagnostic(state: State<'_, Arc<AppState>>, request_id: u32, response_id: u32, s3_ms: u32, n_bs_ms: u32, n_cr_ms: u32, did: u16, signal_paths: Vec<String>) -> Result<WorkspaceView, String> {
-    with_workspace(&state, |w| w.configure_diagnostic(request_id, response_id, s3_ms, n_bs_ms, n_cr_ms, did, signal_paths))
+fn configure_diagnostic(state: State<'_, Arc<AppState>>, request_id: u32, response_id: u32, s3_ms: u32, n_bs_ms: u32, n_cr_ms: u32, did: u16, signal_paths: Vec<String>, write_enabled: bool) -> Result<WorkspaceView, String> {
+    with_workspace(&state, |w| w.configure_diagnostic(request_id, response_id, s3_ms, n_bs_ms, n_cr_ms, did, signal_paths, write_enabled))
 }
 
 #[tauri::command]

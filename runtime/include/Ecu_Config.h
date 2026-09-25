@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "Ecu_Status.h"
 
 /* 仅支持标准 11 位 CAN、DLC 1..8、LSB0 小端无符号信号。 */
 typedef struct {
@@ -27,6 +28,8 @@ typedef struct {
     uint16_t monitor_frame_index;
 } EcuDtcConfig;
 
+typedef EcuStatus (*EcuDidWriteFunction)(const uint8_t data[4]);
+
 /* Single physical DoCAN connection; DIDs read live, configured Com signals. */
 typedef struct {
     uint32_t request_can_id;
@@ -38,6 +41,7 @@ typedef struct {
     const uint16_t *did_signal_ids;
     uint8_t did_signal_count;
     const EcuDtcConfig *dtc;
+    const EcuDidWriteFunction *did_writers; /* NULL disables WriteDataByIdentifier. */
 } EcuDiagnosticConfig;
 
 typedef struct {

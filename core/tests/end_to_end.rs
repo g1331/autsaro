@@ -290,9 +290,9 @@ fn configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_multiframe_did(
     project.add_signal(frame.clone(), "LiveA".into(), 0, 32, 0).unwrap();
     let view = project.add_signal(frame.clone(), "LiveB".into(), 32, 32, 0).unwrap();
     let sources: Vec<_> = view.signals.iter().filter(|signal| signal.frame_path == frame).map(|signal| signal.path.clone()).collect();
-    assert!(project.configure_diagnostic(0x321, 0x708, 5000, 200, 200, 0x1234, sources.clone()).is_err());
+    assert!(project.configure_diagnostic(0x321, 0x708, 5000, 200, 200, 0x1234, sources.clone(), false).is_err());
     assert!(project.view().diagnostic.is_none());
-    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, sources).unwrap();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, sources, false).unwrap();
     let validation = project.validate().unwrap();
     assert!(validation.issues.is_empty(), "{:?}", validation.issues);
     project.save().unwrap();
@@ -344,7 +344,7 @@ fn diagnostic_transport_discards_bad_or_timed_out_multiframe_requests_and_recove
     project.add_signal(frame.clone(), "LiveValue".into(), 0, 32, 42).unwrap();
     let view = project.add_signal(frame, "LiveOther".into(), 32, 32, 43).unwrap();
     let sources = view.signals.iter().map(|signal| signal.path.clone()).collect();
-    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, sources).unwrap();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, sources, false).unwrap();
     project.save().unwrap();
     let generated = temp.0.join("GeneratedDiag");
     generator::generate(&mut project, &generated).unwrap();
@@ -378,7 +378,7 @@ fn diagnostic_tester_present_keeps_session_and_fc_block_size_paces_response() {
         project.add_signal(frame, format!("{name}High"), 32, 32, 0).unwrap();
     }
     let sources = project.view().signals.iter().map(|signal| signal.path.clone()).collect();
-    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, sources).unwrap();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, sources, false).unwrap();
     project.save().unwrap();
     let generated = temp.0.join("GeneratedDiag");
     generator::generate(&mut project, &generated).unwrap();
@@ -412,7 +412,7 @@ fn unsupported_imported_transport_padding_blocks_diagnostic_generation() {
     let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
     let frame = project.add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(1000), None).unwrap().frames[0].path.clone();
     let signal = project.add_signal(frame, "LiveA".into(), 0, 32, 0).unwrap().signals[0].path.clone();
-    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, vec![signal]).unwrap();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, vec![signal], false).unwrap();
     project.save().unwrap();
     let source = temp.0.join("Diag/Diag.arxml");
     let original = fs::read_to_string(&source).unwrap();
@@ -434,7 +434,7 @@ fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restarts() {
     let rx = project.add_frame("Heartbeat".into(), 0x456, 2, Direction::Rx, None, Some(50)).unwrap()
         .frames.into_iter().find(|frame| frame.name == "Heartbeat").unwrap().path;
     project.add_signal(rx.clone(), "HeartbeatValue".into(), 0, 8, 0).unwrap();
-    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, vec![did_signal]).unwrap();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, vec![did_signal], false).unwrap();
     project.configure_dtc(0x123456, rx.clone()).unwrap();
     project.save().unwrap();
     let source = temp.0.join("Diag/Diag.arxml");
@@ -500,4 +500,54 @@ fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restarts() {
     generator::generate(&mut without_dtc, &simple).unwrap();
     generator::build(&simple).unwrap();
     assert!(host::run_diagnostic(&simple).unwrap().passed);
+}
+
+#[cfg(windows)]
+#[test]
+fn extended_session_write_did_changes_live_can_but_not_restart_state() {
+    let temp = Scratch::new();
+    let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
+    let frame = project.add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(100), None).unwrap().frames[0].path.clone();
+    project.add_signal(frame.clone(), "LiveA".into(), 0, 32, 1).unwrap();
+    let view = project.add_signal(frame.clone(), "LiveB".into(), 32, 32, 2).unwrap();
+    let signals = view.signals.iter().filter(|signal| signal.frame_path == frame)
+        .map(|signal| signal.path.clone()).collect();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, signals, true).unwrap();
+    project.save().unwrap();
+    let source = temp.0.join("Diag/Diag.arxml");
+    let original = fs::read_to_string(&source).unwrap();
+    fs::write(&source, original.replace("</ELEMENTS>", "<!-- owner note --></ELEMENTS>")).unwrap();
+    let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
+    assert!(reopened.view().diagnostic.unwrap().write_enabled);
+    let generated = temp.0.join("GeneratedWrite");
+    generator::generate(&mut reopened, &generated).unwrap();
+    let binary = generator::build(&generated).unwrap().binary_path;
+    let run = |commands: &[u8]| {
+        let mut ecu = Command::new(&binary).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
+        ecu.stdin.take().unwrap().write_all(commands).unwrap();
+        let result = ecu.wait_with_output().unwrap();
+        assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stdout));
+        String::from_utf8(result.stdout).unwrap()
+    };
+    let first = run(b"R 1792 4 032E1234\nR 1792 3 021003\nR 1792 4 032E4321\nR 1792 4 032E1234\nR 1792 4 03221234\nR 1792 3 300000\nR 1792 8 100B2E1234112233\nR 1792 6 214455667788\nR 1792 4 03221234\nR 1792 3 300000\nT 100\nT 5101\nR 1792 4 032E1234\n");
+    let responses: Vec<_> = first.lines().map(|line| line.trim_end_matches('\r'))
+        .filter(|line| line.starts_with("X 1800 ")).collect();
+    assert_eq!(responses, [
+        "X 1800 4 037F2E31", "X 1800 7 06500300320032",
+        "X 1800 4 037F2E31", "X 1800 4 037F2E13",
+        "X 1800 8 100B621234000000", "X 1800 6 210100000002",
+        "X 1800 3 300000", "X 1800 4 036E1234",
+        "X 1800 8 100B621234112233", "X 1800 6 214455667788",
+        "X 1800 4 037F2E31",
+    ], "{first}");
+    assert!(first.lines().any(|line| line.trim_end_matches('\r') == "X 801 8 4433221188776655"), "{first}");
+    let after_restart = run(b"R 1792 3 021003\nR 1792 4 03221234\nR 1792 3 300000\n");
+    assert!(after_restart.contains("X 1800 8 100B621234000000"), "{after_restart}");
+    assert!(after_restart.contains("X 1800 6 210100000002"), "{after_restart}");
+    let report = host::run_diagnostic(&generated).unwrap();
+    assert!(report.passed, "{}", report.log);
+    assert!(report.events.iter().any(|event| event.contains("写入")));
+    reopened.clear_diagnostic().unwrap();
+    reopened.save().unwrap();
+    assert!(fs::read_to_string(&source).unwrap().contains("<!-- owner note -->"));
 }

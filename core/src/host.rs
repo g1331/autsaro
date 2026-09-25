@@ -10,7 +10,7 @@ use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Clone)]
-struct Signal { id: u16, frame: String, start: u8, length: u8 }
+struct Signal { id: u16, frame: String, start: u8, length: u8, initial: u32 }
 #[derive(Clone)]
 struct Frame { path: String, id: u32, dlc: u8, tx: bool, period: u32, timeout: u32 }
 struct DiagnosticProfile {
@@ -21,6 +21,7 @@ struct DiagnosticProfile {
     n_cr_ms: u32,
     did: u16,
     signal_ids: Vec<u16>,
+    write_enabled: bool,
 }
 struct DtcProfile { code: u32, frame_index: usize, id: u32, dlc: u8, timeout: u32 }
 struct Profile { frames: Vec<Frame>, signals: Vec<Signal>, diagnostic: Option<DiagnosticProfile>, dtc: Option<DtcProfile>, text: String }
@@ -31,6 +32,7 @@ fn profile(dir: &Path) -> Result<Profile, String> {
     let mut signals = Vec::new();
     let mut diagnostic = None;
     let mut dtc = None;
+    let mut write_did = None;
     for line in text.lines() {
         let cols: Vec<_> = line.split_whitespace().collect();
         match cols.first().copied() {
@@ -48,7 +50,7 @@ fn profile(dir: &Path) -> Result<Profile, String> {
             Some("SIGNAL") if cols.len() >= 6 => {
                 let field = |name: &str| cols.iter().find_map(|c| c.strip_prefix(name));
                 let (start, length) = field("bits=").ok_or("缺少信号位段")?.split_once(':').ok_or("位段无效")?;
-                signals.push(Signal { id: cols[1].parse().map_err(|_| "信号 ID 无效")?, frame: field("frame=").ok_or("缺少信号帧引用")?.into(), start: start.parse().map_err(|_| "起始位无效")?, length: length.parse().map_err(|_| "长度无效")? });
+                signals.push(Signal { id: cols[1].parse().map_err(|_| "信号 ID 无效")?, frame: field("frame=").ok_or("缺少信号帧引用")?.into(), start: start.parse().map_err(|_| "起始位无效")?, length: length.parse().map_err(|_| "长度无效")?, initial: field("initial=").ok_or("缺少信号初值")?.parse().map_err(|_| "信号初值无效")? });
             }
             Some("DIAGNOSTIC") if cols.len() == 8 => {
                 let field = |name: &str| cols.iter().find_map(|column| column.strip_prefix(name));
@@ -63,10 +65,17 @@ fn profile(dir: &Path) -> Result<Profile, String> {
                     n_cr_ms: field("ncr=").ok_or("诊断 N_Cr 缺失")?.parse().map_err(|_| "诊断 N_Cr 无效")?,
                     did: field("did=").ok_or("诊断 DID 缺失")?.parse().map_err(|_| "诊断 DID 无效")?,
                     signal_ids: ids,
+                    write_enabled: false,
                 };
                 if diagnostic.replace(config).is_some() { return Err("诊断清单含多个连接".into()); }
             }
             Some("DIAGNOSTIC") => return Err("诊断清单字段数量错误".into()),
+            Some("WRITE_DID") if cols.len() == 2 => {
+                let did = cols[1].strip_prefix("did=").ok_or("写入 DID 清单缺少编号")?
+                    .parse::<u16>().map_err(|_| "写入 DID 编号无效")?;
+                if write_did.replace(did).is_some() { return Err("诊断清单含多个写入 DID".into()); }
+            }
+            Some("WRITE_DID") => return Err("写入 DID 清单字段数量错误".into()),
             Some("DTC") if cols.len() == 6 => {
                 let field = |name: &str| cols.iter().find_map(|column| column.strip_prefix(name));
                 let config = DtcProfile {
@@ -83,6 +92,11 @@ fn profile(dir: &Path) -> Result<Profile, String> {
         }
     }
     if frames.is_empty() || signals.is_empty() { return Err("生成配置缺少帧或信号".into()); }
+    if let Some(did) = write_did {
+        let configured = diagnostic.as_mut().ok_or("写入 DID 缺少诊断连接")?;
+        if configured.did != did { return Err("写入 DID 与诊断连接不一致".into()); }
+        configured.write_enabled = true;
+    }
     if let Some(config) = &dtc {
         let frame = frames.get(config.frame_index).ok_or("DTC 监控帧不存在")?;
         if diagnostic.is_none() || config.code < 0x100 || config.code >= 0xFFFFFF ||
@@ -362,6 +376,9 @@ pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
         prepare(&mut ecu, &profile, salt)?;
         let before_session = diagnostic_request(&mut ecu, fence, did_request.clone())?;
         diagnostic_frames(&before_session, &[vec![0x03, 0x7F, 0x22, 0x31]], &profile, diagnostic, salt)?;
+        let before_write = diagnostic_request(&mut ecu, fence, format!("R {request} 4 032E{did:04X}"))?;
+        diagnostic_frames(&before_write, &[vec![0x03, 0x7F, 0x2E, if diagnostic.write_enabled { 0x31 } else { 0x11 }]],
+            &profile, diagnostic, salt)?;
         events.push("默认会话拒绝受限 DID".into());
 
         let session = diagnostic_request(&mut ecu, fence, format!("R {request} 3 021003"))?;
@@ -430,12 +447,23 @@ pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
         Some(dtc) => verify_persistent_dtc(&binary, &profile, diagnostic, dtc, salt, &mut events),
         None => Ok(()),
     });
-    match outcome {
-        Ok(()) => Ok(RunReport { passed: true, log: if profile.dtc.is_some() {
-            "独立测试器验证 CAN 诊断会话、实时 DID、流控及 Dem/NvM DTC 跨进程保持".into()
+    let outcome = outcome.and_then(|()| {
+        if diagnostic.write_enabled {
+            verify_writable_did(&binary, &profile, diagnostic, salt, &mut events)
         } else {
-            "独立测试器验证 CAN 诊断会话、实时 DID、传输流控与故障恢复".into()
-        }, events }),
+            Ok(())
+        }
+    });
+    match outcome {
+        Ok(()) => {
+            let mut log = if profile.dtc.is_some() {
+                "独立测试器验证 CAN 诊断会话、实时 DID、流控及 Dem/NvM DTC 跨进程保持".to_owned()
+            } else {
+                "独立测试器验证 CAN 诊断会话、实时 DID、传输流控与故障恢复".to_owned()
+            };
+            if diagnostic.write_enabled { log.push_str("；扩展会话 0x2E 易失写入"); }
+            Ok(RunReport { passed: true, log, events })
+        }
         Err(error) => Ok(RunReport { passed: false, log: error, events }),
     }
 }
@@ -499,5 +527,128 @@ fn verify_persistent_dtc(
         return Err("损坏的 NvM 状态未在启动时被明确拒绝".into());
     }
     events.push("双份 NvM 状态损坏在启动时被拒绝，未伪造空 DTC".into());
+    Ok(())
+}
+
+fn expect_did_bytes(
+    ecu: &mut EcuProcess, profile: &Profile, diagnostic: &DiagnosticProfile, salt: u32, data: &[u8],
+) -> Result<(), String> {
+    let fence = profile.signals[0].id;
+    let request = diagnostic.request_id;
+    let did = diagnostic.did;
+    let mut expected = vec![0x62, (did >> 8) as u8, did as u8];
+    expected.extend_from_slice(data);
+    let first = diagnostic_request(ecu, fence, format!("R {request} 4 0322{did:04X}"))?;
+    if expected.len() <= 7 {
+        let mut single = vec![expected.len() as u8];
+        single.extend_from_slice(&expected);
+        return diagnostic_frames(&first, &[single], profile, diagnostic, salt);
+    }
+    let mut ff = vec![0x10 | ((expected.len() >> 8) as u8 & 0x0F), expected.len() as u8];
+    ff.extend_from_slice(&expected[..6]);
+    diagnostic_frames(&first, &[ff], profile, diagnostic, salt)?;
+    let following = diagnostic_request(ecu, fence, format!("R {request} 3 300000"))?;
+    let mut frames = Vec::new();
+    for (index, chunk) in expected[6..].chunks(7).enumerate() {
+        let mut cf = vec![0x20 | ((index + 1) as u8 & 0x0F)];
+        cf.extend_from_slice(chunk);
+        frames.push(cf);
+    }
+    diagnostic_frames(&following, &frames, profile, diagnostic, salt)
+}
+
+fn verify_writable_did(
+    binary: &Path, profile: &Profile, diagnostic: &DiagnosticProfile, salt: u32, events: &mut Vec<String>,
+) -> Result<(), String> {
+    let storage = profile.dtc.as_ref().map(|_| TempNvm::new());
+    let mut ecu = EcuProcess::start(binary, storage.as_ref().map(|state| state.path.as_path()))?;
+    let request = diagnostic.request_id;
+    let fence = profile.signals[0].id;
+    let did = diagnostic.did;
+    prepare(&mut ecu, profile, salt)?;
+    let session = diagnostic_request(&mut ecu, fence, format!("R {request} 3 021003"))?;
+    diagnostic_frames(&session, &[vec![0x06, 0x50, 0x03, 0x00, 0x32, 0x00, 0x32]], profile, diagnostic, salt)?;
+    let other_did = if did == u16::MAX { did - 1 } else { did + 1 };
+    let unknown = diagnostic_request(&mut ecu, fence, format!("R {request} 4 032E{other_did:04X}"))?;
+    diagnostic_frames(&unknown, &[vec![0x03, 0x7F, 0x2E, 0x31]], profile, diagnostic, salt)?;
+    let truncated = diagnostic_request(&mut ecu, fence, format!("R {request} 4 032E{did:04X}"))?;
+    diagnostic_frames(&truncated, &[vec![0x03, 0x7F, 0x2E, 0x13]], profile, diagnostic, salt)?;
+
+    let signals: Vec<_> = diagnostic.signal_ids.iter().map(|id|
+        profile.signals.iter().find(|signal| signal.id == *id).ok_or("写入 DID 引用不存在的信号"))
+        .collect::<Result<_, _>>()?;
+    let written: Vec<u32> = signals.iter().map(|signal| !value(signal, salt)).collect();
+    let mut record = vec![0x2E, (did >> 8) as u8, did as u8];
+    for value in &written { record.extend_from_slice(&value.to_be_bytes()); }
+    let positive = vec![0x03, 0x6E, (did >> 8) as u8, did as u8];
+    if record.len() <= 7 {
+        let mut sf = vec![record.len() as u8];
+        sf.extend_from_slice(&record);
+        let response = diagnostic_request(&mut ecu, fence, format!("R {request} {} {}", sf.len(), hex_payload(&sf)))?;
+        diagnostic_frames(&response, &[positive], profile, diagnostic, salt)?;
+    } else {
+        let mut ff = vec![0x10 | ((record.len() >> 8) as u8 & 0x0F), record.len() as u8];
+        ff.extend_from_slice(&record[..6]);
+        let flow = diagnostic_request(&mut ecu, fence, format!("R {request} {} {}", ff.len(), hex_payload(&ff)))?;
+        diagnostic_frames(&flow, &[vec![0x30, 0x00, 0x00]], profile, diagnostic, salt)?;
+        let chunk_count = (record.len() - 6).div_ceil(7);
+        for (index, chunk) in record[6..].chunks(7).enumerate() {
+            let mut cf = vec![0x20 | ((index + 1) as u8 & 0x0F)];
+            cf.extend_from_slice(chunk);
+            let response = diagnostic_request(&mut ecu, fence, format!("R {request} {} {}", cf.len(), hex_payload(&cf)))?;
+            let expected = if index + 1 == chunk_count { std::slice::from_ref(&positive) } else { &[] };
+            diagnostic_frames(&response, expected, profile, diagnostic, salt)?;
+        }
+    }
+    let mut bytes = Vec::with_capacity(written.len() * 4);
+    for value in &written { bytes.extend_from_slice(&value.to_be_bytes()); }
+    expect_did_bytes(&mut ecu, profile, diagnostic, salt, &bytes)?;
+    for (signal, expected) in signals.iter().zip(&written) {
+        let (frames, response) = ecu.query(&[], signal.id)?;
+        if !frames.is_empty() || parse_value(&response)? != (*expected, true) {
+            return Err(format!("0x2E 未更新实际 Com 信号 {}", signal.id));
+        }
+    }
+    let monitored_frame = profile.frames.iter().find(|frame| frame.path == signals[0].frame && frame.tx)
+        .ok_or("写入 DID 未关联发送帧")?;
+    let periodic = tick(&mut ecu, profile, monitored_frame.period as u64)?;
+    let mut observed = false;
+    for line in periodic {
+        let (id, payload) = parse_frame(&line)?;
+        let frame = profile.frames.iter().find(|frame| frame.tx && frame.id == id && frame.dlc as usize == payload.len())
+            .ok_or("0x2E 后 ECU 发送了未知 CAN 帧")?;
+        for signal in profile.signals.iter().filter(|signal| signal.frame == frame.path) {
+            let expected = diagnostic.signal_ids.iter().position(|id| *id == signal.id)
+                .map(|index| written[index]).unwrap_or_else(|| value(signal, salt));
+            if signal_value(&payload, signal) != expected {
+                return Err(format!("0x2E 后 CAN 帧未携带更新的信号 {}", signal.id));
+            }
+        }
+        observed |= frame.id == monitored_frame.id;
+    }
+    if !observed { return Err("0x2E 后未观察到被写入信号的周期 CAN 帧".into()); }
+    events.push("扩展会话 0x2E 实际写入 Com 信号，0x22 与周期 CAN 均观察到新值".into());
+    let expired_at = monitored_frame.period as u64 + diagnostic.s3_ms as u64 + 1;
+    for line in tick(&mut ecu, profile, expired_at)? {
+        let (id, _) = parse_frame(&line)?;
+        if id == diagnostic.response_id { return Err("会话超时推进中出现未请求的诊断响应".into()); }
+    }
+    let denied = diagnostic_request(&mut ecu, fence, format!("R {request} 4 032E{did:04X}"))?;
+    diagnostic_frames(&denied, &[vec![0x03, 0x7F, 0x2E, 0x31]], profile, diagnostic, salt)?;
+    drop(ecu);
+
+    let mut restarted = EcuProcess::start(binary, storage.as_ref().map(|state| state.path.as_path()))?;
+    for signal in &signals {
+        let (frames, response) = restarted.query(&[], signal.id)?;
+        if !frames.is_empty() || parse_value(&response)? != (signal.initial, true) {
+            return Err(format!("易失 DID 信号 {} 在重启后未恢复配置初值", signal.id));
+        }
+    }
+    let session = diagnostic_request(&mut restarted, fence, format!("R {request} 3 021003"))?;
+    diagnostic_frames(&session, &[vec![0x06, 0x50, 0x03, 0x00, 0x32, 0x00, 0x32]], profile, diagnostic, salt)?;
+    let mut initial = Vec::with_capacity(signals.len() * 4);
+    for signal in &signals { initial.extend_from_slice(&signal.initial.to_be_bytes()); }
+    expect_did_bytes(&mut restarted, profile, diagnostic, salt, &initial)?;
+    events.push("S3 回默认会话拒绝写入；ECU 重启后 DID 恢复初值且未误称 NvM 持久化".into());
     Ok(())
 }

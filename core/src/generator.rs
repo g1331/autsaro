@@ -26,7 +26,9 @@ fn source_files(dir: &Path) -> Result<Vec<(PathBuf, String)>, String> {
 }
 
 fn config_source(name: &str, frames: &[crate::model::FrameView], signals: &[SignalView], diagnostic: Option<&DiagnosticView>) -> Result<(String, String), String> {
-    let mut source = String::from("#include \"Ecu_Config.h\"\n\nstatic const EcuSignalConfig signals[] = {\n");
+    let mut source = String::from("#include \"Ecu_Config.h\"\n");
+    if diagnostic.is_some_and(|d| d.write_enabled) { source.push_str("#include \"Rte.h\"\n"); }
+    source.push_str("\nstatic const EcuSignalConfig signals[] = {\n");
     let mut frame_rows = Vec::new();
     let mut map = format!("ECU {name}\n# ID 映射由已验证的 ARXML 路径按字典序稳定生成\n");
     let mut signal_ids = std::collections::BTreeMap::new();
@@ -60,6 +62,24 @@ fn config_source(name: &str, frames: &[crate::model::FrameView], signals: &[Sign
         }
         source.push_str(" };\n");
         map.push('\n');
+        let writer_ref = if diagnostic.write_enabled {
+            writeln!(map, "WRITE_DID did={}", diagnostic.did).unwrap();
+            source.push('\n');
+            for (index, path) in diagnostic.signal_paths.iter().enumerate() {
+                let id = signal_ids.get(path.as_str()).ok_or_else(|| format!("诊断 DID 信号没有生成 ID: {path}"))?;
+                writeln!(source, "static EcuStatus Ecu_DcmWrite_{index}(const uint8_t data[4]) {{").unwrap();
+                writeln!(source, "    uint32_t value = ((uint32_t)data[0] << 24) | ((uint32_t)data[1] << 16) | ((uint32_t)data[2] << 8) | (uint32_t)data[3];").unwrap();
+                writeln!(source, "    return Rte_WriteSignal({id}u, value);").unwrap();
+                source.push_str("}\n");
+            }
+            source.push_str("static const EcuDidWriteFunction diagnostic_writers[] = { ");
+            for index in 0..diagnostic.signal_paths.len() {
+                if index != 0 { source.push_str(", "); }
+                write!(source, "Ecu_DcmWrite_{index}").unwrap();
+            }
+            source.push_str(" };\n");
+            "diagnostic_writers"
+        } else { "NULL" };
         let dtc_ref = if let Some(dtc) = &diagnostic.dtc {
             let (index, frame) = frames.iter().enumerate().find(|(_, frame)| frame.path == dtc.monitor_frame_path)
                 .ok_or_else(|| format!("DTC 监控帧未生成: {}", dtc.monitor_frame_path))?;
@@ -67,7 +87,7 @@ fn config_source(name: &str, frames: &[crate::model::FrameView], signals: &[Sign
             writeln!(source, "static const EcuDtcConfig dtc = {{ {}u, {}u }};", dtc.code, index).unwrap();
             "&dtc"
         } else { "NULL" };
-        writeln!(source, "static const EcuDiagnosticConfig diagnostic = {{ {}u, {}u, {}u, {}u, {}u, {}u, diagnostic_signal_ids, {}u, {dtc_ref} }};\n",
+        writeln!(source, "static const EcuDiagnosticConfig diagnostic = {{ {}u, {}u, {}u, {}u, {}u, {}u, diagnostic_signal_ids, {}u, {dtc_ref}, {writer_ref} }};\n",
             diagnostic.request_id, diagnostic.response_id, diagnostic.s3_ms, diagnostic.n_bs_ms, diagnostic.n_cr_ms, diagnostic.did, diagnostic.signal_paths.len()).unwrap();
         "&diagnostic"
     } else { "NULL" };

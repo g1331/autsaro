@@ -106,6 +106,9 @@ static EcuStatus ValidateConfig(const EcuConfig *config)
             if (!HasReadableDiagnosticSignal(config, diagnostic->did_signal_ids[i])) {
                 return ECU_ERR_CONFIG;
             }
+            if (diagnostic->did_writers != NULL && diagnostic->did_writers[i] == NULL) {
+                return ECU_ERR_CONFIG;
+            }
             for (j = 0; j < i; ++j) {
                 if (diagnostic->did_signal_ids[j] == diagnostic->did_signal_ids[i]) {
                     return ECU_ERR_CONFIG;

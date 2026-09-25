@@ -223,6 +223,12 @@ fn render_diagnostic(project: &str, diagnostic: &DiagnosticView, frame_count: us
         let params = format!("{}{}{}", number(&service_path, "DcmDsdSidTabServiceId", sid), boolean(&service_path, "DcmDsdServiceUsed", true), boolean(&service_path, "DcmDsdSidTabSubfuncAvail", subfunction));
         services.push_str(&container(name, &service_path, &params, "", ""));
     }
+    if diagnostic.write_enabled {
+        let params = format!("{}{}{}", number(&service_path, "DcmDsdSidTabServiceId", 0x2e),
+            boolean(&service_path, "DcmDsdServiceUsed", true),
+            boolean(&service_path, "DcmDsdSidTabSubfuncAvail", false));
+        services.push_str(&container("WriteDataByIdentifier", &service_path, &params, "", ""));
+    }
     if diagnostic.dtc.is_some() {
         for (name, sid, subfunction) in [("ClearDiagnosticInformation", 0x14, false), ("ReadDTCInformation", 0x19, true)] {
             let params = format!("{}{}{}", number(&service_path, "DcmDsdSidTabServiceId", sid),
@@ -271,7 +277,11 @@ fn render_diagnostic(project: &str, diagnostic: &DiagnosticView, frame_count: us
     let mut did_signals = String::new();
     for (index, signal_path) in diagnostic.signal_paths.iter().enumerate() {
         let data_name = format!("Data_{index}");
-        let params = format!("{}{}{}{}", choice(&data_path, "DcmDspDataType", "UINT32"), choice(&data_path, "DcmDspDataUsePort", "USE_DATA_SYNCH_FNC"), choice(&data_path, "DcmDspDataEndianness", "BIG_ENDIAN"), function(&data_path, "DcmDspDataReadFnc", &format!("Ecu_DcmRead_{index}")));
+        let mut params = format!("{}{}{}{}", choice(&data_path, "DcmDspDataType", "UINT32"), choice(&data_path, "DcmDspDataUsePort", "USE_DATA_SYNCH_FNC"), choice(&data_path, "DcmDspDataEndianness", "BIG_ENDIAN"), function(&data_path, "DcmDspDataReadFnc", &format!("Ecu_DcmRead_{index}")));
+        if diagnostic.write_enabled {
+            params.push_str(&number(&data_path, "DcmDspDataByteSize", 4));
+            params.push_str(&function(&data_path, "DcmDspDataWriteFnc", &format!("Ecu_DcmWrite_{index}")));
+        }
         let data = container(&data_name, &data_path, &params, "", "");
         // DcmDspDidDataRef names DcmDspData, but ECUC has no direct ComSignalRef for it.
         let admin = format!("<ADMIN-DATA><SDGS><SDG GID=\"AutosarWorkbenchDiagnostic\"><SD GID=\"ComSignalRef\">{signal_path}</SD></SDG></SDGS></ADMIN-DATA>");
@@ -286,7 +296,13 @@ fn render_diagnostic(project: &str, diagnostic: &DiagnosticView, frame_count: us
     let read_path = format!("{info_path}/DcmDspDidRead");
     let ext_ref = ref_path(project, "DcmCfg/DcmConfigSet/DcmDsp/Sessions/Extended");
     let read_value = container("Read", &read_path, "", &reference(&read_path, "DcmDspDidReadSessionRef", "ECUC-CONTAINER-VALUE", &ext_ref), "");
-    let info_value = container("DidInfo", &info_path, &boolean(&info_path, "DcmDspDidDynamicallyDefined", false), "", &read_value);
+    let mut info_children = read_value;
+    if diagnostic.write_enabled {
+        let write_path = format!("{info_path}/DcmDspDidWrite");
+        info_children.push_str(&container("Write", &write_path, "",
+            &reference(&write_path, "DcmDspDidWriteSessionRef", "ECUC-CONTAINER-VALUE", &ext_ref), ""));
+    }
+    let info_value = container("DidInfo", &info_path, &boolean(&info_path, "DcmDspDidDynamicallyDefined", false), "", &info_children);
     let sessions_path = format!("{dsp}/DcmDspSession");
     let session_path = format!("{sessions_path}/DcmDspSessionRow");
     let session = |name: &str, level: u8| {

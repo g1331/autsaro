@@ -81,6 +81,7 @@ pub struct DiagnosticView {
     pub n_cr_ms: u32,
     pub did: u16,
     pub signal_paths: Vec<String>,
+    pub write_enabled: bool,
     pub dtc: Option<DtcView>,
 }
 

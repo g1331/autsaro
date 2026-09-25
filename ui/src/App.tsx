@@ -13,8 +13,8 @@ type SignalFields = { name: string; startBit: string; length: string; initialVal
 type FrameChanges = Pick<Frame, 'name' | 'id' | 'dlc' | 'direction' | 'periodMs' | 'timeoutMs'>;
 type SignalChanges = Pick<Signal, 'name' | 'startBit' | 'length' | 'initialValue'>;
 type Draft = { kind: 'frame'; path: string; fields: FrameFields } | { kind: 'signal'; path: string; fields: SignalFields } | null;
-type DiagnosticFields = { requestId: string; responseId: string; s3Ms: string; nBsMs: string; nCrMs: string; did: string; signalPaths: string[] };
-type DiagnosticChanges = Pick<DiagnosticView, 'requestId' | 'responseId' | 's3Ms' | 'nBsMs' | 'nCrMs' | 'did' | 'signalPaths'>;
+type DiagnosticFields = { requestId: string; responseId: string; s3Ms: string; nBsMs: string; nCrMs: string; did: string; signalPaths: string[]; writeEnabled: boolean };
+type DiagnosticChanges = Pick<DiagnosticView, 'requestId' | 'responseId' | 's3Ms' | 'nBsMs' | 'nCrMs' | 'did' | 'signalPaths' | 'writeEnabled'>;
 type DtcFields = { code: string; monitorFramePath: string };
 type Notice = { tone: 'error' | 'info'; text: string } | null;
 type Page = 'editor' | 'diagnostics' | 'build' | 'virtual';
@@ -48,13 +48,13 @@ const signalFields = (signal: Signal): SignalFields => ({
 });
 const newFrame: FrameFields = { name: '', id: '', dlc: '8', direction: 'tx', periodMs: '100', timeoutMs: '' };
 const newSignal: SignalFields = { name: '', startBit: '0', length: '8', initialValue: '0' };
-const newDiagnostic: DiagnosticFields = { requestId: '', responseId: '', s3Ms: '', nBsMs: '', nCrMs: '', did: '', signalPaths: [] };
+const newDiagnostic: DiagnosticFields = { requestId: '', responseId: '', s3Ms: '', nBsMs: '', nCrMs: '', did: '', signalPaths: [], writeEnabled: false };
 const diagnosticFields = (diagnostic: DiagnosticView | null): DiagnosticFields => diagnostic ? {
   requestId: `0x${diagnostic.requestId.toString(16).toUpperCase()}`,
   responseId: `0x${diagnostic.responseId.toString(16).toUpperCase()}`,
   s3Ms: String(diagnostic.s3Ms), nBsMs: String(diagnostic.nBsMs), nCrMs: String(diagnostic.nCrMs),
   did: `0x${diagnostic.did.toString(16).toUpperCase().padStart(4, '0')}`,
-  signalPaths: [...diagnostic.signalPaths],
+  signalPaths: [...diagnostic.signalPaths], writeEnabled: diagnostic.writeEnabled,
 } : { ...newDiagnostic, signalPaths: [] };
 const dtcFields = (dtc: DtcView | null): DtcFields => dtc
   ? { code: `0x${dtc.code.toString(16).toUpperCase().padStart(6, '0')}`, monitorFramePath: dtc.monitorFramePath }
@@ -97,7 +97,7 @@ function diagnosticChanges(fields: DiagnosticFields, view: WorkspaceView): Diagn
     s3Ms: intInRange(fields.s3Ms, 'S3 (ms)', 5000, 2147483647),
     nBsMs: intInRange(fields.nBsMs, 'N_Bs (ms)', 1, 2147483647),
     nCrMs: intInRange(fields.nCrMs, 'N_Cr (ms)', 1, 2147483647),
-    signalPaths: fields.signalPaths,
+    signalPaths: fields.signalPaths, writeEnabled: fields.writeEnabled,
   };
 }
 
@@ -618,6 +618,7 @@ export default function App() {
                         return <li key={path}><span className="signal-order">{String(index + 1).padStart(2, '0')}</span><span className="signal-description"><strong>{signal?.name ?? '信号不可用'}</strong><small className="mono path-text">{path}</small></span><div className="signal-order-actions"><button type="button" aria-label={`上移 ${signal?.name ?? path}`} onClick={() => { const paths = [...diagnosticDraft.signalPaths]; [paths[index - 1], paths[index]] = [paths[index], paths[index - 1]]; setDiagnosticDraft({ ...diagnosticDraft, signalPaths: paths }); }} disabled={disabled || index === 0}>↑</button><button type="button" aria-label={`下移 ${signal?.name ?? path}`} onClick={() => { const paths = [...diagnosticDraft.signalPaths]; [paths[index], paths[index + 1]] = [paths[index + 1], paths[index]]; setDiagnosticDraft({ ...diagnosticDraft, signalPaths: paths }); }} disabled={disabled || index === diagnosticDraft.signalPaths.length - 1}>↓</button><button type="button" aria-label={`移除 ${signal?.name ?? path}`} onClick={() => setDiagnosticDraft({ ...diagnosticDraft, signalPaths: diagnosticDraft.signalPaths.filter(item => item !== path) })} disabled={disabled}>移除</button></div></li>;
                       })}</ol>
                     </div>
+                    <label className="diagnostic-write"><input type="checkbox" checked={diagnosticDraft.writeEnabled} onChange={event => setDiagnosticDraft({ ...diagnosticDraft, writeEnabled: event.target.checked })} disabled={disabled} /><span>允许扩展会话写入此 DID (0x2E)<small>仅修改主机虚拟运行的应用状态；不写入 flash/NvM，不提供 0x27 安全解锁。重启后恢复初始值。</small></span></label>
                   </div>
                   {diagnosticError && <p className="diagnostic-error" role="alert">{diagnosticError}</p>}
                   <div className="diagnostic-actions"><button type="button" className="primary-button compact" onClick={configureDiagnostic} disabled={disabled || !diagnosticUnapplied || dtcUnapplied || frameUnapplied}>{workspace.diagnostic ? '应用诊断更改' : '创建诊断配置'}</button><button type="button" className="quiet-button" onClick={() => { setDiagnosticDraft(diagnosticFields(workspace.diagnostic)); setDiagnosticSignal(''); setDiagnosticError(''); }} disabled={disabled || !diagnosticUnapplied}>还原草稿</button>{workspace.diagnostic && <button type="button" className="quiet-button" onClick={clearDiagnostic} disabled={disabled || diagnosticUnapplied || dtcUnapplied || frameUnapplied}>移除诊断配置</button>}{diagnosticUnapplied && <span role="status">未应用的诊断草稿</span>}</div>

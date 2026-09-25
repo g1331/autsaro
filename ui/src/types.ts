@@ -40,6 +40,7 @@ export type DiagnosticView = {
   nCrMs: number;
   did: number;
   signalPaths: string[];
+  writeEnabled: boolean;
   dtc: DtcView | null;
 };
 
