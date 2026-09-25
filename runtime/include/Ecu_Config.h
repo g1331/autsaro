@@ -22,12 +22,25 @@ typedef struct {
     uint32_t initial_value;
 } EcuSignalConfig;
 
+/* Single physical DoCAN connection; DIDs read live, configured Com signals. */
+typedef struct {
+    uint32_t request_can_id;
+    uint32_t response_can_id;
+    uint32_t s3_ms;
+    uint32_t n_bs_ms;
+    uint32_t n_cr_ms;
+    uint16_t did;
+    const uint16_t *did_signal_ids;
+    uint8_t did_signal_count;
+} EcuDiagnosticConfig;
+
 typedef struct {
     const char *name;
     const EcuFrameConfig *frames;
     size_t frame_count;
     const EcuSignalConfig *signals;
     size_t signal_count;
+    const EcuDiagnosticConfig *diagnostic;
 } EcuConfig;
 
 /* 每个生成工程提供一个且仅一个此符号。 */
@@ -35,5 +48,7 @@ extern const EcuConfig Ecu_Config;
 
 #define ECU_MAX_FRAMES 32u
 #define ECU_MAX_SIGNALS 64u
+#define ECU_DIAG_MAX_PAYLOAD 256u
+#define ECU_DIAG_MAX_DID_SIGNALS 8u
 
 #endif

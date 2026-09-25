@@ -25,11 +25,23 @@ export type Signal = {
   initialValue: number;
 };
 
+export type DiagnosticView = {
+  path: string;
+  requestId: number;
+  responseId: number;
+  s3Ms: number;
+  nBsMs: number;
+  nCrMs: number;
+  did: number;
+  signalPaths: string[];
+};
+
 export type WorkspaceView = {
   name: string;
   files: { path: string; readonly: boolean; retainedCount: number }[];
   frames: Frame[];
   signals: Signal[];
+  diagnostic: DiagnosticView | null;
   issues: Issue[];
   dirty: boolean;
 };

@@ -1,5 +1,5 @@
 use crate::arxml_render::render_profile;
-use crate::model::{validate_profile, Direction, FileView, FrameView, Issue, Severity, SignalView, WorkspaceView};
+use crate::model::{validate_diagnostic, validate_profile, DiagnosticView, Direction, FileView, FrameView, Issue, Severity, SignalView, WorkspaceView};
 use crate::schema;
 use roxmltree::{Document, Node};
 use serde_json::Value;
@@ -44,6 +44,7 @@ pub struct Workspace {
     files: Vec<SourceFile>,
     frames: Vec<FrameView>,
     signals: Vec<SignalView>,
+    diagnostic: Option<DiagnosticView>,
     issues: Vec<Issue>,
     schema_zip: PathBuf,
 }
@@ -126,7 +127,7 @@ fn load_sources(files: Vec<PathBuf>, schema_zip: PathBuf) -> Result<Workspace, S
         return Err(format!("导入前 XSD 校验失败 {}: {}", first.file.as_deref().unwrap_or(""), first.message));
     }
     let name = sources.iter().filter_map(|s| Document::parse(&s.text).ok()).flat_map(|d| d.root_element().descendants().filter(|n| n.is_element() && n.tag_name().name() == "AR-PACKAGE").filter_map(|n| child_text(n, "SHORT-NAME")).collect::<Vec<_>>()).next().unwrap_or_else(|| "ImportedEcu".into());
-    let mut workspace = Workspace { name, files: sources, frames: Vec::new(), signals: Vec::new(), issues: Vec::new(), schema_zip };
+    let mut workspace = Workspace { name, files: sources, frames: Vec::new(), signals: Vec::new(), diagnostic: None, issues: Vec::new(), schema_zip };
     workspace.refresh()?;
     Ok(workspace)
 }
@@ -202,6 +203,156 @@ fn install_staged(file: &SourceFile, stage: &Path, backup: &Path) -> Result<(), 
     Ok(())
 }
 
+type DiagnosticShape = BTreeMap<String, (String, String, Vec<(String, String, String, String)>)>;
+
+fn diagnostic_shape(docs: &[Document<'_>]) -> Result<DiagnosticShape, String> {
+    let mut shape = BTreeMap::new();
+    for doc in docs {
+        for module in doc.descendants().filter(|n| n.is_element() && n.tag_name().name() == "ECUC-MODULE-CONFIGURATION-VALUES"
+            && matches!(definition(*n).as_deref(), Some("/AUTOSAR/EcucDefs/Dcm" | "/AUTOSAR/EcucDefs/CanTp"))) {
+            for node in module.descendants().filter(|n| n.is_element()
+                && matches!(n.tag_name().name(), "ECUC-MODULE-CONFIGURATION-VALUES" | "ECUC-CONTAINER-VALUE")) {
+                let mut values = Vec::new();
+                for group in node.children().filter(|n| n.is_element() && matches!(n.tag_name().name(), "PARAMETER-VALUES" | "REFERENCE-VALUES")) {
+                    for item in group.children().filter(|n| n.is_element()) {
+                        let value = child_text(item, if group.tag_name().name() == "REFERENCE-VALUES" { "VALUE-REF" } else { "VALUE" })
+                            .ok_or_else(|| format!("{} 缺少 ECUC 值", path_of(node)))?;
+                        let definition = definition(item).ok_or_else(|| format!("{} 缺少 ECUC 参数定义", path_of(node)))?;
+                        let definition_dest = item.children().find(|n| n.is_element() && n.tag_name().name() == "DEFINITION-REF")
+                            .and_then(|n| n.attribute("DEST")).unwrap_or("").to_owned();
+                        let value_dest = item.children().find(|n| n.is_element() && n.tag_name().name() == "VALUE-REF")
+                            .and_then(|n| n.attribute("DEST")).unwrap_or("").to_owned();
+                        values.push((definition, definition_dest, value, value_dest));
+                    }
+                }
+                values.sort();
+                let path = path_of(node);
+                let definition_dest = node.children().find(|n| n.is_element() && n.tag_name().name() == "DEFINITION-REF")
+                    .and_then(|n| n.attribute("DEST")).unwrap_or("").to_owned();
+                if shape.insert(path.clone(), (definition(node).unwrap_or_default(), definition_dest, values)).is_some() {
+                    return Err(format!("重复的诊断 ECUC 容器 {path}"));
+                }
+            }
+        }
+    }
+    Ok(shape)
+}
+
+fn parse_diagnostic(files: &[SourceFile], project: &str, frames: &[FrameView], signals: &[SignalView]) -> Result<Option<DiagnosticView>, String> {
+    let docs: Vec<_> = files.iter().map(|file| Document::parse(&file.text).map_err(|e| e.to_string())).collect::<Result<_, _>>()?;
+    let actual = diagnostic_shape(&docs)?;
+    let nodes: Vec<_> = docs.iter().flat_map(|doc| doc.descendants().filter(|n| n.is_element())).collect();
+    if actual.is_empty() {
+        let request = format!("/{project}/NPdu_DiagRequest");
+        let response = format!("/{project}/NPdu_DiagResponse");
+        if nodes.iter().any(|n| n.tag_name().name() == "N-PDU" &&
+            (path_of(*n) == request || path_of(*n) == response)) {
+            return Err("诊断 N-PDU 存在，但缺少对应的 CanTp/Dcm 配置".into());
+        }
+        return Ok(None);
+    }
+    let unique = |def: &str| -> Result<Node<'_, '_>, String> {
+        let mut found = nodes.iter().copied().filter(|n| n.tag_name().name() == "ECUC-CONTAINER-VALUE" && definition(*n).as_deref() == Some(def));
+        let node = found.next().ok_or_else(|| format!("诊断配置缺少 {def}"))?;
+        if found.next().is_some() { return Err(format!("诊断配置含多个 {def}")); }
+        Ok(node)
+    };
+    let general = unique("/AUTOSAR/EcucDefs/Dcm/DcmGeneral")?;
+    let rx_sdu = unique("/AUTOSAR/EcucDefs/CanTp/CanTpConfig/CanTpChannel/CanTpRxNSdu")?;
+    let tx_sdu = unique("/AUTOSAR/EcucDefs/CanTp/CanTpConfig/CanTpChannel/CanTpTxNSdu")?;
+    let did_node = unique("/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsp/DcmDspDid")?;
+    let s3_ms = parse_milliseconds(param(general, "DcmS3ServerTimeoutOverwrite"), "DcmS3ServerTimeoutOverwrite", &path_of(general)).map_err(|e| e.message)?;
+    let n_bs_ms = parse_milliseconds(param(tx_sdu, "CanTpNbs"), "CanTpNbs", &path_of(tx_sdu)).map_err(|e| e.message)?;
+    let n_cr_ms = parse_milliseconds(param(rx_sdu, "CanTpNcr"), "CanTpNcr", &path_of(rx_sdu)).map_err(|e| e.message)?;
+    let did = parse_u32(param(did_node, "DcmDspDidIdentifier"), "DcmDspDidIdentifier", &path_of(did_node)).map_err(|e| e.message)?;
+    let did: u16 = did.try_into().map_err(|_| "诊断 DID 超出 16 位范围")?;
+    let request = format!("/{project}/NPdu_DiagRequest");
+    let response = format!("/{project}/NPdu_DiagResponse");
+    let mut ids = Vec::new();
+    for name in ["DcmPdu_DiagRequest", "DcmPdu_DiagResponse"] {
+        let path = format!("/{project}/{name}");
+        let pdus: Vec<_> = nodes.iter().copied().filter(|n| n.tag_name().name() == "DCM-I-PDU" && path_of(*n) == path).collect();
+        if pdus.len() != 1 || child_text(pdus[0], "LENGTH").as_deref() != Some("256") {
+            return Err(format!("{path} 必须是唯一的最大 256 字节 DCM-I-PDU"));
+        }
+    }
+    for (pdu, tx) in [(&request, false), (&response, true)] {
+        let pdus: Vec<_> = nodes.iter().copied().filter(|n| n.tag_name().name() == "N-PDU" && path_of(*n) == *pdu).collect();
+        if pdus.len() != 1 || child_text(pdus[0], "LENGTH").as_deref() != Some("8") ||
+            child_text(pdus[0], "HAS-DYNAMIC-LENGTH").as_deref() != Some("true") {
+            return Err(format!("{pdu} 必须是唯一的动态长度 8 字节 N-PDU"));
+        }
+        let def = if tx { "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfTxPduCfg" } else { "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfRxPduCfg" };
+        let ref_name = if tx { "CanIfTxPduRef" } else { "CanIfRxPduRef" };
+        let canif: Vec<_> = nodes.iter().copied().filter(|n| n.tag_name().name() == "ECUC-CONTAINER-VALUE" && definition(*n).as_deref() == Some(def) && ref_value(*n, ref_name).as_deref() == Some(pdu)).collect();
+        if canif.len() != 1 { return Err(format!("{pdu} 缺少唯一且方向正确的 CanIf 映射")); }
+        let field = if tx { "CanIfTxPduCanId" } else { "CanIfRxPduCanId" };
+        if tx && param(canif[0], "CanIfTxPduCanIdType").as_deref() != Some("STANDARD_CAN") ||
+            !tx && (param(canif[0], "CanIfRxPduDataLength").as_deref() != Some("8") ||
+                param(canif[0], "CanIfRxPduCanIdType").as_deref() != Some("STANDARD_NO_FD_CAN") ||
+                param(canif[0], "CanIfRxPduDataLengthCheck").as_deref() != Some("false")) {
+            return Err(format!("{pdu} 须配置不检查变长 DLC 的经典 11 位 CAN"));
+        }
+        let expected_params: &[&str] = if tx {
+            &["CanIfTxPduCanId", "CanIfTxPduId", "CanIfTxPduCanIdType"]
+        } else {
+            &["CanIfRxPduCanId", "CanIfRxPduId", "CanIfRxPduDataLength", "CanIfRxPduCanIdType", "CanIfRxPduDataLengthCheck"]
+        };
+        let parameter_values: Vec<_> = canif[0].children().filter(|n| n.is_element() && n.tag_name().name() == "PARAMETER-VALUES")
+            .flat_map(|group| group.children().filter(|n| n.is_element())).collect();
+        let reference_values: Vec<_> = canif[0].children().filter(|n| n.is_element() && n.tag_name().name() == "REFERENCE-VALUES")
+            .flat_map(|group| group.children().filter(|n| n.is_element())).collect();
+        if parameter_values.len() != expected_params.len() ||
+            expected_params.iter().any(|name| parameter_values.iter().filter(|n| definition(**n).as_deref() == Some(format!("{def}/{name}").as_str())).count() != 1) ||
+            reference_values.len() != 1 || definition(reference_values[0]).as_deref() != Some(format!("{def}/{ref_name}").as_str()) ||
+            reference_values[0].children().find(|n| n.is_element() && n.tag_name().name() == "VALUE-REF")
+                .and_then(|n| n.attribute("DEST")) != Some("N-PDU") ||
+            param(canif[0], if tx { "CanIfTxPduId" } else { "CanIfRxPduId" }).as_deref() != Some(frames.len().to_string().as_str()) {
+            return Err(format!("{pdu} 的诊断 CanIf 参数或引用不属于受支持的静态配置"));
+        }
+        let wrong_direction = nodes.iter().any(|n| n.tag_name().name() == "ECUC-CONTAINER-VALUE"
+            && definition(*n).as_deref() == Some(if tx { "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfRxPduCfg" } else { "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfTxPduCfg" })
+            && ref_value(*n, if tx { "CanIfRxPduRef" } else { "CanIfTxPduRef" }).as_deref() == Some(pdu));
+        if wrong_direction { return Err(format!("{pdu} 同时配置了反向 CanIf 映射")); }
+        ids.push(parse_u32(param(canif[0], field), field, pdu).map_err(|e| e.message)?);
+    }
+    let data_def = "/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsp/DcmDspData";
+    let did_signal_def = "/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsp/DcmDspDid/DcmDspDidSignal";
+    let mut bindings = Vec::new();
+    for item in did_node.descendants().filter(|n| n.is_element() && definition(*n).as_deref() == Some(did_signal_def)) {
+        let offset = parse_u32(param(item, "DcmDspDidByteOffset"), "DcmDspDidByteOffset", &path_of(item)).map_err(|e| e.message)?;
+        let data_ref = ref_value(item, "DcmDspDidDataRef").ok_or("诊断 DID 信号缺少数据引用")?;
+        let data: Vec<_> = nodes.iter().copied().filter(|n| n.tag_name().name() == "ECUC-CONTAINER-VALUE" && definition(*n).as_deref() == Some(data_def) && path_of(*n) == data_ref).collect();
+        if data.len() != 1 { return Err(format!("{data_ref} 诊断数据引用未唯一解析")); }
+        let metadata: Vec<_> = data[0].descendants().filter(|n| n.is_element() && n.tag_name().name() == "SDG"
+            && n.attribute("GID") == Some("AutosarWorkbenchDiagnostic")).collect();
+        if metadata.len() != 1 { return Err(format!("{data_ref} 必须有唯一的工具域绑定")); }
+        let refs: Vec<_> = metadata[0].children().filter(|n| n.is_element()).collect();
+        if refs.len() != 1 || refs[0].tag_name().name() != "SD" ||
+            refs[0].attribute("GID") != Some("ComSignalRef") || refs[0].text().is_none_or(str::is_empty) {
+            return Err(format!("{data_ref} 缺少唯一的工具域 ComSignalRef 绑定"));
+        }
+        bindings.push((offset, refs[0].text().unwrap().to_owned()));
+    }
+    bindings.sort_by_key(|(offset, _)| *offset);
+    if bindings.is_empty() || bindings.iter().enumerate().any(|(i, (offset, _))| *offset != i as u32 * 4) {
+        return Err("诊断 DID 数据字节偏移必须是从零开始的连续 32 位信号".into());
+    }
+    let diagnostic = DiagnosticView {
+        path: path_of(did_node), request_id: ids[0], response_id: ids[1], s3_ms, n_bs_ms, n_cr_ms, did,
+        signal_paths: bindings.into_iter().map(|(_, path)| path).collect(),
+    };
+    if let Some(issue) = validate_diagnostic(&diagnostic, frames, signals).first() {
+        return Err(format!("{}: {}", issue.code, issue.message));
+    }
+    let expected = render_profile(project, frames, signals, Some(&diagnostic));
+    let expected_doc = Document::parse(&expected).map_err(|e| e.to_string())?;
+    if actual != diagnostic_shape(&[expected_doc])? {
+        return Err("CanTp/Dcm 配置含未知、不一致或不受支持的参数、引用、方向、会话或变体".into());
+    }
+    Ok(Some(diagnostic))
+}
+
 impl Workspace {
     pub fn create(directory: &Path, name: &str, schema_zip: PathBuf) -> Result<Self, String> {
         if !valid_name(name) {
@@ -209,7 +360,7 @@ impl Workspace {
         }
         fs::create_dir_all(directory).map_err(|e| e.to_string())?;
         let path = directory.join(format!("{name}.arxml"));
-        let text = render_profile(name, &[], &[]);
+        let text = render_profile(name, &[], &[], None);
         let issues = schema::validate_files(&schema_zip, &[(path.as_path(), text.as_str())])?;
         if let Some(first) = issues.first() {
             return Err(format!("空项目 XSD 校验失败: {}", first.message));
@@ -227,23 +378,24 @@ impl Workspace {
         WorkspaceView {
             name: self.name.clone(),
             files: self.files.iter().map(|file| {
+                let managed = self.is_managed_file(file);
                 let doc = Document::parse(&file.text).ok();
                 let supported = doc.as_ref().is_some_and(|d| d.descendants().any(|n| n.is_element() &&
                     ((n.tag_name().name() == "I-SIGNAL-I-PDU" && self.frames.iter().any(|f| f.path == path_of(n))) ||
                     (n.tag_name().name() == "ECUC-CONTAINER-VALUE" && self.signals.iter().any(|s| s.path == path_of(n))))));
-                let retained_count = doc.as_ref().map(|d| d.descendants().filter(|n| n.is_element() &&
+                let retained_count = if managed { 0 } else { doc.as_ref().map(|d| d.descendants().filter(|n| n.is_element() &&
                     n.parent_element().is_some_and(|p| p.tag_name().name() == "ELEMENTS") &&
                     !matches!(n.tag_name().name(), "I-SIGNAL-I-PDU" | "ECUC-MODULE-CONFIGURATION-VALUES") &&
-                    !(n.tag_name().name() == "I-SIGNAL" && self.signals.iter().any(|s| path_of(*n) == format!("/{}/ISignal_{}", self.name, s.name)))).count()).unwrap_or(0);
-                FileView { path: file.path.display().to_string(), readonly: !self.is_managed_file(file) && !supported, retained_count }
+                    !(n.tag_name().name() == "I-SIGNAL" && self.signals.iter().any(|s| path_of(*n) == format!("/{}/ISignal_{}", self.name, s.name)))).count()).unwrap_or(0) };
+                FileView { path: file.path.display().to_string(), readonly: !managed && !supported, retained_count }
             }).collect(),
-            frames: self.frames.clone(), signals: self.signals.clone(), issues: self.issues.clone(),
+            frames: self.frames.clone(), signals: self.signals.clone(), diagnostic: self.diagnostic.clone(), issues: self.issues.clone(),
             dirty: self.files.iter().any(|file| file.saved != file.text),
         }
     }
 
     fn is_managed_file(&self, file: &SourceFile) -> bool {
-        file.text == render_profile(&self.name, &self.frames, &self.signals)
+        file.text == render_profile(&self.name, &self.frames, &self.signals, self.diagnostic.as_ref())
     }
 
     fn refresh(&mut self) -> Result<(), String> {
@@ -389,26 +541,52 @@ impl Workspace {
         frames.sort_by(|a,b| a.path.cmp(&b.path));
         signals.sort_by(|a,b| a.path.cmp(&b.path));
         issues.extend(validate_profile(&frames, &signals));
+        let diagnostic = match parse_diagnostic(&self.files, &self.name, &frames, &signals) {
+            Ok(diagnostic) => diagnostic,
+            Err(message) => {
+                issues.push(Issue::error("DIAG_UNSUPPORTED", message, None));
+                None
+            }
+        };
         self.frames = frames;
         self.signals = signals;
+        self.diagnostic = diagnostic;
         self.issues = issues;
         Ok(())
     }
 
-    fn replace_managed(&mut self, frames: Vec<FrameView>, signals: Vec<SignalView>) -> Result<(), String> {
+    fn replace_managed(&mut self, frames: Vec<FrameView>, signals: Vec<SignalView>, diagnostic: Option<DiagnosticView>) -> Result<(), String> {
         let index = self.files.iter().position(|f| self.is_managed_file(f)).ok_or("当前项目没有可安全重建的配置文件；已保留导入内容，不执行可能破坏未知项的新增操作")?;
         let mut frames = frames;
         let mut signals = signals;
         frames.sort_by(|a,b| a.path.cmp(&b.path));
         signals.sort_by(|a,b| a.path.cmp(&b.path));
-        let issues = validate_profile(&frames, &signals);
+        let mut issues = validate_profile(&frames, &signals);
+        if let Some(diagnostic) = &diagnostic { issues.extend(validate_diagnostic(diagnostic, &frames, &signals)); }
         if let Some(first) = issues.first() { return Err(format!("{}: {}", first.code, first.message)); }
-        self.files[index].text = render_profile(&self.name, &frames, &signals);
-        self.refresh()?;
+        let previous = self.files[index].text.clone();
+        self.files[index].text = render_profile(&self.name, &frames, &signals, diagnostic.as_ref());
+        if let Err(error) = self.refresh() {
+            self.files[index].text = previous;
+            let _ = self.refresh();
+            return Err(error);
+        }
+        // A new Rx frame has no ComSignal/ComTimeout until its first signal is added.
+        // Keep the requested timeout in the editing model; validation/save still reject
+        // the incomplete on-disk profile if the user stops before adding that signal.
         for frame in &mut self.frames {
-            if matches!(frame.direction, Direction::Rx) && !signals.iter().any(|s| s.frame_path == frame.path) {
-                frame.timeout_ms = frames.iter().find(|f| f.path == frame.path).and_then(|f| f.timeout_ms);
+            if matches!(frame.direction, Direction::Rx) && !signals.iter().any(|signal| signal.frame_path == frame.path) {
+                frame.timeout_ms = frames.iter().find(|source| source.path == frame.path).and_then(|source| source.timeout_ms);
             }
+        }
+        self.issues.retain(|issue| !(issue.code == "RX_TIMEOUT" && frames.iter().any(|frame|
+            matches!(frame.direction, Direction::Rx) && issue.path.as_deref() == Some(frame.path.as_str()) &&
+            !signals.iter().any(|signal| signal.frame_path == frame.path))));
+        if let Some(issue) = self.issues.iter().find(|i| matches!(i.severity, Severity::Error)) {
+            let error = format!("{}: {}", issue.code, issue.message);
+            self.files[index].text = previous;
+            self.refresh()?;
+            return Err(error);
         }
         Ok(())
     }
@@ -424,7 +602,9 @@ impl Workspace {
             }
         }
         let checked = self.refresh().and_then(|_| {
-            if matches(self) { Ok(()) } else { Err("编辑后的 ARXML 与配置模型不一致".into()) }
+            if let Some(issue) = self.issues.iter().find(|i| matches!(i.severity, Severity::Error)) {
+                Err(format!("{}: {}", issue.code, issue.message))
+            } else if matches(self) { Ok(()) } else { Err("编辑后的 ARXML 与配置模型不一致".into()) }
         });
         if let Err(error) = checked {
             for (i, text) in previous { self.files[i].text = text; }
@@ -526,7 +706,7 @@ impl Workspace {
         if self.frames.iter().any(|f| f.path == path) { return Err("同名帧已经存在".into()); }
         let mut frames = self.frames.clone();
         frames.push(FrameView { path, name, id, dlc, direction, period_ms, timeout_ms });
-        self.replace_managed(frames, self.signals.clone())?;
+        self.replace_managed(frames, self.signals.clone(), self.diagnostic.clone())?;
         Ok(self.view())
     }
 
@@ -537,9 +717,84 @@ impl Workspace {
         if self.signals.iter().any(|s| s.path == path) { return Err("同名信号已经存在".into()); }
         let mut signals = self.signals.clone();
         signals.push(SignalView { path, name, frame_path, start_bit, length, initial_value });
-        self.replace_managed(self.frames.clone(), signals)?;
+        self.replace_managed(self.frames.clone(), signals, self.diagnostic.clone())?;
         Ok(self.view())
     }
+    pub fn configure_diagnostic(
+        &mut self, request_id: u32, response_id: u32, s3_ms: u32, n_bs_ms: u32, n_cr_ms: u32,
+        did: u16, signal_paths: Vec<String>,
+    ) -> Result<WorkspaceView, String> {
+        let diagnostic = DiagnosticView {
+            path: format!("/{}/DcmCfg/DcmConfigSet/DcmDsp/Did", self.name),
+            request_id, response_id, s3_ms, n_bs_ms, n_cr_ms, did, signal_paths,
+        };
+        self.replace_managed(self.frames.clone(), self.signals.clone(), Some(diagnostic))?;
+        Ok(self.view())
+    }
+
+    pub fn clear_diagnostic(&mut self) -> Result<WorkspaceView, String> {
+        if self.diagnostic.is_none() { return Err("当前工程没有可移除的受支持诊断配置".into()); }
+        if self.files.iter().any(|file| self.is_managed_file(file)) {
+            self.replace_managed(self.frames.clone(), self.signals.clone(), None)?;
+            return Ok(self.view());
+        }
+        let mut patches: Vec<Vec<Patch>> = (0..self.files.len()).map(|_| Vec::new()).collect();
+        let mut removed = BTreeSet::new();
+        let targets: BTreeSet<_> = [
+            format!("/{}/DcmCfg", self.name), format!("/{}/CanTpCfg", self.name),
+            format!("/{}/NPdu_DiagRequest", self.name), format!("/{}/NPdu_DiagResponse", self.name),
+            format!("/{}/DcmPdu_DiagRequest", self.name), format!("/{}/DcmPdu_DiagResponse", self.name),
+        ].into_iter().collect();
+        let mut owned_paths = BTreeSet::new();
+        for file in &self.files {
+            let doc = Document::parse(&file.text).map_err(|e| e.to_string())?;
+            for node in doc.descendants().filter(|n| n.is_element()) {
+                let path = path_of(node);
+                if (matches!(node.tag_name().name(), "ECUC-MODULE-CONFIGURATION-VALUES" | "N-PDU" | "DCM-I-PDU") &&
+                    targets.contains(&path)) || (node.tag_name().name() == "ECUC-CONTAINER-VALUE" &&
+                    (path == format!("/{}/CanIfCfg/CanIfInitCfg/Can_DiagRequest", self.name) ||
+                        path == format!("/{}/CanIfCfg/CanIfInitCfg/Can_DiagResponse", self.name))) {
+                    owned_paths.extend(node.descendants().filter(|n| n.is_element() && child_text(*n, "SHORT-NAME").is_some()).map(path_of));
+                }
+            }
+        }
+        for (index, file) in self.files.iter().enumerate() {
+            let doc = Document::parse(&file.text).map_err(|e| e.to_string())?;
+            for node in doc.descendants().filter(|n| n.is_element()) {
+                let path = path_of(node);
+                let owned = (matches!(node.tag_name().name(), "ECUC-MODULE-CONFIGURATION-VALUES" | "N-PDU" | "DCM-I-PDU") &&
+                    targets.contains(&path)) || (node.tag_name().name() == "ECUC-CONTAINER-VALUE" &&
+                    (path == format!("/{}/CanIfCfg/CanIfInitCfg/Can_DiagRequest", self.name) ||
+                        path == format!("/{}/CanIfCfg/CanIfInitCfg/Can_DiagResponse", self.name)));
+                if !owned { continue; }
+                if node.descendants().any(|n| n.is_comment() || n.is_element() &&
+                    (!matches!(n.tag_name().name(), "ECUC-MODULE-CONFIGURATION-VALUES" | "ECUC-CONTAINER-VALUE" |
+                        "N-PDU" | "DCM-I-PDU" | "SHORT-NAME" | "DEFINITION-REF" | "CONTAINERS" |
+                        "PARAMETER-VALUES" | "ECUC-NUMERICAL-PARAM-VALUE" | "ECUC-TEXTUAL-PARAM-VALUE" |
+                        "REFERENCE-VALUES" | "ECUC-REFERENCE-VALUE" | "VALUE" | "VALUE-REF" |
+                        "SUB-CONTAINERS" | "HAS-DYNAMIC-LENGTH" | "LENGTH" | "ADMIN-DATA" | "SDGS" | "SDG" | "SD") ||
+                        n.tag_name().name() == "SDG" && n.attribute("GID") != Some("AutosarWorkbenchDiagnostic"))) {
+                    return Err(format!("{path} 含非工具所有的 ARXML 内容，拒绝删除"));
+                }
+                if !removed.insert(path.clone()) { return Err(format!("重复的诊断元素 {path}")); }
+                patches[index].push(Patch { range: node.range(), value: String::new() });
+            }
+        }
+        if removed.len() != 8 { return Err("诊断 ARXML 节点不完整，拒绝部分删除".into()); }
+        for file in &self.files {
+            let doc = Document::parse(&file.text).map_err(|e| e.to_string())?;
+            for node in doc.descendants().filter(|n| n.is_element() && n.tag_name().name().ends_with("-REF") && n.tag_name().name() != "DEFINITION-REF") {
+                if let Some(target) = node.text() {
+                    if owned_paths.contains(target) && !node.ancestors().any(|ancestor| removed.contains(&path_of(ancestor))) {
+                        return Err(format!("外部引用 {target} 仍依赖诊断配置，拒绝删除"));
+                    }
+                }
+            }
+        }
+        self.commit_patches(patches, |workspace| workspace.diagnostic.is_none())?;
+        Ok(self.view())
+    }
+
 
     pub fn update_frame(&mut self, path: &str, changes: Value) -> Result<WorkspaceView, String> {
         let old = self.frames.iter().find(|f| f.path == path).ok_or("帧不存在")?.clone();
@@ -552,9 +807,14 @@ impl Workspace {
         if let Some(v) = changes.get("timeoutMs") { frame.timeout_ms = if v.is_null() { None } else { Some(v.as_u64().ok_or("超时须为整数")?.try_into().map_err(|_| "超时超出范围")?) }; }
         if let Some(v) = changes.get("direction") { let current = match frame.direction { Direction::Tx => "tx", Direction::Rx => "rx" }; if v.as_str() != Some(current) { return Err("切换方向需要重新建立 Com/CanIf 映射；请创建新帧".into()); } }
         if let Some(issue) = validate_profile(&frames, &self.signals).first() { return Err(format!("{}: {}", issue.code, issue.message)); }
+        if let Some(diagnostic) = &self.diagnostic {
+            if let Some(issue) = validate_diagnostic(diagnostic, &frames, &self.signals).first() {
+                return Err(format!("{}: {}", issue.code, issue.message));
+            }
+        }
         let updated = frames.iter().find(|f| f.path == path).unwrap().clone();
         if self.files.iter().any(|file| self.is_managed_file(file)) {
-            self.replace_managed(frames, self.signals.clone())?;
+            self.replace_managed(frames, self.signals.clone(), self.diagnostic.clone())?;
         } else {
             self.patch_imported_frame(&old, &updated)?;
         }
@@ -572,9 +832,14 @@ impl Workspace {
         if let Some(v) = changes.get("length") { signal.length = v.as_u64().ok_or("位长须为整数")?.try_into().map_err(|_| "位长超出范围")?; }
         if let Some(v) = changes.get("initialValue") { signal.initial_value = v.as_u64().ok_or("初始值须为整数")?.try_into().map_err(|_| "初始值超出范围")?; }
         if let Some(issue) = validate_profile(&self.frames, &signals).first() { return Err(format!("{}: {}", issue.code, issue.message)); }
+        if let Some(diagnostic) = &self.diagnostic {
+            if let Some(issue) = validate_diagnostic(diagnostic, &self.frames, &signals).first() {
+                return Err(format!("{}: {}", issue.code, issue.message));
+            }
+        }
         let updated = signals.iter().find(|s| s.path == path).unwrap().clone();
         if self.files.iter().any(|file| self.is_managed_file(file)) {
-            self.replace_managed(self.frames.clone(), signals)?;
+            self.replace_managed(self.frames.clone(), signals, self.diagnostic.clone())?;
         } else {
             self.patch_imported_signal(&old, &updated)?;
         }

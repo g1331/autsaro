@@ -280,3 +280,146 @@ fn linked_can_frame_must_match_canif_and_pdu_layout() {
     assert!(generator::generate(&mut imported, &generated).is_err());
     assert!(!generated.exists());
 }
+
+#[cfg(windows)]
+#[test]
+fn configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_multiframe_did() {
+    let temp = Scratch::new();
+    let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
+    let frame = project.add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(1000), None).unwrap().frames[0].path.clone();
+    project.add_signal(frame.clone(), "LiveA".into(), 0, 32, 0).unwrap();
+    let view = project.add_signal(frame.clone(), "LiveB".into(), 32, 32, 0).unwrap();
+    let sources: Vec<_> = view.signals.iter().filter(|signal| signal.frame_path == frame).map(|signal| signal.path.clone()).collect();
+    assert!(project.configure_diagnostic(0x321, 0x708, 5000, 200, 200, 0x1234, sources.clone()).is_err());
+    assert!(project.view().diagnostic.is_none());
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, sources).unwrap();
+    let validation = project.validate().unwrap();
+    assert!(validation.issues.is_empty(), "{:?}", validation.issues);
+    project.save().unwrap();
+
+    let source = temp.0.join("Diag/Diag.arxml");
+    let original = fs::read_to_string(&source).unwrap();
+    fs::write(&source, original.replace("</ELEMENTS>", "<!-- user annotation --></ELEMENTS>")).unwrap();
+    let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
+    let diagnostic = reopened.view().diagnostic.unwrap();
+    assert_eq!((diagnostic.request_id, diagnostic.response_id, diagnostic.did), (0x700, 0x708, 0x1234));
+    let output = temp.0.join("GeneratedDiag");
+    generator::generate(&mut reopened, &output).unwrap();
+    let binary = generator::build(&output).unwrap().binary_path;
+    let mut ecu = Command::new(binary).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
+    ecu.stdin.take().unwrap().write_all(
+        b"S 0 287454020\nS 1 1432778632\nR 1792 4 03221234\nR 1792 3 021003\nR 1792 4 03221234\nR 1792 3 300000\nT 5001\nR 1792 4 03221234\n"
+    ).unwrap();
+    let output = ecu.wait_with_output().unwrap();
+    assert!(output.status.success());
+    let log = String::from_utf8(output.stdout).unwrap();
+    let frames: Vec<_> = log.lines().map(|line| line.trim_end_matches('\r')).filter(|line| line.starts_with("X 1800 ")).collect();
+    assert_eq!(frames, [
+        "X 1800 4 037F2231",
+        "X 1800 7 06500300320032",
+        "X 1800 8 100B621234112233",
+        "X 1800 6 214455667788",
+        "X 1800 4 037F2231",
+    ], "{log}");
+    let report = host::run_diagnostic(&temp.0.join("GeneratedDiag")).unwrap();
+    assert!(report.passed, "independent host diagnostic tester failed: {}", report.log);
+    assert!(report.events.iter().any(|event| event.contains("多帧")));
+    reopened.clear_diagnostic().unwrap();
+    reopened.save().unwrap();
+    assert!(fs::read_to_string(&source).unwrap().contains("<!-- user annotation -->"));
+    let mut signal_only = Workspace::open(vec![temp.0.join("Diag/Diag.arxml")], archive()).unwrap();
+    assert!(signal_only.view().diagnostic.is_none());
+    let signal_output = temp.0.join("GeneratedSignalsOnly");
+    generator::generate(&mut signal_only, &signal_output).unwrap();
+    generator::build(&signal_output).unwrap();
+    assert!(host::run_diagnostic(&signal_output).is_err());
+}
+
+#[cfg(windows)]
+#[test]
+fn diagnostic_transport_discards_bad_or_timed_out_multiframe_requests_and_recovers() {
+    let temp = Scratch::new();
+    let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
+    let frame = project.add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(1000), None).unwrap().frames[0].path.clone();
+    project.add_signal(frame.clone(), "LiveValue".into(), 0, 32, 42).unwrap();
+    let view = project.add_signal(frame, "LiveOther".into(), 32, 32, 43).unwrap();
+    let sources = view.signals.iter().map(|signal| signal.path.clone()).collect();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, sources).unwrap();
+    project.save().unwrap();
+    let generated = temp.0.join("GeneratedDiag");
+    generator::generate(&mut project, &generated).unwrap();
+    let binary = generator::build(&generated).unwrap().binary_path;
+    let mut ecu = Command::new(binary).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
+    ecu.stdin.take().unwrap().write_all(
+        b"R 1792 8 1009221234123412\nR 1792 4 22341234\nR 1792 8 1009221234123412\nR 1792 4 21341234\nR 1792 8 1009221234123412\nT 201\nR 1792 3 023E00\nR 1792 3 021003\nR 1792 4 03221234\nT 402\nR 1792 3 023E00\n"
+    ).unwrap();
+    let output = ecu.wait_with_output().unwrap();
+    assert!(output.status.success());
+    let log = String::from_utf8(output.stdout).unwrap();
+    let lines: Vec<_> = log.lines().map(|line| line.trim_end_matches('\r')).collect();
+    let flow_controls = lines.iter().filter(|line| **line == "X 1800 3 300000").count();
+    assert_eq!(flow_controls, 3, "{log}");
+    assert!(lines.contains(&"E TP_SEQUENCE"), "{log}");
+    assert!(lines.contains(&"X 1800 4 037F2213"), "{log}");
+    assert_eq!(lines.iter().filter(|line| **line == "E TP_TIMEOUT").count(), 2, "{log}");
+    assert!(lines.contains(&"X 1800 3 027E00"), "{log}");
+    assert!(lines.iter().any(|line| line.starts_with("X 1800 8 100B621234")), "{log}");
+}
+
+#[cfg(windows)]
+#[test]
+fn diagnostic_tester_present_keeps_session_and_fc_block_size_paces_response() {
+    let temp = Scratch::new();
+    let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
+    for (name, id) in [("LiveA", 0x321), ("LiveB", 0x322)] {
+        let frame = project.add_frame(name.into(), id, 8, Direction::Tx, Some(1000), None).unwrap()
+            .frames.into_iter().find(|item| item.name == name).unwrap().path;
+        project.add_signal(frame.clone(), format!("{name}Low"), 0, 32, 0).unwrap();
+        project.add_signal(frame, format!("{name}High"), 32, 32, 0).unwrap();
+    }
+    let sources = project.view().signals.iter().map(|signal| signal.path.clone()).collect();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, sources).unwrap();
+    project.save().unwrap();
+    let generated = temp.0.join("GeneratedDiag");
+    generator::generate(&mut project, &generated).unwrap();
+    let binary = generator::build(&generated).unwrap().binary_path;
+    let mut ecu = Command::new(binary).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
+    ecu.stdin.take().unwrap().write_all(
+        b"S 0 16909060\nS 1 84281096\nS 2 151653132\nS 3 219025168\nR 1792 3 021003\nT 4000\nR 1792 3 023E80\nT 8000\nR 1792 4 03221234\nR 1792 3 300105\nG 0\nT 8005\nG 0\nR 1792 3 300105\nT 13006\nR 1792 4 03221234\n"
+    ).unwrap();
+    let output = ecu.wait_with_output().unwrap();
+    assert!(output.status.success());
+    let log = String::from_utf8(output.stdout).unwrap();
+    let lines: Vec<_> = log.lines().map(|line| line.trim_end_matches('\r')).collect();
+    let diagnostic: Vec<_> = lines.iter().filter(|line| line.starts_with("X 1800 ")).copied().collect();
+    assert_eq!(diagnostic, [
+        "X 1800 7 06500300320032",
+        "X 1800 8 1013621234010203",
+        "X 1800 8 210405060708090A",
+        "X 1800 7 220B0C0D0E0F10",
+        "X 1800 4 037F2231",
+    ], "{log}");
+    let fence_positions: Vec<_> = lines.iter().enumerate().filter(|(_, line)| line.starts_with("V 0 ")).map(|(index, _)| index).collect();
+    let second_cf = lines.iter().position(|line| *line == "X 1800 7 220B0C0D0E0F10").unwrap();
+    assert_eq!(fence_positions.len(), 2, "{log}");
+    assert!(fence_positions[1] < second_cf, "FC block size was ignored: {log}");
+}
+
+#[cfg(windows)]
+#[test]
+fn unsupported_imported_transport_padding_blocks_diagnostic_generation() {
+    let temp = Scratch::new();
+    let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
+    let frame = project.add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(1000), None).unwrap().frames[0].path.clone();
+    let signal = project.add_signal(frame, "LiveA".into(), 0, 32, 0).unwrap().signals[0].path.clone();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, vec![signal]).unwrap();
+    project.save().unwrap();
+    let source = temp.0.join("Diag/Diag.arxml");
+    let original = fs::read_to_string(&source).unwrap();
+    fs::write(&source, original.replacen(">CANTP_OFF<", ">CANTP_ON<", 1)).unwrap();
+    let mut imported = Workspace::open(vec![source], archive()).unwrap();
+    assert!(imported.view().issues.iter().any(|issue| issue.code == "DIAG_UNSUPPORTED"));
+    let generated = temp.0.join("RejectedDiag");
+    assert!(generator::generate(&mut imported, &generated).is_err());
+    assert!(!generated.exists());
+}

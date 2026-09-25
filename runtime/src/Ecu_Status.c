@@ -12,6 +12,11 @@ const char *Ecu_StatusName(EcuStatus status)
     case ECU_ERR_FRAME_DLC: return "FRAME_DLC";
     case ECU_ERR_CONTROLLER: return "CONTROLLER";
     case ECU_ERR_TIME: return "TIME";
+    case ECU_ERR_TP_SEQUENCE: return "TP_SEQUENCE";
+    case ECU_ERR_TP_TIMEOUT: return "TP_TIMEOUT";
+    case ECU_ERR_TP_LENGTH: return "TP_LENGTH";
+    case ECU_ERR_TP_FLOW: return "TP_FLOW";
+    case ECU_ERR_TP_BUSY: return "TP_BUSY";
     case ECU_ERR_IO: return "IO";
     default: return "INTERNAL";
     }

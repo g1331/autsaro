@@ -11,6 +11,11 @@ typedef enum {
     ECU_ERR_FRAME_DLC,
     ECU_ERR_CONTROLLER,
     ECU_ERR_TIME,
+    ECU_ERR_TP_SEQUENCE,
+    ECU_ERR_TP_TIMEOUT,
+    ECU_ERR_TP_LENGTH,
+    ECU_ERR_TP_FLOW,
+    ECU_ERR_TP_BUSY,
     ECU_ERR_IO
 } EcuStatus;
 

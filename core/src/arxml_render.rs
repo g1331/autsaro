@@ -1,4 +1,4 @@
-use crate::model::{Direction, FrameView, SignalView};
+use crate::model::{DiagnosticView, Direction, FrameView, SignalView};
 use std::fmt::Write;
 
 fn ref_path(project: &str, name: &str) -> String {
@@ -24,6 +24,14 @@ fn choice(path: &str, name: &str, value: &str) -> String {
 fn text(path: &str, name: &str, value: impl std::fmt::Display) -> String {
     param(&format!("{path}/{name}"), "TEXTUAL", value, "STRING")
 }
+fn boolean(path: &str, name: &str, value: bool) -> String {
+    param(&format!("{path}/{name}"), "NUMERICAL", value, "BOOLEAN")
+}
+
+fn function(path: &str, name: &str, value: &str) -> String {
+    format!("<ECUC-TEXTUAL-PARAM-VALUE><DEFINITION-REF DEST=\"ECUC-FUNCTION-NAME-DEF\">{path}/{name}</DEFINITION-REF><VALUE>{value}</VALUE></ECUC-TEXTUAL-PARAM-VALUE>")
+}
+
 
 fn reference(path: &str, name: &str, dest: &str, target: &str) -> String {
     format!("<ECUC-REFERENCE-VALUE><DEFINITION-REF DEST=\"ECUC-REFERENCE-DEF\">{path}/{name}</DEFINITION-REF><VALUE-REF DEST=\"{dest}\">{target}</VALUE-REF></ECUC-REFERENCE-VALUE>")
@@ -44,7 +52,138 @@ fn container(name: &str, definition: &str, params: &str, refs: &str, children: &
     value
 }
 
-pub fn render_profile(project: &str, frames: &[FrameView], signals: &[SignalView]) -> String {
+fn module(name: &str, definition: &str, children: &str) -> String {
+    format!("<ECUC-MODULE-CONFIGURATION-VALUES><SHORT-NAME>{name}</SHORT-NAME><DEFINITION-REF DEST=\"ECUC-MODULE-DEF\">/AUTOSAR/EcucDefs/{definition}</DEFINITION-REF><CONTAINERS>{children}</CONTAINERS></ECUC-MODULE-CONFIGURATION-VALUES>")
+}
+
+fn render_diagnostic(project: &str, diagnostic: &DiagnosticView, frame_count: usize, elements: &mut String, canif_children: &mut String) {
+    let request = ref_path(project, "NPdu_DiagRequest");
+    let response = ref_path(project, "NPdu_DiagResponse");
+    let request_sdu = ref_path(project, "DcmPdu_DiagRequest");
+    let response_sdu = ref_path(project, "DcmPdu_DiagResponse");
+    for name in ["NPdu_DiagRequest", "NPdu_DiagResponse"] {
+        write!(elements, "<N-PDU><SHORT-NAME>{name}</SHORT-NAME><HAS-DYNAMIC-LENGTH>true</HAS-DYNAMIC-LENGTH><LENGTH>8</LENGTH></N-PDU>").unwrap();
+    }
+    for name in ["DcmPdu_DiagRequest", "DcmPdu_DiagResponse"] {
+        write!(elements, "<DCM-I-PDU><SHORT-NAME>{name}</SHORT-NAME><LENGTH>256</LENGTH></DCM-I-PDU>").unwrap();
+    }
+    for (name, id, is_tx, pdu) in [("DiagRequest", diagnostic.request_id, false, &request), ("DiagResponse", diagnostic.response_id, true, &response)] {
+        let path = if is_tx { "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfTxPduCfg" } else { "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfRxPduCfg" };
+        let params = if is_tx {
+            format!("{}{}{}", number(path, "CanIfTxPduCanId", id), number(path, "CanIfTxPduId", frame_count), choice(path, "CanIfTxPduCanIdType", "STANDARD_CAN"))
+        } else {
+            format!("{}{}{}{}{}", number(path, "CanIfRxPduCanId", id), number(path, "CanIfRxPduId", frame_count), number(path, "CanIfRxPduDataLength", 8), choice(path, "CanIfRxPduCanIdType", "STANDARD_NO_FD_CAN"), boolean(path, "CanIfRxPduDataLengthCheck", false))
+        };
+        let refs = reference(path, if is_tx { "CanIfTxPduRef" } else { "CanIfRxPduRef" }, "N-PDU", pdu);
+        canif_children.push_str(&container(&format!("Can_{name}"), path, &params, &refs, ""));
+    }
+
+    let rx = "/AUTOSAR/EcucDefs/CanTp/CanTpConfig/CanTpChannel/CanTpRxNSdu";
+    let rx_pdu = format!("{rx}/CanTpRxNPdu");
+    let tx_fc = format!("{rx}/CanTpTxFcNPdu");
+    let rx_children = container("RequestNPdu", &rx_pdu, &number(&rx_pdu, "CanTpRxNPduId", 0), &reference(&rx_pdu, "CanTpRxNPduRef", "N-PDU", &request), "")
+        + &container("ResponseFc", &tx_fc, &number(&tx_fc, "CanTpTxFcNPduConfirmationPduId", 1), &reference(&tx_fc, "CanTpTxFcNPduRef", "N-PDU", &response), "");
+    let rx_params = format!("{}{}{}{}{}{}{}{}", number(rx, "CanTpRxNSduId", 0), choice(rx, "CanTpRxAddressingFormat", "CANTP_STANDARD"), choice(rx, "CanTpRxPaddingActivation", "CANTP_OFF"), choice(rx, "CanTpRxTaType", "CANTP_PHYSICAL"), number(rx, "CanTpBs", 0), decimal(rx, "CanTpSTmin", 0), number(rx, "CanTpRxWftMax", 0), decimal(rx, "CanTpNcr", diagnostic.n_cr_ms));
+    let rx_sdu = container("Request", rx, &rx_params, &reference(rx, "CanTpRxNSduRef", "DCM-I-PDU", &request_sdu), &rx_children);
+    let tx = "/AUTOSAR/EcucDefs/CanTp/CanTpConfig/CanTpChannel/CanTpTxNSdu";
+    let tx_pdu = format!("{tx}/CanTpTxNPdu");
+    let rx_fc = format!("{tx}/CanTpRxFcNPdu");
+    let tx_children = container("ResponseNPdu", &tx_pdu, &number(&tx_pdu, "CanTpTxNPduConfirmationPduId", 0), &reference(&tx_pdu, "CanTpTxNPduRef", "N-PDU", &response), "")
+        + &container("RequestFc", &rx_fc, &number(&rx_fc, "CanTpRxFcNPduId", 1), &reference(&rx_fc, "CanTpRxFcNPduRef", "N-PDU", &request), "");
+    let tx_params = format!("{}{}{}{}{}{}{}", number(tx, "CanTpTxNSduId", 0), choice(tx, "CanTpTxAddressingFormat", "CANTP_STANDARD"), choice(tx, "CanTpTxPaddingActivation", "CANTP_OFF"), choice(tx, "CanTpTxTaType", "CANTP_PHYSICAL"), boolean(tx, "CanTpTc", false), decimal(tx, "CanTpNas", diagnostic.n_bs_ms), decimal(tx, "CanTpNbs", diagnostic.n_bs_ms));
+    let tx_sdu = container("Response", tx, &tx_params, &reference(tx, "CanTpTxNSduRef", "DCM-I-PDU", &response_sdu), &tx_children);
+    let channel = container("Channel", "/AUTOSAR/EcucDefs/CanTp/CanTpConfig/CanTpChannel", "", "", &(rx_sdu + &tx_sdu));
+    let config_path = "/AUTOSAR/EcucDefs/CanTp/CanTpConfig";
+    let config = container("CanTpConfig", config_path, &decimal(config_path, "CanTpMainFunctionPeriod", 1), "", &channel);
+    let general_path = "/AUTOSAR/EcucDefs/CanTp/CanTpGeneral";
+    let mut general_params = String::new();
+    for name in ["CanTpChangeParameterApi", "CanTpDevErrorDetect", "CanTpEnableSecurityEventReporting", "CanTpReadParameterApi", "CanTpVersionInfoApi"] {
+        general_params.push_str(&boolean(general_path, name, false));
+    }
+    general_params.push_str(&number(general_path, "CanTpPaddingByte", 0));
+    let general = container("CanTpGeneral", general_path, &general_params, "", "");
+    elements.push_str(&module("CanTpCfg", "CanTp", &(config + &general)));
+
+    let base = "/AUTOSAR/EcucDefs/Dcm/DcmConfigSet";
+    let dsd = format!("{base}/DcmDsd");
+    let table = format!("{dsd}/DcmDsdServiceTable");
+    let service_path = format!("{table}/DcmDsdService");
+    let mut services = String::new();
+    for (name, sid, subfunction) in [("SessionControl", 0x10, true), ("ReadDataByIdentifier", 0x22, false), ("TesterPresent", 0x3e, true)] {
+        let params = format!("{}{}{}", number(&service_path, "DcmDsdSidTabServiceId", sid), boolean(&service_path, "DcmDsdServiceUsed", true), boolean(&service_path, "DcmDsdSidTabSubfuncAvail", subfunction));
+        services.push_str(&container(name, &service_path, &params, "", ""));
+    }
+    let table_value = container("Services", &table, &number(&table, "DcmDsdSidTabId", 0), "", &services);
+    let dsd_value = container("DcmDsd", &dsd, "", "", &table_value);
+
+    let dsl = format!("{base}/DcmDsl");
+    let buffer = format!("{dsl}/DcmDslBuffer");
+    let buffer_value = container("Buffer", &buffer, &number(&buffer, "DcmDslBufferSize", 256), "", "");
+    let diag_resp = format!("{dsl}/DcmDslDiagResp");
+    let diag_resp_value = container("DiagResp", &diag_resp, &boolean(&diag_resp, "DcmDslDiagRespOnSecondDeclinedRequest", true), "", "");
+    let protocol = format!("{dsl}/DcmDslProtocol");
+    let row = format!("{protocol}/DcmDslProtocolRow");
+    let connection = format!("{row}/DcmDslConnection");
+    let main = format!("{connection}/DcmDslMainConnection");
+    let dcm_rx = format!("{main}/DcmDslProtocolRx");
+    let dcm_tx = format!("{main}/DcmDslProtocolTx");
+    let rx_value = container("Request", &dcm_rx, &(choice(&dcm_rx, "DcmDslProtocolRxAddrType", "DCM_PHYSICAL_TYPE") + &number(&dcm_rx, "DcmDslProtocolRxPduId", 0)), &reference(&dcm_rx, "DcmDslProtocolRxPduRef", "DCM-I-PDU", &request_sdu), "");
+    let tx_value = container("Response", &dcm_tx, &number(&dcm_tx, "DcmDslTxConfirmationPduId", 0), &reference(&dcm_tx, "DcmDslProtocolTxPduRef", "DCM-I-PDU", &response_sdu), "");
+    let main_value = container("Main", &main, &number(&main, "DcmDslProtocolRxConnectionId", 0), "", &(rx_value + &tx_value));
+    let row_params = format!("{}{}{}{}{}{}", number(&row, "DcmDslProtocolPriority", 0), boolean(&row, "DcmDslProtocolRowUsed", true), choice(&row, "DcmDslProtocolType", "DCM_UDS_ON_CAN"), boolean(&row, "DcmSendRespPendOnRestart", false), decimal(&row, "DcmTimStrP2ServerAdjust", 0), decimal(&row, "DcmTimStrP2StarServerAdjust", 0));
+    let buffer_ref = ref_path(project, "DcmCfg/DcmConfigSet/DcmDsl/Buffer");
+    let table_ref = ref_path(project, "DcmCfg/DcmConfigSet/DcmDsd/Services");
+    let row_refs = reference(&row, "DcmDslProtocolRxBufferRef", "ECUC-CONTAINER-VALUE", &buffer_ref)
+        + &reference(&row, "DcmDslProtocolTxBufferRef", "ECUC-CONTAINER-VALUE", &buffer_ref)
+        + &reference(&row, "DcmDslProtocolSIDTable", "ECUC-CONTAINER-VALUE", &table_ref);
+    let row_value = container("UdsCan", &row, &row_params, &row_refs, &main_value);
+    let protocol_value = container("Protocol", &protocol, "", "", &row_value);
+    let dsl_value = container("DcmDsl", &dsl, "", "", &(buffer_value + &diag_resp_value + &protocol_value));
+
+    let dsp = format!("{base}/DcmDsp");
+    let did_path = format!("{dsp}/DcmDspDid");
+    let data_path = format!("{dsp}/DcmDspData");
+    let info_path = format!("{dsp}/DcmDspDidInfo");
+    let did_signal_path = format!("{did_path}/DcmDspDidSignal");
+    let mut data_values = String::new();
+    let mut did_signals = String::new();
+    for (index, signal_path) in diagnostic.signal_paths.iter().enumerate() {
+        let data_name = format!("Data_{index}");
+        let params = format!("{}{}{}{}", choice(&data_path, "DcmDspDataType", "UINT32"), choice(&data_path, "DcmDspDataUsePort", "USE_DATA_SYNCH_FNC"), choice(&data_path, "DcmDspDataEndianness", "BIG_ENDIAN"), function(&data_path, "DcmDspDataReadFnc", &format!("Ecu_DcmRead_{index}")));
+        let data = container(&data_name, &data_path, &params, "", "");
+        // DcmDspDidDataRef names DcmDspData, but ECUC has no direct ComSignalRef for it.
+        let admin = format!("<ADMIN-DATA><SDGS><SDG GID=\"AutosarWorkbenchDiagnostic\"><SD GID=\"ComSignalRef\">{signal_path}</SD></SDG></SDGS></ADMIN-DATA>");
+        data_values.push_str(&data.replacen("</SHORT-NAME>", &format!("</SHORT-NAME>{admin}"), 1));
+        let signal_params = number(&did_signal_path, "DcmDspDidByteOffset", index * 4);
+        let data_ref = ref_path(project, &format!("DcmCfg/DcmConfigSet/DcmDsp/{data_name}"));
+        did_signals.push_str(&container(&format!("Signal_{index}"), &did_signal_path, &signal_params, &reference(&did_signal_path, "DcmDspDidDataRef", "ECUC-CONTAINER-VALUE", &data_ref), ""));
+    }
+    let info_ref = ref_path(project, "DcmCfg/DcmConfigSet/DcmDsp/DidInfo");
+    let did_params = format!("{}{}{}{}", number(&did_path, "DcmDspDidIdentifier", diagnostic.did), number(&did_path, "DcmDspDidSize", diagnostic.signal_paths.len() * 4), boolean(&did_path, "DcmDspDidUsed", true), choice(&did_path, "DcmDspDidUsePort", "USE_DATA_ELEMENT_SPECIFIC_INTERFACES"));
+    let did_value = container("Did", &did_path, &did_params, &reference(&did_path, "DcmDspDidInfoRef", "ECUC-CONTAINER-VALUE", &info_ref), &did_signals);
+    let read_path = format!("{info_path}/DcmDspDidRead");
+    let ext_ref = ref_path(project, "DcmCfg/DcmConfigSet/DcmDsp/Sessions/Extended");
+    let read_value = container("Read", &read_path, "", &reference(&read_path, "DcmDspDidReadSessionRef", "ECUC-CONTAINER-VALUE", &ext_ref), "");
+    let info_value = container("DidInfo", &info_path, &boolean(&info_path, "DcmDspDidDynamicallyDefined", false), "", &read_value);
+    let sessions_path = format!("{dsp}/DcmDspSession");
+    let session_path = format!("{sessions_path}/DcmDspSessionRow");
+    let session = |name: &str, level: u8| {
+        let params = format!("{}{}{}{}", number(&session_path, "DcmDspSessionLevel", level), choice(&session_path, "DcmDspSessionForBoot", "DCM_NO_BOOT"), decimal(&session_path, "DcmDspSessionP2ServerMax", 50), decimal(&session_path, "DcmDspSessionP2StarServerMax", 5000));
+        container(name, &session_path, &params, "", "")
+    };
+    let sessions = container("Sessions", &sessions_path, "", "", &(session("Default", 1) + &session("Extended", 3)));
+    let dsp_params = choice(&dsp, "DcmDspDataDefaultEndianness", "BIG_ENDIAN") + &boolean(&dsp, "DcmDspEnableObdMirror", false);
+    let dsp_value = container("DcmDsp", &dsp, &dsp_params, "", &(did_value + &info_value + &data_values + &sessions));
+    let page_path = format!("{base}/DcmPageBufferCfg");
+    let page_value = container("PageBuffer", &page_path, &boolean(&page_path, "DcmPagedBufferEnabled", false), "", "");
+    let config = container("DcmConfigSet", base, "", "", &(dsd_value + &dsl_value + &dsp_value + &page_value));
+    let general_path = "/AUTOSAR/EcucDefs/Dcm/DcmGeneral";
+    let general_params = format!("{}{}{}{}{}{}", boolean(general_path, "DcmDevErrorDetect", false), boolean(general_path, "DcmEnableSecurityEventReporting", false), boolean(general_path, "DcmRespondAllRequest", false), boolean(general_path, "DcmVersionInfoApi", false), decimal(general_path, "DcmTaskTime", 1), decimal(general_path, "DcmS3ServerTimeoutOverwrite", diagnostic.s3_ms));
+    let general = container("DcmGeneral", general_path, &general_params, "", "");
+    elements.push_str(&module("DcmCfg", "Dcm", &(config + &general)));
+}
+
+pub fn render_profile(project: &str, frames: &[FrameView], signals: &[SignalView], diagnostic: Option<&DiagnosticView>) -> String {
     let mut elements = String::new();
     let mut com_children = String::new();
     let mut canif_children = String::new();
@@ -95,6 +234,9 @@ pub fn render_profile(project: &str, frames: &[FrameView], signals: &[SignalView
             }
         }
         com_children.push_str(&container(&signal.name, path, &params, "", ""));
+    }
+    if let Some(diagnostic) = diagnostic {
+        render_diagnostic(project, diagnostic, frames.len(), &mut elements, &mut canif_children);
     }
     if !com_children.is_empty() {
         let config = container("ComConfig", "/AUTOSAR/EcucDefs/Com/ComConfig", "", "", &com_children);

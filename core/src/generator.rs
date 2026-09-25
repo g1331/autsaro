@@ -1,5 +1,5 @@
 use crate::arxml::Workspace;
-use crate::model::{BuildReport, Direction, GenerationReport, Issue, SignalView};
+use crate::model::{BuildReport, DiagnosticView, Direction, GenerationReport, Issue, SignalView};
 use std::fmt::Write;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -25,10 +25,11 @@ fn source_files(dir: &Path) -> Result<Vec<(PathBuf, String)>, String> {
     Ok(files)
 }
 
-fn config_source(name: &str, frames: &[crate::model::FrameView], signals: &[SignalView]) -> (String, String) {
+fn config_source(name: &str, frames: &[crate::model::FrameView], signals: &[SignalView], diagnostic: Option<&DiagnosticView>) -> Result<(String, String), String> {
     let mut source = String::from("#include \"Ecu_Config.h\"\n\nstatic const EcuSignalConfig signals[] = {\n");
     let mut frame_rows = Vec::new();
     let mut map = format!("ECU {name}\n# ID 映射由已验证的 ARXML 路径按字典序稳定生成\n");
+    let mut signal_ids = std::collections::BTreeMap::new();
     let mut next_id = 0usize;
     for frame in frames {
         let mut frame_signals: Vec<_> = signals.iter().filter(|s| s.frame_path == frame.path).collect();
@@ -37,6 +38,7 @@ fn config_source(name: &str, frames: &[crate::model::FrameView], signals: &[Sign
         for signal in frame_signals {
             writeln!(source, "    {{ {}u, {}u, {}u, {}u }},", next_id, signal.start_bit, signal.length, signal.initial_value).unwrap();
             writeln!(map, "SIGNAL {} {} frame={} bits={}:{} initial={}", next_id, signal.path, frame.path, signal.start_bit, signal.length, signal.initial_value).unwrap();
+            signal_ids.insert(signal.path.as_str(), next_id);
             next_id += 1;
         }
         frame_rows.push(format!("    {{ {}u, {}u, {}u, {}u, {}u, {}u, {}u }},", frame.id, frame.dlc, matches!(frame.direction, Direction::Tx) as u8, first, next_id - first, frame.period_ms.unwrap_or(0), frame.timeout_ms.unwrap_or(0)));
@@ -44,8 +46,26 @@ fn config_source(name: &str, frames: &[crate::model::FrameView], signals: &[Sign
     }
     source.push_str("};\n\nstatic const EcuFrameConfig frames[] = {\n");
     for row in frame_rows { writeln!(source, "{row}").unwrap(); }
-    write!(source, "}};\n\nconst EcuConfig Ecu_Config = {{ \"{name}\", frames, sizeof(frames) / sizeof(frames[0]), signals, sizeof(signals) / sizeof(signals[0]) }};\n").unwrap();
-    (source, map)
+    source.push_str("};\n\n");
+    let diagnostic_ref = if let Some(diagnostic) = diagnostic {
+        source.push_str("static const uint16_t diagnostic_signal_ids[] = { ");
+        write!(map, "DIAGNOSTIC request={} response={} s3={} nbs={} ncr={} did={} signals=",
+            diagnostic.request_id, diagnostic.response_id, diagnostic.s3_ms, diagnostic.n_bs_ms, diagnostic.n_cr_ms,
+            diagnostic.did).unwrap();
+        for (index, path) in diagnostic.signal_paths.iter().enumerate() {
+            let id = signal_ids.get(path.as_str()).ok_or_else(|| format!("诊断 DID 信号没有生成 ID: {path}"))?;
+            if index != 0 { source.push_str(", "); map.push(','); }
+            write!(source, "{id}u").unwrap();
+            write!(map, "{id}").unwrap();
+        }
+        source.push_str(" };\n");
+        map.push('\n');
+        writeln!(source, "static const EcuDiagnosticConfig diagnostic = {{ {}u, {}u, {}u, {}u, {}u, {}u, diagnostic_signal_ids, {}u }};\n",
+            diagnostic.request_id, diagnostic.response_id, diagnostic.s3_ms, diagnostic.n_bs_ms, diagnostic.n_cr_ms, diagnostic.did, diagnostic.signal_paths.len()).unwrap();
+        "&diagnostic"
+    } else { "NULL" };
+    writeln!(source, "const EcuConfig Ecu_Config = {{ \"{name}\", frames, sizeof(frames) / sizeof(frames[0]), signals, sizeof(signals) / sizeof(signals[0]), {diagnostic_ref} }};").unwrap();
+    Ok((source, map))
 }
 
 fn expected_paths(dir: &Path, names: &[String]) -> Result<(), String> {
@@ -77,7 +97,7 @@ fn walk_files(dir: &Path) -> Result<Vec<PathBuf>, String> {
 pub fn generate(workspace: &mut Workspace, output: &Path) -> Result<GenerationReport, String> {
     let (frames, signals) = workspace.checked_profile()?;
     let sources = source_files(&runtime_dir())?;
-    let (generated, map) = config_source(workspace.name(), &frames, &signals);
+    let (generated, map) = config_source(workspace.name(), &frames, &signals, workspace.view().diagnostic.as_ref())?;
     let mut names: Vec<String> = sources.iter().map(|(_,name)| name.clone()).collect();
     names.extend(["Ecu_Config.c".into(), "profile.txt".into()]);
     names.sort();

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { ArrowRight, Boxes, Cable, CircleAlert, CircleCheck, FileCode2, FileInput, FolderOpen, FolderPlus, Hammer, HardDrive, ListChecks, MonitorPlay, Plus, Save, Waypoints } from 'lucide-react';
-import type { BuildResult, Frame, GenerateResult, Issue, Signal, VirtualResult, WorkspaceView } from './types';
+import type { BuildResult, DiagnosticView, Frame, GenerateResult, Issue, Signal, VirtualResult, WorkspaceView } from './types';
 
 type Stage = 'save' | 'validate' | 'generate' | 'build' | 'virtual';
 type StageState = 'pending' | 'running' | 'done' | 'failed' | 'stale';
@@ -13,6 +13,8 @@ type SignalFields = { name: string; startBit: string; length: string; initialVal
 type FrameChanges = Pick<Frame, 'name' | 'id' | 'dlc' | 'direction' | 'periodMs' | 'timeoutMs'>;
 type SignalChanges = Pick<Signal, 'name' | 'startBit' | 'length' | 'initialValue'>;
 type Draft = { kind: 'frame'; path: string; fields: FrameFields } | { kind: 'signal'; path: string; fields: SignalFields } | null;
+type DiagnosticFields = { requestId: string; responseId: string; s3Ms: string; nBsMs: string; nCrMs: string; did: string; signalPaths: string[] };
+type DiagnosticChanges = Pick<DiagnosticView, 'requestId' | 'responseId' | 's3Ms' | 'nBsMs' | 'nCrMs' | 'did' | 'signalPaths'>;
 type Notice = { tone: 'error' | 'info'; text: string } | null;
 type Page = 'editor' | 'diagnostics' | 'build' | 'virtual';
 
@@ -45,6 +47,44 @@ const signalFields = (signal: Signal): SignalFields => ({
 });
 const newFrame: FrameFields = { name: '', id: '', dlc: '8', direction: 'tx', periodMs: '100', timeoutMs: '' };
 const newSignal: SignalFields = { name: '', startBit: '0', length: '8', initialValue: '0' };
+const newDiagnostic: DiagnosticFields = { requestId: '', responseId: '', s3Ms: '', nBsMs: '', nCrMs: '', did: '', signalPaths: [] };
+const diagnosticFields = (diagnostic: DiagnosticView | null): DiagnosticFields => diagnostic ? {
+  requestId: `0x${diagnostic.requestId.toString(16).toUpperCase()}`,
+  responseId: `0x${diagnostic.responseId.toString(16).toUpperCase()}`,
+  s3Ms: String(diagnostic.s3Ms), nBsMs: String(diagnostic.nBsMs), nCrMs: String(diagnostic.nCrMs),
+  did: `0x${diagnostic.did.toString(16).toUpperCase().padStart(4, '0')}`,
+  signalPaths: [...diagnostic.signalPaths],
+} : { ...newDiagnostic, signalPaths: [] };
+
+function canNumber(value: string, label: string, max: number): number {
+  const input = value.trim();
+  if (!/^(?:0x[0-9a-f]+|\d+)$/i.test(input)) throw new Error(`${label}须为十进制或 0x 开头的十六进制整数`);
+  const parsed = Number(input);
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > max) throw new Error(`${label}须为 0–${max} 的整数`);
+  return parsed;
+}
+function diagnosticChanges(fields: DiagnosticFields, view: WorkspaceView): DiagnosticChanges {
+  const requestId = canNumber(fields.requestId, '请求 CAN ID', 2047);
+  const responseId = canNumber(fields.responseId, '响应 CAN ID', 2047);
+  if (requestId === responseId || view.frames.some(frame => frame.id === requestId || frame.id === responseId)) {
+    throw new Error('请求与响应 CAN ID 须不同，且不可与现有 Com 帧 CAN ID 冲突');
+  }
+  const did = canNumber(fields.did, 'DID', 65535);
+  if (did === 0xF186) throw new Error('DID 0xF186 保留给当前会话标识，请选择其他 DID');
+  if (fields.signalPaths.length < 1 || fields.signalPaths.length > 8 || new Set(fields.signalPaths).size !== fields.signalPaths.length) {
+    throw new Error('按顺序选择 1–8 个不同的 32-bit Tx 信号');
+  }
+  if (fields.signalPaths.some(path => !view.signals.some(signal => signal.path === path && signal.length === 32 && view.frames.some(frame => frame.path === signal.framePath && frame.direction === 'tx')))) {
+    throw new Error('所选信号须为当前项目中的 32-bit Tx 信号');
+  }
+  return {
+    requestId, responseId, did,
+    s3Ms: intInRange(fields.s3Ms, 'S3 (ms)', 5000, 2147483647),
+    nBsMs: intInRange(fields.nBsMs, 'N_Bs (ms)', 1, 2147483647),
+    nCrMs: intInRange(fields.nCrMs, 'N_Cr (ms)', 1, 2147483647),
+    signalPaths: fields.signalPaths,
+  };
+}
 
 function labelFromPath(path: string): string {
   return path.split(/[\\/]/).filter(Boolean).at(-1) ?? path;
@@ -123,6 +163,9 @@ export default function App() {
   const [workspace, setWorkspace] = useState<WorkspaceView | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [draft, setDraft] = useState<Draft>(null);
+  const [diagnosticDraft, setDiagnosticDraft] = useState<DiagnosticFields>(() => diagnosticFields(null));
+  const [diagnosticSignal, setDiagnosticSignal] = useState('');
+  const [diagnosticError, setDiagnosticError] = useState('');
   const [source, setSource] = useState<'empty' | 'import'>('empty');
   const [projectName, setProjectName] = useState('');
   const [projectDirectory, setProjectDirectory] = useState('');
@@ -134,6 +177,7 @@ export default function App() {
   const [generated, setGenerated] = useState<GenerateResult | null>(null);
   const [built, setBuilt] = useState<BuildResult | null>(null);
   const [virtualResult, setVirtualResult] = useState<VirtualResult | null>(null);
+  const [virtualKind, setVirtualKind] = useState<'signal' | 'diagnostic' | null>(null);
   const [operationIssues, setOperationIssues] = useState<Issue[]>([]);
   const [notice, setNotice] = useState<Notice>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -145,7 +189,10 @@ export default function App() {
   const signalFrame = currentSignal ? workspace?.frames.find(item => item.path === currentSignal.framePath) : undefined;
   const currentFile = selection?.kind === 'file' ? workspace?.files.find(item => item.path === selection.path) : undefined;
   const focusedFrame = currentFrame ?? signalFrame;
-  const unapplied = hasUnapplied(workspace, draft);
+  const frameUnapplied = hasUnapplied(workspace, draft);
+  const diagnosticUnapplied = Boolean(workspace && JSON.stringify(diagnosticDraft) !== JSON.stringify(diagnosticFields(workspace.diagnostic)));
+  const unapplied = frameUnapplied || diagnosticUnapplied;
+  const eligibleSignals = workspace?.signals.filter(signal => signal.length === 32 && workspace.frames.some(frame => frame.path === signal.framePath && frame.direction === 'tx')) ?? [];
   const issues = [...(workspace?.issues ?? []), ...operationIssues];
   const errorCount = issues.filter(issue => issue.severity === 'error').length;
 
@@ -154,6 +201,9 @@ export default function App() {
     setWorkspace(view);
     setSelection(next);
     setDraft(draftFor(view, next));
+    setDiagnosticDraft(diagnosticFields(view.diagnostic));
+    setDiagnosticSignal('');
+    setDiagnosticError('');
   }
   function invalidateAfterEdit() {
     setStages({
@@ -169,14 +219,15 @@ export default function App() {
   function markStage(key: Stage, state: StageState, detail: string) {
     setStages(previous => ({ ...previous, [key]: { state, detail } }));
   }
-  function requireReady(allowUnapplied = false) {
+  function requireReady(allowed?: 'frame' | 'diagnostic') {
     if (!native) throw new Error('需要桌面运行环境');
-    if (unapplied && !allowUnapplied) throw new Error('检查器中有未应用的更改，请先应用或还原');
+    if (frameUnapplied && allowed !== 'frame') throw new Error('检查器中有未应用的更改，请先应用或还原');
+    if (diagnosticUnapplied && allowed !== 'diagnostic') throw new Error('DoCAN 配置有未应用的更改，请先应用或还原');
   }
-  async function run<T>(label: string, job: () => Promise<T>, onSuccess: (result: T) => void, stage?: Stage, allowUnapplied = false) {
+  async function run<T>(label: string, job: () => Promise<T>, onSuccess: (result: T) => void, stage?: Stage, allowed?: 'frame' | 'diagnostic') {
     if (busy) return;
     try {
-      requireReady(allowUnapplied);
+      requireReady(allowed);
       setBusy(label);
       setNotice(null);
       if (stage) markStage(stage, 'running', `${label}中…`);
@@ -212,7 +263,7 @@ export default function App() {
     return !workspace?.dirty && !unapplied || window.confirm('当前配置或检查器有尚未保存的更改。切换项目会丢失这些更改，确定继续？');
   }
   function choose(selectionNext: Selection) {
-    if (unapplied && !window.confirm('检查器中有未应用的更改，确定放弃并切换对象？')) return;
+    if (frameUnapplied && !window.confirm('检查器中有未应用的更改，确定放弃并切换对象？')) return;
     setSelection(selectionNext);
     if (workspace) setDraft(draftFor(workspace, selectionNext));
     setCreating(null);
@@ -220,7 +271,8 @@ export default function App() {
   }
   function openCreator(kind: 'frame' | 'signal') {
     if (!native || busy || !workspace) return;
-    if (unapplied && !window.confirm('检查器中有未应用的更改，确定放弃并创建对象？')) return;
+    if (diagnosticUnapplied) { setDiagnosticError('请先应用或还原 DoCAN 配置草稿，再添加帧或信号'); return; }
+    if (frameUnapplied && !window.confirm('检查器中有未应用的更改，确定放弃并创建对象？')) return;
     if (workspace) setDraft(draftFor(workspace, selection));
     setCreating(kind);
     setNotice(null);
@@ -237,11 +289,15 @@ export default function App() {
     setCreating(null);
     setPage('editor');
     acceptView(view, initialSelection(view));
+    setDiagnosticError('');
   }
   function startProject() {
     if (!confirmDiscard()) return;
     setWorkspace(null);
     setSelection(null);
+    setDiagnosticDraft(diagnosticFields(null));
+    setDiagnosticSignal('');
+    setDiagnosticError('');
     setDraft(null);
     setSource('empty');
     setProjectName('');
@@ -287,7 +343,7 @@ export default function App() {
         void run('修改帧', () => invoke<WorkspaceView>('update_frame', { path: oldPath, changes }), view => {
           invalidateAfterEdit();
           acceptView(view, { kind: 'frame', path: view.frames.find(frame => frame.path === oldPath)?.path ?? view.frames.find(frame => frame.name === changes.name)?.path ?? '' });
-        }, undefined, true);
+        }, undefined, 'frame');
       } else {
         const owner = workspace.frames.find(frame => frame.path === workspace.signals.find(item => item.path === draft.path)?.framePath);
         if (!owner) throw new Error('所属帧不存在，无法修改信号');
@@ -296,9 +352,35 @@ export default function App() {
         void run('修改信号', () => invoke<WorkspaceView>('update_signal', { path: oldPath, changes }), view => {
           invalidateAfterEdit();
           acceptView(view, { kind: 'signal', path: view.signals.find(signal => signal.path === oldPath)?.path ?? view.signals.find(signal => signal.name === changes.name && signal.framePath === owner.path)?.path ?? '' });
-        }, undefined, true);
+        }, undefined, 'frame');
       }
     } catch (error) { setNotice({ tone: 'error', text: errorText(error) }); }
+  }
+  function configureDiagnostic() {
+    if (!workspace) return;
+    let values: DiagnosticChanges;
+    try {
+      values = diagnosticChanges(diagnosticDraft, workspace);
+      setDiagnosticError('');
+    } catch (error) {
+      setDiagnosticError(errorText(error));
+      return;
+    }
+    void run('配置 DoCAN', () => invoke<WorkspaceView>('configure_diagnostic', values).catch(error => {
+      setDiagnosticError(errorText(error));
+      throw error;
+    }), view => {
+      invalidateAfterEdit();
+      acceptView(view);
+    }, undefined, 'diagnostic');
+  }
+  function clearDiagnostic() {
+    if (!workspace?.diagnostic || diagnosticUnapplied || frameUnapplied) return;
+    if (!window.confirm('移除当前工程的诊断配置？应用后仍需保存 ARXML 才会写入文件。')) return;
+    void run('移除 DoCAN', () => invoke<WorkspaceView>('clear_diagnostic'), view => {
+      invalidateAfterEdit();
+      acceptView(view);
+    }, undefined, 'diagnostic');
   }
   function saveProject() {
     void run('保存', () => invoke<WorkspaceView>('save_project'), view => {
@@ -373,9 +455,22 @@ export default function App() {
     void run('主机虚拟运行', () => invoke<VirtualResult>('run_virtual', {
       firstOutputDirectory: generated.outputDirectory, secondOutputDirectory: peerDirectory,
     }), result => {
+      setVirtualKind('signal');
       setVirtualResult(result);
       setPage('virtual');
       markStage('virtual', result.passed ? 'done' : 'failed', result.passed ? '双 ECU 虚拟运行通过' : '双 ECU 虚拟运行未通过');
+    }, 'virtual');
+  }
+  function runDiagnostic() {
+    if (!workspace?.diagnostic || !generated || stages.generate.state !== 'done' || stages.build.state !== 'done' || unapplied) return;
+    setVirtualResult(null);
+    void run('诊断独立测试', () => invoke<VirtualResult>('run_diagnostic', {
+      outputDirectory: generated.outputDirectory,
+    }), result => {
+      setVirtualKind('diagnostic');
+      setVirtualResult(result);
+      setPage('virtual');
+      markStage('virtual', result.passed ? 'done' : 'failed', result.passed ? '诊断独立测试器通过' : '诊断独立测试器未通过');
     }, 'virtual');
   }
 
@@ -444,10 +539,40 @@ export default function App() {
                 <div className="table-wrap"><table><caption>CAN 帧配置</caption><thead><tr><th scope="col">帧名称</th><th scope="col">CAN ID</th><th scope="col">DLC</th><th scope="col">方向</th><th scope="col">周期 / 超时</th><th scope="col">信号</th></tr></thead><tbody>{workspace.frames.map(frame => <tr key={frame.path} className={focusedFrame?.path === frame.path ? 'selected-row' : ''} onClick={() => choose({ kind: 'frame', path: frame.path })}><td><button type="button" className="table-link" onClick={event => { event.stopPropagation(); choose({ kind: 'frame', path: frame.path }); }}>{frame.name}</button></td><td className="mono">0x{frame.id.toString(16).toUpperCase().padStart(3, '0')}</td><td className="mono">{frame.dlc}</td><td><span className={`direction ${frame.direction}`}>{frame.direction.toUpperCase()}</span></td><td className="mono">{frame.direction === 'tx' ? `${frame.periodMs ?? '—'} ms` : `${frame.timeoutMs ?? '—'} ms`}</td><td className="mono">{workspace.signals.filter(signal => signal.framePath === frame.path).length}</td></tr>)}{!workspace.frames.length && <tr><td colSpan={6} className="empty-cell">项目尚无 CAN 帧。使用“添加帧”开始配置。</td></tr>}</tbody></table></div>
                 <div className="section-header secondary"><div><p className="eyebrow">FRAME MAPPING</p><h2>{focusedFrame ? `${focusedFrame.name} · 信号` : '全部信号'}</h2><p>{focusedFrame ? `帧路径：${focusedFrame.path}` : '选择一帧可查看信号映射与引用。'}</p></div><button type="button" className="outline-button small" onClick={() => openCreator('signal')} disabled={disabled || !focusedFrame}><Plus aria-hidden="true" size={15} />添加信号</button></div>
                 <div className="table-wrap"><table><caption>信号配置</caption><thead><tr><th scope="col">信号名称</th><th scope="col">所属帧</th><th scope="col">起始位</th><th scope="col">长度</th><th scope="col">初始值</th><th scope="col">编码</th></tr></thead><tbody>{workspace.signals.filter(signal => !focusedFrame || signal.framePath === focusedFrame.path).map(signal => <tr key={signal.path} className={currentSignal?.path === signal.path ? 'selected-row' : ''} onClick={() => choose({ kind: 'signal', path: signal.path })}><td><button type="button" className="table-link" onClick={event => { event.stopPropagation(); choose({ kind: 'signal', path: signal.path }); }}>{signal.name}</button></td><td>{workspace.frames.find(frame => frame.path === signal.framePath)?.name ?? signal.framePath}</td><td className="mono">{signal.startBit}</td><td className="mono">{signal.length} bit</td><td className="mono">{signal.initialValue}</td><td>uint / LE</td></tr>)}{!workspace.signals.some(signal => !focusedFrame || signal.framePath === focusedFrame.path) && <tr><td colSpan={6} className="empty-cell">当前范围内暂无信号。</td></tr>}</tbody></table></div>
+                <section className="diagnostic-editor" aria-labelledby="diagnostic-editor-title">
+                  <div className="section-header secondary"><div><p className="eyebrow">HOST VIRTUAL / DoCAN</p><h2 id="diagnostic-editor-title">诊断通信配置</h2><p>单条 11-bit 物理连接；扩展会话中一个 DID 按顺序读取实时 32-bit Tx 信号。</p></div><span className="diagnostic-state">{workspace.diagnostic ? '已配置' : '未配置'}</span></div>
+                  {workspace.diagnostic && <p className="diagnostic-path">配置路径 <span className="mono path-text">{workspace.diagnostic.path}</span></p>}
+                  <div className="diagnostic-fields form-fields">
+                    <div className="form-pair">
+                      <label>请求 CAN ID <small>0–2047 · 十进制或 0x 十六进制</small><input value={diagnosticDraft.requestId} onChange={event => setDiagnosticDraft({ ...diagnosticDraft, requestId: event.target.value })} placeholder="例如 0x700" disabled={disabled} autoComplete="off" /></label>
+                      <label>响应 CAN ID <small>不与 Com 帧冲突</small><input value={diagnosticDraft.responseId} onChange={event => setDiagnosticDraft({ ...diagnosticDraft, responseId: event.target.value })} placeholder="例如 0x708" disabled={disabled} autoComplete="off" /></label>
+                    </div>
+                    <div className="diagnostic-timers">
+                      <label>S3 <small>ms · 5000–2147483647</small><input type="number" min="5000" max="2147483647" step="1" value={diagnosticDraft.s3Ms} onChange={event => setDiagnosticDraft({ ...diagnosticDraft, s3Ms: event.target.value })} disabled={disabled} /></label>
+                      <label>N_Bs <small>ms · 1–2147483647</small><input type="number" min="1" max="2147483647" step="1" value={diagnosticDraft.nBsMs} onChange={event => setDiagnosticDraft({ ...diagnosticDraft, nBsMs: event.target.value })} disabled={disabled} /></label>
+                      <label>N_Cr <small>ms · 1–2147483647</small><input type="number" min="1" max="2147483647" step="1" value={diagnosticDraft.nCrMs} onChange={event => setDiagnosticDraft({ ...diagnosticDraft, nCrMs: event.target.value })} disabled={disabled} /></label>
+                    </div>
+                    <label>DID <small>0–65535 · 0xF186 保留</small><input value={diagnosticDraft.did} onChange={event => setDiagnosticDraft({ ...diagnosticDraft, did: event.target.value })} placeholder="例如 0xF190" disabled={disabled} autoComplete="off" /></label>
+                    <div className="signal-picker">
+                      <label htmlFor="diagnostic-signal">DID 信号顺序 <small>1–8 个 32-bit Tx 信号；每项占 4 字节</small></label>
+                      <div className="signal-picker-controls"><select id="diagnostic-signal" value={diagnosticSignal} onChange={event => setDiagnosticSignal(event.target.value)} disabled={disabled || diagnosticDraft.signalPaths.length >= 8 || !eligibleSignals.some(signal => !diagnosticDraft.signalPaths.includes(signal.path))}>
+                        <option value="">选择 32-bit Tx 信号</option>
+                        {eligibleSignals.filter(signal => !diagnosticDraft.signalPaths.includes(signal.path)).map(signal => <option key={signal.path} value={signal.path}>{signal.name} · {workspace.frames.find(frame => frame.path === signal.framePath)?.name} · {signal.path}</option>)}
+                      </select><button type="button" className="outline-button small" onClick={() => { if (diagnosticSignal) { setDiagnosticDraft({ ...diagnosticDraft, signalPaths: [...diagnosticDraft.signalPaths, diagnosticSignal] }); setDiagnosticSignal(''); } }} disabled={disabled || !diagnosticSignal || diagnosticDraft.signalPaths.length >= 8}><Plus aria-hidden="true" size={14} />添加</button></div>
+                      {!eligibleSignals.length && <p className="field-help">先在 Tx CAN 帧中配置至少一个 32-bit 信号。</p>}
+                      <ol className="diagnostic-signal-list">{diagnosticDraft.signalPaths.map((path, index) => {
+                        const signal = workspace.signals.find(item => item.path === path);
+                        return <li key={path}><span className="signal-order">{String(index + 1).padStart(2, '0')}</span><span className="signal-description"><strong>{signal?.name ?? '信号不可用'}</strong><small className="mono path-text">{path}</small></span><div className="signal-order-actions"><button type="button" aria-label={`上移 ${signal?.name ?? path}`} onClick={() => { const paths = [...diagnosticDraft.signalPaths]; [paths[index - 1], paths[index]] = [paths[index], paths[index - 1]]; setDiagnosticDraft({ ...diagnosticDraft, signalPaths: paths }); }} disabled={disabled || index === 0}>↑</button><button type="button" aria-label={`下移 ${signal?.name ?? path}`} onClick={() => { const paths = [...diagnosticDraft.signalPaths]; [paths[index], paths[index + 1]] = [paths[index + 1], paths[index]]; setDiagnosticDraft({ ...diagnosticDraft, signalPaths: paths }); }} disabled={disabled || index === diagnosticDraft.signalPaths.length - 1}>↓</button><button type="button" aria-label={`移除 ${signal?.name ?? path}`} onClick={() => setDiagnosticDraft({ ...diagnosticDraft, signalPaths: diagnosticDraft.signalPaths.filter(item => item !== path) })} disabled={disabled}>移除</button></div></li>;
+                      })}</ol>
+                    </div>
+                  </div>
+                  {diagnosticError && <p className="diagnostic-error" role="alert">{diagnosticError}</p>}
+                  <div className="diagnostic-actions"><button type="button" className="primary-button compact" onClick={configureDiagnostic} disabled={disabled || !diagnosticUnapplied || frameUnapplied}>{workspace.diagnostic ? '应用诊断更改' : '创建诊断配置'}</button><button type="button" className="quiet-button" onClick={() => { setDiagnosticDraft(diagnosticFields(workspace.diagnostic)); setDiagnosticSignal(''); setDiagnosticError(''); }} disabled={disabled || !diagnosticUnapplied}>还原草稿</button>{workspace.diagnostic && <button type="button" className="quiet-button" onClick={clearDiagnostic} disabled={disabled || diagnosticUnapplied || frameUnapplied}>移除诊断配置</button>}{diagnosticUnapplied && <span role="status">未应用的诊断草稿</span>}</div>
+                </section>
               </>}
               {page === 'diagnostics' && <div className="workflow-page diagnostic-view">
                 <div className="section-header"><div><p className="eyebrow">VALIDATION REPORT</p><h2>诊断</h2><p>按来源文件与配置对象定位问题。校验结果只代表当前项目状态。</p></div><button type="button" className="primary-button compact" onClick={validateProject} disabled={disabled || unapplied}><ListChecks aria-hidden="true" size={15} />运行校验</button></div>
-                {unapplied && <div className="page-guidance">检查器中有未应用的更改。<button type="button" onClick={() => setPage('editor')}>返回配置</button></div>}
+                {unapplied && <div className="page-guidance">配置页有未应用的更改。<button type="button" onClick={() => setPage('editor')}>返回配置</button></div>}
                 <div className={`diagnostic-summary${errorCount ? ' has-errors' : ''}`}><strong>{errorCount}</strong> 个错误 <span>·</span> {issues.length - errorCount} 个警告 / 提示</div>
                 {issues.length ? <ul className="issue-list">{issues.map((issue, index) => {
                   const target = issueTarget(issue, workspace);
@@ -463,11 +588,12 @@ export default function App() {
                 {built && <div className="result-section"><h3>构建二进制</h3><p className="mono path-text">{built.binaryPath}</p><details><summary>构建日志</summary><pre>{built.log}</pre></details></div>}
               </div>}
               {page === 'virtual' && <div className="workflow-page virtual-view">
-                <div className="section-header"><div><p className="eyebrow">HOST VIRTUAL BUS</p><h2>双 ECU 虚拟运行</h2><p>两个独立 C99 ECU 进程经虚拟 CAN 总线交换信号，并检查超时与故障路径。</p></div></div>
-                <div className={`virtual-status stage ${stages.virtual.state}`}><span className="stage-number">05</span><div className="stage-copy"><strong>主机虚拟闭环</strong><small>{stages.virtual.detail}</small></div><span className="stage-pill">{stages.virtual.state === 'done' && <CircleCheck aria-hidden="true" size={13} />}{stageLabels[stages.virtual.state]}</span></div>
+                <div className="section-header"><div><p className="eyebrow">HOST VIRTUAL BUS</p><h2>主机虚拟运行</h2><p>双 ECU 信号闭环与独立测试器诊断验证分别运行；结果不代表真实硬件符合性。</p></div></div>
+                <div className={`virtual-status stage ${stages.virtual.state}`}><span className="stage-number">05</span><div className="stage-copy"><strong>主机虚拟验证</strong><small>{stages.virtual.detail}</small></div><span className="stage-pill">{stages.virtual.state === 'done' && <CircleCheck aria-hidden="true" size={13} />}{stageLabels[stages.virtual.state]}</span></div>
                 {(!built || stages.build.state !== 'done' || unapplied) && <div className="page-guidance">当前配置尚未完成可运行的主机目标构建。<button type="button" onClick={() => setPage(unapplied ? 'editor' : 'build')}>前往{unapplied ? '配置' : '生成与构建'}</button></div>}
                 <div className="peer-section"><h3>对端 ECU 工程</h3><p>选择另一份已生成并构建的 ECU 工程目录；当前工程与对端在虚拟总线上运行。</p><div className="path-picker"><input readOnly value={peerDirectory} placeholder="选择对端生成工程目录" aria-label="对端生成工程目录" /><button type="button" onClick={() => void chooseDirectory(setPeerDirectory)} disabled={disabled || stages.build.state !== 'done'}><FolderOpen aria-hidden="true" size={15} />选择对端目录</button></div><button type="button" className="primary-button compact" onClick={runVirtual} disabled={disabled || unapplied || stages.build.state !== 'done' || !peerDirectory}><MonitorPlay aria-hidden="true" size={15} />运行虚拟闭环</button></div>
-                {virtualResult && <div className="result-section"><h3>运行结果 · {virtualResult.passed ? '通过' : '未通过'}</h3><ul className="events-list">{virtualResult.events.map((event, index) => <li key={index} className="mono">{event}</li>)}</ul><details><summary>完整运行日志</summary><pre>{virtualResult.log}</pre></details></div>}
+                {workspace.diagnostic && <div className="peer-section"><h3>诊断独立测试器</h3><p>对当前生成 ECU 注入物理诊断 CAN 帧，核对会话、实时 DID、流控、超时与故障恢复；无需对端 ECU 工程。</p><button type="button" className="primary-button compact" onClick={runDiagnostic} disabled={disabled || unapplied || stages.build.state !== 'done'}><MonitorPlay aria-hidden="true" size={15} />验证诊断连接</button></div>}
+                {virtualResult && <div className="result-section"><h3>{virtualKind === 'diagnostic' ? '诊断独立测试器' : '双 ECU 信号闭环'} · {virtualResult.passed ? '通过' : '未通过'}</h3><ul className="events-list">{virtualResult.events.map((event, index) => <li key={index} className="mono">{event}</li>)}</ul><details><summary>完整运行日志</summary><pre>{virtualResult.log}</pre></details></div>}
                 <div className="hardware-note"><CircleAlert aria-hidden="true" size={16} /><span>真实硬件未验证；主机虚拟运行结果不代表已上板。</span></div>
               </div>}
             </section>

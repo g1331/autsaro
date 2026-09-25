@@ -1,6 +1,6 @@
 #include "CanIf.h"
 #include "Can.h"
-#include "PduR.h"
+#include "LSduR.h"
 
 static const EcuConfig *active_config;
 
@@ -25,13 +25,17 @@ EcuStatus CanIf_Transmit(size_t frame_index, const uint8_t data[8])
 EcuStatus CanIf_RxIndication(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t now_ms)
 {
     size_t i;
+    if (active_config->diagnostic != NULL &&
+        id == active_config->diagnostic->request_can_id) {
+        return LSduR_CanTpRxIndication(dlc, data, now_ms);
+    }
     for (i = 0; i < active_config->frame_count; ++i) {
         const EcuFrameConfig *frame = &active_config->frames[i];
         if (frame->id == id && frame->direction == 0u) {
             if (frame->dlc != dlc) {
                 return ECU_ERR_FRAME_DLC;
             }
-            return PduR_RxIndication(i, data, now_ms);
+            return LSduR_CanIfRxIndication(i, data, now_ms);
         }
     }
     /* 其他标准 CAN ID 在控制器过滤器处被丢弃。 */

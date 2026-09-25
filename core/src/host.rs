@@ -1,4 +1,5 @@
 use crate::model::RunReport;
+use std::fmt::Write as _;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
@@ -11,12 +12,22 @@ use std::time::Duration;
 struct Signal { id: u16, frame: String, start: u8, length: u8 }
 #[derive(Clone)]
 struct Frame { path: String, id: u32, dlc: u8, tx: bool, period: u32, timeout: u32 }
-struct Profile { frames: Vec<Frame>, signals: Vec<Signal>, text: String }
+struct DiagnosticProfile {
+    request_id: u32,
+    response_id: u32,
+    s3_ms: u32,
+    n_bs_ms: u32,
+    n_cr_ms: u32,
+    did: u16,
+    signal_ids: Vec<u16>,
+}
+struct Profile { frames: Vec<Frame>, signals: Vec<Signal>, diagnostic: Option<DiagnosticProfile>, text: String }
 
 fn profile(dir: &Path) -> Result<Profile, String> {
     let text = fs::read_to_string(dir.join("profile.txt")).map_err(|e| format!("配置清单缺失: {e}"))?;
     let mut frames = Vec::new();
     let mut signals = Vec::new();
+    let mut diagnostic = None;
     for line in text.lines() {
         let cols: Vec<_> = line.split_whitespace().collect();
         match cols.first().copied() {
@@ -36,11 +47,28 @@ fn profile(dir: &Path) -> Result<Profile, String> {
                 let (start, length) = field("bits=").ok_or("缺少信号位段")?.split_once(':').ok_or("位段无效")?;
                 signals.push(Signal { id: cols[1].parse().map_err(|_| "信号 ID 无效")?, frame: field("frame=").ok_or("缺少信号帧引用")?.into(), start: start.parse().map_err(|_| "起始位无效")?, length: length.parse().map_err(|_| "长度无效")? });
             }
+            Some("DIAGNOSTIC") if cols.len() == 8 => {
+                let field = |name: &str| cols.iter().find_map(|column| column.strip_prefix(name));
+                let ids = field("signals=").ok_or("诊断清单缺少 DID 信号")?.split(',')
+                    .map(|id| id.parse::<u16>().map_err(|_| "诊断信号 ID 无效".to_owned()))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let config = DiagnosticProfile {
+                    request_id: field("request=").ok_or("诊断请求 ID 缺失")?.parse().map_err(|_| "诊断请求 ID 无效")?,
+                    response_id: field("response=").ok_or("诊断响应 ID 缺失")?.parse().map_err(|_| "诊断响应 ID 无效")?,
+                    s3_ms: field("s3=").ok_or("诊断 S3 缺失")?.parse().map_err(|_| "诊断 S3 无效")?,
+                    n_bs_ms: field("nbs=").ok_or("诊断 N_Bs 缺失")?.parse().map_err(|_| "诊断 N_Bs 无效")?,
+                    n_cr_ms: field("ncr=").ok_or("诊断 N_Cr 缺失")?.parse().map_err(|_| "诊断 N_Cr 无效")?,
+                    did: field("did=").ok_or("诊断 DID 缺失")?.parse().map_err(|_| "诊断 DID 无效")?,
+                    signal_ids: ids,
+                };
+                if diagnostic.replace(config).is_some() { return Err("诊断清单含多个连接".into()); }
+            }
+            Some("DIAGNOSTIC") => return Err("诊断清单字段数量错误".into()),
             _ => {}
         }
     }
     if frames.is_empty() || signals.is_empty() { return Err("生成配置缺少帧或信号".into()); }
-    Ok(Profile { frames, signals, text })
+    Ok(Profile { frames, signals, diagnostic, text })
 }
 
 struct EcuProcess {
@@ -220,6 +248,144 @@ pub fn run(first: &Path, second: &Path) -> Result<RunReport, String> {
     })();
     match outcome {
         Ok(()) => Ok(RunReport { passed: true, log: "双 ECU CAN 位向量、超时、BUS_OFF 与 DLC 错误路径通过".into(), events }),
+        Err(error) => Ok(RunReport { passed: false, log: error, events }),
+    }
+}
+
+fn hex_payload(bytes: &[u8]) -> String {
+    let mut text = String::with_capacity(bytes.len() * 2);
+    for byte in bytes { write!(&mut text, "{byte:02X}").expect("writing to a String"); }
+    text
+}
+
+fn diagnostic_frames(
+    lines: &[String], expected: &[Vec<u8>], profile: &Profile, diagnostic: &DiagnosticProfile, salt: u32,
+) -> Result<(), String> {
+    let mut matched = 0;
+    for line in lines {
+        let (id, payload) = parse_frame(line)?;
+        if id == diagnostic.response_id {
+            if expected.get(matched) != Some(&payload) {
+                return Err(format!("诊断响应报文不匹配: {line}；期望 {:?}", expected.get(matched)));
+            }
+            matched += 1;
+        } else {
+            let frame = profile.frames.iter().find(|frame| frame.tx && frame.id == id && frame.dlc as usize == payload.len())
+                .ok_or_else(|| format!("诊断测试收到未配置的报文: {line}"))?;
+            if payload != expected_payload(frame, profile, salt) {
+                return Err(format!("周期 CAN 帧载荷不匹配: {line}"));
+            }
+        }
+    }
+    if matched != expected.len() { return Err(format!("诊断响应数量错误: 收到 {matched}，期望 {}", expected.len())); }
+    Ok(())
+}
+
+fn diagnostic_request(ecu: &mut EcuProcess, fence: u16, command: String) -> Result<Vec<String>, String> {
+    ecu.query(&[command], fence).map(|(frames, _)| frames)
+}
+
+fn diagnostic_error(ecu: &mut EcuProcess, command: String, expected: &str) -> Result<(), String> {
+    ecu.command(&command)?;
+    let line = ecu.lines.recv_timeout(Duration::from_secs(5)).map_err(|e| format!("诊断错误无响应: {e}"))?;
+    if line == format!("E {expected}") { Ok(()) } else { Err(format!("诊断错误状态不匹配: {line}，期望 E {expected}")) }
+}
+
+pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
+    let profile = profile(dir)?;
+    let diagnostic = profile.diagnostic.as_ref().ok_or("生成配置不含诊断连接")?;
+    if diagnostic.signal_ids.is_empty() || diagnostic.signal_ids.len() > 8 || diagnostic.request_id == diagnostic.response_id
+        || diagnostic.s3_ms < 5000 || diagnostic.n_bs_ms == 0 || diagnostic.n_cr_ms == 0 {
+        return Err("诊断清单超出支持范围".into());
+    }
+    let binary = dir.join(if cfg!(windows) { "ecu_host.exe" } else { "ecu_host" });
+    if !binary.is_file() { return Err("诊断虚拟 ECU 尚未完成 C99 构建".into()); }
+    let salt = 0x1357_9BDF;
+    let mut ecu = EcuProcess::start(&binary)?;
+    let mut events = Vec::new();
+    let outcome = (|| -> Result<(), String> {
+        let fence = profile.signals[0].id;
+        let request = diagnostic.request_id;
+        let did = diagnostic.did;
+        let did_request = format!("R {request} 4 0322{did:04X}");
+        let mut expected_did = vec![0x62, (did >> 8) as u8, did as u8];
+        for (index, id) in diagnostic.signal_ids.iter().enumerate() {
+            if diagnostic.signal_ids[..index].contains(id) { return Err("诊断清单重复引用信号".into()); }
+            let signal = profile.signals.iter().find(|signal| signal.id == *id).ok_or("诊断清单引用不存在的信号")?;
+            if signal.length != 32 || !profile.frames.iter().any(|frame| frame.tx && frame.path == signal.frame) {
+                return Err("诊断 DID 只能引用 32 位发送信号".into());
+            }
+            expected_did.extend_from_slice(&value(signal, salt).to_be_bytes());
+        }
+        prepare(&mut ecu, &profile, salt)?;
+        let before_session = diagnostic_request(&mut ecu, fence, did_request.clone())?;
+        diagnostic_frames(&before_session, &[vec![0x03, 0x7F, 0x22, 0x31]], &profile, diagnostic, salt)?;
+        events.push("默认会话拒绝受限 DID".into());
+
+        let session = diagnostic_request(&mut ecu, fence, format!("R {request} 3 021003"))?;
+        diagnostic_frames(&session, &[vec![0x06, 0x50, 0x03, 0x00, 0x32, 0x00, 0x32]], &profile, diagnostic, salt)?;
+        let suppressed = diagnostic_request(&mut ecu, fence, format!("R {request} 3 023E80"))?;
+        diagnostic_frames(&suppressed, &[], &profile, diagnostic, salt)?;
+        events.push("扩展会话与 TesterPresent 抑制响应通过".into());
+
+        let first = diagnostic_request(&mut ecu, fence, did_request.clone())?;
+        if expected_did.len() <= 7 {
+            let mut single = vec![expected_did.len() as u8];
+            single.extend_from_slice(&expected_did);
+            diagnostic_frames(&first, &[single], &profile, diagnostic, salt)?;
+            events.push("读取实时 DID 单帧载荷通过".into());
+        } else {
+            let mut ff = vec![0x10 | ((expected_did.len() >> 8) as u8 & 0x0F), expected_did.len() as u8];
+            ff.extend_from_slice(&expected_did[..6]);
+            diagnostic_frames(&first, &[ff], &profile, diagnostic, salt)?;
+            let cf = diagnostic_request(&mut ecu, fence, format!("R {request} 3 300000"))?;
+            let mut expected = Vec::new();
+            let mut offset = 6;
+            let mut sequence = 1u8;
+            while offset < expected_did.len() {
+                let end = (offset + 7).min(expected_did.len());
+                let mut frame = vec![0x20 | sequence];
+                frame.extend_from_slice(&expected_did[offset..end]);
+                expected.push(frame);
+                offset = end;
+                sequence = (sequence + 1) & 0x0F;
+            }
+            diagnostic_frames(&cf, &expected, &profile, diagnostic, salt)?;
+            events.push(format!("实时 DID {} 字节多帧响应及流控通过", expected_did.len()));
+
+            let pending = diagnostic_request(&mut ecu, fence, did_request.clone())?;
+            let mut ff = vec![0x10 | ((expected_did.len() >> 8) as u8 & 0x0F), expected_did.len() as u8];
+            ff.extend_from_slice(&expected_did[..6]);
+            diagnostic_frames(&pending, &[ff], &profile, diagnostic, salt)?;
+            diagnostic_error(&mut ecu, format!("T {}", diagnostic.n_bs_ms as u64 + 1), "TP_TIMEOUT")?;
+            events.push("N_Bs 流控超时终止发送".into());
+        }
+
+        let padded = [0x22, (did >> 8) as u8, did as u8, 0, 0, 0, 0, 0, 0];
+        let request_ff = format!("R {request} 8 1009{}", hex_payload(&padded[..6]));
+        let flow = diagnostic_request(&mut ecu, fence, request_ff.clone())?;
+        diagnostic_frames(&flow, &[vec![0x30, 0x00, 0x00]], &profile, diagnostic, salt)?;
+        diagnostic_error(&mut ecu, format!("R {request} 4 22000000"), "TP_SEQUENCE")?;
+        let flow = diagnostic_request(&mut ecu, fence, request_ff)?;
+        diagnostic_frames(&flow, &[vec![0x30, 0x00, 0x00]], &profile, diagnostic, salt)?;
+        let next_time = diagnostic.n_bs_ms as u64 + diagnostic.n_cr_ms as u64 + 2;
+        diagnostic_error(&mut ecu, format!("T {next_time}"), "TP_TIMEOUT")?;
+        let heartbeat = diagnostic_request(&mut ecu, fence, format!("R {request} 3 023E00"))?;
+        diagnostic_frames(&heartbeat, &[vec![0x02, 0x7E, 0x00]], &profile, diagnostic, salt)?;
+        events.push("接收序号错误、N_Cr 超时与后续请求恢复通过".into());
+
+        let session = diagnostic_request(&mut ecu, fence, format!("R {request} 3 021003"))?;
+        diagnostic_frames(&session, &[vec![0x06, 0x50, 0x03, 0x00, 0x32, 0x00, 0x32]], &profile, diagnostic, salt)?;
+        let expiry = next_time + diagnostic.s3_ms as u64 + 1;
+        let timed = diagnostic_request(&mut ecu, fence, format!("T {expiry}"))?;
+        diagnostic_frames(&timed, &[], &profile, diagnostic, salt)?;
+        let expired = diagnostic_request(&mut ecu, fence, did_request)?;
+        diagnostic_frames(&expired, &[vec![0x03, 0x7F, 0x22, 0x31]], &profile, diagnostic, salt)?;
+        events.push("S3 超时恢复默认会话".into());
+        Ok(())
+    })();
+    match outcome {
+        Ok(()) => Ok(RunReport { passed: true, log: "独立测试器验证 CAN 诊断会话、实时 DID、传输流控与故障恢复".into(), events }),
         Err(error) => Ok(RunReport { passed: false, log: error, events }),
     }
 }

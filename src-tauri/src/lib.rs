@@ -55,6 +55,16 @@ fn update_signal(state: State<'_, Arc<AppState>>, path: String, changes: serde_j
 }
 
 #[tauri::command]
+fn configure_diagnostic(state: State<'_, Arc<AppState>>, request_id: u32, response_id: u32, s3_ms: u32, n_bs_ms: u32, n_cr_ms: u32, did: u16, signal_paths: Vec<String>) -> Result<WorkspaceView, String> {
+    with_workspace(&state, |w| w.configure_diagnostic(request_id, response_id, s3_ms, n_bs_ms, n_cr_ms, did, signal_paths))
+}
+
+#[tauri::command]
+fn clear_diagnostic(state: State<'_, Arc<AppState>>) -> Result<WorkspaceView, String> {
+    with_workspace(&state, Workspace::clear_diagnostic)
+}
+
+#[tauri::command]
 fn save_project(state: State<'_, Arc<AppState>>) -> Result<WorkspaceView, String> {
     with_workspace(&state, Workspace::save)
 }
@@ -84,11 +94,17 @@ async fn run_virtual(first_output_directory: String, second_output_directory: St
         .await.map_err(|e| e.to_string())?
 }
 
+#[tauri::command]
+async fn run_diagnostic(output_directory: String) -> Result<RunReport, String> {
+    tauri::async_runtime::spawn_blocking(move || autosar_config_core::host::run_diagnostic(Path::new(&output_directory)))
+        .await.map_err(|e| e.to_string())?
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Arc::new(AppState::default()))
-        .invoke_handler(tauri::generate_handler![create_project, open_project, add_frame, add_signal, update_frame, update_signal, save_project, validate_project, generate_project, build_project, run_virtual])
+        .invoke_handler(tauri::generate_handler![create_project, open_project, add_frame, add_signal, update_frame, update_signal, configure_diagnostic, clear_diagnostic, save_project, validate_project, generate_project, build_project, run_virtual, run_diagnostic])
         .run(tauri::generate_context!())
         .expect("Tauri 桌面工作台无法启动");
 }

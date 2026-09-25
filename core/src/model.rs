@@ -72,11 +72,25 @@ pub struct SignalView {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DiagnosticView {
+    pub path: String,
+    pub request_id: u32,
+    pub response_id: u32,
+    pub s3_ms: u32,
+    pub n_bs_ms: u32,
+    pub n_cr_ms: u32,
+    pub did: u16,
+    pub signal_paths: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkspaceView {
     pub name: String,
     pub files: Vec<FileView>,
     pub frames: Vec<FrameView>,
     pub signals: Vec<SignalView>,
+    pub diagnostic: Option<DiagnosticView>,
     pub issues: Vec<Issue>,
     pub dirty: bool,
 }
@@ -142,6 +156,38 @@ pub fn validate_profile(frames: &[FrameView], signals: &[SignalView]) -> Vec<Iss
     for signal in signals {
         if !frames.iter().any(|frame| frame.path == signal.frame_path) {
             issues.push(Issue::error("MISSING_FRAME", "信号引用的帧不存在", Some(signal.path.clone())));
+        }
+    }
+    issues
+}
+
+pub fn validate_diagnostic(diagnostic: &DiagnosticView, frames: &[FrameView], signals: &[SignalView]) -> Vec<Issue> {
+    let mut issues = Vec::new();
+    let path = Some(diagnostic.path.clone());
+    if diagnostic.request_id > 0x7ff || diagnostic.response_id > 0x7ff ||
+        diagnostic.request_id == diagnostic.response_id ||
+        frames.iter().any(|frame| frame.id == diagnostic.request_id || frame.id == diagnostic.response_id) {
+        issues.push(Issue::error("DIAG_CAN_ID", "诊断请求/响应须使用不与 Com 帧冲突的不同 11 位 CAN 标识符", path.clone()));
+    }
+    if !(5000..=i32::MAX as u32).contains(&diagnostic.s3_ms) ||
+        !(1..=i32::MAX as u32).contains(&diagnostic.n_bs_ms) ||
+        !(1..=i32::MAX as u32).contains(&diagnostic.n_cr_ms) {
+        issues.push(Issue::error("DIAG_TIMING", "S3 至少 5000 ms，N_Bs/N_Cr 须为正毫秒，计时器不得超过 2^31-1 ms", path.clone()));
+    }
+    if diagnostic.did == 0xf186 {
+        issues.push(Issue::error("DIAG_DID", "DID 0xF186 保留给活动会话", path.clone()));
+    }
+    if !(1..=8).contains(&diagnostic.signal_paths.len()) {
+        issues.push(Issue::error("DIAG_SIGNAL_COUNT", "诊断 DID 须绑定 1–8 个信号", path.clone()));
+    }
+    for (index, signal_path) in diagnostic.signal_paths.iter().enumerate() {
+        if diagnostic.signal_paths[..index].contains(signal_path) {
+            issues.push(Issue::error("DIAG_SIGNAL_DUPLICATE", "诊断 DID 信号不能重复", Some(signal_path.clone())));
+        }
+        let valid = signals.iter().find(|signal| &signal.path == signal_path).is_some_and(|signal|
+            signal.length == 32 && frames.iter().any(|frame| frame.path == signal.frame_path && matches!(frame.direction, Direction::Tx)));
+        if !valid {
+            issues.push(Issue::error("DIAG_SIGNAL", "诊断 DID 只支持存在的 32 位 Tx Com 信号", Some(signal_path.clone())));
         }
     }
     issues
