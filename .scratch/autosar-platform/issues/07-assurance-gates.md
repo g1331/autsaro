@@ -54,3 +54,18 @@ Blocked by: 03, 05, 06, 09
 **DRAFT 选项的声明隔离：**本地 R24-11 [Dcm SWS `[ECUC_Dcm_01215]`](../../../docs/official/R24-11/CP/Diagnostics/AUTOSAR_CP_SWS_DiagnosticCommunicationManager.pdf)（提取文本 25099–25126 行）仅将 `DcmDspRoutineFncSignature` 参数及 `ROUTINE_FNC_NORMAL` 选项标为 DRAFT，不把 Dcm 模块、整个 RoutineControl 服务或 `SWS_Dcm_01203` 的回调签名整体标为 DRAFT。当前可选 0x31 主机行为保留为有界实现事实；该选项不能计入当前有效的成熟配置覆盖或用来证明 ECUC 集成。若要列作兼容能力，须先决定兼容目的/配置范围，再按本档案核对适用接口、可见性、构建及独立行为证据；未决时不升级支持声明。
 
 适用条款与 SHALL/SHOULD/MAY 限定参见[生成代码质量门研究](../research/generated-c-quality-gates.md)及其链接的本地、Git 忽略的 R24-11 官方 PDF。尤其 `SWS_BSW_00001` 的 BSWMD、条件性的 `TPS_BSWMDT_04000` SWCT、`SWS_BSW_00036` 版本检查及 `SWS_BSW_00054` 调度顺序说明可纳入适用性核对；`SWS_BSW_00013` 的配置源仅在其条件成立时要求。生成 RTE 的 MISRA 例外与 SWC C 的责任不可混淆，不增设无依据的 `Compiler.h` 或空配置源。
+
+## 2026-09-29 P0：第三方 CanIf/CAN 与生命周期互操作前置条件
+
+在宣称第三方 CanIf/CAN 互操作，或 EcuM→BswM→ComM→CanSM 生命周期剖面可互操作之前，必须先按 R24-11 ECUC MOD 补齐并逐引用验证 CanIf/CAN 配置闭包。该门槛是配置/声明的 P0 阻断条件，不是把 CAN 虚拟主机阶段改判为完成，也不表示相关实现或证据已经通过。
+
+- **CanIf 根与控制器/驱动：**MOD 要求 CanIf 的 `CanIfDispatchCfg`、`CanIfInitCfg`（含必需 `CanIfInitCfgSet`）、`CanIfPrivateCfg`、`CanIfPublicCfg` 各为 1..1；`CanIfCtrlDrvCfg` 为 1..*，每个驱动配置须提供 `CanIfCtrlDrvInitHohConfigRef`（指向 `CanIfInitHohCfg`）和 `CanIfCtrlDrvNameRef`（指向 `Can/CanGeneral`）。每个 `CanIfCtrlCfg` 还要求 `CanIfCtrlId`、`CanIfCtrlWakeupSupport`、`CanIfCtrlCanCtrlRef`；后者指向 `Can/CanConfigSet/CanController`。MOD：[`AUTOSAR_CP_MOD_ECUConfigurationParameters.zip`](../../../docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_MOD_ECUConfigurationParameters.zip)，ARXML selectors `:20750-21822`、`:21822-22108`、`:24189-24514`。
+- **HOH 与缓冲：**被驱动配置引用的 `CanIfInitHohCfg` 必须闭合实际 HRH/HTH；HOH 关联控制器并引用 CAN Driver 的 HardwareObject。Rx PDU 的 `CanIfRxPduHrhIdRef` 必须指向 `CanIfHrhCfg`；Tx PDU 的 `CanIfTxPduBufferRef` 必须指向 `CanIfBufferCfg`。这些不是系统 PDU 名称的别名。MOD selectors：`:21822-22781`、`:22013-22108`、`:23420-23910`。
+- **必需 PDU 配置：**对每个 Tx PDU，除全局 `CanIfTxPduRef` 外，还要提供 1..1 `CanIfTxPduBufferRef`、`CanIfTxPduType`、`CanIfTxPduReadNotifyStatus`、`CanIfTxPduTruncation`。对每个 Rx PDU，除全局 `CanIfRxPduRef` 外，还要提供 1..1 `CanIfRxPduHrhIdRef`、`CanIfRxPduDataLengthCheck`、`CanIfRxPduReadData`、`CanIfRxPduReadNotifyStatus`。MOD selectors：Rx `:22782-23212`，Tx `:23420-23910`。
+- **Can 模块目标必须真实存在于配置模型中：**CanIf 的驱动名/控制器引用分别要求 `Can/CanGeneral` 与 `Can/CanConfigSet/CanController`；Can Driver 的 `CanHardwareObject` 又要求 `CanControllerRef` 指向该控制器。EcuC `Pdu` 只能解决 COM 栈全局 PDU 标识，不会替代 Can Driver、控制器或 HOH。MOD selector：`:18999-19703`（CanController、CanHardwareObject/CanControllerRef），并见上述 CanIf `CanIfCtrlDrvNameRef`/`CanIfCtrlCanCtrlRef`。
+
+当前 [`arxml_render.rs`](../../../core/src/arxml_render.rs#L402-L412) 只为 Tx/Rx 输出有限的 PDU 参数与全局 PDU 引用，并且只包装 `CanIfInitCfg`（`:439-441`）；缺少上述其余根、驱动、控制器、HOH、缓冲及必需 PDU 项，因而不能称为完整标准 CanIf/CAN ECUC。引用上述 MOD 仅用于本地核对，不将某个可选参数或整个 CanIf/Can 模块标为 DRAFT/OBSOLETE。
+
+提交 `c7d08a8` **只关闭 COM+EcuC 全局 PDU 子集**：当前 [`README.md`](../../../README.md#当前支持) 已明确该子集不等于完整 CanIf/CAN ECUC，且 EcuM、BswM、ComM、CanSM 尚未建模。该提交不能作为第三方 CanIf/CAN 或 EcuM→BswM→ComM→CanSM 生命周期互操作证据；CanIf/CAN 闭包是必要前置条件，生命周期链还须分别完成这些模块的 ECUC/SWS 配置引用与端到端行为验证。
+
+`AUTOSAR_00053.xsd` 通过也不足以证明该 ECUC 闭包有效：XSD 结构通过不等于引用目标符合 ECUC MOD 的 `DESTINATION-REF`，也不等于模块定义要求的容器/参数最小重数已满足。对拟声明的组合必须额外按 R24-11 MOD 检查上述引用解析和必需重数；缺项时档案保持“未验证/不支持此互操作声明”，不得由 host build 或虚拟冒烟升级。该补充只细化既有逐组合门槛，不改本地图的阶段状态或引入进度百分比。
