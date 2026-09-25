@@ -23,6 +23,12 @@ cl /TC /W4 /I runtime\include runtime\src\Can.c runtime\src\CanIf.c runtime\src\
 
 每个 ECU 最多 32 帧、64 信号；CAN ID `0..2047`，DLC `1..8`，信号长度 `1..32` 位，无符号 LSB0 小端位序，一帧可有多个不重叠信号。每个信号 ID 在 ECU 内唯一，帧 ID 在 ECU 内唯一；每个信号恰属一帧。Tx 帧设置正周期且超时为零；Rx 帧设置正超时且周期为零。初值必须适合位宽。超出范围、不支持的位序/帧类型/参数不能被默默转换为此结构；生成器必须在生成前拒绝它们。
 
+新建 ARXML 的 EcuC 子集提供 `EcuC/EcucConfigSet/EcucPduCollection/Pdu`：不超过 32 帧的主机配置使用 `PduIdTypeEnum=UINT8`，含 256 字节诊断 N-SDU 时使用 `PduLengthTypeEnum=UINT16`（仅信号时为 `UINT8`），每个 Pdu 记录字节长度。配置 Com 帧时提供 `ComGeneral` 的必需选项、`ComIPdu` 的 `IMMEDIATE/NORMAL` 与 Tx 未使用位初值。Com 与 CanIf 的 PDU 值引用指向独立全局 Pdu，工具 SDG 将其一一绑定到系统 I-PDU/N-PDU/DCM-I-PDU；这不是标准的系统 PDU 直接引用。CanIf 仍缺少完整控制器/驱动、HOH、缓冲和必需的根/PDU 参数，故本主机虚拟实现**不**提供可供第三方 CanIf/CAN 驱动直接使用的完整 ECUC 配置。
+
+诊断的 `CanTpRx/TxNSduRef`、四项 CanTp N-PDU/FC N-PDU 引用与 `DcmDslProtocolRx/TxPduRef` 全部以 `DEST="ECUC-CONTAINER-VALUE"` 绑定相应全局 Pdu；系统 N-PDU/DCM-I-PDU 只由工具 SDG 指明关系。System Template `[constr_3448]` 不允许在本剖面的 I-SIGNAL-I-PDU、N-PDU、DCM-I-PDU 对应全局 Pdu 上输出 `DynamicLength`，系统 N-PDU 也不输出 `HAS-DYNAMIC-LENGTH`。N-PDU 的长度由传输层处理，DcmIPdu 本身动态；解析器不靠 EcuC 的 `DynamicLength` 推断运行时行为，带有该字段的导入文件只读阻断。
+
+解析消耗的 ComIPdu/ComSignal 时要求唯一的本项目 `ComCfg` 模块、正确的模块定义以及直接的 `ComConfig`/`ComGeneral` 归属。来源模块被重命名、父级定义错误或子容器挂到外部模块，即使局部 PDU/信号引用仍可解析，也仅只读导入并禁止生成。
+
 信号发送：`Os_Advance`（单核虚拟时间、周期任务）→ `Com_TriggerTransmit`（以 `Rte_WriteSignal` 写入的应用值打包）→ `PduR_Transmit` → `LSduR_PduRTransmit` → `CanIf_Transmit` → 虚拟 `Can_Transmit` → `X` 输出。信号接收：`R` 输入 → `Can_Inject` → `CanIf_RxIndication`（ID 过滤、DLC 检查）→ `LSduR_CanIfRxIndication` → `PduR_RxIndication` → `Com_RxIndication`（解包、更新有效性）→ `Rte_ReadSignal`。没有自行回显；主机编排器按 ID 优先级路由两个 ECU 的信号报文，也可丢帧。当前虚拟 CAN 控制器具有 STARTED/STOPPED/BUS_OFF 状态，但不模拟位级仲裁、电气错误计数器和真实中断。
 
 ## 诊断连接（可选）
@@ -41,7 +47,7 @@ Dcm 提供 0x10 默认/扩展会话、0x3E TesterPresent（子功能 0x80 抑制
 
 0x31 是本工程的**主机专属行为**：生成 ARXML 在 DID 的 `ADMIN-DATA/SDGS` 下存储唯一 `AutosarWorkbenchHostRestoreDidV1` 工具组，其中 `Rid` 为十进制 16-bit 编号、`SessionRef` 固定指向本项目的 Extended 会话；不生成 DcmDsd 0x31 服务或 DcmDspRoutine/StartRoutine/CommonAuthorization 的标准 ECUC 节点。主机读取工具记录生成内部例程，不把 `Ecu_HostRestoreDid` 作为第三方 Dcm 回调。R24-11 `DcmDspRoutineFncSignature` 本属草案；独立的第三方 Dcm 不会从该 ARXML 获得本例程，也未验证例程的标准 ECUC 接口。
 
-早期本工具保存的旧例程 ECUC 只在形状完全符合旧输出且所有文件中没有指向待删除路径的外部引用或工具文本时可迁移：读取 RID 后先在内存中暂存新格式，原 ARXML 保持不变，确认保存前不能编辑或生成。用户在工作区看到待转换状态并确认保存；未知内容、重复或版本不符的工具组、错误会话或外部修改阻断转换/保存，不以空 RID 或静默删除代替恢复。若旧例程仍被外部引用/工具文本指向，或与其他不受支持的 Dcm/CanTp 配置并存，仍可只读导入，诊断问题显示 RID 与问题来源文件，但不能保存或生成；须先由配置所有者处理依赖或扩展后再重新导入。
+旧工具保存的 Com/CanIf 引用直接指向系统 I-PDU/N-PDU，不满足现在的全局 EcuC Pdu 闭包。这类旧 ARXML 只读导入：显示可识别的 RID 和源文件，但保存、编辑及生成均被阻断；不猜测系统与全局 Pdu 的对应关系，也不改写原文件。已经具备新全局 Pdu 配置、仅旧例程节点待转换的工程，才可在旧节点与引用均安全时先于内存暂存 0x31 的工具 SDG，并在用户确认保存后写回。未知工具版本、错误会话、外部依赖或源文件被修改时仍拒绝不安全迁移。
 
 可选单 DTC：`profile.txt` 的 `DTC code=<十进制> frame=<生成帧索引> id=<CAN ID> dlc=<字节数> timeout=<ms>` 指定一个带信号的 Rx 帧（超时为正），DTC 范围 `0x000100–0xFFFFFE`。首次有效 Rx 帧令监控测试完成；其后第一次达到超时阈值，Com → Dem 记故障并持久化。Dcm 在默认/扩展会话支持 0x19/0x01，按状态掩码返回匹配 DTC 数量及状态可用掩码 `0x7F`；当前最多一个 DTC，因此数量为 0 或 1。支持单 DTC 的 0x19/0x02，按请求掩码读取；其他 0x19 子功能返回 NRC 0x12。0x14 仅扩展会话和 `0xFFFFFF` 全部清除，默认会话返回 NRC 0x7F，其他组返回 NRC 0x31，持久化失败返回 NRC 0x72。未配置 DTC 时 0x19/0x01、0x19/0x02 与 0x14 返回 NRC 0x11。
 

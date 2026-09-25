@@ -72,6 +72,264 @@ fn generated_c99_ecus_exchange_golden_vectors_and_recover_from_faults() {
 
 #[cfg(windows)]
 #[test]
+fn global_ecuc_pdu_binding_roundtrips_and_rejects_wrong_com_reference_type() {
+    let temp = Scratch::new();
+    let source = temp.0.join("Closure/Closure.arxml");
+    let mut project = Workspace::create(source.parent().unwrap(), "Closure", archive()).unwrap();
+    let frame = project.add_frame("Live".into(), 0x321, 1, Direction::Tx, Some(10), None).unwrap().frames[0].path.clone();
+    project.add_signal(frame.clone(), "Value".into(), 0, 8, 7).unwrap();
+    project.save().unwrap();
+    let saved = fs::read_to_string(&source).unwrap();
+    let doc = roxmltree::Document::parse(&saved).unwrap();
+    let global = doc.descendants().find(|node| node.has_tag_name("ECUC-CONTAINER-VALUE") &&
+        node.children().any(|child| child.has_tag_name("SHORT-NAME") && child.text() == Some("Pdu_Live")) &&
+        node.children().any(|child| child.has_tag_name("DEFINITION-REF") && child.text()
+            == Some("/AUTOSAR/EcucDefs/EcuC/EcucConfigSet/EcucPduCollection/Pdu"))).unwrap();
+    assert!(global.descendants().any(|node| node.has_tag_name("VALUE") && node.text() == Some("1")));
+    assert!(!global.descendants().any(|node| node.has_tag_name("DEFINITION-REF") &&
+        node.text().is_some_and(|value| value.ends_with("/DynamicLength"))),
+        "System Template constr_3448 excludes DynamicLength for system I-PDU bindings");
+    assert!(global.descendants().any(|node| node.has_tag_name("SDG") &&
+        node.attribute("GID") == Some("AutosarWorkbenchGlobalPduV1") &&
+        node.descendants().any(|child| child.has_tag_name("SD") &&
+            child.attribute("GID") == Some("SystemPduRef") && child.text() == Some(frame.as_str()))));
+    let com_ref = doc.descendants().find(|node| node.has_tag_name("ECUC-REFERENCE-VALUE") &&
+        node.children().any(|child| child.has_tag_name("DEFINITION-REF") &&
+            child.text().is_some_and(|value| value.ends_with("/ComPduIdRef")))).unwrap();
+    let reference = com_ref.children().find(|node| node.has_tag_name("VALUE-REF")).unwrap();
+    assert_eq!(reference.attribute("DEST"), Some("ECUC-CONTAINER-VALUE"));
+    assert_eq!(reference.text(), Some("/Closure/EcuCCfg/EcucConfigSet/Pdus/Pdu_Live"));
+    let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
+    assert!(reopened.validate().unwrap().issues.is_empty());
+    let generated = temp.0.join("Generated");
+    generator::generate(&mut reopened, &generated).unwrap();
+    let binary = generator::build(&generated).unwrap().binary_path;
+    let mut ecu = Command::new(binary).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
+    ecu.stdin.take().unwrap().write_all(b"T 10\n").unwrap();
+    assert_eq!(String::from_utf8(ecu.wait_with_output().unwrap().stdout).unwrap().trim(), "X 801 1 07");
+
+    let wrong = saved.replacen(&saved[reference.range()], &saved[reference.range()]
+        .replace("ECUC-CONTAINER-VALUE", "I-SIGNAL-I-PDU"), 1);
+    fs::write(&source, &wrong).unwrap();
+    let mut unsupported = Workspace::open(vec![source.clone()], archive()).unwrap();
+    let issue = unsupported.validate().unwrap().issues.into_iter()
+        .find(|issue| issue.code == "PDU_UNSUPPORTED").expect("wrong ECUC destination must block use");
+    assert!(issue.file.as_deref().is_some_and(|file| file.contains("Closure.arxml")));
+    assert!(issue.path.as_deref().is_some_and(|path| path.contains("Pdu_Live")));
+    assert!(unsupported.save().unwrap_err().contains("PDU_UNSUPPORTED"));
+    assert!(generator::generate(&mut unsupported, &temp.0.join("Unsafe")).unwrap_err().contains("PDU_UNSUPPORTED"));
+    assert_eq!(fs::read_to_string(source).unwrap(), wrong);
+}
+
+#[test]
+fn missing_required_com_or_ecuc_root_is_read_only_and_cannot_generate() {
+    let temp = Scratch::new();
+    let source = temp.0.join("Closure/Closure.arxml");
+    let mut project = Workspace::create(source.parent().unwrap(), "Closure", archive()).unwrap();
+    let frame = project.add_frame("Live".into(), 0x321, 1, Direction::Tx, Some(10), None).unwrap().frames[0].path.clone();
+    project.add_signal(frame, "Value".into(), 0, 8, 7).unwrap();
+    project.save().unwrap();
+    let xml = fs::read_to_string(&source).unwrap();
+    for name in ["ComGeneral", "Hardware"] {
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        let required = doc.descendants().find(|node| node.has_tag_name("ECUC-CONTAINER-VALUE") &&
+            node.children().any(|child| child.has_tag_name("SHORT-NAME") && child.text() == Some(name))).unwrap();
+        let modified = format!("{}{}", &xml[..required.range().start], &xml[required.range().end..]);
+        fs::write(&source, &modified).unwrap();
+        let mut imported = Workspace::open(vec![source.clone()], archive()).unwrap();
+        let issue = imported.validate().unwrap().issues.into_iter()
+            .find(|issue| issue.code == "PDU_UNSUPPORTED")
+            .unwrap_or_else(|| panic!("missing {name} must block generation"));
+        assert!(issue.file.as_deref().is_some_and(|file| file.contains("Closure.arxml")));
+        assert!(imported.save().unwrap_err().contains("PDU_UNSUPPORTED"));
+        assert!(generator::generate(&mut imported, &temp.0.join(format!("Unsafe{name}"))).unwrap_err().contains("PDU_UNSUPPORTED"));
+        assert_eq!(fs::read_to_string(&source).unwrap(), modified);
+    }
+    let doc = roxmltree::Document::parse(&xml).unwrap();
+    let module = doc.descendants().find(|node| node.has_tag_name("ECUC-MODULE-CONFIGURATION-VALUES") &&
+        node.children().any(|child| child.has_tag_name("SHORT-NAME") && child.text() == Some("EcuCCfg"))).unwrap();
+    let insertion = module.range().end - "</CONTAINERS></ECUC-MODULE-CONFIGURATION-VALUES>".len();
+    let ecuc_extra = format!("{}<ECUC-CONTAINER-VALUE><SHORT-NAME>Partitions</SHORT-NAME><DEFINITION-REF DEST=\"ECUC-PARAM-CONF-CONTAINER-DEF\">/AUTOSAR/EcucDefs/EcuC/EcucPartitionCollection</DEFINITION-REF></ECUC-CONTAINER-VALUE>{}",
+        &xml[..insertion], &xml[insertion..]);
+    let config = doc.descendants().find(|node| node.has_tag_name("ECUC-CONTAINER-VALUE") &&
+        node.children().any(|child| child.has_tag_name("DEFINITION-REF") &&
+            child.text() == Some("/AUTOSAR/EcucDefs/Com/ComConfig"))).unwrap();
+    let insertion = config.range().end - "</SUB-CONTAINERS></ECUC-CONTAINER-VALUE>".len();
+    let com_extra = format!("{}<ECUC-CONTAINER-VALUE><SHORT-NAME>Groups</SHORT-NAME><DEFINITION-REF DEST=\"ECUC-PARAM-CONF-CONTAINER-DEF\">/AUTOSAR/EcucDefs/Com/ComConfig/ComIPduGroup</DEFINITION-REF></ECUC-CONTAINER-VALUE>{}",
+        &xml[..insertion], &xml[insertion..]);
+    for (name, modified) in [("Partitions", ecuc_extra), ("Groups", com_extra)] {
+        fs::write(&source, &modified).unwrap();
+        let mut imported = Workspace::open(vec![source.clone()], archive()).unwrap();
+        let issue = imported.validate().unwrap().issues.into_iter()
+            .find(|issue| issue.code == "PDU_UNSUPPORTED").unwrap_or_else(|| panic!("unknown {name} must be read-only"));
+        assert!(issue.file.as_deref().is_some_and(|file| file.contains("Closure.arxml")));
+        assert!(imported.save().unwrap_err().contains("PDU_UNSUPPORTED"));
+        assert!(generator::generate(&mut imported, &temp.0.join(format!("Unsafe{name}"))).unwrap_err().contains("PDU_UNSUPPORTED"));
+        assert_eq!(fs::read_to_string(&source).unwrap(), modified);
+    }
+    for name in ["ComCfg", "EcuCCfg"] {
+        let module = doc.descendants().find(|node| node.has_tag_name("ECUC-MODULE-CONFIGURATION-VALUES") &&
+            node.children().any(|child| child.has_tag_name("SHORT-NAME") && child.text() == Some(name))).unwrap();
+        let definition = module.children().find(|child| child.has_tag_name("DEFINITION-REF")).unwrap();
+        let modified = format!("{}<DEFINITION-REF DEST=\"ECUC-MODULE-DEF\">/AUTOSAR/EcucDefs/CanIf</DEFINITION-REF>{}",
+            &xml[..definition.range().start], &xml[definition.range().end..]);
+        fs::write(&source, &modified).unwrap();
+        let mut imported = Workspace::open(vec![source.clone()], archive()).unwrap();
+        let issue = imported.validate().unwrap().issues.into_iter()
+            .find(|issue| issue.code == "PDU_UNSUPPORTED").unwrap_or_else(|| panic!("{name} parent definition must block use"));
+        assert_eq!(issue.path.as_deref(), Some(format!("/Closure/{name}").as_str()));
+        assert!(issue.file.as_deref().is_some_and(|file| file.contains("Closure.arxml")));
+        assert!(imported.save().unwrap_err().contains("PDU_UNSUPPORTED"));
+        assert!(generator::generate(&mut imported, &temp.0.join(format!("Unsafe{name}"))).unwrap_err().contains("PDU_UNSUPPORTED"));
+        assert_eq!(fs::read_to_string(&source).unwrap(), modified);
+    }
+    let renamed = xml.replacen("<SHORT-NAME>ComCfg</SHORT-NAME>", "<SHORT-NAME>AltCom</SHORT-NAME>", 1)
+        .replace("/Closure/ComCfg/", "/Closure/AltCom/");
+    let renamed_doc = roxmltree::Document::parse(&renamed).unwrap();
+    let general = renamed_doc.descendants().find(|node| node.has_tag_name("ECUC-CONTAINER-VALUE") &&
+        node.children().any(|child| child.has_tag_name("SHORT-NAME") && child.text() == Some("ComGeneral"))).unwrap();
+    let missing_general = format!("{}{}", &renamed[..general.range().start], &renamed[general.range().end..]);
+    let module = renamed_doc.descendants().find(|node| node.has_tag_name("ECUC-MODULE-CONFIGURATION-VALUES") &&
+        node.children().any(|child| child.has_tag_name("SHORT-NAME") && child.text() == Some("AltCom"))).unwrap();
+    let definition = module.children().find(|child| child.has_tag_name("DEFINITION-REF")).unwrap();
+    let foreign_parent = format!("{}<DEFINITION-REF DEST=\"ECUC-MODULE-DEF\">/AUTOSAR/EcucDefs/CanIf</DEFINITION-REF>{}",
+        &renamed[..definition.range().start], &renamed[definition.range().end..]);
+    for (name, modified) in [("Renamed", renamed), ("MissingGeneral", missing_general), ("ForeignParent", foreign_parent)] {
+        fs::write(&source, &modified).unwrap();
+        let mut imported = Workspace::open(vec![source.clone()], archive()).unwrap();
+        assert_eq!(imported.view().frames.len(), 1, "the altered ComIPdu remains consumed");
+        let issue = imported.validate().unwrap().issues.into_iter()
+            .find(|issue| issue.code == "PDU_UNSUPPORTED")
+            .unwrap_or_else(|| panic!("{name} Com owner must be rejected"));
+        assert_eq!(issue.path.as_deref(), Some("/Closure/AltCom"));
+        assert!(issue.file.as_deref().is_some_and(|file| file.contains("Closure.arxml")));
+        assert!(imported.save().unwrap_err().contains("PDU_UNSUPPORTED"));
+        assert!(generator::generate(&mut imported, &temp.0.join(format!("Unsafe{name}"))).unwrap_err().contains("PDU_UNSUPPORTED"));
+        assert_eq!(fs::read_to_string(&source).unwrap(), modified);
+    }
+}
+
+#[test]
+fn multiple_consumed_com_modules_cannot_generate() {
+    let temp = Scratch::new();
+    let source = temp.0.join("Closure/Closure.arxml");
+    let mut project = Workspace::create(source.parent().unwrap(), "Closure", archive()).unwrap();
+    let frame = project.add_frame("Live".into(), 0x321, 1, Direction::Tx, Some(10), None).unwrap().frames[0].path.clone();
+    project.add_signal(frame, "Value".into(), 0, 8, 7).unwrap();
+    project.save().unwrap();
+    let xml = fs::read_to_string(&source).unwrap();
+    let doc = roxmltree::Document::parse(&xml).unwrap();
+    let module = doc.descendants().find(|node| node.has_tag_name("ECUC-MODULE-CONFIGURATION-VALUES") &&
+        node.children().any(|child| child.has_tag_name("SHORT-NAME") && child.text() == Some("ComCfg"))).unwrap();
+    let duplicate = xml[module.range()].replacen("<SHORT-NAME>ComCfg</SHORT-NAME>",
+        "<SHORT-NAME>AltCom</SHORT-NAME>", 1).replace("/Closure/ComCfg/", "/Closure/AltCom/");
+    let insertion = xml.find("</ELEMENTS>").unwrap();
+    let modified = format!("{}{}{}", &xml[..insertion], duplicate, &xml[insertion..]);
+    fs::write(&source, &modified).unwrap();
+    let mut imported = Workspace::open(vec![source.clone()], archive()).unwrap();
+    let issue = imported.validate().unwrap().issues.into_iter()
+        .find(|issue| issue.code == "PDU_UNSUPPORTED" && issue.message.contains("唯一"))
+        .expect("two consumed Com modules must not produce a host profile");
+    assert_eq!(issue.path.as_deref(), Some("/Closure/AltCom"));
+    assert!(issue.file.as_deref().is_some_and(|file| file.contains("Closure.arxml")));
+    assert!(imported.save().is_err());
+    let output = temp.0.join("UnsafeDuplicateComOwner");
+    assert!(generator::generate(&mut imported, &output).is_err());
+    assert!(!output.exists());
+    assert_eq!(fs::read_to_string(source).unwrap(), modified);
+}
+
+#[test]
+fn imported_global_pdu_cannot_duplicate_system_binding_or_misstate_diagnostic_length() {
+    let temp = Scratch::new();
+    let source = temp.0.join("Diag/Diag.arxml");
+    let mut project = Workspace::create(source.parent().unwrap(), "Diag", archive()).unwrap();
+    let frame = project.add_frame("Live".into(), 0x321, 4, Direction::Tx, Some(100), None).unwrap().frames[0].path.clone();
+    let signal = project.add_signal(frame, "Value".into(), 0, 32, 7).unwrap().signals[0].path.clone();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, vec![signal], true, Some(0xf001)).unwrap();
+    project.save().unwrap();
+    let xml = fs::read_to_string(&source).unwrap();
+    let doc = roxmltree::Document::parse(&xml).unwrap();
+    let find_pdu = |name| doc.descendants().find(|node| node.has_tag_name("ECUC-CONTAINER-VALUE") &&
+        node.children().any(|child| child.has_tag_name("SHORT-NAME") && child.text() == Some(name)) &&
+        node.children().any(|child| child.has_tag_name("DEFINITION-REF") && child.text()
+            == Some("/AUTOSAR/EcucDefs/EcuC/EcucConfigSet/EcucPduCollection/Pdu"))).unwrap();
+    let live = find_pdu("Pdu_Live");
+    let shadow = xml[live.range()].replacen("<SHORT-NAME>Pdu_Live</SHORT-NAME>",
+        "<SHORT-NAME>Pdu_Shadow</SHORT-NAME>", 1);
+    let duplicate = format!("{}{}{}", &xml[..live.range().end], shadow, &xml[live.range().end..]);
+    let diagnostic = find_pdu("DcmPdu_DiagRequest");
+    let short = &xml[diagnostic.range()];
+    let wrong_length = format!("{}{}{}", &xml[..diagnostic.range().start],
+        short.replacen("<VALUE>256</VALUE>", "<VALUE>8</VALUE>", 1), &xml[diagnostic.range().end..]);
+    let request = find_pdu("NPdu_DiagRequest");
+    let missing = format!("{}{}", &xml[..request.range().start], &xml[request.range().end..]);
+    let insertion = live.range().end - "</ECUC-CONTAINER-VALUE>".len();
+    let dependent = format!("{}<REFERENCE-VALUES><ECUC-REFERENCE-VALUE><DEFINITION-REF DEST=\"ECUC-REFERENCE-DEF\">/AUTOSAR/EcucDefs/EcuC/EcucConfigSet/EcucPduCollection/Pdu/PduTriggeredByRef</DEFINITION-REF><VALUE-REF DEST=\"PDU-TRIGGERING\">/Diag/UnknownTrigger</VALUE-REF></ECUC-REFERENCE-VALUE></REFERENCE-VALUES>{}",
+        &xml[..insertion], &xml[insertion..]);
+    let insertion = live.range().start + xml[live.range()].find("</PARAMETER-VALUES>").unwrap();
+    let dynamic = format!("{}<ECUC-NUMERICAL-PARAM-VALUE><DEFINITION-REF DEST=\"ECUC-BOOLEAN-PARAM-DEF\">/AUTOSAR/EcucDefs/EcuC/EcucConfigSet/EcucPduCollection/Pdu/DynamicLength</DEFINITION-REF><VALUE>false</VALUE></ECUC-NUMERICAL-PARAM-VALUE>{}",
+        &xml[..insertion], &xml[insertion..]);
+    for (name, modified) in [("duplicate", duplicate), ("length", wrong_length), ("missing", missing),
+        ("dependent", dependent), ("dynamic", dynamic)] {
+        fs::write(&source, &modified).unwrap();
+        let mut imported = Workspace::open(vec![source.clone()], archive()).unwrap();
+        let issue = imported.validate().unwrap().issues.into_iter()
+            .find(|issue| issue.code == "PDU_UNSUPPORTED")
+            .unwrap_or_else(|| panic!("{name} must not generate an ECU from ambiguous PDU bindings"));
+        assert!(issue.file.as_deref().is_some_and(|file| file.contains("Diag.arxml")));
+        assert!(imported.save().unwrap_err().contains("PDU_UNSUPPORTED"));
+        assert!(generator::generate(&mut imported, &temp.0.join(format!("Unsafe{name}"))).unwrap_err().contains("PDU_UNSUPPORTED"));
+        assert_eq!(fs::read_to_string(&source).unwrap(), modified);
+    }
+}
+
+#[test]
+fn diagnostic_ecuc_refs_reject_old_system_destinations_and_dynamic_npdu() {
+    let temp = Scratch::new();
+    let source = temp.0.join("Diag/Diag.arxml");
+    let mut project = Workspace::create(source.parent().unwrap(), "Diag", archive()).unwrap();
+    let frame = project.add_frame("Live".into(), 0x321, 4, Direction::Tx, Some(100), None).unwrap().frames[0].path.clone();
+    let signal = project.add_signal(frame, "Value".into(), 0, 32, 7).unwrap().signals[0].path.clone();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, vec![signal], false, None).unwrap();
+    project.save().unwrap();
+    let xml = fs::read_to_string(&source).unwrap();
+    let doc = roxmltree::Document::parse(&xml).unwrap();
+    for (name, system, old_dest) in [
+        ("CanTpTxNPduRef", "/Diag/NPdu_DiagResponse", "N-PDU"),
+        ("DcmDslProtocolRxPduRef", "/Diag/DcmPdu_DiagRequest", "DCM-I-PDU"),
+    ] {
+        let reference = doc.descendants().find(|node| node.has_tag_name("ECUC-REFERENCE-VALUE") &&
+            node.children().any(|child| child.has_tag_name("DEFINITION-REF") &&
+                child.text().is_some_and(|value| value.ends_with(&format!("/{name}"))))).unwrap();
+        let value = reference.children().find(|child| child.has_tag_name("VALUE-REF")).unwrap();
+        assert_eq!(value.attribute("DEST"), Some("ECUC-CONTAINER-VALUE"));
+        let modified = format!("{}<VALUE-REF DEST=\"{old_dest}\">{system}</VALUE-REF>{}",
+            &xml[..value.range().start], &xml[value.range().end..]);
+        fs::write(&source, &modified).unwrap();
+        let mut imported = Workspace::open(vec![source.clone()], archive()).unwrap();
+        assert!(imported.validate().unwrap().issues.iter().any(|issue| issue.code == "DIAG_UNSUPPORTED"),
+            "{name} must not silently bind a system PDU");
+        assert!(imported.save().is_err());
+        assert!(generator::generate(&mut imported, &temp.0.join(format!("Unsafe{name}"))).is_err());
+        assert_eq!(fs::read_to_string(&source).unwrap(), modified);
+    }
+    let n_pdu = doc.descendants().find(|node| node.has_tag_name("N-PDU") &&
+        node.children().any(|child| child.has_tag_name("SHORT-NAME") &&
+            child.text() == Some("NPdu_DiagRequest"))).unwrap();
+    let insertion = n_pdu.range().start + xml[n_pdu.range()].find("</SHORT-NAME>").unwrap() + "</SHORT-NAME>".len();
+    let modified = format!("{}<HAS-DYNAMIC-LENGTH>true</HAS-DYNAMIC-LENGTH>{}",
+        &xml[..insertion], &xml[insertion..]);
+    fs::write(&source, &modified).unwrap();
+    let mut imported = Workspace::open(vec![source.clone()], archive()).unwrap();
+    assert!(imported.validate().unwrap().issues.iter().any(|issue| issue.code == "DIAG_UNSUPPORTED"));
+    assert!(imported.save().is_err());
+    assert!(generator::generate(&mut imported, &temp.0.join("UnsafeDynamicNPdu")).is_err());
+    assert_eq!(fs::read_to_string(source).unwrap(), modified);
+}
+
+#[cfg(windows)]
+#[test]
 fn host_rejects_id_matched_wrong_dlc_even_when_other_frames_exchange() {
     let temp = Scratch::new();
     let (mut a, mut b) = create_pair(&temp.0);
@@ -107,8 +365,11 @@ fn imported_unknown_content_survives_supported_edit_without_rewriting_other_file
     let mut imported = Workspace::open(vec![source.clone(), other.clone()], archive()).unwrap();
     assert_eq!(imported.view().files.len(), 2);
     let frame = imported.view().frames.into_iter().find(|f| f.name == "Command").unwrap();
-    imported.update_frame(&frame.path, serde_json::json!({"id": 802})).unwrap();
+    imported.update_frame(&frame.path, serde_json::json!({"id": 802, "dlc": 3})).unwrap();
     imported.save().unwrap();
+    let reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
+    let updated = reopened.view().frames.into_iter().find(|item| item.path == frame.path).unwrap();
+    assert_eq!((updated.id, updated.dlc), (802, 3), "imported frame must retain ID and global PDU length");
     assert!(fs::read_to_string(&source).unwrap().contains(retained));
     assert_eq!(unrelated, fs::read_to_string(other).unwrap(), "unmodified ARXML must stay byte-identical");
     assert_eq!(a.view().frames.len(), 2);
@@ -299,6 +560,41 @@ fn configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_multiframe_did(
 
     let source = temp.0.join("Diag/Diag.arxml");
     let original = fs::read_to_string(&source).unwrap();
+    let doc = roxmltree::Document::parse(&original).unwrap();
+    let global: Vec<_> = doc.descendants().filter(|node| node.has_tag_name("ECUC-CONTAINER-VALUE") &&
+        node.children().any(|child| child.has_tag_name("DEFINITION-REF") &&
+            child.text() == Some("/AUTOSAR/EcucDefs/EcuC/EcucConfigSet/EcucPduCollection/Pdu"))).collect();
+    assert_eq!(global.len(), 5, "Com, CanTp and Dcm system PDUs need distinct global handles");
+    assert!(global.iter().all(|pdu| !pdu.descendants().any(|node|
+        node.has_tag_name("DEFINITION-REF") &&
+        node.text().is_some_and(|value| value.ends_with("/DynamicLength")))),
+        "constr_3448 excludes DynamicLength for I-SIGNAL-I-PDU, N-PDU and DCM-I-PDU");
+    let n_pdus: Vec<_> = doc.descendants().filter(|node| node.has_tag_name("N-PDU") &&
+        node.children().any(|child| child.has_tag_name("SHORT-NAME") &&
+            child.text().is_some_and(|name| name.starts_with("NPdu_Diag")))).collect();
+    assert_eq!(n_pdus.len(), 2);
+    assert!(n_pdus.iter().all(|pdu| !pdu.children().any(|child| child.has_tag_name("HAS-DYNAMIC-LENGTH"))),
+        "System Template constr_3448 excludes hasDynamicLength on N-PDU");
+    assert!(doc.descendants().any(|node| node.has_tag_name("ECUC-TEXTUAL-PARAM-VALUE") &&
+        node.children().any(|child| child.has_tag_name("DEFINITION-REF") &&
+            child.text().is_some_and(|value| value.ends_with("/PduLengthTypeEnum"))) &&
+        node.children().any(|child| child.has_tag_name("VALUE") && child.text() == Some("UINT16"))));
+    for (name, target) in [
+        ("CanIfRxPduRef", "NPdu_DiagRequest"), ("CanIfTxPduRef", "NPdu_DiagResponse"),
+        ("CanTpRxNPduRef", "NPdu_DiagRequest"), ("CanTpTxFcNPduRef", "NPdu_DiagResponse"),
+        ("CanTpTxNPduRef", "NPdu_DiagResponse"), ("CanTpRxFcNPduRef", "NPdu_DiagRequest"),
+        ("CanTpRxNSduRef", "DcmPdu_DiagRequest"), ("CanTpTxNSduRef", "DcmPdu_DiagResponse"),
+        ("DcmDslProtocolRxPduRef", "DcmPdu_DiagRequest"),
+        ("DcmDslProtocolTxPduRef", "DcmPdu_DiagResponse"),
+    ] {
+        let target = format!("/Diag/EcuCCfg/EcucConfigSet/Pdus/{target}");
+        assert!(doc.descendants().any(|node| node.has_tag_name("ECUC-REFERENCE-VALUE") &&
+            node.children().any(|child| child.has_tag_name("DEFINITION-REF") &&
+                child.text().is_some_and(|value| value.ends_with(&format!("/{name}")))) &&
+            node.children().any(|child| child.has_tag_name("VALUE-REF") &&
+                child.attribute("DEST") == Some("ECUC-CONTAINER-VALUE") &&
+                child.text() == Some(target.as_str()))), "{name} must target {target}");
+    }
     fs::write(&source, original.replace("</ELEMENTS>", "<!-- user annotation --></ELEMENTS>")).unwrap();
     let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
     let diagnostic = reopened.view().diagnostic.unwrap();
@@ -639,9 +935,30 @@ fn start_routine_restores_written_did_signals_and_respects_session() {
     assert!(fs::read_to_string(&source).unwrap().contains("<!-- retained annotation -->"));
 }
 
-#[cfg(windows)]
 #[test]
-fn legacy_routine_import_stages_lossless_conversion_until_explicit_save() {
+fn legacy_tool_saved_pdus_import_read_only_without_losing_rid_or_source() {
+    let temp = Scratch::new();
+    let source = temp.0.join("Legacy.arxml");
+    let old = include_str!("fixtures/legacy-routine.arxml");
+    fs::write(&source, old).unwrap();
+    let mut project = Workspace::open(vec![source.clone()], archive()).unwrap();
+    let view = project.validate().unwrap();
+    assert!(!view.dirty && !view.routine_migration_pending);
+    assert_eq!(view.diagnostic.unwrap().reset_routine_id, Some(0xf001));
+    let issue = view.issues.iter().find(|issue| issue.code == "PDU_LEGACY_READ_ONLY")
+        .expect("old Com reference must be located and block write/generation");
+    assert!(issue.file.as_deref().is_some_and(|file| file.contains("Legacy.arxml")));
+    assert!(issue.path.as_deref().is_some_and(|path| path.contains("Pdu_")));
+    assert!(project.save().unwrap_err().contains("PDU_LEGACY_READ_ONLY"));
+    assert!(generator::generate(&mut project, &temp.0.join("Unsafe")).unwrap_err().contains("PDU_LEGACY_READ_ONLY"));
+    assert_eq!(fs::read_to_string(&source).unwrap(), old);
+    let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
+    assert!(reopened.validate().unwrap().issues.iter().any(|issue| issue.code == "PDU_LEGACY_READ_ONLY"));
+    assert_eq!(fs::read_to_string(source).unwrap(), old);
+}
+
+#[test]
+fn decorated_legacy_routine_remains_read_only_across_multiple_files() {
     let temp = Scratch::new();
     let source = temp.0.join("Legacy.arxml");
     let old = include_str!("fixtures/legacy-routine.arxml")
@@ -654,35 +971,20 @@ fn legacy_routine_import_stages_lossless_conversion_until_explicit_save() {
     fs::write(&other, untouched).unwrap();
     let mut project = Workspace::open(vec![source.clone(), other.clone()], archive()).unwrap();
     let view = project.view();
-    assert!(view.routine_migration_pending && view.dirty, "{:?}", view.issues);
+    assert!(!view.routine_migration_pending && !view.dirty, "{:?}", view.issues);
     assert_eq!(view.diagnostic.unwrap().reset_routine_id, Some(0xf001));
-    assert_eq!(fs::read_to_string(&source).unwrap(), old, "opening must not rewrite the source");
-    assert!(generator::generate(&mut project, &temp.0.join("BeforeSave")).unwrap_err().contains("保存"));
-    assert!(project.clear_diagnostic().unwrap_err().contains("先保存"));
-    assert_eq!(project.view().diagnostic.unwrap().reset_routine_id, Some(0xf001));
-    assert!(!temp.0.join("BeforeSave").exists());
-    let external = old.replace("<!-- retained owner annotation -->", "<!-- externally changed annotation -->");
-    fs::write(&source, &external).unwrap();
-    assert!(project.save().unwrap_err().contains("外部修改"));
-    assert!(project.view().routine_migration_pending);
-    assert_eq!(fs::read_to_string(&source).unwrap(), external);
-    fs::write(&source, &old).unwrap();
-    project.save().unwrap();
-    assert!(!project.view().routine_migration_pending);
-    assert_eq!(fs::read_to_string(&other).unwrap(), untouched, "unaffected ARXML must stay byte-identical");
-    let migrated = fs::read_to_string(&source).unwrap();
-    assert!(migrated.contains("<!-- retained owner annotation -->"));
-    assert!(migrated.contains("<SDG GID=\"OwnerMeta\"><SD GID=\"Label\">retained</SD></SDG>"));
-    let doc = roxmltree::Document::parse(&migrated).unwrap();
-    assert!(!doc.descendants().any(|node| node.has_tag_name("DEFINITION-REF")
-        && node.text().is_some_and(|path| path.ends_with("/DcmDspRoutine") || path.ends_with("/DcmDspCommonAuthorization"))));
-    let mut reopened = Workspace::open(vec![source, other], archive()).unwrap();
-    assert!(!reopened.view().routine_migration_pending);
+    assert!(view.files.iter().all(|file| file.readonly));
+    let issue = view.issues.iter().find(|issue| issue.code == "PDU_LEGACY_READ_ONLY").unwrap();
+    assert!(issue.file.as_deref().is_some_and(|file| file.contains("Legacy.arxml")));
+    assert_eq!(fs::read_to_string(&source).unwrap(), old);
+    assert_eq!(fs::read_to_string(&other).unwrap(), untouched);
+    assert!(project.save().unwrap_err().contains("PDU_LEGACY_READ_ONLY"));
+    assert!(generator::generate(&mut project, &temp.0.join("BeforeSave")).unwrap_err().contains("PDU_LEGACY_READ_ONLY"));
+    let mut reopened = Workspace::open(vec![source.clone(), other.clone()], archive()).unwrap();
     assert_eq!(reopened.view().diagnostic.unwrap().reset_routine_id, Some(0xf001));
-    let output = temp.0.join("MigratedRoutine");
-    generator::generate(&mut reopened, &output).unwrap();
-    generator::build(&output).unwrap();
-    assert!(host::run_diagnostic(&output).unwrap().passed);
+    assert!(reopened.validate().unwrap().issues.iter().any(|issue| issue.code == "PDU_LEGACY_READ_ONLY"));
+    assert_eq!(fs::read_to_string(source).unwrap(), old);
+    assert_eq!(fs::read_to_string(other).unwrap(), untouched);
 }
 
 #[test]
@@ -701,11 +1003,11 @@ fn old_routine_with_external_reference_imports_read_only_without_changing_arxml(
     assert!(!view.dirty && !view.routine_migration_pending);
     assert_eq!(view.diagnostic.unwrap().reset_routine_id, Some(0xf001));
     assert!(view.files.iter().all(|file| file.readonly));
-    let issue = view.issues.iter().find(|issue| issue.code == "DIAG_UNSUPPORTED").unwrap();
-    assert!(issue.message.contains("61441") && issue.message.contains("外部引用/内容") && issue.message.contains("ResetDid"), "{}", issue.message);
+    let issue = view.issues.iter().find(|issue| issue.code == "PDU_LEGACY_READ_ONLY").unwrap();
+    assert!(issue.message.contains("ComPduIdRef"), "{}", issue.message);
     assert!(issue.file.as_deref().is_some_and(|file| file.contains("Legacy.arxml")));
-    assert!(project.save().unwrap_err().contains("DIAG_UNSUPPORTED"));
-    assert!(generator::generate(&mut project, &temp.0.join("Unsafe")).unwrap_err().contains("DIAG_UNSUPPORTED"));
+    assert!(project.save().unwrap_err().contains("PDU_LEGACY_READ_ONLY"));
+    assert!(generator::generate(&mut project, &temp.0.join("Unsafe")).unwrap_err().contains("PDU_LEGACY_READ_ONLY"));
     assert_eq!(fs::read_to_string(&source).unwrap(), old);
 }
 
@@ -724,11 +1026,11 @@ fn old_routine_referenced_by_vendor_sdg_in_another_file_imports_read_only() {
     assert!(!view.dirty && !view.routine_migration_pending);
     assert_eq!(view.diagnostic.unwrap().reset_routine_id, Some(0xf001));
     assert!(view.files.iter().all(|file| file.readonly));
-    let issue = view.issues.iter().find(|issue| issue.code == "DIAG_UNSUPPORTED").unwrap();
-    assert!(issue.message.contains("61441") && issue.message.contains("ResetDid"), "{}", issue.message);
-    assert!(issue.file.as_deref().is_some_and(|file| file.contains("Vendor.arxml")));
-    assert!(project.save().unwrap_err().contains("DIAG_UNSUPPORTED"));
-    assert!(generator::generate(&mut project, &temp.0.join("Unsafe")).unwrap_err().contains("DIAG_UNSUPPORTED"));
+    let issue = view.issues.iter().find(|issue| issue.code == "PDU_LEGACY_READ_ONLY").unwrap();
+    assert!(issue.path.as_deref().is_some_and(|path| path.contains("Pdu_")));
+    assert!(issue.file.as_deref().is_some_and(|file| file.contains("Legacy.arxml")));
+    assert!(project.save().unwrap_err().contains("PDU_LEGACY_READ_ONLY"));
+    assert!(generator::generate(&mut project, &temp.0.join("Unsafe")).unwrap_err().contains("PDU_LEGACY_READ_ONLY"));
     assert_eq!(fs::read_to_string(source).unwrap(), old);
     assert_eq!(fs::read_to_string(owner).unwrap(), vendor);
 }
@@ -751,8 +1053,8 @@ fn unsupported_vendor_extension_with_old_routine_remains_read_only_and_importabl
     let issue = view.issues.iter().find(|issue| issue.code == "DIAG_UNSUPPORTED").unwrap();
     assert!(issue.message.contains("61441") && issue.message.contains("保留"), "{}", issue.message);
     assert!(issue.file.as_deref().is_some_and(|file| file.contains("Legacy.arxml")));
-    assert!(generator::generate(&mut project, &temp.0.join("Unsafe")).unwrap_err().contains("DIAG_UNSUPPORTED"));
-    assert!(project.save().unwrap_err().contains("DIAG_UNSUPPORTED"));
+    assert!(generator::generate(&mut project, &temp.0.join("Unsafe")).is_err());
+    assert!(project.save().is_err());
     assert_eq!(fs::read_to_string(source).unwrap(), old);
 }
 

@@ -309,8 +309,9 @@ export default function App() {
     else setSignalInput(newSignal);
   }
   function applyProject(view: WorkspaceView) {
-    setStages({ ...stageDefaults, save: view.issues.some(issue => issue.code === 'DIAG_UNSUPPORTED' && issue.message.startsWith('旧版例程 RID '))
-      ? { state: 'failed', detail: '旧版例程含不受支持配置，源文件只读且不能生成' }
+    setStages({ ...stageDefaults, save: view.issues.some(issue => issue.code.startsWith('PDU_') ||
+      issue.code === 'DIAG_UNSUPPORTED' && issue.message.startsWith('旧版例程 RID '))
+      ? { state: 'failed', detail: '导入的配置只读，来源文件未被修改；不能保存或生成' }
       : view.routineMigrationPending
         ? { state: 'stale', detail: '旧版主机例程格式待保存转换' }
         : view.dirty ? stageDefaults.save : { state: 'done', detail: '项目配置已保存' } });
@@ -540,7 +541,9 @@ export default function App() {
   }
 
   const unsupportedLegacyIssue = workspace?.issues.find(issue => issue.code === 'DIAG_UNSUPPORTED' && issue.message.startsWith('旧版例程 RID '));
-  const disabled = !native || Boolean(busy) || Boolean(unsupportedLegacyIssue) || Boolean(workspace?.routineMigrationPending);
+  const unsupportedPduIssue = workspace?.issues.find(issue => issue.code.startsWith('PDU_'));
+  const blockedIssue = unsupportedPduIssue ?? unsupportedLegacyIssue;
+  const disabled = !native || Boolean(busy) || Boolean(blockedIssue) || Boolean(workspace?.routineMigrationPending);
   return (
     <div className="app-shell">
       {!workspace ? (
@@ -601,7 +604,8 @@ export default function App() {
           <div className="workspace-content">
             <div className={`workspace-grid${page === 'editor' ? '' : ' single-page'}`}>
             <section className="main-pane" aria-label={page === 'editor' ? '配置工作区' : '项目工作页'}>
-              {page === 'editor' && <><div className="section-header"><div><p className="eyebrow">CAN COMMUNICATION</p><h2>帧与信号</h2><p>仅支持标准 11-bit CAN、DLC 1–8、原始无符号小端信号。</p></div><div className="section-actions"><button type="button" className="outline-button small" onClick={saveProject} disabled={!native || Boolean(busy) || Boolean(unsupportedLegacyIssue) || unapplied}><Save aria-hidden="true" size={15} />保存 ARXML</button><button type="button" className="outline-button small" onClick={() => openCreator('frame')} disabled={disabled}><Plus aria-hidden="true" size={15} />添加帧</button></div></div>
+              {page === 'editor' && <><div className="section-header"><div><p className="eyebrow">CAN COMMUNICATION</p><h2>帧与信号</h2><p>仅支持标准 11-bit CAN、DLC 1–8、原始无符号小端信号。</p></div><div className="section-actions"><button type="button" className="outline-button small" onClick={saveProject} disabled={!native || Boolean(busy) || Boolean(blockedIssue) || unapplied}><Save aria-hidden="true" size={15} />保存 ARXML</button><button type="button" className="outline-button small" onClick={() => openCreator('frame')} disabled={disabled}><Plus aria-hidden="true" size={15} />添加帧</button></div></div>
+                {unsupportedPduIssue && <div className="page-guidance" role="alert">{unsupportedPduIssue.message}。原 ARXML 保留只读；请在“诊断”页查看来源，当前不能保存或生成。</div>}
                 <div className="table-wrap"><table><caption>CAN 帧配置</caption><thead><tr><th scope="col">帧名称</th><th scope="col">CAN ID</th><th scope="col">DLC</th><th scope="col">方向</th><th scope="col">周期 / 超时</th><th scope="col">信号</th></tr></thead><tbody>{workspace.frames.map(frame => <tr key={frame.path} className={focusedFrame?.path === frame.path ? 'selected-row' : ''} onClick={() => choose({ kind: 'frame', path: frame.path })}><td><button type="button" className="table-link" onClick={event => { event.stopPropagation(); choose({ kind: 'frame', path: frame.path }); }}>{frame.name}</button></td><td className="mono">0x{frame.id.toString(16).toUpperCase().padStart(3, '0')}</td><td className="mono">{frame.dlc}</td><td><span className={`direction ${frame.direction}`}>{frame.direction.toUpperCase()}</span></td><td className="mono">{frame.direction === 'tx' ? `${frame.periodMs ?? '—'} ms` : `${frame.timeoutMs ?? '—'} ms`}</td><td className="mono">{workspace.signals.filter(signal => signal.framePath === frame.path).length}</td></tr>)}{!workspace.frames.length && <tr><td colSpan={6} className="empty-cell">项目尚无 CAN 帧。使用“添加帧”开始配置。</td></tr>}</tbody></table></div>
                 <div className="section-header secondary"><div><p className="eyebrow">FRAME MAPPING</p><h2>{focusedFrame ? `${focusedFrame.name} · 信号` : '全部信号'}</h2><p>{focusedFrame ? `帧路径：${focusedFrame.path}` : '选择一帧可查看信号映射与引用。'}</p></div><button type="button" className="outline-button small" onClick={() => openCreator('signal')} disabled={disabled || !focusedFrame}><Plus aria-hidden="true" size={15} />添加信号</button></div>
                 <div className="table-wrap"><table><caption>信号配置</caption><thead><tr><th scope="col">信号名称</th><th scope="col">所属帧</th><th scope="col">起始位</th><th scope="col">长度</th><th scope="col">初始值</th><th scope="col">编码</th></tr></thead><tbody>{workspace.signals.filter(signal => !focusedFrame || signal.framePath === focusedFrame.path).map(signal => <tr key={signal.path} className={currentSignal?.path === signal.path ? 'selected-row' : ''} onClick={() => choose({ kind: 'signal', path: signal.path })}><td><button type="button" className="table-link" onClick={event => { event.stopPropagation(); choose({ kind: 'signal', path: signal.path }); }}>{signal.name}</button></td><td>{workspace.frames.find(frame => frame.path === signal.framePath)?.name ?? signal.framePath}</td><td className="mono">{signal.startBit}</td><td className="mono">{signal.length} bit</td><td className="mono">{signal.initialValue}</td><td>uint / LE</td></tr>)}{!workspace.signals.some(signal => !focusedFrame || signal.framePath === focusedFrame.path) && <tr><td colSpan={6} className="empty-cell">当前范围内暂无信号。</td></tr>}</tbody></table></div>
