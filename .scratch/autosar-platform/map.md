@@ -12,6 +12,7 @@ Label: wayfinder:map
 - 地图中的议题记录产品决策，不拆成实现任务；研究记录保存在 `.scratch/autosar-platform/research/`，由相应议题引用。
 - 本地 Markdown 议题系统位于 `.scratch/autosar-platform/`；每个子议题在 `issues/` 下独立成文件，文件头保留系统字段 `Type`、`Status` 和 `Blocked by`。未结议题不重复列在本地图。
 - 决策记录区分已确认范围与研究推论；规范、工具和许可调查保留证据来源。遵循规范不等于通过认证；公开可读不等于获准再分发规范。
+- 学习层的课程、真实工作区导览、内置教学工程与按阶段扩展的决策，见独立的[AUTOSAR 学习层的内容、导览与关卡决策地图](../autosar-learning/map.md)；具体模块教学只在对应运行能力验收后纳入。
 
 ## 已有决策
 
