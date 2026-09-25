@@ -1,0 +1,17 @@
+[package]
+name = "autosar-config-desktop"
+version = "0.1.0"
+edition = "2024"
+build = "build.rs"
+
+[lib]
+name = "autosar_config_desktop"
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde_json = "1"
+autosar-config-core = { path = "../core" }
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }

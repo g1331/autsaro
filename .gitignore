@@ -1,0 +1,13 @@
+# AUTOSAR 官方资料仅供本地查阅，不随开源实现再分发。
+docs/official/**/*.pdf
+docs/official/**/*.zip
+docs/official/**/*.sha256
+docs/official/**/*.part
+docs/official/**/download-status.json
+docs/official/**/*.xsd
+
+# 本机构建中间产物。
+**/target/
+src-tauri/gen/
+**/*.tsbuildinfo
+.scratch/autosar-platform/research/*.tmp.zip

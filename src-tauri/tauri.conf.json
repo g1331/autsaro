@@ -1,0 +1,18 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Classic CAN 配置工作台",
+  "version": "0.1.0",
+  "identifier": "dev.autosar.classic-can-workbench",
+  "build": {
+    "beforeDevCommand": "npm --prefix ../ui run dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "npm --prefix ../ui run build",
+    "frontendDist": "../ui/dist"
+  },
+  "app": {
+    "windows": [
+      { "title": "Classic CAN 配置工作台", "width": 1480, "height": 920, "minWidth": 1080, "minHeight": 720 }
+    ]
+  },
+  "bundle": { "active": false }
+}
