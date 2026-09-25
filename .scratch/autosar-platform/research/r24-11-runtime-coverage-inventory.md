@@ -11,11 +11,11 @@
 
 ## A.2 官方模块候选清单及项目行为/目标证据
 
-**生命周期标记**：`OBSOLETE` = Overview §3 明确列明 obsolete；`UNKNOWN` = 目前所读 Overview/Appendix 未证明 VALID，也未找到其 obsolete/draft 声明；UNKNOWN 不表示有效或无效。表中 `§3 lead` 仅给 cluster 页码与长名称/表内文件名线索，不保证对应 SWS 的实际文件 ID；尤其 Cdd、SchM 等没有直接的一对一 SWS 行。逐项查 Release Overview 表的 `File Name`、实际本地规范文件名及规范元数据，填入并核对确切 source ID 前，任何行不得用于冻结清单或分母。
+**生命周期标记**：`OBSOLETE` = Overview §3 明确列明 obsolete；`UNKNOWN` = 未找到模块族整体 lifecycle assertion，不表示有效或无效。除文件列明的局部对象外，不能将 `DocStatus=published` 当成模块有效状态。ZIP 中 `LIFE-CYCLE-INFO-SET/Requirements` 的 `DEFAULT-LC-STATE-REF=valid` 表示该 Requirements set 的默认对象状态；`LIFE-CYCLE-INFOS` 中逐对象 `draft`/`obsolete` 会覆盖默认值。此为需求/ECUC 等对象的生命周期信息，**不等价于模块族整体 VALID/DRAFT/OBSOLETE**。主清单 `§3 lead` 仅给 cluster 页码与长名称/表内文件名线索；下方目标子集审计表已映射实际 SWS ID，其余行的 ID 仍待核。尤其 Cdd、SchM 等没有直接的一对一 SWS 行。未有准确 source ID 及生命周期证据的行不得用于冻结清单或分母。
 
 **目标列**：`H` = 当前主机虚拟目标的行为记录；`M1`、`M2` = 将来逐个指定的 MCU/板卡+工具链档案。所有行的 M1/M2 均为 `TBD—未指定、未验证`，不是支持声明。未被 README 当前行为明确覆盖的 H 项均为 `TBD—本清单未找到用户可观察实现行为证据`；存在具体受限行为时只记行为，不升级成模块整体支持。
 
-| 家族/cluster | 模块（Appendix A.2 短名；规范长名） | 生命周期 | §3 lead（长名称/文件名线索；实际 source ID 待核） | 当前 H：README 可见行为（仅行为） | M1 | M2 |
+| 家族/cluster | 模块（Appendix A.2 短名；规范长名） | 模块族生命周期 | §3 lead（未映射行实际 source ID 待核；下方含 target 子集映射） | 当前 H：README 可见行为（仅行为） | M1 | M2 |
 |---|---|---|---|---|---|---|
 | IO | Adc — ADC Driver | UNKNOWN | p.24–25, SWS ADC Driver | TBD | TBD | TBD |
 | SWArch/SystemServices | Arti — AUTOSAR Run-Time Interface | UNKNOWN | p.26, SWS AUTOSAR Run-Time Interface | TBD | TBD | TBD |
@@ -134,6 +134,50 @@
 | Communication | WEth — Wireless Ethernet Driver | UNKNOWN | p.23, SWS Wireless Ethernet Driver | TBD | TBD | TBD |
 | Communication | WEthTrcv — Wireless Ethernet Transceiver Driver | UNKNOWN | p.23, SWS Wireless Ethernet Transceiver Driver | TBD | TBD | TBD |
 | Communication | Xcp — XCP | UNKNOWN | p.23, SWS XCP | TBD | TBD | TBD |
+
+### 当前/近期 profile 候选：官方 SWS ID 与生命周期元数据核对
+
+本次检查的 target subset 对应 SWS ARXML ZIP 成员均在 `AUTOSAR_CP_MOD_SpecificationsARXML.zip` 内；其 `ADMIN-DATA/SDG[DocumentMetadata]` 报告 `DocStatus=published`、`DocStatusDraftExtension` 为空、`DocRelease=R24-11`。这证明的是**文件的发布元数据**，不是模块族的生命周期。下表 LC 结果来自各成员的 `LifeCycleInfoSets/Requirements`：`valid` 是 Requirements 集默认状态，显式 `draft`/`obsolete` 仅用于列明的 traceable 对象。目标表的模块族状态因此继续是 `UNKNOWN`；不根据文档 published 或其多数 requirements 默认 valid 推断模块族 VALID。Release Overview §3 对这些 SWS 行无 obsolete 生命周期变更注记；其空白也不证明 VALID。
+
+| 模块族 | 实际 SWS 文件 ID / `DocIdentNo`（§3 cluster / PDF 页） | 生命周期状态（Requirements 对象级，非模块状态） |
+|---|---|---|
+| ADC / Adc | [`AUTOSAR_CP_SWS_ADCDriver`, 10](../../../docs/official/R24-11/CP/IO/AUTOSAR_CP_SWS_ADCDriver.pdf)（IO, §3 pp.24–25） | 默认 `valid`；`LIFE-CYCLE-INFOS` 为空（ARXML archive member `CP_SWS_ADCDriver_010` 的 Requirements LCI）。 |
+| CAN / Can | [`AUTOSAR_CP_SWS_CANDriver`, 11](../../../docs/official/R24-11/CP/Communication/AUTOSAR_CP_SWS_CANDriver.pdf)（Communication, §3 pp.20–21） | 默认 `valid`；DRAFT 覆盖项包括 `SWS_Can_00521–00539`、`SWS_CAN_91025–91029`、`ECUC_Can_00496`、`ECUC_Can_00498`。ARXML lines 39449–39556。 |
+| CAN / CanIf | [`AUTOSAR_CP_SWS_CANInterface`, 12](../../../docs/official/R24-11/CP/Communication/AUTOSAR_CP_SWS_CANInterface.pdf)（Communication, §3 pp.20–21） | 默认 `valid`；DRAFT 覆盖项包括 `SWS_CANIF_00922–00936`、`00967`、`91010–91014`、`91016–91017`、`92000–92003`、`ECUC_CanIf_00848–00854`（编号间有缺项）。ARXML lines 50103–50242。 |
+| CAN / CanNm | [`AUTOSAR_CP_SWS_CANNetworkManagement`, 13](../../../docs/official/R24-11/CP/Communication/AUTOSAR_CP_SWS_CANNetworkManagement.pdf)（Communication, §3 pp.20–21） | 默认 `valid`；`LIFE-CYCLE-INFOS` 为空。ARXML lines 24967–24970。 |
+| CAN / CanSM | [`AUTOSAR_CP_SWS_CANStateManager`, 253](../../../docs/official/R24-11/CP/Communication/AUTOSAR_CP_SWS_CANStateManager.pdf)（Communication, §3 pp.20–21） | 默认 `valid`；DRAFT 覆盖项为 `SWS_CanSM_00667–00670`、`SWS_CanSM_91004`。ARXML lines 20385–20408。Overview §4.3（p.29）另列 CanSM 技术缺陷；这不是生命周期状态。 |
+| CAN / CanTrcv | [`AUTOSAR_CP_SWS_CANTransceiverDriver`, 71](../../../docs/official/R24-11/CP/Communication/AUTOSAR_CP_SWS_CANTransceiverDriver.pdf)（Communication, §3 pp.20–21） | 默认 `valid`；`LIFE-CYCLE-INFOS` 为空。ARXML lines 20844–20848。 |
+| CAN / CanTp | [`AUTOSAR_CP_SWS_CANTransportLayer`, 14](../../../docs/official/R24-11/CP/Communication/AUTOSAR_CP_SWS_CANTransportLayer.pdf)（Communication, §3 pp.20–21） | 默认 `valid`；`LIFE-CYCLE-INFOS` 为空。ARXML lines 27653–27657。 |
+| COM / Com | [`AUTOSAR_CP_SWS_COM`, 15](../../../docs/official/R24-11/CP/Communication/AUTOSAR_CP_SWS_COM.pdf)（Communication, §3 pp.21–22） | 默认 `valid`；DRAFT 覆盖项为 `SWS_Com_00900`、`00903`、`91016–91021`、`ECUC_Com_10031`。ARXML lines 48812–48851。 |
+| Diagnostics / Dcm | [`AUTOSAR_CP_SWS_DiagnosticCommunicationManager`, 18](../../../docs/official/R24-11/CP/Diagnostics/AUTOSAR_CP_SWS_DiagnosticCommunicationManager.pdf)（Diagnostics, §3 p.23） | 默认 `valid`；DRAFT 覆盖项包括 `SWS_Dcm_01590`、`01703–01753`（该序列中的奇数编号）、`91090–91107`，以及 `ECUC_Dcm_01215`、`01187`、`01188`。其中 `ECUC_Dcm_01215` 是单个参数的状态，不代表 Dcm/RoutineControl 生命周期。ZIP member `CP_SWS_DiagnosticCommunicationManager_018` 的 Requirements LCI；该参数见 PDF extracted lines 25099–25126。 |
+| Diagnostics / Dem | [`AUTOSAR_CP_SWS_DiagnosticEventManager`, 19](../../../docs/official/R24-11/CP/Diagnostics/AUTOSAR_CP_SWS_DiagnosticEventManager.pdf)（Diagnostics, §3 p.23） | 默认 `valid`；DRAFT 覆盖项为 `SWS_Dem_91196`、`SWS_Dem_91060`、`ECUC_Dem_00970`、`00803`、`00990`。ZIP member `CP_SWS_DiagnosticEventManager_019` 的 Requirements LCI。 |
+| RTE / Rte | [`AUTOSAR_CP_SWS_RTE`, 84](../../../docs/official/R24-11/CP/RTE/AUTOSAR_CP_SWS_RTE.pdf)（RTE, §3 p.26） | 默认 `valid`；DRAFT 覆盖项包括 `SWS_Rte_91134–91136`、`ECUC_Rte_09208–09213`（另有其他跨模块 ECUC 对象引用）。ZIP member `CP_SWS_RTE_084` 的 Requirements LCI。 |
+| OS / Os | [`AUTOSAR_CP_SWS_OS`, 34](../../../docs/official/R24-11/CP/SystemServices/AUTOSAR_CP_SWS_OS.pdf)（SystemServices, §3 p.27） | 默认 `valid`；DRAFT 覆盖项为 `SWS_Os_91034`、`SWS_Os_91026`。ZIP member `CP_SWS_OS_034` 的 Requirements LCI。 |
+| Mode / EcuM | [`AUTOSAR_CP_SWS_ECUStateManager`, 78](../../../docs/official/R24-11/CP/ModeManagement/AUTOSAR_CP_SWS_ECUStateManager.pdf)（ModeManagement, §3 p.26） | 默认 `valid`；`LIFE-CYCLE-INFOS` 为空。ARXML lines 38494–38497。 |
+| Mode / BswM | [`AUTOSAR_CP_SWS_BSWModeManager`, 313](../../../docs/official/R24-11/CP/ModeManagement/AUTOSAR_CP_SWS_BSWModeManager.pdf)（ModeManagement, §3 p.26） | 默认 `valid`；DRAFT 覆盖项包括 `SWS_BswM_00287–00319`、`SWS_BSWM_91006–91010`、`SWS_BswM_CONSTR_00007`、`ECUC_BswM_01089`、`01090`、`01094`、`00145`。ARXML lines 57046–57221。 |
+| System / ComM | [`AUTOSAR_CP_SWS_COMManager`, 79](../../../docs/official/R24-11/CP/SystemServices/AUTOSAR_CP_SWS_COMManager.pdf)（SystemServices, §3 p.27） | 默认 `valid`；DRAFT 覆盖项为 `SWS_ComM_01091`、`SWS_ComM_CONSTR_00003`。ARXML lines 34036–34048。 |
+| IO / Dio | [`AUTOSAR_CP_SWS_DIODriver`, 20](../../../docs/official/R24-11/CP/IO/AUTOSAR_CP_SWS_DIODriver.pdf)（IO, §3 pp.24–25） | 默认 `valid`；`LIFE-CYCLE-INFOS` 为空。ARXML lines 9350–9354。 |
+| MCAL / Gpt | [`AUTOSAR_CP_SWS_GPTDriver`, 30](../../../docs/official/R24-11/CP/MCAL/AUTOSAR_CP_SWS_GPTDriver.pdf)（MCAL, §3 p.25） | 默认 `valid`；`LIFE-CYCLE-INFOS` 为空。ARXML lines 14219–14223。 |
+| IO / Port | [`AUTOSAR_CP_SWS_PortDriver`, 40](../../../docs/official/R24-11/CP/IO/AUTOSAR_CP_SWS_PortDriver.pdf)（IO, §3 pp.24–25） | 默认 `valid`；`LIFE-CYCLE-INFOS` 为空。ARXML lines 8791–8795。 |
+| Ethernet / Eth | [`AUTOSAR_CP_SWS_EthernetDriver`, 430](../../../docs/official/R24-11/CP/Communication/AUTOSAR_CP_SWS_EthernetDriver.pdf)（Communication, §3 p.22） | DRAFT 与 OBSOLETE 两类需求级覆盖项均存在。OBSOLETE 示例：`SWS_Eth_00096`、`00298`、`00299`、`00264–00266`、`00268–00272`、`00300`、`00176–00180`、`00210`；另有多项 DRAFT requirements/constr。ARXML lines 47907–48464。这不表示整个 Ethernet Driver 模块已废止或处于 DRAFT。 |
+| Ethernet / EthIf | [`AUTOSAR_CP_SWS_EthernetInterface`, 417](../../../docs/official/R24-11/CP/Communication/AUTOSAR_CP_SWS_EthernetInterface.pdf)（Communication, §3 p.22） | Requirements LCI 中有 DRAFT 与 OBSOLETE 对象覆盖项；例如 `SWS_EthIf_00154`、`91051` 为 obsolete，多个 `SWS_EthIf_912xx` 与 `ECUC_EthIf_*` 对象为 draft。ZIP member `CP_SWS_EthernetInterface_417` 的 Requirements LCI；模块族状态仍未知。Overview §4.4（p.29）列出的 Ethernet Interface 技术限制不是生命周期状态。 |
+| Ethernet / EthSM | [`AUTOSAR_CP_SWS_EthernetStateManager`, 415](../../../docs/official/R24-11/CP/Communication/AUTOSAR_CP_SWS_EthernetStateManager.pdf)（Communication, §3 p.22） | 默认 `valid`；DRAFT 覆盖项为 `SWS_EthSM_00224`、`91004`、`ECUC_EthSM_00113`。ARXML lines 9174–9190。 |
+| Ethernet / EthSwt | [`AUTOSAR_CP_SWS_EthernetSwitchDriver`, 656](../../../docs/official/R24-11/CP/Communication/AUTOSAR_CP_SWS_EthernetSwitchDriver.pdf)（Communication, §3 p.22） | Requirements LCI 中有 DRAFT ECUC 对象覆盖项，例如 `ECUC_EthSwt_00141`、`00146–00150`、`00164–00180`；尚未确认模块级生命周期声明。ZIP member `CP_SWS_EthernetSwitchDriver_656` 的 Requirements LCI。 |
+| Ethernet / EthTrcv | [`AUTOSAR_CP_SWS_EthernetTransceiverDriver`, 431](../../../docs/official/R24-11/CP/Communication/AUTOSAR_CP_SWS_EthernetTransceiverDriver.pdf)（Communication, §3 p.22） | 默认 `valid`；DRAFT 覆盖项包括 `SWS_EthTrcv_00029`、`00192–00200`、`00208`、`91013`、`91026–91041`、`ECUC_EthTrcv_00071`。ARXML lines 29754–29858。 |
+
+所核对的 ZIP 成员在 `ADMIN-DATA/SDG[@GID='DocumentMetadata']` 中记为 `DocStatus=published`、`DocStatusDraftExtension` 为空、`DocRelease=R24-11`；这只是**文档发布元数据**。`LifeCycleInfoSets/Requirements` 中 `DEFAULT-LC-STATE-REF=valid` 是需求集的默认对象状态，逐对象 `draft`/`obsolete` 则覆盖该默认值；两者都不能直接推出模块族生命周期。对较大的 DCM/RTE/OS/Ethernet 成员，因文本搜索有 4 MiB 扫描上限，改为读取指定 ZIP 成员的 LCI 尾部；未从失败或不完整搜索推断状态。
+
+以下路径均相对于 `docs/official/R24-11/CP/ReleaseDocumentation/AUTOSAR_CP_MOD_SpecificationsARXML.zip`，可按成员名和对象 ID 复核：
+
+| 对象 | 精确 archive member 与 source selector |
+|---|---|
+| CAN Driver | `CP_SWS_CANDriver_011/AUTOSAR_CP_SWS_CANDriver.arxml` → `LifeCycleInfoSets/Requirements`（抽取 lines 39449–39556；默认 `valid`，如 `SWS_Can_00521` 为 `draft`）。 |
+| Dcm | `CP_SWS_DiagnosticCommunicationManager_018/AUTOSAR_CP_SWS_DiagnosticCommunicationManager.arxml` → `LifeCycleInfoSets/Requirements/LIFE-CYCLE-INFOS` → `ECUC_Dcm_01215`（`draft`）；另见 Dcm PDF 抽取 lines 25099–25126。 |
+| EcuM | `CP_SWS_ECUStateManager_078/AUTOSAR_CP_SWS_ECUStateManager.arxml` → `LifeCycleInfoSets/Requirements`（抽取 lines 38494–38497；默认 `valid`，`LIFE-CYCLE-INFOS` 为空）。 |
+| Ethernet Interface | `CP_SWS_EthernetInterface_417/AUTOSAR_CP_SWS_EthernetInterface.arxml` → `LifeCycleInfoSets/Requirements/LIFE-CYCLE-INFOS` → `SWS_EthIf_00154`、`SWS_EthIf_91051`（`obsolete`）；另有 `ECUC_EthIf_*` 对象标为 `draft`。 |
+
+本节表格记录的 `draft`/`obsolete` 限于列出的需求或 ECUC 对象；不会把对应模块族由 `UNKNOWN` 改标为 `VALID`、`DRAFT` 或 `OBSOLETE`。Overview §4 中 CanSM §4.3、Ethernet Interface §4.4 的技术限制另行记录，不是生命周期标记。
+
 
 ### A.1 库清单（单独登记，不混入 A.2 模块数）
 
