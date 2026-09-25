@@ -29,3 +29,13 @@ Blocked by: 01, 02, 05
 采用方案 B：UI 与 ARXML 文件经同一版本化配置模型，先校验 Schema、引用与跨模块语义，再形成生成计划并确定性输出完整工程。生成过程不得由模板各自解释 ARXML，也不调用 AI 临场补写目标代码。每个已支持目标提供可运行的 C99 实现与所需配置；虚拟目标的 CAN/时间行为和将来的实机 MCAL 分处明确接口位置。未支持的配置、版本或目标必须报告具体错误，不产出假装完整的工程。
 
 **验证要求**：用真实 R24-11 ARXML 和 `AUTOSAR_00053.xsd` 验证 Rust 解析、XSD 校验、导入/导出及 Windows 本地运行；后续打包交付须另行验证。XSD 校验不替代跨模块规则，更不构成 AUTOSAR 符合性声明；技术选型本身不等于验收。
+
+## 2026-09-26 生成闭包复核（保留上述方案 B 与技术栈决策）
+
+生成计划应是**受支持配置与目标的工件所有权契约**，不是“源文件能编译”的清单。输入侧明确 CP/FO 版次与配置文件集合、ECUC 定义/值、必要的系统/SWC/BSW 描述、引用与选定变体；计划侧明确每个模块的配置类和消费方；输出侧逐一列出通用运行实现、生成源/头/配置、RTE/BSW 集成描述、回调与公开接口、类型、适用的 MemMap、目标适配、构建/链接入口及主机专属工件。某项只对特定模块或配置适用时记录条件与不适用理由，不为满足表格而输出空壳；共用运行源码和项目专属生成代码分别标注版本与所有者。实际规范适用性见[生成代码质量门研究](../research/generated-c-quality-gates.md)，其中链接的官方 PDF 仅是本地参考材料。
+
+生成前对**引用、声明与定义、符号可见性及精确函数签名、类型、配置绑定及构建输入**作闭包检查；按选定 ECUC 条件逐项核对读/写/例程等回调，而不是仅检查名称或生成 C 能否由本项目的内部指针调用。ECUC 参数所指回调必须由生成代码或已声明、已验证的集成提供方以匹配接口提供。跨模块、跨文件与变体选择由共用模型/生成计划统一解析，不能让模板或运行时代码各自补猜；缺依赖、冲突或未支持目标时定位并拒绝该组合的生成，不能产生看似完整的工程。生成后用完整输出目录而非单个配置文件比较确定性，并将生成器、运行源码、输入、Schema/目标工具链来源关联至[逐组合验收](07-assurance-gates.md)。
+
+**已观察到的 P0 闭包缺口（不是主机 CAN 冒烟失败的结论）：**[`arxml_render.rs`](../../../core/src/arxml_render.rs) 的诊断 ECUC 将 `DcmDspDataReadFnc` 设为 `Ecu_DcmRead_<index>`，可选 `DcmDspDataWriteFnc` 设为 `Ecu_DcmWrite_<index>`（284–290 行）；配置例程时 `DcmDspStartRoutineFnc=Ecu_DcmRestoreDid` 且选择 `ROUTINE_FNC_NORMAL`（321–335 行）。[`generator.rs`](../../../core/src/generator.rs) 未定义读符号，却把写函数生成为 `static EcuStatus(const uint8_t[4])`、例程函数生成为 `static EcuStatus(void)`（65–95 行）；主机 [`Dcm.c`](../../../runtime/src/Dcm.c) 直接从 `Rte_ReadSignal` 读值，且主机 [`Ecu_Config.h`](../../../runtime/include/Ecu_Config.h) 使用自己的函数指针类型。所选 R24-11 Dcm 对固定长度同步写回调的 [`SWS_Dcm_00794`](../../../docs/official/R24-11/CP/Diagnostics/AUTOSAR_CP_SWS_DiagnosticCommunicationManager.pdf) 要求 `Std_ReturnType(const uint8* Data, Dcm_NegativeResponseCodeType* ErrorCode)`；对 `ROUTINE_FNC_NORMAL` 的 `SWS_Dcm_01203` 要求含 `OpStatus`、`ErrorCode`，其余记录参数依配置而定。须逐个确认实际选择的读/写/Start 回调的**提供者、外部可见性及适用的精确类型/参数/返回值**；补一个同名读函数也不能解决写/Start 签名和可见性问题。当前只能将对应诊断组合的 ECUC 集成记为未验证，不推断现有主机行为失败，也不预定修复方式。上述 Dcm PDF 是用户本地提供、被 Git 忽略的参考材料，不随仓库分发。
+
+**适用性边界：**同一用户本地 R24-11 [Dcm SWS](../../../docs/official/R24-11/CP/Diagnostics/AUTOSAR_CP_SWS_DiagnosticCommunicationManager.pdf) 的 `[ECUC_Dcm_01215]`（提取文本 25099–25126 行）把 **`DcmDspRoutineFncSignature` 参数及 `ROUTINE_FNC_NORMAL` 选项**标为 DRAFT；这不等于整个 Dcm 模块、RoutineControl 服务或 `SWS_Dcm_01203` 的 normal 回调签名都标为 DRAFT。现有可选 0x31 主机行为仍可如实描述，但不能因其运行便把该选项计入当前有效的成熟 ECUC 配置能力或宣称已完成 AUTOSAR ECUC 集成；只有明确兼容用途、适用范围并取得该组合的闭包与行为证据后，才能单列这类兼容档案，不预断实现方案。
