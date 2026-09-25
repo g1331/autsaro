@@ -53,6 +53,7 @@ export type WorkspaceView = {
   diagnostic: DiagnosticView | null;
   issues: Issue[];
   dirty: boolean;
+  routineMigrationPending: boolean;
 };
 
 export type GenerateResult = {

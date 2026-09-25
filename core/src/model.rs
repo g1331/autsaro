@@ -104,6 +104,7 @@ pub struct WorkspaceView {
     pub diagnostic: Option<DiagnosticView>,
     pub issues: Vec<Issue>,
     pub dirty: bool,
+    pub routine_migration_pending: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

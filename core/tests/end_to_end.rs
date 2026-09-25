@@ -536,6 +536,9 @@ fn extended_session_write_did_changes_live_can_but_not_restart_state() {
     project.save().unwrap();
     let source = temp.0.join("Diag/Diag.arxml");
     let original = fs::read_to_string(&source).unwrap();
+    let doc = roxmltree::Document::parse(&original).unwrap();
+    assert!(!doc.descendants().any(|node| node.has_tag_name("SDG")
+        && node.attribute("GID").is_some_and(|gid| gid.starts_with("AutosarWorkbenchHostRestoreDid"))));
     fs::write(&source, original.replace("</ELEMENTS>", "<!-- owner note --></ELEMENTS>")).unwrap();
     let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
     assert!(reopened.view().diagnostic.unwrap().write_enabled);
@@ -549,12 +552,12 @@ fn extended_session_write_did_changes_live_can_but_not_restart_state() {
         assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stdout));
         String::from_utf8(result.stdout).unwrap()
     };
-    let first = run(b"R 1792 4 032E1234\nR 1792 3 021003\nR 1792 4 032E4321\nR 1792 4 032E1234\nR 1792 4 03221234\nR 1792 3 300000\nR 1792 8 100B2E1234112233\nR 1792 6 214455667788\nR 1792 4 03221234\nR 1792 3 300000\nT 100\nT 5101\nR 1792 4 032E1234\n");
+    let first = run(b"R 1792 4 032E1234\nR 1792 3 021003\nR 1792 5 043101F001\nR 1792 4 032E4321\nR 1792 4 032E1234\nR 1792 4 03221234\nR 1792 3 300000\nR 1792 8 100B2E1234112233\nR 1792 6 214455667788\nR 1792 4 03221234\nR 1792 3 300000\nT 100\nT 5101\nR 1792 4 032E1234\n");
     let responses: Vec<_> = first.lines().map(|line| line.trim_end_matches('\r'))
         .filter(|line| line.starts_with("X 1800 ")).collect();
     assert_eq!(responses, [
         "X 1800 4 037F2E31", "X 1800 7 06500300320032",
-        "X 1800 4 037F2E31", "X 1800 4 037F2E13",
+        "X 1800 4 037F3111", "X 1800 4 037F2E31", "X 1800 4 037F2E13",
         "X 1800 8 100B621234000000", "X 1800 6 210100000002",
         "X 1800 3 300000", "X 1800 4 036E1234",
         "X 1800 8 100B621234112233", "X 1800 6 214455667788",
@@ -588,6 +591,21 @@ fn start_routine_restores_written_did_signals_and_respects_session() {
     project.save().unwrap();
     let source = temp.0.join("Diag/Diag.arxml");
     let original = fs::read_to_string(&source).unwrap();
+    let doc = roxmltree::Document::parse(&original).unwrap();
+    let did = doc.descendants().find(|node| node.has_tag_name("ECUC-CONTAINER-VALUE")
+        && node.children().any(|child| child.has_tag_name("SHORT-NAME") && child.text() == Some("Did"))).unwrap();
+    let routine: Vec<_> = did.descendants().filter(|node| node.has_tag_name("SDG")
+        && node.attribute("GID") == Some("AutosarWorkbenchHostRestoreDidV1")).collect();
+    assert_eq!(routine.len(), 1, "host routine metadata must be unique");
+    let field = |name: &str| routine[0].children().find(|node| node.has_tag_name("SD")
+        && node.attribute("GID") == Some(name)).and_then(|node| node.text());
+    assert_eq!(field("Rid"), Some("61441"));
+    assert_eq!(field("SessionRef"), Some("/Diag/DcmCfg/DcmConfigSet/DcmDsp/Sessions/Extended"));
+    assert!(!doc.descendants().any(|node| node.has_tag_name("DEFINITION-REF") && node.text()
+        .is_some_and(|path| path.ends_with("/DcmDspRoutine") || path.ends_with("/DcmDspCommonAuthorization")
+            || path.ends_with("/DcmDspStartRoutine"))));
+    assert!(!doc.descendants().any(|node| node.has_tag_name("ECUC-CONTAINER-VALUE")
+        && node.children().any(|child| child.has_tag_name("SHORT-NAME") && child.text() == Some("RoutineControl"))));
     fs::write(&source, original.replace("</ELEMENTS>", "<!-- retained annotation --></ELEMENTS>")).unwrap();
     let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
     assert_eq!(reopened.view().diagnostic.unwrap().reset_routine_id, Some(0xF001));
@@ -619,6 +637,151 @@ fn start_routine_restores_written_did_signals_and_respects_session() {
     reopened.clear_diagnostic().unwrap();
     reopened.save().unwrap();
     assert!(fs::read_to_string(&source).unwrap().contains("<!-- retained annotation -->"));
+}
+
+#[cfg(windows)]
+#[test]
+fn legacy_routine_import_stages_lossless_conversion_until_explicit_save() {
+    let temp = Scratch::new();
+    let source = temp.0.join("Legacy.arxml");
+    let old = include_str!("fixtures/legacy-routine.arxml")
+        .replace("<ECUC-CONTAINER-VALUE><SHORT-NAME>Did</SHORT-NAME>",
+            "<ECUC-CONTAINER-VALUE><SHORT-NAME>Did</SHORT-NAME><ADMIN-DATA><SDGS><SDG GID=\"OwnerMeta\"><SD GID=\"Label\">retained</SD></SDG></SDGS></ADMIN-DATA>")
+        .replace("</ELEMENTS>", "<!-- retained owner annotation --></ELEMENTS>");
+    fs::write(&source, &old).unwrap();
+    let other = temp.0.join("Other.arxml");
+    let untouched = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd\"><AR-PACKAGES><AR-PACKAGE><SHORT-NAME>Other</SHORT-NAME><ELEMENTS><I-SIGNAL><SHORT-NAME>Extra</SHORT-NAME><LENGTH>1</LENGTH></I-SIGNAL></ELEMENTS></AR-PACKAGE></AR-PACKAGES></AUTOSAR>";
+    fs::write(&other, untouched).unwrap();
+    let mut project = Workspace::open(vec![source.clone(), other.clone()], archive()).unwrap();
+    let view = project.view();
+    assert!(view.routine_migration_pending && view.dirty, "{:?}", view.issues);
+    assert_eq!(view.diagnostic.unwrap().reset_routine_id, Some(0xf001));
+    assert_eq!(fs::read_to_string(&source).unwrap(), old, "opening must not rewrite the source");
+    assert!(generator::generate(&mut project, &temp.0.join("BeforeSave")).unwrap_err().contains("保存"));
+    assert!(project.clear_diagnostic().unwrap_err().contains("先保存"));
+    assert_eq!(project.view().diagnostic.unwrap().reset_routine_id, Some(0xf001));
+    assert!(!temp.0.join("BeforeSave").exists());
+    let external = old.replace("<!-- retained owner annotation -->", "<!-- externally changed annotation -->");
+    fs::write(&source, &external).unwrap();
+    assert!(project.save().unwrap_err().contains("外部修改"));
+    assert!(project.view().routine_migration_pending);
+    assert_eq!(fs::read_to_string(&source).unwrap(), external);
+    fs::write(&source, &old).unwrap();
+    project.save().unwrap();
+    assert!(!project.view().routine_migration_pending);
+    assert_eq!(fs::read_to_string(&other).unwrap(), untouched, "unaffected ARXML must stay byte-identical");
+    let migrated = fs::read_to_string(&source).unwrap();
+    assert!(migrated.contains("<!-- retained owner annotation -->"));
+    assert!(migrated.contains("<SDG GID=\"OwnerMeta\"><SD GID=\"Label\">retained</SD></SDG>"));
+    let doc = roxmltree::Document::parse(&migrated).unwrap();
+    assert!(!doc.descendants().any(|node| node.has_tag_name("DEFINITION-REF")
+        && node.text().is_some_and(|path| path.ends_with("/DcmDspRoutine") || path.ends_with("/DcmDspCommonAuthorization"))));
+    let mut reopened = Workspace::open(vec![source, other], archive()).unwrap();
+    assert!(!reopened.view().routine_migration_pending);
+    assert_eq!(reopened.view().diagnostic.unwrap().reset_routine_id, Some(0xf001));
+    let output = temp.0.join("MigratedRoutine");
+    generator::generate(&mut reopened, &output).unwrap();
+    generator::build(&output).unwrap();
+    assert!(host::run_diagnostic(&output).unwrap().passed);
+}
+
+#[test]
+fn old_routine_with_external_reference_imports_read_only_without_changing_arxml() {
+    let temp = Scratch::new();
+    let source = temp.0.join("Legacy.arxml");
+    let reference = "<ECUC-REFERENCE-VALUE><DEFINITION-REF DEST=\"ECUC-REFERENCE-DEF\">/AUTOSAR/EcucDefs/Com/ComConfig/ComIPdu/ExternalRef</DEFINITION-REF><VALUE-REF DEST=\"ECUC-CONTAINER-VALUE\">/Legacy/DcmCfg/DcmConfigSet/DcmDsp/ResetDid</VALUE-REF></ECUC-REFERENCE-VALUE>";
+    let baseline = include_str!("fixtures/legacy-routine.arxml");
+    let com = baseline.find("<ECUC-MODULE-CONFIGURATION-VALUES><SHORT-NAME>ComCfg").unwrap();
+    let at = com + baseline[com..].find("</REFERENCE-VALUES>").unwrap();
+    let old = format!("{}{reference}{}", &baseline[..at], &baseline[at..]);
+    fs::write(&source, &old).unwrap();
+    let mut project = Workspace::open(vec![source.clone()], archive())
+        .expect("external owner must block migration, not read-only import");
+    let view = project.validate().unwrap();
+    assert!(!view.dirty && !view.routine_migration_pending);
+    assert_eq!(view.diagnostic.unwrap().reset_routine_id, Some(0xf001));
+    assert!(view.files.iter().all(|file| file.readonly));
+    let issue = view.issues.iter().find(|issue| issue.code == "DIAG_UNSUPPORTED").unwrap();
+    assert!(issue.message.contains("61441") && issue.message.contains("外部引用/内容") && issue.message.contains("ResetDid"), "{}", issue.message);
+    assert!(issue.file.as_deref().is_some_and(|file| file.contains("Legacy.arxml")));
+    assert!(project.save().unwrap_err().contains("DIAG_UNSUPPORTED"));
+    assert!(generator::generate(&mut project, &temp.0.join("Unsafe")).unwrap_err().contains("DIAG_UNSUPPORTED"));
+    assert_eq!(fs::read_to_string(&source).unwrap(), old);
+}
+
+#[test]
+fn old_routine_referenced_by_vendor_sdg_in_another_file_imports_read_only() {
+    let temp = Scratch::new();
+    let source = temp.0.join("Legacy.arxml");
+    let old = include_str!("fixtures/legacy-routine.arxml");
+    fs::write(&source, old).unwrap();
+    let owner = temp.0.join("Vendor.arxml");
+    let vendor = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd\"><AR-PACKAGES><AR-PACKAGE><SHORT-NAME>Vendor</SHORT-NAME><ADMIN-DATA><SDGS><SDG GID=\"VendorBinding\"><SD GID=\"Target\">/Legacy/DcmCfg/DcmConfigSet/DcmDsp/ResetDid</SD></SDG></SDGS></ADMIN-DATA><ELEMENTS><I-SIGNAL><SHORT-NAME>Extra</SHORT-NAME><LENGTH>1</LENGTH></I-SIGNAL></ELEMENTS></AR-PACKAGE></AR-PACKAGES></AUTOSAR>";
+    fs::write(&owner, vendor).unwrap();
+    let mut project = Workspace::open(vec![source.clone(), owner.clone()], archive())
+        .expect("vendor SDG targeting deleted node must block migration, not read-only import");
+    let view = project.validate().unwrap();
+    assert!(!view.dirty && !view.routine_migration_pending);
+    assert_eq!(view.diagnostic.unwrap().reset_routine_id, Some(0xf001));
+    assert!(view.files.iter().all(|file| file.readonly));
+    let issue = view.issues.iter().find(|issue| issue.code == "DIAG_UNSUPPORTED").unwrap();
+    assert!(issue.message.contains("61441") && issue.message.contains("ResetDid"), "{}", issue.message);
+    assert!(issue.file.as_deref().is_some_and(|file| file.contains("Vendor.arxml")));
+    assert!(project.save().unwrap_err().contains("DIAG_UNSUPPORTED"));
+    assert!(generator::generate(&mut project, &temp.0.join("Unsafe")).unwrap_err().contains("DIAG_UNSUPPORTED"));
+    assert_eq!(fs::read_to_string(source).unwrap(), old);
+    assert_eq!(fs::read_to_string(owner).unwrap(), vendor);
+}
+
+#[test]
+fn unsupported_vendor_extension_with_old_routine_remains_read_only_and_importable() {
+    let temp = Scratch::new();
+    let source = temp.0.join("Legacy.arxml");
+    let baseline = include_str!("fixtures/legacy-routine.arxml");
+    let general = baseline.find("<SHORT-NAME>DcmGeneral</SHORT-NAME>").unwrap();
+    let at = general + baseline[general..].find("</PARAMETER-VALUES>").unwrap();
+    let extension = "<ECUC-NUMERICAL-PARAM-VALUE><DEFINITION-REF DEST=\"ECUC-INTEGER-PARAM-DEF\">/AUTOSAR/EcucDefs/Dcm/DcmGeneral/VendorExtension</DEFINITION-REF><VALUE>7</VALUE></ECUC-NUMERICAL-PARAM-VALUE>";
+    let old = format!("{}{extension}{}", &baseline[..at], &baseline[at..]);
+    fs::write(&source, &old).unwrap();
+    let mut project = Workspace::open(vec![source.clone()], archive())
+        .expect("unsupported Dcm extension must not prevent read-only ARXML inspection");
+    let view = project.view();
+    assert!(!view.dirty && !view.routine_migration_pending);
+    assert!(view.diagnostic.is_none(), "unsupported configuration must not masquerade as supported");
+    let issue = view.issues.iter().find(|issue| issue.code == "DIAG_UNSUPPORTED").unwrap();
+    assert!(issue.message.contains("61441") && issue.message.contains("保留"), "{}", issue.message);
+    assert!(issue.file.as_deref().is_some_and(|file| file.contains("Legacy.arxml")));
+    assert!(generator::generate(&mut project, &temp.0.join("Unsafe")).unwrap_err().contains("DIAG_UNSUPPORTED"));
+    assert!(project.save().unwrap_err().contains("DIAG_UNSUPPORTED"));
+    assert_eq!(fs::read_to_string(source).unwrap(), old);
+}
+
+#[test]
+fn host_routine_metadata_rejects_unknown_version_and_wrong_session() {
+    let temp = Scratch::new();
+    let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
+    let frame = project.add_frame("Live".into(), 0x321, 4, Direction::Tx, Some(100), None).unwrap().frames[0].path.clone();
+    let signal = project.add_signal(frame, "Value".into(), 0, 32, 1).unwrap().signals[0].path.clone();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, vec![signal], true, Some(0xf001)).unwrap();
+    project.save().unwrap();
+    let source = temp.0.join("Diag/Diag.arxml");
+    let saved = fs::read_to_string(&source).unwrap();
+    let start = saved.find("<SDG GID=\"AutosarWorkbenchHostRestoreDidV1\">").unwrap();
+    let end = start + saved[start..].find("</SDG>").unwrap() + "</SDG>".len();
+    let group = &saved[start..end];
+    for (altered, reason) in [
+        (saved.replace("AutosarWorkbenchHostRestoreDidV1", "AutosarWorkbenchHostRestoreDidV2"), "版本"),
+        (saved.replace("<SD GID=\"SessionRef\">/Diag/DcmCfg/DcmConfigSet/DcmDsp/Sessions/Extended</SD>",
+            "<SD GID=\"SessionRef\">/Diag/DcmCfg/DcmConfigSet/DcmDsp/Sessions/Default</SD>"), "SessionRef"),
+        (saved.replace("<SD GID=\"Rid\">61441</SD>", ""), "Rid"),
+        (saved.replacen(group, &format!("{group}{group}"), 1), "重复"),
+    ] {
+        assert_ne!(saved, altered);
+        fs::write(&source, &altered).unwrap();
+        let error = Workspace::open(vec![source.clone()], archive()).err().expect("invalid host metadata must not be accepted");
+        assert!(error.contains(reason) && error.contains("Diag.arxml"), "{error}");
+        assert_eq!(fs::read_to_string(&source).unwrap(), altered);
+    }
 }
 
 #[cfg(windows)]

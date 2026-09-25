@@ -37,9 +37,11 @@ Dcm 提供 0x10 默认/扩展会话、0x3E TesterPresent（子功能 0x80 抑制
 
 启用 0x2E 时还提供可外部链接的 `Std_ReturnType Ecu_DcmWrite_<index>(const uint8_t *data, Dcm_NegativeResponseCodeType *error_code)`，由同一头文件声明；主机 Dcm 实际调用它，经 Rte → Com 写入，失败时回调填入 0x72 并返回 `E_NOT_OK`，主机发送相应 NRC。未启用写入时不生成写回调声明或定义。
 
-可选 0x31/0x01 StartRoutine 只能在已启用 0x2E 时配置一个 RID；`profile.txt` 增加 `RESET_ROUTINE id=<十进制>` 行，未配置时不输出该行且服务返回 NRC 0x11。请求载荷为 `31 01 <RID 高字节> <RID 低字节>`，扩展会话中生成的 `Ecu_DcmRestoreDid` 回调按 DID 配置顺序经 Rte → Com 将绑定的 Tx 信号写回各自的初始值；成功响应 `71 01 <RID 高字节> <RID 低字节>`，0x22 与周期 CAN 均能观察到恢复。默认会话或 RID 不匹配返回 NRC 0x31，StopRoutine/RequestRoutineResults 返回 NRC 0x12，长度错误返回 NRC 0x13，回调写入失败返回 NRC 0x22。没有选项/状态记录、持久化、0x27 安全访问或失败时的事务回滚；例程只作用于当前进程的易失状态。
+可选 0x31/0x01 StartRoutine 只能在已启用 0x2E 时配置一个 RID；`profile.txt` 增加 `RESET_ROUTINE id=<十进制>` 行，未配置时不输出该行且服务返回 NRC 0x11。请求载荷为 `31 01 <RID 高字节> <RID 低字节>`，扩展会话中生成的内部 `Ecu_HostRestoreDid` 按 DID 配置顺序经 Rte → Com 将绑定的 Tx 信号写回各自的初始值；成功响应 `71 01 <RID 高字节> <RID 低字节>`，0x22 与周期 CAN 均能观察到恢复。默认会话或 RID 不匹配返回 NRC 0x31，StopRoutine/RequestRoutineResults 返回 NRC 0x12，长度错误返回 NRC 0x13，写入失败返回 NRC 0x22。没有选项/状态记录、持久化、0x27 安全访问或失败时的事务回滚；例程只作用于当前进程的易失状态。
 
-0x31 的上述主机行为仍使用工程内的 `Ecu_DcmRestoreDid`，不属于本次已闭合的外部读/写回调。R24-11 `DcmDspRoutineFncSignature` 属草案配置项；例程 ECUC 所引用的外部回调签名/集成尚未验收，不得将主机例程通过解释为成熟标准 Dcm 集成通过。
+0x31 是本工程的**主机专属行为**：生成 ARXML 在 DID 的 `ADMIN-DATA/SDGS` 下存储唯一 `AutosarWorkbenchHostRestoreDidV1` 工具组，其中 `Rid` 为十进制 16-bit 编号、`SessionRef` 固定指向本项目的 Extended 会话；不生成 DcmDsd 0x31 服务或 DcmDspRoutine/StartRoutine/CommonAuthorization 的标准 ECUC 节点。主机读取工具记录生成内部例程，不把 `Ecu_HostRestoreDid` 作为第三方 Dcm 回调。R24-11 `DcmDspRoutineFncSignature` 本属草案；独立的第三方 Dcm 不会从该 ARXML 获得本例程，也未验证例程的标准 ECUC 接口。
+
+早期本工具保存的旧例程 ECUC 只在形状完全符合旧输出且所有文件中没有指向待删除路径的外部引用或工具文本时可迁移：读取 RID 后先在内存中暂存新格式，原 ARXML 保持不变，确认保存前不能编辑或生成。用户在工作区看到待转换状态并确认保存；未知内容、重复或版本不符的工具组、错误会话或外部修改阻断转换/保存，不以空 RID 或静默删除代替恢复。若旧例程仍被外部引用/工具文本指向，或与其他不受支持的 Dcm/CanTp 配置并存，仍可只读导入，诊断问题显示 RID 与问题来源文件，但不能保存或生成；须先由配置所有者处理依赖或扩展后再重新导入。
 
 可选单 DTC：`profile.txt` 的 `DTC code=<十进制> frame=<生成帧索引> id=<CAN ID> dlc=<字节数> timeout=<ms>` 指定一个带信号的 Rx 帧（超时为正），DTC 范围 `0x000100–0xFFFFFE`。首次有效 Rx 帧令监控测试完成；其后第一次达到超时阈值，Com → Dem 记故障并持久化。Dcm 在默认/扩展会话支持 0x19/0x01，按状态掩码返回匹配 DTC 数量及状态可用掩码 `0x7F`；当前最多一个 DTC，因此数量为 0 或 1。支持单 DTC 的 0x19/0x02，按请求掩码读取；其他 0x19 子功能返回 NRC 0x12。0x14 仅扩展会话和 `0xFFFFFF` 全部清除，默认会话返回 NRC 0x7F，其他组返回 NRC 0x31，持久化失败返回 NRC 0x72。未配置 DTC 时 0x19/0x01、0x19/0x02 与 0x14 返回 NRC 0x11。
 

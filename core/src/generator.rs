@@ -105,7 +105,7 @@ fn config_source(name: &str, frames: &[crate::model::FrameView], signals: &[Sign
         } else { "NULL" };
         let routine_ref = if let Some(rid) = diagnostic.reset_routine_id {
             writeln!(map, "RESET_ROUTINE id={rid}").unwrap();
-            source.push_str("\nstatic EcuStatus Ecu_DcmRestoreDid(void) {\n    EcuStatus status;\n");
+            source.push_str("\nstatic EcuStatus Ecu_HostRestoreDid(void) {\n    EcuStatus status;\n");
             for path in &diagnostic.signal_paths {
                 let id = signal_ids.get(path.as_str()).ok_or_else(|| format!("诊断 DID 信号没有生成 ID: {path}"))?;
                 let initial_value = signals.iter().find(|signal| signal.path == *path)
@@ -114,7 +114,7 @@ fn config_source(name: &str, frames: &[crate::model::FrameView], signals: &[Sign
                 source.push_str("    if (status != ECU_OK) { return status; }\n");
             }
             source.push_str("    return ECU_OK;\n}\n");
-            writeln!(source, "static const EcuResetRoutineConfig diagnostic_reset_routine = {{ {rid}u, Ecu_DcmRestoreDid }};").unwrap();
+            writeln!(source, "static const EcuResetRoutineConfig diagnostic_reset_routine = {{ {rid}u, Ecu_HostRestoreDid }};").unwrap();
             "&diagnostic_reset_routine"
         } else { "NULL" };
         let dtc_ref = if let Some(dtc) = &diagnostic.dtc {
