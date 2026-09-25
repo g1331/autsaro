@@ -29,6 +29,12 @@ typedef struct {
 } EcuDtcConfig;
 
 typedef EcuStatus (*EcuDidWriteFunction)(const uint8_t data[4]);
+typedef EcuStatus (*EcuRoutineStartFunction)(void);
+
+typedef struct {
+    uint16_t id;
+    EcuRoutineStartFunction start;
+} EcuResetRoutineConfig;
 
 /* Single physical DoCAN connection; DIDs read live, configured Com signals. */
 typedef struct {
@@ -42,6 +48,7 @@ typedef struct {
     uint8_t did_signal_count;
     const EcuDtcConfig *dtc;
     const EcuDidWriteFunction *did_writers; /* NULL disables WriteDataByIdentifier. */
+    const EcuResetRoutineConfig *reset_routine; /* NULL disables RoutineControl. */
 } EcuDiagnosticConfig;
 
 typedef struct {

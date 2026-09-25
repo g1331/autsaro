@@ -132,6 +132,31 @@ EcuStatus Dcm_RxIndication(const uint8_t *request, size_t length, uint64_t now_m
         response[1] = request[1];
         response[2] = request[2];
         return PduR_DcmTransmit(response, 3u, now_ms);
+    case 0x31u:
+        if (active_config->reset_routine == NULL) {
+            return NegativeResponse(0x31u, 0x11u, now_ms);
+        }
+        if (length < 4u) {
+            return NegativeResponse(0x31u, 0x13u, now_ms);
+        }
+        if (((uint16_t)request[2] << 8u | request[3]) != active_config->reset_routine->id ||
+            active_session != 0x03u) {
+            return NegativeResponse(0x31u, 0x31u, now_ms);
+        }
+        if (request[1] != 0x01u) {
+            return NegativeResponse(0x31u, 0x12u, now_ms);
+        }
+        if (length != 4u) {
+            return NegativeResponse(0x31u, 0x13u, now_ms);
+        }
+        if (active_config->reset_routine->start() != ECU_OK) {
+            return NegativeResponse(0x31u, 0x22u, now_ms);
+        }
+        response[0] = 0x71u;
+        response[1] = 0x01u;
+        response[2] = request[2];
+        response[3] = request[3];
+        return PduR_DcmTransmit(response, 4u, now_ms);
     case 0x19u:
         if (active_config->dtc == NULL) {
             return NegativeResponse(0x19u, 0x11u, now_ms);

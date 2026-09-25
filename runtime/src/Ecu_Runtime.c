@@ -96,6 +96,10 @@ static EcuStatus ValidateConfig(const EcuConfig *config)
             diagnostic->did_signal_count > ECU_DIAG_MAX_DID_SIGNALS) {
             return ECU_ERR_CONFIG;
         }
+        if (diagnostic->reset_routine != NULL &&
+            (diagnostic->did_writers == NULL || diagnostic->reset_routine->start == NULL)) {
+            return ECU_ERR_CONFIG;
+        }
         for (i = 0; i < config->frame_count; ++i) {
             if (config->frames[i].id == diagnostic->request_can_id ||
                 config->frames[i].id == diagnostic->response_can_id) {

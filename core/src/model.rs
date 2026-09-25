@@ -82,6 +82,7 @@ pub struct DiagnosticView {
     pub did: u16,
     pub signal_paths: Vec<String>,
     pub write_enabled: bool,
+    pub reset_routine_id: Option<u16>,
     pub dtc: Option<DtcView>,
 }
 
@@ -199,6 +200,9 @@ pub fn validate_diagnostic(diagnostic: &DiagnosticView, frames: &[FrameView], si
         if !valid {
             issues.push(Issue::error("DIAG_SIGNAL", "诊断 DID 只支持存在的 32 位 Tx Com 信号", Some(signal_path.clone())));
         }
+    }
+    if diagnostic.reset_routine_id.is_some() && !diagnostic.write_enabled {
+        issues.push(Issue::error("RESET_ROUTINE_WRITE", "重置例程要求 DID 可通过 0x2E 写入", path.clone()));
     }
     if let Some(dtc) = &diagnostic.dtc {
         if !(0x100..=0xfffffe).contains(&dtc.code) {

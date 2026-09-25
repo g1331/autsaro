@@ -80,6 +80,20 @@ fn config_source(name: &str, frames: &[crate::model::FrameView], signals: &[Sign
             source.push_str(" };\n");
             "diagnostic_writers"
         } else { "NULL" };
+        let routine_ref = if let Some(rid) = diagnostic.reset_routine_id {
+            writeln!(map, "RESET_ROUTINE id={rid}").unwrap();
+            source.push_str("\nstatic EcuStatus Ecu_DcmRestoreDid(void) {\n    EcuStatus status;\n");
+            for path in &diagnostic.signal_paths {
+                let id = signal_ids.get(path.as_str()).ok_or_else(|| format!("诊断 DID 信号没有生成 ID: {path}"))?;
+                let initial_value = signals.iter().find(|signal| signal.path == *path)
+                    .ok_or_else(|| format!("诊断 DID 信号不存在: {path}"))?.initial_value;
+                writeln!(source, "    status = Rte_WriteSignal({id}u, {initial_value}u);").unwrap();
+                source.push_str("    if (status != ECU_OK) { return status; }\n");
+            }
+            source.push_str("    return ECU_OK;\n}\n");
+            writeln!(source, "static const EcuResetRoutineConfig diagnostic_reset_routine = {{ {rid}u, Ecu_DcmRestoreDid }};").unwrap();
+            "&diagnostic_reset_routine"
+        } else { "NULL" };
         let dtc_ref = if let Some(dtc) = &diagnostic.dtc {
             let (index, frame) = frames.iter().enumerate().find(|(_, frame)| frame.path == dtc.monitor_frame_path)
                 .ok_or_else(|| format!("DTC 监控帧未生成: {}", dtc.monitor_frame_path))?;
@@ -87,7 +101,7 @@ fn config_source(name: &str, frames: &[crate::model::FrameView], signals: &[Sign
             writeln!(source, "static const EcuDtcConfig dtc = {{ {}u, {}u }};", dtc.code, index).unwrap();
             "&dtc"
         } else { "NULL" };
-        writeln!(source, "static const EcuDiagnosticConfig diagnostic = {{ {}u, {}u, {}u, {}u, {}u, {}u, diagnostic_signal_ids, {}u, {dtc_ref}, {writer_ref} }};\n",
+        writeln!(source, "static const EcuDiagnosticConfig diagnostic = {{ {}u, {}u, {}u, {}u, {}u, {}u, diagnostic_signal_ids, {}u, {dtc_ref}, {writer_ref}, {routine_ref} }};\n",
             diagnostic.request_id, diagnostic.response_id, diagnostic.s3_ms, diagnostic.n_bs_ms, diagnostic.n_cr_ms, diagnostic.did, diagnostic.signal_paths.len()).unwrap();
         "&diagnostic"
     } else { "NULL" };

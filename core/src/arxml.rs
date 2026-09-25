@@ -400,9 +400,21 @@ fn parse_diagnostic(files: &[SourceFile], project: &str, frames: &[FrameView], s
         && matches!(definition(*n).as_deref(), Some("/AUTOSAR/EcucDefs/Dem" | "/AUTOSAR/EcucDefs/NvM"))) {
         return Err("Dem/NvM 配置存在但缺少受支持的单个 UDS DTC".into());
     }
+    let routine_def = "/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsp/DcmDspRoutine";
+    let routines: Vec<_> = nodes.iter().copied().filter(|node| node.tag_name().name() == "ECUC-CONTAINER-VALUE"
+        && definition(*node).as_deref() == Some(routine_def)).collect();
+    let reset_routine_id = match routines.as_slice() {
+        [] => None,
+        [routine] => {
+            let rid = parse_u32(param(*routine, "DcmDspRoutineIdentifier"), "DcmDspRoutineIdentifier", &path_of(*routine))
+                .map_err(|e| e.message)?;
+            Some(u16::try_from(rid).map_err(|_| "例程 RID 超出 16 位范围")?)
+        }
+        _ => return Err("仅支持一个重置 DID 例程".into()),
+    };
     let diagnostic = DiagnosticView {
         path: path_of(did_node), request_id: ids[0], response_id: ids[1], s3_ms, n_bs_ms, n_cr_ms, did,
-        signal_paths: bindings.into_iter().map(|(_, path)| path).collect(), dtc,
+        signal_paths: bindings.into_iter().map(|(_, path)| path).collect(), dtc, reset_routine_id,
         write_enabled: nodes.iter().any(|node| node.tag_name().name() == "ECUC-CONTAINER-VALUE"
             && definition(*node).as_deref() == Some("/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsp/DcmDspDidInfo/DcmDspDidWrite")),
     };
@@ -786,11 +798,11 @@ impl Workspace {
     }
     pub fn configure_diagnostic(
         &mut self, request_id: u32, response_id: u32, s3_ms: u32, n_bs_ms: u32, n_cr_ms: u32,
-        did: u16, signal_paths: Vec<String>, write_enabled: bool,
+        did: u16, signal_paths: Vec<String>, write_enabled: bool, reset_routine_id: Option<u16>,
     ) -> Result<WorkspaceView, String> {
         let diagnostic = DiagnosticView {
             path: format!("/{}/DcmCfg/DcmConfigSet/DcmDsp/Did", self.name),
-            request_id, response_id, s3_ms, n_bs_ms, n_cr_ms, did, signal_paths, write_enabled,
+            request_id, response_id, s3_ms, n_bs_ms, n_cr_ms, did, signal_paths, write_enabled, reset_routine_id,
             dtc: self.diagnostic.as_ref().and_then(|existing| existing.dtc.clone()),
         };
         self.replace_managed(self.frames.clone(), self.signals.clone(), Some(diagnostic))?;

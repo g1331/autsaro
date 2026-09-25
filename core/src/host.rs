@@ -22,6 +22,7 @@ struct DiagnosticProfile {
     did: u16,
     signal_ids: Vec<u16>,
     write_enabled: bool,
+    reset_routine_id: Option<u16>,
 }
 struct DtcProfile { code: u32, frame_index: usize, id: u32, dlc: u8, timeout: u32 }
 struct Profile { frames: Vec<Frame>, signals: Vec<Signal>, diagnostic: Option<DiagnosticProfile>, dtc: Option<DtcProfile>, text: String }
@@ -33,6 +34,7 @@ fn profile(dir: &Path) -> Result<Profile, String> {
     let mut diagnostic = None;
     let mut dtc = None;
     let mut write_did = None;
+    let mut reset_routine = None;
     for line in text.lines() {
         let cols: Vec<_> = line.split_whitespace().collect();
         match cols.first().copied() {
@@ -66,6 +68,7 @@ fn profile(dir: &Path) -> Result<Profile, String> {
                     did: field("did=").ok_or("诊断 DID 缺失")?.parse().map_err(|_| "诊断 DID 无效")?,
                     signal_ids: ids,
                     write_enabled: false,
+                    reset_routine_id: None,
                 };
                 if diagnostic.replace(config).is_some() { return Err("诊断清单含多个连接".into()); }
             }
@@ -76,6 +79,12 @@ fn profile(dir: &Path) -> Result<Profile, String> {
                 if write_did.replace(did).is_some() { return Err("诊断清单含多个写入 DID".into()); }
             }
             Some("WRITE_DID") => return Err("写入 DID 清单字段数量错误".into()),
+            Some("RESET_ROUTINE") if cols.len() == 2 => {
+                let id = cols[1].strip_prefix("id=").ok_or("例程清单缺少 RID")?
+                    .parse::<u16>().map_err(|_| "例程 RID 无效")?;
+                if reset_routine.replace(id).is_some() { return Err("诊断清单含多个例程".into()); }
+            }
+            Some("RESET_ROUTINE") => return Err("例程清单字段数量错误".into()),
             Some("DTC") if cols.len() == 6 => {
                 let field = |name: &str| cols.iter().find_map(|column| column.strip_prefix(name));
                 let config = DtcProfile {
@@ -96,6 +105,11 @@ fn profile(dir: &Path) -> Result<Profile, String> {
         let configured = diagnostic.as_mut().ok_or("写入 DID 缺少诊断连接")?;
         if configured.did != did { return Err("写入 DID 与诊断连接不一致".into()); }
         configured.write_enabled = true;
+    }
+    if let Some(id) = reset_routine {
+        let configured = diagnostic.as_mut().ok_or("例程缺少诊断连接")?;
+        if !configured.write_enabled { return Err("恢复 DID 例程需要可写 DID".into()); }
+        configured.reset_routine_id = Some(id);
     }
     if let Some(config) = &dtc {
         let frame = frames.get(config.frame_index).ok_or("DTC 监控帧不存在")?;
@@ -379,6 +393,10 @@ pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
         let before_write = diagnostic_request(&mut ecu, fence, format!("R {request} 4 032E{did:04X}"))?;
         diagnostic_frames(&before_write, &[vec![0x03, 0x7F, 0x2E, if diagnostic.write_enabled { 0x31 } else { 0x11 }]],
             &profile, diagnostic, salt)?;
+        let rid = diagnostic.reset_routine_id.unwrap_or(0xF001);
+        let before_routine = diagnostic_request(&mut ecu, fence, format!("R {request} 5 043101{rid:04X}"))?;
+        diagnostic_frames(&before_routine, &[vec![0x03, 0x7F, 0x31,
+            if diagnostic.reset_routine_id.is_some() { 0x31 } else { 0x11 }]], &profile, diagnostic, salt)?;
         events.push("默认会话拒绝受限 DID".into());
 
         let session = diagnostic_request(&mut ecu, fence, format!("R {request} 3 021003"))?;
@@ -462,6 +480,7 @@ pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
                 "独立测试器验证 CAN 诊断会话、实时 DID、传输流控与故障恢复".to_owned()
             };
             if diagnostic.write_enabled { log.push_str("；扩展会话 0x2E 易失写入"); }
+            if diagnostic.reset_routine_id.is_some() { log.push_str("；0x31 恢复 DID 初值例程"); }
             Ok(RunReport { passed: true, log, events })
         }
         Err(error) => Ok(RunReport { passed: false, log: error, events }),
@@ -628,6 +647,35 @@ fn verify_writable_did(
     }
     if !observed { return Err("0x2E 后未观察到被写入信号的周期 CAN 帧".into()); }
     events.push("扩展会话 0x2E 实际写入 Com 信号，0x22 与周期 CAN 均观察到新值".into());
+    if let Some(rid) = diagnostic.reset_routine_id {
+        let session = diagnostic_request(&mut ecu, fence, format!("R {request} 3 021003"))?;
+        diagnostic_frames(&session, &[vec![0x06, 0x50, 0x03, 0x00, 0x32, 0x00, 0x32]], profile, diagnostic, salt)?;
+        let other_rid = if rid == u16::MAX { rid - 1 } else { rid + 1 };
+        let unknown = diagnostic_request(&mut ecu, fence, format!("R {request} 5 043101{other_rid:04X}"))?;
+        diagnostic_frames(&unknown, &[vec![0x03, 0x7F, 0x31, 0x31]], profile, diagnostic, salt)?;
+        let unsupported = diagnostic_request(&mut ecu, fence, format!("R {request} 5 043102{rid:04X}"))?;
+        diagnostic_frames(&unsupported, &[vec![0x03, 0x7F, 0x31, 0x12]], profile, diagnostic, salt)?;
+        let malformed = diagnostic_request(&mut ecu, fence, format!("R {request} 6 053101{rid:04X}00"))?;
+        diagnostic_frames(&malformed, &[vec![0x03, 0x7F, 0x31, 0x13]], profile, diagnostic, salt)?;
+        for (signal, expected) in signals.iter().zip(&written) {
+            let (frames, response) = ecu.query(&[], signal.id)?;
+            if !frames.is_empty() || parse_value(&response)? != (*expected, true) {
+                return Err(format!("被拒绝的 0x31 请求改动了信号 {}", signal.id));
+            }
+        }
+        let restored = diagnostic_request(&mut ecu, fence, format!("R {request} 5 043101{rid:04X}"))?;
+        diagnostic_frames(&restored, &[vec![0x04, 0x71, 0x01, (rid >> 8) as u8, rid as u8]], profile, diagnostic, salt)?;
+        let mut initial = Vec::with_capacity(signals.len() * 4);
+        for signal in &signals { initial.extend_from_slice(&signal.initial.to_be_bytes()); }
+        expect_did_bytes(&mut ecu, profile, diagnostic, salt, &initial)?;
+        for signal in &signals {
+            let (frames, response) = ecu.query(&[], signal.id)?;
+            if !frames.is_empty() || parse_value(&response)? != (signal.initial, true) {
+                return Err(format!("0x31 例程未恢复实际 Com 信号 {}", signal.id));
+            }
+        }
+        events.push("0x31/0x01 例程将可写 DID 恢复至配置初值，0x22 与 Com 信号均观察到恢复".into());
+    }
     let expired_at = monitored_frame.period as u64 + diagnostic.s3_ms as u64 + 1;
     for line in tick(&mut ecu, profile, expired_at)? {
         let (id, _) = parse_frame(&line)?;
@@ -635,6 +683,10 @@ fn verify_writable_did(
     }
     let denied = diagnostic_request(&mut ecu, fence, format!("R {request} 4 032E{did:04X}"))?;
     diagnostic_frames(&denied, &[vec![0x03, 0x7F, 0x2E, 0x31]], profile, diagnostic, salt)?;
+    if let Some(rid) = diagnostic.reset_routine_id {
+        let denied = diagnostic_request(&mut ecu, fence, format!("R {request} 5 043101{rid:04X}"))?;
+        diagnostic_frames(&denied, &[vec![0x03, 0x7F, 0x31, 0x31]], profile, diagnostic, salt)?;
+    }
     drop(ecu);
 
     let mut restarted = EcuProcess::start(binary, storage.as_ref().map(|state| state.path.as_path()))?;

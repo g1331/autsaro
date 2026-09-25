@@ -13,8 +13,8 @@ type SignalFields = { name: string; startBit: string; length: string; initialVal
 type FrameChanges = Pick<Frame, 'name' | 'id' | 'dlc' | 'direction' | 'periodMs' | 'timeoutMs'>;
 type SignalChanges = Pick<Signal, 'name' | 'startBit' | 'length' | 'initialValue'>;
 type Draft = { kind: 'frame'; path: string; fields: FrameFields } | { kind: 'signal'; path: string; fields: SignalFields } | null;
-type DiagnosticFields = { requestId: string; responseId: string; s3Ms: string; nBsMs: string; nCrMs: string; did: string; signalPaths: string[]; writeEnabled: boolean };
-type DiagnosticChanges = Pick<DiagnosticView, 'requestId' | 'responseId' | 's3Ms' | 'nBsMs' | 'nCrMs' | 'did' | 'signalPaths' | 'writeEnabled'>;
+type DiagnosticFields = { requestId: string; responseId: string; s3Ms: string; nBsMs: string; nCrMs: string; did: string; signalPaths: string[]; writeEnabled: boolean; resetRoutineId: string };
+type DiagnosticChanges = Pick<DiagnosticView, 'requestId' | 'responseId' | 's3Ms' | 'nBsMs' | 'nCrMs' | 'did' | 'signalPaths' | 'writeEnabled' | 'resetRoutineId'>;
 type DtcFields = { code: string; monitorFramePath: string };
 type Notice = { tone: 'error' | 'info'; text: string } | null;
 type Page = 'editor' | 'diagnostics' | 'build' | 'virtual';
@@ -48,13 +48,14 @@ const signalFields = (signal: Signal): SignalFields => ({
 });
 const newFrame: FrameFields = { name: '', id: '', dlc: '8', direction: 'tx', periodMs: '100', timeoutMs: '' };
 const newSignal: SignalFields = { name: '', startBit: '0', length: '8', initialValue: '0' };
-const newDiagnostic: DiagnosticFields = { requestId: '', responseId: '', s3Ms: '', nBsMs: '', nCrMs: '', did: '', signalPaths: [], writeEnabled: false };
+const newDiagnostic: DiagnosticFields = { requestId: '', responseId: '', s3Ms: '', nBsMs: '', nCrMs: '', did: '', signalPaths: [], writeEnabled: false, resetRoutineId: '' };
 const diagnosticFields = (diagnostic: DiagnosticView | null): DiagnosticFields => diagnostic ? {
   requestId: `0x${diagnostic.requestId.toString(16).toUpperCase()}`,
   responseId: `0x${diagnostic.responseId.toString(16).toUpperCase()}`,
   s3Ms: String(diagnostic.s3Ms), nBsMs: String(diagnostic.nBsMs), nCrMs: String(diagnostic.nCrMs),
   did: `0x${diagnostic.did.toString(16).toUpperCase().padStart(4, '0')}`,
   signalPaths: [...diagnostic.signalPaths], writeEnabled: diagnostic.writeEnabled,
+  resetRoutineId: diagnostic.resetRoutineId === null ? '' : `0x${diagnostic.resetRoutineId.toString(16).toUpperCase().padStart(4, '0')}`,
 } : { ...newDiagnostic, signalPaths: [] };
 const dtcFields = (dtc: DtcView | null): DtcFields => dtc
   ? { code: `0x${dtc.code.toString(16).toUpperCase().padStart(6, '0')}`, monitorFramePath: dtc.monitorFramePath }
@@ -92,12 +93,16 @@ function diagnosticChanges(fields: DiagnosticFields, view: WorkspaceView): Diagn
   if (fields.signalPaths.some(path => !view.signals.some(signal => signal.path === path && signal.length === 32 && view.frames.some(frame => frame.path === signal.framePath && frame.direction === 'tx')))) {
     throw new Error('所选信号须为当前项目中的 32-bit Tx 信号');
   }
+  if (!fields.writeEnabled && fields.resetRoutineId.trim()) {
+    throw new Error('启用 0x31/0x01 复位例程前，须先允许 0x2E 写入此 DID');
+  }
+  const resetRoutineId = fields.resetRoutineId.trim() ? canNumber(fields.resetRoutineId, '复位例程 RID', 65535) : null;
   return {
     requestId, responseId, did,
     s3Ms: intInRange(fields.s3Ms, 'S3 (ms)', 5000, 2147483647),
     nBsMs: intInRange(fields.nBsMs, 'N_Bs (ms)', 1, 2147483647),
     nCrMs: intInRange(fields.nCrMs, 'N_Cr (ms)', 1, 2147483647),
-    signalPaths: fields.signalPaths, writeEnabled: fields.writeEnabled,
+    signalPaths: fields.signalPaths, writeEnabled: fields.writeEnabled, resetRoutineId,
   };
 }
 
@@ -618,7 +623,8 @@ export default function App() {
                         return <li key={path}><span className="signal-order">{String(index + 1).padStart(2, '0')}</span><span className="signal-description"><strong>{signal?.name ?? '信号不可用'}</strong><small className="mono path-text">{path}</small></span><div className="signal-order-actions"><button type="button" aria-label={`上移 ${signal?.name ?? path}`} onClick={() => { const paths = [...diagnosticDraft.signalPaths]; [paths[index - 1], paths[index]] = [paths[index], paths[index - 1]]; setDiagnosticDraft({ ...diagnosticDraft, signalPaths: paths }); }} disabled={disabled || index === 0}>↑</button><button type="button" aria-label={`下移 ${signal?.name ?? path}`} onClick={() => { const paths = [...diagnosticDraft.signalPaths]; [paths[index], paths[index + 1]] = [paths[index + 1], paths[index]]; setDiagnosticDraft({ ...diagnosticDraft, signalPaths: paths }); }} disabled={disabled || index === diagnosticDraft.signalPaths.length - 1}>↓</button><button type="button" aria-label={`移除 ${signal?.name ?? path}`} onClick={() => setDiagnosticDraft({ ...diagnosticDraft, signalPaths: diagnosticDraft.signalPaths.filter(item => item !== path) })} disabled={disabled}>移除</button></div></li>;
                       })}</ol>
                     </div>
-                    <label className="diagnostic-write"><input type="checkbox" checked={diagnosticDraft.writeEnabled} onChange={event => setDiagnosticDraft({ ...diagnosticDraft, writeEnabled: event.target.checked })} disabled={disabled} /><span>允许扩展会话写入此 DID (0x2E)<small>仅修改主机虚拟运行的应用状态；不写入 flash/NvM，不提供 0x27 安全解锁。重启后恢复初始值。</small></span></label>
+                    <label className="diagnostic-write"><input type="checkbox" checked={diagnosticDraft.writeEnabled} onChange={event => setDiagnosticDraft({ ...diagnosticDraft, writeEnabled: event.target.checked, resetRoutineId: event.target.checked ? diagnosticDraft.resetRoutineId : '' })} disabled={disabled} /><span>允许扩展会话写入此 DID (0x2E)<small>仅修改主机虚拟运行的应用状态；不写入 flash/NvM，不提供 0x27 安全解锁。重启后恢复初始值。关闭写入也会关闭下方复位例程。</small></span></label>
+                    <label className="diagnostic-routine">复位例程 RID (0x31/0x01) <small>可选 · 0–65535 · 十进制或 0x 十六进制；留空即关闭</small><input value={diagnosticDraft.resetRoutineId} onChange={event => setDiagnosticDraft({ ...diagnosticDraft, resetRoutineId: event.target.value })} placeholder="例如 0x0201" disabled={disabled || !diagnosticDraft.writeEnabled} autoComplete="off" /><small>仅在扩展会话中，将当前可写 DID 的 Tx 信号恢复为配置初始值；仅主机虚拟易失状态，不是 0x27 安全访问，也不写入 Flash/NvM。</small></label>
                   </div>
                   {diagnosticError && <p className="diagnostic-error" role="alert">{diagnosticError}</p>}
                   <div className="diagnostic-actions"><button type="button" className="primary-button compact" onClick={configureDiagnostic} disabled={disabled || !diagnosticUnapplied || dtcUnapplied || frameUnapplied}>{workspace.diagnostic ? '应用诊断更改' : '创建诊断配置'}</button><button type="button" className="quiet-button" onClick={() => { setDiagnosticDraft(diagnosticFields(workspace.diagnostic)); setDiagnosticSignal(''); setDiagnosticError(''); }} disabled={disabled || !diagnosticUnapplied}>还原草稿</button>{workspace.diagnostic && <button type="button" className="quiet-button" onClick={clearDiagnostic} disabled={disabled || diagnosticUnapplied || dtcUnapplied || frameUnapplied}>移除诊断配置</button>}{diagnosticUnapplied && <span role="status">未应用的诊断草稿</span>}</div>

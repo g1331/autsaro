@@ -41,6 +41,7 @@ export type DiagnosticView = {
   did: number;
   signalPaths: string[];
   writeEnabled: boolean;
+  resetRoutineId: number | null;
   dtc: DtcView | null;
 };
 

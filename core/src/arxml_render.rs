@@ -229,6 +229,12 @@ fn render_diagnostic(project: &str, diagnostic: &DiagnosticView, frame_count: us
             boolean(&service_path, "DcmDsdSidTabSubfuncAvail", false));
         services.push_str(&container("WriteDataByIdentifier", &service_path, &params, "", ""));
     }
+    if diagnostic.reset_routine_id.is_some() {
+        let params = format!("{}{}{}", number(&service_path, "DcmDsdSidTabServiceId", 0x31),
+            boolean(&service_path, "DcmDsdServiceUsed", true),
+            boolean(&service_path, "DcmDsdSidTabSubfuncAvail", true));
+        services.push_str(&container("RoutineControl", &service_path, &params, "", ""));
+    }
     if diagnostic.dtc.is_some() {
         for (name, sid, subfunction) in [("ClearDiagnosticInformation", 0x14, false), ("ReadDTCInformation", 0x19, true)] {
             let params = format!("{}{}{}", number(&service_path, "DcmDsdSidTabServiceId", sid),
@@ -312,6 +318,23 @@ fn render_diagnostic(project: &str, diagnostic: &DiagnosticView, frame_count: us
     let sessions = container("Sessions", &sessions_path, "", "", &(session("Default", 1) + &session("Extended", 3)));
     let dsp_params = choice(&dsp, "DcmDspDataDefaultEndianness", "BIG_ENDIAN") + &boolean(&dsp, "DcmDspEnableObdMirror", false);
     let mut dsp_children = did_value + &info_value + &data_values + &sessions;
+    if let Some(rid) = diagnostic.reset_routine_id {
+        let auth_path = format!("{dsp}/DcmDspCommonAuthorization");
+        let auth_ref = ref_path(project, "DcmCfg/DcmConfigSet/DcmDsp/ResetRoutineAuthorization");
+        dsp_children.push_str(&container("ResetRoutineAuthorization", &auth_path, "",
+            &reference(&auth_path, "DcmDspCommonAuthorizationSessionRef", "ECUC-CONTAINER-VALUE", &ext_ref), ""));
+        let routine_path = format!("{dsp}/DcmDspRoutine");
+        let start_path = format!("{routine_path}/DcmDspStartRoutine");
+        let start = container("Start", &start_path,
+            &function(&start_path, "DcmDspStartRoutineFnc", "Ecu_DcmRestoreDid"),
+            &reference(&start_path, "DcmDspStartRoutineCommonAuthorizationRef", "ECUC-CONTAINER-VALUE", &auth_ref), "");
+        let params = format!("{}{}{}{}",
+            number(&routine_path, "DcmDspRoutineIdentifier", rid),
+            boolean(&routine_path, "DcmDspRoutineUsed", true),
+            boolean(&routine_path, "DcmDspRoutineUsePort", false),
+            choice(&routine_path, "DcmDspRoutineFncSignature", "ROUTINE_FNC_NORMAL"));
+        dsp_children.push_str(&container("ResetDid", &routine_path, &params, "", &start));
+    }
     if diagnostic.dtc.is_some() {
         dsp_children.push_str(&container("ClearDTC", &format!("{dsp}/DcmDspClearDTC"), "", "", ""));
         dsp_children.push_str(&container("ReadDTCInformation", &format!("{dsp}/DcmDspReadDTCInformation"), "", "", ""));
