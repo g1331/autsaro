@@ -1,7 +1,6 @@
 #include "Dcm.h"
 #include "Dem.h"
 #include "PduR.h"
-#include "Rte.h"
 
 static const EcuDiagnosticConfig *active_config;
 static uint8_t active_session;
@@ -96,16 +95,9 @@ EcuStatus Dcm_RxIndication(const uint8_t *request, size_t length, uint64_t now_m
         response[1] = request[1];
         response[2] = request[2];
         for (i = 0u; i < active_config->did_signal_count; ++i) {
-            uint32_t value;
-            uint8_t valid;
-            result = Rte_ReadSignal(active_config->did_signal_ids[i], &value, &valid);
-            if (result != ECU_OK || valid == 0u) {
+            if (active_config->did_readers[i](&response[3u + 4u * i]) != E_OK) {
                 return NegativeResponse(0x22u, 0x22u, now_ms);
             }
-            response[3u + 4u * i] = (uint8_t)(value >> 24u);
-            response[4u + 4u * i] = (uint8_t)(value >> 16u);
-            response[5u + 4u * i] = (uint8_t)(value >> 8u);
-            response[6u + 4u * i] = (uint8_t)value;
         }
         return PduR_DcmTransmit(response, 3u + 4u * active_config->did_signal_count, now_ms);
     case 0x2eu:
@@ -123,9 +115,9 @@ EcuStatus Dcm_RxIndication(const uint8_t *request, size_t length, uint64_t now_m
             return NegativeResponse(0x2eu, 0x13u, now_ms);
         }
         for (i = 0u; i < active_config->did_signal_count; ++i) {
-            result = active_config->did_writers[i](&request[3u + 4u * i]);
-            if (result != ECU_OK) {
-                return NegativeResponse(0x2eu, 0x72u, now_ms);
+            Dcm_NegativeResponseCodeType error_code = DCM_E_GENERALPROGRAMMINGFAILURE;
+            if (active_config->did_writers[i](&request[3u + 4u * i], &error_code) != E_OK) {
+                return NegativeResponse(0x2eu, error_code, now_ms);
             }
         }
         response[0] = 0x6eu;

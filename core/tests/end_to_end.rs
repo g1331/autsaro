@@ -620,3 +620,92 @@ fn start_routine_restores_written_did_signals_and_respects_session() {
     reopened.save().unwrap();
     assert!(fs::read_to_string(&source).unwrap().contains("<!-- retained annotation -->"));
 }
+
+#[cfg(windows)]
+#[test]
+fn generated_dcm_callbacks_link_for_independent_consumer_and_update_live_signals() {
+    let temp = Scratch::new();
+    let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
+    let frame = project.add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(100), None).unwrap().frames[0].path.clone();
+    let first = project.add_signal(frame.clone(), "First".into(), 0, 32, 0x01020304).unwrap();
+    let second = project.add_signal(frame.clone(), "Second".into(), 32, 32, 0xaabbccdd).unwrap();
+    let paths = [first.signals.last().unwrap().path.clone(), second.signals.last().unwrap().path.clone()];
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, paths.to_vec(), true, None).unwrap();
+    project.save().unwrap();
+    let source_path = temp.0.join("Diag/Diag.arxml");
+    let mut reopened = Workspace::open(vec![source_path.clone()], archive()).unwrap();
+    reopened.update_frame(&frame, serde_json::json!({"periodMs": 110})).unwrap();
+    reopened.save().unwrap();
+    let source = fs::read_to_string(&source_path).unwrap();
+    let doc = roxmltree::Document::parse(&source).unwrap();
+    let callbacks = |parameter: &str| -> Vec<String> {
+        doc.descendants().filter(|node| node.has_tag_name("ECUC-TEXTUAL-PARAM-VALUE"))
+            .filter(|node| node.children().any(|child| child.has_tag_name("DEFINITION-REF")
+                && child.text().is_some_and(|text| text.ends_with(parameter))))
+            .filter_map(|node| node.children().find(|child| child.has_tag_name("VALUE"))
+                .and_then(|value| value.text()).map(str::to_owned))
+            .collect()
+    };
+    let reads = callbacks("/DcmDspDataReadFnc");
+    let writes = callbacks("/DcmDspDataWriteFnc");
+    assert_eq!((reads.len(), writes.len()), (2, 2));
+    let output = temp.0.join("GeneratedDiag");
+    generator::generate(&mut reopened, &output).unwrap();
+    generator::build(&output).unwrap();
+    let report = host::run_diagnostic(&output).unwrap();
+    assert!(report.passed, "generated ECU diagnostic smoke: {}", report.log);
+
+    let consumer = temp.0.join("consumer.c");
+    fs::write(&consumer, format!(r#"
+#include <stdint.h>
+#include <string.h>
+#include "Dcm_Externals.h"
+#include "Ecu_Runtime.h"
+#include "Rte.h"
+
+static EcuStatus sink(uint32_t id, uint8_t dlc, const uint8_t data[8])
+{{
+    (void)id;
+    (void)dlc;
+    (void)data;
+    return ECU_OK;
+}}
+
+int main(void)
+{{
+    uint8_t data[4];
+    uint8_t valid;
+    uint32_t value;
+    Dcm_NegativeResponseCodeType error_code = 0u;
+    const uint8_t first_initial[4] = {{ 0x01u, 0x02u, 0x03u, 0x04u }};
+    const uint8_t second_initial[4] = {{ 0xaau, 0xbbu, 0xccu, 0xddu }};
+    const uint8_t written[4] = {{ 0x11u, 0x22u, 0x33u, 0x44u }};
+    if (Ecu_Init(&Ecu_Config, sink, NULL) != ECU_OK) return 1;
+    if ({read_first}(data) != E_OK || memcmp(data, first_initial, 4u) != 0) return 2;
+    if ({read_second}(data) != E_OK || memcmp(data, second_initial, 4u) != 0) return 3;
+    if ({write_first}(written, &error_code) != E_OK) return 4;
+    if ({read_first}(data) != E_OK || memcmp(data, written, 4u) != 0) return 5;
+    if (Rte_ReadSignal(0u, &value, &valid) != ECU_OK || value != 0x11223344u || valid != 1u) return 6;
+    if (Rte_ReadSignal(1u, &value, &valid) != ECU_OK || value != 0xaabbccddu || valid != 1u) return 7;
+    if ({write_second}(first_initial, &error_code) != E_OK) return 8;
+    if (Rte_ReadSignal(1u, &value, &valid) != ECU_OK || value != 0x01020304u || valid != 1u) return 9;
+    if ({write_first}(NULL, &error_code) != E_NOT_OK || error_code != 0x72u) return 10;
+    return 0;
+}}
+"#, read_first = reads[0], read_second = reads[1], write_first = writes[0], write_second = writes[1])).unwrap();
+    let cc = std::env::var_os("AUTOSAR_CC").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("gcc"));
+    let mut sources: Vec<_> = fs::read_dir(output.join("src")).unwrap().map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "c")
+            && path.file_name().unwrap() != "ecu_host_main.c").collect();
+    sources.sort();
+    sources.push(output.join("Ecu_Config.c"));
+    sources.push(consumer);
+    let executable = temp.0.join("consumer.exe");
+    let built = Command::new(cc).args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
+        .arg("-I").arg(output.join("include")).arg("-I").arg(&output)
+        .args(sources).arg("-o").arg(&executable).output().unwrap();
+    assert!(built.status.success(), "independent consumer link: {}", String::from_utf8_lossy(&built.stderr));
+    let observed = Command::new(executable).output().unwrap();
+    assert!(observed.status.success(), "independent consumer failed at check {:?}: {}",
+        observed.status.code(), String::from_utf8_lossy(&observed.stderr));
+}

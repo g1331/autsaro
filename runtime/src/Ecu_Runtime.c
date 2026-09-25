@@ -92,7 +92,8 @@ static EcuStatus ValidateConfig(const EcuConfig *config)
             diagnostic->request_can_id == diagnostic->response_can_id ||
             diagnostic->s3_ms == 0u || diagnostic->n_bs_ms == 0u || diagnostic->n_cr_ms == 0u ||
             diagnostic->did == 0u || diagnostic->did == 0xf186u ||
-            diagnostic->did_signal_ids == NULL || diagnostic->did_signal_count == 0u ||
+            diagnostic->did_signal_ids == NULL || diagnostic->did_readers == NULL ||
+            diagnostic->did_signal_count == 0u ||
             diagnostic->did_signal_count > ECU_DIAG_MAX_DID_SIGNALS) {
             return ECU_ERR_CONFIG;
         }
@@ -108,6 +109,9 @@ static EcuStatus ValidateConfig(const EcuConfig *config)
         }
         for (i = 0; i < diagnostic->did_signal_count; ++i) {
             if (!HasReadableDiagnosticSignal(config, diagnostic->did_signal_ids[i])) {
+                return ECU_ERR_CONFIG;
+            }
+            if (diagnostic->did_readers[i] == NULL) {
                 return ECU_ERR_CONFIG;
             }
             if (diagnostic->did_writers != NULL && diagnostic->did_writers[i] == NULL) {

@@ -25,9 +25,10 @@ fn source_files(dir: &Path) -> Result<Vec<(PathBuf, String)>, String> {
     Ok(files)
 }
 
-fn config_source(name: &str, frames: &[crate::model::FrameView], signals: &[SignalView], diagnostic: Option<&DiagnosticView>) -> Result<(String, String), String> {
-    let mut source = String::from("#include \"Ecu_Config.h\"\n");
-    if diagnostic.is_some_and(|d| d.write_enabled) { source.push_str("#include \"Rte.h\"\n"); }
+fn config_source(name: &str, frames: &[crate::model::FrameView], signals: &[SignalView], diagnostic: Option<&DiagnosticView>) -> Result<(String, String, String), String> {
+    let mut source = String::from("#include \"Ecu_Config.h\"\n#include \"Dcm_Externals.h\"\n");
+    if diagnostic.is_some() { source.push_str("#include \"Rte.h\"\n"); }
+    let mut externals = String::from("#ifndef DCM_EXTERNALS_H\n#define DCM_EXTERNALS_H\n\n#include <stdint.h>\n#include \"Ecu_DcmCallbackTypes.h\"\n\n");
     source.push_str("\nstatic const EcuSignalConfig signals[] = {\n");
     let mut frame_rows = Vec::new();
     let mut map = format!("ECU {name}\n# ID 映射由已验证的 ARXML 路径按字典序稳定生成\n");
@@ -62,15 +63,37 @@ fn config_source(name: &str, frames: &[crate::model::FrameView], signals: &[Sign
         }
         source.push_str(" };\n");
         map.push('\n');
+        source.push('\n');
+        for (index, path) in diagnostic.signal_paths.iter().enumerate() {
+            let id = signal_ids.get(path.as_str()).ok_or_else(|| format!("诊断 DID 信号没有生成 ID: {path}"))?;
+            writeln!(externals, "Std_ReturnType Ecu_DcmRead_{index}(uint8_t *data);").unwrap();
+            writeln!(source, "Std_ReturnType Ecu_DcmRead_{index}(uint8_t *data) {{").unwrap();
+            source.push_str("    uint32_t value;\n    uint8_t valid;\n");
+            writeln!(source, "    if (data == NULL || Rte_ReadSignal({id}u, &value, &valid) != ECU_OK || valid == 0u) {{ return E_NOT_OK; }}").unwrap();
+            source.push_str("    data[0] = (uint8_t)(value >> 24u);\n");
+            source.push_str("    data[1] = (uint8_t)(value >> 16u);\n");
+            source.push_str("    data[2] = (uint8_t)(value >> 8u);\n");
+            source.push_str("    data[3] = (uint8_t)value;\n    return E_OK;\n}\n");
+        }
+        source.push_str("static const EcuDidReadFunction diagnostic_readers[] = { ");
+        for index in 0..diagnostic.signal_paths.len() {
+            if index != 0 { source.push_str(", "); }
+            write!(source, "Ecu_DcmRead_{index}").unwrap();
+        }
+        source.push_str(" };\n");
         let writer_ref = if diagnostic.write_enabled {
             writeln!(map, "WRITE_DID did={}", diagnostic.did).unwrap();
             source.push('\n');
             for (index, path) in diagnostic.signal_paths.iter().enumerate() {
                 let id = signal_ids.get(path.as_str()).ok_or_else(|| format!("诊断 DID 信号没有生成 ID: {path}"))?;
-                writeln!(source, "static EcuStatus Ecu_DcmWrite_{index}(const uint8_t data[4]) {{").unwrap();
-                writeln!(source, "    uint32_t value = ((uint32_t)data[0] << 24) | ((uint32_t)data[1] << 16) | ((uint32_t)data[2] << 8) | (uint32_t)data[3];").unwrap();
-                writeln!(source, "    return Rte_WriteSignal({id}u, value);").unwrap();
-                source.push_str("}\n");
+                writeln!(externals, "Std_ReturnType Ecu_DcmWrite_{index}(const uint8_t *data, Dcm_NegativeResponseCodeType *error_code);").unwrap();
+                writeln!(source, "Std_ReturnType Ecu_DcmWrite_{index}(const uint8_t *data, Dcm_NegativeResponseCodeType *error_code) {{").unwrap();
+                source.push_str("    uint32_t value;\n");
+                source.push_str("    if (error_code == NULL) { return E_NOT_OK; }\n");
+                source.push_str("    if (data == NULL) { *error_code = DCM_E_GENERALPROGRAMMINGFAILURE; return E_NOT_OK; }\n");
+                source.push_str("    value = ((uint32_t)data[0] << 24) | ((uint32_t)data[1] << 16) | ((uint32_t)data[2] << 8) | (uint32_t)data[3];\n");
+                writeln!(source, "    if (Rte_WriteSignal({id}u, value) != ECU_OK) {{").unwrap();
+                source.push_str("        *error_code = DCM_E_GENERALPROGRAMMINGFAILURE;\n        return E_NOT_OK;\n    }\n    return E_OK;\n}\n");
             }
             source.push_str("static const EcuDidWriteFunction diagnostic_writers[] = { ");
             for index in 0..diagnostic.signal_paths.len() {
@@ -101,12 +124,13 @@ fn config_source(name: &str, frames: &[crate::model::FrameView], signals: &[Sign
             writeln!(source, "static const EcuDtcConfig dtc = {{ {}u, {}u }};", dtc.code, index).unwrap();
             "&dtc"
         } else { "NULL" };
-        writeln!(source, "static const EcuDiagnosticConfig diagnostic = {{ {}u, {}u, {}u, {}u, {}u, {}u, diagnostic_signal_ids, {}u, {dtc_ref}, {writer_ref}, {routine_ref} }};\n",
+        writeln!(source, "static const EcuDiagnosticConfig diagnostic = {{ {}u, {}u, {}u, {}u, {}u, {}u, diagnostic_signal_ids, {}u, {dtc_ref}, diagnostic_readers, {writer_ref}, {routine_ref} }};\n",
             diagnostic.request_id, diagnostic.response_id, diagnostic.s3_ms, diagnostic.n_bs_ms, diagnostic.n_cr_ms, diagnostic.did, diagnostic.signal_paths.len()).unwrap();
         "&diagnostic"
     } else { "NULL" };
     writeln!(source, "const EcuConfig Ecu_Config = {{ \"{name}\", frames, sizeof(frames) / sizeof(frames[0]), signals, sizeof(signals) / sizeof(signals[0]), {diagnostic_ref} }};").unwrap();
-    Ok((source, map))
+    externals.push_str("\n#endif\n");
+    Ok((source, map, externals))
 }
 
 fn expected_paths(dir: &Path, names: &[String]) -> Result<(), String> {
@@ -138,9 +162,9 @@ fn walk_files(dir: &Path) -> Result<Vec<PathBuf>, String> {
 pub fn generate(workspace: &mut Workspace, output: &Path) -> Result<GenerationReport, String> {
     let (frames, signals) = workspace.checked_profile()?;
     let sources = source_files(&runtime_dir())?;
-    let (generated, map) = config_source(workspace.name(), &frames, &signals, workspace.view().diagnostic.as_ref())?;
+    let (generated, map, externals) = config_source(workspace.name(), &frames, &signals, workspace.view().diagnostic.as_ref())?;
     let mut names: Vec<String> = sources.iter().map(|(_,name)| name.clone()).collect();
-    names.extend(["Ecu_Config.c".into(), "profile.txt".into()]);
+    names.extend(["Dcm_Externals.h".into(), "Ecu_Config.c".into(), "profile.txt".into()]);
     names.sort();
     expected_paths(output, &names)?;
     let parent = output.parent().ok_or("输出目录须有父目录")?;
@@ -154,6 +178,7 @@ pub fn generate(workspace: &mut Workspace, output: &Path) -> Result<GenerationRe
             fs::copy(source, target).map_err(|e| e.to_string())?;
         }
         fs::write(stage.join("Ecu_Config.c"), generated).map_err(|e| e.to_string())?;
+        fs::write(stage.join("Dcm_Externals.h"), externals).map_err(|e| e.to_string())?;
         fs::write(stage.join("profile.txt"), map).map_err(|e| e.to_string())?;
         fs::write(stage.join("files.list"), names.join("\n") + "\n").map_err(|e| e.to_string())?;
         let backup = parent.join(format!(".autosar-config-backup-{}-{}", std::process::id(), workspace.name()));

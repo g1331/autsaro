@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "Ecu_Status.h"
+#include "Ecu_DcmCallbackTypes.h"
 
 /* 仅支持标准 11 位 CAN、DLC 1..8、LSB0 小端无符号信号。 */
 typedef struct {
@@ -28,7 +29,8 @@ typedef struct {
     uint16_t monitor_frame_index;
 } EcuDtcConfig;
 
-typedef EcuStatus (*EcuDidWriteFunction)(const uint8_t data[4]);
+typedef Std_ReturnType (*EcuDidReadFunction)(uint8_t *data);
+typedef Std_ReturnType (*EcuDidWriteFunction)(const uint8_t *data, Dcm_NegativeResponseCodeType *error_code);
 typedef EcuStatus (*EcuRoutineStartFunction)(void);
 
 typedef struct {
@@ -47,6 +49,7 @@ typedef struct {
     const uint16_t *did_signal_ids;
     uint8_t did_signal_count;
     const EcuDtcConfig *dtc;
+    const EcuDidReadFunction *did_readers;
     const EcuDidWriteFunction *did_writers; /* NULL disables WriteDataByIdentifier. */
     const EcuResetRoutineConfig *reset_routine; /* NULL disables RoutineControl. */
 } EcuDiagnosticConfig;

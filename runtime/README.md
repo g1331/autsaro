@@ -1,6 +1,6 @@
 # 主机虚拟 ECU C99 运行时
 
-本目录是 **标准 11 位 Classical CAN 原始信号及单条主机虚拟 DoCAN 物理连接**的独立目标端代码，可选配一个由 Rx 帧超时触发、由主机 NvM 持久化的 UDS DTC。不声称完整 AUTOSAR/ISO 一致性或真实芯片验证。生成器须把本目录 `include/`、`src/` 的文件与自身输出的 `Ecu_Config.c` 一起纳入每个 ECU 的独立工程；不依赖历史私有协议栈。每个进程只链接**一个** `const EcuConfig Ecu_Config`，未配置诊断时其 `diagnostic` 指针为 `NULL`，未配置故障记忆时其 `diagnostic->dtc` 指针为 `NULL`。
+本目录是 **标准 11 位 Classical CAN 原始信号及单条主机虚拟 DoCAN 物理连接**的独立目标端代码，可选配一个由 Rx 帧超时触发、由主机 NvM 持久化的 UDS DTC。不声称完整 AUTOSAR/ISO 一致性或真实芯片验证。生成器须把本目录 `include/`、`src/` 的文件与自身输出的 `Ecu_Config.c`、`Dcm_Externals.h` 一起纳入每个 ECU 的独立工程；不依赖历史私有协议栈。每个进程只链接**一个** `const EcuConfig Ecu_Config`，未配置诊断时其 `diagnostic` 指针为 `NULL`，未配置故障记忆时其 `diagnostic->dtc` 指针为 `NULL`。
 
 ## 构建
 
@@ -17,7 +17,7 @@ gcc -std=c99 -Wall -Wextra -pedantic -Iruntime/include runtime/src/*.c generated
 cl /TC /W4 /I runtime\include runtime\src\Can.c runtime\src\CanIf.c runtime\src\CanTp.c runtime\src\Com.c runtime\src\Dcm.c runtime\src\Dem.c runtime\src\Ecu_Runtime.c runtime\src\Ecu_Status.c runtime\src\LSduR.c runtime\src\NvM.c runtime\src\Os.c runtime\src\PduR.c runtime\src\Rte.c runtime\src\ecu_host_main.c generated\Ecu_Config.c /Fe:ecu.exe
 ```
 
-独立交付工程应保留这些源码和头文件，并将其中的 include/source 路径调整为工程内路径。输入配置结构和容量上限定义在 `include/Ecu_Config.h`；启动时再次校验生成数据，错误返回 `E CONFIG` 并退出。
+独立交付工程应保留这些源码和头文件，包括工程根目录的生成回调声明 `Dcm_Externals.h`，并将其中的 include/source 路径调整为工程内路径。输入配置结构和容量上限定义在 `include/Ecu_Config.h`；启动时再次校验生成数据，错误返回 `E CONFIG` 并退出。
 
 ## 支持范围与调用链
 
@@ -31,9 +31,15 @@ cl /TC /W4 /I runtime\include runtime\src\Can.c runtime\src\CanIf.c runtime\src\
 
 Dcm 提供 0x10 默认/扩展会话、0x3E TesterPresent（子功能 0x80 抑制正响应）和 0x22 一个有序实时 DID。0x10 的会话切换仅在正响应发送确认后提交；扩展会话 S3 超时回默认。一个 DID 从 1–8 个 32-bit Tx Com 信号读取并以每项大端 4 字节拼接；默认会话或 DID 不匹配返回 `7F 22 31`，长度错误返回 NRC 0x13，当前值不可读返回 NRC 0x22。P2=50 ms、P2*=500 ms 写在 0x10 响应中；S3 配置不得小于 5000 ms。`profile.txt` 的 `DIAGNOSTIC` 行记录生成 ID、计时器与 DID 信号 ID 顺序，供独立主机测试器驱动。
 
+生成工程按 DID 信号顺序提供外部链接的 `Std_ReturnType Ecu_DcmRead_<index>(uint8_t *data)`，声明在 `Dcm_Externals.h`；主机 Dcm 的 0x22 实际调用它读取 Tx Com 值并写入 4 字节大端数据，读取失败仍返回 NRC 0x22。`include/Ecu_DcmCallbackTypes.h` 只定义主机剖面所需的 `Std_ReturnType`、`Dcm_NegativeResponseCodeType` 和返回码；它不是完整 AUTOSAR `Std_Types.h` 或 `Rte_Dcm_Type.h`，此回调闭包不证明第三方 Dcm 互操作或完整 BSW/RTE 符合性。
+
 可选 0x2E WriteDataByIdentifier 仅作用于当前诊断配置的一个 DID，须显式启用；`profile.txt` 增加 `WRITE_DID did=<十进制>` 行，未启用时不输出该行并返回 NRC 0x11。Dcm 只在扩展会话接受与 DID 的 1–8 个 32-bit Tx 信号相符的完整数据记录，每项按大端 4 字节传入生成的 `Ecu_DcmWrite_<index>` 回调，回调经 Rte → Com 修改当前值；0x22 读回与周期 CAN 帧立即可见。默认会话或 DID 不匹配返回 NRC 0x31，记录长度不符返回 NRC 0x13。写入可以是单帧或多帧请求，S3 回默认会话后不能继续写；ECU 进程重启后值恢复配置初值。此功能只写易失的主机虚拟应用状态，不使用 NvM/Flash，也没有 0x27 安全访问级别；会话限制不能当作认证。
 
+启用 0x2E 时还提供可外部链接的 `Std_ReturnType Ecu_DcmWrite_<index>(const uint8_t *data, Dcm_NegativeResponseCodeType *error_code)`，由同一头文件声明；主机 Dcm 实际调用它，经 Rte → Com 写入，失败时回调填入 0x72 并返回 `E_NOT_OK`，主机发送相应 NRC。未启用写入时不生成写回调声明或定义。
+
 可选 0x31/0x01 StartRoutine 只能在已启用 0x2E 时配置一个 RID；`profile.txt` 增加 `RESET_ROUTINE id=<十进制>` 行，未配置时不输出该行且服务返回 NRC 0x11。请求载荷为 `31 01 <RID 高字节> <RID 低字节>`，扩展会话中生成的 `Ecu_DcmRestoreDid` 回调按 DID 配置顺序经 Rte → Com 将绑定的 Tx 信号写回各自的初始值；成功响应 `71 01 <RID 高字节> <RID 低字节>`，0x22 与周期 CAN 均能观察到恢复。默认会话或 RID 不匹配返回 NRC 0x31，StopRoutine/RequestRoutineResults 返回 NRC 0x12，长度错误返回 NRC 0x13，回调写入失败返回 NRC 0x22。没有选项/状态记录、持久化、0x27 安全访问或失败时的事务回滚；例程只作用于当前进程的易失状态。
+
+0x31 的上述主机行为仍使用工程内的 `Ecu_DcmRestoreDid`，不属于本次已闭合的外部读/写回调。R24-11 `DcmDspRoutineFncSignature` 属草案配置项；例程 ECUC 所引用的外部回调签名/集成尚未验收，不得将主机例程通过解释为成熟标准 Dcm 集成通过。
 
 可选单 DTC：`profile.txt` 的 `DTC code=<十进制> frame=<生成帧索引> id=<CAN ID> dlc=<字节数> timeout=<ms>` 指定一个带信号的 Rx 帧（超时为正），DTC 范围 `0x000100–0xFFFFFE`。首次有效 Rx 帧令监控测试完成；其后第一次达到超时阈值，Com → Dem 记故障并持久化。Dcm 在默认/扩展会话支持 0x19/0x01，按状态掩码返回匹配 DTC 数量及状态可用掩码 `0x7F`；当前最多一个 DTC，因此数量为 0 或 1。支持单 DTC 的 0x19/0x02，按请求掩码读取；其他 0x19 子功能返回 NRC 0x12。0x14 仅扩展会话和 `0xFFFFFF` 全部清除，默认会话返回 NRC 0x7F，其他组返回 NRC 0x31，持久化失败返回 NRC 0x72。未配置 DTC 时 0x19/0x01、0x19/0x02 与 0x14 返回 NRC 0x11。
 
