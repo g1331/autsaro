@@ -25,7 +25,7 @@ Label: wayfinder:map
 - [首个完整可验证范围](issues/05-first-verified-profile.md)：首版改用 CP/FO R24-11 的 CAN 闭环，在主机虚拟 ECU 上验证；R25-11 留作后续升级，NXP S32K344 仅为待获取板卡的实机候选。
 - [生成器架构与配置入口](issues/06-generator-architecture.md)：确定 Tauri＋React/TypeScript＋Rust 内核、C99 目标代码；从空项目配置与 R24-11 ARXML 导入/导出共用模型，校验后确定性生成。
 - [项目工件与 ARXML 往返语义](issues/09-project-artifacts.md)：R24-11 多文件 ARXML 是唯一配置权威；保留未支持内容的语义，无法保证引用安全时阻止保存，变体影响生成时明确拒绝。
-- [内部验收与发布界限](issues/07-assurance-gates.md)：先以真实界面、ARXML 往返、确定性生成和双虚拟 ECU 行为证据验收本地能力；暂不公开发布，也不作实机/安全/一致性声明。
+- [内部验收与发布界限](issues/07-assurance-gates.md)：先以真实界面、ARXML 往返、确定性生成和双虚拟 ECU 行为证据验收本地能力；并对每个受支持的模块/目标组合留存可追溯的适用 R24-11 生成 C 义务证据（接口、配置、MemMap 与 MISRA）；暂不公开发布，也不作实机/安全/一致性声明。
 - [配置工作区交互模型](issues/10-configuration-workspace.md)：历史原型比较了工程树、任务流程与依赖链；当前桌面工作区采用左侧项目导航，配置、诊断、生成与构建、虚拟运行分级切换，工程树与对象检查器只在配置页显示，各阶段状态独立呈现。
 - [Classic 阶段扩展路线](issues/08-expansion-route.md)：先 CAN 虚拟闭环，再做深 CAN 诊断、系统生命周期/虚拟 I/O，继而扩其他网络，横向模块按依赖切入；R24-11 当前有效运行模块逐一以配置/目标组合验收，先纯软件，AP 待多类 CP 能力稳定后单独决策。
 
