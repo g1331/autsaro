@@ -47,7 +47,7 @@ Dcm 提供 0x10 默认/扩展会话、0x3E TesterPresent（子功能 0x80 抑制
 
 0x31 是本工程的**主机专属行为**：生成 ARXML 在 DID 的 `ADMIN-DATA/SDGS` 下存储唯一 `AutosarWorkbenchHostRestoreDidV1` 工具组，其中 `Rid` 为十进制 16-bit 编号、`SessionRef` 固定指向本项目的 Extended 会话；不生成 DcmDsd 0x31 服务或 DcmDspRoutine/StartRoutine/CommonAuthorization 的标准 ECUC 节点。主机读取工具记录生成内部例程，不把 `Ecu_HostRestoreDid` 作为第三方 Dcm 回调。R24-11 `DcmDspRoutineFncSignature` 本属草案；独立的第三方 Dcm 不会从该 ARXML 获得本例程，也未验证例程的标准 ECUC 接口。
 
-旧工具保存的 Com/CanIf 引用直接指向系统 I-PDU/N-PDU，不满足现在的全局 EcuC Pdu 闭包。这类旧 ARXML 只读导入：显示可识别的 RID 和源文件，但保存、编辑及生成均被阻断；不猜测系统与全局 Pdu 的对应关系，也不改写原文件。已经具备新全局 Pdu 配置、仅旧例程节点待转换的工程，才可在旧节点与引用均安全时先于内存暂存 0x31 的工具 SDG，并在用户确认保存后写回。未知工具版本、错误会话、外部依赖或源文件被修改时仍拒绝不安全迁移。
+旧工具保存的 Com/CanIf/CanTp/Dcm ECUC 引用直接指向系统 PDU。仅当所有旧容器、字段与引用均完整匹配本工具拥有的形状且无外部依赖/变体时，导入阶段才在内存暂存全局 EcuC Pdu 与必需 Com 字段的转换；系统 I-PDU/N-PDU/DCM-I-PDU、无关源文件及注释不重建。旧 0x31 例程与 PDU 的迁移一起预检，任一不安全即撤回全部暂存并保持原始 ARXML 只读。暂存状态为 dirty/pending，确认保存前不得编辑或生成；明确确认后沿用保存事务及外部文件改动守卫。用户已有的 EcuC 配置、未知 ECUC 扩展与引用不自动修改；迁移后仍不是完整 CanIf/CAN ECUC。
 
 可选单 DTC：`profile.txt` 的 `DTC code=<十进制> frame=<生成帧索引> id=<CAN ID> dlc=<字节数> timeout=<ms>` 指定一个带信号的 Rx 帧（超时为正），DTC 范围 `0x000100–0xFFFFFE`。首次有效 Rx 帧令监控测试完成；其后第一次达到超时阈值，Com → Dem 记故障并持久化。Dcm 在默认/扩展会话支持 0x19/0x01，按状态掩码返回匹配 DTC 数量及状态可用掩码 `0x7F`；当前最多一个 DTC，因此数量为 0 或 1。支持单 DTC 的 0x19/0x02，按请求掩码读取；其他 0x19 子功能返回 NRC 0x12。0x14 仅扩展会话和 `0xFFFFFF` 全部清除，默认会话返回 NRC 0x7F，其他组返回 NRC 0x31，持久化失败返回 NRC 0x72。未配置 DTC 时 0x19/0x01、0x19/0x02 与 0x14 返回 NRC 0x11。
 

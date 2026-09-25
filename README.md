@@ -18,7 +18,7 @@
 
 生成的主机工程对每个 DID 数据提供可外部链接的 `Ecu_DcmRead_<index>`，启用 0x2E 时还提供 `Ecu_DcmWrite_<index>`；主机 Dcm 实际通过这些回调读写 Com 信号，而不只在 ARXML 中填写函数名。`Dcm_Externals.h` 声明这些回调，`include/Ecu_DcmCallbackTypes.h` 仅定义本主机剖面所需的 `Std_ReturnType` 等类型，不是完整 AUTOSAR `Std_Types.h` 或生成的 RTE 类型头，也不证明第三方 Dcm 可直接接入。0x31 仍由生成工程的内部 `Ecu_HostRestoreDid` 实现；其 R24-11 ECUC 例程函数签名参数属草案，本产品不声明该例程的标准 ECUC 集成。
 
-旧版本工具保存的 Com/CanIf 引用直接指向系统 I-PDU/N-PDU，缺少 EcuC 全局 Pdu 与 ComGeneral。此类 ARXML 仍可**原样只读导入**并查看可识别的帧、DID/RID 和来源问题，但不能保存、编辑或生成；不会自动按名称猜测绑定、更改 DEST 或覆盖原文件，显式转换需另行完成。只有已经满足新 Com/EcuC PDU 闭包、但还留有旧 0x31 例程节点的工程，才在旧节点确属本工具且无外部依赖时暂存例程转换，确认保存后写回。新全局 Pdu 上额外的引用、未知 Com/EcuC 子容器、重复或版本不符的工具记录、外部修改和无法安全迁移的引用均阻断操作。
+旧工具保存的 Com/CanIf/CanTp/Dcm 引用直接指向系统 I-PDU/N-PDU/DCM-I-PDU。对**完整识别的本工具旧形状**，导入只在内存暂存迁移：按已验证的引用关系添加 EcuC 全局 Pdu、ComGeneral/ComIPdu 必需字段并重定向 ECUC 引用，保留系统 PDU 与不相关的源文件/注释；含旧 0x31 例程时须同时能够安全转成 DID 工具记录。工作区显示“未保存/待确认”，磁盘原文件不变，确认前禁止编辑与生成，保存须明确确认且复用外部修改检测和事务回滚。未知扩展、外部依赖、用户已有 EcuC 模块、未解析变体或任一例程步骤不安全时，整个旧工程保持原样只读并定位问题，不猜测短名或覆盖来源。已暂存的转换仍**不**补齐 CanIf/CAN 控制器、HOH、缓冲等必需配置。
 
 受支持的 ComIPdu/ComSignal 必须直接归属本工程唯一的 `/{项目名}/ComCfg/ComConfig`，其模块定义和 ComGeneral 必须正确；重命名模块、把子容器挂到其他模块或改动父级 `DEFINITION-REF` 即使保留了可解析的 Pdu/Signal 引用，也只读阻断，不按子容器局部定义猜测所有者。
 

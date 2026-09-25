@@ -7,6 +7,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 use std::fs;
 use std::path::{Path, PathBuf};
+mod migration;
+
 
 const NS: &str = "http://autosar.org/schema/r4.0";
 const XSI: &str = "http://www.w3.org/2001/XMLSchema-instance";
@@ -77,6 +79,8 @@ pub struct Workspace {
     diagnostic: Option<DiagnosticView>,
     issues: Vec<Issue>,
     routine_migration_pending: bool,
+    pdu_migration_pending: bool,
+    pdu_migration_issue: Option<Issue>,
     routine_migration_issue: Option<Issue>,
     schema_zip: PathBuf,
 }
@@ -291,7 +295,7 @@ fn load_sources(files: Vec<PathBuf>, schema_zip: PathBuf) -> Result<Workspace, S
         return Err(format!("导入前 XSD 校验失败 {}: {}", first.file.as_deref().unwrap_or(""), first.message));
     }
     let name = sources.iter().filter_map(|s| Document::parse(&s.text).ok()).flat_map(|d| d.root_element().descendants().filter(|n| n.is_element() && n.tag_name().name() == "AR-PACKAGE").filter_map(|n| child_text(n, "SHORT-NAME")).collect::<Vec<_>>()).next().unwrap_or_else(|| "ImportedEcu".into());
-    let mut workspace = Workspace { name, files: sources, frames: Vec::new(), signals: Vec::new(), diagnostic: None, issues: Vec::new(), routine_migration_pending: false, routine_migration_issue: None, schema_zip };
+    let mut workspace = Workspace { name, files: sources, frames: Vec::new(), signals: Vec::new(), diagnostic: None, issues: Vec::new(), routine_migration_pending: false, routine_migration_issue: None, pdu_migration_pending: false, pdu_migration_issue: None, schema_zip };
     workspace.refresh()?;
     if let Some(issue) = workspace.issues.iter().find(|issue| issue.code == "DIAG_UNSUPPORTED") {
         let message = issue.message.clone();
@@ -350,7 +354,34 @@ fn load_sources(files: Vec<PathBuf>, schema_zip: PathBuf) -> Result<Workspace, S
                 rid.map(|value| value.to_string()).unwrap_or_else(|| "未确认".into()));
         }
     }
-    if workspace.routine_migration_pending && !workspace.issues.iter().any(|issue| issue.code.starts_with("PDU_")) {
+    if workspace.issues.iter().any(|issue| issue.code == "PDU_LEGACY_READ_ONLY") &&
+        !workspace.issues.iter().any(|issue| issue.code == "DIAG_UNSUPPORTED") {
+        let original: Vec<_> = workspace.files.iter().map(|file| file.text.clone()).collect();
+        match workspace.stage_legacy_pdus() {
+            Ok(()) => {
+                workspace.pdu_migration_pending = true;
+                if workspace.routine_migration_pending {
+                    let result = workspace.stage_legacy_routine();
+                    let unsafe_routine = match result {
+                        Ok(issue) => issue,
+                        Err(message) => Some(Issue { file: workspace.files.first().map(|file| file.path.display().to_string()),
+                            ..Issue::error("DIAG_UNSUPPORTED", message,
+                                Some(format!("/{}/DcmCfg/DcmConfigSet/DcmDsp/ResetDid", workspace.name))) }),
+                    };
+                    if let Some(issue) = unsafe_routine {
+                        for (file, text) in workspace.files.iter_mut().zip(original) { file.text = text; }
+                        workspace.pdu_migration_pending = false;
+                        workspace.routine_migration_issue = Some(issue);
+                        workspace.refresh()?;
+                    }
+                }
+            }
+            Err(issue) => {
+                workspace.pdu_migration_issue = Some(issue);
+                workspace.refresh()?;
+            }
+        }
+    } else if workspace.routine_migration_pending && !workspace.issues.iter().any(|issue| issue.code.starts_with("PDU_")) {
         if let Some(issue) = workspace.stage_legacy_routine()? {
             workspace.routine_migration_issue = Some(issue);
             workspace.refresh()?;
@@ -363,6 +394,31 @@ struct Patch {
     range: std::ops::Range<usize>,
     value: String,
 }
+fn migration_issue(file: &SourceFile, path: String, message: impl Into<String>) -> Issue {
+    Issue { file: Some(file.path.display().to_string()),
+        ..Issue::error("PDU_UNSUPPORTED", message, Some(path)) }
+}
+
+fn legacy_reference_patch(node: Node<'_, '_>, file: &SourceFile, expected_definition: &str,
+    old_target: &str, old_dest: &str, new_target: &str) -> Result<Patch, Issue> {
+    let path = path_of(node.parent_element().and_then(|group| group.parent_element()).unwrap_or(node));
+    let invalid = || migration_issue(file, path.clone(), format!("旧版引用 {expected_definition} 含未知内容或目标，拒绝迁移"));
+    let mut fields = node.children().filter(|child| child.is_element());
+    let Some(definition_ref) = fields.next() else { return Err(invalid()); };
+    let Some(value_ref) = fields.next() else { return Err(invalid()); };
+    if fields.next().is_some() || node.attributes().len() != 0 || node.descendants().any(|child| child.is_comment()) ||
+        definition_ref.tag_name().name() != "DEFINITION-REF" ||
+        definition_ref.attribute("DEST") != Some("ECUC-REFERENCE-DEF") ||
+        definition_ref.attributes().len() != 1 || definition_ref.text() != Some(expected_definition) ||
+        value_ref.tag_name().name() != "VALUE-REF" || value_ref.attribute("DEST") != Some(old_dest) ||
+        value_ref.attributes().len() != 1 || value_ref.text() != Some(old_target) ||
+        value_ref.children().any(|child| child.is_element() || child.is_comment()) {
+        return Err(invalid());
+    }
+    Ok(Patch { range: value_ref.range(),
+        value: format!("<VALUE-REF DEST=\"ECUC-CONTAINER-VALUE\">{new_target}</VALUE-REF>") })
+}
+
 
 fn patch_child(node: Node<'_, '_>, child_name: &str, value: String, patches: &mut Vec<Patch>) -> Result<(), String> {
     let leaf = node.children().find(|n| n.is_element() && n.tag_name().name() == child_name)
@@ -836,6 +892,7 @@ impl Workspace {
             frames: self.frames.clone(), signals: self.signals.clone(), diagnostic: self.diagnostic.clone(), issues: self.issues.clone(),
             dirty: self.files.iter().any(|file| file.saved != file.text),
             routine_migration_pending: self.routine_migration_pending,
+            pdu_migration_pending: self.pdu_migration_pending,
         }
     }
 
@@ -1160,6 +1217,7 @@ impl Workspace {
             self.routine_migration_pending = false;
             issues.push(issue.clone());
         }
+        if let Some(issue) = &self.pdu_migration_issue { issues.push(issue.clone()); }
         self.frames = frames;
         self.signals = signals;
         self.diagnostic = diagnostic;
@@ -1252,6 +1310,9 @@ impl Workspace {
 
 
     fn require_saved_routine_migration(&self) -> Result<(), String> {
+        if self.pdu_migration_pending {
+            return Err("PDU_MIGRATION_PENDING: 请先确认并保存旧版 PDU 转换，再修改工程配置".into());
+        }
         if self.routine_migration_pending {
             return Err("旧版例程转换待确认：请先保存 ARXML，再修改工程配置".into());
         }
@@ -1710,6 +1771,17 @@ impl Workspace {
     }
 
     pub fn save(&mut self) -> Result<WorkspaceView, String> {
+        self.save_with_confirmation(false)
+    }
+
+    pub fn save_confirmed_migration(&mut self) -> Result<WorkspaceView, String> {
+        self.save_with_confirmation(true)
+    }
+
+    fn save_with_confirmation(&mut self, confirmed: bool) -> Result<WorkspaceView, String> {
+        if self.pdu_migration_pending && !confirmed {
+            return Err("PDU_MIGRATION_PENDING: 请明确确认旧版 PDU 转换后再保存".into());
+        }
         self.validate()?;
         if let Some(issue) = self.issues.iter().find(|i| matches!(i.severity, Severity::Error)) { return Err(format!("{}: {}", issue.code, issue.message)); }
         let dirty = self.files.iter().filter(|f| f.text != f.saved).collect::<Vec<_>>();
@@ -1761,6 +1833,7 @@ impl Workspace {
         }
         for file in &mut self.files { file.saved = file.text.clone(); }
         self.routine_migration_pending = false;
+        self.pdu_migration_pending = false;
         if let Some(error) = cleanup_error { return Err(error); }
         Ok(self.view())
     }
@@ -1768,6 +1841,7 @@ impl Workspace {
     pub fn checked_profile(&mut self) -> Result<(Vec<FrameView>, Vec<SignalView>), String> {
         self.validate()?;
         if self.routine_migration_pending { return Err("旧版例程 ARXML 待保存迁移，拒绝生成".into()); }
+        if self.pdu_migration_pending { return Err("PDU_MIGRATION_PENDING: 旧版 PDU ARXML 待确认保存，拒绝生成".into()); }
         if let Some(issue) = self.issues.iter().find(|i| matches!(i.severity, Severity::Error)) { return Err(format!("{}: {}", issue.code, issue.message)); }
         if let Some(issue) = self.issues.iter().find(|i| i.code == "VARIANT_DEPENDENCY") { return Err(format!("{}: {}", issue.code, issue.message)); }
         if self.frames.is_empty() || self.signals.is_empty() { return Err("NO_SIGNALS: 至少需要一帧和一个信号才能生成".into()); }

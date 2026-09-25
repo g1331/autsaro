@@ -54,6 +54,7 @@ export type WorkspaceView = {
   issues: Issue[];
   dirty: boolean;
   routineMigrationPending: boolean;
+  pduMigrationPending: boolean;
 };
 
 export type GenerateResult = {
