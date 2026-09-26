@@ -76,7 +76,7 @@
           "status": "not_run"
         }
       },
-      "next_gap": "基础连接局部证据待审；外部多文件诊断输入、原生用户流程、标准 BSW/RTE 工件及静态质量仍缺。"
+      "next_gap": "AUDIT-002 审计已收口但未升级支持声明；外部多文件诊断输入、原生用户流程、逐模块标准工件与静态义务仍缺。"
     },
     {
       "id": "HOST-DOCAN-WRITE-01",
@@ -271,7 +271,7 @@
     {
       "id": "AUDIT-002",
       "title": "主机 DoCAN 档案拆分与基础连接审计",
-      "status": "review",
+      "status": "done",
       "card": "docs/workflow/tasks/AUDIT-002-host-docan.md",
       "branch": "audit/AUDIT-002-docan-baseline",
       "base_commit": "bdb9881",
@@ -285,8 +285,24 @@
         "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
       ],
       "review": {
-        "status": "pending_review"
+        "status": "passed",
+        "reviewer": "Agent audit002_review",
+        "date": "2026-09-26",
+        "evidence": "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
       }
+    },
+    {
+      "id": "AUDIT-003",
+      "title": "主机单 DTC 与 NvM 档案审计",
+      "status": "ready",
+      "card": "docs/workflow/tasks/AUDIT-003-host-dtc.md",
+      "capabilities": [
+        "HOST-DOCAN-DTC-01"
+      ],
+      "depends_on": [
+        "AUDIT-002"
+      ],
+      "evidence": []
     }
   ]
 }

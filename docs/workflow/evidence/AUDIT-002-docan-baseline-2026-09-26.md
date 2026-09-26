@@ -55,4 +55,6 @@ python scripts/workflow.py check
 
 ## 独立审查
 
-待新 Agent 会话只读复核源码、测试、官方资料及本记录；在此之前 AUDIT-002 保持 `review`，以上门均不得升级为 `passed`。
+独立审查者 Agent `audit002_review`，2026-09-26，只读核对任务、状态、源码、测试、本地官方资料包哈希与所引 SWS 位置；首次在新 PowerShell 会话未设置 vcpkg/libclang 环境变量时，Cargo 因找不到 `libxml2` 停止；按 README 设置后独立复跑主用例 1/1、`diagnostic_` 6/6、旧引用/动态长度拒绝 1/1、`workflow.py check`，均通过。它没有重跑全量验证，本记录的 `verify --scope all` 仍以本轮开发执行结果为据。审查结论为 **AUDIT-002 可作为有界证据审计收口，HOST-DOCAN-01 保持 `documented_behavior`，六门不得标为 `passed`**。
+
+审查指出旧系统 PDU 引用和 N-PDU 动态长度用例断言生成失败、来源字节不变，却未直接断言输出目录不存在。`generator::generate` 在 `core/src/generator.rs` 的 `checked_profile` 检查通过后才预留/安装输出目录；结合测试中的配置拒绝，这一路径从源码可判定不会创建输出，本轮仍将其作为源码核对结论，不写成测试直接断言。CanTp padding 用例则直接断言目标目录不存在。此差别不影响审计收口，也不提升输入门状态。

@@ -1,6 +1,6 @@
 # AUDIT-002：主机 DoCAN 档案拆分与基础连接审计
 
-**状态：**review。**分支：**`audit/AUDIT-002-docan-baseline`。**基线：**`bdb9881`。**依赖：**AUDIT-001。**关联能力：**HOST-DOCAN-01。**类型：**证据审计，不升级支持声明。[实际证据](../evidence/AUDIT-002-docan-baseline-2026-09-26.md)。
+**状态：**done（2026-09-26 独立审查通过）。**分支：**`audit/AUDIT-002-docan-baseline`。**基线：**`bdb9881`。**依赖：**AUDIT-001。**关联能力：**HOST-DOCAN-01。**类型：**证据审计，不升级支持声明。[实际证据与审查](../evidence/AUDIT-002-docan-baseline-2026-09-26.md)。
 
 ## 本卡的确定范围
 
@@ -29,3 +29,7 @@
 | `HOST-DOCAN-SEC-DTC-01` | 单 DTC＋`0x27` | 安全状态和 DTC 状态各自的持久化与拒绝 |
 
 这些是明确选定的档案，不是全部配置组合的覆盖声明；同时启用多项选项、改变 DID 信号数或选用其他目标时需另记录该组合的证据。
+
+## 收口
+
+固定两信号基础连接的 ARXML、完整再生成清单、GCC 构建与报文/故障恢复得到可复核证据；审查者 Agent `audit002_review` 核对源码、测试和官方条款位置并复跑定向用例，允许以审计结论收口。`HOST-DOCAN-01` 仍是 `documented_behavior`，六门均未标通过；原生诊断用户流程、外部多文件输入、逐模块标准工件与静态义务仍缺。下一任务为 [AUDIT-003 单 DTC/NvM 档案](AUDIT-003-host-dtc.md)。
