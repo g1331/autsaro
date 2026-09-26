@@ -30,3 +30,9 @@
 Windows 当前会话先设置 `VCPKG_ROOT=<local-vcpkg-root>`、`VCPKGRS_TRIPLET=x64-windows-static`、`LIBCLANG_PATH=<local-libclang-directory>`。最终源码执行 `python scripts/workflow.py verify --scope all`：工作流 Python 测试 **8/8**、UI TypeScript/Vite 构建、核心单元测试 **2/2**、核心端到端 **40/40**、Tauri 构建均通过；编译器仍报既有 `LNK4098` 默认库冲突警告。另执行 `python scripts/workflow.py check`，状态索引有效。
 
 `HOST-CAN-01` 仍为 `documented_behavior`；本次只增强保存操作的可检查性，不补齐外部真实多文件 CAN 配置、独立离线交接、逐模块规范义务、指定 MCU、第三方互操作或静态质量门。预览与保存之间的并发文件修改仍受现有来源复核和暂存安装逻辑的能力边界约束，不能从顺序拒绝测试推断任意时序下的原子性。
+
+## 独立复核
+
+独立 Agent `build001_review` 于 2026-09-26 以 `8acff1c..f17d8de` 为审查范围，核对任务、源码、预览与确认 IPC、UI、测试、上述证据和截图，未发现阻断缺陷。同一新会话按 README 设置三项构建变量后，复跑 `imported_unknown_content_survives_supported_edit_without_rewriting_other_file`、`save_preview_rejects_edits_and_external_changes_after_preview`、`split_package_save_preserves_sources_and_rejects_stale_reference_file`、`noncanonical_pdu_input_is_not_rewritten_or_generated`，四项均通过；`git diff --check 8acff1c f17d8de` 通过。审查未重跑原生窗口或完整构建，因此这两项仍以实施证据为准。
+
+审查指出：两文件原生场景中的第二份文件是独立保留文件；跨文件引用的 CAN 配置有既有核心测试，但该测试沿 `save()` 直接保存，未单独通过原生预览确认链。两个入口共用现有保存路径，当前不构成 BUILD-001 阻断；不能把本次证据表述为“外部跨引用多文件配置已在 UI 全链验收”。`HOST-CAN-01` 仍不升级支持声明。

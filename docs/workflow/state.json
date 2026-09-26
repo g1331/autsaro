@@ -39,7 +39,7 @@
           "status": "not_run"
         }
       },
-      "next_gap": "AUDIT-001 已审计收口但未升级支持声明；先完成 BUILD-001 的保存前 ARXML 改动预览，再续作外部多文件 CAN 输入、生成差异与离线交接及逐模块标准义务。"
+      "next_gap": "BUILD-001 的保存前预览已审查收口；仍需外部跨引用多文件 CAN 输入的 UI 全链、生成差异与离线交接，以及逐模块标准义务。"
     },
     {
       "id": "HOST-DOCAN-01",
@@ -294,7 +294,7 @@
     {
       "id": "BUILD-001",
       "title": "保存前查看 ARXML 文件改动",
-      "status": "review",
+      "status": "done",
       "card": "docs/workflow/tasks/BUILD-001-arxml-save-preview.md",
       "branch": "feature/BUILD-001-arxml-save-preview",
       "base_commit": "8acff1c",
@@ -309,7 +309,10 @@
         "docs/workflow/evidence/BUILD-001-save-preview-2026-09-26.png"
       ],
       "review": {
-        "status": "not_run"
+        "status": "passed",
+        "reviewer": "Agent build001_review",
+        "date": "2026-09-26",
+        "evidence": "docs/workflow/evidence/BUILD-001-save-preview-2026-09-26.md"
       }
     },
     {
