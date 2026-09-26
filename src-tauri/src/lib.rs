@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::State;
-use autosar_config_core::{schema, BuildReport, Direction, GenerationReport, RunReport, SavePreview, Workspace, WorkspaceView};
+use autosar_config_core::{schema, BuildReport, Direction, GenerationPreview, GenerationReport, RunReport, SavePreview, Workspace, WorkspaceView};
 
 #[derive(Default)]
 struct AppState {
@@ -89,10 +89,18 @@ fn validate_project(state: State<'_, Arc<AppState>>) -> Result<WorkspaceView, St
 }
 
 #[tauri::command]
-fn generate_project(state: State<'_, Arc<AppState>>, output_directory: String) -> Result<GenerationReport, String> {
+fn preview_generate_project(state: State<'_, Arc<AppState>>, output_directory: String) -> Result<GenerationPreview, String> {
+    with_workspace(&state, |workspace| {
+        if workspace.view().dirty { return Err("请先保存 ARXML，再预览目标工程".into()); }
+        autosar_config_core::generator::preview_generate(workspace, Path::new(&output_directory))
+    })
+}
+
+#[tauri::command]
+fn generate_project(state: State<'_, Arc<AppState>>, output_directory: String, revision: String) -> Result<GenerationReport, String> {
     with_workspace(&state, |workspace| {
         if workspace.view().dirty { return Err("请先保存 ARXML，再生成目标工程".into()); }
-        autosar_config_core::generator::generate(workspace, Path::new(&output_directory))
+        autosar_config_core::generator::generate_previewed(workspace, Path::new(&output_directory), &revision)
     })
 }
 
@@ -118,7 +126,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Arc::new(AppState::default()))
-        .invoke_handler(tauri::generate_handler![create_project, open_project, add_frame, add_signal, update_frame, update_signal, configure_diagnostic, clear_diagnostic, configure_dtc, clear_dtc, preview_save_project, save_project, validate_project, generate_project, build_project, run_virtual, run_diagnostic])
+        .invoke_handler(tauri::generate_handler![create_project, open_project, add_frame, add_signal, update_frame, update_signal, configure_diagnostic, clear_diagnostic, configure_dtc, clear_dtc, preview_save_project, save_project, validate_project, preview_generate_project, generate_project, build_project, run_virtual, run_diagnostic])
         .run(tauri::generate_context!())
         .expect("Tauri 桌面工作台无法启动");
 }

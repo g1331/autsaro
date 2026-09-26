@@ -2,42 +2,11 @@
   "schema_version": 1,
   "reviewed_done_task_ids": [
     "AUDIT-001",
-    "AUDIT-002"
+    "AUDIT-002",
+    "BUILD-001",
+    "BUILD-002"
   ],
   "items": [
-    {
-      "id": "WF-002",
-      "status": "trial",
-      "severity": "normal",
-      "problem": "已安装本地 vcpkg 依赖时，新的 PowerShell 会话直接运行核心验证仍因构建环境变量缺失而失败",
-      "impact": "AUDIT-001 首次 `verify --scope core` 在 libxml 构建脚本退出 101；需回查 README 并定位 vcpkg/libclang 后重跑，增加复现成本",
-      "observations": [
-        {
-          "task_id": "AUDIT-001",
-          "detail": "`python scripts/workflow.py verify --scope core` 报 `vcpkg did not succeed in finding libxml2`；设置 VCPKG_ROOT、VCPKGRS_TRIPLET、LIBCLANG_PATH 后全量验证通过。README 已写这些变量，本次先记录环境发现成本，未据单次现象修改验证脚本。",
-          "source": "README.md"
-        },
-        {
-          "task_id": "AUDIT-002",
-          "detail": "独立审查者在新的 PowerShell 会话直接运行 cargo test，因未设置 vcpkg/libclang 环境先失败；按 README 设置后聚焦测试通过。同根因再次增加复核成本。",
-          "source": "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
-        },
-        {
-          "task_id": "BUILD-001",
-          "detail": "实施者与独立审查者在各自 PowerShell 会话均先按 README 设置 VCPKG_ROOT、VCPKGRS_TRIPLET、LIBCLANG_PATH，再运行 Cargo；本次未因缺变量先失败。试行还需后续任务继续观察。",
-          "source": "docs/workflow/evidence/BUILD-001-save-preview-2026-09-26.md"
-        }
-      ],
-      "change": "在 AGENT_WORKFLOW.md 验证步骤前提醒 Windows 新 PowerShell 会话及独立审查先核对三个构建变量；若提醒无效则调整或撤回该句。",
-      "success_condition": "后续至少两张实际在新 PowerShell 会话运行 Cargo 的任务，没有再因遗漏 VCPKG_ROOT、VCPKGRS_TRIPLET、LIBCLANG_PATH 而先失败；若未触及此场景继续试行。",
-      "change_files": [
-        "docs/workflow/AGENT_WORKFLOW.md"
-      ],
-      "baseline_done_task_ids": [
-        "AUDIT-001",
-        "AUDIT-002"
-      ]
-    },
     {
       "id": "WF-004",
       "status": "observed",
@@ -53,40 +22,42 @@
       ]
     },
     {
-      "id": "WF-005",
+      "id": "WF-007",
       "status": "trial",
       "severity": "normal",
-      "problem": "任务排序让 Agent 在已有主机行为可运行后连续选择审计，缺少可见产品增量",
-      "impact": "三轮推进中只有两次 ARXML 来源变化拒绝的产品缺陷修复；AUDIT-001、AUDIT-002 收口均未升级支持声明，原下一项仍是纯审计 AUDIT-003",
+      "problem": "单独启动测试桌面进程仍会在维护者正在使用的 Windows 桌面弹窗或抢焦点",
+      "impact": "BUILD-002 的第一次手工界面演练干扰了维护者正常用机，也不满足工作流原本要求的隔离环境；维护者明确要求 Agent 在后台验收",
       "observations": [
         {
-          "task_id": "AUDIT-001",
-          "detail": "审计中修复了跨文件保存及生成前来源变化两项真实缺陷，但最终收口主要是证据和文档，HOST-CAN-01 六门仍未通过。",
-          "source": "docs/workflow/evidence/AUDIT-001-host-can-closure-2026-09-26.md"
-        },
-        {
-          "task_id": "AUDIT-002",
-          "detail": "基础 DoCAN 审计新增测试与档案，未改变产品源码或用户可见流程；随后仍排纯审计 AUDIT-003。",
-          "source": "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
-        },
-        {
-          "task_id": "BUILD-001",
-          "detail": "连续两项审计之后，BUILD-001 已交付可在原生工作区复现的 ARXML 保存预览，并分别记录产品变化与未完成的验收门；这是试行后的首张任务卡，仍待第二张完成后复盘。",
-          "source": "docs/workflow/evidence/BUILD-001-save-preview-2026-09-26.md"
+          "task_id": "BUILD-002",
+          "detail": "首次 release 桌面测试在共享交互桌面启动，维护者指出干扰；随即关闭本轮窗口与 Vite，改用未切换到用户屏幕的独立 Windows desktop 与 WebView2 CDP，在后台完成预览、确认、构建和拒绝场景。",
+          "source": "docs/workflow/evidence/BUILD-002-generation-preview-2026-09-26.md"
         }
       ],
-      "change": "把当前用户流程和可运行产品切片排在一般证据盘点之前；连续审计未带来支持升级时，下一项转为可观察产品任务 BUILD-001；效果不足则重新评估排序与任务切片。",
-      "success_condition": "接下来两项完成的任务中至少有一项交付可由用户操作复现的产品行为或修复真实缺陷，并将产品变化与审计认识分开报告；不得靠降低证据门取得绿色状态。",
+      "change": "AGENTS.md 明确所有 Agent 验收须在后台完成；验证桌面程序时使用真正隔离的桌面会话或虚拟机，无法做到就标未验证，不在用户当前桌面补做。",
+      "success_condition": "后续至少两张涉及桌面验收的任务卡没有在维护者当前桌面弹出测试窗口、抢焦点或发送输入，且交接清楚标出后台已验与未验项目。",
       "change_files": [
-        "docs/workflow/AGENT_WORKFLOW.md",
-        "docs/workflow/OWNER_GUIDE.md",
-        "docs/workflow/state.json",
-        "docs/workflow/tasks/BUILD-001-arxml-save-preview.md",
-        "docs/workflow/tasks/AUDIT-003-host-dtc.md"
+        "AGENTS.md"
       ],
       "baseline_done_task_ids": [
         "AUDIT-001",
-        "AUDIT-002"
+        "AUDIT-002",
+        "BUILD-001",
+        "BUILD-002"
+      ]
+    },
+    {
+      "id": "WF-006",
+      "status": "observed",
+      "severity": "normal",
+      "problem": "已有桌面调试程序占用默认 target 的 exe 时，完整构建门无法替换该文件",
+      "impact": "BUILD-002 的核心与 UI 检查通过后，verify --scope all 最后一步 cargo build 因 Access denied (os error 5) 中断；需在保留他人运行窗口的同时用独立构建档位验证桌面程序",
+      "observations": [
+        {
+          "task_id": "BUILD-002",
+          "detail": "已有 autosar-config-desktop.exe 进程 40860，由另一 PowerShell 会话启动；本轮未停止该进程，默认 debug exe 锁定导致 cargo build 退出 101。",
+          "source": "docs/workflow/evidence/BUILD-002-generation-preview-2026-09-26.md"
+        }
       ]
     }
   ]
