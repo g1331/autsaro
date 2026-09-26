@@ -7,7 +7,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 use std::fs;
 use std::path::{Path, PathBuf};
-mod migration;
 
 
 const NS: &str = "http://autosar.org/schema/r4.0";
@@ -78,10 +77,6 @@ pub struct Workspace {
     signals: Vec<SignalView>,
     diagnostic: Option<DiagnosticView>,
     issues: Vec<Issue>,
-    routine_migration_pending: bool,
-    pdu_migration_pending: bool,
-    pdu_migration_issue: Option<Issue>,
-    routine_migration_issue: Option<Issue>,
     schema_zip: PathBuf,
 }
 
@@ -295,96 +290,22 @@ fn load_sources(files: Vec<PathBuf>, schema_zip: PathBuf) -> Result<Workspace, S
         return Err(format!("导入前 XSD 校验失败 {}: {}", first.file.as_deref().unwrap_or(""), first.message));
     }
     let name = sources.iter().filter_map(|s| Document::parse(&s.text).ok()).flat_map(|d| d.root_element().descendants().filter(|n| n.is_element() && n.tag_name().name() == "AR-PACKAGE").filter_map(|n| child_text(n, "SHORT-NAME")).collect::<Vec<_>>()).next().unwrap_or_else(|| "ImportedEcu".into());
-    let mut workspace = Workspace { name, files: sources, frames: Vec::new(), signals: Vec::new(), diagnostic: None, issues: Vec::new(), routine_migration_pending: false, routine_migration_issue: None, pdu_migration_pending: false, pdu_migration_issue: None, schema_zip };
+    let mut workspace = Workspace { name, files: sources, frames: Vec::new(), signals: Vec::new(), diagnostic: None, issues: Vec::new(), schema_zip };
     workspace.refresh()?;
-    if let Some(issue) = workspace.issues.iter().find(|issue| issue.code == "DIAG_UNSUPPORTED") {
-        let message = issue.message.clone();
-        let pdu_blocked = workspace.issues.iter().any(|issue| issue.code.starts_with("PDU_"));
-        let mut host_metadata_groups = 0;
-        let prefix = format!("/{}/DcmCfg/DcmConfigSet", workspace.name);
-        let routine_path = format!("{prefix}/DcmDsp/ResetDid");
-        let start_path = format!("{routine_path}/Start");
-        let auth_path = format!("{prefix}/DcmDsp/ResetRoutineAuthorization");
-        let service_path = format!("{prefix}/DcmDsd/Services/RoutineControl");
-        let mut legacy_source = None;
+    if workspace.issues.iter().any(|issue| issue.code == "DIAG_UNSUPPORTED") {
         for file in &workspace.files {
+            if !file.text.contains("AutosarWorkbenchHostRestoreDid") { continue; }
             let doc = Document::parse(&file.text).map_err(|error| error.to_string())?;
-            for node in doc.descendants().filter(|node| node.is_element()) {
-                if node.tag_name().name() == "SDG" && node.attribute("GID")
-                    .is_some_and(|gid| gid.starts_with("AutosarWorkbenchHostRestoreDid")) {
-                    host_metadata_groups += 1;
-                    if !pdu_blocked || host_metadata_groups != 1 || message.contains("主机复位例程") {
-                        return Err(format!("{}: {}: {message}", file.path.display(), path_of(node.parent_element().unwrap_or(node))));
-                    }
-                    let did = node.ancestors().find(|parent| parent.is_element() &&
-                        parent.tag_name().name() == "ECUC-CONTAINER-VALUE" &&
-                        definition(*parent).as_deref() == Some("/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsp/DcmDspDid"))
-                        .ok_or_else(|| format!("{}: 主机复位例程不在 DID 容器中", file.path.display()))?;
-                    let nodes: Vec<_> = doc.descendants().filter(|child| child.is_element()).collect();
-                    parse_host_routine(did, &workspace.name, &nodes)
-                        .map_err(|error| format!("{}: {error}", file.path.display()))?;
-                    continue;
-                }
-                let definition_ref = node.tag_name().name() == "DEFINITION-REF";
-                let is_routine_def = definition_ref && node.text().is_some_and(|path| path.ends_with("/DcmDspRoutine"));
-                let is_start_def = definition_ref && node.text().is_some_and(|path| path.ends_with("/DcmDspStartRoutine"));
-                let is_auth_def = definition_ref && node.text().is_some_and(|path| path.ends_with("/DcmDspCommonAuthorization"));
-                let is_service_name = node.tag_name().name() == "SHORT-NAME" && node.text() == Some("RoutineControl");
-                if !(is_routine_def || is_start_def || is_auth_def || is_service_name) { continue; }
-                let owner = node.parent_element().unwrap_or(node);
-                let path = path_of(owner);
-                let is_routine = is_routine_def && path == routine_path;
-                let is_legacy = is_routine || is_start_def && path == start_path ||
-                    is_auth_def && path == auth_path || is_service_name && path == service_path &&
-                    definition(owner).as_deref().is_some_and(|path| path.ends_with("/DcmDsdService"));
-                if is_legacy {
-                    let rid = is_routine.then(|| param(owner, "DcmDspRoutineIdentifier"))
-                        .flatten().and_then(|value| value.parse::<u16>().ok());
-                    if legacy_source.is_none() || rid.is_some() {
-                        legacy_source = Some((file.path.display().to_string(), path_of(owner), rid));
-                    }
-                }
+            let nodes: Vec<_> = doc.descendants().filter(|node| node.is_element()).collect();
+            for group in nodes.iter().copied().filter(|node| node.tag_name().name() == "SDG" &&
+                node.attribute("GID").is_some_and(|gid| gid.starts_with("AutosarWorkbenchHostRestoreDid"))) {
+                let did = group.ancestors().find(|node| node.is_element() &&
+                    node.tag_name().name() == "ECUC-CONTAINER-VALUE" &&
+                    definition(*node).as_deref() == Some("/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsp/DcmDspDid"))
+                    .ok_or_else(|| format!("{}: 主机复位例程不在 DID 容器中", file.path.display()))?;
+                parse_host_routine(did, &workspace.name, &nodes)
+                    .map_err(|error| format!("{}: {error}", file.path.display()))?;
             }
-        }
-        if let Some((file, path, rid)) = legacy_source {
-            let issue = workspace.issues.iter_mut().find(|issue| issue.code == "DIAG_UNSUPPORTED").unwrap();
-            issue.file = Some(file);
-            issue.path = Some(path);
-            issue.message = format!("旧版例程 RID {} 无法安全迁移；原始 ARXML 保留只读，禁止保存与生成：{message}",
-                rid.map(|value| value.to_string()).unwrap_or_else(|| "未确认".into()));
-        }
-    }
-    if workspace.issues.iter().any(|issue| issue.code == "PDU_LEGACY_READ_ONLY") &&
-        !workspace.issues.iter().any(|issue| issue.code == "DIAG_UNSUPPORTED") {
-        let original: Vec<_> = workspace.files.iter().map(|file| file.text.clone()).collect();
-        match workspace.stage_legacy_pdus() {
-            Ok(()) => {
-                workspace.pdu_migration_pending = true;
-                if workspace.routine_migration_pending {
-                    let result = workspace.stage_legacy_routine();
-                    let unsafe_routine = match result {
-                        Ok(issue) => issue,
-                        Err(message) => Some(Issue { file: workspace.files.first().map(|file| file.path.display().to_string()),
-                            ..Issue::error("DIAG_UNSUPPORTED", message,
-                                Some(format!("/{}/DcmCfg/DcmConfigSet/DcmDsp/ResetDid", workspace.name))) }),
-                    };
-                    if let Some(issue) = unsafe_routine {
-                        for (file, text) in workspace.files.iter_mut().zip(original) { file.text = text; }
-                        workspace.pdu_migration_pending = false;
-                        workspace.routine_migration_issue = Some(issue);
-                        workspace.refresh()?;
-                    }
-                }
-            }
-            Err(issue) => {
-                workspace.pdu_migration_issue = Some(issue);
-                workspace.refresh()?;
-            }
-        }
-    } else if workspace.routine_migration_pending && !workspace.issues.iter().any(|issue| issue.code.starts_with("PDU_")) {
-        if let Some(issue) = workspace.stage_legacy_routine()? {
-            workspace.routine_migration_issue = Some(issue);
-            workspace.refresh()?;
         }
     }
     Ok(workspace)
@@ -393,30 +314,6 @@ fn load_sources(files: Vec<PathBuf>, schema_zip: PathBuf) -> Result<Workspace, S
 struct Patch {
     range: std::ops::Range<usize>,
     value: String,
-}
-fn migration_issue(file: &SourceFile, path: String, message: impl Into<String>) -> Issue {
-    Issue { file: Some(file.path.display().to_string()),
-        ..Issue::error("PDU_UNSUPPORTED", message, Some(path)) }
-}
-
-fn legacy_reference_patch(node: Node<'_, '_>, file: &SourceFile, expected_definition: &str,
-    old_target: &str, old_dest: &str, new_target: &str) -> Result<Patch, Issue> {
-    let path = path_of(node.parent_element().and_then(|group| group.parent_element()).unwrap_or(node));
-    let invalid = || migration_issue(file, path.clone(), format!("旧版引用 {expected_definition} 含未知内容或目标，拒绝迁移"));
-    let mut fields = node.children().filter(|child| child.is_element());
-    let Some(definition_ref) = fields.next() else { return Err(invalid()); };
-    let Some(value_ref) = fields.next() else { return Err(invalid()); };
-    if fields.next().is_some() || node.attributes().len() != 0 || node.descendants().any(|child| child.is_comment()) ||
-        definition_ref.tag_name().name() != "DEFINITION-REF" ||
-        definition_ref.attribute("DEST") != Some("ECUC-REFERENCE-DEF") ||
-        definition_ref.attributes().len() != 1 || definition_ref.text() != Some(expected_definition) ||
-        value_ref.tag_name().name() != "VALUE-REF" || value_ref.attribute("DEST") != Some(old_dest) ||
-        value_ref.attributes().len() != 1 || value_ref.text() != Some(old_target) ||
-        value_ref.children().any(|child| child.is_element() || child.is_comment()) {
-        return Err(invalid());
-    }
-    Ok(Patch { range: value_ref.range(),
-        value: format!("<VALUE-REF DEST=\"ECUC-CONTAINER-VALUE\">{new_target}</VALUE-REF>") })
 }
 
 
@@ -549,37 +446,6 @@ fn diagnostic_shape(docs: &[Document<'_>]) -> Result<DiagnosticShape, String> {
     }
     Ok(shape)
 }
-fn normalize_legacy_diagnostic_pdu_refs(actual: &mut DiagnosticShape, expected: &DiagnosticShape, project: &str) {
-    let legacy = [
-        ("CanTpRxNPduRef", "NPdu_DiagRequest", "N-PDU"),
-        ("CanTpTxFcNPduRef", "NPdu_DiagResponse", "N-PDU"),
-        ("CanTpTxNPduRef", "NPdu_DiagResponse", "N-PDU"),
-        ("CanTpRxFcNPduRef", "NPdu_DiagRequest", "N-PDU"),
-        ("CanTpRxNSduRef", "DcmPdu_DiagRequest", "DCM-I-PDU"),
-        ("CanTpTxNSduRef", "DcmPdu_DiagResponse", "DCM-I-PDU"),
-        ("DcmDslProtocolRxPduRef", "DcmPdu_DiagRequest", "DCM-I-PDU"),
-        ("DcmDslProtocolTxPduRef", "DcmPdu_DiagResponse", "DCM-I-PDU"),
-    ];
-    let system_prefix = format!("/{project}/");
-    for (path, (_, _, values, _)) in actual {
-        let Some((_, _, expected_values, _)) = expected.get(path) else { continue; };
-        for (definition, definition_dest, target, dest) in values.iter_mut() {
-            let Some((_, system_name, old_dest)) = legacy.iter()
-                .find(|(name, _, _)| definition.rsplit('/').next() == Some(*name)) else { continue; };
-            if definition_dest != "ECUC-REFERENCE-DEF" ||
-                target.strip_prefix(&system_prefix) != Some(*system_name) || dest.as_str() != *old_dest {
-                continue;
-            }
-            if let Some((_, _, new_target, new_dest)) = expected_values.iter().find(|candidate|
-                candidate.0.as_str() == definition.as_str() &&
-                candidate.1.as_str() == definition_dest.as_str() && candidate.3 == "ECUC-CONTAINER-VALUE") {
-                target.clone_from(new_target);
-                dest.clone_from(new_dest);
-            }
-        }
-        values.sort_unstable();
-    }
-}
 
 const HOST_ROUTINE_GID: &str = "AutosarWorkbenchHostRestoreDidV1";
 
@@ -613,78 +479,13 @@ fn parse_host_routine(did: Node<'_, '_>, project: &str, nodes: &[Node<'_, '_>]) 
     }
     Ok(Some(rid))
 }
-fn legacy_param(definition: &str, name: &str, kind: &str, value: impl ToString) -> (String, String, String, String) {
-    let dest = if kind == "FUNCTION-NAME" { "ECUC-FUNCTION-NAME-DEF".into() } else { format!("ECUC-{kind}-PARAM-DEF") };
-    (format!("{definition}/{name}"), dest, value.to_string(), String::new())
-}
-
-fn legacy_ref(definition: &str, name: &str, value: &str) -> (String, String, String, String) {
-    (format!("{definition}/{name}"), "ECUC-REFERENCE-DEF".into(), value.into(), "ECUC-CONTAINER-VALUE".into())
-}
-
-fn strip_legacy_routine(shape: &mut DiagnosticShape, nodes: &[Node<'_, '_>], project: &str) -> Result<Option<u16>, String> {
-    let prefix = format!("/{project}/DcmCfg/DcmConfigSet");
-    let service = format!("{prefix}/DcmDsd/Services/RoutineControl");
-    let auth = format!("{prefix}/DcmDsp/ResetRoutineAuthorization");
-    let routine = format!("{prefix}/DcmDsp/ResetDid");
-    let start = format!("{routine}/Start");
-    let paths = [&service, &auth, &routine, &start];
-    if !paths.iter().any(|path| shape.contains_key(path.as_str())) { return Ok(None); }
-    let rid_node = nodes.iter().copied().find(|node| node.tag_name().name() == "ECUC-CONTAINER-VALUE" && path_of(*node) == routine)
-        .ok_or_else(|| format!("{routine}: 旧版例程节点不完整，拒绝迁移"))?;
-    let rid = parse_u32(param(rid_node, "DcmDspRoutineIdentifier"), "DcmDspRoutineIdentifier", &routine)
-        .map_err(|issue| issue.message)?;
-    let rid: u16 = rid.try_into().map_err(|_| format!("{routine}: RID 超出 16 位范围，拒绝迁移"))?;
-    let dsp = "/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsp";
-    let dsd_service = "/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsd/DcmDsdServiceTable/DcmDsdService";
-    let auth_def = format!("{dsp}/DcmDspCommonAuthorization");
-    let routine_def = format!("{dsp}/DcmDspRoutine");
-    let start_def = format!("{routine_def}/DcmDspStartRoutine");
-    let session = format!("{prefix}/DcmDsp/Sessions/Extended");
-    let mut entries = [
-        (&service, dsd_service.to_owned(), vec![
-            legacy_param(dsd_service, "DcmDsdSidTabServiceId", "INTEGER", 49),
-            legacy_param(dsd_service, "DcmDsdServiceUsed", "BOOLEAN", true),
-            legacy_param(dsd_service, "DcmDsdSidTabSubfuncAvail", "BOOLEAN", true),
-        ], vec!["SHORT-NAME", "DEFINITION-REF", "PARAMETER-VALUES"]),
-        (&auth, auth_def.clone(), vec![
-            legacy_ref(&auth_def, "DcmDspCommonAuthorizationSessionRef", &session),
-        ], vec!["SHORT-NAME", "DEFINITION-REF", "REFERENCE-VALUES"]),
-        (&routine, routine_def.clone(), vec![
-            legacy_param(&routine_def, "DcmDspRoutineIdentifier", "INTEGER", rid),
-            legacy_param(&routine_def, "DcmDspRoutineUsed", "BOOLEAN", true),
-            legacy_param(&routine_def, "DcmDspRoutineUsePort", "BOOLEAN", false),
-            legacy_param(&routine_def, "DcmDspRoutineFncSignature", "ENUMERATION", "ROUTINE_FNC_NORMAL"),
-        ], vec!["SHORT-NAME", "DEFINITION-REF", "PARAMETER-VALUES", "SUB-CONTAINERS"]),
-        (&start, start_def.clone(), vec![
-            legacy_param(&start_def, "DcmDspStartRoutineFnc", "FUNCTION-NAME", "Ecu_DcmRestoreDid"),
-            legacy_ref(&start_def, "DcmDspStartRoutineCommonAuthorizationRef", &auth),
-        ], vec!["SHORT-NAME", "DEFINITION-REF", "PARAMETER-VALUES", "REFERENCE-VALUES"]),
-    ];
-    for (path, definition, values, children) in &mut entries {
-        values.sort();
-        let expected = (definition.clone(), "ECUC-PARAM-CONF-CONTAINER-DEF".into(), values.clone(), String::new());
-        if shape.remove(path.as_str()) != Some(expected) {
-            return Err(format!("{path}: 旧版例程含未知参数或引用，拒绝迁移"));
-        }
-        let node = nodes.iter().copied().find(|node| node.tag_name().name() == "ECUC-CONTAINER-VALUE" && path_of(*node) == **path)
-            .ok_or_else(|| format!("{path}: 旧版例程节点缺失"))?;
-        if node.children().filter(|child| child.is_element()).map(|child| child.tag_name().name()).collect::<Vec<_>>() != *children ||
-            node.descendants().any(|child| child.is_comment() || child.is_element() &&
-                (matches!(child.tag_name().name(), "ADMIN-DATA" | "VARIATION-POINT") ||
-                child.attributes().any(|attribute| attribute.name() != "DEST"))) {
-            return Err(format!("{path}: 旧版例程含额外内容，拒绝丢失未知数据"));
-        }
-    }
-    Ok(Some(rid))
-}
 
 
 
-fn parse_diagnostic(files: &[SourceFile], project: &str, frames: &[FrameView], signals: &[SignalView],
-    legacy_pdu_refs: bool) -> Result<Option<(DiagnosticView, bool)>, String> {
+fn parse_diagnostic(files: &[SourceFile], project: &str, frames: &[FrameView], signals: &[SignalView])
+    -> Result<Option<DiagnosticView>, String> {
     let docs: Vec<_> = files.iter().map(|file| Document::parse(&file.text).map_err(|e| e.to_string())).collect::<Result<_, _>>()?;
-    let mut actual = diagnostic_shape(&docs)?;
+    let actual = diagnostic_shape(&docs)?;
     let nodes: Vec<_> = docs.iter().flat_map(|doc| doc.descendants().filter(|n| n.is_element())).collect();
     if actual.is_empty() {
         if nodes.iter().any(|node| node.tag_name().name() == "SDG" && node.attribute("GID")
@@ -729,20 +530,19 @@ fn parse_diagnostic(files: &[SourceFile], project: &str, frames: &[FrameView], s
         if pdus.len() != 1 || child_text(pdus[0], "LENGTH").as_deref() != Some("8") {
             return Err(format!("{pdu} 必须是唯一的 8 字节 N-PDU"));
         }
-        let dynamic = child_text(pdus[0], "HAS-DYNAMIC-LENGTH");
-        if dynamic.is_some() && !(legacy_pdu_refs && dynamic.as_deref() == Some("true")) {
+        if child_text(pdus[0], "HAS-DYNAMIC-LENGTH").is_some() {
             return Err(format!("{pdu} 不适用 HAS-DYNAMIC-LENGTH"));
         }
         let global = format!("/{project}/EcuCCfg/EcucConfigSet/Pdus/{}", pdu.rsplit('/').next().unwrap());
         let configured = nodes.iter().any(|node| node.tag_name().name() == "ECUC-CONTAINER-VALUE" &&
             definition(*node).as_deref() == Some("/AUTOSAR/EcucDefs/EcuC/EcucConfigSet/EcucPduCollection/Pdu") &&
             path_of(*node) == global);
-        let target = if configured { global.as_str() } else { pdu.as_str() };
+        if !configured { return Err(format!("{pdu} 缺少对应的 EcuC 全局 Pdu")); }
         let def = if tx { "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfTxPduCfg" } else { "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfRxPduCfg" };
         let ref_name = if tx { "CanIfTxPduRef" } else { "CanIfRxPduRef" };
         let canif: Vec<_> = nodes.iter().copied().filter(|n| n.tag_name().name() == "ECUC-CONTAINER-VALUE" &&
-            definition(*n).as_deref() == Some(def) && ref_value(*n, ref_name).as_deref() == Some(target)).collect();
-        if canif.len() != 1 { return Err(format!("{pdu} 缺少唯一且方向正确的 CanIf 映射")); }
+            definition(*n).as_deref() == Some(def) && ref_value(*n, ref_name).as_deref() == Some(global.as_str())).collect();
+        if canif.len() != 1 { return Err(format!("{pdu} 缺少唯一且方向正确的 CanIf 全局 Pdu 映射")); }
         let field = if tx { "CanIfTxPduCanId" } else { "CanIfRxPduCanId" };
         if tx && param(canif[0], "CanIfTxPduCanIdType").as_deref() != Some("STANDARD_CAN") ||
             !tx && (param(canif[0], "CanIfRxPduDataLength").as_deref() != Some("8") ||
@@ -763,13 +563,13 @@ fn parse_diagnostic(files: &[SourceFile], project: &str, frames: &[FrameView], s
             expected_params.iter().any(|name| parameter_values.iter().filter(|n| definition(**n).as_deref() == Some(format!("{def}/{name}").as_str())).count() != 1) ||
             reference_values.len() != 1 || definition(reference_values[0]).as_deref() != Some(format!("{def}/{ref_name}").as_str()) ||
             reference_values[0].children().find(|n| n.is_element() && n.tag_name().name() == "VALUE-REF")
-                .and_then(|n| n.attribute("DEST")) != Some(if configured { "ECUC-CONTAINER-VALUE" } else { "N-PDU" }) ||
+                .and_then(|n| n.attribute("DEST")) != Some("ECUC-CONTAINER-VALUE") ||
             param(canif[0], if tx { "CanIfTxPduId" } else { "CanIfRxPduId" }).as_deref() != Some(frames.len().to_string().as_str()) {
             return Err(format!("{pdu} 的诊断 CanIf 参数或引用不属于受支持的静态配置"));
         }
         let wrong_direction = nodes.iter().any(|n| n.tag_name().name() == "ECUC-CONTAINER-VALUE"
             && definition(*n).as_deref() == Some(if tx { "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfRxPduCfg" } else { "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfTxPduCfg" })
-            && ref_value(*n, if tx { "CanIfRxPduRef" } else { "CanIfTxPduRef" }).as_deref() == Some(pdu));
+            && ref_value(*n, if tx { "CanIfRxPduRef" } else { "CanIfTxPduRef" }).as_deref() == Some(global.as_str()));
         if wrong_direction { return Err(format!("{pdu} 同时配置了反向 CanIf 映射")); }
         ids.push(parse_u32(param(canif[0], field), field, pdu).map_err(|e| e.message)?);
     }
@@ -827,12 +627,7 @@ fn parse_diagnostic(files: &[SourceFile], project: &str, frames: &[FrameView], s
         && matches!(definition(*n).as_deref(), Some("/AUTOSAR/EcucDefs/Dem" | "/AUTOSAR/EcucDefs/NvM"))) {
         return Err("Dem/NvM 配置存在但缺少受支持的单个 UDS DTC".into());
     }
-    let metadata_rid = parse_host_routine(did_node, project, &nodes)?;
-    let legacy_rid = strip_legacy_routine(&mut actual, &nodes, project)?;
-    if metadata_rid.is_some() && legacy_rid.is_some() {
-        return Err(format!("{}: 新旧主机例程配置同时存在，拒绝导入", path_of(did_node)));
-    }
-    let reset_routine_id = metadata_rid.or(legacy_rid);
+    let reset_routine_id = parse_host_routine(did_node, project, &nodes)?;
     let diagnostic = DiagnosticView {
         path: path_of(did_node), request_id: ids[0], response_id: ids[1], s3_ms, n_bs_ms, n_cr_ms, did,
         signal_paths: bindings.into_iter().map(|(_, path)| path).collect(), dtc, reset_routine_id,
@@ -845,11 +640,10 @@ fn parse_diagnostic(files: &[SourceFile], project: &str, frames: &[FrameView], s
     let expected = render_profile(project, frames, signals, Some(&diagnostic));
     let expected_doc = Document::parse(&expected).map_err(|e| e.to_string())?;
     let expected_shape = diagnostic_shape(&[expected_doc])?;
-    if legacy_pdu_refs { normalize_legacy_diagnostic_pdu_refs(&mut actual, &expected_shape, project); }
     if actual != expected_shape {
         return Err("CanTp/Dcm/Dem/NvM 配置含未知、不一致或不受支持的参数、引用、方向、会话或变体".into());
     }
-    Ok(Some((diagnostic, legacy_rid.is_some())))
+    Ok(Some(diagnostic))
 }
 
 impl Workspace {
@@ -891,8 +685,6 @@ impl Workspace {
             }).collect(),
             frames: self.frames.clone(), signals: self.signals.clone(), diagnostic: self.diagnostic.clone(), issues: self.issues.clone(),
             dirty: self.files.iter().any(|file| file.saved != file.text),
-            routine_migration_pending: self.routine_migration_pending,
-            pdu_migration_pending: self.pdu_migration_pending,
         }
     }
 
@@ -1078,13 +870,9 @@ impl Workspace {
                         "Com PDU 引用 DEST 或必需参数不属于受支持的全局 PDU 配置", Some(path.clone())) });
                 }
                 binding.system_path.as_str()
-            } else if pdus.contains_key(&pdu_ref) {
-                issues.push(Issue { file: Some(record.file.clone()), ..Issue::error("PDU_LEGACY_READ_ONLY",
-                    "旧版工具的 ComPduIdRef 指向系统 I-PDU；原文件只读，禁止保存或生成", Some(path.clone())) });
-                pdu_ref.as_str()
             } else {
                 issues.push(Issue { file: Some(record.file), ..Issue::error("PDU_UNSUPPORTED",
-                    format!("ComPduIdRef 未解析到绑定的 EcuC Pdu: {pdu_ref}"), Some(path)) });
+                    format!("ComPduIdRef 必须指向绑定的 EcuC 全局 Pdu: {pdu_ref}"), Some(path)) });
                 continue;
             };
             let Some(pdu) = pdus.get(system_path) else {
@@ -1093,7 +881,7 @@ impl Workspace {
             let Some(canif_pdu) = canif.get(&pdu_ref) else {
                 issues.push(Issue::error("CANIF_PDU_REF", "CanIf 没有引用同一个 PDU", Some(pdu_ref))); continue;
             };
-            if global_pdus.contains_key(&pdu_ref) && canif_pdu.dest.as_deref() != Some("ECUC-CONTAINER-VALUE") {
+            if canif_pdu.dest.as_deref() != Some("ECUC-CONTAINER-VALUE") {
                 issues.push(Issue::error("PDU_UNSUPPORTED", "CanIf PDU 引用 DEST 必须指向 EcuC Pdu 容器", Some(pdu_ref.clone())));
             }
             let direction = match record.direction.as_deref() {
@@ -1171,18 +959,12 @@ impl Workspace {
             frames.push(FrameView { name: system_path.rsplit('/').next().unwrap_or("").trim_start_matches("Pdu_").into(),
                 path: system_path.to_owned(), id, dlc: (*dlc).min(u8::MAX as u32) as u8, direction, period_ms, timeout_ms });
         }
-        // Retain the specific legacy-PDU blocker as the primary save/generation error.
         issues.extend(com_owner_issues);
         frames.sort_by(|a,b| a.path.cmp(&b.path));
         signals.sort_by(|a,b| a.path.cmp(&b.path));
         issues.extend(validate_profile(&frames, &signals));
-        let legacy_pdu_refs = issues.iter().any(|issue| issue.code == "PDU_LEGACY_READ_ONLY");
-        let diagnostic = match parse_diagnostic(&self.files, &self.name, &frames, &signals, legacy_pdu_refs) {
-            Ok(Some((diagnostic, legacy))) => {
-                self.routine_migration_pending |= legacy;
-                Some(diagnostic)
-            }
-            Ok(None) => None,
+        let diagnostic = match parse_diagnostic(&self.files, &self.name, &frames, &signals) {
+            Ok(diagnostic) => diagnostic,
             Err(message) => {
                 issues.push(Issue::error("DIAG_UNSUPPORTED", message, None));
                 None
@@ -1210,115 +992,12 @@ impl Workspace {
                 }
             }
         }
-        if issues.iter().any(|issue| issue.code.starts_with("PDU_")) {
-            self.routine_migration_pending = false;
-        }
-        if let Some(issue) = &self.routine_migration_issue {
-            self.routine_migration_pending = false;
-            issues.push(issue.clone());
-        }
-        if let Some(issue) = &self.pdu_migration_issue { issues.push(issue.clone()); }
         self.frames = frames;
         self.signals = signals;
         self.diagnostic = diagnostic;
         self.issues = issues;
         Ok(())
     }
-    fn stage_legacy_routine(&mut self) -> Result<Option<Issue>, String> {
-        let diagnostic = self.diagnostic.as_ref().ok_or("旧版例程未能解析 RID，拒绝迁移")?;
-        let rid = diagnostic.reset_routine_id.ok_or("旧版例程缺少 RID，拒绝迁移")?;
-        let prefix = format!("/{}/DcmCfg/DcmConfigSet", self.name);
-        let targets: BTreeSet<_> = [
-            format!("{prefix}/DcmDsd/Services/RoutineControl"),
-            format!("{prefix}/DcmDsp/ResetRoutineAuthorization"),
-            format!("{prefix}/DcmDsp/ResetDid"),
-        ].into_iter().collect();
-        let mut patches: Vec<Vec<Patch>> = (0..self.files.len()).map(|_| Vec::new()).collect();
-        let mut removed = BTreeSet::new();
-        let mut owned_paths = BTreeSet::new();
-        let session = format!("{prefix}/DcmDsp/Sessions/Extended");
-        let metadata = format!("<SDG GID=\"{HOST_ROUTINE_GID}\"><SD GID=\"Rid\">{rid}</SD><SD GID=\"SessionRef\">{session}</SD></SDG>");
-        let mut found_did = false;
-        for (index, file) in self.files.iter().enumerate() {
-            let doc = Document::parse(&file.text).map_err(|e| e.to_string())?;
-            for node in doc.descendants().filter(|node| node.is_element() && node.tag_name().name() == "ECUC-CONTAINER-VALUE") {
-                let path = path_of(node);
-                if targets.contains(&path) {
-                    if !removed.insert(path.clone()) { return Err(format!("{}: 重复的旧版例程节点 {path}", file.path.display())); }
-                    owned_paths.extend(node.descendants().filter(|child| child.is_element()
-                        && child_text(*child, "SHORT-NAME").is_some()).map(path_of));
-                    patches[index].push(Patch { range: node.range(), value: String::new() });
-                }
-                if path != diagnostic.path { continue; }
-                if found_did { return Err(format!("重复的诊断 DID {}", diagnostic.path)); }
-                found_did = true;
-                let admin = node.children().find(|child| child.is_element() && child.tag_name().name() == "ADMIN-DATA");
-                let (position, value) = if let Some(admin) = admin {
-                    let sdgs = admin.children().find(|child| child.is_element() && child.tag_name().name() == "SDGS");
-                    let (parent, closing, content) = if let Some(sdgs) = sdgs {
-                        (sdgs, "</SDGS>", metadata.clone())
-                    } else {
-                        (admin, "</ADMIN-DATA>", format!("<SDGS>{metadata}</SDGS>"))
-                    };
-                    let raw = &file.text[parent.range()];
-                    let offset = raw.rfind(closing).ok_or_else(|| format!("{}: {} 的 ADMIN-DATA 不能安全增补", file.path.display(), diagnostic.path))?;
-                    (parent.range().start + offset, content)
-                } else {
-                    let short = node.children().find(|child| child.is_element() && child.tag_name().name() == "SHORT-NAME")
-                        .ok_or_else(|| format!("{}: {} 缺少 SHORT-NAME", file.path.display(), diagnostic.path))?;
-                    (short.range().end, format!("<ADMIN-DATA><SDGS>{metadata}</SDGS></ADMIN-DATA>"))
-                };
-                patches[index].push(Patch { range: position..position, value });
-            }
-        }
-        if !found_did || removed != targets { return Err("旧版例程 DID 或 ECUC 节点不完整，拒绝部分迁移".into()); }
-        for file in &self.files {
-            let doc = Document::parse(&file.text).map_err(|e| e.to_string())?;
-            for node in doc.descendants() {
-                let target = if node.is_text() || node.is_comment() {
-                    node.text().and_then(|text| owned_paths.iter().find(|path| text.contains(path.as_str())))
-                } else if node.is_element() {
-                    node.attributes().find_map(|attribute| owned_paths.iter().find(|path| attribute.value().contains(path.as_str())))
-                } else { None };
-                if let Some(target) = target {
-                    if node.ancestors().any(|ancestor| removed.contains(&path_of(ancestor))) { continue; }
-                    let path = path_of(node.parent_element().unwrap_or(node));
-                    let mut issue = Issue::error("DIAG_UNSUPPORTED",
-                        format!("旧版例程 RID {rid} 无法安全迁移；原始 ARXML 保留只读，禁止保存与生成：外部引用/内容 {path} 仍依赖旧版例程 {target}"),
-                        Some(path));
-                    issue.file = Some(file.path.display().to_string());
-                    return Ok(Some(issue));
-                }
-            }
-        }
-        let previous: Vec<_> = patches.iter().enumerate().filter(|(_, edits)| !edits.is_empty())
-            .map(|(index, _)| (index, self.files[index].text.clone())).collect();
-        self.commit_patches(patches, |workspace| workspace.diagnostic.as_ref()
-            .is_some_and(|diagnostic| diagnostic.reset_routine_id == Some(rid)))?;
-        let schema_error = match schema::validate_files(&self.schema_zip, &self.files.iter()
-            .map(|file| (file.path.as_path(), file.text.as_str())).collect::<Vec<_>>()) {
-            Ok(issues) => issues.first().map(|issue| format!("{}: {}", issue.file.as_deref().unwrap_or(""), issue.message)),
-            Err(error) => Some(error),
-        };
-        if let Some(error) = schema_error {
-            for (index, text) in previous { self.files[index].text = text; }
-            self.refresh()?;
-            return Err(format!("旧版例程转换后的 XSD 校验失败: {error}"));
-        }
-        Ok(None)
-    }
-
-
-    fn require_saved_routine_migration(&self) -> Result<(), String> {
-        if self.pdu_migration_pending {
-            return Err("PDU_MIGRATION_PENDING: 请先确认并保存旧版 PDU 转换，再修改工程配置".into());
-        }
-        if self.routine_migration_pending {
-            return Err("旧版例程转换待确认：请先保存 ARXML，再修改工程配置".into());
-        }
-        Ok(())
-    }
-
     fn replace_managed(&mut self, frames: Vec<FrameView>, signals: Vec<SignalView>, diagnostic: Option<DiagnosticView>) -> Result<(), String> {
         let index = self.files.iter().position(|f| self.is_managed_file(f)).ok_or("当前项目没有可安全重建的配置文件；已保留导入内容，不执行可能破坏未知项的新增操作")?;
         let mut frames = frames;
@@ -1490,7 +1169,6 @@ impl Workspace {
     }
 
     pub fn add_frame(&mut self, name: String, id: u32, dlc: u8, direction: Direction, period_ms: Option<u32>, timeout_ms: Option<u32>) -> Result<WorkspaceView, String> {
-        self.require_saved_routine_migration()?;
         if !valid_name(&name) { return Err("帧名称只能包含 ASCII 字母、数字与下划线，且须以字母开头".into()); }
         let path = format!("/{}/Pdu_{}", self.name, name);
         if self.frames.iter().any(|f| f.path == path) { return Err("同名帧已经存在".into()); }
@@ -1501,7 +1179,6 @@ impl Workspace {
     }
 
     pub fn add_signal(&mut self, frame_path: String, name: String, start_bit: u8, length: u8, initial_value: u32) -> Result<WorkspaceView, String> {
-        self.require_saved_routine_migration()?;
         if !valid_name(&name) { return Err("信号名称只能包含 ASCII 字母、数字与下划线，且须以字母开头".into()); }
         if !self.frames.iter().any(|f| f.path == frame_path) { return Err("关联帧不存在".into()); }
         let path = format!("/{}/ComCfg/ComConfig/{}", self.name, name);
@@ -1515,7 +1192,6 @@ impl Workspace {
         &mut self, request_id: u32, response_id: u32, s3_ms: u32, n_bs_ms: u32, n_cr_ms: u32,
         did: u16, signal_paths: Vec<String>, write_enabled: bool, reset_routine_id: Option<u16>,
     ) -> Result<WorkspaceView, String> {
-        self.require_saved_routine_migration()?;
         let diagnostic = DiagnosticView {
             path: format!("/{}/DcmCfg/DcmConfigSet/DcmDsp/Did", self.name),
             request_id, response_id, s3_ms, n_bs_ms, n_cr_ms, did, signal_paths, write_enabled, reset_routine_id,
@@ -1525,7 +1201,6 @@ impl Workspace {
         Ok(self.view())
     }
     pub fn configure_dtc(&mut self, code: u32, monitor_frame_path: String) -> Result<WorkspaceView, String> {
-        self.require_saved_routine_migration()?;
         let mut diagnostic = self.diagnostic.clone().ok_or("须先配置诊断服务，再配置 UDS DTC")?;
         diagnostic.dtc = Some(DtcView {
             path: format!("/{}/DemCfg/DemConfigSet/DTC", self.name), code, monitor_frame_path,
@@ -1538,7 +1213,6 @@ impl Workspace {
     }
 
     pub fn clear_dtc(&mut self) -> Result<WorkspaceView, String> {
-        self.require_saved_routine_migration()?;
         let mut diagnostic = self.diagnostic.clone().ok_or("当前工程没有诊断配置")?;
         if diagnostic.dtc.is_none() { return Err("当前工程没有可移除的受支持 DTC".into()); }
         diagnostic.dtc = None;
@@ -1592,7 +1266,6 @@ impl Workspace {
 
 
     pub fn clear_diagnostic(&mut self) -> Result<WorkspaceView, String> {
-        self.require_saved_routine_migration()?;
         if self.diagnostic.is_none() { return Err("当前工程没有可移除的受支持诊断配置".into()); }
         if self.files.iter().any(|file| self.is_managed_file(file)) {
             self.replace_managed(self.frames.clone(), self.signals.clone(), None)?;
@@ -1681,7 +1354,6 @@ impl Workspace {
 
 
     pub fn update_frame(&mut self, path: &str, changes: Value) -> Result<WorkspaceView, String> {
-        self.require_saved_routine_migration()?;
         let old = self.frames.iter().find(|f| f.path == path).ok_or("帧不存在")?.clone();
         let mut frames = self.frames.clone();
         let frame = frames.iter_mut().find(|f| f.path == path).ok_or("帧不存在")?;
@@ -1707,7 +1379,6 @@ impl Workspace {
     }
 
     pub fn update_signal(&mut self, path: &str, changes: Value) -> Result<WorkspaceView, String> {
-        self.require_saved_routine_migration()?;
         let old = self.signals.iter().find(|s| s.path == path).ok_or("信号不存在")?.clone();
         let mut signals = self.signals.clone();
         let signal = signals.iter_mut().find(|s| s.path == path).ok_or("信号不存在")?;
@@ -1771,17 +1442,6 @@ impl Workspace {
     }
 
     pub fn save(&mut self) -> Result<WorkspaceView, String> {
-        self.save_with_confirmation(false)
-    }
-
-    pub fn save_confirmed_migration(&mut self) -> Result<WorkspaceView, String> {
-        self.save_with_confirmation(true)
-    }
-
-    fn save_with_confirmation(&mut self, confirmed: bool) -> Result<WorkspaceView, String> {
-        if self.pdu_migration_pending && !confirmed {
-            return Err("PDU_MIGRATION_PENDING: 请明确确认旧版 PDU 转换后再保存".into());
-        }
         self.validate()?;
         if let Some(issue) = self.issues.iter().find(|i| matches!(i.severity, Severity::Error)) { return Err(format!("{}: {}", issue.code, issue.message)); }
         let dirty = self.files.iter().filter(|f| f.text != f.saved).collect::<Vec<_>>();
@@ -1832,16 +1492,12 @@ impl Workspace {
             }
         }
         for file in &mut self.files { file.saved = file.text.clone(); }
-        self.routine_migration_pending = false;
-        self.pdu_migration_pending = false;
         if let Some(error) = cleanup_error { return Err(error); }
         Ok(self.view())
     }
 
     pub fn checked_profile(&mut self) -> Result<(Vec<FrameView>, Vec<SignalView>), String> {
         self.validate()?;
-        if self.routine_migration_pending { return Err("旧版例程 ARXML 待保存迁移，拒绝生成".into()); }
-        if self.pdu_migration_pending { return Err("PDU_MIGRATION_PENDING: 旧版 PDU ARXML 待确认保存，拒绝生成".into()); }
         if let Some(issue) = self.issues.iter().find(|i| matches!(i.severity, Severity::Error)) { return Err(format!("{}: {}", issue.code, issue.message)); }
         if let Some(issue) = self.issues.iter().find(|i| i.code == "VARIANT_DEPENDENCY") { return Err(format!("{}: {}", issue.code, issue.message)); }
         if self.frames.is_empty() || self.signals.is_empty() { return Err("NO_SIGNALS: 至少需要一帧和一个信号才能生成".into()); }

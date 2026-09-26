@@ -39,15 +39,8 @@ const stageLabels: Record<StageState, string> = {
   pending: '待执行', running: '进行中', done: '已完成', failed: '未通过', stale: '已过期',
 };
 function importedSaveStage(view: WorkspaceView): StageRecord {
-  if (view.issues.some(issue => issue.code.startsWith('PDU_') ||
-    issue.code === 'DIAG_UNSUPPORTED' && issue.message.startsWith('旧版例程 RID '))) {
-    return { state: 'failed', detail: '导入的配置只读，来源文件未被修改；不能保存或生成' };
-  }
-  if (view.pduMigrationPending) {
-    return { state: 'stale', detail: '旧版 PDU 配置已暂存转换，须明确确认保存' };
-  }
-  if (view.routineMigrationPending) {
-    return { state: 'stale', detail: '旧版主机例程格式待保存转换' };
+  if (view.issues.some(issue => issue.code.startsWith('PDU_') || issue.code === 'DIAG_UNSUPPORTED')) {
+    return { state: 'failed', detail: '导入的配置不属于当前支持范围；来源文件未被修改，不能保存或生成' };
   }
   return view.dirty ? stageDefaults.save : { state: 'done', detail: '项目配置已保存' };
 }
@@ -455,13 +448,7 @@ export default function App() {
     }, undefined, 'diagnostic');
   }
   function saveProject() {
-    if (workspace?.pduMigrationPending && !window.confirm(
-      `旧版 COM/CanIf/CanTp/Dcm PDU 引用及必需配置已在工作区暂存转换，系统 PDU 与其他内容保留原样。${workspace.routineMigrationPending ? '旧版 0x31 例程也已暂存安全转换。' : ''}磁盘原文件尚未修改；确认保存这些转换？`
-    )) return;
-    if (!workspace?.pduMigrationPending && workspace?.routineMigrationPending && !window.confirm(
-      '旧版例程 ARXML 已在工作区暂存转换：保留 RID 和主机 0x31 行为，移除草案 Dcm ECUC 例程配置，改为 DID 工具专属记录。磁盘原文件尚未修改；确认保存转换？'
-    )) return;
-    void run('保存', () => invoke<WorkspaceView>('save_project', { confirmMigration: Boolean(workspace?.pduMigrationPending) }), view => {
+    void run('保存', () => invoke<WorkspaceView>('save_project'), view => {
       acceptView(view);
       if (view.dirty) {
         markStage('save', 'failed', '后端仍报告未保存修改');
@@ -552,10 +539,8 @@ export default function App() {
     }, 'virtual');
   }
 
-  const unsupportedLegacyIssue = workspace?.issues.find(issue => issue.code === 'DIAG_UNSUPPORTED' && issue.message.startsWith('旧版例程 RID '));
-  const unsupportedPduIssue = workspace?.issues.find(issue => issue.code.startsWith('PDU_'));
-  const blockedIssue = unsupportedPduIssue ?? unsupportedLegacyIssue;
-  const disabled = !native || Boolean(busy) || Boolean(blockedIssue) || Boolean(workspace?.routineMigrationPending) || Boolean(workspace?.pduMigrationPending);
+  const unsupportedIssue = workspace?.issues.find(issue => issue.code.startsWith('PDU_') || issue.code === 'DIAG_UNSUPPORTED');
+  const disabled = !native || Boolean(busy) || Boolean(unsupportedIssue);
   return (
     <div className="app-shell">
       {!workspace ? (
@@ -616,16 +601,13 @@ export default function App() {
           <div className="workspace-content">
             <div className={`workspace-grid${page === 'editor' ? '' : ' single-page'}`}>
             <section className="main-pane" aria-label={page === 'editor' ? '配置工作区' : '项目工作页'}>
-              {page === 'editor' && <><div className="section-header"><div><p className="eyebrow">CAN COMMUNICATION</p><h2>帧与信号</h2><p>仅支持标准 11-bit CAN、DLC 1–8、原始无符号小端信号。</p></div><div className="section-actions"><button type="button" className="outline-button small" onClick={saveProject} disabled={!native || Boolean(busy) || Boolean(blockedIssue) || unapplied}><Save aria-hidden="true" size={15} />保存 ARXML</button><button type="button" className="outline-button small" onClick={() => openCreator('frame')} disabled={disabled}><Plus aria-hidden="true" size={15} />添加帧</button></div></div>
-                {unsupportedPduIssue && <div className="page-guidance" role="alert">{unsupportedPduIssue.message}。原 ARXML 保留只读；请在“诊断”页查看来源，当前不能保存或生成。</div>}
-                {workspace.pduMigrationPending && <div className="page-guidance" role="status">检测到旧版 PDU 配置：转换仅暂存在工作区，磁盘原 ARXML 未修改。请先点击“保存 ARXML”并明确确认转换；确认前不能修改或生成工程。CanIf/CAN ECUC 仍不完整。</div>}
+              {page === 'editor' && <><div className="section-header"><div><p className="eyebrow">CAN COMMUNICATION</p><h2>帧与信号</h2><p>仅支持标准 11-bit CAN、DLC 1–8、原始无符号小端信号。</p></div><div className="section-actions"><button type="button" className="outline-button small" onClick={saveProject} disabled={!native || Boolean(busy) || Boolean(unsupportedIssue) || unapplied}><Save aria-hidden="true" size={15} />保存 ARXML</button><button type="button" className="outline-button small" onClick={() => openCreator('frame')} disabled={disabled}><Plus aria-hidden="true" size={15} />添加帧</button></div></div>
+                {unsupportedIssue && <div className="page-guidance" role="alert">{unsupportedIssue.message}。原 ARXML 保持不变；请在“诊断”页查看问题，当前不能修改、保存或生成。</div>}
                 <div className="table-wrap"><table><caption>CAN 帧配置</caption><thead><tr><th scope="col">帧名称</th><th scope="col">CAN ID</th><th scope="col">DLC</th><th scope="col">方向</th><th scope="col">周期 / 超时</th><th scope="col">信号</th></tr></thead><tbody>{workspace.frames.map(frame => <tr key={frame.path} className={focusedFrame?.path === frame.path ? 'selected-row' : ''} onClick={() => choose({ kind: 'frame', path: frame.path })}><td><button type="button" className="table-link" onClick={event => { event.stopPropagation(); choose({ kind: 'frame', path: frame.path }); }}>{frame.name}</button></td><td className="mono">0x{frame.id.toString(16).toUpperCase().padStart(3, '0')}</td><td className="mono">{frame.dlc}</td><td><span className={`direction ${frame.direction}`}>{frame.direction.toUpperCase()}</span></td><td className="mono">{frame.direction === 'tx' ? `${frame.periodMs ?? '—'} ms` : `${frame.timeoutMs ?? '—'} ms`}</td><td className="mono">{workspace.signals.filter(signal => signal.framePath === frame.path).length}</td></tr>)}{!workspace.frames.length && <tr><td colSpan={6} className="empty-cell">项目尚无 CAN 帧。使用“添加帧”开始配置。</td></tr>}</tbody></table></div>
                 <div className="section-header secondary"><div><p className="eyebrow">FRAME MAPPING</p><h2>{focusedFrame ? `${focusedFrame.name} · 信号` : '全部信号'}</h2><p>{focusedFrame ? `帧路径：${focusedFrame.path}` : '选择一帧可查看信号映射与引用。'}</p></div><button type="button" className="outline-button small" onClick={() => openCreator('signal')} disabled={disabled || !focusedFrame}><Plus aria-hidden="true" size={15} />添加信号</button></div>
                 <div className="table-wrap"><table><caption>信号配置</caption><thead><tr><th scope="col">信号名称</th><th scope="col">所属帧</th><th scope="col">起始位</th><th scope="col">长度</th><th scope="col">初始值</th><th scope="col">编码</th></tr></thead><tbody>{workspace.signals.filter(signal => !focusedFrame || signal.framePath === focusedFrame.path).map(signal => <tr key={signal.path} className={currentSignal?.path === signal.path ? 'selected-row' : ''} onClick={() => choose({ kind: 'signal', path: signal.path })}><td><button type="button" className="table-link" onClick={event => { event.stopPropagation(); choose({ kind: 'signal', path: signal.path }); }}>{signal.name}</button></td><td>{workspace.frames.find(frame => frame.path === signal.framePath)?.name ?? signal.framePath}</td><td className="mono">{signal.startBit}</td><td className="mono">{signal.length} bit</td><td className="mono">{signal.initialValue}</td><td>uint / LE</td></tr>)}{!workspace.signals.some(signal => !focusedFrame || signal.framePath === focusedFrame.path) && <tr><td colSpan={6} className="empty-cell">当前范围内暂无信号。</td></tr>}</tbody></table></div>
                 <section className="diagnostic-editor" aria-labelledby="diagnostic-editor-title">
                   <div className="section-header secondary"><div><p className="eyebrow">HOST VIRTUAL / DoCAN</p><h2 id="diagnostic-editor-title">诊断通信配置</h2><p>单条 11-bit 物理连接；扩展会话中一个 DID 按顺序读取实时 32-bit Tx 信号。</p></div><span className="diagnostic-state">{workspace.diagnostic ? '已配置' : '未配置'}</span></div>
-                  {workspace.routineMigrationPending && <div className="page-guidance" role="status">检测到旧版例程配置：RID {workspace.diagnostic?.resetRoutineId?.toString(16).toUpperCase().padStart(4, '0')} 已保留，转换仅暂存在工作区，原 ARXML 尚未修改。请先保存 ARXML 并确认转换，再修改配置或生成工程。</div>}
-                  {unsupportedLegacyIssue && <div className="page-guidance" role="alert">{unsupportedLegacyIssue.message}。请在“诊断”页查看来源；当前工程只读，不能以新配置覆盖旧 RID。</div>}
                   {workspace.diagnostic && <p className="diagnostic-path">配置路径 <span className="mono path-text">{workspace.diagnostic.path}</span></p>}
                   <div className="diagnostic-fields form-fields">
                     <div className="form-pair">

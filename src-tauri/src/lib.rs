@@ -75,12 +75,8 @@ fn clear_dtc(state: State<'_, Arc<AppState>>) -> Result<WorkspaceView, String> {
 }
 
 #[tauri::command]
-fn save_project(state: State<'_, Arc<AppState>>, confirm_migration: Option<bool>) -> Result<WorkspaceView, String> {
-    with_workspace(&state, |workspace| if confirm_migration.unwrap_or(false) {
-        workspace.save_confirmed_migration()
-    } else {
-        workspace.save()
-    })
+fn save_project(state: State<'_, Arc<AppState>>) -> Result<WorkspaceView, String> {
+    with_workspace(&state, Workspace::save)
 }
 
 #[tauri::command]
