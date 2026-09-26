@@ -40,6 +40,209 @@ fn create_pair(root: &Path) -> (Workspace, Workspace) {
     (a, b)
 }
 
+#[test]
+fn regeneration_preserves_user_edits_to_generated_files() {
+    let temp = Scratch::new();
+    let (mut ecu, _) = create_pair(&temp.0);
+    let output = temp.0.join("Generated");
+    generator::generate(&mut ecu, &output).unwrap();
+    for name in ["src/Com.c", "Ecu_Config.c", "files.list", "files.sha256"] {
+        let changed = b"user edited generated output";
+        let file = output.join(name);
+        let original = fs::read(&file).unwrap();
+        fs::write(&file, changed).unwrap();
+        assert!(generator::generate(&mut ecu, &output).is_err(), "{name}");
+        assert_eq!(fs::read(&file).unwrap(), changed, "{name}");
+        fs::write(file, original).unwrap();
+    }
+}
+
+#[test]
+fn regeneration_rejects_missing_proof_and_unlisted_user_content() {
+    let temp = Scratch::new();
+    let (mut ecu, _) = create_pair(&temp.0);
+    let output = temp.0.join("Generated");
+    generator::generate(&mut ecu, &output).unwrap();
+    let config = fs::read(output.join("Ecu_Config.c")).unwrap();
+
+    let proof = output.join("files.sha256");
+    let proof_contents = fs::read(&proof).unwrap();
+    fs::remove_file(&proof).unwrap();
+    assert!(generator::generate(&mut ecu, &output).unwrap_err().contains("完整性记录"));
+    assert_eq!(fs::read(output.join("Ecu_Config.c")).unwrap(), config);
+
+    fs::write(&proof, b"invalid proof\n").unwrap();
+    assert!(generator::generate(&mut ecu, &output).is_err());
+    fs::write(&proof, proof_contents).unwrap();
+    let manifest = output.join("files.list");
+    let manifest_contents = fs::read(&manifest).unwrap();
+    fs::remove_file(&manifest).unwrap();
+    assert!(generator::generate(&mut ecu, &output).unwrap_err().contains("文件清单"));
+    assert_eq!(fs::read(output.join("Ecu_Config.c")).unwrap(), config);
+    fs::write(&manifest, manifest_contents).unwrap();
+    let extra = output.join("notes.txt");
+    fs::write(&extra, b"user content").unwrap();
+    assert!(generator::generate(&mut ecu, &output).is_err());
+    assert_eq!(fs::read(&extra).unwrap(), b"user content");
+    fs::remove_file(&extra).unwrap();
+    let extra_dir = output.join("user-data");
+    fs::create_dir(&extra_dir).unwrap();
+    assert!(generator::generate(&mut ecu, &output).is_err());
+    assert!(extra_dir.is_dir());
+    assert_eq!(fs::read(output.join("Ecu_Config.c")).unwrap(), config);
+}
+
+#[test]
+fn regeneration_rejects_a_missing_generated_file() {
+    let temp = Scratch::new();
+    let (mut ecu, _) = create_pair(&temp.0);
+    let output = temp.0.join("Generated");
+    generator::generate(&mut ecu, &output).unwrap();
+    let missing = output.join("include/Can.h");
+    fs::remove_file(&missing).unwrap();
+    let manifest = fs::read(output.join("files.list")).unwrap();
+
+    assert!(generator::generate(&mut ecu, &output).is_err());
+    assert!(!missing.exists());
+    assert_eq!(fs::read(output.join("files.list")).unwrap(), manifest);
+}
+
+#[cfg(windows)]
+#[test]
+fn generation_rejects_junction_output_without_touching_its_target() {
+    let temp = Scratch::new();
+    let (mut ecu, _) = create_pair(&temp.0);
+    let owner = temp.0.join("OwnerData");
+    fs::create_dir(&owner).unwrap();
+    fs::write(owner.join("sentinel.txt"), b"owner content").unwrap();
+    let output = temp.0.join("Generated");
+    let junction = Command::new("cmd").arg("/C").arg("mklink").arg("/J")
+        .arg(&output).arg(&owner).output().unwrap();
+    assert!(junction.status.success(), "{}", String::from_utf8_lossy(&junction.stderr));
+
+    assert!(generator::generate(&mut ecu, &output).unwrap_err().contains("重解析点"));
+    assert_eq!(fs::read(owner.join("sentinel.txt")).unwrap(), b"owner content");
+    assert!(!owner.join("Ecu_Config.c").exists());
+    fs::remove_dir(&output).unwrap();
+    assert_eq!(fs::read(owner.join("sentinel.txt")).unwrap(), b"owner content");
+}
+
+#[test]
+fn generation_rejects_trailing_dot_alias_without_touching_owner_directory() {
+    let temp = Scratch::new();
+    let (mut ecu, _) = create_pair(&temp.0);
+    let owner = temp.0.join("OwnerData");
+    fs::create_dir(&owner).unwrap();
+    fs::write(owner.join("sentinel.txt"), b"owner content").unwrap();
+
+    assert!(generator::generate(&mut ecu, &owner.join(".")).is_err());
+    assert_eq!(fs::read(owner.join("sentinel.txt")).unwrap(), b"owner content");
+    assert!(!owner.join("OwnerData").exists());
+}
+
+#[test]
+fn regeneration_keeps_previous_output_tree() {
+    let temp = Scratch::new();
+    let (mut ecu, _) = create_pair(&temp.0);
+    let output = temp.0.join("Generated");
+    let stage_collision = temp.0.join(format!(".autosar-config-stage-{}-0", std::process::id()));
+    fs::create_dir(&stage_collision).unwrap();
+    fs::write(stage_collision.join("owner.txt"), b"keep staged owner content").unwrap();
+    let initial = generator::generate(&mut ecu, &output).unwrap();
+    assert!(initial.previous_output_directory.is_none());
+    assert_eq!(fs::read(stage_collision.join("owner.txt")).unwrap(), b"keep staged owner content");
+    let old_config = fs::read(output.join("Ecu_Config.c")).unwrap();
+    let old_manifest = fs::read(output.join("files.list")).unwrap();
+    let collision = temp.0.join(format!(".autosar-config-backup-{}-0", std::process::id()));
+    fs::create_dir(&collision).unwrap();
+    fs::write(collision.join("owner.txt"), b"do not replace").unwrap();
+    let frame = ecu.view().frames.iter().find(|frame| frame.name == "Command").unwrap().path.clone();
+    ecu.update_frame(&frame, serde_json::json!({"periodMs": 15})).unwrap();
+    ecu.save().unwrap();
+    let regenerated = generator::generate(&mut ecu, &output).unwrap();
+    let previous = PathBuf::from(regenerated.previous_output_directory.unwrap());
+    assert!(previous.is_absolute() && !previous.starts_with(&collision));
+    assert_eq!(fs::read(previous.join("Ecu_Config.c")).unwrap(), old_config);
+    assert_eq!(fs::read(previous.join("files.list")).unwrap(), old_manifest);
+    assert_eq!(fs::read(collision.join("owner.txt")).unwrap(), b"do not replace");
+    assert_ne!(fs::read(output.join("Ecu_Config.c")).unwrap(), old_config);
+
+    let next = generator::generate(&mut ecu, &output).unwrap();
+    assert_ne!(next.previous_output_directory.as_deref(), Some(previous.to_str().unwrap()));
+    assert_eq!(fs::read(previous.join("Ecu_Config.c")).unwrap(), old_config);
+}
+
+#[cfg(windows)]
+#[test]
+fn regeneration_preserves_built_binary_until_owner_moves_it() {
+    let temp = Scratch::new();
+    let (mut ecu, _) = create_pair(&temp.0);
+    let output = temp.0.join("Generated");
+    generator::generate(&mut ecu, &output).unwrap();
+    let binary = generator::build(&output).unwrap().binary_path;
+    let original = fs::read(&binary).unwrap();
+    let config = fs::read(output.join("Ecu_Config.c")).unwrap();
+    let manifest = fs::read(output.join("files.list")).unwrap();
+    let proof = fs::read(output.join("files.sha256")).unwrap();
+
+    let error = generator::generate(&mut ecu, &output).unwrap_err();
+    assert!(error.contains("请选择新的空输出目录"), "{error}");
+    assert_eq!(fs::read(&binary).unwrap(), original);
+    assert_eq!(fs::read(output.join("Ecu_Config.c")).unwrap(), config);
+    assert_eq!(fs::read(output.join("files.list")).unwrap(), manifest);
+    assert_eq!(fs::read(output.join("files.sha256")).unwrap(), proof);
+    let archived = temp.0.join("PreservedBuild.exe");
+    fs::rename(&binary, &archived).unwrap();
+    generator::generate(&mut ecu, &output).unwrap();
+    assert_eq!(fs::read(&archived).unwrap(), original);
+}
+
+#[cfg(windows)]
+#[test]
+fn rebuild_rejects_existing_binary_without_overwriting_owner_bytes() {
+    let temp = Scratch::new();
+    let (mut ecu, _) = create_pair(&temp.0);
+    let output = temp.0.join("Generated");
+    let generated = generator::generate(&mut ecu, &output).unwrap();
+    let output = PathBuf::from(generated.output_directory);
+    let binary = generator::build(&output).unwrap().binary_path;
+    fs::write(&binary, b"owner modified binary").unwrap();
+
+    assert!(generator::build(&output).is_err());
+    assert_eq!(fs::read(&binary).unwrap(), b"owner modified binary");
+    let archived = temp.0.join("OwnerBinary.exe");
+    fs::rename(&binary, &archived).unwrap();
+    let rebuilt = generator::build(&output).unwrap().binary_path;
+    let mut process = Command::new(rebuilt).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
+    process.stdin.take().unwrap().write_all(b"S 0 54\nT 10\n").unwrap();
+    let result = process.wait_with_output().unwrap();
+    assert!(result.status.success());
+    assert_eq!(String::from_utf8(result.stdout).unwrap().trim(), "X 801 2 B001");
+    assert_eq!(fs::read(archived).unwrap(), b"owner modified binary");
+}
+
+#[cfg(windows)]
+#[test]
+fn untouched_output_regenerates_changed_config_and_runs_the_new_schedule() {
+    let temp = Scratch::new();
+    let (mut ecu, _) = create_pair(&temp.0);
+    let output = temp.0.join("Generated");
+    generator::generate(&mut ecu, &output).unwrap();
+    let original = fs::read(output.join("Ecu_Config.c")).unwrap();
+    let frame = ecu.view().frames.iter().find(|frame| frame.name == "Command").unwrap().path.clone();
+    ecu.update_frame(&frame, serde_json::json!({"periodMs": 15})).unwrap();
+    ecu.save().unwrap();
+    generator::generate(&mut ecu, &output).unwrap();
+    assert_ne!(fs::read(output.join("Ecu_Config.c")).unwrap(), original);
+
+    let binary = generator::build(&output).unwrap().binary_path;
+    let mut ecu = Command::new(binary).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
+    ecu.stdin.take().unwrap().write_all(b"S 0 54\nT 10\nT 15\n").unwrap();
+    let result = ecu.wait_with_output().unwrap();
+    assert!(result.status.success());
+    assert_eq!(String::from_utf8(result.stdout).unwrap().trim(), "X 801 2 B001");
+}
+
 #[cfg(windows)]
 #[test]
 fn generated_c99_ecus_exchange_golden_vectors_and_recover_from_faults() {

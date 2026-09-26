@@ -59,6 +59,7 @@ export type WorkspaceView = {
 
 export type GenerateResult = {
   outputDirectory: string;
+  previousOutputDirectory: string | null;
   files: string[];
   issues: Issue[];
 };

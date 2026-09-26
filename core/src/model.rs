@@ -112,6 +112,7 @@ pub struct WorkspaceView {
 #[serde(rename_all = "camelCase")]
 pub struct GenerationReport {
     pub output_directory: String,
+    pub previous_output_directory: Option<String>,
     pub files: Vec<String>,
     pub issues: Vec<Issue>,
 }

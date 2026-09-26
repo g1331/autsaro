@@ -1,7 +1,10 @@
 use crate::arxml::Workspace;
 use crate::model::{BuildReport, DiagnosticView, Direction, GenerationReport, Issue, SignalView};
+use sha2::{Digest, Sha256};
+use std::ffi::OsStr;
 use std::fmt::Write;
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -133,30 +136,94 @@ fn config_source(name: &str, frames: &[crate::model::FrameView], signals: &[Sign
     Ok((source, map, externals))
 }
 
-fn expected_paths(dir: &Path, names: &[String]) -> Result<(), String> {
-    if !dir.exists() { return Ok(()); }
-    if dir.is_dir() && fs::read_dir(dir).map_err(|e| e.to_string())?.next().is_none() { return Ok(()); }
-    let manifest = dir.join("files.list");
-    let previous = fs::read_to_string(&manifest).map_err(|_| format!("输出目录非本工具生成，拒绝覆盖: {}", dir.display()))?;
-    let listed: std::collections::BTreeSet<_> = previous.lines().collect();
-    let requested: std::collections::BTreeSet<_> = names.iter().map(String::as_str).collect();
-    if listed != requested { return Err("已有输出清单不匹配，拒绝删除或覆盖其他生成版本".into()); }
-    for entry in walk_files(dir)? {
-        let name = entry.strip_prefix(dir).map_err(|e| e.to_string())?.to_string_lossy().replace('\\', "/");
-        if name != "files.list" && name != "ecu_host.exe" && name != "ecu_host" && !listed.contains(name.as_str()) {
-            return Err(format!("输出目录含用户文件，拒绝替换: {name}"));
+fn file_digest(path: &Path) -> Result<String, String> {
+    let mut file = fs::File::open(path).map_err(|e| format!("生成文件缺失或无法读取 {}: {e}", path.display()))?;
+    let mut digest = Sha256::new();
+    let mut buffer = [0u8; 8192];
+    loop {
+        let count = file.read(&mut buffer).map_err(|e| format!("生成文件无法读取 {}: {e}", path.display()))?;
+        if count == 0 { break; }
+        digest.update(&buffer[..count]);
+    }
+    Ok(format!("{:x}", digest.finalize()))
+}
+
+fn integrity_record(dir: &Path, names: &[String]) -> Result<String, String> {
+    let mut record = String::new();
+    for name in names.iter().map(String::as_str).chain(std::iter::once("files.list")) {
+        writeln!(record, "{}  {name}", file_digest(&dir.join(name))?).unwrap();
+    }
+    Ok(record)
+}
+
+fn is_reparse_point(metadata: &fs::Metadata) -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+        metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+    }
+    #[cfg(not(windows))]
+    { metadata.file_type().is_symlink() }
+}
+
+fn reserve_directory(parent: &Path, role: &str, output_name: &OsStr) -> Result<PathBuf, String> {
+    for suffix in 0u64.. {
+        let candidate = parent.join(format!(".autosar-config-{role}-{}-{suffix}", std::process::id()));
+        if candidate.file_name() == Some(output_name) { continue; }
+        match fs::create_dir(&candidate) {
+            Ok(()) => return Ok(candidate),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(format!("无法保留临时目录 {}: {error}", candidate.display())),
+        }
+    }
+    Err("无法分配唯一的临时目录".into())
+}
+
+fn check_entries(dir: &Path, root: &Path, names: &[String]) -> Result<(), String> {
+    for entry in fs::read_dir(dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        let name = path.strip_prefix(root).map_err(|e| e.to_string())?.to_str()
+            .ok_or("输出目录包含非 UTF-8 文件名")?.replace('\\', "/");
+        let metadata = fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
+        if is_reparse_point(&metadata) { return Err(format!("输出目录含链接或重解析点，拒绝替换: {name}")); }
+        let kind = metadata.file_type();
+        if kind.is_dir() {
+            if name != "include" && name != "src" { return Err(format!("输出目录含用户目录，拒绝替换: {name}")); }
+            check_entries(&path, root, names)?;
+        } else if name == "ecu_host.exe" || name == "ecu_host" {
+            return Err(format!("输出目录含已构建的二进制文件 {name}，拒绝替换并保留原目录；请选择新的空输出目录，或由文件所有者明确移走旧二进制后重试"));
+        } else if !kind.is_file() ||
+            (name != "files.list" && name != "files.sha256" && names.binary_search(&name).is_err()) {
+            return Err(format!("输出目录含用户文件或链接，拒绝替换: {name}"));
         }
     }
     Ok(())
 }
 
-fn walk_files(dir: &Path) -> Result<Vec<PathBuf>, String> {
-    let mut files = Vec::new();
-    for entry in fs::read_dir(dir).map_err(|e| e.to_string())? {
-        let entry = entry.map_err(|e| e.to_string())?;
-        if entry.file_type().map_err(|e| e.to_string())?.is_dir() { files.extend(walk_files(&entry.path())?); } else { files.push(entry.path()); }
+fn verify_generated_output(dir: &Path, names: &[String]) -> Result<(), String> {
+    let metadata = match fs::symlink_metadata(dir) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.to_string()),
+    };
+    if is_reparse_point(&metadata) || !metadata.file_type().is_dir() {
+        return Err(format!("输出目录不是普通目录或是重解析点，拒绝覆盖: {}", dir.display()));
     }
-    Ok(files)
+    if fs::read_dir(dir).map_err(|e| e.to_string())?.next().is_none() { return Ok(()); }
+    let previous = fs::read_to_string(dir.join("files.list"))
+        .map_err(|_| format!("输出目录缺少受支持的文件清单，拒绝覆盖: {}", dir.display()))?;
+    if previous != format!("{}\n", names.join("\n")) {
+        return Err("已有输出清单不匹配，拒绝删除或覆盖其他生成版本".into());
+    }
+    check_entries(dir, dir, names)?;
+    let recorded = fs::read_to_string(dir.join("files.sha256"))
+        .map_err(|_| format!("输出目录缺少完整性记录，拒绝覆盖旧版生成目录: {}", dir.display()))?;
+    if recorded != integrity_record(dir, names)? {
+        return Err("生成文件或完整性记录已被修改，拒绝覆盖用户内容".into());
+    }
+    Ok(())
 }
 
 pub fn generate(workspace: &mut Workspace, output: &Path) -> Result<GenerationReport, String> {
@@ -166,11 +233,17 @@ pub fn generate(workspace: &mut Workspace, output: &Path) -> Result<GenerationRe
     let mut names: Vec<String> = sources.iter().map(|(_,name)| name.clone()).collect();
     names.extend(["Dcm_Externals.h".into(), "Ecu_Config.c".into(), "profile.txt".into()]);
     names.sort();
-    expected_paths(output, &names)?;
+    let output_name = output.file_name().ok_or("输出目录须有名称")?;
     let parent = output.parent().ok_or("输出目录须有父目录")?;
-    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    let stage = parent.join(format!(".autosar-config-{}-{}", std::process::id(), workspace.name()));
-    fs::create_dir(&stage).map_err(|e| format!("临时生成目录不可创建: {e}"))?;
+    if output_name == "." || output_name == ".." || parent.join(output_name) != output {
+        return Err("输出目录须为明确的命名路径，不能以 . 或 .. 结尾".into());
+    }
+    let parent = if parent.is_absolute() { parent.to_path_buf() }
+        else { std::env::current_dir().map_err(|e| e.to_string())?.join(parent) };
+    fs::create_dir_all(&parent).map_err(|e| e.to_string())?;
+    let output = parent.join(output_name);
+    verify_generated_output(&output, &names)?;
+    let stage = reserve_directory(&parent, "stage", output_name)?;
     let result = (|| {
         for (source, name) in sources {
             let target = stage.join(&name);
@@ -181,30 +254,69 @@ pub fn generate(workspace: &mut Workspace, output: &Path) -> Result<GenerationRe
         fs::write(stage.join("Dcm_Externals.h"), externals).map_err(|e| e.to_string())?;
         fs::write(stage.join("profile.txt"), map).map_err(|e| e.to_string())?;
         fs::write(stage.join("files.list"), names.join("\n") + "\n").map_err(|e| e.to_string())?;
-        let backup = parent.join(format!(".autosar-config-backup-{}-{}", std::process::id(), workspace.name()));
-        if output.exists() { fs::rename(output, &backup).map_err(|e| e.to_string())?; }
-        if let Err(error) = fs::rename(&stage, output) {
-            if backup.exists() { let _ = fs::rename(&backup, output); }
-            return Err(error.to_string());
+        fs::write(stage.join("files.sha256"), integrity_record(&stage, &names)?).map_err(|e| e.to_string())?;
+        verify_generated_output(&output, &names)?;
+        let existing = match fs::symlink_metadata(&output) {
+            Ok(metadata) if is_reparse_point(&metadata) || !metadata.file_type().is_dir() =>
+                return Err(format!("输出目录已变为链接或非普通目录，拒绝替换: {}", output.display())),
+            Ok(_) => true,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+            Err(error) => return Err(error.to_string()),
+        };
+        let backup = if existing {
+            let backup_root = reserve_directory(&parent, "backup", output_name)?;
+            let preserved = backup_root.join(output_name);
+            fs::rename(&output, &preserved).map_err(|e|
+                format!("无法保留旧生成工程 {} 至 {}: {e}", output.display(), preserved.display()))?;
+            Some(preserved)
+        } else { None };
+        if let Err(error) = fs::rename(&stage, &output) {
+            let recovery = backup.as_ref().map(|path|
+                format!("；原输出保留在 {}", path.display())).unwrap_or_default();
+            return Err(format!("无法安装新生成工程: {error}{recovery}"));
         }
-        if backup.exists() { fs::remove_dir_all(backup).map_err(|e| e.to_string())?; }
-        Ok(())
+        Ok(backup)
     })();
-    if result.is_err() { let _ = fs::remove_dir_all(stage); }
-    result?;
-    Ok(GenerationReport { output_directory: output.display().to_string(), files: names, issues: Vec::<Issue>::new() })
+    let backup = result.map_err(|error| format!("{error}；临时生成目录保留在 {}", stage.display()))?;
+    Ok(GenerationReport { output_directory: output.display().to_string(),
+        previous_output_directory: backup.map(|path| path.display().to_string()), files: names, issues: Vec::<Issue>::new() })
 }
 
 pub fn build(output: &Path) -> Result<BuildReport, String> {
     if !output.join("files.list").is_file() || !output.join("Ecu_Config.c").is_file() { return Err("须先生成完整 C99 工程".into()); }
+    let metadata = fs::symlink_metadata(output).map_err(|e| e.to_string())?;
+    if is_reparse_point(&metadata) || !metadata.file_type().is_dir() {
+        return Err(format!("构建目录不是普通目录或是重解析点: {}", output.display()));
+    }
+    let binary = output.join(if cfg!(windows) { "ecu_host.exe" } else { "ecu_host" });
+    let occupied = || format!("已有构建二进制 {}，拒绝覆盖；请选新的空目录重新生成并构建，或由文件所有者明确移走旧二进制后重试", binary.display());
+    match fs::symlink_metadata(&binary) {
+        Ok(_) => return Err(occupied()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.to_string()),
+    }
     let cc = std::env::var_os("AUTOSAR_CC").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("gcc"));
     let mut sources = fs::read_dir(output.join("src")).map_err(|e| e.to_string())?.map(|entry| entry.map(|e| e.path()).map_err(|e| e.to_string())).collect::<Result<Vec<_>,_>>()?;
     sources.retain(|p| p.extension().is_some_and(|e| e == "c"));
     sources.sort();
     sources.push(output.join("Ecu_Config.c"));
-    let binary = output.join(if cfg!(windows) { "ecu_host.exe" } else { "ecu_host" });
-    let result = Command::new(cc).arg("-std=c99").arg("-Wall").arg("-Wextra").arg("-Werror").arg("-pedantic").arg("-I").arg(output.join("include")).args(sources).arg("-o").arg(&binary).output().map_err(|e| format!("无法启动 C99 编译器: {e}"))?;
+    let stage = reserve_directory(output.parent().ok_or("构建目录须有父目录")?, "build", binary.file_name().unwrap())?;
+    let staged_binary = stage.join(binary.file_name().unwrap());
+    let result = Command::new(cc).arg("-std=c99").arg("-Wall").arg("-Wextra").arg("-Werror").arg("-pedantic").arg("-I")
+        .arg(output.join("include")).args(sources).arg("-o").arg(&staged_binary).output()
+        .map_err(|e| format!("无法启动 C99 编译器: {e}；临时目录保留在 {}", stage.display()))?;
     let log = format!("{}{}", String::from_utf8_lossy(&result.stdout), String::from_utf8_lossy(&result.stderr));
-    if !result.status.success() { return Err(format!("C99 构建失败: {log}")); }
-    Ok(BuildReport { binary_path: binary.display().to_string(), log: if log.is_empty() { "C99 构建成功".into() } else { log } })
+    if !result.status.success() { return Err(format!("C99 构建失败: {log}；临时目录保留在 {}", stage.display())); }
+    fs::hard_link(&staged_binary, &binary).map_err(|error| {
+        let reason = if error.kind() == std::io::ErrorKind::AlreadyExists { occupied() }
+            else { format!("无法安装已编译的二进制: {error}") };
+        format!("{reason}；临时编译产物保留在 {}", staged_binary.display())
+    })?;
+    let cleanup = fs::remove_file(&staged_binary).and_then(|_| fs::remove_dir(&stage));
+    let log = match cleanup {
+        Ok(()) if log.is_empty() => "C99 构建成功".into(),
+        Ok(()) => log,
+        Err(error) => format!("{log}C99 构建成功，但临时目录 {} 未完全清理: {error}", stage.display()),
+    };
+    Ok(BuildReport { binary_path: binary.display().to_string(), log })
 }
