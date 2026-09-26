@@ -11,16 +11,16 @@
       "target": "Windows host virtual ECU; local GCC toolchain",
       "claim_level": "documented_behavior",
       "documented_in": "README.md",
-      "review": { "status": "not_run" },
+      "review": { "status": "pending_review" },
       "gates": {
-        "input_roundtrip": { "status": "not_run" },
-        "artifact_closure": { "status": "not_run" },
-        "build_static": { "status": "not_run" },
-        "independent_behavior": { "status": "not_run" },
+        "input_roundtrip": { "status": "pending_review", "evidence": "docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md" },
+        "artifact_closure": { "status": "pending_review", "evidence": "docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md" },
+        "build_static": { "status": "pending_review", "evidence": "docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md" },
+        "independent_behavior": { "status": "pending_review", "evidence": "docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md" },
         "user_workflow": { "status": "not_run" },
         "spec_obligations": { "status": "not_run" }
       },
-      "next_gap": "按逐配置证据门审计已有主机 CAN 剖面，见 AUDIT-001。"
+      "next_gap": "真实外部多文件 CAN 项目的受支持编辑与原生界面交接、逐模块静态/工件义务仍缺证据；AUDIT-001 继续。"
     },
     {
       "id": "HOST-DOCAN-01",
@@ -46,11 +46,13 @@
     {
       "id": "AUDIT-001",
       "title": "主机 CAN 信号基线证据审计",
-      "status": "ready",
+      "status": "active",
       "card": "docs/workflow/tasks/AUDIT-001-host-can.md",
+      "branch": "audit/AUDIT-001-host-can",
+      "base_commit": "aef47c3",
       "capabilities": ["HOST-CAN-01"],
       "depends_on": [],
-      "evidence": []
+      "evidence": ["docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md"]
     },
     {
       "id": "AUDIT-002",

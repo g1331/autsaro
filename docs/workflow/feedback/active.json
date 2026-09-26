@@ -23,6 +23,20 @@
         "scripts/workflow.py"
       ],
       "baseline_done_task_ids": []
+    },
+    {
+      "id": "WF-002",
+      "status": "observed",
+      "severity": "normal",
+      "problem": "已安装本地 vcpkg 依赖时，新的 PowerShell 会话直接运行核心验证仍因构建环境变量缺失而失败",
+      "impact": "AUDIT-001 首次 `verify --scope core` 在 libxml 构建脚本退出 101；需回查 README 并定位 vcpkg/libclang 后重跑，增加复现成本",
+      "observations": [
+        {
+          "task_id": "AUDIT-001",
+          "detail": "`python scripts/workflow.py verify --scope core` 报 `vcpkg did not succeed in finding libxml2`；设置 VCPKG_ROOT、VCPKGRS_TRIPLET、LIBCLANG_PATH 后全量验证通过。README 已写这些变量，本次先记录环境发现成本，未据单次现象修改验证脚本。",
+          "source": "README.md"
+        }
+      ]
     }
   ]
 }
