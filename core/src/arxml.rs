@@ -1584,6 +1584,13 @@ impl Workspace {
     pub fn save(&mut self) -> Result<WorkspaceView, String> {
         self.validate()?;
         if let Some(issue) = self.issues.iter().find(|i| matches!(i.severity, Severity::Error)) { return Err(format!("{}: {}", issue.code, issue.message)); }
+        // Validation includes references across every imported file, including files this
+        // edit leaves untouched. A stale untouched file would invalidate that result.
+        for file in &self.files {
+            if fs::read_to_string(&file.path).map_err(|e| e.to_string())? != file.saved {
+                return Err(format!("文件已被外部修改，拒绝保存基于过期跨文件配置的编辑: {}", file.path.display()));
+            }
+        }
         let dirty = self.files.iter().filter(|f| f.text != f.saved).collect::<Vec<_>>();
         let mut staged = Vec::new();
         for (index, file) in dirty.iter().enumerate() {

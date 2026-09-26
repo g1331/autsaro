@@ -254,9 +254,13 @@ fn generated_c99_ecus_exchange_golden_vectors_and_recover_from_faults() {
     fs::create_dir(&out_b).unwrap();
     generator::generate(&mut a, &out_a).unwrap();
     generator::generate(&mut b, &out_b).unwrap();
-    let original = fs::read(out_a.join("Ecu_Config.c")).unwrap();
+    let mut names: Vec<String> = fs::read_to_string(out_a.join("files.list")).unwrap().lines().map(str::to_owned).collect();
+    names.extend(["files.list".into(), "files.sha256".into()]);
+    let original: Vec<_> = names.iter().map(|name| fs::read(out_a.join(name)).unwrap()).collect();
     generator::generate(&mut a, &out_a).unwrap();
-    assert_eq!(original, fs::read(out_a.join("Ecu_Config.c")).unwrap(), "identical ARXML must generate stable C");
+    for (name, expected) in names.iter().zip(&original) {
+        assert_eq!(&fs::read(out_a.join(name)).unwrap(), expected, "identical ARXML changed generated file {name}");
+    }
     let exe_a = generator::build(&out_a).unwrap().binary_path;
     let exe_b = generator::build(&out_b).unwrap().binary_path;
     let mut tx = Command::new(exe_a).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
@@ -732,6 +736,40 @@ fn save_does_not_overwrite_external_changes_to_managed_arxml() {
     assert_eq!(fs::read_to_string(&source).unwrap(), external);
     assert!(project.view().dirty);
     assert_eq!(fs::read_dir(source.parent().unwrap()).unwrap().count(), 1, "failed save left staging files");
+}
+
+#[test]
+fn split_package_save_preserves_sources_and_rejects_stale_reference_file() {
+    let temp = Scratch::new();
+    create_pair(&temp.0);
+    let source = temp.0.join("Alpha/Alpha.arxml");
+    let other = temp.0.join("Alpha/Signals.arxml");
+    let original = fs::read_to_string(&source).unwrap();
+    let start = original.find("<I-SIGNAL><SHORT-NAME>ISignal_SendCount</SHORT-NAME>").unwrap();
+    let end = start + original[start..].find("</I-SIGNAL>").unwrap() + "</I-SIGNAL>".len();
+    let signal = &original[start..end];
+    fs::write(&source, original.replacen(signal, "", 1)).unwrap();
+    fs::write(&other, format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd\"><AR-PACKAGES><AR-PACKAGE><SHORT-NAME>Alpha</SHORT-NAME><ELEMENTS>{signal}</ELEMENTS></AR-PACKAGE></AR-PACKAGES></AUTOSAR>\n")).unwrap();
+
+    let mut project = Workspace::open(vec![source.clone(), other.clone()], archive()).unwrap();
+    assert!(project.validate().unwrap().issues.is_empty());
+    let frame = project.view().frames.into_iter().find(|frame| frame.name == "Command").unwrap();
+    let untouched = fs::read(&other).unwrap();
+    project.update_frame(&frame.path, serde_json::json!({"id": 802})).unwrap();
+    project.save().unwrap();
+    assert_eq!(fs::read(&other).unwrap(), untouched, "supported edit must leave the other file byte-identical");
+    let mut project = Workspace::open(vec![source.clone(), other.clone()], archive()).unwrap();
+    assert!(project.validate().unwrap().issues.is_empty());
+    assert_eq!(project.view().frames.iter().find(|item| item.name == "Command").unwrap().id, 802);
+    project.update_frame(&frame.path, serde_json::json!({"id": 803})).unwrap();
+    let before_save = fs::read(&source).unwrap();
+    let external = fs::read_to_string(&other).unwrap().replacen("<LENGTH>8</LENGTH>", "<LENGTH>7</LENGTH>", 1);
+    fs::write(&other, &external).unwrap();
+
+    assert!(project.save().unwrap_err().contains("外部修改"));
+    assert_eq!(fs::read(&source).unwrap(), before_save, "dirty source must not be partly committed");
+    assert_eq!(fs::read_to_string(&other).unwrap(), external, "external source must be preserved");
+    assert!(project.view().dirty);
 }
 
 #[test]
