@@ -46,15 +46,16 @@
     {
       "id": "AUDIT-001",
       "title": "主机 CAN 信号基线证据审计",
-      "status": "active",
+      "status": "review",
       "card": "docs/workflow/tasks/AUDIT-001-host-can.md",
-      "branch": "audit/AUDIT-001-host-can",
-      "base_commit": "aef47c3",
+      "branch": "audit/AUDIT-001-closure",
+      "base_commit": "d1a804f",
       "capabilities": ["HOST-CAN-01"],
       "depends_on": [],
       "evidence": [
         "docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md",
-        "docs/workflow/evidence/AUDIT-001-host-can-ui-2026-09-26.md"
+        "docs/workflow/evidence/AUDIT-001-host-can-ui-2026-09-26.md",
+        "docs/workflow/evidence/AUDIT-001-host-can-closure-2026-09-26.md"
       ]
     },
     {
