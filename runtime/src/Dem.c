@@ -84,6 +84,14 @@ uint8_t Dem_FilterDtc(uint8_t mask, uint32_t *code, uint8_t *status)
     if (active_dtc == NULL || (event_status & mask & DTC_AVAILABILITY) == 0u) {
         return 0u;
     }
+    return Dem_GetSupportedDtc(code, status);
+}
+
+uint8_t Dem_GetSupportedDtc(uint32_t *code, uint8_t *status)
+{
+    if (active_dtc == NULL) {
+        return 0u;
+    }
     *code = active_dtc->code;
     *status = event_status;
     return 1u;

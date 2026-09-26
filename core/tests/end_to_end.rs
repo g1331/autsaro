@@ -1369,6 +1369,81 @@ fn unsupported_imported_transport_padding_blocks_diagnostic_generation() {
 
 #[cfg(windows)]
 #[test]
+fn supported_dtcs_include_zero_status_and_follow_configured_lifecycle() {
+    let temp = Scratch::new();
+    for (name, code, encoded) in [("SupportedA", 0x123456, "123456"), ("SupportedB", 0xABCDEF, "ABCDEF")] {
+        let directory = temp.0.join(name);
+        let mut project = Workspace::create(&directory, name, archive()).unwrap();
+        let tx = project.add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(1000), None).unwrap().frames[0].path.clone();
+        let signal = project.add_signal(tx, "LiveValue".into(), 0, 32, 7).unwrap().signals[0].path.clone();
+        let rx = project.add_frame("Heartbeat".into(), 0x456, 2, Direction::Rx, None, Some(50)).unwrap()
+            .frames.into_iter().find(|frame| frame.name == "Heartbeat").unwrap().path;
+        project.add_signal(rx.clone(), "HeartbeatValue".into(), 0, 8, 0).unwrap();
+        project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, vec![signal], false, None, false).unwrap();
+        project.configure_dtc(code, rx).unwrap();
+        project.save().unwrap();
+        let source = directory.join(format!("{name}.arxml"));
+        let saved = fs::read(&source).unwrap();
+        let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
+        assert!(reopened.validate().unwrap().issues.is_empty());
+        assert_eq!(reopened.view().diagnostic.unwrap().dtc.unwrap().code, code);
+        let generated = directory.join("generated");
+        generator::generate(&mut reopened, &generated).unwrap();
+        assert_eq!(fs::read(&source).unwrap(), saved);
+        let binary = generator::build(&generated).unwrap().binary_path;
+        let storage = directory.join("dtc.nvm");
+        let run = |input: &str| {
+            let mut ecu = Command::new(&binary).arg("--nvm").arg(&storage)
+                .stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
+            ecu.stdin.take().unwrap().write_all(input.as_bytes()).unwrap();
+            let output = ecu.wait_with_output().unwrap();
+            assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stdout));
+            let lines: Vec<String> = String::from_utf8(output.stdout).unwrap().lines()
+                .map(|line| line.trim_end_matches('\r').to_owned()).collect();
+            assert!(!lines.iter().any(|line| line.starts_with("E ")), "{lines:?}");
+            lines.into_iter().filter(|line| line.starts_with("X 1800 ")).collect::<Vec<_>>()
+        };
+        let supported = |status| format!("X 1800 8 07590A7F{encoded}{status:02X}");
+        // Initial reads, including rejected requests, must not mutate persistent state.
+        assert!(run("").is_empty());
+        let before = fs::read(&storage).unwrap();
+        assert_eq!(run("R 1792 3 02190A\nR 1792 4 03190A00\nR 1792 2 0119\nR 1792 3 021903\nR 1792 3 02198A\nR 1792 3 02190A\n"), vec![
+            supported(0x50), "X 1800 4 037F1913".into(), "X 1800 4 037F1913".into(),
+            "X 1800 4 037F1912".into(), "X 1800 4 037F1912".into(), supported(0x50),
+        ]);
+        assert_eq!(fs::read(&storage).unwrap(), before);
+        // Zero status is still supported; a zero status mask remains empty for 01/02.
+        assert_eq!(run("R 1110 2 0100\nR 1792 3 02190A\nR 1792 4 03190100\nR 1792 4 03190200\nR 1792 4 0319027F\nR 1792 3 021003\nR 1792 3 028502\nT 51\nR 1792 3 02190A\nR 1792 3 028501\nR 1110 2 0100\nT 102\nR 1792 3 02190A\n"), vec![
+            supported(0x00), "X 1800 7 0659017F010000".into(), "X 1800 4 0359027F".into(),
+            "X 1800 4 0359027F".into(), "X 1800 7 06500300320032".into(),
+            "X 1800 3 02C502".into(), supported(0x00), "X 1800 3 02C501".into(), supported(0x2F),
+        ]);
+        assert_eq!(run("R 1792 3 02190A\nR 1110 2 0100\nR 1792 3 02190A\nR 1792 3 021003\nR 1792 5 0414FFFFFF\nR 1792 3 02190A\n"), vec![
+            supported(0x6D), supported(0x2C), "X 1800 7 06500300320032".into(),
+            "X 1800 2 0154".into(), supported(0x50),
+        ]);
+        assert_eq!(run("R 1792 3 02190A\n"), vec![supported(0x50)]);
+        let report = host::run_diagnostic(&generated).unwrap();
+        assert!(report.passed, "{report:?}");
+        assert!(report.events.iter().any(|event| event.contains("0x19/0x0A")));
+
+        reopened.clear_dtc().unwrap();
+        reopened.save().unwrap();
+        let mut cleared = Workspace::open(vec![source], archive()).unwrap();
+        assert!(cleared.view().diagnostic.unwrap().dtc.is_none());
+        let without_dtc = directory.join("without-dtc");
+        generator::generate(&mut cleared, &without_dtc).unwrap();
+        let binary = generator::build(&without_dtc).unwrap().binary_path;
+        let mut ecu = Command::new(binary).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
+        ecu.stdin.take().unwrap().write_all(b"R 1792 3 02190A\n").unwrap();
+        let output = ecu.wait_with_output().unwrap();
+        assert!(output.status.success());
+        assert_eq!(String::from_utf8(output.stdout).unwrap().trim(), "X 1800 4 037F1911");
+    }
+}
+
+#[cfg(windows)]
+#[test]
 fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restarts() {
     let temp = Scratch::new();
     let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();

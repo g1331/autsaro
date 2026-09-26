@@ -224,10 +224,10 @@ EcuStatus Dcm_RxIndication(const uint8_t *request, size_t length, uint64_t now_m
         if (length < 2u) {
             return NegativeResponse(0x19u, 0x13u, now_ms);
         }
-        if (request[1] != 0x01u && request[1] != 0x02u) {
+        if (request[1] != 0x01u && request[1] != 0x02u && request[1] != 0x0au) {
             return NegativeResponse(0x19u, 0x12u, now_ms);
         }
-        if (length != 3u) {
+        if (length != (request[1] == 0x0au ? 2u : 3u)) {
             return NegativeResponse(0x19u, 0x13u, now_ms);
         }
         response[0] = 0x59u;
@@ -236,7 +236,8 @@ EcuStatus Dcm_RxIndication(const uint8_t *request, size_t length, uint64_t now_m
         {
             uint32_t code;
             uint8_t status;
-            uint8_t found = Dem_FilterDtc(request[2], &code, &status);
+            uint8_t found = request[1] == 0x0au ? Dem_GetSupportedDtc(&code, &status)
+                                              : Dem_FilterDtc(request[2], &code, &status);
             if (request[1] == 0x01u) {
                 response[3] = 0x01u; /* ISO 14229-1 DTC format. */
                 response[4] = 0u;

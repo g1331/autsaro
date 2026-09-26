@@ -610,15 +610,30 @@ fn verify_persistent_dtc(
     let request = diagnostic.request_id;
     let read_dtc = format!("R {request} 4 03190208");
     let count_dtc = format!("R {request} 4 03190108");
+    let supported_dtc = format!("R {request} 3 02190A");
     let counted = |count| vec![0x06, 0x59, 0x01, 0x7F, 0x01, 0x00, count];
     let empty = vec![0x03, 0x59, 0x02, 0x7F];
     let reported = |status| vec![0x07, 0x59, 0x02, 0x7F,
+        (dtc.code >> 16) as u8, (dtc.code >> 8) as u8, dtc.code as u8, status];
+    let supported = |status| vec![0x07, 0x59, 0x0A, 0x7F,
         (dtc.code >> 16) as u8, (dtc.code >> 8) as u8, dtc.code as u8, status];
     {
         let mut ecu = EcuProcess::start(binary, Some(&state.path), security)?;
         prepare(&mut ecu, profile, salt)?;
         let before = diagnostic_request(&mut ecu, fence, read_dtc.clone())?;
         diagnostic_frames(&before, &[empty.clone()], profile, diagnostic, salt)?;
+        let all = diagnostic_request(&mut ecu, fence, supported_dtc.clone())?;
+        diagnostic_frames(&all, &[supported(0x50)], profile, diagnostic, salt)?;
+        for (payload, nrc) in [("03190A00", 0x13), ("0119", 0x13), ("021903", 0x12), ("02198A", 0x12)] {
+            let invalid = diagnostic_request(&mut ecu, fence,
+                format!("R {request} {} {payload}", payload.len() / 2))?;
+            diagnostic_frames(&invalid, &[vec![0x03, 0x7F, 0x19, nrc]], profile, diagnostic, salt)?;
+        }
+        let received = diagnostic_request(&mut ecu, fence,
+            format!("R {} {} {}", dtc.id, dtc.dlc, "00".repeat(dtc.dlc as usize)))?;
+        diagnostic_frames(&received, &[], profile, diagnostic, salt)?;
+        let all = diagnostic_request(&mut ecu, fence, supported_dtc.clone())?;
+        diagnostic_frames(&all, &[supported(0x00)], profile, diagnostic, salt)?;
         let count = diagnostic_request(&mut ecu, fence, count_dtc.clone())?;
         diagnostic_frames(&count, &[counted(0)], profile, diagnostic, salt)?;
         let session = diagnostic_request(&mut ecu, fence, format!("R {request} 3 021003"))?;
@@ -633,6 +648,8 @@ fn verify_persistent_dtc(
         diagnostic_frames(&timed, &[], profile, diagnostic, salt)?;
         let suppressed = diagnostic_request(&mut ecu, fence, read_dtc.clone())?;
         diagnostic_frames(&suppressed, &[empty.clone()], profile, diagnostic, salt)?;
+        let all = diagnostic_request(&mut ecu, fence, supported_dtc.clone())?;
+        diagnostic_frames(&all, &[supported(0x00)], profile, diagnostic, salt)?;
         let count = diagnostic_request(&mut ecu, fence, count_dtc.clone())?;
         diagnostic_frames(&count, &[counted(0)], profile, diagnostic, salt)?;
         let on = diagnostic_request(&mut ecu, fence, format!("R {request} 3 028501"))?;
@@ -644,6 +661,8 @@ fn verify_persistent_dtc(
         diagnostic_frames(&timed, &[], profile, diagnostic, salt)?;
         let failed = diagnostic_request(&mut ecu, fence, read_dtc.clone())?;
         diagnostic_frames(&failed, &[reported(0x2F)], profile, diagnostic, salt)?;
+        let all = diagnostic_request(&mut ecu, fence, supported_dtc.clone())?;
+        diagnostic_frames(&all, &[supported(0x2F)], profile, diagnostic, salt)?;
         let count = diagnostic_request(&mut ecu, fence, count_dtc.clone())?;
         diagnostic_frames(&count, &[counted(1)], profile, diagnostic, salt)?;
     }
@@ -654,6 +673,8 @@ fn verify_persistent_dtc(
         prepare(&mut ecu, profile, salt)?;
         let recovered = diagnostic_request(&mut ecu, fence, read_dtc.clone())?;
         diagnostic_frames(&recovered, &[reported(0x6D)], profile, diagnostic, salt)?;
+        let all = diagnostic_request(&mut ecu, fence, supported_dtc.clone())?;
+        diagnostic_frames(&all, &[supported(0x6D)], profile, diagnostic, salt)?;
         let count = diagnostic_request(&mut ecu, fence, count_dtc.clone())?;
         diagnostic_frames(&count, &[counted(1)], profile, diagnostic, salt)?;
         let passed = diagnostic_request(&mut ecu, fence,
@@ -674,6 +695,8 @@ fn verify_persistent_dtc(
         diagnostic_frames(&cleared, &[vec![0x01, 0x54]], profile, diagnostic, salt)?;
         let now_empty = diagnostic_request(&mut ecu, fence, read_dtc.clone())?;
         diagnostic_frames(&now_empty, &[empty.clone()], profile, diagnostic, salt)?;
+        let all = diagnostic_request(&mut ecu, fence, supported_dtc.clone())?;
+        diagnostic_frames(&all, &[supported(0x50)], profile, diagnostic, salt)?;
         let count = diagnostic_request(&mut ecu, fence, count_dtc.clone())?;
         diagnostic_frames(&count, &[counted(0)], profile, diagnostic, salt)?;
     }
@@ -683,9 +706,12 @@ fn verify_persistent_dtc(
         diagnostic_frames(&after_restart, &[empty], profile, diagnostic, salt)?;
         let count = diagnostic_request(&mut ecu, fence, count_dtc)?;
         diagnostic_frames(&count, &[counted(0)], profile, diagnostic, salt)?;
+        let all = diagnostic_request(&mut ecu, fence, supported_dtc)?;
+        diagnostic_frames(&all, &[supported(0x50)], profile, diagnostic, salt)?;
     }
     events.push("重启后 DTC 保持、默认会话拒绝清除、扩展会话清除跨重启生效".into());
     events.push("0x19/0x01 状态掩码计数与 0x19/0x02 在超时、重启、清除前后一致".into());
+    events.push("0x19/0x0A 在无故障、暂停记录、超时、重启与清除后均报告配置的 DTC 和当前状态；错误长度与不支持子功能被拒绝后可恢复".into());
     fs::write(&state.path, [0u8; 64]).map_err(|e| format!("故障注入 NvM 损坏失败: {e}"))?;
     let mut corrupt_command = Command::new(binary);
     corrupt_command.arg("--nvm").arg(&state.path);

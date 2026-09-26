@@ -397,6 +397,27 @@
         "date": "2026-09-26",
         "evidence": "docs/workflow/evidence/BUILD-004-build-integrity-2026-09-26.md"
       }
+    },
+    {
+      "id": "DIAG-001",
+      "title": "读取主机 ECU 支持的 DTC 列表",
+      "status": "review",
+      "card": "docs/workflow/tasks/DIAG-001-supported-dtcs.md",
+      "branch": "feature/DIAG-001-supported-dtcs",
+      "base_commit": "b4a5a67",
+      "capabilities": [
+        "HOST-DOCAN-DTC-01",
+        "HOST-DOCAN-SEC-DTC-01"
+      ],
+      "depends_on": [
+        "AUDIT-002"
+      ],
+      "evidence": [
+        "docs/workflow/evidence/DIAG-001-supported-dtcs-2026-09-26.md"
+      ],
+      "review": {
+        "status": "pending_review"
+      }
     }
   ]
 }
