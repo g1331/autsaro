@@ -148,7 +148,7 @@
       "id": "HOST-DOCAN-DTC-01",
       "name": "Windows 虚拟 ECU 的单 DTC 故障记忆",
       "release": "CP/FO R24-11",
-      "configuration": "Base DoCAN plus one monitored Rx timeout DTC and host NvM; no write, routine or security",
+      "configuration": "Base DoCAN plus one monitored Rx timeout DTC and host NvM; 0x19/0x01, 0x02, 0x0A, 0x14 and 0x85; no write, routine or security",
       "target": "Windows host virtual ECU; local GCC toolchain",
       "claim_level": "documented_behavior",
       "documented_in": "README.md",
@@ -175,7 +175,7 @@
           "status": "not_run"
         }
       },
-      "next_gap": "优先续作：核对 0x19/0x14/0x85、持久化、损坏拒绝和重启恢复。"
+      "next_gap": "DIAG-001 已交付无状态过滤的支持 DTC 列表及正反向主机验证；整体单 DTC/NvM 档案的外部输入、原生用户流程和规范义务仍待 AUDIT-003 核对，不能据此升级支持。"
     },
     {
       "id": "HOST-DOCAN-SEC-WRITE-01",
@@ -241,7 +241,7 @@
           "status": "not_run"
         }
       },
-      "next_gap": "单独核对 DTC 状态与安全状态文件、解锁后清除和重启故障路径。"
+      "next_gap": "DIAG-001 已验证启用安全档案时未解锁可读取 0x19/0x0A；安全状态文件、完整原生用户流程与规范义务仍须按组合审查。"
     }
   ],
   "tasks": [
@@ -401,7 +401,7 @@
     {
       "id": "DIAG-001",
       "title": "读取主机 ECU 支持的 DTC 列表",
-      "status": "review",
+      "status": "done",
       "card": "docs/workflow/tasks/DIAG-001-supported-dtcs.md",
       "branch": "feature/DIAG-001-supported-dtcs",
       "base_commit": "b4a5a67",
@@ -416,7 +416,10 @@
         "docs/workflow/evidence/DIAG-001-supported-dtcs-2026-09-26.md"
       ],
       "review": {
-        "status": "pending_review"
+        "status": "passed",
+        "reviewer": "Agent diag001_review",
+        "date": "2026-09-26",
+        "evidence": "docs/workflow/evidence/DIAG-001-supported-dtcs-2026-09-26.md"
       }
     }
   ]

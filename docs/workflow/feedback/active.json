@@ -45,6 +45,11 @@
           "task_id": "BUILD-004",
           "detail": "BUILD-001/002 交付保存与生成预览，BUILD-003/004 交付离线构建和构建完整性；任务卡均声明不新增 ECU 运行服务，用户再次指出长期目标未推进。",
           "source": "docs/workflow/tasks/BUILD-004-build-integrity.md"
+        },
+        {
+          "task_id": "DIAG-001",
+          "detail": "通用推进指令下选择深 CAN 诊断运行增量：生成 ECU 新增 0x19/0x0A，具有配置闭环、独立正反向运行和新会话审查证据；这是试行后的第一张完成任务，保留 trial 等待第二张观察。",
+          "source": "docs/workflow/evidence/DIAG-001-supported-dtcs-2026-09-26.md"
         }
       ],
       "change": "AGENT_WORKFLOW.md 要求领取任务前核对近期成果与阶段出口，连续两张配套任务后默认选择 ECU 可运行行为切片，例外需有具体阻断证据；OWNER_GUIDE.md 解释通用推进指令的预期和成果分类。撤回时删除新增排序段落和对应说明。",
