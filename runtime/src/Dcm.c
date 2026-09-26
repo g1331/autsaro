@@ -1,6 +1,7 @@
 #include "Dcm.h"
 #include "Dem.h"
 #include "PduR.h"
+#include "Security.h"
 
 static const EcuDiagnosticConfig *active_config;
 static uint8_t active_session;
@@ -25,6 +26,9 @@ void Dcm_TpTxConfirmation(EcuStatus status, uint64_t now_ms)
 {
     if (pending_session != 0u) {
         if (status == ECU_OK) {
+            if (active_session != 0x01u) {
+                Security_Lock();
+            }
             active_session = pending_session;
             if (active_session == 0x01u && active_config != NULL && active_config->dtc != NULL) {
                 (void)Dem_EnableDTCSetting();
@@ -40,6 +44,7 @@ void Dcm_AdvanceTime(uint64_t now_ms)
     if (active_config != NULL && active_session != 0x01u &&
         now_ms - last_request_ms >= active_config->s3_ms) {
         active_session = 0x01u;
+        Security_Lock();
         if (active_config->dtc != NULL) {
             (void)Dem_EnableDTCSetting();
         }
@@ -89,6 +94,34 @@ EcuStatus Dcm_RxIndication(const uint8_t *request, size_t length, uint64_t now_m
         response[0] = 0x7eu;
         response[1] = 0x00u;
         return PduR_DcmTransmit(response, 2u, now_ms);
+    case 0x27u:
+        if (active_config->security_enabled == 0u) {
+            return NegativeResponse(0x27u, 0x11u, now_ms);
+        }
+        if (length < 2u) {
+            return NegativeResponse(0x27u, 0x13u, now_ms);
+        }
+        if (active_session != 0x03u) {
+            return NegativeResponse(0x27u, 0x7fu, now_ms);
+        }
+        if (request[1] != 0x01u && request[1] != 0x02u) {
+            return NegativeResponse(0x27u, 0x12u, now_ms);
+        }
+        if (length != (request[1] == 0x01u ? 2u : 2u + ECU_SECURITY_KEY_SIZE)) {
+            return NegativeResponse(0x27u, 0x13u, now_ms);
+        }
+        response[0] = 0x67u;
+        response[1] = request[1];
+        if (request[1] == 0x01u) {
+            uint8_t code = Security_RequestSeed(&response[2], now_ms);
+            return code == 0u ? PduR_DcmTransmit(response, 2u + ECU_SECURITY_SEED_SIZE, now_ms)
+                              : NegativeResponse(0x27u, code, now_ms);
+        }
+        {
+            uint8_t code = Security_SendKey(&request[2], now_ms);
+            return code == 0u ? PduR_DcmTransmit(response, 2u, now_ms)
+                              : NegativeResponse(0x27u, code, now_ms);
+        }
     case 0x22u:
         if (length != 3u) {
             return NegativeResponse(0x22u, 0x13u, now_ms);
@@ -120,6 +153,9 @@ EcuStatus Dcm_RxIndication(const uint8_t *request, size_t length, uint64_t now_m
         if (length != 3u + 4u * active_config->did_signal_count) {
             return NegativeResponse(0x2eu, 0x13u, now_ms);
         }
+        if (active_config->security_enabled != 0u && !Security_IsUnlocked()) {
+            return NegativeResponse(0x2eu, 0x33u, now_ms);
+        }
         for (i = 0u; i < active_config->did_signal_count; ++i) {
             Dcm_NegativeResponseCodeType error_code = DCM_E_GENERALPROGRAMMINGFAILURE;
             if (active_config->did_writers[i](&request[3u + 4u * i], &error_code) != E_OK) {
@@ -147,6 +183,9 @@ EcuStatus Dcm_RxIndication(const uint8_t *request, size_t length, uint64_t now_m
         if (length != 4u) {
             return NegativeResponse(0x31u, 0x13u, now_ms);
         }
+        if (active_config->security_enabled != 0u && !Security_IsUnlocked()) {
+            return NegativeResponse(0x31u, 0x33u, now_ms);
+        }
         if (active_config->reset_routine->start() != ECU_OK) {
             return NegativeResponse(0x31u, 0x22u, now_ms);
         }
@@ -167,6 +206,9 @@ EcuStatus Dcm_RxIndication(const uint8_t *request, size_t length, uint64_t now_m
         }
         if (request[1] != 0x01u && request[1] != 0x02u) {
             return NegativeResponse(0x85u, 0x12u, now_ms);
+        }
+        if (active_config->security_enabled != 0u && !Security_IsUnlocked()) {
+            return NegativeResponse(0x85u, 0x33u, now_ms);
         }
         result = request[1] == 0x01u ? Dem_EnableDTCSetting() : Dem_DisableDTCSetting();
         if (result != ECU_OK) {
@@ -222,6 +264,9 @@ EcuStatus Dcm_RxIndication(const uint8_t *request, size_t length, uint64_t now_m
         }
         if (request[1] != 0xffu || request[2] != 0xffu || request[3] != 0xffu) {
             return NegativeResponse(0x14u, 0x31u, now_ms);
+        }
+        if (active_config->security_enabled != 0u && !Security_IsUnlocked()) {
+            return NegativeResponse(0x14u, 0x33u, now_ms);
         }
         if (Dem_ClearAll() != ECU_OK) {
             return NegativeResponse(0x14u, 0x72u, now_ms);

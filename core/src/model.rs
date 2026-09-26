@@ -83,6 +83,7 @@ pub struct DiagnosticView {
     pub signal_paths: Vec<String>,
     pub write_enabled: bool,
     pub reset_routine_id: Option<u16>,
+    pub security_enabled: bool,
     pub dtc: Option<DtcView>,
 }
 
@@ -204,6 +205,9 @@ pub fn validate_diagnostic(diagnostic: &DiagnosticView, frames: &[FrameView], si
     }
     if diagnostic.reset_routine_id.is_some() && !diagnostic.write_enabled {
         issues.push(Issue::error("RESET_ROUTINE_WRITE", "重置例程要求 DID 可通过 0x2E 写入", path.clone()));
+    }
+    if diagnostic.security_enabled && !diagnostic.write_enabled && diagnostic.dtc.is_none() {
+        issues.push(Issue::error("SECURITY_TARGET", "安全访问须保护可写 DID 或故障记忆操作", path.clone()));
     }
     if let Some(dtc) = &diagnostic.dtc {
         if !(0x100..=0xfffffe).contains(&dtc.code) {

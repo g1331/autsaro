@@ -8,6 +8,7 @@ use std::sync::mpsc::{self, Receiver};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use sha2::{Digest, Sha256};
 
 #[derive(Clone)]
 struct Signal { id: u16, frame: String, start: u8, length: u8, initial: u32 }
@@ -23,6 +24,7 @@ struct DiagnosticProfile {
     signal_ids: Vec<u16>,
     write_enabled: bool,
     reset_routine_id: Option<u16>,
+    security_enabled: bool,
 }
 struct DtcProfile { code: u32, frame_index: usize, id: u32, dlc: u8, timeout: u32 }
 struct Profile { frames: Vec<Frame>, signals: Vec<Signal>, diagnostic: Option<DiagnosticProfile>, dtc: Option<DtcProfile>, text: String }
@@ -35,6 +37,7 @@ fn profile(dir: &Path) -> Result<Profile, String> {
     let mut dtc = None;
     let mut write_did = None;
     let mut reset_routine = None;
+    let mut security = false;
     for line in text.lines() {
         let cols: Vec<_> = line.split_whitespace().collect();
         match cols.first().copied() {
@@ -69,6 +72,7 @@ fn profile(dir: &Path) -> Result<Profile, String> {
                     signal_ids: ids,
                     write_enabled: false,
                     reset_routine_id: None,
+                    security_enabled: false,
                 };
                 if diagnostic.replace(config).is_some() { return Err("诊断清单含多个连接".into()); }
             }
@@ -85,6 +89,11 @@ fn profile(dir: &Path) -> Result<Profile, String> {
                 if reset_routine.replace(id).is_some() { return Err("诊断清单含多个例程".into()); }
             }
             Some("RESET_ROUTINE") => return Err("例程清单字段数量错误".into()),
+            Some("SECURITY") if cols == ["SECURITY", "level=1", "seed=16", "key=16", "attempts=3", "delay=5000"] => {
+                if security { return Err("诊断清单含多个安全档案".into()); }
+                security = true;
+            }
+            Some("SECURITY") => return Err("安全档案清单不受支持".into()),
             Some("DTC") if cols.len() == 6 => {
                 let field = |name: &str| cols.iter().find_map(|column| column.strip_prefix(name));
                 let config = DtcProfile {
@@ -111,6 +120,11 @@ fn profile(dir: &Path) -> Result<Profile, String> {
         if !configured.write_enabled { return Err("恢复 DID 例程需要可写 DID".into()); }
         configured.reset_routine_id = Some(id);
     }
+    if security {
+        let configured = diagnostic.as_mut().ok_or("安全档案缺少诊断连接")?;
+        if !configured.write_enabled && dtc.is_none() { return Err("安全档案没有受保护操作".into()); }
+        configured.security_enabled = true;
+    }
     if let Some(config) = &dtc {
         let frame = frames.get(config.frame_index).ok_or("DTC 监控帧不存在")?;
         if diagnostic.is_none() || config.code < 0x100 || config.code >= 0xFFFFFF ||
@@ -135,15 +149,28 @@ impl Drop for TempNvm {
     fn drop(&mut self) { let _ = fs::remove_file(&self.path); }
 }
 
+struct SecurityFiles { key: TempNvm, state: TempNvm }
+impl SecurityFiles {
+    fn new() -> Result<Self, String> {
+        let files = Self { key: TempNvm::new(), state: TempNvm::new() };
+        fs::write(&files.key.path, [0x5au8; 32]).map_err(|e| format!("无法准备隔离的测试密钥: {e}"))?;
+        Ok(files)
+    }
+}
+
 struct EcuProcess {
     child: Child,
     stdin: ChildStdin,
     lines: Receiver<String>,
 }
 impl EcuProcess {
-    fn start(path: &Path, nvm_path: Option<&Path>) -> Result<Self, String> {
+    fn start(path: &Path, nvm_path: Option<&Path>, security: Option<&SecurityFiles>) -> Result<Self, String> {
         let mut command = Command::new(path);
         if let Some(storage) = nvm_path { command.arg("--nvm").arg(storage); }
+        if let Some(files) = security {
+            command.arg("--security-key").arg(&files.key.path)
+                .arg("--security-state").arg(&files.state.path);
+        }
         let mut child = command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()
             .map_err(|e| format!("无法启动 ECU {}: {e}", path.display()))?;
         let stdin = child.stdin.take().ok_or("ECU stdin 不可用")?;
@@ -269,8 +296,10 @@ pub fn run(first: &Path, second: &Path) -> Result<RunReport, String> {
     if !binary_a.is_file() || !binary_b.is_file() { return Err("两个生成目录均须先完成 C99 构建".into()); }
     let a_nvm = a.dtc.as_ref().map(|_| TempNvm::new());
     let b_nvm = b.dtc.as_ref().map(|_| TempNvm::new());
-    let mut ecu_a = EcuProcess::start(&binary_a, a_nvm.as_ref().map(|state| state.path.as_path()))?;
-    let mut ecu_b = EcuProcess::start(&binary_b, b_nvm.as_ref().map(|state| state.path.as_path()))?;
+    let a_security = if a.diagnostic.as_ref().is_some_and(|d| d.security_enabled) { Some(SecurityFiles::new()?) } else { None };
+    let b_security = if b.diagnostic.as_ref().is_some_and(|d| d.security_enabled) { Some(SecurityFiles::new()?) } else { None };
+    let mut ecu_a = EcuProcess::start(&binary_a, a_nvm.as_ref().map(|state| state.path.as_path()), a_security.as_ref())?;
+    let mut ecu_b = EcuProcess::start(&binary_b, b_nvm.as_ref().map(|state| state.path.as_path()), b_security.as_ref())?;
     let mut events = Vec::new();
     let outcome = (|| -> Result<(), String> {
         let max_period = a.frames.iter().chain(&b.frames).filter(|f| f.tx).map(|f| f.period).max().ok_or("没有周期发送帧")? as u64;
@@ -360,6 +389,84 @@ fn diagnostic_error(ecu: &mut EcuProcess, command: String, expected: &str) -> Re
     if line == format!("E {expected}") { Ok(()) } else { Err(format!("诊断错误状态不匹配: {line}，期望 E {expected}")) }
 }
 
+fn security_key(seed: &[u8]) -> [u8; 16] {
+    let mut inner = [0x36u8; 64];
+    let mut outer = [0x5cu8; 64];
+    for i in 0..32 { inner[i] ^= 0x5a; outer[i] ^= 0x5a; }
+    let mut hash = Sha256::new();
+    hash.update(inner);
+    hash.update(b"AUTOSAR-HOST-SECURITY-v1");
+    hash.update(seed);
+    let digest = hash.finalize();
+    let mut hash = Sha256::new();
+    hash.update(outer);
+    hash.update(digest);
+    let digest = hash.finalize();
+    let mut key = [0u8; 16];
+    key.copy_from_slice(&digest[..16]);
+    key
+}
+
+fn send_payload(ecu: &mut EcuProcess, fence: u16, request: u32, payload: &[u8]) -> Result<Vec<String>, String> {
+    if payload.len() <= 7 {
+        let mut frame = vec![payload.len() as u8];
+        frame.extend_from_slice(payload);
+        return diagnostic_request(ecu, fence, format!("R {request} {} {}", frame.len(), hex_payload(&frame)));
+    }
+    let mut first = vec![0x10 | ((payload.len() >> 8) as u8 & 0x0f), payload.len() as u8];
+    first.extend_from_slice(&payload[..6]);
+    let flow = diagnostic_request(ecu, fence, format!("R {request} {} {}", first.len(), hex_payload(&first)))?;
+    if flow.len() != 1 || parse_frame(&flow[0])?.1 != [0x30, 0x00, 0x00] {
+        return Err("多帧诊断请求未得到 CTS 流控".into());
+    }
+    let mut result = Vec::new();
+    for (index, chunk) in payload[6..].chunks(7).enumerate() {
+        let mut frame = vec![0x20 | ((index as u8 + 1) & 0x0f)];
+        frame.extend_from_slice(chunk);
+        result = diagnostic_request(ecu, fence, format!("R {request} {} {}", frame.len(), hex_payload(&frame)))?;
+    }
+    Ok(result)
+}
+
+fn security_seed(ecu: &mut EcuProcess, profile: &Profile, diagnostic: &DiagnosticProfile, salt: u32) -> Result<[u8; 16], String> {
+    let fence = profile.signals[0].id;
+    let first = send_payload(ecu, fence, diagnostic.request_id, &[0x27, 0x01])?;
+    let responses: Vec<_> = first.iter().filter_map(|line| parse_frame(line).ok())
+        .filter(|(id, _)| *id == diagnostic.response_id).collect();
+    if responses.len() != 1 || responses[0].1.len() != 8 || responses[0].1[..2] != [0x10, 0x12] {
+        return Err(format!("0x27 未返回 18 字节多帧 seed 首帧: {first:?}"));
+    }
+    let mut payload = responses[0].1[2..].to_vec();
+    let rest = diagnostic_request(ecu, fence, format!("R {} 3 300000", diagnostic.request_id))?;
+    let mut sequence = 1u8;
+    for line in &rest {
+        let (id, frame) = parse_frame(line)?;
+        if id == diagnostic.response_id {
+            if frame.first() != Some(&(0x20 | sequence)) { return Err("0x27 seed 响应连续帧序号错误".into()); }
+            payload.extend_from_slice(&frame[1..]);
+            sequence += 1;
+        }
+    }
+    payload.truncate(18);
+    if sequence != 3 || payload.len() != 18 || payload[..2] != [0x67, 0x01] {
+        return Err("0x27 seed 响应载荷错误".into());
+    }
+    diagnostic_frames(&first, &[responses[0].1.clone()], profile, diagnostic, salt)?;
+    let mut seed = [0u8; 16];
+    seed.copy_from_slice(&payload[2..]);
+    Ok(seed)
+}
+
+fn security_unlock(ecu: &mut EcuProcess, profile: &Profile, diagnostic: &DiagnosticProfile, salt: u32) -> Result<[u8; 16], String> {
+    let seed = security_seed(ecu, profile, diagnostic, salt)?;
+    let key = security_key(&seed);
+    let mut key_request = vec![0x27, 0x02];
+    key_request.extend_from_slice(&key);
+    let result = send_payload(ecu, profile.signals[0].id, diagnostic.request_id, &key_request)?;
+    diagnostic_frames(&result, &[vec![0x02, 0x67, 0x02]], profile, diagnostic, salt)?;
+    Ok(key)
+}
+
 pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
     let profile = profile(dir)?;
     let diagnostic = profile.diagnostic.as_ref().ok_or("生成配置不含诊断连接")?;
@@ -371,7 +478,8 @@ pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
     if !binary.is_file() { return Err("诊断虚拟 ECU 尚未完成 C99 构建".into()); }
     let salt = 0x1357_9BDF;
     let initial_nvm = profile.dtc.as_ref().map(|_| TempNvm::new());
-    let mut ecu = EcuProcess::start(&binary, initial_nvm.as_ref().map(|state| state.path.as_path()))?;
+    let security = if diagnostic.security_enabled { Some(SecurityFiles::new()?) } else { None };
+    let mut ecu = EcuProcess::start(&binary, initial_nvm.as_ref().map(|state| state.path.as_path()), security.as_ref())?;
     let mut events = Vec::new();
     let outcome = (|| -> Result<(), String> {
         let fence = profile.signals[0].id;
@@ -462,15 +570,20 @@ pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
         Ok(())
     })();
     let outcome = outcome.and_then(|()| match &profile.dtc {
-        Some(dtc) => verify_persistent_dtc(&binary, &profile, diagnostic, dtc, salt, &mut events),
+        Some(dtc) => verify_persistent_dtc(&binary, &profile, diagnostic, dtc, salt, security.as_ref(), &mut events),
         None => Ok(()),
     });
     let outcome = outcome.and_then(|()| {
         if diagnostic.write_enabled {
-            verify_writable_did(&binary, &profile, diagnostic, salt, &mut events)
+            verify_writable_did(&binary, &profile, diagnostic, salt, security.as_ref(), &mut events)
         } else {
             Ok(())
         }
+    });
+    let outcome = outcome.and_then(|()| {
+        if diagnostic.security_enabled {
+            verify_security(&binary, &profile, diagnostic, salt, &mut events)
+        } else { Ok(()) }
     });
     match outcome {
         Ok(()) => {
@@ -481,6 +594,7 @@ pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
             };
             if diagnostic.write_enabled { log.push_str("；扩展会话 0x2E 易失写入"); }
             if diagnostic.reset_routine_id.is_some() { log.push_str("；0x31 恢复 DID 初值例程"); }
+            if diagnostic.security_enabled { log.push_str("；0x27 单级安全访问与受限操作"); }
             Ok(RunReport { passed: true, log, events })
         }
         Err(error) => Ok(RunReport { passed: false, log: error, events }),
@@ -489,7 +603,7 @@ pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
 
 fn verify_persistent_dtc(
     binary: &Path, profile: &Profile, diagnostic: &DiagnosticProfile, dtc: &DtcProfile,
-    salt: u32, events: &mut Vec<String>,
+    salt: u32, security: Option<&SecurityFiles>, events: &mut Vec<String>,
 ) -> Result<(), String> {
     let state = TempNvm::new();
     let fence = profile.signals[0].id;
@@ -501,7 +615,7 @@ fn verify_persistent_dtc(
     let reported = |status| vec![0x07, 0x59, 0x02, 0x7F,
         (dtc.code >> 16) as u8, (dtc.code >> 8) as u8, dtc.code as u8, status];
     {
-        let mut ecu = EcuProcess::start(binary, Some(&state.path))?;
+        let mut ecu = EcuProcess::start(binary, Some(&state.path), security)?;
         prepare(&mut ecu, profile, salt)?;
         let before = diagnostic_request(&mut ecu, fence, read_dtc.clone())?;
         diagnostic_frames(&before, &[empty.clone()], profile, diagnostic, salt)?;
@@ -509,6 +623,7 @@ fn verify_persistent_dtc(
         diagnostic_frames(&count, &[counted(0)], profile, diagnostic, salt)?;
         let session = diagnostic_request(&mut ecu, fence, format!("R {request} 3 021003"))?;
         diagnostic_frames(&session, &[vec![0x06, 0x50, 0x03, 0x00, 0x32, 0x00, 0x32]], profile, diagnostic, salt)?;
+        if diagnostic.security_enabled { security_unlock(&mut ecu, profile, diagnostic, salt)?; }
         let off = diagnostic_request(&mut ecu, fence, format!("R {request} 3 028502"))?;
         diagnostic_frames(&off, &[vec![0x02, 0xC5, 0x02]], profile, diagnostic, salt)?;
         let received = diagnostic_request(&mut ecu, fence,
@@ -535,7 +650,7 @@ fn verify_persistent_dtc(
     events.push("接收帧超时产生真实 Dem DTC，进程结束前写入 NvM".into());
     events.push("0x85/0x02 禁用 DTC 设置时 Rx 超时不记录故障；0x85/0x01 恢复后新超时写入 Dem/NvM".into());
     {
-        let mut ecu = EcuProcess::start(binary, Some(&state.path))?;
+        let mut ecu = EcuProcess::start(binary, Some(&state.path), security)?;
         prepare(&mut ecu, profile, salt)?;
         let recovered = diagnostic_request(&mut ecu, fence, read_dtc.clone())?;
         diagnostic_frames(&recovered, &[reported(0x6D)], profile, diagnostic, salt)?;
@@ -552,6 +667,7 @@ fn verify_persistent_dtc(
         diagnostic_frames(&denied, &[vec![0x03, 0x7F, 0x14, 0x7F]], profile, diagnostic, salt)?;
         let session = diagnostic_request(&mut ecu, fence, format!("R {request} 3 021003"))?;
         diagnostic_frames(&session, &[vec![0x06, 0x50, 0x03, 0x00, 0x32, 0x00, 0x32]], profile, diagnostic, salt)?;
+        if diagnostic.security_enabled { security_unlock(&mut ecu, profile, diagnostic, salt)?; }
         let wrong_group = diagnostic_request(&mut ecu, fence, format!("R {request} 5 0414000001"))?;
         diagnostic_frames(&wrong_group, &[vec![0x03, 0x7F, 0x14, 0x31]], profile, diagnostic, salt)?;
         let cleared = diagnostic_request(&mut ecu, fence, format!("R {request} 5 0414FFFFFF"))?;
@@ -562,7 +678,7 @@ fn verify_persistent_dtc(
         diagnostic_frames(&count, &[counted(0)], profile, diagnostic, salt)?;
     }
     {
-        let mut ecu = EcuProcess::start(binary, Some(&state.path))?;
+        let mut ecu = EcuProcess::start(binary, Some(&state.path), security)?;
         let after_restart = diagnostic_request(&mut ecu, fence, read_dtc)?;
         diagnostic_frames(&after_restart, &[empty], profile, diagnostic, salt)?;
         let count = diagnostic_request(&mut ecu, fence, count_dtc)?;
@@ -571,7 +687,13 @@ fn verify_persistent_dtc(
     events.push("重启后 DTC 保持、默认会话拒绝清除、扩展会话清除跨重启生效".into());
     events.push("0x19/0x01 状态掩码计数与 0x19/0x02 在超时、重启、清除前后一致".into());
     fs::write(&state.path, [0u8; 64]).map_err(|e| format!("故障注入 NvM 损坏失败: {e}"))?;
-    let corrupt = Command::new(binary).arg("--nvm").arg(&state.path).output()
+    let mut corrupt_command = Command::new(binary);
+    corrupt_command.arg("--nvm").arg(&state.path);
+    if let Some(files) = security {
+        corrupt_command.arg("--security-key").arg(&files.key.path)
+            .arg("--security-state").arg(&files.state.path);
+    }
+    let corrupt = corrupt_command.output()
         .map_err(|e| format!("无法验证 NvM 完整性拒绝路径: {e}"))?;
     if corrupt.status.success() || !String::from_utf8_lossy(&corrupt.stdout).lines().any(|line| line.trim_end_matches('\r') == "E NVM") {
         return Err("损坏的 NvM 状态未在启动时被明确拒绝".into());
@@ -608,16 +730,18 @@ fn expect_did_bytes(
 }
 
 fn verify_writable_did(
-    binary: &Path, profile: &Profile, diagnostic: &DiagnosticProfile, salt: u32, events: &mut Vec<String>,
+    binary: &Path, profile: &Profile, diagnostic: &DiagnosticProfile, salt: u32,
+    security: Option<&SecurityFiles>, events: &mut Vec<String>,
 ) -> Result<(), String> {
     let storage = profile.dtc.as_ref().map(|_| TempNvm::new());
-    let mut ecu = EcuProcess::start(binary, storage.as_ref().map(|state| state.path.as_path()))?;
+    let mut ecu = EcuProcess::start(binary, storage.as_ref().map(|state| state.path.as_path()), security)?;
     let request = diagnostic.request_id;
     let fence = profile.signals[0].id;
     let did = diagnostic.did;
     prepare(&mut ecu, profile, salt)?;
     let session = diagnostic_request(&mut ecu, fence, format!("R {request} 3 021003"))?;
     diagnostic_frames(&session, &[vec![0x06, 0x50, 0x03, 0x00, 0x32, 0x00, 0x32]], profile, diagnostic, salt)?;
+    if diagnostic.security_enabled { security_unlock(&mut ecu, profile, diagnostic, salt)?; }
     let other_did = if did == u16::MAX { did - 1 } else { did + 1 };
     let unknown = diagnostic_request(&mut ecu, fence, format!("R {request} 4 032E{other_did:04X}"))?;
     diagnostic_frames(&unknown, &[vec![0x03, 0x7F, 0x2E, 0x31]], profile, diagnostic, salt)?;
@@ -694,6 +818,7 @@ fn verify_writable_did(
                 return Err(format!("被拒绝的 0x31 请求改动了信号 {}", signal.id));
             }
         }
+        if diagnostic.security_enabled { security_unlock(&mut ecu, profile, diagnostic, salt)?; }
         let restored = diagnostic_request(&mut ecu, fence, format!("R {request} 5 043101{rid:04X}"))?;
         diagnostic_frames(&restored, &[vec![0x04, 0x71, 0x01, (rid >> 8) as u8, rid as u8]], profile, diagnostic, salt)?;
         let mut initial = Vec::with_capacity(signals.len() * 4);
@@ -720,7 +845,7 @@ fn verify_writable_did(
     }
     drop(ecu);
 
-    let mut restarted = EcuProcess::start(binary, storage.as_ref().map(|state| state.path.as_path()))?;
+    let mut restarted = EcuProcess::start(binary, storage.as_ref().map(|state| state.path.as_path()), security)?;
     for signal in &signals {
         let (frames, response) = restarted.query(&[], signal.id)?;
         if !frames.is_empty() || parse_value(&response)? != (signal.initial, true) {
@@ -733,5 +858,102 @@ fn verify_writable_did(
     for signal in &signals { initial.extend_from_slice(&signal.initial.to_be_bytes()); }
     expect_did_bytes(&mut restarted, profile, diagnostic, salt, &initial)?;
     events.push("S3 回默认会话拒绝写入；ECU 重启后 DID 恢复初值且未误称 NvM 持久化".into());
+    Ok(())
+}
+
+fn verify_security(
+    binary: &Path, profile: &Profile, diagnostic: &DiagnosticProfile, salt: u32,
+    events: &mut Vec<String>,
+) -> Result<(), String> {
+    let files = SecurityFiles::new()?;
+    let nvm = profile.dtc.as_ref().map(|_| TempNvm::new());
+    let fence = profile.signals[0].id;
+    let request = diagnostic.request_id;
+    let mut protected = Vec::new();
+    if diagnostic.write_enabled {
+        let mut data = vec![0x2e, (diagnostic.did >> 8) as u8, diagnostic.did as u8];
+        data.resize(3 + diagnostic.signal_ids.len() * 4, 0u8);
+        protected.push(data);
+    }
+    if let Some(rid) = diagnostic.reset_routine_id {
+        protected.push(vec![0x31, 0x01, (rid >> 8) as u8, rid as u8]);
+    }
+    if profile.dtc.is_some() {
+        protected.push(vec![0x14, 0xff, 0xff, 0xff]);
+        protected.push(vec![0x85, 0x01]);
+    }
+    let check_protected = |ecu: &mut EcuProcess, unlocked: bool| -> Result<(), String> {
+        for payload in &protected {
+            let result = send_payload(ecu, fence, request, payload)?;
+            let expected = if !unlocked { vec![0x03, 0x7f, payload[0], 0x33] }
+                else { match payload[0] {
+                    0x2e => vec![0x03, 0x6e, payload[1], payload[2]],
+                    0x31 => vec![0x04, 0x71, 0x01, payload[2], payload[3]],
+                    0x14 => vec![0x01, 0x54],
+                    0x85 => vec![0x02, 0xc5, 0x01],
+                    _ => return Err("安全档案含未知受保护服务".into()),
+                }};
+            diagnostic_frames(&result, &[expected], profile, diagnostic, salt)?;
+        }
+        Ok(())
+    };
+    {
+        let mut ecu = EcuProcess::start(binary, nvm.as_ref().map(|s| s.path.as_path()), Some(&files))?;
+        let before_session = send_payload(&mut ecu, fence, request, &[0x27, 0x01])?;
+        diagnostic_frames(&before_session, &[vec![0x03, 0x7f, 0x27, 0x7f]], profile, diagnostic, salt)?;
+        let session = send_payload(&mut ecu, fence, request, &[0x10, 0x03])?;
+        diagnostic_frames(&session, &[vec![0x06, 0x50, 0x03, 0x00, 0x32, 0x00, 0x32]], profile, diagnostic, salt)?;
+        check_protected(&mut ecu, false)?;
+        let out_of_order = send_payload(&mut ecu, fence, request, &[0x27, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])?;
+        diagnostic_frames(&out_of_order, &[vec![0x03, 0x7f, 0x27, 0x24]], profile, diagnostic, salt)?;
+        let used_key = security_unlock(&mut ecu, profile, diagnostic, salt)?;
+        if security_seed(&mut ecu, profile, diagnostic, salt)? != [0u8; 16] {
+            return Err("已解锁级别请求 seed 时未返回零 seed".into());
+        }
+        let mut replay = vec![0x27, 0x02];
+        replay.extend_from_slice(&used_key);
+        let rejected_replay = send_payload(&mut ecu, fence, request, &replay)?;
+        diagnostic_frames(&rejected_replay, &[vec![0x03, 0x7f, 0x27, 0x24]], profile, diagnostic, salt)?;
+        check_protected(&mut ecu, true)?;
+        let repeated_session = send_payload(&mut ecu, fence, request, &[0x10, 0x03])?;
+        diagnostic_frames(&repeated_session, &[vec![0x06, 0x50, 0x03, 0x00, 0x32, 0x00, 0x32]], profile, diagnostic, salt)?;
+        check_protected(&mut ecu, false)?;
+        for attempt in 1..=3 {
+            let _seed = security_seed(&mut ecu, profile, diagnostic, salt)?;
+            let mut wrong = vec![0x27, 0x02];
+            wrong.resize(18, 0u8);
+            let result = send_payload(&mut ecu, fence, request, &wrong)?;
+            diagnostic_frames(&result, &[vec![0x03, 0x7f, 0x27,
+                if attempt == 3 { 0x36 } else { 0x35 }]], profile, diagnostic, salt)?;
+        }
+        let delayed = send_payload(&mut ecu, fence, request, &[0x27, 0x01])?;
+        diagnostic_frames(&delayed, &[vec![0x03, 0x7f, 0x27, 0x37]], profile, diagnostic, salt)?;
+    }
+    {
+        let mut ecu = EcuProcess::start(binary, nvm.as_ref().map(|s| s.path.as_path()), Some(&files))?;
+        let session = send_payload(&mut ecu, fence, request, &[0x10, 0x03])?;
+        diagnostic_frames(&session, &[vec![0x06, 0x50, 0x03, 0x00, 0x32, 0x00, 0x32]], profile, diagnostic, salt)?;
+        let delayed = send_payload(&mut ecu, fence, request, &[0x27, 0x01])?;
+        diagnostic_frames(&delayed, &[vec![0x03, 0x7f, 0x27, 0x37]], profile, diagnostic, salt)?;
+        let _ = tick(&mut ecu, profile, 5000)?;
+        let session = send_payload(&mut ecu, fence, request, &[0x10, 0x03])?;
+        diagnostic_frames(&session, &[vec![0x06, 0x50, 0x03, 0x00, 0x32, 0x00, 0x32]], profile, diagnostic, salt)?;
+        security_unlock(&mut ecu, profile, diagnostic, salt)?;
+        let _ = tick(&mut ecu, profile, 5000 + diagnostic.s3_ms as u64 + 1)?;
+        let session = send_payload(&mut ecu, fence, request, &[0x10, 0x03])?;
+        diagnostic_frames(&session, &[vec![0x06, 0x50, 0x03, 0x00, 0x32, 0x00, 0x32]], profile, diagnostic, salt)?;
+        check_protected(&mut ecu, false)?;
+    }
+    fs::write(&files.state.path, [0u8; 16]).map_err(|e| format!("无法注入安全计数损坏: {e}"))?;
+    let mut corrupt = Command::new(binary);
+    if let Some(state) = &nvm { corrupt.arg("--nvm").arg(&state.path); }
+    let output = corrupt.arg("--security-key").arg(&files.key.path)
+        .arg("--security-state").arg(&files.state.path).output()
+        .map_err(|e| format!("无法检查损坏安全状态的启动拒绝: {e}"))?;
+    if output.status.success() || !String::from_utf8_lossy(&output.stdout).contains("E NVM") {
+        return Err("损坏的安全计数文件未在启动时拒绝".into());
+    }
+    events.push("0x27 seed/key 解锁、受保护操作、错误 key 次数/延时、重启保持与 S3 复锁通过".into());
+    events.push("损坏的安全失败计数文件在启动时被拒绝".into());
     Ok(())
 }

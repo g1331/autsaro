@@ -7,14 +7,14 @@
 在工程根目录，将 `generated/Ecu_Config.c` 换成该 ECU 实际生成文件：
 
 ```sh
-# MinGW GCC（或其他 C99 GCC）
-gcc -std=c99 -Wall -Wextra -pedantic -Iruntime/include runtime/src/*.c generated/Ecu_Config.c -o ecu.exe
+# MinGW GCC（Windows 主机目标）
+gcc -std=c99 -Wall -Wextra -pedantic -Iruntime/include runtime/src/*.c generated/Ecu_Config.c -o ecu.exe -lbcrypt
 ```
 
 在 MSVC 开发者命令提示符中：
 
 ```bat
-cl /TC /W4 /I runtime\include runtime\src\Can.c runtime\src\CanIf.c runtime\src\CanTp.c runtime\src\Com.c runtime\src\Dcm.c runtime\src\Dem.c runtime\src\Ecu_Runtime.c runtime\src\Ecu_Status.c runtime\src\LSduR.c runtime\src\NvM.c runtime\src\Os.c runtime\src\PduR.c runtime\src\Rte.c runtime\src\ecu_host_main.c generated\Ecu_Config.c /Fe:ecu.exe
+cl /TC /W4 /I runtime\include runtime\src\Can.c runtime\src\CanIf.c runtime\src\CanTp.c runtime\src\Com.c runtime\src\Dcm.c runtime\src\Dem.c runtime\src\Ecu_Runtime.c runtime\src\Ecu_Status.c runtime\src\LSduR.c runtime\src\NvM.c runtime\src\Os.c runtime\src\PduR.c runtime\src\Rte.c runtime\src\Security.c runtime\src\ecu_host_main.c generated\Ecu_Config.c bcrypt.lib /Fe:ecu.exe
 ```
 
 独立交付工程应保留这些源码和头文件，包括工程根目录的生成回调声明 `Dcm_Externals.h`，并将其中的 include/source 路径调整为工程内路径。输入配置结构和容量上限定义在 `include/Ecu_Config.h`；启动时再次校验生成数据，错误返回 `E CONFIG` 并退出。
@@ -39,11 +39,13 @@ Dcm 提供 0x10 默认/扩展会话、0x3E TesterPresent（子功能 0x80 抑制
 
 生成工程按 DID 信号顺序提供外部链接的 `Std_ReturnType Ecu_DcmRead_<index>(uint8_t *data)`，声明在 `Dcm_Externals.h`；主机 Dcm 的 0x22 实际调用它读取 Tx Com 值并写入 4 字节大端数据，读取失败仍返回 NRC 0x22。`include/Ecu_DcmCallbackTypes.h` 只定义主机剖面所需的 `Std_ReturnType`、`Dcm_NegativeResponseCodeType` 和返回码；它不是完整 AUTOSAR `Std_Types.h` 或 `Rte_Dcm_Type.h`，此回调闭包不证明第三方 Dcm 互操作或完整 BSW/RTE 符合性。
 
-可选 0x2E WriteDataByIdentifier 仅作用于当前诊断配置的一个 DID，须显式启用；`profile.txt` 增加 `WRITE_DID did=<十进制>` 行，未启用时不输出该行并返回 NRC 0x11。Dcm 只在扩展会话接受与 DID 的 1–8 个 32-bit Tx 信号相符的完整数据记录，每项按大端 4 字节传入生成的 `Ecu_DcmWrite_<index>` 回调，回调经 Rte → Com 修改当前值；0x22 读回与周期 CAN 帧立即可见。默认会话或 DID 不匹配返回 NRC 0x31，记录长度不符返回 NRC 0x13。写入可以是单帧或多帧请求，S3 回默认会话后不能继续写；ECU 进程重启后值恢复配置初值。此功能只写易失的主机虚拟应用状态，不使用 NvM/Flash，也没有 0x27 安全访问级别；会话限制不能当作认证。
+可选 0x2E WriteDataByIdentifier 仅作用于当前诊断配置的一个 DID，须显式启用；`profile.txt` 增加 `WRITE_DID did=<十进制>` 行，未启用时不输出该行并返回 NRC 0x11。Dcm 只在扩展会话接受与 DID 的 1–8 个 32-bit Tx 信号相符的完整数据记录，每项按大端 4 字节传入生成的 `Ecu_DcmWrite_<index>` 回调，回调经 Rte → Com 修改当前值；0x22 读回与周期 CAN 帧立即可见。默认会话或 DID 不匹配返回 NRC 0x31，记录长度不符返回 NRC 0x13。写入可以是单帧或多帧请求，S3 回默认会话后不能继续写；ECU 进程重启后值恢复配置初值。此功能只写易失的主机虚拟应用状态，不使用 NvM/Flash；若启用下述 0x27 档案，写入还须解锁。
 
 启用 0x2E 时还提供可外部链接的 `Std_ReturnType Ecu_DcmWrite_<index>(const uint8_t *data, Dcm_NegativeResponseCodeType *error_code)`，由同一头文件声明；主机 Dcm 实际调用它，经 Rte → Com 写入，失败时回调填入 0x72 并返回 `E_NOT_OK`，主机发送相应 NRC。未启用写入时不生成写回调声明或定义。
 
-可选 0x31/0x01 StartRoutine 只能在已启用 0x2E 时配置一个 RID；`profile.txt` 增加 `RESET_ROUTINE id=<十进制>` 行，未配置时不输出该行且服务返回 NRC 0x11。请求载荷为 `31 01 <RID 高字节> <RID 低字节>`，扩展会话中生成的内部 `Ecu_HostRestoreDid` 按 DID 配置顺序经 Rte → Com 将绑定的 Tx 信号写回各自的初始值；成功响应 `71 01 <RID 高字节> <RID 低字节>`，0x22 与周期 CAN 均能观察到恢复。默认会话或 RID 不匹配返回 NRC 0x31，StopRoutine/RequestRoutineResults 返回 NRC 0x12，长度错误返回 NRC 0x13，写入失败返回 NRC 0x22。没有选项/状态记录、持久化、0x27 安全访问或失败时的事务回滚；例程只作用于当前进程的易失状态。
+可选的**Windows 主机安全档案**提供单级 0x27：`27 01` 返回 16 字节随机 seed，`27 02` 携带 16 字节 key；key 为 HMAC-SHA256(`32 字节密钥`, `AUTOSAR-HOST-SECURITY-v1` 与 seed 的拼接)的前 16 字节。仅扩展会话可请求，成功后允许当前进程的 `0x2E`、`0x31/0x01`、`0x14`、`0x85`；未解锁时返回 NRC 0x33。错误顺序、错误 key、第三次失败及延时中请求 seed 分别返回 0x24、0x35、0x36、0x37。成功切换会话、S3 超时及重启会重新锁定。失败次数（最多 3 次）保存在独立的 16 字节 CRC32 校验状态文件；第三次失败后等待 5 秒虚拟时间，重启后仍须等待 5 秒；到期清零。密钥文件必须恰为 32 字节原始数据，由运行者保管，不能写入 ARXML 或生成工程。生成的 `ecu_host.exe` 启用本档案时须传 `--security-key <密钥文件> --security-state <独占状态文件>`；同时配置 DTC 时另传 `--nvm <独占故障文件>`。缺密钥/参数返回 `E CONFIG`，损坏或不可写的安全状态返回 `E NVM`。状态文件的 CRC 只检测损坏，不防止有本机文件写权限者篡改；本档案不证明硬件密钥保护或量产级认证。
+
+可选 0x31/0x01 StartRoutine 只能在已启用 0x2E 时配置一个 RID；`profile.txt` 增加 `RESET_ROUTINE id=<十进制>` 行，未配置时不输出该行且服务返回 NRC 0x11。请求载荷为 `31 01 <RID 高字节> <RID 低字节>`，扩展会话中生成的内部 `Ecu_HostRestoreDid` 按 DID 配置顺序经 Rte → Com 将绑定的 Tx 信号写回各自的初始值；成功响应 `71 01 <RID 高字节> <RID 低字节>`，0x22 与周期 CAN 均能观察到恢复。默认会话或 RID 不匹配返回 NRC 0x31，StopRoutine/RequestRoutineResults 返回 NRC 0x12，长度错误返回 NRC 0x13，写入失败返回 NRC 0x22。没有选项/状态记录、持久化或失败时的事务回滚；例程只作用于当前进程的易失状态，启用安全档案时还须先通过 0x27 解锁。
 
 0x31 是本工程的**主机专属行为**：生成 ARXML 在 DID 的 `ADMIN-DATA/SDGS` 下存储唯一 `AutosarWorkbenchHostRestoreDidV1` 工具组，其中 `Rid` 为十进制 16-bit 编号、`SessionRef` 固定指向本项目的 Extended 会话；不生成 DcmDsd 0x31 服务或 DcmDspRoutine/StartRoutine/CommonAuthorization 的标准 ECUC 节点。主机读取工具记录生成内部例程，不把 `Ecu_HostRestoreDid` 作为第三方 Dcm 回调。R24-11 `DcmDspRoutineFncSignature` 本属草案；独立的第三方 Dcm 不会从该 ARXML 获得本例程，也未验证例程的标准 ECUC 接口。
 
@@ -55,7 +57,7 @@ Dcm 提供 0x10 默认/扩展会话、0x3E TesterPresent（子功能 0x80 抑制
 
 配置 DTC 的 `ecu_host` **必须**以 `--nvm <独占的文件路径>` 启动；未配置 DTC 的工程不带参数运行。缺少参数返回 `E CONFIG`，既有文件损坏、配置指纹不匹配或写入失败返回 `E NVM`，不降级成空 DTC。不存在的文件会创建两个 32 字节 CRC32 保护槽位；每次状态改变交替写槽并 `fflush`、`fsync`/`_commit` 后才确认，启动要求两个槽位均完整，任一损坏即拒绝使用以避免旧状态覆盖最新故障。主机进程启动作为新的操作周期：初始/清除状态 `0x50`，有效 Rx 首次测试通过 `0x00`，首次超时 `0x2F`，故障后重启 `0x6D`，该周期再收到有效帧 `0x2C`；后续周期才清除 pending 标志。独立测试器为每次验证分配隔离文件，不复用实际 ECU 状态。
 
-这是有边界的主机虚拟实现：未实现多事件 Dem、真实 NvM 设备与 Ea/Fee/MemIf 目标、0x27 与其他 0x31 例程/子功能、其他写入 DID/持久写入、其他 0x19 子功能和 0x14 清除组、功能寻址、跨连接并发、实车确认时序或完整 ECUC 外部 ComM 引用；不以 XSD 通过代替 AUTOSAR/ISO 语义与互操作认证。Dem 事件到监测 Rx 帧只在工具专属 SDG 中绑定，操作周期只是进程启动。
+这是有边界的主机虚拟实现：未实现多事件 Dem、真实 NvM 设备与 Ea/Fee/MemIf 目标、多级 0x27 与其他 0x31 例程/子功能、其他写入 DID/持久写入、其他 0x19 子功能和 0x14 清除组、功能寻址、跨连接并发、实车确认时序或完整 ECUC 外部 ComM 引用；不以 XSD 通过代替 AUTOSAR/ISO 语义与互操作认证。Dem 事件到监测 Rx 帧只在工具专属 SDG 中绑定，操作周期只是进程启动。
 
 ## 逐行 stdin/stdout 协议
 

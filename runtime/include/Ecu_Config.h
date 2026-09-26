@@ -52,6 +52,7 @@ typedef struct {
     const EcuDidReadFunction *did_readers;
     const EcuDidWriteFunction *did_writers; /* NULL disables WriteDataByIdentifier. */
     const EcuResetRoutineConfig *reset_routine; /* NULL disables RoutineControl. */
+    uint8_t security_enabled; /* Host-only SecurityAccess level 1. */
 } EcuDiagnosticConfig;
 
 typedef struct {

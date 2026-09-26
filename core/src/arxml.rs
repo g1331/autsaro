@@ -628,9 +628,11 @@ fn parse_diagnostic(files: &[SourceFile], project: &str, frames: &[FrameView], s
         return Err("Dem/NvM 配置存在但缺少受支持的单个 UDS DTC".into());
     }
     let reset_routine_id = parse_host_routine(did_node, project, &nodes)?;
+    let security_enabled = nodes.iter().any(|node| node.tag_name().name() == "ECUC-CONTAINER-VALUE"
+        && definition(*node).as_deref() == Some("/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsp/DcmDspSecurity/DcmDspSecurityRow"));
     let diagnostic = DiagnosticView {
         path: path_of(did_node), request_id: ids[0], response_id: ids[1], s3_ms, n_bs_ms, n_cr_ms, did,
-        signal_paths: bindings.into_iter().map(|(_, path)| path).collect(), dtc, reset_routine_id,
+        signal_paths: bindings.into_iter().map(|(_, path)| path).collect(), dtc, reset_routine_id, security_enabled,
         write_enabled: nodes.iter().any(|node| node.tag_name().name() == "ECUC-CONTAINER-VALUE"
             && definition(*node).as_deref() == Some("/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsp/DcmDspDidInfo/DcmDspDidWrite")),
     };
@@ -1190,11 +1192,11 @@ impl Workspace {
     }
     pub fn configure_diagnostic(
         &mut self, request_id: u32, response_id: u32, s3_ms: u32, n_bs_ms: u32, n_cr_ms: u32,
-        did: u16, signal_paths: Vec<String>, write_enabled: bool, reset_routine_id: Option<u16>,
+        did: u16, signal_paths: Vec<String>, write_enabled: bool, reset_routine_id: Option<u16>, security_enabled: bool,
     ) -> Result<WorkspaceView, String> {
         let diagnostic = DiagnosticView {
             path: format!("/{}/DcmCfg/DcmConfigSet/DcmDsp/Did", self.name),
-            request_id, response_id, s3_ms, n_bs_ms, n_cr_ms, did, signal_paths, write_enabled, reset_routine_id,
+            request_id, response_id, s3_ms, n_bs_ms, n_cr_ms, did, signal_paths, write_enabled, reset_routine_id, security_enabled,
             dtc: self.diagnostic.as_ref().and_then(|existing| existing.dtc.clone()),
         };
         self.replace_managed(self.frames.clone(), self.signals.clone(), Some(diagnostic))?;
@@ -1215,6 +1217,9 @@ impl Workspace {
     pub fn clear_dtc(&mut self) -> Result<WorkspaceView, String> {
         let mut diagnostic = self.diagnostic.clone().ok_or("当前工程没有诊断配置")?;
         if diagnostic.dtc.is_none() { return Err("当前工程没有可移除的受支持 DTC".into()); }
+        if diagnostic.security_enabled && !diagnostic.write_enabled {
+            return Err("先关闭 0x27 安全档案，再移除唯一受保护的 DTC".into());
+        }
         diagnostic.dtc = None;
         if self.files.iter().any(|file| self.is_managed_file(file)) {
             self.replace_managed(self.frames.clone(), self.signals.clone(), Some(diagnostic))?;

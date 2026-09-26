@@ -127,8 +127,11 @@ fn config_source(name: &str, frames: &[crate::model::FrameView], signals: &[Sign
             writeln!(source, "static const EcuDtcConfig dtc = {{ {}u, {}u }};", dtc.code, index).unwrap();
             "&dtc"
         } else { "NULL" };
-        writeln!(source, "static const EcuDiagnosticConfig diagnostic = {{ {}u, {}u, {}u, {}u, {}u, {}u, diagnostic_signal_ids, {}u, {dtc_ref}, diagnostic_readers, {writer_ref}, {routine_ref} }};\n",
-            diagnostic.request_id, diagnostic.response_id, diagnostic.s3_ms, diagnostic.n_bs_ms, diagnostic.n_cr_ms, diagnostic.did, diagnostic.signal_paths.len()).unwrap();
+        if diagnostic.security_enabled {
+            map.push_str("SECURITY level=1 seed=16 key=16 attempts=3 delay=5000\n");
+        }
+        writeln!(source, "static const EcuDiagnosticConfig diagnostic = {{ {}u, {}u, {}u, {}u, {}u, {}u, diagnostic_signal_ids, {}u, {dtc_ref}, diagnostic_readers, {writer_ref}, {routine_ref}, {}u }};\n",
+            diagnostic.request_id, diagnostic.response_id, diagnostic.s3_ms, diagnostic.n_bs_ms, diagnostic.n_cr_ms, diagnostic.did, diagnostic.signal_paths.len(), diagnostic.security_enabled as u8).unwrap();
         "&diagnostic"
     } else { "NULL" };
     writeln!(source, "const EcuConfig Ecu_Config = {{ \"{name}\", frames, sizeof(frames) / sizeof(frames[0]), signals, sizeof(signals) / sizeof(signals[0]), {diagnostic_ref} }};").unwrap();
@@ -228,8 +231,12 @@ fn verify_generated_output(dir: &Path, names: &[String]) -> Result<(), String> {
 
 pub fn generate(workspace: &mut Workspace, output: &Path) -> Result<GenerationReport, String> {
     let (frames, signals) = workspace.checked_profile()?;
+    let diagnostic = workspace.view().diagnostic;
+    if !cfg!(windows) && diagnostic.as_ref().is_some_and(|item| item.security_enabled) {
+        return Err("0x27 主机安全档案目前仅支持 Windows 目标".into());
+    }
     let sources = source_files(&runtime_dir())?;
-    let (generated, map, externals) = config_source(workspace.name(), &frames, &signals, workspace.view().diagnostic.as_ref())?;
+    let (generated, map, externals) = config_source(workspace.name(), &frames, &signals, diagnostic.as_ref())?;
     let mut names: Vec<String> = sources.iter().map(|(_,name)| name.clone()).collect();
     names.extend(["Dcm_Externals.h".into(), "Ecu_Config.c".into(), "profile.txt".into()]);
     names.sort();
@@ -302,8 +309,11 @@ pub fn build(output: &Path) -> Result<BuildReport, String> {
     sources.push(output.join("Ecu_Config.c"));
     let stage = reserve_directory(output.parent().ok_or("构建目录须有父目录")?, "build", binary.file_name().unwrap())?;
     let staged_binary = stage.join(binary.file_name().unwrap());
-    let result = Command::new(cc).arg("-std=c99").arg("-Wall").arg("-Wextra").arg("-Werror").arg("-pedantic").arg("-I")
-        .arg(output.join("include")).args(sources).arg("-o").arg(&staged_binary).output()
+    let mut command = Command::new(cc);
+    command.arg("-std=c99").arg("-Wall").arg("-Wextra").arg("-Werror").arg("-pedantic").arg("-I")
+        .arg(output.join("include")).args(sources).arg("-o").arg(&staged_binary);
+    if cfg!(windows) { command.arg("-lbcrypt"); }
+    let result = command.output()
         .map_err(|e| format!("无法启动 C99 编译器: {e}；临时目录保留在 {}", stage.display()))?;
     let log = format!("{}{}", String::from_utf8_lossy(&result.stdout), String::from_utf8_lossy(&result.stderr));
     if !result.status.success() { return Err(format!("C99 构建失败: {log}；临时目录保留在 {}", stage.display())); }

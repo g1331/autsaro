@@ -7,6 +7,7 @@
 #include "Dcm.h"
 #include "LSduR.h"
 #include "PduR.h"
+#include "Security.h"
 
 static uint8_t HasReadableDiagnosticSignal(const EcuConfig *config, uint16_t id)
 {
@@ -101,6 +102,10 @@ static EcuStatus ValidateConfig(const EcuConfig *config)
             (diagnostic->did_writers == NULL || diagnostic->reset_routine->start == NULL)) {
             return ECU_ERR_CONFIG;
         }
+        if (diagnostic->security_enabled > 1u ||
+            (diagnostic->security_enabled != 0u && diagnostic->did_writers == NULL && diagnostic->dtc == NULL)) {
+            return ECU_ERR_CONFIG;
+        }
         for (i = 0; i < config->frame_count; ++i) {
             if (config->frames[i].id == diagnostic->request_can_id ||
                 config->frames[i].id == diagnostic->response_can_id) {
@@ -137,13 +142,19 @@ static EcuStatus ValidateConfig(const EcuConfig *config)
     return ECU_OK;
 }
 
-EcuStatus Ecu_Init(const EcuConfig *config, CanTxSink sink, const char *nvm_path)
+EcuStatus Ecu_Init(const EcuConfig *config, CanTxSink sink, const char *nvm_path,
+                   const char *security_key_path, const char *security_state_path)
 {
     EcuStatus result = ValidateConfig(config);
     if (result != ECU_OK || sink == NULL) {
         return ECU_ERR_CONFIG;
     }
     result = Dem_Init(config, nvm_path);
+    if (result != ECU_OK) {
+        return result;
+    }
+    result = Security_Init(config->diagnostic != NULL && config->diagnostic->security_enabled != 0u,
+                           security_key_path, security_state_path);
     if (result != ECU_OK) {
         return result;
     }

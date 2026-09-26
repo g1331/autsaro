@@ -449,7 +449,7 @@ fn imported_global_pdu_cannot_duplicate_system_binding_or_misstate_diagnostic_le
     let mut project = Workspace::create(source.parent().unwrap(), "Diag", archive()).unwrap();
     let frame = project.add_frame("Live".into(), 0x321, 4, Direction::Tx, Some(100), None).unwrap().frames[0].path.clone();
     let signal = project.add_signal(frame, "Value".into(), 0, 32, 7).unwrap().signals[0].path.clone();
-    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, vec![signal], true, Some(0xf001)).unwrap();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, vec![signal], true, Some(0xf001), false).unwrap();
     project.save().unwrap();
     let xml = fs::read_to_string(&source).unwrap();
     let doc = roxmltree::Document::parse(&xml).unwrap();
@@ -494,7 +494,7 @@ fn diagnostic_ecuc_refs_reject_old_system_destinations_and_dynamic_npdu() {
     let mut project = Workspace::create(source.parent().unwrap(), "Diag", archive()).unwrap();
     let frame = project.add_frame("Live".into(), 0x321, 4, Direction::Tx, Some(100), None).unwrap().frames[0].path.clone();
     let signal = project.add_signal(frame, "Value".into(), 0, 32, 7).unwrap().signals[0].path.clone();
-    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, vec![signal], false, None).unwrap();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, vec![signal], false, None, false).unwrap();
     project.save().unwrap();
     let xml = fs::read_to_string(&source).unwrap();
     let doc = roxmltree::Document::parse(&xml).unwrap();
@@ -754,9 +754,9 @@ fn configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_multiframe_did(
     project.add_signal(frame.clone(), "LiveA".into(), 0, 32, 0).unwrap();
     let view = project.add_signal(frame.clone(), "LiveB".into(), 32, 32, 0).unwrap();
     let sources: Vec<_> = view.signals.iter().filter(|signal| signal.frame_path == frame).map(|signal| signal.path.clone()).collect();
-    assert!(project.configure_diagnostic(0x321, 0x708, 5000, 200, 200, 0x1234, sources.clone(), false, None).is_err());
+    assert!(project.configure_diagnostic(0x321, 0x708, 5000, 200, 200, 0x1234, sources.clone(), false, None, false).is_err());
     assert!(project.view().diagnostic.is_none());
-    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, sources, false, None).unwrap();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, sources, false, None, false).unwrap();
     let validation = project.validate().unwrap();
     assert!(validation.issues.is_empty(), "{:?}", validation.issues);
     project.save().unwrap();
@@ -843,7 +843,7 @@ fn diagnostic_transport_discards_bad_or_timed_out_multiframe_requests_and_recove
     project.add_signal(frame.clone(), "LiveValue".into(), 0, 32, 42).unwrap();
     let view = project.add_signal(frame, "LiveOther".into(), 32, 32, 43).unwrap();
     let sources = view.signals.iter().map(|signal| signal.path.clone()).collect();
-    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, sources, false, None).unwrap();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, sources, false, None, false).unwrap();
     project.save().unwrap();
     let generated = temp.0.join("GeneratedDiag");
     generator::generate(&mut project, &generated).unwrap();
@@ -877,7 +877,7 @@ fn diagnostic_tester_present_keeps_session_and_fc_block_size_paces_response() {
         project.add_signal(frame, format!("{name}High"), 32, 32, 0).unwrap();
     }
     let sources = project.view().signals.iter().map(|signal| signal.path.clone()).collect();
-    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, sources, false, None).unwrap();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, sources, false, None, false).unwrap();
     project.save().unwrap();
     let generated = temp.0.join("GeneratedDiag");
     generator::generate(&mut project, &generated).unwrap();
@@ -911,7 +911,7 @@ fn unsupported_imported_transport_padding_blocks_diagnostic_generation() {
     let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
     let frame = project.add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(1000), None).unwrap().frames[0].path.clone();
     let signal = project.add_signal(frame, "LiveA".into(), 0, 32, 0).unwrap().signals[0].path.clone();
-    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, vec![signal], false, None).unwrap();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, vec![signal], false, None, false).unwrap();
     project.save().unwrap();
     let source = temp.0.join("Diag/Diag.arxml");
     let original = fs::read_to_string(&source).unwrap();
@@ -933,7 +933,7 @@ fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restarts() {
     let rx = project.add_frame("Heartbeat".into(), 0x456, 2, Direction::Rx, None, Some(50)).unwrap()
         .frames.into_iter().find(|frame| frame.name == "Heartbeat").unwrap().path;
     project.add_signal(rx.clone(), "HeartbeatValue".into(), 0, 8, 0).unwrap();
-    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, vec![did_signal], false, None).unwrap();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, vec![did_signal], false, None, false).unwrap();
     project.configure_dtc(0x123456, rx.clone()).unwrap();
     project.save().unwrap();
     let source = temp.0.join("Diag/Diag.arxml");
@@ -1109,7 +1109,7 @@ fn extended_session_write_did_changes_live_can_but_not_restart_state() {
     let view = project.add_signal(frame.clone(), "LiveB".into(), 32, 32, 2).unwrap();
     let signals = view.signals.iter().filter(|signal| signal.frame_path == frame)
         .map(|signal| signal.path.clone()).collect();
-    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, signals, true, None).unwrap();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, signals, true, None, false).unwrap();
     project.save().unwrap();
     let source = temp.0.join("Diag/Diag.arxml");
     let original = fs::read_to_string(&source).unwrap();
@@ -1154,6 +1154,59 @@ fn extended_session_write_did_changes_live_can_but_not_restart_state() {
 
 #[cfg(windows)]
 #[test]
+fn security_access_roundtrips_and_gates_host_writes() {
+    let temp = Scratch::new();
+    let mut project = Workspace::create(&temp.0.join("Secure"), "Secure", archive()).unwrap();
+    let frame = project.add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(100), None).unwrap().frames[0].path.clone();
+    let signal = project.add_signal(frame, "LiveValue".into(), 0, 32, 7).unwrap().signals[0].path.clone();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, vec![signal], true, Some(0xf001), true).unwrap();
+    project.save().unwrap();
+    let source = temp.0.join("Secure/Secure.arxml");
+    let xml = fs::read_to_string(&source).unwrap();
+    assert!(xml.contains("DcmDspSecurityRow"));
+    assert!(!xml.contains("5A5A5A5A"));
+    let mut reopened = Workspace::open(vec![source], archive()).unwrap();
+    assert!(reopened.view().diagnostic.unwrap().security_enabled);
+    let generated = temp.0.join("GeneratedSecure");
+    generator::generate(&mut reopened, &generated).unwrap();
+    let configuration = fs::read_to_string(generated.join("Ecu_Config.c")).unwrap();
+    assert!(!configuration.contains("5A5A5A5A"));
+    let binary = generator::build(&generated).unwrap().binary_path;
+    let without_key = Command::new(&binary).output().unwrap();
+    assert!(!without_key.status.success());
+    assert!(String::from_utf8_lossy(&without_key.stdout).contains("E CONFIG"));
+    let report = host::run_diagnostic(&generated).unwrap();
+    assert!(report.passed, "{}", report.log);
+    assert!(report.events.iter().any(|event| event.contains("0x27")));
+}
+
+#[cfg(windows)]
+#[test]
+fn security_access_gates_dtc_mutations_without_a_writable_did() {
+    let temp = Scratch::new();
+    let mut project = Workspace::create(&temp.0.join("SecureDtc"), "SecureDtc", archive()).unwrap();
+    let tx = project.add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(1000), None).unwrap().frames[0].path.clone();
+    let signal = project.add_signal(tx, "LiveValue".into(), 0, 32, 7).unwrap().signals[0].path.clone();
+    let rx = project.add_frame("Heartbeat".into(), 0x456, 2, Direction::Rx, None, Some(50)).unwrap()
+        .frames.into_iter().find(|frame| frame.name == "Heartbeat").unwrap().path;
+    project.add_signal(rx.clone(), "HeartbeatValue".into(), 0, 8, 0).unwrap();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, vec![signal], false, None, false).unwrap();
+    project.configure_dtc(0x123456, rx).unwrap();
+    let current = project.view().diagnostic.unwrap();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, current.signal_paths, false, None, true).unwrap();
+    project.save().unwrap();
+    let mut reopened = Workspace::open(vec![temp.0.join("SecureDtc/SecureDtc.arxml")], archive()).unwrap();
+    assert!(reopened.view().diagnostic.unwrap().security_enabled);
+    assert!(reopened.clear_dtc().is_err(), "sole protected operation cannot be removed silently");
+    let generated = temp.0.join("GeneratedSecureDtc");
+    generator::generate(&mut reopened, &generated).unwrap();
+    generator::build(&generated).unwrap();
+    let report = host::run_diagnostic(&generated).unwrap();
+    assert!(report.passed, "{}", report.log);
+}
+
+#[cfg(windows)]
+#[test]
 fn start_routine_restores_written_did_signals_and_respects_session() {
     let temp = Scratch::new();
     let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
@@ -1162,9 +1215,9 @@ fn start_routine_restores_written_did_signals_and_respects_session() {
     let view = project.add_signal(frame.clone(), "LiveB".into(), 32, 32, 2).unwrap();
     let signals: Vec<_> = view.signals.iter().filter(|signal| signal.frame_path == frame)
         .map(|signal| signal.path.clone()).collect();
-    assert!(project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, signals.clone(), false, Some(0xF001)).is_err());
+    assert!(project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, signals.clone(), false, Some(0xF001), false).is_err());
     assert!(project.view().diagnostic.is_none());
-    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, signals, true, Some(0xF001)).unwrap();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, signals, true, Some(0xF001), false).unwrap();
     project.save().unwrap();
     let source = temp.0.join("Diag/Diag.arxml");
     let original = fs::read_to_string(&source).unwrap();
@@ -1242,7 +1295,7 @@ fn host_routine_metadata_rejects_unknown_version_and_wrong_session() {
     let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
     let frame = project.add_frame("Live".into(), 0x321, 4, Direction::Tx, Some(100), None).unwrap().frames[0].path.clone();
     let signal = project.add_signal(frame, "Value".into(), 0, 32, 1).unwrap().signals[0].path.clone();
-    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, vec![signal], true, Some(0xf001)).unwrap();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, vec![signal], true, Some(0xf001), false).unwrap();
     project.save().unwrap();
     let source = temp.0.join("Diag/Diag.arxml");
     let saved = fs::read_to_string(&source).unwrap();
@@ -1273,7 +1326,7 @@ fn generated_dcm_callbacks_link_for_independent_consumer_and_update_live_signals
     let first = project.add_signal(frame.clone(), "First".into(), 0, 32, 0x01020304).unwrap();
     let second = project.add_signal(frame.clone(), "Second".into(), 32, 32, 0xaabbccdd).unwrap();
     let paths = [first.signals.last().unwrap().path.clone(), second.signals.last().unwrap().path.clone()];
-    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, paths.to_vec(), true, None).unwrap();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234, paths.to_vec(), true, None, false).unwrap();
     project.save().unwrap();
     let source_path = temp.0.join("Diag/Diag.arxml");
     let mut reopened = Workspace::open(vec![source_path.clone()], archive()).unwrap();
@@ -1323,7 +1376,7 @@ int main(void)
     const uint8_t first_initial[4] = {{ 0x01u, 0x02u, 0x03u, 0x04u }};
     const uint8_t second_initial[4] = {{ 0xaau, 0xbbu, 0xccu, 0xddu }};
     const uint8_t written[4] = {{ 0x11u, 0x22u, 0x33u, 0x44u }};
-    if (Ecu_Init(&Ecu_Config, sink, NULL) != ECU_OK) return 1;
+    if (Ecu_Init(&Ecu_Config, sink, NULL, NULL, NULL) != ECU_OK) return 1;
     if ({read_first}(data) != E_OK || memcmp(data, first_initial, 4u) != 0) return 2;
     if ({read_second}(data) != E_OK || memcmp(data, second_initial, 4u) != 0) return 3;
     if ({write_first}(written, &error_code) != E_OK) return 4;
@@ -1346,7 +1399,7 @@ int main(void)
     let executable = temp.0.join("consumer.exe");
     let built = Command::new(cc).args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
         .arg("-I").arg(output.join("include")).arg("-I").arg(&output)
-        .args(sources).arg("-o").arg(&executable).output().unwrap();
+        .args(sources).arg("-o").arg(&executable).arg("-lbcrypt").output().unwrap();
     assert!(built.status.success(), "independent consumer link: {}", String::from_utf8_lossy(&built.stderr));
     let observed = Command::new(executable).output().unwrap();
     assert!(observed.status.success(), "independent consumer failed at check {:?}: {}",

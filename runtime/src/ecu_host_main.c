@@ -84,18 +84,33 @@ int main(int argc, char **argv)
     char line[256];
     EcuStatus result;
     const char *nvm_path = NULL;
+    const char *security_key_path = NULL;
+    const char *security_state_path = NULL;
+    int arg;
     (void)setvbuf(stdout, NULL, _IONBF, 0);
-    if (Ecu_Config.diagnostic != NULL && Ecu_Config.diagnostic->dtc != NULL) {
-        if (argc != 3 || strcmp(argv[1], "--nvm") != 0 || argv[2][0] == '\0') {
+    for (arg = 1; arg < argc; arg += 2) {
+        if (arg + 1 >= argc || argv[arg + 1][0] == '\0') {
             (void)Report(ECU_ERR_CONFIG);
             return 1;
         }
-        nvm_path = argv[2];
-    } else if (argc != 1) {
+        if (strcmp(argv[arg], "--nvm") == 0 && nvm_path == NULL) {
+            nvm_path = argv[arg + 1];
+        } else if (strcmp(argv[arg], "--security-key") == 0 && security_key_path == NULL) {
+            security_key_path = argv[arg + 1];
+        } else if (strcmp(argv[arg], "--security-state") == 0 && security_state_path == NULL) {
+            security_state_path = argv[arg + 1];
+        } else {
+            (void)Report(ECU_ERR_CONFIG);
+            return 1;
+        }
+    }
+    if ((Ecu_Config.diagnostic != NULL && Ecu_Config.diagnostic->dtc != NULL) != (nvm_path != NULL) ||
+        (Ecu_Config.diagnostic != NULL && Ecu_Config.diagnostic->security_enabled != 0u) !=
+            (security_key_path != NULL && security_state_path != NULL)) {
         (void)Report(ECU_ERR_CONFIG);
         return 1;
     }
-    result = Ecu_Init(&Ecu_Config, EmitFrame, nvm_path);
+    result = Ecu_Init(&Ecu_Config, EmitFrame, nvm_path, security_key_path, security_state_path);
     if (result != ECU_OK) {
         (void)Report(result);
         return 1;

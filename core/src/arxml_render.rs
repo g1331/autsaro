@@ -264,7 +264,17 @@ fn render_diagnostic(project: &str, diagnostic: &DiagnosticView, frame_count: us
         let params = format!("{}{}{}", number(&service_path, "DcmDsdSidTabServiceId", 0x2e),
             boolean(&service_path, "DcmDsdServiceUsed", true),
             boolean(&service_path, "DcmDsdSidTabSubfuncAvail", false));
-        services.push_str(&container("WriteDataByIdentifier", &service_path, &params, "", ""));
+        let refs = if diagnostic.security_enabled { reference(&service_path, "DcmDsdSidTabSecurityLevelRef",
+            "ECUC-CONTAINER-VALUE", &ref_path(project, "DcmCfg/DcmConfigSet/DcmDsp/Security/Level1")) } else { String::new() };
+        services.push_str(&container("WriteDataByIdentifier", &service_path, &params, &refs, ""));
+    }
+    if diagnostic.security_enabled {
+        let params = format!("{}{}{}", number(&service_path, "DcmDsdSidTabServiceId", 0x27),
+            boolean(&service_path, "DcmDsdServiceUsed", true),
+            boolean(&service_path, "DcmDsdSidTabSubfuncAvail", true));
+        let refs = reference(&service_path, "DcmDsdSidTabSessionLevelRef", "ECUC-CONTAINER-VALUE",
+            &ref_path(project, "DcmCfg/DcmConfigSet/DcmDsp/Sessions/Extended"));
+        services.push_str(&container("SecurityAccess", &service_path, &params, &refs, ""));
     }
     if diagnostic.dtc.is_some() {
         for (name, sid, subfunction) in [
@@ -275,10 +285,14 @@ fn render_diagnostic(project: &str, diagnostic: &DiagnosticView, frame_count: us
             let params = format!("{}{}{}", number(&service_path, "DcmDsdSidTabServiceId", sid),
                 boolean(&service_path, "DcmDsdServiceUsed", true),
                 boolean(&service_path, "DcmDsdSidTabSubfuncAvail", subfunction));
-            let refs = if sid != 0x19 {
+            let mut refs = if sid != 0x19 {
                 reference(&service_path, "DcmDsdSidTabSessionLevelRef", "ECUC-CONTAINER-VALUE",
                     &ref_path(project, "DcmCfg/DcmConfigSet/DcmDsp/Sessions/Extended"))
             } else { String::new() };
+            if diagnostic.security_enabled && (sid == 0x14 || sid == 0x85) {
+                refs.push_str(&reference(&service_path, "DcmDsdSidTabSecurityLevelRef", "ECUC-CONTAINER-VALUE",
+                    &ref_path(project, "DcmCfg/DcmConfigSet/DcmDsp/Security/Level1")));
+            }
             services.push_str(&container(name, &service_path, &params, &refs, ""));
         }
     }
@@ -348,8 +362,13 @@ fn render_diagnostic(project: &str, diagnostic: &DiagnosticView, frame_count: us
     let mut info_children = read_value;
     if diagnostic.write_enabled {
         let write_path = format!("{info_path}/DcmDspDidWrite");
+        let mut refs = reference(&write_path, "DcmDspDidWriteSessionRef", "ECUC-CONTAINER-VALUE", &ext_ref);
+        if diagnostic.security_enabled {
+            refs.push_str(&reference(&write_path, "DcmDspDidWriteSecurityLevelRef", "ECUC-CONTAINER-VALUE",
+                &ref_path(project, "DcmCfg/DcmConfigSet/DcmDsp/Security/Level1")));
+        }
         info_children.push_str(&container("Write", &write_path, "",
-            &reference(&write_path, "DcmDspDidWriteSessionRef", "ECUC-CONTAINER-VALUE", &ext_ref), ""));
+            &refs, ""));
     }
     let info_value = container("DidInfo", &info_path, &boolean(&info_path, "DcmDspDidDynamicallyDefined", false), "", &info_children);
     let sessions_path = format!("{dsp}/DcmDspSession");
@@ -361,6 +380,25 @@ fn render_diagnostic(project: &str, diagnostic: &DiagnosticView, frame_count: us
     let sessions = container("Sessions", &sessions_path, "", "", &(session("Default", 1) + &session("Extended", 3)));
     let dsp_params = choice(&dsp, "DcmDspDataDefaultEndianness", "BIG_ENDIAN") + &boolean(&dsp, "DcmDspEnableObdMirror", false);
     let mut dsp_children = did_value + &info_value + &data_values + &sessions;
+    if diagnostic.security_enabled {
+        let security = format!("{dsp}/DcmDspSecurity");
+        let row = format!("{security}/DcmDspSecurityRow");
+        let params = number(&row, "DcmDspSecurityLevel", 1)
+            + &number(&row, "DcmDspSecuritySeedSize", 16)
+            + &number(&row, "DcmDspSecurityKeySize", 16)
+            + &choice(&row, "DcmDspSecurityUsePort", "USE_ASYNCH_FNC")
+            + &boolean(&row, "DcmDspSecurityAttemptCounterEnabled", true)
+            + &number(&row, "DcmDspSecurityNumAttDelay", 3)
+            + &decimal(&row, "DcmDspSecurityDelayTime", 5)
+            + &decimal(&row, "DcmDspSecurityDelayTimeOnBoot", 5)
+            + &function(&row, "DcmDspSecurityGetSeedFnc", "Security_RequestSeed")
+            + &function(&row, "DcmDspSecurityCompareKeyFnc", "Security_SendKey")
+            + &function(&row, "DcmDspSecurityGetAttemptCounterFnc", "Security_GetAttemptCounter")
+            + &function(&row, "DcmDspSecuritySetAttemptCounterFnc", "Security_SetAttemptCounter");
+        let row_value = container("Level1", &row, &params, "", "");
+        dsp_children.push_str(&container("Security", &security,
+            &boolean(&security, "DcmDspSecurityResetAttemptCounterOnTimeout", true), "", &row_value));
+    }
     if diagnostic.dtc.is_some() {
         dsp_children.push_str(&container("ClearDTC", &format!("{dsp}/DcmDspClearDTC"), "", "", ""));
         dsp_children.push_str(&container("ReadDTCInformation", &format!("{dsp}/DcmDspReadDTCInformation"), "", "", ""));
