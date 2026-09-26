@@ -28,6 +28,24 @@ fn source_files(dir: &Path) -> Result<Vec<(PathBuf, String)>, String> {
     Ok(files)
 }
 
+fn handoff_readme(diagnostic: Option<&DiagnosticView>) -> String {
+    let mut run = String::from(".\\ecu_host.exe");
+    let mut notes = String::new();
+    if let Some(diagnostic) = diagnostic {
+        if diagnostic.dtc.is_some() {
+            run.push_str(" --nvm .\\ecu.nvm");
+            notes.push_str("The `--nvm` path is an exclusive host DTC state file. A missing file is initialized; a damaged or mismatched existing file stops startup.\n\n");
+        }
+        if diagnostic.security_enabled {
+            run.push_str(" --security-key .\\ecu.key --security-state .\\ecu.security");
+            notes.push_str("Create `ecu.key` locally as exactly 32 raw secret bytes before starting. It is not generated or listed in the manifest; do not include it when handing off the source project. Give each ECU its own security state file. A missing key or damaged state stops startup.\n\n");
+        }
+    }
+    include_str!("../../runtime/generated-README.md")
+        .replace("{{RUN_COMMAND}}", &run)
+        .replace("{{RUN_NOTES}}", notes.trim_end())
+}
+
 fn config_source(name: &str, frames: &[crate::model::FrameView], signals: &[SignalView], diagnostic: Option<&DiagnosticView>) -> Result<(String, String, String), String> {
     let mut source = String::from("#include \"Ecu_Config.h\"\n#include \"Dcm_Externals.h\"\n");
     if diagnostic.is_some() { source.push_str("#include \"Rte.h\"\n"); }
@@ -241,6 +259,8 @@ fn prepared_files(workspace: &mut Workspace) -> Result<Vec<(String, Vec<u8>)>, S
         files.push((name, fs::read(&source).map_err(|e| format!("无法读取运行代码 {}: {e}", source.display()))?));
     }
     files.extend([
+        ("README.md".into(), handoff_readme(diagnostic.as_ref()).into_bytes()),
+        ("build.ps1".into(), include_bytes!("../../runtime/generated-build.ps1").to_vec()),
         ("Dcm_Externals.h".into(), externals.into_bytes()),
         ("Ecu_Config.c".into(), generated.into_bytes()),
         ("profile.txt".into(), map.into_bytes()),
