@@ -243,6 +243,71 @@ fn untouched_output_regenerates_changed_config_and_runs_the_new_schedule() {
     assert_eq!(String::from_utf8(result.stdout).unwrap().trim(), "X 801 2 B001");
 }
 
+#[test]
+fn generation_preview_is_read_only_and_confirmed_files_match() {
+    let temp = Scratch::new();
+    let (mut ecu, _) = create_pair(&temp.0);
+    let output = temp.0.join("PreviewOutput");
+    fs::create_dir(&output).unwrap();
+    let preview = generator::preview_generate(&mut ecu, &output).unwrap();
+    assert!(fs::read_dir(&output).unwrap().next().is_none());
+    assert!(preview.files.iter().all(|file| file.status == "new"));
+    assert!(preview.files.iter().any(|file| file.path == "Ecu_Config.c" && file.after.as_ref().unwrap().contains("const EcuConfig")));
+    generator::generate_previewed(&mut ecu, &output, &preview.revision).unwrap();
+    for file in &preview.files {
+        assert_eq!(fs::read_to_string(output.join(&file.path)).unwrap(), file.after.as_deref().unwrap());
+    }
+
+    let first = fs::read(output.join("Ecu_Config.c")).unwrap();
+    let frame = ecu.view().frames.iter().find(|frame| frame.name == "Command").unwrap().path.clone();
+    ecu.update_frame(&frame, serde_json::json!({"periodMs": 15})).unwrap();
+    ecu.save().unwrap();
+    let changed = generator::preview_generate(&mut ecu, &output).unwrap();
+    assert_eq!(changed.files.iter().find(|file| file.path == "Ecu_Config.c").unwrap().status, "changed");
+    assert_eq!(fs::read(output.join("Ecu_Config.c")).unwrap(), first);
+    assert!(generator::generate_previewed(&mut ecu, &output, &preview.revision).unwrap_err().contains("预览已失效"));
+    generator::generate_previewed(&mut ecu, &output, &changed.revision).unwrap();
+    assert_ne!(fs::read(output.join("Ecu_Config.c")).unwrap(), first);
+}
+
+#[test]
+fn generation_preview_rejects_changed_existing_output() {
+    let temp = Scratch::new();
+    let (mut ecu, _) = create_pair(&temp.0);
+    let output = temp.0.join("PreviewOutput");
+    generator::generate(&mut ecu, &output).unwrap();
+    let preview = generator::preview_generate(&mut ecu, &output).unwrap();
+    let original = fs::read(output.join("Ecu_Config.c")).unwrap();
+    fs::write(output.join("Ecu_Config.c"), b"owner change").unwrap();
+    assert!(generator::generate_previewed(&mut ecu, &output, &preview.revision).is_err());
+    assert_eq!(fs::read(output.join("Ecu_Config.c")).unwrap(), b"owner change");
+    assert_ne!(fs::read(output.join("Ecu_Config.c")).unwrap(), original);
+}
+
+#[test]
+fn generation_preview_rejects_user_files_binaries_and_bad_proofs_before_writing() {
+    let temp = Scratch::new();
+    let (mut ecu, _) = create_pair(&temp.0);
+    let user_output = temp.0.join("UserOutput");
+    fs::create_dir(&user_output).unwrap();
+    fs::write(user_output.join("owner.txt"), b"keep me").unwrap();
+    assert!(generator::preview_generate(&mut ecu, &user_output).unwrap_err().contains("拒绝覆盖"));
+    assert_eq!(fs::read(user_output.join("owner.txt")).unwrap(), b"keep me");
+
+    let built_output = temp.0.join("BuiltOutput");
+    generator::generate(&mut ecu, &built_output).unwrap();
+    let binary = built_output.join(if cfg!(windows) { "ecu_host.exe" } else { "ecu_host" });
+    fs::write(&binary, b"owner binary").unwrap();
+    assert!(generator::preview_generate(&mut ecu, &built_output).unwrap_err().contains("二进制文件"));
+    assert_eq!(fs::read(&binary).unwrap(), b"owner binary");
+
+    let changed_output = temp.0.join("ChangedOutput");
+    generator::generate(&mut ecu, &changed_output).unwrap();
+    fs::write(changed_output.join("Ecu_Config.c"), b"owner edit").unwrap();
+    assert!(generator::preview_generate(&mut ecu, &changed_output).unwrap_err().contains("完整性记录已被修改"));
+    assert_eq!(fs::read(changed_output.join("Ecu_Config.c")).unwrap(), b"owner edit");
+}
+
 #[cfg(windows)]
 #[test]
 fn generated_c99_ecus_exchange_golden_vectors_and_recover_from_faults() {

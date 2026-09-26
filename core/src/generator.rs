@@ -1,5 +1,5 @@
 use crate::arxml::Workspace;
-use crate::model::{BuildReport, DiagnosticView, Direction, GenerationReport, Issue, SignalView};
+use crate::model::{BuildReport, DiagnosticView, Direction, GenerationPreview, GenerationPreviewFile, GenerationReport, Issue, SignalView};
 use sha2::{Digest, Sha256};
 use std::ffi::OsStr;
 use std::fmt::Write;
@@ -229,17 +229,36 @@ fn verify_generated_output(dir: &Path, names: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-pub fn generate(workspace: &mut Workspace, output: &Path) -> Result<GenerationReport, String> {
+fn prepared_files(workspace: &mut Workspace) -> Result<Vec<(String, Vec<u8>)>, String> {
     let (frames, signals) = workspace.checked_profile()?;
     let diagnostic = workspace.view().diagnostic;
     if !cfg!(windows) && diagnostic.as_ref().is_some_and(|item| item.security_enabled) {
         return Err("0x27 主机安全档案目前仅支持 Windows 目标".into());
     }
-    let sources = source_files(&runtime_dir())?;
     let (generated, map, externals) = config_source(workspace.name(), &frames, &signals, diagnostic.as_ref())?;
-    let mut names: Vec<String> = sources.iter().map(|(_,name)| name.clone()).collect();
-    names.extend(["Dcm_Externals.h".into(), "Ecu_Config.c".into(), "profile.txt".into()]);
-    names.sort();
+    let mut files = Vec::new();
+    for (source, name) in source_files(&runtime_dir())? {
+        files.push((name, fs::read(&source).map_err(|e| format!("无法读取运行代码 {}: {e}", source.display()))?));
+    }
+    files.extend([
+        ("Dcm_Externals.h".into(), externals.into_bytes()),
+        ("Ecu_Config.c".into(), generated.into_bytes()),
+        ("profile.txt".into(), map.into_bytes()),
+    ]);
+    files.sort_by(|a,b| a.0.cmp(&b.0));
+    let names: Vec<_> = files.iter().map(|(name,_)| name.clone()).collect();
+    let list = names.join("\n") + "\n";
+    let mut record = String::new();
+    for (name, bytes) in &files {
+        writeln!(record, "{:x}  {name}", Sha256::digest(bytes)).unwrap();
+    }
+    writeln!(record, "{:x}  files.list", Sha256::digest(list.as_bytes())).unwrap();
+    files.push(("files.list".into(), list.into_bytes()));
+    files.push(("files.sha256".into(), record.into_bytes()));
+    Ok(files)
+}
+
+fn output_path(output: &Path) -> Result<PathBuf, String> {
     let output_name = output.file_name().ok_or("输出目录须有名称")?;
     let parent = output.parent().ok_or("输出目录须有父目录")?;
     if output_name == "." || output_name == ".." || parent.join(output_name) != output {
@@ -247,22 +266,83 @@ pub fn generate(workspace: &mut Workspace, output: &Path) -> Result<GenerationRe
     }
     let parent = if parent.is_absolute() { parent.to_path_buf() }
         else { std::env::current_dir().map_err(|e| e.to_string())?.join(parent) };
-    fs::create_dir_all(&parent).map_err(|e| e.to_string())?;
-    let output = parent.join(output_name);
+    Ok(parent.join(output_name))
+}
+
+fn file_names(files: &[(String, Vec<u8>)]) -> Vec<String> {
+    files.iter().take(files.len() - 2).map(|(name,_)| name.clone()).collect()
+}
+
+fn preview_prepared(files: &[(String, Vec<u8>)], output: &Path) -> Result<GenerationPreview, String> {
+    let output = output_path(output)?;
+    let names = file_names(files);
+    verify_generated_output(&output, &names)?;
+    let mut digest = Sha256::new();
+    digest.update(output.to_string_lossy().as_bytes());
+    let mut changes = Vec::new();
+    for (name, after) in files {
+        let path = output.join(name);
+        let before = match fs::read(&path) {
+            Ok(bytes) => Some(bytes),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => return Err(format!("无法读取旧生成文件 {}: {error}", path.display())),
+        };
+        digest.update((name.len() as u64).to_le_bytes());
+        digest.update(name.as_bytes());
+        if let Some(bytes) = &before {
+            digest.update([1]);
+            digest.update((bytes.len() as u64).to_le_bytes());
+            digest.update(bytes);
+        } else { digest.update([0]); }
+        digest.update((after.len() as u64).to_le_bytes());
+        digest.update(after);
+        let status = if before.is_none() { "new" } else if before.as_deref() == Some(after) { "unchanged" } else { "changed" };
+        changes.push(GenerationPreviewFile {
+            path: name.clone(), status: status.into(),
+            before: if status == "changed" { Some(String::from_utf8(before.unwrap()).map_err(|_| format!("旧生成文件不是 UTF-8 文本: {name}"))?) } else { None },
+            after: if status != "unchanged" { Some(String::from_utf8(after.clone()).map_err(|_| format!("新生成文件不是 UTF-8 文本: {name}"))?) } else { None },
+        });
+    }
+    Ok(GenerationPreview { output_directory: output.display().to_string(), revision: format!("{:x}", digest.finalize()), files: changes })
+}
+
+pub fn preview_generate(workspace: &mut Workspace, output: &Path) -> Result<GenerationPreview, String> {
+    let files = prepared_files(workspace)?;
+    preview_prepared(&files, output)
+}
+
+pub fn generate_previewed(workspace: &mut Workspace, output: &Path, revision: &str) -> Result<GenerationReport, String> {
+    let files = prepared_files(workspace)?;
+    if preview_prepared(&files, output)?.revision != revision {
+        return Err("生成预览已失效：配置、运行源码或旧输出已变化；请重新预览".into());
+    }
+    generate_prepared(files, output, Some(revision))
+}
+
+pub fn generate(workspace: &mut Workspace, output: &Path) -> Result<GenerationReport, String> {
+    generate_prepared(prepared_files(workspace)?, output, None)
+}
+
+fn generate_prepared(files: Vec<(String, Vec<u8>)>, output: &Path, expected_revision: Option<&str>) -> Result<GenerationReport, String> {
+    let output = output_path(output)?;
+    let names = file_names(&files);
+    let parent = output.parent().ok_or("输出目录须有父目录")?;
+    let output_name = output.file_name().ok_or("输出目录须有名称")?;
+    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     verify_generated_output(&output, &names)?;
     let stage = reserve_directory(&parent, "stage", output_name)?;
     let result = (|| {
-        for (source, name) in sources {
+        for (name, contents) in &files {
             let target = stage.join(&name);
             fs::create_dir_all(target.parent().unwrap()).map_err(|e| e.to_string())?;
-            fs::copy(source, target).map_err(|e| e.to_string())?;
+            fs::write(target, contents).map_err(|e| e.to_string())?;
         }
-        fs::write(stage.join("Ecu_Config.c"), generated).map_err(|e| e.to_string())?;
-        fs::write(stage.join("Dcm_Externals.h"), externals).map_err(|e| e.to_string())?;
-        fs::write(stage.join("profile.txt"), map).map_err(|e| e.to_string())?;
-        fs::write(stage.join("files.list"), names.join("\n") + "\n").map_err(|e| e.to_string())?;
-        fs::write(stage.join("files.sha256"), integrity_record(&stage, &names)?).map_err(|e| e.to_string())?;
         verify_generated_output(&output, &names)?;
+        if let Some(revision) = expected_revision {
+            if preview_prepared(&files, &output)?.revision != revision {
+                return Err("生成预览已失效：旧输出在确认期间变化；请重新预览".into());
+            }
+        }
         let existing = match fs::symlink_metadata(&output) {
             Ok(metadata) if is_reparse_point(&metadata) || !metadata.file_type().is_dir() =>
                 return Err(format!("输出目录已变为链接或非普通目录，拒绝替换: {}", output.display())),

@@ -68,5 +68,11 @@ export type GenerateResult = {
   issues: Issue[];
 };
 
+export type GenerationPreview = {
+  outputDirectory: string;
+  revision: string;
+  files: { path: string; status: 'new' | 'changed' | 'unchanged'; before: string | null; after: string | null }[];
+};
+
 export type BuildResult = { binaryPath: string; log: string };
 export type VirtualResult = { passed: boolean; log: string; events: string[] };

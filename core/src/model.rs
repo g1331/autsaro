@@ -134,6 +134,23 @@ pub struct GenerationReport {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct GenerationPreviewFile {
+    pub path: String,
+    pub status: String,
+    pub before: Option<String>,
+    pub after: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerationPreview {
+    pub output_directory: String,
+    pub revision: String,
+    pub files: Vec<GenerationPreviewFile>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BuildReport {
     pub binary_path: String,
     pub log: String,

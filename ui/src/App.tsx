@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { ArrowRight, Boxes, Cable, CircleAlert, CircleCheck, FileCode2, FileInput, FolderOpen, FolderPlus, Hammer, HardDrive, ListChecks, MonitorPlay, Plus, Save, Waypoints } from 'lucide-react';
-import type { BuildResult, DiagnosticView, DtcView, Frame, GenerateResult, Issue, SavePreview, Signal, VirtualResult, WorkspaceView } from './types';
+import type { BuildResult, DiagnosticView, DtcView, Frame, GenerationPreview, GenerateResult, Issue, SavePreview, Signal, VirtualResult, WorkspaceView } from './types';
 
 type Stage = 'save' | 'validate' | 'generate' | 'build' | 'virtual';
 type StageState = 'pending' | 'running' | 'done' | 'failed' | 'stale';
@@ -155,11 +155,11 @@ function signalChanges(fields: SignalFields, frame: Frame): SignalChanges {
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
-function previewDelta(before: string, after: string) {
+function previewDelta(before: string, after: string, xml = true) {
   // Generated ARXML often puts many XML elements on one physical line.
   // Break only adjacent tags for display; the complete source stays available below.
-  const oldLines = before.replaceAll('><', '>\n<').split('\n');
-  const newLines = after.replaceAll('><', '>\n<').split('\n');
+  const oldLines = (xml ? before.replaceAll('><', '>\n<') : before).split('\n');
+  const newLines = (xml ? after.replaceAll('><', '>\n<') : after).split('\n');
   let first = 0;
   while (first < oldLines.length && first < newLines.length && oldLines[first] === newLines[first]) first++;
   let tail = 0;
@@ -225,6 +225,8 @@ export default function App() {
   const [signalInput, setSignalInput] = useState<SignalFields>(newSignal);
   const [stages, setStages] = useState<Record<Stage, StageRecord>>(stageDefaults);
   const [generated, setGenerated] = useState<GenerateResult | null>(null);
+  const [generationPreview, setGenerationPreview] = useState<GenerationPreview | null>(null);
+  const [generationPreviewPath, setGenerationPreviewPath] = useState('');
   const [built, setBuilt] = useState<BuildResult | null>(null);
   const [virtualResult, setVirtualResult] = useState<VirtualResult | null>(null);
   const [virtualKind, setVirtualKind] = useState<'signal' | 'diagnostic' | null>(null);
@@ -253,6 +255,7 @@ export default function App() {
 
   function acceptView(view: WorkspaceView, requested?: Selection | null) {
     setSavePreview(null);
+    setGenerationPreview(null);
     const next = findSelection(view, requested === undefined ? selection : requested);
     setWorkspace(view);
     setSelection(next);
@@ -508,27 +511,39 @@ export default function App() {
     if (workspace?.dirty) { setNotice({ tone: 'error', text: '请先保存配置，再生成工程' }); return; }
     if (stages.validate.state !== 'done') { setNotice({ tone: 'error', text: '请先完成无阻断错误的校验' }); return; }
     void chooseDirectory(directory => {
-      setGenerated(null);
-      setBuilt(null);
-      setVirtualResult(null);
-      markStage('build', 'stale', '等待新生成工程');
-      markStage('virtual', 'stale', '等待新生成工程');
-      void run('生成', () => invoke<GenerateResult>('generate_project', { outputDirectory: directory }), result => {
-        setOperationIssues(result.issues);
-        setPage('build');
-        if (result.issues.some(issue => issue.severity === 'error') || !result.outputDirectory || !result.files.length) {
-          markStage('generate', 'failed', '生成结果有错误或缺少工程文件');
-          setNotice({ tone: 'error', text: '生成未通过，请查看诊断；不能视为工程已构建' });
-        } else {
-          setGenerated(result);
-          setBuilt(null);
-          setVirtualResult(null);
-          markStage('generate', 'done', result.outputDirectory);
-          markStage('build', 'pending', '尚未构建生成工程');
-          markStage('virtual', 'pending', '尚未运行两个 ECU');
-        }
-      }, 'generate');
+      void run('预览生成', () => invoke<GenerationPreview>('preview_generate_project', { outputDirectory: directory }), preview => {
+        setGenerationPreview(preview);
+        setGenerationPreviewPath(preview.files.find(file => file.status === 'changed')?.path ?? preview.files.find(file => file.status === 'new')?.path ?? preview.files[0]?.path ?? '');
+      });
     });
+  }
+  function confirmGenerate() {
+    if (!generationPreview) return;
+    const preview = generationPreview;
+    setGenerated(null);
+    setBuilt(null);
+    setVirtualResult(null);
+    markStage('build', 'stale', '等待新生成工程');
+    markStage('virtual', 'stale', '等待新生成工程');
+    void run('生成', () => invoke<GenerateResult>('generate_project', { outputDirectory: preview.outputDirectory, revision: preview.revision }).catch(error => {
+      setGenerationPreview(null);
+      throw error;
+    }), result => {
+      setGenerationPreview(null);
+      setOperationIssues(result.issues);
+      setPage('build');
+      if (result.issues.some(issue => issue.severity === 'error') || !result.outputDirectory || !result.files.length) {
+        markStage('generate', 'failed', '生成结果有错误或缺少工程文件');
+        setNotice({ tone: 'error', text: '生成未通过，请查看诊断；不能视为工程已构建' });
+      } else {
+        setGenerated(result);
+        setBuilt(null);
+        setVirtualResult(null);
+        markStage('generate', 'done', result.outputDirectory);
+        markStage('build', 'pending', '尚未构建生成工程');
+        markStage('virtual', 'pending', '尚未运行两个 ECU');
+      }
+    }, 'generate');
   }
   function buildProject() {
     if (!generated || stages.generate.state !== 'done') return;
@@ -577,6 +592,9 @@ export default function App() {
   const previewFile = savePreview?.files.find(file => file.path === previewPath);
   const delta = previewFile?.before !== null && previewFile?.after !== null && previewFile?.before !== undefined && previewFile?.after !== undefined
     ? previewDelta(previewFile.before, previewFile.after) : null;
+  const generationPreviewFile = generationPreview?.files.find(file => file.path === generationPreviewPath);
+  const generationDelta = generationPreviewFile?.status === 'changed' && generationPreviewFile.before !== null && generationPreviewFile.after !== null
+    ? previewDelta(generationPreviewFile.before, generationPreviewFile.after, false) : null;
   const disabled = !native || Boolean(busy) || Boolean(unsupportedIssue);
   return (
     <div className="app-shell">
@@ -708,7 +726,7 @@ export default function App() {
                 <div className="section-header"><div><p className="eyebrow">GENERATION / BUILD</p><h2>生成与构建</h2><p>从已保存、无阻断错误的配置生成独立 C99 工程，再构建主机目标。已有二进制时不覆盖；请选新的空目录，或由所有者明确移走旧文件。</p></div></div>
                 <ol className="stage-list">{buildSteps.map(step => { const state = unapplied && stages[step.key].state === 'done' ? 'stale' : stages[step.key].state; return <li key={step.key} className={`stage ${state}`}><span className="stage-number">{step.number}</span><div className="stage-copy"><strong>{step.label}</strong><small title={stages[step.key].detail}>{state === 'stale' && unapplied ? '草稿未应用，需重新保存并校验' : stages[step.key].detail}</small></div><span className="stage-pill">{state === 'done' && <CircleCheck aria-hidden="true" size={13} />}{stageLabels[state]}</span></li>; })}</ol>
                 {(unapplied || workspace.dirty || stages.validate.state !== 'done') && <div className="page-guidance">生成前须应用更改、保存配置并完成无阻断错误的校验。<button type="button" onClick={() => setPage(unapplied || workspace.dirty ? 'editor' : 'diagnostics')}>前往{unapplied || workspace.dirty ? '配置' : '诊断'}</button></div>}
-                <div className="delivery-actions"><button type="button" className="primary-button compact" onClick={generateProject} disabled={disabled || unapplied || workspace.dirty || stages.validate.state !== 'done'}><Boxes aria-hidden="true" size={15} />选择目录并生成工程</button><button type="button" className="outline-button" onClick={buildProject} disabled={disabled || unapplied || stages.generate.state !== 'done'}><Hammer aria-hidden="true" size={15} />构建生成工程</button></div>
+                <div className="delivery-actions"><button type="button" className="primary-button compact" onClick={generateProject} disabled={disabled || unapplied || workspace.dirty || stages.validate.state !== 'done'}><Boxes aria-hidden="true" size={15} />选择目录并预览工程</button><button type="button" className="outline-button" onClick={buildProject} disabled={disabled || unapplied || stages.generate.state !== 'done'}><Hammer aria-hidden="true" size={15} />构建生成工程</button></div>
                 {generated && !unapplied && !workspace.dirty && stages.generate.state === 'done' && <div className="result-section"><h3>生成工程位置</h3><p className="mono path-text">{generated.outputDirectory}</p><details><summary>工程文件 · {generated.files.length}</summary><ul>{generated.files.map((file, index) => <li key={`${file}-${index}`} className="mono">{file}</li>)}</ul></details></div>}
                 {generated?.previousOutputDirectory && <div className="page-guidance" role="status">旧生成工程保留位置：<span className="mono path-text">{generated.previousOutputDirectory}</span>。工具不会自动清理；确认不再需要后由文件所有者自行移走或删除。</div>}
                 {built && !unapplied && !workspace.dirty && stages.build.state === 'done' && <div className="result-section"><h3>构建二进制</h3><p className="mono path-text">{built.binaryPath}</p><details><summary>构建日志</summary><pre>{built.log}</pre></details></div>}
@@ -744,6 +762,12 @@ export default function App() {
         <div className="save-preview-body"><nav aria-label="预览文件">{savePreview.files.map(file => <button type="button" key={file.path} className={file.path === previewPath ? 'active' : ''} onClick={() => setPreviewPath(file.path)} title={file.path}><span>{labelFromPath(file.path)}</span><small>{file.changed ? '将修改' : '保持不变'}</small></button>)}</nav>
           <div className="save-preview-content">{previewFile && <><p className="mono path-text">{previewFile.path}</p>{delta ? <><p>差异范围包含全部改动；相同的开头和结尾已折叠。为阅读方便，相邻 XML 标签已分行，原始字节见下方完整文本。</p><div className="save-preview-compare"><div><h3>当前文件 · 预览第 {delta.oldStart} 行起</h3><pre>{delta.oldText || '（此处无内容）'}</pre></div><div><h3>拟保存 · 预览第 {delta.newStart} 行起</h3><pre>{delta.newText || '（此处无内容）'}</pre></div></div><details className="save-preview-full"><summary>查看两份完整文本</summary><div className="save-preview-compare"><div><h3>当前文件</h3><pre>{previewFile.before}</pre></div><div><h3>拟保存</h3><pre>{previewFile.after}</pre></div></div></details></> : <p className="save-preview-unchanged">这份来源文件保持原字节，不会重写。</p>}</>}</div>
         </div><footer><span>{savePreview.files.filter(file => file.changed).length} 份将修改 · {savePreview.files.filter(file => !file.changed).length} 份保持不变</span><div><button type="button" className="quiet-button" onClick={() => setSavePreview(null)} disabled={Boolean(busy)}>取消</button><button type="button" className="primary-button compact" onClick={confirmSave} disabled={Boolean(busy) || !savePreview.files.some(file => file.changed)}>确认保存</button></div></footer>
+      </section></div>}
+      {generationPreview && <div className="save-preview-backdrop"><section className="save-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="generation-preview-title">
+        <header><div><p className="eyebrow">C99 GENERATION PREVIEW</p><h2 id="generation-preview-title">确认生成工程</h2><p>预览不写入输出目录。确认后生成完整工程；原有工程将保留在备份目录。</p></div><button type="button" className="quiet-button" onClick={() => setGenerationPreview(null)} disabled={Boolean(busy)}>关闭</button></header>
+        <div className="save-preview-body"><nav aria-label="生成文件预览">{generationPreview.files.map(file => <button type="button" key={file.path} className={file.path === generationPreviewPath ? 'active' : ''} onClick={() => setGenerationPreviewPath(file.path)} title={file.path}><span>{file.path}</span><small>{file.status === 'new' ? '将新增' : file.status === 'changed' ? '将修改' : '内容不变'}</small></button>)}</nav>
+          <div className="save-preview-content">{generationPreviewFile && <><p className="mono path-text">{generationPreview.outputDirectory} / {generationPreviewFile.path}</p>{generationDelta ? <><div className="save-preview-compare"><div><h3>当前文件 · 第 {generationDelta.oldStart} 行起</h3><pre>{generationDelta.oldText || '（此处无内容）'}</pre></div><div><h3>拟生成 · 第 {generationDelta.newStart} 行起</h3><pre>{generationDelta.newText || '（此处无内容）'}</pre></div></div><details className="save-preview-full"><summary>查看两份完整文本</summary><div className="save-preview-compare"><div><h3>当前文件</h3><pre>{generationPreviewFile.before}</pre></div><div><h3>拟生成</h3><pre>{generationPreviewFile.after}</pre></div></div></details></> : generationPreviewFile.status === 'new' ? <div className="save-preview-compare"><div><h3>拟生成文件</h3><pre>{generationPreviewFile.after}</pre></div></div> : <p className="save-preview-unchanged">文件内容不变；确认后仍会生成完整工程并保留旧目录。</p>}</>}</div>
+        </div><footer><span>{generationPreview.files.filter(file => file.status === 'new').length} 个新增 · {generationPreview.files.filter(file => file.status === 'changed').length} 个修改 · {generationPreview.files.filter(file => file.status === 'unchanged').length} 个内容不变</span><div><button type="button" className="quiet-button" onClick={() => setGenerationPreview(null)} disabled={Boolean(busy)}>取消</button><button type="button" className="primary-button compact" onClick={confirmGenerate} disabled={Boolean(busy)}>确认生成</button></div></footer>
       </section></div>}
     </div>
   );
