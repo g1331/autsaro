@@ -712,7 +712,21 @@ fn imported_unknown_content_survives_supported_edit_without_rewriting_other_file
     assert_eq!(imported.view().files.len(), 2);
     let frame = imported.view().frames.into_iter().find(|f| f.name == "Command").unwrap();
     imported.update_frame(&frame.path, serde_json::json!({"id": 802, "dlc": 3})).unwrap();
-    imported.save().unwrap();
+    let original_source = fs::read_to_string(&source).unwrap();
+    let preview = imported.preview_save().unwrap();
+    assert_eq!(preview.files.len(), 2);
+    let changed_path = fs::canonicalize(&source).unwrap().display().to_string();
+    let changed = preview.files.iter().find(|file| file.path == changed_path).unwrap();
+    assert!(changed.changed);
+    assert_eq!(changed.before.as_deref(), Some(original_source.as_str()));
+    assert!(changed.after.as_deref().unwrap().contains(retained));
+    assert_eq!(fs::read_to_string(&source).unwrap(), original_source, "preview must not write ARXML");
+    let unchanged_path = fs::canonicalize(&other).unwrap().display().to_string();
+    let unchanged = preview.files.iter().find(|file| file.path == unchanged_path).unwrap();
+    assert!(!unchanged.changed);
+    assert!(unchanged.before.is_none() && unchanged.after.is_none());
+    imported.save_previewed(&preview.revision).unwrap();
+    assert_eq!(fs::read_to_string(&source).unwrap(), changed.after.as_deref().unwrap());
     let reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
     let updated = reopened.view().frames.into_iter().find(|item| item.path == frame.path).unwrap();
     assert_eq!((updated.id, updated.dlc), (802, 3), "imported frame must retain ID and global PDU length");
@@ -736,6 +750,26 @@ fn save_does_not_overwrite_external_changes_to_managed_arxml() {
     assert_eq!(fs::read_to_string(&source).unwrap(), external);
     assert!(project.view().dirty);
     assert_eq!(fs::read_dir(source.parent().unwrap()).unwrap().count(), 1, "failed save left staging files");
+}
+
+#[test]
+fn save_preview_rejects_edits_and_external_changes_after_preview() {
+    let temp = Scratch::new();
+    let (mut project, _) = create_pair(&temp.0);
+    let source = temp.0.join("Alpha/Alpha.arxml");
+    let frame = project.view().frames.into_iter().find(|frame| frame.name == "Command").unwrap();
+    project.update_frame(&frame.path, serde_json::json!({"id": 802})).unwrap();
+    let first = project.preview_save().unwrap();
+    project.update_frame(&frame.path, serde_json::json!({"id": 804})).unwrap();
+    assert!(project.save_previewed(&first.revision).unwrap_err().contains("重新查看"));
+    assert!(fs::read_to_string(&source).unwrap().contains("<VALUE>801</VALUE>"));
+
+    let second = project.preview_save().unwrap();
+    let external = fs::read_to_string(&source).unwrap().replacen("<VALUE>801</VALUE>", "<VALUE>803</VALUE>", 1);
+    fs::write(&source, &external).unwrap();
+    assert!(project.save_previewed(&second.revision).unwrap_err().contains("外部修改"));
+    assert!(project.preview_save().unwrap_err().contains("外部修改"));
+    assert_eq!(fs::read_to_string(&source).unwrap(), external);
 }
 
 #[test]
@@ -1507,6 +1541,7 @@ fn noncanonical_pdu_input_is_not_rewritten_or_generated() {
     assert!(view.files.iter().all(|file| file.readonly));
     assert!(view.issues.iter().any(|issue| issue.code == "PDU_UNSUPPORTED"
         && issue.path.as_deref().is_some_and(|path| path.contains("ComCfg"))));
+    assert!(project.preview_save().unwrap_err().contains("PDU_UNSUPPORTED"));
     assert!(project.save().is_err());
     let output = temp.0.join("Rejected");
     assert!(generator::generate(&mut project, &output).is_err());
