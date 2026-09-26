@@ -247,6 +247,19 @@ fn verify_generated_output(dir: &Path, names: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+fn verify_build_input(output: &Path) -> Result<(), String> {
+    let list = fs::read_to_string(output.join("files.list"))
+        .map_err(|e| format!("生成工程缺少可读文件清单: {e}"))?;
+    let names: Vec<String> = list.lines().map(str::to_owned).collect();
+    if names.is_empty() || list != format!("{}\n", names.join("\n")) ||
+        names.windows(2).any(|pair| pair[0] >= pair[1]) ||
+        names.iter().any(|name| name.contains('\\') ||
+            Path::new(name).components().any(|component| !matches!(component, std::path::Component::Normal(_)))) {
+        return Err("生成工程文件清单格式或路径无效，拒绝构建".into());
+    }
+    verify_generated_output(output, &names).map_err(|e| format!("生成工程完整性检查失败，拒绝构建: {e}"))
+}
+
 fn prepared_files(workspace: &mut Workspace) -> Result<Vec<(String, Vec<u8>)>, String> {
     let (frames, signals) = workspace.checked_profile()?;
     let diagnostic = workspace.view().diagnostic;
@@ -402,6 +415,7 @@ pub fn build(output: &Path) -> Result<BuildReport, String> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(error.to_string()),
     }
+    verify_build_input(output)?;
     let cc = std::env::var_os("AUTOSAR_CC").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("gcc"));
     let mut sources = fs::read_dir(output.join("src")).map_err(|e| e.to_string())?.map(|entry| entry.map(|e| e.path()).map_err(|e| e.to_string())).collect::<Result<Vec<_>,_>>()?;
     sources.retain(|p| p.extension().is_some_and(|e| e == "c"));
@@ -417,6 +431,8 @@ pub fn build(output: &Path) -> Result<BuildReport, String> {
         .map_err(|e| format!("无法启动 C99 编译器: {e}；临时目录保留在 {}", stage.display()))?;
     let log = format!("{}{}", String::from_utf8_lossy(&result.stdout), String::from_utf8_lossy(&result.stderr));
     if !result.status.success() { return Err(format!("C99 构建失败: {log}；临时目录保留在 {}", stage.display())); }
+    verify_build_input(output).map_err(|e|
+        format!("编译期间{e}；临时编译产物保留在 {}", staged_binary.display()))?;
     fs::hard_link(&staged_binary, &binary).map_err(|error| {
         let reason = if error.kind() == std::io::ErrorKind::AlreadyExists { occupied() }
             else { format!("无法安装已编译的二进制: {error}") };

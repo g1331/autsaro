@@ -257,6 +257,90 @@ fn rebuild_rejects_existing_binary_without_overwriting_owner_bytes() {
     assert_eq!(fs::read(archived).unwrap(), b"owner modified binary");
 }
 
+#[test]
+fn build_rejects_changed_generated_inputs_before_compiling() {
+    let temp = Scratch::new();
+    let (mut ecu, _) = create_pair(&temp.0);
+    for (case, path, change) in [
+        ("changed source", "Ecu_Config.c", "append"),
+        ("changed manifest", "files.list", "append"),
+        ("extra source", "src/Owner.c", "create"),
+        ("missing header", "include/Can.h", "remove"),
+    ] {
+        let output = temp.0.join(case);
+        generator::generate(&mut ecu, &output).unwrap();
+        let target = output.join(path);
+        match change {
+            "append" => {
+                let mut content = fs::read(&target).unwrap();
+                content.extend_from_slice(b"\n/* external edit */\n");
+                fs::write(&target, content).unwrap();
+            }
+            "create" => fs::write(&target, b"int owner(void) { return 1; }\n").unwrap(),
+            "remove" => fs::remove_file(&target).unwrap(),
+            _ => unreachable!(),
+        }
+        let before = if target.exists() { Some(fs::read(&target).unwrap()) } else { None };
+        let error = generator::build(&output).unwrap_err();
+        assert!(error.contains("拒绝构建"), "{case}: {error}");
+        assert!(!output.join(if cfg!(windows) { "ecu_host.exe" } else { "ecu_host" }).exists(), "{case}");
+        assert_eq!(target.exists().then(|| fs::read(&target).unwrap()), before, "{case}");
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn build_rejects_source_changed_during_compilation_before_installing_binary() {
+    if let Some(output) = std::env::var_os("AUTOSAR_BUILD_MUTATION_CHILD") {
+        let error = generator::build(Path::new(&output)).unwrap_err();
+        assert!(error.contains("编译期间") && error.contains("完整性检查失败"), "{error}");
+        assert!(!Path::new(&output).join("ecu_host.exe").exists());
+        return;
+    }
+
+    let temp = Scratch::new();
+    let (mut ecu, _) = create_pair(&temp.0);
+    let output = temp.0.join("Generated");
+    generator::generate(&mut ecu, &output).unwrap();
+    let target = output.join("Ecu_Config.c");
+    let compiler_source = temp.0.join("mutating_compiler.c");
+    let compiler = temp.0.join("mutating_compiler.exe");
+    fs::write(&compiler_source, r#"#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+int main(int argc, char **argv) {
+    const char *target = getenv("AUTOSAR_MUTATION_TARGET");
+    FILE *changed = target ? fopen(target, "ab") : NULL;
+    if (changed == NULL || fputs("\n/* changed during build */\n", changed) < 0 || fclose(changed) != 0) return 1;
+    for (int i = 1; i + 1 < argc; ++i) {
+        if (strcmp(argv[i], "-o") == 0) {
+            FILE *binary = fopen(argv[i + 1], "wb");
+            if (binary == NULL || fputs("staged binary", binary) < 0 || fclose(binary) != 0) return 2;
+            return 0;
+        }
+    }
+    return 3;
+}
+"#).unwrap();
+    let compiled = Command::new("gcc").arg(&compiler_source).arg("-o").arg(&compiler).output().unwrap();
+    assert!(compiled.status.success(), "{}", String::from_utf8_lossy(&compiled.stderr));
+
+    let child = Command::new(std::env::current_exe().unwrap())
+        .arg("--exact").arg("build_rejects_source_changed_during_compilation_before_installing_binary")
+        .arg("--nocapture")
+        .env("AUTOSAR_BUILD_MUTATION_CHILD", &output)
+        .env("AUTOSAR_MUTATION_TARGET", &target)
+        .env("AUTOSAR_CC", &compiler)
+        .output().unwrap();
+    assert!(child.status.success(), "{}{}", String::from_utf8_lossy(&child.stdout), String::from_utf8_lossy(&child.stderr));
+    assert!(!output.join("ecu_host.exe").exists());
+    assert!(fs::read_to_string(&target).unwrap().contains("changed during build"));
+    let stages: Vec<_> = fs::read_dir(&temp.0).unwrap().map(|entry| entry.unwrap().path())
+        .filter(|path| path.file_name().unwrap().to_string_lossy().starts_with(".autosar-config-build-")).collect();
+    assert_eq!(stages.len(), 1);
+    assert_eq!(fs::read(stages[0].join("ecu_host.exe")).unwrap(), b"staged binary");
+}
+
 #[cfg(windows)]
 #[test]
 fn untouched_output_regenerates_changed_config_and_runs_the_new_schedule() {
