@@ -7,10 +7,10 @@ This directory is a self-contained C99 source project for one virtual ECU. It ta
 Install MinGW GCC and PowerShell. From any working directory, run `build.ps1` with PowerShell:
 
 ```powershell
-pwsh -NoProfile -File <generated-directory>\build.ps1
+pwsh -NoProfile -File "<generated-directory>\build.ps1"
 ```
 
-On Windows PowerShell 5.1, use `powershell -NoProfile -ExecutionPolicy Bypass -File <generated-directory>\build.ps1` instead. The script uses `gcc` from `PATH`, or the compiler named by `AUTOSAR_CC`. It compiles all `src/*.c` and `Ecu_Config.c` with C99, `-Wall -Wextra -Werror -pedantic`, `include/`, and Windows `bcrypt`; the result is `ecu_host.exe` in this directory. An existing executable is never replaced. Move it yourself before rebuilding. Keep all files listed in `files.list` together; `files.sha256` records their contents for regeneration checks, not authentication.
+On Windows PowerShell 5.1, use `powershell -NoProfile -ExecutionPolicy Bypass -File "<generated-directory>\build.ps1"` instead. Replace `<generated-directory>` with the actual path. The script uses `gcc` from `PATH`, or the compiler named by `AUTOSAR_CC`. It compiles all `src/*.c` and `Ecu_Config.c` with C99, `-Wall -Wextra -Werror -pedantic`, `include/`, and Windows `bcrypt`; the result is `ecu_host.exe` in this directory. An existing executable is never replaced. Move it yourself before rebuilding. Keep all files listed in `files.list` together; `files.sha256` records their contents for regeneration checks, not authentication.
 
 ## Run
 

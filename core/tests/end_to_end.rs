@@ -74,8 +74,10 @@ fn generated_handoff_builds_and_runs_after_moving_without_the_workbench() {
     assert!(listed.lines().any(|name| name == "README.md"));
     assert!(listed.lines().any(|name| name == "build.ps1"));
 
-    let build = Command::new("powershell").args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
-        .arg(delivered.join("build.ps1")).current_dir(&temp.0).output().unwrap();
+    let documented_command = readme.lines().find(|line| line.contains("powershell -NoProfile -ExecutionPolicy Bypass -File"))
+        .unwrap().split('`').nth(1).unwrap().replace("<generated-directory>", delivered.to_str().unwrap());
+    let build = Command::new("powershell").args(["-NoProfile", "-Command", &documented_command])
+        .current_dir(&temp.0).output().unwrap();
     assert!(build.status.success(), "{}{}", String::from_utf8_lossy(&build.stdout), String::from_utf8_lossy(&build.stderr));
     let binary = delivered.join("ecu_host.exe");
     let mut process = Command::new(&binary).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();

@@ -9,7 +9,7 @@
 ## 实施与可复现结果
 
 - `core/src/generator.rs` 把 `runtime/generated-README.md` 与 `runtime/generated-build.ps1` 纳入生成文件，按配置填入无诊断、DTC、0x27 或两者同时启用的启动命令。两文件进入预览、`files.list` 和 `files.sha256`。UI 生成结果指向目录内说明。
-- `generated_handoff_builds_and_runs_after_moving_without_the_workbench` 生成 Alpha 后把工程移动到临时目录 `Delivered ECU with spaces`，从另一工作目录执行 `powershell -NoProfile -ExecutionPolicy Bypass -File <交付目录>\build.ps1`。GCC C99 编译链接退出 0；新二进制输入 `T 10` 后得到 `X 801 2 2800`。将二进制改为 `owner binary` 后再执行脚本，非零退出且字节不变。测试临时目录自动清理，以测试名重建。
+- `generated_handoff_builds_and_runs_after_moving_without_the_workbench` 生成 Alpha 后把工程移动到临时目录 `Delivered ECU with spaces`，从另一工作目录执行 README 中的 Windows PowerShell 命令，将占位符替换为实际交付路径。GCC C99 编译链接退出 0；新二进制输入 `T 10` 后得到 `X 801 2 2800`。将二进制改为 `owner binary` 后再执行脚本，非零退出且字节不变。测试临时目录自动清理，以测试名重建。
 - `regeneration_preserves_user_edits_to_generated_files` 将说明、脚本逐一改为用户字节，再生成均拒绝并保留字节。既有生成预览测试逐项比较预览与确认后的文件，覆盖新增文件。DTC、0x27、DTC＋0x27 既有端到端用例分别核对 README 启动参数，但不替代无诊断离线运行证据。
 - 工具链：Rust/Cargo 1.98.1 MSVC，Node 24.19.0，npm 11.17.0，Python 3.12.9，MSYS2 GCC 16.1.0。Cargo 前设置并核对 `VCPKG_ROOT=<local-vcpkg-root>`、`VCPKGRS_TRIPLET=x64-windows-static`、`LIBCLANG_PATH=<local-libclang-directory>`。
 - 聚焦 `cargo test --manifest-path core/Cargo.toml --test end_to_end generated_handoff_builds_and_runs_after_moving_without_the_workbench -- --nocapture`：1/1 通过。`python scripts/workflow.py verify --scope all`：退出码 0，工作流测试 8/8、`npm ci`、UI TypeScript/Vite 构建、核心单元 2/2、端到端 44/44、Tauri debug 构建通过。`python scripts/workflow.py check`：状态有效。Rust 链接仍有既有 `LNK4098` 默认库冲突警告；未据此声称静态质量通过。
@@ -22,4 +22,4 @@
 
 ## 独立审查
 
-待新 Agent 会话按任务卡、源码和本记录独立复核，结论及修复在此补充。
+Agent `build003_review` 在独立会话读取任务、源码和证据，并复跑移动交付 1/1、再生成保护 1/1、安全访问 2/2、DTC 1/1 及工作流状态检查。审查发现 P2 问题：初版 README 的 `-File` 路径未加引号，含空格路径按说明执行会失败；初版测试通过 `Command::arg` 直接传路径，漏测文档命令。已将两种 PowerShell 示例的路径加引号，并改为从生成 README 读取示例、替换实际路径后经 PowerShell 执行；聚焦用例重新通过 1/1。修复后待审查者复核。
