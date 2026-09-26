@@ -761,15 +761,56 @@ fn split_package_save_preserves_sources_and_rejects_stale_reference_file() {
     let mut project = Workspace::open(vec![source.clone(), other.clone()], archive()).unwrap();
     assert!(project.validate().unwrap().issues.is_empty());
     assert_eq!(project.view().frames.iter().find(|item| item.name == "Command").unwrap().id, 802);
-    project.update_frame(&frame.path, serde_json::json!({"id": 803})).unwrap();
-    let before_save = fs::read(&source).unwrap();
+    assert!(!project.view().dirty);
     let external = fs::read_to_string(&other).unwrap().replacen("<LENGTH>8</LENGTH>", "<LENGTH>7</LENGTH>", 1);
     fs::write(&other, &external).unwrap();
+    assert!(project.validate().unwrap_err().contains("外部修改"));
+    let unsafe_output = temp.0.join("StaleGeneration");
+    assert!(generator::generate(&mut project, &unsafe_output).unwrap_err().contains("外部修改"));
+    assert!(!unsafe_output.exists(), "stale sources must not materialize C99 output");
+    project.update_frame(&frame.path, serde_json::json!({"id": 803})).unwrap();
+    let before_save = fs::read(&source).unwrap();
 
     assert!(project.save().unwrap_err().contains("外部修改"));
     assert_eq!(fs::read(&source).unwrap(), before_save, "dirty source must not be partly committed");
     assert_eq!(fs::read_to_string(&other).unwrap(), external, "external source must be preserved");
     assert!(project.view().dirty);
+}
+
+#[test]
+fn three_file_host_can_edit_preserves_retained_and_untouched_sources() {
+    let temp = Scratch::new();
+    create_pair(&temp.0);
+    let source = temp.0.join("Alpha/Alpha.arxml");
+    let clock = temp.0.join("Alpha/Clock.arxml");
+    let signals = temp.0.join("Alpha/Signals.arxml");
+    let original = fs::read_to_string(&source).unwrap();
+    let signal_start = original.find("<I-SIGNAL><SHORT-NAME>ISignal_SendCount</SHORT-NAME>").unwrap();
+    let signal_end = signal_start + original[signal_start..].find("</I-SIGNAL>").unwrap() + "</I-SIGNAL>".len();
+    let system_signal = &original[signal_start..signal_end];
+    let without_signal = original.replacen(system_signal, "", 1);
+    let clock_start = without_signal.find("<ECUC-MODULE-CONFIGURATION-VALUES><SHORT-NAME>McuCfg</SHORT-NAME>").unwrap();
+    let clock_end = clock_start + without_signal[clock_start..].find("</ECUC-MODULE-CONFIGURATION-VALUES>").unwrap()
+        + "</ECUC-MODULE-CONFIGURATION-VALUES>".len();
+    let mcu = &without_signal[clock_start..clock_end];
+    fs::write(&source, without_signal.replacen(mcu, "", 1)).unwrap();
+    let wrap = |content: &str| format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd\"><AR-PACKAGES><AR-PACKAGE><SHORT-NAME>Alpha</SHORT-NAME><ELEMENTS>{content}</ELEMENTS></AR-PACKAGE></AR-PACKAGES></AUTOSAR>\n");
+    fs::write(&clock, wrap(mcu)).unwrap();
+    let retained = "<I-SIGNAL><SHORT-NAME>RetainedUnknown</SHORT-NAME><LENGTH>1</LENGTH></I-SIGNAL>";
+    fs::write(&signals, wrap(&(system_signal.to_owned() + retained))).unwrap();
+
+    let mut project = Workspace::open(vec![source.clone(), clock.clone(), signals.clone()], archive()).unwrap();
+    assert!(project.validate().unwrap().issues.is_empty());
+    assert_eq!(project.view().files.iter().map(|file| file.retained_count).sum::<usize>(), 1);
+    let unchanged_clock = fs::read(&clock).unwrap();
+    let signal = project.view().signals.into_iter().find(|signal| signal.name == "SendCount").unwrap();
+    project.update_signal(&signal.path, serde_json::json!({"length": 7})).unwrap();
+    project.save().unwrap();
+    assert_eq!(fs::read(&clock).unwrap(), unchanged_clock);
+    assert!(fs::read_to_string(&signals).unwrap().contains(retained));
+    let mut reopened = Workspace::open(vec![source, clock, signals], archive()).unwrap();
+    assert!(reopened.validate().unwrap().issues.is_empty());
+    assert_eq!(reopened.view().signals.into_iter().find(|item| item.name == "SendCount").unwrap().length, 7);
 }
 
 #[test]

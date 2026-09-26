@@ -37,6 +37,38 @@
           "source": "README.md"
         }
       ]
+    },
+    {
+      "id": "WF-003",
+      "status": "trial",
+      "severity": "normal",
+      "problem": "工作流测试用实时 state.json 与反馈队列充当初始夹具，状态自然演进后测试误失败",
+      "impact": "AUDIT-001 全量验证中，已有 evidence 和 WF-002 使两项 Python 测试失败，阻断产品验证并造成回查成本",
+      "observations": [
+        {
+          "task_id": "AUDIT-001",
+          "detail": "`verify --scope all` 的 `test_done_audit_needs_evidence_and_independent_review` 和 `test_trial_needs_two_later_tasks_and_an_observable_condition` 在当前有效状态下失败；前者预设任务无证据，后者固定使用现有的 WF-002。",
+          "source": "scripts/test_workflow.py"
+        }
+      ],
+      "change": "保留一项实时状态有效性检查；其余规则测试改用从当前结构归一化的独立合成夹具。若后续状态演进仍误触发，可回退或进一步固定夹具结构。",
+      "success_condition": "后续至少两张触及任务状态或反馈队列演进的任务卡，仍能通过工作流测试，同时恶意状态的拒绝断言保持有效",
+      "change_files": ["scripts/test_workflow.py"],
+      "baseline_done_task_ids": []
+    },
+    {
+      "id": "WF-004",
+      "status": "observed",
+      "severity": "normal",
+      "problem": "Windows 上原生界面演练后若 Vite 仍运行，npm ci 可能无法替换使用中的 esbuild.exe",
+      "impact": "AUDIT-001 的完整验证在 npm ci 以 EPERM unlink esbuild.exe 退出；停止本轮开发服务后重跑通过",
+      "observations": [
+        {
+          "task_id": "AUDIT-001",
+          "detail": "隔离原生窗口演练留有后台 Vite 服务；`verify --scope all` 的 `npm ci --prefix ui` 报 EPERM unlink esbuild.exe。停止本轮测试进程后通过，先记录一次性环境冲突，不因单次现象改动验证门。",
+          "source": "scripts/workflow.py"
+        }
+      ]
     }
   ]
 }

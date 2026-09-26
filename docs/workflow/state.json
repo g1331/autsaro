@@ -17,10 +17,10 @@
         "artifact_closure": { "status": "pending_review", "evidence": "docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md" },
         "build_static": { "status": "pending_review", "evidence": "docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md" },
         "independent_behavior": { "status": "pending_review", "evidence": "docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md" },
-        "user_workflow": { "status": "not_run" },
+        "user_workflow": { "status": "pending_review", "evidence": "docs/workflow/evidence/AUDIT-001-host-can-ui-2026-09-26.md" },
         "spec_obligations": { "status": "not_run" }
       },
-      "next_gap": "真实外部多文件 CAN 项目的受支持编辑与原生界面交接、逐模块静态/工件义务仍缺证据；AUDIT-001 继续。"
+      "next_gap": "隔离原生界面与来源变更拒绝已演练；真实外部多文件 CAN 输入的差异/离线交接、逐模块静态与工件义务仍缺证据；AUDIT-001 继续。"
     },
     {
       "id": "HOST-DOCAN-01",
@@ -52,7 +52,10 @@
       "base_commit": "aef47c3",
       "capabilities": ["HOST-CAN-01"],
       "depends_on": [],
-      "evidence": ["docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md"]
+      "evidence": [
+        "docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md",
+        "docs/workflow/evidence/AUDIT-001-host-can-ui-2026-09-26.md"
+      ]
     },
     {
       "id": "AUDIT-002",
