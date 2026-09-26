@@ -10,12 +10,24 @@ from workflow import FEEDBACK, ROOT, STATE, check_feedback, check_state, feedbac
 class WorkflowStateTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.baseline = json.loads(STATE.read_text(encoding="utf-8"))
-        cls.feedback = json.loads(FEEDBACK.read_text(encoding="utf-8"))
+        cls.current_state = json.loads(STATE.read_text(encoding="utf-8"))
+        cls.current_feedback = json.loads(FEEDBACK.read_text(encoding="utf-8"))
+        cls.baseline = copy.deepcopy(cls.current_state)
+        cls.baseline["capabilities"] = cls.baseline["capabilities"][:2]
+        cls.baseline["tasks"] = cls.baseline["tasks"][:2]
+        cls.baseline["capabilities"][0]["claim_level"] = "documented_behavior"
+        cls.baseline["capabilities"][0]["review"] = {"status": "not_run"}
+        cls.baseline["capabilities"][0]["gates"] = {
+            name: {"status": "not_run"} for name in cls.baseline["capabilities"][0]["gates"]
+        }
+        cls.baseline["tasks"][0].update(status="ready", evidence=[])
+        cls.baseline["tasks"][0].pop("review", None)
+        cls.baseline["tasks"][1]["status"] = "proposed"
+        cls.feedback = {"schema_version": 1, "reviewed_done_task_ids": [], "items": []}
 
     def test_current_state_is_valid(self):
-        self.assertEqual(check_state(self.baseline, ROOT), [])
-        self.assertEqual(check_feedback(self.feedback, self.baseline, ROOT), [])
+        self.assertEqual(check_state(self.current_state, ROOT), [])
+        self.assertEqual(check_feedback(self.current_feedback, self.current_state, ROOT), [])
 
     def test_internal_support_requires_evidence_and_review(self):
         state = copy.deepcopy(self.baseline)

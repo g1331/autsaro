@@ -1543,6 +1543,17 @@ impl Workspace {
         Ok(self.view())
     }
 
+    fn ensure_sources_current(&self) -> Result<(), String> {
+        for file in &self.files {
+            let disk = fs::read(&file.path).map_err(|error|
+                format!("无法读取来源文件 {}: {error}", file.path.display()))?;
+            if disk != file.saved.as_bytes() {
+                return Err(format!("文件已被外部修改，拒绝基于过期配置继续；请重新导入项目: {}", file.path.display()));
+            }
+        }
+        Ok(())
+    }
+
     pub fn validate(&mut self) -> Result<WorkspaceView, String> {
         self.refresh()?;
         self.issues.extend(schema::validate_files(&self.schema_zip, &self.files.iter().map(|f| (f.path.as_path(), f.text.as_str())).collect::<Vec<_>>())?);
@@ -1567,6 +1578,7 @@ impl Workspace {
                 }
             }
         }
+        self.ensure_sources_current()?;
         Ok(self.view())
     }
 
@@ -1586,11 +1598,7 @@ impl Workspace {
         if let Some(issue) = self.issues.iter().find(|i| matches!(i.severity, Severity::Error)) { return Err(format!("{}: {}", issue.code, issue.message)); }
         // Validation includes references across every imported file, including files this
         // edit leaves untouched. A stale untouched file would invalidate that result.
-        for file in &self.files {
-            if fs::read_to_string(&file.path).map_err(|e| e.to_string())? != file.saved {
-                return Err(format!("文件已被外部修改，拒绝保存基于过期跨文件配置的编辑: {}", file.path.display()));
-            }
-        }
+        self.ensure_sources_current()?;
         let dirty = self.files.iter().filter(|f| f.text != f.saved).collect::<Vec<_>>();
         let mut staged = Vec::new();
         for (index, file) in dirty.iter().enumerate() {
