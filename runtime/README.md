@@ -47,11 +47,11 @@ Dcm 提供 0x10 默认/扩展会话、0x3E TesterPresent（子功能 0x80 抑制
 
 0x31 是本工程的**主机专属行为**：生成 ARXML 在 DID 的 `ADMIN-DATA/SDGS` 下存储唯一 `AutosarWorkbenchHostRestoreDidV1` 工具组，其中 `Rid` 为十进制 16-bit 编号、`SessionRef` 固定指向本项目的 Extended 会话；不生成 DcmDsd 0x31 服务或 DcmDspRoutine/StartRoutine/CommonAuthorization 的标准 ECUC 节点。主机读取工具记录生成内部例程，不把 `Ecu_HostRestoreDid` 作为第三方 Dcm 回调。R24-11 `DcmDspRoutineFncSignature` 本属草案；独立的第三方 Dcm 不会从该 ARXML 获得本例程，也未验证例程的标准 ECUC 接口。
 
-旧工具保存的 Com/CanIf/CanTp/Dcm ECUC 引用直接指向系统 PDU。仅当所有旧容器、字段与引用均完整匹配本工具拥有的形状且无外部依赖/变体时，导入阶段才在内存暂存全局 EcuC Pdu 与必需 Com 字段的转换；系统 I-PDU/N-PDU/DCM-I-PDU、无关源文件及注释不重建。旧 0x31 例程与 PDU 的迁移一起预检，任一不安全即撤回全部暂存并保持原始 ARXML 只读。暂存状态为 dirty/pending，确认保存前不得编辑或生成；明确确认后沿用保存事务及外部文件改动守卫。用户已有的 EcuC 配置、未知 ECUC 扩展与引用不自动修改；迁移后仍不是完整 CanIf/CAN ECUC。
+工作区只接受当前 R24-11 工具配置结构：Com/CanIf/CanTp/Dcm 的 ECUC PDU 引用须指向 EcuC 全局 Pdu，主机 0x31 例程由 DID 工具 SDG 描述。旧工具生成的系统 PDU 直接引用与草案 Dcm 例程配置不会自动迁移或隐式补全；不符合当前结构的输入保留原文件并阻止保存和生成。无关且不影响有效配置的未知内容仍可原样保留。
 
 可选单 DTC：`profile.txt` 的 `DTC code=<十进制> frame=<生成帧索引> id=<CAN ID> dlc=<字节数> timeout=<ms>` 指定一个带信号的 Rx 帧（超时为正），DTC 范围 `0x000100–0xFFFFFE`。首次有效 Rx 帧令监控测试完成；其后第一次达到超时阈值，Com → Dem 记故障并持久化。Dcm 在默认/扩展会话支持 0x19/0x01，按状态掩码返回匹配 DTC 数量及状态可用掩码 `0x7F`；当前最多一个 DTC，因此数量为 0 或 1。支持单 DTC 的 0x19/0x02，按请求掩码读取；其他 0x19 子功能返回 NRC 0x12。0x14 仅扩展会话和 `0xFFFFFF` 全部清除，默认会话返回 NRC 0x7F，其他组返回 NRC 0x31，持久化失败返回 NRC 0x72。未配置 DTC 时 0x19/0x01、0x19/0x02 与 0x14 返回 NRC 0x11。
 
-配置 DTC 的 `ecu_host` **必须**以 `--nvm <独占的文件路径>` 启动；无 DTC 的旧工程仍不带参数运行。缺少参数返回 `E CONFIG`，既有文件损坏、配置指纹不匹配或写入失败返回 `E NVM`，不降级成空 DTC。不存在的文件会创建两个 32 字节 CRC32 保护槽位；每次状态改变交替写槽并 `fflush`、`fsync`/`_commit` 后才确认，启动要求两个槽位均完整，任一损坏即拒绝使用以避免旧状态覆盖最新故障。主机进程启动作为新的操作周期：初始/清除状态 `0x50`，有效 Rx 首次测试通过 `0x00`，首次超时 `0x2F`，故障后重启 `0x6D`，该周期再收到有效帧 `0x2C`；后续周期才清除 pending 标志。独立测试器为每次验证分配隔离文件，不复用实际 ECU 状态。
+配置 DTC 的 `ecu_host` **必须**以 `--nvm <独占的文件路径>` 启动；未配置 DTC 的工程不带参数运行。缺少参数返回 `E CONFIG`，既有文件损坏、配置指纹不匹配或写入失败返回 `E NVM`，不降级成空 DTC。不存在的文件会创建两个 32 字节 CRC32 保护槽位；每次状态改变交替写槽并 `fflush`、`fsync`/`_commit` 后才确认，启动要求两个槽位均完整，任一损坏即拒绝使用以避免旧状态覆盖最新故障。主机进程启动作为新的操作周期：初始/清除状态 `0x50`，有效 Rx 首次测试通过 `0x00`，首次超时 `0x2F`，故障后重启 `0x6D`，该周期再收到有效帧 `0x2C`；后续周期才清除 pending 标志。独立测试器为每次验证分配隔离文件，不复用实际 ECU 状态。
 
 这是有边界的主机虚拟实现：未实现多事件 Dem、真实 NvM 设备与 Ea/Fee/MemIf 目标、0x27 与其他 0x31 例程/子功能、其他写入 DID/持久写入、其他 0x19 子功能和 0x14 清除组、功能寻址、跨连接并发、实车确认时序或完整 ECUC 外部 ComM 引用；不以 XSD 通过代替 AUTOSAR/ISO 语义与互操作认证。Dem 事件到监测 Rx 帧只在工具专属 SDG 中绑定，操作周期只是进程启动。
 
