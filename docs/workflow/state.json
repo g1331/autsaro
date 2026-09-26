@@ -39,7 +39,7 @@
           "status": "not_run"
         }
       },
-      "next_gap": "AUDIT-001 已审计收口但未升级支持声明；真实外部多文件 CAN 输入的编辑、差异与离线交接，以及逐模块 BSW/RTE 工件、MISRA 和并发来源修改证据仍缺。"
+      "next_gap": "AUDIT-001 已审计收口但未升级支持声明；先完成 BUILD-001 的保存前 ARXML 改动预览，再续作外部多文件 CAN 输入、生成差异与离线交接及逐模块标准义务。"
     },
     {
       "id": "HOST-DOCAN-01",
@@ -292,9 +292,22 @@
       }
     },
     {
+      "id": "BUILD-001",
+      "title": "保存前查看 ARXML 文件改动",
+      "status": "ready",
+      "card": "docs/workflow/tasks/BUILD-001-arxml-save-preview.md",
+      "capabilities": [
+        "HOST-CAN-01"
+      ],
+      "depends_on": [
+        "AUDIT-001"
+      ],
+      "evidence": []
+    },
+    {
       "id": "AUDIT-003",
       "title": "主机单 DTC 与 NvM 档案审计",
-      "status": "ready",
+      "status": "proposed",
       "card": "docs/workflow/tasks/AUDIT-003-host-dtc.md",
       "capabilities": [
         "HOST-DOCAN-DTC-01"

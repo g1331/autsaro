@@ -46,6 +46,38 @@
           "source": "scripts/workflow.py"
         }
       ]
+    },
+    {
+      "id": "WF-005",
+      "status": "trial",
+      "severity": "normal",
+      "problem": "任务排序让 Agent 在已有主机行为可运行后连续选择审计，缺少可见产品增量",
+      "impact": "三轮推进中只有两次 ARXML 来源变化拒绝的产品缺陷修复；AUDIT-001、AUDIT-002 收口均未升级支持声明，原下一项仍是纯审计 AUDIT-003",
+      "observations": [
+        {
+          "task_id": "AUDIT-001",
+          "detail": "审计中修复了跨文件保存及生成前来源变化两项真实缺陷，但最终收口主要是证据和文档，HOST-CAN-01 六门仍未通过。",
+          "source": "docs/workflow/evidence/AUDIT-001-host-can-closure-2026-09-26.md"
+        },
+        {
+          "task_id": "AUDIT-002",
+          "detail": "基础 DoCAN 审计新增测试与档案，未改变产品源码或用户可见流程；随后仍排纯审计 AUDIT-003。",
+          "source": "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
+        }
+      ],
+      "change": "把当前用户流程和可运行产品切片排在一般证据盘点之前；连续审计未带来支持升级时，下一项转为可观察产品任务 BUILD-001；效果不足则重新评估排序与任务切片。",
+      "success_condition": "接下来两项完成的任务中至少有一项交付可由用户操作复现的产品行为或修复真实缺陷，并将产品变化与审计认识分开报告；不得靠降低证据门取得绿色状态。",
+      "change_files": [
+        "docs/workflow/AGENT_WORKFLOW.md",
+        "docs/workflow/OWNER_GUIDE.md",
+        "docs/workflow/state.json",
+        "docs/workflow/tasks/BUILD-001-arxml-save-preview.md",
+        "docs/workflow/tasks/AUDIT-003-host-dtc.md"
+      ],
+      "baseline_done_task_ids": [
+        "AUDIT-001",
+        "AUDIT-002"
+      ]
     }
   ]
 }
