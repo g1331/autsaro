@@ -1,32 +1,13 @@
 {
   "schema_version": 1,
-  "reviewed_done_task_ids": [],
+  "reviewed_done_task_ids": [
+    "AUDIT-001",
+    "AUDIT-002"
+  ],
   "items": [
     {
-      "id": "WF-001",
-      "status": "trial",
-      "severity": "normal",
-      "problem": "初版开发工作流没有反馈积累和自我复盘环节",
-      "impact": "跨会话出现的流程摩擦无法累计，Agent 也没有明确时机检验并改进自身工作方式",
-      "observations": [
-        {
-          "task_id": null,
-          "detail": "使用者在初版工作流落地后指出，应让 Agent 记录使用中的问题，积累后自行优化，并在后续验证解决情况"
-        }
-      ],
-      "change": "增加反馈队列、复盘触发、试行与归档说明，并把到期提示接入只读状态；若造成重复流程负担，撤回相关提示并保留历史反馈",
-      "success_condition": "接下来的两项相关任务交接中，Agent 能按规则记录实际摩擦并检查是否到期，且状态查询保持只读；若未出现摩擦，也能明确说明已检查反馈队列",
-      "change_files": [
-        "docs/workflow/AGENT_WORKFLOW.md",
-        "docs/workflow/OWNER_GUIDE.md",
-        "docs/workflow/feedback/README.md",
-        "scripts/workflow.py"
-      ],
-      "baseline_done_task_ids": []
-    },
-    {
       "id": "WF-002",
-      "status": "observed",
+      "status": "trial",
       "severity": "normal",
       "problem": "已安装本地 vcpkg 依赖时，新的 PowerShell 会话直接运行核心验证仍因构建环境变量缺失而失败",
       "impact": "AUDIT-001 首次 `verify --scope core` 在 libxml 构建脚本退出 101；需回查 README 并定位 vcpkg/libclang 后重跑，增加复现成本",
@@ -35,26 +16,22 @@
           "task_id": "AUDIT-001",
           "detail": "`python scripts/workflow.py verify --scope core` 报 `vcpkg did not succeed in finding libxml2`；设置 VCPKG_ROOT、VCPKGRS_TRIPLET、LIBCLANG_PATH 后全量验证通过。README 已写这些变量，本次先记录环境发现成本，未据单次现象修改验证脚本。",
           "source": "README.md"
-        }
-      ]
-    },
-    {
-      "id": "WF-003",
-      "status": "trial",
-      "severity": "normal",
-      "problem": "工作流测试用实时 state.json 与反馈队列充当初始夹具，状态自然演进后测试误失败",
-      "impact": "AUDIT-001 全量验证中，已有 evidence 和 WF-002 使两项 Python 测试失败，阻断产品验证并造成回查成本",
-      "observations": [
+        },
         {
-          "task_id": "AUDIT-001",
-          "detail": "`verify --scope all` 的 `test_done_audit_needs_evidence_and_independent_review` 和 `test_trial_needs_two_later_tasks_and_an_observable_condition` 在当前有效状态下失败；前者预设任务无证据，后者固定使用现有的 WF-002。",
-          "source": "scripts/test_workflow.py"
+          "task_id": "AUDIT-002",
+          "detail": "独立审查者在新的 PowerShell 会话直接运行 cargo test，因未设置 vcpkg/libclang 环境先失败；按 README 设置后聚焦测试通过。同根因再次增加复核成本。",
+          "source": "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
         }
       ],
-      "change": "保留一项实时状态有效性检查；其余规则测试改用从当前结构归一化的独立合成夹具。若后续状态演进仍误触发，可回退或进一步固定夹具结构。",
-      "success_condition": "后续至少两张触及任务状态或反馈队列演进的任务卡，仍能通过工作流测试，同时恶意状态的拒绝断言保持有效",
-      "change_files": ["scripts/test_workflow.py"],
-      "baseline_done_task_ids": []
+      "change": "在 AGENT_WORKFLOW.md 验证步骤前提醒 Windows 新 PowerShell 会话及独立审查先核对三个构建变量；若提醒无效则调整或撤回该句。",
+      "success_condition": "后续至少两张实际在新 PowerShell 会话运行 Cargo 的任务，没有再因遗漏 VCPKG_ROOT、VCPKGRS_TRIPLET、LIBCLANG_PATH 而先失败；若未触及此场景继续试行。",
+      "change_files": [
+        "docs/workflow/AGENT_WORKFLOW.md"
+      ],
+      "baseline_done_task_ids": [
+        "AUDIT-001",
+        "AUDIT-002"
+      ]
     },
     {
       "id": "WF-004",
