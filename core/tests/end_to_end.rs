@@ -46,7 +46,7 @@ fn regeneration_preserves_user_edits_to_generated_files() {
     let (mut ecu, _) = create_pair(&temp.0);
     let output = temp.0.join("Generated");
     generator::generate(&mut ecu, &output).unwrap();
-    for name in ["src/Com.c", "Ecu_Config.c", "files.list", "files.sha256"] {
+    for name in ["src/Com.c", "Ecu_Config.c", "README.md", "build.ps1", "files.list", "files.sha256"] {
         let changed = b"user edited generated output";
         let file = output.join(name);
         let original = fs::read(&file).unwrap();
@@ -55,6 +55,42 @@ fn regeneration_preserves_user_edits_to_generated_files() {
         assert_eq!(fs::read(&file).unwrap(), changed, "{name}");
         fs::write(file, original).unwrap();
     }
+}
+
+#[cfg(windows)]
+#[test]
+fn generated_handoff_builds_and_runs_after_moving_without_the_workbench() {
+    let temp = Scratch::new();
+    let (mut ecu, _) = create_pair(&temp.0);
+    let output = temp.0.join("Generated");
+    generator::generate(&mut ecu, &output).unwrap();
+    let delivered = temp.0.join("Delivered ECU with spaces");
+    fs::rename(&output, &delivered).unwrap();
+    let readme = fs::read_to_string(delivered.join("README.md")).unwrap();
+    assert!(readme.contains(".\\ecu_host.exe"));
+    assert!(!readme.contains("--nvm"));
+    assert!(!readme.contains("{{RUN_COMMAND}}"));
+    let listed = fs::read_to_string(delivered.join("files.list")).unwrap();
+    assert!(listed.lines().any(|name| name == "README.md"));
+    assert!(listed.lines().any(|name| name == "build.ps1"));
+
+    let documented_command = readme.lines().find(|line| line.contains("powershell -NoProfile -ExecutionPolicy Bypass -File"))
+        .unwrap().split('`').nth(1).unwrap().replace("<generated-directory>", delivered.to_str().unwrap());
+    let build = Command::new("powershell").args(["-NoProfile", "-Command", &documented_command])
+        .current_dir(&temp.0).output().unwrap();
+    assert!(build.status.success(), "{}{}", String::from_utf8_lossy(&build.stdout), String::from_utf8_lossy(&build.stderr));
+    let binary = delivered.join("ecu_host.exe");
+    let mut process = Command::new(&binary).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
+    process.stdin.take().unwrap().write_all(b"T 10\n").unwrap();
+    let result = process.wait_with_output().unwrap();
+    assert!(result.status.success());
+    assert_eq!(String::from_utf8(result.stdout).unwrap().trim(), "X 801 2 2800");
+
+    fs::write(&binary, b"owner binary").unwrap();
+    let repeated = Command::new("powershell").args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
+        .arg(delivered.join("build.ps1")).current_dir(&temp.0).output().unwrap();
+    assert!(!repeated.status.success());
+    assert_eq!(fs::read(&binary).unwrap(), b"owner binary");
 }
 
 #[test]
@@ -1299,6 +1335,9 @@ fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restarts() {
     assert_eq!((dtc.code, dtc.monitor_frame_path), (0x123456, rx));
     let generated = temp.0.join("GeneratedDiag");
     generator::generate(&mut reopened, &generated).unwrap();
+    let handoff = fs::read_to_string(generated.join("README.md")).unwrap();
+    assert!(handoff.contains(".\\ecu_host.exe --nvm .\\ecu.nvm"));
+    assert!(!handoff.contains("--security-key"));
     let binary = generator::build(&generated).unwrap().binary_path;
     let without_storage = Command::new(&binary).output().unwrap();
     assert!(!without_storage.status.success());
@@ -1493,6 +1532,9 @@ fn security_access_roundtrips_and_gates_host_writes() {
     assert!(reopened.view().diagnostic.unwrap().security_enabled);
     let generated = temp.0.join("GeneratedSecure");
     generator::generate(&mut reopened, &generated).unwrap();
+    let handoff = fs::read_to_string(generated.join("README.md")).unwrap();
+    assert!(handoff.contains(".\\ecu_host.exe --security-key .\\ecu.key --security-state .\\ecu.security"));
+    assert!(!handoff.contains("--nvm"));
     let configuration = fs::read_to_string(generated.join("Ecu_Config.c")).unwrap();
     assert!(!configuration.contains("5A5A5A5A"));
     let binary = generator::build(&generated).unwrap().binary_path;
@@ -1524,6 +1566,8 @@ fn security_access_gates_dtc_mutations_without_a_writable_did() {
     assert!(reopened.clear_dtc().is_err(), "sole protected operation cannot be removed silently");
     let generated = temp.0.join("GeneratedSecureDtc");
     generator::generate(&mut reopened, &generated).unwrap();
+    let handoff = fs::read_to_string(generated.join("README.md")).unwrap();
+    assert!(handoff.contains(".\\ecu_host.exe --nvm .\\ecu.nvm --security-key .\\ecu.key --security-state .\\ecu.security"));
     generator::build(&generated).unwrap();
     let report = host::run_diagnostic(&generated).unwrap();
     assert!(report.passed, "{}", report.log);

@@ -39,7 +39,7 @@
           "status": "not_run"
         }
       },
-      "next_gap": "BUILD-001 保存预览与 BUILD-002 生成工程预览已审查收口；仍需外部跨引用多文件 CAN 输入的 UI 全链、离线交接，以及逐模块标准义务。"
+      "next_gap": "BUILD-001/002/003 已收口保存预览、生成预览与生成目录离线构建说明；仍需外部跨引用多文件 CAN 输入的 UI 全链、另一执行者交接及逐模块标准义务。"
     },
     {
       "id": "HOST-DOCAN-01",
@@ -337,6 +337,29 @@
         "reviewer": "Agent build002_review",
         "date": "2026-09-26",
         "evidence": "docs/workflow/evidence/BUILD-002-generation-preview-2026-09-26.md"
+      }
+    },
+    {
+      "id": "BUILD-003",
+      "title": "生成工程的离线构建交接",
+      "status": "done",
+      "card": "docs/workflow/tasks/BUILD-003-offline-handoff.md",
+      "branch": "feature/BUILD-003-offline-handoff",
+      "base_commit": "0f7f474",
+      "capabilities": [
+        "HOST-CAN-01"
+      ],
+      "depends_on": [
+        "BUILD-002"
+      ],
+      "evidence": [
+        "docs/workflow/evidence/BUILD-003-offline-handoff-2026-09-26.md"
+      ],
+      "review": {
+        "status": "passed",
+        "reviewer": "Agent build003_review",
+        "date": "2026-09-26",
+        "evidence": "docs/workflow/evidence/BUILD-003-offline-handoff-2026-09-26.md"
       }
     },
     {
