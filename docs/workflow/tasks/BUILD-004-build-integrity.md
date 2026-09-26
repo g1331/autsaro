@@ -1,6 +1,6 @@
 # BUILD-004：构建时核对生成工程完整性
 
-**状态：**review（已补齐独立复核指出的编译期间变化用例）。**分支：**`feature/BUILD-004-build-integrity`。**基线：**`dad392b`。**依赖：**BUILD-003。**关联能力：**HOST-CAN-01。**类型：**产品构建流程风险修复。
+**状态：**done（2026-09-26 独立复审通过）。**分支：**`feature/BUILD-004-build-integrity`。**基线：**`dad392b`。**依赖：**BUILD-003。**关联能力：**HOST-CAN-01。**类型：**产品构建流程风险修复。
 
 ## 范围与依据
 
@@ -15,3 +15,7 @@ CP/FO R24-11、无配置变体、Windows 主机虚拟 ECU 与 MinGW GCC；先用
 ## 验收
 
 在 `core/tests/end_to_end.rs` 覆盖正常构建与上述关键拒绝路径；运行 `python scripts/workflow.py verify --scope all` 与 `check`，保存工具链、命令、输入、输出和限制。进入 `review` 后由新的 Agent 会话独立核对源码、测试及证据，再决定是否收口；本卡不升级 HOST-CAN-01 的六道证据门或支持声明。
+
+## 交接
+
+工作台构建前后核对生成文件，外部误改、额外文件和编译期间的来源变化均在测试中拒绝；完整 `verify --scope all` 通过，核心端到端 46/46。独立审查者复核修复并重跑编译期间变化的聚焦用例 1/1，同意在防误改范围内收口。原生桌面窗口未运行；清单摘要不是防恶意篡改认证。结果与未验证项见 [BUILD-004 证据](../evidence/BUILD-004-build-integrity-2026-09-26.md)。

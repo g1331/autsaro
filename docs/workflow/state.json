@@ -39,7 +39,7 @@
           "status": "not_run"
         }
       },
-      "next_gap": "BUILD-001/002/003 已收口保存预览、生成预览与生成目录离线构建说明；仍需外部跨引用多文件 CAN 输入的 UI 全链、另一执行者交接及逐模块标准义务。"
+      "next_gap": "BUILD-001/002/003/004 已收口保存预览、生成预览、离线构建说明和工作台构建误改拒绝；仍需外部跨引用多文件 CAN 输入的 UI 全链、另一执行者交接及逐模块标准义务。"
     },
     {
       "id": "HOST-DOCAN-01",
@@ -378,7 +378,7 @@
     {
       "id": "BUILD-004",
       "title": "构建时核对生成工程完整性",
-      "status": "review",
+      "status": "done",
       "card": "docs/workflow/tasks/BUILD-004-build-integrity.md",
       "branch": "feature/BUILD-004-build-integrity",
       "base_commit": "dad392b",
@@ -390,7 +390,13 @@
       ],
       "evidence": [
         "docs/workflow/evidence/BUILD-004-build-integrity-2026-09-26.md"
-      ]
+      ],
+      "review": {
+        "status": "passed",
+        "reviewer": "Agent build004_review",
+        "date": "2026-09-26",
+        "evidence": "docs/workflow/evidence/BUILD-004-build-integrity-2026-09-26.md"
+      }
     }
   ]
 }
