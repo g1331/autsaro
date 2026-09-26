@@ -1,6 +1,6 @@
 # BUILD-004：构建时核对生成工程完整性
 
-**状态：**review。**分支：**`feature/BUILD-004-build-integrity`。**基线：**`dad392b`。**依赖：**BUILD-003。**关联能力：**HOST-CAN-01。**类型：**产品构建流程风险修复。
+**状态：**review（已补齐独立复核指出的编译期间变化用例）。**分支：**`feature/BUILD-004-build-integrity`。**基线：**`dad392b`。**依赖：**BUILD-003。**关联能力：**HOST-CAN-01。**类型：**产品构建流程风险修复。
 
 ## 范围与依据
 
