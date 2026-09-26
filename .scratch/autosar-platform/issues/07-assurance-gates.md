@@ -22,6 +22,7 @@ Blocked by: 03, 05, 06, 09
 生成 C 工程另按**产物 × 模块 × 受支持配置 × 目标/工具链**逐项验收，而非以全项目一条笼统的“符合 AUTOSAR”结论代替：
 
 - 对用 C 实现的 BSW 模块，核对 `SWS_BSW_00115` 的 MISRA C:2012；仅技术上合理的例外可偏离，偏离须在 C 源码中明确标识并说明理由。核对 `SWS_BSW_00234` 的 BSW 外部接口 C99 约束，以及 `SWS_BSW_00006` 的模块实现源文件包含 `<Mip>_MemMap.h`。若模块有定义为 `const` 的链接时配置参数，按 `SWS_BSW_00013` 核对对应配置源文件；没有该参数时记录不适用，而非强制生成空文件。
+- 对声称标准 BSW 的模块，按 `SWS_BSW_00004`、`SWS_BSW_00020` 核对实现源码与公开头文件的命名和声明位置，并按 `SWS_BSW_00002` 核对随实现交付的模块文档及规范/要求偏离说明；不是只看 `.c/.h` 能否编译。源码中的 MISRA 偏离注释须指向实际违规位置和理由；缩进、括号布局、普通注释的语言由项目风格确定，不能伪称为无条件适用的 AUTOSAR SHALL。主机专属文件与生成的 BSW/RTE 工件分别记录角色，不把某一类的义务直接套给全部 C 文件。
 - 对受支持的 RTE 范围，按 `SWS_Rte_05086` 核对生成阶段的 RTE Basic Software Module Description，并按 `SWS_Rte_05090` 核对其中的生成产物记录；`SWS_Rte_01157` 规定 C/C++ 组件使用的固定 RTE 头文件名 `Rte.h`，不能以存在 `Rte.h` 充当整个 RTE 生成与行为通过的证据。各模块还须结合适用的 ECUC、BSW Module Description 模板和该模块 SWS 核对 API、类型、配置与运行行为；R24-11 已移除旧编译器抽象要求，不将 `Compiler.h` 列为必备产物。
 - 每个受支持组合保存需求 ID 与适用/不适用理由、生成源文件/头文件/接口/类型/配置/内存映射及 BSWMD 对照、适用模块的 MISRA 静态分析报告或逐项有理由的偏离记录、指定目标和工具链的构建/链接记录，以及独立预期结果驱动的运行行为证据。XSD 校验与编译器警告检查仅是证据的一部分，不能替代这些检查。
 
@@ -64,8 +65,8 @@ Blocked by: 03, 05, 06, 09
 - **必需 PDU 配置：**对每个 Tx PDU，除全局 `CanIfTxPduRef` 外，还要提供 1..1 `CanIfTxPduBufferRef`、`CanIfTxPduType`、`CanIfTxPduReadNotifyStatus`、`CanIfTxPduTruncation`。对每个 Rx PDU，除全局 `CanIfRxPduRef` 外，还要提供 1..1 `CanIfRxPduHrhIdRef`、`CanIfRxPduDataLengthCheck`、`CanIfRxPduReadData`、`CanIfRxPduReadNotifyStatus`。MOD selectors：Rx `:22782-23212`，Tx `:23420-23910`。
 - **Can 模块目标必须真实存在于配置模型中：**CanIf 的驱动名/控制器引用分别要求 `Can/CanGeneral` 与 `Can/CanConfigSet/CanController`；Can Driver 的 `CanHardwareObject` 又要求 `CanControllerRef` 指向该控制器。EcuC `Pdu` 只能解决 COM 栈全局 PDU 标识，不会替代 Can Driver、控制器或 HOH。MOD selector：`:18999-19703`（CanController、CanHardwareObject/CanControllerRef），并见上述 CanIf `CanIfCtrlDrvNameRef`/`CanIfCtrlCanCtrlRef`。
 
-当前 [`arxml_render.rs`](../../../core/src/arxml_render.rs#L402-L412) 只为 Tx/Rx 输出有限的 PDU 参数与全局 PDU 引用，并且只包装 `CanIfInitCfg`（`:439-441`）；缺少上述其余根、驱动、控制器、HOH、缓冲及必需 PDU 项，因而不能称为完整标准 CanIf/CAN ECUC。引用上述 MOD 仅用于本地核对，不将某个可选参数或整个 CanIf/Can 模块标为 DRAFT/OBSOLETE。
+当前生成器为**固定的 11 位主机虚拟剖面**输出 Mcu 时钟参考点、Can 控制器/硬件对象、CanIf 根/驱动/HOH/零容量缓冲及 PDU 配置；导入器拒绝缺失或改动这些受支持绑定的输入。集成测试从本地 R24-11 MOD 读取必需重数、参数范围和引用目标，核对生成 ARXML，并对断开的时钟/HOH/缓冲引用做拒绝测试。这关闭了该主机剖面的配置结构缺口，不证明虚拟基地址、波特率与真实 MCU 匹配，也不证明主机 C API 符合第三方 CanIf/Can ABI；第三方互操作的 P0 档案仍待实际对端、目标与模块 SWS 证据。引用上述 MOD 不把可选参数或整个 CanIf/Can 模块标为 DRAFT/OBSOLETE。
 
-提交 `c7d08a8` **只关闭 COM+EcuC 全局 PDU 子集**：当前 [`README.md`](../../../README.md#当前支持) 已明确该子集不等于完整 CanIf/CAN ECUC，且 EcuM、BswM、ComM、CanSM 尚未建模。该提交不能作为第三方 CanIf/CAN 或 EcuM→BswM→ComM→CanSM 生命周期互操作证据；CanIf/CAN 闭包是必要前置条件，生命周期链还须分别完成这些模块的 ECUC/SWS 配置引用与端到端行为验证。
+历史提交 `c7d08a8` **只关闭 COM+EcuC 全局 PDU 子集**；本次固定主机剖面的 CanIf/CAN/Mcu 配置增量另行核对，不能追溯归功于该提交。EcuM、BswM、ComM、CanSM 仍未建模；生命周期链仍须分别完成这些模块的 ECUC/SWS 配置引用与端到端行为验证。
 
 `AUTOSAR_00053.xsd` 通过也不足以证明该 ECUC 闭包有效：XSD 结构通过不等于引用目标符合 ECUC MOD 的 `DESTINATION-REF`，也不等于模块定义要求的容器/参数最小重数已满足。对拟声明的组合必须额外按 R24-11 MOD 检查上述引用解析和必需重数；缺项时档案保持“未验证/不支持此互操作声明”，不得由 host build 或虚拟冒烟升级。该补充只细化既有逐组合门槛，不改本地图的阶段状态或引入进度百分比。

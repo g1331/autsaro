@@ -54,7 +54,7 @@ Blocked by: 04, 05, 06, 07, 10
 
 每个阶段先列出拟声明的配置/变体、模块、目标/工具链及可观察行为，再按[内部质量档案](07-assurance-gates.md)逐组合核实输入/工件闭包、目标构建、独立正负向行为、失败恢复和适用资源/时序预算；未证实的组合不得借相邻组合的成绩退出。阶段路线是工作排序，不等于完成清单：一个已实施 SID、空接口或主机编译结果只能列为该子集的事实，不自动升级为整个模块族/阶段通过。跨 ECU/外部工具互操作须以其实际对端和范围单列证据。
 
-CAN 信号基线以双 ECU 的独立位向量、收发/超时/控制器故障及多文件 ARXML 往返为主机目标出口；诊断阶段分别记录物理 DoCAN 连接的 SID/子功能、双向多帧时序与否定应答、会话边界、DTC 状态/存储损坏及重启恢复、写入/例程状态变化和拒绝行为。当前 README 所述 0x10/0x22/0x3E、可选 0x2E/0x31、单 DTC 0x19/0x14 等是有限主机子集；0x27 安全访问、完整诊断服务、真实 NvM 设备均未提供。原路线第 2 阶段的**受限访问**等要求未由该子集满足，不能称“深 CAN 诊断”整体已退出；同时不得以会话限制冒充认证。历史 Dcm 读/写回调闭包缺口已由 `6190260` 修复为有界主机回调，但第三方 Dcm ECUC/ABI 集成仍未验证，CanIf/CAN ECUC 闭包也仍不完整，详见[生成器复核](06-generator-architecture.md)与[验收门](07-assurance-gates.md)。
+CAN 信号基线以双 ECU 的独立位向量、收发/超时/控制器故障及多文件 ARXML 往返为主机目标出口；诊断阶段分别记录物理 DoCAN 连接的 SID/子功能、双向多帧时序与否定应答、会话边界、DTC 状态/存储损坏及重启恢复、写入/例程状态变化和拒绝行为。当前 README 所述 0x10/0x22/0x3E、可选 0x2E/0x31、单 DTC 0x19/0x14，以及固定单级主机 0x27 安全访问，均是有限主机子集；多级安全、完整诊断服务和真实 NvM 设备仍未提供。不能以该子集称“深 CAN 诊断”整体已退出，也不得以主机密钥文件冒充硬件安全存储。历史 Dcm 读/写回调缺口已由 `6190260` 修复为有界主机回调，但第三方 Dcm ECUC/ABI 集成仍未验证。固定主机 CanIf/CAN/Mcu ECUC 的必需结构与引用已补齐并按 MOD 检查；虚拟硬件与自有 C API 仍未取得第三方互操作证据，详见[生成器复核](06-generator-architecture.md)与[验收门](07-assurance-gates.md)。
 
 诊断路线中的可选 0x31 主机行为仍可作为有限子集记录；历史版本曾将它编码为 `DcmDspRoutineFncSignature=ROUTINE_FNC_NORMAL`，但 `6ddcab9` 已将主机专用路径移出标准 Dcm Routine ECUC。当前生成器只把 RID/会话写入工具专用 ADMIN-DATA，不发出 `DcmDspRoutine` 或 `DcmDspRoutineFncSignature`/`ROUTINE_FNC_NORMAL`；此主机行为不证明标准 ECUC 或第三方 Dcm 集成。R24-11 本地 [Dcm SWS `[ECUC_Dcm_01215]`](../../../docs/official/R24-11/CP/Diagnostics/AUTOSAR_CP_SWS_DiagnosticCommunicationManager.pdf)（提取文本 25099–25126 行）仍只将该参数/选项标为 DRAFT；不能计入成熟 ECUC 配置覆盖，但也不把 Dcm 模块或 RoutineControl 服务本身、`SWS_Dcm_01203` normal 回调签名整体标为 DRAFT。该限定不排除相关模块/服务能力；PDF 是用户本地、Git 忽略的材料。
 
