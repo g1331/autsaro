@@ -26,6 +26,9 @@ void Dcm_TpTxConfirmation(EcuStatus status, uint64_t now_ms)
     if (pending_session != 0u) {
         if (status == ECU_OK) {
             active_session = pending_session;
+            if (active_session == 0x01u && active_config != NULL && active_config->dtc != NULL) {
+                (void)Dem_EnableDTCSetting();
+            }
             last_request_ms = now_ms;
         }
         pending_session = 0u;
@@ -37,6 +40,9 @@ void Dcm_AdvanceTime(uint64_t now_ms)
     if (active_config != NULL && active_session != 0x01u &&
         now_ms - last_request_ms >= active_config->s3_ms) {
         active_session = 0x01u;
+        if (active_config->dtc != NULL) {
+            (void)Dem_EnableDTCSetting();
+        }
         pending_session = 0u;
     }
 }
@@ -149,6 +155,26 @@ EcuStatus Dcm_RxIndication(const uint8_t *request, size_t length, uint64_t now_m
         response[2] = request[2];
         response[3] = request[3];
         return PduR_DcmTransmit(response, 4u, now_ms);
+    case 0x85u:
+        if (active_config->dtc == NULL) {
+            return NegativeResponse(0x85u, 0x11u, now_ms);
+        }
+        if (length != 2u) {
+            return NegativeResponse(0x85u, 0x13u, now_ms);
+        }
+        if (active_session != 0x03u) {
+            return NegativeResponse(0x85u, 0x7fu, now_ms);
+        }
+        if (request[1] != 0x01u && request[1] != 0x02u) {
+            return NegativeResponse(0x85u, 0x12u, now_ms);
+        }
+        result = request[1] == 0x01u ? Dem_EnableDTCSetting() : Dem_DisableDTCSetting();
+        if (result != ECU_OK) {
+            return NegativeResponse(0x85u, 0x22u, now_ms);
+        }
+        response[0] = 0xc5u;
+        response[1] = request[1];
+        return PduR_DcmTransmit(response, 2u, now_ms);
     case 0x19u:
         if (active_config->dtc == NULL) {
             return NegativeResponse(0x19u, 0x11u, now_ms);

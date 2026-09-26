@@ -507,10 +507,25 @@ fn verify_persistent_dtc(
         diagnostic_frames(&before, &[empty.clone()], profile, diagnostic, salt)?;
         let count = diagnostic_request(&mut ecu, fence, count_dtc.clone())?;
         diagnostic_frames(&count, &[counted(0)], profile, diagnostic, salt)?;
+        let session = diagnostic_request(&mut ecu, fence, format!("R {request} 3 021003"))?;
+        diagnostic_frames(&session, &[vec![0x06, 0x50, 0x03, 0x00, 0x32, 0x00, 0x32]], profile, diagnostic, salt)?;
+        let off = diagnostic_request(&mut ecu, fence, format!("R {request} 3 028502"))?;
+        diagnostic_frames(&off, &[vec![0x02, 0xC5, 0x02]], profile, diagnostic, salt)?;
         let received = diagnostic_request(&mut ecu, fence,
             format!("R {} {} {}", dtc.id, dtc.dlc, "00".repeat(dtc.dlc as usize)))?;
         diagnostic_frames(&received, &[], profile, diagnostic, salt)?;
         let timed = diagnostic_request(&mut ecu, fence, format!("T {}", dtc.timeout as u64 + 1))?;
+        diagnostic_frames(&timed, &[], profile, diagnostic, salt)?;
+        let suppressed = diagnostic_request(&mut ecu, fence, read_dtc.clone())?;
+        diagnostic_frames(&suppressed, &[empty.clone()], profile, diagnostic, salt)?;
+        let count = diagnostic_request(&mut ecu, fence, count_dtc.clone())?;
+        diagnostic_frames(&count, &[counted(0)], profile, diagnostic, salt)?;
+        let on = diagnostic_request(&mut ecu, fence, format!("R {request} 3 028501"))?;
+        diagnostic_frames(&on, &[vec![0x02, 0xC5, 0x01]], profile, diagnostic, salt)?;
+        let received = diagnostic_request(&mut ecu, fence,
+            format!("R {} {} {}", dtc.id, dtc.dlc, "00".repeat(dtc.dlc as usize)))?;
+        diagnostic_frames(&received, &[], profile, diagnostic, salt)?;
+        let timed = diagnostic_request(&mut ecu, fence, format!("T {}", 2 * (dtc.timeout as u64 + 1)))?;
         diagnostic_frames(&timed, &[], profile, diagnostic, salt)?;
         let failed = diagnostic_request(&mut ecu, fence, read_dtc.clone())?;
         diagnostic_frames(&failed, &[reported(0x2F)], profile, diagnostic, salt)?;
@@ -518,6 +533,7 @@ fn verify_persistent_dtc(
         diagnostic_frames(&count, &[counted(1)], profile, diagnostic, salt)?;
     }
     events.push("接收帧超时产生真实 Dem DTC，进程结束前写入 NvM".into());
+    events.push("0x85/0x02 禁用 DTC 设置时 Rx 超时不记录故障；0x85/0x01 恢复后新超时写入 Dem/NvM".into());
     {
         let mut ecu = EcuProcess::start(binary, Some(&state.path))?;
         prepare(&mut ecu, profile, salt)?;

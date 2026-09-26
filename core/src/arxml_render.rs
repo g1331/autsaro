@@ -267,11 +267,15 @@ fn render_diagnostic(project: &str, diagnostic: &DiagnosticView, frame_count: us
         services.push_str(&container("WriteDataByIdentifier", &service_path, &params, "", ""));
     }
     if diagnostic.dtc.is_some() {
-        for (name, sid, subfunction) in [("ClearDiagnosticInformation", 0x14, false), ("ReadDTCInformation", 0x19, true)] {
+        for (name, sid, subfunction) in [
+            ("ClearDiagnosticInformation", 0x14, false),
+            ("ReadDTCInformation", 0x19, true),
+            ("ControlDTCSetting", 0x85, true),
+        ] {
             let params = format!("{}{}{}", number(&service_path, "DcmDsdSidTabServiceId", sid),
                 boolean(&service_path, "DcmDsdServiceUsed", true),
                 boolean(&service_path, "DcmDsdSidTabSubfuncAvail", subfunction));
-            let refs = if sid == 0x14 {
+            let refs = if sid != 0x19 {
                 reference(&service_path, "DcmDsdSidTabSessionLevelRef", "ECUC-CONTAINER-VALUE",
                     &ref_path(project, "DcmCfg/DcmConfigSet/DcmDsp/Sessions/Extended"))
             } else { String::new() };
@@ -298,9 +302,13 @@ fn render_diagnostic(project: &str, diagnostic: &DiagnosticView, frame_count: us
     let row_params = format!("{}{}{}{}{}{}", number(&row, "DcmDslProtocolPriority", 0), boolean(&row, "DcmDslProtocolRowUsed", true), choice(&row, "DcmDslProtocolType", "DCM_UDS_ON_CAN"), boolean(&row, "DcmSendRespPendOnRestart", false), decimal(&row, "DcmTimStrP2ServerAdjust", 0), decimal(&row, "DcmTimStrP2StarServerAdjust", 0));
     let buffer_ref = ref_path(project, "DcmCfg/DcmConfigSet/DcmDsl/Buffer");
     let table_ref = ref_path(project, "DcmCfg/DcmConfigSet/DcmDsd/Services");
-    let row_refs = reference(&row, "DcmDslProtocolRxBufferRef", "ECUC-CONTAINER-VALUE", &buffer_ref)
+    let mut row_refs = reference(&row, "DcmDslProtocolRxBufferRef", "ECUC-CONTAINER-VALUE", &buffer_ref)
         + &reference(&row, "DcmDslProtocolTxBufferRef", "ECUC-CONTAINER-VALUE", &buffer_ref)
         + &reference(&row, "DcmDslProtocolSIDTable", "ECUC-CONTAINER-VALUE", &table_ref);
+    if diagnostic.dtc.is_some() {
+        row_refs.push_str(&reference(&row, "DcmDemClientRef", "ECUC-CONTAINER-VALUE",
+            &ref_path(project, "DemCfg/DemGeneral/DcmClient")));
+    }
     let row_value = container("UdsCan", &row, &row_params, &row_refs, &main_value);
     let protocol_value = container("Protocol", &protocol, "", "", &row_value);
     let dsl_value = container("DcmDsl", &dsl, "", "", &(buffer_value + &diag_resp_value + &protocol_value));
@@ -356,6 +364,9 @@ fn render_diagnostic(project: &str, diagnostic: &DiagnosticView, frame_count: us
     if diagnostic.dtc.is_some() {
         dsp_children.push_str(&container("ClearDTC", &format!("{dsp}/DcmDspClearDTC"), "", "", ""));
         dsp_children.push_str(&container("ReadDTCInformation", &format!("{dsp}/DcmDspReadDTCInformation"), "", "", ""));
+        let control = format!("{dsp}/DcmDspControlDTCSetting");
+        dsp_children.push_str(&container("ControlDTCSetting", &control,
+            &boolean(&control, "DcmSupportDTCSettingControlOptionRecord", false), "", ""));
     }
     let dsp_value = container("DcmDsp", &dsp, &dsp_params, "", &dsp_children);
     let page_path = format!("{base}/DcmPageBufferCfg");

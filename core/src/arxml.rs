@@ -1225,8 +1225,10 @@ impl Workspace {
             format!("/{}/NvMCfg", self.name),
             format!("/{}/DcmCfg/DcmConfigSet/DcmDsd/Services/ClearDiagnosticInformation", self.name),
             format!("/{}/DcmCfg/DcmConfigSet/DcmDsd/Services/ReadDTCInformation", self.name),
+            format!("/{}/DcmCfg/DcmConfigSet/DcmDsd/Services/ControlDTCSetting", self.name),
             format!("/{}/DcmCfg/DcmConfigSet/DcmDsp/ClearDTC", self.name),
             format!("/{}/DcmCfg/DcmConfigSet/DcmDsp/ReadDTCInformation", self.name),
+            format!("/{}/DcmCfg/DcmConfigSet/DcmDsp/ControlDTCSetting", self.name),
         ].into_iter().collect();
         let expected = render_profile(&self.name, &self.frames, &self.signals, self.diagnostic.as_ref());
         let expected_doc = Document::parse(&expected).map_err(|e| e.to_string())?;
@@ -1236,8 +1238,34 @@ impl Workspace {
         let mut patches: Vec<Vec<Patch>> = (0..self.files.len()).map(|_| Vec::new()).collect();
         let mut removed = BTreeSet::new();
         let mut owned_paths = BTreeSet::new();
+        let row_path = format!("/{}/DcmCfg/DcmConfigSet/DcmDsl/Protocol/UdsCan", self.name);
+        let client_path = format!("/{}/DemCfg/DemGeneral/DcmClient", self.name);
+        let client_definition = "/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsl/DcmDslProtocol/DcmDslProtocolRow/DcmDemClientRef";
+        let mut removed_client_ref: Option<(usize, std::ops::Range<usize>)> = None;
         for (index, file) in self.files.iter().enumerate() {
             let doc = Document::parse(&file.text).map_err(|e| e.to_string())?;
+            for row in doc.descendants().filter(|node| node.is_element() &&
+                node.tag_name().name() == "ECUC-CONTAINER-VALUE" && path_of(*node) == row_path) {
+                if definition(row).as_deref() != Some("/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsl/DcmDslProtocol/DcmDslProtocolRow") {
+                    return Err(format!("{row_path} 定义不匹配，拒绝移除 DTC"));
+                }
+                let mut references = row.children().filter(|node| node.is_element() && node.tag_name().name() == "REFERENCE-VALUES")
+                    .flat_map(|group| group.children().filter(|node| node.is_element()))
+                    .filter(|node| definition(*node).as_deref() == Some(client_definition));
+                let link = references.next().ok_or_else(|| format!("{row_path} 缺少 DcmDemClientRef"))?;
+                if references.next().is_some() || removed_client_ref.is_some() {
+                    return Err(format!("{row_path} 有重复的 DcmDemClientRef"));
+                }
+                let target = link.children().find(|node| node.is_element() && node.tag_name().name() == "VALUE-REF")
+                    .ok_or_else(|| format!("{row_path} 的 DcmDemClientRef 缺少目标"))?;
+                if link.tag_name().name() != "ECUC-REFERENCE-VALUE" ||
+                    target.attribute("DEST") != Some("ECUC-CONTAINER-VALUE") || target.text() != Some(client_path.as_str()) {
+                    return Err(format!("{row_path} 的 DcmDemClientRef 不属于当前 DTC 配置"));
+                }
+                let range = link.range();
+                patches[index].push(Patch { range: range.clone(), value: String::new() });
+                removed_client_ref = Some((index, range));
+            }
             for node in doc.descendants().filter(|n| n.is_element()
                 && child_text(*n, "SHORT-NAME").is_some() && targets.contains(&path_of(*n))) {
                 let path = path_of(node);
@@ -1249,12 +1277,17 @@ impl Workspace {
                 patches[index].push(Patch { range: node.range(), value: String::new() });
             }
         }
+        if removed_client_ref.is_none() { return Err(format!("{row_path} 缺少唯一的 DcmDemClientRef")); }
         if removed != targets { return Err("DTC ARXML 节点不完整，拒绝部分删除".into()); }
-        for file in &self.files {
+        for (index, file) in self.files.iter().enumerate() {
             let doc = Document::parse(&file.text).map_err(|e| e.to_string())?;
             for node in doc.descendants().filter(|n| n.is_element() && n.tag_name().name().ends_with("-REF") && n.tag_name().name() != "DEFINITION-REF") {
                 if let Some(target) = node.text() {
                     if owned_paths.contains(target) && !node.ancestors().any(|ancestor| removed.contains(&path_of(ancestor))) {
+                        if removed_client_ref.as_ref().is_some_and(|(file_index, range)|
+                            *file_index == index && range.start <= node.range().start && node.range().end <= range.end) {
+                            continue;
+                        }
                         return Err(format!("外部引用 {target} 仍依赖 DTC 配置，拒绝删除"));
                     }
                 }

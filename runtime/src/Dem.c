@@ -5,6 +5,7 @@
 
 static const EcuDtcConfig *active_dtc;
 static uint8_t event_status;
+static uint8_t dtc_setting_enabled;
 
 static EcuStatus SetStatus(uint8_t updated)
 {
@@ -25,6 +26,7 @@ EcuStatus Dem_Init(const EcuConfig *config, const char *nvm_path)
     EcuStatus result;
     active_dtc = NULL;
     event_status = 0x50u;
+    dtc_setting_enabled = 1u;
     if (config->diagnostic == NULL || config->diagnostic->dtc == NULL) {
         return ECU_OK;
     }
@@ -43,9 +45,27 @@ EcuStatus Dem_Init(const EcuConfig *config, const char *nvm_path)
                                UINT8_C(0x40)));
 }
 
+EcuStatus Dem_DisableDTCSetting(void)
+{
+    if (active_dtc == NULL) {
+        return ECU_ERR_CONFIG;
+    }
+    dtc_setting_enabled = 0u;
+    return ECU_OK;
+}
+
+EcuStatus Dem_EnableDTCSetting(void)
+{
+    if (active_dtc == NULL) {
+        return ECU_ERR_CONFIG;
+    }
+    dtc_setting_enabled = 1u;
+    return ECU_OK;
+}
+
 EcuStatus Dem_ReportPassed(uint16_t frame_index)
 {
-    if (active_dtc == NULL || active_dtc->monitor_frame_index != frame_index) {
+    if (active_dtc == NULL || active_dtc->monitor_frame_index != frame_index || dtc_setting_enabled == 0u) {
         return ECU_OK;
     }
     return SetStatus((uint8_t)(event_status & (uint8_t)~UINT8_C(0x51)));
@@ -53,7 +73,7 @@ EcuStatus Dem_ReportPassed(uint16_t frame_index)
 
 EcuStatus Dem_ReportFailed(uint16_t frame_index)
 {
-    if (active_dtc == NULL || active_dtc->monitor_frame_index != frame_index) {
+    if (active_dtc == NULL || active_dtc->monitor_frame_index != frame_index || dtc_setting_enabled == 0u) {
         return ECU_OK;
     }
     return SetStatus((uint8_t)((event_status & (uint8_t)~UINT8_C(0x50)) | UINT8_C(0x2f)));

@@ -938,6 +938,37 @@ fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restarts() {
     project.save().unwrap();
     let source = temp.0.join("Diag/Diag.arxml");
     let original = fs::read_to_string(&source).unwrap();
+    let document = roxmltree::Document::parse(&original).unwrap();
+    let dcm_service = document.descendants().find(|node| node.has_tag_name("ECUC-CONTAINER-VALUE") &&
+        node.children().any(|child| child.has_tag_name("SHORT-NAME") && child.text() == Some("ControlDTCSetting")) &&
+        node.children().any(|child| child.has_tag_name("DEFINITION-REF") &&
+            child.text() == Some("/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsd/DcmDsdServiceTable/DcmDsdService"))).unwrap();
+    assert!(dcm_service.descendants().any(|node| node.has_tag_name("ECUC-NUMERICAL-PARAM-VALUE") &&
+        node.children().any(|child| child.has_tag_name("DEFINITION-REF") &&
+            child.text().is_some_and(|value| value.ends_with("/DcmDsdSidTabServiceId"))) &&
+        node.children().any(|child| child.has_tag_name("VALUE") && child.text() == Some("133"))));
+    assert!(dcm_service.descendants().any(|node| node.has_tag_name("VALUE-REF") &&
+        node.attribute("DEST") == Some("ECUC-CONTAINER-VALUE") &&
+        node.text() == Some("/Diag/DcmCfg/DcmConfigSet/DcmDsp/Sessions/Extended")));
+    assert!(document.descendants().any(|node| node.has_tag_name("ECUC-REFERENCE-VALUE") &&
+        node.children().any(|child| child.has_tag_name("DEFINITION-REF") &&
+            child.text().is_some_and(|value| value.ends_with("/DcmDemClientRef"))) &&
+        node.children().any(|child| child.has_tag_name("VALUE-REF") &&
+            child.attribute("DEST") == Some("ECUC-CONTAINER-VALUE") &&
+            child.text() == Some("/Diag/DemCfg/DemGeneral/DcmClient"))));
+    let option = document.descendants().find(|node| node.has_tag_name("ECUC-NUMERICAL-PARAM-VALUE") &&
+        node.children().any(|child| child.has_tag_name("DEFINITION-REF") &&
+            child.text().is_some_and(|value| value.ends_with("/DcmSupportDTCSettingControlOptionRecord")))).unwrap();
+    let option_value = option.children().find(|node| node.has_tag_name("VALUE")).unwrap();
+    assert_eq!(option_value.text(), Some("false"));
+    let mutated = format!("{}<VALUE>true</VALUE>{}",
+        &original[..option_value.range().start], &original[option_value.range().end..]);
+    let unsupported_path = temp.0.join("Unsupported.arxml");
+    fs::write(&unsupported_path, &mutated).unwrap();
+    let mut unsupported = Workspace::open(vec![unsupported_path.clone()], archive()).unwrap();
+    assert!(unsupported.view().issues.iter().any(|issue| issue.code == "DIAG_UNSUPPORTED"));
+    assert!(generator::generate(&mut unsupported, &temp.0.join("UnsupportedOutput")).is_err());
+    assert_eq!(fs::read_to_string(&unsupported_path).unwrap(), mutated);
     fs::write(&source, original.replace("</ELEMENTS>", "<!-- retained by owner --></ELEMENTS>")).unwrap();
     let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
     let dtc = reopened.view().diagnostic.unwrap().dtc.unwrap();
@@ -949,15 +980,15 @@ fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restarts() {
     assert!(!without_storage.status.success());
     assert!(String::from_utf8_lossy(&without_storage.stdout).contains("E CONFIG"));
     let storage = temp.0.join("dtc.nvm");
-    let run = |input: &[u8]| {
-        let mut ecu = Command::new(&binary).arg("--nvm").arg(&storage)
+    let run = |storage: &Path, input: &[u8]| {
+        let mut ecu = Command::new(&binary).arg("--nvm").arg(storage)
             .stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
         ecu.stdin.take().unwrap().write_all(input).unwrap();
         let result = ecu.wait_with_output().unwrap();
         assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stdout));
         String::from_utf8(result.stdout).unwrap()
     };
-    let first = run(b"R 1110 2 0100\nR 1792 4 03190208\nR 1792 4 03190108\nR 1792 4 03190100\nR 1792 3 021901\nR 1792 4 03190308\nT 51\nR 1792 4 03190208\nR 1792 4 03190108\nR 1792 4 03190110\nR 1792 4 03190200\n");
+    let first = run(&storage, b"R 1110 2 0100\nR 1792 4 03190208\nR 1792 4 03190108\nR 1792 4 03190100\nR 1792 3 021901\nR 1792 4 03190308\nT 51\nR 1792 4 03190208\nR 1792 4 03190108\nR 1792 4 03190110\nR 1792 4 03190200\n");
     let first: Vec<_> = first.lines().map(|line| line.trim_end_matches('\r')).filter(|line| line.starts_with("X 1800 ")).collect();
     assert_eq!(first, [
         "X 1800 4 0359027F",
@@ -972,7 +1003,7 @@ fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restarts() {
     ], "{first:?}");
     assert!(storage.is_file());
 
-    let second = run(b"R 1792 4 03190208\nR 1792 4 03190108\nR 1792 4 03190110\nR 1110 2 0200\nR 1792 4 03190208\nR 1792 4 03190108\nR 1792 5 0414FFFFFF\nR 1792 3 021003\nR 1792 5 0414000001\nR 1792 5 0414FFFFFF\nR 1792 4 03190208\nR 1792 4 03190108\n");
+    let second = run(&storage, b"R 1792 4 03190208\nR 1792 4 03190108\nR 1792 4 03190110\nR 1110 2 0200\nR 1792 4 03190208\nR 1792 4 03190108\nR 1792 5 0414FFFFFF\nR 1792 3 021003\nR 1792 5 0414000001\nR 1792 5 0414FFFFFF\nR 1792 4 03190208\nR 1792 4 03190108\n");
     let second: Vec<_> = second.lines().map(|line| line.trim_end_matches('\r')).filter(|line| line.starts_with("X 1800 ")).collect();
     assert_eq!(second, [
         "X 1800 8 0759027F1234566D",
@@ -988,8 +1019,46 @@ fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restarts() {
         "X 1800 7 0659017F010000",
     ], "{second:?}");
 
-    let third = run(b"R 1792 4 03190208\nR 1792 4 03190108\n");
+    let third = run(&storage, b"R 1792 4 03190208\nR 1792 4 03190108\n");
     assert_eq!(third.lines().map(|line| line.trim_end_matches('\r')).collect::<Vec<_>>(), ["X 1800 4 0359027F", "X 1800 7 0659017F010000"]);
+    let control_storage = temp.0.join("dtc-control.nvm");
+    let controlled = run(&control_storage, b"R 1792 3 028502\nR 1792 3 021003\nR 1792 2 0185\nR 1792 6 058502FFFFFF\nR 1792 3 028503\nR 1792 3 028582\nR 1792 3 028502\nR 1110 2 0100\nT 51\nR 1792 4 03190208\nR 1792 4 03190108\nR 1792 3 028501\nR 1110 2 0100\nT 102\nR 1792 4 03190208\nR 1792 3 028502\nR 1110 2 0100\nT 153\nR 1792 4 03190208\nR 1792 5 0414FFFFFF\nR 1792 4 03190208\nR 1792 3 028502\nR 1792 3 021001\nR 1792 3 028502\nR 1110 2 0100\nT 204\nR 1792 4 03190208\n");
+    let controlled: Vec<_> = controlled.lines().map(|line| line.trim_end_matches('\r'))
+        .filter(|line| line.starts_with("X 1800 ")).collect();
+    assert_eq!(controlled, [
+        "X 1800 4 037F857F",
+        "X 1800 7 06500300320032",
+        "X 1800 4 037F8513",
+        "X 1800 4 037F8513",
+        "X 1800 4 037F8512",
+        "X 1800 4 037F8512",
+        "X 1800 3 02C502",
+        "X 1800 4 0359027F",
+        "X 1800 7 0659017F010000",
+        "X 1800 3 02C501",
+        "X 1800 8 0759027F1234562F",
+        "X 1800 3 02C502",
+        "X 1800 8 0759027F1234562F",
+        "X 1800 2 0154",
+        "X 1800 4 0359027F",
+        "X 1800 3 02C502",
+        "X 1800 7 06500100320032",
+        "X 1800 4 037F857F",
+        "X 1800 8 0759027F1234562F",
+    ], "{controlled:?}");
+    let s3_storage = temp.0.join("dtc-s3.nvm");
+    let s3 = run(&s3_storage, b"R 1792 3 021003\nR 1792 3 028502\nR 1110 2 0100\nT 51\nT 5100\nR 1792 3 028502\nR 1110 2 0100\nT 5151\nR 1792 4 03190208\n");
+    let s3: Vec<_> = s3.lines().map(|line| line.trim_end_matches('\r'))
+        .filter(|line| line.starts_with("X 1800 ")).collect();
+    assert_eq!(s3, [
+        "X 1800 7 06500300320032", "X 1800 3 02C502",
+        "X 1800 4 037F857F", "X 1800 8 0759027F1234562F",
+    ], "{s3:?}");
+    let restart_storage = temp.0.join("dtc-restart.nvm");
+    let disabled = run(&restart_storage, b"R 1792 3 021003\nR 1792 3 028502\nR 1110 2 0100\nT 51\nR 1792 4 03190208\n");
+    assert!(disabled.lines().any(|line| line.trim_end_matches('\r') == "X 1800 4 0359027F"));
+    let enabled_after_restart = run(&restart_storage, b"R 1110 2 0100\nT 51\nR 1792 4 03190208\n");
+    assert!(enabled_after_restart.lines().any(|line| line.trim_end_matches('\r') == "X 1800 8 0759027F1234562F"));
     let mut slots = fs::read(&storage).unwrap();
     assert_eq!(slots.len(), 64);
     let first_sequence = u64::from_le_bytes(slots[4..12].try_into().unwrap());
@@ -1007,6 +1076,14 @@ fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restarts() {
     reopened.clear_dtc().unwrap();
     reopened.save().unwrap();
     assert!(fs::read_to_string(&source).unwrap().contains("<!-- retained by owner -->"));
+    let saved_without_dtc = fs::read_to_string(&source).unwrap();
+    let stripped = roxmltree::Document::parse(&saved_without_dtc).unwrap();
+    assert!(!stripped.descendants().any(|node| node.has_tag_name("ECUC-CONTAINER-VALUE") &&
+        node.children().any(|child| child.has_tag_name("SHORT-NAME") &&
+            child.text() == Some("ControlDTCSetting"))));
+    assert!(!stripped.descendants().any(|node| node.has_tag_name("ECUC-REFERENCE-VALUE") &&
+        node.children().any(|child| child.has_tag_name("DEFINITION-REF") &&
+            child.text().is_some_and(|value| value.ends_with("/DcmDemClientRef")))));
     let mut without_dtc = Workspace::open(vec![source], archive()).unwrap();
     let diagnostic = without_dtc.view().diagnostic.unwrap();
     assert!(diagnostic.dtc.is_none());
@@ -1015,9 +1092,10 @@ fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restarts() {
     generator::generate(&mut without_dtc, &simple).unwrap();
     let binary = generator::build(&simple).unwrap().binary_path;
     let mut ecu = Command::new(binary).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
-    ecu.stdin.take().unwrap().write_all(b"R 1792 4 03190108\n").unwrap();
+    ecu.stdin.take().unwrap().write_all(b"R 1792 4 03190108\nR 1792 3 028502\n").unwrap();
     let output = ecu.wait_with_output().unwrap();
-    assert_eq!(String::from_utf8(output.stdout).unwrap().lines().map(|line| line.trim_end_matches('\r')).collect::<Vec<_>>(), ["X 1800 4 037F1911"]);
+    assert_eq!(String::from_utf8(output.stdout).unwrap().lines().map(|line| line.trim_end_matches('\r')).collect::<Vec<_>>(),
+        ["X 1800 4 037F1911", "X 1800 4 037F8511"]);
     assert!(host::run_diagnostic(&simple).unwrap().passed);
 }
 
