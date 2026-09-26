@@ -374,6 +374,23 @@
         "AUDIT-002"
       ],
       "evidence": []
+    },
+    {
+      "id": "BUILD-004",
+      "title": "构建时核对生成工程完整性",
+      "status": "review",
+      "card": "docs/workflow/tasks/BUILD-004-build-integrity.md",
+      "branch": "feature/BUILD-004-build-integrity",
+      "base_commit": "dad392b",
+      "capabilities": [
+        "HOST-CAN-01"
+      ],
+      "depends_on": [
+        "BUILD-003"
+      ],
+      "evidence": [
+        "docs/workflow/evidence/BUILD-004-build-integrity-2026-09-26.md"
+      ]
     }
   ]
 }

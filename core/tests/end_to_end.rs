@@ -257,6 +257,37 @@ fn rebuild_rejects_existing_binary_without_overwriting_owner_bytes() {
     assert_eq!(fs::read(archived).unwrap(), b"owner modified binary");
 }
 
+#[test]
+fn build_rejects_changed_generated_inputs_before_compiling() {
+    let temp = Scratch::new();
+    let (mut ecu, _) = create_pair(&temp.0);
+    for (case, path, change) in [
+        ("changed source", "Ecu_Config.c", "append"),
+        ("changed manifest", "files.list", "append"),
+        ("extra source", "src/Owner.c", "create"),
+        ("missing header", "include/Can.h", "remove"),
+    ] {
+        let output = temp.0.join(case);
+        generator::generate(&mut ecu, &output).unwrap();
+        let target = output.join(path);
+        match change {
+            "append" => {
+                let mut content = fs::read(&target).unwrap();
+                content.extend_from_slice(b"\n/* external edit */\n");
+                fs::write(&target, content).unwrap();
+            }
+            "create" => fs::write(&target, b"int owner(void) { return 1; }\n").unwrap(),
+            "remove" => fs::remove_file(&target).unwrap(),
+            _ => unreachable!(),
+        }
+        let before = if target.exists() { Some(fs::read(&target).unwrap()) } else { None };
+        let error = generator::build(&output).unwrap_err();
+        assert!(error.contains("拒绝构建"), "{case}: {error}");
+        assert!(!output.join(if cfg!(windows) { "ecu_host.exe" } else { "ecu_host" }).exists(), "{case}");
+        assert_eq!(target.exists().then(|| fs::read(&target).unwrap()), before, "{case}");
+    }
+}
+
 #[cfg(windows)]
 #[test]
 fn untouched_output_regenerates_changed_config_and_runs_the_new_schedule() {
