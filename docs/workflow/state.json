@@ -20,7 +20,7 @@
         "user_workflow": { "status": "pending_review", "evidence": "docs/workflow/evidence/AUDIT-001-host-can-ui-2026-09-26.md" },
         "spec_obligations": { "status": "not_run" }
       },
-      "next_gap": "隔离原生界面与来源变更拒绝已演练；真实外部多文件 CAN 输入的差异/离线交接、逐模块静态与工件义务仍缺证据；AUDIT-001 继续。"
+      "next_gap": "AUDIT-001 已审计收口但未升级支持声明；真实外部多文件 CAN 输入的编辑、差异与离线交接，以及逐模块 BSW/RTE 工件、MISRA 和并发来源修改证据仍缺。"
     },
     {
       "id": "HOST-DOCAN-01",
@@ -46,7 +46,7 @@
     {
       "id": "AUDIT-001",
       "title": "主机 CAN 信号基线证据审计",
-      "status": "review",
+      "status": "done",
       "card": "docs/workflow/tasks/AUDIT-001-host-can.md",
       "branch": "audit/AUDIT-001-closure",
       "base_commit": "d1a804f",
@@ -56,12 +56,18 @@
         "docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md",
         "docs/workflow/evidence/AUDIT-001-host-can-ui-2026-09-26.md",
         "docs/workflow/evidence/AUDIT-001-host-can-closure-2026-09-26.md"
-      ]
+      ],
+      "review": {
+        "status": "passed",
+        "reviewer": "Agent audit001_closure_review",
+        "date": "2026-09-26",
+        "evidence": "docs/workflow/evidence/AUDIT-001-host-can-closure-2026-09-26.md"
+      }
     },
     {
       "id": "AUDIT-002",
       "title": "有界主机 DoCAN 档案拆分与审计",
-      "status": "proposed",
+      "status": "ready",
       "card": "docs/workflow/tasks/AUDIT-002-host-docan.md",
       "capabilities": ["HOST-DOCAN-01"],
       "depends_on": ["AUDIT-001"],
