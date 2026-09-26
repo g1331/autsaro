@@ -26,4 +26,4 @@
 
 Agent 实施流程改动后，将反馈改为 `trial`，填写 `change`（改了什么、如何撤回）、`success_condition`（后续怎样判断好转）、`change_files`（仓库内的改动文件）和 `baseline_done_task_ids`（试行开始时所有已完成任务 ID）。两张**新完成的任务**之后检查同类场景是否改善；若任务没有触及同类情形，继续试行。若仍有问题，在原记录追加观察，调整或撤回改动并重设试行基线。确认解决或确认无需修改时，把反馈移到 `HISTORY.md`，包含 ID、日期、原现象、改动/不改的理由、后续任务与实际结果。历史不充当能力验收证据。
 
-`reviewed_done_task_ids` 保存上次工作流复盘时已经完成的全部任务 ID。每次复盘完成后在 `HISTORY.md` 记录日期、检查的任务 ID 与结论，即使本次无需调整，也更新该基线；达到三张新完成任务时再复盘。运行 `python scripts/workflow.py check` 检查字段与引用，`python scripts/workflow.py status` 查看只读的复盘触发原因。字段检查只能发现缺项，不能替代对反馈真实性和改动效果的判断。
+`reviewed_done_task_ids` 保存上次工作流复盘时已经完成的全部任务 ID。每次复盘完成后在 `HISTORY.md` 记录日期、检查的任务 ID 与结论，即使本次无需调整，也更新该基线；达到三张新完成任务时再复盘。试行反馈若本次没有同类场景，继续保留 `trial`；已经复盘过的任务不会立即重复触发同一项试行复盘，后续再完成两张任务时重新检查。运行 `python scripts/workflow.py check` 检查字段与引用，`python scripts/workflow.py status` 查看只读的复盘触发原因。字段检查只能发现缺项，不能替代对反馈真实性和改动效果的判断。

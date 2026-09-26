@@ -91,6 +91,12 @@ class WorkflowStateTests(unittest.TestCase):
         self.assertEqual(feedback_review_reasons(feedback, state), [])
         state["tasks"][1]["status"] = "done"
         self.assertTrue(any("WF-002" in reason for reason in feedback_review_reasons(feedback, state)))
+        feedback["reviewed_done_task_ids"] = ["AUDIT-001", "AUDIT-002"]
+        self.assertEqual(feedback_review_reasons(feedback, state), [])
+        state["tasks"].append({"id": "BUILD-001", "status": "done"})
+        self.assertEqual(feedback_review_reasons(feedback, state), [])
+        state["tasks"].append({"id": "BUILD-002", "status": "done"})
+        self.assertTrue(any("WF-002" in reason for reason in feedback_review_reasons(feedback, state)))
         del feedback["items"][-1]["success_condition"]
         self.assertTrue(any("success_condition" in error for error in check_feedback(feedback, state, ROOT)))
 

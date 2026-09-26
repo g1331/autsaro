@@ -284,9 +284,9 @@ def feedback_review_reasons(feedback: dict, state: dict) -> list[str]:
         elif item["status"] == "observed" and len(item["observations"]) >= 2:
             reasons.append(f"{item['id']} 已出现 {len(item['observations'])} 次")
         elif item["status"] == "trial":
-            trial_tasks = done_ids - set(item["baseline_done_task_ids"])
+            trial_tasks = done_ids - set(item["baseline_done_task_ids"]) - set(feedback["reviewed_done_task_ids"])
             if len(trial_tasks) >= 2:
-                reasons.append(f"{item['id']} 已经过 {len(trial_tasks)} 张试行任务")
+                reasons.append(f"{item['id']} 复盘后又经过 {len(trial_tasks)} 张试行任务")
     return reasons
 
 
