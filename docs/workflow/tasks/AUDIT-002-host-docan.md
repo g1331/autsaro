@@ -1,6 +1,6 @@
 # AUDIT-002：主机 DoCAN 档案拆分与基础连接审计
 
-**状态：**active。**分支：**`audit/AUDIT-002-docan-baseline`。**基线：**`bdb9881`。**依赖：**AUDIT-001。**关联能力：**HOST-DOCAN-01。**类型：**证据审计，不升级支持声明。
+**状态：**review。**分支：**`audit/AUDIT-002-docan-baseline`。**基线：**`bdb9881`。**依赖：**AUDIT-001。**关联能力：**HOST-DOCAN-01。**类型：**证据审计，不升级支持声明。[实际证据](../evidence/AUDIT-002-docan-baseline-2026-09-26.md)。
 
 ## 本卡的确定范围
 

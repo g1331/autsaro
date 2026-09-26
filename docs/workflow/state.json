@@ -54,16 +54,20 @@
       },
       "gates": {
         "input_roundtrip": {
-          "status": "not_run"
+          "status": "pending_review",
+          "evidence": "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
         },
         "artifact_closure": {
-          "status": "not_run"
+          "status": "pending_review",
+          "evidence": "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
         },
         "build_static": {
-          "status": "not_run"
+          "status": "pending_review",
+          "evidence": "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
         },
         "independent_behavior": {
-          "status": "not_run"
+          "status": "pending_review",
+          "evidence": "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
         },
         "user_workflow": {
           "status": "not_run"
@@ -72,7 +76,7 @@
           "status": "not_run"
         }
       },
-      "next_gap": "AUDIT-002 审计基础连接；ARXML 外部来源、原生用户流程、逐模块标准工件与静态质量尚待独立证据。"
+      "next_gap": "基础连接局部证据待审；外部多文件诊断输入、原生用户流程、标准 BSW/RTE 工件及静态质量仍缺。"
     },
     {
       "id": "HOST-DOCAN-WRITE-01",
@@ -267,7 +271,7 @@
     {
       "id": "AUDIT-002",
       "title": "主机 DoCAN 档案拆分与基础连接审计",
-      "status": "active",
+      "status": "review",
       "card": "docs/workflow/tasks/AUDIT-002-host-docan.md",
       "branch": "audit/AUDIT-002-docan-baseline",
       "base_commit": "bdb9881",
@@ -277,7 +281,12 @@
       "depends_on": [
         "AUDIT-001"
       ],
-      "evidence": []
+      "evidence": [
+        "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
+      ],
+      "review": {
+        "status": "pending_review"
+      }
     }
   ]
 }
