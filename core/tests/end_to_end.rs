@@ -1022,6 +1022,13 @@ fn configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_multiframe_did(
     assert_eq!((diagnostic.request_id, diagnostic.response_id, diagnostic.did), (0x700, 0x708, 0x1234));
     let output = temp.0.join("GeneratedDiag");
     generator::generate(&mut reopened, &output).unwrap();
+    let mut names: Vec<String> = fs::read_to_string(output.join("files.list")).unwrap().lines().map(str::to_owned).collect();
+    names.extend(["files.list".into(), "files.sha256".into()]);
+    let original_files: Vec<_> = names.iter().map(|name| fs::read(output.join(name)).unwrap()).collect();
+    generator::generate(&mut reopened, &output).unwrap();
+    for (name, expected) in names.iter().zip(&original_files) {
+        assert_eq!(&fs::read(output.join(name)).unwrap(), expected, "identical diagnostic ARXML changed {name}");
+    }
     let binary = generator::build(&output).unwrap().binary_path;
     let mut ecu = Command::new(binary).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
     ecu.stdin.take().unwrap().write_all(
