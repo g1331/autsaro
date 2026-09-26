@@ -10,20 +10,6 @@
   ],
   "items": [
     {
-      "id": "WF-004",
-      "status": "observed",
-      "severity": "normal",
-      "problem": "Windows 上原生界面演练后若 Vite 仍运行，npm ci 可能无法替换使用中的 esbuild.exe",
-      "impact": "AUDIT-001 的完整验证在 npm ci 以 EPERM unlink esbuild.exe 退出；停止本轮开发服务后重跑通过",
-      "observations": [
-        {
-          "task_id": "AUDIT-001",
-          "detail": "隔离原生窗口演练留有后台 Vite 服务；`verify --scope all` 的 `npm ci --prefix ui` 报 EPERM unlink esbuild.exe。停止本轮测试进程后通过，先记录一次性环境冲突，不因单次现象改动验证门。",
-          "source": "scripts/workflow.py"
-        }
-      ]
-    },
-    {
       "id": "WF-007",
       "status": "trial",
       "severity": "normal",
@@ -49,17 +35,31 @@
       ]
     },
     {
-      "id": "WF-006",
-      "status": "observed",
+      "id": "WF-008",
+      "status": "trial",
       "severity": "normal",
-      "problem": "已有桌面调试程序占用默认 target 的 exe 时，完整构建门无法替换该文件",
-      "impact": "BUILD-002 的核心与 UI 检查通过后，verify --scope all 最后一步 cargo build 因 Access denied (os error 5) 中断；需在保留他人运行窗口的同时用独立构建档位验证桌面程序",
+      "problem": "通用推进指令连续选择现有能力的操作和交付改进，未回到 Classic Platform 的可运行行为扩展",
+      "impact": "BUILD-001 至 BUILD-004 均有产品价值，但连续四张完成任务没有新增 ECU 运行行为；单靠再次发送通用指令无法稳定推动阶段路线",
       "observations": [
         {
-          "task_id": "BUILD-002",
-          "detail": "已有 autosar-config-desktop.exe 进程 40860，由另一 PowerShell 会话启动；本轮未停止该进程，默认 debug exe 锁定导致 cargo build 退出 101。",
-          "source": "docs/workflow/evidence/BUILD-002-generation-preview-2026-09-26.md"
+          "task_id": "BUILD-004",
+          "detail": "BUILD-001/002 交付保存与生成预览，BUILD-003/004 交付离线构建和构建完整性；任务卡均声明不新增 ECU 运行服务，用户再次指出长期目标未推进。",
+          "source": "docs/workflow/tasks/BUILD-004-build-integrity.md"
         }
+      ],
+      "change": "AGENT_WORKFLOW.md 要求领取任务前核对近期成果与阶段出口，连续两张配套任务后默认选择 ECU 可运行行为切片，例外需有具体阻断证据；OWNER_GUIDE.md 解释通用推进指令的预期和成果分类。撤回时删除新增排序段落和对应说明。",
+      "success_condition": "后续两张新完成的主要开发任务中，至少一张交付生成 ECU 的新增可观察运行行为和独立正反向证据；若因具体阻断例外，必须说明受阻切片并在解决后回到它，不能再次连续以非阻断配套工作替代运行能力。",
+      "change_files": [
+        "docs/workflow/AGENT_WORKFLOW.md",
+        "docs/workflow/OWNER_GUIDE.md"
+      ],
+      "baseline_done_task_ids": [
+        "AUDIT-001",
+        "AUDIT-002",
+        "BUILD-001",
+        "BUILD-002",
+        "BUILD-003",
+        "BUILD-004"
       ]
     }
   ]
