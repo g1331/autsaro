@@ -23,7 +23,7 @@ cl /TC /W4 /I runtime\include runtime\src\Can.c runtime\src\CanIf.c runtime\src\
 
 每个 ECU 最多 32 帧、64 信号；CAN ID `0..2047`，DLC `1..8`，信号长度 `1..32` 位，无符号 LSB0 小端位序，一帧可有多个不重叠信号。每个信号 ID 在 ECU 内唯一，帧 ID 在 ECU 内唯一；每个信号恰属一帧。Tx 帧设置正周期且超时为零；Rx 帧设置正超时且周期为零。初值必须适合位宽。超出范围、不支持的位序/帧类型/参数不能被默默转换为此结构；生成器必须在生成前拒绝它们。
 
-新建 ARXML 的 EcuC 子集提供 `EcuC/EcucConfigSet/EcucPduCollection/Pdu`：不超过 32 帧的主机配置使用 `PduIdTypeEnum=UINT8`，含 256 字节诊断 N-SDU 时使用 `PduLengthTypeEnum=UINT16`（仅信号时为 `UINT8`），每个 Pdu 记录字节长度。配置 Com 帧时提供 `ComGeneral` 的必需选项、`ComIPdu` 的 `IMMEDIATE/NORMAL` 与 Tx 未使用位初值。Com 与 CanIf 的 PDU 值引用指向独立全局 Pdu，工具 SDG 将其一一绑定到系统 I-PDU/N-PDU/DCM-I-PDU；这不是标准的系统 PDU 直接引用。CanIf 仍缺少完整控制器/驱动、HOH、缓冲和必需的根/PDU 参数，故本主机虚拟实现**不**提供可供第三方 CanIf/CAN 驱动直接使用的完整 ECUC 配置。
+新建 ARXML 的 EcuC 子集提供 `EcuC/EcucConfigSet/EcucPduCollection/Pdu`：不超过 32 帧的主机配置使用 `PduIdTypeEnum=UINT8`，含 256 字节诊断 N-SDU 时使用 `PduLengthTypeEnum=UINT16`（仅信号时为 `UINT8`），每个 Pdu 记录字节长度。配置 Com 帧时提供 `ComGeneral` 的必需选项、`ComIPdu` 的 `IMMEDIATE/NORMAL` 与 Tx 未使用位初值。Com 与 CanIf 的 PDU 值引用指向独立全局 Pdu，工具 SDG 将其一一绑定到系统 I-PDU/N-PDU/DCM-I-PDU；这不是标准的系统 PDU 直接引用。固定主机剖面的 CanIf/CAN ECUC 还包含必需根、控制器/驱动、HOH、零容量 Tx 缓冲与 PDU 参数，并以单个虚拟 Mcu 时钟参考点闭合 `CanCpuClockRef`；生成的虚拟时钟、基地址、波特率不驱动真实硬件。主机 C API、控制器状态和调度仍是自有实现，不作为第三方 CanIf/CAN 驱动互操作证据。
 
 诊断的 `CanTpRx/TxNSduRef`、四项 CanTp N-PDU/FC N-PDU 引用与 `DcmDslProtocolRx/TxPduRef` 全部以 `DEST="ECUC-CONTAINER-VALUE"` 绑定相应全局 Pdu；系统 N-PDU/DCM-I-PDU 只由工具 SDG 指明关系。System Template `[constr_3448]` 不允许在本剖面的 I-SIGNAL-I-PDU、N-PDU、DCM-I-PDU 对应全局 Pdu 上输出 `DynamicLength`，系统 N-PDU 也不输出 `HAS-DYNAMIC-LENGTH`。N-PDU 的长度由传输层处理，DcmIPdu 本身动态；解析器不靠 EcuC 的 `DynamicLength` 推断运行时行为，带有该字段的导入文件只读阻断。
 

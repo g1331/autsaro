@@ -92,6 +92,178 @@ fn render_global_pdus(project: &str, frames: &[FrameView], diagnostic: Option<&D
     module("EcuCCfg", "EcuC", &(config + &hardware))
 }
 
+fn render_host_can_ecuc(project: &str) -> String {
+    // These clock and bit-timing values describe only the fixed virtual host profile.
+    let mcu_general = "/AUTOSAR/EcucDefs/Mcu/McuGeneralConfiguration";
+    let mcu_general_params = [
+        ("McuDevErrorDetect", false), ("McuGetRamStateApi", false),
+        ("McuInitClock", true), ("McuNoPll", true),
+        ("McuPerformResetApi", false), ("McuVersionInfoApi", false),
+    ].into_iter().map(|(name, value)| boolean(mcu_general, name, value)).collect::<String>();
+    let mcu_general_value = container("McuGeneralConfiguration", mcu_general, &mcu_general_params, "", "");
+    let clock_ref = "/AUTOSAR/EcucDefs/Mcu/McuModuleConfiguration/McuClockSettingConfig/McuClockReferencePoint";
+    let clock_ref_value = container("HostClock", clock_ref,
+        &param(&format!("{clock_ref}/McuClockReferencePointFrequency"), "NUMERICAL", 16_000_000, "FLOAT"), "", "");
+    let clock = "/AUTOSAR/EcucDefs/Mcu/McuModuleConfiguration/McuClockSettingConfig";
+    let clock_value = container("HostClockSetting", clock, &number(clock, "McuClockSettingId", 0), "", &clock_ref_value);
+    let mode = "/AUTOSAR/EcucDefs/Mcu/McuModuleConfiguration/McuModeSettingConf";
+    let mode_value = container("HostMode", mode, &number(mode, "McuMode", 0), "", "");
+    let mcu_module = "/AUTOSAR/EcucDefs/Mcu/McuModuleConfiguration";
+    let mcu_module_params = choice(mcu_module, "McuClockSrcFailureNotification", "DISABLED")
+        + &number(mcu_module, "McuNumberOfMcuModes", 1)
+        + &number(mcu_module, "McuRamSectors", 0);
+    let mcu_module_value = container("McuModuleConfiguration", mcu_module, &mcu_module_params, "",
+        &(clock_value + &mode_value));
+    let reset = "/AUTOSAR/EcucDefs/Mcu/McuPublishedInformation/McuResetReasonConf";
+    let reset_value = container("HostReset", reset, &number(reset, "McuResetReason", 0), "", "");
+    let published = container("McuPublishedInformation", "/AUTOSAR/EcucDefs/Mcu/McuPublishedInformation", "", "", &reset_value);
+    let mcu = module("McuCfg", "Mcu", &(mcu_general_value + &mcu_module_value + &published));
+
+    let baud = "/AUTOSAR/EcucDefs/Can/CanConfigSet/CanController/CanControllerBaudrateConfig";
+    let baud_params = param(&format!("{baud}/CanControllerBaudRate"), "NUMERICAL", 500, "FLOAT")
+        + &number(baud, "CanControllerBaudRateConfigID", 0)
+        + &number(baud, "CanControllerPropSeg", 7)
+        + &number(baud, "CanControllerSeg1", 16)
+        + &number(baud, "CanControllerSeg2", 8)
+        + &number(baud, "CanControllerSyncJumpWidth", 1);
+    let baud_value = container("HostBaudrate", baud, &baud_params, "", "");
+    let controller = "/AUTOSAR/EcucDefs/Can/CanConfigSet/CanController";
+    let controller_params = choice(controller, "CanBusoffProcessing", "POLLING")
+        + &boolean(controller, "CanControllerActivation", true)
+        + &number(controller, "CanControllerBaseAddress", 0)
+        + &number(controller, "CanControllerId", 0)
+        + &boolean(controller, "CanHwPnSupport", false)
+        + &choice(controller, "CanRxProcessing", "POLLING")
+        + &choice(controller, "CanTxProcessing", "POLLING")
+        + &choice(controller, "CanWakeupProcessing", "POLLING")
+        + &boolean(controller, "CanWakeupSupport", false);
+    let controller_refs = reference(controller, "CanControllerDefaultBaudrate", "ECUC-CONTAINER-VALUE",
+        &ref_path(project, "CanCfg/CanConfigSet/HostController/HostBaudrate"))
+        + &reference(controller, "CanCpuClockRef", "ECUC-CONTAINER-VALUE",
+            &ref_path(project, "McuCfg/McuModuleConfiguration/HostClockSetting/HostClock"));
+    let controller_value = container("HostController", controller, &controller_params, &controller_refs, &baud_value);
+    let hardware = "/AUTOSAR/EcucDefs/Can/CanConfigSet/CanHardwareObject";
+    let mut objects = String::new();
+    for (name, id, direction) in [("HostRxObject", 0, "RECEIVE"), ("HostTxObject", 1, "TRANSMIT")] {
+        let params = choice(hardware, "CanHandleType", "BASIC")
+            + &number(hardware, "CanHwObjectCount", 1)
+            + &choice(hardware, "CanIdType", "STANDARD")
+            + &number(hardware, "CanObjectId", id)
+            + &choice(hardware, "CanObjectType", direction)
+            + &choice(hardware, "CanObjectPayloadLength", "CAN_OBJECT_PL_8");
+        let refs = reference(hardware, "CanControllerRef", "ECUC-CONTAINER-VALUE",
+            &ref_path(project, "CanCfg/CanConfigSet/HostController"));
+        objects.push_str(&container(name, hardware, &params, &refs, ""));
+    }
+    let config = container("CanConfigSet", "/AUTOSAR/EcucDefs/Can/CanConfigSet", "", "",
+        &(controller_value + &objects));
+    let general = "/AUTOSAR/EcucDefs/Can/CanGeneral";
+    let general_params = boolean(general, "CanDevErrorDetect", false)
+        + &boolean(general, "CanEnableSecurityEventReporting", false)
+        + &boolean(general, "CanGlobalTimeSupport", false)
+        + &number(general, "CanIndex", 0)
+        + &decimal(general, "CanMainFunctionModePeriod", 1)
+        + &boolean(general, "CanMultiplexedTransmission", false)
+        + &decimal(general, "CanTimeoutDuration", 1000)
+        + &boolean(general, "CanVersionInfoApi", false);
+    let general_refs = reference(general, "CanSupportTTCANRef", "ECUC-CONTAINER-VALUE",
+        &ref_path(project, "CanIfCfg/CanIfPrivateCfg"));
+    let can_general = container("CanGeneral", general, &general_params, &general_refs, "");
+    mcu + &module("CanCfg", "Can", &(config + &can_general))
+}
+
+fn render_host_canif_ecuc(project: &str, pdus: &str) -> String {
+    let dispatch = "/AUTOSAR/EcucDefs/CanIf/CanIfDispatchCfg";
+    let dispatch_params = choice(dispatch, "CanIfDispatchUserCtrlBusOffUL", "CDD")
+        + &choice(dispatch, "CanIfDispatchUserCtrlModeIndicationUL", "CDD");
+    let dispatch_value = container("CanIfDispatchCfg", dispatch, &dispatch_params, "", "");
+    let ctrl = "/AUTOSAR/EcucDefs/CanIf/CanIfCtrlDrvCfg/CanIfCtrlCfg";
+    let ctrl_value = container("HostController", ctrl,
+        &(number(ctrl, "CanIfCtrlId", 0) + &boolean(ctrl, "CanIfCtrlWakeupSupport", false)),
+        &reference(ctrl, "CanIfCtrlCanCtrlRef", "ECUC-CONTAINER-VALUE",
+            &ref_path(project, "CanCfg/CanConfigSet/HostController")), "");
+    let driver = "/AUTOSAR/EcucDefs/CanIf/CanIfCtrlDrvCfg";
+    let driver_refs = reference(driver, "CanIfCtrlDrvInitHohConfigRef", "ECUC-CONTAINER-VALUE",
+        &ref_path(project, "CanIfCfg/CanIfInitCfg/HostHoh"))
+        + &reference(driver, "CanIfCtrlDrvNameRef", "ECUC-CONTAINER-VALUE",
+            &ref_path(project, "CanCfg/CanGeneral"));
+    let driver_value = container("HostDriver", driver, "", &driver_refs, &ctrl_value);
+    let hrh = "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfInitHohCfg/CanIfHrhCfg";
+    let hrh_refs = reference(hrh, "CanIfHrhCanCtrlIdRef", "ECUC-CONTAINER-VALUE",
+        &ref_path(project, "CanIfCfg/HostDriver/HostController"))
+        + &reference(hrh, "CanIfHrhIdSymRef", "ECUC-CONTAINER-VALUE",
+            &ref_path(project, "CanCfg/CanConfigSet/HostRxObject"));
+    let hrh_value = container("HostRxHrh", hrh, &boolean(hrh, "CanIfHrhSoftwareFilter", true), &hrh_refs, "");
+    let hth = "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfInitHohCfg/CanIfHthCfg";
+    let hth_refs = reference(hth, "CanIfHthCanCtrlIdRef", "ECUC-CONTAINER-VALUE",
+        &ref_path(project, "CanIfCfg/HostDriver/HostController"))
+        + &reference(hth, "CanIfHthIdSymRef", "ECUC-CONTAINER-VALUE",
+            &ref_path(project, "CanCfg/CanConfigSet/HostTxObject"));
+    let hth_value = container("HostTxHth", hth, "", &hth_refs, "");
+    let hoh = container("HostHoh", "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfInitHohCfg", "", "",
+        &(hrh_value + &hth_value));
+    let buffer = "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfBufferCfg";
+    let buffer_value = container("HostTxBuffer", buffer, &number(buffer, "CanIfBufferSize", 0),
+        &reference(buffer, "CanIfBufferHthRef", "ECUC-CONTAINER-VALUE",
+            &ref_path(project, "CanIfCfg/CanIfInitCfg/HostHoh/HostTxHth")), "");
+    let init = "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg";
+    let init_value = container("CanIfInitCfg", init, &text(init, "CanIfInitCfgSet", "HostInit"), "",
+        &(hoh + &buffer_value + pdus));
+    let private = "/AUTOSAR/EcucDefs/CanIf/CanIfPrivateCfg";
+    let private_params = boolean(private, "CanIfFixedBuffer", false)
+        + &boolean(private, "CanIfPrivateDataLengthCheck", true)
+        + &choice(private, "CanIfPrivateSoftwareFilterType", "LINEAR")
+        + &boolean(private, "CanIfSupportTTCAN", false);
+    let private_value = container("CanIfPrivateCfg", private, &private_params, "", "");
+    let public = "/AUTOSAR/EcucDefs/CanIf/CanIfPublicCfg";
+    let mut public_params = String::new();
+    for (name, value) in [
+        ("CanIfBusMirroringSupport", false), ("CanIfDevErrorDetect", false),
+        ("CanIfEnableSecurityEventReporting", false), ("CanIfGlobalTimeSupport", false),
+        ("CanIfPublicCtrlPnEnable", false), ("CanIfPublicMultipleDrvSupport", false),
+        ("CanIfPublicPnSupport", false), ("CanIfPublicReadRxPduDataApi", false),
+        ("CanIfPublicReadRxPduNotifyStatusApi", false), ("CanIfPublicReadTxPduNotifyStatusApi", false),
+        ("CanIfPublicSetDynamicTxIdApi", false), ("CanIfPublicTrcvPnEnable", false),
+        ("CanIfPublicTxBuffering", false), ("CanIfPublicTxConfirmPollingSupport", false),
+        ("CanIfPublicWakeupCheckValidSupport", false), ("CanIfTriggerTransmitSupport", false),
+        ("CanIfTxOfflineActiveSupport", false), ("CanIfVersionInfoApi", false),
+        ("CanIfWakeupSupport", false),
+    ] { public_params.push_str(&boolean(public, name, value)); }
+    public_params.push_str(&choice(public, "CanIfPublicHandleTypeEnum", "UINT8"));
+    let public_value = container("CanIfPublicCfg", public, &public_params, "", "");
+    module("CanIfCfg", "CanIf", &(driver_value + &dispatch_value + &init_value + &private_value + &public_value))
+}
+
+fn render_host_canif_pdu(project: &str, name: &str, id: u32, dlc: u8, index: usize,
+    is_tx: bool, diagnostic: bool, global_pdu: &str) -> String {
+    if is_tx {
+        let path = "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfTxPduCfg";
+        let params = number(path, "CanIfTxPduCanId", id)
+            + &number(path, "CanIfTxPduId", index)
+            + &choice(path, "CanIfTxPduCanIdType", "STANDARD_CAN")
+            + &boolean(path, "CanIfTxPduReadNotifyStatus", false)
+            + &boolean(path, "CanIfTxPduTruncation", false)
+            + &choice(path, "CanIfTxPduType", "STATIC");
+        let refs = reference(path, "CanIfTxPduRef", "ECUC-CONTAINER-VALUE", global_pdu)
+            + &reference(path, "CanIfTxPduBufferRef", "ECUC-CONTAINER-VALUE",
+                &ref_path(project, "CanIfCfg/CanIfInitCfg/HostTxBuffer"));
+        container(name, path, &params, &refs, "")
+    } else {
+        let path = "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfRxPduCfg";
+        let params = number(path, "CanIfRxPduCanId", id)
+            + &number(path, "CanIfRxPduId", index)
+            + &number(path, "CanIfRxPduDataLength", dlc)
+            + &choice(path, "CanIfRxPduCanIdType", "STANDARD_NO_FD_CAN")
+            + &boolean(path, "CanIfRxPduDataLengthCheck", !diagnostic)
+            + &boolean(path, "CanIfRxPduReadData", false)
+            + &boolean(path, "CanIfRxPduReadNotifyStatus", false);
+        let refs = reference(path, "CanIfRxPduRef", "ECUC-CONTAINER-VALUE", global_pdu)
+            + &reference(path, "CanIfRxPduHrhIdRef", "ECUC-CONTAINER-VALUE",
+                &ref_path(project, "CanIfCfg/CanIfInitCfg/HostHoh/HostRxHrh"));
+        container(name, path, &params, &refs, "")
+    }
+}
+
 fn render_dtc(project: &str, diagnostic: &DiagnosticView, elements: &mut String) {
     let dtc = diagnostic.dtc.as_ref().unwrap();
     let base = "/AUTOSAR/EcucDefs/Dem/DemConfigSet";
@@ -214,15 +386,8 @@ fn render_diagnostic(project: &str, diagnostic: &DiagnosticView, frame_count: us
         write!(elements, "<DCM-I-PDU><SHORT-NAME>{name}</SHORT-NAME><LENGTH>256</LENGTH></DCM-I-PDU>").unwrap();
     }
     for (name, id, is_tx) in [("DiagRequest", diagnostic.request_id, false), ("DiagResponse", diagnostic.response_id, true)] {
-        let path = if is_tx { "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfTxPduCfg" } else { "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfRxPduCfg" };
-        let params = if is_tx {
-            format!("{}{}{}", number(path, "CanIfTxPduCanId", id), number(path, "CanIfTxPduId", frame_count), choice(path, "CanIfTxPduCanIdType", "STANDARD_CAN"))
-        } else {
-            format!("{}{}{}{}{}", number(path, "CanIfRxPduCanId", id), number(path, "CanIfRxPduId", frame_count), number(path, "CanIfRxPduDataLength", 8), choice(path, "CanIfRxPduCanIdType", "STANDARD_NO_FD_CAN"), boolean(path, "CanIfRxPduDataLengthCheck", false))
-        };
-        let refs = reference(path, if is_tx { "CanIfTxPduRef" } else { "CanIfRxPduRef" },
-            "ECUC-CONTAINER-VALUE", if is_tx { &response_pdu } else { &request_pdu });
-        canif_children.push_str(&container(&format!("Can_{name}"), path, &params, &refs, ""));
+        canif_children.push_str(&render_host_canif_pdu(project, &format!("Can_{name}"), id, 8, frame_count,
+            is_tx, true, if is_tx { &response_pdu } else { &request_pdu }));
     }
 
     let rx = "/AUTOSAR/EcucDefs/CanTp/CanTpConfig/CanTpChannel/CanTpRxNSdu";
@@ -448,17 +613,9 @@ pub fn render_profile(project: &str, frames: &[FrameView], signals: &[SignalView
             container("Tx", &tx_path, &number(&tx_path, "ComTxIPduUnusedAreasDefault", 0), "", &true_mode)
         } else { String::new() };
         com_children.push_str(&container(&format!("Pdu_{}", frame.name), com_path, &com_params, &(com_pdu_ref + &com_refs), &tx_children));
-        let (canif_def, canif_params, canif_ref) = match frame.direction {
-            Direction::Tx => {
-                let path = "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfTxPduCfg";
-                (path, format!("{}{}{}", number(path, "CanIfTxPduCanId", frame.id), number(path, "CanIfTxPduId", frame_index), choice(path, "CanIfTxPduCanIdType", "STANDARD_CAN")), reference(path, "CanIfTxPduRef", "ECUC-CONTAINER-VALUE", &global_pdu_path(project, &format!("Pdu_{}", frame.name))))
-            }
-            Direction::Rx => {
-                let path = "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfRxPduCfg";
-                (path, format!("{}{}{}", number(path, "CanIfRxPduCanId", frame.id), number(path, "CanIfRxPduId", frame_index), number(path, "CanIfRxPduDataLength", frame.dlc)), reference(path, "CanIfRxPduRef", "ECUC-CONTAINER-VALUE", &global_pdu_path(project, &format!("Pdu_{}", frame.name))))
-            }
-        };
-        canif_children.push_str(&container(&format!("Can_{}", frame.name), canif_def, &canif_params, &canif_ref, ""));
+        canif_children.push_str(&render_host_canif_pdu(project, &format!("Can_{}", frame.name),
+            frame.id, frame.dlc, frame_index, matches!(frame.direction, Direction::Tx), false,
+            &global_pdu_path(project, &format!("Pdu_{}", frame.name))));
     }
     for (signal_index, signal) in signals.iter().enumerate() {
         write!(elements, "<I-SIGNAL><SHORT-NAME>ISignal_{}</SHORT-NAME><LENGTH>{}</LENGTH></I-SIGNAL>", signal.name, signal.length).unwrap();
@@ -486,8 +643,8 @@ pub fn render_profile(project: &str, frames: &[FrameView], signals: &[SignalView
         elements.push_str(&module("ComCfg", "Com", &(config + &general)));
     }
     if !canif_children.is_empty() {
-        let config = container("CanIfInitCfg", "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg", "", "", &canif_children);
-        elements.push_str(&module("CanIfCfg", "CanIf", &config));
+        elements.push_str(&render_host_can_ecuc(project));
+        elements.push_str(&render_host_canif_ecuc(project, &canif_children));
     }
     format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd\"><AR-PACKAGES><AR-PACKAGE><SHORT-NAME>{project}</SHORT-NAME><ELEMENTS>{elements}</ELEMENTS></AR-PACKAGE></AR-PACKAGES></AUTOSAR>\n")
 }

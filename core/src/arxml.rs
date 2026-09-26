@@ -70,6 +70,14 @@ struct FrameMapping {
     byte_order: Option<String>,
 }
 
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd)]
+struct EcucRecord {
+    path: String,
+    kind: String,
+    definition: String,
+    value: String,
+}
+
 pub struct Workspace {
     name: String,
     files: Vec<SourceFile>,
@@ -112,6 +120,94 @@ fn ref_dest(node: Node<'_, '_>, suffix: &str) -> Option<String> {
         .find(|n| definition(*n).is_some_and(|path| path.ends_with(&format!("/{suffix}"))))
         .and_then(|reference| reference.children().find(|child| child.is_element() && child.tag_name().name() == "VALUE-REF"))
         .and_then(|value| value.attribute("DEST")).map(str::to_owned)
+}
+
+fn host_ecuc_records(module: Node<'_, '_>) -> Vec<EcucRecord> {
+    let mut records = Vec::new();
+    for node in module.descendants().filter(|n| n.is_element()) {
+        let kind = node.tag_name().name();
+        if !matches!(kind, "ECUC-MODULE-CONFIGURATION-VALUES" | "ECUC-CONTAINER-VALUE" |
+            "ECUC-NUMERICAL-PARAM-VALUE" | "ECUC-TEXTUAL-PARAM-VALUE" | "ECUC-REFERENCE-VALUE") {
+            continue;
+        }
+        let owner = if matches!(kind, "ECUC-MODULE-CONFIGURATION-VALUES" | "ECUC-CONTAINER-VALUE") {
+            node
+        } else {
+            node.ancestors().find(|ancestor| ancestor.is_element() && ancestor.tag_name().name() == "ECUC-CONTAINER-VALUE")
+                .unwrap_or(module)
+        };
+        let value = if kind == "ECUC-REFERENCE-VALUE" {
+            node.children().find(|child| child.is_element() && child.tag_name().name() == "VALUE-REF")
+                .map(|child| format!("{}:{}", child.attribute("DEST").unwrap_or(""), child.text().unwrap_or("")))
+                .unwrap_or_default()
+        } else if matches!(kind, "ECUC-NUMERICAL-PARAM-VALUE" | "ECUC-TEXTUAL-PARAM-VALUE") {
+            child_text(node, "VALUE").unwrap_or_default()
+        } else { String::new() };
+        records.push(EcucRecord { path: path_of(owner), kind: kind.to_owned(),
+            definition: definition(node).unwrap_or_default(), value });
+    }
+    records.sort();
+    records
+}
+
+fn validate_host_can_ecuc(files: &[SourceFile], project: &str, frames: &[FrameView],
+    signals: &[SignalView], diagnostic: Option<&DiagnosticView>) -> Vec<Issue> {
+    let expected_xml = render_profile(project, frames, signals, diagnostic);
+    let expected_doc = match Document::parse(&expected_xml) {
+        Ok(doc) => doc,
+        Err(error) => return vec![Issue::error("PDU_UNSUPPORTED",
+            format!("当前输入无法形成固定主机 CAN 剖面: {error}"), None)],
+    };
+    let expected_paths = ["McuCfg", "CanCfg", "CanIfCfg"].map(|name| format!("/{project}/{name}"));
+    let mut expected = BTreeMap::new();
+    for module in expected_doc.descendants().filter(|node| node.is_element() &&
+        node.tag_name().name() == "ECUC-MODULE-CONFIGURATION-VALUES") {
+        let path = path_of(module);
+        if expected_paths.contains(&path) { expected.insert(path, host_ecuc_records(module)); }
+    }
+    let mut actual = BTreeMap::new();
+    let mut issues = Vec::new();
+    for file in files {
+        let doc = match Document::parse(&file.text) { Ok(doc) => doc, Err(_) => continue };
+        for module in doc.descendants().filter(|node| node.is_element() &&
+            node.tag_name().name() == "ECUC-MODULE-CONFIGURATION-VALUES") {
+            let path = path_of(module);
+            let own_module = expected_paths.contains(&path);
+            let can_definition = matches!(definition(module).as_deref(),
+                Some("/AUTOSAR/EcucDefs/Mcu" | "/AUTOSAR/EcucDefs/Can" | "/AUTOSAR/EcucDefs/CanIf"));
+            if !own_module && !(path.starts_with(&format!("/{project}/")) && can_definition) { continue; }
+            if !own_module {
+                issues.push(Issue { file: Some(file.path.display().to_string()), ..Issue::error("PDU_UNSUPPORTED",
+                    "额外的 Mcu/Can/CanIf 模块不属于固定主机剖面", Some(path)) });
+                continue;
+            }
+            if actual.insert(path.clone(), (host_ecuc_records(module), file.path.display().to_string())).is_some() {
+                issues.push(Issue { file: Some(file.path.display().to_string()), ..Issue::error("PDU_UNSUPPORTED",
+                    "主机 Mcu/Can/CanIf 模块路径重复", Some(path)) });
+            }
+        }
+    }
+    for path in expected_paths {
+        match (expected.get(&path), actual.get(&path)) {
+            (None, None) => {}
+            (Some(_), None) => issues.push(Issue { file: files.first().map(|file| file.path.display().to_string()),
+                ..Issue::error("PDU_UNSUPPORTED", "缺少固定主机 Mcu/Can/CanIf ECUC 模块", Some(path)) }),
+            (None, Some((_, file))) => issues.push(Issue { file: Some(file.clone()),
+                ..Issue::error("PDU_UNSUPPORTED", "无 CAN PDU 的工程不应含主机 Mcu/Can/CanIf 配置", Some(path)) }),
+            (Some(want), Some((got, file))) if want != got => {
+                let missing = want.iter().find(|record| !got.contains(record));
+                let extra = got.iter().find(|record| !want.contains(record));
+                let record = missing.or(extra).unwrap();
+                let field = record.definition.rsplit('/').next().unwrap_or("配置");
+                let message = if missing.is_some() { format!("主机 CAN ECUC 缺少或不匹配必需项 {field}") }
+                    else { format!("主机 CAN ECUC 含未支持的配置项 {field}") };
+                issues.push(Issue { file: Some(file.clone()), ..Issue::error("PDU_UNSUPPORTED", message,
+                    Some(record.path.clone())) });
+            }
+            _ => {}
+        }
+    }
+    issues
 }
 fn tool_global_pdu(node: Node<'_, '_>, file: &SourceFile) -> Result<GlobalPduBinding, String> {
     let groups: Vec<_> = node.descendants().filter(|child| child.is_element() && child.tag_name().name() == "SDG"
@@ -551,19 +647,23 @@ fn parse_diagnostic(files: &[SourceFile], project: &str, frames: &[FrameView], s
             return Err(format!("{pdu} 须配置不检查变长 DLC 的经典 11 位 CAN"));
         }
         let expected_params: &[&str] = if tx {
-            &["CanIfTxPduCanId", "CanIfTxPduId", "CanIfTxPduCanIdType"]
+            &["CanIfTxPduCanId", "CanIfTxPduId", "CanIfTxPduCanIdType", "CanIfTxPduReadNotifyStatus",
+                "CanIfTxPduTruncation", "CanIfTxPduType"]
         } else {
-            &["CanIfRxPduCanId", "CanIfRxPduId", "CanIfRxPduDataLength", "CanIfRxPduCanIdType", "CanIfRxPduDataLengthCheck"]
+            &["CanIfRxPduCanId", "CanIfRxPduId", "CanIfRxPduDataLength", "CanIfRxPduCanIdType",
+                "CanIfRxPduDataLengthCheck", "CanIfRxPduReadData", "CanIfRxPduReadNotifyStatus"]
         };
         let parameter_values: Vec<_> = canif[0].children().filter(|n| n.is_element() && n.tag_name().name() == "PARAMETER-VALUES")
             .flat_map(|group| group.children().filter(|n| n.is_element())).collect();
         let reference_values: Vec<_> = canif[0].children().filter(|n| n.is_element() && n.tag_name().name() == "REFERENCE-VALUES")
             .flat_map(|group| group.children().filter(|n| n.is_element())).collect();
+        let expected_refs = [ref_name, if tx { "CanIfTxPduBufferRef" } else { "CanIfRxPduHrhIdRef" }];
         if parameter_values.len() != expected_params.len() ||
             expected_params.iter().any(|name| parameter_values.iter().filter(|n| definition(**n).as_deref() == Some(format!("{def}/{name}").as_str())).count() != 1) ||
-            reference_values.len() != 1 || definition(reference_values[0]).as_deref() != Some(format!("{def}/{ref_name}").as_str()) ||
-            reference_values[0].children().find(|n| n.is_element() && n.tag_name().name() == "VALUE-REF")
-                .and_then(|n| n.attribute("DEST")) != Some("ECUC-CONTAINER-VALUE") ||
+            reference_values.len() != 2 ||
+            expected_refs.iter().any(|name| reference_values.iter().filter(|n| definition(**n).as_deref() == Some(format!("{def}/{name}").as_str())).count() != 1) ||
+            reference_values.iter().any(|value| value.children().find(|n| n.is_element() && n.tag_name().name() == "VALUE-REF")
+                .and_then(|n| n.attribute("DEST")) != Some("ECUC-CONTAINER-VALUE")) ||
             param(canif[0], if tx { "CanIfTxPduId" } else { "CanIfRxPduId" }).as_deref() != Some(frames.len().to_string().as_str()) {
             return Err(format!("{pdu} 的诊断 CanIf 参数或引用不属于受支持的静态配置"));
         }
@@ -891,8 +991,9 @@ impl Workspace {
                 Some("RECEIVE") if !canif_pdu.tx => Direction::Rx,
                 _ => { issues.push(Issue::error("PDU_DIRECTION", "Com 与 CanIf 方向不一致或未知", Some(pdu_ref))); continue; }
             };
-            if canif_pdu.id_type.as_deref().is_some_and(|kind| kind != "STANDARD_CAN") {
-                issues.push(Issue::error("CAN_ID_TYPE", "仅支持 STANDARD_CAN", Some(pdu_ref.clone())));
+            let expected_id_type = if canif_pdu.tx { "STANDARD_CAN" } else { "STANDARD_NO_FD_CAN" };
+            if canif_pdu.id_type.as_deref() != Some(expected_id_type) {
+                issues.push(Issue::error("CAN_ID_TYPE", "仅支持经典 11 位 CAN", Some(pdu_ref.clone())));
             }
             let Ok(dlc) = pdu.length.as_ref() else { issues.push(pdu.length.as_ref().unwrap_err().clone()); continue; };
             if global_pdus.get(&pdu_ref).is_some_and(|binding| binding.length != *dlc) {
@@ -972,6 +1073,7 @@ impl Workspace {
                 None
             }
         };
+        issues.extend(validate_host_can_ecuc(&self.files, &self.name, &frames, &signals, diagnostic.as_ref()));
         if !global_pdus.is_empty() {
             let mut expected: BTreeSet<_> = frames.iter()
                 .map(|frame| format!("/{}/EcuCCfg/EcucConfigSet/Pdus/Pdu_{}", self.name, frame.name)).collect();
