@@ -1,8 +1,9 @@
 use crate::arxml_render::render_profile;
-use crate::model::{validate_diagnostic, validate_profile, DiagnosticView, Direction, DtcView, FileView, FrameView, Issue, Severity, SignalView, WorkspaceView};
+use crate::model::{validate_diagnostic, validate_profile, DiagnosticView, Direction, DtcView, FileView, FrameView, Issue, SavePreview, SavePreviewFile, Severity, SignalView, WorkspaceView};
 use crate::schema;
 use roxmltree::{Document, Node};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 use std::fs;
@@ -1591,6 +1592,44 @@ impl Workspace {
             }
         }
         Ok(paths)
+    }
+
+    fn save_revision(&self) -> String {
+        let mut digest = Sha256::new();
+        for file in &self.files {
+            let path = file.path.to_string_lossy();
+            for bytes in [path.as_bytes(), file.saved.as_bytes(), file.text.as_bytes()] {
+                digest.update((bytes.len() as u64).to_le_bytes());
+                digest.update(bytes);
+            }
+        }
+        format!("{:x}", digest.finalize())
+    }
+
+    pub fn preview_save(&mut self) -> Result<SavePreview, String> {
+        self.validate()?;
+        if let Some(issue) = self.issues.iter().find(|issue| matches!(issue.severity, Severity::Error)) {
+            return Err(format!("{}: {}", issue.code, issue.message));
+        }
+        Ok(SavePreview {
+            revision: self.save_revision(),
+            files: self.files.iter().map(|file| {
+                let changed = file.saved != file.text;
+                SavePreviewFile {
+                    path: file.path.display().to_string(),
+                    changed,
+                    before: changed.then(|| file.saved.clone()),
+                    after: changed.then(|| file.text.clone()),
+                }
+            }).collect(),
+        })
+    }
+
+    pub fn save_previewed(&mut self, revision: &str) -> Result<WorkspaceView, String> {
+        if self.save_revision() != revision {
+            return Err("配置已在预览后改变，请重新查看 ARXML 改动再保存".into());
+        }
+        self.save()
     }
 
     pub fn save(&mut self) -> Result<WorkspaceView, String> {

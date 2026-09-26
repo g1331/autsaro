@@ -294,15 +294,23 @@
     {
       "id": "BUILD-001",
       "title": "保存前查看 ARXML 文件改动",
-      "status": "ready",
+      "status": "review",
       "card": "docs/workflow/tasks/BUILD-001-arxml-save-preview.md",
+      "branch": "feature/BUILD-001-arxml-save-preview",
+      "base_commit": "8acff1c",
       "capabilities": [
         "HOST-CAN-01"
       ],
       "depends_on": [
         "AUDIT-001"
       ],
-      "evidence": []
+      "evidence": [
+        "docs/workflow/evidence/BUILD-001-save-preview-2026-09-26.md",
+        "docs/workflow/evidence/BUILD-001-save-preview-2026-09-26.png"
+      ],
+      "review": {
+        "status": "not_run"
+      }
     },
     {
       "id": "AUDIT-003",

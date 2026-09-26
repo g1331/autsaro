@@ -109,6 +109,22 @@ pub struct WorkspaceView {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SavePreviewFile {
+    pub path: String,
+    pub changed: bool,
+    pub before: Option<String>,
+    pub after: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavePreview {
+    pub revision: String,
+    pub files: Vec<SavePreviewFile>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GenerationReport {
     pub output_directory: String,
     pub previous_output_directory: Option<String>,

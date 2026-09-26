@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { ArrowRight, Boxes, Cable, CircleAlert, CircleCheck, FileCode2, FileInput, FolderOpen, FolderPlus, Hammer, HardDrive, ListChecks, MonitorPlay, Plus, Save, Waypoints } from 'lucide-react';
-import type { BuildResult, DiagnosticView, DtcView, Frame, GenerateResult, Issue, Signal, VirtualResult, WorkspaceView } from './types';
+import type { BuildResult, DiagnosticView, DtcView, Frame, GenerateResult, Issue, SavePreview, Signal, VirtualResult, WorkspaceView } from './types';
 
 type Stage = 'save' | 'validate' | 'generate' | 'build' | 'virtual';
 type StageState = 'pending' | 'running' | 'done' | 'failed' | 'stale';
@@ -155,6 +155,23 @@ function signalChanges(fields: SignalFields, frame: Frame): SignalChanges {
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
+function previewDelta(before: string, after: string) {
+  // Generated ARXML often puts many XML elements on one physical line.
+  // Break only adjacent tags for display; the complete source stays available below.
+  const oldLines = before.replaceAll('><', '>\n<').split('\n');
+  const newLines = after.replaceAll('><', '>\n<').split('\n');
+  let first = 0;
+  while (first < oldLines.length && first < newLines.length && oldLines[first] === newLines[first]) first++;
+  let tail = 0;
+  while (tail < oldLines.length - first && tail < newLines.length - first &&
+    oldLines[oldLines.length - 1 - tail] === newLines[newLines.length - 1 - tail]) tail++;
+  return {
+    oldStart: first + 1,
+    newStart: first + 1,
+    oldText: oldLines.slice(first, oldLines.length - tail).join('\n'),
+    newText: newLines.slice(first, newLines.length - tail).join('\n'),
+  };
+}
 function initialSelection(view: WorkspaceView): Selection | null {
   if (view.frames.length) return { kind: 'frame', path: view.frames[0].path };
   if (view.files.length) return { kind: 'file', path: view.files[0].path };
@@ -216,6 +233,8 @@ export default function App() {
   const [busy, setBusy] = useState<string | null>(null);
   const [page, setPage] = useState<Page>('editor');
   const [peerDirectory, setPeerDirectory] = useState('');
+  const [savePreview, setSavePreview] = useState<SavePreview | null>(null);
+  const [previewPath, setPreviewPath] = useState('');
 
   const currentFrame = selection?.kind === 'frame' ? workspace?.frames.find(item => item.path === selection.path) : undefined;
   const currentSignal = selection?.kind === 'signal' ? workspace?.signals.find(item => item.path === selection.path) : undefined;
@@ -233,6 +252,7 @@ export default function App() {
   const errorCount = issues.filter(issue => issue.severity === 'error').length;
 
   function acceptView(view: WorkspaceView, requested?: Selection | null) {
+    setSavePreview(null);
     const next = findSelection(view, requested === undefined ? selection : requested);
     setWorkspace(view);
     setSelection(next);
@@ -452,7 +472,17 @@ export default function App() {
     }, undefined, 'diagnostic');
   }
   function saveProject() {
-    void run('保存', () => invoke<WorkspaceView>('save_project'), view => {
+    void run('预览保存', () => invoke<SavePreview>('preview_save_project'), preview => {
+      setSavePreview(preview);
+      setPreviewPath(preview.files.find(file => file.changed)?.path ?? preview.files[0]?.path ?? '');
+    });
+  }
+  function confirmSave() {
+    if (!savePreview || !savePreview.files.some(file => file.changed)) return;
+    void run('保存', () => invoke<WorkspaceView>('save_project', { revision: savePreview.revision }).catch(error => {
+      setSavePreview(null);
+      throw error;
+    }), view => {
       acceptView(view);
       if (view.dirty) {
         markStage('save', 'failed', '后端仍报告未保存修改');
@@ -544,6 +574,9 @@ export default function App() {
   }
 
   const unsupportedIssue = workspace?.issues.find(issue => issue.code.startsWith('PDU_') || issue.code === 'DIAG_UNSUPPORTED');
+  const previewFile = savePreview?.files.find(file => file.path === previewPath);
+  const delta = previewFile?.before !== null && previewFile?.after !== null && previewFile?.before !== undefined && previewFile?.after !== undefined
+    ? previewDelta(previewFile.before, previewFile.after) : null;
   const disabled = !native || Boolean(busy) || Boolean(unsupportedIssue);
   return (
     <div className="app-shell">
@@ -605,7 +638,7 @@ export default function App() {
           <div className="workspace-content">
             <div className={`workspace-grid${page === 'editor' ? '' : ' single-page'}`}>
             <section className="main-pane" aria-label={page === 'editor' ? '配置工作区' : '项目工作页'}>
-              {page === 'editor' && <><div className="section-header"><div><p className="eyebrow">CAN COMMUNICATION</p><h2>帧与信号</h2><p>仅支持标准 11-bit CAN、DLC 1–8、原始无符号小端信号。</p></div><div className="section-actions"><button type="button" className="outline-button small" onClick={saveProject} disabled={!native || Boolean(busy) || Boolean(unsupportedIssue) || unapplied}><Save aria-hidden="true" size={15} />保存 ARXML</button><button type="button" className="outline-button small" onClick={() => openCreator('frame')} disabled={disabled}><Plus aria-hidden="true" size={15} />添加帧</button></div></div>
+              {page === 'editor' && <><div className="section-header"><div><p className="eyebrow">CAN COMMUNICATION</p><h2>帧与信号</h2><p>仅支持标准 11-bit CAN、DLC 1–8、原始无符号小端信号。</p></div><div className="section-actions"><button type="button" className="outline-button small" onClick={saveProject} disabled={!native || Boolean(busy) || Boolean(unsupportedIssue) || unapplied}><Save aria-hidden="true" size={15} />查看并保存 ARXML</button><button type="button" className="outline-button small" onClick={() => openCreator('frame')} disabled={disabled}><Plus aria-hidden="true" size={15} />添加帧</button></div></div>
                 {unsupportedIssue && <div className="page-guidance" role="alert">{unsupportedIssue.message}。原 ARXML 保持不变；请在“诊断”页查看问题，当前不能修改、保存或生成。</div>}
                 <div className="table-wrap"><table><caption>CAN 帧配置</caption><thead><tr><th scope="col">帧名称</th><th scope="col">CAN ID</th><th scope="col">DLC</th><th scope="col">方向</th><th scope="col">周期 / 超时</th><th scope="col">信号</th></tr></thead><tbody>{workspace.frames.map(frame => <tr key={frame.path} className={focusedFrame?.path === frame.path ? 'selected-row' : ''} onClick={() => choose({ kind: 'frame', path: frame.path })}><td><button type="button" className="table-link" onClick={event => { event.stopPropagation(); choose({ kind: 'frame', path: frame.path }); }}>{frame.name}</button></td><td className="mono">0x{frame.id.toString(16).toUpperCase().padStart(3, '0')}</td><td className="mono">{frame.dlc}</td><td><span className={`direction ${frame.direction}`}>{frame.direction.toUpperCase()}</span></td><td className="mono">{frame.direction === 'tx' ? `${frame.periodMs ?? '—'} ms` : `${frame.timeoutMs ?? '—'} ms`}</td><td className="mono">{workspace.signals.filter(signal => signal.framePath === frame.path).length}</td></tr>)}{!workspace.frames.length && <tr><td colSpan={6} className="empty-cell">项目尚无 CAN 帧。使用“添加帧”开始配置。</td></tr>}</tbody></table></div>
                 <div className="section-header secondary"><div><p className="eyebrow">FRAME MAPPING</p><h2>{focusedFrame ? `${focusedFrame.name} · 信号` : '全部信号'}</h2><p>{focusedFrame ? `帧路径：${focusedFrame.path}` : '选择一帧可查看信号映射与引用。'}</p></div><button type="button" className="outline-button small" onClick={() => openCreator('signal')} disabled={disabled || !focusedFrame}><Plus aria-hidden="true" size={15} />添加信号</button></div>
@@ -706,6 +739,12 @@ export default function App() {
           </div>
         </main>
       )}
+      {savePreview && <div className="save-preview-backdrop"><section className="save-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="save-preview-title">
+        <header><div><p className="eyebrow">ARXML SAVE PREVIEW</p><h2 id="save-preview-title">确认文件改动</h2><p>预览不会写入磁盘。逐份查看原文与拟保存内容，再确认保存。</p></div><button type="button" className="quiet-button" onClick={() => setSavePreview(null)} disabled={Boolean(busy)}>关闭</button></header>
+        <div className="save-preview-body"><nav aria-label="预览文件">{savePreview.files.map(file => <button type="button" key={file.path} className={file.path === previewPath ? 'active' : ''} onClick={() => setPreviewPath(file.path)} title={file.path}><span>{labelFromPath(file.path)}</span><small>{file.changed ? '将修改' : '保持不变'}</small></button>)}</nav>
+          <div className="save-preview-content">{previewFile && <><p className="mono path-text">{previewFile.path}</p>{delta ? <><p>差异范围包含全部改动；相同的开头和结尾已折叠。为阅读方便，相邻 XML 标签已分行，原始字节见下方完整文本。</p><div className="save-preview-compare"><div><h3>当前文件 · 预览第 {delta.oldStart} 行起</h3><pre>{delta.oldText || '（此处无内容）'}</pre></div><div><h3>拟保存 · 预览第 {delta.newStart} 行起</h3><pre>{delta.newText || '（此处无内容）'}</pre></div></div><details className="save-preview-full"><summary>查看两份完整文本</summary><div className="save-preview-compare"><div><h3>当前文件</h3><pre>{previewFile.before}</pre></div><div><h3>拟保存</h3><pre>{previewFile.after}</pre></div></div></details></> : <p className="save-preview-unchanged">这份来源文件保持原字节，不会重写。</p>}</>}</div>
+        </div><footer><span>{savePreview.files.filter(file => file.changed).length} 份将修改 · {savePreview.files.filter(file => !file.changed).length} 份保持不变</span><div><button type="button" className="quiet-button" onClick={() => setSavePreview(null)} disabled={Boolean(busy)}>取消</button><button type="button" className="primary-button compact" onClick={confirmSave} disabled={Boolean(busy) || !savePreview.files.some(file => file.changed)}>确认保存</button></div></footer>
+      </section></div>}
     </div>
   );
 }

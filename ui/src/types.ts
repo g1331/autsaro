@@ -56,6 +56,11 @@ export type WorkspaceView = {
   dirty: boolean;
 };
 
+export type SavePreview = {
+  revision: string;
+  files: { path: string; changed: boolean; before: string | null; after: string | null }[];
+};
+
 export type GenerateResult = {
   outputDirectory: string;
   previousOutputDirectory: string | null;

@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::State;
-use autosar_config_core::{schema, BuildReport, Direction, GenerationReport, RunReport, Workspace, WorkspaceView};
+use autosar_config_core::{schema, BuildReport, Direction, GenerationReport, RunReport, SavePreview, Workspace, WorkspaceView};
 
 #[derive(Default)]
 struct AppState {
@@ -75,8 +75,12 @@ fn clear_dtc(state: State<'_, Arc<AppState>>) -> Result<WorkspaceView, String> {
 }
 
 #[tauri::command]
-fn save_project(state: State<'_, Arc<AppState>>) -> Result<WorkspaceView, String> {
-    with_workspace(&state, Workspace::save)
+fn preview_save_project(state: State<'_, Arc<AppState>>) -> Result<SavePreview, String> {
+    with_workspace(&state, Workspace::preview_save)
+}
+#[tauri::command]
+fn save_project(state: State<'_, Arc<AppState>>, revision: String) -> Result<WorkspaceView, String> {
+    with_workspace(&state, |workspace| workspace.save_previewed(&revision))
 }
 
 #[tauri::command]
@@ -114,7 +118,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Arc::new(AppState::default()))
-        .invoke_handler(tauri::generate_handler![create_project, open_project, add_frame, add_signal, update_frame, update_signal, configure_diagnostic, clear_diagnostic, configure_dtc, clear_dtc, save_project, validate_project, generate_project, build_project, run_virtual, run_diagnostic])
+        .invoke_handler(tauri::generate_handler![create_project, open_project, add_frame, add_signal, update_frame, update_signal, configure_diagnostic, clear_diagnostic, configure_dtc, clear_dtc, preview_save_project, save_project, validate_project, generate_project, build_project, run_virtual, run_diagnostic])
         .run(tauri::generate_context!())
         .expect("Tauri 桌面工作台无法启动");
 }
