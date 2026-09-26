@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "reviewed_done_task_ids": [],
+  "items": [
+    {
+      "id": "WF-001",
+      "status": "trial",
+      "severity": "normal",
+      "problem": "初版开发工作流没有反馈积累和自我复盘环节",
+      "impact": "跨会话出现的流程摩擦无法累计，Agent 也没有明确时机检验并改进自身工作方式",
+      "observations": [
+        {
+          "task_id": null,
+          "detail": "使用者在初版工作流落地后指出，应让 Agent 记录使用中的问题，积累后自行优化，并在后续验证解决情况"
+        }
+      ],
+      "change": "增加反馈队列、复盘触发、试行与归档说明，并把到期提示接入只读状态；若造成重复流程负担，撤回相关提示并保留历史反馈",
+      "success_condition": "接下来的两项相关任务交接中，Agent 能按规则记录实际摩擦并检查是否到期，且状态查询保持只读；若未出现摩擦，也能明确说明已检查反馈队列",
+      "change_files": [
+        "docs/workflow/AGENT_WORKFLOW.md",
+        "docs/workflow/OWNER_GUIDE.md",
+        "docs/workflow/feedback/README.md",
+        "scripts/workflow.py"
+      ],
+      "baseline_done_task_ids": []
+    }
+  ]
+}

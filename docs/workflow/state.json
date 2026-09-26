@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "stage": "CP/FO R24-11 主机 CAN 与有界 DoCAN 的证据基线",
+  "map": ".scratch/autosar-platform/map.md",
+  "capabilities": [
+    {
+      "id": "HOST-CAN-01",
+      "name": "Windows 虚拟 ECU 上的 11 位 Classical CAN 信号闭环",
+      "release": "CP/FO R24-11",
+      "configuration": "DLC 1-8; unsigned LSB0 signals; supported fixed host Mcu/Can/CanIf profile",
+      "target": "Windows host virtual ECU; local GCC toolchain",
+      "claim_level": "documented_behavior",
+      "documented_in": "README.md",
+      "review": { "status": "not_run" },
+      "gates": {
+        "input_roundtrip": { "status": "not_run" },
+        "artifact_closure": { "status": "not_run" },
+        "build_static": { "status": "not_run" },
+        "independent_behavior": { "status": "not_run" },
+        "user_workflow": { "status": "not_run" },
+        "spec_obligations": { "status": "not_run" }
+      },
+      "next_gap": "按逐配置证据门审计已有主机 CAN 剖面，见 AUDIT-001。"
+    },
+    {
+      "id": "HOST-DOCAN-01",
+      "name": "Windows 虚拟 ECU 上的有界物理 DoCAN 连接",
+      "release": "CP/FO R24-11",
+      "configuration": "One configured physical connection; service, DTC, write, routine, and security options need separate profiles",
+      "target": "Windows host virtual ECU; local GCC toolchain",
+      "claim_level": "documented_behavior",
+      "documented_in": "README.md",
+      "review": { "status": "not_run" },
+      "gates": {
+        "input_roundtrip": { "status": "not_run" },
+        "artifact_closure": { "status": "not_run" },
+        "build_static": { "status": "not_run" },
+        "independent_behavior": { "status": "not_run" },
+        "user_workflow": { "status": "not_run" },
+        "spec_obligations": { "status": "not_run" }
+      },
+      "next_gap": "AUDIT-001 收口后拆分诊断选项组合，逐项审计。"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "AUDIT-001",
+      "title": "主机 CAN 信号基线证据审计",
+      "status": "ready",
+      "card": "docs/workflow/tasks/AUDIT-001-host-can.md",
+      "capabilities": ["HOST-CAN-01"],
+      "depends_on": [],
+      "evidence": []
+    },
+    {
+      "id": "AUDIT-002",
+      "title": "有界主机 DoCAN 档案拆分与审计",
+      "status": "proposed",
+      "card": "docs/workflow/tasks/AUDIT-002-host-docan.md",
+      "capabilities": ["HOST-DOCAN-01"],
+      "depends_on": ["AUDIT-001"],
+      "evidence": []
+    }
+  ]
+}

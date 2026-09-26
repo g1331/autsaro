@@ -10,4 +10,5 @@ docs/official/**/*.xsd
 **/target/
 src-tauri/gen/
 **/*.tsbuildinfo
+**/__pycache__/
 .scratch/autosar-platform/research/*.tmp.zip

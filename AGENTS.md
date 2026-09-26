@@ -4,6 +4,10 @@
 
 `core/src/` 是 Rust 配置模型、ARXML 解析、代码生成和主机验证的核心；`core/tests/end_to_end.rs` 及 `core/tests/fixtures/` 存放集成测试。`src-tauri/` 提供桌面后端，`ui/src/` 是 React/TypeScript 界面，`src-tauri/icons/` 存放图标。`runtime/include/` 和 `runtime/src/` 是随生成工程交付的 C99 主机虚拟 ECU 运行时。`docs/official/` 只记录官方资料位置，下载的规范文件不入库；`scripts/` 放资料收集脚本。功能边界先读 `README.md` 和 `runtime/README.md`。
 
+## 跨 Agent 交接
+
+接到“状态如何”“继续开发”等请求时，先读 [`docs/workflow/AGENT_WORKFLOW.md`](docs/workflow/AGENT_WORKFLOW.md) 并核对 Git 与源码。日常使用方式见 [`docs/workflow/OWNER_GUIDE.md`](docs/workflow/OWNER_GUIDE.md)。执行状态和工作流反馈由仓库文件保存，不以当前 Agent 的聊天记录为准；“状态如何”只读，不修改仓库。产品地图记录决策，任务和证据记录实际进展，两者不能混作完成证明。
+
 ## 构建、测试与本地开发
 
 在仓库根目录运行：
