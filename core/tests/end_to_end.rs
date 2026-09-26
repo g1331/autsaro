@@ -1280,6 +1280,61 @@ fn configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_multiframe_did(
 
 #[cfg(windows)]
 #[test]
+fn active_session_did_reports_session_transitions_and_rejects_invalid_reads() {
+    let temp = Scratch::new();
+    let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
+    let frame = project.add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(1000), None).unwrap().frames[0].path.clone();
+    let signal = project.add_signal(frame, "LiveValue".into(), 0, 32, 42).unwrap().signals[0].path.clone();
+    assert!(project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0xF186,
+        vec![signal.clone()], false, None, false).is_err());
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234,
+        vec![signal], false, None, false).unwrap();
+    project.save().unwrap();
+    let source = temp.0.join("Diag/Diag.arxml");
+    let saved = fs::read(&source).unwrap();
+    let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
+    assert!(reopened.validate().unwrap().issues.is_empty());
+    let generated = temp.0.join("GeneratedDiag");
+    generator::generate(&mut reopened, &generated).unwrap();
+    assert_eq!(fs::read(&source).unwrap(), saved);
+    let binary = generator::build(&generated).unwrap().binary_path;
+    let mut ecu = Command::new(binary).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
+    ecu.stdin.take().unwrap().write_all(
+        b"R 1792 4 0322F186\nR 1792 4 0322F187\nR 1792 3 0222F1\nR 1792 3 021003\nR 1792 4 0322F186\nR 1792 3 021001\nR 1792 4 0322F186\nR 1792 3 021003\nT 5001\nR 1792 4 0322F186\n"
+    ).unwrap();
+    let output = ecu.wait_with_output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stdout));
+    let log = String::from_utf8(output.stdout).unwrap();
+    let diagnostic: Vec<_> = log.lines().map(|line| line.trim_end_matches('\r'))
+        .filter(|line| line.starts_with("X 1800 ")).collect();
+    assert_eq!(diagnostic, [
+        "X 1800 5 0462F18601",
+        "X 1800 4 037F2231",
+        "X 1800 4 037F2213",
+        "X 1800 7 06500300320032",
+        "X 1800 5 0462F18603",
+        "X 1800 7 06500100320032",
+        "X 1800 5 0462F18601",
+        "X 1800 7 06500300320032",
+        "X 1800 5 0462F18601",
+    ], "{log}");
+    let report = host::run_diagnostic(&generated).unwrap();
+    assert!(report.passed, "{report:?}");
+    assert!(report.events.iter().any(|event| event.contains("0xF186")));
+
+    let signal = reopened.view().diagnostic.unwrap().signal_paths[0].clone();
+    reopened.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0xF187,
+        vec![signal], false, None, false).unwrap();
+    reopened.save().unwrap();
+    let generated = temp.0.join("GeneratedF187");
+    generator::generate(&mut reopened, &generated).unwrap();
+    generator::build(&generated).unwrap();
+    let report = host::run_diagnostic(&generated).unwrap();
+    assert!(report.passed, "0xF187 is a configurable DID: {report:?}");
+}
+
+#[cfg(windows)]
+#[test]
 fn diagnostic_transport_discards_bad_or_timed_out_multiframe_requests_and_recovers() {
     let temp = Scratch::new();
     let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();

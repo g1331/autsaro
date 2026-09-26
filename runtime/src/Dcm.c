@@ -126,6 +126,13 @@ EcuStatus Dcm_RxIndication(const uint8_t *request, size_t length, uint64_t now_m
         if (length != 3u) {
             return NegativeResponse(0x22u, 0x13u, now_ms);
         }
+        if (request[1] == 0xf1u && request[2] == 0x86u) {
+            response[0] = 0x62u;
+            response[1] = 0xf1u;
+            response[2] = 0x86u;
+            response[3] = active_session;
+            return PduR_DcmTransmit(response, 4u, now_ms);
+        }
         if (((uint16_t)request[1] << 8u | request[2]) != active_config->did ||
             active_session != 0x03u) {
             return NegativeResponse(0x22u, 0x31u, now_ms);

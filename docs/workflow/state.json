@@ -421,6 +421,29 @@
         "date": "2026-09-26",
         "evidence": "docs/workflow/evidence/DIAG-001-supported-dtcs-2026-09-26.md"
       }
+    },
+    {
+      "id": "DIAG-002",
+      "title": "读取当前诊断会话 DID",
+      "status": "done",
+      "card": "docs/workflow/tasks/DIAG-002-active-session-did.md",
+      "branch": "feature/DIAG-002-active-session-did",
+      "base_commit": "b3ee5c9",
+      "capabilities": [
+        "HOST-DOCAN-01"
+      ],
+      "depends_on": [
+        "DIAG-001"
+      ],
+      "evidence": [
+        "docs/workflow/evidence/DIAG-002-active-session-did-2026-09-26.md"
+      ],
+      "review": {
+        "status": "passed",
+        "reviewer": "Agent diag002_review",
+        "date": "2026-09-26",
+        "evidence": "docs/workflow/evidence/DIAG-002-active-session-did-2026-09-26.md"
+      }
     }
   ]
 }

@@ -496,6 +496,9 @@ pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
             expected_did.extend_from_slice(&value(signal, salt).to_be_bytes());
         }
         prepare(&mut ecu, &profile, salt)?;
+        let active_session_did = format!("R {request} 4 0322F186");
+        let default_session = diagnostic_request(&mut ecu, fence, active_session_did.clone())?;
+        diagnostic_frames(&default_session, &[vec![0x04, 0x62, 0xF1, 0x86, 0x01]], &profile, diagnostic, salt)?;
         let before_session = diagnostic_request(&mut ecu, fence, did_request.clone())?;
         diagnostic_frames(&before_session, &[vec![0x03, 0x7F, 0x22, 0x31]], &profile, diagnostic, salt)?;
         let before_write = diagnostic_request(&mut ecu, fence, format!("R {request} 4 032E{did:04X}"))?;
@@ -507,6 +510,19 @@ pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
             if diagnostic.reset_routine_id.is_some() { 0x31 } else { 0x11 }]], &profile, diagnostic, salt)?;
         events.push("默认会话拒绝受限 DID".into());
 
+        let session = diagnostic_request(&mut ecu, fence, format!("R {request} 3 021003"))?;
+        diagnostic_frames(&session, &[vec![0x06, 0x50, 0x03, 0x00, 0x32, 0x00, 0x32]], &profile, diagnostic, salt)?;
+        let extended_session = diagnostic_request(&mut ecu, fence, active_session_did.clone())?;
+        diagnostic_frames(&extended_session, &[vec![0x04, 0x62, 0xF1, 0x86, 0x03]], &profile, diagnostic, salt)?;
+        let unknown_did = if did == 0xF187 { 0xF188 } else { 0xF187 };
+        let unknown_did = diagnostic_request(&mut ecu, fence, format!("R {request} 4 0322{unknown_did:04X}"))?;
+        diagnostic_frames(&unknown_did, &[vec![0x03, 0x7F, 0x22, 0x31]], &profile, diagnostic, salt)?;
+        let short_did = diagnostic_request(&mut ecu, fence, format!("R {request} 3 0222F1"))?;
+        diagnostic_frames(&short_did, &[vec![0x03, 0x7F, 0x22, 0x13]], &profile, diagnostic, salt)?;
+        let session = diagnostic_request(&mut ecu, fence, format!("R {request} 3 021001"))?;
+        diagnostic_frames(&session, &[vec![0x06, 0x50, 0x01, 0x00, 0x32, 0x00, 0x32]], &profile, diagnostic, salt)?;
+        let default_session = diagnostic_request(&mut ecu, fence, active_session_did.clone())?;
+        diagnostic_frames(&default_session, &[vec![0x04, 0x62, 0xF1, 0x86, 0x01]], &profile, diagnostic, salt)?;
         let session = diagnostic_request(&mut ecu, fence, format!("R {request} 3 021003"))?;
         diagnostic_frames(&session, &[vec![0x06, 0x50, 0x03, 0x00, 0x32, 0x00, 0x32]], &profile, diagnostic, salt)?;
         let suppressed = diagnostic_request(&mut ecu, fence, format!("R {request} 3 023E80"))?;
@@ -566,6 +582,9 @@ pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
         diagnostic_frames(&timed, &[], &profile, diagnostic, salt)?;
         let expired = diagnostic_request(&mut ecu, fence, did_request)?;
         diagnostic_frames(&expired, &[vec![0x03, 0x7F, 0x22, 0x31]], &profile, diagnostic, salt)?;
+        let default_session = diagnostic_request(&mut ecu, fence, active_session_did)?;
+        diagnostic_frames(&default_session, &[vec![0x04, 0x62, 0xF1, 0x86, 0x01]], &profile, diagnostic, salt)?;
+        events.push("0xF186 活动会话 DID 在默认、扩展、主动切回和 S3 回退后与实际状态一致；未知 DID 与错误长度被拒绝".into());
         events.push("S3 超时恢复默认会话".into());
         Ok(())
     })();
