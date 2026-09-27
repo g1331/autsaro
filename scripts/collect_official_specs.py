@@ -1,14 +1,14 @@
 """Fetch one AUTOSAR release using its official SHA-256 manifests."""
 
+import json
+import os
+import re
+import subprocess
+import sys
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from hashlib import sha256
 from pathlib import Path
-import json
-import os
-import re
-import sys
-import subprocess
 
 if len(sys.argv) != 2 or sys.argv[1] not in ("R24-11", "R25-11"):
     raise SystemExit("usage: python scripts/collect_official_specs.py R24-11|R25-11")
@@ -41,7 +41,11 @@ def fetch(item):
     platform, expected, relative = item
     name = Path(relative).name
     # The R25-11 FO search indexes this file under AP; R24-11 uses FO.
-    source_platform = "AP" if RELEASE == "R25-11" and name == "AUTOSAR_FO_MMOD_MetaModel.zip" else platform
+    source_platform = (
+        "AP"
+        if RELEASE == "R25-11" and name == "AUTOSAR_FO_MMOD_MetaModel.zip"
+        else platform
+    )
     url = f"{SOURCE}/{source_platform}/{name}"
     target = ROOT / platform / relative
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -63,13 +67,31 @@ def fetch(item):
         return result
     try:
         process = subprocess.run(
-            ["curl.exe", "-fsSL", "-C", "-", "--retry", "2",
-             "--connect-timeout", "20", "--speed-time", "120", "--speed-limit", "1024",
-             "-o", str(temporary), url],
-            capture_output=True, text=True,
+            [
+                "curl.exe",
+                "-fsSL",
+                "-C",
+                "-",
+                "--retry",
+                "2",
+                "--connect-timeout",
+                "20",
+                "--speed-time",
+                "120",
+                "--speed-limit",
+                "1024",
+                "-o",
+                str(temporary),
+                url,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
         )
         if process.returncode:
-            result["status"] = "unavailable" if "404" in process.stderr else "download-error"
+            result["status"] = (
+                "unavailable" if "404" in process.stderr else "download-error"
+            )
             result["error"] = process.stderr.strip()[-300:]
             if result["status"] == "unavailable":
                 temporary.unlink(missing_ok=True)

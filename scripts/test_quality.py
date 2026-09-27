@@ -13,9 +13,13 @@ class QualityTests(unittest.TestCase):
         path = Path("core/src/example.rs")
         source = "fn old( ){ }\nfn new( ){ }\n"
         formatted = "fn old() {}\nfn new() {}\n"
-        self.assertEqual(quality.changed_format_errors(path, source, formatted, {1}),
-                         ["core/src/example.rs:1: format differs from configured formatter"])
-        self.assertEqual(quality.changed_format_errors(path, source, formatted, {3}), [])
+        self.assertEqual(
+            quality.changed_format_errors(path, source, formatted, {1}),
+            ["core/src/example.rs:1: format differs from configured formatter"],
+        )
+        self.assertEqual(
+            quality.changed_format_errors(path, source, formatted, {3}), []
+        )
 
     def test_hygiene_rejects_trailing_space_and_python_syntax(self):
         with tempfile.TemporaryDirectory() as temporary:
