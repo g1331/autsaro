@@ -76,7 +76,7 @@
           "status": "not_run"
         }
       },
-      "next_gap": "AUDIT-002 审计已收口但未升级支持声明；外部多文件诊断输入、原生用户流程、逐模块标准工件与静态义务仍缺。"
+      "next_gap": "DIAG-003 已交付同一 0x22 请求的多 DID 主机读取；外部多文件诊断输入、原生用户流程、逐模块标准工件与静态义务仍缺，不能据此升级支持声明。"
     },
     {
       "id": "HOST-DOCAN-WRITE-01",
@@ -443,6 +443,29 @@
         "reviewer": "Agent diag002_review",
         "date": "2026-09-26",
         "evidence": "docs/workflow/evidence/DIAG-002-active-session-did-2026-09-26.md"
+      }
+    },
+    {
+      "id": "DIAG-003",
+      "title": "单次 0x22 请求读取多个 DID",
+      "status": "done",
+      "card": "docs/workflow/tasks/DIAG-003-multi-did-read.md",
+      "branch": "feature/DIAG-003-multi-did-read",
+      "base_commit": "5bdb5bf",
+      "capabilities": [
+        "HOST-DOCAN-01"
+      ],
+      "depends_on": [
+        "DIAG-002"
+      ],
+      "evidence": [
+        "docs/workflow/evidence/DIAG-003-multi-did-read-2026-09-27.md"
+      ],
+      "review": {
+        "status": "passed",
+        "reviewer": "Agent diag003_review",
+        "date": "2026-09-27",
+        "evidence": "docs/workflow/evidence/DIAG-003-multi-did-read-2026-09-27.md"
       }
     }
   ]

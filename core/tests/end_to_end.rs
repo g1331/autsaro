@@ -1335,6 +1335,69 @@ fn active_session_did_reports_session_transitions_and_rejects_invalid_reads() {
 
 #[cfg(windows)]
 #[test]
+fn multiple_dids_keep_request_order_and_skip_unavailable_values() {
+    let temp = Scratch::new();
+    let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
+    let frame = project.add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(1000), None).unwrap().frames[0].path.clone();
+    let signal = project.add_signal(frame, "LiveValue".into(), 0, 32, 42).unwrap().signals[0].path.clone();
+    project.configure_diagnostic(0x700, 0x708, 5000, 200, 200, 0x1234,
+        vec![signal], false, None, false).unwrap();
+    project.save().unwrap();
+    let source = temp.0.join("Diag/Diag.arxml");
+    let saved = fs::read(&source).unwrap();
+    let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
+    assert!(reopened.validate().unwrap().issues.is_empty());
+    let generated = temp.0.join("GeneratedDiag");
+    generator::generate(&mut reopened, &generated).unwrap();
+    assert_eq!(fs::read(&source).unwrap(), saved);
+    let binary = generator::build(&generated).unwrap().binary_path;
+    let mut ecu = Command::new(binary).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
+    let mut commands = b"R 1792 6 05221234F186\nR 1792 3 021003\nR 1792 6 05221234F186\nR 1792 3 300000\nR 1792 6 0522F1861234\nR 1792 3 300000\nR 1792 6 0522F187F186\nR 1792 6 0522F187F188\nR 1792 5 0422F18612\nR 1792 6 0522F186F186\nR 1792 4 03221234\nR 1792 3 300000\n".to_vec();
+    let mut oversized = vec![0x22];
+    for _ in 0..86 { oversized.extend_from_slice(&[0xF1, 0x86]); }
+    assert_eq!(oversized.len(), 173);
+    let mut first = vec![0x10, oversized.len() as u8];
+    first.extend_from_slice(&oversized[..6]);
+    let mut request_frames = vec![first];
+    for (index, chunk) in oversized[6..].chunks(7).enumerate() {
+        let mut frame = vec![0x20 | ((index as u8 + 1) & 0x0F)];
+        frame.extend_from_slice(chunk);
+        request_frames.push(frame);
+    }
+    for frame in request_frames {
+        let hex = frame.iter().map(|byte| format!("{byte:02X}")).collect::<Vec<_>>().join("");
+        commands.extend_from_slice(format!("R 1792 {} {hex}\n", frame.len()).as_bytes());
+    }
+    commands.extend_from_slice(b"R 1792 4 0322F186\n");
+    ecu.stdin.take().unwrap().write_all(&commands).unwrap();
+    let output = ecu.wait_with_output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stdout));
+    let log = String::from_utf8(output.stdout).unwrap();
+    let frames: Vec<_> = log.lines().map(|line| line.trim_end_matches('\r'))
+        .filter(|line| line.starts_with("X 1800 ")).collect();
+    assert_eq!(frames, [
+        "X 1800 5 0462F18601",
+        "X 1800 7 06500300320032",
+        "X 1800 8 100A621234000000",
+        "X 1800 5 212AF18603",
+        "X 1800 8 100A62F186031234",
+        "X 1800 5 210000002A",
+        "X 1800 5 0462F18603",
+        "X 1800 4 037F2231",
+        "X 1800 4 037F2213",
+        "X 1800 8 0762F18603F18603",
+        "X 1800 8 076212340000002A",
+        "X 1800 3 300000",
+        "X 1800 4 037F2214",
+        "X 1800 5 0462F18603",
+    ], "{log}");
+    let report = host::run_diagnostic(&generated).unwrap();
+    assert!(report.passed, "{report:?}");
+    assert!(report.events.iter().any(|event| event.contains("多 DID")));
+}
+
+#[cfg(windows)]
+#[test]
 fn diagnostic_transport_discards_bad_or_timed_out_multiframe_requests_and_recovers() {
     let temp = Scratch::new();
     let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
@@ -1349,7 +1412,7 @@ fn diagnostic_transport_discards_bad_or_timed_out_multiframe_requests_and_recove
     let binary = generator::build(&generated).unwrap().binary_path;
     let mut ecu = Command::new(binary).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
     ecu.stdin.take().unwrap().write_all(
-        b"R 1792 8 1009221234123412\nR 1792 4 22341234\nR 1792 8 1009221234123412\nR 1792 4 21341234\nR 1792 8 1009221234123412\nT 201\nR 1792 3 023E00\nR 1792 3 021003\nR 1792 4 03221234\nT 402\nR 1792 3 023E00\n"
+        b"R 1792 8 100A221234123412\nR 1792 4 22341234\nR 1792 8 100A221234123412\nR 1792 5 2134123412\nR 1792 8 100A221234123412\nT 201\nR 1792 3 023E00\nR 1792 3 021003\nR 1792 4 03221234\nT 402\nR 1792 3 023E00\n"
     ).unwrap();
     let output = ecu.wait_with_output().unwrap();
     assert!(output.status.success());

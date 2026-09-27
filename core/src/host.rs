@@ -501,6 +501,8 @@ pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
         diagnostic_frames(&default_session, &[vec![0x04, 0x62, 0xF1, 0x86, 0x01]], &profile, diagnostic, salt)?;
         let before_session = diagnostic_request(&mut ecu, fence, did_request.clone())?;
         diagnostic_frames(&before_session, &[vec![0x03, 0x7F, 0x22, 0x31]], &profile, diagnostic, salt)?;
+        let mixed_default = diagnostic_request(&mut ecu, fence, format!("R {request} 6 0522{did:04X}F186"))?;
+        diagnostic_frames(&mixed_default, &[vec![0x04, 0x62, 0xF1, 0x86, 0x01]], &profile, diagnostic, salt)?;
         let before_write = diagnostic_request(&mut ecu, fence, format!("R {request} 4 032E{did:04X}"))?;
         diagnostic_frames(&before_write, &[vec![0x03, 0x7F, 0x2E, if diagnostic.write_enabled { 0x31 } else { 0x11 }]],
             &profile, diagnostic, salt)?;
@@ -515,10 +517,18 @@ pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
         let extended_session = diagnostic_request(&mut ecu, fence, active_session_did.clone())?;
         diagnostic_frames(&extended_session, &[vec![0x04, 0x62, 0xF1, 0x86, 0x03]], &profile, diagnostic, salt)?;
         let unknown_did = if did == 0xF187 { 0xF188 } else { 0xF187 };
-        let unknown_did = diagnostic_request(&mut ecu, fence, format!("R {request} 4 0322{unknown_did:04X}"))?;
-        diagnostic_frames(&unknown_did, &[vec![0x03, 0x7F, 0x22, 0x31]], &profile, diagnostic, salt)?;
+        let unknown_response = diagnostic_request(&mut ecu, fence, format!("R {request} 4 0322{unknown_did:04X}"))?;
+        diagnostic_frames(&unknown_response, &[vec![0x03, 0x7F, 0x22, 0x31]], &profile, diagnostic, salt)?;
         let short_did = diagnostic_request(&mut ecu, fence, format!("R {request} 3 0222F1"))?;
         diagnostic_frames(&short_did, &[vec![0x03, 0x7F, 0x22, 0x13]], &profile, diagnostic, salt)?;
+        let malformed_pair = diagnostic_request(&mut ecu, fence, format!("R {request} 5 0422F18612"))?;
+        diagnostic_frames(&malformed_pair, &[vec![0x03, 0x7F, 0x22, 0x13]], &profile, diagnostic, salt)?;
+        let unknown_pair = diagnostic_request(&mut ecu, fence,
+            format!("R {request} 6 0522{unknown_did:04X}{unknown_did:04X}"))?;
+        diagnostic_frames(&unknown_pair, &[vec![0x03, 0x7F, 0x22, 0x31]], &profile, diagnostic, salt)?;
+        let mixed_unknown = diagnostic_request(&mut ecu, fence,
+            format!("R {request} 6 0522{unknown_did:04X}F186"))?;
+        diagnostic_frames(&mixed_unknown, &[vec![0x04, 0x62, 0xF1, 0x86, 0x03]], &profile, diagnostic, salt)?;
         let session = diagnostic_request(&mut ecu, fence, format!("R {request} 3 021001"))?;
         diagnostic_frames(&session, &[vec![0x06, 0x50, 0x01, 0x00, 0x32, 0x00, 0x32]], &profile, diagnostic, salt)?;
         let default_session = diagnostic_request(&mut ecu, fence, active_session_did.clone())?;
@@ -561,6 +571,27 @@ pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
             diagnostic_error(&mut ecu, format!("T {}", diagnostic.n_bs_ms as u64 + 1), "TP_TIMEOUT")?;
             events.push("N_Bs 流控超时终止发送".into());
         }
+
+        for (request_dids, configured_first) in [
+            (format!("{did:04X}F186"), true), (format!("F186{did:04X}"), false),
+        ] {
+            let mut combined = vec![0x62];
+            if configured_first { combined.extend_from_slice(&expected_did[1..]); }
+            combined.extend_from_slice(&[0xF1, 0x86, 0x03]);
+            if !configured_first { combined.extend_from_slice(&expected_did[1..]); }
+            let first = diagnostic_request(&mut ecu, fence, format!("R {request} 6 0522{request_dids}"))?;
+            let mut ff = vec![0x10 | ((combined.len() >> 8) as u8 & 0x0F), combined.len() as u8];
+            ff.extend_from_slice(&combined[..6]);
+            diagnostic_frames(&first, &[ff], &profile, diagnostic, salt)?;
+            let rest = diagnostic_request(&mut ecu, fence, format!("R {request} 3 300000"))?;
+            let expected: Vec<_> = combined[6..].chunks(7).enumerate().map(|(index, chunk)| {
+                let mut frame = vec![0x20 | ((index as u8 + 1) & 0x0F)];
+                frame.extend_from_slice(chunk);
+                frame
+            }).collect();
+            diagnostic_frames(&rest, &expected, &profile, diagnostic, salt)?;
+        }
+        events.push("0x22 多 DID 按请求顺序经流控返回实时值和活动会话；无效 DID、默认会话受限 DID 与错误长度按范围处理".into());
 
         let padded = [0x22, (did >> 8) as u8, did as u8, 0, 0, 0, 0, 0, 0];
         let request_ff = format!("R {request} 8 1009{}", hex_payload(&padded[..6]));

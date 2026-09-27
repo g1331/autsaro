@@ -35,7 +35,7 @@ cl /TC /W4 /I runtime\include runtime\src\Can.c runtime\src\CanIf.c runtime\src\
 
 一条物理 normal-addressing 11-bit Classical CAN 连接；请求与响应 ID 不相同，也不能与 Com 帧 ID 冲突。`CanIf` 按请求 ID 交给 `LSduR` → `CanTp`，PduR 持有上限 256 字节的 N-SDU 收发缓冲，Dcm 处理完成请求；响应由 Dcm → PduR → CanTp → LSduR → Can 输出。CanTp 按 SF/FF/CF/FC 分段，检查 FF 总长、CF 序号和 DLC，FF 后以 CTS/BS=0/STmin=0 回应；发送方遵守测试器给出的 FC 块大小、STmin（100 μs 单位在 1 ms 主机时钟上向上取整）、N_Bs，接收方按 N_Cr 终止不完整请求。错误后丢弃半包，下一个完整请求可以恢复。
 
-Dcm 提供 0x10 默认/扩展会话、0x3E TesterPresent（子功能 0x80 抑制正响应）和 0x22 一个有序实时 DID。0x10 的会话切换仅在正响应发送确认后提交；扩展会话 S3 超时回默认。一个 DID 从 1–8 个 32-bit Tx Com 信号读取并以每项大端 4 字节拼接；配置 DID 在默认会话或 DID 不匹配时返回 `7F 22 31`；保留 DID `0xF186` 通过 0x22 返回当前默认/扩展会话编号，不依赖应用信号，长度错误返回 NRC 0x13，当前值不可读返回 NRC 0x22。P2=50 ms、P2*=500 ms 写在 0x10 响应中；S3 配置不得小于 5000 ms。`profile.txt` 的 `DIAGNOSTIC` 行记录生成 ID、计时器与 DID 信号 ID 顺序，供独立主机测试器驱动。
+Dcm 提供 0x10 默认/扩展会话、0x3E TesterPresent（子功能 0x80 抑制正响应）和 0x22 一个有序实时 DID。0x10 的会话切换仅在正响应发送确认后提交；扩展会话 S3 超时回默认。一个 DID 从 1–8 个 32-bit Tx Com 信号读取并以每项大端 4 字节拼接；配置 DID 在默认会话不可读；保留 DID `0xF186` 通过 0x22 返回当前默认/扩展会话编号，不依赖应用信号。0x22 请求可按顺序列出多个 DID，响应只包含当前可读的 DID，全部不可读时返回 `7F 22 31`；请求缺失 DID 或字节数不成对返回 NRC 0x13，响应超过 256 字节返回 NRC 0x14，当前值不可读返回 NRC 0x22。P2=50 ms、P2*=500 ms 写在 0x10 响应中；S3 配置不得小于 5000 ms。`profile.txt` 的 `DIAGNOSTIC` 行记录生成 ID、计时器与 DID 信号 ID 顺序，供独立主机测试器驱动。
 
 生成工程按 DID 信号顺序提供外部链接的 `Std_ReturnType Ecu_DcmRead_<index>(uint8_t *data)`，声明在 `Dcm_Externals.h`；主机 Dcm 的 0x22 实际调用它读取 Tx Com 值并写入 4 字节大端数据，读取失败仍返回 NRC 0x22。`include/Ecu_DcmCallbackTypes.h` 只定义主机剖面所需的 `Std_ReturnType`、`Dcm_NegativeResponseCodeType` 和返回码；它不是完整 AUTOSAR `Std_Types.h` 或 `Rte_Dcm_Type.h`，此回调闭包不证明第三方 Dcm 互操作或完整 BSW/RTE 符合性。
 

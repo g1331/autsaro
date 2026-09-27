@@ -54,7 +54,7 @@ void Dcm_AdvanceTime(uint64_t now_ms)
 
 EcuStatus Dcm_RxIndication(const uint8_t *request, size_t length, uint64_t now_ms)
 {
-    uint8_t response[3u + 4u * ECU_DIAG_MAX_DID_SIGNALS];
+    uint8_t response[ECU_DIAG_MAX_PAYLOAD];
     EcuStatus result;
     size_t i;
     if (active_config == NULL || request == NULL || length == 0u) {
@@ -123,29 +123,42 @@ EcuStatus Dcm_RxIndication(const uint8_t *request, size_t length, uint64_t now_m
                               : NegativeResponse(0x27u, code, now_ms);
         }
     case 0x22u:
-        if (length != 3u) {
+        if (length < 3u || (length & 1u) == 0u) {
             return NegativeResponse(0x22u, 0x13u, now_ms);
         }
-        if (request[1] == 0xf1u && request[2] == 0x86u) {
+        {
+            size_t response_length = 1u;
+            size_t offset;
             response[0] = 0x62u;
-            response[1] = 0xf1u;
-            response[2] = 0x86u;
-            response[3] = active_session;
-            return PduR_DcmTransmit(response, 4u, now_ms);
-        }
-        if (((uint16_t)request[1] << 8u | request[2]) != active_config->did ||
-            active_session != 0x03u) {
-            return NegativeResponse(0x22u, 0x31u, now_ms);
-        }
-        response[0] = 0x62u;
-        response[1] = request[1];
-        response[2] = request[2];
-        for (i = 0u; i < active_config->did_signal_count; ++i) {
-            if (active_config->did_readers[i](&response[3u + 4u * i]) != E_OK) {
-                return NegativeResponse(0x22u, 0x22u, now_ms);
+            for (offset = 1u; offset < length; offset += 2u) {
+                uint16_t did = (uint16_t)((uint16_t)request[offset] << 8u | request[offset + 1u]);
+                size_t data_length;
+                if (did == 0xf186u) {
+                    data_length = 1u;
+                } else if (did == active_config->did && active_session == 0x03u) {
+                    data_length = 4u * active_config->did_signal_count;
+                } else {
+                    continue;
+                }
+                if (response_length + 2u + data_length > sizeof(response)) {
+                    return NegativeResponse(0x22u, 0x14u, now_ms);
+                }
+                response[response_length++] = request[offset];
+                response[response_length++] = request[offset + 1u];
+                if (did == 0xf186u) {
+                    response[response_length++] = active_session;
+                } else {
+                    for (i = 0u; i < active_config->did_signal_count; ++i) {
+                        if (active_config->did_readers[i](&response[response_length]) != E_OK) {
+                            return NegativeResponse(0x22u, 0x22u, now_ms);
+                        }
+                        response_length += 4u;
+                    }
+                }
             }
+            return response_length == 1u ? NegativeResponse(0x22u, 0x31u, now_ms)
+                                         : PduR_DcmTransmit(response, response_length, now_ms);
         }
-        return PduR_DcmTransmit(response, 3u + 4u * active_config->did_signal_count, now_ms);
     case 0x2eu:
         if (active_config->did_writers == NULL) {
             return NegativeResponse(0x2eu, 0x11u, now_ms);
