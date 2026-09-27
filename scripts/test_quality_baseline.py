@@ -1,14 +1,58 @@
 """Check that the audit fails closed on unclassified C and missing evidence."""
 
 import hashlib
+import io
+import shutil
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
+import quality_baseline
 from quality_baseline import c_scope_errors, generated_input_errors, spec_evidence_gaps
 
 
 class BaselineTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("doxygen"), "Doxygen is not installed")
+    def test_doxygen_rejects_missing_public_api_docs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            include = root / "runtime" / "include"
+            include.mkdir(parents=True)
+            (root / "runtime" / "Doxyfile").write_text(
+                (quality_baseline.ROOT / "runtime/Doxyfile").read_text(
+                    encoding="utf-8"
+                ),
+                encoding="utf-8",
+            )
+            header = include / "Example.h"
+            header.write_text("int Example(int value);\n", encoding="utf-8")
+            with (
+                patch.object(quality_baseline, "ROOT", root),
+                redirect_stdout(io.StringIO()),
+            ):
+                self.assertFalse(quality_baseline.doxygen_check())
+                header.write_text(
+                    "/** @file\n * @brief Example API.\n */\nint Example(int value);\n",
+                    encoding="utf-8",
+                )
+                self.assertFalse(quality_baseline.doxygen_check())
+                header.write_text(
+                    "/** @file\n * @brief Example API.\n */\n"
+                    "/** @brief Returns the input.\n * @param wrong Invalid name.\n"
+                    " * @return The input.\n */\nint Example(int value);\n",
+                    encoding="utf-8",
+                )
+                self.assertFalse(quality_baseline.doxygen_check())
+                header.write_text(
+                    "/** @file\n * @brief Example API.\n */\n"
+                    "/** @brief Returns the input.\n * @param value Input value.\n"
+                    " * @return The input.\n */\nint Example(int value);\n",
+                    encoding="utf-8",
+                )
+                self.assertTrue(quality_baseline.doxygen_check())
+
     def test_new_c_source_needs_an_explicit_role(self):
         with tempfile.TemporaryDirectory() as temporary:
             source_dir = Path(temporary) / "runtime" / "src"

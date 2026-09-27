@@ -1,3 +1,6 @@
+/** @file
+ * @brief Host signal access interface.
+ */
 #ifndef RTE_H
 #define RTE_H
 

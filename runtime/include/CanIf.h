@@ -1,3 +1,6 @@
+/** @file
+ * @brief CAN interface for configured host frames.
+ */
 #ifndef CANIF_H
 #define CANIF_H
 

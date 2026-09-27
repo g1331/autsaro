@@ -1,3 +1,6 @@
+/** @file
+ * @brief Host ECU configuration types used by generated output.
+ */
 #ifndef ECU_CONFIG_H
 #define ECU_CONFIG_H
 

@@ -1,3 +1,6 @@
+/** @file
+ * @brief Status codes shared by the host runtime.
+ */
 #ifndef ECU_STATUS_H
 #define ECU_STATUS_H
 

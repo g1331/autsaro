@@ -1,3 +1,6 @@
+/** @file
+ * @brief Host persistence interface for the configured DTC.
+ */
 #ifndef NVM_H
 #define NVM_H
 

@@ -1,3 +1,6 @@
+/** @file
+ * @brief Host diagnostic event and DTC interface.
+ */
 #ifndef DEM_H
 #define DEM_H
 

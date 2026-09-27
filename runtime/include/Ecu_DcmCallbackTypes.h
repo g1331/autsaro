@@ -1,3 +1,6 @@
+/** @file
+ * @brief Host-only DCM callback ABI types.
+ */
 #ifndef ECU_DCM_CALLBACK_TYPES_H
 #define ECU_DCM_CALLBACK_TYPES_H
 

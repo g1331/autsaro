@@ -1,3 +1,6 @@
+/** @file
+ * @brief Host PDU routing and transport buffer interface.
+ */
 #ifndef PDUR_H
 #define PDUR_H
 

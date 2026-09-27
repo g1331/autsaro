@@ -1,3 +1,6 @@
+/** @file
+ * @brief Host-only SecurityAccess state interface.
+ */
 #ifndef ECU_SECURITY_H
 #define ECU_SECURITY_H
 

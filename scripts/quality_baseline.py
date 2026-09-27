@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -51,12 +52,13 @@ def misra_addon(executable: str) -> Path | None:
     return next((path for path in candidates if path.is_file()), None)
 
 
-def run_check(label: str, command: list[str]) -> bool:
+def run_check(label: str, command: list[str], *, input_text: str | None = None) -> bool:
     print(f"\n[{label}] {' '.join(command)}", flush=True)
     try:
         result = subprocess.run(
             command,
             cwd=ROOT,
+            input=input_text,
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -72,6 +74,8 @@ def run_check(label: str, command: list[str]) -> bool:
         print(line)
     if len(output) > 35:
         print(f"... {len(output) - 35} more output lines")
+    if label == "C API Doxygen":
+        print(f"Reported Doxygen warnings: {sum('error:' in line for line in output)}")
     if "MISRA scan" in label:
         print(
             f"Reported MISRA findings: {len(re.findall(r'\[misra-c2012-', combined))}"
@@ -89,6 +93,47 @@ def spec_evidence_gaps(state: dict) -> list[str]:
         if gate["status"] not in {"passed", "not_applicable"}:
             gaps.append(f"{capability['id']}: spec_obligations={gate['status']}")
     return gaps
+
+
+def doxygen_header_errors(root: Path) -> list[str]:
+    errors = []
+    headers = sorted((root / "runtime/include").glob("*.h"))
+    if not headers:
+        return ["runtime/include: no public C headers found"]
+    for header in headers:
+        try:
+            marked = header.read_text(encoding="utf-8").lstrip().startswith("/** @file")
+        except (OSError, UnicodeError) as error:
+            errors.append(
+                f"{header.relative_to(root).as_posix()}: cannot read header: {error}"
+            )
+            continue
+        if not marked:
+            errors.append(
+                f"{header.relative_to(root).as_posix()}: missing Doxygen @file header"
+            )
+    return errors
+
+
+def doxygen_check() -> bool:
+    header_errors = doxygen_header_errors(ROOT)
+    if header_errors:
+        print("\n[C API Doxygen]")
+        for error in header_errors:
+            print(error)
+        return False
+    try:
+        config = (ROOT / "runtime/Doxyfile").read_text(encoding="utf-8")
+    except OSError as error:
+        print(f"[C API Doxygen] Cannot read runtime/Doxyfile: {error}")
+        return False
+    with tempfile.TemporaryDirectory() as temporary:
+        output = Path(temporary).as_posix()
+        return run_check(
+            "C API Doxygen",
+            ["doxygen", "-"],
+            input_text=f'{config}\nOUTPUT_DIRECTORY = "{output}"\n',
+        )
 
 
 def generated_input_errors(directory: Path) -> list[str]:
@@ -183,6 +228,8 @@ def main() -> int:
         ),
     ]
     failed = [label for label, command in checks if not run_check(label, command)]
+    if not doxygen_check():
+        failed.append("C API Doxygen")
 
     generated_scanned = False
     scope_errors = c_scope_errors(ROOT)

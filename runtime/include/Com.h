@@ -1,3 +1,6 @@
+/** @file
+ * @brief Host COM signal and PDU interface.
+ */
 #ifndef COM_H
 #define COM_H
 

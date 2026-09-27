@@ -1,3 +1,6 @@
+/** @file
+ * @brief Host ECU startup and validation interface.
+ */
 #ifndef ECU_RUNTIME_H
 #define ECU_RUNTIME_H
 

@@ -1,3 +1,6 @@
+/** @file
+ * @brief Bounded host DoCAN transport interface.
+ */
 #ifndef CANTP_H
 #define CANTP_H
 

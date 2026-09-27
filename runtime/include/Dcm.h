@@ -1,3 +1,6 @@
+/** @file
+ * @brief Host diagnostic request processing interface.
+ */
 #ifndef DCM_H
 #define DCM_H
 

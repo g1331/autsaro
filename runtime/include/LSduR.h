@@ -1,3 +1,6 @@
+/** @file
+ * @brief Host diagnostic PDU routing bridge.
+ */
 #ifndef LSDUR_H
 #define LSDUR_H
 

@@ -1,3 +1,6 @@
+/** @file
+ * @brief Host virtual scheduler and clock interface.
+ */
 #ifndef OS_H
 #define OS_H
 
