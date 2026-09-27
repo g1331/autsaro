@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from datetime import date
@@ -12,6 +13,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 STATE = ROOT / "docs" / "workflow" / "state.json"
 FEEDBACK = ROOT / "docs" / "workflow" / "feedback" / "active.json"
+LOCAL_ABSOLUTE_PATH = re.compile(
+    r"(?<![A-Za-z0-9])[A-Za-z]:[/\\]|/(?:Users|home)/[^/\\\s`]+"
+)
 GATES = (
     "input_roundtrip",
     "artifact_closure",
@@ -48,6 +52,27 @@ def evidence_file(root: Path, value: object) -> bool:
         path.parts[:3] == ("docs", "workflow", "evidence")
         and path.name != "TEMPLATE.md"
     )
+
+
+def local_path_errors(root: Path) -> list[str]:
+    """Keep workstation paths out of committed handoff documents."""
+    documents = [root / "docs" / "workflow" / "OWNER_GUIDE.md"]
+    documents.extend(sorted((root / "docs" / "workflow" / "evidence").glob("*.md")))
+    errors = []
+    for document in documents:
+        try:
+            lines = document.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeError) as error:
+            errors.append(
+                f"Cannot read workflow document {document.relative_to(root)}: {error}"
+            )
+            continue
+        for number, line in enumerate(lines, start=1):
+            if LOCAL_ABSOLUTE_PATH.search(line):
+                errors.append(
+                    f"{document.relative_to(root)}:{number} contains a local absolute path"
+                )
+    return errors
 
 
 def check_review(
@@ -538,6 +563,8 @@ def main() -> int:
     errors = check_state(state, ROOT)
     if not errors:
         errors.extend(check_feedback(feedback, state, ROOT))
+    if not errors and arguments.command != "status":
+        errors.extend(local_path_errors(ROOT))
     if errors:
         for error in errors:
             print(f"State error: {error}", file=sys.stderr)

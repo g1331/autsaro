@@ -2,7 +2,9 @@
 
 import copy
 import json
+import tempfile
 import unittest
+from pathlib import Path
 
 from workflow import (
     FEEDBACK,
@@ -11,6 +13,7 @@ from workflow import (
     check_feedback,
     check_state,
     feedback_review_reasons,
+    local_path_errors,
 )
 
 
@@ -38,6 +41,24 @@ class WorkflowStateTests(unittest.TestCase):
         self.assertEqual(
             check_feedback(self.current_feedback, self.current_state, ROOT), []
         )
+        self.assertEqual(local_path_errors(ROOT), [])
+
+    def test_workflow_evidence_rejects_workstation_paths(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            evidence = root / "docs" / "workflow" / "evidence"
+            evidence.mkdir(parents=True)
+            (evidence.parent / "OWNER_GUIDE.md").write_text(
+                "Use docs/workflow/evidence/sample.md.\n", encoding="utf-8"
+            )
+            (evidence / "sample.md").write_text(
+                "output: C:\\Users\\someone\\AppData\\Local\\Temp\\sample\n"
+                "source: /home/someone/projects/sample\n",
+                encoding="utf-8",
+            )
+            errors = local_path_errors(root)
+            self.assertEqual(len(errors), 2)
+            self.assertTrue(all("local absolute path" in error for error in errors))
 
     def test_internal_support_requires_evidence_and_review(self):
         state = copy.deepcopy(self.baseline)
