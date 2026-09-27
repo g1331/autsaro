@@ -60,8 +60,8 @@ cargo build --manifest-path src-tauri/Cargo.toml
 python -m venv .quality-venv
 .\.quality-venv\Scripts\python.exe -m pip install -r scripts/requirements-quality.txt
 npm ci --prefix ui
-python scripts/workflow.py verify --scope all
-python scripts/workflow.py verify --scope baseline
+python scripts/verify.py --scope all
+python scripts/verify.py --scope baseline
 ```
 
 审计代表性生成工程时，可先用核心示例在独立临时目录生成一个带 Tx 信号的主机 ECU，再把其输出传给全量基线；目录由调用者保留以核对 `files.list`、`files.sha256` 和扫描输入：
@@ -69,18 +69,22 @@ python scripts/workflow.py verify --scope baseline
 ```powershell
 $sample = Join-Path $env:TEMP ('autosar-quality-' + [guid]::NewGuid().ToString('N'))
 cargo run --manifest-path core/Cargo.toml --example quality_sample -- $sample
-python scripts/workflow.py verify --scope baseline --generated-dir (Join-Path $sample 'generated')
+python scripts/verify.py --scope baseline --generated-dir (Join-Path $sample 'generated')
 ```
 
-增量交付验证包含 `python scripts/quality.py`：检查仓库源码的 UTF-8、末尾换行、空白和 Python 语法，对**相对当前任务基线新改的行**分别用 rustfmt、clang-format 和 Prettier 检查格式，并用 GCC 严格 C99 模式检查主机运行时源码和独立头文件的语法；随后执行 UI ESLint 与严格类型构建、核心测试、桌面构建及 Rust Clippy 的 correctness/suspicious 检查。
+增量交付验证包含 `python scripts/quality.py`：检查仓库源码的 UTF-8、末尾换行、空白和 Python 语法，对**相对指定 story 起始提交新改的行**分别用 rustfmt、clang-format 和 Prettier 检查格式，并用 GCC 严格 C99 模式检查主机运行时源码和独立头文件的语法；随后执行 UI ESLint 与严格类型构建、核心测试、桌面构建及 Rust Clippy 的 correctness/suspicious 检查。
 
-进行中的任务以记录的 `base_commit` 为格式基线；没有进行中任务时，未提交的改动对比 `HEAD`，干净工作区复核上一提交时对比 `HEAD^`。独立核对更长的一组已提交改动可显式指定 `python scripts/quality.py --base <基线提交>`。修改旧文件无需顺带全文件重排，但新改行须符合对应格式器。
+进行中的 story 须在实现记录中保存起始提交，并用 `--base` 显式指定；省略时，未提交的改动对比 `HEAD`，干净工作区复核上一提交时对比 `HEAD^`。修改旧文件无需顺带全文件重排，但新改行须符合对应格式器。
 
 `verify --scope baseline` 是单独的**全量质量与证据缺口审计**，逐项汇总受支持源码的全文件格式、Python Ruff、UI ESLint、两套 Rust 全告警 Clippy、公开 C 头文件的 Doxygen 文档告警、运行时 BSW/RTE C 的 Cppcheck MISRA 部分扫描，一份完整性清单可核对的代表性生成工程的配置 C（用 `--generated-dir <工程目录>` 指定），以及各能力档案的 `spec_obligations` 状态；有缺口便返回非零。日常 `--scope all` 仍是增量交付门，不能把它的绿色结果解释为全量基线通过。运行部分 MISRA 扫描需另安装 `cppcheck`（当前验证版本 2.21.0）并确保它及随包的 `misra.py` 在本机可用；Windows/MSYS2 可安装 `mingw-w64-x86_64-cppcheck`。Cppcheck 的开源规则覆盖不完整，不提供 `--generated-dir` 时生成 C 项会报“未执行”；提供后仅扫描该份生成配置 C，仍不覆盖所有配置、目标集成和逐模块全部 SWS；即使全绿也不构成 MISRA、AUTOSAR 或实机符合性证明。Doxygen 使用 [`runtime/Doxyfile`](runtime/Doxyfile) 检查 `runtime/include/` 的公开接口、配置类型与注释参数，当前验证版本 1.16.1；Windows/MSYS2 可安装 `mingw-w64-x86_64-doxygen`。现存未注释声明会使基线报红，Doxygen 能检查文档缺失和标签错误，不能判断说明是否真实，也不代表 AUTOSAR 或 MISRA 符合性。适用性、偏离和完整规范证据仍按[验收决定](.scratch/autosar-platform/issues/07-assurance-gates.md)逐组合建立。
 
 调试桌面程序时，先在一个终端运行 `npm run dev --prefix ui`（端口 `127.0.0.1:1420`），另一个终端运行 `src-tauri/target/debug/autosar-config-desktop.exe`。当前验证的是源码目录中的本地调试程序；生成器从仓库 `runtime/` 复制目标源码，桌面程序从上述本地路径取得 XSD。没有可脱离源码目录使用的安装包。
 
 ## 使用顺序
+
+项目开发由仓库内固定版本 BMad 接管。面向使用者的[项目推进说明](docs/project/OWNER_GUIDE.md)给出日常说法；Agent 按[推进规则](docs/project/AGENT_OPERATING_RULES.md)从 `_bmad-output/implementation-artifacts/sprint-status.yaml` 恢复任务。`docs/assurance/capabilities.json` 独立记录支持声明和六道证据门；迁移前任务状态保存在 `docs/workflow/archive/`，不再参与选题。
+
+已提交的 `.agents/skills/` 和 `_bmad/` 可直接供 Codex 使用；重新安装或更新时固定 `bmad-method@6.12.0`、BMM 和 `codex`，先核对安装器差异，不让新版本覆盖团队定制。`_bmad/config.user.toml` 是被 Git 忽略的个人安装答案；团队共用语言和配置放在 `_bmad/custom/config.toml`。从仓库打开新的 Codex 会话可调用 `bmad-help` 查看当前阶段，或说“按项目计划继续推进”。
 
 1. 在起始页新建项目并选择保存 ARXML 的目录，或一次选中同一 ECU 的所有 `.arxml` 文件导入。导入按所选文件集合建模，不自动识别并拆分其他 ECU 的文件。
 2. “配置”页选择帧/信号，在右侧检查器修改并应用；如需诊断，在同页设置物理 CAN ID、计时器、DID 与有序 32-bit Tx 信号，可勾选“允许扩展会话写入此 DID”以启用易失 0x2E，再填写可选 RID 启用 0x31/0x01 初值复位例程；应用诊断配置后可选配一个监测 Rx 帧超时的 DTC。启用写入或配置 DTC 后，可勾选“用 0x27 保护状态更改”，并再次应用诊断配置。先保存，再到“诊断”页运行校验。未应用的草稿不会悄悄写入 ARXML。

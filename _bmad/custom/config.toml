@@ -1,0 +1,8 @@
+# Shared answers for this repository. Installer-managed files remain untouched.
+[core]
+user_name = "项目维护者"
+communication_language = "Simplified Chinese"
+document_output_language = "Simplified Chinese"
+
+[modules.bmm]
+user_skill_level = "beginner"

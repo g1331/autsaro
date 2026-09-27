@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import ast
 import difflib
-import json
 import re
 import shutil
 import subprocess
@@ -292,7 +291,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--base",
-        help="Compare source lines against this commit (default: active task base, HEAD for pending edits, or HEAD^)",
+        help="Compare source lines against this commit (default: HEAD for pending edits, or HEAD^)",
     )
     parser.add_argument(
         "--all-format",
@@ -300,14 +299,8 @@ def main() -> int:
         help="Audit formatting of all source files, including legacy code",
     )
     arguments = parser.parse_args()
-    state = json.loads(
-        (ROOT / "docs" / "workflow" / "state.json").read_text(encoding="utf-8")
-    )
-    active = [task for task in state["tasks"] if task["status"] == "active"]
     if arguments.base:
         base = arguments.base
-    elif len(active) == 1:
-        base = active[0]["base_commit"]
     else:
         pending = run(["git", "status", "--porcelain", "--untracked-files=normal"])
         if pending.returncode:

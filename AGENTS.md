@@ -6,7 +6,7 @@
 
 ## 跨 Agent 交接
 
-接到“状态如何”“继续开发”等请求时，先读 [`docs/workflow/AGENT_WORKFLOW.md`](docs/workflow/AGENT_WORKFLOW.md) 并核对 Git 与源码。日常使用方式见 [`docs/workflow/OWNER_GUIDE.md`](docs/workflow/OWNER_GUIDE.md)。执行状态和工作流反馈由仓库文件保存，不以当前 Agent 的聊天记录为准；“状态如何”只读，不修改仓库。产品地图记录决策，任务和证据记录实际进展，两者不能混作完成证明。
+接到“状态如何”“继续开发”等请求时，先读[项目推进规则](docs/project/AGENT_OPERATING_RULES.md)，核对 Git、源码和 `_bmad-output/implementation-artifacts/sprint-status.yaml`。日常用法见[使用说明](docs/project/OWNER_GUIDE.md)。BMad sprint 文件是唯一任务进度来源；`docs/assurance/capabilities.json` 只记录能力声明及证据门，产品地图只记录方向与决策。旧 `docs/workflow/` 任务和证据作为历史输入保留；“状态如何”只读。
 
 ## 构建、测试与本地开发
 
@@ -19,7 +19,7 @@ cargo test --manifest-path core/Cargo.toml
 cargo build --manifest-path src-tauri/Cargo.toml
 ```
 
-上述命令依次安装锁定的前端依赖、执行 TypeScript 检查并构建界面、运行核心测试、编译桌面程序。增量交付门用 `python scripts/workflow.py verify --scope all`；全量质量与规范证据缺口审计用 `python scripts/workflow.py verify --scope baseline`，它允许如实报红。首次安装检查工具见 `README.md`。界面开发用 `npm run dev --prefix ui`；桌面调试程序从 `src-tauri/target/debug/` 启动。Windows 依赖 Rust MSVC、C++ Build Tools、WebView2、GCC、vcpkg libxml2 和 libclang；具体环境变量见 `README.md`。
+上述命令依次安装锁定的前端依赖、执行 TypeScript 检查并构建界面、运行核心测试、编译桌面程序。增量交付门用 `python scripts/verify.py --scope all --base <story起始提交>`；全量质量与规范证据缺口审计用 `python scripts/verify.py --scope baseline`，它允许如实报红。能力档案校验用 `python scripts/assurance.py`。首次安装检查工具见 `README.md`。界面开发用 `npm run dev --prefix ui`；桌面调试程序从 `src-tauri/target/debug/` 启动。Windows 依赖 Rust MSVC、C++ Build Tools、WebView2、GCC、vcpkg libxml2 和 libclang；具体环境变量见 `README.md`。
 
 ## 代码风格与命名
 

@@ -349,7 +349,7 @@ def main() -> int:
 
     try:
         state = json.loads(
-            (ROOT / "docs/workflow/state.json").read_text(encoding="utf-8")
+            (ROOT / "docs/assurance/capabilities.json").read_text(encoding="utf-8")
         )
         gaps = spec_evidence_gaps(state)
     except (OSError, ValueError, KeyError, TypeError) as error:

@@ -17,3 +17,10 @@ src-tauri/gen/
 
 # Per-machine CodeGraph index; initialize locally with `codegraph init`.
 .codegraph/
+
+# BMad personal configuration and disposable runtime output.
+_bmad/config.user.toml
+_bmad/*.bak
+_bmad/custom/*.user.toml
+_bmad-output/.cache/
+_bmad-output/**/*.tmp

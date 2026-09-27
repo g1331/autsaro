@@ -1,0 +1,245 @@
+{
+  "schema_version": 1,
+  "capabilities": [
+    {
+      "id": "HOST-CAN-01",
+      "name": "Windows 虚拟 ECU 上的 11 位 Classical CAN 信号闭环",
+      "release": "CP/FO R24-11",
+      "configuration": "DLC 1-8; unsigned LSB0 signals; supported fixed host Mcu/Can/CanIf profile",
+      "target": "Windows host virtual ECU; local GCC toolchain",
+      "claim_level": "documented_behavior",
+      "documented_in": "README.md",
+      "review": {
+        "status": "pending_review"
+      },
+      "gates": {
+        "input_roundtrip": {
+          "status": "pending_review",
+          "evidence": "docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md"
+        },
+        "artifact_closure": {
+          "status": "pending_review",
+          "evidence": "docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md"
+        },
+        "build_static": {
+          "status": "pending_review",
+          "evidence": "docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md"
+        },
+        "independent_behavior": {
+          "status": "pending_review",
+          "evidence": "docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md"
+        },
+        "user_workflow": {
+          "status": "pending_review",
+          "evidence": "docs/workflow/evidence/AUDIT-001-host-can-ui-2026-09-26.md"
+        },
+        "spec_obligations": {
+          "status": "not_run"
+        }
+      },
+      "next_gap": "BUILD-001/002/003/004 已收口保存预览、生成预览、离线构建说明和工作台构建误改拒绝；仍需外部跨引用多文件 CAN 输入的 UI 全链、另一执行者交接及逐模块标准义务。"
+    },
+    {
+      "id": "HOST-DOCAN-01",
+      "name": "Windows 虚拟 ECU 上的基础物理 DoCAN 连接与只读 DID",
+      "release": "CP/FO R24-11",
+      "configuration": "One 11-bit physical connection; 0x10/0x3E/0x22; DID 0x1234 with two live 32-bit Tx signals; no DTC, write, routine or security; no selected variant",
+      "target": "Windows host virtual ECU; local GCC toolchain",
+      "claim_level": "documented_behavior",
+      "documented_in": "README.md",
+      "review": {
+        "status": "not_run"
+      },
+      "gates": {
+        "input_roundtrip": {
+          "status": "pending_review",
+          "evidence": "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
+        },
+        "artifact_closure": {
+          "status": "pending_review",
+          "evidence": "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
+        },
+        "build_static": {
+          "status": "pending_review",
+          "evidence": "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
+        },
+        "independent_behavior": {
+          "status": "pending_review",
+          "evidence": "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
+        },
+        "user_workflow": {
+          "status": "not_run"
+        },
+        "spec_obligations": {
+          "status": "not_run"
+        }
+      },
+      "next_gap": "DIAG-003 已交付同一 0x22 请求的多 DID 主机读取；外部多文件诊断输入、原生用户流程、逐模块标准工件与静态义务仍缺，不能据此升级支持声明。"
+    },
+    {
+      "id": "HOST-DOCAN-WRITE-01",
+      "name": "Windows 虚拟 ECU 的易失 0x2E 写入",
+      "release": "CP/FO R24-11",
+      "configuration": "Base DoCAN plus 0x2E; one writable DID; no DTC, routine or security",
+      "target": "Windows host virtual ECU; local GCC toolchain",
+      "claim_level": "documented_behavior",
+      "documented_in": "README.md",
+      "review": {
+        "status": "not_run"
+      },
+      "gates": {
+        "input_roundtrip": {
+          "status": "not_run"
+        },
+        "artifact_closure": {
+          "status": "not_run"
+        },
+        "build_static": {
+          "status": "not_run"
+        },
+        "independent_behavior": {
+          "status": "not_run"
+        },
+        "user_workflow": {
+          "status": "not_run"
+        },
+        "spec_obligations": {
+          "status": "not_run"
+        }
+      },
+      "next_gap": "单独核对写回调、Com/CAN 即时变化、会话拒绝及重启易失性。"
+    },
+    {
+      "id": "HOST-DOCAN-ROUTINE-01",
+      "name": "Windows 虚拟 ECU 的 0x31/0x01 初值复位",
+      "release": "CP/FO R24-11",
+      "configuration": "Base DoCAN plus 0x2E and one reset RID; no DTC or security",
+      "target": "Windows host virtual ECU; local GCC toolchain",
+      "claim_level": "documented_behavior",
+      "documented_in": "README.md",
+      "review": {
+        "status": "not_run"
+      },
+      "gates": {
+        "input_roundtrip": {
+          "status": "not_run"
+        },
+        "artifact_closure": {
+          "status": "not_run"
+        },
+        "build_static": {
+          "status": "not_run"
+        },
+        "independent_behavior": {
+          "status": "not_run"
+        },
+        "user_workflow": {
+          "status": "not_run"
+        },
+        "spec_obligations": {
+          "status": "not_run"
+        }
+      },
+      "next_gap": "单独核对主机工具 SDG、内部例程回调、RID/会话拒绝与复位结果。"
+    },
+    {
+      "id": "HOST-DOCAN-DTC-01",
+      "name": "Windows 虚拟 ECU 的单 DTC 故障记忆",
+      "release": "CP/FO R24-11",
+      "configuration": "Base DoCAN plus one monitored Rx timeout DTC and host NvM; 0x19/0x01, 0x02, 0x0A, 0x14 and 0x85; no write, routine or security",
+      "target": "Windows host virtual ECU; local GCC toolchain",
+      "claim_level": "documented_behavior",
+      "documented_in": "README.md",
+      "review": {
+        "status": "not_run"
+      },
+      "gates": {
+        "input_roundtrip": {
+          "status": "not_run"
+        },
+        "artifact_closure": {
+          "status": "not_run"
+        },
+        "build_static": {
+          "status": "not_run"
+        },
+        "independent_behavior": {
+          "status": "not_run"
+        },
+        "user_workflow": {
+          "status": "not_run"
+        },
+        "spec_obligations": {
+          "status": "not_run"
+        }
+      },
+      "next_gap": "DIAG-001 已交付无状态过滤的支持 DTC 列表及正反向主机验证；整体单 DTC/NvM 档案的外部输入、原生用户流程和规范义务仍待 AUDIT-003 核对，不能据此升级支持。"
+    },
+    {
+      "id": "HOST-DOCAN-SEC-WRITE-01",
+      "name": "Windows 虚拟 ECU 的受 0x27 保护的易失写入",
+      "release": "CP/FO R24-11",
+      "configuration": "Base DoCAN plus 0x2E and 0x27; no DTC or routine",
+      "target": "Windows host virtual ECU; local GCC toolchain",
+      "claim_level": "documented_behavior",
+      "documented_in": "README.md",
+      "review": {
+        "status": "not_run"
+      },
+      "gates": {
+        "input_roundtrip": {
+          "status": "not_run"
+        },
+        "artifact_closure": {
+          "status": "not_run"
+        },
+        "build_static": {
+          "status": "not_run"
+        },
+        "independent_behavior": {
+          "status": "not_run"
+        },
+        "user_workflow": {
+          "status": "not_run"
+        },
+        "spec_obligations": {
+          "status": "not_run"
+        }
+      },
+      "next_gap": "单独核对密钥文件、错误次数与延时持久化、会话复锁及写入权限。"
+    },
+    {
+      "id": "HOST-DOCAN-SEC-DTC-01",
+      "name": "Windows 虚拟 ECU 的受 0x27 保护的单 DTC",
+      "release": "CP/FO R24-11",
+      "configuration": "Base DoCAN plus one DTC and 0x27; no write or routine",
+      "target": "Windows host virtual ECU; local GCC toolchain",
+      "claim_level": "documented_behavior",
+      "documented_in": "README.md",
+      "review": {
+        "status": "not_run"
+      },
+      "gates": {
+        "input_roundtrip": {
+          "status": "not_run"
+        },
+        "artifact_closure": {
+          "status": "not_run"
+        },
+        "build_static": {
+          "status": "not_run"
+        },
+        "independent_behavior": {
+          "status": "not_run"
+        },
+        "user_workflow": {
+          "status": "not_run"
+        },
+        "spec_obligations": {
+          "status": "not_run"
+        }
+      },
+      "next_gap": "DIAG-001 已验证启用安全档案时未解锁可读取 0x19/0x0A；安全状态文件、完整原生用户流程与规范义务仍须按组合审查。"
+    }
+  ]
+}

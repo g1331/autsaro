@@ -1,0 +1,2 @@
+# Installer-managed upstream BMad skills are vendored without rewriting their content.
+/.agents/skills/** -whitespace
