@@ -10,4 +10,7 @@ void Can_MainFunction_Read(void);
 /** @brief Poll one completed host Tx request and confirm it to CanIf. */
 void Can_MainFunction_Write(void);
 
+/** @brief Notify CanIf of a completed host controller mode transition. */
+void Can_MainFunction_Wakeup(void);
+
 #endif

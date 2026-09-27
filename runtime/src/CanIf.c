@@ -4,11 +4,20 @@
 #include "LSduR.h"
 #include "Os.h"
 
+#define CANIF_START_SEC_VAR_CLEARED_UNSPECIFIED
+#include "CanIf_MemMap.h"
+
 static const EcuConfig *canif_config;
 static uint64_t host_rx_time_ms;
 static uint8_t host_rx_time_active;
 static EcuStatus host_rx_result;
 static Can_ControllerStateType indicated_controller_mode;
+
+#define CANIF_STOP_SEC_VAR_CLEARED_UNSPECIFIED
+#include "CanIf_MemMap.h"
+
+#define CANIF_START_SEC_CODE
+#include "CanIf_MemMap.h"
 
 void CanIf_Init(const EcuConfig *config) {
     Can_Lock();
@@ -156,3 +165,6 @@ EcuStatus CanIf_HostRxIndication(uint32_t id, uint8_t dlc, const uint8_t data[8]
     Can_Unlock();
     return result;
 }
+
+#define CANIF_STOP_SEC_CODE
+#include "CanIf_MemMap.h"

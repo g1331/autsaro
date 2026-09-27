@@ -8,6 +8,7 @@
 #include "LSduR.h"
 #include "PduR.h"
 #include "Security.h"
+#include "SchM_Can.h"
 
 static uint8_t HasReadableDiagnosticSignal(const EcuConfig *config, uint16_t id) {
     size_t frame_index;
@@ -164,6 +165,7 @@ EcuStatus Ecu_Init(const EcuConfig *config, CanTxSink sink, const char *nvm_path
     if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_OK) {
         return ECU_ERR_CONTROLLER;
     }
+    Can_MainFunction_Wakeup();
     Os_Init(config);
     PduR_Init(config);
     LSduR_Init(config->diagnostic);

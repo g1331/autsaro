@@ -2,7 +2,7 @@
 title: Complete STD-001 host Can Driver slice
 type: feature
 created: '2026-09-27'
-status: in-progress
+status: done
 route: dispatch
 baseline_commit: fb776bfaef4016b3f4903136701b80b108ccc55e
 review_loop_iteration: 0
@@ -44,7 +44,7 @@ context:
 
 **Execution:**
 - [x] 对照历史证据与当前源码，找出尚未完成的 STD-001 条目。
-- [ ] 核对官方 R24-11 Can Driver/BSW General 与 ECUC MOD 的适用条款，修复可证实的缺口。
+- [x] 核对官方 R24-11 Can Driver/BSW General 与 ECUC MOD 的适用条款，修复可证实的缺口。
 - [x] 运行生成工程正反向主机验证、增量质量门和独立复核，记录未通过的能力门。
 
 **Acceptance Criteria:**
@@ -63,6 +63,9 @@ context:
 
 ## Review Triage Log
 
+- 2026-09-27：最终独立只读复核发现模式通知只在 `Ecu_Init` 轮询，运行期间 `Can_SetControllerMode` 后缺少常规调度入口。核对 `Os_Advance` 和主机命令 `T` 路径后确认；在有效虚拟时间推进时调用 `Can_MainFunction_Wakeup`，并更新运行时契约。
+- 2026-09-27：blind review 未发现可复现缺陷。edge-case review 指出主机 `Can_SetMode` 接受不支持的枚举会改变控制器状态且取消待通知；核对源码确认（medium），增加无副作用拒绝并在待通知状态回归。verification-gap review 指出原测试直接调用 `Can_MainFunction_Wakeup`，删除 `Os_Advance` 的轮询连接不会使测试失败；核对后确认（medium），用 C99 harness 经 `Os_Advance` 触发并断言通知。
+
 - 2026-09-27：独立只读审查发现 `Can_Init(NULL)` 或重复初始化可破坏运行状态。确认并修复；新增 C99 待发帧向量在旧实现会因控制器回到 STOPPED 失败。
 - 2026-09-27：另一只读审查对 `Can.c`、`Can.h`、`end_to_end.rs` 补丁未发现待修复问题；该结论只覆盖补丁，不代替整个 Story 1.1 的标准义务复核。
 - 2026-09-27：本轮独立只读审查指出模式回调仍在 `Can_SetControllerMode` 返回前同步发生。核对 Can Driver PDF 页 33 的 `SWS_Can_00373` 后确认是剩余标准时序缺口，当前主机同步行为已在运行时说明中标明，未标为闭合。
@@ -75,3 +78,7 @@ context:
 本轮以 `35d0274` 为基线运行增量门：12 个 Python 测试、3 个核心单元测试、53 个端到端测试、UI lint/构建、核心与桌面 Clippy/构建均通过。定向 `standard_can_host_entry_points_reject_invalid_requests_and_send_valid_frame` 1/1 通过；双 ECU 金向量也在完整测试中通过。以新生成的独立代表工程运行全量基线：全文件格式、Python/UI lint、全告警 Clippy 与 Doxygen 通过；BSW/RTE/生成 C 的部分 MISRA 扫描分别报告 25/11/7 项，七个能力档案的 `spec_obligations` 仍为 `not_run`，故全量基线退出 1。原生桌面 GUI 未在隔离会话重新执行。Story 保持 `in-progress`。
 
 本次以 `fb776bfaef4016b3f4903136701b80b108ccc55e` 对最终源码运行 `python scripts/verify.py --scope all --base ...`：12 个脚本测试、3 个核心单元测试、53 个端到端测试、UI lint/构建、核心及桌面 Clippy/构建通过，含双 ECU 金向量和新增回调/门控定向 harness。单独的 `cargo test --manifest-path core/Cargo.toml standard_can -- --nocapture` 两项通过。使用最终源码的 `quality_sample` 新生成代表工程，`files.list` 含 `Can.c`、`CanIf.c`、`CanIf.h`；运行 `python scripts/verify.py --scope baseline --generated-dir ...`：格式、Python/UI lint、全告警 Clippy、Doxygen 通过；BSW/RTE/生成 C 部分 MISRA 分别为 25/11/7 项，七个规范证据门仍 `not_run`，基线退出 1。当前未在隔离桌面会话复验原生 GUI；能力声明保持 `documented_behavior`。
+
+2026-09-27 最终增量以 `f92fd6ade6c8d8582df750bc46a0cdd0d2d067de` 为起点。`python scripts/verify.py --scope all --base ...` 的 12 个脚本测试、3 个核心单元测试、53 个端到端测试、UI lint/构建、核心及桌面 Clippy/构建全部通过。`cargo test --manifest-path core/Cargo.toml generated_c99_ecus_exchange_golden_vectors_and_recover_from_faults -- --nocapture` 在调度接入后再次通过。隔离 Windows Sandbox 原生桌面新建 `Story1Sandbox.arxml`，加入 `StatusTx`（11 位 CAN ID 321，DLC 8，100 ms Tx）及 `Counter`（bit 0，8 bit，初值 17），保存预览确认 1 处 ARXML 变化，运行诊断 0 错误，界面确认生成 48 项工程文件。宿主以生成的 `build.ps1` GCC 编译成功；向 `ecu_host.exe` 输入 `T 100`，实际输出 `X 321 8 1100000000000000`，与独立配置预期一致。隔离 Sandbox 未安装 GCC，构建与运行在宿主后台完成。全量基线对该 GUI 工程报告格式、lint、Clippy、Doxygen 均通过；部分 MISRA 扫描 BSW/RTE/生成 C 为 42/11/7 项，七个 `spec_obligations` 仍 `not_run`，因此基线退出 1。新增 MemMap 标记约定触发 BSW 部分扫描中的 20.1/20.5；它仅映射宿主默认代码与清零数据段。BSWMD、CanSM/CDD 上层通知、完整 MISRA 和官方一致性仍未闭合，`HOST-CAN-01` 维持 `documented_behavior`；此 Story 的结论只针对固定主机切片。
+
+最终审查补丁后，以 story 起始提交 `fb776bfaef4016b3f4903136701b80b108ccc55e` 重跑完整增量门，12 个脚本测试、3 个核心单元测试、53 个端到端测试和全部构建、lint、Clippy 通过；定向 C99 harness 也独立通过。使用最终源码在隔离桌面再次预览并生成 `gui-generated-final`，宿主 GCC 构建成功，`T 100` 再次输出 `X 321 8 1100000000000000`。以该最终工程重跑全量基线，格式、lint、Clippy、Doxygen 通过，仍由上述 42/11/7 项部分 MISRA 与七个规范证据门退出 1。Story 的固定主机切片验收完成；不改变完整 AUTOSAR 能力声明。

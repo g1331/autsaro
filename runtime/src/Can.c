@@ -4,6 +4,9 @@
 #include "SchM_Can.h"
 #include <stddef.h>
 
+#define CAN_START_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Can_MemMap.h"
+
 static CanMode controller_mode;
 static uint8_t bus_off;
 static CanTxSink tx_sink;
@@ -17,6 +20,9 @@ static PduIdType tx_handle;
 static uint8_t tx_confirmation_pending;
 static uint8_t tx_confirming;
 static uint32_t interrupt_disable_count;
+static uint8_t mode_notification_pending;
+static uint8_t mode_notification_processing;
+static Can_ControllerStateType pending_controller_mode;
 static uint8_t rx_pending;
 static uint8_t rx_processing;
 static uint32_t rx_id;
@@ -24,6 +30,12 @@ static uint8_t rx_length;
 static uint8_t rx_payload[8];
 static uint64_t rx_time_ms;
 static EcuStatus rx_result;
+
+#define CAN_STOP_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Can_MemMap.h"
+
+#define CAN_START_SEC_CODE
+#include "Can_MemMap.h"
 
 void Can_Init(const Can_ConfigType *config) {
     Can_Lock();
@@ -39,13 +51,16 @@ void Can_Init(const Can_ConfigType *config) {
         rx_pending = 0u;
         rx_processing = 0u;
         interrupt_disable_count = 0u;
+        mode_notification_pending = 0u;
+        mode_notification_processing = 0u;
     }
     Can_Unlock();
 }
 
 void Can_DeInit(void) {
     Can_Lock();
-    if ((initialized != 0u) && (controller_mode != CAN_STARTED)) {
+    if ((initialized != 0u) && (controller_mode != CAN_STARTED) &&
+        (mode_notification_pending == 0u)) {
         initialized = 0u;
         tx_sink = NULL;
         controller_mode = CAN_STOPPED;
@@ -57,6 +72,8 @@ void Can_DeInit(void) {
         rx_pending = 0u;
         rx_processing = 0u;
         interrupt_disable_count = 0u;
+        mode_notification_pending = 0u;
+        mode_notification_processing = 0u;
     }
     Can_Unlock();
 }
@@ -75,25 +92,28 @@ Std_ReturnType Can_SetBaudrate(uint8_t controller, uint16_t baud_rate_config_id)
 Std_ReturnType Can_SetControllerMode(uint8_t controller, Can_ControllerStateType transition) {
     Std_ReturnType result = E_NOT_OK;
     Can_Lock();
-    if ((initialized != 0u) && (controller == 0u) &&
+    if ((initialized != 0u) && (controller == 0u) && (mode_notification_pending == 0u) &&
         ((transition == CAN_CS_STARTED) || (transition == CAN_CS_STOPPED) ||
          (transition == CAN_CS_SLEEP))) {
         if ((transition == CAN_CS_STARTED) && (controller_mode == CAN_STOPPED)) {
             controller_mode = CAN_STARTED;
             bus_off = 0u;
-            CanIf_ControllerModeIndication(controller, CAN_CS_STARTED);
+            pending_controller_mode = CAN_CS_STARTED;
+            mode_notification_pending = 1u;
             result = E_OK;
         } else if ((transition == CAN_CS_STOPPED) &&
                    ((controller_mode == CAN_STARTED) || (controller_mode == CAN_SLEEP))) {
             controller_mode = CAN_STOPPED;
             tx_pending = 0u;
-            CanIf_ControllerModeIndication(controller, CAN_CS_STOPPED);
+            pending_controller_mode = CAN_CS_STOPPED;
+            mode_notification_pending = 1u;
             result = E_OK;
         } else if ((transition == CAN_CS_SLEEP) &&
                    ((controller_mode == CAN_STOPPED) || (controller_mode == CAN_SLEEP))) {
             if (controller_mode != CAN_SLEEP) {
                 controller_mode = CAN_SLEEP;
-                CanIf_ControllerModeIndication(controller, CAN_CS_SLEEP);
+                pending_controller_mode = CAN_CS_SLEEP;
+                mode_notification_pending = 1u;
             }
             result = E_OK;
         } else {
@@ -238,14 +258,19 @@ EcuStatus Can_HostFlush(void) {
 
 void Can_SetMode(CanMode mode) {
     Can_Lock();
-    if ((controller_mode == CAN_SLEEP) && (mode != CAN_STOPPED)) {
+    if ((mode != CAN_STARTED) && (mode != CAN_STOPPED) && (mode != CAN_SLEEP) &&
+        (mode != CAN_BUS_OFF)) {
+        /* Ignore unsupported host mode values without changing a pending indication. */
+    } else if ((controller_mode == CAN_SLEEP) && (mode != CAN_STOPPED)) {
         /* Logical sleep can only exit via STOPPED. */
     } else if (mode == CAN_BUS_OFF) {
+        mode_notification_pending = 0u;
         controller_mode = CAN_STOPPED;
         bus_off = 1u;
         tx_pending = 0u;
         CanIf_ControllerBusOff(0u);
     } else {
+        mode_notification_pending = 0u;
         controller_mode = mode;
         bus_off = 0u;
         if (mode != CAN_STARTED) {
@@ -260,6 +285,18 @@ void Can_SetMode(CanMode mode) {
         } else {
             /* Bus-off was handled above; other values have no CanIf mode. */
         }
+    }
+    Can_Unlock();
+}
+
+void Can_MainFunction_Wakeup(void) {
+    Can_Lock();
+    if ((mode_notification_pending != 0u) && (mode_notification_processing == 0u)) {
+        Can_ControllerStateType mode = pending_controller_mode;
+        mode_notification_pending = 0u;
+        mode_notification_processing = 1u;
+        CanIf_ControllerModeIndication(0u, mode);
+        mode_notification_processing = 0u;
     }
     Can_Unlock();
 }
@@ -368,3 +405,6 @@ void Can_MainFunction_Read(void) {
     }
     Can_Unlock();
 }
+
+#define CAN_STOP_SEC_CODE
+#include "Can_MemMap.h"

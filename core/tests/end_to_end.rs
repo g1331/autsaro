@@ -19,6 +19,7 @@ fn standard_can_host_entry_points_reject_invalid_requests_and_send_valid_frame()
         &harness,
 r#"#include "Can.h"
 #include "CanIf.h"
+#include "Os.h"
 #include "SchM_Can.h"
 #ifdef _WIN32
 #include <windows.h>
@@ -38,6 +39,10 @@ static unsigned probe_rx_reentry;
 static EcuStatus nested_rx_result;
 static unsigned fail_output;
 static unsigned enqueue_on_emit;
+EcuStatus Com_AdvanceTime(uint64_t now_ms) { (void)now_ms; return ECU_OK; }
+void Dcm_AdvanceTime(uint64_t now_ms) { (void)now_ms; }
+EcuStatus CanTp_AdvanceTime(uint64_t now_ms) { (void)now_ms; return ECU_OK; }
+EcuStatus Com_TriggerTransmit(size_t frame_index) { (void)frame_index; return ECU_OK; }
 static int valid_result;
 static int invalid_result;
 #ifdef _WIN32
@@ -128,6 +133,7 @@ static void *valid_thread(void *unused) { (void)unused; send_valid_frames(); ret
 static void *invalid_thread(void *unused) { (void)unused; reject_invalid_frames(); return NULL; }
 #endif
 int main(void) {
+    const EcuConfig empty_config = {"test", NULL, 0u, NULL, 0u, NULL};
     uint8_t bytes[8] = {0x12u, 0x34u};
     Can_ConfigType config = {emit};
     Can_ConfigType invalid_config = {NULL};
@@ -135,6 +141,7 @@ int main(void) {
     Can_ControllerStateType state = CAN_CS_UNINIT;
     Can_ErrorStateType error_state = CAN_ERRORSTATE_PASSIVE;
     uint8_t error_counter = 0xa5u;
+    Os_Init(&empty_config);
     Can_Init(NULL);
     if (Can_GetControllerMode(0u, &state) != E_NOT_OK) return 1;
     if (Can_GetControllerErrorState(0u, &error_state) != E_NOT_OK) return 47;
@@ -158,8 +165,14 @@ int main(void) {
     if (Can_SetControllerMode(0u, CAN_CS_STOPPED) != E_NOT_OK) return 13;
     if (Can_SetControllerMode(1u, CAN_CS_STARTED) != E_NOT_OK) return 4;
     if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_OK) return 5;
+    if (mode_notifications != 0u || Can_SetControllerMode(0u, CAN_CS_STOPPED) != E_NOT_OK) return 66;
+    Can_SetMode((CanMode)99);
+    if (Can_GetMode() != CAN_STARTED || mode_notifications != 0u) return 74;
+    if (Os_Advance(1u) != ECU_OK) return 73;
     if (mode_notifications != 1u || last_notified_mode != CAN_CS_STARTED ||
         mode_notification_mismatch != 0u) return 61;
+    Can_MainFunction_Wakeup();
+    if (mode_notifications != 1u) return 69;
     if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_NOT_OK) return 14;
     if (Can_SetControllerMode(0u, CAN_CS_SLEEP) != E_NOT_OK) return 27;
     if (mode_notifications != 1u) return 65;
@@ -195,13 +208,17 @@ int main(void) {
     if (Can_GetMode() != CAN_BUS_OFF) return 21;
     if (Can_TransmitPdu(0u, 0x321u, 2u, bytes) != ECU_ERR_CONTROLLER) return 11;
     if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_OK) return 16;
-    if (last_notified_mode != CAN_CS_STARTED) return 63;
+    if (mode_notifications != 1u) return 67;
+    Can_MainFunction_Wakeup();
+    if (last_notified_mode != CAN_CS_STARTED || mode_notifications != 2u) return 63;
     if (Can_GetMode() != CAN_STARTED) return 17;
     if (Can_GetControllerErrorState(0u, &error_state) != E_OK ||
         error_state != CAN_ERRORSTATE_ACTIVE) return 53;
     if (Can_SetControllerMode(0u, CAN_CS_STOPPED) != E_OK) return 18;
+    Can_MainFunction_Wakeup();
     if (Can_SetControllerMode(0u, CAN_CS_STOPPED) != E_NOT_OK) return 19;
     if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_OK) return 22;
+    Can_MainFunction_Wakeup();
 #ifdef _WIN32
     {
         HANDLE valid = CreateThread(NULL, 0, valid_thread, NULL, 0, NULL);
@@ -223,7 +240,10 @@ int main(void) {
 #endif
     if (valid_result != 0 || invalid_result != 0 || sent != 101u) return 26;
     if (Can_SetControllerMode(0u, CAN_CS_STOPPED) != E_OK) return 30;
+    Can_MainFunction_Wakeup();
     if (Can_SetControllerMode(0u, CAN_CS_SLEEP) != E_OK) return 31;
+    if (last_notified_mode != CAN_CS_STOPPED) return 68;
+    Can_MainFunction_Wakeup();
     if (last_notified_mode != CAN_CS_SLEEP || mode_notification_mismatch != 0u) return 64;
     if (Can_GetControllerMode(0u, &state) != E_OK || state != CAN_CS_SLEEP) return 32;
     if (Can_Write(0u, &pdu) != E_NOT_OK) return 33;
@@ -231,7 +251,9 @@ int main(void) {
     Can_SetMode(CAN_STARTED);
     if (Can_GetControllerMode(0u, &state) != E_OK || state != CAN_CS_SLEEP) return 35;
     if (Can_SetControllerMode(0u, CAN_CS_STOPPED) != E_OK) return 36;
+    Can_MainFunction_Wakeup();
     if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_OK) return 37;
+    Can_MainFunction_Wakeup();
     enqueue_on_emit = 1u;
     if (Can_Write(0u, &pdu) != E_OK || Can_HostFlush() != ECU_OK) return 38;
     if (Can_HostFlush() != ECU_OK || sent != 102u) return 39;
@@ -266,12 +288,22 @@ int main(void) {
     {
         unsigned before_cancel = confirmed;
         if (Can_SetControllerMode(0u, CAN_CS_STOPPED) != E_OK) return 54;
+        Can_DeInit();
+        if (Can_GetControllerMode(0u, &state) != E_OK || state != CAN_CS_STOPPED) return 72;
+        Can_MainFunction_Wakeup();
         if (Can_HostFlush() != ECU_OK || confirmed != before_cancel) return 59;
     }
     Can_DeInit();
     if (Can_GetControllerMode(0u, &state) != E_NOT_OK || Can_Write(0u, &pdu) != E_NOT_OK) return 55;
     Can_Init(&config);
     if (Can_GetControllerMode(0u, &state) != E_OK || state != CAN_CS_STOPPED) return 56;
+    if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_OK) return 70;
+    {
+        unsigned before_override = mode_notifications;
+        Can_SetMode(CAN_BUS_OFF);
+        Can_MainFunction_Wakeup();
+        if (mode_notifications != before_override || bus_off_notifications != 2u) return 71;
+    }
     return 0;
 }
 "#,
@@ -284,6 +316,7 @@ int main(void) {
         .arg(format!("-I{}", root.join("runtime/include").display()))
         .arg(root.join("runtime/src/Can.c"))
         .arg(root.join("runtime/src/Can_HostLock.c"))
+        .arg(root.join("runtime/src/Os.c"))
         .arg(&harness)
         .arg("-o")
         .arg(&binary)

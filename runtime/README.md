@@ -31,7 +31,7 @@ cl /TC /W4 /I runtime\include runtime\src\Can.c runtime\src\Can_HostLock.c runti
 
 信号发送：`Os_Advance`（单核虚拟时间、周期任务）→ `Com_TriggerTransmit`（以 `Rte_WriteSignal` 写入的应用值打包）→ `PduR_Transmit` → `LSduR_PduRTransmit` → `CanIf_Transmit` → 主机 `Can_TransmitPdu` 包装层 → 非阻塞 `Can_Write` 入队 → 主机 `Can_HostFlush` → `X` 输出。信号接收：`R` 输入 → `Can_Inject` → `CanIf_RxIndication`（ID 过滤、DLC 检查）→ `LSduR_CanIfRxIndication` → `PduR_RxIndication` → `Com_RxIndication`（解包、更新有效性）→ `Rte_ReadSignal`。没有自行回显；主机编排器按 ID 优先级路由两个 ECU 的信号报文，也可丢帧。`Can_Init`、`Can_SetControllerMode`、`Can_GetControllerMode` 和 `Can_Write` 已有 R24-11 的公开签名及本主机剖面的类型；初始化配置仍包含主机输出回调，生成的主机程序在每次入队后同步排空以保留既有协议顺序。一个发送槽占用时 `Can_Write` 立即返回 `CAN_BUSY`；公开入口单独调用时须由主机排空才实际输出。其他必需服务、回调、MemMap、BSWMD、MISRA 与第三方互操作尚未闭合，不据此声明完整标准 Can Driver。当前虚拟 CAN 控制器具有 STARTED/STOPPED/逻辑 SLEEP/BUS_OFF 状态；bus-off 对标准状态查询表现为 STOPPED，拒绝报文，直到 `Can_SetControllerMode(..., CAN_CS_STARTED)` 明确恢复。它不模拟位级仲裁、电气错误计数器和真实中断。
 
-模式转换与 bus-off 当前同步通知 CanIf；CanIf 据此拒绝非 STARTED 状态的信号和诊断发送。R24-11 所需的独立模式通知调度及 CanSM 上层派发尚未实现，本主机剖面不能据此声明完整的标准通知链。
+标准模式请求先改变虚拟控制器状态，由 `Can_MainFunction_Wakeup` 在随后的一次主机轮询中通知 CanIf；`Ecu_Init` 在启动控制器后执行该轮询，`Os_Advance` 在每次有效的虚拟时间推进时继续轮询。主机注入的 bus-off 立即通知 CanIf。CanIf 据此拒绝非 STARTED 状态的信号和诊断发送；没有 CanSM/CDD 上层派发及真实硬件模式完成检测，故不声明完整标准通知链。`Can.c` 和 `CanIf.c` 通过各自的 MemMap 标记头文件把代码和清零静态数据归入 Windows 默认链接段；不推断 MCU 内存分区。
 
 ## 诊断连接（可选）
 

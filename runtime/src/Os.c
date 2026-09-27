@@ -3,6 +3,7 @@
 #include "Com.h"
 #include "CanTp.h"
 #include "Dcm.h"
+#include "SchM_Can.h"
 
 static const EcuConfig *os_config;
 static uint64_t current_ms;
@@ -20,6 +21,7 @@ EcuStatus Os_Advance(uint64_t now_ms) {
     if (now_ms < previous_ms) {
         result = ECU_ERR_TIME;
     } else {
+        Can_MainFunction_Wakeup();
         current_ms = now_ms;
         result = Com_AdvanceTime(now_ms);
         if (result == ECU_OK) {
