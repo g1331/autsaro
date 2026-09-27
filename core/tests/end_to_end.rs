@@ -388,7 +388,8 @@ int main(void) {
     const EcuFrameConfig frame = {0x321u, 2u, 0u, 0u, 0u, 0u, 1u};
     const EcuConfig config = {"test", &frame, 1u, NULL, 0u, NULL};
     const EcuFrameConfig tx_frame = {0x321u, 2u, 1u, 0u, 0u, 10u, 0u};
-    const EcuConfig tx_config = {"tx", &tx_frame, 1u, NULL, 0u, NULL};
+    const EcuDiagnosticConfig diagnostic = {.response_can_id = 0x456u};
+    const EcuConfig tx_config = {"tx", &tx_frame, 1u, NULL, 0u, &diagnostic};
     const uint8_t data[8] = {0x12u, 0x34u};
     CanIf_Init(&config);
     if (CanIf_HostRxIndication(0x321u, 2u, data, 10u) != ECU_OK) return 1;
@@ -396,18 +397,24 @@ int main(void) {
     CanIf_TxConfirmation(0u);
     if (tx_confirmation_count != 0u) return 3;
     CanIf_Init(&tx_config);
+    if (CanIf_TransmitDiagnostic(2u, data) != ECU_ERR_CONTROLLER || transmit_count != 0u) return 12;
     if (CanIf_Transmit(0u, data) != ECU_ERR_CONTROLLER || transmit_count != 0u) return 6;
     CanIf_ControllerModeIndication(1u, CAN_CS_STARTED);
-    if (CanIf_Transmit(0u, data) != ECU_ERR_CONTROLLER || transmit_count != 0u) return 7;
+    if (CanIf_Transmit(0u, data) != ECU_ERR_CONTROLLER ||
+        CanIf_TransmitDiagnostic(2u, data) != ECU_ERR_CONTROLLER || transmit_count != 0u) return 7;
     CanIf_ControllerModeIndication(0u, CAN_CS_STARTED);
     if (CanIf_Transmit(0u, data) != ECU_OK || transmit_count != 1u) return 8;
+    if (CanIf_TransmitDiagnostic(2u, data) != ECU_OK || transmit_count != 2u) return 13;
     CanIf_ControllerBusOff(0u);
-    if (CanIf_Transmit(0u, data) != ECU_ERR_CONTROLLER || transmit_count != 1u) return 9;
+    if (CanIf_Transmit(0u, data) != ECU_ERR_CONTROLLER ||
+        CanIf_TransmitDiagnostic(2u, data) != ECU_ERR_CONTROLLER || transmit_count != 2u) return 9;
     CanIf_ControllerModeIndication(0u, CAN_CS_STARTED);
-    if (CanIf_Transmit(0u, data) != ECU_OK || transmit_count != 2u) return 10;
+    if (CanIf_Transmit(0u, data) != ECU_OK || transmit_count != 3u) return 10;
+    if (CanIf_TransmitDiagnostic(2u, data) != ECU_OK || transmit_count != 4u) return 14;
     CanIf_ControllerModeIndication(0u, CAN_CS_STOPPED);
-    if (CanIf_Transmit(0u, data) != ECU_ERR_CONTROLLER || transmit_count != 2u) return 11;
-    CanIf_TxConfirmation(1u);
+    if (CanIf_Transmit(0u, data) != ECU_ERR_CONTROLLER ||
+        CanIf_TransmitDiagnostic(2u, data) != ECU_ERR_CONTROLLER || transmit_count != 4u) return 11;
+    CanIf_TxConfirmation(2u);
     if (tx_confirmation_count != 0u) return 4;
     CanIf_TxConfirmation(0u);
     if (tx_confirmation_count != 1u || tx_confirmed_id != 0u) return 5;

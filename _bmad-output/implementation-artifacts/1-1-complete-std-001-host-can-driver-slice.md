@@ -51,6 +51,19 @@ context:
 - 有效双 ECU 配置发送保持正确且经过标准入口；无效输入与状态拒绝不发旧报文。
 - 证据包含输入、独立预期、实际输出、基线提交、检查结果和剩余限制。
 
+### Review Findings
+
+- [x] [Review][Patch] 补齐诊断发送的 STOPPED 和 bus-off 拒绝向量 [core/tests/end_to_end.rs:396] — C99 harness 已覆盖拒绝、恢复及底层调用次数；定向测试和完整增量门通过。
+
+Rejected:
+- 历史段落中的 `in-progress` 记录带有当时基线与日期；后续段落给出最终切片结论，不是当前状态的第二来源。
+- Story frontmatter 的 `done` 与 sprint 的 `review` 属于审查前过渡状态；项目规则以 sprint 文件作为当前进度来源，审查流程将按结果同步两处。
+- 执行清单要求核对标准义务并记录未通过的门，未要求把完整 Can/CanIf 标准交付闭合；剩余缺口已记录。
+- 最终验收结论明确限定固定主机切片，且明确保持 `HOST-CAN-01` 为 `documented_behavior`，没有宣称完整标准支持。
+- Verification 段的占位命令属于 story 文档改写建议；本轮代码审查不将规格文件编辑列为代码缺陷。
+- MemMap 头文件与运行时说明均限定为 Windows 默认链接段和宿主标记，没有宣称 MCU 内存分区。
+- 历史 STD-001 任务卡约束的是完整标准义务；本 Story 的固定主机切片边界及未通过门已明确，能力声明未升级。
+
 ## Implementation Notes
 
 迁移时已存在 `STD-001` 分支和实现。本文件仅恢复进行中状态，不宣称 story 已完成。旧任务基线提交：`c4a01b5cd41c`；迁移后新改动应另记 story 起始提交。
@@ -62,6 +75,8 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+- 2026-09-27：本轮代码审查保留 1 项诊断发送门控的验证缺口，已在现有 C99 CanIf harness 补充 STOPPED、bus-off、恢复与错误控制器通知向量；定向测试及以 `fb776bfaef4016b3f4903136701b80b108ccc55e` 为基线的 `python scripts/verify.py --scope all --base ...` 通过。边界条件审查层返回空结果，故该层未提供有效意见；其他 7 条意见未形成代码缺陷。
 
 - 2026-09-27：最终独立只读复核发现模式通知只在 `Ecu_Init` 轮询，运行期间 `Can_SetControllerMode` 后缺少常规调度入口。核对 `Os_Advance` 和主机命令 `T` 路径后确认；在有效虚拟时间推进时调用 `Can_MainFunction_Wakeup`，并更新运行时契约。
 - 2026-09-27：blind review 未发现可复现缺陷。edge-case review 指出主机 `Can_SetMode` 接受不支持的枚举会改变控制器状态且取消待通知；核对源码确认（medium），增加无副作用拒绝并在待通知状态回归。verification-gap review 指出原测试直接调用 `Can_MainFunction_Wakeup`，删除 `Os_Advance` 的轮询连接不会使测试失败；核对后确认（medium），用 C99 harness 经 `Os_Advance` 触发并断言通知。
