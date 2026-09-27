@@ -269,13 +269,16 @@ def main() -> int:
                 "--quiet",
                 "--template=gcc",
                 f"--addon={addon}",
-                "-Iruntime/include",
             ]
             for label, names in (
                 ("BSW partial MISRA scan", BSW_SOURCES),
                 ("RTE partial MISRA scan", RTE_SOURCES),
             ):
-                command = [*common, *(f"runtime/src/{name}" for name in sorted(names))]
+                command = [
+                    *common,
+                    "-Iruntime/include",
+                    *(f"runtime/src/{name}" for name in sorted(names)),
+                ]
                 if not run_check(label, command):
                     failed.append(label)
             if arguments.generated_dir is not None and not generated_input_errors(
