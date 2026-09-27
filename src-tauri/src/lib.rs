@@ -1,6 +1,6 @@
 use autosar_config_core::{
-    BuildReport, Direction, GenerationPreview, GenerationReport, RunReport, SavePreview, Workspace,
-    WorkspaceView, schema,
+    BuildReport, DiagnosticSettings, Direction, GenerationPreview, GenerationReport, RunReport,
+    SavePreview, Workspace, WorkspaceView, schema,
 };
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -100,31 +100,9 @@ fn update_signal(
 #[tauri::command]
 fn configure_diagnostic(
     state: State<'_, Arc<AppState>>,
-    request_id: u32,
-    response_id: u32,
-    s3_ms: u32,
-    n_bs_ms: u32,
-    n_cr_ms: u32,
-    did: u16,
-    signal_paths: Vec<String>,
-    write_enabled: bool,
-    reset_routine_id: Option<u16>,
-    security_enabled: bool,
+    settings: DiagnosticSettings,
 ) -> Result<WorkspaceView, String> {
-    with_workspace(&state, |w| {
-        w.configure_diagnostic(
-            request_id,
-            response_id,
-            s3_ms,
-            n_bs_ms,
-            n_cr_ms,
-            did,
-            signal_paths,
-            write_enabled,
-            reset_routine_id,
-            security_enabled,
-        )
-    })
+    with_workspace(&state, |w| w.configure_diagnostic(settings))
 }
 
 #[tauri::command]

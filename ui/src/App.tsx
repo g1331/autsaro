@@ -734,7 +734,7 @@ export default function App() {
     void run(
       '配置 DoCAN',
       () =>
-        invoke<WorkspaceView>('configure_diagnostic', values).catch((error) => {
+        invoke<WorkspaceView>('configure_diagnostic', { settings: values }).catch((error) => {
           setDiagnosticError(errorText(error));
           throw error;
         }),

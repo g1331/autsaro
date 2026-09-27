@@ -89,6 +89,46 @@ pub struct DiagnosticView {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DiagnosticSettings {
+    pub request_id: u32,
+    pub response_id: u32,
+    pub s3_ms: u32,
+    pub n_bs_ms: u32,
+    pub n_cr_ms: u32,
+    pub did: u16,
+    pub signal_paths: Vec<String>,
+    pub write_enabled: bool,
+    pub reset_routine_id: Option<u16>,
+    pub security_enabled: bool,
+}
+
+#[cfg(test)]
+mod diagnostic_settings_tests {
+    use super::DiagnosticSettings;
+
+    #[test]
+    fn accepts_camel_case_ipc_payload() {
+        let payload = serde_json::json!({
+            "requestId": 0x700,
+            "responseId": 0x708,
+            "s3Ms": 5000,
+            "nBsMs": 200,
+            "nCrMs": 200,
+            "did": 0x1234,
+            "signalPaths": ["/Example/ComCfg/ComConfig/Signal"],
+            "writeEnabled": true,
+            "resetRoutineId": 0xF001,
+            "securityEnabled": false
+        });
+        let settings: DiagnosticSettings = serde_json::from_value(payload).unwrap();
+        assert_eq!(settings.request_id, 0x700);
+        assert_eq!(settings.signal_paths, ["/Example/ComCfg/ComConfig/Signal"]);
+        assert_eq!(settings.reset_routine_id, Some(0xF001));
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DtcView {
     pub path: String,
     pub code: u32,

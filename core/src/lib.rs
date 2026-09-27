@@ -7,7 +7,7 @@ pub mod schema;
 
 pub use arxml::Workspace;
 pub use model::{
-    BuildReport, DiagnosticView, Direction, DtcView, FrameView, GenerationPreview,
-    GenerationPreviewFile, GenerationReport, Issue, RunReport, SavePreview, SavePreviewFile,
-    SignalView, WorkspaceView,
+    BuildReport, DiagnosticSettings, DiagnosticView, Direction, DtcView, FrameView,
+    GenerationPreview, GenerationPreviewFile, GenerationReport, Issue, RunReport, SavePreview,
+    SavePreviewFile, SignalView, WorkspaceView,
 };

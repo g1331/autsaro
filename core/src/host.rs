@@ -432,7 +432,7 @@ fn parse_frame(event: &str) -> Result<(u32, Vec<u8>), String> {
         return Err("报文载荷长度不一致".into());
     }
     let mut bytes = Vec::new();
-    for pair in data.as_bytes().chunks_exact(2) {
+    for pair in data.as_bytes().as_chunks::<2>().0 {
         bytes.push(
             u8::from_str_radix(std::str::from_utf8(pair).map_err(|e| e.to_string())?, 16)
                 .map_err(|_| "报文十六进制无效")?,
@@ -546,7 +546,7 @@ fn route_and_check(
             }
         }
     }
-    if matched.iter().any(|count| *count == 0) {
+    if matched.contains(&0) {
         return Err("两个 ECU 必须各自发送至少一个由对端接收的信号帧".into());
     }
     Ok(observed_rx_id.unwrap())
@@ -1344,7 +1344,13 @@ fn verify_persistent_dtc(
         let mut ecu = EcuProcess::start(binary, Some(&state.path), security)?;
         prepare(&mut ecu, profile, salt)?;
         let before = diagnostic_request(&mut ecu, fence, read_dtc.clone())?;
-        diagnostic_frames(&before, &[empty.clone()], profile, diagnostic, salt)?;
+        diagnostic_frames(
+            &before,
+            std::slice::from_ref(&empty),
+            profile,
+            diagnostic,
+            salt,
+        )?;
         let all = diagnostic_request(&mut ecu, fence, supported_dtc.clone())?;
         diagnostic_frames(&all, &[supported(0x50)], profile, diagnostic, salt)?;
         for (payload, nrc) in [
@@ -1398,7 +1404,13 @@ fn verify_persistent_dtc(
         let timed = diagnostic_request(&mut ecu, fence, format!("T {}", dtc.timeout as u64 + 1))?;
         diagnostic_frames(&timed, &[], profile, diagnostic, salt)?;
         let suppressed = diagnostic_request(&mut ecu, fence, read_dtc.clone())?;
-        diagnostic_frames(&suppressed, &[empty.clone()], profile, diagnostic, salt)?;
+        diagnostic_frames(
+            &suppressed,
+            std::slice::from_ref(&empty),
+            profile,
+            diagnostic,
+            salt,
+        )?;
         let all = diagnostic_request(&mut ecu, fence, supported_dtc.clone())?;
         diagnostic_frames(&all, &[supported(0x00)], profile, diagnostic, salt)?;
         let count = diagnostic_request(&mut ecu, fence, count_dtc.clone())?;
@@ -1483,7 +1495,13 @@ fn verify_persistent_dtc(
         let cleared = diagnostic_request(&mut ecu, fence, format!("R {request} 5 0414FFFFFF"))?;
         diagnostic_frames(&cleared, &[vec![0x01, 0x54]], profile, diagnostic, salt)?;
         let now_empty = diagnostic_request(&mut ecu, fence, read_dtc.clone())?;
-        diagnostic_frames(&now_empty, &[empty.clone()], profile, diagnostic, salt)?;
+        diagnostic_frames(
+            &now_empty,
+            std::slice::from_ref(&empty),
+            profile,
+            diagnostic,
+            salt,
+        )?;
         let all = diagnostic_request(&mut ecu, fence, supported_dtc.clone())?;
         diagnostic_frames(&all, &[supported(0x50)], profile, diagnostic, salt)?;
         let count = diagnostic_request(&mut ecu, fence, count_dtc.clone())?;

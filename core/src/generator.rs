@@ -604,18 +604,18 @@ fn generate_prepared(
     let output_name = output.file_name().ok_or("输出目录须有名称")?;
     fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     verify_generated_output(&output, &names)?;
-    let stage = reserve_directory(&parent, "stage", output_name)?;
+    let stage = reserve_directory(parent, "stage", output_name)?;
     let result = (|| {
         for (name, contents) in &files {
-            let target = stage.join(&name);
+            let target = stage.join(name);
             fs::create_dir_all(target.parent().unwrap()).map_err(|e| e.to_string())?;
             fs::write(target, contents).map_err(|e| e.to_string())?;
         }
         verify_generated_output(&output, &names)?;
-        if let Some(revision) = expected_revision {
-            if preview_prepared(&files, &output)?.revision != revision {
-                return Err("生成预览已失效：旧输出在确认期间变化；请重新预览".into());
-            }
+        if let Some(revision) = expected_revision
+            && preview_prepared(&files, &output)?.revision != revision
+        {
+            return Err("生成预览已失效：旧输出在确认期间变化；请重新预览".into());
         }
         let existing = match fs::symlink_metadata(&output) {
             Ok(metadata) if is_reparse_point(&metadata) || !metadata.file_type().is_dir() => {
@@ -629,7 +629,7 @@ fn generate_prepared(
             Err(error) => return Err(error.to_string()),
         };
         let backup = if existing {
-            let backup_root = reserve_directory(&parent, "backup", output_name)?;
+            let backup_root = reserve_directory(parent, "backup", output_name)?;
             let preserved = backup_root.join(output_name);
             fs::rename(&output, &preserved).map_err(|e| {
                 format!(

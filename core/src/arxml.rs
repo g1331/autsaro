@@ -1,7 +1,8 @@
 use crate::arxml_render::render_profile;
 use crate::model::{
-    DiagnosticView, Direction, DtcView, FileView, FrameView, Issue, SavePreview, SavePreviewFile,
-    Severity, SignalView, WorkspaceView, validate_diagnostic, validate_profile,
+    DiagnosticSettings, DiagnosticView, Direction, DtcView, FileView, FrameView, Issue,
+    SavePreview, SavePreviewFile, Severity, SignalView, WorkspaceView, validate_diagnostic,
+    validate_profile,
 };
 use crate::schema;
 use roxmltree::{Document, Node};
@@ -792,7 +793,7 @@ fn signal_type(length: u8) -> &'static str {
 }
 
 fn apply_patches(text: &mut String, patches: &mut Vec<Patch>) -> Result<(), String> {
-    patches.sort_by(|a, b| b.range.start.cmp(&a.range.start));
+    patches.sort_by_key(|patch| std::cmp::Reverse(patch.range.start));
     let mut next_start = text.len();
     for patch in patches {
         if patch.range.end > next_start {
@@ -1562,14 +1563,13 @@ impl Workspace {
                     let path = path_of(node);
                     if let Some(previous) =
                         paths.insert(path.clone(), node.tag_name().name().to_owned())
+                        && (previous != "AR-PACKAGE" || node.tag_name().name() != "AR-PACKAGE")
                     {
-                        if previous != "AR-PACKAGE" || node.tag_name().name() != "AR-PACKAGE" {
-                            issues.push(Issue::error(
-                                "DUPLICATE_PATH",
-                                "ARXML 绝对路径重复",
-                                Some(path),
-                            ));
-                        }
+                        issues.push(Issue::error(
+                            "DUPLICATE_PATH",
+                            "ARXML 绝对路径重复",
+                            Some(path),
+                        ));
                     }
                 }
                 if node.tag_name().name() == "ECUC-MODULE-CONFIGURATION-VALUES" {
@@ -1762,8 +1762,8 @@ impl Workspace {
                             );
                         }
                         Some("/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfTxPduCfg") => {
-                            if let Some(pdu) = ref_value(node, "CanIfTxPduRef") {
-                                if canif
+                            if let Some(pdu) = ref_value(node, "CanIfTxPduRef")
+                                && canif
                                     .insert(
                                         pdu.clone(),
                                         CanIfPduRecord {
@@ -1777,18 +1777,17 @@ impl Workspace {
                                         },
                                     )
                                     .is_some()
-                                {
-                                    issues.push(Issue::error(
-                                        "CANIF_PDU_DUPLICATE",
-                                        "同一 I-PDU 有多个 CanIf 映射",
-                                        Some(pdu),
-                                    ));
-                                }
+                            {
+                                issues.push(Issue::error(
+                                    "CANIF_PDU_DUPLICATE",
+                                    "同一 I-PDU 有多个 CanIf 映射",
+                                    Some(pdu),
+                                ));
                             }
                         }
                         Some("/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfRxPduCfg") => {
-                            if let Some(pdu) = ref_value(node, "CanIfRxPduRef") {
-                                if canif
+                            if let Some(pdu) = ref_value(node, "CanIfRxPduRef")
+                                && canif
                                     .insert(
                                         pdu.clone(),
                                         CanIfPduRecord {
@@ -1802,13 +1801,12 @@ impl Workspace {
                                         },
                                     )
                                     .is_some()
-                                {
-                                    issues.push(Issue::error(
-                                        "CANIF_PDU_DUPLICATE",
-                                        "同一 I-PDU 有多个 CanIf 映射",
-                                        Some(pdu),
-                                    ));
-                                }
+                            {
+                                issues.push(Issue::error(
+                                    "CANIF_PDU_DUPLICATE",
+                                    "同一 I-PDU 有多个 CanIf 映射",
+                                    Some(pdu),
+                                ));
                             }
                         }
                         _ => {}
@@ -2348,10 +2346,8 @@ impl Workspace {
                     continue;
                 }
                 let binding = tool_global_pdu(node, file)?;
-                if binding.system_path == system_path {
-                    if found.replace(path_of(node)).is_some() {
-                        return Err(format!("{system_path} 有多个全局 PDU 绑定"));
-                    }
+                if binding.system_path == system_path && found.replace(path_of(node)).is_some() {
+                    return Err(format!("{system_path} 有多个全局 PDU 绑定"));
                 }
             }
         }
@@ -2393,16 +2389,15 @@ impl Workspace {
                     let def = definition(node).unwrap_or_default();
                     if def.ends_with("/CanIfTxPduCfg")
                         && ref_value(node, "CanIfTxPduRef").as_deref() == Some(&global_pdu)
+                        && old.id != new.id
                     {
-                        if old.id != new.id {
-                            patch_param(
-                                node,
-                                "CanIfTxPduCanId",
-                                new.id.to_string(),
-                                &mut patches[index],
-                            )?;
-                            found_id = true;
-                        }
+                        patch_param(
+                            node,
+                            "CanIfTxPduCanId",
+                            new.id.to_string(),
+                            &mut patches[index],
+                        )?;
+                        found_id = true;
                     }
                     if def.ends_with("/CanIfRxPduCfg")
                         && ref_value(node, "CanIfRxPduRef").as_deref() == Some(&global_pdu)
@@ -2629,29 +2624,20 @@ impl Workspace {
     }
     pub fn configure_diagnostic(
         &mut self,
-        request_id: u32,
-        response_id: u32,
-        s3_ms: u32,
-        n_bs_ms: u32,
-        n_cr_ms: u32,
-        did: u16,
-        signal_paths: Vec<String>,
-        write_enabled: bool,
-        reset_routine_id: Option<u16>,
-        security_enabled: bool,
+        settings: DiagnosticSettings,
     ) -> Result<WorkspaceView, String> {
         let diagnostic = DiagnosticView {
             path: format!("/{}/DcmCfg/DcmConfigSet/DcmDsp/Did", self.name),
-            request_id,
-            response_id,
-            s3_ms,
-            n_bs_ms,
-            n_cr_ms,
-            did,
-            signal_paths,
-            write_enabled,
-            reset_routine_id,
-            security_enabled,
+            request_id: settings.request_id,
+            response_id: settings.response_id,
+            s3_ms: settings.s3_ms,
+            n_bs_ms: settings.n_bs_ms,
+            n_cr_ms: settings.n_cr_ms,
+            did: settings.did,
+            signal_paths: settings.signal_paths,
+            write_enabled: settings.write_enabled,
+            reset_routine_id: settings.reset_routine_id,
+            security_enabled: settings.security_enabled,
             dtc: self
                 .diagnostic
                 .as_ref()
@@ -2824,24 +2810,23 @@ impl Workspace {
                     && n.tag_name().name().ends_with("-REF")
                     && n.tag_name().name() != "DEFINITION-REF"
             }) {
-                if let Some(target) = node.text() {
-                    if owned_paths.contains(target)
-                        && !node
-                            .ancestors()
-                            .any(|ancestor| removed.contains(&path_of(ancestor)))
+                if let Some(target) = node.text()
+                    && owned_paths.contains(target)
+                    && !node
+                        .ancestors()
+                        .any(|ancestor| removed.contains(&path_of(ancestor)))
+                {
+                    if removed_client_ref
+                        .as_ref()
+                        .is_some_and(|(file_index, range)| {
+                            *file_index == index
+                                && range.start <= node.range().start
+                                && node.range().end <= range.end
+                        })
                     {
-                        if removed_client_ref
-                            .as_ref()
-                            .is_some_and(|(file_index, range)| {
-                                *file_index == index
-                                    && range.start <= node.range().start
-                                    && node.range().end <= range.end
-                            })
-                        {
-                            continue;
-                        }
-                        return Err(format!("外部引用 {target} 仍依赖 DTC 配置，拒绝删除"));
+                        continue;
                     }
+                    return Err(format!("外部引用 {target} 仍依赖 DTC 配置，拒绝删除"));
                 }
             }
         }
@@ -3082,10 +3067,10 @@ impl Workspace {
         if let Some(issue) = validate_profile(&frames, &self.signals).first() {
             return Err(format!("{}: {}", issue.code, issue.message));
         }
-        if let Some(diagnostic) = &self.diagnostic {
-            if let Some(issue) = validate_diagnostic(diagnostic, &frames, &self.signals).first() {
-                return Err(format!("{}: {}", issue.code, issue.message));
-            }
+        if let Some(diagnostic) = &self.diagnostic
+            && let Some(issue) = validate_diagnostic(diagnostic, &frames, &self.signals).first()
+        {
+            return Err(format!("{}: {}", issue.code, issue.message));
         }
         let updated = frames.iter().find(|f| f.path == path).unwrap().clone();
         if self.files.iter().any(|file| self.is_managed_file(file)) {
@@ -3141,10 +3126,10 @@ impl Workspace {
         if let Some(issue) = validate_profile(&self.frames, &signals).first() {
             return Err(format!("{}: {}", issue.code, issue.message));
         }
-        if let Some(diagnostic) = &self.diagnostic {
-            if let Some(issue) = validate_diagnostic(diagnostic, &self.frames, &signals).first() {
-                return Err(format!("{}: {}", issue.code, issue.message));
-            }
+        if let Some(diagnostic) = &self.diagnostic
+            && let Some(issue) = validate_diagnostic(diagnostic, &self.frames, &signals).first()
+        {
+            return Err(format!("{}: {}", issue.code, issue.message));
         }
         let updated = signals.iter().find(|s| s.path == path).unwrap().clone();
         if self.files.iter().any(|file| self.is_managed_file(file)) {
@@ -3187,20 +3172,19 @@ impl Workspace {
                     && n.tag_name().name().ends_with("-REF")
                     && n.tag_name().name() != "DEFINITION-REF"
             }) {
-                if let Some(reference) = node.text() {
-                    if reference.starts_with('/')
-                        && !paths.contains(reference)
-                        && !reference.starts_with("/AUTOSAR/EcucDefs/")
-                    {
-                        self.issues.push(Issue {
-                            file: Some(file.path.display().to_string()),
-                            ..Issue::error(
-                                "UNRESOLVED_REF",
-                                format!("跨文件引用未解析: {reference}"),
-                                Some(path_of(node.parent_element().unwrap_or(node))),
-                            )
-                        });
-                    }
+                if let Some(reference) = node.text()
+                    && reference.starts_with('/')
+                    && !paths.contains(reference)
+                    && !reference.starts_with("/AUTOSAR/EcucDefs/")
+                {
+                    self.issues.push(Issue {
+                        file: Some(file.path.display().to_string()),
+                        ..Issue::error(
+                            "UNRESOLVED_REF",
+                            format!("跨文件引用未解析: {reference}"),
+                            Some(path_of(node.parent_element().unwrap_or(node))),
+                        )
+                    });
                 }
             }
             for node in doc

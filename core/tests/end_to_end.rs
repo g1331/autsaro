@@ -1,4 +1,4 @@
-use autosar_config_core::{Direction, Workspace, generator, host, schema};
+use autosar_config_core::{DiagnosticSettings, Direction, Workspace, generator, host, schema};
 use std::fs;
 use std::io::Read;
 use std::io::Write;
@@ -925,18 +925,18 @@ fn host_can_ecuc_closes_required_mod_fields_and_rejects_broken_links() {
         .add_signal(rx, "ReceivedValue".into(), 0, 8, 0)
         .unwrap();
     project
-        .configure_diagnostic(
-            0x700,
-            0x708,
-            5000,
-            200,
-            200,
-            0x1234,
-            vec![signal],
-            false,
-            None,
-            false,
-        )
+        .configure_diagnostic(DiagnosticSettings {
+            request_id: 0x700,
+            response_id: 0x708,
+            s3_ms: 5000,
+            n_bs_ms: 200,
+            n_cr_ms: 200,
+            did: 0x1234,
+            signal_paths: vec![signal],
+            write_enabled: false,
+            reset_routine_id: None,
+            security_enabled: false,
+        })
         .unwrap();
     project.save().unwrap();
     let source = temp.0.join("CanClosure/CanClosure.arxml");
@@ -1486,18 +1486,18 @@ fn imported_global_pdu_cannot_duplicate_system_binding_or_misstate_diagnostic_le
         .path
         .clone();
     project
-        .configure_diagnostic(
-            0x700,
-            0x708,
-            5000,
-            200,
-            200,
-            0x1234,
-            vec![signal],
-            true,
-            Some(0xf001),
-            false,
-        )
+        .configure_diagnostic(DiagnosticSettings {
+            request_id: 0x700,
+            response_id: 0x708,
+            s3_ms: 5000,
+            n_bs_ms: 200,
+            n_cr_ms: 200,
+            did: 0x1234,
+            signal_paths: vec![signal],
+            write_enabled: true,
+            reset_routine_id: Some(0xf001),
+            security_enabled: false,
+        })
         .unwrap();
     project.save().unwrap();
     let xml = fs::read_to_string(&source).unwrap();
@@ -1609,18 +1609,18 @@ fn diagnostic_ecuc_refs_reject_old_system_destinations_and_dynamic_npdu() {
         .path
         .clone();
     project
-        .configure_diagnostic(
-            0x700,
-            0x708,
-            5000,
-            200,
-            200,
-            0x1234,
-            vec![signal],
-            false,
-            None,
-            false,
-        )
+        .configure_diagnostic(DiagnosticSettings {
+            request_id: 0x700,
+            response_id: 0x708,
+            s3_ms: 5000,
+            n_bs_ms: 200,
+            n_cr_ms: 200,
+            did: 0x1234,
+            signal_paths: vec![signal],
+            write_enabled: false,
+            reset_routine_id: None,
+            security_enabled: false,
+        })
         .unwrap();
     project.save().unwrap();
     let xml = fs::read_to_string(&source).unwrap();
@@ -2340,25 +2340,34 @@ fn configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_multiframe_did(
         .collect();
     assert!(
         project
-            .configure_diagnostic(
-                0x321,
-                0x708,
-                5000,
-                200,
-                200,
-                0x1234,
-                sources.clone(),
-                false,
-                None,
-                false
-            )
+            .configure_diagnostic(DiagnosticSettings {
+                request_id: 0x321,
+                response_id: 0x708,
+                s3_ms: 5000,
+                n_bs_ms: 200,
+                n_cr_ms: 200,
+                did: 0x1234,
+                signal_paths: sources.clone(),
+                write_enabled: false,
+                reset_routine_id: None,
+                security_enabled: false
+            })
             .is_err()
     );
     assert!(project.view().diagnostic.is_none());
     project
-        .configure_diagnostic(
-            0x700, 0x708, 5000, 200, 200, 0x1234, sources, false, None, false,
-        )
+        .configure_diagnostic(DiagnosticSettings {
+            request_id: 0x700,
+            response_id: 0x708,
+            s3_ms: 5000,
+            n_bs_ms: 200,
+            n_cr_ms: 200,
+            did: 0x1234,
+            signal_paths: sources,
+            write_enabled: false,
+            reset_routine_id: None,
+            security_enabled: false,
+        })
         .unwrap();
     let validation = project.validate().unwrap();
     assert!(validation.issues.is_empty(), "{:?}", validation.issues);
@@ -2555,33 +2564,33 @@ fn active_session_did_reports_session_transitions_and_rejects_invalid_reads() {
         .clone();
     assert!(
         project
-            .configure_diagnostic(
-                0x700,
-                0x708,
-                5000,
-                200,
-                200,
-                0xF186,
-                vec![signal.clone()],
-                false,
-                None,
-                false
-            )
+            .configure_diagnostic(DiagnosticSettings {
+                request_id: 0x700,
+                response_id: 0x708,
+                s3_ms: 5000,
+                n_bs_ms: 200,
+                n_cr_ms: 200,
+                did: 0xF186,
+                signal_paths: vec![signal.clone()],
+                write_enabled: false,
+                reset_routine_id: None,
+                security_enabled: false
+            })
             .is_err()
     );
     project
-        .configure_diagnostic(
-            0x700,
-            0x708,
-            5000,
-            200,
-            200,
-            0x1234,
-            vec![signal],
-            false,
-            None,
-            false,
-        )
+        .configure_diagnostic(DiagnosticSettings {
+            request_id: 0x700,
+            response_id: 0x708,
+            s3_ms: 5000,
+            n_bs_ms: 200,
+            n_cr_ms: 200,
+            did: 0x1234,
+            signal_paths: vec![signal],
+            write_enabled: false,
+            reset_routine_id: None,
+            security_enabled: false,
+        })
         .unwrap();
     project.save().unwrap();
     let source = temp.0.join("Diag/Diag.arxml");
@@ -2633,18 +2642,18 @@ fn active_session_did_reports_session_transitions_and_rejects_invalid_reads() {
 
     let signal = reopened.view().diagnostic.unwrap().signal_paths[0].clone();
     reopened
-        .configure_diagnostic(
-            0x700,
-            0x708,
-            5000,
-            200,
-            200,
-            0xF187,
-            vec![signal],
-            false,
-            None,
-            false,
-        )
+        .configure_diagnostic(DiagnosticSettings {
+            request_id: 0x700,
+            response_id: 0x708,
+            s3_ms: 5000,
+            n_bs_ms: 200,
+            n_cr_ms: 200,
+            did: 0xF187,
+            signal_paths: vec![signal],
+            write_enabled: false,
+            reset_routine_id: None,
+            security_enabled: false,
+        })
         .unwrap();
     reopened.save().unwrap();
     let generated = temp.0.join("GeneratedF187");
@@ -2672,18 +2681,18 @@ fn multiple_dids_keep_request_order_and_skip_unavailable_values() {
         .path
         .clone();
     project
-        .configure_diagnostic(
-            0x700,
-            0x708,
-            5000,
-            200,
-            200,
-            0x1234,
-            vec![signal],
-            false,
-            None,
-            false,
-        )
+        .configure_diagnostic(DiagnosticSettings {
+            request_id: 0x700,
+            response_id: 0x708,
+            s3_ms: 5000,
+            n_bs_ms: 200,
+            n_cr_ms: 200,
+            did: 0x1234,
+            signal_paths: vec![signal],
+            write_enabled: false,
+            reset_routine_id: None,
+            security_enabled: false,
+        })
         .unwrap();
     project.save().unwrap();
     let source = temp.0.join("Diag/Diag.arxml");
@@ -2783,9 +2792,18 @@ fn diagnostic_transport_discards_bad_or_timed_out_multiframe_requests_and_recove
         .map(|signal| signal.path.clone())
         .collect();
     project
-        .configure_diagnostic(
-            0x700, 0x708, 5000, 200, 200, 0x1234, sources, false, None, false,
-        )
+        .configure_diagnostic(DiagnosticSettings {
+            request_id: 0x700,
+            response_id: 0x708,
+            s3_ms: 5000,
+            n_bs_ms: 200,
+            n_cr_ms: 200,
+            did: 0x1234,
+            signal_paths: sources,
+            write_enabled: false,
+            reset_routine_id: None,
+            security_enabled: false,
+        })
         .unwrap();
     project.save().unwrap();
     let generated = temp.0.join("GeneratedDiag");
@@ -2855,9 +2873,18 @@ fn diagnostic_tester_present_keeps_session_and_fc_block_size_paces_response() {
         .map(|signal| signal.path.clone())
         .collect();
     project
-        .configure_diagnostic(
-            0x700, 0x708, 5000, 200, 200, 0x1234, sources, false, None, false,
-        )
+        .configure_diagnostic(DiagnosticSettings {
+            request_id: 0x700,
+            response_id: 0x708,
+            s3_ms: 5000,
+            n_bs_ms: 200,
+            n_cr_ms: 200,
+            did: 0x1234,
+            signal_paths: sources,
+            write_enabled: false,
+            reset_routine_id: None,
+            security_enabled: false,
+        })
         .unwrap();
     project.save().unwrap();
     let generated = temp.0.join("GeneratedDiag");
@@ -2929,18 +2956,18 @@ fn unsupported_imported_transport_padding_blocks_diagnostic_generation() {
         .path
         .clone();
     project
-        .configure_diagnostic(
-            0x700,
-            0x708,
-            5000,
-            200,
-            200,
-            0x1234,
-            vec![signal],
-            false,
-            None,
-            false,
-        )
+        .configure_diagnostic(DiagnosticSettings {
+            request_id: 0x700,
+            response_id: 0x708,
+            s3_ms: 5000,
+            n_bs_ms: 200,
+            n_cr_ms: 200,
+            did: 0x1234,
+            signal_paths: vec![signal],
+            write_enabled: false,
+            reset_routine_id: None,
+            security_enabled: false,
+        })
         .unwrap();
     project.save().unwrap();
     let source = temp.0.join("Diag/Diag.arxml");
@@ -2993,18 +3020,18 @@ fn supported_dtcs_include_zero_status_and_follow_configured_lifecycle() {
             .add_signal(rx.clone(), "HeartbeatValue".into(), 0, 8, 0)
             .unwrap();
         project
-            .configure_diagnostic(
-                0x700,
-                0x708,
-                5000,
-                200,
-                200,
-                0x1234,
-                vec![signal],
-                false,
-                None,
-                false,
-            )
+            .configure_diagnostic(DiagnosticSettings {
+                request_id: 0x700,
+                response_id: 0x708,
+                s3_ms: 5000,
+                n_bs_ms: 200,
+                n_cr_ms: 200,
+                did: 0x1234,
+                signal_paths: vec![signal],
+                write_enabled: false,
+                reset_routine_id: None,
+                security_enabled: false,
+            })
             .unwrap();
         project.configure_dtc(code, rx).unwrap();
         project.save().unwrap();
@@ -3163,18 +3190,18 @@ fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restarts() {
         .add_signal(rx.clone(), "HeartbeatValue".into(), 0, 8, 0)
         .unwrap();
     project
-        .configure_diagnostic(
-            0x700,
-            0x708,
-            5000,
-            200,
-            200,
-            0x1234,
-            vec![did_signal],
-            false,
-            None,
-            false,
-        )
+        .configure_diagnostic(DiagnosticSettings {
+            request_id: 0x700,
+            response_id: 0x708,
+            s3_ms: 5000,
+            n_bs_ms: 200,
+            n_cr_ms: 200,
+            did: 0x1234,
+            signal_paths: vec![did_signal],
+            write_enabled: false,
+            reset_routine_id: None,
+            security_enabled: false,
+        })
         .unwrap();
     project.configure_dtc(0x123456, rx.clone()).unwrap();
     project.save().unwrap();
@@ -3515,9 +3542,18 @@ fn extended_session_write_did_changes_live_can_but_not_restart_state() {
         .map(|signal| signal.path.clone())
         .collect();
     project
-        .configure_diagnostic(
-            0x700, 0x708, 5000, 200, 200, 0x1234, signals, true, None, false,
-        )
+        .configure_diagnostic(DiagnosticSettings {
+            request_id: 0x700,
+            response_id: 0x708,
+            s3_ms: 5000,
+            n_bs_ms: 200,
+            n_cr_ms: 200,
+            did: 0x1234,
+            signal_paths: signals,
+            write_enabled: true,
+            reset_routine_id: None,
+            security_enabled: false,
+        })
         .unwrap();
     project.save().unwrap();
     let source = temp.0.join("Diag/Diag.arxml");
@@ -3623,18 +3659,18 @@ fn security_access_roundtrips_and_gates_host_writes() {
         .path
         .clone();
     project
-        .configure_diagnostic(
-            0x700,
-            0x708,
-            5000,
-            200,
-            200,
-            0x1234,
-            vec![signal],
-            true,
-            Some(0xf001),
-            true,
-        )
+        .configure_diagnostic(DiagnosticSettings {
+            request_id: 0x700,
+            response_id: 0x708,
+            s3_ms: 5000,
+            n_bs_ms: 200,
+            n_cr_ms: 200,
+            did: 0x1234,
+            signal_paths: vec![signal],
+            write_enabled: true,
+            reset_routine_id: Some(0xf001),
+            security_enabled: true,
+        })
         .unwrap();
     project.save().unwrap();
     let source = temp.0.join("Secure/Secure.arxml");
@@ -3691,34 +3727,34 @@ fn security_access_gates_dtc_mutations_without_a_writable_did() {
         .add_signal(rx.clone(), "HeartbeatValue".into(), 0, 8, 0)
         .unwrap();
     project
-        .configure_diagnostic(
-            0x700,
-            0x708,
-            5000,
-            200,
-            200,
-            0x1234,
-            vec![signal],
-            false,
-            None,
-            false,
-        )
+        .configure_diagnostic(DiagnosticSettings {
+            request_id: 0x700,
+            response_id: 0x708,
+            s3_ms: 5000,
+            n_bs_ms: 200,
+            n_cr_ms: 200,
+            did: 0x1234,
+            signal_paths: vec![signal],
+            write_enabled: false,
+            reset_routine_id: None,
+            security_enabled: false,
+        })
         .unwrap();
     project.configure_dtc(0x123456, rx).unwrap();
     let current = project.view().diagnostic.unwrap();
     project
-        .configure_diagnostic(
-            0x700,
-            0x708,
-            5000,
-            200,
-            200,
-            0x1234,
-            current.signal_paths,
-            false,
-            None,
-            true,
-        )
+        .configure_diagnostic(DiagnosticSettings {
+            request_id: 0x700,
+            response_id: 0x708,
+            s3_ms: 5000,
+            n_bs_ms: 200,
+            n_cr_ms: 200,
+            did: 0x1234,
+            signal_paths: current.signal_paths,
+            write_enabled: false,
+            reset_routine_id: None,
+            security_enabled: true,
+        })
         .unwrap();
     project.save().unwrap();
     let mut reopened =
@@ -3762,34 +3798,34 @@ fn start_routine_restores_written_did_signals_and_respects_session() {
         .collect();
     assert!(
         project
-            .configure_diagnostic(
-                0x700,
-                0x708,
-                5000,
-                200,
-                200,
-                0x1234,
-                signals.clone(),
-                false,
-                Some(0xF001),
-                false
-            )
+            .configure_diagnostic(DiagnosticSettings {
+                request_id: 0x700,
+                response_id: 0x708,
+                s3_ms: 5000,
+                n_bs_ms: 200,
+                n_cr_ms: 200,
+                did: 0x1234,
+                signal_paths: signals.clone(),
+                write_enabled: false,
+                reset_routine_id: Some(0xF001),
+                security_enabled: false
+            })
             .is_err()
     );
     assert!(project.view().diagnostic.is_none());
     project
-        .configure_diagnostic(
-            0x700,
-            0x708,
-            5000,
-            200,
-            200,
-            0x1234,
-            signals,
-            true,
-            Some(0xF001),
-            false,
-        )
+        .configure_diagnostic(DiagnosticSettings {
+            request_id: 0x700,
+            response_id: 0x708,
+            s3_ms: 5000,
+            n_bs_ms: 200,
+            n_cr_ms: 200,
+            did: 0x1234,
+            signal_paths: signals,
+            write_enabled: true,
+            reset_routine_id: Some(0xF001),
+            security_enabled: false,
+        })
         .unwrap();
     project.save().unwrap();
     let source = temp.0.join("Diag/Diag.arxml");
@@ -3949,18 +3985,18 @@ fn host_routine_metadata_rejects_unknown_version_and_wrong_session() {
         .path
         .clone();
     project
-        .configure_diagnostic(
-            0x700,
-            0x708,
-            5000,
-            200,
-            200,
-            0x1234,
-            vec![signal],
-            true,
-            Some(0xf001),
-            false,
-        )
+        .configure_diagnostic(DiagnosticSettings {
+            request_id: 0x700,
+            response_id: 0x708,
+            s3_ms: 5000,
+            n_bs_ms: 200,
+            n_cr_ms: 200,
+            did: 0x1234,
+            signal_paths: vec![signal],
+            write_enabled: true,
+            reset_routine_id: Some(0xf001),
+            security_enabled: false,
+        })
         .unwrap();
     project.save().unwrap();
     let source = temp.0.join("Diag/Diag.arxml");
@@ -4023,18 +4059,18 @@ fn generated_dcm_callbacks_link_for_independent_consumer_and_update_live_signals
         second.signals.last().unwrap().path.clone(),
     ];
     project
-        .configure_diagnostic(
-            0x700,
-            0x708,
-            5000,
-            200,
-            200,
-            0x1234,
-            paths.to_vec(),
-            true,
-            None,
-            false,
-        )
+        .configure_diagnostic(DiagnosticSettings {
+            request_id: 0x700,
+            response_id: 0x708,
+            s3_ms: 5000,
+            n_bs_ms: 200,
+            n_cr_ms: 200,
+            did: 0x1234,
+            signal_paths: paths.to_vec(),
+            write_enabled: true,
+            reset_routine_id: None,
+            security_enabled: false,
+        })
         .unwrap();
     project.save().unwrap();
     let source_path = temp.0.join("Diag/Diag.arxml");

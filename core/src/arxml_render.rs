@@ -447,16 +447,28 @@ fn render_host_canif_ecuc(project: &str, pdus: &str) -> String {
     )
 }
 
-fn render_host_canif_pdu(
-    project: &str,
-    name: &str,
+struct HostCanIfPdu<'a> {
+    project: &'a str,
+    name: &'a str,
     id: u32,
     dlc: u8,
     index: usize,
     is_tx: bool,
     diagnostic: bool,
-    global_pdu: &str,
-) -> String {
+    global_pdu: &'a str,
+}
+
+fn render_host_canif_pdu(pdu: HostCanIfPdu<'_>) -> String {
+    let HostCanIfPdu {
+        project,
+        name,
+        id,
+        dlc,
+        index,
+        is_tx,
+        diagnostic,
+        global_pdu,
+    } = pdu;
     if is_tx {
         let path = "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfTxPduCfg";
         let params = number(path, "CanIfTxPduCanId", id)
@@ -761,16 +773,16 @@ fn render_diagnostic(
         ("DiagRequest", diagnostic.request_id, false),
         ("DiagResponse", diagnostic.response_id, true),
     ] {
-        canif_children.push_str(&render_host_canif_pdu(
+        canif_children.push_str(&render_host_canif_pdu(HostCanIfPdu {
             project,
-            &format!("Can_{name}"),
+            name: &format!("Can_{name}"),
             id,
-            8,
-            frame_count,
+            dlc: 8,
+            index: frame_count,
             is_tx,
-            true,
-            if is_tx { &response_pdu } else { &request_pdu },
-        ));
+            diagnostic: true,
+            global_pdu: if is_tx { &response_pdu } else { &request_pdu },
+        }));
     }
 
     let rx = "/AUTOSAR/EcucDefs/CanTp/CanTpConfig/CanTpChannel/CanTpRxNSdu";
@@ -1436,16 +1448,16 @@ pub fn render_profile(
             &(com_pdu_ref + &com_refs),
             &tx_children,
         ));
-        canif_children.push_str(&render_host_canif_pdu(
+        canif_children.push_str(&render_host_canif_pdu(HostCanIfPdu {
             project,
-            &format!("Can_{}", frame.name),
-            frame.id,
-            frame.dlc,
-            frame_index,
-            matches!(frame.direction, Direction::Tx),
-            false,
-            &global_pdu_path(project, &format!("Pdu_{}", frame.name)),
-        ));
+            name: &format!("Can_{}", frame.name),
+            id: frame.id,
+            dlc: frame.dlc,
+            index: frame_index,
+            is_tx: matches!(frame.direction, Direction::Tx),
+            diagnostic: false,
+            global_pdu: &global_pdu_path(project, &format!("Pdu_{}", frame.name)),
+        }));
     }
     for (signal_index, signal) in signals.iter().enumerate() {
         write!(
@@ -1473,10 +1485,10 @@ pub fn render_profile(
             text(path, "ComSignalInitValue", signal.initial_value),
             choice(path, "ComSignalType", ty)
         );
-        if let Some(frame) = frames.iter().find(|f| f.path == signal.frame_path) {
-            if let Some(timeout) = frame.timeout_ms {
-                params.push_str(&decimal(path, "ComTimeout", timeout));
-            }
+        if let Some(frame) = frames.iter().find(|f| f.path == signal.frame_path)
+            && let Some(timeout) = frame.timeout_ms
+        {
+            params.push_str(&decimal(path, "ComTimeout", timeout));
         }
         com_children.push_str(&container(&signal.name, path, &params, "", ""));
     }
