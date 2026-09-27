@@ -40,6 +40,8 @@
 
 ## 当前切片的规范逐项核对
 
+后续 CanTp 扫描整改前阅读本地 R24-11 `AUTOSAR_CP_SWS_CANTransportLayer.pdf` 页 31–33、66–67，核对首帧、连续帧、流控、N_Bs/N_Cr 超时的状态与错误路径。仅整理表达式、退出路径和局部变量；保留 `AbortRx`、`FinishTx`、FC 发送及确认的调用顺序，不升级现有主机 CanTp 公开接口为标准接口。`cargo test --manifest-path core/Cargo.toml diagnostic_ -- --nocapture` 通过（单元 1/1、端到端 6/6）；完整 `python scripts/workflow.py verify --scope all` 在配置本机 vcpkg/libclang 路径后通过（脚本 15/15、核心 3/3 + 50/50、UI/桌面构建和增量 Clippy）。新代表性工程 `<temporary-dir>/generated` 的全量基线仍失败四个分区：BSW 部分 MISRA 173 条、RTE 9 条、生成 C 7 条及七项规范证据门。另查本地 R24-11 Dcm SWS 页 35–36、51–56、111–112 与 NvM SWS 页 37–39、44、84、99–101、139；现有同步主机诊断与文件写入不符合标准模块的请求占用、异步作业/接口要求，后续整改必须以这些义务为输入。
+
 下列核对使用本地 `docs/official/R24-11/CP/Communication/AUTOSAR_CP_SWS_CANDriver.pdf` 原文，列出本切片已声明的行为与尚未闭合的依赖；它不是完整 Can SWS 覆盖表。
 
 | 条款 | 当前证据与缺口 |

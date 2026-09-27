@@ -25,12 +25,12 @@ typedef struct {
     uint8_t active;
 } CanTpTxState;
 
-static const EcuDiagnosticConfig *active_config;
+static const EcuDiagnosticConfig *cantp_config;
 static CanTpRxState rx;
 static CanTpTxState tx;
 
 static void AbortRx(void) {
-    if (rx.active) {
+    if (rx.active != 0u) {
         rx.active = 0u;
         PduR_CanTpRxAbort();
     }
@@ -49,13 +49,14 @@ static EcuStatus FinishTx(EcuStatus status, uint64_t now_ms) {
 }
 
 static EcuStatus SendConsecutiveFrames(uint64_t now_ms) {
-    while (tx.active && !tx.waiting_fc && tx.sent < tx.length) {
+    EcuStatus outcome = ECU_OK;
+    while ((tx.active != 0u) && (tx.waiting_fc == 0u) && (tx.sent < tx.length)) {
         uint8_t frame[8] = {0};
         size_t count = tx.length - tx.sent;
         EcuStatus result;
 
-        if (tx.sent_cf && now_ms - tx.last_cf_ms < tx.stmin_ms) {
-            return ECU_OK;
+        if ((tx.sent_cf != 0u) && ((now_ms - tx.last_cf_ms) < tx.stmin_ms)) {
+            break;
         }
         if (count > 7u) {
             count = 7u;
@@ -63,31 +64,37 @@ static EcuStatus SendConsecutiveFrames(uint64_t now_ms) {
         frame[0] = (uint8_t)(0x20u | tx.next_sn);
         result = PduR_CanTpCopyTxData(tx.sent, &frame[1], count);
         if (result != ECU_OK) {
-            return FinishTx(result, now_ms);
+            outcome = FinishTx(result, now_ms);
+            break;
         }
         result = LSduR_CanTpTransmit((uint8_t)(count + 1u), frame);
         if (result != ECU_OK) {
-            return FinishTx(result, now_ms);
+            outcome = FinishTx(result, now_ms);
+            break;
         }
         tx.sent += count;
         tx.next_sn = (uint8_t)((tx.next_sn + 1u) & 0x0fu);
         tx.last_cf_ms = now_ms;
         tx.sent_cf = 1u;
         if (tx.sent == tx.length) {
-            return FinishTx(ECU_OK, now_ms);
+            outcome = FinishTx(ECU_OK, now_ms);
+            break;
         }
-        if (tx.block_size != 0u && --tx.block_remaining == 0u) {
-            tx.waiting_fc = 1u;
-            tx.wait_started_ms = now_ms;
-            return ECU_OK;
+        if (tx.block_size != 0u) {
+            --tx.block_remaining;
+            if (tx.block_remaining == 0u) {
+                tx.waiting_fc = 1u;
+                tx.wait_started_ms = now_ms;
+                break;
+            }
         }
     }
-    return ECU_OK;
+    return outcome;
 }
 
 void CanTp_Init(const EcuDiagnosticConfig *config) {
     AbortRx();
-    active_config = config;
+    cantp_config = config;
     rx.active = 0u;
     tx.active = 0u;
     tx.waiting_fc = 0u;
@@ -95,227 +102,238 @@ void CanTp_Init(const EcuDiagnosticConfig *config) {
 
 EcuStatus CanTp_AdvanceTime(uint64_t now_ms) {
     uint8_t expired = 0u;
-    if (active_config == NULL) {
-        return ECU_OK;
+    EcuStatus result = ECU_OK;
+    if (cantp_config != NULL) {
+        if (((rx.active != 0u) && (now_ms < rx.last_cf_ms)) ||
+            ((tx.active != 0u) && (tx.waiting_fc != 0u) && (now_ms < tx.wait_started_ms)) ||
+            ((tx.active != 0u) && (tx.sent_cf != 0u) && (now_ms < tx.last_cf_ms))) {
+            result = ECU_ERR_TIME;
+        } else {
+            if ((rx.active != 0u) && ((now_ms - rx.last_cf_ms) >= cantp_config->n_cr_ms)) {
+                AbortRx();
+                expired = 1u;
+            }
+            if ((tx.active != 0u) && (tx.waiting_fc != 0u) &&
+                ((now_ms - tx.wait_started_ms) >= cantp_config->n_bs_ms)) {
+                (void)FinishTx(ECU_ERR_TP_TIMEOUT, now_ms);
+                expired = 1u;
+            }
+            if (expired != 0u) {
+                result = ECU_ERR_TP_TIMEOUT;
+            } else {
+                result = SendConsecutiveFrames(now_ms);
+            }
+        }
     }
-    if ((rx.active && now_ms < rx.last_cf_ms) ||
-        (tx.active && tx.waiting_fc && now_ms < tx.wait_started_ms) ||
-        (tx.active && tx.sent_cf && now_ms < tx.last_cf_ms)) {
-        return ECU_ERR_TIME;
-    }
-    if (rx.active && now_ms - rx.last_cf_ms >= active_config->n_cr_ms) {
-        AbortRx();
-        expired = 1u;
-    }
-    if (tx.active && tx.waiting_fc && now_ms - tx.wait_started_ms >= active_config->n_bs_ms) {
-        (void)FinishTx(ECU_ERR_TP_TIMEOUT, now_ms);
-        expired = 1u;
-    }
-    if (expired) {
-        return ECU_ERR_TP_TIMEOUT;
-    }
-    return SendConsecutiveFrames(now_ms);
+    return result;
 }
 
 static EcuStatus ReceiveSingle(uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
     size_t length = (size_t)(data[0] & 0x0fu);
-    EcuStatus result;
+    EcuStatus result = ECU_ERR_TP_LENGTH;
     AbortRx();
-    if (length == 0u || length > 7u) {
-        return ECU_ERR_TP_LENGTH;
+    if ((length != 0u) && (length <= 7u)) {
+        if ((size_t)dlc < (length + 1u)) {
+            result = ECU_ERR_FRAME_DLC;
+        } else {
+            result = PduR_CanTpStartOfReception(length);
+            if (result == ECU_OK) {
+                rx.active = 1u;
+                result = PduR_CanTpCopyRxData(&data[1], length);
+                if (result != ECU_OK) {
+                    AbortRx();
+                } else {
+                    result = FinishRx(now_ms);
+                }
+            }
+        }
     }
-    if ((size_t)dlc < length + 1u) {
-        return ECU_ERR_FRAME_DLC;
-    }
-    result = PduR_CanTpStartOfReception(length);
-    if (result != ECU_OK) {
-        return result;
-    }
-    rx.active = 1u;
-    result = PduR_CanTpCopyRxData(&data[1], length);
-    if (result != ECU_OK) {
-        AbortRx();
-        return result;
-    }
-    return FinishRx(now_ms);
+    return result;
 }
 
 static EcuStatus ReceiveFirst(uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
     size_t length = ((size_t)(data[0] & 0x0fu) << 8u) | data[1];
-    uint8_t flow_control[8] = {0x30u, 0u, 0u};
-    EcuStatus result;
+    uint8_t flow_control[8] = {0x30u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
+    EcuStatus result = ECU_ERR_TP_LENGTH;
     AbortRx();
     if (dlc != 8u) {
-        return ECU_ERR_FRAME_DLC;
-    }
-    if (length > ECU_DIAG_MAX_PAYLOAD) {
+        result = ECU_ERR_FRAME_DLC;
+    } else if (length > ECU_DIAG_MAX_PAYLOAD) {
         flow_control[0] = 0x32u; /* FC(OVFLW): no N-SDU was delivered. */
         result = LSduR_CanTpTransmit(3u, flow_control);
-        return result == ECU_OK ? ECU_ERR_TP_LENGTH : result;
+        if (result == ECU_OK) {
+            result = ECU_ERR_TP_LENGTH;
+        }
+    } else if (length > 7u) {
+        result = PduR_CanTpStartOfReception(length);
+        if (result == ECU_OK) {
+            rx.active = 1u;
+            rx.length = length;
+            rx.received = 0u;
+            rx.next_sn = 1u;
+            result = PduR_CanTpCopyRxData(&data[2], 6u);
+            if (result != ECU_OK) {
+                AbortRx();
+            } else {
+                rx.received = 6u;
+                result = LSduR_CanTpTransmit(3u, flow_control);
+                if (result != ECU_OK) {
+                    AbortRx();
+                } else {
+                    rx.last_cf_ms = now_ms;
+                }
+            }
+        }
+    } else {
+        /* A first frame must carry more than one Classical CAN frame. */
     }
-    if (length <= 7u) {
-        return ECU_ERR_TP_LENGTH;
-    }
-    result = PduR_CanTpStartOfReception(length);
-    if (result != ECU_OK) {
-        return result;
-    }
-    rx.active = 1u;
-    rx.length = length;
-    rx.received = 0u;
-    rx.next_sn = 1u;
-    result = PduR_CanTpCopyRxData(&data[2], 6u);
-    if (result != ECU_OK) {
-        AbortRx();
-        return result;
-    }
-    rx.received = 6u;
-    result = LSduR_CanTpTransmit(3u, flow_control);
-    if (result != ECU_OK) {
-        AbortRx();
-        return result;
-    }
-    rx.last_cf_ms = now_ms;
-    return ECU_OK;
+    return result;
 }
 
 static EcuStatus ReceiveConsecutive(uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
     size_t count;
-    EcuStatus result;
-    if (!rx.active) {
-        return ECU_ERR_TP_SEQUENCE;
-    }
-    if ((data[0] & 0x0fu) != rx.next_sn) {
+    EcuStatus result = ECU_ERR_TP_SEQUENCE;
+    if (rx.active == 0u) {
+        /* No segmented reception is active. */
+    } else if ((data[0] & 0x0fu) != rx.next_sn) {
         AbortRx();
-        return ECU_ERR_TP_SEQUENCE;
-    }
-    count = rx.length - rx.received;
-    if (count > 7u) {
-        count = 7u;
-        if (dlc != 8u) {
-            AbortRx();
-            return ECU_ERR_FRAME_DLC;
+    } else {
+        size_t remaining = rx.length - rx.received;
+        count = remaining;
+        if (count > 7u) {
+            count = 7u;
         }
-    } else if ((size_t)dlc < count + 1u) {
-        AbortRx();
-        return ECU_ERR_FRAME_DLC;
+        if (((remaining > 7u) && (dlc != 8u)) ||
+            ((remaining <= 7u) && ((size_t)dlc < (count + 1u)))) {
+            AbortRx();
+            result = ECU_ERR_FRAME_DLC;
+        } else {
+            result = PduR_CanTpCopyRxData(&data[1], count);
+            if (result != ECU_OK) {
+                AbortRx();
+            } else {
+                rx.received += count;
+                rx.next_sn = (uint8_t)((rx.next_sn + 1u) & 0x0fu);
+                if (rx.received == rx.length) {
+                    result = FinishRx(now_ms);
+                } else {
+                    rx.last_cf_ms = now_ms;
+                }
+            }
+        }
     }
-    result = PduR_CanTpCopyRxData(&data[1], count);
-    if (result != ECU_OK) {
-        AbortRx();
-        return result;
-    }
-    rx.received += count;
-    rx.next_sn = (uint8_t)((rx.next_sn + 1u) & 0x0fu);
-    if (rx.received == rx.length) {
-        return FinishRx(now_ms);
-    }
-    rx.last_cf_ms = now_ms;
-    return ECU_OK;
+    return result;
 }
 
 static EcuStatus ReceiveFlowControl(uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
     uint8_t flow_status = data[0] & 0x0fu;
-    uint8_t stmin;
-    if (!tx.active || !tx.waiting_fc) {
-        return ECU_ERR_TP_FLOW;
+    EcuStatus result = ECU_ERR_TP_FLOW;
+    if ((tx.active != 0u) && (tx.waiting_fc != 0u)) {
+        if ((dlc < 3u) || (flow_status > 2u)) {
+            result = FinishTx(ECU_ERR_TP_FLOW, now_ms);
+        } else if (flow_status == 2u) {
+            result = FinishTx(ECU_ERR_TP_FLOW, now_ms);
+        } else if (flow_status == 1u) {
+            tx.wait_started_ms = now_ms;
+            result = ECU_OK;
+        } else {
+            uint8_t stmin = data[2];
+            if ((stmin > 0x7fu) && ((stmin < 0xf1u) || (stmin > 0xf9u))) {
+                result = FinishTx(ECU_ERR_TP_FLOW, now_ms);
+            } else {
+                tx.stmin_ms =
+                    (stmin <= 0x7fu)
+                        ? (uint32_t)stmin
+                        : UINT32_C(1); /* 100-us values round up to the host's ms clock. */
+                tx.block_size = data[1];
+                tx.block_remaining = data[1];
+                tx.waiting_fc = 0u;
+                result = SendConsecutiveFrames(now_ms);
+            }
+        }
     }
-    if (dlc < 3u || flow_status > 2u) {
-        return FinishTx(ECU_ERR_TP_FLOW, now_ms);
-    }
-    if (flow_status == 2u) {
-        return FinishTx(ECU_ERR_TP_FLOW, now_ms);
-    }
-    if (flow_status == 1u) {
-        tx.wait_started_ms = now_ms;
-        return ECU_OK;
-    }
-    stmin = data[2];
-    if (stmin > 0x7fu && (stmin < 0xf1u || stmin > 0xf9u)) {
-        return FinishTx(ECU_ERR_TP_FLOW, now_ms);
-    }
-    tx.stmin_ms = stmin <= 0x7fu ? stmin : 1u; /* 100-us values round up to the host's ms clock. */
-    tx.block_size = data[1];
-    tx.block_remaining = data[1];
-    tx.waiting_fc = 0u;
-    return SendConsecutiveFrames(now_ms);
+    return result;
 }
 
 EcuStatus CanTp_RxIndication(uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
-    EcuStatus result;
-    if (active_config == NULL || data == NULL) {
-        return ECU_ERR_CONFIG;
-    }
-    result = CanTp_AdvanceTime(now_ms);
-    if (result != ECU_OK) {
-        return result;
-    }
-    if (dlc < 1u || dlc > 8u) {
-        AbortRx();
-        if (dlc > 8u && (data[0] >> 4u) == 3u && tx.active && tx.waiting_fc) {
-            return FinishTx(ECU_ERR_TP_FLOW, now_ms);
+    EcuStatus result = ECU_ERR_CONFIG;
+    if ((cantp_config != NULL) && (data != NULL)) {
+        result = CanTp_AdvanceTime(now_ms);
+        if (result == ECU_OK) {
+            if ((dlc < 1u) || (dlc > 8u)) {
+                AbortRx();
+                if ((dlc > 8u) && ((data[0] >> 4u) == 3u) && (tx.active != 0u) &&
+                    (tx.waiting_fc != 0u)) {
+                    result = FinishTx(ECU_ERR_TP_FLOW, now_ms);
+                } else {
+                    result = ECU_ERR_FRAME_DLC;
+                }
+            } else {
+                switch (data[0] >> 4u) {
+                case 0u:
+                    result = ReceiveSingle(dlc, data, now_ms);
+                    break;
+                case 1u:
+                    if (dlc < 2u) {
+                        AbortRx();
+                        result = ECU_ERR_FRAME_DLC;
+                    } else {
+                        result = ReceiveFirst(dlc, data, now_ms);
+                    }
+                    break;
+                case 2u:
+                    result = ReceiveConsecutive(dlc, data, now_ms);
+                    break;
+                case 3u:
+                    result = ReceiveFlowControl(dlc, data, now_ms);
+                    break;
+                default:
+                    AbortRx();
+                    result = ECU_ERR_TP_FLOW;
+                    break;
+                }
+            }
         }
-        return ECU_ERR_FRAME_DLC;
     }
-    switch (data[0] >> 4u) {
-    case 0u:
-        return ReceiveSingle(dlc, data, now_ms);
-    case 1u:
-        if (dlc < 2u) {
-            AbortRx();
-            return ECU_ERR_FRAME_DLC;
-        }
-        return ReceiveFirst(dlc, data, now_ms);
-    case 2u:
-        return ReceiveConsecutive(dlc, data, now_ms);
-    case 3u:
-        return ReceiveFlowControl(dlc, data, now_ms);
-    default:
-        AbortRx();
-        return ECU_ERR_TP_FLOW;
-    }
+    return result;
 }
 
 EcuStatus CanTp_Transmit(size_t length, uint64_t now_ms) {
     uint8_t frame[8] = {0};
     size_t count;
-    EcuStatus result;
-    if (active_config == NULL) {
-        return ECU_ERR_CONFIG;
+    EcuStatus result = ECU_ERR_CONFIG;
+    if (cantp_config != NULL) {
+        if (tx.active != 0u) {
+            result = ECU_ERR_TP_BUSY;
+        } else if ((length == 0u) || (length > ECU_DIAG_MAX_PAYLOAD)) {
+            result = ECU_ERR_TP_LENGTH;
+        } else {
+            tx.active = 1u;
+            tx.length = length;
+            tx.sent = 0u;
+            tx.sent_cf = 0u;
+            tx.next_sn = 1u;
+            tx.waiting_fc = 0u;
+            if (length <= 7u) {
+                frame[0] = (uint8_t)length;
+                count = length;
+            } else {
+                frame[0] = (uint8_t)(0x10u | (length >> 8u));
+                frame[1] = (uint8_t)length;
+                count = 6u;
+            }
+            result = PduR_CanTpCopyTxData(0u, &frame[(length <= 7u) ? 1u : 2u], count);
+            if (result == ECU_OK) {
+                result = LSduR_CanTpTransmit((uint8_t)((length <= 7u) ? (length + 1u) : 8u), frame);
+            }
+            if ((result != ECU_OK) || (length <= 7u)) {
+                result = FinishTx(result, now_ms);
+            } else {
+                tx.sent = count;
+                tx.waiting_fc = 1u;
+                tx.wait_started_ms = now_ms;
+            }
+        }
     }
-    if (tx.active) {
-        return ECU_ERR_TP_BUSY;
-    }
-    if (length == 0u || length > ECU_DIAG_MAX_PAYLOAD) {
-        return ECU_ERR_TP_LENGTH;
-    }
-    tx.active = 1u;
-    tx.length = length;
-    tx.sent = 0u;
-    tx.sent_cf = 0u;
-    tx.next_sn = 1u;
-    tx.waiting_fc = 0u;
-    if (length <= 7u) {
-        frame[0] = (uint8_t)length;
-        count = length;
-    } else {
-        frame[0] = (uint8_t)(0x10u | (length >> 8u));
-        frame[1] = (uint8_t)length;
-        count = 6u;
-    }
-    result = PduR_CanTpCopyTxData(0u, &frame[length <= 7u ? 1u : 2u], count);
-    if (result != ECU_OK) {
-        return FinishTx(result, now_ms);
-    }
-    result = LSduR_CanTpTransmit((uint8_t)(length <= 7u ? length + 1u : 8u), frame);
-    if (result != ECU_OK) {
-        return FinishTx(result, now_ms);
-    }
-    if (length <= 7u) {
-        return FinishTx(ECU_OK, now_ms);
-    }
-    tx.sent = count;
-    tx.waiting_fc = 1u;
-    tx.wait_started_ms = now_ms;
-    return ECU_OK;
+    return result;
 }
