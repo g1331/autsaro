@@ -28,6 +28,13 @@ typedef enum {
     CAN_CS_SLEEP = 0x03    /**< Logical sleep state of this host controller. */
 } Can_ControllerStateType;
 
+/** @brief CAN controller error states defined by R24-11. */
+typedef enum {
+    CAN_ERRORSTATE_ACTIVE = 0,  /**< Controller can communicate normally. */
+    CAN_ERRORSTATE_PASSIVE = 1, /**< Controller does not send active error frames. */
+    CAN_ERRORSTATE_BUSOFF = 2   /**< Controller does not participate on the bus. */
+} Can_ErrorStateType;
+
 /** @brief The single host transmit handle is still completing a previous request. */
 #define CAN_BUSY 0x02u
 

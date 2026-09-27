@@ -96,10 +96,27 @@ int main(void) {
     Can_ConfigType config = {emit};
     Can_PduType pdu = {0u, 2u, 0x321u, bytes};
     Can_ControllerStateType state = CAN_CS_UNINIT;
+    Can_ErrorStateType error_state = CAN_ERRORSTATE_PASSIVE;
+    uint8_t error_counter = 0xa5u;
     Can_Init(NULL);
     if (Can_GetControllerMode(0u, &state) != E_NOT_OK) return 1;
+    if (Can_GetControllerErrorState(0u, &error_state) != E_NOT_OK) return 47;
     Can_Init(&config);
     if (Can_GetControllerMode(0u, &state) != E_OK || state != CAN_CS_STOPPED) return 2;
+    if (Can_GetControllerErrorState(0u, &error_state) != E_OK ||
+        error_state != CAN_ERRORSTATE_ACTIVE) return 48;
+    if (Can_GetControllerErrorState(1u, &error_state) != E_NOT_OK ||
+        Can_GetControllerErrorState(0u, NULL) != E_NOT_OK) return 49;
+    if (Can_SetBaudrate(0u, 0u) != E_OK || Can_SetBaudrate(0u, 1u) != E_NOT_OK ||
+        Can_SetBaudrate(1u, 0u) != E_NOT_OK) return 50;
+    if (Can_GetControllerRxErrorCounter(0u, &error_counter) != E_NOT_OK ||
+        Can_GetControllerTxErrorCounter(0u, &error_counter) != E_NOT_OK ||
+        error_counter != 0xa5u || Can_CheckWakeup(0u) != E_NOT_OK) return 51;
+    Can_DisableControllerInterrupts(0u);
+    Can_DisableControllerInterrupts(0u);
+    Can_EnableControllerInterrupts(0u);
+    Can_EnableControllerInterrupts(0u);
+    Can_EnableControllerInterrupts(0u);
     if (Can_Write(0u, &pdu) != E_NOT_OK) return 3;
     if (Can_SetControllerMode(0u, CAN_CS_STOPPED) != E_NOT_OK) return 13;
     if (Can_SetControllerMode(1u, CAN_CS_STARTED) != E_NOT_OK) return 4;
@@ -123,10 +140,14 @@ int main(void) {
     fail_output = 0u;
     Can_SetMode(CAN_BUS_OFF);
     if (Can_GetControllerMode(0u, &state) != E_OK || state != CAN_CS_STOPPED) return 15;
+    if (Can_GetControllerErrorState(0u, &error_state) != E_OK ||
+        error_state != CAN_ERRORSTATE_BUSOFF) return 52;
     if (Can_GetMode() != CAN_BUS_OFF) return 21;
     if (Can_Transmit(0x321u, 2u, bytes) != ECU_ERR_CONTROLLER) return 11;
     if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_OK) return 16;
     if (Can_GetMode() != CAN_STARTED) return 17;
+    if (Can_GetControllerErrorState(0u, &error_state) != E_OK ||
+        error_state != CAN_ERRORSTATE_ACTIVE) return 53;
     if (Can_SetControllerMode(0u, CAN_CS_STOPPED) != E_OK) return 18;
     if (Can_SetControllerMode(0u, CAN_CS_STOPPED) != E_NOT_OK) return 19;
     if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_OK) return 22;
@@ -189,6 +210,11 @@ int main(void) {
     }
     if (sent != 103u) return 46;
 #endif
+    if (Can_SetControllerMode(0u, CAN_CS_STOPPED) != E_OK) return 54;
+    Can_DeInit();
+    if (Can_GetControllerMode(0u, &state) != E_NOT_OK || Can_Write(0u, &pdu) != E_NOT_OK) return 55;
+    Can_Init(&config);
+    if (Can_GetControllerMode(0u, &state) != E_OK || state != CAN_CS_STOPPED) return 56;
     return 0;
 }
 "#,

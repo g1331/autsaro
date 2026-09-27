@@ -12,6 +12,7 @@ static uint8_t tx_in_flight;
 static uint32_t tx_id;
 static uint8_t tx_length;
 static uint8_t tx_payload[8];
+static uint32_t interrupt_disable_count;
 
 void Can_Init(const Can_ConfigType *config) {
     Can_Lock();
@@ -27,7 +28,33 @@ void Can_Init(const Can_ConfigType *config) {
     bus_off = 0u;
     tx_pending = 0u;
     tx_in_flight = 0u;
+    interrupt_disable_count = 0u;
     Can_Unlock();
+}
+
+void Can_DeInit(void) {
+    Can_Lock();
+    if ((initialized != 0u) && (controller_mode != CAN_STARTED)) {
+        initialized = 0u;
+        tx_sink = NULL;
+        controller_mode = CAN_STOPPED;
+        bus_off = 0u;
+        tx_pending = 0u;
+        tx_in_flight = 0u;
+        interrupt_disable_count = 0u;
+    }
+    Can_Unlock();
+}
+
+Std_ReturnType Can_SetBaudrate(uint8_t controller, uint16_t baud_rate_config_id) {
+    Std_ReturnType result = E_NOT_OK;
+    Can_Lock();
+    if ((initialized != 0u) && (controller == 0u) && (baud_rate_config_id == 0u)) {
+        /* The fixed virtual target has one baud-rate configuration and no registers to change. */
+        result = E_OK;
+    }
+    Can_Unlock();
+    return result;
 }
 
 Std_ReturnType Can_SetControllerMode(uint8_t controller, Can_ControllerStateType transition) {
@@ -72,6 +99,50 @@ Std_ReturnType Can_GetControllerMode(uint8_t controller, Can_ControllerStateType
     }
     Can_Unlock();
     return result;
+}
+
+Std_ReturnType Can_GetControllerErrorState(uint8_t controller, Can_ErrorStateType *error_state) {
+    Std_ReturnType result = E_NOT_OK;
+    Can_Lock();
+    if ((initialized != 0u) && (controller == 0u) && (error_state != NULL)) {
+        *error_state = (bus_off != 0u) ? CAN_ERRORSTATE_BUSOFF : CAN_ERRORSTATE_ACTIVE;
+        result = E_OK;
+    }
+    Can_Unlock();
+    return result;
+}
+
+Std_ReturnType Can_GetControllerRxErrorCounter(uint8_t controller, uint8_t *error_counter) {
+    (void)controller;
+    (void)error_counter;
+    return E_NOT_OK;
+}
+
+Std_ReturnType Can_GetControllerTxErrorCounter(uint8_t controller, uint8_t *error_counter) {
+    (void)controller;
+    (void)error_counter;
+    return E_NOT_OK;
+}
+
+void Can_DisableControllerInterrupts(uint8_t controller) {
+    Can_Lock();
+    if ((initialized != 0u) && (controller == 0u) && (interrupt_disable_count < UINT32_MAX)) {
+        ++interrupt_disable_count;
+    }
+    Can_Unlock();
+}
+
+void Can_EnableControllerInterrupts(uint8_t controller) {
+    Can_Lock();
+    if ((initialized != 0u) && (controller == 0u) && (interrupt_disable_count != 0u)) {
+        --interrupt_disable_count;
+    }
+    Can_Unlock();
+}
+
+Std_ReturnType Can_CheckWakeup(uint8_t controller) {
+    (void)controller;
+    return E_NOT_OK;
 }
 
 static EcuStatus Can_WriteHost(Can_HwHandleType hth, const Can_PduType *pdu) {
