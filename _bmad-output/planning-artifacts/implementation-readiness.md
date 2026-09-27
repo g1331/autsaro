@@ -1,6 +1,6 @@
 # 2026-09-28 产品方向调整后的实施就绪检查
 
-**分范围结果：Epic 3 的受限 Windows 主机交接为 PASS，可以按 Story 3.1→3.2→3.3 开始开发；Epic 1 仍为 `in-progress`、待正式收尾；Epic 2 仍在 backlog，其 Story 2.1 保持 CONCERNS；完整参考 ECU 的 Epic 4–6 仍为 FAIL。**Epic 编号保留历史引用，不表示前两项已经完成。Story 文件的 `ready-for-dev` 只表示其界定的范围可实施，不代表能力档案已通过，也不解除后续 Epic 的决策门。
+**分范围结果：Epic 1 的固定主机 CAN 切片已收尾；Epic 2 及 Story 2.1 仍在 backlog 并暂缓排期；Epic 3 的受限 Windows 主机交接为 PASS，可以按 Story 3.1→3.2→3.3 开始开发；完整参考 ECU 的 Epic 4–6 仍为 FAIL。**Epic 1 `done` 仅对应其有界任务，不升级 `HOST-CAN-01` 的 `documented_behavior`；Story 文件的 `ready-for-dev` 也不代表能力档案已通过。
 
 PRD R1–R7 与 Epic 1、Epic 2 的旧主机结果和拒绝场景可追踪。Story 1.1 的固定主机切片已完成，验收和剩余标准义务记录于对应 story；完成该 story 不代表完整 Can/CanIf 标准支持。Epic 3 经重新限定为当前主机剖面的输入快照、可重建工程与离线双 ECU/诊断复验，已有多文件 ARXML 保存、独立 C99 构建、双 ECU 和诊断测试基础；源码及交接说明明确显示生成目录尚未包含 ARXML 来源。PRD R6/R7、架构交接约束、Epic 退出条件及三份 story 的正反向验收共同界定了可实施增量，不依赖 OS、SWC 或板级选择。其开发 PASS 是任务就绪判断，Epic 完成仍须由非实现者实际复验并按证据门审查。
 
