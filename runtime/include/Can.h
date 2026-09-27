@@ -30,7 +30,7 @@ typedef struct {
     CanTxSink sink; /**< Host frame output callback. */
 } Can_ConfigType;
 
-/** @brief Initialize the host Can Driver in the stopped state.
+/** @brief Initialize the host Can Driver in the stopped state; ignore invalid or repeated calls.
  * @param[in] config Host controller configuration.
  */
 void Can_Init(const Can_ConfigType *config);

@@ -113,6 +113,7 @@ static void *invalid_thread(void *unused) { (void)unused; reject_invalid_frames(
 int main(void) {
     uint8_t bytes[8] = {0x12u, 0x34u};
     Can_ConfigType config = {emit};
+    Can_ConfigType invalid_config = {NULL};
     Can_PduType pdu = {0u, 2u, 0x321u, bytes};
     Can_ControllerStateType state = CAN_CS_UNINIT;
     Can_ErrorStateType error_state = CAN_ERRORSTATE_PASSIVE;
@@ -151,6 +152,10 @@ int main(void) {
     pdu.length = 2u;
     pdu.swPduHandle = 7u;
     if (Can_Write(0u, &pdu) != E_OK || sent != 0u) return 9;
+    Can_Init(NULL);
+    Can_Init(&invalid_config);
+    Can_Init(&config);
+    if (Can_GetControllerMode(0u, &state) != E_OK || state != CAN_CS_STARTED) return 60;
     if (Can_Write(0u, &pdu) != CAN_BUSY || sent != 0u) return 28;
     if (Can_HostFlush() != ECU_OK || sent != 1u || confirmed != 1u || last_confirmed != 7u ||
         callback_write_busy == 0u) return 29;

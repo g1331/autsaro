@@ -42,7 +42,7 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] 对照历史证据与当前源码，找出尚未完成的 STD-001 条目。
+- [x] 对照历史证据与当前源码，找出尚未完成的 STD-001 条目。
 - [ ] 核对官方 R24-11 Can Driver/BSW General 与 ECUC MOD 的适用条款，修复可证实的缺口。
 - [ ] 运行生成工程正反向主机验证、增量质量门和独立复核，记录未通过的能力门。
 
@@ -54,10 +54,17 @@ context:
 
 迁移时已存在 `STD-001` 分支和实现。本文件仅恢复进行中状态，不宣称 story 已完成。旧任务基线提交：`c4a01b5cd41c`；迁移后新改动应另记 story 起始提交。
 
+2026-09-27 实际演练起始提交 `35d0274`。独立只读复核发现运行中无效或重复 `Can_Init` 会重置控制器、丢失已排队报文；主 Agent 将初始化限制为首次有效配置，新增待发帧期间三种重入初始化的回归向量。补丁复核未发现这三个文件中的可执行缺陷。仍待落实历史任务卡列出的适用 Can/CanIf 标准义务及完整配置工件，尤其重复初始化的 DET 处理、控制器模式与 bus-off 通知、BSWMD/MemMap；不能仅因主机测试通过将 story 或 `HOST-CAN-01` 标为完成。
+
 ## Spec Change Log
 
 ## Review Triage Log
 
+- 2026-09-27：独立只读审查发现 `Can_Init(NULL)` 或重复初始化可破坏运行状态。确认并修复；新增 C99 待发帧向量在旧实现会因控制器回到 STOPPED 失败。
+- 2026-09-27：另一只读审查对 `Can.c`、`Can.h`、`end_to_end.rs` 补丁未发现待修复问题；该结论只覆盖补丁，不代替整个 Story 1.1 的标准义务复核。
+
 ## Verification
 
 `python scripts/verify.py --scope all --base <story-baseline>`；`python scripts/verify.py --scope baseline --generated-dir <工程目录>`。按证据逐一执行隔离主机行为验证；原生 GUI 无隔离环境时标记未验证。
+
+本轮以 `35d0274` 为基线运行增量门：12 个 Python 测试、3 个核心单元测试、53 个端到端测试、UI lint/构建、核心与桌面 Clippy/构建均通过。定向 `standard_can_host_entry_points_reject_invalid_requests_and_send_valid_frame` 1/1 通过；双 ECU 金向量也在完整测试中通过。以新生成的独立代表工程运行全量基线：全文件格式、Python/UI lint、全告警 Clippy 与 Doxygen 通过；BSW/RTE/生成 C 的部分 MISRA 扫描分别报告 25/11/7 项，七个能力档案的 `spec_obligations` 仍为 `not_run`，故全量基线退出 1。原生桌面 GUI 未在隔离会话重新执行。Story 保持 `in-progress`。

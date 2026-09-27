@@ -27,23 +27,19 @@ static EcuStatus rx_result;
 
 void Can_Init(const Can_ConfigType *config) {
     Can_Lock();
-    tx_sink = NULL;
-    initialized = 0u;
-    if (config != NULL) {
+    if ((initialized == 0u) && (config != NULL) && (config->sink != NULL)) {
         tx_sink = config->sink;
-        if (tx_sink != NULL) {
-            initialized = 1u;
-        }
+        initialized = 1u;
+        controller_mode = CAN_STOPPED;
+        bus_off = 0u;
+        tx_pending = 0u;
+        tx_in_flight = 0u;
+        tx_confirmation_pending = 0u;
+        tx_confirming = 0u;
+        rx_pending = 0u;
+        rx_processing = 0u;
+        interrupt_disable_count = 0u;
     }
-    controller_mode = CAN_STOPPED;
-    bus_off = 0u;
-    tx_pending = 0u;
-    tx_in_flight = 0u;
-    tx_confirmation_pending = 0u;
-    tx_confirming = 0u;
-    rx_pending = 0u;
-    rx_processing = 0u;
-    interrupt_disable_count = 0u;
     Can_Unlock();
 }
 
