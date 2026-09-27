@@ -21,7 +21,7 @@
         {
           "task_id": "BUILD-002",
           "detail": "首次 release 桌面测试在共享交互桌面启动，维护者指出干扰；随即关闭本轮窗口与 Vite，改用未切换到用户屏幕的独立 Windows desktop 与 WebView2 CDP，在后台完成预览、确认、构建和拒绝场景。",
-          "source": "docs/workflow/evidence/BUILD-002-generation-preview-2026-09-26.md"
+          "source": "docs/assurance/evidence/BUILD-002-generation-preview-2026-09-26.md"
         }
       ],
       "change": "AGENTS.md 明确所有 Agent 验收须在后台完成；验证桌面程序时使用真正隔离的桌面会话或虚拟机，无法做到就标未验证，不在用户当前桌面补做。",

@@ -17,23 +17,23 @@
       "gates": {
         "input_roundtrip": {
           "status": "pending_review",
-          "evidence": "docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md"
+          "evidence": "docs/assurance/evidence/AUDIT-001-host-can-2026-09-26.md"
         },
         "artifact_closure": {
           "status": "pending_review",
-          "evidence": "docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md"
+          "evidence": "docs/assurance/evidence/AUDIT-001-host-can-2026-09-26.md"
         },
         "build_static": {
           "status": "pending_review",
-          "evidence": "docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md"
+          "evidence": "docs/assurance/evidence/AUDIT-001-host-can-2026-09-26.md"
         },
         "independent_behavior": {
           "status": "pending_review",
-          "evidence": "docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md"
+          "evidence": "docs/assurance/evidence/AUDIT-001-host-can-2026-09-26.md"
         },
         "user_workflow": {
           "status": "pending_review",
-          "evidence": "docs/workflow/evidence/AUDIT-001-host-can-ui-2026-09-26.md"
+          "evidence": "docs/assurance/evidence/AUDIT-001-host-can-ui-2026-09-26.md"
         },
         "spec_obligations": {
           "status": "not_run"
@@ -55,19 +55,19 @@
       "gates": {
         "input_roundtrip": {
           "status": "pending_review",
-          "evidence": "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
+          "evidence": "docs/assurance/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
         },
         "artifact_closure": {
           "status": "pending_review",
-          "evidence": "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
+          "evidence": "docs/assurance/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
         },
         "build_static": {
           "status": "pending_review",
-          "evidence": "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
+          "evidence": "docs/assurance/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
         },
         "independent_behavior": {
           "status": "pending_review",
-          "evidence": "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
+          "evidence": "docs/assurance/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
         },
         "user_workflow": {
           "status": "not_run"
@@ -249,7 +249,7 @@
       "id": "AUDIT-001",
       "title": "主机 CAN 信号基线证据审计",
       "status": "done",
-      "card": "docs/workflow/tasks/AUDIT-001-host-can.md",
+      "card": "docs/workflow/archive/tasks/AUDIT-001-host-can.md",
       "branch": "audit/AUDIT-001-closure",
       "base_commit": "e977cc385883",
       "capabilities": [
@@ -257,22 +257,22 @@
       ],
       "depends_on": [],
       "evidence": [
-        "docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md",
-        "docs/workflow/evidence/AUDIT-001-host-can-ui-2026-09-26.md",
-        "docs/workflow/evidence/AUDIT-001-host-can-closure-2026-09-26.md"
+        "docs/assurance/evidence/AUDIT-001-host-can-2026-09-26.md",
+        "docs/assurance/evidence/AUDIT-001-host-can-ui-2026-09-26.md",
+        "docs/assurance/evidence/AUDIT-001-host-can-closure-2026-09-26.md"
       ],
       "review": {
         "status": "passed",
         "reviewer": "Agent audit001_closure_review",
         "date": "2026-09-26",
-        "evidence": "docs/workflow/evidence/AUDIT-001-host-can-closure-2026-09-26.md"
+        "evidence": "docs/assurance/evidence/AUDIT-001-host-can-closure-2026-09-26.md"
       }
     },
     {
       "id": "AUDIT-002",
       "title": "主机 DoCAN 档案拆分与基础连接审计",
       "status": "done",
-      "card": "docs/workflow/tasks/AUDIT-002-host-docan.md",
+      "card": "docs/workflow/archive/tasks/AUDIT-002-host-docan.md",
       "branch": "audit/AUDIT-002-docan-baseline",
       "base_commit": "dc8d0ef8c559",
       "capabilities": [
@@ -282,20 +282,20 @@
         "AUDIT-001"
       ],
       "evidence": [
-        "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
+        "docs/assurance/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
       ],
       "review": {
         "status": "passed",
         "reviewer": "Agent audit002_review",
         "date": "2026-09-26",
-        "evidence": "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
+        "evidence": "docs/assurance/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
       }
     },
     {
       "id": "BUILD-001",
       "title": "保存前查看 ARXML 文件改动",
       "status": "done",
-      "card": "docs/workflow/tasks/BUILD-001-arxml-save-preview.md",
+      "card": "docs/workflow/archive/tasks/BUILD-001-arxml-save-preview.md",
       "branch": "feature/BUILD-001-arxml-save-preview",
       "base_commit": "cdff6ebe52d5",
       "capabilities": [
@@ -305,21 +305,21 @@
         "AUDIT-001"
       ],
       "evidence": [
-        "docs/workflow/evidence/BUILD-001-save-preview-2026-09-26.md",
-        "docs/workflow/evidence/BUILD-001-save-preview-2026-09-26.png"
+        "docs/assurance/evidence/BUILD-001-save-preview-2026-09-26.md",
+        "docs/assurance/evidence/BUILD-001-save-preview-2026-09-26.png"
       ],
       "review": {
         "status": "passed",
         "reviewer": "Agent build001_review",
         "date": "2026-09-26",
-        "evidence": "docs/workflow/evidence/BUILD-001-save-preview-2026-09-26.md"
+        "evidence": "docs/assurance/evidence/BUILD-001-save-preview-2026-09-26.md"
       }
     },
     {
       "id": "BUILD-002",
       "title": "生成前查看 C99 工程改动",
       "status": "done",
-      "card": "docs/workflow/tasks/BUILD-002-generation-preview.md",
+      "card": "docs/workflow/archive/tasks/BUILD-002-generation-preview.md",
       "branch": "feature/BUILD-002-generation-preview",
       "base_commit": "c89868e9a5ab",
       "capabilities": [
@@ -329,21 +329,21 @@
         "BUILD-001"
       ],
       "evidence": [
-        "docs/workflow/evidence/BUILD-002-generation-preview-2026-09-26.md",
-        "docs/workflow/evidence/BUILD-002-generation-preview-hidden-2026-09-26.png"
+        "docs/assurance/evidence/BUILD-002-generation-preview-2026-09-26.md",
+        "docs/assurance/evidence/BUILD-002-generation-preview-hidden-2026-09-26.png"
       ],
       "review": {
         "status": "passed",
         "reviewer": "Agent build002_review",
         "date": "2026-09-26",
-        "evidence": "docs/workflow/evidence/BUILD-002-generation-preview-2026-09-26.md"
+        "evidence": "docs/assurance/evidence/BUILD-002-generation-preview-2026-09-26.md"
       }
     },
     {
       "id": "BUILD-003",
       "title": "生成工程的离线构建交接",
       "status": "done",
-      "card": "docs/workflow/tasks/BUILD-003-offline-handoff.md",
+      "card": "docs/workflow/archive/tasks/BUILD-003-offline-handoff.md",
       "branch": "feature/BUILD-003-offline-handoff",
       "base_commit": "dbb2afdb9a76",
       "capabilities": [
@@ -353,20 +353,20 @@
         "BUILD-002"
       ],
       "evidence": [
-        "docs/workflow/evidence/BUILD-003-offline-handoff-2026-09-26.md"
+        "docs/assurance/evidence/BUILD-003-offline-handoff-2026-09-26.md"
       ],
       "review": {
         "status": "passed",
         "reviewer": "Agent build003_review",
         "date": "2026-09-26",
-        "evidence": "docs/workflow/evidence/BUILD-003-offline-handoff-2026-09-26.md"
+        "evidence": "docs/assurance/evidence/BUILD-003-offline-handoff-2026-09-26.md"
       }
     },
     {
       "id": "AUDIT-003",
       "title": "主机单 DTC 与 NvM 档案审计",
       "status": "proposed",
-      "card": "docs/workflow/tasks/AUDIT-003-host-dtc.md",
+      "card": "docs/workflow/archive/tasks/AUDIT-003-host-dtc.md",
       "capabilities": [
         "HOST-DOCAN-DTC-01"
       ],
@@ -379,7 +379,7 @@
       "id": "BUILD-004",
       "title": "构建时核对生成工程完整性",
       "status": "done",
-      "card": "docs/workflow/tasks/BUILD-004-build-integrity.md",
+      "card": "docs/workflow/archive/tasks/BUILD-004-build-integrity.md",
       "branch": "feature/BUILD-004-build-integrity",
       "base_commit": "4e22935adc94",
       "capabilities": [
@@ -389,20 +389,20 @@
         "BUILD-003"
       ],
       "evidence": [
-        "docs/workflow/evidence/BUILD-004-build-integrity-2026-09-26.md"
+        "docs/assurance/evidence/BUILD-004-build-integrity-2026-09-26.md"
       ],
       "review": {
         "status": "passed",
         "reviewer": "Agent build004_review",
         "date": "2026-09-26",
-        "evidence": "docs/workflow/evidence/BUILD-004-build-integrity-2026-09-26.md"
+        "evidence": "docs/assurance/evidence/BUILD-004-build-integrity-2026-09-26.md"
       }
     },
     {
       "id": "DIAG-001",
       "title": "读取主机 ECU 支持的 DTC 列表",
       "status": "done",
-      "card": "docs/workflow/tasks/DIAG-001-supported-dtcs.md",
+      "card": "docs/workflow/archive/tasks/DIAG-001-supported-dtcs.md",
       "branch": "feature/DIAG-001-supported-dtcs",
       "base_commit": "143cfe158be8",
       "capabilities": [
@@ -413,20 +413,20 @@
         "AUDIT-002"
       ],
       "evidence": [
-        "docs/workflow/evidence/DIAG-001-supported-dtcs-2026-09-26.md"
+        "docs/assurance/evidence/DIAG-001-supported-dtcs-2026-09-26.md"
       ],
       "review": {
         "status": "passed",
         "reviewer": "Agent diag001_review",
         "date": "2026-09-26",
-        "evidence": "docs/workflow/evidence/DIAG-001-supported-dtcs-2026-09-26.md"
+        "evidence": "docs/assurance/evidence/DIAG-001-supported-dtcs-2026-09-26.md"
       }
     },
     {
       "id": "DIAG-002",
       "title": "读取当前诊断会话 DID",
       "status": "done",
-      "card": "docs/workflow/tasks/DIAG-002-active-session-did.md",
+      "card": "docs/workflow/archive/tasks/DIAG-002-active-session-did.md",
       "branch": "feature/DIAG-002-active-session-did",
       "base_commit": "b359d56bb538",
       "capabilities": [
@@ -436,20 +436,20 @@
         "DIAG-001"
       ],
       "evidence": [
-        "docs/workflow/evidence/DIAG-002-active-session-did-2026-09-26.md"
+        "docs/assurance/evidence/DIAG-002-active-session-did-2026-09-26.md"
       ],
       "review": {
         "status": "passed",
         "reviewer": "Agent diag002_review",
         "date": "2026-09-26",
-        "evidence": "docs/workflow/evidence/DIAG-002-active-session-did-2026-09-26.md"
+        "evidence": "docs/assurance/evidence/DIAG-002-active-session-did-2026-09-26.md"
       }
     },
     {
       "id": "DIAG-003",
       "title": "单次 0x22 请求读取多个 DID",
       "status": "done",
-      "card": "docs/workflow/tasks/DIAG-003-multi-did-read.md",
+      "card": "docs/workflow/archive/tasks/DIAG-003-multi-did-read.md",
       "branch": "feature/DIAG-003-multi-did-read",
       "base_commit": "3410e7cbbd19",
       "capabilities": [
@@ -459,20 +459,20 @@
         "DIAG-002"
       ],
       "evidence": [
-        "docs/workflow/evidence/DIAG-003-multi-did-read-2026-09-27.md"
+        "docs/assurance/evidence/DIAG-003-multi-did-read-2026-09-27.md"
       ],
       "review": {
         "status": "passed",
         "reviewer": "Agent diag003_review",
         "date": "2026-09-27",
-        "evidence": "docs/workflow/evidence/DIAG-003-multi-did-read-2026-09-27.md"
+        "evidence": "docs/assurance/evidence/DIAG-003-multi-did-read-2026-09-27.md"
       }
     },
     {
       "id": "STD-001",
       "title": "Windows 主机目标的标准 Can Driver 接口切片",
       "status": "active",
-      "card": "docs/workflow/tasks/STD-001-host-can-driver-api.md",
+      "card": "docs/workflow/archive/tasks/STD-001-host-can-driver-api.md",
       "branch": "fix/quality-check-findings",
       "base_commit": "c4a01b5cd41c",
       "capabilities": [
@@ -482,7 +482,7 @@
         "DIAG-003"
       ],
       "evidence": [
-        "docs/workflow/evidence/STD-001-host-can-driver-api-2026-09-27.md"
+        "docs/assurance/evidence/STD-001-host-can-driver-api-2026-09-27.md"
       ]
     }
   ]

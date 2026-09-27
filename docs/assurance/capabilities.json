@@ -15,23 +15,23 @@
       "gates": {
         "input_roundtrip": {
           "status": "pending_review",
-          "evidence": "docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md"
+          "evidence": "docs/assurance/evidence/AUDIT-001-host-can-2026-09-26.md"
         },
         "artifact_closure": {
           "status": "pending_review",
-          "evidence": "docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md"
+          "evidence": "docs/assurance/evidence/AUDIT-001-host-can-2026-09-26.md"
         },
         "build_static": {
           "status": "pending_review",
-          "evidence": "docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md"
+          "evidence": "docs/assurance/evidence/AUDIT-001-host-can-2026-09-26.md"
         },
         "independent_behavior": {
           "status": "pending_review",
-          "evidence": "docs/workflow/evidence/AUDIT-001-host-can-2026-09-26.md"
+          "evidence": "docs/assurance/evidence/AUDIT-001-host-can-2026-09-26.md"
         },
         "user_workflow": {
           "status": "pending_review",
-          "evidence": "docs/workflow/evidence/AUDIT-001-host-can-ui-2026-09-26.md"
+          "evidence": "docs/assurance/evidence/AUDIT-001-host-can-ui-2026-09-26.md"
         },
         "spec_obligations": {
           "status": "not_run"
@@ -53,19 +53,19 @@
       "gates": {
         "input_roundtrip": {
           "status": "pending_review",
-          "evidence": "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
+          "evidence": "docs/assurance/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
         },
         "artifact_closure": {
           "status": "pending_review",
-          "evidence": "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
+          "evidence": "docs/assurance/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
         },
         "build_static": {
           "status": "pending_review",
-          "evidence": "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
+          "evidence": "docs/assurance/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
         },
         "independent_behavior": {
           "status": "pending_review",
-          "evidence": "docs/workflow/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
+          "evidence": "docs/assurance/evidence/AUDIT-002-docan-baseline-2026-09-26.md"
         },
         "user_workflow": {
           "status": "not_run"

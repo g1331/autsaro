@@ -1,6 +1,6 @@
 # BUILD-002：生成前查看 C99 工程改动
 
-**状态：**done（2026-09-26 独立审查通过）。**分支：**`feature/BUILD-002-generation-preview`。**基线：**`c89868e9a5ab`。**依赖：**BUILD-001。**关联能力：**HOST-CAN-01。**类型：**产品能力增量。[实施与复核证据](../evidence/BUILD-002-generation-preview-2026-09-26.md)。
+**状态：**done（2026-09-26 独立审查通过）。**分支：**`feature/BUILD-002-generation-preview`。**基线：**`c89868e9a5ab`。**依赖：**BUILD-001。**关联能力：**HOST-CAN-01。**类型：**产品能力增量。[实施与复核证据](../../../assurance/evidence/BUILD-002-generation-preview-2026-09-26.md)。
 
 ## 用户可见结果
 

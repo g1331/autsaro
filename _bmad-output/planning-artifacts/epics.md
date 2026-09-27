@@ -20,7 +20,7 @@
 
 ### Story 1.1: Complete STD-001 host Can Driver slice
 
-承接[在途任务卡](../../docs/workflow/tasks/STD-001-host-can-driver-api.md)与[已有证据](../../docs/workflow/evidence/STD-001-host-can-driver-api-2026-09-27.md)，迁移时保持 in-progress，不重复实现已提交代码。核对 R24-11 `AUTOSAR_CP_SWS_CANDriver.pdf` 的 `SWS_Can_00223`、`SWS_Can_00230`、`SWS_Can_91014`、`SWS_Can_00233`，及 `AUTOSAR_CP_SWS_BSWGeneral.pdf` 的 `SWS_BSW_00006`、`SWS_BSW_00115`；ECUC/MOD 依赖及其他适用义务按任务卡补齐。
+承接[在途任务卡](../../docs/workflow/archive/tasks/STD-001-host-can-driver-api.md)与[已有证据](../../docs/assurance/evidence/STD-001-host-can-driver-api-2026-09-27.md)，迁移时保持 in-progress，不重复实现已提交代码。核对 R24-11 `AUTOSAR_CP_SWS_CANDriver.pdf` 的 `SWS_Can_00223`、`SWS_Can_00230`、`SWS_Can_91014`、`SWS_Can_00233`，及 `AUTOSAR_CP_SWS_BSWGeneral.pdf` 的 `SWS_BSW_00006`、`SWS_BSW_00115`；ECUC/MOD 依赖及其他适用义务按任务卡补齐。
 
 验收：生成工程的 CanIf→Can 发送确实进入标准入口并保留可观察报文；正向双 ECU 结果与独立预期一致；空配置、错误句柄/ID/DLC、空 PDU 或数据、非法状态及影响生成的变体被拒绝；运行增量质量门、记录基线红项和未验证范围；新的独立复核结论写入 story 记录。未完成门禁不得升级 `HOST-CAN-01` 声明。
 

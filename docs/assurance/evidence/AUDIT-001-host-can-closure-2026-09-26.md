@@ -16,7 +16,7 @@
 | `Rte.c` / `Rte.h` | 两个固定函数 `Rte_WriteSignal`、`Rte_ReadSignal` 只是转调 Com；源码来自 `runtime/`，不随 ECU/SWC 模型生成。 | 这是主机信号桥接层；不能仅因文件名是 `Rte.h` 就宣称 RTE 生成器或 SWC 接口已实现。 |
 | 模型和描述文件 | ARXML 渲染器生成固定主机 ECUC 值与系统 PDU/信号；生成器仅输出上述三项专属文件，没有 BSW Module Description、RTE Basic Software Module Description 或其产物清单生成路径。 | 固定主机 ECUC 的局部 MOD 闭包有测试；标准 BSW/RTE 描述工件门未满足，不将主机 ECUC 值误当 BSWMD。 |
 
-本地 R24-11 [BSW General PDF](../../../docs/official/R24-11/CP/BSWGeneral/AUTOSAR_CP_SWS_BSWGeneral.pdf) 原文页 18–37 与仓库[质量门研究](../../research/autosar-platform/generated-c-quality-gates.md)用于下表适用性核对。条款只施加在其实际对象上；下表的“缺口”不等于判定目前主机专属代码违反一个尚未声明适用的标准模块接口。
+本地 R24-11 [BSW General PDF](../../official/R24-11/CP/BSWGeneral/AUTOSAR_CP_SWS_BSWGeneral.pdf) 原文页 18–37 与仓库[质量门研究](../../research/autosar-platform/generated-c-quality-gates.md)用于下表适用性核对。条款只施加在其实际对象上；下表的“缺口”不等于判定目前主机专属代码违反一个尚未声明适用的标准模块接口。
 
 | 条款/项目门 | 本次检查 | 状态与边界 |
 | --- | --- | --- |

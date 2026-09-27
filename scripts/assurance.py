@@ -32,7 +32,7 @@ def repository_file(root: Path, value: object) -> bool:
 
 def evidence_file(root: Path, value: object) -> bool:
     return repository_file(root, value) and str(value).startswith(
-        "docs/workflow/evidence/"
+        "docs/assurance/evidence/"
     )
 
 

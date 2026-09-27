@@ -16,4 +16,4 @@ CP/FO R24-11、无配置变体、Windows 主机虚拟 ECU 与 MinGW GCC；先以
 
 ## 交接
 
-完整 `verify --scope all` 两次通过；审查者发现的含空格路径示例问题已修复并复审通过。原生桌面与另一台机器的交接尚未运行，能力声明保持 `documented_behavior`。实施、验证与审查记录见 [BUILD-003 证据](../evidence/BUILD-003-offline-handoff-2026-09-26.md)。
+完整 `verify --scope all` 两次通过；审查者发现的含空格路径示例问题已修复并复审通过。原生桌面与另一台机器的交接尚未运行，能力声明保持 `documented_behavior`。实施、验证与审查记录见 [BUILD-003 证据](../../../assurance/evidence/BUILD-003-offline-handoff-2026-09-26.md)。

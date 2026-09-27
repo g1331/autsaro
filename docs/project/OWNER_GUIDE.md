@@ -14,7 +14,7 @@
 
 不知道下一步时直接调用 `bmad-help`。`bmad-build` 处理一个明确的开发目标或 story；委托整个 epic 时，Agent 应按 BMad 规划逐项推进，并核对组合结果，而不是把 epic 当成单次 Build。关键意图不清时使用适用的 BMad 规划技能；`bmad-code-review` 可作额外审查，`bmad-retrospective` 用于阶段复盘。这些技能各有工作范围，但仓库不再规定每次委托只能推进一个工作单元或必须在下一项前开新会话。
 
-当前长期方向与阶段需求在 `_bmad-output/planning-artifacts/` 的 product brief 和 PRD，近期工作拆在 epics/stories，任务状态在 `_bmad-output/implementation-artifacts/sprint-status.yaml`。学习层目前是 product brief 中的待规划方向，不会仅因旧议题存在就进入开发队列。早期产品地图、决策和研究已归档到 `docs/project/archive/` 与 `docs/research/autosar-platform/`，不再需要你维护第二份产品计划。旧任务卡和证据仍留在 `docs/workflow/` 供追溯；能力是否有资格标为“内部支持”看 `docs/assurance/acceptance-policy.md` 和 `docs/assurance/capabilities.json` 的独立证据门。Story 完成不等于某个 AUTOSAR 模块已完整实现。
+当前长期方向与阶段需求在 `_bmad-output/planning-artifacts/` 的 product brief 和 PRD，近期工作拆在 epics/stories，任务状态在 `_bmad-output/implementation-artifacts/sprint-status.yaml`。学习层目前是 product brief 中的待规划方向，不会仅因旧议题存在就进入开发队列。早期产品地图、决策和研究已归档到 `docs/project/archive/` 与 `docs/research/autosar-platform/`，不再需要你维护第二份产品计划。旧任务卡和反馈保存在 `docs/workflow/archive/`，历史运行证据保存在 `docs/assurance/evidence/`；能力是否有资格标为“内部支持”看 `docs/assurance/acceptance-policy.md` 和 `docs/assurance/capabilities.json` 的独立证据门。Story 完成不等于某个 AUTOSAR 模块已完整实现。
 
 Agent 应把规范研究放进具体功能任务，不用一轮轮独立审计替代产品开发。当前做什么须同时核对委托目标、BMad 规划与状态及实际证据，不以本说明中的静态示例为准。
 

@@ -7,8 +7,8 @@ route: dispatch
 baseline_commit: fb776bfaef4016b3f4903136701b80b108ccc55e
 review_loop_iteration: 0
 context:
-  - docs/workflow/tasks/STD-001-host-can-driver-api.md
-  - docs/workflow/evidence/STD-001-host-can-driver-api-2026-09-27.md
+  - docs/workflow/archive/tasks/STD-001-host-can-driver-api.md
+  - docs/assurance/evidence/STD-001-host-can-driver-api-2026-09-27.md
 ---
 
 <frozen-after-approval reason="既有已授权任务迁移；范围由历史任务卡限定">
