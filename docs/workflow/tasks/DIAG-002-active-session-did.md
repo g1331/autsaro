@@ -1,6 +1,6 @@
 # DIAG-002：读取当前诊断会话 DID
 
-**状态：**done（2026-09-26 独立审查通过）。**分支：**`feature/DIAG-002-active-session-did`。**基线：**`b3ee5c9`。**依赖：**DIAG-001。**关联能力：**HOST-DOCAN-01。**类型：**新增生成 ECU 的可观察诊断行为。
+**状态：**done（2026-09-26 独立审查通过）。**分支：**`feature/DIAG-002-active-session-did`。**基线：**`b359d56bb538`。**依赖：**DIAG-001。**关联能力：**HOST-DOCAN-01。**类型：**新增生成 ECU 的可观察诊断行为。
 
 ## 范围与依据
 

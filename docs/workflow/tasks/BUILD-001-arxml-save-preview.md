@@ -1,6 +1,6 @@
 # BUILD-001：保存前查看 ARXML 文件改动
 
-**状态：**done（2026-09-26 独立审查通过）。**分支：**`feature/BUILD-001-arxml-save-preview`。**基线：**`8acff1c`。**依赖：**AUDIT-001。**关联能力：**HOST-CAN-01。**类型：**产品能力增量。[实施、原生验证与独立审查证据](../evidence/BUILD-001-save-preview-2026-09-26.md)。
+**状态：**done（2026-09-26 独立审查通过）。**分支：**`feature/BUILD-001-arxml-save-preview`。**基线：**`cdff6ebe52d5`。**依赖：**AUDIT-001。**关联能力：**HOST-CAN-01。**类型：**产品能力增量。[实施、原生验证与独立审查证据](../evidence/BUILD-001-save-preview-2026-09-26.md)。
 
 ## 用户可见结果
 

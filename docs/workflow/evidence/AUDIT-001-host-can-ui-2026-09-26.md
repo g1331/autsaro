@@ -2,7 +2,7 @@
 
 ## 范围、输入与基线
 
-- 源码基线 `e21b778`；被测源码提交 `9b3b885`，分支 `audit/AUDIT-001-host-can`。目标为 Windows 主机虚拟 ECU；工具链和本地 R24-11 XSD/MOD/Showcase 包摘要见[前一切片](AUDIT-001-host-can-2026-09-26.md)。官方 ZIP 不提交。
+- 源码基线 `231b7131eb31`；被测源码提交 `c747bf91f365`，分支 `audit/AUDIT-001-host-can`。目标为 Windows 主机虚拟 ECU；工具链和本地 R24-11 XSD/MOD/Showcase 包摘要见[前一切片](AUDIT-001-host-can-2026-09-26.md)。官方 ZIP 不提交。
 - 本机 17 个 R24-11 官方 ZIP 中，对单项不超过 25 MiB 的 `.arxml/.xml` 搜索 `<CAN-FRAME>`、`<I-SIGNAL-I-PDU>` 和 `CanIfCfg` 配置值，未取得可直接编辑的完整外部 CAN 项目；本搜索不涵盖超大成员，也不证明外界没有此类项目。因此本次**原生界面编辑输入仍是本工具生成后拆分的 R24-11 XSD 有效主机配置**，不能填补“真实外部多文件 CAN 输入”的门。
 - 可重建的三文件配置由 `core/tests/end_to_end.rs` 的 `three_file_host_can_edit_preserves_retained_and_untouched_sources` 固定：Alpha 的 `Command` 是 ID `801`、DLC `2`、10 ms Tx，`SendCount` 为 bit 3、8 bit、初值 5；`Reply` 是 ID `1110`、DLC `2`、50 ms Rx，`RecvStatus` 在 bit 0。将系统 `ISignal_SendCount` 移到同包 `Signals.arxml`，Mcu 模块移到同包 `Clock.arxml`，另加独立的 `RetainedUnknown` 信号作为保留项。Beta 使用相反 Tx/Rx 方向、相同两 ID、Rx 超时 40 ms 与 Tx 周期 20 ms。测试在临时目录重建和校验输入；原生演练也使用临时目录，不把机器路径写入可移植命令。
 - 演练的三份 Alpha 输入在编辑前 SHA-256：主文件 `c4fdb51831785c98cd22874de9b43f672c8e6322df3f816f635bb496e5eadf9a`、Clock `0d5a38e6d5ebf721b43f7cca8de04c10b1596831f45a0e95131fd4c7f5a0725f`、Signals `6d910aed539f576b94c80b3421c1959adf86dc88b15b29d966bda09646ab1801`。这些摘要仅标识本次临时演练输入；可移植重建入口是上述测试的配置步骤。
@@ -43,6 +43,6 @@ python scripts/workflow.py check
 
 ## 独立复核
 
-另一 Agent 只读复核了 `9b3b885` 的来源字节检查、保存复核、生成前拒绝和两项端到端断言；独立复跑两项定向测试、工作流 Python **8/8** 与 `workflow.py check`，均通过。其 Rust 首次执行缺少本机 vcpkg 环境变量，按 README 设定后复跑通过。复核还对照了临时输入摘要、7 bit 信号及保留项、未改写的 Clock、34 项生成清单、空拒绝目录和恢复后的 ID `803`。未发现阻断本次本地集成的缺陷，同意 `AUDIT-001` 维持 `active`、`HOST-CAN-01` 维持 `documented_behavior`。
+另一 Agent 只读复核了 `c747bf91f365` 的来源字节检查、保存复核、生成前拒绝和两项端到端断言；独立复跑两项定向测试、工作流 Python **8/8** 与 `workflow.py check`，均通过。其 Rust 首次执行缺少本机 vcpkg 环境变量，按 README 设定后复跑通过。复核还对照了临时输入摘要、7 bit 信号及保留项、未改写的 Clock、34 项生成清单、空拒绝目录和恢复后的 ID `803`。未发现阻断本次本地集成的缺陷，同意 `AUDIT-001` 维持 `active`、`HOST-CAN-01` 维持 `documented_behavior`。
 
 复核明确指出，磁盘产物和截图不能独立证明 `CreateDesktopW`、原生选择器、IPC 的完整逐步操作，因此 `user_workflow` 仅为 `pending_review`。来源预检与生成之间的并发改动仍可能产生旧快照工程，不能把顺序拒绝扩大解释为并发安全。工作流测试的合成夹具还依赖实时列表前两项的顺序；已记入 `WF-003`，不阻断本切片。运行中的 Vite 占用 `esbuild.exe` 已记入 `WF-004`。

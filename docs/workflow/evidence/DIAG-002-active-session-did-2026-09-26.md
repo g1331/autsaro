@@ -2,7 +2,7 @@
 
 ## 组合、输入和独立预期
 
-基线 `b3ee5c9`，分支 `feature/DIAG-002-active-session-did`。CP/FO R24-11、无变体、Windows 主机虚拟 ECU、MSVC Rust 1.98.1、MSYS2 MinGW GCC 16.1.0。依据 [R24-11 Dcm SWS](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_DiagnosticCommunicationManager.pdf) §7.4.2.2、`SWS_Dcm_00085`（PDF 页 112）：DSP 内部管理 `0xF186` 的读访问。本主机档案将其限定为已实现的默认会话 `01` 与扩展会话 `03`，不借此声明完整 Dcm 标准接口。
+基线 `b359d56bb538`，分支 `feature/DIAG-002-active-session-did`。CP/FO R24-11、无变体、Windows 主机虚拟 ECU、MSVC Rust 1.98.1、MSYS2 MinGW GCC 16.1.0。依据 [R24-11 Dcm SWS](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_DiagnosticCommunicationManager.pdf) §7.4.2.2、`SWS_Dcm_00085`（PDF 页 112）：DSP 内部管理 `0xF186` 的读访问。本主机档案将其限定为已实现的默认会话 `01` 与扩展会话 `03`，不借此声明完整 Dcm 标准接口。
 
 `core/tests/end_to_end.rs::active_session_did_reports_session_transitions_and_rejects_invalid_reads` 创建一个 Tx 帧、一个 32-bit 信号、`0x700/0x708` 物理诊断连接，配置 DID `0x1234` 与 S3=5000 ms。测试先确认不能把保留 `0xF186` 配为普通 DID；然后保存、重开、XSD/语义验证、生成 C99 工程并编译。生成后原 ARXML 字节未变化。独立预期按 SID `22` 的正响应 `62`、DID 高低字节 `F1 86` 和活动会话编号构成，测试不从生成器读取预期响应。
 

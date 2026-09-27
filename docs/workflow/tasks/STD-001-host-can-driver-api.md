@@ -1,6 +1,6 @@
 # STD-001：Windows 主机目标的标准 Can Driver 接口切片
 
-**状态：**active。**分支：**`fix/quality-check-findings`。**基线：**`caaf01e`。**关联能力：**HOST-CAN-01。**类型：**标准模块交付的第一项接口与运行切片；不预先升级支持声明。
+**状态：**active。**分支：**`fix/quality-check-findings`。**基线：**`c4a01b5cd41c`。**关联能力：**HOST-CAN-01。**类型：**标准模块交付的第一项接口与运行切片；不预先升级支持声明。
 
 ## 范围与依据
 

@@ -2,7 +2,7 @@
 
 ## 被审组合、输入与基线
 
-- 任务 `AUDIT-002`，能力 `HOST-DOCAN-01`。基线 `bdb9881`，本分支的测试与档案提交 `66ef3d9`。CP/FO R24-11，Windows 虚拟 ECU，MSYS2 GCC 16.1.0；Rust/Cargo 1.98.1、Node 24.19.0、npm 11.17.0、Python 3.12.9。未选配置变体。
+- 任务 `AUDIT-002`，能力 `HOST-DOCAN-01`。基线 `dc8d0ef8c559`，本分支的测试与档案提交 `db8dbd0e6060`。CP/FO R24-11，Windows 虚拟 ECU，MSYS2 GCC 16.1.0；Rust/Cargo 1.98.1、Node 24.19.0、npm 11.17.0、Python 3.12.9。未选配置变体。
 - 可重建输入在 `core/tests/end_to_end.rs` 的 `configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_multiframe_did`：新建 `Diag.arxml`，一条 `0x321`、DLC 8、周期 1000 ms 的 Tx 帧，两个有序 32-bit LSB0 信号；诊断请求/响应 ID 为 `0x700/0x708`，S3=5000 ms，N_Bs=N_Cr=200 ms，DID=`0x1234`。未启用 DTC、`0x2E`、`0x31` 或 `0x27`。测试临时目录由 `Scratch` 清理，复核者以测试名重建输入。
 - 本地官方 XSD 包 `docs/official/R24-11/FO/MethodologyAndTemplates/AUTOSAR_FO_MMOD_XMLSchema.zip`，SHA-256 `9db3ab1d2ec4db7cc8ff09f1259ff93a7a5945a9500d4cd3ea4a7090f2a25766`，含 `AUTOSAR_00053.xsd`；ECUC MOD 包 `docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_MOD_ECUConfigurationParameters.zip`，SHA-256 `df1e3bc992e49de6e14e5c1a679d7ce7ca90d2450d66186cea0b4a0f1f6555fb`。官方资料被 Git 忽略，未入库。输入为工具新建的主机剖面，未使用外部可编辑诊断项目。
 

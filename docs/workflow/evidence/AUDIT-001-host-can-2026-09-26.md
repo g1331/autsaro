@@ -2,7 +2,7 @@
 
 ## 基线与可重建输入
 
-- 源码基线：`aef47c3`（`master` 干净）；被测源码提交：`81f115f`（分支 `audit/AUDIT-001-host-can`）。目标是 Windows 虚拟双 ECU、11 位 Classical CAN、DLC 1–8、无符号 LSB0、固定 Mcu/Can/CanIf 主机剖面；未选择实机或配置变体。
+- 源码基线：`0270add11a80`（`master` 干净）；被测源码提交：`afdfd77e0faf`（分支 `audit/AUDIT-001-host-can`）。目标是 Windows 虚拟双 ECU、11 位 Classical CAN、DLC 1–8、无符号 LSB0、固定 Mcu/Can/CanIf 主机剖面；未选择实机或配置变体。
 - 本地官方资料（Git 忽略，需自行放在 README 指定位置）：FO `AUTOSAR_FO_MMOD_XMLSchema.zip` SHA-256 `9db3ab1d2ec4db7cc8ff09f1259ff93a7a5945a9500d4cd3ea4a7090f2a25766`，内有 `AUTOSAR_00053.xsd`；CP `AUTOSAR_CP_EXP_ModelingShowCases.zip` SHA-256 `dd55faad0bdc22181dd8fddf3927ad59b36c88ff9a7848f05f445c9b141fd701`；CP `AUTOSAR_CP_MOD_ECUConfigurationParameters.zip` SHA-256 `df1e3bc992e49de6e14e5c1a679d7ce7ca90d2450d66186cea0b4a0f1f6555fb`，内有同名 `.arxml`。
 - 工具链：`rustc/cargo 1.98.1`（`stable-x86_64-pc-windows-msvc`）、MSYS2 `gcc 16.1.0`、Node `24.19.0`、npm `11.17.0`、Python `3.12.9`；vcpkg `2026-07-27-98d7cb0`，`x64-windows-static` 的 libxml2 `2.15.4`，以及由 `LIBCLANG_PATH` 指向的 libclang。安装位置因机器而异，不属于可移植基线；本次 `clang` 命令不在 PATH，未记录其 CLI 版本。
 - 可重建输入：`core/tests/end_to_end.rs` 的 `official_r24_sample_imports_as_one_split_package_without_rewriting_sources` 从官方 Showcase ZIP 取 `30_MeasurementCalibration/10_Introductory/model/` 下 **15 份** ARXML；`create_pair` 新建 Alpha/Beta 两种不同主机 CAN 配置；`split_package_save_preserves_sources_and_rejects_stale_reference_file` 把 Alpha 的系统 `I-SIGNAL` 移到第二份同名 `AR-PACKAGE`，再编辑第一份。这后一组是由本工具生成、经 R24-11 XSD 校验的多文件主机配置，**不是**官方 Showcase 中现成的 CAN 项目。

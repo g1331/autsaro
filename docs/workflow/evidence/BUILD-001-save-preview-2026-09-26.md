@@ -2,7 +2,7 @@
 
 ## 范围与依据
 
-- 基线 `8acff1c`；实施分支 `feature/BUILD-001-arxml-save-preview`。输入是 CP/FO R24-11 `AUTOSAR_00053.xsd` 有效的两份 ARXML，无选定变体；目标是 Windows 原生 Tauri 工作台与本机文件。预览是工作台行为，不属于某个 BSW 模块的 SWS 服务；本卡不新增 ECUC 配置节点或修改生成 C99 语义。输入保存约束沿用[项目工件决策](../../../.scratch/autosar-platform/issues/09-project-artifacts.md)。
+- 基线 `cdff6ebe52d5`；实施分支 `feature/BUILD-001-arxml-save-preview`。输入是 CP/FO R24-11 `AUTOSAR_00053.xsd` 有效的两份 ARXML，无选定变体；目标是 Windows 原生 Tauri 工作台与本机文件。预览是工作台行为，不属于某个 BSW 模块的 SWS 服务；本卡不新增 ECUC 配置节点或修改生成 C99 语义。输入保存约束沿用[项目工件决策](../../../.scratch/autosar-platform/issues/09-project-artifacts.md)。
 - 核心从 `Workspace` 已保存文本与待写文本构建只读预览，列出全部来源文件。修改项携带完整原文与拟保存文本，未修改项只标识路径和状态。确认保存带上预览修订摘要；后端复核当前配置，仍沿原保存路径再次校验 XSD、引用与全部来源字节，且保留暂存、安装和回滚机制。
 - UI 按 XML 相邻标签分行显示差异范围，以便阅读压缩成一行的 ARXML；可展开查看未重排的完整前后文本。重排仅在展示层，不参与写入。界面截图：[双文件差异预览](BUILD-001-save-preview-2026-09-26.png)。截图中的 `802→803` 是另一次只读预览，随后取消；下面的落盘证据来自 `801→802`。
 
@@ -33,6 +33,6 @@ Windows 当前会话先设置 `VCPKG_ROOT=<local-vcpkg-root>`、`VCPKGRS_TRIPLET
 
 ## 独立复核
 
-独立 Agent `build001_review` 于 2026-09-26 以 `8acff1c..f17d8de` 为审查范围，核对任务、源码、预览与确认 IPC、UI、测试、上述证据和截图，未发现阻断缺陷。同一新会话按 README 设置三项构建变量后，复跑 `imported_unknown_content_survives_supported_edit_without_rewriting_other_file`、`save_preview_rejects_edits_and_external_changes_after_preview`、`split_package_save_preserves_sources_and_rejects_stale_reference_file`、`noncanonical_pdu_input_is_not_rewritten_or_generated`，四项均通过；`git diff --check 8acff1c f17d8de` 通过。审查未重跑原生窗口或完整构建，因此这两项仍以实施证据为准。
+独立 Agent `build001_review` 于 2026-09-26 以 `cdff6ebe52d5..891c9fcc332c` 为审查范围，核对任务、源码、预览与确认 IPC、UI、测试、上述证据和截图，未发现阻断缺陷。同一新会话按 README 设置三项构建变量后，复跑 `imported_unknown_content_survives_supported_edit_without_rewriting_other_file`、`save_preview_rejects_edits_and_external_changes_after_preview`、`split_package_save_preserves_sources_and_rejects_stale_reference_file`、`noncanonical_pdu_input_is_not_rewritten_or_generated`，四项均通过；`git diff --check cdff6ebe52d5 891c9fcc332c` 通过。审查未重跑原生窗口或完整构建，因此这两项仍以实施证据为准。
 
 审查指出：两文件原生场景中的第二份文件是独立保留文件；跨文件引用的 CAN 配置有既有核心测试，但该测试沿 `save()` 直接保存，未单独通过原生预览确认链。两个入口共用现有保存路径，当前不构成 BUILD-001 阻断；不能把本次证据表述为“外部跨引用多文件配置已在 UI 全链验收”。`HOST-CAN-01` 仍不升级支持声明。

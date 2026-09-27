@@ -251,7 +251,7 @@
       "status": "done",
       "card": "docs/workflow/tasks/AUDIT-001-host-can.md",
       "branch": "audit/AUDIT-001-closure",
-      "base_commit": "d1a804f",
+      "base_commit": "e977cc385883",
       "capabilities": [
         "HOST-CAN-01"
       ],
@@ -274,7 +274,7 @@
       "status": "done",
       "card": "docs/workflow/tasks/AUDIT-002-host-docan.md",
       "branch": "audit/AUDIT-002-docan-baseline",
-      "base_commit": "bdb9881",
+      "base_commit": "dc8d0ef8c559",
       "capabilities": [
         "HOST-DOCAN-01"
       ],
@@ -297,7 +297,7 @@
       "status": "done",
       "card": "docs/workflow/tasks/BUILD-001-arxml-save-preview.md",
       "branch": "feature/BUILD-001-arxml-save-preview",
-      "base_commit": "8acff1c",
+      "base_commit": "cdff6ebe52d5",
       "capabilities": [
         "HOST-CAN-01"
       ],
@@ -321,7 +321,7 @@
       "status": "done",
       "card": "docs/workflow/tasks/BUILD-002-generation-preview.md",
       "branch": "feature/BUILD-002-generation-preview",
-      "base_commit": "8836f6b",
+      "base_commit": "c89868e9a5ab",
       "capabilities": [
         "HOST-CAN-01"
       ],
@@ -345,7 +345,7 @@
       "status": "done",
       "card": "docs/workflow/tasks/BUILD-003-offline-handoff.md",
       "branch": "feature/BUILD-003-offline-handoff",
-      "base_commit": "0f7f474",
+      "base_commit": "dbb2afdb9a76",
       "capabilities": [
         "HOST-CAN-01"
       ],
@@ -381,7 +381,7 @@
       "status": "done",
       "card": "docs/workflow/tasks/BUILD-004-build-integrity.md",
       "branch": "feature/BUILD-004-build-integrity",
-      "base_commit": "dad392b",
+      "base_commit": "4e22935adc94",
       "capabilities": [
         "HOST-CAN-01"
       ],
@@ -404,7 +404,7 @@
       "status": "done",
       "card": "docs/workflow/tasks/DIAG-001-supported-dtcs.md",
       "branch": "feature/DIAG-001-supported-dtcs",
-      "base_commit": "b4a5a67",
+      "base_commit": "143cfe158be8",
       "capabilities": [
         "HOST-DOCAN-DTC-01",
         "HOST-DOCAN-SEC-DTC-01"
@@ -428,7 +428,7 @@
       "status": "done",
       "card": "docs/workflow/tasks/DIAG-002-active-session-did.md",
       "branch": "feature/DIAG-002-active-session-did",
-      "base_commit": "b3ee5c9",
+      "base_commit": "b359d56bb538",
       "capabilities": [
         "HOST-DOCAN-01"
       ],
@@ -451,7 +451,7 @@
       "status": "done",
       "card": "docs/workflow/tasks/DIAG-003-multi-did-read.md",
       "branch": "feature/DIAG-003-multi-did-read",
-      "base_commit": "5bdb5bf",
+      "base_commit": "3410e7cbbd19",
       "capabilities": [
         "HOST-DOCAN-01"
       ],
@@ -474,7 +474,7 @@
       "status": "active",
       "card": "docs/workflow/tasks/STD-001-host-can-driver-api.md",
       "branch": "fix/quality-check-findings",
-      "base_commit": "caaf01e",
+      "base_commit": "c4a01b5cd41c",
       "capabilities": [
         "HOST-CAN-01"
       ],

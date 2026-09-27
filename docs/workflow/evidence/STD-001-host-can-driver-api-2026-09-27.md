@@ -1,6 +1,6 @@
 # STD-001 主机 Can Driver 接口切片：进行中证据
 
-2026-09-27，分支 `fix/quality-check-findings`，任务基线 `caaf01e`。本记录只覆盖当前有界 Windows/MinGW 主机切片，不是 Can 模块或 HOST-CAN-01 的最终审查结论。
+2026-09-27，分支 `fix/quality-check-findings`，任务基线 `c4a01b5cd41c`。本记录只覆盖当前有界 Windows/MinGW 主机切片，不是 Can 模块或 HOST-CAN-01 的最终审查结论。
 
 ## 输入、接口与实际调用
 
@@ -10,7 +10,7 @@
 
 ## 已运行命令与结果
 
-- `python scripts/workflow.py verify --scope all`：通过；脚本 15/15、核心单元 3/3、端到端 50/50、UI ESLint/构建、核心与桌面增量 Clippy、桌面构建均通过。该次运行在后续 Can.c 单出口与括号整理之前；整理后分别重跑上述两个核心定向测试及 `python scripts/quality.py --base caaf01e`，均通过。
+- `python scripts/workflow.py verify --scope all`：通过；脚本 15/15、核心单元 3/3、端到端 50/50、UI ESLint/构建、核心与桌面增量 Clippy、桌面构建均通过。该次运行在后续 Can.c 单出口与括号整理之前；整理后分别重跑上述两个核心定向测试及 `python scripts/quality.py --base c4a01b5cd41c`，均通过。
 - `python scripts/workflow.py verify --scope baseline --generated-dir <上述生成目录>`：全文件格式、Python Ruff、UI ESLint、两套全告警 Clippy 和 C API Doxygen 通过；BSW/RTE/生成 C 部分 MISRA 与逐能力规范证据分区仍失败。Can.c 整理后单独对 BSW 文件集重跑 Cppcheck，报告 327 条 MISRA 发现；其中新 Can.c 的多出口与优先级发现已消除。此扫描只覆盖部分规则，不证明 MISRA 符合。
 - `python scripts/workflow.py check`：通过。
 
@@ -20,17 +20,17 @@
 
 修复后重跑 `python scripts/workflow.py verify --scope all`：脚本 15/15、核心单元 3/3、端到端 50/50、UI lint/构建、增量质量、核心与桌面 Clippy、桌面构建均通过。重新生成的代表性 ECU 位于 `<temporary-dir>/generated`；以该工程重跑全量基线，格式/Python/UI/全告警 Clippy/Doxygen 均通过，BSW 部分 MISRA 334 条、RTE 9 条、生成 C 7 条及七项能力的规范义务门仍失败。该扫描会同时解析 Windows 与 POSIX 锁分支并报告部分系统 API 缺声明；没有因此删掉有效的并发保护或放宽扫描。
 
-第二个独立只读 Agent 复核 `833e48a`，发现 bus-off 虽在标准查询中呈现 STOPPED，却无法通过标准 `Can_SetControllerMode` 恢复，以及输出回调重入 Can API 时非递归锁会死锁。进一步修复为分别记录标准控制器模式和主机 bus-off 错误状态；bus-off 后明确请求 STARTED 可恢复。锁改为 Windows `CRITICAL_SECTION` / POSIX recursive mutex，测试回调重入状态查询及两个并发发送线程各 100 次的返回值隔离。该二次修复的定向 C99 harness 已通过；最终独立复审待运行。
+第二个独立只读 Agent 复核 `827a8ad3909c`，发现 bus-off 虽在标准查询中呈现 STOPPED，却无法通过标准 `Can_SetControllerMode` 恢复，以及输出回调重入 Can API 时非递归锁会死锁。进一步修复为分别记录标准控制器模式和主机 bus-off 错误状态；bus-off 后明确请求 STARTED 可恢复。锁改为 Windows `CRITICAL_SECTION` / POSIX recursive mutex，测试回调重入状态查询及两个并发发送线程各 100 次的返回值隔离。该二次修复的定向 C99 harness 已通过；最终独立复审待运行。
 
 二次修复后 `python scripts/workflow.py verify --scope all` 再次通过（脚本 15/15、核心 3/3 + 50/50、UI 与桌面构建、增量 Clippy）。新代表性工程 `<temporary-dir>/generated` 的全量基线仍有四个失败分区：BSW 部分 MISRA 352 条、RTE 9 条、生成 C 7 条，以及七项规范证据门。可重入锁新增的 POSIX/Windows 系统 API 与 `abort` 也被扫描报告；标准交付所需的逐条处置未完成。
 
-第三个独立只读 Agent 复核 `c4ca40f`，确认 bus-off 标准恢复与可重入发送，但发现公开枚举缺 `CAN_CS_SLEEP`（R24-11 SWS_Can_91013）以及接收注入的状态检查和 CanIf 派发之间存在并发竞态。该轮先补齐枚举、拒绝 SLEEP 转换；`Can_Inject` 在同一可重入锁内检查状态并派发，测试接收回调也重入查询控制器状态。补丁后 `python scripts/workflow.py verify --scope all` 再次通过；新代表性工程 `<temporary-dir>/generated` 的全量基线仍是相同四个失败分区和 352/9/7 条部分 MISRA 发现。
+第三个独立只读 Agent 复核 `f6ce046379f7`，确认 bus-off 标准恢复与可重入发送，但发现公开枚举缺 `CAN_CS_SLEEP`（R24-11 SWS_Can_91013）以及接收注入的状态检查和 CanIf 派发之间存在并发竞态。该轮先补齐枚举、拒绝 SLEEP 转换；`Can_Inject` 在同一可重入锁内检查状态并派发，测试接收回调也重入查询控制器状态。补丁后 `python scripts/workflow.py verify --scope all` 再次通过；新代表性工程 `<temporary-dir>/generated` 的全量基线仍是相同四个失败分区和 352/9/7 条部分 MISRA 发现。
 
 第四个独立只读 Agent 初查未定位到被 Git 忽略的 PDF；提供准确路径后，它依据本地 R24-11 Can Driver PDF 页 31、35、55、76–77 修正结论：`SWS_Can_00258`/`00290`/`00405` 要求即使硬件不支持休眠也实现逻辑 SLEEP，`SWS_Can_00275` 要求 `Can_Write` 非阻塞，忙时用 `CAN_BUSY`（`SWS_Can_00039`/`00213`/`00214`）。当前补丁实现 STOPPED→逻辑 SLEEP→STOPPED；`Can_Write` 通过 try-lock 将报文复制到单个发送槽，忙时立即返回 `CAN_BUSY`；主机包装层在公开入口入队后调用 `Can_HostFlush`，保留原有输出顺序与 I/O 错误传播。C99 harness 覆盖错误状态转换、待发槽忙、回调内再次 `Can_Write`、慢回调期间的并发 `CAN_BUSY`，并保留金向量和拒绝路径。`python scripts/workflow.py verify --scope all` 再次通过（脚本 15/15、核心 3/3 + 50/50、UI 与桌面构建及增量 Clippy）。新代表性工程 `<temporary-dir>/generated` 的全量基线仍为四个失败分区，部分 MISRA 发现为 BSW 358、RTE 9、生成 C 7 条；七项规范证据门仍为 `not_run`。非阻塞改动后的独立复审尚未执行。
 
 第五个独立只读 Agent 对非阻塞版指出同一 HTH 的输出回调重入会错误返回 `E_OK`；现用 `tx_in_flight` 将回调执行期也计入占用，重入请求返回 `CAN_BUSY` 且不覆盖在途报文。定向测试及完整 `python scripts/workflow.py verify --scope all` 已通过（脚本 15/15、核心 3/3 + 50/50、UI/桌面构建与增量 Clippy）。新代表性工程 `<temporary-dir>/generated` 的全量基线仍失败四个分区；BSW 部分 MISRA 358 条、RTE 9 条、生成 C 7 条，七项规范证据门仍为 `not_run`。最终复审待执行。
 
-第五个 Agent 对 `5f1dd8e` 只读复审，确认同一 HTH 的回调重入不再覆盖在途报文，并按 `SWS_Can_00213`/`00214` 返回 `CAN_BUSY`；未发现该限定范围内的其他缺陷。随后为处理平台锁给 BSW MISRA 扫描新增的系统 API 发现，将 Windows/POSIX 锁实现移至明确分类的主机适配源码 `Can_HostLock.c`，BSW 仅依赖小型内部锁接口；生成器按 `src/` 文件自动交付，新文件已列入 MSVC 构建说明和 C 源码分类。独立 C99 harness、生成双 ECU 金向量与分类脚本测试已通过，BSW 部分 MISRA 报告由 358 降为 329 条；最终完整增量门、全量基线和该调整的独立复核待执行。
+第五个 Agent 对 `c9a179d56aa4` 只读复审，确认同一 HTH 的回调重入不再覆盖在途报文，并按 `SWS_Can_00213`/`00214` 返回 `CAN_BUSY`；未发现该限定范围内的其他缺陷。随后为处理平台锁给 BSW MISRA 扫描新增的系统 API 发现，将 Windows/POSIX 锁实现移至明确分类的主机适配源码 `Can_HostLock.c`，BSW 仅依赖小型内部锁接口；生成器按 `src/` 文件自动交付，新文件已列入 MSVC 构建说明和 C 源码分类。独立 C99 harness、生成双 ECU 金向量与分类脚本测试已通过，BSW 部分 MISRA 报告由 358 降为 329 条；最终完整增量门、全量基线和该调整的独立复核待执行。
 
 平台锁分离后完整 `python scripts/workflow.py verify --scope all` 再次通过（脚本 15/15、核心 3/3 + 50/50、UI/桌面构建及增量 Clippy）。新代表性工程 `<temporary-dir>/generated` 的全量基线先发现新增 Python 测试文件格式未对齐；按锁定 Ruff 版本修正后复跑，格式/Python/UI/全告警 Clippy/Doxygen 均通过，仍失败 BSW 329、RTE 9、生成 C 7 条部分 MISRA 与七项规范证据门。该次调整尚待独立复核。
 
@@ -85,4 +85,4 @@ Dcm 质量整改按已查本地 R24-11 Dcm SWS 的请求、会话和确认顺序
 
 独立只读复核指出异步失败确认可能需要区分 Tx 与 Rx 会话所有者。当前主机 sink 在发送调用内同步给出结果，且只有一条物理诊断连接；已撤回把成功确认后的同一帧再次报失败的无效测试。完整异步确认、N_As 等待与并发会话不在本切片的支持声明中，仍是标准交付缺口；没有把规范义务门标为通过。最终 `python scripts/workflow.py verify --scope all` 通过（脚本 15/15、核心 3/3、端到端 52/52、UI/桌面构建与增量 Clippy）。最新代表性工程 `<temporary-dir>/generated` 的全量基线仍失败：BSW 部分 MISRA 26、RTE 11、生成 C 7 条，以及七项 `spec_obligations=not_run`。其中 BSW 新增的 8.7 与 RTE 新增的 2.3/2.4 属于公开接口跨翻译单元但局部扫描未见使用者的报告，不能据此宣称全运行时或完整 MISRA 审核完成。
 
-进一步按 MISRA C:2012 Rule 8.7 清查本轮新增公开符号：旧 `Can_Transmit` 包装函数已经没有产品调用方，故删除并将独立测试改用保留 PDU 句柄的 `Can_TransmitPdu`。`python scripts/quality.py --base caaf01e`、Can Driver C99 harness 和生成 ECU 金向量通过。以重新生成的 `<temporary-dir>/generated` 复跑全量基线，BSW 部分 MISRA 回到 25 条，RTE 11、生成 C 7 条，七项规范义务门仍未运行；其他基线分区通过。RTE 增加的 2.3/2.4 是 `Com.h` 为标准 `Com_TxConfirmation` 签名引入 ComStack 类型后，在单独扫描 RTE 翻译单元时看到的未使用类型；未通过删除标准公开签名或屏蔽规则来消音。完整 MISRA 规则集、逐条偏差审批和全运行时扫描仍未完成。
+进一步按 MISRA C:2012 Rule 8.7 清查本轮新增公开符号：旧 `Can_Transmit` 包装函数已经没有产品调用方，故删除并将独立测试改用保留 PDU 句柄的 `Can_TransmitPdu`。`python scripts/quality.py --base c4a01b5cd41c`、Can Driver C99 harness 和生成 ECU 金向量通过。以重新生成的 `<temporary-dir>/generated` 复跑全量基线，BSW 部分 MISRA 回到 25 条，RTE 11、生成 C 7 条，七项规范义务门仍未运行；其他基线分区通过。RTE 增加的 2.3/2.4 是 `Com.h` 为标准 `Com_TxConfirmation` 签名引入 ComStack 类型后，在单独扫描 RTE 翻译单元时看到的未使用类型；未通过删除标准公开签名或屏蔽规则来消音。完整 MISRA 规则集、逐条偏差审批和全运行时扫描仍未完成。

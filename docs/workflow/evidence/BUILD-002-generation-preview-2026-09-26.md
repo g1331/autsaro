@@ -1,6 +1,6 @@
 # BUILD-002 生成工程预览：实施与复核证据
 
-**状态：**独立审查通过（Agent build002_review，2026-09-26）。**基线：**`8836f6b`。**分支：**`feature/BUILD-002-generation-preview`。**目标：**CP/FO R24-11、Windows 主机虚拟 CAN、GCC 16.1.0；不升级内部支持声明。
+**状态：**独立审查通过（Agent build002_review，2026-09-26）。**基线：**`c89868e9a5ab`。**分支：**`feature/BUILD-002-generation-preview`。**目标：**CP/FO R24-11、Windows 主机虚拟 CAN、GCC 16.1.0；不升级内部支持声明。
 
 ## 结果与范围
 

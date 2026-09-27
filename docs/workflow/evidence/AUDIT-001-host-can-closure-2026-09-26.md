@@ -2,7 +2,7 @@
 
 ## 范围、基线与可重建输入
 
-- 本次只审计 CP/FO R24-11、固定 Mcu/Can/CanIf 主机剖面、11 位 Classical CAN、DLC 1–8、无符号 LSB0 信号与 Windows/GCC 双 ECU。续作基线为 `d1a804f`，分支 `audit/AUDIT-001-closure`；前两份证据分别对应 `81f115f` 与 `9b3b885` 的源码和实际演练。本次不修改产品实现或扩大支持声明。
+- 本次只审计 CP/FO R24-11、固定 Mcu/Can/CanIf 主机剖面、11 位 Classical CAN、DLC 1–8、无符号 LSB0 信号与 Windows/GCC 双 ECU。续作基线为 `e977cc385883`，分支 `audit/AUDIT-001-closure`；前两份证据分别对应 `afdfd77e0faf` 与 `c747bf91f365` 的源码和实际演练。本次不修改产品实现或扩大支持声明。
 - R24-11 官方 FO XSD ZIP、CP Showcase ZIP、CP ECUC MOD ZIP 的 SHA-256 依次是 `9db3ab1d2ec4db7cc8ff09f1259ff93a7a5945a9500d4cd3ea4a7090f2a25766`、`dd55faad0bdc22181dd8fddf3927ad59b36c88ff9a7848f05f445c9b141fd701`、`df1e3bc992e49de6e14e5c1a679d7ce7ca90d2450d66186cea0b4a0f1f6555fb`。本地位置与可重建的官方 15 文件导入、工具生成后拆分的三文件主机 CAN 输入，见[行为与来源证据](AUDIT-001-host-can-2026-09-26.md)及[隔离原生界面证据](AUDIT-001-host-can-ui-2026-09-26.md)。官方 15 文件样例未提供可直接编辑的完整主机 CAN 项目。
 - 当前工具链：Rust/Cargo 1.98.1 MSVC、MSYS2 GCC 16.1.0、Node 24.19.0、npm 11.17.0、Python 3.12.9。Windows 目标为本机主机虚拟 ECU，不是 MCU 或第三方 CAN 栈。未选择配置变体；影响生成的未决变体应拒绝。
 

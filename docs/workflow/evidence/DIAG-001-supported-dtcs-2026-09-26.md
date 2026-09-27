@@ -2,7 +2,7 @@
 
 ## 组合与规范边界
 
-基线 `b4a5a67`，分支 `feature/DIAG-001-supported-dtcs`。CP/FO R24-11、无变体、Windows 主机虚拟 ECU、MinGW GCC。现有单 DTC 配置下增加 `19 0A`，用于发现已配置而当前未故障的监测项。标准参考是 [R24-11 Dcm SWS](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_DiagnosticCommunicationManager.pdf) §7.4.2.5.2、`SWS_Dcm_01645`（0x0A 禁用状态过滤）和 `SWS_Dcm_00828`（非分页响应不添加虚构零记录）。查询官方文档索引取得对应表格和条款；直接下载端本次返回 HTTP 502，本地 PDF 路径见任务卡，独立审查可核对原文。
+基线 `143cfe158be8`，分支 `feature/DIAG-001-supported-dtcs`。CP/FO R24-11、无变体、Windows 主机虚拟 ECU、MinGW GCC。现有单 DTC 配置下增加 `19 0A`，用于发现已配置而当前未故障的监测项。标准参考是 [R24-11 Dcm SWS](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_DiagnosticCommunicationManager.pdf) §7.4.2.5.2、`SWS_Dcm_01645`（0x0A 禁用状态过滤）和 `SWS_Dcm_00828`（非分页响应不添加虚构零记录）。查询官方文档索引取得对应表格和条款；直接下载端本次返回 HTTP 502，本地 PDF 路径见任务卡，独立审查可核对原文。
 
 主机 `Dem_GetSupportedDtc` 返回唯一配置编号及当前状态；Dcm 依据子功能分别执行无状态过滤与原有掩码过滤。因此状态为零仍是支持项，但 `19 01 00`/`19 02 00` 保持零匹配。接口是主机内部 API，不声称标准 Dem_SetDTCFilter/GetNextFilteredDTC ABI。无需新增 ECUC 选项；既有 SID 25 / DcmDspReadDTCInformation / DemClient 和单 DTC 配置控制此能力。标准 BSW 文件结构、MemMap、MISRA、BSWMD 及外部协议栈互操作仍未验证，不升级能力档案的六道门或内部支持等级。
 
@@ -41,8 +41,8 @@
 
 没有启动维护者桌面窗口。原生 Tauri 窗口与 IPC 交互、第三方诊断仪/协议栈、真实 CAN/MCU/电气与 ISR 时序、完整 BSW/MISRA 义务未验证。本主机剖面明确拒绝 0x8A，不声明完整 UDS 子功能抑制正响应行为。没有改变持久格式，没有新增多 DTC 或完成深 CAN 诊断阶段的声明。
 
-Agent `diag001_review` 以不继承开发会话的只读新会话审查提交 `e8e49d9a21299a44fc7ed14ec51cfdaf814591af`（基线 `b4a5a67`）。直接核对本地 R24-11 Dcm PDF 第 117–119 页，除任务中的条款外确认 `SWS_Dcm_01644` 要求响应含状态可用掩码及 DTC/status 记录；确认实现符合本任务所限定行为，主机自有 API 不冒充标准 Dem 接口。
+Agent `diag001_review` 以不继承开发会话的只读新会话审查提交 `e8e49d9a21299a44fc7ed14ec51cfdaf814591af`（基线 `143cfe158be8`）。直接核对本地 R24-11 Dcm PDF 第 117–119 页，除任务中的条款外确认 `SWS_Dcm_01644` 要求响应含状态可用掩码及 DTC/status 记录；确认实现符合本任务所限定行为，主机自有 API 不冒充标准 Dem 接口。
 
-独立重跑新增生命周期用例 1/1（11.24 秒）及 `security_access_gates_dtc_mutations_without_a_writable_did` 1/1（2.59 秒），检查 `git diff --check b4a5a67 e8e49d9`、`python scripts/workflow.py check` 均通过，审查前后工作区干净。核对配置保存/重开、两套 DTC 字节值、零状态、原掩码行为、读操作无 NvM 副作用、错误恢复与安全读取；未发现阻断问题，同意在既定主机单 DTC 范围内关闭任务并本地集成。
+独立重跑新增生命周期用例 1/1（11.24 秒）及 `security_access_gates_dtc_mutations_without_a_writable_did` 1/1（2.59 秒），检查 `git diff --check 143cfe158be8 c124c0abfc17`、`python scripts/workflow.py check` 均通过，审查前后工作区干净。核对配置保存/重开、两套 DTC 字节值、零状态、原掩码行为、读操作无 NvM 副作用、错误恢复与安全读取；未发现阻断问题，同意在既定主机单 DTC 范围内关闭任务并本地集成。
 
 审查者未重复完整 47 项集成或 UI/Tauri 构建，未运行原生 GUI/IPC，也未将本次审查记为完整规范义务通过。主代理复核上述审查引用与实际源码、测试及门禁结果后收口。
