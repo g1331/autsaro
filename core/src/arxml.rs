@@ -1094,6 +1094,8 @@ fn parse_diagnostic(
         &path_of(general),
     )
     .map_err(|e| e.message)?;
+    let n_as_ms = parse_milliseconds(param(tx_sdu, "CanTpNas"), "CanTpNas", &path_of(tx_sdu))
+        .map_err(|e| e.message)?;
     let n_bs_ms = parse_milliseconds(param(tx_sdu, "CanTpNbs"), "CanTpNbs", &path_of(tx_sdu))
         .map_err(|e| e.message)?;
     let n_cr_ms = parse_milliseconds(param(rx_sdu, "CanTpNcr"), "CanTpNcr", &path_of(rx_sdu))
@@ -1406,6 +1408,7 @@ fn parse_diagnostic(
         request_id: ids[0],
         response_id: ids[1],
         s3_ms,
+        n_as_ms,
         n_bs_ms,
         n_cr_ms,
         did,
@@ -2631,6 +2634,7 @@ impl Workspace {
             request_id: settings.request_id,
             response_id: settings.response_id,
             s3_ms: settings.s3_ms,
+            n_as_ms: settings.n_as_ms.unwrap_or(settings.n_bs_ms),
             n_bs_ms: settings.n_bs_ms,
             n_cr_ms: settings.n_cr_ms,
             did: settings.did,

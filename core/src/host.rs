@@ -31,6 +31,7 @@ struct DiagnosticProfile {
     request_id: u32,
     response_id: u32,
     s3_ms: u32,
+    n_as_ms: u32,
     n_bs_ms: u32,
     n_cr_ms: u32,
     did: u16,
@@ -107,13 +108,21 @@ fn profile(dir: &Path) -> Result<Profile, String> {
                         .map_err(|_| "信号初值无效")?,
                 });
             }
-            Some("DIAGNOSTIC") if cols.len() == 8 => {
+            Some("DIAGNOSTIC") if (cols.len() == 8) || (cols.len() == 9) => {
                 let field = |name: &str| cols.iter().find_map(|column| column.strip_prefix(name));
                 let ids = field("signals=")
                     .ok_or("诊断清单缺少 DID 信号")?
                     .split(',')
                     .map(|id| id.parse::<u16>().map_err(|_| "诊断信号 ID 无效".to_owned()))
                     .collect::<Result<Vec<_>, _>>()?;
+                let n_bs_ms = field("nbs=")
+                    .ok_or("诊断 N_Bs 缺失")?
+                    .parse()
+                    .map_err(|_| "诊断 N_Bs 无效")?;
+                let n_as_ms = field("nas=")
+                    .map(|value| value.parse().map_err(|_| "诊断 N_As 无效"))
+                    .transpose()?
+                    .unwrap_or(n_bs_ms);
                 let config = DiagnosticProfile {
                     request_id: field("request=")
                         .ok_or("诊断请求 ID 缺失")?
@@ -127,10 +136,8 @@ fn profile(dir: &Path) -> Result<Profile, String> {
                         .ok_or("诊断 S3 缺失")?
                         .parse()
                         .map_err(|_| "诊断 S3 无效")?,
-                    n_bs_ms: field("nbs=")
-                        .ok_or("诊断 N_Bs 缺失")?
-                        .parse()
-                        .map_err(|_| "诊断 N_Bs 无效")?,
+                    n_as_ms,
+                    n_bs_ms,
                     n_cr_ms: field("ncr=")
                         .ok_or("诊断 N_Cr 缺失")?
                         .parse()
@@ -895,6 +902,7 @@ pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
         || diagnostic.signal_ids.len() > 8
         || diagnostic.request_id == diagnostic.response_id
         || diagnostic.s3_ms < 5000
+        || diagnostic.n_as_ms == 0
         || diagnostic.n_bs_ms == 0
         || diagnostic.n_cr_ms == 0
     {

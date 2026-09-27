@@ -56,6 +56,7 @@ type DiagnosticFields = {
   requestId: string;
   responseId: string;
   s3Ms: string;
+  nAsMs: string;
   nBsMs: string;
   nCrMs: string;
   did: string;
@@ -69,6 +70,7 @@ type DiagnosticChanges = Pick<
   | 'requestId'
   | 'responseId'
   | 's3Ms'
+  | 'nAsMs'
   | 'nBsMs'
   | 'nCrMs'
   | 'did'
@@ -143,6 +145,7 @@ const newDiagnostic: DiagnosticFields = {
   requestId: '',
   responseId: '',
   s3Ms: '',
+  nAsMs: '',
   nBsMs: '',
   nCrMs: '',
   did: '',
@@ -157,6 +160,7 @@ const diagnosticFields = (diagnostic: DiagnosticView | null): DiagnosticFields =
         requestId: `0x${diagnostic.requestId.toString(16).toUpperCase()}`,
         responseId: `0x${diagnostic.responseId.toString(16).toUpperCase()}`,
         s3Ms: String(diagnostic.s3Ms),
+        nAsMs: String(diagnostic.nAsMs),
         nBsMs: String(diagnostic.nBsMs),
         nCrMs: String(diagnostic.nCrMs),
         did: `0x${diagnostic.did.toString(16).toUpperCase().padStart(4, '0')}`,
@@ -252,6 +256,7 @@ function diagnosticChanges(fields: DiagnosticFields, view: WorkspaceView): Diagn
     responseId,
     did,
     s3Ms: intInRange(fields.s3Ms, 'S3 (ms)', 5000, 2147483647),
+    nAsMs: intInRange(fields.nAsMs, 'N_As (ms)', 1, 2147483647),
     nBsMs: intInRange(fields.nBsMs, 'N_Bs (ms)', 1, 2147483647),
     nCrMs: intInRange(fields.nCrMs, 'N_Cr (ms)', 1, 2147483647),
     signalPaths: fields.signalPaths,
@@ -1552,6 +1557,23 @@ export default function App() {
                               value={diagnosticDraft.s3Ms}
                               onChange={(event) =>
                                 setDiagnosticDraft({ ...diagnosticDraft, s3Ms: event.target.value })
+                              }
+                              disabled={disabled}
+                            />
+                          </label>
+                          <label>
+                            N_As <small>ms · 1–2147483647</small>
+                            <input
+                              type="number"
+                              min="1"
+                              max="2147483647"
+                              step="1"
+                              value={diagnosticDraft.nAsMs}
+                              onChange={(event) =>
+                                setDiagnosticDraft({
+                                  ...diagnosticDraft,
+                                  nAsMs: event.target.value,
+                                })
                               }
                               disabled={disabled}
                             />

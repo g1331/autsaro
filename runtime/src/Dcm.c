@@ -49,13 +49,13 @@ void Dcm_AdvanceTime(uint64_t now_ms) {
 }
 
 static EcuStatus HandleSessionControl(const uint8_t *request, size_t length, uint64_t now_ms) {
-    uint8_t response[6];
     EcuStatus result;
     if (length != 2u) {
         result = NegativeResponse(0x10u, 0x13u, now_ms);
     } else if ((request[1] != 0x01u) && (request[1] != 0x03u)) {
         result = NegativeResponse(0x10u, 0x12u, now_ms);
     } else {
+        uint8_t response[6];
         response[0] = 0x50u;
         response[1] = request[1];
         response[2] = 0x00u;
@@ -122,13 +122,13 @@ static EcuStatus HandleSecurityAccess(const uint8_t *request, size_t length, uin
 static EcuStatus HandleReadData(const uint8_t *request, size_t length, uint64_t now_ms) {
     uint8_t response[ECU_DIAG_MAX_PAYLOAD];
     size_t response_length = 1u;
-    size_t offset;
     uint8_t nrc = 0u;
     EcuStatus result;
     response[0] = 0x62u;
     if ((length < 3u) || ((length & 1u) == 0u)) {
         nrc = 0x13u;
     } else {
+        size_t offset;
         for (offset = 1u; (offset < length) && (nrc == 0u); offset += 2u) {
             uint16_t did = (uint16_t)(((uint16_t)request[offset] << 8u) | request[offset + 1u]);
             size_t data_length = 0u;
@@ -146,7 +146,6 @@ static EcuStatus HandleReadData(const uint8_t *request, size_t length, uint64_t 
                 if (((response_length + 2u) + data_length) > sizeof(response)) {
                     nrc = 0x14u;
                 } else {
-                    size_t i;
                     response[response_length] = request[offset];
                     ++response_length;
                     response[response_length] = request[offset + 1u];
@@ -155,6 +154,7 @@ static EcuStatus HandleReadData(const uint8_t *request, size_t length, uint64_t 
                         response[response_length] = active_session;
                         ++response_length;
                     } else {
+                        size_t i;
                         for (i = 0u; (i < dcm_config->did_signal_count) && (nrc == 0u); ++i) {
                             if (dcm_config->did_readers[i](&response[response_length]) != E_OK) {
                                 nrc = 0x22u;

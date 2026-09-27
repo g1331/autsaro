@@ -56,11 +56,11 @@ void CanIf_TxConfirmation(PduIdType can_tx_pdu_id) {
 }
 
 static EcuStatus RouteRx(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
-    size_t i;
     EcuStatus result = ECU_OK;
     if ((canif_config->diagnostic != NULL) && (id == canif_config->diagnostic->request_can_id)) {
         result = LSduR_CanTpRxIndication(dlc, data, now_ms);
     } else {
+        size_t i;
         for (i = 0u; i < canif_config->frame_count; ++i) {
             const EcuFrameConfig *frame = &canif_config->frames[i];
             if ((frame->id == id) && (frame->direction == 0u)) {
@@ -105,8 +105,8 @@ EcuStatus CanIf_HostRxIndication(uint32_t id, uint8_t dlc, const uint8_t data[8]
     EcuStatus result;
     uint64_t previous_time_ms;
     uint8_t previous_time_active;
-    size_t i;
     if (data != NULL) {
+        size_t i;
         for (i = 0u; (i < dlc) && (i < sizeof(payload)); ++i) {
             payload[i] = data[i];
         }

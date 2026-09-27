@@ -77,6 +77,7 @@ pub struct DiagnosticView {
     pub request_id: u32,
     pub response_id: u32,
     pub s3_ms: u32,
+    pub n_as_ms: u32,
     pub n_bs_ms: u32,
     pub n_cr_ms: u32,
     pub did: u16,
@@ -93,6 +94,8 @@ pub struct DiagnosticSettings {
     pub request_id: u32,
     pub response_id: u32,
     pub s3_ms: u32,
+    #[serde(default)]
+    pub n_as_ms: Option<u32>,
     pub n_bs_ms: u32,
     pub n_cr_ms: u32,
     pub did: u16,
@@ -303,12 +306,13 @@ pub fn validate_diagnostic(
         ));
     }
     if !(5000..=i32::MAX as u32).contains(&diagnostic.s3_ms)
+        || !(1..=i32::MAX as u32).contains(&diagnostic.n_as_ms)
         || !(1..=i32::MAX as u32).contains(&diagnostic.n_bs_ms)
         || !(1..=i32::MAX as u32).contains(&diagnostic.n_cr_ms)
     {
         issues.push(Issue::error(
             "DIAG_TIMING",
-            "S3 至少 5000 ms，N_Bs/N_Cr 须为正毫秒，计时器不得超过 2^31-1 ms",
+            "S3 至少 5000 ms，N_As/N_Bs/N_Cr 须为正毫秒，计时器不得超过 2^31-1 ms",
             path.clone(),
         ));
     }

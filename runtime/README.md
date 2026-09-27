@@ -33,7 +33,9 @@ cl /TC /W4 /I runtime\include runtime\src\Can.c runtime\src\Can_HostLock.c runti
 
 ## 诊断连接（可选）
 
-一条物理 normal-addressing 11-bit Classical CAN 连接；请求与响应 ID 不相同，也不能与 Com 帧 ID 冲突。`CanIf` 按请求 ID 交给 `LSduR` → `CanTp`，PduR 持有上限 256 字节的 N-SDU 收发缓冲，Dcm 处理完成请求；响应由 Dcm → PduR → CanTp → LSduR → Can 输出。CanTp 按 SF/FF/CF/FC 分段，检查 FF 总长、CF 序号和 DLC，FF 后以 CTS/BS=0/STmin=0 回应；发送方遵守测试器给出的 FC 块大小、STmin（100 μs 单位在 1 ms 主机时钟上向上取整）、N_Bs，接收方按 N_Cr 终止不完整请求。错误后丢弃半包，下一个完整请求可以恢复。
+一条物理 normal-addressing 11-bit Classical CAN 连接；请求与响应 ID 不相同，也不能与 Com 帧 ID 冲突。`CanIf` 按请求 ID 交给 `LSduR` → `CanTp`，PduR 持有上限 256 字节的 N-SDU 收发缓冲，Dcm 处理完成请求；响应由 Dcm → PduR → CanTp → LSduR → Can 输出。CanTp 按 SF/FF/CF/FC 分段，检查 FF 总长、CF 序号和 DLC，FF 后以 CTS/BS=0/STmin=0 回应；发送方遵守测试器给出的 FC 块大小、STmin（100 μs 单位在 1 ms 主机时钟上向上取整）、N_Bs，发送确认等待 N_As，接收方按 N_Cr 终止不完整请求。错误后丢弃半包，下一个完整请求可以恢复。
+
+`CanTpNas`、`CanTpNbs` 与 `CanTpNcr` 分别进入生成配置。CanTp 只在对应 PDU 句柄确认后推进 SF/FF/CF/FC 状态；N_As 到期时终止会话，但该帧仍占用发送 PDU，直到迟到的确认到达。正常主机 sink 在发送调用内同步确认；独立 C99 用例另验证延迟确认和超时释放。此主机接口仍未覆盖完整 CanTp SWS、ISR 并发及第三方模块互操作。
 
 Dcm 提供 0x10 默认/扩展会话、0x3E TesterPresent（子功能 0x80 抑制正响应）和 0x22 一个有序实时 DID。0x10 的会话切换仅在正响应发送确认后提交；扩展会话 S3 超时回默认。一个 DID 从 1–8 个 32-bit Tx Com 信号读取并以每项大端 4 字节拼接；配置 DID 在默认会话不可读；保留 DID `0xF186` 通过 0x22 返回当前默认/扩展会话编号，不依赖应用信号。0x22 请求可按顺序列出多个 DID，响应只包含当前可读的 DID，全部不可读时返回 `7F 22 31`；请求缺失 DID 或字节数不成对返回 NRC 0x13，响应超过 256 字节返回 NRC 0x14，当前值不可读返回 NRC 0x22。P2=50 ms、P2*=500 ms 写在 0x10 响应中；S3 配置不得小于 5000 ms。`profile.txt` 的 `DIAGNOSTIC` 行记录生成 ID、计时器与 DID 信号 ID 顺序，供独立主机测试器驱动。
 
@@ -73,4 +75,4 @@ Dcm 提供 0x10 默认/扩展会话、0x3E TesterPresent（子功能 0x80 抑制
 | `G <signal_id>` | 返回 `V <signal_id> <value> <0或1>`；Rx 初始无效，超时后保留最后数值但 `valid=0`。Tx 初始有效。 |
 | `M <0\|1\|2>` | 依次设置 STOPPED、STARTED、BUS_OFF；关闭时拒绝 Rx 并跳过 Tx 周期，重新 STARTED 不补发已跳过的帧。 |
 
-语义错误（例如未知信号、错误 DLC、诊断序号错误 `E TP_SEQUENCE`、N_Bs/N_Cr 超时 `E TP_TIMEOUT`、控制器关闭时注入）输出 `E <code>` 并继续处理后续行；非法命令、错误数字或 hex 输出 `E PROTOCOL` 并以非零码退出；时间倒退输出 `E TIME` 并非零退出。未配置 ID 的合法报文被过滤，不是错误。实际总线丢帧由外部主机编排，Rx 信号有效位会随时间真实超时。诊断失败路径不会把半包交给 Dcm，也不会把错误当作诊断正响应。
+语义错误（例如未知信号、错误 DLC、诊断序号错误 `E TP_SEQUENCE`、N_As/N_Bs/N_Cr 超时 `E TP_TIMEOUT`、控制器关闭时注入）输出 `E <code>` 并继续处理后续行；非法命令、错误数字或 hex 输出 `E PROTOCOL` 并以非零码退出；时间倒退输出 `E TIME` 并非零退出。未配置 ID 的合法报文被过滤，不是错误。实际总线丢帧由外部主机编排，Rx 信号有效位会随时间真实超时。诊断失败路径不会把半包交给 Dcm，也不会把错误当作诊断正响应。

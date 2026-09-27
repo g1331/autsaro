@@ -862,7 +862,7 @@ fn render_diagnostic(
         choice(tx, "CanTpTxPaddingActivation", "CANTP_OFF"),
         choice(tx, "CanTpTxTaType", "CANTP_PHYSICAL"),
         boolean(tx, "CanTpTc", false),
-        decimal(tx, "CanTpNas", diagnostic.n_bs_ms),
+        decimal(tx, "CanTpNas", diagnostic.n_as_ms),
         decimal(tx, "CanTpNbs", diagnostic.n_bs_ms)
     );
     let tx_sdu = container(

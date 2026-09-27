@@ -36,6 +36,7 @@ export type DiagnosticView = {
   requestId: number;
   responseId: number;
   s3Ms: number;
+  nAsMs: number;
   nBsMs: number;
   nCrMs: number;
   did: number;

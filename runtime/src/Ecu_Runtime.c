@@ -90,7 +90,8 @@ static EcuStatus ValidateConfig(const EcuConfig *config) {
         const EcuDiagnosticConfig *diagnostic = config->diagnostic;
         if (diagnostic->request_can_id > 0x7ffu || diagnostic->response_can_id > 0x7ffu ||
             diagnostic->request_can_id == diagnostic->response_can_id || diagnostic->s3_ms == 0u ||
-            diagnostic->n_bs_ms == 0u || diagnostic->n_cr_ms == 0u || diagnostic->did == 0u ||
+            diagnostic->n_as_ms == 0u || diagnostic->n_bs_ms == 0u || diagnostic->n_cr_ms == 0u ||
+            diagnostic->did == 0u || (size_t)diagnostic->tx_pdu_id != config->frame_count ||
             diagnostic->did == 0xf186u || diagnostic->did_signal_ids == NULL ||
             diagnostic->did_readers == NULL || diagnostic->did_signal_count == 0u ||
             diagnostic->did_signal_count > ECU_DIAG_MAX_DID_SIGNALS) {

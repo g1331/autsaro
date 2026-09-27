@@ -77,7 +77,6 @@ static void EncodeSlot(uint8_t slot[SLOT_SIZE], uint64_t number, uint8_t status)
 }
 
 static int ValidSlot(const uint8_t slot[SLOT_SIZE]) {
-    size_t i;
     int valid = 1;
     if ((slot[0] != UINT8_C(0x4e)) || (slot[1] != UINT8_C(0x56)) || (slot[2] != UINT8_C(0x48)) ||
         (slot[3] != UINT8_C(0x31)) || (Load64(&slot[4]) == 0u) ||
@@ -85,6 +84,7 @@ static int ValidSlot(const uint8_t slot[SLOT_SIZE]) {
         (Load32(&slot[28]) != Checksum(slot, 28u))) {
         valid = 0;
     } else {
+        size_t i;
         for (i = 17u; i < 28u; ++i) {
             if (slot[i] != 0u) {
                 valid = 0;
@@ -109,10 +109,6 @@ static EcuStatus WriteSlot(unsigned index, uint64_t number, uint8_t status) {
 
 EcuStatus NvM_Init(const EcuConfig *config, const char *path, uint8_t *status) {
     uint8_t slots[SLOT_COUNT][SLOT_SIZE];
-    unsigned i;
-    int chosen = -1;
-    unsigned valid_count = 0u;
-    long length;
     EcuStatus result = ECU_ERR_CONFIG;
     NvM_HostClose();
     if ((path != NULL) && (path[0] != '\0') && (config != NULL) && (config->diagnostic != NULL) &&
@@ -128,11 +124,15 @@ EcuStatus NvM_Init(const EcuConfig *config, const char *path, uint8_t *status) {
                 result = ECU_OK;
             }
             break;
-        case NVM_HOST_OPEN_EXISTING:
+        case NVM_HOST_OPEN_EXISTING: {
+            long length;
             length = NvM_HostLength();
             if ((length >= (long)SLOT_SIZE) && (length <= (long)sizeof(slots))) {
                 (void)memset(slots, 0, sizeof(slots));
                 if (NvM_HostRead(&slots[0][0], (size_t)length) == 0) {
+                    unsigned i;
+                    int chosen = -1;
+                    unsigned valid_count = 0u;
                     for (i = 0u; i < SLOT_COUNT; ++i) {
                         if (ValidSlot(slots[i]) != 0) {
                             ++valid_count;
@@ -151,6 +151,7 @@ EcuStatus NvM_Init(const EcuConfig *config, const char *path, uint8_t *status) {
                 }
             }
             break;
+        }
         default:
             break;
         }
@@ -162,9 +163,9 @@ EcuStatus NvM_Init(const EcuConfig *config, const char *path, uint8_t *status) {
 }
 
 EcuStatus NvM_Write(uint8_t status) {
-    unsigned next_slot;
     EcuStatus result = ECU_ERR_NVM;
     if ((sequence != UINT64_MAX) && ((status & 0x80u) == 0u)) {
+        unsigned next_slot;
         next_slot = 1u - current_slot;
         result = WriteSlot(next_slot, sequence + 1u, status);
         if (result == ECU_OK) {

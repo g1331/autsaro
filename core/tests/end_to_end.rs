@@ -390,6 +390,7 @@ EcuStatus LSduR_CanTpTransmit(uint8_t dlc, const uint8_t data[8]) {
     CanTp_TxConfirmation(0u, fail_frame != 0u ? E_NOT_OK : E_OK);
     return ECU_OK;
 }
+
 EcuStatus PduR_CanTpCopyTxData(size_t offset, uint8_t *destination, size_t length) {
     size_t i;
     (void)offset;
@@ -415,6 +416,122 @@ int main(void) {
     if (completion_count != 1u || completion_status != ECU_ERR_IO) return 2;
     fail_frame = 0u;
     if (CanTp_Transmit(8u, 6u) != ECU_OK || completion_count != 1u) return 3;
+    return 0;
+}
+"#,
+    )
+    .unwrap();
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let build = Command::new("gcc")
+        .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
+        .arg(format!("-I{}", root.join("runtime/include").display()))
+        .arg(root.join("runtime/src/CanTp.c"))
+        .arg(&harness)
+        .arg("-o")
+        .arg(&binary)
+        .output()
+        .unwrap();
+    assert!(
+        build.status.success(),
+        "{}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+    let run = Command::new(&binary).output().unwrap();
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+}
+
+#[test]
+fn cantp_async_confirmation_respects_n_as_and_late_release() {
+    let temp = Scratch::new();
+    let harness = temp.0.join("cantp_async_confirmation.c");
+    let binary = temp.0.join(if cfg!(windows) {
+        "cantp_async_confirmation.exe"
+    } else {
+        "cantp_async_confirmation"
+    });
+    fs::write(
+        &harness,
+        r#"#include "CanTp.h"
+#include "LSduR.h"
+#include "PduR.h"
+#include <stddef.h>
+static unsigned completion_count;
+static EcuStatus completion_status;
+static unsigned frame_count;
+static unsigned rx_abort_count;
+EcuStatus LSduR_CanTpTransmit(uint8_t dlc, const uint8_t data[8]) {
+    (void)dlc; (void)data;
+    ++frame_count;
+    return ECU_OK;
+}
+EcuStatus PduR_CanTpCopyTxData(size_t offset, uint8_t *destination, size_t length) {
+    size_t i;
+    (void)offset;
+    for (i = 0u; i < length; ++i) destination[i] = 0u;
+    return ECU_OK;
+}
+void PduR_CanTpTxConfirmation(EcuStatus status, uint64_t now_ms) {
+    (void)now_ms;
+    completion_status = status;
+    ++completion_count;
+}
+void PduR_CanTpRxAbort(void) { ++rx_abort_count; }
+EcuStatus PduR_CanTpRxIndication(uint64_t now_ms) { (void)now_ms; return ECU_OK; }
+EcuStatus PduR_CanTpStartOfReception(size_t length) { (void)length; return ECU_OK; }
+EcuStatus PduR_CanTpCopyRxData(const uint8_t *data, size_t length) {
+    (void)data; (void)length; return ECU_OK;
+}
+int main(void) {
+    static const EcuDiagnosticConfig config = {.n_as_ms = 5u, .n_bs_ms = 10u,
+                                              .n_cr_ms = 10u, .tx_pdu_id = 3u};
+    const uint8_t flow_control[8] = {0x30u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
+    const uint8_t first_frame[8] = {0x10u, 0x08u, 0u, 0u, 0u, 0u, 0u, 0u};
+    CanTp_Init(&config);
+    if (CanTp_Transmit(4u, 0u) != ECU_OK || frame_count != 1u || completion_count != 0u) return 1;
+    CanTp_TxConfirmation(2u, E_OK);
+    if (CanTp_AdvanceTime(1u) != ECU_OK || completion_count != 0u) return 2;
+    CanTp_TxConfirmation(3u, E_OK);
+    if (CanTp_AdvanceTime(2u) != ECU_OK || completion_count != 1u ||
+        completion_status != ECU_OK) return 3;
+    if (CanTp_Transmit(4u, 3u) != ECU_OK || frame_count != 2u) return 4;
+    if (CanTp_AdvanceTime(8u) != ECU_ERR_TP_TIMEOUT || completion_count != 2u ||
+        completion_status != ECU_ERR_TP_TIMEOUT) return 5;
+    if (CanTp_Transmit(4u, 8u) != ECU_ERR_TP_BUSY) return 6;
+    CanTp_TxConfirmation(3u, E_OK);
+    if (CanTp_AdvanceTime(9u) != ECU_OK || completion_count != 2u) return 7;
+    if (CanTp_Transmit(4u, 10u) != ECU_OK || frame_count != 3u) return 8;
+    CanTp_TxConfirmation(3u, E_NOT_OK);
+    if (CanTp_AdvanceTime(11u) != ECU_ERR_IO || completion_count != 3u ||
+        completion_status != ECU_ERR_IO) return 9;
+    if (CanTp_Transmit(8u, 12u) != ECU_OK || frame_count != 4u) return 10;
+    if (CanTp_RxIndication(3u, flow_control, 13u) != ECU_ERR_TP_FLOW) return 11;
+    CanTp_TxConfirmation(3u, E_OK);
+    if (CanTp_AdvanceTime(14u) != ECU_OK || completion_count != 3u) return 12;
+    if (CanTp_RxIndication(3u, flow_control, 15u) != ECU_OK || frame_count != 5u) return 13;
+    if (CanTp_AdvanceTime(19u) != ECU_OK || completion_count != 3u) return 14;
+    CanTp_TxConfirmation(3u, E_OK);
+    if (CanTp_AdvanceTime(19u) != ECU_OK || completion_count != 4u ||
+        completion_status != ECU_OK) return 15;
+    if (CanTp_Transmit(8u, 20u) != ECU_OK || frame_count != 6u) return 16;
+    CanTp_TxConfirmation(3u, E_OK);
+    if (CanTp_AdvanceTime(21u) != ECU_OK || completion_count != 4u) return 17;
+    if (CanTp_AdvanceTime(31u) != ECU_ERR_TP_TIMEOUT || completion_count != 5u ||
+        completion_status != ECU_ERR_TP_TIMEOUT) return 18;
+    if (CanTp_Transmit(8u, 40u) != ECU_OK || frame_count != 7u) return 19;
+    CanTp_TxConfirmation(3u, E_OK);
+    if (CanTp_AdvanceTime(41u) != ECU_OK) return 20;
+    if (CanTp_RxIndication(8u, first_frame, 42u) != ECU_OK || frame_count != 8u) return 21;
+    if (CanTp_AdvanceTime(47u) != ECU_ERR_TP_TIMEOUT || rx_abort_count != 1u ||
+        completion_count != 5u) return 22;
+    CanTp_TxConfirmation(3u, E_OK);
+    if (CanTp_AdvanceTime(48u) != ECU_OK || completion_count != 5u) return 23;
+    if (CanTp_Transmit(4u, 49u) != ECU_ERR_TP_BUSY) return 24;
+    if (CanTp_AdvanceTime(51u) != ECU_ERR_TP_TIMEOUT || completion_count != 6u ||
+        completion_status != ECU_ERR_TP_TIMEOUT) return 25;
     return 0;
 }
 "#,
@@ -1366,6 +1483,7 @@ fn host_can_ecuc_closes_required_mod_fields_and_rejects_broken_links() {
             request_id: 0x700,
             response_id: 0x708,
             s3_ms: 5000,
+            n_as_ms: Some(200),
             n_bs_ms: 200,
             n_cr_ms: 200,
             did: 0x1234,
@@ -1927,6 +2045,7 @@ fn imported_global_pdu_cannot_duplicate_system_binding_or_misstate_diagnostic_le
             request_id: 0x700,
             response_id: 0x708,
             s3_ms: 5000,
+            n_as_ms: Some(200),
             n_bs_ms: 200,
             n_cr_ms: 200,
             did: 0x1234,
@@ -2050,6 +2169,7 @@ fn diagnostic_ecuc_refs_reject_old_system_destinations_and_dynamic_npdu() {
             request_id: 0x700,
             response_id: 0x708,
             s3_ms: 5000,
+            n_as_ms: Some(200),
             n_bs_ms: 200,
             n_cr_ms: 200,
             did: 0x1234,
@@ -2781,6 +2901,7 @@ fn configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_multiframe_did(
                 request_id: 0x321,
                 response_id: 0x708,
                 s3_ms: 5000,
+                n_as_ms: Some(200),
                 n_bs_ms: 200,
                 n_cr_ms: 200,
                 did: 0x1234,
@@ -2797,6 +2918,7 @@ fn configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_multiframe_did(
             request_id: 0x700,
             response_id: 0x708,
             s3_ms: 5000,
+            n_as_ms: Some(75),
             n_bs_ms: 200,
             n_cr_ms: 200,
             did: 0x1234,
@@ -2897,6 +3019,16 @@ fn configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_multiframe_did(
             "{name} must target {target}"
         );
     }
+    assert!(original.contains("CanTpNas"));
+    fs::write(&source, original.replacen("CanTpNas", "CanTpMissingNas", 1)).unwrap();
+    let missing_n_as = Workspace::open(vec![source.clone()], archive()).unwrap();
+    assert!(
+        missing_n_as
+            .view()
+            .issues
+            .iter()
+            .any(|issue| issue.code == "DIAG_UNSUPPORTED")
+    );
     fs::write(
         &source,
         original.replace("</ELEMENTS>", "<!-- user annotation --></ELEMENTS>"),
@@ -2904,6 +3036,7 @@ fn configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_multiframe_did(
     .unwrap();
     let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
     let diagnostic = reopened.view().diagnostic.unwrap();
+    assert_eq!((diagnostic.n_as_ms, diagnostic.n_bs_ms), (75, 200));
     assert_eq!(
         (
             diagnostic.request_id,
@@ -2914,6 +3047,8 @@ fn configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_multiframe_did(
     );
     let output = temp.0.join("GeneratedDiag");
     generator::generate(&mut reopened, &output).unwrap();
+    let generated_config = fs::read_to_string(output.join("Ecu_Config.c")).unwrap();
+    assert!(generated_config.contains("5000u, 75u, 200u, 200u"));
     let mut names: Vec<String> = fs::read_to_string(output.join("files.list"))
         .unwrap()
         .lines()
@@ -3005,6 +3140,7 @@ fn active_session_did_reports_session_transitions_and_rejects_invalid_reads() {
                 request_id: 0x700,
                 response_id: 0x708,
                 s3_ms: 5000,
+                n_as_ms: Some(200),
                 n_bs_ms: 200,
                 n_cr_ms: 200,
                 did: 0xF186,
@@ -3020,6 +3156,7 @@ fn active_session_did_reports_session_transitions_and_rejects_invalid_reads() {
             request_id: 0x700,
             response_id: 0x708,
             s3_ms: 5000,
+            n_as_ms: Some(200),
             n_bs_ms: 200,
             n_cr_ms: 200,
             did: 0x1234,
@@ -3083,6 +3220,7 @@ fn active_session_did_reports_session_transitions_and_rejects_invalid_reads() {
             request_id: 0x700,
             response_id: 0x708,
             s3_ms: 5000,
+            n_as_ms: Some(200),
             n_bs_ms: 200,
             n_cr_ms: 200,
             did: 0xF187,
@@ -3122,6 +3260,7 @@ fn multiple_dids_keep_request_order_and_skip_unavailable_values() {
             request_id: 0x700,
             response_id: 0x708,
             s3_ms: 5000,
+            n_as_ms: Some(200),
             n_bs_ms: 200,
             n_cr_ms: 200,
             did: 0x1234,
@@ -3233,6 +3372,7 @@ fn diagnostic_transport_discards_bad_or_timed_out_multiframe_requests_and_recove
             request_id: 0x700,
             response_id: 0x708,
             s3_ms: 5000,
+            n_as_ms: Some(200),
             n_bs_ms: 200,
             n_cr_ms: 200,
             did: 0x1234,
@@ -3314,6 +3454,7 @@ fn diagnostic_tester_present_keeps_session_and_fc_block_size_paces_response() {
             request_id: 0x700,
             response_id: 0x708,
             s3_ms: 5000,
+            n_as_ms: Some(200),
             n_bs_ms: 200,
             n_cr_ms: 200,
             did: 0x1234,
@@ -3397,6 +3538,7 @@ fn unsupported_imported_transport_padding_blocks_diagnostic_generation() {
             request_id: 0x700,
             response_id: 0x708,
             s3_ms: 5000,
+            n_as_ms: Some(200),
             n_bs_ms: 200,
             n_cr_ms: 200,
             did: 0x1234,
@@ -3461,6 +3603,7 @@ fn supported_dtcs_include_zero_status_and_follow_configured_lifecycle() {
                 request_id: 0x700,
                 response_id: 0x708,
                 s3_ms: 5000,
+                n_as_ms: Some(200),
                 n_bs_ms: 200,
                 n_cr_ms: 200,
                 did: 0x1234,
@@ -3631,6 +3774,7 @@ fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restarts() {
             request_id: 0x700,
             response_id: 0x708,
             s3_ms: 5000,
+            n_as_ms: Some(200),
             n_bs_ms: 200,
             n_cr_ms: 200,
             did: 0x1234,
@@ -3983,6 +4127,7 @@ fn extended_session_write_did_changes_live_can_but_not_restart_state() {
             request_id: 0x700,
             response_id: 0x708,
             s3_ms: 5000,
+            n_as_ms: Some(200),
             n_bs_ms: 200,
             n_cr_ms: 200,
             did: 0x1234,
@@ -4100,6 +4245,7 @@ fn security_access_roundtrips_and_gates_host_writes() {
             request_id: 0x700,
             response_id: 0x708,
             s3_ms: 5000,
+            n_as_ms: Some(200),
             n_bs_ms: 200,
             n_cr_ms: 200,
             did: 0x1234,
@@ -4168,6 +4314,7 @@ fn security_access_gates_dtc_mutations_without_a_writable_did() {
             request_id: 0x700,
             response_id: 0x708,
             s3_ms: 5000,
+            n_as_ms: Some(200),
             n_bs_ms: 200,
             n_cr_ms: 200,
             did: 0x1234,
@@ -4184,6 +4331,7 @@ fn security_access_gates_dtc_mutations_without_a_writable_did() {
             request_id: 0x700,
             response_id: 0x708,
             s3_ms: 5000,
+            n_as_ms: Some(200),
             n_bs_ms: 200,
             n_cr_ms: 200,
             did: 0x1234,
@@ -4239,6 +4387,7 @@ fn start_routine_restores_written_did_signals_and_respects_session() {
                 request_id: 0x700,
                 response_id: 0x708,
                 s3_ms: 5000,
+                n_as_ms: Some(200),
                 n_bs_ms: 200,
                 n_cr_ms: 200,
                 did: 0x1234,
@@ -4255,6 +4404,7 @@ fn start_routine_restores_written_did_signals_and_respects_session() {
             request_id: 0x700,
             response_id: 0x708,
             s3_ms: 5000,
+            n_as_ms: Some(200),
             n_bs_ms: 200,
             n_cr_ms: 200,
             did: 0x1234,
@@ -4426,6 +4576,7 @@ fn host_routine_metadata_rejects_unknown_version_and_wrong_session() {
             request_id: 0x700,
             response_id: 0x708,
             s3_ms: 5000,
+            n_as_ms: Some(200),
             n_bs_ms: 200,
             n_cr_ms: 200,
             did: 0x1234,
@@ -4500,6 +4651,7 @@ fn generated_dcm_callbacks_link_for_independent_consumer_and_update_live_signals
             request_id: 0x700,
             response_id: 0x708,
             s3_ms: 5000,
+            n_as_ms: Some(200),
             n_bs_ms: 200,
             n_cr_ms: 200,
             did: 0x1234,

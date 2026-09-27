@@ -62,6 +62,7 @@ typedef struct {
     uint32_t request_can_id;                /**< Physical request CAN identifier. */
     uint32_t response_can_id;               /**< Physical response CAN identifier. */
     uint32_t s3_ms;                         /**< Inactivity timeout for nondefault sessions. */
+    uint32_t n_as_ms;                       /**< CAN frame transmit confirmation timeout. */
     uint32_t n_bs_ms;                       /**< Flow-control wait timeout. */
     uint32_t n_cr_ms;                       /**< Consecutive-frame receive timeout. */
     uint16_t did;                           /**< Configured data identifier. */
@@ -72,6 +73,7 @@ typedef struct {
     const EcuDidWriteFunction *did_writers; /**< NULL disables WriteDataByIdentifier. */
     const EcuResetRoutineConfig *reset_routine; /**< NULL disables the reset routine. */
     uint8_t security_enabled;                   /**< Enables the host-only SecurityAccess level. */
+    uint8_t tx_pdu_id;                          /**< Generated diagnostic CAN transmit handle. */
 } EcuDiagnosticConfig;
 
 /** @brief Root of the generated host ECU configuration. */

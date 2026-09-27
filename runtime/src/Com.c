@@ -108,9 +108,9 @@ void Com_TxConfirmation(PduIdType tx_pdu_id, Std_ReturnType result) {
 
 EcuStatus Com_RxIndication(size_t frame_index, const uint8_t data[8], uint64_t now_ms) {
     const EcuFrameConfig *frame = &com_config->frames[frame_index];
-    size_t i;
     EcuStatus result = Dem_ReportPassed((uint16_t)frame_index);
     if (result == ECU_OK) {
+        size_t i;
         for (i = frame->first_signal; i < (size_t)frame->first_signal + frame->signal_count; ++i) {
             const EcuSignalConfig *signal = &com_config->signals[i];
             uint32_t value = 0u;

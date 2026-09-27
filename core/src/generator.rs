@@ -135,10 +135,11 @@ fn config_source(
         source.push_str("static const uint16_t diagnostic_signal_ids[] = { ");
         write!(
             map,
-            "DIAGNOSTIC request={} response={} s3={} nbs={} ncr={} did={} signals=",
+            "DIAGNOSTIC request={} response={} s3={} nas={} nbs={} ncr={} did={} signals=",
             diagnostic.request_id,
             diagnostic.response_id,
             diagnostic.s3_ms,
+            diagnostic.n_as_ms,
             diagnostic.n_bs_ms,
             diagnostic.n_cr_ms,
             diagnostic.did
@@ -274,8 +275,8 @@ fn config_source(
         if diagnostic.security_enabled {
             map.push_str("SECURITY level=1 seed=16 key=16 attempts=3 delay=5000\n");
         }
-        writeln!(source, "static const EcuDiagnosticConfig diagnostic = {{ {}u, {}u, {}u, {}u, {}u, {}u, diagnostic_signal_ids, {}u, {dtc_ref}, diagnostic_readers, {writer_ref}, {routine_ref}, {}u }};\n",
-            diagnostic.request_id, diagnostic.response_id, diagnostic.s3_ms, diagnostic.n_bs_ms, diagnostic.n_cr_ms, diagnostic.did, diagnostic.signal_paths.len(), diagnostic.security_enabled as u8).unwrap();
+        writeln!(source, "static const EcuDiagnosticConfig diagnostic = {{ {}u, {}u, {}u, {}u, {}u, {}u, {}u, diagnostic_signal_ids, {}u, {dtc_ref}, diagnostic_readers, {writer_ref}, {routine_ref}, {}u, {}u }};\n",
+            diagnostic.request_id, diagnostic.response_id, diagnostic.s3_ms, diagnostic.n_as_ms, diagnostic.n_bs_ms, diagnostic.n_cr_ms, diagnostic.did, diagnostic.signal_paths.len(), diagnostic.security_enabled as u8, frames.len()).unwrap();
         "&diagnostic"
     } else {
         "NULL"

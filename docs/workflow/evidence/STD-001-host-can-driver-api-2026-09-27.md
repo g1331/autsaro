@@ -86,3 +86,11 @@ Dcm 质量整改按已查本地 R24-11 Dcm SWS 的请求、会话和确认顺序
 独立只读复核指出异步失败确认可能需要区分 Tx 与 Rx 会话所有者。当前主机 sink 在发送调用内同步给出结果，且只有一条物理诊断连接；已撤回把成功确认后的同一帧再次报失败的无效测试。完整异步确认、N_As 等待与并发会话不在本切片的支持声明中，仍是标准交付缺口；没有把规范义务门标为通过。最终 `python scripts/workflow.py verify --scope all` 通过（脚本 15/15、核心 3/3、端到端 52/52、UI/桌面构建与增量 Clippy）。最新代表性工程 `<temporary-dir>/generated` 的全量基线仍失败：BSW 部分 MISRA 26、RTE 11、生成 C 7 条，以及七项 `spec_obligations=not_run`。其中 BSW 新增的 8.7 与 RTE 新增的 2.3/2.4 属于公开接口跨翻译单元但局部扫描未见使用者的报告，不能据此宣称全运行时或完整 MISRA 审核完成。
 
 进一步按 MISRA C:2012 Rule 8.7 清查本轮新增公开符号：旧 `Can_Transmit` 包装函数已经没有产品调用方，故删除并将独立测试改用保留 PDU 句柄的 `Can_TransmitPdu`。`python scripts/quality.py --base c4a01b5cd41c`、Can Driver C99 harness 和生成 ECU 金向量通过。以重新生成的 `<temporary-dir>/generated` 复跑全量基线，BSW 部分 MISRA 回到 25 条，RTE 11、生成 C 7 条，七项规范义务门仍未运行；其他基线分区通过。RTE 增加的 2.3/2.4 是 `Com.h` 为标准 `Com_TxConfirmation` 签名引入 ComStack 类型后，在单独扫描 RTE 翻译单元时看到的未使用类型；未通过删除标准公开签名或屏蔽规则来消音。完整 MISRA 规则集、逐条偏差审批和全运行时扫描仍未完成。
+
+## R24-11 CanTp N_As 与异步确认闭环
+
+实施前直接核对本地 R24-11 `AUTOSAR_CP_SWS_CANTransportLayer.pdf`：PDF 页 26–27 的 `SWS_CanTp_00075`、`00076`、`00355` 要求 N_As 超时中止对应会话，并在迟到确认前继续占用 CAN N-PDU；页 68 的 `SWS_CanTp_00215` 定义带 PDU ID 和结果的确认；页 114 的 `ECUC_CanTp_00263` 单独定义 `CanTpNas`。因此配置读取、编辑、ARXML 往返、主机清单和生成 C 均保留独立 N_As，不再把它静默复制为 N_Bs。旧八字段主机清单仍可读，缺失 `nas=` 时沿用旧 N_Bs 值；新生成清单明确写入 `nas=`。导入 ARXML 若缺少必需的 `CanTpNas`，以 `DIAG_UNSUPPORTED` 拒绝生成。
+
+CanTp 现在按配置的 Tx PDU 句柄记录确认，SF/FF/CF/FC 在成功确认后推进状态；未确认时按 N_As 计时，超时中止拥有该帧的会话，但保留帧占用直至迟到确认。C99 独立用例覆盖错误句柄、异步成功和失败、单帧超时、迟到确认后恢复、FF/CF 延迟确认、N_Bs 从 FF 确认时起算，以及 RX FC 与并发 TX 的所有权。独立只读审查发现初稿的 FC 超时只看 `tx.active`，可能误终止另一发送会话；按帧类型修正后，并发故障向量证明只终止对应 RX。现有正常主机 sink 仍在发送调用内同步确认，故这些新增异步路径的证据来自独立 C99 harness，而非外部硬件。
+
+将 CanIf、Com、Dcm、NvM、Os 中 13 条变量作用域提示按原控制流收窄；对应 BSW 部分扫描不再有非 MISRA 的 Cppcheck 提示。`python scripts/workflow.py verify --scope all` 通过：脚本 17/17、核心单元 3/3、端到端 53/53、UI lint/构建、桌面构建与增量 Clippy；`python scripts/quality.py --base c4a01b5cd41c` 和 `python scripts/workflow.py check` 通过。以重新生成的 `<temporary-dir>/generated` 运行全量基线，格式、Python、UI、两套全告警 Clippy 与 Doxygen 通过；仍有 BSW 25、RTE 11、生成 C 7 条部分 MISRA 报告及七项 `spec_obligations=not_run`，基线未通过。所列 MISRA 报告主要来自局部扫描未见跨翻译单元的公开入口和宏使用；对整个 `runtime/src` 的同类扫描还包含主机适配源码的多类报告，不能用局部计数推断整体符合性。ISR 并发安全、完整 CanTp SWS、MemMap/BSWMD、完整 MISRA 逐规则处理及七项规范证据门仍待闭合，能力级别与 STD-001 状态不变。
