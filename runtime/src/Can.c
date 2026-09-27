@@ -264,10 +264,6 @@ CanMode Can_GetMode(void) {
     return mode;
 }
 
-EcuStatus Can_Transmit(uint32_t id, uint8_t dlc, const uint8_t data[8]) {
-    return Can_TransmitPdu(0u, id, dlc, data);
-}
-
 EcuStatus Can_TransmitPdu(PduIdType pdu_id, uint32_t id, uint8_t dlc, const uint8_t data[8]) {
     uint8_t payload[8] = {0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
     Can_PduType pdu;

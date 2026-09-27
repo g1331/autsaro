@@ -85,14 +85,14 @@ static void send_valid_frames(void) {
     uint8_t bytes[8] = {0x12u, 0x34u};
     unsigned i;
     for (i = 0u; i < 100u; ++i) {
-        if (Can_Transmit(0x321u, 2u, bytes) != ECU_OK) valid_result = 1;
+        if (Can_TransmitPdu(0u, 0x321u, 2u, bytes) != ECU_OK) valid_result = 1;
     }
 }
 static void reject_invalid_frames(void) {
     uint8_t bytes[8] = {0x12u, 0x34u};
     unsigned i;
     for (i = 0u; i < 100u; ++i) {
-        if (Can_Transmit(0x800u, 2u, bytes) != ECU_ERR_FRAME_ID) invalid_result = 1;
+        if (Can_TransmitPdu(0u, 0x800u, 2u, bytes) != ECU_ERR_FRAME_ID) invalid_result = 1;
     }
 }
 #ifdef _WIN32
@@ -160,14 +160,14 @@ int main(void) {
         nested_rx_result != ECU_ERR_CAN_BUSY) return 57;
     if (Can_Inject(0x321u, 2u, NULL, 10u) != ECU_ERR_CONFIG || received != 2u) return 12;
     fail_output = 1u;
-    if (Can_Transmit(0x321u, 2u, bytes) != ECU_ERR_IO || sent != 1u || confirmed != 1u) return 20;
+    if (Can_TransmitPdu(0u, 0x321u, 2u, bytes) != ECU_ERR_IO || sent != 1u || confirmed != 1u) return 20;
     fail_output = 0u;
     Can_SetMode(CAN_BUS_OFF);
     if (Can_GetControllerMode(0u, &state) != E_OK || state != CAN_CS_STOPPED) return 15;
     if (Can_GetControllerErrorState(0u, &error_state) != E_OK ||
         error_state != CAN_ERRORSTATE_BUSOFF) return 52;
     if (Can_GetMode() != CAN_BUS_OFF) return 21;
-    if (Can_Transmit(0x321u, 2u, bytes) != ECU_ERR_CONTROLLER) return 11;
+    if (Can_TransmitPdu(0u, 0x321u, 2u, bytes) != ECU_ERR_CONTROLLER) return 11;
     if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_OK) return 16;
     if (Can_GetMode() != CAN_STARTED) return 17;
     if (Can_GetControllerErrorState(0u, &error_state) != E_OK ||
