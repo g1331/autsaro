@@ -55,7 +55,7 @@ static EcuStatus emit(uint32_t id, uint8_t dlc, const uint8_t data[8]) {
     ++sent;
     return ECU_OK;
 }
-EcuStatus CanIf_RxIndication(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
+EcuStatus CanIf_HostRxIndication(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
     Can_ControllerStateType state = CAN_CS_UNINIT;
     if (Can_GetControllerMode(0u, &state) != E_OK || state != CAN_CS_STARTED) return ECU_ERR_CONTROLLER;
     if (id != 0x321u || dlc != 2u || data[0] != 0x12u || now_ms != 10u) return ECU_ERR_IO;
@@ -226,6 +226,84 @@ int main(void) {
         .arg("-pthread")
         .arg(format!("-I{}", root.join("runtime/include").display()))
         .arg(root.join("runtime/src/Can.c"))
+        .arg(root.join("runtime/src/Can_HostLock.c"))
+        .arg(&harness)
+        .arg("-o")
+        .arg(&binary)
+        .output()
+        .unwrap();
+    assert!(
+        build.status.success(),
+        "{}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+    let run = Command::new(&binary).output().unwrap();
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+}
+
+#[test]
+fn standard_canif_rx_callback_keeps_nested_host_status_and_time_separate() {
+    let temp = Scratch::new();
+    let harness = temp.0.join("canif_rx_callback.c");
+    let binary = temp.0.join(if cfg!(windows) {
+        "canif_rx_callback.exe"
+    } else {
+        "canif_rx_callback"
+    });
+    fs::write(
+        &harness,
+        r#"#include "CanIf.h"
+#include "Can.h"
+#include "LSduR.h"
+#include "Os.h"
+
+static int nested_time_ok;
+static int outer_time_ok;
+static int depth;
+uint64_t Os_Now(void) { return 99u; }
+EcuStatus Can_Transmit(uint32_t id, uint8_t dlc, const uint8_t data[8]) {
+    (void)id; (void)dlc; (void)data; return ECU_OK;
+}
+EcuStatus LSduR_CanTpRxIndication(uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
+    (void)dlc; (void)data; (void)now_ms; return ECU_ERR_CONFIG;
+}
+EcuStatus LSduR_CanIfRxIndication(size_t frame_index, const uint8_t data[8], uint64_t now_ms) {
+    Can_HwType mailbox = {0x321u, 0u, 0u};
+    uint8_t bytes[2] = {0x12u, 0x34u};
+    PduInfoType pdu = {bytes, NULL, 2u};
+    (void)frame_index; (void)data;
+    if (depth != 0) {
+        nested_time_ok = now_ms == 99u;
+        return ECU_ERR_FRAME_DLC;
+    }
+    outer_time_ok = now_ms == 10u;
+    depth = 1;
+    CanIf_RxIndication(&mailbox, &pdu);
+    depth = 0;
+    return ECU_OK;
+}
+int main(void) {
+    const EcuFrameConfig frame = {0x321u, 2u, 0u, 0u, 0u, 0u, 1u};
+    const EcuConfig config = {"test", &frame, 1u, NULL, 0u, NULL};
+    const uint8_t data[8] = {0x12u, 0x34u};
+    CanIf_Init(&config);
+    if (CanIf_HostRxIndication(0x321u, 2u, data, 10u) != ECU_OK) return 1;
+    if (outer_time_ok == 0 || nested_time_ok == 0) return 2;
+    return 0;
+}
+"#,
+    )
+    .unwrap();
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let build = Command::new("gcc")
+        .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
+        .arg("-pthread")
+        .arg(format!("-I{}", root.join("runtime/include").display()))
+        .arg(root.join("runtime/src/CanIf.c"))
         .arg(root.join("runtime/src/Can_HostLock.c"))
         .arg(&harness)
         .arg("-o")

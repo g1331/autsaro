@@ -285,7 +285,7 @@ EcuStatus Can_Inject(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t n
     } else if (data == NULL) {
         result = ECU_ERR_CONFIG;
     } else {
-        result = CanIf_RxIndication(id, dlc, data, now_ms);
+        result = CanIf_HostRxIndication(id, dlc, data, now_ms);
     }
     Can_Unlock();
     return result;

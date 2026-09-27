@@ -12,6 +12,13 @@ typedef uint32_t Can_IdType;
 /** @brief Hardware transmit handle; the current host profile has one handle, zero. */
 typedef uint16_t Can_HwHandleType;
 
+/** @brief Hardware object, controller and identifier of a received CAN L-PDU. */
+typedef struct {
+    Can_IdType CanId;     /**< Received CAN identifier. */
+    Can_HwHandleType Hoh; /**< Receive hardware object handle. */
+    uint8_t ControllerId; /**< Abstract CanIf controller identifier. */
+} Can_HwType;
+
 /** @brief CAN L-SDU supplied by CanIf to Can_Write. */
 typedef struct {
     PduIdType swPduHandle; /**< Software PDU handle for confirmation routing. */
