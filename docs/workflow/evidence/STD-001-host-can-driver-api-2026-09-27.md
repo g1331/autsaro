@@ -24,6 +24,8 @@
 
 二次修复后 `python scripts/workflow.py verify --scope all` 再次通过（脚本 15/15、核心 3/3 + 50/50、UI 与桌面构建、增量 Clippy）。新代表性工程 `<temporary-dir>/generated` 的全量基线仍有四个失败分区：BSW 部分 MISRA 352 条、RTE 9 条、生成 C 7 条，以及七项规范证据门。可重入锁新增的 POSIX/Windows 系统 API 与 `abort` 也被扫描报告；标准交付所需的逐条处置未完成。
 
+第三个独立只读 Agent 复核 `c4ca40f`，确认 bus-off 标准恢复与可重入发送，但发现公开枚举缺 `CAN_CS_SLEEP`（R24-11 SWS_Can_91013）以及接收注入的状态检查和 CanIf 派发之间存在并发竞态。已补齐枚举并拒绝主机不支持的 SLEEP 转换；`Can_Inject` 现在在同一可重入锁内检查状态并派发，测试接收回调也重入查询控制器状态。补丁后 `python scripts/workflow.py verify --scope all` 再次通过；新代表性工程 `<temporary-dir>/generated` 的全量基线仍是相同四个失败分区和 352/9/7 条部分 MISRA 发现。最终复核仍待执行。
+
 ## 未闭合的标准义务
 
 `Can_DeInit`、`Can_SetBaudrate`、中断控制、错误状态及其他适用服务/回调、线程安全的 `Can_Write`、完整 ECUC/BSWMD、MemMap 与逐规则 MISRA 处理尚未闭合。当前 `Can_ConfigType` 仍携带主机输出回调，`Can_Write` 在单线程虚拟目标同步执行；这不是第三方 CanIf/CAN ABI 或真实 MCU 证据。任务保持 `active`，HOST-CAN-01 仍为 `documented_behavior`，所有六道证据门维持原状态；后续须补标准工件、独立运行和新 Agent 复核。

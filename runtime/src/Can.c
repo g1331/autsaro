@@ -176,16 +176,18 @@ EcuStatus Can_Transmit(uint32_t id, uint8_t dlc, const uint8_t data[8]) {
 
 EcuStatus Can_Inject(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
     EcuStatus result = ECU_OK;
+    Can_Lock();
     if (id > 0x7ffu) {
         result = ECU_ERR_FRAME_ID;
     } else if ((dlc < 1u) || (dlc > 8u)) {
         result = ECU_ERR_FRAME_DLC;
-    } else if (Can_GetMode() != CAN_STARTED) {
+    } else if (controller_mode != CAN_STARTED) {
         result = ECU_ERR_CONTROLLER;
     } else if (data == NULL) {
         result = ECU_ERR_CONFIG;
     } else {
         result = CanIf_RxIndication(id, dlc, data, now_ms);
     }
+    Can_Unlock();
     return result;
 }

@@ -38,6 +38,8 @@ static EcuStatus emit(uint32_t id, uint8_t dlc, const uint8_t data[8]) {
     return ECU_OK;
 }
 EcuStatus CanIf_RxIndication(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
+    Can_ControllerStateType state = CAN_CS_UNINIT;
+    if (Can_GetControllerMode(0u, &state) != E_OK || state != CAN_CS_STARTED) return ECU_ERR_CONTROLLER;
     if (id != 0x321u || dlc != 2u || data[0] != 0x12u || now_ms != 10u) return ECU_ERR_IO;
     ++received;
     return ECU_OK;
@@ -77,6 +79,7 @@ int main(void) {
     if (Can_SetControllerMode(1u, CAN_CS_STARTED) != E_NOT_OK) return 4;
     if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_OK) return 5;
     if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_NOT_OK) return 14;
+    if (Can_SetControllerMode(0u, CAN_CS_SLEEP) != E_NOT_OK) return 27;
     if (Can_Write(1u, &pdu) != E_NOT_OK || Can_Write(0u, NULL) != E_NOT_OK) return 6;
     pdu.id = 0x800u;
     if (Can_Write(0u, &pdu) != E_NOT_OK) return 7;
