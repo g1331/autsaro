@@ -9,17 +9,19 @@ static const EcuDiagnosticConfig *active_diagnostic;
 void LSduR_Init(const EcuDiagnosticConfig *config) { active_diagnostic = config; }
 
 EcuStatus LSduR_CanTpTransmit(uint8_t dlc, const uint8_t data[8]) {
-    if (active_diagnostic == NULL) {
-        return ECU_ERR_CONFIG;
+    EcuStatus result = ECU_ERR_CONFIG;
+    if (active_diagnostic != NULL) {
+        result = Can_Transmit(active_diagnostic->response_can_id, dlc, data);
     }
-    return Can_Transmit(active_diagnostic->response_can_id, dlc, data);
+    return result;
 }
 
 EcuStatus LSduR_CanTpRxIndication(uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
-    if (active_diagnostic == NULL) {
-        return ECU_ERR_CONFIG;
+    EcuStatus result = ECU_ERR_CONFIG;
+    if (active_diagnostic != NULL) {
+        result = CanTp_RxIndication(dlc, data, now_ms);
     }
-    return CanTp_RxIndication(dlc, data, now_ms);
+    return result;
 }
 
 EcuStatus LSduR_PduRTransmit(size_t frame_index, const uint8_t data[8]) {

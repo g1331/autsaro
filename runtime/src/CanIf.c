@@ -7,31 +7,36 @@ static const EcuConfig *active_config;
 void CanIf_Init(const EcuConfig *config) { active_config = config; }
 
 EcuStatus CanIf_Transmit(size_t frame_index, const uint8_t data[8]) {
-    const EcuFrameConfig *frame;
-    if (frame_index >= active_config->frame_count) {
-        return ECU_ERR_CONFIG;
+    EcuStatus result = ECU_ERR_CONFIG;
+    if (frame_index < active_config->frame_count) {
+        const EcuFrameConfig *frame = &active_config->frames[frame_index];
+        if (frame->direction != 1u) {
+            result = ECU_ERR_DIRECTION;
+        } else {
+            result = Can_Transmit(frame->id, frame->dlc, data);
+        }
     }
-    frame = &active_config->frames[frame_index];
-    if (frame->direction != 1u) {
-        return ECU_ERR_DIRECTION;
-    }
-    return Can_Transmit(frame->id, frame->dlc, data);
+    return result;
 }
 
 EcuStatus CanIf_RxIndication(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
     size_t i;
-    if (active_config->diagnostic != NULL && id == active_config->diagnostic->request_can_id) {
-        return LSduR_CanTpRxIndication(dlc, data, now_ms);
-    }
-    for (i = 0; i < active_config->frame_count; ++i) {
-        const EcuFrameConfig *frame = &active_config->frames[i];
-        if (frame->id == id && frame->direction == 0u) {
-            if (frame->dlc != dlc) {
-                return ECU_ERR_FRAME_DLC;
+    EcuStatus result = ECU_OK;
+    if ((active_config->diagnostic != NULL) && (id == active_config->diagnostic->request_can_id)) {
+        result = LSduR_CanTpRxIndication(dlc, data, now_ms);
+    } else {
+        for (i = 0u; i < active_config->frame_count; ++i) {
+            const EcuFrameConfig *frame = &active_config->frames[i];
+            if ((frame->id == id) && (frame->direction == 0u)) {
+                if (frame->dlc != dlc) {
+                    result = ECU_ERR_FRAME_DLC;
+                } else {
+                    result = LSduR_CanIfRxIndication(i, data, now_ms);
+                }
+                break;
             }
-            return LSduR_CanIfRxIndication(i, data, now_ms);
         }
     }
     /* 其他标准 CAN ID 在控制器过滤器处被丢弃。 */
-    return ECU_OK;
+    return result;
 }

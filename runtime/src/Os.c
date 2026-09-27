@@ -17,31 +17,29 @@ uint64_t Os_Now(void) { return current_ms; }
 EcuStatus Os_Advance(uint64_t now_ms) {
     size_t i;
     uint64_t previous_ms = current_ms;
-    EcuStatus transport_status;
+    EcuStatus result = ECU_OK;
     if (now_ms < previous_ms) {
-        return ECU_ERR_TIME;
-    }
-    current_ms = now_ms;
-    {
-        EcuStatus result = Com_AdvanceTime(now_ms);
-        if (result != ECU_OK) {
-            return result;
+        result = ECU_ERR_TIME;
+    } else {
+        current_ms = now_ms;
+        result = Com_AdvanceTime(now_ms);
+        if (result == ECU_OK) {
+            Dcm_AdvanceTime(now_ms);
+            result = CanTp_AdvanceTime(now_ms);
         }
-    }
-    Dcm_AdvanceTime(now_ms);
-    transport_status = CanTp_AdvanceTime(now_ms);
-    if (transport_status != ECU_OK) {
-        return transport_status;
-    }
-    for (i = 0; i < active_config->frame_count; ++i) {
-        const EcuFrameConfig *frame = &active_config->frames[i];
-        if (frame->direction == 1u && now_ms / frame->period_ms > previous_ms / frame->period_ms &&
-            Can_GetMode() == CAN_STARTED) {
-            EcuStatus result = Com_TriggerTransmit(i);
-            if (result != ECU_OK) {
-                return result;
+        if (result == ECU_OK) {
+            for (i = 0u; i < active_config->frame_count; ++i) {
+                const EcuFrameConfig *frame = &active_config->frames[i];
+                if ((frame->direction == 1u) &&
+                    ((now_ms / frame->period_ms) > (previous_ms / frame->period_ms)) &&
+                    (Can_GetMode() == CAN_STARTED)) {
+                    result = Com_TriggerTransmit(i);
+                    if (result != ECU_OK) {
+                        break;
+                    }
+                }
             }
         }
     }
-    return ECU_OK;
+    return result;
 }

@@ -34,6 +34,8 @@
 
 平台锁分离后完整 `python scripts/workflow.py verify --scope all` 再次通过（脚本 15/15、核心 3/3 + 50/50、UI/桌面构建及增量 Clippy）。新代表性工程 `<temporary-dir>/generated` 的全量基线先发现新增 Python 测试文件格式未对齐；按锁定 Ruff 版本修正后复跑，格式/Python/UI/全告警 Clippy/Doxygen 均通过，仍失败 BSW 329、RTE 9、生成 C 7 条部分 MISRA 与七项规范证据门。该次调整尚待独立复核。
 
+第六个独立只读 Agent 对平台锁分离及检查器源码分类未发现限定范围内的回归；确认生成器会收集并编译新主机锁源码，同时指出 HOST 分类仍不在部分 MISRA 扫描中，不能由 BSW 数字下降推断完整 MISRA 进展。其后对 `CanIf.c`、`LSduR.c` 与主机虚拟调度器 `Os.c` 的多出口和表达式分组作语义保持整理，保留 CAN/诊断优先、DLC 拒绝、周期调度及错误短路顺序。独立双 ECU 金向量及完整 `python scripts/workflow.py verify --scope all` 通过（脚本 15/15、核心 3/3 + 50/50、UI/桌面构建与增量 Clippy）。新代表性工程 `<temporary-dir>/generated` 的全量基线中格式/Python/UI/全告警 Clippy/Doxygen 均通过；仍失败 BSW 314、RTE 9、生成 C 7 条部分 MISRA 及七项规范证据门。
+
 ## 当前切片的规范逐项核对
 
 下列核对使用本地 `docs/official/R24-11/CP/Communication/AUTOSAR_CP_SWS_CANDriver.pdf` 原文，列出本切片已声明的行为与尚未闭合的依赖；它不是完整 Can SWS 覆盖表。
