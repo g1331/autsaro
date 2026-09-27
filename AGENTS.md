@@ -19,11 +19,11 @@ cargo test --manifest-path core/Cargo.toml
 cargo build --manifest-path src-tauri/Cargo.toml
 ```
 
-上述命令依次安装锁定的前端依赖、执行 TypeScript 检查并构建界面、运行核心测试、编译桌面程序。完整门禁用 `python scripts/workflow.py verify --scope all`，其中包含增量格式、源码卫生、C99 语法和限定范围的 Clippy 检查；首次安装格式工具见 `README.md`。界面开发用 `npm run dev --prefix ui`；桌面调试程序从 `src-tauri/target/debug/` 启动。Windows 依赖 Rust MSVC、C++ Build Tools、WebView2、GCC、vcpkg libxml2 和 libclang；具体环境变量见 `README.md`。
+上述命令依次安装锁定的前端依赖、执行 TypeScript 检查并构建界面、运行核心测试、编译桌面程序。增量交付门用 `python scripts/workflow.py verify --scope all`；全量质量与规范证据缺口审计用 `python scripts/workflow.py verify --scope baseline`，它允许如实报红。首次安装检查工具见 `README.md`。界面开发用 `npm run dev --prefix ui`；桌面调试程序从 `src-tauri/target/debug/` 启动。Windows 依赖 Rust MSVC、C++ Build Tools、WebView2、GCC、vcpkg libxml2 和 libclang；具体环境变量见 `README.md`。
 
 ## 代码风格与命名
 
-Rust 使用四空格及 `snake_case` 函数名；现有文件尚未整体通过 `rustfmt`，避免全仓格式化，但新增或修改的代码行须通过 `scripts/quality.py` 的 rustfmt 增量检查。TypeScript/TSX 沿用两空格、单引号和分号，新改行由锁定版本的 Prettier 检查，严格类型检查包含在 UI 构建中。C 代码保持 C99、四空格缩进，公开运行时接口沿用 `Can_Transmit` 等模块前缀；新改行由固定版本的 clang-format 检查。`.editorconfig` 约定基础空白格式。仓库尚无统一 ESLint、全量历史格式通过或覆盖率门禁；这些检查也不能代替 MISRA 与模块 SWS 证据。
+Rust 使用四空格及 `snake_case` 函数名；现有文件尚未整体通过 `rustfmt`，避免全仓格式化，但新增或修改的代码行须通过 `scripts/quality.py` 的 rustfmt 增量检查。TypeScript/TSX 沿用两空格、单引号和分号，新改行由锁定版本的 Prettier 检查，严格类型检查包含在 UI 构建中，ESLint 覆盖 UI 源码。C 代码保持 C99、四空格缩进，公开运行时接口沿用 `Can_Transmit` 等模块前缀；新改行由固定版本的 clang-format 检查。`.editorconfig` 约定基础空白格式。仓库尚未达到全量历史格式通过，也没有覆盖率门禁；部分 MISRA 扫描不能代替完整 MISRA 与模块 SWS 证据。
 
 ## 测试要求
 

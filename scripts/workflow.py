@@ -325,25 +325,29 @@ def print_status(state: dict, feedback: dict) -> None:
     print("向用户报告前，仍须核对 Git、源码和实际命令输出。")
 
 
-def verify(scope: str) -> int:
+def verify(scope: str, generated_dir: str | None = None) -> int:
     npm = "npm.cmd" if sys.platform == "win32" else "npm"
     clippy = ["-A", "clippy::all", "-D", "clippy::correctness", "-D", "clippy::suspicious"]
     commands = {
         "core": [["cargo", "test", "--manifest-path", "core/Cargo.toml"],
                  ["cargo", "clippy", "--manifest-path", "core/Cargo.toml", "--all-targets", "--", *clippy]],
-        "ui": [[npm, "ci", "--prefix", "ui"], [npm, "run", "build", "--prefix", "ui"]],
+        "ui": [[npm, "ci", "--prefix", "ui"], [npm, "run", "lint", "--prefix", "ui"],
+               [npm, "run", "build", "--prefix", "ui"]],
         "desktop": [["cargo", "build", "--manifest-path", "src-tauri/Cargo.toml"],
                     ["cargo", "clippy", "--manifest-path", "src-tauri/Cargo.toml", "--all-targets", "--", *clippy]],
         "all": [
             [sys.executable, "-B", "-m", "unittest", "discover", "-s", "scripts", "-p", "test_*.py"],
             [npm, "ci", "--prefix", "ui"],
             [sys.executable, "-B", "scripts/quality.py"],
+            [npm, "run", "lint", "--prefix", "ui"],
             [npm, "run", "build", "--prefix", "ui"],
             ["cargo", "test", "--manifest-path", "core/Cargo.toml"],
             ["cargo", "clippy", "--manifest-path", "core/Cargo.toml", "--all-targets", "--", *clippy],
             ["cargo", "build", "--manifest-path", "src-tauri/Cargo.toml"],
             ["cargo", "clippy", "--manifest-path", "src-tauri/Cargo.toml", "--all-targets", "--", *clippy],
         ],
+        "baseline": [[sys.executable, "-B", "scripts/quality_baseline.py",
+                      *(["--generated-dir", generated_dir] if generated_dir else [])]],
     }
     for command in [["git", "diff", "--check"], ["git", "diff", "--cached", "--check"], *commands[scope]]:
         print(f"> {' '.join(command)}", flush=True)
@@ -367,7 +371,8 @@ def main() -> int:
     subcommands.add_parser("status", help="Read-only status index")
     subcommands.add_parser("check", help="Validate cross-agent state and evidence references")
     verify_parser = subcommands.add_parser("verify", help="Run local verification gates")
-    verify_parser.add_argument("--scope", choices=("core", "ui", "desktop", "all"), required=True)
+    verify_parser.add_argument("--scope", choices=("core", "ui", "desktop", "all", "baseline"), required=True)
+    verify_parser.add_argument("--generated-dir", help="Generated ECU project to include in baseline scan")
     arguments = parser.parse_args()
     try:
         state = load_state()
@@ -387,7 +392,9 @@ def main() -> int:
     elif arguments.command == "check":
         print("Workflow state is valid.")
     else:
-        return verify(arguments.scope)
+        if arguments.generated_dir and arguments.scope != "baseline":
+            parser.error("--generated-dir requires --scope baseline")
+        return verify(arguments.scope, arguments.generated_dir)
     return 0
 
 
