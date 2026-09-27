@@ -1,18 +1,20 @@
-# BMad 项目推进规则
+# BMad 在本仓库的使用约定
 
-## 恢复项目状态
+## 由 BMad 决定任务流转
 
-本仓库固定使用 BMad 6.12.0，Codex 技能在 `.agents/skills/`，共用配置在 `_bmad/`。新会话先核对 Git 状态、当前源码、`_bmad-output/planning-artifacts/` 的 PRD/架构/epic、`_bmad-output/implementation-artifacts/sprint-status.yaml` 及对应 story 文件；可用 `bmad-help` 与 `bmad-sprint-planning` 的 status/validate 意图辅助导航。BMad 状态是任务进度唯一来源。产品地图 `.scratch/autosar-platform/map.md` 记录产品决定，`docs/assurance/capabilities.json` 记录能力声明和六道证据门；两者都不能由 story 状态自动推断。历史 `docs/workflow/` 只用于溯源。
+本仓库固定使用 BMad 6.12.0。新会话先核对 Git、源码、`_bmad-output/planning-artifacts/` 和对应 story 文件，再用 `bmad-sprint-planning` 的 status 操作读取 `_bmad-output/implementation-artifacts/sprint-status.yaml`。通常执行它推荐的下一项：恢复进行中 story、处理 review、开始就绪或 backlog story，或在没有待开发 story 时复盘。一次 `bmad-build` 处理一个目标或 story；开始另一项时使用新会话。不另设连续开发数量、自定义领题排序或独立于 BMad 的任务状态机。
 
-“状态如何”只读：对照状态、Git、源码与能力档案，简述可运行行为、已完成和在途 story、下一功能项、未通过的门及阻断，不构建、不修改状态。`sprint-status.yaml` 的推荐动作只是索引；文件与现实冲突时先核实，再走 BMad 修复状态流程。
+“按项目计划继续推进”和“按 BMad 工作流推进下一步”都表示执行当前最合适的**一个 BMad 工作单元**。“状态如何”只读，不领取任务或修改仓库。若 sprint 状态与 story、Git 或源码证据不一致，先核实，再使用 BMad 的 sprint-status 修复流程，不凭聊天记录或手工改 YAML 猜测完成度。
 
-## 一次推进最多两个 story
+产品地图 `.scratch/autosar-platform/map.md` 记录产品决策，`docs/assurance/capabilities.json` 记录能力声明和六道证据门；两者不参与 BMad 任务排序，也不能由 story `done` 自动升级。历史 `docs/workflow/` 只用于溯源。重大需求或跨 epic 调整走 BMad PRD、架构、epic/story 或 `bmad-correct-course`，不另建项目管理状态。
 
-“按项目计划继续推进”时，先恢复在途 story；若无在途项，按依赖和产品价值选择就绪 story。优先解决明确阻断当前切片的回归，随后推进能增加可观察 ECU 行为的 story。证据调查并入其所属的产品 story，除非有真实缺陷或支持声明前置门，不连续领取独立审计项。Story 2.1 的规范适用性在就绪检查中列为关注项；开发前先用 `bmad-spec` 结合本地 R24-11 Dem/Dcm/NvM 文档收口，再运行 Build，不猜测规范语义。
+## 使用 BMad 开发与收尾
 
-主 Agent 对每个 story 执行 `bmad-build`，独立审查仅作只读复核，由主 Agent 修复并核对结论；当前不使用 `bmad-build-auto` 或 BMad Loop。每项记录起始提交、实现和拒绝路径、实际输入与输出、验证命令、规范出处、未验证维度。运行 `python scripts/verify.py --scope all --base <story起始提交>` 与适用的实际主机测试；全量旧债用 `--scope baseline` 单独报告，不弱化规则。若 BMad 技能要求对重大意图空缺或不可逆操作作选择，提供具体推荐并停在该边界；常规技术判断自行完成。
+对明确的 story 使用 `bmad-build`：让它调查意图、选择规划深度、实施、复核、修复并记录结果。Build 已包含代码复核；`bmad-code-review` 用于额外检查或 sprint 中确实待审的变更，不对每项交付机械重复。Story 2.1 的 Dem/Dcm/NvM 语义关注项是 Build 的输入，编码前必须查明适用规范与配置边界；若 Build 无法安全收口重要意图缺口，再用 `bmad-spec`、更新 PRD 或修订 story，不把 Spec 固定为所有 story 的前置步骤。
 
-一轮最多完成两个 story；到 epic 边界、重大产品决定或真实阻断即停，并交接已完成内容与下一项。Epic 结束时对合并行为进行端到端验收并运行 `bmad-retrospective`。复盘行动项进入 BMad sprint 文件或后续 story；旧工作流反馈 `WF-007` 已迁入 sprint action item，必须在后续实际桌面验收中观察后再关闭。单次本机问题只写入对应 story，不形成共享任务。
+每项记录起始提交、实现与拒绝路径、实际输入输出、验证命令、规范出处和未验证维度。运行 `python scripts/verify.py --scope all --base <story起始提交>` 与适用的主机测试；全量旧债用 `--scope baseline` 单独报告，不弱化规则。若 BMad 技能要求对重大意图空缺或不可逆操作作选择，给出具体推荐；常规技术判断自行完成。
+
+`bmad-retrospective` 用于审视已完成 epic 的合并结果和行动项。Epic 结束时可建议复盘；BMad 状态推荐或使用者要求时运行，但它不自动挡住下一项 backlog story。若发现跨 story 的实际风险，说明证据并建议复盘。旧工作流反馈 `WF-007` 已作为 sprint action item 保留，只有后续相关桌面验收提供观察结果时才更新，不因换流程而虚假关闭。单次本机问题只写入对应 story。
 
 ## AUTOSAR 声明与交付
 

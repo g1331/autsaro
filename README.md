@@ -84,7 +84,7 @@ python scripts/verify.py --scope baseline --generated-dir (Join-Path $sample 'ge
 
 项目开发由仓库内固定版本 BMad 接管。面向使用者的[项目推进说明](docs/project/OWNER_GUIDE.md)给出日常说法；Agent 按[推进规则](docs/project/AGENT_OPERATING_RULES.md)从 `_bmad-output/implementation-artifacts/sprint-status.yaml` 恢复任务。`docs/assurance/capabilities.json` 独立记录支持声明和六道证据门；迁移前任务状态保存在 `docs/workflow/archive/`，不再参与选题。
 
-已提交的 `.agents/skills/` 和 `_bmad/` 可直接供 Codex 使用；重新安装或更新时固定 `bmad-method@6.12.0`、BMM 和 `codex`，先核对安装器差异，不让新版本覆盖团队定制。`_bmad/config.user.toml` 是被 Git 忽略的个人安装答案；团队共用语言和配置放在 `_bmad/custom/config.toml`。从仓库打开新的 Codex 会话可调用 `bmad-help` 查看当前阶段，或说“按项目计划继续推进”。
+已提交的 `.agents/skills/` 和 `_bmad/` 可直接供 Codex 使用；重新安装或更新时固定 `bmad-method@6.12.0`、BMM 和 `codex`，先核对安装器差异，不让新版本覆盖团队定制。`_bmad/config.user.toml` 是被 Git 忽略的个人安装答案；团队共用语言和配置放在 `_bmad/custom/config.toml`。从仓库打开新的 Codex 会话可调用 `bmad-help` 查看当前阶段，或说“按 BMad 工作流推进下一步”；旧说法“按项目计划继续推进”与之同义。
 
 1. 在起始页新建项目并选择保存 ARXML 的目录，或一次选中同一 ECU 的所有 `.arxml` 文件导入。导入按所选文件集合建模，不自动识别并拆分其他 ECU 的文件。
 2. “配置”页选择帧/信号，在右侧检查器修改并应用；如需诊断，在同页设置物理 CAN ID、计时器、DID 与有序 32-bit Tx 信号，可勾选“允许扩展会话写入此 DID”以启用易失 0x2E，再填写可选 RID 启用 0x31/0x01 初值复位例程；应用诊断配置后可选配一个监测 Rx 帧超时的 DTC。启用写入或配置 DTC 后，可勾选“用 0x27 保护状态更改”，并再次应用诊断配置。先保存，再到“诊断”页运行校验。未应用的草稿不会悄悄写入 ARXML。
