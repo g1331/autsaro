@@ -30,6 +30,10 @@
 
 第五个独立只读 Agent 对非阻塞版指出同一 HTH 的输出回调重入会错误返回 `E_OK`；现用 `tx_in_flight` 将回调执行期也计入占用，重入请求返回 `CAN_BUSY` 且不覆盖在途报文。定向测试及完整 `python scripts/workflow.py verify --scope all` 已通过（脚本 15/15、核心 3/3 + 50/50、UI/桌面构建与增量 Clippy）。新代表性工程 `<temporary-dir>/generated` 的全量基线仍失败四个分区；BSW 部分 MISRA 358 条、RTE 9 条、生成 C 7 条，七项规范证据门仍为 `not_run`。最终复审待执行。
 
+第五个 Agent 对 `5f1dd8e` 只读复审，确认同一 HTH 的回调重入不再覆盖在途报文，并按 `SWS_Can_00213`/`00214` 返回 `CAN_BUSY`；未发现该限定范围内的其他缺陷。随后为处理平台锁给 BSW MISRA 扫描新增的系统 API 发现，将 Windows/POSIX 锁实现移至明确分类的主机适配源码 `Can_HostLock.c`，BSW 仅依赖小型内部锁接口；生成器按 `src/` 文件自动交付，新文件已列入 MSVC 构建说明和 C 源码分类。独立 C99 harness、生成双 ECU 金向量与分类脚本测试已通过，BSW 部分 MISRA 报告由 358 降为 329 条；最终完整增量门、全量基线和该调整的独立复核待执行。
+
+平台锁分离后完整 `python scripts/workflow.py verify --scope all` 再次通过（脚本 15/15、核心 3/3 + 50/50、UI/桌面构建及增量 Clippy）。新代表性工程 `<temporary-dir>/generated` 的全量基线先发现新增 Python 测试文件格式未对齐；按锁定 Ruff 版本修正后复跑，格式/Python/UI/全告警 Clippy/Doxygen 均通过，仍失败 BSW 329、RTE 9、生成 C 7 条部分 MISRA 与七项规范证据门。该次调整尚待独立复核。
+
 ## 当前切片的规范逐项核对
 
 下列核对使用本地 `docs/official/R24-11/CP/Communication/AUTOSAR_CP_SWS_CANDriver.pdf` 原文，列出本切片已声明的行为与尚未闭合的依赖；它不是完整 Can SWS 覆盖表。

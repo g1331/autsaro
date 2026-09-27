@@ -26,7 +26,13 @@ BSW_SOURCES = {
     "PduR.c",
 }
 RTE_SOURCES = {"Rte.c"}
-HOST_SOURCES = {"ecu_host_main.c", "Ecu_Runtime.c", "Ecu_Status.c", "Security.c"}
+HOST_SOURCES = {
+    "ecu_host_main.c",
+    "Ecu_Runtime.c",
+    "Ecu_Status.c",
+    "Security.c",
+    "Can_HostLock.c",
+}
 
 
 def c_scope_errors(root: Path) -> list[str]:

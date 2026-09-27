@@ -59,6 +59,7 @@ class BaselineTests(unittest.TestCase):
             source_dir.mkdir(parents=True)
             for name in (
                 "Can.c",
+                "Can_HostLock.c",
                 "CanIf.c",
                 "CanTp.c",
                 "Com.c",

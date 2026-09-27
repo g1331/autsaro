@@ -200,6 +200,7 @@ int main(void) {
         .arg("-pthread")
         .arg(format!("-I{}", root.join("runtime/include").display()))
         .arg(root.join("runtime/src/Can.c"))
+        .arg(root.join("runtime/src/Can_HostLock.c"))
         .arg(&harness)
         .arg("-o")
         .arg(&binary)
