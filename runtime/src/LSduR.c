@@ -11,7 +11,7 @@ void LSduR_Init(const EcuDiagnosticConfig *config) { active_diagnostic = config;
 EcuStatus LSduR_CanTpTransmit(uint8_t dlc, const uint8_t data[8]) {
     EcuStatus result = ECU_ERR_CONFIG;
     if (active_diagnostic != NULL) {
-        result = Can_Transmit(active_diagnostic->response_can_id, dlc, data);
+        result = CanIf_TransmitDiagnostic(dlc, data);
     }
     return result;
 }
@@ -26,6 +26,10 @@ EcuStatus LSduR_CanTpRxIndication(uint8_t dlc, const uint8_t data[8], uint64_t n
 
 EcuStatus LSduR_PduRTransmit(size_t frame_index, const uint8_t data[8]) {
     return CanIf_Transmit(frame_index, data);
+}
+
+void LSduR_CanIfTxConfirmation(PduIdType pdu_id, Std_ReturnType result) {
+    PduR_CanIfTxConfirmation(pdu_id, result);
 }
 
 EcuStatus LSduR_CanIfRxIndication(size_t frame_index, const uint8_t data[8], uint64_t now_ms) {

@@ -59,6 +59,8 @@ Dcm 提供 0x10 默认/扩展会话、0x3E TesterPresent（子功能 0x80 抑制
 
 这是有边界的主机虚拟实现：未实现多事件 Dem、真实 NvM 设备与 Ea/Fee/MemIf 目标、多级 0x27 与其他 0x31 例程/子功能、其他写入 DID/持久写入、其他 0x19 子功能和 0x14 清除组、功能寻址、跨连接并发、实车确认时序或完整 ECUC 外部 ComM 引用；不以 XSD 通过代替 AUTOSAR/ISO 语义与互操作认证。Dem 事件到监测 Rx 帧只在工具专属 SDG 中绑定，操作周期只是进程启动。
 
+主机 CAN 发送路径将 `Can_Write` 接受的 `swPduHandle` 保留到输出成功，再通过 `Can_MainFunction_Write`、`CanIf_TxConfirmation`、LSduR/PduR 送到 Com 或 CanTp。当前输出回调与确认在同一次主机调用内同步完成；CanTp 的该剖面要求同步确认才能继续发送，尚不支持真实控制器延后确认时所需的 N_As 等待与异步会话状态。控制器停止会取消尚未输出的待发帧，不把取消伪装成成功确认。
+
 ## 逐行 stdin/stdout 协议
 
 启动时控制器为 STARTED、虚拟时间为 0。输入使用十进制非负整数、严格的大写十六进制；每条指令独占一行。输出立即刷新。配置 DTC 时须先传启动参数 `--nvm <path>`；该路径必须与其他 ECU/测试进程隔离。

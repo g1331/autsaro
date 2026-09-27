@@ -13,6 +13,9 @@ static uint8_t tx_in_flight;
 static uint32_t tx_id;
 static uint8_t tx_length;
 static uint8_t tx_payload[8];
+static PduIdType tx_handle;
+static uint8_t tx_confirmation_pending;
+static uint8_t tx_confirming;
 static uint32_t interrupt_disable_count;
 static uint8_t rx_pending;
 static uint8_t rx_processing;
@@ -36,6 +39,8 @@ void Can_Init(const Can_ConfigType *config) {
     bus_off = 0u;
     tx_pending = 0u;
     tx_in_flight = 0u;
+    tx_confirmation_pending = 0u;
+    tx_confirming = 0u;
     rx_pending = 0u;
     rx_processing = 0u;
     interrupt_disable_count = 0u;
@@ -51,6 +56,8 @@ void Can_DeInit(void) {
         bus_off = 0u;
         tx_pending = 0u;
         tx_in_flight = 0u;
+        tx_confirmation_pending = 0u;
+        tx_confirming = 0u;
         rx_pending = 0u;
         rx_processing = 0u;
         interrupt_disable_count = 0u;
@@ -172,11 +179,13 @@ static EcuStatus Can_WriteHost(Can_HwHandleType hth, const Can_PduType *pdu) {
             /* Can_Init has not installed a host output callback. */
         } else if (controller_mode != CAN_STARTED) {
             result = ECU_ERR_CONTROLLER;
-        } else if ((tx_pending != 0u) || (tx_in_flight != 0u)) {
+        } else if ((tx_pending != 0u) || (tx_in_flight != 0u) || (tx_confirmation_pending != 0u) ||
+                   (tx_confirming != 0u)) {
             result = ECU_ERR_CAN_BUSY;
         } else {
             size_t i;
             tx_id = pdu->id;
+            tx_handle = pdu->swPduHandle;
             tx_length = pdu->length;
             for (i = 0u; i < (size_t)pdu->length; ++i) {
                 tx_payload[i] = pdu->sdu[i];
@@ -217,6 +226,10 @@ EcuStatus Can_HostFlush(void) {
         tx_in_flight = 1u;
         result = tx_sink(id, length, payload);
         tx_in_flight = 0u;
+        if (result == ECU_OK) {
+            tx_confirmation_pending = 1u;
+            Can_MainFunction_Write();
+        }
     }
     Can_Unlock();
     return result;
@@ -252,6 +265,10 @@ CanMode Can_GetMode(void) {
 }
 
 EcuStatus Can_Transmit(uint32_t id, uint8_t dlc, const uint8_t data[8]) {
+    return Can_TransmitPdu(0u, id, dlc, data);
+}
+
+EcuStatus Can_TransmitPdu(PduIdType pdu_id, uint32_t id, uint8_t dlc, const uint8_t data[8]) {
     uint8_t payload[8] = {0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
     Can_PduType pdu;
     EcuStatus result = ECU_ERR_CONFIG;
@@ -261,7 +278,7 @@ EcuStatus Can_Transmit(uint32_t id, uint8_t dlc, const uint8_t data[8]) {
         for (i = 0u; (i < dlc) && (i < sizeof(payload)); ++i) {
             payload[i] = data[i];
         }
-        pdu.swPduHandle = 0u;
+        pdu.swPduHandle = pdu_id;
         pdu.length = dlc;
         pdu.id = id;
         pdu.sdu = payload;
@@ -283,6 +300,18 @@ EcuStatus Can_Transmit(uint32_t id, uint8_t dlc, const uint8_t data[8]) {
         }
     }
     return result;
+}
+
+void Can_MainFunction_Write(void) {
+    Can_Lock();
+    if ((tx_confirmation_pending != 0u) && (tx_confirming == 0u)) {
+        PduIdType handle = tx_handle;
+        tx_confirmation_pending = 0u;
+        tx_confirming = 1u;
+        CanIf_TxConfirmation(handle);
+        tx_confirming = 0u;
+    }
+    Can_Unlock();
 }
 
 EcuStatus Can_Inject(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {

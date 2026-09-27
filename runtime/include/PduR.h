@@ -8,6 +8,8 @@
 #include <stdint.h>
 #include "Ecu_Config.h"
 #include "Ecu_Status.h"
+#include "ComStack_Types.h"
+#include "Std_Types.h"
 
 /** @brief Route a configured Tx frame to LSduR.
  * @param[in] frame_index Index into EcuConfig::frames.
@@ -15,6 +17,11 @@
  * @return Host routing status.
  */
 EcuStatus PduR_Transmit(size_t frame_index, const uint8_t data[8]);
+/** @brief Dispatch a CanIf transmit confirmation to Com or CanTp.
+ * @param[in] pdu_id Generated CanIf transmit PDU identifier.
+ * @param[in] result Standard transmission result.
+ */
+void PduR_CanIfTxConfirmation(PduIdType pdu_id, Std_ReturnType result);
 /** @brief Route a configured Rx frame to Com.
  * @param[in] frame_index Index into EcuConfig::frames.
  * @param[in] data Eight-byte frame buffer.

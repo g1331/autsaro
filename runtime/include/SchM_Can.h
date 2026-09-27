@@ -7,4 +7,7 @@
 /** @brief Poll one pending host Rx frame and indicate it to CanIf. */
 void Can_MainFunction_Read(void);
 
+/** @brief Poll one completed host Tx request and confirm it to CanIf. */
+void Can_MainFunction_Write(void);
+
 #endif

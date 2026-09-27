@@ -8,6 +8,8 @@
 #include <stdint.h>
 #include "Ecu_Config.h"
 #include "Ecu_Status.h"
+#include "ComStack_Types.h"
+#include "Std_Types.h"
 
 /** @brief Load generated signal and frame configuration.
  * @param[in] config Generated ECU configuration.
@@ -31,6 +33,11 @@ EcuStatus Com_GetSignal(uint16_t id, uint32_t *value, uint8_t *valid);
  * @return Host transmission status.
  */
 EcuStatus Com_TriggerTransmit(size_t frame_index);
+/** @brief Record confirmation of a configured transmitted I-PDU.
+ * @param[in] tx_pdu_id Generated Tx I-PDU identifier.
+ * @param[in] result Standard transmission result.
+ */
+void Com_TxConfirmation(PduIdType tx_pdu_id, Std_ReturnType result);
 /** @brief Decode a configured Rx frame into its signals.
  * @param[in] frame_index Index into EcuConfig::frames.
  * @param[in] data Eight-byte frame buffer.

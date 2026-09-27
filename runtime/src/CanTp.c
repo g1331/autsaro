@@ -1,6 +1,7 @@
 #include "CanTp.h"
 #include "LSduR.h"
 #include "PduR.h"
+#include "Std_Types.h"
 
 /* N-SDU storage belongs to PduR; only one eight-byte N-PDU is staged at a time. */
 typedef struct {
@@ -28,6 +29,20 @@ typedef struct {
 static const EcuDiagnosticConfig *cantp_config;
 static CanTpRxState rx;
 static CanTpTxState tx;
+static uint8_t frame_confirmation_expected;
+static uint8_t frame_confirmed;
+
+static EcuStatus SendFrame(uint8_t dlc, const uint8_t data[8]) {
+    EcuStatus result;
+    frame_confirmed = 0u;
+    frame_confirmation_expected = 1u;
+    result = LSduR_CanTpTransmit(dlc, data);
+    frame_confirmation_expected = 0u;
+    if ((result == ECU_OK) && (frame_confirmed == 0u)) {
+        result = ECU_ERR_IO;
+    }
+    return result;
+}
 
 static void AbortRx(void) {
     if (rx.active != 0u) {
@@ -46,6 +61,13 @@ static EcuStatus FinishTx(EcuStatus status, uint64_t now_ms) {
     tx.waiting_fc = 0u;
     PduR_CanTpTxConfirmation(status, now_ms);
     return status;
+}
+
+void CanTp_TxConfirmation(PduIdType tx_pdu_id, Std_ReturnType result) {
+    (void)tx_pdu_id;
+    if ((frame_confirmation_expected != 0u) && (result == E_OK)) {
+        frame_confirmed = 1u;
+    }
 }
 
 static EcuStatus SendConsecutiveFrames(uint64_t now_ms) {
@@ -68,7 +90,7 @@ static EcuStatus SendConsecutiveFrames(uint64_t now_ms) {
                 outcome = FinishTx(result, now_ms);
                 stop = 1u;
             } else {
-                result = LSduR_CanTpTransmit((uint8_t)(count + 1u), frame);
+                result = SendFrame((uint8_t)(count + 1u), frame);
                 if (result != ECU_OK) {
                     outcome = FinishTx(result, now_ms);
                     stop = 1u;
@@ -103,6 +125,8 @@ void CanTp_Init(const EcuDiagnosticConfig *config) {
     rx.active = 0u;
     tx.active = 0u;
     tx.waiting_fc = 0u;
+    frame_confirmation_expected = 0u;
+    frame_confirmed = 0u;
 }
 
 EcuStatus CanTp_AdvanceTime(uint64_t now_ms) {
@@ -165,7 +189,7 @@ static EcuStatus ReceiveFirst(uint8_t dlc, const uint8_t data[8], uint64_t now_m
         result = ECU_ERR_FRAME_DLC;
     } else if (length > ECU_DIAG_MAX_PAYLOAD) {
         flow_control[0] = 0x32u; /* FC(OVFLW): no N-SDU was delivered. */
-        result = LSduR_CanTpTransmit(3u, flow_control);
+        result = SendFrame(3u, flow_control);
         if (result == ECU_OK) {
             result = ECU_ERR_TP_LENGTH;
         }
@@ -181,7 +205,7 @@ static EcuStatus ReceiveFirst(uint8_t dlc, const uint8_t data[8], uint64_t now_m
                 AbortRx();
             } else {
                 rx.received = 6u;
-                result = LSduR_CanTpTransmit(3u, flow_control);
+                result = SendFrame(3u, flow_control);
                 if (result != ECU_OK) {
                     AbortRx();
                 } else {
@@ -329,7 +353,7 @@ EcuStatus CanTp_Transmit(size_t length, uint64_t now_ms) {
             }
             result = PduR_CanTpCopyTxData(0u, &frame[(length <= 7u) ? 1u : 2u], count);
             if (result == ECU_OK) {
-                result = LSduR_CanTpTransmit((uint8_t)((length <= 7u) ? (length + 1u) : 8u), frame);
+                result = SendFrame((uint8_t)((length <= 7u) ? (length + 1u) : 8u), frame);
             }
             if ((result != ECU_OK) || (length <= 7u)) {
                 result = FinishTx(result, now_ms);

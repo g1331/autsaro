@@ -111,6 +111,14 @@ CanMode Can_GetMode(void);
  * @return Host transmission status.
  */
 EcuStatus Can_Transmit(uint32_t id, uint8_t dlc, const uint8_t data[8]);
+/** @brief Send a host frame while retaining its generated CanIf PDU handle.
+ * @param[in] pdu_id Generated CanIf transmit PDU identifier.
+ * @param[in] id Standard CAN identifier.
+ * @param[in] dlc Number of valid payload bytes.
+ * @param[in] data Eight-byte frame buffer.
+ * @return Host transmission status.
+ */
+EcuStatus Can_TransmitPdu(PduIdType pdu_id, uint32_t id, uint8_t dlc, const uint8_t data[8]);
 /** @brief Inject one received frame into the host CAN stack.
  * @param[in] id Standard CAN identifier.
  * @param[in] dlc Number of valid payload bytes.

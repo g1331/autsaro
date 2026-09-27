@@ -21,6 +21,16 @@ void CanIf_Init(const EcuConfig *config);
  * @return Host transmission status.
  */
 EcuStatus CanIf_Transmit(size_t frame_index, const uint8_t data[8]);
+/** @brief Transmit one configured diagnostic response segment via CanIf.
+ * @param[in] dlc Number of valid segment bytes.
+ * @param[in] data Eight-byte segment buffer.
+ * @return Host transmission status.
+ */
+EcuStatus CanIf_TransmitDiagnostic(uint8_t dlc, const uint8_t data[8]);
+/** @brief Confirm a successful Can Driver transmission to the configured upper layer.
+ * @param[in] can_tx_pdu_id Software PDU handle retained by Can_Write.
+ */
+void CanIf_TxConfirmation(PduIdType can_tx_pdu_id);
 /** @brief Route a received CAN L-PDU through the R24-11 CanIf callback.
  * @param[in] mailbox Receive hardware object and CAN identifier.
  * @param[in] pdu_info Received payload and length.

@@ -8,6 +8,8 @@
 #include <stdint.h>
 #include "Ecu_Config.h"
 #include "Ecu_Status.h"
+#include "ComStack_Types.h"
+#include "Std_Types.h"
 
 /** @brief Reset one physical, normal-addressed 11-bit DoCAN connection.
  * @param[in] config Generated diagnostic connection.
@@ -26,6 +28,11 @@ EcuStatus CanTp_RxIndication(uint8_t dlc, const uint8_t data[8], uint64_t now_ms
  * @return Host transport status.
  */
 EcuStatus CanTp_Transmit(size_t length, uint64_t now_ms);
+/** @brief Record confirmation of one transmitted diagnostic CAN frame.
+ * @param[in] tx_pdu_id Generated diagnostic transmit PDU identifier.
+ * @param[in] result Standard CAN frame transmission result.
+ */
+void CanTp_TxConfirmation(PduIdType tx_pdu_id, Std_ReturnType result);
 /** @brief Advance transport timers and pending segment transmission.
  * @param[in] now_ms Current host clock in milliseconds.
  * @return Host transport status.

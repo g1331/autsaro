@@ -19,15 +19,40 @@ void CanIf_Init(const EcuConfig *config) {
 
 EcuStatus CanIf_Transmit(size_t frame_index, const uint8_t data[8]) {
     EcuStatus result = ECU_ERR_CONFIG;
-    if (frame_index < canif_config->frame_count) {
+    if ((canif_config != NULL) && (frame_index < canif_config->frame_count)) {
         const EcuFrameConfig *frame = &canif_config->frames[frame_index];
         if (frame->direction != 1u) {
             result = ECU_ERR_DIRECTION;
         } else {
-            result = Can_Transmit(frame->id, frame->dlc, data);
+            result = Can_TransmitPdu((PduIdType)frame_index, frame->id, frame->dlc, data);
         }
     }
     return result;
+}
+
+EcuStatus CanIf_TransmitDiagnostic(uint8_t dlc, const uint8_t data[8]) {
+    EcuStatus result = ECU_ERR_CONFIG;
+    if ((canif_config != NULL) && (canif_config->diagnostic != NULL)) {
+        result = Can_TransmitPdu((PduIdType)canif_config->frame_count,
+                                 canif_config->diagnostic->response_can_id, dlc, data);
+    }
+    return result;
+}
+
+void CanIf_TxConfirmation(PduIdType can_tx_pdu_id) {
+    Can_Lock();
+    if (canif_config != NULL) {
+        if (((size_t)can_tx_pdu_id < canif_config->frame_count) &&
+            (canif_config->frames[can_tx_pdu_id].direction == 1u)) {
+            LSduR_CanIfTxConfirmation(can_tx_pdu_id, E_OK);
+        } else if (((size_t)can_tx_pdu_id == canif_config->frame_count) &&
+                   (canif_config->diagnostic != NULL)) {
+            LSduR_CanIfTxConfirmation(can_tx_pdu_id, E_OK);
+        } else {
+            /* No generated transmit PDU corresponds to this handle. */
+        }
+    }
+    Can_Unlock();
 }
 
 static EcuStatus RouteRx(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {

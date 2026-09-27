@@ -27,6 +27,19 @@ EcuStatus PduR_Transmit(size_t frame_index, const uint8_t data[8]) {
     return LSduR_PduRTransmit(frame_index, data);
 }
 
+void PduR_CanIfTxConfirmation(PduIdType pdu_id, Std_ReturnType result) {
+    if (pdur_config != NULL) {
+        if ((size_t)pdu_id < pdur_config->frame_count) {
+            Com_TxConfirmation(pdu_id, result);
+        } else if (((size_t)pdu_id == pdur_config->frame_count) &&
+                   (pdur_config->diagnostic != NULL)) {
+            CanTp_TxConfirmation(pdu_id, result);
+        } else {
+            /* No generated upper-layer route corresponds to this handle. */
+        }
+    }
+}
+
 EcuStatus PduR_RxIndication(size_t frame_index, const uint8_t data[8], uint64_t now_ms) {
     return Com_RxIndication(frame_index, data, now_ms);
 }

@@ -1,4 +1,5 @@
 #include "Com.h"
+#include "Std_Types.h"
 #include "Dem.h"
 #include "PduR.h"
 
@@ -7,6 +8,7 @@ static uint32_t signal_values[ECU_MAX_SIGNALS];
 static uint8_t signal_valid[ECU_MAX_SIGNALS];
 static uint64_t rx_at_ms[ECU_MAX_FRAMES];
 static uint8_t rx_seen[ECU_MAX_FRAMES];
+static uint8_t tx_confirmed[ECU_MAX_FRAMES];
 
 static size_t FindSignal(uint16_t id) {
     size_t i;
@@ -44,6 +46,7 @@ void Com_Init(const EcuConfig *config) {
     for (i = 0; i < config->frame_count; ++i) {
         rx_at_ms[i] = 0;
         rx_seen[i] = 0;
+        tx_confirmed[i] = 0u;
     }
 }
 
@@ -78,6 +81,7 @@ EcuStatus Com_GetSignal(uint16_t id, uint32_t *value, uint8_t *valid) {
 EcuStatus Com_TriggerTransmit(size_t frame_index) {
     const EcuFrameConfig *frame = &com_config->frames[frame_index];
     uint8_t data[8] = {0};
+    EcuStatus result;
     size_t i;
     for (i = frame->first_signal; i < (size_t)frame->first_signal + frame->signal_count; ++i) {
         const EcuSignalConfig *signal = &com_config->signals[i];
@@ -87,7 +91,19 @@ EcuStatus Com_TriggerTransmit(size_t frame_index) {
             data[position / 8u] |= (uint8_t)(((signal_values[i] >> bit) & 1u) << (position % 8u));
         }
     }
-    return PduR_Transmit(frame_index, data);
+    tx_confirmed[frame_index] = 0u;
+    result = PduR_Transmit(frame_index, data);
+    if ((result == ECU_OK) && (tx_confirmed[frame_index] == 0u)) {
+        result = ECU_ERR_IO;
+    }
+    return result;
+}
+
+void Com_TxConfirmation(PduIdType tx_pdu_id, Std_ReturnType result) {
+    if ((com_config != NULL) && ((size_t)tx_pdu_id < com_config->frame_count) &&
+        (com_config->frames[tx_pdu_id].direction == 1u) && (result == E_OK)) {
+        tx_confirmed[tx_pdu_id] = 1u;
+    }
 }
 
 EcuStatus Com_RxIndication(size_t frame_index, const uint8_t data[8], uint64_t now_ms) {

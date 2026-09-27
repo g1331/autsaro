@@ -76,3 +76,11 @@ Dcm 质量整改按已查本地 R24-11 Dcm SWS 的请求、会话和确认顺序
 独立只读复核指出，初稿在接收回调重入时可能再次执行 `Can_MainFunction_Read`，违反 `SWS_Can_00012`。修复后用 `rx_processing` 防止主函数自重入，并以 `ECU_ERR_CAN_BUSY` 拒绝回调内再次注入；C99 harness 验证这两种嵌套调用均不产生第二次回调且外层结果正确。该 Agent 复审确认自重入问题已关闭。首轮关于共享 `rx_result` 会覆盖外层返回值的判断，在修复后的赋值顺序与拒绝路径下不成立。
 
 修复后 `python scripts/workflow.py verify --scope all` 通过：脚本 15/15、核心单元 3/3、端到端 51/51、UI lint/构建、增量 Clippy、桌面构建。新生成工程 `<temporary-dir>/generated` 的 `files.list` 含 `SchM_Can.h` 和 `Can.c`。以此工程运行全量基线，格式、Python、UI、全告警 Clippy 与 Doxygen 通过；BSW 部分 MISRA 25、RTE 9、生成 C 7 条，七项规范义务门仍 `not_run`，因此基线未通过。下一标准链按 Can Driver SWS 页 40、81 的 `swPduHandle`、Tx 轮询与 `CanIf_TxConfirmation` 要求处理；当前主机 `Can_Transmit` 仍把句柄固定为 0，不能当作已完成的标准确认路径。
+
+## R24-11 主机 Tx 句柄与同步确认链
+
+实施前核对本地 Can Driver SWS 页 40、81 的 `SWS_Can_00276`、`SWS_Can_00016`、`SWS_Can_00225`、`SWS_Can_00031`；CanIf SWS 页 50、123、156 的 `SWS_CANIF_00383`、`SWS_CANIF_00007`；Com SWS 页 129 的 `SWS_Com_00124`；CanTp SWS 页 26–27、68 的 `SWS_CanTp_00075`、`SWS_CanTp_00355`、`SWS_CanTp_00215`。生成 ECUC 已给每个信号 Tx PDU 分配帧索引，诊断响应 Tx PDU 分配 `frame_count`，均适合当前 `PduIdType=UINT8` 容量。
+
+`Can_Write` 现保留传入的 `swPduHandle`；主机输出回调成功后，由 `Can_MainFunction_Write` 调用 `CanIf_TxConfirmation(handle)`，再按配置路由到 LSduR/PduR、Com 或 CanTp。Com 周期 Tx 与 CanTp 分段发送在该同步主机剖面内以对应确认作为成功条件；输出失败不产生成功确认，CanTp 同步 `E_NOT_OK` 确认会终止当前发送。控制器 STOPPED 取消未输出帧而不产生成功确认，依据 Can Driver `SWS_Can_00282`。独立 C99 harness 覆盖非零句柄保留、确认自重入/回调内发送拒绝、输出失败无成功确认、停止取消、CanIf Tx/Rx 句柄分流与 CanTp 失败确认后重新启动。生成 ECU 金向量及诊断多帧测试通过。
+
+独立只读复核指出异步失败确认可能需要区分 Tx 与 Rx 会话所有者。当前主机 sink 在发送调用内同步给出结果，且只有一条物理诊断连接；已撤回把成功确认后的同一帧再次报失败的无效测试。完整异步确认、N_As 等待与并发会话不在本切片的支持声明中，仍是标准交付缺口；没有把规范义务门标为通过。最终 `python scripts/workflow.py verify --scope all` 通过（脚本 15/15、核心 3/3、端到端 52/52、UI/桌面构建与增量 Clippy）。最新代表性工程 `<temporary-dir>/generated` 的全量基线仍失败：BSW 部分 MISRA 26、RTE 11、生成 C 7 条，以及七项 `spec_obligations=not_run`。其中 BSW 新增的 8.7 与 RTE 新增的 2.3/2.4 属于公开接口跨翻译单元但局部扫描未见使用者的报告，不能据此宣称全运行时或完整 MISRA 审核完成。

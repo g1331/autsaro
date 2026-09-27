@@ -27,6 +27,9 @@ r#"#include "Can.h"
 #endif
 static unsigned sent;
 static unsigned received;
+static unsigned confirmed;
+static PduIdType last_confirmed;
+static unsigned callback_write_busy;
 static unsigned probe_rx_reentry;
 static EcuStatus nested_rx_result;
 static unsigned fail_output;
@@ -57,6 +60,14 @@ static EcuStatus emit(uint32_t id, uint8_t dlc, const uint8_t data[8]) {
     if (fail_output != 0u) return ECU_ERR_IO;
     ++sent;
     return ECU_OK;
+}
+void CanIf_TxConfirmation(PduIdType handle) {
+    uint8_t bytes[8] = {0x12u, 0x34u};
+    Can_PduType nested = {handle, 2u, 0x321u, bytes};
+    Can_MainFunction_Write();
+    if (Can_Write(0u, &nested) == CAN_BUSY) callback_write_busy = 1u;
+    last_confirmed = handle;
+    ++confirmed;
 }
 EcuStatus CanIf_HostRxIndication(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
     Can_ControllerStateType state = CAN_CS_UNINIT;
@@ -138,16 +149,18 @@ int main(void) {
     pdu.length = 0u;
     if (Can_Write(0u, &pdu) != E_NOT_OK) return 8;
     pdu.length = 2u;
+    pdu.swPduHandle = 7u;
     if (Can_Write(0u, &pdu) != E_OK || sent != 0u) return 9;
     if (Can_Write(0u, &pdu) != CAN_BUSY || sent != 0u) return 28;
-    if (Can_HostFlush() != ECU_OK || sent != 1u) return 29;
+    if (Can_HostFlush() != ECU_OK || sent != 1u || confirmed != 1u || last_confirmed != 7u ||
+        callback_write_busy == 0u) return 29;
     if (Can_Inject(0x321u, 2u, bytes, 10u) != ECU_OK || received != 1u) return 10;
     probe_rx_reentry = 1u;
     if (Can_Inject(0x321u, 2u, bytes, 10u) != ECU_OK || received != 2u ||
         nested_rx_result != ECU_ERR_CAN_BUSY) return 57;
     if (Can_Inject(0x321u, 2u, NULL, 10u) != ECU_ERR_CONFIG || received != 2u) return 12;
     fail_output = 1u;
-    if (Can_Transmit(0x321u, 2u, bytes) != ECU_ERR_IO || sent != 1u) return 20;
+    if (Can_Transmit(0x321u, 2u, bytes) != ECU_ERR_IO || sent != 1u || confirmed != 1u) return 20;
     fail_output = 0u;
     Can_SetMode(CAN_BUS_OFF);
     if (Can_GetControllerMode(0u, &state) != E_OK || state != CAN_CS_STOPPED) return 15;
@@ -221,7 +234,12 @@ int main(void) {
     }
     if (sent != 103u) return 46;
 #endif
-    if (Can_SetControllerMode(0u, CAN_CS_STOPPED) != E_OK) return 54;
+    if (Can_Write(0u, &pdu) != E_OK) return 58;
+    {
+        unsigned before_cancel = confirmed;
+        if (Can_SetControllerMode(0u, CAN_CS_STOPPED) != E_OK) return 54;
+        if (Can_HostFlush() != ECU_OK || confirmed != before_cancel) return 59;
+    }
     Can_DeInit();
     if (Can_GetControllerMode(0u, &state) != E_NOT_OK || Can_Write(0u, &pdu) != E_NOT_OK) return 55;
     Can_Init(&config);
@@ -275,9 +293,14 @@ fn standard_canif_rx_callback_keeps_nested_host_status_and_time_separate() {
 static int nested_time_ok;
 static int outer_time_ok;
 static int depth;
+static unsigned tx_confirmation_count;
+static PduIdType tx_confirmed_id;
 uint64_t Os_Now(void) { return 99u; }
-EcuStatus Can_Transmit(uint32_t id, uint8_t dlc, const uint8_t data[8]) {
-    (void)id; (void)dlc; (void)data; return ECU_OK;
+EcuStatus Can_TransmitPdu(PduIdType pdu_id, uint32_t id, uint8_t dlc, const uint8_t data[8]) {
+    (void)pdu_id; (void)id; (void)dlc; (void)data; return ECU_OK;
+}
+void LSduR_CanIfTxConfirmation(PduIdType pdu_id, Std_ReturnType result) {
+    if (result == E_OK) { tx_confirmed_id = pdu_id; ++tx_confirmation_count; }
 }
 EcuStatus LSduR_CanTpRxIndication(uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
     (void)dlc; (void)data; (void)now_ms; return ECU_ERR_CONFIG;
@@ -300,10 +323,19 @@ EcuStatus LSduR_CanIfRxIndication(size_t frame_index, const uint8_t data[8], uin
 int main(void) {
     const EcuFrameConfig frame = {0x321u, 2u, 0u, 0u, 0u, 0u, 1u};
     const EcuConfig config = {"test", &frame, 1u, NULL, 0u, NULL};
+    const EcuFrameConfig tx_frame = {0x321u, 2u, 1u, 0u, 0u, 10u, 0u};
+    const EcuConfig tx_config = {"tx", &tx_frame, 1u, NULL, 0u, NULL};
     const uint8_t data[8] = {0x12u, 0x34u};
     CanIf_Init(&config);
     if (CanIf_HostRxIndication(0x321u, 2u, data, 10u) != ECU_OK) return 1;
     if (outer_time_ok == 0 || nested_time_ok == 0) return 2;
+    CanIf_TxConfirmation(0u);
+    if (tx_confirmation_count != 0u) return 3;
+    CanIf_Init(&tx_config);
+    CanIf_TxConfirmation(1u);
+    if (tx_confirmation_count != 0u) return 4;
+    CanIf_TxConfirmation(0u);
+    if (tx_confirmation_count != 1u || tx_confirmed_id != 0u) return 5;
     return 0;
 }
 "#,
@@ -316,6 +348,83 @@ int main(void) {
         .arg(format!("-I{}", root.join("runtime/include").display()))
         .arg(root.join("runtime/src/CanIf.c"))
         .arg(root.join("runtime/src/Can_HostLock.c"))
+        .arg(&harness)
+        .arg("-o")
+        .arg(&binary)
+        .output()
+        .unwrap();
+    assert!(
+        build.status.success(),
+        "{}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+    let run = Command::new(&binary).output().unwrap();
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+}
+
+#[test]
+fn cantp_failed_frame_confirmation_ends_host_session() {
+    let temp = Scratch::new();
+    let harness = temp.0.join("cantp_failed_confirmation.c");
+    let binary = temp.0.join(if cfg!(windows) {
+        "cantp_failed_confirmation.exe"
+    } else {
+        "cantp_failed_confirmation"
+    });
+    fs::write(
+        &harness,
+        r#"#include "CanTp.h"
+#include "LSduR.h"
+#include "Os.h"
+#include "PduR.h"
+#include <stddef.h>
+static unsigned completion_count;
+static EcuStatus completion_status;
+static unsigned fail_frame;
+EcuStatus LSduR_CanTpTransmit(uint8_t dlc, const uint8_t data[8]) {
+    (void)dlc; (void)data;
+    CanTp_TxConfirmation(0u, fail_frame != 0u ? E_NOT_OK : E_OK);
+    return ECU_OK;
+}
+EcuStatus PduR_CanTpCopyTxData(size_t offset, uint8_t *destination, size_t length) {
+    size_t i;
+    (void)offset;
+    for (i = 0u; i < length; ++i) destination[i] = 0u;
+    return ECU_OK;
+}
+void PduR_CanTpTxConfirmation(EcuStatus status, uint64_t now_ms) {
+    (void)now_ms;
+    completion_status = status;
+    ++completion_count;
+}
+void PduR_CanTpRxAbort(void) {}
+EcuStatus PduR_CanTpRxIndication(uint64_t now_ms) { (void)now_ms; return ECU_OK; }
+EcuStatus PduR_CanTpStartOfReception(size_t length) { (void)length; return ECU_OK; }
+EcuStatus PduR_CanTpCopyRxData(const uint8_t *data, size_t length) {
+    (void)data; (void)length; return ECU_OK;
+}
+int main(void) {
+    static const EcuDiagnosticConfig config = {0};
+    CanTp_Init(&config);
+    fail_frame = 1u;
+    if (CanTp_Transmit(8u, 0u) != ECU_ERR_IO) return 1;
+    if (completion_count != 1u || completion_status != ECU_ERR_IO) return 2;
+    fail_frame = 0u;
+    if (CanTp_Transmit(8u, 6u) != ECU_OK || completion_count != 1u) return 3;
+    return 0;
+}
+"#,
+    )
+    .unwrap();
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let build = Command::new("gcc")
+        .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
+        .arg(format!("-I{}", root.join("runtime/include").display()))
+        .arg(root.join("runtime/src/CanTp.c"))
         .arg(&harness)
         .arg("-o")
         .arg(&binary)

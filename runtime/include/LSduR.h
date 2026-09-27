@@ -8,6 +8,8 @@
 #include <stdint.h>
 #include "Ecu_Config.h"
 #include "Ecu_Status.h"
+#include "ComStack_Types.h"
+#include "Std_Types.h"
 
 /** @brief Load the generated host diagnostic routing connection.
  * @param[in] config Generated diagnostic configuration.
@@ -32,6 +34,11 @@ EcuStatus LSduR_CanTpRxIndication(uint8_t dlc, const uint8_t data[8], uint64_t n
  * @return Host routing status.
  */
 EcuStatus LSduR_PduRTransmit(size_t frame_index, const uint8_t data[8]);
+/** @brief Route one CanIf transmit confirmation to the owning upper layer.
+ * @param[in] pdu_id Generated CanIf transmit PDU identifier.
+ * @param[in] result Standard transmission result.
+ */
+void LSduR_CanIfTxConfirmation(PduIdType pdu_id, Std_ReturnType result);
 /** @brief Forward a received configured frame from CanIf.
  * @param[in] frame_index Index into EcuConfig::frames.
  * @param[in] data Eight-byte frame buffer.
