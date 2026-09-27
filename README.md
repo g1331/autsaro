@@ -82,7 +82,7 @@ python scripts/verify.py --scope baseline --generated-dir (Join-Path $sample 'ge
 
 ## 使用顺序
 
-项目开发由仓库内固定版本 BMad 接管。[产品简述](_bmad-output/planning-artifacts/product-brief.md)、[PRD](_bmad-output/planning-artifacts/prd.md)、[架构](_bmad-output/planning-artifacts/architecture.md)与 [epics](_bmad-output/planning-artifacts/epics.md) 是当前规划入口；面向使用者的[项目推进说明](docs/project/OWNER_GUIDE.md)给出日常说法，Agent 按[推进规则](docs/project/AGENT_OPERATING_RULES.md)从 `_bmad-output/implementation-artifacts/sprint-status.yaml` 恢复任务。[内部验收规则](docs/assurance/acceptance-policy.md)和 `docs/assurance/capabilities.json` 独立记录质量门、支持声明和证据；早期产品决定与研究分别归档于 `docs/project/archive/autosar-platform/` 和 `docs/research/autosar-platform/`，迁移前任务状态保存在 `docs/workflow/archive/`，均不参与选题。
+项目开发由仓库内固定版本 BMad 接管。[产品简述](_bmad-output/planning-artifacts/product-brief.md)、[PRD](_bmad-output/planning-artifacts/prd.md)、[架构](_bmad-output/planning-artifacts/architecture.md)与 [epics](_bmad-output/planning-artifacts/epics.md) 是当前规划入口；学习层目前只在产品简述中列为待规划方向。面向使用者的[项目推进说明](docs/project/OWNER_GUIDE.md)给出日常说法，Agent 按[推进规则](docs/project/AGENT_OPERATING_RULES.md)从 `_bmad-output/implementation-artifacts/sprint-status.yaml` 恢复任务。[内部验收规则](docs/assurance/acceptance-policy.md)和 `docs/assurance/capabilities.json` 独立记录质量门、支持声明和证据；早期产品决定与研究分别归档于 `docs/project/archive/` 和 `docs/research/autosar-platform/`，迁移前任务状态保存在 `docs/workflow/archive/`，均不参与选题。
 
 已提交的 `.agents/skills/` 和 `_bmad/` 可直接供 Codex 使用；重新安装或更新时固定 `bmad-method@6.12.0`、BMM 和 `codex`，先核对安装器差异，不让新版本覆盖团队定制。`_bmad/config.user.toml` 是被 Git 忽略的个人安装答案；团队共用语言和配置放在 `_bmad/custom/config.toml`。从仓库打开新的 Codex 会话可调用 `bmad-help` 查看当前阶段，或说“按 BMad 工作流推进下一步”；旧说法“按项目计划继续推进”与之同义。
 

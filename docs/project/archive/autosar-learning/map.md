@@ -1,5 +1,7 @@
 # AUTOSAR 学习层的内容、导览与关卡决策地图
 
+本文件是迁移前的讨论快照。迁移时七个子议题均未结案；以下 `Status: open` 是旧议题系统的历史状态，不再驱动任务选择。学习层目前作为 [BMad 产品简述](../../../../_bmad-output/planning-artifacts/product-brief.md)中的待规划方向，实施范围尚未进入 PRD、epic 或 sprint。保留这些问题供后续 BMad 规划逐项回答。
+
 Label: wayfinder:map
 Status: open
 
@@ -9,13 +11,13 @@ Status: open
 
 ## Notes
 
-- 关联主产品路线：[AUTOSAR Classic 平台决策地图](../../docs/project/archive/autosar-platform/map.md)与[Classic 阶段扩展路线](../../docs/project/archive/autosar-platform/issues/08-expansion-route.md)。现有工作区是单套配置编辑器；多文件 ARXML 是配置项目的唯一权威，保存、校验、生成、构建、虚拟运行分别呈现，主机证据不代表实机或 AUTOSAR/ISO 认证。
+- 关联主产品路线：[AUTOSAR Classic 平台决策地图](../autosar-platform/map.md)与[Classic 阶段扩展路线](../autosar-platform/issues/08-expansion-route.md)。现有工作区是单套配置编辑器；多文件 ARXML 是配置项目的唯一权威，保存、校验、生成、构建、虚拟运行分别呈现，主机证据不代表实机或 AUTOSAR/ISO 认证。
 - 已定范围：学习者可从零学习 Classic（具备基本编程能力）；首批操作关卡只使用当前经过验证的 11-bit CAN 信号与受限 DoCAN。基础概念可介绍其余模块的位置，但不得把未实现能力展示为可运行成果。
 - 已定体验：独立学习页作为课程／关卡入口；导览由学习页进入真实工作区高亮实际控件，再返回学习页，不强制首次使用向导，也不建立第二套编辑器。
 - 已定练习：只读内置模板复制为独立的真实 ARXML 教学工程；初、中、高级关卡可自行选择、跳过或重做，但“通过”必须依赖真实可观察的配置／构建／虚拟运行检查点，而非点击下一步。练习不修改已有项目。
 - 课程语言沿用项目的简体中文；代码标识符与规范术语保留原名。教材与样例应注明 CP/FO R24-11、当前支持边界和材料出处；不复制未获再分发授权的官方文件。
-- 本地 Markdown 议题系统：本文件为地图，`issues/` 中每个文件为子议题；`Type`、`Status`、`Assignee`、`Blocked by` 和 `Label` 为系统字段。开放、无指派且所有阻塞项已关闭的议题构成前沿。决策仅写在议题的结论段，地图在结案后只追加带名称链接的一句索引。
-- 当前仅本地研发，不推送、不公开发布。按 wayfinder 规则，本地图只处理决策；一轮只解决一个非研究议题。
+- 原 Markdown 议题系统的七个问题保留在 `issues/`；`Type`、`Status`、`Assignee`、`Blocked by` 和 `Label` 是历史字段。后续不再按它们的前沿规则领取规划任务。
+- 当前仅本地研发，不推送、不公开发布。学习层下一步由 BMad 产品规划承接，旧地图只作出处。
 
 ## Decisions so far
 

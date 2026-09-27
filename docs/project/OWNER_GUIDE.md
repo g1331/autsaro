@@ -12,7 +12,7 @@
 
 不知道下一步时直接调用 `bmad-help`。开发一般用 `bmad-build`，它会先调查需求与源码，再实施、验证和复核一个目标；若关键意图仍不清楚，它会停在需要确定的设计上，或建议使用 `bmad-spec`。`bmad-code-review` 是额外的独立审查入口，不必对每个已由 Build 复核的 story 再重复执行。阶段复盘有价值，但不是开始下个 story 的固定许可步骤。
 
-当前长期方向与阶段需求在 `_bmad-output/planning-artifacts/` 的 product brief 和 PRD，近期工作拆在 epics/stories，任务状态在 `_bmad-output/implementation-artifacts/sprint-status.yaml`。早期产品地图、决策和研究已归档到 `docs/project/archive/autosar-platform/` 与 `docs/research/autosar-platform/`，不再需要你维护第二份产品计划。旧任务卡和证据仍留在 `docs/workflow/` 供追溯；能力是否有资格标为“内部支持”看 `docs/assurance/acceptance-policy.md` 和 `docs/assurance/capabilities.json` 的独立证据门。Story 完成不等于某个 AUTOSAR 模块已完整实现。
+当前长期方向与阶段需求在 `_bmad-output/planning-artifacts/` 的 product brief 和 PRD，近期工作拆在 epics/stories，任务状态在 `_bmad-output/implementation-artifacts/sprint-status.yaml`。学习层目前是 product brief 中的待规划方向，不会仅因旧议题存在就进入开发队列。早期产品地图、决策和研究已归档到 `docs/project/archive/` 与 `docs/research/autosar-platform/`，不再需要你维护第二份产品计划。旧任务卡和证据仍留在 `docs/workflow/` 供追溯；能力是否有资格标为“内部支持”看 `docs/assurance/acceptance-policy.md` 和 `docs/assurance/capabilities.json` 的独立证据门。Story 完成不等于某个 AUTOSAR 模块已完整实现。
 
 Agent 应把规范研究放进具体功能任务，不用一轮轮独立审计替代产品开发。当前做什么以 BMad sprint 状态和实际证据为准，不以本说明中的静态示例为准。
 

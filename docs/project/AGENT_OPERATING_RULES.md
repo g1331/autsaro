@@ -6,7 +6,7 @@
 
 “按项目计划继续推进”和“按 BMad 工作流推进下一步”都表示执行当前最合适的**一个 BMad 工作单元**。“状态如何”只读，不领取任务或修改仓库。若 sprint 状态与 story、Git 或源码证据不一致，先核实，再使用 BMad 的 sprint-status 修复流程，不凭聊天记录或手工改 YAML 猜测完成度。
 
-BMad 的 product brief、PRD、architecture 和 epics 记录当前产品方向与计划；`docs/assurance/acceptance-policy.md` 及 `docs/assurance/capabilities.json` 分别记录内部验收规则、能力声明和证据门，不参与 BMad 任务排序，也不能由 story `done` 自动升级。早期产品决定与调查分别在 `docs/project/archive/autosar-platform/`、`docs/research/autosar-platform/` 供溯源，不形成另一套当前规划。历史 `docs/workflow/` 只用于溯源。重大需求或跨 epic 调整走 BMad PRD、架构、epic/story 或 `bmad-correct-course`，不另建项目管理状态。
+BMad 的 product brief、PRD、architecture 和 epics 记录当前产品方向与计划；学习层目前仅是 product brief 中的待规划方向，其未决问题不能当作已就绪的 story。`docs/assurance/acceptance-policy.md` 及 `docs/assurance/capabilities.json` 分别记录内部验收规则、能力声明和证据门，不参与 BMad 任务排序，也不能由 story `done` 自动升级。早期产品决定与调查分别在 `docs/project/archive/`、`docs/research/autosar-platform/` 供溯源，不形成另一套当前规划。历史 `docs/workflow/` 只用于溯源。重大需求或跨 epic 调整走 BMad PRD、架构、epic/story 或 `bmad-correct-course`，不另建项目管理状态。
 
 ## 使用 BMad 开发与收尾
 

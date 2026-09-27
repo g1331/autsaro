@@ -19,6 +19,8 @@
 
 各阶段的退出条件相同：明确拟声明的版次、模块、配置/变体、目标与工具链；使用真实输入完成保存与生成闭包、独立构建、正反向运行和失败恢复；核对适用规范义务及证据。未通过的组合保持未支持或待审。实机和其他版次是独立验证轴；Adaptive Platform 待另行产品决定。这里只记录方向和阶段出口，后续阶段尚未拆分 story、估算工作量或承诺日期。
 
+学习层是[产品简述](product-brief.md)中的待规划方向。本首阶段 PRD、现有 epics 和 sprint 未纳入课程、导览、教学工程或关卡实现；其内容与验收范围须先解决[历史问题集](../../docs/project/archive/autosar-learning/map.md)，再通过 BMad 需求和架构规划进入开发。教学内容只能以相应已验证的运行能力为基础。
+
 ## 需求来源与验收
 
 当前产品方向以[产品简述](product-brief.md)为准，首阶段实施范围由本 PRD、[架构](architecture.md)及 [epics](epics.md)逐步细化。逐组合验收规则见[内部验收政策](../../docs/assurance/acceptance-policy.md)。原始调查与取舍留在[项目历史资料](../../docs/project/archive/autosar-platform/map.md)，供溯源而不另行安排任务。规范 PDF 只保存在本机；story 引用可定位的文件名、条款号、版次及适用性判断，不复制原文。能力档案位于 `docs/assurance/capabilities.json`，历史任务和证据位于 `docs/workflow/`，BMad sprint 文件是唯一任务状态。
