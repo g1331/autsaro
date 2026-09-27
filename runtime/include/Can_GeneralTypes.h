@@ -25,7 +25,10 @@ typedef enum {
     CAN_CS_UNINIT = 0x00,  /**< Driver is not initialized. */
     CAN_CS_STARTED = 0x01, /**< Controller accepts frame traffic. */
     CAN_CS_STOPPED = 0x02, /**< Controller is stopped. */
-    CAN_CS_SLEEP = 0x03    /**< Standard sleep state; unsupported by this host controller. */
+    CAN_CS_SLEEP = 0x03    /**< Logical sleep state of this host controller. */
 } Can_ControllerStateType;
+
+/** @brief The single host transmit handle is still completing a previous request. */
+#define CAN_BUSY 0x02u
 
 #endif

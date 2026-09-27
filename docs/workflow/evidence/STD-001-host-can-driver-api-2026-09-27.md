@@ -5,7 +5,7 @@
 ## 输入、接口与实际调用
 
 - 输入为 `cargo run --manifest-path core/Cargo.toml --example quality_sample -- <独立临时目录>` 生成的单 Tx 信号 ECU；输出有 `files.list` 和 `files.sha256`。实际复核目录为 `<temporary-dir>/generated`。
-- 本地 R24-11 Can Driver PDF 页 52–55、57、61、67、76 给出 `Can_ConfigType`、`Can_PduType`、`Can_HwHandleType`、状态类型及 `Can_Init`、`Can_SetControllerMode`、`Can_GetControllerMode`、`Can_Write` 的公开签名。当前实现为这些入口增加主机配置及类型；生成工程的 `Ecu_Init` 实际经 `Can_Init` 和 `Can_SetControllerMode` 初始化，Tx 路径经 `Can_Transmit` 主机包装层调用 `Can_Write`。
+- 本地 R24-11 Can Driver PDF 页 52–55、57、61、67、76 给出 `Can_ConfigType`、`Can_PduType`、`Can_HwHandleType`、状态类型及 `Can_Init`、`Can_SetControllerMode`、`Can_GetControllerMode`、`Can_Write` 的公开签名。当前实现为这些入口增加主机配置及类型；生成工程的 `Ecu_Init` 实际经 `Can_Init` 和 `Can_SetControllerMode` 初始化，Tx 路径经 `Can_Transmit` 主机包装层调用 `Can_Write`，随后以主机专用 `Can_HostFlush` 排空。
 - 主机金向量路径 `generated_c99_ecus_exchange_golden_vectors_and_recover_from_faults` 通过。新增独立 C99 harness `standard_can_host_entry_points_reject_invalid_requests_and_send_valid_frame` 通过，覆盖未初始化/停止、无效控制器与 HTH、空 PDU、错误 ID/DLC、有效发送、接收注入与 bus-off 拒绝。
 
 ## 已运行命令与结果
@@ -24,8 +24,10 @@
 
 二次修复后 `python scripts/workflow.py verify --scope all` 再次通过（脚本 15/15、核心 3/3 + 50/50、UI 与桌面构建、增量 Clippy）。新代表性工程 `<temporary-dir>/generated` 的全量基线仍有四个失败分区：BSW 部分 MISRA 352 条、RTE 9 条、生成 C 7 条，以及七项规范证据门。可重入锁新增的 POSIX/Windows 系统 API 与 `abort` 也被扫描报告；标准交付所需的逐条处置未完成。
 
-第三个独立只读 Agent 复核 `c4ca40f`，确认 bus-off 标准恢复与可重入发送，但发现公开枚举缺 `CAN_CS_SLEEP`（R24-11 SWS_Can_91013）以及接收注入的状态检查和 CanIf 派发之间存在并发竞态。已补齐枚举并拒绝主机不支持的 SLEEP 转换；`Can_Inject` 现在在同一可重入锁内检查状态并派发，测试接收回调也重入查询控制器状态。补丁后 `python scripts/workflow.py verify --scope all` 再次通过；新代表性工程 `<temporary-dir>/generated` 的全量基线仍是相同四个失败分区和 352/9/7 条部分 MISRA 发现。最终复核仍待执行。
+第三个独立只读 Agent 复核 `c4ca40f`，确认 bus-off 标准恢复与可重入发送，但发现公开枚举缺 `CAN_CS_SLEEP`（R24-11 SWS_Can_91013）以及接收注入的状态检查和 CanIf 派发之间存在并发竞态。该轮先补齐枚举、拒绝 SLEEP 转换；`Can_Inject` 在同一可重入锁内检查状态并派发，测试接收回调也重入查询控制器状态。补丁后 `python scripts/workflow.py verify --scope all` 再次通过；新代表性工程 `<temporary-dir>/generated` 的全量基线仍是相同四个失败分区和 352/9/7 条部分 MISRA 发现。
+
+第四个独立只读 Agent 初查未定位到被 Git 忽略的 PDF；提供准确路径后，它依据本地 R24-11 Can Driver PDF 页 31、35、55、76–77 修正结论：`SWS_Can_00258`/`00290`/`00405` 要求即使硬件不支持休眠也实现逻辑 SLEEP，`SWS_Can_00275` 要求 `Can_Write` 非阻塞，忙时用 `CAN_BUSY`（`SWS_Can_00039`/`00213`/`00214`）。当前补丁实现 STOPPED→逻辑 SLEEP→STOPPED；`Can_Write` 通过 try-lock 将报文复制到单个发送槽，忙时立即返回 `CAN_BUSY`；主机包装层在公开入口入队后调用 `Can_HostFlush`，保留原有输出顺序与 I/O 错误传播。C99 harness 覆盖错误状态转换、待发槽忙、回调内再次 `Can_Write`、慢回调期间的并发 `CAN_BUSY`，并保留金向量和拒绝路径。`python scripts/workflow.py verify --scope all` 再次通过（脚本 15/15、核心 3/3 + 50/50、UI 与桌面构建及增量 Clippy）。新代表性工程 `<temporary-dir>/generated` 的全量基线仍为四个失败分区，部分 MISRA 发现为 BSW 358、RTE 9、生成 C 7 条；七项规范证据门仍为 `not_run`。非阻塞改动后的独立复审尚未执行。
 
 ## 未闭合的标准义务
 
-`Can_DeInit`、`Can_SetBaudrate`、中断控制、错误状态及其他适用服务/回调、线程安全的 `Can_Write`、完整 ECUC/BSWMD、MemMap 与逐规则 MISRA 处理尚未闭合。当前 `Can_ConfigType` 仍携带主机输出回调，`Can_Write` 在单线程虚拟目标同步执行；这不是第三方 CanIf/CAN ABI 或真实 MCU 证据。任务保持 `active`，HOST-CAN-01 仍为 `documented_behavior`，所有六道证据门维持原状态；后续须补标准工件、独立运行和新 Agent 复核。
+`Can_DeInit`、`Can_SetBaudrate`、中断控制、错误状态及其他适用服务/回调、完整 ECUC/BSWMD、MemMap 与逐规则 MISRA 处理尚未闭合。当前 `Can_ConfigType` 仍携带主机输出回调，公开 `Can_Write` 只接受到单槽主机缓存、需由主机专用入口排空；这不是第三方 CanIf/CAN ABI 或真实 MCU 证据。任务保持 `active`，HOST-CAN-01 仍为 `documented_behavior`，所有六道证据门维持原状态；后续须补标准工件、独立运行和新 Agent 复核。

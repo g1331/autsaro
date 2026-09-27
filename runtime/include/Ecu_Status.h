@@ -21,7 +21,8 @@ typedef enum {
     ECU_ERR_TP_FLOW,      /**< Transport flow-control exchange failed. */
     ECU_ERR_TP_BUSY,      /**< Transport channel is already occupied. */
     ECU_ERR_IO,           /**< Host input or output operation failed. */
-    ECU_ERR_NVM           /**< Host DTC persistence operation failed. */
+    ECU_ERR_NVM,          /**< Host DTC persistence operation failed. */
+    ECU_ERR_CAN_BUSY      /**< Host CAN transmit object has no free slot. */
 } EcuStatus;
 
 /** @brief Return a stable text name for a host status code.

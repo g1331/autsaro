@@ -27,12 +27,30 @@ r#"#include "Can.h"
 static unsigned sent;
 static unsigned received;
 static unsigned fail_output;
+static unsigned enqueue_on_emit;
 static int valid_result;
 static int invalid_result;
+#ifdef _WIN32
+static HANDLE sink_entered;
+static HANDLE sink_release;
+static EcuStatus flush_result;
+static Std_ReturnType blocked_write_result;
+#endif
 static EcuStatus emit(uint32_t id, uint8_t dlc, const uint8_t data[8]) {
     Can_ControllerStateType state = CAN_CS_UNINIT;
     if (Can_GetControllerMode(0u, &state) != E_OK || state != CAN_CS_STARTED) return ECU_ERR_CONTROLLER;
     if (id != 0x321u || dlc != 2u || data[0] != 0x12u || data[1] != 0x34u) return ECU_ERR_IO;
+#ifdef _WIN32
+    if (sink_entered != NULL) {
+        SetEvent(sink_entered);
+        if (WaitForSingleObject(sink_release, INFINITE) != WAIT_OBJECT_0) return ECU_ERR_IO;
+    }
+#endif
+    if (enqueue_on_emit != 0u) {
+        Can_PduType nested = {0u, 2u, 0x321u, (uint8_t *)data};
+        enqueue_on_emit = 0u;
+        if (Can_Write(0u, &nested) != E_OK) return ECU_ERR_IO;
+    }
     if (fail_output != 0u) return ECU_ERR_IO;
     ++sent;
     return ECU_OK;
@@ -61,6 +79,14 @@ static void reject_invalid_frames(void) {
 #ifdef _WIN32
 static DWORD WINAPI valid_thread(LPVOID unused) { (void)unused; send_valid_frames(); return 0u; }
 static DWORD WINAPI invalid_thread(LPVOID unused) { (void)unused; reject_invalid_frames(); return 0u; }
+static DWORD WINAPI flush_thread(LPVOID unused) { (void)unused; flush_result = Can_HostFlush(); return 0u; }
+static DWORD WINAPI blocked_write_thread(LPVOID unused) {
+    uint8_t bytes[8] = {0x12u, 0x34u};
+    Can_PduType pdu = {0u, 2u, 0x321u, bytes};
+    (void)unused;
+    blocked_write_result = Can_Write(0u, &pdu);
+    return 0u;
+}
 #else
 static void *valid_thread(void *unused) { (void)unused; send_valid_frames(); return NULL; }
 static void *invalid_thread(void *unused) { (void)unused; reject_invalid_frames(); return NULL; }
@@ -87,7 +113,9 @@ int main(void) {
     pdu.length = 0u;
     if (Can_Write(0u, &pdu) != E_NOT_OK) return 8;
     pdu.length = 2u;
-    if (Can_Write(0u, &pdu) != E_OK || sent != 1u) return 9;
+    if (Can_Write(0u, &pdu) != E_OK || sent != 0u) return 9;
+    if (Can_Write(0u, &pdu) != CAN_BUSY || sent != 0u) return 28;
+    if (Can_HostFlush() != ECU_OK || sent != 1u) return 29;
     if (Can_Inject(0x321u, 2u, bytes, 10u) != ECU_OK || received != 1u) return 10;
     if (Can_Inject(0x321u, 2u, NULL, 10u) != ECU_ERR_CONFIG || received != 1u) return 12;
     fail_output = 1u;
@@ -122,6 +150,45 @@ int main(void) {
     }
 #endif
     if (valid_result != 0 || invalid_result != 0 || sent != 101u) return 26;
+    if (Can_SetControllerMode(0u, CAN_CS_STOPPED) != E_OK) return 30;
+    if (Can_SetControllerMode(0u, CAN_CS_SLEEP) != E_OK) return 31;
+    if (Can_GetControllerMode(0u, &state) != E_OK || state != CAN_CS_SLEEP) return 32;
+    if (Can_Write(0u, &pdu) != E_NOT_OK) return 33;
+    if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_NOT_OK) return 34;
+    Can_SetMode(CAN_STARTED);
+    if (Can_GetControllerMode(0u, &state) != E_OK || state != CAN_CS_SLEEP) return 35;
+    if (Can_SetControllerMode(0u, CAN_CS_STOPPED) != E_OK) return 36;
+    if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_OK) return 37;
+    enqueue_on_emit = 1u;
+    if (Can_Write(0u, &pdu) != E_OK || Can_HostFlush() != ECU_OK) return 38;
+    if (Can_HostFlush() != ECU_OK || sent != 103u) return 39;
+#ifdef _WIN32
+    {
+        HANDLE output;
+        HANDLE writer;
+        sink_entered = CreateEvent(NULL, TRUE, FALSE, NULL);
+        sink_release = CreateEvent(NULL, TRUE, FALSE, NULL);
+        if (sink_entered == NULL || sink_release == NULL) return 40;
+        if (Can_Write(0u, &pdu) != E_OK) return 41;
+        output = CreateThread(NULL, 0, flush_thread, NULL, 0, NULL);
+        if (output == NULL || WaitForSingleObject(sink_entered, 1000u) != WAIT_OBJECT_0) return 42;
+        writer = CreateThread(NULL, 0, blocked_write_thread, NULL, 0, NULL);
+        if (writer == NULL) return 43;
+        if (WaitForSingleObject(writer, 500u) != WAIT_OBJECT_0 || blocked_write_result != CAN_BUSY) {
+            SetEvent(sink_release);
+            return 44;
+        }
+        SetEvent(sink_release);
+        if (WaitForSingleObject(output, 1000u) != WAIT_OBJECT_0 || flush_result != ECU_OK) return 45;
+        CloseHandle(writer);
+        CloseHandle(output);
+        CloseHandle(sink_entered);
+        CloseHandle(sink_release);
+        sink_entered = NULL;
+        sink_release = NULL;
+    }
+    if (sent != 104u) return 46;
+#endif
     return 0;
 }
 "#,

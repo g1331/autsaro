@@ -22,6 +22,12 @@ static void Can_Lock(void) {
     }
     EnterCriticalSection(&can_lock);
 }
+static int Can_TryLock(void) {
+    if (InitOnceExecuteOnce(&can_lock_once, Can_InitLock, NULL, NULL) == 0) {
+        abort();
+    }
+    return TryEnterCriticalSection(&can_lock) != 0;
+}
 static void Can_Unlock(void) { LeaveCriticalSection(&can_lock); }
 #else
 #include <pthread.h>
@@ -47,6 +53,12 @@ static void Can_Lock(void) {
         abort();
     }
 }
+static int Can_TryLock(void) {
+    if (pthread_once(&can_lock_once, Can_InitLock) != 0) {
+        abort();
+    }
+    return pthread_mutex_trylock(&can_lock) == 0;
+}
 static void Can_Unlock(void) {
     if (pthread_mutex_unlock(&can_lock) != 0) {
         abort();
@@ -58,6 +70,10 @@ static CanMode controller_mode;
 static uint8_t bus_off;
 static CanTxSink tx_sink;
 static uint8_t initialized;
+static uint8_t tx_pending;
+static uint32_t tx_id;
+static uint8_t tx_length;
+static uint8_t tx_payload[8];
 
 void Can_Init(const Can_ConfigType *config) {
     Can_Lock();
@@ -71,6 +87,7 @@ void Can_Init(const Can_ConfigType *config) {
     }
     controller_mode = CAN_STOPPED;
     bus_off = 0u;
+    tx_pending = 0u;
     Can_Unlock();
 }
 
@@ -78,13 +95,20 @@ Std_ReturnType Can_SetControllerMode(uint8_t controller, Can_ControllerStateType
     Std_ReturnType result = E_NOT_OK;
     Can_Lock();
     if ((initialized != 0u) && (controller == 0u) &&
-        ((transition == CAN_CS_STARTED) || (transition == CAN_CS_STOPPED))) {
+        ((transition == CAN_CS_STARTED) || (transition == CAN_CS_STOPPED) ||
+         (transition == CAN_CS_SLEEP))) {
         if ((transition == CAN_CS_STARTED) && (controller_mode == CAN_STOPPED)) {
             controller_mode = CAN_STARTED;
             bus_off = 0u;
             result = E_OK;
-        } else if ((transition == CAN_CS_STOPPED) && (controller_mode == CAN_STARTED)) {
+        } else if ((transition == CAN_CS_STOPPED) &&
+                   ((controller_mode == CAN_STARTED) || (controller_mode == CAN_SLEEP))) {
             controller_mode = CAN_STOPPED;
+            tx_pending = 0u;
+            result = E_OK;
+        } else if ((transition == CAN_CS_SLEEP) &&
+                   ((controller_mode == CAN_STOPPED) || (controller_mode == CAN_SLEEP))) {
+            controller_mode = CAN_SLEEP;
             result = E_OK;
         }
     }
@@ -98,6 +122,8 @@ Std_ReturnType Can_GetControllerMode(uint8_t controller, Can_ControllerStateType
     if ((initialized != 0u) && (controller == 0u) && (mode != NULL)) {
         if (controller_mode == CAN_STARTED) {
             *mode = CAN_CS_STARTED;
+        } else if (controller_mode == CAN_SLEEP) {
+            *mode = CAN_CS_SLEEP;
         } else {
             *mode = CAN_CS_STOPPED;
         }
@@ -109,38 +135,79 @@ Std_ReturnType Can_GetControllerMode(uint8_t controller, Can_ControllerStateType
 
 static EcuStatus Can_WriteHost(Can_HwHandleType hth, const Can_PduType *pdu) {
     EcuStatus result = ECU_ERR_CONFIG;
-    Can_Lock();
-    if ((initialized == 0u) || (hth != 0u) || (pdu == NULL) || (pdu->sdu == NULL)) {
+    if ((hth != 0u) || (pdu == NULL) || (pdu->sdu == NULL)) {
         /* Invalid host configuration or caller input. */
-    } else if (controller_mode != CAN_STARTED) {
-        result = ECU_ERR_CONTROLLER;
     } else if (pdu->id > 0x7ffu) {
         result = ECU_ERR_FRAME_ID;
     } else if ((pdu->length < 1u) || (pdu->length > 8u)) {
         result = ECU_ERR_FRAME_DLC;
+    } else if (Can_TryLock() == 0) {
+        result = ECU_ERR_CAN_BUSY;
     } else {
-        result = tx_sink(pdu->id, pdu->length, pdu->sdu);
+        if (initialized == 0u) {
+            /* Can_Init has not installed a host output callback. */
+        } else if (controller_mode != CAN_STARTED) {
+            result = ECU_ERR_CONTROLLER;
+        } else if (tx_pending != 0u) {
+            result = ECU_ERR_CAN_BUSY;
+        } else {
+            size_t i;
+            tx_id = pdu->id;
+            tx_length = pdu->length;
+            for (i = 0u; i < (size_t)pdu->length; ++i) {
+                tx_payload[i] = pdu->sdu[i];
+            }
+            tx_pending = 1u;
+            result = ECU_OK;
+        }
+        Can_Unlock();
     }
-    Can_Unlock();
     return result;
 }
 
 Std_ReturnType Can_Write(Can_HwHandleType hth, const Can_PduType *pdu) {
     Std_ReturnType result = E_NOT_OK;
-    if (Can_WriteHost(hth, pdu) == ECU_OK) {
+    EcuStatus host_result = Can_WriteHost(hth, pdu);
+    if (host_result == ECU_OK) {
         result = E_OK;
+    } else if (host_result == ECU_ERR_CAN_BUSY) {
+        result = CAN_BUSY;
     }
+    return result;
+}
+
+EcuStatus Can_HostFlush(void) {
+    EcuStatus result = ECU_OK;
+    Can_Lock();
+    if (tx_pending != 0u) {
+        uint32_t id = tx_id;
+        uint8_t length = tx_length;
+        uint8_t payload[8];
+        size_t i;
+        for (i = 0u; i < (size_t)length; ++i) {
+            payload[i] = tx_payload[i];
+        }
+        tx_pending = 0u;
+        result = tx_sink(id, length, payload);
+    }
+    Can_Unlock();
     return result;
 }
 
 void Can_SetMode(CanMode mode) {
     Can_Lock();
-    if (mode == CAN_BUS_OFF) {
+    if ((controller_mode == CAN_SLEEP) && (mode != CAN_STOPPED)) {
+        /* Logical sleep can only exit via STOPPED. */
+    } else if (mode == CAN_BUS_OFF) {
         controller_mode = CAN_STOPPED;
         bus_off = 1u;
+        tx_pending = 0u;
     } else {
         controller_mode = mode;
         bus_off = 0u;
+        if (mode != CAN_STARTED) {
+            tx_pending = 0u;
+        }
     }
     Can_Unlock();
 }
@@ -161,6 +228,7 @@ EcuStatus Can_Transmit(uint32_t id, uint8_t dlc, const uint8_t data[8]) {
     Can_PduType pdu;
     EcuStatus result = ECU_ERR_CONFIG;
     if (data != NULL) {
+        Std_ReturnType write_result;
         size_t i;
         for (i = 0u; (i < dlc) && (i < sizeof(payload)); ++i) {
             payload[i] = data[i];
@@ -169,7 +237,22 @@ EcuStatus Can_Transmit(uint32_t id, uint8_t dlc, const uint8_t data[8]) {
         pdu.length = dlc;
         pdu.id = id;
         pdu.sdu = payload;
-        result = Can_WriteHost(0u, &pdu);
+        write_result = Can_Write(0u, &pdu);
+        if (write_result == E_OK) {
+            result = Can_HostFlush();
+        } else if (write_result == CAN_BUSY) {
+            result = ECU_ERR_CAN_BUSY;
+        } else if (id > 0x7ffu) {
+            result = ECU_ERR_FRAME_ID;
+        } else if ((dlc < 1u) || (dlc > 8u)) {
+            result = ECU_ERR_FRAME_DLC;
+        } else {
+            Can_Lock();
+            if (initialized != 0u) {
+                result = ECU_ERR_CONTROLLER;
+            }
+            Can_Unlock();
+        }
     }
     return result;
 }

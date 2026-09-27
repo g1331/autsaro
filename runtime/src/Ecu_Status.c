@@ -34,6 +34,8 @@ const char *Ecu_StatusName(EcuStatus status) {
         return "IO";
     case ECU_ERR_NVM:
         return "NVM";
+    case ECU_ERR_CAN_BUSY:
+        return "CAN_BUSY";
     default:
         return "INTERNAL";
     }

@@ -13,7 +13,8 @@
 typedef enum {
     CAN_STOPPED = 0, /**< Controller is stopped. */
     CAN_STARTED = 1, /**< Controller accepts frame traffic. */
-    CAN_BUS_OFF = 2  /**< Controller rejects frame traffic after a bus-off event. */
+    CAN_BUS_OFF = 2, /**< Controller rejects frame traffic after a bus-off event. */
+    CAN_SLEEP = 3    /**< Logical sleep state for the virtual controller. */
 } CanMode;
 
 /** @brief Host callback that emits one CAN frame.
@@ -45,12 +46,16 @@ Std_ReturnType Can_SetControllerMode(uint8_t controller, Can_ControllerStateType
  * @return E_OK when the state was read, otherwise E_NOT_OK.
  */
 Std_ReturnType Can_GetControllerMode(uint8_t controller, Can_ControllerStateType *mode);
-/** @brief Submit one CAN L-SDU through hardware transmit handle zero.
+/** @brief Queue one CAN L-SDU through hardware transmit handle zero without waiting for output.
  * @param[in] hth Generated hardware transmit handle, currently zero.
  * @param[in] pdu Caller-owned CAN L-SDU.
- * @return E_OK when the host sink accepts the frame, otherwise E_NOT_OK.
+ * @return E_OK when accepted, CAN_BUSY if the handle is occupied, otherwise E_NOT_OK.
  */
 Std_ReturnType Can_Write(Can_HwHandleType hth, const Can_PduType *pdu);
+/** @brief Complete the pending host transmission through the configured output callback.
+ * @return Host output status, or ECU_OK if no frame is pending.
+ */
+EcuStatus Can_HostFlush(void);
 
 /** @brief Change the virtual controller state.
  * @param[in] mode New controller state.
