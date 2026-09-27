@@ -28,6 +28,21 @@
 
 第四个独立只读 Agent 初查未定位到被 Git 忽略的 PDF；提供准确路径后，它依据本地 R24-11 Can Driver PDF 页 31、35、55、76–77 修正结论：`SWS_Can_00258`/`00290`/`00405` 要求即使硬件不支持休眠也实现逻辑 SLEEP，`SWS_Can_00275` 要求 `Can_Write` 非阻塞，忙时用 `CAN_BUSY`（`SWS_Can_00039`/`00213`/`00214`）。当前补丁实现 STOPPED→逻辑 SLEEP→STOPPED；`Can_Write` 通过 try-lock 将报文复制到单个发送槽，忙时立即返回 `CAN_BUSY`；主机包装层在公开入口入队后调用 `Can_HostFlush`，保留原有输出顺序与 I/O 错误传播。C99 harness 覆盖错误状态转换、待发槽忙、回调内再次 `Can_Write`、慢回调期间的并发 `CAN_BUSY`，并保留金向量和拒绝路径。`python scripts/workflow.py verify --scope all` 再次通过（脚本 15/15、核心 3/3 + 50/50、UI 与桌面构建及增量 Clippy）。新代表性工程 `<temporary-dir>/generated` 的全量基线仍为四个失败分区，部分 MISRA 发现为 BSW 358、RTE 9、生成 C 7 条；七项规范证据门仍为 `not_run`。非阻塞改动后的独立复审尚未执行。
 
+第五个独立只读 Agent 对非阻塞版指出同一 HTH 的输出回调重入会错误返回 `E_OK`；现用 `tx_in_flight` 将回调执行期也计入占用，重入请求返回 `CAN_BUSY` 且不覆盖在途报文。定向测试及完整 `python scripts/workflow.py verify --scope all` 已通过（脚本 15/15、核心 3/3 + 50/50、UI/桌面构建与增量 Clippy）。新代表性工程 `<temporary-dir>/generated` 的全量基线仍失败四个分区；BSW 部分 MISRA 358 条、RTE 9 条、生成 C 7 条，七项规范证据门仍为 `not_run`。最终复审待执行。
+
+## 当前切片的规范逐项核对
+
+下列核对使用本地 `docs/official/R24-11/CP/Communication/AUTOSAR_CP_SWS_CANDriver.pdf` 原文，列出本切片已声明的行为与尚未闭合的依赖；它不是完整 Can SWS 覆盖表。
+
+| 条款 | 当前证据与缺口 |
+| --- | --- |
+| `SWS_Can_00223`、`00259` | `Can_Init` 使用标准签名并将控制器置 STOPPED；重复初始化的 DET 路径、配置工件仍未实现。 |
+| `SWS_Can_00230`、`00409`、`00258`、`00290`、`00405` | 标准入口拒绝非法转换，允许 STOPPED→STARTED、STOPPED→逻辑 SLEEP→STOPPED；异步模式通知、STARTED 重新初始化、控制器中断与 DET 仍待实现。 |
+| `SWS_Can_00020`、`00272` | 主机 bus-off 停止发送并报告 STOPPED，显式 STARTED 可恢复；CanIf 的 bus-off 通知仍待实现。 |
+| `SWS_Can_91014`、`91015` | 标准模式查询返回当前 STARTED、STOPPED 或逻辑 SLEEP；DET 错误上报仍待实现。 |
+| `SWS_Can_00039`、`00212`–`00214`、`00233`、`00275` | 一个 HTH 的 `Can_Write` 复制报文并立即返回；占用或抢占时返回 `CAN_BUSY`，慢主机回调不阻塞其他 `Can_Write`；Tx confirmation、独立排空调度与完整硬件语义仍待实现。 |
+| `SWS_Can_00218`、`00219`、`00505` | 当前非 FD/非 TriggerTransmit 剖面拒绝 DLC>8、空 PDU/SDU；标准 DET 诊断仍待实现。 |
+
 ## 未闭合的标准义务
 
 `Can_DeInit`、`Can_SetBaudrate`、中断控制、错误状态及其他适用服务/回调、完整 ECUC/BSWMD、MemMap 与逐规则 MISRA 处理尚未闭合。当前 `Can_ConfigType` 仍携带主机输出回调，公开 `Can_Write` 只接受到单槽主机缓存、需由主机专用入口排空；这不是第三方 CanIf/CAN ABI 或真实 MCU 证据。任务保持 `active`，HOST-CAN-01 仍为 `documented_behavior`，所有六道证据门维持原状态；后续须补标准工件、独立运行和新 Agent 复核。

@@ -49,7 +49,7 @@ static EcuStatus emit(uint32_t id, uint8_t dlc, const uint8_t data[8]) {
     if (enqueue_on_emit != 0u) {
         Can_PduType nested = {0u, 2u, 0x321u, (uint8_t *)data};
         enqueue_on_emit = 0u;
-        if (Can_Write(0u, &nested) != E_OK) return ECU_ERR_IO;
+        if (Can_Write(0u, &nested) != CAN_BUSY) return ECU_ERR_IO;
     }
     if (fail_output != 0u) return ECU_ERR_IO;
     ++sent;
@@ -161,7 +161,7 @@ int main(void) {
     if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_OK) return 37;
     enqueue_on_emit = 1u;
     if (Can_Write(0u, &pdu) != E_OK || Can_HostFlush() != ECU_OK) return 38;
-    if (Can_HostFlush() != ECU_OK || sent != 103u) return 39;
+    if (Can_HostFlush() != ECU_OK || sent != 102u) return 39;
 #ifdef _WIN32
     {
         HANDLE output;
@@ -187,7 +187,7 @@ int main(void) {
         sink_entered = NULL;
         sink_release = NULL;
     }
-    if (sent != 104u) return 46;
+    if (sent != 103u) return 46;
 #endif
     return 0;
 }

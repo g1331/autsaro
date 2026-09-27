@@ -71,6 +71,7 @@ static uint8_t bus_off;
 static CanTxSink tx_sink;
 static uint8_t initialized;
 static uint8_t tx_pending;
+static uint8_t tx_in_flight;
 static uint32_t tx_id;
 static uint8_t tx_length;
 static uint8_t tx_payload[8];
@@ -88,6 +89,7 @@ void Can_Init(const Can_ConfigType *config) {
     controller_mode = CAN_STOPPED;
     bus_off = 0u;
     tx_pending = 0u;
+    tx_in_flight = 0u;
     Can_Unlock();
 }
 
@@ -148,7 +150,7 @@ static EcuStatus Can_WriteHost(Can_HwHandleType hth, const Can_PduType *pdu) {
             /* Can_Init has not installed a host output callback. */
         } else if (controller_mode != CAN_STARTED) {
             result = ECU_ERR_CONTROLLER;
-        } else if (tx_pending != 0u) {
+        } else if ((tx_pending != 0u) || (tx_in_flight != 0u)) {
             result = ECU_ERR_CAN_BUSY;
         } else {
             size_t i;
@@ -188,7 +190,9 @@ EcuStatus Can_HostFlush(void) {
             payload[i] = tx_payload[i];
         }
         tx_pending = 0u;
+        tx_in_flight = 1u;
         result = tx_sink(id, length, payload);
+        tx_in_flight = 0u;
     }
     Can_Unlock();
     return result;
