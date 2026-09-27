@@ -467,6 +467,21 @@
         "date": "2026-09-27",
         "evidence": "docs/workflow/evidence/DIAG-003-multi-did-read-2026-09-27.md"
       }
+    },
+    {
+      "id": "STD-001",
+      "title": "Windows 主机目标的标准 Can Driver 接口切片",
+      "status": "active",
+      "card": "docs/workflow/tasks/STD-001-host-can-driver-api.md",
+      "branch": "fix/quality-check-findings",
+      "base_commit": "caaf01e",
+      "capabilities": [
+        "HOST-CAN-01"
+      ],
+      "depends_on": [
+        "DIAG-003"
+      ],
+      "evidence": []
     }
   ]
 }
