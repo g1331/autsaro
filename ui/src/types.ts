@@ -71,7 +71,12 @@ export type GenerateResult = {
 export type GenerationPreview = {
   outputDirectory: string;
   revision: string;
-  files: { path: string; status: 'new' | 'changed' | 'unchanged'; before: string | null; after: string | null }[];
+  files: {
+    path: string;
+    status: 'new' | 'changed' | 'unchanged';
+    before: string | null;
+    after: string | null;
+  }[];
 };
 
 export type BuildResult = { binaryPath: string; log: string };

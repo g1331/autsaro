@@ -19,24 +19,21 @@ static uint32_t fingerprint;
 static uint64_t sequence;
 static unsigned current_slot;
 
-static void Store32(uint8_t *data, uint32_t value)
-{
+static void Store32(uint8_t *data, uint32_t value) {
     unsigned i;
     for (i = 0u; i < 4u; ++i) {
         data[i] = (uint8_t)(value >> (i * 8u));
     }
 }
 
-static void Store64(uint8_t *data, uint64_t value)
-{
+static void Store64(uint8_t *data, uint64_t value) {
     unsigned i;
     for (i = 0u; i < 8u; ++i) {
         data[i] = (uint8_t)(value >> (i * 8u));
     }
 }
 
-static uint32_t Load32(const uint8_t *data)
-{
+static uint32_t Load32(const uint8_t *data) {
     unsigned i;
     uint32_t value = 0u;
     for (i = 0u; i < 4u; ++i) {
@@ -45,8 +42,7 @@ static uint32_t Load32(const uint8_t *data)
     return value;
 }
 
-static uint64_t Load64(const uint8_t *data)
-{
+static uint64_t Load64(const uint8_t *data) {
     unsigned i;
     uint64_t value = 0u;
     for (i = 0u; i < 8u; ++i) {
@@ -55,8 +51,7 @@ static uint64_t Load64(const uint8_t *data)
     return value;
 }
 
-static uint32_t Checksum(const uint8_t *data, size_t length)
-{
+static uint32_t Checksum(const uint8_t *data, size_t length) {
     uint32_t crc = UINT32_MAX;
     size_t i;
     for (i = 0u; i < length; ++i) {
@@ -69,8 +64,7 @@ static uint32_t Checksum(const uint8_t *data, size_t length)
     return ~crc;
 }
 
-static uint32_t ConfigFingerprint(const EcuConfig *config)
-{
+static uint32_t ConfigFingerprint(const EcuConfig *config) {
     const EcuDtcConfig *dtc = config->diagnostic->dtc;
     const EcuFrameConfig *frame = &config->frames[dtc->monitor_frame_index];
     uint8_t fields[15];
@@ -83,8 +77,7 @@ static uint32_t ConfigFingerprint(const EcuConfig *config)
     return Checksum(fields, sizeof(fields));
 }
 
-static void EncodeSlot(uint8_t slot[SLOT_SIZE], uint64_t number, uint8_t status)
-{
+static void EncodeSlot(uint8_t slot[SLOT_SIZE], uint64_t number, uint8_t status) {
     memset(slot, 0, SLOT_SIZE);
     memcpy(slot, "NVH1", 4u);
     Store64(&slot[4], number);
@@ -93,8 +86,7 @@ static void EncodeSlot(uint8_t slot[SLOT_SIZE], uint64_t number, uint8_t status)
     Store32(&slot[28], Checksum(slot, 28u));
 }
 
-static int ValidSlot(const uint8_t slot[SLOT_SIZE])
-{
+static int ValidSlot(const uint8_t slot[SLOT_SIZE]) {
     size_t i;
     if (memcmp(slot, "NVH1", 4u) != 0 || Load64(&slot[4]) == 0u ||
         Load32(&slot[12]) != fingerprint || (slot[16] & 0x80u) != 0u ||
@@ -109,8 +101,7 @@ static int ValidSlot(const uint8_t slot[SLOT_SIZE])
     return 1;
 }
 
-static EcuStatus WriteSlot(unsigned index, uint64_t number, uint8_t status)
-{
+static EcuStatus WriteSlot(unsigned index, uint64_t number, uint8_t status) {
     uint8_t slot[SLOT_SIZE];
     EncodeSlot(slot, number, status);
     if (fseek(storage, (long)(index * SLOT_SIZE), SEEK_SET) != 0 ||
@@ -127,8 +118,7 @@ static EcuStatus WriteSlot(unsigned index, uint64_t number, uint8_t status)
     return ECU_OK;
 }
 
-EcuStatus NvM_Init(const EcuConfig *config, const char *path, uint8_t *status)
-{
+EcuStatus NvM_Init(const EcuConfig *config, const char *path, uint8_t *status) {
     uint8_t slots[SLOT_COUNT][SLOT_SIZE];
     unsigned i;
     int chosen = -1;
@@ -152,8 +142,7 @@ EcuStatus NvM_Init(const EcuConfig *config, const char *path, uint8_t *status)
         if (storage == NULL) {
             return ECU_ERR_NVM;
         }
-        if (WriteSlot(0u, 1u, 0x50u) != ECU_OK ||
-            WriteSlot(1u, 2u, 0x50u) != ECU_OK) {
+        if (WriteSlot(0u, 1u, 0x50u) != ECU_OK || WriteSlot(1u, 2u, 0x50u) != ECU_OK) {
             (void)fclose(storage);
             storage = NULL;
             return ECU_ERR_NVM;
@@ -194,8 +183,7 @@ EcuStatus NvM_Init(const EcuConfig *config, const char *path, uint8_t *status)
     return ECU_OK;
 }
 
-EcuStatus NvM_Write(uint8_t status)
-{
+EcuStatus NvM_Write(uint8_t status) {
     unsigned next_slot;
     if (storage == NULL || sequence == UINT64_MAX || (status & 0x80u) != 0u) {
         return ECU_ERR_NVM;

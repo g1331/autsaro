@@ -8,8 +8,7 @@
 #include "Os.h"
 #include "Rte.h"
 
-static int ParseDecimal(const char *text, uint64_t *value)
-{
+static int ParseDecimal(const char *text, uint64_t *value) {
     uint64_t parsed = 0;
     const unsigned char *cursor = (const unsigned char *)text;
     if (*cursor == '\0') {
@@ -31,13 +30,11 @@ static int ParseDecimal(const char *text, uint64_t *value)
     return 1;
 }
 
-static int ParseField(const char *text, uint64_t maximum, uint64_t *value)
-{
+static int ParseField(const char *text, uint64_t maximum, uint64_t *value) {
     return ParseDecimal(text, value) && *value <= maximum;
 }
 
-static int ParseHex(const char *text, uint8_t dlc, uint8_t bytes[8])
-{
+static int ParseHex(const char *text, uint8_t dlc, uint8_t bytes[8]) {
     size_t i;
     if (strlen(text) != (size_t)dlc * 2u) {
         return 0;
@@ -60,8 +57,7 @@ static int ParseHex(const char *text, uint8_t dlc, uint8_t bytes[8])
     return 1;
 }
 
-static EcuStatus EmitFrame(uint32_t id, uint8_t dlc, const uint8_t data[8])
-{
+static EcuStatus EmitFrame(uint32_t id, uint8_t dlc, const uint8_t data[8]) {
     unsigned i;
     if (printf("X %" PRIu32 " %u ", id, (unsigned)dlc) < 0) {
         return ECU_ERR_IO;
@@ -74,13 +70,9 @@ static EcuStatus EmitFrame(uint32_t id, uint8_t dlc, const uint8_t data[8])
     return putchar('\n') == EOF ? ECU_ERR_IO : ECU_OK;
 }
 
-static int Report(EcuStatus result)
-{
-    return printf("E %s\n", Ecu_StatusName(result)) < 0 ? 3 : 0;
-}
+static int Report(EcuStatus result) { return printf("E %s\n", Ecu_StatusName(result)) < 0 ? 3 : 0; }
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
     char line[256];
     EcuStatus result;
     const char *nvm_path = NULL;
@@ -104,7 +96,8 @@ int main(int argc, char **argv)
             return 1;
         }
     }
-    if ((Ecu_Config.diagnostic != NULL && Ecu_Config.diagnostic->dtc != NULL) != (nvm_path != NULL) ||
+    if ((Ecu_Config.diagnostic != NULL && Ecu_Config.diagnostic->dtc != NULL) !=
+            (nvm_path != NULL) ||
         (Ecu_Config.diagnostic != NULL && Ecu_Config.diagnostic->security_enabled != 0u) !=
             (security_key_path != NULL && security_state_path != NULL)) {
         (void)Report(ECU_ERR_CONFIG);
@@ -186,7 +179,7 @@ int main(int argc, char **argv)
             }
         }
         continue;
-malformed:
+    malformed:
         (void)printf("E PROTOCOL\n");
         return 2;
     }

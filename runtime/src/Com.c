@@ -8,8 +8,7 @@ static uint8_t signal_valid[ECU_MAX_SIGNALS];
 static uint64_t rx_at_ms[ECU_MAX_FRAMES];
 static uint8_t rx_seen[ECU_MAX_FRAMES];
 
-static size_t FindSignal(uint16_t id)
-{
+static size_t FindSignal(uint16_t id) {
     size_t i;
     for (i = 0; i < active_config->signal_count; ++i) {
         if (active_config->signals[i].id == id) {
@@ -19,8 +18,7 @@ static size_t FindSignal(uint16_t id)
     return active_config->signal_count;
 }
 
-static size_t FrameForSignal(size_t signal_index)
-{
+static size_t FrameForSignal(size_t signal_index) {
     size_t i;
     for (i = 0; i < active_config->frame_count; ++i) {
         const EcuFrameConfig *frame = &active_config->frames[i];
@@ -32,8 +30,7 @@ static size_t FrameForSignal(size_t signal_index)
     return active_config->frame_count;
 }
 
-void Com_Init(const EcuConfig *config)
-{
+void Com_Init(const EcuConfig *config) {
     size_t i;
     active_config = config;
     for (i = 0; i < config->signal_count; ++i) {
@@ -46,8 +43,7 @@ void Com_Init(const EcuConfig *config)
     }
 }
 
-EcuStatus Com_SetSignal(uint16_t id, uint32_t value)
-{
+EcuStatus Com_SetSignal(uint16_t id, uint32_t value) {
     size_t i = FindSignal(id);
     const EcuSignalConfig *signal;
     if (i == active_config->signal_count) {
@@ -64,8 +60,7 @@ EcuStatus Com_SetSignal(uint16_t id, uint32_t value)
     return ECU_OK;
 }
 
-EcuStatus Com_GetSignal(uint16_t id, uint32_t *value, uint8_t *valid)
-{
+EcuStatus Com_GetSignal(uint16_t id, uint32_t *value, uint8_t *valid) {
     size_t i = FindSignal(id);
     if (i == active_config->signal_count) {
         return ECU_ERR_SIGNAL_ID;
@@ -75,8 +70,7 @@ EcuStatus Com_GetSignal(uint16_t id, uint32_t *value, uint8_t *valid)
     return ECU_OK;
 }
 
-EcuStatus Com_TriggerTransmit(size_t frame_index)
-{
+EcuStatus Com_TriggerTransmit(size_t frame_index) {
     const EcuFrameConfig *frame = &active_config->frames[frame_index];
     uint8_t data[8] = {0};
     size_t i;
@@ -91,8 +85,7 @@ EcuStatus Com_TriggerTransmit(size_t frame_index)
     return PduR_Transmit(frame_index, data);
 }
 
-EcuStatus Com_RxIndication(size_t frame_index, const uint8_t data[8], uint64_t now_ms)
-{
+EcuStatus Com_RxIndication(size_t frame_index, const uint8_t data[8], uint64_t now_ms) {
     const EcuFrameConfig *frame = &active_config->frames[frame_index];
     size_t i;
     EcuStatus result = Dem_ReportPassed((uint16_t)frame_index);
@@ -115,20 +108,19 @@ EcuStatus Com_RxIndication(size_t frame_index, const uint8_t data[8], uint64_t n
     return ECU_OK;
 }
 
-EcuStatus Com_AdvanceTime(uint64_t now_ms)
-{
+EcuStatus Com_AdvanceTime(uint64_t now_ms) {
     size_t i;
     for (i = 0; i < active_config->frame_count; ++i) {
         const EcuFrameConfig *frame = &active_config->frames[i];
-        if (frame->direction == 0u && rx_seen[i] &&
-            signal_valid[frame->first_signal] != 0u &&
+        if (frame->direction == 0u && rx_seen[i] && signal_valid[frame->first_signal] != 0u &&
             now_ms - rx_at_ms[i] >= frame->timeout_ms) {
             size_t j;
             EcuStatus result = Dem_ReportFailed((uint16_t)i);
             if (result != ECU_OK) {
                 return result;
             }
-            for (j = frame->first_signal; j < (size_t)frame->first_signal + frame->signal_count; ++j) {
+            for (j = frame->first_signal; j < (size_t)frame->first_signal + frame->signal_count;
+                 ++j) {
                 signal_valid[j] = 0u;
             }
         }

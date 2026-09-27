@@ -9,8 +9,7 @@
 #include "PduR.h"
 #include "Security.h"
 
-static uint8_t HasReadableDiagnosticSignal(const EcuConfig *config, uint16_t id)
-{
+static uint8_t HasReadableDiagnosticSignal(const EcuConfig *config, uint16_t id) {
     size_t frame_index;
     for (frame_index = 0u; frame_index < config->frame_count; ++frame_index) {
         const EcuFrameConfig *frame = &config->frames[frame_index];
@@ -29,16 +28,15 @@ static uint8_t HasReadableDiagnosticSignal(const EcuConfig *config, uint16_t id)
     return 0u;
 }
 
-static EcuStatus ValidateConfig(const EcuConfig *config)
-{
+static EcuStatus ValidateConfig(const EcuConfig *config) {
     uint8_t assigned[ECU_MAX_SIGNALS] = {0};
     size_t i;
     size_t j;
 
     if (config == NULL || config->name == NULL || config->name[0] == '\0' ||
-        config->frames == NULL || config->signals == NULL ||
-        config->frame_count == 0 || config->frame_count > ECU_MAX_FRAMES ||
-        config->signal_count == 0 || config->signal_count > ECU_MAX_SIGNALS) {
+        config->frames == NULL || config->signals == NULL || config->frame_count == 0 ||
+        config->frame_count > ECU_MAX_FRAMES || config->signal_count == 0 ||
+        config->signal_count > ECU_MAX_SIGNALS) {
         return ECU_ERR_CONFIG;
     }
     for (i = 0; i < config->signal_count; ++i) {
@@ -51,9 +49,8 @@ static EcuStatus ValidateConfig(const EcuConfig *config)
     for (i = 0; i < config->frame_count; ++i) {
         const EcuFrameConfig *frame = &config->frames[i];
         uint64_t occupied = 0;
-        if (frame->id > 0x7ffu || frame->dlc < 1u || frame->dlc > 8u ||
-            frame->direction > 1u || frame->signal_count == 0u ||
-            frame->first_signal > config->signal_count ||
+        if (frame->id > 0x7ffu || frame->dlc < 1u || frame->dlc > 8u || frame->direction > 1u ||
+            frame->signal_count == 0u || frame->first_signal > config->signal_count ||
             frame->signal_count > config->signal_count - frame->first_signal ||
             (frame->direction == 1u && (frame->period_ms == 0u || frame->timeout_ms != 0u)) ||
             (frame->direction == 0u && (frame->timeout_ms == 0u || frame->period_ms != 0u))) {
@@ -69,11 +66,13 @@ static EcuStatus ValidateConfig(const EcuConfig *config)
             unsigned bit;
             if (assigned[j] || signal->bit_length == 0u || signal->bit_length > 32u ||
                 (unsigned)signal->start_bit + signal->bit_length > (unsigned)frame->dlc * 8u ||
-                (signal->bit_length < 32u && signal->initial_value >= (UINT32_C(1) << signal->bit_length))) {
+                (signal->bit_length < 32u &&
+                 signal->initial_value >= (UINT32_C(1) << signal->bit_length))) {
                 return ECU_ERR_CONFIG;
             }
             assigned[j] = 1u;
-            for (bit = signal->start_bit; bit < (unsigned)signal->start_bit + signal->bit_length; ++bit) {
+            for (bit = signal->start_bit; bit < (unsigned)signal->start_bit + signal->bit_length;
+                 ++bit) {
                 uint64_t mask = UINT64_C(1) << bit;
                 if ((occupied & mask) != 0u) {
                     return ECU_ERR_CONFIG;
@@ -90,11 +89,10 @@ static EcuStatus ValidateConfig(const EcuConfig *config)
     if (config->diagnostic != NULL) {
         const EcuDiagnosticConfig *diagnostic = config->diagnostic;
         if (diagnostic->request_can_id > 0x7ffu || diagnostic->response_can_id > 0x7ffu ||
-            diagnostic->request_can_id == diagnostic->response_can_id ||
-            diagnostic->s3_ms == 0u || diagnostic->n_bs_ms == 0u || diagnostic->n_cr_ms == 0u ||
-            diagnostic->did == 0u || diagnostic->did == 0xf186u ||
-            diagnostic->did_signal_ids == NULL || diagnostic->did_readers == NULL ||
-            diagnostic->did_signal_count == 0u ||
+            diagnostic->request_can_id == diagnostic->response_can_id || diagnostic->s3_ms == 0u ||
+            diagnostic->n_bs_ms == 0u || diagnostic->n_cr_ms == 0u || diagnostic->did == 0u ||
+            diagnostic->did == 0xf186u || diagnostic->did_signal_ids == NULL ||
+            diagnostic->did_readers == NULL || diagnostic->did_signal_count == 0u ||
             diagnostic->did_signal_count > ECU_DIAG_MAX_DID_SIGNALS) {
             return ECU_ERR_CONFIG;
         }
@@ -103,7 +101,8 @@ static EcuStatus ValidateConfig(const EcuConfig *config)
             return ECU_ERR_CONFIG;
         }
         if (diagnostic->security_enabled > 1u ||
-            (diagnostic->security_enabled != 0u && diagnostic->did_writers == NULL && diagnostic->dtc == NULL)) {
+            (diagnostic->security_enabled != 0u && diagnostic->did_writers == NULL &&
+             diagnostic->dtc == NULL)) {
             return ECU_ERR_CONFIG;
         }
         for (i = 0; i < config->frame_count; ++i) {
@@ -143,8 +142,7 @@ static EcuStatus ValidateConfig(const EcuConfig *config)
 }
 
 EcuStatus Ecu_Init(const EcuConfig *config, CanTxSink sink, const char *nvm_path,
-                   const char *security_key_path, const char *security_state_path)
-{
+                   const char *security_key_path, const char *security_state_path) {
     EcuStatus result = ValidateConfig(config);
     if (result != ECU_OK || sink == NULL) {
         return ECU_ERR_CONFIG;

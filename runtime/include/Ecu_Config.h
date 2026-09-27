@@ -33,7 +33,8 @@ typedef struct {
 } EcuDtcConfig;
 
 typedef Std_ReturnType (*EcuDidReadFunction)(uint8_t *data);
-typedef Std_ReturnType (*EcuDidWriteFunction)(const uint8_t *data, Dcm_NegativeResponseCodeType *error_code);
+typedef Std_ReturnType (*EcuDidWriteFunction)(const uint8_t *data,
+                                              Dcm_NegativeResponseCodeType *error_code);
 typedef EcuStatus (*EcuRoutineStartFunction)(void);
 
 typedef struct {
@@ -53,9 +54,9 @@ typedef struct {
     uint8_t did_signal_count;
     const EcuDtcConfig *dtc;
     const EcuDidReadFunction *did_readers;
-    const EcuDidWriteFunction *did_writers; /* NULL disables WriteDataByIdentifier. */
+    const EcuDidWriteFunction *did_writers;     /* NULL disables WriteDataByIdentifier. */
     const EcuResetRoutineConfig *reset_routine; /* NULL disables RoutineControl. */
-    uint8_t security_enabled; /* Host-only SecurityAccess level 1. */
+    uint8_t security_enabled;                   /* Host-only SecurityAccess level 1. */
 } EcuDiagnosticConfig;
 
 typedef struct {

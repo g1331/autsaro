@@ -8,22 +8,19 @@ static uint8_t active_session;
 static uint8_t pending_session;
 static uint64_t last_request_ms;
 
-static EcuStatus NegativeResponse(uint8_t service, uint8_t code, uint64_t now_ms)
-{
+static EcuStatus NegativeResponse(uint8_t service, uint8_t code, uint64_t now_ms) {
     const uint8_t response[3] = {0x7fu, service, code};
     return PduR_DcmTransmit(response, sizeof(response), now_ms);
 }
 
-void Dcm_Init(const EcuDiagnosticConfig *config)
-{
+void Dcm_Init(const EcuDiagnosticConfig *config) {
     active_config = config;
     active_session = 0x01u;
     pending_session = 0u;
     last_request_ms = 0u;
 }
 
-void Dcm_TpTxConfirmation(EcuStatus status, uint64_t now_ms)
-{
+void Dcm_TpTxConfirmation(EcuStatus status, uint64_t now_ms) {
     if (pending_session != 0u) {
         if (status == ECU_OK) {
             if (active_session != 0x01u) {
@@ -39,8 +36,7 @@ void Dcm_TpTxConfirmation(EcuStatus status, uint64_t now_ms)
     }
 }
 
-void Dcm_AdvanceTime(uint64_t now_ms)
-{
+void Dcm_AdvanceTime(uint64_t now_ms) {
     if (active_config != NULL && active_session != 0x01u &&
         now_ms - last_request_ms >= active_config->s3_ms) {
         active_session = 0x01u;
@@ -52,8 +48,7 @@ void Dcm_AdvanceTime(uint64_t now_ms)
     }
 }
 
-EcuStatus Dcm_RxIndication(const uint8_t *request, size_t length, uint64_t now_ms)
-{
+EcuStatus Dcm_RxIndication(const uint8_t *request, size_t length, uint64_t now_ms) {
     uint8_t response[ECU_DIAG_MAX_PAYLOAD];
     EcuStatus result;
     size_t i;
@@ -257,7 +252,7 @@ EcuStatus Dcm_RxIndication(const uint8_t *request, size_t length, uint64_t now_m
             uint32_t code;
             uint8_t status;
             uint8_t found = request[1] == 0x0au ? Dem_GetSupportedDtc(&code, &status)
-                                              : Dem_FilterDtc(request[2], &code, &status);
+                                                : Dem_FilterDtc(request[2], &code, &status);
             if (request[1] == 0x01u) {
                 response[3] = 0x01u; /* ISO 14229-1 DTC format. */
                 response[4] = 0u;

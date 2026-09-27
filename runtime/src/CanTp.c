@@ -29,30 +29,26 @@ static const EcuDiagnosticConfig *active_config;
 static CanTpRxState rx;
 static CanTpTxState tx;
 
-static void AbortRx(void)
-{
+static void AbortRx(void) {
     if (rx.active) {
         rx.active = 0u;
         PduR_CanTpRxAbort();
     }
 }
 
-static EcuStatus FinishRx(uint64_t now_ms)
-{
+static EcuStatus FinishRx(uint64_t now_ms) {
     rx.active = 0u;
     return PduR_CanTpRxIndication(now_ms);
 }
 
-static EcuStatus FinishTx(EcuStatus status, uint64_t now_ms)
-{
+static EcuStatus FinishTx(EcuStatus status, uint64_t now_ms) {
     tx.active = 0u;
     tx.waiting_fc = 0u;
     PduR_CanTpTxConfirmation(status, now_ms);
     return status;
 }
 
-static EcuStatus SendConsecutiveFrames(uint64_t now_ms)
-{
+static EcuStatus SendConsecutiveFrames(uint64_t now_ms) {
     while (tx.active && !tx.waiting_fc && tx.sent < tx.length) {
         uint8_t frame[8] = {0};
         size_t count = tx.length - tx.sent;
@@ -89,8 +85,7 @@ static EcuStatus SendConsecutiveFrames(uint64_t now_ms)
     return ECU_OK;
 }
 
-void CanTp_Init(const EcuDiagnosticConfig *config)
-{
+void CanTp_Init(const EcuDiagnosticConfig *config) {
     AbortRx();
     active_config = config;
     rx.active = 0u;
@@ -98,8 +93,7 @@ void CanTp_Init(const EcuDiagnosticConfig *config)
     tx.waiting_fc = 0u;
 }
 
-EcuStatus CanTp_AdvanceTime(uint64_t now_ms)
-{
+EcuStatus CanTp_AdvanceTime(uint64_t now_ms) {
     uint8_t expired = 0u;
     if (active_config == NULL) {
         return ECU_OK;
@@ -123,8 +117,7 @@ EcuStatus CanTp_AdvanceTime(uint64_t now_ms)
     return SendConsecutiveFrames(now_ms);
 }
 
-static EcuStatus ReceiveSingle(uint8_t dlc, const uint8_t data[8], uint64_t now_ms)
-{
+static EcuStatus ReceiveSingle(uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
     size_t length = (size_t)(data[0] & 0x0fu);
     EcuStatus result;
     AbortRx();
@@ -147,8 +140,7 @@ static EcuStatus ReceiveSingle(uint8_t dlc, const uint8_t data[8], uint64_t now_
     return FinishRx(now_ms);
 }
 
-static EcuStatus ReceiveFirst(uint8_t dlc, const uint8_t data[8], uint64_t now_ms)
-{
+static EcuStatus ReceiveFirst(uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
     size_t length = ((size_t)(data[0] & 0x0fu) << 8u) | data[1];
     uint8_t flow_control[8] = {0x30u, 0u, 0u};
     EcuStatus result;
@@ -187,8 +179,7 @@ static EcuStatus ReceiveFirst(uint8_t dlc, const uint8_t data[8], uint64_t now_m
     return ECU_OK;
 }
 
-static EcuStatus ReceiveConsecutive(uint8_t dlc, const uint8_t data[8], uint64_t now_ms)
-{
+static EcuStatus ReceiveConsecutive(uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
     size_t count;
     EcuStatus result;
     if (!rx.active) {
@@ -223,8 +214,7 @@ static EcuStatus ReceiveConsecutive(uint8_t dlc, const uint8_t data[8], uint64_t
     return ECU_OK;
 }
 
-static EcuStatus ReceiveFlowControl(uint8_t dlc, const uint8_t data[8], uint64_t now_ms)
-{
+static EcuStatus ReceiveFlowControl(uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
     uint8_t flow_status = data[0] & 0x0fu;
     uint8_t stmin;
     if (!tx.active || !tx.waiting_fc) {
@@ -251,8 +241,7 @@ static EcuStatus ReceiveFlowControl(uint8_t dlc, const uint8_t data[8], uint64_t
     return SendConsecutiveFrames(now_ms);
 }
 
-EcuStatus CanTp_RxIndication(uint8_t dlc, const uint8_t data[8], uint64_t now_ms)
-{
+EcuStatus CanTp_RxIndication(uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
     EcuStatus result;
     if (active_config == NULL || data == NULL) {
         return ECU_ERR_CONFIG;
@@ -287,8 +276,7 @@ EcuStatus CanTp_RxIndication(uint8_t dlc, const uint8_t data[8], uint64_t now_ms
     }
 }
 
-EcuStatus CanTp_Transmit(size_t length, uint64_t now_ms)
-{
+EcuStatus CanTp_Transmit(size_t length, uint64_t now_ms) {
     uint8_t frame[8] = {0};
     size_t count;
     EcuStatus result;
