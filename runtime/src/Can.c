@@ -1,12 +1,71 @@
 #include "Can.h"
 #include "CanIf.h"
+#include <stddef.h>
 
 static CanMode controller_mode;
 static CanTxSink tx_sink;
+static EcuStatus last_host_status;
+static uint8_t initialized;
 
-void Can_Init(CanTxSink sink) {
-    tx_sink = sink;
-    controller_mode = CAN_STARTED;
+void Can_Init(const Can_ConfigType *config) {
+    tx_sink = NULL;
+    initialized = 0u;
+    if (config != NULL) {
+        tx_sink = config->sink;
+        if (tx_sink != NULL) {
+            initialized = 1u;
+        }
+    }
+    controller_mode = CAN_STOPPED;
+    last_host_status = ECU_ERR_CONFIG;
+}
+
+Std_ReturnType Can_SetControllerMode(uint8_t controller, Can_ControllerStateType transition) {
+    Std_ReturnType result = E_NOT_OK;
+    if ((initialized != 0u) && (controller == 0u) &&
+        ((transition == CAN_CS_STARTED) || (transition == CAN_CS_STOPPED))) {
+        if (transition == CAN_CS_STARTED) {
+            controller_mode = CAN_STARTED;
+        } else {
+            controller_mode = CAN_STOPPED;
+        }
+        result = E_OK;
+    }
+    return result;
+}
+
+Std_ReturnType Can_GetControllerMode(uint8_t controller, Can_ControllerStateType *mode) {
+    Std_ReturnType result = E_NOT_OK;
+    if ((initialized != 0u) && (controller == 0u) && (mode != NULL) &&
+        (controller_mode != CAN_BUS_OFF)) {
+        if (controller_mode == CAN_STARTED) {
+            *mode = CAN_CS_STARTED;
+        } else {
+            *mode = CAN_CS_STOPPED;
+        }
+        result = E_OK;
+    }
+    return result;
+}
+
+Std_ReturnType Can_Write(Can_HwHandleType hth, const Can_PduType *pdu) {
+    Std_ReturnType result = E_NOT_OK;
+    last_host_status = ECU_ERR_CONFIG;
+    if ((initialized == 0u) || (hth != 0u) || (pdu == NULL) || (pdu->sdu == NULL)) {
+        /* Invalid host configuration or caller input. */
+    } else if (controller_mode != CAN_STARTED) {
+        last_host_status = ECU_ERR_CONTROLLER;
+    } else if (pdu->id > 0x7ffu) {
+        last_host_status = ECU_ERR_FRAME_ID;
+    } else if ((pdu->length < 1u) || (pdu->length > 8u)) {
+        last_host_status = ECU_ERR_FRAME_DLC;
+    } else {
+        last_host_status = tx_sink(pdu->id, pdu->length, pdu->sdu);
+    }
+    if (last_host_status == ECU_OK) {
+        result = E_OK;
+    }
+    return result;
 }
 
 void Can_SetMode(CanMode mode) { controller_mode = mode; }
@@ -14,27 +73,36 @@ void Can_SetMode(CanMode mode) { controller_mode = mode; }
 CanMode Can_GetMode(void) { return controller_mode; }
 
 EcuStatus Can_Transmit(uint32_t id, uint8_t dlc, const uint8_t data[8]) {
-    if (controller_mode != CAN_STARTED) {
-        return ECU_ERR_CONTROLLER;
+    uint8_t payload[8] = {0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
+    Can_PduType pdu;
+    EcuStatus result = ECU_ERR_CONFIG;
+    if (data != NULL) {
+        size_t i;
+        for (i = 0u; (i < dlc) && (i < sizeof(payload)); ++i) {
+            payload[i] = data[i];
+        }
+        pdu.swPduHandle = 0u;
+        pdu.length = dlc;
+        pdu.id = id;
+        pdu.sdu = payload;
+        (void)Can_Write(0u, &pdu);
+        result = last_host_status;
     }
-    if (id > 0x7ffu) {
-        return ECU_ERR_FRAME_ID;
-    }
-    if (dlc < 1u || dlc > 8u) {
-        return ECU_ERR_FRAME_DLC;
-    }
-    return tx_sink(id, dlc, data);
+    return result;
 }
 
 EcuStatus Can_Inject(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
+    EcuStatus result = ECU_OK;
     if (id > 0x7ffu) {
-        return ECU_ERR_FRAME_ID;
+        result = ECU_ERR_FRAME_ID;
+    } else if ((dlc < 1u) || (dlc > 8u)) {
+        result = ECU_ERR_FRAME_DLC;
+    } else if (controller_mode != CAN_STARTED) {
+        result = ECU_ERR_CONTROLLER;
+    } else if (data == NULL) {
+        result = ECU_ERR_CONFIG;
+    } else {
+        result = CanIf_RxIndication(id, dlc, data, now_ms);
     }
-    if (dlc < 1u || dlc > 8u) {
-        return ECU_ERR_FRAME_DLC;
-    }
-    if (controller_mode != CAN_STARTED) {
-        return ECU_ERR_CONTROLLER;
-    }
-    return CanIf_RxIndication(id, dlc, data, now_ms);
+    return result;
 }

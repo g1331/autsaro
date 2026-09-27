@@ -6,6 +6,83 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[test]
+fn standard_can_host_entry_points_reject_invalid_requests_and_send_valid_frame() {
+    let temp = Scratch::new();
+    let harness = temp.0.join("can_standard_api.c");
+    let binary = temp.0.join(if cfg!(windows) {
+        "can_standard_api.exe"
+    } else {
+        "can_standard_api"
+    });
+    fs::write(
+        &harness,
+        r#"#include "Can.h"
+#include "CanIf.h"
+static unsigned sent;
+static unsigned received;
+static EcuStatus emit(uint32_t id, uint8_t dlc, const uint8_t data[8]) {
+    if (id != 0x321u || dlc != 2u || data[0] != 0x12u || data[1] != 0x34u) return ECU_ERR_IO;
+    ++sent;
+    return ECU_OK;
+}
+EcuStatus CanIf_RxIndication(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
+    if (id != 0x321u || dlc != 2u || data[0] != 0x12u || now_ms != 10u) return ECU_ERR_IO;
+    ++received;
+    return ECU_OK;
+}
+int main(void) {
+    uint8_t bytes[8] = {0x12u, 0x34u};
+    Can_ConfigType config = {emit};
+    Can_PduType pdu = {0u, 2u, 0x321u, bytes};
+    Can_ControllerStateType state = CAN_CS_UNINIT;
+    Can_Init(NULL);
+    if (Can_GetControllerMode(0u, &state) != E_NOT_OK) return 1;
+    Can_Init(&config);
+    if (Can_GetControllerMode(0u, &state) != E_OK || state != CAN_CS_STOPPED) return 2;
+    if (Can_Write(0u, &pdu) != E_NOT_OK) return 3;
+    if (Can_SetControllerMode(1u, CAN_CS_STARTED) != E_NOT_OK) return 4;
+    if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_OK) return 5;
+    if (Can_Write(1u, &pdu) != E_NOT_OK || Can_Write(0u, NULL) != E_NOT_OK) return 6;
+    pdu.id = 0x800u;
+    if (Can_Write(0u, &pdu) != E_NOT_OK) return 7;
+    pdu.id = 0x321u;
+    pdu.length = 0u;
+    if (Can_Write(0u, &pdu) != E_NOT_OK) return 8;
+    pdu.length = 2u;
+    if (Can_Write(0u, &pdu) != E_OK || sent != 1u) return 9;
+    if (Can_Inject(0x321u, 2u, bytes, 10u) != ECU_OK || received != 1u) return 10;
+    if (Can_Inject(0x321u, 2u, NULL, 10u) != ECU_ERR_CONFIG || received != 1u) return 12;
+    Can_SetMode(CAN_BUS_OFF);
+    if (Can_Transmit(0x321u, 2u, bytes) != ECU_ERR_CONTROLLER) return 11;
+    return 0;
+}
+"#,
+    )
+    .unwrap();
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let build = Command::new("gcc")
+        .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
+        .arg(format!("-I{}", root.join("runtime/include").display()))
+        .arg(root.join("runtime/src/Can.c"))
+        .arg(&harness)
+        .arg("-o")
+        .arg(&binary)
+        .output()
+        .unwrap();
+    assert!(
+        build.status.success(),
+        "{}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+    let run = Command::new(&binary).output().unwrap();
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+}
+
 struct Scratch(PathBuf);
 impl Scratch {
     fn new() -> Self {

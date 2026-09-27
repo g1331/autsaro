@@ -29,7 +29,7 @@ cl /TC /W4 /I runtime\include runtime\src\Can.c runtime\src\CanIf.c runtime\src\
 
 解析消耗的 ComIPdu/ComSignal 时要求唯一的本项目 `ComCfg` 模块、正确的模块定义以及直接的 `ComConfig`/`ComGeneral` 归属。来源模块被重命名、父级定义错误或子容器挂到外部模块，即使局部 PDU/信号引用仍可解析，也仅只读导入并禁止生成。
 
-信号发送：`Os_Advance`（单核虚拟时间、周期任务）→ `Com_TriggerTransmit`（以 `Rte_WriteSignal` 写入的应用值打包）→ `PduR_Transmit` → `LSduR_PduRTransmit` → `CanIf_Transmit` → 虚拟 `Can_Transmit` → `X` 输出。信号接收：`R` 输入 → `Can_Inject` → `CanIf_RxIndication`（ID 过滤、DLC 检查）→ `LSduR_CanIfRxIndication` → `PduR_RxIndication` → `Com_RxIndication`（解包、更新有效性）→ `Rte_ReadSignal`。没有自行回显；主机编排器按 ID 优先级路由两个 ECU 的信号报文，也可丢帧。当前虚拟 CAN 控制器具有 STARTED/STOPPED/BUS_OFF 状态，但不模拟位级仲裁、电气错误计数器和真实中断。
+信号发送：`Os_Advance`（单核虚拟时间、周期任务）→ `Com_TriggerTransmit`（以 `Rte_WriteSignal` 写入的应用值打包）→ `PduR_Transmit` → `LSduR_PduRTransmit` → `CanIf_Transmit` → 主机 `Can_Transmit` 包装层 → `Can_Write` → `X` 输出。信号接收：`R` 输入 → `Can_Inject` → `CanIf_RxIndication`（ID 过滤、DLC 检查）→ `LSduR_CanIfRxIndication` → `PduR_RxIndication` → `Com_RxIndication`（解包、更新有效性）→ `Rte_ReadSignal`。没有自行回显；主机编排器按 ID 优先级路由两个 ECU 的信号报文，也可丢帧。`Can_Init`、`Can_SetControllerMode`、`Can_GetControllerMode` 和 `Can_Write` 已有 R24-11 的公开签名及本主机剖面的类型；初始化配置仍包含主机输出回调，发送由单线程虚拟目标同步完成，其他必需服务、回调、MemMap、BSWMD、MISRA 与第三方互操作尚未闭合，不据此声明完整标准 Can Driver。当前虚拟 CAN 控制器具有 STARTED/STOPPED/BUS_OFF 状态，但不模拟位级仲裁、电气错误计数器和真实中断。
 
 ## 诊断连接（可选）
 

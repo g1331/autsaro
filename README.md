@@ -62,6 +62,14 @@ python scripts/workflow.py verify --scope all
 python scripts/workflow.py verify --scope baseline
 ```
 
+审计代表性生成工程时，可先用核心示例在独立临时目录生成一个带 Tx 信号的主机 ECU，再把其输出传给全量基线；目录由调用者保留以核对 `files.list`、`files.sha256` 和扫描输入：
+
+```powershell
+$sample = Join-Path $env:TEMP ('autosar-quality-' + [guid]::NewGuid().ToString('N'))
+cargo run --manifest-path core/Cargo.toml --example quality_sample -- $sample
+python scripts/workflow.py verify --scope baseline --generated-dir (Join-Path $sample 'generated')
+```
+
 增量交付验证包含 `python scripts/quality.py`：检查仓库源码的 UTF-8、末尾换行、空白和 Python 语法，对**相对当前任务基线新改的行**分别用 rustfmt、clang-format 和 Prettier 检查格式，并用 GCC 严格 C99 模式检查主机运行时源码和独立头文件的语法；随后执行 UI ESLint 与严格类型构建、核心测试、桌面构建及 Rust Clippy 的 correctness/suspicious 检查。
 
 进行中的任务以记录的 `base_commit` 为格式基线；没有进行中任务时，未提交的改动对比 `HEAD`，干净工作区复核上一提交时对比 `HEAD^`。独立核对更长的一组已提交改动可显式指定 `python scripts/quality.py --base <基线提交>`。修改旧文件无需顺带全文件重排，但新改行须符合对应格式器。

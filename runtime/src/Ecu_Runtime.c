@@ -143,6 +143,7 @@ static EcuStatus ValidateConfig(const EcuConfig *config) {
 
 EcuStatus Ecu_Init(const EcuConfig *config, CanTxSink sink, const char *nvm_path,
                    const char *security_key_path, const char *security_state_path) {
+    Can_ConfigType can_config = {sink};
     EcuStatus result = ValidateConfig(config);
     if (result != ECU_OK || sink == NULL) {
         return ECU_ERR_CONFIG;
@@ -158,7 +159,10 @@ EcuStatus Ecu_Init(const EcuConfig *config, CanTxSink sink, const char *nvm_path
     }
     Com_Init(config);
     CanIf_Init(config);
-    Can_Init(sink);
+    Can_Init(&can_config);
+    if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_OK) {
+        return ECU_ERR_CONTROLLER;
+    }
     Os_Init(config);
     PduR_Init(config);
     LSduR_Init(config->diagnostic);

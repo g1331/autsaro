@@ -481,7 +481,9 @@
       "depends_on": [
         "DIAG-003"
       ],
-      "evidence": []
+      "evidence": [
+        "docs/workflow/evidence/STD-001-host-can-driver-api-2026-09-27.md"
+      ]
     }
   ]
 }
