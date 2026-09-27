@@ -8,9 +8,18 @@
 #include "Ecu_Config.h"
 #include "Ecu_Status.h"
 
-/* 单核主机时钟：按配置周期调度 Com 发送，推进接收超时。 */
+/** @brief Reset the single-core host clock and configured schedule.
+ * @param[in] config Generated ECU configuration.
+ */
 void Os_Init(const EcuConfig *config);
+/** @brief Advance periodic Com transmission and receive timers.
+ * @param[in] now_ms New host clock in milliseconds.
+ * @return Host scheduling status.
+ */
 EcuStatus Os_Advance(uint64_t now_ms);
+/** @brief Read the current host clock.
+ * @return Current host clock in milliseconds.
+ */
 uint64_t Os_Now(void);
 
 #endif
