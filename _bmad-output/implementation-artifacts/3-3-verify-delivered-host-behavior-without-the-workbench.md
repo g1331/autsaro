@@ -2,7 +2,8 @@
 title: Verify delivered host behavior without the workbench
 type: feature
 created: '2026-09-28'
-status: ready-for-dev
+status: done
+baseline_commit: 14efd7abdf979354737a1d655d19fd4d795d7683
 context:
   - _bmad-output/planning-artifacts/prd.md
   - _bmad-output/planning-artifacts/architecture.md
@@ -32,3 +33,16 @@ context:
 ## Verification
 
 以干净临时目录执行离线复验，并用缺文件、错误帧、超时和缺编译器反例检查失败关闭。运行相关 `core/tests/end_to_end.rs` 集成测试及增量质量门；不在用户交互桌面弹窗或抢焦点。
+
+## Code Map
+
+- `core/src/bin/package_host_reference.rs`：从固定的 Alpha/Beta 合法主机配置生成双 ECU 参考交付包。
+- `runtime/reference-verify.ps1`、`runtime/reference-vectors.json`、`runtime/reference-README.md`：离线完整性、构建、独立向量和报告入口。
+- `core/tests/end_to_end.rs`：搬迁后通过、错误预期与缺输入失败的端到端验证。
+
+## Tasks & Acceptance
+
+- [x] 在 `core/src/bin/package_host_reference.rs` 产出带输入快照的双 ECU 参考包；Given 合法 R24-11 XSD，When 生成并搬迁，Then 包内包含独立构建所需源码及参考资料。
+- [x] 在 `runtime/reference-verify.ps1` 与 `runtime/reference-vectors.json` 核对 CAN 双向和物理诊断拒绝/恢复；Given 预期与实际不一致，When 离线复验，Then 非零退出并保存失败报告。
+- [x] 在 `runtime/reference-verify.ps1` 防止修改原包，校验缺文件/篡改、GCC 缺失、构建失败、异常退出与超时；Given 任一失败，Then 不报告通过。
+- [x] 在 `core/tests/end_to_end.rs` 验证新路径离线通过与负例；在说明中明确固定主机剖面及未验范围。

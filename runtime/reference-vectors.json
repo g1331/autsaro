@@ -1,0 +1,25 @@
+{
+  "format": "autosar-host-reference-v1",
+  "target": "Windows host virtual ECU, fixed 11-bit Classical CAN and physical DoCAN profile",
+  "timeoutMs": 15000,
+  "cases": [
+    {
+      "name": "Alpha CAN transmit and receive",
+      "ecu": "Alpha",
+      "input": "S 0 54\nT 10\nR 1110 2 0700\nG 2\n",
+      "expected": ["X 801 2 B001", "V 2 7 1"]
+    },
+    {
+      "name": "Beta CAN receive and transmit",
+      "ecu": "Beta",
+      "input": "R 801 2 B001\nG 0\nT 20\n",
+      "expected": ["V 0 54 1", "X 1110 2 0700"]
+    },
+    {
+      "name": "Alpha diagnostic rejection then recovery",
+      "ecu": "Alpha",
+      "input": "R 1792 3 021003\nR 1792 4 0322FFFF\nR 1792 4 03221234\n",
+      "expected": ["X 1800 7 06500300320032", "X 1800 4 037F2231", "X 1800 8 0762123411223344"]
+    }
+  ]
+}

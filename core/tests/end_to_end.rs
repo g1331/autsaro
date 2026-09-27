@@ -1,4 +1,5 @@
 use autosar_config_core::{DiagnosticSettings, Direction, Workspace, generator, host, schema};
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Read;
 use std::io::Write;
@@ -704,6 +705,362 @@ fn create_pair(root: &Path) -> (Workspace, Workspace) {
     assert!(b.validate().unwrap().issues.is_empty());
     b.save().unwrap();
     (a, b)
+}
+
+#[test]
+fn saved_handoff_reopens_after_move_and_reproduces_host_sources() {
+    let temp = Scratch::new();
+    let _ = create_pair(&temp.0);
+    let source = temp.0.join("Alpha/Alpha.arxml");
+    let split = temp.0.join("Other/Alpha.arxml");
+    fs::create_dir(split.parent().unwrap()).unwrap();
+    let xml = fs::read_to_string(&source).unwrap();
+    let start = xml
+        .find("<I-SIGNAL><SHORT-NAME>ISignal_SendCount</SHORT-NAME>")
+        .unwrap();
+    let end = start + xml[start..].find("</I-SIGNAL>").unwrap() + "</I-SIGNAL>".len();
+    let signal = &xml[start..end];
+    fs::write(&source, xml.replacen(signal, "", 1)).unwrap();
+    fs::write(&split, format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd\"><AR-PACKAGES><AR-PACKAGE><SHORT-NAME>Alpha</SHORT-NAME><ELEMENTS>{signal}</ELEMENTS></AR-PACKAGE></AR-PACKAGES></AUTOSAR>\n")).unwrap();
+    let mut original = Workspace::open(vec![source.clone(), split.clone()], archive()).unwrap();
+    let output = temp.0.join("Handoff");
+    let preview = generator::preview_handoff(&mut original, &output).unwrap();
+    assert!(
+        preview
+            .files
+            .iter()
+            .any(|file| file.path == "inputs/000.arxml")
+    );
+    generator::generate_handoff_previewed(&mut original, &output, &preview.revision).unwrap();
+    let moved = temp.0.join("Received/Handoff");
+    fs::create_dir(moved.parent().unwrap()).unwrap();
+    fs::rename(&output, &moved).unwrap();
+    let manifest = fs::read_to_string(moved.join("files.list")).unwrap();
+    let listed: Vec<_> = manifest
+        .lines()
+        .filter(|name| name.starts_with("inputs/"))
+        .collect();
+    assert_eq!(listed.len(), 2);
+    let metadata: serde_json::Value =
+        serde_json::from_slice(&fs::read(moved.join("handoff.json")).unwrap()).unwrap();
+    let sources = metadata["sources"].as_array().unwrap();
+    assert_eq!(sources.len(), 2);
+    assert!(
+        sources
+            .iter()
+            .all(|item| item["originalName"] == "Alpha.arxml")
+    );
+    assert!(
+        !fs::read_to_string(moved.join("handoff.json"))
+            .unwrap()
+            .contains(temp.0.to_str().unwrap())
+    );
+    let delivered_paths: Vec<_> = sources
+        .iter()
+        .map(|item| moved.join(item["path"].as_str().unwrap()))
+        .collect();
+    let delivered_bytes: Vec<_> = delivered_paths
+        .iter()
+        .map(|path| fs::read(path).unwrap())
+        .collect();
+    assert!(delivered_bytes.contains(&fs::read(&source).unwrap()));
+    assert!(delivered_bytes.contains(&fs::read(&split).unwrap()));
+    let mut reopened = generator::open_handoff(&moved, archive()).unwrap();
+    assert!(reopened.validate().unwrap().issues.is_empty());
+    let regenerated = temp.0.join("Received/Rebuilt");
+    generator::generate(&mut reopened, &regenerated).unwrap();
+    for name in fs::read_to_string(regenerated.join("files.list"))
+        .unwrap()
+        .lines()
+    {
+        if name != "README.md" {
+            assert_eq!(
+                fs::read(regenerated.join(name)).unwrap(),
+                fs::read(moved.join(name)).unwrap(),
+                "{name}"
+            );
+        }
+    }
+    #[cfg(windows)]
+    assert!(Path::new(&generator::build(&regenerated).unwrap().binary_path).exists());
+    #[cfg(windows)]
+    {
+        assert!(Path::new(&generator::build(&moved).unwrap().binary_path).exists());
+        assert!(generator::open_handoff(&moved, archive()).is_ok());
+    }
+    assert!(
+        fs::read_to_string(moved.join("README.md"))
+            .unwrap()
+            .contains("handoff.json")
+    );
+}
+
+#[test]
+fn handoff_rejects_dirty_stale_and_modified_output_without_losing_old_package() {
+    let temp = Scratch::new();
+    let (mut ecu, _) = create_pair(&temp.0);
+    let source = temp.0.join("Alpha/Alpha.arxml");
+    let output = temp.0.join("Handoff");
+    generator::generate_handoff(&mut ecu, &output).unwrap();
+    let original = fs::read(output.join("inputs/000.arxml")).unwrap();
+    let frame = ecu.view().frames[0].path.clone();
+    ecu.update_frame(&frame, serde_json::json!({"id": 802}))
+        .unwrap();
+    assert!(
+        generator::preview_handoff(&mut ecu, &output)
+            .unwrap_err()
+            .contains("保存")
+    );
+    assert_eq!(fs::read(output.join("inputs/000.arxml")).unwrap(), original);
+    ecu.save().unwrap();
+    let external = fs::read_to_string(&source).unwrap().replacen(
+        "<VALUE>802</VALUE>",
+        "<VALUE>803</VALUE>",
+        1,
+    );
+    fs::write(&source, &external).unwrap();
+    assert!(
+        generator::generate_handoff(&mut ecu, &output)
+            .unwrap_err()
+            .contains("外部修改")
+    );
+    assert_eq!(fs::read(output.join("inputs/000.arxml")).unwrap(), original);
+    let mut reopened = Workspace::open(vec![source], archive()).unwrap();
+    fs::write(output.join("inputs/000.arxml"), b"owner changed this input").unwrap();
+    assert!(generator::generate_handoff(&mut reopened, &output).is_err());
+    assert_eq!(
+        fs::read(output.join("inputs/000.arxml")).unwrap(),
+        b"owner changed this input"
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn source_junction_cannot_be_imported_for_handoff() {
+    let temp = Scratch::new();
+    let _ = create_pair(&temp.0);
+    let alias = temp.0.join("SourceAlias");
+    let linked = Command::new("cmd")
+        .args(["/C", "mklink", "/J"])
+        .arg(&alias)
+        .arg(temp.0.join("Alpha"))
+        .output()
+        .unwrap();
+    assert!(
+        linked.status.success(),
+        "{}",
+        String::from_utf8_lossy(&linked.stderr)
+    );
+    let result = Workspace::open(vec![alias.join("Alpha.arxml")], archive());
+    assert!(result.err().unwrap().contains("重解析点"));
+    fs::remove_dir(&alias).unwrap();
+    assert!(temp.0.join("Alpha/Alpha.arxml").exists());
+}
+
+#[test]
+fn delivered_input_removal_or_tampering_cannot_reproduce_host_project() {
+    let temp = Scratch::new();
+    let (mut ecu, _) = create_pair(&temp.0);
+    let output = temp.0.join("Handoff");
+    generator::generate_handoff(&mut ecu, &output).unwrap();
+    let input = output.join("inputs/000.arxml");
+    let original = fs::read(&input).unwrap();
+    fs::remove_file(&input).unwrap();
+    assert!(generator::open_handoff(&output, archive()).is_err());
+    let original = String::from_utf8(original).unwrap();
+    assert!(original.contains("<VALUE>801</VALUE>"));
+    let tampered = original.replacen("<VALUE>801</VALUE>", "<VALUE>9999</VALUE>", 1);
+    fs::write(&input, &tampered).unwrap();
+    assert!(generator::open_handoff(&output, archive()).is_err());
+    assert!(!temp.0.join("BadRebuild").exists());
+    assert_eq!(fs::read_to_string(&input).unwrap(), tampered);
+
+    fs::write(&input, original).unwrap();
+    let metadata_path = output.join("handoff.json");
+    let metadata = fs::read_to_string(&metadata_path).unwrap();
+    fs::write(
+        &metadata_path,
+        metadata.replacen("CP/FO R24-11", "CP/FO R99-99", 1),
+    )
+    .unwrap();
+    let records_path = output.join("files.sha256");
+    let seal_metadata = || {
+        let digest = format!("{:x}", Sha256::digest(fs::read(&metadata_path).unwrap()));
+        let records = fs::read_to_string(&records_path).unwrap();
+        let updated = records
+            .lines()
+            .map(|line| {
+                if line.ends_with("  handoff.json") {
+                    format!("{digest}  handoff.json")
+                } else {
+                    line.to_owned()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n";
+        fs::write(&records_path, updated).unwrap();
+    };
+    seal_metadata();
+    assert!(
+        generator::open_handoff(&output, archive())
+            .err()
+            .unwrap()
+            .contains("版次")
+    );
+
+    let mut wrong_roots: serde_json::Value = serde_json::from_str(&metadata).unwrap();
+    wrong_roots["sources"][0]["packageRoots"] = serde_json::json!(["WrongPackage"]);
+    fs::write(
+        &metadata_path,
+        serde_json::to_vec_pretty(&wrong_roots).unwrap(),
+    )
+    .unwrap();
+    seal_metadata();
+    assert!(
+        generator::open_handoff(&output, archive())
+            .err()
+            .unwrap()
+            .contains("逻辑包根")
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn moved_reference_bundle_verifies_offline_and_rejects_wrong_vector() {
+    let temp = Scratch::new();
+    let bundle = temp.0.join("Reference");
+    let producer = Command::new(env!("CARGO_BIN_EXE_package_host_reference"))
+        .arg(&bundle)
+        .output()
+        .unwrap();
+    assert!(
+        producer.status.success(),
+        "{}",
+        String::from_utf8_lossy(&producer.stderr)
+    );
+    let moved = temp.0.join("Received reference with spaces");
+    fs::rename(&bundle, &moved).unwrap();
+    let verify = |suffix: &str| {
+        let report = temp.0.join(format!("{suffix}.json"));
+        let result = Command::new("powershell")
+            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
+            .arg(moved.join("verify.ps1"))
+            .arg("-ReportPath")
+            .arg(&report)
+            .current_dir(&temp.0)
+            .output()
+            .unwrap();
+        let report_text = fs::read_to_string(&report).unwrap();
+        let value: serde_json::Value =
+            serde_json::from_str(report_text.trim_start_matches('\u{feff}')).unwrap();
+        (result.status.success(), value)
+    };
+    let (passed, result) = verify("pass");
+    assert!(passed, "{result}");
+    assert_eq!(result["status"], "passed");
+    assert!(
+        result["checks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|item| item["name"] == "Alpha diagnostic rejection then recovery")
+    );
+
+    let empty_path = temp.0.join("NoCompiler");
+    fs::create_dir(&empty_path).unwrap();
+    let report = temp.0.join("no-compiler.json");
+    let powershell = PathBuf::from(std::env::var("WINDIR").unwrap())
+        .join("System32/WindowsPowerShell/v1.0/powershell.exe");
+    let no_compiler = Command::new(powershell)
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
+        .arg(moved.join("verify.ps1"))
+        .arg("-ReportPath")
+        .arg(&report)
+        .env("PATH", &empty_path)
+        .current_dir(&temp.0)
+        .output()
+        .unwrap();
+    assert!(!no_compiler.status.success());
+    let result = fs::read_to_string(&report).unwrap();
+    assert!(result.contains("gcc"));
+
+    let report_alias = temp.0.join("ReportAlias");
+    let linked = Command::new("cmd")
+        .args(["/C", "mklink", "/J"])
+        .arg(&report_alias)
+        .arg(&moved)
+        .output()
+        .unwrap();
+    assert!(linked.status.success());
+    let linked_report = Command::new("powershell")
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
+        .arg(moved.join("verify.ps1"))
+        .arg("-ReportPath")
+        .arg(report_alias.join("new-directory/result.json"))
+        .current_dir(&temp.0)
+        .output()
+        .unwrap();
+    assert!(!linked_report.status.success());
+    assert!(!moved.join("new-directory").exists());
+    fs::remove_dir(report_alias).unwrap();
+
+    let vector_path = moved.join("vectors.json");
+    let original = fs::read_to_string(&vector_path).unwrap();
+    fs::write(
+        &vector_path,
+        original.replacen("X 801 2 B001", "X 801 2 DEADBEEF", 1),
+    )
+    .unwrap();
+    let hash_path = moved.join("reference-files.sha256");
+    let seal_vectors = || {
+        let digest = format!("{:x}", Sha256::digest(fs::read(&vector_path).unwrap()));
+        let records = fs::read_to_string(&hash_path).unwrap();
+        let updated = records
+            .lines()
+            .map(|line| {
+                if line.ends_with("  vectors.json") {
+                    format!("{digest}  vectors.json")
+                } else {
+                    line.to_owned()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n";
+        fs::write(&hash_path, updated).unwrap();
+    };
+    seal_vectors();
+    let (passed, result) = verify("wrong-vector");
+    assert!(!passed);
+    assert_eq!(result["status"], "failed");
+    assert!(
+        result["error"].as_str().unwrap().contains("expected"),
+        "{result}"
+    );
+
+    let mut slow: serde_json::Value = serde_json::from_str(&original).unwrap();
+    slow["timeoutMs"] = serde_json::json!(1);
+    slow["cases"][0]["input"] = serde_json::json!("G 0\n".repeat(20_000));
+    fs::write(&vector_path, serde_json::to_vec_pretty(&slow).unwrap()).unwrap();
+    seal_vectors();
+    let (passed, result) = verify("timeout");
+    assert!(!passed);
+    assert_eq!(result["status"], "failed");
+    assert!(
+        result["error"].as_str().unwrap().contains("timed out"),
+        "{result}"
+    );
+
+    fs::remove_file(moved.join("Beta/inputs/000.arxml")).unwrap();
+    let (passed, result) = verify("missing-input");
+    assert!(!passed);
+    assert!(
+        result["error"]
+            .as_str()
+            .unwrap()
+            .contains("Missing package file")
+    );
 }
 
 #[test]

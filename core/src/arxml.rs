@@ -23,6 +23,12 @@ struct SourceFile {
     saved: String,
 }
 
+pub(crate) struct HandoffSource {
+    pub original_name: String,
+    pub package_roots: Vec<String>,
+    pub contents: Vec<u8>,
+}
+
 struct PduInfo {
     length: Result<u32, Issue>,
     mappings: Vec<SignalMapping>,
@@ -613,6 +619,39 @@ fn load_sources(files: Vec<PathBuf>, schema_zip: PathBuf) -> Result<Workspace, S
     let mut sources = Vec::new();
     let mut unique = BTreeSet::new();
     for path in files {
+        let selected = if path.is_absolute() {
+            path.clone()
+        } else {
+            std::env::current_dir()
+                .map_err(|e| e.to_string())?
+                .join(&path)
+        };
+        if selected
+            .components()
+            .any(|part| matches!(part, std::path::Component::ParentDir))
+        {
+            return Err(format!(
+                "ARXML 来源路径包含 ..，拒绝导入: {}",
+                path.display()
+            ));
+        }
+        for ancestor in selected.ancestors() {
+            let metadata = fs::symlink_metadata(ancestor)
+                .map_err(|e| format!("{}: {e}", ancestor.display()))?;
+            #[cfg(windows)]
+            let linked = {
+                use std::os::windows::fs::MetadataExt;
+                metadata.file_attributes() & 0x400 != 0
+            };
+            #[cfg(not(windows))]
+            let linked = metadata.file_type().is_symlink();
+            if linked {
+                return Err(format!(
+                    "ARXML 来源路径包含链接或重解析点: {}",
+                    ancestor.display()
+                ));
+            }
+        }
         let path = fs::canonicalize(&path).map_err(|e| format!("{}: {e}", path.display()))?;
         if !path
             .extension()
@@ -3156,6 +3195,49 @@ impl Workspace {
             }
         }
         Ok(())
+    }
+
+    pub(crate) fn handoff_sources(&mut self) -> Result<Vec<HandoffSource>, String> {
+        if self.files.iter().any(|file| file.text != file.saved) {
+            return Err("请先保存全部 ARXML，再导出可重建交付包".into());
+        }
+        self.ensure_sources_current()?;
+        self.checked_profile()?;
+        let mut sources = Vec::with_capacity(self.files.len());
+        for file in &self.files {
+            let original_name = file
+                .path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .ok_or("ARXML 来源文件名不是 UTF-8")?
+                .to_owned();
+            let doc = Document::parse(&file.saved).map_err(|e| e.to_string())?;
+            let package_roots = doc
+                .descendants()
+                .filter(|node| {
+                    node.is_element()
+                        && node.tag_name().name() == "AR-PACKAGE"
+                        && node.parent_element().is_some_and(|parent| {
+                            parent.tag_name().name() == "AR-PACKAGES"
+                                && parent.parent_element().is_some_and(|grandparent| {
+                                    grandparent.tag_name().name() == "AUTOSAR"
+                                })
+                        })
+                })
+                .filter_map(|node| child_text(node, "SHORT-NAME"))
+                .collect();
+            sources.push(HandoffSource {
+                original_name,
+                package_roots,
+                contents: file.saved.as_bytes().to_vec(),
+            });
+        }
+        sources.sort_by(|left, right| {
+            left.contents
+                .cmp(&right.contents)
+                .then_with(|| left.original_name.cmp(&right.original_name))
+        });
+        Ok(sources)
     }
 
     pub fn validate(&mut self) -> Result<WorkspaceView, String> {

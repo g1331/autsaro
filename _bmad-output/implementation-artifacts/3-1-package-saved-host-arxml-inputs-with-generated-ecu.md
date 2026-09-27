@@ -2,7 +2,8 @@
 title: Package saved host ARXML inputs with generated ECU
 type: feature
 created: '2026-09-28'
-status: ready-for-dev
+status: done
+baseline_commit: 14efd7abdf979354737a1d655d19fd4d795d7683
 context:
   - _bmad-output/planning-artifacts/prd.md
   - _bmad-output/planning-artifacts/architecture.md
@@ -33,3 +34,34 @@ context:
 ## Verification
 
 在 `core/tests/end_to_end.rs` 覆盖多文件正向、同名路径、外部改动/脏输入、缺文件或断链及旧输出保护；运行 `cargo test --manifest-path core/Cargo.toml` 和本 story 的增量质量门。无需弹出桌面窗口；原生 GUI 路径仅在隔离桌面会话可用时验证，否则如实标未验证。
+
+## Code Map
+
+- `core/src/arxml.rs`：从已保存且与磁盘一致的 Workspace 提取原始输入及逻辑包根。
+- `core/src/generator.rs`：把输入、映射和交接说明并入完整性清单及预览，复用安全暂存与旧输出保护。
+- `src-tauri/src/lib.rs`、`ui/src/App.tsx`：提供独立于普通生成的交付入口。
+- `core/tests/end_to_end.rs`：证明同名多文件、原字节保留、搬迁与失败保护。
+
+## Tasks & Acceptance
+
+- [x] 在 `core/src/arxml.rs` 提取已保存的来源输入；Given 未保存或外部修改，When 导出交付包，Then 明确失败且不改源文件。
+- [x] 在 `core/src/generator.rs` 生成稳定的 `inputs/`、`handoff.json`、说明与完整性记录；Given 同名多文件，When 导出，Then 包内路径无冲突且元数据无原机器绝对路径。
+- [x] 在 `src-tauri/src/lib.rs`、`ui/src/App.tsx` 接入预览及确认；Given 旧输出有用户改动，When 确认，Then 拒绝覆盖并保留旧包。
+- [x] 在 `core/tests/end_to_end.rs` 验证已保存输入、多文件引用、失败关闭与主机工程回归。
+
+## Review Triage Log
+
+| 来源 | 判定与依据 | 处理 |
+| --- | --- | --- |
+| Blind 1：映射包根未核对 | medium：原实现可接受与 ARXML 不符的 `packageRoots`；`open_handoff` 现逐项核对实际包根。 | 已修复并加入反例。 |
+| Blind 2：千份输入索引 | false：生成与导入均用相同的 `{:03}` 最小宽度格式，索引 1000 会扩展为四位；不存在互不兼容。 | 无需改动。 |
+| Blind 3：未做 XSD 校验 | false：`open_handoff` 调用 `checked_profile`，其调用 `validate`，后者执行 `schema::validate_files`。 | 无需改动。 |
+| Blind 4：缺少包名被跳过 | false：`handoff_sources` 先运行 `checked_profile` 的 XSD/剖面校验；不合法顶层包无法通过导出。 | 无需改动。 |
+| Blind 5：未来嵌套输入目录 | low：当前受支持交付格式只有扁平 `inputs/{index}.arxml`；未来扩展格式须同时变更生成与读取。 | 不为未定义格式加分支。 |
+| Blind 6：额外文件被忽略 | medium：旧离线校验只核对清单条目；现拒绝额外文件、目录及重解析点。 | 已修复。 |
+| Blind 7：三类用例可被替换 | medium：旧脚本只核对数量；现核对固定名称、ECU、输入和预期结构。 | 已修复。 |
+| Blind 8：向量输入和超时不预检 | low：旧脚本会在执行中失败但定位较晚；现先校验输入及超时区间。 | 已修复。 |
+| Blind 9：暂存名碰撞 | low：纳秒时间戳与 PID 碰撞时创建会明确失败且不覆盖；重试不改变当前用户结果。 | 保持失败关闭。 |
+| Edge 1：已改二进制被重新生成覆盖 | false：二进制放行仅用于只读 `open_handoff`；`generate_prepared` 仍经不放行二进制的校验，拒绝替换。 | 无需改动。 |
+| Edge 2：报告路径经链接写回包内 | medium：原字面路径判断不解析链接；现拒绝已有报告和路径祖先重解析点，改将失败报告写到系统临时目录。 | 已修复。 |
+| Gap 1：超时分支未验证 | medium：原测试没有触发 `taskkill`；现以大量合法输入和极短上限复验，检查非零退出和失败报告。 | 已补测试。 |

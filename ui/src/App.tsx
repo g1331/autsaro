@@ -402,6 +402,8 @@ export default function App() {
   const [generated, setGenerated] = useState<GenerateResult | null>(null);
   const [generationPreview, setGenerationPreview] = useState<GenerationPreview | null>(null);
   const [generationPreviewPath, setGenerationPreviewPath] = useState('');
+  const [generationKind, setGenerationKind] = useState<'project' | 'handoff'>('project');
+  const [handoffGenerated, setHandoffGenerated] = useState(false);
   const [built, setBuilt] = useState<BuildResult | null>(null);
   const [virtualResult, setVirtualResult] = useState<VirtualResult | null>(null);
   const [virtualKind, setVirtualKind] = useState<'signal' | 'diagnostic' | null>(null);
@@ -625,6 +627,15 @@ export default function App() {
       () => invoke<WorkspaceView>('open_project', { paths: importPaths }),
       applyProject,
     );
+  }
+  function importHandoff() {
+    void chooseDirectory((directory) => {
+      void run(
+        '导入交付包',
+        () => invoke<WorkspaceView>('open_handoff_project', { directory }),
+        applyProject,
+      );
+    });
   }
   function addFrame() {
     let values: FrameChanges;
@@ -857,7 +868,7 @@ export default function App() {
       'validate',
     );
   }
-  function generateProject() {
+  function generateProject(handoff = false) {
     if (workspace?.dirty) {
       setNotice({ tone: 'error', text: '请先保存配置，再生成工程' });
       return;
@@ -868,9 +879,14 @@ export default function App() {
     }
     void chooseDirectory((directory) => {
       void run(
-        '预览生成',
-        () => invoke<GenerationPreview>('preview_generate_project', { outputDirectory: directory }),
+        handoff ? '预览可重建交付包' : '预览生成',
+        () =>
+          invoke<GenerationPreview>(
+            handoff ? 'preview_handoff_project' : 'preview_generate_project',
+            { outputDirectory: directory },
+          ),
         (preview) => {
+          setGenerationKind(handoff ? 'handoff' : 'project');
           setGenerationPreview(preview);
           setGenerationPreviewPath(
             preview.files.find((file) => file.status === 'changed')?.path ??
@@ -893,10 +909,13 @@ export default function App() {
     void run(
       '生成',
       () =>
-        invoke<GenerateResult>('generate_project', {
-          outputDirectory: preview.outputDirectory,
-          revision: preview.revision,
-        }).catch((error) => {
+        invoke<GenerateResult>(
+          generationKind === 'handoff' ? 'generate_handoff_project' : 'generate_project',
+          {
+            outputDirectory: preview.outputDirectory,
+            revision: preview.revision,
+          },
+        ).catch((error) => {
           setGenerationPreview(null);
           throw error;
         }),
@@ -913,6 +932,7 @@ export default function App() {
           setNotice({ tone: 'error', text: '生成未通过，请查看诊断；不能视为工程已构建' });
         } else {
           setGenerated(result);
+          setHandoffGenerated(generationKind === 'handoff');
           setBuilt(null);
           setVirtualResult(null);
           markStage('generate', 'done', result.outputDirectory);
@@ -1118,6 +1138,14 @@ export default function App() {
                       >
                         <FileInput aria-hidden="true" size={16} />
                         选择多份 .arxml 文件
+                      </button>
+                      <button
+                        type="button"
+                        className="outline-button"
+                        onClick={importHandoff}
+                        disabled={disabled}
+                      >
+                        导入可重建主机交付包
                       </button>
                       <div className="import-list" aria-live="polite">
                         {importPaths.length ? (
@@ -2128,7 +2156,7 @@ export default function App() {
                       <button
                         type="button"
                         className="primary-button compact"
-                        onClick={generateProject}
+                        onClick={() => generateProject()}
                         disabled={
                           disabled ||
                           unapplied ||
@@ -2138,6 +2166,19 @@ export default function App() {
                       >
                         <Boxes aria-hidden="true" size={15} />
                         选择目录并预览工程
+                      </button>
+                      <button
+                        type="button"
+                        className="outline-button"
+                        onClick={() => generateProject(true)}
+                        disabled={
+                          disabled ||
+                          unapplied ||
+                          workspace.dirty ||
+                          stages.validate.state !== 'done'
+                        }
+                      >
+                        导出可重建主机交付包
                       </button>
                       <button
                         type="button"
@@ -2156,7 +2197,11 @@ export default function App() {
                         <div className="result-section">
                           <h3>生成工程位置</h3>
                           <p className="mono path-text">{generated.outputDirectory}</p>
-                          <p>交付目录内的 README.md 与 build.ps1 提供独立构建和启动方法。</p>
+                          <p>
+                            {handoffGenerated
+                              ? '交付包含源 ARXML 与 handoff.json；README.md 列明重新导入依赖。生成成功不代表主机行为已验证。'
+                              : '交付目录内的 README.md 与 build.ps1 提供独立构建和启动方法；源 ARXML 未随普通工程交付。'}
+                          </p>
                           <details>
                             <summary>工程文件 · {generated.files.length}</summary>
                             <ul>
@@ -2602,7 +2647,9 @@ export default function App() {
             <header>
               <div>
                 <p className="eyebrow">C99 GENERATION PREVIEW</p>
-                <h2 id="generation-preview-title">确认生成工程</h2>
+                <h2 id="generation-preview-title">
+                  {generationKind === 'handoff' ? '确认导出可重建主机交付包' : '确认生成工程'}
+                </h2>
                 <p>预览不写入输出目录。确认后生成完整工程；原有工程将保留在备份目录。</p>
               </div>
               <button
@@ -2705,7 +2752,7 @@ export default function App() {
                   onClick={confirmGenerate}
                   disabled={Boolean(busy)}
                 >
-                  确认生成
+                  {generationKind === 'handoff' ? '确认导出' : '确认生成'}
                 </button>
               </div>
             </footer>

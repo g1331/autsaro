@@ -2,7 +2,8 @@
 title: Reopen delivered inputs and reproduce host C99 project
 type: feature
 created: '2026-09-28'
-status: ready-for-dev
+status: done
+baseline_commit: 14efd7abdf979354737a1d655d19fd4d795d7683
 context:
   - _bmad-output/planning-artifacts/prd.md
   - _bmad-output/planning-artifacts/architecture.md
@@ -32,3 +33,15 @@ context:
 ## Verification
 
 在独立临时目录运行完整导入→再生成→文件集合及内容比较→GCC 构建；加入缺文件、篡改和跨文件断链反例。运行 `cargo test --manifest-path core/Cargo.toml` 和增量质量门；没有隔离桌面会话时只验证无头路径，界面声明另标未验证。
+
+## Code Map
+
+- `core/src/generator.rs`：校验交付清单、映射和版本后重新打开所有输入。
+- `src-tauri/src/lib.rs`、`ui/src/App.tsx`：从交付目录打开并显示当前剖面结果。
+- `core/tests/end_to_end.rs`：搬迁后的重新导入、等价源码比较、构建与失败反例。
+
+## Tasks & Acceptance
+
+- [x] 在 `core/src/generator.rs` 实现只读交付包导入；Given 缺失、篡改或不安全路径，When 接收者打开交付目录，Then 拒绝且原输入不变。
+- [x] 在 `src-tauri/src/lib.rs`、`ui/src/App.tsx` 提供交付目录入口；Given 同版工作台与合法 XSD，When 接收者选择目录，Then 导入已列出的全部 ARXML。
+- [x] 在生成说明与 `core/tests/end_to_end.rs` 证明搬迁后再生成、C99 内容相同并能链接；Given 仅生成或构建，Then 不宣称行为已验证。

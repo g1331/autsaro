@@ -51,6 +51,17 @@ fn open_project(
 }
 
 #[tauri::command]
+fn open_handoff_project(
+    state: State<'_, Arc<AppState>>,
+    directory: String,
+) -> Result<WorkspaceView, String> {
+    let workspace = autosar_config_core::generator::open_handoff(Path::new(&directory), archive())?;
+    let view = workspace.view();
+    *state.workspace.lock().map_err(|_| "工作区状态锁损坏")? = Some(workspace);
+    Ok(view)
+}
+
+#[tauri::command]
 fn add_frame(
     state: State<'_, Arc<AppState>>,
     name: String,
@@ -155,6 +166,16 @@ fn preview_generate_project(
 }
 
 #[tauri::command]
+fn preview_handoff_project(
+    state: State<'_, Arc<AppState>>,
+    output_directory: String,
+) -> Result<GenerationPreview, String> {
+    with_workspace(&state, |workspace| {
+        autosar_config_core::generator::preview_handoff(workspace, Path::new(&output_directory))
+    })
+}
+
+#[tauri::command]
 fn generate_project(
     state: State<'_, Arc<AppState>>,
     output_directory: String,
@@ -165,6 +186,21 @@ fn generate_project(
             return Err("请先保存 ARXML，再生成目标工程".into());
         }
         autosar_config_core::generator::generate_previewed(
+            workspace,
+            Path::new(&output_directory),
+            &revision,
+        )
+    })
+}
+
+#[tauri::command]
+fn generate_handoff_project(
+    state: State<'_, Arc<AppState>>,
+    output_directory: String,
+    revision: String,
+) -> Result<GenerationReport, String> {
+    with_workspace(&state, |workspace| {
+        autosar_config_core::generator::generate_handoff_previewed(
             workspace,
             Path::new(&output_directory),
             &revision,
@@ -212,6 +248,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             create_project,
             open_project,
+            open_handoff_project,
             add_frame,
             add_signal,
             update_frame,
@@ -225,6 +262,8 @@ pub fn run() {
             validate_project,
             preview_generate_project,
             generate_project,
+            preview_handoff_project,
+            generate_handoff_project,
             build_project,
             run_virtual,
             run_diagnostic
