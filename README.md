@@ -50,6 +50,21 @@ cargo test --manifest-path core/Cargo.toml
 cargo build --manifest-path src-tauri/Cargo.toml
 ```
 
+## 代码质量检查
+
+首次在本机安装固定版本的 C 格式器（虚拟环境被 Git 忽略）；UI 的 Prettier 由 `npm ci` 按锁文件安装：
+
+```powershell
+python -m venv .quality-venv
+.\.quality-venv\Scripts\python.exe -m pip install -r scripts/requirements-quality.txt
+npm ci --prefix ui
+python scripts/workflow.py verify --scope all
+```
+
+完整验证现在包含 `python scripts/quality.py`：检查仓库源码的 UTF-8、末尾换行、空白和 Python 语法，对**相对当前任务基线新改的行**分别用 rustfmt、clang-format 和 Prettier 检查格式，并用 GCC 严格 C99 模式检查主机运行时源码和独立头文件的语法；随后执行 UI 严格类型构建、核心测试、桌面构建及 Rust Clippy 的 correctness/suspicious 检查。
+
+进行中的任务以记录的 `base_commit` 为格式基线；没有进行中任务时，未提交的改动对比 `HEAD`，干净工作区复核上一提交时对比 `HEAD^`。独立核对更长的一组已提交改动可显式指定 `python scripts/quality.py --base <基线提交>`。`--all-format` 可查看未迁移的旧格式差异，不作为当前通过门槛。修改旧文件无需顺带全文件重排，但新改行须符合对应格式器。格式、编译与 Clippy 通过也不等于 MISRA C:2012、全部 AUTOSAR 模块义务或实机目标通过，相关证据仍按[验收决定](.scratch/autosar-platform/issues/07-assurance-gates.md)分别建立。
+
 调试桌面程序时，先在一个终端运行 `npm run dev --prefix ui`（端口 `127.0.0.1:1420`），另一个终端运行 `src-tauri/target/debug/autosar-config-desktop.exe`。当前验证的是源码目录中的本地调试程序；生成器从仓库 `runtime/` 复制目标源码，桌面程序从上述本地路径取得 XSD。没有可脱离源码目录使用的安装包。
 
 ## 使用顺序

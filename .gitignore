@@ -11,6 +11,7 @@ docs/official/**/*.xsd
 src-tauri/gen/
 **/*.tsbuildinfo
 **/__pycache__/
+.quality-venv/
 .scratch/autosar-platform/research/*.tmp.zip
 
 # Per-machine CodeGraph index; initialize locally with `codegraph init`.

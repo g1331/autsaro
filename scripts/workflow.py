@@ -327,16 +327,22 @@ def print_status(state: dict, feedback: dict) -> None:
 
 def verify(scope: str) -> int:
     npm = "npm.cmd" if sys.platform == "win32" else "npm"
+    clippy = ["-A", "clippy::all", "-D", "clippy::correctness", "-D", "clippy::suspicious"]
     commands = {
-        "core": [["cargo", "test", "--manifest-path", "core/Cargo.toml"]],
+        "core": [["cargo", "test", "--manifest-path", "core/Cargo.toml"],
+                 ["cargo", "clippy", "--manifest-path", "core/Cargo.toml", "--all-targets", "--", *clippy]],
         "ui": [[npm, "ci", "--prefix", "ui"], [npm, "run", "build", "--prefix", "ui"]],
-        "desktop": [["cargo", "build", "--manifest-path", "src-tauri/Cargo.toml"]],
+        "desktop": [["cargo", "build", "--manifest-path", "src-tauri/Cargo.toml"],
+                    ["cargo", "clippy", "--manifest-path", "src-tauri/Cargo.toml", "--all-targets", "--", *clippy]],
         "all": [
-            [sys.executable, "-B", "-m", "unittest", "discover", "-s", "scripts", "-p", "test_workflow.py"],
+            [sys.executable, "-B", "-m", "unittest", "discover", "-s", "scripts", "-p", "test_*.py"],
             [npm, "ci", "--prefix", "ui"],
+            [sys.executable, "-B", "scripts/quality.py"],
             [npm, "run", "build", "--prefix", "ui"],
             ["cargo", "test", "--manifest-path", "core/Cargo.toml"],
+            ["cargo", "clippy", "--manifest-path", "core/Cargo.toml", "--all-targets", "--", *clippy],
             ["cargo", "build", "--manifest-path", "src-tauri/Cargo.toml"],
+            ["cargo", "clippy", "--manifest-path", "src-tauri/Cargo.toml", "--all-targets", "--", *clippy],
         ],
     }
     for command in [["git", "diff", "--check"], ["git", "diff", "--cached", "--check"], *commands[scope]]:
