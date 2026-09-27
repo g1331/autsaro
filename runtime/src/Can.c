@@ -1,6 +1,7 @@
 #include "Can.h"
 #include "Can_HostLock.h"
 #include "CanIf.h"
+#include "SchM_Can.h"
 #include <stddef.h>
 
 static CanMode controller_mode;
@@ -13,6 +14,13 @@ static uint32_t tx_id;
 static uint8_t tx_length;
 static uint8_t tx_payload[8];
 static uint32_t interrupt_disable_count;
+static uint8_t rx_pending;
+static uint8_t rx_processing;
+static uint32_t rx_id;
+static uint8_t rx_length;
+static uint8_t rx_payload[8];
+static uint64_t rx_time_ms;
+static EcuStatus rx_result;
 
 void Can_Init(const Can_ConfigType *config) {
     Can_Lock();
@@ -28,6 +36,8 @@ void Can_Init(const Can_ConfigType *config) {
     bus_off = 0u;
     tx_pending = 0u;
     tx_in_flight = 0u;
+    rx_pending = 0u;
+    rx_processing = 0u;
     interrupt_disable_count = 0u;
     Can_Unlock();
 }
@@ -41,6 +51,8 @@ void Can_DeInit(void) {
         bus_off = 0u;
         tx_pending = 0u;
         tx_in_flight = 0u;
+        rx_pending = 0u;
+        rx_processing = 0u;
         interrupt_disable_count = 0u;
     }
     Can_Unlock();
@@ -284,9 +296,39 @@ EcuStatus Can_Inject(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t n
         result = ECU_ERR_CONTROLLER;
     } else if (data == NULL) {
         result = ECU_ERR_CONFIG;
+    } else if (rx_processing != 0u) {
+        result = ECU_ERR_CAN_BUSY;
     } else {
-        result = CanIf_HostRxIndication(id, dlc, data, now_ms);
+        size_t i;
+        rx_id = id;
+        rx_length = dlc;
+        rx_time_ms = now_ms;
+        for (i = 0u; i < (size_t)dlc; ++i) {
+            rx_payload[i] = data[i];
+        }
+        rx_pending = 1u;
+        Can_MainFunction_Read();
+        result = rx_result;
     }
     Can_Unlock();
     return result;
+}
+
+void Can_MainFunction_Read(void) {
+    Can_Lock();
+    if ((rx_processing == 0u) && (rx_pending != 0u)) {
+        uint32_t id = rx_id;
+        uint8_t length = rx_length;
+        uint8_t payload[8];
+        uint64_t now_ms = rx_time_ms;
+        size_t i;
+        for (i = 0u; i < (size_t)length; ++i) {
+            payload[i] = rx_payload[i];
+        }
+        rx_pending = 0u;
+        rx_processing = 1u;
+        rx_result = CanIf_HostRxIndication(id, length, payload, now_ms);
+        rx_processing = 0u;
+    }
+    Can_Unlock();
 }

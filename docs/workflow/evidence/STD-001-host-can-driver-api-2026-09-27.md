@@ -68,3 +68,11 @@ Dcm 质量整改按已查本地 R24-11 Dcm SWS 的请求、会话和确认顺序
 ## 未闭合的标准义务
 
 `Can_DeInit`、`Can_SetBaudrate`、中断控制、错误状态及其他适用服务/回调、完整 ECUC/BSWMD、MemMap 与逐规则 MISRA 处理尚未闭合。当前 `Can_ConfigType` 仍携带主机输出回调，公开 `Can_Write` 只接受到单槽主机缓存、需由主机专用入口排空；这不是第三方 CanIf/CAN ABI 或真实 MCU 证据。任务保持 `active`，HOST-CAN-01 仍为 `documented_behavior`，所有六道证据门维持原状态；后续须补标准工件、独立运行和新 Agent 复核。
+
+## R24-11 接收轮询入口与重入修复
+
+在修改前核对本地 Can Driver SWS 页 43–44、82 的 `SWS_Can_00396`、`SWS_Can_00012`、`SWS_Can_00226`、`SWS_Can_00108`，以及生成配置 `CanRxProcessing=POLLING`。新增随生成工程交付的 `SchM_Can.h` 和 `Can_MainFunction_Read`。主机 `Can_Inject` 把接收帧复制入单槽缓冲，再触发一次轮询；轮询入口复制帧后通过 `CanIf_HostRxIndication` 调用标准 `CanIf_RxIndication`。主机入口仍同步完成注入，以维持既有逐行协议的错误返回；该主机调度方式不是独立周期调度或硬件中断证据。
+
+独立只读复核指出，初稿在接收回调重入时可能再次执行 `Can_MainFunction_Read`，违反 `SWS_Can_00012`。修复后用 `rx_processing` 防止主函数自重入，并以 `ECU_ERR_CAN_BUSY` 拒绝回调内再次注入；C99 harness 验证这两种嵌套调用均不产生第二次回调且外层结果正确。该 Agent 复审确认自重入问题已关闭。首轮关于共享 `rx_result` 会覆盖外层返回值的判断，在修复后的赋值顺序与拒绝路径下不成立。
+
+修复后 `python scripts/workflow.py verify --scope all` 通过：脚本 15/15、核心单元 3/3、端到端 51/51、UI lint/构建、增量 Clippy、桌面构建。新生成工程 `<temporary-dir>/generated` 的 `files.list` 含 `SchM_Can.h` 和 `Can.c`。以此工程运行全量基线，格式、Python、UI、全告警 Clippy 与 Doxygen 通过；BSW 部分 MISRA 25、RTE 9、生成 C 7 条，七项规范义务门仍 `not_run`，因此基线未通过。下一标准链按 Can Driver SWS 页 40、81 的 `swPduHandle`、Tx 轮询与 `CanIf_TxConfirmation` 要求处理；当前主机 `Can_Transmit` 仍把句柄固定为 0，不能当作已完成的标准确认路径。

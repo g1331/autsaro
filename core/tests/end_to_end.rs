@@ -19,6 +19,7 @@ fn standard_can_host_entry_points_reject_invalid_requests_and_send_valid_frame()
         &harness,
 r#"#include "Can.h"
 #include "CanIf.h"
+#include "SchM_Can.h"
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -26,6 +27,8 @@ r#"#include "Can.h"
 #endif
 static unsigned sent;
 static unsigned received;
+static unsigned probe_rx_reentry;
+static EcuStatus nested_rx_result;
 static unsigned fail_output;
 static unsigned enqueue_on_emit;
 static int valid_result;
@@ -60,6 +63,11 @@ EcuStatus CanIf_HostRxIndication(uint32_t id, uint8_t dlc, const uint8_t data[8]
     if (Can_GetControllerMode(0u, &state) != E_OK || state != CAN_CS_STARTED) return ECU_ERR_CONTROLLER;
     if (id != 0x321u || dlc != 2u || data[0] != 0x12u || now_ms != 10u) return ECU_ERR_IO;
     ++received;
+    if (probe_rx_reentry != 0u) {
+        probe_rx_reentry = 0u;
+        Can_MainFunction_Read();
+        nested_rx_result = Can_Inject(id, dlc, data, now_ms);
+    }
     return ECU_OK;
 }
 static void send_valid_frames(void) {
@@ -134,7 +142,10 @@ int main(void) {
     if (Can_Write(0u, &pdu) != CAN_BUSY || sent != 0u) return 28;
     if (Can_HostFlush() != ECU_OK || sent != 1u) return 29;
     if (Can_Inject(0x321u, 2u, bytes, 10u) != ECU_OK || received != 1u) return 10;
-    if (Can_Inject(0x321u, 2u, NULL, 10u) != ECU_ERR_CONFIG || received != 1u) return 12;
+    probe_rx_reentry = 1u;
+    if (Can_Inject(0x321u, 2u, bytes, 10u) != ECU_OK || received != 2u ||
+        nested_rx_result != ECU_ERR_CAN_BUSY) return 57;
+    if (Can_Inject(0x321u, 2u, NULL, 10u) != ECU_ERR_CONFIG || received != 2u) return 12;
     fail_output = 1u;
     if (Can_Transmit(0x321u, 2u, bytes) != ECU_ERR_IO || sent != 1u) return 20;
     fail_output = 0u;
