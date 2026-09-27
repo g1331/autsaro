@@ -14,6 +14,12 @@
 - `python scripts/workflow.py verify --scope baseline --generated-dir <上述生成目录>`：全文件格式、Python Ruff、UI ESLint、两套全告警 Clippy 和 C API Doxygen 通过；BSW/RTE/生成 C 部分 MISRA 与逐能力规范证据分区仍失败。Can.c 整理后单独对 BSW 文件集重跑 Cppcheck，报告 327 条 MISRA 发现；其中新 Can.c 的多出口与优先级发现已消除。此扫描只覆盖部分规则，不证明 MISRA 符合。
 - `python scripts/workflow.py check`：通过。
 
+## 独立复核与修复
+
+新的只读 Agent 对本切片检查了本地 Can Driver SWS 与实现，指出 bus-off 后标准状态查询错误、`Can_Write` 经共享 `last_host_status` 产生数据竞争、以及重复控制器状态转换未拒绝。随后核对本地 R24-11 Can Driver PDF 页 34–37 的状态转换与 bus-off 约束，修复这三项；主机包装层现在从每次调用的返回值取得错误，状态与发送入口由同一锁保护。C99 harness 增加重复转换、bus-off 查询/拒绝/恢复和主机输出失败验证。复核 Agent 尚未复审修复后的提交。
+
+修复后重跑 `python scripts/workflow.py verify --scope all`：脚本 15/15、核心单元 3/3、端到端 50/50、UI lint/构建、增量质量、核心与桌面 Clippy、桌面构建均通过。重新生成的代表性 ECU 位于 `<temporary-dir>/generated`；以该工程重跑全量基线，格式/Python/UI/全告警 Clippy/Doxygen 均通过，BSW 部分 MISRA 334 条、RTE 9 条、生成 C 7 条及七项能力的规范义务门仍失败。该扫描会同时解析 Windows 与 POSIX 锁分支并报告部分系统 API 缺声明；没有因此删掉有效的并发保护或放宽扫描。
+
 ## 未闭合的标准义务
 
 `Can_DeInit`、`Can_SetBaudrate`、中断控制、错误状态及其他适用服务/回调、线程安全的 `Can_Write`、完整 ECUC/BSWMD、MemMap 与逐规则 MISRA 处理尚未闭合。当前 `Can_ConfigType` 仍携带主机输出回调，`Can_Write` 在单线程虚拟目标同步执行；这不是第三方 CanIf/CAN ABI 或真实 MCU 证据。任务保持 `active`，HOST-CAN-01 仍为 `documented_behavior`，所有六道证据门维持原状态；后续须补标准工件、独立运行和新 Agent 复核。

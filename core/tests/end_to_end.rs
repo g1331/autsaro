@@ -21,8 +21,10 @@ fn standard_can_host_entry_points_reject_invalid_requests_and_send_valid_frame()
 #include "CanIf.h"
 static unsigned sent;
 static unsigned received;
+static unsigned fail_output;
 static EcuStatus emit(uint32_t id, uint8_t dlc, const uint8_t data[8]) {
     if (id != 0x321u || dlc != 2u || data[0] != 0x12u || data[1] != 0x34u) return ECU_ERR_IO;
+    if (fail_output != 0u) return ECU_ERR_IO;
     ++sent;
     return ECU_OK;
 }
@@ -41,8 +43,10 @@ int main(void) {
     Can_Init(&config);
     if (Can_GetControllerMode(0u, &state) != E_OK || state != CAN_CS_STOPPED) return 2;
     if (Can_Write(0u, &pdu) != E_NOT_OK) return 3;
+    if (Can_SetControllerMode(0u, CAN_CS_STOPPED) != E_NOT_OK) return 13;
     if (Can_SetControllerMode(1u, CAN_CS_STARTED) != E_NOT_OK) return 4;
     if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_OK) return 5;
+    if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_NOT_OK) return 14;
     if (Can_Write(1u, &pdu) != E_NOT_OK || Can_Write(0u, NULL) != E_NOT_OK) return 6;
     pdu.id = 0x800u;
     if (Can_Write(0u, &pdu) != E_NOT_OK) return 7;
@@ -53,8 +57,17 @@ int main(void) {
     if (Can_Write(0u, &pdu) != E_OK || sent != 1u) return 9;
     if (Can_Inject(0x321u, 2u, bytes, 10u) != ECU_OK || received != 1u) return 10;
     if (Can_Inject(0x321u, 2u, NULL, 10u) != ECU_ERR_CONFIG || received != 1u) return 12;
+    fail_output = 1u;
+    if (Can_Transmit(0x321u, 2u, bytes) != ECU_ERR_IO || sent != 1u) return 20;
+    fail_output = 0u;
     Can_SetMode(CAN_BUS_OFF);
+    if (Can_GetControllerMode(0u, &state) != E_OK || state != CAN_CS_STOPPED) return 15;
     if (Can_Transmit(0x321u, 2u, bytes) != ECU_ERR_CONTROLLER) return 11;
+    if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_NOT_OK) return 16;
+    Can_SetMode(CAN_STOPPED);
+    if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_OK) return 17;
+    if (Can_SetControllerMode(0u, CAN_CS_STOPPED) != E_OK) return 18;
+    if (Can_SetControllerMode(0u, CAN_CS_STOPPED) != E_NOT_OK) return 19;
     return 0;
 }
 "#,
