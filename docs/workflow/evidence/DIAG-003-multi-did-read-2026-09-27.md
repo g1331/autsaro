@@ -2,7 +2,7 @@
 
 ## 组合、来源与输入
 
-基线 `3410e7cbbd19`，分支 `feature/DIAG-003-multi-did-read`。CP/FO R24-11、无变体、Windows 主机虚拟 ECU；Rust/Cargo 1.98.1 MSVC、MSYS2 MinGW GCC 16.1.0、Node 24.19.0/npm 11.17.0、Python 3.12.9。依据 [官方 R24-11 Dcm SWS](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_DiagnosticCommunicationManager.pdf) §7.4.2.6，`SWS_Dcm_00253`、`SWS_Dcm_00438`、`SWS_Dcm_00434`；`DcmDspMaxDidToRead` `[ECUC_Dcm_00638]` 为可选参数，本主机固定配置未设置。响应 256 字节上限及超长返回 NRC 0x14 是本主机传输容量处理，不据此证明完整第三方 Dcm 接口。项目质量门见 `.scratch/autosar-platform/issues/07-assurance-gates.md`。
+基线 `3410e7cbbd19`，分支 `feature/DIAG-003-multi-did-read`。CP/FO R24-11、无变体、Windows 主机虚拟 ECU；Rust/Cargo 1.98.1 MSVC、MSYS2 MinGW GCC 16.1.0、Node 24.19.0/npm 11.17.0、Python 3.12.9。依据 [官方 R24-11 Dcm SWS](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_DiagnosticCommunicationManager.pdf) §7.4.2.6，`SWS_Dcm_00253`、`SWS_Dcm_00438`、`SWS_Dcm_00434`；`DcmDspMaxDidToRead` `[ECUC_Dcm_00638]` 为可选参数，本主机固定配置未设置。响应 256 字节上限及超长返回 NRC 0x14 是本主机传输容量处理，不据此证明完整第三方 Dcm 接口。项目质量门见 `docs/assurance/acceptance-policy.md`。
 
 `core/tests/end_to_end.rs::multiple_dids_keep_request_order_and_skip_unavailable_values` 新建 Tx 帧与一个 32-bit 初值为 42 的信号，配置 DID `0x1234`、请求/响应 CAN ID `0x700/0x708`、S3=5000 ms；保存、重开、XSD/语义验证、生成独立工程并编译，确认源 ARXML 字节未变。生成产物沿用现有 `files.list`/`files.sha256` 闭包；本卡未新增生成文件或 ECUC 项。独立预期从上述固定输入和 UDS/CanTp 报文结构写出，没有从生成器输出提取期望字节。
 

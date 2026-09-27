@@ -4,7 +4,7 @@
 
 ## 范围与依据
 
-CP/FO R24-11、无配置变体、Windows 主机虚拟 ECU、MinGW GCC；一虚拟 Can 控制器、标准 11 位 Classical CAN、一个 Tx 硬件句柄、DLC 1–8。保留既有双 ECU 信号闭环的可观察报文和拒绝路径，使生成工程的 CanIf→Can 发送链实际使用标准 Can Driver 类型与入口。来源为本地 R24-11 `AUTOSAR_CP_SWS_CANDriver.pdf`：PDF 页 52–55 的 `Can_ConfigType`、`Can_PduType`、`Can_HwHandleType`、控制器状态类型，页 57 的 `SWS_Can_00223`（`Can_Init`），页 61 的 `SWS_Can_00230`（`Can_SetControllerMode`），页 67 的 `SWS_Can_91014`（`Can_GetControllerMode`），页 76 的 `SWS_Can_00233`（`Can_Write`）。通用义务依本地 `AUTOSAR_CP_SWS_BSWGeneral.pdf` 页 22 `SWS_BSW_00006`、页 37 `SWS_BSW_00115` 及仓库 [验收决定](../../../.scratch/autosar-platform/issues/07-assurance-gates.md)。实现前逐项核对这些条款的适用条件与类型依赖。
+CP/FO R24-11、无配置变体、Windows 主机虚拟 ECU、MinGW GCC；一虚拟 Can 控制器、标准 11 位 Classical CAN、一个 Tx 硬件句柄、DLC 1–8。保留既有双 ECU 信号闭环的可观察报文和拒绝路径，使生成工程的 CanIf→Can 发送链实际使用标准 Can Driver 类型与入口。来源为本地 R24-11 `AUTOSAR_CP_SWS_CANDriver.pdf`：PDF 页 52–55 的 `Can_ConfigType`、`Can_PduType`、`Can_HwHandleType`、控制器状态类型，页 57 的 `SWS_Can_00223`（`Can_Init`），页 61 的 `SWS_Can_00230`（`Can_SetControllerMode`），页 67 的 `SWS_Can_91014`（`Can_GetControllerMode`），页 76 的 `SWS_Can_00233`（`Can_Write`）。通用义务依本地 `AUTOSAR_CP_SWS_BSWGeneral.pdf` 页 22 `SWS_BSW_00006`、页 37 `SWS_BSW_00115` 及仓库 [验收决定](../../assurance/acceptance-policy.md)。实现前逐项核对这些条款的适用条件与类型依赖。
 
 ## 可观察结果与拒绝
 

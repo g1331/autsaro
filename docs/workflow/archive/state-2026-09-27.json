@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "stage": "CP/FO R24-11 主机 CAN 与有界 DoCAN 的证据基线",
-  "map": ".scratch/autosar-platform/map.md",
+  "map": "docs/project/archive/autosar-platform/map.md",
   "capabilities": [
     {
       "id": "HOST-CAN-01",

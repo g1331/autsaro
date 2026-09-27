@@ -2,7 +2,7 @@
 
 ## 范围与依据
 
-- 基线 `cdff6ebe52d5`；实施分支 `feature/BUILD-001-arxml-save-preview`。输入是 CP/FO R24-11 `AUTOSAR_00053.xsd` 有效的两份 ARXML，无选定变体；目标是 Windows 原生 Tauri 工作台与本机文件。预览是工作台行为，不属于某个 BSW 模块的 SWS 服务；本卡不新增 ECUC 配置节点或修改生成 C99 语义。输入保存约束沿用[项目工件决策](../../../.scratch/autosar-platform/issues/09-project-artifacts.md)。
+- 基线 `cdff6ebe52d5`；实施分支 `feature/BUILD-001-arxml-save-preview`。输入是 CP/FO R24-11 `AUTOSAR_00053.xsd` 有效的两份 ARXML，无选定变体；目标是 Windows 原生 Tauri 工作台与本机文件。预览是工作台行为，不属于某个 BSW 模块的 SWS 服务；本卡不新增 ECUC 配置节点或修改生成 C99 语义。输入保存约束沿用[项目工件决策](../../project/archive/autosar-platform/issues/09-project-artifacts.md)。
 - 核心从 `Workspace` 已保存文本与待写文本构建只读预览，列出全部来源文件。修改项携带完整原文与拟保存文本，未修改项只标识路径和状态。确认保存带上预览修订摘要；后端复核当前配置，仍沿原保存路径再次校验 XSD、引用与全部来源字节，且保留暂存、安装和回滚机制。
 - UI 按 XML 相邻标签分行显示差异范围，以便阅读压缩成一行的 ARXML；可展开查看未重排的完整前后文本。重排仅在展示层，不参与写入。界面截图：[双文件差异预览](BUILD-001-save-preview-2026-09-26.png)。截图中的 `802→803` 是另一次只读预览，随后取消；下面的落盘证据来自 `801→802`。
 

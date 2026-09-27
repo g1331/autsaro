@@ -6,7 +6,7 @@
 
 在桌面工作区导入或创建受支持的主机 CAN 项目，修改一条帧或信号后，保存前能看到本次拟改动的 ARXML 文件、每份文件的原内容与拟保存内容差异，以及哪些来源文件保持不变。用户确认后保存，关闭并重开仍得到所预览的配置。预览不写磁盘，也不自动替用户确认保存。
 
-这是[工作区可追溯旅程](../../../.scratch/autosar-platform/issues/10-configuration-workspace.md)和[多文件保存不变量](../../../.scratch/autosar-platform/issues/09-project-artifacts.md)的一个有界切片；本卡只预览 ARXML 保存差异，生成 C 工程的差异和独立离线交接另立任务。保留项、原始文件边界与未修改文件的字节不变约束继续适用。
+这是[工作区可追溯旅程](../../project/archive/autosar-platform/issues/10-configuration-workspace.md)和[多文件保存不变量](../../project/archive/autosar-platform/issues/09-project-artifacts.md)的一个有界切片；本卡只预览 ARXML 保存差异，生成 C 工程的差异和独立离线交接另立任务。保留项、原始文件边界与未修改文件的字节不变约束继续适用。
 
 输入按 CP/FO R24-11 `AUTOSAR_00053.xsd` 校验；使用现有主机 CAN 配置子集，不新增 ECUC/MOD 对象。预览和确认属于桌面工具保存流程，不适用 BSW SWS 服务条款；变体影响生成时仍按现有规则拒绝生成。目标是 Windows 原生 Tauri 工作台和本机 ARXML 文件，拒绝无法安全编辑的输入、失效预览与外部来源变更。
 

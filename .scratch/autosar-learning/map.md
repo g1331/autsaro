@@ -9,7 +9,7 @@ Status: open
 
 ## Notes
 
-- 关联主产品路线：[AUTOSAR Classic 平台决策地图](../autosar-platform/map.md)与[Classic 阶段扩展路线](../autosar-platform/issues/08-expansion-route.md)。现有工作区是单套配置编辑器；多文件 ARXML 是配置项目的唯一权威，保存、校验、生成、构建、虚拟运行分别呈现，主机证据不代表实机或 AUTOSAR/ISO 认证。
+- 关联主产品路线：[AUTOSAR Classic 平台决策地图](../../docs/project/archive/autosar-platform/map.md)与[Classic 阶段扩展路线](../../docs/project/archive/autosar-platform/issues/08-expansion-route.md)。现有工作区是单套配置编辑器；多文件 ARXML 是配置项目的唯一权威，保存、校验、生成、构建、虚拟运行分别呈现，主机证据不代表实机或 AUTOSAR/ISO 认证。
 - 已定范围：学习者可从零学习 Classic（具备基本编程能力）；首批操作关卡只使用当前经过验证的 11-bit CAN 信号与受限 DoCAN。基础概念可介绍其余模块的位置，但不得把未实现能力展示为可运行成果。
 - 已定体验：独立学习页作为课程／关卡入口；导览由学习页进入真实工作区高亮实际控件，再返回学习页，不强制首次使用向导，也不建立第二套编辑器。
 - 已定练习：只读内置模板复制为独立的真实 ARXML 教学工程；初、中、高级关卡可自行选择、跳过或重做，但“通过”必须依赖真实可观察的配置／构建／虚拟运行检查点，而非点击下一步。练习不修改已有项目。

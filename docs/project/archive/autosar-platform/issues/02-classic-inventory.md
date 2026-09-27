@@ -9,4 +9,4 @@ Status: resolved
 
 当时本地的 26 份 PDF 是 CP R20-11 选集（现已按要求删除），缺少大量模块 SWS、TPS、模型、Schema、方法论及配套 FO 工件。独立生成工具须按固定的 CP/FO 配对版本建立资料清单；实际项目还需 ECU Extract、软件组件描述、ECUC 定义和值、目标硬件及工具链资料，并按启用模块取得所引用的外部标准。原议题曾建议将 CP R20-11 + FO R20-11 作为当时资料的调查基线；首个正式支持版本已由后续议题改为 CP/FO R24-11，不能混用版本。所有模块是最终覆盖能力，不是某一个 ECU 必须启用的全集。
 
-逐类差距、官方清单及不确定性见[研究记录](../research/classic-inventory.md)。
+逐类差距、官方清单及不确定性见[研究记录](../../../../research/autosar-platform/classic-inventory.md)。

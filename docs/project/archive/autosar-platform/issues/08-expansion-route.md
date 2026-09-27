@@ -9,11 +9,11 @@ Blocked by: 04, 05, 06, 07, 10
 ## 讨论依据
 
 - [首个完整可验证范围](05-first-verified-profile.md)已固定 CP/FO R24-11、主机双虚拟 ECU CAN 信号闭环，诊断紧接其后；真实 NXP 板卡仅为候选，未取得实机支持证据。
-- [架构](06-generator-architecture.md)、[项目工件](09-project-artifacts.md)、[配置工作区](10-configuration-workspace.md)和[内部验收](07-assurance-gates.md)分别限定了共用配置模型、R24-11 多文件 ARXML 权威保存、唯一工程树主界面及每个受支持配置/平台组合的行为证据。
-- [R24-11 CP Release Overview §3](../../../docs/official/R24-11/CP/ReleaseDocumentation/AUTOSAR_CP_TR_ReleaseOverview.pdf)按 19 类列出发布规范，既有通信、内存、系统服务、MCAL、IO、诊断、加密、安全等模块规范，也有方法论、架构、模型与需求工件；“覆盖模块”不能误写成同一 ECU 需启用所有发布物。
+- [架构](06-generator-architecture.md)、[项目工件](09-project-artifacts.md)、[配置工作区](10-configuration-workspace.md)和[内部验收](../../../../assurance/acceptance-policy.md)分别限定了共用配置模型、R24-11 多文件 ARXML 权威保存、唯一工程树主界面及每个受支持配置/平台组合的行为证据。
+- [R24-11 CP Release Overview §3](../../../../official/R24-11/CP/ReleaseDocumentation/AUTOSAR_CP_TR_ReleaseOverview.pdf)按 19 类列出发布规范，既有通信、内存、系统服务、MCAL、IO、诊断、加密、安全等模块规范，也有方法论、架构、模型与需求工件；“覆盖模块”不能误写成同一 ECU 需启用所有发布物。
 - [AP 可行性](04-adaptive-feasibility.md)已决定目前不实施 AP；其 POSIX/C++、ARA 服务通信与部署环境不能视为 CP C99 工程的模板增量。当前也未决定对外发布日期。
 
-进一步依据：[R24-11 诊断链与故障存储研究](../research/diagnostics-expansion.md)、[R24-11 模块族与硬件边界研究](../research/classic-expansion-families.md)。前者指出 R24-11 CanTp 经 LSduR 与下层连接；Dcm 会话/活数据诊断不必伪造 Dem/NvM，而 DTC 故障存储及跨复位保持是不同承诺。后者区分 19 类发布物与可运行模块、虚拟行为证据与硬件证据。
+进一步依据：[R24-11 诊断链与故障存储研究](../../../../research/autosar-platform/diagnostics-expansion.md)、[R24-11 模块族与硬件边界研究](../../../../research/autosar-platform/classic-expansion-families.md)。前者指出 R24-11 CanTp 经 LSduR 与下层连接；Dcm 会话/活数据诊断不必伪造 Dem/NvM，而 DTC 故障存储及跨复位保持是不同承诺。后者区分 19 类发布物与可运行模块、虚拟行为证据与硬件证据。
 
 ## 已确认方向（待细化）
 
@@ -23,12 +23,12 @@ Blocked by: 04, 05, 06, 07, 10
 - “尽量完整”仅表示首个诊断增量的覆盖意向，不等于已在会话、易失 DTC、持久 DTC 三种范围中作出选择；须核查 Dcm 服务族、Dem、NvM、编程与外部 ISO 的依赖，再明确支持承诺和分阶段验收。
 - AP 至少在**多类 CP 能力稳定**后再单独决定是否实施，不要求等待 CP 全模块，也不与首个 CAN/诊断闭环并行开发。
 - CP/AP 共用架构的早期提案未经过 AP 文档完整核对，予以撤回；模型、FO 版本与运行/部署链的复用范围须以调查证据为准。
-- 核对[R24-11 诊断广度证据](../research/diagnostics-breadth.md)后，确定**先做深一个 CAN 诊断档案**：主机上真实 DoCAN 多帧、会话/数据、负响应与超时、Dem 故障、NvM 跨重启 DTC、受限访问及有状态变化的写入/例程，并按 SID/子功能和失败路径验收；DoIP、OBD、J1939、刷写/bootloader 后续各自成可验档案，不把一个档案表述成所有 UDS/ISO 已符合。
+- 核对[R24-11 诊断广度证据](../../../../research/autosar-platform/diagnostics-breadth.md)后，确定**先做深一个 CAN 诊断档案**：主机上真实 DoCAN 多帧、会话/数据、负响应与超时、Dem 故障、NvM 跨重启 DTC、受限访问及有状态变化的写入/例程，并按 SID/子功能和失败路径验收；DoIP、OBD、J1939、刷写/bootloader 后续各自成可验档案，不把一个档案表述成所有 UDS/ISO 已符合。
 
 ## AP 文档核查后的架构依据
 
-- [AP 模型与配置工件对照](../research/adaptive-model-boundaries.md)核实：**同版** CP/AP R24-11 共用 FO R24-11 的 `AUTOSAR_00053.xsd`；当前 CP R24-11 与所调查 AP R25-11/FO R25-11 的 `AUTOSAR_00054.xsd` 是不同版次。公共 ARXML 物理格式与引用机制不意味着 ECU Extract/ECUC、AP Application Design、Execution/Service Instance/Machine 等 Manifest 与 APMC 有相同语义。
-- [AP 生成—部署—运行对照](../research/adaptive-runtime-boundaries.md)核实：AP 的 C++ proxy/skeleton、ARA 功能集群、Manifest、POSIX 进程及 EM/CM 部署运行链与 CP 的 C99 BSW/RTE/虚拟 ECU 生成链不同；SOME/IP 等跨平台互通点不使目标代码或配置语义自动复用。
+- [AP 模型与配置工件对照](../../../../research/autosar-platform/adaptive-model-boundaries.md)核实：**同版** CP/AP R24-11 共用 FO R24-11 的 `AUTOSAR_00053.xsd`；当前 CP R24-11 与所调查 AP R25-11/FO R25-11 的 `AUTOSAR_00054.xsd` 是不同版次。公共 ARXML 物理格式与引用机制不意味着 ECU Extract/ECUC、AP Application Design、Execution/Service Instance/Machine 等 Manifest 与 APMC 有相同语义。
+- [AP 生成—部署—运行对照](../../../../research/autosar-platform/adaptive-runtime-boundaries.md)核实：AP 的 C++ proxy/skeleton、ARA 功能集群、Manifest、POSIX 进程及 EM/CM 部署运行链与 CP 的 C99 BSW/RTE/虚拟 ECU 生成链不同；SOME/IP 等跨平台互通点不使目标代码或配置语义自动复用。
 - FO/ARXML 文档、引用、出处与诊断报告的机制级接缝仅是可检验的复用候选；“共用一个 CP/AP 配置模型/校验器/生成器”仍无证据，不能作为当前架构承诺。AP 目标版本、实际模型工件和主机运行样本尚未选定，AP 也不进入当前 CP 实施阶段。
 
 进一步确定：当前 CP 只保留**版次/平台显式边界**，不预造统一 CP/AP 领域模型或 AP 空实现；只有真实 AP 样本证明某项文档/引用/诊断机制共性后才共享。做深 CAN 诊断之后，下一组先推进**系统生命周期与虚拟 I/O**，再扩第二网络。
@@ -52,10 +52,10 @@ Blocked by: 04, 05, 06, 07, 10
 
 ## 2026-09-26 阶段出口复核（不改变上述依赖路线）
 
-每个阶段先列出拟声明的配置/变体、模块、目标/工具链及可观察行为，再按[内部质量档案](07-assurance-gates.md)逐组合核实输入/工件闭包、目标构建、独立正负向行为、失败恢复和适用资源/时序预算；未证实的组合不得借相邻组合的成绩退出。阶段路线是工作排序，不等于完成清单：一个已实施 SID、空接口或主机编译结果只能列为该子集的事实，不自动升级为整个模块族/阶段通过。跨 ECU/外部工具互操作须以其实际对端和范围单列证据。
+每个阶段先列出拟声明的配置/变体、模块、目标/工具链及可观察行为，再按[内部质量档案](../../../../assurance/acceptance-policy.md)逐组合核实输入/工件闭包、目标构建、独立正负向行为、失败恢复和适用资源/时序预算；未证实的组合不得借相邻组合的成绩退出。阶段路线是工作排序，不等于完成清单：一个已实施 SID、空接口或主机编译结果只能列为该子集的事实，不自动升级为整个模块族/阶段通过。跨 ECU/外部工具互操作须以其实际对端和范围单列证据。
 
-CAN 信号基线以双 ECU 的独立位向量、收发/超时/控制器故障及多文件 ARXML 往返为主机目标出口；诊断阶段分别记录物理 DoCAN 连接的 SID/子功能、双向多帧时序与否定应答、会话边界、DTC 状态/存储损坏及重启恢复、写入/例程状态变化和拒绝行为。当前 README 所述 0x10/0x22/0x3E、可选 0x2E/0x31、单 DTC 0x19/0x14，以及固定单级主机 0x27 安全访问，均是有限主机子集；多级安全、完整诊断服务和真实 NvM 设备仍未提供。不能以该子集称“深 CAN 诊断”整体已退出，也不得以主机密钥文件冒充硬件安全存储。历史 Dcm 读/写回调缺口已由 `6190260` 修复为有界主机回调，但第三方 Dcm ECUC/ABI 集成仍未验证。固定主机 CanIf/CAN/Mcu ECUC 的必需结构与引用已补齐并按 MOD 检查；虚拟硬件与自有 C API 仍未取得第三方互操作证据，详见[生成器复核](06-generator-architecture.md)与[验收门](07-assurance-gates.md)。
+CAN 信号基线以双 ECU 的独立位向量、收发/超时/控制器故障及多文件 ARXML 往返为主机目标出口；诊断阶段分别记录物理 DoCAN 连接的 SID/子功能、双向多帧时序与否定应答、会话边界、DTC 状态/存储损坏及重启恢复、写入/例程状态变化和拒绝行为。当前 README 所述 0x10/0x22/0x3E、可选 0x2E/0x31、单 DTC 0x19/0x14，以及固定单级主机 0x27 安全访问，均是有限主机子集；多级安全、完整诊断服务和真实 NvM 设备仍未提供。不能以该子集称“深 CAN 诊断”整体已退出，也不得以主机密钥文件冒充硬件安全存储。历史 Dcm 读/写回调缺口已由 `6190260` 修复为有界主机回调，但第三方 Dcm ECUC/ABI 集成仍未验证。固定主机 CanIf/CAN/Mcu ECUC 的必需结构与引用已补齐并按 MOD 检查；虚拟硬件与自有 C API 仍未取得第三方互操作证据，详见[生成器复核](06-generator-architecture.md)与[验收门](../../../../assurance/acceptance-policy.md)。
 
-诊断路线中的可选 0x31 主机行为仍可作为有限子集记录；历史版本曾将它编码为 `DcmDspRoutineFncSignature=ROUTINE_FNC_NORMAL`，但 `6ddcab9` 已将主机专用路径移出标准 Dcm Routine ECUC。当前生成器只把 RID/会话写入工具专用 ADMIN-DATA，不发出 `DcmDspRoutine` 或 `DcmDspRoutineFncSignature`/`ROUTINE_FNC_NORMAL`；此主机行为不证明标准 ECUC 或第三方 Dcm 集成。R24-11 本地 [Dcm SWS `[ECUC_Dcm_01215]`](../../../docs/official/R24-11/CP/Diagnostics/AUTOSAR_CP_SWS_DiagnosticCommunicationManager.pdf)（提取文本 25099–25126 行）仍只将该参数/选项标为 DRAFT；不能计入成熟 ECUC 配置覆盖，但也不把 Dcm 模块或 RoutineControl 服务本身、`SWS_Dcm_01203` normal 回调签名整体标为 DRAFT。该限定不排除相关模块/服务能力；PDF 是用户本地、Git 忽略的材料。
+诊断路线中的可选 0x31 主机行为仍可作为有限子集记录；历史版本曾将它编码为 `DcmDspRoutineFncSignature=ROUTINE_FNC_NORMAL`，但 `6ddcab9` 已将主机专用路径移出标准 Dcm Routine ECUC。当前生成器只把 RID/会话写入工具专用 ADMIN-DATA，不发出 `DcmDspRoutine` 或 `DcmDspRoutineFncSignature`/`ROUTINE_FNC_NORMAL`；此主机行为不证明标准 ECUC 或第三方 Dcm 集成。R24-11 本地 [Dcm SWS `[ECUC_Dcm_01215]`](../../../../official/R24-11/CP/Diagnostics/AUTOSAR_CP_SWS_DiagnosticCommunicationManager.pdf)（提取文本 25099–25126 行）仍只将该参数/选项标为 DRAFT；不能计入成熟 ECUC 配置覆盖，但也不把 Dcm 模块或 RoutineControl 服务本身、`SWS_Dcm_01203` normal 回调签名整体标为 DRAFT。该限定不排除相关模块/服务能力；PDF 是用户本地、Git 忽略的材料。
 
 生命周期/I/O、其他网络与横向模块仍以真实状态转换/模拟对端和故障场景退出，不以增列模块名代替集成。主机虚拟调度及 CAN 不能证明目标编译器、MCAL/ISR、寄存器、收发器、电气层、总线时序与资源预算；实机是一条**独立目标轴**，取得板卡、合法 SDK/工具及逐芯片证据后再判定。AP 是另一产品/部署轴；CP 同版 FO 物理格式共性不构成 AP 模型或运行能力验收。标准、硬件或安全/量产/官方一致性声明另行给出相应证据，当前不以内部阶段通过替代。

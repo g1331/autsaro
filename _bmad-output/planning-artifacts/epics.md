@@ -12,7 +12,7 @@
 
 ## Epic 2: 有界诊断故障记忆的下一项运行能力
 
-用户价值：从现有单 DTC 主机档案扩展为两个可区分的故障状态，诊断请求能分别读出并清除，重启后的主机存储结果可重现。对应 PRD R2、R3、R4；仅沿既有 11 位物理 DoCAN 和主机文件 NvM 实现，第三方 Dem/NvM 与真实 Flash 不在本 epic 声明内。Epic 1 无需依赖 Epic 2；按产品地图的诊断路线推进。
+用户价值：从现有单 DTC 主机档案扩展为两个可区分的故障状态，诊断请求能分别读出并清除，重启后的主机存储结果可重现。对应 PRD R2、R3、R4；仅沿既有 11 位物理 DoCAN 和主机文件 NvM 实现，第三方 Dem/NvM 与真实 Flash 不在本 epic 声明内。Epic 1 无需依赖 Epic 2；对应 PRD 中的深入 CAN 诊断方向。
 
 ### Story 2.1: Independent host state and diagnostic reporting for two DTCs
 
