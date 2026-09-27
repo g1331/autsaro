@@ -1258,7 +1258,7 @@ button svg,
 }
 .diagnostic-timers {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 15px;
 }
 .diagnostic-timers label {
@@ -1634,6 +1634,7 @@ button svg,
     grid-template-columns: minmax(0, 1fr);
   }
   .inspector {
+    grid-column: 1;
     border-left: 0;
     border-top: 1px solid var(--line);
   }
@@ -1659,5 +1660,47 @@ button svg,
   }
   .workspace-grid {
     min-height: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .workbench {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+  }
+  .project-rail {
+    flex: none;
+    max-height: 240px;
+    padding: 12px 14px;
+    overflow-y: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .workspace-heading {
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+  }
+  .project-nav {
+    flex-direction: row;
+    flex: none;
+    overflow-x: auto;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+  }
+  .project-nav button {
+    flex: none;
+    width: auto;
+    white-space: nowrap;
+  }
+  .tree-pane {
+    max-height: 82px;
+  }
+  .workspace-content {
+    flex: 1;
+  }
+  .workspace-content .notice {
+    left: 14px;
+    right: 14px;
   }
 }
