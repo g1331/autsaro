@@ -56,8 +56,13 @@ class WorkflowStateTests(unittest.TestCase):
                 "source: /home/someone/projects/sample\n",
                 encoding="utf-8",
             )
+            tasks = root / "docs" / "workflow" / "tasks"
+            tasks.mkdir()
+            (tasks / "sample.md").write_text(
+                "build: D:\\workstation\\private\\sample\n", encoding="utf-8"
+            )
             errors = local_path_errors(root)
-            self.assertEqual(len(errors), 2)
+            self.assertEqual(len(errors), 3)
             self.assertTrue(all("local absolute path" in error for error in errors))
 
     def test_internal_support_requires_evidence_and_review(self):

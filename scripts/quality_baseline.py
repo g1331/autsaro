@@ -59,8 +59,31 @@ def misra_addon(executable: str) -> Path | None:
     return next((path for path in candidates if path.is_file()), None)
 
 
-def run_check(label: str, command: list[str], *, input_text: str | None = None) -> bool:
-    print(f"\n[{label}] {' '.join(command)}", flush=True)
+def safe_output_line(line: str, *, generated_dir: Path | None = None) -> str:
+    """Retain diagnostic details without printing workstation locations."""
+    locations = [
+        (str(ROOT), "<repo-root>"),
+        (tempfile.gettempdir(), "<temporary-dir>"),
+        (str(Path.home()), "<home>"),
+    ]
+    if generated_dir is not None:
+        locations.insert(0, (str(generated_dir), "<generated-dir>"))
+    for location, replacement in locations:
+        for spelling in {location, location.replace("\\", "/")}:
+            line = re.sub(re.escape(spelling), replacement, line, flags=re.IGNORECASE)
+    if re.search(r"(?<![A-Za-z0-9])[A-Za-z]:[/\\]|/(?:Users|home)/[^/\\\s`]+", line):
+        return "[diagnostic line contains an unrecognized local path]"
+    return line
+
+
+def run_check(
+    label: str,
+    command: list[str],
+    *,
+    input_text: str | None = None,
+    generated_dir: Path | None = None,
+) -> bool:
+    print(f"\n[{label}]", flush=True)
     try:
         result = subprocess.run(
             command,
@@ -73,12 +96,12 @@ def run_check(label: str, command: list[str], *, input_text: str | None = None) 
             check=False,
         )
     except OSError as error:
-        print(f"FAILED: {error}")
+        print(safe_output_line(f"FAILED: {error}", generated_dir=generated_dir))
         return False
     combined = result.stdout + result.stderr
     output = combined.splitlines()
     for line in output[:35]:
-        print(line)
+        print(safe_output_line(line, generated_dir=generated_dir))
     if len(output) > 35:
         print(f"... {len(output) - 35} more output lines")
     if label == "C API Doxygen":
@@ -127,12 +150,14 @@ def doxygen_check() -> bool:
     if header_errors:
         print("\n[C API Doxygen]")
         for error in header_errors:
-            print(error)
+            print(safe_output_line(error))
         return False
     try:
         config = (ROOT / "runtime/Doxyfile").read_text(encoding="utf-8")
     except OSError as error:
-        print(f"[C API Doxygen] Cannot read runtime/Doxyfile: {error}")
+        print(
+            safe_output_line(f"[C API Doxygen] Cannot read runtime/Doxyfile: {error}")
+        )
         return False
     with tempfile.TemporaryDirectory() as temporary:
         output = Path(temporary).as_posix()
@@ -243,7 +268,7 @@ def main() -> int:
     if scope_errors:
         print("\n[C source classification]")
         for error in scope_errors:
-            print(error)
+            print(safe_output_line(error))
         failed.append("C source classification")
     else:
         cppcheck = shutil.which("cppcheck")
@@ -299,7 +324,9 @@ def main() -> int:
                     str(generated / "Ecu_Config.c"),
                 ]
                 generated_scanned = True
-                if not run_check("Generated C partial MISRA scan", command):
+                if not run_check(
+                    "Generated C partial MISRA scan", command, generated_dir=generated
+                ):
                     failed.append("Generated C partial MISRA scan")
 
     if arguments.generated_dir is None:
@@ -312,7 +339,7 @@ def main() -> int:
         if generated_errors:
             print("\n[Generated C partial MISRA scan]")
             for error in generated_errors:
-                print(error)
+                print(safe_output_line(error))
             failed.append("Generated C partial MISRA scan")
         elif not generated_scanned:
             print(

@@ -56,8 +56,12 @@ def evidence_file(root: Path, value: object) -> bool:
 
 def local_path_errors(root: Path) -> list[str]:
     """Keep workstation paths out of committed handoff documents."""
-    documents = [root / "docs" / "workflow" / "OWNER_GUIDE.md"]
-    documents.extend(sorted((root / "docs" / "workflow" / "evidence").glob("*.md")))
+    workflow = root / "docs" / "workflow"
+    owner_guide = workflow / "OWNER_GUIDE.md"
+    documents = [owner_guide]
+    documents.extend(
+        path for path in sorted(workflow.rglob("*.md")) if path != owner_guide
+    )
     errors = []
     for document in documents:
         try:
@@ -520,7 +524,15 @@ def verify(scope: str, generated_dir: str | None = None) -> int:
         ["git", "diff", "--cached", "--check"],
         *commands[scope],
     ]:
-        print(f"> {' '.join(command)}", flush=True)
+        display = [
+            "python"
+            if argument == sys.executable
+            else "<generated-dir>"
+            if generated_dir is not None and argument == generated_dir
+            else argument
+            for argument in command
+        ]
+        print(f"> {' '.join(display)}", flush=True)
         try:
             result = subprocess.run(command, cwd=ROOT, check=False)
         except OSError as error:

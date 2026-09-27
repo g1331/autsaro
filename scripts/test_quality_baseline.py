@@ -10,10 +10,35 @@ from pathlib import Path
 from unittest.mock import patch
 
 import quality_baseline
-from quality_baseline import c_scope_errors, generated_input_errors, spec_evidence_gaps
+from quality_baseline import (
+    c_scope_errors,
+    generated_input_errors,
+    safe_output_line,
+    spec_evidence_gaps,
+)
 
 
 class BaselineTests(unittest.TestCase):
+    def test_audit_output_redacts_workstation_paths(self):
+        repository = str(quality_baseline.ROOT)
+        self.assertIn(
+            "<repo-root>", safe_output_line(f"warning: {repository}/runtime/src/Can.c")
+        )
+        self.assertNotIn(
+            repository, safe_output_line(f"warning: {repository}/runtime/src/Can.c")
+        )
+        self.assertEqual(
+            safe_output_line(r"warning: X:\private-workspace\Can.c:10"),
+            "[diagnostic line contains an unrecognized local path]",
+        )
+        generated = Path(tempfile.gettempdir()) / "generated-sample"
+        self.assertEqual(
+            safe_output_line(
+                f"{generated}/include/Ecu_Config.h", generated_dir=generated
+            ),
+            "<generated-dir>/include/Ecu_Config.h",
+        )
+
     @unittest.skipUnless(shutil.which("doxygen"), "Doxygen is not installed")
     def test_doxygen_rejects_missing_public_api_docs(self):
         with tempfile.TemporaryDirectory() as temporary:
