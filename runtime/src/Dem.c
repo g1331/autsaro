@@ -8,91 +8,98 @@ static uint8_t event_status;
 static uint8_t dtc_setting_enabled;
 
 static EcuStatus SetStatus(uint8_t updated) {
-    EcuStatus result;
-    if (updated == event_status) {
-        return ECU_OK;
-    }
-    result = NvM_Write(updated);
-    if (result == ECU_OK) {
-        event_status = updated;
+    EcuStatus result = ECU_OK;
+    if (updated != event_status) {
+        result = NvM_Write(updated);
+        if (result == ECU_OK) {
+            event_status = updated;
+        }
     }
     return result;
 }
 
 EcuStatus Dem_Init(const EcuConfig *config, const char *nvm_path) {
     uint8_t saved;
-    EcuStatus result;
+    EcuStatus result = ECU_OK;
     active_dtc = NULL;
     event_status = 0x50u;
     dtc_setting_enabled = 1u;
-    if (config->diagnostic == NULL || config->diagnostic->dtc == NULL) {
-        return ECU_OK;
+    if ((config->diagnostic != NULL) && (config->diagnostic->dtc != NULL)) {
+        if ((nvm_path == NULL) || (nvm_path[0] == '\0')) {
+            result = ECU_ERR_CONFIG;
+        } else {
+            result = NvM_Init(config, nvm_path, &saved);
+            if (result == ECU_OK) {
+                active_dtc = config->diagnostic->dtc;
+                event_status = saved;
+                /* A pending DTC survives only when the previous cycle saw a failure. */
+                result = SetStatus((uint8_t)((saved & (uint8_t)~UINT8_C(0x06)) |
+                                             (((saved & 0x02u) != 0u) ? UINT8_C(0x04) : 0u) |
+                                             UINT8_C(0x40)));
+            }
+        }
     }
-    if (nvm_path == NULL || nvm_path[0] == '\0') {
-        return ECU_ERR_CONFIG;
-    }
-    result = NvM_Init(config, nvm_path, &saved);
-    if (result != ECU_OK) {
-        return result;
-    }
-    active_dtc = config->diagnostic->dtc;
-    event_status = saved;
-    /* A pending DTC survives only when the previous cycle saw a failure. */
-    return SetStatus((uint8_t)((saved & (uint8_t)~UINT8_C(0x06)) |
-                               ((saved & 0x02u) != 0u ? UINT8_C(0x04) : 0u) | UINT8_C(0x40)));
+    return result;
 }
 
 EcuStatus Dem_DisableDTCSetting(void) {
-    if (active_dtc == NULL) {
-        return ECU_ERR_CONFIG;
+    EcuStatus result = ECU_ERR_CONFIG;
+    if (active_dtc != NULL) {
+        dtc_setting_enabled = 0u;
+        result = ECU_OK;
     }
-    dtc_setting_enabled = 0u;
-    return ECU_OK;
+    return result;
 }
 
 EcuStatus Dem_EnableDTCSetting(void) {
-    if (active_dtc == NULL) {
-        return ECU_ERR_CONFIG;
+    EcuStatus result = ECU_ERR_CONFIG;
+    if (active_dtc != NULL) {
+        dtc_setting_enabled = 1u;
+        result = ECU_OK;
     }
-    dtc_setting_enabled = 1u;
-    return ECU_OK;
+    return result;
 }
 
 EcuStatus Dem_ReportPassed(uint16_t frame_index) {
-    if (active_dtc == NULL || active_dtc->monitor_frame_index != frame_index ||
-        dtc_setting_enabled == 0u) {
-        return ECU_OK;
+    EcuStatus result = ECU_OK;
+    if ((active_dtc != NULL) && (active_dtc->monitor_frame_index == frame_index) &&
+        (dtc_setting_enabled != 0u)) {
+        result = SetStatus((uint8_t)(event_status & (uint8_t)~UINT8_C(0x51)));
     }
-    return SetStatus((uint8_t)(event_status & (uint8_t)~UINT8_C(0x51)));
+    return result;
 }
 
 EcuStatus Dem_ReportFailed(uint16_t frame_index) {
-    if (active_dtc == NULL || active_dtc->monitor_frame_index != frame_index ||
-        dtc_setting_enabled == 0u) {
-        return ECU_OK;
+    EcuStatus result = ECU_OK;
+    if ((active_dtc != NULL) && (active_dtc->monitor_frame_index == frame_index) &&
+        (dtc_setting_enabled != 0u)) {
+        result = SetStatus((uint8_t)((event_status & (uint8_t)~UINT8_C(0x50)) | UINT8_C(0x2f)));
     }
-    return SetStatus((uint8_t)((event_status & (uint8_t)~UINT8_C(0x50)) | UINT8_C(0x2f)));
+    return result;
 }
 
 uint8_t Dem_FilterDtc(uint8_t mask, uint32_t *code, uint8_t *status) {
-    if (active_dtc == NULL || (event_status & mask & DTC_AVAILABILITY) == 0u) {
-        return 0u;
+    uint8_t result = 0u;
+    if ((active_dtc != NULL) && (((event_status & mask) & DTC_AVAILABILITY) != 0u)) {
+        result = Dem_GetSupportedDtc(code, status);
     }
-    return Dem_GetSupportedDtc(code, status);
+    return result;
 }
 
 uint8_t Dem_GetSupportedDtc(uint32_t *code, uint8_t *status) {
-    if (active_dtc == NULL) {
-        return 0u;
+    uint8_t result = 0u;
+    if (active_dtc != NULL) {
+        *code = active_dtc->code;
+        *status = event_status;
+        result = 1u;
     }
-    *code = active_dtc->code;
-    *status = event_status;
-    return 1u;
+    return result;
 }
 
 EcuStatus Dem_ClearAll(void) {
-    if (active_dtc == NULL) {
-        return ECU_ERR_CONFIG;
+    EcuStatus result = ECU_ERR_CONFIG;
+    if (active_dtc != NULL) {
+        result = SetStatus(0x50u);
     }
-    return SetStatus(0x50u);
+    return result;
 }
