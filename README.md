@@ -28,14 +28,16 @@
 
 ## 本地开发环境（Windows）
 
-需要 Rust stable **MSVC** 工具链、Visual Studio C++ Build Tools、WebView2、Node.js/npm、C99 GCC，以及 libxml2 和 libclang。`libxml` Rust 依赖使用 vcpkg 的 `x64-windows-static` libxml2，bindgen 需要可用的 `libclang.dll`。
+需要 Rust stable **MSVC** 工具链、Visual Studio C++ Build Tools、WebView2、Node.js/npm、C99 GCC，以及 libxml2 和 libclang。`libxml` Rust 依赖使用 vcpkg 的 `x64-windows-static-md` libxml2（静态库、动态 MSVC CRT），bindgen 需要可用的 `libclang.dll`。
 
 根据本机安装情况设置以下环境变量：
 
-- `VCPKG_ROOT` 指向 vcpkg 根目录，`VCPKGRS_TRIPLET` 设为 `x64-windows-static`。
+- `VCPKG_ROOT` 指向 vcpkg 根目录，`VCPKGRS_TRIPLET` 设为 `x64-windows-static-md`。
 - `LIBCLANG_PATH` 指向包含 `libclang.dll` 的目录。
 - `AUTOSAR_CC` 可选，指向用于构建生成工程的 GCC 可执行文件；未设置时使用 `PATH` 中的 `gcc`。
 - `CARGO_HOME`、`RUSTUP_HOME` 可按需控制 Rust 工具链位置；Cargo 构建产物默认位于 `core/target/` 和 `src-tauri/target/`，已由 `.gitignore` 忽略。`cargo`、`rustc`、`gcc`、`node`、`npm` 仍须能在当前会话调用。
+
+首次安装可运行 `& (Join-Path $env:VCPKG_ROOT "vcpkg.exe") install "libxml2[iconv,zlib]:x64-windows-static-md"`。若从旧 triplet 切换且 Cargo 已缓存 `libxml`，分别对 `core/Cargo.toml` 和 `src-tauri/Cargo.toml` 执行 `cargo clean --manifest-path <manifest> -p libxml` 后重建；仅修改当前会话变量不会重跑已缓存的构建脚本。
 
 本地官方材料须由使用者自行放置，不随源码分发：
 
