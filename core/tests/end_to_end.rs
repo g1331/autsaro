@@ -17,12 +17,21 @@ fn standard_can_host_entry_points_reject_invalid_requests_and_send_valid_frame()
     });
     fs::write(
         &harness,
-        r#"#include "Can.h"
+r#"#include "Can.h"
 #include "CanIf.h"
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <pthread.h>
+#endif
 static unsigned sent;
 static unsigned received;
 static unsigned fail_output;
+static int valid_result;
+static int invalid_result;
 static EcuStatus emit(uint32_t id, uint8_t dlc, const uint8_t data[8]) {
+    Can_ControllerStateType state = CAN_CS_UNINIT;
+    if (Can_GetControllerMode(0u, &state) != E_OK || state != CAN_CS_STARTED) return ECU_ERR_CONTROLLER;
     if (id != 0x321u || dlc != 2u || data[0] != 0x12u || data[1] != 0x34u) return ECU_ERR_IO;
     if (fail_output != 0u) return ECU_ERR_IO;
     ++sent;
@@ -33,6 +42,27 @@ EcuStatus CanIf_RxIndication(uint32_t id, uint8_t dlc, const uint8_t data[8], ui
     ++received;
     return ECU_OK;
 }
+static void send_valid_frames(void) {
+    uint8_t bytes[8] = {0x12u, 0x34u};
+    unsigned i;
+    for (i = 0u; i < 100u; ++i) {
+        if (Can_Transmit(0x321u, 2u, bytes) != ECU_OK) valid_result = 1;
+    }
+}
+static void reject_invalid_frames(void) {
+    uint8_t bytes[8] = {0x12u, 0x34u};
+    unsigned i;
+    for (i = 0u; i < 100u; ++i) {
+        if (Can_Transmit(0x800u, 2u, bytes) != ECU_ERR_FRAME_ID) invalid_result = 1;
+    }
+}
+#ifdef _WIN32
+static DWORD WINAPI valid_thread(LPVOID unused) { (void)unused; send_valid_frames(); return 0u; }
+static DWORD WINAPI invalid_thread(LPVOID unused) { (void)unused; reject_invalid_frames(); return 0u; }
+#else
+static void *valid_thread(void *unused) { (void)unused; send_valid_frames(); return NULL; }
+static void *invalid_thread(void *unused) { (void)unused; reject_invalid_frames(); return NULL; }
+#endif
 int main(void) {
     uint8_t bytes[8] = {0x12u, 0x34u};
     Can_ConfigType config = {emit};
@@ -62,12 +92,33 @@ int main(void) {
     fail_output = 0u;
     Can_SetMode(CAN_BUS_OFF);
     if (Can_GetControllerMode(0u, &state) != E_OK || state != CAN_CS_STOPPED) return 15;
+    if (Can_GetMode() != CAN_BUS_OFF) return 21;
     if (Can_Transmit(0x321u, 2u, bytes) != ECU_ERR_CONTROLLER) return 11;
-    if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_NOT_OK) return 16;
-    Can_SetMode(CAN_STOPPED);
-    if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_OK) return 17;
+    if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_OK) return 16;
+    if (Can_GetMode() != CAN_STARTED) return 17;
     if (Can_SetControllerMode(0u, CAN_CS_STOPPED) != E_OK) return 18;
     if (Can_SetControllerMode(0u, CAN_CS_STOPPED) != E_NOT_OK) return 19;
+    if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_OK) return 22;
+#ifdef _WIN32
+    {
+        HANDLE valid = CreateThread(NULL, 0, valid_thread, NULL, 0, NULL);
+        HANDLE invalid = CreateThread(NULL, 0, invalid_thread, NULL, 0, NULL);
+        if (valid == NULL || invalid == NULL) return 23;
+        if (WaitForSingleObject(valid, INFINITE) != WAIT_OBJECT_0) return 24;
+        if (WaitForSingleObject(invalid, INFINITE) != WAIT_OBJECT_0) return 25;
+        CloseHandle(valid);
+        CloseHandle(invalid);
+    }
+#else
+    {
+        pthread_t valid;
+        pthread_t invalid;
+        if (pthread_create(&valid, NULL, valid_thread, NULL) != 0) return 23;
+        if (pthread_create(&invalid, NULL, invalid_thread, NULL) != 0) return 24;
+        if (pthread_join(valid, NULL) != 0 || pthread_join(invalid, NULL) != 0) return 25;
+    }
+#endif
+    if (valid_result != 0 || invalid_result != 0 || sent != 101u) return 26;
     return 0;
 }
 "#,
@@ -76,6 +127,7 @@ int main(void) {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
     let build = Command::new("gcc")
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
+        .arg("-pthread")
         .arg(format!("-I{}", root.join("runtime/include").display()))
         .arg(root.join("runtime/src/Can.c"))
         .arg(&harness)

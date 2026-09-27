@@ -1,19 +1,61 @@
+#if !defined(_WIN32)
+#define _XOPEN_SOURCE 700
+#endif
 #include "Can.h"
 #include "CanIf.h"
 #include <stddef.h>
+#include <stdlib.h>
 #if defined(_WIN32)
 #include <windows.h>
-static SRWLOCK can_lock = SRWLOCK_INIT;
-static void Can_Lock(void) { AcquireSRWLockExclusive(&can_lock); }
-static void Can_Unlock(void) { ReleaseSRWLockExclusive(&can_lock); }
+static INIT_ONCE can_lock_once = INIT_ONCE_STATIC_INIT;
+static CRITICAL_SECTION can_lock;
+static BOOL CALLBACK Can_InitLock(PINIT_ONCE once, PVOID parameter, PVOID *context) {
+    (void)once;
+    (void)parameter;
+    (void)context;
+    InitializeCriticalSection(&can_lock);
+    return TRUE;
+}
+static void Can_Lock(void) {
+    if (InitOnceExecuteOnce(&can_lock_once, Can_InitLock, NULL, NULL) == 0) {
+        abort();
+    }
+    EnterCriticalSection(&can_lock);
+}
+static void Can_Unlock(void) { LeaveCriticalSection(&can_lock); }
 #else
 #include <pthread.h>
-static pthread_mutex_t can_lock = PTHREAD_MUTEX_INITIALIZER;
-static void Can_Lock(void) { (void)pthread_mutex_lock(&can_lock); }
-static void Can_Unlock(void) { (void)pthread_mutex_unlock(&can_lock); }
+static pthread_once_t can_lock_once = PTHREAD_ONCE_INIT;
+static pthread_mutex_t can_lock;
+static void Can_InitLock(void) {
+    pthread_mutexattr_t attributes;
+    if (pthread_mutexattr_init(&attributes) != 0) {
+        abort();
+    }
+    if (pthread_mutexattr_settype(&attributes, PTHREAD_MUTEX_RECURSIVE) != 0) {
+        abort();
+    }
+    if (pthread_mutex_init(&can_lock, &attributes) != 0) {
+        abort();
+    }
+    if (pthread_mutexattr_destroy(&attributes) != 0) {
+        abort();
+    }
+}
+static void Can_Lock(void) {
+    if ((pthread_once(&can_lock_once, Can_InitLock) != 0) || (pthread_mutex_lock(&can_lock) != 0)) {
+        abort();
+    }
+}
+static void Can_Unlock(void) {
+    if (pthread_mutex_unlock(&can_lock) != 0) {
+        abort();
+    }
+}
 #endif
 
 static CanMode controller_mode;
+static uint8_t bus_off;
 static CanTxSink tx_sink;
 static uint8_t initialized;
 
@@ -28,6 +70,7 @@ void Can_Init(const Can_ConfigType *config) {
         }
     }
     controller_mode = CAN_STOPPED;
+    bus_off = 0u;
     Can_Unlock();
 }
 
@@ -38,6 +81,7 @@ Std_ReturnType Can_SetControllerMode(uint8_t controller, Can_ControllerStateType
         ((transition == CAN_CS_STARTED) || (transition == CAN_CS_STOPPED))) {
         if ((transition == CAN_CS_STARTED) && (controller_mode == CAN_STOPPED)) {
             controller_mode = CAN_STARTED;
+            bus_off = 0u;
             result = E_OK;
         } else if ((transition == CAN_CS_STOPPED) && (controller_mode == CAN_STARTED)) {
             controller_mode = CAN_STOPPED;
@@ -91,7 +135,13 @@ Std_ReturnType Can_Write(Can_HwHandleType hth, const Can_PduType *pdu) {
 
 void Can_SetMode(CanMode mode) {
     Can_Lock();
-    controller_mode = mode;
+    if (mode == CAN_BUS_OFF) {
+        controller_mode = CAN_STOPPED;
+        bus_off = 1u;
+    } else {
+        controller_mode = mode;
+        bus_off = 0u;
+    }
     Can_Unlock();
 }
 
@@ -99,6 +149,9 @@ CanMode Can_GetMode(void) {
     CanMode mode;
     Can_Lock();
     mode = controller_mode;
+    if (bus_off != 0u) {
+        mode = CAN_BUS_OFF;
+    }
     Can_Unlock();
     return mode;
 }

@@ -20,6 +20,10 @@
 
 修复后重跑 `python scripts/workflow.py verify --scope all`：脚本 15/15、核心单元 3/3、端到端 50/50、UI lint/构建、增量质量、核心与桌面 Clippy、桌面构建均通过。重新生成的代表性 ECU 位于 `<temporary-dir>/generated`；以该工程重跑全量基线，格式/Python/UI/全告警 Clippy/Doxygen 均通过，BSW 部分 MISRA 334 条、RTE 9 条、生成 C 7 条及七项能力的规范义务门仍失败。该扫描会同时解析 Windows 与 POSIX 锁分支并报告部分系统 API 缺声明；没有因此删掉有效的并发保护或放宽扫描。
 
+第二个独立只读 Agent 复核 `833e48a`，发现 bus-off 虽在标准查询中呈现 STOPPED，却无法通过标准 `Can_SetControllerMode` 恢复，以及输出回调重入 Can API 时非递归锁会死锁。进一步修复为分别记录标准控制器模式和主机 bus-off 错误状态；bus-off 后明确请求 STARTED 可恢复。锁改为 Windows `CRITICAL_SECTION` / POSIX recursive mutex，测试回调重入状态查询及两个并发发送线程各 100 次的返回值隔离。该二次修复的定向 C99 harness 已通过；最终独立复审待运行。
+
+二次修复后 `python scripts/workflow.py verify --scope all` 再次通过（脚本 15/15、核心 3/3 + 50/50、UI 与桌面构建、增量 Clippy）。新代表性工程 `<temporary-dir>/generated` 的全量基线仍有四个失败分区：BSW 部分 MISRA 352 条、RTE 9 条、生成 C 7 条，以及七项规范证据门。可重入锁新增的 POSIX/Windows 系统 API 与 `abort` 也被扫描报告；标准交付所需的逐条处置未完成。
+
 ## 未闭合的标准义务
 
 `Can_DeInit`、`Can_SetBaudrate`、中断控制、错误状态及其他适用服务/回调、线程安全的 `Can_Write`、完整 ECUC/BSWMD、MemMap 与逐规则 MISRA 处理尚未闭合。当前 `Can_ConfigType` 仍携带主机输出回调，`Can_Write` 在单线程虚拟目标同步执行；这不是第三方 CanIf/CAN ABI 或真实 MCU 证据。任务保持 `active`，HOST-CAN-01 仍为 `documented_behavior`，所有六道证据门维持原状态；后续须补标准工件、独立运行和新 Agent 复核。
