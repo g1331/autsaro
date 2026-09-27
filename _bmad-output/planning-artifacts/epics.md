@@ -1,6 +1,6 @@
 # Autosar Classic 产品成果与实施记录
 
-本文件以[产品简述](product-brief.md)的完整 Classic 产品方向、[PRD](prd.md) 的参考 ECU 用户成果和[架构](architecture.md)的实现边界为依据。Epic 按使用者能交付的工程结果划分，模块是每个结果的支持范围，不把规范目录逐项变成 Epic。现有 Epic 1、Epic 2 保留原编号和 story 记录：它们是方向澄清前建立的有界主机工作，不代表当前产品路线的先后顺序。Epic 3 是第一项可实施的产品成果，限于当前受支持的 Windows 主机剖面；Epic 4–6 才逐步达到通用 CAN＋诊断完整参考 ECU。**Epic 3 的就绪不代表后续 Epic 或整套产品已就绪。**
+本文件以[产品简述](product-brief.md)的完整 Classic 产品方向、[PRD](prd.md) 的参考 ECU 用户成果和[架构](architecture.md)的实现边界为依据。Epic 按使用者能交付的工程结果划分，模块是每个结果的支持范围，不把规范目录逐项变成 Epic。编号是稳定标识，不是“前一项全部完成才能出现后一项”的证明。Epic 1 的唯一 story 已完成，但 Epic 仍记为 `in-progress`、待独立收尾；Epic 2 与其唯一 story 仍在 `backlog`，因产品方向调整不作为默认下一开发项。Epic 3 是新路线中第一项已拆解且可实施的产品成果，限于当前受支持的 Windows 主机剖面；Epic 4–6 才逐步达到通用 CAN＋诊断完整参考 ECU。**Epic 3 的就绪不代表 Epic 1、2 已完成，也不代表后续 Epic 或整套产品已就绪。**
 
 第一条产品链完成，须同时满足 Epic 3 的受限主机工程交接、Epic 4 的标准参考输入与应用/RTE/OS 主机运行、Epic 5 的单网络完整主机行为和 Epic 6 的指定 MCU 复验。中间 Epic 可以交付受限成果，但不能以任一中间结果声明完整 Classic 参考 ECU；一个参考 ECU 的完成也不代表所有 Classic 模块、配置、目标或规范版次均已支持。每个支持声明仍须通过[六道证据门](../../docs/assurance/acceptance-policy.md)，主机和硬件证据分别记录。
 
