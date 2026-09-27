@@ -31,6 +31,8 @@ cl /TC /W4 /I runtime\include runtime\src\Can.c runtime\src\Can_HostLock.c runti
 
 信号发送：`Os_Advance`（单核虚拟时间、周期任务）→ `Com_TriggerTransmit`（以 `Rte_WriteSignal` 写入的应用值打包）→ `PduR_Transmit` → `LSduR_PduRTransmit` → `CanIf_Transmit` → 主机 `Can_TransmitPdu` 包装层 → 非阻塞 `Can_Write` 入队 → 主机 `Can_HostFlush` → `X` 输出。信号接收：`R` 输入 → `Can_Inject` → `CanIf_RxIndication`（ID 过滤、DLC 检查）→ `LSduR_CanIfRxIndication` → `PduR_RxIndication` → `Com_RxIndication`（解包、更新有效性）→ `Rte_ReadSignal`。没有自行回显；主机编排器按 ID 优先级路由两个 ECU 的信号报文，也可丢帧。`Can_Init`、`Can_SetControllerMode`、`Can_GetControllerMode` 和 `Can_Write` 已有 R24-11 的公开签名及本主机剖面的类型；初始化配置仍包含主机输出回调，生成的主机程序在每次入队后同步排空以保留既有协议顺序。一个发送槽占用时 `Can_Write` 立即返回 `CAN_BUSY`；公开入口单独调用时须由主机排空才实际输出。其他必需服务、回调、MemMap、BSWMD、MISRA 与第三方互操作尚未闭合，不据此声明完整标准 Can Driver。当前虚拟 CAN 控制器具有 STARTED/STOPPED/逻辑 SLEEP/BUS_OFF 状态；bus-off 对标准状态查询表现为 STOPPED，拒绝报文，直到 `Can_SetControllerMode(..., CAN_CS_STARTED)` 明确恢复。它不模拟位级仲裁、电气错误计数器和真实中断。
 
+模式转换与 bus-off 当前同步通知 CanIf；CanIf 据此拒绝非 STARTED 状态的信号和诊断发送。R24-11 所需的独立模式通知调度及 CanSM 上层派发尚未实现，本主机剖面不能据此声明完整的标准通知链。
+
 ## 诊断连接（可选）
 
 一条物理 normal-addressing 11-bit Classical CAN 连接；请求与响应 ID 不相同，也不能与 Com 帧 ID 冲突。`CanIf` 按请求 ID 交给 `LSduR` → `CanTp`，PduR 持有上限 256 字节的 N-SDU 收发缓冲，Dcm 处理完成请求；响应由 Dcm → PduR → CanTp → LSduR → Can 输出。CanTp 按 SF/FF/CF/FC 分段，检查 FF 总长、CF 序号和 DLC，FF 后以 CTS/BS=0/STmin=0 回应；发送方遵守测试器给出的 FC 块大小、STmin（100 μs 单位在 1 ms 主机时钟上向上取整）、N_Bs，发送确认等待 N_As，接收方按 N_Cr 终止不完整请求。错误后丢弃半包，下一个完整请求可以恢复。

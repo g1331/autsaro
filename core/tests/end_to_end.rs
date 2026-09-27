@@ -29,6 +29,10 @@ static unsigned sent;
 static unsigned received;
 static unsigned confirmed;
 static PduIdType last_confirmed;
+static unsigned mode_notifications;
+static unsigned bus_off_notifications;
+static Can_ControllerStateType last_notified_mode;
+static unsigned mode_notification_mismatch;
 static unsigned callback_write_busy;
 static unsigned probe_rx_reentry;
 static EcuStatus nested_rx_result;
@@ -68,6 +72,19 @@ void CanIf_TxConfirmation(PduIdType handle) {
     if (Can_Write(0u, &nested) == CAN_BUSY) callback_write_busy = 1u;
     last_confirmed = handle;
     ++confirmed;
+}
+void CanIf_ControllerModeIndication(uint8_t controller_id, Can_ControllerStateType mode) {
+    if (controller_id == 0u) {
+        Can_ControllerStateType current = CAN_CS_UNINIT;
+        if (Can_GetControllerMode(0u, &current) != E_OK || current != mode) {
+            ++mode_notification_mismatch;
+        }
+        last_notified_mode = mode;
+        ++mode_notifications;
+    }
+}
+void CanIf_ControllerBusOff(uint8_t controller_id) {
+    if (controller_id == 0u) ++bus_off_notifications;
 }
 EcuStatus CanIf_HostRxIndication(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
     Can_ControllerStateType state = CAN_CS_UNINIT;
@@ -141,8 +158,11 @@ int main(void) {
     if (Can_SetControllerMode(0u, CAN_CS_STOPPED) != E_NOT_OK) return 13;
     if (Can_SetControllerMode(1u, CAN_CS_STARTED) != E_NOT_OK) return 4;
     if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_OK) return 5;
+    if (mode_notifications != 1u || last_notified_mode != CAN_CS_STARTED ||
+        mode_notification_mismatch != 0u) return 61;
     if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_NOT_OK) return 14;
     if (Can_SetControllerMode(0u, CAN_CS_SLEEP) != E_NOT_OK) return 27;
+    if (mode_notifications != 1u) return 65;
     if (Can_Write(1u, &pdu) != E_NOT_OK || Can_Write(0u, NULL) != E_NOT_OK) return 6;
     pdu.id = 0x800u;
     if (Can_Write(0u, &pdu) != E_NOT_OK) return 7;
@@ -168,12 +188,14 @@ int main(void) {
     if (Can_TransmitPdu(0u, 0x321u, 2u, bytes) != ECU_ERR_IO || sent != 1u || confirmed != 1u) return 20;
     fail_output = 0u;
     Can_SetMode(CAN_BUS_OFF);
+    if (bus_off_notifications != 1u) return 62;
     if (Can_GetControllerMode(0u, &state) != E_OK || state != CAN_CS_STOPPED) return 15;
     if (Can_GetControllerErrorState(0u, &error_state) != E_OK ||
         error_state != CAN_ERRORSTATE_BUSOFF) return 52;
     if (Can_GetMode() != CAN_BUS_OFF) return 21;
     if (Can_TransmitPdu(0u, 0x321u, 2u, bytes) != ECU_ERR_CONTROLLER) return 11;
     if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_OK) return 16;
+    if (last_notified_mode != CAN_CS_STARTED) return 63;
     if (Can_GetMode() != CAN_STARTED) return 17;
     if (Can_GetControllerErrorState(0u, &error_state) != E_OK ||
         error_state != CAN_ERRORSTATE_ACTIVE) return 53;
@@ -202,6 +224,7 @@ int main(void) {
     if (valid_result != 0 || invalid_result != 0 || sent != 101u) return 26;
     if (Can_SetControllerMode(0u, CAN_CS_STOPPED) != E_OK) return 30;
     if (Can_SetControllerMode(0u, CAN_CS_SLEEP) != E_OK) return 31;
+    if (last_notified_mode != CAN_CS_SLEEP || mode_notification_mismatch != 0u) return 64;
     if (Can_GetControllerMode(0u, &state) != E_OK || state != CAN_CS_SLEEP) return 32;
     if (Can_Write(0u, &pdu) != E_NOT_OK) return 33;
     if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_NOT_OK) return 34;
@@ -300,9 +323,12 @@ static int outer_time_ok;
 static int depth;
 static unsigned tx_confirmation_count;
 static PduIdType tx_confirmed_id;
+static unsigned transmit_count;
 uint64_t Os_Now(void) { return 99u; }
 EcuStatus Can_TransmitPdu(PduIdType pdu_id, uint32_t id, uint8_t dlc, const uint8_t data[8]) {
-    (void)pdu_id; (void)id; (void)dlc; (void)data; return ECU_OK;
+    (void)pdu_id; (void)id; (void)dlc; (void)data;
+    ++transmit_count;
+    return ECU_OK;
 }
 void LSduR_CanIfTxConfirmation(PduIdType pdu_id, Std_ReturnType result) {
     if (result == E_OK) { tx_confirmed_id = pdu_id; ++tx_confirmation_count; }
@@ -337,6 +363,17 @@ int main(void) {
     CanIf_TxConfirmation(0u);
     if (tx_confirmation_count != 0u) return 3;
     CanIf_Init(&tx_config);
+    if (CanIf_Transmit(0u, data) != ECU_ERR_CONTROLLER || transmit_count != 0u) return 6;
+    CanIf_ControllerModeIndication(1u, CAN_CS_STARTED);
+    if (CanIf_Transmit(0u, data) != ECU_ERR_CONTROLLER || transmit_count != 0u) return 7;
+    CanIf_ControllerModeIndication(0u, CAN_CS_STARTED);
+    if (CanIf_Transmit(0u, data) != ECU_OK || transmit_count != 1u) return 8;
+    CanIf_ControllerBusOff(0u);
+    if (CanIf_Transmit(0u, data) != ECU_ERR_CONTROLLER || transmit_count != 1u) return 9;
+    CanIf_ControllerModeIndication(0u, CAN_CS_STARTED);
+    if (CanIf_Transmit(0u, data) != ECU_OK || transmit_count != 2u) return 10;
+    CanIf_ControllerModeIndication(0u, CAN_CS_STOPPED);
+    if (CanIf_Transmit(0u, data) != ECU_ERR_CONTROLLER || transmit_count != 2u) return 11;
     CanIf_TxConfirmation(1u);
     if (tx_confirmation_count != 0u) return 4;
     CanIf_TxConfirmation(0u);

@@ -31,6 +31,15 @@ EcuStatus CanIf_TransmitDiagnostic(uint8_t dlc, const uint8_t data[8]);
  * @param[in] can_tx_pdu_id Software PDU handle retained by Can_Write.
  */
 void CanIf_TxConfirmation(PduIdType can_tx_pdu_id);
+/** @brief Record the controller mode reported by the Can Driver.
+ * @param[in] controller_id Generated CanIf controller identifier, currently zero.
+ * @param[in] controller_mode Mode reached by the virtual controller.
+ */
+void CanIf_ControllerModeIndication(uint8_t controller_id, Can_ControllerStateType controller_mode);
+/** @brief Record a bus-off notification from the Can Driver.
+ * @param[in] controller_id Generated CanIf controller identifier, currently zero.
+ */
+void CanIf_ControllerBusOff(uint8_t controller_id);
 /** @brief Route a received CAN L-PDU through the R24-11 CanIf callback.
  * @param[in] mailbox Receive hardware object and CAN identifier.
  * @param[in] pdu_info Received payload and length.

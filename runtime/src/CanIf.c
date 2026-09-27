@@ -8,34 +8,46 @@ static const EcuConfig *canif_config;
 static uint64_t host_rx_time_ms;
 static uint8_t host_rx_time_active;
 static EcuStatus host_rx_result;
+static Can_ControllerStateType indicated_controller_mode;
 
 void CanIf_Init(const EcuConfig *config) {
     Can_Lock();
     canif_config = config;
     host_rx_time_active = 0u;
     host_rx_result = ECU_ERR_CONFIG;
+    indicated_controller_mode = CAN_CS_STOPPED;
     Can_Unlock();
 }
 
 EcuStatus CanIf_Transmit(size_t frame_index, const uint8_t data[8]) {
     EcuStatus result = ECU_ERR_CONFIG;
+    Can_Lock();
     if ((canif_config != NULL) && (frame_index < canif_config->frame_count)) {
         const EcuFrameConfig *frame = &canif_config->frames[frame_index];
         if (frame->direction != 1u) {
             result = ECU_ERR_DIRECTION;
+        } else if (indicated_controller_mode != CAN_CS_STARTED) {
+            result = ECU_ERR_CONTROLLER;
         } else {
             result = Can_TransmitPdu((PduIdType)frame_index, frame->id, frame->dlc, data);
         }
     }
+    Can_Unlock();
     return result;
 }
 
 EcuStatus CanIf_TransmitDiagnostic(uint8_t dlc, const uint8_t data[8]) {
     EcuStatus result = ECU_ERR_CONFIG;
+    Can_Lock();
     if ((canif_config != NULL) && (canif_config->diagnostic != NULL)) {
-        result = Can_TransmitPdu((PduIdType)canif_config->frame_count,
-                                 canif_config->diagnostic->response_can_id, dlc, data);
+        if (indicated_controller_mode != CAN_CS_STARTED) {
+            result = ECU_ERR_CONTROLLER;
+        } else {
+            result = Can_TransmitPdu((PduIdType)canif_config->frame_count,
+                                     canif_config->diagnostic->response_can_id, dlc, data);
+        }
     }
+    Can_Unlock();
     return result;
 }
 
@@ -51,6 +63,25 @@ void CanIf_TxConfirmation(PduIdType can_tx_pdu_id) {
         } else {
             /* No generated transmit PDU corresponds to this handle. */
         }
+    }
+    Can_Unlock();
+}
+
+void CanIf_ControllerModeIndication(uint8_t controller_id,
+                                    Can_ControllerStateType controller_mode) {
+    Can_Lock();
+    if ((canif_config != NULL) && (controller_id == 0u) &&
+        ((controller_mode == CAN_CS_STARTED) || (controller_mode == CAN_CS_STOPPED) ||
+         (controller_mode == CAN_CS_SLEEP))) {
+        indicated_controller_mode = controller_mode;
+    }
+    Can_Unlock();
+}
+
+void CanIf_ControllerBusOff(uint8_t controller_id) {
+    Can_Lock();
+    if ((canif_config != NULL) && (controller_id == 0u)) {
+        indicated_controller_mode = CAN_CS_STOPPED;
     }
     Can_Unlock();
 }

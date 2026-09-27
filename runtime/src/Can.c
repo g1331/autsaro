@@ -81,15 +81,20 @@ Std_ReturnType Can_SetControllerMode(uint8_t controller, Can_ControllerStateType
         if ((transition == CAN_CS_STARTED) && (controller_mode == CAN_STOPPED)) {
             controller_mode = CAN_STARTED;
             bus_off = 0u;
+            CanIf_ControllerModeIndication(controller, CAN_CS_STARTED);
             result = E_OK;
         } else if ((transition == CAN_CS_STOPPED) &&
                    ((controller_mode == CAN_STARTED) || (controller_mode == CAN_SLEEP))) {
             controller_mode = CAN_STOPPED;
             tx_pending = 0u;
+            CanIf_ControllerModeIndication(controller, CAN_CS_STOPPED);
             result = E_OK;
         } else if ((transition == CAN_CS_SLEEP) &&
                    ((controller_mode == CAN_STOPPED) || (controller_mode == CAN_SLEEP))) {
-            controller_mode = CAN_SLEEP;
+            if (controller_mode != CAN_SLEEP) {
+                controller_mode = CAN_SLEEP;
+                CanIf_ControllerModeIndication(controller, CAN_CS_SLEEP);
+            }
             result = E_OK;
         } else {
             /* Unsupported transition leaves the current state unchanged. */
@@ -239,11 +244,21 @@ void Can_SetMode(CanMode mode) {
         controller_mode = CAN_STOPPED;
         bus_off = 1u;
         tx_pending = 0u;
+        CanIf_ControllerBusOff(0u);
     } else {
         controller_mode = mode;
         bus_off = 0u;
         if (mode != CAN_STARTED) {
             tx_pending = 0u;
+        }
+        if (mode == CAN_STARTED) {
+            CanIf_ControllerModeIndication(0u, CAN_CS_STARTED);
+        } else if (mode == CAN_STOPPED) {
+            CanIf_ControllerModeIndication(0u, CAN_CS_STOPPED);
+        } else if (mode == CAN_SLEEP) {
+            CanIf_ControllerModeIndication(0u, CAN_CS_SLEEP);
+        } else {
+            /* Bus-off was handled above; other values have no CanIf mode. */
         }
     }
     Can_Unlock();
