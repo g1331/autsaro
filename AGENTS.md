@@ -6,7 +6,7 @@
 
 ## 跨 Agent 交接
 
-接到“状态如何”“继续开发”等请求时，先读[项目推进规则](docs/project/AGENT_OPERATING_RULES.md)，核对 Git、源码和 `_bmad-output/implementation-artifacts/sprint-status.yaml`。日常用法见[使用说明](docs/project/OWNER_GUIDE.md)。BMad product brief、PRD、architecture、epics 和 sprint 状态分别承载当前产品方向、需求、设计、任务与进度；学习层当前只列在 product brief 中，尚未成为实施任务。`docs/assurance/` 独立记录验收规则、能力声明及证据门。早期产品地图、研究和旧 `docs/workflow/` 任务/证据只作为历史输入；“状态如何”只读。
+接到“状态如何”“继续开发”或指定 story、epic 的请求时，核对 Git、源码及相关 BMad 规划和状态工件，按用户委托的目标使用仓库安装的 BMad 技能；日常用法见[使用说明](docs/project/OWNER_GUIDE.md)。BMad product brief、PRD、architecture、epics 和 sprint 状态分别承载当前产品方向、需求、设计、任务与进度；学习层当前只列在 product brief 中，尚未成为实施任务。[内部验收规则](docs/assurance/acceptance-policy.md)和 `docs/assurance/capabilities.json` 独立记录验收条件、能力声明及证据门。早期产品地图、研究和旧 `docs/workflow/` 任务/证据只作为历史输入；“状态如何”只读。
 
 ## 构建、测试与本地开发
 
