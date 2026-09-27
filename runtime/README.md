@@ -14,7 +14,7 @@ gcc -std=c99 -Wall -Wextra -pedantic -Iruntime/include runtime/src/*.c generated
 在 MSVC 开发者命令提示符中：
 
 ```bat
-cl /TC /W4 /I runtime\include runtime\src\Can.c runtime\src\Can_HostLock.c runtime\src\CanIf.c runtime\src\CanTp.c runtime\src\Com.c runtime\src\Dcm.c runtime\src\Dem.c runtime\src\Ecu_Runtime.c runtime\src\Ecu_Status.c runtime\src\LSduR.c runtime\src\NvM.c runtime\src\Os.c runtime\src\PduR.c runtime\src\Rte.c runtime\src\Security.c runtime\src\ecu_host_main.c generated\Ecu_Config.c bcrypt.lib /Fe:ecu.exe
+cl /TC /W4 /I runtime\include runtime\src\Can.c runtime\src\Can_HostLock.c runtime\src\CanIf.c runtime\src\CanTp.c runtime\src\Com.c runtime\src\Dcm.c runtime\src\Dem.c runtime\src\Ecu_Runtime.c runtime\src\Ecu_Status.c runtime\src\LSduR.c runtime\src\NvM.c runtime\src\NvM_HostStorage.c runtime\src\Os.c runtime\src\PduR.c runtime\src\Rte.c runtime\src\Security.c runtime\src\ecu_host_main.c generated\Ecu_Config.c bcrypt.lib /Fe:ecu.exe
 ```
 
 独立交付工程应保留这些源码和头文件，包括工程根目录的生成回调声明 `Dcm_Externals.h`，并将其中的 include/source 路径调整为工程内路径。输入配置结构和容量上限定义在 `include/Ecu_Config.h`；启动时再次校验生成数据，错误返回 `E CONFIG` 并退出。

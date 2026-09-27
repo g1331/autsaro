@@ -4,11 +4,11 @@
 #include "CanTp.h"
 #include "Dcm.h"
 
-static const EcuConfig *active_config;
+static const EcuConfig *os_config;
 static uint64_t current_ms;
 
 void Os_Init(const EcuConfig *config) {
-    active_config = config;
+    os_config = config;
     current_ms = 0;
 }
 
@@ -28,8 +28,8 @@ EcuStatus Os_Advance(uint64_t now_ms) {
             result = CanTp_AdvanceTime(now_ms);
         }
         if (result == ECU_OK) {
-            for (i = 0u; i < active_config->frame_count; ++i) {
-                const EcuFrameConfig *frame = &active_config->frames[i];
+            for (i = 0u; i < os_config->frame_count; ++i) {
+                const EcuFrameConfig *frame = &os_config->frames[i];
                 if ((frame->direction == 1u) &&
                     ((now_ms / frame->period_ms) > (previous_ms / frame->period_ms)) &&
                     (Can_GetMode() == CAN_STARTED)) {

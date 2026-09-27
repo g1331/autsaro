@@ -32,6 +32,7 @@ HOST_SOURCES = {
     "Ecu_Status.c",
     "Security.c",
     "Can_HostLock.c",
+    "NvM_HostStorage.c",
 }
 
 

@@ -60,6 +60,7 @@ class BaselineTests(unittest.TestCase):
             for name in (
                 "Can.c",
                 "Can_HostLock.c",
+                "NvM_HostStorage.c",
                 "CanIf.c",
                 "CanTp.c",
                 "Com.c",

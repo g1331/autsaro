@@ -1,20 +1,10 @@
-#ifndef _WIN32
-#define _POSIX_C_SOURCE 200809L
-#endif
 #include "NvM.h"
-#include <errno.h>
-#include <stdio.h>
+#include "NvM_HostStorage.h"
 #include <string.h>
-#ifdef _WIN32
-#include <io.h>
-#else
-#include <unistd.h>
-#endif
 
 #define SLOT_SIZE 32u
 #define SLOT_COUNT 2u
 
-static FILE *storage;
 static uint32_t fingerprint;
 static uint64_t sequence;
 static unsigned current_slot;
@@ -29,7 +19,7 @@ static void Store32(uint8_t *data, uint32_t value) {
 static void Store64(uint8_t *data, uint64_t value) {
     unsigned i;
     for (i = 0u; i < 8u; ++i) {
-        data[i] = (uint8_t)(value >> (i * 8u));
+        data[i] = (uint8_t)(value >> ((uint64_t)i * UINT64_C(8)));
     }
 }
 
@@ -46,7 +36,7 @@ static uint64_t Load64(const uint8_t *data) {
     unsigned i;
     uint64_t value = 0u;
     for (i = 0u; i < 8u; ++i) {
-        value |= (uint64_t)data[i] << (i * 8u);
+        value |= (uint64_t)data[i] << ((uint64_t)i * UINT64_C(8));
     }
     return value;
 }
@@ -58,7 +48,7 @@ static uint32_t Checksum(const uint8_t *data, size_t length) {
         unsigned bit;
         crc ^= data[i];
         for (bit = 0u; bit < 8u; ++bit) {
-            crc = (crc >> 1u) ^ ((crc & 1u) != 0u ? UINT32_C(0xedb88320) : 0u);
+            crc = (crc >> 1u) ^ (((crc & 1u) != 0u) ? 0xedb88320u : 0u);
         }
     }
     return ~crc;
@@ -78,8 +68,8 @@ static uint32_t ConfigFingerprint(const EcuConfig *config) {
 }
 
 static void EncodeSlot(uint8_t slot[SLOT_SIZE], uint64_t number, uint8_t status) {
-    memset(slot, 0, SLOT_SIZE);
-    memcpy(slot, "NVH1", 4u);
+    (void)memset(slot, 0, SLOT_SIZE);
+    (void)memcpy(slot, "NVH1", 4u);
     Store64(&slot[4], number);
     Store32(&slot[12], fingerprint);
     slot[16] = status;
@@ -88,46 +78,33 @@ static void EncodeSlot(uint8_t slot[SLOT_SIZE], uint64_t number, uint8_t status)
 
 static int ValidSlot(const uint8_t slot[SLOT_SIZE]) {
     size_t i;
+    int valid = 1;
     if ((slot[0] != UINT8_C(0x4e)) || (slot[1] != UINT8_C(0x56)) || (slot[2] != UINT8_C(0x48)) ||
-        (slot[3] != UINT8_C(0x31)) || Load64(&slot[4]) == 0u || Load32(&slot[12]) != fingerprint ||
-        (slot[16] & 0x80u) != 0u || Load32(&slot[28]) != Checksum(slot, 28u)) {
-        return 0;
-    }
-    for (i = 17u; i < 28u; ++i) {
-        if (slot[i] != 0u) {
-            return 0;
+        (slot[3] != UINT8_C(0x31)) || (Load64(&slot[4]) == 0u) ||
+        (Load32(&slot[12]) != fingerprint) || ((slot[16] & 0x80u) != 0u) ||
+        (Load32(&slot[28]) != Checksum(slot, 28u))) {
+        valid = 0;
+    } else {
+        for (i = 17u; i < 28u; ++i) {
+            if (slot[i] != 0u) {
+                valid = 0;
+                break;
+            }
         }
     }
-    return 1;
-}
-
-static long StorageLength(void) {
-    long length = -1L;
-    if (fseek(storage, 0L, SEEK_END) == 0) {
-        errno = 0;
-        length = ftell(storage);
-        if (errno != 0) {
-            length = -1L;
-        }
-    }
-    return length;
+    return valid;
 }
 
 static EcuStatus WriteSlot(unsigned index, uint64_t number, uint8_t status) {
     uint8_t slot[SLOT_SIZE];
+    EcuStatus result = ECU_ERR_NVM;
     EncodeSlot(slot, number, status);
-    if (fseek(storage, (long)(index * SLOT_SIZE), SEEK_SET) != 0 ||
-        fwrite(slot, 1u, SLOT_SIZE, storage) != SLOT_SIZE || fflush(storage) != 0) {
-        return ECU_ERR_NVM;
+    if (NvM_HostWrite((size_t)index * SLOT_SIZE, slot, sizeof(slot)) != 0) {
+        /* The host write or durability sync failed. */
+    } else {
+        result = ECU_OK;
     }
-#ifdef _WIN32
-    if (_commit(_fileno(storage)) != 0) {
-#else
-    if (fsync(fileno(storage)) != 0) {
-#endif
-        return ECU_ERR_NVM;
-    }
-    return ECU_OK;
+    return result;
 }
 
 EcuStatus NvM_Init(const EcuConfig *config, const char *path, uint8_t *status) {
@@ -136,77 +113,64 @@ EcuStatus NvM_Init(const EcuConfig *config, const char *path, uint8_t *status) {
     int chosen = -1;
     unsigned valid_count = 0u;
     long length;
-    if (storage != NULL) {
-        (void)fclose(storage);
-        storage = NULL;
-    }
-    if (path == NULL || path[0] == '\0' || config == NULL || config->diagnostic == NULL ||
-        config->diagnostic->dtc == NULL || status == NULL) {
-        return ECU_ERR_CONFIG;
-    }
-    fingerprint = ConfigFingerprint(config);
-    errno = 0;
-    storage = fopen(path, "r+b");
-    if (storage == NULL) {
-        if (errno != ENOENT) {
-            return ECU_ERR_NVM;
-        }
-        storage = fopen(path, "w+b");
-        if (storage == NULL) {
-            return ECU_ERR_NVM;
-        }
-        if (WriteSlot(0u, 1u, 0x50u) != ECU_OK || WriteSlot(1u, 2u, 0x50u) != ECU_OK) {
-            (void)fclose(storage);
-            storage = NULL;
-            return ECU_ERR_NVM;
-        }
-        current_slot = 1u;
-        sequence = 2u;
-        *status = 0x50u;
-        return ECU_OK;
-    }
-    length = StorageLength();
-    if (length < (long)SLOT_SIZE || length > (long)sizeof(slots) ||
-        fseek(storage, 0L, SEEK_SET) != 0) {
-        (void)fclose(storage);
-        storage = NULL;
-        return ECU_ERR_NVM;
-    }
-    memset(slots, 0, sizeof(slots));
-    if (fread(slots, 1u, (size_t)length, storage) != (size_t)length) {
-        (void)fclose(storage);
-        storage = NULL;
-        return ECU_ERR_NVM;
-    }
-    for (i = 0u; i < SLOT_COUNT; ++i) {
-        if (ValidSlot(slots[i])) {
-            ++valid_count;
-            if (chosen < 0 || Load64(&slots[i][4]) > Load64(&slots[chosen][4])) {
-                chosen = (int)i;
+    EcuStatus result = ECU_ERR_CONFIG;
+    NvM_HostClose();
+    if ((path != NULL) && (path[0] != '\0') && (config != NULL) && (config->diagnostic != NULL) &&
+        (config->diagnostic->dtc != NULL) && (status != NULL)) {
+        fingerprint = ConfigFingerprint(config);
+        result = ECU_ERR_NVM;
+        switch (NvM_HostOpen(path)) {
+        case NVM_HOST_OPEN_CREATED:
+            if ((WriteSlot(0u, 1u, 0x50u) == ECU_OK) && (WriteSlot(1u, 2u, 0x50u) == ECU_OK)) {
+                current_slot = 1u;
+                sequence = 2u;
+                *status = 0x50u;
+                result = ECU_OK;
             }
+            break;
+        case NVM_HOST_OPEN_EXISTING:
+            length = NvM_HostLength();
+            if ((length >= (long)SLOT_SIZE) && (length <= (long)sizeof(slots))) {
+                (void)memset(slots, 0, sizeof(slots));
+                if (NvM_HostRead(&slots[0][0], (size_t)length) == 0) {
+                    for (i = 0u; i < SLOT_COUNT; ++i) {
+                        if (ValidSlot(slots[i]) != 0) {
+                            ++valid_count;
+                            if ((chosen < 0) ||
+                                (Load64(&slots[i][4]) > Load64(&slots[chosen][4]))) {
+                                chosen = (int)i;
+                            }
+                        }
+                    }
+                    if ((chosen >= 0) && (valid_count == SLOT_COUNT)) {
+                        current_slot = (unsigned)chosen;
+                        sequence = Load64(&slots[chosen][4]);
+                        *status = slots[chosen][16];
+                        result = ECU_OK;
+                    }
+                }
+            }
+            break;
+        default:
+            break;
+        }
+        if (result != ECU_OK) {
+            NvM_HostClose();
         }
     }
-    if (chosen < 0 || valid_count != SLOT_COUNT) {
-        (void)fclose(storage);
-        storage = NULL;
-        return ECU_ERR_NVM;
-    }
-    current_slot = (unsigned)chosen;
-    sequence = Load64(&slots[chosen][4]);
-    *status = slots[chosen][16];
-    return ECU_OK;
+    return result;
 }
 
 EcuStatus NvM_Write(uint8_t status) {
     unsigned next_slot;
-    if (storage == NULL || sequence == UINT64_MAX || (status & 0x80u) != 0u) {
-        return ECU_ERR_NVM;
+    EcuStatus result = ECU_ERR_NVM;
+    if ((sequence != UINT64_MAX) && ((status & 0x80u) == 0u)) {
+        next_slot = 1u - current_slot;
+        result = WriteSlot(next_slot, sequence + 1u, status);
+        if (result == ECU_OK) {
+            current_slot = next_slot;
+            ++sequence;
+        }
     }
-    next_slot = 1u - current_slot;
-    if (WriteSlot(next_slot, sequence + 1u, status) != ECU_OK) {
-        return ECU_ERR_NVM;
-    }
-    current_slot = next_slot;
-    ++sequence;
-    return ECU_OK;
+    return result;
 }

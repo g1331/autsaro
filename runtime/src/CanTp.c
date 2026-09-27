@@ -50,42 +50,47 @@ static EcuStatus FinishTx(EcuStatus status, uint64_t now_ms) {
 
 static EcuStatus SendConsecutiveFrames(uint64_t now_ms) {
     EcuStatus outcome = ECU_OK;
-    while ((tx.active != 0u) && (tx.waiting_fc == 0u) && (tx.sent < tx.length)) {
+    uint8_t stop = 0u;
+    while ((tx.active != 0u) && (tx.waiting_fc == 0u) && (tx.sent < tx.length) && (stop == 0u)) {
         uint8_t frame[8] = {0};
         size_t count = tx.length - tx.sent;
         EcuStatus result;
 
         if ((tx.sent_cf != 0u) && ((now_ms - tx.last_cf_ms) < tx.stmin_ms)) {
-            break;
-        }
-        if (count > 7u) {
-            count = 7u;
-        }
-        frame[0] = (uint8_t)(0x20u | tx.next_sn);
-        result = PduR_CanTpCopyTxData(tx.sent, &frame[1], count);
-        if (result != ECU_OK) {
-            outcome = FinishTx(result, now_ms);
-            break;
-        }
-        result = LSduR_CanTpTransmit((uint8_t)(count + 1u), frame);
-        if (result != ECU_OK) {
-            outcome = FinishTx(result, now_ms);
-            break;
-        }
-        tx.sent += count;
-        tx.next_sn = (uint8_t)((tx.next_sn + 1u) & 0x0fu);
-        tx.last_cf_ms = now_ms;
-        tx.sent_cf = 1u;
-        if (tx.sent == tx.length) {
-            outcome = FinishTx(ECU_OK, now_ms);
-            break;
-        }
-        if (tx.block_size != 0u) {
-            --tx.block_remaining;
-            if (tx.block_remaining == 0u) {
-                tx.waiting_fc = 1u;
-                tx.wait_started_ms = now_ms;
-                break;
+            stop = 1u;
+        } else {
+            if (count > 7u) {
+                count = 7u;
+            }
+            frame[0] = (uint8_t)(0x20u | tx.next_sn);
+            result = PduR_CanTpCopyTxData(tx.sent, &frame[1], count);
+            if (result != ECU_OK) {
+                outcome = FinishTx(result, now_ms);
+                stop = 1u;
+            } else {
+                result = LSduR_CanTpTransmit((uint8_t)(count + 1u), frame);
+                if (result != ECU_OK) {
+                    outcome = FinishTx(result, now_ms);
+                    stop = 1u;
+                } else {
+                    tx.sent += count;
+                    tx.next_sn = (uint8_t)((tx.next_sn + 1u) & 0x0fu);
+                    tx.last_cf_ms = now_ms;
+                    tx.sent_cf = 1u;
+                    if (tx.sent == tx.length) {
+                        outcome = FinishTx(ECU_OK, now_ms);
+                        stop = 1u;
+                    } else if (tx.block_size != 0u) {
+                        --tx.block_remaining;
+                        if (tx.block_remaining == 0u) {
+                            tx.waiting_fc = 1u;
+                            tx.wait_started_ms = now_ms;
+                            stop = 1u;
+                        }
+                    } else {
+                        /* Unbounded block: continue while separation time permits. */
+                    }
+                }
             }
         }
     }

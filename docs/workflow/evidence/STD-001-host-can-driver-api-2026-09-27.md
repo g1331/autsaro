@@ -40,6 +40,8 @@
 
 ## 当前切片的规范逐项核对
 
+随后将主机 NvM 文件打开、读写、`fflush` 与 `fsync`/`_commit` 抽入 `NvM_HostStorage.c`，BSW `NvM.c` 保留双槽 CRC/配置指纹、序号选择与持久化成功后才提交状态；新主机源按现有分类显式登记并随生成工程自动交付。`CanTp.c` 连续帧循环和 `CanIf.c`、`Os.c` 静态标识符也做了语义保持整理。开发前查本地 R24-11 NvM SWS 页 37–39、44–45、84、99–101、139 与 CanTp SWS 页 32、34、66–67；这些整理未实现 NvM 标准异步队列或新的标准 CanTp API。脚本测试 15/15、诊断定向 6/6、两项跨重启 DTC 定向测试及完整 `python scripts/workflow.py verify --scope all`（核心 3/3 + 50/50、UI/桌面构建和增量 Clippy）通过。独立只读 Agent 核对文件新建/损坏、双槽恢复、持久化时序和 CF/FC 逻辑，未发现确定行为回归，但没有运行故障注入。代表性工程 `<temporary-dir>/generated` 的全量基线在修正 Python 格式后仍失败四个分区：BSW 部分 MISRA 18 条、RTE 9 条、生成 C 7 条，以及七项规范证据门；其他格式、Lint、全告警 Clippy、Doxygen 均通过。额外只读 Cppcheck 对 `runtime/src` 全部 C 源码运行同一部分 MISRA 扫描报 295 条，其中大量属于明确分类的 HOST 源码；18 条 BSW 数字不得解释为整个交付物只剩 18 条。
+
 Dcm 质量整改按已查本地 R24-11 Dcm SWS 的请求、会话和确认顺序，将当前主机服务分派的九个服务处理分成单出口函数，保留原有 NRC 优先级、读/写回调顺序、`pending_session` 发送失败复位及 Dem 状态更新调用。`cargo test --manifest-path core/Cargo.toml diagnostic_ -- --nocapture` 通过（单元 1/1、端到端 6/6）；完整 `python scripts/workflow.py verify --scope all` 通过（脚本 15/15、核心 3/3 + 50/50、UI/桌面构建和增量 Clippy）。新代表性工程 `<temporary-dir>/generated` 的全量基线中格式、Python、UI、全告警 Clippy 和 Doxygen 通过；仍失败 BSW 部分 MISRA 77 条、RTE 9 条、生成 C 7 条及七项规范证据门。随后将 Dcm 文件内重复的静态标识符改为模块专属名称，再次单独扫描 BSW 文件集降为 76 条；这一步尚未重跑完整基线。此主机 Dcm API 仍不等价于规范要求的 Dcm/PduR 异步接口与完整 DSL/DSD/DSP 能力，不能升级标准支持声明。
 
 独立只读 Agent 对 Dcm 改动逐服务核对本地 Dcm SWS 7.4.1.2–7.4.1.3、7.4.2.2、7.4.2.6、7.4.2.8、7.4.2.13、7.4.2.15、7.4.2.16 与 7.4.2.24，未发现与 HEAD 相比的确定行为回归；指出错误优先级组合、回调失败副作用和发送失败后会话状态缺少专门单元测试。本轮完整端到端通过，但未据此宣称这些独立路径均已验证。
