@@ -9,6 +9,17 @@ typedef uint8_t AppModeType;
 typedef uint8_t ResourceType;
 typedef uint32_t EventMaskType;
 typedef EventMaskType *EventMaskRefType;
+typedef uint8_t CounterType;
+typedef uint8_t AlarmType;
+/* Automotive Counter values are independent of FreeRTOS's 32-bit tick ABI. */
+typedef uint64_t TickType;
+typedef TickType *TickRefType;
+typedef struct {
+    TickType maxallowedvalue;
+    TickType ticksperbase;
+    TickType mincycle;
+} AlarmBaseType;
+typedef AlarmBaseType *AlarmBaseRefType;
 #define RES_SCHEDULER 7u
 #define E_OK 0u
 #define E_OS_ACCESS 1u
@@ -93,6 +104,55 @@ StatusType Os_SetEvent(TaskType TaskID, EventMaskType Mask);
  * @return E_OK, E_OS_ID, E_OS_ACCESS, E_OS_STATE, E_OS_ILLEGAL_ADDRESS or E_OS_CALLEVEL.
  */
 StatusType GetEvent(TaskType TaskID, EventMaskRefType Event);
+/** Increment a software Counter and execute due Alarm actions.
+ * @param CounterID Configured software Counter.
+ * @return E_OK, E_OS_ID or E_OS_CALLEVEL; action errors invoke configured ErrorHook.
+ */
+StatusType IncrementCounter(CounterType CounterID);
+/** Read a Counter's current modular value.
+ * @param CounterID Configured Counter.
+ * @param Value Non-null output; unchanged on rejection.
+ * @return E_OK, E_OS_ID, E_OS_ILLEGAL_ADDRESS or E_OS_CALLEVEL.
+ */
+StatusType GetCounterValue(CounterType CounterID, TickRefType Value);
+/** Read a modular elapsed value and update the prior sample.
+ * @param CounterID Configured Counter.
+ * @param Value Prior sample on input, current value on success.
+ * @param ElapsedValue Difference within one modulus; multiple wraps are not detectable.
+ * @return E_OK, E_OS_ID, E_OS_VALUE, E_OS_ILLEGAL_ADDRESS or E_OS_CALLEVEL.
+ */
+StatusType GetElapsedValue(CounterType CounterID, TickRefType Value, TickRefType ElapsedValue);
+/** Read immutable Alarm Counter properties.
+ * @param AlarmID Configured Alarm.
+ * @param Info Non-null output.
+ * @return E_OK, E_OS_ID, E_OS_ILLEGAL_ADDRESS or E_OS_CALLEVEL.
+ */
+StatusType GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info);
+/** Read ticks remaining until the active Alarm expires.
+ * @param AlarmID Configured Alarm.
+ * @param Tick Non-null output, unchanged on rejection.
+ * @return E_OK, E_OS_ID, E_OS_NOFUNC, E_OS_ILLEGAL_ADDRESS or E_OS_CALLEVEL.
+ */
+StatusType GetAlarm(AlarmType AlarmID, TickRefType Tick);
+/** Start a relative Alarm.
+ * @param AlarmID Configured Alarm.
+ * @param Increment Positive distance within the Counter maximum.
+ * @param Cycle Zero for one-shot, or a valid cycle.
+ * @return E_OK, E_OS_ID, E_OS_VALUE, E_OS_STATE or E_OS_CALLEVEL.
+ */
+StatusType SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle);
+/** Start an absolute Alarm; the current value expires only after a complete modulus.
+ * @param AlarmID Configured Alarm.
+ * @param Start Absolute value within the Counter maximum.
+ * @param Cycle Zero for one-shot, or a valid cycle.
+ * @return E_OK, E_OS_ID, E_OS_VALUE, E_OS_STATE or E_OS_CALLEVEL.
+ */
+StatusType SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle);
+/** Cancel an active Alarm.
+ * @param AlarmID Configured Alarm.
+ * @return E_OK, E_OS_ID, E_OS_NOFUNC or E_OS_CALLEVEL.
+ */
+StatusType CancelAlarm(AlarmType AlarmID);
 void StartupHook(void);
 void ShutdownHook(StatusType Error);
 #endif

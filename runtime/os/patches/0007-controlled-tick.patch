@@ -1,0 +1,51 @@
+--- a/portable/MSVC-MingW/port.c
++++ b/portable/MSVC-MingW/port.c
+@@ -295,7 +295,11 @@
+ 
+     /* Process the tick itself. */
+     configASSERT( xPortRunning );
+-    ulSwitchRequired = ( uint32_t ) xTaskIncrementTick();
++    ulSwitchRequired = 0;
++    if( Os_TimeBeginTick() != 0 )
++    {
++        ulSwitchRequired = ( uint32_t ) xTaskIncrementTick();
++    }
+ 
+     return ulSwitchRequired;
+ }
+@@ -593,6 +597,12 @@
+ void vPortSetInterruptHandler( uint32_t ulInterruptNumber,
+                                uint32_t ( * pvHandler )( void ) )
+ {
++    if( ( Os_Config != NULL ) && ( Os_Config->time != NULL ) &&
++        ( ulInterruptNumber == portINTERRUPT_TICK ) && ( pvHandler != prvProcessTickInterrupt ) )
++    {
++        Os_BackendShutdown( E_OS_ACCESS );
++    }
++
+     if( !Os_MailboxHandlerAllowed( ulInterruptNumber, pvHandler ) )
+     {
+         Os_BackendShutdown( E_OS_ACCESS );
+--- a/tasks.c
++++ b/tasks.c
+@@ -4236,6 +4236,20 @@
+     return xAlreadyYielded;
+ }
+ /*-----------------------------------------------------------*/
++
++#ifdef OS_TIME_TESTS
++void vTaskOsTestTick( TickType_t tick )
++{
++    taskENTER_CRITICAL();
++    configASSERT( listLIST_IS_EMPTY( pxDelayedTaskList ) );
++    configASSERT( listLIST_IS_EMPTY( pxOverflowDelayedTaskList ) );
++    configASSERT( xPendedTicks == 0 );
++    xTickCount = tick;
++    xNumOfOverflows = 0;
++    prvResetNextTaskUnblockTime();
++    taskEXIT_CRITICAL();
++}
++#endif
+ 
+ TickType_t xTaskGetTickCount( void )
+ {

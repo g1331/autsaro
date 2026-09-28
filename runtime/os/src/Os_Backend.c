@@ -89,7 +89,7 @@ static size_t task_index(TaskType id) {
     }
     return OS_MAX_TASKS;
 }
-static int activation_context(void) {
+int Os_BackendServiceContext(void) {
     const Os_NativeStack *stack = Os_StackCurrent();
     Os_BackendGuardService();
     return (Os_TargetReady() != 0) && (stack != NULL) &&
@@ -98,13 +98,14 @@ static int activation_context(void) {
              ((current_interrupt >= 32u) ||
               ((Os_Config->category1_isrs & (UINT32_C(1) << current_interrupt)) == 0u))));
 }
-int Os_BackendInputOwner(void) {
+int Os_BackendTaskOwner(TaskType id) {
     size_t index = current_task_index();
     if (index == OS_MAX_TASKS) {
         return 0;
     }
-    return (Os_Config->tasks[index].id == Os_Config->input_task) ? 1 : -1;
+    return (Os_Config->tasks[index].id == id) ? 1 : -1;
 }
+int Os_BackendInputOwner(void) { return Os_BackendTaskOwner(Os_Config->input_task); }
 void Os_BackendGuardService(void) {
     const Os_NativeStack *stack = Os_StackCurrent();
     if ((InterlockedCompareExchange(&Os_Closing, 0, 0) != 0) && (stack != NULL) &&
@@ -301,9 +302,9 @@ static void report_and_exit(void) {
     Os_StackReport();
     printf("lifecycle=Closed state=%s reason=%u trace=%s threads=%u events=%u mutexes=%u "
            "resource_calls=%u hidden=2 controllers=2 heap=windows static=freertos "
-           "input_closed=1 tick_closed=1\n",
+           "input_closed=1 tick_closed=1 time_signal_failed=%d\n",
            shutdown_reason == E_OK ? "Ready" : "Failed", shutdown_reason, trace, threads, events,
-           mutexes, resource_calls);
+           mutexes, resource_calls, Os_TimeSignalFailed());
     fflush(stdout);
     ExitProcess(shutdown_reason == E_OK ? 0u : shutdown_reason);
 }
@@ -369,6 +370,7 @@ static DWORD WINAPI control(void *argument) {
     return 0u;
 }
 void Os_BackendStackFault(char failed_role) {
+    Os_TimeClose();
     Os_MailboxClose();
     InterlockedOr(&activation_admission, 2);
     InterlockedExchange(&Os_Closing, 1);
@@ -400,6 +402,7 @@ void Os_BackendShutdown(StatusType error) {
     ExitProcess(E_OS_STATE);
 }
 void Os_BackendRequestShutdown(StatusType error) {
+    Os_TimeClose();
     Os_MailboxClose();
     if ((InterlockedOr(&activation_admission, 2) & 2) == 0) {
         InterlockedExchange(&Os_Closing, 1);
@@ -572,6 +575,7 @@ void Os_BackendStart(AppModeType mode) {
         Os_BackendShutdown(E_OS_VALUE);
     }
     startup_mode = mode;
+    Os_TimeInit(mode);
     Os_StackInit();
     Os_MailboxInstall();
     if (!DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &main_thread,
@@ -611,7 +615,7 @@ void Os_BackendStart(AppModeType mode) {
 StatusType Os_BackendState(TaskType id, TaskStateRefType state) {
     size_t i;
     Os_StackCheck();
-    if (!activation_context()) {
+    if (!Os_BackendServiceContext()) {
         return E_OS_CALLEVEL;
     }
     for (i = 0u; i < Os_Config->task_count; ++i) {
@@ -647,7 +651,7 @@ StatusType Os_BackendActivate(TaskType id) {
     size_t index;
     const ActivationQueue *queue;
     const Os_NativeStack *stack;
-    if (!activation_context()) {
+    if (!Os_BackendServiceContext()) {
         return E_OS_CALLEVEL;
     }
     index = task_index(id);
@@ -927,6 +931,7 @@ StatusType Os_BackendWait(EventMaskType mask) {
          * predicate represents automotive WAITING. The ISR cannot interleave
          * before this complete transaction releases the port critical section. */
         vTaskSuspend(NULL);
+        Os_TimeOnWaiting(Os_Config->tasks[index].id, task_events[index], mask);
     }
     taskEXIT_CRITICAL();
     Os_BackendGuardService();
@@ -952,7 +957,7 @@ StatusType Os_BackendClear(EventMaskType mask) {
 StatusType Os_BackendEvent(TaskType id, EventMaskType mask, EventMaskRefType output) {
     size_t index;
     StatusType status = E_OK;
-    if (!activation_context()) {
+    if (!Os_BackendServiceContext()) {
         return E_OS_CALLEVEL;
     }
     index = task_index(id);
@@ -996,7 +1001,7 @@ StatusType Os_BackendInspect(TaskType id, Os_ActivationInfo *info) {
     size_t index;
     unsigned j;
     Os_ActivationInfo snapshot;
-    if (!activation_context()) {
+    if (!Os_BackendServiceContext()) {
         return E_OS_CALLEVEL;
     }
     index = task_index(id);

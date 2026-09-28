@@ -1,6 +1,7 @@
 #ifndef AUTOSAR_EPIC4_OS_TARGET_H
 #define AUTOSAR_EPIC4_OS_TARGET_H
 #include "Os.h"
+#include "Os_Time.h"
 #include <stddef.h>
 #define OS_MAX_TASKS 16u
 #define OS_MAX_PRIORITY 30u
@@ -58,6 +59,7 @@ typedef struct {
     uint32_t category1_isrs;
     TaskType input_task;
     EventMaskType input_event;
+    const Os_TimeConfig *time;
 } Os_TargetConfig;
 /** Prepare one process-local target before StartOS.
  * @param config Static configuration retained for the lifetime of the process.

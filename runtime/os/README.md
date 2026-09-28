@@ -117,3 +117,28 @@ cargo test --manifest-path core/Cargo.toml epic4_event_wakeup_races -- --exact -
 ```
 
 26个独立原生向量覆盖连续Wait、所有权、新实例、标准错误、Category1/2调用矩阵、Category1在共享资源ceiling期间仍能交付、五个发布/等待交错、256槽容量、522条环绕、最后uint64 ticket和后续拒绝、bridge/消费者接口拒绝及5个配置拒绝。另验证接收Task未在所选mode中autostart时，在创建线程之前拒绝启动。第六复制件补丁维护IRQ30的handler所有权，启动期或运行期替换均以E_OS_ACCESS关闭，未接纳输入、未继续应用；原件不改。控制生产者通过实际Windows线程/IRQ接线；观察者读取真实TCB状态，只有测试握手使用宿主等待，不替代内核选择。MISRA仍为partial扫描，完整质量和偏离批准不能由这些行为测试替代。
+
+## 受控时间与Counter/Alarm（4.8）
+
+可选Time配置提供独立Counter/Alarm对象及唯一完成owner。汽车TickType为uint64，Counter最大UINT32_MAX；FreeRTOS实际tick仍为32bit，逻辑epoch为uint64。SystemCounter按原创ECUC保持SOFTWARE，参考max65535/mincycle1/ticksperbase1。标准IncrementCounter可独立驱动软件Counter，硬件Counter拒绝该服务；GetElapsedValue按单个模数返回差值，不能识别经过多轮模数的间隔。
+
+原生bridge以Os_TargetAdvanceOneTick请求恰好下一个epoch；epoch0和最后已确认epoch是无推进操作，跳跃/倒退或未确认下一请求拒绝。第七复制件补丁在原有tick ISR前取得唯一pending请求门；实际xTaskIncrementTick触发backend tick hook，推进SystemCounter、按静态配置顺序执行Alarm，并设置wake_event（参考可用Ev_IO）。IRQ1不能被替换。Alarm_Work设置Ev_Work，Alarm_App设置Ev_App，wake_event仅让owner处理ticket，不代表额外BSW周期。
+
+owner通过Os_TargetCurrentTick取得已交付ticket，处理事件/工作后调用Os_TargetCompleteTick标记，再清空已观察事件并进入Wait。只有真实内核suspended-list成员、无待处理事件、输入mailbox无已发布或在途记录时，才发布完整Os_TickCompletion。原生bridge用Os_TargetWaitTick等待手动完成event；通知先成功、结果后发布，event保持到同一producer预留下个ticket时重置，避免通知与发布交错丢失。watchdog只控制宿主存活，不产生汽车时间。完成event的实际重置/通知失败会关闭目标并报告time_signal_failed=1，不返回完成记录。
+
+Alarm支持相对/绝对/周期/取消、ActivateTask/SetEvent/Callback核心。绝对start等于当前Counter值时等待完整模数；宽TickType可表示最大Counter的4294967296剩余量。动作错误调用已配置error_hook，IncrementCounter自身仍E_OK。完整ErrorHook身份、调用矩阵、递归抑制及服务参数访问由4.18闭合。
+
+```powershell
+python scripts/epic4_os.py --suite time
+cargo test --manifest-path core/Cargo.toml epic4_controlled_tick_and_alarm -- --exact --nocapture
+```
+
+40个原生向量覆盖1000次独立完成（1000 Work/100 App）、Counter与实际内核独立回绕、uint64上界、未确认推进、4.2相对/绝对Alarm预期、完整模数/最大剩余量、动作失败和回调、标准错误及Category1/2、21种配置拒绝、真实完成句柄失败和IRQ1替换拒绝。另验证预留至pending间关闭时拒绝且ticket保持、Time启用时完成event分配失败在任何线程创建前关闭。初始实际kernel计数和关闭边界仅在OS_TIME_TESTS入口注入，随后真正运行原内核跨界；生产配置没有该入口。该范围是时间核心行为证明，完整SC1、规范质量与集成交接仍须以下出口闭合。
+
+| 尚未闭合的等级/集成义务 | 出口 |
+| --- | --- |
+| 八software Counter容量、两个ScheduleTable及Alarm IncrementCounter动作/交互 | 4.17独立容量与语义向量 |
+| 完整生命周期、Extended Status、Hook/中断上下文和嵌套 | 4.18完整义务矩阵 |
+| ARTI描述/Hook、完整C质量和偏离批准 | 4.19/4.20 |
+| BSW/SWC周期、输出成功/确认和HostBatch COMMIT静止点 | 4.14–16跨story集成 |
+| 可重建包、完整SC1等级声明及独立交接 | 4.21/4.22 |

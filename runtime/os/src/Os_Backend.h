@@ -7,6 +7,23 @@
 #include "Os_Stack.h"
 #include "Os_Mailbox.h"
 int Os_BackendInputOwner(void);
+int Os_BackendTaskOwner(TaskType id);
+int Os_BackendServiceContext(void);
+StatusType Os_BridgeContext(void);
+int Os_MailboxQuiescent(void);
+StatusType Os_TimeValidate(const Os_TargetConfig *target);
+void Os_TimeInit(AppModeType mode);
+void Os_TimeClose(void);
+int Os_TimeSignalFailed(void);
+void Os_TimeTick(void);
+void vApplicationTickHook(void);
+int Os_TimeBeginTick(void);
+#ifdef OS_TIME_TESTS
+void Os_TimeTestSeed(uint64_t epoch, uint32_t kernel_tick, TickType value);
+void Os_TimeTestCloseEvent(void);
+void Os_TimeTestBeforePending(void);
+#endif
+void Os_TimeOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate);
 void Os_MailboxInstall(void);
 void Os_MailboxClose(void);
 int Os_MailboxHandlerAllowed(uint32_t interrupt, uint32_t (*handler)(void));

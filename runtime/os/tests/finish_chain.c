@@ -278,7 +278,7 @@ int main(int argc, char **argv) {
                              {5u, "E", task_e, 3u, 0u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
                              {6u, "M", monitor, 1u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
     Os_ResourceConfig resources[] = {{0u, 5u, 10u, 0u}, {1u, 5u, 10u, 0u}};
-    Os_TargetConfig config = {tasks, 7u, 262144u, resources, 1u, NULL, 0u, 0u, 0u, 0u};
+    Os_TargetConfig config = {tasks, 7u, 262144u, resources, 1u, NULL, 0u, 0u, 0u, 0u, NULL};
     StatusType prepared;
     scenario = (argc == 2) ? argv[1] : "terminate-pending";
     if (strcmp(scenario, "self") == 0) {

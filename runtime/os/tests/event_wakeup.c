@@ -397,7 +397,7 @@ int main(int argc, char **argv) {
         {3u, "N", inactive, 2u, 0u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
     Os_ResourceConfig resource = {0u, 31u, 1u, UINT32_C(1) << 29u};
     Os_TargetConfig config = {tasks, 4u, 262144u, &resource, 1u, NULL, 0u, UINT32_C(1) << 31u,
-                              0u,    0u};
+                              0u,    0u, NULL};
     scenario = (argc == 2) ? argv[1] : "already";
     mailbox = strncmp(scenario, "mailbox-", 8u) == 0;
     if (strcmp(scenario, "oracle-wait") == 0) {

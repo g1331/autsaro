@@ -63,7 +63,7 @@ development_status:
   4-5-原子终止-链式移交与新入口执行: done
   4-6-实现非抢占-内部资源及资源上限恢复: done
   4-7-保持事件所有权与无丢失唤醒: done
-  4-8-逐毫秒推进受控时间与-counter-alarm: backlog
+  4-8-逐毫秒推进受控时间与-counter-alarm: done
   4-9-捕获-windows-真实执行栈故障并关闭目标: done
   4-10-从标准输入建立唯一校验集成计划: backlog
   4-11-由-swc-描述生成组件接口与同步服务类型: backlog

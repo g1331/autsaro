@@ -37,6 +37,28 @@ fn epic4_obligation_and_oracle_baseline() {
 
 #[cfg(windows)]
 #[test]
+fn epic4_controlled_tick_and_alarm() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let output = Command::new("python")
+        .arg(root.join("scripts/epic4_os.py"))
+        .args(["--suite", "time"])
+        .current_dir(root)
+        .output()
+        .expect("run independent controlled tick and counter/alarm vectors");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout)
+            .starts_with("epic4_controlled_tick_and_alarm PASS:")
+    );
+}
+
+#[cfg(windows)]
+#[test]
 fn epic4_event_wakeup_races() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let output = Command::new("python")

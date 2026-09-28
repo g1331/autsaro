@@ -33,9 +33,7 @@ void Os_TestInputLastTicket(uint64_t ticket) { last_ticket = ticket; }
 #endif
 StatusType Os_TargetPostInput(const uint8_t *data, uint8_t length, uint64_t *ticket) {
     static unsigned write_index;
-    static volatile LONG producer;
-    LONG thread;
-    LONG owner;
+    StatusType context;
     Os_InputRecord *record;
     if (Os_StackCurrent() != NULL) {
         return E_OS_CALLEVEL;
@@ -49,10 +47,9 @@ StatusType Os_TargetPostInput(const uint8_t *data, uint8_t length, uint64_t *tic
     if ((Os_TargetReady() == 0) || (Os_Config->input_event == 0u)) {
         return E_OS_STATE;
     }
-    thread = (LONG)GetCurrentThreadId();
-    owner = InterlockedCompareExchange(&producer, thread, 0);
-    if ((owner != 0) && (owner != thread)) {
-        return E_OS_ACCESS;
+    context = Os_BridgeContext();
+    if (context != E_OK) {
+        return context;
     }
     if ((InterlockedCompareExchange(&published, 0, 0) >= (LONG)OS_INPUT_CAPACITY) ||
         (last_ticket == UINT64_MAX)) {
@@ -76,6 +73,21 @@ StatusType Os_TargetPostInput(const uint8_t *data, uint8_t length, uint64_t *tic
         vPortGenerateSimulatedInterruptFromWindowsThread(OS_INPUT_INTERRUPT);
     }
     return E_OK;
+}
+StatusType Os_BridgeContext(void) {
+    static volatile LONG producer;
+    LONG thread;
+    LONG owner;
+    if (Os_StackCurrent() != NULL) {
+        return E_OS_CALLEVEL;
+    }
+    thread = (LONG)GetCurrentThreadId();
+    owner = InterlockedCompareExchange(&producer, thread, 0);
+    return ((owner == 0) || (owner == thread)) ? E_OK : E_OS_ACCESS;
+}
+int Os_MailboxQuiescent(void) {
+    return ((InterlockedCompareExchange(&admission, 0, 0) & 1) == 0) &&
+           (InterlockedCompareExchange(&published, 0, 0) == 0);
 }
 static StatusType input_context(void) {
     int owner;

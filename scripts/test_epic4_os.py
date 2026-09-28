@@ -150,6 +150,35 @@ class DependencyTests(unittest.TestCase):
             ):
                 epic4_os.check_events(Path("unused.exe"))
 
+    def test_time_gate_rejects_lost_tick_wrap_and_action_error(self):
+        original = json.loads(
+            (
+                epic4_os.ROOT / "docs/assurance/evidence/epic4/controlled-time.json"
+            ).read_text(encoding="utf-8")
+        )["observations"]
+        with patch("epic4_os.execute", side_effect=copy.deepcopy(original)):
+            self.assertEqual(
+                len(epic4_os.check_time(Path("unused.exe"))), len(original)
+            )
+        for scenario, before, after in [
+            ("thousand", "ticks=1000", "ticks=999"),
+            ("wrap", "kernel=0 counter=1", "kernel=1 counter=1"),
+            ("absolute-cycle", "counter=6", "counter=5"),
+            ("action-error", "errors=1 last=4", "errors=0 last=0"),
+        ]:
+            records = copy.deepcopy(original)
+            record = next(row for row in records if row["scenario"] == scenario)
+            record["stdout"] = record["stdout"].replace(before, after)
+            self.assertNotEqual(
+                record["stdout"],
+                next(row["stdout"] for row in original if row["scenario"] == scenario),
+            )
+            with (
+                patch("epic4_os.execute", side_effect=records),
+                self.assertRaises(AssertionError),
+            ):
+                epic4_os.check_time(Path("unused.exe"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -163,6 +163,11 @@
       "path": "runtime/os/patches/0006-input-handler-ownership.patch",
       "sha256": "bcb70ae8a8947344c206ff4a0b31d445b6c6bb1956135d45f81c6e1b554a3075",
       "role": "production input IRQ handler ownership guard; copied upstream only"
+    },
+    {
+      "path": "runtime/os/patches/0007-controlled-tick.patch",
+      "sha256": "d027c76922a4d8d69e639b3cbe5a48c121b4dabfaf116334b4acff1fc472160f",
+      "role": "production one-request tick and handler ownership gate; test-only actual tick seed; copied upstream only"
     }
   ],
   "research_material": [

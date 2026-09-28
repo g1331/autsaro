@@ -142,6 +142,7 @@ def build(directory: Path, harness: str = "lifecycle.c") -> tuple[Path, dict]:
         str(TARGET / "src/Os_Stack.c"),
         str(TARGET / "src/Os_HostEvent.c"),
         str(TARGET / "src/Os_Mailbox.c"),
+        str(TARGET / "src/Os_Time.c"),
         str(TARGET / "tests" / harness),
         str(copied / "tasks.c"),
         str(copied / "list.c"),
@@ -161,6 +162,8 @@ def build(directory: Path, harness: str = "lifecycle.c") -> tuple[Path, dict]:
         command.insert(1, "-DOS_RESOURCE_TESTS")
     if harness == "event_wakeup.c":
         command.insert(1, "-DOS_EVENT_TESTS")
+    if harness == "controlled_time.c":
+        command.insert(1, "-DOS_TIME_TESTS")
     compiled = subprocess.run(command, capture_output=True, text=True, check=False)
     if compiled.returncode:
         raise RuntimeError(f"OS C99 build failed:\n{compiled.stdout}{compiled.stderr}")
@@ -183,7 +186,7 @@ def build(directory: Path, harness: str = "lifecycle.c") -> tuple[Path, dict]:
         "product_sources": {
             p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
             for p in sorted(TARGET.rglob("*"))
-            if p.is_file()
+            if p.is_file() and p.suffix != ".dump"
         },
         "command": command,
     }
@@ -221,6 +224,122 @@ def execute(
 def require(condition: bool, observation: dict) -> None:
     if not condition:
         raise AssertionError(observation)
+
+
+def check_time(binary: Path) -> list[dict]:
+    records = []
+    for case, ticks, work, app, rejected, expected in [
+        ("thousand", 1000, 1000, 100, 2, [(1, 1, 1, 1), (2, 2, 2, 1), (3, 3, 3, 1)]),
+        (
+            "wrap",
+            3,
+            3,
+            0,
+            2,
+            [
+                (65535, 4294967294, 65535, 1),
+                (65536, 4294967295, 0, 1),
+                (65537, 0, 1, 1),
+            ],
+        ),
+        ("epoch-max", 1, 1, 0, 2, [(18446744073709551615, 1, 65535, 1)]),
+        ("inflight", 1, 1, 0, 4, [(1, 1, 1, 1)]),
+    ]:
+        result = execute(binary, case)
+        require(result["exit"] == 0 and not result["stderr"], result)
+        require(
+            f"time ticks={ticks} work={work} app={app} rejects={rejected} error=0"
+            in result["stdout"],
+            result,
+        )
+        require("trace=ISREMZ " in result["stdout"], result)
+        require("context rejected=7" in result["stdout"], result)
+        actual = [
+            tuple(map(int, row))
+            for row in re.findall(
+                r"TICK epoch=(\d+) kernel=(\d+) counter=(\d+) actions=(\d+)",
+                result["stdout"],
+            )
+        ]
+        require(actual == expected, result)
+        records.append(result)
+    for case, trace, entries, callbacks, errors, last, rejected, counter in [
+        ("relative-wrap", "ISREHrMZ", 1, 0, 0, 0, 3, 1),
+        ("absolute-cycle", "ISRErMZ", 0, 0, 0, 0, 2, 6),
+        ("absolute-current", "ISREBrMZ", 0, 1, 0, 0, 0, 14),
+        ("absolute-wide", "ISRErMZ", 0, 0, 0, 0, 0, 0),
+        ("action-error", "ISRErMZ", 0, 0, 1, 4, 0, 1),
+        ("callback", "ISREBBBrMZ", 0, 3, 0, 0, 0, 7),
+        ("counter-errors", "ISRErMZ", 0, 0, 0, 0, 15, 0),
+        ("category1-time", "ISREJrMZ", 0, 0, 0, 0, 8, 0),
+        ("category2-time", "ISREJrMZ", 0, 0, 0, 0, 1, 1),
+    ]:
+        result = execute(binary, case)
+        require(result["exit"] == 0 and not result["stderr"], result)
+        require(f"trace={trace} " in result["stdout"], result)
+        require(
+            "time ticks=0 work=0 app=0 rejects=0 error=0" in result["stdout"], result
+        )
+        require("context rejected=7" in result["stdout"], result)
+        require(
+            f"alarm entries={entries} callbacks={callbacks} errors={errors} last={last} rejected={rejected} counter={counter}"
+            in result["stdout"],
+            result,
+        )
+        records.append(result)
+    for case, status in [
+        ("config-counter-null", 8),
+        ("config-counter-capacity", 8),
+        ("config-counter-duplicate", 3),
+        ("config-counter-maximum", 8),
+        ("config-counter-base", 8),
+        ("config-counter-cycle", 8),
+        ("config-system-missing", 3),
+        ("config-system-hardware", 8),
+        ("config-alarm-null", 8),
+        ("config-alarm-capacity", 8),
+        ("config-alarm-duplicate", 3),
+        ("config-alarm-counter", 3),
+        ("config-alarm-action", 8),
+        ("config-alarm-task", 8),
+        ("config-alarm-basic", 8),
+        ("config-alarm-callback", 8),
+        ("config-alarm-cycle", 8),
+        ("config-owner-basic", 8),
+        ("config-owner-inactive", 8),
+        ("config-wake", 8),
+        ("config-tick-category1", 8),
+    ]:
+        result = execute(binary, case)
+        require(result["exit"] == 0 and result["stdout"] == f"prepare={status}", result)
+        records.append(result)
+    for case, work in [("reset-failure", 0), ("signal-failure", 1)]:
+        result = execute(binary, case)
+        require(result["exit"] == 7 and "trace=ISREZ " in result["stdout"], result)
+        require(f"time ticks=0 work={work} app=0 " in result["stdout"], result)
+        require("time_signal_failed=1" in result["stdout"], result)
+        records.append(result)
+    for case, trace in [
+        ("replace-tick-startup", "ISZ"),
+        ("replace-tick-running", "ISREZ"),
+    ]:
+        result = execute(binary, case)
+        require(result["exit"] == 1 and f"trace={trace} " in result["stdout"], result)
+        require("time ticks=0 work=0 app=0 " in result["stdout"], result)
+        records.append(result)
+    result = execute(binary, "close-before-pending")
+    require(result["exit"] == 7 and "trace=ISREZ " in result["stdout"], result)
+    require("time ticks=0 work=0 app=0 rejects=1 error=7" in result["stdout"], result)
+    require("time_signal_failed=0" in result["stdout"], result)
+    records.append(result)
+    result = execute(binary, "thousand", failure=1)
+    require(result["exit"] == 7 and "trace=IZ " in result["stdout"], result)
+    require(
+        "threads=0 events=0 mutexes=0 resource_calls=1 " in result["stdout"], result
+    )
+    require("time ticks=0 work=0 app=0 " in result["stdout"], result)
+    records.append(result)
+    return records
 
 
 def check_events(binary: Path) -> list[dict]:
@@ -671,7 +790,15 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--suite",
-        choices=["lifecycle", "stack", "activation", "finish", "resources", "events"],
+        choices=[
+            "lifecycle",
+            "stack",
+            "activation",
+            "finish",
+            "resources",
+            "events",
+            "time",
+        ],
         default="lifecycle",
     )
     parser.add_argument("--evidence", type=Path)
@@ -684,6 +811,7 @@ def main() -> None:
             "finish": "finish_chain.c",
             "resources": "resource_preemption.c",
             "events": "event_wakeup.c",
+            "time": "controlled_time.c",
         }
         checks = {
             "lifecycle": check_lifecycle,
@@ -692,6 +820,7 @@ def main() -> None:
             "finish": check_finish,
             "resources": check_resources,
             "events": check_events,
+            "time": check_time,
         }
         binary, evidence = build(Path(temporary), harnesses[args.suite])
         evidence["observations"] = checks[args.suite](binary)
@@ -705,6 +834,7 @@ def main() -> None:
             "finish": "epic4_finish_chain_atomicity",
             "resources": "epic4_resource_and_preemption",
             "events": "epic4_event_wakeup_races",
+            "time": "epic4_controlled_tick_and_alarm",
         }
         name = names[args.suite]
         print(f"{name} PASS: {len(evidence['observations'])} native vectors")

@@ -149,6 +149,12 @@ StatusType Os_TargetPrepare(const Os_TargetConfig *config) {
             }
         }
     }
+    {
+        StatusType time_status = Os_TimeValidate(config);
+        if (time_status != E_OK) {
+            return time_status;
+        }
+    }
     Os_Config = config;
     return E_OK;
 }
