@@ -1,0 +1,4 @@
+interface:
+  display_name: "MISRA C:2012 编码"
+  short_description: "覆盖 MISRA C:2012 修订基线全部 221 项编码与核查指导"
+  default_prompt: "使用 $misra-c2012 完成本次 C 代码修改，遵循 C:2012 修订基线和仓库 C99 契约，验证生成结果并说明偏离及证据缺口。"

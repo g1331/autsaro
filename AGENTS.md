@@ -25,6 +25,8 @@ cargo build --manifest-path src-tauri/Cargo.toml
 
 ## 代码风格与命名
 
+编写或修改 C 源码、头文件及生成器输出的 C 代码时，使用仓库技能 [misra-c2012](.agents/skills/misra-c2012/SKILL.md)，按 MISRA C:2012 的修订基线落实编码、适用性与受控偏离，并说明实际验证范围；技能和部分扫描不能替代完整规范及符合性证据。
+
 Rust 使用四空格及 `snake_case` 函数名；现有文件尚未整体通过 `rustfmt`，避免全仓格式化，但新增或修改的代码行须通过 `scripts/quality.py` 的 rustfmt 增量检查。TypeScript/TSX 沿用两空格、单引号和分号，新改行由锁定版本的 Prettier 检查，严格类型检查包含在 UI 构建中，ESLint 覆盖 UI 源码。C 代码保持 C99、四空格缩进，公开运行时接口沿用 `Can_Transmit` 等模块前缀；新改行由固定版本的 clang-format 检查。`runtime/include/` 的公开 C 接口按 Doxygen 格式说明契约，缺文档和参数说明由全量基线审计报告；内部静态函数不强制逐一注释。`.editorconfig` 约定基础空白格式。仓库尚未达到全量历史格式通过，也没有覆盖率门禁；部分 MISRA 扫描不能代替完整 MISRA 与模块 SWS 证据。
 
 ## 测试要求

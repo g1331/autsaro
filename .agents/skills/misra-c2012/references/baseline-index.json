@@ -1,0 +1,1559 @@
+{
+  "baseline": "MISRA C:2012 + AMD1-AMD4 + TC1-TC2 (C:2023 consolidated identifiers)",
+  "checked_on": "2026-09-28",
+  "guidelines": 221,
+  "rules": 200,
+  "directives": 21,
+  "source_url": "https://gitlab.com/MISRA/MISRA-C/MISRA-C-2012/tools/-/raw/main/misra_c_2023__headlines_for_cppcheck.txt",
+  "source_sha256": "0721569409d9db4f73eb65dad2a7d0e82eb3cc01c76f1f3f2e13dbd174d8e625",
+  "id_category_sha256": "2880302f294925feec62b25d53cd976ff24809710f77c64d993a767072654143",
+  "guideline_metadata": [
+    {
+      "id": "D1.1",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012d1.1.html",
+      "guidance_file": "references/directives.md"
+    },
+    {
+      "id": "D2.1",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012d2.1.html",
+      "guidance_file": "references/directives.md"
+    },
+    {
+      "id": "D3.1",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ug/misra-c2012-guidelines-not-checked.html",
+      "guidance_file": "references/directives.md"
+    },
+    {
+      "id": "D4.1",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012d4.1.html",
+      "guidance_file": "references/directives.md"
+    },
+    {
+      "id": "D4.2",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ug/misra-c2012-guidelines-not-checked.html",
+      "guidance_file": "references/directives.md"
+    },
+    {
+      "id": "D4.3",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012d4.3.html",
+      "guidance_file": "references/directives.md"
+    },
+    {
+      "id": "D4.4",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012d4.4.html",
+      "guidance_file": "references/directives.md"
+    },
+    {
+      "id": "D4.5",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012d4.5.html",
+      "guidance_file": "references/directives.md"
+    },
+    {
+      "id": "D4.6",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012d4.6.html",
+      "guidance_file": "references/directives.md"
+    },
+    {
+      "id": "D4.7",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012d4.7.html",
+      "guidance_file": "references/directives.md"
+    },
+    {
+      "id": "D4.8",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012d4.8.html",
+      "guidance_file": "references/directives.md"
+    },
+    {
+      "id": "D4.9",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012d4.9.html",
+      "guidance_file": "references/directives.md"
+    },
+    {
+      "id": "D4.10",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012d4.10.html",
+      "guidance_file": "references/directives.md"
+    },
+    {
+      "id": "D4.11",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012d4.11.html",
+      "guidance_file": "references/directives.md"
+    },
+    {
+      "id": "D4.12",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012d4.12.html",
+      "guidance_file": "references/directives.md"
+    },
+    {
+      "id": "D4.13",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012d4.13.html",
+      "guidance_file": "references/directives.md"
+    },
+    {
+      "id": "D4.14",
+      "category": "Required",
+      "introduced": "AMD1",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012d4.14.html",
+      "guidance_file": "references/directives.md"
+    },
+    {
+      "id": "D4.15",
+      "category": "Required",
+      "introduced": "AMD3",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012d4.15.html",
+      "guidance_file": "references/directives.md"
+    },
+    {
+      "id": "D5.1",
+      "category": "Required",
+      "introduced": "AMD4",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012d5.1.html",
+      "guidance_file": "references/directives.md"
+    },
+    {
+      "id": "D5.2",
+      "category": "Required",
+      "introduced": "AMD4",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012d5.2.html",
+      "guidance_file": "references/directives.md"
+    },
+    {
+      "id": "D5.3",
+      "category": "Required",
+      "introduced": "AMD4",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012d5.3.html",
+      "guidance_file": "references/directives.md"
+    },
+    {
+      "id": "R1.1",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule1.1.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R1.2",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule1.2.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R1.3",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule1.3.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R1.4",
+      "category": "Required",
+      "introduced": "AMD2",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule1.4.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R1.5",
+      "category": "Required",
+      "introduced": "AMD3",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule1.5.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R2.1",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule2.1.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R2.2",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule2.2.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R2.3",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule2.3.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R2.4",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule2.4.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R2.5",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule2.5.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R2.6",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule2.6.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R2.7",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule2.7.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R2.8",
+      "category": "Advisory",
+      "introduced": "AMD4",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule2.8.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R3.1",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule3.1.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R3.2",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule3.2.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R4.1",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule4.1.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R4.2",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule4.2.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R5.1",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule5.1.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R5.2",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule5.2.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R5.3",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule5.3.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R5.4",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule5.4.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R5.5",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule5.5.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R5.6",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule5.6.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R5.7",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule5.7.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R5.8",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule5.8.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R5.9",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule5.9.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R6.1",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule6.1.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R6.2",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule6.2.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R6.3",
+      "category": "Required",
+      "introduced": "AMD3",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule6.3.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R7.1",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule7.1.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R7.2",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule7.2.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R7.3",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule7.3.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R7.4",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule7.4.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R7.5",
+      "category": "Mandatory",
+      "introduced": "AMD3",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule7.5.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R7.6",
+      "category": "Required",
+      "introduced": "AMD4",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule7.6.html",
+      "guidance_file": "references/language.md"
+    },
+    {
+      "id": "R8.1",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule8.1.html",
+      "guidance_file": "references/declarations.md"
+    },
+    {
+      "id": "R8.2",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule8.2.html",
+      "guidance_file": "references/declarations.md"
+    },
+    {
+      "id": "R8.3",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule8.3.html",
+      "guidance_file": "references/declarations.md"
+    },
+    {
+      "id": "R8.4",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule8.4.html",
+      "guidance_file": "references/declarations.md"
+    },
+    {
+      "id": "R8.5",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule8.5.html",
+      "guidance_file": "references/declarations.md"
+    },
+    {
+      "id": "R8.6",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule8.6.html",
+      "guidance_file": "references/declarations.md"
+    },
+    {
+      "id": "R8.7",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule8.7.html",
+      "guidance_file": "references/declarations.md"
+    },
+    {
+      "id": "R8.8",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule8.8.html",
+      "guidance_file": "references/declarations.md"
+    },
+    {
+      "id": "R8.9",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule8.9.html",
+      "guidance_file": "references/declarations.md"
+    },
+    {
+      "id": "R8.10",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule8.10.html",
+      "guidance_file": "references/declarations.md"
+    },
+    {
+      "id": "R8.11",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule8.11.html",
+      "guidance_file": "references/declarations.md"
+    },
+    {
+      "id": "R8.12",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule8.12.html",
+      "guidance_file": "references/declarations.md"
+    },
+    {
+      "id": "R8.13",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule8.13.html",
+      "guidance_file": "references/declarations.md"
+    },
+    {
+      "id": "R8.14",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule8.14.html",
+      "guidance_file": "references/declarations.md"
+    },
+    {
+      "id": "R8.15",
+      "category": "Required",
+      "introduced": "AMD3",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule8.15.html",
+      "guidance_file": "references/declarations.md"
+    },
+    {
+      "id": "R8.16",
+      "category": "Advisory",
+      "introduced": "AMD3",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule8.16.html",
+      "guidance_file": "references/declarations.md"
+    },
+    {
+      "id": "R8.17",
+      "category": "Advisory",
+      "introduced": "AMD3",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule8.17.html",
+      "guidance_file": "references/declarations.md"
+    },
+    {
+      "id": "R9.1",
+      "category": "Mandatory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule9.1.html",
+      "guidance_file": "references/declarations.md"
+    },
+    {
+      "id": "R9.2",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule9.2.html",
+      "guidance_file": "references/declarations.md"
+    },
+    {
+      "id": "R9.3",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule9.3.html",
+      "guidance_file": "references/declarations.md"
+    },
+    {
+      "id": "R9.4",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule9.4.html",
+      "guidance_file": "references/declarations.md"
+    },
+    {
+      "id": "R9.5",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule9.5.html",
+      "guidance_file": "references/declarations.md"
+    },
+    {
+      "id": "R9.6",
+      "category": "Required",
+      "introduced": "AMD4",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule9.6.html",
+      "guidance_file": "references/declarations.md"
+    },
+    {
+      "id": "R9.7",
+      "category": "Mandatory",
+      "introduced": "AMD4",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule9.7.html",
+      "guidance_file": "references/declarations.md"
+    },
+    {
+      "id": "R10.1",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule10.1.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R10.2",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule10.2.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R10.3",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule10.3.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R10.4",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule10.4.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R10.5",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule10.5.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R10.6",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule10.6.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R10.7",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule10.7.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R10.8",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule10.8.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R11.1",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule11.1.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R11.2",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule11.2.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R11.3",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule11.3.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R11.4",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule11.4.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R11.5",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule11.5.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R11.6",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule11.6.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R11.7",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule11.7.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R11.8",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule11.8.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R11.9",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule11.9.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R11.10",
+      "category": "Required",
+      "introduced": "AMD4",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule11.10.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R12.1",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule12.1.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R12.2",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule12.2.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R12.3",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule12.3.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R12.4",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule12.4.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R12.5",
+      "category": "Mandatory",
+      "introduced": "AMD1",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule12.5.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R12.6",
+      "category": "Required",
+      "introduced": "AMD4",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule12.6.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R13.1",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule13.1.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R13.2",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule13.2.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R13.3",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule13.3.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R13.4",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule13.4.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R13.5",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule13.5.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R13.6",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule13.6.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R14.1",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule14.1.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R14.2",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule14.2.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R14.3",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule14.3.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R14.4",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule14.4.html",
+      "guidance_file": "references/expressions.md"
+    },
+    {
+      "id": "R15.1",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule15.1.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R15.2",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule15.2.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R15.3",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule15.3.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R15.4",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule15.4.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R15.5",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule15.5.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R15.6",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule15.6.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R15.7",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule15.7.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R16.1",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule16.1.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R16.2",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule16.2.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R16.3",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule16.3.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R16.4",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule16.4.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R16.5",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule16.5.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R16.6",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule16.6.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R16.7",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule16.7.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R17.1",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule17.1.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R17.2",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule17.2.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R17.3",
+      "category": "Mandatory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule17.3.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R17.4",
+      "category": "Mandatory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule17.4.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R17.5",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule17.5.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R17.6",
+      "category": "Mandatory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule17.6.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R17.7",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule17.7.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R17.8",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule17.8.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R17.9",
+      "category": "Mandatory",
+      "introduced": "AMD3",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule17.9.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R17.10",
+      "category": "Required",
+      "introduced": "AMD3",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule17.10.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R17.11",
+      "category": "Advisory",
+      "introduced": "AMD3",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule17.11.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R17.12",
+      "category": "Advisory",
+      "introduced": "AMD3",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule17.12.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R17.13",
+      "category": "Required",
+      "introduced": "AMD3",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule17.13.html",
+      "guidance_file": "references/control-flow.md"
+    },
+    {
+      "id": "R18.1",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule18.1.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R18.2",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule18.2.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R18.3",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule18.3.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R18.4",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule18.4.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R18.5",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule18.5.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R18.6",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule18.6.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R18.7",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule18.7.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R18.8",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule18.8.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R18.9",
+      "category": "Required",
+      "introduced": "AMD3",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule18.9.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R18.10",
+      "category": "Mandatory",
+      "introduced": "AMD4",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule18.10.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R19.1",
+      "category": "Mandatory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule19.1.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R19.2",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule19.2.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R20.1",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule20.1.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R20.2",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule20.2.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R20.3",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule20.3.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R20.4",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule20.4.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R20.5",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule20.5.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R20.6",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule20.6.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R20.7",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule20.7.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R20.8",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule20.8.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R20.9",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule20.9.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R20.10",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule20.10.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R20.11",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule20.11.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R20.12",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule20.12.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R20.13",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule20.13.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R20.14",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule20.14.html",
+      "guidance_file": "references/pointers-preprocessing.md"
+    },
+    {
+      "id": "R21.1",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.1.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.2",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.2.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.3",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.3.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.4",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.4.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.5",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.5.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.6",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.6.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.7",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.7.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.8",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.8.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.9",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.9.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.10",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.10.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.11",
+      "category": "Advisory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.11.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.12",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.12.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.13",
+      "category": "Mandatory",
+      "introduced": "AMD1",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.13.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.14",
+      "category": "Required",
+      "introduced": "AMD1",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.14.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.15",
+      "category": "Required",
+      "introduced": "AMD1",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.15.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.16",
+      "category": "Required",
+      "introduced": "AMD1",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.16.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.17",
+      "category": "Mandatory",
+      "introduced": "AMD1",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.17.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.18",
+      "category": "Mandatory",
+      "introduced": "AMD1",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.18.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.19",
+      "category": "Mandatory",
+      "introduced": "AMD1",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.19.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.20",
+      "category": "Mandatory",
+      "introduced": "AMD1",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.20.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.21",
+      "category": "Required",
+      "introduced": "AMD2",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.21.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.22",
+      "category": "Mandatory",
+      "introduced": "AMD3",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.22.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.23",
+      "category": "Required",
+      "introduced": "AMD3",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.23.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.24",
+      "category": "Required",
+      "introduced": "AMD3",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.24.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.25",
+      "category": "Required",
+      "introduced": "AMD4",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.25.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R21.26",
+      "category": "Required",
+      "introduced": "AMD4",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule21.26.html",
+      "guidance_file": "references/libraries.md"
+    },
+    {
+      "id": "R22.1",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule22.1.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R22.2",
+      "category": "Mandatory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule22.2.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R22.3",
+      "category": "Required",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule22.3.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R22.4",
+      "category": "Mandatory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule22.4.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R22.5",
+      "category": "Mandatory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule22.5.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R22.6",
+      "category": "Mandatory",
+      "introduced": "2012",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule22.6.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R22.7",
+      "category": "Required",
+      "introduced": "AMD1",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule22.7.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R22.8",
+      "category": "Required",
+      "introduced": "AMD1",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule22.8.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R22.9",
+      "category": "Required",
+      "introduced": "AMD1",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule22.9.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R22.10",
+      "category": "Required",
+      "introduced": "AMD1",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule22.10.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R22.11",
+      "category": "Required",
+      "introduced": "AMD4",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule22.11.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R22.12",
+      "category": "Mandatory",
+      "introduced": "AMD4",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule22.12.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R22.13",
+      "category": "Required",
+      "introduced": "AMD4",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule22.13.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R22.14",
+      "category": "Mandatory",
+      "introduced": "AMD4",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule22.14.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R22.15",
+      "category": "Required",
+      "introduced": "AMD4",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule22.15.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R22.16",
+      "category": "Required",
+      "introduced": "AMD4",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule22.16.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R22.17",
+      "category": "Required",
+      "introduced": "AMD4",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule22.17.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R22.18",
+      "category": "Required",
+      "introduced": "AMD4",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule22.18.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R22.19",
+      "category": "Required",
+      "introduced": "AMD4",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule22.19.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R22.20",
+      "category": "Mandatory",
+      "introduced": "AMD4",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule22.20.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R23.1",
+      "category": "Advisory",
+      "introduced": "AMD3",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule23.1.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R23.2",
+      "category": "Required",
+      "introduced": "AMD3",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule23.2.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R23.3",
+      "category": "Advisory",
+      "introduced": "AMD3",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule23.3.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R23.4",
+      "category": "Required",
+      "introduced": "AMD3",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule23.4.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R23.5",
+      "category": "Advisory",
+      "introduced": "AMD3",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule23.5.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R23.6",
+      "category": "Required",
+      "introduced": "AMD3",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule23.6.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R23.7",
+      "category": "Advisory",
+      "introduced": "AMD3",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule23.7.html",
+      "guidance_file": "references/resources-generics.md"
+    },
+    {
+      "id": "R23.8",
+      "category": "Required",
+      "introduced": "AMD3",
+      "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule23.8.html",
+      "guidance_file": "references/resources-generics.md"
+    }
+  ]
+}
