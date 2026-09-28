@@ -5,6 +5,7 @@ docs/official/**/*.sha256
 docs/official/**/*.part
 docs/official/**/download-status.json
 docs/official/**/*.xsd
+docs/official/FreeRTOS/**/*.tar.gz
 
 # 本机构建中间产物。
 **/target/
@@ -15,6 +16,7 @@ src-tauri/gen/
 .automotive-skills-venv/
 .playwright-cli/
 .scratch/autosar-platform/research/*.tmp.zip
+.scratch/epic4/
 
 # Per-machine CodeGraph index; initialize locally with `codegraph init`.
 .codegraph/

@@ -25,6 +25,14 @@ entry. The underlying verifier accepts `--osek-pdf`, `--kernel-archive`, and
 mismatches fail the entry; no source is downloaded during verification. PyMuPDF
 is required for checking the current normative paragraph index.
 
+The default external inputs are `docs/official/OSEK/os223.pdf` and
+`docs/official/FreeRTOS/kernel.tar.gz`; both remain ignored local reference
+material. Obtain the exact versions from the pinned URLs in `sources.json` and
+verify their recorded SHA-256 before use. The registered Rust entry uses these
+stable locations and the `gcc` executable on PATH; it has no dependency on a
+research session's temporary directory. CLI overrides support other explicit
+locations. Verification never downloads inputs or accepts a mismatched version.
+
 Applicability decisions require independent review in addition to structural
 verification. Later stories must attach actual behavioral evidence to applicable
 rows and justify conditional exclusions before the final Epic 4 exit can pass.

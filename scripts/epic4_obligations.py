@@ -12,7 +12,7 @@ import hashlib
 import json
 import re
 import subprocess
-import tempfile
+import shutil
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
@@ -434,7 +434,8 @@ def verify(args: argparse.Namespace) -> dict:
         [args.compiler, "-dumpmachine"], capture_output=True, text=True, check=True
     ).stdout.strip()
     require(
-        version == sources["compiler"]["identity"]
+        epic4_os.compiler_description(version)
+        == epic4_os.compiler_description(sources["compiler"]["identity"])
         and target == sources["compiler"]["target"]
         and digest(Path(args.compiler)) == sources["compiler"]["executable_sha256"],
         "fixed compiler identity mismatch",
@@ -456,11 +457,16 @@ def verify(args: argparse.Namespace) -> dict:
 
 
 def main() -> None:
-    cache = Path(tempfile.gettempdir()) / "autosar-freertos-feasibility-c8x5jkac"
     parser = argparse.ArgumentParser()
-    parser.add_argument("--osek-pdf", type=Path, default=cache / "os223.pdf")
-    parser.add_argument("--kernel-archive", type=Path, default=cache / "kernel.tar.gz")
-    parser.add_argument("--compiler", default="D:/Programs/msys64/mingw64/bin/gcc.exe")
+    parser.add_argument(
+        "--osek-pdf", type=Path, default=ROOT / "docs/official/OSEK/os223.pdf"
+    )
+    parser.add_argument(
+        "--kernel-archive",
+        type=Path,
+        default=ROOT / "docs/official/FreeRTOS/kernel.tar.gz",
+    )
+    parser.add_argument("--compiler", default=shutil.which("gcc") or "gcc")
     parser.add_argument("--evidence", type=Path)
     args = parser.parse_args()
     result = verify(args)

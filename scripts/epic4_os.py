@@ -36,9 +36,69 @@ def compiler() -> str:
     machine = subprocess.run(
         [cc, "-dumpmachine"], capture_output=True, text=True, check=True
     )
-    if "16.1.0" not in version.stdout or machine.stdout.strip() != "x86_64-w64-mingw32":
+    pinned = json.loads(
+        (ROOT / "docs/assurance/epic4/sources.json").read_text(encoding="utf-8")
+    )["compiler"]
+    executable = Path(shutil.which(cc) or cc)
+    if (
+        compiler_description(version.stdout.splitlines()[0])
+        != compiler_description(pinned["identity"])
+        or machine.stdout.strip() != pinned["target"]
+        or hashlib.sha256(executable.read_bytes()).hexdigest()
+        != pinned["executable_sha256"]
+    ):
         raise ValueError("target requires GCC 16.1.0 x86_64-w64-mingw32")
     return cc
+
+
+def compiler_description(identity: str) -> str:
+    # argv[0] spelling/case is not compiler identity; vendor/release and the
+    # actual executable digest are independently pinned.
+    return identity.partition(" ")[2]
+
+
+def write_shared_evidence(path: Path, record: dict, build_directory: Path) -> None:
+    raw = (json.dumps(record, indent=2) + "\n").encode("utf-8")
+    suite = path.stem
+    local = ROOT / ".scratch/epic4" / (suite + "-raw.json")
+    local.parent.mkdir(parents=True, exist_ok=True)
+    local.write_bytes(raw)
+    replacements = [
+        (str(build_directory), "<build-dir>"),
+        (build_directory.as_posix(), "<build-dir>"),
+        (str(ROOT), "<repo-root>"),
+        (ROOT.as_posix(), "<repo-root>"),
+    ]
+    for tool in (os.environ.get("AUTOSAR_CC", "gcc"), "cppcheck"):
+        executable = shutil.which(tool)
+        if executable:
+            directory = Path(executable).resolve().parent.parent
+            replacements.extend(
+                [
+                    (str(directory), "<toolchain-dir>"),
+                    (directory.as_posix(), "<toolchain-dir>"),
+                ]
+            )
+
+    def normalize(value):
+        if isinstance(value, dict):
+            return {key: normalize(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [normalize(item) for item in value]
+        if isinstance(value, str):
+            for original, replacement in replacements:
+                value = value.replace(original, replacement)
+            return value
+        return value
+
+    shared = normalize(record)
+    shared["representation"] = (
+        "workspace/build/toolchain paths normalized; observed native addresses and thread IDs retained for physical-stack and fault correlation"
+    )
+    shared["raw_record_sha256"] = hashlib.sha256(raw).hexdigest()
+    shared["raw_record_local"] = local.relative_to(ROOT).as_posix()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(shared, indent=2) + "\n", encoding="utf-8")
 
 
 def build(directory: Path, harness: str = "lifecycle.c") -> tuple[Path, dict]:
@@ -90,6 +150,8 @@ def build(directory: Path, harness: str = "lifecycle.c") -> tuple[Path, dict]:
     ]
     if harness == "native_stack.c":
         command.insert(1, "-DOS_STACK_TESTS")
+    if harness == "activation.c":
+        command.insert(1, "-DOS_ACTIVATION_TESTS")
     compiled = subprocess.run(command, capture_output=True, text=True, check=False)
     if compiled.returncode:
         raise RuntimeError(f"OS C99 build failed:\n{compiled.stdout}{compiled.stderr}")
@@ -150,6 +212,82 @@ def execute(
 def require(condition: bool, observation: dict) -> None:
     if not condition:
         raise AssertionError(observation)
+
+
+def check_activation(binary: Path) -> list[dict]:
+    import re
+
+    literal_oracles = json.loads(
+        (ROOT / "core/tests/fixtures/epic4_oracles/os.json").read_text(encoding="utf-8")
+    )
+    fifo = {case["id"]: case for case in literal_oracles["cases"]}
+    cases = [
+        ("aab", "ISRLAHaCBMZ", (2, 1, 0, 1), 0),
+        ("aba", "ISRLAHaBCMZ", (2, 1, 0, 1), 0),
+        ("aabb", "ISRLAHaCBDMZ", (2, 2, 0, 1), 0),
+        ("abab", "ISRLAHaBCDMZ", (2, 2, 0, 1), 0),
+        ("limits", "ISRLAHaCBMZ", (2, 1, 0, 1), 2),
+        ("invalid", "ISRLAHaCBMZ", (2, 1, 0, 1), 1),
+        ("extended", "ISRLEMZ", (0, 0, 1, 0), 2),
+        ("overflow", "ISRLABMZ", (1, 1, 0, 0), 0),
+        ("rebase-fifo", "ISRLABCDMZ", (2, 2, 0, 0), 0),
+        ("autostart", "ISRABMZ", (1, 1, 0, 0), 0),
+        ("capacity", "ISRLA" + "C" * 31 + "MZ", (32, 0, 0, 0), 1),
+        ("wrap", "ISRLA" + "C" * 47 + "MZ", (48, 0, 0, 0), 1),
+        ("isr", "ISRLJAlBMZ", (1, 1, 0, 0), 3),
+    ]
+    observations = []
+    for scenario, expected_trace, counts, rejected in cases:
+        result = execute(binary, scenario)
+        summary = re.search(
+            r"activation a=(\d+) b=(\d+) e=(\d+) h=(\d+) observer=(\d+) rejected=(\d+) error=(\d+)",
+            result["stdout"],
+        )
+        trace = re.search(r"trace=(\S+)", result["stdout"])
+        require(
+            result["exit"] == 0 and summary is not None and trace is not None, result
+        )
+        require(tuple(map(int, summary.groups()[:4])) == counts, result)
+        require(
+            int(summary[5]) > 0
+            and int(summary[6]) == rejected
+            and int(summary[7]) == 0,
+            result,
+        )
+        require(
+            trace[1] == expected_trace
+            and "input_closed=1 tick_closed=1" in result["stdout"],
+            result,
+        )
+        if scenario in {"aabb", "abab"}:
+            entry_names = {"A": "A#1", "C": "A#2", "B": "B#1", "D": "B#2"}
+            actual_entries = [
+                entry_names[marker] for marker in trace[1] if marker in entry_names
+            ]
+            require(
+                actual_entries == fifo["fifo-" + scenario]["expected_entry_order"],
+                result,
+            )
+        result["independent_expected_trace"] = expected_trace
+        observations.append(result)
+    for scenario in ["zero-limit", "bad-limit", "extended-multiple", "bad-kind"]:
+        result = execute(binary, scenario)
+        require(result["exit"] == 0 and result["stdout"] == "prepare=8", result)
+        observations.append(result)
+    for scenario, pending in [
+        ("close-admission", 0),
+        ("close-ready", 0),
+        ("close-accepted", 1),
+    ]:
+        close = execute(binary, scenario)
+        require(close["exit"] == 0 and "trace=ISRLQZ " in close["stdout"], close)
+        require(
+            f"close_pending={pending}\n" in close["stdout"]
+            and "input_closed=1 tick_closed=1" in close["stdout"],
+            close,
+        )
+        observations.append(close)
+    return observations
 
 
 def check_lifecycle(binary: Path) -> list[dict]:
@@ -341,30 +479,33 @@ def check_stack(binary: Path) -> list[dict]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--suite", choices=["lifecycle", "stack"], default="lifecycle")
+    parser.add_argument(
+        "--suite", choices=["lifecycle", "stack", "activation"], default="lifecycle"
+    )
     parser.add_argument("--evidence", type=Path)
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="autosar-epic4-os-") as temporary:
-        binary, evidence = build(
-            Path(temporary),
-            "lifecycle.c" if args.suite == "lifecycle" else "native_stack.c",
-        )
-        evidence["observations"] = (
-            check_lifecycle(binary)
-            if args.suite == "lifecycle"
-            else check_stack(binary)
-        )
+        harnesses = {
+            "lifecycle": "lifecycle.c",
+            "stack": "native_stack.c",
+            "activation": "activation.c",
+        }
+        checks = {
+            "lifecycle": check_lifecycle,
+            "stack": check_stack,
+            "activation": check_activation,
+        }
+        binary, evidence = build(Path(temporary), harnesses[args.suite])
+        evidence["observations"] = checks[args.suite](binary)
         evidence["status"] = "pass"
         if args.evidence:
-            args.evidence.parent.mkdir(parents=True, exist_ok=True)
-            args.evidence.write_text(
-                json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
-            )
-        name = (
-            "epic4_backend_lifecycle"
-            if args.suite == "lifecycle"
-            else "epic4_native_stack_fault_shutdown"
-        )
+            write_shared_evidence(args.evidence, evidence, Path(temporary))
+        names = {
+            "lifecycle": "epic4_backend_lifecycle",
+            "stack": "epic4_native_stack_fault_shutdown",
+            "activation": "epic4_activation_fifo",
+        }
+        name = names[args.suite]
         print(f"{name} PASS: {len(evidence['observations'])} native vectors")
 
 

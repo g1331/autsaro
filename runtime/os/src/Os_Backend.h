@@ -7,7 +7,14 @@
 #include "Os_Stack.h"
 void Os_BackendStart(AppModeType mode);
 void Os_BackendShutdown(StatusType error);
+void Os_BackendRequestShutdown(StatusType error);
+void Os_BackendGuardService(void);
 StatusType Os_BackendState(TaskType id, TaskStateRefType state);
+StatusType Os_BackendActivate(TaskType id);
+StatusType Os_BackendFinish(void);
+StatusType Os_BackendInspect(TaskType id, Os_ActivationInfo *info);
+void Os_BackendObserveSwitch(void);
+int Os_BackendTakeIsrReschedule(void);
 void Os_BackendAssert(const char *file, int line);
 HANDLE Os_PortEvent(LPSECURITY_ATTRIBUTES attributes, BOOL manual, BOOL initial, LPCSTR name);
 HANDLE Os_PortMutex(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name);

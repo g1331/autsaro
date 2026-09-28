@@ -37,6 +37,25 @@ fn epic4_obligation_and_oracle_baseline() {
 
 #[cfg(windows)]
 #[test]
+fn epic4_activation_fifo() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let output = Command::new("python")
+        .arg(root.join("scripts/epic4_os.py"))
+        .args(["--suite", "activation"])
+        .current_dir(root)
+        .output()
+        .expect("run independent activation FIFO and native kernel observer vectors");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).starts_with("epic4_activation_fifo PASS:"));
+}
+
+#[cfg(windows)]
+#[test]
 fn epic4_native_stack_fault_shutdown() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let output = Command::new("python")

@@ -16,8 +16,11 @@ StatusType Os_TargetPrepare(const Os_TargetConfig *config) {
         if (task->id >= OS_MAX_TASKS) {
             return E_OS_ID;
         }
-        if (task->name == NULL || task->entry == NULL || task->priority == 0u ||
-            task->priority > OS_MAX_PRIORITY || task->autostart_modes > 3u) {
+        if ((task->name == NULL) || (task->entry == NULL) || (task->priority == 0u) ||
+            (task->priority > OS_MAX_PRIORITY) || (task->autostart_modes > 3u) ||
+            (task->kind > OS_EXTENDED_TASK) || (task->activation_limit == 0u) ||
+            (task->activation_limit > OS_MAX_ACTIVATIONS) ||
+            ((task->kind == OS_EXTENDED_TASK) && (task->activation_limit != 1u))) {
             return E_OS_VALUE;
         }
         for (j = 0u; j < i; ++j) {
@@ -36,11 +39,27 @@ void ShutdownOS(StatusType Error) {
 }
 StatusType GetTaskState(TaskType TaskID, TaskStateRefType State) {
     Os_StackCheck();
+    Os_BackendGuardService();
     if (State == NULL) {
-        return E_OS_VALUE;
-    }
-    if (!Os_TargetReady()) {
-        return E_OS_STATE;
+        return E_OS_ILLEGAL_ADDRESS;
     }
     return Os_BackendState(TaskID, State);
+}
+StatusType ActivateTask(TaskType TaskID) {
+    Os_StackCheck();
+    Os_BackendGuardService();
+    return Os_BackendActivate(TaskID);
+}
+StatusType TerminateTask(void) {
+    Os_StackCheck();
+    Os_BackendGuardService();
+    return Os_BackendFinish();
+}
+StatusType Os_TargetInspectActivation(TaskType id, Os_ActivationInfo *info) {
+    Os_StackCheck();
+    Os_BackendGuardService();
+    if (info == NULL) {
+        return E_OS_ILLEGAL_ADDRESS;
+    }
+    return Os_BackendInspect(id, info);
 }

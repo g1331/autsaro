@@ -1,6 +1,6 @@
 # Epic 4 Windows OS 基础
 
-本目录是独立新目标的生产基础，Story 4.3 生命周期已验证；Story 4.9 真实栈路径已完成独立复核。未接入 ECU/RTE/BSW，不声明 SC1，也不放行 W3。旧 `runtime/src/Os.c` 继续用于历史主机目标，两者不能同链接。
+本目录是独立新目标的生产基础，Story 4.3 生命周期及 Story 4.9 真实栈路径已完成独立复核；Story 4.4 提供请求 FIFO 与实际内核状态。未接入 ECU/RTE/BSW，不声明 SC1，也不放行 W3。旧 `runtime/src/Os.c` 继续用于历史主机目标，两者不能同链接。
 
 ## 固定来源与离线复建
 
@@ -24,13 +24,13 @@ python scripts/epic4_os.py --suite stack
 
 ## 生产补丁边界
 
-端口补丁保留上游原有线程上下文机制和调度选择；改为正常宿主优先级，移除墙钟 timer/首次 tick，首次只 yield。创建栈按目标 reserve，所有创建经过可审阅失败检查/计数，关闭门阻止继续 resume。未修改 `tasks.c` ready 策略；FIFO/原子结束/事件/资源补丁属于 4.4–4.7。4.8 再提供逐毫秒受控 ticket；当前无输入/tick 驱动。
+端口补丁保留上游原有线程上下文机制和优先级调度选择；改为正常宿主优先级，移除墙钟 timer/首次 tick，首次只 yield。创建栈按目标 reserve，所有创建经过可审阅失败检查/计数，关闭门阻止继续 resume。第三补丁在复制件中增加有限 ready 排序政策，见下方 4.4 契约。完整 Finish/Chain、资源及事件属于 4.5–4.7。4.8 再提供逐毫秒受控 ticket；当前无输入/tick 驱动。
 
 `AUTOSAR_OS_FAIL_RESOURCE` 为独立 harness 的原生资源建立失败注入入口：正整数 N 表示第 N 次 CreateEvent/CreateMutex/CreateThread 返回失败，随后目标关闭。畸形、零、负值及溢出输入以 E_OS_VALUE 拒绝。正常部署不设置；测试器显式清除继承值。每个实际建立点均有独立子进程向量。
 
 ## 验收边界
 
-4.3 历史证据 `docs/assurance/evidence/epic4/backend-lifecycle.json` 保留原 commit 的 34 向量与摘要；4.9 修改后的生命周期回归单独保存于 `backend-lifecycle-stack-regression.json`，46 向量，包含两种模式、多 ready 优先级和全部新资源建立失败点。激活语义、受控 tick、完整 Extended Status/Hook/ISR、Counter/ScheduleTable、ARTI、等级及交接仍待完成。
+4.3 历史证据 `docs/assurance/evidence/epic4/backend-lifecycle.json` 保留原 commit 的 34 向量与摘要；4.9 修改后的生命周期回归单独保存于 `backend-lifecycle-stack-regression.json`，46 向量，包含两种模式、多 ready 优先级和全部新资源建立失败点。受控 tick、完整 Finish/Chain、Extended Status/Hook/ISR、Counter/ScheduleTable、ARTI、等级及交接仍待完成。
 
 ## Windows 真实栈（4.9）
 
@@ -48,3 +48,21 @@ VEH 只处理实际 STATUS_STACK_OVERFLOW，或访问本线程注册时未提交
 | D 备用控制线程 | Ready 前注册、独立控制栈 | 测试 APC 真溢出，C 接管 |
 
 `native-stack.json` 保存 23 向量：正常、保留区读/写、六角色真实溢出与实际 Context 破坏、并行故障、连续控制故障及其stdout失败兜底、三类上下文操作失败、无关异常分类、6 类真实栈保证 API 拒绝。超时、未捕获的应处理故障、错误关闭码、故障后 X 哨兵均失败。所有角色的保证初始化失败在 Ready 前 E_OS_STATE 关闭，不能冒充 E_OS_STACKFAULT 证据。`AUTOSAR_OS_BAD_GUARANTEE=<角色>` 仅用于 verifier 请求超出实际 reserve 的容量，观察 SetThreadStackGuarantee 的真实失败；verifier 清除继承注入值。`OS_STACK_TESTS` 只为独立 harness 提供 backup handle/idle 消耗测试入口，生产构建不含这些入口。上下文操作失败向量仅在测试构建强制一次失败返回、保留有效句柄，以验证停止/关闭分支，明确不是实际栈故障或新的能力声明。编译后二进制未链接 emutls helper；异常路径 TLS 不依赖首次动态分配。能力档案不因这组证据升级，W3 仍要求其他 W1/W2 全部前置通过。
+
+
+## 完整激活请求 FIFO（4.4）
+
+静态任务声明种类及激活上限：Basic 为 1–32，Extended 固定为 1；每个成功接纳的请求占用独立静态环槽，当前实例也计入上限。ActivateTask 在同一事务内核验容量、保存请求、更新实际内核队列，并在合法边界请求已有内核调度。拒绝不消费序号、不改请求或运行状态。GetTaskState 读取实际 TCB 状态；NULL 输出按 SWS_Os_00566 返回 E_OS_ILLEGAL_ADDRESS。
+
+第三补丁按最早存活请求排序实际 FreeRTOS ready 列表，同优先级始终选头部；抢占后恢复同一原生帧。序号是可原子压缩的存活顺序标记，不是永久唯一 ID；达到 uint64 上界时仅压缩元数据并更新内核键，保留完整槽和相对顺序。该政策要求固定单核 generic selector 且关闭时间片，不支持其他 selector。最小 TerminateTask 使用私有、同线程的 setjmp/longjmp 根帧重新进入下一实例，成功不会返回旧应用帧；完整 Chain、资源拒绝和事件唤醒语义按后续 stories 闭合。
+
+Windows 模拟 ISR 已持有端口递归 interrupt-event mutex；服务临界区可在该固定端口嵌套取得，退出借 xInsideInterrupt 避免任务级等待。ISR 激活使用 xTaskResumeFromISR，返回布尔值只表示需要切换，由 backend 在 ISR 出口请求原选择器。没有 MCU 中断安全性声明。请求接纳与关闭通过同一 Interlocked 状态字线性化：关闭赢得原子门后不写新请求；接纳先赢得门的请求属于已接纳前缀，关闭后保留其记录，但不得执行或正常返回应用。关闭位永久保留，关闭控制不等待在途事务或普通 mutex。服务仍在入口、事务内及返回边界核验。测试注入的 100 ms 正常关闭延迟仅存在于 OS_ACTIVATION_TESTS，生产和真实栈故障路径均没有该延迟。
+
+```powershell
+python scripts/epic4_os.py --suite activation
+cargo test --manifest-path core/Cargo.toml epic4_activation_fifo -- --exact --nocapture
+```
+
+20 个实际子进程向量覆盖 AAB/ABA/AABB/ABAB、抢占帧保留、Basic/Extended 拒绝、32 请求容量与 48 次环回绕、序号压缩、同级 autostart、ISR 成功/拒绝以及关闭竞争。独立 observer 只读已缓存 TCB 的真实状态/排序键并核对完整请求档案，不轮询选择 runnable。未来 Wait/Wake 的 ready 位置必须由 4.7 单独证明。
+
+新共享证据明确标记为路径归一化表示，原始结构化记录位于忽略的 .scratch/epic4，并关联其 SHA-256；保留诊断所需的真实栈地址和线程 ID。activation-static-analysis.json 保留实际扫描命令、源码身份和完整诊断。Cppcheck Windows 模型和 MISRA 修订覆盖不完整，扫描仍报红；新增 backend 根帧及主机 I/O 的偏离尚未批准，4.20 完整质量出口仍须闭合。

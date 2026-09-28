@@ -1,0 +1,185 @@
+--- a/tasks.c
++++ b/tasks.c
+@@ -193,6 +193,17 @@
+ 
+ /*-----------------------------------------------------------*/
+ 
++#if defined( configOS_REQUEST_FIFO ) && ( configOS_REQUEST_FIFO == 1 )
++    #if ( configNUMBER_OF_CORES != 1 ) || ( configUSE_PORT_OPTIMISED_TASK_SELECTION != 0 )
++        #error The automotive request FIFO policy requires the fixed generic single-core selector
++    #endif
++    #define taskOS_SELECT_READY( target, list ) ( ( target ) = listGET_OWNER_OF_HEAD_ENTRY( list ) )
++    #define taskOS_INSERT_READY( task ) prvOsInsertReadyTask( task )
++#else
++    #define taskOS_SELECT_READY( target, list ) listGET_OWNER_OF_NEXT_ENTRY( target, list )
++    #define taskOS_INSERT_READY( task ) listINSERT_END( &( pxReadyTasksLists[ ( task )->uxPriority ] ), &( ( task )->xStateListItem ) )
++#endif
++
+     #if ( configNUMBER_OF_CORES == 1 )
+         #define taskSELECT_HIGHEST_PRIORITY_TASK()                                       \
+     do {                                                                                 \
+@@ -207,7 +218,7 @@
+                                                                                          \
+         /* listGET_OWNER_OF_NEXT_ENTRY indexes through the list, so the tasks of \
+          * the  same priority get an equal share of the processor time. */                    \
+-        listGET_OWNER_OF_NEXT_ENTRY( pxCurrentTCB, &( pxReadyTasksLists[ uxTopPriority ] ) ); \
++        taskOS_SELECT_READY( pxCurrentTCB, &( pxReadyTasksLists[ uxTopPriority ] ) ); \
+         uxTopReadyPriority = uxTopPriority;                                                   \
+     } while( 0 ) /* taskSELECT_HIGHEST_PRIORITY_TASK */
+     #else /* if ( configNUMBER_OF_CORES == 1 ) */
+@@ -288,7 +299,7 @@
+     do {                                                                                                   \
+         traceMOVED_TASK_TO_READY_STATE( pxTCB );                                                           \
+         taskRECORD_READY_PRIORITY( ( pxTCB )->uxPriority );                                                \
+-        listINSERT_END( &( pxReadyTasksLists[ ( pxTCB )->uxPriority ] ), &( ( pxTCB )->xStateListItem ) ); \
++        taskOS_INSERT_READY( pxTCB ); \
+         tracePOST_MOVED_TASK_TO_READY_STATE( pxTCB );                                                      \
+     } while( 0 )
+ /*-----------------------------------------------------------*/
+@@ -386,6 +397,10 @@
+         UBaseType_t uxCoreAffinityMask; /**< Used to link the task to certain cores.  UBaseType_t must have greater than or equal to the number of bits as configNUMBER_OF_CORES. */
+     #endif
+ 
++    #if defined( configOS_REQUEST_FIFO ) && ( configOS_REQUEST_FIFO == 1 )
++        uint64_t ullOsReadySequence;
++    #endif
++
+     ListItem_t xStateListItem;                  /**< The list that the state list item of a task is reference from denotes the state of that task (Ready, Blocked, Suspended ). */
+     ListItem_t xEventListItem;                  /**< Used to reference a task from an event list. */
+     UBaseType_t uxPriority;                     /**< The priority of the task.  0 is the lowest priority. */
+@@ -591,6 +606,10 @@
+  * Utility to ready all the lists used by the scheduler.  This is called
+  * automatically upon the creation of the first task.
+  */
++#if defined( configOS_REQUEST_FIFO ) && ( configOS_REQUEST_FIFO == 1 )
++    STATIC void prvOsInsertReadyTask( TCB_t * pxTask );
++#endif
++
+ STATIC void prvInitialiseTaskLists( void ) PRIVILEGED_FUNCTION;
+ 
+ /*
+@@ -1912,6 +1931,9 @@
+     }
+ 
+     pxNewTCB->uxPriority = uxPriority;
++    #if defined( configOS_REQUEST_FIFO ) && ( configOS_REQUEST_FIFO == 1 )
++        pxNewTCB->ullOsReadySequence = 0;
++    #endif
+     #if ( configUSE_MUTEXES == 1 )
+     {
+         pxNewTCB->uxBasePriority = uxPriority;
+@@ -2567,7 +2589,12 @@
+         configASSERT( pxTCB != NULL );
+ 
+         #if ( configNUMBER_OF_CORES == 1 )
+-            if( pxTCB == pxCurrentTCB )
++            if( ( pxTCB == pxCurrentTCB )
++                #if defined( configOS_REQUEST_FIFO ) && ( configOS_REQUEST_FIFO == 1 )
++                    && ( listLIST_ITEM_CONTAINER( &( pxTCB->xStateListItem ) ) ==
++                         &( pxReadyTasksLists[ pxTCB->uxPriority ] ) )
++                #endif
++                )
+             {
+                 /* The task calling this function is querying its own state. */
+                 eReturn = eRunning;
+@@ -8965,3 +8992,56 @@
+     #endif /* #if ( configGENERATE_RUN_TIME_STATS == 1 ) */
+ }
+ /*-----------------------------------------------------------*/
++
++#if defined( configOS_REQUEST_FIFO ) && ( configOS_REQUEST_FIFO == 1 )
++/* Only this kernel ready list selects runnable tasks. The backend supplies the
++ * identity of the oldest accepted request, never a selected runnable task. */
++STATIC void prvOsInsertReadyTask( TCB_t * pxTask )
++{
++    List_t * pxReady = &( pxReadyTasksLists[ pxTask->uxPriority ] );
++    ListItem_t * pxPosition = listGET_HEAD_ENTRY( pxReady );
++    ListItem_t * pxPreviousIndex = pxReady->pxIndex;
++    while( pxPosition != listGET_END_MARKER( pxReady ) )
++    {
++        const TCB_t * pxOther = listGET_LIST_ITEM_OWNER( pxPosition );
++        if( pxOther->ullOsReadySequence > pxTask->ullOsReadySequence )
++        {
++            break;
++        }
++        pxPosition = listGET_NEXT( pxPosition );
++    }
++    /* vListInsertEnd inserts before pxIndex. Restore that cursor immediately;
++     * the fixed FIFO selector observes the list head, not the rotating cursor. */
++    pxReady->pxIndex = pxPosition;
++    vListInsertEnd( pxReady, &( pxTask->xStateListItem ) );
++    pxReady->pxIndex = pxPreviousIndex;
++}
++
++void vTaskOsSetReadySequence( TaskHandle_t xTask, uint64_t ullSequence )
++{
++    TCB_t * pxTask = xTask;
++    configASSERT( pxTask != NULL );
++    taskENTER_CRITICAL();
++    {
++        pxTask->ullOsReadySequence = ullSequence;
++        if( listLIST_ITEM_CONTAINER( &( pxTask->xStateListItem ) ) ==
++            &( pxReadyTasksLists[ pxTask->uxPriority ] ) )
++        {
++            ( void ) uxListRemove( &( pxTask->xStateListItem ) );
++            prvOsInsertReadyTask( pxTask );
++        }
++    }
++    taskEXIT_CRITICAL();
++}
++
++uint64_t ullTaskOsReadySequence( TaskHandle_t xTask )
++{
++    uint64_t ullSequence;
++    const TCB_t * pxTask = xTask;
++    configASSERT( pxTask != NULL );
++    taskENTER_CRITICAL();
++    ullSequence = pxTask->ullOsReadySequence;
++    taskEXIT_CRITICAL();
++    return ullSequence;
++}
++#endif
+--- a/include/task.h
++++ b/include/task.h
+@@ -1366,6 +1366,11 @@
+  * \ingroup TaskCtrl
+  */
+ void vTaskResume( TaskHandle_t xTaskToResume ) PRIVILEGED_FUNCTION;
++#if defined( configOS_REQUEST_FIFO ) && ( configOS_REQUEST_FIFO == 1 )
++    void vTaskOsSetReadySequence( TaskHandle_t xTask, uint64_t ullSequence );
++    uint64_t ullTaskOsReadySequence( TaskHandle_t xTask );
++#endif
++
+ 
+ /**
+  * task. h
+--- a/include/FreeRTOS.h
++++ b/include/FreeRTOS.h
+@@ -3182,6 +3182,9 @@
+     #if ( configUSE_CORE_AFFINITY == 1 ) && ( configNUMBER_OF_CORES > 1 )
+         UBaseType_t uxDummy26;
+     #endif
++    #if defined( configOS_REQUEST_FIFO ) && ( configOS_REQUEST_FIFO == 1 )
++        uint64_t ullOsReadySequenceDummy;
++    #endif
+     StaticListItem_t xDummy3[ 2 ];
+     UBaseType_t uxDummy5;
+     void * pxDummy6;
+--- a/portable/MSVC-MingW/port.c
++++ b/portable/MSVC-MingW/port.c
+@@ -368,6 +368,15 @@
+                 }
+             }
+ 
++            #if defined( configOS_REQUEST_FIFO ) && ( configOS_REQUEST_FIFO == 1 )
++                /* Standard OS services request the existing selector at ISR exit,
++                 * independent of the host interrupt callback's private return. */
++                if( Os_BackendTakeIsrReschedule() )
++                {
++                    ulSwitchRequired |= 1UL;
++                }
++            #endif
++
+             if( ulSwitchRequired != pdFALSE )
+             {
+                 /* Suspend the old thread. */

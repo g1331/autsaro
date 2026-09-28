@@ -25,7 +25,7 @@ static void check_task(TaskType id, TaskType other, char marker) {
     if (!Os_TargetReady() || GetTaskState(id, &state) != E_OK || state != RUNNING ||
         GetTaskState(other, &state) != E_OK || state != (both_ready ? READY : SUSPENDED) ||
         GetTaskState(99u, &state) != E_OS_ID || state != (both_ready ? READY : SUSPENDED) ||
-        GetTaskState(id, NULL) != E_OS_VALUE) {
+        GetTaskState(id, NULL) != E_OS_ILLEGAL_ADDRESS) {
         ShutdownOS(E_OS_STATE);
     }
     Os_TargetTrace(marker);
@@ -35,7 +35,8 @@ static void check_task(TaskType id, TaskType other, char marker) {
 static void task_a(void) { check_task(0u, 1u, 'A'); }
 static void task_b(void) { check_task(1u, 0u, 'B'); }
 int main(int argc, char **argv) {
-    Os_TaskConfig tasks[2] = {{0u, "A", task_a, 2u, 1u}, {1u, "B", task_b, 2u, 2u}};
+    Os_TaskConfig tasks[2] = {{0u, "A", task_a, 2u, 1u, OS_BASIC_TASK, 1u},
+                              {1u, "B", task_b, 2u, 2u, OS_BASIC_TASK, 1u}};
     Os_TargetConfig config = {tasks, 2u, 262144u};
     AppModeType mode = 1u;
     StatusType expected = E_OK;
@@ -104,7 +105,7 @@ int main(int argc, char **argv) {
     }
     {
         TaskStateType state = 99u;
-        if (GetTaskState(0u, &state) != E_OS_STATE || state != 99u) {
+        if (GetTaskState(0u, &state) != E_OS_CALLEVEL || state != 99u) {
             return 99;
         }
     }
