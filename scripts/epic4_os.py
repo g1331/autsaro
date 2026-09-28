@@ -156,6 +156,8 @@ def build(directory: Path, harness: str = "lifecycle.c") -> tuple[Path, dict]:
         command.insert(1, "-DOS_ACTIVATION_TESTS")
     if harness == "finish_chain.c":
         command.insert(1, "-DOS_FINISH_TESTS")
+    if harness == "resource_preemption.c":
+        command.insert(1, "-DOS_RESOURCE_TESTS")
     compiled = subprocess.run(command, capture_output=True, text=True, check=False)
     if compiled.returncode:
         raise RuntimeError(f"OS C99 build failed:\n{compiled.stdout}{compiled.stderr}")
@@ -342,6 +344,63 @@ def check_finish(binary: Path) -> list[dict]:
         ("resource-duplicate", 3),
         ("resource-ceiling-low", 8),
         ("resource-ceiling-high", 8),
+    ]:
+        result = execute(binary, scenario)
+        require(result["exit"] == 0 and result["stdout"] == f"prepare={code}", result)
+        observations.append(result)
+    return observations
+
+
+def check_resources(binary: Path) -> list[dict]:
+    observations = []
+    for scenario, trace, counts in [
+        ("full", "ISRAHaMZ", (1, 0, 0, 0)),
+        ("non", "ISRAnHaMZ", (1, 0, 0, 0)),
+        ("internal", "ISRAgHaMZ", (1, 0, 0, 0)),
+        ("internal-preempt", "ISRADgHaMZ", (1, 0, 0, 0)),
+        ("wait", "ISRABaMZ", (0, 1, 0, 0)),
+        ("already", "ISRAaBMZ", (0, 1, 0, 0)),
+        ("nested", "ISRAHaMZ", (1, 0, 0, 5)),
+        ("resource-wait", "ISRAHaMZ", (1, 0, 0, 6)),
+        ("restore", "ISRArHaBMZ", (1, 1, 0, 0)),
+        ("nonowner", "ISRADaMZ", (0, 0, 0, 0)),
+        ("masked-isr", "ISRApJaMZ", (0, 0, 1, 4)),
+        ("external-isr", "ISRAJaMZ", (0, 0, 1, 4)),
+        ("oracle-non", "ISRAnHaMZ", (1, 0, 0, 0)),
+        ("oracle-resource", "ISRArHaMZ", (1, 0, 0, 0)),
+        ("internal-resource", "ISRAaMZ", (0, 0, 0, 3)),
+        ("access", "ISRAaBMZ", (0, 1, 0, 2)),
+        ("scheduler", "ISRAJrHaMZ", (1, 0, 1, 4)),
+    ]:
+        result = execute(binary, scenario)
+        summary = re.search(
+            r"resources h=(\d+) b=(\d+) irq=(\d+) observer=(\d+) rejected=(\d+) error=(\d+)",
+            result["stdout"],
+        )
+        require(
+            result["exit"] == 0
+            and f"trace={trace} " in result["stdout"]
+            and summary is not None,
+            result,
+        )
+        require(
+            (int(summary[1]), int(summary[2]), int(summary[3]), int(summary[5]))
+            == counts
+            and int(summary[4]) > 0
+            and int(summary[6]) == 0,
+            result,
+        )
+        result["independent_expected_trace"] = trace
+        observations.append(result)
+    for scenario, code in [
+        ("bad-schedule", 8),
+        ("internal-null", 8),
+        ("internal-capacity", 8),
+        ("internal-duplicate", 3),
+        ("internal-missing", 3),
+        ("internal-low", 8),
+        ("internal-high", 8),
+        ("non-internal-low", 8),
     ]:
         result = execute(binary, scenario)
         require(result["exit"] == 0 and result["stdout"] == f"prepare={code}", result)
@@ -540,7 +599,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--suite",
-        choices=["lifecycle", "stack", "activation", "finish"],
+        choices=["lifecycle", "stack", "activation", "finish", "resources"],
         default="lifecycle",
     )
     parser.add_argument("--evidence", type=Path)
@@ -551,12 +610,14 @@ def main() -> None:
             "stack": "native_stack.c",
             "activation": "activation.c",
             "finish": "finish_chain.c",
+            "resources": "resource_preemption.c",
         }
         checks = {
             "lifecycle": check_lifecycle,
             "stack": check_stack,
             "activation": check_activation,
             "finish": check_finish,
+            "resources": check_resources,
         }
         binary, evidence = build(Path(temporary), harnesses[args.suite])
         evidence["observations"] = checks[args.suite](binary)
@@ -568,6 +629,7 @@ def main() -> None:
             "stack": "epic4_native_stack_fault_shutdown",
             "activation": "epic4_activation_fifo",
             "finish": "epic4_finish_chain_atomicity",
+            "resources": "epic4_resource_and_preemption",
         }
         name = names[args.suite]
         print(f"{name} PASS: {len(evidence['observations'])} native vectors")

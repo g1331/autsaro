@@ -1,0 +1,94 @@
+--- a/portable/MSVC-MingW/port.c
++++ b/portable/MSVC-MingW/port.c
+@@ -338,6 +338,23 @@
+              * critical sections from doing the same. */
+             xInsideInterrupt = pdTRUE;
+ 
++            /* Stop application execution for the entire real ISR interval. */
++            /* Suspend the old thread. */
++            pxThreadState = ( ThreadState_t * ) *( ( size_t * ) pxCurrentTCB );
++            configASSERT( Os_PortSuspendThread( pxThreadState->pvThread ) != ( DWORD ) -1 );
++
++            /* Ensure the thread is actually suspended by performing a
++             * synchronous operation that can only complete when the thread
++             * is actually suspended. The below code asks for dummy register
++             * data. Experimentation shows that these two lines don't appear
++             * to do anything now, but according to
++             * https://devblogs.microsoft.com/oldnewthing/20150205-00/?p=44743
++             * they do - so as they do not harm (slight run-time hit). */
++            xContext.ContextFlags = CONTEXT_CONTROL;
++            configASSERT( Os_PortGetThreadContext( pxThreadState->pvThread, &xContext ) );
++            Os_StackObserve( pxThreadState->pvThread, &xContext );
++
++
+             /* Used to indicate whether the simulated interrupt processing has
+              * necessitated a context switch to another task/thread. */
+             ulSwitchRequired = pdFALSE;
+@@ -347,24 +364,26 @@
+             for( i = 0; i < portMAX_INTERRUPTS; i++ )
+             {
+                 /* Is the simulated interrupt pending? */
+-                if( ( ulPendingInterrupts & ( 1UL << i ) ) != 0 )
++                if( ( ( ulPendingInterrupts & ( 1UL << i ) ) != 0 ) && Os_BackendInterruptEnabled( i ) )
+                 {
++                    /* Consume before callback; a re-pended edge stays pending. */
++                    ulPendingInterrupts &= ~( 1UL << i );
++
+                     /* Is a handler installed? */
+                     if( ulIsrHandler[ i ] != NULL )
+                     {
+                         /* Run the actual handler.  Handlers return pdTRUE if they
+                          * necessitate a context switch. */
+                         Os_StackCheck();
++                        Os_BackendInterruptEnter( i );
+                         if( ulIsrHandler[ i ]() != pdFALSE )
+                         {
+                             /* A bit mask is used purely to help debugging. */
+                             ulSwitchRequired |= ( 1UL << i );
+                         }
+                         Os_StackCheck();
++                        Os_BackendInterruptLeave();
+                     }
+-
+-                    /* Clear the interrupt pending bit. */
+-                    ulPendingInterrupts &= ~( 1UL << i );
+                 }
+             }
+ 
+@@ -379,21 +398,6 @@
+ 
+             if( ulSwitchRequired != pdFALSE )
+             {
+-                /* Suspend the old thread. */
+-                pxThreadState = ( ThreadState_t * ) *( ( size_t * ) pxCurrentTCB );
+-                configASSERT( Os_PortSuspendThread( pxThreadState->pvThread ) != ( DWORD ) -1 );
+-
+-                /* Ensure the thread is actually suspended by performing a
+-                 * synchronous operation that can only complete when the thread
+-                 * is actually suspended. The below code asks for dummy register
+-                 * data. Experimentation shows that these two lines don't appear
+-                 * to do anything now, but according to
+-                 * https://devblogs.microsoft.com/oldnewthing/20150205-00/?p=44743
+-                 * they do - so as they do not harm (slight run-time hit). */
+-                xContext.ContextFlags = CONTEXT_CONTROL;
+-                configASSERT( Os_PortGetThreadContext( pxThreadState->pvThread, &xContext ) );
+-                Os_StackObserve( pxThreadState->pvThread, &xContext );
+-
+                 /* Select the next task to run. */
+                 vTaskSwitchContext();
+ 
+@@ -404,10 +408,10 @@
+                 /* pxThreadState->pvThread can be NULL if the task deleted
+                  * itself - but a deleted task should never be resumed here. */
+                 configASSERT( pxThreadState->pvThread != NULL );
+-                if( InterlockedCompareExchange( &Os_Closing, 0, 0 ) == 0 )
+-        {
+-            Os_PortResumeThread( pxThreadState->pvThread );
+-        }
++            }
++            if( InterlockedCompareExchange( &Os_Closing, 0, 0 ) == 0 )
++            {
++                Os_PortResumeThread( pxThreadState->pvThread );
+             }
+ 
+             /* If the thread that is about to be resumed stopped running

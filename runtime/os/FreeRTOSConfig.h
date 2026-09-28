@@ -4,8 +4,8 @@
 #define configUSE_TIME_SLICING 0
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION 0
 #define configOS_REQUEST_FIFO 1
-void Os_BackendObserveSwitch(void);
-#define traceTASK_SWITCHED_IN() Os_BackendObserveSwitch()
+void Os_BackendOnSwitch(void);
+#define traceTASK_SWITCHED_IN() Os_BackendOnSwitch()
 #define configUSE_IDLE_HOOK 1
 #define configUSE_TICK_HOOK 0
 #define configTICK_RATE_HZ 1000

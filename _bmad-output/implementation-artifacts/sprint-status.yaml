@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-27-2026 18:43
-last_updated: 09-28-2026 22:02
+last_updated: 09-28-2026 23:09
 project: Autosar
 project_key: NOKEY
 tracking_system: file-system
@@ -61,7 +61,7 @@ development_status:
   4-3-建立固定内核的唯一-backend-与静态生命周期基础: done
   4-4-保留全部激活请求-fifo-与实际内核状态: done
   4-5-原子终止-链式移交与新入口执行: done
-  4-6-实现非抢占-内部资源及资源上限恢复: backlog
+  4-6-实现非抢占-内部资源及资源上限恢复: done
   4-7-保持事件所有权与无丢失唤醒: backlog
   4-8-逐毫秒推进受控时间与-counter-alarm: backlog
   4-9-捕获-windows-真实执行栈故障并关闭目标: done

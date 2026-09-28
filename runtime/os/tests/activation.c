@@ -337,13 +337,13 @@ static void monitor(void) {
 }
 
 int main(int argc, char **argv) {
-    Os_TaskConfig tasks[] = {{0u, "L", launcher, 4u, 1u, OS_BASIC_TASK, 1u},
-                             {1u, "A", task_a, 2u, 0u, OS_BASIC_TASK, 2u},
-                             {2u, "B", task_b, 2u, 0u, OS_BASIC_TASK, 2u},
-                             {3u, "H", task_h, 3u, 0u, OS_BASIC_TASK, 1u},
-                             {4u, "E", task_e, 2u, 0u, OS_EXTENDED_TASK, 1u},
-                             {5u, "M", monitor, 1u, 1u, OS_BASIC_TASK, 1u}};
-    const Os_TargetConfig config = {tasks, 6u, 262144u, NULL, 0u};
+    Os_TaskConfig tasks[] = {{0u, "L", launcher, 4u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+                             {1u, "A", task_a, 2u, 0u, OS_BASIC_TASK, 2u, OS_SCHEDULE_FULL, 0u},
+                             {2u, "B", task_b, 2u, 0u, OS_BASIC_TASK, 2u, OS_SCHEDULE_FULL, 0u},
+                             {3u, "H", task_h, 3u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+                             {4u, "E", task_e, 2u, 0u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+                             {5u, "M", monitor, 1u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
+    const Os_TargetConfig config = {tasks, 6u, 262144u, NULL, 0u, NULL, 0u};
     StatusType prepared;
     scenario = (argc == 2) ? argv[1] : "aab";
     configuration = tasks;

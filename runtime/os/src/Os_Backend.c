@@ -16,8 +16,14 @@ typedef struct {
 } ActivationQueue;
 static ActivationQueue activations[OS_MAX_TASKS];
 static EventMaskType task_events[OS_MAX_TASKS];
-static unsigned resource_depth[OS_MAX_TASKS];
-static size_t owned_resources[OS_MAX_TASKS][OS_MAX_RESOURCES];
+static EventMaskType wait_masks[OS_MAX_TASKS];
+static uint8_t task_waiting[OS_MAX_TASKS];
+static uint8_t internal_held[OS_MAX_TASKS];
+static uint64_t ready_sequences[OS_MAX_TASKS];
+static unsigned resource_depth[OS_MAX_TASKS + 1u];
+static size_t owned_resources[OS_MAX_TASKS + 1u][OS_MAX_RESOURCES];
+static volatile LONG interrupt_ceiling;
+static unsigned current_interrupt = 32u;
 static uint64_t request_sequence;
 typedef struct {
     uint64_t *slot;
@@ -56,6 +62,20 @@ static unsigned fail_resource;
 static volatile LONG started;
 static void task_entry(void *argument);
 static void bootstrap(void *argument);
+static void acquire_internal(size_t index);
+static void release_internal(size_t index);
+static uint8_t internal_ceiling(size_t index);
+static void observe_transition(void);
+void Os_BackendInterruptEnter(unsigned interrupt) { current_interrupt = interrupt; }
+void Os_BackendInterruptLeave(void) {
+    configASSERT(resource_depth[OS_MAX_TASKS] == 0u);
+    current_interrupt = 32u;
+}
+int Os_BackendInterruptEnabled(unsigned interrupt) {
+    /* The kernel's yield is not an automotive ISR. Currently declared Category2
+     * callbacks share virtual priority31; complete categories/nesting follow4.18. */
+    return (interrupt == 0u) || (InterlockedCompareExchange(&interrupt_ceiling, 0, 0) < 31);
+}
 static size_t task_index(TaskType id) {
     size_t i;
     for (i = 0u; i < Os_Config->task_count; ++i) {
@@ -81,10 +101,12 @@ void Os_BackendGuardService(void) {
 /* Normalize only live metadata order stamps. This never chooses a runnable task;
  * the existing kernel ready-list policy remains the only selector. */
 static void rebase_orders(void) {
-    static OrderReference rebase_entries[OS_MAX_TASKS * OS_MAX_ACTIVATIONS];
+    static OrderReference rebase_entries[OS_MAX_TASKS * (OS_MAX_ACTIVATIONS + 1u)];
     size_t i;
     unsigned j;
     unsigned count = 0u;
+    uint64_t previous = 0u;
+    uint64_t rank = 0u;
     for (i = 0u; i < Os_Config->task_count; ++i) {
         ActivationQueue *queue = &activations[i];
         for (j = 0u; j < queue->count; ++j) {
@@ -98,29 +120,59 @@ static void rebase_orders(void) {
             rebase_entries[position].previous = *slot;
             ++count;
         }
+        if (ready_sequences[i] != 0u) {
+            unsigned position = count;
+            while ((position > 0u) &&
+                   (rebase_entries[position - 1u].previous > ready_sequences[i])) {
+                rebase_entries[position] = rebase_entries[position - 1u];
+                --position;
+            }
+            rebase_entries[position].slot = &ready_sequences[i];
+            rebase_entries[position].previous = ready_sequences[i];
+            ++count;
+        }
     }
     for (j = 0u; j < count; ++j) {
-        *rebase_entries[j].slot = (uint64_t)j + 1u;
+        if (rebase_entries[j].previous != previous) {
+            ++rank;
+            previous = rebase_entries[j].previous;
+        }
+        *rebase_entries[j].slot = rank;
     }
     for (i = 0u; i < Os_Config->task_count; ++i) {
         if (activations[i].count != 0u) {
-            vTaskOsSetReadySequence(handles[i], activations[i].requests[activations[i].head]);
+            vTaskOsSetReadySequence(handles[i], ready_sequences[i]);
         }
     }
-    request_sequence = count;
+    request_sequence = rank;
 }
 static void append_activation(size_t index) {
     ActivationQueue *queue = &activations[index];
     unsigned tail = (queue->head + queue->count) % OS_MAX_ACTIVATIONS;
     if (queue->count == 0u) {
         task_events[index] = 0u;
+        task_waiting[index] = 0u;
+        wait_masks[index] = 0u;
+        ready_sequences[index] = request_sequence + 1u;
     }
     ++request_sequence;
     queue->requests[tail] = request_sequence;
     ++queue->count;
 }
-void Os_BackendObserveSwitch(void) {
-#if defined(OS_ACTIVATION_TESTS) || defined(OS_FINISH_TESTS)
+void Os_BackendOnSwitch(void) {
+    if (Os_TargetReady() != 0) {
+        size_t i;
+        for (i = 0u; i < Os_Config->task_count; ++i) {
+            if (handles[i] == xTaskGetCurrentTaskHandle()) {
+                acquire_internal(i);
+                break;
+            }
+        }
+    }
+    observe_transition();
+}
+static void observe_transition(void) {
+#if defined(OS_ACTIVATION_TESTS) || defined(OS_FINISH_TESTS) || defined(OS_RESOURCE_TESTS)
     const Os_NativeStack *stack = Os_StackCurrent();
     if ((Os_TargetReady() != 0) && (stack != NULL) &&
         ((stack->role == 'T') || (stack->role == 'S'))) {
@@ -128,7 +180,45 @@ void Os_BackendObserveSwitch(void) {
     }
 #endif
 }
-static void observe_transition(void) { Os_BackendObserveSwitch(); }
+static uint8_t internal_ceiling(size_t index) {
+    size_t i;
+    uint8_t ceiling = 0u;
+    const Os_TaskConfig *task = &Os_Config->tasks[index];
+    if (task->schedule == OS_SCHEDULE_NON) {
+        for (i = 0u; i < Os_Config->task_count; ++i) {
+            if (Os_Config->tasks[i].priority > ceiling) {
+                ceiling = Os_Config->tasks[i].priority;
+            }
+        }
+    } else if (task->internal_resource != 0u) {
+        for (i = 0u; i < Os_Config->internal_resource_count; ++i) {
+            if (Os_Config->internal_resources[i].id == task->internal_resource) {
+                ceiling = Os_Config->internal_resources[i].ceiling;
+                break;
+            }
+        }
+    } else {
+        /* FULL tasks without an assigned internal resource retain base priority. */
+    }
+    return ceiling;
+}
+static void acquire_internal(size_t index) {
+    uint8_t ceiling = internal_ceiling(index);
+    if ((ceiling != 0u) && (internal_held[index] == 0u)) {
+        configASSERT(resource_depth[index] == 0u);
+        internal_held[index] = 1u;
+        if (uxTaskPriorityGet(handles[index]) < ceiling) {
+            vTaskPrioritySet(handles[index], ceiling);
+        }
+    }
+}
+static void release_internal(size_t index) {
+    if (internal_held[index] != 0u) {
+        configASSERT(resource_depth[index] == 0u);
+        internal_held[index] = 0u;
+        vTaskPrioritySet(handles[index], Os_Config->tasks[index].priority);
+    }
+}
 #ifdef OS_ACTIVATION_TESTS
 void Os_TargetTestSequence(uint64_t sequence) {
     taskENTER_CRITICAL();
@@ -518,7 +608,7 @@ StatusType Os_BackendState(TaskType id, TaskStateRefType state) {
                 *state = WAITING;
                 break;
             case eSuspended:
-                *state = SUSPENDED;
+                *state = (task_waiting[i] != 0u) ? WAITING : SUSPENDED;
                 break;
             default:
                 taskEXIT_CRITICAL();
@@ -573,7 +663,7 @@ StatusType Os_BackendActivate(TaskType id) {
     configASSERT((queue->count != 0u) || (eTaskGetState(handles[index]) == eSuspended));
     append_activation(index);
     if (queue->count == 1u) {
-        vTaskOsSetReadySequence(handles[index], queue->requests[queue->head]);
+        vTaskOsSetReadySequence(handles[index], ready_sequences[index]);
         if (stack->role == 'S') {
             BaseType_t wake = xTaskResumeFromISR(handles[index]);
             if (wake != pdFALSE) {
@@ -656,6 +746,7 @@ static StatusType complete_activation(TaskType id, int chain) {
         configASSERT((activations[target].count != 0u) ||
                      (eTaskGetState(handles[target]) == eSuspended));
     }
+    release_internal(index);
     queue->requests[queue->head] = 0u;
     queue->head = (queue->head + 1u) % OS_MAX_ACTIVATIONS;
     --queue->count;
@@ -669,7 +760,8 @@ static StatusType complete_activation(TaskType id, int chain) {
             }
         }
     }
-    vTaskOsSetReadySequence(current, (queue->count == 0u) ? 0u : queue->requests[queue->head]);
+    ready_sequences[index] = (queue->count == 0u) ? 0u : queue->requests[queue->head];
+    vTaskOsSetReadySequence(current, ready_sequences[index]);
 #ifdef OS_FINISH_TESTS
     Os_TestFinishBoundary(1u);
 #endif
@@ -686,16 +778,23 @@ static StatusType complete_activation(TaskType id, int chain) {
 StatusType Os_BackendFinish(void) { return complete_activation(0u, 0); }
 StatusType Os_BackendChain(TaskType id) { return complete_activation(id, 1); }
 StatusType Os_BackendResource(ResourceType id, int acquire) {
-    static UBaseType_t saved_priorities[OS_MAX_TASKS][OS_MAX_RESOURCES];
+    static UBaseType_t saved_priorities[OS_MAX_TASKS + 1u][OS_MAX_RESOURCES];
+    static LONG saved_interrupt_ceilings[OS_MAX_TASKS + 1u][OS_MAX_RESOURCES];
     static unsigned resource_owner[OS_MAX_RESOURCES];
+    const Os_NativeStack *stack = Os_StackCurrent();
     size_t task;
     size_t resource;
     unsigned depth;
     StatusType status = E_OK;
+    Os_ResourceConfig scheduler = {RES_SCHEDULER, 0u, 0u, 0u};
+    const Os_ResourceConfig *config;
     Os_BackendGuardService();
     task = current_task_index();
     if (task == OS_MAX_TASKS) {
-        return E_OS_CALLEVEL;
+        if ((Os_TargetReady() == 0) || (stack == NULL) || (stack->role != 'S') ||
+            (current_interrupt == 0u) || (current_interrupt >= 32u)) {
+            return E_OS_CALLEVEL;
+        }
     }
     for (resource = 0u; resource < Os_Config->resource_count; ++resource) {
         if (Os_Config->resources[resource].id == id) {
@@ -703,24 +802,46 @@ StatusType Os_BackendResource(ResourceType id, int acquire) {
         }
     }
     if (resource == Os_Config->resource_count) {
-        return E_OS_ID;
+        if (id != RES_SCHEDULER) {
+            return E_OS_ID;
+        }
+        /* The predefined scheduler resource occupies the reserved eighth slot
+         * when omitted from user configuration. No extra ninth resource exists. */
+        resource = OS_MAX_RESOURCES - 1u;
+        for (size_t i = 0u; i < Os_Config->task_count; ++i) {
+            scheduler.task_access |= (uint16_t)(1u << Os_Config->tasks[i].id);
+            if (Os_Config->tasks[i].priority > scheduler.ceiling) {
+                scheduler.ceiling = Os_Config->tasks[i].priority;
+            }
+        }
+        config = &scheduler;
+    } else {
+        config = &Os_Config->resources[resource];
     }
     taskENTER_CRITICAL();
     Os_BackendGuardService();
     depth = resource_depth[task];
     if (acquire != 0) {
-        const Os_ResourceConfig *config = &Os_Config->resources[resource];
         if ((depth >= OS_MAX_RESOURCES) || (resource_owner[resource] != 0u) ||
-            ((config->task_access & (1u << Os_Config->tasks[task].id)) == 0u) ||
-            (Os_Config->tasks[task].priority > config->ceiling)) {
+            ((task != OS_MAX_TASKS) &&
+             (((config->task_access & (1u << Os_Config->tasks[task].id)) == 0u) ||
+              (Os_Config->tasks[task].priority > config->ceiling))) ||
+            ((task == OS_MAX_TASKS) &&
+             ((config->isr_access & (UINT32_C(1) << current_interrupt)) == 0u))) {
             status = E_OS_ACCESS;
         } else {
-            saved_priorities[task][depth] = uxTaskPriorityGet(handles[task]);
+            saved_priorities[task][depth] =
+                (task == OS_MAX_TASKS) ? 0u : uxTaskPriorityGet(handles[task]);
+            saved_interrupt_ceilings[task][depth] =
+                InterlockedCompareExchange(&interrupt_ceiling, 0, 0);
             owned_resources[task][depth] = resource;
             resource_depth[task] = depth + 1u;
             resource_owner[resource] = (unsigned)task + 1u;
-            if (config->ceiling > saved_priorities[task][depth]) {
+            if ((task != OS_MAX_TASKS) && (config->ceiling > saved_priorities[task][depth])) {
                 vTaskPrioritySet(handles[task], config->ceiling);
+            }
+            if (config->isr_access != 0u) {
+                InterlockedExchange(&interrupt_ceiling, 31);
             }
         }
     } else if ((depth == 0u) || (depth > OS_MAX_RESOURCES) ||
@@ -730,11 +851,80 @@ StatusType Os_BackendResource(ResourceType id, int acquire) {
     } else {
         resource_depth[task] = depth - 1u;
         resource_owner[resource] = 0u;
-        vTaskPrioritySet(handles[task], saved_priorities[task][depth - 1u]);
+        InterlockedExchange(&interrupt_ceiling, saved_interrupt_ceilings[task][depth - 1u]);
+        if (task != OS_MAX_TASKS) {
+            vTaskPrioritySet(handles[task], saved_priorities[task][depth - 1u]);
+        }
     }
     taskEXIT_CRITICAL();
     Os_BackendGuardService();
     return status;
+}
+StatusType Os_BackendSchedule(void) {
+    size_t index = current_task_index();
+    if (index == OS_MAX_TASKS) {
+        return E_OS_CALLEVEL;
+    }
+    taskENTER_CRITICAL();
+    Os_BackendGuardService();
+    if (resource_depth[index] != 0u) {
+        taskEXIT_CRITICAL();
+        return E_OS_RESOURCE;
+    }
+    if (internal_held[index] != 0u) {
+        release_internal(index);
+        taskYIELD();
+    }
+    taskEXIT_CRITICAL();
+    Os_BackendGuardService();
+    acquire_internal(index);
+    return E_OK;
+}
+StatusType Os_BackendWait(EventMaskType mask) {
+    size_t index = current_task_index();
+    if (index == OS_MAX_TASKS) {
+        return E_OS_CALLEVEL;
+    }
+    if (Os_Config->tasks[index].kind != OS_EXTENDED_TASK) {
+        return E_OS_ACCESS;
+    }
+    taskENTER_CRITICAL();
+    Os_BackendGuardService();
+    if (resource_depth[index] != 0u) {
+        taskEXIT_CRITICAL();
+        return E_OS_RESOURCE;
+    }
+    if ((task_events[index] & mask) == 0u) {
+        wait_masks[index] = mask;
+        task_waiting[index] = 1u;
+        release_internal(index);
+        ready_sequences[index] = 0u;
+        vTaskOsSetReadySequence(handles[index], 0u);
+        /* Native suspended-list membership plus the live activation/wait
+         * predicate represents automotive WAITING. The ISR cannot interleave
+         * before this complete transaction releases the port critical section. */
+        vTaskSuspend(NULL);
+    }
+    taskEXIT_CRITICAL();
+    Os_BackendGuardService();
+    acquire_internal(index);
+    configASSERT(task_waiting[index] == 0u);
+    return E_OK;
+}
+StatusType Os_BackendClear(EventMaskType mask) {
+    size_t index = current_task_index();
+    if (index == OS_MAX_TASKS) {
+        return E_OS_CALLEVEL;
+    }
+    if (Os_Config->tasks[index].kind != OS_EXTENDED_TASK) {
+        return E_OS_ACCESS;
+    }
+    taskENTER_CRITICAL();
+    Os_BackendGuardService();
+    task_events[index] &= ~mask;
+    taskEXIT_CRITICAL();
+    Os_BackendGuardService();
+    return E_OK;
 }
 StatusType Os_BackendEvent(TaskType id, EventMaskType mask, EventMaskRefType output) {
     size_t index;
@@ -756,6 +946,24 @@ StatusType Os_BackendEvent(TaskType id, EventMaskType mask, EventMaskRefType out
         *output = task_events[index];
     } else {
         task_events[index] |= mask;
+        if ((task_waiting[index] != 0u) && ((task_events[index] & wait_masks[index]) != 0u)) {
+            const Os_NativeStack *stack = Os_StackCurrent();
+            if (request_sequence == UINT64_MAX) {
+                rebase_orders();
+            }
+            ++request_sequence;
+            ready_sequences[index] = request_sequence;
+            task_waiting[index] = 0u;
+            wait_masks[index] = 0u;
+            vTaskOsSetReadySequence(handles[index], ready_sequences[index]);
+            if (stack->role == 'S') {
+                if (xTaskResumeFromISR(handles[index]) != pdFALSE) {
+                    InterlockedExchange(&isr_reschedule, 1);
+                }
+            } else {
+                vTaskResume(handles[index]);
+            }
+        }
     }
     taskEXIT_CRITICAL();
     Os_BackendGuardService();
@@ -788,8 +996,15 @@ StatusType Os_BackendInspect(TaskType id, Os_ActivationInfo *info) {
     snapshot.events = task_events[index];
     snapshot.effective_priority = (uint8_t)uxTaskPriorityGet(handles[index]);
     snapshot.resource_count = resource_depth[index];
+    snapshot.internal_held = internal_held[index];
+    snapshot.internal_ceiling = internal_ceiling(index);
+    snapshot.waiting = task_waiting[index];
+    snapshot.wait_mask = wait_masks[index];
     for (j = 0u; j < snapshot.resource_count; ++j) {
-        snapshot.resources[j] = Os_Config->resources[owned_resources[index][j]].id;
+        size_t resource = owned_resources[index][j];
+        snapshot.resources[j] = (resource < Os_Config->resource_count)
+                                    ? Os_Config->resources[resource].id
+                                    : RES_SCHEDULER;
     }
     *info = snapshot;
     taskEXIT_CRITICAL();

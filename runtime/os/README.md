@@ -84,3 +84,21 @@ cargo test --manifest-path core/Cargo.toml epic4_finish_chain_atomicity -- --exa
 22 个原生场景覆盖满容量自链、pending、优先级链/同级请求、拒绝完整快照、实际资源ceiling、事件重置、Chain前/后夹点的实际ISR与额外激活、missing-end最低关闭和6种资源配置拒绝。ISR在普通临界区退出后执行，只观察完整状态；完成旧A实例的 order3 被移除，Chain目标B order4 先于ISR重新激活A的 order5。Observer读实际TCB状态/排序键，资源和事件快照均来自实际核心。静态分析仍是部分覆盖，后续完整质量出口和偏离审批要求保持。
 
 静态外部资源 ceiling 按 OSEK §8.5 校验：不低于所有访问任务的最高优先级，并低于不访问该资源、且优先级高于最高访问者的任务。资源测试声明 A/H 为访问者，验证过低或过高 ceiling 在创建线程前拒绝。
+
+
+## 混合抢占与资源（4.6）
+
+每个 Task 声明 FULL/NON 和可选内部资源，静态配置支持两组内部资源。唯一内核先按真实就绪队列选出 Running，backend 再为该已选 Task 取得内部 ceiling；激活不会预先抬高未运行任务。NON 使用最高汽车任务优先级的隐式内部资源；抢占保留内部持有，Schedule、真正等待和成功结束释放，恢复运行时重新取得。外部资源所有权/LIFO独立记录，持外部资源拒绝这些释放边界。
+
+WaitEvent 使用一个完整临界事务发布谓词、释放内部资源并进入真实内核 suspended-list；存活激活和等待标记将该物理停驻明确映射为汽车 WAITING。SetEvent满足谓词后更新独立 ready位置并恢复同一原生实例；激活FIFO记录仍保留，普通唤醒不是新激活。已设置事件的Wait不释放内部资源。完整事件所有权、输入发布/等待竞态及唤醒顺序仍由4.7闭合，不以notification默认行为作等价证明。
+
+外部资源共8槽，预定义 RES_SCHEDULER 使用保留的第8槽，未显式配置时自动可用；它仅阻止其他Task抢占，IRQ仍能交付。显式配置保留槽必须覆盖全部Task、使用最高汽车Task优先级且不得分配ISR访问。普通资源声明task_access与isr_access，当前固定Category2模拟组虚拟优先级31；共享资源以实际内核有效优先级与端口待处理IRQ屏蔽维护ceiling。ISR另有真实所有权/LIFO，离开handler前必须释放，不借用被中断Task的资源栈。完整类别/嵌套/中断义务仍归4.18。
+
+第五复制件补丁只在现有端口边界增加资源屏蔽、真实ISR身份和完整ISR期间的同步Suspend/GetThreadContext/Resume。pending在handler前消费，屏蔽时保持，回调重投的边不被尾部清除。使用既有上下文机制和唯一kernel selector；没有新调度器或Windows实时优先级。外部IRQ注入场景在ISR观察区间睡眠50ms并核对应用原子进度未增加，直接证明应用线程整个区间停驻，避免同宿主普通优先级下仅在切换时挂起造成并行执行。
+
+```powershell
+python scripts/epic4_os.py --suite resources
+cargo test --manifest-path core/Cargo.toml epic4_resource_and_preemption -- --exact --nocapture
+```
+
+当前25个原生场景覆盖FULL/NON、两组内部ceiling的真实升降、Schedule/阻塞/已设置事件、嵌套和同ceiling恢复、拒绝快照、Task/ISR共享屏蔽、外部IRQ物理停驻、RES_SCHEDULER，以及8种静态配置拒绝。独立4.2的NON调度和ceiling释放条件以其原始优先级单独运行。原件与历史证据保留，新的 partial静态扫描覆盖实际复制件端口；诊断与完整质量出口继续如实记录。

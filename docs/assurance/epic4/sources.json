@@ -153,6 +153,11 @@
       "path": "runtime/os/patches/0004-windows-event-namespace.patch",
       "sha256": "633529f96b0bb46cae34687cae8dd9bffda068b971f0dd22b8da9c5fdaa47bf1",
       "role": "production Windows event namespace adapter, applied only to copied fixed upstream"
+    },
+    {
+      "path": "runtime/os/patches/0005-category2-resource-gate.patch",
+      "sha256": "e43dd1f0998e7ec0a8feb8e397ba37c285bf2c031480a6528297e078c94c82df",
+      "role": "production Category2 resource gate and suspended-actor ISR interval; copied upstream only"
     }
   ],
   "research_material": [

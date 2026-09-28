@@ -79,7 +79,7 @@ static uint32_t interrupt(void) {
     Os_TargetTrace('J');
     reject_finish(2u, false, E_OS_CALLEVEL);
     reject_finish(0u, true, E_OS_CALLEVEL);
-    check(GetResource(0u) == E_OS_CALLEVEL);
+    check(GetResource(0u) == E_OS_ACCESS);
     if ((strcmp(scenario, "isr") == 0) || (strncmp(scenario, "boundary-", 9u) == 0)) {
         check(ActivateTask(1u) == E_OK);
     }
@@ -270,15 +270,15 @@ static void monitor(void) {
     ShutdownOS(E_OK);
 }
 int main(int argc, char **argv) {
-    Os_TaskConfig tasks[] = {{0u, "L", launcher, 6u, 1u, OS_BASIC_TASK, 1u},
-                             {1u, "A", task_a, 3u, 0u, OS_BASIC_TASK, 2u},
-                             {2u, "B", task_b, 3u, 0u, OS_BASIC_TASK, 2u},
-                             {3u, "H", task_h, 4u, 0u, OS_BASIC_TASK, 1u},
-                             {4u, "D", task_d, 2u, 0u, OS_BASIC_TASK, 1u},
-                             {5u, "E", task_e, 3u, 0u, OS_EXTENDED_TASK, 1u},
-                             {6u, "M", monitor, 1u, 1u, OS_BASIC_TASK, 1u}};
-    Os_ResourceConfig resources[] = {{0u, 5u, 10u}, {1u, 5u, 10u}};
-    Os_TargetConfig config = {tasks, 7u, 262144u, resources, 1u};
+    Os_TaskConfig tasks[] = {{0u, "L", launcher, 6u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+                             {1u, "A", task_a, 3u, 0u, OS_BASIC_TASK, 2u, OS_SCHEDULE_FULL, 0u},
+                             {2u, "B", task_b, 3u, 0u, OS_BASIC_TASK, 2u, OS_SCHEDULE_FULL, 0u},
+                             {3u, "H", task_h, 4u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+                             {4u, "D", task_d, 2u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+                             {5u, "E", task_e, 3u, 0u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+                             {6u, "M", monitor, 1u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
+    Os_ResourceConfig resources[] = {{0u, 5u, 10u, 0u}, {1u, 5u, 10u, 0u}};
+    Os_TargetConfig config = {tasks, 7u, 262144u, resources, 1u, NULL, 0u};
     StatusType prepared;
     scenario = (argc == 2) ? argv[1] : "terminate-pending";
     if (strcmp(scenario, "self") == 0) {

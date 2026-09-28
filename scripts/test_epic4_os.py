@@ -84,6 +84,33 @@ class DependencyTests(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 epic4_os.verify_sources(kernel)
 
+    def test_resource_gate_rejects_preemption_wait_and_mask_order(self):
+        original = json.loads(
+            (
+                epic4_os.ROOT / "docs/assurance/evidence/epic4/resource-preemption.json"
+            ).read_text(encoding="utf-8")
+        )["observations"]
+        with patch("epic4_os.execute", side_effect=copy.deepcopy(original)):
+            self.assertEqual(
+                len(epic4_os.check_resources(Path("unused.exe"))), len(original)
+            )
+        for index, before, after in [
+            (1, "trace=ISRAnHaMZ", "trace=ISRAHnaMZ"),
+            (4, "trace=ISRABaMZ", "trace=ISRAaBMZ"),
+            (10, "trace=ISRApJaMZ", "trace=ISRAJpaMZ"),
+        ]:
+            with self.subTest(index=index):
+                records = copy.deepcopy(original)
+                records[index]["stdout"] = records[index]["stdout"].replace(
+                    before, after
+                )
+                self.assertNotEqual(records[index]["stdout"], original[index]["stdout"])
+                with (
+                    patch("epic4_os.execute", side_effect=records),
+                    self.assertRaises(AssertionError),
+                ):
+                    epic4_os.check_resources(Path("unused.exe"))
+
     def test_compiler_identity_rejected(self):
         class Result:
             stdout = "unexpected compiler"

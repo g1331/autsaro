@@ -8,11 +8,19 @@
 #define OS_BASIC_TASK 0u
 #define OS_EXTENDED_TASK 1u
 #define OS_MAX_RESOURCES 8u
+#define OS_MAX_INTERNAL_RESOURCES 2u
+#define OS_SCHEDULE_FULL 0u
+#define OS_SCHEDULE_NON 1u
 typedef struct {
     ResourceType id;
     uint8_t ceiling;
     uint16_t task_access;
+    uint32_t isr_access;
 } Os_ResourceConfig;
+typedef struct {
+    uint8_t id;
+    uint8_t ceiling;
+} Os_InternalResourceConfig;
 typedef struct {
     TaskType id;
     const char *name;
@@ -21,6 +29,8 @@ typedef struct {
     uint8_t autostart_modes;
     uint8_t kind;
     uint8_t activation_limit;
+    uint8_t schedule;
+    uint8_t internal_resource;
 } Os_TaskConfig;
 typedef struct {
     TaskStateType state;
@@ -32,6 +42,10 @@ typedef struct {
     uint8_t effective_priority;
     unsigned resource_count;
     ResourceType resources[OS_MAX_RESOURCES];
+    uint8_t internal_held;
+    uint8_t internal_ceiling;
+    uint8_t waiting;
+    EventMaskType wait_mask;
 } Os_ActivationInfo;
 typedef struct {
     const Os_TaskConfig *tasks;
@@ -39,6 +53,8 @@ typedef struct {
     uint32_t host_stack_reserve;
     const Os_ResourceConfig *resources;
     size_t resource_count;
+    const Os_InternalResourceConfig *internal_resources;
+    size_t internal_resource_count;
 } Os_TargetConfig;
 /** Prepare one process-local target before StartOS.
  * @param config Static configuration retained for the lifetime of the process.
@@ -70,5 +86,8 @@ unsigned Os_TargetTestPending(TaskType id);
 #ifdef OS_FINISH_TESTS
 void Os_TestObserve(void);
 void Os_TestFinishBoundary(unsigned point);
+#endif
+#ifdef OS_RESOURCE_TESTS
+void Os_TestObserve(void);
 #endif
 #endif
