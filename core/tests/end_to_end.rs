@@ -7,6 +7,14 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[path = "support/epic4_reference.rs"]
+mod epic4_reference;
+
+#[test]
+fn epic4_reference_input_baseline() {
+    epic4_reference::verify();
+}
+
 #[cfg(windows)]
 #[test]
 fn epic4_native_stack_fault_shutdown() {

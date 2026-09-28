@@ -1,0 +1,149 @@
+{
+  "profile": "epic4-win64-sr-cs-v1",
+  "ownership": "Product-original XML and literal expectations, created for this repository; no official XML copied",
+  "external_xsd": {
+    "path": "docs/official/R24-11/FO/MethodologyAndTemplates/AUTOSAR_FO_MMOD_XMLSchema.zip",
+    "sha256": "9db3ab1d2ec4db7cc8ff09f1259ff93a7a5945a9500d4cd3ea4a7090f2a25766"
+  },
+  "external_mod": {
+    "path": "docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_MOD_ECUConfigurationParameters.zip",
+    "sha256": "df1e3bc992e49de6e14e5c1a679d7ce7ca90d2450d66186cea0b4a0f1f6555fb"
+  },
+  "files": [
+    {
+      "path": "expectations.json",
+      "role": "negative fixture or expectation catalog",
+      "sha256": "4beba3461e5d0543f34d1d7ce4d11c82f7c7383cfdb4e454147190c733aa8d12"
+    },
+    {
+      "path": "negative/broken-reference/application.arxml",
+      "role": "negative fixture or expectation catalog",
+      "sha256": "d4b47247c56e67898d7a53d5be5b30a1e0893a6e2d507d0683addf03ec4fe718"
+    },
+    {
+      "path": "negative/cases.json",
+      "role": "negative fixture or expectation catalog",
+      "sha256": "d9d6e0d02da70180f023c928ce66abe5f79d6e5c8a310dcdc9329a2184792cfc"
+    },
+    {
+      "path": "negative/direction-conflict/extract.arxml",
+      "role": "negative fixture or expectation catalog",
+      "sha256": "77e6f8d3b7cd8a403a8f7124965fea91fd9b7dd278aa7e0fae5197eeae7edca8"
+    },
+    {
+      "path": "negative/implicit-access/application.arxml",
+      "role": "negative fixture or expectation catalog",
+      "sha256": "b8cb5b0f3a85299eae9a8ceb2fae10a223688a7d72170d065f805fd9f87bfff3"
+    },
+    {
+      "path": "negative/length-conflict/extract.arxml",
+      "role": "negative fixture or expectation catalog",
+      "sha256": "3dcc33d0d3bd956bcf727bfea2029d44a325c109e763b5cd1b220b32c8a8cded"
+    },
+    {
+      "path": "negative/missing-bsw-entry/bsw.arxml",
+      "role": "negative fixture or expectation catalog",
+      "sha256": "aa5aea53889f066b4dd23caef723f98e0ec97dcbce6cc7a4b01511b06e8a8cb0"
+    },
+    {
+      "path": "negative/missing-service-client/services.arxml",
+      "role": "negative fixture or expectation catalog",
+      "sha256": "33c3667522a33bd99e769e88fe914a61ec5c444f704c61a0096677154dc805b1"
+    },
+    {
+      "path": "negative/missing-type-map/types.arxml",
+      "role": "negative fixture or expectation catalog",
+      "sha256": "c8b6ee092d69cde9a39dd4f8f90d01958980c96e3f6ea995480c0e556a7a46eb"
+    },
+    {
+      "path": "negative/mode-access/application.arxml",
+      "role": "negative fixture or expectation catalog",
+      "sha256": "6d0921d6414144d609f327ed5fb08ca15dfb59081526051f0500aacecccdf878"
+    },
+    {
+      "path": "negative/multiple-instances/application.arxml",
+      "role": "negative fixture or expectation catalog",
+      "sha256": "b1d112b1d7008242dcc37fdb9cdb51447b8aeea6b51496a0e500e79feeaaea8d"
+    },
+    {
+      "path": "negative/period-alarm-conflict/application.arxml",
+      "role": "negative fixture or expectation catalog",
+      "sha256": "2418b972d856e8f80538e2705e9ae601a18c5dcfb7a00a884845dd5485a8d176"
+    },
+    {
+      "path": "negative/queued-sr/application.arxml",
+      "role": "negative fixture or expectation catalog",
+      "sha256": "6f57b6940e238d582e36c97e411f6328209c5cfa541363319c17c9fa39c84e0e"
+    },
+    {
+      "path": "negative/reentrant/application.arxml",
+      "role": "negative fixture or expectation catalog",
+      "sha256": "34b1141198105ccc8ddf147bfa8cc891d4785419b00853e76dbf2312f7780475"
+    },
+    {
+      "path": "negative/structure-invalid/application.arxml",
+      "role": "negative fixture or expectation catalog",
+      "sha256": "2f757571744fea943f9058f482c2b504f897e4db87acda95d15cf5245800c229"
+    },
+    {
+      "path": "negative/target-not-unique/extract.arxml",
+      "role": "negative fixture or expectation catalog",
+      "sha256": "cf98d17b9be372f87271661a019e4f05b7587fd1ea3e68720da8e3ae4e9fadb0"
+    },
+    {
+      "path": "negative/transformer/extract.arxml",
+      "role": "negative fixture or expectation catalog",
+      "sha256": "adf15a9b91c27e54f0bbc09a28e7f05a955f20f51301fc09a98365f842d13925"
+    },
+    {
+      "path": "negative/type-conflict/application.arxml",
+      "role": "negative fixture or expectation catalog",
+      "sha256": "02cbdec461e83a6fc8e6cb7be32c5db2b57bceebf5ad189426a1cf4c6e930442"
+    },
+    {
+      "path": "negative/unselected-variant/application.arxml",
+      "role": "negative fixture or expectation catalog",
+      "sha256": "ca61bfa00b583dbaff01a937341ddc1828f58cb1cbb160c1018af2af5a1e7e26"
+    },
+    {
+      "path": "negative/wrong-dest/application.arxml",
+      "role": "negative fixture or expectation catalog",
+      "sha256": "a4158574b93608dcc70e2bf6f6a5b9be4d322909c8cd14e1c681c1c5004b7545"
+    },
+    {
+      "path": "positive/application.arxml",
+      "role": "SWC/composition",
+      "sha256": "566c5c6d3197e085d41942850999c5a94d2ca160d3eef7bb75b39081480fd245"
+    },
+    {
+      "path": "positive/bsw.arxml",
+      "role": "current host BSW descriptions and implementations",
+      "sha256": "840aca25bde824e184f122bbc16e326fa3e966b6cb61dfd57cea1e0e4a4fd421"
+    },
+    {
+      "path": "positive/ecuc.arxml",
+      "role": "selected ECUC configuration values",
+      "sha256": "5685f8f1dde540299172edb776b8219b07bad4fab158259e4ae0fa69295835a6"
+    },
+    {
+      "path": "positive/extract.arxml",
+      "role": "single ECU Extract and communication",
+      "sha256": "c00f00569b099b1537003b42ee5144aa3acb2a2579a1b0eb2f9e188a3d90bd90"
+    },
+    {
+      "path": "positive/services.arxml",
+      "role": "Dcm service client description, future producer",
+      "sha256": "036874896b6dcf5c2ece0db8d3ddfbc7a3bdb19f2e8c9157469c013c59ff82b6"
+    },
+    {
+      "path": "positive/types.arxml",
+      "role": "application/implementation types and interfaces",
+      "sha256": "dcbbffd3137ef01c973d44516bb04c3220b75243cd6418815a25e04523db5727"
+    },
+    {
+      "path": "positive/unrelated.arxml",
+      "role": "unrelated retained input",
+      "sha256": "74880a9da60a5f4aa50f188dc8369ac4e2c78a82c453fc867f525f1b05bc97e4"
+    }
+  ]
+}

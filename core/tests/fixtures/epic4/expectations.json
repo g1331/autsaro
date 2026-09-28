@@ -1,0 +1,1046 @@
+{
+  "profile": "epic4-win64-sr-cs-v1",
+  "source": "Independent literal expectations from INTEGRATION-CONTRACT \u00a71/2/3/6; original reference configuration",
+  "checks": [
+    {
+      "file": "extract.arxml",
+      "object": "/Extract/ReferenceExtract",
+      "xpath": "a:CATEGORY",
+      "expected": [
+        "ECU_EXTRACT"
+      ],
+      "category": "TARGET_CATEGORY"
+    },
+    {
+      "file": "extract.arxml",
+      "object": "/Extract/RxValueFrame",
+      "xpath": "a:FRAME-LENGTH",
+      "expected": [
+        "4"
+      ],
+      "category": "LENGTH_CONFLICT"
+    },
+    {
+      "file": "extract.arxml",
+      "object": "/Extract/ReferenceCan/Channel/RxValueTrigger",
+      "xpath": "a:IDENTIFIER",
+      "expected": [
+        "800"
+      ],
+      "category": "CAN_ID_CONFLICT"
+    },
+    {
+      "file": "extract.arxml",
+      "object": "/Extract/ReferenceEcu/CanConnector/RxValueFramePort",
+      "xpath": "a:COMMUNICATION-DIRECTION",
+      "expected": [
+        "IN"
+      ],
+      "category": "DIRECTION_CONFLICT"
+    },
+    {
+      "file": "extract.arxml",
+      "object": "/Extract/TxValueFrame",
+      "xpath": "a:FRAME-LENGTH",
+      "expected": [
+        "4"
+      ],
+      "category": "LENGTH_CONFLICT"
+    },
+    {
+      "file": "extract.arxml",
+      "object": "/Extract/ReferenceCan/Channel/TxValueTrigger",
+      "xpath": "a:IDENTIFIER",
+      "expected": [
+        "801"
+      ],
+      "category": "CAN_ID_CONFLICT"
+    },
+    {
+      "file": "extract.arxml",
+      "object": "/Extract/ReferenceEcu/CanConnector/TxValueFramePort",
+      "xpath": "a:COMMUNICATION-DIRECTION",
+      "expected": [
+        "OUT"
+      ],
+      "category": "DIRECTION_CONFLICT"
+    },
+    {
+      "file": "extract.arxml",
+      "object": "/Extract/DiagRequestFrame",
+      "xpath": "a:FRAME-LENGTH",
+      "expected": [
+        "8"
+      ],
+      "category": "LENGTH_CONFLICT"
+    },
+    {
+      "file": "extract.arxml",
+      "object": "/Extract/ReferenceCan/Channel/DiagRequestTrigger",
+      "xpath": "a:IDENTIFIER",
+      "expected": [
+        "1792"
+      ],
+      "category": "CAN_ID_CONFLICT"
+    },
+    {
+      "file": "extract.arxml",
+      "object": "/Extract/ReferenceEcu/CanConnector/DiagRequestFramePort",
+      "xpath": "a:COMMUNICATION-DIRECTION",
+      "expected": [
+        "IN"
+      ],
+      "category": "DIRECTION_CONFLICT"
+    },
+    {
+      "file": "extract.arxml",
+      "object": "/Extract/DiagResponseFrame",
+      "xpath": "a:FRAME-LENGTH",
+      "expected": [
+        "8"
+      ],
+      "category": "LENGTH_CONFLICT"
+    },
+    {
+      "file": "extract.arxml",
+      "object": "/Extract/ReferenceCan/Channel/DiagResponseTrigger",
+      "xpath": "a:IDENTIFIER",
+      "expected": [
+        "1800"
+      ],
+      "category": "CAN_ID_CONFLICT"
+    },
+    {
+      "file": "extract.arxml",
+      "object": "/Extract/ReferenceEcu/CanConnector/DiagResponseFramePort",
+      "xpath": "a:COMMUNICATION-DIRECTION",
+      "expected": [
+        "OUT"
+      ],
+      "category": "DIRECTION_CONFLICT"
+    },
+    {
+      "file": "extract.arxml",
+      "object": "/Extract/RxValueSignal",
+      "xpath": "a:LENGTH",
+      "expected": [
+        "32"
+      ],
+      "category": "LENGTH_CONFLICT"
+    },
+    {
+      "file": "extract.arxml",
+      "object": "/Extract/RxValuePdu/RxValueMap",
+      "xpath": "a:PACKING-BYTE-ORDER",
+      "expected": [
+        "MOST-SIGNIFICANT-BYTE-LAST"
+      ],
+      "category": "BYTE_ORDER_CONFLICT"
+    },
+    {
+      "file": "extract.arxml",
+      "object": "/Extract/RxValuePdu/RxValueMap",
+      "xpath": "a:START-POSITION",
+      "expected": [
+        "0"
+      ],
+      "category": "BIT_POSITION_CONFLICT"
+    },
+    {
+      "file": "extract.arxml",
+      "object": "/Extract/TxValueSignal",
+      "xpath": "a:LENGTH",
+      "expected": [
+        "32"
+      ],
+      "category": "LENGTH_CONFLICT"
+    },
+    {
+      "file": "extract.arxml",
+      "object": "/Extract/TxValuePdu/TxValueMap",
+      "xpath": "a:PACKING-BYTE-ORDER",
+      "expected": [
+        "MOST-SIGNIFICANT-BYTE-LAST"
+      ],
+      "category": "BYTE_ORDER_CONFLICT"
+    },
+    {
+      "file": "extract.arxml",
+      "object": "/Extract/TxValuePdu/TxValueMap",
+      "xpath": "a:START-POSITION",
+      "expected": [
+        "0"
+      ],
+      "category": "BIT_POSITION_CONFLICT"
+    },
+    {
+      "file": "types.arxml",
+      "object": "/Types/ApplicationTypes",
+      "xpath": "a:DATA-TYPE-MAPS/a:DATA-TYPE-MAP/a:APPLICATION-DATA-TYPE-REF",
+      "expected": [
+        "/Types/ApplicationUint32"
+      ],
+      "category": "TYPE_MAP_MISSING"
+    },
+    {
+      "file": "types.arxml",
+      "object": "/Types/ApplicationTypes",
+      "xpath": "a:DATA-TYPE-MAPS/a:DATA-TYPE-MAP/a:IMPLEMENTATION-DATA-TYPE-REF",
+      "expected": [
+        "/Types/uint32"
+      ],
+      "category": "TYPE_CONFLICT"
+    },
+    {
+      "file": "types.arxml",
+      "object": "/Types/Dcm_DataElement_ApplicationValueType/Byte",
+      "xpath": "a:ARRAY-SIZE",
+      "expected": [
+        "4"
+      ],
+      "category": "DID_SIZE_CONFLICT"
+    },
+    {
+      "file": "types.arxml",
+      "object": "/Types/DataServices_ApplicationValue",
+      "xpath": "a:IS-SERVICE",
+      "expected": [
+        "true"
+      ],
+      "category": "SERVICE_INTERFACE_CONFLICT"
+    },
+    {
+      "file": "types.arxml",
+      "object": "/Types/DataServices_ApplicationValue/ReadData/Data",
+      "xpath": "a:DIRECTION",
+      "expected": [
+        "OUT"
+      ],
+      "category": "SERVICE_DIRECTION_CONFLICT"
+    },
+    {
+      "file": "types.arxml",
+      "object": "/Types/DataServices_ApplicationValue/ReadData/Data",
+      "xpath": "a:TYPE-TREF",
+      "expected": [
+        "/Types/Dcm_DataElement_ApplicationValueType"
+      ],
+      "category": "TYPE_CONFLICT"
+    },
+    {
+      "file": "application.arxml",
+      "object": "/Application/EchoApplication/RxValue",
+      "xpath": "a:REQUIRED-INTERFACE-TREF",
+      "expected": [
+        "/Types/ValueInterface"
+      ],
+      "category": "TYPE_CONFLICT"
+    },
+    {
+      "file": "application.arxml",
+      "object": "/Application/EchoApplication/TxValue",
+      "xpath": "a:PROVIDED-INTERFACE-TREF",
+      "expected": [
+        "/Types/ValueInterface"
+      ],
+      "category": "TYPE_CONFLICT"
+    },
+    {
+      "file": "application.arxml",
+      "object": "/Application/EchoApplication/Behavior/Periodic10ms",
+      "xpath": "a:PERIOD",
+      "expected": [
+        "0.01"
+      ],
+      "category": "PERIOD_ALARM_CONFLICT"
+    },
+    {
+      "file": "application.arxml",
+      "object": "/Application/EchoApplication/Behavior/ReadApplicationValue",
+      "xpath": "a:OPERATION-IREF/a:CONTEXT-P-PORT-REF",
+      "expected": [
+        "/Application/EchoApplication/ApplicationValue"
+      ],
+      "category": "SERVICE_PROVIDER_CONFLICT"
+    },
+    {
+      "file": "application.arxml",
+      "object": "/Application/EchoApplication/Behavior/ReadApplicationValue",
+      "xpath": "a:START-ON-EVENT-REF",
+      "expected": [
+        "/Application/EchoApplication/Behavior/ReadDataRunnable"
+      ],
+      "category": "SERVICE_RUNNABLE_CONFLICT"
+    },
+    {
+      "file": "services.arxml",
+      "object": "/Services/DcmService/ApplicationValue",
+      "xpath": "a:REQUIRED-INTERFACE-TREF",
+      "expected": [
+        "/Types/DataServices_ApplicationValue"
+      ],
+      "category": "SERVICE_CLIENT_MISSING"
+    },
+    {
+      "file": "services.arxml",
+      "object": "/Services/DcmService/Behavior/DcmReadData",
+      "xpath": "a:SERVER-CALL-POINTS/a:SYNCHRONOUS-SERVER-CALL-POINT/a:OPERATION-IREF/a:TARGET-REQUIRED-OPERATION-REF",
+      "expected": [
+        "/Types/DataServices_ApplicationValue/ReadData"
+      ],
+      "category": "SERVICE_CLIENT_MISSING"
+    },
+    {
+      "file": "application.arxml",
+      "object": "/Application/ReferenceComposition/ApplicationValueConnection",
+      "xpath": "a:PROVIDER-IREF/a:CONTEXT-COMPONENT-REF",
+      "expected": [
+        "/Application/ReferenceComposition/EchoApplication"
+      ],
+      "category": "SERVICE_INSTANCE_CONFLICT"
+    },
+    {
+      "file": "application.arxml",
+      "object": "/Application/ReferenceComposition/ApplicationValueConnection",
+      "xpath": "a:REQUESTER-IREF/a:CONTEXT-COMPONENT-REF",
+      "expected": [
+        "/Application/ReferenceComposition/DcmService"
+      ],
+      "category": "SERVICE_CLIENT_MISSING"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Os/Task_Ecu",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Os/OsTask/OsTaskActivation']/a:VALUE",
+      "expected": [
+        "1"
+      ],
+      "category": "CONFIG_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Os/Task_Ecu",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Os/OsTask/OsTaskPriority']/a:VALUE",
+      "expected": [
+        "1"
+      ],
+      "category": "CONFIG_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Os/Task_Ecu",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Os/OsTask/OsTaskSchedule']/a:VALUE",
+      "expected": [
+        "FULL"
+      ],
+      "category": "CONFIG_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Os/SystemCounter",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Os/OsCounter/OsCounterMaxAllowedValue']/a:VALUE",
+      "expected": [
+        "65535"
+      ],
+      "category": "CONFIG_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Os/SystemCounter",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Os/OsCounter/OsCounterMinCycle']/a:VALUE",
+      "expected": [
+        "1"
+      ],
+      "category": "CONFIG_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Os/SystemCounter",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Os/OsCounter/OsCounterTicksPerBase']/a:VALUE",
+      "expected": [
+        "1"
+      ],
+      "category": "CONFIG_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Os/SystemCounter",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Os/OsCounter/OsCounterType']/a:VALUE",
+      "expected": [
+        "SOFTWARE"
+      ],
+      "category": "CONFIG_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Os/SystemCounter",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Os/OsCounter/OsSecondsPerTick']/a:VALUE",
+      "expected": [
+        "0.001"
+      ],
+      "category": "CONFIG_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Os/Alarm_Work/Autostart",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Os/OsAlarm/OsAlarmAutostart/OsAlarmAlarmTime']/a:VALUE",
+      "expected": [
+        "1"
+      ],
+      "category": "PERIOD_ALARM_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Os/Alarm_Work/Autostart",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Os/OsAlarm/OsAlarmAutostart/OsAlarmCycleTime']/a:VALUE",
+      "expected": [
+        "1"
+      ],
+      "category": "PERIOD_ALARM_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Os/Alarm_App/Autostart",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Os/OsAlarm/OsAlarmAutostart/OsAlarmAlarmTime']/a:VALUE",
+      "expected": [
+        "10"
+      ],
+      "category": "PERIOD_ALARM_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Os/Alarm_App/Autostart",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Os/OsAlarm/OsAlarmAutostart/OsAlarmCycleTime']/a:VALUE",
+      "expected": [
+        "10"
+      ],
+      "category": "PERIOD_ALARM_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Dcm/Config/Dsp/ApplicationValue",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsp/DcmDspData/DcmDspDataUsePort']/a:VALUE",
+      "expected": [
+        "USE_DATA_SYNCH_CLIENT_SERVER"
+      ],
+      "category": "DID_CONTRACT_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Dcm/Config/Dsp/ApplicationValue",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsp/DcmDspData/DcmDspDataType']/a:VALUE",
+      "expected": [
+        "UINT8_N"
+      ],
+      "category": "DID_CONTRACT_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Dcm/Config/Dsp/ApplicationValue",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsp/DcmDspData/DcmDspDataByteSize']/a:VALUE",
+      "expected": [
+        "4"
+      ],
+      "category": "DID_CONTRACT_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Dcm/Config/Dsp/ApplicationValue",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsp/DcmDspData/DcmDspDataEndianness']/a:VALUE",
+      "expected": [
+        "OPAQUE"
+      ],
+      "category": "DID_CONTRACT_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Dcm/Config/Dsp/ApplicationValue",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsp/DcmDspData/DcmDspDataConditionCheckReadFncUsed']/a:VALUE",
+      "expected": [
+        "false"
+      ],
+      "category": "DID_CONTRACT_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Dcm/Config/Dsp/ApplicationDid",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsp/DcmDspDid/DcmDspDidIdentifier']/a:VALUE",
+      "expected": [
+        "4660"
+      ],
+      "category": "DID_CONTRACT_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Com/Config/RxValue",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Com/ComConfig/ComSignal/ComBitSize']/a:VALUE",
+      "expected": [
+        "32"
+      ],
+      "category": "CONFIG_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Com/Config/RxValue",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Com/ComConfig/ComSignal/ComBitPosition']/a:VALUE",
+      "expected": [
+        "0"
+      ],
+      "category": "CONFIG_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Com/Config/RxValue",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Com/ComConfig/ComSignal/ComSignalType']/a:VALUE",
+      "expected": [
+        "UINT32"
+      ],
+      "category": "CONFIG_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Com/Config/RxValue",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Com/ComConfig/ComSignal/ComSignalEndianness']/a:VALUE",
+      "expected": [
+        "LITTLE_ENDIAN"
+      ],
+      "category": "CONFIG_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Com/Config/RxValue",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Com/ComConfig/ComSignal/ComSignalInitValue']/a:VALUE",
+      "expected": [
+        "0"
+      ],
+      "category": "CONFIG_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Com/Config/TxValue",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Com/ComConfig/ComSignal/ComBitSize']/a:VALUE",
+      "expected": [
+        "32"
+      ],
+      "category": "CONFIG_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Com/Config/TxValue",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Com/ComConfig/ComSignal/ComBitPosition']/a:VALUE",
+      "expected": [
+        "0"
+      ],
+      "category": "CONFIG_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Com/Config/TxValue",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Com/ComConfig/ComSignal/ComSignalType']/a:VALUE",
+      "expected": [
+        "UINT32"
+      ],
+      "category": "CONFIG_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Com/Config/TxValue",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Com/ComConfig/ComSignal/ComSignalEndianness']/a:VALUE",
+      "expected": [
+        "LITTLE_ENDIAN"
+      ],
+      "category": "CONFIG_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Com/Config/TxValue",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Com/ComConfig/ComSignal/ComSignalInitValue']/a:VALUE",
+      "expected": [
+        "0"
+      ],
+      "category": "CONFIG_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Com/Config/RxValue",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Com/ComConfig/ComSignal/ComTimeout']/a:VALUE",
+      "expected": [
+        "0.03"
+      ],
+      "category": "CONFIG_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Com/Config/RxValue",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Com/ComConfig/ComSignal/ComFirstTimeout']/a:VALUE",
+      "expected": [
+        "0"
+      ],
+      "category": "CONFIG_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Com/Config/RxValue",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Com/ComConfig/ComSignal/ComRxDataTimeoutAction']/a:VALUE",
+      "expected": [
+        "NONE"
+      ],
+      "category": "CONFIG_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Com/Config/TxValuePdu/Transmit/ModeTrue/Periodic",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Com/ComConfig/ComIPdu/ComTxIPdu/ComTxModeTrue/ComTxMode/ComTxModeTimePeriod']/a:VALUE",
+      "expected": [
+        "0.01"
+      ],
+      "category": "CONFIG_CONFLICT"
+    },
+    {
+      "file": "types.arxml",
+      "object": "/Types/Base_uint32",
+      "xpath": "a:BASE-TYPE-SIZE",
+      "expected": [
+        "32"
+      ],
+      "category": "TYPE_CONFLICT"
+    },
+    {
+      "file": "types.arxml",
+      "object": "/Types/uint32",
+      "xpath": "a:SW-DATA-DEF-PROPS/a:SW-DATA-DEF-PROPS-VARIANTS/a:SW-DATA-DEF-PROPS-CONDITIONAL/a:BASE-TYPE-REF",
+      "expected": [
+        "/Types/Base_uint32"
+      ],
+      "category": "TYPE_CONFLICT"
+    },
+    {
+      "file": "application.arxml",
+      "object": "/Application/EchoApplication/Behavior/PeriodicRunnable/ReadRxValue",
+      "xpath": "a:ACCESSED-VARIABLE/a:AUTOSAR-VARIABLE-IREF/a:PORT-PROTOTYPE-REF",
+      "expected": [
+        "/Application/EchoApplication/RxValue"
+      ],
+      "category": "ACCESS_CONFLICT"
+    },
+    {
+      "file": "application.arxml",
+      "object": "/Application/EchoApplication/Behavior/PeriodicRunnable/WriteTxValue",
+      "xpath": "a:ACCESSED-VARIABLE/a:AUTOSAR-VARIABLE-IREF/a:PORT-PROTOTYPE-REF",
+      "expected": [
+        "/Application/EchoApplication/TxValue"
+      ],
+      "category": "ACCESS_CONFLICT"
+    },
+    {
+      "file": "extract.arxml",
+      "object": "/Extract/ReferenceExtract/Mapping/EchoToEcu",
+      "xpath": "a:ECU-INSTANCE-REF",
+      "expected": [
+        "/Extract/ReferenceEcu"
+      ],
+      "category": "ECU_MAPPING_CONFLICT"
+    },
+    {
+      "file": "bsw.arxml",
+      "object": "/Bsw/Com/Behavior/Com_TriggerTransmit_10ms",
+      "xpath": "a:PERIOD",
+      "expected": [
+        "0.01"
+      ],
+      "category": "PERIOD_ALARM_CONFLICT"
+    },
+    {
+      "file": "bsw.arxml",
+      "object": "/Bsw/Com/Behavior/Com_TriggerTransmit_Entity",
+      "xpath": "a:IMPLEMENTED-ENTRY-REF",
+      "expected": [
+        "/Bsw/Com_TriggerTransmit"
+      ],
+      "category": "BSW_ENTRY_MISSING"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Rte/EchoApplication/Periodic10ms",
+      "xpath": "a:REFERENCE-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Rte/RteSwComponentInstance/RteEventToTaskMapping/RteMappedToTaskRef']/a:VALUE-REF",
+      "expected": [
+        "/Configuration/Os/Task_Ecu"
+      ],
+      "category": "SCHEDULE_MAPPING_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Rte/EchoApplication/Periodic10ms",
+      "xpath": "a:REFERENCE-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Rte/RteSwComponentInstance/RteEventToTaskMapping/RteUsedOsAlarmRef']/a:VALUE-REF",
+      "expected": [
+        "/Configuration/Os/Alarm_App"
+      ],
+      "category": "SCHEDULE_MAPPING_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Rte/EchoApplication/Periodic10ms",
+      "xpath": "a:REFERENCE-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Rte/RteSwComponentInstance/RteEventToTaskMapping/RteUsedOsEventRef']/a:VALUE-REF",
+      "expected": [
+        "/Configuration/Os/Ev_App"
+      ],
+      "category": "SCHEDULE_MAPPING_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Rte/Com/Transmit10ms",
+      "xpath": "a:REFERENCE-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Rte/RteBswModuleInstance/RteBswEventToTaskMapping/RteBswMappedToTaskRef']/a:VALUE-REF",
+      "expected": [
+        "/Configuration/Os/Task_Ecu"
+      ],
+      "category": "SCHEDULE_MAPPING_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Rte/Com/Transmit10ms",
+      "xpath": "a:REFERENCE-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Rte/RteBswModuleInstance/RteBswEventToTaskMapping/RteBswUsedOsAlarmRef']/a:VALUE-REF",
+      "expected": [
+        "/Configuration/Os/Alarm_App"
+      ],
+      "category": "SCHEDULE_MAPPING_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Rte/Com/Transmit10ms",
+      "xpath": "a:REFERENCE-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Rte/RteBswModuleInstance/RteBswEventToTaskMapping/RteBswUsedOsEventRef']/a:VALUE-REF",
+      "expected": [
+        "/Configuration/Os/Ev_App"
+      ],
+      "category": "SCHEDULE_MAPPING_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Rte/Can/Work1ms",
+      "xpath": "a:REFERENCE-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Rte/RteBswModuleInstance/RteBswEventToTaskMapping/RteBswMappedToTaskRef']/a:VALUE-REF",
+      "expected": [
+        "/Configuration/Os/Task_Ecu"
+      ],
+      "category": "SCHEDULE_MAPPING_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Rte/Can/Work1ms",
+      "xpath": "a:REFERENCE-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Rte/RteBswModuleInstance/RteBswEventToTaskMapping/RteBswUsedOsAlarmRef']/a:VALUE-REF",
+      "expected": [
+        "/Configuration/Os/Alarm_Work"
+      ],
+      "category": "SCHEDULE_MAPPING_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Rte/Can/Work1ms",
+      "xpath": "a:REFERENCE-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Rte/RteBswModuleInstance/RteBswEventToTaskMapping/RteBswUsedOsEventRef']/a:VALUE-REF",
+      "expected": [
+        "/Configuration/Os/Ev_Work"
+      ],
+      "category": "SCHEDULE_MAPPING_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Rte/CanTp/Work1ms",
+      "xpath": "a:REFERENCE-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Rte/RteBswModuleInstance/RteBswEventToTaskMapping/RteBswMappedToTaskRef']/a:VALUE-REF",
+      "expected": [
+        "/Configuration/Os/Task_Ecu"
+      ],
+      "category": "SCHEDULE_MAPPING_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Rte/CanTp/Work1ms",
+      "xpath": "a:REFERENCE-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Rte/RteBswModuleInstance/RteBswEventToTaskMapping/RteBswUsedOsAlarmRef']/a:VALUE-REF",
+      "expected": [
+        "/Configuration/Os/Alarm_Work"
+      ],
+      "category": "SCHEDULE_MAPPING_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Rte/CanTp/Work1ms",
+      "xpath": "a:REFERENCE-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Rte/RteBswModuleInstance/RteBswEventToTaskMapping/RteBswUsedOsEventRef']/a:VALUE-REF",
+      "expected": [
+        "/Configuration/Os/Ev_Work"
+      ],
+      "category": "SCHEDULE_MAPPING_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Rte/Com/Work1ms",
+      "xpath": "a:REFERENCE-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Rte/RteBswModuleInstance/RteBswEventToTaskMapping/RteBswMappedToTaskRef']/a:VALUE-REF",
+      "expected": [
+        "/Configuration/Os/Task_Ecu"
+      ],
+      "category": "SCHEDULE_MAPPING_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Rte/Com/Work1ms",
+      "xpath": "a:REFERENCE-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Rte/RteBswModuleInstance/RteBswEventToTaskMapping/RteBswUsedOsAlarmRef']/a:VALUE-REF",
+      "expected": [
+        "/Configuration/Os/Alarm_Work"
+      ],
+      "category": "SCHEDULE_MAPPING_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Rte/Com/Work1ms",
+      "xpath": "a:REFERENCE-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Rte/RteBswModuleInstance/RteBswEventToTaskMapping/RteBswUsedOsEventRef']/a:VALUE-REF",
+      "expected": [
+        "/Configuration/Os/Ev_Work"
+      ],
+      "category": "SCHEDULE_MAPPING_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Rte/Dcm/Work1ms",
+      "xpath": "a:REFERENCE-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Rte/RteBswModuleInstance/RteBswEventToTaskMapping/RteBswMappedToTaskRef']/a:VALUE-REF",
+      "expected": [
+        "/Configuration/Os/Task_Ecu"
+      ],
+      "category": "SCHEDULE_MAPPING_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Rte/Dcm/Work1ms",
+      "xpath": "a:REFERENCE-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Rte/RteBswModuleInstance/RteBswEventToTaskMapping/RteBswUsedOsAlarmRef']/a:VALUE-REF",
+      "expected": [
+        "/Configuration/Os/Alarm_Work"
+      ],
+      "category": "SCHEDULE_MAPPING_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Rte/Dcm/Work1ms",
+      "xpath": "a:REFERENCE-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Rte/RteBswModuleInstance/RteBswEventToTaskMapping/RteBswUsedOsEventRef']/a:VALUE-REF",
+      "expected": [
+        "/Configuration/Os/Ev_Work"
+      ],
+      "category": "SCHEDULE_MAPPING_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Dcm/Config/Dsp/ApplicationDidInfo/Read",
+      "xpath": "a:REFERENCE-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsp/DcmDspDidInfo/DcmDspDidRead/DcmDspDidReadSessionRef']/a:VALUE-REF",
+      "expected": [
+        "/Configuration/Dcm/Config/Dsp/Sessions/Default",
+        "/Configuration/Dcm/Config/Dsp/Sessions/Extended"
+      ],
+      "category": "DID_CONTRACT_CONFLICT"
+    }
+  ],
+  "required_current_entries": [
+    "Can_Init",
+    "Can_MainFunction_Wakeup",
+    "CanIf_Init",
+    "PduR_Init",
+    "CanTp_Init",
+    "CanTp_AdvanceTime",
+    "Com_Init",
+    "Com_SetSignal",
+    "Com_GetSignal",
+    "Com_AdvanceTime",
+    "Com_TriggerTransmit",
+    "Dcm_Init",
+    "Dcm_AdvanceTime"
+  ],
+  "future_producers": {
+    "story-4.11": [
+      "Rte_Type.h",
+      "Rte_EchoApplication.h"
+    ],
+    "story-4.13": [
+      "DcmService_ReadData",
+      "Com_SendSignal",
+      "Com_ReceiveSignal",
+      "generated RTE/SchM/Task_Ecu integration"
+    ],
+    "story-4.15": [
+      "EchoApplication_Periodic",
+      "EchoApplication_ReadData"
+    ]
+  },
+  "bsw_signatures": {
+    "Can_Init": {
+      "return": "void",
+      "arguments": [
+        {
+          "name": "config",
+          "native_type": "const Can_ConfigType *",
+          "direction": "IN"
+        }
+      ]
+    },
+    "Can_MainFunction_Wakeup": {
+      "return": "void",
+      "arguments": []
+    },
+    "Can_MainFunction_Read": {
+      "return": "void",
+      "arguments": []
+    },
+    "Can_MainFunction_Write": {
+      "return": "void",
+      "arguments": []
+    },
+    "CanIf_Init": {
+      "return": "void",
+      "arguments": [
+        {
+          "name": "config",
+          "native_type": "const EcuConfig *",
+          "direction": "IN"
+        }
+      ]
+    },
+    "CanIf_Transmit": {
+      "return": "EcuStatus",
+      "arguments": [
+        {
+          "name": "frame_index",
+          "native_type": "size_t",
+          "direction": "IN"
+        },
+        {
+          "name": "data",
+          "native_type": "const uint8_t *",
+          "direction": "IN"
+        }
+      ]
+    },
+    "PduR_Init": {
+      "return": "void",
+      "arguments": [
+        {
+          "name": "config",
+          "native_type": "const EcuConfig *",
+          "direction": "IN"
+        }
+      ]
+    },
+    "PduR_Transmit": {
+      "return": "EcuStatus",
+      "arguments": [
+        {
+          "name": "frame_index",
+          "native_type": "size_t",
+          "direction": "IN"
+        },
+        {
+          "name": "data",
+          "native_type": "const uint8_t *",
+          "direction": "IN"
+        }
+      ]
+    },
+    "CanTp_Init": {
+      "return": "void",
+      "arguments": [
+        {
+          "name": "config",
+          "native_type": "const EcuDiagnosticConfig *",
+          "direction": "IN"
+        }
+      ]
+    },
+    "CanTp_AdvanceTime": {
+      "return": "EcuStatus",
+      "arguments": [
+        {
+          "name": "now_ms",
+          "native_type": "uint64_t",
+          "direction": "IN"
+        }
+      ]
+    },
+    "Com_Init": {
+      "return": "void",
+      "arguments": [
+        {
+          "name": "config",
+          "native_type": "const EcuConfig *",
+          "direction": "IN"
+        }
+      ]
+    },
+    "Com_SetSignal": {
+      "return": "EcuStatus",
+      "arguments": [
+        {
+          "name": "id",
+          "native_type": "uint16_t",
+          "direction": "IN"
+        },
+        {
+          "name": "value",
+          "native_type": "uint32_t",
+          "direction": "IN"
+        }
+      ]
+    },
+    "Com_GetSignal": {
+      "return": "EcuStatus",
+      "arguments": [
+        {
+          "name": "id",
+          "native_type": "uint16_t",
+          "direction": "IN"
+        },
+        {
+          "name": "value",
+          "native_type": "uint32_t *",
+          "direction": "OUT"
+        },
+        {
+          "name": "valid",
+          "native_type": "uint8_t *",
+          "direction": "OUT"
+        }
+      ]
+    },
+    "Com_AdvanceTime": {
+      "return": "EcuStatus",
+      "arguments": [
+        {
+          "name": "now_ms",
+          "native_type": "uint64_t",
+          "direction": "IN"
+        }
+      ]
+    },
+    "Com_TriggerTransmit": {
+      "return": "EcuStatus",
+      "arguments": [
+        {
+          "name": "frame_index",
+          "native_type": "size_t",
+          "direction": "IN"
+        }
+      ]
+    },
+    "Dcm_Init": {
+      "return": "void",
+      "arguments": [
+        {
+          "name": "config",
+          "native_type": "const EcuDiagnosticConfig *",
+          "direction": "IN"
+        }
+      ]
+    },
+    "Dcm_AdvanceTime": {
+      "return": "void",
+      "arguments": [
+        {
+          "name": "now_ms",
+          "native_type": "uint64_t",
+          "direction": "IN"
+        }
+      ]
+    }
+  },
+  "bsw_signature_source": "Independent literal declarations from runtime/include/* and SchM_Can.h; pointer ABI fixed by Windows x64/GCC 16.1.0. Header array parameters are compared after C array-to-pointer adjustment."
+}

@@ -1,0 +1,203 @@
+{
+  "source": "INTEGRATION-CONTRACT \u00a71/2; epics Story 4.1; independent static fixture mutations",
+  "cases": [
+    {
+      "id": "target-not-unique",
+      "overrides": [
+        "negative/target-not-unique/extract.arxml"
+      ],
+      "file": "extract.arxml",
+      "object": "/Extract/ReferenceEcu",
+      "category": "TARGET_NOT_UNIQUE",
+      "expected_xsd": "pass",
+      "expected_semantic": "reject"
+    },
+    {
+      "id": "broken-reference",
+      "overrides": [
+        "negative/broken-reference/application.arxml"
+      ],
+      "file": "application.arxml",
+      "object": "/Application/EchoApplication/RxValue",
+      "category": "REFERENCE_UNRESOLVED",
+      "expected_xsd": "pass",
+      "expected_semantic": "reject"
+    },
+    {
+      "id": "wrong-dest",
+      "overrides": [
+        "negative/wrong-dest/application.arxml"
+      ],
+      "file": "application.arxml",
+      "object": "/Application/EchoApplication/RxValue",
+      "category": "REFERENCE_DEST",
+      "expected_xsd": "pass",
+      "expected_semantic": "reject"
+    },
+    {
+      "id": "direction-conflict",
+      "overrides": [
+        "negative/direction-conflict/extract.arxml"
+      ],
+      "file": "extract.arxml",
+      "object": "/Extract/ReferenceEcu/CanConnector/RxValueFramePort",
+      "category": "DIRECTION_CONFLICT",
+      "expected_xsd": "pass",
+      "expected_semantic": "reject"
+    },
+    {
+      "id": "length-conflict",
+      "overrides": [
+        "negative/length-conflict/extract.arxml"
+      ],
+      "file": "extract.arxml",
+      "object": "/Extract/RxValueSignal",
+      "category": "LENGTH_CONFLICT",
+      "expected_xsd": "pass",
+      "expected_semantic": "reject"
+    },
+    {
+      "id": "type-conflict",
+      "overrides": [
+        "negative/type-conflict/application.arxml"
+      ],
+      "file": "application.arxml",
+      "object": "/Application/EchoApplication/RxValue",
+      "category": "TYPE_CONFLICT",
+      "expected_xsd": "pass",
+      "expected_semantic": "reject"
+    },
+    {
+      "id": "missing-type-map",
+      "overrides": [
+        "negative/missing-type-map/types.arxml"
+      ],
+      "file": "types.arxml",
+      "object": "/Types/ApplicationTypes",
+      "category": "TYPE_MAP_MISSING",
+      "expected_xsd": "pass",
+      "expected_semantic": "reject"
+    },
+    {
+      "id": "period-alarm-conflict",
+      "overrides": [
+        "negative/period-alarm-conflict/application.arxml"
+      ],
+      "file": "application.arxml",
+      "object": "/Application/EchoApplication/Behavior/Periodic10ms",
+      "category": "PERIOD_ALARM_CONFLICT",
+      "expected_xsd": "pass",
+      "expected_semantic": "reject"
+    },
+    {
+      "id": "multiple-instances",
+      "overrides": [
+        "negative/multiple-instances/application.arxml"
+      ],
+      "file": "application.arxml",
+      "object": "/Application/ReferenceComposition/EchoApplication",
+      "category": "MULTIPLE_INSTANCES",
+      "expected_xsd": "pass",
+      "expected_semantic": "reject"
+    },
+    {
+      "id": "reentrant",
+      "overrides": [
+        "negative/reentrant/application.arxml"
+      ],
+      "file": "application.arxml",
+      "object": "/Application/EchoApplication/Behavior/PeriodicRunnable",
+      "category": "REENTRANCY_UNSUPPORTED",
+      "expected_xsd": "pass",
+      "expected_semantic": "reject"
+    },
+    {
+      "id": "unselected-variant",
+      "overrides": [
+        "negative/unselected-variant/application.arxml"
+      ],
+      "file": "application.arxml",
+      "object": "/Application/EchoApplication",
+      "category": "VARIANT_UNSELECTED",
+      "expected_xsd": "pass",
+      "expected_semantic": "reject"
+    },
+    {
+      "id": "missing-bsw-entry",
+      "overrides": [
+        "negative/missing-bsw-entry/bsw.arxml"
+      ],
+      "file": "bsw.arxml",
+      "object": "/Bsw/Com_AdvanceTime",
+      "category": "BSW_ENTRY_MISSING",
+      "expected_xsd": "pass",
+      "expected_semantic": "reject"
+    },
+    {
+      "id": "missing-service-client",
+      "overrides": [
+        "negative/missing-service-client/services.arxml"
+      ],
+      "file": "services.arxml",
+      "object": "/Services/DcmService/ApplicationValue",
+      "category": "SERVICE_CLIENT_MISSING",
+      "expected_xsd": "pass",
+      "expected_semantic": "reject"
+    },
+    {
+      "id": "queued-sr",
+      "overrides": [
+        "negative/queued-sr/application.arxml"
+      ],
+      "file": "application.arxml",
+      "object": "/Application/EchoApplication/RxValue",
+      "category": "QUEUED_UNSUPPORTED",
+      "expected_xsd": "pass",
+      "expected_semantic": "reject"
+    },
+    {
+      "id": "implicit-access",
+      "overrides": [
+        "negative/implicit-access/application.arxml"
+      ],
+      "file": "application.arxml",
+      "object": "/Application/EchoApplication/Behavior/PeriodicRunnable",
+      "category": "IMPLICIT_UNSUPPORTED",
+      "expected_xsd": "pass",
+      "expected_semantic": "reject"
+    },
+    {
+      "id": "mode-access",
+      "overrides": [
+        "negative/mode-access/application.arxml"
+      ],
+      "file": "application.arxml",
+      "object": "/Application/EchoApplication/Behavior/PeriodicRunnable",
+      "category": "MODE_UNSUPPORTED",
+      "expected_xsd": "pass",
+      "expected_semantic": "reject"
+    },
+    {
+      "id": "transformer",
+      "overrides": [
+        "negative/transformer/extract.arxml"
+      ],
+      "file": "extract.arxml",
+      "object": "/Extract/RxValueSignal",
+      "category": "TRANSFORMER_UNSUPPORTED",
+      "expected_xsd": "pass",
+      "expected_semantic": "reject"
+    },
+    {
+      "id": "structure-invalid",
+      "overrides": [
+        "negative/structure-invalid/application.arxml"
+      ],
+      "file": "application.arxml",
+      "object": "/Application/EchoApplication/Behavior/Periodic10ms",
+      "category": "R24_XSD",
+      "expected_xsd": "fail",
+      "expected_semantic": "not_run"
+    }
+  ]
+}

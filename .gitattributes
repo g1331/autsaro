@@ -4,3 +4,5 @@
 /third_party/freertos/** -text
 # A unified patch uses a single space as the empty context-line marker.
 /runtime/os/patches/** -text whitespace=-blank-at-eol
+# Original input raw-byte manifests must survive a fresh checkout unchanged.
+/core/tests/fixtures/epic4/** text eol=lf
