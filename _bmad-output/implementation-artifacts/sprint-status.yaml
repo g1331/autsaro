@@ -29,11 +29,17 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-27-2026 18:43
-last_updated: 09-28-2026 02:02
+last_updated: 09-28-2026 14:29
 project: Autosar
 project_key: NOKEY
 tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts
+# Sprint planning baseline: 4844e1d (2026-09-28); Epic 4 planning gate PASS only.
+# Entry conditions and dependencies: ../planning-artifacts/implementation-readiness.md
+# First candidates: 4.1 and 4.3 independently; 4.9 after 4.3 for early stack-risk validation.
+# W3/4.13 requires 4.3-4.9 and 4.10-4.12 to pass; full SC1/handoff remains the Epic exit gate.
+# All 22 new stories stay backlog; no implementation story files or build work started.
+# Epic 2 / Story 2.1 remain deferred backlog pending the diagnostic support matrix.
 development_status:
   epic-1: done
   1-1-complete-std-001-host-can-driver-slice: done
@@ -50,6 +56,28 @@ development_status:
   epic-3-retrospective: optional
 
   epic-4: backlog
+  4-1-建立原创参考输入与可定位的拒绝样例: backlog
+  4-2-固定标准义务-依赖来源及独立验收预期: backlog
+  4-3-建立固定内核的唯一-backend-与静态生命周期基础: backlog
+  4-4-保留全部激活请求-fifo-与实际内核状态: backlog
+  4-5-原子终止-链式移交与新入口执行: backlog
+  4-6-实现非抢占-内部资源及资源上限恢复: backlog
+  4-7-保持事件所有权与无丢失唤醒: backlog
+  4-8-逐毫秒推进受控时间与-counter-alarm: backlog
+  4-9-捕获-windows-真实执行栈故障并关闭目标: backlog
+  4-10-从标准输入建立唯一校验集成计划: backlog
+  4-11-由-swc-描述生成组件接口与同步服务类型: backlog
+  4-12-接入标准输入的安全编辑-保存与重开: backlog
+  4-13-从唯一计划生成可链接-ecu-集成工程: backlog
+  4-14-通过-hostbatchv1-运行并闭合输出确认: backlog
+  4-15-运行同一应用实例的-s-r-快照和同步-did: backlog
+  4-16-独立验证边界-诊断恢复与旧目标回归: backlog
+  4-17-完成-counter-scheduletable-能力及-sc1-容量: backlog
+  4-18-补齐生命周期-extended-status-hook-和中断义务: backlog
+  4-19-生成并验证-r24-11-arti-描述与-hook: backlog
+  4-20-关闭适用-c-工件-模块描述和静态质量证据: backlog
+  4-21-交付新目标可重建包与准确工作台状态: backlog
+  4-22-独立复核完整等级与工程交接出口: backlog
   epic-4-retrospective: optional
 
   epic-5: backlog

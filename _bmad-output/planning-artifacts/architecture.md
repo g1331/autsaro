@@ -1,6 +1,6 @@
 # 架构约束与扩展接缝
 
-Epic 4 的规范核定与路线决定见 [spine](architecture/epic-4/ARCHITECTURE-SPINE.md) 和 [R24-11 契约矩阵](architecture/epic-4/R24-11-CONTRACT.md)。维护者已确认主路线：以单核 SC1 为目标，固定 FreeRTOS 内核＋自有 AUTOSAR OS 语义实现＋有限单核策略扩展；原生 Windows 边界保持。Q2 已确认显式 S/R＋同步 C/S 应用 DID。Trampoline/ATK2 等保留参考和备选，不继续并列选型。路线采用不代表生产依赖已引入、完整 SC1 或产品集成已验证；技术关口按该路线关闭，只有实际触发停止条件才重新选型。具体输入/接口/时间契约已由 [集成契约](architecture/epic-4/INTEGRATION-CONTRACT.md) 固定，Epic 4 架构已收口；尚未形成可派发故事，故事级就绪 NOT READY；本轮不开始功能开发。
+Epic 4 的规范核定与路线决定见 [spine](architecture/epic-4/ARCHITECTURE-SPINE.md) 和 [R24-11 契约矩阵](architecture/epic-4/R24-11-CONTRACT.md)。维护者已确认主路线：以单核 SC1 为目标，固定 FreeRTOS 内核＋自有 AUTOSAR OS 语义实现＋有限单核策略扩展；原生 Windows 边界保持。Q2 已确认显式 S/R＋同步 C/S 应用 DID。Trampoline/ATK2 等保留参考和备选，不继续并列选型。路线采用不代表生产依赖已引入、完整 SC1 或产品集成已验证；技术关口按该路线关闭，只有实际触发停止条件才重新选型。具体输入/接口/时间契约已由 [集成契约](architecture/epic-4/INTEGRATION-CONTRACT.md) 固定，Epic 4 架构已收口；`4844e1d` 已确认 W0–W5 共 22 条 stories，本轮 sprint 规划检查在此范围 PASS。尚无 ready-for-dev 开发工件，Epic 4 及新 stories 保持 backlog；首批进入条件见 [实施就绪判断](implementation-readiness.md)，本轮不开始功能开发。
 
 配置权威是 R24-11 多文件 ARXML；内部模型是解析、编辑和生成时的表示，不形成并行持久化配置。`core/src/` 负责模型、解析、跨文件引用与跨模块校验、生成计划和确定性代码生成；`src-tauri/` 连接桌面后端；`ui/src/` 提供配置与预览；`runtime/include/`、`runtime/src/` 随生成工程交付当前 C99 主机运行时。产品方向是以符合声明范围的 AUTOSAR OS 契约承载自有 Classic BSW 栈；早期可先用外部 RTOS 在 Windows 主机上做有界集成，再对指定 MCU 建立独立适配和证据。OS 实现、主机模拟及具体芯片驱动的责任边界须明确。运行代码须分清标准 BSW 接口、生成配置与 RTE、OS 实现及主机专属代码，不能让主机桥接行为冒充实机驱动或 AUTOSAR OS。
 
@@ -31,4 +31,4 @@ Epic 3 已交付当前 R24-11 固定 Windows 主机剖面的可重建包与离�
 工作区采用左侧项目导航，将配置、诊断、生成与构建、虚拟运行分开；工程树与对象检查器位于配置页。界面需区分已保存、已校验、已生成、已构建、主机已运行、指定目标已验证和适用验收门已通过，后一状态不由前一状态自动推断。界面原型及早期方案比较见[历史决策](../../docs/project/archive/autosar-platform/issues/10-configuration-workspace.md)，当前实现和实际测试结果仍以源码及证据为准。
 
 
-**FreeRTOS 可行性调查更新（2026-09-28）：**固定 V11.3.1 实际 commit `054e14f3397023aa83813a65aa065fc4597d481b` 和 GCC 16.1.0，已在隔离 Windows 后台进程构建、复现同级抢占恢复/资源恢复反例，并验证有限队列策略扩展、合法链式移交与 C99 入口重启机制；详见 [调查与采用条件](architecture/epic-4/FREERTOS-FEASIBILITY.md)。这条路线需要产品维护策略扩展，不能按薄 API 封装估算。原版 Windows 栈数组不是实际执行栈；主机 SC1 的真实栈门、全部激活请求 FIFO、错误/ISR/计时/Hook 与完整条款/输入证据仍未闭合。若首阶段先交付有界主机集成，FR-6 和 Epic 4 完整退出门仍保留，能力口径按证据门确定，不再作为选型待决。未开始产品功能开发，Epic 4 继续 FAIL/backlog。
+**FreeRTOS 可行性调查更新（2026-09-28）：**固定 V11.3.1 实际 commit `054e14f3397023aa83813a65aa065fc4597d481b` 和 GCC 16.1.0，已在隔离 Windows 后台进程构建、复现同级抢占恢复/资源恢复反例，并验证有限队列策略扩展、合法链式移交与 C99 入口重启机制；详见 [调查与采用条件](architecture/epic-4/FREERTOS-FEASIBILITY.md)。这条路线需要产品维护策略扩展，不能按薄 API 封装估算。原版 Windows 栈数组不是实际执行栈；主机 SC1 的真实栈门、全部激活请求 FIFO、错误/ISR/计时/Hook 与完整条款/输入证据仍未闭合。若首阶段先交付有界主机集成，FR-6 和 Epic 4 完整退出门仍保留，能力口径按证据门确定，不再作为选型待决。未开始产品功能开发；Epic 4 规划就绪 PASS、实施 backlog，完整 SC1 与工程交接仍须逐项取得实际证据。
