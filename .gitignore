@@ -12,6 +12,7 @@ src-tauri/gen/
 **/*.tsbuildinfo
 **/__pycache__/
 .quality-venv/
+.automotive-skills-venv/
 .playwright-cli/
 .scratch/autosar-platform/research/*.tmp.zip
 

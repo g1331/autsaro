@@ -19,3 +19,16 @@
 Agent 应把规范研究放进具体功能任务，不用一轮轮独立审计替代产品开发。当前做什么须同时核对委托目标、BMad 规划与状态及实际证据，不以本说明中的静态示例为准。
 
 项目目前由你主动唤起 Agent，不会在你离开后后台自动开发或发送通知。Agent 可作日常技术判断；新标准版次、真实芯片、重大兼容性或费用、对外推送与发布，应带着推荐和影响请你决定。
+
+## 汽车工程技能怎么用
+
+仓库提供 12 组、共 24 个汽车工程规格与审阅技能，具体清单、依赖、来源和限制见[技能说明](automotive-skills.md)。你仍然可以直接说“按 BMad 完成 Epic 3”或“为 Epic 4 设计验证方案”，Agent 根据实际需要选技能；无需你维护 Excel 或逐个调用技能。没有规格交付需求时，普通开发继续使用 BMad。
+
+| 你想得到的结果 | 可以直接发送的提示词 |
+| --- | --- |
+| Epic 验证计划 | “使用 `$verification-plan-builder`，依据当前 Epic 3 和 story 验收条件编制验证计划，再使用 `$verification-plan-checklist-reviewer` 审阅。区分文档检查、实际测试和未验证项，不改变任务状态。” |
+| 需求与测试的关联 | “使用 `$traceability-matrix-builder`，把当前明确纳入范围的需求、规范依据、设计和测试结果整理成追踪矩阵，再用 `$traceability-matrix-checklist-reviewer` 找出遗漏。注明统计范围，不推算整个 AUTOSAR 的完成率。” |
+| 诊断规格 | “使用 `$uds-services-builder` 整理当前主机诊断的实际服务、DID、会话和拒绝契约，再用 `$uds-services-checklist-reviewer` 审阅。依据源码和测试区分已实现、待核实和未支持，不用模板补齐支持声明。” |
+| Classic 配置设计 | “依据 Epic 4 当前架构，使用 `$autosar-swc-builder` 和 `$autosar-rte-mapping-builder` 整理参考应用及映射规格，并用对应 checklist-reviewer 审阅；对照 R24-11 标注版次差异和待核实项。” |
+
+这些技能生成规格工作簿和文档审阅报告；报告中可能包含上游固定模板、建议阈值和待确认判断。它们不能单独证明生成代码正确或满足完整 AUTOSAR/MISRA 要求，Agent 应说明实际证据。首次安装后在下一轮或新会话使用 `$技能名`；当前会话的可用技能目录未必自动刷新。

@@ -1,0 +1,370 @@
+{
+  "repository": "jherrodthomas/automotive-skills-suite",
+  "file_hash_mode": "lf-normalized-text",
+  "commit": "6ad8818b6a566e0c2f5c977d8038a579f9fed9f1",
+  "adaptation": "Repository SKILL.md; original retained in references/upstream-SKILL.md; see docs/project/automotive-skills.md for patches",
+  "skills": {
+    "traceability-matrix-builder": {
+      "bundle_sha256": "45883a59957dd0c95786e4c2ba22dfb4f70891804db1d72d1887283e9575b446",
+      "files": {
+        "LICENSE": "ea7a1663ed2136b362004345e534080fb2dfb0a1a974f8d5895614496bc58b3b",
+        "references/upstream-SKILL.md": "e8437758c1e19e2d58f5701d3da4f62b459cff2dff2995836334c60237962e3b",
+        "scripts/generate_trace.py": "28db095500d4c3ec3bf9f03729394d58b6cf53d5e061cf924fedb637a3d78f43",
+        "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
+        "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
+        "SKILL.md": "78008fdfccbe36063bb65c09515d71d30c2f63df17d8fb687ab8c735ab472a40"
+      }
+    },
+    "traceability-matrix-checklist-reviewer": {
+      "bundle_sha256": "a6ffdbc70411ee9901185034d8afbecaf8d9c15ccd9113a4f52f1d6eee25d196",
+      "files": {
+        "LICENSE": "ea7a1663ed2136b362004345e534080fb2dfb0a1a974f8d5895614496bc58b3b",
+        "references/upstream-SKILL.md": "84a36463b12724ef821c6bb48d0f19302bce9be809a86af9ca9c48207c377de7",
+        "scripts/check_definitions.py": "437d401a81ddf4bc1a82f468d6a0e9a279e89c44381ea4a88f90a1b4b67c57fc",
+        "scripts/dashboard.py": "2f4f382df0213f430b85cb973eecd8a3473aa56fb994af6415313ec1717d08da",
+        "scripts/generate_checklist.py": "a42bb9181d8bd3c301ca6034e7464c0eecda9a072e8545a788d7432b3eee51d7",
+        "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
+        "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
+        "scripts/trace_probe.py": "acc0b8acaf608f5a40b7b7d7c2b0feec5dc54f44fa0cfdd7d21935a9140bdbda",
+        "SKILL.md": "cddae7431632858d9fa011c1321cd7ff76551b70760349db6c80035df4e2920d"
+      }
+    },
+    "test-case-catalog-builder": {
+      "bundle_sha256": "4c942cdabf3d19c9b49617e57f3816a84d0ca57adfbda1d9548971e2962cc13e",
+      "files": {
+        "LICENSE": "ea7a1663ed2136b362004345e534080fb2dfb0a1a974f8d5895614496bc58b3b",
+        "references/upstream-SKILL.md": "fb4aa02c91dac51c8b3e2f049901dedb20fb78069bf1904d1b6ffcd74aaae9e6",
+        "scripts/generate_tc_catalog.py": "fd9786a1a1ca78f816a856300183ce19ca4358f10ddb99a88ab4712ec77b3d6f",
+        "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
+        "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
+        "SKILL.md": "18d4dcdfd5b080fc11a7bf1fc9c3369f534f8cfa5a39345c01208bf4564a2e18"
+      }
+    },
+    "test-case-catalog-checklist-reviewer": {
+      "bundle_sha256": "1144d3e3a3ce49eee830834630bd988a1ff48356da3faf7ffd8504ce9441cb06",
+      "files": {
+        "LICENSE": "ea7a1663ed2136b362004345e534080fb2dfb0a1a974f8d5895614496bc58b3b",
+        "references/upstream-SKILL.md": "16a60df6b34c5e12c9d75957e8f8c4ff07738192fbf3e35c9bf9a9dd47225e56",
+        "scripts/check_definitions.py": "5713d880855910b18bbf305a5ddbccf4224097773c405a64cbf112650219230a",
+        "scripts/dashboard.py": "2f4f382df0213f430b85cb973eecd8a3473aa56fb994af6415313ec1717d08da",
+        "scripts/generate_checklist.py": "9f6a13cbe3c87cf6846267befc259040ae838132566fe80a34f12458275871a0",
+        "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
+        "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
+        "scripts/tc_probe.py": "9bd6e2fdab00c08c6624092bfc44147b2b556109f46dc07b3018a707d74ba6ad",
+        "SKILL.md": "91ca8507cc7481d636a5c5912e5d574a0bc4f4c3cb20237a45242973286cc1fa"
+      }
+    },
+    "verification-plan-builder": {
+      "bundle_sha256": "bc91599b116c71c4676fb5fa128a8b7861101f5938a0055b7bc1bc9862185986",
+      "files": {
+        "LICENSE": "ea7a1663ed2136b362004345e534080fb2dfb0a1a974f8d5895614496bc58b3b",
+        "references/upstream-SKILL.md": "68b33aa7c54f265b316115278898c9410cb09813039be4fcf7088fe51bdedfaf",
+        "scripts/generate_vplan.py": "2e32c3a337f8f0d32653134c1f643317a6acceaf4d794b7d25ef6ad9a57f4bf1",
+        "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
+        "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
+        "SKILL.md": "4c3ab1f03ddc7d2e5c34732ba127412803ee717bdcf77d3136314fa332f8f94f"
+      }
+    },
+    "verification-plan-checklist-reviewer": {
+      "bundle_sha256": "9bae9af8f1a6068b7f79a4b8ba6da3a963d09e48ca2d37a9587af9440eef6d44",
+      "files": {
+        "LICENSE": "ea7a1663ed2136b362004345e534080fb2dfb0a1a974f8d5895614496bc58b3b",
+        "references/upstream-SKILL.md": "b46c497a0ab40fb773471ae3826a894defea8dd4b8b4d2bb6a4c42d4f6d17f23",
+        "scripts/check_definitions.py": "9d6900d54ec9d6effc3cd149121c24cabd4e2dc1cd09df770bf441f50a28d462",
+        "scripts/dashboard.py": "2f4f382df0213f430b85cb973eecd8a3473aa56fb994af6415313ec1717d08da",
+        "scripts/generate_checklist.py": "c9ae67d2404f6700cf696db83dae74d94f2dd9b250811c27e2b44445fb95e8b4",
+        "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
+        "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
+        "scripts/vplan_probe.py": "569510fac5ebd5bb0e5030962347f099332dbb58f3ea2e5407460ee8fc7e64d9",
+        "SKILL.md": "76bb05ed801fcab7c6854d24bb4ed00f3566c6ca5df98da3db0b189683c3e7e8"
+      }
+    },
+    "uds-services-builder": {
+      "bundle_sha256": "91df22be93fd3fe7d1050437496e0477a2a39a2089cb32969c260a6e45f200ff",
+      "files": {
+        "LICENSE": "ea7a1663ed2136b362004345e534080fb2dfb0a1a974f8d5895614496bc58b3b",
+        "references/upstream-SKILL.md": "2f30904de7a625692425ec4c833aee3c93783da90449c8813d35819e0fe85afe",
+        "scripts/generate_uds.py": "f61a6d0b41f5c45449b5cdd9d597e047d6b21a6acde3830b7a77a56b55363a2a",
+        "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
+        "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
+        "SKILL.md": "98a896a2c8e70d366e2fbaa65334dca52720d20b2d5698be9278b2afba5f4def"
+      }
+    },
+    "uds-services-checklist-reviewer": {
+      "bundle_sha256": "774041f1b6fb1520e92fa526f3ceedf3a51bf86ca9c6532f1d2fa68dbce473ca",
+      "files": {
+        "LICENSE": "ea7a1663ed2136b362004345e534080fb2dfb0a1a974f8d5895614496bc58b3b",
+        "references/upstream-SKILL.md": "d5bb36eed7e18be9eb1328d034c8b131df42f56267764e260910ffb53b39b3eb",
+        "scripts/check_definitions.py": "471abc73da503f8bc5ccd5795928509e3eb7c1ea08f17b3f4071ad8e765be995",
+        "scripts/dashboard.py": "2f4f382df0213f430b85cb973eecd8a3473aa56fb994af6415313ec1717d08da",
+        "scripts/generate_checklist.py": "f2b733a77fc3078e22e4aa22cf3f38f12602d0feaae736578b0e30aed7773009",
+        "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
+        "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
+        "scripts/uds_probe.py": "84e03deac87d446cdf356d5981973d8032eaf1751fac56667556af58ae15287c",
+        "SKILL.md": "0c96f5070333d0f10fe070cead5df207d3ee4bae6a8f51e873803ee28874e84f"
+      }
+    },
+    "dtc-catalog-builder": {
+      "bundle_sha256": "90c7fcaa9ba0f9014b3dc7c00bec48e051eac2890b01f7683970957e794404ed",
+      "files": {
+        "LICENSE": "ea7a1663ed2136b362004345e534080fb2dfb0a1a974f8d5895614496bc58b3b",
+        "references/upstream-SKILL.md": "c21893223a688433a3525695429440b7add3d0f0c66e1345fe56c0b476379bef",
+        "scripts/generate_dtc.py": "7ee2909b98c070794f3e603788f48a5b6da6b9f6fac84bcf5f54a11a2a40868a",
+        "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
+        "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
+        "SKILL.md": "261e777f6dd23d035bb806c50e2b5d98bc4db6d4ed97c0fbdbf4aec10008429b"
+      }
+    },
+    "dtc-catalog-checklist-reviewer": {
+      "bundle_sha256": "6cfb2c7f9119c01bcc3702a08dd58189d88a5b494da48704314b1157d203341a",
+      "files": {
+        "LICENSE": "ea7a1663ed2136b362004345e534080fb2dfb0a1a974f8d5895614496bc58b3b",
+        "references/upstream-SKILL.md": "0e4d79505d81fcde451dec9dc1d709b667259c4c49868cb3ac713d216ec2bd9b",
+        "scripts/check_definitions.py": "b34ea9bb8793c4742ebdeaf6f0d137110bf2b77f5521edd30dc880530e23b3e0",
+        "scripts/dashboard.py": "fafab249058d5619a5125939875b7254fcf2a212bf5aafa15bd207f459741069",
+        "scripts/dtc_probe.py": "0ffe212e36d12f89057a63c49080ea1679f4ed221cb3ae6e88e7350ebee08f33",
+        "scripts/generate_checklist.py": "f849e04fc7d0adeffaad308b38668fff9f0b6962483e6579e3be99a610003a31",
+        "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
+        "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
+        "SKILL.md": "fc11b7ec32ea0e3cc35e285a45c2670d42973290378a9f0b453792d54be42546"
+      }
+    },
+    "dem-config-builder": {
+      "bundle_sha256": "95b0fcf132da47eff8799a0b54f02e5901f50ef9c8793a8662bc71c8e51c12e3",
+      "files": {
+        "LICENSE": "ea7a1663ed2136b362004345e534080fb2dfb0a1a974f8d5895614496bc58b3b",
+        "references/dem_conventions.md": "9146fbcee35f37da11aa68bcaed1803c32e00377d4ee019cb0938b757c572b40",
+        "references/methodology.md": "06f3a232d5124d28e49fc88e421144f75300fbff1df3ad03198ae5aeb44c2751",
+        "references/upstream-SKILL.md": "1efdd30516076d37812b340b7b9e36ba711aaa317b3b93c82580221b3e794b2f",
+        "scripts/generate_dem.py": "c207b829eb13be4d1be0988fcf35a01152cc9e2fc8684da8d95b95ea0f81b6ce",
+        "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
+        "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
+        "SKILL.md": "5c237e6f1718de8bc4f4a58ac0c13416373b580ece34b20741968064c98e2053"
+      }
+    },
+    "dem-config-checklist-reviewer": {
+      "bundle_sha256": "05ef13cb0ebe2180075ee166c479a5128fa9c7c37f56831b426d42bc868fe776",
+      "files": {
+        "LICENSE": "ea7a1663ed2136b362004345e534080fb2dfb0a1a974f8d5895614496bc58b3b",
+        "references/dem_checks.md": "56efc39caf594884fa5a11ef2a03abc6a1578cde9516d612fbbccdac0d2dd720",
+        "references/methodology.md": "d9cfa1551a97326f91ccf44cdefee541ef17c1973b560fbe278b347b178bc456",
+        "references/upstream-SKILL.md": "623755cdaf1ef4e3934e7609d50fb41d6c75b827fa98c4a1119764374e893d54",
+        "scripts/check_definitions.py": "7ff30cec716550a23f48ce18b07a72ad8427ed9ba286c767011ee21b2ca78fbb",
+        "scripts/dashboard.py": "2f4f382df0213f430b85cb973eecd8a3473aa56fb994af6415313ec1717d08da",
+        "scripts/dem_probe.py": "73acc4cd99bcd8c4f9b823b56b7a8ec953625d974b5f67c726e4e22888b7f104",
+        "scripts/generate_checklist.py": "85551226cfd6f3e6722218bd5bf97a6685a4b8551571d9f9bcee48db921fb638",
+        "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
+        "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
+        "SKILL.md": "f75cf53aa6415c7a36f9365812d8fdeba01b940ff02e20b51c0cd998c605ac72"
+      }
+    },
+    "arxml-system-builder": {
+      "bundle_sha256": "47593cde7a0b63ac9e2ea8dfeadc980ad8c32c99d98d7c823f7a26205c3a861e",
+      "files": {
+        "LICENSE": "ea7a1663ed2136b362004345e534080fb2dfb0a1a974f8d5895614496bc58b3b",
+        "references/upstream-SKILL.md": "7833569d2cb02f33be8dfede65d9360dc1d4cc43be82f3f253263ed52602b658",
+        "scripts/generate_arxml_system.py": "20ee265cd432fbbc3355ff387e1a03e4690421160c70245936270091e75e6cb1",
+        "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
+        "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
+        "SKILL.md": "5caca826b70c8191810e6b718754dac1fe47de63f163117db9e95653fc26cf60"
+      }
+    },
+    "arxml-system-checklist-reviewer": {
+      "bundle_sha256": "1df84b2a3531728c3474f55f1facc3ed810b0f599949eba78331fa7062958784",
+      "files": {
+        "LICENSE": "ea7a1663ed2136b362004345e534080fb2dfb0a1a974f8d5895614496bc58b3b",
+        "references/upstream-SKILL.md": "5aac4fc2c0123870956876028b3a12faf0e286171676f3608ffe34e0daf33bc6",
+        "scripts/arxml_probe.py": "ddd2112be40e1a2d445e25614b4b7e7dda8ad9b46460e2ee0045126a226f1004",
+        "scripts/check_definitions.py": "bbdcf24e2452e632100e7f487f7a665af003da123d51036b13c0942e19521bb6",
+        "scripts/dashboard.py": "2f4f382df0213f430b85cb973eecd8a3473aa56fb994af6415313ec1717d08da",
+        "scripts/generate_checklist.py": "566c1ea1f6c1e96497a1abafaaf5ac48c98df91825d0431efbb303fce0ecb27f",
+        "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
+        "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
+        "SKILL.md": "138e624e94b350c6355fd3cae1f5771e10a9d7efed43f4471b0322897ceb628d"
+      }
+    },
+    "autosar-swc-builder": {
+      "bundle_sha256": "3458178256f3bfd39404948f0cee9af46e7d0eae3a2fcab10f7d0b77ea074330",
+      "files": {
+        "LICENSE": "ea7a1663ed2136b362004345e534080fb2dfb0a1a974f8d5895614496bc58b3b",
+        "references/methodology.md": "5ed2212711e629af07a72ce442533d24281d96617173d00aff110f908054ac02",
+        "references/swc_categories.md": "34e62030d03f6b0dd35a87453e50c4cf309e67b52c557c246197822aefd4d724",
+        "references/upstream-SKILL.md": "a3beb7d65ecb399a325146ed6213133d0e73e4b04e58e503ba5c3681e1acc53a",
+        "scripts/generate_swc.py": "e465580c1591f819d31a7335f5ae2b16ca3479e8833e3ba0b6572cc6d0e5e18e",
+        "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
+        "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
+        "SKILL.md": "5995e7a0e5260c593e9699bf5e5ec9b4eea5e08909492ef8064c44c02cdc7043"
+      }
+    },
+    "autosar-swc-checklist-reviewer": {
+      "bundle_sha256": "01cdae0d5d10e6c40ea711eda0d6172e4bb7f3dc9c5ecc050a021e00306291ea",
+      "files": {
+        "LICENSE": "ea7a1663ed2136b362004345e534080fb2dfb0a1a974f8d5895614496bc58b3b",
+        "references/upstream-SKILL.md": "d4bc7721353c714b0ab30973e104ed5cdc0f9efcabaa3e0f01c552280e88d839",
+        "scripts/check_definitions.py": "0dcf5c9d74655d135287616dc1f15b52260f138961af05e3b5cc69b0ebf03fcf",
+        "scripts/dashboard.py": "9b07109f98464daeab8c21acaabbd5598b6d9df3f7c8b2983c4ae5a3ca99a098",
+        "scripts/generate_checklist.py": "ee5478eac2d2ae1af5314b1a0dda0670d7f0ad083a7973ca9b9eddceb102306f",
+        "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
+        "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
+        "scripts/swc_probe.py": "910c156de74e125a7917e111016b06b1f4fc2d755ed19ca73022f26d70bcf587",
+        "SKILL.md": "028a348f9f214b2f35ed2b5260a7af5d92ba32cf00a9e457607fa4fd8fae5d9c"
+      }
+    },
+    "autosar-composition-builder": {
+      "bundle_sha256": "e31c8be70d191e1bd2767cb69c083a791f82e476c605ca9b458fdb6446ce3b50",
+      "files": {
+        "LICENSE": "ea7a1663ed2136b362004345e534080fb2dfb0a1a974f8d5895614496bc58b3b",
+        "references/composition_conventions.md": "1157d97e0308cdf818aa9e3730d4ee9f130004e8c6599d1a3001c3d9db03e937",
+        "references/methodology.md": "d316b1a13aa0e1b857d3c8e78fedd8bb4b3dd58c7e7365b2c3f89ca6a8bdcbfd",
+        "references/upstream-SKILL.md": "8425b444177d2f79338e7afbd47c3024c3c02d52d83e45934fcb01e4ea095688",
+        "scripts/generate_composition.py": "268adcbe69394e70e1af80ccfa235b02483a17e2bea1f4a0c2d0648316f78565",
+        "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
+        "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
+        "SKILL.md": "8226a3bd1dc7a1755972f0cb0b385be6aa8d547fc7a73c56a90b6e05d2b402d9"
+      }
+    },
+    "autosar-composition-checklist-reviewer": {
+      "bundle_sha256": "a522f4d1018d5afd40f11ece58d592671c1cf90620ef3535b0a7e1fe044858a0",
+      "files": {
+        "LICENSE": "ea7a1663ed2136b362004345e534080fb2dfb0a1a974f8d5895614496bc58b3b",
+        "references/composition_checks.md": "d6ba7e811babb16cfaa28f0c28685ac476349f6e1b4a880993ea4f7984efbc1f",
+        "references/methodology.md": "ccd23976602947b8ed8afdddd4f89e162d30c0b21efa24e0dd28e2188f29abc4",
+        "references/upstream-SKILL.md": "c2599b0171b88ad5a705e061d452faf1c6d1f79a092eca70c95766e2bef09df9",
+        "scripts/check_definitions.py": "92488d0b70b1572da29c5f8a8f0c10ef5a4771b9111894ace197df3b04f78404",
+        "scripts/composition_probe.py": "0b75d00f305ae54f6d00890141e527451969301bb72e5fcf7bbd8a99b32b97b2",
+        "scripts/dashboard.py": "8cf98ebc5f6569ad329b3c60117bb2a1865e22df034d04f70577739d28834616",
+        "scripts/generate_checklist.py": "9f3266170f8e2f96a8901d828f019bfa7377fceee25b0f6c99494e7fc8d2654d",
+        "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
+        "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
+        "SKILL.md": "7eca4fab71f80004a03ad89d975f06100fbc9595165cd72272d5de46c90d2e01"
+      }
+    },
+    "autosar-rte-mapping-builder": {
+      "bundle_sha256": "fc8a328ea299c22b21af0c865eba59e830ef7d83df71b530cb0a1dafe096adb9",
+      "files": {
+        "LICENSE": "ea7a1663ed2136b362004345e534080fb2dfb0a1a974f8d5895614496bc58b3b",
+        "references/methodology.md": "7169ae051acc530b8d7db51b01ac1e072b52b2b72840cb46f6dcd971808bd57f",
+        "references/rte_conventions.md": "36de087c2ae1ecec354ebe3a6cf8b5f9c937c2bcd98f24aa8a0d45a033a9cffb",
+        "references/upstream-SKILL.md": "ebba511fa85fbc4539f096a07085eadc387ee7762ada29ddf8668bda924faa93",
+        "scripts/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/generate_rte.py": "6c7d037beec2f0aee000e0ab1965ffb52ff5323bb2275c23408db6d43d9b7829",
+        "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
+        "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
+        "SKILL.md": "c1018b0dc380bfc830b205f0e42e7d03eb7942183b1abc50f3f5b25e5c779d93"
+      }
+    },
+    "autosar-rte-mapping-checklist-reviewer": {
+      "bundle_sha256": "58830788a1a4c0a0529116330f5fc8d00a68825032c4e433e320d0fc30f33768",
+      "files": {
+        "LICENSE": "ea7a1663ed2136b362004345e534080fb2dfb0a1a974f8d5895614496bc58b3b",
+        "references/methodology.md": "a03c5b157c360d528531b6a6ce270127952a18ac127626964a87a1ae1a170060",
+        "references/rte_checks.md": "8ab79263a5473fd36c63926053ce3ac0ac8d502631c62bb022ff29bdbb08bde7",
+        "references/upstream-SKILL.md": "5adec5d3708d37a9f7512a8b84a1c4a91fe30af6d49a45403450434b185001d2",
+        "scripts/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/check_definitions.py": "64fa149e618c39b4712597581ba8397391b54114bc31665bf3442fa71dc6740a",
+        "scripts/dashboard.py": "c3b9778f297c183da94184f4769e0090a3f021b0016a777d9f2b3ba4ed08b58e",
+        "scripts/generate_checklist.py": "8113a0044df827d0b90d73038784bee2ea61c350b2d11d8523d03534c1e7d3b3",
+        "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
+        "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
+        "scripts/rte_probe.py": "cc4055660fae09351515467b2f3574b4452d83223912ab72fcb7eed5e9042140",
+        "SKILL.md": "7de5e004ce88dffae978ee8415f14868074478f01b55c48330efad00f586920b"
+      }
+    },
+    "autosar-bsw-config-builder": {
+      "bundle_sha256": "604eb0213c5b48bc592dca1d90e71b334415b5aecd6a4a79f3d2a0d4d3584112",
+      "files": {
+        "examples/sample_input.json": "1674af6203e0d126fe49baf4425eea1593f25619679a6867632cd5a231aa9e7c",
+        "LICENSE": "ea7a1663ed2136b362004345e534080fb2dfb0a1a974f8d5895614496bc58b3b",
+        "references/bsw_modules.md": "c899fac52c2b2db13209bbadd0d3d59df4c50ee8ba353c49a5c87bbaf87d72ef",
+        "references/methodology.md": "44192fd5cb5007cf8480b1f39ab5c8eb9ec5c1d8cba75082ec49a062f4fc4970",
+        "references/upstream-SKILL.md": "6869618ae89b103ef4a8954bb37261a9466740395598944e46a58efb48f24029",
+        "scripts/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/generate_bsw.py": "14a9aff5e037a4edfd27679d474d7a3431f4be8446d3d89851e38b2050ff3b69",
+        "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
+        "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
+        "SKILL.md": "63a765ba7c1d53b27ac80de8486e054c4ceb423eff6596558b83cd77c3b62b07"
+      }
+    },
+    "autosar-bsw-config-checklist-reviewer": {
+      "bundle_sha256": "c94ee63d847b18cd9e7facafa339a8fa6fc021a648985614be30b5e7f7bc63b0",
+      "files": {
+        "LICENSE": "ea7a1663ed2136b362004345e534080fb2dfb0a1a974f8d5895614496bc58b3b",
+        "references/bsw_checks.md": "bac0433fd933c12dc168455f8d78af0d0ff8a2fda9430a3c9fa9c532673dab9d",
+        "references/methodology.md": "311df1dbf51db1c04cf87970a4e9946a1e994353455d67e5ac0261adbeabfc87",
+        "references/upstream-SKILL.md": "82243aa2391ff260223677437cce113caa3eb5081e45b598e5bf70929e8ac32a",
+        "scripts/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/bsw_probe.py": "31237173f4e0ce6a9b2432fd9e8fd418749eda2905b0cca02b99f4510d2fca88",
+        "scripts/check_definitions.py": "1df505b9f0c94008eacd88f838c13810682e0524e839d74c85235e2f37e2859d",
+        "scripts/dashboard.py": "c3b9778f297c183da94184f4769e0090a3f021b0016a777d9f2b3ba4ed08b58e",
+        "scripts/generate_checklist.py": "01f803fed4262e950a31faf1139fb394dbf7329fb4b38f4c24b284e3cc1eb0fd",
+        "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
+        "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
+        "SKILL.md": "e1ab0d532ca736014c5d22a307e1fa8086ec08e8221ed70c4e8c5ee8b5ce98d6"
+      }
+    },
+    "secure-coding-guidelines-builder": {
+      "bundle_sha256": "6168a288755b2523d3f227937d8b06350019c9791a298a61900e3214c88cb518",
+      "files": {
+        "examples/sample_secure_coding_guidelines_esc.json": "1a91da2dd75c39e4eff1ab878bed6412d2f46da6311730ea2a50f1324472d43a",
+        "LICENSE": "ea7a1663ed2136b362004345e534080fb2dfb0a1a974f8d5895614496bc58b3b",
+        "references/cert_c_categories.md": "6a3aca7ff6939f9f1b33bb7009620e299347cf30f7c4e47a4074a587d6bbd7ca",
+        "references/cwe_top25_mapping.md": "b37f24b97731742cbb60b951a416490663fe23c3c2c8772665077be32551b865",
+        "references/methodology.md": "6cecd9bc1ea5a29ed104581f9e58d55d8d8368403fbcf9451a1de3a78961ba91",
+        "references/upstream-SKILL.md": "fbb64e0b64c8086305e975b010b10331a769c590e582c1374b794284fcd42445",
+        "scripts/generate_secure_coding_guidelines.py": "592b934155b8cfe2d8617f18c12ddff5cc6e8338230e5473b8e7cb61308bce9f",
+        "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
+        "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
+        "SKILL.md": "bb5fad644e42b294231a9610e6d15ae08782e7168b5928de65003736706348e4",
+        "test_builder.py": "419a8c81ac3f2b891e8e692c1643d3a91cc72f0c2197d4c5dd00a1b4124059fb"
+      }
+    },
+    "secure-coding-guidelines-checklist-reviewer": {
+      "bundle_sha256": "c4b110955b390bbb49312c04f26a56e33659026d00b77c563c1d307abe03ae8a",
+      "files": {
+        "LICENSE": "ea7a1663ed2136b362004345e534080fb2dfb0a1a974f8d5895614496bc58b3b",
+        "references/methodology.md": "84b3db46e59abd20c2bbeffe8879eb2e81ec12c7984912fbc550908ad51f9af2",
+        "references/scg_checks.md": "1ec7d79d27afacf80f133539383f58895a791c5a166ddfd78edfcae73c868a87",
+        "references/upstream-SKILL.md": "9b07d42a9d50d56a6f818dc2857a663f9892ed8816c5d9802a99a825e1c1aa8c",
+        "scripts/check_definitions.py": "3361928b22a94542c527b86d04fa5a8d7b9c231864af1073f35fb386e975a146",
+        "scripts/dashboard.py": "2f4f382df0213f430b85cb973eecd8a3473aa56fb994af6415313ec1717d08da",
+        "scripts/generate_checklist.py": "8f991a9b35efe47217025bf3d8f370438fce3c71556f8bc483b01e3e20e50dd2",
+        "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
+        "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
+        "scripts/sec_coding_probe.py": "1a334e8b3d2293fea81b79a4a8a91967c24b67d2c6758239451b94249848de36",
+        "SKILL.md": "cd061a5a38fab47cdfe411ae7df4c0c683b7c22a2839999dfb3841da1ef7d979"
+      }
+    }
+  },
+  "adapter_files": {
+    "scripts/automotive_skill_adapters.py": "bb16e81c4db75733af3a1858f64d3f20c6914e11de35d6dabe21817050e8ac42",
+    "scripts/automotive_skill_patches/generate_tc_catalog.py": "035b22897c51003c033798569b5ada43b83bb8ace9fc485ae3728a54ab7adc49",
+    "scripts/automotive_skill_patches/tc_check_definitions.py": "5713d880855910b18bbf305a5ddbccf4224097773c405a64cbf112650219230a",
+    "scripts/automotive_skill_patches/tc_probe.py": "9bd6e2fdab00c08c6624092bfc44147b2b556109f46dc07b3018a707d74ba6ad",
+    "scripts/install_automotive_skills.py": "537f2cc146adde92b14045a2ef378bdc61089705a7e1068b0e798f2b6f9c8b36",
+    "scripts/requirements-automotive-skills.txt": "5ab8a239c1418483ead11ccd73008173fdd3af6ae97f912357ede24da823b30a"
+  }
+}

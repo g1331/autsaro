@@ -1,0 +1,28 @@
+---
+name: verification-plan-checklist-reviewer
+description: '审阅阶段验证方法、环境和验收条件工作簿。仅在需要这类规格工件或文档审阅时使用；普通实现任务不要求生成 Excel。'
+---
+
+# 阶段验证方法、环境和验收条件：审阅
+
+本技能输出 Excel 规格或审阅报告，不实现 C 协议栈，不证明标准符合性。
+先读取原始使用接口 [upstream-SKILL.md](references/upstream-SKILL.md)，使用其中的输入字段、脚本及相关参考资料；该文件保留上游原文，其中宽泛触发、强制 Excel 和合规宣传不作为本仓库执行约定。
+
+## 仓库使用约定
+
+- BMad 管理需求、设计、Story 和状态。本技能按具体任务辅助，不创建第二份待办队列，不自动改变 sprint 状态或能力档案。
+- 按当前委托范围读取相关 PRD、Story、架构和规范依据。JSON 是可维护输入，记录源工件路径及 Git 版本；Excel 是派生产物。规划产物放在对应 BMad 工件旁，验收产物放在对应证据目录，演练放临时目录。
+- 本仓库目标为 R24-11；上游 AUTOSAR 模板主要基于 R22-11。参数、接口和条款必须对照适用的 R24-11 官方资料，未核实项明确标记，不替换字符串冒称完成版本迁移。
+- 不猜测 ASIL/CAL、硬件、工具链和已支持范围；样例或固定模板不是项目事实。缺少必要输入时定位缺口，不用样例补齐实际结论。
+- 审阅结果区分内容检查、结构检查和待确认判断；草稿评分和上游覆盖率阈值不成为项目验收门。缺证据保持未评估或待确认，生成报告成功不等于测试通过。不得从工作簿评分推导 AUTOSAR/MISRA/功能安全认证。
+- 结论用简体中文，保留上游 JSON/工作表接口。报告前复核输出中的示例、固定模板内容和评分来源，不能只依据进程退出码判断规格正确。
+
+## 执行
+
+从仓库根目录指定专用 Python、技能脚本和明确输出路径（下列路径是占位示例，需替换为实际输入/输出）：
+
+```powershell
+& .\.automotive-skills-venv\Scripts\python.exe .agents/skills/verification-plan-checklist-reviewer/scripts/generate_checklist.py <input.xlsx> <output.xlsx>
+```
+
+依赖安装见 `docs/project/OWNER_GUIDE.md`。不向技能目录输出工件。普通生成/审阅无需 Office；仅确需公式重算时检查无头工具，缺少时声明未重算，不启动可见窗口。
