@@ -1,2 +1,6 @@
 # Installer-managed upstream BMad skills are vendored without rewriting their content.
 /.agents/skills/** -whitespace
+# Preserve dependency and patch bytes for offline SHA-256 verification.
+/third_party/freertos/** -text
+# A unified patch uses a single space as the empty context-line marker.
+/runtime/os/patches/** -text whitespace=-blank-at-eol

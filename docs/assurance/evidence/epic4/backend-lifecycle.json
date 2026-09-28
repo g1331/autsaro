@@ -1,0 +1,287 @@
+{
+  "kernel_commit": "054e14f3397023aa83813a65aa065fc4597d481b",
+  "compiler": "GCC 16.1.0 x64",
+  "patches": {
+    "0001-controlled-host-lifecycle.patch": "b522c8fa69454989be899658d670f6313fb621f455f32a258e06fad18fbbf04f"
+  },
+  "product_sources": {
+    "runtime/os/FreeRTOSConfig.h": "b37b83020654229e6a01a02ba2b10eb8cadd19486b5340d45e6d1ab96f8adf4e",
+    "runtime/os/include/Os.h": "9b1aa57312c5e61cce3d5571abc23d78a7fa19dbf88a3214410152a34ffb2047",
+    "runtime/os/include/Os_Target.h": "b8db6591366708153d75e22d54e3e2b783c57110a76c0c0ba0c51ea06b4207b5",
+    "runtime/os/patches/0001-controlled-host-lifecycle.patch": "b522c8fa69454989be899658d670f6313fb621f455f32a258e06fad18fbbf04f",
+    "runtime/os/README.md": "8c45079cb8014e62bf20aeeededfcf81e29ac2e636bb19cef4f9999c19f6467e",
+    "runtime/os/src/Os.c": "e1d6cc4cf3e8df14f35bf6897040c11453aa974072615b864d378256451b1f91",
+    "runtime/os/src/Os_Backend.c": "d6143928aaa8f45bdd3e5903f8f270f64d4d9659b8a41b0e0f31b870d91d8928",
+    "runtime/os/src/Os_Backend.h": "dfc25d086d6cd1706507a718efc7ee23a1df3660d9bfc97c7bf04ad35753db54",
+    "runtime/os/tests/lifecycle.c": "1266154cfb0aef989741a9a87c1004b5ee0b9fc99eaed07ae7e21f7c557ac2a9"
+  },
+  "command": [
+    "gcc",
+    "-std=c99",
+    "-O1",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-I",
+    "D:\\Codebase\\Autosar\\runtime\\os",
+    "-I",
+    "D:\\Codebase\\Autosar\\runtime\\os\\include",
+    "-I",
+    "D:\\Codebase\\Autosar\\runtime\\os\\src",
+    "-I",
+    "C:\\Users\\admin\\AppData\\Local\\Temp\\autosar-epic4-os-88h59osj\\kernel\\include",
+    "-I",
+    "C:\\Users\\admin\\AppData\\Local\\Temp\\autosar-epic4-os-88h59osj\\kernel\\portable\\MSVC-MingW",
+    "D:\\Codebase\\Autosar\\runtime\\os\\src\\Os.c",
+    "D:\\Codebase\\Autosar\\runtime\\os\\src\\Os_Backend.c",
+    "D:\\Codebase\\Autosar\\runtime\\os\\tests\\lifecycle.c",
+    "C:\\Users\\admin\\AppData\\Local\\Temp\\autosar-epic4-os-88h59osj\\kernel\\tasks.c",
+    "C:\\Users\\admin\\AppData\\Local\\Temp\\autosar-epic4-os-88h59osj\\kernel\\list.c",
+    "C:\\Users\\admin\\AppData\\Local\\Temp\\autosar-epic4-os-88h59osj\\kernel\\queue.c",
+    "C:\\Users\\admin\\AppData\\Local\\Temp\\autosar-epic4-os-88h59osj\\kernel\\portable\\MSVC-MingW\\port.c",
+    "-lwinmm",
+    "-o",
+    "C:\\Users\\admin\\AppData\\Local\\Temp\\autosar-epic4-os-88h59osj\\os_harness.exe"
+  ],
+  "observations": [
+    {
+      "scenario": "normal",
+      "failure": 0,
+      "exit": 0,
+      "stdout": "lifecycle=Closed state=Ready reason=0 trace=ISRAD threads=5 events=6 mutexes=1 resource_calls=12 hidden=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "mode2",
+      "failure": 0,
+      "exit": 0,
+      "stdout": "lifecycle=Closed state=Ready reason=0 trace=ISRBD threads=5 events=6 mutexes=1 resource_calls=12 hidden=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "priority",
+      "failure": 0,
+      "exit": 0,
+      "stdout": "lifecycle=Closed state=Ready reason=0 trace=ISRBD threads=5 events=6 mutexes=1 resource_calls=12 hidden=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "zero-count",
+      "failure": 0,
+      "exit": 8,
+      "stdout": "state=Failed reason=8 rejected_before_threads=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "capacity",
+      "failure": 0,
+      "exit": 8,
+      "stdout": "state=Failed reason=8 rejected_before_threads=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "duplicate",
+      "failure": 0,
+      "exit": 3,
+      "stdout": "state=Failed reason=3 rejected_before_threads=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "bad-id",
+      "failure": 0,
+      "exit": 3,
+      "stdout": "state=Failed reason=3 rejected_before_threads=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "zero-priority",
+      "failure": 0,
+      "exit": 8,
+      "stdout": "state=Failed reason=8 rejected_before_threads=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "bad-priority",
+      "failure": 0,
+      "exit": 8,
+      "stdout": "state=Failed reason=8 rejected_before_threads=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "null-entry",
+      "failure": 0,
+      "exit": 8,
+      "stdout": "state=Failed reason=8 rejected_before_threads=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "bad-stack",
+      "failure": 0,
+      "exit": 8,
+      "stdout": "state=Failed reason=8 rejected_before_threads=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "small-stack",
+      "failure": 0,
+      "exit": 8,
+      "stdout": "state=Failed reason=8 rejected_before_threads=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "large-stack",
+      "failure": 0,
+      "exit": 8,
+      "stdout": "state=Failed reason=8 rejected_before_threads=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "null-tasks",
+      "failure": 0,
+      "exit": 8,
+      "stdout": "state=Failed reason=8 rejected_before_threads=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "bad-autostart",
+      "failure": 0,
+      "exit": 8,
+      "stdout": "state=Failed reason=8 rejected_before_threads=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "bad-mode",
+      "failure": 0,
+      "exit": 8,
+      "stdout": "lifecycle=Closed state=Failed reason=8 trace=ID threads=0 events=0 mutexes=0 resource_calls=0 hidden=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "startup-failure",
+      "failure": 0,
+      "exit": 7,
+      "stdout": "lifecycle=Closed state=Failed reason=7 trace=ISD threads=5 events=6 mutexes=1 resource_calls=12 hidden=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "repeat-start",
+      "failure": 0,
+      "exit": 7,
+      "stdout": "lifecycle=Closed state=Failed reason=7 trace=ISID threads=5 events=6 mutexes=1 resource_calls=12 hidden=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "normal",
+      "failure": "invalid",
+      "exit": 8,
+      "stdout": "lifecycle=Closed state=Failed reason=8 trace=ID threads=0 events=0 mutexes=0 resource_calls=0 hidden=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "normal",
+      "failure": "-1",
+      "exit": 8,
+      "stdout": "lifecycle=Closed state=Failed reason=8 trace=ID threads=0 events=0 mutexes=0 resource_calls=0 hidden=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "normal",
+      "failure": "429496729600",
+      "exit": 8,
+      "stdout": "lifecycle=Closed state=Failed reason=8 trace=ID threads=0 events=0 mutexes=0 resource_calls=0 hidden=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "normal",
+      "failure": "0",
+      "exit": 8,
+      "stdout": "lifecycle=Closed state=Failed reason=8 trace=ID threads=0 events=0 mutexes=0 resource_calls=0 hidden=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "normal",
+      "failure": 1,
+      "exit": 7,
+      "stdout": "lifecycle=Closed state=Failed reason=7 trace=ID threads=0 events=0 mutexes=0 resource_calls=1 hidden=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "normal",
+      "failure": 2,
+      "exit": 7,
+      "stdout": "lifecycle=Closed state=Failed reason=7 trace=ID threads=0 events=1 mutexes=0 resource_calls=2 hidden=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "normal",
+      "failure": 3,
+      "exit": 7,
+      "stdout": "lifecycle=Closed state=Failed reason=7 trace=ID threads=1 events=1 mutexes=0 resource_calls=3 hidden=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "normal",
+      "failure": 4,
+      "exit": 7,
+      "stdout": "lifecycle=Closed state=Failed reason=7 trace=ID threads=1 events=2 mutexes=0 resource_calls=4 hidden=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "normal",
+      "failure": 5,
+      "exit": 7,
+      "stdout": "lifecycle=Closed state=Failed reason=7 trace=ID threads=2 events=2 mutexes=0 resource_calls=5 hidden=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "normal",
+      "failure": 6,
+      "exit": 7,
+      "stdout": "lifecycle=Closed state=Failed reason=7 trace=ID threads=2 events=3 mutexes=0 resource_calls=6 hidden=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "normal",
+      "failure": 7,
+      "exit": 7,
+      "stdout": "lifecycle=Closed state=Failed reason=7 trace=ID threads=3 events=3 mutexes=0 resource_calls=7 hidden=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "normal",
+      "failure": 8,
+      "exit": 7,
+      "stdout": "lifecycle=Closed state=Failed reason=7 trace=ID threads=3 events=4 mutexes=0 resource_calls=8 hidden=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "normal",
+      "failure": 9,
+      "exit": 7,
+      "stdout": "lifecycle=Closed state=Failed reason=7 trace=ID threads=4 events=4 mutexes=0 resource_calls=9 hidden=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "normal",
+      "failure": 10,
+      "exit": 7,
+      "stdout": "lifecycle=Closed state=Failed reason=7 trace=ID threads=4 events=5 mutexes=0 resource_calls=10 hidden=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "normal",
+      "failure": 11,
+      "exit": 7,
+      "stdout": "lifecycle=Closed state=Failed reason=7 trace=ID threads=5 events=5 mutexes=0 resource_calls=11 hidden=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "normal",
+      "failure": 12,
+      "exit": 7,
+      "stdout": "lifecycle=Closed state=Failed reason=7 trace=ID threads=5 events=5 mutexes=1 resource_calls=12 hidden=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    }
+  ],
+  "status": "pass"
+}

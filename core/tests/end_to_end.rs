@@ -7,6 +7,25 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[cfg(windows)]
+#[test]
+fn epic4_backend_lifecycle() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let output = Command::new("python")
+        .arg(root.join("scripts/epic4_os.py"))
+        .args(["--suite", "lifecycle"])
+        .current_dir(root)
+        .output()
+        .expect("start independent Windows OS verifier");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("epic4_backend_lifecycle PASS"));
+}
+
 #[test]
 fn standard_can_host_entry_points_reject_invalid_requests_and_send_valid_frame() {
     let temp = Scratch::new();

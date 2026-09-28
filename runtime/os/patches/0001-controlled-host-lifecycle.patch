@@ -1,0 +1,235 @@
+--- a/portable/MSVC-MingW/port.c
++++ b/portable/MSVC-MingW/port.c
+@@ -32,6 +32,7 @@
+ /* Scheduler includes. */
+ #include "FreeRTOS.h"
+ #include "task.h"
++#include "Os_Backend.h"
+ 
+ #ifdef WIN32_LEAN_AND_MEAN
+     #include <winsock2.h>
+@@ -50,10 +51,10 @@
+ #define portNO_CRITICAL_NESTING                     ( ( uint32_t ) 0 )
+ 
+ /* The priorities at which the various components of the simulation execute. */
+-#define portDELETE_SELF_THREAD_PRIORITY             THREAD_PRIORITY_TIME_CRITICAL /* Must be highest. */
+-#define portSIMULATED_INTERRUPTS_THREAD_PRIORITY    THREAD_PRIORITY_TIME_CRITICAL
+-#define portSIMULATED_TIMER_THREAD_PRIORITY         THREAD_PRIORITY_HIGHEST
+-#define portTASK_THREAD_PRIORITY                    THREAD_PRIORITY_ABOVE_NORMAL
++#define portDELETE_SELF_THREAD_PRIORITY             THREAD_PRIORITY_ABOVE_NORMAL /* Must be highest. */
++#define portSIMULATED_INTERRUPTS_THREAD_PRIORITY    THREAD_PRIORITY_ABOVE_NORMAL
++#define portSIMULATED_TIMER_THREAD_PRIORITY         THREAD_PRIORITY_NORMAL
++#define portTASK_THREAD_PRIORITY                    THREAD_PRIORITY_NORMAL
+ 
+ /*
+  * Created as a high priority thread, this function uses a timer to simulate
+@@ -61,7 +62,7 @@
+  * environment the timer does not achieve anything approaching real time
+  * performance though.
+  */
+-static DWORD WINAPI prvSimulatedPeripheralTimer( LPVOID lpParameter );
++
+ 
+ /*
+  * Process all the simulated interrupts - each represented by a bit in
+@@ -89,7 +90,7 @@
+  * Called when the process exits to let Windows know the high timer resolution
+  * is no longer required.
+  */
+-static BOOL WINAPI prvEndProcess( DWORD dwCtrlType );
++
+ 
+ /*-----------------------------------------------------------*/
+ 
+@@ -144,93 +145,13 @@
+ 
+ /*-----------------------------------------------------------*/
+ 
+-static DWORD WINAPI prvSimulatedPeripheralTimer( LPVOID lpParameter )
+-{
+-    TickType_t xMinimumWindowsBlockTime;
+-    TIMECAPS xTimeCaps;
+-    TickType_t xWaitTimeBetweenTicks = portTICK_PERIOD_MS;
+-    HANDLE hTimer = NULL;
+-    LARGE_INTEGER liDueTime;
+-    BOOL bSuccess;
+-
+-    /* Set the timer resolution to the maximum possible. */
+-    if( timeGetDevCaps( &xTimeCaps, sizeof( xTimeCaps ) ) == MMSYSERR_NOERROR )
+-    {
+-        xMinimumWindowsBlockTime = ( TickType_t ) xTimeCaps.wPeriodMin;
+-        timeBeginPeriod( xTimeCaps.wPeriodMin );
+-
+-        /* Register an exit handler so the timeBeginPeriod() function can be
+-         * matched with a timeEndPeriod() when the application exits. */
+-        SetConsoleCtrlHandler( prvEndProcess, TRUE );
+-    }
+-    else
+-    {
+-        xMinimumWindowsBlockTime = ( TickType_t ) 20;
+-    }
+-
+-    /* Just to prevent compiler warnings. */
+-    ( void ) lpParameter;
+-
+-    /* Tick time for the timer is adjusted with the maximum available
+-     resolution. */
+-    if( portTICK_PERIOD_MS < xMinimumWindowsBlockTime )
+-    {
+-        xWaitTimeBetweenTicks = xMinimumWindowsBlockTime;
+-    }
+-
+-    /* Convert the tick time in milliseconds to nanoseconds resolution
+-     for the Waitable Timer. */
+-    liDueTime.u.LowPart = xWaitTimeBetweenTicks * 1000 * 1000;
+-    liDueTime.u.HighPart = 0;
+-
+-    /* Create a synchronization Waitable Timer.*/
+-    hTimer = CreateWaitableTimer( NULL, FALSE, NULL );
+-
+-    configASSERT( hTimer != NULL );
+-
+-    /* Set the Waitable Timer. The timer is set to run periodically at every
+-    xWaitTimeBetweenTicks milliseconds. */
+-    bSuccess = SetWaitableTimer( hTimer, &liDueTime, xWaitTimeBetweenTicks, NULL, NULL, 0 );
+-    configASSERT( bSuccess );
+-
+-    while( xPortRunning == pdTRUE )
+-    {
+-        /* Wait until the timer expires and we can access the simulated interrupt
+-         * variables. */
+-
+-        WaitForSingleObject( hTimer, INFINITE );
+-
+-        vPortGenerateSimulatedInterruptFromWindowsThread( portINTERRUPT_TICK );
+-    }
+-
+-    return 0;
+-}
+-/*-----------------------------------------------------------*/
+-
+-static BOOL WINAPI prvEndProcess( DWORD dwCtrlType )
+-{
+-    TIMECAPS xTimeCaps;
+-
+-    ( void ) dwCtrlType;
+-
+-    if( timeGetDevCaps( &xTimeCaps, sizeof( xTimeCaps ) ) == MMSYSERR_NOERROR )
+-    {
+-        /* Match the call to timeBeginPeriod( xTimeCaps.wPeriodMin ) made when
+-         * the process started with a timeEndPeriod() as the process exits. */
+-        timeEndPeriod( xTimeCaps.wPeriodMin );
+-    }
+-
+-    return pdFALSE;
+-}
+-/*-----------------------------------------------------------*/
+-
+ StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
+                                      TaskFunction_t pxCode,
+                                      void * pvParameters )
+ {
+     ThreadState_t * pxThreadState = NULL;
+     int8_t * pcTopOfStack = ( int8_t * ) pxTopOfStack;
+-    const SIZE_T xStackSize = 1024; /* Set the size to a small number which will get rounded up to the minimum possible. */
++    const SIZE_T xStackSize = Os_Config->host_stack_reserve; /* Set the size to a small number which will get rounded up to the minimum possible. */
+ 
+     /* In this simulated case a stack is not initialised, but instead a thread
+      * is created that will execute the task being created.  The thread handles
+@@ -243,7 +164,7 @@
+     /* Create the event used to prevent the thread from executing past its yield
+      * point if the SuspendThread() call that suspends the thread does not take
+      * effect immediately (it is an asynchronous call). */
+-    pxThreadState->pvYieldEvent = CreateEvent( NULL,   /* Default security attributes. */
++    pxThreadState->pvYieldEvent = Os_PortEvent( NULL,   /* Default security attributes. */
+                                                FALSE,  /* Auto reset. */
+                                                FALSE,  /* Start not signalled. */
+                                                NULL ); /* No name. */
+@@ -256,7 +177,7 @@
+ #pragma GCC diagnostic ignored "-Wcast-function-type"
+ #endif
+     /* Create the thread itself. */
+-    pxThreadState->pvThread = CreateThread( NULL, xStackSize, ( LPTHREAD_START_ROUTINE ) pxCode, pvParameters, CREATE_SUSPENDED | STACK_SIZE_PARAM_IS_A_RESERVATION, NULL );
++    pxThreadState->pvThread = Os_PortThread( NULL, xStackSize, ( LPTHREAD_START_ROUTINE ) pxCode, pvParameters, CREATE_SUSPENDED | STACK_SIZE_PARAM_IS_A_RESERVATION, NULL );
+ #ifdef __GNUC__
+ #pragma GCC diagnostic pop
+ #endif
+@@ -293,7 +214,7 @@
+ 
+         /* The highest priority class is used to [try to] prevent other Windows
+          * activity interfering with FreeRTOS timing too much. */
+-        if( SetPriorityClass( GetCurrentProcess(), REALTIME_PRIORITY_CLASS ) == 0 )
++        if( SetPriorityClass( GetCurrentProcess(), NORMAL_PRIORITY_CLASS ) == 0 )
+         {
+-            printf( "SetPriorityClass() failed\r\n" );
++            Os_BackendShutdown( E_OS_STATE );
+         }
+@@ -304,8 +225,8 @@
+ 
+         /* Create the events and mutexes that are used to synchronise all the
+          * threads. */
+-        pvInterruptEventMutex = CreateMutex( NULL, FALSE, NULL );
+-        pvInterruptEvent = CreateEvent( NULL, FALSE, FALSE, NULL );
++        pvInterruptEventMutex = Os_PortMutex( NULL, FALSE, NULL );
++        pvInterruptEvent = Os_PortEvent( NULL, FALSE, FALSE, NULL );
+ 
+         if( ( pvInterruptEventMutex == NULL ) || ( pvInterruptEvent == NULL ) )
+         {
+@@ -336,20 +257,6 @@
+ 
+     if( lSuccess == pdPASS )
+     {
+-        /* Start the thread that simulates the timer peripheral to generate
+-         * tick interrupts.  The priority is set below that of the simulated
+-         * interrupt handler so the interrupt event mutex is used for the
+-         * handshake / overrun protection. */
+-        pvHandle = CreateThread( NULL, 0, prvSimulatedPeripheralTimer, NULL, CREATE_SUSPENDED, NULL );
+-
+-        if( pvHandle != NULL )
+-        {
+-            SetThreadPriority( pvHandle, portSIMULATED_TIMER_THREAD_PRIORITY );
+-            SetThreadPriorityBoost( pvHandle, TRUE );
+-            SetThreadAffinityMask( pvHandle, 0x01 );
+-            ResumeThread( pvHandle );
+-        }
+-
+         /* Start the highest priority task by obtaining its associated thread
+          * state structure, in which is stored the thread handle. */
+         pxThreadState = ( ThreadState_t * ) *( ( size_t * ) pxCurrentTCB );
+@@ -359,7 +266,10 @@
+         xPortRunning = pdTRUE;
+ 
+         /* Start the first task. */
+-        ResumeThread( pxThreadState->pvThread );
++        if( InterlockedCompareExchange( &Os_Closing, 0, 0 ) == 0 )
++        {
++            ResumeThread( pxThreadState->pvThread );
++        }
+ 
+         /* Handle all simulated interrupts - including yield requests and
+          * simulated ticks. */
+@@ -408,10 +318,10 @@
+ 
+     /* Create a pending tick to ensure the first task is started as soon as
+      * this thread pends. */
+-    ulPendingInterrupts |= ( 1UL << portINTERRUPT_TICK );
++    ulPendingInterrupts |= ( 1UL << portINTERRUPT_YIELD );
+     SetEvent( pvInterruptEvent );
+ 
+-    while( xPortRunning == pdTRUE )
++    while( ( xPortRunning == pdTRUE ) && ( InterlockedCompareExchange( &Os_Closing, 0, 0 ) == 0 ) )
+     {
+         xInsideInterrupt = pdFALSE;
+ 
+@@ -482,7 +392,10 @@
+                 /* pxThreadState->pvThread can be NULL if the task deleted
+                  * itself - but a deleted task should never be resumed here. */
+                 configASSERT( pxThreadState->pvThread != NULL );
+-                ResumeThread( pxThreadState->pvThread );
++                if( InterlockedCompareExchange( &Os_Closing, 0, 0 ) == 0 )
++        {
++            ResumeThread( pxThreadState->pvThread );
++        }
+             }
+ 
+             /* If the thread that is about to be resumed stopped running
