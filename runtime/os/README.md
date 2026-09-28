@@ -66,3 +66,21 @@ cargo test --manifest-path core/Cargo.toml epic4_activation_fifo -- --exact --no
 20 个实际子进程向量覆盖 AAB/ABA/AABB/ABAB、抢占帧保留、Basic/Extended 拒绝、32 请求容量与 48 次环回绕、序号压缩、同级 autostart、ISR 成功/拒绝以及关闭竞争。独立 observer 只读已缓存 TCB 的真实状态/排序键并核对完整请求档案，不轮询选择 runnable。未来 Wait/Wake 的 ready 位置必须由 4.7 单独证明。
 
 新共享证据明确标记为路径归一化表示，原始结构化记录位于忽略的 .scratch/epic4，并关联其 SHA-256；保留诊断所需的真实栈地址和线程 ID。activation-static-analysis.json 保留实际扫描命令、源码身份和完整诊断。Cppcheck Windows 模型和 MISRA 修订覆盖不完整，扫描仍报红；新增 backend 根帧及主机 I/O 的偏离尚未批准，4.20 完整质量出口仍须闭合。
+
+
+## 原子 Finish/Chain 与入口（4.5）
+
+TerminateTask 和 ChainTask 共用先验证后提交的完成事务。持有外部资源、目标无效/已满或调用层级不允许时，源/目标请求、事件、资源所有权、有效优先级及 ready 位置全部保留。自链先完成当前实例，再按新的请求位置接续；即使处于激活上限也不额外占槽。Basic 已排队的实例保持 FIFO，Extended 新实例（含自链）清空存储事件。所有成功路径进入同原生线程私有根帧，局部变量重新初始化，不返回旧应用调用。
+
+静态资源配置最多8个，声明 id、ceiling 和按 TaskID 位映射的 task_access。当前外部资源核心以真实所有权/LIFO及内核有效优先级支持持资源拒绝，绝不阻塞等待；4.6 再闭合 NON/内部资源、完整恢复位置和ISR资源。SetEvent/GetEvent 当前支持活动 Extended 任务的存储与查询，4.7 再完成 Clear/Wait 与无丢失唤醒；当前没有可达 Waiting 任务。直接返回入口仍最低失败关闭 E_OS_STATE，完整 missing-end/Hook 契约由4.18负责。
+
+标准 OS SetEvent 与 Win32 SetEvent 同名。公共服务宏映射到 Os_SetEvent；私有 Os_Windows.h 暂时移除该宏导入 Windows 声明后恢复，原生事件信号通过独立 Os_HostSetEvent 翻译单元调用真正 Win32 API。汽车应用仅包含公开 OS 头文件并调用标准服务；使用 Windows API 的原生桥必须经 Os_Windows.h 适配边界导入。第四复制件补丁只替换端口的 Win32 信号调用，不修改选择器、上下文或上游原件。
+
+```powershell
+python scripts/epic4_os.py --suite finish
+cargo test --manifest-path core/Cargo.toml epic4_finish_chain_atomicity -- --exact --nocapture
+```
+
+22 个原生场景覆盖满容量自链、pending、优先级链/同级请求、拒绝完整快照、实际资源ceiling、事件重置、Chain前/后夹点的实际ISR与额外激活、missing-end最低关闭和6种资源配置拒绝。ISR在普通临界区退出后执行，只观察完整状态；完成旧A实例的 order3 被移除，Chain目标B order4 先于ISR重新激活A的 order5。Observer读实际TCB状态/排序键，资源和事件快照均来自实际核心。静态分析仍是部分覆盖，后续完整质量出口和偏离审批要求保持。
+
+静态外部资源 ceiling 按 OSEK §8.5 校验：不低于所有访问任务的最高优先级，并低于不访问该资源、且优先级高于最高访问者的任务。资源测试声明 A/H 为访问者，验证过低或过高 ceiling 在创建线程前拒绝。

@@ -1,6 +1,6 @@
 #ifndef AUTOSAR_EPIC4_OS_STACK_H
 #define AUTOSAR_EPIC4_OS_STACK_H
-#include <windows.h>
+#include "Os_Windows.h"
 #include <stdint.h>
 #include "FreeRTOS.h"
 #define OS_NATIVE_STACKS 21u

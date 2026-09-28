@@ -1,0 +1,47 @@
+--- a/portable/MSVC-MingW/port.c
++++ b/portable/MSVC-MingW/port.c
+@@ -319,7 +319,7 @@
+     /* Create a pending tick to ensure the first task is started as soon as
+      * this thread pends. */
+     ulPendingInterrupts |= ( 1UL << portINTERRUPT_YIELD );
+-    SetEvent( pvInterruptEvent );
++    Os_HostSetEvent( pvInterruptEvent );
+ 
+     while( ( xPortRunning == pdTRUE ) && ( InterlockedCompareExchange( &Os_Closing, 0, 0 ) == 0 ) )
+     {
+@@ -419,7 +419,7 @@
+              * the task was switched out asynchronously by an interrupt as the event
+              * is reset before the task blocks on it. */
+             pxThreadState = ( ThreadState_t * ) ( *( size_t * ) pxCurrentTCB );
+-            SetEvent( pxThreadState->pvYieldEvent );
++            Os_HostSetEvent( pxThreadState->pvYieldEvent );
+             ReleaseMutex( pvInterruptEventMutex );
+         }
+     }
+@@ -539,7 +539,7 @@
+          * down to zero. */
+         if( ulCriticalNesting == portNO_CRITICAL_NESTING )
+         {
+-            SetEvent( pvInterruptEvent );
++            Os_HostSetEvent( pvInterruptEvent );
+ 
+             /* Going to wait for an event - make sure the event is not already
+              * signaled. */
+@@ -577,7 +577,7 @@
+          * the handler thread can execute immediately pvInterruptEventMutex is
+          * released. */
+         configASSERT( ulCriticalNesting == 0UL );
+-        SetEvent( pvInterruptEvent );
++        Os_HostSetEvent( pvInterruptEvent );
+ 
+         /* Give back the mutex so the simulated interrupt handler unblocks
+          * and can access the interrupt handler variables. */
+@@ -649,7 +649,7 @@
+                  * interrupt is pended if the interrupt is pended
+                  * from outside a critical section - hence it is set
+                  * here. */
+-                SetEvent( pvInterruptEvent );
++                Os_HostSetEvent( pvInterruptEvent );
+ 
+                 /* The calling task is going to wait for an event to ensure the
+                  * interrupt that is pending executes immediately after the

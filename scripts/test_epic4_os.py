@@ -19,10 +19,15 @@ class DependencyTests(unittest.TestCase):
                 epic4_os.ROOT / "docs/assurance/evidence/epic4/activation-fifo.json"
             ).read_text(encoding="utf-8")
         )
-        original = evidence["observations"][0]
+        original = evidence["observations"]
+        with patch("epic4_os.execute", side_effect=copy.deepcopy(original)):
+            self.assertEqual(
+                len(epic4_os.check_activation(Path("unused.exe"))), len(original)
+            )
         for mutation in ["order", "observer"]:
             with self.subTest(mutation=mutation):
-                result = copy.deepcopy(original)
+                records = copy.deepcopy(original)
+                result = records[0]
                 if mutation == "order":
                     result["stdout"] = result["stdout"].replace(
                         "trace=ISRLAHaCBMZ", "trace=ISRLAHaBCMZ"
@@ -32,10 +37,39 @@ class DependencyTests(unittest.TestCase):
                         r"observer=\d+", "observer=0", result["stdout"]
                     )
                 with (
-                    patch("epic4_os.execute", return_value=result),
+                    patch("epic4_os.execute", side_effect=records),
                     self.assertRaises(AssertionError),
                 ):
                     epic4_os.check_activation(Path("unused.exe"))
+
+    def test_finish_gate_rejects_entry_order_return_and_missing_observer(self):
+        original = json.loads(
+            (
+                epic4_os.ROOT / "docs/assurance/evidence/epic4/finish-chain.json"
+            ).read_text(encoding="utf-8")
+        )["observations"]
+        with patch("epic4_os.execute", side_effect=copy.deepcopy(original)):
+            self.assertEqual(
+                len(epic4_os.check_finish(Path("unused.exe"))), len(original)
+            )
+        for mutation in ["order", "return", "observer"]:
+            with self.subTest(mutation=mutation):
+                records = copy.deepcopy(original)
+                if mutation == "observer":
+                    records[0]["stdout"] = re.sub(
+                        r"observer=\d+", "observer=0", records[0]["stdout"]
+                    )
+                else:
+                    records[0]["stdout"] = records[0]["stdout"].replace(
+                        "trace=ISRLACMZ",
+                        "trace=ISRLCAMZ" if mutation == "order" else "trace=ISRLACXMZ",
+                    )
+                self.assertNotEqual(records[0]["stdout"], original[0]["stdout"])
+                with (
+                    patch("epic4_os.execute", side_effect=records),
+                    self.assertRaises(AssertionError),
+                ):
+                    epic4_os.check_finish(Path("unused.exe"))
 
     def test_missing_and_modified_kernel_rejected(self):
         with tempfile.TemporaryDirectory(prefix="epic4-dependency-") as directory:

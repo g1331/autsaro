@@ -53,7 +53,15 @@ static void check(bool condition) {
 static bool same_info(const Os_ActivationInfo *left, const Os_ActivationInfo *right) {
     unsigned i;
     bool same = (left->state == right->state) && (left->count == right->count) &&
-                (left->kernel_sequence == right->kernel_sequence);
+                (left->kernel_sequence == right->kernel_sequence) &&
+                (left->events == right->events) &&
+                (left->effective_priority == right->effective_priority) &&
+                (left->resource_count == right->resource_count);
+    for (i = 0u; i < OS_MAX_RESOURCES; ++i) {
+        if (left->resources[i] != right->resources[i]) {
+            same = false;
+        }
+    }
     for (i = 0u; i < 32u; ++i) {
         if (left->requests[i] != right->requests[i]) {
             same = false;
@@ -335,7 +343,7 @@ int main(int argc, char **argv) {
                              {3u, "H", task_h, 3u, 0u, OS_BASIC_TASK, 1u},
                              {4u, "E", task_e, 2u, 0u, OS_EXTENDED_TASK, 1u},
                              {5u, "M", monitor, 1u, 1u, OS_BASIC_TASK, 1u}};
-    const Os_TargetConfig config = {tasks, 6u, 262144u};
+    const Os_TargetConfig config = {tasks, 6u, 262144u, NULL, 0u};
     StatusType prepared;
     scenario = (argc == 2) ? argv[1] : "aab";
     configuration = tasks;

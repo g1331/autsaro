@@ -6,11 +6,15 @@ typedef uint8_t TaskType;
 typedef uint8_t TaskStateType;
 typedef TaskStateType *TaskStateRefType;
 typedef uint8_t AppModeType;
+typedef uint8_t ResourceType;
+typedef uint32_t EventMaskType;
+typedef EventMaskType *EventMaskRefType;
 #define E_OK 0u
 #define E_OS_ACCESS 1u
 #define E_OS_CALLEVEL 2u
 #define E_OS_ID 3u
 #define E_OS_LIMIT 4u
+#define E_OS_RESOURCE 6u
 #define E_OS_STATE 7u
 #define E_OS_VALUE 8u
 #define E_OS_ILLEGAL_ADDRESS 10u
@@ -40,9 +44,39 @@ StatusType GetTaskState(TaskType TaskID, TaskStateRefType State);
  */
 StatusType ActivateTask(TaskType TaskID);
 /** Complete the current activation. Success never returns to the application.
- * @return E_OS_CALLEVEL or E_OS_STATE on rejection; success enters the next task.
+ * @return E_OS_CALLEVEL, E_OS_RESOURCE or E_OS_STATE on rejection; success never returns.
  */
 StatusType TerminateTask(void);
+/** Complete this activation and accept a sequential successor atomically.
+ * @param TaskID Configured successor; self-chain does not consume extra capacity.
+ * @return E_OS_ID, E_OS_LIMIT, E_OS_RESOURCE or E_OS_CALLEVEL on rejection.
+ * Successful calls never return to the completed application frame.
+ */
+StatusType ChainTask(TaskType TaskID);
+/** Acquire a configured external resource using its static priority ceiling.
+ * @param ResID Resource accessible to this task.
+ * @return E_OK, E_OS_ID, E_OS_ACCESS or E_OS_CALLEVEL; no blocking acquisition.
+ */
+StatusType GetResource(ResourceType ResID);
+/** Release the last external resource acquired by this task.
+ * @param ResID Last owned resource, in LIFO order.
+ * @return E_OK, E_OS_ID, E_OS_NOFUNC or E_OS_CALLEVEL.
+ */
+StatusType ReleaseResource(ResourceType ResID);
+#define E_OS_NOFUNC 5u
+/** Set stored event bits of an active Extended task; Wait/Wake belongs to4.7.
+ * @param TaskID Extended task identifier.
+ * @param Mask Bits to publish.
+ * @return E_OK, E_OS_ID, E_OS_ACCESS, E_OS_STATE or E_OS_CALLEVEL.
+ */
+#define SetEvent Os_SetEvent
+StatusType Os_SetEvent(TaskType TaskID, EventMaskType Mask);
+/** Read the stored events of an active Extended task.
+ * @param TaskID Extended task identifier.
+ * @param Event Caller-owned non-null output; unchanged on rejection.
+ * @return E_OK, E_OS_ID, E_OS_ACCESS, E_OS_STATE, E_OS_ILLEGAL_ADDRESS or E_OS_CALLEVEL.
+ */
+StatusType GetEvent(TaskType TaskID, EventMaskRefType Event);
 void StartupHook(void);
 void ShutdownHook(StatusType Error);
 #endif

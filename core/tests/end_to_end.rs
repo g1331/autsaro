@@ -37,6 +37,27 @@ fn epic4_obligation_and_oracle_baseline() {
 
 #[cfg(windows)]
 #[test]
+fn epic4_finish_chain_atomicity() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let output = Command::new("python")
+        .arg(root.join("scripts/epic4_os.py"))
+        .args(["--suite", "finish"])
+        .current_dir(root)
+        .output()
+        .expect("run independent atomic finish/chain and native entry vectors");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).starts_with("epic4_finish_chain_atomicity PASS:")
+    );
+}
+
+#[cfg(windows)]
+#[test]
 fn epic4_activation_fifo() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let output = Command::new("python")

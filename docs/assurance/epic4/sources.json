@@ -148,6 +148,11 @@
       "path": "runtime/os/patches/0003-activation-ready-policy.patch",
       "sha256": "357b1a98a00d8bd197092e4199b710849d08d5684f9d0eabf4459c354c9f979b",
       "role": "production request ready policy and standard ISR-exit reschedule, applied only to copied fixed upstream"
+    },
+    {
+      "path": "runtime/os/patches/0004-windows-event-namespace.patch",
+      "sha256": "633529f96b0bb46cae34687cae8dd9bffda068b971f0dd22b8da9c5fdaa47bf1",
+      "role": "production Windows event namespace adapter, applied only to copied fixed upstream"
     }
   ],
   "research_material": [

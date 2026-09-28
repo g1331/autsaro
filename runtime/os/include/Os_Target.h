@@ -7,6 +7,12 @@
 #define OS_MAX_ACTIVATIONS 32u
 #define OS_BASIC_TASK 0u
 #define OS_EXTENDED_TASK 1u
+#define OS_MAX_RESOURCES 8u
+typedef struct {
+    ResourceType id;
+    uint8_t ceiling;
+    uint16_t task_access;
+} Os_ResourceConfig;
 typedef struct {
     TaskType id;
     const char *name;
@@ -22,11 +28,17 @@ typedef struct {
     /* Live FIFO order stamps; atomic rebasing preserves order, not lifetime IDs. */
     uint64_t requests[OS_MAX_ACTIVATIONS];
     uint64_t kernel_sequence;
+    EventMaskType events;
+    uint8_t effective_priority;
+    unsigned resource_count;
+    ResourceType resources[OS_MAX_RESOURCES];
 } Os_ActivationInfo;
 typedef struct {
     const Os_TaskConfig *tasks;
     size_t task_count;
     uint32_t host_stack_reserve;
+    const Os_ResourceConfig *resources;
+    size_t resource_count;
 } Os_TargetConfig;
 /** Prepare one process-local target before StartOS.
  * @param config Static configuration retained for the lifetime of the process.
@@ -54,5 +66,9 @@ void Os_TestBeforeActivationLock(void);
 void Os_TestAtActivationAdmission(unsigned point);
 void Os_TestBeforeClose(void);
 unsigned Os_TargetTestPending(TaskType id);
+#endif
+#ifdef OS_FINISH_TESTS
+void Os_TestObserve(void);
+void Os_TestFinishBoundary(unsigned point);
 #endif
 #endif

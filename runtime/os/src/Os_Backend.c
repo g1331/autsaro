@@ -15,6 +15,9 @@ typedef struct {
     unsigned count;
 } ActivationQueue;
 static ActivationQueue activations[OS_MAX_TASKS];
+static EventMaskType task_events[OS_MAX_TASKS];
+static unsigned resource_depth[OS_MAX_TASKS];
+static size_t owned_resources[OS_MAX_TASKS][OS_MAX_RESOURCES];
 static uint64_t request_sequence;
 typedef struct {
     uint64_t *slot;
@@ -109,12 +112,15 @@ static void rebase_orders(void) {
 static void append_activation(size_t index) {
     ActivationQueue *queue = &activations[index];
     unsigned tail = (queue->head + queue->count) % OS_MAX_ACTIVATIONS;
+    if (queue->count == 0u) {
+        task_events[index] = 0u;
+    }
     ++request_sequence;
     queue->requests[tail] = request_sequence;
     ++queue->count;
 }
 void Os_BackendObserveSwitch(void) {
-#ifdef OS_ACTIVATION_TESTS
+#if defined(OS_ACTIVATION_TESTS) || defined(OS_FINISH_TESTS)
     const Os_NativeStack *stack = Os_StackCurrent();
     if ((Os_TargetReady() != 0) && (stack != NULL) &&
         ((stack->role == 'T') || (stack->role == 'S'))) {
@@ -215,7 +221,7 @@ static DWORD WINAPI control(void *argument) {
     if (Os_StackRegister(argument == NULL ? 'C' : 'D')) {
         InterlockedExchange(&controller_healthy[index], 1);
     }
-    if (!SetEvent(controller_registered[index])) {
+    if (!Os_HostSetEvent(controller_registered[index])) {
         ExitProcess(E_OS_STATE);
     }
     if (controller_healthy[index] == 0) {
@@ -270,7 +276,7 @@ void Os_BackendStackFault(char failed_role) {
     if (controller_healthy[0] == 0 && controller_healthy[1] == 0) {
         Os_StackFatalExit();
     }
-    if (!SetEvent(controller_healthy[0] != 0 ? close_event : backup_event)) {
+    if (!Os_HostSetEvent((controller_healthy[0] != 0) ? close_event : backup_event)) {
         ExitProcess(E_OS_STACKFAULT);
     }
     Sleep(INFINITE);
@@ -295,7 +301,7 @@ void Os_BackendRequestShutdown(StatusType error) {
         if (controller_healthy[0] == 0 && controller_healthy[1] == 0) {
             report_and_exit();
         }
-        if (!SetEvent(controller_healthy[0] != 0 ? close_event : backup_event)) {
+        if (!Os_HostSetEvent((controller_healthy[0] != 0) ? close_event : backup_event)) {
             ExitProcess(E_OS_STATE);
         }
     }
@@ -341,7 +347,7 @@ static DWORD WINAPI native_task_start(void *argument) {
         Os_BackendShutdown(E_OS_STATE);
     }
     Os_StackRecordBuffer(start->buffer_top);
-    if (!SetEvent(start->registered) ||
+    if (!Os_HostSetEvent(start->registered) ||
         WaitForSingleObject(start->gate, INFINITE) != WAIT_OBJECT_0) {
         Os_BackendShutdown(E_OS_STATE);
     }
@@ -375,7 +381,7 @@ HANDLE Os_PortTaskThread(TaskFunction_t code, void *argument, const StackType_t 
         Os_BackendShutdown(E_OS_STATE);
     }
     Os_StackObserve(thread, &context);
-    if (!SetEvent(start->gate)) {
+    if (!Os_HostSetEvent(start->gate)) {
         Os_BackendShutdown(E_OS_STATE);
     }
     return thread;
@@ -583,11 +589,25 @@ StatusType Os_BackendActivate(TaskType id) {
     Os_BackendGuardService();
     return E_OK;
 }
-StatusType Os_BackendFinish(void) {
+static size_t current_task_index(void) {
+    const Os_NativeStack *stack = Os_StackCurrent();
+    size_t index;
+    if ((stack == NULL) || (stack->role != 'T') || (Os_TargetReady() == 0)) {
+        return OS_MAX_TASKS;
+    }
+    for (index = 0u; index < Os_Config->task_count; ++index) {
+        if (handles[index] == xTaskGetCurrentTaskHandle()) {
+            return index;
+        }
+    }
+    return OS_MAX_TASKS;
+}
+static StatusType complete_activation(TaskType id, int chain) {
     const Os_NativeStack *stack = Os_StackCurrent();
     size_t index;
     TaskHandle_t current;
     ActivationQueue *queue;
+    size_t target = OS_MAX_TASKS;
     Os_BackendGuardService();
     if ((Os_TargetReady() == 0) || (stack == NULL) || (stack->role != 'T')) {
         return E_OS_CALLEVEL;
@@ -602,16 +622,58 @@ StatusType Os_BackendFinish(void) {
         return E_OS_CALLEVEL;
     }
     queue = &activations[index];
+    if (chain != 0) {
+        target = task_index(id);
+        if (target == OS_MAX_TASKS) {
+            return E_OS_ID;
+        }
+    }
     taskENTER_CRITICAL();
     Os_BackendGuardService();
+    if (resource_depth[index] != 0u) {
+        taskEXIT_CRITICAL();
+        return E_OS_RESOURCE;
+    }
     if (queue->count == 0u) {
         taskEXIT_CRITICAL();
         return E_OS_STATE;
     }
+    if ((chain != 0) && (target != index) &&
+        (activations[target].count >= Os_Config->tasks[target].activation_limit)) {
+        taskEXIT_CRITICAL();
+        return E_OS_LIMIT;
+    }
+#ifdef OS_FINISH_TESTS
+    Os_TestFinishBoundary(0u);
+#endif
+    if (InterlockedCompareExchange(&activation_admission, 1, 0) != 0) {
+        Os_BackendShutdown(E_OS_STATE);
+    }
+    if ((chain != 0) && (request_sequence == UINT64_MAX)) {
+        rebase_orders();
+    }
+    if ((chain != 0) && (target != index)) {
+        configASSERT((activations[target].count != 0u) ||
+                     (eTaskGetState(handles[target]) == eSuspended));
+    }
     queue->requests[queue->head] = 0u;
     queue->head = (queue->head + 1u) % OS_MAX_ACTIVATIONS;
     --queue->count;
+    if (chain != 0) {
+        append_activation(target);
+        if (target != index) {
+            vTaskOsSetReadySequence(handles[target],
+                                    activations[target].requests[activations[target].head]);
+            if (activations[target].count == 1u) {
+                vTaskResume(handles[target]);
+            }
+        }
+    }
     vTaskOsSetReadySequence(current, (queue->count == 0u) ? 0u : queue->requests[queue->head]);
+#ifdef OS_FINISH_TESTS
+    Os_TestFinishBoundary(1u);
+#endif
+    InterlockedAnd(&activation_admission, ~1L);
     if (queue->count == 0u) {
         vTaskSuspend(NULL);
     } else {
@@ -620,6 +682,84 @@ StatusType Os_BackendFinish(void) {
     taskEXIT_CRITICAL();
     Os_BackendGuardService();
     longjmp(restart_frames[index], 1);
+}
+StatusType Os_BackendFinish(void) { return complete_activation(0u, 0); }
+StatusType Os_BackendChain(TaskType id) { return complete_activation(id, 1); }
+StatusType Os_BackendResource(ResourceType id, int acquire) {
+    static UBaseType_t saved_priorities[OS_MAX_TASKS][OS_MAX_RESOURCES];
+    static unsigned resource_owner[OS_MAX_RESOURCES];
+    size_t task;
+    size_t resource;
+    unsigned depth;
+    StatusType status = E_OK;
+    Os_BackendGuardService();
+    task = current_task_index();
+    if (task == OS_MAX_TASKS) {
+        return E_OS_CALLEVEL;
+    }
+    for (resource = 0u; resource < Os_Config->resource_count; ++resource) {
+        if (Os_Config->resources[resource].id == id) {
+            break;
+        }
+    }
+    if (resource == Os_Config->resource_count) {
+        return E_OS_ID;
+    }
+    taskENTER_CRITICAL();
+    Os_BackendGuardService();
+    depth = resource_depth[task];
+    if (acquire != 0) {
+        const Os_ResourceConfig *config = &Os_Config->resources[resource];
+        if ((depth >= OS_MAX_RESOURCES) || (resource_owner[resource] != 0u) ||
+            ((config->task_access & (1u << Os_Config->tasks[task].id)) == 0u) ||
+            (Os_Config->tasks[task].priority > config->ceiling)) {
+            status = E_OS_ACCESS;
+        } else {
+            saved_priorities[task][depth] = uxTaskPriorityGet(handles[task]);
+            owned_resources[task][depth] = resource;
+            resource_depth[task] = depth + 1u;
+            resource_owner[resource] = (unsigned)task + 1u;
+            if (config->ceiling > saved_priorities[task][depth]) {
+                vTaskPrioritySet(handles[task], config->ceiling);
+            }
+        }
+    } else if ((depth == 0u) || (depth > OS_MAX_RESOURCES) ||
+               (owned_resources[task][depth - 1u] != resource) ||
+               (resource_owner[resource] != (unsigned)task + 1u)) {
+        status = E_OS_NOFUNC;
+    } else {
+        resource_depth[task] = depth - 1u;
+        resource_owner[resource] = 0u;
+        vTaskPrioritySet(handles[task], saved_priorities[task][depth - 1u]);
+    }
+    taskEXIT_CRITICAL();
+    Os_BackendGuardService();
+    return status;
+}
+StatusType Os_BackendEvent(TaskType id, EventMaskType mask, EventMaskRefType output) {
+    size_t index;
+    StatusType status = E_OK;
+    if (!activation_context()) {
+        return E_OS_CALLEVEL;
+    }
+    index = task_index(id);
+    if (index == OS_MAX_TASKS) {
+        return E_OS_ID;
+    }
+    taskENTER_CRITICAL();
+    Os_BackendGuardService();
+    if (Os_Config->tasks[index].kind != OS_EXTENDED_TASK) {
+        status = E_OS_ACCESS;
+    } else if (activations[index].count == 0u) {
+        status = E_OS_STATE;
+    } else if (output != NULL) {
+        *output = task_events[index];
+    } else {
+        task_events[index] |= mask;
+    }
+    taskEXIT_CRITICAL();
+    Os_BackendGuardService();
+    return status;
 }
 StatusType Os_BackendInspect(TaskType id, Os_ActivationInfo *info) {
     size_t index;
@@ -645,6 +785,12 @@ StatusType Os_BackendInspect(TaskType id, Os_ActivationInfo *info) {
             activations[index].requests[(activations[index].head + j) % OS_MAX_ACTIVATIONS];
     }
     snapshot.kernel_sequence = ullTaskOsReadySequence(handles[index]);
+    snapshot.events = task_events[index];
+    snapshot.effective_priority = (uint8_t)uxTaskPriorityGet(handles[index]);
+    snapshot.resource_count = resource_depth[index];
+    for (j = 0u; j < snapshot.resource_count; ++j) {
+        snapshot.resources[j] = Os_Config->resources[owned_resources[index][j]].id;
+    }
     *info = snapshot;
     taskEXIT_CRITICAL();
     Os_BackendGuardService();

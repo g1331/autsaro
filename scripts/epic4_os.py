@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -139,6 +140,7 @@ def build(directory: Path, harness: str = "lifecycle.c") -> tuple[Path, dict]:
         str(TARGET / "src/Os.c"),
         str(TARGET / "src/Os_Backend.c"),
         str(TARGET / "src/Os_Stack.c"),
+        str(TARGET / "src/Os_HostEvent.c"),
         str(TARGET / "tests" / harness),
         str(copied / "tasks.c"),
         str(copied / "list.c"),
@@ -152,6 +154,8 @@ def build(directory: Path, harness: str = "lifecycle.c") -> tuple[Path, dict]:
         command.insert(1, "-DOS_STACK_TESTS")
     if harness == "activation.c":
         command.insert(1, "-DOS_ACTIVATION_TESTS")
+    if harness == "finish_chain.c":
+        command.insert(1, "-DOS_FINISH_TESTS")
     compiled = subprocess.run(command, capture_output=True, text=True, check=False)
     if compiled.returncode:
         raise RuntimeError(f"OS C99 build failed:\n{compiled.stdout}{compiled.stderr}")
@@ -287,6 +291,61 @@ def check_activation(binary: Path) -> list[dict]:
             close,
         )
         observations.append(close)
+    return observations
+
+
+def check_finish(binary: Path) -> list[dict]:
+    observations = []
+    cases = [
+        ("terminate-pending", "ISRLACMZ", (2, 0, 0, 0, 0), 0, 0),
+        ("self", "ISRLABCMZ", (2, 1, 0, 0, 0), 0, 0),
+        ("self-pending", "ISRLACBFMZ", (3, 1, 0, 0, 0), 0, 0),
+        ("high", "ISRLAHMZ", (1, 0, 1, 0, 0), 0, 0),
+        ("same", "ISRLABMZ", (1, 1, 0, 0, 0), 0, 0),
+        ("same-fifo", "ISRLAHBbMZ", (1, 2, 1, 0, 0), 0, 0),
+        ("low", "ISRLACDMZ", (2, 0, 0, 1, 0), 0, 0),
+        ("invalid", "ISRLABMZ", (1, 1, 0, 0, 0), 1, 0),
+        ("limit", "ISRLAEMZ", (1, 0, 0, 0, 1), 1, 0),
+        ("resource", "ISRLAMZ", (1, 0, 0, 0, 0), 2, 0),
+        ("extended-self", "ISRLEeMZ", (0, 0, 0, 0, 2), 0, 0),
+        ("extended-target", "ISRLEAeMZ", (1, 0, 0, 0, 2), 0, 0),
+        ("isr", "ISRLAJaCMZ", (2, 0, 0, 0, 0), 2, 0),
+        ("boundary-pre", "ISRLAJBCMZ", (2, 1, 0, 0, 0), 2, 0),
+        ("boundary-post", "ISRLAJBCMZ", (2, 1, 0, 0, 0), 2, 0),
+        ("missing-end", "ISRLAZ", (1, 0, 0, 0, 0), 0, 7),
+    ]
+    for scenario, expected, counts, rejected, code in cases:
+        result = execute(binary, scenario)
+        summary = re.search(
+            r"finish a=(\d+) b=(\d+) h=(\d+) d=(\d+) e=(\d+) observer=(\d+) rejected=(\d+) error=(\d+)",
+            result["stdout"],
+        )
+        require(
+            result["exit"] == code
+            and f"trace={expected} " in result["stdout"]
+            and summary is not None,
+            result,
+        )
+        require(tuple(map(int, summary.groups()[:5])) == counts, result)
+        require(
+            int(summary[6]) > 0
+            and int(summary[7]) == rejected
+            and int(summary[8]) == code,
+            result,
+        )
+        result["independent_expected_trace"] = expected
+        observations.append(result)
+    for scenario, code in [
+        ("resource-null", 8),
+        ("resource-capacity", 8),
+        ("resource-access", 8),
+        ("resource-duplicate", 3),
+        ("resource-ceiling-low", 8),
+        ("resource-ceiling-high", 8),
+    ]:
+        result = execute(binary, scenario)
+        require(result["exit"] == 0 and result["stdout"] == f"prepare={code}", result)
+        observations.append(result)
     return observations
 
 
@@ -480,7 +539,9 @@ def check_stack(binary: Path) -> list[dict]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--suite", choices=["lifecycle", "stack", "activation"], default="lifecycle"
+        "--suite",
+        choices=["lifecycle", "stack", "activation", "finish"],
+        default="lifecycle",
     )
     parser.add_argument("--evidence", type=Path)
     args = parser.parse_args()
@@ -489,11 +550,13 @@ def main() -> None:
             "lifecycle": "lifecycle.c",
             "stack": "native_stack.c",
             "activation": "activation.c",
+            "finish": "finish_chain.c",
         }
         checks = {
             "lifecycle": check_lifecycle,
             "stack": check_stack,
             "activation": check_activation,
+            "finish": check_finish,
         }
         binary, evidence = build(Path(temporary), harnesses[args.suite])
         evidence["observations"] = checks[args.suite](binary)
@@ -504,6 +567,7 @@ def main() -> None:
             "lifecycle": "epic4_backend_lifecycle",
             "stack": "epic4_native_stack_fault_shutdown",
             "activation": "epic4_activation_fifo",
+            "finish": "epic4_finish_chain_atomicity",
         }
         name = names[args.suite]
         print(f"{name} PASS: {len(evidence['observations'])} native vectors")

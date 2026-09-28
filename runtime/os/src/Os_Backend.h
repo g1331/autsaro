@@ -3,7 +3,7 @@
 #include "Os_Target.h"
 #include "FreeRTOS.h"
 #include "task.h"
-#include <windows.h>
+#include "Os_Windows.h"
 #include "Os_Stack.h"
 void Os_BackendStart(AppModeType mode);
 void Os_BackendShutdown(StatusType error);
@@ -12,6 +12,9 @@ void Os_BackendGuardService(void);
 StatusType Os_BackendState(TaskType id, TaskStateRefType state);
 StatusType Os_BackendActivate(TaskType id);
 StatusType Os_BackendFinish(void);
+StatusType Os_BackendChain(TaskType id);
+StatusType Os_BackendResource(ResourceType id, int acquire);
+StatusType Os_BackendEvent(TaskType id, EventMaskType mask, EventMaskRefType output);
 StatusType Os_BackendInspect(TaskType id, Os_ActivationInfo *info);
 void Os_BackendObserveSwitch(void);
 int Os_BackendTakeIsrReschedule(void);

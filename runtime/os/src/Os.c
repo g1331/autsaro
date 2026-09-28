@@ -29,6 +29,45 @@ StatusType Os_TargetPrepare(const Os_TargetConfig *config) {
             }
         }
     }
+    if ((config->resource_count > OS_MAX_RESOURCES) ||
+        ((config->resource_count != 0u) && (config->resources == NULL))) {
+        return E_OS_VALUE;
+    }
+    for (i = 0u; i < config->resource_count; ++i) {
+        const Os_ResourceConfig *resource = &config->resources[i];
+        uint32_t task_mask = 0u;
+        uint8_t highest_access = 0u;
+        if ((resource->id >= OS_MAX_RESOURCES) || (resource->ceiling == 0u) ||
+            (resource->ceiling > OS_MAX_PRIORITY)) {
+            return E_OS_VALUE;
+        }
+        for (j = 0u; j < config->task_count; ++j) {
+            task_mask |= 1u << config->tasks[j].id;
+            if (((resource->task_access & (1u << config->tasks[j].id)) != 0u) &&
+                (config->tasks[j].priority > highest_access)) {
+                highest_access = config->tasks[j].priority;
+            }
+        }
+        if ((resource->task_access == 0u) ||
+            (((uint32_t)resource->task_access & ~task_mask) != 0u)) {
+            return E_OS_VALUE;
+        }
+        if (resource->ceiling < highest_access) {
+            return E_OS_VALUE;
+        }
+        for (j = 0u; j < config->task_count; ++j) {
+            const Os_TaskConfig *task = &config->tasks[j];
+            if (((resource->task_access & (1u << task->id)) == 0u) &&
+                (task->priority > highest_access) && (task->priority <= resource->ceiling)) {
+                return E_OS_VALUE;
+            }
+        }
+        for (j = 0u; j < i; ++j) {
+            if (resource->id == config->resources[j].id) {
+                return E_OS_ID;
+            }
+        }
+    }
     Os_Config = config;
     return E_OK;
 }
@@ -54,6 +93,34 @@ StatusType TerminateTask(void) {
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendFinish();
+}
+StatusType ChainTask(TaskType TaskID) {
+    Os_StackCheck();
+    Os_BackendGuardService();
+    return Os_BackendChain(TaskID);
+}
+StatusType GetResource(ResourceType ResID) {
+    Os_StackCheck();
+    Os_BackendGuardService();
+    return Os_BackendResource(ResID, 1);
+}
+StatusType ReleaseResource(ResourceType ResID) {
+    Os_StackCheck();
+    Os_BackendGuardService();
+    return Os_BackendResource(ResID, 0);
+}
+StatusType SetEvent(TaskType TaskID, EventMaskType Mask) {
+    Os_StackCheck();
+    Os_BackendGuardService();
+    return Os_BackendEvent(TaskID, Mask, NULL);
+}
+StatusType GetEvent(TaskType TaskID, EventMaskRefType Event) {
+    Os_StackCheck();
+    Os_BackendGuardService();
+    if (Event == NULL) {
+        return E_OS_ILLEGAL_ADDRESS;
+    }
+    return Os_BackendEvent(TaskID, 0u, Event);
 }
 StatusType Os_TargetInspectActivation(TaskType id, Os_ActivationInfo *info) {
     Os_StackCheck();
