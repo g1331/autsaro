@@ -1,0 +1,14 @@
+{
+  "tag": "V11.3.1",
+  "commit": "054e14f3397023aa83813a65aa065fc4597d481b",
+  "archive_sha256": "dd832f699e6ebee00366d7c737e259860d9d1fd5f2c2311c90dff16e8cfbcf61",
+  "LICENSE.md": "508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1",
+  "tasks.c": "ae8bcc9dd0b30d39bf37eb36f1ef3067d086906b2f92ca2aea1acc0f0ad31645",
+  "queue.c": "31e5ce0890906b7eaac466007c8810fbfe248d22f667a3c620c3f18e9fc0fcc3",
+  "portable/MSVC-MingW/port.c": "003bfa8d6b441a628bbf3a0bd93ca4f5e3158e3aba50e726e64b16f84409e296",
+  "portable/MSVC-MingW/portmacro.h": "c1fc8b71ab93902e6fb0699ffc25af756fe4316fe6235c8705b4f68689c721a2",
+  "source_url": "https://codeload.github.com/FreeRTOS/FreeRTOS-Kernel/tar.gz/054e14f3397023aa83813a65aa065fc4597d481b",
+  "osek_url": "https://www.nxp.com/docs/en/application-note-software/685_2_os223.pdf",
+  "osek_sha256": "2ec77d3c4259797f4d0190f938131b641d415d8e0a85ce40a72e4201a9114746",
+  "compiler": "gcc 16.1.0 (MSYS2 Rev5), x86_64-w64-mingw32"
+}

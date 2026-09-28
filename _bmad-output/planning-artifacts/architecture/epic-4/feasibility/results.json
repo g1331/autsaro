@@ -1,0 +1,700 @@
+{
+  "harness_sha256": "963246f9cf410f46235c5699f615a29591f108ed287b9110677ff6037fa36693",
+  "policy_patch_sha256": "d566ce7572eaadbbd8f9701ad21e4636fee39806f1d69947df885f70a72dff99",
+  "source": {
+    "tag": "V11.3.1",
+    "commit": "054e14f3397023aa83813a65aa065fc4597d481b",
+    "archive_sha256": "dd832f699e6ebee00366d7c737e259860d9d1fd5f2c2311c90dff16e8cfbcf61",
+    "LICENSE.md": "508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1",
+    "tasks.c": "ae8bcc9dd0b30d39bf37eb36f1ef3067d086906b2f92ca2aea1acc0f0ad31645",
+    "queue.c": "31e5ce0890906b7eaac466007c8810fbfe248d22f667a3c620c3f18e9fc0fcc3",
+    "portable/MSVC-MingW/port.c": "003bfa8d6b441a628bbf3a0bd93ca4f5e3158e3aba50e726e64b16f84409e296",
+    "portable/MSVC-MingW/portmacro.h": "c1fc8b71ab93902e6fb0699ffc25af756fe4316fe6235c8705b4f68689c721a2",
+    "source_url": "https://codeload.github.com/FreeRTOS/FreeRTOS-Kernel/tar.gz/054e14f3397023aa83813a65aa065fc4597d481b",
+    "osek_url": "https://www.nxp.com/docs/en/application-note-software/685_2_os223.pdf",
+    "osek_sha256": "2ec77d3c4259797f4d0190f938131b641d415d8e0a85ce40a72e4201a9114746",
+    "compiler": "gcc 16.1.0 (MSYS2 Rev5), x86_64-w64-mingw32"
+  },
+  "compiler": "gcc (Rev5, Built by MSYS2 project) 16.1.0",
+  "compiler_target": "x86_64-w64-mingw32",
+  "repeat": 3,
+  "port_priority_normalized": true,
+  "builds": [
+    {
+      "variant": "baseline",
+      "exit": 0,
+      "stderr": "",
+      "flags": "-std=c99 -O1 -Wall -Wextra -Werror; static allocation; no time slicing; no timers/mutexes; NORMAL process priority"
+    },
+    {
+      "variant": "policy",
+      "exit": 0,
+      "stderr": "",
+      "flags": "-std=c99 -O1 -Wall -Wextra -Werror; static allocation; no time slicing; no timers/mutexes; NORMAL process priority"
+    }
+  ],
+  "runs": [
+    {
+      "variant": "baseline",
+      "repeat": 1,
+      "mode": 1,
+      "exit": 0,
+      "stdout": "mode=1 trace=AHBa entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 1,
+      "mode": 2,
+      "exit": 0,
+      "stdout": "mode=2 trace=AHaB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.016,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 1,
+      "mode": 3,
+      "exit": 0,
+      "stdout": "mode=3 trace=AaB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.016,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 1,
+      "mode": 4,
+      "exit": 0,
+      "stdout": "mode=4 trace=10B entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.015,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 1,
+      "mode": 5,
+      "exit": 0,
+      "stdout": "mode=5 trace=AaHBz entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.016,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 1,
+      "mode": 6,
+      "exit": 0,
+      "stdout": "mode=6 trace=ABAA entries=3 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 1,
+      "mode": 7,
+      "exit": 99,
+      "stdout": "",
+      "stderr": "ASSERT <kernel>\\tasks.c:3317",
+      "seconds": 0.015,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 1,
+      "mode": 8,
+      "exit": 0,
+      "stdout": "mode=8 trace=OB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.016,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 1,
+      "mode": 9,
+      "exit": 0,
+      "stdout": "mode=9 trace=AaHBz entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 2,
+      "mode": 1,
+      "exit": 0,
+      "stdout": "mode=1 trace=AHBa entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.016,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 2,
+      "mode": 2,
+      "exit": 0,
+      "stdout": "mode=2 trace=AHaB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 2,
+      "mode": 3,
+      "exit": 0,
+      "stdout": "mode=3 trace=AaB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.015,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 2,
+      "mode": 4,
+      "exit": 0,
+      "stdout": "mode=4 trace=10B entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 2,
+      "mode": 5,
+      "exit": 0,
+      "stdout": "mode=5 trace=AaHBz entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.016,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 2,
+      "mode": 6,
+      "exit": 0,
+      "stdout": "mode=6 trace=ABAA entries=3 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 2,
+      "mode": 7,
+      "exit": 99,
+      "stdout": "",
+      "stderr": "ASSERT <kernel>\\tasks.c:3317",
+      "seconds": 0.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 2,
+      "mode": 8,
+      "exit": 0,
+      "stdout": "mode=8 trace=OB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.016,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 2,
+      "mode": 9,
+      "exit": 0,
+      "stdout": "mode=9 trace=AaHBz entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 3,
+      "mode": 1,
+      "exit": 0,
+      "stdout": "mode=1 trace=AHBa entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 3,
+      "mode": 2,
+      "exit": 0,
+      "stdout": "mode=2 trace=AHaB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.015,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 3,
+      "mode": 3,
+      "exit": 0,
+      "stdout": "mode=3 trace=AaB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 3,
+      "mode": 4,
+      "exit": 0,
+      "stdout": "mode=4 trace=10B entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.016,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 3,
+      "mode": 5,
+      "exit": 0,
+      "stdout": "mode=5 trace=AaHBz entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 3,
+      "mode": 6,
+      "exit": 0,
+      "stdout": "mode=6 trace=ABAA entries=3 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.015,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 3,
+      "mode": 7,
+      "exit": 99,
+      "stdout": "",
+      "stderr": "ASSERT <kernel>\\tasks.c:3317",
+      "seconds": 0.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 3,
+      "mode": 8,
+      "exit": 0,
+      "stdout": "mode=8 trace=OB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "baseline",
+      "repeat": 3,
+      "mode": 9,
+      "exit": 0,
+      "stdout": "mode=9 trace=AaHBz entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.016,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 1,
+      "mode": 1,
+      "exit": 0,
+      "stdout": "mode=1 trace=AHaB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.015,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 1,
+      "mode": 2,
+      "exit": 0,
+      "stdout": "mode=2 trace=AHaB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.016,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 1,
+      "mode": 3,
+      "exit": 0,
+      "stdout": "mode=3 trace=AaB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 1,
+      "mode": 4,
+      "exit": 0,
+      "stdout": "mode=4 trace=10B entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.016,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 1,
+      "mode": 5,
+      "exit": 0,
+      "stdout": "mode=5 trace=AaHzB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 1,
+      "mode": 6,
+      "exit": 0,
+      "stdout": "mode=6 trace=ABAA entries=3 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.015,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 1,
+      "mode": 7,
+      "exit": 99,
+      "stdout": "",
+      "stderr": "ASSERT <policy-kernel>\\tasks.c:3328",
+      "seconds": 0.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 1,
+      "mode": 8,
+      "exit": 0,
+      "stdout": "mode=8 trace=OB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 1,
+      "mode": 9,
+      "exit": 0,
+      "stdout": "mode=9 trace=AaHzB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.016,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 1,
+      "mode": 10,
+      "exit": 0,
+      "stdout": "mode=10 trace=ABbC entries=2 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 1,
+      "mode": 11,
+      "exit": 0,
+      "stdout": "mode=11 trace=ABA entries=2 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.015,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 1,
+      "mode": 13,
+      "exit": 0,
+      "stdout": "mode=13 trace=11B entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 1,
+      "mode": 14,
+      "exit": 0,
+      "stdout": "mode=14 trace=WBEeb entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.016,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 2,
+      "mode": 1,
+      "exit": 0,
+      "stdout": "mode=1 trace=AHaB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 2,
+      "mode": 2,
+      "exit": 0,
+      "stdout": "mode=2 trace=AHaB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.016,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 2,
+      "mode": 3,
+      "exit": 0,
+      "stdout": "mode=3 trace=AaB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.015,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 2,
+      "mode": 4,
+      "exit": 0,
+      "stdout": "mode=4 trace=10B entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.016,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 2,
+      "mode": 5,
+      "exit": 0,
+      "stdout": "mode=5 trace=AaHzB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 2,
+      "mode": 6,
+      "exit": 0,
+      "stdout": "mode=6 trace=ABAA entries=3 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.016,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 2,
+      "mode": 7,
+      "exit": 99,
+      "stdout": "",
+      "stderr": "ASSERT <policy-kernel>\\tasks.c:3328",
+      "seconds": 0.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 2,
+      "mode": 8,
+      "exit": 0,
+      "stdout": "mode=8 trace=OB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 2,
+      "mode": 9,
+      "exit": 0,
+      "stdout": "mode=9 trace=AaHzB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.015,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 2,
+      "mode": 10,
+      "exit": 0,
+      "stdout": "mode=10 trace=ABbC entries=2 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 2,
+      "mode": 11,
+      "exit": 0,
+      "stdout": "mode=11 trace=ABA entries=2 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.016,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 2,
+      "mode": 13,
+      "exit": 0,
+      "stdout": "mode=13 trace=11B entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 2,
+      "mode": 14,
+      "exit": 0,
+      "stdout": "mode=14 trace=WBEeb entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 3,
+      "mode": 1,
+      "exit": 0,
+      "stdout": "mode=1 trace=AHaB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.015,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 3,
+      "mode": 2,
+      "exit": 0,
+      "stdout": "mode=2 trace=AHaB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.016,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 3,
+      "mode": 3,
+      "exit": 0,
+      "stdout": "mode=3 trace=AaB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 3,
+      "mode": 4,
+      "exit": 0,
+      "stdout": "mode=4 trace=10B entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 3,
+      "mode": 5,
+      "exit": 0,
+      "stdout": "mode=5 trace=AaHzB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.016,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 3,
+      "mode": 6,
+      "exit": 0,
+      "stdout": "mode=6 trace=ABAA entries=3 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 3,
+      "mode": 7,
+      "exit": 99,
+      "stdout": "",
+      "stderr": "ASSERT <policy-kernel>\\tasks.c:3328",
+      "seconds": 0.015,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 3,
+      "mode": 8,
+      "exit": 0,
+      "stdout": "mode=8 trace=OB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 3,
+      "mode": 9,
+      "exit": 0,
+      "stdout": "mode=9 trace=AaHzB entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 3,
+      "mode": 10,
+      "exit": 0,
+      "stdout": "mode=10 trace=ABbC entries=2 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.016,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 3,
+      "mode": 11,
+      "exit": 0,
+      "stdout": "mode=11 trace=ABA entries=2 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 3,
+      "mode": 13,
+      "exit": 0,
+      "stdout": "mode=13 trace=11B entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.0,
+      "expected_observation": true
+    },
+    {
+      "variant": "policy",
+      "repeat": 3,
+      "mode": 14,
+      "exit": 0,
+      "stdout": "mode=14 trace=WBEeb entries=0 stack_outside=1",
+      "stderr": "",
+      "seconds": 1.016,
+      "expected_observation": true
+    }
+  ],
+  "scope": "research only; not SC1 or production integration",
+  "all_expected_observations": true
+}

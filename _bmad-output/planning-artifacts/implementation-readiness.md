@@ -1,13 +1,30 @@
-# 2026-09-28 产品方向调整后的实施就绪检查
+# 2026-09-28 Epic 4 实施就绪判断
 
-**分范围结果：Epic 1 的固定主机 CAN 切片已收尾；Epic 2 及 Story 2.1 仍在 backlog 并暂缓排期；Epic 3 的受限 Windows 主机交接为 PASS，可以按 Story 3.1→3.2→3.3 开始开发；完整参考 ECU 的 Epic 4–6 仍为 FAIL。**Epic 1 `done` 仅对应其有界任务，不升级 `HOST-CAN-01` 的 `documented_behavior`；Story 文件的 `ready-for-dev` 也不代表能力档案已通过。
+**Epic 4 架构已收口；故事级实施就绪为 NOT READY，Epic 4 保持 backlog。**这两个结论分别回答“设计能否指导实施”和“是否已有可直接派发的故事”。本轮完成架构与规划，没有开始功能开发、引入生产 OS 依赖或升级能力声明。
 
-PRD R1–R7 与 Epic 1、Epic 2 的旧主机结果和拒绝场景可追踪。Story 1.1 的固定主机切片已完成，验收和剩余标准义务记录于对应 story；完成该 story 不代表完整 Can/CanIf 标准支持。Epic 3 经重新限定为当前主机剖面的输入快照、可重建工程与离线双 ECU/诊断复验，已有多文件 ARXML 保存、独立 C99 构建、双 ECU 和诊断测试基础；源码及交接说明明确显示生成目录尚未包含 ARXML 来源。PRD R6/R7、架构交接约束、Epic 退出条件及三份 story 的正反向验收共同界定了可实施增量，不依赖 OS、SWC 或板级选择。其开发 PASS 是任务就绪判断，Epic 完成仍须由非实现者实际复验并按证据门审查。
+## 当前事实
 
-2026-09-28 在当前 Windows 环境以 README 规定的本机 vcpkg/libclang 路径运行 `cargo test --manifest-path core/Cargo.toml`：3 个单元测试和 53 个端到端测试通过，包含移动后的单 ECU 独立构建运行、双 ECU 金向量、诊断及输入保存/拒绝测试。首次未设置当前终端的 vcpkg 路径时 `libxml` 构建脚本找不到已安装库，未进入测试；补齐仅限该测试进程的路径后重跑通过。此结果验证现有主机基线，不是 Story 3.1–3.3 新功能已实现，也不包含原生 GUI 验收。
+HEAD `817063e` 与 sprint 一致：Epic 1/3 完成，Epic 2/Story 2.1 暂缓，Epic 4–6 backlog。现有 `runtime/src/Rte.c` 仍是固定 Com wrapper，`Os.c` 仍为 Os_Advance 轮询；新架构是新增目标设计，不能据其声明源码已支持。能力档案七项 documented_behavior 不变。本轮未重跑 Epic 3 构建、行为或 GUI 验收。
 
-PRD FR-1–FR-15 的完整参考 ECU 产品链由 Epic 4–6 继续承载：标准参考输入、应用/RTE/OS 主机运行、单网络完整主机行为和指定 MCU 复验。它们尚无可实施 stories。PM 已提出一组最小参考配置，并推荐 FRDM-A-S32K344 作为硬件评估候选；仍需按 R24-11 核定合法完整参考输入与产物责任、诊断/NM 义务和配置，按 OS 规范声明等级并比较可交付实现路径，再实际核对 OS/RTD/工具链版本及许可、首个板级目标和真实对端。NXP RTD 所标的规范版次差异不能静默忽略，故 Epic 4–6 保持 FAIL。当前 `Os_Advance` 既不是 FreeRTOS 接入，也不是 AUTOSAR OS 实现。
+## 架构与实施关口
 
-Epic 2 的双 DTC 用户结果仍明确，但准确 Dem/Dcm/NvM 条款、存储格式及两个监测源的配置闭包尚待定位；不能将未核实的标准语义当已确定实现。Story 2.1 保留 backlog，但不作为新产品路线的默认下一项；诊断支持矩阵核定后决定独立保留、并入 Epic 5 或取消未开始的增量。若经排期复核启动，`bmad-build` 应先从规范和现有配置调查这些缺口；无法在该 story 内安全收口时，再使用 `bmad-spec` 或修订规划工件。该旧任务不依赖新参考 ECU 的板级目标，也不能代替其输入/RTE/OS/NM 成果。此关注项不生成独立的纯审计任务。
+权威规则见 [spine](architecture/epic-4/ARCHITECTURE-SPINE.md)，具体边界见 [集成契约](architecture/epic-4/INTEGRATION-CONTRACT.md)，官方依据见 [规范矩阵](architecture/epic-4/R24-11-CONTRACT.md)。
 
-本次就绪判断区分产品排序与任务状态：Story 2.1 仍在 backlog，未开始实施；Epic 3 的三个 story 可依次进入开发，sprint 中由脚本标为 `ready-for-dev`，Epic 本身保持 backlog 直到实际开工。Epic 4–6 只作为后续产品成果，不得自动派发开发。下一实施动作是按 BMad Build 开始 Story 3.1，并在完成三项 story 后核对整个 Epic 3 的交接和能力边界；规划动作则并行继续关闭 Epic 4–6 的 PRD 参考配置、规范适用、OS 与目标决策门，再拆 stories。历史产品地图只用于追溯，当前方向以 BMad 工件为准。
+| 关口 | 架构结果 | 实施证据及归属 |
+| --- | --- | --- |
+| G4-1 输入角色/来源 | PASS：原创单 ECU Extract、SWC/类型、实际 BSW 描述/定义、ECUC 值与依赖闭包固定 | W0 生成原创正反输入、验证 XSD/语义、逐项条款与来源清单；当前无新 fixture 验收 |
+| G4-2 SWC/RTE/DID | PASS：显式 uint32 S/R、四字节同步 C/S、签名/返回/快照/端序固定 | W2 契约生成与闭包，W4 独立 CAN/UDS 向量 |
+| G4-3 OS 路线/等级 | PASS：已确认固定 FreeRTOS＋自有语义＋有限单核扩展，SC1/Extended Status 目标 | W1 核心 FIFO、原子转换、事件/资源等；W5 全部适用 SC1 容量/Hook/ARTI/错误与等级出口 |
+| G4-4 Windows/交付 | PASS：固定内核版本/摘要、MIT、原生 Windows x64/GCC、真实线程栈策略与停止条件 | W1 先证实真实栈捕获/关闭和受控端口；W5 完整许可、源码/补丁/工具档案和新目录独立复验 |
+| G4-5 时间/共享状态 | PASS：逐毫秒请求/确认、HostBatchV1、单 Task_Ecu、固定同刻顺序、容量和故障固定 | W1 受控 tick；W3 生成集成；W4 输入/超时/确认/应用可见性验证 |
+| G4-6 可派发故事 | NOT READY：工作包及依赖已固定，但尚无故事级规格、产物和验收工件 | 下一实施规划据 W0–W5 拆故事；各故事进入前具备其具体输入/依赖/验收，不要求自身或整个 OS 先已实现 |
+
+架构 PASS 表示设计已核定，不能读取为对应功能或标准符合性 PASS。研究结果见 [FreeRTOS 调查](architecture/epic-4/FREERTOS-FEASIBILITY.md)：原版同级顺序/资源恢复反例否决薄封装；66 条隔离观测不证明完整 FIFO、SC1 或生产栈监测。
+
+## 依赖和停止条件
+
+W0 输入基线和 W1 backend 基础可从最终架构开始规格化；W2 依赖 W0，可与 W1 并行。W3 集成须等 W1 核心语义、受控时间和真实栈验证，以及 W2 生成闭包通过。W4 验证应用闭环；W5 完成全部适用 SC1 与独立交接出口。完整 SC1 是 Epic 退出门，不是架构定稿或 W1 开始的前置条件。
+
+只有有限扩展失去维护边界、需要替换主要调度器，或真实 Windows 栈契约被证实无法满足时才重新评估路线；普通未实现项不再打开候选选型。Trampoline/ATK2 保留参考与备选。
+
+Epic 5 的 NM、DTC/NvM 与持久化关口及 Epic 6 的板卡/合法 MCU 依赖/端口/实机证据仍未解除。Epic 2 保持暂缓。本轮不派发 bmad-build，不改变 sprint 或 capability 状态。

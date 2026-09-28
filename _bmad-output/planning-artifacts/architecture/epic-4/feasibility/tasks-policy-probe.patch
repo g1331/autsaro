@@ -1,0 +1,66 @@
+--- a/tasks.c
++++ b/tasks.c
+@@ -207,7 +207,7 @@
+                                                                                          \
+         /* listGET_OWNER_OF_NEXT_ENTRY indexes through the list, so the tasks of \
+          * the  same priority get an equal share of the processor time. */                    \
+-        listGET_OWNER_OF_NEXT_ENTRY( pxCurrentTCB, &( pxReadyTasksLists[ uxTopPriority ] ) ); \
++        pxCurrentTCB = listGET_OWNER_OF_HEAD_ENTRY( &( pxReadyTasksLists[ uxTopPriority ] ) ); \
+         uxTopReadyPriority = uxTopPriority;                                                   \
+     } while( 0 ) /* taskSELECT_HIGHEST_PRIORITY_TASK */
+     #else /* if ( configNUMBER_OF_CORES == 1 ) */
+@@ -242,7 +242,7 @@
+         /* Find the highest priority list that contains ready tasks. */                         \
+         portGET_HIGHEST_PRIORITY( uxTopPriority, uxTopReadyPriority );                          \
+         configASSERT( listCURRENT_LIST_LENGTH( &( pxReadyTasksLists[ uxTopPriority ] ) ) > 0 ); \
+-        listGET_OWNER_OF_NEXT_ENTRY( pxCurrentTCB, &( pxReadyTasksLists[ uxTopPriority ] ) );   \
++        pxCurrentTCB = listGET_OWNER_OF_HEAD_ENTRY( &( pxReadyTasksLists[ uxTopPriority ] ) );   \
+     } while( 0 )
+ 
+ /*-----------------------------------------------------------*/
+@@ -3001,7 +3001,18 @@
+                         mtCOVERAGE_TEST_MARKER();
+                     }
+ 
+-                    prvAddTaskToReadyList( pxTCB );
++                    if( pxTCB == pxCurrentTCB )
++                    {
++                        List_t * ready = &( pxReadyTasksLists[ pxTCB->uxPriority ] );
++                        ListItem_t * saved = ready->pxIndex;
++                        ready->pxIndex = ready->xListEnd.pxNext;
++                        prvAddTaskToReadyList( pxTCB );
++                        ready->pxIndex = saved;
++                    }
++                    else
++                    {
++                        prvAddTaskToReadyList( pxTCB );
++                    }
+                 }
+                 else
+                 {
+@@ -8965,3 +8976,25 @@
+     #endif /* #if ( configGENERATE_RUN_TIME_STATS == 1 ) */
+ }
+ /*-----------------------------------------------------------*/
++
++/* Research-only queue transition; not a production API or complete finish hook. */
++void probe_requeue_current(void)
++{
++    taskENTER_CRITICAL();
++    (void)uxListRemove(&(pxCurrentTCB->xStateListItem));
++    prvAddTaskToReadyList(pxCurrentTCB);
++    portYIELD_WITHIN_API();
++    taskEXIT_CRITICAL();
++}
++
++/* Legal-path state-transition experiment only: no errors/hooks/ISR support. */
++void probe_transition(TaskHandle_t target, BaseType_t requeue)
++{
++    taskENTER_CRITICAL();
++    (void)uxListRemove(&(pxCurrentTCB->xStateListItem));
++    if(requeue) { prvAddTaskToReadyList(pxCurrentTCB); }
++    else { vListInsertEnd(&xSuspendedTaskList, &(pxCurrentTCB->xStateListItem)); }
++    if(target != NULL && target != pxCurrentTCB) { vTaskResume(target); }
++    portYIELD_WITHIN_API();
++    taskEXIT_CRITICAL();
++}
