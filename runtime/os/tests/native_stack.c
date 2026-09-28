@@ -133,7 +133,7 @@ int main(int argc, char **argv) {
     Os_TaskConfig tasks[2] = {
         {0u, "FaultTask", entry, 2u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
         {1u, "Inactive", entry, 3u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
-    Os_TargetConfig config = {tasks, 1u, 262144u, NULL, 0u, NULL, 0u};
+    Os_TargetConfig config = {tasks, 1u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u};
     scenario = argc == 2 ? argv[1] : "normal";
     if (strcmp(scenario, "sp-corrupt") == 0 || strncmp(scenario, "api-", 4u) == 0) {
         config.task_count = 2u;

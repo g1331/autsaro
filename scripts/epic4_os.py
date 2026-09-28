@@ -141,6 +141,7 @@ def build(directory: Path, harness: str = "lifecycle.c") -> tuple[Path, dict]:
         str(TARGET / "src/Os_Backend.c"),
         str(TARGET / "src/Os_Stack.c"),
         str(TARGET / "src/Os_HostEvent.c"),
+        str(TARGET / "src/Os_Mailbox.c"),
         str(TARGET / "tests" / harness),
         str(copied / "tasks.c"),
         str(copied / "list.c"),
@@ -158,6 +159,8 @@ def build(directory: Path, harness: str = "lifecycle.c") -> tuple[Path, dict]:
         command.insert(1, "-DOS_FINISH_TESTS")
     if harness == "resource_preemption.c":
         command.insert(1, "-DOS_RESOURCE_TESTS")
+    if harness == "event_wakeup.c":
+        command.insert(1, "-DOS_EVENT_TESTS")
     compiled = subprocess.run(command, capture_output=True, text=True, check=False)
     if compiled.returncode:
         raise RuntimeError(f"OS C99 build failed:\n{compiled.stdout}{compiled.stderr}")
@@ -218,6 +221,75 @@ def execute(
 def require(condition: bool, observation: dict) -> None:
     if not condition:
         raise AssertionError(observation)
+
+
+def check_events(binary: Path) -> list[dict]:
+    cases = [
+        ("already", "ISREaMZ", 2, 0, 0, 1),
+        ("wait", "ISREPwpMZ", 2, 0, 0, 1),
+        ("oracle-wait", "ISREPwpMZ", 2, 0, 0, 1),
+        ("ownership", "ISREPwpMZ", 2, 0, 0, 1),
+        ("new-instance", "ISREEnMZ", 2, 0, 0, 2),
+        ("errors", "ISRErMZ", 10, 0, 0, 1),
+        ("category1", "ISREJiMZ", 12, 0, 0, 1),
+        ("category1-ceiling", "ISREJiMZ", 12, 0, 0, 1),
+        ("category2", "ISREJiMZ", 6, 0, 0, 1),
+        ("mailbox-before", "ISREqMZ", 2, 2, 2, 1),
+        ("mailbox-between", "ISREqMZ", 2, 2, 2, 1),
+        ("mailbox-after-clear", "ISREqMZ", 2, 2, 2, 1),
+        ("mailbox-empty-wait", "ISREqMZ", 2, 2, 2, 1),
+        ("mailbox-wait", "ISREqMZ", 2, 1, 1, 1),
+        ("mailbox-full", "ISREqMZ", 2, 256, 256, 1),
+        ("mailbox-wrap", "ISREqMZ", 2, 522, 522, 1),
+        ("mailbox-exhaustion", "ISREqMZ", 2, 1, 18446744073709551615, 1),
+        ("mailbox-api", "ISREPqpMZ", 4, 2, 2, 1),
+    ]
+    observations = []
+    for scenario, trace, rejected, records, ticket, entries in cases:
+        result = execute(binary, scenario)
+        summary = re.search(
+            r"event checks=(\d+) rejected=(\d+) records=(\d+) ticket=(\d+) entries=(\d+) error=(\d+) bridge_rejected=(\d+)",
+            result["stdout"],
+        )
+        require(result["exit"] == 0 and summary is not None, result)
+        values = tuple(map(int, summary.groups()))
+        bridge_rejected = (
+            9
+            if scenario == "mailbox-api"
+            else 1
+            if scenario in {"mailbox-full", "mailbox-exhaustion"}
+            else 0
+        )
+        require(
+            values[0] > 15
+            and values[1:] == (rejected, records, ticket, entries, 0, bridge_rejected),
+            result,
+        )
+        require(f"trace={trace} " in result["stdout"] and not result["stderr"], result)
+        observations.append(result)
+    for scenario, status in [
+        ("input-invalid-task", 3),
+        ("input-basic", 8),
+        ("input-inactive", 8),
+        ("input-category1", 8),
+        ("category1-resource", 8),
+    ]:
+        result = execute(binary, scenario)
+        require(result["exit"] == 0 and result["stdout"] == f"prepare={status}", result)
+        observations.append(result)
+    mode = execute(binary, "mailbox-mode")
+    require(mode["exit"] == 8 and "trace=IZ " in mode["stdout"], mode)
+    require("threads=0 events=0 mutexes=0 " in mode["stdout"], mode)
+    observations.append(mode)
+    for scenario, trace in [
+        ("mailbox-replace-startup", "ISZ"),
+        ("mailbox-replace-running", "ISREZ"),
+    ]:
+        result = execute(binary, scenario)
+        require(result["exit"] == 1 and f"trace={trace} " in result["stdout"], result)
+        require("records=0 ticket=0 " in result["stdout"], result)
+        observations.append(result)
+    return observations
 
 
 def check_activation(binary: Path) -> list[dict]:
@@ -599,7 +671,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--suite",
-        choices=["lifecycle", "stack", "activation", "finish", "resources"],
+        choices=["lifecycle", "stack", "activation", "finish", "resources", "events"],
         default="lifecycle",
     )
     parser.add_argument("--evidence", type=Path)
@@ -611,6 +683,7 @@ def main() -> None:
             "activation": "activation.c",
             "finish": "finish_chain.c",
             "resources": "resource_preemption.c",
+            "events": "event_wakeup.c",
         }
         checks = {
             "lifecycle": check_lifecycle,
@@ -618,6 +691,7 @@ def main() -> None:
             "activation": check_activation,
             "finish": check_finish,
             "resources": check_resources,
+            "events": check_events,
         }
         binary, evidence = build(Path(temporary), harnesses[args.suite])
         evidence["observations"] = checks[args.suite](binary)
@@ -630,6 +704,7 @@ def main() -> None:
             "activation": "epic4_activation_fifo",
             "finish": "epic4_finish_chain_atomicity",
             "resources": "epic4_resource_and_preemption",
+            "events": "epic4_event_wakeup_races",
         }
         name = names[args.suite]
         print(f"{name} PASS: {len(evidence['observations'])} native vectors")

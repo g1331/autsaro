@@ -86,6 +86,25 @@ StatusType Os_TargetPrepare(const Os_TargetConfig *config) {
         ((config->resource_count != 0u) && (config->resources == NULL))) {
         return E_OS_VALUE;
     }
+    if (((config->category1_isrs & 1u) != 0u) ||
+        ((config->input_event != 0u) &&
+         ((config->category1_isrs & (UINT32_C(1) << OS_INPUT_INTERRUPT)) != 0u))) {
+        return E_OS_VALUE;
+    }
+    if (config->input_event != 0u) {
+        for (i = 0u; i < config->task_count; ++i) {
+            if (config->tasks[i].id == config->input_task) {
+                break;
+            }
+        }
+        if (i == config->task_count) {
+            return E_OS_ID;
+        }
+        if ((config->tasks[i].kind != OS_EXTENDED_TASK) ||
+            (config->tasks[i].autostart_modes == 0u)) {
+            return E_OS_VALUE;
+        }
+    }
     for (i = 0u; i < config->resource_count; ++i) {
         const Os_ResourceConfig *resource = &config->resources[i];
         uint32_t task_mask = 0u;
@@ -103,7 +122,8 @@ StatusType Os_TargetPrepare(const Os_TargetConfig *config) {
             }
         }
         if (((resource->task_access == 0u) && (resource->isr_access == 0u)) ||
-            (((uint32_t)resource->task_access & ~task_mask) != 0u)) {
+            (((uint32_t)resource->task_access & ~task_mask) != 0u) ||
+            ((resource->isr_access & config->category1_isrs) != 0u)) {
             return E_OS_VALUE;
         }
         if ((resource->id == RES_SCHEDULER) &&

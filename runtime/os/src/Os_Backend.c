@@ -66,15 +66,19 @@ static void acquire_internal(size_t index);
 static void release_internal(size_t index);
 static uint8_t internal_ceiling(size_t index);
 static void observe_transition(void);
+static size_t current_task_index(void);
 void Os_BackendInterruptEnter(unsigned interrupt) { current_interrupt = interrupt; }
 void Os_BackendInterruptLeave(void) {
     configASSERT(resource_depth[OS_MAX_TASKS] == 0u);
     current_interrupt = 32u;
 }
 int Os_BackendInterruptEnabled(unsigned interrupt) {
-    /* The kernel's yield is not an automotive ISR. Currently declared Category2
-     * callbacks share virtual priority31; complete categories/nesting follow4.18. */
-    return (interrupt == 0u) || (InterlockedCompareExchange(&interrupt_ceiling, 0, 0) < 31);
+    /* Category1 remains unaffected by an OS Category2 resource ceiling. Full
+     * interrupt suspension/nesting services are validated separately in4.18. */
+    return (interrupt == 0u) ||
+           ((interrupt < 32u) &&
+            ((Os_Config->category1_isrs & (UINT32_C(1) << interrupt)) != 0u)) ||
+           (InterlockedCompareExchange(&interrupt_ceiling, 0, 0) < 31);
 }
 static size_t task_index(TaskType id) {
     size_t i;
@@ -89,7 +93,17 @@ static int activation_context(void) {
     const Os_NativeStack *stack = Os_StackCurrent();
     Os_BackendGuardService();
     return (Os_TargetReady() != 0) && (stack != NULL) &&
-           ((stack->role == 'T') || (stack->role == 'S'));
+           ((stack->role == 'T') ||
+            ((stack->role == 'S') &&
+             ((current_interrupt >= 32u) ||
+              ((Os_Config->category1_isrs & (UINT32_C(1) << current_interrupt)) == 0u))));
+}
+int Os_BackendInputOwner(void) {
+    size_t index = current_task_index();
+    if (index == OS_MAX_TASKS) {
+        return 0;
+    }
+    return (Os_Config->tasks[index].id == Os_Config->input_task) ? 1 : -1;
 }
 void Os_BackendGuardService(void) {
     const Os_NativeStack *stack = Os_StackCurrent();
@@ -172,7 +186,8 @@ void Os_BackendOnSwitch(void) {
     observe_transition();
 }
 static void observe_transition(void) {
-#if defined(OS_ACTIVATION_TESTS) || defined(OS_FINISH_TESTS) || defined(OS_RESOURCE_TESTS)
+#if defined(OS_ACTIVATION_TESTS) || defined(OS_FINISH_TESTS) || defined(OS_RESOURCE_TESTS) ||      \
+    defined(OS_EVENT_TESTS)
     const Os_NativeStack *stack = Os_StackCurrent();
     if ((Os_TargetReady() != 0) && (stack != NULL) &&
         ((stack->role == 'T') || (stack->role == 'S'))) {
@@ -354,6 +369,7 @@ static DWORD WINAPI control(void *argument) {
     return 0u;
 }
 void Os_BackendStackFault(char failed_role) {
+    Os_MailboxClose();
     InterlockedOr(&activation_admission, 2);
     InterlockedExchange(&Os_Closing, 1);
     InterlockedExchange(&ready, 0);
@@ -384,6 +400,7 @@ void Os_BackendShutdown(StatusType error) {
     ExitProcess(E_OS_STATE);
 }
 void Os_BackendRequestShutdown(StatusType error) {
+    Os_MailboxClose();
     if ((InterlockedOr(&activation_admission, 2) & 2) == 0) {
         InterlockedExchange(&Os_Closing, 1);
         shutdown_reason = error;
@@ -550,8 +567,13 @@ void Os_BackendStart(AppModeType mode) {
     if (Os_Config == NULL || (mode != 1u && mode != 2u)) {
         Os_BackendShutdown(E_OS_VALUE);
     }
+    if ((Os_Config->input_event != 0u) &&
+        ((Os_Config->tasks[task_index(Os_Config->input_task)].autostart_modes & mode) == 0u)) {
+        Os_BackendShutdown(E_OS_VALUE);
+    }
     startup_mode = mode;
     Os_StackInit();
+    Os_MailboxInstall();
     if (!DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &main_thread,
                          0u, FALSE, DUPLICATE_SAME_ACCESS)) {
         Os_BackendShutdown(E_OS_STATE);
@@ -792,7 +814,8 @@ StatusType Os_BackendResource(ResourceType id, int acquire) {
     task = current_task_index();
     if (task == OS_MAX_TASKS) {
         if ((Os_TargetReady() == 0) || (stack == NULL) || (stack->role != 'S') ||
-            (current_interrupt == 0u) || (current_interrupt >= 32u)) {
+            (current_interrupt == 0u) || (current_interrupt >= 32u) ||
+            ((Os_Config->category1_isrs & (UINT32_C(1) << current_interrupt)) != 0u)) {
             return E_OS_CALLEVEL;
         }
     }

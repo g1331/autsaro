@@ -1,0 +1,14 @@
+--- a/portable/MSVC-MingW/port.c
++++ b/portable/MSVC-MingW/port.c
+@@ -593,6 +593,11 @@
+ void vPortSetInterruptHandler( uint32_t ulInterruptNumber,
+                                uint32_t ( * pvHandler )( void ) )
+ {
++    if( !Os_MailboxHandlerAllowed( ulInterruptNumber, pvHandler ) )
++    {
++        Os_BackendShutdown( E_OS_ACCESS );
++    }
++
+     if( ulInterruptNumber < portMAX_INTERRUPTS )
+     {
+         if( pvInterruptEventMutex != NULL )

@@ -5,6 +5,16 @@
 #include "task.h"
 #include "Os_Windows.h"
 #include "Os_Stack.h"
+#include "Os_Mailbox.h"
+int Os_BackendInputOwner(void);
+void Os_MailboxInstall(void);
+void Os_MailboxClose(void);
+int Os_MailboxHandlerAllowed(uint32_t interrupt, uint32_t (*handler)(void));
+#ifdef OS_EVENT_TESTS
+void Os_TestObserve(void);
+void Os_TestInputNotified(void);
+void Os_TestInputLastTicket(uint64_t ticket);
+#endif
 void Os_BackendStart(AppModeType mode);
 void Os_BackendShutdown(StatusType error);
 void Os_BackendRequestShutdown(StatusType error);

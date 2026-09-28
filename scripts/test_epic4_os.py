@@ -121,6 +121,35 @@ class DependencyTests(unittest.TestCase):
         ):
             epic4_os.compiler()
 
+    def test_event_gate_rejects_lost_record_ticket_and_missing_restart(self):
+        original = json.loads(
+            (
+                epic4_os.ROOT / "docs/assurance/evidence/epic4/event-wakeup.json"
+            ).read_text(encoding="utf-8")
+        )["observations"]
+        with patch("epic4_os.execute", side_effect=copy.deepcopy(original)):
+            self.assertEqual(
+                len(epic4_os.check_events(Path("unused.exe"))), len(original)
+            )
+        for scenario, before, after in [
+            ("mailbox-between", "records=2", "records=1"),
+            ("mailbox-full", "ticket=256", "ticket=255"),
+            ("new-instance", "entries=2", "entries=1"),
+            ("category1", "rejected=12", "rejected=11"),
+        ]:
+            records = copy.deepcopy(original)
+            record = next(row for row in records if row["scenario"] == scenario)
+            record["stdout"] = record["stdout"].replace(before, after)
+            self.assertNotEqual(
+                record["stdout"],
+                next(row["stdout"] for row in original if row["scenario"] == scenario),
+            )
+            with (
+                patch("epic4_os.execute", side_effect=records),
+                self.assertRaises(AssertionError),
+            ):
+                epic4_os.check_events(Path("unused.exe"))
+
 
 if __name__ == "__main__":
     unittest.main()

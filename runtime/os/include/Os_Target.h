@@ -55,6 +55,9 @@ typedef struct {
     size_t resource_count;
     const Os_InternalResourceConfig *internal_resources;
     size_t internal_resource_count;
+    uint32_t category1_isrs;
+    TaskType input_task;
+    EventMaskType input_event;
 } Os_TargetConfig;
 /** Prepare one process-local target before StartOS.
  * @param config Static configuration retained for the lifetime of the process.

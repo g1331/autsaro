@@ -1,0 +1,287 @@
+{
+  "kernel_commit": "054e14f3397023aa83813a65aa065fc4597d481b",
+  "compiler": "GCC 16.1.0 x64",
+  "tls_abi": "PE native TLS; no emutls helper",
+  "binary_sha256": "a96553c34624b918f92152d03c6416dced503b662639e0ebc0d3d6444ed94356",
+  "patches": {
+    "0001-controlled-host-lifecycle.patch": "b522c8fa69454989be899658d670f6313fb621f455f32a258e06fad18fbbf04f",
+    "0002-native-stack.patch": "75e4e04e0de99dd9c1dc3e36e3a93c3d51cad64fec32a09e8b203c3c15040648",
+    "0003-activation-ready-policy.patch": "357b1a98a00d8bd197092e4199b710849d08d5684f9d0eabf4459c354c9f979b",
+    "0004-windows-event-namespace.patch": "633529f96b0bb46cae34687cae8dd9bffda068b971f0dd22b8da9c5fdaa47bf1",
+    "0005-category2-resource-gate.patch": "e43dd1f0998e7ec0a8feb8e397ba37c285bf2c031480a6528297e078c94c82df",
+    "0006-input-handler-ownership.patch": "bcb70ae8a8947344c206ff4a0b31d445b6c6bb1956135d45f81c6e1b554a3075"
+  },
+  "product_sources": {
+    "runtime/os/FreeRTOSConfig.h": "36e6717cf1982e55f08f6256cb2932bff6cdeafafe66fa3641cbd161be45c3f5",
+    "runtime/os/include/Os.h": "8e00282a88fdc5ff300dee8b9095e6d67fa0034e5a153c8b856d7e9edd8ae359",
+    "runtime/os/include/Os_Mailbox.h": "de31d0af68fe473bcab3ee365066eb1feec3436036a0740b2be996d78719ef4c",
+    "runtime/os/include/Os_Target.h": "8272cd36d2a836299794f0f16088a0642574d35482d86106e159c75b80031979",
+    "runtime/os/patches/0001-controlled-host-lifecycle.patch": "b522c8fa69454989be899658d670f6313fb621f455f32a258e06fad18fbbf04f",
+    "runtime/os/patches/0002-native-stack.patch": "75e4e04e0de99dd9c1dc3e36e3a93c3d51cad64fec32a09e8b203c3c15040648",
+    "runtime/os/patches/0003-activation-ready-policy.patch": "357b1a98a00d8bd197092e4199b710849d08d5684f9d0eabf4459c354c9f979b",
+    "runtime/os/patches/0004-windows-event-namespace.patch": "633529f96b0bb46cae34687cae8dd9bffda068b971f0dd22b8da9c5fdaa47bf1",
+    "runtime/os/patches/0005-category2-resource-gate.patch": "e43dd1f0998e7ec0a8feb8e397ba37c285bf2c031480a6528297e078c94c82df",
+    "runtime/os/patches/0006-input-handler-ownership.patch": "bcb70ae8a8947344c206ff4a0b31d445b6c6bb1956135d45f81c6e1b554a3075",
+    "runtime/os/README.md": "da4023d20aa5ce6f4cef6e8e66d7548911e4bbdea29a415928ae9649ee6a187c",
+    "runtime/os/src/Os.c": "9dc762d4fb3c3207b99460cd51123bbb82bcb1c65e366618c662e83e837bdf09",
+    "runtime/os/src/Os_Backend.c": "d9af7302a9e1889a47d8dbc02c922982304d9b149be246b65052f68dc282ddec",
+    "runtime/os/src/Os_Backend.h": "bac422978f176ca720ceec2b9b612fb948e6b1d29b7c76995b3f965997ecb8db",
+    "runtime/os/src/Os_HostEvent.c": "229aabdeffede1d31b840fc08216f294aa4f5390b39033309fb14a38d9ae301f",
+    "runtime/os/src/Os_Mailbox.c": "7ed95dcf9a02e2d8777d72a92691f0ded48cec6e991895cccaa5cdedc5d1f0c1",
+    "runtime/os/src/Os_Stack.c": "44669d37c3bbdcb59165c19cfb911482ac44ec7cc9ec4dbdee347b954cd5e479",
+    "runtime/os/src/Os_Stack.h": "8fe1dc8c433e64094ebd9c7e8a48c3fd1a9fdc15a9f9c2e50bc0cf87324297f8",
+    "runtime/os/src/Os_Windows.h": "8ac65b461896350a6a7c2ee645cc6a0089507aef98b177d97280851e3a42d8c0",
+    "runtime/os/tests/activation.c": "8fd506713b2d80925cd8b94774e637a4c4500e5b5a1ab00b0901ec5649c877aa",
+    "runtime/os/tests/event_wakeup.c": "77e21a50d4b290cc77c68dccd0e3ef4b64d76a92a0e4072df12e46ddd0431a71",
+    "runtime/os/tests/finish_chain.c": "4d36d9f0b796f0072176e8b6a602dd00a0fb1b70bb983a647fb78bc48eacf092",
+    "runtime/os/tests/lifecycle.c": "8d58b82470de5dd7752a9028cb5abc233b6740c363ae36d20ab7ba3f5bdf191a",
+    "runtime/os/tests/native_stack.c": "2a1495c7398f87d1e13d593677119dbc14624547309a32893a0bd6865449aefa",
+    "runtime/os/tests/resource_preemption.c": "00ca7d22ff19e31c3112f6c55a0eff86412cc60059503ad3ef800f173230b52a"
+  },
+  "command": [
+    "gcc",
+    "-DOS_EVENT_TESTS",
+    "-std=c99",
+    "-O1",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-I",
+    "<repo-root>\\runtime\\os",
+    "-I",
+    "<repo-root>\\runtime\\os\\include",
+    "-I",
+    "<repo-root>\\runtime\\os\\src",
+    "-I",
+    "<build-dir>\\kernel\\include",
+    "-I",
+    "<build-dir>\\kernel\\portable\\MSVC-MingW",
+    "<repo-root>\\runtime\\os\\src\\Os.c",
+    "<repo-root>\\runtime\\os\\src\\Os_Backend.c",
+    "<repo-root>\\runtime\\os\\src\\Os_Stack.c",
+    "<repo-root>\\runtime\\os\\src\\Os_HostEvent.c",
+    "<repo-root>\\runtime\\os\\src\\Os_Mailbox.c",
+    "<repo-root>\\runtime\\os\\tests\\event_wakeup.c",
+    "<build-dir>\\kernel\\tasks.c",
+    "<build-dir>\\kernel\\list.c",
+    "<build-dir>\\kernel\\queue.c",
+    "<build-dir>\\kernel\\portable\\MSVC-MingW\\port.c",
+    "-lwinmm",
+    "-o",
+    "<build-dir>\\os_harness.exe"
+  ],
+  "observations": [
+    {
+      "scenario": "already",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "event checks=30 rejected=2 records=0 ticket=0 entries=1 error=0 bridge_rejected=0\nSTACK role=S tid=57836 low=311064264704 high=311066361856 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=311066356976 observations=23 buffer_low=0 buffer_high=0\nSTACK role=C tid=77376 low=311060201472 high=311060463616 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=311060462608 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=71444 low=311060463616 high=311060725760 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=311060724784 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=69536 low=311060725760 high=311060987904 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=311060985336 observations=11 buffer_low=140694584542144 buffer_high=140694584546240\nSTACK role=T tid=72736 low=311060987904 high=311061250048 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=311061248600 observations=2 buffer_low=140694584546240 buffer_high=140694584550336\nSTACK role=T tid=74784 low=311061250048 high=311061512192 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=311061510848 observations=6 buffer_low=140694584550336 buffer_high=140694584554432\nSTACK role=T tid=37300 low=311061512192 high=311061774336 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=311061773000 observations=2 buffer_low=140694584554432 buffer_high=140694584558528\nSTACK role=B tid=65192 low=311061774336 high=311062036480 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=311062034952 observations=6 buffer_low=140694584607680 buffer_high=140694584611776\nSTACK role=I tid=71400 low=311068459008 high=311068721152 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=311068719384 observations=2 buffer_low=140694584611776 buffer_high=140694584615872\nlifecycle=Closed state=Ready reason=0 trace=ISREaMZ threads=8 events=23 mutexes=1 resource_calls=32 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "wait",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "event checks=72 rejected=2 records=0 ticket=0 entries=1 error=0 bridge_rejected=0\nSTACK role=S tid=48036 low=927048138752 high=927050235904 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=927050231328 observations=53 buffer_low=0 buffer_high=0\nSTACK role=C tid=8208 low=927044796416 high=927045058560 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=927045057248 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=9092 low=927045058560 high=927045320704 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=927045319984 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=60960 low=927045320704 high=927045582848 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=927045580200 observations=19 buffer_low=140694584542144 buffer_high=140694584546240\nSTACK role=T tid=44984 low=927045582848 high=927045844992 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=927045844152 observations=10 buffer_low=140694584546240 buffer_high=140694584550336\nSTACK role=T tid=63816 low=927052333056 high=927052595200 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=927052592896 observations=6 buffer_low=140694584550336 buffer_high=140694584554432\nSTACK role=T tid=60284 low=927052595200 high=927052857344 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=927052856312 observations=2 buffer_low=140694584554432 buffer_high=140694584558528\nSTACK role=B tid=65788 low=927052857344 high=927053119488 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=927053117528 observations=6 buffer_low=140694584607680 buffer_high=140694584611776\nSTACK role=I tid=63312 low=927053119488 high=927053381632 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=927053381160 observations=2 buffer_low=140694584611776 buffer_high=140694584615872\nlifecycle=Closed state=Ready reason=0 trace=ISREPwpMZ threads=8 events=23 mutexes=1 resource_calls=32 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "oracle-wait",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "event checks=80 rejected=2 records=0 ticket=0 entries=1 error=0 bridge_rejected=0\nSTACK role=S tid=70028 low=771110207488 high=771112304640 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=771112299648 observations=53 buffer_low=0 buffer_high=0\nSTACK role=C tid=58728 low=771107717120 high=771107979264 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=771107977232 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=53056 low=771114401792 high=771114663936 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=771114661744 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=77208 low=771114663936 high=771114926080 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=771114924536 observations=28 buffer_low=140694584542144 buffer_high=140694584546240\nSTACK role=T tid=76032 low=771114926080 high=771115188224 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=771115187128 observations=10 buffer_low=140694584546240 buffer_high=140694584550336\nSTACK role=T tid=73988 low=771115188224 high=771115450368 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=771115449040 observations=6 buffer_low=140694584550336 buffer_high=140694584554432\nSTACK role=T tid=64112 low=771115450368 high=771115712512 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=771115710136 observations=2 buffer_low=140694584554432 buffer_high=140694584558528\nSTACK role=B tid=29112 low=771115712512 high=771115974656 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=771115972568 observations=6 buffer_low=140694584607680 buffer_high=140694584611776\nSTACK role=I tid=35584 low=771115974656 high=771116236800 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=771116235576 observations=2 buffer_low=140694584611776 buffer_high=140694584615872\nlifecycle=Closed state=Ready reason=0 trace=ISREPwpMZ threads=8 events=23 mutexes=1 resource_calls=32 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "ownership",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "event checks=83 rejected=2 records=0 ticket=0 entries=1 error=0 bridge_rejected=0\nSTACK role=S tid=48004 low=264880783360 high=264882880512 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=264882875344 observations=53 buffer_low=0 buffer_high=0\nSTACK role=C tid=37412 low=264877637632 high=264877899776 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=264877897472 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=77748 low=264877899776 high=264878161920 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=264878161392 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=51360 low=264878161920 high=264878424064 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=264878421336 observations=23 buffer_low=140694584542144 buffer_high=140694584546240\nSTACK role=T tid=65028 low=264878424064 high=264878686208 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=264878684824 observations=13 buffer_low=140694584546240 buffer_high=140694584550336\nSTACK role=T tid=62540 low=264884977664 high=264885239808 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=264885239264 observations=6 buffer_low=140694584550336 buffer_high=140694584554432\nSTACK role=T tid=43060 low=264885239808 high=264885501952 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=264885500232 observations=2 buffer_low=140694584554432 buffer_high=140694584558528\nSTACK role=B tid=74328 low=264885501952 high=264885764096 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=264885763048 observations=6 buffer_low=140694584607680 buffer_high=140694584611776\nSTACK role=I tid=49656 low=264885764096 high=264886026240 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=264886024504 observations=2 buffer_low=140694584611776 buffer_high=140694584615872\nlifecycle=Closed state=Ready reason=0 trace=ISREPwpMZ threads=8 events=23 mutexes=1 resource_calls=32 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "new-instance",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "event checks=35 rejected=2 records=0 ticket=0 entries=2 error=0 bridge_rejected=0\nSTACK role=S tid=62364 low=913414553600 high=913416650752 reserve=2097152 commit=36864 guard=20480 guarantee=16384 sp=913416646864 observations=33 buffer_low=0 buffer_high=0\nSTACK role=C tid=36408 low=913410490368 high=913410752512 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=913410752016 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=52208 low=913410752512 high=913411014656 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=913411012848 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=67108 low=913411014656 high=913411276800 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=913411273784 observations=10 buffer_low=140694584542144 buffer_high=140694584546240\nSTACK role=T tid=77572 low=913411276800 high=913411538944 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=913411536600 observations=2 buffer_low=140694584546240 buffer_high=140694584550336\nSTACK role=T tid=72376 low=913411538944 high=913411801088 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=913411799264 observations=6 buffer_low=140694584550336 buffer_high=140694584554432\nSTACK role=T tid=60576 low=913411801088 high=913412063232 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=913412060952 observations=2 buffer_low=140694584554432 buffer_high=140694584558528\nSTACK role=B tid=63744 low=913412063232 high=913412325376 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=913412323496 observations=6 buffer_low=140694584607680 buffer_high=140694584611776\nSTACK role=I tid=63676 low=913418747904 high=913419010048 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=913419008568 observations=2 buffer_low=140694584611776 buffer_high=140694584615872\nlifecycle=Closed state=Ready reason=0 trace=ISREEnMZ threads=8 events=23 mutexes=1 resource_calls=32 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "errors",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "event checks=46 rejected=10 records=0 ticket=0 entries=1 error=0 bridge_rejected=0\nSTACK role=S tid=28528 low=659055181824 high=659057278976 reserve=2097152 commit=36864 guard=20480 guarantee=16384 sp=659057275120 observations=33 buffer_low=0 buffer_high=0\nSTACK role=C tid=58688 low=659052494848 high=659052756992 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=659052756240 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=60916 low=659052756992 high=659053019136 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=659053018400 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=61016 low=659059376128 high=659059638272 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=659059636904 observations=21 buffer_low=140694584542144 buffer_high=140694584546240\nSTACK role=T tid=54920 low=659059638272 high=659059900416 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=659059898584 observations=2 buffer_low=140694584546240 buffer_high=140694584550336\nSTACK role=T tid=25444 low=659059900416 high=659060162560 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=659060161648 observations=6 buffer_low=140694584550336 buffer_high=140694584554432\nSTACK role=T tid=68108 low=659060162560 high=659060424704 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=659060423064 observations=2 buffer_low=140694584554432 buffer_high=140694584558528\nSTACK role=B tid=11824 low=659060424704 high=659060686848 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=659060685496 observations=6 buffer_low=140694584607680 buffer_high=140694584611776\nSTACK role=I tid=74368 low=659060686848 high=659060948992 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=659060948008 observations=2 buffer_low=140694584611776 buffer_high=140694584615872\nlifecycle=Closed state=Ready reason=0 trace=ISRErMZ threads=8 events=23 mutexes=1 resource_calls=32 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "category1",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "event checks=36 rejected=12 records=0 ticket=0 entries=1 error=0 bridge_rejected=0\nSTACK role=S tid=74836 low=873769992192 high=873772089344 reserve=2097152 commit=36864 guard=20480 guarantee=16384 sp=873772085312 observations=36 buffer_low=0 buffer_high=0\nSTACK role=C tid=65736 low=873774186496 high=873774448640 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=873774447840 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=76656 low=873774448640 high=873774710784 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=873774708688 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=75012 low=873774710784 high=873774972928 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=873774971016 observations=8 buffer_low=140694584542144 buffer_high=140694584546240\nSTACK role=T tid=72792 low=873774972928 high=873775235072 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=873775234632 observations=2 buffer_low=140694584546240 buffer_high=140694584550336\nSTACK role=T tid=68564 low=873775235072 high=873775497216 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=873775495440 observations=6 buffer_low=140694584550336 buffer_high=140694584554432\nSTACK role=T tid=68876 low=873775497216 high=873775759360 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=873775757848 observations=2 buffer_low=140694584554432 buffer_high=140694584558528\nSTACK role=B tid=73368 low=873775759360 high=873776021504 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=873776020904 observations=6 buffer_low=140694584607680 buffer_high=140694584611776\nSTACK role=I tid=62876 low=873776021504 high=873776283648 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=873776282664 observations=2 buffer_low=140694584611776 buffer_high=140694584615872\nlifecycle=Closed state=Ready reason=0 trace=ISREJiMZ threads=8 events=23 mutexes=1 resource_calls=32 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "category1-ceiling",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "event checks=48 rejected=12 records=0 ticket=0 entries=1 error=0 bridge_rejected=0\nSTACK role=S tid=50484 low=594890719232 high=594892816384 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=594892811040 observations=46 buffer_low=0 buffer_high=0\nSTACK role=C tid=61236 low=594887442432 high=594887704576 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=594887703840 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=71744 low=594887704576 high=594887966720 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=594887965936 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=74472 low=594887966720 high=594888228864 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=594888227176 observations=12 buffer_low=140694584542144 buffer_high=140694584546240\nSTACK role=T tid=10408 low=594888228864 high=594888491008 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=594888489448 observations=2 buffer_low=140694584546240 buffer_high=140694584550336\nSTACK role=T tid=73064 low=594894913536 high=594895175680 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=594895174752 observations=6 buffer_low=140694584550336 buffer_high=140694584554432\nSTACK role=T tid=67448 low=594895175680 high=594895437824 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=594895436360 observations=2 buffer_low=140694584554432 buffer_high=140694584558528\nSTACK role=B tid=77368 low=594895437824 high=594895699968 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=594895698280 observations=6 buffer_low=140694584607680 buffer_high=140694584611776\nSTACK role=I tid=67200 low=594895699968 high=594895962112 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=594895960968 observations=2 buffer_low=140694584611776 buffer_high=140694584615872\nlifecycle=Closed state=Ready reason=0 trace=ISREJiMZ threads=8 events=23 mutexes=1 resource_calls=32 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "category2",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "event checks=33 rejected=6 records=0 ticket=0 entries=1 error=0 bridge_rejected=0\nSTACK role=S tid=65464 low=745120202752 high=745122299904 reserve=2097152 commit=36864 guard=20480 guarantee=16384 sp=745122296336 observations=33 buffer_low=0 buffer_high=0\nSTACK role=C tid=71900 low=745116860416 high=745117122560 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=745117121136 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=71628 low=745117122560 high=745117384704 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=745117382464 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=48456 low=745117384704 high=745117646848 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=745117645048 observations=8 buffer_low=140694584542144 buffer_high=140694584546240\nSTACK role=T tid=70876 low=745117646848 high=745117908992 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=745117907096 observations=2 buffer_low=140694584546240 buffer_high=140694584550336\nSTACK role=T tid=58580 low=745124397056 high=745124659200 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=745124658368 observations=6 buffer_low=140694584550336 buffer_high=140694584554432\nSTACK role=T tid=75972 low=745124659200 high=745124921344 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=745124920648 observations=2 buffer_low=140694584554432 buffer_high=140694584558528\nSTACK role=B tid=66220 low=745124921344 high=745125183488 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=745125182040 observations=6 buffer_low=140694584607680 buffer_high=140694584611776\nSTACK role=I tid=61348 low=745125183488 high=745125445632 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=745125443832 observations=2 buffer_low=140694584611776 buffer_high=140694584615872\nlifecycle=Closed state=Ready reason=0 trace=ISREJiMZ threads=8 events=23 mutexes=1 resource_calls=32 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "mailbox-before",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "event checks=39 rejected=2 records=2 ticket=2 entries=1 error=0 bridge_rejected=0\nSTACK role=S tid=51448 low=291340550144 high=291342647296 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=291342641856 observations=26 buffer_low=0 buffer_high=0\nSTACK role=C tid=73256 low=291344744448 high=291345006592 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=291345004128 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=73536 low=291345006592 high=291345268736 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=291345266800 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=52528 low=291345268736 high=291345530880 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=291345529000 observations=9 buffer_low=140694584542144 buffer_high=140694584546240\nSTACK role=T tid=77720 low=291345530880 high=291345793024 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=291345792232 observations=2 buffer_low=140694584546240 buffer_high=140694584550336\nSTACK role=T tid=70032 low=291345793024 high=291346055168 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=291346053536 observations=6 buffer_low=140694584550336 buffer_high=140694584554432\nSTACK role=T tid=27824 low=291346055168 high=291346317312 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=291346314936 observations=2 buffer_low=140694584554432 buffer_high=140694584558528\nSTACK role=B tid=77388 low=291346317312 high=291346579456 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=291346577080 observations=6 buffer_low=140694584607680 buffer_high=140694584611776\nSTACK role=I tid=69200 low=291346579456 high=291346841600 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=291346839736 observations=2 buffer_low=140694584611776 buffer_high=140694584615872\nlifecycle=Closed state=Ready reason=0 trace=ISREqMZ threads=8 events=23 mutexes=1 resource_calls=32 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "mailbox-between",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "event checks=43 rejected=2 records=2 ticket=2 entries=1 error=0 bridge_rejected=0\nSTACK role=S tid=63872 low=221767532544 high=221769629696 reserve=2097152 commit=36864 guard=20480 guarantee=16384 sp=221769625904 observations=26 buffer_low=0 buffer_high=0\nSTACK role=C tid=6852 low=221764190208 high=221764452352 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=221764451264 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=45544 low=221764452352 high=221764714496 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=221764712416 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=75532 low=221764714496 high=221764976640 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=221764973816 observations=13 buffer_low=140694584542144 buffer_high=140694584546240\nSTACK role=T tid=69688 low=221764976640 high=221765238784 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=221765236696 observations=2 buffer_low=140694584546240 buffer_high=140694584550336\nSTACK role=T tid=68248 low=221771726848 high=221771988992 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=221771988128 observations=6 buffer_low=140694584550336 buffer_high=140694584554432\nSTACK role=T tid=74772 low=221771988992 high=221772251136 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=221772250360 observations=2 buffer_low=140694584554432 buffer_high=140694584558528\nSTACK role=B tid=61784 low=221772251136 high=221772513280 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=221772511800 observations=6 buffer_low=140694584607680 buffer_high=140694584611776\nSTACK role=I tid=51788 low=221772513280 high=221772775424 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=221772773960 observations=2 buffer_low=140694584611776 buffer_high=140694584615872\nlifecycle=Closed state=Ready reason=0 trace=ISREqMZ threads=8 events=23 mutexes=1 resource_calls=32 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "mailbox-after-clear",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "event checks=41 rejected=2 records=2 ticket=2 entries=1 error=0 bridge_rejected=0\nSTACK role=S tid=13172 low=767289196544 high=767291293696 reserve=2097152 commit=36864 guard=20480 guarantee=16384 sp=767291290128 observations=26 buffer_low=0 buffer_high=0\nSTACK role=C tid=69192 low=767286312960 high=767286575104 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=767286573376 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=46608 low=767286575104 high=767286837248 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=767286835536 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=62168 low=767286837248 high=767287099392 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=767287096040 observations=12 buffer_low=140694584542144 buffer_high=140694584546240\nSTACK role=T tid=33240 low=767293390848 high=767293652992 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=767293651896 observations=2 buffer_low=140694584546240 buffer_high=140694584550336\nSTACK role=T tid=73344 low=767293652992 high=767293915136 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=767293913728 observations=6 buffer_low=140694584550336 buffer_high=140694584554432\nSTACK role=T tid=60408 low=767293915136 high=767294177280 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=767294176328 observations=2 buffer_low=140694584554432 buffer_high=140694584558528\nSTACK role=B tid=75260 low=767294177280 high=767294439424 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=767294438248 observations=6 buffer_low=140694584607680 buffer_high=140694584611776\nSTACK role=I tid=48700 low=767294439424 high=767294701568 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=767294701096 observations=2 buffer_low=140694584611776 buffer_high=140694584615872\nlifecycle=Closed state=Ready reason=0 trace=ISREqMZ threads=8 events=23 mutexes=1 resource_calls=32 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "mailbox-empty-wait",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "event checks=41 rejected=2 records=2 ticket=2 entries=1 error=0 bridge_rejected=0\nSTACK role=S tid=71588 low=597021425664 high=597023522816 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=597023517664 observations=26 buffer_low=0 buffer_high=0\nSTACK role=D tid=37760 low=597025882112 high=597026144256 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=597026143216 observations=1 buffer_low=0 buffer_high=0\nSTACK role=C tid=77784 low=597025619968 high=597025882112 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=597025881552 observations=2 buffer_low=0 buffer_high=0\nSTACK role=T tid=49744 low=597026144256 high=597026406400 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=597026403752 observations=10 buffer_low=140694584542144 buffer_high=140694584546240\nSTACK role=T tid=11512 low=597026406400 high=597026668544 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=597026666536 observations=2 buffer_low=140694584546240 buffer_high=140694584550336\nSTACK role=T tid=74468 low=597026668544 high=597026930688 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=597026928640 observations=6 buffer_low=140694584550336 buffer_high=140694584554432\nSTACK role=T tid=75720 low=597026930688 high=597027192832 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=597027190552 observations=2 buffer_low=140694584554432 buffer_high=140694584558528\nSTACK role=B tid=63580 low=597027192832 high=597027454976 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=597027453048 observations=6 buffer_low=140694584607680 buffer_high=140694584611776\nSTACK role=I tid=9416 low=597027454976 high=597027717120 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=597027715992 observations=2 buffer_low=140694584611776 buffer_high=140694584615872\nlifecycle=Closed state=Ready reason=0 trace=ISREqMZ threads=8 events=23 mutexes=1 resource_calls=32 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "mailbox-wait",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "event checks=58 rejected=2 records=1 ticket=1 entries=1 error=0 bridge_rejected=0\nSTACK role=S tid=60488 low=1059701391360 high=1059703488512 reserve=2097152 commit=36864 guard=20480 guarantee=16384 sp=1059703484416 observations=44 buffer_low=0 buffer_high=0\nSTACK role=C tid=9384 low=1059705585664 high=1059705847808 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1059705846512 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=73500 low=1059705847808 high=1059706109952 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1059706108320 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=66952 low=1059706109952 high=1059706372096 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1059706370024 observations=10 buffer_low=140694584542144 buffer_high=140694584546240\nSTACK role=T tid=65448 low=1059706372096 high=1059706634240 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1059706633736 observations=2 buffer_low=140694584546240 buffer_high=140694584550336\nSTACK role=T tid=41976 low=1059706634240 high=1059706896384 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1059706893968 observations=12 buffer_low=140694584550336 buffer_high=140694584554432\nSTACK role=T tid=61988 low=1059706896384 high=1059707158528 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1059707156488 observations=2 buffer_low=140694584554432 buffer_high=140694584558528\nSTACK role=B tid=3028 low=1059707158528 high=1059707420672 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1059707419368 observations=6 buffer_low=140694584607680 buffer_high=140694584611776\nSTACK role=I tid=72884 low=1059707420672 high=1059707682816 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1059707681848 observations=2 buffer_low=140694584611776 buffer_high=140694584615872\nlifecycle=Closed state=Ready reason=0 trace=ISREqMZ threads=8 events=23 mutexes=1 resource_calls=32 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "mailbox-full",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "event checks=1054 rejected=2 records=256 ticket=256 entries=1 error=0 bridge_rejected=1\nSTACK role=S tid=63844 low=830096801792 high=830098898944 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=830098894288 observations=266 buffer_low=0 buffer_high=0\nSTACK role=C tid=32576 low=830092804096 high=830093066240 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=830093065376 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=2428 low=830093066240 high=830093328384 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=830093325936 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=59016 low=830093328384 high=830093590528 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=830093587464 observations=169 buffer_low=140694584542144 buffer_high=140694584546240\nSTACK role=T tid=22188 low=830093590528 high=830093852672 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=830093850824 observations=2 buffer_low=140694584546240 buffer_high=140694584550336\nSTACK role=T tid=2348 low=830093852672 high=830094114816 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=830094112880 observations=6 buffer_low=140694584550336 buffer_high=140694584554432\nSTACK role=T tid=14608 low=830094114816 high=830094376960 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=830094375224 observations=2 buffer_low=140694584554432 buffer_high=140694584558528\nSTACK role=B tid=73476 low=830094376960 high=830094639104 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=830094637592 observations=6 buffer_low=140694584607680 buffer_high=140694584611776\nSTACK role=I tid=68648 low=830100996096 high=830101258240 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=830101257352 observations=2 buffer_low=140694584611776 buffer_high=140694584615872\nlifecycle=Closed state=Ready reason=0 trace=ISREqMZ threads=8 events=23 mutexes=1 resource_calls=32 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "mailbox-wrap",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "event checks=3211 rejected=2 records=522 ticket=522 entries=1 error=0 bridge_rejected=0\nSTACK role=S tid=75300 low=651773870080 high=651775967232 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=651775962352 observations=827 buffer_low=0 buffer_high=0\nSTACK role=C tid=56820 low=651778064384 high=651778326528 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=651778325248 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=49628 low=651778326528 high=651778588672 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=651778587696 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=77048 low=651778588672 high=651778850816 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=651778847720 observations=1063 buffer_low=140694584542144 buffer_high=140694584546240\nSTACK role=T tid=65104 low=651778850816 high=651779112960 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=651779111304 observations=2 buffer_low=140694584546240 buffer_high=140694584550336\nSTACK role=T tid=57248 low=651779112960 high=651779375104 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=651779372832 observations=6 buffer_low=140694584550336 buffer_high=140694584554432\nSTACK role=T tid=60244 low=651779375104 high=651779637248 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=651779636808 observations=2 buffer_low=140694584554432 buffer_high=140694584558528\nSTACK role=B tid=68912 low=651779637248 high=651779899392 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=651779897912 observations=6 buffer_low=140694584607680 buffer_high=140694584611776\nSTACK role=I tid=75732 low=651779899392 high=651780161536 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=651780159768 observations=2 buffer_low=140694584611776 buffer_high=140694584615872\nlifecycle=Closed state=Ready reason=0 trace=ISREqMZ threads=8 events=23 mutexes=1 resource_calls=32 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "mailbox-exhaustion",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "event checks=34 rejected=2 records=1 ticket=18446744073709551615 entries=1 error=0 bridge_rejected=1\nSTACK role=S tid=58960 low=597988212736 high=597990309888 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=597990304592 observations=26 buffer_low=0 buffer_high=0\nSTACK role=D tid=77816 low=597992669184 high=597992931328 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=597992930352 observations=1 buffer_low=0 buffer_high=0\nSTACK role=C tid=74348 low=597992407040 high=597992669184 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=597992668528 observations=2 buffer_low=0 buffer_high=0\nSTACK role=T tid=45044 low=597992931328 high=597993193472 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=597993190872 observations=9 buffer_low=140694584542144 buffer_high=140694584546240\nSTACK role=T tid=63696 low=597993193472 high=597993455616 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=597993453656 observations=2 buffer_low=140694584546240 buffer_high=140694584550336\nSTACK role=T tid=62228 low=597993455616 high=597993717760 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=597993716176 observations=6 buffer_low=140694584550336 buffer_high=140694584554432\nSTACK role=T tid=72836 low=597993717760 high=597993979904 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=597993978456 observations=2 buffer_low=140694584554432 buffer_high=140694584558528\nSTACK role=B tid=49592 low=597993979904 high=597994242048 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=597994240408 observations=6 buffer_low=140694584607680 buffer_high=140694584611776\nSTACK role=I tid=76668 low=597994242048 high=597994504192 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=597994503352 observations=2 buffer_low=140694584611776 buffer_high=140694584615872\nlifecycle=Closed state=Ready reason=0 trace=ISREqMZ threads=8 events=23 mutexes=1 resource_calls=32 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "mailbox-api",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "event checks=91 rejected=4 records=2 ticket=2 entries=1 error=0 bridge_rejected=9\nSTACK role=S tid=38696 low=145317953536 high=145320050688 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=145320045824 observations=56 buffer_low=0 buffer_high=0\nSTACK role=C tid=39840 low=145314349056 high=145314611200 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=145314609056 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=68924 low=145314611200 high=145314873344 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=145314871312 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=50928 low=145314873344 high=145315135488 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=145315133736 observations=22 buffer_low=140694584542144 buffer_high=140694584546240\nSTACK role=T tid=76144 low=145315135488 high=145315397632 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=145315395336 observations=10 buffer_low=140694584546240 buffer_high=140694584550336\nSTACK role=T tid=72276 low=145315397632 high=145315659776 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=145315658384 observations=6 buffer_low=140694584550336 buffer_high=140694584554432\nSTACK role=T tid=75504 low=145322147840 high=145322409984 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=145322408328 observations=2 buffer_low=140694584554432 buffer_high=140694584558528\nSTACK role=B tid=77812 low=145322409984 high=145322672128 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=145322670840 observations=6 buffer_low=140694584607680 buffer_high=140694584611776\nSTACK role=I tid=65344 low=145322672128 high=145322934272 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=145322931864 observations=2 buffer_low=140694584611776 buffer_high=140694584615872\nlifecycle=Closed state=Ready reason=0 trace=ISREPqpMZ threads=8 events=23 mutexes=1 resource_calls=32 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "input-invalid-task",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "prepare=3",
+      "stderr": ""
+    },
+    {
+      "scenario": "input-basic",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "prepare=8",
+      "stderr": ""
+    },
+    {
+      "scenario": "input-inactive",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "prepare=8",
+      "stderr": ""
+    },
+    {
+      "scenario": "input-category1",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "prepare=8",
+      "stderr": ""
+    },
+    {
+      "scenario": "category1-resource",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "prepare=8",
+      "stderr": ""
+    },
+    {
+      "scenario": "mailbox-mode",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 8,
+      "stdout": "event checks=1 rejected=0 records=0 ticket=0 entries=0 error=8 bridge_rejected=0\nlifecycle=Closed state=Failed reason=8 trace=IZ threads=0 events=0 mutexes=0 resource_calls=0 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "mailbox-replace-startup",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 1,
+      "stdout": "event checks=3 rejected=0 records=0 ticket=0 entries=0 error=1 bridge_rejected=0\nSTACK role=S tid=70180 low=435578470400 high=435580567552 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=435580563648 observations=3 buffer_low=0 buffer_high=0\nSTACK role=C tid=73192 low=435582664704 high=435582926848 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=435582925216 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=64692 low=435582926848 high=435583188992 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=435583187600 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=58272 low=435583188992 high=435583451136 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=435583449704 observations=2 buffer_low=140694584542144 buffer_high=140694584546240\nSTACK role=T tid=75948 low=435583451136 high=435583713280 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=435583712184 observations=2 buffer_low=140694584546240 buffer_high=140694584550336\nSTACK role=T tid=69300 low=435583713280 high=435583975424 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=435583973224 observations=2 buffer_low=140694584550336 buffer_high=140694584554432\nSTACK role=T tid=51628 low=435583975424 high=435584237568 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=435584236984 observations=2 buffer_low=140694584554432 buffer_high=140694584558528\nSTACK role=B tid=67552 low=435584237568 high=435584499712 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=435584498088 observations=5 buffer_low=140694584607680 buffer_high=140694584611776\nSTACK role=I tid=74952 low=435584499712 high=435584761856 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=435584761128 observations=2 buffer_low=140694584611776 buffer_high=140694584615872\nlifecycle=Closed state=Failed reason=1 trace=ISZ threads=8 events=23 mutexes=1 resource_calls=32 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    },
+    {
+      "scenario": "mailbox-replace-running",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 1,
+      "stdout": "event checks=13 rejected=0 records=0 ticket=0 entries=1 error=1 bridge_rejected=0\nSTACK role=S tid=60644 low=585162031104 high=585164128256 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=585164123072 observations=13 buffer_low=0 buffer_high=0\nSTACK role=C tid=70944 low=585159606272 high=585159868416 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=585159866672 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=73148 low=585166225408 high=585166487552 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=585166485168 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=48384 low=585166487552 high=585166749696 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=585166747816 observations=3 buffer_low=140694584542144 buffer_high=140694584546240\nSTACK role=T tid=9024 low=585166749696 high=585167011840 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=585167010152 observations=2 buffer_low=140694584546240 buffer_high=140694584550336\nSTACK role=T tid=76572 low=585167011840 high=585167273984 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=585167271896 observations=2 buffer_low=140694584550336 buffer_high=140694584554432\nSTACK role=T tid=61944 low=585167273984 high=585167536128 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=585167535320 observations=2 buffer_low=140694584554432 buffer_high=140694584558528\nSTACK role=B tid=67352 low=585167536128 high=585167798272 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=585167796264 observations=6 buffer_low=140694584607680 buffer_high=140694584611776\nSTACK role=I tid=7716 low=585167798272 high=585168060416 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=585168059880 observations=2 buffer_low=140694584611776 buffer_high=140694584615872\nlifecycle=Closed state=Failed reason=1 trace=ISREZ threads=8 events=23 mutexes=1 resource_calls=32 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1",
+      "stderr": ""
+    }
+  ],
+  "status": "pass",
+  "representation": "workspace/build/toolchain paths normalized; observed native addresses and thread IDs retained for physical-stack and fault correlation",
+  "raw_record_sha256": "1d03efa428452667a14d4957e9f3bdc0366dfbd5eb1211344f96c8250bfd79f8",
+  "raw_record_local": ".scratch/epic4/event-wakeup-raw.json"
+}

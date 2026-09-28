@@ -80,7 +80,7 @@ StatusType WaitEvent(EventMaskType Mask);
  * @return E_OK, E_OS_ACCESS or E_OS_CALLEVEL.
  */
 StatusType ClearEvent(EventMaskType Mask);
-/** Set stored event bits of an active Extended task; Wait/Wake belongs to4.7.
+/** Set stored event bits of an active Extended task; repeated setting merges bits.
  * @param TaskID Extended task identifier.
  * @param Mask Bits to publish.
  * @return E_OK, E_OS_ID, E_OS_ACCESS, E_OS_STATE or E_OS_CALLEVEL.

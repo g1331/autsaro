@@ -102,3 +102,18 @@ cargo test --manifest-path core/Cargo.toml epic4_resource_and_preemption -- --ex
 ```
 
 当前25个原生场景覆盖FULL/NON、两组内部ceiling的真实升降、Schedule/阻塞/已设置事件、嵌套和同ceiling恢复、拒绝快照、Task/ISR共享屏蔽、外部IRQ物理停驻、RES_SCHEDULER，以及8种静态配置拒绝。独立4.2的NON调度和ceiling释放条件以其原始优先级单独运行。原件与历史证据保留，新的 partial静态扫描覆盖实际复制件端口；诊断与完整质量出口继续如实记录。
+
+## 事件与输入发布（4.7）
+
+事件身份为 Task 与 mask，Wait 不消费存储位，Clear 只清除调用 Extended Task 的位；新实例（含自链）清零。Category1 由目标 category1_isrs 明确指定，拒绝汽车事件/资源核心服务；Category2 可 Set/Get 和使用声明的资源，但不能 Wait/Clear。Category1 不受 Category2 资源 ceiling 屏蔽。完整 Hook、中断暂停和嵌套仍须4.18验证。
+
+可选 input_task/input_event 将唯一输入消费者绑定到 autostart Extended Task；input_event=0关闭该入口。启用时专用模拟IRQ30由 backend保留，不能同时声明Category1或替换其handler。`Os_Mailbox.h` 提供32字节复制记录、单调uint64 ticket和256槽输入队列。一个持续存活的原生bridge线程是唯一生产者，配置Task是唯一消费者；其他生产者/Task拒绝。生产者先完整复制槽，再通过Windows Interlocked发布计数，最后pending模拟ISR，ISR只设置事件。队列满和ticket耗尽在写槽之前拒绝，输出ticket保持；消费者按ticket顺序复制后释放槽。汽车Task和ISR不能从bridge接口发布，bridge不能直接调用汽车事件/消费接口。
+
+消费循环使用GetEvent→Clear已观察位→排空完整记录→再次检查队列/事件→Wait。事件合并不合并记录或确认数；Get/Clear之间的通知即使被Clear，记录仍在队列并被排空。判空后发布的记录由随后存储的事件唤醒实际等待Task。队列与事件分别承担数据及唤醒责任，不能只凭事件位计数。ticket只代表记录接纳，业务完成、输出成功和HostBatch静止点仍由4.8/4.14集成闭合。
+
+```powershell
+python scripts/epic4_os.py --suite events
+cargo test --manifest-path core/Cargo.toml epic4_event_wakeup_races -- --exact --nocapture
+```
+
+26个独立原生向量覆盖连续Wait、所有权、新实例、标准错误、Category1/2调用矩阵、Category1在共享资源ceiling期间仍能交付、五个发布/等待交错、256槽容量、522条环绕、最后uint64 ticket和后续拒绝、bridge/消费者接口拒绝及5个配置拒绝。另验证接收Task未在所选mode中autostart时，在创建线程之前拒绝启动。第六复制件补丁维护IRQ30的handler所有权，启动期或运行期替换均以E_OS_ACCESS关闭，未接纳输入、未继续应用；原件不改。控制生产者通过实际Windows线程/IRQ接线；观察者读取真实TCB状态，只有测试握手使用宿主等待，不替代内核选择。MISRA仍为partial扫描，完整质量和偏离批准不能由这些行为测试替代。
