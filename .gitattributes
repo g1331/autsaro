@@ -6,3 +6,5 @@
 /runtime/os/patches/** -text whitespace=-blank-at-eol
 # Original input raw-byte manifests must survive a fresh checkout unchanged.
 /core/tests/fixtures/epic4/** text eol=lf
+/core/tests/fixtures/epic4_oracles/** text eol=lf
+/docs/assurance/epic4/** text eol=lf

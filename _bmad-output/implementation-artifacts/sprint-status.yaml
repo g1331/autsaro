@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-27-2026 18:43
-last_updated: 09-28-2026 16:37
+last_updated: 09-28-2026 19:27
 project: Autosar
 project_key: NOKEY
 tracking_system: file-system
@@ -57,7 +57,7 @@ development_status:
 
   epic-4: in-progress
   4-1-建立原创参考输入与可定位的拒绝样例: done
-  4-2-固定标准义务-依赖来源及独立验收预期: backlog
+  4-2-固定标准义务-依赖来源及独立验收预期: done
   4-3-建立固定内核的唯一-backend-与静态生命周期基础: done
   4-4-保留全部激活请求-fifo-与实际内核状态: backlog
   4-5-原子终止-链式移交与新入口执行: backlog

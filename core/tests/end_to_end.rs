@@ -15,6 +15,26 @@ fn epic4_reference_input_baseline() {
     epic4_reference::verify();
 }
 
+#[test]
+fn epic4_obligation_and_oracle_baseline() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let output = Command::new("python")
+        .arg(root.join("scripts/epic4_obligations.py"))
+        .current_dir(root)
+        .output()
+        .expect("run independent source/obligation/oracle baseline verifier");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout)
+            .starts_with("epic4_obligation_and_oracle_baseline PASS ")
+    );
+}
+
 #[cfg(windows)]
 #[test]
 fn epic4_native_stack_fault_shutdown() {

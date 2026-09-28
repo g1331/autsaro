@@ -1,0 +1,356 @@
+{
+  "profile": "Windows single-core SC1",
+  "status": "independent expected values; future execution not_run",
+  "cases": [
+    {
+      "id": "fifo-aabb",
+      "launcher_priority": "higher than both workers",
+      "worker_priorities": "equal",
+      "activation_limit": 2,
+      "requests": [
+        "A",
+        "A",
+        "B",
+        "B"
+      ],
+      "expected_entry_order": [
+        "A#1",
+        "A#2",
+        "B#1",
+        "B#2"
+      ],
+      "source": [
+        "OSEK \u00a74.2/4.3 and13.2.3.1",
+        "INTEGRATION-CONTRACT \u00a75"
+      ]
+    },
+    {
+      "id": "fifo-abab",
+      "launcher_priority": "higher than both workers",
+      "worker_priorities": "equal",
+      "activation_limit": 2,
+      "requests": [
+        "A",
+        "B",
+        "A",
+        "B"
+      ],
+      "expected_entry_order": [
+        "A#1",
+        "B#1",
+        "A#2",
+        "B#2"
+      ],
+      "source": [
+        "OSEK \u00a74.2/4.3 and13.2.3.1",
+        "INTEGRATION-CONTRACT \u00a75"
+      ]
+    },
+    {
+      "id": "activation-limit",
+      "operation": "third pending activation of basic task with limit2",
+      "expected_status": "E_OS_LIMIT",
+      "expected_side_effect": "none; accepted order unchanged",
+      "source": [
+        "OSEK13.2.3.1"
+      ]
+    },
+    {
+      "id": "invalid-task",
+      "operation": "ActivateTask with non-existent ID",
+      "expected_status": "E_OS_ID",
+      "expected_side_effect": "none",
+      "source": [
+        "OSEK13.2.3.1"
+      ]
+    },
+    {
+      "id": "null-state",
+      "operation": "GetTaskState(validTask,NULL) in legal Task context",
+      "expected_status": "E_OS_ILLEGAL_ADDRESS",
+      "source": [
+        "SWS_Os_00566"
+      ]
+    },
+    {
+      "id": "wait-basic",
+      "operation": "WaitEvent from Basic Task",
+      "expected_status": "E_OS_ACCESS",
+      "expected_side_effect": "Task remains Running",
+      "source": [
+        "OSEK13.5.3.4"
+      ]
+    },
+    {
+      "id": "terminate-with-resource",
+      "operation": "TerminateTask while external resource held",
+      "expected_status": "E_OS_RESOURCE",
+      "expected_side_effect": "task/resource/activation preserved",
+      "source": [
+        "OSEK13.2.3.2"
+      ]
+    },
+    {
+      "id": "real-stack-fault",
+      "operation": "actual native Task/ISR stack consumption, boundary fault or corrupted actual Rsp",
+      "expected_status": "E_OS_STACKFAULT",
+      "expected_side_effect": "no later application code; ISR/input/tick/scheduling closed; ShutdownOS and healthy shutdown control",
+      "source": [
+        "SWS_Os_00067",
+        "SWS_Os_00068",
+        "INTEGRATION-CONTRACT \u00a75",
+        "SWS_Os_00107"
+      ],
+      "initial": "Actual Task/Category2 ISR native stack monitoring enabled; ProtectionHook not configured"
+    },
+    {
+      "id": "extended-wait-wake",
+      "initial": "Extended E priority2 Running, event mask0; Basic P priority1 Ready",
+      "operations": [
+        "E WaitEvent(1)",
+        "P SetEvent(E,1)"
+      ],
+      "expected_trace": [
+        "E Waiting",
+        "P Running",
+        "E Ready",
+        "E Running before P SetEvent returns",
+        "E WaitEvent returns E_OK",
+        "E GetEvent reports1",
+        "E ClearEvent(1) returns E_OK",
+        "E event mask0"
+      ],
+      "source": [
+        "OSEK OS 2.2.3 sections7,13.5.3.1,13.5.3.3,13.5.3.4"
+      ]
+    },
+    {
+      "id": "event-already-set",
+      "initial": "Extended E Running, event mask1",
+      "operations": [
+        "WaitEvent(1)"
+      ],
+      "expected_trace": [
+        "returns E_OK without Waiting transition",
+        "event mask remains1"
+      ],
+      "source": [
+        "OSEK OS 2.2.3 sections7,13.5.3.4"
+      ]
+    },
+    {
+      "id": "nonpreemptive-schedule",
+      "initial": "Basic L priority1 NON Task Running with its implicit internal resource at highest task priority; H priority2 suspended; no external resource held",
+      "operations": [
+        "L ActivateTask(H)",
+        "L Schedule()"
+      ],
+      "expected_trace": [
+        "L ActivateTask returns E_OK, H Ready and L continues",
+        "Schedule releases the implicit internal resource",
+        "H Running",
+        "H terminates",
+        "L resumes Schedule returning E_OK with internal resource reacquired"
+      ],
+      "source": [
+        "OSEK OS 2.2.3 sections4.6.2,13.2.3.4",
+        "OSEK OS 2.2.3 section8.7"
+      ]
+    },
+    {
+      "id": "resource-ceiling-release",
+      "initial": "L priority1 Running; H priority2 suspended; resource R ceiling3 accessible by L",
+      "operations": [
+        "L GetResource(R)",
+        "L ActivateTask(H)",
+        "L ReleaseResource(R)"
+      ],
+      "expected_trace": [
+        "L effective priority3",
+        "H Ready, L continues",
+        "L effective priority1 at release",
+        "H Running before L ReleaseResource returns",
+        "H terminates",
+        "L ReleaseResource returns E_OK"
+      ],
+      "source": [
+        "OSEK OS 2.2.3 sections8,13.4.3.1,13.4.3.2"
+      ]
+    },
+    {
+      "id": "alarm-relative-wrap",
+      "initial": "Counter C value14 max15 mincycle1 ticksperbase1; alarm A inactive, action ActivateTask(T)",
+      "operations": [
+        "GetAlarmBase(A)",
+        "SetRelAlarm(A,3,0)",
+        "GetAlarm(A)",
+        "SetRelAlarm(A,1,0)",
+        "IncrementCounter(C) three times",
+        "GetAlarm(A)",
+        "CancelAlarm(A)"
+      ],
+      "expected_trace": [
+        "base max15 ticksperbase1 mincycle1",
+        "E_OK",
+        "remaining3",
+        "E_OS_STATE with original deadline preserved",
+        "counter15 then0 then1; exactly one T activation at1",
+        "E_OS_NOFUNC",
+        "E_OS_NOFUNC"
+      ],
+      "source": [
+        "OSEK OS 2.2.3 sections13.6.3.1-13.6.3.5",
+        "OSEK OS 2.2.3 section9 and R24-11 SWS_OS Counter APIs"
+      ]
+    },
+    {
+      "id": "alarm-absolute-cycle-cancel",
+      "initial": "Counter C value14 max15 mincycle1; alarm A inactive, action SetEvent(E,1), Extended E active",
+      "operations": [
+        "SetAbsAlarm(A,2,2)",
+        "IncrementCounter(C) four times",
+        "IncrementCounter(C) twice",
+        "CancelAlarm(A)",
+        "IncrementCounter(C) twice",
+        "SetRelAlarm(A,1,16)"
+      ],
+      "expected_trace": [
+        "E_OK",
+        "counter15,0,1,2; SetEvent at2",
+        "SetEvent again at4",
+        "E_OK",
+        "counter6 with no additional alarm action",
+        "E_OS_VALUE, A remains inactive"
+      ],
+      "source": [
+        "OSEK OS 2.2.3 sections13.6.3.3-13.6.3.5",
+        "OSEK OS 2.2.3 section9 and R24-11 SWS_OS Counter APIs"
+      ]
+    },
+    {
+      "id": "two-unsynchronized-schedule-tables",
+      "initial": "Eight independent software Counters C0-C7 value0 max15; S0 on C0 and S1 on C1, both NONE synchronization and STOPPED, duration5, nonrepeating. S0 expiry1 ActivateTask(A),expiry3 SetEvent(E,1); S1 expiry1 ActivateTask(B). Extended E active.",
+      "operations": [
+        "StartScheduleTableRel(S0,2)",
+        "StartScheduleTableRel(S1,1)",
+        "IncrementCounter(C0) seven times",
+        "IncrementCounter(C1) six times",
+        "GetScheduleTableStatus(S0)",
+        "GetScheduleTableStatus(S1)",
+        "GetCounterValue(C2-C7)"
+      ],
+      "expected_trace": [
+        "both starts E_OK and status RUNNING",
+        "S0: A activation atC0=3, SetEvent atC0=5, STOPPED atC0=7",
+        "S1: B activation atC1=2, STOPPED atC1=6",
+        "S0 STOPPED",
+        "S1 STOPPED",
+        "all six untouched counters remain0"
+      ],
+      "source": [
+        "R24-11 SWS_OS section7.3 and APIs StartScheduleTableRel/GetScheduleTableStatus/IncrementCounter",
+        "R24-11 SWS_Os_00241 Table7.4"
+      ]
+    },
+    {
+      "id": "nested-interrupt-control",
+      "initial": "Task context, Cat1/Cat2 interrupts enabled; pending ISR deliveries recorded independently",
+      "operations": [
+        "SuspendAllInterrupts twice",
+        "pend Cat1 andCat2",
+        "ResumeAllInterrupts once",
+        "ResumeAllInterrupts second time",
+        "SuspendOSInterrupts twice",
+        "pend Cat2, deliver Cat1",
+        "ResumeOSInterrupts once",
+        "ResumeOSInterrupts second time",
+        "DisableAllInterrupts",
+        "pend Cat1 andCat2",
+        "EnableAllInterrupts"
+      ],
+      "expected_trace": [
+        "both categories deferred during nested All suspension",
+        "first ResumeAll keeps both disabled",
+        "last ResumeAll restores original enabled state and pending deliveries",
+        "OS suspension defers Cat2 while Cat1 remains permitted",
+        "first ResumeOS keeps Cat2 deferred",
+        "last ResumeOS restores Cat2 and pending delivery",
+        "DisableAll defers both categories",
+        "EnableAll restores both categories; no wall-clock tick introduced"
+      ],
+      "source": [
+        "OSEK OS 2.2.3 sections6,13.3.2.1-13.3.2.6",
+        "INTEGRATION-CONTRACT controlled-input policy"
+      ]
+    },
+    {
+      "id": "hooks-error-context-and-no-recursion",
+      "initial": "Startup/Shutdown/Error/PreTask/PostTask hooks enabled; service-ID and parameter-access enabled; autostart A priority2 and B priority1; invalid TaskID999",
+      "operations": [
+        "StartOS(default)",
+        "A ActivateTask(999)",
+        "ErrorHook internally calls ActivateTask(999)",
+        "A successful GetTaskState(B)",
+        "A TerminateTask",
+        "B ShutdownOS(E_OK)"
+      ],
+      "expected_trace": [
+        "StartupHook after initialization before any Task Running",
+        "PreTaskHook sees A Running and GetTaskID=A",
+        "ErrorHook E_OS_ID, service ActivateTask and original parameter999 visible before A receives E_OS_ID",
+        "nested error returns E_OS_ID without recursive ErrorHook or overwriting outer diagnostic context",
+        "successful GetTaskState invokes no ErrorHook",
+        "PostTaskHook sees A still Running before outgoing transition",
+        "PreTaskHook sees B Running",
+        "ShutdownHook receives E_OK once",
+        "shutdown caller never returns; after ShutdownHook returns interrupts disabled and automotive shutdown enters endless loop, no later automotive Task/ISR/input/tick code"
+      ],
+      "source": [
+        "OSEK OS 2.2.3 sections11,13.8.2,13.8.4",
+        "SWS_Os_00424",
+        "SWS_Os_00425"
+      ]
+    },
+    {
+      "id": "isr-service-level-error",
+      "initial": "Category2 ISR active, Extended Task E active; Extended Status; legal task-switch deferred to ISR exit",
+      "operations": [
+        "ISR SetEvent(E,1)",
+        "ISR WaitEvent(1)"
+      ],
+      "expected_trace": [
+        "SetEvent returns E_OK and E becomes Ready if waiting",
+        "WaitEvent returns E_OS_CALLEVEL with ISR/event/task states unchanged",
+        "ready higher-priority Task executes only after ISR exit"
+      ],
+      "source": [
+        "OSEK OS 2.2.3 sections12.2,13.5.3.1,13.5.3.4",
+        "R24-11 SWS_OS ISR exit scheduling"
+      ]
+    },
+    {
+      "id": "native-boundary-stack-fault",
+      "operation": "Consume actual native Task or ISR stack until reserve boundary fault; no synthetic buffer",
+      "expected_status": "E_OS_STACKFAULT",
+      "expected_side_effect": "VEH/stack monitor records actual boundary condition; no later application code; healthy control calls ShutdownOS once with no ProtectionHook, independent ShutdownHook stack; damaged stack never resumes",
+      "source": [
+        "SWS_Os_00067",
+        "SWS_Os_00068",
+        "SWS_Os_00107",
+        "INTEGRATION-CONTRACT section5"
+      ]
+    },
+    {
+      "id": "native-corrupted-rsp-stack-fault",
+      "operation": "Context saved actual native Rsp is corrupted outside its registered stack bounds before resume",
+      "expected_status": "E_OS_STACKFAULT",
+      "expected_side_effect": "pre-resume monitor rejects real saved context before execution; no later application code; healthy control calls ShutdownOS once with no ProtectionHook; damaged context never resumes",
+      "source": [
+        "SWS_Os_00068",
+        "SWS_Os_00107",
+        "INTEGRATION-CONTRACT section5",
+        "SWS_Os_00067"
+      ]
+    }
+  ]
+}

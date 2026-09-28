@@ -13,7 +13,7 @@
     {
       "path": "expectations.json",
       "role": "negative fixture or expectation catalog",
-      "sha256": "4beba3461e5d0543f34d1d7ce4d11c82f7c7383cfdb4e454147190c733aa8d12"
+      "sha256": "8de589dd6e8c0e795b7e53878168ab2269a7b6ba3a692e25268b65d4bb4af6b8"
     },
     {
       "path": "negative/broken-reference/application.arxml",
@@ -123,7 +123,7 @@
     {
       "path": "positive/ecuc.arxml",
       "role": "selected ECUC configuration values",
-      "sha256": "5685f8f1dde540299172edb776b8219b07bad4fab158259e4ae0fa69295835a6"
+      "sha256": "3514ad87a216403788c79fe7f9b7bcfe5600ea5619c6aac5ed3870767852e1b3"
     },
     {
       "path": "positive/extract.arxml",

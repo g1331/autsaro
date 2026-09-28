@@ -1,0 +1,182 @@
+{
+  "profile": "epic4-win64-sr-cs-v1",
+  "sources": [
+    {
+      "id": "AUTOSAR_CP_SWS_OS",
+      "edition": "R24-11",
+      "path": "docs/official/R24-11/CP/SystemServices/AUTOSAR_CP_SWS_OS.pdf",
+      "sha256": "6ec1915808e8819c6552bcc69fe935d8664f7bf0b8f9eb55810377e79ff8ae44",
+      "authoritative_hash_list": "docs/official/R24-11/CP/AUTOSAR_CP_TR_SpecificationHashes.sha256",
+      "source_url": "https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_OS.pdf",
+      "redistribute": false
+    },
+    {
+      "id": "AUTOSAR_CP_SWS_DiagnosticCommunicationManager",
+      "edition": "R24-11",
+      "path": "docs/official/R24-11/CP/Diagnostics/AUTOSAR_CP_SWS_DiagnosticCommunicationManager.pdf",
+      "sha256": "cf5aeee78fda6e5a25f982f04cb146ce4a75586de7ba41913d46b0cea1cc2407",
+      "authoritative_hash_list": "docs/official/R24-11/CP/AUTOSAR_CP_TR_SpecificationHashes.sha256",
+      "source_url": "https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_DiagnosticCommunicationManager.pdf",
+      "redistribute": false
+    },
+    {
+      "id": "AUTOSAR_CP_SWS_CANTransportLayer",
+      "edition": "R24-11",
+      "path": "docs/official/R24-11/CP/Communication/AUTOSAR_CP_SWS_CANTransportLayer.pdf",
+      "sha256": "7334d633b02c443aacbe0ca25e20c319e977104eeb4bf8e67ac0358cfea34a22",
+      "authoritative_hash_list": "docs/official/R24-11/CP/AUTOSAR_CP_TR_SpecificationHashes.sha256",
+      "source_url": "https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_CANTransportLayer.pdf",
+      "redistribute": false
+    },
+    {
+      "id": "AUTOSAR_CP_SWS_RTE",
+      "edition": "R24-11",
+      "path": "docs/official/R24-11/CP/RTE/AUTOSAR_CP_SWS_RTE.pdf",
+      "sha256": "d9b95dfa8ae5c94418382835b7f5da9fd53e0c76c07b5d14f139c8a58dd39769",
+      "authoritative_hash_list": "docs/official/R24-11/CP/AUTOSAR_CP_TR_SpecificationHashes.sha256",
+      "source_url": "https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_RTE.pdf",
+      "redistribute": false
+    },
+    {
+      "id": "AUTOSAR_CP_SWS_BSWGeneral",
+      "edition": "R24-11",
+      "path": "docs/official/R24-11/CP/BSWGeneral/AUTOSAR_CP_SWS_BSWGeneral.pdf",
+      "sha256": "4709480090ff9a612d908e8bd46edd502e2e4fa332f7a3bf93801f17cc91872b",
+      "authoritative_hash_list": "docs/official/R24-11/CP/AUTOSAR_CP_TR_SpecificationHashes.sha256",
+      "source_url": "https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_BSWGeneral.pdf",
+      "redistribute": false
+    },
+    {
+      "id": "AUTOSAR_CP_TPS_ECUConfiguration",
+      "edition": "R24-11",
+      "path": "docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_TPS_ECUConfiguration.pdf",
+      "sha256": "8db56203b533c5783dd594d1e4eb8aa5c5dc6839b51d39dabf8499b34b6a0170",
+      "authoritative_hash_list": "docs/official/R24-11/CP/AUTOSAR_CP_TR_SpecificationHashes.sha256",
+      "source_url": "https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_TPS_ECUConfiguration.pdf",
+      "redistribute": false
+    },
+    {
+      "id": "AUTOSAR_CP_TPS_SystemTemplate",
+      "edition": "R24-11",
+      "path": "docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_TPS_SystemTemplate.pdf",
+      "sha256": "5267a329104c2dcb029b3f713afa376733466a1b225a33498036a2f1ef017777",
+      "authoritative_hash_list": "docs/official/R24-11/CP/AUTOSAR_CP_TR_SpecificationHashes.sha256",
+      "source_url": "https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_TPS_SystemTemplate.pdf",
+      "redistribute": false
+    },
+    {
+      "id": "AUTOSAR_CP_TPS_SoftwareComponentTemplate",
+      "edition": "R24-11",
+      "path": "docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_TPS_SoftwareComponentTemplate.pdf",
+      "sha256": "ea86a1b4b43c4ec0319b706e8696412ffb920cb6cc6422a911bedc1f0c9d59da",
+      "authoritative_hash_list": "docs/official/R24-11/CP/AUTOSAR_CP_TR_SpecificationHashes.sha256",
+      "source_url": "https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_TPS_SoftwareComponentTemplate.pdf",
+      "redistribute": false
+    },
+    {
+      "id": "AUTOSAR_CP_TPS_BSWModuleDescriptionTemplate",
+      "edition": "R24-11",
+      "path": "docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_TPS_BSWModuleDescriptionTemplate.pdf",
+      "sha256": "786ccab650f516f541e8d29b41f5c00e57ccd3de6ac1cad70db268f3ec7c5c28",
+      "authoritative_hash_list": "docs/official/R24-11/CP/AUTOSAR_CP_TR_SpecificationHashes.sha256",
+      "source_url": "https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_TPS_BSWModuleDescriptionTemplate.pdf",
+      "redistribute": false
+    },
+    {
+      "id": "OSEK_OS",
+      "edition": "2.2.3, 2005-02-17",
+      "external_cache": "OSEK_OS223_PDF",
+      "sha256": "2ec77d3c4259797f4d0190f938131b641d415d8e0a85ce40a72e4201a9114746",
+      "source_url": "https://www.nxp.com/docs/en/application-note-software/685_2_os223.pdf",
+      "redistribute": false
+    }
+  ],
+  "kernel": {
+    "tag": "V11.3.1",
+    "commit": "054e14f3397023aa83813a65aa065fc4597d481b",
+    "source_url": "https://codeload.github.com/FreeRTOS/FreeRTOS-Kernel/tar.gz/054e14f3397023aa83813a65aa065fc4597d481b",
+    "archive_sha256": "dd832f699e6ebee00366d7c737e259860d9d1fd5f2c2311c90dff16e8cfbcf61",
+    "license": "MIT",
+    "files": {
+      "LICENSE.md": "508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1",
+      "include/FreeRTOS.h": "c8e1cec639a7e8aa115ec5a1d19ab5c06cc06ab84f5c7fedefeba410a09cad55",
+      "include/StackMacros.h": "74ec543ebd05d7349d81423f639c9f1fe293a2546dffa8fd45ff5ace18df34bc",
+      "include/atomic.h": "3c67fad07a479a52ef100867361fd558ae57366bc49dee7430dc6f81c513fea4",
+      "include/croutine.h": "3f29e3f57a9b7ed5b20d9587493eecdab9721691b33e5f73a1f9c88e538aa773",
+      "include/deprecated_definitions.h": "0f178c08d7c3beeebdeaf80f8a2f95a414cca365e541afd571191f41d727829b",
+      "include/event_groups.h": "601e20f83bf25037b11fb1a4d73e2ee5f473fa16ea4a819b8e48fc615a3a1d8d",
+      "include/list.h": "3d609251d8844eb0739b87e8a73e22c8a5e87e732818225de50ac9e6e2570d91",
+      "include/message_buffer.h": "440c9396c36796834c28c53ab2618318081d2131b7424626be2d3e5b9c094537",
+      "include/mpu_prototypes.h": "3c8a2a4830669a75d30d44743705fdfe5e652ff7fa418e6e1e9a8ff0599b88ba",
+      "include/mpu_syscall_numbers.h": "c59cd2441cf7b77abcb1f80fa4c2a6e8dc46c889697952e41ae75ad9113cb5df",
+      "include/mpu_wrappers.h": "cd7039238054231580972711aa2e721c92af84f48d41bc547421beef62d94359",
+      "include/newlib-freertos.h": "36f01b774f38c7428174bf1e2d1fe254c6c121c9425e5a6ecc63b719f4c6f07c",
+      "include/picolibc-freertos.h": "0f9872dc834793f07a8e26002dfd2555a8fc2e4b517334e33b413cbcae33fa98",
+      "include/portable.h": "9e7eadda8b37e2ef9144a65adc3cd924609ac1260afbbfd38229eb249d541de3",
+      "include/projdefs.h": "b87e7b478bf43b00f4d6b5a95b88f6274f2d6904e3c3b7d87661819f772b2a56",
+      "include/queue.h": "b37adb121ccda80426d6c838badda077543181e8cf86c187a7a6dc079713413c",
+      "include/semphr.h": "4c0cdbc7a795b1d0ce60e72e6e5cde88e31a415c77d58796dea82a362cec9dbf",
+      "include/stack_macros.h": "64d48c4a8c633f7585d0ecb98d37be3cd1535b5c97e670f0b71e68edefc27f53",
+      "include/stream_buffer.h": "7572e8af72b78e9928f6b6f4dc56baa5c100cee11dde69e97823a86a3ac5471b",
+      "include/task.h": "805ba117c8e9a3ad3bc6cceadb8c70de584c1389947477b6c203aab524302158",
+      "include/timers.h": "3c1447bd41a4e718afcd77e2bdd6fea47f4a828b0b4631e755902912bf2157d1",
+      "list.c": "182fefbf019d8d804ba287dc6a2ee4755b9895898ea7aae7fa41f0154c83c677",
+      "portable/MSVC-MingW/port.c": "003bfa8d6b441a628bbf3a0bd93ca4f5e3158e3aba50e726e64b16f84409e296",
+      "portable/MSVC-MingW/portmacro.h": "c1fc8b71ab93902e6fb0699ffc25af756fe4316fe6235c8705b4f68689c721a2",
+      "queue.c": "31e5ce0890906b7eaac466007c8810fbfe248d22f667a3c620c3f18e9fc0fcc3",
+      "tasks.c": "ae8bcc9dd0b30d39bf37eb36f1ef3067d086906b2f92ca2aea1acc0f0ad31645"
+    }
+  },
+  "archive_identity": {
+    "source_url": "https://codeload.github.com/FreeRTOS/FreeRTOS-Kernel/tar.gz/054e14f3397023aa83813a65aa065fc4597d481b",
+    "sha256": "dd832f699e6ebee00366d7c737e259860d9d1fd5f2c2311c90dff16e8cfbcf61",
+    "external_cache": "FREERTOS_KERNEL_ARCHIVE",
+    "verified": true
+  },
+  "production_patches": [
+    {
+      "path": "runtime/os/patches/0001-controlled-host-lifecycle.patch",
+      "sha256": "b522c8fa69454989be899658d670f6313fb621f455f32a258e06fad18fbbf04f",
+      "role": "production patch, applied only to copied fixed upstream"
+    },
+    {
+      "path": "runtime/os/patches/0002-native-stack.patch",
+      "sha256": "75e4e04e0de99dd9c1dc3e36e3a93c3d51cad64fec32a09e8b203c3c15040648",
+      "role": "production patch, applied only to copied fixed upstream"
+    }
+  ],
+  "research_material": [
+    {
+      "path": "_bmad-output/planning-artifacts/architecture/epic-4/feasibility/probe.py",
+      "sha256": "963246f9cf410f46235c5699f615a29591f108ed287b9110677ff6037fa36693",
+      "role": "research only, not applied by production build"
+    }
+  ],
+  "compiler": {
+    "identity": "gcc.exe (Rev5, Built by MSYS2 project) 16.1.0",
+    "target": "x86_64-w64-mingw32",
+    "executable_sha256": "d38d4dd6bea387499487881383e644ab7c193ac8f8364dc4252d6e6cc09700e2",
+    "external_tool": true,
+    "redistributed": false
+  },
+  "rights": [
+    {
+      "item": "fixed FreeRTOS source and product patches",
+      "license": "MIT, preserved LICENSE.md and original notices",
+      "gate": "verified source redistribution permission and notice preservation"
+    },
+    {
+      "item": "official AUTOSAR XSD/MOD/PDF and OSEK source documents",
+      "gate": "external lawful reference only; original files excluded from reference package"
+    },
+    {
+      "item": "repository original product source",
+      "gate": "original repository material; no new public license grant or publication performed"
+    },
+    {
+      "item": "future generated binary runtime library imports",
+      "gate": "not_run; binary import/runtime notice audit required in stories4.20/4.21 before packaging",
+      "blocks": "package containing an unreviewed or unknown-rights runtime dependency"
+    }
+  ]
+}

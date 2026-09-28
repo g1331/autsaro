@@ -1,0 +1,22 @@
+{
+  "baseline_status": "pass",
+  "future_behavior_status": "not_run",
+  "independent_baseline_review": "independent baseline review accepted; future target behavior not_run",
+  "source_count": 10,
+  "current_os_requirements": 595,
+  "trace_rows": 691,
+  "protocol_cases": 11,
+  "timing_cases": 6,
+  "os_cases": 20,
+  "pdf_reader": "1.28.2",
+  "compiler": "gcc.exe (Rev5, Built by MSYS2 project) 16.1.0",
+  "scope": "source/trace/oracle baseline only; target behavior and final applicability exit remain separate gates",
+  "inputs": {
+    "docs/assurance/epic4/obligations.json": "a691103e8dd217b12c1e838bdb6a06fcef772dc8cbafb673d2bf70b62185b18f",
+    "docs/assurance/epic4/os-source-index.json": "2165a30b7f71ff1305e925f061bbd92cec6578f2dbe7323c69fe0a15aac163b0",
+    "docs/assurance/epic4/reviewed-baseline.json": "a2f2e97c256cd4f563bcbf88793ae0f0799f7a3c0dc7a1b9957bc47a08fe1031",
+    "docs/assurance/epic4/sources.json": "2e12c69236c684cdd233866b89fcd98c57b7b017e91719561604032e2a17b0cd",
+    "core/tests/fixtures/epic4_oracles/os.json": "7d5f539d39725742db720d8c85097f173c4138031f92c7f2a94017ca91aeae26",
+    "core/tests/fixtures/epic4_oracles/protocol.json": "b064fada1c69ae11628f58ea589f3a832b1ade14798010e0dba6a2cb4fa30a1f"
+  }
+}

@@ -830,6 +830,60 @@
         "/Configuration/Dcm/Config/Dsp/Sessions/Extended"
       ],
       "category": "DID_CONTRACT_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Os/OperatingSystem",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Os/OsOS/OsUseGetServiceId']/a:VALUE",
+      "expected": [
+        "true"
+      ],
+      "category": "HOOK_CONFIG_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Os/OperatingSystem",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Os/OsOS/OsUseParameterAccess']/a:VALUE",
+      "expected": [
+        "true"
+      ],
+      "category": "HOOK_CONFIG_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Dcm/General",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Dcm/DcmGeneral/DcmTaskTime']/a:VALUE",
+      "expected": [
+        "0.001"
+      ],
+      "category": "PERIOD_ALARM_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/Dcm/Config/Dsp",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsp/DcmDspMaxDidToRead']/a:VALUE",
+      "expected": [
+        "2"
+      ],
+      "category": "DID_CONTRACT_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/CanTp/General",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/CanTp/CanTpGeneral/CanTpPaddingByte']/a:VALUE",
+      "expected": [
+        "0"
+      ],
+      "category": "TRANSPORT_CONFIG_CONFLICT"
+    },
+    {
+      "file": "ecuc.arxml",
+      "object": "/Configuration/CanTp/Config",
+      "xpath": "a:PARAMETER-VALUES/*[a:DEFINITION-REF='/AUTOSAR/EcucDefs/CanTp/CanTpConfig/CanTpMainFunctionPeriod']/a:VALUE",
+      "expected": [
+        "0.001"
+      ],
+      "category": "PERIOD_ALARM_CONFLICT"
     }
   ],
   "required_current_entries": [

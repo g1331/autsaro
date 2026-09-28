@@ -1,0 +1,463 @@
+{
+  "profile": "epic4-win64-sr-cs-v1",
+  "status": "independent expected values; future execution not_run",
+  "settings": {
+    "clock": "controlled_logical_ms",
+    "tick_ms": 1,
+    "input_before_deadline": true,
+    "application_before_dcm": true,
+    "rx_deadline_ms": 30,
+    "first_rx_timeout_ms": 0,
+    "application_period_ms": 10,
+    "tx_period_ms": 10,
+    "p2_ms": 50,
+    "p2_star_ms": 5000,
+    "p2_adjust_ms": 0,
+    "p2_star_adjust_ms": 0,
+    "s3_ms": 5000,
+    "s3_source": "SWS_Dcm_01679: overwrite parameter absent",
+    "nas_ms": 200,
+    "nar_ms": 200,
+    "nbs_ms": 200,
+    "nbr_ms": 200,
+    "ncr_ms": 200,
+    "ncs_ms": 200,
+    "bs": 0,
+    "stmin_ms": 0,
+    "wft_max": 0,
+    "padding_byte": 0,
+    "max_dids_per_request": 2,
+    "rx_sdu_buffer_bytes": 64,
+    "tx_sdu_buffer_bytes": 64
+  },
+  "matching": "Expected frames are ordered observations at specified epoch; earlier periodic frames must separately satisfy their declared schedule. Transport-only cases filter diagnostic ID while checking periodic frames independently.",
+  "cases": [
+    {
+      "id": "initial-did",
+      "input": [
+        {
+          "epoch": 0,
+          "rx": [
+            {
+              "id": 1792,
+              "data": "0322123400000000"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "epoch": 0,
+          "id": 1800,
+          "data": "0762123400000000"
+        }
+      ],
+      "source": [
+        "INTEGRATION-CONTRACT \u00a72/6",
+        "SWS_Dcm_00437"
+      ]
+    },
+    {
+      "id": "sr-and-same-epoch-did",
+      "input": [
+        {
+          "epoch": 0,
+          "rx": [
+            {
+              "id": 800,
+              "data": "78563412"
+            }
+          ]
+        },
+        {
+          "epoch": 10,
+          "rx": [
+            {
+              "id": 1792,
+              "data": "0322123400000000"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "epoch": 10,
+          "id": 801,
+          "data": "78563412"
+        },
+        {
+          "epoch": 10,
+          "id": 1800,
+          "data": "0762123412345678"
+        }
+      ],
+      "source": [
+        "INTEGRATION-CONTRACT \u00a73/6"
+      ]
+    },
+    {
+      "id": "rx-expires-at-30",
+      "input": [
+        {
+          "epoch": 0,
+          "rx": [
+            {
+              "id": 800,
+              "data": "78563412"
+            }
+          ]
+        },
+        {
+          "epoch": 30,
+          "rx": [
+            {
+              "id": 1792,
+              "data": "0322123400000000"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "epoch": 30,
+          "id": 801,
+          "data": "00000000"
+        },
+        {
+          "epoch": 30,
+          "id": 1800,
+          "data": "0762123400000000"
+        }
+      ],
+      "source": [
+        "INTEGRATION-CONTRACT \u00a72/6"
+      ]
+    },
+    {
+      "id": "rx-at-deadline-wins",
+      "input": [
+        {
+          "epoch": 0,
+          "rx": [
+            {
+              "id": 800,
+              "data": "78563412"
+            }
+          ]
+        },
+        {
+          "epoch": 30,
+          "rx": [
+            {
+              "id": 800,
+              "data": "EFCDAB89"
+            },
+            {
+              "id": 1792,
+              "data": "0322123400000000"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "epoch": 30,
+          "id": 801,
+          "data": "EFCDAB89"
+        },
+        {
+          "epoch": 30,
+          "id": 1800,
+          "data": "0762123489ABCDEF"
+        }
+      ],
+      "source": [
+        "INTEGRATION-CONTRACT \u00a73/6"
+      ]
+    },
+    {
+      "id": "unsupported-did",
+      "input": [
+        {
+          "epoch": 0,
+          "rx": [
+            {
+              "id": 1792,
+              "data": "0322123500000000"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "epoch": 0,
+          "id": 1800,
+          "data": "037F223100000000"
+        }
+      ],
+      "source": [
+        "SWS_Dcm_00438"
+      ]
+    },
+    {
+      "id": "missing-did",
+      "input": [
+        {
+          "epoch": 0,
+          "rx": [
+            {
+              "id": 1792,
+              "data": "0122000000000000"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "epoch": 0,
+          "id": 1800,
+          "data": "037F221300000000"
+        }
+      ],
+      "source": [
+        "SWS_Dcm_00696",
+        "SWS_Dcm_00272"
+      ]
+    },
+    {
+      "id": "too-many-dids",
+      "input": [
+        {
+          "epoch": 0,
+          "rx": [
+            {
+              "id": 1792,
+              "data": "0722123412341234"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "epoch": 0,
+          "id": 1800,
+          "data": "037F221300000000"
+        }
+      ],
+      "source": [
+        "SWS_Dcm_01335",
+        "DcmDspMaxDidToRead=2"
+      ]
+    },
+    {
+      "id": "extended-session",
+      "input": [
+        {
+          "epoch": 0,
+          "rx": [
+            {
+              "id": 1792,
+              "data": "0210030000000000"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "epoch": 0,
+          "id": 1800,
+          "data": "065003003201F400"
+        }
+      ],
+      "source": [
+        "SWS_Dcm_00250",
+        "SWS_Dcm_00311",
+        "P2=50ms / P2*=5000ms encoded in 10ms units"
+      ]
+    },
+    {
+      "id": "unsupported-session",
+      "input": [
+        {
+          "epoch": 0,
+          "rx": [
+            {
+              "id": 1792,
+              "data": "0210020000000000"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "epoch": 0,
+          "id": 1800,
+          "data": "037F101200000000"
+        }
+      ],
+      "source": [
+        "SWS_Dcm_00273",
+        "SWS_Dcm_00307",
+        "configured subservices1/3"
+      ]
+    },
+    {
+      "id": "same-did-segmented-read",
+      "precondition": "snapshot 0x12345678 committed at epoch10",
+      "input": [
+        {
+          "epoch": 10,
+          "rx": [
+            {
+              "id": 1792,
+              "data": "0522123412340000"
+            }
+          ]
+        },
+        {
+          "epoch": 10,
+          "rx": [
+            {
+              "id": 1792,
+              "data": "3000000000000000"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "epoch": 10,
+          "id": 1800,
+          "data": "100D621234123456"
+        },
+        {
+          "epoch": 10,
+          "id": 1800,
+          "data": "2178123412345678"
+        }
+      ],
+      "source": [
+        "SWS_Dcm_00437: every requested DID",
+        "declared max DID count2; same application server twice",
+        "CanTp normal-addressed FF/CF"
+      ]
+    },
+    {
+      "id": "rx-segmentation-then-format-rejection",
+      "input": [
+        {
+          "epoch": 10,
+          "rx": [
+            {
+              "id": 1792,
+              "data": "1009221234123412"
+            }
+          ]
+        },
+        {
+          "epoch": 11,
+          "rx": [
+            {
+              "id": 1792,
+              "data": "2134123400000000"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "epoch": 10,
+          "id": 1800,
+          "data": "3000000000000000"
+        },
+        {
+          "epoch": 11,
+          "id": 1800,
+          "data": "037F221300000000"
+        }
+      ],
+      "source": [
+        "CanTp Rx FF/CF, BS0/STmin0",
+        "SWS_Dcm_01335: four requested DIDs exceed2"
+      ]
+    }
+  ],
+  "timing_cases": [
+    {
+      "id": "nbs-on-deadline",
+      "start": "FF successful confirmation at10",
+      "deadline": 210,
+      "event": "FC received at210 before timeout",
+      "expected": "CF response completes; no timeout",
+      "source": [
+        "CanTp \u00a77.3.2",
+        "input-before-deadline contract"
+      ]
+    },
+    {
+      "id": "nbs-late",
+      "start": "FF successful confirmation at10",
+      "deadline": 210,
+      "event": "empty tick210 followed by FC211",
+      "expected": "transmission aborted at210, late FC cannot revive it; next valid SF recovers",
+      "source": [
+        "CanTp \u00a77.3.2"
+      ]
+    },
+    {
+      "id": "ncr-on-deadline",
+      "start": "FC successful confirmation at10",
+      "deadline": 210,
+      "event": "valid CF at210",
+      "expected": "Rx completes before timeout",
+      "source": [
+        "CanTp \u00a77.3.1",
+        "input-before-deadline contract"
+      ]
+    },
+    {
+      "id": "ncr-late",
+      "start": "FC successful confirmation at10",
+      "deadline": 210,
+      "event": "empty tick210 followed by CF211",
+      "expected": "Rx aborted, no response for incomplete request; next valid SF recovers",
+      "source": [
+        "CanTp \u00a77.3.1"
+      ]
+    },
+    {
+      "id": "s3-expired",
+      "start": "extended session confirmed at0",
+      "input_epochs": [
+        1000,
+        2000,
+        3000,
+        4000,
+        5000
+      ],
+      "events": "all batches empty; then query F186 again at5000",
+      "expected_can": "0462F18601000000",
+      "source": [
+        "SWS_Dcm_01679",
+        "SWS_Dcm_00085"
+      ]
+    },
+    {
+      "id": "s3-input-at-boundary",
+      "start": "extended session confirmed at0",
+      "input_epochs": [
+        1000,
+        2000,
+        3000,
+        4000
+      ],
+      "events": "query F186 in batch5000 before deadline processing",
+      "expected_can": "0462F18603000000",
+      "source": [
+        "SWS_Dcm_01679",
+        "SWS_Dcm_00085",
+        "input-before-deadline contract"
+      ]
+    }
+  ]
+}
