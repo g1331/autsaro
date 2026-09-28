@@ -1,0 +1,59 @@
+--- a/portable/MSVC-MingW/port.c
++++ b/portable/MSVC-MingW/port.c
+@@ -152,5 +152,5 @@
+     ThreadState_t * pxThreadState = NULL;
+     int8_t * pcTopOfStack = ( int8_t * ) pxTopOfStack;
+-    const SIZE_T xStackSize = Os_Config->host_stack_reserve; /* Set the size to a small number which will get rounded up to the minimum possible. */
++
+ 
+     /* In this simulated case a stack is not initialised, but instead a thread
+@@ -178,5 +178,5 @@
+ #endif
+     /* Create the thread itself. */
+-    pxThreadState->pvThread = Os_PortThread( NULL, xStackSize, ( LPTHREAD_START_ROUTINE ) pxCode, pvParameters, CREATE_SUSPENDED | STACK_SIZE_PARAM_IS_A_RESERVATION, NULL );
++    pxThreadState->pvThread = Os_PortTaskThread( pxCode, pvParameters, pxTopOfStack );
+ #ifdef __GNUC__
+ #pragma GCC diagnostic pop
+@@ -269,5 +269,5 @@
+         if( InterlockedCompareExchange( &Os_Closing, 0, 0 ) == 0 )
+         {
+-            ResumeThread( pxThreadState->pvThread );
++            Os_PortResumeThread( pxThreadState->pvThread );
+         }
+ 
+@@ -355,4 +355,5 @@
+                         /* Run the actual handler.  Handlers return pdTRUE if they
+                          * necessitate a context switch. */
++                        Os_StackCheck();
+                         if( ulIsrHandler[ i ]() != pdFALSE )
+                         {
+@@ -360,4 +361,5 @@
+                             ulSwitchRequired |= ( 1UL << i );
+                         }
++                        Os_StackCheck();
+                     }
+ 
+@@ -371,5 +373,5 @@
+                 /* Suspend the old thread. */
+                 pxThreadState = ( ThreadState_t * ) *( ( size_t * ) pxCurrentTCB );
+-                SuspendThread( pxThreadState->pvThread );
++                configASSERT( Os_PortSuspendThread( pxThreadState->pvThread ) != ( DWORD ) -1 );
+ 
+                 /* Ensure the thread is actually suspended by performing a
+@@ -380,6 +382,7 @@
+                  * https://devblogs.microsoft.com/oldnewthing/20150205-00/?p=44743
+                  * they do - so as they do not harm (slight run-time hit). */
+-                xContext.ContextFlags = CONTEXT_INTEGER;
+-                ( void ) GetThreadContext( pxThreadState->pvThread, &xContext );
++                xContext.ContextFlags = CONTEXT_CONTROL;
++                configASSERT( Os_PortGetThreadContext( pxThreadState->pvThread, &xContext ) );
++                Os_StackObserve( pxThreadState->pvThread, &xContext );
+ 
+                 /* Select the next task to run. */
+@@ -395,5 +398,5 @@
+                 if( InterlockedCompareExchange( &Os_Closing, 0, 0 ) == 0 )
+         {
+-            ResumeThread( pxThreadState->pvThread );
++            Os_PortResumeThread( pxThreadState->pvThread );
+         }
+             }

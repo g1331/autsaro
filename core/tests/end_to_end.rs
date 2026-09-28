@@ -9,6 +9,27 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(windows)]
 #[test]
+fn epic4_native_stack_fault_shutdown() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let output = Command::new("python")
+        .arg(root.join("scripts/epic4_os.py"))
+        .args(["--suite", "stack"])
+        .current_dir(root)
+        .output()
+        .expect("start independent native stack verifier");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("epic4_native_stack_fault_shutdown PASS")
+    );
+}
+
+#[cfg(windows)]
+#[test]
 fn epic4_backend_lifecycle() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let output = Command::new("python")

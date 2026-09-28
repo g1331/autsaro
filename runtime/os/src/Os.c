@@ -30,8 +30,12 @@ StatusType Os_TargetPrepare(const Os_TargetConfig *config) {
     return E_OK;
 }
 void StartOS(AppModeType Mode) { Os_BackendStart(Mode); }
-void ShutdownOS(StatusType Error) { Os_BackendShutdown(Error); }
+void ShutdownOS(StatusType Error) {
+    Os_StackCheck();
+    Os_BackendShutdown(Error);
+}
 StatusType GetTaskState(TaskType TaskID, TaskStateRefType State) {
+    Os_StackCheck();
     if (State == NULL) {
         return E_OS_VALUE;
     }

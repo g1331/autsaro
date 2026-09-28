@@ -3,7 +3,7 @@
 #define configUSE_PREEMPTION 1
 #define configUSE_TIME_SLICING 0
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION 0
-#define configUSE_IDLE_HOOK 0
+#define configUSE_IDLE_HOOK 1
 #define configUSE_TICK_HOOK 0
 #define configTICK_RATE_HZ 1000
 #define configMAX_PRIORITIES 32
@@ -26,6 +26,7 @@
 #define INCLUDE_vTaskDelete 0
 #define INCLUDE_xTaskGetCurrentTaskHandle 1
 #define INCLUDE_eTaskGetState 1
+#define INCLUDE_xTaskGetHandle 1
 void Os_BackendAssert(const char *file, int line);
 #define configASSERT(x)                                                                            \
     do {                                                                                           \
