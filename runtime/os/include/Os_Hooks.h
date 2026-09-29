@@ -17,6 +17,11 @@ typedef enum {
     OS_HOOK_ALARM
 } Os_HookPhase;
 #define OSServiceId_Unknown ((OSServiceIdType)0u)
+#define OSServiceId_GetISRID ((OSServiceIdType)0x01u)
+#define OSServiceId_DisableInterruptSource ((OSServiceIdType)0x30u)
+#define OSServiceId_EnableInterruptSource ((OSServiceIdType)0x31u)
+#define OSServiceId_ClearPendingInterrupt ((OSServiceIdType)0x32u)
+#define OSServiceId_InterruptMissingEnd ((OSServiceIdType)0xfcu)
 #define OSServiceId_TaskMissingEnd ((OSServiceIdType)0xfdu)
 #define OSServiceId_GetTaskID ((OSServiceIdType)0x80u)
 #define OSServiceId_GetTaskState ((OSServiceIdType)0x81u)
@@ -38,12 +43,37 @@ typedef enum {
 #define OSServiceId_SetRelAlarm ((OSServiceIdType)0x8eu)
 #define OSServiceId_SetAbsAlarm ((OSServiceIdType)0x8fu)
 #define OSServiceId_CancelAlarm ((OSServiceIdType)0x90u)
+#define OSServiceId_EnableAllInterrupts ((OSServiceIdType)0x91u)
+#define OSServiceId_DisableAllInterrupts ((OSServiceIdType)0x92u)
+#define OSServiceId_ResumeAllInterrupts ((OSServiceIdType)0x93u)
+#define OSServiceId_SuspendAllInterrupts ((OSServiceIdType)0x94u)
+#define OSServiceId_ResumeOSInterrupts ((OSServiceIdType)0x95u)
+#define OSServiceId_SuspendOSInterrupts ((OSServiceIdType)0x96u)
+#define OSServiceId_ShutdownOS ((OSServiceIdType)0x97u)
+#define OSServiceId_StartOS ((OSServiceIdType)0x98u)
+#define OSServiceId_GetActiveApplicationMode ((OSServiceIdType)0x99u)
 #define OSServiceId_StartScheduleTableRel ((OSServiceIdType)0x7u)
 #define OSServiceId_StartScheduleTableAbs ((OSServiceIdType)0x8u)
 #define OSServiceId_StopScheduleTable ((OSServiceIdType)0x9u)
 #define OSServiceId_NextScheduleTable ((OSServiceIdType)0xau)
 #define OSServiceId_GetScheduleTableStatus ((OSServiceIdType)0xeu)
 typedef union {
+    struct {
+        ISRType ISRID;
+        boolean ClearPending;
+    } service_EnableInterruptSource;
+    struct {
+        ISRType ISRID;
+    } service_DisableInterruptSource;
+    struct {
+        ISRType ISRID;
+    } service_ClearPendingInterrupt;
+    struct {
+        AppModeType Mode;
+    } service_StartOS;
+    struct {
+        StatusType Error;
+    } service_ShutdownOS;
     struct {
         TaskRefType TaskID;
     } service_GetTaskID;
@@ -144,6 +174,16 @@ OSServiceIdType Os_ErrorServiceId(void);
 #define OSErrorGetServiceId() Os_ErrorServiceId()
 #endif
 #if OS_USE_PARAMETER_ACCESS
+#define OSError_EnableInterruptSource_ISRID()                                                      \
+    (Os_ErrorParametersCurrent()->service_EnableInterruptSource.ISRID)
+#define OSError_EnableInterruptSource_ClearPending()                                               \
+    (Os_ErrorParametersCurrent()->service_EnableInterruptSource.ClearPending)
+#define OSError_DisableInterruptSource_ISRID()                                                     \
+    (Os_ErrorParametersCurrent()->service_DisableInterruptSource.ISRID)
+#define OSError_ClearPendingInterrupt_ISRID()                                                      \
+    (Os_ErrorParametersCurrent()->service_ClearPendingInterrupt.ISRID)
+#define OSError_StartOS_Mode() (Os_ErrorParametersCurrent()->service_StartOS.Mode)
+#define OSError_ShutdownOS_Error() (Os_ErrorParametersCurrent()->service_ShutdownOS.Error)
 #define OSError_GetTaskID_TaskID() (Os_ErrorParametersCurrent()->service_GetTaskID.TaskID)
 #define OSError_GetTaskState_TaskID() (Os_ErrorParametersCurrent()->service_GetTaskState.TaskID)
 #define OSError_GetTaskState_State() (Os_ErrorParametersCurrent()->service_GetTaskState.State)

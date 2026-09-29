@@ -44,6 +44,14 @@ void Os_BackendRequestShutdown(StatusType error);
 void Os_BackendGuardService(void);
 Os_HookPhase Os_HookContext(void);
 int Os_HookServiceAllowed(OSServiceIdType service);
+StatusType Os_ServiceAccessStatus(OSServiceIdType service);
+unsigned Os_BackendCurrentInterrupt(void);
+int Os_BackendStarted(void);
+int Os_InterruptAllows(unsigned interrupt);
+int Os_PortInterruptSourceEnabled(uint32_t interrupt);
+int Os_PortInterruptSourceControl(uint32_t interrupt, unsigned operation, boolean clear);
+int Os_InterruptDisabled(void);
+void Os_InterruptRestoreOwner(void);
 int Os_HookQueryContext(void);
 int Os_ErrorHookConfigured(void);
 StatusType Os_ErrorResult(OSServiceIdType service, StatusType status,

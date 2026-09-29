@@ -1,0 +1,49 @@
+--- a/portable/MSVC-MingW/port.c
++++ b/portable/MSVC-MingW/port.c
+@@ -135,7 +135,45 @@
+ /* Handlers for all the simulated software interrupts.  The first two positions
+  * are used for the Yield and Tick interrupts so are handled slightly differently,
+  * all the other interrupts can be user defined. */
+-static uint32_t (* ulIsrHandler[ portMAX_INTERRUPTS ])( void ) = { 0 };
++static uint32_t (* ulIsrHandler[ portMAX_INTERRUPTS ])( void ) = { 0 };/* Category 2 source state; accesses use the existing native interrupt mutex. */
++static uint32_t ulOsDisabledSources;
++int Os_PortInterruptSourceEnabled( uint32_t interrupt )
++{
++    return ( interrupt < 32U ) &&
++           ( ( ulOsDisabledSources & ( UINT32_C( 1 ) << interrupt ) ) == 0U );
++}
++int Os_PortInterruptSourceControl( uint32_t interrupt, unsigned operation, boolean clear )
++{
++    uint32_t bit;
++    if( ( interrupt >= 32U ) || ( interrupt == 1U ) || ( ulIsrHandler[ interrupt ] == NULL ) )
++    {
++        return 0;
++    }
++    bit = UINT32_C( 1 ) << interrupt;
++    if( operation == 0U )
++    {
++        ulOsDisabledSources |= bit;
++    }
++    else if( operation == 1U )
++    {
++        if( clear != FALSE )
++        {
++            ulPendingInterrupts &= ~bit;
++        }
++        ulOsDisabledSources &= ~bit;
++    }
++    else if( operation == 2U )
++    {
++        ulPendingInterrupts &= ~bit;
++    }
++    else
++    {
++        return 0;
++    }
++    return 1;
++}
++
++
+ 
+ /* Pointer to the TCB of the currently executing task. */
+ extern void * volatile pxCurrentTCB;

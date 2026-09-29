@@ -5,6 +5,10 @@
 #define STD_TYPES_H
 
 #include <stdint.h>
+/** @brief Eight-bit boolean used by standard-facing host interfaces. */
+typedef uint8_t boolean;
+#define FALSE 0
+#define TRUE 1
 
 /** @brief Return status used by standard-facing host BSW entry points. */
 typedef uint8_t Std_ReturnType;

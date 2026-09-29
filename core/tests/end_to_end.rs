@@ -246,6 +246,28 @@ fn epic4_standard_error_hook_parameters() {
 
 #[cfg(windows)]
 #[test]
+fn epic4_standard_interrupt_pairing() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let output = Command::new("python")
+        .arg(root.join("scripts/epic4_os.py"))
+        .args(["--suite", "interrupt-pairing"])
+        .current_dir(root)
+        .output()
+        .expect("run actual interrupt masks, source controls and exit restoration");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "epic4_standard_interrupt_pairing PASS: 28 native vectors"
+    );
+}
+
+#[cfg(windows)]
+#[test]
 fn epic4_controlled_tick_and_alarm() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let output = Command::new("python")

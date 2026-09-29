@@ -158,9 +158,28 @@ StatusType Os_TargetPrepare(const Os_TargetConfig *config) {
     Os_Config = config;
     return E_OK;
 }
-void StartOS(AppModeType Mode) { Os_BackendStart(Mode); }
+void StartOS(AppModeType Mode) {
+    if (Os_InterruptDisabled() != 0) {
+        const Os_ErrorParameters arguments = {.service_StartOS = {Mode}};
+        if (Os_BackendStarted() == 0) {
+            /* Preserve the fixed first-StartOS non-returning rejection contract;
+             * no native scheduler or automotive startup is performed. */
+            Os_BackendShutdown(E_OS_DISABLEDINT);
+        }
+        if (Os_HookContext() != OS_HOOK_ERROR) {
+            (void)Os_ErrorResult(OSServiceId_StartOS, E_OS_DISABLEDINT, &arguments);
+        }
+        return;
+    }
+    Os_BackendStart(Mode);
+}
 void ShutdownOS(StatusType Error) {
     Os_StackCheck();
+    if ((Os_HookContext() != OS_HOOK_ERROR) && (Os_InterruptDisabled() != 0)) {
+        const Os_ErrorParameters arguments = {.service_ShutdownOS = {Error}};
+        (void)Os_ErrorResult(OSServiceId_ShutdownOS, E_OS_DISABLEDINT, &arguments);
+        return;
+    }
     Os_BackendShutdown(Error);
 }
 static StatusType implementation_GetTaskID(TaskRefType TaskID) {
@@ -174,7 +193,27 @@ static StatusType implementation_GetTaskID(TaskRefType TaskID) {
 AppModeType GetActiveApplicationMode(void) {
     Os_StackCheck();
     Os_BackendGuardService();
+    if ((Os_HookContext() != OS_HOOK_ERROR) && (Os_InterruptDisabled() != 0)) {
+        const Os_ErrorParameters arguments = {.service_TerminateTask = {0u}};
+        (void)Os_ErrorResult(OSServiceId_GetActiveApplicationMode, E_OS_DISABLEDINT, &arguments);
+        return 0u;
+    }
     return Os_BackendApplicationMode();
+}
+ISRType GetISRID(void) {
+    const Os_NativeStack *stack = Os_StackCurrent();
+    const unsigned interrupt = Os_BackendCurrentInterrupt();
+    Os_StackCheck();
+    Os_BackendGuardService();
+    if ((Os_HookContext() != OS_HOOK_ERROR) && (Os_InterruptDisabled() != 0)) {
+        const Os_ErrorParameters arguments = {.service_TerminateTask = {0u}};
+        (void)Os_ErrorResult(OSServiceId_GetISRID, E_OS_DISABLEDINT, &arguments);
+        return INVALID_ISR;
+    }
+    return (stack != NULL && stack->role == 'S' && interrupt < 32u && interrupt != 1u &&
+            Os_Config != NULL && (Os_Config->category1_isrs & (UINT32_C(1) << interrupt)) == 0u)
+               ? (ISRType)interrupt
+               : INVALID_ISR;
 }
 static StatusType implementation_GetTaskState(TaskType TaskID, TaskStateRefType State) {
     Os_StackCheck();
@@ -251,8 +290,10 @@ StatusType GetTaskID(TaskRefType TaskID) {
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_GetTaskID) == 0) ? E_OS_CALLEVEL
-                                                                 : implementation_GetTaskID(TaskID);
+    status = Os_ServiceAccessStatus(OSServiceId_GetTaskID);
+    if (status == E_OK) {
+        status = implementation_GetTaskID(TaskID);
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }
@@ -264,9 +305,10 @@ StatusType GetTaskState(TaskType TaskID, TaskStateRefType State) {
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_GetTaskState) == 0)
-                 ? E_OS_CALLEVEL
-                 : implementation_GetTaskState(TaskID, State);
+    status = Os_ServiceAccessStatus(OSServiceId_GetTaskState);
+    if (status == E_OK) {
+        status = implementation_GetTaskState(TaskID, State);
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }
@@ -278,9 +320,10 @@ StatusType ActivateTask(TaskType TaskID) {
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_ActivateTask) == 0)
-                 ? E_OS_CALLEVEL
-                 : implementation_ActivateTask(TaskID);
+    status = Os_ServiceAccessStatus(OSServiceId_ActivateTask);
+    if (status == E_OK) {
+        status = implementation_ActivateTask(TaskID);
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }
@@ -292,9 +335,10 @@ StatusType TerminateTask(void) {
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_TerminateTask) == 0)
-                 ? E_OS_CALLEVEL
-                 : implementation_TerminateTask();
+    status = Os_ServiceAccessStatus(OSServiceId_TerminateTask);
+    if (status == E_OK) {
+        status = implementation_TerminateTask();
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }
@@ -306,8 +350,10 @@ StatusType ChainTask(TaskType TaskID) {
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_ChainTask) == 0) ? E_OS_CALLEVEL
-                                                                 : implementation_ChainTask(TaskID);
+    status = Os_ServiceAccessStatus(OSServiceId_ChainTask);
+    if (status == E_OK) {
+        status = implementation_ChainTask(TaskID);
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }
@@ -319,9 +365,10 @@ StatusType GetResource(ResourceType ResID) {
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_GetResource) == 0)
-                 ? E_OS_CALLEVEL
-                 : implementation_GetResource(ResID);
+    status = Os_ServiceAccessStatus(OSServiceId_GetResource);
+    if (status == E_OK) {
+        status = implementation_GetResource(ResID);
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }
@@ -333,9 +380,10 @@ StatusType ReleaseResource(ResourceType ResID) {
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_ReleaseResource) == 0)
-                 ? E_OS_CALLEVEL
-                 : implementation_ReleaseResource(ResID);
+    status = Os_ServiceAccessStatus(OSServiceId_ReleaseResource);
+    if (status == E_OK) {
+        status = implementation_ReleaseResource(ResID);
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }
@@ -347,8 +395,10 @@ StatusType Schedule(void) {
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_Schedule) == 0) ? E_OS_CALLEVEL
-                                                                : implementation_Schedule();
+    status = Os_ServiceAccessStatus(OSServiceId_Schedule);
+    if (status == E_OK) {
+        status = implementation_Schedule();
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }
@@ -360,8 +410,10 @@ StatusType WaitEvent(EventMaskType Mask) {
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_WaitEvent) == 0) ? E_OS_CALLEVEL
-                                                                 : implementation_WaitEvent(Mask);
+    status = Os_ServiceAccessStatus(OSServiceId_WaitEvent);
+    if (status == E_OK) {
+        status = implementation_WaitEvent(Mask);
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }
@@ -373,8 +425,10 @@ StatusType ClearEvent(EventMaskType Mask) {
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_ClearEvent) == 0) ? E_OS_CALLEVEL
-                                                                  : implementation_ClearEvent(Mask);
+    status = Os_ServiceAccessStatus(OSServiceId_ClearEvent);
+    if (status == E_OK) {
+        status = implementation_ClearEvent(Mask);
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }
@@ -386,9 +440,10 @@ StatusType SetEvent(TaskType TaskID, EventMaskType Mask) {
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_SetEvent) == 0)
-                 ? E_OS_CALLEVEL
-                 : implementation_SetEvent(TaskID, Mask);
+    status = Os_ServiceAccessStatus(OSServiceId_SetEvent);
+    if (status == E_OK) {
+        status = implementation_SetEvent(TaskID, Mask);
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }
@@ -400,9 +455,10 @@ StatusType GetEvent(TaskType TaskID, EventMaskRefType Event) {
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_GetEvent) == 0)
-                 ? E_OS_CALLEVEL
-                 : implementation_GetEvent(TaskID, Event);
+    status = Os_ServiceAccessStatus(OSServiceId_GetEvent);
+    if (status == E_OK) {
+        status = implementation_GetEvent(TaskID, Event);
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }

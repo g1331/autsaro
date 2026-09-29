@@ -331,9 +331,10 @@ StatusType StartScheduleTableRel(ScheduleTableType ScheduleTableID, TickType Off
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_StartScheduleTableRel) == 0)
-                 ? E_OS_CALLEVEL
-                 : implementation_StartScheduleTableRel(ScheduleTableID, Offset);
+    status = Os_ServiceAccessStatus(OSServiceId_StartScheduleTableRel);
+    if (status == E_OK) {
+        status = implementation_StartScheduleTableRel(ScheduleTableID, Offset);
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }
@@ -346,9 +347,10 @@ StatusType StartScheduleTableAbs(ScheduleTableType ScheduleTableID, TickType Sta
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_StartScheduleTableAbs) == 0)
-                 ? E_OS_CALLEVEL
-                 : implementation_StartScheduleTableAbs(ScheduleTableID, Start);
+    status = Os_ServiceAccessStatus(OSServiceId_StartScheduleTableAbs);
+    if (status == E_OK) {
+        status = implementation_StartScheduleTableAbs(ScheduleTableID, Start);
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }
@@ -360,9 +362,10 @@ StatusType StopScheduleTable(ScheduleTableType ScheduleTableID) {
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_StopScheduleTable) == 0)
-                 ? E_OS_CALLEVEL
-                 : implementation_StopScheduleTable(ScheduleTableID);
+    status = Os_ServiceAccessStatus(OSServiceId_StopScheduleTable);
+    if (status == E_OK) {
+        status = implementation_StopScheduleTable(ScheduleTableID);
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }
@@ -376,9 +379,10 @@ StatusType NextScheduleTable(ScheduleTableType ScheduleTableID_From,
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_NextScheduleTable) == 0)
-                 ? E_OS_CALLEVEL
-                 : implementation_NextScheduleTable(ScheduleTableID_From, ScheduleTableID_To);
+    status = Os_ServiceAccessStatus(OSServiceId_NextScheduleTable);
+    if (status == E_OK) {
+        status = implementation_NextScheduleTable(ScheduleTableID_From, ScheduleTableID_To);
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }
@@ -392,9 +396,10 @@ StatusType GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_GetScheduleTableStatus) == 0)
-                 ? E_OS_CALLEVEL
-                 : implementation_GetScheduleTableStatus(ScheduleTableID, ScheduleStatus);
+    status = Os_ServiceAccessStatus(OSServiceId_GetScheduleTableStatus);
+    if (status == E_OK) {
+        status = implementation_GetScheduleTableStatus(ScheduleTableID, ScheduleStatus);
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }

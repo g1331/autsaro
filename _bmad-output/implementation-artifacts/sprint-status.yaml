@@ -73,6 +73,8 @@ development_status:
   4-15-运行同一应用实例的-s-r-快照和同步-did: done
   4-16-独立验证边界-诊断恢复与旧目标回归: done
   4-17-完成-counter-scheduletable-能力及-sc1-容量: done
+  # 4.18: six interrupt pairs/source control/GetISRID and exit-mask restoration
+  # verified independently; ISR resources/nesting/full calling table and exits remain open.
   4-18-补齐生命周期-extended-status-hook-和中断义务: in-progress
   4-19-生成并验证-r24-11-arti-描述与-hook: backlog
   4-20-关闭适用-c-工件-模块描述和静态质量证据: backlog

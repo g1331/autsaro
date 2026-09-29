@@ -173,6 +173,11 @@
       "path": "runtime/os/patches/0008-task-hook-boundaries.patch",
       "sha256": "bf6d08e9ff0b6e2c8eb866b5c0509559e9d5ab37cf9df25b23824dcc16beccdc",
       "role": "production Task Post hook before existing FIFO-selected TCB assignment; no new task selection or ready-list mutation; copied upstream only"
+    },
+    {
+      "path": "runtime/os/patches/0009-interrupt-source-control.patch",
+      "sha256": "31b2a63c117986a01ba028b2f7dc4b91bb7b8d9c92bea78265a0240051b90829",
+      "role": "production Category2 source disable/enable/clear using actual native pending bits and registered handlers; existing native interrupt mutex only; copied upstream only"
     }
   ],
   "research_material": [

@@ -57,6 +57,10 @@ context: []
 
 ## Implementation Notes
 
+中断独立增量（起始cd647a934790bce89c56ed6a22827a1517c6515c）：六配对服务采用实际原生actor的PE TLS状态，All与OS独立嵌套，Disable非嵌套，首/末配对更新共享原子owner数；实际端口分发遵守屏蔽，内核私有yield保持可用。25个StatusType及Start/Shutdown/Mode/GetISRID边界忽略被屏蔽调用者的非中断服务，保留输出；ErrorHook合法查询可观察原错误。Task missing-end和Cat2返回自动恢复遗留屏蔽；Cat2清理在原ISR身份下报告9/service252。GetISRID对实际Cat2返回身份、其他返回INVALID；尚未证明嵌套恢复。第九补丁在真实pending/handler表增加源开关及清除，三个标准源API在原有interrupt mutex内操作，Disable保留pending，Enable(clear)/ClearPending按真实位清除，非法/私有yield/Cat1/未安装源拒绝，Task/Cat2之外拒绝。公共boolean来自共同Std_Types.h，Windows RPC重名由平台边界隔离。源API入口同样检查真实原生栈和不可逆关闭门。
+
+当前中断证据：28个独立原生过程通过，包括四类配对交错/未配对、三种屏蔽下29非中断服务无副作用/准确错误参数、Cat1/Cat2身份与配对、四种Cat2泄漏恢复、四种missing-end恢复后真实pending递送和monitor运行、启动前拒绝，以及八个实际源控制场景（含真实Cat2内三个源API的清除/保留待决递送，以及在实际ISR栈上故意清除当前逻辑身份后的无副作用拒绝）。正式入口epic4_standard_interrupt_pairing接入核心测试。公共类型三包含顺序和ErrorHook八配置回归通过；部分静态扫描覆盖九本地OS模块、生成Hook及九补丁后的tasks.c/port.c共12单元，exit1诊断完整保留。R17.2有界wrapper/change重入仍未批准，完整MISRA/SC1不声明通过。完整ISR资源清理、实际嵌套ISR、全部调用表、ControlIdle/isOsStarted、507行最终结果及4.19～4.22仍待推进。
+
 返回Task/资源增量实施：trampoline在RUNNING状态通过标准错误通路报告E_OS_MISSINGEND11、内部合成service253，然后使用同一真实完成事务按LIFO清理外部资源/ceiling，正常发Post并消费激活队列；新激活重入真实原生栈，其他Task继续。移除未配置RES_SCHEDULER自动隐藏槽；既有成功资源向量改为真正显式配置最高Task ceiling，并新增未配置Get/Release双拒绝及状态不变。旧missing-end最低关闭预期按R24-11 p74～75更新为正常终止后monitor继续，全部22Finish/Chain回归通过。七个返回Task向量、26资源、22Finish回归、最终正式门和三路复核均通过，标准中断配对恢复仍开放。
 
 人工调用图核查补充：虽然错误报告函数和ErrorHook自身不递归，外层失败查询GetTaskState等标准wrapper可能仍活跃，ErrorHook依法再次查询同一服务时会重入该wrapper（error_hooks向量4已有真实路径）。这是不同于嵌套ErrorHook的有界函数重入；完整MISRA出口须对R17.2 Required作明确消除或受控偏离处置，目前没有批准，standard-error-static-analysis已记录，不能把部分编译/扫描或回调递归抑制冒充该规则全通过。
@@ -83,6 +87,8 @@ ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参�
 
 ## Review Triage Log
 
+- 中断增量blind/edge/verification-gap三路完成；Cat1屏蔽服务建议按OSEK原文驳回，源上下文及Cat2覆盖缺口已修正。追加两条独立pending/拒绝副作用覆盖缺口已修正，最终定向复核均无剩余发现。五个真实编译变异（Cat2两种清除no-op及三个拒绝操作仍产生副作用）全部被新原生断言拒绝，证据interrupt-oracle-mutations-4-18.json；实际28向量、公共类型三顺序、八ErrorHook配置与最终交付摘要匹配。完整故事仍开放。
+
 - 返回Task/资源增量blind／edge／verification-gap三路独立复核均无发现。七个返回Task、22Finish/Chain和26资源真实向量均通过；Python首轮因仍读取历史finish-chain/resource-preemption记录不符合新标准行为而报红，已改用本次真实回归工件，同时增加旧整OS关闭和隐式scheduler的拒绝变异验证，历史记录不覆写。完整故事中断恢复和SC1仍开放。
 
 - Task Hook增量blind／edge／verification-gap三路独立复核均无发现。首轮完整门86通过/1失败，实际Pre/Post增加诊断标记后，20tick总139标记超出127前缀，trace_dropped12；旧生成测试按未截断片段计数失配。改为独立字面139序列的精确保留前缀和丢弃数量，保持completed20、两个实际CAN输出、全部初始化失败断言；额外只读verification-gap复核无发现。失败原始日志与Windows链接占用日志保留，源实现未因此改动。
@@ -93,6 +99,8 @@ ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参�
 
 ## Verification
 
+中断增量最终完整门exit0：89个核心集成测试566.71s、29Python、增量格式/C99、UI lint/build、桌面构建和两组Clippy通过。原生28、公共类型三包含顺序、八ErrorHook配置、五个被拒绝的真实变异和最终源码身份一致；12实际翻译单元部分静态exit1保留。首轮77通过/12失败均因新增boolean后的共同头清单旧摘要，审阅源码后同步BSW契约清单并重编译；次轮88通过/1失败仅因运行期间新增场景而旧测试程序仍预期26，最终重新编译28后完整门通过，失败日志均保留。三路复核及修正复核完成，没有剩余增量发现。4.18与Epic4保持in-progress，ISR资源清理/实际嵌套/全调用表/idle/全部507行、221项与交接未关闭。
+
 返回Task/资源增量最终完整门exit0：88个核心集成测试532.30s、29Python、增量格式/C99、UI/桌面构建和两组Clippy通过。七个返回Task/22Finish/26资源原生证据与最终源码身份匹配；实际八补丁后tasks.c及九本地C翻译单元部分静态exit1诊断保留。三路独立复核无发现。正常Task入口返回已不再关闭整个OS；SWS_Os_00239标准中断配对恢复、完整ISR/调用表、R17.2处置及完整221项/交接仍开放，sprint不关闭。
 
 Task Hook增量最终完整门exit0：87个核心集成测试541.62s、29Python、增量格式/C99、UI/桌面构建和两组Clippy通过。真实生成定向复验222.76s通过，最终完整门也覆盖该项。八原生Task Hook向量与源码身份/八补丁摘要一致；九本地C翻译单元及实际八补丁后tasks.c部分静态exit1诊断保留。三路独立复核和生成轨迹断言定向复核均无发现。sprint保持4.18/Epic4 in-progress，missing-end/ISR/全调用表、R17.2处置、完整221项和最终交接仍开放。
@@ -100,3 +108,7 @@ Task Hook增量最终完整门exit0：87个核心集成测试541.62s、29Python�
 ErrorHook增量完整门exit0：86个核心集成测试600.13s（包含正式epic4_standard_error_hook_parameters、真实参考ECU/HostBatch/栈及所有既有回归）、29Python、UI/桌面构建和两组Clippy通过。最终仅内部声明参数名校正；八配置原生编译/运行、增量quality及桌面构建已针对复验，随后文档身份刷新。部分Cppcheck九个翻译单元exit1，诊断和人工范围核查记录于standard-error-static-analysis-4-18.json。四条相关义务均按部分支持记录，不把未来服务/missing-end/ISR清理或整体SC1标为通过。
 
 正式epic4_sc1_errors_hooks_and_isr、四类最低容量成功运行、错误/Hook/参数/层级/ISR独立向量；受影响既有OS/时间/实际栈/参考ECU/HostBatch回归。完整门python scripts/verify.py --scope all --base <4.17完整本地提交>，测试线程按Owner Guide固定2。实际C99编译、部分Cppcheck与人工重点核查不替代完整221项原文/Required批准或SC1最终出口。全部验收无头后台，原生UI/IPC只能在隔离桌面验证。
+
+中断增量复核逐项：blind的Cat1不得调用六屏蔽服务为false，OSEK2.2.3 §13.3.2各服务明确允许Cat1/Cat2/Task，现有isr-balanced实际覆盖；不按通用非中断服务上下文删掉合法Cat1能力。edge的注册S栈无当前逻辑ISR仍可操作源为medium/patch：内部通用ServiceContext确实接纳current_interrupt>=32，源边界已显式拒绝无当前ISR或私有yield，新增source-outside-isr实际ISR栈边界故障注入验证三API均CAL/源位不变。verification-gap的Cat2源调用未覆盖为medium/patch：source-isr在真实Cat2内调用全部三API，真实pending清除两次、最后保留一条，另一源实际恰好递送一次；没有新线程、mock pending或嵌套ISR声明。
+
+验证覆盖复核追加两条medium/patch均已修正：同一pending位的连续清除存在后续动作掩盖错误的缺口，现ClearPending用源6、EnableTRUE用源7、EnableFALSE用源8，只有8可实际递送；任一清除无效果都会触发不允许的源6/7回调。拒绝副作用场景现Disable8后立即检查enabled，Enable6TRUE与Clear7分别面对预置真实pending，返回后必须实际递送6/7各一次（ODEC），不会由后续反向操作恢复或无pending掩盖。独立28向量通过，未将故障注入当作正常嵌套ISR支持。

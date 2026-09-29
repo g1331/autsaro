@@ -1,0 +1,351 @@
+{
+  "format": "epic4-interrupt-obligation-results-v1",
+  "status": "partial; complete story and SC1 remain open",
+  "increment_baseline": "cd647a934790bce89c56ed6a22827a1517c6515c",
+  "obligations_sha256": "a691103e8dd217b12c1e838bdb6a06fcef772dc8cbafb673d2bf70b62185b18f",
+  "rows": [
+    {
+      "key": "SWS_Os_00299",
+      "sealed_applicability": "applicable",
+      "result": "partially_verified",
+      "verified_scope": "Four All primitives balanced/unmatched before Start and after Shutdown without port mutex; disabled first Start rejected without starting actors.",
+      "remaining_scope": "Startup/Shutdown complete context table remains open.",
+      "evidence": {
+        "artifact": "interrupt-pairing-4-18.json",
+        "test": "epic4_standard_interrupt_pairing"
+      },
+      "implementation": [
+        "runtime/os/src/Os_Interrupt.c",
+        "runtime/os/src/Os_Backend.c",
+        "runtime/os/src/Os_Error.c",
+        "runtime/os/patches/0009-interrupt-source-control.patch"
+      ],
+      "static_evidence": "interrupt-static-analysis-4-18.json"
+    },
+    {
+      "key": "SWS_Os_00092",
+      "sealed_applicability": "applicable",
+      "result": "partially_verified",
+      "verified_scope": "Unmatched EnableAll/ResumeAll/ResumeOS have no effect; independent native pending delivery unchanged.",
+      "remaining_scope": "Other complete SC1 obligations remain separate.",
+      "evidence": {
+        "artifact": "interrupt-pairing-4-18.json",
+        "test": "epic4_standard_interrupt_pairing"
+      },
+      "implementation": [
+        "runtime/os/src/Os_Interrupt.c",
+        "runtime/os/src/Os_Backend.c",
+        "runtime/os/src/Os_Error.c",
+        "runtime/os/patches/0009-interrupt-source-control.patch"
+      ],
+      "static_evidence": "interrupt-static-analysis-4-18.json"
+    },
+    {
+      "key": "SWS_Os_00093",
+      "sealed_applicability": "applicable",
+      "result": "partially_verified",
+      "verified_scope": "Three disabled regions reject 29 implemented noninterrupt services with preserved state/output and independent literal error IDs/parameters; source-control interrupt services remain permitted.",
+      "remaining_scope": "Future ControlIdle/isOsStarted and whole calling-context profile require additional tests.",
+      "evidence": {
+        "artifact": "interrupt-pairing-4-18.json",
+        "test": "epic4_standard_interrupt_pairing"
+      },
+      "implementation": [
+        "runtime/os/src/Os_Interrupt.c",
+        "runtime/os/src/Os_Backend.c",
+        "runtime/os/src/Os_Error.c",
+        "runtime/os/patches/0009-interrupt-source-control.patch"
+      ],
+      "static_evidence": "interrupt-static-analysis-4-18.json"
+    },
+    {
+      "key": "SWS_Os_00239",
+      "sealed_applicability": "applicable",
+      "result": "partially_verified",
+      "verified_scope": "Task entry return restores Disable, nestedAll, nestedOS and mixed masks, then actual pending ISR and successor monitor execute after normal activation completion.",
+      "remaining_scope": "Combined leaked resources plus masks and complete profile assessment still require integration.",
+      "evidence": {
+        "artifact": "interrupt-pairing-4-18.json",
+        "test": "epic4_standard_interrupt_pairing"
+      },
+      "implementation": [
+        "runtime/os/src/Os_Interrupt.c",
+        "runtime/os/src/Os_Backend.c",
+        "runtime/os/src/Os_Error.c",
+        "runtime/os/patches/0009-interrupt-source-control.patch"
+      ],
+      "static_evidence": "interrupt-static-analysis-4-18.json"
+    },
+    {
+      "key": "SWS_Os_00368",
+      "sealed_applicability": "applicable",
+      "result": "partially_verified",
+      "verified_scope": "Cat2 return restores Disable, nestedAll, nestedOS and mixed masks and ErrorHook receives E_OS_DISABLEDINT while original ISR identity remains current.",
+      "remaining_scope": "Combined resources plus masks and actual nested-ISR cases remain open.",
+      "evidence": {
+        "artifact": "interrupt-pairing-4-18.json",
+        "test": "epic4_standard_interrupt_pairing"
+      },
+      "implementation": [
+        "runtime/os/src/Os_Interrupt.c",
+        "runtime/os/src/Os_Backend.c",
+        "runtime/os/src/Os_Error.c",
+        "runtime/os/patches/0009-interrupt-source-control.patch"
+      ],
+      "static_evidence": "interrupt-static-analysis-4-18.json"
+    },
+    {
+      "key": "SWS_Os_00263",
+      "sealed_applicability": "applicable",
+      "result": "partially_verified",
+      "verified_scope": "GetISRID and ErrorHook inside actual native Cat2 observe ISR5.",
+      "remaining_scope": "Actual nested ISR restoration not yet tested.",
+      "evidence": {
+        "artifact": "interrupt-pairing-4-18.json",
+        "test": "epic4_standard_interrupt_pairing"
+      },
+      "implementation": [
+        "runtime/os/src/Os_Interrupt.c",
+        "runtime/os/src/Os_Backend.c",
+        "runtime/os/src/Os_Error.c",
+        "runtime/os/patches/0009-interrupt-source-control.patch"
+      ],
+      "static_evidence": "interrupt-static-analysis-4-18.json"
+    },
+    {
+      "key": "SWS_Os_00264",
+      "sealed_applicability": "applicable",
+      "result": "partially_verified",
+      "verified_scope": "Task, Startup and Cat1 GetISRID return INVALID_ISR; actual Cat2 returns current identity.",
+      "remaining_scope": "Full global-hook/context matrix remains open.",
+      "evidence": {
+        "artifact": "interrupt-pairing-4-18.json",
+        "test": "epic4_standard_interrupt_pairing"
+      },
+      "implementation": [
+        "runtime/os/src/Os_Interrupt.c",
+        "runtime/os/src/Os_Backend.c",
+        "runtime/os/src/Os_Error.c",
+        "runtime/os/patches/0009-interrupt-source-control.patch"
+      ],
+      "static_evidence": "interrupt-static-analysis-4-18.json"
+    },
+    {
+      "key": "SWS_Os_00511",
+      "sealed_applicability": "applicable",
+      "result": "partially_verified",
+      "verified_scope": "Public GetISRID signature and R24 service identity0x01 supplied.",
+      "remaining_scope": "Whole service-context behavior tracked separately.",
+      "evidence": {
+        "artifact": "interrupt-pairing-4-18.json",
+        "test": "epic4_standard_interrupt_pairing"
+      },
+      "implementation": [
+        "runtime/os/src/Os_Interrupt.c",
+        "runtime/os/src/Os_Backend.c",
+        "runtime/os/src/Os_Error.c",
+        "runtime/os/patches/0009-interrupt-source-control.patch"
+      ],
+      "static_evidence": "interrupt-static-analysis-4-18.json"
+    },
+    {
+      "key": "SWS_Os_00515",
+      "sealed_applicability": "applicable",
+      "result": "partially_verified",
+      "verified_scope": "GetISRID implemented for selected four OSEK conformance-class configuration support.",
+      "remaining_scope": "GetISRID capacity-class-specific runtime combinations not yet separately exercised.",
+      "evidence": {
+        "artifact": "interrupt-pairing-4-18.json",
+        "test": "epic4_standard_interrupt_pairing"
+      },
+      "implementation": [
+        "runtime/os/src/Os_Interrupt.c",
+        "runtime/os/src/Os_Backend.c",
+        "runtime/os/src/Os_Error.c",
+        "runtime/os/patches/0009-interrupt-source-control.patch"
+      ],
+      "static_evidence": "interrupt-static-analysis-4-18.json"
+    },
+    {
+      "key": "SWS_Os_91019",
+      "sealed_applicability": "applicable",
+      "result": "partially_verified",
+      "verified_scope": "DisableInterruptSource operates actual Cat2 source state; repeated valid disable accepted, pending retained; invalid/private/Cat1/unknown sources and forbiddenHook rejected.",
+      "remaining_scope": "Full lifecycle/global-hook calling table remains open; actual Cat2 source success and no-active-ISR rejection now verified.",
+      "evidence": {
+        "artifact": "interrupt-pairing-4-18.json",
+        "test": "epic4_standard_interrupt_pairing"
+      },
+      "implementation": [
+        "runtime/os/src/Os_Interrupt.c",
+        "runtime/os/src/Os_Backend.c",
+        "runtime/os/src/Os_Error.c",
+        "runtime/os/patches/0009-interrupt-source-control.patch"
+      ],
+      "static_evidence": "interrupt-static-analysis-4-18.json"
+    },
+    {
+      "key": "SWS_Os_91020",
+      "sealed_applicability": "applicable",
+      "result": "partially_verified",
+      "verified_scope": "EnableInterruptSource preserves or clears actual pending according to typed boolean flag, including global application mask; independent literal output proves delivery/no delivery.",
+      "remaining_scope": "Full lifecycle/global-hook calling table remains open; actual Cat2 source success and no-active-ISR rejection now verified.",
+      "evidence": {
+        "artifact": "interrupt-pairing-4-18.json",
+        "test": "epic4_standard_interrupt_pairing"
+      },
+      "implementation": [
+        "runtime/os/src/Os_Interrupt.c",
+        "runtime/os/src/Os_Backend.c",
+        "runtime/os/src/Os_Error.c",
+        "runtime/os/patches/0009-interrupt-source-control.patch"
+      ],
+      "static_evidence": "interrupt-static-analysis-4-18.json"
+    },
+    {
+      "key": "SWS_Os_91021",
+      "sealed_applicability": "applicable",
+      "result": "partially_verified",
+      "verified_scope": "ClearPendingInterrupt clears actual pending while source remains disabled; fresh request delivers after enable.",
+      "remaining_scope": "Full lifecycle/global-hook calling table remains open; actual Cat2 source success and no-active-ISR rejection now verified.",
+      "evidence": {
+        "artifact": "interrupt-pairing-4-18.json",
+        "test": "epic4_standard_interrupt_pairing"
+      },
+      "implementation": [
+        "runtime/os/src/Os_Interrupt.c",
+        "runtime/os/src/Os_Backend.c",
+        "runtime/os/src/Os_Error.c",
+        "runtime/os/patches/0009-interrupt-source-control.patch"
+      ],
+      "static_evidence": "interrupt-static-analysis-4-18.json"
+    },
+    {
+      "key": "OSEK_SERVICE_EnableAllInterrupts",
+      "sealed_applicability": "applicable",
+      "result": "partially_verified",
+      "verified_scope": "Task/Cat1/Cat2 masks, unmatched restores and cross-group/nested sequencing observed in real native dispatcher; All masks Cat1/Cat2 and OS masks Cat2 only.",
+      "remaining_scope": "Alarm callback allowed All-pair contexts and full lifecycle/Hook combinations remain to be tested.",
+      "evidence": {
+        "artifact": "interrupt-pairing-4-18.json",
+        "test": "epic4_standard_interrupt_pairing"
+      },
+      "implementation": [
+        "runtime/os/src/Os_Interrupt.c",
+        "runtime/os/src/Os_Backend.c",
+        "runtime/os/src/Os_Error.c",
+        "runtime/os/patches/0009-interrupt-source-control.patch"
+      ],
+      "static_evidence": "interrupt-static-analysis-4-18.json"
+    },
+    {
+      "key": "OSEK_SERVICE_DisableAllInterrupts",
+      "sealed_applicability": "applicable",
+      "result": "partially_verified",
+      "verified_scope": "Task/Cat1/Cat2 masks, unmatched restores and cross-group/nested sequencing observed in real native dispatcher; All masks Cat1/Cat2 and OS masks Cat2 only.",
+      "remaining_scope": "Alarm callback allowed All-pair contexts and full lifecycle/Hook combinations remain to be tested.",
+      "evidence": {
+        "artifact": "interrupt-pairing-4-18.json",
+        "test": "epic4_standard_interrupt_pairing"
+      },
+      "implementation": [
+        "runtime/os/src/Os_Interrupt.c",
+        "runtime/os/src/Os_Backend.c",
+        "runtime/os/src/Os_Error.c",
+        "runtime/os/patches/0009-interrupt-source-control.patch"
+      ],
+      "static_evidence": "interrupt-static-analysis-4-18.json"
+    },
+    {
+      "key": "OSEK_SERVICE_ResumeAllInterrupts",
+      "sealed_applicability": "applicable",
+      "result": "partially_verified",
+      "verified_scope": "Task/Cat1/Cat2 masks, unmatched restores and cross-group/nested sequencing observed in real native dispatcher; All masks Cat1/Cat2 and OS masks Cat2 only.",
+      "remaining_scope": "Alarm callback allowed All-pair contexts and full lifecycle/Hook combinations remain to be tested.",
+      "evidence": {
+        "artifact": "interrupt-pairing-4-18.json",
+        "test": "epic4_standard_interrupt_pairing"
+      },
+      "implementation": [
+        "runtime/os/src/Os_Interrupt.c",
+        "runtime/os/src/Os_Backend.c",
+        "runtime/os/src/Os_Error.c",
+        "runtime/os/patches/0009-interrupt-source-control.patch"
+      ],
+      "static_evidence": "interrupt-static-analysis-4-18.json"
+    },
+    {
+      "key": "OSEK_SERVICE_SuspendAllInterrupts",
+      "sealed_applicability": "applicable",
+      "result": "partially_verified",
+      "verified_scope": "Task/Cat1/Cat2 masks, unmatched restores and cross-group/nested sequencing observed in real native dispatcher; All masks Cat1/Cat2 and OS masks Cat2 only.",
+      "remaining_scope": "Alarm callback allowed All-pair contexts and full lifecycle/Hook combinations remain to be tested.",
+      "evidence": {
+        "artifact": "interrupt-pairing-4-18.json",
+        "test": "epic4_standard_interrupt_pairing"
+      },
+      "implementation": [
+        "runtime/os/src/Os_Interrupt.c",
+        "runtime/os/src/Os_Backend.c",
+        "runtime/os/src/Os_Error.c",
+        "runtime/os/patches/0009-interrupt-source-control.patch"
+      ],
+      "static_evidence": "interrupt-static-analysis-4-18.json"
+    },
+    {
+      "key": "OSEK_SERVICE_ResumeOSInterrupts",
+      "sealed_applicability": "applicable",
+      "result": "partially_verified",
+      "verified_scope": "Task/Cat1/Cat2 masks, unmatched restores and cross-group/nested sequencing observed in real native dispatcher; All masks Cat1/Cat2 and OS masks Cat2 only.",
+      "remaining_scope": "Alarm callback allowed All-pair contexts and full lifecycle/Hook combinations remain to be tested.",
+      "evidence": {
+        "artifact": "interrupt-pairing-4-18.json",
+        "test": "epic4_standard_interrupt_pairing"
+      },
+      "implementation": [
+        "runtime/os/src/Os_Interrupt.c",
+        "runtime/os/src/Os_Backend.c",
+        "runtime/os/src/Os_Error.c",
+        "runtime/os/patches/0009-interrupt-source-control.patch"
+      ],
+      "static_evidence": "interrupt-static-analysis-4-18.json"
+    },
+    {
+      "key": "OSEK_SERVICE_SuspendOSInterrupts",
+      "sealed_applicability": "applicable",
+      "result": "partially_verified",
+      "verified_scope": "Task/Cat1/Cat2 masks, unmatched restores and cross-group/nested sequencing observed in real native dispatcher; All masks Cat1/Cat2 and OS masks Cat2 only.",
+      "remaining_scope": "Alarm callback allowed All-pair contexts and full lifecycle/Hook combinations remain to be tested.",
+      "evidence": {
+        "artifact": "interrupt-pairing-4-18.json",
+        "test": "epic4_standard_interrupt_pairing"
+      },
+      "implementation": [
+        "runtime/os/src/Os_Interrupt.c",
+        "runtime/os/src/Os_Backend.c",
+        "runtime/os/src/Os_Error.c",
+        "runtime/os/patches/0009-interrupt-source-control.patch"
+      ],
+      "static_evidence": "interrupt-static-analysis-4-18.json"
+    },
+    {
+      "key": "OSEK_SEMANTIC_INTERRUPTS",
+      "sealed_applicability": "applicable",
+      "result": "partially_verified",
+      "verified_scope": "Real application pending bits filtered by All/OS/source masks; private native kernel yield remains available; independent category counters and traces prove restoration.",
+      "remaining_scope": "Actual nested interrupt preemption, complete call table and ISR resource cleanup remain open.",
+      "evidence": {
+        "artifact": "interrupt-pairing-4-18.json",
+        "test": "epic4_standard_interrupt_pairing"
+      },
+      "implementation": [
+        "runtime/os/src/Os_Interrupt.c",
+        "runtime/os/src/Os_Backend.c",
+        "runtime/os/src/Os_Error.c",
+        "runtime/os/patches/0009-interrupt-source-control.patch"
+      ],
+      "static_evidence": "interrupt-static-analysis-4-18.json"
+    }
+  ],
+  "historical_evidence": "Earlier returned-task obligation record retained as original increment snapshot; no sealed applicability changed."
+}

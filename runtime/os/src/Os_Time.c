@@ -729,9 +729,10 @@ StatusType IncrementCounter(CounterType CounterID) {
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_IncrementCounter) == 0)
-                 ? E_OS_CALLEVEL
-                 : implementation_IncrementCounter(CounterID);
+    status = Os_ServiceAccessStatus(OSServiceId_IncrementCounter);
+    if (status == E_OK) {
+        status = implementation_IncrementCounter(CounterID);
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }
@@ -743,9 +744,10 @@ StatusType GetCounterValue(CounterType CounterID, TickRefType Value) {
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_GetCounterValue) == 0)
-                 ? E_OS_CALLEVEL
-                 : implementation_GetCounterValue(CounterID, Value);
+    status = Os_ServiceAccessStatus(OSServiceId_GetCounterValue);
+    if (status == E_OK) {
+        status = implementation_GetCounterValue(CounterID, Value);
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }
@@ -758,9 +760,10 @@ StatusType GetElapsedValue(CounterType CounterID, TickRefType Value, TickRefType
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_GetElapsedValue) == 0)
-                 ? E_OS_CALLEVEL
-                 : implementation_GetElapsedValue(CounterID, Value, ElapsedValue);
+    status = Os_ServiceAccessStatus(OSServiceId_GetElapsedValue);
+    if (status == E_OK) {
+        status = implementation_GetElapsedValue(CounterID, Value, ElapsedValue);
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }
@@ -772,9 +775,10 @@ StatusType GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info) {
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_GetAlarmBase) == 0)
-                 ? E_OS_CALLEVEL
-                 : implementation_GetAlarmBase(AlarmID, Info);
+    status = Os_ServiceAccessStatus(OSServiceId_GetAlarmBase);
+    if (status == E_OK) {
+        status = implementation_GetAlarmBase(AlarmID, Info);
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }
@@ -786,9 +790,10 @@ StatusType GetAlarm(AlarmType AlarmID, TickRefType Tick) {
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_GetAlarm) == 0)
-                 ? E_OS_CALLEVEL
-                 : implementation_GetAlarm(AlarmID, Tick);
+    status = Os_ServiceAccessStatus(OSServiceId_GetAlarm);
+    if (status == E_OK) {
+        status = implementation_GetAlarm(AlarmID, Tick);
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }
@@ -800,9 +805,10 @@ StatusType SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle) {
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_SetRelAlarm) == 0)
-                 ? E_OS_CALLEVEL
-                 : implementation_SetRelAlarm(AlarmID, Increment, Cycle);
+    status = Os_ServiceAccessStatus(OSServiceId_SetRelAlarm);
+    if (status == E_OK) {
+        status = implementation_SetRelAlarm(AlarmID, Increment, Cycle);
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }
@@ -814,9 +820,10 @@ StatusType SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle) {
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_SetAbsAlarm) == 0)
-                 ? E_OS_CALLEVEL
-                 : implementation_SetAbsAlarm(AlarmID, Start, Cycle);
+    status = Os_ServiceAccessStatus(OSServiceId_SetAbsAlarm);
+    if (status == E_OK) {
+        status = implementation_SetAbsAlarm(AlarmID, Start, Cycle);
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }
@@ -828,9 +835,10 @@ StatusType CancelAlarm(AlarmType AlarmID) {
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
-    status = (Os_HookServiceAllowed(OSServiceId_CancelAlarm) == 0)
-                 ? E_OS_CALLEVEL
-                 : implementation_CancelAlarm(AlarmID);
+    status = Os_ServiceAccessStatus(OSServiceId_CancelAlarm);
+    if (status == E_OK) {
+        status = implementation_CancelAlarm(AlarmID);
+    }
     if (Os_HookContext() == OS_HOOK_ERROR) {
         return status;
     }

@@ -70,18 +70,35 @@ static uint8_t internal_ceiling(size_t index);
 static void observe_transition(void);
 static size_t current_task_index(void);
 static void leave_running(size_t index);
+unsigned Os_BackendCurrentInterrupt(void) { return current_interrupt; }
+int Os_BackendStarted(void) { return InterlockedCompareExchange(&started, 0, 0) != 0; }
 void Os_BackendInterruptEnter(unsigned interrupt) { current_interrupt = interrupt; }
 void Os_BackendInterruptLeave(void) {
+    if (Os_InterruptDisabled() != 0) {
+        const Os_ErrorParameters arguments = {.service_TerminateTask = {0u}};
+        /* Native ISR dispatch already owns the interrupt mutex and has stopped
+         * the automotive Task. Restore only this logical ISR's saved pairs. */
+        Os_InterruptRestoreOwner();
+        if ((current_interrupt < 32u) && (current_interrupt != 1u) &&
+            ((Os_Config->category1_isrs & (UINT32_C(1) << current_interrupt)) == 0u)) {
+            (void)Os_ErrorResult(OSServiceId_InterruptMissingEnd, E_OS_DISABLEDINT, &arguments);
+        }
+    }
     configASSERT(resource_depth[OS_MAX_TASKS] == 0u);
     current_interrupt = 32u;
 }
 int Os_BackendInterruptEnabled(unsigned interrupt) {
-    /* Category1 remains unaffected by an OS Category2 resource ceiling. Full
-     * interrupt suspension/nesting services are validated separately in4.18. */
-    return (interrupt == 0u) ||
-           ((interrupt < 32u) &&
-            ((Os_Config->category1_isrs & (UINT32_C(1) << interrupt)) != 0u)) ||
-           (InterlockedCompareExchange(&interrupt_ceiling, 0, 0) < 31);
+    /* The private kernel yield is not an application ISR; it must remain
+     * available to complete native port critical-section handshakes. */
+    if (interrupt == 1u) {
+        return 1;
+    }
+    return (Os_InterruptAllows(interrupt) != 0) &&
+           (Os_PortInterruptSourceEnabled(interrupt) != 0) &&
+           ((interrupt == 0u) ||
+            ((interrupt < 32u) &&
+             ((Os_Config->category1_isrs & (UINT32_C(1) << interrupt)) != 0u)) ||
+            (InterlockedCompareExchange(&interrupt_ceiling, 0, 0) < 31));
 }
 static size_t task_index(TaskType id) {
     size_t i;
@@ -123,7 +140,8 @@ StatusType Os_BackendTaskId(TaskRefType id) {
     Os_BackendGuardService();
     *id = INVALID_TASK;
     for (size_t i = 0u; i < Os_Config->task_count; ++i) {
-        if (handles[i] == xTaskGetCurrentTaskHandle()) {
+        if ((handles[i] == xTaskGetCurrentTaskHandle()) &&
+            (eTaskGetState(handles[i]) == eRunning)) {
             *id = Os_Config->tasks[i].id;
             break;
         }
@@ -824,6 +842,7 @@ static StatusType complete_activation(TaskType id, int chain, int returned) {
         return E_OS_LIMIT;
     }
     if (returned != 0) {
+        Os_InterruptRestoreOwner();
         /* Restore real external ownership and ceilings in LIFO order within
          * this activation transaction. A pending preemption cannot expose a
          * partly cleaned activation before it has completed normally. */

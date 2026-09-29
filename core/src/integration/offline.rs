@@ -68,12 +68,20 @@ pub(super) fn sources() -> Result<Vec<(String, Vec<u8>)>, String> {
             include_bytes!("../../../runtime/os/patches/0008-task-hook-boundaries.patch"),
         ),
         (
+            "os/patches/0009-interrupt-source-control.patch",
+            include_bytes!("../../../runtime/os/patches/0009-interrupt-source-control.patch"),
+        ),
+        (
             "os/README.md",
             include_bytes!("../../../runtime/os/README.md"),
         ),
         (
             "os/src/Os.c",
             include_bytes!("../../../runtime/os/src/Os.c"),
+        ),
+        (
+            "os/src/Os_Interrupt.c",
+            include_bytes!("../../../runtime/os/src/Os_Interrupt.c"),
         ),
         (
             "os/src/Os_Error.c",

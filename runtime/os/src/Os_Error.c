@@ -26,6 +26,18 @@ int Os_HookServiceAllowed(OSServiceIdType service) {
 int Os_ErrorHookConfigured(void) {
     return (Os_Config != NULL) && (Os_Config->hooks != NULL) && (Os_Config->hooks->error != NULL);
 }
+StatusType Os_ServiceAccessStatus(OSServiceIdType service) {
+    StatusType result = E_OK;
+    if ((Os_HookContext() != OS_HOOK_ERROR) && (Os_InterruptDisabled() != 0)) {
+        result = E_OS_DISABLEDINT;
+    } else if (Os_HookServiceAllowed(service) == 0) {
+        result = E_OS_CALLEVEL;
+    } else {
+        /* ErrorHook did not acquire the interrupted caller's mask. Its legal
+         * queries can inspect the original failed caller without changing it. */
+    }
+    return result;
+}
 const Os_ErrorParameters *Os_ErrorParametersCurrent(void) {
     return (phase == OS_HOOK_ERROR) ? &parameters : &empty_parameters;
 }

@@ -134,11 +134,14 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
         "-I",
         str(TARGET / "src"),
         "-I",
+        str(ROOT / "runtime/include"),
+        "-I",
         str(copied / "include"),
         "-I",
         str(copied / "portable/MSVC-MingW"),
         str(TARGET / "src/Os.c"),
         str(TARGET / "src/Os_Error.c"),
+        str(TARGET / "src/Os_Interrupt.c"),
         str(TARGET / "src/Os_Backend.c"),
         str(TARGET / "src/Os_Stack.c"),
         str(TARGET / "src/Os_HostEvent.c"),
@@ -188,7 +191,7 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
         },
         "product_sources": {
             p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
-            for p in sorted(TARGET.rglob("*"))
+            for p in sorted([*TARGET.rglob("*"), ROOT / "runtime/include/Std_Types.h"])
             if p.is_file() and p.suffix != ".dump"
         },
         "command": command,
@@ -847,6 +850,71 @@ def check_stack(binary: Path) -> list[dict]:
     return observations
 
 
+def check_interrupt_pairing(binary: Path) -> list[dict]:
+    service_ids = [128,129,130,131,132,133,134,135,136,137,138,139,
+                   15,16,17,140,141,142,143,144,7,8,9,10,14,153,1,151,152]
+    cases = {
+        "disable": (1, 1, 0, "CO"),
+        "all-nested": (1, 1, 0, "NCO"),
+        "os-nested": (1, 1, 0, "CNO"),
+        "os-all": (1, 1, 0, "CO"),
+        "all-os": (1, 1, 0, "CO"),
+        "unmatched": (1, 1, 0, "CO"),
+        "hook-reject": (1, 1, 6, "CO"),
+        "services-disable": (1, 1, 29, "CO"),
+        "services-all": (1, 1, 29, "CO"),
+        "services-os": (1, 1, 29, "CO"),
+        "isr-balanced": (1, 1, 0, "CO"),
+        "isr-leak-disable": (1, 1, 1, "CO"),
+        "isr-leak-all": (1, 1, 1, "CO"),
+        "isr-leak-os": (1, 1, 1, "CO"),
+        "isr-leak-mixed": (1, 1, 1, "CO"),
+        "source-retain": (1, 1, 0, "OC"),
+        "source-clear": (1, 1, 0, "OC"),
+        "source-enable-clear": (1, 1, 0, "OC"),
+        "source-global": (1, 1, 0, "OC"),
+        "source-invalid": (1, 1, 6, "CO"),
+        "source-hook-reject": (1, 1, 3, "CO"),
+        "source-isr": (1, 1, 0, "OQC"),
+        "source-outside-isr": (1, 1, 3, "ODEC"),
+        "missing-disable": (0, 1, 1, "OM"),
+        "missing-all": (0, 1, 1, "OM"),
+        "missing-os": (0, 1, 1, "OM"),
+        "missing-mixed": (0, 1, 1, "OM"),
+        "disabled-first-start": (0, 0, 0, ""),
+    }
+    observations = []
+    for scenario, (cat1, cat2, errors, trace) in cases.items():
+        startup = int(scenario != "disabled-first-start")
+        reason = 9 if not startup else 0
+        task = 255 if scenario.startswith("missing-") or not startup else 0
+        result = execute(binary, scenario)
+        expected = (f"pairing scenario={scenario} startup={startup} cat1={cat1} cat2={cat2} "
+                    f"isr_task={task} errors={errors} trace={trace} reason={reason}")
+        error_expected = ([(9,service,"T") for service in service_ids]
+                          if scenario.startswith("services-") else
+                          [(2,service,"B") for service in range(145,151)]
+                          if scenario == "hook-reject" else
+                          [(3,service,"T") for service in [48,49,50,48,48,48]]
+                          if scenario == "source-invalid" else
+                          [(2,service,"B") for service in [48,49,50]]
+                          if scenario == "source-hook-reject" else
+                          [(2,service,"S") for service in [48,49,50]]
+                          if scenario == "source-outside-isr" else
+                          [(9,252,"S")] if scenario.startswith("isr-leak-") else
+                          [(11,253,"T")] if scenario.startswith("missing-") else [])
+        actual = [(int(status),int(service),actor) for status,service,actor in re.findall(
+            r"mask_error status=(\d+) service=(\d+) actor=([TBS])", result["stdout"])]
+        require(result["exit"] == reason and not result["stderr"], result)
+        require(expected in result["stdout"] and actual == error_expected, result)
+        require(f"lifecycle=Closed state={'Ready' if startup else 'Failed'} reason={reason}"
+                in result["stdout"], result)
+        result["independent_expected_pairing"] = [cat1,cat2,task,errors,trace,reason]
+        result["independent_expected_errors"] = error_expected
+        observations.append(result)
+    return observations
+
+
 def check_returned_task(binary: Path) -> list[dict]:
     observations = []
     cases = {
@@ -987,6 +1055,7 @@ def check_public_types(directory: Path) -> dict:
     command = [
         compiler(), "-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic",
         "-I" + str(TARGET / "include"), str(TARGET / "tests/public_types.c"),
+        "-I" + str(ROOT / "runtime/include"),
         "-o", str(binary),
     ]
     expected = "public_types range_and_pointer_contracts=pass access_truth_table=16\n"
@@ -1012,7 +1081,8 @@ def check_public_types(directory: Path) -> dict:
             path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
             for path in [TARGET / "include/Os.h", TARGET / "include/Os_Types.h",
                          TARGET / "include/Os_Cfg.h", TARGET / "include/Os_Hooks.h",
-                         TARGET / "src/Os_Windows.h", TARGET / "tests/public_types.c"]
+                         TARGET / "src/Os_Windows.h", TARGET / "tests/public_types.c",
+                         ROOT / "runtime/include/Std_Types.h"]
         },
         "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
         "observations": observations,
@@ -1037,6 +1107,7 @@ def main() -> None:
             "error-hooks",
             "task-hooks",
             "returned-task",
+            "interrupt-pairing",
         ],
         default="lifecycle",
     )
@@ -1062,6 +1133,7 @@ def main() -> None:
             "error-hooks": "error_hooks.c",
             "task-hooks": "task_hooks.c",
             "returned-task": "returned_task.c",
+            "interrupt-pairing": "interrupt_pairing.c",
         }
         checks = {
             "lifecycle": check_lifecycle,
@@ -1076,6 +1148,7 @@ def main() -> None:
             "error-hooks": check_error_hooks,
             "task-hooks": check_task_hooks,
             "returned-task": check_returned_task,
+            "interrupt-pairing": check_interrupt_pairing,
         }
         binary, evidence = build(Path(temporary), harnesses[args.suite])
         evidence["observations"] = checks[args.suite](binary)
@@ -1123,6 +1196,7 @@ def main() -> None:
             "error-hooks": "epic4_standard_error_hook_parameters",
             "task-hooks": "epic4_real_task_hook_transitions",
             "returned-task": "epic4_returned_task_resource_cleanup",
+            "interrupt-pairing": "epic4_standard_interrupt_pairing",
         }
         name = names[args.suite]
         print(f"{name} PASS: {len(evidence['observations'])} native vectors")

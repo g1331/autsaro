@@ -36,6 +36,7 @@ int main(void) {
     TryToGetSpinlockType acquired = TRYTOGETSPINLOCK_SUCCESS;
     IdleModeType idle = IDLE_NO_HALT;
     OSServiceIdType service = 0x36u;
+    boolean clear_pending = TRUE;
     *state_ref = APPLICATION_TERMINATED;
     *task_ref = 0u;
     if ((application == INVALID_OSAPPLICATION) || (state != APPLICATION_TERMINATED) ||
@@ -44,7 +45,8 @@ int main(void) {
         (access == NO_ACCESS) || (object != OBJECT_SCHEDULETABLE) ||
         (protection != PRO_PREVENT_ARRIVAL_RATE) || (restart != OS_OSAPPLICATION_RESTART) ||
         (time != UINT64_C(4294967295000000)) || (acquired == TRYTOGETSPINLOCK_NOSUCCESS) ||
-        (idle != IDLE_NO_HALT) || (service != 0x36u)) {
+        (idle != IDLE_NO_HALT) || (service != 0x36u) || (sizeof(boolean) != 1u) ||
+        (clear_pending != TRUE) || (TRUE == FALSE)) {
         return 1;
     }
     /* The selected host AccessType representation uses read/write/execute/stack

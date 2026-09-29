@@ -2,6 +2,38 @@
 #define AUTOSAR_EPIC4_OS_H
 #include "Os_Types.h"
 #include "Os_Hooks.h"
+/** Restore the caller's non-nested DisableAllInterrupts state; unmatched call has no effect. */
+void EnableAllInterrupts(void);
+/** Mask all application interrupts. This pair does not support nesting. */
+void DisableAllInterrupts(void);
+/** Restore one nesting level of the caller's all-interrupt suspension. */
+void ResumeAllInterrupts(void);
+/** Mask all application interrupts; nesting with the All/OS suspend pairs is supported. */
+void SuspendAllInterrupts(void);
+/** Restore one nesting level of the caller's Category 2 interrupt suspension. */
+void ResumeOSInterrupts(void);
+/** Mask Category 2 application interrupts, preserving Category 1 delivery. */
+void SuspendOSInterrupts(void);
+/** Read the active logical Category 2 ISR, including its hooks.
+ * @return ISR vector identifier, or INVALID_ISR outside a Category 2 ISR.
+ */
+ISRType GetISRID(void);
+/** Enable a known Category 2 source; optionally clear its real pending bit.
+ * @param ISRID Logical source/vector identifier.
+ * @param ClearPending TRUE to consume the pending edge before enabling.
+ * @return E_OK, E_OS_ID or E_OS_CALLEVEL; invalid calls do not change the source.
+ */
+StatusType EnableInterruptSource(ISRType ISRID, boolean ClearPending);
+/** Disable a known Category 2 source, retaining any real pending edge.
+ * @param ISRID Logical source/vector identifier.
+ * @return E_OK, E_OS_ID or E_OS_CALLEVEL.
+ */
+StatusType DisableInterruptSource(ISRType ISRID);
+/** Clear a known Category 2 source's real pending bit without enabling it.
+ * @param ISRID Logical source/vector identifier.
+ * @return E_OK, E_OS_ID or E_OS_CALLEVEL.
+ */
+StatusType ClearPendingInterrupt(ISRType ISRID);
 /** Start a NONE-synchronized table at a positive relative delay.
  * @param ScheduleTableID Configured table identifier.
  * @param Offset Delay; Offset plus initial offset must fit counter maximum.
