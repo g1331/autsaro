@@ -457,7 +457,7 @@ fn verify_build_input(output: &Path) -> Result<(), String> {
         .map_err(|e| format!("生成工程完整性检查失败，拒绝构建: {e}"))
 }
 
-fn seal_files(mut files: Vec<(String, Vec<u8>)>) -> Vec<(String, Vec<u8>)> {
+pub(crate) fn seal_files(mut files: Vec<(String, Vec<u8>)>) -> Vec<(String, Vec<u8>)> {
     files.sort_by(|a, b| a.0.cmp(&b.0));
     let names: Vec<_> = files.iter().map(|(name, _)| name.clone()).collect();
     let list = names.join("\n") + "\n";
@@ -572,7 +572,7 @@ fn file_names(files: &[(String, Vec<u8>)]) -> Vec<String> {
         .collect()
 }
 
-fn preview_prepared(
+pub(crate) fn preview_prepared(
     files: &[(String, Vec<u8>)],
     output: &Path,
 ) -> Result<GenerationPreview, String> {
@@ -759,7 +759,7 @@ pub fn generate(workspace: &mut Workspace, output: &Path) -> Result<GenerationRe
     generate_prepared(prepared_files(workspace)?, output, None)
 }
 
-fn generate_prepared(
+pub(crate) fn generate_prepared(
     files: Vec<(String, Vec<u8>)>,
     output: &Path,
     expected_revision: Option<&str>,

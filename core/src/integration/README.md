@@ -44,3 +44,12 @@ full C quality and independent engineering handoff remain later exits.
 external dependencies and tool/source-inventory errors. It carries the logical
 file, complete object path, cause and remedy when applicable. Rejection produces
 no plan and writes no engineering output.
+
+The W2 contract consumer is `plan.component_contract_files()`. It returns a
+read-only deterministic file collection containing shared RTE types/statuses,
+the application and service caller's headers, provenance and integrity records.
+Use `contracts.preview(output)` and then
+`contracts.generate_previewed(output, &preview.revision)` to install exactly
+the reviewed bytes with the existing generator's output protection and backup.
+The contract contains declarations only. Independent application compilation
+does not imply that the subsequent ECU/RTE runtime has linked or run.

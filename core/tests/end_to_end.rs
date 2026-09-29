@@ -13,6 +13,14 @@ mod epic4_reference;
 #[path = "support/epic4_plan.rs"]
 mod epic4_plan;
 
+#[path = "support/epic4_contract.rs"]
+mod epic4_contract;
+
+#[test]
+fn epic4_component_contract_generation() {
+    epic4_contract::verify();
+}
+
 #[test]
 fn epic4_validated_integration_plan() {
     epic4_plan::validated_integration_plan();

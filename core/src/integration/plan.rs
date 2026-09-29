@@ -144,7 +144,7 @@ fn assemble(
                 argument_type,
                 if port.read { "OUT" } else { "IN" },
             )],
-            "story-4.11:Rte.h",
+            "story-4.11:component contract header",
             "story-4.13:generated Rte.c",
             &port.path,
         ));
