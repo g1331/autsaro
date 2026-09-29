@@ -565,7 +565,7 @@ def check_finish(binary: Path) -> list[dict]:
         ("isr", "ISRLAJaCMZ", (2, 0, 0, 0, 0), 2, 0),
         ("boundary-pre", "ISRLAJBCMZ", (2, 1, 0, 0, 0), 2, 0),
         ("boundary-post", "ISRLAJBCMZ", (2, 1, 0, 0, 0), 2, 0),
-        ("missing-end", "ISRLAZ", (1, 0, 0, 0, 0), 0, 7),
+        ("missing-end", "ISRLAMZ", (1, 0, 0, 0, 0), 0, 0),
     ]
     for scenario, expected, counts, rejected, code in cases:
         result = execute(binary, scenario)
@@ -622,6 +622,7 @@ def check_resources(binary: Path) -> list[dict]:
         ("internal-resource", "ISRAaMZ", (0, 0, 0, 3)),
         ("access", "ISRAaBMZ", (0, 1, 0, 2)),
         ("scheduler", "ISRAJrHaMZ", (1, 0, 1, 4)),
+        ("scheduler-unconfigured", "ISRAaMZ", (0, 0, 0, 0)),
     ]:
         result = execute(binary, scenario)
         summary = re.search(
@@ -846,6 +847,30 @@ def check_stack(binary: Path) -> list[dict]:
     return observations
 
 
+def check_returned_task(binary: Path) -> list[dict]:
+    observations = []
+    cases = {
+        "basic": (1, 1, 0, "p0Aeq0p2M"),
+        "extended": (1, 1, 0, "p0Aeq0p2M"),
+        "resources": (1, 1, 1, "p0Aeq0p1Hq1p2M"),
+        "internal": (1, 1, 1, "p0Aeq0p1Hq1p2M"),
+        "queued": (3, 3, 0, "p0Aeq0p0Beq0p0Ceq0p2M"),
+        "queued-resources": (3, 3, 1, "p0Aeq0p1Hq1p0Beq0p0Ceq0p2M"),
+        "unconfigured": (1, 0, 0, "AM"),
+    }
+    for scenario, (entries, errors, helper, trace) in cases.items():
+        result = execute(binary, scenario)
+        expected = (f"returned scenario={scenario} entries={entries} errors={errors} "
+                    f"helper={helper} status={11 if errors else 0} "
+                    f"service={253 if errors else 0} trace={trace} reason=0")
+        require(result["exit"] == 0 and not result["stderr"], result)
+        require(expected in result["stdout"], result)
+        require("lifecycle=Closed state=Ready reason=0" in result["stdout"], result)
+        result["independent_expected_activation_cleanup"] = [entries, errors, helper, trace]
+        observations.append(result)
+    return observations
+
+
 def check_task_hooks(binary: Path) -> list[dict]:
     transitions = "p0Aq0p1Hq1p0Bq0p2Lq2p0Cq0p1Jq1p2Mq2p0D"
     expected_traces = {
@@ -1011,6 +1036,7 @@ def main() -> None:
             "capacity",
             "error-hooks",
             "task-hooks",
+            "returned-task",
         ],
         default="lifecycle",
     )
@@ -1035,6 +1061,7 @@ def main() -> None:
             "capacity": "sc1_capacity.c",
             "error-hooks": "error_hooks.c",
             "task-hooks": "task_hooks.c",
+            "returned-task": "returned_task.c",
         }
         checks = {
             "lifecycle": check_lifecycle,
@@ -1048,6 +1075,7 @@ def main() -> None:
             "capacity": check_capacity,
             "error-hooks": check_error_hooks,
             "task-hooks": check_task_hooks,
+            "returned-task": check_returned_task,
         }
         binary, evidence = build(Path(temporary), harnesses[args.suite])
         evidence["observations"] = checks[args.suite](binary)
@@ -1094,6 +1122,7 @@ def main() -> None:
             "capacity": "epic4_sc1_class_capacity",
             "error-hooks": "epic4_standard_error_hook_parameters",
             "task-hooks": "epic4_real_task_hook_transitions",
+            "returned-task": "epic4_returned_task_resource_cleanup",
         }
         name = names[args.suite]
         print(f"{name} PASS: {len(evidence['observations'])} native vectors")

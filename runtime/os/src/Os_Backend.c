@@ -591,8 +591,8 @@ static void task_entry(void *argument) {
     (void)setjmp(restart_frames[index]);
     configASSERT(activations[index].count != 0u);
     task->entry();
-    /* Full missing-end handling belongs to 4.18; never silently keep running. */
-    Os_BackendShutdown(E_OS_STATE);
+    /* A returned entry is an erroneous activation, not a whole-OS shutdown. */
+    Os_BackendMissingEnd();
 }
 static void bootstrap(void *argument) {
     size_t i;
@@ -782,7 +782,7 @@ static size_t current_task_index(void) {
     }
     return OS_MAX_TASKS;
 }
-static StatusType complete_activation(TaskType id, int chain) {
+static StatusType complete_activation(TaskType id, int chain, int returned) {
     const Os_NativeStack *stack = Os_StackCurrent();
     size_t index;
     TaskHandle_t current;
@@ -810,7 +810,7 @@ static StatusType complete_activation(TaskType id, int chain) {
     }
     taskENTER_CRITICAL();
     Os_BackendGuardService();
-    if (resource_depth[index] != 0u) {
+    if ((resource_depth[index] != 0u) && (returned == 0)) {
         taskEXIT_CRITICAL();
         return E_OS_RESOURCE;
     }
@@ -822,6 +822,17 @@ static StatusType complete_activation(TaskType id, int chain) {
         (activations[target].count >= Os_Config->tasks[target].activation_limit)) {
         taskEXIT_CRITICAL();
         return E_OS_LIMIT;
+    }
+    if (returned != 0) {
+        /* Restore real external ownership and ceilings in LIFO order within
+         * this activation transaction. A pending preemption cannot expose a
+         * partly cleaned activation before it has completed normally. */
+        while (resource_depth[index] != 0u) {
+            const size_t resource = owned_resources[index][resource_depth[index] - 1u];
+            configASSERT(resource < Os_Config->resource_count);
+            const StatusType released = Os_BackendResource(Os_Config->resources[resource].id, 0);
+            configASSERT(released == E_OK);
+        }
     }
 #ifdef OS_FINISH_TESTS
     Os_TestFinishBoundary(0u);
@@ -868,8 +879,17 @@ static StatusType complete_activation(TaskType id, int chain) {
     Os_BackendGuardService();
     longjmp(restart_frames[index], 1);
 }
-StatusType Os_BackendFinish(void) { return complete_activation(0u, 0); }
-StatusType Os_BackendChain(TaskType id) { return complete_activation(id, 1); }
+StatusType Os_BackendFinish(void) { return complete_activation(0u, 0, 0); }
+StatusType Os_BackendChain(TaskType id) { return complete_activation(id, 1, 0); }
+void Os_BackendMissingEnd(void) {
+    const Os_ErrorParameters arguments = {.service_TerminateTask = {0u}};
+    Os_StackCheck();
+    /* Report before leaving RUNNING, while the application's leaked resource
+     * state remains observable. Normal completion then cleans this activation. */
+    (void)Os_ErrorResult(OSServiceId_TaskMissingEnd, E_OS_MISSINGEND, &arguments);
+    (void)complete_activation(0u, 0, 1);
+    Os_BackendShutdown(E_OS_STATE);
+}
 StatusType Os_BackendResource(ResourceType id, int acquire) {
     static UBaseType_t saved_priorities[OS_MAX_TASKS + 1u][OS_MAX_RESOURCES];
     static LONG saved_interrupt_ceilings[OS_MAX_TASKS + 1u][OS_MAX_RESOURCES];
@@ -879,7 +899,6 @@ StatusType Os_BackendResource(ResourceType id, int acquire) {
     size_t resource;
     unsigned depth;
     StatusType status = E_OK;
-    Os_ResourceConfig scheduler = {RES_SCHEDULER, 0u, 0u, 0u};
     const Os_ResourceConfig *config;
     Os_BackendGuardService();
     task = current_task_index();
@@ -896,22 +915,9 @@ StatusType Os_BackendResource(ResourceType id, int acquire) {
         }
     }
     if (resource == Os_Config->resource_count) {
-        if (id != RES_SCHEDULER) {
-            return E_OS_ID;
-        }
-        /* The predefined scheduler resource occupies the reserved eighth slot
-         * when omitted from user configuration. No extra ninth resource exists. */
-        resource = OS_MAX_RESOURCES - 1u;
-        for (size_t i = 0u; i < Os_Config->task_count; ++i) {
-            scheduler.task_access |= (uint16_t)(1u << Os_Config->tasks[i].id);
-            if (Os_Config->tasks[i].priority > scheduler.ceiling) {
-                scheduler.ceiling = Os_Config->tasks[i].priority;
-            }
-        }
-        config = &scheduler;
-    } else {
-        config = &Os_Config->resources[resource];
+        return E_OS_ID;
     }
+    config = &Os_Config->resources[resource];
     taskENTER_CRITICAL();
     Os_BackendGuardService();
     depth = resource_depth[task];

@@ -1,5 +1,7 @@
 # Epic 4 Windows OS 基础
 
+4.18的返回Task清理增量把入口返回作为错误激活处理：在离开RUNNING前报告`E_OS_MISSINGEND`（目标值11，内部合成身份`OSServiceId_TaskMissingEnd`为253），随后在同一完成事务中按LIFO释放实际外部资源及恢复ceiling，发Post并正常结束该激活。Basic排队激活继续复用真实原生Task栈，Extended/非抢占Task同样正常终止，其他Task可取得已释放资源。未配置ErrorHook时仍正常清理和终止；不能把入口返回直接当作整个OS关闭。`RES_SCHEDULER`现仅使用显式配置的资源，未配置时Get/Release均返回`E_OS_ID`，不自动创建隐藏槽。`python scripts/epic4_os.py --suite returned-task`提供七个独立轨迹，正式入口为`epic4_returned_task_resource_cleanup`。标准中断屏蔽服务尚未接入，因此该增量不证明missing-end的中断配对恢复或完整SC1出口。
+
 4.18的Task Hook增量接入真实内核转换：第八受控补丁在既有FIFO选择器确定候选后、赋值`pxCurrentTCB`前观察旧/新对象，不增设选择器或修改ready列表。抢占的PostTaskHook在旧Task仍为RUNNING时调用，PreTaskHook在新Task已被内核选中且内部资源取得后调用。WaitEvent、TerminateTask和ChainTask在改写状态/激活队列前发Post，随后内核转换不重复发Post；同一TCB的排队激活/自身Chain仍有新激活的Pre。无切换yield、已满足的WaitEvent不发额外Hook，ShutdownOS不发Post。`python scripts/epic4_os.py --suite task-hooks`用八个独立进程验证字面顺序、实际身份/RUNNING状态与内部资源，正式入口为`epic4_real_task_hook_transitions`。missing-end、中断控制和完整SC1调用表仍开放。
 
 4.18的错误报告增量在25个现有标准StatusType服务边界调用可选ErrorHook，提供有类型的service ID与参数快照。`Os_TargetConfig.hooks`为NULL时不调用标准Hook；配置`Os_HookConfig.error`后，Task、Cat2及Startup内的服务错误在原执行上下文报告。ErrorHook内再次失败不递归、不覆盖外层快照，输出参数在服务拒绝时保持原值。`Os_Cfg.h`默认启用`OS_USE_GET_SERVICE_ID`与`OS_USE_PARAMETER_ACCESS`，可在编译时分别设置0/1；对应标准访问宏在禁用时不定义。固定生产ECUC的两项开关为true，生成交付包含`Os_Types.h`、`Os_Cfg.h`、`Os_Hooks.h`、`Os_Error.c`和`Ecu_OsHooks.c`。`python scripts/epic4_os.py --suite error-hooks`运行四种开关各配置/未配置八个独立进程，正式入口为`epic4_standard_error_hook_parameters`。PreTask/PostTask回调的真实任务转换另有独立增量验证，missing-end及完整中断控制仍待实现，4.18与完整SC1出口保持开放。

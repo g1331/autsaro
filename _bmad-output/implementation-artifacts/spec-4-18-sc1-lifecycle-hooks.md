@@ -57,6 +57,8 @@ context: []
 
 ## Implementation Notes
 
+返回Task/资源增量实施：trampoline在RUNNING状态通过标准错误通路报告E_OS_MISSINGEND11、内部合成service253，然后使用同一真实完成事务按LIFO清理外部资源/ceiling，正常发Post并消费激活队列；新激活重入真实原生栈，其他Task继续。移除未配置RES_SCHEDULER自动隐藏槽；既有成功资源向量改为真正显式配置最高Task ceiling，并新增未配置Get/Release双拒绝及状态不变。旧missing-end最低关闭预期按R24-11 p74～75更新为正常终止后monitor继续，全部22Finish/Chain回归通过。七个返回Task向量、26资源、22Finish回归、最终正式门和三路复核均通过，标准中断配对恢复仍开放。
+
 人工调用图核查补充：虽然错误报告函数和ErrorHook自身不递归，外层失败查询GetTaskState等标准wrapper可能仍活跃，ErrorHook依法再次查询同一服务时会重入该wrapper（error_hooks向量4已有真实路径）。这是不同于嵌套ErrorHook的有界函数重入；完整MISRA出口须对R17.2 Required作明确消除或受控偏离处置，目前没有批准，standard-error-static-analysis已记录，不能把部分编译/扫描或回调递归抑制冒充该规则全通过。
 
 后续missing-end清理已查明一处必须同时修正的资源契约：Os_BackendResource仍保留未配置RES_SCHEDULER时自动建立第八槽的旧分支，而R24-11 OS p37明确不自动创建。本故事冻结约束要求显式配置。下一资源/终止增量须移除自动分支，既有scheduler成功向量改为真正配置该资源，并补未配置拒绝；资源清理只能索引实际配置资源，不依赖该隐藏槽。当前容量增量已显式配置，不能用它证明这个未配置分支已关闭。
@@ -81,6 +83,8 @@ ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参�
 
 ## Review Triage Log
 
+- 返回Task/资源增量blind／edge／verification-gap三路独立复核均无发现。七个返回Task、22Finish/Chain和26资源真实向量均通过；Python首轮因仍读取历史finish-chain/resource-preemption记录不符合新标准行为而报红，已改用本次真实回归工件，同时增加旧整OS关闭和隐式scheduler的拒绝变异验证，历史记录不覆写。完整故事中断恢复和SC1仍开放。
+
 - Task Hook增量blind／edge／verification-gap三路独立复核均无发现。首轮完整门86通过/1失败，实际Pre/Post增加诊断标记后，20tick总139标记超出127前缀，trace_dropped12；旧生成测试按未截断片段计数失配。改为独立字面139序列的精确保留前缀和丢弃数量，保持completed20、两个实际CAN输出、全部初始化失败断言；额外只读verification-gap复核无发现。失败原始日志与Windows链接占用日志保留，源实现未因此改动。
 
 - ErrorHook增量edge与verification-gap独立复核均无发现。blind提出“GetTaskID标准service ID应0x04”：false，实际R24-11 OS p167的0x04属于CheckTaskMemoryAccess，p147将GetTaskID列为OSEK服务，OSEK2.2.3 §13.8.3只规定各OSServiceId_xx唯一，没有该数值；当前0x80～0x90与AUTOSAR规定的Counter/Schedule ID分开且独立字面预期检查。保留现有值，不将其他模块/实现常量当作本规范义务。
@@ -88,6 +92,8 @@ ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参�
 - 容量独立增量三路blind／edge／verification-gap均未发现可定位缺陷或验证缺口；完整故事的Hook/错误/ISR工作仍开放。正式容量/真实生成两项测试163.73s通过；18容量、40受控时间、43计时向量封存，26最低容量义务直接映射到四个主场景，部分静态exit1原样保留。容量增量完整门exit0：85个集成测试（660.24s）、29Python、UI/桌面构建和两组Clippy通过；本故事Hook/错误/ISR仍未完成，sprint保持in-progress。
 
 ## Verification
+
+返回Task/资源增量最终完整门exit0：88个核心集成测试532.30s、29Python、增量格式/C99、UI/桌面构建和两组Clippy通过。七个返回Task/22Finish/26资源原生证据与最终源码身份匹配；实际八补丁后tasks.c及九本地C翻译单元部分静态exit1诊断保留。三路独立复核无发现。正常Task入口返回已不再关闭整个OS；SWS_Os_00239标准中断配对恢复、完整ISR/调用表、R17.2处置及完整221项/交接仍开放，sprint不关闭。
 
 Task Hook增量最终完整门exit0：87个核心集成测试541.62s、29Python、增量格式/C99、UI/桌面构建和两组Clippy通过。真实生成定向复验222.76s通过，最终完整门也覆盖该项。八原生Task Hook向量与源码身份/八补丁摘要一致；九本地C翻译单元及实际八补丁后tasks.c部分静态exit1诊断保留。三路独立复核和生成轨迹断言定向复核均无发现。sprint保持4.18/Epic4 in-progress，missing-end/ISR/全调用表、R17.2处置、完整221项和最终交接仍开放。
 

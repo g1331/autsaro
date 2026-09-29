@@ -45,7 +45,8 @@ class DependencyTests(unittest.TestCase):
     def test_finish_gate_rejects_entry_order_return_and_missing_observer(self):
         original = json.loads(
             (
-                epic4_os.ROOT / "docs/assurance/evidence/epic4/finish-chain.json"
+                epic4_os.ROOT
+                / "docs/assurance/evidence/epic4/returned-task-finish-regression-4-18.json"
             ).read_text(encoding="utf-8")
         )["observations"]
         with patch("epic4_os.execute", side_effect=copy.deepcopy(original)):
@@ -71,6 +72,18 @@ class DependencyTests(unittest.TestCase):
                 ):
                     epic4_os.check_finish(Path("unused.exe"))
 
+        # Reject the former whole-OS close instead of accepting a returned Task
+        # which failed to finish its activation and run the pending monitor.
+        records = copy.deepcopy(original)
+        returned = next(row for row in records if row["scenario"] == "missing-end")
+        returned["exit"] = 7
+        returned["stdout"] = returned["stdout"].replace("trace=ISRLAMZ", "trace=ISRLAZ")
+        with (
+            patch("epic4_os.execute", side_effect=records),
+            self.assertRaises(AssertionError),
+        ):
+            epic4_os.check_finish(Path("unused.exe"))
+
     def test_missing_and_modified_kernel_rejected(self):
         with tempfile.TemporaryDirectory(prefix="epic4-dependency-") as directory:
             kernel = Path(directory) / "kernel"
@@ -87,7 +100,8 @@ class DependencyTests(unittest.TestCase):
     def test_resource_gate_rejects_preemption_wait_and_mask_order(self):
         original = json.loads(
             (
-                epic4_os.ROOT / "docs/assurance/evidence/epic4/resource-preemption.json"
+                epic4_os.ROOT
+                / "docs/assurance/evidence/epic4/configured-resource-regression-4-18.json"
             ).read_text(encoding="utf-8")
         )["observations"]
         with patch("epic4_os.execute", side_effect=copy.deepcopy(original)):
@@ -98,6 +112,7 @@ class DependencyTests(unittest.TestCase):
             (1, "trace=ISRAnHaMZ", "trace=ISRAHnaMZ"),
             (4, "trace=ISRABaMZ", "trace=ISRAaBMZ"),
             (10, "trace=ISRApJaMZ", "trace=ISRAJpaMZ"),
+            (17, "trace=ISRAaMZ", "trace=ISRAJrHaMZ"),
         ]:
             with self.subTest(index=index):
                 records = copy.deepcopy(original)

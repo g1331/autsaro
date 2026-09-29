@@ -54,6 +54,7 @@ StatusType Os_BackendTaskId(TaskRefType id);
 AppModeType Os_BackendApplicationMode(void);
 StatusType Os_BackendActivate(TaskType id);
 StatusType Os_BackendFinish(void);
+void Os_BackendMissingEnd(void);
 StatusType Os_BackendChain(TaskType id);
 StatusType Os_BackendResource(ResourceType id, int acquire);
 StatusType Os_BackendEvent(TaskType id, EventMaskType mask, EventMaskRefType output);

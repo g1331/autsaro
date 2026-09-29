@@ -261,6 +261,11 @@ static void task_a(void) {
         check(ActivateTask(3u) == E_OK);
         check_priority(4u, 1u, 0u);
         check(ReleaseResource(1u) == E_OK);
+    } else if (strcmp(scenario, "scheduler-unconfigured") == 0) {
+        check_priority(2u, 0u, 0u);
+        check(GetResource(RES_SCHEDULER) == E_OS_ID);
+        check(ReleaseResource(RES_SCHEDULER) == E_OS_ID);
+        check_priority(2u, 0u, 0u);
     } else if (strcmp(scenario, "scheduler") == 0) {
         check(GetResource(RES_SCHEDULER) == E_OK);
         check_priority(5u, 1u, 0u);
@@ -351,11 +356,15 @@ int main(int argc, char **argv) {
                              {3u, "D", task_d, 5u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
                              {4u, "E", task_e, 2u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
                              {5u, "M", monitor, 1u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
-    Os_ResourceConfig resources[] = {{0u, 3u, 5u, 0u},           {1u, 4u, 5u, 0u},
-                                     {2u, 4u, 5u, 0u},           {3u, 2u, 2u, 0u},
-                                     {4u, 31u, 1u, 0x80000000u}, {5u, 31u, 0u, 0x80000000u}};
+    Os_ResourceConfig resources[] = {{0u, 3u, 5u, 0u},
+                                     {1u, 4u, 5u, 0u},
+                                     {2u, 4u, 5u, 0u},
+                                     {3u, 2u, 2u, 0u},
+                                     {4u, 31u, 1u, 0x80000000u},
+                                     {5u, 31u, 0u, 0x80000000u},
+                                     {RES_SCHEDULER, 5u, 63u, 0u}};
     Os_InternalResourceConfig internal[] = {{1u, 3u}, {2u, 5u}};
-    Os_TargetConfig config = {tasks, 6u, 262144u, resources, 6u,   internal,
+    Os_TargetConfig config = {tasks, 6u, 262144u, resources, 7u,   internal,
                               2u,    0u, 0u,      0u,        NULL, NULL};
     StatusType prepared;
     scenario = (argc == 2) ? argv[1] : "non";
@@ -402,6 +411,15 @@ int main(int argc, char **argv) {
         tasks[0].internal_resource = 1u;
     } else {
         /* Behavior vectors retain the declared valid static configuration. */
+    }
+    resources[6].ceiling = 0u;
+    for (unsigned i = 0u; i < 6u; ++i) {
+        if (tasks[i].priority > resources[6].ceiling) {
+            resources[6].ceiling = tasks[i].priority;
+        }
+    }
+    if (strcmp(scenario, "scheduler-unconfigured") == 0) {
+        config.resource_count = 6u;
     }
     prepared = Os_TargetPrepare(&config);
     if ((strcmp(scenario, "bad-schedule") == 0) || (strcmp(scenario, "non-internal-low") == 0) ||

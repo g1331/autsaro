@@ -180,6 +180,28 @@ fn epic4_sc1_class_capacity() {
 
 #[cfg(windows)]
 #[test]
+fn epic4_returned_task_resource_cleanup() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let output = Command::new("python")
+        .arg(root.join("scripts/epic4_os.py"))
+        .args(["--suite", "returned-task"])
+        .current_dir(root)
+        .output()
+        .expect("run actual returned Task activation cleanup");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "epic4_returned_task_resource_cleanup PASS: 7 native vectors"
+    );
+}
+
+#[cfg(windows)]
+#[test]
 fn epic4_real_task_hook_transitions() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let output = Command::new("python")

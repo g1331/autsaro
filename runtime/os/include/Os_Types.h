@@ -90,6 +90,7 @@ typedef AlarmBaseType *AlarmBaseRefType;
 #define E_OS_STATE 7u
 #define E_OS_VALUE 8u
 #define E_OS_ILLEGAL_ADDRESS 10u
+#define E_OS_MISSINGEND 11u
 #define E_OS_STACKFAULT 13u
 #define RUNNING 0u
 #define WAITING 1u
