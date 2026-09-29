@@ -1,0 +1,1810 @@
+{
+  "format": "epic4-sc1-timing-obligation-results-v1",
+  "status": "functional timing scope assessed; not a full SC1, MISRA or handoff exit",
+  "baseline_commit": "10c250426b2cf827c9f6d5df9b8b65374358c21a",
+  "obligations_sha256": "a691103e8dd217b12c1e838bdb6a06fcef772dc8cbafb673d2bf70b62185b18f",
+  "reviewed_baseline_sha256": "a2f2e97c256cd4f563bcbf88793ae0f0799f7a3c0dc7a1b9957bc47a08fe1031",
+  "source_pdf_sha256": "6ec1915808e8819c6552bcc69fe935d8664f7bf0b8f9eb55810377e79ff8ae44",
+  "rows": [
+    {
+      "key": "SWS_Os_00374",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 39,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "capacity",
+        "eight-tables",
+        "bad-zero-points",
+        "bad-empty-action",
+        "bad-counter",
+        "hardware-counter"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00384",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 39,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "hardware-counter",
+        "hardware-kernel-wrap",
+        "wrap"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00401",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 40,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "capacity",
+        "eight-tables",
+        "bad-zero-points",
+        "bad-empty-action",
+        "bad-counter",
+        "hardware-counter"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00402",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 40,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "capacity",
+        "eight-tables",
+        "bad-zero-points",
+        "bad-empty-action",
+        "bad-counter",
+        "hardware-counter"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00403",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 40,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "capacity",
+        "eight-tables",
+        "bad-zero-points",
+        "bad-empty-action",
+        "bad-counter",
+        "hardware-counter"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00404",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 40,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "capacity",
+        "eight-tables",
+        "bad-zero-points",
+        "bad-empty-action",
+        "bad-counter",
+        "hardware-counter"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00407",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 41,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "capacity",
+        "eight-tables",
+        "bad-zero-points",
+        "bad-empty-action",
+        "bad-counter",
+        "hardware-counter"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00442",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 41,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "bad-duplicate-offset",
+        "bad-mincycle",
+        "relative-zero",
+        "relative-max"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00443",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 41,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "bad-duplicate-offset",
+        "bad-mincycle",
+        "relative-zero",
+        "relative-max"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00408",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 41,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "bad-duplicate-offset",
+        "bad-mincycle",
+        "relative-zero",
+        "relative-max"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00002",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 41,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "capacity",
+        "eight-tables",
+        "bad-zero-points",
+        "bad-empty-action",
+        "bad-counter",
+        "hardware-counter"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00007",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 41,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "capacity",
+        "eight-tables",
+        "bad-zero-points",
+        "bad-empty-action",
+        "bad-counter",
+        "hardware-counter"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00409",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 41,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "capacity",
+        "eight-tables",
+        "bad-zero-points",
+        "bad-empty-action",
+        "bad-counter",
+        "hardware-counter"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00410",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 42,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "capacity",
+        "eight-tables",
+        "bad-zero-points",
+        "bad-empty-action",
+        "bad-counter",
+        "hardware-counter"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00411",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 42,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "capacity",
+        "eight-tables",
+        "bad-zero-points",
+        "bad-empty-action",
+        "bad-counter",
+        "hardware-counter"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00412",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 42,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "same-point",
+        "capacity"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00413",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 43,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "repeat",
+        "bad-repeat-final"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00009",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 43,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "capacity",
+        "link-zero-final",
+        "relative-zero"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00427",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 43,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "capacity",
+        "link-zero-final",
+        "relative-zero"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00444",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 43,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "repeat",
+        "bad-repeat-final"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00194",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 43,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "repeat",
+        "bad-repeat-final"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00428",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 45,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "stop-next",
+        "repeat"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00414",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 46,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "link",
+        "link-backward",
+        "link-zero-final",
+        "replace-next"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00510",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 46,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "autostart",
+        "autostart-mode2",
+        "autostart-absolute"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00013",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 48,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00429",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 49,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00430",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 49,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00431",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 50,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00462",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 50,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00463",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 50,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00435",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 51,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00415",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 52,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00416",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 53,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00436",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 53,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00559",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 53,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00437",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 53,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00438",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 53,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00206",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 54,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00417",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 54,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00418",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 54,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00419",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 54,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00420",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 54,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00421",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 54,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00347",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 170,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00275",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 170,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00452",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 170,
+      "result": "condition_not_instantiated",
+      "basis": "IMPLICIT synchronization is not configured or supplied; raw Prepare and RTE parser refuse it before execution.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00332",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 170,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00276",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 170,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00277",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 170,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00278",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 171,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00521",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 171,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00358",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 171,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00348",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 171,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00349",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 171,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00350",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 172,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00351",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 172,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00522",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 172,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00006",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 172,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00279",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 173,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00280",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 173,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00281",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 173,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "stop-next",
+        "repeat"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00523",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 173,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00191",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 173,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00282",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 174,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00330",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 174,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00283",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 174,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00309",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 174,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00484",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 174,
+      "result": "condition_not_instantiated",
+      "basis": "All accepted tables have the same NONE strategy; differing strategies are refused during configuration validation.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00284",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 174,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "link",
+        "link-backward",
+        "link-zero-final",
+        "replace-next"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00324",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 174,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "link",
+        "link-backward",
+        "link-zero-final",
+        "replace-next"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00505",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 174,
+      "result": "condition_not_instantiated",
+      "basis": "EXPLICIT synchronization is not provided in the confirmed SC1 profile.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00453",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 175,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "stop-next",
+        "repeat"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00524",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 175,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00201",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 175,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00387",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 175,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00388",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 175,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00389",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 175,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00525",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 176,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00199",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 176,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00454",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 177,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00455",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 177,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00456",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 177,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00457",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 177,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00526",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 177,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00422",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 177,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00362",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 178,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00323",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 178,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00458",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 178,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00483",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 178,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00300",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 178,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00527",
+      "sealed_applicability": "conditional_na",
+      "source": "R24-11 OS",
+      "pdf_page": 178,
+      "result": "condition_not_instantiated",
+      "basis": "Reference and independent SC1 profile do not provide global-time/synchronized-table feature. SWS_Os_00241 does not require global synchronization for SC1; if supplied, SWS_Os_00240 requires all interfaces to conform.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00227",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 178,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00289",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 179,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00353",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 179,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00354",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 179,
+      "result": "condition_not_instantiated",
+      "basis": "Explicit-synchronization WAITING cannot be instantiated in the confirmed NONE profile.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00290",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 179,
+      "result": "condition_not_instantiated",
+      "basis": "Synchronized RUNNING state cannot be instantiated in the confirmed NONE profile.",
+      "evidence": [
+        "sc1-timing-capacity.json#bad-sync",
+        "core/tests/support/epic4_timing.rs#wrong-strategy",
+        "runtime/os/src/Os_Schedule.c#Os_ScheduleValidate"
+      ]
+    },
+    {
+      "key": "SWS_Os_00291",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 179,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00293",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 179,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00528",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 179,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "rejects",
+        "capacity",
+        "absolute",
+        "relative-max",
+        "category1",
+        "category2"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00399",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 180,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "wrap",
+        "hardware-counter",
+        "hardware-kernel-wrap",
+        "controlled-time/counter-errors",
+        "controlled-time/category2-time"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00285",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 180,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "wrap",
+        "hardware-counter",
+        "hardware-kernel-wrap",
+        "controlled-time/counter-errors",
+        "controlled-time/category2-time"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00286",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 180,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "wrap",
+        "hardware-counter",
+        "hardware-kernel-wrap",
+        "controlled-time/counter-errors",
+        "controlled-time/category2-time",
+        "counter-chain"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c: iterative CounterWork increment/alarm dispatch; runtime/os/tests/sc1_timing.c: counter-chain exact values; scripts/epic4_os.py independent expected trace"
+    },
+    {
+      "key": "SWS_Os_00321",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 180,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "action-error",
+        "controlled-time/action-error"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00529",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 180,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "wrap",
+        "hardware-counter",
+        "hardware-kernel-wrap",
+        "controlled-time/counter-errors",
+        "controlled-time/category2-time"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00530",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 180,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "wrap",
+        "hardware-counter",
+        "hardware-kernel-wrap",
+        "controlled-time/counter-errors",
+        "controlled-time/category2-time"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00383",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 181,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "wrap",
+        "hardware-counter",
+        "hardware-kernel-wrap",
+        "controlled-time/counter-errors",
+        "controlled-time/category2-time"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00376",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 181,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "wrap",
+        "hardware-counter",
+        "hardware-kernel-wrap",
+        "controlled-time/counter-errors",
+        "controlled-time/category2-time"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00377",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 181,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "wrap",
+        "hardware-counter",
+        "hardware-kernel-wrap",
+        "controlled-time/counter-errors",
+        "controlled-time/category2-time"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00531",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 181,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "hardware-counter",
+        "hardware-kernel-wrap",
+        "wrap"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00532",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 181,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "wrap",
+        "hardware-counter",
+        "hardware-kernel-wrap",
+        "controlled-time/counter-errors",
+        "controlled-time/category2-time"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00392",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 182,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "wrap",
+        "hardware-counter",
+        "hardware-kernel-wrap",
+        "controlled-time/counter-errors",
+        "controlled-time/category2-time"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00381",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 182,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "wrap",
+        "hardware-counter",
+        "hardware-kernel-wrap",
+        "controlled-time/counter-errors",
+        "controlled-time/category2-time"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00391",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 182,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "wrap",
+        "hardware-counter",
+        "hardware-kernel-wrap",
+        "controlled-time/counter-errors",
+        "controlled-time/category2-time"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00382",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 182,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "wrap",
+        "hardware-counter",
+        "hardware-kernel-wrap",
+        "controlled-time/counter-errors",
+        "controlled-time/category2-time"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00460",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 182,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "wrap",
+        "hardware-counter",
+        "hardware-kernel-wrap",
+        "controlled-time/counter-errors",
+        "controlled-time/category2-time"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00533",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 182,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "wrap",
+        "hardware-counter",
+        "hardware-kernel-wrap",
+        "controlled-time/counter-errors",
+        "controlled-time/category2-time"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SWS_Os_00534",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 182,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "wrap",
+        "hardware-counter",
+        "hardware-kernel-wrap",
+        "controlled-time/counter-errors",
+        "controlled-time/category2-time"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SC1_CAP_SOFTWARE_COUNTERS",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 130,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "capacity",
+        "wrap"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "SC1_CAP_SCHEDULE_TABLES",
+      "sealed_applicability": "applicable",
+      "source": "R24-11 OS",
+      "pdf_page": 130,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "capacity",
+        "eight-tables"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "OSEK_SERVICE_GetAlarmBase",
+      "sealed_applicability": "applicable",
+      "source": "OSEK OS 2.2.3",
+      "pdf_page": 63,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "controlled-time/absolute-cycle",
+        "controlled-time/relative-wrap",
+        "controlled-time/absolute-current",
+        "controlled-time/counter-errors"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "OSEK_SERVICE_GetAlarm",
+      "sealed_applicability": "applicable",
+      "source": "OSEK OS 2.2.3",
+      "pdf_page": 63,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "controlled-time/absolute-cycle",
+        "controlled-time/relative-wrap",
+        "controlled-time/absolute-current",
+        "controlled-time/counter-errors"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "OSEK_SERVICE_SetAbsAlarm",
+      "sealed_applicability": "applicable",
+      "source": "OSEK OS 2.2.3",
+      "pdf_page": 64,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "controlled-time/absolute-cycle",
+        "controlled-time/relative-wrap",
+        "controlled-time/absolute-current",
+        "controlled-time/counter-errors"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    },
+    {
+      "key": "OSEK_SERVICE_CancelAlarm",
+      "sealed_applicability": "applicable",
+      "source": "OSEK OS 2.2.3",
+      "pdf_page": 65,
+      "result": "covered_for_selected_host_profile",
+      "evidence": [
+        "controlled-time/absolute-cycle",
+        "controlled-time/relative-wrap",
+        "controlled-time/absolute-current",
+        "controlled-time/counter-errors"
+      ],
+      "source_proof": "runtime/os/src/Os_Time.c and Os_Schedule.c; public signatures in runtime/os/include/Os.h"
+    }
+  ],
+  "limits": [
+    "Sealed applicability is unchanged; conditional antecedents are recorded separately, not relabelled.",
+    "The delivered reference ECU remains one owner and one software SystemCounter. Periodic RTE table groups have one repeating ExpiryPoint and an explicit first deadline matching the TimingEvent period. General multi-point/multi-counter capability is verified in independent native OS configurations.",
+    "Hardware counter evidence is a Win64 host timer register driven by the actual controlled kernel tick ISR, not an MCU timer declaration.",
+    "Full SC1/coding/adopted-code/Required approval/ARTI/handoff exit remains separate."
+  ],
+  "verification_summary": {
+    "final_full_gate": {
+      "command": "python scripts/verify.py --scope all --base 10c250426b2cf827c9f6d5df9b8b65374358c21a",
+      "RUST_TEST_THREADS": 2,
+      "exit_code": 0,
+      "core_integration_passed": 83,
+      "core_integration_seconds": 458.0,
+      "python_unit_tests_passed": 29,
+      "UI_lint_and_build": "pass",
+      "core_and_desktop_clippy": "pass",
+      "desktop_build": "pass",
+      "raw_log_sha256": "ebca99c9a6b1501f685f3c3349983c6e9bfa756c6a71e7583295270461267953"
+    },
+    "native_sc1_timing_vectors": 43,
+    "controlled_time_regression_vectors": 40,
+    "final_period_edit_test": {
+      "command": "cargo test --manifest-path core/Cargo.toml --test end_to_end epic4_sc1_timing_capacity -- --exact",
+      "exit_code": 0,
+      "seconds": 135.36,
+      "offsets": [
+        0,
+        2
+      ],
+      "edited_start_values": [
+        20,
+        18
+      ],
+      "actual_transmit_epochs": [
+        20,
+        40
+      ],
+      "raw_log_sha256": "cf649f0065e74963eb8448b060767341531c2418e93763aff1edee341c911162"
+    },
+    "evidence_sha256": {
+      "sc1-timing-capacity.json": "4f2efb6218d7ec4cdad0da6ba841065a3e2e1663305b1770b8cc4cd6f07344b4",
+      "controlled-time-regression-4-17.json": "6445b1f1ed04d094479dd668dad56739f7ee2c184aa135e3c290246f9e46cef7",
+      "schedule-table-generation.json": "1f839481e04357cd281877832314a2a501f7d1671ad175cb58d1699789e23ee4",
+      "sc1-timing-static-analysis.json": "78cba8661c416d43793ec9c77d10a97b0e02df5d3b952f9a3f3235ea3aaa48c4"
+    },
+    "independent_review": "blind/edge/verification-gap completed; valid nonzero-offset gap patched and independently rechecked; obligation trace audited and counter-chain reference patched",
+    "full_exit": "not established: remaining stories4.18-4.22, complete SC1/MISRA/adopted-code/approval/ARTI/isolated native flow/handoff still open"
+  }
+}

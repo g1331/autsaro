@@ -24,18 +24,19 @@ static const Os_CounterConfig counters[] = {
         .software = 1u,
     },
 };
-static const Os_AlarmConfig alarms[] = {
 @ALARMS@
-};
+@SCHEDULE_TABLES@
 static const Os_TimeConfig time_config = {
     .counters = counters,
     .counter_count = 1u,
-    .alarms = alarms,
-    .alarm_count = 2u,
+    .alarms = @ALARM_PTR@,
+    .alarm_count = @ALARM_COUNT@u,
     .system_counter = 0u,
     .owner = 0u,
     .wake_event = ECU_TARGET_EVENT_WORK,
     .error_hook = NULL,
+    .schedule_tables = @SCHEDULE_PTR@,
+    .schedule_table_count = @SCHEDULE_COUNT@u,
 };
 const Os_TargetConfig Ecu_OsConfig = {
     .tasks = tasks,

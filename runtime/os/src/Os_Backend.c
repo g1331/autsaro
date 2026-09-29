@@ -552,6 +552,8 @@ static void bootstrap(void *argument) {
             vTaskResume(handles[i]);
         }
     }
+    Os_TimeAutostart(startup_mode);
+    Os_ScheduleAutostart(startup_mode);
     InterlockedExchange(&ready, 1);
     Os_TargetTrace('R');
     observe_transition();

@@ -220,7 +220,24 @@ fn assemble(
             schedule
                 .entities
                 .iter()
+                .filter(|entity| entity.expiry_point.is_none())
                 .map(|entity| entity.alarm.clone())
+                .collect(),
+        ),
+        (
+            "os_schedule_table",
+            schedule
+                .entities
+                .iter()
+                .filter_map(|entity| entity.schedule_table.clone())
+                .collect(),
+        ),
+        (
+            "os_expiry_point",
+            schedule
+                .entities
+                .iter()
+                .filter_map(|entity| entity.expiry_point.clone())
                 .collect(),
         ),
         (

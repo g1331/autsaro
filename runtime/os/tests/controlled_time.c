@@ -25,6 +25,15 @@ static unsigned callbacks;
 static unsigned error_hooks;
 static StatusType last_error;
 static TickType final_counter;
+typedef struct {
+    uint64_t epoch;
+    uint32_t kernel;
+    TickType value;
+    TickType elapsed;
+} HardwareRecord;
+static HardwareRecord hardware[20];
+static unsigned hardware_count;
+static TickType hardware_previous;
 static void check(bool condition) {
     if (!condition) {
         Os_TargetTrace('!');
@@ -344,6 +353,16 @@ static void owner(void) {
         check(Os_TargetCurrentTick(&ticket, &epoch) == E_OK);
         check(GetCounterValue(0u, &counter) == E_OK);
         check(counter == (epoch % UINT64_C(65536)));
+        if (strncmp(scenario, "hardware-", 9u) == 0) {
+            TickType value;
+            TickType elapsed;
+            check(hardware_count < 20u);
+            check(GetCounterValue(1u, &value) == E_OK);
+            check(GetElapsedValue(1u, &hardware_previous, &elapsed) == E_OK);
+            check((value == hardware_previous) && (elapsed == 1u));
+            hardware[hardware_count++] =
+                (HardwareRecord){epoch, (uint32_t)xTaskGetTickCount(), value, elapsed};
+        }
         if ((events & 1u) != 0u) {
             ++work_count;
         }
@@ -412,6 +431,11 @@ void StartupHook(void) {
 }
 void ShutdownHook(StatusType Error) {
     unsigned i;
+    for (i = 0u; i < hardware_count; ++i) {
+        printf("hardware epoch=%llu kernel=%u value=%llu elapsed=%llu\n",
+               (unsigned long long)hardware[i].epoch, (unsigned)hardware[i].kernel,
+               (unsigned long long)hardware[i].value, (unsigned long long)hardware[i].elapsed);
+    }
     Os_TargetTrace('Z');
     if (printf("time ticks=%u work=%u app=%u rejects=%u error=%u\n", completed_count, work_count,
                app_count, native_rejects, Error) < 0) {
@@ -440,12 +464,16 @@ int main(int argc, char **argv) {
         {1u, "M", monitor, 1u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
         {2u, "H", alarm_task, 3u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
     Os_CounterConfig counters[] = {{0u, 65535u, 1u, 1u, 1u}, {1u, 15u, 1u, 1u, 0u}};
-    Os_AlarmConfig alarms[] = {{0u, 0u, OS_ALARM_EVENT, 0u, 1u, NULL, 1u, 0u, 1u, 1u},
-                               {1u, 0u, OS_ALARM_EVENT, 0u, 2u, NULL, 1u, 0u, 10u, 10u}};
-    Os_TimeConfig time = {counters, 1u, alarms, 2u, 0u, 0u, 4u, NULL};
+    Os_AlarmConfig alarms[] = {{0u, 0u, OS_ALARM_EVENT, 0u, 1u, NULL, 1u, 0u, 1u, 1u, 0u},
+                               {1u, 0u, OS_ALARM_EVENT, 0u, 2u, NULL, 1u, 0u, 10u, 10u, 0u}};
+    Os_TimeConfig time = {counters, 1u, alarms, 2u, 0u, 0u, 4u, NULL, NULL, 0u};
     Os_TargetConfig config = {tasks, 3u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, &time};
     scenario = (argc == 2) ? argv[1] : "thousand";
     steps = (strcmp(scenario, "thousand") == 0) ? 1000u : 1u;
+    if (strncmp(scenario, "hardware-", 9u) == 0) {
+        steps = 20u;
+        time.counter_count = 2u;
+    }
     manual = (strncmp(scenario, "absolute-", 9u) == 0) ||
              (strcmp(scenario, "relative-wrap") == 0) || (strcmp(scenario, "action-error") == 0) ||
              (strcmp(scenario, "callback") == 0) || (strcmp(scenario, "counter-errors") == 0) ||
@@ -475,7 +503,7 @@ int main(int argc, char **argv) {
             time.error_hook = alarm_error;
         }
     }
-    if (strcmp(scenario, "wrap") == 0) {
+    if ((strcmp(scenario, "wrap") == 0) || (strcmp(scenario, "hardware-kernel-wrap") == 0)) {
         initial_epoch = UINT64_C(65534);
         initial_kernel = UINT32_MAX - 2u;
         alarms[1].start = 6u;

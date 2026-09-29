@@ -184,7 +184,7 @@ impl ValidatedIntegrationPlan {
             .entities
             .iter()
             .filter(|entity| entity.period_ms == 1)
-            .any(|entity| entity.alarm != work.alarm || entity.os_event != work.os_event)
+            .any(|entity| entity.trigger() != work.trigger() || entity.os_event != work.os_event)
         {
             return Err(reject(
                 "The fixed owner work cycle does not have one alarm/event.",
@@ -195,16 +195,47 @@ impl ValidatedIntegrationPlan {
             header.as_bytes().to_vec(),
         );
         let mut groups = BTreeMap::new();
+        let mut table_groups = BTreeMap::new();
         for entity in &plan.schedule.entities {
-            groups.insert(
+            if let Some(table) = &entity.schedule_table {
+                table_groups.insert(
+                    table.clone(),
+                    (
+                        entity.period_ms,
+                        mask(&entity.os_event),
+                        entity.expiry_offset.unwrap(),
+                        entity.table_start.unwrap(),
+                    ),
+                );
+            } else {
+                groups.insert(
                 entity.alarm.clone(),
                 (entity.period_ms, mask(&entity.os_event)),
-            );
+                );
+            }
         }
         let mut alarms = String::new();
         for (id, (_, (period, event))) in groups.iter().enumerate() {
-            writeln!(alarms, "    {{{id}u, 0u, OS_ALARM_EVENT, 0u, {event}u, NULL, 1u, 0u, {period}u, {period}u}},").unwrap();
+            writeln!(alarms, "    {{{id}u, 0u, OS_ALARM_EVENT, 0u, {event}u, NULL, 1u, 0u, {period}u, {period}u, 0u}},").unwrap();
         }
+        let mut tables = String::new();
+        let mut table_entries = String::new();
+        for (id, (_, (period, event, offset, start))) in table_groups.iter().enumerate() {
+            writeln!(tables, "static const Os_ExpiryAction table_actions_{id}[] = {{{{OS_ALARM_EVENT, 0u, {event}u}}}};\nstatic const Os_ExpiryPoint table_points_{id}[] = {{{{{offset}u, table_actions_{id}, 1u}}}};").unwrap();
+            writeln!(table_entries, "    {{{id}u, 0u, {period}u, table_points_{id}, 1u, 1u, OS_SCHEDULE_SYNC_NONE, 1u, 0u, {start}u}},").unwrap();
+        }
+        if !table_groups.is_empty() {
+            writeln!(
+                tables,
+                "static const Os_ScheduleTableConfig schedule_tables[] = {{\n{table_entries}}};"
+            )
+            .unwrap();
+        }
+        let alarm_declaration = if groups.is_empty() {
+            String::new()
+        } else {
+            format!("static const Os_AlarmConfig alarms[] = {{\n{alarms}}};")
+        };
         let read = component.data_ports.iter().find(|port| port.read).unwrap();
         let write = component.data_ports.iter().find(|port| !port.read).unwrap();
         let mut config = include_str!("../../../runtime/ecu/templates/Ecu_Config.c.in").to_owned();
@@ -215,7 +246,23 @@ impl ValidatedIntegrationPlan {
             ),
             ("TASK_PRIORITY", plan.schedule.task_priority.to_string()),
             ("COUNTER_MAX", plan.schedule.counter_maximum.to_string()),
-            ("ALARMS", alarms.trim_end().to_owned()),
+            ("ALARMS", alarm_declaration),
+            (
+                "ALARM_PTR",
+                if groups.is_empty() { "NULL" } else { "alarms" }.to_owned(),
+            ),
+            ("ALARM_COUNT", groups.len().to_string()),
+            ("SCHEDULE_TABLES", tables),
+            (
+                "SCHEDULE_PTR",
+                if table_groups.is_empty() {
+                    "NULL"
+                } else {
+                    "schedule_tables"
+                }
+                .to_owned(),
+            ),
+            ("SCHEDULE_COUNT", table_groups.len().to_string()),
             ("RX_CAN_ID", rx.can_id.to_string()),
             ("TX_CAN_ID", tx.can_id.to_string()),
             ("RX_DEADLINE", rx.deadline_ms.unwrap().to_string()),

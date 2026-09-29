@@ -11,6 +11,14 @@ typedef uint32_t EventMaskType;
 typedef EventMaskType *EventMaskRefType;
 typedef uint8_t CounterType;
 typedef uint8_t AlarmType;
+typedef uint8_t ScheduleTableType;
+typedef uint8_t ScheduleTableStatusType;
+typedef ScheduleTableStatusType *ScheduleTableStatusRefType;
+#define SCHEDULETABLE_STOPPED 0u
+#define SCHEDULETABLE_NEXT 1u
+#define SCHEDULETABLE_WAITING 2u
+#define SCHEDULETABLE_RUNNING 3u
+#define SCHEDULETABLE_RUNNING_AND_SYNCHRONOUS 4u
 /* Automotive Counter values are independent of FreeRTOS's 32-bit tick ABI. */
 typedef uint64_t TickType;
 typedef TickType *TickRefType;
@@ -32,6 +40,37 @@ typedef AlarmBaseType *AlarmBaseRefType;
 #define E_OS_VALUE 8u
 #define E_OS_ILLEGAL_ADDRESS 10u
 #define E_OS_STACKFAULT 13u
+/** Start a NONE-synchronized table at a positive relative delay.
+ * @param ScheduleTableID Configured table identifier.
+ * @param Offset Delay; Offset plus initial offset must fit counter maximum.
+ * @return E_OK or E_OS_ID/VALUE/STATE/CALLEVEL; refusal preserves state.
+ */
+StatusType StartScheduleTableRel(ScheduleTableType ScheduleTableID, TickType Offset);
+/** Start at the next occurrence of an absolute counter value.
+ * @param ScheduleTableID Configured table identifier.
+ * @param Start Value within counter maximum; equality waits a full wrap.
+ * @return E_OK or E_OS_ID/VALUE/STATE/CALLEVEL; refusal preserves state.
+ */
+StatusType StartScheduleTableAbs(ScheduleTableType ScheduleTableID, TickType Start);
+/** Stop a running or reserved NEXT table and detach its successor.
+ * @param ScheduleTableID Configured table identifier.
+ * @return E_OK or E_OS_ID/NOFUNC/CALLEVEL.
+ */
+StatusType StopScheduleTable(ScheduleTableType ScheduleTableID);
+/** Reserve a stopped table to follow the running source's final delay.
+ * @param ScheduleTableID_From Running source table.
+ * @param ScheduleTableID_To Stopped destination on the same counter/strategy.
+ * @return E_OK or E_OS_ID/NOFUNC/STATE/CALLEVEL; refusal preserves both.
+ */
+StatusType NextScheduleTable(ScheduleTableType ScheduleTableID_From,
+                             ScheduleTableType ScheduleTableID_To);
+/** Copy the table's current state within the existing OS critical boundary.
+ * @param ScheduleTableID Configured table identifier.
+ * @param ScheduleStatus Nonnull caller-owned output, unchanged on refusal.
+ * @return E_OK or E_OS_ID/ILLEGAL_ADDRESS/CALLEVEL.
+ */
+StatusType GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
+                                  ScheduleTableStatusRefType ScheduleStatus);
 #define RUNNING 0u
 #define WAITING 1u
 #define READY 2u

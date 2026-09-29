@@ -69,6 +69,7 @@ StatusType Os_TimeValidate(const Os_TargetConfig *target) {
     size_t i;
     size_t j;
     int system_found = 0;
+    uint8_t increments[OS_MAX_COUNTERS][OS_MAX_COUNTERS] = {{0}};
     if (config == NULL) {
         return E_OK;
     }
@@ -112,18 +113,35 @@ StatusType Os_TimeValidate(const Os_TargetConfig *target) {
                 counter = &config->counters[j];
             }
         }
-        if ((alarm->id >= OS_MAX_ALARMS) || (alarm->action > OS_ALARM_CALLBACK) ||
+        if ((alarm->id >= OS_MAX_ALARMS) || (alarm->action > OS_ALARM_INCREMENT_COUNTER) ||
             (alarm->autostart_modes > 3u) || (alarm->absolute > 1u)) {
             return E_OS_VALUE;
         }
         if (counter == NULL) {
             return E_OS_ID;
         }
-        if (((alarm->action != OS_ALARM_CALLBACK) && (task == NULL)) ||
+        if (((alarm->action <= OS_ALARM_EVENT) && (task == NULL)) ||
             ((alarm->action == OS_ALARM_EVENT) &&
              ((task->kind != OS_EXTENDED_TASK) || (alarm->event == 0u))) ||
             ((alarm->action == OS_ALARM_CALLBACK) && (alarm->callback == NULL))) {
             return E_OS_VALUE;
+        }
+        if (alarm->action == OS_ALARM_INCREMENT_COUNTER) {
+            size_t from = OS_MAX_COUNTERS;
+            size_t to = OS_MAX_COUNTERS;
+            for (j = 0u; j < config->counter_count; ++j) {
+                if (config->counters[j].id == alarm->counter) {
+                    from = j;
+                }
+                if ((config->counters[j].id == alarm->increment_counter) &&
+                    (config->counters[j].software != 0u)) {
+                    to = j;
+                }
+            }
+            if ((from == OS_MAX_COUNTERS) || (to == OS_MAX_COUNTERS)) {
+                return E_OS_ID;
+            }
+            increments[from][to] = 1u;
         }
         if ((alarm->autostart_modes != 0u) && ((alarm->start > counter->maximum) ||
                                                ((alarm->absolute == 0u) && (alarm->start == 0u)) ||
@@ -136,7 +154,22 @@ StatusType Os_TimeValidate(const Os_TargetConfig *target) {
             }
         }
     }
-    return E_OK;
+    /* An increment action graph must not admit recursive counter cycles. */
+    for (size_t k = 0u; k < config->counter_count; ++k) {
+        for (i = 0u; i < config->counter_count; ++i) {
+            for (j = 0u; j < config->counter_count; ++j) {
+                if ((increments[i][k] != 0u) && (increments[k][j] != 0u)) {
+                    increments[i][j] = 1u;
+                }
+            }
+        }
+    }
+    for (i = 0u; i < config->counter_count; ++i) {
+        if (increments[i][i] != 0u) {
+            return E_OS_VALUE;
+        }
+    }
+    return Os_ScheduleValidate(target);
 }
 static TickType absolute_distance(size_t counter, TickType start) {
     TickType current = values[counter];
@@ -151,6 +184,11 @@ void Os_TimeInit(AppModeType mode) {
             Os_BackendShutdown(E_OS_VALUE);
         }
         completion_event = Os_PortEvent(NULL, TRUE, FALSE, NULL);
+    }
+}
+void Os_TimeAutostart(AppModeType mode) {
+    const Os_TimeConfig *config = Os_Config->time;
+    if (config != NULL) {
         for (size_t i = 0u; i < config->alarm_count; ++i) {
             const Os_AlarmConfig *alarm = &config->alarms[i];
             if ((alarm->autostart_modes & mode) != 0u) {
@@ -171,27 +209,11 @@ void Os_TimeClose(void) {
     }
 }
 int Os_TimeSignalFailed(void) { return InterlockedCompareExchange(&signal_failed, 0, 0) != 0; }
-static void action(size_t index) {
-    const Os_AlarmConfig *alarm = &Os_Config->time->alarms[index];
-    StatusType status = E_OK;
+void Os_TimeReportAction(StatusType status) {
     if (action_count == UINT64_MAX) {
         Os_BackendShutdown(E_OS_STATE);
     }
     ++action_count;
-    switch (alarm->action) {
-    case OS_ALARM_ACTIVATE:
-        status = ActivateTask(alarm->task);
-        break;
-    case OS_ALARM_EVENT:
-        status = SetEvent(alarm->task, alarm->event);
-        break;
-    case OS_ALARM_CALLBACK:
-        alarm->callback();
-        break;
-    default:
-        Os_BackendShutdown(E_OS_STATE);
-        break;
-    }
     if (status != E_OK) {
         if (error_count == UINT64_MAX) {
             Os_BackendShutdown(E_OS_STATE);
@@ -202,21 +224,74 @@ static void action(size_t index) {
         }
     }
 }
+static void action(size_t index) {
+    const Os_AlarmConfig *alarm = &Os_Config->time->alarms[index];
+    StatusType status = E_OK;
+    switch (alarm->action) {
+    case OS_ALARM_ACTIVATE:
+        status = ActivateTask(alarm->task);
+        break;
+    case OS_ALARM_EVENT:
+        status = SetEvent(alarm->task, alarm->event);
+        break;
+    case OS_ALARM_CALLBACK:
+        alarm->callback();
+        break;
+    case OS_ALARM_INCREMENT_COUNTER:
+        /* Counter actions are handled by the bounded iterative work stack. */
+        Os_BackendShutdown(E_OS_STATE);
+        break;
+    default:
+        Os_BackendShutdown(E_OS_STATE);
+        break;
+    }
+    Os_TimeReportAction(status);
+}
+TickType Os_TimeCounterValue(CounterType counter) { return values[counter_index(counter)]; }
 static void increment(size_t counter) {
-    size_t i;
+    typedef struct {
+        size_t counter;
+        size_t alarm;
+        uint8_t report;
+    } CounterWork;
+    CounterWork work[OS_MAX_COUNTERS];
+    size_t depth = 1u;
     const Os_TimeConfig *config = Os_Config->time;
+    work[0] = (CounterWork){counter, 0u, 0u};
     values[counter] = (values[counter] == config->counters[counter].maximum)
                           ? 0u
                           : (values[counter] + UINT64_C(1));
-    for (i = 0u; i < config->alarm_count; ++i) {
-        if ((config->alarms[i].counter == config->counters[counter].id) &&
-            (alarms[i].active != 0u)) {
-            configASSERT(alarms[i].remaining != 0u);
-            --alarms[i].remaining;
-            if (alarms[i].remaining == 0u) {
-                alarms[i].remaining = alarms[i].cycle;
-                alarms[i].active = (alarms[i].cycle == 0u) ? 0u : 1u;
-                action(i);
+    while (depth != 0u) {
+        CounterWork *current = &work[depth - 1u];
+        if (current->alarm < config->alarm_count) {
+            size_t i = current->alarm;
+            ++current->alarm;
+            if ((config->alarms[i].counter == config->counters[current->counter].id) &&
+                (alarms[i].active != 0u)) {
+                configASSERT(alarms[i].remaining != 0u);
+                --alarms[i].remaining;
+                if (alarms[i].remaining == 0u) {
+                    alarms[i].remaining = alarms[i].cycle;
+                    alarms[i].active = (alarms[i].cycle == 0u) ? 0u : 1u;
+                    if (config->alarms[i].action == OS_ALARM_INCREMENT_COUNTER) {
+                        size_t child = counter_index(config->alarms[i].increment_counter);
+                        configASSERT(depth < OS_MAX_COUNTERS);
+                        work[depth] = (CounterWork){child, 0u, 1u};
+                        ++depth;
+                        values[child] = (values[child] == config->counters[child].maximum)
+                                            ? 0u
+                                            : values[child] + UINT64_C(1);
+                    } else {
+                        action(i);
+                    }
+                }
+            }
+        } else {
+            uint8_t report = current->report;
+            Os_ScheduleIncrement(config->counters[current->counter].id);
+            --depth;
+            if (report != 0u) {
+                Os_TimeReportAction(E_OK);
             }
         }
     }
@@ -415,6 +490,13 @@ void Os_TimeTick(void) {
         }
         action_count = 0u;
         error_count = 0u;
+        /* Host timer counters are registers driven by the actual controlled
+         * kernel tick ISR. Standard IncrementCounter cannot write them. */
+        for (size_t i = 0u; i < config->counter_count; ++i) {
+            if (config->counters[i].software == 0u) {
+                increment(i);
+            }
+        }
         increment(counter_index(config->system_counter));
         if (SetEvent(config->owner, config->wake_event) != E_OK) {
             Os_BackendShutdown(E_OS_STATE);

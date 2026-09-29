@@ -13,10 +13,20 @@ pub struct ScheduledEntity {
     pub symbol: String,
     pub task: String,
     pub alarm: String,
+    pub expiry_point: Option<String>,
+    pub schedule_table: Option<String>,
+    pub expiry_offset: Option<u32>,
+    pub table_start: Option<u32>,
     pub os_event: String,
     pub period_ms: u32,
     pub position: u32,
     pub application: bool,
+}
+
+impl ScheduledEntity {
+    pub fn trigger(&self) -> &str {
+        self.expiry_point.as_deref().unwrap_or(&self.alarm)
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -269,6 +279,7 @@ pub(super) fn inspect(
                 || !graph.within(event, behavior)
                 || !values(graph, mapping, "RteMappedToTaskRef", true).is_empty()
                 || !values(graph, mapping, "RteUsedOsAlarmRef", true).is_empty()
+                || !values(graph, mapping, "RteUsedOsSchTblExpiryPointRef", true).is_empty()
                 || !values(graph, mapping, "RteUsedOsEventRef", true).is_empty()
                 || !values(graph, mapping, "RtePositionInTask", false).is_empty()
             {
@@ -294,7 +305,39 @@ pub(super) fn inspect(
                 )
             })?;
         let mapped_task = reference(graph, mapping, &format!("{prefix}MappedToTaskRef"))?;
-        let alarm = reference(graph, mapping, &format!("{prefix}UsedOsAlarmRef"))?;
+        let alarm_refs = values(graph, mapping, &format!("{prefix}UsedOsAlarmRef"), true);
+        let expiry_refs = values(
+            graph,
+            mapping,
+            &format!("{prefix}UsedOsSchTblExpiryPointRef"),
+            true,
+        );
+        if alarm_refs.len() + expiry_refs.len() != 1 {
+            return Err(reject(
+                graph,
+                mapping,
+                "SCHEDULE_NOT_UNIQUE",
+                "Use exactly one Alarm or ScheduleTable ExpiryPoint timing source.",
+            ));
+        }
+        let using_table = !expiry_refs.is_empty();
+        let alarm = reference(
+            graph,
+            mapping,
+            &format!(
+                "{prefix}UsedOs{}Ref",
+                if using_table {
+                    "SchTblExpiryPoint"
+                } else {
+                    "Alarm"
+                }
+            ),
+        )?;
+        let table = if using_table {
+            enclosing(graph, alarm, "OsScheduleTable")
+        } else {
+            None
+        };
         let os_event = reference(graph, mapping, &format!("{prefix}UsedOsEventRef"))?;
         let position = value(graph, mapping, &format!("{prefix}PositionInTask"), false)
             .and_then(|value| value.parse::<u32>().ok())
@@ -308,11 +351,21 @@ pub(super) fn inspect(
                 )
             })?;
         if mapped_task != task
-            || !definition_is(graph, alarm, "OsAlarm")
+            || (!using_table && !definition_is(graph, alarm, "OsAlarm"))
+            || (using_table
+                && (!definition_is(graph, alarm, "OsScheduleTableExpiryPoint") || table.is_none()))
             || !definition_is(graph, os_event, "OsEvent")
             || !positions.insert(position)
             || !task_events.contains(graph.elements[os_event].object.as_str())
-            || reference(graph, alarm, "OsAlarmCounterRef")? != counter
+            || reference(
+                graph,
+                table.unwrap_or(alarm),
+                if using_table {
+                    "OsScheduleTableCounterRef"
+                } else {
+                    "OsAlarmCounterRef"
+                },
+            )? != counter
         {
             return Err(reject(
                 graph,
@@ -322,14 +375,34 @@ pub(super) fn inspect(
             ));
         }
         let autostarts: Vec<_> = graph
-            .descendants(alarm, "ECUC-CONTAINER-VALUE")
+            .descendants(table.unwrap_or(alarm), "ECUC-CONTAINER-VALUE")
             .into_iter()
-            .filter(|index| definition_is(graph, *index, "OsAlarmAutostart"))
+            .filter(|index| {
+                definition_is(
+                    graph,
+                    *index,
+                    if using_table {
+                        "OsScheduleTableAutostart"
+                    } else {
+                        "OsAlarmAutostart"
+                    },
+                )
+            })
             .collect();
         let actions: Vec<_> = graph
             .descendants(alarm, "ECUC-CONTAINER-VALUE")
             .into_iter()
-            .filter(|index| definition_is(graph, *index, "OsAlarmSetEvent"))
+            .filter(|index| {
+                definition_is(
+                    graph,
+                    *index,
+                    if using_table {
+                        "OsScheduleTableEventSetting"
+                    } else {
+                        "OsAlarmSetEvent"
+                    },
+                )
+            })
             .collect();
         if autostarts.len() != 1 || actions.len() != 1 {
             return Err(reject(
@@ -340,9 +413,18 @@ pub(super) fn inspect(
             ));
         }
         let autostart = autostarts[0];
-        let alarm_modes: BTreeSet<_> = values(graph, autostart, "OsAlarmAppModeRef", true)
-            .into_iter()
-            .collect();
+        let alarm_modes: BTreeSet<_> = values(
+            graph,
+            autostart,
+            if using_table {
+                "OsScheduleTableAppModeRef"
+            } else {
+                "OsAlarmAppModeRef"
+            },
+            true,
+        )
+        .into_iter()
+        .collect();
         if alarm_modes != modes {
             return Err(reject(
                 graph,
@@ -351,7 +433,64 @@ pub(super) fn inspect(
                 "The periodic alarm and ECU owner task use different autostart modes.",
             ));
         }
-        if value(graph, autostart, "OsAlarmAutostartType", false) != Some("RELATIVE")
+        let expiry_offset = using_table
+            .then(|| {
+                value(graph, alarm, "OsScheduleTblExpPointOffset", false)
+                    .and_then(|text| text.parse::<u32>().ok())
+            })
+            .flatten();
+        let table_start = using_table
+            .then(|| {
+                value(graph, autostart, "OsScheduleTableStartValue", false)
+                    .and_then(|text| text.parse::<u32>().ok())
+            })
+            .flatten();
+        if using_table {
+            let table = table.unwrap();
+            let sync: Vec<_> = graph
+                .descendants(table, "ECUC-CONTAINER-VALUE")
+                .into_iter()
+                .filter(|index| definition_is(graph, *index, "OsScheduleTableSync"))
+                .collect();
+            let points: Vec<_> = graph
+                .descendants(table, "ECUC-CONTAINER-VALUE")
+                .into_iter()
+                .filter(|index| definition_is(graph, *index, "OsScheduleTableExpiryPoint"))
+                .collect();
+            if sync.len() != 1
+                || value(graph, sync[0], "OsScheduleTblSyncStrategy", false) != Some("NONE")
+                || points != vec![alarm]
+                || graph
+                    .descendants(alarm, "ECUC-CONTAINER-VALUE")
+                    .into_iter()
+                    .filter(|index| definition_is(graph, *index, "OsScheduleTableTaskActivation"))
+                    .count()
+                    != 0
+                || !matches!(
+                    value(graph, table, "OsScheduleTableRepeating", false),
+                    Some("true" | "1")
+                )
+                || value(graph, table, "OsScheduleTableDuration", false)
+                    .and_then(|value| value.parse::<u32>().ok())
+                    != Some(period)
+                || value(graph, autostart, "OsScheduleTableAutostartType", false)
+                    != Some("RELATIVE")
+                || expiry_offset.is_none_or(|offset| offset >= period)
+                || table_start.is_none_or(|start| {
+                    start == 0
+                        || start.checked_add(expiry_offset.unwrap_or(u32::MAX)) != Some(period)
+                })
+                || reference(graph, actions[0], "OsScheduleTableSetEventTaskRef")? != task
+                || reference(graph, actions[0], "OsScheduleTableSetEventRef")? != os_event
+            {
+                return Err(reject(
+                    graph,
+                    mapping,
+                    "PERIOD_SCHEDULE_TABLE_CONFLICT",
+                    "The selected periodic RTE group needs one NONE-synchronized repeating ExpiryPoint, matching duration, first deadline and owner SetEvent action.",
+                ));
+            }
+        } else if value(graph, autostart, "OsAlarmAutostartType", false) != Some("RELATIVE")
             || value(graph, autostart, "OsAlarmAlarmTime", false)
                 .and_then(|value| value.parse::<u32>().ok())
                 != Some(period)
@@ -416,7 +555,15 @@ pub(super) fn inspect(
             entity: graph.elements[entity].object.clone(),
             symbol,
             task: graph.elements[task].object.clone(),
-            alarm: graph.elements[alarm].object.clone(),
+            alarm: if using_table {
+                String::new()
+            } else {
+                graph.elements[alarm].object.clone()
+            },
+            expiry_point: using_table.then(|| graph.elements[alarm].object.clone()),
+            schedule_table: table.map(|index| graph.elements[index].object.clone()),
+            expiry_offset,
+            table_start,
             os_event: graph.elements[os_event].object.clone(),
             period_ms: period,
             position,
@@ -442,6 +589,24 @@ pub(super) fn inspect(
         }
     }
     entities.sort_by_key(|entity| entity.position);
+    let mapped_tables: BTreeSet<_> = entities
+        .iter()
+        .filter_map(|entity| entity.schedule_table.as_deref())
+        .collect();
+    let declared_tables: BTreeSet<_> = graph
+        .of_kind("ECUC-CONTAINER-VALUE")
+        .into_iter()
+        .filter(|index| definition_is(graph, *index, "OsScheduleTable"))
+        .map(|index| graph.elements[index].object.as_str())
+        .collect();
+    if mapped_tables != declared_tables {
+        return Err(reject(
+            graph,
+            behavior,
+            "SCHEDULE_TABLE_UNBOUND",
+            "Every table in the selected reference ECU must have an explicit periodic RTE group; unsupported unused tables cannot be silently omitted.",
+        ));
+    }
     let expected_order = [
         "Can_MainFunction_Wakeup",
         "CanTp_AdvanceTime",

@@ -72,7 +72,7 @@ fn live_output(binary: &Path) {
     assert!(status.success());
 }
 
-fn run_text(binary: &Path, directory: &Path, script: &[u8]) -> String {
+pub(super) fn run_text(binary: &Path, directory: &Path, script: &[u8]) -> String {
     std::fs::create_dir_all(directory).unwrap();
     let mut child = Command::new(binary)
         .stdin(Stdio::piped())

@@ -88,6 +88,10 @@ pub(super) fn sources() -> Result<Vec<(String, Vec<u8>)>, String> {
             include_bytes!("../../../runtime/os/src/Os_Time.c"),
         ),
         (
+            "os/src/Os_Schedule.c",
+            include_bytes!("../../../runtime/os/src/Os_Schedule.c"),
+        ),
+        (
             "os/src/Os_Windows.h",
             include_bytes!("../../../runtime/os/src/Os_Windows.h"),
         ),

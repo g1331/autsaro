@@ -70,3 +70,7 @@ Agent 应把规范研究放进具体功能任务，不用一轮轮独立审计�
 新目标只开放诊断服务`0x10`、`0x3E`、`0x22`，单次读取最多2个DID；应用DID为`0x1234`，`F186`返回实际会话。FC WAIT按所选WFTmax=0终止交换。N_Bs／N_Cr超时终止对应连接并允许后续合法请求恢复；HostBatch错误回执的`transport_status`、`transport_epoch`和`transport_count`分别记录首个实际失败、其逻辑epoch及失败数量。已执行tick／输入不会回滚，即使批目标比失败epoch更晚。失败记录由owner有界发布，原生桥接复制后消耗全局sequence。实际输出失败、输出队列溢出及宿主watchdog仍关闭ECU。独立协议及旧目标回归入口为`cargo test --manifest-path core/Cargo.toml --test end_to_end epic4_independent_behavior_and_legacy_regression -- --exact`；旧host-v1按其独立配置保留原服务。
 
 在同一Windows主机执行整套集成测试时，先设置PowerShell的`$env:RUST_TEST_THREADS='2'`，再执行验证命令；单独的`--exact`协议测试只运行一个实例。真实FreeRTOS宿主实例同时运行会竞争CPU，默认大量并发可能触发固定5000ms的COMMIT watchdog。限制测试并发用于提供可复验的运行环境，watchdog、单批1000ms逻辑跨度及所有验收断言保持原值；故障关闭记录仍须保留。
+
+RTE周期组也可显式引用`RteUsedOsSchTblExpiryPointRef`／`RteBswUsedOsSchTblExpiryPointRef`。所选参考ECU使用一个重复ExpiryPoint、`NONE`同步策略和同一owner／软件SystemCounter；表duration等于TimingEvent周期，启动值加初始offset等于首个周期。周期编辑会同时更新相关事件、Com周期、表duration和启动值。未知或未绑定的表、混用Alarm与ExpiryPoint、错误Task/Event及不匹配周期会在生成前拒绝。
+
+独立计时验收入口为`cargo test --manifest-path core/Cargo.toml --test end_to_end epic4_sc1_timing_capacity -- --exact`。它运行八个独立软件Counter、八表实际配置、双表封存轨迹、单次／重复／绝对／链接／停止／错误前态和真实生成工程消费者。`Os_CounterConfig.software=0`的宿主定时器Counter由实际受控内核tick ISR推进，不能通过标准`IncrementCounter`写入；读取及elapsed值按该Counter模数调整，内核32位tick回绕不改变已推进的Counter值。该证据限定Win64主机，完整SC1／ARTI／编码与交接出口继续分别验收。

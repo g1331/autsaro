@@ -7,6 +7,11 @@
 #define OS_ALARM_ACTIVATE 0u
 #define OS_ALARM_EVENT 1u
 #define OS_ALARM_CALLBACK 2u
+#define OS_ALARM_INCREMENT_COUNTER 3u
+#define OS_MAX_SCHEDULE_TABLES 8u
+#define OS_MAX_EXPIRY_POINTS 32u
+#define OS_MAX_EXPIRY_ACTIONS 16u
+#define OS_SCHEDULE_SYNC_NONE 0u
 typedef struct {
     CounterType id;
     TickType maximum;
@@ -25,7 +30,32 @@ typedef struct {
     uint8_t absolute;
     TickType start;
     TickType cycle;
+    CounterType increment_counter;
 } Os_AlarmConfig;
+
+typedef struct {
+    uint8_t action;
+    TaskType task;
+    EventMaskType event;
+} Os_ExpiryAction;
+typedef struct {
+    TickType offset;
+    const Os_ExpiryAction *actions;
+    size_t action_count;
+} Os_ExpiryPoint;
+/** Static table retained for the process lifetime; validated before threads. */
+typedef struct {
+    ScheduleTableType id;
+    CounterType counter;
+    TickType duration;
+    const Os_ExpiryPoint *points;
+    size_t point_count;
+    uint8_t repeating;
+    uint8_t synchronization;
+    uint8_t autostart_modes;
+    uint8_t absolute;
+    TickType start;
+} Os_ScheduleTableConfig;
 typedef struct {
     const Os_CounterConfig *counters;
     size_t counter_count;
@@ -35,6 +65,8 @@ typedef struct {
     TaskType owner;
     EventMaskType wake_event;
     void (*error_hook)(StatusType);
+    const Os_ScheduleTableConfig *schedule_tables;
+    size_t schedule_table_count;
 } Os_TimeConfig;
 typedef struct {
     uint64_t epoch;

@@ -105,7 +105,7 @@ pub(crate) fn fields(
                 .schedule
                 .entities
                 .iter()
-                .filter(|entity| entity.alarm == application.alarm)
+                .filter(|entity| entity.trigger() == application.trigger())
             {
                 edits.insert(
                     (entity.event.clone(), "PERIOD".into(), false),
@@ -129,27 +129,62 @@ pub(crate) fn fields(
                 .configuration
                 .iter()
                 .filter(|record| {
-                    record.path.starts_with(&format!("{}/", application.alarm))
-                        && record.definition.ends_with("/OsAlarmAutostart")
+                    record.path.starts_with(&format!(
+                        "{}/",
+                        application
+                            .schedule_table
+                            .as_deref()
+                            .unwrap_or(&application.alarm)
+                    )) && record
+                        .definition
+                        .ends_with(if application.schedule_table.is_some() {
+                            "/OsScheduleTableAutostart"
+                        } else {
+                            "/OsAlarmAutostart"
+                        })
                 })
                 .collect();
             if modes.len() != 1 || autostart.len() != 1 {
                 return Err(issue(
                     plan,
                     "EDIT_UNSAFE",
-                    &application.alarm,
-                    "The checked period must have a uniquely located Com mode and alarm autostart.",
+                    application.trigger(),
+                    "The checked period must have a uniquely located Com mode and timing-source autostart.",
                 ));
             }
             edits.insert(
                 (modes[0].path.clone(), "ComTxModeTimePeriod".into(), true),
                 seconds,
             );
-            for parameter in ["OsAlarmAlarmTime", "OsAlarmCycleTime"] {
+            if let Some(table) = &application.schedule_table {
+                let offset = application.expiry_offset.unwrap();
+                if period <= offset {
+                    return Err(issue(
+                        plan,
+                        "EDIT_RANGE",
+                        table,
+                        "The table's initial expiry offset must remain below the edited period.",
+                    ));
+                }
+                edits.insert(
+                    (table.clone(), "OsScheduleTableDuration".into(), true),
+                    period.to_string(),
+                );
+                edits.insert(
+                    (
+                        autostart[0].path.clone(),
+                        "OsScheduleTableStartValue".into(),
+                        true,
+                    ),
+                    (period - offset).to_string(),
+                );
+            } else {
+                for parameter in ["OsAlarmAlarmTime", "OsAlarmCycleTime"] {
                 edits.insert(
                     (autostart[0].path.clone(), parameter.into(), true),
                     period.to_string(),
                 );
+                }
             }
         }
     }

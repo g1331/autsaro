@@ -31,6 +31,9 @@ mod epic4_application;
 #[path = "support/epic4_protocol.rs"]
 mod epic4_protocol;
 
+#[path = "support/epic4_timing.rs"]
+mod epic4_timing;
+
 #[test]
 fn epic4_independent_behavior_and_legacy_regression() {
     epic4_protocol::independent_behavior();
@@ -151,6 +154,29 @@ fn epic4_controlled_tick_and_alarm() {
         String::from_utf8_lossy(&output.stdout)
             .starts_with("epic4_controlled_tick_and_alarm PASS:")
     );
+}
+
+#[cfg(windows)]
+#[test]
+fn epic4_sc1_timing_capacity() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let output = Command::new("python")
+        .arg(root.join("scripts/epic4_os.py"))
+        .args(["--suite", "sc1-timing"])
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout)
+            .starts_with("epic4_sc1_timing_capacity PASS: 43 native vectors")
+    );
+    epic4_timing::generated_tables();
 }
 
 #[cfg(windows)]

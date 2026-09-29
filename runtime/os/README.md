@@ -1,5 +1,9 @@
 # Epic 4 Windows OS 基础
 
+4.17在同一后端增加有界Counter/ScheduleTable计时：最多八Counter、八表、每表32个ExpiryPoint及每点16个动作。表提供标准Rel／Abs启动、Stop、Next和Status接口，支持单次／重复、当前绝对值完整回绕、NEXT替换/分离及同点先激活后设事件。同步策略限已确认NONE；其他策略在建立线程前拒绝。软件Counter增量Alarm采用最多八帧的迭代工作栈，配置增量环拒绝，不使用递归或额外调度线程。宿主定时器Counter由实际受控内核tick ISR驱动；无MCU计时器声明。
+
+`python scripts/epic4_os.py --suite sc1-timing`运行独立容量、状态、拒绝和宿主Counter向量；`epic4_sc1_timing_capacity`同时运行真实RTE表配置、外部消费者及周期编辑后的CAN/DID字节。完整SC1等级及所有编码/ARTI/交接义务仍以后续出口为准，不能仅据这些向量升级声明。
+
 本目录是独立新目标的生产基础，Story 4.3 生命周期及 Story 4.9 真实栈路径已完成独立复核；Story 4.4 提供请求 FIFO 与实际内核状态。未接入 ECU/RTE/BSW，不声明 SC1，也不放行 W3。旧 `runtime/src/Os.c` 继续用于历史主机目标，两者不能同链接。
 
 ## 固定来源与离线复建

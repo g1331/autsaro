@@ -143,6 +143,7 @@ def build(directory: Path, harness: str = "lifecycle.c") -> tuple[Path, dict]:
         str(TARGET / "src/Os_HostEvent.c"),
         str(TARGET / "src/Os_Mailbox.c"),
         str(TARGET / "src/Os_Time.c"),
+        str(TARGET / "src/Os_Schedule.c"),
         str(TARGET / "tests" / harness),
         str(copied / "tasks.c"),
         str(copied / "list.c"),
@@ -224,6 +225,63 @@ def execute(
 def require(condition: bool, observation: dict) -> None:
     if not condition:
         raise AssertionError(observation)
+
+
+def check_sc1_timing(binary: Path) -> list[dict]:
+    paired = [("A", 0, 2), ("E", 0, 4), ("A", 0, 7), ("E", 0, 9)]
+    cases = {
+        "capacity": [("A", 0, 3), ("E", 0, 5), ("B", 1, 2)],
+        "eight-tables": [("A", i, 2) for i in range(8)],
+        "wrap": [],
+        "absolute": [("A", 0, 15), ("E", 0, 1)],
+        "relative-max": [("A", 0, 15), ("E", 0, 1)],
+        "relative-zero": [("A", 0, 1)],
+        "same-point": [("E", 0, 1)],
+        "repeat": paired + [("A", 0, 1)],
+        "link": paired,
+        "link-backward": paired,
+        "link-zero-final": [("A", 0, 2), ("E", 0, 4), ("A", 0, 4)],
+        "replace-next": paired,
+        "stop-next": paired[:2],
+        "autostart": paired[:2],
+        "autostart-mode2": paired[:2],
+        "autostart-absolute": [("A", 0, 1), ("E", 0, 3)],
+        "counter-chain": [],
+        "action-error": [("E", 0, 4)],
+        "rejects": paired,
+        "category1": [],
+        "category2": [],
+    }
+    records = []
+    for name, expected in cases.items():
+        result = execute(binary, name)
+        require(result["exit"] == 0 and not result["stderr"], result)
+        actual = [(kind, int(counter), int(value)) for kind, counter, value in re.findall(
+            r"timing_action (\w) counter=(\d+) value=(\d+)", result["stdout"]
+        )]
+        require(actual == expected, result)
+        require("lifecycle=Closed state=Ready reason=0" in result["stdout"], result)
+        require("status=0" in result["stdout"], result)
+        require(("errors=1 last_error=4" if name == "action-error" else "errors=0 last_error=0") in result["stdout"], result)
+        if name == "rejects":
+            require("rejects=19" in result["stdout"], result)
+        if name == "category1":
+            require("rejects=5" in result["stdout"], result)
+        result["independent_expected_actions"] = expected
+        records.append(result)
+    for name in [
+        "cycle", "counter-count", "table-count", "null-tables", "duplicate-id", "counter",
+        "zero-points", "many-points", "null-points", "duplicate-offset", "duration",
+        "empty-action", "null-action", "many-actions", "task", "event", "repeat-final",
+        "sync", "autostart", "mincycle",
+    ]:
+        result = execute(binary, "bad-" + name)
+        status = 3 if name in {"duplicate-id", "counter", "task", "event"} else 8
+        require(result["exit"] == 0 and not result["stderr"], result)
+        require(result["stdout"] == f"timing_prepare case=bad-{name} status={status} ready=0", result)
+        result["independent_expected_status"] = status
+        records.append(result)
+    return records
 
 
 def check_time(binary: Path) -> list[dict]:
@@ -798,6 +856,7 @@ def main() -> None:
             "resources",
             "events",
             "time",
+            "sc1-timing",
         ],
         default="lifecycle",
     )
@@ -812,6 +871,7 @@ def main() -> None:
             "resources": "resource_preemption.c",
             "events": "event_wakeup.c",
             "time": "controlled_time.c",
+            "sc1-timing": "sc1_timing.c",
         }
         checks = {
             "lifecycle": check_lifecycle,
@@ -821,9 +881,27 @@ def main() -> None:
             "resources": check_resources,
             "events": check_events,
             "time": check_time,
+            "sc1-timing": check_sc1_timing,
         }
         binary, evidence = build(Path(temporary), harnesses[args.suite])
         evidence["observations"] = checks[args.suite](binary)
+        if args.suite == "sc1-timing":
+            clock_dir = Path(temporary) / "host-timer"
+            clock_dir.mkdir()
+            clock, clock_sources = build(clock_dir, "controlled_time.c")
+            evidence["host_timer_source_identity"] = clock_sources
+            for name, epochs, kernels, values in [
+                ("hardware-counter", list(range(1, 21)), list(range(1, 21)), list(range(1, 16)) + [0, 1, 2, 3, 4]),
+                ("hardware-kernel-wrap", [65535, 65536, 65537], [4294967294, 4294967295, 0], [1, 2, 3]),
+            ]:
+                result = execute(clock, name)
+                actual = [tuple(map(int, row)) for row in re.findall(r"hardware epoch=(\d+) kernel=(\d+) value=(\d+) elapsed=(\d+)", result["stdout"])]
+                expected = list(zip(epochs, kernels, values, [1] * len(values)))
+                require(result["exit"] == 0 and not result["stderr"], result)
+                require("lifecycle=Closed state=Ready reason=0" in result["stdout"], result)
+                require(actual == expected, result)
+                result["independent_expected_host_timer"] = expected
+                evidence["observations"].append(result)
         evidence["status"] = "pass"
         if args.evidence:
             write_shared_evidence(args.evidence, evidence, Path(temporary))
@@ -835,6 +913,7 @@ def main() -> None:
             "resources": "epic4_resource_and_preemption",
             "events": "epic4_event_wakeup_races",
             "time": "epic4_controlled_tick_and_alarm",
+            "sc1-timing": "epic4_sc1_timing_capacity",
         }
         name = names[args.suite]
         print(f"{name} PASS: {len(evidence['observations'])} native vectors")
