@@ -915,6 +915,32 @@ def check_interrupt_pairing(binary: Path) -> list[dict]:
     return observations
 
 
+def check_isr_cleanup(binary: Path) -> list[dict]:
+    cases = {
+        "single": (1, 6, 6, "AIRPHB"),
+        "nested": (1, 6, 6, "AIRPHB"),
+        "maximum": (1, 6, 6, "AIRPHB"),
+        "disable": (2, 9, 6, "AIDRPHB"),
+        "all": (2, 9, 6, "AIDRPHB"),
+        "os": (2, 9, 6, "AIDRPHB"),
+        "mixed": (2, 9, 6, "AIDRPHB"),
+        "unconfigured": (0, 0, 0, "AIPHB"),
+        "unconfigured-mixed": (0, 0, 0, "AIPHB"),
+        "balanced": (0, 0, 0, "AIPHB"),
+    }
+    observations = []
+    for scenario, (errors, first, last, trace) in cases.items():
+        result = execute(binary, scenario)
+        expected = (f"isr_cleanup scenario={scenario} probes=1 helpers=1 errors={errors} "
+                    f"first={first} last={last} trace={trace} reason=0")
+        require(result["exit"] == 0 and not result["stderr"], result)
+        require(expected in result["stdout"], result)
+        require("lifecycle=Closed state=Ready reason=0" in result["stdout"], result)
+        result["independent_expected_cleanup"] = [1, 1, errors, first, last, trace]
+        observations.append(result)
+    return observations
+
+
 def check_returned_task(binary: Path) -> list[dict]:
     observations = []
     cases = {
@@ -1108,6 +1134,7 @@ def main() -> None:
             "task-hooks",
             "returned-task",
             "interrupt-pairing",
+            "isr-cleanup",
         ],
         default="lifecycle",
     )
@@ -1134,6 +1161,7 @@ def main() -> None:
             "task-hooks": "task_hooks.c",
             "returned-task": "returned_task.c",
             "interrupt-pairing": "interrupt_pairing.c",
+            "isr-cleanup": "isr_cleanup.c",
         }
         checks = {
             "lifecycle": check_lifecycle,
@@ -1149,6 +1177,7 @@ def main() -> None:
             "task-hooks": check_task_hooks,
             "returned-task": check_returned_task,
             "interrupt-pairing": check_interrupt_pairing,
+            "isr-cleanup": check_isr_cleanup,
         }
         binary, evidence = build(Path(temporary), harnesses[args.suite])
         evidence["observations"] = checks[args.suite](binary)
@@ -1197,6 +1226,7 @@ def main() -> None:
             "task-hooks": "epic4_real_task_hook_transitions",
             "returned-task": "epic4_returned_task_resource_cleanup",
             "interrupt-pairing": "epic4_standard_interrupt_pairing",
+            "isr-cleanup": "epic4_category2_exit_cleanup",
         }
         name = names[args.suite]
         print(f"{name} PASS: {len(evidence['observations'])} native vectors")

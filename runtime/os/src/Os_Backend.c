@@ -74,8 +74,8 @@ unsigned Os_BackendCurrentInterrupt(void) { return current_interrupt; }
 int Os_BackendStarted(void) { return InterlockedCompareExchange(&started, 0, 0) != 0; }
 void Os_BackendInterruptEnter(unsigned interrupt) { current_interrupt = interrupt; }
 void Os_BackendInterruptLeave(void) {
+    const Os_ErrorParameters arguments = {.service_TerminateTask = {0u}};
     if (Os_InterruptDisabled() != 0) {
-        const Os_ErrorParameters arguments = {.service_TerminateTask = {0u}};
         /* Native ISR dispatch already owns the interrupt mutex and has stopped
          * the automotive Task. Restore only this logical ISR's saved pairs. */
         Os_InterruptRestoreOwner();
@@ -84,7 +84,17 @@ void Os_BackendInterruptLeave(void) {
             (void)Os_ErrorResult(OSServiceId_InterruptMissingEnd, E_OS_DISABLEDINT, &arguments);
         }
     }
-    configASSERT(resource_depth[OS_MAX_TASKS] == 0u);
+    if (resource_depth[OS_MAX_TASKS] != 0u) {
+        /* Dispatch still owns the native interrupt mutex. Release actual
+         * configured resources in LIFO order before reporting the ISR fault. */
+        while (resource_depth[OS_MAX_TASKS] != 0u) {
+            const size_t resource =
+                owned_resources[OS_MAX_TASKS][resource_depth[OS_MAX_TASKS] - 1u];
+            const StatusType released = Os_BackendResource(Os_Config->resources[resource].id, 0);
+            configASSERT(released == E_OK);
+        }
+        (void)Os_ErrorResult(OSServiceId_InterruptMissingEnd, E_OS_RESOURCE, &arguments);
+    }
     current_interrupt = 32u;
 }
 int Os_BackendInterruptEnabled(unsigned interrupt) {

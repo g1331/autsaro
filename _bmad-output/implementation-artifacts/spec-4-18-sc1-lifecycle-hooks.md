@@ -57,6 +57,8 @@ context: []
 
 ## Implementation Notes
 
+下一Cat2资源出口增量（起始9c6c7ece29b54e34e3598b415a77749b269c8119）：按本地R24-11 SWS_Os_00369，实际native dispatcher仍持mutex期间，复用资源释放实现LIFO清理真实配置资源，恢复所有权/ceiling后调用可选ErrorHook报告6，原currentISR在回调后才退出；遗留屏蔽仍按00368先恢复并报告9。独立预期覆盖单/双资源、Disable/All/OS/mixed、未配置Hook和平衡路径，实际pendingISR6和已激活Task1必须先后取得全部释放资源，再返回原Task0取得。完整嵌套ISR及SC1整体不据此关闭。
+
 中断独立增量（起始cd647a934790bce89c56ed6a22827a1517c6515c）：六配对服务采用实际原生actor的PE TLS状态，All与OS独立嵌套，Disable非嵌套，首/末配对更新共享原子owner数；实际端口分发遵守屏蔽，内核私有yield保持可用。25个StatusType及Start/Shutdown/Mode/GetISRID边界忽略被屏蔽调用者的非中断服务，保留输出；ErrorHook合法查询可观察原错误。Task missing-end和Cat2返回自动恢复遗留屏蔽；Cat2清理在原ISR身份下报告9/service252。GetISRID对实际Cat2返回身份、其他返回INVALID；尚未证明嵌套恢复。第九补丁在真实pending/handler表增加源开关及清除，三个标准源API在原有interrupt mutex内操作，Disable保留pending，Enable(clear)/ClearPending按真实位清除，非法/私有yield/Cat1/未安装源拒绝，Task/Cat2之外拒绝。公共boolean来自共同Std_Types.h，Windows RPC重名由平台边界隔离。源API入口同样检查真实原生栈和不可逆关闭门。
 
 当前中断证据：28个独立原生过程通过，包括四类配对交错/未配对、三种屏蔽下29非中断服务无副作用/准确错误参数、Cat1/Cat2身份与配对、四种Cat2泄漏恢复、四种missing-end恢复后真实pending递送和monitor运行、启动前拒绝，以及八个实际源控制场景（含真实Cat2内三个源API的清除/保留待决递送，以及在实际ISR栈上故意清除当前逻辑身份后的无副作用拒绝）。正式入口epic4_standard_interrupt_pairing接入核心测试。公共类型三包含顺序和ErrorHook八配置回归通过；部分静态扫描覆盖九本地OS模块、生成Hook及九补丁后的tasks.c/port.c共12单元，exit1诊断完整保留。R17.2有界wrapper/change重入仍未批准，完整MISRA/SC1不声明通过。完整ISR资源清理、实际嵌套ISR、全部调用表、ControlIdle/isOsStarted、507行最终结果及4.19～4.22仍待推进。
@@ -87,6 +89,8 @@ ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参�
 
 ## Review Triage Log
 
+- Cat2资源出口增量blind/edge/verification-gap三路独立复核均无发现。十个真实过程、28屏蔽/26资源回归通过；actual旧backend副本在single/maximum/mixed/unconfigured-mixed四个新独立断言场景均因原断言关闭被拒绝，证明本次测试识别原问题；12翻译单元部分静态诊断保留，不升级完整MISRA声明。
+
 - 中断增量blind/edge/verification-gap三路完成；Cat1屏蔽服务建议按OSEK原文驳回，源上下文及Cat2覆盖缺口已修正。追加两条独立pending/拒绝副作用覆盖缺口已修正，最终定向复核均无剩余发现。五个真实编译变异（Cat2两种清除no-op及三个拒绝操作仍产生副作用）全部被新原生断言拒绝，证据interrupt-oracle-mutations-4-18.json；实际28向量、公共类型三顺序、八ErrorHook配置与最终交付摘要匹配。完整故事仍开放。
 
 - 返回Task/资源增量blind／edge／verification-gap三路独立复核均无发现。七个返回Task、22Finish/Chain和26资源真实向量均通过；Python首轮因仍读取历史finish-chain/resource-preemption记录不符合新标准行为而报红，已改用本次真实回归工件，同时增加旧整OS关闭和隐式scheduler的拒绝变异验证，历史记录不覆写。完整故事中断恢复和SC1仍开放。
@@ -98,6 +102,8 @@ ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参�
 - 容量独立增量三路blind／edge／verification-gap均未发现可定位缺陷或验证缺口；完整故事的Hook/错误/ISR工作仍开放。正式容量/真实生成两项测试163.73s通过；18容量、40受控时间、43计时向量封存，26最低容量义务直接映射到四个主场景，部分静态exit1原样保留。容量增量完整门exit0：85个集成测试（660.24s）、29Python、UI/桌面构建和两组Clippy通过；本故事Hook/错误/ISR仍未完成，sprint保持in-progress。
 
 ## Verification
+
+Cat2资源出口增量最终完整门exit0：90个核心集成测试567.09s、29Python、增量格式/C99、UI lint/build、桌面构建及两组Clippy通过。十个出口过程、28屏蔽/26资源回归与最终源码摘要匹配，实际旧backend四场景均被拒绝；12单元部分静态exit1保留。三路独立复核无发现，sprint保持4.18/Epic4 in-progress。后续完整调用表已以官方R24-11 p72/73实际PDF图像核实：六屏蔽API全部Hook/Alarm列为OK，当前较窄Hook限制须在下一增量修正；GetISRID/Shutdown/Mode各自不同许可也须覆盖。当前出口清理不冒充全调用表、实际嵌套ISR、221项或交接完成。
 
 中断增量最终完整门exit0：89个核心集成测试566.71s、29Python、增量格式/C99、UI lint/build、桌面构建和两组Clippy通过。原生28、公共类型三包含顺序、八ErrorHook配置、五个被拒绝的真实变异和最终源码身份一致；12实际翻译单元部分静态exit1保留。首轮77通过/12失败均因新增boolean后的共同头清单旧摘要，审阅源码后同步BSW契约清单并重编译；次轮88通过/1失败仅因运行期间新增场景而旧测试程序仍预期26，最终重新编译28后完整门通过，失败日志均保留。三路复核及修正复核完成，没有剩余增量发现。4.18与Epic4保持in-progress，ISR资源清理/实际嵌套/全调用表/idle/全部507行、221项与交接未关闭。
 

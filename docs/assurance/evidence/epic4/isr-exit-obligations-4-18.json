@@ -1,0 +1,51 @@
+{
+  "format": "epic4-isr-exit-obligation-results-v1",
+  "status": "scoped native ISR exit cleanup verified; whole story remains open",
+  "increment_baseline": "9c6c7ece29b54e34e3598b415a77749b269c8119",
+  "obligations_sha256": "a691103e8dd217b12c1e838bdb6a06fcef772dc8cbafb673d2bf70b62185b18f",
+  "rows": [
+    {
+      "key": "SWS_Os_00369",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_current_non_nested_native_isr_profile",
+      "verified_scope": "Actual Cat2 return releases one/two/seven configured ISR resources in LIFO order and restores all ownership/ceilings before optional ErrorHook receives6 in originalISR5 context. PendingISR6, activated highTask1 and originalTask0 each reacquire all released resources; balanced and unconfigured returns also proven.",
+      "remaining_scope": "Actual nested ISR resources/contexts and completeSC1/221/handoff exits remain open.",
+      "implementation": [
+        "runtime/os/src/Os_Backend.c Os_BackendInterruptLeave/Os_BackendResource",
+        "runtime/os/src/Os_Interrupt.c Os_InterruptRestoreOwner"
+      ],
+      "evidence": {
+        "artifact": "isr-exit-cleanup-4-18.json",
+        "test": "epic4_category2_exit_cleanup",
+        "regressions": [
+          "isr-exit-interrupt-regression-4-18.json",
+          "isr-exit-resource-regression-4-18.json"
+        ],
+        "old_behavior_rejection": "isr-exit-old-behavior-rejection-4-18.json"
+      },
+      "static_evidence": "isr-exit-static-analysis-4-18.json"
+    },
+    {
+      "key": "SWS_Os_00368",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_current_non_nested_native_isr_profile",
+      "verified_scope": "Combined leaked resources and Disable/nestedAll/nestedOS/mixed masks restored at actualCat2 exit. Configured callback receives9 before resource cleanup then6 after cleanup, both with originalISR5 and interruptedTask0 RUNNING. Unconfigured mixed case still restores and continues normally.",
+      "remaining_scope": "Actual nested ISR resources/contexts and completeSC1/221/handoff exits remain open.",
+      "implementation": [
+        "runtime/os/src/Os_Backend.c Os_BackendInterruptLeave/Os_BackendResource",
+        "runtime/os/src/Os_Interrupt.c Os_InterruptRestoreOwner"
+      ],
+      "evidence": {
+        "artifact": "isr-exit-cleanup-4-18.json",
+        "test": "epic4_category2_exit_cleanup",
+        "regressions": [
+          "isr-exit-interrupt-regression-4-18.json",
+          "isr-exit-resource-regression-4-18.json"
+        ],
+        "old_behavior_rejection": "isr-exit-old-behavior-rejection-4-18.json"
+      },
+      "static_evidence": "isr-exit-static-analysis-4-18.json"
+    }
+  ],
+  "context_limits": "Existing fixed backend uses one active logical ISR and shared ISR resource-owner slot. Tests use genuine pending delivery after original ISR returns; no nested support claimed. RES_SCHEDULER remains explicit Task-only; maximum ISR fixture uses seven nonscheduler resources, not a reduced total-resource capacity claim."
+}
