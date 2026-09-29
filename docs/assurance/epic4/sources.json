@@ -168,6 +168,11 @@
       "path": "runtime/os/patches/0007-controlled-tick.patch",
       "sha256": "d027c76922a4d8d69e639b3cbe5a48c121b4dabfaf116334b4acff1fc472160f",
       "role": "production one-request tick and handler ownership gate; test-only actual tick seed; copied upstream only"
+    },
+    {
+      "path": "runtime/os/patches/0008-task-hook-boundaries.patch",
+      "sha256": "bf6d08e9ff0b6e2c8eb866b5c0509559e9d5ab37cf9df25b23824dcc16beccdc",
+      "role": "production Task Post hook before existing FIFO-selected TCB assignment; no new task selection or ready-list mutation; copied upstream only"
     }
   ],
   "research_material": [

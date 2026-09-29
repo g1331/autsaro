@@ -19,6 +19,7 @@ static EventMaskType task_events[OS_MAX_TASKS];
 static EventMaskType wait_masks[OS_MAX_TASKS];
 static uint8_t task_waiting[OS_MAX_TASKS];
 static uint8_t internal_held[OS_MAX_TASKS];
+static size_t running_hook_task = OS_MAX_TASKS;
 static uint64_t ready_sequences[OS_MAX_TASKS];
 static unsigned resource_depth[OS_MAX_TASKS + 1u];
 static size_t owned_resources[OS_MAX_TASKS + 1u][OS_MAX_RESOURCES];
@@ -68,6 +69,7 @@ static void release_internal(size_t index);
 static uint8_t internal_ceiling(size_t index);
 static void observe_transition(void);
 static size_t current_task_index(void);
+static void leave_running(size_t index);
 void Os_BackendInterruptEnter(unsigned interrupt) { current_interrupt = interrupt; }
 void Os_BackendInterruptLeave(void) {
     configASSERT(resource_depth[OS_MAX_TASKS] == 0u);
@@ -199,12 +201,38 @@ static void append_activation(size_t index) {
     queue->requests[tail] = request_sequence;
     ++queue->count;
 }
+static void leave_running(size_t index) {
+    if ((running_hook_task == index) && (index < OS_MAX_TASKS)) {
+        if ((InterlockedCompareExchange(&Os_Closing, 0, 0) == 0) && (Os_Config->hooks != NULL)) {
+            Os_HookInvoke(Os_Config->hooks->post_task, OS_HOOK_POST);
+        }
+        running_hook_task = OS_MAX_TASKS;
+    }
+}
+void Os_BackendBeforeSelect(void *current, void *next) {
+    if ((current != next) && (Os_TargetReady() != 0) &&
+        (InterlockedCompareExchange(&Os_Closing, 0, 0) == 0)) {
+        for (size_t i = 0u; i < Os_Config->task_count; ++i) {
+            if (handles[i] == current) {
+                leave_running(i);
+                break;
+            }
+        }
+    }
+}
 void Os_BackendOnSwitch(void) {
     if (Os_TargetReady() != 0) {
         size_t i;
         for (i = 0u; i < Os_Config->task_count; ++i) {
             if (handles[i] == xTaskGetCurrentTaskHandle()) {
                 acquire_internal(i);
+                if ((running_hook_task != i) &&
+                    (InterlockedCompareExchange(&Os_Closing, 0, 0) == 0)) {
+                    running_hook_task = i;
+                    if (Os_Config->hooks != NULL) {
+                        Os_HookInvoke(Os_Config->hooks->pre_task, OS_HOOK_PRE);
+                    }
+                }
                 break;
             }
         }
@@ -808,6 +836,9 @@ static StatusType complete_activation(TaskType id, int chain) {
         configASSERT((activations[target].count != 0u) ||
                      (eTaskGetState(handles[target]) == eSuspended));
     }
+    /* PostTaskHook observes the outgoing activation while still RUNNING,
+     * before changing its queue/state or releasing its internal resource. */
+    leave_running(index);
     release_internal(index);
     queue->requests[queue->head] = 0u;
     queue->head = (queue->head + 1u) % OS_MAX_ACTIVATIONS;
@@ -958,6 +989,7 @@ StatusType Os_BackendWait(EventMaskType mask) {
         return E_OS_RESOURCE;
     }
     if ((task_events[index] & mask) == 0u) {
+        leave_running(index);
         wait_masks[index] = mask;
         task_waiting[index] = 1u;
         release_internal(index);

@@ -1,0 +1,18 @@
+--- a/tasks.c
++++ b/tasks.c
+@@ -197,7 +197,14 @@
+     #if ( configNUMBER_OF_CORES != 1 ) || ( configUSE_PORT_OPTIMISED_TASK_SELECTION != 0 )
+         #error The automotive request FIFO policy requires the fixed generic single-core selector
+     #endif
+-    #define taskOS_SELECT_READY( target, list ) ( ( target ) = listGET_OWNER_OF_HEAD_ENTRY( list ) )
++    /* Observe the existing FIFO selector's chosen candidate before committing
++     * pxCurrentTCB. No extra task selection or ready-list mutation occurs. */
++    #define taskOS_SELECT_READY( target, list )                         \
++    do {                                                              \
++        TCB_t * pxOsSelected = listGET_OWNER_OF_HEAD_ENTRY( list );     \
++        traceOS_TASK_SELECTED( ( target ), pxOsSelected );              \
++        ( target ) = pxOsSelected;                                     \
++    } while( 0 )
+     #define taskOS_INSERT_READY( task ) prvOsInsertReadyTask( task )
+ #else
+     #define taskOS_SELECT_READY( target, list ) listGET_OWNER_OF_NEXT_ENTRY( target, list )

@@ -64,6 +64,10 @@ pub(super) fn sources() -> Result<Vec<(String, Vec<u8>)>, String> {
             include_bytes!("../../../runtime/os/patches/0007-controlled-tick.patch"),
         ),
         (
+            "os/patches/0008-task-hook-boundaries.patch",
+            include_bytes!("../../../runtime/os/patches/0008-task-hook-boundaries.patch"),
+        ),
+        (
             "os/README.md",
             include_bytes!("../../../runtime/os/README.md"),
         ),

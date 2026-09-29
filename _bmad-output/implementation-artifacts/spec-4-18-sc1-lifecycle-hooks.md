@@ -57,6 +57,12 @@ context: []
 
 ## Implementation Notes
 
+人工调用图核查补充：虽然错误报告函数和ErrorHook自身不递归，外层失败查询GetTaskState等标准wrapper可能仍活跃，ErrorHook依法再次查询同一服务时会重入该wrapper（error_hooks向量4已有真实路径）。这是不同于嵌套ErrorHook的有界函数重入；完整MISRA出口须对R17.2 Required作明确消除或受控偏离处置，目前没有批准，standard-error-static-analysis已记录，不能把部分编译/扫描或回调递归抑制冒充该规则全通过。
+
+后续missing-end清理已查明一处必须同时修正的资源契约：Os_BackendResource仍保留未配置RES_SCHEDULER时自动建立第八槽的旧分支，而R24-11 OS p37明确不自动创建。本故事冻结约束要求显式配置。下一资源/终止增量须移除自动分支，既有scheduler成功向量改为真正配置该资源，并补未配置拒绝；资源清理只能索引实际配置资源，不依赖该隐藏槽。当前容量增量已显式配置，不能用它证明这个未配置分支已关闭。
+
+Task Hook增量：第八受控补丁只观察原FIFO候选，在pxCurrentTCB赋值前发Post；真实SWITCHED_IN取得内部资源后发Pre。用单一运行Hook对象标记过滤无切换yield，同时Wait/Finish/Chain显式在状态变化前发Post并清除标记，防止内核出口重复。相同TCB的新激活重新发Pre，Shutdown关闭门后不发Post。生成离线闭包、八补丁来源摘要和工程说明同步；八独立过程字面轨迹覆盖抢占/等待/唤醒/Chain/Term、内部资源、未配置Hook、自身Chain、排队同TCB、Shutdown、noop-yield和已满足Wait。最终八向量、正式测试、三路独立复核和完整门均通过；不据此关闭4.18。
+
 ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参数快照、两个访问宏开关及可选回调配置；真实Task/Cat2/Startup三类执行上下文覆盖。Startup无汽车Task的嵌套错误报告返回INVALID_TASK；ErrorHook内再次失败绕过活跃报告函数，不递归、不覆盖外层快照，回调结束恢复之前Hook限制。Alarm动作错误在标准回调已配置时仅报告一次。三头文件分离避免循环include，生成交付闭包包含新头文件、Os_Error.c和Ecu_OsHooks.c。Pre/Post函数已绑定但真实转换调用仍待实现，绝不按本增量关闭4.18。八个独立新进程覆盖四种开关与配置/未配置，已配置每次31条独立错误记录；部分Cppcheck诊断保留，完整221项仍开放。
 
 下一实施增量的接口选择：ErrorHook参数快照使用逐服务的有类型结构/联合成员，保留TickType与各类输出指针原类型，不通过uintptr_t或void指针强转取回参数。一个错误报告边界负责回调前后上下文与递归抑制；ErrorHook内再次失败只返回状态，不覆盖外层快照。标准ErrorHook与现有Time.error_hook私有兼容通路须明确单次报告责任，原40向量作为回归依据。新可选Hook配置和两个宏开关按真实生产配置接入，旧未配置消费者不引入未定义回调符号。
@@ -75,11 +81,15 @@ ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参�
 
 ## Review Triage Log
 
+- Task Hook增量blind／edge／verification-gap三路独立复核均无发现。首轮完整门86通过/1失败，实际Pre/Post增加诊断标记后，20tick总139标记超出127前缀，trace_dropped12；旧生成测试按未截断片段计数失配。改为独立字面139序列的精确保留前缀和丢弃数量，保持completed20、两个实际CAN输出、全部初始化失败断言；额外只读verification-gap复核无发现。失败原始日志与Windows链接占用日志保留，源实现未因此改动。
+
 - ErrorHook增量edge与verification-gap独立复核均无发现。blind提出“GetTaskID标准service ID应0x04”：false，实际R24-11 OS p167的0x04属于CheckTaskMemoryAccess，p147将GetTaskID列为OSEK服务，OSEK2.2.3 §13.8.3只规定各OSServiceId_xx唯一，没有该数值；当前0x80～0x90与AUTOSAR规定的Counter/Schedule ID分开且独立字面预期检查。保留现有值，不将其他模块/实现常量当作本规范义务。
 
 - 容量独立增量三路blind／edge／verification-gap均未发现可定位缺陷或验证缺口；完整故事的Hook/错误/ISR工作仍开放。正式容量/真实生成两项测试163.73s通过；18容量、40受控时间、43计时向量封存，26最低容量义务直接映射到四个主场景，部分静态exit1原样保留。容量增量完整门exit0：85个集成测试（660.24s）、29Python、UI/桌面构建和两组Clippy通过；本故事Hook/错误/ISR仍未完成，sprint保持in-progress。
 
 ## Verification
+
+Task Hook增量最终完整门exit0：87个核心集成测试541.62s、29Python、增量格式/C99、UI/桌面构建和两组Clippy通过。真实生成定向复验222.76s通过，最终完整门也覆盖该项。八原生Task Hook向量与源码身份/八补丁摘要一致；九本地C翻译单元及实际八补丁后tasks.c部分静态exit1诊断保留。三路独立复核和生成轨迹断言定向复核均无发现。sprint保持4.18/Epic4 in-progress，missing-end/ISR/全调用表、R17.2处置、完整221项和最终交接仍开放。
 
 ErrorHook增量完整门exit0：86个核心集成测试600.13s（包含正式epic4_standard_error_hook_parameters、真实参考ECU/HostBatch/栈及所有既有回归）、29Python、UI/桌面构建和两组Clippy通过。最终仅内部声明参数名校正；八配置原生编译/运行、增量quality及桌面构建已针对复验，随后文档身份刷新。部分Cppcheck九个翻译单元exit1，诊断和人工范围核查记录于standard-error-static-analysis-4-18.json。四条相关义务均按部分支持记录，不把未来服务/missing-end/ISR清理或整体SC1标为通过。
 

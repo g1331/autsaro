@@ -180,6 +180,28 @@ fn epic4_sc1_class_capacity() {
 
 #[cfg(windows)]
 #[test]
+fn epic4_real_task_hook_transitions() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let output = Command::new("python")
+        .arg(root.join("scripts/epic4_os.py"))
+        .args(["--suite", "task-hooks"])
+        .current_dir(root)
+        .output()
+        .expect("run real kernel Task hook transitions");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "epic4_real_task_hook_transitions PASS: 8 native vectors"
+    );
+}
+
+#[cfg(windows)]
+#[test]
 fn epic4_standard_error_hook_parameters() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let output = Command::new("python")

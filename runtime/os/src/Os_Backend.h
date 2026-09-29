@@ -65,6 +65,7 @@ void Os_BackendInterruptEnter(unsigned interrupt);
 void Os_BackendInterruptLeave(void);
 StatusType Os_BackendInspect(TaskType id, Os_ActivationInfo *info);
 void Os_BackendOnSwitch(void);
+void Os_BackendBeforeSelect(void *current, void *next);
 int Os_BackendTakeIsrReschedule(void);
 void Os_BackendAssert(const char *file, int line);
 HANDLE Os_PortEvent(LPSECURITY_ATTRIBUTES attributes, BOOL manual, BOOL initial, LPCSTR name);

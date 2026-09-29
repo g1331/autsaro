@@ -188,8 +188,25 @@ pub fn verify() {
     assert!(text.contains("ecu_probe completed=20"), "{text}");
     assert!(text.contains("trace=IdcpmgrsR"), "{text}");
     assert_eq!(text.matches("ecu_output epoch=").count(), 2, "{text}");
-    assert_eq!(text.matches("wtcaxd").count(), 2, "{text}");
-    assert_eq!(text.matches("wtcd").count(), 18, "{text}");
+    // Twenty completed ticks plus two physically confirmed outputs produce
+    // real Pre/Post transitions, including each confirmation-only wake.
+    // Diagnostic trace saves a bounded prefix; omitted markers are explicit.
+    let mut expected_trace = String::from("IdcpmgrsRpq");
+    for _ in 0..2 {
+        expected_trace.push_str(&"pwtcdq".repeat(9));
+        expected_trace.push_str("pwtcaxdqpq");
+    }
+    assert_eq!(expected_trace.len(), 139);
+    let lifecycle = text
+        .lines()
+        .find(|line| line.starts_with("lifecycle=Closed"))
+        .unwrap();
+    let actual_trace = lifecycle
+        .split_whitespace()
+        .find_map(|field| field.strip_prefix("trace="))
+        .unwrap();
+    assert_eq!(actual_trace, &expected_trace[..127], "{text}");
+    assert!(lifecycle.ends_with("trace_dropped=12"), "{text}");
     for stage in 1..=8 {
         let failed = run_probe(&build.join("ecu_probe.exe"), Some(stage));
         assert!(!failed.status.success(), "stage {stage}");

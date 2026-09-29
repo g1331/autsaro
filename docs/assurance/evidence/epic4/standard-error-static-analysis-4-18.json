@@ -67,6 +67,7 @@
       "long long _InterlockedCompareExchange64(long long volatile *Destination, long long ExChange, long long Comperand) {",
       "void *_InterlockedCompareExchangePointer(void * volatile *Destination, void *ExChange, void *Comperand);",
       "void *_InterlockedCompareExchangePointer(void *volatile *Destination, void *ExChange, void *Comperand) {"
-    ]
+    ],
+    "public_query_reentry_open": "ErrorHook recursion is suppressed, but an outer failed GetTaskState/GetTaskID/GetEvent/GetAlarmBase/GetAlarm public wrapper can remain active while ErrorHook legally calls that same query wrapper. Harness vector4 demonstrates the GetTaskState path. This is bounded wrapper function reentry, distinct from reporter reentry; R17.2 Required disposition remains open for final MISRA assessment. No deviation approval or full MISRA conformity is claimed."
   }
 }

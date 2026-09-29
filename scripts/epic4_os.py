@@ -846,6 +846,31 @@ def check_stack(binary: Path) -> list[dict]:
     return observations
 
 
+def check_task_hooks(binary: Path) -> list[dict]:
+    transitions = "p0Aq0p1Hq1p0Bq0p2Lq2p0Cq0p1Jq1p2Mq2p0D"
+    expected_traces = {
+        "transitions": transitions,
+        "internal": transitions,
+        "unconfigured": "AHBLCJMD",
+        "self-chain": "p0Xq0p0Yq0p2Z",
+        "queued": "p0Xq0p0Yq0p2Z",
+        "shutdown": "p0F",
+        "noop-yield": "p0F",
+        "wait-satisfied": "p0F",
+    }
+    observations = []
+    for scenario, trace in expected_traces.items():
+        result = execute(binary, scenario)
+        expected = (f"task_hooks scenario={scenario} "
+                    f"configured={int(scenario != 'unconfigured')} trace={trace} reason=0")
+        require(result["exit"] == 0 and not result["stderr"], result)
+        require(expected in result["stdout"], result)
+        require("lifecycle=Closed state=Ready reason=0" in result["stdout"], result)
+        result["independent_expected_task_transition_trace"] = trace
+        observations.append(result)
+    return observations
+
+
 def check_error_hooks(binary: Path, service_access: int = 1, parameter_access: int = 1) -> list[dict]:
     statuses = [3,6,3,10,3,3,5,6,6,1,3,3,3,3,10,3,5,8,8,5,8,8,5,5,3,8,3,4]
     services = [130,131,132,128,129,133,134,135,136,137,138,139,15,16,17,140,141,142,143,144,7,8,9,10,14,17,15,130]
@@ -985,6 +1010,7 @@ def main() -> None:
             "public-types",
             "capacity",
             "error-hooks",
+            "task-hooks",
         ],
         default="lifecycle",
     )
@@ -1008,6 +1034,7 @@ def main() -> None:
             "sc1-timing": "sc1_timing.c",
             "capacity": "sc1_capacity.c",
             "error-hooks": "error_hooks.c",
+            "task-hooks": "task_hooks.c",
         }
         checks = {
             "lifecycle": check_lifecycle,
@@ -1020,6 +1047,7 @@ def main() -> None:
             "sc1-timing": check_sc1_timing,
             "capacity": check_capacity,
             "error-hooks": check_error_hooks,
+            "task-hooks": check_task_hooks,
         }
         binary, evidence = build(Path(temporary), harnesses[args.suite])
         evidence["observations"] = checks[args.suite](binary)
@@ -1065,6 +1093,7 @@ def main() -> None:
             "sc1-timing": "epic4_sc1_timing_capacity",
             "capacity": "epic4_sc1_class_capacity",
             "error-hooks": "epic4_standard_error_hook_parameters",
+            "task-hooks": "epic4_real_task_hook_transitions",
         }
         name = names[args.suite]
         print(f"{name} PASS: {len(evidence['observations'])} native vectors")
