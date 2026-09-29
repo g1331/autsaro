@@ -2,6 +2,7 @@ pub mod arxml;
 pub mod arxml_render;
 pub mod generator;
 pub mod host;
+pub mod integration;
 pub mod model;
 pub mod schema;
 

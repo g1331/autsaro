@@ -1,0 +1,325 @@
+{
+  "status": "pass",
+  "profile": "epic4-win64-sr-cs-v1",
+  "scope": "17 current host BSW function signatures and source addresses; legacy runtime link only, not the new Epic4 ECU link or standard certification",
+  "command": [
+    "gcc",
+    "-std=c99",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-I<repo-root>\\runtime\\include",
+    "-I<repo-root>\\runtime\\src",
+    "<build-dir>\\current_bsw_contract.c",
+    "<repo-root>\\runtime\\src\\Can.c",
+    "<repo-root>\\runtime\\src\\Can_HostLock.c",
+    "<repo-root>\\runtime\\src\\CanIf.c",
+    "<repo-root>\\runtime\\src\\CanTp.c",
+    "<repo-root>\\runtime\\src\\Com.c",
+    "<repo-root>\\runtime\\src\\Dcm.c",
+    "<repo-root>\\runtime\\src\\Dem.c",
+    "<repo-root>\\runtime\\src\\Ecu_Runtime.c",
+    "<repo-root>\\runtime\\src\\Ecu_Status.c",
+    "<repo-root>\\runtime\\src\\LSduR.c",
+    "<repo-root>\\runtime\\src\\NvM.c",
+    "<repo-root>\\runtime\\src\\NvM_HostStorage.c",
+    "<repo-root>\\runtime\\src\\Os.c",
+    "<repo-root>\\runtime\\src\\PduR.c",
+    "<repo-root>\\runtime\\src\\Rte.c",
+    "<repo-root>\\runtime\\src\\Security.c",
+    "-lbcrypt",
+    "-o",
+    "<build-dir>\\current_bsw_contract.exe"
+  ],
+  "compile_exit": 0,
+  "run_exit": 0,
+  "probe_source_sha256": "d1d30d8259f59401d052fe2a194769d7453d291a0c3d87d85d8302d629d1f53f",
+  "product_sources": {
+    "runtime/include/Can.h": "859f0b61a4a7ee784fa4f842f9084be4e8f3b7546be3be32f69f0cbdd1c79f31",
+    "runtime/include/CanIf.h": "1a02f6da5099d8e32bbbff5e67ab2d3284af65635c3c493fd2e2fa45c7728daf",
+    "runtime/include/CanIf_MemMap.h": "271f11d7398d6fba369ff62490d3e635348e23781539daf9478b6091107ee865",
+    "runtime/include/CanTp.h": "8d24d5d45133a8a1ad8c0d60f6fb0bc896a0ddc61f6d13728828cc8b9e6a7912",
+    "runtime/include/Can_GeneralTypes.h": "df468e893e2e51347f39d34ec8d89906deecfada4cd23e728a8ef51020b25454",
+    "runtime/include/Can_MemMap.h": "423bbfcb101ebfbcdd99ee990edc53d7f63524795cfad5e99ca0af268360e173",
+    "runtime/include/Com.h": "2727b112395c9ac1e4721160aef270a95cf2c09e027ecbb6a7fa0dd0ce7d51f6",
+    "runtime/include/ComStack_Types.h": "e39bd4b7f61433daf8bbf7b87b4988fa0cb1a8fe23029e285c2315a4f6c55d4c",
+    "runtime/include/Dcm.h": "498e138903ad5ae0c2137a764e0981252939bc035ebd11627cba1e3e4bc07a9a",
+    "runtime/include/Dem.h": "5e5f0c831600f530651057d6ec70622ab39e86d4fd6475e26c13e26e98c86801",
+    "runtime/include/Ecu_Config.h": "97ff7aab9d833ed63dd128c624804a5bf4c9521644afd184aa9928a1f3ac3b28",
+    "runtime/include/Ecu_DcmCallbackTypes.h": "cef2930390216c6acb5e14ddd31442b552322a13b1bf6274b45831219703c932",
+    "runtime/include/Ecu_Status.h": "43bf6321656d71b4c6850d62b038ed638ea0d1a932f3fb35823e7f2714f8043b",
+    "runtime/include/LSduR.h": "122b786c8158434775bc457dafd94b4cf2426d528be60d6ab8de9ba950cf62af",
+    "runtime/include/Os.h": "46bd20117624b757a533648578466e1cd2e2e7aa374445a638e5bf692bdf1fda",
+    "runtime/include/PduR.h": "624c315738e89b1ebd6a5bb28d257e11c0793294837acee7799d73b248d7783f",
+    "runtime/include/SchM_Can.h": "86a9516e1fb41e90543390f2c2161e14a443ff145af5a9ce9337ea6bbab6428d",
+    "runtime/include/Security.h": "3ff40c47d38505bbe5d960babb547254a28ab0eba0a5cd6f5cbfe7fc9324f423",
+    "runtime/include/Std_Types.h": "d62e00c03e4e558dad0c0dee505d3bc0df6dd3b4619ec32e7b7253b9ae8481a1",
+    "runtime/src/Can.c": "c6ef08eb20237a422bb4b2f8efc5f936730f9fcf3d33af129c6b742ff421307d",
+    "runtime/src/CanIf.c": "e86cc8445caa16ccb25d1840e671ad6a7f074cab2a3bbc5b7ef7a4acdc3e3704",
+    "runtime/src/CanTp.c": "bfa2cbde8548ed3d73b4341db6ea3b4af543182fac65ec7a0bbb7ae4fc8acaf0",
+    "runtime/src/Com.c": "5add0e9394056f69ac44acc0babf231b1ace14c572c6ff59eca72ce7c556ec7c",
+    "runtime/src/Dcm.c": "c7da5ea8ade5386e761044e0604df3f425405083678f14232ae18ccd8290037f",
+    "runtime/src/PduR.c": "7667ead4708771d6f2f26e854807461f1635af6852fe6e0a81957b63fca434f0",
+    "runtime/contracts/bsw-v1.json": "a438ecf6a806d592af946605cd96604232094f232f59bd1306493bb7930f5ef3",
+    "runtime/src/Can_HostLock.c": "2b041a20750f57a11c1f319d8b79c904b8251c0c7a619131b47a9bc74fb75c9e",
+    "runtime/src/Dem.c": "aa8ade516ef95e273cb646a55f8a0025fda5701afdc15ecc10ee38372a818b2c",
+    "runtime/src/Ecu_Runtime.c": "c485f96dd4d30f9aba7cea2ccfa6e3acf9b690780bff50269b91b16d3d05f372",
+    "runtime/src/Ecu_Status.c": "d406944730b6834f29983aad9ee8fa64c77753d2dfcee5798102d0fb5b7a9dc6",
+    "runtime/src/LSduR.c": "45074f864cfa3a590963e5b201c56261910d448a29564a747e3e55fff8a81340",
+    "runtime/src/NvM.c": "4a9b1219f6d550e3e65918b3655689640a2a00d3f3452d853b80ae5411f55654",
+    "runtime/src/NvM_HostStorage.c": "4a76561223d025fef6808f2ba16e9ce4704b8bb88bd76f51e4abb08276ed30a0",
+    "runtime/src/Os.c": "a0d6253e041ac604880b21e662b08115e14812117c84f46ed8dc57ba8d926a6c",
+    "runtime/src/Rte.c": "2fa1be887f66930027e1ef33fb12ac7c50be148c4be34802877ae451c42cf737",
+    "runtime/src/Security.c": "86ab1bd43cf7edac66bd0052fa4458fe7c1dccc7a22415ce84c49b4bbda5ae48"
+  },
+  "entries": {
+    "CanIf_Init": {
+      "module": "CanIf",
+      "returnType": "void",
+      "arguments": [
+        {
+          "name": "config",
+          "nativeType": "const EcuConfig *",
+          "direction": "IN"
+        }
+      ],
+      "header": "runtime/include/CanIf.h",
+      "source": "runtime/src/CanIf.c",
+      "stage": "current_host_bsw"
+    },
+    "CanIf_Transmit": {
+      "module": "CanIf",
+      "returnType": "EcuStatus",
+      "arguments": [
+        {
+          "name": "frame_index",
+          "nativeType": "size_t",
+          "direction": "IN"
+        },
+        {
+          "name": "data",
+          "nativeType": "const uint8_t *",
+          "direction": "IN"
+        }
+      ],
+      "header": "runtime/include/CanIf.h",
+      "source": "runtime/src/CanIf.c",
+      "stage": "current_host_bsw"
+    },
+    "CanTp_AdvanceTime": {
+      "module": "CanTp",
+      "returnType": "EcuStatus",
+      "arguments": [
+        {
+          "name": "now_ms",
+          "nativeType": "uint64_t",
+          "direction": "IN"
+        }
+      ],
+      "header": "runtime/include/CanTp.h",
+      "source": "runtime/src/CanTp.c",
+      "stage": "current_host_bsw"
+    },
+    "CanTp_Init": {
+      "module": "CanTp",
+      "returnType": "void",
+      "arguments": [
+        {
+          "name": "config",
+          "nativeType": "const EcuDiagnosticConfig *",
+          "direction": "IN"
+        }
+      ],
+      "header": "runtime/include/CanTp.h",
+      "source": "runtime/src/CanTp.c",
+      "stage": "current_host_bsw"
+    },
+    "Can_Init": {
+      "module": "Can",
+      "returnType": "void",
+      "arguments": [
+        {
+          "name": "config",
+          "nativeType": "const Can_ConfigType *",
+          "direction": "IN"
+        }
+      ],
+      "header": "runtime/include/Can.h",
+      "source": "runtime/src/Can.c",
+      "stage": "current_host_bsw"
+    },
+    "Can_MainFunction_Read": {
+      "module": "Can",
+      "returnType": "void",
+      "arguments": [],
+      "header": "runtime/include/SchM_Can.h",
+      "source": "runtime/src/Can.c",
+      "stage": "current_host_bsw"
+    },
+    "Can_MainFunction_Wakeup": {
+      "module": "Can",
+      "returnType": "void",
+      "arguments": [],
+      "header": "runtime/include/SchM_Can.h",
+      "source": "runtime/src/Can.c",
+      "stage": "current_host_bsw"
+    },
+    "Can_MainFunction_Write": {
+      "module": "Can",
+      "returnType": "void",
+      "arguments": [],
+      "header": "runtime/include/SchM_Can.h",
+      "source": "runtime/src/Can.c",
+      "stage": "current_host_bsw"
+    },
+    "Com_AdvanceTime": {
+      "module": "Com",
+      "returnType": "EcuStatus",
+      "arguments": [
+        {
+          "name": "now_ms",
+          "nativeType": "uint64_t",
+          "direction": "IN"
+        }
+      ],
+      "header": "runtime/include/Com.h",
+      "source": "runtime/src/Com.c",
+      "stage": "current_host_bsw"
+    },
+    "Com_GetSignal": {
+      "module": "Com",
+      "returnType": "EcuStatus",
+      "arguments": [
+        {
+          "name": "id",
+          "nativeType": "uint16_t",
+          "direction": "IN"
+        },
+        {
+          "name": "value",
+          "nativeType": "uint32_t *",
+          "direction": "OUT"
+        },
+        {
+          "name": "valid",
+          "nativeType": "uint8_t *",
+          "direction": "OUT"
+        }
+      ],
+      "header": "runtime/include/Com.h",
+      "source": "runtime/src/Com.c",
+      "stage": "current_host_bsw"
+    },
+    "Com_Init": {
+      "module": "Com",
+      "returnType": "void",
+      "arguments": [
+        {
+          "name": "config",
+          "nativeType": "const EcuConfig *",
+          "direction": "IN"
+        }
+      ],
+      "header": "runtime/include/Com.h",
+      "source": "runtime/src/Com.c",
+      "stage": "current_host_bsw"
+    },
+    "Com_SetSignal": {
+      "module": "Com",
+      "returnType": "EcuStatus",
+      "arguments": [
+        {
+          "name": "id",
+          "nativeType": "uint16_t",
+          "direction": "IN"
+        },
+        {
+          "name": "value",
+          "nativeType": "uint32_t",
+          "direction": "IN"
+        }
+      ],
+      "header": "runtime/include/Com.h",
+      "source": "runtime/src/Com.c",
+      "stage": "current_host_bsw"
+    },
+    "Com_TriggerTransmit": {
+      "module": "Com",
+      "returnType": "EcuStatus",
+      "arguments": [
+        {
+          "name": "frame_index",
+          "nativeType": "size_t",
+          "direction": "IN"
+        }
+      ],
+      "header": "runtime/include/Com.h",
+      "source": "runtime/src/Com.c",
+      "stage": "current_host_bsw"
+    },
+    "Dcm_AdvanceTime": {
+      "module": "Dcm",
+      "returnType": "void",
+      "arguments": [
+        {
+          "name": "now_ms",
+          "nativeType": "uint64_t",
+          "direction": "IN"
+        }
+      ],
+      "header": "runtime/include/Dcm.h",
+      "source": "runtime/src/Dcm.c",
+      "stage": "current_host_bsw"
+    },
+    "Dcm_Init": {
+      "module": "Dcm",
+      "returnType": "void",
+      "arguments": [
+        {
+          "name": "config",
+          "nativeType": "const EcuDiagnosticConfig *",
+          "direction": "IN"
+        }
+      ],
+      "header": "runtime/include/Dcm.h",
+      "source": "runtime/src/Dcm.c",
+      "stage": "current_host_bsw"
+    },
+    "PduR_Init": {
+      "module": "PduR",
+      "returnType": "void",
+      "arguments": [
+        {
+          "name": "config",
+          "nativeType": "const EcuConfig *",
+          "direction": "IN"
+        }
+      ],
+      "header": "runtime/include/PduR.h",
+      "source": "runtime/src/PduR.c",
+      "stage": "current_host_bsw"
+    },
+    "PduR_Transmit": {
+      "module": "PduR",
+      "returnType": "EcuStatus",
+      "arguments": [
+        {
+          "name": "frame_index",
+          "nativeType": "size_t",
+          "direction": "IN"
+        },
+        {
+          "name": "data",
+          "nativeType": "const uint8_t *",
+          "direction": "IN"
+        }
+      ],
+      "header": "runtime/include/PduR.h",
+      "source": "runtime/src/PduR.c",
+      "stage": "current_host_bsw"
+    }
+  },
+  "representation": "workspace/build/toolchain paths normalized; observed native addresses and thread IDs retained for physical-stack and fault correlation",
+  "raw_record_sha256": "5948ba9139c69f1c3be483bebcc524e2be9bcce1252fd1aea94e7d1e173545b7",
+  "raw_record_local": ".scratch/epic4/current-bsw-contract-raw.json"
+}

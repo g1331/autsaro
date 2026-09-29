@@ -3240,6 +3240,79 @@ impl Workspace {
         Ok(sources)
     }
 
+    /// Check the current standard inputs through the single Epic 4 plan path.
+    /// Unsaved in-memory edits can be previewed, but external changes to their
+    /// saved sources are rejected before the plan is constructed.
+    pub fn integration_plan(
+        &self,
+        runtime: &crate::integration::RuntimeCatalog,
+        mod_archive: PathBuf,
+    ) -> Result<crate::integration::ValidatedIntegrationPlan, Vec<crate::integration::PlanDiagnostic>>
+    {
+        use crate::integration::{
+            DiagnosticCategory, InputSource, PlanDependencies, PlanDiagnostic,
+        };
+        let issue = |code: &str, message: String| {
+            vec![PlanDiagnostic {
+            category: DiagnosticCategory::Input, code: code.into(), file: None, object: None,
+            message, remedy: "Reopen the original input set and resolve external changes before checking its integration plan.".into(),
+        }]
+        };
+        self.ensure_sources_current()
+            .map_err(|error| issue("SOURCE_CHANGED", error))?;
+        let mut root = self
+            .files
+            .first()
+            .and_then(|file| file.path.parent())
+            .ok_or_else(|| {
+                issue(
+                    "INPUT_MISSING",
+                    "No input source directory is available.".into(),
+                )
+            })?;
+        while !self
+            .files
+            .iter()
+            .all(|file| file.path.strip_prefix(root).is_ok())
+        {
+            root = root.parent().ok_or_else(|| {
+                issue(
+                    "SOURCE_IDENTITY",
+                    "The source files do not share a portable input root.".into(),
+                )
+            })?;
+        }
+        let sources: Vec<_> = self
+            .files
+            .iter()
+            .map(|file| {
+                let relative = file
+                    .path
+                    .strip_prefix(root)
+                    .map_err(|error| issue("SOURCE_IDENTITY", error.to_string()))?;
+                let logical = relative
+                    .to_str()
+                    .ok_or_else(|| {
+                        issue(
+                            "SOURCE_IDENTITY",
+                            "The source identity is not UTF-8.".into(),
+                        )
+                    })?
+                    .replace('\\', "/");
+                InputSource::new(logical, file.text.as_bytes().to_vec())
+                    .map_err(|issue| vec![issue])
+            })
+            .collect::<Result<_, _>>()?;
+        crate::integration::build_plan(
+            &sources,
+            &PlanDependencies {
+                xsd_archive: self.schema_zip.clone(),
+                mod_archive,
+            },
+            runtime,
+        )
+    }
+
     pub fn validate(&mut self) -> Result<WorkspaceView, String> {
         self.refresh()?;
         self.issues.extend(schema::validate_files(

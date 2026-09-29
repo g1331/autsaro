@@ -10,6 +10,44 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[path = "support/epic4_reference.rs"]
 mod epic4_reference;
 
+#[path = "support/epic4_plan.rs"]
+mod epic4_plan;
+
+#[test]
+fn epic4_validated_integration_plan() {
+    epic4_plan::validated_integration_plan();
+}
+
+#[test]
+fn epic4_plan_additional_boundaries() {
+    epic4_plan::plan_additional_boundaries();
+}
+
+#[test]
+fn epic4_input_graph_identity_and_references() {
+    epic4_plan::graph_identity_and_references();
+}
+
+#[test]
+fn epic4_component_semantic_rejections() {
+    epic4_plan::component_semantic_rejections();
+}
+
+#[test]
+fn epic4_schedule_semantic_rejections() {
+    epic4_plan::schedule_semantic_rejections();
+}
+
+#[test]
+fn epic4_communication_semantic_rejections() {
+    epic4_plan::communication_semantic_rejections();
+}
+
+#[test]
+fn epic4_bsw_semantic_rejections() {
+    epic4_plan::bsw_semantic_rejections();
+}
+
 #[test]
 fn epic4_reference_input_baseline() {
     epic4_reference::verify();
