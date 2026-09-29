@@ -844,6 +844,41 @@ def check_stack(binary: Path) -> list[dict]:
     return observations
 
 
+def check_public_types(directory: Path) -> dict:
+    binary = directory / "public_types.exe"
+    command = [
+        compiler(), "-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic",
+        "-I" + str(TARGET / "include"), str(TARGET / "tests/public_types.c"),
+        "-o", str(binary),
+    ]
+    expected = "public_types range_and_pointer_contracts=pass access_truth_table=16\n"
+    observations = []
+    for name, extra in [
+        ("header-only", []),
+        ("windows-before", ["-DOS_PUBLIC_TYPES_WINDOWS_BEFORE"]),
+        ("windows-after", ["-DOS_PUBLIC_TYPES_WINDOWS_AFTER"]),
+    ]:
+        actual_command = command + ["-I" + str(TARGET / "src")] + extra
+        subprocess.run(actual_command, capture_output=True, text=True, check=True)
+        result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=5)
+        require(result.returncode == 0 and result.stdout == expected and not result.stderr,
+                {"exit": result.returncode, "stdout": result.stdout, "stderr": result.stderr})
+        observations.append({"scenario": name, "command": actual_command,
+                             "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
+                             "exit": result.returncode, "stdout": result.stdout,
+                             "stderr": result.stderr, "independent_expected": expected})
+    return {
+        "status": "pass for public type contracts only; runtime services remain separate",
+        "command": command,
+        "product_sources": {
+            path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in [TARGET / "include/Os.h", TARGET / "src/Os_Windows.h", TARGET / "tests/public_types.c"]
+        },
+        "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
+        "observations": observations,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -857,12 +892,19 @@ def main() -> None:
             "events",
             "time",
             "sc1-timing",
+            "public-types",
         ],
         default="lifecycle",
     )
     parser.add_argument("--evidence", type=Path)
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="autosar-epic4-os-") as temporary:
+        if args.suite == "public-types":
+            evidence = check_public_types(Path(temporary))
+            if args.evidence:
+                write_shared_evidence(args.evidence, evidence, Path(temporary))
+            print("epic4_os_public_type_contracts PASS: independent C99 consumer")
+            return
         harnesses = {
             "lifecycle": "lifecycle.c",
             "stack": "native_stack.c",

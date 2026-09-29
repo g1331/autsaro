@@ -7,7 +7,11 @@
 #undef SetEvent
 #define OS_RESTORE_EVENT_SERVICE 1
 #endif
+/* Windows COM declares an unrelated ApplicationType enum. Keep it inside the
+ * host adapter namespace while preserving the standard Os.h public name. */
+#define ApplicationType Os_Win32ApplicationType
 #include <windows.h>
+#undef ApplicationType
 BOOL Os_HostSetEvent(HANDLE event);
 #ifdef OS_RESTORE_EVENT_SERVICE
 #define SetEvent Os_SetEvent

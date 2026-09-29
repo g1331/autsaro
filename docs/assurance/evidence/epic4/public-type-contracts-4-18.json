@@ -1,0 +1,114 @@
+{
+  "status": "pass for public type contracts only; runtime services remain separate",
+  "command": [
+    "gcc",
+    "-std=c99",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-pedantic",
+    "-I<repo-root>\\runtime\\os\\include",
+    "<repo-root>\\runtime\\os\\tests\\public_types.c",
+    "-o",
+    "<build-dir>\\public_types.exe"
+  ],
+  "product_sources": {
+    "runtime/os/include/Os.h": "f22582212ff7728b27e341e4d9c7f8d8a35e52ff45cf57a98cd0f6b831d8212e",
+    "runtime/os/src/Os_Windows.h": "7513f31950c778c23f7ddfe9f114e475d5ebf71e7e593abb9fa78fe01755f315",
+    "runtime/os/tests/public_types.c": "248fe448ba9a7aad92b5b2da505a95ebfa3033788e95ca586842c6fe9e5989a1"
+  },
+  "binary_sha256": "cec6cbe15f7d474b88fc1b86ad65ba856b7a40ec482b291f9e2f73f579f88157",
+  "observations": [
+    {
+      "scenario": "header-only",
+      "command": [
+        "gcc",
+        "-std=c99",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-pedantic",
+        "-I<repo-root>\\runtime\\os\\include",
+        "<repo-root>\\runtime\\os\\tests\\public_types.c",
+        "-o",
+        "<build-dir>\\public_types.exe",
+        "-I<repo-root>\\runtime\\os\\src"
+      ],
+      "binary_sha256": "cde9b4bdd085668b8e09e264ad51af20f7167820f4be7315ff31826a0f5af6a5",
+      "exit": 0,
+      "stdout": "public_types range_and_pointer_contracts=pass access_truth_table=16\n",
+      "stderr": "",
+      "independent_expected": "public_types range_and_pointer_contracts=pass access_truth_table=16\n"
+    },
+    {
+      "scenario": "windows-before",
+      "command": [
+        "gcc",
+        "-std=c99",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-pedantic",
+        "-I<repo-root>\\runtime\\os\\include",
+        "<repo-root>\\runtime\\os\\tests\\public_types.c",
+        "-o",
+        "<build-dir>\\public_types.exe",
+        "-I<repo-root>\\runtime\\os\\src",
+        "-DOS_PUBLIC_TYPES_WINDOWS_BEFORE"
+      ],
+      "binary_sha256": "cec6cbe15f7d474b88fc1b86ad65ba856b7a40ec482b291f9e2f73f579f88157",
+      "exit": 0,
+      "stdout": "public_types range_and_pointer_contracts=pass access_truth_table=16\n",
+      "stderr": "",
+      "independent_expected": "public_types range_and_pointer_contracts=pass access_truth_table=16\n"
+    },
+    {
+      "scenario": "windows-after",
+      "command": [
+        "gcc",
+        "-std=c99",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-pedantic",
+        "-I<repo-root>\\runtime\\os\\include",
+        "<repo-root>\\runtime\\os\\tests\\public_types.c",
+        "-o",
+        "<build-dir>\\public_types.exe",
+        "-I<repo-root>\\runtime\\os\\src",
+        "-DOS_PUBLIC_TYPES_WINDOWS_AFTER"
+      ],
+      "binary_sha256": "cec6cbe15f7d474b88fc1b86ad65ba856b7a40ec482b291f9e2f73f579f88157",
+      "exit": 0,
+      "stdout": "public_types range_and_pointer_contracts=pass access_truth_table=16\n",
+      "stderr": "",
+      "independent_expected": "public_types range_and_pointer_contracts=pass access_truth_table=16\n"
+    }
+  ],
+  "representation": "workspace/build/toolchain paths normalized; observed native addresses and thread IDs retained for physical-stack and fault correlation",
+  "raw_record_sha256": "de69b98998020eac90713468fd2d41f02526111154fe1043979042187739ea1b",
+  "raw_record_local": ".scratch/epic4/public-type-contracts-4-18-raw.json",
+  "source_basis": {
+    "document": "AUTOSAR_CP_SWS_OS.pdf R24-11",
+    "sha256": "6ec1915808e8819c6552bcc69fe935d8664f7bf0b8f9eb55810377e79ff8ae44",
+    "pages": [
+      152,
+      153,
+      154,
+      155,
+      156,
+      157,
+      158,
+      159,
+      160,
+      161
+    ],
+    "role": "public type definitions only, not conditional runtime implementation"
+  },
+  "manual_review": {
+    "range": "ApplicationType fixed uint32; valid application IDs are absent in selected no-OS-Application configuration, INVALID remains outside them. CoreId uint16 covers logical range; selected master is0. Spinlock and Area types represent prescribed65535/65534 bounds; no multicore/spinlock/peripheral service claim.",
+    "pointers": "Task/ApplicationState references point to their declared public types; MemoryStartAddress and TrustedFunctionParameter references are void pointers; MemorySize is host size_t.",
+    "macros": "Memory-access predicates evaluate the argument once. Win32 ApplicationType enum is renamed only during the owned native-header import; Windows COM enum/tag/ABI and standard Os.h public typedef remain distinct. Win32-before and Win32-after consumers both compiled and ran.",
+    "MISRA": "C99 strict compiler and focused declaration/width/pointer/preprocessor review only; no full221 normative check or Required deviation approval claimed."
+  }
+}
