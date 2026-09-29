@@ -68,7 +68,7 @@ development_status:
   4-10-从标准输入建立唯一校验集成计划: done
   4-11-由-swc-描述生成组件接口与同步服务类型: done
   4-12-接入标准输入的安全编辑-保存与重开: done
-  4-13-从唯一计划生成可链接-ecu-集成工程: backlog
+  4-13-从唯一计划生成可链接-ecu-集成工程: done
   4-14-通过-hostbatchv1-运行并闭合输出确认: backlog
   4-15-运行同一应用实例的-s-r-快照和同步-did: backlog
   4-16-独立验证边界-诊断恢复与旧目标回归: backlog

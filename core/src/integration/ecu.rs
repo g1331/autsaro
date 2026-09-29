@@ -1,0 +1,332 @@
+use super::component::c_name;
+use super::{DiagnosticCategory, PlanDiagnostic, ValidatedIntegrationPlan, bsw_sources, offline};
+use crate::{GenerationPreview, GenerationReport, generator};
+use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
+use std::fmt::Write;
+use std::path::Path;
+
+/// A complete deterministic source project from the same validated plan.
+/// No unchecked constructor or caller-supplied source replacements exist.
+pub struct EcuIntegrationFiles {
+    files: Vec<(String, Vec<u8>)>,
+}
+impl EcuIntegrationFiles {
+    pub fn files(&self) -> &[(String, Vec<u8>)] {
+        &self.files
+    }
+    pub fn preview(&self, output: &Path) -> Result<GenerationPreview, String> {
+        generator::preview_prepared(&self.files, output)
+    }
+    pub fn generate_previewed(
+        &self,
+        output: &Path,
+        revision: &str,
+    ) -> Result<GenerationReport, String> {
+        generator::generate_prepared(self.files.clone(), output, Some(revision))
+    }
+}
+
+fn reject(message: impl Into<String>) -> Vec<PlanDiagnostic> {
+    vec![PlanDiagnostic {
+        category: DiagnosticCategory::Tool,
+        code: "ECU_SOURCE_CLOSURE".into(),
+        file: None,
+        object: None,
+        message: message.into(),
+        remedy: "Restore the matching compiled source/plan identities and resolve the located integration contract before generating.".into(),
+    }]
+}
+
+impl ValidatedIntegrationPlan {
+    pub fn ecu_integration_files(&self) -> Result<EcuIntegrationFiles, Vec<PlanDiagnostic>> {
+        let plan = self.description();
+        let contract = self.component_contract_files()?;
+        let mut files: BTreeMap<String, Vec<u8>> = bsw_sources::sources().into_iter().collect();
+        files.insert(
+            "bsw-origin/include/Os.h".into(),
+            include_bytes!("../../../runtime/include/Os.h").to_vec(),
+        );
+        let mut source_paths = BTreeMap::new();
+        for (path, expected) in &plan.runtime_sources {
+            let delivered = if path == "runtime/include/Os.h" {
+                "bsw-origin/include/Os.h"
+            } else {
+                path.trim_start_matches("runtime/")
+            };
+            let bytes = files
+                .get(delivered)
+                .ok_or_else(|| reject(format!("The plan source is not delivered: {path}")))?;
+            if format!("{:x}", Sha256::digest(bytes)) != *expected {
+                return Err(reject(format!("The plan/source identity differs: {path}")));
+            }
+            source_paths.insert(path, delivered.to_owned());
+        }
+        files.extend(offline::sources().map_err(reject)?);
+        for (name, bytes) in contract.files() {
+            if name.starts_with("include/") || name == "contract.json" {
+                if let Some(previous) = files.insert(name.clone(), bytes.clone()) {
+                    if previous != *bytes {
+                        return Err(reject(format!("A contract/runtime header differs: {name}")));
+                    }
+                }
+            }
+        }
+        for (name, bytes) in [
+            (
+                "include/Ecu_Target.h",
+                include_bytes!("../../../runtime/ecu/include/Ecu_Target.h").as_slice(),
+            ),
+            (
+                "src/Ecu_Target.c",
+                include_bytes!("../../../runtime/ecu/src/Ecu_Target.c").as_slice(),
+            ),
+            (
+                "src/Ecu_SchM.c",
+                include_bytes!("../../../runtime/ecu/src/Ecu_SchM.c").as_slice(),
+            ),
+            (
+                "build.ps1",
+                include_bytes!("../../../runtime/ecu/build.ps1").as_slice(),
+            ),
+            (
+                "src/ecu_probe.c",
+                include_bytes!("../../../runtime/ecu/src/ecu_probe.c").as_slice(),
+            ),
+        ] {
+            if files.insert(name.into(), bytes.to_vec()).is_some() {
+                return Err(reject(format!("An ECU source owner collides: {name}")));
+            }
+        }
+        let component = &plan.component;
+        let app_header = format!(
+            "Rte_{}.h",
+            c_name(component.component.rsplit('/').next().unwrap())
+        );
+        let client_header = format!(
+            "Rte_{}.h",
+            c_name(
+                component
+                    .service
+                    .client_instance
+                    .rsplit('/')
+                    .next()
+                    .unwrap()
+            )
+        );
+        let rx = plan.signals.iter().find(|signal| signal.receive).unwrap();
+        let tx = plan.signals.iter().find(|signal| !signal.receive).unwrap();
+        let signal_id = |path: &str| {
+            plan.handles
+                .iter()
+                .find(|handle| handle.domain == "com_signal" && handle.path == path)
+                .unwrap()
+                .handle
+        };
+        let rx_id = signal_id(&rx.com_signal);
+        let tx_id = signal_id(&tx.com_signal);
+        let app = plan
+            .schedule
+            .entities
+            .iter()
+            .find(|entity| entity.application)
+            .unwrap();
+        let work = plan
+            .schedule
+            .entities
+            .iter()
+            .find(|entity| entity.period_ms == 1)
+            .unwrap();
+        let mask = |path: &str| {
+            plan.events
+                .iter()
+                .find(|event| event.path == path)
+                .unwrap()
+                .mask
+        };
+        let io = plan
+            .events
+            .iter()
+            .find(|event| event.path != app.os_event && event.path != work.os_event)
+            .ok_or_else(|| reject("No distinct owner IO event exists."))?;
+        let header = format!(
+            "/** @file Generated checked target constants and OS configuration. */\n#ifndef ECU_TARGET_CONFIG_H\n#define ECU_TARGET_CONFIG_H\n#include \"Os_Target.h\"\n#include \"{app_header}\"\n#define ECU_TARGET_TASK 0u\n#define ECU_TARGET_EVENT_WORK {}u\n#define ECU_TARGET_EVENT_APP {}u\n#define ECU_TARGET_EVENT_IO {}u\n#define ECU_TARGET_RX_CAN_ID {}u\n#define ECU_TARGET_RX_DEADLINE_MS {}u\n#define ECU_TARGET_TX_CANIF_PDU {}u\n#define ECU_TARGET_DIAG_TX_CANIF_PDU {}u\n#define ECU_TARGET_DCM_P2_MS {}u\n#define ECU_TARGET_DCM_P2_STAR_MS {}u\n#define ECU_TARGET_DCM_BUFFER_BYTES {}u\n#define ECU_TARGET_RUN_APPLICATION() {}()\n#define ECU_TARGET_TRANSMIT() Com_TriggerTransmit(1u)\nextern const Os_TargetConfig Ecu_OsConfig;\nvoid Ecu_ApplicationInitialize(void);\nStd_ReturnType Ecu_TargetReadDid(uint8_t *data);\n#ifdef ECU_TARGET_TESTS\nint Ecu_TargetTestFailStage(unsigned stage);\nvoid Ecu_TargetTestShutdown(StatusType reason);\n#endif\n#endif\n",
+            mask(&work.os_event),
+            mask(&app.os_event),
+            io.mask,
+            rx.can_id,
+            rx.deadline_ms.unwrap(),
+            tx.can_if_handle,
+            plan.diagnostic.response_can_if_handle,
+            plan.diagnostic.p2_ms,
+            plan.diagnostic.p2_star_ms,
+            plan.diagnostic.buffer_bytes,
+            component.periodic_symbol,
+        );
+        if plan
+            .schedule
+            .entities
+            .iter()
+            .filter(|entity| entity.period_ms == 1)
+            .any(|entity| entity.alarm != work.alarm || entity.os_event != work.os_event)
+        {
+            return Err(reject(
+                "The fixed owner work cycle does not have one alarm/event.",
+            ));
+        }
+        files.insert(
+            "include/Ecu_TargetConfig.h".into(),
+            header.as_bytes().to_vec(),
+        );
+        let mut groups = BTreeMap::new();
+        for entity in &plan.schedule.entities {
+            groups.insert(
+                entity.alarm.clone(),
+                (entity.period_ms, mask(&entity.os_event)),
+            );
+        }
+        let mut alarms = String::new();
+        for (id, (_, (period, event))) in groups.iter().enumerate() {
+            writeln!(alarms, "    {{{id}u, 0u, OS_ALARM_EVENT, 0u, {event}u, NULL, 1u, 0u, {period}u, {period}u}},").unwrap();
+        }
+        let read = component.data_ports.iter().find(|port| port.read).unwrap();
+        let write = component.data_ports.iter().find(|port| !port.read).unwrap();
+        let mut config = include_str!("../../../runtime/ecu/templates/Ecu_Config.c.in").to_owned();
+        for (key, value) in [
+            (
+                "TASK_NAME",
+                serde_json::to_string(plan.schedule.task.rsplit('/').next().unwrap()).unwrap(),
+            ),
+            ("TASK_PRIORITY", plan.schedule.task_priority.to_string()),
+            ("COUNTER_MAX", plan.schedule.counter_maximum.to_string()),
+            ("ALARMS", alarms.trim_end().to_owned()),
+            ("RX_CAN_ID", rx.can_id.to_string()),
+            ("TX_CAN_ID", tx.can_id.to_string()),
+            ("RX_DEADLINE", rx.deadline_ms.unwrap().to_string()),
+            ("APP_PERIOD", component.period_ms.to_string()),
+            ("RX_ID", rx_id.to_string()),
+            ("TX_ID", tx_id.to_string()),
+            ("RX_INITIAL", read.initial_value.to_string()),
+            ("TX_INITIAL", write.initial_value.to_string()),
+            ("DIAG_RX_CAN_ID", plan.diagnostic.request_can_id.to_string()),
+            (
+                "DIAG_TX_CAN_ID",
+                plan.diagnostic.response_can_id.to_string(),
+            ),
+            ("S3", plan.diagnostic.s3_ms.to_string()),
+            ("NAS", plan.diagnostic.n_as_ms.to_string()),
+            ("NBS", plan.diagnostic.n_bs_ms.to_string()),
+            ("NCR", plan.diagnostic.n_cr_ms.to_string()),
+            ("DID", plan.diagnostic.did.to_string()),
+            (
+                "DIAG_TX_HANDLE",
+                plan.diagnostic.response_can_if_handle.to_string(),
+            ),
+            (
+                "ECU_NAME",
+                serde_json::to_string(component.ecu.rsplit('/').next().unwrap()).unwrap(),
+            ),
+        ] {
+            config = config.replace(&format!("@{key}@"), &value);
+        }
+        if config.contains('@') {
+            return Err(reject(
+                "The generated configuration has an unresolved placeholder.",
+            ));
+        }
+        files.insert("src/Ecu_Config.c".into(), config.into_bytes());
+        let com = files.get_mut("include/Com.h").unwrap();
+        let mut text = String::from_utf8(com.clone()).map_err(|error| reject(error.to_string()))?;
+        let original_com = com.clone();
+        let end = text.rfind("#endif").unwrap();
+        text.insert_str(end, "typedef uint16_t Com_SignalIdType;\n#define COM_SERVICE_NOT_AVAILABLE 0x80u\nStd_ReturnType Com_SendSignal(Com_SignalIdType SignalId, const void *SignalDataPtr);\nStd_ReturnType Com_ReceiveSignal(Com_SignalIdType SignalId, void *SignalDataPtr);\n");
+        *com = text.into_bytes();
+        files.insert("bsw-origin/include/Com.h".into(), original_com);
+        if let Some((_, delivered)) = source_paths
+            .iter_mut()
+            .find(|(path, _)| path.as_str() == "runtime/include/Com.h")
+        {
+            *delivered = "bsw-origin/include/Com.h".into();
+        }
+        let datatype = c_name(component.service.array_type.rsplit('/').next().unwrap());
+        let call = format!(
+            "Rte_Call_{}_{}",
+            c_name(component.service.client_port.rsplit('/').next().unwrap()),
+            c_name(&component.service.operation_name)
+        );
+        let substitutions = [
+            ("APP_HEADER", app_header),
+            ("CLIENT_HEADER", client_header),
+            ("RX_ID", rx_id.to_string()),
+            ("TX_ID", tx_id.to_string()),
+            ("RX_INITIAL", read.initial_value.to_string()),
+            ("TX_INITIAL", write.initial_value.to_string()),
+            ("READ_API", read.api_symbol.clone()),
+            ("WRITE_API", write.api_symbol.clone()),
+            ("CALL_API", call),
+            ("SERVER_API", component.service.runnable_symbol.clone()),
+            ("CLIENT_API", component.service.client_symbol.clone()),
+            ("PERIODIC_API", component.periodic_symbol.clone()),
+            ("DATATYPE", datatype),
+        ];
+        for (name, template) in [
+            (
+                "src/Rte.c",
+                include_str!("../../../runtime/ecu/templates/Rte.c.in"),
+            ),
+            (
+                "src/Application.c",
+                include_str!("../../../runtime/ecu/templates/Application.c.in"),
+            ),
+        ] {
+            let mut source = template.to_owned();
+            for (placeholder, value) in &substitutions {
+                source = source.replace(&format!("@{placeholder}@"), value);
+            }
+            if source.contains('@') {
+                return Err(reject(
+                    "A generated C template contains an unresolved placeholder.",
+                ));
+            }
+            files.insert(name.into(), source.into_bytes());
+        }
+        for source in self.sources() {
+            files.insert(
+                format!("inputs/{}", source.logical_path()),
+                source.bytes().to_vec(),
+            );
+        }
+        let mut metadata = serde_json::to_vec_pretty(&serde_json::json!({
+            "format": "autosar-ecu-integration-v1", "plan": plan,
+            "originalBswSources": source_paths,
+            "privateBswMappings": {
+                "task": { "path": plan.schedule.task, "id": 0 },
+                "counter": { "path": plan.schedule.counter, "id": 0 },
+                "receiveFrame": { "comSignal": rx.com_signal, "index": 0, "canIfHandle": rx.can_if_handle },
+                "transmitFrame": { "comSignal": tx.com_signal, "index": 1, "canIfHandle": tx.can_if_handle },
+                "diagnosticTransmit": { "canIfHandle": plan.diagnostic.response_can_if_handle },
+            },
+            "target": "Windows x64 GCC 16.1.0 controlled_logical_ms",
+            "owner": "one generated AUTOSTART extended Task_Ecu; StartupHook owns initialization",
+            "time": "uint64 epoch, independent software Counter, uint32 FreeRTOS tick",
+            "schm": "single BSW owner checks; native input/output and OS retain atomic protocols",
+            "applicationAcceptance": "real generated reference application; complete behavior evidence belongs to stories4.15/4.16",
+            "hostBatchAcceptance": "story4.14; ecu_probe is a startup/control probe",
+        })).map_err(|error| reject(error.to_string()))?;
+        metadata.push(b'\n');
+        files.insert("integration.json".into(), metadata);
+        files.insert(
+            "toolchain.json".into(),
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "identity": "gcc.exe (Rev5, Built by MSYS2 project) 16.1.0",
+                "target": "x86_64-w64-mingw32",
+                "sha256": "d38d4dd6bea387499487881383e644ab7c193ac8f8364dc4252d6e6cc09700e2",
+            }))
+            .unwrap(),
+        );
+        files.insert("README.md".into(), b"# ECU integration source project\n\nThis generated Windows x64 project consumes one validated standard input plan. The actual single Task_Ecu, generated RTE/reference application, BSW target variants, static OS configuration and fixed FreeRTOS sources are included. The original kernel and seven product patches are retained; build.ps1 applies the patches only to its separate build copy. MIT notices remain in kernel/LICENSE.md. Product source is included for authorized internal use, without a new public license grant. AUTOSAR XSD/MOD/PDF files and compiler binaries are external and are not redistributed.\n\nRun PowerShell build.ps1 -OutputDirectory <new-empty-directory> with Git and the pinned GCC 16.1.0 x64 toolchain on PATH. The script checks source manifests, compiler identity and native TLS, and builds a bounded startup probe. Source trees stay unchanged. An optional -ControlSource <external-consumer.c> links an independent native consumer instead of the bundled probe; it supplies main only and consumes the same delivered public headers and runtime. Generation itself requires this fixed compiler and Git for a complete compile/link preflight before installing any destination. Run the resulting ecu_probe.exe; it drives individual controlled ticks and consumes/confirms actual outputs outside the automotive task. HostBatchV1 is the subsequent story4.14 entry. Complete application/network/SC1/handoff evidence is separate; a successful build/probe is not those acceptance decisions.\n".to_vec());
+        let files = generator::seal_files(files.into_iter().collect());
+        super::link_check::verify(&files).map_err(reject)?;
+        Ok(EcuIntegrationFiles { files })
+    }
+}

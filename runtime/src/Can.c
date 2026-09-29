@@ -2,6 +2,9 @@
 #include "Can_HostLock.h"
 #include "CanIf.h"
 #include "SchM_Can.h"
+#ifdef ECU_TARGET_EPIC4
+#include "Ecu_Target.h"
+#endif
 #include <stddef.h>
 
 #define CAN_START_SEC_VAR_CLEARED_UNSPECIFIED
@@ -245,12 +248,18 @@ EcuStatus Can_HostFlush(void) {
         }
         tx_pending = 0u;
         tx_in_flight = 1u;
+#ifdef ECU_TARGET_EPIC4
+        result = Ecu_TargetEnqueueTransmit(tx_handle, id, length, payload);
+#else
         result = tx_sink(id, length, payload);
+#endif
         tx_in_flight = 0u;
+#ifndef ECU_TARGET_EPIC4
         if (result == ECU_OK) {
             tx_confirmation_pending = 1u;
             Can_MainFunction_Write();
         }
+#endif
     }
     Can_Unlock();
     return result;

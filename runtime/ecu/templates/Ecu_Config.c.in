@@ -1,0 +1,87 @@
+#include "Ecu_Target.h"
+#include "Ecu_TargetConfig.h"
+#include "Ecu_Config.h"
+
+static const Os_TaskConfig tasks[] = {
+    {
+        .id = 0u,
+        .name = @TASK_NAME@,
+        .entry = Ecu_TargetTask,
+        .priority = @TASK_PRIORITY@u,
+        .autostart_modes = 1u,
+        .kind = OS_EXTENDED_TASK,
+        .activation_limit = 1u,
+        .schedule = OS_SCHEDULE_FULL,
+        .internal_resource = 0u,
+    },
+};
+static const Os_CounterConfig counters[] = {
+    {
+        .id = 0u,
+        .maximum = @COUNTER_MAX@u,
+        .ticks_per_base = 1u,
+        .minimum_cycle = 1u,
+        .software = 1u,
+    },
+};
+static const Os_AlarmConfig alarms[] = {
+@ALARMS@
+};
+static const Os_TimeConfig time_config = {
+    .counters = counters,
+    .counter_count = 1u,
+    .alarms = alarms,
+    .alarm_count = 2u,
+    .system_counter = 0u,
+    .owner = 0u,
+    .wake_event = ECU_TARGET_EVENT_WORK,
+    .error_hook = NULL,
+};
+const Os_TargetConfig Ecu_OsConfig = {
+    .tasks = tasks,
+    .task_count = 1u,
+    .host_stack_reserve = 262144u,
+    .resources = NULL,
+    .resource_count = 0u,
+    .internal_resources = NULL,
+    .internal_resource_count = 0u,
+    .category1_isrs = 0u,
+    .input_task = 0u,
+    .input_event = ECU_TARGET_EVENT_IO,
+    .time = &time_config,
+};
+static const EcuFrameConfig frames[] = {
+    {@RX_CAN_ID@u, 4u, 0u, 0u, 1u, 0u, @RX_DEADLINE@u},
+    {@TX_CAN_ID@u, 4u, 1u, 1u, 1u, @APP_PERIOD@u, 0u},
+};
+static const EcuSignalConfig signals[] = {
+    {@RX_ID@u, 0u, 32u, @RX_INITIAL@u},
+    {@TX_ID@u, 0u, 32u, @TX_INITIAL@u},
+};
+static const EcuDidReadFunction readers[] = {Ecu_TargetReadDid};
+static const uint16_t did_signals[] = {@TX_ID@u};
+static const EcuDiagnosticConfig diagnostic = {
+    .request_can_id = @DIAG_RX_CAN_ID@u,
+    .response_can_id = @DIAG_TX_CAN_ID@u,
+    .s3_ms = @S3@u,
+    .n_as_ms = @NAS@u,
+    .n_bs_ms = @NBS@u,
+    .n_cr_ms = @NCR@u,
+    .did = @DID@u,
+    .did_signal_ids = did_signals,
+    .did_signal_count = 1u,
+    .dtc = NULL,
+    .did_readers = readers,
+    .did_writers = NULL,
+    .reset_routine = NULL,
+    .security_enabled = 0u,
+    .tx_pdu_id = @DIAG_TX_HANDLE@u,
+};
+const EcuConfig Ecu_Config = {
+    .name = @ECU_NAME@,
+    .frames = frames,
+    .frame_count = 2u,
+    .signals = signals,
+    .signal_count = 2u,
+    .diagnostic = &diagnostic,
+};

@@ -1,0 +1,253 @@
+use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
+
+pub(super) fn sources() -> Result<Vec<(String, Vec<u8>)>, String> {
+    let sources: &[(&str, &[u8])] = &[
+        (
+            "os/FreeRTOSConfig.h",
+            include_bytes!("../../../runtime/os/FreeRTOSConfig.h"),
+        ),
+        (
+            "os/include/Os.h",
+            include_bytes!("../../../runtime/os/include/Os.h"),
+        ),
+        (
+            "os/include/Os_Mailbox.h",
+            include_bytes!("../../../runtime/os/include/Os_Mailbox.h"),
+        ),
+        (
+            "os/include/Os_Target.h",
+            include_bytes!("../../../runtime/os/include/Os_Target.h"),
+        ),
+        (
+            "os/include/Os_Time.h",
+            include_bytes!("../../../runtime/os/include/Os_Time.h"),
+        ),
+        (
+            "os/patches/0001-controlled-host-lifecycle.patch",
+            include_bytes!("../../../runtime/os/patches/0001-controlled-host-lifecycle.patch"),
+        ),
+        (
+            "os/patches/0002-native-stack.patch",
+            include_bytes!("../../../runtime/os/patches/0002-native-stack.patch"),
+        ),
+        (
+            "os/patches/0003-activation-ready-policy.patch",
+            include_bytes!("../../../runtime/os/patches/0003-activation-ready-policy.patch"),
+        ),
+        (
+            "os/patches/0004-windows-event-namespace.patch",
+            include_bytes!("../../../runtime/os/patches/0004-windows-event-namespace.patch"),
+        ),
+        (
+            "os/patches/0005-category2-resource-gate.patch",
+            include_bytes!("../../../runtime/os/patches/0005-category2-resource-gate.patch"),
+        ),
+        (
+            "os/patches/0006-input-handler-ownership.patch",
+            include_bytes!("../../../runtime/os/patches/0006-input-handler-ownership.patch"),
+        ),
+        (
+            "os/patches/0007-controlled-tick.patch",
+            include_bytes!("../../../runtime/os/patches/0007-controlled-tick.patch"),
+        ),
+        (
+            "os/README.md",
+            include_bytes!("../../../runtime/os/README.md"),
+        ),
+        (
+            "os/src/Os.c",
+            include_bytes!("../../../runtime/os/src/Os.c"),
+        ),
+        (
+            "os/src/Os_Backend.c",
+            include_bytes!("../../../runtime/os/src/Os_Backend.c"),
+        ),
+        (
+            "os/src/Os_Backend.h",
+            include_bytes!("../../../runtime/os/src/Os_Backend.h"),
+        ),
+        (
+            "os/src/Os_HostEvent.c",
+            include_bytes!("../../../runtime/os/src/Os_HostEvent.c"),
+        ),
+        (
+            "os/src/Os_Mailbox.c",
+            include_bytes!("../../../runtime/os/src/Os_Mailbox.c"),
+        ),
+        (
+            "os/src/Os_Stack.c",
+            include_bytes!("../../../runtime/os/src/Os_Stack.c"),
+        ),
+        (
+            "os/src/Os_Stack.h",
+            include_bytes!("../../../runtime/os/src/Os_Stack.h"),
+        ),
+        (
+            "os/src/Os_Time.c",
+            include_bytes!("../../../runtime/os/src/Os_Time.c"),
+        ),
+        (
+            "os/src/Os_Windows.h",
+            include_bytes!("../../../runtime/os/src/Os_Windows.h"),
+        ),
+        (
+            "kernel/include/atomic.h",
+            include_bytes!("../../../third_party/freertos/include/atomic.h"),
+        ),
+        (
+            "kernel/include/croutine.h",
+            include_bytes!("../../../third_party/freertos/include/croutine.h"),
+        ),
+        (
+            "kernel/include/deprecated_definitions.h",
+            include_bytes!("../../../third_party/freertos/include/deprecated_definitions.h"),
+        ),
+        (
+            "kernel/include/event_groups.h",
+            include_bytes!("../../../third_party/freertos/include/event_groups.h"),
+        ),
+        (
+            "kernel/include/FreeRTOS.h",
+            include_bytes!("../../../third_party/freertos/include/FreeRTOS.h"),
+        ),
+        (
+            "kernel/include/list.h",
+            include_bytes!("../../../third_party/freertos/include/list.h"),
+        ),
+        (
+            "kernel/include/message_buffer.h",
+            include_bytes!("../../../third_party/freertos/include/message_buffer.h"),
+        ),
+        (
+            "kernel/include/mpu_prototypes.h",
+            include_bytes!("../../../third_party/freertos/include/mpu_prototypes.h"),
+        ),
+        (
+            "kernel/include/mpu_syscall_numbers.h",
+            include_bytes!("../../../third_party/freertos/include/mpu_syscall_numbers.h"),
+        ),
+        (
+            "kernel/include/mpu_wrappers.h",
+            include_bytes!("../../../third_party/freertos/include/mpu_wrappers.h"),
+        ),
+        (
+            "kernel/include/newlib-freertos.h",
+            include_bytes!("../../../third_party/freertos/include/newlib-freertos.h"),
+        ),
+        (
+            "kernel/include/picolibc-freertos.h",
+            include_bytes!("../../../third_party/freertos/include/picolibc-freertos.h"),
+        ),
+        (
+            "kernel/include/portable.h",
+            include_bytes!("../../../third_party/freertos/include/portable.h"),
+        ),
+        (
+            "kernel/include/projdefs.h",
+            include_bytes!("../../../third_party/freertos/include/projdefs.h"),
+        ),
+        (
+            "kernel/include/queue.h",
+            include_bytes!("../../../third_party/freertos/include/queue.h"),
+        ),
+        (
+            "kernel/include/semphr.h",
+            include_bytes!("../../../third_party/freertos/include/semphr.h"),
+        ),
+        (
+            "kernel/include/stack_macros.h",
+            include_bytes!("../../../third_party/freertos/include/stack_macros.h"),
+        ),
+        (
+            "kernel/include/StackMacros.h",
+            include_bytes!("../../../third_party/freertos/include/StackMacros.h"),
+        ),
+        (
+            "kernel/include/stream_buffer.h",
+            include_bytes!("../../../third_party/freertos/include/stream_buffer.h"),
+        ),
+        (
+            "kernel/include/task.h",
+            include_bytes!("../../../third_party/freertos/include/task.h"),
+        ),
+        (
+            "kernel/include/timers.h",
+            include_bytes!("../../../third_party/freertos/include/timers.h"),
+        ),
+        (
+            "kernel/LICENSE.md",
+            include_bytes!("../../../third_party/freertos/LICENSE.md"),
+        ),
+        (
+            "kernel/list.c",
+            include_bytes!("../../../third_party/freertos/list.c"),
+        ),
+        (
+            "kernel/portable/MSVC-MingW/port.c",
+            include_bytes!("../../../third_party/freertos/portable/MSVC-MingW/port.c"),
+        ),
+        (
+            "kernel/portable/MSVC-MingW/portmacro.h",
+            include_bytes!("../../../third_party/freertos/portable/MSVC-MingW/portmacro.h"),
+        ),
+        (
+            "kernel/queue.c",
+            include_bytes!("../../../third_party/freertos/queue.c"),
+        ),
+        (
+            "kernel/source-manifest.json",
+            include_bytes!("../../../third_party/freertos/source-manifest.json"),
+        ),
+        (
+            "kernel/tasks.c",
+            include_bytes!("../../../third_party/freertos/tasks.c"),
+        ),
+    ];
+    let manifest: serde_json::Value = serde_json::from_slice(include_bytes!(
+        "../../../third_party/freertos/source-manifest.json"
+    ))
+    .map_err(|error| error.to_string())?;
+    if manifest["commit"] != "054e14f3397023aa83813a65aa065fc4597d481b"
+        || manifest["license"] != "MIT"
+    {
+        return Err("The embedded OS kernel identity or license is invalid.".into());
+    }
+    let identities: BTreeMap<&str, String> = sources
+        .iter()
+        .map(|(name, bytes)| (*name, format!("{:x}", Sha256::digest(bytes))))
+        .collect();
+    let files = manifest["files"]
+        .as_object()
+        .ok_or("The embedded kernel manifest has no source map.")?;
+    for (name, expected) in files {
+        if identities
+            .get(format!("kernel/{name}").as_str())
+            .map(String::as_str)
+            != expected.as_str()
+        {
+            return Err(format!(
+                "The embedded kernel source differs from its pinned identity: {name}"
+            ));
+        }
+    }
+    // Upstream's deprecated StackMacros.h and active stack_macros.h are
+    // distinct files. Preserve both original byte streams without relying on
+    // case-sensitive destination directories on the supported Windows host.
+    let mut output: Vec<_> = sources
+        .iter()
+        .map(|(name, bytes)| {
+            let delivered = if *name == "kernel/include/StackMacros.h" {
+                "kernel-compat/include/StackMacros.h"
+            } else {
+                name
+            };
+            (delivered.to_string(), bytes.to_vec())
+        })
+        .collect();
+    output.push((
+        "kernel-path-map.json".into(),
+        br#"{"format":"original-kernel-path-map-v1","relocated":{"include/StackMacros.h":"kernel-compat/include/StackMacros.h"},"reason":"Preserve deprecated case alias separately on Windows; tasks.c includes the unmodified active stack_macros.h."}"#.to_vec(),
+    ));
+    Ok(output)
+}

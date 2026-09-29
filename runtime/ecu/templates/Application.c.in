@@ -1,0 +1,33 @@
+#include "Ecu_Target.h"
+#include "Ecu_TargetConfig.h"
+#include "@APP_HEADER@"
+#include <stddef.h>
+
+/* Only the generated owner Task reads/writes this instance's committed value. */
+static uint32 snapshot;
+
+void Ecu_ApplicationInitialize(void) {
+    Ecu_TargetAssertOwner();
+    snapshot = @TX_INITIAL@u;
+}
+void @PERIODIC_API@(void) {
+    uint32 value;
+    Std_ReturnType status = @READ_API@(&value);
+    if (status != E_OK) {
+        value = @RX_INITIAL@u;
+    }
+    if (@WRITE_API@(value) != E_OK) {
+        ShutdownOS(E_OS_STATE);
+    }
+    snapshot = value;
+}
+Std_ReturnType @SERVER_API@(@DATATYPE@ Data) {
+    unsigned i;
+    if ((Ecu_TargetIsOwner() == 0) || (Data == NULL)) {
+        return E_NOT_OK;
+    }
+    for (i = 0u; i < 4u; ++i) {
+        Data[i] = (uint8)(snapshot >> ((3u - i) * 8u));
+    }
+    return E_OK;
+}

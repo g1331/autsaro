@@ -254,6 +254,23 @@ fn assemble(
     }
     let rx = signals.iter().find(|signal| signal.receive).unwrap();
     let tx = signals.iter().find(|signal| !signal.receive).unwrap();
+    if [
+        rx.can_if_handle,
+        tx.can_if_handle,
+        diagnostic.request_can_if_handle,
+        diagnostic.response_can_if_handle,
+    ]
+    .into_iter()
+    .any(|handle| handle > u16::from(u8::MAX))
+    {
+        return Err(vec![graph.diagnostic(
+            context,
+            DiagnosticCategory::Unsupported,
+            "CANIF_HANDLE_WIDTH",
+            "A selected CanIf PDU handle does not fit the target's declared UINT8 PduIdType.",
+            "Use handles between 0 and 255 in each CanIf direction domain; this target does not narrow wider handles.",
+        )]);
+    }
     if rx.can_if_handle == diagnostic.request_can_if_handle
         || tx.can_if_handle == diagnostic.response_can_if_handle
         || [

@@ -48,3 +48,13 @@ Agent 应把规范研究放进具体功能任务，不用一轮轮独立审计�
 点击“预览保存”查看受影响文件及保存前后原文，再确认保存；“重开来源”重新读取并检查磁盘输入。未修改文件保持原字节，外部编辑、失效预览及待恢复备份会阻止保存。输入已校验或已保存，都不表示运行工程已经生成。XSD/MOD 仍须在本机合法提供，不属于交付输入包。
 
 后台原生复验使用 `python scripts/epic4_desktop.py --binary <本次桌面构建路径> --evidence docs/assurance/evidence/epic4/standard-input-roundtrip.json`。该脚本创建独立 Windows Desktop，通过 `STARTUPINFO.lpDesktop` 指定子进程归属，核对实际窗口不在输入桌面，不调用 SwitchDesktop。WebView 使用私有数据目录，真实 UI 与原生 Rust IPC 完成编辑、预览、保存、重开及拒绝路径；测试进程由专属 job 关闭。原始截图和桌面句柄记录保留在忽略的 `.scratch/epic4/`，共享证据记录来源摘要与实际验证范围。
+
+## 独立 ECU 集成工程
+
+核心提供 `generate_epic4_ecu` 命令，消费同一个已验证标准计划。先运行 `cargo run --manifest-path core/Cargo.toml --bin generate_epic4_ecu -- --repository <匹配的仓库路径> --output <工程目录> --input <文件1.arxml> --input <文件2.arxml> ...`，读取 JSON 预览；再附加 `--write --revision <预览的完整revision>` 安装工程。每份原始输入分别传入 `--input`。过期预览、来源身份变化或输出目录含用户修改会拒绝安装，保留已有内容。
+
+生成前会使用交付的完整构建入口实际编译、链接，检查类型、宏及外部符号闭包。因此生成环境需要 Git 与已锁定的 Windows x64 MSYS2 GCC 16.1.0 Rev5；`AUTOSAR_CC` 可指定该编译器路径，具体版本、目标和二进制 SHA256 必须符合生成工程中的 `toolchain.json`。失败时诊断指出保留的临时来源及编译日志位置，不安装目标目录。
+
+工程包含原始输入、生成配置、RTE/应用、实际 BSW/OS 和固定 FreeRTOS 来源、七个补丁、来源映射及许可。移到其他目录后，运行工程内 `build.ps1 -OutputDirectory <新的独立构建目录>`，再运行输出的 `ecu_probe.exe` 验证启动与 20 个显式受控 tick。构建目录必须位于工程之外；构建只在该目录的内核副本应用补丁。`-ControlSource <工程外的控制消费者.c>` 可替换 probe 的 `main`，链接相同公共头和运行时，验证独立输入/输出；不会替换 BSW 或应用实现。
+
+该入口交付 Windows 主机工程。HostBatchV1、完整应用/通信向量及完整 SC1／交接仍须分别通过后续验收；编译和启动成功不能升级这些能力声明。官方 XSD、MOD、PDF、编译器及许可受限规范不随生成工程分发。

@@ -2,7 +2,12 @@
 #include "Can.h"
 #include "Can_HostLock.h"
 #include "LSduR.h"
+#ifdef ECU_TARGET_EPIC4
+#include "Ecu_Target.h"
+#include "Ecu_TargetConfig.h"
+#else
 #include "Os.h"
+#endif
 
 #define CANIF_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "CanIf_MemMap.h"
@@ -38,7 +43,12 @@ EcuStatus CanIf_Transmit(size_t frame_index, const uint8_t data[8]) {
         } else if (indicated_controller_mode != CAN_CS_STARTED) {
             result = ECU_ERR_CONTROLLER;
         } else {
+#ifdef ECU_TARGET_EPIC4
+            result =
+                Can_TransmitPdu((PduIdType)ECU_TARGET_TX_CANIF_PDU, frame->id, frame->dlc, data);
+#else
             result = Can_TransmitPdu((PduIdType)frame_index, frame->id, frame->dlc, data);
+#endif
         }
     }
     Can_Unlock();
@@ -52,7 +62,11 @@ EcuStatus CanIf_TransmitDiagnostic(uint8_t dlc, const uint8_t data[8]) {
         if (indicated_controller_mode != CAN_CS_STARTED) {
             result = ECU_ERR_CONTROLLER;
         } else {
+#ifdef ECU_TARGET_EPIC4
+            result = Can_TransmitPdu((PduIdType)ECU_TARGET_DIAG_TX_CANIF_PDU,
+#else
             result = Can_TransmitPdu((PduIdType)canif_config->frame_count,
+#endif
                                      canif_config->diagnostic->response_can_id, dlc, data);
         }
     }
@@ -63,6 +77,12 @@ EcuStatus CanIf_TransmitDiagnostic(uint8_t dlc, const uint8_t data[8]) {
 void CanIf_TxConfirmation(PduIdType can_tx_pdu_id) {
     Can_Lock();
     if (canif_config != NULL) {
+#ifdef ECU_TARGET_EPIC4
+        if ((can_tx_pdu_id == ECU_TARGET_TX_CANIF_PDU) ||
+            (can_tx_pdu_id == ECU_TARGET_DIAG_TX_CANIF_PDU)) {
+            LSduR_CanIfTxConfirmation(can_tx_pdu_id, E_OK);
+        }
+#else
         if (((size_t)can_tx_pdu_id < canif_config->frame_count) &&
             (canif_config->frames[can_tx_pdu_id].direction == 1u)) {
             LSduR_CanIfTxConfirmation(can_tx_pdu_id, E_OK);
@@ -72,6 +92,7 @@ void CanIf_TxConfirmation(PduIdType can_tx_pdu_id) {
         } else {
             /* No generated transmit PDU corresponds to this handle. */
         }
+#endif
     }
     Can_Unlock();
 }
@@ -129,7 +150,11 @@ void CanIf_RxIndication(const Can_HwType *mailbox, const PduInfoType *pdu_info) 
         } else if ((pdu_info->SduLength < 1u) || (pdu_info->SduLength > 8u)) {
             host_rx_result = ECU_ERR_FRAME_DLC;
         } else {
+#ifdef ECU_TARGET_EPIC4
+            uint64_t now_ms = (host_rx_time_active != 0u) ? host_rx_time_ms : Ecu_TargetNow();
+#else
             uint64_t now_ms = (host_rx_time_active != 0u) ? host_rx_time_ms : Os_Now();
+#endif
             host_rx_time_active = 0u;
             host_rx_result =
                 RouteRx(mailbox->CanId, (uint8_t)pdu_info->SduLength, pdu_info->SduDataPtr, now_ms);

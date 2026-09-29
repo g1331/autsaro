@@ -442,6 +442,27 @@ pub(super) fn inspect(
         }
     }
     entities.sort_by_key(|entity| entity.position);
+    let expected_order = [
+        "Can_MainFunction_Wakeup",
+        "CanTp_AdvanceTime",
+        "Com_AdvanceTime",
+        component.periodic_symbol.as_str(),
+        "Com_TriggerTransmit",
+        "Dcm_AdvanceTime",
+    ];
+    if entities
+        .iter()
+        .map(|entity| entity.symbol.as_str())
+        .collect::<Vec<_>>()
+        != expected_order
+    {
+        return Err(reject(
+            graph,
+            behavior,
+            "SCHEDULE_ORDER",
+            "Declared task positions do not match the target's required driver, transport, receive, application, transmit and diagnostic order.",
+        ));
+    }
     Ok(ScheduleContract {
         task: graph.elements[task].object.clone(),
         task_priority: priority.unwrap(),

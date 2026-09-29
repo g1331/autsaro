@@ -19,6 +19,14 @@ mod epic4_contract;
 #[path = "support/epic4_roundtrip.rs"]
 mod epic4_roundtrip;
 
+#[path = "support/epic4_ecu.rs"]
+mod epic4_ecu;
+
+#[test]
+fn epic4_ecu_integration_generation() {
+    epic4_ecu::verify();
+}
+
 #[test]
 fn epic4_safe_input_roundtrip() {
     epic4_roundtrip::verify();

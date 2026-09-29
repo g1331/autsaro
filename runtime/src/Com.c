@@ -93,9 +93,11 @@ EcuStatus Com_TriggerTransmit(size_t frame_index) {
     }
     tx_confirmed[frame_index] = 0u;
     result = PduR_Transmit(frame_index, data);
+#ifndef ECU_TARGET_EPIC4
     if ((result == ECU_OK) && (tx_confirmed[frame_index] == 0u)) {
         result = ECU_ERR_IO;
     }
+#endif
     return result;
 }
 

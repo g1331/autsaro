@@ -4,6 +4,9 @@
 #include "Com.h"
 #include "Dcm.h"
 #include "LSduR.h"
+#ifdef ECU_TARGET_EPIC4
+#include "Ecu_TargetConfig.h"
+#endif
 
 static const EcuConfig *pdur_config;
 static uint8_t rx_data[ECU_DIAG_MAX_PAYLOAD];
@@ -29,6 +32,15 @@ EcuStatus PduR_Transmit(size_t frame_index, const uint8_t data[8]) {
 
 void PduR_CanIfTxConfirmation(PduIdType pdu_id, Std_ReturnType result) {
     if (pdur_config != NULL) {
+#ifdef ECU_TARGET_EPIC4
+        if (pdu_id == ECU_TARGET_TX_CANIF_PDU) {
+            Com_TxConfirmation(1u, result);
+        } else if ((pdu_id == ECU_TARGET_DIAG_TX_CANIF_PDU) && (pdur_config->diagnostic != NULL)) {
+            CanTp_TxConfirmation(pdur_config->diagnostic->tx_pdu_id, result);
+        } else {
+            /* The validated CanIf transmit domain has no such handle. */
+        }
+#else
         if ((size_t)pdu_id < pdur_config->frame_count) {
             Com_TxConfirmation(pdu_id, result);
         } else if (((size_t)pdu_id == pdur_config->frame_count) &&
@@ -37,6 +49,7 @@ void PduR_CanIfTxConfirmation(PduIdType pdu_id, Std_ReturnType result) {
         } else {
             /* No generated upper-layer route corresponds to this handle. */
         }
+#endif
     }
 }
 

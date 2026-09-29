@@ -21,7 +21,7 @@ typedef struct {
 } AlarmBaseType;
 typedef AlarmBaseType *AlarmBaseRefType;
 #define RES_SCHEDULER 7u
-#define E_OK 0u
+#define E_OK 0x00u
 #define E_OS_ACCESS 1u
 #define E_OS_CALLEVEL 2u
 #define E_OS_ID 3u

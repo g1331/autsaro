@@ -329,7 +329,11 @@ fn is_reparse_point(metadata: &fs::Metadata) -> bool {
     }
 }
 
-fn reserve_directory(parent: &Path, role: &str, output_name: &OsStr) -> Result<PathBuf, String> {
+pub(crate) fn reserve_directory(
+    parent: &Path,
+    role: &str,
+    output_name: &OsStr,
+) -> Result<PathBuf, String> {
     for suffix in 0u64.. {
         let candidate = parent.join(format!(
             ".autosar-config-{role}-{}-{suffix}",
@@ -368,10 +372,11 @@ fn check_entries(
         }
         let kind = metadata.file_type();
         if kind.is_dir() {
-            if name != "include"
-                && name != "src"
-                && !(name == "inputs" && names.iter().any(|item| item.starts_with("inputs/")))
-            {
+            // A directory is generated only when it is an ancestor of a
+            // declared file. This also covers nested kernel/OS/input trees;
+            // arbitrary owner directories, even empty ones, still refuse.
+            let prefix = format!("{name}/");
+            if !names.iter().any(|item| item.starts_with(&prefix)) {
                 return Err(format!("输出目录含用户目录，拒绝替换: {name}"));
             }
             check_entries(&path, root, names, allow_host_binary)?;

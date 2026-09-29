@@ -94,7 +94,12 @@ extern const EcuConfig Ecu_Config;
 /** @brief Maximum signal count accepted by the host runtime. */
 #define ECU_MAX_SIGNALS 64u
 /** @brief Maximum diagnostic payload size in bytes. */
+#ifdef ECU_TARGET_EPIC4
+#include "Ecu_TargetConfig.h"
+#define ECU_DIAG_MAX_PAYLOAD ECU_TARGET_DCM_BUFFER_BYTES
+#else
 #define ECU_DIAG_MAX_PAYLOAD 256u
+#endif
 /** @brief Maximum number of 32-bit signals in one DID. */
 #define ECU_DIAG_MAX_DID_SIGNALS 8u
 

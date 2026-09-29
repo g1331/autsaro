@@ -2,6 +2,9 @@
 #include "Dem.h"
 #include "PduR.h"
 #include "Security.h"
+#ifdef ECU_TARGET_EPIC4
+#include "Ecu_TargetConfig.h"
+#endif
 
 static const EcuDiagnosticConfig *dcm_config;
 static uint8_t active_session;
@@ -58,10 +61,17 @@ static EcuStatus HandleSessionControl(const uint8_t *request, size_t length, uin
         uint8_t response[6];
         response[0] = 0x50u;
         response[1] = request[1];
+#ifdef ECU_TARGET_EPIC4
+        response[2] = (uint8_t)(ECU_TARGET_DCM_P2_MS / 256u);
+        response[3] = (uint8_t)(ECU_TARGET_DCM_P2_MS % 256u);
+        response[4] = (uint8_t)((ECU_TARGET_DCM_P2_STAR_MS / 10u) / 256u);
+        response[5] = (uint8_t)((ECU_TARGET_DCM_P2_STAR_MS / 10u) % 256u);
+#else
         response[2] = 0x00u;
         response[3] = 0x32u; /* P2ServerMax: 50 ms */
         response[4] = 0x00u;
         response[5] = 0x32u; /* P2*ServerMax: 500 ms in 10 ms units */
+#endif
         pending_session = request[1];
         result = PduR_DcmTransmit(response, sizeof(response), now_ms);
         if (result != ECU_OK) {
@@ -136,7 +146,12 @@ static EcuStatus HandleReadData(const uint8_t *request, size_t length, uint64_t 
             if (did == 0xf186u) {
                 data_length = 1u;
                 supported = 1u;
-            } else if ((did == dcm_config->did) && (active_session == 0x03u)) {
+            } else if ((did == dcm_config->did) &&
+#ifdef ECU_TARGET_EPIC4
+                       ((active_session == 0x01u) || (active_session == 0x03u))) {
+#else
+                       (active_session == 0x03u)) {
+#endif
                 data_length = 4u * dcm_config->did_signal_count;
                 supported = 1u;
             } else {

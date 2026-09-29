@@ -3,14 +3,18 @@
 //! Construction is all-or-nothing. Input bytes and identities are retained;
 //! component contracts and ECU integration consume the same checked plan.
 
+mod bsw_sources;
 mod catalog;
 mod communication;
 mod component;
 mod configuration;
 mod contracts;
 mod diagnostic;
+mod ecu;
 pub(crate) mod editor;
 mod graph;
+mod link_check;
+mod offline;
 mod plan;
 mod routing;
 mod schedule;
@@ -21,6 +25,7 @@ pub use component::{ComponentContract, DataPort, ServicePort};
 pub use configuration::{ConfigurationRecord, EventAssignment};
 pub use contracts::ComponentContractFiles;
 pub use diagnostic::DiagnosticContract;
+pub use ecu::EcuIntegrationFiles;
 pub use editor::{IntegrationEdit, IntegrationInspection};
 pub use plan::{HandleAssignment, PlanDescription, ValidatedIntegrationPlan, build_plan};
 pub use routing::PduRoute;
