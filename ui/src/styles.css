@@ -151,6 +151,8 @@ h3 {
   margin-bottom: 20px;
 }
 .source-fields input,
+.source-fields textarea,
+.integration-view input,
 .form-fields input,
 .form-fields select,
 .path-picker input {
@@ -167,6 +169,8 @@ h3 {
   outline: none;
 }
 .source-fields input:focus,
+.source-fields textarea:focus,
+.integration-view input:focus,
 .form-fields input:focus,
 .form-fields select:focus,
 .path-picker input:focus {
@@ -1703,4 +1707,39 @@ button svg,
     left: 14px;
     right: 14px;
   }
+}
+
+.source-fields textarea {
+  height: auto;
+  padding: 10px 12px;
+  resize: vertical;
+  font-family: var(--mono, monospace);
+  line-height: 1.6;
+}
+.integration-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 24px;
+  margin: 18px 0;
+}
+.integration-fields .field {
+  display: grid;
+  gap: 8px;
+  color: var(--soft);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.integration-fields .field:last-child {
+  grid-column: 1 / -1;
+}
+.integration-view input {
+  max-width: 180px;
+  margin-top: 0;
+}
+.integration-view .section-actions {
+  flex-wrap: wrap;
+}
+.integration-diff pre {
+  max-height: 360px;
+  overflow: auto;
 }

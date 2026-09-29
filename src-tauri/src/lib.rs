@@ -1,3 +1,7 @@
+use autosar_config_core::integration::{
+    DiagnosticCategory, IntegrationEdit, IntegrationInspection, PlanDependencies, PlanDiagnostic,
+    RuntimeCatalog,
+};
 use autosar_config_core::{
     BuildReport, DiagnosticSettings, Direction, GenerationPreview, GenerationReport, RunReport,
     SavePreview, Workspace, WorkspaceView, schema,
@@ -27,6 +31,97 @@ fn with_workspace<T>(
     operation(guard.as_mut().ok_or("请先创建或导入 ARXML 项目")?)
 }
 
+fn integration_failure(message: impl Into<String>) -> Vec<PlanDiagnostic> {
+    vec![PlanDiagnostic {
+        category: DiagnosticCategory::Tool,
+        code: "WORKSPACE_UNAVAILABLE".into(),
+        file: None,
+        object: None,
+        message: message.into(),
+        remedy:
+            "Import the standard ARXML input set and resolve the workspace error before continuing."
+                .into(),
+    }]
+}
+
+fn with_integration<T>(
+    state: &AppState,
+    operation: impl FnOnce(&mut Workspace, &RuntimeCatalog, PathBuf) -> Result<T, Vec<PlanDiagnostic>>,
+) -> Result<T, Vec<PlanDiagnostic>> {
+    let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let runtime = RuntimeCatalog::from_repository(&repo)?;
+    let dependencies = PlanDependencies::from_repository(&repo);
+    let mut guard = state
+        .workspace
+        .lock()
+        .map_err(|_| integration_failure("工作区状态锁损坏"))?;
+    operation(
+        guard
+            .as_mut()
+            .ok_or_else(|| integration_failure("请先导入标准 ARXML 输入"))?,
+        &runtime,
+        dependencies.mod_archive,
+    )
+}
+
+#[tauri::command]
+async fn inspect_integration(
+    state: State<'_, Arc<AppState>>,
+) -> Result<IntegrationInspection, Vec<PlanDiagnostic>> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        with_integration(&state, |workspace, runtime, archive| {
+            Ok(workspace.inspect_integration(runtime, archive))
+        })
+    })
+    .await
+    .map_err(|error| integration_failure(error.to_string()))?
+}
+
+#[tauri::command]
+async fn edit_integration(
+    state: State<'_, Arc<AppState>>,
+    changes: IntegrationEdit,
+) -> Result<IntegrationInspection, Vec<PlanDiagnostic>> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        with_integration(&state, |workspace, runtime, archive| {
+            workspace.edit_integration(runtime, archive, changes)
+        })
+    })
+    .await
+    .map_err(|error| integration_failure(error.to_string()))?
+}
+
+#[tauri::command]
+async fn preview_integration_save(
+    state: State<'_, Arc<AppState>>,
+) -> Result<SavePreview, Vec<PlanDiagnostic>> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        with_integration(&state, |workspace, runtime, archive| {
+            workspace.preview_integration_save(runtime, archive)
+        })
+    })
+    .await
+    .map_err(|error| integration_failure(error.to_string()))?
+}
+
+#[tauri::command]
+async fn save_integration(
+    state: State<'_, Arc<AppState>>,
+    revision: String,
+) -> Result<IntegrationInspection, Vec<PlanDiagnostic>> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        with_integration(&state, |workspace, runtime, archive| {
+            workspace.save_integration_previewed(runtime, archive, &revision)
+        })
+    })
+    .await
+    .map_err(|error| integration_failure(error.to_string()))?
+}
+
 #[tauri::command]
 fn create_project(
     state: State<'_, Arc<AppState>>,
@@ -37,6 +132,11 @@ fn create_project(
     let view = workspace.view();
     *state.workspace.lock().map_err(|_| "工作区状态锁损坏")? = Some(workspace);
     Ok(view)
+}
+
+#[tauri::command]
+fn workspace_view(state: State<'_, Arc<AppState>>) -> Result<WorkspaceView, String> {
+    with_workspace(&state, |workspace| Ok(workspace.view()))
 }
 
 #[tauri::command]
@@ -246,6 +346,11 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(Arc::new(AppState::default()))
         .invoke_handler(tauri::generate_handler![
+            workspace_view,
+            inspect_integration,
+            edit_integration,
+            preview_integration_save,
+            save_integration,
             create_project,
             open_project,
             open_handoff_project,

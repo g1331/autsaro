@@ -13,6 +13,8 @@ use std::fmt::Write;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+mod integration_editor;
+
 const NS: &str = "http://autosar.org/schema/r4.0";
 const XSI: &str = "http://www.w3.org/2001/XMLSchema-instance";
 
@@ -1506,6 +1508,16 @@ impl Workspace {
 
     pub fn view(&self) -> WorkspaceView {
         WorkspaceView {
+            integration_candidate: self.files.iter().any(|file| {
+                Document::parse(&file.text).ok().is_some_and(|document| {
+                    document.descendants().any(|node| {
+                        node.is_element()
+                            && node.tag_name().namespace() == Some(NS)
+                            && node.tag_name().name() == "SYSTEM"
+                            && child_text(node, "CATEGORY").as_deref() == Some("ECU_EXTRACT")
+                    })
+                })
+            }),
             name: self.name.clone(),
             files: self
                 .files
@@ -3460,6 +3472,10 @@ impl Workspace {
         }
         // Validation includes references across every imported file, including files this
         // edit leaves untouched. A stale untouched file would invalidate that result.
+        self.save_sources()
+    }
+
+    fn save_sources(&mut self) -> Result<WorkspaceView, String> {
         self.ensure_sources_current()?;
         let dirty = self
             .files

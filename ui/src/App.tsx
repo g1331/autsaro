@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
+import { IntegrationPanel } from './IntegrationPanel';
+import { requestConfirmation } from './confirmation';
 import {
   ArrowRight,
   Boxes,
@@ -81,7 +83,7 @@ type DiagnosticChanges = Pick<
 >;
 type DtcFields = { code: string; monitorFramePath: string };
 type Notice = { tone: 'error' | 'info'; text: string } | null;
-type Page = 'editor' | 'diagnostics' | 'build' | 'virtual';
+type Page = 'editor' | 'diagnostics' | 'build' | 'virtual' | 'integration';
 
 const native = isTauri();
 const steps: { key: Stage; label: string; number: string }[] = [
@@ -382,6 +384,8 @@ function issueTarget(issue: Issue, view: WorkspaceView): Selection | null {
 
 export default function App() {
   const [workspace, setWorkspace] = useState<WorkspaceView | null>(null);
+  const [integrationUnapplied, setIntegrationUnapplied] = useState(false);
+  const [integrationProcessing, setIntegrationProcessing] = useState(false);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [draft, setDraft] = useState<Draft>(null);
   const [diagnosticDraft, setDiagnosticDraft] = useState<DiagnosticFields>(() =>
@@ -395,6 +399,7 @@ export default function App() {
   const [projectName, setProjectName] = useState('');
   const [projectDirectory, setProjectDirectory] = useState('');
   const [importPaths, setImportPaths] = useState<string[]>([]);
+  const [importPathText, setImportPathText] = useState('');
   const [creating, setCreating] = useState<'frame' | 'signal' | null>(null);
   const [frameInput, setFrameInput] = useState<FrameFields>(newFrame);
   const [signalInput, setSignalInput] = useState<SignalFields>(newSignal);
@@ -440,7 +445,7 @@ export default function App() {
     workspace?.diagnostic &&
     JSON.stringify(dtcDraft) !== JSON.stringify(dtcFields(workspace.diagnostic.dtc)),
   );
-  const unapplied = frameUnapplied || diagnosticUnapplied || dtcUnapplied;
+  const unapplied = frameUnapplied || diagnosticUnapplied || dtcUnapplied || integrationUnapplied;
   const eligibleSignals =
     workspace?.signals.filter(
       (signal) =>
@@ -535,25 +540,43 @@ export default function App() {
         filters: [{ name: 'AUTOSAR ARXML', extensions: ['arxml'] }],
         title: '选择项目 ARXML 文件',
       });
-      if (paths) setImportPaths(Array.isArray(paths) ? paths : [paths]);
+      if (paths) {
+        const selected = Array.isArray(paths) ? paths : [paths];
+        setImportPaths(selected);
+        setImportPathText(selected.join('\n'));
+      }
     } catch (error) {
       setNotice({ tone: 'error', text: `选择文件失败：${errorText(error)}` });
     }
   }
-  function confirmDiscard(): boolean {
+  async function confirmAction(message: string): Promise<boolean> {
+    if (busy || integrationProcessing) return false;
+    setBusy('确认操作');
+    try {
+      return await requestConfirmation(message);
+    } catch (error) {
+      setNotice({ tone: 'error', text: `确认操作失败：${errorText(error)}` });
+      return false;
+    } finally {
+      setBusy(null);
+    }
+  }
+  async function confirmDiscard(): Promise<boolean> {
     return (
       (!workspace?.dirty && !unapplied) ||
-      window.confirm('当前配置或检查器有尚未保存的更改。切换项目会丢失这些更改，确定继续？')
+      (await confirmAction('当前配置或检查器有尚未保存的更改。切换项目会丢失这些更改，确定继续？'))
     );
   }
-  function choose(selectionNext: Selection) {
-    if (frameUnapplied && !window.confirm('检查器中有未应用的更改，确定放弃并切换对象？')) return;
+  async function choose(selectionNext: Selection) {
+    if (busy || integrationProcessing) return;
+    if (frameUnapplied && !(await confirmAction('检查器中有未应用的更改，确定放弃并切换对象？')))
+      return;
     setSelection(selectionNext);
     if (workspace) setDraft(draftFor(workspace, selectionNext));
     setCreating(null);
     setPage('editor');
   }
-  function openCreator(kind: 'frame' | 'signal') {
+  async function openCreator(kind: 'frame' | 'signal') {
     if (!native || busy || !workspace) return;
     if (diagnosticUnapplied) {
       setDiagnosticError('请先应用或还原 DoCAN 配置草稿，再添加帧或信号');
@@ -563,7 +586,8 @@ export default function App() {
       setDtcError('请先应用或还原故障记忆草稿，再添加帧或信号');
       return;
     }
-    if (frameUnapplied && !window.confirm('检查器中有未应用的更改，确定放弃并创建对象？')) return;
+    if (frameUnapplied && !(await confirmAction('检查器中有未应用的更改，确定放弃并创建对象？')))
+      return;
     if (workspace) setDraft(draftFor(workspace, selection));
     setCreating(kind);
     setNotice(null);
@@ -571,6 +595,8 @@ export default function App() {
     else setSignalInput(newSignal);
   }
   function applyProject(view: WorkspaceView) {
+    setIntegrationUnapplied(false);
+    setIntegrationProcessing(Boolean(view.integrationCandidate));
     setStages({ ...stageDefaults, save: importedSaveStage(view) });
     setGenerated(null);
     setBuilt(null);
@@ -578,13 +604,15 @@ export default function App() {
     setOperationIssues([]);
     setPeerDirectory('');
     setCreating(null);
-    setPage('editor');
+    setPage(view.integrationCandidate ? 'integration' : 'editor');
     acceptView(view, initialSelection(view));
     setDiagnosticError('');
   }
-  function startProject() {
-    if (!confirmDiscard()) return;
+  async function startProject() {
+    if (integrationProcessing) return;
+    if (!(await confirmDiscard())) return;
     setWorkspace(null);
+    setIntegrationUnapplied(false);
     setSelection(null);
     setDiagnosticDraft(diagnosticFields(null));
     setDiagnosticSignal('');
@@ -596,6 +624,7 @@ export default function App() {
     setProjectName('');
     setProjectDirectory('');
     setImportPaths([]);
+    setImportPathText('');
     setNotice(null);
   }
   function createProject() {
@@ -787,9 +816,9 @@ export default function App() {
       'dtc',
     );
   }
-  function clearDtc() {
+  async function clearDtc() {
     if (!workspace?.diagnostic?.dtc || unapplied) return;
-    if (!window.confirm('移除当前故障记忆配置？应用后仍需保存 ARXML 才会写入文件。')) return;
+    if (!(await confirmAction('移除当前故障记忆配置？应用后仍需保存 ARXML 才会写入文件。'))) return;
     void run(
       '移除故障记忆',
       () => invoke<WorkspaceView>('clear_dtc'),
@@ -800,9 +829,10 @@ export default function App() {
     );
   }
 
-  function clearDiagnostic() {
+  async function clearDiagnostic() {
     if (!workspace?.diagnostic || diagnosticUnapplied || dtcUnapplied || frameUnapplied) return;
-    if (!window.confirm('移除当前工程的诊断配置？应用后仍需保存 ARXML 才会写入文件。')) return;
+    if (!(await confirmAction('移除当前工程的诊断配置？应用后仍需保存 ARXML 才会写入文件。')))
+      return;
     void run(
       '移除 DoCAN',
       () => invoke<WorkspaceView>('clear_diagnostic'),
@@ -1159,6 +1189,27 @@ export default function App() {
                           <p>尚未选择文件</p>
                         )}
                       </div>
+                      <details>
+                        <summary>直接填写来源路径</summary>
+                        <label className="field">
+                          <span>每行一份 ARXML 的完整路径</span>
+                          <textarea
+                            aria-label="ARXML 来源路径"
+                            rows={7}
+                            value={importPathText}
+                            onChange={(event) => {
+                              setImportPathText(event.target.value);
+                              setImportPaths(
+                                event.target.value
+                                  .split(/\r?\n/)
+                                  .map((line) => line.trim())
+                                  .filter(Boolean),
+                              );
+                            }}
+                            disabled={disabled}
+                          />
+                        </label>
+                      </details>
                       <button
                         type="button"
                         className="primary-button"
@@ -1202,7 +1253,7 @@ export default function App() {
                 aria-label="切换项目"
                 title="切换项目"
                 onClick={startProject}
-                disabled={Boolean(busy)}
+                disabled={Boolean(busy) || integrationProcessing}
               >
                 <FolderOpen aria-hidden="true" size={16} />
               </button>
@@ -1210,8 +1261,24 @@ export default function App() {
             <nav className="project-nav" aria-label="项目工作页">
               <button
                 type="button"
+                className={page === 'integration' ? 'active' : ''}
+                aria-current={page === 'integration' ? 'page' : undefined}
+                onClick={() => {
+                  if (page !== 'integration') {
+                    setIntegrationProcessing(true);
+                    setPage('integration');
+                  }
+                }}
+                disabled={integrationProcessing}
+              >
+                <ListChecks aria-hidden="true" size={16} />
+                标准输入{workspace.dirty && <span className="nav-alert">未保存</span>}
+              </button>
+              <button
+                type="button"
                 className={page === 'editor' ? 'active' : ''}
                 aria-current={page === 'editor' ? 'page' : undefined}
+                disabled={Boolean(workspace.integrationCandidate) || integrationProcessing}
                 onClick={() => setPage('editor')}
               >
                 <Cable aria-hidden="true" size={16} />
@@ -1221,15 +1288,20 @@ export default function App() {
                 type="button"
                 className={page === 'diagnostics' ? 'active' : ''}
                 aria-current={page === 'diagnostics' ? 'page' : undefined}
+                disabled={Boolean(workspace.integrationCandidate) || integrationProcessing}
                 onClick={() => setPage('diagnostics')}
               >
                 <CircleAlert aria-hidden="true" size={16} />
-                诊断{issues.length > 0 && <span className="nav-count">{issues.length}</span>}
+                诊断
+                {!workspace.integrationCandidate && issues.length > 0 && (
+                  <span className="nav-count">{issues.length}</span>
+                )}
               </button>
               <button
                 type="button"
                 className={page === 'build' ? 'active' : ''}
                 aria-current={page === 'build' ? 'page' : undefined}
+                disabled={Boolean(workspace.integrationCandidate) || integrationProcessing}
                 onClick={() => setPage('build')}
               >
                 <HardDrive aria-hidden="true" size={16} />
@@ -1239,6 +1311,7 @@ export default function App() {
                 type="button"
                 className={page === 'virtual' ? 'active' : ''}
                 aria-current={page === 'virtual' ? 'page' : undefined}
+                disabled={Boolean(workspace.integrationCandidate) || integrationProcessing}
                 onClick={() => setPage('virtual')}
               >
                 <MonitorPlay aria-hidden="true" size={16} />
@@ -1337,6 +1410,20 @@ export default function App() {
                 className="main-pane"
                 aria-label={page === 'editor' ? '配置工作区' : '项目工作页'}
               >
+                {page === 'integration' && (
+                  <IntegrationPanel
+                    onDraftChange={setIntegrationUnapplied}
+                    onBusyChange={setIntegrationProcessing}
+                    locked={Boolean(busy)}
+                    key={workspace.files.map((file) => file.path).join('|')}
+                    workspace={workspace}
+                    native={native}
+                    onView={(view) => {
+                      acceptView(view);
+                      invalidateAfterEdit();
+                    }}
+                  />
+                )}
                 {page === 'editor' && (
                   <>
                     <div className="section-header">

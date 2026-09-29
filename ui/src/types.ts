@@ -48,6 +48,7 @@ export type DiagnosticView = {
 };
 
 export type WorkspaceView = {
+  integrationCandidate?: boolean;
   name: string;
   files: { path: string; readonly: boolean; retainedCount: number }[];
   frames: Frame[];
@@ -55,6 +56,26 @@ export type WorkspaceView = {
   diagnostic: DiagnosticView | null;
   issues: Issue[];
   dirty: boolean;
+};
+
+export type PlanDiagnostic = {
+  category: 'input' | 'unsupported' | 'dependency' | 'tool';
+  code: string;
+  file: string | null;
+  object: string | null;
+  message: string;
+  remedy: string;
+};
+
+export type IntegrationInspection = {
+  profile: string;
+  diagnostics: PlanDiagnostic[];
+  description: null | {
+    sources: { logicalPath: string; rawSha256: string; roles: string[] }[];
+    component: { component: string; instance: string; periodMs: number };
+    signals: { port: string; canId: number; receive: boolean; dlc: number }[];
+    diagnostic: { did: number; requestCanId: number; responseCanId: number };
+  };
 };
 
 export type SavePreview = {

@@ -1,0 +1,485 @@
+"""Verify native IPC on a separate, never switched Windows desktop.
+
+The child uses STARTUPINFO.lpDesktop and a private WebView2 data directory.
+No windows are created on the input desktop. All children belong to a
+kill-on-close job. CDP drives actual path-entry UI and the WebView; all
+application IPC reaches Rust without replacing the native transport.
+"""
+
+import argparse
+import ctypes
+from ctypes import wintypes as w
+import json
+import hashlib
+import os
+from pathlib import Path
+import shutil
+import socket
+import subprocess
+import time
+import urllib.request
+import uuid
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class Startup(ctypes.Structure):
+    _fields_ = [
+        ("cb", w.DWORD),
+        ("lpReserved", w.LPWSTR),
+        ("lpDesktop", w.LPWSTR),
+        ("lpTitle", w.LPWSTR),
+        ("dwX", w.DWORD),
+        ("dwY", w.DWORD),
+        ("dwXSize", w.DWORD),
+        ("dwYSize", w.DWORD),
+        ("dwXCountChars", w.DWORD),
+        ("dwYCountChars", w.DWORD),
+        ("dwFillAttribute", w.DWORD),
+        ("dwFlags", w.DWORD),
+        ("wShowWindow", w.WORD),
+        ("cbReserved2", w.WORD),
+        ("lpReserved2", ctypes.POINTER(w.BYTE)),
+        ("hStdInput", w.HANDLE),
+        ("hStdOutput", w.HANDLE),
+        ("hStdError", w.HANDLE),
+    ]
+
+
+class Process(ctypes.Structure):
+    _fields_ = [
+        ("process", w.HANDLE),
+        ("thread", w.HANDLE),
+        ("pid", w.DWORD),
+        ("tid", w.DWORD),
+    ]
+
+
+class Limits(ctypes.Structure):
+    _fields_ = [
+        ("process_time", ctypes.c_int64),
+        ("job_time", ctypes.c_int64),
+        ("flags", w.DWORD),
+        ("minimum", ctypes.c_size_t),
+        ("maximum", ctypes.c_size_t),
+        ("active", w.DWORD),
+        ("affinity", ctypes.c_size_t),
+        ("priority", w.DWORD),
+        ("scheduling", w.DWORD),
+    ]
+
+
+class ExtendedLimits(ctypes.Structure):
+    _fields_ = [
+        ("basic", Limits),
+        ("io", ctypes.c_uint64 * 6),
+        ("process_memory", ctypes.c_size_t),
+        ("job_memory", ctypes.c_size_t),
+        ("peak_process", ctypes.c_size_t),
+        ("peak_job", ctypes.c_size_t),
+    ]
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--binary", required=True, type=Path)
+    parser.add_argument("--evidence", type=Path)
+    args = parser.parse_args()
+    if os.name != "nt":
+        raise RuntimeError("Native desktop verification requires Windows")
+    binary = args.binary.resolve(strict=True)
+    scratch = ROOT / ".scratch" / "epic4" / f"desktop-{uuid.uuid4().hex}"
+    scratch.mkdir(parents=True)
+    inputs = scratch / "inputs"
+    shutil.copytree(ROOT / "core/tests/fixtures/epic4/positive", inputs)
+    paths = sorted(str(path) for path in inputs.glob("*.arxml"))
+    (scratch / "inputs.json").write_text(json.dumps(paths), encoding="utf-8")
+    user = ctypes.WinDLL("user32", use_last_error=True)
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    user.CreateDesktopW.argtypes = [
+        w.LPCWSTR,
+        w.LPCWSTR,
+        w.LPVOID,
+        w.DWORD,
+        w.DWORD,
+        w.LPVOID,
+    ]
+    user.CreateDesktopW.restype = w.HANDLE
+    user.OpenInputDesktop.argtypes = [w.DWORD, w.BOOL, w.DWORD]
+    user.OpenInputDesktop.restype = w.HANDLE
+    user.GetThreadDesktop.argtypes = [w.DWORD]
+    user.GetThreadDesktop.restype = w.HANDLE
+    window_callback = ctypes.WINFUNCTYPE(w.BOOL, w.HWND, w.LPARAM)
+    user.EnumDesktopWindows.argtypes = [w.HANDLE, window_callback, w.LPARAM]
+    user.GetWindowThreadProcessId.argtypes = [w.HWND, ctypes.POINTER(w.DWORD)]
+    user.GetProcessWindowStation.restype = w.HANDLE
+    user.GetUserObjectInformationW.argtypes = [
+        w.HANDLE,
+        ctypes.c_int,
+        w.LPVOID,
+        w.DWORD,
+        ctypes.POINTER(w.DWORD),
+    ]
+    user.CloseDesktop.argtypes = [w.HANDLE]
+    user.SetThreadDesktop.argtypes = [w.HANDLE]
+    user.GetWindowTextW.argtypes = [w.HWND, w.LPWSTR, ctypes.c_int]
+    user.GetClassNameW.argtypes = [w.HWND, w.LPWSTR, ctypes.c_int]
+    user.EnumChildWindows.argtypes = [w.HWND, window_callback, w.LPARAM]
+    user.GetDlgCtrlID.argtypes = [w.HWND]
+    user.SendMessageW.argtypes = [w.HWND, w.UINT, w.WPARAM, w.LPARAM]
+    user.SendMessageW.restype = w.LPARAM
+    kernel.GetCurrentThreadId.restype = w.DWORD
+    kernel.CreateJobObjectW.argtypes = [w.LPVOID, w.LPCWSTR]
+    kernel.CreateJobObjectW.restype = w.HANDLE
+    kernel.SetInformationJobObject.argtypes = [
+        w.HANDLE,
+        ctypes.c_int,
+        w.LPVOID,
+        w.DWORD,
+    ]
+    kernel.AssignProcessToJobObject.argtypes = [w.HANDLE, w.HANDLE]
+    kernel.CreateProcessW.argtypes = [
+        w.LPCWSTR,
+        w.LPWSTR,
+        w.LPVOID,
+        w.LPVOID,
+        w.BOOL,
+        w.DWORD,
+        w.LPVOID,
+        w.LPCWSTR,
+        ctypes.POINTER(Startup),
+        ctypes.POINTER(Process),
+    ]
+    kernel.ResumeThread.argtypes = [w.HANDLE]
+    kernel.TerminateProcess.argtypes = [w.HANDLE, w.UINT]
+    kernel.CloseHandle.argtypes = [w.HANDLE]
+    kernel.WaitForSingleObject.argtypes = [w.HANDLE, w.DWORD]
+
+    def checked(result):
+        if not result:
+            raise ctypes.WinError(ctypes.get_last_error())
+        return result
+
+    def name(handle):
+        buffer = ctypes.create_unicode_buffer(256)
+        needed = w.DWORD()
+        checked(
+            user.GetUserObjectInformationW(
+                handle, 2, buffer, ctypes.sizeof(buffer), ctypes.byref(needed)
+            )
+        )
+        return buffer.value
+
+    def windows(handle, pid):
+        found = []
+
+        @window_callback
+        def visit(window, _):
+            owner = w.DWORD()
+            thread = user.GetWindowThreadProcessId(window, ctypes.byref(owner))
+            if owner.value == pid:
+                found.append({"window": window, "thread": thread})
+            return True
+
+        checked(user.EnumDesktopWindows(handle, visit, 0))
+        return found
+
+    original_thread_desktop = checked(
+        user.GetThreadDesktop(kernel.GetCurrentThreadId())
+    )
+    original = checked(user.OpenInputDesktop(0, False, 1))
+    desktop_name = f"AutosarEpic4-{uuid.uuid4().hex}"
+    desktop = checked(user.CreateDesktopW(desktop_name, None, None, 0, 0x1FF, None))
+    job = checked(kernel.CreateJobObjectW(None, None))
+    processes = []
+    try:
+        limits = ExtendedLimits()
+        limits.basic.flags = 0x2000
+        checked(
+            kernel.SetInformationJobObject(
+                job, 9, ctypes.byref(limits), ctypes.sizeof(limits)
+            )
+        )
+        station = name(user.GetProcessWindowStation())
+        input_name = name(original)
+        if name(desktop) == input_name:
+            raise RuntimeError("Isolation desktop equals the input desktop")
+        checked(user.SetThreadDesktop(desktop))
+
+        def launch(command, environment):
+            startup = Startup()
+            startup.cb = ctypes.sizeof(startup)
+            startup.lpDesktop = f"{station}\\{desktop_name}"
+            process = Process()
+            block = ctypes.create_unicode_buffer(
+                "\0".join(
+                    f"{key}={value}"
+                    for key, value in sorted(
+                        environment.items(), key=lambda item: item[0].upper()
+                    )
+                )
+                + "\0\0"
+            )
+            command_line = ctypes.create_unicode_buffer(
+                subprocess.list2cmdline(command)
+            )
+            # Suspended + Unicode environment + no console window. Assign the
+            # job before any child can spawn, then verify actual desktop identity.
+            checked(
+                kernel.CreateProcessW(
+                    None,
+                    command_line,
+                    None,
+                    None,
+                    False,
+                    0x08000404,
+                    block,
+                    str(ROOT),
+                    ctypes.byref(startup),
+                    ctypes.byref(process),
+                )
+            )
+            processes.append(process)
+            if not kernel.AssignProcessToJobObject(job, process.process):
+                error = ctypes.get_last_error()
+                checked(kernel.TerminateProcess(process.process, 1))
+                raise ctypes.WinError(error)
+            if kernel.ResumeThread(process.thread) == 0xFFFFFFFF:
+                raise ctypes.WinError(ctypes.get_last_error())
+            return process
+
+        with socket.socket() as socket_handle:
+            socket_handle.bind(("127.0.0.1", 1420))
+        node = shutil.which("node")
+        if node is None:
+            raise RuntimeError("Node.js is required for the existing Vite/CDP test")
+        launch(
+            [
+                node,
+                str(ROOT / "ui/node_modules/vite/bin/vite.js"),
+                "--host",
+                "127.0.0.1",
+                "--port",
+                "1420",
+                "--strictPort",
+                "--config",
+                str(ROOT / "ui/vite.config.ts"),
+                str(ROOT / "ui"),
+            ],
+            os.environ.copy(),
+        )
+        with socket.socket() as socket_handle:
+            socket_handle.bind(("127.0.0.1", 0))
+            debug_port = socket_handle.getsockname()[1]
+        environment = os.environ.copy()
+        environment["WEBVIEW2_USER_DATA_FOLDER"] = str(scratch / "webview-profile")
+        environment["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = (
+            f"--remote-debugging-port={debug_port}"
+        )
+        deadline = time.monotonic() + 40
+        while True:
+            try:
+                with urllib.request.urlopen("http://127.0.0.1:1420", timeout=1):
+                    break
+            except OSError:
+                if time.monotonic() > deadline:
+                    raise RuntimeError("Isolated Vite process failed to become ready")
+                time.sleep(0.2)
+        app = launch([str(binary)], environment)
+        while True:
+            try:
+                with urllib.request.urlopen(
+                    f"http://127.0.0.1:{debug_port}/json/list", timeout=1
+                ) as response:
+                    pages = json.load(response)
+                target = next(page for page in pages if page.get("type") == "page")
+                break
+            except (OSError, StopIteration):
+                if time.monotonic() > deadline:
+                    raise RuntimeError("Isolated native WebView did not expose CDP")
+                time.sleep(0.2)
+        actual = name(desktop)
+        isolated_windows = windows(desktop, app.pid)
+        if not isolated_windows or windows(original, app.pid):
+            raise RuntimeError(
+                "Native app windows are not exclusively on the isolated desktop"
+            )
+        current = checked(user.OpenInputDesktop(0, False, 1))
+        try:
+            if name(current) != input_name:
+                raise RuntimeError("The input desktop changed during the isolated test")
+        finally:
+            user.CloseDesktop(current)
+        proof = {
+            "inputDesktop": input_name,
+            "applicationDesktop": actual,
+            "applicationWindows": isolated_windows,
+            "station": station,
+            "pid": app.pid,
+            "tid": app.tid,
+            "desktopSwitched": False,
+            "privateWebviewProfile": True,
+            "sourceSelection": "real UI path entry",
+            "applicationIPC": "native Rust",
+        }
+        (scratch / "isolation.json").write_text(
+            json.dumps(proof, indent=2), encoding="utf-8"
+        )
+        driver = subprocess.Popen(
+            [
+                node,
+                str(ROOT / "scripts/epic4_desktop_cdp.mjs"),
+                target["webSocketDebuggerUrl"],
+                str(scratch),
+            ],
+            cwd=ROOT,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+        canceled = 0
+        observed = {}
+        deadline = time.monotonic() + 150
+
+        def window_text(window, class_name=False):
+            buffer = ctypes.create_unicode_buffer(256)
+            method = user.GetClassNameW if class_name else user.GetWindowTextW
+            method(window, buffer, len(buffer))
+            return buffer.value
+
+        try:
+            while driver.poll() is None:
+                if time.monotonic() > deadline:
+                    raise RuntimeError(
+                        "Native UI driver exceeded its bounded verification time"
+                    )
+                for item in windows(desktop, app.pid):
+                    window = item["window"]
+                    if window_text(window, True) != "#32770":
+                        continue
+                    started = observed.setdefault(window, time.monotonic())
+                    # Let the renderer show its pending confirmation state.
+                    if time.monotonic() - started < 1:
+                        continue
+                    cancel_buttons = []
+
+                    @window_callback
+                    def child(child_window, _):
+                        if window_text(child_window, True) == "Button" and (
+                            user.GetDlgCtrlID(child_window) == 2
+                            or window_text(child_window) in ("取消", "Cancel")
+                        ):
+                            cancel_buttons.append(child_window)
+                        return True
+
+                    checked(user.EnumChildWindows(window, child, 0))
+                    if cancel_buttons:
+                        # Only an enumerated native dialog on our separate
+                        # desktop, owned by this test's Tauri PID, is addressed.
+                        user.SendMessageW(cancel_buttons[0], 0x00F5, 0, 0)
+                        canceled += 1
+                        observed[window] = time.monotonic() + 150
+                time.sleep(0.05)
+            if driver.returncode:
+                return driver.returncode
+            if canceled < 1:
+                raise RuntimeError(
+                    "The native discard confirmation was not actually canceled"
+                )
+        finally:
+            if driver.poll() is None:
+                driver.terminate()
+                driver.wait(timeout=5)
+        current = checked(user.OpenInputDesktop(0, False, 1))
+        try:
+            if name(current) != input_name:
+                raise RuntimeError("Input desktop changed by the test")
+        finally:
+            user.CloseDesktop(current)
+    finally:
+        cleanup_errors = []
+        if not user.SetThreadDesktop(original_thread_desktop):
+            cleanup_errors.append(
+                "Unable to restore the test controller's original desktop"
+            )
+        if not kernel.CloseHandle(job):
+            cleanup_errors.append("Unable to close the isolated process job")
+        for process in processes:
+            if kernel.WaitForSingleObject(process.process, 5000) != 0:
+                cleanup_errors.append(
+                    f"Process {process.pid} did not terminate after closing the job"
+                )
+            kernel.CloseHandle(process.thread)
+            kernel.CloseHandle(process.process)
+        if not user.CloseDesktop(desktop):
+            cleanup_errors.append("Unable to close the isolated desktop")
+        if not user.CloseDesktop(original):
+            cleanup_errors.append(
+                "Unable to close the input desktop observation handle"
+            )
+        if cleanup_errors:
+            raise RuntimeError("; ".join(cleanup_errors))
+    if args.evidence:
+        from epic4_os import write_shared_evidence
+
+        tracked_sources = [
+            "core/src/arxml.rs",
+            "core/src/arxml/integration_editor.rs",
+            "core/src/integration/editor.rs",
+            "core/src/integration/mod.rs",
+            "core/src/model.rs",
+            "src-tauri/src/lib.rs",
+            "ui/src/App.tsx",
+            "ui/src/IntegrationPanel.tsx",
+            "ui/src/confirmation.ts",
+            "ui/src/types.ts",
+            "ui/src/styles.css",
+            "scripts/epic4_desktop.py",
+            "scripts/epic4_desktop_cdp.mjs",
+        ]
+        record = {
+            "entry": "epic4_isolated_native_ipc",
+            "passed": True,
+            "scope": "W2 standard-input UI and actual native Rust IPC; no W3 ECU runtime claim",
+            "isolation": {
+                "mechanism": "CreateDesktopW + STARTUPINFO.lpDesktop",
+                "applicationWindowsOnSeparateDesktop": True,
+                "applicationWindowCount": len(isolated_windows),
+                "inputDesktopUnchanged": True,
+                "desktopSwitched": False,
+                "privateWebviewProfile": True,
+                "jobChildrenTerminated": True,
+                "desktopHandlesClosed": True,
+                "nativeDiscardDialogsCanceled": canceled,
+            },
+            "native": json.loads(
+                (scratch / "native-ipc.json").read_text(encoding="utf-8")
+            ),
+            "binarySha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
+            "sources": {
+                source: hashlib.sha256((ROOT / source).read_bytes()).hexdigest()
+                for source in tracked_sources
+            },
+            "screenshots": {
+                name: hashlib.sha256((scratch / name).read_bytes()).hexdigest()
+                for name in [
+                    "standard-input-plan.png",
+                    "standard-input-preview.png",
+                    "standard-input-rejection.png",
+                ]
+            },
+            "references": [
+                "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-createdesktopw",
+                "https://learn.microsoft.com/en-us/windows/win32/winstation/thread-connection-to-a-desktop",
+            ],
+        }
+        write_shared_evidence(args.evidence, record, scratch)
+        shared = json.loads(args.evidence.read_text(encoding="utf-8"))
+        shared["representation"] = (
+            "Workspace paths normalized; per-run desktop names, process/thread IDs and HWNDs remain only in the ignored isolation.json. Native flow and source hashes are unchanged."
+        )
+        args.evidence.write_text(json.dumps(shared, indent=2) + "\n", encoding="utf-8")
+    print(f"epic4_isolated_native_ipc PASS: {scratch}", flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

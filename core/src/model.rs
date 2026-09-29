@@ -141,6 +141,8 @@ pub struct DtcView {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceView {
+    #[serde(default)]
+    pub integration_candidate: bool,
     pub name: String,
     pub files: Vec<FileView>,
     pub frames: Vec<FrameView>,

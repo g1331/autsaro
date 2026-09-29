@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-27-2026 18:43
-last_updated: 09-28-2026 23:49
+last_updated: 09-29-2026 13:02
 project: Autosar
 project_key: NOKEY
 tracking_system: file-system
@@ -38,7 +38,7 @@ story_location: _bmad-output/implementation-artifacts
 # Entry conditions and dependencies: ../planning-artifacts/implementation-readiness.md
 # First candidates: 4.1 and 4.3 independently; 4.9 after 4.3 for early stack-risk validation.
 # W3/4.13 requires 4.3-4.9 and 4.10-4.12 to pass; full SC1/handoff remains the Epic exit gate.
-# Epic 4 build active: 4.3 first, then early 4.9 stack gate; W3 remains closed.
+# Epic 4 build active: W1/W2 gates passed; W3/4.13 development entry open, full SC1/handoff exit remains open.
 # Epic 2 / Story 2.1 remain deferred backlog pending the diagnostic support matrix.
 development_status:
   epic-1: done
@@ -67,7 +67,7 @@ development_status:
   4-9-捕获-windows-真实执行栈故障并关闭目标: done
   4-10-从标准输入建立唯一校验集成计划: done
   4-11-由-swc-描述生成组件接口与同步服务类型: done
-  4-12-接入标准输入的安全编辑-保存与重开: backlog
+  4-12-接入标准输入的安全编辑-保存与重开: done
   4-13-从唯一计划生成可链接-ecu-集成工程: backlog
   4-14-通过-hostbatchv1-运行并闭合输出确认: backlog
   4-15-运行同一应用实例的-s-r-快照和同步-did: backlog
