@@ -135,6 +135,15 @@ void StartOS(AppModeType Mode);
  * @param Error Standard shutdown reason.
  */
 void ShutdownOS(StatusType Error);
+/** Read the automotive task selected by the actual kernel.
+ * @param TaskID Nonnull caller-owned output; INVALID_TASK if none is selected.
+ * @return E_OK, E_OS_CALLEVEL or E_OS_ILLEGAL_ADDRESS; refusal preserves output.
+ */
+StatusType GetTaskID(TaskRefType TaskID);
+/** Read the application mode selected by StartOS, including in global hooks.
+ * @return Selected mode; zero before StartOS has selected a mode.
+ */
+AppModeType GetActiveApplicationMode(void);
 /** Query actual backend task state.
  * @param TaskID Configured task identifier.
  * @param State Output state, must not be null.

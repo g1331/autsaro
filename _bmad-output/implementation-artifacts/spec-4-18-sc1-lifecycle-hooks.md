@@ -57,6 +57,10 @@ context: []
 
 ## Implementation Notes
 
+下一项已定位实际边界：configOS_REQUEST_FIFO的taskOS_SELECT_READY直接选择ready-list头并赋予pxCurrentTCB，Hook必须在候选确定、赋值前后接入且过滤相同Task；WaitEvent/Terminate/Chain要在waiting/activation状态改写前发Post，避免报告已WAITING/SUSPENDED的任务。当前参考ECUC明确OsErrorHook/Pre/Post及两个访问开关为true，生成配置尚无完整实现；后续须同时补runtime与生成闭包，不能只补测试回调。
+
+容量增量已实现：标准软件Counter/Alarm可独立于私有Extended-owner确认通道使用，wake_event0/ownerINVALID显式选择；该模式没有宿主硬件tick来源，硬件Counter配置拒绝，参考非零wake_event路径保持。GetTaskID读实际kernel选中Task，GetActiveApplicationMode读实际StartOS模式；完整Hook/错误/调用表仍待后续实现。四类最低容量、四类含非抢占Task、两类重复优先级/三次Basic排队激活、模式2及七类配置越界拒绝共18向量通过，实际资源/内部优先级/Alarm二次Task入口、ECC每Task八事件置位清除状态均有独立预期。
+
 首个类型增量：已补公共类型及范围/指针/常量，独立C99消费者覆盖header-only、Windows-before、Windows-after三种真实包含顺序及16项AccessType真值表。原生生命周期46向量通过；初次原生编译暴露Windows COM ApplicationType重名，现由既有Os_Windows.h边界隔离。类型/源码证据在public-type-contracts-4-18.json；本故事其他服务/Hook/ISR/容量仍未完成，不因类型编译通过升级等级。
 
 需求/授权无待确认缺口；无外部不可逆操作。新增公共服务与Hook配置影响OS声明、生成配置和全部本地静态初始化器，按所有消费者同步更新。纯标准公共类型先独立编译核对，条件类型不代表对应SC2/多核行为已实现。
@@ -66,6 +70,8 @@ context: []
 ## Spec Change Log
 
 ## Review Triage Log
+
+- 容量独立增量三路blind／edge／verification-gap均未发现可定位缺陷或验证缺口；完整故事的Hook/错误/ISR工作仍开放。正式容量/真实生成两项测试163.73s通过；18容量、40受控时间、43计时向量封存，26最低容量义务直接映射到四个主场景，部分静态exit1原样保留。容量增量完整门exit0：85个集成测试（660.24s）、29Python、UI/桌面构建和两组Clippy通过；本故事Hook/错误/ISR仍未完成，sprint保持in-progress。
 
 ## Verification
 

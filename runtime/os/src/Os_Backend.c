@@ -107,6 +107,24 @@ int Os_BackendTaskOwner(TaskType id) {
     return (Os_Config->tasks[index].id == id) ? 1 : -1;
 }
 int Os_BackendInputOwner(void) { return Os_BackendTaskOwner(Os_Config->input_task); }
+StatusType Os_BackendTaskId(TaskRefType id) {
+    if (!Os_BackendServiceContext()) {
+        return E_OS_CALLEVEL;
+    }
+    taskENTER_CRITICAL();
+    Os_BackendGuardService();
+    *id = INVALID_TASK;
+    for (size_t i = 0u; i < Os_Config->task_count; ++i) {
+        if (handles[i] == xTaskGetCurrentTaskHandle()) {
+            *id = Os_Config->tasks[i].id;
+            break;
+        }
+    }
+    taskEXIT_CRITICAL();
+    Os_BackendGuardService();
+    return E_OK;
+}
+AppModeType Os_BackendApplicationMode(void) { return startup_mode; }
 void Os_BackendGuardService(void) {
     const Os_NativeStack *stack = Os_StackCurrent();
     if ((InterlockedCompareExchange(&Os_Closing, 0, 0) != 0) && (stack != NULL) &&

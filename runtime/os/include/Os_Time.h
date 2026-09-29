@@ -63,6 +63,9 @@ typedef struct {
     size_t alarm_count;
     CounterType system_counter;
     TaskType owner;
+    /* Zero selects standard software Counter/Alarm use without the private
+     * host tick handshake; owner must then be INVALID_TASK. A nonzero mask
+     * retains the configured AUTOSTART Extended owner and controlled ISR. */
     EventMaskType wake_event;
     void (*error_hook)(StatusType);
     const Os_ScheduleTableConfig *schedule_tables;

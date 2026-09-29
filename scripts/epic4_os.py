@@ -844,6 +844,64 @@ def check_stack(binary: Path) -> list[dict]:
     return observations
 
 
+def check_capacity(binary: Path) -> list[dict]:
+    # Figure 3-3 minima are independent of the producer's configuration arrays.
+    cases = {
+        "bcc1": (8, 1, False, False, False),
+        "bcc2": (8, 8, False, False, False),
+        "ecc1": (16, 8, True, False, False),
+        "ecc2": (16, 8, True, False, False),
+        "bcc1-nonpreemptive": (8, 1, False, False, True),
+        "bcc2-nonpreemptive": (8, 8, False, False, True),
+        "ecc1-nonpreemptive": (16, 8, True, False, True),
+        "ecc2-nonpreemptive": (16, 8, True, False, True),
+        "bcc2-multiplicity": (8, 8, False, True, False),
+        "ecc2-multiplicity": (16, 8, True, True, False),
+        "ecc1-mode2": (16, 8, True, False, False),
+    }
+    observations = []
+    for name, (count, resources, extended, multiple, nonpreemptive) in cases.items():
+        result = execute(binary, name)
+        priority_count = count - int(multiple)
+        header = (f"capacity case={name} tasks={count} active={count} "
+                  f"priorities={priority_count} resources={resources} internal=2 "
+                  f"alarms=1 modes=1 queued={3 if multiple else 0} reason=0")
+        expected = []
+        order = (list(range(count - 2, 1, -1)) + [1, count - 1, 0]
+                 if multiple else list(range(count - 1, -1, -1)))
+        order += [1]
+        if multiple:
+            order += [1, 1, 1, count - 1]
+        entries = [0] * count
+        for position, task in enumerate(order):
+            entries[task] += 1
+            basic = not extended or (multiple and task in [1, count - 1])
+            priority = (2 if multiple and task == count - 1 else task + 1)
+            if nonpreemptive and task == 2:
+                priority = count
+            expected.append((task, entries[task], 0, priority,
+                             int(task < 2 or (nonpreemptive and task == 2)),
+                             0 if basic else 255, 0, 0 if position < count else 1))
+        actual = [tuple(map(int, row)) for row in re.findall(
+            r"task id=(\d+) entry=(\d+) state=(\d+) priority=(\d+) internal=(\d+) events_seen=(\d+) events_final=(\d+) counter=(\d+)",
+            result["stdout"])]
+        require(result["exit"] == 0 and not result["stderr"], result)
+        require(header in result["stdout"] and actual == expected, result)
+        require("lifecycle=Closed state=Ready reason=0" in result["stdout"], result)
+        result["independent_expected_tasks"] = expected
+        result["independent_expected_capacity"] = header
+        observations.append(result)
+    for name in ["bad-manual-owner", "bad-manual-hardware", "bad-task-capacity",
+                 "bad-resource-capacity", "bad-internal-capacity", "bad-alarm-capacity",
+                 "bad-priority"]:
+        result = execute(binary, name)
+        expected = f"capacity rejection={name} reason=8 ready=0"
+        require(result["exit"] == 8 and result["stdout"] == expected and not result["stderr"], result)
+        result["independent_expected"] = expected
+        observations.append(result)
+    return observations
+
+
 def check_public_types(directory: Path) -> dict:
     binary = directory / "public_types.exe"
     command = [
@@ -893,6 +951,7 @@ def main() -> None:
             "time",
             "sc1-timing",
             "public-types",
+            "capacity",
         ],
         default="lifecycle",
     )
@@ -914,6 +973,7 @@ def main() -> None:
             "events": "event_wakeup.c",
             "time": "controlled_time.c",
             "sc1-timing": "sc1_timing.c",
+            "capacity": "sc1_capacity.c",
         }
         checks = {
             "lifecycle": check_lifecycle,
@@ -924,6 +984,7 @@ def main() -> None:
             "events": check_events,
             "time": check_time,
             "sc1-timing": check_sc1_timing,
+            "capacity": check_capacity,
         }
         binary, evidence = build(Path(temporary), harnesses[args.suite])
         evidence["observations"] = checks[args.suite](binary)
@@ -956,6 +1017,7 @@ def main() -> None:
             "events": "epic4_event_wakeup_races",
             "time": "epic4_controlled_tick_and_alarm",
             "sc1-timing": "epic4_sc1_timing_capacity",
+            "capacity": "epic4_sc1_class_capacity",
         }
         name = names[args.suite]
         print(f"{name} PASS: {len(evidence['observations'])} native vectors")

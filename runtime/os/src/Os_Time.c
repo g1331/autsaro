@@ -76,9 +76,11 @@ StatusType Os_TimeValidate(const Os_TargetConfig *target) {
     owner = configured_task(target, config->owner);
     if ((config->counter_count == 0u) || (config->counter_count > OS_MAX_COUNTERS) ||
         (config->counters == NULL) || (config->alarm_count > OS_MAX_ALARMS) ||
-        ((config->alarm_count != 0u) && (config->alarms == NULL)) || (owner == NULL) ||
-        (owner->kind != OS_EXTENDED_TASK) || (owner->autostart_modes == 0u) ||
-        (config->wake_event == 0u) || ((target->category1_isrs & 2u) != 0u)) {
+        ((config->alarm_count != 0u) && (config->alarms == NULL)) ||
+        ((config->wake_event != 0u) &&
+         ((owner == NULL) || (owner->kind != OS_EXTENDED_TASK) || (owner->autostart_modes == 0u) ||
+          ((target->category1_isrs & 2u) != 0u))) ||
+        ((config->wake_event == 0u) && (config->owner != INVALID_TASK))) {
         return E_OS_VALUE;
     }
     for (i = 0u; i < config->counter_count; ++i) {
@@ -86,7 +88,7 @@ StatusType Os_TimeValidate(const Os_TargetConfig *target) {
         if ((counter->id >= OS_MAX_COUNTERS) || (counter->maximum == 0u) ||
             (counter->maximum > UINT32_MAX) || (counter->ticks_per_base == 0u) ||
             (counter->minimum_cycle == 0u) || (counter->minimum_cycle > counter->maximum) ||
-            (counter->software > 1u)) {
+            (counter->software > 1u) || ((config->wake_event == 0u) && (counter->software == 0u))) {
             return E_OS_VALUE;
         }
         for (j = 0u; j < i; ++j) {
@@ -178,7 +180,7 @@ static TickType absolute_distance(size_t counter, TickType start) {
 }
 void Os_TimeInit(AppModeType mode) {
     const Os_TimeConfig *config = Os_Config->time;
-    if (config != NULL) {
+    if ((config != NULL) && (config->wake_event != 0u)) {
         const Os_TaskConfig *owner = configured_task(Os_Config, config->owner);
         if ((owner->autostart_modes & mode) == 0u) {
             Os_BackendShutdown(E_OS_VALUE);
@@ -480,11 +482,14 @@ int Os_TimeBeginTick(void) {
     if (Os_Config->time == NULL) {
         return Os_TargetReady();
     }
+    if (Os_Config->time->wake_event == 0u) {
+        return 0;
+    }
     return InterlockedCompareExchange(&tick_state, TIME_PROCESSING, TIME_PENDING) == TIME_PENDING;
 }
 void Os_TimeTick(void) {
     const Os_TimeConfig *config = Os_Config->time;
-    if (config != NULL) {
+    if ((config != NULL) && (config->wake_event != 0u)) {
         if (InterlockedCompareExchange(&tick_state, 0, 0) != TIME_PROCESSING) {
             Os_BackendShutdown(E_OS_STATE);
         }
@@ -509,7 +514,8 @@ static StatusType native_time_context(void) {
     if (Os_StackCurrent() != NULL) {
         return E_OS_CALLEVEL;
     }
-    if ((Os_TargetReady() == 0) || (Os_Config->time == NULL)) {
+    if ((Os_TargetReady() == 0) || (Os_Config->time == NULL) ||
+        (Os_Config->time->wake_event == 0u)) {
         return E_OS_STATE;
     }
     return Os_BridgeContext();
@@ -614,7 +620,8 @@ static StatusType time_owner(void) {
     int owner;
     Os_StackCheck();
     Os_BackendGuardService();
-    if ((Os_TargetReady() == 0) || (Os_Config->time == NULL)) {
+    if ((Os_TargetReady() == 0) || (Os_Config->time == NULL) ||
+        (Os_Config->time->wake_event == 0u)) {
         return E_OS_STATE;
     }
     owner = Os_BackendTaskOwner(Os_Config->time->owner);

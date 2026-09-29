@@ -163,6 +163,19 @@ void ShutdownOS(StatusType Error) {
     Os_StackCheck();
     Os_BackendShutdown(Error);
 }
+StatusType GetTaskID(TaskRefType TaskID) {
+    Os_StackCheck();
+    Os_BackendGuardService();
+    if (TaskID == NULL) {
+        return E_OS_ILLEGAL_ADDRESS;
+    }
+    return Os_BackendTaskId(TaskID);
+}
+AppModeType GetActiveApplicationMode(void) {
+    Os_StackCheck();
+    Os_BackendGuardService();
+    return Os_BackendApplicationMode();
+}
 StatusType GetTaskState(TaskType TaskID, TaskStateRefType State) {
     Os_StackCheck();
     Os_BackendGuardService();

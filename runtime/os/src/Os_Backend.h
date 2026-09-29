@@ -43,6 +43,8 @@ void Os_BackendShutdown(StatusType error);
 void Os_BackendRequestShutdown(StatusType error);
 void Os_BackendGuardService(void);
 StatusType Os_BackendState(TaskType id, TaskStateRefType state);
+StatusType Os_BackendTaskId(TaskRefType id);
+AppModeType Os_BackendApplicationMode(void);
 StatusType Os_BackendActivate(TaskType id);
 StatusType Os_BackendFinish(void);
 StatusType Os_BackendChain(TaskType id);
