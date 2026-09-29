@@ -1,0 +1,20 @@
+--- a/portable/MSVC-MingW/port.c
++++ b/portable/MSVC-MingW/port.c
+@@ -466,7 +466,17 @@
+              * is reset before the task blocks on it. */
+             pxThreadState = ( ThreadState_t * ) ( *( size_t * ) pxCurrentTCB );
+             Os_HostSetEvent( pxThreadState->pvYieldEvent );
++            #ifdef OS_TIME_TESTS
++                Os_TimeTestDispatchFinishing();
++            #endif
++            /* Complete the ISR phase while still owning the mutex. A resumed
++             * Task can acquire it immediately after release, before this actor
++             * reaches the next loop iteration. */
++            xInsideInterrupt = pdFALSE;
+             ReleaseMutex( pvInterruptEventMutex );
++            #ifdef OS_TIME_TESTS
++                Os_TimeTestDispatchUnlocked();
++            #endif
+         }
+     }
+ }

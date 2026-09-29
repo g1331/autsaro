@@ -79,7 +79,8 @@ void Os_BackendInterruptLeave(void) {
         /* Native ISR dispatch already owns the interrupt mutex and has stopped
          * the automotive Task. Restore only this logical ISR's saved pairs. */
         Os_InterruptRestoreOwner();
-        if ((current_interrupt < 32u) && (current_interrupt != 1u) &&
+        if ((current_interrupt < 32u) && (current_interrupt != OS_KERNEL_YIELD_INTERRUPT) &&
+            (current_interrupt != OS_CONTROLLED_TICK_INTERRUPT) &&
             ((Os_Config->category1_isrs & (UINT32_C(1) << current_interrupt)) == 0u)) {
             (void)Os_ErrorResult(OSServiceId_InterruptMissingEnd, E_OS_DISABLEDINT, &arguments);
         }
@@ -98,17 +99,22 @@ void Os_BackendInterruptLeave(void) {
     current_interrupt = 32u;
 }
 int Os_BackendInterruptEnabled(unsigned interrupt) {
+    int allowed;
     /* The private kernel yield is not an application ISR; it must remain
      * available to complete native port critical-section handshakes. */
-    if (interrupt == 1u) {
+    if (interrupt == OS_KERNEL_YIELD_INTERRUPT) {
         return 1;
     }
-    return (Os_InterruptAllows(interrupt) != 0) &&
-           (Os_PortInterruptSourceEnabled(interrupt) != 0) &&
-           ((interrupt == 0u) ||
-            ((interrupt < 32u) &&
-             ((Os_Config->category1_isrs & (UINT32_C(1) << interrupt)) != 0u)) ||
-            (InterlockedCompareExchange(&interrupt_ceiling, 0, 0) < 31));
+    allowed =
+        (Os_InterruptAllows(interrupt) != 0) && (Os_PortInterruptSourceEnabled(interrupt) != 0) &&
+        (((interrupt < 32u) && ((Os_Config->category1_isrs & (UINT32_C(1) << interrupt)) != 0u)) ||
+         (InterlockedCompareExchange(&interrupt_ceiling, 0, 0) < 31));
+#ifdef OS_TIME_TESTS
+    if (interrupt == OS_CONTROLLED_TICK_INTERRUPT && allowed == 0) {
+        Os_TimeTestMasked();
+    }
+#endif
+    return allowed;
 }
 static size_t task_index(TaskType id) {
     size_t i;
@@ -388,7 +394,7 @@ static void report_and_exit(void) {
     if (Os_StackHasFault() != 0) {
         shutdown_reason = E_OS_STACKFAULT;
     }
-    ShutdownHook(shutdown_reason);
+    Os_ShutdownHookInvoke(shutdown_reason);
     Os_StackReport();
     printf("lifecycle=Closed state=%s reason=%u trace=%s threads=%u events=%u mutexes=%u "
            "resource_calls=%u hidden=2 controllers=2 heap=windows static=freertos "
@@ -605,6 +611,9 @@ void vApplicationGetIdleTaskMemory(StaticTask_t **task, StackType_t **stack,
 }
 void vApplicationIdleHook(void) {
     Os_StackCheck();
+#ifdef OS_IDLE_TESTS
+    Os_TestIdleObserved();
+#endif
 #ifdef OS_STACK_TESTS
     void Os_StackTestIdle(void);
     Os_StackTestIdle();
@@ -933,7 +942,7 @@ StatusType Os_BackendResource(ResourceType id, int acquire) {
     task = current_task_index();
     if (task == OS_MAX_TASKS) {
         if ((Os_TargetReady() == 0) || (stack == NULL) || (stack->role != 'S') ||
-            (current_interrupt == 0u) || (current_interrupt >= 32u) ||
+            (current_interrupt == OS_KERNEL_YIELD_INTERRUPT) || (current_interrupt >= 32u) ||
             ((Os_Config->category1_isrs & (UINT32_C(1) << current_interrupt)) != 0u)) {
             return E_OS_CALLEVEL;
         }

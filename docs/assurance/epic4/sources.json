@@ -178,6 +178,16 @@
       "path": "runtime/os/patches/0009-interrupt-source-control.patch",
       "sha256": "31b2a63c117986a01ba028b2f7dc4b91bb7b8d9c92bea78265a0240051b90829",
       "role": "production Category2 source disable/enable/clear using actual native pending bits and registered handlers; existing native interrupt mutex only; copied upstream only"
+    },
+    {
+      "path": "runtime/os/patches/0010-native-interrupt-identities.patch",
+      "sha256": "c27b3887858dcace2630fd9b114eb7c55f8f365af328e7fa8f37897805b707d0",
+      "role": "fixed native identity: private yield0 and controlled tick1 owned by kernel; neither is an application source; mask gate exempts actual yield0 only"
+    },
+    {
+      "path": "runtime/os/patches/0011-isr-phase-before-mutex-release.patch",
+      "sha256": "e2aea7b4a24ea564c2cf8fcf85932982a8aec80d642394c37cb4dd1067eb1a4f",
+      "role": "finish actual ISR phase before releasing native interrupt mutex; prevents resumed Task from inheriting stale global ISR flag; deterministic test-only handoff seam; copied upstream only"
     }
   ],
   "research_material": [

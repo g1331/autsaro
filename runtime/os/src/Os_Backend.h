@@ -6,6 +6,8 @@
 #include "Os_Windows.h"
 #include "Os_Stack.h"
 #include "Os_Mailbox.h"
+#define OS_KERNEL_YIELD_INTERRUPT 0u
+#define OS_CONTROLLED_TICK_INTERRUPT 1u
 int Os_BackendInputOwner(void);
 int Os_BackendTaskOwner(TaskType id);
 int Os_BackendServiceContext(void);
@@ -24,10 +26,14 @@ int Os_TimeSignalFailed(void);
 void Os_TimeTick(void);
 void vApplicationTickHook(void);
 int Os_TimeBeginTick(void);
+#ifdef OS_IDLE_TESTS
+void Os_TestIdleObserved(void);
+#endif
 #ifdef OS_TIME_TESTS
 void Os_TimeTestSeed(uint64_t epoch, uint32_t kernel_tick, TickType value);
 void Os_TimeTestCloseEvent(void);
 void Os_TimeTestBeforePending(void);
+void Os_TimeTestMasked(void);
 #endif
 void Os_TimeOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate);
 void Os_MailboxInstall(void);
@@ -57,6 +63,13 @@ int Os_ErrorHookConfigured(void);
 StatusType Os_ErrorResult(OSServiceIdType service, StatusType status,
                           const Os_ErrorParameters *arguments);
 void Os_HookInvoke(void (*hook)(void), Os_HookPhase selected);
+void Os_ShutdownHookInvoke(StatusType error);
+#ifdef OS_TIME_TESTS
+void Os_TimeTestDispatchFinishing(void);
+void Os_TimeTestDispatchUnlocked(void);
+void Os_TimeTestOnWaiting(void);
+extern volatile BaseType_t xInsideInterrupt;
+#endif
 StatusType Os_BackendState(TaskType id, TaskStateRefType state);
 StatusType Os_BackendTaskId(TaskRefType id);
 AppModeType Os_BackendApplicationMode(void);

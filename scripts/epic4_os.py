@@ -99,7 +99,7 @@ def write_shared_evidence(path: Path, record: dict, build_directory: Path) -> No
     shared["raw_record_sha256"] = hashlib.sha256(raw).hexdigest()
     shared["raw_record_local"] = local.relative_to(ROOT).as_posix()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(shared, indent=2) + "\n", encoding="utf-8")
+    path.write_bytes((json.dumps(shared, indent=2) + "\n").encode("utf-8"))
 
 
 def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...] = ()) -> tuple[Path, dict]:
@@ -170,6 +170,8 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
         command.insert(1, "-DOS_EVENT_TESTS")
     if harness == "controlled_time.c":
         command.insert(1, "-DOS_TIME_TESTS")
+    if harness == "idle_state.c":
+        command.insert(1, "-DOS_IDLE_TESTS")
     compiled = subprocess.run(command, capture_output=True, text=True, check=False)
     if compiled.returncode:
         raise RuntimeError(f"OS C99 build failed:\n{compiled.stdout}{compiled.stderr}")
@@ -307,6 +309,10 @@ def check_time(binary: Path) -> list[dict]:
         ),
         ("epoch-max", 1, 1, 0, 2, [(18446744073709551615, 1, 65535, 1)]),
         ("inflight", 1, 1, 0, 4, [(1, 1, 1, 1)]),
+        ("tick-mask-all", 1, 1, 0, 2, [(1, 1, 1, 1)]),
+        ("tick-mask-os", 1, 1, 0, 2, [(1, 1, 1, 1)]),
+        ("tick-owner-all", 1, 1, 0, 2, [(1, 1, 1, 1)]),
+        ("tick-owner-os", 1, 1, 0, 2, [(1, 1, 1, 1)]),
     ]:
         result = execute(binary, case)
         require(result["exit"] == 0 and not result["stderr"], result)
@@ -317,6 +323,10 @@ def check_time(binary: Path) -> list[dict]:
         )
         require("trace=ISREMZ " in result["stdout"], result)
         require("context rejected=7" in result["stdout"], result)
+        if case in ["tick-mask-all", "tick-mask-os", "tick-owner-all", "tick-owner-os"]:
+            require("tick_masked observed=1 kernel=0 pending=1" in result["stdout"], result)
+        if case in ["tick-owner-all", "tick-owner-os"]:
+            require("dispatch_release phase=0 waiting_commit=1" in result["stdout"], result)
         actual = [
             tuple(map(int, row))
             for row in re.findall(
@@ -696,7 +706,7 @@ def check_lifecycle(binary: Path) -> list[dict]:
     for scenario, trace, reason in [
         ("bad-mode", "ID", 8),
         ("startup-failure", "ISD", 7),
-        ("repeat-start", "ISID", 7),
+        ("repeat-start", "ISRD", 7),
     ]:
         result = execute(binary, scenario)
         require(
@@ -852,7 +862,7 @@ def check_stack(binary: Path) -> list[dict]:
 
 def check_interrupt_pairing(binary: Path) -> list[dict]:
     service_ids = [128,129,130,131,132,133,134,135,136,137,138,139,
-                   15,16,17,140,141,142,143,144,7,8,9,10,14,153,1,151,152]
+                   15,16,17,140,141,142,143,144,7,8,9,10,14,153,1,151,152,29,54]
     cases = {
         "disable": (1, 1, 0, "CO"),
         "all-nested": (1, 1, 0, "NCO"),
@@ -860,10 +870,10 @@ def check_interrupt_pairing(binary: Path) -> list[dict]:
         "os-all": (1, 1, 0, "CO"),
         "all-os": (1, 1, 0, "CO"),
         "unmatched": (1, 1, 0, "CO"),
-        "hook-reject": (1, 1, 6, "CO"),
-        "services-disable": (1, 1, 29, "CO"),
-        "services-all": (1, 1, 29, "CO"),
-        "services-os": (1, 1, 29, "CO"),
+        "hook-allowed": (1, 1, 0, "CO"),
+        "services-disable": (1, 1, 31, "CO"),
+        "services-all": (1, 1, 31, "CO"),
+        "services-os": (1, 1, 31, "CO"),
         "isr-balanced": (1, 1, 0, "CO"),
         "isr-leak-disable": (1, 1, 1, "CO"),
         "isr-leak-all": (1, 1, 1, "CO"),
@@ -873,7 +883,7 @@ def check_interrupt_pairing(binary: Path) -> list[dict]:
         "source-clear": (1, 1, 0, "OC"),
         "source-enable-clear": (1, 1, 0, "OC"),
         "source-global": (1, 1, 0, "OC"),
-        "source-invalid": (1, 1, 6, "CO"),
+        "source-invalid": (1, 1, 7, "CO"),
         "source-hook-reject": (1, 1, 3, "CO"),
         "source-isr": (1, 1, 0, "OQC"),
         "source-outside-isr": (1, 1, 3, "ODEC"),
@@ -893,9 +903,7 @@ def check_interrupt_pairing(binary: Path) -> list[dict]:
                     f"isr_task={task} errors={errors} trace={trace} reason={reason}")
         error_expected = ([(9,service,"T") for service in service_ids]
                           if scenario.startswith("services-") else
-                          [(2,service,"B") for service in range(145,151)]
-                          if scenario == "hook-reject" else
-                          [(3,service,"T") for service in [48,49,50,48,48,48]]
+                          [(3,service,"T") for service in [48,49,50,48,48,48,48]]
                           if scenario == "source-invalid" else
                           [(2,service,"B") for service in [48,49,50]]
                           if scenario == "source-hook-reject" else
@@ -911,6 +919,72 @@ def check_interrupt_pairing(binary: Path) -> list[dict]:
                 in result["stdout"], result)
         result["independent_expected_pairing"] = [cat1,cat2,task,errors,trace,reason]
         result["independent_expected_errors"] = error_expected
+        observations.append(result)
+    return observations
+
+
+def check_calling_context(binary: Path) -> list[dict]:
+    ids = [128,129,130,131,132,133,134,135,136,137,138,139,
+           15,16,17,140,141,142,143,144,7,8,9,10,14,48,49,50,29]
+    observations = []
+    for scenario in ["startup", "pre", "post", "error", "alarm-callback", "shutdown",
+                     "startup-shutdown", "error-shutdown", "outside-isr"]:
+        queries = scenario in ["pre", "post", "error", "error-shutdown"]
+        expected = [2] * 29
+        if queries:
+            expected[0] = 0
+            for index in [1,11,15,16]:
+                expected[index] = 3
+        if scenario.startswith("error"):
+            error_expected = [(3,130)]
+        elif scenario == "shutdown":
+            error_expected = []
+        else:
+            error_expected = [] if scenario == "outside-isr" else [(9,service) for service in [128,153,1,29,54,151,152]]
+            error_expected += [(status, service) for status, service in zip(expected, ids) if status]
+            if scenario in ["alarm-callback", "outside-isr"]:
+                error_expected += [(2,153)]
+            error_expected += [(2,1),(2,152)]
+            if scenario in ["pre", "post", "alarm-callback", "outside-isr"]:
+                error_expected += [(2,151)]
+        reason = 8 if scenario.endswith("-shutdown") else 0
+        result = execute(binary, scenario)
+        actual = [(int(status),int(service)) for status,service in re.findall(
+            r"matrix_error status=(\d+) service=(\d+)", result["stdout"])]
+        summary = (f"calling scenario={scenario} errors={len(error_expected)} reason={reason} "
+                   "statuses=" + ",".join(map(str, expected)))
+        require(result["exit"] == reason and not result["stderr"], result)
+        require(summary in result["stdout"] and actual == error_expected, result)
+        require("lifecycle=Closed" in result["stdout"] and f"reason={reason}" in result["stdout"], result)
+        result["independent_expected_statuses"] = expected
+        result["independent_expected_errors"] = error_expected
+        result["context_scope"] = ("actual configured standard Alarm callback delivered by software Counter increment"
+                                   if scenario == "alarm-callback" else
+                                   "no-active-ISR boundary fault injection on actual native ISR stack"
+                                   if scenario == "outside-isr" else "actual standard global Hook execution")
+        observations.append(result)
+    return observations
+
+
+def check_idle_state(binary: Path) -> list[dict]:
+    observations = []
+    cases = {
+        "valid": [(2,29)],
+        "invalid": [(2,29),(3,29)],
+        "masked": [(2,29),(9,29),(9,54)],
+        "isr": [(2,29)],
+        "unconfigured": [],
+    }
+    for scenario, expected in cases.items():
+        result = execute(binary, scenario)
+        actual = [(int(status),int(service)) for status,service in re.findall(
+            r"idle_error status=(\d+) service=(\d+)", result["stdout"])]
+        summary = (f"idle_state scenario={scenario} observed=1 wakes=1 errors={len(expected)} reason=0")
+        require(result["exit"] == 0 and not result["stderr"], result)
+        require(summary in result["stdout"] and actual == expected, result)
+        require("lifecycle=Closed state=Ready reason=0" in result["stdout"], result)
+        result["independent_expected_errors"] = expected
+        result["scope"] = "single-core ignores CoreID65535; existing virtual-core no-halt idle loop runs on actual I stack then actual ISR wakes waiting automotive Task; started query remains DRAFT"
         observations.append(result)
     return observations
 
@@ -1135,6 +1209,8 @@ def main() -> None:
             "returned-task",
             "interrupt-pairing",
             "isr-cleanup",
+            "calling-context",
+            "idle-state",
         ],
         default="lifecycle",
     )
@@ -1162,6 +1238,8 @@ def main() -> None:
             "returned-task": "returned_task.c",
             "interrupt-pairing": "interrupt_pairing.c",
             "isr-cleanup": "isr_cleanup.c",
+            "calling-context": "calling_context.c",
+            "idle-state": "idle_state.c",
         }
         checks = {
             "lifecycle": check_lifecycle,
@@ -1178,6 +1256,8 @@ def main() -> None:
             "returned-task": check_returned_task,
             "interrupt-pairing": check_interrupt_pairing,
             "isr-cleanup": check_isr_cleanup,
+            "calling-context": check_calling_context,
+            "idle-state": check_idle_state,
         }
         binary, evidence = build(Path(temporary), harnesses[args.suite])
         evidence["observations"] = checks[args.suite](binary)
@@ -1227,6 +1307,8 @@ def main() -> None:
             "returned-task": "epic4_returned_task_resource_cleanup",
             "interrupt-pairing": "epic4_standard_interrupt_pairing",
             "isr-cleanup": "epic4_category2_exit_cleanup",
+            "calling-context": "epic4_standard_calling_context",
+            "idle-state": "epic4_standard_idle_and_started_state",
         }
         name = names[args.suite]
         print(f"{name} PASS: {len(evidence['observations'])} native vectors")

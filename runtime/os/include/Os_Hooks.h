@@ -18,6 +18,8 @@ typedef enum {
 } Os_HookPhase;
 #define OSServiceId_Unknown ((OSServiceIdType)0u)
 #define OSServiceId_GetISRID ((OSServiceIdType)0x01u)
+#define OSServiceId_ControlIdle ((OSServiceIdType)0x1du)
+#define OSServiceId_isOsStarted ((OSServiceIdType)0x36u)
 #define OSServiceId_DisableInterruptSource ((OSServiceIdType)0x30u)
 #define OSServiceId_EnableInterruptSource ((OSServiceIdType)0x31u)
 #define OSServiceId_ClearPendingInterrupt ((OSServiceIdType)0x32u)
@@ -58,6 +60,10 @@ typedef enum {
 #define OSServiceId_NextScheduleTable ((OSServiceIdType)0xau)
 #define OSServiceId_GetScheduleTableStatus ((OSServiceIdType)0xeu)
 typedef union {
+    struct {
+        CoreIdType CoreID;
+        IdleModeType IdleMode;
+    } service_ControlIdle;
     struct {
         ISRType ISRID;
         boolean ClearPending;
@@ -174,6 +180,8 @@ OSServiceIdType Os_ErrorServiceId(void);
 #define OSErrorGetServiceId() Os_ErrorServiceId()
 #endif
 #if OS_USE_PARAMETER_ACCESS
+#define OSError_ControlIdle_CoreID() (Os_ErrorParametersCurrent()->service_ControlIdle.CoreID)
+#define OSError_ControlIdle_IdleMode() (Os_ErrorParametersCurrent()->service_ControlIdle.IdleMode)
 #define OSError_EnableInterruptSource_ISRID()                                                      \
     (Os_ErrorParametersCurrent()->service_EnableInterruptSource.ISRID)
 #define OSError_EnableInterruptSource_ClearPending()                                               \

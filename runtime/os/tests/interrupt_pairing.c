@@ -60,6 +60,7 @@ void ErrorHook(StatusType error) {
     } else if (service == OSServiceId_DisableInterruptSource) {
         check(OSError_DisableInterruptSource_ISRID() == 99u ||
               OSError_DisableInterruptSource_ISRID() == 1u ||
+              OSError_DisableInterruptSource_ISRID() == 0u ||
               OSError_DisableInterruptSource_ISRID() == 4u ||
               OSError_DisableInterruptSource_ISRID() == 6u ||
               OSError_DisableInterruptSource_ISRID() == 8u ||
@@ -67,15 +68,20 @@ void ErrorHook(StatusType error) {
     } else if (service == OSServiceId_ClearPendingInterrupt) {
         check(OSError_ClearPendingInterrupt_ISRID() == 99u ||
               OSError_ClearPendingInterrupt_ISRID() == 7u);
+    } else if (service == OSServiceId_ControlIdle) {
+        check(OSError_ControlIdle_CoreID() == UINT16_MAX &&
+              OSError_ControlIdle_IdleMode() == IDLE_NO_HALT);
     }
     statuses[errors] = error;
     services[errors] = service;
     actors[errors] = Os_StackCurrent()->role;
     ++errors;
-    /* Mask services are forbidden in ErrorHook and cannot disturb the outer
-     * snapshot or the Task's saved state. No nested error callback occurs. */
+    /* R24-11 permits mask primitives in ErrorHook. Balanced nested pairs
+     * preserve the interrupted actor's outer mask and error snapshot. */
     SuspendAllInterrupts();
-    EnableAllInterrupts();
+    SuspendOSInterrupts();
+    ResumeOSInterrupts();
+    ResumeAllInterrupts();
     check(OSErrorGetServiceId() == service);
 }
 static uint32_t cat1(void) {
@@ -154,14 +160,14 @@ static void pend(void) {
     vPortGenerateSimulatedInterrupt(5u);
 }
 void StartupHook(void) {
-    if (strcmp(scenario, "hook-reject") == 0) {
-        EnableAllInterrupts();
+    if (strcmp(scenario, "hook-allowed") == 0) {
         DisableAllInterrupts();
-        ResumeAllInterrupts();
+        EnableAllInterrupts();
         SuspendAllInterrupts();
-        ResumeOSInterrupts();
+        ResumeAllInterrupts();
         SuspendOSInterrupts();
-        check(errors == 6u && Os_InterruptDisabled() == 0);
+        ResumeOSInterrupts();
+        check(errors == 0u && Os_InterruptDisabled() == 0);
     }
     if (strcmp(scenario, "source-hook-reject") == 0) {
         check(DisableInterruptSource(99u) == E_OS_CALLEVEL);
@@ -244,7 +250,8 @@ static void refused_services(void) {
     check(GetISRID() == INVALID_ISR);
     ShutdownOS(8u);
     StartOS(2u);
-    check(errors == 29u && output_task == 42u && output_state == 42u &&
+    check(ControlIdle(UINT16_MAX, IDLE_NO_HALT) == 9u && isOsStarted() == FALSE);
+    check(errors == 31u && output_task == 42u && output_state == 42u &&
           output_event == UINT32_C(0xdead) && output_value == UINT64_MAX &&
           output_elapsed == UINT64_MAX && output_table == 42u);
     check(output_base.maxallowedvalue == 61u && output_base.ticksperbase == 62u &&
@@ -261,9 +268,10 @@ static void owner(void) {
             check(EnableInterruptSource(99u, TRUE) == E_OS_ID);
             check(ClearPendingInterrupt(99u) == E_OS_ID);
             check(DisableInterruptSource(1u) == E_OS_ID);
+            check(DisableInterruptSource(0u) == E_OS_ID);
             check(DisableInterruptSource(4u) == E_OS_ID);
             check(DisableInterruptSource(7u) == E_OS_ID);
-            check(errors == 6u);
+            check(errors == 7u);
             pend();
         } else if (strcmp(scenario, "source-hook-reject") == 0) {
             pend();

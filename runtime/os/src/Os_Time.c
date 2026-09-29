@@ -679,6 +679,9 @@ StatusType Os_TargetCompleteTick(uint64_t ticket) {
 }
 void Os_TimeOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate) {
     const Os_TimeConfig *config = Os_Config->time;
+#ifdef OS_TIME_TESTS
+    Os_TimeTestOnWaiting();
+#endif
 #ifdef ECU_TARGET_EPIC4
     Ecu_TargetOnWaiting(id, pending, predicate);
 #endif

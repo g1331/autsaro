@@ -9,6 +9,12 @@ void StartupHook(void) {
     if (startup_failure != 0u) {
         if (startup_failure == 2u) {
             StartOS(1u);
+            /* R24-11 wrong-context StartOS is ignored and returns. The
+             * original initialization must not be entered a second time. */
+            if (GetActiveApplicationMode() != 1u || isOsStarted() != TRUE) {
+                Os_TargetTrace('X');
+            }
+            Os_TargetTrace('R');
         }
         ShutdownOS(E_OS_STATE);
     }

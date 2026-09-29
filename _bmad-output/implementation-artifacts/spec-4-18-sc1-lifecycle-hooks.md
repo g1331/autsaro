@@ -57,6 +57,8 @@ context: []
 
 ## Implementation Notes
 
+调用上下文/idle独立增量起始a9dbeeff93cdcb838480fa9afb2266baa65551fd。已读取并渲染R24-11 p72/73表，优先该版本扩展而非旧OSEK更窄许可；所有六屏蔽服务在各已支持Hook/Alarm阶段许可，Hook有独立逻辑屏蔽归属，保护原调用者状态同时对Hook自己屏蔽的服务执行00093规则。GetISRID仅ErrorHook许可；Mode在Error/Pre/Post/Startup/Shutdown许可；Shutdown仅Task/Cat2/Error/Startup，Start不从活动OS/Hook再次启动。ShutdownHook以无普通mutex的专用阶段设置调用，消除实际关闭栈错误服务取得受损actor锁的死锁。无当前ISR及私有yield的S actor普通服务拒绝。ControlIdle按单核省略CoreID检查，支持真实虚拟核既有NO_HALT，未知模式拒绝；isOsStarted按DRAFT语义记录StartOS入口而非Ready/成功，不改标为定稿。新增九调用上下文、五真实idle过程及两正式入口；原屏蔽向量扩展至31非中断服务。Alarm场景通过配置的软件Counter/Alarm回调真实递送；无ISR身份场景在真实原生ISR栈故障注入，不能证明嵌套支持。固定端口IRQ0为私有yield、IRQ1为受控tick；第十补丁保护两内核源的handler/源控制所有权，真实tick遵守All/OS屏蔽。两新增原生向量确认实际过滤器观察到pending tick时kernel仍0、票据未完成，恢复后同票据完成且kernel/Counter各增一次，时间回归共44向量，含两种消费Task自身屏蔽及ISR阶段／mutex交接的确定性验证；第十一补丁在释放mutex前结束ISR阶段。
+
 下一Cat2资源出口增量（起始9c6c7ece29b54e34e3598b415a77749b269c8119）：按本地R24-11 SWS_Os_00369，实际native dispatcher仍持mutex期间，复用资源释放实现LIFO清理真实配置资源，恢复所有权/ceiling后调用可选ErrorHook报告6，原currentISR在回调后才退出；遗留屏蔽仍按00368先恢复并报告9。独立预期覆盖单/双资源、Disable/All/OS/mixed、未配置Hook和平衡路径，实际pendingISR6和已激活Task1必须先后取得全部释放资源，再返回原Task0取得。完整嵌套ISR及SC1整体不据此关闭。
 
 中断独立增量（起始cd647a934790bce89c56ed6a22827a1517c6515c）：六配对服务采用实际原生actor的PE TLS状态，All与OS独立嵌套，Disable非嵌套，首/末配对更新共享原子owner数；实际端口分发遵守屏蔽，内核私有yield保持可用。25个StatusType及Start/Shutdown/Mode/GetISRID边界忽略被屏蔽调用者的非中断服务，保留输出；ErrorHook合法查询可观察原错误。Task missing-end和Cat2返回自动恢复遗留屏蔽；Cat2清理在原ISR身份下报告9/service252。GetISRID对实际Cat2返回身份、其他返回INVALID；尚未证明嵌套恢复。第九补丁在真实pending/handler表增加源开关及清除，三个标准源API在原有interrupt mutex内操作，Disable保留pending，Enable(clear)/ClearPending按真实位清除，非法/私有yield/Cat1/未安装源拒绝，Task/Cat2之外拒绝。公共boolean来自共同Std_Types.h，Windows RPC重名由平台边界隔离。源API入口同样检查真实原生栈和不可逆关闭门。
@@ -88,6 +90,14 @@ ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参�
 ## Spec Change Log
 
 ## Review Triage Log
+
+- 第十一补丁／44时间向量／repeat-start修正的追加blind、edge、verification-gap三路复核均无新增发现。最终行为门92集成测试全部通过（567.52秒），Python29、UI lint/build、桌面build与两Clippy通过。随后按既有LF属性归一OS文本字节，原始补丁和上游不变；七套原生回归、三调用错误变体、两旧ISR时序变体及12单元部分扫描均从规范化来源刷新，500摘要匹配，Python／增量质量复验通过；生成ECU包亦在该来源重编复验。507总结果已建立，61行关联增量证据，全部最终处置仍待逐项评估，4.18保持in-progress。
+
+- 调用上下文/idle增量blind提出“StartOS失败或被忽略后isOsStarted不应为TRUE”：false。已核对R24-11 p205的DRAFT91034，以是否调用过StartOS为返回依据，非Ready或成功；当前入口原子记录调用，屏蔽查询另遵守00093，无两者混淆。edge无发现。verification-gap提出“屏蔽时isOsStarted也应TRUE”：false，p74 SWS_Os_00093要求Task/ISR/Hook自身屏蔽时忽略任何非中断OS服务，DRAFT查询未声明例外；当前返回无效FALSE且ErrorHook报告9，恢复后TRUE，原状态未被改写。两条建议均不修改实现或弱化断言。
+
+- 专项tick探查指出native生产者读取kernel可能有普通Task服务上下文问题：固定portmacro.h将32位tick标为原子，xTaskGetTickCount路径不进入普通critical；去掉该读取与递送前printf的复制实验仍有失败。失败后采集定位到票据已完成而Wait返回仍WAITING的原断言。缓存yield条件的复制端口不能修复；实际dispatcher在释放mutex后才到下一轮清除共享xInsideInterrupt，Task可能先取得mutex并错误跳过critical出口等待。第十一补丁在mutex内完成ISR阶段后才释放；六次对应复制实验全部通过，新增两种消费Task自身屏蔽的确定性握手与原有40/两monitor屏蔽合计44向量通过。复制恢复旧标志时序时两种握手均被原断言拒绝（isr-phase-release-mutations-4-18.json）；复制native观察者失败后等待健康controller报告，避免生产者先退出99遮蔽Task断言，产品成功断言未弱化。原失败日志保留，完整嵌套及SC1出口仍开放。
+
+- 当前完整门91通过/1失败为旧repeat-start轨迹ISID；源码确认Startup内重复StartOS应按R24 Table7.1/00088忽略，而非重入原生初始化并增加第二个I。生命周期场景在重复调用返回后核对实际Mode1/DRAFT已调用状态并加R，独立预期ISRD；保留显式Startup随后Shutdown7及资源失败拒绝，46原生向量通过。历史生命周期工件不覆写。
 
 - Cat2资源出口增量blind/edge/verification-gap三路独立复核均无发现。十个真实过程、28屏蔽/26资源回归通过；actual旧backend副本在single/maximum/mixed/unconfigured-mixed四个新独立断言场景均因原断言关闭被拒绝，证明本次测试识别原问题；12翻译单元部分静态诊断保留，不升级完整MISRA声明。
 

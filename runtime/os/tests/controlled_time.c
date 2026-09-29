@@ -8,6 +8,9 @@ static volatile LONG producer_done;
 static volatile LONG owner_held;
 static volatile LONG release_owner;
 static volatile LONG owner_entered;
+static volatile LONG tick_mask_observed;
+static volatile LONG tick_mask_kernel;
+static volatile LONG dispatch_release_stage;
 static unsigned work_count;
 static unsigned app_count;
 static unsigned completed_count;
@@ -48,6 +51,34 @@ static void native_check(bool condition) {
 static void native_refuse(StatusType status, StatusType expected) {
     native_check(status == expected);
     ++native_rejects;
+}
+void Os_TimeTestMasked(void) {
+    if (strncmp(scenario, "tick-mask-", 10u) == 0 || strncmp(scenario, "tick-owner-", 11u) == 0) {
+        InterlockedExchange(&tick_mask_kernel, (LONG)xTaskGetTickCountFromISR());
+        InterlockedExchange(&tick_mask_observed, 1);
+    }
+}
+void Os_TimeTestDispatchFinishing(void) {
+    if (strncmp(scenario, "tick-owner-", 11u) == 0 &&
+        InterlockedCompareExchange(&tick_mask_observed, 0, 0) != 0 &&
+        xTaskGetTickCountFromISR() == 1u) {
+        (void)InterlockedCompareExchange(&dispatch_release_stage, 1, 0);
+    }
+}
+void Os_TimeTestDispatchUnlocked(void) {
+    DWORD started_at = GetTickCount();
+    while (InterlockedCompareExchange(&dispatch_release_stage, 0, 0) == 1) {
+        native_check((GetTickCount() - started_at) < 4000u);
+        Sleep(1u);
+    }
+}
+void Os_TimeTestOnWaiting(void) {
+    if (InterlockedCompareExchange(&dispatch_release_stage, 0, 0) == 1) {
+        /* The ISR actor is deliberately paused after releasing its mutex.
+         * This Task owns the next waiting commit: the old ISR flag must be off. */
+        check(xInsideInterrupt == pdFALSE);
+        InterlockedExchange(&dispatch_release_stage, 2);
+    }
 }
 static void refuse(StatusType status, StatusType expected) {
     check(status == expected);
@@ -271,6 +302,18 @@ static DWORD WINAPI requester(void *argument) {
         Os_TickCompletion record = {0};
         native_check(Os_TargetAdvanceOneTick(epoch, &ticket) == E_OK);
         native_check(ticket == epoch);
+        if (i == 1u && (strncmp(scenario, "tick-mask-", 10u) == 0 ||
+                        strncmp(scenario, "tick-owner-", 11u) == 0)) {
+            started_at = GetTickCount();
+            while (InterlockedCompareExchange(&tick_mask_observed, 0, 0) == 0) {
+                native_check((GetTickCount() - started_at) < 4000u);
+                Sleep(1u);
+            }
+            native_check(InterlockedCompareExchange(&tick_mask_kernel, 0, 0) == 0);
+            native_check(Os_TargetTickCompletion(ticket, &record) == E_OS_NOFUNC);
+            printf("tick_masked observed=1 kernel=0 pending=1\n");
+            InterlockedExchange(&release_owner, 1);
+        }
         if (strcmp(scenario, "signal-failure") == 0) {
             /* The deliberately closed event has no active native waiter. */
             Sleep(INFINITE);
@@ -338,7 +381,26 @@ static void owner(void) {
         check(Os_TargetWaitTick(ticket, 0u, &record) == E_OS_VALUE);
         context_rejects = 7u;
     }
-    (void)InterlockedExchange(&owner_entered, 1);
+    if (strcmp(scenario, "tick-owner-all") == 0) {
+        SuspendAllInterrupts();
+    } else if (strcmp(scenario, "tick-owner-os") == 0) {
+        SuspendOSInterrupts();
+    }
+    if (strcmp(scenario, "tick-mask-all") != 0 && strcmp(scenario, "tick-mask-os") != 0) {
+        (void)InterlockedExchange(&owner_entered, 1);
+    }
+    if (strncmp(scenario, "tick-owner-", 11u) == 0) {
+        DWORD started_at = GetTickCount();
+        while (InterlockedCompareExchange(&release_owner, 0, 0) == 0) {
+            check((GetTickCount() - started_at) < 4000u);
+            Sleep(1u);
+        }
+        if (strcmp(scenario, "tick-owner-all") == 0) {
+            ResumeAllInterrupts();
+        } else {
+            ResumeOSInterrupts();
+        }
+    }
     if (manual) {
         manual_alarms();
     }
@@ -386,6 +448,25 @@ static void owner(void) {
 }
 static void monitor(void) {
     DWORD started_at = GetTickCount();
+    if (strcmp(scenario, "tick-mask-all") == 0 || strcmp(scenario, "tick-mask-os") == 0) {
+        /* The real owner is already WAITING when this lower-priority Task
+         * runs. Hold its tick pending using this Task's own balanced mask. */
+        if (strcmp(scenario, "tick-mask-all") == 0) {
+            SuspendAllInterrupts();
+        } else {
+            SuspendOSInterrupts();
+        }
+        (void)InterlockedExchange(&owner_entered, 1);
+        while (InterlockedCompareExchange(&release_owner, 0, 0) == 0) {
+            check((GetTickCount() - started_at) < 4000u);
+            Sleep(1u);
+        }
+        if (strcmp(scenario, "tick-mask-all") == 0) {
+            ResumeAllInterrupts();
+        } else {
+            ResumeOSInterrupts();
+        }
+    }
     while (InterlockedCompareExchange(&producer_done, 0, 0) == 0) {
         check((GetTickCount() - started_at) < 8000u);
         Sleep(1u);
@@ -431,6 +512,10 @@ void StartupHook(void) {
 }
 void ShutdownHook(StatusType Error) {
     unsigned i;
+    if (strncmp(scenario, "tick-owner-", 11u) == 0) {
+        printf("dispatch_release phase=0 waiting_commit=%ld\n",
+               InterlockedCompareExchange(&dispatch_release_stage, 0, 0) == 2 ? 1L : 0L);
+    }
     for (i = 0u; i < hardware_count; ++i) {
         printf("hardware epoch=%llu kernel=%u value=%llu elapsed=%llu\n",
                (unsigned long long)hardware[i].epoch, (unsigned)hardware[i].kernel,

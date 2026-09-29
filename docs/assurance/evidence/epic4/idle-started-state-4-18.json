@@ -1,0 +1,197 @@
+{
+  "kernel_commit": "054e14f3397023aa83813a65aa065fc4597d481b",
+  "compiler": "GCC 16.1.0 x64",
+  "tls_abi": "PE native TLS; no emutls helper",
+  "binary_sha256": "67799d912688dbf408f72700b374acec28b76a065bed42721182471660c7c5e0",
+  "patches": {
+    "0001-controlled-host-lifecycle.patch": "b522c8fa69454989be899658d670f6313fb621f455f32a258e06fad18fbbf04f",
+    "0002-native-stack.patch": "75e4e04e0de99dd9c1dc3e36e3a93c3d51cad64fec32a09e8b203c3c15040648",
+    "0003-activation-ready-policy.patch": "357b1a98a00d8bd197092e4199b710849d08d5684f9d0eabf4459c354c9f979b",
+    "0004-windows-event-namespace.patch": "633529f96b0bb46cae34687cae8dd9bffda068b971f0dd22b8da9c5fdaa47bf1",
+    "0005-category2-resource-gate.patch": "e43dd1f0998e7ec0a8feb8e397ba37c285bf2c031480a6528297e078c94c82df",
+    "0006-input-handler-ownership.patch": "bcb70ae8a8947344c206ff4a0b31d445b6c6bb1956135d45f81c6e1b554a3075",
+    "0007-controlled-tick.patch": "d027c76922a4d8d69e639b3cbe5a48c121b4dabfaf116334b4acff1fc472160f",
+    "0008-task-hook-boundaries.patch": "bf6d08e9ff0b6e2c8eb866b5c0509559e9d5ab37cf9df25b23824dcc16beccdc",
+    "0009-interrupt-source-control.patch": "31b2a63c117986a01ba028b2f7dc4b91bb7b8d9c92bea78265a0240051b90829",
+    "0010-native-interrupt-identities.patch": "c27b3887858dcace2630fd9b114eb7c55f8f365af328e7fa8f37897805b707d0",
+    "0011-isr-phase-before-mutex-release.patch": "e2aea7b4a24ea564c2cf8fcf85932982a8aec80d642394c37cb4dd1067eb1a4f"
+  },
+  "product_sources": {
+    "runtime/include/Std_Types.h": "9ff4d82a55ae0b8727dc3e75c2c5cf92ac5f4cad4f649939ff9d5d39716bc4ef",
+    "runtime/os/FreeRTOSConfig.h": "03b64e00357a47db0ce053d10766690c8c72a92caac03beb792704e235b9a23b",
+    "runtime/os/include/Os.h": "1e3927fa6ac7c3c3d593ab401303ac97c6cab62b35a5e3b993155016da400775",
+    "runtime/os/include/Os_Cfg.h": "34439ac9d1b5a9bbd371b458abe03dc2498563b4ad6774b9cea6a7557d0bf5ec",
+    "runtime/os/include/Os_Hooks.h": "e86af6e53f039aad0c05ceca3b86d992d62d379d71a462e508e2e5003af9325e",
+    "runtime/os/include/Os_Mailbox.h": "de31d0af68fe473bcab3ee365066eb1feec3436036a0740b2be996d78719ef4c",
+    "runtime/os/include/Os_Target.h": "be9785c4ec9eeb590d5ca7e42335a028be502c5cdff454353e2e3b105cdb1877",
+    "runtime/os/include/Os_Time.h": "02a429a14b8a1b3d50158b4b66801fd06d57172282b375e52faeb09c40f8acd5",
+    "runtime/os/include/Os_Types.h": "da4e9331f3cd8f9ac597ded055137f0f41a2b970c344557c301561315b7f06fc",
+    "runtime/os/patches/0001-controlled-host-lifecycle.patch": "b522c8fa69454989be899658d670f6313fb621f455f32a258e06fad18fbbf04f",
+    "runtime/os/patches/0002-native-stack.patch": "75e4e04e0de99dd9c1dc3e36e3a93c3d51cad64fec32a09e8b203c3c15040648",
+    "runtime/os/patches/0003-activation-ready-policy.patch": "357b1a98a00d8bd197092e4199b710849d08d5684f9d0eabf4459c354c9f979b",
+    "runtime/os/patches/0004-windows-event-namespace.patch": "633529f96b0bb46cae34687cae8dd9bffda068b971f0dd22b8da9c5fdaa47bf1",
+    "runtime/os/patches/0005-category2-resource-gate.patch": "e43dd1f0998e7ec0a8feb8e397ba37c285bf2c031480a6528297e078c94c82df",
+    "runtime/os/patches/0006-input-handler-ownership.patch": "bcb70ae8a8947344c206ff4a0b31d445b6c6bb1956135d45f81c6e1b554a3075",
+    "runtime/os/patches/0007-controlled-tick.patch": "d027c76922a4d8d69e639b3cbe5a48c121b4dabfaf116334b4acff1fc472160f",
+    "runtime/os/patches/0008-task-hook-boundaries.patch": "bf6d08e9ff0b6e2c8eb866b5c0509559e9d5ab37cf9df25b23824dcc16beccdc",
+    "runtime/os/patches/0009-interrupt-source-control.patch": "31b2a63c117986a01ba028b2f7dc4b91bb7b8d9c92bea78265a0240051b90829",
+    "runtime/os/patches/0010-native-interrupt-identities.patch": "c27b3887858dcace2630fd9b114eb7c55f8f365af328e7fa8f37897805b707d0",
+    "runtime/os/patches/0011-isr-phase-before-mutex-release.patch": "e2aea7b4a24ea564c2cf8fcf85932982a8aec80d642394c37cb4dd1067eb1a4f",
+    "runtime/os/README.md": "40a3b7fc8eb179b8c55b305ac8579f6baf4fa605e69fc3668edfa0a37e064a59",
+    "runtime/os/src/Os.c": "8d1a8d64996ad15be8821bff56c57cc5950cf5c49ec1d575c47e8ed1cf374519",
+    "runtime/os/src/Os_Backend.c": "5bbd5aedc15346dba222af78b38ec8c950149b295747fab8138e78aacc790ca4",
+    "runtime/os/src/Os_Backend.h": "66288502307f2327dd5390840ee41c8cd6a8075ca4283388d4712174c12a40c8",
+    "runtime/os/src/Os_Error.c": "010fbeff52edcd9c784a61b8b00b994911aa814e7d727f299f5b727260b633f5",
+    "runtime/os/src/Os_HostEvent.c": "229aabdeffede1d31b840fc08216f294aa4f5390b39033309fb14a38d9ae301f",
+    "runtime/os/src/Os_Interrupt.c": "542cda9a80190bd6586904b272cfcd8ccc459754a611ee549563f81260db6dcb",
+    "runtime/os/src/Os_Mailbox.c": "5dcfd6f0ef73b852d92c732bb16cea67805e1493f1ff1b381ba52d1e705292eb",
+    "runtime/os/src/Os_Schedule.c": "f28f2ed6f55648e9205fcf56c9ea5f0fef0a4e75dd12377ce490920e13677125",
+    "runtime/os/src/Os_Stack.c": "44669d37c3bbdcb59165c19cfb911482ac44ec7cc9ec4dbdee347b954cd5e479",
+    "runtime/os/src/Os_Stack.h": "8fe1dc8c433e64094ebd9c7e8a48c3fd1a9fdc15a9f9c2e50bc0cf87324297f8",
+    "runtime/os/src/Os_Time.c": "c28442d5476117ee7823ad57070307ddc46c56c5e399e2724936664c744a17c7",
+    "runtime/os/src/Os_Windows.h": "653a7ef7849fcd34545d17eacb4317513b2789f49e38292a69ce2fdfe9782722",
+    "runtime/os/tests/activation.c": "15fd3975cf1b4c0ebcf70923c48d3d565caeddf38e15b326517064f7d8e8f8d4",
+    "runtime/os/tests/calling_context.c": "2dd1cf1b26af2b89e911b91b94d6ce062c07f7da0bbf0dfce44198fd2d6051f7",
+    "runtime/os/tests/controlled_time.c": "dc8ca7739c2c458fda8f4687da5957f2d3200ea6c65dfae918411fc795284493",
+    "runtime/os/tests/error_hooks.c": "624785f46efcd0039403071cfd044b6fb65f1b75d64c69fc9abc3d0e45180392",
+    "runtime/os/tests/event_wakeup.c": "f1eaf6fb9190444d1d3722b2427af4b99d043b9a3cabe1663aaafa5c96660a03",
+    "runtime/os/tests/finish_chain.c": "1621704d0742ec1eae874fe7e9975afaf78bff1c2f6b0f7accac1542ce8d131e",
+    "runtime/os/tests/idle_state.c": "119db00e99edb91300321d697d4cac916273b57cbfd5f160dbb7a5efe9ea439d",
+    "runtime/os/tests/interrupt_pairing.c": "a81d9bef46bc13f618d01c83c6126db7e01ba7d3c895c02d6643812a7de1ed13",
+    "runtime/os/tests/isr_cleanup.c": "4e5472664f3c04e63b8446dffe96cc7f43adebba9da89e01d744aaf1b07c533a",
+    "runtime/os/tests/lifecycle.c": "2a5b54fdd1d24359c8e8f3707ec67c5dc330b135f1adab25f5954b0464de1fc2",
+    "runtime/os/tests/native_stack.c": "d231fe80328627b12aebfae4eb6caebad6733c721097c7df4fa59ad2053efece",
+    "runtime/os/tests/public_types.c": "38a0cca15aef91d451ad3c4346cb26f8c96ee28370cbb2e421e278b7b90e9508",
+    "runtime/os/tests/resource_preemption.c": "157f45153b723a4666ba0007b19727fb046ee9ab88659969b0af9e58107bed59",
+    "runtime/os/tests/returned_task.c": "856c71b8df723091e979b131901402e7d4d2247429e88e7c8e70761232b0da35",
+    "runtime/os/tests/sc1_capacity.c": "52bc6b5c1178621d8c50d076807c25cb4ca29856566dfe0e21a27ea5cd41e559",
+    "runtime/os/tests/sc1_timing.c": "0a032b3a966b5d91e493ddec2319a44841be84056c9ef5499e5e0718217980ea",
+    "runtime/os/tests/task_hooks.c": "d79628db722fe64e264a499b9ee867e9dba04a83a32522f047b0350e9514ba34"
+  },
+  "command": [
+    "gcc",
+    "-DOS_IDLE_TESTS",
+    "-std=c99",
+    "-O1",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-I",
+    "<repo-root>\\runtime\\os",
+    "-I",
+    "<repo-root>\\runtime\\os\\include",
+    "-I",
+    "<repo-root>\\runtime\\os\\src",
+    "-I",
+    "<repo-root>\\runtime\\include",
+    "-I",
+    "<build-dir>\\kernel\\include",
+    "-I",
+    "<build-dir>\\kernel\\portable\\MSVC-MingW",
+    "<repo-root>\\runtime\\os\\src\\Os.c",
+    "<repo-root>\\runtime\\os\\src\\Os_Error.c",
+    "<repo-root>\\runtime\\os\\src\\Os_Interrupt.c",
+    "<repo-root>\\runtime\\os\\src\\Os_Backend.c",
+    "<repo-root>\\runtime\\os\\src\\Os_Stack.c",
+    "<repo-root>\\runtime\\os\\src\\Os_HostEvent.c",
+    "<repo-root>\\runtime\\os\\src\\Os_Mailbox.c",
+    "<repo-root>\\runtime\\os\\src\\Os_Time.c",
+    "<repo-root>\\runtime\\os\\src\\Os_Schedule.c",
+    "<repo-root>\\runtime\\os\\tests\\idle_state.c",
+    "<build-dir>\\kernel\\tasks.c",
+    "<build-dir>\\kernel\\list.c",
+    "<build-dir>\\kernel\\queue.c",
+    "<build-dir>\\kernel\\portable\\MSVC-MingW\\port.c",
+    "-lwinmm",
+    "-o",
+    "<build-dir>\\os_harness.exe"
+  ],
+  "observations": [
+    {
+      "scenario": "valid",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "idle_state scenario=valid observed=1 wakes=1 errors=1 reason=0\nidle_error status=2 service=29\nSTACK role=S tid=33104 low=591315075072 high=591317172224 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=591317168800 observations=18 buffer_low=0 buffer_high=0\nSTACK role=C tid=11872 low=591319269376 high=591319531520 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=591319529168 observations=3 buffer_low=0 buffer_high=0\nSTACK role=D tid=8484 low=591319531520 high=591319793664 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=591319792496 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=40896 low=591319793664 high=591320055808 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=591320055184 observations=13 buffer_low=140702027674624 buffer_high=140702027678720\nSTACK role=B tid=42176 low=591320055808 high=591320317952 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=591320316008 observations=9 buffer_low=140702027740160 buffer_high=140702027744256\nSTACK role=I tid=53112 low=591320317952 high=591320580096 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=591320579208 observations=12465 buffer_low=140702027744256 buffer_high=140702027748352\nlifecycle=Closed state=Ready reason=0 trace=IR threads=5 events=14 mutexes=1 resource_calls=20 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_errors": [
+        [
+          2,
+          29
+        ]
+      ],
+      "scope": "single-core ignores CoreID65535; existing virtual-core no-halt idle loop runs on actual I stack then actual ISR wakes waiting automotive Task; started query remains DRAFT"
+    },
+    {
+      "scenario": "invalid",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "idle_state scenario=invalid observed=1 wakes=1 errors=2 reason=0\nidle_error status=2 service=29\nidle_error status=3 service=29\nSTACK role=S tid=18316 low=785857380352 high=785859477504 reserve=2097152 commit=36864 guard=20480 guarantee=16384 sp=785859474384 observations=18 buffer_low=0 buffer_high=0\nSTACK role=C tid=1604 low=785854824448 high=785855086592 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=785855084832 observations=3 buffer_low=0 buffer_high=0\nSTACK role=D tid=15592 low=785861574656 high=785861836800 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=785861834960 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=24996 low=785861836800 high=785862098944 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=785862096768 observations=15 buffer_low=140702027674624 buffer_high=140702027678720\nSTACK role=B tid=48280 low=785862098944 high=785862361088 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=785862359608 observations=9 buffer_low=140702027740160 buffer_high=140702027744256\nSTACK role=I tid=8576 low=785862361088 high=785862623232 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=785862621992 observations=9564 buffer_low=140702027744256 buffer_high=140702027748352\nlifecycle=Closed state=Ready reason=0 trace=IR threads=5 events=14 mutexes=1 resource_calls=20 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_errors": [
+        [
+          2,
+          29
+        ],
+        [
+          3,
+          29
+        ]
+      ],
+      "scope": "single-core ignores CoreID65535; existing virtual-core no-halt idle loop runs on actual I stack then actual ISR wakes waiting automotive Task; started query remains DRAFT"
+    },
+    {
+      "scenario": "masked",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "idle_state scenario=masked observed=1 wakes=1 errors=3 reason=0\nidle_error status=2 service=29\nidle_error status=9 service=29\nidle_error status=9 service=54\nSTACK role=S tid=37736 low=998546341888 high=998548439040 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=998548435792 observations=18 buffer_low=0 buffer_high=0\nSTACK role=D tid=35096 low=998543589376 high=998543851520 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=998543849536 observations=1 buffer_low=0 buffer_high=0\nSTACK role=C tid=36432 low=998543327232 high=998543589376 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=998543586928 observations=3 buffer_low=0 buffer_high=0\nSTACK role=T tid=40916 low=998543851520 high=998544113664 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=998544112112 observations=20 buffer_low=140702027674624 buffer_high=140702027678720\nSTACK role=B tid=48840 low=998550536192 high=998550798336 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=998550796248 observations=9 buffer_low=140702027740160 buffer_high=140702027744256\nSTACK role=I tid=43608 low=998550798336 high=998551060480 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=998551058632 observations=9876 buffer_low=140702027744256 buffer_high=140702027748352\nlifecycle=Closed state=Ready reason=0 trace=IR threads=5 events=14 mutexes=1 resource_calls=20 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_errors": [
+        [
+          2,
+          29
+        ],
+        [
+          9,
+          29
+        ],
+        [
+          9,
+          54
+        ]
+      ],
+      "scope": "single-core ignores CoreID65535; existing virtual-core no-halt idle loop runs on actual I stack then actual ISR wakes waiting automotive Task; started query remains DRAFT"
+    },
+    {
+      "scenario": "isr",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "idle_state scenario=isr observed=1 wakes=1 errors=1 reason=0\nidle_error status=2 service=29\nSTACK role=S tid=35612 low=724230471680 high=724232568832 reserve=2097152 commit=36864 guard=20480 guarantee=16384 sp=724232566160 observations=19 buffer_low=0 buffer_high=0\nSTACK role=C tid=42248 low=724228112384 high=724228374528 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=724228372608 observations=3 buffer_low=0 buffer_high=0\nSTACK role=D tid=52236 low=724234665984 high=724234928128 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=724234926736 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=27740 low=724234928128 high=724235190272 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=724235188576 observations=13 buffer_low=140702027674624 buffer_high=140702027678720\nSTACK role=B tid=28700 low=724235190272 high=724235452416 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=724235451320 observations=9 buffer_low=140702027740160 buffer_high=140702027744256\nSTACK role=I tid=42164 low=724235452416 high=724235714560 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=724235713256 observations=9866 buffer_low=140702027744256 buffer_high=140702027748352\nlifecycle=Closed state=Ready reason=0 trace=IR threads=5 events=14 mutexes=1 resource_calls=20 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_errors": [
+        [
+          2,
+          29
+        ]
+      ],
+      "scope": "single-core ignores CoreID65535; existing virtual-core no-halt idle loop runs on actual I stack then actual ISR wakes waiting automotive Task; started query remains DRAFT"
+    },
+    {
+      "scenario": "unconfigured",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "idle_state scenario=unconfigured observed=1 wakes=1 errors=0 reason=0\nSTACK role=S tid=8972 low=299301339136 high=299303436288 reserve=2097152 commit=36864 guard=20480 guarantee=16384 sp=299303433248 observations=18 buffer_low=0 buffer_high=0\nSTACK role=C tid=35100 low=299305533440 high=299305795584 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=299305794096 observations=3 buffer_low=0 buffer_high=0\nSTACK role=D tid=36200 low=299305795584 high=299306057728 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=299306057056 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=51452 low=299306057728 high=299306319872 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=299306318528 observations=14 buffer_low=140702027674624 buffer_high=140702027678720\nSTACK role=B tid=48324 low=299306319872 high=299306582016 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=299306581384 observations=8 buffer_low=140702027740160 buffer_high=140702027744256\nSTACK role=I tid=44756 low=299306582016 high=299306844160 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=299306841832 observations=10957 buffer_low=140702027744256 buffer_high=140702027748352\nlifecycle=Closed state=Ready reason=0 trace=IR threads=5 events=14 mutexes=1 resource_calls=20 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_errors": [],
+      "scope": "single-core ignores CoreID65535; existing virtual-core no-halt idle loop runs on actual I stack then actual ISR wakes waiting automotive Task; started query remains DRAFT"
+    }
+  ],
+  "status": "pass",
+  "representation": "workspace/build/toolchain paths normalized; observed native addresses and thread IDs retained for physical-stack and fault correlation",
+  "raw_record_sha256": "055a94645c6ec2fd8c581603323379016724454790394a512e98f1decfd4777c",
+  "raw_record_local": ".scratch/epic4/idle-started-state-4-18-raw.json"
+}

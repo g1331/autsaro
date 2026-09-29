@@ -1,6 +1,17 @@
 #ifndef AUTOSAR_EPIC4_OS_H
 #define AUTOSAR_EPIC4_OS_H
 #include "Os_Types.h"
+/** @brief Select the supported virtual-core idle mode.
+ * @param CoreID Ignored by this single-core target, including foreign values.
+ * @param IdleMode IDLE_NO_HALT; other modes return E_OS_ID without an effect.
+ * @return E_OK, or the standard context/disabled-interrupt/invalid-mode error.
+ */
+StatusType ControlIdle(CoreIdType CoreID, IdleModeType IdleMode);
+/** @brief R24-11 DRAFT query of whether StartOS has been called.
+ * @return TRUE after entry to StartOS; FALSE before it or when the call is ignored.
+ * @note The draft API can be used before startup in an initialized C environment.
+ */
+boolean isOsStarted(void);
 #include "Os_Hooks.h"
 /** Restore the caller's non-nested DisableAllInterrupts state; unmatched call has no effect. */
 void EnableAllInterrupts(void);

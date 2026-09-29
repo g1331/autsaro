@@ -1,0 +1,24 @@
+--- a/portable/MSVC-MingW/port.c
++++ b/portable/MSVC-MingW/port.c
+@@ -145,7 +145,7 @@
+ int Os_PortInterruptSourceControl( uint32_t interrupt, unsigned operation, boolean clear )
+ {
+     uint32_t bit;
+-    if( ( interrupt >= 32U ) || ( interrupt == 1U ) || ( ulIsrHandler[ interrupt ] == NULL ) )
++    if( ( interrupt >= 32U ) || ( interrupt <= OS_CONTROLLED_TICK_INTERRUPT ) || ( ulIsrHandler[ interrupt ] == NULL ) )
+     {
+         return 0;
+     }
+@@ -635,6 +635,12 @@
+ void vPortSetInterruptHandler( uint32_t ulInterruptNumber,
+                                uint32_t ( * pvHandler )( void ) )
+ {
++    if( ( ( ulInterruptNumber == portINTERRUPT_YIELD ) && ( pvHandler != prvProcessYieldInterrupt ) ) ||
++        ( ( ulInterruptNumber == portINTERRUPT_TICK ) && ( pvHandler != prvProcessTickInterrupt ) ) )
++    {
++        Os_BackendShutdown( E_OS_ACCESS );
++    }
++
+     if( ( Os_Config != NULL ) && ( Os_Config->time != NULL ) &&
+         ( ulInterruptNumber == portINTERRUPT_TICK ) && ( pvHandler != prvProcessTickInterrupt ) )
+     {

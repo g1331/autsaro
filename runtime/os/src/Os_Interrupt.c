@@ -8,15 +8,20 @@ typedef struct {
 } InterruptState;
 /* One cell per physical Task/boot actor, and separate logical ISR cells on
  * the native ISR thread. This preserves ownership across interrupted actors. */
-static __thread InterruptState states[33];
+static __thread InterruptState states[33u * ((unsigned)OS_HOOK_ALARM + 1u)];
 static volatile LONG all_owners;
 static volatile LONG os_owners;
 
 static InterruptState *owner_state(void) {
     const Os_NativeStack *stack = Os_StackCurrent();
     const unsigned interrupt = Os_BackendCurrentInterrupt();
-    const unsigned index =
-        (stack != NULL && stack->role == 'S' && interrupt < 32u) ? interrupt : 32u;
+    const Os_HookPhase phase = Os_HookContext();
+    unsigned index = (stack != NULL && stack->role == 'S' && interrupt < 32u) ? interrupt : 32u;
+    if (phase >= OS_HOOK_ERROR && phase <= OS_HOOK_ALARM) {
+        /* Each Hook has its own mask ownership, including its logical ISR.
+         * Queries in ErrorHook do not inherit the failed caller's mask. */
+        index += 33u * (unsigned)phase;
+    }
     return &states[index];
 }
 int Os_InterruptDisabled(void) {
@@ -37,15 +42,17 @@ static int permitted(unsigned operation) {
     const Os_NativeStack *stack = Os_StackCurrent();
     const unsigned group = operation / 2u;
     int allowed = 0;
-    if (phase == OS_HOOK_ALARM) {
-        allowed = group == 1u;
-    } else if ((phase == OS_HOOK_NONE || phase == OS_HOOK_SHUTDOWN) && group != 2u &&
+    if (phase >= OS_HOOK_ERROR && phase <= OS_HOOK_ALARM) {
+        /* R24-11 Table 7.1 permits all six primitives from every supported
+         * global Hook and Alarm callback, extending the older OSEK table. */
+        allowed = 1;
+    } else if (phase == OS_HOOK_NONE && group != 2u &&
                (Os_BackendStarted() == 0 || InterlockedCompareExchange(&Os_Closing, 0, 0) != 0)) {
         allowed = 1;
     } else if (phase == OS_HOOK_NONE && stack != NULL) {
         allowed = stack->role == 'T' || (stack->role == 'S' && Os_BackendCurrentInterrupt() < 32u);
     } else {
-        /* Ordinary global hooks cannot change the interrupted actor's mask. */
+        /* A registered nonautomotive actor is not a Task or active ISR. */
     }
     return allowed;
 }
@@ -156,9 +163,11 @@ static StatusType source_control(ISRType interrupt, unsigned operation, boolean 
     /* Source operations are interrupt services, so application All/OS masks
      * do not reject them. Hooks and Category 1 callers cannot change sources. */
     if ((Os_HookContext() != OS_HOOK_NONE) || (Os_BackendServiceContext() == 0) ||
-        ((stack != NULL) && (stack->role == 'S') && ((current >= 32u) || (current == 1u)))) {
+        ((stack != NULL) && (stack->role == 'S') &&
+         ((current >= 32u) || (current == OS_KERNEL_YIELD_INTERRUPT)))) {
         result = E_OS_CALLEVEL;
-    } else if ((interrupt >= 32u) || (interrupt == 1u) ||
+    } else if ((interrupt >= 32u) || (interrupt == OS_KERNEL_YIELD_INTERRUPT) ||
+               (interrupt == OS_CONTROLLED_TICK_INTERRUPT) ||
                ((Os_Config->category1_isrs & (UINT32_C(1) << interrupt)) != 0u)) {
         result = E_OS_ID;
     } else {

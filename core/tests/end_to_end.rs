@@ -268,6 +268,50 @@ fn epic4_standard_interrupt_pairing() {
 
 #[cfg(windows)]
 #[test]
+fn epic4_standard_calling_context() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let output = Command::new("python")
+        .arg(root.join("scripts/epic4_os.py"))
+        .args(["--suite", "calling-context"])
+        .current_dir(root)
+        .output()
+        .expect("run R24 calling-context and logical Hook mask-ownership vectors");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "epic4_standard_calling_context PASS: 9 native vectors"
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn epic4_standard_idle_and_started_state() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let output = Command::new("python")
+        .arg(root.join("scripts/epic4_os.py"))
+        .args(["--suite", "idle-state"])
+        .current_dir(root)
+        .output()
+        .expect("run actual no-halt virtual-core idle and draft startup-state query");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "epic4_standard_idle_and_started_state PASS: 5 native vectors"
+    );
+}
+
+#[cfg(windows)]
+#[test]
 fn epic4_category2_exit_cleanup() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let output = Command::new("python")

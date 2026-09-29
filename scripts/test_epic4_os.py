@@ -168,7 +168,7 @@ class DependencyTests(unittest.TestCase):
     def test_time_gate_rejects_lost_tick_wrap_and_action_error(self):
         original = json.loads(
             (
-                epic4_os.ROOT / "docs/assurance/evidence/epic4/controlled-time.json"
+                epic4_os.ROOT / "docs/assurance/evidence/epic4/calling-time-regression-4-18.json"
             ).read_text(encoding="utf-8")
         )["observations"]
         with patch("epic4_os.execute", side_effect=copy.deepcopy(original)):
@@ -180,6 +180,10 @@ class DependencyTests(unittest.TestCase):
             ("wrap", "kernel=0 counter=1", "kernel=1 counter=1"),
             ("absolute-cycle", "counter=6", "counter=5"),
             ("action-error", "errors=1 last=4", "errors=0 last=0"),
+            ("tick-mask-all", "observed=1 kernel=0 pending=1", "observed=1 kernel=1 pending=1"),
+            ("tick-mask-os", "observed=1 kernel=0 pending=1", "observed=1 kernel=0 pending=0"),
+            ("tick-owner-all", "phase=0 waiting_commit=1", "phase=1 waiting_commit=1"),
+            ("tick-owner-os", "phase=0 waiting_commit=1", "phase=0 waiting_commit=0"),
         ]:
             records = copy.deepcopy(original)
             record = next(row for row in records if row["scenario"] == scenario)

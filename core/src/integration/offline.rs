@@ -72,6 +72,14 @@ pub(super) fn sources() -> Result<Vec<(String, Vec<u8>)>, String> {
             include_bytes!("../../../runtime/os/patches/0009-interrupt-source-control.patch"),
         ),
         (
+            "os/patches/0010-native-interrupt-identities.patch",
+            include_bytes!("../../../runtime/os/patches/0010-native-interrupt-identities.patch"),
+        ),
+        (
+            "os/patches/0011-isr-phase-before-mutex-release.patch",
+            include_bytes!("../../../runtime/os/patches/0011-isr-phase-before-mutex-release.patch"),
+        ),
+        (
             "os/README.md",
             include_bytes!("../../../runtime/os/README.md"),
         ),

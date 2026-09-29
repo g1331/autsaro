@@ -1,6 +1,7 @@
 #include "Os_Target.h"
 #include "Os_Backend.h"
 const Os_TargetConfig *Os_Config;
+static volatile LONG start_called;
 StatusType Os_TargetPrepare(const Os_TargetConfig *config) {
     size_t i, j;
     uint8_t highest_task = 0u;
@@ -86,7 +87,7 @@ StatusType Os_TargetPrepare(const Os_TargetConfig *config) {
         ((config->resource_count != 0u) && (config->resources == NULL))) {
         return E_OS_VALUE;
     }
-    if (((config->category1_isrs & 1u) != 0u) ||
+    if (((config->category1_isrs & 3u) != 0u) ||
         ((config->input_event != 0u) &&
          ((config->category1_isrs & (UINT32_C(1) << OS_INPUT_INTERRUPT)) != 0u))) {
         return E_OS_VALUE;
@@ -111,7 +112,7 @@ StatusType Os_TargetPrepare(const Os_TargetConfig *config) {
         uint8_t highest_access = 0u;
         if ((resource->id >= OS_MAX_RESOURCES) || (resource->ceiling == 0u) ||
             (resource->ceiling > ((resource->isr_access != 0u) ? 31u : OS_MAX_PRIORITY)) ||
-            ((resource->isr_access & 1u) != 0u)) {
+            ((resource->isr_access & 3u) != 0u)) {
             return E_OS_VALUE;
         }
         for (j = 0u; j < config->task_count; ++j) {
@@ -159,6 +160,8 @@ StatusType Os_TargetPrepare(const Os_TargetConfig *config) {
     return E_OK;
 }
 void StartOS(AppModeType Mode) {
+    InterlockedExchange(&start_called, 1);
+    Os_StackCheck();
     if (Os_InterruptDisabled() != 0) {
         const Os_ErrorParameters arguments = {.service_StartOS = {Mode}};
         if (Os_BackendStarted() == 0) {
@@ -171,13 +174,56 @@ void StartOS(AppModeType Mode) {
         }
         return;
     }
+    if ((Os_HookContext() != OS_HOOK_NONE) || (Os_BackendStarted() != 0)) {
+        const Os_ErrorParameters arguments = {.service_StartOS = {Mode}};
+        if (Os_HookContext() != OS_HOOK_ERROR) {
+            (void)Os_ErrorResult(OSServiceId_StartOS, E_OS_CALLEVEL, &arguments);
+        }
+        return;
+    }
     Os_BackendStart(Mode);
 }
-void ShutdownOS(StatusType Error) {
+boolean isOsStarted(void) {
+    const StatusType status = Os_ServiceAccessStatus(OSServiceId_isOsStarted);
+    const Os_ErrorParameters arguments = {.service_TerminateTask = {0u}};
     Os_StackCheck();
-    if ((Os_HookContext() != OS_HOOK_ERROR) && (Os_InterruptDisabled() != 0)) {
-        const Os_ErrorParameters arguments = {.service_ShutdownOS = {Error}};
-        (void)Os_ErrorResult(OSServiceId_ShutdownOS, E_OS_DISABLEDINT, &arguments);
+    Os_BackendGuardService();
+    if (status != E_OK) {
+        if (Os_HookContext() != OS_HOOK_ERROR) {
+            (void)Os_ErrorResult(OSServiceId_isOsStarted, status, &arguments);
+        }
+        return FALSE;
+    }
+    return InterlockedCompareExchange(&start_called, 0, 0) != 0 ? TRUE : FALSE;
+}
+StatusType ControlIdle(CoreIdType CoreID, IdleModeType IdleMode) {
+    const Os_ErrorParameters arguments = {.service_ControlIdle = {CoreID, IdleMode}};
+    StatusType status = Os_ServiceAccessStatus(OSServiceId_ControlIdle);
+    Os_StackCheck();
+    Os_BackendGuardService();
+    if (status == E_OK) {
+        if (Os_BackendServiceContext() == 0) {
+            status = E_OS_CALLEVEL;
+        } else if (IdleMode != IDLE_NO_HALT) {
+            status = E_OS_ID;
+        } else {
+            /* The existing Windows virtual-core idle loop does not halt.
+             * This target has one supported mode, already effective. CoreID
+             * is intentionally unchecked as required for single-core OS. */
+        }
+    }
+    return Os_HookContext() == OS_HOOK_ERROR
+               ? status
+               : Os_ErrorResult(OSServiceId_ControlIdle, status, &arguments);
+}
+void ShutdownOS(StatusType Error) {
+    const Os_ErrorParameters arguments = {.service_ShutdownOS = {Error}};
+    const StatusType status = Os_ServiceAccessStatus(OSServiceId_ShutdownOS);
+    Os_StackCheck();
+    if (status != E_OK) {
+        if (Os_HookContext() != OS_HOOK_ERROR) {
+            (void)Os_ErrorResult(OSServiceId_ShutdownOS, status, &arguments);
+        }
         return;
     }
     Os_BackendShutdown(Error);
@@ -191,26 +237,33 @@ static StatusType implementation_GetTaskID(TaskRefType TaskID) {
     return Os_BackendTaskId(TaskID);
 }
 AppModeType GetActiveApplicationMode(void) {
+    const StatusType status = Os_ServiceAccessStatus(OSServiceId_GetActiveApplicationMode);
     Os_StackCheck();
     Os_BackendGuardService();
-    if ((Os_HookContext() != OS_HOOK_ERROR) && (Os_InterruptDisabled() != 0)) {
+    if (status != E_OK) {
         const Os_ErrorParameters arguments = {.service_TerminateTask = {0u}};
-        (void)Os_ErrorResult(OSServiceId_GetActiveApplicationMode, E_OS_DISABLEDINT, &arguments);
+        if (Os_HookContext() != OS_HOOK_ERROR) {
+            (void)Os_ErrorResult(OSServiceId_GetActiveApplicationMode, status, &arguments);
+        }
         return 0u;
     }
     return Os_BackendApplicationMode();
 }
 ISRType GetISRID(void) {
+    const StatusType status = Os_ServiceAccessStatus(OSServiceId_GetISRID);
     const Os_NativeStack *stack = Os_StackCurrent();
     const unsigned interrupt = Os_BackendCurrentInterrupt();
     Os_StackCheck();
     Os_BackendGuardService();
-    if ((Os_HookContext() != OS_HOOK_ERROR) && (Os_InterruptDisabled() != 0)) {
+    if (status != E_OK) {
         const Os_ErrorParameters arguments = {.service_TerminateTask = {0u}};
-        (void)Os_ErrorResult(OSServiceId_GetISRID, E_OS_DISABLEDINT, &arguments);
+        if (Os_HookContext() != OS_HOOK_ERROR) {
+            (void)Os_ErrorResult(OSServiceId_GetISRID, status, &arguments);
+        }
         return INVALID_ISR;
     }
-    return (stack != NULL && stack->role == 'S' && interrupt < 32u && interrupt != 1u &&
+    return (stack != NULL && stack->role == 'S' && interrupt < 32u &&
+            interrupt != OS_KERNEL_YIELD_INTERRUPT && interrupt != OS_CONTROLLED_TICK_INTERRUPT &&
             Os_Config != NULL && (Os_Config->category1_isrs & (UINT32_C(1) << interrupt)) == 0u)
                ? (ISRType)interrupt
                : INVALID_ISR;
