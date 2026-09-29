@@ -7,9 +7,26 @@
 #include "ComStack_Types.h"
 #include "Ecu_Status.h"
 #include "Ecu_HostBatch.h"
+#include "Std_Types.h"
 #include "Os_Target.h"
 #include <stddef.h>
 #include <stdint.h>
+
+/** The sole application's committed snapshot and most recent standard status.
+ * Read/write statuses describe the last periodic attempt; failed writes retain
+ * the previously committed value and epoch. Only the owner may inspect it.
+ */
+typedef struct {
+    uint32_t value;
+    uint64_t epoch;
+    Std_ReturnType read_status;
+    Std_ReturnType write_status;
+} Ecu_ApplicationState;
+/** Inspect one coherent application state on the automotive owner.
+ * @param result Nonnull caller storage, unchanged on refusal.
+ * @return E_OK on the owner, E_NOT_OK for other contexts or a null output.
+ */
+Std_ReturnType Ecu_ApplicationInspect(Ecu_ApplicationState *result);
 
 #define ECU_TARGET_UNPREPARED 0u
 #define ECU_TARGET_INITIALIZING 1u

@@ -70,7 +70,7 @@ development_status:
   4-12-接入标准输入的安全编辑-保存与重开: done
   4-13-从唯一计划生成可链接-ecu-集成工程: done
   4-14-通过-hostbatchv1-运行并闭合输出确认: done
-  4-15-运行同一应用实例的-s-r-快照和同步-did: backlog
+  4-15-运行同一应用实例的-s-r-快照和同步-did: done
   4-16-独立验证边界-诊断恢复与旧目标回归: backlog
   4-17-完成-counter-scheduletable-能力及-sc1-容量: backlog
   4-18-补齐生命周期-extended-status-hook-和中断义务: backlog

@@ -513,7 +513,9 @@ void Ecu_TargetTask(void) {
             }
             Os_TargetTrace('c');
             if ((events & ECU_TARGET_EVENT_APP) != 0u) {
+                stage(9u);
                 ECU_TARGET_RUN_APPLICATION();
+                stage(10u);
                 Os_TargetTrace('a');
                 if (ECU_TARGET_TRANSMIT() != ECU_OK) {
                     fail();

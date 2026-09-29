@@ -4,22 +4,33 @@
 #include <stddef.h>
 
 /* Only the generated owner Task reads/writes this instance's committed value. */
-static uint32 snapshot;
+static Ecu_ApplicationState application;
 
 void Ecu_ApplicationInitialize(void) {
     Ecu_TargetAssertOwner();
-    snapshot = @TX_INITIAL@u;
+    application.value = @TX_INITIAL@u;
+    application.epoch = UINT64_C(0);
+    application.read_status = RTE_E_NEVER_RECEIVED;
+    application.write_status = E_OK;
 }
 void @PERIODIC_API@(void) {
     uint32 value;
-    Std_ReturnType status = @READ_API@(&value);
-    if (status != E_OK) {
+    application.read_status = @READ_API@(&value);
+    if (application.read_status != E_OK) {
         value = @RX_INITIAL@u;
     }
-    if (@WRITE_API@(value) != E_OK) {
-        ShutdownOS(E_OS_STATE);
+    application.write_status = @WRITE_API@(value);
+    if (application.write_status == E_OK) {
+        application.value = value;
+        application.epoch = Ecu_TargetNow();
     }
-    snapshot = value;
+}
+Std_ReturnType Ecu_ApplicationInspect(Ecu_ApplicationState *result) {
+    if ((Ecu_TargetIsOwner() == 0) || (result == NULL)) {
+        return E_NOT_OK;
+    }
+    *result = application;
+    return E_OK;
 }
 Std_ReturnType @SERVER_API@(@DATATYPE@ Data) {
     unsigned i;
@@ -27,7 +38,7 @@ Std_ReturnType @SERVER_API@(@DATATYPE@ Data) {
         return E_NOT_OK;
     }
     for (i = 0u; i < 4u; ++i) {
-        Data[i] = (uint8)(snapshot >> ((3u - i) * 8u));
+        Data[i] = (uint8)(application.value >> ((3u - i) * 8u));
     }
     return E_OK;
 }

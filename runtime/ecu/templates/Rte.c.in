@@ -28,9 +28,8 @@ Std_ReturnType Com_ReceiveSignal(Com_SignalIdType SignalId, void *SignalDataPtr)
     if (Com_GetSignal(SignalId, &value, &valid) != ECU_OK) {
         return COM_SERVICE_NOT_AVAILABLE;
     }
-    if (valid == 0u) {
-        value = @RX_INITIAL@u;
-    }
+    /* Com preserves the received value when its deadline clears validity.
+     * Return that value unchanged; Rte_Read reports freshness separately. */
     (void)memcpy(SignalDataPtr, &value, sizeof(value));
     return E_OK;
 }

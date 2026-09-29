@@ -62,3 +62,7 @@ Agent 应把规范研究放进具体功能任务，不用一轮轮独立审计�
 `OUT`携带真实输出的epoch、全局sequence、ticket/PDU及CAN数据；实际写入和flush成功后才确认对应输出。`COMMIT_OK`代表批输入、tick、输出与确认已完成并进入真实等待点，`COMMIT_ERROR`保留已执行前缀及BSW拒绝结果，`REJECT`表示接纳失败。每个COMMIT固定5000ms宿主watchdog，写入失败、阻塞超时或256项输出队列溢出关闭ECU，不声称已执行部分回滚。生命周期诊断仅保留有界前缀，`trace_dropped`明确省略的marker数量；该诊断容量与实际汽车输出容量不同。HostBatch与`-TestMode`或`-ControlSource`不能同时选择。
 
 该入口交付 Windows 主机工程。完整应用/通信向量及完整 SC1／交接仍须分别通过后续验收；编译和启动成功不能升级这些能力声明。官方 XSD、MOD、PDF、编译器及许可受限规范不随生成工程分发。
+
+参考应用的S/R Read在未接收时返回初值0／`RTE_E_NEVER_RECEIVED`，有效接收返回实际值／`E_OK`，过期保留最后接收值并返回`RTE_E_MAX_AGE_EXCEEDED`。应用对非成功读取采用配置初值；只有`Rte_Write`成功才提交值和逻辑epoch，失败记录标准状态并保留旧提交。DID 0x1234在默认／扩展会话中，经同Task的同步服务器读取这一提交值并编码为四字节大端；epoch30的新输入先于deadline处理。同一epoch的批次不重复应用周期。
+
+应用集成代码可在owner上调用`Ecu_ApplicationInspect`读取提交值、epoch及最近读写状态；原生线程和空输出拒绝，输出存储保持。独立消费者的`-TestMode`阶段9／10分别位于周期调用前后，使用真实CAN controller状态验证写拒绝和恢复；有界观测由owner发布，原生线程输出。正式后台入口为`cargo test --manifest-path core/Cargo.toml --test end_to_end epic4_application_sr_cs_loop -- --exact`。生产HostBatch沿用输出故障关闭规则；完整协议边界及恢复仍需4.16验收。

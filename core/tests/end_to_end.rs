@@ -25,6 +25,14 @@ mod epic4_ecu;
 #[path = "support/epic4_batch.rs"]
 mod epic4_batch;
 
+#[path = "support/epic4_application.rs"]
+mod epic4_application;
+
+#[test]
+fn epic4_application_sr_cs_loop() {
+    epic4_application::application_loop();
+}
+
 #[test]
 fn epic4_host_batch_codec() {
     epic4_batch::codec();
