@@ -1,4 +1,7 @@
 #include "Os_Backend.h"
+#ifdef ECU_TARGET_EPIC4
+#include "Ecu_Target.h"
+#endif
 
 static TickType values[OS_MAX_COUNTERS];
 typedef struct {
@@ -585,6 +588,9 @@ StatusType Os_TargetCompleteTick(uint64_t ticket) {
 }
 void Os_TimeOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate) {
     const Os_TimeConfig *config = Os_Config->time;
+#ifdef ECU_TARGET_EPIC4
+    Ecu_TargetOnWaiting(id, pending, predicate);
+#endif
     if ((config != NULL) && (id == config->owner) && (pending == 0u) &&
         ((predicate & config->wake_event) != 0u) && (Os_MailboxQuiescent() != 0) &&
         (InterlockedCompareExchange(&tick_state, TIME_PUBLISHING, TIME_MARKED) == TIME_MARKED)) {

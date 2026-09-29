@@ -57,4 +57,8 @@ Agent 应把规范研究放进具体功能任务，不用一轮轮独立审计�
 
 工程包含原始输入、生成配置、RTE/应用、实际 BSW/OS 和固定 FreeRTOS 来源、七个补丁、来源映射及许可。移到其他目录后，运行工程内 `build.ps1 -OutputDirectory <新的独立构建目录>`，再运行输出的 `ecu_probe.exe` 验证启动与 20 个显式受控 tick。构建目录必须位于工程之外；构建只在该目录的内核副本应用补丁。`-ControlSource <工程外的控制消费者.c>` 可替换 probe 的 `main`，链接相同公共头和运行时，验证独立输入/输出；不会替换 BSW 或应用实现。
 
-该入口交付 Windows 主机工程。HostBatchV1、完整应用/通信向量及完整 SC1／交接仍须分别通过后续验收；编译和启动成功不能升级这些能力声明。官方 XSD、MOD、PDF、编译器及许可受限规范不随生成工程分发。
+同一个工程可用 `build.ps1 -OutputDirectory <新的独立构建目录> -HostBatch` 构建生产文本入口 `ecu_host_batch.exe`。它从标准输入逐行读取 `BEGIN <epoch>`、零到256行 `RX <CAN ID> <DLC> <hex>` 和 `COMMIT`；例如 `BEGIN 10`、`RX 0x320 4 78563412`、`COMMIT`。epoch为非递减毫秒整数，单批最多跨1000ms；载荷必须恰好包含DLC所需的十六进制字节。BEGIN/RX只暂存，COMMIT执行完整批；目标epoch前的每个tick逐一完成，目标输入在该epoch的周期处理前消费，同epoch不重跑周期。
+
+`OUT`携带真实输出的epoch、全局sequence、ticket/PDU及CAN数据；实际写入和flush成功后才确认对应输出。`COMMIT_OK`代表批输入、tick、输出与确认已完成并进入真实等待点，`COMMIT_ERROR`保留已执行前缀及BSW拒绝结果，`REJECT`表示接纳失败。每个COMMIT固定5000ms宿主watchdog，写入失败、阻塞超时或256项输出队列溢出关闭ECU，不声称已执行部分回滚。生命周期诊断仅保留有界前缀，`trace_dropped`明确省略的marker数量；该诊断容量与实际汽车输出容量不同。HostBatch与`-TestMode`或`-ControlSource`不能同时选择。
+
+该入口交付 Windows 主机工程。完整应用/通信向量及完整 SC1／交接仍须分别通过后续验收；编译和启动成功不能升级这些能力声明。官方 XSD、MOD、PDF、编译器及许可受限规范不随生成工程分发。

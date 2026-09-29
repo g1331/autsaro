@@ -22,6 +22,24 @@ mod epic4_roundtrip;
 #[path = "support/epic4_ecu.rs"]
 mod epic4_ecu;
 
+#[path = "support/epic4_batch.rs"]
+mod epic4_batch;
+
+#[test]
+fn epic4_host_batch_codec() {
+    epic4_batch::codec();
+}
+
+#[test]
+fn epic4_host_batch_native_boundary() {
+    epic4_batch::native_boundary();
+}
+
+#[test]
+fn epic4_host_batch_commit() {
+    epic4_batch::commit();
+}
+
 #[test]
 fn epic4_ecu_integration_generation() {
     epic4_ecu::verify();

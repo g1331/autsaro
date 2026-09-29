@@ -57,6 +57,7 @@ static StatusType shutdown_reason;
 static AppModeType startup_mode;
 static char trace[128];
 static size_t trace_length;
+static uint64_t trace_dropped;
 static unsigned resource_calls, threads, events, mutexes;
 static unsigned fail_resource;
 static volatile LONG started;
@@ -281,11 +282,20 @@ BOOL Os_PortGetThreadContext(HANDLE thread, CONTEXT *context) {
 }
 
 void Os_TargetTrace(char marker) {
-    if (trace_length + 1u >= sizeof(trace) || marker == '\0') {
+    if (marker == '\0') {
         if (InterlockedCompareExchange(&Os_Closing, 0, 0) != 0) {
             return;
         }
         Os_BackendShutdown(E_OS_STATE);
+    }
+    /* This bounded diagnostic prefix is not an automotive output queue.
+     * Continued operation must not depend on room for optional trace text;
+     * report omitted markers explicitly without replacing the saved prefix. */
+    if (trace_length + 1u >= sizeof(trace)) {
+        if (trace_dropped != UINT64_MAX) {
+            ++trace_dropped;
+        }
+        return;
     }
     trace[trace_length++] = marker;
 }
@@ -302,9 +312,9 @@ static void report_and_exit(void) {
     Os_StackReport();
     printf("lifecycle=Closed state=%s reason=%u trace=%s threads=%u events=%u mutexes=%u "
            "resource_calls=%u hidden=2 controllers=2 heap=windows static=freertos "
-           "input_closed=1 tick_closed=1 time_signal_failed=%d\n",
+           "input_closed=1 tick_closed=1 time_signal_failed=%d trace_dropped=%llu\n",
            shutdown_reason == E_OK ? "Ready" : "Failed", shutdown_reason, trace, threads, events,
-           mutexes, resource_calls, Os_TimeSignalFailed());
+           mutexes, resource_calls, Os_TimeSignalFailed(), (unsigned long long)trace_dropped);
     fflush(stdout);
     ExitProcess(shutdown_reason == E_OK ? 0u : shutdown_reason);
 }

@@ -30,4 +30,16 @@ void Dcm_TpTxConfirmation(EcuStatus status, uint64_t now_ms);
  */
 void Dcm_AdvanceTime(uint64_t now_ms);
 
+#ifdef ECU_TARGET_EPIC4
+/** @brief Process copied requests at the owner diagnostic/confirmation phase.
+ * @param[in] now_ms Explicit owner epoch; does not advance timers.
+ * @return Actual dispatch status; queued requests wait for prior transport.
+ */
+EcuStatus Dcm_TargetProcess(uint64_t now_ms);
+/** @brief Inspect the owner's deferred request count.
+ * @return Number of complete requests awaiting dispatch.
+ */
+unsigned Dcm_TargetPending(void);
+#endif
+
 #endif

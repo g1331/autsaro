@@ -6,6 +6,7 @@
 
 #include "ComStack_Types.h"
 #include "Ecu_Status.h"
+#include "Ecu_HostBatch.h"
 #include "Os_Target.h"
 #include <stddef.h>
 #include <stdint.h>
@@ -26,6 +27,46 @@ typedef struct {
     uint8_t dlc;
     uint8_t data[8];
 } Ecu_OutputRecord;
+
+/** Completion published at the real owner waiting/empty boundary. */
+typedef struct {
+    uint64_t ticket;
+    uint64_t epoch;
+    uint16_t input_count;
+    EcuStatus input_status;
+} Ecu_BatchCompletion;
+
+/** Native output operation: nonzero means the actual write/flush succeeded.
+ * A NULL output is the final completed/error batch receipt.
+ * @param output Immutable copied frame, or NULL for final receipt.
+ * @param batch Native staging/sequence and actual completed epoch.
+ * @param status Actual execution status.
+ * @param context Caller-owned sink context, retained only during execution.
+ * @return Nonzero for successful physical host output, zero for failure.
+ */
+typedef int (*Ecu_HostSink)(const Ecu_OutputRecord *output, const Ecu_HostBatch *batch,
+                            StatusType status, void *context);
+
+/** Execute one previously decoded complete batch on its sole native producer.
+ * @param batch Valid initialized staging in executing state.
+ * @param sink Actual output/receipt writer; called outside automotive tasks.
+ * @param context Caller-owned callback context.
+ * @return Standard admission/execution status. Output/watchdog faults close
+ * the process through the existing target fault control and never roll back.
+ */
+StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *context);
+
+/** Validate every immutable frame before any automotive time/state change.
+ * @param frames Caller-owned array; NULL only for count zero.
+ * @param count Zero through256.
+ * @return E_OK or standard pointer/value/capacity refusal.
+ */
+StatusType Ecu_TargetValidateFrames(const Ecu_BatchFrame *frames, uint16_t count);
+/** Native fault control for failed host output or its watchdog.
+ * @param reason Standard non-success shutdown reason.
+ * Does not return; requests existing shutdown and bounds failed host cleanup.
+ */
+void Ecu_TargetAbortNative(StatusType reason);
 
 /** Prepare the generated process-local configuration once, before StartOS.
  * @return Standard configuration/state status; creates no OS threads.
@@ -56,6 +97,28 @@ uint64_t Ecu_TargetNow(void);
  */
 StatusType Ecu_TargetPostFrame(uint64_t at, uint32_t id, uint8_t dlc, const uint8_t data[8],
                                uint64_t *ticket);
+/** Copy one complete batch before notifying the automotive owner.
+ * @param at Last completed logical epoch or its successor.
+ * @param frames Caller-owned frames; NULL allowed only for count zero.
+ * @param count Zero through256; whole validation precedes notification.
+ * @param ticket Accepted batch ticket, unchanged on refusal.
+ * @return Standard value/state/capacity/context status. One batch in flight.
+ */
+StatusType Ecu_TargetPostBatch(uint64_t at, const Ecu_BatchFrame *frames, uint16_t count,
+                               uint64_t *ticket);
+/** Read a completed batch after the owner is waiting with no pending IO.
+ * @param ticket Accepted batch identity.
+ * @param result Complete immutable record; unchanged until completion.
+ * @return E_OK, E_OS_NOFUNC, E_OS_ID or standard context/pointer errors.
+ */
+StatusType Ecu_TargetBatchCompletion(uint64_t ticket, Ecu_BatchCompletion *result);
+/** Target-only backend waiting callback; executes in its existing critical
+ * transition, without host IO or advancing automotive time.
+ * @param id Actual waiting Task.
+ * @param pending Remaining event bits.
+ * @param predicate Actual WaitEvent predicate.
+ */
+void Ecu_TargetOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate);
 /** Copy the next published output from the sole native control consumer.
  * @param record Caller-owned output, unchanged when empty or rejected.
  * @return E_OK, E_OS_NOFUNC, E_OS_ACCESS, E_OS_STATE or E_OS_ILLEGAL_ADDRESS.

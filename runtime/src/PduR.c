@@ -60,7 +60,11 @@ EcuStatus PduR_RxIndication(size_t frame_index, const uint8_t data[8], uint64_t 
 EcuStatus PduR_CanTpStartOfReception(size_t length) {
     EcuStatus result = ECU_ERR_TP_LENGTH;
     if ((pdur_config->diagnostic != NULL) && (length != 0u) && (length <= sizeof(rx_data))) {
-        if ((rx_active != 0u) || (tx_active != 0u)) {
+        if ((rx_active != 0u) || (tx_active != 0u)
+#ifdef ECU_TARGET_EPIC4
+            || (Dcm_TargetPending() != 0u)
+#endif
+        ) {
             result = ECU_ERR_TP_BUSY;
         } else {
             rx_expected = length;
@@ -132,3 +136,7 @@ EcuStatus PduR_DcmTransmit(const uint8_t *data, size_t length, uint64_t now_ms) 
     }
     return result;
 }
+
+#ifdef ECU_TARGET_EPIC4
+int PduR_TargetDiagnosticReady(void) { return (rx_active == 0u) && (tx_active == 0u); }
+#endif

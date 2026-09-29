@@ -72,4 +72,11 @@ void PduR_CanTpTxConfirmation(EcuStatus status, uint64_t now_ms);
  */
 EcuStatus PduR_DcmTransmit(const uint8_t *data, size_t length, uint64_t now_ms);
 
+#ifdef ECU_TARGET_EPIC4
+/** @brief Query the owner's physical diagnostic connection availability.
+ * @return Nonzero when neither reception nor response owns its buffers.
+ */
+int PduR_TargetDiagnosticReady(void);
+#endif
+
 #endif

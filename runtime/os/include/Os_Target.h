@@ -66,7 +66,9 @@ typedef struct {
  * @return E_OK or a standard validation error; no threads created on rejection.
  */
 StatusType Os_TargetPrepare(const Os_TargetConfig *config);
-/** Bounded memory trace; does not perform host I/O.
+/** Bounded diagnostic prefix; does not perform host I/O.
+ * Full capacity preserves the prefix and counts omitted markers in the closing
+ * lifecycle report. Optional diagnostic text cannot terminate normal execution.
  * @param marker Nonzero character to append.
  */
 void Os_TargetTrace(char marker);

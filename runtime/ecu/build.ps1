@@ -1,9 +1,11 @@
 param(
     [Parameter(Mandatory = $true)][string]$OutputDirectory,
     [switch]$TestMode,
+    [switch]$HostBatch,
     [string]$ControlSource
 )
 $ErrorActionPreference = 'Stop'
+if ($HostBatch -and $ControlSource) { throw 'Select HostBatch or an independent ControlSource entry, not both.' }
 
 function Get-SourceSha256([string]$LiteralPath) {
     $stream = [System.IO.File]::OpenRead($LiteralPath)
@@ -99,6 +101,13 @@ $includeFlags = @('-I', (Join-Path $projectRoot 'include'),
     '-I', (Join-Path $kernelCopy 'portable/MSVC-MingW'))
 $sources = @($names | Where-Object { $_ -match '^(src|os/src)/[^/]+\.c$' } |
     ForEach-Object { Join-Path $projectRoot $_ })
+$sources = @($sources | Where-Object { $_ -ne (Join-Path $projectRoot 'src/ecu_probe.c') -and
+    $_ -ne (Join-Path $projectRoot 'src/ecu_host_batch.c') })
+if (-not $ControlSource) {
+    if ($HostBatch -and $TestMode) { throw 'HostBatch uses production mode; select a separate independent test consumer.' }
+    $entry = if ($HostBatch) { 'src/ecu_host_batch.c' } else { 'src/ecu_probe.c' }
+    $sources += Join-Path $projectRoot $entry
+}
 if ($ControlSource) {
     $controlPath = [System.IO.Path]::GetFullPath($ControlSource)
     if (-not (Test-Path -LiteralPath $controlPath -PathType Leaf) -or
@@ -112,7 +121,7 @@ if ($ControlSource) {
 $sources += @(@('tasks.c', 'list.c', 'queue.c', 'portable/MSVC-MingW/port.c') | ForEach-Object { Join-Path $kernelCopy $_ })
 $testFlags = @()
 if ($TestMode) { $testFlags += '-DECU_TARGET_TESTS' }
-$binary = Join-Path $buildRoot 'ecu_probe.exe'
+$binary = Join-Path $buildRoot $(if ($HostBatch) { 'ecu_host_batch.exe' } else { 'ecu_probe.exe' })
 $compileArguments = @('-std=c99', '-O1', '-Wall', '-Wextra', '-Werror', '-DECU_TARGET_EPIC4')
 $compileArguments += $testFlags
 $compileArguments += $includeFlags
@@ -127,4 +136,4 @@ $objdump = Join-Path (Split-Path -Parent $compilerPath) 'objdump.exe'
 $symbols = & $objdump -t $binary
 if ($LASTEXITCODE -ne 0) { throw 'Native ABI symbol check failed.' }
 if ($symbols -match '__emutls') { throw 'Physical stack faults require native PE TLS.' }
-Write-Output "Built ECU startup probe: $binary"
+Write-Output "Built ECU native entry: $binary"

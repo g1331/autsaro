@@ -36,6 +36,13 @@ static volatile LONG native_owner;
 static DWORD native_thread;
 /* Accessed only by the native producer after its atomic identity publication. */
 static uint64_t native_input_epoch;
+static uint64_t native_batch_ticket;
+static volatile LONG batch_state;
+static uint64_t batch_epoch;
+static uint16_t batch_count;
+static uint8_t batch_needs_tick;
+static Ecu_BatchFrame batch_frames[ECU_BATCH_CAPACITY];
+static Ecu_BatchCompletion batch_completion;
 static DWORD initialization_thread;
 static uint64_t epoch;
 static uint64_t processed_tick;
@@ -219,6 +226,126 @@ StatusType Ecu_TargetPostFrame(uint64_t at, uint32_t id, uint8_t dlc, const uint
     }
     return status;
 }
+static StatusType batch_time(uint64_t at, Os_TickCompletion *completed) {
+    StatusType status;
+    if (at < native_input_epoch) {
+        return E_OS_VALUE;
+    }
+    status = Os_TargetTickCompletion(at, completed);
+    if ((status == E_OS_ID) && (at != UINT64_C(0))) {
+        status = Os_TargetTickCompletion(at - UINT64_C(1), completed);
+    }
+    return (status == E_OS_ID) ? E_OS_VALUE : ((status == E_OS_NOFUNC) ? E_OS_STATE : status);
+}
+static int frame_shape(const Ecu_BatchFrame *frame) {
+    return (frame->id <= 0x7ffu) && (frame->dlc > 0u) && (frame->dlc <= 8u) &&
+           ((frame->id != Ecu_Config.frames[0].id) || (frame->dlc == Ecu_Config.frames[0].dlc)) &&
+           ((frame->id != Ecu_Config.diagnostic->request_can_id) || (frame->dlc == 8u)) &&
+           (frame->id != Ecu_Config.frames[1].id) &&
+           (frame->id != Ecu_Config.diagnostic->response_can_id);
+}
+StatusType Ecu_TargetValidateFrames(const Ecu_BatchFrame *frames, uint16_t count) {
+    uint16_t index;
+    if ((frames == NULL) && (count != 0u)) {
+        return E_OS_ILLEGAL_ADDRESS;
+    }
+    if (count > ECU_BATCH_CAPACITY) {
+        return E_OS_LIMIT;
+    }
+    for (index = 0u; index < count; ++index) {
+        if (frame_shape(&frames[index]) == 0) {
+            return E_OS_VALUE;
+        }
+    }
+    return E_OK;
+}
+void Ecu_TargetAbortNative(StatusType reason) {
+    StatusType failure = (reason == E_OK) ? E_OS_STATE : reason;
+    (void)InterlockedExchange(&lifecycle, (LONG)ECU_TARGET_FAILED);
+    Os_BackendRequestShutdown(failure);
+    /* Fault controllers normally close first; blocked host IO must not keep
+     * this failed process alive after the native watchdog has expired. */
+    Sleep(600u);
+    ExitProcess((UINT)failure);
+}
+StatusType Ecu_TargetPostBatch(uint64_t at, const Ecu_BatchFrame *frames, uint16_t count,
+                               uint64_t *ticket) {
+    Os_TickCompletion completed;
+    Ecu_Input input = {0};
+    uint64_t mailbox_ticket;
+    StatusType status;
+    if (ticket == NULL) {
+        return E_OS_ILLEGAL_ADDRESS;
+    }
+    status = Ecu_TargetValidateFrames(frames, count);
+    if (status != E_OK) {
+        return status;
+    }
+    status = native_context();
+    if (status != E_OK) {
+        return status;
+    }
+    status = batch_time(at, &completed);
+    if (status != E_OK) {
+        return status;
+    }
+    if (native_batch_ticket == UINT64_MAX) {
+        return E_OS_LIMIT;
+    }
+    if (InterlockedCompareExchange(&batch_state, 1, 0) != 0) {
+        return E_OS_STATE;
+    }
+    batch_epoch = at;
+    batch_count = count;
+    batch_needs_tick = (at != completed.epoch) ? 1u : 0u;
+    if (count != 0u) {
+        (void)memcpy((void *)batch_frames, (const void *)frames, (size_t)count * sizeof(frames[0]));
+    }
+    batch_completion.ticket = native_batch_ticket + UINT64_C(1);
+    batch_completion.epoch = at;
+    batch_completion.input_count = count;
+    batch_completion.input_status = ECU_OK;
+    input.kind = 3u;
+    input.epoch = at;
+    input.output_ticket = batch_completion.ticket;
+    (void)InterlockedExchange(&batch_state, 2);
+    status = Os_TargetPostInput((const uint8_t *)&input, (uint8_t)sizeof(input), &mailbox_ticket);
+    if (status == E_OK) {
+        native_batch_ticket = batch_completion.ticket;
+        native_input_epoch = at;
+        *ticket = native_batch_ticket;
+    } else {
+        (void)InterlockedExchange(&batch_state, 0);
+    }
+    return status;
+}
+StatusType Ecu_TargetBatchCompletion(uint64_t ticket, Ecu_BatchCompletion *result) {
+    StatusType status;
+    if (result == NULL) {
+        return E_OS_ILLEGAL_ADDRESS;
+    }
+    status = native_context();
+    if (status != E_OK) {
+        return status;
+    }
+    if ((ticket == UINT64_C(0)) || (ticket != native_batch_ticket)) {
+        return E_OS_ID;
+    }
+    if (load(&batch_state) != 5) {
+        return E_OS_NOFUNC;
+    }
+    *result = batch_completion;
+    (void)InterlockedExchange(&batch_state, 0);
+    return E_OK;
+}
+void Ecu_TargetOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate) {
+    if ((id == ECU_TARGET_TASK) && (pending == 0u) && ((predicate & ECU_TARGET_EVENT_IO) != 0u) &&
+        (Os_MailboxQuiescent() != 0) && (output_pending == 0u) && (load(&batch_state) == 4) &&
+        (Dcm_TargetPending() == 0u) &&
+        ((batch_needs_tick == 0u) || (processed_tick == batch_epoch))) {
+        (void)InterlockedCompareExchange(&batch_state, 5, 4);
+    }
+}
 EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc,
                                     const uint8_t data[8]) {
     Ecu_OutputSlot *slot = &outputs[output_write];
@@ -309,6 +436,26 @@ static void consume(const Ecu_Input *input) {
         if (CanTp_AdvanceTime(epoch) != ECU_OK) {
             fail();
         }
+    } else if (input->kind == 3u) {
+        uint16_t index;
+        if ((load(&batch_state) != 2) || (input->output_ticket != batch_completion.ticket) ||
+            (input->epoch != batch_epoch) || (batch_epoch < epoch) ||
+            ((batch_epoch - epoch) > UINT64_C(1))) {
+            fail();
+        }
+        (void)InterlockedExchange(&batch_state, 3);
+        epoch = batch_epoch;
+        for (index = 0u; index < batch_count; ++index) {
+            EcuStatus status = Can_Inject(batch_frames[index].id, batch_frames[index].dlc,
+                                          batch_frames[index].data, epoch);
+            if ((status == ECU_OK) && (batch_frames[index].id == ECU_TARGET_RX_CAN_ID)) {
+                Ecu_TargetRecordReceive(epoch);
+            }
+            if ((status != ECU_OK) && (batch_completion.input_status == ECU_OK)) {
+                batch_completion.input_status = status;
+            }
+        }
+        (void)InterlockedExchange(&batch_state, 4);
     } else {
         fail();
     }
@@ -341,6 +488,16 @@ void Ecu_TargetTask(void) {
         }
         status = Os_TargetCurrentTick(&ticket, &delivered);
         if ((status == E_OK) && (ticket != processed_tick)) {
+            EventMaskType tick_events;
+            /* A tick may arrive while this Task drains copied inputs. Its
+             * alarm events are published before the delivered ticket, so
+             * refresh the hints instead of losing this tick's application. */
+            if ((GetEvent(ECU_TARGET_TASK, &tick_events) != E_OK) ||
+                (ClearEvent(tick_events & (ECU_TARGET_EVENT_WORK | ECU_TARGET_EVENT_APP)) !=
+                 E_OK)) {
+                fail();
+            }
+            events |= tick_events;
             if (delivered < epoch) {
                 fail();
             }
@@ -370,6 +527,9 @@ void Ecu_TargetTask(void) {
             fail();
         } else {
             /* An IO-only wake consumes callbacks without repeating periodic work. */
+            if ((processed_tick == epoch) && (Dcm_TargetProcess(epoch) != ECU_OK)) {
+                fail();
+            }
         }
         if ((status == E_OK) && (output_pending == 0u) && (Os_TargetCompleteTick(ticket) != E_OK)) {
             fail();

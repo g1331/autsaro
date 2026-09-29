@@ -57,7 +57,14 @@ static EcuStatus SendFrame(uint8_t dlc, const uint8_t data[8], uint64_t now_ms, 
         frame_confirmation_ok = 0u;
         frame_aborted = 0u;
         frame_pending = 1u;
+#ifdef ECU_TARGET_EPIC4
+        /* The selected DoCAN target has a fixed eight-byte Classical CAN
+         * N-PDU. All callers provide a fully initialized eight-byte buffer. */
+        (void)dlc;
+        result = LSduR_CanTpTransmit(8u, data);
+#else
         result = LSduR_CanTpTransmit(dlc, data);
+#endif
         if (result != ECU_OK) {
             frame_pending = 0u;
             frame_kind = CANTP_FRAME_NONE;
@@ -382,8 +389,14 @@ static EcuStatus ReceiveFlowControl(uint8_t dlc, const uint8_t data[8], uint64_t
 EcuStatus CanTp_RxIndication(uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
     EcuStatus result = ECU_ERR_CONFIG;
     if ((cantp_config != NULL) && (data != NULL)) {
+        /* The owner drains the epoch's inputs before its transport deadline
+         * phase; an input at the boundary must not expire itself first.
+         * The legacy synchronous target still advances before receiving. */
+#ifndef ECU_TARGET_EPIC4
         result = CanTp_AdvanceTime(now_ms);
-        if (result == ECU_OK) {
+        if (result == ECU_OK)
+#endif
+        {
             if ((dlc < 1u) || (dlc > 8u)) {
                 AbortRx();
                 if ((dlc > 8u) && ((data[0] >> 4u) == 3u) && (tx.active != 0u) &&

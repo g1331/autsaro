@@ -48,7 +48,7 @@ fn parameter(text: &str, name: &str, old: u32, new: u32) -> String {
     result
 }
 
-fn compile(project: &Path, output: &Path, control: Option<&Path>) {
+pub(super) fn compile(project: &Path, output: &Path, control: Option<&Path>) {
     let mut command = Command::new("powershell.exe");
     command
         .args([
@@ -73,7 +73,7 @@ fn compile(project: &Path, output: &Path, control: Option<&Path>) {
     );
 }
 
-fn run_probe(binary: &Path, stage: Option<u32>) -> Output {
+pub(super) fn run_probe(binary: &Path, stage: Option<u32>) -> Output {
     let mut command = Command::new(binary);
     if let Some(stage) = stage {
         command.arg(stage.to_string());
