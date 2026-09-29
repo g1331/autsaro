@@ -31,6 +31,11 @@ typedef struct {
     Ecu_OutputRecord record;
 } Ecu_OutputSlot;
 
+typedef struct {
+    volatile LONG state;
+    Ecu_ProtocolRecord record;
+} Ecu_ProtocolSlot;
+
 static volatile LONG lifecycle;
 static volatile LONG native_owner;
 static DWORD native_thread;
@@ -53,6 +58,9 @@ static unsigned output_confirm;
 static unsigned output_retire;
 static unsigned output_pending;
 static Ecu_OutputSlot outputs[ECU_TARGET_OUTPUT_CAPACITY];
+static Ecu_ProtocolSlot protocol_failures[ECU_TARGET_OUTPUT_CAPACITY];
+static unsigned protocol_write;
+static unsigned protocol_read;
 static uint8_t received;
 static uint64_t received_at;
 
@@ -61,6 +69,24 @@ static void fail(void) {
     ShutdownOS(E_OS_STATE);
 }
 static LONG load(volatile LONG *value) { return InterlockedCompareExchange(value, 0, 0); }
+
+static void advance_transport(void) {
+    EcuStatus status = CanTp_AdvanceTime(epoch);
+    if (status == ECU_ERR_TP_TIMEOUT) {
+        Ecu_ProtocolSlot *slot = &protocol_failures[protocol_write];
+        if (load(&slot->state) != 0) {
+            fail();
+        }
+        slot->record.epoch = epoch;
+        slot->record.status = status;
+        protocol_write = (protocol_write + 1u) % ECU_TARGET_OUTPUT_CAPACITY;
+        (void)InterlockedExchange(&slot->state, 1);
+    } else if (status != ECU_OK) {
+        fail();
+    } else {
+        /* CanTp has already aborted the timed-out connection before reporting. */
+    }
+}
 uint8_t Ecu_TargetState(void) {
     LONG state = load(&lifecycle);
     if ((state == (LONG)ECU_TARGET_READY) && (Os_TargetReady() == 0)) {
@@ -98,6 +124,25 @@ static StatusType native_context(void) {
         return E_OK;
     }
     return ((owner == 2) && (native_thread == GetCurrentThreadId())) ? E_OK : E_OS_ACCESS;
+}
+
+StatusType Ecu_TargetTakeProtocolFailure(Ecu_ProtocolRecord *record) {
+    StatusType status;
+    Ecu_ProtocolSlot *slot = &protocol_failures[protocol_read];
+    if (record == NULL) {
+        return E_OS_ILLEGAL_ADDRESS;
+    }
+    status = native_context();
+    if (status == E_OK) {
+        if (InterlockedCompareExchange(&slot->state, 2, 1) == 1) {
+            *record = slot->record;
+            (void)InterlockedExchange(&slot->state, 0);
+            protocol_read = (protocol_read + 1u) % ECU_TARGET_OUTPUT_CAPACITY;
+        } else {
+            status = E_OS_NOFUNC;
+        }
+    }
+    return status;
 }
 StatusType Ecu_TargetPrepare(void) {
     StatusType status;
@@ -433,9 +478,7 @@ static void consume(const Ecu_Input *input) {
         output_retire = (output_retire + 1u) % ECU_TARGET_OUTPUT_CAPACITY;
         (void)InterlockedExchange(&slot->state, 0);
         CanIf_TxConfirmation(input->pdu);
-        if (CanTp_AdvanceTime(epoch) != ECU_OK) {
-            fail();
-        }
+        advance_transport();
     } else if (input->kind == 3u) {
         uint16_t index;
         if ((load(&batch_state) != 2) || (input->output_ticket != batch_completion.ticket) ||
@@ -504,9 +547,7 @@ void Ecu_TargetTask(void) {
             epoch = delivered;
             Can_MainFunction_Wakeup();
             Os_TargetTrace('w');
-            if (CanTp_AdvanceTime(epoch) != ECU_OK) {
-                fail();
-            }
+            advance_transport();
             Os_TargetTrace('t');
             if (Com_AdvanceTime(epoch) != ECU_OK) {
                 fail();

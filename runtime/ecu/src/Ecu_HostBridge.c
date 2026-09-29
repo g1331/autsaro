@@ -36,9 +36,22 @@ static void sequence(Ecu_HostBatch *batch) {
 static void pump(Ecu_HostBatch *batch, Ecu_HostSink sink, void *context,
                  const Ecu_HostWatch *control) {
     Ecu_OutputRecord output;
+    Ecu_ProtocolRecord failure;
     StatusType status;
     require((GetTickCount64() - control->started) < ECU_BATCH_WATCHDOG_MS);
     require(Ecu_TargetState() == ECU_TARGET_READY);
+    status = Ecu_TargetTakeProtocolFailure(&failure);
+    while (status == E_OK) {
+        sequence(batch);
+        require(batch->transport_count != UINT16_MAX);
+        ++batch->transport_count;
+        if (batch->transport_status == ECU_OK) {
+            batch->transport_status = failure.status;
+            batch->transport_epoch = failure.epoch;
+        }
+        status = Ecu_TargetTakeProtocolFailure(&failure);
+    }
+    require(status == E_OS_NOFUNC);
     status = Ecu_TargetTakeOutput(&output);
     if (status == E_OK) {
         sequence(batch);
@@ -60,6 +73,7 @@ static void tick(Ecu_HostBatch *batch, uint64_t at, Ecu_HostSink sink, void *con
         status = Os_TargetWaitTick(ticket, 1u, &result);
         if (status == E_OK) {
             require(result.epoch == at);
+            pump(batch, sink, context, control);
             sequence(batch);
             return;
         }
@@ -103,7 +117,7 @@ StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *c
      * tick completion, one Com output per tick, maximum configured transport
      * output per diagnostic input and any older transport tail, plus receipt.
      * Individual Win32/output tickets remain separate correlation identities. */
-    required = (uint64_t)batch->count + (UINT64_C(2) * span) +
+    required = (uint64_t)batch->count + (UINT64_C(3) * span) +
                ((uint64_t)diagnostic_inputs * transport_frames) + UINT64_C(1);
     if (span != UINT64_C(0)) {
         required += transport_frames;
@@ -115,6 +129,9 @@ StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *c
     if (status != E_OK) {
         return status;
     }
+    batch->transport_status = ECU_OK;
+    batch->transport_epoch = UINT64_C(0);
+    batch->transport_count = 0u;
     control.cancel = CreateEventA(NULL, TRUE, FALSE, NULL);
     if (control.cancel == NULL) {
         Ecu_TargetAbortNative(E_OS_STATE);
@@ -147,8 +164,11 @@ StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *c
         Sleep(1u);
     }
     require((completed.epoch == batch->epoch) && (completed.input_count == batch->count));
+    pump(batch, sink, context, &control);
     batch->input_status = completed.input_status;
-    status = (completed.input_status == ECU_OK) ? E_OK : E_OS_VALUE;
+    status = ((completed.input_status == ECU_OK) && (batch->transport_status == ECU_OK))
+                 ? E_OK
+                 : E_OS_VALUE;
     require(Ecu_HostBatchComplete(batch) == E_OK);
     require((GetTickCount64() - control.started) < ECU_BATCH_WATCHDOG_MS);
     require(sink(NULL, batch, status, context) != 0);

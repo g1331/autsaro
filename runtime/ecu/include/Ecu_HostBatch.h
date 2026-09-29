@@ -37,6 +37,9 @@ typedef struct {
     uint8_t executing;
     uint8_t input_sequences_reserved;
     EcuStatus input_status;
+    EcuStatus transport_status;
+    uint64_t transport_epoch;
+    uint16_t transport_count;
     Ecu_BatchFrame frames[ECU_BATCH_CAPACITY];
 } Ecu_HostBatch;
 

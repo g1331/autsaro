@@ -45,6 +45,19 @@ typedef struct {
     uint8_t data[8];
 } Ecu_OutputRecord;
 
+/** Immutable owner-published transport failure; ordinary timeouts recover. */
+typedef struct {
+    uint64_t epoch;
+    EcuStatus status;
+} Ecu_ProtocolRecord;
+
+/** Copy and retire the next transport failure on the sole native consumer.
+ * @param record Caller-owned storage, unchanged on empty/context refusal.
+ * @return E_OK, E_OS_NOFUNC or standard context/pointer errors.
+ * Queue overflow closes the target; records are never silently discarded.
+ */
+StatusType Ecu_TargetTakeProtocolFailure(Ecu_ProtocolRecord *record);
+
 /** Completion published at the real owner waiting/empty boundary. */
 typedef struct {
     uint64_t ticket;

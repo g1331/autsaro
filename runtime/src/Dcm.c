@@ -159,7 +159,11 @@ static EcuStatus HandleReadData(const uint8_t *request, size_t length, uint64_t 
     uint8_t nrc = 0u;
     EcuStatus result;
     response[0] = 0x62u;
-    if ((length < 3u) || ((length & 1u) == 0u)) {
+    if ((length < 3u) || ((length & 1u) == 0u)
+#ifdef ECU_TARGET_EPIC4
+        || (length > 5u)
+#endif
+    ) {
         nrc = 0x13u;
     } else {
         size_t offset;
@@ -380,6 +384,11 @@ static EcuStatus DispatchRequest(const uint8_t *request, size_t length, uint64_t
     EcuStatus result = ECU_ERR_CONFIG;
     if ((dcm_config != NULL) && (request != NULL) && (length != 0u)) {
         last_request_ms = now_ms;
+#ifdef ECU_TARGET_EPIC4
+        if ((request[0] != 0x10u) && (request[0] != 0x3eu) && (request[0] != 0x22u)) {
+            return NegativeResponse(request[0], 0x11u, now_ms);
+        }
+#endif
         switch (request[0]) {
         case 0x10u:
             result = HandleSessionControl(request, length, now_ms);

@@ -11,12 +11,14 @@ static int write_output(const Ecu_OutputRecord *output, const Ecu_HostBatch *sta
     (void)context;
     if (output == NULL) {
         if (printf("%s batch=%llu epoch=%llu sequence=%llu input_first=%llu inputs=%u status=%u "
-                   "input_status=%u\n",
+                   "input_status=%u transport_status=%u transport_epoch=%llu transport_count=%u\n",
                    (status == E_OK) ? "COMMIT_OK" : "COMMIT_ERROR",
                    (unsigned long long)state->batch_id, (unsigned long long)state->completed_epoch,
                    (unsigned long long)state->sequence,
                    (unsigned long long)state->first_input_sequence, (unsigned)state->count,
-                   (unsigned)status, (unsigned)state->input_status) < 0) {
+                   (unsigned)status, (unsigned)state->input_status,
+                   (unsigned)state->transport_status, (unsigned long long)state->transport_epoch,
+                   (unsigned)state->transport_count) < 0) {
             return 0;
         }
     } else {

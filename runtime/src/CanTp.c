@@ -365,8 +365,13 @@ static EcuStatus ReceiveFlowControl(uint8_t dlc, const uint8_t data[8], uint64_t
         } else if (flow_status == 2u) {
             result = FinishTx(ECU_ERR_TP_FLOW, now_ms);
         } else if (flow_status == 1u) {
+#ifdef ECU_TARGET_EPIC4
+            /* The selected target has WFTmax zero: WAIT aborts this exchange. */
+            result = FinishTx(ECU_ERR_TP_FLOW, now_ms);
+#else
             tx.wait_started_ms = now_ms;
             result = ECU_OK;
+#endif
         } else {
             uint8_t stmin = data[2];
             if ((stmin > 0x7fu) && ((stmin < 0xf1u) || (stmin > 0xf9u))) {

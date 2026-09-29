@@ -28,6 +28,14 @@ mod epic4_batch;
 #[path = "support/epic4_application.rs"]
 mod epic4_application;
 
+#[path = "support/epic4_protocol.rs"]
+mod epic4_protocol;
+
+#[test]
+fn epic4_independent_behavior_and_legacy_regression() {
+    epic4_protocol::independent_behavior();
+}
+
 #[test]
 fn epic4_application_sr_cs_loop() {
     epic4_application::application_loop();

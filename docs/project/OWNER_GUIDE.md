@@ -65,4 +65,8 @@ Agent 应把规范研究放进具体功能任务，不用一轮轮独立审计�
 
 参考应用的S/R Read在未接收时返回初值0／`RTE_E_NEVER_RECEIVED`，有效接收返回实际值／`E_OK`，过期保留最后接收值并返回`RTE_E_MAX_AGE_EXCEEDED`。应用对非成功读取采用配置初值；只有`Rte_Write`成功才提交值和逻辑epoch，失败记录标准状态并保留旧提交。DID 0x1234在默认／扩展会话中，经同Task的同步服务器读取这一提交值并编码为四字节大端；epoch30的新输入先于deadline处理。同一epoch的批次不重复应用周期。
 
-应用集成代码可在owner上调用`Ecu_ApplicationInspect`读取提交值、epoch及最近读写状态；原生线程和空输出拒绝，输出存储保持。独立消费者的`-TestMode`阶段9／10分别位于周期调用前后，使用真实CAN controller状态验证写拒绝和恢复；有界观测由owner发布，原生线程输出。正式后台入口为`cargo test --manifest-path core/Cargo.toml --test end_to_end epic4_application_sr_cs_loop -- --exact`。生产HostBatch沿用输出故障关闭规则；完整协议边界及恢复仍需4.16验收。
+应用集成代码可在owner上调用`Ecu_ApplicationInspect`读取提交值、epoch及最近读写状态；原生线程和空输出拒绝，输出存储保持。独立消费者的`-TestMode`阶段9／10分别位于周期调用前后，使用真实CAN controller状态验证写拒绝和恢复；有界观测由owner发布，原生线程输出。正式后台入口为`cargo test --manifest-path core/Cargo.toml --test end_to_end epic4_application_sr_cs_loop -- --exact`。
+
+新目标只开放诊断服务`0x10`、`0x3E`、`0x22`，单次读取最多2个DID；应用DID为`0x1234`，`F186`返回实际会话。FC WAIT按所选WFTmax=0终止交换。N_Bs／N_Cr超时终止对应连接并允许后续合法请求恢复；HostBatch错误回执的`transport_status`、`transport_epoch`和`transport_count`分别记录首个实际失败、其逻辑epoch及失败数量。已执行tick／输入不会回滚，即使批目标比失败epoch更晚。失败记录由owner有界发布，原生桥接复制后消耗全局sequence。实际输出失败、输出队列溢出及宿主watchdog仍关闭ECU。独立协议及旧目标回归入口为`cargo test --manifest-path core/Cargo.toml --test end_to_end epic4_independent_behavior_and_legacy_regression -- --exact`；旧host-v1按其独立配置保留原服务。
+
+在同一Windows主机执行整套集成测试时，先设置PowerShell的`$env:RUST_TEST_THREADS='2'`，再执行验证命令；单独的`--exact`协议测试只运行一个实例。真实FreeRTOS宿主实例同时运行会竞争CPU，默认大量并发可能触发固定5000ms的COMMIT watchdog。限制测试并发用于提供可复验的运行环境，watchdog、单批1000ms逻辑跨度及所有验收断言保持原值；故障关闭记录仍须保留。
