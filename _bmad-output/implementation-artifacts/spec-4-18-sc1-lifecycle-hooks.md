@@ -39,7 +39,7 @@ context: []
 
 ## Code Map & Tasks
 
-- runtime/os/include/Os.h、Os_Target.h及新错误/Hook内部模块：补标准服务、类型、错误码与参数宏；显式可选Hook和两个错误宏配置开关，默认未配置时保留既有消费者行为。已有初始化器和生成配置同步更新，不擅自实现SC2/3/4行为。
+- runtime/os/include/Os.h、Os_Target.h、Os_Hooks.h及Os_Error.c／内部错误声明：补标准服务、类型、错误码与参数宏；显式可选Hook和两个错误宏配置开关，默认未配置时保留既有消费者行为。已有初始化器和生成配置同步更新，不擅自实现SC2/3/4行为。
 - runtime/os/src/Os.c、Os_Time.c、Os_Schedule.c及内部声明：统一服务级错误身份/参数报告和调用层级/禁中断保护；ErrorHook递归抑制及准确输出保持。软件Counter/Alarm配置与私有受控tick owner要求分开验证，纯Basic容量配置不依赖Extended owner。
 - runtime/os/src/Os_Backend.c、FreeRTOSConfig.h：接入真实内核SWITCHED_OUT/IN及当前汽车身份；missing-end在原生Task trampoline中清理资源/屏蔽后正常结束；Shutdown路径不补PostTaskHook；保持真实栈关闭机制和StartOS不可返回。
 - runtime/os/patches/：仅在实际移植边界需要时增加受控补丁，保留来源/顺序/摘要。模拟pending位派发前统一判断全局、OS类、源及资源门槛；实际源清除与嵌套上下文恢复，不以后台线程模拟新调度。
@@ -57,6 +57,10 @@ context: []
 
 ## Implementation Notes
 
+ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参数快照、两个访问宏开关及可选回调配置；真实Task/Cat2/Startup三类执行上下文覆盖。Startup无汽车Task的嵌套错误报告返回INVALID_TASK；ErrorHook内再次失败绕过活跃报告函数，不递归、不覆盖外层快照，回调结束恢复之前Hook限制。Alarm动作错误在标准回调已配置时仅报告一次。三头文件分离避免循环include，生成交付闭包包含新头文件、Os_Error.c和Ecu_OsHooks.c。Pre/Post函数已绑定但真实转换调用仍待实现，绝不按本增量关闭4.18。八个独立新进程覆盖四种开关与配置/未配置，已配置每次31条独立错误记录；部分Cppcheck诊断保留，完整221项仍开放。
+
+下一实施增量的接口选择：ErrorHook参数快照使用逐服务的有类型结构/联合成员，保留TickType与各类输出指针原类型，不通过uintptr_t或void指针强转取回参数。一个错误报告边界负责回调前后上下文与递归抑制；ErrorHook内再次失败只返回状态，不覆盖外层快照。标准ErrorHook与现有Time.error_hook私有兼容通路须明确单次报告责任，原40向量作为回归依据。新可选Hook配置和两个宏开关按真实生产配置接入，旧未配置消费者不引入未定义回调符号。
+
 下一项已定位实际边界：configOS_REQUEST_FIFO的taskOS_SELECT_READY直接选择ready-list头并赋予pxCurrentTCB，Hook必须在候选确定、赋值前后接入且过滤相同Task；WaitEvent/Terminate/Chain要在waiting/activation状态改写前发Post，避免报告已WAITING/SUSPENDED的任务。当前参考ECUC明确OsErrorHook/Pre/Post及两个访问开关为true，生成配置尚无完整实现；后续须同时补runtime与生成闭包，不能只补测试回调。
 
 容量增量已实现：标准软件Counter/Alarm可独立于私有Extended-owner确认通道使用，wake_event0/ownerINVALID显式选择；该模式没有宿主硬件tick来源，硬件Counter配置拒绝，参考非零wake_event路径保持。GetTaskID读实际kernel选中Task，GetActiveApplicationMode读实际StartOS模式；完整Hook/错误/调用表仍待后续实现。四类最低容量、四类含非抢占Task、两类重复优先级/三次Basic排队激活、模式2及七类配置越界拒绝共18向量通过，实际资源/内部优先级/Alarm二次Task入口、ECC每Task八事件置位清除状态均有独立预期。
@@ -71,8 +75,12 @@ context: []
 
 ## Review Triage Log
 
+- ErrorHook增量edge与verification-gap独立复核均无发现。blind提出“GetTaskID标准service ID应0x04”：false，实际R24-11 OS p167的0x04属于CheckTaskMemoryAccess，p147将GetTaskID列为OSEK服务，OSEK2.2.3 §13.8.3只规定各OSServiceId_xx唯一，没有该数值；当前0x80～0x90与AUTOSAR规定的Counter/Schedule ID分开且独立字面预期检查。保留现有值，不将其他模块/实现常量当作本规范义务。
+
 - 容量独立增量三路blind／edge／verification-gap均未发现可定位缺陷或验证缺口；完整故事的Hook/错误/ISR工作仍开放。正式容量/真实生成两项测试163.73s通过；18容量、40受控时间、43计时向量封存，26最低容量义务直接映射到四个主场景，部分静态exit1原样保留。容量增量完整门exit0：85个集成测试（660.24s）、29Python、UI/桌面构建和两组Clippy通过；本故事Hook/错误/ISR仍未完成，sprint保持in-progress。
 
 ## Verification
+
+ErrorHook增量完整门exit0：86个核心集成测试600.13s（包含正式epic4_standard_error_hook_parameters、真实参考ECU/HostBatch/栈及所有既有回归）、29Python、UI/桌面构建和两组Clippy通过。最终仅内部声明参数名校正；八配置原生编译/运行、增量quality及桌面构建已针对复验，随后文档身份刷新。部分Cppcheck九个翻译单元exit1，诊断和人工范围核查记录于standard-error-static-analysis-4-18.json。四条相关义务均按部分支持记录，不把未来服务/missing-end/ISR清理或整体SC1标为通过。
 
 正式epic4_sc1_errors_hooks_and_isr、四类最低容量成功运行、错误/Hook/参数/层级/ISR独立向量；受影响既有OS/时间/实际栈/参考ECU/HostBatch回归。完整门python scripts/verify.py --scope all --base <4.17完整本地提交>，测试线程按Owner Guide固定2。实际C99编译、部分Cppcheck与人工重点核查不替代完整221项原文/Required批准或SC1最终出口。全部验收无头后台，原生UI/IPC只能在隔离桌面验证。

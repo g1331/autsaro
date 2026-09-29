@@ -60,6 +60,7 @@ typedef struct {
     TaskType input_task;
     EventMaskType input_event;
     const Os_TimeConfig *time;
+    const Os_HookConfig *hooks;
 } Os_TargetConfig;
 /** Prepare one process-local target before StartOS.
  * @param config Static configuration retained for the lifetime of the process.

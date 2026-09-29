@@ -102,7 +102,7 @@ def write_shared_evidence(path: Path, record: dict, build_directory: Path) -> No
     path.write_text(json.dumps(shared, indent=2) + "\n", encoding="utf-8")
 
 
-def build(directory: Path, harness: str = "lifecycle.c") -> tuple[Path, dict]:
+def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...] = ()) -> tuple[Path, dict]:
     manifest = verify_sources()
     cc = compiler()
     copied = directory / "kernel"
@@ -138,6 +138,7 @@ def build(directory: Path, harness: str = "lifecycle.c") -> tuple[Path, dict]:
         "-I",
         str(copied / "portable/MSVC-MingW"),
         str(TARGET / "src/Os.c"),
+        str(TARGET / "src/Os_Error.c"),
         str(TARGET / "src/Os_Backend.c"),
         str(TARGET / "src/Os_Stack.c"),
         str(TARGET / "src/Os_HostEvent.c"),
@@ -153,6 +154,7 @@ def build(directory: Path, harness: str = "lifecycle.c") -> tuple[Path, dict]:
         "-o",
         str(binary),
     ]
+    command[1:1] = ["-D" + value for value in defines]
     if harness == "native_stack.c":
         command.insert(1, "-DOS_STACK_TESTS")
     if harness == "activation.c":
@@ -844,6 +846,34 @@ def check_stack(binary: Path) -> list[dict]:
     return observations
 
 
+def check_error_hooks(binary: Path, service_access: int = 1, parameter_access: int = 1) -> list[dict]:
+    statuses = [3,6,3,10,3,3,5,6,6,1,3,3,3,3,10,3,5,8,8,5,8,8,5,5,3,8,3,4]
+    services = [130,131,132,128,129,133,134,135,136,137,138,139,15,16,17,140,141,142,143,144,7,8,9,10,14,17,15,130]
+    observations = []
+    for scenario in ["configured", "unconfigured"]:
+        result = execute(binary, scenario)
+        configured = scenario == "configured"
+        expected = [(i, status, services[i] if service_access else 0,
+                     1 if i == 9 else 0, parameter_access, "T")
+                    for i, status in enumerate(statuses)] if configured else []
+        if configured:
+            expected[0:0] = [(28, 2, 130 if service_access else 0, 255,
+                              parameter_access, "B")] * 2
+            expected.append((0, 3, 130 if service_access else 0, 0, parameter_access, "S"))
+        actual = [tuple(map(int, values[:5])) + (values[5],) for values in re.findall(
+            r"error vector=(\d+) status=(\d+) service=(\d+) caller=(\d+) parameters=(\d+) actor=([TSB])",
+            result["stdout"])]
+        header = (f"errors calls={len(expected)} service_access={service_access} "
+                  f"parameter_access={parameter_access} configured={int(configured)} reason=0")
+        require(result["exit"] == 0 and not result["stderr"], result)
+        require(header in result["stdout"] and actual == expected, result)
+        require("lifecycle=Closed state=Ready reason=0" in result["stdout"], result)
+        result["independent_expected_errors"] = expected
+        result["configuration_switches"] = [service_access, parameter_access]
+        observations.append(result)
+    return observations
+
+
 def check_capacity(binary: Path) -> list[dict]:
     # Figure 3-3 minima are independent of the producer's configuration arrays.
     cases = {
@@ -930,7 +960,9 @@ def check_public_types(directory: Path) -> dict:
         "command": command,
         "product_sources": {
             path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
-            for path in [TARGET / "include/Os.h", TARGET / "src/Os_Windows.h", TARGET / "tests/public_types.c"]
+            for path in [TARGET / "include/Os.h", TARGET / "include/Os_Types.h",
+                         TARGET / "include/Os_Cfg.h", TARGET / "include/Os_Hooks.h",
+                         TARGET / "src/Os_Windows.h", TARGET / "tests/public_types.c"]
         },
         "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
         "observations": observations,
@@ -952,6 +984,7 @@ def main() -> None:
             "sc1-timing",
             "public-types",
             "capacity",
+            "error-hooks",
         ],
         default="lifecycle",
     )
@@ -974,6 +1007,7 @@ def main() -> None:
             "time": "controlled_time.c",
             "sc1-timing": "sc1_timing.c",
             "capacity": "sc1_capacity.c",
+            "error-hooks": "error_hooks.c",
         }
         checks = {
             "lifecycle": check_lifecycle,
@@ -985,9 +1019,21 @@ def main() -> None:
             "time": check_time,
             "sc1-timing": check_sc1_timing,
             "capacity": check_capacity,
+            "error-hooks": check_error_hooks,
         }
         binary, evidence = build(Path(temporary), harnesses[args.suite])
         evidence["observations"] = checks[args.suite](binary)
+        if args.suite == "error-hooks":
+            evidence["variant_sources"] = {}
+            for service_access, parameter_access in [(0, 1), (1, 0), (0, 0)]:
+                variant_dir = Path(temporary) / f"macros-{service_access}{parameter_access}"
+                variant_dir.mkdir()
+                variant, identities = build(variant_dir, "error_hooks.c", (
+                    f"OS_USE_GET_SERVICE_ID={service_access}",
+                    f"OS_USE_PARAMETER_ACCESS={parameter_access}",
+                ))
+                evidence["variant_sources"][f"{service_access}{parameter_access}"] = identities
+                evidence["observations"] += check_error_hooks(variant, service_access, parameter_access)
         if args.suite == "sc1-timing":
             clock_dir = Path(temporary) / "host-timer"
             clock_dir.mkdir()
@@ -1018,6 +1064,7 @@ def main() -> None:
             "time": "epic4_controlled_tick_and_alarm",
             "sc1-timing": "epic4_sc1_timing_capacity",
             "capacity": "epic4_sc1_class_capacity",
+            "error-hooks": "epic4_standard_error_hook_parameters",
         }
         name = names[args.suite]
         print(f"{name} PASS: {len(evidence['observations'])} native vectors")

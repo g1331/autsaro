@@ -98,6 +98,10 @@ impl ValidatedIntegrationPlan {
                 include_bytes!("../../../runtime/ecu/src/Ecu_Target.c").as_slice(),
             ),
             (
+                "src/Ecu_OsHooks.c",
+                include_bytes!("../../../runtime/ecu/src/Ecu_OsHooks.c").as_slice(),
+            ),
+            (
                 "src/Ecu_SchM.c",
                 include_bytes!("../../../runtime/ecu/src/Ecu_SchM.c").as_slice(),
             ),

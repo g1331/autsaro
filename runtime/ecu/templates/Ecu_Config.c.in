@@ -26,6 +26,11 @@ static const Os_CounterConfig counters[] = {
 };
 @ALARMS@
 @SCHEDULE_TABLES@
+static const Os_HookConfig hooks = {
+    .error = &ErrorHook,
+    .pre_task = &PreTaskHook,
+    .post_task = &PostTaskHook,
+};
 static const Os_TimeConfig time_config = {
     .counters = counters,
     .counter_count = 1u,
@@ -50,6 +55,7 @@ const Os_TargetConfig Ecu_OsConfig = {
     .input_task = 0u,
     .input_event = ECU_TARGET_EVENT_IO,
     .time = &time_config,
+    .hooks = &hooks,
 };
 static const EcuFrameConfig frames[] = {
     {@RX_CAN_ID@u, 4u, 0u, 0u, 1u, 0u, @RX_DEADLINE@u},

@@ -93,7 +93,13 @@ static size_t task_index(TaskType id) {
 int Os_BackendServiceContext(void) {
     const Os_NativeStack *stack = Os_StackCurrent();
     Os_BackendGuardService();
-    return (Os_TargetReady() != 0) && (stack != NULL) &&
+    if (stack == NULL) {
+        return 0;
+    }
+    if (Os_HookQueryContext() != 0) {
+        return 1;
+    }
+    return (Os_TargetReady() != 0) &&
            ((stack->role == 'T') ||
             ((stack->role == 'S') &&
              ((current_interrupt >= 32u) ||
@@ -563,7 +569,7 @@ static void task_entry(void *argument) {
 static void bootstrap(void *argument) {
     size_t i;
     (void)argument;
-    StartupHook();
+    Os_HookInvoke(&StartupHook, OS_HOOK_STARTUP);
     taskENTER_CRITICAL();
     for (i = 0u; i < Os_Config->task_count; ++i) {
         if ((Os_Config->tasks[i].autostart_modes & startup_mode) != 0u) {

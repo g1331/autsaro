@@ -230,13 +230,15 @@ static StatusType start_table(ScheduleTableType id, TickType value, int absolute
     Os_BackendGuardService();
     return status;
 }
-StatusType StartScheduleTableRel(ScheduleTableType ScheduleTableID, TickType Offset) {
+static StatusType implementation_StartScheduleTableRel(ScheduleTableType ScheduleTableID,
+                                                       TickType Offset) {
     return start_table(ScheduleTableID, Offset, 0);
 }
-StatusType StartScheduleTableAbs(ScheduleTableType ScheduleTableID, TickType Start) {
+static StatusType implementation_StartScheduleTableAbs(ScheduleTableType ScheduleTableID,
+                                                       TickType Start) {
     return start_table(ScheduleTableID, Start, 1);
 }
-StatusType StopScheduleTable(ScheduleTableType ScheduleTableID) {
+static StatusType implementation_StopScheduleTable(ScheduleTableType ScheduleTableID) {
     size_t index;
     StatusType status = context();
     if (status != E_OK) {
@@ -266,8 +268,8 @@ StatusType StopScheduleTable(ScheduleTableType ScheduleTableID) {
     Os_BackendGuardService();
     return status;
 }
-StatusType NextScheduleTable(ScheduleTableType ScheduleTableID_From,
-                             ScheduleTableType ScheduleTableID_To) {
+static StatusType implementation_NextScheduleTable(ScheduleTableType ScheduleTableID_From,
+                                                   ScheduleTableType ScheduleTableID_To) {
     size_t from;
     size_t to;
     StatusType status = context();
@@ -300,8 +302,8 @@ StatusType NextScheduleTable(ScheduleTableType ScheduleTableID_From,
     Os_BackendGuardService();
     return status;
 }
-StatusType GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
-                                  ScheduleTableStatusRefType ScheduleStatus) {
+static StatusType implementation_GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
+                                                        ScheduleTableStatusRefType ScheduleStatus) {
     size_t index;
     StatusType status;
     if (ScheduleStatus == NULL) {
@@ -321,4 +323,80 @@ StatusType GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
     taskEXIT_CRITICAL();
     Os_BackendGuardService();
     return E_OK;
+}
+
+StatusType StartScheduleTableRel(ScheduleTableType ScheduleTableID, TickType Offset) {
+    const Os_ErrorParameters arguments = {
+        .service_StartScheduleTableRel = {ScheduleTableID, Offset}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_StartScheduleTableRel) == 0)
+                 ? E_OS_CALLEVEL
+                 : implementation_StartScheduleTableRel(ScheduleTableID, Offset);
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_StartScheduleTableRel, status, &arguments);
+}
+
+StatusType StartScheduleTableAbs(ScheduleTableType ScheduleTableID, TickType Start) {
+    const Os_ErrorParameters arguments = {
+        .service_StartScheduleTableAbs = {ScheduleTableID, Start}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_StartScheduleTableAbs) == 0)
+                 ? E_OS_CALLEVEL
+                 : implementation_StartScheduleTableAbs(ScheduleTableID, Start);
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_StartScheduleTableAbs, status, &arguments);
+}
+
+StatusType StopScheduleTable(ScheduleTableType ScheduleTableID) {
+    const Os_ErrorParameters arguments = {.service_StopScheduleTable = {ScheduleTableID}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_StopScheduleTable) == 0)
+                 ? E_OS_CALLEVEL
+                 : implementation_StopScheduleTable(ScheduleTableID);
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_StopScheduleTable, status, &arguments);
+}
+
+StatusType NextScheduleTable(ScheduleTableType ScheduleTableID_From,
+                             ScheduleTableType ScheduleTableID_To) {
+    const Os_ErrorParameters arguments = {
+        .service_NextScheduleTable = {ScheduleTableID_From, ScheduleTableID_To}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_NextScheduleTable) == 0)
+                 ? E_OS_CALLEVEL
+                 : implementation_NextScheduleTable(ScheduleTableID_From, ScheduleTableID_To);
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_NextScheduleTable, status, &arguments);
+}
+
+StatusType GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
+                                  ScheduleTableStatusRefType ScheduleStatus) {
+    const Os_ErrorParameters arguments = {
+        .service_GetScheduleTableStatus = {ScheduleTableID, ScheduleStatus}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_GetScheduleTableStatus) == 0)
+                 ? E_OS_CALLEVEL
+                 : implementation_GetScheduleTableStatus(ScheduleTableID, ScheduleStatus);
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_GetScheduleTableStatus, status, &arguments);
 }

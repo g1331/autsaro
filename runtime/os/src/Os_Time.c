@@ -221,7 +221,7 @@ void Os_TimeReportAction(StatusType status) {
             Os_BackendShutdown(E_OS_STATE);
         }
         ++error_count;
-        if (Os_Config->time->error_hook != NULL) {
+        if ((Os_Config->time->error_hook != NULL) && (Os_ErrorHookConfigured() == 0)) {
             Os_Config->time->error_hook(status);
         }
     }
@@ -237,7 +237,7 @@ static void action(size_t index) {
         status = SetEvent(alarm->task, alarm->event);
         break;
     case OS_ALARM_CALLBACK:
-        alarm->callback();
+        Os_HookInvoke(alarm->callback, OS_HOOK_ALARM);
         break;
     case OS_ALARM_INCREMENT_COUNTER:
         /* Counter actions are handled by the bounded iterative work stack. */
@@ -298,7 +298,7 @@ static void increment(size_t counter) {
         }
     }
 }
-StatusType IncrementCounter(CounterType CounterID) {
+static StatusType implementation_IncrementCounter(CounterType CounterID) {
     size_t index;
     Os_StackCheck();
     Os_BackendGuardService();
@@ -316,7 +316,7 @@ StatusType IncrementCounter(CounterType CounterID) {
     Os_BackendGuardService();
     return E_OK;
 }
-StatusType GetCounterValue(CounterType CounterID, TickRefType Value) {
+static StatusType implementation_GetCounterValue(CounterType CounterID, TickRefType Value) {
     size_t index;
     Os_StackCheck();
     Os_BackendGuardService();
@@ -337,7 +337,8 @@ StatusType GetCounterValue(CounterType CounterID, TickRefType Value) {
     Os_BackendGuardService();
     return E_OK;
 }
-StatusType GetElapsedValue(CounterType CounterID, TickRefType Value, TickRefType ElapsedValue) {
+static StatusType implementation_GetElapsedValue(CounterType CounterID, TickRefType Value,
+                                                 TickRefType ElapsedValue) {
     size_t index;
     StatusType status = E_OK;
     Os_StackCheck();
@@ -367,7 +368,7 @@ StatusType GetElapsedValue(CounterType CounterID, TickRefType Value, TickRefType
     Os_BackendGuardService();
     return status;
 }
-StatusType GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info) {
+static StatusType implementation_GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info) {
     size_t index;
     const Os_CounterConfig *counter;
     Os_StackCheck();
@@ -389,7 +390,7 @@ StatusType GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info) {
     Os_BackendGuardService();
     return E_OK;
 }
-StatusType GetAlarm(AlarmType AlarmID, TickRefType Tick) {
+static StatusType implementation_GetAlarm(AlarmType AlarmID, TickRefType Tick) {
     size_t index;
     StatusType status = E_OK;
     Os_StackCheck();
@@ -447,13 +448,14 @@ static StatusType set_alarm(AlarmType id, TickType start, TickType cycle, int ab
     Os_BackendGuardService();
     return status;
 }
-StatusType SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle) {
+static StatusType implementation_SetRelAlarm(AlarmType AlarmID, TickType Increment,
+                                             TickType Cycle) {
     return set_alarm(AlarmID, Increment, Cycle, 0);
 }
-StatusType SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle) {
+static StatusType implementation_SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle) {
     return set_alarm(AlarmID, Start, Cycle, 1);
 }
-StatusType CancelAlarm(AlarmType AlarmID) {
+static StatusType implementation_CancelAlarm(AlarmType AlarmID) {
     size_t index;
     StatusType status = E_OK;
     Os_StackCheck();
@@ -721,3 +723,116 @@ void Os_TimeTestSeed(uint64_t epoch, uint32_t kernel_tick, TickType value) {
     completion.counter = value;
 }
 #endif
+
+StatusType IncrementCounter(CounterType CounterID) {
+    const Os_ErrorParameters arguments = {.service_IncrementCounter = {CounterID}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_IncrementCounter) == 0)
+                 ? E_OS_CALLEVEL
+                 : implementation_IncrementCounter(CounterID);
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_IncrementCounter, status, &arguments);
+}
+
+StatusType GetCounterValue(CounterType CounterID, TickRefType Value) {
+    const Os_ErrorParameters arguments = {.service_GetCounterValue = {CounterID, Value}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_GetCounterValue) == 0)
+                 ? E_OS_CALLEVEL
+                 : implementation_GetCounterValue(CounterID, Value);
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_GetCounterValue, status, &arguments);
+}
+
+StatusType GetElapsedValue(CounterType CounterID, TickRefType Value, TickRefType ElapsedValue) {
+    const Os_ErrorParameters arguments = {
+        .service_GetElapsedValue = {CounterID, Value, ElapsedValue}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_GetElapsedValue) == 0)
+                 ? E_OS_CALLEVEL
+                 : implementation_GetElapsedValue(CounterID, Value, ElapsedValue);
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_GetElapsedValue, status, &arguments);
+}
+
+StatusType GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info) {
+    const Os_ErrorParameters arguments = {.service_GetAlarmBase = {AlarmID, Info}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_GetAlarmBase) == 0)
+                 ? E_OS_CALLEVEL
+                 : implementation_GetAlarmBase(AlarmID, Info);
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_GetAlarmBase, status, &arguments);
+}
+
+StatusType GetAlarm(AlarmType AlarmID, TickRefType Tick) {
+    const Os_ErrorParameters arguments = {.service_GetAlarm = {AlarmID, Tick}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_GetAlarm) == 0)
+                 ? E_OS_CALLEVEL
+                 : implementation_GetAlarm(AlarmID, Tick);
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_GetAlarm, status, &arguments);
+}
+
+StatusType SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle) {
+    const Os_ErrorParameters arguments = {.service_SetRelAlarm = {AlarmID, Increment, Cycle}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_SetRelAlarm) == 0)
+                 ? E_OS_CALLEVEL
+                 : implementation_SetRelAlarm(AlarmID, Increment, Cycle);
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_SetRelAlarm, status, &arguments);
+}
+
+StatusType SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle) {
+    const Os_ErrorParameters arguments = {.service_SetAbsAlarm = {AlarmID, Start, Cycle}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_SetAbsAlarm) == 0)
+                 ? E_OS_CALLEVEL
+                 : implementation_SetAbsAlarm(AlarmID, Start, Cycle);
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_SetAbsAlarm, status, &arguments);
+}
+
+StatusType CancelAlarm(AlarmType AlarmID) {
+    const Os_ErrorParameters arguments = {.service_CancelAlarm = {AlarmID}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_CancelAlarm) == 0)
+                 ? E_OS_CALLEVEL
+                 : implementation_CancelAlarm(AlarmID);
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_CancelAlarm, status, &arguments);
+}

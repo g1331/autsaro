@@ -42,6 +42,13 @@ void Os_BackendStart(AppModeType mode);
 void Os_BackendShutdown(StatusType error);
 void Os_BackendRequestShutdown(StatusType error);
 void Os_BackendGuardService(void);
+Os_HookPhase Os_HookContext(void);
+int Os_HookServiceAllowed(OSServiceIdType service);
+int Os_HookQueryContext(void);
+int Os_ErrorHookConfigured(void);
+StatusType Os_ErrorResult(OSServiceIdType service, StatusType status,
+                          const Os_ErrorParameters *arguments);
+void Os_HookInvoke(void (*hook)(void), Os_HookPhase selected);
 StatusType Os_BackendState(TaskType id, TaskStateRefType state);
 StatusType Os_BackendTaskId(TaskRefType id);
 AppModeType Os_BackendApplicationMode(void);

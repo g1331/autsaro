@@ -163,7 +163,7 @@ void ShutdownOS(StatusType Error) {
     Os_StackCheck();
     Os_BackendShutdown(Error);
 }
-StatusType GetTaskID(TaskRefType TaskID) {
+static StatusType implementation_GetTaskID(TaskRefType TaskID) {
     Os_StackCheck();
     Os_BackendGuardService();
     if (TaskID == NULL) {
@@ -176,7 +176,7 @@ AppModeType GetActiveApplicationMode(void) {
     Os_BackendGuardService();
     return Os_BackendApplicationMode();
 }
-StatusType GetTaskState(TaskType TaskID, TaskStateRefType State) {
+static StatusType implementation_GetTaskState(TaskType TaskID, TaskStateRefType State) {
     Os_StackCheck();
     Os_BackendGuardService();
     if (State == NULL) {
@@ -184,52 +184,52 @@ StatusType GetTaskState(TaskType TaskID, TaskStateRefType State) {
     }
     return Os_BackendState(TaskID, State);
 }
-StatusType ActivateTask(TaskType TaskID) {
+static StatusType implementation_ActivateTask(TaskType TaskID) {
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendActivate(TaskID);
 }
-StatusType TerminateTask(void) {
+static StatusType implementation_TerminateTask(void) {
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendFinish();
 }
-StatusType ChainTask(TaskType TaskID) {
+static StatusType implementation_ChainTask(TaskType TaskID) {
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendChain(TaskID);
 }
-StatusType GetResource(ResourceType ResID) {
+static StatusType implementation_GetResource(ResourceType ResID) {
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendResource(ResID, 1);
 }
-StatusType ReleaseResource(ResourceType ResID) {
+static StatusType implementation_ReleaseResource(ResourceType ResID) {
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendResource(ResID, 0);
 }
-StatusType Schedule(void) {
+static StatusType implementation_Schedule(void) {
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendSchedule();
 }
-StatusType WaitEvent(EventMaskType Mask) {
+static StatusType implementation_WaitEvent(EventMaskType Mask) {
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendWait(Mask);
 }
-StatusType ClearEvent(EventMaskType Mask) {
+static StatusType implementation_ClearEvent(EventMaskType Mask) {
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendClear(Mask);
 }
-StatusType SetEvent(TaskType TaskID, EventMaskType Mask) {
+static StatusType implementation_SetEvent(TaskType TaskID, EventMaskType Mask) {
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendEvent(TaskID, Mask, NULL);
 }
-StatusType GetEvent(TaskType TaskID, EventMaskRefType Event) {
+static StatusType implementation_GetEvent(TaskType TaskID, EventMaskRefType Event) {
     Os_StackCheck();
     Os_BackendGuardService();
     if (Event == NULL) {
@@ -244,4 +244,167 @@ StatusType Os_TargetInspectActivation(TaskType id, Os_ActivationInfo *info) {
         return E_OS_ILLEGAL_ADDRESS;
     }
     return Os_BackendInspect(id, info);
+}
+
+StatusType GetTaskID(TaskRefType TaskID) {
+    const Os_ErrorParameters arguments = {.service_GetTaskID = {TaskID}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_GetTaskID) == 0) ? E_OS_CALLEVEL
+                                                                 : implementation_GetTaskID(TaskID);
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_GetTaskID, status, &arguments);
+}
+
+StatusType GetTaskState(TaskType TaskID, TaskStateRefType State) {
+    const Os_ErrorParameters arguments = {.service_GetTaskState = {TaskID, State}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_GetTaskState) == 0)
+                 ? E_OS_CALLEVEL
+                 : implementation_GetTaskState(TaskID, State);
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_GetTaskState, status, &arguments);
+}
+
+StatusType ActivateTask(TaskType TaskID) {
+    const Os_ErrorParameters arguments = {.service_ActivateTask = {TaskID}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_ActivateTask) == 0)
+                 ? E_OS_CALLEVEL
+                 : implementation_ActivateTask(TaskID);
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_ActivateTask, status, &arguments);
+}
+
+StatusType TerminateTask(void) {
+    const Os_ErrorParameters arguments = {.service_TerminateTask = {0u}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_TerminateTask) == 0)
+                 ? E_OS_CALLEVEL
+                 : implementation_TerminateTask();
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_TerminateTask, status, &arguments);
+}
+
+StatusType ChainTask(TaskType TaskID) {
+    const Os_ErrorParameters arguments = {.service_ChainTask = {TaskID}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_ChainTask) == 0) ? E_OS_CALLEVEL
+                                                                 : implementation_ChainTask(TaskID);
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_ChainTask, status, &arguments);
+}
+
+StatusType GetResource(ResourceType ResID) {
+    const Os_ErrorParameters arguments = {.service_GetResource = {ResID}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_GetResource) == 0)
+                 ? E_OS_CALLEVEL
+                 : implementation_GetResource(ResID);
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_GetResource, status, &arguments);
+}
+
+StatusType ReleaseResource(ResourceType ResID) {
+    const Os_ErrorParameters arguments = {.service_ReleaseResource = {ResID}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_ReleaseResource) == 0)
+                 ? E_OS_CALLEVEL
+                 : implementation_ReleaseResource(ResID);
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_ReleaseResource, status, &arguments);
+}
+
+StatusType Schedule(void) {
+    const Os_ErrorParameters arguments = {.service_Schedule = {0u}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_Schedule) == 0) ? E_OS_CALLEVEL
+                                                                : implementation_Schedule();
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_Schedule, status, &arguments);
+}
+
+StatusType WaitEvent(EventMaskType Mask) {
+    const Os_ErrorParameters arguments = {.service_WaitEvent = {Mask}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_WaitEvent) == 0) ? E_OS_CALLEVEL
+                                                                 : implementation_WaitEvent(Mask);
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_WaitEvent, status, &arguments);
+}
+
+StatusType ClearEvent(EventMaskType Mask) {
+    const Os_ErrorParameters arguments = {.service_ClearEvent = {Mask}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_ClearEvent) == 0) ? E_OS_CALLEVEL
+                                                                  : implementation_ClearEvent(Mask);
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_ClearEvent, status, &arguments);
+}
+
+StatusType SetEvent(TaskType TaskID, EventMaskType Mask) {
+    const Os_ErrorParameters arguments = {.service_SetEvent = {TaskID, Mask}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_SetEvent) == 0)
+                 ? E_OS_CALLEVEL
+                 : implementation_SetEvent(TaskID, Mask);
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_SetEvent, status, &arguments);
+}
+
+StatusType GetEvent(TaskType TaskID, EventMaskRefType Event) {
+    const Os_ErrorParameters arguments = {.service_GetEvent = {TaskID, Event}};
+    StatusType status;
+    Os_StackCheck();
+    Os_BackendGuardService();
+    status = (Os_HookServiceAllowed(OSServiceId_GetEvent) == 0)
+                 ? E_OS_CALLEVEL
+                 : implementation_GetEvent(TaskID, Event);
+    if (Os_HookContext() == OS_HOOK_ERROR) {
+        return status;
+    }
+    return Os_ErrorResult(OSServiceId_GetEvent, status, &arguments);
 }

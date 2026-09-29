@@ -355,7 +355,8 @@ int main(int argc, char **argv) {
                                      {2u, 4u, 5u, 0u},           {3u, 2u, 2u, 0u},
                                      {4u, 31u, 1u, 0x80000000u}, {5u, 31u, 0u, 0x80000000u}};
     Os_InternalResourceConfig internal[] = {{1u, 3u}, {2u, 5u}};
-    Os_TargetConfig config = {tasks, 6u, 262144u, resources, 6u, internal, 2u, 0u, 0u, 0u, NULL};
+    Os_TargetConfig config = {tasks, 6u, 262144u, resources, 6u,   internal,
+                              2u,    0u, 0u,      0u,        NULL, NULL};
     StatusType prepared;
     scenario = (argc == 2) ? argv[1] : "non";
     if ((strcmp(scenario, "non") == 0) || (strcmp(scenario, "oracle-non") == 0)) {

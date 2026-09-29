@@ -1,5 +1,7 @@
 # Epic 4 Windows OS 基础
 
+4.18的错误报告增量在25个现有标准StatusType服务边界调用可选ErrorHook，提供有类型的service ID与参数快照。`Os_TargetConfig.hooks`为NULL时不调用标准Hook；配置`Os_HookConfig.error`后，Task、Cat2及Startup内的服务错误在原执行上下文报告。ErrorHook内再次失败不递归、不覆盖外层快照，输出参数在服务拒绝时保持原值。`Os_Cfg.h`默认启用`OS_USE_GET_SERVICE_ID`与`OS_USE_PARAMETER_ACCESS`，可在编译时分别设置0/1；对应标准访问宏在禁用时不定义。固定生产ECUC的两项开关为true，生成交付包含`Os_Types.h`、`Os_Cfg.h`、`Os_Hooks.h`、`Os_Error.c`和`Ecu_OsHooks.c`。`python scripts/epic4_os.py --suite error-hooks`运行四种开关各配置/未配置八个独立进程，正式入口为`epic4_standard_error_hook_parameters`。PreTask/PostTask回调已经声明和绑定，真实任务转换调用、missing-end及完整中断控制仍待实现，4.18与完整SC1出口保持开放。
+
 4.18的容量增量使用真实BCC1／BCC2／ECC1／ECC2配置运行最低任务、优先级、资源、内部资源、Alarm、模式和事件能力；`python scripts/epic4_os.py --suite capacity`执行18个独立轨迹及拒绝向量，正式入口为`epic4_sc1_class_capacity`。BCC配置只包含Basic Task。静态`Os_TimeConfig.wake_event=0`与`owner=INVALID_TASK`选择标准软件Counter/Alarm使用，不创建私有受控tick确认通道；此配置的硬件Counter拒绝。非零wake_event仍要求AUTOSTART Extended owner，继续使用既有实际内核受控tick/完成确认，不改变参考ECU的时间协议。完整错误、Hook、ISR和SC1出口仍未完成。
 
 4.17在同一后端增加有界Counter/ScheduleTable计时：最多八Counter、八表、每表32个ExpiryPoint及每点16个动作。表提供标准Rel／Abs启动、Stop、Next和Status接口，支持单次／重复、当前绝对值完整回绕、NEXT替换/分离及同点先激活后设事件。同步策略限已确认NONE；其他策略在建立线程前拒绝。软件Counter增量Alarm采用最多八帧的迭代工作栈，配置增量环拒绝，不使用递归或额外调度线程。宿主定时器Counter由实际受控内核tick ISR驱动；无MCU计时器声明。

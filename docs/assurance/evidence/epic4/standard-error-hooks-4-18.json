@@ -1,0 +1,1470 @@
+{
+  "kernel_commit": "054e14f3397023aa83813a65aa065fc4597d481b",
+  "compiler": "GCC 16.1.0 x64",
+  "tls_abi": "PE native TLS; no emutls helper",
+  "binary_sha256": "29f482d75e7259e03b2cb2b3781e0286475373c5f5ba755b7e19359fc115b732",
+  "patches": {
+    "0001-controlled-host-lifecycle.patch": "b522c8fa69454989be899658d670f6313fb621f455f32a258e06fad18fbbf04f",
+    "0002-native-stack.patch": "75e4e04e0de99dd9c1dc3e36e3a93c3d51cad64fec32a09e8b203c3c15040648",
+    "0003-activation-ready-policy.patch": "357b1a98a00d8bd197092e4199b710849d08d5684f9d0eabf4459c354c9f979b",
+    "0004-windows-event-namespace.patch": "633529f96b0bb46cae34687cae8dd9bffda068b971f0dd22b8da9c5fdaa47bf1",
+    "0005-category2-resource-gate.patch": "e43dd1f0998e7ec0a8feb8e397ba37c285bf2c031480a6528297e078c94c82df",
+    "0006-input-handler-ownership.patch": "bcb70ae8a8947344c206ff4a0b31d445b6c6bb1956135d45f81c6e1b554a3075",
+    "0007-controlled-tick.patch": "d027c76922a4d8d69e639b3cbe5a48c121b4dabfaf116334b4acff1fc472160f"
+  },
+  "product_sources": {
+    "runtime/os/FreeRTOSConfig.h": "facbf3a296fa5aa3d12c7d93babb34f99c9d9e940ce140e586f7aac8fc966589",
+    "runtime/os/include/Os.h": "375d7e287dff18b399cd70a5f9469028c5e1ba6a8d5fca8107052733c2844d41",
+    "runtime/os/include/Os_Cfg.h": "34439ac9d1b5a9bbd371b458abe03dc2498563b4ad6774b9cea6a7557d0bf5ec",
+    "runtime/os/include/Os_Hooks.h": "ed098ad47d42db0ed5eb30c43728711e4490e3810c2ddf5ff74a4484538c2a20",
+    "runtime/os/include/Os_Mailbox.h": "de31d0af68fe473bcab3ee365066eb1feec3436036a0740b2be996d78719ef4c",
+    "runtime/os/include/Os_Target.h": "be9785c4ec9eeb590d5ca7e42335a028be502c5cdff454353e2e3b105cdb1877",
+    "runtime/os/include/Os_Time.h": "02a429a14b8a1b3d50158b4b66801fd06d57172282b375e52faeb09c40f8acd5",
+    "runtime/os/include/Os_Types.h": "4077bfa53d6add288b53e3bcf3ff3e37635b0dde88296d453156cf0af1ce4cc7",
+    "runtime/os/patches/0001-controlled-host-lifecycle.patch": "b522c8fa69454989be899658d670f6313fb621f455f32a258e06fad18fbbf04f",
+    "runtime/os/patches/0002-native-stack.patch": "75e4e04e0de99dd9c1dc3e36e3a93c3d51cad64fec32a09e8b203c3c15040648",
+    "runtime/os/patches/0003-activation-ready-policy.patch": "357b1a98a00d8bd197092e4199b710849d08d5684f9d0eabf4459c354c9f979b",
+    "runtime/os/patches/0004-windows-event-namespace.patch": "633529f96b0bb46cae34687cae8dd9bffda068b971f0dd22b8da9c5fdaa47bf1",
+    "runtime/os/patches/0005-category2-resource-gate.patch": "e43dd1f0998e7ec0a8feb8e397ba37c285bf2c031480a6528297e078c94c82df",
+    "runtime/os/patches/0006-input-handler-ownership.patch": "bcb70ae8a8947344c206ff4a0b31d445b6c6bb1956135d45f81c6e1b554a3075",
+    "runtime/os/patches/0007-controlled-tick.patch": "d027c76922a4d8d69e639b3cbe5a48c121b4dabfaf116334b4acff1fc472160f",
+    "runtime/os/README.md": "7caab9e7ffbc4b2a500c4fa08859a09afb325f3ce7efb3ad2a8a638dff910432",
+    "runtime/os/src/Os.c": "b5ed468e686a17eada2662555d0fc40a20d79c136a63bc25255c0655f4014235",
+    "runtime/os/src/Os_Backend.c": "e703df637ca84881b8aa43ff35585deda992b44994a90de25d42bc4605a0612c",
+    "runtime/os/src/Os_Backend.h": "1ba7d1d54803f083ceda617e72e870a52cd9bebf42f687fa92cfc34e451aab55",
+    "runtime/os/src/Os_Error.c": "75d3520db0e19947acf0709db1f9d14c3ccdd9d7b7e4d9448e20543f24e5d236",
+    "runtime/os/src/Os_HostEvent.c": "229aabdeffede1d31b840fc08216f294aa4f5390b39033309fb14a38d9ae301f",
+    "runtime/os/src/Os_Mailbox.c": "5dcfd6f0ef73b852d92c732bb16cea67805e1493f1ff1b381ba52d1e705292eb",
+    "runtime/os/src/Os_Schedule.c": "7679a5539aea964a9b98b4fd0ee2055f10057d8457bfc4fa19210f85e6f53417",
+    "runtime/os/src/Os_Stack.c": "44669d37c3bbdcb59165c19cfb911482ac44ec7cc9ec4dbdee347b954cd5e479",
+    "runtime/os/src/Os_Stack.h": "8fe1dc8c433e64094ebd9c7e8a48c3fd1a9fdc15a9f9c2e50bc0cf87324297f8",
+    "runtime/os/src/Os_Time.c": "a1daf2332dc37a7c433dee8659e30cdb99e122b94fabaa4271bbfafbbfbc70ad",
+    "runtime/os/src/Os_Windows.h": "7513f31950c778c23f7ddfe9f114e475d5ebf71e7e593abb9fa78fe01755f315",
+    "runtime/os/tests/activation.c": "15fd3975cf1b4c0ebcf70923c48d3d565caeddf38e15b326517064f7d8e8f8d4",
+    "runtime/os/tests/controlled_time.c": "cae381dd426d51efe00d100d98fbb8bfac098fd5927d5e449428a5f5673ba210",
+    "runtime/os/tests/error_hooks.c": "624785f46efcd0039403071cfd044b6fb65f1b75d64c69fc9abc3d0e45180392",
+    "runtime/os/tests/event_wakeup.c": "f1eaf6fb9190444d1d3722b2427af4b99d043b9a3cabe1663aaafa5c96660a03",
+    "runtime/os/tests/finish_chain.c": "1621704d0742ec1eae874fe7e9975afaf78bff1c2f6b0f7accac1542ce8d131e",
+    "runtime/os/tests/lifecycle.c": "5b5e749ffe8d8ae4a27fae7f912b8b9e51686847d017aadc3a4508e0f46b774c",
+    "runtime/os/tests/native_stack.c": "d231fe80328627b12aebfae4eb6caebad6733c721097c7df4fa59ad2053efece",
+    "runtime/os/tests/public_types.c": "248fe448ba9a7aad92b5b2da505a95ebfa3033788e95ca586842c6fe9e5989a1",
+    "runtime/os/tests/resource_preemption.c": "c3966c2174aa7412b0d58ed6644427ae9c8e3023066ad8076cea0552002092c4",
+    "runtime/os/tests/sc1_capacity.c": "52bc6b5c1178621d8c50d076807c25cb4ca29856566dfe0e21a27ea5cd41e559",
+    "runtime/os/tests/sc1_timing.c": "0a032b3a966b5d91e493ddec2319a44841be84056c9ef5499e5e0718217980ea"
+  },
+  "command": [
+    "gcc",
+    "-std=c99",
+    "-O1",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-I",
+    "<repo-root>\\runtime\\os",
+    "-I",
+    "<repo-root>\\runtime\\os\\include",
+    "-I",
+    "<repo-root>\\runtime\\os\\src",
+    "-I",
+    "<build-dir>\\kernel\\include",
+    "-I",
+    "<build-dir>\\kernel\\portable\\MSVC-MingW",
+    "<repo-root>\\runtime\\os\\src\\Os.c",
+    "<repo-root>\\runtime\\os\\src\\Os_Error.c",
+    "<repo-root>\\runtime\\os\\src\\Os_Backend.c",
+    "<repo-root>\\runtime\\os\\src\\Os_Stack.c",
+    "<repo-root>\\runtime\\os\\src\\Os_HostEvent.c",
+    "<repo-root>\\runtime\\os\\src\\Os_Mailbox.c",
+    "<repo-root>\\runtime\\os\\src\\Os_Time.c",
+    "<repo-root>\\runtime\\os\\src\\Os_Schedule.c",
+    "<repo-root>\\runtime\\os\\tests\\error_hooks.c",
+    "<build-dir>\\kernel\\tasks.c",
+    "<build-dir>\\kernel\\list.c",
+    "<build-dir>\\kernel\\queue.c",
+    "<build-dir>\\kernel\\portable\\MSVC-MingW\\port.c",
+    "-lwinmm",
+    "-o",
+    "<build-dir>\\os_harness.exe"
+  ],
+  "observations": [
+    {
+      "scenario": "configured",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "errors calls=31 service_access=1 parameter_access=1 configured=1 reason=0\nerror vector=28 status=2 service=130 caller=255 parameters=1 actor=B\nerror vector=28 status=2 service=130 caller=255 parameters=1 actor=B\nerror vector=0 status=3 service=130 caller=0 parameters=1 actor=T\nerror vector=1 status=6 service=131 caller=0 parameters=1 actor=T\nerror vector=2 status=3 service=132 caller=0 parameters=1 actor=T\nerror vector=3 status=10 service=128 caller=0 parameters=1 actor=T\nerror vector=4 status=3 service=129 caller=0 parameters=1 actor=T\nerror vector=5 status=3 service=133 caller=0 parameters=1 actor=T\nerror vector=6 status=5 service=134 caller=0 parameters=1 actor=T\nerror vector=7 status=6 service=135 caller=0 parameters=1 actor=T\nerror vector=8 status=6 service=136 caller=0 parameters=1 actor=T\nerror vector=9 status=1 service=137 caller=1 parameters=1 actor=T\nerror vector=10 status=3 service=138 caller=0 parameters=1 actor=T\nerror vector=11 status=3 service=139 caller=0 parameters=1 actor=T\nerror vector=12 status=3 service=15 caller=0 parameters=1 actor=T\nerror vector=13 status=3 service=16 caller=0 parameters=1 actor=T\nerror vector=14 status=10 service=17 caller=0 parameters=1 actor=T\nerror vector=15 status=3 service=140 caller=0 parameters=1 actor=T\nerror vector=16 status=5 service=141 caller=0 parameters=1 actor=T\nerror vector=17 status=8 service=142 caller=0 parameters=1 actor=T\nerror vector=18 status=8 service=143 caller=0 parameters=1 actor=T\nerror vector=19 status=5 service=144 caller=0 parameters=1 actor=T\nerror vector=20 status=8 service=7 caller=0 parameters=1 actor=T\nerror vector=21 status=8 service=8 caller=0 parameters=1 actor=T\nerror vector=22 status=5 service=9 caller=0 parameters=1 actor=T\nerror vector=23 status=5 service=10 caller=0 parameters=1 actor=T\nerror vector=24 status=3 service=14 caller=0 parameters=1 actor=T\nerror vector=25 status=8 service=17 caller=0 parameters=1 actor=T\nerror vector=26 status=3 service=15 caller=0 parameters=1 actor=T\nerror vector=27 status=4 service=130 caller=0 parameters=1 actor=T\nerror vector=0 status=3 service=130 caller=0 parameters=1 actor=S\nSTACK role=S tid=43056 low=33072087040 high=33074184192 reserve=2097152 commit=36864 guard=20480 guarantee=16384 sp=33074181376 observations=22 buffer_low=0 buffer_high=0\nSTACK role=C tid=48904 low=33068941312 high=33069203456 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=33069201648 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=47660 low=33069203456 high=33069465600 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=33069465088 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=35132 low=33069465600 high=33069727744 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=33069725856 observations=324 buffer_low=140701512627168 buffer_high=140701512631264\nSTACK role=T tid=31392 low=33069727744 high=33069989888 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=33069988920 observations=17 buffer_low=140701512631264 buffer_high=140701512635360\nSTACK role=B tid=44124 low=33076281344 high=33076543488 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=33076541032 observations=21 buffer_low=140701512692704 buffer_high=140701512696800\nSTACK role=I tid=22180 low=33076543488 high=33076805632 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=33076804472 observations=2 buffer_low=140701512696800 buffer_high=140701512700896\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=18 mutexes=1 resource_calls=25 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_errors": [
+        [
+          28,
+          2,
+          130,
+          255,
+          1,
+          "B"
+        ],
+        [
+          28,
+          2,
+          130,
+          255,
+          1,
+          "B"
+        ],
+        [
+          0,
+          3,
+          130,
+          0,
+          1,
+          "T"
+        ],
+        [
+          1,
+          6,
+          131,
+          0,
+          1,
+          "T"
+        ],
+        [
+          2,
+          3,
+          132,
+          0,
+          1,
+          "T"
+        ],
+        [
+          3,
+          10,
+          128,
+          0,
+          1,
+          "T"
+        ],
+        [
+          4,
+          3,
+          129,
+          0,
+          1,
+          "T"
+        ],
+        [
+          5,
+          3,
+          133,
+          0,
+          1,
+          "T"
+        ],
+        [
+          6,
+          5,
+          134,
+          0,
+          1,
+          "T"
+        ],
+        [
+          7,
+          6,
+          135,
+          0,
+          1,
+          "T"
+        ],
+        [
+          8,
+          6,
+          136,
+          0,
+          1,
+          "T"
+        ],
+        [
+          9,
+          1,
+          137,
+          1,
+          1,
+          "T"
+        ],
+        [
+          10,
+          3,
+          138,
+          0,
+          1,
+          "T"
+        ],
+        [
+          11,
+          3,
+          139,
+          0,
+          1,
+          "T"
+        ],
+        [
+          12,
+          3,
+          15,
+          0,
+          1,
+          "T"
+        ],
+        [
+          13,
+          3,
+          16,
+          0,
+          1,
+          "T"
+        ],
+        [
+          14,
+          10,
+          17,
+          0,
+          1,
+          "T"
+        ],
+        [
+          15,
+          3,
+          140,
+          0,
+          1,
+          "T"
+        ],
+        [
+          16,
+          5,
+          141,
+          0,
+          1,
+          "T"
+        ],
+        [
+          17,
+          8,
+          142,
+          0,
+          1,
+          "T"
+        ],
+        [
+          18,
+          8,
+          143,
+          0,
+          1,
+          "T"
+        ],
+        [
+          19,
+          5,
+          144,
+          0,
+          1,
+          "T"
+        ],
+        [
+          20,
+          8,
+          7,
+          0,
+          1,
+          "T"
+        ],
+        [
+          21,
+          8,
+          8,
+          0,
+          1,
+          "T"
+        ],
+        [
+          22,
+          5,
+          9,
+          0,
+          1,
+          "T"
+        ],
+        [
+          23,
+          5,
+          10,
+          0,
+          1,
+          "T"
+        ],
+        [
+          24,
+          3,
+          14,
+          0,
+          1,
+          "T"
+        ],
+        [
+          25,
+          8,
+          17,
+          0,
+          1,
+          "T"
+        ],
+        [
+          26,
+          3,
+          15,
+          0,
+          1,
+          "T"
+        ],
+        [
+          27,
+          4,
+          130,
+          0,
+          1,
+          "T"
+        ],
+        [
+          0,
+          3,
+          130,
+          0,
+          1,
+          "S"
+        ]
+      ],
+      "configuration_switches": [
+        1,
+        1
+      ]
+    },
+    {
+      "scenario": "unconfigured",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "errors calls=0 service_access=1 parameter_access=1 configured=0 reason=0\nSTACK role=S tid=36500 low=990166122496 high=990168219648 reserve=2097152 commit=36864 guard=20480 guarantee=16384 sp=990168216096 observations=13 buffer_low=0 buffer_high=0\nSTACK role=C tid=44112 low=990170316800 high=990170578944 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=990170577488 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=41352 low=990170578944 high=990170841088 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=990170839632 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=45456 low=990170841088 high=990171103232 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=990171102368 observations=81 buffer_low=140701512627168 buffer_high=140701512631264\nSTACK role=T tid=46936 low=990171103232 high=990171365376 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=990171363352 observations=8 buffer_low=140701512631264 buffer_high=140701512635360\nSTACK role=B tid=46544 low=990171365376 high=990171627520 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=990171625976 observations=9 buffer_low=140701512692704 buffer_high=140701512696800\nSTACK role=I tid=35408 low=990171627520 high=990171889664 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=990171889032 observations=2 buffer_low=140701512696800 buffer_high=140701512700896\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=18 mutexes=1 resource_calls=25 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_errors": [],
+      "configuration_switches": [
+        1,
+        1
+      ]
+    },
+    {
+      "scenario": "configured",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "errors calls=31 service_access=0 parameter_access=1 configured=1 reason=0\nerror vector=28 status=2 service=0 caller=255 parameters=1 actor=B\nerror vector=28 status=2 service=0 caller=255 parameters=1 actor=B\nerror vector=0 status=3 service=0 caller=0 parameters=1 actor=T\nerror vector=1 status=6 service=0 caller=0 parameters=1 actor=T\nerror vector=2 status=3 service=0 caller=0 parameters=1 actor=T\nerror vector=3 status=10 service=0 caller=0 parameters=1 actor=T\nerror vector=4 status=3 service=0 caller=0 parameters=1 actor=T\nerror vector=5 status=3 service=0 caller=0 parameters=1 actor=T\nerror vector=6 status=5 service=0 caller=0 parameters=1 actor=T\nerror vector=7 status=6 service=0 caller=0 parameters=1 actor=T\nerror vector=8 status=6 service=0 caller=0 parameters=1 actor=T\nerror vector=9 status=1 service=0 caller=1 parameters=1 actor=T\nerror vector=10 status=3 service=0 caller=0 parameters=1 actor=T\nerror vector=11 status=3 service=0 caller=0 parameters=1 actor=T\nerror vector=12 status=3 service=0 caller=0 parameters=1 actor=T\nerror vector=13 status=3 service=0 caller=0 parameters=1 actor=T\nerror vector=14 status=10 service=0 caller=0 parameters=1 actor=T\nerror vector=15 status=3 service=0 caller=0 parameters=1 actor=T\nerror vector=16 status=5 service=0 caller=0 parameters=1 actor=T\nerror vector=17 status=8 service=0 caller=0 parameters=1 actor=T\nerror vector=18 status=8 service=0 caller=0 parameters=1 actor=T\nerror vector=19 status=5 service=0 caller=0 parameters=1 actor=T\nerror vector=20 status=8 service=0 caller=0 parameters=1 actor=T\nerror vector=21 status=8 service=0 caller=0 parameters=1 actor=T\nerror vector=22 status=5 service=0 caller=0 parameters=1 actor=T\nerror vector=23 status=5 service=0 caller=0 parameters=1 actor=T\nerror vector=24 status=3 service=0 caller=0 parameters=1 actor=T\nerror vector=25 status=8 service=0 caller=0 parameters=1 actor=T\nerror vector=26 status=3 service=0 caller=0 parameters=1 actor=T\nerror vector=27 status=4 service=0 caller=0 parameters=1 actor=T\nerror vector=0 status=3 service=0 caller=0 parameters=1 actor=S\nSTACK role=S tid=9052 low=1044348141568 high=1044350238720 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=1044350234960 observations=22 buffer_low=0 buffer_high=0\nSTACK role=C tid=36676 low=1044344340480 high=1044344602624 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1044344600464 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=18984 low=1044344602624 high=1044344864768 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1044344862864 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=48932 low=1044344864768 high=1044345126912 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1044345124864 observations=324 buffer_low=140698921137120 buffer_high=140698921141216\nSTACK role=T tid=49952 low=1044345126912 high=1044345389056 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1044345386568 observations=17 buffer_low=140698921141216 buffer_high=140698921145312\nSTACK role=B tid=37828 low=1044345389056 high=1044345651200 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1044345649272 observations=21 buffer_low=140698921202656 buffer_high=140698921206752\nSTACK role=I tid=43272 low=1044345651200 high=1044345913344 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1044345912232 observations=2 buffer_low=140698921206752 buffer_high=140698921210848\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=18 mutexes=1 resource_calls=25 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_errors": [
+        [
+          28,
+          2,
+          0,
+          255,
+          1,
+          "B"
+        ],
+        [
+          28,
+          2,
+          0,
+          255,
+          1,
+          "B"
+        ],
+        [
+          0,
+          3,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          1,
+          6,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          2,
+          3,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          3,
+          10,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          4,
+          3,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          5,
+          3,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          6,
+          5,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          7,
+          6,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          8,
+          6,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          9,
+          1,
+          0,
+          1,
+          1,
+          "T"
+        ],
+        [
+          10,
+          3,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          11,
+          3,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          12,
+          3,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          13,
+          3,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          14,
+          10,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          15,
+          3,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          16,
+          5,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          17,
+          8,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          18,
+          8,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          19,
+          5,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          20,
+          8,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          21,
+          8,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          22,
+          5,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          23,
+          5,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          24,
+          3,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          25,
+          8,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          26,
+          3,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          27,
+          4,
+          0,
+          0,
+          1,
+          "T"
+        ],
+        [
+          0,
+          3,
+          0,
+          0,
+          1,
+          "S"
+        ]
+      ],
+      "configuration_switches": [
+        0,
+        1
+      ]
+    },
+    {
+      "scenario": "unconfigured",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "errors calls=0 service_access=0 parameter_access=1 configured=0 reason=0\nSTACK role=S tid=28368 low=524571115520 high=524573212672 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=524573209104 observations=13 buffer_low=0 buffer_high=0\nSTACK role=C tid=9080 low=524567969792 high=524568231936 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=524568231040 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=50800 low=524568231936 high=524568494080 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=524568491856 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=40080 low=524568494080 high=524568756224 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=524568754800 observations=81 buffer_low=140698921137120 buffer_high=140698921141216\nSTACK role=T tid=29200 low=524568756224 high=524569018368 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=524569017192 observations=8 buffer_low=140698921141216 buffer_high=140698921145312\nSTACK role=B tid=38996 low=524575309824 high=524575571968 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=524575570360 observations=9 buffer_low=140698921202656 buffer_high=140698921206752\nSTACK role=I tid=48236 low=524575571968 high=524575834112 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=524575832760 observations=2 buffer_low=140698921206752 buffer_high=140698921210848\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=18 mutexes=1 resource_calls=25 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_errors": [],
+      "configuration_switches": [
+        0,
+        1
+      ]
+    },
+    {
+      "scenario": "configured",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "errors calls=31 service_access=1 parameter_access=0 configured=1 reason=0\nerror vector=28 status=2 service=130 caller=255 parameters=0 actor=B\nerror vector=28 status=2 service=130 caller=255 parameters=0 actor=B\nerror vector=0 status=3 service=130 caller=0 parameters=0 actor=T\nerror vector=1 status=6 service=131 caller=0 parameters=0 actor=T\nerror vector=2 status=3 service=132 caller=0 parameters=0 actor=T\nerror vector=3 status=10 service=128 caller=0 parameters=0 actor=T\nerror vector=4 status=3 service=129 caller=0 parameters=0 actor=T\nerror vector=5 status=3 service=133 caller=0 parameters=0 actor=T\nerror vector=6 status=5 service=134 caller=0 parameters=0 actor=T\nerror vector=7 status=6 service=135 caller=0 parameters=0 actor=T\nerror vector=8 status=6 service=136 caller=0 parameters=0 actor=T\nerror vector=9 status=1 service=137 caller=1 parameters=0 actor=T\nerror vector=10 status=3 service=138 caller=0 parameters=0 actor=T\nerror vector=11 status=3 service=139 caller=0 parameters=0 actor=T\nerror vector=12 status=3 service=15 caller=0 parameters=0 actor=T\nerror vector=13 status=3 service=16 caller=0 parameters=0 actor=T\nerror vector=14 status=10 service=17 caller=0 parameters=0 actor=T\nerror vector=15 status=3 service=140 caller=0 parameters=0 actor=T\nerror vector=16 status=5 service=141 caller=0 parameters=0 actor=T\nerror vector=17 status=8 service=142 caller=0 parameters=0 actor=T\nerror vector=18 status=8 service=143 caller=0 parameters=0 actor=T\nerror vector=19 status=5 service=144 caller=0 parameters=0 actor=T\nerror vector=20 status=8 service=7 caller=0 parameters=0 actor=T\nerror vector=21 status=8 service=8 caller=0 parameters=0 actor=T\nerror vector=22 status=5 service=9 caller=0 parameters=0 actor=T\nerror vector=23 status=5 service=10 caller=0 parameters=0 actor=T\nerror vector=24 status=3 service=14 caller=0 parameters=0 actor=T\nerror vector=25 status=8 service=17 caller=0 parameters=0 actor=T\nerror vector=26 status=3 service=15 caller=0 parameters=0 actor=T\nerror vector=27 status=4 service=130 caller=0 parameters=0 actor=T\nerror vector=0 status=3 service=130 caller=0 parameters=0 actor=S\nSTACK role=S tid=37100 low=313320800256 high=313322897408 reserve=2097152 commit=36864 guard=20480 guarantee=16384 sp=313322894464 observations=22 buffer_low=0 buffer_high=0\nSTACK role=C tid=34560 low=313324994560 high=313325256704 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=313325254240 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=40384 low=313325256704 high=313325518848 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=313325517392 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=49648 low=313325518848 high=313325780992 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=313325780208 observations=324 buffer_low=140702942360544 buffer_high=140702942364640\nSTACK role=T tid=29676 low=313325780992 high=313326043136 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=313326041096 observations=17 buffer_low=140702942364640 buffer_high=140702942368736\nSTACK role=B tid=21680 low=313326043136 high=313326305280 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=313326304184 observations=21 buffer_low=140702942426080 buffer_high=140702942430176\nSTACK role=I tid=28604 low=313326305280 high=313326567424 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=313326566424 observations=2 buffer_low=140702942430176 buffer_high=140702942434272\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=18 mutexes=1 resource_calls=25 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_errors": [
+        [
+          28,
+          2,
+          130,
+          255,
+          0,
+          "B"
+        ],
+        [
+          28,
+          2,
+          130,
+          255,
+          0,
+          "B"
+        ],
+        [
+          0,
+          3,
+          130,
+          0,
+          0,
+          "T"
+        ],
+        [
+          1,
+          6,
+          131,
+          0,
+          0,
+          "T"
+        ],
+        [
+          2,
+          3,
+          132,
+          0,
+          0,
+          "T"
+        ],
+        [
+          3,
+          10,
+          128,
+          0,
+          0,
+          "T"
+        ],
+        [
+          4,
+          3,
+          129,
+          0,
+          0,
+          "T"
+        ],
+        [
+          5,
+          3,
+          133,
+          0,
+          0,
+          "T"
+        ],
+        [
+          6,
+          5,
+          134,
+          0,
+          0,
+          "T"
+        ],
+        [
+          7,
+          6,
+          135,
+          0,
+          0,
+          "T"
+        ],
+        [
+          8,
+          6,
+          136,
+          0,
+          0,
+          "T"
+        ],
+        [
+          9,
+          1,
+          137,
+          1,
+          0,
+          "T"
+        ],
+        [
+          10,
+          3,
+          138,
+          0,
+          0,
+          "T"
+        ],
+        [
+          11,
+          3,
+          139,
+          0,
+          0,
+          "T"
+        ],
+        [
+          12,
+          3,
+          15,
+          0,
+          0,
+          "T"
+        ],
+        [
+          13,
+          3,
+          16,
+          0,
+          0,
+          "T"
+        ],
+        [
+          14,
+          10,
+          17,
+          0,
+          0,
+          "T"
+        ],
+        [
+          15,
+          3,
+          140,
+          0,
+          0,
+          "T"
+        ],
+        [
+          16,
+          5,
+          141,
+          0,
+          0,
+          "T"
+        ],
+        [
+          17,
+          8,
+          142,
+          0,
+          0,
+          "T"
+        ],
+        [
+          18,
+          8,
+          143,
+          0,
+          0,
+          "T"
+        ],
+        [
+          19,
+          5,
+          144,
+          0,
+          0,
+          "T"
+        ],
+        [
+          20,
+          8,
+          7,
+          0,
+          0,
+          "T"
+        ],
+        [
+          21,
+          8,
+          8,
+          0,
+          0,
+          "T"
+        ],
+        [
+          22,
+          5,
+          9,
+          0,
+          0,
+          "T"
+        ],
+        [
+          23,
+          5,
+          10,
+          0,
+          0,
+          "T"
+        ],
+        [
+          24,
+          3,
+          14,
+          0,
+          0,
+          "T"
+        ],
+        [
+          25,
+          8,
+          17,
+          0,
+          0,
+          "T"
+        ],
+        [
+          26,
+          3,
+          15,
+          0,
+          0,
+          "T"
+        ],
+        [
+          27,
+          4,
+          130,
+          0,
+          0,
+          "T"
+        ],
+        [
+          0,
+          3,
+          130,
+          0,
+          0,
+          "S"
+        ]
+      ],
+      "configuration_switches": [
+        1,
+        0
+      ]
+    },
+    {
+      "scenario": "unconfigured",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "errors calls=0 service_access=1 parameter_access=0 configured=0 reason=0\nSTACK role=S tid=51176 low=879688155136 high=879690252288 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=879690248672 observations=13 buffer_low=0 buffer_high=0\nSTACK role=C tid=5700 low=879692349440 high=879692611584 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=879692609648 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=44048 low=879692611584 high=879692873728 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=879692872816 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=12508 low=879692873728 high=879693135872 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=879693133408 observations=81 buffer_low=140702942360544 buffer_high=140702942364640\nSTACK role=T tid=49228 low=879693135872 high=879693398016 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=879693395512 observations=8 buffer_low=140702942364640 buffer_high=140702942368736\nSTACK role=B tid=39356 low=879693398016 high=879693660160 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=879693659224 observations=9 buffer_low=140702942426080 buffer_high=140702942430176\nSTACK role=I tid=40248 low=879693660160 high=879693922304 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=879693920056 observations=2 buffer_low=140702942430176 buffer_high=140702942434272\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=18 mutexes=1 resource_calls=25 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_errors": [],
+      "configuration_switches": [
+        1,
+        0
+      ]
+    },
+    {
+      "scenario": "configured",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "errors calls=31 service_access=0 parameter_access=0 configured=1 reason=0\nerror vector=28 status=2 service=0 caller=255 parameters=0 actor=B\nerror vector=28 status=2 service=0 caller=255 parameters=0 actor=B\nerror vector=0 status=3 service=0 caller=0 parameters=0 actor=T\nerror vector=1 status=6 service=0 caller=0 parameters=0 actor=T\nerror vector=2 status=3 service=0 caller=0 parameters=0 actor=T\nerror vector=3 status=10 service=0 caller=0 parameters=0 actor=T\nerror vector=4 status=3 service=0 caller=0 parameters=0 actor=T\nerror vector=5 status=3 service=0 caller=0 parameters=0 actor=T\nerror vector=6 status=5 service=0 caller=0 parameters=0 actor=T\nerror vector=7 status=6 service=0 caller=0 parameters=0 actor=T\nerror vector=8 status=6 service=0 caller=0 parameters=0 actor=T\nerror vector=9 status=1 service=0 caller=1 parameters=0 actor=T\nerror vector=10 status=3 service=0 caller=0 parameters=0 actor=T\nerror vector=11 status=3 service=0 caller=0 parameters=0 actor=T\nerror vector=12 status=3 service=0 caller=0 parameters=0 actor=T\nerror vector=13 status=3 service=0 caller=0 parameters=0 actor=T\nerror vector=14 status=10 service=0 caller=0 parameters=0 actor=T\nerror vector=15 status=3 service=0 caller=0 parameters=0 actor=T\nerror vector=16 status=5 service=0 caller=0 parameters=0 actor=T\nerror vector=17 status=8 service=0 caller=0 parameters=0 actor=T\nerror vector=18 status=8 service=0 caller=0 parameters=0 actor=T\nerror vector=19 status=5 service=0 caller=0 parameters=0 actor=T\nerror vector=20 status=8 service=0 caller=0 parameters=0 actor=T\nerror vector=21 status=8 service=0 caller=0 parameters=0 actor=T\nerror vector=22 status=5 service=0 caller=0 parameters=0 actor=T\nerror vector=23 status=5 service=0 caller=0 parameters=0 actor=T\nerror vector=24 status=3 service=0 caller=0 parameters=0 actor=T\nerror vector=25 status=8 service=0 caller=0 parameters=0 actor=T\nerror vector=26 status=3 service=0 caller=0 parameters=0 actor=T\nerror vector=27 status=4 service=0 caller=0 parameters=0 actor=T\nerror vector=0 status=3 service=0 caller=0 parameters=0 actor=S\nSTACK role=S tid=49884 low=59479425024 high=59481522176 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=59481518224 observations=22 buffer_low=0 buffer_high=0\nSTACK role=C tid=37348 low=59475427328 high=59475689472 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=59475688928 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=18808 low=59475689472 high=59475951616 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=59475949184 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=13304 low=59475951616 high=59476213760 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=59476212416 observations=324 buffer_low=140694787847136 buffer_high=140694787851232\nSTACK role=T tid=45908 low=59476213760 high=59476475904 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=59476473896 observations=17 buffer_low=140694787851232 buffer_high=140694787855328\nSTACK role=B tid=41584 low=59476475904 high=59476738048 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=59476736792 observations=21 buffer_low=140694787912672 buffer_high=140694787916768\nSTACK role=I tid=24324 low=59476738048 high=59477000192 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=59476999032 observations=2 buffer_low=140694787916768 buffer_high=140694787920864\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=18 mutexes=1 resource_calls=25 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_errors": [
+        [
+          28,
+          2,
+          0,
+          255,
+          0,
+          "B"
+        ],
+        [
+          28,
+          2,
+          0,
+          255,
+          0,
+          "B"
+        ],
+        [
+          0,
+          3,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          1,
+          6,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          2,
+          3,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          3,
+          10,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          4,
+          3,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          5,
+          3,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          6,
+          5,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          7,
+          6,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          8,
+          6,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          9,
+          1,
+          0,
+          1,
+          0,
+          "T"
+        ],
+        [
+          10,
+          3,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          11,
+          3,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          12,
+          3,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          13,
+          3,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          14,
+          10,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          15,
+          3,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          16,
+          5,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          17,
+          8,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          18,
+          8,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          19,
+          5,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          20,
+          8,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          21,
+          8,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          22,
+          5,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          23,
+          5,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          24,
+          3,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          25,
+          8,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          26,
+          3,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          27,
+          4,
+          0,
+          0,
+          0,
+          "T"
+        ],
+        [
+          0,
+          3,
+          0,
+          0,
+          0,
+          "S"
+        ]
+      ],
+      "configuration_switches": [
+        0,
+        0
+      ]
+    },
+    {
+      "scenario": "unconfigured",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "errors calls=0 service_access=0 parameter_access=0 configured=0 reason=0\nSTACK role=S tid=14652 low=830702878720 high=830704975872 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=830704971664 observations=13 buffer_low=0 buffer_high=0\nSTACK role=C tid=30992 low=830699536384 high=830699798528 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=830699796208 observations=2 buffer_low=0 buffer_high=0\nSTACK role=D tid=48000 low=830699798528 high=830700060672 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=830700058672 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=43340 low=830700060672 high=830700322816 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=830700321776 observations=81 buffer_low=140694787847136 buffer_high=140694787851232\nSTACK role=T tid=5008 low=830700322816 high=830700584960 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=830700583432 observations=8 buffer_low=140694787851232 buffer_high=140694787855328\nSTACK role=B tid=48272 low=830707073024 high=830707335168 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=830707333720 observations=9 buffer_low=140694787912672 buffer_high=140694787916768\nSTACK role=I tid=39708 low=830707335168 high=830707597312 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=830707596200 observations=2 buffer_low=140694787916768 buffer_high=140694787920864\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=18 mutexes=1 resource_calls=25 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_errors": [],
+      "configuration_switches": [
+        0,
+        0
+      ]
+    }
+  ],
+  "variant_sources": {
+    "01": {
+      "kernel_commit": "054e14f3397023aa83813a65aa065fc4597d481b",
+      "compiler": "GCC 16.1.0 x64",
+      "tls_abi": "PE native TLS; no emutls helper",
+      "binary_sha256": "e257c3dc679352d4b36f7276796efeed81820a34f829037cb7df39303d5c4141",
+      "patches": {
+        "0001-controlled-host-lifecycle.patch": "b522c8fa69454989be899658d670f6313fb621f455f32a258e06fad18fbbf04f",
+        "0002-native-stack.patch": "75e4e04e0de99dd9c1dc3e36e3a93c3d51cad64fec32a09e8b203c3c15040648",
+        "0003-activation-ready-policy.patch": "357b1a98a00d8bd197092e4199b710849d08d5684f9d0eabf4459c354c9f979b",
+        "0004-windows-event-namespace.patch": "633529f96b0bb46cae34687cae8dd9bffda068b971f0dd22b8da9c5fdaa47bf1",
+        "0005-category2-resource-gate.patch": "e43dd1f0998e7ec0a8feb8e397ba37c285bf2c031480a6528297e078c94c82df",
+        "0006-input-handler-ownership.patch": "bcb70ae8a8947344c206ff4a0b31d445b6c6bb1956135d45f81c6e1b554a3075",
+        "0007-controlled-tick.patch": "d027c76922a4d8d69e639b3cbe5a48c121b4dabfaf116334b4acff1fc472160f"
+      },
+      "product_sources": {
+        "runtime/os/FreeRTOSConfig.h": "facbf3a296fa5aa3d12c7d93babb34f99c9d9e940ce140e586f7aac8fc966589",
+        "runtime/os/include/Os.h": "375d7e287dff18b399cd70a5f9469028c5e1ba6a8d5fca8107052733c2844d41",
+        "runtime/os/include/Os_Cfg.h": "34439ac9d1b5a9bbd371b458abe03dc2498563b4ad6774b9cea6a7557d0bf5ec",
+        "runtime/os/include/Os_Hooks.h": "ed098ad47d42db0ed5eb30c43728711e4490e3810c2ddf5ff74a4484538c2a20",
+        "runtime/os/include/Os_Mailbox.h": "de31d0af68fe473bcab3ee365066eb1feec3436036a0740b2be996d78719ef4c",
+        "runtime/os/include/Os_Target.h": "be9785c4ec9eeb590d5ca7e42335a028be502c5cdff454353e2e3b105cdb1877",
+        "runtime/os/include/Os_Time.h": "02a429a14b8a1b3d50158b4b66801fd06d57172282b375e52faeb09c40f8acd5",
+        "runtime/os/include/Os_Types.h": "4077bfa53d6add288b53e3bcf3ff3e37635b0dde88296d453156cf0af1ce4cc7",
+        "runtime/os/patches/0001-controlled-host-lifecycle.patch": "b522c8fa69454989be899658d670f6313fb621f455f32a258e06fad18fbbf04f",
+        "runtime/os/patches/0002-native-stack.patch": "75e4e04e0de99dd9c1dc3e36e3a93c3d51cad64fec32a09e8b203c3c15040648",
+        "runtime/os/patches/0003-activation-ready-policy.patch": "357b1a98a00d8bd197092e4199b710849d08d5684f9d0eabf4459c354c9f979b",
+        "runtime/os/patches/0004-windows-event-namespace.patch": "633529f96b0bb46cae34687cae8dd9bffda068b971f0dd22b8da9c5fdaa47bf1",
+        "runtime/os/patches/0005-category2-resource-gate.patch": "e43dd1f0998e7ec0a8feb8e397ba37c285bf2c031480a6528297e078c94c82df",
+        "runtime/os/patches/0006-input-handler-ownership.patch": "bcb70ae8a8947344c206ff4a0b31d445b6c6bb1956135d45f81c6e1b554a3075",
+        "runtime/os/patches/0007-controlled-tick.patch": "d027c76922a4d8d69e639b3cbe5a48c121b4dabfaf116334b4acff1fc472160f",
+        "runtime/os/README.md": "7caab9e7ffbc4b2a500c4fa08859a09afb325f3ce7efb3ad2a8a638dff910432",
+        "runtime/os/src/Os.c": "b5ed468e686a17eada2662555d0fc40a20d79c136a63bc25255c0655f4014235",
+        "runtime/os/src/Os_Backend.c": "e703df637ca84881b8aa43ff35585deda992b44994a90de25d42bc4605a0612c",
+        "runtime/os/src/Os_Backend.h": "1ba7d1d54803f083ceda617e72e870a52cd9bebf42f687fa92cfc34e451aab55",
+        "runtime/os/src/Os_Error.c": "75d3520db0e19947acf0709db1f9d14c3ccdd9d7b7e4d9448e20543f24e5d236",
+        "runtime/os/src/Os_HostEvent.c": "229aabdeffede1d31b840fc08216f294aa4f5390b39033309fb14a38d9ae301f",
+        "runtime/os/src/Os_Mailbox.c": "5dcfd6f0ef73b852d92c732bb16cea67805e1493f1ff1b381ba52d1e705292eb",
+        "runtime/os/src/Os_Schedule.c": "7679a5539aea964a9b98b4fd0ee2055f10057d8457bfc4fa19210f85e6f53417",
+        "runtime/os/src/Os_Stack.c": "44669d37c3bbdcb59165c19cfb911482ac44ec7cc9ec4dbdee347b954cd5e479",
+        "runtime/os/src/Os_Stack.h": "8fe1dc8c433e64094ebd9c7e8a48c3fd1a9fdc15a9f9c2e50bc0cf87324297f8",
+        "runtime/os/src/Os_Time.c": "a1daf2332dc37a7c433dee8659e30cdb99e122b94fabaa4271bbfafbbfbc70ad",
+        "runtime/os/src/Os_Windows.h": "7513f31950c778c23f7ddfe9f114e475d5ebf71e7e593abb9fa78fe01755f315",
+        "runtime/os/tests/activation.c": "15fd3975cf1b4c0ebcf70923c48d3d565caeddf38e15b326517064f7d8e8f8d4",
+        "runtime/os/tests/controlled_time.c": "cae381dd426d51efe00d100d98fbb8bfac098fd5927d5e449428a5f5673ba210",
+        "runtime/os/tests/error_hooks.c": "624785f46efcd0039403071cfd044b6fb65f1b75d64c69fc9abc3d0e45180392",
+        "runtime/os/tests/event_wakeup.c": "f1eaf6fb9190444d1d3722b2427af4b99d043b9a3cabe1663aaafa5c96660a03",
+        "runtime/os/tests/finish_chain.c": "1621704d0742ec1eae874fe7e9975afaf78bff1c2f6b0f7accac1542ce8d131e",
+        "runtime/os/tests/lifecycle.c": "5b5e749ffe8d8ae4a27fae7f912b8b9e51686847d017aadc3a4508e0f46b774c",
+        "runtime/os/tests/native_stack.c": "d231fe80328627b12aebfae4eb6caebad6733c721097c7df4fa59ad2053efece",
+        "runtime/os/tests/public_types.c": "248fe448ba9a7aad92b5b2da505a95ebfa3033788e95ca586842c6fe9e5989a1",
+        "runtime/os/tests/resource_preemption.c": "c3966c2174aa7412b0d58ed6644427ae9c8e3023066ad8076cea0552002092c4",
+        "runtime/os/tests/sc1_capacity.c": "52bc6b5c1178621d8c50d076807c25cb4ca29856566dfe0e21a27ea5cd41e559",
+        "runtime/os/tests/sc1_timing.c": "0a032b3a966b5d91e493ddec2319a44841be84056c9ef5499e5e0718217980ea"
+      },
+      "command": [
+        "gcc",
+        "-DOS_USE_GET_SERVICE_ID=0",
+        "-DOS_USE_PARAMETER_ACCESS=1",
+        "-std=c99",
+        "-O1",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-I",
+        "<repo-root>\\runtime\\os",
+        "-I",
+        "<repo-root>\\runtime\\os\\include",
+        "-I",
+        "<repo-root>\\runtime\\os\\src",
+        "-I",
+        "<build-dir>\\macros-01\\kernel\\include",
+        "-I",
+        "<build-dir>\\macros-01\\kernel\\portable\\MSVC-MingW",
+        "<repo-root>\\runtime\\os\\src\\Os.c",
+        "<repo-root>\\runtime\\os\\src\\Os_Error.c",
+        "<repo-root>\\runtime\\os\\src\\Os_Backend.c",
+        "<repo-root>\\runtime\\os\\src\\Os_Stack.c",
+        "<repo-root>\\runtime\\os\\src\\Os_HostEvent.c",
+        "<repo-root>\\runtime\\os\\src\\Os_Mailbox.c",
+        "<repo-root>\\runtime\\os\\src\\Os_Time.c",
+        "<repo-root>\\runtime\\os\\src\\Os_Schedule.c",
+        "<repo-root>\\runtime\\os\\tests\\error_hooks.c",
+        "<build-dir>\\macros-01\\kernel\\tasks.c",
+        "<build-dir>\\macros-01\\kernel\\list.c",
+        "<build-dir>\\macros-01\\kernel\\queue.c",
+        "<build-dir>\\macros-01\\kernel\\portable\\MSVC-MingW\\port.c",
+        "-lwinmm",
+        "-o",
+        "<build-dir>\\macros-01\\os_harness.exe"
+      ]
+    },
+    "10": {
+      "kernel_commit": "054e14f3397023aa83813a65aa065fc4597d481b",
+      "compiler": "GCC 16.1.0 x64",
+      "tls_abi": "PE native TLS; no emutls helper",
+      "binary_sha256": "1270ec9da5596e4d7ff94dc0f6b7ad8cf7321a01aed50b44a44e4eb47adb2f1f",
+      "patches": {
+        "0001-controlled-host-lifecycle.patch": "b522c8fa69454989be899658d670f6313fb621f455f32a258e06fad18fbbf04f",
+        "0002-native-stack.patch": "75e4e04e0de99dd9c1dc3e36e3a93c3d51cad64fec32a09e8b203c3c15040648",
+        "0003-activation-ready-policy.patch": "357b1a98a00d8bd197092e4199b710849d08d5684f9d0eabf4459c354c9f979b",
+        "0004-windows-event-namespace.patch": "633529f96b0bb46cae34687cae8dd9bffda068b971f0dd22b8da9c5fdaa47bf1",
+        "0005-category2-resource-gate.patch": "e43dd1f0998e7ec0a8feb8e397ba37c285bf2c031480a6528297e078c94c82df",
+        "0006-input-handler-ownership.patch": "bcb70ae8a8947344c206ff4a0b31d445b6c6bb1956135d45f81c6e1b554a3075",
+        "0007-controlled-tick.patch": "d027c76922a4d8d69e639b3cbe5a48c121b4dabfaf116334b4acff1fc472160f"
+      },
+      "product_sources": {
+        "runtime/os/FreeRTOSConfig.h": "facbf3a296fa5aa3d12c7d93babb34f99c9d9e940ce140e586f7aac8fc966589",
+        "runtime/os/include/Os.h": "375d7e287dff18b399cd70a5f9469028c5e1ba6a8d5fca8107052733c2844d41",
+        "runtime/os/include/Os_Cfg.h": "34439ac9d1b5a9bbd371b458abe03dc2498563b4ad6774b9cea6a7557d0bf5ec",
+        "runtime/os/include/Os_Hooks.h": "ed098ad47d42db0ed5eb30c43728711e4490e3810c2ddf5ff74a4484538c2a20",
+        "runtime/os/include/Os_Mailbox.h": "de31d0af68fe473bcab3ee365066eb1feec3436036a0740b2be996d78719ef4c",
+        "runtime/os/include/Os_Target.h": "be9785c4ec9eeb590d5ca7e42335a028be502c5cdff454353e2e3b105cdb1877",
+        "runtime/os/include/Os_Time.h": "02a429a14b8a1b3d50158b4b66801fd06d57172282b375e52faeb09c40f8acd5",
+        "runtime/os/include/Os_Types.h": "4077bfa53d6add288b53e3bcf3ff3e37635b0dde88296d453156cf0af1ce4cc7",
+        "runtime/os/patches/0001-controlled-host-lifecycle.patch": "b522c8fa69454989be899658d670f6313fb621f455f32a258e06fad18fbbf04f",
+        "runtime/os/patches/0002-native-stack.patch": "75e4e04e0de99dd9c1dc3e36e3a93c3d51cad64fec32a09e8b203c3c15040648",
+        "runtime/os/patches/0003-activation-ready-policy.patch": "357b1a98a00d8bd197092e4199b710849d08d5684f9d0eabf4459c354c9f979b",
+        "runtime/os/patches/0004-windows-event-namespace.patch": "633529f96b0bb46cae34687cae8dd9bffda068b971f0dd22b8da9c5fdaa47bf1",
+        "runtime/os/patches/0005-category2-resource-gate.patch": "e43dd1f0998e7ec0a8feb8e397ba37c285bf2c031480a6528297e078c94c82df",
+        "runtime/os/patches/0006-input-handler-ownership.patch": "bcb70ae8a8947344c206ff4a0b31d445b6c6bb1956135d45f81c6e1b554a3075",
+        "runtime/os/patches/0007-controlled-tick.patch": "d027c76922a4d8d69e639b3cbe5a48c121b4dabfaf116334b4acff1fc472160f",
+        "runtime/os/README.md": "7caab9e7ffbc4b2a500c4fa08859a09afb325f3ce7efb3ad2a8a638dff910432",
+        "runtime/os/src/Os.c": "b5ed468e686a17eada2662555d0fc40a20d79c136a63bc25255c0655f4014235",
+        "runtime/os/src/Os_Backend.c": "e703df637ca84881b8aa43ff35585deda992b44994a90de25d42bc4605a0612c",
+        "runtime/os/src/Os_Backend.h": "1ba7d1d54803f083ceda617e72e870a52cd9bebf42f687fa92cfc34e451aab55",
+        "runtime/os/src/Os_Error.c": "75d3520db0e19947acf0709db1f9d14c3ccdd9d7b7e4d9448e20543f24e5d236",
+        "runtime/os/src/Os_HostEvent.c": "229aabdeffede1d31b840fc08216f294aa4f5390b39033309fb14a38d9ae301f",
+        "runtime/os/src/Os_Mailbox.c": "5dcfd6f0ef73b852d92c732bb16cea67805e1493f1ff1b381ba52d1e705292eb",
+        "runtime/os/src/Os_Schedule.c": "7679a5539aea964a9b98b4fd0ee2055f10057d8457bfc4fa19210f85e6f53417",
+        "runtime/os/src/Os_Stack.c": "44669d37c3bbdcb59165c19cfb911482ac44ec7cc9ec4dbdee347b954cd5e479",
+        "runtime/os/src/Os_Stack.h": "8fe1dc8c433e64094ebd9c7e8a48c3fd1a9fdc15a9f9c2e50bc0cf87324297f8",
+        "runtime/os/src/Os_Time.c": "a1daf2332dc37a7c433dee8659e30cdb99e122b94fabaa4271bbfafbbfbc70ad",
+        "runtime/os/src/Os_Windows.h": "7513f31950c778c23f7ddfe9f114e475d5ebf71e7e593abb9fa78fe01755f315",
+        "runtime/os/tests/activation.c": "15fd3975cf1b4c0ebcf70923c48d3d565caeddf38e15b326517064f7d8e8f8d4",
+        "runtime/os/tests/controlled_time.c": "cae381dd426d51efe00d100d98fbb8bfac098fd5927d5e449428a5f5673ba210",
+        "runtime/os/tests/error_hooks.c": "624785f46efcd0039403071cfd044b6fb65f1b75d64c69fc9abc3d0e45180392",
+        "runtime/os/tests/event_wakeup.c": "f1eaf6fb9190444d1d3722b2427af4b99d043b9a3cabe1663aaafa5c96660a03",
+        "runtime/os/tests/finish_chain.c": "1621704d0742ec1eae874fe7e9975afaf78bff1c2f6b0f7accac1542ce8d131e",
+        "runtime/os/tests/lifecycle.c": "5b5e749ffe8d8ae4a27fae7f912b8b9e51686847d017aadc3a4508e0f46b774c",
+        "runtime/os/tests/native_stack.c": "d231fe80328627b12aebfae4eb6caebad6733c721097c7df4fa59ad2053efece",
+        "runtime/os/tests/public_types.c": "248fe448ba9a7aad92b5b2da505a95ebfa3033788e95ca586842c6fe9e5989a1",
+        "runtime/os/tests/resource_preemption.c": "c3966c2174aa7412b0d58ed6644427ae9c8e3023066ad8076cea0552002092c4",
+        "runtime/os/tests/sc1_capacity.c": "52bc6b5c1178621d8c50d076807c25cb4ca29856566dfe0e21a27ea5cd41e559",
+        "runtime/os/tests/sc1_timing.c": "0a032b3a966b5d91e493ddec2319a44841be84056c9ef5499e5e0718217980ea"
+      },
+      "command": [
+        "gcc",
+        "-DOS_USE_GET_SERVICE_ID=1",
+        "-DOS_USE_PARAMETER_ACCESS=0",
+        "-std=c99",
+        "-O1",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-I",
+        "<repo-root>\\runtime\\os",
+        "-I",
+        "<repo-root>\\runtime\\os\\include",
+        "-I",
+        "<repo-root>\\runtime\\os\\src",
+        "-I",
+        "<build-dir>\\macros-10\\kernel\\include",
+        "-I",
+        "<build-dir>\\macros-10\\kernel\\portable\\MSVC-MingW",
+        "<repo-root>\\runtime\\os\\src\\Os.c",
+        "<repo-root>\\runtime\\os\\src\\Os_Error.c",
+        "<repo-root>\\runtime\\os\\src\\Os_Backend.c",
+        "<repo-root>\\runtime\\os\\src\\Os_Stack.c",
+        "<repo-root>\\runtime\\os\\src\\Os_HostEvent.c",
+        "<repo-root>\\runtime\\os\\src\\Os_Mailbox.c",
+        "<repo-root>\\runtime\\os\\src\\Os_Time.c",
+        "<repo-root>\\runtime\\os\\src\\Os_Schedule.c",
+        "<repo-root>\\runtime\\os\\tests\\error_hooks.c",
+        "<build-dir>\\macros-10\\kernel\\tasks.c",
+        "<build-dir>\\macros-10\\kernel\\list.c",
+        "<build-dir>\\macros-10\\kernel\\queue.c",
+        "<build-dir>\\macros-10\\kernel\\portable\\MSVC-MingW\\port.c",
+        "-lwinmm",
+        "-o",
+        "<build-dir>\\macros-10\\os_harness.exe"
+      ]
+    },
+    "00": {
+      "kernel_commit": "054e14f3397023aa83813a65aa065fc4597d481b",
+      "compiler": "GCC 16.1.0 x64",
+      "tls_abi": "PE native TLS; no emutls helper",
+      "binary_sha256": "a6ed2f869dfd5244e7f3f07c0d06159a70c139f10508cd3f34d524831229b982",
+      "patches": {
+        "0001-controlled-host-lifecycle.patch": "b522c8fa69454989be899658d670f6313fb621f455f32a258e06fad18fbbf04f",
+        "0002-native-stack.patch": "75e4e04e0de99dd9c1dc3e36e3a93c3d51cad64fec32a09e8b203c3c15040648",
+        "0003-activation-ready-policy.patch": "357b1a98a00d8bd197092e4199b710849d08d5684f9d0eabf4459c354c9f979b",
+        "0004-windows-event-namespace.patch": "633529f96b0bb46cae34687cae8dd9bffda068b971f0dd22b8da9c5fdaa47bf1",
+        "0005-category2-resource-gate.patch": "e43dd1f0998e7ec0a8feb8e397ba37c285bf2c031480a6528297e078c94c82df",
+        "0006-input-handler-ownership.patch": "bcb70ae8a8947344c206ff4a0b31d445b6c6bb1956135d45f81c6e1b554a3075",
+        "0007-controlled-tick.patch": "d027c76922a4d8d69e639b3cbe5a48c121b4dabfaf116334b4acff1fc472160f"
+      },
+      "product_sources": {
+        "runtime/os/FreeRTOSConfig.h": "facbf3a296fa5aa3d12c7d93babb34f99c9d9e940ce140e586f7aac8fc966589",
+        "runtime/os/include/Os.h": "375d7e287dff18b399cd70a5f9469028c5e1ba6a8d5fca8107052733c2844d41",
+        "runtime/os/include/Os_Cfg.h": "34439ac9d1b5a9bbd371b458abe03dc2498563b4ad6774b9cea6a7557d0bf5ec",
+        "runtime/os/include/Os_Hooks.h": "ed098ad47d42db0ed5eb30c43728711e4490e3810c2ddf5ff74a4484538c2a20",
+        "runtime/os/include/Os_Mailbox.h": "de31d0af68fe473bcab3ee365066eb1feec3436036a0740b2be996d78719ef4c",
+        "runtime/os/include/Os_Target.h": "be9785c4ec9eeb590d5ca7e42335a028be502c5cdff454353e2e3b105cdb1877",
+        "runtime/os/include/Os_Time.h": "02a429a14b8a1b3d50158b4b66801fd06d57172282b375e52faeb09c40f8acd5",
+        "runtime/os/include/Os_Types.h": "4077bfa53d6add288b53e3bcf3ff3e37635b0dde88296d453156cf0af1ce4cc7",
+        "runtime/os/patches/0001-controlled-host-lifecycle.patch": "b522c8fa69454989be899658d670f6313fb621f455f32a258e06fad18fbbf04f",
+        "runtime/os/patches/0002-native-stack.patch": "75e4e04e0de99dd9c1dc3e36e3a93c3d51cad64fec32a09e8b203c3c15040648",
+        "runtime/os/patches/0003-activation-ready-policy.patch": "357b1a98a00d8bd197092e4199b710849d08d5684f9d0eabf4459c354c9f979b",
+        "runtime/os/patches/0004-windows-event-namespace.patch": "633529f96b0bb46cae34687cae8dd9bffda068b971f0dd22b8da9c5fdaa47bf1",
+        "runtime/os/patches/0005-category2-resource-gate.patch": "e43dd1f0998e7ec0a8feb8e397ba37c285bf2c031480a6528297e078c94c82df",
+        "runtime/os/patches/0006-input-handler-ownership.patch": "bcb70ae8a8947344c206ff4a0b31d445b6c6bb1956135d45f81c6e1b554a3075",
+        "runtime/os/patches/0007-controlled-tick.patch": "d027c76922a4d8d69e639b3cbe5a48c121b4dabfaf116334b4acff1fc472160f",
+        "runtime/os/README.md": "7caab9e7ffbc4b2a500c4fa08859a09afb325f3ce7efb3ad2a8a638dff910432",
+        "runtime/os/src/Os.c": "b5ed468e686a17eada2662555d0fc40a20d79c136a63bc25255c0655f4014235",
+        "runtime/os/src/Os_Backend.c": "e703df637ca84881b8aa43ff35585deda992b44994a90de25d42bc4605a0612c",
+        "runtime/os/src/Os_Backend.h": "1ba7d1d54803f083ceda617e72e870a52cd9bebf42f687fa92cfc34e451aab55",
+        "runtime/os/src/Os_Error.c": "75d3520db0e19947acf0709db1f9d14c3ccdd9d7b7e4d9448e20543f24e5d236",
+        "runtime/os/src/Os_HostEvent.c": "229aabdeffede1d31b840fc08216f294aa4f5390b39033309fb14a38d9ae301f",
+        "runtime/os/src/Os_Mailbox.c": "5dcfd6f0ef73b852d92c732bb16cea67805e1493f1ff1b381ba52d1e705292eb",
+        "runtime/os/src/Os_Schedule.c": "7679a5539aea964a9b98b4fd0ee2055f10057d8457bfc4fa19210f85e6f53417",
+        "runtime/os/src/Os_Stack.c": "44669d37c3bbdcb59165c19cfb911482ac44ec7cc9ec4dbdee347b954cd5e479",
+        "runtime/os/src/Os_Stack.h": "8fe1dc8c433e64094ebd9c7e8a48c3fd1a9fdc15a9f9c2e50bc0cf87324297f8",
+        "runtime/os/src/Os_Time.c": "a1daf2332dc37a7c433dee8659e30cdb99e122b94fabaa4271bbfafbbfbc70ad",
+        "runtime/os/src/Os_Windows.h": "7513f31950c778c23f7ddfe9f114e475d5ebf71e7e593abb9fa78fe01755f315",
+        "runtime/os/tests/activation.c": "15fd3975cf1b4c0ebcf70923c48d3d565caeddf38e15b326517064f7d8e8f8d4",
+        "runtime/os/tests/controlled_time.c": "cae381dd426d51efe00d100d98fbb8bfac098fd5927d5e449428a5f5673ba210",
+        "runtime/os/tests/error_hooks.c": "624785f46efcd0039403071cfd044b6fb65f1b75d64c69fc9abc3d0e45180392",
+        "runtime/os/tests/event_wakeup.c": "f1eaf6fb9190444d1d3722b2427af4b99d043b9a3cabe1663aaafa5c96660a03",
+        "runtime/os/tests/finish_chain.c": "1621704d0742ec1eae874fe7e9975afaf78bff1c2f6b0f7accac1542ce8d131e",
+        "runtime/os/tests/lifecycle.c": "5b5e749ffe8d8ae4a27fae7f912b8b9e51686847d017aadc3a4508e0f46b774c",
+        "runtime/os/tests/native_stack.c": "d231fe80328627b12aebfae4eb6caebad6733c721097c7df4fa59ad2053efece",
+        "runtime/os/tests/public_types.c": "248fe448ba9a7aad92b5b2da505a95ebfa3033788e95ca586842c6fe9e5989a1",
+        "runtime/os/tests/resource_preemption.c": "c3966c2174aa7412b0d58ed6644427ae9c8e3023066ad8076cea0552002092c4",
+        "runtime/os/tests/sc1_capacity.c": "52bc6b5c1178621d8c50d076807c25cb4ca29856566dfe0e21a27ea5cd41e559",
+        "runtime/os/tests/sc1_timing.c": "0a032b3a966b5d91e493ddec2319a44841be84056c9ef5499e5e0718217980ea"
+      },
+      "command": [
+        "gcc",
+        "-DOS_USE_GET_SERVICE_ID=0",
+        "-DOS_USE_PARAMETER_ACCESS=0",
+        "-std=c99",
+        "-O1",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-I",
+        "<repo-root>\\runtime\\os",
+        "-I",
+        "<repo-root>\\runtime\\os\\include",
+        "-I",
+        "<repo-root>\\runtime\\os\\src",
+        "-I",
+        "<build-dir>\\macros-00\\kernel\\include",
+        "-I",
+        "<build-dir>\\macros-00\\kernel\\portable\\MSVC-MingW",
+        "<repo-root>\\runtime\\os\\src\\Os.c",
+        "<repo-root>\\runtime\\os\\src\\Os_Error.c",
+        "<repo-root>\\runtime\\os\\src\\Os_Backend.c",
+        "<repo-root>\\runtime\\os\\src\\Os_Stack.c",
+        "<repo-root>\\runtime\\os\\src\\Os_HostEvent.c",
+        "<repo-root>\\runtime\\os\\src\\Os_Mailbox.c",
+        "<repo-root>\\runtime\\os\\src\\Os_Time.c",
+        "<repo-root>\\runtime\\os\\src\\Os_Schedule.c",
+        "<repo-root>\\runtime\\os\\tests\\error_hooks.c",
+        "<build-dir>\\macros-00\\kernel\\tasks.c",
+        "<build-dir>\\macros-00\\kernel\\list.c",
+        "<build-dir>\\macros-00\\kernel\\queue.c",
+        "<build-dir>\\macros-00\\kernel\\portable\\MSVC-MingW\\port.c",
+        "-lwinmm",
+        "-o",
+        "<build-dir>\\macros-00\\os_harness.exe"
+      ]
+    }
+  },
+  "status": "pass",
+  "representation": "workspace/build/toolchain paths normalized; observed native addresses and thread IDs retained for physical-stack and fault correlation",
+  "raw_record_sha256": "2eea64b4018bd05fd1a866b0bbcc5849619fd2f5614cc92cfc91fdcea36a791e",
+  "raw_record_local": ".scratch/epic4/standard-error-hooks-4-18-raw.json"
+}
