@@ -62,6 +62,8 @@ context: []
 
 ## Review Triage Log
 
+- 可重定位向量增量：真实port表已绑定32槽可写.os_vec，生成／搬移工程独立链接检查通过；两种编译故障副本被拒绝。入口11、嵌套26、退出清理10、生命周期46及真实生成测试通过；三路BMad复核无发现。增量规格见spec-4-18-interrupt-vector.md。Memory Mapping和Counter服务仍待实现，父story保持in-progress。
+
 - 公共兼容增量修正复核：同三路blind／edge／verification-gap均已完成最终差异复核且无剩余发现。七个真实头文件变异和六包含顺序已通过，完整符号基准包含local/static及重数；新增正式看门狗在最终源上2.70s通过，实际后代退出。最终完整99门仍运行，未据此提前提交或关闭故事。
 
 - 公共兼容增量首轮blind无发现；verification-gap“仅三名符号黑名单未排除其他输出”为medium／patch：实际static volatile CompatibilityExtra used变异在严格C99编译／运行成功且输出相同，旧名单确实漏检。改为逐包含顺序对同源去除兼容声明的基准对象与实际对象全部已定义符号的名称／类别／重数作比较（包括static），不依赖预先知道多余符号名；新增第七真实变异由这项独立检查拒绝。

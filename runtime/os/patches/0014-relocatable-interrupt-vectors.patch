@@ -1,0 +1,13 @@
+--- a/portable/MSVC-MingW/port.c
++++ b/portable/MSVC-MingW/port.c
+@@ -135,7 +135,9 @@
+ /* Handlers for all the simulated software interrupts.  The first two positions
+  * are used for the Yield and Tick interrupts so are handled slightly differently,
+  * all the other interrupts can be user defined. */
+-static uint32_t (* ulIsrHandler[ portMAX_INTERRUPTS ])( void ) = { 0 };/* Category 2 source state; accesses use the existing native interrupt mutex. */
++/* Use the generated, relocatable vector section for every port dispatch. */
++#define ulIsrHandler Os_InterruptVectorTable
++/* Category 2 source state; accesses use the existing native interrupt mutex. */
+ static uint32_t ulOsDisabledSources;
+ int Os_PortInterruptSourceEnabled( uint32_t interrupt )
+ {

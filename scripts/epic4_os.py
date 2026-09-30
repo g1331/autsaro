@@ -58,12 +58,39 @@ def compiler_description(identity: str) -> str:
     return identity.partition(" ")[2]
 
 
-def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...] = ()) -> tuple[Path, dict]:
+def verify_vector_section(binary: Path, tool: Path) -> None:
+    sections = subprocess.run(
+        [str(tool), "-h", str(binary)], capture_output=True, text=True, check=True
+    ).stdout
+    matches = list(re.finditer(
+        r"^\s*(\d+)\s+\.os_vec\s+([0-9a-fA-F]+)[^\n]*\n([^\n]+)",
+        sections, re.MULTILINE,
+    ))
+    if len(matches) != 1 or int(matches[0][2], 16) != 32 * 8:
+        raise ValueError("native interrupt vector section is missing or has the wrong size")
+    flags = matches[0][3]
+    if "DATA" not in flags or "READONLY" in flags or "ALLOC" not in flags:
+        raise ValueError("native interrupt vector section must be writable allocated data")
+    symbols = subprocess.run(
+        [str(tool), "-t", str(binary)], capture_output=True, text=True, check=True
+    ).stdout
+    tables = list(re.finditer(
+        r"\(sec\s+(\d+)\)[^\n]*\s0x([0-9a-fA-F]+)\s+Os_InterruptVectorTable$",
+        symbols, re.MULTILINE,
+    ))
+    if (len(tables) != 1 or int(tables[0][1]) != int(matches[0][1]) + 1
+            or int(tables[0][2], 16) != 0):
+        raise ValueError("the actual interrupt vector table is not in its dedicated section")
+
+
+def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...] = (),
+          target: Path | None = None) -> tuple[Path, dict]:
+    target = TARGET if target is None else target
     verify_sources()
     cc = compiler()
     copied = directory / "kernel"
     shutil.copytree(KERNEL, copied)
-    patches = sorted((TARGET / "patches").glob("*.patch"))
+    patches = sorted((target / "patches").glob("*.patch"))
     for patch in patches:
         subprocess.run(
             ["git", "apply", "--ignore-space-change", "--check", str(patch)],
@@ -84,27 +111,28 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
         "-Wextra",
         "-Werror",
         "-I",
-        str(TARGET),
+        str(target),
         "-I",
-        str(TARGET / "include"),
+        str(target / "include"),
         "-I",
-        str(TARGET / "src"),
+        str(target / "src"),
         "-I",
         str(ROOT / "runtime/include"),
         "-I",
         str(copied / "include"),
         "-I",
         str(copied / "portable/MSVC-MingW"),
-        str(TARGET / "src/Os.c"),
-        str(TARGET / "src/Os_Error.c"),
-        str(TARGET / "src/Os_Interrupt.c"),
-        str(TARGET / "src/Os_Backend.c"),
-        str(TARGET / "src/Os_Stack.c"),
-        str(TARGET / "src/Os_HostEvent.c"),
-        str(TARGET / "src/Os_Mailbox.c"),
-        str(TARGET / "src/Os_Time.c"),
-        str(TARGET / "src/Os_Schedule.c"),
-        str(TARGET / "tests" / harness),
+        str(target / "src/Os.c"),
+        str(target / "src/Os_Error.c"),
+        str(target / "src/Os_Interrupt.c"),
+        str(target / "src/Os_Backend.c"),
+        str(target / "src/Os_Vector.c"),
+        str(target / "src/Os_Stack.c"),
+        str(target / "src/Os_HostEvent.c"),
+        str(target / "src/Os_Mailbox.c"),
+        str(target / "src/Os_Time.c"),
+        str(target / "src/Os_Schedule.c"),
+        str(target / "tests" / harness),
         str(copied / "tasks.c"),
         str(copied / "list.c"),
         str(copied / "queue.c"),
@@ -139,6 +167,7 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
         raise ValueError(
             "native exception path requires PE TLS without emutls allocation"
         )
+    verify_vector_section(binary, tool)
     return binary, {"command": command}
 
 
@@ -1327,6 +1356,35 @@ def check_public_compatibility(directory: Path) -> None:
                                                 "baseline_symbols": signatures[1]})
 
 
+def check_vector_mutations(directory: Path) -> None:
+    positive = directory / "positive"
+    positive.mkdir()
+    binary, _ = build(positive, "entry_bodies.c")
+    check_entry_bodies(binary)
+    for name in ("old-binding", "no-section"):
+        target = directory / (name + "-source")
+        shutil.copytree(TARGET, target)
+        output = directory / (name + "-build")
+        output.mkdir()
+        if name == "old-binding":
+            (target / "patches/0014-relocatable-interrupt-vectors.patch").unlink()
+            mutant, _ = build(output, "entry_bodies.c", target=target)
+            result = execute(mutant, "normal")
+            require(result["exit"] == 7 and not result["stderr"], result)
+        else:
+            path = target / "src/Os_Vector.c"
+            text = path.read_text(encoding="utf-8")
+            attribute = '__attribute__((section(".os_vec"), aligned(8)))'
+            require(text.count(attribute) == 1, "vector section mutation did not apply")
+            path.write_text(text.replace(attribute, ""), encoding="utf-8")
+            try:
+                build(output, "entry_bodies.c", target=target)
+            except ValueError as error:
+                require("vector section is missing" in str(error), str(error))
+            else:
+                raise AssertionError("missing vector section passed its linked contract check")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -1353,6 +1411,7 @@ def main() -> None:
             "nonstatus-errors",
             "source-repetition",
             "entry-bodies",
+            "vector-section",
             "status-modes",
             "calling-context",
             "idle-state",
@@ -1361,6 +1420,10 @@ def main() -> None:
     )
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="autosar-epic4-os-") as temporary:
+        if args.suite == "vector-section":
+            check_vector_mutations(Path(temporary))
+            print("epic4_interrupt_vector_section PASS: actual Win64 vector table; 2 rejected compiled mutations")
+            return
         if args.suite == "status-modes":
             observations = check_status_modes(Path(temporary))
             print("epic4_sc1_status_modes PASS: 2 native status configurations; 18 Standard capacity vectors")

@@ -99,6 +99,38 @@ pub(super) fn run_probe(binary: &Path, stage: Option<u32>) -> Output {
     child.wait_with_output().unwrap()
 }
 
+fn check_vector_section(binary: &Path) {
+    let output = Command::new("objdump")
+        .arg("-h")
+        .arg(binary)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let text = String::from_utf8(output.stdout).unwrap();
+    let rows: Vec<_> = text
+        .lines()
+        .map(|line| line.split_whitespace().collect::<Vec<_>>())
+        .filter(|fields| fields.get(1) == Some(&".os_vec"))
+        .collect();
+    assert_eq!(rows.len(), 1, "{text}");
+    assert_eq!(u64::from_str_radix(rows[0][2], 16).unwrap(), 256);
+    let symbol_section = rows[0][0].parse::<u32>().unwrap() + 1;
+    let output = Command::new("objdump")
+        .arg("-t")
+        .arg(binary)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let symbols = String::from_utf8(output.stdout).unwrap();
+    let tables: Vec<_> = symbols
+        .lines()
+        .filter(|line| line.ends_with(" Os_InterruptVectorTable"))
+        .collect();
+    assert_eq!(tables.len(), 1, "{symbols}");
+    assert!(tables[0].contains(&format!("(sec {symbol_section:2})")));
+    assert!(tables[0].contains("0x0000000000000000 Os_InterruptVectorTable"));
+}
+
 fn run_public_command(
     command: &mut Command,
     directory: &Path,
@@ -340,6 +372,7 @@ pub fn verify() {
         String::from_utf8_lossy(&compiled.stdout),
         String::from_utf8_lossy(&compiled.stderr)
     );
+    check_vector_section(&build.join("ecu_probe.exe"));
     let normal = run_probe(&build.join("ecu_probe.exe"), None);
     assert!(
         normal.status.success(),

@@ -29,4 +29,6 @@ cargo test --manifest-path core/Cargo.toml
 
 脚本在临时目录构建并检查真实行为，失败返回非零，不写入共享报告。各suite由核心集成测试注册；更多用法见--help。开发、复核、验证结论及任务状态按安装的BMad，记录在对应story/spec。
 
-当前后续产品工作包括实际生成中断向量段、Memory Mapping、Counter OsService、ARTI、适用模块描述及新目标交接；对应Epic4故事仍须实现和验证。
+真实dispatcher使用32槽Os_InterruptVectorTable；生成工程交付该源码及第14个受控补丁，链接到256字节可重定位、可写的.os_vec段。构建检查实际表的符号与段绑定。
+
+当前后续产品工作包括Memory Mapping、Counter OsService、ARTI、适用模块描述及新目标交接；对应Epic4故事仍须实现和验证。

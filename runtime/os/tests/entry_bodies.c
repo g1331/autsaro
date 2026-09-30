@@ -53,6 +53,9 @@ void ShutdownHook(StatusType error) {
 }
 static uint32_t replacement(void) { return 0u; }
 void StartupHook(void) {
+    check(Os_InterruptVectorTable[0u] != NULL && Os_InterruptVectorTable[1u] != NULL);
+    check(Os_InterruptVectorTable[5u] != NULL && Os_InterruptVectorTable[6u] != NULL);
+    check(Os_InterruptVectorTable[2u] == NULL);
     if (is("replace-owned")) {
         vPortSetInterruptHandler(5u, replacement);
     }

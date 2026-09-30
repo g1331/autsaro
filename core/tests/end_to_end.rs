@@ -269,6 +269,27 @@ fn epic4_public_consumer_watchdog() {
 
 #[cfg(windows)]
 #[test]
+fn epic4_interrupt_vector_section() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let output = Command::new("python")
+        .arg(root.join("scripts/epic4_os.py"))
+        .args(["--suite", "vector-section"])
+        .current_dir(root)
+        .output()
+        .expect("check the actual native vector table and compiled rejection cases");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).starts_with(
+        "epic4_interrupt_vector_section PASS: actual Win64 vector table; 2 rejected compiled mutations"
+    ));
+}
+
+#[cfg(windows)]
+#[test]
 fn epic4_osek_entry_bodies() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let output = Command::new("python")

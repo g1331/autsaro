@@ -5,6 +5,7 @@
 #include "task.h"
 #include "Os_Windows.h"
 #include "Os_Stack.h"
+#include "Os_Vector.h"
 #include "Os_Mailbox.h"
 #define OS_KERNEL_YIELD_INTERRUPT 0u
 #define OS_CONTROLLED_TICK_INTERRUPT 1u

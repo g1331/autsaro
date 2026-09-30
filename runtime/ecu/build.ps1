@@ -136,4 +136,20 @@ $objdump = Join-Path (Split-Path -Parent $compilerPath) 'objdump.exe'
 $symbols = & $objdump -t $binary
 if ($LASTEXITCODE -ne 0) { throw 'Native ABI symbol check failed.' }
 if ($symbols -match '__emutls') { throw 'Physical stack faults require native PE TLS.' }
+$sections = & $objdump -h $binary
+if ($LASTEXITCODE -ne 0) { throw 'Native section check failed.' }
+$vectors = @($sections | Select-String '^\s*(\d+)\s+\.os_vec\s+([0-9a-fA-F]+)[^\r\n]*$')
+if ($vectors.Count -ne 1 -or [Convert]::ToInt32($vectors[0].Matches[0].Groups[2].Value, 16) -ne 256) {
+    throw 'The native interrupt vector section is missing or has the wrong size.'
+}
+$vectorSection = [int]$vectors[0].Matches[0].Groups[1].Value + 1
+$vectorFlags = $sections[$vectors[0].LineNumber]
+if ($vectorFlags -notmatch 'DATA' -or $vectorFlags -notmatch 'ALLOC' -or $vectorFlags -match 'READONLY') {
+    throw 'The native interrupt vector section must be writable allocated data.'
+}
+$tables = @($symbols | Select-String '\(sec\s+(\d+)\)[^\r\n]*\s0x([0-9a-fA-F]+)\s+Os_InterruptVectorTable$')
+if ($tables.Count -ne 1 -or [int]$tables[0].Matches[0].Groups[1].Value -ne $vectorSection -or
+    [Convert]::ToInt64($tables[0].Matches[0].Groups[2].Value, 16) -ne 0) {
+    throw 'The actual interrupt vector table is not in its dedicated section.'
+}
 Write-Output "Built ECU native entry: $binary"

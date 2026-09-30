@@ -92,6 +92,18 @@ pub(super) fn sources() -> Result<Vec<(String, Vec<u8>)>, String> {
             include_bytes!("../../../runtime/os/patches/0013-interrupt-source-repetition.patch"),
         ),
         (
+            "os/patches/0014-relocatable-interrupt-vectors.patch",
+            include_bytes!("../../../runtime/os/patches/0014-relocatable-interrupt-vectors.patch"),
+        ),
+        (
+            "os/src/Os_Vector.c",
+            include_bytes!("../../../runtime/os/src/Os_Vector.c"),
+        ),
+        (
+            "os/src/Os_Vector.h",
+            include_bytes!("../../../runtime/os/src/Os_Vector.h"),
+        ),
+        (
             "os/README.md",
             include_bytes!("../../../runtime/os/README.md"),
         ),
