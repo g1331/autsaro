@@ -1,6 +1,6 @@
 use autosar_config_core::integration::{
     DiagnosticCategory, IntegrationEdit, IntegrationInspection, PlanDependencies, PlanDiagnostic,
-    RuntimeCatalog,
+    RuntimeCatalog, build_ecu_project, verify_ecu_project,
 };
 use autosar_config_core::{
     BuildReport, DiagnosticSettings, Direction, GenerationPreview, GenerationReport, RunReport,
@@ -151,14 +151,160 @@ fn open_project(
 }
 
 #[tauri::command]
-fn open_handoff_project(
+async fn open_handoff_project(
     state: State<'_, Arc<AppState>>,
     directory: String,
 ) -> Result<WorkspaceView, String> {
-    let workspace = autosar_config_core::generator::open_handoff(Path::new(&directory), archive())?;
-    let view = workspace.view();
-    *state.workspace.lock().map_err(|_| "工作区状态锁损坏")? = Some(workspace);
-    Ok(view)
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let root = Path::new(&directory);
+        let metadata: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(root.join("handoff.json")).map_err(|e| e.to_string())?,
+        )
+        .map_err(|e| e.to_string())?;
+        let workspace = match metadata["format"].as_str() {
+            Some("autosar-ecu-handoff-v1") => {
+                let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+                let runtime =
+                    RuntimeCatalog::from_repository(&repo).map_err(|e| format!("{e:?}"))?;
+                Workspace::open_ecu_handoff(
+                    root,
+                    &PlanDependencies::from_repository(&repo),
+                    &runtime,
+                )
+                .map_err(|e| format!("{e:?}"))?
+            }
+            Some("autosar-host-handoff-v1") => {
+                autosar_config_core::generator::open_handoff(root, archive())?
+            }
+            _ => {
+                return Err(
+                    "Unsupported handoff format; the current workspace was retained.".into(),
+                );
+            }
+        };
+        let view = workspace.view();
+        *state.workspace.lock().map_err(|_| "工作区状态锁损坏")? = Some(workspace);
+        Ok(view)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn preview_ecu_project(
+    state: State<'_, Arc<AppState>>,
+    output_directory: String,
+    handoff: bool,
+) -> Result<GenerationPreview, Vec<PlanDiagnostic>> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        with_integration(&state, |workspace, runtime, archive| {
+            let plan = workspace.saved_integration_plan(runtime, archive.clone())?;
+            let files = if handoff {
+                plan.ecu_handoff_files()?
+            } else {
+                plan.ecu_integration_files()?
+            };
+            workspace.saved_integration_plan(runtime, archive.clone())?;
+            files
+                .preview(Path::new(&output_directory))
+                .map_err(integration_failure)
+        })
+    })
+    .await
+    .map_err(|e| integration_failure(e.to_string()))?
+}
+
+#[tauri::command]
+async fn generate_ecu_project(
+    state: State<'_, Arc<AppState>>,
+    output_directory: String,
+    handoff: bool,
+    revision: String,
+) -> Result<GenerationReport, Vec<PlanDiagnostic>> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        with_integration(&state, |workspace, runtime, archive| {
+            let plan = workspace.saved_integration_plan(runtime, archive.clone())?;
+            let files = if handoff {
+                plan.ecu_handoff_files()?
+            } else {
+                plan.ecu_integration_files()?
+            };
+            workspace.saved_integration_plan(runtime, archive.clone())?;
+            files
+                .generate_previewed(Path::new(&output_directory), &revision)
+                .map_err(integration_failure)
+        })
+    })
+    .await
+    .map_err(|e| integration_failure(e.to_string()))?
+}
+
+#[tauri::command]
+async fn build_ecu(
+    state: State<'_, Arc<AppState>>,
+    output_directory: String,
+    build_directory: String,
+) -> Result<BuildReport, Vec<PlanDiagnostic>> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        with_integration(&state, |workspace, runtime, archive| {
+            let plan = current_ecu(workspace, runtime, &archive, Path::new(&output_directory))?;
+            let result = build_ecu_project(
+                &plan,
+                Path::new(&output_directory),
+                Path::new(&build_directory),
+            )
+            .map_err(integration_failure)?;
+            current_ecu(workspace, runtime, &archive, Path::new(&output_directory))?;
+            Ok(result)
+        })
+    })
+    .await
+    .map_err(|e| integration_failure(e.to_string()))?
+}
+
+#[tauri::command]
+async fn verify_ecu(
+    state: State<'_, Arc<AppState>>,
+    output_directory: String,
+) -> Result<RunReport, Vec<PlanDiagnostic>> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        with_integration(&state, |workspace, runtime, archive| {
+            let plan = current_ecu(workspace, runtime, &archive, Path::new(&output_directory))?;
+            let result = verify_ecu_project(&plan, Path::new(&output_directory))
+                .map_err(integration_failure)?;
+            current_ecu(workspace, runtime, &archive, Path::new(&output_directory))?;
+            Ok(result)
+        })
+    })
+    .await
+    .map_err(|e| integration_failure(e.to_string()))?
+}
+
+fn current_ecu(
+    workspace: &Workspace,
+    runtime: &RuntimeCatalog,
+    archive: &Path,
+    output: &Path,
+) -> Result<autosar_config_core::integration::ValidatedIntegrationPlan, Vec<PlanDiagnostic>> {
+    let plan = workspace.saved_integration_plan(runtime, archive.to_path_buf())?;
+    let bytes = std::fs::read(output.join("integration.json"))
+        .map_err(|e| integration_failure(e.to_string()))?;
+    let data: serde_json::Value =
+        serde_json::from_slice(&bytes).map_err(|e| integration_failure(e.to_string()))?;
+    if data["plan"]
+        != serde_json::to_value(plan.description())
+            .map_err(|e| integration_failure(e.to_string()))?
+    {
+        return Err(integration_failure(
+            "Generated source identities differ from the saved workspace. Regenerate before building or verifying.",
+        ));
+    }
+    Ok(plan)
 }
 
 #[tauri::command]
@@ -354,6 +500,10 @@ pub fn run() {
             create_project,
             open_project,
             open_handoff_project,
+            preview_ecu_project,
+            generate_ecu_project,
+            build_ecu,
+            verify_ecu,
             add_frame,
             add_signal,
             update_frame,

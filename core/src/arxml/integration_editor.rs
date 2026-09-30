@@ -16,6 +16,41 @@ fn failure(code: &str, message: impl Into<String>) -> Vec<PlanDiagnostic> {
 }
 
 impl Workspace {
+    pub fn saved_integration_plan(
+        &self,
+        runtime: &RuntimeCatalog,
+        mod_archive: PathBuf,
+    ) -> Result<ValidatedIntegrationPlan, Vec<PlanDiagnostic>> {
+        if self.files.iter().any(|file| file.text != file.saved) {
+            return Err(failure(
+                "SOURCE_DIRTY",
+                "Save all standard inputs before generating or exporting the ECU project.",
+            ));
+        }
+        self.integration_plan(runtime, mod_archive)
+    }
+
+    pub fn open_ecu_handoff(
+        output: &std::path::Path,
+        dependencies: &crate::integration::PlanDependencies,
+        runtime: &RuntimeCatalog,
+    ) -> Result<Self, Vec<PlanDiagnostic>> {
+        let package = crate::integration::open_ecu_handoff(output, dependencies, runtime)?;
+        let mut workspace = Self::open(package.input_paths(), dependencies.xsd_archive.clone())
+            .map_err(|e| failure("ECU_HANDOFF", e))?;
+        workspace.integration_input_root = Some(package.input_root());
+        let actual = workspace.saved_integration_plan(runtime, dependencies.mod_archive.clone())?;
+        if serde_json::to_value(actual.description()).unwrap()
+            != serde_json::to_value(package.plan().description()).unwrap()
+        {
+            return Err(failure(
+                "SOURCE_CHANGED",
+                "The delivered inputs changed while opening the ECU package.",
+            ));
+        }
+        Ok(workspace)
+    }
+
     pub fn inspect_integration(
         &self,
         runtime: &RuntimeCatalog,

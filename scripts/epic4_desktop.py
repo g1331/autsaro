@@ -88,10 +88,18 @@ def main() -> int:
         raise RuntimeError("Native desktop verification requires Windows")
     binary = args.binary.resolve(strict=True)
     scratch = Path(tempfile.mkdtemp(prefix="autosar-epic4-desktop-"))
+    print(f"Isolated native test directory: {scratch}", flush=True)
     inputs = scratch / "inputs"
     shutil.copytree(ROOT / "core/tests/fixtures/epic4/positive", inputs)
     paths = sorted(str(path) for path in inputs.glob("*.arxml"))
     (scratch / "inputs.json").write_text(json.dumps(paths), encoding="utf-8")
+    packager = ROOT / "core/target/debug/package_host_reference.exe"
+    packaged = subprocess.run(
+        [str(packager), str(scratch / "legacy")], cwd=ROOT,
+        creationflags=subprocess.CREATE_NO_WINDOW, capture_output=True, timeout=180,
+    )
+    if packaged.returncode:
+        raise RuntimeError(packaged.stdout.decode("utf-8", errors="replace") + packaged.stderr.decode("utf-8", errors="replace"))
     user = ctypes.WinDLL("user32", use_last_error=True)
     kernel = ctypes.WinDLL("kernel32", use_last_error=True)
     user.CreateDesktopW.argtypes = [
@@ -308,6 +316,7 @@ def main() -> int:
                 raise RuntimeError("The input desktop changed during the isolated test")
         finally:
             user.CloseDesktop(current)
+        driver_log = (scratch / "native-driver.log").open("w", encoding="utf-8")
         driver = subprocess.Popen(
             [
                 node,
@@ -317,10 +326,12 @@ def main() -> int:
             ],
             cwd=ROOT,
             creationflags=subprocess.CREATE_NO_WINDOW,
+            stdout=driver_log,
+            stderr=subprocess.STDOUT,
         )
         canceled = 0
         observed = {}
-        deadline = time.monotonic() + 150
+        deadline = time.monotonic() + 900
 
         def window_text(window, class_name=False):
             buffer = ctypes.create_unicode_buffer(256)
@@ -343,9 +354,17 @@ def main() -> int:
                     if time.monotonic() - started < 1:
                         continue
                     cancel_buttons = []
+                    accept_buttons = []
 
                     @window_callback
                     def child(child_window, _):
+                        # DirectUI TaskDialog buttons can expose ID 0. Use the
+                        # actual translated positive label on our owned dialog.
+                        if window_text(child_window, True) == "Button" and (
+                            user.GetDlgCtrlID(child_window) in (1, 6, 1000, 1004)
+                            or window_text(child_window) in ("确定", "确认", "是", "OK", "Ok", "Yes")
+                        ):
+                            accept_buttons.append(child_window)
                         if window_text(child_window, True) == "Button" and (
                             user.GetDlgCtrlID(child_window) == 2
                             or window_text(child_window) in ("取消", "Cancel")
@@ -354,14 +373,26 @@ def main() -> int:
                         return True
 
                     checked(user.EnumChildWindows(window, child, 0))
-                    if cancel_buttons:
+                    permission = scratch / "accept-generation-path.txt"
+                    requested = permission.read_text(encoding="utf-8") if permission.is_file() else ""
+                    # TaskDialog content is not necessarily exposed as child
+                    # window text. The driver authorizes only this generation
+                    # confirmation, with an output inside its own temp tree.
+                    allowed = requested and Path(requested).resolve().is_relative_to(scratch)
+                    if allowed and window_text(window) == "确认操作" and accept_buttons:
+                        user.SendMessageW(accept_buttons[0], 0x00F5, 0, 0)
+                        permission.unlink()
+                        observed[window] = time.monotonic() + 900
+                    elif cancel_buttons:
                         # Only an enumerated native dialog on our separate
                         # desktop, owned by this test's Tauri PID, is addressed.
                         user.SendMessageW(cancel_buttons[0], 0x00F5, 0, 0)
                         canceled += 1
-                        observed[window] = time.monotonic() + 150
+                        observed[window] = time.monotonic() + 900
                 time.sleep(0.05)
             if driver.returncode:
+                driver_log.flush()
+                print((scratch / "native-driver.log").read_text(encoding="utf-8")[-8000:], flush=True)
                 return driver.returncode
             if canceled < 1:
                 raise RuntimeError(
@@ -371,6 +402,7 @@ def main() -> int:
             if driver.poll() is None:
                 driver.terminate()
                 driver.wait(timeout=5)
+            driver_log.close()
         current = checked(user.OpenInputDesktop(0, False, 1))
         try:
             if name(current) != input_name:

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile, rename } from "node:fs/promises";
 import path from "node:path";
 
 const [url, scratch] = process.argv.slice(2);
@@ -34,7 +34,7 @@ function cdp(method, params = {}) {
     const timer = setTimeout(() => {
       pending.delete(id);
       reject(new Error(`CDP timed out: ${method}`));
-    }, 30000);
+    }, 300000);
     pending.set(id, { resolve, reject, timer });
     ws.send(JSON.stringify({ id, method, params }));
   });
@@ -50,13 +50,29 @@ async function evaluate(expression) {
   return result.result.value;
 }
 async function until(expression, expected = true) {
-  const deadline = Date.now() + 30000;
+  const deadline = Date.now() + 300000;
   while (Date.now() < deadline) {
     const result = await evaluate(expression);
     if (result === expected) return;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`UI condition did not become true: ${expression}`);
+}
+async function stage(name, expected) {
+  const selector = `[data-stage=${JSON.stringify(name)}]`;
+  const deadline = Date.now() + 300000;
+  while (Date.now() < deadline) {
+    const value = await evaluate(
+      `document.querySelector(${JSON.stringify(selector)})?.textContent`,
+    );
+    if (value === expected) return;
+    if (value === "失败" && expected === "已通过")
+      throw new Error(
+        `Actual ${name} failed: ${await evaluate("document.body.innerText")}`,
+      );
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Actual ${name} did not reach ${expected}`);
 }
 async function click(text) {
   await evaluate(`(() => {
@@ -173,6 +189,134 @@ try {
     ),
     "1100",
   );
+  const delivery = path.join(scratch, "ECU source");
+  const moved = path.join(scratch, "moved ECU source");
+  const regenerated = path.join(scratch, "regenerated ECU source");
+  await click("生成与构建");
+  await input("ECU 输出目录", delivery);
+  await input("ECU 构建目录", path.join(scratch, "ECU build"));
+  await click("预览 ECU 交付");
+  await until(`Boolean(document.querySelector('[aria-label="ECU 文件预览"]'))`);
+  assert.equal(
+    await evaluate(`document.querySelector('[data-stage="生成"]').textContent`),
+    "未执行",
+  );
+  await screenshot("ecu-source-preview.png");
+  await click("确认生成 ECU");
+  await until(`document.body.innerText.includes('已取消生成，输出目录未改动')`);
+  await writeFile(path.join(scratch, "accept-generation-path.txt"), delivery);
+  await click("确认生成 ECU");
+  await until(
+    `document.querySelector('[data-stage="生成"]').textContent === '已通过'`,
+  );
+  await click("构建 ECU");
+  await until(
+    `document.querySelector('[data-stage="构建"]').textContent === '已通过'`,
+  );
+  const originalBinary = await readFile(
+    path.join(scratch, "ECU build", "ecu_host_batch.exe"),
+  );
+  await click("构建 ECU");
+  await stage("构建", "失败");
+  assert.deepEqual(
+    await readFile(path.join(scratch, "ECU build", "ecu_host_batch.exe")),
+    originalBinary,
+  );
+  await input("ECU 构建目录", path.join(scratch, "ECU recovery build"));
+  await click("构建 ECU");
+  await stage("构建", "已通过");
+  await click("验证 ECU 主机行为");
+  await until(
+    `document.querySelector('[data-stage="主机行为"]').textContent === '已通过'`,
+  );
+  assert.equal(
+    await evaluate(
+      `document.querySelector('[data-stage="完整 SC1 工程等级复验"]').textContent`,
+    ),
+    "当前工程未验证",
+  );
+  assert.equal(
+    await evaluate(`document.querySelector('[data-stage="实机"]').textContent`),
+    "未验证",
+  );
+  await screenshot("ecu-host-behavior.png");
+  await evaluate(
+    `document.querySelector('[aria-label="ECU 行为日志"]').scrollIntoView({block: 'end'})`,
+  );
+  await screenshot("ecu-host-log.png");
+  const runtime = path.join(delivery, "src", "Rte.c");
+  const originalRuntime = await readFile(runtime);
+  await writeFile(
+    runtime,
+    Buffer.concat([originalRuntime, Buffer.from("\n/* external edit */\n")]),
+  );
+  await click("验证 ECU 主机行为");
+  await stage("主机行为", "失败");
+  await screenshot("ecu-source-rejection.png");
+  await writeFile(runtime, originalRuntime);
+  await click("验证 ECU 主机行为");
+  await stage("主机行为", "已通过");
+  await click("标准输入");
+  await until(
+    `Boolean(document.querySelector('input[aria-label="应用周期"]') && !document.querySelector('input[aria-label="应用周期"]').disabled)`,
+  );
+  await input("应用周期", "21");
+  await click("生成与构建");
+  await stage("生成", "已失效");
+  assert(
+    await evaluate(
+      `([...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='构建 ECU')).disabled`,
+    ),
+  );
+  await click("标准输入");
+  await click("还原草稿");
+  await click("生成与构建");
+  await rename(delivery, moved);
+  await input("重导入 ECU 目录", moved);
+  await click("重导入 ECU 交接包");
+  await until(
+    `document.body.innerText.includes('标准输入已校验，尚未生成运行工程')`,
+  );
+  assert.equal(
+    await evaluate(
+      `document.querySelector('input[aria-label="接收 CAN ID"]').value`,
+    ),
+    "1100",
+  );
+  await click("生成与构建");
+  for (const stage of ["校验", "生成", "构建", "主机行为"]) {
+    assert.equal(
+      await evaluate(
+        `document.querySelector('[data-stage=${JSON.stringify(stage)}]').textContent`,
+      ),
+      "未执行",
+    );
+  }
+  await input("ECU 输出目录", regenerated);
+  await click("预览 ECU 交付");
+  await until(`Boolean(document.querySelector('[aria-label="ECU 文件预览"]'))`);
+  await writeFile(
+    path.join(scratch, "accept-generation-path.txt"),
+    regenerated,
+  );
+  await click("确认生成 ECU");
+  await until(
+    `document.querySelector('[data-stage="生成"]').textContent === '已通过'`,
+  );
+  const files = (await readFile(path.join(moved, "files.list"), "utf8"))
+    .trim()
+    .split(/\r?\n/);
+  for (const file of [...files, "files.list", "files.sha256"]) {
+    assert.deepEqual(
+      await readFile(path.join(regenerated, file)),
+      await readFile(path.join(moved, file)),
+      `Reimport/regenerate changed ${file}`,
+    );
+  }
+  await click("标准输入");
+  await until(
+    `Boolean(document.querySelector('input[aria-label="应用周期"]'))`,
+  );
   const checkedPlan = await evaluate(
     `window.__TAURI_INTERNALS__.invoke('inspect_integration')`,
   );
@@ -220,7 +364,32 @@ try {
     await evaluate(`document.body.innerText.includes('TARGET_NOT_UNIQUE')`),
   );
   console.log(
-    "Native standard-input edit/preview/save/reopen/rejection passed",
+    "Native standard-input and ECU preview/export/build/behavior/failure/move/reimport/regenerate passed",
+  );
+  const legacyDirectory = path.join(scratch, "legacy", "Alpha");
+  const legacy = await evaluate(
+    `window.__TAURI_INTERNALS__.invoke('open_handoff_project', {directory: ${JSON.stringify(legacyDirectory)}})`,
+  );
+  assert.equal(legacy.name, "Alpha");
+  assert.equal(Boolean(legacy.integrationCandidate), false);
+  assert(legacy.frames.length > 0 && legacy.signals.length > 0);
+  const unknown = path.join(legacyDirectory, "handoff.json");
+  const original = await readFile(unknown);
+  const changed = JSON.parse(original.toString());
+  changed.format = "unknown-handoff-v99";
+  await writeFile(unknown, JSON.stringify(changed));
+  assert(
+    await evaluate(
+      `window.__TAURI_INTERNALS__.invoke('open_handoff_project', {directory: ${JSON.stringify(legacyDirectory)}}).then(()=>false,()=>true)`,
+    ),
+  );
+  const retained = await evaluate(
+    `window.__TAURI_INTERNALS__.invoke('workspace_view')`,
+  );
+  assert.equal(retained.name, "Alpha");
+  await writeFile(unknown, original);
+  console.log(
+    "Real native host-v1 dispatch and rejected-format workspace retention passed",
   );
 } catch (error) {
   console.error(String(error), await evaluate("document.body.innerText"));

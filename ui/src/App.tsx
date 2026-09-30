@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { IntegrationPanel } from './IntegrationPanel';
+import { IntegrationDelivery } from './IntegrationDelivery';
 import { requestConfirmation } from './confirmation';
 import {
   ArrowRight,
@@ -1265,7 +1266,7 @@ export default function App() {
                 aria-current={page === 'integration' ? 'page' : undefined}
                 onClick={() => {
                   if (page !== 'integration') {
-                    setIntegrationProcessing(true);
+                    if (!workspace.integrationCandidate) setIntegrationProcessing(true);
                     setPage('integration');
                   }
                 }}
@@ -1301,7 +1302,7 @@ export default function App() {
                 type="button"
                 className={page === 'build' ? 'active' : ''}
                 aria-current={page === 'build' ? 'page' : undefined}
-                disabled={Boolean(workspace.integrationCandidate) || integrationProcessing}
+                disabled={integrationProcessing}
                 onClick={() => setPage('build')}
               >
                 <HardDrive aria-hidden="true" size={16} />
@@ -1311,7 +1312,7 @@ export default function App() {
                 type="button"
                 className={page === 'virtual' ? 'active' : ''}
                 aria-current={page === 'virtual' ? 'page' : undefined}
-                disabled={Boolean(workspace.integrationCandidate) || integrationProcessing}
+                disabled={integrationProcessing}
                 onClick={() => setPage('virtual')}
               >
                 <MonitorPlay aria-hidden="true" size={16} />
@@ -1410,19 +1411,39 @@ export default function App() {
                 className="main-pane"
                 aria-label={page === 'editor' ? '配置工作区' : '项目工作页'}
               >
-                {page === 'integration' && (
-                  <IntegrationPanel
-                    onDraftChange={setIntegrationUnapplied}
-                    onBusyChange={setIntegrationProcessing}
-                    locked={Boolean(busy)}
-                    key={workspace.files.map((file) => file.path).join('|')}
+                {workspace.integrationCandidate && (
+                  <IntegrationDelivery
                     workspace={workspace}
                     native={native}
-                    onView={(view) => {
-                      acceptView(view);
-                      invalidateAfterEdit();
+                    active={page === 'build' || page === 'virtual'}
+                    locked={Boolean(busy)}
+                    unapplied={integrationUnapplied}
+                    onBusyChange={setIntegrationProcessing}
+                    chooseDirectory={chooseDirectory}
+                    onImport={(directory) => {
+                      void run(
+                        '导入交付包',
+                        () => invoke<WorkspaceView>('open_handoff_project', { directory }),
+                        applyProject,
+                      );
                     }}
                   />
+                )}
+                {(workspace.integrationCandidate || page === 'integration') && (
+                  <div hidden={page !== 'integration'}>
+                    <IntegrationPanel
+                      onDraftChange={setIntegrationUnapplied}
+                      onBusyChange={setIntegrationProcessing}
+                      locked={Boolean(busy)}
+                      key={workspace.files.map((file) => file.path).join('|')}
+                      workspace={workspace}
+                      native={native}
+                      onView={(view) => {
+                        acceptView(view);
+                        invalidateAfterEdit();
+                      }}
+                    />
+                  </div>
                 )}
                 {page === 'editor' && (
                   <>
@@ -2189,7 +2210,7 @@ export default function App() {
                     )}
                   </div>
                 )}
-                {page === 'build' && (
+                {page === 'build' && !workspace.integrationCandidate && (
                   <div className="workflow-page delivery-view">
                     <div className="section-header">
                       <div>
@@ -2320,7 +2341,7 @@ export default function App() {
                     )}
                   </div>
                 )}
-                {page === 'virtual' && (
+                {page === 'virtual' && !workspace.integrationCandidate && (
                   <div className="workflow-page virtual-view">
                     <div className="section-header">
                       <div>

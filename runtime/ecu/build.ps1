@@ -123,6 +123,7 @@ $testFlags = @()
 if ($TestMode) { $testFlags += '-DECU_TARGET_TESTS' }
 $binary = Join-Path $buildRoot $(if ($HostBatch) { 'ecu_host_batch.exe' } else { 'ecu_probe.exe' })
 $compileArguments = @('-std=c99', '-O1', '-g', '-Wall', '-Wextra', '-Werror', '-DECU_TARGET_EPIC4')
+$compileArguments += @("-ffile-prefix-map=$projectRoot=.", "-ffile-prefix-map=$buildRoot=build")
 $compileArguments += $testFlags
 $compileArguments += $includeFlags
 $compileArguments += $sources

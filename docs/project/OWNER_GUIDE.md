@@ -55,7 +55,7 @@ Agent 应把规范研究放进具体功能任务，不用一轮轮独立审计�
 
 生成前会使用交付的完整构建入口实际编译、链接，检查类型、宏及外部符号闭包。因此生成环境需要 Git 与已锁定的 Windows x64 MSYS2 GCC 16.1.0 Rev5；`AUTOSAR_CC` 可指定该编译器路径，具体版本、目标和二进制 SHA256 必须符合生成工程中的 `toolchain.json`。失败时诊断指出保留的临时来源及编译日志位置，不安装目标目录。
 
-工程包含原始输入、生成配置、RTE/应用、实际 BSW/OS 和固定 FreeRTOS 来源、七个补丁、来源映射及许可。移到其他目录后，运行工程内 `build.ps1 -OutputDirectory <新的独立构建目录>`，再运行输出的 `ecu_probe.exe` 验证启动与 20 个显式受控 tick。构建目录必须位于工程之外；构建只在该目录的内核副本应用补丁。`-ControlSource <工程外的控制消费者.c>` 可替换 probe 的 `main`，链接相同公共头和运行时，验证独立输入/输出；不会替换 BSW 或应用实现。
+工程包含原始输入、生成配置、RTE/应用、实际 BSW/OS 和固定 FreeRTOS 来源、十四个补丁、来源映射及许可。移到其他目录后，运行工程内 `build.ps1 -OutputDirectory <新的独立构建目录>`，再运行输出的 `ecu_probe.exe` 验证启动与 20 个显式受控 tick。构建目录必须位于工程之外；构建只在该目录的内核副本应用补丁。`-ControlSource <工程外的控制消费者.c>` 可替换 probe 的 `main`，链接相同公共头和运行时，验证独立输入/输出；不会替换 BSW 或应用实现。
 
 同一个工程可用 `build.ps1 -OutputDirectory <新的独立构建目录> -HostBatch` 构建生产文本入口 `ecu_host_batch.exe`。它从标准输入逐行读取 `BEGIN <epoch>`、零到256行 `RX <CAN ID> <DLC> <hex>` 和 `COMMIT`；例如 `BEGIN 10`、`RX 0x320 4 78563412`、`COMMIT`。epoch为非递减毫秒整数，单批最多跨1000ms；载荷必须恰好包含DLC所需的十六进制字节。BEGIN/RX只暂存，COMMIT执行完整批；目标epoch前的每个tick逐一完成，目标输入在该epoch的周期处理前消费，同epoch不重跑周期。
 
@@ -74,3 +74,11 @@ Agent 应把规范研究放进具体功能任务，不用一轮轮独立审计�
 RTE周期组也可显式引用`RteUsedOsSchTblExpiryPointRef`／`RteBswUsedOsSchTblExpiryPointRef`。所选参考ECU使用一个重复ExpiryPoint、`NONE`同步策略和同一owner／软件SystemCounter；表duration等于TimingEvent周期，启动值加初始offset等于首个周期。周期编辑会同时更新相关事件、Com周期、表duration和启动值。未知或未绑定的表、混用Alarm与ExpiryPoint、错误Task/Event及不匹配周期会在生成前拒绝。
 
 独立计时验收入口为`cargo test --manifest-path core/Cargo.toml --test end_to_end epic4_sc1_timing_capacity -- --exact`。它运行八个独立软件Counter、八表实际配置、双表封存轨迹、单次／重复／绝对／链接／停止／错误前态和真实生成工程消费者。`Os_CounterConfig.software=0`的宿主定时器Counter由实际受控内核tick ISR推进，不能通过标准`IncrementCounter`写入；读取及elapsed值按该Counter模数调整，内核32位tick回绕不改变已推进的Counter值。该证据限定Win64主机，完整SC1／ARTI／编码与交接出口继续分别验收。
+
+## 新目标交接与工作台状态
+
+标准输入工程的“生成与构建”和“虚拟运行”页使用同一新目标交付面板。填写独立 ECU 输出目录，预览实际文件后确认生成；默认包含 `autosar-ecu-handoff-v1` 元数据。再填写工程之外的新空构建目录，执行“构建 ECU”和“验证 ECU 主机行为”。行为检查会在临时目录重新构建生产 HostBatch 入口，执行 CAN/DID、真实 N_Cr 超时恢复和非法批次拒绝；日志留在界面，过程不会写入仓库报告。
+
+交接包可整体搬移，在面板填写“重导入 ECU 目录”重新打开，再生成到另一目录。原字节输入、固定运行时、许可、外部 XSD/MOD 身份及每份生成源码会重新核对，不能用包内 JSON 直接恢复一个可信计划。旧 host-v1 保持原读取和离线运行入口。SHA-256 用于完整性检查，不提供发布者签名认证。
+
+保存、校验、生成、构建、本次主机行为分别显示真实结果；输入修改或重新打开会使下游结果失效。完整 SC1 当前工程复验与实机状态保持未验证，不从有界主机向量推断。离线接收者执行包内 `verify.ps1 -BuildDirectory <新的空目录>`；仅重导入和再生成需要同版工作台以及合法、匹配的 XSD/MOD。包内保留固定 FreeRTOS 来源、十四个补丁和 MIT 许可，产品代码仅用于所有者授权的内部用途，不增加公开发布许可。

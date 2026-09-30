@@ -49,6 +49,21 @@ mod epic4_arti;
 #[path = "support/epic4_artifacts.rs"]
 mod epic4_artifacts;
 
+#[path = "support/epic4_handoff.rs"]
+mod epic4_handoff;
+
+#[cfg(windows)]
+#[test]
+fn epic4_rebuildable_handoff() {
+    epic4_handoff::verify();
+}
+
+#[cfg(windows)]
+#[test]
+fn epic4_one_ms_delivery() {
+    epic4_handoff::verify_rapid();
+}
+
 #[cfg(windows)]
 #[test]
 fn epic4_generated_artifact_obligations() {

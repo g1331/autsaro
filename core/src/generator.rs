@@ -442,7 +442,7 @@ fn verify_generated_output(dir: &Path, names: &[String]) -> Result<(), String> {
     verify_generated_output_with_binary(dir, names, false)
 }
 
-fn verify_build_input(output: &Path) -> Result<(), String> {
+pub(crate) fn verify_build_input(output: &Path) -> Result<Vec<String>, String> {
     let list = fs::read_to_string(output.join("files.list"))
         .map_err(|e| format!("生成工程缺少可读文件清单: {e}"))?;
     let names: Vec<String> = list.lines().map(str::to_owned).collect();
@@ -459,7 +459,8 @@ fn verify_build_input(output: &Path) -> Result<(), String> {
         return Err("生成工程文件清单格式或路径无效，拒绝构建".into());
     }
     verify_generated_output(output, &names)
-        .map_err(|e| format!("生成工程完整性检查失败，拒绝构建: {e}"))
+        .map_err(|e| format!("生成工程完整性检查失败，拒绝构建: {e}"))?;
+    Ok(names)
 }
 
 pub(crate) fn seal_files(mut files: Vec<(String, Vec<u8>)>) -> Vec<(String, Vec<u8>)> {

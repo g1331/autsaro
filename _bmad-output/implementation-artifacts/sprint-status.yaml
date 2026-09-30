@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-27-2026 18:43
-last_updated: 10-01-2026 00:08
+last_updated: 10-01-2026 03:41
 project: Autosar
 project_key: NOKEY
 tracking_system: file-system
@@ -73,28 +73,10 @@ development_status:
   4-15-运行同一应用实例的-s-r-快照和同步-did: done
   4-16-独立验证边界-诊断恢复与旧目标回归: done
   4-17-完成-counter-scheduletable-能力及-sc1-容量: done
-  # 4.18: six interrupt pairs/source control/GetISRID and exit-mask restoration
-  # Cat2 resource exit cleanup, R24 calling table/idle and tick-mask handoff verified;
-  # native nesting26/cleanup10 and seven compiled mutations verified; full gate93 passes.
-  # Public Counter/RTE types:17 native vectors,6 include orders,3 compiled mutations;
-  # full gate94 passes; generated Counter time64 vectors/4 mutants/3 rejections verified;
-  # generated timing full gate95 passes; non-StatusType reporting10/5 mutants and9/28/5 regressions verified;
-  # non-Status full gate96 passes; source repetition12/6 compiled mutants and28/26 regressions verified;
-  # source repetition full gate97 passes; public compatibility6 orders/7 mutants and process watchdog verified;
-  # OSEK entry bodies11/8 mutants and Counter constants33/21 header mutants verified;
-  # final three review lenses clear; full gate100 passes; new raw records stay ignored.
-  # STANDARD real moved generation, both native modes,18 capacity vectors and3 warning mutants verified;
-  # final three review lenses clear; full gate102 passes; SWS_Os_00763 current-profile passed.
-  # Native .os_vec32 slots, patch14, moved generated links and2 compiled rejection cases verified;
-  # BMad vector review clear; Memory Mapping10 entries/6 rejections and moved links verified;
-  # MemMap review patch fixed; Counter service/XSD/real Task and moved links verified;
-  # BMad Counter review complete with two refuted findings; explicit scheduler and OS policy identity verified;
-  # all four boolean forms consumed on the moved target, numeric/definition review patches verified;
-  # 105 integration results plus fixed ScheduleTable and final configuration tests pass; four BMad review layers clear.
   4-18-补齐生命周期-extended-status-hook-和中断义务: done
   4-19-生成并验证-r24-11-arti-描述与-hook: done
   4-20-关闭适用-c-工件-模块描述和静态质量证据: done
-  4-21-交付新目标可重建包与准确工作台状态: backlog
+  4-21-交付新目标可重建包与准确工作台状态: done
   4-22-独立复核完整等级与工程交接出口: backlog
   epic-4-retrospective: optional
 

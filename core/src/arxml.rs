@@ -96,6 +96,7 @@ pub struct Workspace {
     diagnostic: Option<DiagnosticView>,
     issues: Vec<Issue>,
     schema_zip: PathBuf,
+    integration_input_root: Option<PathBuf>,
 }
 
 fn child_text(node: Node<'_, '_>, name: &str) -> Option<String> {
@@ -724,6 +725,7 @@ fn load_sources(files: Vec<PathBuf>, schema_zip: PathBuf) -> Result<Workspace, S
         diagnostic: None,
         issues: Vec::new(),
         schema_zip,
+        integration_input_root: None,
     };
     workspace.refresh()?;
     if workspace
@@ -3273,9 +3275,9 @@ impl Workspace {
         self.ensure_sources_current()
             .map_err(|error| issue("SOURCE_CHANGED", error))?;
         let mut root = self
-            .files
-            .first()
-            .and_then(|file| file.path.parent())
+            .integration_input_root
+            .as_deref()
+            .or_else(|| self.files.first().and_then(|file| file.path.parent()))
             .ok_or_else(|| {
                 issue(
                     "INPUT_MISSING",
@@ -3287,6 +3289,12 @@ impl Workspace {
             .iter()
             .all(|file| file.path.strip_prefix(root).is_ok())
         {
+            if self.integration_input_root.is_some() {
+                return Err(issue(
+                    "SOURCE_IDENTITY",
+                    "A delivered source escaped its declared logical input root.".into(),
+                ));
+            }
             root = root.parent().ok_or_else(|| {
                 issue(
                     "SOURCE_IDENTITY",

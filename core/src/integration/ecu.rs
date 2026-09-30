@@ -39,7 +39,18 @@ fn reject(message: impl Into<String>) -> Vec<PlanDiagnostic> {
 }
 
 impl ValidatedIntegrationPlan {
+    pub fn ecu_handoff_files(&self) -> Result<EcuIntegrationFiles, Vec<PlanDiagnostic>> {
+        let project = self.ecu_integration_files()?;
+        Ok(EcuIntegrationFiles {
+            files: super::handoff::files(self, project.files).map_err(reject)?,
+        })
+    }
     pub fn ecu_integration_files(&self) -> Result<EcuIntegrationFiles, Vec<PlanDiagnostic>> {
+        let project = self.ecu_source_files()?;
+        super::link_check::verify(project.files()).map_err(reject)?;
+        Ok(project)
+    }
+    pub(super) fn ecu_source_files(&self) -> Result<EcuIntegrationFiles, Vec<PlanDiagnostic>> {
         let plan = self.description();
         let contract = self.component_contract_files()?;
         let mut files: BTreeMap<String, Vec<u8>> = bsw_sources::sources().into_iter().collect();
@@ -242,8 +253,8 @@ impl ValidatedIntegrationPlan {
             .schedule
             .entities
             .iter()
-            .find(|entity| entity.period_ms == 1)
-            .unwrap();
+            .find(|entity| entity.period_ms == 1 && entity.os_event != app.os_event)
+            .ok_or_else(|| reject("No distinct fixed owner work event exists."))?;
         let mask = |path: &str| {
             plan.events
                 .iter()
@@ -274,7 +285,7 @@ impl ValidatedIntegrationPlan {
             .schedule
             .entities
             .iter()
-            .filter(|entity| entity.period_ms == 1)
+            .filter(|entity| entity.period_ms == 1 && entity.os_event != app.os_event)
             .any(|entity| entity.trigger() != work.trigger() || entity.os_event != work.os_event)
         {
             return Err(reject(
@@ -528,8 +539,8 @@ impl ValidatedIntegrationPlan {
             include_bytes!("../../../runtime/ecu/include/Rte_MemMap.h").to_vec(),
         );
         files.extend(super::artifacts::files(plan, &files).map_err(reject)?);
+        files.extend(super::handoff::verification_files(self).map_err(reject)?);
         let files = generator::seal_files(files.into_iter().collect());
-        super::link_check::verify(&files).map_err(reject)?;
         Ok(EcuIntegrationFiles { files })
     }
 }
