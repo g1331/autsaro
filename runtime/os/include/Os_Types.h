@@ -98,7 +98,19 @@ typedef AlarmBaseType *AlarmBaseRefType;
 #define E_OS_DISABLEDINT 9u
 #define E_OS_ILLEGAL_ADDRESS 10u
 #define E_OS_MISSINGEND 11u
+#define E_OS_PROTECTION_MEMORY 12u
 #define E_OS_STACKFAULT 13u
+/* R24-11 section 7.15 assigns numeric values to the implementation. These
+ * public names do not select protection, spinlocks or multicore services. */
+#define E_OS_CORE 14u
+#define E_OS_NESTING_DEADLOCK 15u
+#define E_OS_PROTECTION_LOCKED 16u
+#define E_OS_SPINLOCK 17u
+#define E_OS_SERVICEID 18u
+#define E_OS_PROTECTION_EXCEPTION 19u
+#define E_OS_INTERFERENCE_DEADLOCK 20u
+#define E_OS_PROTECTION_TIME 21u
+#define E_OS_PROTECTION_ARRIVAL 22u
 #define RUNNING 0u
 #define WAITING 1u
 #define READY 2u

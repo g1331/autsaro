@@ -99,6 +99,117 @@ pub(super) fn run_probe(binary: &Path, stage: Option<u32>) -> Output {
     child.wait_with_output().unwrap()
 }
 
+fn run_public_command(
+    command: &mut Command,
+    directory: &Path,
+    name: &str,
+    watchdog: Duration,
+) -> Output {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    // Files prevent a compiler descendant holding an inherited pipe from
+    // blocking output collection after the watchdog kills the process tree.
+    let stdout = directory.join(format!("{name}.stdout"));
+    let stderr = directory.join(format!("{name}.stderr"));
+    let mut child = command
+        .stdin(Stdio::null())
+        .stdout(fs::File::create(&stdout).unwrap())
+        .stderr(fs::File::create(&stderr).unwrap())
+        .spawn()
+        .unwrap();
+    let started = Instant::now();
+    while child.try_wait().unwrap().is_none() {
+        if started.elapsed() >= watchdog {
+            let mut cleanup_command = Command::new("taskkill.exe");
+            cleanup_command.args(["/PID", &child.id().to_string(), "/T", "/F"]);
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                cleanup_command.creation_flags(0x08000000);
+            }
+            let cleanup_stdout = directory.join(format!("{name}.cleanup.stdout"));
+            let cleanup_stderr = directory.join(format!("{name}.cleanup.stderr"));
+            let mut cleanup = cleanup_command
+                .stdin(Stdio::null())
+                .stdout(fs::File::create(&cleanup_stdout).unwrap())
+                .stderr(fs::File::create(&cleanup_stderr).unwrap())
+                .spawn()
+                .unwrap();
+            let cleanup_started = Instant::now();
+            while cleanup.try_wait().unwrap().is_none() {
+                if cleanup_started.elapsed() >= Duration::from_secs(3) {
+                    cleanup.kill().unwrap();
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            let cleanup_status = cleanup.wait().unwrap();
+            if child.try_wait().unwrap().is_none() {
+                child.kill().unwrap();
+            }
+            child.wait().unwrap();
+            panic!(
+                "{name} exceeded host watchdog: {}{}; cleanup {cleanup_status}: {}{}",
+                String::from_utf8_lossy(&fs::read(&stdout).unwrap()),
+                String::from_utf8_lossy(&fs::read(&stderr).unwrap()),
+                String::from_utf8_lossy(&fs::read(cleanup_stdout).unwrap()),
+                String::from_utf8_lossy(&fs::read(cleanup_stderr).unwrap())
+            );
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    Output {
+        status: child.wait().unwrap(),
+        stdout: fs::read(stdout).unwrap(),
+        stderr: fs::read(stderr).unwrap(),
+    }
+}
+
+#[cfg(windows)]
+pub fn verify_public_watchdog() {
+    let scratch = super::Scratch::new();
+    let mut command = Command::new("python");
+    command.args([
+        "-c",
+        "import subprocess,sys,time; child=subprocess.Popen([sys.executable,'-c','import time; time.sleep(30)'],creationflags=0x08000000); print('watchdog_child='+str(child.pid),flush=True); time.sleep(30)",
+    ]);
+    let failure = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        run_public_command(
+            &mut command,
+            &scratch.0,
+            "watchdog-probe",
+            Duration::from_secs(2),
+        )
+    }));
+    let panic = failure.expect_err("the deliberately stalled process must time out");
+    let message = panic.downcast_ref::<String>().unwrap();
+    assert!(message.contains("watchdog-probe exceeded host watchdog"));
+    let output = fs::read_to_string(scratch.0.join("watchdog-probe.stdout")).unwrap();
+    let pid = output
+        .lines()
+        .find_map(|line| line.strip_prefix("watchdog_child="))
+        .unwrap()
+        .parse::<u32>()
+        .unwrap();
+    let mut query = Command::new("powershell.exe");
+    query.args([
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        &format!("if (Get-Process -Id {pid} -ErrorAction SilentlyContinue) {{ exit 1 }}"),
+    ]);
+    let gone = run_public_command(
+        &mut query,
+        &scratch.0,
+        "watchdog-descendant-query",
+        Duration::from_secs(5),
+    );
+    assert!(gone.status.success(), "watchdog must close its descendant");
+}
+
 pub fn verify() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let dependencies = PlanDependencies::from_repository(root);
@@ -106,7 +217,7 @@ pub fn verify() {
     let inputs = super::epic4_plan::inputs();
     let plan = build_plan(&inputs, &dependencies, &runtime).unwrap();
     let project = plan.ecu_integration_files().unwrap();
-    for header in ["Os_Types.h", "Rte_Os_Type.h"] {
+    for header in ["Os.h", "Os_Types.h", "Rte_Os_Type.h"] {
         let delivered = &project
             .files()
             .iter()
@@ -169,6 +280,45 @@ pub fn verify() {
     assert!(output.join("kernel/include/stack_macros.h").is_file());
     let moved = scratch.0.join("moved-source-project");
     fs::rename(&output, &moved).unwrap();
+    // Compile the same independent legacy source against the moved delivery,
+    // with no repository header search path or OS object linked in.
+    let public_binary = scratch.0.join("delivered-public-compatibility.exe");
+    let mut public_command = Command::new("gcc");
+    public_command
+        .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
+        .arg("-I")
+        .arg(moved.join("os/include"))
+        .arg("-I")
+        .arg(moved.join("include"))
+        .arg(root.join("runtime/os/tests/public_compatibility.c"))
+        .arg("-o")
+        .arg(&public_binary);
+    let public_compile = run_public_command(
+        &mut public_command,
+        &scratch.0,
+        "public-compile",
+        Duration::from_secs(60),
+    );
+    assert!(
+        public_compile.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&public_compile.stdout),
+        String::from_utf8_lossy(&public_compile.stderr)
+    );
+    let public_run = run_public_command(
+        &mut Command::new(&public_binary),
+        &scratch.0,
+        "public-run",
+        Duration::from_secs(5),
+    );
+    assert!(public_run.status.success());
+    assert!(public_run.stderr.is_empty());
+    assert_eq!(
+        String::from_utf8(public_run.stdout)
+            .unwrap()
+            .replace("\r\n", "\n"),
+        "public_compatibility declarations=16 evaluations=0 error_codes=23 unique=pass\n"
+    );
     let build = scratch.0.join("new-independent-build");
     let compiled = Command::new("powershell.exe")
         .args([

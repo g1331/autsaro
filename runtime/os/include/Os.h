@@ -1,6 +1,14 @@
 #ifndef AUTOSAR_EPIC4_OS_H
 #define AUTOSAR_EPIC4_OS_H
 #include "Os_Types.h"
+/* OSEK source compatibility only (R24-11 section 7.1.2.1). The unused tag
+ * deliberately consumes a legacy file-scope semicolon in strict C99. It has
+ * no object, function, configuration or argument-evaluation effect. R2.4
+ * Advisory: this incomplete tag exists solely for the required interface. */
+#define DeclareTask(identifier) struct Os_DeclarationCompatibility
+#define DeclareResource(identifier) struct Os_DeclarationCompatibility
+#define DeclareEvent(identifier) struct Os_DeclarationCompatibility
+#define DeclareAlarm(identifier) struct Os_DeclarationCompatibility
 /** @brief Select the supported virtual-core idle mode.
  * @param CoreID Ignored by this single-core target, including foreign values.
  * @param IdleMode IDLE_NO_HALT; other modes return E_OS_ID without an effect.

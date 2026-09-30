@@ -57,6 +57,10 @@ context: []
 
 ## Implementation Notes
 
+下一OSEK公共入口核查已按实际原文确认独立缺口：p54第13.2.5节要求TASK(TaskName)将对象名与入口函数绑定；p57/58的Cat2 ISR命名及p37／66的ALARMCALLBACK无参／无返回值声明亦需要公共构造宏。当前Os.h不存在三者，严格C99实际前置消费者已编译拒绝，记录.scratch/epic4/osek-entry-prechange/result.json。后续实现必须把用户void身体与现有native Task／ISR／Alarm配置及调度接通，尤其Cat2身体返回后的资源／屏蔽清理及激活递送不能只由头文件编译冒充；Cat1原文未规定该命名，不发明更严格要求。p65／66另要求所有已配置Counter的OSMAXALLOWEDVALUE_x／OSTICKSPERBASE_x／OSMINCYCLE_x，以及系统Counter的无后缀三常量和OSTICKDURATION；原文明确至少一个system time counter。需要基于实际受控Counter配置及生成工件核定，不能把所选FreeRTOS kernel tick范围直接当汽车Counter值。四个Declare兼容宏及通用错误符号增量只解决已声明的有限部分，不关闭这些义务。
+
+公共兼容／错误符号增量起始97f515fa03bcc5ffbe825a8795bcc93c61cfc641：四个宏在Os.h用不完整struct声明吸收旧分号且不展开参数；Os_Types.h补十个p136符号，保留旧数值，范围12、14～22。新public_compatibility.c／public-compatibility suite／正式epic4_os_public_compatibility验证16声明、23值和六包含顺序，nm比对声明前后全部定义符号，新增第七额外对象变异。现有epic4_ecu_integration_generation在实际移动工程头上编译同一独立消费者，Os.h交付字节同步核对；首轮仅Rust直接读取Windows C输出的CRLF与LF预期失配，已在读取边界统一换行而保留完整文本匹配，原失败日志不覆写。新增fixture的puts结果按R17.7显式处理，部分静态诊断及测试角色边界保留；最终定向、完整门及独立复核仍须完成后提交。
+
 下一公共兼容／错误符号增量按实际原文p37与OSEK p50／58／60／62实现四个无功能Declare宏，使用惰性不完整struct前向声明接受旧文件作用域分号，参数不展开／求值，不产生对象、函数、链接或配置依赖；R2.4 Advisory标签用途为标准源兼容，明确限定而不追认为Required批准。p13691025列十四个新增AUTOSAR错误名，当前仅四个已声明；补其余十个独立StatusType常量，保留既有错误数值，新增值由实现分配。独立严格C99消费者须覆盖已配置数值ID／未配置标识／重复声明／不求值参数，核对二十三个OSEK＋AUTOSAR错误名的非零、范围与唯一性，并通过实际旧头／空宏／有副作用宏／重复错误值等变异证明预期有效。实际旧公共头的前置消费者已编译拒绝，原始诊断位于.scratch/epic4/public-compatibility-prechange/result.json；该前置失败不计为实施通过。完整生成工程须用交付头编译消费者，不能用仓库include替代离线交付。
 
 00809源重复调用增量起始62c749e3d8dc59f4b26a997a9b0ea7a21d510191。在实际十二补丁端口副本上派生第十三补丁：Os_PortInterruptSourceControl仍先拒绝未安装／内核源，再在同一实际mutex内判断重复disable／enable并返回独立内部码2，重复失败不得改disabled／pending位；runtime/os/src/Os_Interrupt.c将该码映射E_OS_NOFUNC并按StatusType保留有类型ErrorHook。保留201页ClearPending TRUE／FALSE明确语义。runtime/os/tests/source_repetition.c须验证Task与Cat2、默认开启后Enable重复、关闭后Disable重复、两种ClearPending参数、全局屏蔽下真实pending保持、无配置Hook、非法源／私有源优先E_ID及错误参数。旧interrupt_pairing源场景保留双调用但按规范期待5／新增报告；合法EnableTRUE实际clear场景须先真正Disable对应源，避免以现在非法的重复Enable证明清除成功。第十三补丁、离线闭包、来源摘要、生成说明及正式测试同步。实际恢复重复成功和失败仍改pending／开关的副本必须被独立预期拒绝；完成验证／复核后才提交，507／C221／交接仍开放。
@@ -123,6 +127,11 @@ ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参�
 
 ## Review Triage Log
 
+- 公共兼容增量修正复核：同三路blind／edge／verification-gap均已完成最终差异复核且无剩余发现。七个真实头文件变异和六包含顺序已通过，完整符号基准包含local/static及重数；新增正式看门狗在最终源上2.70s通过，实际后代退出。最终完整99门仍运行，未据此提前提交或关闭故事。
+
+- 公共兼容增量首轮blind无发现；verification-gap“仅三名符号黑名单未排除其他输出”为medium／patch：实际static volatile CompatibilityExtra used变异在严格C99编译／运行成功且输出相同，旧名单确实漏检。改为逐包含顺序对同源去除兼容声明的基准对象与实际对象全部已定义符号的名称／类别／重数作比较（包括static），不依赖预先知道多余符号名；新增第七真实变异由这项独立检查拒绝。
+- 公共兼容增量edge“新生成消费者GCC／执行无看门狗”为medium／patch：新Command.output确实无期限，可能阻断开发验收。新路径显式编译60s／执行5s，文件采集防止继承管道阻塞，超时终止自有进程树，清理器亦限3s；CREATE_NO_WINDOW保持无桌面干扰。正式epic4_public_consumer_watchdog用实际挂起父／子进程验证诊断保留和后代退出。未把历史其他无期限构建重写为本增量已解决。两项修正须定向复核；完整门与故事出口仍开放。
+
 - 00809源重复调用增量：blind与edge独立复核均完成且无发现。verification-gap唯一发现“unconfigured未执行重复源服务”为false：source_repetition.c最终else实际调用repeated_enable(TRUE)，断言返回E_OS_NOFUNC且源仍启用；该场景Hook指针NULL，随后真实pending递送一次且errors0。原复核者沿实际分支复核后撤回，并确认无其他缺口。不把Python空错误记录列表误读为原生服务返回E_OK。
 
 - 00367非Status服务增量三路独立只读复核完成：blind和verification-gap无发现；edge初次仅返回未完成的空输入读入结果，没有计为通过，要求同一复核者分块读取实际558492字节diff后重新分析，最终返回无发现。当前十原生向量、五个逐函数旧分支编译变异和9／28／5回归通过，330项来源摘要匹配；完整门仍须最终终态确认，不能据此关闭故事。
@@ -154,6 +163,8 @@ ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参�
 - 容量独立增量三路blind／edge／verification-gap均未发现可定位缺陷或验证缺口；完整故事的Hook/错误/ISR工作仍开放。正式容量/真实生成两项测试163.73s通过；18容量、40受控时间、43计时向量封存，26最低容量义务直接映射到四个主场景，部分静态exit1原样保留。容量增量完整门exit0：85个集成测试（660.24s）、29Python、UI/桌面构建和两组Clippy通过；本故事Hook/错误/ISR仍未完成，sprint保持in-progress。
 
 ## Verification
+
+公共兼容／错误符号增量最终完整门exit0：99个核心集成测试1038.56s、29Python、增量格式／C99、UI lint/build、桌面build及两组Clippy通过。正式生成ECU测试在最终源上用移动后的交付头编译／运行独立消费者；六包含顺序／16声明／23唯一范围值／全部符号基准比较通过。七个实际旧／空／缺失／别名／零／超范围／额外对象变异均由独立预期拒绝。实际父子进程看门狗正式测试通过，输出保留、隐藏运行及后代关闭均验证；首轮换行失配及原复核发现保留记录，两项medium修正后三路最终复核均无剩余问题。单翻译单元部分静态exit1诊断保留，四工件32项产品摘要与最终来源匹配，不冒充完整221符合。507封存行／分类保持，79行有关联，全部最终结果待逐项核查；4.18／Epic4保持in-progress。完整门日志.scratch/epic4/story418-public-compatibility-full-gate.log及.exit保留。下一TASK／Cat2 ISR／ALARMCALLBACK与Counter常量、STANDARD模式、生成向量／Memory Mapping／RTE服务和完整C221／ARTI／交接出口仍须完成。
 
 00809中断源重复增量最终完整门exit0：97个核心集成测试1154.54s、29Python、增量格式／C99、UI lint/build、桌面build及两组Clippy通过。12原生重复源过程及28配对／26嵌套回归通过；六个实际状态／pending／开关／注册检查变异全部被原生断言以关闭7识别。12翻译单元部分静态exit1诊断保留；五工件350项产品／补丁摘要与最终来源一致。三路独立复核完成，唯一错误覆盖疑问已按实际unconfigured分支及证据驳回且由原复核者撤回，无剩余增量发现。十个规范行增加限定证据关联，历史允许重复Disable的说明由本次00809修正覆盖；507封存行／分类不变，77行有关联，全部最终结果仍待逐项处置。完整门重新生成的时间消费者二进制及生成器说明摘要按真实产物同步，其独立预期／变异／生成头不变。原始门日志.scratch/epic4/story418-source-repetition-full-gate.log与.exit保留。4.18／Epic4保持in-progress；下一公共兼容宏／错误符号、标准模式、向量／Memory Mapping／RTE服务及完整C221／ARTI／交接出口仍开放。
 

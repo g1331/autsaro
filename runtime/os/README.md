@@ -176,3 +176,5 @@ cargo test --manifest-path core/Cargo.toml epic4_controlled_tick_and_alarm -- --
 | ARTI描述/Hook、完整C质量和偏离批准 | 4.19/4.20 |
 | BSW/SWC周期、输出成功/确认和HostBatch COMMIT静止点 | 4.14–16跨story集成 |
 | 可重建包、完整SC1等级声明及独立交接 | 4.21/4.22 |
+
+OSEK旧源码的DeclareTask／DeclareResource／DeclareEvent／DeclareAlarm由Os.h提供无功能C99兼容声明，参数不求值，也不配置或定义对象。Os_Types.h保留既有错误数值并提供R24-11第7.15节全部十四个开发错误名；声明本身不启用保护、spinlock或多核运行。独立严格C99消费者验证16次声明／23个唯一错误值与六种包含顺序，完整SC1和C221出口仍独立核查。

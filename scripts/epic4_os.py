@@ -1308,6 +1308,63 @@ def check_public_types(directory: Path) -> dict:
     }
 
 
+def check_public_compatibility(directory: Path) -> dict:
+    binary = directory / "public_compatibility.exe"
+    cc = compiler()
+    nm = Path(shutil.which(cc) or cc).with_name("nm.exe")
+    command = [cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic",
+               "-I" + str(TARGET / "include"), "-I" + str(TARGET / "src"),
+               "-I" + str(ROOT / "runtime/include"),
+               str(TARGET / "tests/public_compatibility.c"), "-o", str(binary)]
+    expected = "public_compatibility declarations=16 evaluations=0 error_codes=23 unique=pass\n"
+    observations = []
+    for name, extra in [
+        ("header-only", []),
+        ("windows-before", ["-DOS_PUBLIC_TYPES_WINDOWS_BEFORE"]),
+        ("windows-after", ["-DOS_PUBLIC_TYPES_WINDOWS_AFTER"]),
+        ("rte-before-os", ["-DOS_PUBLIC_RTE_BEFORE"]),
+        ("rte-windows-before", ["-DOS_PUBLIC_RTE_BEFORE", "-DOS_PUBLIC_TYPES_WINDOWS_BEFORE"]),
+        ("rte-windows-after", ["-DOS_PUBLIC_RTE_BEFORE", "-DOS_PUBLIC_TYPES_WINDOWS_AFTER"]),
+    ]:
+        actual_command = command + extra
+        subprocess.run(actual_command, capture_output=True, text=True, check=True, timeout=30)
+        result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=5)
+        require(result.returncode == 0 and result.stdout == expected and not result.stderr,
+                {"exit": result.returncode, "stdout": result.stdout, "stderr": result.stderr})
+        signatures = []
+        for baseline in [False, True]:
+            object_command = actual_command.copy()
+            object_file = directory / f"{name}-{'baseline' if baseline else 'actual'}.o"
+            object_command[object_command.index("-o") + 1] = str(object_file)
+            object_command.append("-c")
+            if baseline:
+                object_command.append("-DOS_PUBLIC_COMPAT_BASELINE")
+            subprocess.run(object_command, capture_output=True, text=True, check=True, timeout=30)
+            symbols = subprocess.run([str(nm), "--defined-only", "--format=posix", str(object_file)],
+                                     capture_output=True, text=True, check=True, timeout=5)
+            signatures.append(sorted(tuple(line.split()[:2]) for line in symbols.stdout.splitlines()))
+        require(signatures[0] == signatures[1], {"actual_symbols": signatures[0],
+                                                "baseline_symbols": signatures[1]})
+        observations.append({"scenario": name, "command": actual_command,
+                             "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
+                             "exit": result.returncode, "stdout": result.stdout,
+                             "stderr": result.stderr, "independent_expected": expected,
+                             "defined_symbol_signature": signatures[0],
+                             "compatibility_symbols_emitted": False})
+    return {
+        "status": "pass for functionless OSEK declarations and public error symbols only",
+        "product_sources": {
+            path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in [TARGET / "include/Os.h", TARGET / "include/Os_Types.h",
+                         TARGET / "include/Rte_Os_Type.h", TARGET / "include/Os_Cfg.h",
+                         TARGET / "include/Os_Hooks.h", TARGET / "src/Os_Windows.h",
+                         TARGET / "tests/public_compatibility.c", ROOT / "runtime/include/Std_Types.h"]
+        },
+        "observations": observations,
+        "scope": "No protection, spinlock, multicore or complete SC1 runtime capability is inferred from these public declarations.",
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -1322,6 +1379,7 @@ def main() -> None:
             "time",
             "sc1-timing",
             "public-types",
+            "public-compatibility",
             "capacity",
             "error-hooks",
             "task-hooks",
@@ -1345,6 +1403,12 @@ def main() -> None:
             if args.evidence:
                 write_shared_evidence(args.evidence, evidence, Path(temporary))
             print("epic4_os_public_type_contracts PASS: independent C99 consumer")
+            return
+        if args.suite == "public-compatibility":
+            evidence = check_public_compatibility(Path(temporary))
+            if args.evidence:
+                write_shared_evidence(args.evidence, evidence, Path(temporary))
+            print("epic4_os_public_compatibility PASS: 6 independent C99 consumers")
             return
         harnesses = {
             "lifecycle": "lifecycle.c",

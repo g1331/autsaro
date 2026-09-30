@@ -30,7 +30,17 @@
         "core_count=1"
       ],
       "final_result": "pending_current_profile_and_exit_assessment",
-      "increment_results": []
+      "increment_results": [
+        {
+          "artifact": "public-compatibility-obligations-4-18.json",
+          "normalized_artifact_sha256": "fbfd978d20d74c9c52c15887cfc21d30ce9df8f19844e297a2ae350b0b32d44c",
+          "artifact_hash_representation": "UTF-8 sorted compact JSON; not raw local provenance",
+          "row_key": "SWS_Os_00001",
+          "scoped_result": "verified_for_selected_public_declaration_scope",
+          "verified_scope": "OSEK constructional declaration compatibility only, qualified by AUTOSAR p37: DeclareTask/Resource/Event/Alarm accept configured numeric IDs, unconfigured identifiers, repeated file-scope declarations and non-evaluated arguments in strict C99. Six include orders link without OS objects and the complete defined-symbol signature equals a declaration-free object baseline, including static symbols; an additional actual emitted-object mutant is rejected. Complete OSEK runtime/entry interface and all507 assessment are not inferred.",
+          "remaining_scope": "Complete OSEK entry interfaces and counter constants, all507 final current-profile dispositions, full C221/ARTI/handoff and independent story/Epic exits remain open."
+        }
+      ]
     },
     {
       "key": "SWS_Os_00242",
@@ -3994,7 +4004,17 @@
         "core_count=1"
       ],
       "final_result": "pending_current_profile_and_exit_assessment",
-      "increment_results": []
+      "increment_results": [
+        {
+          "artifact": "public-compatibility-obligations-4-18.json",
+          "normalized_artifact_sha256": "fbfd978d20d74c9c52c15887cfc21d30ce9df8f19844e297a2ae350b0b32d44c",
+          "artifact_hash_representation": "UTF-8 sorted compact JSON; not raw local provenance",
+          "row_key": "SWS_Os_91025",
+          "scoped_result": "verified_for_selected_public_declaration_scope",
+          "verified_scope": "All14 p136 AUTOSAR development error names are publicly declared, plus existing OSEK codes:23 distinct values including E_OK. Existing0..11 and13 ABI values are retained;10 added implementation-assigned values fit StatusType. Independent consumer detects zero, oversized and aliased error values; declarations do not select conditional runtime services.",
+          "remaining_scope": "Complete OSEK entry interfaces and counter constants, all507 final current-profile dispositions, full C221/ARTI/handoff and independent story/Epic exits remain open."
+        }
+      ]
     },
     {
       "key": "SWS_Os_91007",

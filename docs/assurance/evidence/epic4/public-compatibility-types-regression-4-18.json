@@ -1,0 +1,171 @@
+{
+  "status": "pass for public type contracts only; runtime services remain separate",
+  "command": [
+    "gcc",
+    "-std=c99",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-pedantic",
+    "-I<repo-root>\\runtime\\os\\include",
+    "<repo-root>\\runtime\\os\\tests\\public_types.c",
+    "-I<repo-root>\\runtime\\include",
+    "-o",
+    "<build-dir>\\public_types.exe"
+  ],
+  "product_sources": {
+    "runtime/os/include/Os.h": "13e0918a8f6dd29ddb6cddbc9b2f72acdf8527b0a5f6cefb35657763631196cc",
+    "runtime/os/include/Os_Types.h": "212ab88b365359780e7020c5f1a9a015069d0f9267f88a62d077dc4a470ec82e",
+    "runtime/os/include/Rte_Os_Type.h": "377ca357b946abbf524b4a39cc710f72c155904a248a39848ccc4c29712fcd12",
+    "runtime/os/include/Os_Cfg.h": "34439ac9d1b5a9bbd371b458abe03dc2498563b4ad6774b9cea6a7557d0bf5ec",
+    "runtime/os/include/Os_Hooks.h": "e86af6e53f039aad0c05ceca3b86d992d62d379d71a462e508e2e5003af9325e",
+    "runtime/os/src/Os_Windows.h": "653a7ef7849fcd34545d17eacb4317513b2789f49e38292a69ce2fdfe9782722",
+    "runtime/os/tests/public_types.c": "41ed601995482b1caf3a26aff5af6a47c24016ce60936d670e4e8327b8b6dd4b",
+    "runtime/include/Std_Types.h": "9ff4d82a55ae0b8727dc3e75c2c5cf92ac5f4cad4f649939ff9d5d39716bc4ef"
+  },
+  "binary_sha256": "64b329cae2148823ec7100d86ee5fb40878bfe0b53d16fc56a2b892ce7b90f71",
+  "observations": [
+    {
+      "scenario": "header-only",
+      "command": [
+        "gcc",
+        "-std=c99",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-pedantic",
+        "-I<repo-root>\\runtime\\os\\include",
+        "<repo-root>\\runtime\\os\\tests\\public_types.c",
+        "-I<repo-root>\\runtime\\include",
+        "-o",
+        "<build-dir>\\public_types.exe",
+        "-I<repo-root>\\runtime\\os\\src"
+      ],
+      "binary_sha256": "89f7ce517586f975839f69d10f3062e4e235b3a9052b660c5d831e018054a96b",
+      "exit": 0,
+      "stdout": "public_types range_and_pointer_contracts=pass access_truth_table=16\n",
+      "stderr": "",
+      "independent_expected": "public_types range_and_pointer_contracts=pass access_truth_table=16\n"
+    },
+    {
+      "scenario": "windows-before",
+      "command": [
+        "gcc",
+        "-std=c99",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-pedantic",
+        "-I<repo-root>\\runtime\\os\\include",
+        "<repo-root>\\runtime\\os\\tests\\public_types.c",
+        "-I<repo-root>\\runtime\\include",
+        "-o",
+        "<build-dir>\\public_types.exe",
+        "-I<repo-root>\\runtime\\os\\src",
+        "-DOS_PUBLIC_TYPES_WINDOWS_BEFORE"
+      ],
+      "binary_sha256": "f6dde085119807bb78026871e847f06fbab590dd325a7118e5b962dc85a9c048",
+      "exit": 0,
+      "stdout": "public_types range_and_pointer_contracts=pass access_truth_table=16\n",
+      "stderr": "",
+      "independent_expected": "public_types range_and_pointer_contracts=pass access_truth_table=16\n"
+    },
+    {
+      "scenario": "windows-after",
+      "command": [
+        "gcc",
+        "-std=c99",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-pedantic",
+        "-I<repo-root>\\runtime\\os\\include",
+        "<repo-root>\\runtime\\os\\tests\\public_types.c",
+        "-I<repo-root>\\runtime\\include",
+        "-o",
+        "<build-dir>\\public_types.exe",
+        "-I<repo-root>\\runtime\\os\\src",
+        "-DOS_PUBLIC_TYPES_WINDOWS_AFTER"
+      ],
+      "binary_sha256": "cec83393c709c74ef1fa1dc426dd45261b98ed5181707fb4751a295624349029",
+      "exit": 0,
+      "stdout": "public_types range_and_pointer_contracts=pass access_truth_table=16\n",
+      "stderr": "",
+      "independent_expected": "public_types range_and_pointer_contracts=pass access_truth_table=16\n"
+    },
+    {
+      "scenario": "rte-before-os",
+      "command": [
+        "gcc",
+        "-std=c99",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-pedantic",
+        "-I<repo-root>\\runtime\\os\\include",
+        "<repo-root>\\runtime\\os\\tests\\public_types.c",
+        "-I<repo-root>\\runtime\\include",
+        "-o",
+        "<build-dir>\\public_types.exe",
+        "-I<repo-root>\\runtime\\os\\src",
+        "-DOS_PUBLIC_RTE_BEFORE"
+      ],
+      "binary_sha256": "cec83393c709c74ef1fa1dc426dd45261b98ed5181707fb4751a295624349029",
+      "exit": 0,
+      "stdout": "public_types range_and_pointer_contracts=pass access_truth_table=16\n",
+      "stderr": "",
+      "independent_expected": "public_types range_and_pointer_contracts=pass access_truth_table=16\n"
+    },
+    {
+      "scenario": "rte-windows-before",
+      "command": [
+        "gcc",
+        "-std=c99",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-pedantic",
+        "-I<repo-root>\\runtime\\os\\include",
+        "<repo-root>\\runtime\\os\\tests\\public_types.c",
+        "-I<repo-root>\\runtime\\include",
+        "-o",
+        "<build-dir>\\public_types.exe",
+        "-I<repo-root>\\runtime\\os\\src",
+        "-DOS_PUBLIC_RTE_BEFORE",
+        "-DOS_PUBLIC_TYPES_WINDOWS_BEFORE"
+      ],
+      "binary_sha256": "287fc8d49282941ce48c504418eba94bbb22743440939f0196a4e4817fd2bf37",
+      "exit": 0,
+      "stdout": "public_types range_and_pointer_contracts=pass access_truth_table=16\n",
+      "stderr": "",
+      "independent_expected": "public_types range_and_pointer_contracts=pass access_truth_table=16\n"
+    },
+    {
+      "scenario": "rte-windows-after",
+      "command": [
+        "gcc",
+        "-std=c99",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-pedantic",
+        "-I<repo-root>\\runtime\\os\\include",
+        "<repo-root>\\runtime\\os\\tests\\public_types.c",
+        "-I<repo-root>\\runtime\\include",
+        "-o",
+        "<build-dir>\\public_types.exe",
+        "-I<repo-root>\\runtime\\os\\src",
+        "-DOS_PUBLIC_RTE_BEFORE",
+        "-DOS_PUBLIC_TYPES_WINDOWS_AFTER"
+      ],
+      "binary_sha256": "64b329cae2148823ec7100d86ee5fb40878bfe0b53d16fc56a2b892ce7b90f71",
+      "exit": 0,
+      "stdout": "public_types range_and_pointer_contracts=pass access_truth_table=16\n",
+      "stderr": "",
+      "independent_expected": "public_types range_and_pointer_contracts=pass access_truth_table=16\n"
+    }
+  ],
+  "representation": "workspace/build/toolchain paths normalized; observed native addresses and thread IDs retained for physical-stack and fault correlation",
+  "raw_record_sha256": "2e85e641525e6ab335e91ab37707d424a1bcd8b6f7466922cd36154431f753c0",
+  "raw_record_local": ".scratch/epic4/public-compatibility-types-regression-4-18-raw.json"
+}
