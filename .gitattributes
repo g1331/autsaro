@@ -51,3 +51,6 @@
 /runtime/src/NvM_HostStorage.h text eol=crlf
 /runtime/src/PduR.c text eol=crlf
 /runtime/src/Security.c text eol=crlf
+
+/docs/assurance/evidence/epic4/counter-type-*-4-18.json text eol=lf
+/docs/assurance/evidence/epic4/public-rte-types-4-18.json text eol=lf

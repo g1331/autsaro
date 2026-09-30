@@ -989,6 +989,26 @@ def check_idle_state(binary: Path) -> list[dict]:
     return observations
 
 
+def check_counter_types(binary: Path) -> list[dict]:
+    observations = []
+    for scenario, errors in [("configured", 9), ("unconfigured", 0)]:
+        result = execute(binary, scenario)
+        expected = f"counter_types scenario={scenario} checks=9 errors={errors} value=7 other=0 reason=0"
+        require(result["exit"] == 0 and not result["stderr"] and expected in result["stdout"], result)
+        require("lifecycle=Closed state=Ready reason=0" in result["stdout"], result)
+        result["independent_expected"] = expected
+        observations.append(result)
+    for field in ("counter", "system", "alarm", "increment", "schedule"):
+        for value in ("256", "65536", "max"):
+            scenario = field + "-" + value
+            result = execute(binary, scenario)
+            expected = f"counter_rejection scenario={scenario} status={8 if field == 'counter' else 3} configured=0"
+            require(result["exit"] == 0 and not result["stderr"] and result["stdout"] == expected, result)
+            result["independent_expected"] = expected
+            observations.append(result)
+    return observations
+
+
 def check_nested_interrupts(binary: Path) -> list[dict]:
     # Literal expected ordering is independent of source IDs and the native
     # dispatch implementation. All entries execute actual installed callbacks.
@@ -1213,6 +1233,9 @@ def check_public_types(directory: Path) -> dict:
         ("header-only", []),
         ("windows-before", ["-DOS_PUBLIC_TYPES_WINDOWS_BEFORE"]),
         ("windows-after", ["-DOS_PUBLIC_TYPES_WINDOWS_AFTER"]),
+        ("rte-before-os", ["-DOS_PUBLIC_RTE_BEFORE"]),
+        ("rte-windows-before", ["-DOS_PUBLIC_RTE_BEFORE", "-DOS_PUBLIC_TYPES_WINDOWS_BEFORE"]),
+        ("rte-windows-after", ["-DOS_PUBLIC_RTE_BEFORE", "-DOS_PUBLIC_TYPES_WINDOWS_AFTER"]),
     ]:
         actual_command = command + ["-I" + str(TARGET / "src")] + extra
         subprocess.run(actual_command, capture_output=True, text=True, check=True)
@@ -1229,6 +1252,7 @@ def check_public_types(directory: Path) -> dict:
         "product_sources": {
             path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
             for path in [TARGET / "include/Os.h", TARGET / "include/Os_Types.h",
+                         TARGET / "include/Rte_Os_Type.h",
                          TARGET / "include/Os_Cfg.h", TARGET / "include/Os_Hooks.h",
                          TARGET / "src/Os_Windows.h", TARGET / "tests/public_types.c",
                          ROOT / "runtime/include/Std_Types.h"]
@@ -1259,6 +1283,7 @@ def main() -> None:
             "interrupt-pairing",
             "isr-cleanup",
             "nested-interrupts",
+            "counter-types",
             "calling-context",
             "idle-state",
         ],
@@ -1289,6 +1314,7 @@ def main() -> None:
             "interrupt-pairing": "interrupt_pairing.c",
             "isr-cleanup": "isr_cleanup.c",
             "nested-interrupts": "nested_interrupts.c",
+            "counter-types": "counter_types.c",
             "calling-context": "calling_context.c",
             "idle-state": "idle_state.c",
         }
@@ -1308,11 +1334,16 @@ def main() -> None:
             "interrupt-pairing": check_interrupt_pairing,
             "isr-cleanup": check_isr_cleanup,
             "nested-interrupts": check_nested_interrupts,
+            "counter-types": check_counter_types,
             "calling-context": check_calling_context,
             "idle-state": check_idle_state,
         }
         binary, evidence = build(Path(temporary), harnesses[args.suite])
         evidence["observations"] = checks[args.suite](binary)
+        if args.suite == "counter-types":
+            headers = Path(temporary) / "public-headers"
+            headers.mkdir()
+            evidence["public_header_contracts"] = check_public_types(headers)
         if args.suite == "error-hooks":
             evidence["variant_sources"] = {}
             for service_access, parameter_access in [(0, 1), (1, 0), (0, 0)]:
@@ -1360,11 +1391,13 @@ def main() -> None:
             "interrupt-pairing": "epic4_standard_interrupt_pairing",
             "isr-cleanup": "epic4_category2_exit_cleanup",
             "nested-interrupts": "epic4_nested_interrupts",
+            "counter-types": "epic4_public_counter_types",
             "calling-context": "epic4_standard_calling_context",
             "idle-state": "epic4_standard_idle_and_started_state",
         }
         name = names[args.suite]
-        print(f"{name} PASS: {len(evidence['observations'])} native vectors")
+        suffix = "; 6 header orders" if args.suite == "counter-types" else ""
+        print(f"{name} PASS: {len(evidence['observations'])} native vectors{suffix}")
 
 
 if __name__ == "__main__":

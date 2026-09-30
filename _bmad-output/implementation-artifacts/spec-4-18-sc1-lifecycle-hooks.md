@@ -57,7 +57,7 @@ context: []
 
 ## Implementation Notes
 
-下一公共类型增量选择：原文p151将DONOTCARE／TotalNumberOfCores限定在多核环境；仍提供明确的公共常量并将所选核数固定为1，不能据此宣称多核运行能力。p229的RTE类型通过新Rte_Os_Type.h提供，TimeInMicrosecondsType为uint64；同一消费者可同时包含Os.h和RTE头，因此CounterType须有唯一uint32定义，统一现有native配置、API和有类型错误参数，禁止通过不同include顺序产生两个不兼容CounterType。已配置Counter容量保持原有8个；新增256、65536和UINT32_MAX标识的真实拒绝／输出保持／ErrorHook参数验证，证明高位不会截断成合法Counter0。公共消费者按实际规范约束核对类型和常量，生成离线闭包包含新头，不以RTE头交付代替Counter服务接口和生成时间换算义务。
+公共类型增量起始04af5b2fbe5377d627d3bb678edc76170b965267。原文p151将DONOTCARE／TotalNumberOfCores限定在多核环境；仍提供明确的公共常量并将所选核数固定为1，不能据此宣称多核运行能力。p229的RTE类型通过新Rte_Os_Type.h提供，TimeInMicrosecondsType为uint64；同一消费者可同时包含Os.h和RTE头，因此CounterType须有唯一uint32定义，统一现有native配置、API和有类型错误参数，禁止通过不同include顺序产生两个不兼容CounterType。已配置Counter容量保持原有8个；新增256、65536和UINT32_MAX标识的真实拒绝／输出保持／ErrorHook参数验证，证明高位不会截断成合法Counter0。公共消费者按实际规范约束核对类型和常量，生成离线闭包包含新头，不以RTE头交付代替Counter服务接口和生成时间换算义务。
 
 后续507行逐项核查已发现“SC1 public interfaces”95行不全是C类型：封存section标签在8.8.2.2后未继续更新，实际PDF p238/239属于配置校验，p321为ARTI配置，p391～393为OS生成义务。保留封存行及适用性，最终处置须按原文实际章节核对，不能按标签批量通过。p223的ReceiverPullCB明确可选且依赖IOC接收配置；p229另规定Rte_Os_Type.h中的TimeInMicrosecondsType为uint64、CounterType为uint32。p393还包含可重定位中断向量段、内部timer信息、OS_TICKS2单位换算宏和Memory Mapping封装；必须追到实际生成工件及适用配置，并与4.19/4.20出口对齐，不能用现有公共头编译或原生行为测试代替这些义务。
 
@@ -99,6 +99,8 @@ ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参�
 
 ## Review Triage Log
 
+- Counter／RTE公共类型增量blind、edge、verification-gap三路独立只读复核均无发现。范围为唯一uint32 Counter定义、uint64时间类型、六包含顺序、17原生拒绝向量、三个实际旧宽度变异及生成离线消费者；不以该增量关闭507行或完整故事。
+
 - 嵌套ISR增量三路独立复核：blind与edge无发现；verification-gap的旧isr_cleanup ErrorHook内要求Cat2已可递送为medium/patch。OSEK §11.1明确Hook不能被Cat2打断，新Hook gate导致旧断言与实际契约冲突。改为Hook内仍屏蔽Cat2，保留随后真实ISR6 probe、helper和原Task获取/释放全部资源的断言；不删除资源重获和LIFO清理验证。完整门首轮已观察到该旧测试失败，日志保留；修正后须定向复验并完成最终门。
 
 - 第十一补丁／44时间向量／repeat-start修正的追加blind、edge、verification-gap三路复核均无新增发现。最终行为门92集成测试全部通过（567.52秒），Python29、UI lint/build、桌面build与两Clippy通过。随后按既有LF属性归一OS文本字节，原始补丁和上游不变；七套原生回归、三调用错误变体、两旧ISR时序变体及12单元部分扫描均从规范化来源刷新，500摘要匹配，Python／增量质量复验通过；生成ECU包亦在该来源重编复验。507总结果已建立，61行关联增量证据，全部最终处置仍待逐项评估，4.18保持in-progress。
@@ -122,6 +124,8 @@ ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参�
 - 容量独立增量三路blind／edge／verification-gap均未发现可定位缺陷或验证缺口；完整故事的Hook/错误/ISR工作仍开放。正式容量/真实生成两项测试163.73s通过；18容量、40受控时间、43计时向量封存，26最低容量义务直接映射到四个主场景，部分静态exit1原样保留。容量增量完整门exit0：85个集成测试（660.24s）、29Python、UI/桌面构建和两组Clippy通过；本故事Hook/错误/ISR仍未完成，sprint保持in-progress。
 
 ## Verification
+
+Counter／RTE公共类型增量完整门exit0：94个核心集成测试1128.37s、29Python、增量格式／C99、UI lint/build、桌面build和两组Clippy均通过。17原生过程、六真实头文件包含顺序和三个实际旧八位Counter变异均有独立断言；生成ECU交付两公共头并由移动后的独立消费者验证。四个工件共170项产品源码摘要与最终源码一致；12单元部分静态exit1诊断保留，不宣称完整MISRA。三路独立复核均无发现；四条类型义务增加限定证据关联，507封存行保持不变，66行已有增量关联但全部最终结果仍待逐项核查。原始完整门日志.scratch/epic4/story418-counter-full-gate.log及同名.exit保留。4.18／Epic4保持in-progress，后续RTE服务端口、时间换算／内部计时／向量段／Memory Mapping和完整出口不据此关闭。
 
 嵌套ISR增量已通过26个原生向量和修正后10个Cat2清理回归。七个实际编译变异均被既有断言识别：串行分发、丢父身份、共享ISR资源栈、丢Hook快照、允许Cat2打断Hook、Cat1出口提前调度由native成功契约断言拒绝；源编号代替优先级的副本正常退出但产生AGCPB，正式Python独立轨迹预期ACPGB明确拒绝，不把进程exit0当行为通过。12个实际翻译单元部分静态exit1诊断保留；固定深度的回调重入仍是未批准R17.2。四个当前原生／负向／静态工件的产品源码摘要逐项匹配。最终完整门exit0：93个核心集成测试全部通过（1108.27秒）、29Python、增量质量／C99、UI lint/build、桌面build和两组Clippy通过，日志为.scratch/epic4/story418-nested-final-gate.log，退出记录为同名.exit。首轮旧测试失败及缺最终汇总日志保留，没有改写为通过。三路独立复核的唯一发现已修正；追加定向复核无剩余问题。全部507封存行保留，62行关联增量证据，所有最终处置仍待逐项核查；4.18与Epic4保持in-progress。
 

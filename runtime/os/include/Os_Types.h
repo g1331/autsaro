@@ -9,10 +9,15 @@ typedef TaskType *TaskRefType;
 typedef uint8_t TaskStateType;
 typedef TaskStateType *TaskStateRefType;
 typedef uint8_t AppModeType;
+/* Public R24-11 constants; this selected target has one logical core. Their
+ * declarations do not enable multicore startup or mode inheritance. */
+#define DONOTCARE UINT8_MAX
+#define TotalNumberOfCores 1u
 typedef uint8_t ResourceType;
 typedef uint32_t EventMaskType;
 typedef EventMaskType *EventMaskRefType;
-typedef uint8_t CounterType;
+/* Shared with Rte_Os_Type.h; never narrow an external Counter identifier. */
+typedef uint32_t CounterType;
 typedef uint8_t AlarmType;
 /* R24-11 public type definitions remain available independently of whether
  * their conditional runtime services are selected in this SC1 configuration. */

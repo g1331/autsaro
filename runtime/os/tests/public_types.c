@@ -1,7 +1,13 @@
 #ifdef OS_PUBLIC_TYPES_WINDOWS_BEFORE
 #include "Os_Windows.h"
 #endif
+#ifdef OS_PUBLIC_RTE_BEFORE
+#include "Rte_Os_Type.h"
+#endif
 #include "Os.h"
+#ifndef OS_PUBLIC_RTE_BEFORE
+#include "Rte_Os_Type.h"
+#endif
 #ifdef OS_PUBLIC_TYPES_WINDOWS_AFTER
 #include "Os_Windows.h"
 #endif
@@ -13,6 +19,8 @@ typedef char ApplicationRange[(sizeof(ApplicationType) == 4u) ? 1 : -1];
 typedef char CoreRange[(sizeof(CoreIdType) >= 2u) ? 1 : -1];
 typedef char SpinlockRange[(sizeof(SpinlockIdType) >= 2u) ? 1 : -1];
 typedef char AreaRange[(sizeof(AreaIdType) >= 2u) ? 1 : -1];
+typedef char CounterRange[(sizeof(CounterType) == 4u) ? 1 : -1];
+typedef char MicrosecondsRange[(sizeof(TimeInMicrosecondsType) == 8u) ? 1 : -1];
 
 int main(void) {
     ApplicationType application = UINT32_C(4294967294);
@@ -37,6 +45,9 @@ int main(void) {
     IdleModeType idle = IDLE_NO_HALT;
     OSServiceIdType service = 0x36u;
     boolean clear_pending = TRUE;
+    CounterType counter = UINT32_MAX;
+    TimeInMicrosecondsType microseconds = UINT64_MAX;
+    AppModeType inherited = DONOTCARE;
     *state_ref = APPLICATION_TERMINATED;
     *task_ref = 0u;
     if ((application == INVALID_OSAPPLICATION) || (state != APPLICATION_TERMINATED) ||
@@ -46,7 +57,10 @@ int main(void) {
         (protection != PRO_PREVENT_ARRIVAL_RATE) || (restart != OS_OSAPPLICATION_RESTART) ||
         (time != UINT64_C(4294967295000000)) || (acquired == TRYTOGETSPINLOCK_NOSUCCESS) ||
         (idle != IDLE_NO_HALT) || (service != 0x36u) || (sizeof(boolean) != 1u) ||
-        (clear_pending != TRUE) || (TRUE == FALSE)) {
+        (clear_pending != TRUE) || (TRUE == FALSE) || (counter != UINT32_MAX) ||
+        (microseconds != UINT64_MAX) || (inherited == 1u) || (inherited == 2u) ||
+        (TotalNumberOfCores != 1u) || (OS_CORE_ID_MASTER != 0u) ||
+        (INVALID_OSAPPLICATION != UINT32_MAX)) {
         return 1;
     }
     /* The selected host AccessType representation uses read/write/execute/stack

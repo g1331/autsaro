@@ -16,6 +16,10 @@ pub(super) fn sources() -> Result<Vec<(String, Vec<u8>)>, String> {
             include_bytes!("../../../runtime/os/include/Os_Types.h"),
         ),
         (
+            "os/include/Rte_Os_Type.h",
+            include_bytes!("../../../runtime/os/include/Rte_Os_Type.h"),
+        ),
+        (
             "os/include/Os_Cfg.h",
             include_bytes!("../../../runtime/os/include/Os_Cfg.h"),
         ),

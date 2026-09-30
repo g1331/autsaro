@@ -3911,7 +3911,17 @@
         "core_count=1"
       ],
       "final_result": "pending_current_profile_and_exit_assessment",
-      "increment_results": []
+      "increment_results": [
+        {
+          "artifact": "counter-type-obligations-4-18.json",
+          "normalized_artifact_sha256": "62285d49e0bd5970011b9538d738dd1c8e2ccacced8da6c5df2d3c555558b1a4",
+          "artifact_hash_representation": "UTF-8 sorted compact JSON; not raw local provenance",
+          "row_key": "SWS_Os_91007",
+          "scoped_result": "verified_for_selected_public_type_contract",
+          "verified_scope": "DONOTCARE is publicly declared outside configured application modes1/2 and checked by six C99 consumers. Primary p151 describes a multicore constant; provision in this one-core profile does not implement mode inheritance or multicore StartOS.",
+          "remaining_scope": "All507 final current-profile dispositions, RTE service ports, OS_TICKS2 unit macros, complete C221/ARTI/handoff and independent Epic exits remain unclosed. No multicore claim."
+        }
+      ]
     },
     {
       "key": "SWS_Os_91002",
@@ -3926,7 +3936,17 @@
         "core_count=1"
       ],
       "final_result": "pending_current_profile_and_exit_assessment",
-      "increment_results": []
+      "increment_results": [
+        {
+          "artifact": "counter-type-obligations-4-18.json",
+          "normalized_artifact_sha256": "62285d49e0bd5970011b9538d738dd1c8e2ccacced8da6c5df2d3c555558b1a4",
+          "artifact_hash_representation": "UTF-8 sorted compact JSON; not raw local provenance",
+          "row_key": "SWS_Os_91002",
+          "scoped_result": "verified_for_selected_public_type_contract",
+          "verified_scope": "TotalNumberOfCores is publicly declared as1 and checked independently in header consumers and the moved generated ECU. Primary p151 describes a multicore constant; this remains the selected one-core target without multicore behavior.",
+          "remaining_scope": "All507 final current-profile dispositions, RTE service ports, OS_TICKS2 unit macros, complete C221/ARTI/handoff and independent Epic exits remain unclosed. No multicore claim."
+        }
+      ]
     },
     {
       "key": "SWS_Os_00772",
@@ -7412,7 +7432,17 @@
         "core_count=1"
       ],
       "final_result": "pending_current_profile_and_exit_assessment",
-      "increment_results": []
+      "increment_results": [
+        {
+          "artifact": "counter-type-obligations-4-18.json",
+          "normalized_artifact_sha256": "62285d49e0bd5970011b9538d738dd1c8e2ccacced8da6c5df2d3c555558b1a4",
+          "artifact_hash_representation": "UTF-8 sorted compact JSON; not raw local provenance",
+          "row_key": "SWS_Os_00794",
+          "scoped_result": "verified_for_selected_public_type_contract",
+          "verified_scope": "Rte_Os_Type.h declares TimeInMicrosecondsType as uint64_t. Six independently compiled C99 include orders assert eight-byte width and UINT64_MAX preservation; generated offline ECU delivers the exact header and its independent moved-project C consumer checks the value before OS preparation.",
+          "remaining_scope": "All507 final current-profile dispositions, RTE service ports, OS_TICKS2 unit macros, complete C221/ARTI/handoff and independent Epic exits remain unclosed. No multicore claim."
+        }
+      ]
     },
     {
       "key": "SWS_Os_00786",
@@ -7427,7 +7457,17 @@
         "core_count=1"
       ],
       "final_result": "pending_current_profile_and_exit_assessment",
-      "increment_results": []
+      "increment_results": [
+        {
+          "artifact": "counter-type-obligations-4-18.json",
+          "normalized_artifact_sha256": "62285d49e0bd5970011b9538d738dd1c8e2ccacced8da6c5df2d3c555558b1a4",
+          "artifact_hash_representation": "UTF-8 sorted compact JSON; not raw local provenance",
+          "row_key": "SWS_Os_00786",
+          "scoped_result": "verified_for_selected_public_type_contract",
+          "verified_scope": "Rte_Os_Type.h reuses the single uint32_t CounterType in Os_Types.h. Six include orders assert four-byte width and UINT32_MAX. Seventeen actual native processes reject 256,65536 and UINT32_MAX IDs without output or Counter0/1 mutation; ErrorHook preserves complete IDs and caller pointer identity. Three actual old-eight-bit mutations are rejected by unchanged assertions.",
+          "remaining_scope": "All507 final current-profile dispositions, RTE service ports, OS_TICKS2 unit macros, complete C221/ARTI/handoff and independent Epic exits remain unclosed. No multicore claim."
+        }
+      ]
     },
     {
       "key": "SWS_Os_00861",

@@ -106,6 +106,19 @@ pub fn verify() {
     let inputs = super::epic4_plan::inputs();
     let plan = build_plan(&inputs, &dependencies, &runtime).unwrap();
     let project = plan.ecu_integration_files().unwrap();
+    for header in ["Os_Types.h", "Rte_Os_Type.h"] {
+        let delivered = &project
+            .files()
+            .iter()
+            .find(|(name, _)| name == &format!("os/include/{header}"))
+            .unwrap()
+            .1;
+        assert_eq!(
+            delivered,
+            &fs::read(root.join("runtime/os/include").join(header)).unwrap(),
+            "public OS/RTE header must be delivered unchanged: {header}"
+        );
+    }
     let metadata: serde_json::Value = serde_json::from_slice(
         &project
             .files()

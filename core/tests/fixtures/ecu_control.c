@@ -1,5 +1,6 @@
 /* Independent consumer: fixed reference vectors are not generated expectations. */
 #include "Ecu_Target.h"
+#include "Rte_Os_Type.h"
 #include "Os_Windows.h"
 #include "Rte_EchoApplication.h"
 #include <stdio.h>
@@ -87,6 +88,12 @@ static DWORD WINAPI control(void *argument) {
 }
 
 int main(void) {
+    CounterType counter = UINT32_MAX;
+    TimeInMicrosecondsType microseconds = UINT64_MAX;
+    if (sizeof(counter) != 4u || sizeof(microseconds) != 8u || counter != UINT32_MAX ||
+        microseconds != UINT64_MAX || TotalNumberOfCores != 1u) {
+        return 48;
+    }
     HANDLE thread;
     require(Ecu_TargetPrepare() == E_OK);
     thread = CreateThread(NULL, 262144u, control, NULL, 0u, NULL);
