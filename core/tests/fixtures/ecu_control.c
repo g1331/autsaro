@@ -1,5 +1,6 @@
 /* Independent consumer: fixed reference vectors are not generated expectations. */
 #include "Ecu_Target.h"
+#include "Ecu_TargetConfig.h"
 #include "Rte_Os_Type.h"
 #include "Os_Windows.h"
 #include "Rte_EchoApplication.h"
@@ -93,6 +94,15 @@ int main(void) {
     if (sizeof(counter) != 4u || sizeof(microseconds) != 8u || counter != UINT32_MAX ||
         microseconds != UINT64_MAX || TotalNumberOfCores != 1u) {
         return 48;
+    }
+    const Os_TimeConfig *time = Ecu_OsConfig.time;
+    if (time == NULL || time->counter_count != 1u || time->counters == NULL ||
+        time->system_counter != 0u || time->counters[0u].id != 0u ||
+        time->counters[0u].maximum != UINT64_C(65535) || time->counters[0u].ticks_per_base != 1u ||
+        time->counters[0u].minimum_cycle != 1u || OSMAXALLOWEDVALUE != time->counters[0u].maximum ||
+        OSTICKSPERBASE != time->counters[0u].ticks_per_base ||
+        OSMINCYCLE != time->counters[0u].minimum_cycle || OSTICKDURATION != UINT64_C(1000000)) {
+        return 49;
     }
     HANDLE thread;
     require(Ecu_TargetPrepare() == E_OK);

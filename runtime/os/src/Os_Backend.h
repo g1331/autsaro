@@ -51,6 +51,7 @@ void Os_TimeOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicat
 void Os_MailboxInstall(void);
 void Os_MailboxClose(void);
 int Os_MailboxHandlerAllowed(uint32_t interrupt, uint32_t (*handler)(void));
+int Os_BackendHandlerAllowed(uint32_t interrupt, uint32_t (*handler)(void));
 #ifdef OS_EVENT_TESTS
 void Os_TestObserve(void);
 void Os_TestInputNotified(void);

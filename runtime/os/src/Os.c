@@ -100,6 +100,12 @@ StatusType Os_TargetPrepare(const Os_TargetConfig *config) {
                 ((config->input_event != 0u) && (i == OS_INPUT_INTERRUPT) && (priority == 0u))) {
                 return E_OS_VALUE;
             }
+            if ((config->interrupts->entries != NULL) && (config->interrupts->entries[i] != NULL) &&
+                ((i < 2u) || (priority == 0u) ||
+                 ((config->category1_isrs & (UINT32_C(1) << i)) != 0u) ||
+                 ((config->input_event != 0u) && (i == OS_INPUT_INTERRUPT)))) {
+                return E_OS_VALUE;
+            }
         }
     }
     if (config->input_event != 0u) {

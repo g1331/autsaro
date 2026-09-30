@@ -14,10 +14,15 @@
 #define OS_MAX_ISR_PRIORITY 31u
 #define OS_SCHEDULE_FULL 0u
 #define OS_SCHEDULE_NON 1u
+typedef void (*Os_IsrEntry)(void);
 typedef struct {
     /* Higher values preempt lower values. Zero leaves an application source
      * unconfigured. Kernel yield/tick entries are reserved and must be zero. */
     uint8_t priorities[OS_MAX_INTERRUPTS];
+    /* Optional array of exactly OS_MAX_INTERRUPTS static Category 2 bodies.
+     * Use OS_ISR_ENTRY(name). NULL retains manual native handler binding.
+     * Slots 0/1, Category 1 and the configured input mailbox must be NULL. */
+    const Os_IsrEntry *entries;
 } Os_IsrConfig;
 typedef struct {
     ResourceType id;

@@ -238,6 +238,28 @@ fn epic4_public_consumer_watchdog() {
 
 #[cfg(windows)]
 #[test]
+fn epic4_osek_entry_bodies() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let output = Command::new("python")
+        .arg(root.join("scripts/epic4_os.py"))
+        .args(["--suite", "entry-bodies"])
+        .current_dir(root)
+        .output()
+        .expect("run the standard OSEK entry bodies on the actual native OS");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "epic4_osek_entry_bodies PASS: 11 native vectors"
+    );
+}
+
+#[cfg(windows)]
+#[test]
 fn epic4_sc1_class_capacity() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let output = Command::new("python")

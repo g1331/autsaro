@@ -1,16 +1,33 @@
 /* Independent literal oracles; these expectations are not generated. */
 #include "Os.h"
 #include <stdio.h>
+#ifndef EXPECTED_COUNTER_MAX
+#define EXPECTED_COUNTER_MAX 65535u
+#endif
 #ifdef COUNTER_TIME_RENAMED
 #define CONVERT_NS(ticks) OS_TICKS2NS_RenamedCounter(ticks)
 #define CONVERT_US(ticks) OS_TICKS2US_RenamedCounter(ticks)
 #define CONVERT_MS(ticks) OS_TICKS2MS_RenamedCounter(ticks)
 #define CONVERT_SEC(ticks) OS_TICKS2SEC_RenamedCounter(ticks)
+#define NAMED_MAX OSMAXALLOWEDVALUE_RenamedCounter
+#define NAMED_BASE OSTICKSPERBASE_RenamedCounter
+#define NAMED_MIN OSMINCYCLE_RenamedCounter
+#define COUNTER_ID OS_COUNTER_ID_RenamedCounter
+#define ID_MAX OSMAXALLOWEDVALUE_OS_COUNTER_ID_RenamedCounter
+#define ID_BASE OSTICKSPERBASE_OS_COUNTER_ID_RenamedCounter
+#define ID_MIN OSMINCYCLE_OS_COUNTER_ID_RenamedCounter
 #else
 #define CONVERT_NS(ticks) OS_TICKS2NS_SystemCounter(ticks)
 #define CONVERT_US(ticks) OS_TICKS2US_SystemCounter(ticks)
 #define CONVERT_MS(ticks) OS_TICKS2MS_SystemCounter(ticks)
 #define CONVERT_SEC(ticks) OS_TICKS2SEC_SystemCounter(ticks)
+#define NAMED_MAX OSMAXALLOWEDVALUE_SystemCounter
+#define NAMED_BASE OSTICKSPERBASE_SystemCounter
+#define NAMED_MIN OSMINCYCLE_SystemCounter
+#define COUNTER_ID OS_COUNTER_ID_SystemCounter
+#define ID_MAX OSMAXALLOWEDVALUE_OS_COUNTER_ID_SystemCounter
+#define ID_BASE OSTICKSPERBASE_OS_COUNTER_ID_SystemCounter
+#define ID_MIN OSMINCYCLE_OS_COUNTER_ID_SystemCounter
 #endif
 
 typedef struct {
@@ -35,6 +52,12 @@ int main(void) {
     size_t index;
     TickType ticks = 1000u;
     PhysicalTimeType converted;
+    if ((NAMED_MAX != EXPECTED_COUNTER_MAX) || (NAMED_BASE != 1u) || (NAMED_MIN != 1u) ||
+        (OSMAXALLOWEDVALUE != EXPECTED_COUNTER_MAX) || (OSTICKSPERBASE != 1u) ||
+        (OSMINCYCLE != 1u) || (OSTICKDURATION != UINT64_C(1000000)) || (COUNTER_ID != 0u) ||
+        (ID_MAX != EXPECTED_COUNTER_MAX) || (ID_BASE != 1u) || (ID_MIN != 1u)) {
+        return 3;
+    }
     for (index = 0u; index < (sizeof(vectors) / sizeof(vectors[0])); ++index) {
         if (CONVERT_NS(vectors[index].ticks) != vectors[index].ns ||
             CONVERT_US(vectors[index].ticks) != vectors[index].us ||

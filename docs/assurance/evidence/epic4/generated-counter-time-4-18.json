@@ -3,26 +3,63 @@
   "language": "C99",
   "observations": [
     {
-      "binarySha256": "68928671dbaae8c99c08583edd8908477e29399ae0257a202c9f38293903ac9d",
+      "binarySha256": "71c45a4c62af143c79f7e311e8a859829c59e5303f10a436835b2eb3a65aa69b",
       "compiledMutations": [
         {
-          "binarySha256": "be6fbf5348474229ad29c91ffb10f14d0e6cc1236990473702f0ec581e041a60",
+          "binarySha256": "b15c81da38c13cb2febc88e3ab4e340425f5e4395f979ffab08a74db161f4bc3",
           "detected": true,
           "exitCode": 1,
-          "mutatedHeaderSha256": "da525eeb59f0c6d8f985dc5d189b1aed993a2deb68d98b5438c0957c7e8f2517",
+          "mutatedHeaderSha256": "690efaa049538941f47cd95c124f11e5b81aa828cb6cd6d678d3626520c69ad8",
           "name": "wrong-nanosecond-scale"
         },
         {
-          "binarySha256": "682fdc773232444e3c61851e3bd4476b96e0afe6aa7f1f104aa484a46619579e",
+          "binarySha256": "efcca4e764ca2987988a65b98a3a9309f59055221b251baec3cd229fbea967b2",
           "detected": true,
           "exitCode": 2,
-          "mutatedHeaderSha256": "195a4ff8e154e29cedf7dc9b9d09af9747290d4361e1d9e58bf8c34140fbba81",
+          "mutatedHeaderSha256": "f36c2c026f56701c6677923822ced7ab9b8c2a9f152e2433f4beef75a9e2cb82",
           "name": "duplicate-argument-evaluation"
+        },
+        {
+          "binarySha256": "973fb01fdc7b3d5b200d6fcf3f639c2e85723302c139bb534d6d56ff27e381f8",
+          "detected": true,
+          "exitCode": 3,
+          "mutatedHeaderSha256": "cd06d22058e44c153eadff3a1137b5ae2e04f586cf95d73cc01a460f15398d15",
+          "name": "wrong-counter-maximum"
+        },
+        {
+          "binarySha256": "973fb01fdc7b3d5b200d6fcf3f639c2e85723302c139bb534d6d56ff27e381f8",
+          "detected": true,
+          "exitCode": 3,
+          "mutatedHeaderSha256": "24237ee9fda8180b27198b18d1f691fe561d7480f6c36d0c6ce03b7831fe448e",
+          "name": "wrong-counter-base"
+        },
+        {
+          "binarySha256": "973fb01fdc7b3d5b200d6fcf3f639c2e85723302c139bb534d6d56ff27e381f8",
+          "detected": true,
+          "exitCode": 3,
+          "mutatedHeaderSha256": "0d0b74c35585e6878e4e9ba4c9eb20698d26abaed2464f4da4f510bc0142b2d5",
+          "name": "wrong-counter-minimum-cycle"
+        },
+        {
+          "binarySha256": "973fb01fdc7b3d5b200d6fcf3f639c2e85723302c139bb534d6d56ff27e381f8",
+          "detected": true,
+          "exitCode": 3,
+          "mutatedHeaderSha256": "b396a37c932177f2c687e13d9f4444fd7c62f87d771f91682c75424d355ad1e8",
+          "name": "wrong-system-tick-duration"
+        },
+        {
+          "binarySha256": "973fb01fdc7b3d5b200d6fcf3f639c2e85723302c139bb534d6d56ff27e381f8",
+          "detected": true,
+          "exitCode": 3,
+          "mutatedHeaderSha256": "efd2923e3d84b6a89284684eb76598e2087906e0a15bd83a06ebe2cf364cee67",
+          "name": "wrong-counter-id-maximum-alias"
         }
       ],
       "counter": "SystemCounter",
+      "counterMaximum": 65535,
       "expressionVectors": 4,
-      "headerSha256": "dda3bb317b1a11a52e02ac57217206e5979184e70a692f686680382bfaf4a923",
+      "headerSha256": "f34f311651279c5daf18fad1f58841b7c1596bdd7729ca944c7e6d4a0d326d72",
+      "legacyCounterConstantChecks": 11,
       "literalUnitValues": 24,
       "singleEvaluations": 4,
       "status": "pass",
@@ -66,26 +103,63 @@
       }
     },
     {
-      "binarySha256": "a3a24a9d4462cd213e0648ad8e90bbc23bf35e11352d0deca3f56af121d6d0bd",
+      "binarySha256": "013f1bf13d9045faef959a604ac87153abb5fd549fe771eb28762255117140a1",
       "compiledMutations": [
         {
-          "binarySha256": "477bad290e6d63f97ec4a646278581ddfd3c41ddc4214d9d6e4bb6c85eb3fbc4",
+          "binarySha256": "ae9a43fe9378dbf1a78e534e6bdc7e69e64c0b05b6a1c41452739ef178c40feb",
           "detected": true,
           "exitCode": 1,
-          "mutatedHeaderSha256": "0984b1770be907e1a55064eefb44d5d3528f5c89796f913251072c89d8bd0d11",
+          "mutatedHeaderSha256": "57dd8ccf75134a73721a822ef075aa19a28c48bc44929a03f168b19674cbac66",
           "name": "wrong-nanosecond-scale"
         },
         {
-          "binarySha256": "f42ab04e258cbbd928dea11c3486a9a5710944ce4a7dac8df5466207d0d2ec68",
+          "binarySha256": "bd2b0229347c4fde1cc09097a1c66d7e79a7cea96134a6b24a3948af30732cf4",
           "detected": true,
           "exitCode": 2,
-          "mutatedHeaderSha256": "1ebed7ad8242abbd2c285e6dbdda581059f6288efec03a2dbbaadf5b044c8b15",
+          "mutatedHeaderSha256": "e548780050f86c0e4b41c877ec19d6e799f2aa0d46c6e5b7eee0d44c2749e2e0",
           "name": "duplicate-argument-evaluation"
+        },
+        {
+          "binarySha256": "220dc880258d9971138069796dc86f82184e97e0bc6be0e9eef664ccd6a3bcbb",
+          "detected": true,
+          "exitCode": 3,
+          "mutatedHeaderSha256": "6f846b6748776274aedff847fada79b788a187b1cc56bc283bc0d5eb30095ee5",
+          "name": "wrong-counter-maximum"
+        },
+        {
+          "binarySha256": "220dc880258d9971138069796dc86f82184e97e0bc6be0e9eef664ccd6a3bcbb",
+          "detected": true,
+          "exitCode": 3,
+          "mutatedHeaderSha256": "816644bfc6673e83a9f9a7ca8bc5d3c4459c625dc03d1af60c0f19ca81e621eb",
+          "name": "wrong-counter-base"
+        },
+        {
+          "binarySha256": "220dc880258d9971138069796dc86f82184e97e0bc6be0e9eef664ccd6a3bcbb",
+          "detected": true,
+          "exitCode": 3,
+          "mutatedHeaderSha256": "0df8730ed80e2747932f81aeaf55fe4e8fa1e79315c6a70f629a54c4323efa13",
+          "name": "wrong-counter-minimum-cycle"
+        },
+        {
+          "binarySha256": "220dc880258d9971138069796dc86f82184e97e0bc6be0e9eef664ccd6a3bcbb",
+          "detected": true,
+          "exitCode": 3,
+          "mutatedHeaderSha256": "0c1fffd2513a3bac9d3c55ac67124510c5fe68b3514bef4a300dcfbac6650fb2",
+          "name": "wrong-system-tick-duration"
+        },
+        {
+          "binarySha256": "220dc880258d9971138069796dc86f82184e97e0bc6be0e9eef664ccd6a3bcbb",
+          "detected": true,
+          "exitCode": 3,
+          "mutatedHeaderSha256": "1971a0af1343f9df76a5a306658de19b658ea8f6ffe6c9ef37a4d23ccb709e68",
+          "name": "wrong-counter-id-maximum-alias"
         }
       ],
       "counter": "RenamedCounter",
+      "counterMaximum": 65535,
       "expressionVectors": 4,
-      "headerSha256": "e0e9212e06fb7d4b22aa764dda6caea2d44ca3ecb98cf187896c648ed6f1a765",
+      "headerSha256": "ea4016add0633a0612a1ac3d10f2a021d9c005d5c6eaa47fc1a23498d8e7710a",
+      "legacyCounterConstantChecks": 11,
       "literalUnitValues": 24,
       "singleEvaluations": 4,
       "status": "pass",
@@ -127,13 +201,113 @@
         "requirement": "SWS_Os_00370",
         "scope": "Selected single-core controlled-logical-time target; no hardware timer claim."
       }
+    },
+    {
+      "binarySha256": "3d44b64e3bbb9e9feb67652a1388b86fe6adfd4793f5315068aa16a4908d2723",
+      "compiledMutations": [
+        {
+          "binarySha256": "ed39cca28d171260d12f07af9c1a451c613dec1e1d57291ddcabebad6b206dcf",
+          "detected": true,
+          "exitCode": 1,
+          "mutatedHeaderSha256": "f92f47b116b13ba520b687587ca41205f82d3babe5c931c98494df4347da97d1",
+          "name": "wrong-nanosecond-scale"
+        },
+        {
+          "binarySha256": "5b1f4257d4e6da33d757beea9b0739ffdbec9690afde0e06830500c16fdbe169",
+          "detected": true,
+          "exitCode": 2,
+          "mutatedHeaderSha256": "36352b78c540e685b73cac10cf2facf9efac0127a93bf5847c18f0c51c3aaacf",
+          "name": "duplicate-argument-evaluation"
+        },
+        {
+          "binarySha256": "4635a874f3974ac964594e94107afdd09d61313703004868a15f77c7dfc5096a",
+          "detected": true,
+          "exitCode": 3,
+          "mutatedHeaderSha256": "15314bae1976d678563e903983b970aff2a3fa766863d3847a79d753a7668feb",
+          "name": "wrong-counter-maximum"
+        },
+        {
+          "binarySha256": "4635a874f3974ac964594e94107afdd09d61313703004868a15f77c7dfc5096a",
+          "detected": true,
+          "exitCode": 3,
+          "mutatedHeaderSha256": "56ed7411c7b5747b2a4f4eeec3e354c5743168ec8d3fef5455dd3ec7d47bb8b7",
+          "name": "wrong-counter-base"
+        },
+        {
+          "binarySha256": "4635a874f3974ac964594e94107afdd09d61313703004868a15f77c7dfc5096a",
+          "detected": true,
+          "exitCode": 3,
+          "mutatedHeaderSha256": "167d1016c0dd04091c81b544bf5695d7e1e2546864e8d19da4abaaa5694b49d7",
+          "name": "wrong-counter-minimum-cycle"
+        },
+        {
+          "binarySha256": "4635a874f3974ac964594e94107afdd09d61313703004868a15f77c7dfc5096a",
+          "detected": true,
+          "exitCode": 3,
+          "mutatedHeaderSha256": "394a70c437fc2b5f703345594f675d35dfd03661f47cb98f005fa3d44388e4c5",
+          "name": "wrong-system-tick-duration"
+        },
+        {
+          "binarySha256": "4635a874f3974ac964594e94107afdd09d61313703004868a15f77c7dfc5096a",
+          "detected": true,
+          "exitCode": 3,
+          "mutatedHeaderSha256": "985ca0d24f5d87347a83c575b53d89ff923d2aa0706185b1833ef1fc25000629",
+          "name": "wrong-counter-id-maximum-alias"
+        }
+      ],
+      "counter": "SystemCounter",
+      "counterMaximum": 4095,
+      "expressionVectors": 4,
+      "headerSha256": "79c0aca20bee4529646a5cc94f0e9b8f94ba4992995890d0ceb214c748ef183d",
+      "legacyCounterConstantChecks": 11,
+      "literalUnitValues": 24,
+      "singleEvaluations": 4,
+      "status": "pass",
+      "timerReport": {
+        "counter": {
+          "maximum": 4095,
+          "name": "SystemCounter",
+          "path": "/Configuration/Os/SystemCounter",
+          "tickNanoseconds": 1000000
+        },
+        "format": "autosar-os-generation-timing-v1",
+        "hostTimeouts": [
+          {
+            "advancesAutomotiveTime": false,
+            "clock": "Windows monotonic milliseconds",
+            "owner": "Os_TargetWaitTick",
+            "rangeMilliseconds": [
+              1,
+              5000
+            ]
+          },
+          {
+            "advancesAutomotiveTime": false,
+            "clock": "Windows monotonic milliseconds",
+            "limitMilliseconds": 5000,
+            "owner": "HostBatchV1"
+          }
+        ],
+        "internalPeriodicTimers": [],
+        "kernelSoftwareTimers": {
+          "configUSE_TIMERS": 0,
+          "enabled": false
+        },
+        "kernelTick": {
+          "logicalMillisecondsPerRequest": 1,
+          "periodicHostThread": false,
+          "source": "explicit controlled interrupt1"
+        },
+        "requirement": "SWS_Os_00370",
+        "scope": "Selected single-core controlled-logical-time target; no hardware timer claim."
+      }
     }
   ],
   "product_sources": {
-    "core/src/integration/ecu.rs": "6a552b46767584051cf4bd697796efa829fb7d32ff9ff2320fc32a15bda61e59",
-    "core/src/integration/schedule.rs": "8bb9b5164e9285d6826a46b2ff2e8ce33d8e458fe54dd163d71165c29a681a1c",
-    "core/tests/fixtures/ecu_counter_time.c": "18d1fb0704c970dfc85106b9503a4622ba78435bf22a36eb0d331893db30e7f1",
-    "core/tests/support/epic4_counter_time.rs": "a8fa23a7ab0aa2ab9736681e52b063785c9bf6887464d3ffbce6ad7e00517891",
+    "core/src/integration/ecu.rs": "d104773d070047190d5548037ef55b39267170a20b39ac713cacef96bdd6518d",
+    "core/src/integration/schedule.rs": "38c36a195a6f22fa3b395a97cde48b54388f5ebafbb63363604a1be6780851b9",
+    "core/tests/fixtures/ecu_counter_time.c": "d34dd09b3c4225b977a808b284f3548fec974559e198d0a1dffa4ba6ec5ac626",
+    "core/tests/support/epic4_counter_time.rs": "2d1186fe243607b927f21ab482d7fd2e3025ce55f31899511316f96ccef2facf",
     "runtime/os/FreeRTOSConfig.h": "03b64e00357a47db0ce053d10766690c8c72a92caac03beb792704e235b9a23b",
     "runtime/os/include/Os_Cfg.h": "34439ac9d1b5a9bbd371b458abe03dc2498563b4ad6774b9cea6a7557d0bf5ec",
     "runtime/os/include/Os_Types.h": "212ab88b365359780e7020c5f1a9a015069d0f9267f88a62d077dc4a470ec82e",

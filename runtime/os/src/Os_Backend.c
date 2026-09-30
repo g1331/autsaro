@@ -95,6 +95,25 @@ static uint8_t internal_ceiling(size_t index);
 static void observe_transition(void);
 static size_t current_task_index(void);
 static void leave_running(size_t index);
+static uint32_t configured_interrupt(void) {
+    const unsigned interrupt = current_interrupt;
+    configASSERT(Os_Config != NULL && Os_Config->interrupts != NULL &&
+                 Os_Config->interrupts->entries != NULL && interrupt < OS_MAX_INTERRUPTS);
+    const Os_IsrEntry entry = Os_Config->interrupts->entries[interrupt];
+    configASSERT(entry != NULL);
+    entry();
+    /* Automotive services record their reschedule request in the established
+     * backend ISR state. Its normal outer exit handles Task selection. */
+    return 0u;
+}
+int Os_BackendHandlerAllowed(uint32_t interrupt, uint32_t (*handler)(void)) {
+    if ((Os_Config != NULL) && (Os_Config->interrupts != NULL) &&
+        (Os_Config->interrupts->entries != NULL) && (interrupt < OS_MAX_INTERRUPTS) &&
+        (Os_Config->interrupts->entries[interrupt] != NULL)) {
+        return handler == configured_interrupt;
+    }
+    return 1;
+}
 unsigned Os_BackendCurrentInterrupt(void) { return current_interrupt; }
 int Os_BackendStarted(void) { return InterlockedCompareExchange(&started, 0, 0) != 0; }
 void Os_BackendInterruptEnter(unsigned interrupt) {
@@ -672,6 +691,13 @@ static void task_entry(void *argument) {
 static void bootstrap(void *argument) {
     size_t i;
     (void)argument;
+    if ((Os_Config->interrupts != NULL) && (Os_Config->interrupts->entries != NULL)) {
+        for (i = 2u; i < OS_MAX_INTERRUPTS; ++i) {
+            if (Os_Config->interrupts->entries[i] != NULL) {
+                vPortSetInterruptHandler((uint32_t)i, configured_interrupt);
+            }
+        }
+    }
     Os_HookInvoke(&StartupHook, OS_HOOK_STARTUP);
     taskENTER_CRITICAL();
     for (i = 0u; i < Os_Config->task_count; ++i) {

@@ -3,11 +3,14 @@
 #include "Ecu_Config.h"
 #include "Os_Mailbox.h"
 
+TASK(@TASK_SYMBOL@) {
+    Ecu_TargetTask();
+}
 static const Os_TaskConfig tasks[] = {
     {
-        .id = 0u,
+        .id = @TASK_SYMBOL@,
         .name = @TASK_NAME@,
-        .entry = Ecu_TargetTask,
+        .entry = OS_TASK_ENTRY(@TASK_SYMBOL@),
         .priority = @TASK_PRIORITY@u,
         .autostart_modes = 1u,
         .kind = OS_EXTENDED_TASK,
@@ -18,10 +21,10 @@ static const Os_TaskConfig tasks[] = {
 };
 static const Os_CounterConfig counters[] = {
     {
-        .id = 0u,
+        .id = @COUNTER_SYMBOL@,
         .maximum = @COUNTER_MAX@u,
-        .ticks_per_base = 1u,
-        .minimum_cycle = 1u,
+        .ticks_per_base = @COUNTER_BASE@u,
+        .minimum_cycle = @COUNTER_MIN_CYCLE@u,
         .software = 1u,
     },
 };
@@ -37,8 +40,8 @@ static const Os_TimeConfig time_config = {
     .counter_count = 1u,
     .alarms = @ALARM_PTR@,
     .alarm_count = @ALARM_COUNT@u,
-    .system_counter = 0u,
-    .owner = 0u,
+    .system_counter = @COUNTER_SYMBOL@,
+    .owner = @TASK_SYMBOL@,
     .wake_event = ECU_TARGET_EVENT_WORK,
     .error_hook = NULL,
     .schedule_tables = @SCHEDULE_PTR@,
@@ -56,7 +59,7 @@ const Os_TargetConfig Ecu_OsConfig = {
     .internal_resources = NULL,
     .internal_resource_count = 0u,
     .category1_isrs = 0u,
-    .input_task = 0u,
+    .input_task = @TASK_SYMBOL@,
     .input_event = ECU_TARGET_EVENT_IO,
     .time = &time_config,
     .hooks = &hooks,

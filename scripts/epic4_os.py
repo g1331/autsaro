@@ -985,6 +985,34 @@ def check_idle_state(binary: Path) -> list[dict]:
     return observations
 
 
+def check_entry_bodies(binary: Path) -> list[dict]:
+    cases = {
+        "normal": (1,0,1,0,0,"OIiWo",0),
+        "nested": (1,1,1,0,0,"OICciWo",0),
+        "cleanup-mask": (1,0,1,0,1,"OIiEWo",0),
+        "cleanup-resource": (1,0,1,0,1,"OIiEWo",0),
+        "alarm": (0,0,1,1,1,"OAEaWo",0),
+        "replace-owned": (0,0,0,0,0,"",1),
+    }
+    observations = []
+    for scenario, (parents,children,workers,alarms,errors,trace,reason) in cases.items():
+        result = execute(binary, scenario)
+        expected = (f"entry_bodies scenario={scenario} parents={parents} children={children} "
+                    f"workers={workers} alarms={alarms} errors={errors} trace={trace} reason={reason}")
+        require(result["exit"] == reason and not result["stderr"], result)
+        require(expected in result["stdout"], result)
+        require(f"lifecycle=Closed state={'Ready' if reason == 0 else 'Failed'} reason={reason}" in result["stdout"], result)
+        result["independent_expected"] = expected
+        observations.append(result)
+    for scenario in ["invalid-priority", "invalid-kernel", "invalid-tick", "invalid-cat1", "invalid-mailbox"]:
+        result = execute(binary, scenario)
+        expected = f"entry_bodies rejection={scenario} status=8 started=0"
+        require(result["exit"] == 0 and result["stdout"] == expected and not result["stderr"], result)
+        result["independent_expected"] = expected
+        observations.append(result)
+    return observations
+
+
 def check_source_repetition(binary: Path) -> list[dict]:
     cases = {
         "default-enable": [(5,49,6,0,255)],
@@ -1390,6 +1418,7 @@ def main() -> None:
             "counter-types",
             "nonstatus-errors",
             "source-repetition",
+            "entry-bodies",
             "calling-context",
             "idle-state",
         ],
@@ -1429,6 +1458,7 @@ def main() -> None:
             "counter-types": "counter_types.c",
             "nonstatus-errors": "nonstatus_errors.c",
             "source-repetition": "source_repetition.c",
+            "entry-bodies": "entry_bodies.c",
             "calling-context": "calling_context.c",
             "idle-state": "idle_state.c",
         }
@@ -1451,6 +1481,7 @@ def main() -> None:
             "counter-types": check_counter_types,
             "nonstatus-errors": check_nonstatus_errors,
             "source-repetition": check_source_repetition,
+            "entry-bodies": check_entry_bodies,
             "calling-context": check_calling_context,
             "idle-state": check_idle_state,
         }
@@ -1510,6 +1541,7 @@ def main() -> None:
             "counter-types": "epic4_public_counter_types",
             "nonstatus-errors": "epic4_nonstatus_service_errors",
             "source-repetition": "epic4_interrupt_source_repetition",
+            "entry-bodies": "epic4_osek_entry_bodies",
             "calling-context": "epic4_standard_calling_context",
             "idle-state": "epic4_standard_idle_and_started_state",
         }

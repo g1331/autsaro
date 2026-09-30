@@ -70,6 +70,17 @@ impl ValidatedIntegrationPlan {
             ns = tick_ms * 1_000_000,
             us = tick_ms * 1_000,
         );
+        let counter_symbol = format!("OS_COUNTER_ID_{counter_name}");
+        let legacy_constants = format!(
+            "#define {counter_symbol} 0u\n#define OSMAXALLOWEDVALUE_{counter_name} UINT64_C({maximum})\n#define OSTICKSPERBASE_{counter_name} UINT64_C({base})\n#define OSMINCYCLE_{counter_name} UINT64_C({minimum})\n#define OSMAXALLOWEDVALUE_{counter_symbol} OSMAXALLOWEDVALUE_{counter_name}\n#define OSTICKSPERBASE_{counter_symbol} OSTICKSPERBASE_{counter_name}\n#define OSMINCYCLE_{counter_symbol} OSMINCYCLE_{counter_name}\n#define OSMAXALLOWEDVALUE OSMAXALLOWEDVALUE_{counter_name}\n#define OSTICKSPERBASE OSTICKSPERBASE_{counter_name}\n#define OSMINCYCLE OSMINCYCLE_{counter_name}\n#define OSTICKDURATION UINT64_C({nanoseconds})\n",
+            maximum = plan.schedule.counter_maximum,
+            base = plan.schedule.counter_ticks_per_base,
+            minimum = plan.schedule.counter_minimum_cycle,
+            nanoseconds = tick_ms * 1_000_000,
+        );
+        let mut counter_header = counter_header;
+        let end = counter_header.rfind("#endif").unwrap();
+        counter_header.insert_str(end, &legacy_constants);
         files.insert(
             "os/include/Os_Counter.h".into(),
             counter_header.into_bytes(),
@@ -78,7 +89,14 @@ impl ValidatedIntegrationPlan {
         let mut configuration_text =
             String::from_utf8(configuration.clone()).map_err(|error| reject(error.to_string()))?;
         let end = configuration_text.rfind("#endif").unwrap();
-        configuration_text.insert_str(end, "#include \"Os_Counter.h\"\n");
+        let task_symbol = format!(
+            "OS_TASK_ID_{}",
+            plan.schedule.task.rsplit('/').next().unwrap()
+        );
+        configuration_text.insert_str(
+            end,
+            &format!("#include \"Os_Counter.h\"\n#define {task_symbol} 0u\n"),
+        );
         *configuration = configuration_text.into_bytes();
         let mut timer_report = serde_json::to_vec_pretty(&serde_json::json!({
             "format": "autosar-os-generation-timing-v1",
@@ -281,12 +299,22 @@ impl ValidatedIntegrationPlan {
         let write = component.data_ports.iter().find(|port| !port.read).unwrap();
         let mut config = include_str!("../../../runtime/ecu/templates/Ecu_Config.c.in").to_owned();
         for (key, value) in [
+            ("TASK_SYMBOL", task_symbol),
             (
                 "TASK_NAME",
                 serde_json::to_string(plan.schedule.task.rsplit('/').next().unwrap()).unwrap(),
             ),
             ("TASK_PRIORITY", plan.schedule.task_priority.to_string()),
             ("COUNTER_MAX", plan.schedule.counter_maximum.to_string()),
+            ("COUNTER_SYMBOL", counter_symbol),
+            (
+                "COUNTER_BASE",
+                plan.schedule.counter_ticks_per_base.to_string(),
+            ),
+            (
+                "COUNTER_MIN_CYCLE",
+                plan.schedule.counter_minimum_cycle.to_string(),
+            ),
             ("ALARMS", alarm_declaration),
             (
                 "ALARM_PTR",

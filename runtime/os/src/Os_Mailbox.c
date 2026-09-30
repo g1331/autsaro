@@ -24,8 +24,9 @@ void Os_MailboxInstall(void) {
     }
 }
 int Os_MailboxHandlerAllowed(uint32_t interrupt, uint32_t (*handler)(void)) {
-    return (Os_Config == NULL) || (Os_Config->input_event == 0u) ||
-           (interrupt != OS_INPUT_INTERRUPT) || (handler == input_interrupt);
+    return Os_BackendHandlerAllowed(interrupt, handler) &&
+           ((Os_Config == NULL) || (Os_Config->input_event == 0u) ||
+            (interrupt != OS_INPUT_INTERRUPT) || (handler == input_interrupt));
 }
 void Os_MailboxClose(void) { InterlockedOr(&admission, 2); }
 #ifdef OS_EVENT_TESTS

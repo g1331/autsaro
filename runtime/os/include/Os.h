@@ -9,6 +9,21 @@
 #define DeclareResource(identifier) struct Os_DeclarationCompatibility
 #define DeclareEvent(identifier) struct Os_DeclarationCompatibility
 #define DeclareAlarm(identifier) struct Os_DeclarationCompatibility
+/* Standard OSEK entry bodies. Token pasting keeps the object spelling even
+ * when its generated identifier is a numeric macro (R20.10 Advisory: source
+ * compatibility requires the same identifier for the body and its binding).
+ * A preceding prototype also covers the normal definition-only use. */
+#define TASK(identifier)                                                                           \
+    void Os_TaskEntry_##identifier(void);                                                          \
+    void Os_TaskEntry_##identifier(void)
+#define OS_TASK_ENTRY(identifier) Os_TaskEntry_##identifier
+#define ISR(identifier)                                                                            \
+    void Os_IsrEntry_##identifier(void);                                                           \
+    void Os_IsrEntry_##identifier(void)
+#define OS_ISR_ENTRY(identifier) Os_IsrEntry_##identifier
+#define ALARMCALLBACK(identifier)                                                                  \
+    void identifier(void);                                                                         \
+    void identifier(void)
 /** @brief Select the supported virtual-core idle mode.
  * @param CoreID Ignored by this single-core target, including foreign values.
  * @param IdleMode IDLE_NO_HALT; other modes return E_OS_ID without an effect.

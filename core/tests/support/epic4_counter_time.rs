@@ -4,11 +4,12 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-fn compile(root: &Path, project: &Path, binary: &Path, renamed: bool) {
+fn compile(root: &Path, project: &Path, binary: &Path, renamed: bool, maximum: u32) {
     let mut command = Command::new("gcc");
     command.args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-I"]);
     command.arg(project.join("os/include"));
     command.arg("-I").arg(project.join("include"));
+    command.arg(format!("-DEXPECTED_COUNTER_MAX={maximum}u"));
     if renamed {
         command.arg("-DCOUNTER_TIME_RENAMED=1");
     }
@@ -33,11 +34,19 @@ pub fn verify() {
     let original = super::epic4_plan::inputs();
     let scratch = super::Scratch::new();
     let mut observations = Vec::new();
-    for renamed in [false, true] {
+    for (renamed, maximum) in [(false, 65535u32), (true, 65535u32), (false, 4095u32)] {
         let inputs = original
             .iter()
             .map(|source| {
-                let text = String::from_utf8(source.bytes().to_vec()).unwrap();
+                let mut text = String::from_utf8(source.bytes().to_vec()).unwrap();
+                if maximum == 4095 && source.logical_path() == "ecuc.arxml" {
+                    let parameter = text
+                        .find("OsCounterMaxAllowedValue</DEFINITION-REF>")
+                        .unwrap();
+                    let start = parameter + text[parameter..].find("<VALUE>").unwrap() + 7;
+                    let end = start + text[start..].find("</VALUE>").unwrap();
+                    text.replace_range(start..end, "4095");
+                }
                 InputSource::new(
                     source.logical_path(),
                     if renamed {
@@ -52,8 +61,16 @@ pub fn verify() {
             .collect::<Vec<_>>();
         let plan = build_plan(&inputs, &dependencies, &runtime).unwrap();
         assert_eq!(plan.description().schedule.counter_tick_ms, 1);
+        assert_eq!(plan.description().schedule.counter_ticks_per_base, 1);
+        assert_eq!(plan.description().schedule.counter_minimum_cycle, 1);
         let files = plan.ecu_integration_files().unwrap();
-        let project = scratch.0.join(if renamed { "renamed" } else { "default" });
+        let project = scratch.0.join(if maximum == 4095 {
+            "alternate-maximum"
+        } else if renamed {
+            "renamed"
+        } else {
+            "default"
+        });
         let preview = files.preview(&project).unwrap();
         files
             .generate_previewed(&project, &preview.revision)
@@ -68,7 +85,7 @@ pub fn verify() {
         };
         assert_eq!(report["counter"]["name"], counter);
         assert_eq!(report["counter"]["tickNanoseconds"], 1_000_000);
-        assert_eq!(report["counter"]["maximum"], 65535);
+        assert_eq!(report["counter"]["maximum"], maximum);
         assert_eq!(report["internalPeriodicTimers"], serde_json::json!([]));
         assert_eq!(report["kernelSoftwareTimers"]["enabled"], false);
         assert_eq!(report["kernelSoftwareTimers"]["configUSE_TIMERS"], 0);
@@ -85,7 +102,11 @@ pub fn verify() {
         let header = fs::read_to_string(&header_path).unwrap();
         let raw_headers = root
             .join(".scratch/epic4/story418-generated-time-headers")
-            .join(counter);
+            .join(if maximum == 4095 {
+                "SystemCounter-4095"
+            } else {
+                counter
+            });
         for (name, bytes) in files.files() {
             if name.starts_with("os/include/") || name.starts_with("include/") {
                 let destination = raw_headers.join(name);
@@ -97,7 +118,7 @@ pub fn verify() {
             assert!(!header.contains("SystemCounter"));
         }
         let binary = scratch.0.join(format!("{counter}.exe"));
-        compile(root, &project, &binary, renamed);
+        compile(root, &project, &binary, renamed, maximum);
         let output = Command::new(&binary).output().unwrap();
         assert!(output.status.success());
         assert_eq!(
@@ -108,7 +129,7 @@ pub fn verify() {
         for (name, mutant, expected_exit) in [
             (
                 "wrong-nanosecond-scale",
-                header.replace("UINT64_C(1000000)", "UINT64_C(2000000)"),
+                header.replace("* UINT64_C(1000000)", "* UINT64_C(2000000)"),
                 1,
             ),
             (
@@ -119,11 +140,53 @@ pub fn verify() {
                 ),
                 2,
             ),
+            (
+                "wrong-counter-maximum",
+                header.replace(
+                    &format!("OSMAXALLOWEDVALUE_{counter} UINT64_C({maximum})"),
+                    &format!("OSMAXALLOWEDVALUE_{counter} UINT64_C({})", maximum - 1),
+                ),
+                3,
+            ),
+            (
+                "wrong-counter-base",
+                header.replace(
+                    &format!("OSTICKSPERBASE_{counter} UINT64_C(1)"),
+                    &format!("OSTICKSPERBASE_{counter} UINT64_C(2)"),
+                ),
+                3,
+            ),
+            (
+                "wrong-counter-minimum-cycle",
+                header.replace(
+                    &format!("OSMINCYCLE_{counter} UINT64_C(1)"),
+                    &format!("OSMINCYCLE_{counter} UINT64_C(2)"),
+                ),
+                3,
+            ),
+            (
+                "wrong-system-tick-duration",
+                header.replace(
+                    "OSTICKDURATION UINT64_C(1000000)",
+                    "OSTICKDURATION UINT64_C(2000000)",
+                ),
+                3,
+            ),
+            (
+                "wrong-counter-id-maximum-alias",
+                header.replace(
+                    &format!(
+                        "OSMAXALLOWEDVALUE_OS_COUNTER_ID_{counter} OSMAXALLOWEDVALUE_{counter}"
+                    ),
+                    &format!("OSMAXALLOWEDVALUE_OS_COUNTER_ID_{counter} OSTICKSPERBASE_{counter}"),
+                ),
+                3,
+            ),
         ] {
             assert_ne!(header, mutant);
             fs::write(&header_path, &mutant).unwrap();
             let mutated_binary = scratch.0.join(format!("{counter}-{name}.exe"));
-            compile(root, &project, &mutated_binary, renamed);
+            compile(root, &project, &mutated_binary, renamed, maximum);
             let result = Command::new(&mutated_binary).output().unwrap();
             assert_eq!(result.status.code(), Some(expected_exit));
             mutations.push(serde_json::json!({
@@ -135,7 +198,9 @@ pub fn verify() {
         fs::write(&header_path, &header).unwrap();
         observations.push(serde_json::json!({
             "counter": counter, "status": "pass", "literalUnitValues": 24,
+            "counterMaximum": maximum,
             "singleEvaluations": 4, "expressionVectors": 4, "timerReport": report,
+            "legacyCounterConstantChecks": 11,
             "headerSha256": format!("{:x}", Sha256::digest(header.as_bytes())),
             "binarySha256": format!("{:x}", Sha256::digest(fs::read(binary).unwrap())),
             "compiledMutations": mutations
