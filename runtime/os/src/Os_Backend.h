@@ -67,6 +67,7 @@ unsigned Os_BackendCurrentInterrupt(void);
 int Os_BackendStarted(void);
 int Os_InterruptAllows(unsigned interrupt);
 int Os_PortInterruptSourceEnabled(uint32_t interrupt);
+/* Native mutex held: 0 invalid, 1 applied, 2 duplicate pair with no side effect. */
 int Os_PortInterruptSourceControl(uint32_t interrupt, unsigned operation, boolean clear);
 int Os_InterruptDisabled(void);
 void Os_InterruptRestoreOwner(void);

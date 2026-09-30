@@ -1,5 +1,7 @@
 # Epic 4 Windows OS 基础
 
+第十三补丁按R24-11 SWS_Os_00809在同一原生mutex内拒绝重复Disable已关闭源／Enable已开启源，返回E_OS_NOFUNC，不改变开关或pending位；StatusType错误仍调用可选ErrorHook并保留原有类型参数。合法Enable仅在ClearPending为TRUE时清除pending，FALSE保留；ClearPending本身可重复。`--suite source-repetition`验证12个真实Task／Cat2／配置／未配置及非法源过程，既有28配对和26嵌套场景仍作为回归，不宣称物理中断或整个SC1出口已完成。
+
 R24-11 SWS_Os_00367规定：不返回`StatusType`的OS服务不触发ErrorHook（未选择的ActivateTaskAsyn／SetEventAsyn例外除外）。StartOS、ShutdownOS、GetActiveApplicationMode、GetISRID及DRAFT isOsStarted在错误上下文／调用者自身屏蔽时仍忽略动作或返回无效值；合法StatusType错误报告和missing-end／ISR清理明确要求的Hook继续保留。`--suite nonstatus-errors`在十个真实调用场景检查无额外报告和原StatusType有类型快照，调用矩阵／中断配对／idle回归分别覆盖9／28／5个原生过程。
 
 公共OS类型与`Rte_Os_Type.h`共用唯一32位`CounterType`，后者另提供64位`TimeInMicrosecondsType`，与R24-11 p229一致；包含顺序不会产生两份不兼容类型。`Os_TargetConfig`及时间配置、库和消费者应使用同一交付头重新编译。所选Counter容量仍为8，不因标识类型扩大而增加对象。`DONOTCARE`和`TotalNumberOfCores=1`为公共常量，本目标仍为单核。`--suite counter-types`覆盖17个原生过程和六种公共头包含顺序：256、65536、UINT32_MAX标识在Counter服务及五类配置引用中准确拒绝，输出和合法Counter值保持，已配置ErrorHook保留完整标识及原始输出指针。RTE类型交付不等同于Counter服务端口、时间单位换算或完整507行出口通过。

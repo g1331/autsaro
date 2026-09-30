@@ -49,7 +49,12 @@ void ErrorHook(StatusType error) {
     check(GetISRID() == ((Os_StackCurrent()->role == 'S' && Os_BackendCurrentInterrupt() == 5u)
                              ? 5u
                              : INVALID_ISR));
-    if (service == OSServiceId_ShutdownOS) {
+    if (error == E_OS_NOFUNC) {
+        check(service == 48u && OSError_DisableInterruptSource_ISRID() == 5u);
+        check(strcmp(scenario, "source-retain") == 0 || strcmp(scenario, "source-clear") == 0 ||
+              strcmp(scenario, "source-enable-clear") == 0 ||
+              strcmp(scenario, "source-global") == 0);
+    } else if (service == OSServiceId_ShutdownOS) {
         check(OSError_ShutdownOS_Error() == 8u);
     } else if (service == OSServiceId_StartOS) {
         check(OSError_StartOS_Mode() == 2u);
@@ -277,7 +282,7 @@ static void owner(void) {
             pend();
         } else {
             check(DisableInterruptSource(5u) == E_OK);
-            check(DisableInterruptSource(5u) == E_OK);
+            check(DisableInterruptSource(5u) == E_OS_NOFUNC);
             vPortGenerateSimulatedInterrupt(5u);
             check(category2 == 0u);
             if (strcmp(scenario, "source-clear") == 0) {

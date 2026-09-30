@@ -193,6 +193,11 @@
       "path": "runtime/os/patches/0012-nested-interrupt-dispatch.patch",
       "sha256": "e14a652b95db9e80bf26eb49354f8f52615af3b2158ae2c2aaf19a1c6947b0aa",
       "role": "priority-based nested ISR dispatch on the existing native stack; defer Task selection until a legal outer exit; copied upstream only"
+    },
+    {
+      "path": "runtime/os/patches/0013-interrupt-source-repetition.patch",
+      "sha256": "834f98c89a173d4eaabf842929dbf4ec27d8e216a1b9b0e9cb14b4fd90660c8c",
+      "role": "reject repeated source disable/enable atomically before pending or source-state changes; existing native mutex; copied upstream only"
     }
   ],
   "research_material": [

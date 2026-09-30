@@ -57,6 +57,10 @@ context: []
 
 ## Implementation Notes
 
+下一公共兼容／错误符号增量按实际原文p37与OSEK p50／58／60／62实现四个无功能Declare宏，使用惰性不完整struct前向声明接受旧文件作用域分号，参数不展开／求值，不产生对象、函数、链接或配置依赖；R2.4 Advisory标签用途为标准源兼容，明确限定而不追认为Required批准。p13691025列十四个新增AUTOSAR错误名，当前仅四个已声明；补其余十个独立StatusType常量，保留既有错误数值，新增值由实现分配。独立严格C99消费者须覆盖已配置数值ID／未配置标识／重复声明／不求值参数，核对二十三个OSEK＋AUTOSAR错误名的非零、范围与唯一性，并通过实际旧头／空宏／有副作用宏／重复错误值等变异证明预期有效。实际旧公共头的前置消费者已编译拒绝，原始诊断位于.scratch/epic4/public-compatibility-prechange/result.json；该前置失败不计为实施通过。完整生成工程须用交付头编译消费者，不能用仓库include替代离线交付。
+
+00809源重复调用增量起始62c749e3d8dc59f4b26a997a9b0ea7a21d510191。在实际十二补丁端口副本上派生第十三补丁：Os_PortInterruptSourceControl仍先拒绝未安装／内核源，再在同一实际mutex内判断重复disable／enable并返回独立内部码2，重复失败不得改disabled／pending位；runtime/os/src/Os_Interrupt.c将该码映射E_OS_NOFUNC并按StatusType保留有类型ErrorHook。保留201页ClearPending TRUE／FALSE明确语义。runtime/os/tests/source_repetition.c须验证Task与Cat2、默认开启后Enable重复、关闭后Disable重复、两种ClearPending参数、全局屏蔽下真实pending保持、无配置Hook、非法源／私有源优先E_ID及错误参数。旧interrupt_pairing源场景保留双调用但按规范期待5／新增报告；合法EnableTRUE实际clear场景须先真正Disable对应源，避免以现在非法的重复Enable证明清除成功。第十三补丁、离线闭包、来源摘要、生成说明及正式测试同步。实际恢复重复成功和失败仍改pending／开关的副本必须被独立预期拒绝；完成验证／复核后才提交，507／C221／交接仍开放。
+
 00763的实际原文p88为“SC1 system standard mode shall be possible”，位于多核分配章节；当前封存行将它列为applicable，生成配置只允许OsStatus=EXTENDED，native Os_Cfg亦无显式status选择。最终核查须结合OSEK标准／扩展Status要求及实际单核profile判断并取得真实标准模式证据，不能仅因参考输入是EXTENDED就把这条记为通过或无依据重分类。后续若需支持provider的STANDARD配置，须保持所选参考ECU／扩展Status的所有错误检查与预期，避免借标准模式关闭有效保护或扩大既定参考输入边界。
 
 兼容宏的严格C99小实验已完成，原始来源及结果位于.scratch/epic4/compat-declaration-probe/result.json：空宏展开后旧文件作用域分号被GCC -std=c99 -Wall -Wextra -Werror -pedantic拒绝；惰性不完整struct前向声明同时接受已定义为数值的对象名与未配置标识，多次调用合法，编译／运行exit0且nm未发现对应对象或函数符号。该实验只解决C99兼容实现选择，不构成该宏的最终MISRA评估或完整OSEK通过；后续实现／交付仍须正式消费者和规范映射。
@@ -119,6 +123,8 @@ ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参�
 
 ## Review Triage Log
 
+- 00809源重复调用增量：blind与edge独立复核均完成且无发现。verification-gap唯一发现“unconfigured未执行重复源服务”为false：source_repetition.c最终else实际调用repeated_enable(TRUE)，断言返回E_OS_NOFUNC且源仍启用；该场景Hook指针NULL，随后真实pending递送一次且errors0。原复核者沿实际分支复核后撤回，并确认无其他缺口。不把Python空错误记录列表误读为原生服务返回E_OK。
+
 - 00367非Status服务增量三路独立只读复核完成：blind和verification-gap无发现；edge初次仅返回未完成的空输入读入结果，没有计为通过，要求同一复核者分块读取实际558492字节diff后重新分析，最终返回无发现。当前十原生向量、五个逐函数旧分支编译变异和9／28／5回归通过，330项来源摘要匹配；完整门仍须最终终态确认，不能据此关闭故事。
 
 - 时间生成增量三路只读复核：blind和verification-gap无发现。edge提出“TickType大于UINT32_MAX会导致纳秒溢出”：false（当前生成Counter的合法值域），实际Os_Types.h的TickType为uint64_t，不能以C类型宽度驳回。原生Os_TimeValidate也明确拒绝maximum>UINT32_MAX，生成器的ScheduleContract.counter_maximum来自parse::<u32>()，当前Counter配置最大65535；已校验分辨率为1ms，生成转换宏明确支持0..UINT32_MAX，比全部合法配置Counter值域更宽，最大支持参数的纳秒乘积4294967295000000小于UINT64_MAX。更大的TickType虽可在C中表达，但超出这一生成Counter／转换契约，不能声称已支持任意64位数的纳秒转换。保留真实UINT32_MAX边界断言及上述显式契约，不把uint64类型误记为uint32。整体507／C221及独立出口仍开放。
@@ -148,6 +154,8 @@ ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参�
 - 容量独立增量三路blind／edge／verification-gap均未发现可定位缺陷或验证缺口；完整故事的Hook/错误/ISR工作仍开放。正式容量/真实生成两项测试163.73s通过；18容量、40受控时间、43计时向量封存，26最低容量义务直接映射到四个主场景，部分静态exit1原样保留。容量增量完整门exit0：85个集成测试（660.24s）、29Python、UI/桌面构建和两组Clippy通过；本故事Hook/错误/ISR仍未完成，sprint保持in-progress。
 
 ## Verification
+
+00809中断源重复增量最终完整门exit0：97个核心集成测试1154.54s、29Python、增量格式／C99、UI lint/build、桌面build及两组Clippy通过。12原生重复源过程及28配对／26嵌套回归通过；六个实际状态／pending／开关／注册检查变异全部被原生断言以关闭7识别。12翻译单元部分静态exit1诊断保留；五工件350项产品／补丁摘要与最终来源一致。三路独立复核完成，唯一错误覆盖疑问已按实际unconfigured分支及证据驳回且由原复核者撤回，无剩余增量发现。十个规范行增加限定证据关联，历史允许重复Disable的说明由本次00809修正覆盖；507封存行／分类不变，77行有关联，全部最终结果仍待逐项处置。完整门重新生成的时间消费者二进制及生成器说明摘要按真实产物同步，其独立预期／变异／生成头不变。原始门日志.scratch/epic4/story418-source-repetition-full-gate.log与.exit保留。4.18／Epic4保持in-progress；下一公共兼容宏／错误符号、标准模式、向量／Memory Mapping／RTE服务及完整C221／ARTI／交接出口仍开放。
 
 00367非Status服务增量最终完整门exit0：96个核心集成测试1171.43s、29Python、增量格式／C99、UI lint/build、桌面build及两组Clippy全部通过。十个实际调用／Hook过程保留invalid值、忽略动作、原StatusType有类型快照与ErrorHook递归抑制；9调用／28配对／5idle回归保留所有StatusType、输出和pending／wake断言，只按原文纠正五类非Status错误报告预期。五个逐函数恢复旧Os.c分支的真实程序均被原生断言以关闭7识别；失败ShutdownHook保留原失败并返回，使实际进程完成退出，未以超时冒充行为通过。12单元部分静态exit1诊断保留；六工件330项产品来源摘要与最终来源一致。三路独立复核均完成无发现；四个规范行有新限定证据，507行／分类不变，70行有增量关联，全部最终结果仍待评估。原始门日志.scratch/epic4/story418-nonstatus-full-gate.log及同名.exit保留；4.18／Epic4仍in-progress。下一00809重复源控制、兼容声明／公共接口、标准模式、向量／Memory Mapping／RTE服务与完整C221／ARTI／交接出口不得据此关闭。
 

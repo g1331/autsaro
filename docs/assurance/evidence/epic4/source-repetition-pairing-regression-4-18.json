@@ -1,0 +1,1132 @@
+{
+  "kernel_commit": "054e14f3397023aa83813a65aa065fc4597d481b",
+  "compiler": "GCC 16.1.0 x64",
+  "tls_abi": "PE native TLS; no emutls helper",
+  "binary_sha256": "f3a3a203db4cc10f275a65133d914b13ec15ec6a329354be969065e8fd32040b",
+  "patches": {
+    "0001-controlled-host-lifecycle.patch": "b522c8fa69454989be899658d670f6313fb621f455f32a258e06fad18fbbf04f",
+    "0002-native-stack.patch": "75e4e04e0de99dd9c1dc3e36e3a93c3d51cad64fec32a09e8b203c3c15040648",
+    "0003-activation-ready-policy.patch": "357b1a98a00d8bd197092e4199b710849d08d5684f9d0eabf4459c354c9f979b",
+    "0004-windows-event-namespace.patch": "633529f96b0bb46cae34687cae8dd9bffda068b971f0dd22b8da9c5fdaa47bf1",
+    "0005-category2-resource-gate.patch": "e43dd1f0998e7ec0a8feb8e397ba37c285bf2c031480a6528297e078c94c82df",
+    "0006-input-handler-ownership.patch": "bcb70ae8a8947344c206ff4a0b31d445b6c6bb1956135d45f81c6e1b554a3075",
+    "0007-controlled-tick.patch": "d027c76922a4d8d69e639b3cbe5a48c121b4dabfaf116334b4acff1fc472160f",
+    "0008-task-hook-boundaries.patch": "bf6d08e9ff0b6e2c8eb866b5c0509559e9d5ab37cf9df25b23824dcc16beccdc",
+    "0009-interrupt-source-control.patch": "31b2a63c117986a01ba028b2f7dc4b91bb7b8d9c92bea78265a0240051b90829",
+    "0010-native-interrupt-identities.patch": "c27b3887858dcace2630fd9b114eb7c55f8f365af328e7fa8f37897805b707d0",
+    "0011-isr-phase-before-mutex-release.patch": "e2aea7b4a24ea564c2cf8fcf85932982a8aec80d642394c37cb4dd1067eb1a4f",
+    "0012-nested-interrupt-dispatch.patch": "e14a652b95db9e80bf26eb49354f8f52615af3b2158ae2c2aaf19a1c6947b0aa",
+    "0013-interrupt-source-repetition.patch": "834f98c89a173d4eaabf842929dbf4ec27d8e216a1b9b0e9cb14b4fd90660c8c"
+  },
+  "product_sources": {
+    "runtime/include/Std_Types.h": "9ff4d82a55ae0b8727dc3e75c2c5cf92ac5f4cad4f649939ff9d5d39716bc4ef",
+    "runtime/os/FreeRTOSConfig.h": "03b64e00357a47db0ce053d10766690c8c72a92caac03beb792704e235b9a23b",
+    "runtime/os/include/Os.h": "b5575fedc89c8bdb7aa13341f660e69cda72997d2cf8debd696ed8d0f1b512ef",
+    "runtime/os/include/Os_Cfg.h": "34439ac9d1b5a9bbd371b458abe03dc2498563b4ad6774b9cea6a7557d0bf5ec",
+    "runtime/os/include/Os_Hooks.h": "e86af6e53f039aad0c05ceca3b86d992d62d379d71a462e508e2e5003af9325e",
+    "runtime/os/include/Os_Mailbox.h": "de31d0af68fe473bcab3ee365066eb1feec3436036a0740b2be996d78719ef4c",
+    "runtime/os/include/Os_Target.h": "7046bdc0acfe3be5e235b7e35c9244e4001b54be235fbee66f751671f3630881",
+    "runtime/os/include/Os_Time.h": "02a429a14b8a1b3d50158b4b66801fd06d57172282b375e52faeb09c40f8acd5",
+    "runtime/os/include/Os_Types.h": "97ecf8fdef7d1ed677397584838a30645d4e9433edfc064f2096a8522fd7abed",
+    "runtime/os/include/Rte_Os_Type.h": "377ca357b946abbf524b4a39cc710f72c155904a248a39848ccc4c29712fcd12",
+    "runtime/os/patches/0001-controlled-host-lifecycle.patch": "b522c8fa69454989be899658d670f6313fb621f455f32a258e06fad18fbbf04f",
+    "runtime/os/patches/0002-native-stack.patch": "75e4e04e0de99dd9c1dc3e36e3a93c3d51cad64fec32a09e8b203c3c15040648",
+    "runtime/os/patches/0003-activation-ready-policy.patch": "357b1a98a00d8bd197092e4199b710849d08d5684f9d0eabf4459c354c9f979b",
+    "runtime/os/patches/0004-windows-event-namespace.patch": "633529f96b0bb46cae34687cae8dd9bffda068b971f0dd22b8da9c5fdaa47bf1",
+    "runtime/os/patches/0005-category2-resource-gate.patch": "e43dd1f0998e7ec0a8feb8e397ba37c285bf2c031480a6528297e078c94c82df",
+    "runtime/os/patches/0006-input-handler-ownership.patch": "bcb70ae8a8947344c206ff4a0b31d445b6c6bb1956135d45f81c6e1b554a3075",
+    "runtime/os/patches/0007-controlled-tick.patch": "d027c76922a4d8d69e639b3cbe5a48c121b4dabfaf116334b4acff1fc472160f",
+    "runtime/os/patches/0008-task-hook-boundaries.patch": "bf6d08e9ff0b6e2c8eb866b5c0509559e9d5ab37cf9df25b23824dcc16beccdc",
+    "runtime/os/patches/0009-interrupt-source-control.patch": "31b2a63c117986a01ba028b2f7dc4b91bb7b8d9c92bea78265a0240051b90829",
+    "runtime/os/patches/0010-native-interrupt-identities.patch": "c27b3887858dcace2630fd9b114eb7c55f8f365af328e7fa8f37897805b707d0",
+    "runtime/os/patches/0011-isr-phase-before-mutex-release.patch": "e2aea7b4a24ea564c2cf8fcf85932982a8aec80d642394c37cb4dd1067eb1a4f",
+    "runtime/os/patches/0012-nested-interrupt-dispatch.patch": "e14a652b95db9e80bf26eb49354f8f52615af3b2158ae2c2aaf19a1c6947b0aa",
+    "runtime/os/patches/0013-interrupt-source-repetition.patch": "834f98c89a173d4eaabf842929dbf4ec27d8e216a1b9b0e9cb14b4fd90660c8c",
+    "runtime/os/README.md": "0a3cd9c1e9267c6fa6dea8f7695ac9d899eebc266de737bd2d6fe6b31b7e6b9c",
+    "runtime/os/src/Os.c": "9a2a4a11a88194818ec50ad0a0f4a5f5996328301c4f8c6b481603427b1bba93",
+    "runtime/os/src/Os_Backend.c": "6e6c2d914760a09d4dd478128de8d7c0ff8913da32eedc40199ff6dd5e1455d9",
+    "runtime/os/src/Os_Backend.h": "9229a2a24c861642d8bca77e5a240a2b668bbe1d7aa5ae19401c5ab5b68155d4",
+    "runtime/os/src/Os_Error.c": "6fe7cbbad702444c2f831a84671f03b1b2ac705d78fe75b25cc9fe516618a75c",
+    "runtime/os/src/Os_HostEvent.c": "229aabdeffede1d31b840fc08216f294aa4f5390b39033309fb14a38d9ae301f",
+    "runtime/os/src/Os_Interrupt.c": "a2e48c3b510f8b2ae58d519eec6ddac506904c406a5f733af22acc867c964d2a",
+    "runtime/os/src/Os_Mailbox.c": "5dcfd6f0ef73b852d92c732bb16cea67805e1493f1ff1b381ba52d1e705292eb",
+    "runtime/os/src/Os_Schedule.c": "f28f2ed6f55648e9205fcf56c9ea5f0fef0a4e75dd12377ce490920e13677125",
+    "runtime/os/src/Os_Stack.c": "44669d37c3bbdcb59165c19cfb911482ac44ec7cc9ec4dbdee347b954cd5e479",
+    "runtime/os/src/Os_Stack.h": "8fe1dc8c433e64094ebd9c7e8a48c3fd1a9fdc15a9f9c2e50bc0cf87324297f8",
+    "runtime/os/src/Os_Time.c": "c28442d5476117ee7823ad57070307ddc46c56c5e399e2724936664c744a17c7",
+    "runtime/os/src/Os_Windows.h": "653a7ef7849fcd34545d17eacb4317513b2789f49e38292a69ce2fdfe9782722",
+    "runtime/os/tests/activation.c": "3eaa64433ca4b1741325b14a0f319d80bfde6e5dc931be0e4bd4dc229bcef79b",
+    "runtime/os/tests/calling_context.c": "9a9e622d3980f476fa4876d2ae6886c6d9bae678bfda865b900258de62545bd2",
+    "runtime/os/tests/controlled_time.c": "19cc8ff8e03509835b749fc9e0c2fb602f0b65cf8c52d424b9442f6c0bf4eaf1",
+    "runtime/os/tests/counter_types.c": "87e097684573cb31b33f4b1c93749bda694d7ca9a7f9c633d5e1b371ba7c43a7",
+    "runtime/os/tests/error_hooks.c": "e378605e61bb95dd8a852c9ac65a81468006bc9fa3099c4d1081ee7b72c5d992",
+    "runtime/os/tests/event_wakeup.c": "fbd7a819863b00933ea26645ccb2f0f67ddac3136bed021d00e3d0b42d456871",
+    "runtime/os/tests/finish_chain.c": "e0106adb6fcadc0e1994761427dc24d9670f44659feaac10f7844e1b6d55ff81",
+    "runtime/os/tests/idle_state.c": "0c7439d1ab0f0b700e3e39d389a3f5e59e6ca2321a14f6cd7c4566abc78feffa",
+    "runtime/os/tests/interrupt_pairing.c": "7fee46c484d127f4bbe0dd4f7a5bdc4c233af465a73de61e83a7f6b2ad133a9b",
+    "runtime/os/tests/isr_cleanup.c": "66ce7384141c1ffa025cdc744c522daa94588d22d7b9616b317a5d504c8b2016",
+    "runtime/os/tests/lifecycle.c": "804c48fb8e58f74991c62f341aa570284e7b2deb02497d6165fb1956a9d99391",
+    "runtime/os/tests/native_stack.c": "19dec8650bfc66e26e46e8059a35c182f3dbafb0e8b338b37a72d95209284e4b",
+    "runtime/os/tests/nested_interrupts.c": "91e62a3cf7149b7d734e6633ad2a63c43626ed006092576de2f0815e9f2e5f1f",
+    "runtime/os/tests/nonstatus_errors.c": "fbfd12dc795396b0cf6428ae398c997122757f45868790078f8a897a19b9c8b4",
+    "runtime/os/tests/public_types.c": "41ed601995482b1caf3a26aff5af6a47c24016ce60936d670e4e8327b8b6dd4b",
+    "runtime/os/tests/resource_preemption.c": "b9f692464b1acefa434e230260b35a2292d44baa20527a6d4d35cbdd74871e6c",
+    "runtime/os/tests/returned_task.c": "51fe33543f45c7e211f97141d70bcdffeb175e6745301e7385552c1eb30fb3a0",
+    "runtime/os/tests/sc1_capacity.c": "2da98bca667342d3074bfe14380f864bb02b84741995d8f9209b274ee05b6b6f",
+    "runtime/os/tests/sc1_timing.c": "334eb770c27ce8710d2273c39c6e429f5fc5a4ae8667d5936a453d6f25418c3e",
+    "runtime/os/tests/source_repetition.c": "d2922f732fbe23b05725b469b0fda04d99a1dd3526a4b1f790d599bd507d870e",
+    "runtime/os/tests/task_hooks.c": "77ae4a6f0287e8db1c37862c102352ff59a87228b210e923a48021dd1e8cabdb"
+  },
+  "command": [
+    "gcc",
+    "-std=c99",
+    "-O1",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-I",
+    "<repo-root>\\runtime\\os",
+    "-I",
+    "<repo-root>\\runtime\\os\\include",
+    "-I",
+    "<repo-root>\\runtime\\os\\src",
+    "-I",
+    "<repo-root>\\runtime\\include",
+    "-I",
+    "<build-dir>\\kernel\\include",
+    "-I",
+    "<build-dir>\\kernel\\portable\\MSVC-MingW",
+    "<repo-root>\\runtime\\os\\src\\Os.c",
+    "<repo-root>\\runtime\\os\\src\\Os_Error.c",
+    "<repo-root>\\runtime\\os\\src\\Os_Interrupt.c",
+    "<repo-root>\\runtime\\os\\src\\Os_Backend.c",
+    "<repo-root>\\runtime\\os\\src\\Os_Stack.c",
+    "<repo-root>\\runtime\\os\\src\\Os_HostEvent.c",
+    "<repo-root>\\runtime\\os\\src\\Os_Mailbox.c",
+    "<repo-root>\\runtime\\os\\src\\Os_Time.c",
+    "<repo-root>\\runtime\\os\\src\\Os_Schedule.c",
+    "<repo-root>\\runtime\\os\\tests\\interrupt_pairing.c",
+    "<build-dir>\\kernel\\tasks.c",
+    "<build-dir>\\kernel\\list.c",
+    "<build-dir>\\kernel\\queue.c",
+    "<build-dir>\\kernel\\portable\\MSVC-MingW\\port.c",
+    "-lwinmm",
+    "-o",
+    "<build-dir>\\os_harness.exe"
+  ],
+  "observations": [
+    {
+      "scenario": "disable",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=disable startup=1 cat1=1 cat2=1 isr_task=0 errors=0 trace=CO reason=0\nSTACK role=S tid=4284 low=461916602368 high=461918699520 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=461918695472 observations=13 buffer_low=0 buffer_high=0\nSTACK role=C tid=25648 low=461913456640 high=461913718784 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=461913716016 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=31360 low=461913718784 high=461913980928 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=461913978928 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=31640 low=461913980928 high=461914243072 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=461914240752 observations=14 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=24068 low=461914243072 high=461914505216 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=461914504072 observations=2 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=16864 low=461920796672 high=461921058816 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=461921056472 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=17900 low=461921058816 high=461921320960 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=461921318728 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        1,
+        1,
+        0,
+        0,
+        "CO",
+        0
+      ],
+      "independent_expected_errors": []
+    },
+    {
+      "scenario": "all-nested",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=all-nested startup=1 cat1=1 cat2=1 isr_task=0 errors=0 trace=NCO reason=0\nSTACK role=S tid=25348 low=910258339840 high=910260436992 reserve=2097152 commit=36864 guard=20480 guarantee=16384 sp=910260433696 observations=13 buffer_low=0 buffer_high=0\nSTACK role=C tid=2796 low=910255718400 high=910255980544 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=910255979376 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=2536 low=910255980544 high=910256242688 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=910256240576 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=11216 low=910262534144 high=910262796288 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=910262795040 observations=20 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=27576 low=910262796288 high=910263058432 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=910263056216 observations=2 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=36156 low=910263058432 high=910263320576 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=910263319688 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=19792 low=910263320576 high=910263582720 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=910263581112 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        1,
+        1,
+        0,
+        0,
+        "NCO",
+        0
+      ],
+      "independent_expected_errors": []
+    },
+    {
+      "scenario": "os-nested",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=os-nested startup=1 cat1=1 cat2=1 isr_task=0 errors=0 trace=CNO reason=0\nSTACK role=S tid=4608 low=180818542592 high=180820639744 reserve=2097152 commit=36864 guard=20480 guarantee=16384 sp=180820637184 observations=13 buffer_low=0 buffer_high=0\nSTACK role=C tid=35452 low=180822736896 high=180822999040 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=180822996832 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=29828 low=180822999040 high=180823261184 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=180823260528 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=36664 low=180823261184 high=180823523328 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=180823521392 observations=20 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=28564 low=180823523328 high=180823785472 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=180823783464 observations=2 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=35208 low=180823785472 high=180824047616 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=180824047000 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=23776 low=180824047616 high=180824309760 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=180824308008 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        1,
+        1,
+        0,
+        0,
+        "CNO",
+        0
+      ],
+      "independent_expected_errors": []
+    },
+    {
+      "scenario": "os-all",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=os-all startup=1 cat1=1 cat2=1 isr_task=0 errors=0 trace=CO reason=0\nSTACK role=S tid=25692 low=848266526720 high=848268623872 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=848268620368 observations=13 buffer_low=0 buffer_high=0\nSTACK role=C tid=36824 low=848264036352 high=848264298496 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=848264295888 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=24728 low=848270721024 high=848270983168 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=848270981920 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=34180 low=848270983168 high=848271245312 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=848271243568 observations=17 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=36288 low=848271245312 high=848271507456 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=848271506920 observations=2 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=36336 low=848271507456 high=848271769600 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=848271768792 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=11784 low=848271769600 high=848272031744 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=848272031192 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        1,
+        1,
+        0,
+        0,
+        "CO",
+        0
+      ],
+      "independent_expected_errors": []
+    },
+    {
+      "scenario": "all-os",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=all-os startup=1 cat1=1 cat2=1 isr_task=0 errors=0 trace=CO reason=0\nSTACK role=S tid=25340 low=831162155008 high=831164252160 reserve=2097152 commit=36864 guard=20480 guarantee=16384 sp=831164249328 observations=13 buffer_low=0 buffer_high=0\nSTACK role=C tid=19340 low=831159074816 high=831159336960 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=831159335936 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=13632 low=831159336960 high=831159599104 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=831159598080 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=22780 low=831159599104 high=831159861248 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=831159859360 observations=17 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=35916 low=831166349312 high=831166611456 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=831166610312 observations=2 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=31496 low=831166611456 high=831166873600 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=831166871944 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=7600 low=831166873600 high=831167135744 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=831167134760 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        1,
+        1,
+        0,
+        0,
+        "CO",
+        0
+      ],
+      "independent_expected_errors": []
+    },
+    {
+      "scenario": "unmatched",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=unmatched startup=1 cat1=1 cat2=1 isr_task=0 errors=0 trace=CO reason=0\nSTACK role=S tid=5728 low=940065161216 high=940067258368 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=940067254272 observations=13 buffer_low=0 buffer_high=0\nSTACK role=C tid=16040 low=940062343168 high=940062605312 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=940062602544 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=22684 low=940062605312 high=940062867456 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=940062865536 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=36348 low=940069355520 high=940069617664 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=940069615344 observations=12 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=2504 low=940069617664 high=940069879808 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=940069878488 observations=2 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=6340 low=940069879808 high=940070141952 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=940070139624 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=10116 low=940070141952 high=940070404096 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=940070403304 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        1,
+        1,
+        0,
+        0,
+        "CO",
+        0
+      ],
+      "independent_expected_errors": []
+    },
+    {
+      "scenario": "hook-allowed",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=hook-allowed startup=1 cat1=1 cat2=1 isr_task=0 errors=0 trace=CO reason=0\nSTACK role=S tid=36120 low=4294967296 high=4297064448 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=4297060272 observations=13 buffer_low=0 buffer_high=0\nSTACK role=C tid=3840 low=4301258752 high=4301520896 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=4301519088 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=8380 low=4301520896 high=4301783040 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=4301781424 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=28612 low=4301783040 high=4302045184 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=4302044576 observations=12 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=6000 low=4302045184 high=4302307328 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=4302306808 observations=2 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=36620 low=4302307328 high=4302569472 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=4302567000 observations=12 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=25096 low=4302569472 high=4302831616 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=4302830088 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        1,
+        1,
+        0,
+        0,
+        "CO",
+        0
+      ],
+      "independent_expected_errors": []
+    },
+    {
+      "scenario": "services-disable",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=services-disable startup=1 cat1=1 cat2=1 isr_task=0 errors=26 trace=CO reason=0\nmask_error status=9 service=128 actor=T\nmask_error status=9 service=129 actor=T\nmask_error status=9 service=130 actor=T\nmask_error status=9 service=131 actor=T\nmask_error status=9 service=132 actor=T\nmask_error status=9 service=133 actor=T\nmask_error status=9 service=134 actor=T\nmask_error status=9 service=135 actor=T\nmask_error status=9 service=136 actor=T\nmask_error status=9 service=137 actor=T\nmask_error status=9 service=138 actor=T\nmask_error status=9 service=139 actor=T\nmask_error status=9 service=15 actor=T\nmask_error status=9 service=16 actor=T\nmask_error status=9 service=17 actor=T\nmask_error status=9 service=140 actor=T\nmask_error status=9 service=141 actor=T\nmask_error status=9 service=142 actor=T\nmask_error status=9 service=143 actor=T\nmask_error status=9 service=144 actor=T\nmask_error status=9 service=7 actor=T\nmask_error status=9 service=8 actor=T\nmask_error status=9 service=9 actor=T\nmask_error status=9 service=10 actor=T\nmask_error status=9 service=14 actor=T\nmask_error status=9 service=29 actor=T\nSTACK role=S tid=19804 low=419245850624 high=419247947776 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=419247944160 observations=13 buffer_low=0 buffer_high=0\nSTACK role=C tid=25352 low=419241918464 high=419242180608 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=419242177968 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=34072 low=419242180608 high=419242442752 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=419242440784 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=12276 low=419242442752 high=419242704896 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=419242704000 observations=330 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=17816 low=419242704896 high=419242967040 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=419242965912 observations=2 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=11732 low=419242967040 high=419243229184 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=419243227544 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=36700 low=419243229184 high=419243491328 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=419243490376 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        1,
+        1,
+        0,
+        26,
+        "CO",
+        0
+      ],
+      "independent_expected_errors": [
+        [
+          9,
+          128,
+          "T"
+        ],
+        [
+          9,
+          129,
+          "T"
+        ],
+        [
+          9,
+          130,
+          "T"
+        ],
+        [
+          9,
+          131,
+          "T"
+        ],
+        [
+          9,
+          132,
+          "T"
+        ],
+        [
+          9,
+          133,
+          "T"
+        ],
+        [
+          9,
+          134,
+          "T"
+        ],
+        [
+          9,
+          135,
+          "T"
+        ],
+        [
+          9,
+          136,
+          "T"
+        ],
+        [
+          9,
+          137,
+          "T"
+        ],
+        [
+          9,
+          138,
+          "T"
+        ],
+        [
+          9,
+          139,
+          "T"
+        ],
+        [
+          9,
+          15,
+          "T"
+        ],
+        [
+          9,
+          16,
+          "T"
+        ],
+        [
+          9,
+          17,
+          "T"
+        ],
+        [
+          9,
+          140,
+          "T"
+        ],
+        [
+          9,
+          141,
+          "T"
+        ],
+        [
+          9,
+          142,
+          "T"
+        ],
+        [
+          9,
+          143,
+          "T"
+        ],
+        [
+          9,
+          144,
+          "T"
+        ],
+        [
+          9,
+          7,
+          "T"
+        ],
+        [
+          9,
+          8,
+          "T"
+        ],
+        [
+          9,
+          9,
+          "T"
+        ],
+        [
+          9,
+          10,
+          "T"
+        ],
+        [
+          9,
+          14,
+          "T"
+        ],
+        [
+          9,
+          29,
+          "T"
+        ]
+      ]
+    },
+    {
+      "scenario": "services-all",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=services-all startup=1 cat1=1 cat2=1 isr_task=0 errors=26 trace=CO reason=0\nmask_error status=9 service=128 actor=T\nmask_error status=9 service=129 actor=T\nmask_error status=9 service=130 actor=T\nmask_error status=9 service=131 actor=T\nmask_error status=9 service=132 actor=T\nmask_error status=9 service=133 actor=T\nmask_error status=9 service=134 actor=T\nmask_error status=9 service=135 actor=T\nmask_error status=9 service=136 actor=T\nmask_error status=9 service=137 actor=T\nmask_error status=9 service=138 actor=T\nmask_error status=9 service=139 actor=T\nmask_error status=9 service=15 actor=T\nmask_error status=9 service=16 actor=T\nmask_error status=9 service=17 actor=T\nmask_error status=9 service=140 actor=T\nmask_error status=9 service=141 actor=T\nmask_error status=9 service=142 actor=T\nmask_error status=9 service=143 actor=T\nmask_error status=9 service=144 actor=T\nmask_error status=9 service=7 actor=T\nmask_error status=9 service=8 actor=T\nmask_error status=9 service=9 actor=T\nmask_error status=9 service=10 actor=T\nmask_error status=9 service=14 actor=T\nmask_error status=9 service=29 actor=T\nSTACK role=S tid=36440 low=715837669376 high=715839766528 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=715839763120 observations=13 buffer_low=0 buffer_high=0\nSTACK role=C tid=34640 low=715834327040 high=715834589184 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=715834586512 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=36096 low=715834589184 high=715834851328 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=715834850080 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=36460 low=715834851328 high=715835113472 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=715835111712 observations=332 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=19516 low=715835113472 high=715835375616 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=715835373608 observations=2 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=8500 low=715841863680 high=715842125824 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=715842124856 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=32820 low=715842125824 high=715842387968 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=715842386344 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        1,
+        1,
+        0,
+        26,
+        "CO",
+        0
+      ],
+      "independent_expected_errors": [
+        [
+          9,
+          128,
+          "T"
+        ],
+        [
+          9,
+          129,
+          "T"
+        ],
+        [
+          9,
+          130,
+          "T"
+        ],
+        [
+          9,
+          131,
+          "T"
+        ],
+        [
+          9,
+          132,
+          "T"
+        ],
+        [
+          9,
+          133,
+          "T"
+        ],
+        [
+          9,
+          134,
+          "T"
+        ],
+        [
+          9,
+          135,
+          "T"
+        ],
+        [
+          9,
+          136,
+          "T"
+        ],
+        [
+          9,
+          137,
+          "T"
+        ],
+        [
+          9,
+          138,
+          "T"
+        ],
+        [
+          9,
+          139,
+          "T"
+        ],
+        [
+          9,
+          15,
+          "T"
+        ],
+        [
+          9,
+          16,
+          "T"
+        ],
+        [
+          9,
+          17,
+          "T"
+        ],
+        [
+          9,
+          140,
+          "T"
+        ],
+        [
+          9,
+          141,
+          "T"
+        ],
+        [
+          9,
+          142,
+          "T"
+        ],
+        [
+          9,
+          143,
+          "T"
+        ],
+        [
+          9,
+          144,
+          "T"
+        ],
+        [
+          9,
+          7,
+          "T"
+        ],
+        [
+          9,
+          8,
+          "T"
+        ],
+        [
+          9,
+          9,
+          "T"
+        ],
+        [
+          9,
+          10,
+          "T"
+        ],
+        [
+          9,
+          14,
+          "T"
+        ],
+        [
+          9,
+          29,
+          "T"
+        ]
+      ]
+    },
+    {
+      "scenario": "services-os",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=services-os startup=1 cat1=1 cat2=1 isr_task=0 errors=26 trace=CO reason=0\nmask_error status=9 service=128 actor=T\nmask_error status=9 service=129 actor=T\nmask_error status=9 service=130 actor=T\nmask_error status=9 service=131 actor=T\nmask_error status=9 service=132 actor=T\nmask_error status=9 service=133 actor=T\nmask_error status=9 service=134 actor=T\nmask_error status=9 service=135 actor=T\nmask_error status=9 service=136 actor=T\nmask_error status=9 service=137 actor=T\nmask_error status=9 service=138 actor=T\nmask_error status=9 service=139 actor=T\nmask_error status=9 service=15 actor=T\nmask_error status=9 service=16 actor=T\nmask_error status=9 service=17 actor=T\nmask_error status=9 service=140 actor=T\nmask_error status=9 service=141 actor=T\nmask_error status=9 service=142 actor=T\nmask_error status=9 service=143 actor=T\nmask_error status=9 service=144 actor=T\nmask_error status=9 service=7 actor=T\nmask_error status=9 service=8 actor=T\nmask_error status=9 service=9 actor=T\nmask_error status=9 service=10 actor=T\nmask_error status=9 service=14 actor=T\nmask_error status=9 service=29 actor=T\nSTACK role=S tid=20240 low=1079813079040 high=1079815176192 reserve=2097152 commit=36864 guard=20480 guarantee=16384 sp=1079815173248 observations=13 buffer_low=0 buffer_high=0\nSTACK role=C tid=4072 low=1079817273344 high=1079817535488 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1079817533040 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=25092 low=1079817535488 high=1079817797632 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1079817796016 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=32752 low=1079817797632 high=1079818059776 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1079818059248 observations=332 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=30128 low=1079818059776 high=1079818321920 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1079818319528 observations=2 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=22484 low=1079818321920 high=1079818584064 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1079818581736 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=35556 low=1079818584064 high=1079818846208 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1079818845208 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        1,
+        1,
+        0,
+        26,
+        "CO",
+        0
+      ],
+      "independent_expected_errors": [
+        [
+          9,
+          128,
+          "T"
+        ],
+        [
+          9,
+          129,
+          "T"
+        ],
+        [
+          9,
+          130,
+          "T"
+        ],
+        [
+          9,
+          131,
+          "T"
+        ],
+        [
+          9,
+          132,
+          "T"
+        ],
+        [
+          9,
+          133,
+          "T"
+        ],
+        [
+          9,
+          134,
+          "T"
+        ],
+        [
+          9,
+          135,
+          "T"
+        ],
+        [
+          9,
+          136,
+          "T"
+        ],
+        [
+          9,
+          137,
+          "T"
+        ],
+        [
+          9,
+          138,
+          "T"
+        ],
+        [
+          9,
+          139,
+          "T"
+        ],
+        [
+          9,
+          15,
+          "T"
+        ],
+        [
+          9,
+          16,
+          "T"
+        ],
+        [
+          9,
+          17,
+          "T"
+        ],
+        [
+          9,
+          140,
+          "T"
+        ],
+        [
+          9,
+          141,
+          "T"
+        ],
+        [
+          9,
+          142,
+          "T"
+        ],
+        [
+          9,
+          143,
+          "T"
+        ],
+        [
+          9,
+          144,
+          "T"
+        ],
+        [
+          9,
+          7,
+          "T"
+        ],
+        [
+          9,
+          8,
+          "T"
+        ],
+        [
+          9,
+          9,
+          "T"
+        ],
+        [
+          9,
+          10,
+          "T"
+        ],
+        [
+          9,
+          14,
+          "T"
+        ],
+        [
+          9,
+          29,
+          "T"
+        ]
+      ]
+    },
+    {
+      "scenario": "isr-balanced",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=isr-balanced startup=1 cat1=1 cat2=1 isr_task=0 errors=0 trace=CO reason=0\nSTACK role=S tid=32508 low=1037106675712 high=1037108772864 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=1037108769184 observations=23 buffer_low=0 buffer_high=0\nSTACK role=C tid=32684 low=1037102743552 high=1037103005696 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1037103002848 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=32356 low=1037103005696 high=1037103267840 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1037103265920 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=2652 low=1037103267840 high=1037103529984 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1037103528272 observations=12 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=11692 low=1037103529984 high=1037103792128 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1037103791304 observations=2 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=36528 low=1037103792128 high=1037104054272 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1037104052456 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=35904 low=1037104054272 high=1037104316416 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=1037104314424 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        1,
+        1,
+        0,
+        0,
+        "CO",
+        0
+      ],
+      "independent_expected_errors": []
+    },
+    {
+      "scenario": "isr-leak-disable",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=isr-leak-disable startup=1 cat1=1 cat2=1 isr_task=0 errors=1 trace=CO reason=0\nmask_error status=9 service=252 actor=S\nSTACK role=S tid=36148 low=929073987584 high=929076084736 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=929076080832 observations=25 buffer_low=0 buffer_high=0\nSTACK role=C tid=31592 low=929071497216 high=929071759360 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=929071758544 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=35592 low=929078181888 high=929078444032 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=929078442528 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=4652 low=929078444032 high=929078706176 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=929078705616 observations=12 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=7604 low=929078706176 high=929078968320 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=929078967224 observations=2 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=33140 low=929078968320 high=929079230464 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=929079229384 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=29456 low=929079230464 high=929079492608 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=929079491880 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        1,
+        1,
+        0,
+        1,
+        "CO",
+        0
+      ],
+      "independent_expected_errors": [
+        [
+          9,
+          252,
+          "S"
+        ]
+      ]
+    },
+    {
+      "scenario": "isr-leak-all",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=isr-leak-all startup=1 cat1=1 cat2=1 isr_task=0 errors=1 trace=CO reason=0\nmask_error status=9 service=252 actor=S\nSTACK role=S tid=27600 low=699951742976 high=699953840128 reserve=2097152 commit=36864 guard=20480 guarantee=16384 sp=699953837072 observations=26 buffer_low=0 buffer_high=0\nSTACK role=C tid=30584 low=699948072960 high=699948335104 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=699948333376 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=36280 low=699948335104 high=699948597248 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=699948595488 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=4360 low=699948597248 high=699948859392 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=699948856864 observations=12 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=22688 low=699948859392 high=699949121536 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=699949120920 observations=2 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=36028 low=699949121536 high=699949383680 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=699949382664 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=36748 low=699949383680 high=699949645824 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=699949644552 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        1,
+        1,
+        0,
+        1,
+        "CO",
+        0
+      ],
+      "independent_expected_errors": [
+        [
+          9,
+          252,
+          "S"
+        ]
+      ]
+    },
+    {
+      "scenario": "isr-leak-os",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=isr-leak-os startup=1 cat1=1 cat2=1 isr_task=0 errors=1 trace=CO reason=0\nmask_error status=9 service=252 actor=S\nSTACK role=S tid=36596 low=346936049664 high=346938146816 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=346938142640 observations=26 buffer_low=0 buffer_high=0\nSTACK role=C tid=10028 low=346933362688 high=346933624832 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=346933623648 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=29092 low=346933624832 high=346933886976 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=346933885792 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=13592 low=346940243968 high=346940506112 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=346940504032 observations=12 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=5528 low=346940506112 high=346940768256 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=346940766232 observations=2 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=5944 low=346940768256 high=346941030400 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=346941027992 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=8464 low=346941030400 high=346941292544 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=346941290216 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        1,
+        1,
+        0,
+        1,
+        "CO",
+        0
+      ],
+      "independent_expected_errors": [
+        [
+          9,
+          252,
+          "S"
+        ]
+      ]
+    },
+    {
+      "scenario": "isr-leak-mixed",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=isr-leak-mixed startup=1 cat1=1 cat2=1 isr_task=0 errors=1 trace=CO reason=0\nmask_error status=9 service=252 actor=S\nSTACK role=S tid=10120 low=447538528256 high=447540625408 reserve=2097152 commit=36864 guard=20480 guarantee=16384 sp=447540621952 observations=27 buffer_low=0 buffer_high=0\nSTACK role=C tid=34324 low=447542722560 high=447542984704 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=447542983360 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=7328 low=447542984704 high=447543246848 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=447543245616 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=10488 low=447543246848 high=447543508992 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=447543507600 observations=12 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=30828 low=447543508992 high=447543771136 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=447543769432 observations=2 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=7928 low=447543771136 high=447544033280 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=447544030904 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=35328 low=447544033280 high=447544295424 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=447544293832 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        1,
+        1,
+        0,
+        1,
+        "CO",
+        0
+      ],
+      "independent_expected_errors": [
+        [
+          9,
+          252,
+          "S"
+        ]
+      ]
+    },
+    {
+      "scenario": "source-retain",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=source-retain startup=1 cat1=1 cat2=1 isr_task=0 errors=1 trace=OC reason=0\nmask_error status=5 service=48 actor=T\nSTACK role=S tid=9976 low=55400464384 high=55402561536 reserve=2097152 commit=36864 guard=20480 guarantee=16384 sp=55402558432 observations=13 buffer_low=0 buffer_high=0\nSTACK role=C tid=29416 low=55404658688 high=55404920832 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=55404918240 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=27952 low=55404920832 high=55405182976 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=55405181168 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=32880 low=55405182976 high=55405445120 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=55405443696 observations=25 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=28552 low=55405445120 high=55405707264 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=55405705480 observations=2 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=33864 low=55405707264 high=55405969408 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=55405968728 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=24056 low=55405969408 high=55406231552 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=55406229656 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        1,
+        1,
+        0,
+        1,
+        "OC",
+        0
+      ],
+      "independent_expected_errors": [
+        [
+          5,
+          48,
+          "T"
+        ]
+      ]
+    },
+    {
+      "scenario": "source-clear",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=source-clear startup=1 cat1=1 cat2=1 isr_task=0 errors=1 trace=OC reason=0\nmask_error status=5 service=48 actor=T\nSTACK role=S tid=26940 low=317844357120 high=317846454272 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=317846450944 observations=13 buffer_low=0 buffer_high=0\nSTACK role=C tid=30332 low=317840228352 high=317840490496 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=317840488304 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=28704 low=317840490496 high=317840752640 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=317840751024 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=25368 low=317840752640 high=317841014784 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=317841013840 observations=26 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=7504 low=317841014784 high=317841276928 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=317841276168 observations=2 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=31768 low=317841276928 high=317841539072 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=317841537688 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=3472 low=317841539072 high=317841801216 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=317841800216 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        1,
+        1,
+        0,
+        1,
+        "OC",
+        0
+      ],
+      "independent_expected_errors": [
+        [
+          5,
+          48,
+          "T"
+        ]
+      ]
+    },
+    {
+      "scenario": "source-enable-clear",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=source-enable-clear startup=1 cat1=1 cat2=1 isr_task=0 errors=1 trace=OC reason=0\nmask_error status=5 service=48 actor=T\nSTACK role=S tid=9072 low=133848629248 high=133850726400 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=133850722896 observations=13 buffer_low=0 buffer_high=0\nSTACK role=C tid=10744 low=133844500480 high=133844762624 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=133844760672 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=30528 low=133844762624 high=133845024768 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=133845022240 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=7240 low=133845024768 high=133845286912 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=133845286384 observations=25 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=15224 low=133845286912 high=133845549056 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=133845548568 observations=2 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=31068 low=133845549056 high=133845811200 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=133845810232 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=22300 low=133845811200 high=133846073344 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=133846072216 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        1,
+        1,
+        0,
+        1,
+        "OC",
+        0
+      ],
+      "independent_expected_errors": [
+        [
+          5,
+          48,
+          "T"
+        ]
+      ]
+    },
+    {
+      "scenario": "source-global",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=source-global startup=1 cat1=1 cat2=1 isr_task=0 errors=1 trace=OC reason=0\nmask_error status=5 service=48 actor=T\nSTACK role=S tid=10672 low=711297335296 high=711299432448 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=711299427904 observations=13 buffer_low=0 buffer_high=0\nSTACK role=D tid=27056 low=711301791744 high=711302053888 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=711302051856 observations=1 buffer_low=0 buffer_high=0\nSTACK role=C tid=10236 low=711301529600 high=711301791744 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=711301790096 observations=6 buffer_low=0 buffer_high=0\nSTACK role=T tid=30428 low=711302053888 high=711302316032 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=711302315472 observations=31 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=19160 low=711302316032 high=711302578176 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=711302576104 observations=2 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=36196 low=711302578176 high=711302840320 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=711302837912 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=1376 low=711302840320 high=711303102464 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=711303101736 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        1,
+        1,
+        0,
+        1,
+        "OC",
+        0
+      ],
+      "independent_expected_errors": [
+        [
+          5,
+          48,
+          "T"
+        ]
+      ]
+    },
+    {
+      "scenario": "source-invalid",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=source-invalid startup=1 cat1=1 cat2=1 isr_task=0 errors=7 trace=CO reason=0\nmask_error status=3 service=48 actor=T\nmask_error status=3 service=49 actor=T\nmask_error status=3 service=50 actor=T\nmask_error status=3 service=48 actor=T\nmask_error status=3 service=48 actor=T\nmask_error status=3 service=48 actor=T\nmask_error status=3 service=48 actor=T\nSTACK role=S tid=34232 low=11590959104 high=11593056256 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=11593052016 observations=13 buffer_low=0 buffer_high=0\nSTACK role=C tid=33924 low=11588534272 high=11588796416 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=11588794560 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=27748 low=11595153408 high=11595415552 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=11595413344 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=18796 low=11595415552 high=11595677696 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=11595675616 observations=93 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=12776 low=11595677696 high=11595939840 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=11595939208 observations=2 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=23200 low=11595939840 high=11596201984 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=11596200248 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=33820 low=11596201984 high=11596464128 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=11596463304 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        1,
+        1,
+        0,
+        7,
+        "CO",
+        0
+      ],
+      "independent_expected_errors": [
+        [
+          3,
+          48,
+          "T"
+        ],
+        [
+          3,
+          49,
+          "T"
+        ],
+        [
+          3,
+          50,
+          "T"
+        ],
+        [
+          3,
+          48,
+          "T"
+        ],
+        [
+          3,
+          48,
+          "T"
+        ],
+        [
+          3,
+          48,
+          "T"
+        ],
+        [
+          3,
+          48,
+          "T"
+        ]
+      ]
+    },
+    {
+      "scenario": "source-hook-reject",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=source-hook-reject startup=1 cat1=1 cat2=1 isr_task=0 errors=3 trace=CO reason=0\nmask_error status=2 service=48 actor=B\nmask_error status=2 service=49 actor=B\nmask_error status=2 service=50 actor=B\nSTACK role=S tid=29676 low=694654337024 high=694656434176 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=694656429776 observations=13 buffer_low=0 buffer_high=0\nSTACK role=C tid=2156 low=694651977728 high=694652239872 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=694652239040 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=17396 low=694658531328 high=694658793472 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=694658791136 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=32556 low=694658793472 high=694659055616 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=694659054624 observations=9 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=3904 low=694659055616 high=694659317760 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=694659316056 observations=2 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=30368 low=694659317760 high=694659579904 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=694659577800 observations=30 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=36588 low=694659579904 high=694659842048 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=694659839880 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        1,
+        1,
+        0,
+        3,
+        "CO",
+        0
+      ],
+      "independent_expected_errors": [
+        [
+          2,
+          48,
+          "B"
+        ],
+        [
+          2,
+          49,
+          "B"
+        ],
+        [
+          2,
+          50,
+          "B"
+        ]
+      ]
+    },
+    {
+      "scenario": "source-isr",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=source-isr startup=1 cat1=1 cat2=1 isr_task=0 errors=0 trace=OQC reason=0\nSTACK role=S tid=36820 low=41878028288 high=41880125440 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=41880121984 observations=24 buffer_low=0 buffer_high=0\nSTACK role=C tid=9532 low=41882222592 high=41882484736 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=41882483248 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=36720 low=41882484736 high=41882746880 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=41882745600 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=21188 low=41882746880 high=41883009024 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=41883008240 observations=11 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=19364 low=41883009024 high=41883271168 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=41883270008 observations=2 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=33944 low=41883271168 high=41883533312 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=41883531848 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=29372 low=41883533312 high=41883795456 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=41883795032 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        1,
+        1,
+        0,
+        0,
+        "OQC",
+        0
+      ],
+      "independent_expected_errors": []
+    },
+    {
+      "scenario": "source-outside-isr",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=source-outside-isr startup=1 cat1=1 cat2=1 isr_task=0 errors=3 trace=ODEC reason=0\nmask_error status=2 service=48 actor=S\nmask_error status=2 service=49 actor=S\nmask_error status=2 service=50 actor=S\nSTACK role=S tid=28968 low=871427473408 high=871429570560 reserve=2097152 commit=36864 guard=20480 guarantee=16384 sp=871429567600 observations=55 buffer_low=0 buffer_high=0\nSTACK role=C tid=29400 low=871424851968 high=871425114112 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=871425113024 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=20664 low=871425114112 high=871425376256 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=871425375712 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=15096 low=871431667712 high=871431929856 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=871431928080 observations=11 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=18908 low=871431929856 high=871432192000 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=871432191128 observations=2 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=16908 low=871432192000 high=871432454144 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=871432452040 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=25220 low=871432454144 high=871432716288 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=871432714664 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        1,
+        1,
+        0,
+        3,
+        "ODEC",
+        0
+      ],
+      "independent_expected_errors": [
+        [
+          2,
+          48,
+          "S"
+        ],
+        [
+          2,
+          49,
+          "S"
+        ],
+        [
+          2,
+          50,
+          "S"
+        ]
+      ]
+    },
+    {
+      "scenario": "missing-disable",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=missing-disable startup=1 cat1=0 cat2=1 isr_task=255 errors=1 trace=OM reason=0\nmask_error status=11 service=253 actor=T\nSTACK role=S tid=23056 low=255500222464 high=255502319616 reserve=2097152 commit=36864 guard=20480 guarantee=16384 sp=255502316880 observations=12 buffer_low=0 buffer_high=0\nSTACK role=C tid=29364 low=255497863168 high=255498125312 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=255498123392 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=36328 low=255504416768 high=255504678912 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=255504678112 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=22880 low=255504678912 high=255504941056 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=255504939480 observations=21 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=36592 low=255504941056 high=255505203200 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=255505202512 observations=9 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=17484 low=255505203200 high=255505465344 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=255505464344 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=34996 low=255505465344 high=255505727488 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=255505725896 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        0,
+        1,
+        255,
+        1,
+        "OM",
+        0
+      ],
+      "independent_expected_errors": [
+        [
+          11,
+          253,
+          "T"
+        ]
+      ]
+    },
+    {
+      "scenario": "missing-all",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=missing-all startup=1 cat1=0 cat2=1 isr_task=255 errors=1 trace=OM reason=0\nmask_error status=11 service=253 actor=T\nSTACK role=S tid=28508 low=681612148736 high=681614245888 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=681614242320 observations=12 buffer_low=0 buffer_high=0\nSTACK role=C tid=18328 low=681609199616 high=681609461760 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=681609460752 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=3476 low=681609461760 high=681609723904 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=681609722048 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=31872 low=681609723904 high=681609986048 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=681609985384 observations=22 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=24396 low=681616343040 high=681616605184 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=681616602832 observations=9 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=15456 low=681616605184 high=681616867328 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=681616865224 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=17836 low=681616867328 high=681617129472 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=681617128808 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        0,
+        1,
+        255,
+        1,
+        "OM",
+        0
+      ],
+      "independent_expected_errors": [
+        [
+          11,
+          253,
+          "T"
+        ]
+      ]
+    },
+    {
+      "scenario": "missing-os",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=missing-os startup=1 cat1=0 cat2=1 isr_task=255 errors=1 trace=OM reason=0\nmask_error status=11 service=253 actor=T\nSTACK role=S tid=5184 low=284690481152 high=284692578304 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=284692574000 observations=12 buffer_low=0 buffer_high=0\nSTACK role=C tid=28636 low=284687990784 high=284688252928 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=284688251680 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=33388 low=284694675456 high=284694937600 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=284694936960 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=36168 low=284694937600 high=284695199744 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=284695197448 observations=22 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=3204 low=284695199744 high=284695461888 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=284695460208 observations=9 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=3952 low=284695461888 high=284695724032 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=284695722632 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=7944 low=284695724032 high=284695986176 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=284695984328 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        0,
+        1,
+        255,
+        1,
+        "OM",
+        0
+      ],
+      "independent_expected_errors": [
+        [
+          11,
+          253,
+          "T"
+        ]
+      ]
+    },
+    {
+      "scenario": "missing-mixed",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 0,
+      "stdout": "pairing scenario=missing-mixed startup=1 cat1=0 cat2=1 isr_task=255 errors=1 trace=OM reason=0\nmask_error status=11 service=253 actor=T\nSTACK role=S tid=30232 low=447339298816 high=447341395968 reserve=2097152 commit=40960 guard=20480 guarantee=16384 sp=447341391952 observations=12 buffer_low=0 buffer_high=0\nSTACK role=C tid=11724 low=447335563264 high=447335825408 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=447335824432 observations=6 buffer_low=0 buffer_high=0\nSTACK role=D tid=36180 low=447335825408 high=447336087552 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=447336085232 observations=1 buffer_low=0 buffer_high=0\nSTACK role=T tid=22256 low=447336087552 high=447336349696 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=447336348328 observations=23 buffer_low=140699977592032 buffer_high=140699977596128\nSTACK role=T tid=22232 low=447336349696 high=447336611840 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=447336609440 observations=9 buffer_low=140699977596128 buffer_high=140699977600224\nSTACK role=B tid=36724 low=447336611840 high=447336873984 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=447336872616 observations=6 buffer_low=140699977657568 buffer_high=140699977661664\nSTACK role=I tid=35936 low=447336873984 high=447337136128 reserve=262144 commit=32768 guard=20480 guarantee=16384 sp=447337134952 observations=2 buffer_low=140699977661664 buffer_high=140699977665760\nlifecycle=Closed state=Ready reason=0 trace=IR threads=6 events=17 mutexes=1 resource_calls=24 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        0,
+        1,
+        255,
+        1,
+        "OM",
+        0
+      ],
+      "independent_expected_errors": [
+        [
+          11,
+          253,
+          "T"
+        ]
+      ]
+    },
+    {
+      "scenario": "disabled-first-start",
+      "failure": 0,
+      "invalid_stack": "",
+      "exit": 9,
+      "stdout": "pairing scenario=disabled-first-start startup=0 cat1=0 cat2=0 isr_task=255 errors=0 trace= reason=9\nlifecycle=Closed state=Failed reason=9 trace= threads=0 events=0 mutexes=0 resource_calls=0 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+      "stderr": "",
+      "independent_expected_pairing": [
+        0,
+        0,
+        255,
+        0,
+        "",
+        9
+      ],
+      "independent_expected_errors": []
+    }
+  ],
+  "status": "pass",
+  "representation": "workspace/build/toolchain paths normalized; observed native addresses and thread IDs retained for physical-stack and fault correlation",
+  "raw_record_sha256": "2ecc95acac4a80474d9043d2f2524ff2fa45148063b063494dcbcdf5955cdb08",
+  "raw_record_local": ".scratch/epic4/source-repetition-pairing-regression-4-18-raw.json"
+}

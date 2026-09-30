@@ -32,12 +32,13 @@ ISRType GetISRID(void);
 /** Enable a known Category 2 source; optionally clear its real pending bit.
  * @param ISRID Logical source/vector identifier.
  * @param ClearPending TRUE to consume the pending edge before enabling.
- * @return E_OK, E_OS_ID or E_OS_CALLEVEL; invalid calls do not change the source.
+ * @return E_OK, E_OS_ID, E_OS_CALLEVEL, or E_OS_NOFUNC if already enabled.
+ * @note Rejected calls preserve source state and pending, including ClearPending=TRUE.
  */
 StatusType EnableInterruptSource(ISRType ISRID, boolean ClearPending);
 /** Disable a known Category 2 source, retaining any real pending edge.
  * @param ISRID Logical source/vector identifier.
- * @return E_OK, E_OS_ID or E_OS_CALLEVEL.
+ * @return E_OK, E_OS_ID, E_OS_CALLEVEL, or E_OS_NOFUNC if already disabled.
  */
 StatusType DisableInterruptSource(ISRType ISRID);
 /** Clear a known Category 2 source's real pending bit without enabling it.

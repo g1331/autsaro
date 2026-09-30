@@ -79,7 +79,8 @@ development_status:
   # Public Counter/RTE types:17 native vectors,6 include orders,3 compiled mutations;
   # full gate94 passes; generated Counter time64 vectors/4 mutants/3 rejections verified;
   # generated timing full gate95 passes; non-StatusType reporting10/5 mutants and9/28/5 regressions verified;
-  # non-Status full gate96 passes;70 of507 rows have scoped references, all final results pending.
+  # non-Status full gate96 passes; source repetition12/6 compiled mutants and28/26 regressions verified;
+  # source repetition full gate97 passes;77 of507 rows have scoped references, all final results pending.
   # Complete507 obligation dispositions and final exits remain open.
   4-18-补齐生命周期-extended-status-hook-和中断义务: in-progress
   4-19-生成并验证-r24-11-arti-描述与-hook: backlog

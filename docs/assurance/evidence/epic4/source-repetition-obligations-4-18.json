@@ -1,0 +1,201 @@
+{
+  "format": "epic4-source-repetition-obligation-results-v1",
+  "status": "scoped verification; complete Story4.18 and Epic exits remain open",
+  "increment_baseline": "62c749e3d8dc59f4b26a997a9b0ea7a21d510191",
+  "obligations_sha256": "a691103e8dd217b12c1e838bdb6a06fcef772dc8cbafb673d2bf70b62185b18f",
+  "normative_context": [
+    "AUTOSAR CP R24-11 OS p134/13500808-00814 and p201/20291019-91021; explicit Enable ClearPending boolean semantics take precedence over the general pending-clear summary"
+  ],
+  "rows": [
+    {
+      "key": "SWS_Os_00808",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_selected_native_source_repetition_scope",
+      "verified_scope": "Three public source APIs operate installed Cat2 sources on the real native dispatcher. This increment supplements prior source-control coverage; it does not close every profile source/call context.",
+      "remaining_scope": "All507 final current-profile dispositions, complete C221/ARTI/handoff and independent story/Epic exits remain open. Historical increment statements that accepted repeated Disable are superseded for the current source profile by this00809 correction.",
+      "evidence": {
+        "artifact": "source-repetition-4-18.json",
+        "test": "epic4_interrupt_source_repetition",
+        "compiled_negative_oracles": "source-repetition-mutations-4-18.json",
+        "pairing_regression": "source-repetition-pairing-regression-4-18.json",
+        "nested_regression": "source-repetition-nested-regression-4-18.json"
+      },
+      "static_evidence": "source-repetition-static-analysis-4-18.json",
+      "implementation": [
+        "runtime/os/patches/0013-interrupt-source-repetition.patch",
+        "runtime/os/src/Os_Interrupt.c"
+      ]
+    },
+    {
+      "key": "SWS_Os_00809",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_selected_native_source_repetition_scope",
+      "verified_scope": "Already enabled/disabled installed sources return E_OS_NOFUNC before any source or pending update, including ClearPending TRUE. Task and actual Cat2 callers, All masks, optional ErrorHook and invalid/private-source precedence are checked. Six compiled status/side-effect/registration mutants are rejected.",
+      "remaining_scope": "All507 final current-profile dispositions, complete C221/ARTI/handoff and independent story/Epic exits remain open. Historical increment statements that accepted repeated Disable are superseded for the current source profile by this00809 correction.",
+      "evidence": {
+        "artifact": "source-repetition-4-18.json",
+        "test": "epic4_interrupt_source_repetition",
+        "compiled_negative_oracles": "source-repetition-mutations-4-18.json",
+        "pairing_regression": "source-repetition-pairing-regression-4-18.json",
+        "nested_regression": "source-repetition-nested-regression-4-18.json"
+      },
+      "static_evidence": "source-repetition-static-analysis-4-18.json",
+      "implementation": [
+        "runtime/os/patches/0013-interrupt-source-repetition.patch",
+        "runtime/os/src/Os_Interrupt.c"
+      ]
+    },
+    {
+      "key": "SWS_Os_00810",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_selected_native_source_repetition_scope",
+      "verified_scope": "Source StatusType failures produce exactly one configured ErrorHook with independent literal status,service,id,boolean and caller identity; absent ErrorHook reports zero. Success and repeated ClearPending return E_OK.",
+      "remaining_scope": "All507 final current-profile dispositions, complete C221/ARTI/handoff and independent story/Epic exits remain open. Historical increment statements that accepted repeated Disable are superseded for the current source profile by this00809 correction.",
+      "evidence": {
+        "artifact": "source-repetition-4-18.json",
+        "test": "epic4_interrupt_source_repetition",
+        "compiled_negative_oracles": "source-repetition-mutations-4-18.json",
+        "pairing_regression": "source-repetition-pairing-regression-4-18.json",
+        "nested_regression": "source-repetition-nested-regression-4-18.json"
+      },
+      "static_evidence": "source-repetition-static-analysis-4-18.json",
+      "implementation": [
+        "runtime/os/patches/0013-interrupt-source-repetition.patch",
+        "runtime/os/src/Os_Interrupt.c"
+      ]
+    },
+    {
+      "key": "SWS_Os_00811",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_selected_native_source_repetition_scope",
+      "verified_scope": "Legal Enable TRUE clears pending and FALSE retains it in the pairing regression, consistent with explicit p201 interface semantics. Rejected duplicate Enable TRUE retains pending and source state in the new vectors.",
+      "remaining_scope": "All507 final current-profile dispositions, complete C221/ARTI/handoff and independent story/Epic exits remain open. Historical increment statements that accepted repeated Disable are superseded for the current source profile by this00809 correction.",
+      "evidence": {
+        "artifact": "source-repetition-4-18.json",
+        "test": "epic4_interrupt_source_repetition",
+        "compiled_negative_oracles": "source-repetition-mutations-4-18.json",
+        "pairing_regression": "source-repetition-pairing-regression-4-18.json",
+        "nested_regression": "source-repetition-nested-regression-4-18.json"
+      },
+      "static_evidence": "source-repetition-static-analysis-4-18.json",
+      "implementation": [
+        "runtime/os/patches/0013-interrupt-source-repetition.patch",
+        "runtime/os/src/Os_Interrupt.c"
+      ]
+    },
+    {
+      "key": "SWS_Os_00812",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_selected_native_source_repetition_scope",
+      "verified_scope": "Legal Disable changes the real native source bit; repeated Disable returns5 without enabling the source or losing pending. Actual delivery is postponed until legal Enable FALSE.",
+      "remaining_scope": "All507 final current-profile dispositions, complete C221/ARTI/handoff and independent story/Epic exits remain open. Historical increment statements that accepted repeated Disable are superseded for the current source profile by this00809 correction.",
+      "evidence": {
+        "artifact": "source-repetition-4-18.json",
+        "test": "epic4_interrupt_source_repetition",
+        "compiled_negative_oracles": "source-repetition-mutations-4-18.json",
+        "pairing_regression": "source-repetition-pairing-regression-4-18.json",
+        "nested_regression": "source-repetition-nested-regression-4-18.json"
+      },
+      "static_evidence": "source-repetition-static-analysis-4-18.json",
+      "implementation": [
+        "runtime/os/patches/0013-interrupt-source-repetition.patch",
+        "runtime/os/src/Os_Interrupt.c"
+      ]
+    },
+    {
+      "key": "SWS_Os_00813",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_selected_native_source_repetition_scope",
+      "verified_scope": "Repeated ClearPending remains legal, clears old actual pending and permits a new request to deliver exactly once.",
+      "remaining_scope": "All507 final current-profile dispositions, complete C221/ARTI/handoff and independent story/Epic exits remain open. Historical increment statements that accepted repeated Disable are superseded for the current source profile by this00809 correction.",
+      "evidence": {
+        "artifact": "source-repetition-4-18.json",
+        "test": "epic4_interrupt_source_repetition",
+        "compiled_negative_oracles": "source-repetition-mutations-4-18.json",
+        "pairing_regression": "source-repetition-pairing-regression-4-18.json",
+        "nested_regression": "source-repetition-nested-regression-4-18.json"
+      },
+      "static_evidence": "source-repetition-static-analysis-4-18.json",
+      "implementation": [
+        "runtime/os/patches/0013-interrupt-source-repetition.patch",
+        "runtime/os/src/Os_Interrupt.c"
+      ]
+    },
+    {
+      "key": "SWS_Os_00814",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_selected_native_source_repetition_scope",
+      "verified_scope": "Controlled Windows source clearing changes only the native controller pending bit. No peripheral request or physical hardware clearing is implemented or claimed.",
+      "remaining_scope": "All507 final current-profile dispositions, complete C221/ARTI/handoff and independent story/Epic exits remain open. Historical increment statements that accepted repeated Disable are superseded for the current source profile by this00809 correction.",
+      "evidence": {
+        "artifact": "source-repetition-4-18.json",
+        "test": "epic4_interrupt_source_repetition",
+        "compiled_negative_oracles": "source-repetition-mutations-4-18.json",
+        "pairing_regression": "source-repetition-pairing-regression-4-18.json",
+        "nested_regression": "source-repetition-nested-regression-4-18.json"
+      },
+      "static_evidence": "source-repetition-static-analysis-4-18.json",
+      "implementation": [
+        "runtime/os/patches/0013-interrupt-source-repetition.patch",
+        "runtime/os/src/Os_Interrupt.c"
+      ]
+    },
+    {
+      "key": "SWS_Os_91019",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_selected_native_source_repetition_scope",
+      "verified_scope": "Public service48 retains original ISR ID in ErrorHook and maps the atomic native duplicate result2 to E_OS_NOFUNC; installed/private/unregistered identity validation precedes repetition.",
+      "remaining_scope": "All507 final current-profile dispositions, complete C221/ARTI/handoff and independent story/Epic exits remain open. Historical increment statements that accepted repeated Disable are superseded for the current source profile by this00809 correction.",
+      "evidence": {
+        "artifact": "source-repetition-4-18.json",
+        "test": "epic4_interrupt_source_repetition",
+        "compiled_negative_oracles": "source-repetition-mutations-4-18.json",
+        "pairing_regression": "source-repetition-pairing-regression-4-18.json",
+        "nested_regression": "source-repetition-nested-regression-4-18.json"
+      },
+      "static_evidence": "source-repetition-static-analysis-4-18.json",
+      "implementation": [
+        "runtime/os/patches/0013-interrupt-source-repetition.patch",
+        "runtime/os/src/Os_Interrupt.c"
+      ]
+    },
+    {
+      "key": "SWS_Os_91020",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_selected_native_source_repetition_scope",
+      "verified_scope": "Public service49 preserves the typed ClearPending flag and ID. Both duplicate boolean cases reject with5 and preserve actual pending; legal FALSE/TRUE behavior remains in28 pairing vectors.",
+      "remaining_scope": "All507 final current-profile dispositions, complete C221/ARTI/handoff and independent story/Epic exits remain open. Historical increment statements that accepted repeated Disable are superseded for the current source profile by this00809 correction.",
+      "evidence": {
+        "artifact": "source-repetition-4-18.json",
+        "test": "epic4_interrupt_source_repetition",
+        "compiled_negative_oracles": "source-repetition-mutations-4-18.json",
+        "pairing_regression": "source-repetition-pairing-regression-4-18.json",
+        "nested_regression": "source-repetition-nested-regression-4-18.json"
+      },
+      "static_evidence": "source-repetition-static-analysis-4-18.json",
+      "implementation": [
+        "runtime/os/patches/0013-interrupt-source-repetition.patch",
+        "runtime/os/src/Os_Interrupt.c"
+      ]
+    },
+    {
+      "key": "SWS_Os_91021",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_selected_native_source_repetition_scope",
+      "verified_scope": "Public ClearPending service retains idempotent successful calls and real pending-only state changes; repeated clear and subsequent fresh delivery are independently checked.",
+      "remaining_scope": "All507 final current-profile dispositions, complete C221/ARTI/handoff and independent story/Epic exits remain open. Historical increment statements that accepted repeated Disable are superseded for the current source profile by this00809 correction.",
+      "evidence": {
+        "artifact": "source-repetition-4-18.json",
+        "test": "epic4_interrupt_source_repetition",
+        "compiled_negative_oracles": "source-repetition-mutations-4-18.json",
+        "pairing_regression": "source-repetition-pairing-regression-4-18.json",
+        "nested_regression": "source-repetition-nested-regression-4-18.json"
+      },
+      "static_evidence": "source-repetition-static-analysis-4-18.json",
+      "implementation": [
+        "runtime/os/patches/0013-interrupt-source-repetition.patch",
+        "runtime/os/src/Os_Interrupt.c"
+      ]
+    }
+  ]
+}

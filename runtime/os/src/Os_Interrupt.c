@@ -173,8 +173,11 @@ static StatusType source_control(ISRType interrupt, unsigned operation, boolean 
     } else {
         taskENTER_CRITICAL();
         Os_BackendGuardService();
-        if (Os_PortInterruptSourceControl(interrupt, operation, clear) == 0) {
+        const int source_result = Os_PortInterruptSourceControl(interrupt, operation, clear);
+        if (source_result == 0) {
             result = E_OS_ID;
+        } else if (source_result == 2) {
+            result = E_OS_NOFUNC;
         }
         taskEXIT_CRITICAL();
         Os_BackendGuardService();

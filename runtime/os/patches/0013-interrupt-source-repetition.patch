@@ -1,0 +1,16 @@
+--- a/portable/MSVC-MingW/port.c
++++ b/portable/MSVC-MingW/port.c
+@@ -150,6 +150,13 @@
+         return 0;
+     }
+     bit = UINT32_C( 1 ) << interrupt;
++    /* Extended-status source pairs are not nested. Reject before any register
++     * update, including pending clear on an already enabled source. */
++    if( ( ( operation == 0U ) && ( ( ulOsDisabledSources & bit ) != 0U ) ) ||
++        ( ( operation == 1U ) && ( ( ulOsDisabledSources & bit ) == 0U ) ) )
++    {
++        return 2;
++    }
+     if( operation == 0U )
+     {
+         ulOsDisabledSources |= bit;

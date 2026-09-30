@@ -879,10 +879,10 @@ def check_interrupt_pairing(binary: Path) -> list[dict]:
         "isr-leak-all": (1, 1, 1, "CO"),
         "isr-leak-os": (1, 1, 1, "CO"),
         "isr-leak-mixed": (1, 1, 1, "CO"),
-        "source-retain": (1, 1, 0, "OC"),
-        "source-clear": (1, 1, 0, "OC"),
-        "source-enable-clear": (1, 1, 0, "OC"),
-        "source-global": (1, 1, 0, "OC"),
+        "source-retain": (1, 1, 1, "OC"),
+        "source-clear": (1, 1, 1, "OC"),
+        "source-enable-clear": (1, 1, 1, "OC"),
+        "source-global": (1, 1, 1, "OC"),
         "source-invalid": (1, 1, 7, "CO"),
         "source-hook-reject": (1, 1, 3, "CO"),
         "source-isr": (1, 1, 0, "OQC"),
@@ -909,6 +909,7 @@ def check_interrupt_pairing(binary: Path) -> list[dict]:
                           if scenario == "source-hook-reject" else
                           [(2,service,"S") for service in [48,49,50]]
                           if scenario == "source-outside-isr" else
+                          [(5,48,"T")] if scenario in ["source-retain", "source-clear", "source-enable-clear", "source-global"] else
                           [(9,252,"S")] if scenario.startswith("isr-leak-") else
                           [(11,253,"T")] if scenario.startswith("missing-") else [])
         actual = [(int(status),int(service),actor) for status,service,actor in re.findall(
@@ -980,6 +981,40 @@ def check_idle_state(binary: Path) -> list[dict]:
         require("lifecycle=Closed state=Ready reason=0" in result["stdout"], result)
         result["independent_expected_errors"] = expected
         result["scope"] = "single-core ignores CoreID65535; existing virtual-core no-halt idle loop runs on actual I stack then actual ISR wakes waiting automotive Task; started query remains DRAFT"
+        observations.append(result)
+    return observations
+
+
+def check_source_repetition(binary: Path) -> list[dict]:
+    cases = {
+        "default-enable": [(5,49,6,0,255)],
+        "enable-false": [(5,49,6,0,255)],
+        "enable-true": [(5,49,6,1,255)],
+        "disable": [(5,48,6,0,255)],
+        "disable-all": [(5,48,6,0,255)],
+        "isr-enable-false": [(5,49,6,0,5)],
+        "isr-enable-true": [(5,49,6,1,5)],
+        "isr-disable": [(5,48,6,0,5)],
+        "clear-repeat": [],
+        "invalid-kernel": [(3,49,1,1,255)],
+        "invalid-unconfigured": [(3,49,31,1,255)],
+        "unconfigured": [],
+    }
+    observations = []
+    for scenario, expected_errors in cases.items():
+        result = execute(binary, scenario)
+        parent = int(scenario.startswith("isr-"))
+        trace = "PpD" if parent else "D"
+        expected = (f"source_repeat scenario={scenario} deliveries=1 parents={parent} "
+                    f"errors={len(expected_errors)} trace={trace} reason=0")
+        actual = [tuple(map(int, row)) for row in re.findall(
+            r"source_repeat_error status=(\d+) service=(\d+) id=(\d+) clear=(\d+) caller=(\d+)",
+            result["stdout"])]
+        require(result["exit"] == 0 and not result["stderr"], result)
+        require(expected in result["stdout"] and actual == expected_errors, result)
+        require("lifecycle=Closed state=Ready reason=0" in result["stdout"], result)
+        result["independent_expected"] = expected
+        result["independent_errors"] = expected_errors
         observations.append(result)
     return observations
 
@@ -1296,6 +1331,7 @@ def main() -> None:
             "nested-interrupts",
             "counter-types",
             "nonstatus-errors",
+            "source-repetition",
             "calling-context",
             "idle-state",
         ],
@@ -1328,6 +1364,7 @@ def main() -> None:
             "nested-interrupts": "nested_interrupts.c",
             "counter-types": "counter_types.c",
             "nonstatus-errors": "nonstatus_errors.c",
+            "source-repetition": "source_repetition.c",
             "calling-context": "calling_context.c",
             "idle-state": "idle_state.c",
         }
@@ -1349,6 +1386,7 @@ def main() -> None:
             "nested-interrupts": check_nested_interrupts,
             "counter-types": check_counter_types,
             "nonstatus-errors": check_nonstatus_errors,
+            "source-repetition": check_source_repetition,
             "calling-context": check_calling_context,
             "idle-state": check_idle_state,
         }
@@ -1407,6 +1445,7 @@ def main() -> None:
             "nested-interrupts": "epic4_nested_interrupts",
             "counter-types": "epic4_public_counter_types",
             "nonstatus-errors": "epic4_nonstatus_service_errors",
+            "source-repetition": "epic4_interrupt_source_repetition",
             "calling-context": "epic4_standard_calling_context",
             "idle-state": "epic4_standard_idle_and_started_state",
         }

@@ -3819,7 +3819,17 @@
         "core_count=1"
       ],
       "final_result": "pending_current_profile_and_exit_assessment",
-      "increment_results": []
+      "increment_results": [
+        {
+          "artifact": "source-repetition-obligations-4-18.json",
+          "normalized_artifact_sha256": "279fbc09c99cb22f6d76b06ea765693bf68795a8c5e864b496862901846150ab",
+          "artifact_hash_representation": "UTF-8 sorted compact JSON; not raw local provenance",
+          "row_key": "SWS_Os_00808",
+          "scoped_result": "verified_for_selected_native_source_repetition_scope",
+          "verified_scope": "Three public source APIs operate installed Cat2 sources on the real native dispatcher. This increment supplements prior source-control coverage; it does not close every profile source/call context.",
+          "remaining_scope": "All507 final current-profile dispositions, complete C221/ARTI/handoff and independent story/Epic exits remain open. Historical increment statements that accepted repeated Disable are superseded for the current source profile by this00809 correction."
+        }
+      ]
     },
     {
       "key": "SWS_Os_00809",
@@ -3834,7 +3844,17 @@
         "core_count=1"
       ],
       "final_result": "pending_current_profile_and_exit_assessment",
-      "increment_results": []
+      "increment_results": [
+        {
+          "artifact": "source-repetition-obligations-4-18.json",
+          "normalized_artifact_sha256": "279fbc09c99cb22f6d76b06ea765693bf68795a8c5e864b496862901846150ab",
+          "artifact_hash_representation": "UTF-8 sorted compact JSON; not raw local provenance",
+          "row_key": "SWS_Os_00809",
+          "scoped_result": "verified_for_selected_native_source_repetition_scope",
+          "verified_scope": "Already enabled/disabled installed sources return E_OS_NOFUNC before any source or pending update, including ClearPending TRUE. Task and actual Cat2 callers, All masks, optional ErrorHook and invalid/private-source precedence are checked. Six compiled status/side-effect/registration mutants are rejected.",
+          "remaining_scope": "All507 final current-profile dispositions, complete C221/ARTI/handoff and independent story/Epic exits remain open. Historical increment statements that accepted repeated Disable are superseded for the current source profile by this00809 correction."
+        }
+      ]
     },
     {
       "key": "SWS_Os_00810",
@@ -3849,7 +3869,17 @@
         "core_count=1"
       ],
       "final_result": "pending_current_profile_and_exit_assessment",
-      "increment_results": []
+      "increment_results": [
+        {
+          "artifact": "source-repetition-obligations-4-18.json",
+          "normalized_artifact_sha256": "279fbc09c99cb22f6d76b06ea765693bf68795a8c5e864b496862901846150ab",
+          "artifact_hash_representation": "UTF-8 sorted compact JSON; not raw local provenance",
+          "row_key": "SWS_Os_00810",
+          "scoped_result": "verified_for_selected_native_source_repetition_scope",
+          "verified_scope": "Source StatusType failures produce exactly one configured ErrorHook with independent literal status,service,id,boolean and caller identity; absent ErrorHook reports zero. Success and repeated ClearPending return E_OK.",
+          "remaining_scope": "All507 final current-profile dispositions, complete C221/ARTI/handoff and independent story/Epic exits remain open. Historical increment statements that accepted repeated Disable are superseded for the current source profile by this00809 correction."
+        }
+      ]
     },
     {
       "key": "SWS_Os_00811",
@@ -3864,7 +3894,17 @@
         "core_count=1"
       ],
       "final_result": "pending_current_profile_and_exit_assessment",
-      "increment_results": []
+      "increment_results": [
+        {
+          "artifact": "source-repetition-obligations-4-18.json",
+          "normalized_artifact_sha256": "279fbc09c99cb22f6d76b06ea765693bf68795a8c5e864b496862901846150ab",
+          "artifact_hash_representation": "UTF-8 sorted compact JSON; not raw local provenance",
+          "row_key": "SWS_Os_00811",
+          "scoped_result": "verified_for_selected_native_source_repetition_scope",
+          "verified_scope": "Legal Enable TRUE clears pending and FALSE retains it in the pairing regression, consistent with explicit p201 interface semantics. Rejected duplicate Enable TRUE retains pending and source state in the new vectors.",
+          "remaining_scope": "All507 final current-profile dispositions, complete C221/ARTI/handoff and independent story/Epic exits remain open. Historical increment statements that accepted repeated Disable are superseded for the current source profile by this00809 correction."
+        }
+      ]
     },
     {
       "key": "SWS_Os_00812",
@@ -3879,7 +3919,17 @@
         "core_count=1"
       ],
       "final_result": "pending_current_profile_and_exit_assessment",
-      "increment_results": []
+      "increment_results": [
+        {
+          "artifact": "source-repetition-obligations-4-18.json",
+          "normalized_artifact_sha256": "279fbc09c99cb22f6d76b06ea765693bf68795a8c5e864b496862901846150ab",
+          "artifact_hash_representation": "UTF-8 sorted compact JSON; not raw local provenance",
+          "row_key": "SWS_Os_00812",
+          "scoped_result": "verified_for_selected_native_source_repetition_scope",
+          "verified_scope": "Legal Disable changes the real native source bit; repeated Disable returns5 without enabling the source or losing pending. Actual delivery is postponed until legal Enable FALSE.",
+          "remaining_scope": "All507 final current-profile dispositions, complete C221/ARTI/handoff and independent story/Epic exits remain open. Historical increment statements that accepted repeated Disable are superseded for the current source profile by this00809 correction."
+        }
+      ]
     },
     {
       "key": "SWS_Os_00813",
@@ -3894,7 +3944,17 @@
         "core_count=1"
       ],
       "final_result": "pending_current_profile_and_exit_assessment",
-      "increment_results": []
+      "increment_results": [
+        {
+          "artifact": "source-repetition-obligations-4-18.json",
+          "normalized_artifact_sha256": "279fbc09c99cb22f6d76b06ea765693bf68795a8c5e864b496862901846150ab",
+          "artifact_hash_representation": "UTF-8 sorted compact JSON; not raw local provenance",
+          "row_key": "SWS_Os_00813",
+          "scoped_result": "verified_for_selected_native_source_repetition_scope",
+          "verified_scope": "Repeated ClearPending remains legal, clears old actual pending and permits a new request to deliver exactly once.",
+          "remaining_scope": "All507 final current-profile dispositions, complete C221/ARTI/handoff and independent story/Epic exits remain open. Historical increment statements that accepted repeated Disable are superseded for the current source profile by this00809 correction."
+        }
+      ]
     },
     {
       "key": "SWS_Os_00814",
@@ -3909,7 +3969,17 @@
         "core_count=1"
       ],
       "final_result": "pending_current_profile_and_exit_assessment",
-      "increment_results": []
+      "increment_results": [
+        {
+          "artifact": "source-repetition-obligations-4-18.json",
+          "normalized_artifact_sha256": "279fbc09c99cb22f6d76b06ea765693bf68795a8c5e864b496862901846150ab",
+          "artifact_hash_representation": "UTF-8 sorted compact JSON; not raw local provenance",
+          "row_key": "SWS_Os_00814",
+          "scoped_result": "verified_for_selected_native_source_repetition_scope",
+          "verified_scope": "Controlled Windows source clearing changes only the native controller pending bit. No peripheral request or physical hardware clearing is implemented or claimed.",
+          "remaining_scope": "All507 final current-profile dispositions, complete C221/ARTI/handoff and independent story/Epic exits remain open. Historical increment statements that accepted repeated Disable are superseded for the current source profile by this00809 correction."
+        }
+      ]
     },
     {
       "key": "SWS_Os_91025",
@@ -6243,6 +6313,15 @@
           "scoped_result": "partially_verified",
           "verified_scope": "EnableInterruptSource preserves or clears actual pending according to typed boolean flag, including global application mask; independent literal output proves delivery/no delivery.",
           "remaining_scope": "Full lifecycle/global-hook calling table remains open; actual Cat2 source success and no-active-ISR rejection now verified."
+        },
+        {
+          "artifact": "source-repetition-obligations-4-18.json",
+          "normalized_artifact_sha256": "279fbc09c99cb22f6d76b06ea765693bf68795a8c5e864b496862901846150ab",
+          "artifact_hash_representation": "UTF-8 sorted compact JSON; not raw local provenance",
+          "row_key": "SWS_Os_91020",
+          "scoped_result": "verified_for_selected_native_source_repetition_scope",
+          "verified_scope": "Public service49 preserves the typed ClearPending flag and ID. Both duplicate boolean cases reject with5 and preserve actual pending; legal FALSE/TRUE behavior remains in28 pairing vectors.",
+          "remaining_scope": "All507 final current-profile dispositions, complete C221/ARTI/handoff and independent story/Epic exits remain open. Historical increment statements that accepted repeated Disable are superseded for the current source profile by this00809 correction."
         }
       ]
     },
@@ -6268,6 +6347,15 @@
           "scoped_result": "partially_verified",
           "verified_scope": "DisableInterruptSource operates actual Cat2 source state; repeated valid disable accepted, pending retained; invalid/private/Cat1/unknown sources and forbiddenHook rejected.",
           "remaining_scope": "Full lifecycle/global-hook calling table remains open; actual Cat2 source success and no-active-ISR rejection now verified."
+        },
+        {
+          "artifact": "source-repetition-obligations-4-18.json",
+          "normalized_artifact_sha256": "279fbc09c99cb22f6d76b06ea765693bf68795a8c5e864b496862901846150ab",
+          "artifact_hash_representation": "UTF-8 sorted compact JSON; not raw local provenance",
+          "row_key": "SWS_Os_91019",
+          "scoped_result": "verified_for_selected_native_source_repetition_scope",
+          "verified_scope": "Public service48 retains original ISR ID in ErrorHook and maps the atomic native duplicate result2 to E_OS_NOFUNC; installed/private/unregistered identity validation precedes repetition.",
+          "remaining_scope": "All507 final current-profile dispositions, complete C221/ARTI/handoff and independent story/Epic exits remain open. Historical increment statements that accepted repeated Disable are superseded for the current source profile by this00809 correction."
         }
       ]
     },
@@ -6293,6 +6381,15 @@
           "scoped_result": "partially_verified",
           "verified_scope": "ClearPendingInterrupt clears actual pending while source remains disabled; fresh request delivers after enable.",
           "remaining_scope": "Full lifecycle/global-hook calling table remains open; actual Cat2 source success and no-active-ISR rejection now verified."
+        },
+        {
+          "artifact": "source-repetition-obligations-4-18.json",
+          "normalized_artifact_sha256": "279fbc09c99cb22f6d76b06ea765693bf68795a8c5e864b496862901846150ab",
+          "artifact_hash_representation": "UTF-8 sorted compact JSON; not raw local provenance",
+          "row_key": "SWS_Os_91021",
+          "scoped_result": "verified_for_selected_native_source_repetition_scope",
+          "verified_scope": "Public ClearPending service retains idempotent successful calls and real pending-only state changes; repeated clear and subsequent fresh delivery are independently checked.",
+          "remaining_scope": "All507 final current-profile dispositions, complete C221/ARTI/handoff and independent story/Epic exits remain open. Historical increment statements that accepted repeated Disable are superseded for the current source profile by this00809 correction."
         }
       ]
     },
