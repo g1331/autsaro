@@ -63,7 +63,9 @@ npm ci --prefix ui
 python scripts/verify.py --scope all
 ```
 
-组合构建与测试可运行 `python scripts/quality.py`：检查仓库源码的 UTF-8、末尾换行、空白和 Python 语法，对**相对指定 story 起始提交新改的行**分别用 rustfmt、clang-format 和 Prettier 检查格式，并用 GCC 严格 C99 模式检查主机运行时源码和独立头文件的语法；随后执行 UI ESLint 与严格类型构建、核心测试、桌面构建及 Rust Clippy 的 correctness/suspicious 检查。
+源码检查使用 `python scripts/quality.py`：检查 UTF-8、末尾换行、空白和 Python 语法，对**相对指定 story 起始提交新改的行**分别用 rustfmt、clang-format 和 Prettier 检查格式，并用 GCC 严格 C99 模式检查主机运行时源码和独立头文件的语法。`python scripts/verify.py --scope all` 组合这些检查、UI ESLint 与严格类型构建、核心测试、桌面构建及 Rust Clippy 的 correctness/suspicious 检查；具体运行范围按 BMad 规格选择。
+
+Epic 4 的生成工件测试使用 PATH 中的 Cppcheck 检查两个实际生成的 RTE 翻译单元，参数为 C99、win64 及 warning/style/performance/portability；当前验证版本为 2.21.0。该检查不运行 MISRA 全规则扫描，也不写报告文件。
 
 BMad 开发规格记录起始提交，并用 `--base` 显式指定；省略时，未提交的改动对比 `HEAD`，干净工作区复核上一提交时对比 `HEAD^`。修改旧文件无需顺带全文件重排，但新改行须符合对应格式器。
 

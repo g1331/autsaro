@@ -4,6 +4,7 @@
 //! component contracts and ECU integration consume the same checked plan.
 
 mod arti;
+mod artifacts;
 mod bsw_sources;
 mod catalog;
 mod communication;

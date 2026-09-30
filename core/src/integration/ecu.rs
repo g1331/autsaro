@@ -523,6 +523,11 @@ impl ValidatedIntegrationPlan {
                 if extended_status { "EXTENDED" } else { "STANDARD" }
             ).as_bytes(),
         );
+        files.insert(
+            "include/Rte_MemMap.h".into(),
+            include_bytes!("../../../runtime/ecu/include/Rte_MemMap.h").to_vec(),
+        );
+        files.extend(super::artifacts::files(plan, &files).map_err(reject)?);
         let files = generator::seal_files(files.into_iter().collect());
         super::link_check::verify(&files).map_err(reject)?;
         Ok(EcuIntegrationFiles { files })

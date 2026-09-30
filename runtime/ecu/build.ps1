@@ -171,4 +171,26 @@ $taskEntries = @($symbols | Select-String '\(sec\s+(\d+)\)[^\r\n]*\sOs_TaskEntry
 if ($taskEntries.Count -ne 1 -or [int]$taskEntries[0].Matches[0].Groups[1].Value -ne $codeSection) {
     throw 'The generated Task is outside its code section.'
 }
+$rteCode = @($sections | Select-String '^\s*(\d+)\s+\.rte_code\s+([0-9a-fA-F]+)[^\r\n]*$')
+if ($rteCode.Count -ne 1 -or [Convert]::ToInt32($rteCode[0].Matches[0].Groups[2].Value, 16) -le 0) {
+    throw 'The generated RTE code section is missing.'
+}
+$rteSection = [int]$rteCode[0].Matches[0].Groups[1].Value + 1
+$rteFlags = $sections[$rteCode[0].LineNumber]
+if ($rteFlags -notmatch 'CODE' -or $rteFlags -notmatch 'READONLY' -or $rteFlags -notmatch 'ALLOC') {
+    throw 'The RTE section must be allocated read-only executable code.'
+}
+[xml]$description = Get-Content -LiteralPath (Join-Path $projectRoot 'descriptions/Host_Implementation.arxml') -Raw -Encoding UTF8
+$namespace = New-Object System.Xml.XmlNamespaceManager($description.NameTable)
+$namespace.AddNamespace('ar', 'http://autosar.org/schema/r4.0')
+$rteEntries = $description.SelectNodes("//ar:BSW-MODULE-DESCRIPTION[ar:SHORT-NAME='Rte']/ar:IMPLEMENTED-ENTRYS/ar:BSW-MODULE-ENTRY-REF-CONDITIONAL/ar:BSW-MODULE-ENTRY-REF", $namespace)
+if ($rteEntries.Count -eq 0) { throw 'The RTE implementation description has no actual entry.' }
+foreach ($reference in $rteEntries) {
+    $entryName = $reference.InnerText.Substring($reference.InnerText.LastIndexOf('/') + 1)
+    if ($entryName -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') { throw 'Invalid RTE entry identity.' }
+    $entry = @($symbols | Select-String ('\(sec\s+(\d+)\)[^\r\n]*\s' + $entryName + '$'))
+    if ($entry.Count -ne 1 -or [int]$entry[0].Matches[0].Groups[1].Value -ne $rteSection) {
+        throw "The described RTE entry is outside its code section: $entryName"
+    }
+}
 Write-Output "Built ECU native entry: $binary"

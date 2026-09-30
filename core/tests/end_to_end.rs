@@ -46,6 +46,15 @@ mod epic4_os_configuration;
 #[path = "support/epic4_arti.rs"]
 mod epic4_arti;
 
+#[path = "support/epic4_artifacts.rs"]
+mod epic4_artifacts;
+
+#[cfg(windows)]
+#[test]
+fn epic4_generated_artifact_obligations() {
+    epic4_artifacts::verify();
+}
+
 #[cfg(windows)]
 #[test]
 fn epic4_arti_description_and_hooks() {

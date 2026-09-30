@@ -19,7 +19,9 @@ pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec
     let mut header = String::from(
         "/** @file Generated synchronous Counter service bindings.\n * Values are OS ticks, as specified by SWS_Os_00560, despite the type name.\n */\n#ifndef AUTOSAR_GENERATED_RTE_OS_H\n#define AUTOSAR_GENERATED_RTE_OS_H\n#include \"Os.h\"\n#include \"Rte_Os_Type.h\"\n",
     );
-    let mut source = String::from("#include \"Rte_Os.h\"\n");
+    let mut source = String::from(
+        "#include \"Rte_Os.h\"\n#define RTE_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n",
+    );
     for (operation, arguments, parameters, forwarded, errors) in [
         (
             "GetCounterValue",
@@ -60,8 +62,9 @@ pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec
         };
         writeln!(header, "/** @brief Synchronous {operation}; preserves native errors and output semantics.\n * @param CounterID Port-defined Counter handle for the server.\n * @param Value Counter ticks; OUT for GetCounterValue, INOUT for GetElapsedValue.\n{elapsed_doc} * @return Native OS service result.\n */\nStatusType {symbol}(CounterType CounterID, {parameters});").unwrap();
         writeln!(header, "/** @brief Call the selected OsService port; values are ticks.\n * @param Value Caller-owned tick value; not retained.\n{elapsed_doc} * @return Native OS service result.\n */\nStatusType Rte_Call_OsService_{operation}({parameters});").unwrap();
-        writeln!(source, "StatusType {symbol}(CounterType CounterID, {parameters}) {{\n    return {operation}(CounterID, {forwarded});\n}}\nStatusType Rte_Call_OsService_{operation}({parameters}) {{\n    return {symbol}({counter_symbol}, {forwarded});\n}}").unwrap();
+        writeln!(source, "RTE_CODE StatusType {symbol}(CounterType CounterID, {parameters}) {{\n    return {operation}(CounterID, {forwarded});\n}}\nRTE_CODE StatusType Rte_Call_OsService_{operation}({parameters}) {{\n    return {symbol}({counter_symbol}, {forwarded});\n}}").unwrap();
     }
+    source.push_str("#define RTE_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n");
     let mut errors = String::new();
     for (name, code) in [
         ("E_OS_ACCESS", 1),

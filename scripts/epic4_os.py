@@ -1465,6 +1465,7 @@ def check_counter_service(directory: Path, project: Path, counter: str) -> None:
     shutil.copytree(TARGET, target)
     shutil.copytree(project / "os/include", target / "include", dirs_exist_ok=True)
     shutil.copyfile(project / "include/Rte_Os.h", target / "include/Rte_Os.h")
+    shutil.copyfile(project / "include/Rte_MemMap.h", target / "include/Rte_MemMap.h")
     source = directory / "Rte_OsService.c"
     original = (project / "src/Rte_OsService.c").read_text(encoding="utf-8")
     source.write_text(original, encoding="utf-8")

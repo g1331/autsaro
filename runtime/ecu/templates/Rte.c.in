@@ -6,12 +6,15 @@
 #include "@CLIENT_HEADER@"
 #include <string.h>
 
-static int available(void) {
+#define RTE_START_SEC_CODE
+#include "Rte_MemMap.h"
+
+RTE_CODE static int available(void) {
     Can_ControllerStateType mode;
     return (Ecu_TargetIsOwner() != 0) && (Can_GetControllerMode(0u, &mode) == E_OK) &&
            (mode == CAN_CS_STARTED);
 }
-Std_ReturnType Com_SendSignal(Com_SignalIdType SignalId, const void *SignalDataPtr) {
+RTE_CODE Std_ReturnType Com_SendSignal(Com_SignalIdType SignalId, const void *SignalDataPtr) {
     uint32 value;
     if ((available() == 0) || (SignalDataPtr == NULL) || (SignalId != @TX_ID@u)) {
         return COM_SERVICE_NOT_AVAILABLE;
@@ -19,7 +22,7 @@ Std_ReturnType Com_SendSignal(Com_SignalIdType SignalId, const void *SignalDataP
     (void)memcpy(&value, SignalDataPtr, sizeof(value));
     return (Com_SetSignal(SignalId, value) == ECU_OK) ? E_OK : COM_SERVICE_NOT_AVAILABLE;
 }
-Std_ReturnType Com_ReceiveSignal(Com_SignalIdType SignalId, void *SignalDataPtr) {
+RTE_CODE Std_ReturnType Com_ReceiveSignal(Com_SignalIdType SignalId, void *SignalDataPtr) {
     uint32 value;
     uint8_t valid;
     if ((available() == 0) || (SignalDataPtr == NULL) || (SignalId != @RX_ID@u)) {
@@ -33,25 +36,28 @@ Std_ReturnType Com_ReceiveSignal(Com_SignalIdType SignalId, void *SignalDataPtr)
     (void)memcpy(SignalDataPtr, &value, sizeof(value));
     return E_OK;
 }
-Std_ReturnType @READ_API@(uint32 *data) {
+RTE_CODE Std_ReturnType @READ_API@(uint32 *data) {
     if (Com_ReceiveSignal(@RX_ID@u, data) != E_OK) {
         return RTE_E_COM_STOPPED;
     }
     return Ecu_TargetReceiveStatus();
 }
-Std_ReturnType @WRITE_API@(uint32 data) { return Com_SendSignal(@TX_ID@u, &data); }
-Std_ReturnType @CALL_API@(@DATATYPE@ Data) {
+RTE_CODE Std_ReturnType @WRITE_API@(uint32 data) { return Com_SendSignal(@TX_ID@u, &data); }
+RTE_CODE Std_ReturnType @CALL_API@(@DATATYPE@ Data) {
     if ((available() == 0) || (Data == NULL)) {
         return E_NOT_OK;
     }
     return @SERVER_API@(Data);
 }
-Std_ReturnType @CLIENT_API@(@DATATYPE@ Data) {
+RTE_CODE Std_ReturnType @CLIENT_API@(@DATATYPE@ Data) {
     return @CALL_API@(Data);
 }
-Std_ReturnType Ecu_TargetReadDid(uint8_t *data) { return @CLIENT_API@(data); }
-uint8_t Ecu_TargetInitializeRte(void) {
+RTE_CODE Std_ReturnType Ecu_TargetReadDid(uint8_t *data) { return @CLIENT_API@(data); }
+RTE_CODE uint8_t Ecu_TargetInitializeRte(void) {
     Ecu_TargetAssertOwner();
     Ecu_ApplicationInitialize();
     return (Com_SetSignal(@TX_ID@u, @TX_INITIAL@u) == ECU_OK) ? E_OK : E_NOT_OK;
 }
+
+#define RTE_STOP_SEC_CODE
+#include "Rte_MemMap.h"
