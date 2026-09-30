@@ -33,4 +33,6 @@ cargo test --manifest-path core/Cargo.toml
 
 标准入口通过OS_START_SEC_CODE／OS_STOP_SEC_CODE与重复包含Os_MemMap.h声明，固定GCC目标的OS_CODE属性将Task、ISR、AlarmCallback及Hook放入只读可执行.os_code段；嵌套、错配、冲突和未支持标记明确拒绝。先包含Os.h，再开始映射，结束后再次包含Os_MemMap.h。参考配置没有SwAddrMethod位置引用，使用默认CODE。
 
-当前后续产品工作包括Counter OsService、ARTI、适用模块描述及新目标交接；对应Epic4故事仍须实现和验证。
+生成工程的include/Rte_Os.h与src/Rte_OsService.c提供同步Counter服务。Rte_Call_OsService_GetCounterValue与Rte_Call_OsService_GetElapsedValue绑定配置的Counter句柄，直接调用原生OS接口；输出为tick及tick差（SWS_Os_00560），不按TimeInMicrosecondsType名称额外换算。服务器OsService_{Counter}_GetCounterValue／GetElapsedValue接受CounterType端口定义参数。os/Os_Service.arxml描述OsService提供端口、服务接口、共享类型、错误及Runnable；受支持的单Counter配置句柄为0。调用方拥有输出存储，拒绝调用保留原生错误、ErrorHook参数快照与输出契约。
+
+当前后续产品工作包括ARTI、适用模块描述及新目标交接；对应Epic4故事仍须实现和验证。

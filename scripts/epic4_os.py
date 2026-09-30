@@ -84,7 +84,8 @@ def verify_vector_section(binary: Path, tool: Path) -> None:
 
 
 def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...] = (),
-          target: Path | None = None) -> tuple[Path, dict]:
+          target: Path | None = None,
+          extra_sources: tuple[Path, ...] = ()) -> tuple[Path, dict]:
     target = TARGET if target is None else target
     verify_sources()
     cc = compiler()
@@ -142,6 +143,7 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
         str(binary),
     ]
     command[1:1] = ["-D" + value for value in defines]
+    command[1:1] = [str(source) for source in extra_sources]
     if harness == "native_stack.c":
         command.insert(1, "-DOS_STACK_TESTS")
     if harness == "activation.c":
@@ -1403,6 +1405,52 @@ def verify_code_section(binary: Path, tool: Path, names: list[str]) -> None:
                                     symbols, re.MULTILINE))
         if len(functions) != 1 or int(functions[0][1]) != int(code[0][1]) + 1:
             raise ValueError(f"OS entry is outside its code section: {name}")
+
+
+def check_counter_service(directory: Path, project: Path, counter: str) -> None:
+    target = directory / "target"
+    shutil.copytree(TARGET, target)
+    shutil.copytree(project / "os/include", target / "include", dirs_exist_ok=True)
+    shutil.copyfile(project / "include/Rte_Os.h", target / "include/Rte_Os.h")
+    source = directory / "Rte_OsService.c"
+    original = (project / "src/Rte_OsService.c").read_text(encoding="utf-8")
+    source.write_text(original, encoding="utf-8")
+    defines = (f"SERVICE_GET=OsService_{counter}_GetCounterValue",
+               f"SERVICE_ELAPSED=OsService_{counter}_GetElapsedValue")
+    for name, text, exit_code in [
+        ("actual", original, 0),
+        ("wrong-binding", original.replace(f"OS_COUNTER_ID_{counter},", "UINT32_MAX,"), 7),
+        ("wrong-units", original.replace("return GetCounterValue(CounterID, Value);",
+             "StatusType result = GetCounterValue(CounterID, Value);\n"
+             "    if (result == E_OK) { *Value *= UINT64_C(1000); }\n    return result;"), 7),
+    ]:
+        if name != "actual":
+            require(text != original, "service mutation did not apply")
+        source.write_text(text, encoding="utf-8")
+        stage = directory / name
+        stage.mkdir()
+        binary, _ = build(stage, "counter_service.c", defines, target, (source,))
+        result = execute(binary, name)
+        require(result["exit"] == exit_code and not result["stderr"], result)
+        if name == "actual":
+            require("counter_service ticks=0 wrap=2 errors=7 reason=0" in result["stdout"], result)
+    for name, mutant, expected in [
+        ("disconnected", original.replace("StatusType Rte_Call_OsService_GetCounterValue(",
+                                          "StatusType Disconnected_GetCounterValue("),
+         "Rte_Call_OsService_GetCounterValue"),
+        ("wrong-signature", original.replace("TimeInMicrosecondsType *Value", "uint32_t *Value"),
+         "conflicting types"),
+    ]:
+        require(mutant != original, "service signature mutation did not apply")
+        source.write_text(mutant, encoding="utf-8")
+        stage = directory / name
+        stage.mkdir()
+        try:
+            build(stage, "counter_service.c", defines, target, (source,))
+        except RuntimeError as error:
+            require(expected in str(error), str(error))
+        else:
+            raise AssertionError(f"{name} Counter client linked successfully")
 
 
 def check_memory_mapping(directory: Path) -> None:

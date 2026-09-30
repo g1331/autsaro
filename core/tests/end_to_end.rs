@@ -37,6 +37,15 @@ mod epic4_timing;
 #[path = "support/epic4_counter_time.rs"]
 mod epic4_counter_time;
 
+#[path = "support/epic4_os_service.rs"]
+mod epic4_os_service;
+
+#[cfg(windows)]
+#[test]
+fn epic4_generated_counter_service() {
+    epic4_os_service::verify();
+}
+
 #[path = "support/epic4_status.rs"]
 mod epic4_status;
 

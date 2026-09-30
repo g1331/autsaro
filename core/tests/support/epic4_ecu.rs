@@ -174,7 +174,7 @@ fn check_entry_sections(binary: &Path) {
     }
 }
 
-fn run_public_command(
+pub(super) fn run_public_command(
     command: &mut Command,
     directory: &Path,
     name: &str,

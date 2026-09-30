@@ -15,6 +15,7 @@ pub(crate) mod editor;
 mod graph;
 mod link_check;
 mod offline;
+mod os_service;
 mod plan;
 mod routing;
 mod schedule;
