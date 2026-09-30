@@ -3,9 +3,13 @@
 #include "Ecu_Config.h"
 #include "Os_Mailbox.h"
 
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 TASK(@TASK_SYMBOL@) {
     Ecu_TargetTask();
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 static const Os_TaskConfig tasks[] = {
     {
         .id = @TASK_SYMBOL@,

@@ -269,6 +269,27 @@ fn epic4_public_consumer_watchdog() {
 
 #[cfg(windows)]
 #[test]
+fn epic4_os_memory_mapping() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let output = Command::new("python")
+        .arg(root.join("scripts/epic4_os.py"))
+        .args(["--suite", "memory-mapping"])
+        .current_dir(root)
+        .output()
+        .expect("compile and link OS entry memory mappings and their rejection cases");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).starts_with(
+        "epic4_os_memory_mapping PASS: 10 linked entries; 6 rejected compile/link cases"
+    ));
+}
+
+#[cfg(windows)]
+#[test]
 fn epic4_interrupt_vector_section() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let output = Command::new("python")

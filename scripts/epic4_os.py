@@ -1385,6 +1385,74 @@ def check_vector_mutations(directory: Path) -> None:
                 raise AssertionError("missing vector section passed its linked contract check")
 
 
+def verify_code_section(binary: Path, tool: Path, names: list[str]) -> None:
+    output = subprocess.run([str(tool), "-h", str(binary)], capture_output=True,
+                            text=True, check=True).stdout
+    code = list(re.finditer(
+        r"^\s*(\d+)\s+\.os_code\s+([0-9a-fA-F]+)[^\n]*\n([^\n]+)",
+        output, re.MULTILINE,
+    ))
+    if len(code) != 1 or int(code[0][2], 16) == 0:
+        raise ValueError("OS entry code section is missing")
+    if not all(flag in code[0][3] for flag in ("CODE", "READONLY", "ALLOC")):
+        raise ValueError("OS entry section must be allocated read-only executable code")
+    symbols = subprocess.run([str(tool), "-t", str(binary)], capture_output=True,
+                             text=True, check=True).stdout
+    for name in names:
+        functions = list(re.finditer(r"\(sec\s+(\d+)\)[^\n]*\s" + re.escape(name) + r"$",
+                                    symbols, re.MULTILINE))
+        if len(functions) != 1 or int(functions[0][1]) != int(code[0][1]) + 1:
+            raise ValueError(f"OS entry is outside its code section: {name}")
+
+
+def check_memory_mapping(directory: Path) -> None:
+    cc = compiler()
+    tool = Path(shutil.which(cc) or cc).parent / "objdump.exe"
+    headers = directory / "include"
+    shutil.copytree(TARGET / "include", headers)
+    flags = [cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-I", str(headers),
+             "-I", str(ROOT / "runtime/include")]
+    source = TARGET / "tests/memory_mapping.c"
+    binary = directory / "memory_mapping.exe"
+    subprocess.run([*flags, str(source), "-o", str(binary)], check=True, timeout=60)
+    names = ["Os_TaskEntry_FirstTask", "Os_TaskEntry_SecondTask", "Os_IsrEntry_FirstISR",
+             "Os_IsrEntry_SecondISR", "AlarmBody", "ErrorHook", "PreTaskHook", "PostTaskHook",
+             "StartupHook", "ShutdownHook"]
+    verify_code_section(binary, tool, names)
+    ran = subprocess.run([str(binary)], capture_output=True, text=True, timeout=5, check=True)
+    require(ran.stdout.strip() == "memory_mapping calls=10" and not ran.stderr, ran.stdout)
+    for name, markers, expected in [
+        ("nested", ["OS_START_SEC_CODE", "OS_START_SEC_CODE"], "Nested OS code section"),
+        ("unmatched-stop", ["OS_STOP_SEC_CODE"], "stopped without a matching start"),
+        ("conflicting", [], "Conflicting OS memory mapping markers"),
+        ("unsupported", ["OS_START_SEC_OTHER"], "Unsupported or missing OS memory mapping marker"),
+        ("attribute-override", [], "OS_CODE override is unsupported"),
+    ]:
+        if name == "conflicting":
+            text = '#include "Os.h"\n#define OS_START_SEC_CODE\n#define OS_STOP_SEC_CODE\n#include "Os_MemMap.h"\n'
+        elif name == "attribute-override":
+            text = '#define OS_CODE\n#include "Os.h"\n'
+        else:
+            text = '#include "Os.h"\n' + ''.join(
+                f'#define {marker}\n#include "Os_MemMap.h"\n' for marker in markers)
+        rejected = subprocess.run([*flags, "-x", "c", "-fsyntax-only", "-"], input=text,
+                                  capture_output=True, text=True, check=False, timeout=60)
+        require(rejected.returncode != 0 and expected in rejected.stderr, rejected.stderr)
+    header = headers / "Os_MemMap.h"
+    original = header.read_text(encoding="utf-8")
+    attribute = '__attribute__((section(".os_code")))'
+    require(original.count(attribute) == 1, "code-section mutation did not apply")
+    header.write_text(original.replace(attribute, ""), encoding="utf-8")
+    mutant = directory / "missing-code-section.exe"
+    subprocess.run([*flags, str(source), "-o", str(mutant)], check=True, timeout=60)
+    try:
+        verify_code_section(mutant, tool, names)
+    except ValueError as error:
+        require("code section is missing" in str(error), str(error))
+    else:
+        raise AssertionError("unmapped entry definitions passed the linked section check")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -1412,6 +1480,7 @@ def main() -> None:
             "source-repetition",
             "entry-bodies",
             "vector-section",
+            "memory-mapping",
             "status-modes",
             "calling-context",
             "idle-state",
@@ -1420,6 +1489,10 @@ def main() -> None:
     )
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="autosar-epic4-os-") as temporary:
+        if args.suite == "memory-mapping":
+            check_memory_mapping(Path(temporary))
+            print("epic4_os_memory_mapping PASS: 10 linked entries; 6 rejected compile/link cases")
+            return
         if args.suite == "vector-section":
             check_vector_mutations(Path(temporary))
             print("epic4_interrupt_vector_section PASS: actual Win64 vector table; 2 rejected compiled mutations")

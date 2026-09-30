@@ -171,6 +171,8 @@ static void stage(unsigned number) {
     (void)number;
 #endif
 }
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 void StartupHook(void) {
     const Can_ConfigType driver = {unexpected_sink};
     Can_ControllerStateType mode;
@@ -213,6 +215,10 @@ void StartupHook(void) {
     stage(8u);
     (void)InterlockedExchange(&lifecycle, (LONG)ECU_TARGET_READY);
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 void ShutdownHook(StatusType Error) {
     LONG state = (Error == E_OK) ? (LONG)ECU_TARGET_CLOSED : (LONG)ECU_TARGET_FAILED;
     (void)InterlockedExchange(&lifecycle, state);
@@ -220,6 +226,8 @@ void ShutdownHook(StatusType Error) {
     Ecu_TargetTestShutdown(Error);
 #endif
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 void Ecu_TargetRecordReceive(uint64_t at) {
     Ecu_TargetAssertOwner();
     received = 1u;

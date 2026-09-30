@@ -245,7 +245,11 @@ OSServiceIdType Os_ErrorServiceId(void);
 #define OSError_GetScheduleTableStatus_ScheduleStatus()                                            \
     (Os_ErrorParametersCurrent()->service_GetScheduleTableStatus.ScheduleStatus)
 #endif
-void ErrorHook(StatusType Error);
-void PreTaskHook(void);
-void PostTaskHook(void);
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_CODE void ErrorHook(StatusType Error);
+OS_CODE void PreTaskHook(void);
+OS_CODE void PostTaskHook(void);
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #endif

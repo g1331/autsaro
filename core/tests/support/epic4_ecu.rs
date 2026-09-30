@@ -131,6 +131,49 @@ fn check_vector_section(binary: &Path) {
     assert!(tables[0].contains("0x0000000000000000 Os_InterruptVectorTable"));
 }
 
+fn check_entry_sections(binary: &Path) {
+    let output = Command::new("objdump")
+        .arg("-h")
+        .arg(binary)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let text = String::from_utf8(output.stdout).unwrap();
+    let row = text
+        .lines()
+        .map(|line| line.split_whitespace().collect::<Vec<_>>())
+        .find(|fields| fields.get(1) == Some(&".os_code"))
+        .expect("generated OS entry code has its actual linked section");
+    let section = row[0].parse::<u32>().unwrap() + 1;
+    let output = Command::new("objdump")
+        .arg("-t")
+        .arg(binary)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let text = String::from_utf8(output.stdout).unwrap();
+    for name in [
+        "Os_TaskEntry_OS_TASK_ID_Task_Ecu",
+        "ErrorHook",
+        "PreTaskHook",
+        "PostTaskHook",
+        "StartupHook",
+        "ShutdownHook",
+    ] {
+        let suffix = format!(" {name}");
+        let rows: Vec<_> = text
+            .lines()
+            .filter(|line| line.ends_with(&suffix))
+            .collect();
+        assert_eq!(rows.len(), 1, "{name}: {text}");
+        assert!(
+            rows[0].contains(&format!("(sec {section:2})")),
+            "{name}: {}",
+            rows[0]
+        );
+    }
+}
+
 fn run_public_command(
     command: &mut Command,
     directory: &Path,
@@ -373,6 +416,7 @@ pub fn verify() {
         String::from_utf8_lossy(&compiled.stderr)
     );
     check_vector_section(&build.join("ecu_probe.exe"));
+    check_entry_sections(&build.join("ecu_probe.exe"));
     let normal = run_probe(&build.join("ecu_probe.exe"), None);
     assert!(
         normal.status.success(),

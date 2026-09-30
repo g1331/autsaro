@@ -31,4 +31,6 @@ cargo test --manifest-path core/Cargo.toml
 
 真实dispatcher使用32槽Os_InterruptVectorTable；生成工程交付该源码及第14个受控补丁，链接到256字节可重定位、可写的.os_vec段。构建检查实际表的符号与段绑定。
 
-当前后续产品工作包括Memory Mapping、Counter OsService、ARTI、适用模块描述及新目标交接；对应Epic4故事仍须实现和验证。
+标准入口通过OS_START_SEC_CODE／OS_STOP_SEC_CODE与重复包含Os_MemMap.h声明，固定GCC目标的OS_CODE属性将Task、ISR、AlarmCallback及Hook放入只读可执行.os_code段；嵌套、错配、冲突和未支持标记明确拒绝。先包含Os.h，再开始映射，结束后再次包含Os_MemMap.h。参考配置没有SwAddrMethod位置引用，使用默认CODE。
+
+当前后续产品工作包括Counter OsService、ARTI、适用模块描述及新目标交接；对应Epic4故事仍须实现和验证。

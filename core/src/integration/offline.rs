@@ -12,6 +12,10 @@ pub(super) fn sources() -> Result<Vec<(String, Vec<u8>)>, String> {
             include_bytes!("../../../runtime/os/include/Os.h"),
         ),
         (
+            "os/include/Os_MemMap.h",
+            include_bytes!("../../../runtime/os/include/Os_MemMap.h"),
+        ),
+        (
             "os/include/Os_Types.h",
             include_bytes!("../../../runtime/os/include/Os_Types.h"),
         ),

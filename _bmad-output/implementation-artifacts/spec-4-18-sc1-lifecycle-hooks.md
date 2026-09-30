@@ -48,7 +48,7 @@ context: []
 - [x] 中断配对／嵌套、实际pending／源控制、Cat2清理、idle及启动状态。
 - [x] 四类最低容量、公共类型、标准构造入口及所选生成Counter常量。
 - [x] STANDARD／EXTENDED真实构建、告警、参数、拒绝和生成交付行为。
-- [ ] 完成实际生成中断向量段和Memory Mapping声明／链接行为。
+- [x] 完成实际生成中断向量段和Memory Mapping声明／链接行为。
 - [ ] 完成Counter OsService端口与ClientServerInterface及配置一致性要求。
 - [ ] 完成剩余具体产品行为、相关回归与BMad复核，同步sprint并本地提交。
 
@@ -61,6 +61,8 @@ context: []
 下一生成义务：00336需接入实际port读取／写入的32槽ulIsrHandler表所在可重定位段；00815需按OS_START_SEC／Os_MemMap／声明／OS_STOP_SEC覆盖实际Task及适用Hook／ISR／Alarm并核对链接；00560／91027需真实Counter服务端口与ClientServerInterface，p228参数是ticks／tick difference，不能因类型名称擅自乘1000。保留现有BSD/MIT及固定依赖边界。
 
 ## Review Triage Log
+
+- Memory Mapping增量：标准Task／ISR／AlarmCallback及五种Hook通过CODE标记和.os_code实际段验证；10入口、6编译／链接拒绝与真实生成／搬移构建通过。三路BMad复核的OS_CODE覆盖问题已修正；人为私有初始化状态覆盖按low拒绝。详情见spec-4-18-memory-mapping.md，Counter服务仍开放。
 
 - 可重定位向量增量：真实port表已绑定32槽可写.os_vec，生成／搬移工程独立链接检查通过；两种编译故障副本被拒绝。入口11、嵌套26、退出清理10、生命周期46及真实生成测试通过；三路BMad复核无发现。增量规格见spec-4-18-interrupt-vector.md。Memory Mapping和Counter服务仍待实现，父story保持in-progress。
 

@@ -152,4 +152,23 @@ if ($tables.Count -ne 1 -or [int]$tables[0].Matches[0].Groups[1].Value -ne $vect
     [Convert]::ToInt64($tables[0].Matches[0].Groups[2].Value, 16) -ne 0) {
     throw 'The actual interrupt vector table is not in its dedicated section.'
 }
+$code = @($sections | Select-String '^\s*(\d+)\s+\.os_code\s+([0-9a-fA-F]+)[^\r\n]*$')
+if ($code.Count -ne 1 -or [Convert]::ToInt32($code[0].Matches[0].Groups[2].Value, 16) -le 0) {
+    throw 'The OS entry code section is missing.'
+}
+$codeSection = [int]$code[0].Matches[0].Groups[1].Value + 1
+$codeFlags = $sections[$code[0].LineNumber]
+if ($codeFlags -notmatch 'CODE' -or $codeFlags -notmatch 'READONLY' -or $codeFlags -notmatch 'ALLOC') {
+    throw 'The OS entry section must be allocated read-only executable code.'
+}
+foreach ($entryName in @('ErrorHook', 'PreTaskHook', 'PostTaskHook', 'StartupHook', 'ShutdownHook')) {
+    $entry = @($symbols | Select-String ('\(sec\s+(\d+)\)[^\r\n]*\s' + $entryName + '$'))
+    if ($entry.Count -ne 1 -or [int]$entry[0].Matches[0].Groups[1].Value -ne $codeSection) {
+        throw "The OS hook is outside its code section: $entryName"
+    }
+}
+$taskEntries = @($symbols | Select-String '\(sec\s+(\d+)\)[^\r\n]*\sOs_TaskEntry_[A-Za-z0-9_]+$')
+if ($taskEntries.Count -ne 1 -or [int]$taskEntries[0].Matches[0].Groups[1].Value -ne $codeSection) {
+    throw 'The generated Task is outside its code section.'
+}
 Write-Output "Built ECU native entry: $binary"

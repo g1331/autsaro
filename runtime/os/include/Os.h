@@ -14,16 +14,16 @@
  * compatibility requires the same identifier for the body and its binding).
  * A preceding prototype also covers the normal definition-only use. */
 #define TASK(identifier)                                                                           \
-    void Os_TaskEntry_##identifier(void);                                                          \
-    void Os_TaskEntry_##identifier(void)
+    OS_CODE void Os_TaskEntry_##identifier(void);                                                  \
+    OS_CODE void Os_TaskEntry_##identifier(void)
 #define OS_TASK_ENTRY(identifier) Os_TaskEntry_##identifier
 #define ISR(identifier)                                                                            \
-    void Os_IsrEntry_##identifier(void);                                                           \
-    void Os_IsrEntry_##identifier(void)
+    OS_CODE void Os_IsrEntry_##identifier(void);                                                   \
+    OS_CODE void Os_IsrEntry_##identifier(void)
 #define OS_ISR_ENTRY(identifier) Os_IsrEntry_##identifier
 #define ALARMCALLBACK(identifier)                                                                  \
-    void identifier(void);                                                                         \
-    void identifier(void)
+    OS_CODE void identifier(void);                                                                 \
+    OS_CODE void identifier(void)
 /** @brief Select the supported virtual-core idle mode.
  * @param CoreID Ignored by this single-core target, including foreign values.
  * @param IdleMode IDLE_NO_HALT; other modes return E_OS_ID without an effect.
@@ -226,6 +226,10 @@ StatusType SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle);
  * @return E_OK, E_OS_ID, E_OS_NOFUNC or E_OS_CALLEVEL.
  */
 StatusType CancelAlarm(AlarmType AlarmID);
-void StartupHook(void);
-void ShutdownHook(StatusType Error);
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_CODE void StartupHook(void);
+OS_CODE void ShutdownHook(StatusType Error);
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #endif
