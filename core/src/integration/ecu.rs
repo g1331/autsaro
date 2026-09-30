@@ -306,6 +306,15 @@ impl ValidatedIntegrationPlan {
             }
         }
         let mut alarms = String::new();
+        files.extend(
+            super::arti::files(
+                plan,
+                use_res_scheduler,
+                &groups.keys().cloned().collect::<Vec<_>>(),
+                &table_groups.keys().cloned().collect::<Vec<_>>(),
+            )
+            .map_err(reject)?,
+        );
         for (id, (_, (period, event))) in groups.iter().enumerate() {
             writeln!(alarms, "    {{{id}u, 0u, OS_ALARM_EVENT, 0u, {event}u, NULL, 1u, 0u, {period}u, {period}u, 0u}},").unwrap();
         }

@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-27-2026 18:43
-last_updated: 09-30-2026 19:51
+last_updated: 09-30-2026 23:00
 project: Autosar
 project_key: NOKEY
 tracking_system: file-system
@@ -92,7 +92,7 @@ development_status:
   # all four boolean forms consumed on the moved target, numeric/definition review patches verified;
   # 105 integration results plus fixed ScheduleTable and final configuration tests pass; four BMad review layers clear.
   4-18-补齐生命周期-extended-status-hook-和中断义务: done
-  4-19-生成并验证-r24-11-arti-描述与-hook: backlog
+  4-19-生成并验证-r24-11-arti-描述与-hook: review
   4-20-关闭适用-c-工件-模块描述和静态质量证据: backlog
   4-21-交付新目标可重建包与准确工作台状态: backlog
   4-22-独立复核完整等级与工程交接出口: backlog

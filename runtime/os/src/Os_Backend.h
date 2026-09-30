@@ -7,12 +7,14 @@
 #include "Os_Stack.h"
 #include "Os_Vector.h"
 #include "Os_Mailbox.h"
+#include "Os_Arti.h"
 #define OS_KERNEL_YIELD_INTERRUPT 0u
 #define OS_CONTROLLED_TICK_INTERRUPT 1u
 typedef struct {
     Os_HookPhase phase;
     OSServiceIdType service;
     Os_ErrorParameters parameters;
+    Os_ArtiCaller arti;
 } Os_ErrorContext;
 void Os_ErrorContextSave(Os_ErrorContext *context);
 void Os_ErrorContextRestore(const Os_ErrorContext *context);
@@ -41,6 +43,9 @@ void vApplicationTickHook(void);
 int Os_TimeBeginTick(void);
 #ifdef OS_IDLE_TESTS
 void Os_TestIdleObserved(void);
+#endif
+#ifdef OS_ARTI_TESTS
+void Os_ArtiTestShutdownObserved(void);
 #endif
 #ifdef OS_TIME_TESTS
 void Os_TimeTestSeed(uint64_t epoch, uint32_t kernel_tick, TickType value);
@@ -113,6 +118,53 @@ HANDLE Os_PortTaskThread(TaskFunction_t code, void *argument, const StackType_t 
 void Os_PortResumeThread(HANDLE thread);
 DWORD Os_PortSuspendThread(HANDLE thread);
 BOOL Os_PortGetThreadContext(HANDLE thread, CONTEXT *context);
+
+/* Private implementations behind application-only ARTI service wrappers. */
+ISRType Os_Implementation_GetISRID(void);
+StatusType Os_Implementation_ControlIdle(CoreIdType CoreID, IdleModeType IdleMode);
+boolean Os_Implementation_isOsStarted(void);
+StatusType Os_Implementation_GetTaskID(TaskRefType TaskID);
+StatusType Os_Implementation_GetTaskState(TaskType TaskID, TaskStateRefType State);
+StatusType Os_Implementation_ActivateTask(TaskType TaskID);
+StatusType Os_Implementation_TerminateTask(void);
+StatusType Os_Implementation_ChainTask(TaskType TaskID);
+StatusType Os_Implementation_GetResource(ResourceType ResID);
+StatusType Os_Implementation_ReleaseResource(ResourceType ResID);
+StatusType Os_Implementation_Schedule(void);
+StatusType Os_Implementation_WaitEvent(EventMaskType Mask);
+StatusType Os_Implementation_ClearEvent(EventMaskType Mask);
+StatusType Os_Implementation_SetEvent(TaskType TaskID, EventMaskType Mask);
+StatusType Os_Implementation_GetEvent(TaskType TaskID, EventMaskRefType Event);
+void Os_Implementation_ShutdownOS(StatusType Error);
+void Os_Implementation_StartOS(AppModeType Mode);
+AppModeType Os_Implementation_GetActiveApplicationMode(void);
+StatusType Os_Implementation_IncrementCounter(CounterType CounterID);
+StatusType Os_Implementation_GetCounterValue(CounterType CounterID, TickRefType Value);
+StatusType Os_Implementation_GetElapsedValue(CounterType CounterID, TickRefType Value,
+                                             TickRefType ElapsedValue);
+StatusType Os_Implementation_GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info);
+StatusType Os_Implementation_GetAlarm(AlarmType AlarmID, TickRefType Tick);
+StatusType Os_Implementation_SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle);
+StatusType Os_Implementation_SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle);
+StatusType Os_Implementation_CancelAlarm(AlarmType AlarmID);
+StatusType Os_Implementation_StartScheduleTableRel(ScheduleTableType ScheduleTableID,
+                                                   TickType Offset);
+StatusType Os_Implementation_StartScheduleTableAbs(ScheduleTableType ScheduleTableID,
+                                                   TickType Start);
+StatusType Os_Implementation_StopScheduleTable(ScheduleTableType ScheduleTableID);
+StatusType Os_Implementation_NextScheduleTable(ScheduleTableType ScheduleTableID_From,
+                                               ScheduleTableType ScheduleTableID_To);
+StatusType Os_Implementation_GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
+                                                    ScheduleTableStatusRefType ScheduleStatus);
+StatusType Os_Implementation_DisableInterruptSource(ISRType ISRID);
+StatusType Os_Implementation_EnableInterruptSource(ISRType ISRID, boolean ClearPending);
+StatusType Os_Implementation_ClearPendingInterrupt(ISRType ISRID);
+void Os_Implementation_EnableAllInterrupts(void);
+void Os_Implementation_DisableAllInterrupts(void);
+void Os_Implementation_ResumeAllInterrupts(void);
+void Os_Implementation_SuspendAllInterrupts(void);
+void Os_Implementation_ResumeOSInterrupts(void);
+void Os_Implementation_SuspendOSInterrupts(void);
 extern const Os_TargetConfig *Os_Config;
 extern volatile LONG Os_Closing;
 #endif

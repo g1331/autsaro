@@ -125,6 +125,9 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
         str(copied / "portable/MSVC-MingW"),
         str(target / "src/Os.c"),
         str(target / "src/Os_Error.c"),
+        str(target / "src/Arti.c"),
+        str(target / "src/Os_Arti.c"),
+        str(target / "src/Os_ArtiServices.c"),
         str(target / "src/Os_Interrupt.c"),
         str(target / "src/Os_Backend.c"),
         str(target / "src/Os_Vector.c"),
@@ -1183,6 +1186,56 @@ def check_returned_task(binary: Path) -> list[dict]:
         result["independent_expected_activation_cleanup"] = [entries, errors, helper, trace]
         observations.append(result)
     return observations
+
+
+def check_arti(binary: Path) -> list[dict]:
+    scenarios = ["transitions", "internal", "unconfigured", "self-chain", "queued", "shutdown", "noop-yield", "wait-satisfied", "buffer"]
+    observations = []
+    for scenario in scenarios:
+        result = execute(binary, scenario)
+        require(result["exit"] == 0 and not result["stderr"], result)
+        expected = "arti buffer=4096 dropped=3 once=1 version=1 error=2 saturated=1" if scenario == "buffer" else f"arti scenario={scenario} transitions="
+        require(expected in result["stdout"], result)
+        observations.append(result)
+    return observations
+
+
+def check_arti_native(directory: Path) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    task_dir = directory / "tasks"
+    task_dir.mkdir()
+    binary, _ = build(task_dir, "arti.c", ("OS_ARTI_TESTS",))
+    observations = check_arti(binary)
+    nested_dir = directory / "nested"
+    nested_dir.mkdir()
+    nested, _ = build(nested_dir, "arti_nested.c", ("OS_ARTI_TESTS",))
+    nested_observations = check_nested_interrupts(nested)
+    for result in nested_observations:
+        if not result["scenario"].startswith("reject-"):
+            require(f"arti_nested scenario={result['scenario']} balanced=" in result["stdout"], result)
+    for name, source, old, new, compile_failure in [
+        ("missing-start", "Os_Arti.c", "0u, OsTask_Start,", "0u, OsTask_Activate,", False),
+        ("wrong-signature", "Arti.c", "uint32_t event_parameter) {", "uint16_t event_parameter) {", True),
+    ]:
+        faulty = directory / name
+        faulty.mkdir()
+        target = faulty / "target"
+        shutil.copytree(TARGET, target)
+        file = target / "src" / source
+        text = file.read_text(encoding="utf-8")
+        require(old in text, name)
+        file.write_bytes(text.replace(old, new, 1).encode("utf-8"))
+        build_dir = faulty / "build"
+        build_dir.mkdir()
+        try:
+            damaged, _ = build(build_dir, "arti.c", ("OS_ARTI_TESTS",), target=target)
+        except RuntimeError as error:
+            require(compile_failure and "conflicting types" in str(error), str(error))
+        else:
+            require(not compile_failure, name)
+            result = execute(damaged, "transitions")
+            require(result["exit"] == 7 and "arti scenario=" not in result["stdout"], result)
+    print(f"ARTI native PASS: {len(observations)} task/tool and {len(nested_observations)} nested/rejection vectors; two compiled faults rejected")
 
 
 def check_task_hooks(binary: Path) -> list[dict]:

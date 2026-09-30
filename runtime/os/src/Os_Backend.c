@@ -26,6 +26,7 @@ static unsigned resource_depth[OS_RESOURCE_ACTORS];
 static size_t owned_resources[OS_RESOURCE_ACTORS][OS_MAX_RESOURCES];
 static volatile LONG interrupt_ceiling;
 static unsigned current_interrupt = 32u;
+const unsigned *const Os_ArtiCurrentIsr = &current_interrupt;
 typedef struct {
     unsigned interrupt;
     Os_ErrorContext error;
@@ -74,6 +75,7 @@ static unsigned task_thread_count;
 HANDLE Os_StackTestTaskThread(unsigned index) { return task_threads[index]; }
 #endif
 static volatile LONG ready;
+const volatile long *const Os_ArtiOsReady = &ready;
 volatile LONG Os_Closing;
 /* Bit 0: an accepted activation transaction; bit 1: admission permanently closed.
  * Both admission and close linearize on this atomic word. Close never waits for
@@ -81,6 +83,15 @@ volatile LONG Os_Closing;
 static volatile LONG activation_admission;
 static StatusType shutdown_reason;
 static AppModeType startup_mode;
+const AppModeType *const Os_ArtiAppMode = &startup_mode;
+static unsigned resource_owner[OS_MAX_RESOURCES];
+const unsigned *const Os_ArtiResourceOwners = resource_owner;
+Os_ArtiTaskState Os_ArtiTasks[OS_MAX_TASKS];
+TaskType Os_ArtiRunningTask = INVALID_TASK;
+const Os_NativeStack *Os_ArtiTaskStacks[OS_MAX_TASKS];
+const void *Os_ArtiTaskContexts[OS_MAX_TASKS];
+static uint8_t arti_completed[OS_MAX_TASKS];
+static void arti_observe_tasks(void);
 static char trace[128];
 static size_t trace_length;
 static uint64_t trace_dropped;
@@ -123,6 +134,10 @@ void Os_BackendInterruptEnter(unsigned interrupt) {
     Os_ErrorContextSave(&interrupt_frames[interrupt_depth].error);
     ++interrupt_depth;
     current_interrupt = interrupt;
+    if ((interrupt > OS_CONTROLLED_TICK_INTERRUPT) &&
+        (Os_BackendInterruptMaySchedule(interrupt) != 0)) {
+        Os_ArtiIsr((ISRType)interrupt, 0);
+    }
 }
 void Os_BackendInterruptLeave(void) {
     const Os_ErrorParameters arguments = {.service_TerminateTask = {0u}};
@@ -147,6 +162,10 @@ void Os_BackendInterruptLeave(void) {
             configASSERT(released == E_OK);
         }
         (void)Os_ErrorResult(OSServiceId_InterruptMissingEnd, E_OS_RESOURCE, &arguments);
+    }
+    if ((current_interrupt > OS_CONTROLLED_TICK_INTERRUPT) &&
+        (Os_BackendInterruptMaySchedule(current_interrupt) != 0)) {
+        Os_ArtiIsr((ISRType)current_interrupt, 1);
     }
     --interrupt_depth;
     Os_ErrorContextRestore(&interrupt_frames[interrupt_depth].error);
@@ -313,10 +332,12 @@ void Os_BackendBeforeSelect(void *current, void *next) {
 }
 void Os_BackendOnSwitch(void) {
     if (Os_TargetReady() != 0) {
+        arti_observe_tasks();
         size_t i;
         for (i = 0u; i < Os_Config->task_count; ++i) {
             if (handles[i] == xTaskGetCurrentTaskHandle()) {
                 acquire_internal(i);
+                arti_observe_tasks();
                 if ((running_hook_task != i) &&
                     (InterlockedCompareExchange(&Os_Closing, 0, 0) == 0)) {
                     running_hook_task = i;
@@ -329,6 +350,65 @@ void Os_BackendOnSwitch(void) {
         }
     }
     observe_transition();
+}
+static TaskStateType native_task_state(size_t index) {
+    switch (eTaskGetState(handles[index])) {
+    case eRunning:
+        return RUNNING;
+    case eReady:
+        return READY;
+    case eBlocked:
+        return WAITING;
+    case eSuspended:
+        return (task_waiting[index] != 0u) ? WAITING : SUSPENDED;
+    default:
+        /* Automotive Task objects are never deleted. */
+        configASSERT(0);
+        return SUSPENDED;
+    }
+}
+static void arti_observe_tasks(void) {
+    TaskStateType previous[OS_MAX_TASKS];
+    uint8_t completed[OS_MAX_TASKS];
+    Os_ArtiRunningTask = INVALID_TASK;
+    for (size_t i = 0u; i < Os_Config->task_count; ++i) {
+        previous[i] = Os_ArtiTasks[i].state;
+        completed[i] = arti_completed[i];
+        arti_completed[i] = 0u;
+        Os_ArtiTasks[i].state = native_task_state(i);
+        Os_ArtiTasks[i].priority = (uint8_t)uxTaskPriorityGet(handles[i]);
+        Os_ArtiTasks[i].activations = activations[i].count;
+        Os_ArtiTasks[i].events = task_events[i];
+        Os_ArtiTasks[i].wait_mask = wait_masks[i];
+        if (Os_ArtiTasks[i].state == RUNNING) {
+            Os_ArtiRunningTask = Os_Config->tasks[i].id;
+        }
+    }
+    /* Outgoing edges precede incoming edges, independent of declaration order.
+     * Queued Basic activations have an atomic logical terminate/activate edge
+     * even when the kernel reselects the same native thread. */
+    for (size_t i = 0u; i < Os_Config->task_count; ++i) {
+        const TaskStateType state = Os_ArtiTasks[i].state;
+        if (completed[i] != 0u) {
+            Os_ArtiTask(OS_ARTI_TASK_TERMINATE, Os_Config->tasks[i].id);
+            previous[i] = SUSPENDED;
+        } else if ((previous[i] == RUNNING) && (state != RUNNING)) {
+            Os_ArtiTask(state == WAITING ? OS_ARTI_TASK_WAIT : OS_ARTI_TASK_PREEMPT,
+                        Os_Config->tasks[i].id);
+        }
+    }
+    for (size_t i = 0u; i < Os_Config->task_count; ++i) {
+        const TaskStateType state = Os_ArtiTasks[i].state;
+        const TaskType id = Os_Config->tasks[i].id;
+        if ((previous[i] == SUSPENDED) && (state != SUSPENDED)) {
+            Os_ArtiTask(OS_ARTI_TASK_ACTIVATE, id);
+        } else if ((previous[i] == WAITING) && ((state == READY) || (state == RUNNING))) {
+            Os_ArtiTask(OS_ARTI_TASK_RELEASE, id);
+        }
+        if ((state == RUNNING) && (previous[i] != RUNNING)) {
+            Os_ArtiTask(OS_ARTI_TASK_START, id);
+        }
+    }
 }
 static void observe_transition(void) {
 #if defined(OS_ACTIVATION_TESTS) || defined(OS_FINISH_TESTS) || defined(OS_RESOURCE_TESTS) ||      \
@@ -452,6 +532,9 @@ static void report_and_exit(void) {
         shutdown_reason = E_OS_STACKFAULT;
     }
     Os_ShutdownHookInvoke(shutdown_reason);
+#ifdef OS_ARTI_TESTS
+    Os_ArtiTestShutdownObserved();
+#endif
     Os_StackReport();
     printf("lifecycle=Closed state=%s reason=%u trace=%s threads=%u events=%u mutexes=%u "
            "resource_calls=%u hidden=2 controllers=2 heap=windows static=freertos "
@@ -610,6 +693,13 @@ static DWORD WINAPI native_task_start(void *argument) {
         Os_BackendShutdown(E_OS_STATE);
     }
     Os_StackRecordBuffer(start->buffer_top);
+    if (start->entry == task_entry) {
+        const Os_TaskConfig *task = start->argument;
+        const size_t index = task_index(task->id);
+        configASSERT(index < Os_Config->task_count);
+        Os_ArtiTaskStacks[index] = Os_StackCurrent();
+        Os_ArtiTaskContexts[index] = Os_StackSavedContext(Os_ArtiTaskStacks[index]);
+    }
     if (!Os_HostSetEvent(start->registered) ||
         WaitForSingleObject(start->gate, INFINITE) != WAIT_OBJECT_0) {
         Os_BackendShutdown(E_OS_STATE);
@@ -683,6 +773,7 @@ static void task_entry(void *argument) {
     /* The private backend trampoline discards completed application frames.
      * No application or generated Runnable uses setjmp/longjmp. */
     (void)setjmp(restart_frames[index]);
+    (void)Os_ArtiCallerSave();
     configASSERT(activations[index].count != 0u);
     task->entry();
     /* A returned entry is an erroneous activation, not a whole-OS shutdown. */
@@ -708,6 +799,7 @@ static void bootstrap(void *argument) {
     Os_TimeAutostart(startup_mode);
     Os_ScheduleAutostart(startup_mode);
     InterlockedExchange(&ready, 1);
+    arti_observe_tasks();
     Os_TargetTrace('R');
     observe_transition();
     taskEXIT_CRITICAL();
@@ -760,6 +852,7 @@ void Os_BackendStart(AppModeType mode) {
         Os_BackendShutdown(E_OS_STATE);
     }
     for (i = 0u; i < Os_Config->task_count; ++i) {
+        Os_ArtiTasks[i].state = SUSPENDED;
         if ((Os_Config->tasks[i].autostart_modes & mode) != 0u) {
             append_activation(i);
         }
@@ -864,6 +957,7 @@ StatusType Os_BackendActivate(TaskType id) {
             vTaskResume(handles[index]);
         }
     }
+    arti_observe_tasks();
     observe_transition();
     InterlockedAnd(&activation_admission, ~1L);
     taskEXIT_CRITICAL();
@@ -956,6 +1050,7 @@ static StatusType complete_activation(TaskType id, int chain, int returned) {
     queue->requests[queue->head] = 0u;
     queue->head = (queue->head + 1u) % OS_MAX_ACTIVATIONS;
     --queue->count;
+    arti_completed[index] = 1u;
     if (chain != 0) {
         append_activation(target);
         if (target != index) {
@@ -995,7 +1090,6 @@ void Os_BackendMissingEnd(void) {
 StatusType Os_BackendResource(ResourceType id, int acquire) {
     static UBaseType_t saved_priorities[OS_RESOURCE_ACTORS][OS_MAX_RESOURCES];
     static LONG saved_interrupt_ceilings[OS_RESOURCE_ACTORS][OS_MAX_RESOURCES];
-    static unsigned resource_owner[OS_MAX_RESOURCES];
     const Os_NativeStack *stack = Os_StackCurrent();
     size_t task;
     size_t resource;
@@ -1066,6 +1160,7 @@ StatusType Os_BackendResource(ResourceType id, int acquire) {
             vTaskPrioritySet(handles[task], saved_priorities[task][depth - 1u]);
         }
     }
+    arti_observe_tasks();
     taskEXIT_CRITICAL();
     Os_BackendGuardService();
     return status;
@@ -1134,6 +1229,7 @@ StatusType Os_BackendClear(EventMaskType mask) {
     taskENTER_CRITICAL();
     Os_BackendGuardService();
     task_events[index] &= ~mask;
+    arti_observe_tasks();
     taskEXIT_CRITICAL();
     Os_BackendGuardService();
     return E_OK;
@@ -1177,6 +1273,7 @@ StatusType Os_BackendEvent(TaskType id, EventMaskType mask, EventMaskRefType out
             }
         }
     }
+    arti_observe_tasks();
     taskEXIT_CRITICAL();
     Os_BackendGuardService();
     return status;

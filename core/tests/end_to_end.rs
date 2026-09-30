@@ -43,6 +43,15 @@ mod epic4_os_service;
 #[path = "support/epic4_os_configuration.rs"]
 mod epic4_os_configuration;
 
+#[path = "support/epic4_arti.rs"]
+mod epic4_arti;
+
+#[cfg(windows)]
+#[test]
+fn epic4_arti_description_and_hooks() {
+    epic4_arti::verify();
+}
+
 #[cfg(windows)]
 #[test]
 fn epic4_generated_scheduler_configuration() {

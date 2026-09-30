@@ -131,12 +131,12 @@ static void change(unsigned operation, OSServiceIdType service) {
         (void)Os_ErrorResult(service, status, &arguments);
     }
 }
-void EnableAllInterrupts(void) { change(0u, OSServiceId_EnableAllInterrupts); }
-void DisableAllInterrupts(void) { change(1u, OSServiceId_DisableAllInterrupts); }
-void ResumeAllInterrupts(void) { change(2u, OSServiceId_ResumeAllInterrupts); }
-void SuspendAllInterrupts(void) { change(3u, OSServiceId_SuspendAllInterrupts); }
-void ResumeOSInterrupts(void) { change(4u, OSServiceId_ResumeOSInterrupts); }
-void SuspendOSInterrupts(void) { change(5u, OSServiceId_SuspendOSInterrupts); }
+void Os_Implementation_EnableAllInterrupts(void) { change(0u, OSServiceId_EnableAllInterrupts); }
+void Os_Implementation_DisableAllInterrupts(void) { change(1u, OSServiceId_DisableAllInterrupts); }
+void Os_Implementation_ResumeAllInterrupts(void) { change(2u, OSServiceId_ResumeAllInterrupts); }
+void Os_Implementation_SuspendAllInterrupts(void) { change(3u, OSServiceId_SuspendAllInterrupts); }
+void Os_Implementation_ResumeOSInterrupts(void) { change(4u, OSServiceId_ResumeOSInterrupts); }
+void Os_Implementation_SuspendOSInterrupts(void) { change(5u, OSServiceId_SuspendOSInterrupts); }
 void Os_InterruptRestoreOwner(void) {
     InterruptState *state = owner_state();
     /* Internal exit cleanup is called under the real OS completion critical
@@ -184,21 +184,21 @@ static StatusType source_control(ISRType interrupt, unsigned operation, boolean 
     }
     return result;
 }
-StatusType DisableInterruptSource(ISRType ISRID) {
+StatusType Os_Implementation_DisableInterruptSource(ISRType ISRID) {
     const Os_ErrorParameters arguments = {.service_DisableInterruptSource = {ISRID}};
     const StatusType status = source_control(ISRID, 0u, FALSE);
     return (Os_HookContext() == OS_HOOK_ERROR)
                ? status
                : Os_ErrorResult(OSServiceId_DisableInterruptSource, status, &arguments);
 }
-StatusType EnableInterruptSource(ISRType ISRID, boolean ClearPending) {
+StatusType Os_Implementation_EnableInterruptSource(ISRType ISRID, boolean ClearPending) {
     const Os_ErrorParameters arguments = {.service_EnableInterruptSource = {ISRID, ClearPending}};
     const StatusType status = source_control(ISRID, 1u, ClearPending);
     return (Os_HookContext() == OS_HOOK_ERROR)
                ? status
                : Os_ErrorResult(OSServiceId_EnableInterruptSource, status, &arguments);
 }
-StatusType ClearPendingInterrupt(ISRType ISRID) {
+StatusType Os_Implementation_ClearPendingInterrupt(ISRType ISRID) {
     const Os_ErrorParameters arguments = {.service_ClearPendingInterrupt = {ISRID}};
     const StatusType status = source_control(ISRID, 2u, FALSE);
     return (Os_HookContext() == OS_HOOK_ERROR)

@@ -3,6 +3,7 @@
 //! Construction is all-or-nothing. Input bytes and identities are retained;
 //! component contracts and ECU integration consume the same checked plan.
 
+mod arti;
 mod bsw_sources;
 mod catalog;
 mod communication;

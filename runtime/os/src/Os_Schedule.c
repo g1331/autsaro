@@ -1,13 +1,8 @@
 #include "Os_Backend.h"
 
-typedef struct {
-    ScheduleTableStatusType status;
-    size_t point;
-    TickType remaining;
-    size_t next;
-    size_t previous;
-} ScheduleState;
+typedef Os_ArtiScheduleState ScheduleState;
 static ScheduleState tables[OS_MAX_SCHEDULE_TABLES];
+const Os_ArtiScheduleState *const Os_ArtiScheduleTables = tables;
 
 static size_t table_index(ScheduleTableType id) {
     const Os_TimeConfig *time = Os_Config->time;
@@ -132,6 +127,7 @@ void Os_ScheduleAutostart(AppModeType mode) {
     }
 }
 static void expiry(const Os_ExpiryPoint *point) {
+    Os_ArtiInternalEnter();
     /* All activations precede all event settings; declaration order is not
      * permitted to set an event on a still-suspended destination Task. */
     for (unsigned pass = 0u; pass < 2u; ++pass) {
@@ -145,6 +141,7 @@ static void expiry(const Os_ExpiryPoint *point) {
             }
         }
     }
+    Os_ArtiInternalLeave();
 }
 static void process(size_t initial) {
     size_t index = initial;
@@ -325,7 +322,8 @@ static StatusType implementation_GetScheduleTableStatus(ScheduleTableType Schedu
     return E_OK;
 }
 
-StatusType StartScheduleTableRel(ScheduleTableType ScheduleTableID, TickType Offset) {
+StatusType Os_Implementation_StartScheduleTableRel(ScheduleTableType ScheduleTableID,
+                                                   TickType Offset) {
     const Os_ErrorParameters arguments = {
         .service_StartScheduleTableRel = {ScheduleTableID, Offset}};
     StatusType status;
@@ -341,7 +339,8 @@ StatusType StartScheduleTableRel(ScheduleTableType ScheduleTableID, TickType Off
     return Os_ErrorResult(OSServiceId_StartScheduleTableRel, status, &arguments);
 }
 
-StatusType StartScheduleTableAbs(ScheduleTableType ScheduleTableID, TickType Start) {
+StatusType Os_Implementation_StartScheduleTableAbs(ScheduleTableType ScheduleTableID,
+                                                   TickType Start) {
     const Os_ErrorParameters arguments = {
         .service_StartScheduleTableAbs = {ScheduleTableID, Start}};
     StatusType status;
@@ -357,7 +356,7 @@ StatusType StartScheduleTableAbs(ScheduleTableType ScheduleTableID, TickType Sta
     return Os_ErrorResult(OSServiceId_StartScheduleTableAbs, status, &arguments);
 }
 
-StatusType StopScheduleTable(ScheduleTableType ScheduleTableID) {
+StatusType Os_Implementation_StopScheduleTable(ScheduleTableType ScheduleTableID) {
     const Os_ErrorParameters arguments = {.service_StopScheduleTable = {ScheduleTableID}};
     StatusType status;
     Os_StackCheck();
@@ -372,7 +371,7 @@ StatusType StopScheduleTable(ScheduleTableType ScheduleTableID) {
     return Os_ErrorResult(OSServiceId_StopScheduleTable, status, &arguments);
 }
 
-StatusType NextScheduleTable(ScheduleTableType ScheduleTableID_From,
+StatusType Os_Implementation_NextScheduleTable(ScheduleTableType ScheduleTableID_From,
                              ScheduleTableType ScheduleTableID_To) {
     const Os_ErrorParameters arguments = {
         .service_NextScheduleTable = {ScheduleTableID_From, ScheduleTableID_To}};
@@ -389,7 +388,7 @@ StatusType NextScheduleTable(ScheduleTableType ScheduleTableID_From,
     return Os_ErrorResult(OSServiceId_NextScheduleTable, status, &arguments);
 }
 
-StatusType GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
+StatusType Os_Implementation_GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
                                   ScheduleTableStatusRefType ScheduleStatus) {
     const Os_ErrorParameters arguments = {
         .service_GetScheduleTableStatus = {ScheduleTableID, ScheduleStatus}};

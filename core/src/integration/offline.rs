@@ -124,6 +124,26 @@ pub(super) fn sources() -> Result<Vec<(String, Vec<u8>)>, String> {
             include_bytes!("../../../runtime/os/src/Os_Error.c"),
         ),
         (
+            "os/include/Arti.h",
+            include_bytes!("../../../runtime/os/include/Arti.h"),
+        ),
+        (
+            "os/include/Os_Arti.h",
+            include_bytes!("../../../runtime/os/include/Os_Arti.h"),
+        ),
+        (
+            "os/src/Arti.c",
+            include_bytes!("../../../runtime/os/src/Arti.c"),
+        ),
+        (
+            "os/src/Os_Arti.c",
+            include_bytes!("../../../runtime/os/src/Os_Arti.c"),
+        ),
+        (
+            "os/src/Os_ArtiServices.c",
+            include_bytes!("../../../runtime/os/src/Os_ArtiServices.c"),
+        ),
+        (
             "os/src/Os_Backend.c",
             include_bytes!("../../../runtime/os/src/Os_Backend.c"),
         ),

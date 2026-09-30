@@ -4,12 +4,10 @@
 #endif
 
 static TickType values[OS_MAX_COUNTERS];
-typedef struct {
-    TickType remaining;
-    TickType cycle;
-    uint8_t active;
-} AlarmState;
+const TickType *const Os_ArtiCounters = values;
+typedef Os_ArtiAlarmState AlarmState;
 static AlarmState alarms[OS_MAX_ALARMS];
+const Os_ArtiAlarmState *const Os_ArtiAlarms = alarms;
 static volatile LONG tick_state;
 static uint64_t requested_epoch;
 static uint64_t confirmed_epoch;
@@ -229,6 +227,7 @@ void Os_TimeReportAction(StatusType status) {
 static void action(size_t index) {
     const Os_AlarmConfig *alarm = &Os_Config->time->alarms[index];
     StatusType status = E_OK;
+    Os_ArtiInternalEnter();
     switch (alarm->action) {
     case OS_ALARM_ACTIVATE:
         status = ActivateTask(alarm->task);
@@ -247,6 +246,7 @@ static void action(size_t index) {
         Os_BackendShutdown(E_OS_STATE);
         break;
     }
+    Os_ArtiInternalLeave();
     Os_TimeReportAction(status);
 }
 TickType Os_TimeCounterValue(CounterType counter) { return values[counter_index(counter)]; }
@@ -505,7 +505,10 @@ void Os_TimeTick(void) {
             }
         }
         increment(counter_index(config->system_counter));
-        if (SetEvent(config->owner, config->wake_event) != E_OK) {
+        Os_ArtiInternalEnter();
+        const StatusType status = SetEvent(config->owner, config->wake_event);
+        Os_ArtiInternalLeave();
+        if (status != E_OK) {
             Os_BackendShutdown(E_OS_STATE);
         }
         (void)InterlockedCompareExchange(&tick_state, TIME_DELIVERED, TIME_PROCESSING);
@@ -727,7 +730,7 @@ void Os_TimeTestSeed(uint64_t epoch, uint32_t kernel_tick, TickType value) {
 }
 #endif
 
-StatusType IncrementCounter(CounterType CounterID) {
+StatusType Os_Implementation_IncrementCounter(CounterType CounterID) {
     const Os_ErrorParameters arguments = {.service_IncrementCounter = {CounterID}};
     StatusType status;
     Os_StackCheck();
@@ -742,7 +745,7 @@ StatusType IncrementCounter(CounterType CounterID) {
     return Os_ErrorResult(OSServiceId_IncrementCounter, status, &arguments);
 }
 
-StatusType GetCounterValue(CounterType CounterID, TickRefType Value) {
+StatusType Os_Implementation_GetCounterValue(CounterType CounterID, TickRefType Value) {
     const Os_ErrorParameters arguments = {.service_GetCounterValue = {CounterID, Value}};
     StatusType status;
     Os_StackCheck();
@@ -757,7 +760,8 @@ StatusType GetCounterValue(CounterType CounterID, TickRefType Value) {
     return Os_ErrorResult(OSServiceId_GetCounterValue, status, &arguments);
 }
 
-StatusType GetElapsedValue(CounterType CounterID, TickRefType Value, TickRefType ElapsedValue) {
+StatusType Os_Implementation_GetElapsedValue(CounterType CounterID, TickRefType Value,
+                                             TickRefType ElapsedValue) {
     const Os_ErrorParameters arguments = {
         .service_GetElapsedValue = {CounterID, Value, ElapsedValue}};
     StatusType status;
@@ -773,7 +777,7 @@ StatusType GetElapsedValue(CounterType CounterID, TickRefType Value, TickRefType
     return Os_ErrorResult(OSServiceId_GetElapsedValue, status, &arguments);
 }
 
-StatusType GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info) {
+StatusType Os_Implementation_GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info) {
     const Os_ErrorParameters arguments = {.service_GetAlarmBase = {AlarmID, Info}};
     StatusType status;
     Os_StackCheck();
@@ -788,7 +792,7 @@ StatusType GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info) {
     return Os_ErrorResult(OSServiceId_GetAlarmBase, status, &arguments);
 }
 
-StatusType GetAlarm(AlarmType AlarmID, TickRefType Tick) {
+StatusType Os_Implementation_GetAlarm(AlarmType AlarmID, TickRefType Tick) {
     const Os_ErrorParameters arguments = {.service_GetAlarm = {AlarmID, Tick}};
     StatusType status;
     Os_StackCheck();
@@ -803,7 +807,7 @@ StatusType GetAlarm(AlarmType AlarmID, TickRefType Tick) {
     return Os_ErrorResult(OSServiceId_GetAlarm, status, &arguments);
 }
 
-StatusType SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle) {
+StatusType Os_Implementation_SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle) {
     const Os_ErrorParameters arguments = {.service_SetRelAlarm = {AlarmID, Increment, Cycle}};
     StatusType status;
     Os_StackCheck();
@@ -818,7 +822,7 @@ StatusType SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle) {
     return Os_ErrorResult(OSServiceId_SetRelAlarm, status, &arguments);
 }
 
-StatusType SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle) {
+StatusType Os_Implementation_SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle) {
     const Os_ErrorParameters arguments = {.service_SetAbsAlarm = {AlarmID, Start, Cycle}};
     StatusType status;
     Os_StackCheck();
@@ -833,7 +837,7 @@ StatusType SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle) {
     return Os_ErrorResult(OSServiceId_SetAbsAlarm, status, &arguments);
 }
 
-StatusType CancelAlarm(AlarmType AlarmID) {
+StatusType Os_Implementation_CancelAlarm(AlarmType AlarmID) {
     const Os_ErrorParameters arguments = {.service_CancelAlarm = {AlarmID}};
     StatusType status;
     Os_StackCheck();

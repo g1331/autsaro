@@ -4,6 +4,13 @@
 #include <stdio.h>
 
 static Os_NativeStack stacks[OS_NATIVE_STACKS];
+const Os_NativeStack *const Os_ArtiStacks = stacks;
+static CONTEXT saved_contexts[OS_NATIVE_STACKS];
+const size_t Os_ArtiNativeContextSize = sizeof(CONTEXT);
+const void *Os_StackSavedContext(const Os_NativeStack *stack) {
+    /* The caller supplies a record obtained from this module's own array. */
+    return &saved_contexts[stack - stacks];
+}
 static volatile LONG stack_count;
 static char invalid_guarantee_role;
 static __thread Os_NativeStack *current_stack;
@@ -170,6 +177,8 @@ void Os_StackObserve(HANDLE thread, const CONTEXT *context) {
                 publish_fault(record, 0u, sp, sp, 'M');
             }
             record->sp = sp;
+            saved_contexts[i] = *context;
+            record->context_valid = 1u;
             ++record->observations;
             return;
         }

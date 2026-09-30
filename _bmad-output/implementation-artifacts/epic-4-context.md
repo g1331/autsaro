@@ -35,7 +35,7 @@
 
 原创单 ECU Extract、ECUC/BSW/SWC 描述及映射是新输入范围。引用、类型、变体、生产者/消费者、符号不闭合时须定位拒绝，保护原输入与旧输出。主机证据不外推 MCU、硬实时、ASIL、完整 MISRA 或官方符合性；失败和 not_run 分别记录。隔离桌面不可用时原生 UI/IPC 保持未验证。
 
-单核 SC1/Extended Status 是完整出口，样例对象数不能缩减等级容量；最小八个软件 Counter、两个 ScheduleTable。中间集成通过只称有界主机集成。全部适用门通过前不标 Epic done。Epic 2 暂缓，Epic 5/6 不扩展。
+单核 SC1/Extended Status 是完整出口，样例对象数不能缩减等级容量；最小八个软件 Counter、两个 ScheduleTable。中间集成通过只称有界主机集成。全部story的实际产品功能完成且通过BMad验证与复核前不标Epic done。Epic 2 暂缓，Epic 5/6 不扩展。
 
 ## Technical Decisions
 

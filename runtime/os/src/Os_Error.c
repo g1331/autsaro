@@ -15,6 +15,7 @@ void Os_ErrorContextSave(Os_ErrorContext *context) {
     context->phase = phase;
     context->service = service_id;
     context->parameters = parameters;
+    context->arti = Os_ArtiCallerSave();
     phase = OS_HOOK_NONE;
     service_id = OSServiceId_Unknown;
     parameters = empty_parameters;
@@ -23,6 +24,7 @@ void Os_ErrorContextRestore(const Os_ErrorContext *context) {
     phase = context->phase;
     service_id = context->service;
     parameters = context->parameters;
+    Os_ArtiCallerRestore(context->arti);
 }
 
 Os_HookPhase Os_HookContext(void) { return phase; }
@@ -70,6 +72,7 @@ StatusType Os_ServiceAccessStatus(OSServiceIdType service) {
         /* The current logical caller owns this mask. ErrorHook uses a separate
          * cell and may query a masked parent until it masks itself. */
     }
+    Os_ArtiAccessResult(result);
     return result;
 }
 const Os_ErrorParameters *Os_ErrorParametersCurrent(void) {
@@ -97,7 +100,11 @@ StatusType Os_ErrorResult(OSServiceIdType service, StatusType status,
         phase = OS_HOOK_ERROR;
         ++hook_depth;
         error_active = 1;
+        const Os_ArtiCaller arti = Os_ArtiCallerSave();
+        Os_ArtiHook(OS_HOOK_ERROR, status, 0);
         Os_Config->hooks->error(status);
+        Os_ArtiHook(OS_HOOK_ERROR, status, 1);
+        Os_ArtiCallerRestore(arti);
         error_active = 0;
         --hook_depth;
         phase = previous;
@@ -119,7 +126,11 @@ void Os_HookInvoke(void (*hook)(void), Os_HookPhase selected) {
         Os_BackendGuardService();
         phase = selected;
         ++hook_depth;
+        const Os_ArtiCaller arti = Os_ArtiCallerSave();
+        Os_ArtiHook(selected, E_OK, 0);
         hook();
+        Os_ArtiHook(selected, E_OK, 1);
+        Os_ArtiCallerRestore(arti);
         --hook_depth;
         phase = previous;
         taskEXIT_CRITICAL();
@@ -131,6 +142,10 @@ void Os_ShutdownHookInvoke(StatusType error) {
     /* Closing runs on the established healthy controller. Never acquire the
      * ordinary port mutex: a suspended or damaged automotive actor may own it. */
     phase = OS_HOOK_SHUTDOWN;
+    const Os_ArtiCaller arti = Os_ArtiCallerSave();
+    Os_ArtiHook(OS_HOOK_SHUTDOWN, error, 0);
     ShutdownHook(error);
+    Os_ArtiHook(OS_HOOK_SHUTDOWN, error, 1);
+    Os_ArtiCallerRestore(arti);
     phase = previous;
 }

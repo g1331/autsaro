@@ -9,7 +9,10 @@ static volatile LONG admission;
 
 static uint32_t input_interrupt(void) {
     if (Os_TargetReady() != 0) {
-        if (SetEvent(Os_Config->input_task, Os_Config->input_event) != E_OK) {
+        Os_ArtiInternalEnter();
+        const StatusType status = SetEvent(Os_Config->input_task, Os_Config->input_event);
+        Os_ArtiInternalLeave();
+        if (status != E_OK) {
             Os_BackendShutdown(E_OS_STATE);
         }
 #ifdef OS_EVENT_TESTS
