@@ -1,0 +1,150 @@
+{
+  "compiler": "gcc (Rev5, Built by MSYS2 project) 16.1.0",
+  "language": "C99",
+  "observations": [
+    {
+      "binarySha256": "7492f7160fb0719456c6036d40af4efa4fb2d8568dd02cbc2700b5a677dfc29b",
+      "compiledMutations": [
+        {
+          "binarySha256": "39941b6bd9074abf1534c6fa7cd2ac666be08aa30bcc6024d88401ac41fbbfef",
+          "detected": true,
+          "exitCode": 1,
+          "mutatedHeaderSha256": "da525eeb59f0c6d8f985dc5d189b1aed993a2deb68d98b5438c0957c7e8f2517",
+          "name": "wrong-nanosecond-scale"
+        },
+        {
+          "binarySha256": "854a9df9c57b391a2e0e4c2a9956fe50a5fdd961de7741c521160bac6a21ad72",
+          "detected": true,
+          "exitCode": 2,
+          "mutatedHeaderSha256": "195a4ff8e154e29cedf7dc9b9d09af9747290d4361e1d9e58bf8c34140fbba81",
+          "name": "duplicate-argument-evaluation"
+        }
+      ],
+      "counter": "SystemCounter",
+      "expressionVectors": 4,
+      "headerSha256": "dda3bb317b1a11a52e02ac57217206e5979184e70a692f686680382bfaf4a923",
+      "literalUnitValues": 24,
+      "singleEvaluations": 4,
+      "status": "pass",
+      "timerReport": {
+        "counter": {
+          "maximum": 65535,
+          "name": "SystemCounter",
+          "path": "/Configuration/Os/SystemCounter",
+          "tickNanoseconds": 1000000
+        },
+        "format": "autosar-os-generation-timing-v1",
+        "hostTimeouts": [
+          {
+            "advancesAutomotiveTime": false,
+            "clock": "Windows monotonic milliseconds",
+            "owner": "Os_TargetWaitTick",
+            "rangeMilliseconds": [
+              1,
+              5000
+            ]
+          },
+          {
+            "advancesAutomotiveTime": false,
+            "clock": "Windows monotonic milliseconds",
+            "limitMilliseconds": 5000,
+            "owner": "HostBatchV1"
+          }
+        ],
+        "internalPeriodicTimers": [],
+        "kernelSoftwareTimers": {
+          "configUSE_TIMERS": 0,
+          "enabled": false
+        },
+        "kernelTick": {
+          "logicalMillisecondsPerRequest": 1,
+          "periodicHostThread": false,
+          "source": "explicit controlled interrupt1"
+        },
+        "requirement": "SWS_Os_00370",
+        "scope": "Selected single-core controlled-logical-time target; no hardware timer claim."
+      }
+    },
+    {
+      "binarySha256": "66a3ea753257555463d781a2bd0cc093fa5bab48868d730400dc3bd4611f4571",
+      "compiledMutations": [
+        {
+          "binarySha256": "b41b74ae849ec41e08bb57731e4c2b4a4a7e25fe5cad0c50f89751d59bc922d8",
+          "detected": true,
+          "exitCode": 1,
+          "mutatedHeaderSha256": "0984b1770be907e1a55064eefb44d5d3528f5c89796f913251072c89d8bd0d11",
+          "name": "wrong-nanosecond-scale"
+        },
+        {
+          "binarySha256": "1a7e6ebd7c58d4b89908685656ea79da8f652f9c973dfed40ee12e4582e3709f",
+          "detected": true,
+          "exitCode": 2,
+          "mutatedHeaderSha256": "1ebed7ad8242abbd2c285e6dbdda581059f6288efec03a2dbbaadf5b044c8b15",
+          "name": "duplicate-argument-evaluation"
+        }
+      ],
+      "counter": "RenamedCounter",
+      "expressionVectors": 4,
+      "headerSha256": "e0e9212e06fb7d4b22aa764dda6caea2d44ca3ecb98cf187896c648ed6f1a765",
+      "literalUnitValues": 24,
+      "singleEvaluations": 4,
+      "status": "pass",
+      "timerReport": {
+        "counter": {
+          "maximum": 65535,
+          "name": "RenamedCounter",
+          "path": "/Configuration/Os/RenamedCounter",
+          "tickNanoseconds": 1000000
+        },
+        "format": "autosar-os-generation-timing-v1",
+        "hostTimeouts": [
+          {
+            "advancesAutomotiveTime": false,
+            "clock": "Windows monotonic milliseconds",
+            "owner": "Os_TargetWaitTick",
+            "rangeMilliseconds": [
+              1,
+              5000
+            ]
+          },
+          {
+            "advancesAutomotiveTime": false,
+            "clock": "Windows monotonic milliseconds",
+            "limitMilliseconds": 5000,
+            "owner": "HostBatchV1"
+          }
+        ],
+        "internalPeriodicTimers": [],
+        "kernelSoftwareTimers": {
+          "configUSE_TIMERS": 0,
+          "enabled": false
+        },
+        "kernelTick": {
+          "logicalMillisecondsPerRequest": 1,
+          "periodicHostThread": false,
+          "source": "explicit controlled interrupt1"
+        },
+        "requirement": "SWS_Os_00370",
+        "scope": "Selected single-core controlled-logical-time target; no hardware timer claim."
+      }
+    }
+  ],
+  "product_sources": {
+    "core/src/integration/ecu.rs": "3f7e8889faa77a6b2127069f6839f4bdb018f7b98a5655860e0cd52e582101e6",
+    "core/src/integration/schedule.rs": "8bb9b5164e9285d6826a46b2ff2e8ce33d8e458fe54dd163d71165c29a681a1c",
+    "core/tests/fixtures/ecu_counter_time.c": "18d1fb0704c970dfc85106b9503a4622ba78435bf22a36eb0d331893db30e7f1",
+    "core/tests/support/epic4_counter_time.rs": "a8fa23a7ab0aa2ab9736681e52b063785c9bf6887464d3ffbce6ad7e00517891",
+    "runtime/os/FreeRTOSConfig.h": "03b64e00357a47db0ce053d10766690c8c72a92caac03beb792704e235b9a23b",
+    "runtime/os/include/Os_Cfg.h": "34439ac9d1b5a9bbd371b458abe03dc2498563b4ad6774b9cea6a7557d0bf5ec",
+    "runtime/os/include/Os_Types.h": "97ecf8fdef7d1ed677397584838a30645d4e9433edfc064f2096a8522fd7abed",
+    "runtime/os/patches/0001-controlled-host-lifecycle.patch": "b522c8fa69454989be899658d670f6313fb621f455f32a258e06fad18fbbf04f"
+  },
+  "rejectedResolutionsSeconds": [
+    "0.002",
+    "0.0005",
+    "0"
+  ],
+  "scope": "Two generated and compiled Counter names,64 independent values/evaluation/expression checks, four compiled negative oracles, internal timing reports and three profile rejections. No RTE service-port or full MISRA claim.",
+  "status": "pass for selected generated Counter time contracts; complete SC1/C221 remains open",
+  "test": "epic4_generated_counter_timing_contracts"
+}

@@ -34,6 +34,14 @@ mod epic4_protocol;
 #[path = "support/epic4_timing.rs"]
 mod epic4_timing;
 
+#[path = "support/epic4_counter_time.rs"]
+mod epic4_counter_time;
+
+#[test]
+fn epic4_generated_counter_timing_contracts() {
+    epic4_counter_time::verify();
+}
+
 #[test]
 fn epic4_independent_behavior_and_legacy_regression() {
     epic4_protocol::independent_behavior();

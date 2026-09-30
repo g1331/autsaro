@@ -57,6 +57,16 @@ context: []
 
 ## Implementation Notes
 
+最终GUI出口的环境前置探针已取得实际结果：.scratch/epic4/isolated_desktop_probe.py通过CreateDesktopW和STARTUPINFOW.lpDesktop创建独立desktop并启动子进程；子进程在核对非Default身份后成功创建／销毁隐藏原生窗口。isolated-desktop-probe-result.json记录输入桌面前后均为Default，未调用SwitchDesktop、foreground或输入注入。此结果仅证明独立desktop对象与隐藏窗口环境可用，不是Tauri／WebView2渲染或IPC通过，也不宣称进程／数据安全沙箱；4.21／4.22仍须验证实际应用窗口、渲染、IPC及交接场景。API依据https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-createdesktopw和https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/ns-processthreadsapi-startupinfow。
+
+公共兼容性继续核查：p37要求为旧OSEK Declare对象宏提供无功能兼容声明，当前runtime/os/include中未发现DeclareTask／DeclareResource／DeclareEvent／DeclareAlarm，需要按OSEK原文核定完整集合再实现，不能用实际配置依赖这些宏。p136的91025还列出多种通用开发错误常量，当前Os_Types.h只声明已运行SC1错误；后续需按实际规范核定公共符号义务并用独立消费者检查，而不是因SC2／多核运行未选择就自动跳过整个公共声明。p158的RestartType原文仅列OS_OSAPPLICATION_RESTART，现有声明匹配，不凭其他实现新增规范并未要求的标识。
+
+RTE服务后续规格须按原文p227～229而非类型名称推断单位：91027的OsService提供port由Counter实例作port-defined参数；00560仅在该Counter有OsSecondsPerTick时出现，本参考输入满足。GetCounterValue／GetElapsedValue的TimeInMicrosecondsType参数描述明确是当前／先前tick值与tick差，Mapped to API为同名原生服务；不能因类型名就擅自乘1000再传回原生GetElapsedValue。新类型头和本次OS_TICKS2宏均不替代该标准service port及ClientServerInterface工件，后续必须验证标准描述、实际RTE调用和错误／输出保持。
+
+逐项核查发现下一项真实缺口：实际R24-11 p132的SWS_Os_00367禁止不返回StatusType的OS服务触发ErrorHook（ActivateTaskAsyn／SetEventAsyn例外未选择）；p76的00093只要求忽略非中断服务，并仅对StatusType服务返回9，没有授权标量／void服务触发ErrorHook。当前Os.c的StartOS、ShutdownOS、GetActiveApplicationMode、GetISRID及DRAFT isOsStarted错误分支仍调用Os_ErrorResult，需按服务返回类别修正。下一独立增量须保留无副作用／无效值、真实栈和关闭门，保留StatusType服务及00368／00369／00069明确要求的系统清理Hook，新增真实配置／未配置Hook过程确认标量／void错误不改变Hook计数／参数快照，并使实际旧分支副本被独立断言拒绝。相关历史调用／屏蔽测试里依赖这些错误Hook的预期须按原文纠正，不能删除无副作用或合法StatusType报告覆盖。本时间宏增量不据此声称整体SC1已通过。
+
+时间生成增量起始68d7467f4597aa318c71c40467384e1882c7467b。按实际R24-11 p393的00393／00370，从唯一已校验ScheduleContract保留OsSecondsPerTick的整毫秒值及Counter路径；固定profile仍只接受1ms，不扩大支持范围。core/src/integration/ecu.rs生成Os_Counter.h并从实际Os_Cfg.h接入，使普通Os.h消费者取得NS／US／MS／SEC四宏。名称来自Counter短名，参数按TickType完整0..UINT32_MAX契约只求值一次；标准命名宏只转发至static inline函数，先将函数的TickType单参数扩为PhysicalTimeType再计算，避免对调用方复合表达式直接做更宽cast，完整输入范围纳秒不溢出，整数秒向下截断。生成os-generation-timing.json列出实际无内部周期timer、configUSE_TIMERS0、显式受控IRQ1及宿主看门狗，不把宿主时间说成汽车时间。core/tests/support/epic4_timing.rs及独立C99 fixture验证默认／改名Counter、四单位全边界、副作用／表达式括号、报告和非法分辨率拒绝；实际错误比例和重复求值变异必须被独立字面预期拒绝。后续向量段、Memory Mapping、RTE服务及全部507行仍独立核查，本增量最终验收记录见Verification。
+
 公共类型增量起始04af5b2fbe5377d627d3bb678edc76170b965267。原文p151将DONOTCARE／TotalNumberOfCores限定在多核环境；仍提供明确的公共常量并将所选核数固定为1，不能据此宣称多核运行能力。p229的RTE类型通过新Rte_Os_Type.h提供，TimeInMicrosecondsType为uint64；同一消费者可同时包含Os.h和RTE头，因此CounterType须有唯一uint32定义，统一现有native配置、API和有类型错误参数，禁止通过不同include顺序产生两个不兼容CounterType。已配置Counter容量保持原有8个；新增256、65536和UINT32_MAX标识的真实拒绝／输出保持／ErrorHook参数验证，证明高位不会截断成合法Counter0。公共消费者按实际规范约束核对类型和常量，生成离线闭包包含新头，不以RTE头交付代替Counter服务接口和生成时间换算义务。
 
 后续507行逐项核查已发现“SC1 public interfaces”95行不全是C类型：封存section标签在8.8.2.2后未继续更新，实际PDF p238/239属于配置校验，p321为ARTI配置，p391～393为OS生成义务。保留封存行及适用性，最终处置须按原文实际章节核对，不能按标签批量通过。p223的ReceiverPullCB明确可选且依赖IOC接收配置；p229另规定Rte_Os_Type.h中的TimeInMicrosecondsType为uint64、CounterType为uint32。p393还包含可重定位中断向量段、内部timer信息、OS_TICKS2单位换算宏和Memory Mapping封装；必须追到实际生成工件及适用配置，并与4.19/4.20出口对齐，不能用现有公共头编译或原生行为测试代替这些义务。
@@ -99,6 +109,8 @@ ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参�
 
 ## Review Triage Log
 
+- 时间生成增量三路只读复核：blind和verification-gap无发现。edge提出“TickType大于UINT32_MAX会导致纳秒溢出”：false（当前生成Counter的合法值域），实际Os_Types.h的TickType为uint64_t，不能以C类型宽度驳回。原生Os_TimeValidate也明确拒绝maximum>UINT32_MAX，生成器的ScheduleContract.counter_maximum来自parse::<u32>()，当前Counter配置最大65535；已校验分辨率为1ms，生成转换宏明确支持0..UINT32_MAX，比全部合法配置Counter值域更宽，最大支持参数的纳秒乘积4294967295000000小于UINT64_MAX。更大的TickType虽可在C中表达，但超出这一生成Counter／转换契约，不能声称已支持任意64位数的纳秒转换。保留真实UINT32_MAX边界断言及上述显式契约，不把uint64类型误记为uint32。整体507／C221及独立出口仍开放。
+
 - Counter／RTE公共类型增量blind、edge、verification-gap三路独立只读复核均无发现。范围为唯一uint32 Counter定义、uint64时间类型、六包含顺序、17原生拒绝向量、三个实际旧宽度变异及生成离线消费者；不以该增量关闭507行或完整故事。
 
 - 嵌套ISR增量三路独立复核：blind与edge无发现；verification-gap的旧isr_cleanup ErrorHook内要求Cat2已可递送为medium/patch。OSEK §11.1明确Hook不能被Cat2打断，新Hook gate导致旧断言与实际契约冲突。改为Hook内仍屏蔽Cat2，保留随后真实ISR6 probe、helper和原Task获取/释放全部资源的断言；不删除资源重获和LIFO清理验证。完整门首轮已观察到该旧测试失败，日志保留；修正后须定向复验并完成最终门。
@@ -124,6 +136,8 @@ ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参�
 - 容量独立增量三路blind／edge／verification-gap均未发现可定位缺陷或验证缺口；完整故事的Hook/错误/ISR工作仍开放。正式容量/真实生成两项测试163.73s通过；18容量、40受控时间、43计时向量封存，26最低容量义务直接映射到四个主场景，部分静态exit1原样保留。容量增量完整门exit0：85个集成测试（660.24s）、29Python、UI/桌面构建和两组Clippy通过；本故事Hook/错误/ISR仍未完成，sprint保持in-progress。
 
 ## Verification
+
+时间生成增量完整门exit0：95个核心集成测试1162.63s、29Python、增量格式／C99、UI lint/build、桌面build及两组Clippy均通过；正式epic4_generated_counter_timing_contracts在最终门重新生成／编译并通过。两种Counter名称共64字面值／单次求值／表达式向量，四个实际坏比例／重复求值变异和三种不支持分辨率拒绝均通过；两个实际生成头消费者部分静态exit1诊断保留。14项产品源码摘要及两种生成Os_Counter／Os_Cfg摘要与最终门来源一致。三路独立复核完成，唯一宽Tick疑问已按实际uint64类型、原生／生成32位Counter最大值限制及显式转换契约驳回，没有弱化已有断言。三个规范义务增加限定证据关联，全部507封存行与160／346／1分类不变，69行有增量关联，全部最终结果仍待逐项核查。完整门日志.scratch/epic4/story418-generated-time-full-gate.log及同名.exit保留，4.18／Epic4保持in-progress；下一00367非Status服务错误Hook修正、向量段／Memory Mapping／RTE服务、C221及最终独立出口仍须完成。
 
 Counter／RTE公共类型增量完整门exit0：94个核心集成测试1128.37s、29Python、增量格式／C99、UI lint/build、桌面build和两组Clippy均通过。17原生过程、六真实头文件包含顺序和三个实际旧八位Counter变异均有独立断言；生成ECU交付两公共头并由移动后的独立消费者验证。四个工件共170项产品源码摘要与最终源码一致；12单元部分静态exit1诊断保留，不宣称完整MISRA。三路独立复核均无发现；四条类型义务增加限定证据关联，507封存行保持不变，66行已有增量关联但全部最终结果仍待逐项核查。原始完整门日志.scratch/epic4/story418-counter-full-gate.log及同名.exit保留。4.18／Epic4保持in-progress，后续RTE服务端口、时间换算／内部计时／向量段／Memory Mapping和完整出口不据此关闭。
 

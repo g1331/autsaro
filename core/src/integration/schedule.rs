@@ -36,6 +36,7 @@ pub struct ScheduleContract {
     pub task_priority: u8,
     pub counter: String,
     pub counter_maximum: u32,
+    pub counter_tick_ms: u32,
     pub entities: Vec<ScheduledEntity>,
     pub synchronous_event: String,
 }
@@ -159,11 +160,12 @@ pub(super) fn inspect(
     let maximum = value(graph, counter, "OsCounterMaxAllowedValue", false)
         .and_then(|value| value.parse::<u32>().ok())
         .filter(|value| *value != 0);
+    let counter_tick_ms = value(graph, counter, "OsSecondsPerTick", false).and_then(milliseconds);
     if maximum.is_none()
         || value(graph, counter, "OsCounterType", false) != Some("SOFTWARE")
         || value(graph, counter, "OsCounterTicksPerBase", false) != Some("1")
         || value(graph, counter, "OsCounterMinCycle", false) != Some("1")
-        || value(graph, counter, "OsSecondsPerTick", false).and_then(milliseconds) != Some(1)
+        || counter_tick_ms != Some(1)
     {
         return Err(reject(
             graph,
@@ -633,6 +635,7 @@ pub(super) fn inspect(
         task_priority: priority.unwrap(),
         counter: graph.elements[counter].object.clone(),
         counter_maximum: maximum.unwrap(),
+        counter_tick_ms: counter_tick_ms.unwrap(),
         entities,
         synchronous_event: synchronous.unwrap(),
     })

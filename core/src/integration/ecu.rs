@@ -63,6 +63,43 @@ impl ValidatedIntegrationPlan {
             source_paths.insert(path, delivered.to_owned());
         }
         files.extend(offline::sources().map_err(reject)?);
+        let counter_name = c_name(plan.schedule.counter.rsplit('/').next().unwrap());
+        let tick_ms = u64::from(plan.schedule.counter_tick_ms);
+        let counter_header = format!(
+            "/** @file Generated Counter time conversions (SWS_Os_00393).\n * Argument: a TickType value in0..UINT32_MAX; evaluated once.\n * Result: PhysicalTimeType. Integer seconds truncate toward zero.\n * The validated Counter resolution is {tick_ms} logical millisecond(s).\n * The largest nanosecond result fits uint64_t without overflow.\n */\n#ifndef AUTOSAR_GENERATED_OS_COUNTER_H\n#define AUTOSAR_GENERATED_OS_COUNTER_H\n#include \"Os_Types.h\"\nstatic inline PhysicalTimeType Os_TicksToNs_{counter_name}(TickType ticks) {{\n    return (PhysicalTimeType)ticks * UINT64_C({ns});\n}}\nstatic inline PhysicalTimeType Os_TicksToUs_{counter_name}(TickType ticks) {{\n    return (PhysicalTimeType)ticks * UINT64_C({us});\n}}\nstatic inline PhysicalTimeType Os_TicksToMs_{counter_name}(TickType ticks) {{\n    return (PhysicalTimeType)ticks * UINT64_C({tick_ms});\n}}\nstatic inline PhysicalTimeType Os_TicksToSec_{counter_name}(TickType ticks) {{\n    return ((PhysicalTimeType)ticks * UINT64_C({tick_ms})) / UINT64_C(1000);\n}}\n#define OS_TICKS2NS_{counter_name}(ticks) (Os_TicksToNs_{counter_name}((ticks)))\n#define OS_TICKS2US_{counter_name}(ticks) (Os_TicksToUs_{counter_name}((ticks)))\n#define OS_TICKS2MS_{counter_name}(ticks) (Os_TicksToMs_{counter_name}((ticks)))\n#define OS_TICKS2SEC_{counter_name}(ticks) (Os_TicksToSec_{counter_name}((ticks)))\n#endif\n",
+            ns = tick_ms * 1_000_000,
+            us = tick_ms * 1_000,
+        );
+        files.insert(
+            "os/include/Os_Counter.h".into(),
+            counter_header.into_bytes(),
+        );
+        let configuration = files.get_mut("os/include/Os_Cfg.h").unwrap();
+        let mut configuration_text =
+            String::from_utf8(configuration.clone()).map_err(|error| reject(error.to_string()))?;
+        let end = configuration_text.rfind("#endif").unwrap();
+        configuration_text.insert_str(end, "#include \"Os_Counter.h\"\n");
+        *configuration = configuration_text.into_bytes();
+        let mut timer_report = serde_json::to_vec_pretty(&serde_json::json!({
+            "format": "autosar-os-generation-timing-v1",
+            "requirement": "SWS_Os_00370",
+            "counter": { "path": plan.schedule.counter, "name": counter_name,
+                "tickNanoseconds": tick_ms * 1_000_000, "maximum": plan.schedule.counter_maximum },
+            "internalPeriodicTimers": [],
+            "kernelSoftwareTimers": { "enabled": false, "configUSE_TIMERS": 0 },
+            "kernelTick": { "source": "explicit controlled interrupt1", "periodicHostThread": false,
+                "logicalMillisecondsPerRequest": 1 },
+            "hostTimeouts": [
+                { "owner": "Os_TargetWaitTick", "clock": "Windows monotonic milliseconds",
+                    "rangeMilliseconds": [1, 5000], "advancesAutomotiveTime": false },
+                { "owner": "HostBatchV1", "clock": "Windows monotonic milliseconds",
+                    "limitMilliseconds": 5000, "advancesAutomotiveTime": false }
+            ],
+            "scope": "Selected single-core controlled-logical-time target; no hardware timer claim."
+        }))
+        .map_err(|error| reject(error.to_string()))?;
+        timer_report.push(b'\n');
+        files.insert("os-generation-timing.json".into(), timer_report);
         for (name, bytes) in contract.files() {
             if name.starts_with("include/") || name == "contract.json" {
                 if let Some(previous) = files.insert(name.clone(), bytes.clone()) {
@@ -391,7 +428,7 @@ impl ValidatedIntegrationPlan {
             }))
             .unwrap(),
         );
-        files.insert("README.md".into(), b"# ECU integration source project\n\nThis generated Windows x64 project consumes one validated standard input plan. The actual single Task_Ecu, generated RTE/reference application, BSW target variants, static OS configuration and fixed FreeRTOS sources are included. The original kernel and twelve product patches are retained; build.ps1 applies the patches only to its separate build copy. MIT notices remain in kernel/LICENSE.md. Product source is included for authorized internal use, without a new public license grant. AUTOSAR XSD/MOD/PDF files and compiler binaries are external and are not redistributed.\n\nRun PowerShell build.ps1 -OutputDirectory <new-empty-directory> with Git and the pinned GCC 16.1.0 x64 toolchain on PATH. The script checks source manifests, compiler identity and native TLS, and builds a bounded startup probe. Source trees stay unchanged. An optional -ControlSource <external-consumer.c> links an independent native consumer instead of the bundled probe; it supplies main only and consumes the same delivered public headers and runtime. Generation itself requires this fixed compiler and Git for a complete compile/link preflight before installing any destination. Run the resulting ecu_probe.exe; it drives individual controlled ticks and consumes/confirms actual outputs outside the automotive task. Build with -HostBatch to select ecu_host_batch.exe, the production HostBatchV1 stdin/stdout entry. Stage BEGIN <epoch>, up to 256 RX <CAN id> <dlc> <exact hex bytes> lines, then COMMIT. Epochs never decrease and each batch spans at most 1000 ms. Each intermediate tick completes individually; inputs precede processing at their target epoch, and equal epochs do not repeat periodic work. OUT records are confirmed only after successful physical write/flush. COMMIT_OK requires real Waiting with copied inputs, ticks, outputs and acknowledgements drained. COMMIT_ERROR reports executed work and BSW input errors; REJECT is admission failure. Each COMMIT has one fixed 5000 ms host watchdog. Failed/blocked output or the 257th pending output closes the ECU without claiming rollback. Diagnostic trace retains a bounded prefix and reports trace_dropped separately. -HostBatch cannot be combined with -TestMode or -ControlSource. Complete application/network/SC1/handoff evidence is separate; a successful build/probe is not those acceptance decisions.\n".to_vec());
+        files.insert("README.md".into(), b"# ECU integration source project\n\nThis generated Windows x64 project consumes one validated standard input plan. The actual single Task_Ecu, generated RTE/reference application, BSW target variants, static OS configuration and fixed FreeRTOS sources are included. The original kernel and twelve product patches are retained; build.ps1 applies the patches only to its separate build copy. MIT notices remain in kernel/LICENSE.md. Product source is included for authorized internal use, without a new public license grant. AUTOSAR XSD/MOD/PDF files and compiler binaries are external and are not redistributed.\n\nRun PowerShell build.ps1 -OutputDirectory <new-empty-directory> with Git and the pinned GCC 16.1.0 x64 toolchain on PATH. The script checks source manifests, compiler identity and native TLS, and builds a bounded startup probe. Source trees stay unchanged. An optional -ControlSource <external-consumer.c> links an independent native consumer instead of the bundled probe; it supplies main only and consumes the same delivered public headers and runtime. Generation itself requires this fixed compiler and Git for a complete compile/link preflight before installing any destination. Run the resulting ecu_probe.exe; it drives individual controlled ticks and consumes/confirms actual outputs outside the automotive task. Build with -HostBatch to select ecu_host_batch.exe, the production HostBatchV1 stdin/stdout entry. Stage BEGIN <epoch>, up to 256 RX <CAN id> <dlc> <exact hex bytes> lines, then COMMIT. Epochs never decrease and each batch spans at most 1000 ms. Each intermediate tick completes individually; inputs precede processing at their target epoch, and equal epochs do not repeat periodic work. OUT records are confirmed only after successful physical write/flush. COMMIT_OK requires real Waiting with copied inputs, ticks, outputs and acknowledgements drained. COMMIT_ERROR reports executed work and BSW input errors; REJECT is admission failure. Each COMMIT has one fixed 5000 ms host watchdog. Failed/blocked output or the 257th pending output closes the ECU without claiming rollback. Diagnostic trace retains a bounded prefix and reports trace_dropped separately. -HostBatch cannot be combined with -TestMode or -ControlSource. Include Os.h for the generated OS_TICKS2NS/US/MS/SEC_<Counter> macros. Pass a TickType value; each argument is evaluated once and integer seconds truncate toward zero. os-generation-timing.json lists the validated Counter resolution and the selected target internal timers and host watchdogs. These watchdogs never advance automotive time. Complete application/network/SC1/handoff evidence is separate; a successful build/probe is not those acceptance decisions.\n".to_vec());
         let files = generator::seal_files(files.into_iter().collect());
         super::link_check::verify(&files).map_err(reject)?;
         Ok(EcuIntegrationFiles { files })

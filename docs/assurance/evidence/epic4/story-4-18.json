@@ -4250,7 +4250,17 @@
         "core_count=1"
       ],
       "final_result": "pending_current_profile_and_exit_assessment",
-      "increment_results": []
+      "increment_results": [
+        {
+          "artifact": "generated-counter-time-obligations-4-18.json",
+          "normalized_artifact_sha256": "401d216ba97617bf9380e26e2b122bf052e55af31e2d7169d0bab36d9916414c",
+          "artifact_hash_representation": "UTF-8 sorted compact JSON; not raw local provenance",
+          "row_key": "SWS_Os_00789",
+          "scoped_result": "verified_for_selected_generated_counter_timing_contract",
+          "verified_scope": "PhysicalTimeType is the implementation-specific uint64 type used by generated conversion function results. All supported Counter maxima are at mostUINT32_MAX and all unit results fit uint64; SEC integer truncation is explicit. No arbitrary64-bit NS conversion claim.",
+          "remaining_scope": "All507 final current-profile dispositions, generated relocatable vector section, OS Memory Mapping, RTE service ports, complete C221/ARTI/handoff and independent Epic exits remain open."
+        }
+      ]
     },
     {
       "key": "SWS_Os_00790",
@@ -7797,7 +7807,17 @@
         "core_count=1"
       ],
       "final_result": "pending_current_profile_and_exit_assessment",
-      "increment_results": []
+      "increment_results": [
+        {
+          "artifact": "generated-counter-time-obligations-4-18.json",
+          "normalized_artifact_sha256": "401d216ba97617bf9380e26e2b122bf052e55af31e2d7169d0bab36d9916414c",
+          "artifact_hash_representation": "UTF-8 sorted compact JSON; not raw local provenance",
+          "row_key": "SWS_Os_00370",
+          "scoped_result": "verified_for_selected_generated_counter_timing_contract",
+          "verified_scope": "The delivered os-generation-timing.json lists the selected target internal timing use: no internal periodic timer, configUSE_TIMERS0, controlled interrupt1 and explicit one-ms logical requests. Windows Os_TargetWaitTick/HostBatch watchdog limits are reported separately and do not advance automotive time. Independent generated report assertions run for two Counter names.",
+          "remaining_scope": "All507 final current-profile dispositions, generated relocatable vector section, OS Memory Mapping, RTE service ports, complete C221/ARTI/handoff and independent Epic exits remain open."
+        }
+      ]
     },
     {
       "key": "SWS_Os_00393",
@@ -7812,7 +7832,17 @@
         "core_count=1"
       ],
       "final_result": "pending_current_profile_and_exit_assessment",
-      "increment_results": []
+      "increment_results": [
+        {
+          "artifact": "generated-counter-time-obligations-4-18.json",
+          "normalized_artifact_sha256": "401d216ba97617bf9380e26e2b122bf052e55af31e2d7169d0bab36d9916414c",
+          "artifact_hash_representation": "UTF-8 sorted compact JSON; not raw local provenance",
+          "row_key": "SWS_Os_00393",
+          "scoped_result": "verified_for_selected_generated_counter_timing_contract",
+          "verified_scope": "Actual generated Os.h/Os_Cfg.h consumers expose all four prescribed macros named from the configured Counter. Default and renamed Counters compile/run24 literal unit values,4 single evaluations and4 composite-expression vectors each. Full supported Counter domain0..UINT32_MAX is representable in uint64 physical nanoseconds; native and generated Counter maxima both reject wider values. Four actual bad-scale/double-evaluation compiled mutations are detected. Three unsupported resolutions reject before generation.",
+          "remaining_scope": "All507 final current-profile dispositions, generated relocatable vector section, OS Memory Mapping, RTE service ports, complete C221/ARTI/handoff and independent Epic exits remain open."
+        }
+      ]
     },
     {
       "key": "SWS_Os_00815",
