@@ -1,5 +1,4 @@
 use autosar_config_core::integration::{InputSource, PlanDependencies, RuntimeCatalog, build_plan};
-use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -33,7 +32,6 @@ pub fn verify() {
     let runtime = RuntimeCatalog::from_repository(root).unwrap();
     let original = super::epic4_plan::inputs();
     let scratch = super::Scratch::new();
-    let mut observations = Vec::new();
     for (renamed, maximum) in [(false, 65535u32), (true, 65535u32), (false, 4095u32)] {
         let inputs = original
             .iter()
@@ -100,20 +98,6 @@ pub fn verify() {
         assert_eq!(report["hostTimeouts"][1]["advancesAutomotiveTime"], false);
         let header_path = project.join("os/include/Os_Counter.h");
         let header = fs::read_to_string(&header_path).unwrap();
-        let raw_headers = root
-            .join(".scratch/epic4/story418-generated-time-headers")
-            .join(if maximum == 4095 {
-                "SystemCounter-4095"
-            } else {
-                counter
-            });
-        for (name, bytes) in files.files() {
-            if name.starts_with("os/include/") || name.starts_with("include/") {
-                let destination = raw_headers.join(name);
-                fs::create_dir_all(destination.parent().unwrap()).unwrap();
-                fs::write(destination, bytes).unwrap();
-            }
-        }
         if renamed {
             assert!(!header.contains("SystemCounter"));
         }
@@ -125,7 +109,6 @@ pub fn verify() {
             String::from_utf8_lossy(&output.stdout).trim(),
             "counter_time PASS: 24 literal unit values; 4 single evaluations; 4 expressions"
         );
-        let mut mutations = Vec::new();
         for (name, mutant, expected_exit) in [
             (
                 "wrong-nanosecond-scale",
@@ -189,22 +172,8 @@ pub fn verify() {
             compile(root, &project, &mutated_binary, renamed, maximum);
             let result = Command::new(&mutated_binary).output().unwrap();
             assert_eq!(result.status.code(), Some(expected_exit));
-            mutations.push(serde_json::json!({
-                "name": name, "detected": true, "exitCode": expected_exit,
-                "mutatedHeaderSha256": format!("{:x}", Sha256::digest(mutant.as_bytes())),
-                "binarySha256": format!("{:x}", Sha256::digest(fs::read(mutated_binary).unwrap()))
-            }));
         }
         fs::write(&header_path, &header).unwrap();
-        observations.push(serde_json::json!({
-            "counter": counter, "status": "pass", "literalUnitValues": 24,
-            "counterMaximum": maximum,
-            "singleEvaluations": 4, "expressionVectors": 4, "timerReport": report,
-            "legacyCounterConstantChecks": 11,
-            "headerSha256": format!("{:x}", Sha256::digest(header.as_bytes())),
-            "binarySha256": format!("{:x}", Sha256::digest(fs::read(binary).unwrap())),
-            "compiledMutations": mutations
-        }));
     }
     for resolution in ["0.002", "0.0005", "0"] {
         let inputs = original
@@ -226,36 +195,4 @@ pub fn verify() {
         let error = build_plan(&inputs, &dependencies, &runtime).err().unwrap();
         assert!(error.iter().any(|issue| issue.code == "COUNTER_PROFILE"));
     }
-    let sources = [
-        "core/src/integration/ecu.rs",
-        "core/src/integration/schedule.rs",
-        "core/tests/fixtures/ecu_counter_time.c",
-        "core/tests/support/epic4_counter_time.rs",
-        "runtime/os/include/Os_Types.h",
-        "runtime/os/include/Os_Cfg.h",
-        "runtime/os/FreeRTOSConfig.h",
-        "runtime/os/patches/0001-controlled-host-lifecycle.patch",
-    ]
-    .into_iter()
-    .map(|name| {
-        (
-            name,
-            format!("{:x}", Sha256::digest(fs::read(root.join(name)).unwrap())),
-        )
-    })
-    .collect::<std::collections::BTreeMap<_, _>>();
-    let compiler = Command::new("gcc").arg("--version").output().unwrap();
-    assert!(compiler.status.success());
-    let evidence = serde_json::json!({
-        "status": "pass for selected generated Counter time contracts; complete SC1/C221 remains open",
-        "test": "epic4_generated_counter_timing_contracts",
-        "compiler": String::from_utf8_lossy(&compiler.stdout).lines().next().unwrap(),
-        "language": "C99", "product_sources": sources, "observations": observations,
-        "rejectedResolutionsSeconds": ["0.002", "0.0005", "0"],
-        "scope": "Two generated and compiled Counter names,64 independent values/evaluation/expression checks, four compiled negative oracles, internal timing reports and three profile rejections. No RTE service-port or full MISRA claim."
-    });
-    let evidence_path = root.join("docs/assurance/evidence/epic4/generated-counter-time-4-18.json");
-    let mut bytes = serde_json::to_vec_pretty(&evidence).unwrap();
-    bytes.push(b'\n');
-    fs::write(evidence_path, bytes).unwrap();
 }

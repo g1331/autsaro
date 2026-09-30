@@ -61,28 +61,17 @@ python -m venv .quality-venv
 .\.quality-venv\Scripts\python.exe -m pip install -r scripts/requirements-quality.txt
 npm ci --prefix ui
 python scripts/verify.py --scope all
-python scripts/verify.py --scope baseline
 ```
 
-审计代表性生成工程时，可先用核心示例在独立临时目录生成一个带 Tx 信号的主机 ECU，再把其输出传给全量基线；目录由调用者保留以核对 `files.list`、`files.sha256` 和扫描输入：
+组合构建与测试可运行 `python scripts/quality.py`：检查仓库源码的 UTF-8、末尾换行、空白和 Python 语法，对**相对指定 story 起始提交新改的行**分别用 rustfmt、clang-format 和 Prettier 检查格式，并用 GCC 严格 C99 模式检查主机运行时源码和独立头文件的语法；随后执行 UI ESLint 与严格类型构建、核心测试、桌面构建及 Rust Clippy 的 correctness/suspicious 检查。
 
-```powershell
-$sample = Join-Path $env:TEMP ('autosar-quality-' + [guid]::NewGuid().ToString('N'))
-cargo run --manifest-path core/Cargo.toml --example quality_sample -- $sample
-python scripts/verify.py --scope baseline --generated-dir (Join-Path $sample 'generated')
-```
-
-增量交付验证包含 `python scripts/quality.py`：检查仓库源码的 UTF-8、末尾换行、空白和 Python 语法，对**相对指定 story 起始提交新改的行**分别用 rustfmt、clang-format 和 Prettier 检查格式，并用 GCC 严格 C99 模式检查主机运行时源码和独立头文件的语法；随后执行 UI ESLint 与严格类型构建、核心测试、桌面构建及 Rust Clippy 的 correctness/suspicious 检查。
-
-进行中的 story 须在实现记录中保存起始提交，并用 `--base` 显式指定；省略时，未提交的改动对比 `HEAD`，干净工作区复核上一提交时对比 `HEAD^`。修改旧文件无需顺带全文件重排，但新改行须符合对应格式器。
-
-`verify --scope baseline` 是单独的**全量质量与证据缺口审计**，逐项汇总受支持源码的全文件格式、Python Ruff、UI ESLint、两套 Rust 全告警 Clippy、公开 C 头文件的 Doxygen 文档告警、运行时 BSW/RTE C 的 Cppcheck MISRA 部分扫描，一份完整性清单可核对的代表性生成工程的配置 C（用 `--generated-dir <工程目录>` 指定），以及各能力档案的 `spec_obligations` 状态；有缺口便返回非零。日常 `--scope all` 仍是增量交付门，不能把它的绿色结果解释为全量基线通过。运行部分 MISRA 扫描需另安装 `cppcheck`（当前验证版本 2.21.0）并确保它及随包的 `misra.py` 在本机可用；Windows/MSYS2 可安装 `mingw-w64-x86_64-cppcheck`。Cppcheck 的开源规则覆盖不完整，不提供 `--generated-dir` 时生成 C 项会报“未执行”；提供后仅扫描该份生成配置 C，仍不覆盖所有配置、目标集成和逐模块全部 SWS；即使全绿也不构成 MISRA、AUTOSAR 或实机符合性证明。Doxygen 使用 [`runtime/Doxyfile`](runtime/Doxyfile) 检查 `runtime/include/` 的公开接口、配置类型与注释参数，当前验证版本 1.16.1；Windows/MSYS2 可安装 `mingw-w64-x86_64-doxygen`。现存未注释声明会使基线报红，Doxygen 能检查文档缺失和标签错误，不能判断说明是否真实，也不代表 AUTOSAR 或 MISRA 符合性。适用性、偏离和完整规范证据仍按[验收决定](docs/assurance/acceptance-policy.md)逐组合建立。
+BMad 开发规格记录起始提交，并用 `--base` 显式指定；省略时，未提交的改动对比 `HEAD`，干净工作区复核上一提交时对比 `HEAD^`。修改旧文件无需顺带全文件重排，但新改行须符合对应格式器。
 
 调试桌面程序时，先在一个终端运行 `npm run dev --prefix ui`（端口 `127.0.0.1:1420`），另一个终端运行 `src-tauri/target/debug/autosar-config-desktop.exe`。当前验证的是源码目录中的本地调试程序；生成器从仓库 `runtime/` 复制目标源码，桌面程序从上述本地路径取得 XSD。没有可脱离源码目录使用的安装包。
 
 ## 使用顺序
 
-项目开发由仓库内固定版本 BMad 接管。[产品简述](_bmad-output/planning-artifacts/product-brief.md)、[PRD](_bmad-output/planning-artifacts/prd.md)、[架构](_bmad-output/planning-artifacts/architecture.md)与 [epics](_bmad-output/planning-artifacts/epics.md) 是当前规划入口；`_bmad-output/implementation-artifacts/sprint-status.yaml` 记录任务状态。学习层目前只在产品简述中列为待规划方向。面向使用者的[项目使用说明](docs/project/OWNER_GUIDE.md)给出日常说法；Agent 按委托范围调用仓库安装的 BMad 技能。[内部验收规则](docs/assurance/acceptance-policy.md)、`docs/assurance/capabilities.json` 和 `docs/assurance/evidence/` 分别保存质量门、支持声明和证据；早期产品决定与研究分别归档于 `docs/project/archive/` 和 `docs/research/autosar-platform/`，迁移前任务及反馈保存在 `docs/workflow/archive/`，均不参与选题。
+项目开发由仓库内固定版本 BMad 接管。[产品简述](_bmad-output/planning-artifacts/product-brief.md)、[PRD](_bmad-output/planning-artifacts/prd.md)、[架构](_bmad-output/planning-artifacts/architecture.md)与 [epics](_bmad-output/planning-artifacts/epics.md) 是当前规划入口；`_bmad-output/implementation-artifacts/sprint-status.yaml` 记录任务状态。学习层目前只在产品简述中列为待规划方向。面向使用者的[项目使用说明](docs/project/OWNER_GUIDE.md)给出日常说法；Agent 按委托范围调用仓库安装的 BMad 技能。开发、验证、复核和流程工件完全按安装的 BMad 执行，验证结论进入对应 story/spec；早期产品决定与研究分别归档于 `docs/project/archive/` 和 `docs/research/autosar-platform/`，迁移前任务及反馈保存在 Git 历史，均不参与选题。
 
 已提交的 `.agents/skills/` 和 `_bmad/` 可直接供 Codex 使用；重新安装或更新时固定 `bmad-method@6.12.0`、BMM 和 `codex`，先核对安装器差异，不让新版本覆盖团队定制。`_bmad/config.user.toml` 是被 Git 忽略的个人安装答案；团队共用语言和配置放在 `_bmad/custom/config.toml`。从仓库打开 Codex 会话可调用 `bmad-help` 查看当前阶段，也可直接委托一个 story、epic 或规划目标。
 

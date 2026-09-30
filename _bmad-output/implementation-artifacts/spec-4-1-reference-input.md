@@ -61,13 +61,13 @@ Given 现有 BSW 与未来生产者，When 核对描述，Then 已有符号对�
 
 XSD ZIP SHA-256 为 9db3ab1d2ec4db7cc8ff09f1259ff93a7a5945a9500d4cd3ea4a7090f2a25766；MOD ZIP 为 df1e3bc992e49de6e14e5c1a679d7ce7ca90d2450d66186cea0b4a0f1f6555fb。本机 lxml 5.4.0 可辅助查看 grammar；验收仍从官方 XSD 实际验证。
 
-正式 Rust 入口选中并执行恰一个测试通过；七个正例文件、18 个反例、原始摘要及外部定义引用已校验。17 个当前 BSW 入口的正式 return/arguments 与真实头文件/实现核对；未来 RTE/组件实现单列。17 个反例 XSD pass 后语义拒绝，1 个结构错误 XSD fail 后语义 not_run。证据为 docs/assurance/evidence/epic4/reference-input.json。
+正式 Rust 入口选中并执行恰一个测试通过；七个正例文件、18 个反例、原始摘要及外部定义引用已校验。17 个当前 BSW 入口的正式 return/arguments 与真实头文件/实现核对；未来 RTE/组件实现单列。17 个反例 XSD pass 后语义拒绝，1 个结构错误 XSD fail 后语义 not_run。证据为 本 story 的验证记录。
 
-最终全门通过：核心 3 单元/61 集成无跳过、UI lint/build、桌面 build/clippy、Python 16、质量及 assurance 7。BSW 精确签名、周期 Tx 映射、独立预期及两项复核修复均包含在最终测试范围中。
+最终全门通过：核心 3 单元/61 集成无跳过、UI lint/build、桌面 build/clippy、Python 16、源码检查。BSW 精确签名、周期 Tx 映射、独立预期及两项复核修复均包含在最终测试范围中。
 
 ## Review Log
 
 - Blind：未发现可确认可操作问题。
 - Verification gap：清单未约束实际文件集合。主代理在临时副本加入 XSD 非法的未列 extra.arxml，复现旧审计接受。已对目录全文件集合与清单精确比对，并在 Rust 对实际正例 ARXML 集合单独比对，保证全部进入 XSD。新增回归测试保护该真实缺陷。
 - Edge：本地对象可覆盖官方 MOD 同路径定义。主代理复现 local/external 相同路径被接受，已在合并前拒绝路径交集；新增真实审计调用验证拒绝，不放宽固定外部定义身份。
-- 两项修复的定向 Python 2 测试和恰一个正式 Rust 入口均通过。两位独立复核者分别确认原发现已关闭，未发现修复范围内具体残留缺陷；最终全门通过。仅 4.1 可 done，W0 义务矩阵、产品输入计划、W3 和 SC1 门未放行。
+- 两项修复的定向 Python 2 测试和恰一个正式 Rust 入口均通过。两位独立复核者分别确认原发现已关闭，未发现修复范围内具体残留缺陷；最终全门通过。仅 4.1 可 done，W0 具体接口与行为、产品输入计划、W3 和 SC1 门未放行。

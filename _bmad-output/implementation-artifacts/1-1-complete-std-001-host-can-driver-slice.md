@@ -7,8 +7,6 @@ route: dispatch
 baseline_commit: fb776bfaef4016b3f4903136701b80b108ccc55e
 review_loop_iteration: 0
 context:
-  - docs/workflow/archive/tasks/STD-001-host-can-driver-api.md
-  - docs/assurance/evidence/STD-001-host-can-driver-api-2026-09-27.md
 ---
 
 <frozen-after-approval reason="既有已授权任务迁移；范围由历史任务卡限定">
@@ -88,11 +86,9 @@ Rejected:
 
 ## Verification
 
-`python scripts/verify.py --scope all --base <story-baseline>`；`python scripts/verify.py --scope baseline --generated-dir <工程目录>`。按证据逐一执行隔离主机行为验证；原生 GUI 无隔离环境时标记未验证。
 
-本轮以 `35d0274` 为基线运行增量门：12 个 Python 测试、3 个核心单元测试、53 个端到端测试、UI lint/构建、核心与桌面 Clippy/构建均通过。定向 `standard_can_host_entry_points_reject_invalid_requests_and_send_valid_frame` 1/1 通过；双 ECU 金向量也在完整测试中通过。以新生成的独立代表工程运行全量基线：全文件格式、Python/UI lint、全告警 Clippy 与 Doxygen 通过；BSW/RTE/生成 C 的部分 MISRA 扫描分别报告 25/11/7 项，七个能力档案的 `spec_obligations` 仍为 `not_run`，故全量基线退出 1。原生桌面 GUI 未在隔离会话重新执行。Story 保持 `in-progress`。
+本轮以 `35d0274` 为基线运行增量门：12 个 Python 测试、3 个核心单元测试、53 个端到端测试、UI lint/构建、核心与桌面 Clippy/构建均通过。定向 `standard_can_host_entry_points_reject_invalid_requests_and_send_valid_frame` 1/1 通过；双 ECU 金向量也在完整测试中通过。以新生成的独立代表工程运行全量基线：全文件格式、Python/UI lint、全告警 Clippy 与 Doxygen 通过；BSW/RTE/生成 C 的部分 MISRA 扫描分别报告 25/11/7 项，七个BMad 实现记录的 `spec_obligations` 仍为 `not_run`，故全量基线退出 1。原生桌面 GUI 未在隔离会话重新执行。Story 保持 `in-progress`。
 
-本次以 `fb776bfaef4016b3f4903136701b80b108ccc55e` 对最终源码运行 `python scripts/verify.py --scope all --base ...`：12 个脚本测试、3 个核心单元测试、53 个端到端测试、UI lint/构建、核心及桌面 Clippy/构建通过，含双 ECU 金向量和新增回调/门控定向 harness。单独的 `cargo test --manifest-path core/Cargo.toml standard_can -- --nocapture` 两项通过。使用最终源码的 `quality_sample` 新生成代表工程，`files.list` 含 `Can.c`、`CanIf.c`、`CanIf.h`；运行 `python scripts/verify.py --scope baseline --generated-dir ...`：格式、Python/UI lint、全告警 Clippy、Doxygen 通过；BSW/RTE/生成 C 部分 MISRA 分别为 25/11/7 项，七个规范证据门仍 `not_run`，基线退出 1。当前未在隔离桌面会话复验原生 GUI；能力声明保持 `documented_behavior`。
 
 2026-09-27 最终增量以 `f92fd6ade6c8d8582df750bc46a0cdd0d2d067de` 为起点。`python scripts/verify.py --scope all --base ...` 的 12 个脚本测试、3 个核心单元测试、53 个端到端测试、UI lint/构建、核心及桌面 Clippy/构建全部通过。`cargo test --manifest-path core/Cargo.toml generated_c99_ecus_exchange_golden_vectors_and_recover_from_faults -- --nocapture` 在调度接入后再次通过。隔离 Windows Sandbox 原生桌面新建 `Story1Sandbox.arxml`，加入 `StatusTx`（11 位 CAN ID 321，DLC 8，100 ms Tx）及 `Counter`（bit 0，8 bit，初值 17），保存预览确认 1 处 ARXML 变化，运行诊断 0 错误，界面确认生成 48 项工程文件。宿主以生成的 `build.ps1` GCC 编译成功；向 `ecu_host.exe` 输入 `T 100`，实际输出 `X 321 8 1100000000000000`，与独立配置预期一致。隔离 Sandbox 未安装 GCC，构建与运行在宿主后台完成。全量基线对该 GUI 工程报告格式、lint、Clippy、Doxygen 均通过；部分 MISRA 扫描 BSW/RTE/生成 C 为 42/11/7 项，七个 `spec_obligations` 仍 `not_run`，因此基线退出 1。新增 MemMap 标记约定触发 BSW 部分扫描中的 20.1/20.5；它仅映射宿主默认代码与清零数据段。BSWMD、CanSM/CDD 上层通知、完整 MISRA 和官方一致性仍未闭合，`HOST-CAN-01` 维持 `documented_behavior`；此 Story 的结论只针对固定主机切片。
 

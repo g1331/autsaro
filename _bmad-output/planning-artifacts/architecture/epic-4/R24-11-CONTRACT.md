@@ -62,7 +62,7 @@
 | Alarm/ScheduleTable：§7.3/8/10 | OSEK Alarm、调度表状态/启动/停止/切换及适用接口；至少两个调度表容量 | 配置可选 Alarm 激活 TimingEvent，不免除实现的调度表能力；复验已配置周期、位置、偏移及容量测试 |
 | Stack：§7.5；`SWS_Os_00067/00068/00396` | Task/Category2 ISR 栈故障检测；无 ProtectionHook 调 ShutdownOS，有 Hook 按规范处理 | 主机端口需能检测其真实执行栈或声明未实现；仅人为翻 flag 不证明检测义务。故障注入必须隔离并可复现 |
 | 生命周期、ISR/错误/Hook：§7.1/8/10 | StartOS/ShutdownOS、启动模式、Extended Status 与适用 Hook/ISR/中断禁用配对 | 参考推荐 Extended Status、单核、无保护 OS-Application；真实 ISR 为 Epic 6 证据，主机只证明模拟边界，不能从 SC1 自动省略基础中断语义 |
-| R24-11 ARTI：§7.16/7.17；`SWS_Os_00858/00829/00836/00837` | 模块描述/ORTI 容器覆盖及 Hook 结构、状态对应；评估每条适用性 | 旧 OS 的日志宏不直接替代 ARTI；生成描述与实际对象匹配，接口/状态轨迹有证据，未核项记 not_run |
+| R24-11 ARTI：§7.16/7.17；`SWS_Os_00858/00829/00836/00837` | 模块描述/ORTI 容器覆盖及 Hook 结构、状态对应；评估每条适用性 | 旧 OS 的日志宏不直接替代 ARTI；生成描述与实际对象匹配，接口/状态轨迹有证据，未核项记 未执行 |
 | 扩展功能：`SWS_Os_00240`、§7.11 | 提供高等级功能时其接口仍须符合对应规范 | 首版不承诺 SC2–4、时间/内存保护、多核或 IOC；不能把宿主隔离当成 AUTOSAR 保护能力 |
 
 这张表明确义务族和验证出口，尚不是逐条完整的 SC1 符合性清单。OS-Application、ProtectionHook、ARTI 等应按完整规范与所选配置审查，不能根据等级表中一个 Yes/空格擅自豁免。
@@ -101,4 +101,4 @@
 
 Q1/Q2 已确认，架构和跨模块契约已收口。后续按 [集成契约 W0–W5](INTEGRATION-CONTRACT.md) 规格化 stories、建立原创输入/条款/来源清单并交付实现证据；完整 SC1 属于 W5 退出门，真实栈与核心语义属于 W1 先验关口，不以尚未实现阻断架构定稿。交付声明仍按实际证据，不降低 FR-6。
 
-当前只读核查确认 HEAD `817063e` 的 Epic 3 已有可重建包、重开和离线参考入口，三个 story 与 sprint 均为 done；依据为该提交、[_bmad-output 中三份 story 记录](../../../implementation-artifacts/3-3-verify-delivered-host-behavior-without-the-workbench.md)与当前源码，本轮未重跑其构建/运行/GUI 验收。原规划“生成目录不含 ARXML”已陈旧。`Rte.c` 和 `Os.c` 仍分别是固定 Com wrapper 和 `Os_Advance` 轮询，因此 Epic 4 仍 **FAIL / backlog / 无 ready-for-dev stories**。Epic 5/6 的 NM、诊断持久化和 MCU 门不由此解除；能力档案不升级。
+当前只读核查确认 HEAD `817063e` 的 Epic 3 已有可重建包、重开和离线参考入口，三个 story 与 sprint 均为 done；依据为该提交、[_bmad-output 中三份 story 记录](../../../implementation-artifacts/3-3-verify-delivered-host-behavior-without-the-workbench.md)与当前源码，本轮未重跑其构建/运行/GUI 验收。原规划“生成目录不含 ARXML”已陈旧。`Rte.c` 和 `Os.c` 仍分别是固定 Com wrapper 和 `Os_Advance` 轮询，因此 Epic 4 仍 **FAIL / backlog / 无 ready-for-dev stories**。Epic 5/6 的 NM、诊断持久化和 MCU 门不由此解除；BMad 实现记录不升级。

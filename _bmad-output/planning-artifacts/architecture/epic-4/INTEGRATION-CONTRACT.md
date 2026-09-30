@@ -4,7 +4,7 @@
 
 ## 1. 输入、计划和生成闭包
 
-目标剖面 ID 固定为 epic4-win64-sr-cs-v1。支持单 ECU、单 Classical CAN 网络、一个单实例 ApplicationSwComponentType；只接受已经展开的 ECU_EXTRACT，不在此 Epic 实现任意 System→Extract 工具。输入角色沿用 [规范矩阵](R24-11-CONTRACT.md)：Extract、SWC/类型、所选 BSW 描述、对应实现、ECUC 定义及配置值、应用 C99 实现、固定内核/目标档案。
+目标剖面 ID 固定为 epic4-win64-sr-cs-v1。支持单 ECU、单 Classical CAN 网络、一个单实例 ApplicationSwComponentType；只接受已经展开的 ECU_EXTRACT，不在此 Epic 实现任意 System→Extract 工具。输入角色沿用 [具体规范接口与行为](R24-11-CONTRACT.md)：Extract、SWC/类型、所选 BSW 描述、对应实现、ECUC 定义及配置值、应用 C99 实现、固定内核/目标档案。
 
 解析结果首先形成只读的 ValidatedIntegrationPlan，所有生成器只消费该计划，不重新解析或补映射。它至少含输入文件角色/逻辑相对路径/原始字节 SHA-256、目标剖面及版本、完整 AUTOSAR 对象路径和实例、应用/实现数据类型映射、通信链、服务绑定、Runnable/Event/Task/Alarm、周期实体顺序、外部符号生产者、源码/工具/许可闭包。对象以完整路径＋实例身份关联，数值句柄由同一计划确定分配；重复短名不是同一对象。符号采用确定性命名，归一化碰撞是生成错误。
 

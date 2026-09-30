@@ -9,12 +9,6 @@
 # Original input raw-byte manifests must survive a fresh checkout unchanged.
 /core/tests/fixtures/epic4/** text eol=lf
 /core/tests/fixtures/epic4_oracles/** text eol=lf
-/docs/assurance/epic4/** text eol=lf
-# Canonical shared evidence bytes for the current SC1 calling/idle increment.
-/docs/assurance/evidence/epic4/calling-*-4-18.json text eol=lf
-/docs/assurance/evidence/epic4/idle-started-state-4-18.json text eol=lf
-/docs/assurance/evidence/epic4/isr-phase-release-mutations-4-18.json text eol=lf
-/docs/assurance/evidence/epic4/story-4-18.json text eol=lf
 
 # Fixed checkout byte identities for packaged BSW producers.
 /runtime/include/Can.h text eol=crlf
@@ -36,7 +30,6 @@
 /runtime/include/SchM_Can.h text eol=crlf
 /runtime/include/Security.h text eol=crlf
 /runtime/include/Std_Types.h text eol=crlf
-/docs/assurance/evidence/epic4/nested-*-4-18.json text eol=lf
 /runtime/src/Can.c text eol=crlf
 /runtime/src/CanIf.c text eol=crlf
 /runtime/src/CanTp.c text eol=crlf
@@ -51,12 +44,3 @@
 /runtime/src/NvM_HostStorage.h text eol=crlf
 /runtime/src/PduR.c text eol=crlf
 /runtime/src/Security.c text eol=crlf
-
-/docs/assurance/evidence/epic4/counter-type-*-4-18.json text eol=lf
-/docs/assurance/evidence/epic4/public-rte-types-4-18.json text eol=lf
-
-/docs/assurance/evidence/epic4/generated-counter-time*-4-18.json text eol=lf
-
-/docs/assurance/evidence/epic4/nonstatus-*-4-18.json text eol=lf
-/docs/assurance/evidence/epic4/source-repetition*-4-18.json text eol=lf
-/docs/assurance/evidence/epic4/public-compatibility*-4-18.json text eol=lf

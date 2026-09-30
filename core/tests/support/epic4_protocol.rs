@@ -1,6 +1,4 @@
 use serde_json::Value;
-use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
@@ -57,28 +55,6 @@ fn field<'a>(line: &'a str, key: &str) -> &'a str {
         .unwrap_or_else(|| panic!("missing {key}: {line}"))
 }
 
-fn digest(path: &Path) -> String {
-    format!("{:x}", Sha256::digest(fs::read(path).unwrap()))
-}
-
-fn tree(path: &Path, base: &Path, result: &mut BTreeMap<String, String>) {
-    for entry in fs::read_dir(path).unwrap() {
-        let path = entry.unwrap().path();
-        if path.is_dir() {
-            tree(&path, base, result);
-        } else {
-            result.insert(
-                path.strip_prefix(base)
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .replace('\\', "/"),
-                digest(&path),
-            );
-        }
-    }
-}
-
 fn frames(text: &str, id: u64) -> Vec<(u64, String)> {
     text.lines()
         .filter(|line| line.starts_with("OUT "))
@@ -99,17 +75,17 @@ pub fn independent_behavior() {
         &fs::read(root.join("core/tests/fixtures/epic4_oracles/protocol.json")).unwrap(),
     )
     .unwrap();
-    let sealed = Command::new("python")
+    let checked = Command::new("python")
         .args(["-X", "utf8"])
-        .arg(root.join("scripts/epic4_obligations.py"))
+        .arg(root.join("scripts/epic4_oracles.py"))
         .current_dir(root)
         .output()
         .unwrap();
     assert!(
-        sealed.status.success(),
+        checked.status.success(),
         "{}{}",
-        String::from_utf8_lossy(&sealed.stdout),
-        String::from_utf8_lossy(&sealed.stderr)
+        String::from_utf8_lossy(&checked.stdout),
+        String::from_utf8_lossy(&checked.stderr)
     );
     let scratch = super::Scratch::new();
     let source = scratch.0.join("protocol-source");
@@ -437,41 +413,14 @@ pub fn independent_behavior() {
     super::security_access_roundtrips_and_gates_host_writes();
     super::start_routine_restores_written_did_signals_and_respects_session();
     println!("EPIC4_PROTOCOL_LEGACY five independent host-v1 configurations pass");
-    let mut observations = BTreeMap::new();
     for entry in fs::read_dir(&scratch.0).unwrap() {
         let directory = entry.unwrap().path();
         if directory.join("stdout").is_file() {
             let text = fs::read_to_string(directory.join("stdout")).unwrap();
-            let records: Vec<_> = text
-                .lines()
-                .filter(|line| line.starts_with("OUT ") || line.starts_with("COMMIT_"))
-                .collect();
             assert!(
                 text.contains("lifecycle=Closed state=Ready reason=0"),
                 "{text}"
             );
-            observations.insert(directory.file_name().unwrap().to_str().unwrap().to_owned(), serde_json::json!({"exit_code":0,"records":records,"raw_stdout_sha256":digest(&directory.join("stdout")),"raw_stderr_sha256":digest(&directory.join("stderr"))}));
         }
     }
-    let mut generated = BTreeMap::new();
-    tree(&source, &source, &mut generated);
-    let repository: BTreeMap<_, _> = [
-        "core/tests/end_to_end.rs",
-        "core/tests/support/epic4_protocol.rs",
-        "runtime/src/Dcm.c",
-        "runtime/src/CanTp.c",
-        "runtime/contracts/bsw-v1.json",
-        "runtime/ecu/include/Ecu_HostBatch.h",
-        "runtime/ecu/include/Ecu_Target.h",
-        "runtime/ecu/src/Ecu_Target.c",
-        "runtime/ecu/src/Ecu_HostBridge.c",
-        "runtime/ecu/src/ecu_host_batch.c",
-    ]
-    .iter()
-    .map(|name| ((*name).to_owned(), digest(&root.join(name))))
-    .collect();
-    println!(
-        "EPIC4_PROTOCOL_EVIDENCE {}",
-        serde_json::json!({"format":"epic4-independent-protocol-v1","status":"pass for story4.16 host protocol and legacy scope; full SC1/MISRA/handoff remain open","baseline_commit":"8431b5bf6834db903692d9b9081cf7b64a2c2d8f","oracle_sha256":digest(&root.join("core/tests/fixtures/epic4_oracles/protocol.json")),"repository_sources":repository,"generated_sources":generated,"binary_sha256":digest(&binary),"observations":observations,"legacy":"five separate host-v1 configurations built and run with existing literal offline vectors","limits":["Headless Win64 host evidence only.","Unselected services stay available only on the separate old target.","Raw stack/thread observations omitted; raw output digests retained.","Full 221-item normative assessment, Required approvals, adopted code, full SC1 and handoff exits remain open."]})
-    );
 }

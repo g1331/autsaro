@@ -10,17 +10,15 @@ story_key: '4-18-补齐生命周期-extended-status-hook-和中断义务'
 context: []
 ---
 
-<frozen-after-approval reason="Epic4 approved intent and autonomous story execution">
+<frozen-after-approval reason="Epic4已确认产品意图；用户2026-09-30明确移除额外assurance流程">
 
 ## Intent
 
-使既定单核 SC1／EXTENDED 的真实 FreeRTOS Win64 后端完成全部适用错误、Hook、启动关闭、逻辑 ISR 与 OSEK 四一致性类最低容量义务。标准服务的成功、错误及清理路径由真实对象和实际内核调度证明；完整等级仍须经4.19～4.22出口。
+完成既定单核SC1真实FreeRTOS Win64后端的生命周期、标准服务／类型、两种状态模式、Hook、逻辑ISR和OSEK四一致性类能力。按BMad实现、验证、复核和记录，不另设报告、审批或默认核查矩阵。
 
 ## Boundaries & Constraints
 
-继承4.2封存507行本故事义务：160 applicable、346 conditional_na、1 conditional；逐条建立结果，不因参考ECU未用而删除能力。缺少同步、多核、OS-Application或IOC等前提时保留封存分类并说明具体条款前提；一般公共类型定义不能借SC1选择跳过。保持SC1／EXTENDED／单核／NONE、已采用FreeRTOS版本及真实原生栈，不重开选型、不扩展Epic2/5/6、不推送、不新增汽车线程或墙钟tick。
-
-所有实现使用C99及MISRA C:2012修订基线。Hook在真实转换边界运行，不用私有trace替代；不得在汽车owner或Hook中阻塞输出。Startup/Shutdown原有关闭控制栈、不可逆关闭与栈故障保护保留。标准调用层级按OSEK表和R24-11逐服务处理，拒绝必须无副作用，输出参数在拒绝时保持。
+保持参考EXTENDED、单核／NONE、固定FreeRTOS版本、唯一backend、真实原生栈及受控逻辑时间；支持显式STANDARD，不重开OS选型。汽车Task／Hook不执行阻塞宿主I/O。四一致性类最低容量、配对／嵌套、清理、调用层级和拒绝输出保持等实际行为不删减。SC2/3/4、实机及Epic2/5/6功能不扩展，不推送。C99和MISRA编码指导用于实际代码；验证和复核写入本工件。
 
 ## I/O & Edge-Case Matrix
 
@@ -37,99 +35,30 @@ context: []
 
 </frozen-after-approval>
 
-## Code Map & Tasks
+## Code Map
 
-- runtime/os/include/Os.h、Os_Target.h、Os_Hooks.h及Os_Error.c／内部错误声明：补标准服务、类型、错误码与参数宏；显式可选Hook和两个错误宏配置开关，默认未配置时保留既有消费者行为。已有初始化器和生成配置同步更新，不擅自实现SC2/3/4行为。
-- runtime/os/src/Os.c、Os_Time.c、Os_Schedule.c及内部声明：统一服务级错误身份/参数报告和调用层级/禁中断保护；ErrorHook递归抑制及准确输出保持。软件Counter/Alarm配置与私有受控tick owner要求分开验证，纯Basic容量配置不依赖Extended owner。
-- runtime/os/src/Os_Backend.c、FreeRTOSConfig.h：接入真实内核SWITCHED_OUT/IN及当前汽车身份；missing-end在原生Task trampoline中清理资源/屏蔽后正常结束；Shutdown路径不补PostTaskHook；保持真实栈关闭机制和StartOS不可返回。
-- runtime/os/patches/：仅在实际移植边界需要时增加受控补丁，保留来源/顺序/摘要。模拟pending位派发前统一判断全局、OS类、源及资源门槛；实际源清除与嵌套上下文恢复，不以后台线程模拟新调度。
-- runtime/os/tests/sc1_errors_hooks.c、scripts/epic4_os.py：独立字面Hook/错误/参数/ISR/清理/容量轨迹，新进程隔离配置；保留全部原生既有向量并更新被新正确行为改变的missing-end独立预期，记录依据。
-- core/tests/end_to_end.rs、生成模板及offline引用：加入epic4_sc1_errors_hooks_and_isr正式入口，生成交付闭包包含新实现/参数配置，实际参考ECU/HostBatch编译链接和行为回归。
-- docs/assurance/evidence/epic4/story-4-18.json、spec/sprint和既有说明：507行逐条结果与具体配置/实现/测试可双向追踪；拒绝或未跑如实记录，完整SC1、ARTI、221项和交接未通过不关闭。
+- runtime/os/include/Os.h、Os_Target.h、Os_Hooks.h、Os_Types.h及src/：标准服务、类型、上下文、Hook和错误参数。
+- runtime/os/src/Os_Backend.c及受控port补丁：真实切换、返回清理、ISR层级与内核状态。
+- runtime/os/tests/、scripts/epic4_os.py、core/tests/end_to_end.rs：实际原生行为、容量、错误与拒绝向量。
+- core/src/integration/ecu.rs、configuration.rs、schedule.rs及runtime/ecu/templates/：计划、状态模式、Counter常量、标准入口和交付生成。
 
 ## Tasks & Acceptance
 
-- [ ] 核对实际R24-11/OSEK原文、公共类型及完整调用表，冻结独立错误/Hook/中断/四类容量预期。
-- [ ] 补标准服务和错误/参数快照、Hook上下文及真实任务转换；实现missing-end正常终止与清理。
-- [x] 补全中断屏蔽配对/嵌套、源pending/ID及Cat2退出清理；实际idle动作与启动状态验证。
-- [ ] 四类成功容量与关键拒绝向量、所有适用服务和类型独立验证；507行逐条处置并保留封存适用性。
-- [ ] 既有OS/栈/时间/参考ECU/HostBatch回归、最终源码/二进制身份、静态/MISRA核查、完整增量门与三路独立复核，本地提交及sprint同步。
+- [x] 生命周期、missing-end、标准错误与准确参数、Hook上下文和真实转换。
+- [x] 中断配对／嵌套、实际pending／源控制、Cat2清理、idle及启动状态。
+- [x] 四类最低容量、公共类型、标准构造入口及所选生成Counter常量。
+- [x] STANDARD／EXTENDED真实构建、告警、参数、拒绝和生成交付行为。
+- [ ] 完成实际生成中断向量段和Memory Mapping声明／链接行为。
+- [ ] 完成Counter OsService端口与ClientServerInterface及配置一致性要求。
+- [ ] 完成剩余具体产品行为、相关回归与BMad复核，同步sprint并本地提交。
 
 ## Implementation Notes
 
-本构造增量同时按OSEK p65／66提供所选生成Counter的三种后缀常量、前缀ID等价后缀、系统三别名及OSTICKDURATION。新增ScheduleContract保留已校验base／minimum两个字段，原固定1及原字面格式拒绝不变；同一字段驱动Ecu_Config.c配置及Os_Counter.h公开常量，避免以kernel的32位范围替代实际软件Counter最大值。独立C99消费者同时检查两个名称及65535／4095两种最大值，共三配置33常量断言，原两配置64项单位／单次求值／表达式覆盖扩展至三配置96项及实际21个比例／求值／常量／别名变异保留；移动ECU独立控制器再将公开常量与实际链接Ecu_OsConfig和字面65535／1／1／1000000作比较。本证明限定于所选生成配置，native手工配置维度不自动成为全配置常量一致性声明。
+实际原生服务和调用表、参数／输出保持、屏蔽清理及同线程嵌套已有测试覆盖；GetISRID在真实ISR帧恢复外层，Hook不改变实际调度。CounterType统一uint32，TickType及TimeInMicrosecondsType为uint64；转换契约为合法Counter值域0..UINT32_MAX。生成器保持唯一验证计划和原输入拒绝规则。
 
-构造测试初轮的两项预期已纠正且保留失败：Alarm Callback依据R24表7.1不能ActivateTask，实际CALLEVEL2／原参数1／不激活后由Task合法激活；原私有handler拥有权失败沿用已封存port补丁的E_OS_ACCESS1，不擅自改为STATE7。第一轮mailbox配置拒绝曾被缺少私有source30优先级掩盖，删新校验的真实变异暴露该缺口；现给30正确优先级和void身体，并移除无关资源，使原校验全部合法且单独触发新拥有权拒绝。旧失败／mutant目录不清理，后续必须用新路径取得有效证据。
+最新增量065dbfa将TASK／ISR／ALARMCALLBACK接入实际配置和调度；11原生向量、8实际实现变异、三配置33常量断言及21头文件变异通过，完整100集成通过。d8ae0c2使STANDARD真实输入可生成、移到含空格新目录构建运行；两模式完整告警、18个Standard容量向量及三个删告警变异通过，完整102集成通过。两次均经BMad三路复核。参考配置仍为EXTENDED。
 
-OSEK构造入口增量起始3bd0e13baa1e85fca2dd4dae30131363e468de55。TASK／ISR宏生成有前置prototype的void身体，并用受控token拼接保留已展开为数值ID的原对象标识；TASK与ISR分别有OS_TASK_ENTRY／OS_ISR_ENTRY绑定宏，ALARMCALLBACK保留原回调例程名及void(void)原型。为让ISR宏同时可用于prototype与定义，不在宏内生成port ABI桥接函数；Os_IsrConfig附加可选32槽void身体表，NULL保留原手工uint32 port绑定。配置阶段拒绝无优先级、私有0/1、Cat1及已被input mailbox拥有的身体槽；bootstrap在StartupHook前安装单一typed uint32适配函数，按真实current interrupt索引调用void身体，既有Enter/Leave负责身份、资源／屏蔽清理和Task恢复，不增加线程或Task选择器。现有MailboxHandlerAllowed也保护显式配置身体不能被原始handler静默替换。实际生成Task以命名空间隔离的OS_TASK_ID_<shortName>绑定标准TASK身体及现有Ecu_TargetTask，再由同一生成ID初始化TaskConfig，保持原参考运行轨迹。原生成功／嵌套／清理／Alarm／错误参数与关键配置拒绝、旧桥接／丢调用／误索引变异、移动生成ECU及所有相关回归须实际验证；完整SC1／221与R17.2未批准状态保留。Counter常量由实际Counter计划另补，不能在此写死kernel范围。
-
-下一OSEK公共入口核查已按实际原文确认独立缺口：p54第13.2.5节要求TASK(TaskName)将对象名与入口函数绑定；p57/58的Cat2 ISR命名及p37／66的ALARMCALLBACK无参／无返回值声明亦需要公共构造宏。当前Os.h不存在三者，严格C99实际前置消费者已编译拒绝，记录.scratch/epic4/osek-entry-prechange/result.json。后续实现必须把用户void身体与现有native Task／ISR／Alarm配置及调度接通，尤其Cat2身体返回后的资源／屏蔽清理及激活递送不能只由头文件编译冒充；Cat1原文未规定该命名，不发明更严格要求。p65／66另要求所有已配置Counter的OSMAXALLOWEDVALUE_x／OSTICKSPERBASE_x／OSMINCYCLE_x，以及系统Counter的无后缀三常量和OSTICKDURATION；原文明确至少一个system time counter。需要基于实际受控Counter配置及生成工件核定，不能把所选FreeRTOS kernel tick范围直接当汽车Counter值。四个Declare兼容宏及通用错误符号增量只解决已声明的有限部分，不关闭这些义务。
-
-公共兼容／错误符号增量起始97f515fa03bcc5ffbe825a8795bcc93c61cfc641：四个宏在Os.h用不完整struct声明吸收旧分号且不展开参数；Os_Types.h补十个p136符号，保留旧数值，范围12、14～22。新public_compatibility.c／public-compatibility suite／正式epic4_os_public_compatibility验证16声明、23值和六包含顺序，nm比对声明前后全部定义符号，新增第七额外对象变异。现有epic4_ecu_integration_generation在实际移动工程头上编译同一独立消费者，Os.h交付字节同步核对；首轮仅Rust直接读取Windows C输出的CRLF与LF预期失配，已在读取边界统一换行而保留完整文本匹配，原失败日志不覆写。新增fixture的puts结果按R17.7显式处理，部分静态诊断及测试角色边界保留；最终定向、完整门及独立复核仍须完成后提交。
-
-下一公共兼容／错误符号增量按实际原文p37与OSEK p50／58／60／62实现四个无功能Declare宏，使用惰性不完整struct前向声明接受旧文件作用域分号，参数不展开／求值，不产生对象、函数、链接或配置依赖；R2.4 Advisory标签用途为标准源兼容，明确限定而不追认为Required批准。p13691025列十四个新增AUTOSAR错误名，当前仅四个已声明；补其余十个独立StatusType常量，保留既有错误数值，新增值由实现分配。独立严格C99消费者须覆盖已配置数值ID／未配置标识／重复声明／不求值参数，核对二十三个OSEK＋AUTOSAR错误名的非零、范围与唯一性，并通过实际旧头／空宏／有副作用宏／重复错误值等变异证明预期有效。实际旧公共头的前置消费者已编译拒绝，原始诊断位于.scratch/epic4/public-compatibility-prechange/result.json；该前置失败不计为实施通过。完整生成工程须用交付头编译消费者，不能用仓库include替代离线交付。
-
-00809源重复调用增量起始62c749e3d8dc59f4b26a997a9b0ea7a21d510191。在实际十二补丁端口副本上派生第十三补丁：Os_PortInterruptSourceControl仍先拒绝未安装／内核源，再在同一实际mutex内判断重复disable／enable并返回独立内部码2，重复失败不得改disabled／pending位；runtime/os/src/Os_Interrupt.c将该码映射E_OS_NOFUNC并按StatusType保留有类型ErrorHook。保留201页ClearPending TRUE／FALSE明确语义。runtime/os/tests/source_repetition.c须验证Task与Cat2、默认开启后Enable重复、关闭后Disable重复、两种ClearPending参数、全局屏蔽下真实pending保持、无配置Hook、非法源／私有源优先E_ID及错误参数。旧interrupt_pairing源场景保留双调用但按规范期待5／新增报告；合法EnableTRUE实际clear场景须先真正Disable对应源，避免以现在非法的重复Enable证明清除成功。第十三补丁、离线闭包、来源摘要、生成说明及正式测试同步。实际恢复重复成功和失败仍改pending／开关的副本必须被独立预期拒绝；完成验证／复核后才提交，507／C221／交接仍开放。
-
-00763的实际原文p88为“SC1 system standard mode shall be possible”，位于多核分配章节；当前封存行将它列为applicable，生成配置只允许OsStatus=EXTENDED，native Os_Cfg亦无显式status选择。最终核查须结合OSEK标准／扩展Status要求及实际单核profile判断并取得真实标准模式证据，不能仅因参考输入是EXTENDED就把这条记为通过或无依据重分类。后续若需支持provider的STANDARD配置，须保持所选参考ECU／扩展Status的所有错误检查与预期，避免借标准模式关闭有效保护或扩大既定参考输入边界。
-
-兼容宏的严格C99小实验已完成，原始来源及结果位于.scratch/epic4/compat-declaration-probe/result.json：空宏展开后旧文件作用域分号被GCC -std=c99 -Wall -Wextra -Werror -pedantic拒绝；惰性不完整struct前向声明同时接受已定义为数值的对象名与未配置标识，多次调用合法，编译／运行exit0且nm未发现对应对象或函数符号。该实验只解决C99兼容实现选择，不构成该宏的最终MISRA评估或完整OSEK通过；后续实现／交付仍须正式消费者和规范映射。
-
-兼容声明的原文范围已核定：OSEK2.2.3 PDF p50／58／60／62定义DeclareTask／DeclareResource／DeclareEvent／DeclareAlarm，p76说明这些构造元素因兼容保留；未发现DeclareCounter，不能凭其他OS实现发明其规范义务。AUTOSAR p37要求这些宏不承担配置功能。后续实现应保证旧文件作用域“DeclareX(identifier);”在严格C99／pedantic下可编译，不产生对象／函数定义或链接依赖；单纯空展开留下文件作用域分号须先实际检查，不能因宏名存在就认为兼容成立。
-
-下一中断源核查已证实00809缺口：实际p135要求Extended Status下重复Disable已关闭源或Enable已打开源返回E_OS_NOFUNC；现source_control只把端口bool成功映射为E_OK，interrupt_pairing.c的source场景显式把连续两次Disable5都预期E_OK，完整门也据此通过。后续独立增量须在同一原生mutex下检测真实源位，保持首次切换／pending清除语义，新增双调用／无副作用／ErrorHook有类型参数和ISR过程。00811的概括清除要求须结合Enable接口的ClearPending参数原文核定，不擅自删除FALSE保留pending的既有明确契约。
-
-00367增量起始c0b4ae90ac6986f73791d74102df97080e487b6d。实际非Status分支在Os.c去除ErrorHook报告，保留原失效返回／忽略行为、栈检查、关闭门和首次Start非返回契约；StatusType错误仍经标准报告边界。runtime/os/tests/nonstatus_errors.c新增真实Task、Cat1／Cat2、Startup／Pre／Post／Shutdown／Alarm／ErrorHook与未配置Hook过程，非Status错误不得增加计数，Status错误及有类型原参数保持；scripts/epic4_os.py接入独立字面预期，核心正式测试接入。旧calling／pairing／idle回归按00367只移除五类非Status错误记录预期，保留全部原Status拒绝、输出保持及真实pending／Task恢复验证。旧Os.c错误分支实际副本须被新断言拒绝，适用部分静态分析诊断保留；完成定向／全门及三路复核后才提交该独立增量，故事仍不得关闭。
-
-最终GUI出口的环境前置探针已取得实际结果：.scratch/epic4/isolated_desktop_probe.py通过CreateDesktopW和STARTUPINFOW.lpDesktop创建独立desktop并启动子进程；子进程在核对非Default身份后成功创建／销毁隐藏原生窗口。isolated-desktop-probe-result.json记录输入桌面前后均为Default，未调用SwitchDesktop、foreground或输入注入。此结果仅证明独立desktop对象与隐藏窗口环境可用，不是Tauri／WebView2渲染或IPC通过，也不宣称进程／数据安全沙箱；4.21／4.22仍须验证实际应用窗口、渲染、IPC及交接场景。API依据https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-createdesktopw和https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/ns-processthreadsapi-startupinfow。
-
-公共兼容性继续核查：p37要求为旧OSEK Declare对象宏提供无功能兼容声明，当前runtime/os/include中未发现DeclareTask／DeclareResource／DeclareEvent／DeclareAlarm，需要按OSEK原文核定完整集合再实现，不能用实际配置依赖这些宏。p136的91025还列出多种通用开发错误常量，当前Os_Types.h只声明已运行SC1错误；后续需按实际规范核定公共符号义务并用独立消费者检查，而不是因SC2／多核运行未选择就自动跳过整个公共声明。p158的RestartType原文仅列OS_OSAPPLICATION_RESTART，现有声明匹配，不凭其他实现新增规范并未要求的标识。
-
-RTE服务后续规格须按原文p227～229而非类型名称推断单位：91027的OsService提供port由Counter实例作port-defined参数；00560仅在该Counter有OsSecondsPerTick时出现，本参考输入满足。GetCounterValue／GetElapsedValue的TimeInMicrosecondsType参数描述明确是当前／先前tick值与tick差，Mapped to API为同名原生服务；不能因类型名就擅自乘1000再传回原生GetElapsedValue。新类型头和本次OS_TICKS2宏均不替代该标准service port及ClientServerInterface工件，后续必须验证标准描述、实际RTE调用和错误／输出保持。
-
-逐项核查发现下一项真实缺口：实际R24-11 p132的SWS_Os_00367禁止不返回StatusType的OS服务触发ErrorHook（ActivateTaskAsyn／SetEventAsyn例外未选择）；p76的00093只要求忽略非中断服务，并仅对StatusType服务返回9，没有授权标量／void服务触发ErrorHook。当前Os.c的StartOS、ShutdownOS、GetActiveApplicationMode、GetISRID及DRAFT isOsStarted错误分支仍调用Os_ErrorResult，需按服务返回类别修正。下一独立增量须保留无副作用／无效值、真实栈和关闭门，保留StatusType服务及00368／00369／00069明确要求的系统清理Hook，新增真实配置／未配置Hook过程确认标量／void错误不改变Hook计数／参数快照，并使实际旧分支副本被独立断言拒绝。相关历史调用／屏蔽测试里依赖这些错误Hook的预期须按原文纠正，不能删除无副作用或合法StatusType报告覆盖。本时间宏增量不据此声称整体SC1已通过。
-
-时间生成增量起始68d7467f4597aa318c71c40467384e1882c7467b。按实际R24-11 p393的00393／00370，从唯一已校验ScheduleContract保留OsSecondsPerTick的整毫秒值及Counter路径；固定profile仍只接受1ms，不扩大支持范围。core/src/integration/ecu.rs生成Os_Counter.h并从实际Os_Cfg.h接入，使普通Os.h消费者取得NS／US／MS／SEC四宏。名称来自Counter短名，参数按TickType完整0..UINT32_MAX契约只求值一次；标准命名宏只转发至static inline函数，先将函数的TickType单参数扩为PhysicalTimeType再计算，避免对调用方复合表达式直接做更宽cast，完整输入范围纳秒不溢出，整数秒向下截断。生成os-generation-timing.json列出实际无内部周期timer、configUSE_TIMERS0、显式受控IRQ1及宿主看门狗，不把宿主时间说成汽车时间。core/tests/support/epic4_timing.rs及独立C99 fixture验证默认／改名Counter、四单位全边界、副作用／表达式括号、报告和非法分辨率拒绝；实际错误比例和重复求值变异必须被独立字面预期拒绝。后续向量段、Memory Mapping、RTE服务及全部507行仍独立核查，本增量最终验收记录见Verification。
-
-公共类型增量起始04af5b2fbe5377d627d3bb678edc76170b965267。原文p151将DONOTCARE／TotalNumberOfCores限定在多核环境；仍提供明确的公共常量并将所选核数固定为1，不能据此宣称多核运行能力。p229的RTE类型通过新Rte_Os_Type.h提供，TimeInMicrosecondsType为uint64；同一消费者可同时包含Os.h和RTE头，因此CounterType须有唯一uint32定义，统一现有native配置、API和有类型错误参数，禁止通过不同include顺序产生两个不兼容CounterType。已配置Counter容量保持原有8个；新增256、65536和UINT32_MAX标识的真实拒绝／输出保持／ErrorHook参数验证，证明高位不会截断成合法Counter0。公共消费者按实际规范约束核对类型和常量，生成离线闭包包含新头，不以RTE头交付代替Counter服务接口和生成时间换算义务。
-
-后续507行逐项核查已发现“SC1 public interfaces”95行不全是C类型：封存section标签在8.8.2.2后未继续更新，实际PDF p238/239属于配置校验，p321为ARTI配置，p391～393为OS生成义务。保留封存行及适用性，最终处置须按原文实际章节核对，不能按标签批量通过。p223的ReceiverPullCB明确可选且依赖IOC接收配置；p229另规定Rte_Os_Type.h中的TimeInMicrosecondsType为uint64、CounterType为uint32。p393还包含可重定位中断向量段、内部timer信息、OS_TICKS2单位换算宏和Memory Mapping封装；必须追到实际生成工件及适用配置，并与4.19/4.20出口对齐，不能用现有公共头编译或原生行为测试代替这些义务。
-
-真实嵌套ISR增量起始94efe9345c98b58ba3be37338fa4b4550884bba2。配置附加可选Os_IsrConfig，32个静态源优先级，应用源2～31使用1～31（高值先行），0为未配置；私有yield0/tick1保留，显式配置时tick为最低1。NULL保留全部应用源同级31的平坦配置。实际原生S栈/既有mutex内在pend与critical出口递送更高优先级源，同级和低级保持pending，不创建ISR线程或另一Task选择器。每层保留身份、Hook阶段和有类型错误参数；资源归属为独立Task/ISR槽，子层清理不得释放父层资源。共享ISR资源的ceiling属于ISR优先级域，持有它的Task提升到所有Task之上；Task-only资源仍用Task优先级。配置校验保留内核源、Cat1/资源ACL和输入源的完整前提。
-
-独立验收须证明真实三层抢占/返回、同级与反向编号的优先级、子层资源/屏蔽清理、父ErrorHook快照恢复、All/OS屏蔽下Cat1/Cat2行为及最外层Task调度。OSEK2.2.3 PDF p73 §14.2.3.1明确Cat2可以抢占Cat1，但子层激活/事件不在最外层Cat1退出时触发重调度；保留请求至后续合法调度点。原生端口回调重入的R17.2范围和物理栈深度须明确记录，不能以有界深度冒充已批准偏离。生成模板/离线补丁闭包、所有初始化器、正式测试与来源摘要同步；当前实现中，尚无本增量通过声明。
-
-调用上下文/idle独立增量起始a9dbeeff93cdcb838480fa9afb2266baa65551fd。已读取并渲染R24-11 p72/73表，优先该版本扩展而非旧OSEK更窄许可；所有六屏蔽服务在各已支持Hook/Alarm阶段许可，Hook有独立逻辑屏蔽归属，保护原调用者状态同时对Hook自己屏蔽的服务执行00093规则。GetISRID仅ErrorHook许可；Mode在Error/Pre/Post/Startup/Shutdown许可；Shutdown仅Task/Cat2/Error/Startup，Start不从活动OS/Hook再次启动。ShutdownHook以无普通mutex的专用阶段设置调用，消除实际关闭栈错误服务取得受损actor锁的死锁。无当前ISR及私有yield的S actor普通服务拒绝。ControlIdle按单核省略CoreID检查，支持真实虚拟核既有NO_HALT，未知模式拒绝；isOsStarted按DRAFT语义记录StartOS入口而非Ready/成功，不改标为定稿。新增九调用上下文、五真实idle过程及两正式入口；原屏蔽向量扩展至31非中断服务。Alarm场景通过配置的软件Counter/Alarm回调真实递送；无ISR身份场景在真实原生ISR栈故障注入，不能证明嵌套支持。固定端口IRQ0为私有yield、IRQ1为受控tick；第十补丁保护两内核源的handler/源控制所有权，真实tick遵守All/OS屏蔽。两新增原生向量确认实际过滤器观察到pending tick时kernel仍0、票据未完成，恢复后同票据完成且kernel/Counter各增一次，时间回归共44向量，含两种消费Task自身屏蔽及ISR阶段／mutex交接的确定性验证；第十一补丁在释放mutex前结束ISR阶段。
-
-下一Cat2资源出口增量（起始9c6c7ece29b54e34e3598b415a77749b269c8119）：按本地R24-11 SWS_Os_00369，实际native dispatcher仍持mutex期间，复用资源释放实现LIFO清理真实配置资源，恢复所有权/ceiling后调用可选ErrorHook报告6，原currentISR在回调后才退出；遗留屏蔽仍按00368先恢复并报告9。独立预期覆盖单/双资源、Disable/All/OS/mixed、未配置Hook和平衡路径，实际pendingISR6和已激活Task1必须先后取得全部释放资源，再返回原Task0取得。完整嵌套ISR及SC1整体不据此关闭。
-
-中断独立增量（起始cd647a934790bce89c56ed6a22827a1517c6515c）：六配对服务采用实际原生actor的PE TLS状态，All与OS独立嵌套，Disable非嵌套，首/末配对更新共享原子owner数；实际端口分发遵守屏蔽，内核私有yield保持可用。25个StatusType及Start/Shutdown/Mode/GetISRID边界忽略被屏蔽调用者的非中断服务，保留输出；ErrorHook合法查询可观察原错误。Task missing-end和Cat2返回自动恢复遗留屏蔽；Cat2清理在原ISR身份下报告9/service252。GetISRID对实际Cat2返回身份、其他返回INVALID；尚未证明嵌套恢复。第九补丁在真实pending/handler表增加源开关及清除，三个标准源API在原有interrupt mutex内操作，Disable保留pending，Enable(clear)/ClearPending按真实位清除，非法/私有yield/Cat1/未安装源拒绝，Task/Cat2之外拒绝。公共boolean来自共同Std_Types.h，Windows RPC重名由平台边界隔离。源API入口同样检查真实原生栈和不可逆关闭门。
-
-当前中断证据：28个独立原生过程通过，包括四类配对交错/未配对、三种屏蔽下29非中断服务无副作用/准确错误参数、Cat1/Cat2身份与配对、四种Cat2泄漏恢复、四种missing-end恢复后真实pending递送和monitor运行、启动前拒绝，以及八个实际源控制场景（含真实Cat2内三个源API的清除/保留待决递送，以及在实际ISR栈上故意清除当前逻辑身份后的无副作用拒绝）。正式入口epic4_standard_interrupt_pairing接入核心测试。公共类型三包含顺序和ErrorHook八配置回归通过；部分静态扫描覆盖九本地OS模块、生成Hook及九补丁后的tasks.c/port.c共12单元，exit1诊断完整保留。R17.2有界wrapper/change重入仍未批准，完整MISRA/SC1不声明通过。完整ISR资源清理、实际嵌套ISR、全部调用表、ControlIdle/isOsStarted、507行最终结果及4.19～4.22仍待推进。
-
-返回Task/资源增量实施：trampoline在RUNNING状态通过标准错误通路报告E_OS_MISSINGEND11、内部合成service253，然后使用同一真实完成事务按LIFO清理外部资源/ceiling，正常发Post并消费激活队列；新激活重入真实原生栈，其他Task继续。移除未配置RES_SCHEDULER自动隐藏槽；既有成功资源向量改为真正显式配置最高Task ceiling，并新增未配置Get/Release双拒绝及状态不变。旧missing-end最低关闭预期按R24-11 p74～75更新为正常终止后monitor继续，全部22Finish/Chain回归通过。七个返回Task向量、26资源、22Finish回归、最终正式门和三路复核均通过，标准中断配对恢复仍开放。
-
-人工调用图核查补充：虽然错误报告函数和ErrorHook自身不递归，外层失败查询GetTaskState等标准wrapper可能仍活跃，ErrorHook依法再次查询同一服务时会重入该wrapper（error_hooks向量4已有真实路径）。这是不同于嵌套ErrorHook的有界函数重入；完整MISRA出口须对R17.2 Required作明确消除或受控偏离处置，目前没有批准，standard-error-static-analysis已记录，不能把部分编译/扫描或回调递归抑制冒充该规则全通过。
-
-后续missing-end清理已查明一处必须同时修正的资源契约：Os_BackendResource仍保留未配置RES_SCHEDULER时自动建立第八槽的旧分支，而R24-11 OS p37明确不自动创建。本故事冻结约束要求显式配置。下一资源/终止增量须移除自动分支，既有scheduler成功向量改为真正配置该资源，并补未配置拒绝；资源清理只能索引实际配置资源，不依赖该隐藏槽。当前容量增量已显式配置，不能用它证明这个未配置分支已关闭。
-
-Task Hook增量：第八受控补丁只观察原FIFO候选，在pxCurrentTCB赋值前发Post；真实SWITCHED_IN取得内部资源后发Pre。用单一运行Hook对象标记过滤无切换yield，同时Wait/Finish/Chain显式在状态变化前发Post并清除标记，防止内核出口重复。相同TCB的新激活重新发Pre，Shutdown关闭门后不发Post。生成离线闭包、八补丁来源摘要和工程说明同步；八独立过程字面轨迹覆盖抢占/等待/唤醒/Chain/Term、内部资源、未配置Hook、自身Chain、排队同TCB、Shutdown、noop-yield和已满足Wait。最终八向量、正式测试、三路独立复核和完整门均通过；不据此关闭4.18。
-
-ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参数快照、两个访问宏开关及可选回调配置；真实Task/Cat2/Startup三类执行上下文覆盖。Startup无汽车Task的嵌套错误报告返回INVALID_TASK；ErrorHook内再次失败绕过活跃报告函数，不递归、不覆盖外层快照，回调结束恢复之前Hook限制。Alarm动作错误在标准回调已配置时仅报告一次。三头文件分离避免循环include，生成交付闭包包含新头文件、Os_Error.c和Ecu_OsHooks.c。Pre/Post函数已绑定但真实转换调用仍待实现，绝不按本增量关闭4.18。八个独立新进程覆盖四种开关与配置/未配置，已配置每次31条独立错误记录；部分Cppcheck诊断保留，完整221项仍开放。
-
-下一实施增量的接口选择：ErrorHook参数快照使用逐服务的有类型结构/联合成员，保留TickType与各类输出指针原类型，不通过uintptr_t或void指针强转取回参数。一个错误报告边界负责回调前后上下文与递归抑制；ErrorHook内再次失败只返回状态，不覆盖外层快照。标准ErrorHook与现有Time.error_hook私有兼容通路须明确单次报告责任，原40向量作为回归依据。新可选Hook配置和两个宏开关按真实生产配置接入，旧未配置消费者不引入未定义回调符号。
-
-下一项已定位实际边界：configOS_REQUEST_FIFO的taskOS_SELECT_READY直接选择ready-list头并赋予pxCurrentTCB，Hook必须在候选确定、赋值前后接入且过滤相同Task；WaitEvent/Terminate/Chain要在waiting/activation状态改写前发Post，避免报告已WAITING/SUSPENDED的任务。当前参考ECUC明确OsErrorHook/Pre/Post及两个访问开关为true，生成配置尚无完整实现；后续须同时补runtime与生成闭包，不能只补测试回调。
-
-容量增量已实现：标准软件Counter/Alarm可独立于私有Extended-owner确认通道使用，wake_event0/ownerINVALID显式选择；该模式没有宿主硬件tick来源，硬件Counter配置拒绝，参考非零wake_event路径保持。GetTaskID读实际kernel选中Task，GetActiveApplicationMode读实际StartOS模式；完整Hook/错误/调用表仍待后续实现。四类最低容量、四类含非抢占Task、两类重复优先级/三次Basic排队激活、模式2及七类配置越界拒绝共18向量通过，实际资源/内部优先级/Alarm二次Task入口、ECC每Task八事件置位清除状态均有独立预期。
-
-首个类型增量：已补公共类型及范围/指针/常量，独立C99消费者覆盖header-only、Windows-before、Windows-after三种真实包含顺序及16项AccessType真值表。原生生命周期46向量通过；初次原生编译暴露Windows COM ApplicationType重名，现由既有Os_Windows.h边界隔离。类型/源码证据在public-type-contracts-4-18.json；本故事其他服务/Hook/ISR/容量仍未完成，不因类型编译通过升级等级。
-
-需求/授权无待确认缺口；无外部不可逆操作。新增公共服务与Hook配置影响OS声明、生成配置和全部本地静态初始化器，按所有消费者同步更新。纯标准公共类型先独立编译核对，条件类型不代表对应SC2/多核行为已实现。
-
-2026-09-29三路只读探查已返回。Task trampoline目前返回即E_OS_STATE关闭；只有Startup/Shutdown Hook，缺标准错误参数宏和Pre/Post；模拟ISR仅单current_interrupt和资源门槛，缺配对/源控制。现有数组上限足够表达四类容量，但没有完整成功容量向量。Os_TimeValidate强制Extended owner，须为纯软件Counter/Alarm实际使用消除不适用的私有tick条件。已读取本地R24-11 OS p74–76、131、194、201–202、205及OSEK最低容量/调用表；ControlIdle单核明确不查CoreID，idle模式硬件相关，isOsStarted在R24-11标为DRAFT，不能冒充已定稿条款。
-
-## Spec Change Log
+下一生成义务：00336需接入实际port读取／写入的32槽ulIsrHandler表所在可重定位段；00815需按OS_START_SEC／Os_MemMap／声明／OS_STOP_SEC覆盖实际Task及适用Hook／ISR／Alarm并核对链接；00560／91027需真实Counter服务端口与ClientServerInterface，p228参数是ticks／tick difference，不能因类型名称擅自乘1000。保留现有BSD/MIT及固定依赖边界。
 
 ## Review Triage Log
 
@@ -142,23 +71,23 @@ ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参�
 
 - 00367非Status服务增量三路独立只读复核完成：blind和verification-gap无发现；edge初次仅返回未完成的空输入读入结果，没有计为通过，要求同一复核者分块读取实际558492字节diff后重新分析，最终返回无发现。当前十原生向量、五个逐函数旧分支编译变异和9／28／5回归通过，330项来源摘要匹配；完整门仍须最终终态确认，不能据此关闭故事。
 
-- 时间生成增量三路只读复核：blind和verification-gap无发现。edge提出“TickType大于UINT32_MAX会导致纳秒溢出”：false（当前生成Counter的合法值域），实际Os_Types.h的TickType为uint64_t，不能以C类型宽度驳回。原生Os_TimeValidate也明确拒绝maximum>UINT32_MAX，生成器的ScheduleContract.counter_maximum来自parse::<u32>()，当前Counter配置最大65535；已校验分辨率为1ms，生成转换宏明确支持0..UINT32_MAX，比全部合法配置Counter值域更宽，最大支持参数的纳秒乘积4294967295000000小于UINT64_MAX。更大的TickType虽可在C中表达，但超出这一生成Counter／转换契约，不能声称已支持任意64位数的纳秒转换。保留真实UINT32_MAX边界断言及上述显式契约，不把uint64类型误记为uint32。整体507／C221及独立出口仍开放。
+- 时间生成增量三路只读复核：blind和verification-gap无发现。edge提出“TickType大于UINT32_MAX会导致纳秒溢出”：false（当前生成Counter的合法值域），实际Os_Types.h的TickType为uint64_t，不能以C类型宽度驳回。原生Os_TimeValidate也明确拒绝maximum>UINT32_MAX，生成器的ScheduleContract.counter_maximum来自parse::<u32>()，当前Counter配置最大65535；已校验分辨率为1ms，生成转换宏明确支持0..UINT32_MAX，比全部合法配置Counter值域更宽，最大支持参数的纳秒乘积4294967295000000小于UINT64_MAX。更大的TickType虽可在C中表达，但超出这一生成Counter／转换契约，不能声称已支持任意64位数的纳秒转换。保留真实UINT32_MAX边界断言及上述显式契约，不把uint64类型误记为uint32。本故事尚有产品功能未完成，独立交接仍开放。
 
-- Counter／RTE公共类型增量blind、edge、verification-gap三路独立只读复核均无发现。范围为唯一uint32 Counter定义、uint64时间类型、六包含顺序、17原生拒绝向量、三个实际旧宽度变异及生成离线消费者；不以该增量关闭507行或完整故事。
+- Counter／RTE公共类型增量blind、edge、verification-gap三路独立只读复核均无发现。范围为唯一uint32 Counter定义、uint64时间类型、六包含顺序、17原生拒绝向量、三个实际旧宽度变异及生成离线消费者；不以该增量关闭对应产品功能或完整故事。
 
 - 嵌套ISR增量三路独立复核：blind与edge无发现；verification-gap的旧isr_cleanup ErrorHook内要求Cat2已可递送为medium/patch。OSEK §11.1明确Hook不能被Cat2打断，新Hook gate导致旧断言与实际契约冲突。改为Hook内仍屏蔽Cat2，保留随后真实ISR6 probe、helper和原Task获取/释放全部资源的断言；不删除资源重获和LIFO清理验证。完整门首轮已观察到该旧测试失败，日志保留；修正后须定向复验并完成最终门。
 
-- 第十一补丁／44时间向量／repeat-start修正的追加blind、edge、verification-gap三路复核均无新增发现。最终行为门92集成测试全部通过（567.52秒），Python29、UI lint/build、桌面build与两Clippy通过。随后按既有LF属性归一OS文本字节，原始补丁和上游不变；七套原生回归、三调用错误变体、两旧ISR时序变体及12单元部分扫描均从规范化来源刷新，500摘要匹配，Python／增量质量复验通过；生成ECU包亦在该来源重编复验。507总结果已建立，61行关联增量证据，全部最终处置仍待逐项评估，4.18保持in-progress。
+- 第十一补丁／44时间向量／repeat-start修正的追加blind、edge、verification-gap三路复核均无新增发现。最终行为门92集成测试全部通过（567.52秒），Python29、UI lint/build、桌面build与两Clippy通过。随后按既有LF属性归一OS文本字节，原始补丁和上游不变；七套原生回归、三调用错误变体、两旧ISR时序变体及12单元部分扫描均从规范化来源刷新，Python／增量质量复验通过；生成ECU包亦在该来源重编复验。4.18仍有产品工作，保持in-progress。
 
 - 调用上下文/idle增量blind提出“StartOS失败或被忽略后isOsStarted不应为TRUE”：false。已核对R24-11 p205的DRAFT91034，以是否调用过StartOS为返回依据，非Ready或成功；当前入口原子记录调用，屏蔽查询另遵守00093，无两者混淆。edge无发现。verification-gap提出“屏蔽时isOsStarted也应TRUE”：false，p74 SWS_Os_00093要求Task/ISR/Hook自身屏蔽时忽略任何非中断OS服务，DRAFT查询未声明例外；当前返回无效FALSE且ErrorHook报告9，恢复后TRUE，原状态未被改写。两条建议均不修改实现或弱化断言。
 
-- 专项tick探查指出native生产者读取kernel可能有普通Task服务上下文问题：固定portmacro.h将32位tick标为原子，xTaskGetTickCount路径不进入普通critical；去掉该读取与递送前printf的复制实验仍有失败。失败后采集定位到票据已完成而Wait返回仍WAITING的原断言。缓存yield条件的复制端口不能修复；实际dispatcher在释放mutex后才到下一轮清除共享xInsideInterrupt，Task可能先取得mutex并错误跳过critical出口等待。第十一补丁在mutex内完成ISR阶段后才释放；六次对应复制实验全部通过，新增两种消费Task自身屏蔽的确定性握手与原有40/两monitor屏蔽合计44向量通过。复制恢复旧标志时序时两种握手均被原断言拒绝（isr-phase-release-mutations-4-18.json）；复制native观察者失败后等待健康controller报告，避免生产者先退出99遮蔽Task断言，产品成功断言未弱化。原失败日志保留，完整嵌套及SC1出口仍开放。
+- 专项tick探查指出native生产者读取kernel可能有普通Task服务上下文问题：固定portmacro.h将32位tick标为原子，xTaskGetTickCount路径不进入普通critical；去掉该读取与递送前printf的复制实验仍有失败。失败后采集定位到票据已完成而Wait返回仍WAITING的原断言。缓存yield条件的复制端口不能修复；实际dispatcher在释放mutex后才到下一轮清除共享xInsideInterrupt，Task可能先取得mutex并错误跳过critical出口等待。第十一补丁在mutex内完成ISR阶段后才释放；六次对应复制实验全部通过，新增两种消费Task自身屏蔽的确定性握手与原有40/两monitor屏蔽合计44向量通过。复制恢复旧标志时序时两种握手均被原断言拒绝；复制native观察者失败后等待健康controller报告，避免生产者先退出99遮蔽Task断言，产品成功断言未弱化。原失败日志保留，完整嵌套及SC1出口仍开放。
 
 - 当前完整门91通过/1失败为旧repeat-start轨迹ISID；源码确认Startup内重复StartOS应按R24 Table7.1/00088忽略，而非重入原生初始化并增加第二个I。生命周期场景在重复调用返回后核对实际Mode1/DRAFT已调用状态并加R，独立预期ISRD；保留显式Startup随后Shutdown7及资源失败拒绝，46原生向量通过。历史生命周期工件不覆写。
 
 - Cat2资源出口增量blind/edge/verification-gap三路独立复核均无发现。十个真实过程、28屏蔽/26资源回归通过；actual旧backend副本在single/maximum/mixed/unconfigured-mixed四个新独立断言场景均因原断言关闭被拒绝，证明本次测试识别原问题；12翻译单元部分静态诊断保留，不升级完整MISRA声明。
 
-- 中断增量blind/edge/verification-gap三路完成；Cat1屏蔽服务建议按OSEK原文驳回，源上下文及Cat2覆盖缺口已修正。追加两条独立pending/拒绝副作用覆盖缺口已修正，最终定向复核均无剩余发现。五个真实编译变异（Cat2两种清除no-op及三个拒绝操作仍产生副作用）全部被新原生断言拒绝，证据interrupt-oracle-mutations-4-18.json；实际28向量、公共类型三顺序、八ErrorHook配置与最终交付摘要匹配。完整故事仍开放。
+- 中断增量blind/edge/verification-gap三路完成；Cat1屏蔽服务建议按OSEK原文驳回，源上下文及Cat2覆盖缺口已修正。追加两条独立pending/拒绝副作用覆盖缺口已修正，最终定向复核均无剩余发现。五个真实编译变异（Cat2两种清除no-op及三个拒绝操作仍产生副作用）全部被新原生断言拒绝；实际28向量、公共类型三顺序、八ErrorHook配置与最终交付摘要匹配。完整故事仍开放。
 
 - 返回Task/资源增量blind／edge／verification-gap三路独立复核均无发现。七个返回Task、22Finish/Chain和26资源真实向量均通过；Python首轮因仍读取历史finish-chain/resource-preemption记录不符合新标准行为而报红，已改用本次真实回归工件，同时增加旧整OS关闭和隐式scheduler的拒绝变异验证，历史记录不覆写。完整故事中断恢复和SC1仍开放。
 
@@ -170,45 +99,6 @@ ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参�
 
 ## Verification
 
-公共兼容／错误符号增量最终完整门exit0：99个核心集成测试1038.56s、29Python、增量格式／C99、UI lint/build、桌面build及两组Clippy通过。正式生成ECU测试在最终源上用移动后的交付头编译／运行独立消费者；六包含顺序／16声明／23唯一范围值／全部符号基准比较通过。七个实际旧／空／缺失／别名／零／超范围／额外对象变异均由独立预期拒绝。实际父子进程看门狗正式测试通过，输出保留、隐藏运行及后代关闭均验证；首轮换行失配及原复核发现保留记录，两项medium修正后三路最终复核均无剩余问题。单翻译单元部分静态exit1诊断保留，四工件32项产品摘要与最终来源匹配，不冒充完整221符合。507封存行／分类保持，79行有关联，全部最终结果待逐项核查；4.18／Epic4保持in-progress。完整门日志.scratch/epic4/story418-public-compatibility-full-gate.log及.exit保留。下一TASK／Cat2 ISR／ALARMCALLBACK与Counter常量、STANDARD模式、生成向量／Memory Mapping／RTE服务和完整C221／ARTI／交接出口仍须完成。
+已运行的正式入口覆盖真实栈／生命周期、激活FIFO、终止／链式移交、资源、事件、受控Counter／ScheduleTable、调用上下文、Hook、ISR清理／嵌套、公共接口、生成ECU和HostBatch。最新两增量完整检查分别100／102核心集成、29Python、UI lint/build、桌面build及两组Clippy通过；对应代码提交065dbfa／d8ae0c2。
 
-00809中断源重复增量最终完整门exit0：97个核心集成测试1154.54s、29Python、增量格式／C99、UI lint/build、桌面build及两组Clippy通过。12原生重复源过程及28配对／26嵌套回归通过；六个实际状态／pending／开关／注册检查变异全部被原生断言以关闭7识别。12翻译单元部分静态exit1诊断保留；五工件350项产品／补丁摘要与最终来源一致。三路独立复核完成，唯一错误覆盖疑问已按实际unconfigured分支及证据驳回且由原复核者撤回，无剩余增量发现。十个规范行增加限定证据关联，历史允许重复Disable的说明由本次00809修正覆盖；507封存行／分类不变，77行有关联，全部最终结果仍待逐项处置。完整门重新生成的时间消费者二进制及生成器说明摘要按真实产物同步，其独立预期／变异／生成头不变。原始门日志.scratch/epic4/story418-source-repetition-full-gate.log与.exit保留。4.18／Epic4保持in-progress；下一公共兼容宏／错误符号、标准模式、向量／Memory Mapping／RTE服务及完整C221／ARTI／交接出口仍开放。
-
-00367非Status服务增量最终完整门exit0：96个核心集成测试1171.43s、29Python、增量格式／C99、UI lint/build、桌面build及两组Clippy全部通过。十个实际调用／Hook过程保留invalid值、忽略动作、原StatusType有类型快照与ErrorHook递归抑制；9调用／28配对／5idle回归保留所有StatusType、输出和pending／wake断言，只按原文纠正五类非Status错误报告预期。五个逐函数恢复旧Os.c分支的真实程序均被原生断言以关闭7识别；失败ShutdownHook保留原失败并返回，使实际进程完成退出，未以超时冒充行为通过。12单元部分静态exit1诊断保留；六工件330项产品来源摘要与最终来源一致。三路独立复核均完成无发现；四个规范行有新限定证据，507行／分类不变，70行有增量关联，全部最终结果仍待评估。原始门日志.scratch/epic4/story418-nonstatus-full-gate.log及同名.exit保留；4.18／Epic4仍in-progress。下一00809重复源控制、兼容声明／公共接口、标准模式、向量／Memory Mapping／RTE服务与完整C221／ARTI／交接出口不得据此关闭。
-
-时间生成增量完整门exit0：95个核心集成测试1162.63s、29Python、增量格式／C99、UI lint/build、桌面build及两组Clippy均通过；正式epic4_generated_counter_timing_contracts在最终门重新生成／编译并通过。两种Counter名称共64字面值／单次求值／表达式向量，四个实际坏比例／重复求值变异和三种不支持分辨率拒绝均通过；两个实际生成头消费者部分静态exit1诊断保留。14项产品源码摘要及两种生成Os_Counter／Os_Cfg摘要与最终门来源一致。三路独立复核完成，唯一宽Tick疑问已按实际uint64类型、原生／生成32位Counter最大值限制及显式转换契约驳回，没有弱化已有断言。三个规范义务增加限定证据关联，全部507封存行与160／346／1分类不变，69行有增量关联，全部最终结果仍待逐项核查。完整门日志.scratch/epic4/story418-generated-time-full-gate.log及同名.exit保留，4.18／Epic4保持in-progress；下一00367非Status服务错误Hook修正、向量段／Memory Mapping／RTE服务、C221及最终独立出口仍须完成。
-
-Counter／RTE公共类型增量完整门exit0：94个核心集成测试1128.37s、29Python、增量格式／C99、UI lint/build、桌面build和两组Clippy均通过。17原生过程、六真实头文件包含顺序和三个实际旧八位Counter变异均有独立断言；生成ECU交付两公共头并由移动后的独立消费者验证。四个工件共170项产品源码摘要与最终源码一致；12单元部分静态exit1诊断保留，不宣称完整MISRA。三路独立复核均无发现；四条类型义务增加限定证据关联，507封存行保持不变，66行已有增量关联但全部最终结果仍待逐项核查。原始完整门日志.scratch/epic4/story418-counter-full-gate.log及同名.exit保留。4.18／Epic4保持in-progress，后续RTE服务端口、时间换算／内部计时／向量段／Memory Mapping和完整出口不据此关闭。
-
-嵌套ISR增量已通过26个原生向量和修正后10个Cat2清理回归。七个实际编译变异均被既有断言识别：串行分发、丢父身份、共享ISR资源栈、丢Hook快照、允许Cat2打断Hook、Cat1出口提前调度由native成功契约断言拒绝；源编号代替优先级的副本正常退出但产生AGCPB，正式Python独立轨迹预期ACPGB明确拒绝，不把进程exit0当行为通过。12个实际翻译单元部分静态exit1诊断保留；固定深度的回调重入仍是未批准R17.2。四个当前原生／负向／静态工件的产品源码摘要逐项匹配。最终完整门exit0：93个核心集成测试全部通过（1108.27秒）、29Python、增量质量／C99、UI lint/build、桌面build和两组Clippy通过，日志为.scratch/epic4/story418-nested-final-gate.log，退出记录为同名.exit。首轮旧测试失败及缺最终汇总日志保留，没有改写为通过。三路独立复核的唯一发现已修正；追加定向复核无剩余问题。全部507封存行保留，62行关联增量证据，所有最终处置仍待逐项核查；4.18与Epic4保持in-progress。
-
-Cat2资源出口增量最终完整门exit0：90个核心集成测试567.09s、29Python、增量格式/C99、UI lint/build、桌面构建及两组Clippy通过。十个出口过程、28屏蔽/26资源回归与最终源码摘要匹配，实际旧backend四场景均被拒绝；12单元部分静态exit1保留。三路独立复核无发现，sprint保持4.18/Epic4 in-progress。后续完整调用表已以官方R24-11 p72/73实际PDF图像核实：六屏蔽API全部Hook/Alarm列为OK，当前较窄Hook限制须在下一增量修正；GetISRID/Shutdown/Mode各自不同许可也须覆盖。当前出口清理不冒充全调用表、实际嵌套ISR、221项或交接完成。
-
-中断增量最终完整门exit0：89个核心集成测试566.71s、29Python、增量格式/C99、UI lint/build、桌面构建和两组Clippy通过。原生28、公共类型三包含顺序、八ErrorHook配置、五个被拒绝的真实变异和最终源码身份一致；12实际翻译单元部分静态exit1保留。首轮77通过/12失败均因新增boolean后的共同头清单旧摘要，审阅源码后同步BSW契约清单并重编译；次轮88通过/1失败仅因运行期间新增场景而旧测试程序仍预期26，最终重新编译28后完整门通过，失败日志均保留。三路复核及修正复核完成，没有剩余增量发现。4.18与Epic4保持in-progress，ISR资源清理/实际嵌套/全调用表/idle/全部507行、221项与交接未关闭。
-
-返回Task/资源增量最终完整门exit0：88个核心集成测试532.30s、29Python、增量格式/C99、UI/桌面构建和两组Clippy通过。七个返回Task/22Finish/26资源原生证据与最终源码身份匹配；实际八补丁后tasks.c及九本地C翻译单元部分静态exit1诊断保留。三路独立复核无发现。正常Task入口返回已不再关闭整个OS；SWS_Os_00239标准中断配对恢复、完整ISR/调用表、R17.2处置及完整221项/交接仍开放，sprint不关闭。
-
-Task Hook增量最终完整门exit0：87个核心集成测试541.62s、29Python、增量格式/C99、UI/桌面构建和两组Clippy通过。真实生成定向复验222.76s通过，最终完整门也覆盖该项。八原生Task Hook向量与源码身份/八补丁摘要一致；九本地C翻译单元及实际八补丁后tasks.c部分静态exit1诊断保留。三路独立复核和生成轨迹断言定向复核均无发现。sprint保持4.18/Epic4 in-progress，missing-end/ISR/全调用表、R17.2处置、完整221项和最终交接仍开放。
-
-ErrorHook增量完整门exit0：86个核心集成测试600.13s（包含正式epic4_standard_error_hook_parameters、真实参考ECU/HostBatch/栈及所有既有回归）、29Python、UI/桌面构建和两组Clippy通过。最终仅内部声明参数名校正；八配置原生编译/运行、增量quality及桌面构建已针对复验，随后文档身份刷新。部分Cppcheck九个翻译单元exit1，诊断和人工范围核查记录于standard-error-static-analysis-4-18.json。四条相关义务均按部分支持记录，不把未来服务/missing-end/ISR清理或整体SC1标为通过。
-
-正式epic4_sc1_errors_hooks_and_isr、四类最低容量成功运行、错误/Hook/参数/层级/ISR独立向量；受影响既有OS/时间/实际栈/参考ECU/HostBatch回归。完整门python scripts/verify.py --scope all --base <4.17完整本地提交>，测试线程按Owner Guide固定2。实际C99编译、部分Cppcheck与人工重点核查不替代完整221项原文/Required批准或SC1最终出口。全部验收无头后台，原生UI/IPC只能在隔离桌面验证。
-
-中断增量复核逐项：blind的Cat1不得调用六屏蔽服务为false，OSEK2.2.3 §13.3.2各服务明确允许Cat1/Cat2/Task，现有isr-balanced实际覆盖；不按通用非中断服务上下文删掉合法Cat1能力。edge的注册S栈无当前逻辑ISR仍可操作源为medium/patch：内部通用ServiceContext确实接纳current_interrupt>=32，源边界已显式拒绝无当前ISR或私有yield，新增source-outside-isr实际ISR栈边界故障注入验证三API均CAL/源位不变。verification-gap的Cat2源调用未覆盖为medium/patch：source-isr在真实Cat2内调用全部三API，真实pending清除两次、最后保留一条，另一源实际恰好递送一次；没有新线程、mock pending或嵌套ISR声明。
-
-验证覆盖复核追加两条medium/patch均已修正：同一pending位的连续清除存在后续动作掩盖错误的缺口，现ClearPending用源6、EnableTRUE用源7、EnableFALSE用源8，只有8可实际递送；任一清除无效果都会触发不允许的源6/7回调。拒绝副作用场景现Disable8后立即检查enabled，Enable6TRUE与Clear7分别面对预置真实pending，返回后必须实际递送6/7各一次（ODEC），不会由后续反向操作恢复或无pending掩盖。独立28向量通过，未将故障注入当作正常嵌套ISR支持。
-
-
-当前入口／Counter增量验收记录集中于本规格：原生TASK／Cat2 ISR／ALARMCALLBACK十一向量通过；原生嵌套26及ISR退出清理10回归通过；八个实际删调用／错索引／漏安装／漏拥有权／漏配置拒绝变异均被独立预期拒绝。三组生成Counter输入（SystemCounter最大65535、RenamedCounter最大65535、SystemCounter最大4095）共33项常量、96项单位／单次求值／表达式检查和21个实际头文件变异通过，正式测试80.94s。十二翻译单元部分静态扫描实际exit1，诊断保留，R17.2 Required偏离未批准。此次新增五份独立运行记录已保留于忽略目录.scratch/epic4/story418-entry-bodies-records/；不作为新的永久共享报告提交。原始日志和构建目录仍保留；本记录不关闭507行、完整221项或整个story，最终完整门及三路复核待完成。
-
-下一SC1状态模式增量规格：按SWS_Os_00763与OSEK2.2.3第12.2.3／14.2.8节，参考EXTENDED输入保持不变，同时接受显式STANDARD并从已验证计划生成实际编译选择。标准模式必须保留ActivateTask／ChainTask的LIMIT、GetAlarm／CancelAlarm的NOFUNC、SetRelAlarm／SetAbsAlarm的STATE告警及正确ErrorHook参数；AUTOSAR两模式共同的DISABLEDINT安全拒绝也保留。主机边界对非法输入继续防御并返回具体诊断，不制造越界或伪成功；这些额外防御与Extended ErrorHook报告的差别需明确实现和实测，不能只增加未使用模式标志。独立原生两模式消费者验证正常调度／上述告警／输出保持／参数／无递归；真实STANDARD输入的生成、移动交付配置及构建行为和未知模式拒绝须分别验证。此增量不更换内核、不扩大SC2/3/4或实机范围，不新增独立永久报告。
-
-入口／Counter增量最终三路只读复核（blind、edge、verification-gap）均无可确认问题或验证缺口；复核范围为规范入口到实际Task／Cat2／Alarm身体绑定、配置／拥有权拒绝、生成常量与真实配置一致性及独立字面预期。当前来源审计确认入口和八变异记录的所有本地产品摘要匹配；两份早期回归目录收录了未参与其gcc命令的旧entry_bodies.c摘要，保留原始记录，不冒充全部目录摘要相同；最终完整门实际重跑26嵌套及10清理向量。完整门.scratch/epic4/story418-entry-bodies-full-gate.log及.exit实际exit0，核心100集成、Python单元、增量格式／C99、UI lint/build、core／桌面Clippy与桌面build通过。部分静态exit1与未批准R17.2仍如实保留；507逐项出口、STANDARD能力、生成向量／MemMap／RTE服务及4.19～4.22未完成，4.18／Epic4继续in-progress。
-
-状态模式原文进一步核对修正实现选择：OSEK第11.2／13.8.2.1节明确任何已返回的非零StatusType都须调用已配置ErrorHook，不能为了制造两模式差异屏蔽非法输入的Hook。第12.2.3节允许省略可在运行前排除的检查，并未强制Standard删除所有额外防御。此主机两模式共用防御检查与完整错误报告，不人为制造未定义越界行为；实际差别是原STANDARD ECUC从拒绝变为受支持输入，已验证计划与生成Os_Cfg.h明确反映选择。独立两模式原生构建和真实STANDARD生成工程验证同一正常调度、六项标准告警及准确错误参数；不得将只有宏值编译而没有真实生成／行为的结果标为支持。
-
-状态模式增量起始065dbfa。最终STANDARD真实输入生成／移到含空格新目录／严格编译链接／独立参考ECU控制器运行通过（正式epic4_generated_standard_status，59.68s）；对同一交付头注入冲突编译选择实际被拒绝，未知／小写ECUC状态同样拒绝，原EXTENDED生成头保留1。原生两模式均验证六项OSEK标准告警、额外非法ID和DISABLEDINT、八次准确ErrorHook参数、Hook内错误不递归、输出保持及最终真实Peer执行。OS_STATUS_EXTENDED=2实际预处理拒绝；STANDARD真实四一致性类18容量／拒绝向量另行通过。实际复制Os_Error.c分别删LIMIT／NOFUNC／STATE报告的三个原生变异均被未修改消费者拒绝为Closed/Failed7。源码静态检查目前为增量C99／格式／已有C实现复用，完整221及R17.2未批准保持；首次fixture宏名／缺StartupHook构建失败和后续头文件插入位置失配均已纠正，不更改独立字面预期。当前完整门和三路复核待完成。此增量全部新运行记录仅在.scratch/epic4/story418-status-*/与现有BMad规格，不新增永久证据JSON。
-
-状态模式三路复核已收齐：blind及verification-gap无发现；edge关于同一容器重复OsStatus未拒绝的条目为false，configuration.rs在建立记录前已逐参数检测values.len()!=1并拒绝PARAMETER_NOT_UNIQUE；原代理重新追踪后撤回。最终完整门仍在运行，尚不提交此增量。后续生成义务按实际R24 p393／394核对：00336必须接入实际native中断向量表所在的可重定位段，不以另建未使用描述表替代；当前port.c的ulIsrHandler是实际派发读取和注册写入的32槽表。00815明确要求OS_START_SEC_<sadm>／Os_MemMap.h／声明／OS_STOP_SEC_<sadm>／Os_MemMap.h；需覆盖生成Task及适用Hook／ISR／Alarm声明并检查实际链接段。已有Can_MemMap.h提供重复包含的项目模式，目标默认平坦段不等于已经核查OS声明。00560／91027必须提供真实Counter OsService服务端口及ClientServerInterface；p228虽然类型叫TimeInMicrosecondsType，参数描述明确为Counter ticks／tick difference，禁止擅自乘1000。上述项保持未完成，后续逐项实施验证。
-
-状态模式最终完整门实际exit0：102核心集成（完整门日志记载实际时间）、29Python、增量格式／C99、UI lint/build、桌面build及两组Clippy通过，日志.scratch/epic4/story418-status-full-gate.log及.exit。最终三路复核无剩余发现，重复参数条目已由实际前置唯一性检查证伪。既有507行结果文件仅更新SWS_Os_00763为当前单核主机／两模式passed并记录源码摘要与实际测试；其余506行保留pending和封存分类，完整故事／Epic出口仍未通过。该结果不宣称完整SC1或221项符合。下一项实际生成向量与Memory Mapping、Counter OsService，随后完整逐项出口及4.19～4.22继续推进。
+本次清理不删减这些行为。后续按具体任务运行覆盖剩余功能的测试和BMad复核，结果更新本节；不因前序通过而把未实现功能标done。

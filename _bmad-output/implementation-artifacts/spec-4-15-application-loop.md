@@ -44,7 +44,6 @@ Read初始值0并返回RTE_E_NEVER_RECEIVED；有效接收返回实际值/E_OK�
 - runtime/ecu/templates/Application.c.in：当前仅value快照，写失败直接Shutdown；改为同owner提交值/epoch与实际读写状态，成功提交、失败保留。服务器仅编码提交值。
 - runtime/ecu/include/Ecu_Target.h与src/Ecu_Target.c、core/src/integration/ecu.rs：明确owner只读应用状态检查和TestMode周期前后检查点，复用现有真实阶段回调。实际传输、Dcm顺序及生成接口来自同一计划，不添加RTE C/S操作或第二周期调度。
 - core/tests/fixtures/application_loop.c、core/tests/support/epic4_application.rs、core/tests/end_to_end.rs：外部原生消费者通过完整生成工程运行epic4_application_sr_cs_loop；固定literal状态、epoch和CAN/UDS字节，真实controller故障/恢复，不用BSW桩。
-- docs/assurance/evidence/epic4/、本spec和sprint：保存最终生成/源码身份、实际独立轨迹、三路复核与限定能力；不提前升级完整出口。
 
 ## Tasks & Acceptance
 
@@ -70,8 +69,8 @@ Read初始值0并返回RTE_E_NEVER_RECEIVED；有效接收返回实际值/E_OK�
 
 ## Verification
 
-正式epic4_application_sr_cs_loop，受影响HostBatch/生成/旧目标检查；python scripts/verify.py --scope all --base adbc96d39bc2be2132bd504b30a7dde2f3399181。MISRA C:2012修订基线人工核查与实际生成部分扫描，真实报告工具覆盖及未通过项，完整221项和SC1出口保持独立。
+正式epic4_application_sr_cs_loop，受影响HostBatch/生成/旧目标检查；python scripts/verify.py --scope all --base adbc96d39bc2be2132bd504b30a7dde2f3399181。MISRA C:2012修订基线人工核查与实际生成部分扫描，真实报告工具覆盖及未通过项，相应 story 的实际功能SC1出口保持独立。
 
-最终完整增量门退出0：29 Python、3核心单元、81核心集成（217.32s）、UI lint/build、双clippy/桌面build通过，包含当前HostBatch和4.13回归。测试日志移动到native后最终正式exact恰选1项通过（29.80s），增量格式/C99及assurance再次通过。生产CLI实际预览/安装同一计划与双入口严格链接；工程外TestMode消费者最终重新编译，五个实际进程状态、epoch、CAN/DID、故障/恢复及原生越权均匹配固定预期，来源/生成树/实际二进制身份记录application-loop.json。三路只读审查无可行动发现及验证缺口，未递延已确认的本story缺陷。
+最终完整增量门退出0：29 Python、3核心单元、81核心集成（217.32s）、UI lint/build、双clippy/桌面build通过，包含当前HostBatch和4.13回归。测试日志移动到native后最终正式exact恰选1项通过（29.80s），增量格式/C99再次通过。生产CLI实际预览/安装同一计划与双入口严格链接；工程外TestMode消费者最终重新编译，五个实际进程状态、epoch、CAN/DID、故障/恢复及原生越权均匹配固定预期，实际生成源码与二进制已用于这些验证。三路只读审查无可行动发现及验证缺口，未递延已确认的本story缺陷。
 
-Cppcheck2.21当前生成的26个主机产品C单元补充扫描退出1，原始诊断保留application-loop-static-analysis.json；新增Application/RTE报告为Advisory早返回/外部API使用位置，未删除公共owner检查来消除诊断。工具平台配置、既存主机I/O Required偏离及完整采用代码/221项核查仍未完成；四个内核C单元与工程外消费者未在本次产品扫描覆盖。不作完整MISRA、SC1或交接通过声明，Epic4继续in-progress。全部验证无头，不推送。
+Cppcheck2.21当前生成的26个主机产品C单元补充扫描退出1，诊断已用于本故事复核；新增Application/RTE报告为Advisory早返回/外部API使用位置，未删除公共owner检查来消除诊断。本次只覆盖工具实际检查的编码规则；四个内核C单元与工程外消费者未在本次产品扫描覆盖。不作完整MISRA、SC1或交接通过声明，Epic4继续in-progress。全部验证无头，不推送。

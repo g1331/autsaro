@@ -47,7 +47,7 @@ context: []
 - [x] `runtime/os/src/Os_Backend.c`、`Os.c`、`Os_Backend.h`、`patches/0002-native-stack.patch`：所有实际汽车/ISR/控制线程注册、调度观测、标准入口检查、无普通锁关闭与双控制栈备用。
 - [x] `runtime/os/tests/native_stack.c`：实际任务/ISR/启动/控制溢出和边界故障，哨兵及 ShutdownHook 控制栈地址验证。
 - [x] `scripts/epic4_os.py`、`scripts/test_epic4_os.py`、`core/tests/end_to_end.rs`：独立预期、运行/退出/异常记录/线程角色与源摘要，保留普通失败区别。
-- [x] `docs/assurance/evidence/epic4/native-stack.json`、`runtime/os/README.md`：实际证据、监测覆盖表及源/补丁绑定，同步 sprint。
+- [x] 本 story 的验证记录、`runtime/os/README.md`：实际证据、监测覆盖表及源/补丁绑定，同步 sprint。
 
 **Acceptance Criteria:**
 - Given 按目标创建的原生线程，When 注册、切换和服务边界，Then 观测实际区域/SP且与内核 buffer 区分；正常运行不误报。
@@ -95,8 +95,8 @@ context: []
 
 ## Verification
 
-- `python scripts/epic4_os.py --suite stack --evidence docs/assurance/evidence/epic4/native-stack.json`
+- `python scripts/epic4_os.py --suite stack`
 - `cargo test --manifest-path core/Cargo.toml epic4_ -- --nocapture`
 - `python scripts/verify.py --scope all --base cfdb2cd648d97a7ddf1dab553f97f91ef54a5d5b`
 
-- 最终验证：23栈向量/46生命周期回归与两个注册的Rust集成入口通过；质量/assurance通过。全量增量门核心3/60、UI lint/build、桌面build/clippy通过。真实栈早期关口PASS；其他W1/W2及完整SC1/交接仍未通过，Epic保持in-progress。
+- 最终验证：23栈向量/46生命周期回归与两个注册的Rust集成入口通过；源码检查通过。全量增量门核心3/60、UI lint/build、桌面build/clippy通过。真实栈早期关口PASS；其他W1/W2及完整SC1/交接仍未通过，Epic保持in-progress。

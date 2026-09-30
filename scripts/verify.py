@@ -1,4 +1,4 @@
-"""Run repository quality gates without consulting legacy task state."""
+"""Run the build, tests and source checks selected by a BMad task."""
 
 from __future__ import annotations
 
@@ -10,9 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def verify(
-    scope: str, generated_dir: str | None = None, base: str | None = None
-) -> int:
+def verify(scope: str, base: str | None = None) -> int:
     npm = "npm.cmd" if sys.platform == "win32" else "npm"
     clippy = [
         "-A",
@@ -53,7 +51,6 @@ def verify(
             ],
         ],
         "all": [
-            [sys.executable, "-B", "scripts/assurance.py"],
             [
                 sys.executable,
                 "-B",
@@ -95,15 +92,6 @@ def verify(
                 *clippy,
             ],
         ],
-        "baseline": [
-            [sys.executable, "-B", "scripts/assurance.py"],
-            [
-                sys.executable,
-                "-B",
-                "scripts/quality_baseline.py",
-                *(["--generated-dir", generated_dir] if generated_dir else []),
-            ],
-        ],
     }
     for command in [
         ["git", "diff", "--check"],
@@ -113,8 +101,6 @@ def verify(
         display = [
             "python"
             if argument == sys.executable
-            else "<generated-dir>"
-            if generated_dir is not None and argument == generated_dir
             else argument
             for argument in command
         ]
@@ -135,20 +121,15 @@ def verify(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--scope", choices=("core", "ui", "desktop", "all", "baseline"), required=True
-    )
-    parser.add_argument(
-        "--generated-dir", help="Representative generated ECU project for baseline scan"
+        "--scope", choices=("core", "ui", "desktop", "all"), required=True
     )
     parser.add_argument(
         "--base", help="Story baseline commit for incremental formatting"
     )
     args = parser.parse_args()
-    if args.generated_dir and args.scope != "baseline":
-        parser.error("--generated-dir requires --scope baseline")
     if args.base and args.scope != "all":
         parser.error("--base requires --scope all")
-    return verify(args.scope, args.generated_dir, args.base)
+    return verify(args.scope, args.base)
 
 
 if __name__ == "__main__":

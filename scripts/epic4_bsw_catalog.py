@@ -123,8 +123,8 @@ def materialize() -> dict:
     }
 
 
-def probe(current: dict, evidence: Path | None) -> None:
-    from epic4_os import compiler, write_shared_evidence
+def probe(current: dict) -> None:
+    from epic4_os import compiler
 
     with tempfile.TemporaryDirectory(prefix="autosar-epic4-bsw-contract-") as temporary:
         directory = Path(temporary)
@@ -175,39 +175,12 @@ def probe(current: dict, evidence: Path | None) -> None:
         )
         if ran.returncode != 0 or ran.stdout or ran.stderr:
             raise ValueError("current BSW address/type probe failed")
-        if evidence:
-            identities = dict(current["sources"])
-            identities[MANIFEST.relative_to(ROOT).as_posix()] = hashlib.sha256(
-                MANIFEST.read_bytes()
-            ).hexdigest()
-            for path in inputs:
-                identities[path.relative_to(ROOT).as_posix()] = hashlib.sha256(
-                    path.read_bytes()
-                ).hexdigest()
-            write_shared_evidence(
-                evidence,
-                {
-                    "status": "pass",
-                    "profile": current["profile"],
-                    "scope": "17 current host BSW function signatures and source addresses; legacy runtime link only, not the new Epic4 ECU link or standard certification",
-                    "command": command,
-                    "compile_exit": built.returncode,
-                    "run_exit": ran.returncode,
-                    "probe_source_sha256": hashlib.sha256(
-                        source.read_bytes()
-                    ).hexdigest(),
-                    "product_sources": identities,
-                    "entries": current["entries"],
-                },
-                directory,
-            )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true")
     parser.add_argument("--probe", action="store_true")
-    parser.add_argument("--evidence", type=Path)
     args = parser.parse_args()
     current = materialize()
     if args.write:
@@ -219,10 +192,8 @@ def main() -> None:
             raise ValueError(
                 "BSW inventory differs; review runtime changes before explicitly regenerating"
             )
-    if args.evidence and not args.probe:
-        parser.error("--evidence requires --probe")
     if args.probe:
-        probe(current, args.evidence)
+        probe(current)
     print(
         f"epic4_bsw_catalog PASS: {len(current['entries'])} selected current producers"
     )

@@ -40,12 +40,12 @@ context: []
 
 ## Code Map
 
-- core/tests/fixtures/epic4_oracles/protocol.json、docs/assurance/epic4/reviewed-baseline.json：封存预期及参数，禁止修改目录迎合代码。
+- core/tests/fixtures/epic4_oracles/protocol.json、本 story 的验证记录，禁止修改目录迎合代码。
 - core/tests/support/epic4_protocol.rs、end_to_end.rs、工程外消费者：正式epic4_independent_behavior_and_legacy_regression，真实生产/native执行，目录与手写失败/恢复字节，旧目标单独验证。
 - runtime/src/Dcm.c：当前通用dispatch仍走旧服务且未限制2DID；增加目标专属SID及数量守卫，旧路径保持。
 - runtime/src/CanTp.c、runtime/ecu/src/Ecu_Target.c：目标目前把timeout当全ECU故障；已核传输失败终止连接并发布真实状态，配置/时间/输出故障仍关闭；WFTmax0拒绝FC WAIT。
 - runtime/ecu/include/Ecu_Target.h、Ecu_HostBatch.h及src/Ecu_HostBridge.c、ecu_host_batch.c：有界失败记录、实际epoch/状态、统一序号预检及错误回执，不以打印代替完成。
-- runtime/contracts/bsw-v1.json、docs/assurance/evidence/epic4/、spec/sprint：刷新实际源字节和最终证据，不升级完整能力出口。
+- runtime/contracts/bsw-v1.json、本 story 的验证记录，不升级完整能力出口。
 
 ## Tasks & Acceptance
 
@@ -71,4 +71,4 @@ context: []
 
 正式epic4_independent_behavior_and_legacy_regression、受影响HostBatch/应用/生成与旧目标；python scripts/verify.py --scope all --base 8431b5bf6834db903692d9b9081cf7b64a2c2d8f。严格真实生成C99构建、部分MISRA及未通过范围如实保存，不替代完整出口。
 
-最终完整门：test result: ok. 82 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 579.28s；exit0。最终单项1通过／81 filtered／85.14s。证据位于docs/assurance/evidence/epic4/independent-protocol.json及independent-protocol-static-analysis.json；实际CLI preview/install、交付工程HostBatch构建通过。三路复核疑点逐条核实，MISRA扫描exit1及完整出口未完成如实保留。
+最终完整门：test result: ok. 82 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 579.28s；exit0。最终单项1通过／81 filtered／85.14s。证据位于本 story 的验证记录；实际CLI preview/install、交付工程HostBatch构建通过。三路复核疑点逐条核实，MISRA扫描exit1及完整出口未完成如实保留。

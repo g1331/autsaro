@@ -12,14 +12,14 @@ from unittest.mock import patch
 import epic4_os
 
 
+def native_fixture(name):
+    path = epic4_os.ROOT / "core/tests/fixtures/epic4_oracles" / name
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 class DependencyTests(unittest.TestCase):
     def test_activation_gate_rejects_swapped_fifo_and_missing_observer(self):
-        evidence = json.loads(
-            (
-                epic4_os.ROOT / "docs/assurance/evidence/epic4/activation-fifo.json"
-            ).read_text(encoding="utf-8")
-        )
-        original = evidence["observations"]
+        original = native_fixture("native-activation.json")
         with patch("epic4_os.execute", side_effect=copy.deepcopy(original)):
             self.assertEqual(
                 len(epic4_os.check_activation(Path("unused.exe"))), len(original)
@@ -43,12 +43,7 @@ class DependencyTests(unittest.TestCase):
                     epic4_os.check_activation(Path("unused.exe"))
 
     def test_finish_gate_rejects_entry_order_return_and_missing_observer(self):
-        original = json.loads(
-            (
-                epic4_os.ROOT
-                / "docs/assurance/evidence/epic4/returned-task-finish-regression-4-18.json"
-            ).read_text(encoding="utf-8")
-        )["observations"]
+        original = native_fixture("native-finish.json")
         with patch("epic4_os.execute", side_effect=copy.deepcopy(original)):
             self.assertEqual(
                 len(epic4_os.check_finish(Path("unused.exe"))), len(original)
@@ -98,12 +93,7 @@ class DependencyTests(unittest.TestCase):
                 epic4_os.verify_sources(kernel)
 
     def test_resource_gate_rejects_preemption_wait_and_mask_order(self):
-        original = json.loads(
-            (
-                epic4_os.ROOT
-                / "docs/assurance/evidence/epic4/configured-resource-regression-4-18.json"
-            ).read_text(encoding="utf-8")
-        )["observations"]
+        original = native_fixture("native-resources.json")
         with patch("epic4_os.execute", side_effect=copy.deepcopy(original)):
             self.assertEqual(
                 len(epic4_os.check_resources(Path("unused.exe"))), len(original)
@@ -137,11 +127,7 @@ class DependencyTests(unittest.TestCase):
             epic4_os.compiler()
 
     def test_event_gate_rejects_lost_record_ticket_and_missing_restart(self):
-        original = json.loads(
-            (
-                epic4_os.ROOT / "docs/assurance/evidence/epic4/event-wakeup.json"
-            ).read_text(encoding="utf-8")
-        )["observations"]
+        original = native_fixture("native-events.json")
         with patch("epic4_os.execute", side_effect=copy.deepcopy(original)):
             self.assertEqual(
                 len(epic4_os.check_events(Path("unused.exe"))), len(original)
@@ -166,11 +152,7 @@ class DependencyTests(unittest.TestCase):
                 epic4_os.check_events(Path("unused.exe"))
 
     def test_time_gate_rejects_lost_tick_wrap_and_action_error(self):
-        original = json.loads(
-            (
-                epic4_os.ROOT / "docs/assurance/evidence/epic4/calling-time-regression-4-18.json"
-            ).read_text(encoding="utf-8")
-        )["observations"]
+        original = native_fixture("native-time.json")
         with patch("epic4_os.execute", side_effect=copy.deepcopy(original)):
             self.assertEqual(
                 len(epic4_os.check_time(Path("unused.exe"))), len(original)

@@ -13,7 +13,7 @@
         "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
         "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
-        "SKILL.md": "78008fdfccbe36063bb65c09515d71d30c2f63df17d8fb687ab8c735ab472a40"
+        "SKILL.md": "be6bb6920f2073eca93d32793d4023b1d0b7ac25c8ea869b57e313f96e66a1aa"
       }
     },
     "traceability-matrix-checklist-reviewer": {
@@ -28,7 +28,7 @@
         "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
         "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
         "scripts/trace_probe.py": "acc0b8acaf608f5a40b7b7d7c2b0feec5dc54f44fa0cfdd7d21935a9140bdbda",
-        "SKILL.md": "cddae7431632858d9fa011c1321cd7ff76551b70760349db6c80035df4e2920d"
+        "SKILL.md": "c1fd3aec92b19bfeae56ebce17eff6f3181000c06667d8df5b1eb775d48bebc0"
       }
     },
     "test-case-catalog-builder": {
@@ -40,7 +40,7 @@
         "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
         "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
-        "SKILL.md": "18d4dcdfd5b080fc11a7bf1fc9c3369f534f8cfa5a39345c01208bf4564a2e18"
+        "SKILL.md": "6e9fd588cc4e031056b71f9a719ec6838d3a0710c22898492360568112654ecd"
       }
     },
     "test-case-catalog-checklist-reviewer": {
@@ -55,7 +55,7 @@
         "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
         "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
         "scripts/tc_probe.py": "9bd6e2fdab00c08c6624092bfc44147b2b556109f46dc07b3018a707d74ba6ad",
-        "SKILL.md": "91ca8507cc7481d636a5c5912e5d574a0bc4f4c3cb20237a45242973286cc1fa"
+        "SKILL.md": "ce095b51a9ecb9a9b49b5d98a8d7c89d2eb731e8f0d69f25acd7dd82a1e0da4e"
       }
     },
     "verification-plan-builder": {
@@ -67,7 +67,7 @@
         "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
         "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
-        "SKILL.md": "4c3ab1f03ddc7d2e5c34732ba127412803ee717bdcf77d3136314fa332f8f94f"
+        "SKILL.md": "1e77e7c37657b5695e713772bd524e6bebb629d5172a29527ad5f4a9eb3dd0f4"
       }
     },
     "verification-plan-checklist-reviewer": {
@@ -82,7 +82,7 @@
         "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
         "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
         "scripts/vplan_probe.py": "569510fac5ebd5bb0e5030962347f099332dbb58f3ea2e5407460ee8fc7e64d9",
-        "SKILL.md": "76bb05ed801fcab7c6854d24bb4ed00f3566c6ca5df98da3db0b189683c3e7e8"
+        "SKILL.md": "2a2b1ce6663e8369671e0409aa0d19f4a51b42063c00706ed10c5c973e14b463"
       }
     },
     "uds-services-builder": {
@@ -94,7 +94,7 @@
         "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
         "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
-        "SKILL.md": "98a896a2c8e70d366e2fbaa65334dca52720d20b2d5698be9278b2afba5f4def"
+        "SKILL.md": "e9bd1bad81e3d8e10d00a64059f9220689148446f20040e4f0456065f9fae910"
       }
     },
     "uds-services-checklist-reviewer": {
@@ -109,7 +109,7 @@
         "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
         "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
         "scripts/uds_probe.py": "84e03deac87d446cdf356d5981973d8032eaf1751fac56667556af58ae15287c",
-        "SKILL.md": "0c96f5070333d0f10fe070cead5df207d3ee4bae6a8f51e873803ee28874e84f"
+        "SKILL.md": "b5c05de3fa14af817cb3335fa7f0a26e783730d100134c06eba0bbba1bf06e14"
       }
     },
     "dtc-catalog-builder": {
@@ -121,7 +121,7 @@
         "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
         "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
-        "SKILL.md": "261e777f6dd23d035bb806c50e2b5d98bc4db6d4ed97c0fbdbf4aec10008429b"
+        "SKILL.md": "f7e869f5058e506bb65224362dfca384a976e8fa3f87cc410702f0b5e2274de7"
       }
     },
     "dtc-catalog-checklist-reviewer": {
@@ -136,7 +136,7 @@
         "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
         "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
-        "SKILL.md": "fc11b7ec32ea0e3cc35e285a45c2670d42973290378a9f0b453792d54be42546"
+        "SKILL.md": "676d692a150f10cfafd2c07a822f59d54129099d22410b0dc738b604bd6f17d0"
       }
     },
     "dem-config-builder": {
@@ -150,7 +150,7 @@
         "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
         "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
-        "SKILL.md": "5c237e6f1718de8bc4f4a58ac0c13416373b580ece34b20741968064c98e2053"
+        "SKILL.md": "19d0291e8a29b214f670115a24c09dadde2738258d723143ccb7fb1a3bfd5513"
       }
     },
     "dem-config-checklist-reviewer": {
@@ -167,7 +167,7 @@
         "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
         "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
-        "SKILL.md": "f75cf53aa6415c7a36f9365812d8fdeba01b940ff02e20b51c0cd998c605ac72"
+        "SKILL.md": "4860c138255542c76dd9595441c7d7fc62143d3939b37263ee84a28f13460f83"
       }
     },
     "arxml-system-builder": {
@@ -179,7 +179,7 @@
         "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
         "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
-        "SKILL.md": "5caca826b70c8191810e6b718754dac1fe47de63f163117db9e95653fc26cf60"
+        "SKILL.md": "f8ab1c1d2be4cc7fa41d90967c92e1d8b0a7d77b083c7bb71c9da47ab7637138"
       }
     },
     "arxml-system-checklist-reviewer": {
@@ -194,7 +194,7 @@
         "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
         "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
-        "SKILL.md": "138e624e94b350c6355fd3cae1f5771e10a9d7efed43f4471b0322897ceb628d"
+        "SKILL.md": "0fc4b8e8bb64499ece92862ba25fd027450dfd5795cfdd609a6eceaf303d5344"
       }
     },
     "autosar-swc-builder": {
@@ -208,7 +208,7 @@
         "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
         "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
-        "SKILL.md": "5995e7a0e5260c593e9699bf5e5ec9b4eea5e08909492ef8064c44c02cdc7043"
+        "SKILL.md": "6bd35faac2e6dac1cd3e2cad215287825757019de488cf24839fd2e79699f2d0"
       }
     },
     "autosar-swc-checklist-reviewer": {
@@ -223,7 +223,7 @@
         "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
         "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
         "scripts/swc_probe.py": "910c156de74e125a7917e111016b06b1f4fc2d755ed19ca73022f26d70bcf587",
-        "SKILL.md": "028a348f9f214b2f35ed2b5260a7af5d92ba32cf00a9e457607fa4fd8fae5d9c"
+        "SKILL.md": "9fb39e7752a3b5411a3415df4c60607fa29cd4e24e2cc693597de9f8347e416f"
       }
     },
     "autosar-composition-builder": {
@@ -237,7 +237,7 @@
         "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
         "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
-        "SKILL.md": "8226a3bd1dc7a1755972f0cb0b385be6aa8d547fc7a73c56a90b6e05d2b402d9"
+        "SKILL.md": "2752edd7716f45638fbf6f1be62481eecf89c814de13fba1a2a763248fbf9fca"
       }
     },
     "autosar-composition-checklist-reviewer": {
@@ -254,7 +254,7 @@
         "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
         "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
-        "SKILL.md": "7eca4fab71f80004a03ad89d975f06100fbc9595165cd72272d5de46c90d2e01"
+        "SKILL.md": "2528c1e20dd67fa4842dd0770e71ec17dbe94563239b968c489102b2e0aea0c6"
       }
     },
     "autosar-rte-mapping-builder": {
@@ -269,7 +269,7 @@
         "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
         "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
-        "SKILL.md": "c1018b0dc380bfc830b205f0e42e7d03eb7942183b1abc50f3f5b25e5c779d93"
+        "SKILL.md": "c11e1a98c3c6265104a534a59920d37a8b911c5ca3ea6c2734cbaa16f786e44d"
       }
     },
     "autosar-rte-mapping-checklist-reviewer": {
@@ -287,7 +287,7 @@
         "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
         "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
         "scripts/rte_probe.py": "cc4055660fae09351515467b2f3574b4452d83223912ab72fcb7eed5e9042140",
-        "SKILL.md": "7de5e004ce88dffae978ee8415f14868074478f01b55c48330efad00f586920b"
+        "SKILL.md": "7c3a3549a32b4c6458782b419cfb705bf2521e8f882d171979135fff5e7359b6"
       }
     },
     "autosar-bsw-config-builder": {
@@ -303,7 +303,7 @@
         "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
         "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
-        "SKILL.md": "63a765ba7c1d53b27ac80de8486e054c4ceb423eff6596558b83cd77c3b62b07"
+        "SKILL.md": "0acaf82fb8a054dd88dbf69666aaaf89bf8d6f9217559093e9793d043cb0fb41"
       }
     },
     "autosar-bsw-config-checklist-reviewer": {
@@ -321,7 +321,7 @@
         "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
         "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
-        "SKILL.md": "e1ab0d532ca736014c5d22a307e1fa8086ec08e8221ed70c4e8c5ee8b5ce98d6"
+        "SKILL.md": "fb02235b8f0e78a3b290bee159d802d301e20d2ba87a03a2c943eb3cd73659bb"
       }
     },
     "secure-coding-guidelines-builder": {
@@ -337,7 +337,7 @@
         "scripts/office/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
         "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
-        "SKILL.md": "bb5fad644e42b294231a9610e6d15ae08782e7168b5928de65003736706348e4",
+        "SKILL.md": "f01a96ef52eda2edc2e5291f075309d4ac78fe69b7445f4e415bd094308a3c63",
         "test_builder.py": "419a8c81ac3f2b891e8e692c1643d3a91cc72f0c2197d4c5dd00a1b4124059fb"
       }
     },
@@ -355,7 +355,7 @@
         "scripts/office/soffice.py": "a3e21840e29e32f947d5286028931b96eaf2dee63f75d883b8eb19c943c80aa0",
         "scripts/recalc.py": "cf419d15e02965aeaec17773c05b61303f7f520f67fa2696547e7da07502eac7",
         "scripts/sec_coding_probe.py": "1a334e8b3d2293fea81b79a4a8a91967c24b67d2c6758239451b94249848de36",
-        "SKILL.md": "cd061a5a38fab47cdfe411ae7df4c0c683b7c22a2839999dfb3841da1ef7d979"
+        "SKILL.md": "ba32e898c5acfcb3d75d8aa63fb1edc41b5660ab3ea87119311cf15bb9a89a7c"
       }
     }
   },
@@ -364,7 +364,7 @@
     "scripts/automotive_skill_patches/generate_tc_catalog.py": "035b22897c51003c033798569b5ada43b83bb8ace9fc485ae3728a54ab7adc49",
     "scripts/automotive_skill_patches/tc_check_definitions.py": "5713d880855910b18bbf305a5ddbccf4224097773c405a64cbf112650219230a",
     "scripts/automotive_skill_patches/tc_probe.py": "9bd6e2fdab00c08c6624092bfc44147b2b556109f46dc07b3018a707d74ba6ad",
-    "scripts/install_automotive_skills.py": "537f2cc146adde92b14045a2ef378bdc61089705a7e1068b0e798f2b6f9c8b36",
+    "scripts/install_automotive_skills.py": "2dd5855572caf05c6e81660a4405a69875a22771a8d1e2446d0a43213a0c2b4a",
     "scripts/requirements-automotive-skills.txt": "5ab8a239c1418483ead11ccd73008173fdd3af6ae97f912357ede24da823b30a"
   }
 }

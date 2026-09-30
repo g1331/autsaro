@@ -47,7 +47,7 @@
 | Crypto | Csm — Crypto Service Manager | UNKNOWN | p.23, SWS Crypto Service Manager | TBD | TBD | TBD |
 | 通信 / Communication | Dds — Data Distribution Service | UNKNOWN | p.21–23, SWS Data Distribution Service | TBD | TBD | TBD |
 | SystemServices | Det — Default Error Tracer | UNKNOWN | p.26–27, SWS Default Error Tracer | TBD | TBD | TBD |
-| Diagnostics | Dcm — Diagnostic Communication Manager | UNKNOWN | p.23, SWS Diagnostic Communication Manager | README:10–15 有限主机 UDS 服务/场景；不表示 Dcm 全部服务或 ECUC 配置成熟。`DcmDspRoutineFncSignature=ROUTINE_FNC_NORMAL` 为 DRAFT 配置选项，见 `docs/assurance/acceptance-policy.md（DRAFT 选项的声明隔离）`；只标该选项 draft，不标 Dcm 整体 | TBD | TBD |
+| Diagnostics | Dcm — Diagnostic Communication Manager | UNKNOWN | p.23, SWS Diagnostic Communication Manager | README:10–15 有限主机 UDS 服务/场景；不表示 Dcm 全部服务或 ECUC 配置成熟。`DcmDspRoutineFncSignature=ROUTINE_FNC_NORMAL` 为 DRAFT 配置选项，依据 R24-11 Dcm SWS `[ECUC_Dcm_01215]`；只标该选项 draft，不标 Dcm 整体 | TBD | TBD |
 | Diagnostics | Dem — Diagnostic Event Manager | UNKNOWN | p.23, SWS Diagnostic Event Manager | README:12–13 有限单 DTC、超时与主机文件重启保存行为；非完整 Dem/NvM 或实体 NVM 声明 | TBD | TBD |
 | 通信 / Communication | Dlt — Diagnostic Log and Trace | UNKNOWN | p.21–23, SWS Diagnostic Log and Trace | TBD | TBD | TBD |
 | 通信 / Communication | DoIP — Diagnostic over IP | UNKNOWN | p.21–23, SWS Diagnostic over IP | TBD | TBD | TBD |
@@ -201,7 +201,7 @@
 - **Release/meta/docs/configuration tooling, not runtime-module rows:** the 19 release clusters themselves; ReleaseDocumentation and Specification Hashes; ApplicationInterfaces models/examples/guides; BSW General rule documents, type specifications and UML; requirements (RS), requirements/specification use cases (SRS), methodology/templates (`TPS`, ECUC XML parameter model, `MOD`), explanations/guides (`EXP`), reports/examples (`TR`), and `ASWS_TransformerGeneral`. They remain important inputs/evidence, but do not become executable modules by appearing in Table 3.1.
 - **A.3 SpecialFiles, not module rows:** ComStack_Types, MemMap, Platform_Types, Std_Types (Appendix A.3, Table A.3, p.99); track as shared integration artifacts in applicable module evidence, not as module-family units.
 - **Explicit obsolete non-module artifact:** `AUTOSAR_CP_RS_Features` is marked obsolete in §3 p.24. It is an RS entry, not an executable module and not included in the candidate inventory.
-- **DRAFT is item-level unless a source marks a whole module/spec draft.** Known R24-11 example: Dcm `ECUC_Dcm_01215` / `DcmDspRoutineFncSignature` and its `ROUTINE_FNC_NORMAL` option are marked DRAFT in Dcm SWS; project record gives exact extracted text lines 25099–25126 and clarifies the scope at `docs/assurance/acceptance-policy.md（DRAFT 选项的声明隔离）`. Do not reclassify Dcm/RoutineControl as a whole. Additional draft items/modules must be found by inspecting each spec and metadata, and entered at the narrowest source-supported level.
+- **DRAFT is item-level unless a source marks a whole module/spec draft.** Known R24-11 example: Dcm `ECUC_Dcm_01215` / `DcmDspRoutineFncSignature` and its `ROUTINE_FNC_NORMAL` option are marked DRAFT in Dcm SWS; the local Dcm SWS extracted text lines 25099–25126 identify this parameter and option. Do not reclassify Dcm/RoutineControl as a whole. Additional draft items/modules must be found by inspecting each spec and metadata, and entered at the narrowest source-supported level.
 
 ## 当前用户可见场景（只录行为，不代表模块整体通过）
 
@@ -237,5 +237,4 @@ Target column grounding: `docs/project/archive/autosar-platform/issues/05-first-
 - [R24-11 Specifications ARXML ZIP](../../official/R24-11/CP/ReleaseDocumentation/AUTOSAR_CP_MOD_SpecificationsARXML.zip)：官方模型化规范元数据，本地忽略；逐规范检查文档状态字段时使用。`DocStatus=published` 只作为文档状态来源。
 - [`README.md`](../../../README.md#L1)：当前产品行为、范围与非声明。
 - [首个受支持档案 `docs/project/archive/autosar-platform/issues/05-first-verified-profile.md`](../../project/archive/autosar-platform/issues/05-first-verified-profile.md#L11)：目标 profile 边界。
-- [内部验收门槛 `docs/assurance/acceptance-policy.md`](../../assurance/acceptance-policy.md#L34)：按 module/function × configuration × target/toolchain 分档的证据要求。
 - [扩展路线 `docs/project/archive/autosar-platform/issues/08-expansion-route.md`](../../project/archive/autosar-platform/issues/08-expansion-route.md#L20)：模块级适用矩阵、VALID/DRAFT/OBSOLETE 分列、逐 profile 验收路线。

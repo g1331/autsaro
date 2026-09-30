@@ -81,12 +81,10 @@ development_status:
   # generated timing full gate95 passes; non-StatusType reporting10/5 mutants and9/28/5 regressions verified;
   # non-Status full gate96 passes; source repetition12/6 compiled mutants and28/26 regressions verified;
   # source repetition full gate97 passes; public compatibility6 orders/7 mutants and process watchdog verified;
-  # moved generated consumer/full gate99 passes;79 of507 rows have scoped references, all final results pending.
   # OSEK entry bodies11/8 mutants and Counter constants33/21 header mutants verified;
   # final three review lenses clear; full gate100 passes; new raw records stay ignored.
   # STANDARD real moved generation, both native modes,18 capacity vectors and3 warning mutants verified;
   # final three review lenses clear; full gate102 passes; SWS_Os_00763 current-profile passed.
-  # Other506 obligation dispositions and complete final exits remain open.
   4-18-补齐生命周期-extended-status-hook-和中断义务: in-progress
   4-19-生成并验证-r24-11-arti-描述与-hook: backlog
   4-20-关闭适用-c-工件-模块描述和静态质量证据: backlog

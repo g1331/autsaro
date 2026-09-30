@@ -44,8 +44,7 @@ context: []
 - runtime/os/include/Os.h、Os_Time.h及src/Os_Time.c、Os_Backend.c：公开标准类型/接口；有界ScheduleTable配置/状态，统一Counter增量与ExpiryPoint动作，启动顺序、合法链接及受控关闭。
 - runtime/os/tests/sc1_timing.c、scripts/epic4_os.py、core/tests/end_to_end.rs：正式epic4_sc1_timing_capacity，独立八Counter/双表真实内核配置、封存轨迹和手写边界/错误向量；控制线程输出复制观测。
 - core/src/integration/schedule.rs、ecu.rs及相关配置模板：一致的Counter/表配置验证和实际生成；TimingEvent使用Alarm／ExpiryPoint的接受/拒绝边界、公共符号闭包；更新受影响初始化器。
-- core/tests/fixtures/epic4_oracles/os.json、docs/assurance/epic4/obligations.json、reviewed-baseline.json：原封存规则/预期保持；4.17全部123条适用/条件义务逐条关联实际结果，未评估不写通过。
-- docs/assurance/evidence/epic4/、spec/sprint、runtime/os/README.md：实际源/补丁/配置/二进制身份、状态轨迹及MISRA核查；完整等级/交接仍保持开放。
+- core/tests/fixtures/epic4_oracles/os.json、本 story 的验证记录；4.17全部123条适用/条件义务逐条关联实际结果，未评估不写通过。
 
 ## Tasks & Acceptance
 
@@ -69,10 +68,10 @@ context: []
 
 ## Verification
 
-最终43原生计时向量与40受控时间回归均通过；正式epic4_sc1_timing_capacity补测135.36s通过。实际CLI最终源生成、生产HostBatch构建及7条独立CAN/DID/receipt记录对比通过。此前完整门83测试/29Python/UI/桌面及Clippy通过；补测后的完整门exit0：83个集成测试全部通过（458.00s）、29个Python测试、UI构建/lint、桌面构建与两组Clippy通过。最终27个生产翻译单元Cppcheck部分扫描exit1，诊断原样保留；新Schedule模块只有Advisory15.5/8.7，形参修改Advisory17.8已消除。完整221项与Required批准不作通过声明。
+最终43原生计时向量与40受控时间回归均通过；正式epic4_sc1_timing_capacity补测135.36s通过。实际CLI最终源生成、生产HostBatch构建及7条独立CAN/DID/receipt记录对比通过。此前完整门83测试/29Python/UI/桌面及Clippy通过；补测后的完整门exit0：83个集成测试全部通过（458.00s）、29个Python测试、UI构建/lint、桌面构建与两组Clippy通过。最终27个生产翻译单元Cppcheck部分扫描exit1，诊断原样保留；新Schedule模块只有Advisory15.5/8.7，形参修改Advisory17.8已消除。相应 story 的实际功能Required批准不作通过声明。
 
 补测首次遗漏原配置30ms接收超时，于40预期旧RX字节而失败（私有timing417-offset-final.log保留）；读取Com配置和实际过期路径后在30重新输入相同RX，保持触发时刻/字节断言，未改产品超时或降低门。
 
-正式epic4_sc1_timing_capacity及受影响4.8／生成／HostBatch/协议回归；python scripts/verify.py --scope all --base 10c250426b2cf827c9f6d5df9b8b65374358c21a，同主机完整测试按Owner Guide设置两个测试线程，固定watchdog及断言保持。实际C99构建与部分MISRA不替代221项原文核对、Required批准、完整SC1或交接出口。
+正式epic4_sc1_timing_capacity及受影响4.8／生成／HostBatch/协议回归；python scripts/verify.py --scope all --base 10c250426b2cf827c9f6d5df9b8b65374358c21a，同主机完整测试按Owner Guide设置两个测试线程，固定watchdog及断言保持。实际 C99 构建和已选用的编码检查范围如实记录；完整 SC1 产品能力与独立交接仍由后续故事完成。
 
 配置生成保持所选单Task／单软件SystemCounter参考剖面；周期RTE组通过一个重复ExpiryPoint表达，初次deadline及duration匹配TimingEvent周期。多Counter/多点/单次/链接等完整适用能力使用独立原生静态OS配置实际运行，不能借参考工程替代容量证明。硬件Counter证据限定实际内核受控tick ISR驱动的Win64宿主定时器，不声明MCU。

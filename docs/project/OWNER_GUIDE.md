@@ -14,7 +14,7 @@
 
 不知道下一步时直接调用 `bmad-help`。`bmad-build` 处理一个明确的开发目标或 story；委托整个 epic 时，Agent 应按 BMad 规划逐项推进，并核对组合结果，而不是把 epic 当成单次 Build。关键意图不清时使用适用的 BMad 规划技能；`bmad-code-review` 可作额外审查，`bmad-retrospective` 用于阶段复盘。这些技能各有工作范围，但仓库不再规定每次委托只能推进一个工作单元或必须在下一项前开新会话。
 
-当前长期方向与阶段需求在 `_bmad-output/planning-artifacts/` 的 product brief 和 PRD，近期工作拆在 epics/stories，任务状态在 `_bmad-output/implementation-artifacts/sprint-status.yaml`。学习层目前是 product brief 中的待规划方向，不会仅因旧议题存在就进入开发队列。早期产品地图、决策和研究已归档到 `docs/project/archive/` 与 `docs/research/autosar-platform/`，不再需要你维护第二份产品计划。旧任务卡和反馈保存在 `docs/workflow/archive/`，历史运行证据保存在 `docs/assurance/evidence/`；能力是否有资格标为“内部支持”看 `docs/assurance/acceptance-policy.md` 和 `docs/assurance/capabilities.json` 的独立证据门。Story 完成不等于某个 AUTOSAR 模块已完整实现。
+当前长期方向与阶段需求在 `_bmad-output/planning-artifacts/` 的 product brief 和 PRD，近期工作拆在 epics/stories，任务状态在 `_bmad-output/implementation-artifacts/sprint-status.yaml`。学习层目前是 product brief 中的待规划方向，不会仅因旧议题存在就进入开发队列。早期产品地图、决策和研究已归档到 `docs/project/archive/` 与 `docs/research/autosar-platform/`，不再需要你维护第二份产品计划。旧任务卡和反馈保存在 Git 历史，只作历史输入。开发、验证、复核、状态和流程工件完全按安装的 BMad，结果进入对应 story/spec。Story 完成不等于某个 AUTOSAR 模块已完整实现。
 
 Agent 应把规范研究放进具体功能任务，不用一轮轮独立审计替代产品开发。当前做什么须同时核对委托目标、BMad 规划与状态及实际证据，不以本说明中的静态示例为准。
 
@@ -47,7 +47,7 @@ Agent 应把规范研究放进具体功能任务，不用一轮轮独立审计�
 
 点击“预览保存”查看受影响文件及保存前后原文，再确认保存；“重开来源”重新读取并检查磁盘输入。未修改文件保持原字节，外部编辑、失效预览及待恢复备份会阻止保存。输入已校验或已保存，都不表示运行工程已经生成。XSD/MOD 仍须在本机合法提供，不属于交付输入包。
 
-后台原生复验使用 `python scripts/epic4_desktop.py --binary <本次桌面构建路径> --evidence docs/assurance/evidence/epic4/standard-input-roundtrip.json`。该脚本创建独立 Windows Desktop，通过 `STARTUPINFO.lpDesktop` 指定子进程归属，核对实际窗口不在输入桌面，不调用 SwitchDesktop。WebView 使用私有数据目录，真实 UI 与原生 Rust IPC 完成编辑、预览、保存、重开及拒绝路径；测试进程由专属 job 关闭。原始截图和桌面句柄记录保留在忽略的 `.scratch/epic4/`，共享证据记录来源摘要与实际验证范围。
+后台原生复验使用 `python scripts/epic4_desktop.py --binary <本次桌面构建路径>`。该脚本创建独立 Windows Desktop，通过 `STARTUPINFO.lpDesktop` 指定子进程归属，核对实际窗口不在输入桌面，不调用 SwitchDesktop。WebView 使用私有数据目录，真实 UI 与原生 Rust IPC 完成编辑、预览、保存、重开及拒绝路径；测试进程由专属 job 关闭。测试截图、输入和桌面句柄中间数据使用临时目录；实际验证结论写入对应 BMad 工件。
 
 ## 独立 ECU 集成工程
 

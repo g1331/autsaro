@@ -10,13 +10,13 @@ import argparse
 import ctypes
 from ctypes import wintypes as w
 import json
-import hashlib
 import os
 from pathlib import Path
 import shutil
 import socket
 import subprocess
 import time
+import tempfile
 import urllib.request
 import uuid
 
@@ -83,13 +83,11 @@ class ExtendedLimits(ctypes.Structure):
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", required=True, type=Path)
-    parser.add_argument("--evidence", type=Path)
     args = parser.parse_args()
     if os.name != "nt":
         raise RuntimeError("Native desktop verification requires Windows")
     binary = args.binary.resolve(strict=True)
-    scratch = ROOT / ".scratch" / "epic4" / f"desktop-{uuid.uuid4().hex}"
-    scratch.mkdir(parents=True)
+    scratch = Path(tempfile.mkdtemp(prefix="autosar-epic4-desktop-"))
     inputs = scratch / "inputs"
     shutil.copytree(ROOT / "core/tests/fixtures/epic4/positive", inputs)
     paths = sorted(str(path) for path in inputs.glob("*.arxml"))
@@ -310,21 +308,6 @@ def main() -> int:
                 raise RuntimeError("The input desktop changed during the isolated test")
         finally:
             user.CloseDesktop(current)
-        proof = {
-            "inputDesktop": input_name,
-            "applicationDesktop": actual,
-            "applicationWindows": isolated_windows,
-            "station": station,
-            "pid": app.pid,
-            "tid": app.tid,
-            "desktopSwitched": False,
-            "privateWebviewProfile": True,
-            "sourceSelection": "real UI path entry",
-            "applicationIPC": "native Rust",
-        }
-        (scratch / "isolation.json").write_text(
-            json.dumps(proof, indent=2), encoding="utf-8"
-        )
         driver = subprocess.Popen(
             [
                 node,
@@ -417,67 +400,7 @@ def main() -> int:
             )
         if cleanup_errors:
             raise RuntimeError("; ".join(cleanup_errors))
-    if args.evidence:
-        from epic4_os import write_shared_evidence
-
-        tracked_sources = [
-            "core/src/arxml.rs",
-            "core/src/arxml/integration_editor.rs",
-            "core/src/integration/editor.rs",
-            "core/src/integration/mod.rs",
-            "core/src/model.rs",
-            "src-tauri/src/lib.rs",
-            "ui/src/App.tsx",
-            "ui/src/IntegrationPanel.tsx",
-            "ui/src/confirmation.ts",
-            "ui/src/types.ts",
-            "ui/src/styles.css",
-            "scripts/epic4_desktop.py",
-            "scripts/epic4_desktop_cdp.mjs",
-        ]
-        record = {
-            "entry": "epic4_isolated_native_ipc",
-            "passed": True,
-            "scope": "W2 standard-input UI and actual native Rust IPC; no W3 ECU runtime claim",
-            "isolation": {
-                "mechanism": "CreateDesktopW + STARTUPINFO.lpDesktop",
-                "applicationWindowsOnSeparateDesktop": True,
-                "applicationWindowCount": len(isolated_windows),
-                "inputDesktopUnchanged": True,
-                "desktopSwitched": False,
-                "privateWebviewProfile": True,
-                "jobChildrenTerminated": True,
-                "desktopHandlesClosed": True,
-                "nativeDiscardDialogsCanceled": canceled,
-            },
-            "native": json.loads(
-                (scratch / "native-ipc.json").read_text(encoding="utf-8")
-            ),
-            "binarySha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
-            "sources": {
-                source: hashlib.sha256((ROOT / source).read_bytes()).hexdigest()
-                for source in tracked_sources
-            },
-            "screenshots": {
-                name: hashlib.sha256((scratch / name).read_bytes()).hexdigest()
-                for name in [
-                    "standard-input-plan.png",
-                    "standard-input-preview.png",
-                    "standard-input-rejection.png",
-                ]
-            },
-            "references": [
-                "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-createdesktopw",
-                "https://learn.microsoft.com/en-us/windows/win32/winstation/thread-connection-to-a-desktop",
-            ],
-        }
-        write_shared_evidence(args.evidence, record, scratch)
-        shared = json.loads(args.evidence.read_text(encoding="utf-8"))
-        shared["representation"] = (
-            "Workspace paths normalized; per-run desktop names, process/thread IDs and HWNDs remain only in the ignored isolation.json. Native flow and source hashes are unchanged."
-        )
-        args.evidence.write_text(json.dumps(shared, indent=2) + "\n", encoding="utf-8")
-    print(f"epic4_isolated_native_ipc PASS: {scratch}", flush=True)
+    print(f"epic4_isolated_native_ipc PASS: temporary files {scratch}", flush=True)
     return 0
 
 

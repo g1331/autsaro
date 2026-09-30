@@ -38,8 +38,8 @@ def compiler() -> str:
         [cc, "-dumpmachine"], capture_output=True, text=True, check=True
     )
     pinned = json.loads(
-        (ROOT / "docs/assurance/epic4/sources.json").read_text(encoding="utf-8")
-    )["compiler"]
+        (TARGET / "toolchain.json").read_text(encoding="utf-8")
+    )
     executable = Path(shutil.which(cc) or cc)
     if (
         compiler_description(version.stdout.splitlines()[0])
@@ -58,52 +58,8 @@ def compiler_description(identity: str) -> str:
     return identity.partition(" ")[2]
 
 
-def write_shared_evidence(path: Path, record: dict, build_directory: Path) -> None:
-    raw = (json.dumps(record, indent=2) + "\n").encode("utf-8")
-    suite = path.stem
-    local = ROOT / ".scratch/epic4" / (suite + "-raw.json")
-    local.parent.mkdir(parents=True, exist_ok=True)
-    local.write_bytes(raw)
-    replacements = [
-        (str(build_directory), "<build-dir>"),
-        (build_directory.as_posix(), "<build-dir>"),
-        (str(ROOT), "<repo-root>"),
-        (ROOT.as_posix(), "<repo-root>"),
-    ]
-    for tool in (os.environ.get("AUTOSAR_CC", "gcc"), "cppcheck"):
-        executable = shutil.which(tool)
-        if executable:
-            directory = Path(executable).resolve().parent.parent
-            replacements.extend(
-                [
-                    (str(directory), "<toolchain-dir>"),
-                    (directory.as_posix(), "<toolchain-dir>"),
-                ]
-            )
-
-    def normalize(value):
-        if isinstance(value, dict):
-            return {key: normalize(item) for key, item in value.items()}
-        if isinstance(value, list):
-            return [normalize(item) for item in value]
-        if isinstance(value, str):
-            for original, replacement in replacements:
-                value = value.replace(original, replacement)
-            return value
-        return value
-
-    shared = normalize(record)
-    shared["representation"] = (
-        "workspace/build/toolchain paths normalized; observed native addresses and thread IDs retained for physical-stack and fault correlation"
-    )
-    shared["raw_record_sha256"] = hashlib.sha256(raw).hexdigest()
-    shared["raw_record_local"] = local.relative_to(ROOT).as_posix()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes((json.dumps(shared, indent=2) + "\n").encode("utf-8"))
-
-
 def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...] = ()) -> tuple[Path, dict]:
-    manifest = verify_sources()
+    verify_sources()
     cc = compiler()
     copied = directory / "kernel"
     shutil.copytree(KERNEL, copied)
@@ -183,22 +139,7 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
         raise ValueError(
             "native exception path requires PE TLS without emutls allocation"
         )
-    evidence = {
-        "kernel_commit": manifest["commit"],
-        "compiler": "GCC 16.1.0 x64",
-        "tls_abi": "PE native TLS; no emutls helper",
-        "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
-        "patches": {
-            p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in patches
-        },
-        "product_sources": {
-            p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
-            for p in sorted([*TARGET.rglob("*"), ROOT / "runtime/include/Std_Types.h"])
-            if p.is_file() and p.suffix != ".dump"
-        },
-        "command": command,
-    }
-    return binary, evidence
+    return binary, {"command": command}
 
 
 def execute(
@@ -1324,7 +1265,7 @@ def check_capacity(binary: Path) -> list[dict]:
     return observations
 
 
-def check_public_types(directory: Path) -> dict:
+def check_public_types(directory: Path) -> None:
     binary = directory / "public_types.exe"
     command = [
         compiler(), "-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic",
@@ -1333,7 +1274,6 @@ def check_public_types(directory: Path) -> dict:
         "-o", str(binary),
     ]
     expected = "public_types range_and_pointer_contracts=pass access_truth_table=16\n"
-    observations = []
     for name, extra in [
         ("header-only", []),
         ("windows-before", ["-DOS_PUBLIC_TYPES_WINDOWS_BEFORE"]),
@@ -1347,27 +1287,9 @@ def check_public_types(directory: Path) -> dict:
         result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=5)
         require(result.returncode == 0 and result.stdout == expected and not result.stderr,
                 {"exit": result.returncode, "stdout": result.stdout, "stderr": result.stderr})
-        observations.append({"scenario": name, "command": actual_command,
-                             "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
-                             "exit": result.returncode, "stdout": result.stdout,
-                             "stderr": result.stderr, "independent_expected": expected})
-    return {
-        "status": "pass for public type contracts only; runtime services remain separate",
-        "command": command,
-        "product_sources": {
-            path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
-            for path in [TARGET / "include/Os.h", TARGET / "include/Os_Types.h",
-                         TARGET / "include/Rte_Os_Type.h",
-                         TARGET / "include/Os_Cfg.h", TARGET / "include/Os_Hooks.h",
-                         TARGET / "src/Os_Windows.h", TARGET / "tests/public_types.c",
-                         ROOT / "runtime/include/Std_Types.h"]
-        },
-        "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
-        "observations": observations,
-    }
 
 
-def check_public_compatibility(directory: Path) -> dict:
+def check_public_compatibility(directory: Path) -> None:
     binary = directory / "public_compatibility.exe"
     cc = compiler()
     nm = Path(shutil.which(cc) or cc).with_name("nm.exe")
@@ -1376,7 +1298,6 @@ def check_public_compatibility(directory: Path) -> dict:
                "-I" + str(ROOT / "runtime/include"),
                str(TARGET / "tests/public_compatibility.c"), "-o", str(binary)]
     expected = "public_compatibility declarations=16 evaluations=0 error_codes=23 unique=pass\n"
-    observations = []
     for name, extra in [
         ("header-only", []),
         ("windows-before", ["-DOS_PUBLIC_TYPES_WINDOWS_BEFORE"]),
@@ -1404,24 +1325,6 @@ def check_public_compatibility(directory: Path) -> dict:
             signatures.append(sorted(tuple(line.split()[:2]) for line in symbols.stdout.splitlines()))
         require(signatures[0] == signatures[1], {"actual_symbols": signatures[0],
                                                 "baseline_symbols": signatures[1]})
-        observations.append({"scenario": name, "command": actual_command,
-                             "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
-                             "exit": result.returncode, "stdout": result.stdout,
-                             "stderr": result.stderr, "independent_expected": expected,
-                             "defined_symbol_signature": signatures[0],
-                             "compatibility_symbols_emitted": False})
-    return {
-        "status": "pass for functionless OSEK declarations and public error symbols only",
-        "product_sources": {
-            path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
-            for path in [TARGET / "include/Os.h", TARGET / "include/Os_Types.h",
-                         TARGET / "include/Rte_Os_Type.h", TARGET / "include/Os_Cfg.h",
-                         TARGET / "include/Os_Hooks.h", TARGET / "src/Os_Windows.h",
-                         TARGET / "tests/public_compatibility.c", ROOT / "runtime/include/Std_Types.h"]
-        },
-        "observations": observations,
-        "scope": "No protection, spinlock, multicore or complete SC1 runtime capability is inferred from these public declarations.",
-    }
 
 
 def main() -> None:
@@ -1456,25 +1359,18 @@ def main() -> None:
         ],
         default="lifecycle",
     )
-    parser.add_argument("--evidence", type=Path)
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="autosar-epic4-os-") as temporary:
         if args.suite == "status-modes":
             observations = check_status_modes(Path(temporary))
-            if args.evidence:
-                write_shared_evidence(args.evidence, {"observations": observations, "status": "pass"}, Path(temporary))
             print("epic4_sc1_status_modes PASS: 2 native status configurations; 18 Standard capacity vectors")
             return
         if args.suite == "public-types":
-            evidence = check_public_types(Path(temporary))
-            if args.evidence:
-                write_shared_evidence(args.evidence, evidence, Path(temporary))
+            check_public_types(Path(temporary))
             print("epic4_os_public_type_contracts PASS: independent C99 consumer")
             return
         if args.suite == "public-compatibility":
-            evidence = check_public_compatibility(Path(temporary))
-            if args.evidence:
-                write_shared_evidence(args.evidence, evidence, Path(temporary))
+            check_public_compatibility(Path(temporary))
             print("epic4_os_public_compatibility PASS: 6 independent C99 consumers")
             return
         harnesses = {
@@ -1523,28 +1419,25 @@ def main() -> None:
             "calling-context": check_calling_context,
             "idle-state": check_idle_state,
         }
-        binary, evidence = build(Path(temporary), harnesses[args.suite])
-        evidence["observations"] = checks[args.suite](binary)
+        binary, _ = build(Path(temporary), harnesses[args.suite])
+        observations = checks[args.suite](binary)
         if args.suite == "counter-types":
             headers = Path(temporary) / "public-headers"
             headers.mkdir()
-            evidence["public_header_contracts"] = check_public_types(headers)
+            check_public_types(headers)
         if args.suite == "error-hooks":
-            evidence["variant_sources"] = {}
             for service_access, parameter_access in [(0, 1), (1, 0), (0, 0)]:
                 variant_dir = Path(temporary) / f"macros-{service_access}{parameter_access}"
                 variant_dir.mkdir()
-                variant, identities = build(variant_dir, "error_hooks.c", (
+                variant, _ = build(variant_dir, "error_hooks.c", (
                     f"OS_USE_GET_SERVICE_ID={service_access}",
                     f"OS_USE_PARAMETER_ACCESS={parameter_access}",
                 ))
-                evidence["variant_sources"][f"{service_access}{parameter_access}"] = identities
-                evidence["observations"] += check_error_hooks(variant, service_access, parameter_access)
+                observations += check_error_hooks(variant, service_access, parameter_access)
         if args.suite == "sc1-timing":
             clock_dir = Path(temporary) / "host-timer"
             clock_dir.mkdir()
             clock, clock_sources = build(clock_dir, "controlled_time.c")
-            evidence["host_timer_source_identity"] = clock_sources
             for name, epochs, kernels, values in [
                 ("hardware-counter", list(range(1, 21)), list(range(1, 21)), list(range(1, 16)) + [0, 1, 2, 3, 4]),
                 ("hardware-kernel-wrap", [65535, 65536, 65537], [4294967294, 4294967295, 0], [1, 2, 3]),
@@ -1556,10 +1449,7 @@ def main() -> None:
                 require("lifecycle=Closed state=Ready reason=0" in result["stdout"], result)
                 require(actual == expected, result)
                 result["independent_expected_host_timer"] = expected
-                evidence["observations"].append(result)
-        evidence["status"] = "pass"
-        if args.evidence:
-            write_shared_evidence(args.evidence, evidence, Path(temporary))
+                observations.append(result)
         names = {
             "lifecycle": "epic4_backend_lifecycle",
             "stack": "epic4_native_stack_fault_shutdown",
@@ -1585,7 +1475,7 @@ def main() -> None:
         }
         name = names[args.suite]
         suffix = "; 6 header orders" if args.suite == "counter-types" else ""
-        print(f"{name} PASS: {len(evidence['observations'])} native vectors{suffix}")
+        print(f"{name} PASS: {len(observations)} native vectors{suffix}")
 
 
 if __name__ == "__main__":

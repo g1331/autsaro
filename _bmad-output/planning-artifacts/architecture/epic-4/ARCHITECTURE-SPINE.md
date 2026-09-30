@@ -15,7 +15,7 @@ companions: [INTEGRATION-CONTRACT.md, R24-11-CONTRACT.md, FREERTOS-FEASIBILITY.m
 
 # Epic 4 架构契约
 
-维护者已确认 Q1：Epic 4 主路线固定为 FreeRTOS 内核＋自有 AUTOSAR OS 语义实现＋有限单核策略扩展；Q2 的显式 S/R＋同步 C/S 应用 DID 已确认。原生 Windows 交付边界保持，Trampoline/ATK2 等只作参考和备选，不继续并列选型。路线采用不等于生产依赖已集成、完整 SC1 已通过或实施就绪；本轮不开始功能开发。输入、类型、服务签名、所有权、时间与验收依赖已固定在 [集成契约](INTEGRATION-CONTRACT.md)。证据见 [规范契约](R24-11-CONTRACT.md)、[FreeRTOS 调查](FREERTOS-FEASIBILITY.md)和 [比较记录](TRAMPOLINE-COMPARISON.md)。
+维护者已确认 Q1：Epic 4 主路线固定为 FreeRTOS 内核＋自有 AUTOSAR OS 语义实现＋有限单核策略扩展；Q2 的显式 S/R＋同步 C/S 应用 DID 已确认。原生 Windows 交付边界保持，Trampoline/ATK2 等只作参考和备选，不继续并列选型。固定生产依赖已集成，完整 SC1 尚未完成；具体实施状态由 BMad sprint 记录。输入、类型、服务签名、所有权、时间与验收依赖已固定在 [集成契约](INTEGRATION-CONTRACT.md)。证据见 [规范契约](R24-11-CONTRACT.md)、[FreeRTOS 调查](FREERTOS-FEASIBILITY.md)和 [比较记录](TRAMPOLINE-COMPARISON.md)。
 
 ## Design Paradigm
 
@@ -40,7 +40,7 @@ flowchart LR
 
 ## Inherited Invariants
 
-父文档 [architecture.md](../../architecture.md) 没有 AD 编号或父级 spine；继承以下原有约束，不为它们补造父级编号：R24-11 ARXML 为配置权威；Rust 核心负责校验与确定性生成；保留无关有效输入，拒绝不安全保存；自有 BSW 与外部 OS/驱动的来源分开；主机/MCU 证据独立；六道证据门；测试不占用交互桌面。Epic 3 历史主机输入不自动成为 Epic 4 的标准输入。
+父文档 [architecture.md](../../architecture.md) 没有 AD 编号或父级 spine；继承以下原有约束，不为它们补造父级编号：R24-11 ARXML 为配置权威；Rust 核心负责校验与确定性生成；保留无关有效输入，拒绝不安全保存；自有 BSW 与外部 OS/驱动的来源分开；主机/MCU 证据独立；BMad story 验证；测试不占用交互桌面。Epic 3 历史主机输入不自动成为 Epic 4 的标准输入。
 
 ## Invariants & Rules
 
@@ -84,7 +84,7 @@ flowchart LR
 
 - **Binds:** FR-4/FR-6/FR-14/FR-15；构建、交接、支持声明。
 - **Prevents:** 候选源码可下载便自动集成，主机通过便继承 MCU 时序，构建通过便提升支持声明。
-- **Rule:** 每个组合固定 OS/端口/配置器/编译器修订、摘要、来源与实际适用许可；产品代码和外部依赖分别列入输入及产物闭包。标准参考原件、工具许可和 AUTOSAR 商用权利不能由某个内核的源码许可推定。主机接口/逻辑行为、实现能力与 MCU 实时性/ISR/内存段分别取证；未跑为 `not_run`，拒绝/失败为失败。沿用 Epic 3 的安全预览、完整性和新目录独立复验规则；原生 UI 仅在隔离桌面验收。
+- **Rule:** 每个组合固定 OS/端口/配置器/编译器修订、摘要、来源与实际适用许可；产品代码和外部依赖分别列入输入及产物闭包。标准参考原件、工具许可和 AUTOSAR 商用权利不能由某个内核的源码许可推定。主机接口/逻辑行为、实现能力与 MCU 实时性/ISR/内存段分别取证；未跑为 `未执行`，拒绝/失败为失败。沿用 Epic 3 的安全预览、完整性和新目录独立复验规则；原生 UI 仅在隔离桌面验收。
 
 ### AD-8 — 复用内核机制，自有汽车 OS 语义与依赖维护 [ADOPTED — owner confirmed]
 

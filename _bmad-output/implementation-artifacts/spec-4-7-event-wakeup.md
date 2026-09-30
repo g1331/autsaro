@@ -40,7 +40,7 @@ context: []
 - `runtime/os/src/Os_Mailbox.c`、`include/Os_Mailbox.h`：静态256槽SPSC记录，32字节不透明载荷，单调uint64 ticket；Windows Interlocked发布/读取count，槽内容先完成后发布。bridge通过专用Category2模拟IRQ通知Task；事件只是提示。生产者身份、容量、关闭和溢出拒绝明确。
 - `runtime/os/tests/event_wakeup.c`：原生进程、真实host生产线程和ISR，控制交错；独立literal记录/ticket/trace及实际TCB检查。复用已有physical suspend observer而不调用第二selector。
 - `scripts/epic4_os.py`、`scripts/test_epic4_os.py`、`core/tests/end_to_end.rs`：注册正式`epic4_event_wakeup_races`，严格向量及证据变异检查。
-- 前序OS harness配置机械补齐新增字段，文档和`docs/assurance/evidence/epic4/`保存当前证据，不覆盖历史证据。
+- 前序OS harness配置机械补齐新增字段，文档和本 story 的验证记录保存当前证据，不覆盖历史证据。
 
 ## Tasks & Acceptance
 

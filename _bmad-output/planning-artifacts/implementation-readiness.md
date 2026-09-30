@@ -4,7 +4,7 @@
 
 ## 当前事实
 
-当前架构基线为 `e5b84a6`，已确认的故事基线为 `4844e1d`，Epic 3 的实现提交为 `817063e`。本轮核对时 HEAD 为 `4844e1d`、工作区干净；sprint 保留 Epic 1/3 完成、Epic 2/Story 2.1 backlog 且暂缓、Epic 5/6 backlog，并补入 Epic 4 的 4.1–4.22，全部 backlog。现有 `runtime/src/Rte.c` 仍是固定 Com wrapper，`Os.c` 仍为 Os_Advance 轮询；新架构是新增目标设计，不能据其声明源码已支持。能力档案七项 documented_behavior 不变。本轮未重跑 Epic 3 构建、行为或 GUI 验收；22 个新测试入口是未来实施要求，功能验收均为 not_run。
+当前架构基线为 `e5b84a6`，已确认的故事基线为 `4844e1d`，Epic 3 的实现提交为 `817063e`。本轮核对时 HEAD 为 `4844e1d`、工作区干净；sprint 保留 Epic 1/3 完成、Epic 2/Story 2.1 backlog 且暂缓、Epic 5/6 backlog，并补入 Epic 4 的 4.1–4.22，全部 backlog。现有 `runtime/src/Rte.c` 仍是固定 Com wrapper，`Os.c` 仍为 Os_Advance 轮询；新架构是新增目标设计，不能据其声明源码已支持。BMad 实现记录七项 documented_behavior 不变。本轮未重跑 Epic 3 构建、行为或 GUI 验收；22 个新测试入口是未来实施要求，功能验收均为 not_run。
 
 ## 规划检查结果与适用范围
 

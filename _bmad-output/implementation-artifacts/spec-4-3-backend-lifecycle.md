@@ -48,7 +48,7 @@ context: []
 - [x] `runtime/os/src/Os.c`、`Os_Backend.c`：静态对象、bootstrap、mode/autostart、真实状态映射、独立控制关闭，拒绝重复启动/非法对象。
 - [x] `runtime/os/FreeRTOSConfig.h`、`runtime/os/patches/`：静态内核、无 timer daemon/mutex、有限端口适配及正常宿主优先级，不引入调度选择器。
 - [x] `core/tests/end_to_end.rs`、`scripts/epic4_os.py`、`runtime/os/tests/`：注册 epic4_backend_lifecycle，固定独立正反预期，离线构建/实际执行/资源失败与依赖拒绝。
-- [x] `runtime/os/README.md`、`docs/assurance/evidence/epic4/`：真实来源/ABI、补丁职责、隐藏任务/原生资源及验收结果，同步 sprint。
+- [x] `runtime/os/README.md`、本 story 的验证记录：真实来源/ABI、补丁职责、隐藏任务/原生资源及验收结果，同步 sprint。
 
 **Acceptance Criteria:**
 - Given 固定源码/工具，When 离线编译执行两种启动模式，Then trace 符合上述预期且内核报告唯一 Running，标准上层不依赖 Windows/FreeRTOS API。
@@ -58,7 +58,7 @@ context: []
 ## Implementation Notes
 
 - 固定归档摘要及 27 个原始源码文件已核对，原件保留字节并由 gitattributes 禁止换行转换；生产端口补丁与产品源码摘要随实际证据记录。
-- 原生生命周期扩展到 34 向量、依赖拒绝 2 测试通过；核心 3 单元/59 集成、UI build/lint、增量质量/assurance 通过，桌面 build/clippy 也已通过；修正后定向生命周期与质量复验通过。
+- 原生生命周期扩展到 34 向量、依赖拒绝 2 测试通过；核心 3 单元/59 集成、UI build/lint、增量源码检查 通过，桌面 build/clippy 也已通过；修正后定向生命周期与质量复验通过。
 - Windows 资源实际 5 个新线程、6 个 event、1 个 mutex；全部 12 个创建点逐一失败注入通过。
 - 构建会话按 README 使用现有 vcpkg static-md/libclang；没有安装新依赖或全局修改环境。
 
@@ -94,6 +94,6 @@ context: []
 ## Verification
 
 - `cargo test --manifest-path core/Cargo.toml epic4_backend_lifecycle -- --nocapture`：所有独立正反向量通过。
-- `python scripts/verify.py --scope all --base a6429d4017547b1ada108688133aaaff07e85466`：增量质量、核心、UI、桌面构建与 assurance 通过；不做交互桌面验收。
+- `python scripts/verify.py --scope all --base a6429d4017547b1ada108688133aaaff07e85466`：增量质量、核心、UI、桌面构建及源码检查 通过；不做交互桌面验收。
 
-- 最终验收：34 个原生向量、2 个依赖拒绝测试、核心 3/59、UI lint/build、桌面 build/clippy、增量 quality 与 assurance 全通过。复核直接修正后定向测试通过；未做用户桌面 GUI 验收，本 story 不要求 GUI。
+- 最终验收：34 个原生向量、2 个依赖拒绝测试、核心 3/59、UI lint/build、桌面 build/clippy、增量 源码检查 全通过。复核直接修正后定向测试通过；未做用户桌面 GUI 验收，本 story 不要求 GUI。

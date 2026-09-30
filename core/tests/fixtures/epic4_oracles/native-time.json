@@ -1,0 +1,266 @@
+[
+  {
+    "scenario": "thousand",
+    "exit": 0,
+    "stdout": "time ticks=1000 work=1000 app=100 rejects=2 error=0\nalarm entries=0 callbacks=0 errors=0 last=0 rejected=0 counter=0\ncontext rejected=7\nTICK epoch=1 kernel=1 counter=1 actions=1\nTICK epoch=2 kernel=2 counter=2 actions=1\nTICK epoch=3 kernel=3 counter=3 actions=1\nlifecycle=Closed state=Ready reason=0 trace=ISREMZ threads=7 events=21 mutexes=1 resource_calls=29 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "wrap",
+    "exit": 0,
+    "stdout": "time ticks=3 work=3 app=0 rejects=2 error=0\nalarm entries=0 callbacks=0 errors=0 last=0 rejected=0 counter=0\ncontext rejected=7\nTICK epoch=65535 kernel=4294967294 counter=65535 actions=1\nTICK epoch=65536 kernel=4294967295 counter=0 actions=1\nTICK epoch=65537 kernel=0 counter=1 actions=1\nlifecycle=Closed state=Ready reason=0 trace=ISREMZ threads=7 events=21 mutexes=1 resource_calls=29 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "epoch-max",
+    "exit": 0,
+    "stdout": "time ticks=1 work=1 app=0 rejects=2 error=0\nalarm entries=0 callbacks=0 errors=0 last=0 rejected=0 counter=0\ncontext rejected=7\nTICK epoch=18446744073709551615 kernel=1 counter=65535 actions=1\nlifecycle=Closed state=Ready reason=0 trace=ISREMZ threads=7 events=21 mutexes=1 resource_calls=29 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "inflight",
+    "exit": 0,
+    "stdout": "time ticks=1 work=1 app=0 rejects=4 error=0\nalarm entries=0 callbacks=0 errors=0 last=0 rejected=0 counter=0\ncontext rejected=7\nTICK epoch=1 kernel=1 counter=1 actions=1\nlifecycle=Closed state=Ready reason=0 trace=ISREMZ threads=7 events=21 mutexes=1 resource_calls=29 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "tick-mask-all",
+    "exit": 0,
+    "stdout": "tick_masked observed=1 kernel=0 pending=1\ntime ticks=1 work=1 app=0 rejects=2 error=0\nalarm entries=0 callbacks=0 errors=0 last=0 rejected=0 counter=0\ncontext rejected=7\nTICK epoch=1 kernel=1 counter=1 actions=1\nlifecycle=Closed state=Ready reason=0 trace=ISREMZ threads=7 events=21 mutexes=1 resource_calls=29 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "tick-mask-os",
+    "exit": 0,
+    "stdout": "tick_masked observed=1 kernel=0 pending=1\ntime ticks=1 work=1 app=0 rejects=2 error=0\nalarm entries=0 callbacks=0 errors=0 last=0 rejected=0 counter=0\ncontext rejected=7\nTICK epoch=1 kernel=1 counter=1 actions=1\nlifecycle=Closed state=Ready reason=0 trace=ISREMZ threads=7 events=21 mutexes=1 resource_calls=29 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "tick-owner-all",
+    "exit": 0,
+    "stdout": "tick_masked observed=1 kernel=0 pending=1\ndispatch_release phase=0 waiting_commit=1\ntime ticks=1 work=1 app=0 rejects=2 error=0\nalarm entries=0 callbacks=0 errors=0 last=0 rejected=0 counter=0\ncontext rejected=7\nTICK epoch=1 kernel=1 counter=1 actions=1\nlifecycle=Closed state=Ready reason=0 trace=ISREMZ threads=7 events=21 mutexes=1 resource_calls=29 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "tick-owner-os",
+    "exit": 0,
+    "stdout": "tick_masked observed=1 kernel=0 pending=1\ndispatch_release phase=0 waiting_commit=1\ntime ticks=1 work=1 app=0 rejects=2 error=0\nalarm entries=0 callbacks=0 errors=0 last=0 rejected=0 counter=0\ncontext rejected=7\nTICK epoch=1 kernel=1 counter=1 actions=1\nlifecycle=Closed state=Ready reason=0 trace=ISREMZ threads=7 events=21 mutexes=1 resource_calls=29 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "relative-wrap",
+    "exit": 0,
+    "stdout": "time ticks=0 work=0 app=0 rejects=0 error=0\nalarm entries=1 callbacks=0 errors=0 last=0 rejected=3 counter=1\ncontext rejected=7\nlifecycle=Closed state=Ready reason=0 trace=ISREHrMZ threads=7 events=21 mutexes=1 resource_calls=29 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "absolute-cycle",
+    "exit": 0,
+    "stdout": "time ticks=0 work=0 app=0 rejects=0 error=0\nalarm entries=0 callbacks=0 errors=0 last=0 rejected=2 counter=6\ncontext rejected=7\nlifecycle=Closed state=Ready reason=0 trace=ISRErMZ threads=7 events=21 mutexes=1 resource_calls=29 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "absolute-current",
+    "exit": 0,
+    "stdout": "time ticks=0 work=0 app=0 rejects=0 error=0\nalarm entries=0 callbacks=1 errors=0 last=0 rejected=0 counter=14\ncontext rejected=7\nlifecycle=Closed state=Ready reason=0 trace=ISREBrMZ threads=7 events=21 mutexes=1 resource_calls=29 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "absolute-wide",
+    "exit": 0,
+    "stdout": "time ticks=0 work=0 app=0 rejects=0 error=0\nalarm entries=0 callbacks=0 errors=0 last=0 rejected=0 counter=0\ncontext rejected=7\nlifecycle=Closed state=Ready reason=0 trace=ISRErMZ threads=7 events=21 mutexes=1 resource_calls=29 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "action-error",
+    "exit": 0,
+    "stdout": "time ticks=0 work=0 app=0 rejects=0 error=0\nalarm entries=0 callbacks=0 errors=1 last=4 rejected=0 counter=1\ncontext rejected=7\nlifecycle=Closed state=Ready reason=0 trace=ISRErMZ threads=7 events=21 mutexes=1 resource_calls=29 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "callback",
+    "exit": 0,
+    "stdout": "time ticks=0 work=0 app=0 rejects=0 error=0\nalarm entries=0 callbacks=3 errors=0 last=0 rejected=0 counter=7\ncontext rejected=7\nlifecycle=Closed state=Ready reason=0 trace=ISREBBBrMZ threads=7 events=21 mutexes=1 resource_calls=29 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "counter-errors",
+    "exit": 0,
+    "stdout": "time ticks=0 work=0 app=0 rejects=0 error=0\nalarm entries=0 callbacks=0 errors=0 last=0 rejected=15 counter=0\ncontext rejected=7\nlifecycle=Closed state=Ready reason=0 trace=ISRErMZ threads=7 events=21 mutexes=1 resource_calls=29 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "category1-time",
+    "exit": 0,
+    "stdout": "time ticks=0 work=0 app=0 rejects=0 error=0\nalarm entries=0 callbacks=0 errors=0 last=0 rejected=8 counter=0\ncontext rejected=7\nlifecycle=Closed state=Ready reason=0 trace=ISREJrMZ threads=7 events=21 mutexes=1 resource_calls=29 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "category2-time",
+    "exit": 0,
+    "stdout": "time ticks=0 work=0 app=0 rejects=0 error=0\nalarm entries=0 callbacks=0 errors=0 last=0 rejected=1 counter=1\ncontext rejected=7\nlifecycle=Closed state=Ready reason=0 trace=ISREJrMZ threads=7 events=21 mutexes=1 resource_calls=29 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "config-counter-null",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "config-counter-capacity",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "config-counter-duplicate",
+    "exit": 0,
+    "stdout": "prepare=3",
+    "stderr": ""
+  },
+  {
+    "scenario": "config-counter-maximum",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "config-counter-base",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "config-counter-cycle",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "config-system-missing",
+    "exit": 0,
+    "stdout": "prepare=3",
+    "stderr": ""
+  },
+  {
+    "scenario": "config-system-hardware",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "config-alarm-null",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "config-alarm-capacity",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "config-alarm-duplicate",
+    "exit": 0,
+    "stdout": "prepare=3",
+    "stderr": ""
+  },
+  {
+    "scenario": "config-alarm-counter",
+    "exit": 0,
+    "stdout": "prepare=3",
+    "stderr": ""
+  },
+  {
+    "scenario": "config-alarm-action",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "config-alarm-task",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "config-alarm-basic",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "config-alarm-callback",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "config-alarm-cycle",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "config-owner-basic",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "config-owner-inactive",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "config-wake",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "config-tick-category1",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "reset-failure",
+    "exit": 7,
+    "stdout": "time ticks=0 work=0 app=0 rejects=1 error=7\nalarm entries=0 callbacks=0 errors=0 last=0 rejected=0 counter=0\ncontext rejected=7\nTICK epoch=0 kernel=0 counter=0 actions=0\nlifecycle=Closed state=Failed reason=7 trace=ISREZ threads=7 events=21 mutexes=1 resource_calls=29 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=1 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "signal-failure",
+    "exit": 7,
+    "stdout": "time ticks=0 work=1 app=0 rejects=1 error=7\nalarm entries=0 callbacks=0 errors=0 last=0 rejected=0 counter=0\ncontext rejected=7\nTICK epoch=0 kernel=0 counter=0 actions=0\nlifecycle=Closed state=Failed reason=7 trace=ISREZ threads=7 events=21 mutexes=1 resource_calls=29 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=1 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "replace-tick-startup",
+    "exit": 1,
+    "stdout": "time ticks=0 work=0 app=0 rejects=0 error=1\nalarm entries=0 callbacks=0 errors=0 last=0 rejected=0 counter=0\ncontext rejected=0\nTICK epoch=0 kernel=0 counter=0 actions=0\nlifecycle=Closed state=Failed reason=1 trace=ISZ threads=7 events=21 mutexes=1 resource_calls=29 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "replace-tick-running",
+    "exit": 1,
+    "stdout": "time ticks=0 work=0 app=0 rejects=0 error=1\nalarm entries=0 callbacks=0 errors=0 last=0 rejected=0 counter=0\ncontext rejected=0\nTICK epoch=0 kernel=0 counter=0 actions=0\nlifecycle=Closed state=Failed reason=1 trace=ISREZ threads=7 events=21 mutexes=1 resource_calls=29 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "close-before-pending",
+    "exit": 7,
+    "stdout": "time ticks=0 work=0 app=0 rejects=1 error=7\nalarm entries=0 callbacks=0 errors=0 last=0 rejected=0 counter=0\ncontext rejected=7\nTICK epoch=0 kernel=0 counter=0 actions=0\nlifecycle=Closed state=Failed reason=7 trace=ISREZ threads=7 events=21 mutexes=1 resource_calls=29 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "thousand",
+    "exit": 7,
+    "stdout": "time ticks=0 work=0 app=0 rejects=0 error=7\nalarm entries=0 callbacks=0 errors=0 last=0 rejected=0 counter=0\ncontext rejected=0\nTICK epoch=0 kernel=0 counter=0 actions=0\nTICK epoch=0 kernel=0 counter=0 actions=0\nTICK epoch=0 kernel=0 counter=0 actions=0\nlifecycle=Closed state=Failed reason=7 trace=IZ threads=0 events=0 mutexes=0 resource_calls=1 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  }
+]

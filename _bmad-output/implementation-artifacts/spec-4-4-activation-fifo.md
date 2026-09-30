@@ -44,7 +44,6 @@ FreeRTOS 仍是唯一 ready 队列、Running 和上下文调度所有者；仅�
 - third_party/freertos/tasks.c：现有同级 round-robin selector 和尾插 ready 政策必须在复制件补丁中更换。
 - runtime/os/patches/0003-activation-ready-policy.patch：新增有限请求序号 ready 排序策略；不修改原件。
 - scripts/epic4_os.py、runtime/os/tests/activation.c：独立进程、literal 轨迹、边界 observer 与正式 Rust 入口。
-- docs/assurance/epic4/sources.json：维护后续生产补丁清单；4.2 历史证据保留所属提交。
 
 ## Implementation Decisions
 
@@ -96,9 +95,9 @@ Applicable repository skill baseline is MISRA C:2012 Third Edition + AMD1-AMD4 +
 - Lifecycle46 and stack23 native vectors passed after API and kernel changes.
 - Independent verifier mutation tests reject FIFO swap or observer removal;3 OS verifier tests passed.
 - Incremental hygiene/format/C99 syntax passed. Full increment and independent three-lens review pending.
-- Actual proof: docs/assurance/evidence/epic4/activation-fifo.json. Source identities are preserved by LF attributes except fixed patch bytes; vendor originals remain unchanged. 4.2 historical proof belongs to0163d12 and is not overwritten by current production registry changes.
+- Actual proof: 本 story 的验证记录 Source identities are preserved by LF attributes except fixed patch bytes; vendor originals remain unchanged. 4.2 historical proof belongs to0163d12 and is not overwritten by current production registry changes.
 
-Additional partial Cppcheck2.21.0 analysis covers actual copied/patched tasks.c, Os.c, Os_Backend.c and activation.c with win64 model and target macros. Full diagnostics retained at docs/assurance/evidence/epic4/activation-static-analysis.json; missing Windows model and adopted-source findings are not marked passed. Tool-reported setjmp/host-I/O identifiers need authoritative rule/role/deviation audit in4.20; no approvals fabricated.
+Additional partial Cppcheck2.21.0 analysis covers actual copied/patched tasks.c, Os.c, Os_Backend.c and activation.c with win64 model and target macros. Full diagnostics retained at 本 story 的验证记录 missing Windows model and adopted-source findings are not marked passed. Tool-reported setjmp/host-I/O identifiers need authoritative rule/role/deviation audit in4.20; no approvals fabricated.
 
 
 ## Review Triage Log

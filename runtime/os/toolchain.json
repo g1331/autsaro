@@ -1,0 +1,7 @@
+{
+  "identity": "gcc.exe (Rev5, Built by MSYS2 project) 16.1.0",
+  "target": "x86_64-w64-mingw32",
+  "executable_sha256": "d38d4dd6bea387499487881383e644ab7c193ac8f8364dc4252d6e6cc09700e2",
+  "external_tool": true,
+  "redistributed": false
+}

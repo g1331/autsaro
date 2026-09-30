@@ -1,0 +1,158 @@
+[
+  {
+    "scenario": "full",
+    "exit": 0,
+    "stdout": "resources h=1 b=0 irq=0 observer=5 rejected=0 error=0\nlifecycle=Closed state=Ready reason=0 trace=ISRAHaMZ threads=10 events=29 mutexes=1 resource_calls=40 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "non",
+    "exit": 0,
+    "stdout": "resources h=1 b=0 irq=0 observer=5 rejected=0 error=0\nlifecycle=Closed state=Ready reason=0 trace=ISRAnHaMZ threads=10 events=29 mutexes=1 resource_calls=40 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "internal",
+    "exit": 0,
+    "stdout": "resources h=1 b=0 irq=0 observer=5 rejected=0 error=0\nlifecycle=Closed state=Ready reason=0 trace=ISRAgHaMZ threads=10 events=29 mutexes=1 resource_calls=40 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "internal-preempt",
+    "exit": 0,
+    "stdout": "resources h=1 b=0 irq=0 observer=8 rejected=0 error=0\nlifecycle=Closed state=Ready reason=0 trace=ISRADgHaMZ threads=10 events=29 mutexes=1 resource_calls=40 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "wait",
+    "exit": 0,
+    "stdout": "resources h=0 b=1 irq=0 observer=5 rejected=0 error=0\nlifecycle=Closed state=Ready reason=0 trace=ISRABaMZ threads=10 events=29 mutexes=1 resource_calls=40 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "already",
+    "exit": 0,
+    "stdout": "resources h=0 b=1 irq=0 observer=4 rejected=0 error=0\nlifecycle=Closed state=Ready reason=0 trace=ISRAaBMZ threads=10 events=29 mutexes=1 resource_calls=40 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "nested",
+    "exit": 0,
+    "stdout": "resources h=1 b=0 irq=0 observer=6 rejected=5 error=0\nlifecycle=Closed state=Ready reason=0 trace=ISRAHaMZ threads=10 events=29 mutexes=1 resource_calls=40 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "resource-wait",
+    "exit": 0,
+    "stdout": "resources h=1 b=0 irq=0 observer=6 rejected=6 error=0\nlifecycle=Closed state=Ready reason=0 trace=ISRAHaMZ threads=10 events=29 mutexes=1 resource_calls=40 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "restore",
+    "exit": 0,
+    "stdout": "resources h=1 b=1 irq=0 observer=7 rejected=0 error=0\nlifecycle=Closed state=Ready reason=0 trace=ISRArHaBMZ threads=10 events=29 mutexes=1 resource_calls=40 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "nonowner",
+    "exit": 0,
+    "stdout": "resources h=0 b=0 irq=0 observer=6 rejected=0 error=0\nlifecycle=Closed state=Ready reason=0 trace=ISRADaMZ threads=10 events=29 mutexes=1 resource_calls=40 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "masked-isr",
+    "exit": 0,
+    "stdout": "resources h=0 b=0 irq=1 observer=3 rejected=4 error=0\nlifecycle=Closed state=Ready reason=0 trace=ISRApJaMZ threads=10 events=29 mutexes=1 resource_calls=40 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "external-isr",
+    "exit": 0,
+    "stdout": "resources h=0 b=0 irq=1 observer=2 rejected=4 error=0\nlifecycle=Closed state=Ready reason=0 trace=ISRAJaMZ threads=10 events=29 mutexes=1 resource_calls=40 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "oracle-non",
+    "exit": 0,
+    "stdout": "resources h=1 b=0 irq=0 observer=5 rejected=0 error=0\nlifecycle=Closed state=Ready reason=0 trace=ISRAnHaMZ threads=10 events=29 mutexes=1 resource_calls=40 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "oracle-resource",
+    "exit": 0,
+    "stdout": "resources h=1 b=0 irq=0 observer=5 rejected=0 error=0\nlifecycle=Closed state=Ready reason=0 trace=ISRArHaMZ threads=10 events=29 mutexes=1 resource_calls=40 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "internal-resource",
+    "exit": 0,
+    "stdout": "resources h=0 b=0 irq=0 observer=3 rejected=3 error=0\nlifecycle=Closed state=Ready reason=0 trace=ISRAaMZ threads=10 events=29 mutexes=1 resource_calls=40 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "access",
+    "exit": 0,
+    "stdout": "resources h=0 b=1 irq=0 observer=4 rejected=2 error=0\nlifecycle=Closed state=Ready reason=0 trace=ISRAaBMZ threads=10 events=29 mutexes=1 resource_calls=40 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "scheduler",
+    "exit": 0,
+    "stdout": "resources h=1 b=0 irq=1 observer=5 rejected=4 error=0\nlifecycle=Closed state=Ready reason=0 trace=ISRAJrHaMZ threads=10 events=29 mutexes=1 resource_calls=40 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "scheduler-unconfigured",
+    "exit": 0,
+    "stdout": "resources h=0 b=0 irq=0 observer=2 rejected=0 error=0\nlifecycle=Closed state=Ready reason=0 trace=ISRAaMZ threads=10 events=29 mutexes=1 resource_calls=40 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "bad-schedule",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "internal-null",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "internal-capacity",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "internal-duplicate",
+    "exit": 0,
+    "stdout": "prepare=3",
+    "stderr": ""
+  },
+  {
+    "scenario": "internal-missing",
+    "exit": 0,
+    "stdout": "prepare=3",
+    "stderr": ""
+  },
+  {
+    "scenario": "internal-low",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "internal-high",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "non-internal-low",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  }
+]

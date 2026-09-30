@@ -219,53 +219,11 @@ try {
   assert(
     await evaluate(`document.body.innerText.includes('TARGET_NOT_UNIQUE')`),
   );
-  await writeFile(
-    path.join(scratch, "native-ipc.json"),
-    JSON.stringify(
-      {
-        passed: true,
-        roles,
-        verifiedFlows: [
-          "import-paths",
-          "inspect",
-          "edit",
-          "preview",
-          "save",
-          "reopen",
-          "reject-duplicate-id",
-          "cancel-unapplied-draft-discard",
-          "missing-extract-blocked",
-        ],
-        channels: [1100, 1101],
-        periodMs: 20,
-        changedFiles: 4,
-        untouchedFiles: ["types.arxml", "services.arxml", "unrelated.arxml"],
-        screenshotFiles: [
-          "standard-input-plan.png",
-          "standard-input-preview.png",
-          "standard-input-rejection.png",
-        ],
-        sourceSelection: "real UI path entry; unmodified native IPC",
-      },
-      null,
-      2,
-    ),
-  );
   console.log(
     "Native standard-input edit/preview/save/reopen/rejection passed",
   );
 } catch (error) {
-  await writeFile(
-    path.join(scratch, "native-failure.json"),
-    JSON.stringify(
-      {
-        error: String(error),
-        body: await evaluate("document.body.innerText"),
-      },
-      null,
-      2,
-    ),
-  );
+  console.error(String(error), await evaluate("document.body.innerText"));
   await screenshot("native-failure.png");
   throw error;
 } finally {

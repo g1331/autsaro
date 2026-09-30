@@ -154,13 +154,13 @@ fn epic4_reference_input_baseline() {
 }
 
 #[test]
-fn epic4_obligation_and_oracle_baseline() {
+fn epic4_independent_oracle_contracts() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let output = Command::new("python")
-        .arg(root.join("scripts/epic4_obligations.py"))
+        .arg(root.join("scripts/epic4_oracles.py"))
         .current_dir(root)
         .output()
-        .expect("run independent source/obligation/oracle baseline verifier");
+        .expect("run independent protocol/OS oracle checks");
     assert!(
         output.status.success(),
         "{}{}",
@@ -169,7 +169,7 @@ fn epic4_obligation_and_oracle_baseline() {
     );
     assert!(
         String::from_utf8_lossy(&output.stdout)
-            .starts_with("epic4_obligation_and_oracle_baseline PASS ")
+            .starts_with("epic4_independent_oracle_contracts PASS")
     );
 }
 

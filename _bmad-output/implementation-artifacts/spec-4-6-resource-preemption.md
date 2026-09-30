@@ -41,7 +41,7 @@ FULL/NON、内部资源、外部资源 ceiling/LIFO 和显式调度点遵循汽�
 - `runtime/os/FreeRTOSConfig.h`、复制件策略补丁：在真实 Running 边界执行必要政策；保留既有线程上下文和唯一 selector。Category2 资源的模拟中断抑制与释放必须在真实端口边界验证。
 - `runtime/os/include/Os.h`、`src/Os_Backend.h`：Schedule 及必要等待边界；成功的 Terminate/Chain继续使用已验证根帧。
 - `runtime/os/tests/resource_preemption.c`、`scripts/epic4_os.py`、`core/tests/end_to_end.rs`：独立 literal 顺序、优先级/实际内核观察，注册 `epic4_resource_and_preemption`。
-- `docs/assurance/epic4/sources.json`：记录生产复制件补丁身份，不覆盖历史证据或固定原件。
+- 本 story 的验证记录：记录生产复制件补丁身份，不覆盖历史证据或固定原件。
 
 ## Tasks & Acceptance
 

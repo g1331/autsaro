@@ -44,7 +44,7 @@ context: []
 - 新增`runtime/os/src/Os_Time.c`、`src/Os_Backend.c/h`：静态Counter/Alarm状态、实际tick回调、请求/交付/确认状态；请求先完整发布再pending一次tick，唯一汽车Task确认。沿用实际端口临界区与任务/Category2检查。
 - `runtime/os/FreeRTOSConfig.h`和有限复制件补丁：开启backend tick hook，实际FreeRTOS tick驱动SystemCounter与动作；隔离测试入口只在test宏下种入实际kernel计数边界，不改CPU上下文/selector。
 - 新增`runtime/os/tests/controlled_time.c`、`scripts/epic4_os.py`、`scripts/test_epic4_os.py`、`core/tests/end_to_end.rs`：正式`epic4_controlled_tick_and_alarm`入口、独立时间/Alarm预期、前态快照及门禁变异测试。
-- `docs/assurance/epic4/sources.json`与新时间证据：生产补丁身份、真实编译/执行和partial静态诊断；保留所有前序证据。
+- 本 story 的验证记录与新时间证据：生产补丁身份、真实编译/执行和partial静态诊断；保留所有前序证据。
 
 ## Tasks & Acceptance
 

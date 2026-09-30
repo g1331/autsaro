@@ -15,17 +15,17 @@ updated: 2026-09-28
 - R1：从 R24-11 多文件 ARXML 或工作台配置形成可检查的工程状态；保存与重开不得悄悄丢失引用或未支持内容。
 - R2：确定性生成独立 C99 工程，完成主机 GCC 构建；其 CanIf→Can 信号收发及有界诊断按声明配置真实运行。
 - R3：对不支持的版本、变体、引用、CAN ID、DLC、控制器状态和诊断输入提供可定位的拒绝结果，不输出假成功。
-- R4：每项新能力交付输入、独立预期、实际正反向结果及适用规范出处；经六道证据门与独立复核后才可升级内部支持声明。
+- R4：每项新能力交付输入、独立预期、实际正反向结果及适用规范出处；按相应 BMad story 的验证与复核确定完成，说明实际配置与目标范围。
 - R5：面向使用者的进度须区分新增运行行为、操作和交付改进、仅证据进展，以及仍未验证的维度。
 - R6：通过显式“导出可重建主机交付包”操作，对已保存且通过当前主机剖面校验的 R24-11 多文件 ARXML，交付工程须随附完整的输入快照、各文件原有逻辑身份、版次/工具版本及来源和完整性清单。另一位工程师在另行取得同版工作台及合法 R24-11 XSD 后，可从交付目录重新导入并再生成等价的 C99 工程；未保存、外部已改动、缺文件或引用不闭合时拒绝可重建交付，生成的清单与路径映射不写源机器绝对路径，且不额外打包密钥或运行状态；源 ARXML 原文由交付者审阅。
 - R7：提供一组有独立预期的合法双 ECU 主机参考输入和离线复验入口。只用交付包、PowerShell、GCC 与独立测试器即可复现 CAN 正向报文、适用诊断及至少一条拒绝/恢复路径；缺少工具、文件损坏、报文不符或超时须给出失败结果，不把生成或构建成功显示为行为已验证。
 
-**已交付的受限产品成果：Epic 3 主机工程交接。**当前源码与 story/sprint（提交 `817063e`）已包含可重建输入包、重新导入和离线参考复验入口；该完成记录不升级能力档案。当前进入 Epic 4 架构收口，不因 Epic 3 完成自动开始开发。R6/R7 以及 R1–R5 的对应部分使用本仓库已支持的固定 11 位 Classical CAN、单虚拟控制器、当前有界物理 DoCAN 和 Windows/GCC 目标；参考输入由产品用现有工作台创建并校验。它交付可重建的主机工程及独立复验，不声称已接受完整 ECU Extract、BSW Delivered Bundle、SWC 描述，也不声称 RTE、AUTOSAR OS 或 MCU 已实现。R24-11 [Classic 方法学](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_TR_Methodology.pdf)的 ECU 配置输入要求因此保留在 FR-1 等完整参考 ECU 需求中，不由主机专属输入替代。此阶段不需要预选 OS 或购买板卡。
+**已交付的受限产品成果：Epic 3 主机工程交接。**当前源码与 story/sprint（提交 `817063e`）已包含可重建输入包、重新导入和离线参考复验入口；该完成记录限定于该 story 的实际功能。当前进入 Epic 4 架构收口，不因 Epic 3 完成自动开始开发。R6/R7 以及 R1–R5 的对应部分使用本仓库已支持的固定 11 位 Classical CAN、单虚拟控制器、当前有界物理 DoCAN 和 Windows/GCC 目标；参考输入由产品用现有工作台创建并校验。它交付可重建的主机工程及独立复验，不声称已接受完整 ECU Extract、BSW Delivered Bundle、SWC 描述，也不声称 RTE、AUTOSAR OS 或 MCU 已实现。R24-11 [Classic 方法学](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_TR_Methodology.pdf)的 ECU 配置输入要求因此保留在 FR-1 等完整参考 ECU 需求中，不由主机专属输入替代。此阶段不需要预选 OS 或购买板卡。
 
 ## 跨阶段的交付完整性
 
 - 对每个拟声明的 ECU 配置，清单须分别指出产品维护的通用 BSW 代码、按该配置生成的代码与描述、使用者提供的应用、选定 RTOS 及合法目标驱动。生成源码占工程行数的比例不作为验收指标；缺少已声明场景必需的接口、符号、配置、构建或行为证据时，该组合不算完整交付。
-- 支持声明须绑定 CP/FO 版次、模块及配置/变体、OS 实现与适配、目标/工具链，并按适用 SWS/MOD 义务及[六道证据门](../../docs/assurance/acceptance-policy.md)复核。未启用模块不要求进入某个 ECU 的工程；目标目录的长期扩张不折算为未经定义的“符合 AUTOSAR 百分比”。
+- 支持声明须绑定 CP/FO 版次、模块及配置/变体、OS 实现与适配、目标/工具链，并按对应 BMad story 验证实际接口与行为。未启用模块不要求进入某个 ECU 的工程；目标目录的长期扩张不折算为未经定义的“符合 AUTOSAR 百分比”。
 - 初期可评估 FreeRTOS 做有界集成与 Windows 主机验证；内核及端口版本、许可证随实际交付固定。完整参考 ECU 须对声明的 AUTOSAR OS 可扩展性等级满足适用的 R24-11 OS 配置、接口与运行义务，具体可评估 FreeRTOS 内核加经验证的兼容实现或另一款可合法交付的 AUTOSAR OS。原生 FreeRTOS 主机移植、固定 RTE 桥接及虚拟调度均不能推定这些义务通过，具体 MCU 仍须单独验证。
 
 产品级功能规格仍待补齐：系统描述/ECU Extract、BSW 模块交付描述与 ECUC、SWC 描述的实际输入契约；模块依赖与变体边界；配置编辑/校验/生成、RTE、通用 BSW、OS/RTOS、MCAL/目标驱动及应用之间逐项可交付的责任；可复现的构建、主机和板级验收。各类输入不要求首个剖面一次全部支持，但每个对外声明的工程场景必须明确其必需输入和缺失时的拒绝。调研这些契约及 R24-11 适用规范后，先定首个典型 ECU 工程和支持矩阵，再把其缺口拆成开发任务。
@@ -34,7 +34,7 @@ updated: 2026-09-28
 
 选用不绑定具体车辆业务的 CAN＋诊断 ECU：一个示例应用通过受支持的 SWC/RTE 接口参与周期信号收发，外部诊断测试器经物理 CAN 连接读取应用数据和故障状态；完整参考工程由本产品的 BSW 实现、配置/生成产物、经验证的 AUTOSAR OS 实现、选定目标驱动及使用者应用组成。主机与指定 MCU 分别构建和验证，且应可从合法配置重建工程、追溯输入与产物并复现失败恢复。中间增量可限定为常开 CAN，但首个完整参考 ECU 须对声明的单 CAN 网络配置交付 ComM/Nm/CanNm/CanSM 所需的网络请求、NM 报文、睡眠/唤醒和故障恢复行为；不能以“中间增量可运行”代替完整参考 ECU 退出。当前 `Rte.c` 的固定信号桥接、主机文件 NvM 与虚拟 Can 行为是已有证据的起点，不视为上述完整接口或板级行为已经交付。
 
-把这条产品链拆成可编码 story 前，须交付四份可审阅结论：① 输入/产物及责任清单，说明 ECU Extract、ECUC、BSW 描述、SWC 描述哪些是本剖面必需或可选，缺失如何拒绝；② R24-11 适用模块、配置、诊断服务及单网络管理的依赖与义务矩阵，明确完整参考 ECU 的支持配置、阶段增量和不支持项；③ AUTOSAR OS 声明等级、FreeRTOS 差距、可合法交付的实现路径及主机/MCU 端口契约；④ 首块板卡、工具链、合法驱动来源与独立板级验证路径。研究输出是规划关口，未核定内容不直接进入实现 story，也不以竞品功能列表代替需求。
+产品链由 BMad 规划拆成可编码 story。各 story 明确所需输入、生成工件、接口、目标、依赖和预期行为；实现与复核结果写入其现有工件，不另建统一报告或矩阵。
 
 ## 首个参考 ECU 的功能需求
 
@@ -77,7 +77,7 @@ updated: 2026-09-28
 
 - **FR-12 主机验证：**另一执行者可用 Windows 虚拟 ECU 和独立对端重建受支持配置，检查输入往返、工程生成/构建、应用通信、诊断、网络请求/释放及故障恢复；结果标明主机时间与硬件行为的界限。
 - **FR-13 实机验证：**在选定板卡和真实对端上，另一执行者可重建同一声明范围的应用通信、诊断、网络管理、重启及适用故障路径；保留实际构建/链接、报文、时序、资源、存储与中断证据。缺少目标证据时仅保留主机声明。
-- **FR-14 支持矩阵：**产品对每个版次、模块/服务、配置/变体、RTOS、目标和工具链组合显示“已实现的有界行为、待审、内部已支持、未支持”的实际依据；只有通过适用[六道证据门](../../docs/assurance/acceptance-policy.md)及独立复核后才升级内部支持声明。
+- **FR-14 支持矩阵：**产品对每个版次、模块/服务、配置/变体、RTOS、目标和工具链组合显示“已实现的有界行为、未实现或不支持”的实际依据；状态反映实际构建和行为结果，不维护额外审批档案。
 - **FR-15 失败关闭：**输入不完整、生成/构建失败或行为证据未通过时，保存可定位错误和可恢复的既有输入/产物，不把旧构建或部分结果标为新配置的完成交付。
 
 首个完整参考 ECU 只覆盖一个明确的 R24-11 单 CAN 网络、一个示例 SWC、选定诊断与 DTC 配置、一个板级目标及一个已声明并验证的 AUTOSAR OS 可扩展性等级；它的完成不能代替其他 CAN 变体、全部 UDS 服务、部分网络/网关协调、其他总线、所有 MCU 或更高 OS 可扩展性等级的支持声明。长期产品继续按依赖扩大有效 Classic 模块覆盖，并逐组合验收；该范围不被首个参考 ECU 的边界取消。
@@ -86,11 +86,11 @@ updated: 2026-09-28
 
 | 能力链 | 当前可观察状态 | 参考 ECU 退出仍需 |
 | --- | --- | --- |
-| 工程输入/生成 | 支持有界 R24-11 多文件 ARXML、固定主机 ECUC 子集及独立 C99 主机工程；能力档案仍仅为 `documented_behavior` | 核定 ECU Extract、BSW/SWC 描述与目标 ECUC 的实际输入/生成契约，并由另一执行者交接复验 |
+| 工程输入/生成 | 支持有界 R24-11 多文件 ARXML、固定主机 ECUC 子集及独立 C99 主机工程；实际实现范围以源码及 BMad story 为准 | 核定 ECU Extract、BSW/SWC 描述与目标 ECUC 的实际输入/生成契约，并由另一执行者交接复验 |
 | 应用与运行基础 | 固定主机 Rte 信号转接、`Os_Advance` 虚拟时间轮询 | 从真实 SWC 描述形成 RTE/调度接口；明确 AUTOSAR OS 可扩展性等级与实现路径，验证适用配置、任务/ISR、计时及资源契约 |
 | 通信与诊断 | 11 位 CAN、有界物理 DoCAN 和单 DTC 主机行为 | 按声明配置完成适用规范义务、真实板级 CAN/诊断及存储路径复验 |
 | 网络管理 | 无 ComM/Nm/CanNm/CanSM 运行模块与 ECUC 闭包 | 单网络请求/释放、NM PDU、模式通知、睡眠/唤醒及异常恢复的主机和板级证据 |
-| 支持声明 | 七项主机能力档案均为 `documented_behavior` | 逐组合通过适用证据门；实机档案与主机档案分别建立 |
+| 支持声明 | 已实现的有界主机行为见对应 BMad story | 按具体 story 完成实际功能验证；主机结果不推定实机行为 |
 
 ### 决策门与 PRD 状态
 
@@ -102,26 +102,26 @@ FR-1–FR-15 是已确认的产品成果方向，当前文档保持 `draft`，�
 
 1. **输入基线：**首个参考工程采用哪份可合法使用的 R24-11 ECU Extract/BSW 描述/SWC 样例，哪些描述由产品提供、哪些由使用者提供？退出物：可追溯的输入清单与至少一组正反例。
 2. **诊断与 NM 剖面：**首个完整支持矩阵的 UDS SID/子功能、DTC/存储策略、单网络 CanNm 变体与计时参数是什么？退出物：按适用 SWS/ECUC 明确的配置与独立预期，不把主机自有行为当成全部标准语义。
-3. **AUTOSAR OS 技术闭合：**实现选择已确定为固定 FreeRTOS＋自有 AUTOSAR OS 语义＋有限单核策略扩展，目标单核 SC1，保持原生 Windows。按 R24-11 [OS 规范](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_OS.pdf)及 OSEK 完整义务建立配置、调度、接口、栈和错误证据；生产版本/补丁/端口组合固定，主机和 MCU 独立取证。当前仅有界主机研究，不能声明完整 SC1。退出物：适用条款矩阵、具体目标档案与可执行独立验收计划；普通缺口不重新打开选型。
+3. **AUTOSAR OS 技术闭合：**实现选择已确定为固定 FreeRTOS＋自有 AUTOSAR OS 语义＋有限单核策略扩展，目标单核 SC1，保持原生 Windows。按 R24-11 [OS 规范](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_OS.pdf)及 OSEK 完整义务建立配置、调度、接口、栈和错误证据；生产版本/补丁/端口组合固定，主机和 MCU 独立取证。当前 SC1 实施尚未完成，不能声明完整 SC1。交付：实际 SC1 接口和行为、固定依赖与许可、可独立构建和复验的工程。开发和验证记录按 BMad，不增加矩阵或独立验收报告；普通缺口不重新打开选型。
 4. **首个硬件目标：**用户目前没有开发板。PM 推荐以 NXP [FRDM-A-S32K344](https://www.nxp.com/design/design-center/development-boards-and-designs/FRDM-A-S32K344) 为首个评估候选：官方列出板载 CAN FD、S32 Design Studio 和可用于 AUTOSAR/非 AUTOSAR 的 RTD；[NXP 指南](https://www.nxp.com/document/guide/s32k344-evb-quick-start-guides%3AGS-S32K344-WB)列出 S32K344 的 Can RTD 示例。购买或绑定为产品目标前，须实际核对可取得的 RTD/FreeRTOS/工具链版本及许可、CAN 收发器/存储/唤醒路径和真实对端。[NXP 的公开技术答复](https://community.nxp.com/t5/S32K/S32K356-RTD%E9%80%89%E6%8B%A9/m-p/2402912/highlight/true)将可见的 RTD 6.0.0 对应 R21-11、7.0.1 对应 R23-11；尚无由此可推定的 R24-11 ECUC 或接口兼容性。退出物：固定版本、合法来源、构建和对端路径的目标档案；评估不通过则重新选板。
 
-当前声明仅限 CP/FO R24-11、Windows 虚拟 ECU、本地 GCC 和各能力档案所列的有界配置。现有 `Os_Advance` 是主机虚拟时间调度，不是已接入的 RTOS，也不是 AUTOSAR OS 实现。真实 MCU、第三方互操作、完整 MISRA、功能安全、官方一致性及公开发布不包含在本阶段的通过声明内。
+当前声明仅限 CP/FO R24-11、Windows 虚拟 ECU、本地 GCC 和各具体功能所声明的有界配置。现有 `Os_Advance` 是主机虚拟时间调度，不是已接入的 RTOS，也不是 AUTOSAR OS 实现。真实 MCU、第三方互操作、完整 MISRA、功能安全、官方一致性及公开发布不包含在本阶段的通过声明内。
 
 ## 后续阶段方向（尚非已批准的完整需求清单）
 
-1. **现有 CAN 主机剖面收口：**使用者从空项目或受支持的多文件 ARXML，经安全保存、可查看的生成差异，取得可交接的独立工程；另一使用者能按交付说明构建两个虚拟 ECU，复现信号收发、状态、拒绝与失败恢复。现有实现和 story 结果须对照该关口及适用证据门核验，不能自动宣告完成。
+1. **现有 CAN 主机剖面收口：**使用者从空项目或受支持的多文件 ARXML，经安全保存、可查看的生成差异，取得可交接的独立工程；另一使用者能按交付说明构建两个虚拟 ECU，复现信号收发、状态、拒绝与失败恢复。现有实现和 story 结果须对照该关口及相应 story 的验收核验，不能自动宣告完成。
 2. **参考 ECU 规格与运行基础集成：**按已确认的通用 CAN＋诊断场景，核清所需的系统/ECU、BSW 和 SWC 输入及产物责任。原生 FreeRTOS 可先用于主机实验；固定 FreeRTOS 内核＋自有汽车 OS 语义实现为已采用的参考 ECU 路线，须先核定差距和有限补丁可行性，按已确定的单核 SC1 目标固定可交付版本、目标驱动配套、配置和调度/中断契约。使已声明的 CAN、诊断、单网络管理及应用/RTE 子集在主机目标上完成配置、生成、构建、运行和失败恢复，并重测主机向量。开发可先通过常开 CAN 增量，但本阶段结束须在主机对端验证网络请求/释放、NM 报文与睡眠/唤醒以及所声明的 OS 接口行为。`Os_Advance` 与原生 FreeRTOS 调度都不能单独充当此出口。
 3. **指定 MCU 的完整参考 ECU：**在选定芯片、板卡、工具链及合法可用的驱动后，集成同一受支持 BSW 子集、已声明并验证的 AUTOSAR OS 实现与至少一个按真实 SWC 描述交付的应用/RTE 接口，完成目标构建、上板、CAN 通信、适用诊断和单网络管理的正反向验证；对真实中断、时序、存储和资源另留目标证据。网络请求/释放、NM 报文、睡眠/唤醒及异常恢复须由真实对端复验；仅有主机信号桥接或常开 CAN 上板不能作为完整参考 ECU 的出口。主机与实机是不同档案，不互相代替。
 4. **同一产品链上深化能力：**沿 DoCAN/UDS 的已声明子集深化多帧、会话、DTC 状态及存储恢复、受限访问和有状态写入/例程；按实际使用场景扩大 EcuM/BswM、RTE、存储与虚拟/真实 I/O 能力，再评估部分网络、网关协调、其他 NM 变体和其他总线网络管理。每个服务、配置及故障路径单独验收；现有单项主机行为不推定为整阶段通过。
 5. **其他网络和横向模块：**根据实际前置条件与可验证对端扩展 Ethernet/DoIP 等网络链，随后评估 LIN、FlexRay、网关、安全、时间同步等模块族。模块是否纳入、先后次序及支持配置在对应阶段规划时决定，不把规范发布清单直接转成任务清单。
 
-阶段按使用者可完成的工程场景退出，模块清单是各阶段的支持范围。对拟声明的版次、模块、配置/变体、RTOS 与适配、目标和工具链，使用真实输入完成保存与生成闭包、独立构建、正反向运行和失败恢复，并核对适用规范义务及六道证据门；未通过的组合保持未支持或待审。当前 CAN 主机剖面尤其须完成非实现者的离线交接与复现，不能由内部演示、生成成功或单项 story `done` 代替。RTOS 主机目标、指定实机与其他版次各有独立档案；在特定 RTOS 和目标未选定前，不由当前 Windows 工程推定其支持。Adaptive Platform 待另行产品决定。这里只记录方向和阶段出口，后续阶段尚未拆分 story、估算工作量或承诺日期。
+阶段按使用者可完成的工程场景退出，模块清单是各阶段的支持范围。对拟声明的版次、模块、配置/变体、RTOS 与适配、目标和工具链，使用真实输入完成保存与生成闭包、独立构建、正反向运行和失败恢复，并核对适用规范义务及对应 story 的验证；未通过的组合保持未支持或待审。当前 CAN 主机剖面尤其须完成非实现者的离线交接与复现，不能由内部演示、生成成功或单项 story `done` 代替。RTOS 主机目标、指定实机与其他版次各有独立档案；在特定 RTOS 和目标未选定前，不由当前 Windows 工程推定其支持。Adaptive Platform 待另行产品决定。这里只记录方向和阶段出口，后续阶段尚未拆分 story、估算工作量或承诺日期。
 
 学习层是[产品简述](product-brief.md)中的后期方向。本阶段及近期诊断增量的 epics、stories 和 sprint 不纳入课程、导览、教学工程或关卡实现。待产品具备多类完整且稳定的可用工程场景后，再依据[历史问题集](../../docs/project/archive/autosar-learning/map.md)和届时已验证的运行能力，用 BMad 确定具体课程需求、架构、验收与实施任务；不预先指定初、中、高级关卡必须使用当前某项尚待审的能力。
 
 ## 需求来源与验收
 
-当前产品方向以[产品简述](product-brief.md)为准，首阶段实施范围由本 PRD、[架构](architecture.md)及 [epics](epics.md)逐步细化。逐组合验收规则见[内部验收政策](../../docs/assurance/acceptance-policy.md)。原始调查与取舍留在[项目历史资料](../../docs/project/archive/autosar-platform/map.md)，供溯源而不另行安排任务。规范 PDF 只保存在本机；story 引用可定位的文件名、条款号、版次及适用性判断，不复制原文。能力档案位于 `docs/assurance/capabilities.json`，历史任务和证据位于 `docs/workflow/`，BMad sprint 文件是唯一任务状态。FR-1/FR-5 的工件关系据 R24-11 [Classic 方法学](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_TR_Methodology.pdf)与 [RTE 规范](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_RTE.pdf)界定；FR-11 的模块边界据 [ComM](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_COMManager.pdf)、[Nm](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_NetworkManagementInterface.pdf)、[CanNm](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_CANNetworkManagement.pdf)和 [CanSM](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_CANStateManager.pdf)核对；FR-6 的 AUTOSAR OS 声明边界见 [OS 规范](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_OS.pdf)。这些是规划依据，不代替逐条适用性审查。
+当前产品方向以[产品简述](product-brief.md)为准，首阶段实施范围由本 PRD、[架构](architecture.md)及 [epics](epics.md)逐步细化。开发、验证、复核及状态管理完全按安装的 BMad。原始调查与取舍留在[项目历史资料](../../docs/project/archive/autosar-platform/map.md)，供溯源而不另行安排任务。规范 PDF 只保存在本机；story 引用可定位的文件名、条款号、版次及适用性判断，不复制原文。实施、验证与复核记录进入对应 BMad story/spec；BMad sprint 文件是唯一任务状态。FR-1/FR-5 的工件关系据 R24-11 [Classic 方法学](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_TR_Methodology.pdf)与 [RTE 规范](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_RTE.pdf)界定；FR-11 的模块边界据 [ComM](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_COMManager.pdf)、[Nm](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_NetworkManagementInterface.pdf)、[CanNm](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_CANNetworkManagement.pdf)和 [CanSM](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_CANStateManager.pdf)核对；FR-6 的 AUTOSAR OS 声明边界见 [OS 规范](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_OS.pdf)。这些是规划依据，不代替逐条适用性审查。
 
 
-**FreeRTOS 可行性调查更新（2026-09-28）：**固定 V11.3.1 实际 commit `054e14f3397023aa83813a65aa065fc4597d481b` 和 GCC 16.1.0，已在隔离 Windows 后台进程构建、复现同级抢占恢复/资源恢复反例，并验证有限队列策略扩展、合法链式移交与 C99 入口重启机制；详见 [调查与采用条件](architecture/epic-4/FREERTOS-FEASIBILITY.md)。这条路线需要产品维护策略扩展，不能按薄 API 封装估算。原版 Windows 栈数组不是实际执行栈；主机 SC1 的真实栈门、全部激活请求 FIFO、错误/ISR/计时/Hook 与完整条款/输入证据仍未闭合。若首阶段先交付有界主机集成，FR-6 和 Epic 4 完整退出门仍保留，能力口径按证据门确定，不再作为选型待决。未开始产品功能开发，Epic 4 继续 FAIL/backlog。
+**FreeRTOS 可行性调查更新（2026-09-28）：**固定 V11.3.1 实际 commit `054e14f3397023aa83813a65aa065fc4597d481b` 和 GCC 16.1.0，已在隔离 Windows 后台进程构建、复现同级抢占恢复/资源恢复反例，并验证有限队列策略扩展、合法链式移交与 C99 入口重启机制；详见 [调查与采用条件](architecture/epic-4/FREERTOS-FEASIBILITY.md)。这条路线需要产品维护策略扩展，不能按薄 API 封装估算。原版 Windows 栈数组不是实际执行栈；主机 SC1 的真实栈门、全部激活请求 FIFO、错误/ISR/计时/Hook 与完整条款/输入证据仍未闭合。若首阶段先交付有界主机集成，FR-6 和 Epic 4 完整退出门仍保留，能力口径按story 验收确定，不再作为选型待决。未开始产品功能开发，Epic 4 继续 FAIL/backlog。
