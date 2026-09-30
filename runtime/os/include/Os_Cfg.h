@@ -1,5 +1,14 @@
 #ifndef AUTOSAR_EPIC4_OS_CFG_H
 #define AUTOSAR_EPIC4_OS_CFG_H
+/* Both status modes retain defensive host checks and nonzero ErrorHook
+ * reporting. The reference ECU selects Extended Status; generated headers
+ * select the validated ECUC value. Standard warnings remain mandatory. */
+#ifndef OS_STATUS_EXTENDED
+#define OS_STATUS_EXTENDED 1
+#endif
+#if (OS_STATUS_EXTENDED != 0) && (OS_STATUS_EXTENDED != 1)
+#error Invalid OS status configuration
+#endif
 /* The fixed reference ECU selects both standard error-access switches.
  * Native configuration tests compile each independent off/on combination. */
 #ifndef OS_USE_GET_SERVICE_ID

@@ -37,6 +37,37 @@ mod epic4_timing;
 #[path = "support/epic4_counter_time.rs"]
 mod epic4_counter_time;
 
+#[path = "support/epic4_status.rs"]
+mod epic4_status;
+
+#[cfg(windows)]
+#[test]
+fn epic4_generated_standard_status() {
+    epic4_status::verify_generated_standard();
+}
+
+#[cfg(windows)]
+#[test]
+fn epic4_sc1_status_modes() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let output = Command::new("python")
+        .arg(root.join("scripts/epic4_os.py"))
+        .args(["--suite", "status-modes"])
+        .current_dir(root)
+        .output()
+        .expect("run both SC1 status modes on the native OS");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "epic4_sc1_status_modes PASS: 2 native status configurations; 18 Standard capacity vectors"
+    );
+}
+
 #[test]
 fn epic4_generated_counter_timing_contracts() {
     epic4_counter_time::verify();

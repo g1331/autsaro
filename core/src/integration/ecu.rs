@@ -88,11 +88,29 @@ impl ValidatedIntegrationPlan {
         let configuration = files.get_mut("os/include/Os_Cfg.h").unwrap();
         let mut configuration_text =
             String::from_utf8(configuration.clone()).map_err(|error| reject(error.to_string()))?;
-        let end = configuration_text.rfind("#endif").unwrap();
+        let extended_status = plan
+            .configuration
+            .iter()
+            .find_map(|record| {
+                record.parameters.iter().find_map(|(name, values)| {
+                    name.ends_with("/OsStatus").then(|| values[0].as_str())
+                })
+            })
+            .unwrap_or("EXTENDED")
+            == "EXTENDED";
+        configuration_text = configuration_text.replace(
+            "#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED 1\n#endif",
+            if extended_status {
+                "#if defined(OS_STATUS_EXTENDED) && (OS_STATUS_EXTENDED != 1)\n#error OsStatus differs from the validated plan\n#endif\n#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED 1\n#endif"
+            } else {
+                "#if defined(OS_STATUS_EXTENDED) && (OS_STATUS_EXTENDED != 0)\n#error OsStatus differs from the validated plan\n#endif\n#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED 0\n#endif"
+            },
+        );
         let task_symbol = format!(
             "OS_TASK_ID_{}",
             plan.schedule.task.rsplit('/').next().unwrap()
         );
+        let end = configuration_text.rfind("#endif").unwrap();
         configuration_text.insert_str(
             end,
             &format!("#include \"Os_Counter.h\"\n#define {task_symbol} 0u\n"),
@@ -457,6 +475,12 @@ impl ValidatedIntegrationPlan {
             .unwrap(),
         );
         files.insert("README.md".into(), b"# ECU integration source project\n\nThis generated Windows x64 project consumes one validated standard input plan. The actual single Task_Ecu, generated RTE/reference application, BSW target variants, static OS configuration and fixed FreeRTOS sources are included. The original kernel and thirteen product patches are retained; build.ps1 applies the patches only to its separate build copy. MIT notices remain in kernel/LICENSE.md. Product source is included for authorized internal use, without a new public license grant. AUTOSAR XSD/MOD/PDF files and compiler binaries are external and are not redistributed.\n\nRun PowerShell build.ps1 -OutputDirectory <new-empty-directory> with Git and the pinned GCC 16.1.0 x64 toolchain on PATH. The script checks source manifests, compiler identity and native TLS, and builds a bounded startup probe. Source trees stay unchanged. An optional -ControlSource <external-consumer.c> links an independent native consumer instead of the bundled probe; it supplies main only and consumes the same delivered public headers and runtime. Generation itself requires this fixed compiler and Git for a complete compile/link preflight before installing any destination. Run the resulting ecu_probe.exe; it drives individual controlled ticks and consumes/confirms actual outputs outside the automotive task. Build with -HostBatch to select ecu_host_batch.exe, the production HostBatchV1 stdin/stdout entry. Stage BEGIN <epoch>, up to 256 RX <CAN id> <dlc> <exact hex bytes> lines, then COMMIT. Epochs never decrease and each batch spans at most 1000 ms. Each intermediate tick completes individually; inputs precede processing at their target epoch, and equal epochs do not repeat periodic work. OUT records are confirmed only after successful physical write/flush. COMMIT_OK requires real Waiting with copied inputs, ticks, outputs and acknowledgements drained. COMMIT_ERROR reports executed work and BSW input errors; REJECT is admission failure. Each COMMIT has one fixed 5000 ms host watchdog. Failed/blocked output or the 257th pending output closes the ECU without claiming rollback. Diagnostic trace retains a bounded prefix and reports trace_dropped separately. -HostBatch cannot be combined with -TestMode or -ControlSource. Include Os.h for the generated OS_TICKS2NS/US/MS/SEC_<Counter> macros. Pass a TickType value; each argument is evaluated once and integer seconds truncate toward zero. os-generation-timing.json lists the validated Counter resolution and the selected target internal timers and host watchdogs. These watchdogs never advance automotive time. Complete application/network/SC1/handoff evidence is separate; a successful build/probe is not those acceptance decisions.\n".to_vec());
+        files.get_mut("README.md").unwrap().extend_from_slice(
+            format!(
+                "\nThe validated OsStatus is {}. Os_Cfg.h fixes this selection and rejects a conflicting compiler override. Both SC1 modes retain defensive host checks and report every detected nonzero service result to the configured ErrorHook. Standard Status retains the mandatory activation-limit and alarm warnings; it does not disable interrupt, stack or shutdown protection.\n",
+                if extended_status { "EXTENDED" } else { "STANDARD" }
+            ).as_bytes(),
+        );
         let files = generator::seal_files(files.into_iter().collect());
         super::link_check::verify(&files).map_err(reject)?;
         Ok(EcuIntegrationFiles { files })

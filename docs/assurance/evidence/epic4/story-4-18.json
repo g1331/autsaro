@@ -1,7 +1,7 @@
 {
   "format": "epic4-story-obligation-results-v1",
   "story": "4.18",
-  "status": "in-progress; all final results pending; scoped increment results are not full story acceptance",
+  "status": "in-progress; one current-profile final row passed; remaining rows pending; complete story and Epic exits remain open",
   "obligations_sha256": "a691103e8dd217b12c1e838bdb6a06fcef772dc8cbafb673d2bf70b62185b18f",
   "sealed_counts": {
     "total": 507,
@@ -1827,8 +1827,29 @@
         "supported_status_modes=STANDARD,EXTENDED",
         "core_count=1"
       ],
-      "final_result": "pending_current_profile_and_exit_assessment",
-      "increment_results": []
+      "final_result": "passed",
+      "increment_results": [],
+      "final_assessment": {
+        "configuration": "SC1, single-core Win64; STANDARD and EXTENDED; reference remains EXTENDED",
+        "reason": "Actual STANDARD ECUC is accepted and drives the generated configuration. Both real native builds retain mandatory standard warnings and complete error reporting; additional defensive checks are retained in both modes as allowed by OSEK12.2.3.",
+        "implementation_record": "_bmad-output/implementation-artifacts/spec-4-18-sc1-lifecycle-hooks.md#verification",
+        "verification": [
+          "epic4_generated_standard_status",
+          "epic4_sc1_status_modes",
+          "scripts/verify.py --scope all --base 065dbfa"
+        ],
+        "observations": "Moved STANDARD project compiled/linked and passed independent ECU behavior; conflicting compiler override and unknown ECUC values rejected; two native modes with six standard warnings and two additional guarded errors; all18 STANDARD capacity vectors; three missing-warning-report mutations rejected; full102 integration tests passed.",
+        "source_sha256": {
+          "core/src/integration/configuration.rs": "3d098094b64d29e57b7a015b497d912d010eab0fe219048fba932f11a7f22079",
+          "core/src/integration/ecu.rs": "097304f2a785ea76edb85bd7c6ce8230a07a219ec7abe2daa1076963312d61a0",
+          "runtime/os/include/Os_Cfg.h": "9183e140543aacb4e6cfdface1d9f47c27300fd13a5fe43b4440431e164500b3",
+          "runtime/os/src/Os_Error.c": "6fe7cbbad702444c2f831a84671f03b1b2ac705d78fe75b25cc9fe516618a75c",
+          "runtime/os/src/Os_Backend.c": "e76ba16bd9ab48b9802d856d62f798b78337c005923908969c6b29fbc53c4a75",
+          "runtime/os/tests/status_modes.c": "27d172b2d6273717de5b22897577c7f55ad1988f8a59a8f58bbe2fbcbbf04766",
+          "core/tests/support/epic4_status.rs": "eb3a5ea1b86c36a722f5cf7eb9fcae4a1a629d9303e627c31db4f5381284edb0"
+        },
+        "limits": "This individual status-mode obligation passes. All other507-row dispositions, applicable C221, ARTI, complete story and Epic exits remain independently gated. Future source changes require reassessment."
+      }
     },
     {
       "key": "SWS_Os_00573",

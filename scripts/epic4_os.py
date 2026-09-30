@@ -985,6 +985,37 @@ def check_idle_state(binary: Path) -> list[dict]:
     return observations
 
 
+def check_status_modes(directory: Path) -> list[dict]:
+    invalid = subprocess.run(
+        [compiler(), "-std=c99", "-E", "-x", "c", "-", "-DOS_STATUS_EXTENDED=2",
+         "-I", str(TARGET / "include")],
+        input='#include "Os_Cfg.h"\n', capture_output=True, text=True, timeout=20,
+    )
+    require(invalid.returncode != 0 and "Invalid OS status configuration" in invalid.stderr,
+            {"stdout": invalid.stdout, "stderr": invalid.stderr, "exit": invalid.returncode})
+    observations = []
+    for mode in (0, 1):
+        build_directory = directory / str(mode)
+        build_directory.mkdir()
+        binary, _ = build(
+            build_directory,
+            "status_modes.c",
+            (f"OS_STATUS_EXTENDED={mode}", f"EXPECTED_STATUS_EXTENDED={mode}"),
+        )
+        result = execute(binary, "")
+        expected = f"status_modes extended={mode} errors=8 peers=1 preserved=1 reason=0"
+        require(result["exit"] == 0 and not result["stderr"], result)
+        require(expected in result["stdout"], result)
+        require("lifecycle=Closed state=Ready reason=0" in result["stdout"], result)
+        observations.append(result)
+    capacity_directory = directory / "standard-capacity"
+    capacity_directory.mkdir()
+    capacity_binary, _ = build(capacity_directory, "sc1_capacity.c", ("OS_STATUS_EXTENDED=0",))
+    capacity = check_capacity(capacity_binary)
+    require(len(capacity) == 18, {"capacity_vectors": len(capacity)})
+    return observations
+
+
 def check_entry_bodies(binary: Path) -> list[dict]:
     cases = {
         "normal": (1,0,1,0,0,"OIiWo",0),
@@ -1419,6 +1450,7 @@ def main() -> None:
             "nonstatus-errors",
             "source-repetition",
             "entry-bodies",
+            "status-modes",
             "calling-context",
             "idle-state",
         ],
@@ -1427,6 +1459,12 @@ def main() -> None:
     parser.add_argument("--evidence", type=Path)
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="autosar-epic4-os-") as temporary:
+        if args.suite == "status-modes":
+            observations = check_status_modes(Path(temporary))
+            if args.evidence:
+                write_shared_evidence(args.evidence, {"observations": observations, "status": "pass"}, Path(temporary))
+            print("epic4_sc1_status_modes PASS: 2 native status configurations; 18 Standard capacity vectors")
+            return
         if args.suite == "public-types":
             evidence = check_public_types(Path(temporary))
             if args.evidence:

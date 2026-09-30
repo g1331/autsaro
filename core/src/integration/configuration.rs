@@ -322,7 +322,6 @@ pub(super) fn inspect(graph: &Graph) -> Result<Configuration, Vec<PlanDiagnostic
         ("CanIfTxPduType", "STATIC"),
         ("ComTransferProperty", "PENDING"),
         ("ComRxDataTimeoutAction", "NONE"),
-        ("OsStatus", "EXTENDED"),
         ("OsScalabilityClass", "SC1"),
         ("DcmDspSessionForBoot", "DCM_NO_BOOT"),
         ("DcmDspDataScalingInfoSize", "0"),
@@ -348,6 +347,16 @@ pub(super) fn inspect(graph: &Graph) -> Result<Configuration, Vec<PlanDiagnostic
     ];
     for record in &records {
         let index = *graph.objects.get(&record.path).unwrap();
+        if let Some(status) = value(graph, index, "OsStatus", false) {
+            if !matches!(status, "STANDARD" | "EXTENDED") {
+                return Err(reject(
+                    graph,
+                    index,
+                    "TARGET_PARAMETER_UNSUPPORTED",
+                    "The SC1 target supports only STANDARD or EXTENDED OsStatus.",
+                ));
+            }
+        }
         for (parameter, expected) in fixed {
             if let Some(actual) = value(graph, index, parameter, false) {
                 if actual != expected {
