@@ -93,7 +93,7 @@ development_status:
   # 105 integration results plus fixed ScheduleTable and final configuration tests pass; four BMad review layers clear.
   4-18-补齐生命周期-extended-status-hook-和中断义务: done
   4-19-生成并验证-r24-11-arti-描述与-hook: done
-  4-20-关闭适用-c-工件-模块描述和静态质量证据: review
+  4-20-关闭适用-c-工件-模块描述和静态质量证据: done
   4-21-交付新目标可重建包与准确工作台状态: backlog
   4-22-独立复核完整等级与工程交接出口: backlog
   epic-4-retrospective: optional
