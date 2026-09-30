@@ -2,7 +2,7 @@
 title: '4.18 完整适用生命周期、Extended Status、Hook 与模拟中断'
 type: 'feature'
 created: '2026-09-29'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '81492c568c9d359fd1dc2e0fb406754e383eee7b'
@@ -51,7 +51,7 @@ context: []
 - [x] 完成实际生成中断向量段和Memory Mapping声明／链接行为。
 - [x] 完成Counter OsService端口与ClientServerInterface。
 - [x] 完成配置一致性要求。
-- [ ] 完成剩余具体产品行为、相关回归与BMad复核，同步sprint并本地提交。
+- [x] 完成剩余具体产品行为、相关回归与BMad复核，同步sprint并本地提交。
 
 ## Implementation Notes
 
@@ -111,3 +111,7 @@ context: []
 已运行的正式入口覆盖真实栈／生命周期、激活FIFO、终止／链式移交、资源、事件、受控Counter／ScheduleTable、调用上下文、Hook、ISR清理／嵌套、公共接口、生成ECU和HostBatch。最新两增量完整检查分别100／102核心集成、29Python、UI lint/build、桌面build及两组Clippy通过；对应代码提交065dbfa／d8ae0c2。
 
 本次清理不删减这些行为。后续按具体任务运行覆盖剩余功能的测试和BMad复核，结果更新本节；不因前序通过而把未实现功能标done。
+
+父story最终复核：生命周期、调用层级、两种状态模式、Hook／标准参数、四一致性类容量、ISR与中断配对、标准类型／入口／Counter时间、实际向量段、CODE映射、Counter服务和配置一致性均已由连续开发增量实施并记录BMad复核。最新有效验证覆盖全部106集成（105全量结果＋受影响ScheduleTable修正183.43s＋最终配置186.80s），3单元、15 Python、核心Clippy和增量格式／C99；无新增未验证代码。4.19 ARTI、4.20适用工件及4.21／4.22交接属于后续故事，不提前关闭Epic。按原始baseline对最终父story整体差异进行独立BMad复核；用户移除额外assurance流程的指令优先，删除的旧报告不再构成完成条件。
+
+最终BMad复核：原始baseline至最终代码的blind、edge-case、verification-gap三路均完成且无发现；code-review完整规格模式的Acceptance Auditor亦完成且无发现。四路均只读，实际构建和行为验证沿用上述最终有效结果，无递延项。build同步review后，code-review按无未解决发现的完成条件将本story及sprint设为done；Epic仍in-progress，继续4.19。
