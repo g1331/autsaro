@@ -34,6 +34,7 @@ static const Os_CounterConfig counters[] = {
 };
 @ALARMS@
 @SCHEDULE_TABLES@
+@SCHEDULER_RESOURCE@
 static const Os_HookConfig hooks = {
     .error = &ErrorHook,
     .pre_task = &PreTaskHook,
@@ -58,8 +59,8 @@ const Os_TargetConfig Ecu_OsConfig = {
     .tasks = tasks,
     .task_count = 1u,
     .host_stack_reserve = 262144u,
-    .resources = NULL,
-    .resource_count = 0u,
+    .resources = @RESOURCE_PTR@,
+    .resource_count = @RESOURCE_COUNT@u,
     .internal_resources = NULL,
     .internal_resource_count = 0u,
     .category1_isrs = 0u,

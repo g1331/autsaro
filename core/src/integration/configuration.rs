@@ -34,7 +34,7 @@ OsAlarmAlarmTime OsAlarmAutostartType OsAlarmCycleTime OsCounterMaxAllowedValue 
 OsScheduleTableDuration OsScheduleTableRepeating OsScheduleTableAutostartType OsScheduleTableStartValue OsScheduleTblExpPointOffset OsScheduleTblSyncStrategy
 OsCounterTicksPerBase OsCounterType OsSecondsPerTick OsEventMask OsErrorHook OsPostTaskHook
 OsPreTaskHook OsProtectionHook OsShutdownHook OsStartupHook OsScalabilityClass OsStatus
-OsUseGetServiceId OsUseParameterAccess OsTaskActivation OsTaskPriority OsTaskSchedule
+OsUseGetServiceId OsUseParameterAccess OsUseResScheduler OsTaskActivation OsTaskPriority OsTaskSchedule
 PduRDestPduHandleId PduRTransmissionConfirmation PduRSourcePduHandleId PduRSrcPduUpTxConf
 RteBswPositionInTask RtePositionInTask";
 
@@ -253,6 +253,69 @@ pub(super) fn inspect(graph: &Graph) -> Result<Configuration, Vec<PlanDiagnostic
         }
         selected.push(found[0]);
     }
+    let os = one(graph, context, "OsOS")?;
+    let hooks = one(graph, os, "OsHooks")?;
+    let os_module = selected[MODULES.iter().position(|module| *module == "Os").unwrap()];
+    let owner = |index: usize| {
+        graph.elements[index]
+            .parent
+            .and_then(|parent| graph.elements[parent].parent)
+    };
+    if owner(hooks) != Some(os) || owner(os) != Some(os_module) {
+        return Err(reject(
+            graph,
+            hooks,
+            "OS_CONFIGURATION",
+            "OsHooks must belong to the selected OsOS.",
+        ));
+    }
+    let os_policies = [
+        (
+            os,
+            &[
+                "OsStatus",
+                "OsScalabilityClass",
+                "OsUseGetServiceId",
+                "OsUseParameterAccess",
+                "OsUseResScheduler",
+            ][..],
+        ),
+        (
+            hooks,
+            &[
+                "OsErrorHook",
+                "OsPostTaskHook",
+                "OsPreTaskHook",
+                "OsProtectionHook",
+                "OsShutdownHook",
+                "OsStartupHook",
+            ][..],
+        ),
+    ];
+    for (container, parameters) in os_policies {
+        if parameters
+            .iter()
+            .any(|parameter| value(graph, container, parameter, false).is_none())
+        {
+            return Err(reject(
+                graph,
+                container,
+                "OS_CONFIGURATION",
+                "A required supported OS configuration parameter is missing or duplicated.",
+            ));
+        }
+    }
+    if !matches!(
+        value(graph, os, "OsUseResScheduler", false),
+        Some("true" | "false" | "1" | "0")
+    ) {
+        return Err(reject(
+            graph,
+            os,
+            "OS_CONFIGURATION",
+            "OsUseResScheduler must be an explicit ECUC boolean.",
+        ));
+    }
     let mut records = Vec::new();
     for container in graph.of_kind("ECUC-CONTAINER-VALUE") {
         if !selected
@@ -260,6 +323,23 @@ pub(super) fn inspect(graph: &Graph) -> Result<Configuration, Vec<PlanDiagnostic
             .any(|module| graph.within(container, *module))
         {
             continue;
+        }
+        if definition_is(graph, container, "OsResource") {
+            if matches!(
+                value(graph, os, "OsUseResScheduler", false),
+                Some("true" | "1")
+            ) && graph.text(container, "SHORT-NAME") == Some("RES_SCHEDULER")
+            {
+                // SWS_Os_00850: the virtual scheduler instance replaces this
+                // configured definition, including its declared properties.
+                continue;
+            }
+            return Err(reject(
+                graph,
+                container,
+                "OS_RESOURCE_PROFILE",
+                "The selected generated profile supports the virtual scheduler resource only; this explicit resource has no implementation mapping.",
+            ));
         }
         let mut parameters = BTreeMap::<String, Vec<String>>::new();
         let mut references = BTreeMap::<String, Vec<String>>::new();
@@ -347,6 +427,22 @@ pub(super) fn inspect(graph: &Graph) -> Result<Configuration, Vec<PlanDiagnostic
     ];
     for record in &records {
         let index = *graph.objects.get(&record.path).unwrap();
+        for definition in record.parameters.keys().filter(|definition| {
+            definition.starts_with("/AUTOSAR/EcucDefs/Os/OsOS/")
+                || os_policies
+                    .iter()
+                    .any(|(_, names)| names.contains(&definition.rsplit('/').next().unwrap_or("")))
+        }) {
+            let expected = definition.rsplit_once('/').unwrap().0;
+            if record.definition != expected {
+                return Err(reject(
+                    graph,
+                    index,
+                    "OS_CONFIGURATION",
+                    "An OS policy parameter is placed in a different configuration container.",
+                ));
+            }
+        }
         if let Some(status) = value(graph, index, "OsStatus", false) {
             if !matches!(status, "STANDARD" | "EXTENDED") {
                 return Err(reject(

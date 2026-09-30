@@ -40,6 +40,15 @@ mod epic4_counter_time;
 #[path = "support/epic4_os_service.rs"]
 mod epic4_os_service;
 
+#[path = "support/epic4_os_configuration.rs"]
+mod epic4_os_configuration;
+
+#[cfg(windows)]
+#[test]
+fn epic4_generated_scheduler_configuration() {
+    epic4_os_configuration::verify();
+}
+
 #[cfg(windows)]
 #[test]
 fn epic4_generated_counter_service() {

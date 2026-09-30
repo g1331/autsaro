@@ -111,6 +111,19 @@ impl ValidatedIntegrationPlan {
             "OS_TASK_ID_{}",
             plan.schedule.task.rsplit('/').next().unwrap()
         );
+        let use_res_scheduler = plan
+            .configuration
+            .iter()
+            .find(|record| record.definition == "/AUTOSAR/EcucDefs/Os/OsOS")
+            .and_then(|record| {
+                record
+                    .parameters
+                    .get("/AUTOSAR/EcucDefs/Os/OsOS/OsUseResScheduler")
+            })
+            .map(|values| matches!(values[0].as_str(), "true" | "1"))
+            .ok_or_else(|| {
+                reject("The validated OS scheduler resource configuration is missing.")
+            })?;
         let end = configuration_text.rfind("#endif").unwrap();
         configuration_text.insert_str(
             end,
@@ -324,6 +337,27 @@ impl ValidatedIntegrationPlan {
                 serde_json::to_string(plan.schedule.task.rsplit('/').next().unwrap()).unwrap(),
             ),
             ("TASK_PRIORITY", plan.schedule.task_priority.to_string()),
+            (
+                "SCHEDULER_RESOURCE",
+                if use_res_scheduler {
+                    format!(
+                        "static const Os_ResourceConfig scheduler_resource = {{RES_SCHEDULER, {}u, UINT16_C(1), UINT32_C(0)}};",
+                        plan.schedule.task_priority
+                    )
+                } else {
+                    String::new()
+                },
+            ),
+            (
+                "RESOURCE_PTR",
+                if use_res_scheduler {
+                    "&scheduler_resource"
+                } else {
+                    "NULL"
+                }
+                .to_owned(),
+            ),
+            ("RESOURCE_COUNT", usize::from(use_res_scheduler).to_string()),
             ("COUNTER_MAX", plan.schedule.counter_maximum.to_string()),
             ("COUNTER_SYMBOL", counter_symbol),
             (

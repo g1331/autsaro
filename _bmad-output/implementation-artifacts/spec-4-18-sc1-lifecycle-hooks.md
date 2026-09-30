@@ -50,7 +50,7 @@ context: []
 - [x] STANDARD／EXTENDED真实构建、告警、参数、拒绝和生成交付行为。
 - [x] 完成实际生成中断向量段和Memory Mapping声明／链接行为。
 - [x] 完成Counter OsService端口与ClientServerInterface。
-- [ ] 完成配置一致性要求。
+- [x] 完成配置一致性要求。
 - [ ] 完成剩余具体产品行为、相关回归与BMad复核，同步sprint并本地提交。
 
 ## Implementation Notes
@@ -62,6 +62,8 @@ context: []
 00336实际可重定位向量、00815实际CODE映射及00560／91027真实Counter服务均已由独立增量实施、验证和BMad复核；后续完成配置一致性并复核完整父story。保留BSD/MIT及固定依赖边界。
 
 ## Review Triage Log
+
+- 配置一致性增量：OsOS／OsHooks唯一性、归属、已支持必选字段和标准定义身份已校验；同一计划生成虚拟RES_SCHEDULER，四种布尔表示均经搬移后真实生成Task消费，数值1同名定义替换、三种原生错误配置和供应商字段拒绝通过。BMad三路复核的数值覆盖及定义后缀问题已修正，最终186.80s通过，无递延。105既有集成与修正后的ScheduleTable183.43s、Clippy／格式／C99／15 Python均有效；详见spec-4-18-os-configuration.md。
 
 - Counter服务增量：实际生成标准OsService端口／类型／操作／参数绑定及C服务器和客户端，两个Counter名称在真实Task下通过tick／回绕／七拒绝结果／参数和输出保持；四种编译／行为故障及两种符号／头文件冲突被拒绝，XSD／引用闭合与搬移工程通过。BMad三路复核已完成，两个“补更多ApplicationError”建议由SWS_Os_00560原件及实际公开原生常量驳回，无递延；详情见spec-4-18-counter-service.md。配置一致性继续实施，父story保持in-progress。
 

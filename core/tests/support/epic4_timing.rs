@@ -37,7 +37,10 @@ pub fn generated_tables() {
     for (name, change) in [
         (
             "not-repeating",
-            ("<VALUE>true</VALUE>", "<VALUE>false</VALUE>"),
+            (
+                "OsScheduleTableRepeating</DEFINITION-REF><VALUE>true</VALUE>",
+                "OsScheduleTableRepeating</DEFINITION-REF><VALUE>false</VALUE>",
+            ),
         ),
         (
             "wrong-strategy",

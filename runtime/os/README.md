@@ -12,6 +12,8 @@ TASK、ISR和ALARMCALLBACK用于标准入口声明／定义；TASK与ISR分别�
 
 时间由controlled_logical_ms逐毫秒请求／确认推进；软件Counter与内核tick分别保持模数，宿主看门狗不推进汽车时间。实际Waiting及输入／tick／输出确认决定提交完成。GetISRID读取真实ISR帧；单核ControlIdle支持IDLE_NO_HALT且省略CoreID检查。isOsStarted按R24-11的DRAFT定义表示进入过StartOS，而非Ready。
 
+生成输入须在唯一OsOS中明确声明OsUseResScheduler及受支持状态／类／错误参数开关，OsHooks直接归属该OsOS。参考值false保持无虚拟scheduler资源；true生成全部本核Task可访问、无ISR访问、天花板为最高Task优先级的RES_SCHEDULER。启用时同名显式OsResource按SWS_Os_00850被忽略，虚拟实例取代其配置；生成剖面不接受其他未映射的显式资源。原生Os_TargetConfig仍支持已验证的Task／ISR资源及四一致性类容量。
+
 Windows物理栈由实际线程、保护页和保证区验证；S/C/D/T/B/I各角色的故障在健康控制路径不可逆关闭，故障线程不继续运行。上下文／资源建立失败有明确拒绝或关闭，不能伪装成功。此目标是Windows主机逻辑行为，不推定MCU电气层或硬实时性。
 
 ## 构建与测试
