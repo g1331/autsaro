@@ -314,7 +314,8 @@ int main(int argc, char **argv) {
         {2u, 0u, 5u, points, 2u, 0u, OS_SCHEDULE_SYNC_NONE, 0u, 0u, 1u},
         {3u, 0u, 5u, points, 2u, 0u, OS_SCHEDULE_SYNC_NONE, 0u, 0u, 1u}};
     Os_TimeConfig time = {counters, 8u, alarms, 2u, 0u, 0u, 4u, action_error, tables, 4u};
-    Os_TargetConfig config = {tasks, 4u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, &time, NULL};
+    Os_TargetConfig config = {tasks, 4u, 262144u, NULL,  0u,   NULL, 0u,
+                              0u,    0u, 0u,      &time, NULL, NULL};
     StatusType status;
     scenario = (argc == 2) ? argv[1] : "capacity";
     for (unsigned i = 0u; i < 9u; ++i) {

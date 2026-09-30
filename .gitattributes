@@ -36,6 +36,7 @@
 /runtime/include/SchM_Can.h text eol=crlf
 /runtime/include/Security.h text eol=crlf
 /runtime/include/Std_Types.h text eol=crlf
+/docs/assurance/evidence/epic4/nested-*-4-18.json text eol=lf
 /runtime/src/Can.c text eol=crlf
 /runtime/src/CanIf.c text eol=crlf
 /runtime/src/CanTp.c text eol=crlf

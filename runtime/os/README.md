@@ -1,5 +1,11 @@
 # Epic 4 Windows OS 基础
 
+4.18的嵌套ISR增量使用`Os_TargetConfig.interrupts`指向静态`Os_IsrConfig`。应用源2～31的优先级为1～31，高值先行，0为未配置；内核源0/1的配置项必须为0。NULL采用应用源同级31的平坦配置；显式配置时受控tick优先级固定1。生成参考ECU显式配置输入源30为1。`Os_ResourceConfig.ceiling`在Task-only资源上表示Task优先级，在ISR共享资源上表示ISR优先级；共享资源由Task持有时，同时提升到所有Task之上。配置拒绝缺失的Cat1、资源访问源或输入源，以及不足的资源ceiling。
+
+第十二补丁在已有原生S栈和interrupt mutex内，按实际pending位与优先级执行回调；当前ISR显式pend、解除屏蔽或退出critical时，更高优先级源可先执行并返回当前ISR，同级与低级保持待决。来源同优先级时按ID先后。外部Windows生产者仍经既有mutex发布；这不是物理中断或墙钟抢占模型。各ISR保留独立资源栈，返回时恢复父身份、Hook阶段及有类型错误快照。OSEK §11.1的Hook门阻止Cat2打断Hook，高优先级Cat1可以打断ISR内的ErrorHook，错误报告不递归。§14.2.3.1的Cat2嵌入Cat1不在外层Cat1返回时调度Task，保留请求至后续Cat2／显式yield边界。
+
+`python scripts/epic4_os.py --suite nested-interrupts`及正式`epic4_nested_interrupts`覆盖26个独立过程：真实三层/30层、同级/低级待决与反向源编号、父子资源隔离及子层清理、Task共享ceiling、All/OS屏蔽与Cat1泄漏恢复、ErrorHook快照和Cat2延后、Cat1外层的Task延后、实际源开关/清除及七项配置拒绝。所有层使用一个真实S线程与向下增长的原生调用栈；不通过直接注入Enter/Leave证明嵌套。本项独立行为证据不替代完整507行、ARTI、221项及工程交接出口；完整增量门与独立复核结论见本故事规格及证据。原生回调有界重入涉及R17.2 Required，尚无批准偏离，不能据行为通过声明完整MISRA符合。
+
 4.18的调用上下文增量以R24-11 p72/73 Table7.1为准：六屏蔽API在各标准Hook及Alarm逻辑阶段允许，扩展旧OSEK限制。每个Hook及逻辑ISR有独立屏蔽归属；ErrorHook可查询被屏蔽的原调用者，但自己屏蔽后非中断服务仍被忽略/返回9。GetISRID、Mode、Start/Shutdown按各自许可处理，错误调用无副作用；无当前逻辑ISR的S栈也不能调用普通标准服务。ShutdownHook在已建立健康关闭栈直接设置阶段，不取得可能由受损Task持有的普通mutex。`--suite calling-context`与正式`epic4_standard_calling_context`运行九个场景，覆盖29个StatusType服务及标量/生命周期服务、错误快照、真实Error/Pre/Post/Startup/Shutdown Hook、配置的软件Counter/Alarm回调和合法Startup/Error关闭。无ISR身份场景在真实原生ISR栈上注入身份缺失，验证拒绝边界；实际嵌套ISR仍待验证。
 
 `ControlIdle`提供单核Windows虚拟核既有的`IDLE_NO_HALT`模式；CoreID检查按规范省略，包括65535，未知IdleMode拒绝。不提供物理CPU低功耗模式。R24-11的`isOsStarted`保留DRAFT标识，表示是否进入过StartOS，而非Ready或成功启动；初始化C环境中启动前为false，StartOS入口后为true，调用被屏蔽而忽略时返回false。`--suite idle-state`与正式`epic4_standard_idle_and_started_state`验证五个过程：单核CoreID忽略、无效模式/Hook/屏蔽拒绝及准确参数、Cat2调用和无配置ErrorHook，真实I栈执行既有不halt的idle循环后，由实际ISR唤醒WAITING Task。实际嵌套ISR、507行最终处置、完整MISRA/ARTI/交接仍未关闭。

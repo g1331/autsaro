@@ -43,7 +43,7 @@ static void task_b(void) { check_task(1u, 0u, 'B'); }
 int main(int argc, char **argv) {
     Os_TaskConfig tasks[2] = {{0u, "A", task_a, 2u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
                               {1u, "B", task_b, 2u, 2u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
-    Os_TargetConfig config = {tasks, 2u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, NULL, NULL};
+    Os_TargetConfig config = {tasks, 2u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, NULL, NULL, NULL};
     AppModeType mode = 1u;
     StatusType expected = E_OK;
     const char *scenario = argc == 2 ? argv[1] : "normal";

@@ -21,10 +21,17 @@ static uint8_t task_waiting[OS_MAX_TASKS];
 static uint8_t internal_held[OS_MAX_TASKS];
 static size_t running_hook_task = OS_MAX_TASKS;
 static uint64_t ready_sequences[OS_MAX_TASKS];
-static unsigned resource_depth[OS_MAX_TASKS + 1u];
-static size_t owned_resources[OS_MAX_TASKS + 1u][OS_MAX_RESOURCES];
+#define OS_RESOURCE_ACTORS (OS_MAX_TASKS + OS_MAX_INTERRUPTS)
+static unsigned resource_depth[OS_RESOURCE_ACTORS];
+static size_t owned_resources[OS_RESOURCE_ACTORS][OS_MAX_RESOURCES];
 static volatile LONG interrupt_ceiling;
 static unsigned current_interrupt = 32u;
+typedef struct {
+    unsigned interrupt;
+    Os_ErrorContext error;
+} InterruptFrame;
+static InterruptFrame interrupt_frames[OS_MAX_INTERRUPTS];
+static unsigned interrupt_depth;
 static uint64_t request_sequence;
 typedef struct {
     uint64_t *slot;
@@ -33,6 +40,24 @@ typedef struct {
 static jmp_buf restart_frames[OS_MAX_TASKS];
 static volatile LONG isr_reschedule;
 int Os_BackendTakeIsrReschedule(void) { return InterlockedExchange(&isr_reschedule, 0) != 0; }
+void Os_BackendRequestIsrReschedule(void) { InterlockedExchange(&isr_reschedule, 1); }
+unsigned Os_BackendInterruptPriority(unsigned interrupt) {
+    unsigned priority = 0u;
+    if ((interrupt > OS_CONTROLLED_TICK_INTERRUPT) && (interrupt < OS_MAX_INTERRUPTS) &&
+        (Os_Config != NULL)) {
+        priority = (Os_Config->interrupts == NULL) ? OS_MAX_ISR_PRIORITY
+                                                   : Os_Config->interrupts->priorities[interrupt];
+    } else if (interrupt == OS_CONTROLLED_TICK_INTERRUPT) {
+        priority = (Os_Config != NULL && Os_Config->interrupts != NULL) ? 1u : OS_MAX_ISR_PRIORITY;
+    } else {
+        /* Kernel yield and inactive identities cannot preempt an ISR. */
+    }
+    return priority;
+}
+int Os_BackendInterruptMaySchedule(unsigned interrupt) {
+    return (interrupt < OS_MAX_INTERRUPTS) &&
+           ((Os_Config->category1_isrs & (UINT32_C(1) << interrupt)) == 0u);
+}
 static HANDLE close_event;
 static HANDLE control_thread;
 static HANDLE backup_thread;
@@ -72,9 +97,18 @@ static size_t current_task_index(void);
 static void leave_running(size_t index);
 unsigned Os_BackendCurrentInterrupt(void) { return current_interrupt; }
 int Os_BackendStarted(void) { return InterlockedCompareExchange(&started, 0, 0) != 0; }
-void Os_BackendInterruptEnter(unsigned interrupt) { current_interrupt = interrupt; }
+void Os_BackendInterruptEnter(unsigned interrupt) {
+    configASSERT(interrupt < OS_MAX_INTERRUPTS);
+    configASSERT(interrupt_depth < OS_MAX_INTERRUPTS);
+    interrupt_frames[interrupt_depth].interrupt = current_interrupt;
+    Os_ErrorContextSave(&interrupt_frames[interrupt_depth].error);
+    ++interrupt_depth;
+    current_interrupt = interrupt;
+}
 void Os_BackendInterruptLeave(void) {
     const Os_ErrorParameters arguments = {.service_TerminateTask = {0u}};
+    const size_t actor = OS_MAX_TASKS + current_interrupt;
+    configASSERT(interrupt_depth != 0u && current_interrupt < OS_MAX_INTERRUPTS);
     if (Os_InterruptDisabled() != 0) {
         /* Native ISR dispatch already owns the interrupt mutex and has stopped
          * the automotive Task. Restore only this logical ISR's saved pairs. */
@@ -85,18 +119,19 @@ void Os_BackendInterruptLeave(void) {
             (void)Os_ErrorResult(OSServiceId_InterruptMissingEnd, E_OS_DISABLEDINT, &arguments);
         }
     }
-    if (resource_depth[OS_MAX_TASKS] != 0u) {
+    if (resource_depth[actor] != 0u) {
         /* Dispatch still owns the native interrupt mutex. Release actual
          * configured resources in LIFO order before reporting the ISR fault. */
-        while (resource_depth[OS_MAX_TASKS] != 0u) {
-            const size_t resource =
-                owned_resources[OS_MAX_TASKS][resource_depth[OS_MAX_TASKS] - 1u];
+        while (resource_depth[actor] != 0u) {
+            const size_t resource = owned_resources[actor][resource_depth[actor] - 1u];
             const StatusType released = Os_BackendResource(Os_Config->resources[resource].id, 0);
             configASSERT(released == E_OK);
         }
         (void)Os_ErrorResult(OSServiceId_InterruptMissingEnd, E_OS_RESOURCE, &arguments);
     }
-    current_interrupt = 32u;
+    --interrupt_depth;
+    Os_ErrorContextRestore(&interrupt_frames[interrupt_depth].error);
+    current_interrupt = interrupt_frames[interrupt_depth].interrupt;
 }
 int Os_BackendInterruptEnabled(unsigned interrupt) {
     int allowed;
@@ -106,9 +141,12 @@ int Os_BackendInterruptEnabled(unsigned interrupt) {
         return 1;
     }
     allowed =
-        (Os_InterruptAllows(interrupt) != 0) && (Os_PortInterruptSourceEnabled(interrupt) != 0) &&
+        (Os_BackendInterruptPriority(interrupt) != 0u) && (Os_InterruptAllows(interrupt) != 0) &&
+        (Os_PortInterruptSourceEnabled(interrupt) != 0) &&
         (((interrupt < 32u) && ((Os_Config->category1_isrs & (UINT32_C(1) << interrupt)) != 0u)) ||
-         (InterlockedCompareExchange(&interrupt_ceiling, 0, 0) < 31));
+         ((LONG)Os_BackendInterruptPriority(interrupt) >
+              InterlockedCompareExchange(&interrupt_ceiling, 0, 0) &&
+          Os_HookBlocksCategory2() == 0));
 #ifdef OS_TIME_TESTS
     if (interrupt == OS_CONTROLLED_TICK_INTERRUPT && allowed == 0) {
         Os_TimeTestMasked();
@@ -929,8 +967,8 @@ void Os_BackendMissingEnd(void) {
     Os_BackendShutdown(E_OS_STATE);
 }
 StatusType Os_BackendResource(ResourceType id, int acquire) {
-    static UBaseType_t saved_priorities[OS_MAX_TASKS + 1u][OS_MAX_RESOURCES];
-    static LONG saved_interrupt_ceilings[OS_MAX_TASKS + 1u][OS_MAX_RESOURCES];
+    static UBaseType_t saved_priorities[OS_RESOURCE_ACTORS][OS_MAX_RESOURCES];
+    static LONG saved_interrupt_ceilings[OS_RESOURCE_ACTORS][OS_MAX_RESOURCES];
     static unsigned resource_owner[OS_MAX_RESOURCES];
     const Os_NativeStack *stack = Os_StackCurrent();
     size_t task;
@@ -946,6 +984,7 @@ StatusType Os_BackendResource(ResourceType id, int acquire) {
             ((Os_Config->category1_isrs & (UINT32_C(1) << current_interrupt)) != 0u)) {
             return E_OS_CALLEVEL;
         }
+        task = OS_MAX_TASKS + current_interrupt;
     }
     for (resource = 0u; resource < Os_Config->resource_count; ++resource) {
         if (Os_Config->resources[resource].id == id) {
@@ -961,25 +1000,32 @@ StatusType Os_BackendResource(ResourceType id, int acquire) {
     depth = resource_depth[task];
     if (acquire != 0) {
         if ((depth >= OS_MAX_RESOURCES) || (resource_owner[resource] != 0u) ||
-            ((task != OS_MAX_TASKS) &&
+            ((task < OS_MAX_TASKS) &&
              (((config->task_access & (1u << Os_Config->tasks[task].id)) == 0u) ||
-              (Os_Config->tasks[task].priority > config->ceiling))) ||
-            ((task == OS_MAX_TASKS) &&
+              ((config->isr_access == 0u) &&
+               (Os_Config->tasks[task].priority > config->ceiling)))) ||
+            ((task >= OS_MAX_TASKS) &&
              ((config->isr_access & (UINT32_C(1) << current_interrupt)) == 0u))) {
             status = E_OS_ACCESS;
         } else {
             saved_priorities[task][depth] =
-                (task == OS_MAX_TASKS) ? 0u : uxTaskPriorityGet(handles[task]);
+                (task >= OS_MAX_TASKS) ? 0u : uxTaskPriorityGet(handles[task]);
             saved_interrupt_ceilings[task][depth] =
                 InterlockedCompareExchange(&interrupt_ceiling, 0, 0);
             owned_resources[task][depth] = resource;
             resource_depth[task] = depth + 1u;
             resource_owner[resource] = (unsigned)task + 1u;
-            if ((task != OS_MAX_TASKS) && (config->ceiling > saved_priorities[task][depth])) {
-                vTaskPrioritySet(handles[task], config->ceiling);
+            if (task < OS_MAX_TASKS) {
+                const UBaseType_t ceiling =
+                    config->isr_access != 0u ? OS_MAX_PRIORITY + 1u : config->ceiling;
+                if (ceiling > saved_priorities[task][depth]) {
+                    vTaskPrioritySet(handles[task], ceiling);
+                }
             }
             if (config->isr_access != 0u) {
-                InterlockedExchange(&interrupt_ceiling, 31);
+                const LONG previous = saved_interrupt_ceilings[task][depth];
+                const LONG ceiling = (LONG)config->ceiling;
+                InterlockedExchange(&interrupt_ceiling, ceiling > previous ? ceiling : previous);
             }
         }
     } else if ((depth == 0u) || (depth > OS_MAX_RESOURCES) ||
@@ -990,7 +1036,7 @@ StatusType Os_BackendResource(ResourceType id, int acquire) {
         resource_depth[task] = depth - 1u;
         resource_owner[resource] = 0u;
         InterlockedExchange(&interrupt_ceiling, saved_interrupt_ceilings[task][depth - 1u]);
-        if (task != OS_MAX_TASKS) {
+        if (task < OS_MAX_TASKS) {
             vTaskPrioritySet(handles[task], saved_priorities[task][depth - 1u]);
         }
     }

@@ -1,0 +1,199 @@
+--- a/portable/MSVC-MingW/port.c
++++ b/portable/MSVC-MingW/port.c
+@@ -175,6 +175,76 @@
+ 
+ 
+ 
++/* These routines execute only on the existing native ISR actor while it owns
++ * the interrupt mutex. Callback nesting is bounded by strictly increasing
++ * configured priorities; no new task selector or automotive actor is used. */
++static uint32_t prvRunOsInterrupt( uint32_t interrupt )
++{
++    uint32_t requested = 0U;
++    ulPendingInterrupts &= ~( UINT32_C( 1 ) << interrupt );
++    if( ulIsrHandler[ interrupt ] != NULL )
++    {
++        Os_StackCheck();
++        Os_BackendInterruptEnter( interrupt );
++        requested = ulIsrHandler[ interrupt ]();
++        Os_StackCheck();
++        Os_BackendInterruptLeave();
++    }
++    return requested;
++}
++
++static uint32_t prvNextOsInterrupt( uint32_t seen, unsigned floor, int nested )
++{
++    uint32_t chosen = portMAX_INTERRUPTS;
++    unsigned highest = floor;
++    uint32_t interrupt;
++    for( interrupt = 0U; interrupt < portMAX_INTERRUPTS; ++interrupt )
++    {
++        const uint32_t bit = UINT32_C( 1 ) << interrupt;
++        const unsigned priority = Os_BackendInterruptPriority( interrupt );
++        if( ( ( ulPendingInterrupts & ~seen & bit ) != 0U ) &&
++            Os_BackendInterruptEnabled( interrupt ) )
++        {
++            /* The kernel yield handshake precedes application dispatch only
++             * at the outer boundary; it never interrupts an application ISR. */
++            if( ( nested == 0 ) && ( interrupt == portINTERRUPT_YIELD ) )
++            {
++                return interrupt;
++            }
++            if( priority > highest )
++            {
++                chosen = interrupt;
++                highest = priority;
++            }
++        }
++    }
++    return chosen;
++}
++
++void Os_PortDispatchNested( void )
++{
++    const Os_NativeStack * stack = Os_StackCurrent();
++    const unsigned current = Os_BackendCurrentInterrupt();
++    uint32_t seen = 0U;
++    if( ( stack != NULL ) && ( stack->role == 'S' ) &&
++        ( current < portMAX_INTERRUPTS ) &&
++        ( current != portINTERRUPT_YIELD ) &&
++        ( ulCriticalNesting == portNO_CRITICAL_NESTING ) )
++    {
++        uint32_t interrupt = prvNextOsInterrupt( seen, Os_BackendInterruptPriority( current ), 1 );
++        while( interrupt < portMAX_INTERRUPTS )
++        {
++            const uint32_t requested = prvRunOsInterrupt( interrupt );
++            seen |= UINT32_C( 1 ) << interrupt;
++            if( ( requested != 0U ) && Os_BackendInterruptMaySchedule( interrupt ) )
++            {
++                Os_BackendRequestIsrReschedule();
++            }
++            interrupt = prvNextOsInterrupt( seen, Os_BackendInterruptPriority( current ), 1 );
++        }
++    }
++}
++
+ /* Pointer to the TCB of the currently executing task. */
+ extern void * volatile pxCurrentTCB;
+ 
+@@ -401,42 +471,29 @@
+              * necessitated a context switch to another task/thread. */
+             ulSwitchRequired = pdFALSE;
+ 
+-            /* For each interrupt we are interested in processing, each of which is
+-             * represented by a bit in the 32bit ulPendingInterrupts variable. */
+-            for( i = 0; i < portMAX_INTERRUPTS; i++ )
++            /* One dispatch per source per pass. Equal priorities use the
++             * stable source ID order; re-pended edges survive for a later pass. */
+             {
+-                /* Is the simulated interrupt pending? */
+-                if( ( ( ulPendingInterrupts & ( 1UL << i ) ) != 0 ) && Os_BackendInterruptEnabled( i ) )
++                uint32_t seen = 0U;
++                i = prvNextOsInterrupt( seen, 0U, 0 );
++                while( i < portMAX_INTERRUPTS )
+                 {
+-                    /* Consume before callback; a re-pended edge stays pending. */
+-                    ulPendingInterrupts &= ~( 1UL << i );
+-
+-                    /* Is a handler installed? */
+-                    if( ulIsrHandler[ i ] != NULL )
++                    const uint32_t requested = prvRunOsInterrupt( i );
++                    seen |= UINT32_C( 1 ) << i;
++                    /* OSEK 14.2.3.1: a Cat2 nested inside an outer Cat1 does
++                     * not schedule Tasks on that Cat1's return. Retain the
++                     * request until a later Cat2 or explicit yield boundary. */
++                    if( Os_BackendInterruptMaySchedule( i ) )
+                     {
+-                        /* Run the actual handler.  Handlers return pdTRUE if they
+-                         * necessitate a context switch. */
+-                        Os_StackCheck();
+-                        Os_BackendInterruptEnter( i );
+-                        if( ulIsrHandler[ i ]() != pdFALSE )
++                        const int serviceRequested = Os_BackendTakeIsrReschedule();
++                        if( ( requested != pdFALSE ) || serviceRequested )
+                         {
+-                            /* A bit mask is used purely to help debugging. */
+-                            ulSwitchRequired |= ( 1UL << i );
++                            ulSwitchRequired |= UINT32_C( 1 ) << i;
+                         }
+-                        Os_StackCheck();
+-                        Os_BackendInterruptLeave();
+                     }
++                    i = prvNextOsInterrupt( seen, 0U, 0 );
+                 }
+             }
+-
+-            #if defined( configOS_REQUEST_FIFO ) && ( configOS_REQUEST_FIFO == 1 )
+-                /* Standard OS services request the existing selector at ISR exit,
+-                 * independent of the host interrupt callback's private return. */
+-                if( Os_BackendTakeIsrReschedule() )
+-                {
+-                    ulSwitchRequired |= 1UL;
+-                }
+-            #endif
+ 
+             if( ulSwitchRequired != pdFALSE )
+             {
+@@ -587,6 +644,14 @@
+         WaitForSingleObject( pvInterruptEventMutex, INFINITE );
+         ulPendingInterrupts |= ( 1UL << ulInterruptNumber );
+ 
++        if( xInsideInterrupt != pdFALSE )
++        {
++            Os_PortDispatchNested();
++            Os_HostSetEvent( pvInterruptEvent );
++            ReleaseMutex( pvInterruptEventMutex );
++            return;
++        }
++
+         /* The simulated interrupt is now held pending, but don't actually
+          * process it yet if this call is within a critical section.  It is
+          * possible for this to be in a critical section as calls to wait for
+@@ -618,7 +683,7 @@
+ 
+ void vPortGenerateSimulatedInterruptFromWindowsThread( uint32_t ulInterruptNumber )
+ {
+-    if( xPortRunning == pdTRUE )
++    if( ( xPortRunning == pdTRUE ) && ( ulInterruptNumber < portMAX_INTERRUPTS ) )
+     {
+         /* Can't proceed if in a critical section as pvInterruptEventMutex won't
+          * be available. */
+@@ -632,7 +697,10 @@
+          * handler thread.  Must be outside of a critical section to get here so
+          * the handler thread can execute immediately pvInterruptEventMutex is
+          * released. */
+-        configASSERT( ulCriticalNesting == 0UL );
++        configASSERT( ( ulCriticalNesting == 0UL ) ||
++                      ( ( Os_StackCurrent() != NULL ) &&
++                        ( Os_StackCurrent()->role == 'S' ) ) );
++        Os_PortDispatchNested();
+         Os_HostSetEvent( pvInterruptEvent );
+ 
+         /* Give back the mutex so the simulated interrupt handler unblocks
+@@ -657,6 +725,13 @@
+         Os_BackendShutdown( E_OS_ACCESS );
+     }
+ 
++    if( ( ulInterruptNumber > portINTERRUPT_TICK ) &&
++        ( ulInterruptNumber < portMAX_INTERRUPTS ) &&
++        ( Os_BackendInterruptPriority( ulInterruptNumber ) == 0U ) )
++    {
++        Os_BackendShutdown( E_OS_ID );
++    }
++
+     if( !Os_MailboxHandlerAllowed( ulInterruptNumber, pvHandler ) )
+     {
+         Os_BackendShutdown( E_OS_ACCESS );
+@@ -702,6 +777,11 @@
+     if( ulCriticalNesting > portNO_CRITICAL_NESTING )
+     {
+         ulCriticalNesting--;
++        if( ( ulCriticalNesting == portNO_CRITICAL_NESTING ) &&
++            ( xInsideInterrupt != pdFALSE ) )
++        {
++            Os_PortDispatchNested();
++        }
+ 
+         /* Don't need to wait for any pending interrupts to execute if the
+          * critical section was exited from inside an interrupt. */

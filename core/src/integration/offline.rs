@@ -80,6 +80,10 @@ pub(super) fn sources() -> Result<Vec<(String, Vec<u8>)>, String> {
             include_bytes!("../../../runtime/os/patches/0011-isr-phase-before-mutex-release.patch"),
         ),
         (
+            "os/patches/0012-nested-interrupt-dispatch.patch",
+            include_bytes!("../../../runtime/os/patches/0012-nested-interrupt-dispatch.patch"),
+        ),
+        (
             "os/README.md",
             include_bytes!("../../../runtime/os/README.md"),
         ),

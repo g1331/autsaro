@@ -136,7 +136,8 @@ int main(int argc, char **argv) {
                                     0u,
                                     0u,
                                     NULL,
-                                    configured ? &hooks : NULL};
+                                    configured ? &hooks : NULL,
+                                    NULL};
     check(Os_TargetPrepare(&target) == E_OK);
     StartOS(1u);
     return 99;

@@ -268,6 +268,28 @@ fn epic4_standard_interrupt_pairing() {
 
 #[cfg(windows)]
 #[test]
+fn epic4_nested_interrupts() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let output = Command::new("python")
+        .arg(root.join("scripts/epic4_os.py"))
+        .args(["--suite", "nested-interrupts"])
+        .current_dir(root)
+        .output()
+        .expect("run native nested ISR identity, resource, Hook and scheduling contracts");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "epic4_nested_interrupts PASS: 26 native vectors"
+    );
+}
+
+#[cfg(windows)]
+#[test]
 fn epic4_standard_calling_context() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let output = Command::new("python")

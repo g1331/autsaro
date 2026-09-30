@@ -10,10 +10,19 @@
 #define OS_EXTENDED_TASK 1u
 #define OS_MAX_RESOURCES 8u
 #define OS_MAX_INTERNAL_RESOURCES 2u
+#define OS_MAX_INTERRUPTS 32u
+#define OS_MAX_ISR_PRIORITY 31u
 #define OS_SCHEDULE_FULL 0u
 #define OS_SCHEDULE_NON 1u
 typedef struct {
+    /* Higher values preempt lower values. Zero leaves an application source
+     * unconfigured. Kernel yield/tick entries are reserved and must be zero. */
+    uint8_t priorities[OS_MAX_INTERRUPTS];
+} Os_IsrConfig;
+typedef struct {
     ResourceType id;
+    /* Task priority for Task-only resources; ISR priority when isr_access is
+     * nonzero. An ISR-shared resource also excludes all Task preemption. */
     uint8_t ceiling;
     uint16_t task_access;
     uint32_t isr_access;
@@ -61,6 +70,8 @@ typedef struct {
     EventMaskType input_event;
     const Os_TimeConfig *time;
     const Os_HookConfig *hooks;
+    /* NULL selects a flat, nonpreempting application ISR configuration. */
+    const Os_IsrConfig *interrupts;
 } Os_TargetConfig;
 /** Prepare one process-local target before StartOS.
  * @param config Static configuration retained for the lifetime of the process.

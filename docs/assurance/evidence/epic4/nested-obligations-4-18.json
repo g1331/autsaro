@@ -1,0 +1,194 @@
+{
+  "format": "epic4-nested-isr-obligation-results-v1",
+  "status": "scoped real software-interrupt nesting verified; whole Story4.18 and final Epic exits remain open",
+  "increment_baseline": "94efe9345c98b58ba3be37338fa4b4550884bba2",
+  "obligations_sha256": "a691103e8dd217b12c1e838bdb6a06fcef772dc8cbafb673d2bf70b62185b18f",
+  "normative_context": [
+    "AUTOSAR CP R24-11 SWS_Os_00263/00264/00368/00369",
+    "OSEK2.2.3 section6,8,11.1,13.8.2.1,14.2.3.1"
+  ],
+  "rows": [
+    {
+      "key": "SWS_Os_00263",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_selected_native_software_interrupt_profile",
+      "verified_scope": "Actual three-level and30-level Cat2 callbacks report their own IDs and restore every parent ID. ErrorHook interrupted by Cat1 restores parent20 identity and typed error parameters.",
+      "remaining_scope": "All507 current-profile final dispositions, full C221/ARTI/handoff and final independent Epic exits remain unclosed. R17.2 callback reentry has no approved deviation.",
+      "evidence": {
+        "artifact": "nested-interrupts-4-18.json",
+        "test": "epic4_nested_interrupts",
+        "regression": "nested-cleanup-regression-4-18.json",
+        "negative_compiled_oracles": "nested-mutations-4-18.json"
+      },
+      "static_evidence": "nested-static-analysis-4-18.json"
+    },
+    {
+      "key": "SWS_Os_00264",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_selected_native_software_interrupt_profile",
+      "verified_scope": "Actual nested Cat1 reports INVALID_ISR, and returning to the automotive Task reports INVALID_ISR; logical Hook phase does not leak into child or Task.",
+      "remaining_scope": "All507 current-profile final dispositions, full C221/ARTI/handoff and final independent Epic exits remain unclosed. R17.2 callback reentry has no approved deviation.",
+      "evidence": {
+        "artifact": "nested-interrupts-4-18.json",
+        "test": "epic4_nested_interrupts",
+        "regression": "nested-cleanup-regression-4-18.json",
+        "negative_compiled_oracles": "nested-mutations-4-18.json"
+      },
+      "static_evidence": "nested-static-analysis-4-18.json"
+    },
+    {
+      "key": "SWS_Os_00368",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_selected_native_software_interrupt_profile",
+      "verified_scope": "A nested Cat2 returns with SuspendAll still active; its mask is restored and ErrorHook reports9/service252 with child6 identity before the parent resumes. Nested Cat1 mask cleanup preserves an outer Cat2 OS mask.",
+      "remaining_scope": "All507 current-profile final dispositions, full C221/ARTI/handoff and final independent Epic exits remain unclosed. R17.2 callback reentry has no approved deviation.",
+      "evidence": {
+        "artifact": "nested-interrupts-4-18.json",
+        "test": "epic4_nested_interrupts",
+        "regression": "nested-cleanup-regression-4-18.json",
+        "negative_compiled_oracles": "nested-mutations-4-18.json"
+      },
+      "static_evidence": "nested-static-analysis-4-18.json"
+    },
+    {
+      "key": "SWS_Os_00369",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_selected_native_software_interrupt_profile",
+      "verified_scope": "Nested child resource leakage is released before ErrorHook reports6/service252 in child6 context; outer ISR resource remains owned and is released successfully only by its parent. Shared-resource-stack mutant is rejected.",
+      "remaining_scope": "All507 current-profile final dispositions, full C221/ARTI/handoff and final independent Epic exits remain unclosed. R17.2 callback reentry has no approved deviation.",
+      "evidence": {
+        "artifact": "nested-interrupts-4-18.json",
+        "test": "epic4_nested_interrupts",
+        "regression": "nested-cleanup-regression-4-18.json",
+        "negative_compiled_oracles": "nested-mutations-4-18.json"
+      },
+      "static_evidence": "nested-static-analysis-4-18.json"
+    },
+    {
+      "key": "OSEK_SEMANTIC_INTERRUPTS",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_selected_native_software_interrupt_profile",
+      "verified_scope": "Real software pending on the existing native S stack executes strict higher priorities before parent return; equal/lower sources wait. Reverse-ID priority order,30 simultaneous layers, and outerCat1 deferred Task scheduling are proven without a new actor or selector.",
+      "remaining_scope": "All507 current-profile final dispositions, full C221/ARTI/handoff and final independent Epic exits remain unclosed. R17.2 callback reentry has no approved deviation.",
+      "evidence": {
+        "artifact": "nested-interrupts-4-18.json",
+        "test": "epic4_nested_interrupts",
+        "regression": "nested-cleanup-regression-4-18.json",
+        "negative_compiled_oracles": "nested-mutations-4-18.json"
+      },
+      "static_evidence": "nested-static-analysis-4-18.json"
+    },
+    {
+      "key": "OSEK_SEMANTIC_PRIORITY_CEILING",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_selected_native_software_interrupt_profile",
+      "verified_scope": "ISR ceiling blocks an equal-priority source until release. Distinct ISR resource stacks and saved ceilings survive nesting. Task holding ISR-shared resource has reserved priority31 and remains above every Task until release, even when its ISR-domain ceiling is3.",
+      "remaining_scope": "All507 current-profile final dispositions, full C221/ARTI/handoff and final independent Epic exits remain unclosed. R17.2 callback reentry has no approved deviation.",
+      "evidence": {
+        "artifact": "nested-interrupts-4-18.json",
+        "test": "epic4_nested_interrupts",
+        "regression": "nested-cleanup-regression-4-18.json",
+        "negative_compiled_oracles": "nested-mutations-4-18.json"
+      },
+      "static_evidence": "nested-static-analysis-4-18.json"
+    },
+    {
+      "key": "OSEK_SEMANTIC_ERROR_HANDLING",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_selected_native_software_interrupt_profile",
+      "verified_scope": "OSEK11.1 Hook gate blocks Cat2 during parent ErrorHook while higher Cat1 executes. An invalid Cat1 query does not recurse into ErrorHook; after Cat1 returns the parent status/service/typed pointer remain intact and Cat2 delivers only after Hook return.",
+      "remaining_scope": "All507 current-profile final dispositions, full C221/ARTI/handoff and final independent Epic exits remain unclosed. R17.2 callback reentry has no approved deviation.",
+      "evidence": {
+        "artifact": "nested-interrupts-4-18.json",
+        "test": "epic4_nested_interrupts",
+        "regression": "nested-cleanup-regression-4-18.json",
+        "negative_compiled_oracles": "nested-mutations-4-18.json"
+      },
+      "static_evidence": "nested-static-analysis-4-18.json"
+    },
+    {
+      "key": "OSEK_SEMANTIC_ERROR_MACROS",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_selected_native_software_interrupt_profile",
+      "verified_scope": "Parent ErrorHook retains GetTaskState service129, TaskID99 and exact caller-owned State pointer across a real higher-priority Cat1, whose error-service snapshot is empty. Dropping frame restoration is rejected.",
+      "remaining_scope": "All507 current-profile final dispositions, full C221/ARTI/handoff and final independent Epic exits remain unclosed. R17.2 callback reentry has no approved deviation.",
+      "evidence": {
+        "artifact": "nested-interrupts-4-18.json",
+        "test": "epic4_nested_interrupts",
+        "regression": "nested-cleanup-regression-4-18.json",
+        "negative_compiled_oracles": "nested-mutations-4-18.json"
+      },
+      "static_evidence": "nested-static-analysis-4-18.json"
+    },
+    {
+      "key": "OSEK_SERVICE_ErrorHook",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_selected_native_software_interrupt_profile",
+      "verified_scope": "Optional ErrorHook executes on the original logical ISR for errors and automatic cleanup. Nested Cat1 does not recurse or replace the active report. Hook completion allows the deferred Cat2, with original parent service still returning its original status.",
+      "remaining_scope": "All507 current-profile final dispositions, full C221/ARTI/handoff and final independent Epic exits remain unclosed. R17.2 callback reentry has no approved deviation.",
+      "evidence": {
+        "artifact": "nested-interrupts-4-18.json",
+        "test": "epic4_nested_interrupts",
+        "regression": "nested-cleanup-regression-4-18.json",
+        "negative_compiled_oracles": "nested-mutations-4-18.json"
+      },
+      "static_evidence": "nested-static-analysis-4-18.json"
+    },
+    {
+      "key": "OSEK_SERVICE_SuspendAllInterrupts",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_selected_native_software_interrupt_profile",
+      "verified_scope": "Outer ISR All mask keeps both higher-priority Cat1 and Cat2 pending; caller-owned state is independent of child mask cells.",
+      "remaining_scope": "All507 current-profile final dispositions, full C221/ARTI/handoff and final independent Epic exits remain unclosed. R17.2 callback reentry has no approved deviation.",
+      "evidence": {
+        "artifact": "nested-interrupts-4-18.json",
+        "test": "epic4_nested_interrupts",
+        "regression": "nested-cleanup-regression-4-18.json",
+        "negative_compiled_oracles": "nested-mutations-4-18.json"
+      },
+      "static_evidence": "nested-static-analysis-4-18.json"
+    },
+    {
+      "key": "OSEK_SERVICE_ResumeAllInterrupts",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_selected_native_software_interrupt_profile",
+      "verified_scope": "Final All resume admits actual pending children before the parent continues. Child Cat2 leaked All state is restored without discarding parent identity.",
+      "remaining_scope": "All507 current-profile final dispositions, full C221/ARTI/handoff and final independent Epic exits remain unclosed. R17.2 callback reentry has no approved deviation.",
+      "evidence": {
+        "artifact": "nested-interrupts-4-18.json",
+        "test": "epic4_nested_interrupts",
+        "regression": "nested-cleanup-regression-4-18.json",
+        "negative_compiled_oracles": "nested-mutations-4-18.json"
+      },
+      "static_evidence": "nested-static-analysis-4-18.json"
+    },
+    {
+      "key": "OSEK_SERVICE_SuspendOSInterrupts",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_selected_native_software_interrupt_profile",
+      "verified_scope": "Outer Cat2 OS mask defers Cat2 while higher Cat1 actually interrupts it; Cat1 begins with its own unmasked logical state.",
+      "remaining_scope": "All507 current-profile final dispositions, full C221/ARTI/handoff and final independent Epic exits remain unclosed. R17.2 callback reentry has no approved deviation.",
+      "evidence": {
+        "artifact": "nested-interrupts-4-18.json",
+        "test": "epic4_nested_interrupts",
+        "regression": "nested-cleanup-regression-4-18.json",
+        "negative_compiled_oracles": "nested-mutations-4-18.json"
+      },
+      "static_evidence": "nested-static-analysis-4-18.json"
+    },
+    {
+      "key": "OSEK_SERVICE_ResumeOSInterrupts",
+      "sealed_applicability": "applicable",
+      "result": "verified_for_selected_native_software_interrupt_profile",
+      "verified_scope": "Parent remains OS-masked after a nested Cat1 returns, including Cat1 mask leakage; final parent OS resume dispatches pending Cat2 before parent continuation.",
+      "remaining_scope": "All507 current-profile final dispositions, full C221/ARTI/handoff and final independent Epic exits remain unclosed. R17.2 callback reentry has no approved deviation.",
+      "evidence": {
+        "artifact": "nested-interrupts-4-18.json",
+        "test": "epic4_nested_interrupts",
+        "regression": "nested-cleanup-regression-4-18.json",
+        "negative_compiled_oracles": "nested-mutations-4-18.json"
+      },
+      "static_evidence": "nested-static-analysis-4-18.json"
+    }
+  ]
+}

@@ -8,6 +8,18 @@
 #include "Os_Mailbox.h"
 #define OS_KERNEL_YIELD_INTERRUPT 0u
 #define OS_CONTROLLED_TICK_INTERRUPT 1u
+typedef struct {
+    Os_HookPhase phase;
+    OSServiceIdType service;
+    Os_ErrorParameters parameters;
+} Os_ErrorContext;
+void Os_ErrorContextSave(Os_ErrorContext *context);
+void Os_ErrorContextRestore(const Os_ErrorContext *context);
+int Os_HookBlocksCategory2(void);
+unsigned Os_BackendInterruptPriority(unsigned interrupt);
+int Os_BackendInterruptMaySchedule(unsigned interrupt);
+void Os_BackendRequestIsrReschedule(void);
+void Os_PortDispatchNested(void);
 int Os_BackendInputOwner(void);
 int Os_BackendTaskOwner(TaskType id);
 int Os_BackendServiceContext(void);

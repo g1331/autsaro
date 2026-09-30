@@ -146,8 +146,8 @@ int main(int argc, char **argv) {
     Os_CounterConfig counters[2] = {{0u, 31u, 1u, 1u, 1u}, {1u, 31u, 1u, 1u, 0u}};
     Os_AlarmConfig alarm = {0u, 0u, OS_ALARM_ACTIVATE, 1u, 0u, NULL, 0u, 0u, 0u, 0u, 0u};
     Os_TimeConfig time = {counters, 1u, &alarm, 1u, 0u, INVALID_TASK, 0u, NULL, NULL, 0u};
-    Os_TargetConfig target = {tasks, 0u, 262144u, resources, 0u,    internal,
-                              2u,    0u, 0u,      0u,        &time, NULL};
+    Os_TargetConfig target = {tasks, 0u, 262144u, resources, 0u,   internal, 2u,
+                              0u,    0u, 0u,      &time,     NULL, NULL};
     StatusType expected = E_OK;
     scenario = (argc == 2) ? argv[1] : "bcc1";
     extended = strncmp(scenario, "ecc", 3u) == 0;

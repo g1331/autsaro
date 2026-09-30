@@ -341,8 +341,8 @@ int main(int argc, char **argv) {
     const Os_HookConfig hooks = {&ErrorHook, NULL, NULL};
     Os_TimeConfig time = {counters,   2u,     &alarm, 1u, 0u, 0u, UINT32_C(0x80000000),
                           &ErrorHook, tables, 2u};
-    Os_TargetConfig target = {tasks, 2u, 262144u, &resource, 1u,    NULL,
-                              0u,    0u, 0u,      0u,        &time, &hooks};
+    Os_TargetConfig target = {tasks, 2u, 262144u, &resource, 1u,     NULL, 0u,
+                              0u,    0u, 0u,      &time,     &hooks, NULL};
     if (argc == 2 && strcmp(argv[1], "unconfigured") == 0) {
         target.hooks = NULL;
         time.error_hook = NULL;

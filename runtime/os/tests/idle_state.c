@@ -93,7 +93,8 @@ int main(int argc, char **argv) {
     const Os_HookConfig hooks = {&ErrorHook, NULL, NULL};
     const Os_TargetConfig target = {
         &task, 1u, 262144u, NULL, 0u,   NULL,
-        0u,    0u, 0u,      0u,   NULL, strcmp(scenario, "unconfigured") == 0 ? NULL : &hooks};
+        0u,    0u, 0u,      0u,   NULL, strcmp(scenario, "unconfigured") == 0 ? NULL : &hooks,
+        NULL};
     check(Os_TargetPrepare(&target) == E_OK && isOsStarted() == FALSE);
     StartOS(1u);
     return 99;

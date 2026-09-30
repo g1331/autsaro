@@ -32,7 +32,9 @@ void ErrorHook(StatusType error) {
         check(Os_BackendInterruptEnabled(6u) == 0);
         record('D');
     } else {
-        check(error == 6u && Os_BackendInterruptEnabled(6u) != 0);
+        /* Resources are released, but OSEK Hooks still exclude Cat2 delivery.
+         * The real probe after Hook return proves ownership/ceiling release. */
+        check(error == 6u && Os_BackendInterruptEnabled(6u) == 0);
         record('R');
     }
     statuses[errors++] = error;
@@ -138,7 +140,8 @@ int main(int argc, char **argv) {
                                     0u,
                                     0u,
                                     NULL,
-                                    strncmp(scenario, "unconfigured", 12u) == 0 ? NULL : &hooks};
+                                    strncmp(scenario, "unconfigured", 12u) == 0 ? NULL : &hooks,
+                                    NULL};
     check(Os_TargetPrepare(&target) == E_OK);
     StartOS(1u);
     return 99;

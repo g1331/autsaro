@@ -989,6 +989,55 @@ def check_idle_state(binary: Path) -> list[dict]:
     return observations
 
 
+def check_nested_interrupts(binary: Path) -> list[dict]:
+    # Literal expected ordering is independent of source IDs and the native
+    # dispatch implementation. All entries execute actual installed callbacks.
+    cases = {
+        "nested": (1, 1, 1, 3, "APCGcpHB", []),
+        "native-call": (1, 1, 1, 3, "APCGcpHB", []),
+        "equal": (1, 0, 1, 1, "APpCcHB", []),
+        "lower": (1, 0, 1, 1, "APpCcHB", []),
+        "priority-order": (1, 1, 0, 1, "ACPGB", []),
+        "resources": (1, 1, 1, 3, "APCGcpHB", [(6, 5, 134)]),
+        "resource-leak": (1, 1, 1, 3, "APCGcpHB", [(6, 5, 134), (6, 6, 252)]),
+        "ceiling": (1, 1, 1, 3, "APCGcpHB", [(6, 5, 134)]),
+        "task-ceiling": (1, 0, 1, 1, "ACcHB", [(6, 5, 134)]),
+        "mask-all": (1, 1, 1, 2, "APGCcpHB", []),
+        "mask-os": (1, 1, 1, 2, "APGCcpHB", []),
+        "mask-cat1-leak": (1, 1, 1, 2, "APGCcpHB", []),
+        "child-mask-leak": (1, 0, 1, 2, "APCcpHB", [(6, 9, 252)]),
+        "hook": (1, 1, 1, 2, "APEGeCcpHB", [(20, 3, 129)]),
+        "cat1-outer": (1, 1, 1, 2, "APCcpTGHB", []),
+        "source-enable": (1, 0, 1, 2, "APCcpHB", []),
+        "source-clear": (1, 0, 1, 2, "APDCcpHB", []),
+        "source-clear-pending": (1, 0, 1, 2, "APDCcpHB", []),
+        "maximum": (0, 0, 1, 30, "A" + "<" * 30 + ">" * 30 + "HB", []),
+    }
+    observations = []
+    for scenario, (children, grandchildren, helpers, maximum, trace, errors) in cases.items():
+        result = execute(binary, scenario)
+        expected = (f"nested scenario={scenario} children={children} grandchildren={grandchildren} "
+                    f"helpers={helpers} errors={len(errors)} depth=0 maximum={maximum} "
+                    f"trace={trace} reason=0")
+        actual_errors = [tuple(map(int, values)) for values in re.findall(
+            r"nested_error isr=(\d+) status=(\d+) service=(\d+)", result["stdout"])]
+        require(result["exit"] == 0 and not result["stderr"], result)
+        require(expected in result["stdout"] and actual_errors == errors, result)
+        require("lifecycle=Closed state=Ready reason=0" in result["stdout"], result)
+        require(len(re.findall(r"^STACK role=S ", result["stdout"], re.MULTILINE)) == 1, result)
+        result["independent_expected"] = expected
+        result["independent_errors"] = errors
+        observations.append(result)
+    for rejection in ("priority", "yield", "tick", "category", "resource", "ceiling", "input"):
+        scenario = "reject-" + rejection
+        result = execute(binary, scenario)
+        expected = f"nested_rejection scenario={scenario} status=8 configured=0"
+        require(result["exit"] == 0 and not result["stderr"] and result["stdout"] == expected, result)
+        result["independent_expected"] = expected
+        observations.append(result)
+    return observations
+
+
 def check_isr_cleanup(binary: Path) -> list[dict]:
     cases = {
         "single": (1, 6, 6, "AIRPHB"),
@@ -1209,6 +1258,7 @@ def main() -> None:
             "returned-task",
             "interrupt-pairing",
             "isr-cleanup",
+            "nested-interrupts",
             "calling-context",
             "idle-state",
         ],
@@ -1238,6 +1288,7 @@ def main() -> None:
             "returned-task": "returned_task.c",
             "interrupt-pairing": "interrupt_pairing.c",
             "isr-cleanup": "isr_cleanup.c",
+            "nested-interrupts": "nested_interrupts.c",
             "calling-context": "calling_context.c",
             "idle-state": "idle_state.c",
         }
@@ -1256,6 +1307,7 @@ def main() -> None:
             "returned-task": check_returned_task,
             "interrupt-pairing": check_interrupt_pairing,
             "isr-cleanup": check_isr_cleanup,
+            "nested-interrupts": check_nested_interrupts,
             "calling-context": check_calling_context,
             "idle-state": check_idle_state,
         }
@@ -1307,6 +1359,7 @@ def main() -> None:
             "returned-task": "epic4_returned_task_resource_cleanup",
             "interrupt-pairing": "epic4_standard_interrupt_pairing",
             "isr-cleanup": "epic4_category2_exit_cleanup",
+            "nested-interrupts": "epic4_nested_interrupts",
             "calling-context": "epic4_standard_calling_context",
             "idle-state": "epic4_standard_idle_and_started_state",
         }

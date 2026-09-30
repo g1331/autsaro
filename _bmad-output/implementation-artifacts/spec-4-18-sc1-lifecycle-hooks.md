@@ -51,11 +51,19 @@ context: []
 
 - [ ] 核对实际R24-11/OSEK原文、公共类型及完整调用表，冻结独立错误/Hook/中断/四类容量预期。
 - [ ] 补标准服务和错误/参数快照、Hook上下文及真实任务转换；实现missing-end正常终止与清理。
-- [ ] 补全中断屏蔽配对/嵌套、源pending/ID及Cat2退出清理；实际idle动作与启动状态验证。
+- [x] 补全中断屏蔽配对/嵌套、源pending/ID及Cat2退出清理；实际idle动作与启动状态验证。
 - [ ] 四类成功容量与关键拒绝向量、所有适用服务和类型独立验证；507行逐条处置并保留封存适用性。
 - [ ] 既有OS/栈/时间/参考ECU/HostBatch回归、最终源码/二进制身份、静态/MISRA核查、完整增量门与三路独立复核，本地提交及sprint同步。
 
 ## Implementation Notes
+
+下一公共类型增量选择：原文p151将DONOTCARE／TotalNumberOfCores限定在多核环境；仍提供明确的公共常量并将所选核数固定为1，不能据此宣称多核运行能力。p229的RTE类型通过新Rte_Os_Type.h提供，TimeInMicrosecondsType为uint64；同一消费者可同时包含Os.h和RTE头，因此CounterType须有唯一uint32定义，统一现有native配置、API和有类型错误参数，禁止通过不同include顺序产生两个不兼容CounterType。已配置Counter容量保持原有8个；新增256、65536和UINT32_MAX标识的真实拒绝／输出保持／ErrorHook参数验证，证明高位不会截断成合法Counter0。公共消费者按实际规范约束核对类型和常量，生成离线闭包包含新头，不以RTE头交付代替Counter服务接口和生成时间换算义务。
+
+后续507行逐项核查已发现“SC1 public interfaces”95行不全是C类型：封存section标签在8.8.2.2后未继续更新，实际PDF p238/239属于配置校验，p321为ARTI配置，p391～393为OS生成义务。保留封存行及适用性，最终处置须按原文实际章节核对，不能按标签批量通过。p223的ReceiverPullCB明确可选且依赖IOC接收配置；p229另规定Rte_Os_Type.h中的TimeInMicrosecondsType为uint64、CounterType为uint32。p393还包含可重定位中断向量段、内部timer信息、OS_TICKS2单位换算宏和Memory Mapping封装；必须追到实际生成工件及适用配置，并与4.19/4.20出口对齐，不能用现有公共头编译或原生行为测试代替这些义务。
+
+真实嵌套ISR增量起始94efe9345c98b58ba3be37338fa4b4550884bba2。配置附加可选Os_IsrConfig，32个静态源优先级，应用源2～31使用1～31（高值先行），0为未配置；私有yield0/tick1保留，显式配置时tick为最低1。NULL保留全部应用源同级31的平坦配置。实际原生S栈/既有mutex内在pend与critical出口递送更高优先级源，同级和低级保持pending，不创建ISR线程或另一Task选择器。每层保留身份、Hook阶段和有类型错误参数；资源归属为独立Task/ISR槽，子层清理不得释放父层资源。共享ISR资源的ceiling属于ISR优先级域，持有它的Task提升到所有Task之上；Task-only资源仍用Task优先级。配置校验保留内核源、Cat1/资源ACL和输入源的完整前提。
+
+独立验收须证明真实三层抢占/返回、同级与反向编号的优先级、子层资源/屏蔽清理、父ErrorHook快照恢复、All/OS屏蔽下Cat1/Cat2行为及最外层Task调度。OSEK2.2.3 PDF p73 §14.2.3.1明确Cat2可以抢占Cat1，但子层激活/事件不在最外层Cat1退出时触发重调度；保留请求至后续合法调度点。原生端口回调重入的R17.2范围和物理栈深度须明确记录，不能以有界深度冒充已批准偏离。生成模板/离线补丁闭包、所有初始化器、正式测试与来源摘要同步；当前实现中，尚无本增量通过声明。
 
 调用上下文/idle独立增量起始a9dbeeff93cdcb838480fa9afb2266baa65551fd。已读取并渲染R24-11 p72/73表，优先该版本扩展而非旧OSEK更窄许可；所有六屏蔽服务在各已支持Hook/Alarm阶段许可，Hook有独立逻辑屏蔽归属，保护原调用者状态同时对Hook自己屏蔽的服务执行00093规则。GetISRID仅ErrorHook许可；Mode在Error/Pre/Post/Startup/Shutdown许可；Shutdown仅Task/Cat2/Error/Startup，Start不从活动OS/Hook再次启动。ShutdownHook以无普通mutex的专用阶段设置调用，消除实际关闭栈错误服务取得受损actor锁的死锁。无当前ISR及私有yield的S actor普通服务拒绝。ControlIdle按单核省略CoreID检查，支持真实虚拟核既有NO_HALT，未知模式拒绝；isOsStarted按DRAFT语义记录StartOS入口而非Ready/成功，不改标为定稿。新增九调用上下文、五真实idle过程及两正式入口；原屏蔽向量扩展至31非中断服务。Alarm场景通过配置的软件Counter/Alarm回调真实递送；无ISR身份场景在真实原生ISR栈故障注入，不能证明嵌套支持。固定端口IRQ0为私有yield、IRQ1为受控tick；第十补丁保护两内核源的handler/源控制所有权，真实tick遵守All/OS屏蔽。两新增原生向量确认实际过滤器观察到pending tick时kernel仍0、票据未完成，恢复后同票据完成且kernel/Counter各增一次，时间回归共44向量，含两种消费Task自身屏蔽及ISR阶段／mutex交接的确定性验证；第十一补丁在释放mutex前结束ISR阶段。
 
@@ -91,6 +99,8 @@ ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参�
 
 ## Review Triage Log
 
+- 嵌套ISR增量三路独立复核：blind与edge无发现；verification-gap的旧isr_cleanup ErrorHook内要求Cat2已可递送为medium/patch。OSEK §11.1明确Hook不能被Cat2打断，新Hook gate导致旧断言与实际契约冲突。改为Hook内仍屏蔽Cat2，保留随后真实ISR6 probe、helper和原Task获取/释放全部资源的断言；不删除资源重获和LIFO清理验证。完整门首轮已观察到该旧测试失败，日志保留；修正后须定向复验并完成最终门。
+
 - 第十一补丁／44时间向量／repeat-start修正的追加blind、edge、verification-gap三路复核均无新增发现。最终行为门92集成测试全部通过（567.52秒），Python29、UI lint/build、桌面build与两Clippy通过。随后按既有LF属性归一OS文本字节，原始补丁和上游不变；七套原生回归、三调用错误变体、两旧ISR时序变体及12单元部分扫描均从规范化来源刷新，500摘要匹配，Python／增量质量复验通过；生成ECU包亦在该来源重编复验。507总结果已建立，61行关联增量证据，全部最终处置仍待逐项评估，4.18保持in-progress。
 
 - 调用上下文/idle增量blind提出“StartOS失败或被忽略后isOsStarted不应为TRUE”：false。已核对R24-11 p205的DRAFT91034，以是否调用过StartOS为返回依据，非Ready或成功；当前入口原子记录调用，屏蔽查询另遵守00093，无两者混淆。edge无发现。verification-gap提出“屏蔽时isOsStarted也应TRUE”：false，p74 SWS_Os_00093要求Task/ISR/Hook自身屏蔽时忽略任何非中断OS服务，DRAFT查询未声明例外；当前返回无效FALSE且ErrorHook报告9，恢复后TRUE，原状态未被改写。两条建议均不修改实现或弱化断言。
@@ -112,6 +122,8 @@ ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参�
 - 容量独立增量三路blind／edge／verification-gap均未发现可定位缺陷或验证缺口；完整故事的Hook/错误/ISR工作仍开放。正式容量/真实生成两项测试163.73s通过；18容量、40受控时间、43计时向量封存，26最低容量义务直接映射到四个主场景，部分静态exit1原样保留。容量增量完整门exit0：85个集成测试（660.24s）、29Python、UI/桌面构建和两组Clippy通过；本故事Hook/错误/ISR仍未完成，sprint保持in-progress。
 
 ## Verification
+
+嵌套ISR增量已通过26个原生向量和修正后10个Cat2清理回归。七个实际编译变异均被既有断言识别：串行分发、丢父身份、共享ISR资源栈、丢Hook快照、允许Cat2打断Hook、Cat1出口提前调度由native成功契约断言拒绝；源编号代替优先级的副本正常退出但产生AGCPB，正式Python独立轨迹预期ACPGB明确拒绝，不把进程exit0当行为通过。12个实际翻译单元部分静态exit1诊断保留；固定深度的回调重入仍是未批准R17.2。四个当前原生／负向／静态工件的产品源码摘要逐项匹配。最终完整门exit0：93个核心集成测试全部通过（1108.27秒）、29Python、增量质量／C99、UI lint/build、桌面build和两组Clippy通过，日志为.scratch/epic4/story418-nested-final-gate.log，退出记录为同名.exit。首轮旧测试失败及缺最终汇总日志保留，没有改写为通过。三路独立复核的唯一发现已修正；追加定向复核无剩余问题。全部507封存行保留，62行关联增量证据，所有最终处置仍待逐项核查；4.18与Epic4保持in-progress。
 
 Cat2资源出口增量最终完整门exit0：90个核心集成测试567.09s、29Python、增量格式/C99、UI lint/build、桌面构建及两组Clippy通过。十个出口过程、28屏蔽/26资源回归与最终源码摘要匹配，实际旧backend四场景均被拒绝；12单元部分静态exit1保留。三路独立复核无发现，sprint保持4.18/Epic4 in-progress。后续完整调用表已以官方R24-11 p72/73实际PDF图像核实：六屏蔽API全部Hook/Alarm列为OK，当前较窄Hook限制须在下一增量修正；GetISRID/Shutdown/Mode各自不同许可也须覆盖。当前出口清理不冒充全调用表、实际嵌套ISR、221项或交接完成。
 

@@ -92,6 +92,16 @@ StatusType Os_TargetPrepare(const Os_TargetConfig *config) {
          ((config->category1_isrs & (UINT32_C(1) << OS_INPUT_INTERRUPT)) != 0u))) {
         return E_OS_VALUE;
     }
+    if (config->interrupts != NULL) {
+        for (i = 0u; i < OS_MAX_INTERRUPTS; ++i) {
+            const uint8_t priority = config->interrupts->priorities[i];
+            if ((priority > OS_MAX_ISR_PRIORITY) || ((i < 2u) && (priority != 0u)) ||
+                (((config->category1_isrs & (UINT32_C(1) << i)) != 0u) && (priority == 0u)) ||
+                ((config->input_event != 0u) && (i == OS_INPUT_INTERRUPT) && (priority == 0u))) {
+                return E_OS_VALUE;
+            }
+        }
+    }
     if (config->input_event != 0u) {
         for (i = 0u; i < config->task_count; ++i) {
             if (config->tasks[i].id == config->input_task) {
@@ -122,6 +132,23 @@ StatusType Os_TargetPrepare(const Os_TargetConfig *config) {
                 highest_access = config->tasks[j].priority;
             }
         }
+        if (resource->isr_access != 0u) {
+            /* Every ISR level is above every Task level on this target. */
+            highest_access = 0u;
+        }
+        for (j = 2u; j < OS_MAX_INTERRUPTS; ++j) {
+            if ((resource->isr_access & (UINT32_C(1) << j)) != 0u) {
+                const uint8_t priority = (config->interrupts == NULL)
+                                             ? OS_MAX_ISR_PRIORITY
+                                             : config->interrupts->priorities[j];
+                if (priority == 0u) {
+                    return E_OS_VALUE;
+                }
+                if (priority > highest_access) {
+                    highest_access = priority;
+                }
+            }
+        }
         if (((resource->task_access == 0u) && (resource->isr_access == 0u)) ||
             (((uint32_t)resource->task_access & ~task_mask) != 0u) ||
             ((resource->isr_access & config->category1_isrs) != 0u)) {
@@ -132,8 +159,7 @@ StatusType Os_TargetPrepare(const Os_TargetConfig *config) {
              (resource->ceiling != highest_task))) {
             return E_OS_VALUE;
         }
-        if ((resource->ceiling < highest_access) ||
-            ((resource->isr_access != 0u) && (resource->ceiling != 31u))) {
+        if (resource->ceiling < highest_access) {
             return E_OS_VALUE;
         }
         for (j = 0u; j < config->task_count; ++j) {

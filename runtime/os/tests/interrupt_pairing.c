@@ -385,7 +385,7 @@ int main(int argc, char **argv) {
     };
     const Os_HookConfig hooks = {&ErrorHook, NULL, NULL};
     const Os_TargetConfig target = {tasks, 2u, 262144u, NULL,  0u, NULL, 0u, UINT32_C(1) << 4u,
-                                    0u,    0u, NULL,    &hooks};
+                                    0u,    0u, NULL,    &hooks, NULL};
     check(Os_TargetPrepare(&target) == E_OK);
     /* All four services operate before startup, including unmatched restores. */
     DisableAllInterrupts();

@@ -124,7 +124,8 @@ int main(int argc, char **argv) {
         {0u, 3u, 3u, 0u}, {1u, 3u, 3u, 0u}, {RES_SCHEDULER, 3u, 7u, 0u}};
     const Os_HookConfig hooks = {&ErrorHook, &PreTaskHook, &PostTaskHook};
     const Os_TargetConfig target = {tasks, 3u, 262144u, external, 3u,   NULL,
-                                    0u,    0u, 0u,      0u,       NULL, configured ? &hooks : NULL};
+                                    0u,    0u, 0u,      0u,       NULL, configured ? &hooks : NULL,
+                                    NULL};
     check(Os_TargetPrepare(&target) == E_OK);
     StartOS(1u);
     return 99;

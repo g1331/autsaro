@@ -6,7 +6,24 @@
 static __thread Os_HookPhase phase;
 static __thread OSServiceIdType service_id;
 static __thread Os_ErrorParameters parameters;
+static __thread unsigned hook_depth;
+static __thread int error_active;
 static const Os_ErrorParameters empty_parameters = {.service_TerminateTask = {0u}};
+int Os_HookBlocksCategory2(void) { return hook_depth != 0u; }
+
+void Os_ErrorContextSave(Os_ErrorContext *context) {
+    context->phase = phase;
+    context->service = service_id;
+    context->parameters = parameters;
+    phase = OS_HOOK_NONE;
+    service_id = OSServiceId_Unknown;
+    parameters = empty_parameters;
+}
+void Os_ErrorContextRestore(const Os_ErrorContext *context) {
+    phase = context->phase;
+    service_id = context->service;
+    parameters = context->parameters;
+}
 
 Os_HookPhase Os_HookContext(void) { return phase; }
 int Os_HookQueryContext(void) {
@@ -63,19 +80,34 @@ OSServiceIdType Os_ErrorServiceId(void) {
 }
 StatusType Os_ErrorResult(OSServiceIdType service, StatusType status,
                           const Os_ErrorParameters *arguments) {
-    if ((status != E_OK) && (phase != OS_HOOK_ERROR) && (Os_ErrorHookConfigured() != 0) &&
+    if ((status != E_OK) && (error_active == 0) && (Os_ErrorHookConfigured() != 0) &&
         (Os_StackCurrent() != NULL) && (InterlockedCompareExchange(&Os_Closing, 0, 0) == 0)) {
         const Os_HookPhase previous = phase;
-        taskENTER_CRITICAL();
+        const Os_NativeStack *stack = Os_StackCurrent();
+        const int isr = (stack->role == 'S') && (Os_BackendCurrentInterrupt() < 32u);
+        /* The native ISR dispatcher already owns the interrupt mutex. Do not
+         * introduce an extra kernel critical level around an ISR ErrorHook.
+         * The Hook gate excludes Cat2; higher priority Cat1 may interrupt it. */
+        if (isr == 0) {
+            taskENTER_CRITICAL();
+        }
         Os_BackendGuardService();
         parameters = *arguments;
         service_id = service;
         phase = OS_HOOK_ERROR;
+        ++hook_depth;
+        error_active = 1;
         Os_Config->hooks->error(status);
+        error_active = 0;
+        --hook_depth;
         phase = previous;
         service_id = OSServiceId_Unknown;
         parameters = empty_parameters;
-        taskEXIT_CRITICAL();
+        if (isr == 0) {
+            taskEXIT_CRITICAL();
+        } else {
+            Os_PortDispatchNested();
+        }
         Os_BackendGuardService();
     }
     return status;
@@ -86,7 +118,9 @@ void Os_HookInvoke(void (*hook)(void), Os_HookPhase selected) {
         taskENTER_CRITICAL();
         Os_BackendGuardService();
         phase = selected;
+        ++hook_depth;
         hook();
+        --hook_depth;
         phase = previous;
         taskEXIT_CRITICAL();
         Os_BackendGuardService();
