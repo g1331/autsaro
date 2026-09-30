@@ -948,6 +948,15 @@
           "scoped_result": "verified_for_current_selected_native_profile",
           "verified_scope": "Nine real native scenarios exercise29 StatusType APIs and scalar/lifecycle APIs. Disallowed global Hooks/Alarm/no-active-ISR calls preserve outputs and state; Task/Cat2 coverage also retained in mask/time regressions. Full507 obligation disposition and nested ISR remain open.",
           "remaining_scope": "Actual nested ISR and full507/C221/ARTI/handoff/final independent exits remain open."
+        },
+        {
+          "artifact": "nonstatus-obligations-4-18.json",
+          "normalized_artifact_sha256": "d7c4440d95d3d0d4bf5e4ab9de4e160dee98bb14125bd990a889273052155cde",
+          "artifact_hash_representation": "UTF-8 sorted compact JSON; not raw local provenance",
+          "row_key": "SWS_Os_00088",
+          "scoped_result": "verified_for_selected_nonstatus_service_report_contract",
+          "verified_scope": "Wrong-context scalar queries return the original invalid values and void StartOS/ShutdownOS have no requested action. Real Hook and native Task/ISR contexts are retained, with actual lifecycle state, application mode and mask pairing checks; absence of ErrorHook does not remove caller protection.",
+          "remaining_scope": "All507 current-profile final dispositions, source-control repeated-call00809 correction, generated vector/Memory Mapping/RTE interfaces, complete C221/ARTI/handoff and independent Epic exits remain open."
         }
       ]
     },
@@ -1217,6 +1226,15 @@
           "scoped_result": "verified_for_current_selected_native_profile",
           "verified_scope": "Disabled Task/ISR/Hook noninterrupt services are ignored with9 where StatusType. ErrorHook owns a separate logical mask; it can query masked parent until it masks itself. Four real pending tick vectors prove All/OS delivery filters and balanced restoration, including ownerTask waiting commit after actual ISR mutex release. Both old phase timings rejected by deterministic copied-build oracles.",
           "remaining_scope": "Actual nested ISR and full507/C221/ARTI/handoff/final independent exits remain open."
+        },
+        {
+          "artifact": "nonstatus-obligations-4-18.json",
+          "normalized_artifact_sha256": "d7c4440d95d3d0d4bf5e4ab9de4e160dee98bb14125bd990a889273052155cde",
+          "artifact_hash_representation": "UTF-8 sorted compact JSON; not raw local provenance",
+          "row_key": "SWS_Os_00093",
+          "scoped_result": "verified_for_selected_nonstatus_service_report_contract",
+          "verified_scope": "Caller-owned interrupt masks still ignore all tested non-interrupt services. Only StatusType services report/return9; scalar/void services preserve invalid values/no effects without ErrorHook. Nine calling,28 pairing and5 idle regressions retain all StatusType results, output preservation, pending-source delivery and actual Task wake behavior.",
+          "remaining_scope": "All507 current-profile final dispositions, source-control repeated-call00809 correction, generated vector/Memory Mapping/RTE interfaces, complete C221/ARTI/handoff and independent Epic exits remain open."
         }
       ]
     },
@@ -3744,7 +3762,17 @@
         "core_count=1"
       ],
       "final_result": "pending_current_profile_and_exit_assessment",
-      "increment_results": []
+      "increment_results": [
+        {
+          "artifact": "nonstatus-obligations-4-18.json",
+          "normalized_artifact_sha256": "d7c4440d95d3d0d4bf5e4ab9de4e160dee98bb14125bd990a889273052155cde",
+          "artifact_hash_representation": "UTF-8 sorted compact JSON; not raw local provenance",
+          "row_key": "SWS_Os_00367",
+          "scoped_result": "verified_for_selected_nonstatus_service_report_contract",
+          "verified_scope": "Five supported public void/scalar rejection paths no longer call ErrorHook. Ten actual native contexts include Task,Cat1,Cat2,Startup/Pre/Post/Shutdown/Alarm/Error and unconfigured Hook. StatusType ActivateTask still reports exactly one ID error with original typed parameter99; active ErrorHook retains its snapshot. Five separately restored old public functions are detected by unchanged native assertions.",
+          "remaining_scope": "All507 current-profile final dispositions, source-control repeated-call00809 correction, generated vector/Memory Mapping/RTE interfaces, complete C221/ARTI/handoff and independent Epic exits remain open."
+        }
+      ]
     },
     {
       "key": "SWS_Os_00806",
@@ -8760,6 +8788,15 @@
           "scoped_result": "verified_for_selected_native_software_interrupt_profile",
           "verified_scope": "Optional ErrorHook executes on the original logical ISR for errors and automatic cleanup. Nested Cat1 does not recurse or replace the active report. Hook completion allows the deferred Cat2, with original parent service still returning its original status.",
           "remaining_scope": "All507 current-profile final dispositions, full C221/ARTI/handoff and final independent Epic exits remain unclosed. R17.2 callback reentry has no approved deviation."
+        },
+        {
+          "artifact": "nonstatus-obligations-4-18.json",
+          "normalized_artifact_sha256": "d7c4440d95d3d0d4bf5e4ab9de4e160dee98bb14125bd990a889273052155cde",
+          "artifact_hash_representation": "UTF-8 sorted compact JSON; not raw local provenance",
+          "row_key": "OSEK_SERVICE_ErrorHook",
+          "scoped_result": "verified_for_selected_nonstatus_service_report_contract",
+          "verified_scope": "Optional standard Hook continues for StatusType errors and explicit missing-end/ISR cleanup events. Removing scalar/void API reports preserves one real error callback and typed snapshot; no Hook configuration produces zero calls.",
+          "remaining_scope": "All507 current-profile final dispositions, source-control repeated-call00809 correction, generated vector/Memory Mapping/RTE interfaces, complete C221/ARTI/handoff and independent Epic exits remain open."
         }
       ]
     },

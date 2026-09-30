@@ -189,35 +189,23 @@ void StartOS(AppModeType Mode) {
     InterlockedExchange(&start_called, 1);
     Os_StackCheck();
     if (Os_InterruptDisabled() != 0) {
-        const Os_ErrorParameters arguments = {.service_StartOS = {Mode}};
         if (Os_BackendStarted() == 0) {
             /* Preserve the fixed first-StartOS non-returning rejection contract;
              * no native scheduler or automotive startup is performed. */
             Os_BackendShutdown(E_OS_DISABLEDINT);
         }
-        if (Os_HookContext() != OS_HOOK_ERROR) {
-            (void)Os_ErrorResult(OSServiceId_StartOS, E_OS_DISABLEDINT, &arguments);
-        }
         return;
     }
     if ((Os_HookContext() != OS_HOOK_NONE) || (Os_BackendStarted() != 0)) {
-        const Os_ErrorParameters arguments = {.service_StartOS = {Mode}};
-        if (Os_HookContext() != OS_HOOK_ERROR) {
-            (void)Os_ErrorResult(OSServiceId_StartOS, E_OS_CALLEVEL, &arguments);
-        }
         return;
     }
     Os_BackendStart(Mode);
 }
 boolean isOsStarted(void) {
     const StatusType status = Os_ServiceAccessStatus(OSServiceId_isOsStarted);
-    const Os_ErrorParameters arguments = {.service_TerminateTask = {0u}};
     Os_StackCheck();
     Os_BackendGuardService();
     if (status != E_OK) {
-        if (Os_HookContext() != OS_HOOK_ERROR) {
-            (void)Os_ErrorResult(OSServiceId_isOsStarted, status, &arguments);
-        }
         return FALSE;
     }
     return InterlockedCompareExchange(&start_called, 0, 0) != 0 ? TRUE : FALSE;
@@ -243,13 +231,9 @@ StatusType ControlIdle(CoreIdType CoreID, IdleModeType IdleMode) {
                : Os_ErrorResult(OSServiceId_ControlIdle, status, &arguments);
 }
 void ShutdownOS(StatusType Error) {
-    const Os_ErrorParameters arguments = {.service_ShutdownOS = {Error}};
     const StatusType status = Os_ServiceAccessStatus(OSServiceId_ShutdownOS);
     Os_StackCheck();
     if (status != E_OK) {
-        if (Os_HookContext() != OS_HOOK_ERROR) {
-            (void)Os_ErrorResult(OSServiceId_ShutdownOS, status, &arguments);
-        }
         return;
     }
     Os_BackendShutdown(Error);
@@ -267,10 +251,6 @@ AppModeType GetActiveApplicationMode(void) {
     Os_StackCheck();
     Os_BackendGuardService();
     if (status != E_OK) {
-        const Os_ErrorParameters arguments = {.service_TerminateTask = {0u}};
-        if (Os_HookContext() != OS_HOOK_ERROR) {
-            (void)Os_ErrorResult(OSServiceId_GetActiveApplicationMode, status, &arguments);
-        }
         return 0u;
     }
     return Os_BackendApplicationMode();
@@ -282,10 +262,6 @@ ISRType GetISRID(void) {
     Os_StackCheck();
     Os_BackendGuardService();
     if (status != E_OK) {
-        const Os_ErrorParameters arguments = {.service_TerminateTask = {0u}};
-        if (Os_HookContext() != OS_HOOK_ERROR) {
-            (void)Os_ErrorResult(OSServiceId_GetISRID, status, &arguments);
-        }
         return INVALID_ISR;
     }
     return (stack != NULL && stack->role == 'S' && interrupt < 32u &&

@@ -251,7 +251,7 @@ static void refused_services(void) {
     ShutdownOS(8u);
     StartOS(2u);
     check(ControlIdle(UINT16_MAX, IDLE_NO_HALT) == 9u && isOsStarted() == FALSE);
-    check(errors == 31u && output_task == 42u && output_state == 42u &&
+    check(errors == 26u && output_task == 42u && output_state == 42u &&
           output_event == UINT32_C(0xdead) && output_value == UINT64_MAX &&
           output_elapsed == UINT64_MAX && output_table == 42u);
     check(output_base.maxallowedvalue == 61u && output_base.ticksperbase == 62u &&

@@ -1,5 +1,7 @@
 # Epic 4 Windows OS 基础
 
+R24-11 SWS_Os_00367规定：不返回`StatusType`的OS服务不触发ErrorHook（未选择的ActivateTaskAsyn／SetEventAsyn例外除外）。StartOS、ShutdownOS、GetActiveApplicationMode、GetISRID及DRAFT isOsStarted在错误上下文／调用者自身屏蔽时仍忽略动作或返回无效值；合法StatusType错误报告和missing-end／ISR清理明确要求的Hook继续保留。`--suite nonstatus-errors`在十个真实调用场景检查无额外报告和原StatusType有类型快照，调用矩阵／中断配对／idle回归分别覆盖9／28／5个原生过程。
+
 公共OS类型与`Rte_Os_Type.h`共用唯一32位`CounterType`，后者另提供64位`TimeInMicrosecondsType`，与R24-11 p229一致；包含顺序不会产生两份不兼容类型。`Os_TargetConfig`及时间配置、库和消费者应使用同一交付头重新编译。所选Counter容量仍为8，不因标识类型扩大而增加对象。`DONOTCARE`和`TotalNumberOfCores=1`为公共常量，本目标仍为单核。`--suite counter-types`覆盖17个原生过程和六种公共头包含顺序：256、65536、UINT32_MAX标识在Counter服务及五类配置引用中准确拒绝，输出和合法Counter值保持，已配置ErrorHook保留完整标识及原始输出指针。RTE类型交付不等同于Counter服务端口、时间单位换算或完整507行出口通过。
 
 4.18的嵌套ISR增量使用`Os_TargetConfig.interrupts`指向静态`Os_IsrConfig`。应用源2～31的优先级为1～31，高值先行，0为未配置；内核源0/1的配置项必须为0。NULL采用应用源同级31的平坦配置；显式配置时受控tick优先级固定1。生成参考ECU显式配置输入源30为1。`Os_ResourceConfig.ceiling`在Task-only资源上表示Task优先级，在ISR共享资源上表示ISR优先级；共享资源由Task持有时，同时提升到所有Task之上。配置拒绝缺失的Cat1、资源访问源或输入源，以及不足的资源ceiling。

@@ -57,6 +57,16 @@ context: []
 
 ## Implementation Notes
 
+00763的实际原文p88为“SC1 system standard mode shall be possible”，位于多核分配章节；当前封存行将它列为applicable，生成配置只允许OsStatus=EXTENDED，native Os_Cfg亦无显式status选择。最终核查须结合OSEK标准／扩展Status要求及实际单核profile判断并取得真实标准模式证据，不能仅因参考输入是EXTENDED就把这条记为通过或无依据重分类。后续若需支持provider的STANDARD配置，须保持所选参考ECU／扩展Status的所有错误检查与预期，避免借标准模式关闭有效保护或扩大既定参考输入边界。
+
+兼容宏的严格C99小实验已完成，原始来源及结果位于.scratch/epic4/compat-declaration-probe/result.json：空宏展开后旧文件作用域分号被GCC -std=c99 -Wall -Wextra -Werror -pedantic拒绝；惰性不完整struct前向声明同时接受已定义为数值的对象名与未配置标识，多次调用合法，编译／运行exit0且nm未发现对应对象或函数符号。该实验只解决C99兼容实现选择，不构成该宏的最终MISRA评估或完整OSEK通过；后续实现／交付仍须正式消费者和规范映射。
+
+兼容声明的原文范围已核定：OSEK2.2.3 PDF p50／58／60／62定义DeclareTask／DeclareResource／DeclareEvent／DeclareAlarm，p76说明这些构造元素因兼容保留；未发现DeclareCounter，不能凭其他OS实现发明其规范义务。AUTOSAR p37要求这些宏不承担配置功能。后续实现应保证旧文件作用域“DeclareX(identifier);”在严格C99／pedantic下可编译，不产生对象／函数定义或链接依赖；单纯空展开留下文件作用域分号须先实际检查，不能因宏名存在就认为兼容成立。
+
+下一中断源核查已证实00809缺口：实际p135要求Extended Status下重复Disable已关闭源或Enable已打开源返回E_OS_NOFUNC；现source_control只把端口bool成功映射为E_OK，interrupt_pairing.c的source场景显式把连续两次Disable5都预期E_OK，完整门也据此通过。后续独立增量须在同一原生mutex下检测真实源位，保持首次切换／pending清除语义，新增双调用／无副作用／ErrorHook有类型参数和ISR过程。00811的概括清除要求须结合Enable接口的ClearPending参数原文核定，不擅自删除FALSE保留pending的既有明确契约。
+
+00367增量起始c0b4ae90ac6986f73791d74102df97080e487b6d。实际非Status分支在Os.c去除ErrorHook报告，保留原失效返回／忽略行为、栈检查、关闭门和首次Start非返回契约；StatusType错误仍经标准报告边界。runtime/os/tests/nonstatus_errors.c新增真实Task、Cat1／Cat2、Startup／Pre／Post／Shutdown／Alarm／ErrorHook与未配置Hook过程，非Status错误不得增加计数，Status错误及有类型原参数保持；scripts/epic4_os.py接入独立字面预期，核心正式测试接入。旧calling／pairing／idle回归按00367只移除五类非Status错误记录预期，保留全部原Status拒绝、输出保持及真实pending／Task恢复验证。旧Os.c错误分支实际副本须被新断言拒绝，适用部分静态分析诊断保留；完成定向／全门及三路复核后才提交该独立增量，故事仍不得关闭。
+
 最终GUI出口的环境前置探针已取得实际结果：.scratch/epic4/isolated_desktop_probe.py通过CreateDesktopW和STARTUPINFOW.lpDesktop创建独立desktop并启动子进程；子进程在核对非Default身份后成功创建／销毁隐藏原生窗口。isolated-desktop-probe-result.json记录输入桌面前后均为Default，未调用SwitchDesktop、foreground或输入注入。此结果仅证明独立desktop对象与隐藏窗口环境可用，不是Tauri／WebView2渲染或IPC通过，也不宣称进程／数据安全沙箱；4.21／4.22仍须验证实际应用窗口、渲染、IPC及交接场景。API依据https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-createdesktopw和https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/ns-processthreadsapi-startupinfow。
 
 公共兼容性继续核查：p37要求为旧OSEK Declare对象宏提供无功能兼容声明，当前runtime/os/include中未发现DeclareTask／DeclareResource／DeclareEvent／DeclareAlarm，需要按OSEK原文核定完整集合再实现，不能用实际配置依赖这些宏。p136的91025还列出多种通用开发错误常量，当前Os_Types.h只声明已运行SC1错误；后续需按实际规范核定公共符号义务并用独立消费者检查，而不是因SC2／多核运行未选择就自动跳过整个公共声明。p158的RestartType原文仅列OS_OSAPPLICATION_RESTART，现有声明匹配，不凭其他实现新增规范并未要求的标识。
@@ -109,6 +119,8 @@ ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参�
 
 ## Review Triage Log
 
+- 00367非Status服务增量三路独立只读复核完成：blind和verification-gap无发现；edge初次仅返回未完成的空输入读入结果，没有计为通过，要求同一复核者分块读取实际558492字节diff后重新分析，最终返回无发现。当前十原生向量、五个逐函数旧分支编译变异和9／28／5回归通过，330项来源摘要匹配；完整门仍须最终终态确认，不能据此关闭故事。
+
 - 时间生成增量三路只读复核：blind和verification-gap无发现。edge提出“TickType大于UINT32_MAX会导致纳秒溢出”：false（当前生成Counter的合法值域），实际Os_Types.h的TickType为uint64_t，不能以C类型宽度驳回。原生Os_TimeValidate也明确拒绝maximum>UINT32_MAX，生成器的ScheduleContract.counter_maximum来自parse::<u32>()，当前Counter配置最大65535；已校验分辨率为1ms，生成转换宏明确支持0..UINT32_MAX，比全部合法配置Counter值域更宽，最大支持参数的纳秒乘积4294967295000000小于UINT64_MAX。更大的TickType虽可在C中表达，但超出这一生成Counter／转换契约，不能声称已支持任意64位数的纳秒转换。保留真实UINT32_MAX边界断言及上述显式契约，不把uint64类型误记为uint32。整体507／C221及独立出口仍开放。
 
 - Counter／RTE公共类型增量blind、edge、verification-gap三路独立只读复核均无发现。范围为唯一uint32 Counter定义、uint64时间类型、六包含顺序、17原生拒绝向量、三个实际旧宽度变异及生成离线消费者；不以该增量关闭507行或完整故事。
@@ -136,6 +148,8 @@ ErrorHook独立增量已接入25个标准StatusType服务边界、有类型参�
 - 容量独立增量三路blind／edge／verification-gap均未发现可定位缺陷或验证缺口；完整故事的Hook/错误/ISR工作仍开放。正式容量/真实生成两项测试163.73s通过；18容量、40受控时间、43计时向量封存，26最低容量义务直接映射到四个主场景，部分静态exit1原样保留。容量增量完整门exit0：85个集成测试（660.24s）、29Python、UI/桌面构建和两组Clippy通过；本故事Hook/错误/ISR仍未完成，sprint保持in-progress。
 
 ## Verification
+
+00367非Status服务增量最终完整门exit0：96个核心集成测试1171.43s、29Python、增量格式／C99、UI lint/build、桌面build及两组Clippy全部通过。十个实际调用／Hook过程保留invalid值、忽略动作、原StatusType有类型快照与ErrorHook递归抑制；9调用／28配对／5idle回归保留所有StatusType、输出和pending／wake断言，只按原文纠正五类非Status错误报告预期。五个逐函数恢复旧Os.c分支的真实程序均被原生断言以关闭7识别；失败ShutdownHook保留原失败并返回，使实际进程完成退出，未以超时冒充行为通过。12单元部分静态exit1诊断保留；六工件330项产品来源摘要与最终来源一致。三路独立复核均完成无发现；四个规范行有新限定证据，507行／分类不变，70行有增量关联，全部最终结果仍待评估。原始门日志.scratch/epic4/story418-nonstatus-full-gate.log及同名.exit保留；4.18／Epic4仍in-progress。下一00809重复源控制、兼容声明／公共接口、标准模式、向量／Memory Mapping／RTE服务与完整C221／ARTI／交接出口不得据此关闭。
 
 时间生成增量完整门exit0：95个核心集成测试1162.63s、29Python、增量格式／C99、UI lint/build、桌面build及两组Clippy均通过；正式epic4_generated_counter_timing_contracts在最终门重新生成／编译并通过。两种Counter名称共64字面值／单次求值／表达式向量，四个实际坏比例／重复求值变异和三种不支持分辨率拒绝均通过；两个实际生成头消费者部分静态exit1诊断保留。14项产品源码摘要及两种生成Os_Counter／Os_Cfg摘要与最终门来源一致。三路独立复核完成，唯一宽Tick疑问已按实际uint64类型、原生／生成32位Counter最大值限制及显式转换契约驳回，没有弱化已有断言。三个规范义务增加限定证据关联，全部507封存行与160／346／1分类不变，69行有增量关联，全部最终结果仍待逐项核查。完整门日志.scratch/epic4/story418-generated-time-full-gate.log及同名.exit保留，4.18／Epic4保持in-progress；下一00367非Status服务错误Hook修正、向量段／Memory Mapping／RTE服务、C221及最终独立出口仍须完成。
 

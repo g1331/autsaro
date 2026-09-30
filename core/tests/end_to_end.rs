@@ -144,6 +144,28 @@ fn epic4_obligation_and_oracle_baseline() {
 
 #[cfg(windows)]
 #[test]
+fn epic4_nonstatus_service_errors() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let output = Command::new("python")
+        .arg(root.join("scripts/epic4_os.py"))
+        .args(["--suite", "nonstatus-errors"])
+        .current_dir(root)
+        .output()
+        .expect("run actual non-StatusType service error-reporting vectors");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "epic4_nonstatus_service_errors PASS: 10 native vectors"
+    );
+}
+
+#[cfg(windows)]
+#[test]
 fn epic4_os_public_type_contracts() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let output = Command::new("python")

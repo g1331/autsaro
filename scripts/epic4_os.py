@@ -862,7 +862,7 @@ def check_stack(binary: Path) -> list[dict]:
 
 def check_interrupt_pairing(binary: Path) -> list[dict]:
     service_ids = [128,129,130,131,132,133,134,135,136,137,138,139,
-                   15,16,17,140,141,142,143,144,7,8,9,10,14,153,1,151,152,29,54]
+                   15,16,17,140,141,142,143,144,7,8,9,10,14,29]
     cases = {
         "disable": (1, 1, 0, "CO"),
         "all-nested": (1, 1, 0, "NCO"),
@@ -871,9 +871,9 @@ def check_interrupt_pairing(binary: Path) -> list[dict]:
         "all-os": (1, 1, 0, "CO"),
         "unmatched": (1, 1, 0, "CO"),
         "hook-allowed": (1, 1, 0, "CO"),
-        "services-disable": (1, 1, 31, "CO"),
-        "services-all": (1, 1, 31, "CO"),
-        "services-os": (1, 1, 31, "CO"),
+        "services-disable": (1, 1, 26, "CO"),
+        "services-all": (1, 1, 26, "CO"),
+        "services-os": (1, 1, 26, "CO"),
         "isr-balanced": (1, 1, 0, "CO"),
         "isr-leak-disable": (1, 1, 1, "CO"),
         "isr-leak-all": (1, 1, 1, "CO"),
@@ -940,13 +940,8 @@ def check_calling_context(binary: Path) -> list[dict]:
         elif scenario == "shutdown":
             error_expected = []
         else:
-            error_expected = [] if scenario == "outside-isr" else [(9,service) for service in [128,153,1,29,54,151,152]]
+            error_expected = [] if scenario == "outside-isr" else [(9,service) for service in [128,29]]
             error_expected += [(status, service) for status, service in zip(expected, ids) if status]
-            if scenario in ["alarm-callback", "outside-isr"]:
-                error_expected += [(2,153)]
-            error_expected += [(2,1),(2,152)]
-            if scenario in ["pre", "post", "alarm-callback", "outside-isr"]:
-                error_expected += [(2,151)]
         reason = 8 if scenario.endswith("-shutdown") else 0
         result = execute(binary, scenario)
         actual = [(int(status),int(service)) for status,service in re.findall(
@@ -971,7 +966,7 @@ def check_idle_state(binary: Path) -> list[dict]:
     cases = {
         "valid": [(2,29)],
         "invalid": [(2,29),(3,29)],
-        "masked": [(2,29),(9,29),(9,54)],
+        "masked": [(2,29),(9,29)],
         "isr": [(2,29)],
         "unconfigured": [],
     }
@@ -985,6 +980,22 @@ def check_idle_state(binary: Path) -> list[dict]:
         require("lifecycle=Closed state=Ready reason=0" in result["stdout"], result)
         result["independent_expected_errors"] = expected
         result["scope"] = "single-core ignores CoreID65535; existing virtual-core no-halt idle loop runs on actual I stack then actual ISR wakes waiting automotive Task; started query remains DRAFT"
+        observations.append(result)
+    return observations
+
+
+def check_nonstatus_errors(binary: Path) -> list[dict]:
+    observations = []
+    for scenario in ["task", "isr", "cat1", "startup", "pre", "post", "shutdown",
+                     "alarm", "error", "unconfigured"]:
+        result = execute(binary, scenario)
+        errors = 0 if scenario == "unconfigured" else 1
+        expected = f"nonstatus scenario={scenario} probes=1 errors={errors} snapshot=pass reason=0"
+        require(result["exit"] == 0 and not result["stderr"], result)
+        require(expected in result["stdout"], result)
+        require("lifecycle=Closed state=Ready reason=0" in result["stdout"], result)
+        result["independent_expected"] = expected
+        result["scope"] = "Real native caller/Hook; ignored void/scalar services never report; StatusType ActivateTask retains one typed error and ErrorHook snapshot"
         observations.append(result)
     return observations
 
@@ -1284,6 +1295,7 @@ def main() -> None:
             "isr-cleanup",
             "nested-interrupts",
             "counter-types",
+            "nonstatus-errors",
             "calling-context",
             "idle-state",
         ],
@@ -1315,6 +1327,7 @@ def main() -> None:
             "isr-cleanup": "isr_cleanup.c",
             "nested-interrupts": "nested_interrupts.c",
             "counter-types": "counter_types.c",
+            "nonstatus-errors": "nonstatus_errors.c",
             "calling-context": "calling_context.c",
             "idle-state": "idle_state.c",
         }
@@ -1335,6 +1348,7 @@ def main() -> None:
             "isr-cleanup": check_isr_cleanup,
             "nested-interrupts": check_nested_interrupts,
             "counter-types": check_counter_types,
+            "nonstatus-errors": check_nonstatus_errors,
             "calling-context": check_calling_context,
             "idle-state": check_idle_state,
         }
@@ -1392,6 +1406,7 @@ def main() -> None:
             "isr-cleanup": "epic4_category2_exit_cleanup",
             "nested-interrupts": "epic4_nested_interrupts",
             "counter-types": "epic4_public_counter_types",
+            "nonstatus-errors": "epic4_nonstatus_service_errors",
             "calling-context": "epic4_standard_calling_context",
             "idle-state": "epic4_standard_idle_and_started_state",
         }
