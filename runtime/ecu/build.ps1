@@ -99,8 +99,10 @@ $includeFlags = @('-I', (Join-Path $projectRoot 'include'),
     '-I', (Join-Path $projectRoot 'os'), '-I', (Join-Path $projectRoot 'os/include'),
     '-I', (Join-Path $projectRoot 'os/src'), '-I', (Join-Path $kernelCopy 'include'),
     '-I', (Join-Path $kernelCopy 'portable/MSVC-MingW'))
-$sources = @($names | Where-Object { $_ -match '^(src|os/src)/[^/]+\.c$' } |
-    ForEach-Object { Join-Path $projectRoot $_ })
+$sources = @($names | Where-Object {
+    $_ -match '^(src|os/src)/[^/]+\.c$' -or
+    $_ -match '^os/src/host/windows/[^/]+\.c$'
+} | ForEach-Object { Join-Path $projectRoot $_ })
 $sources = @($sources | Where-Object { $_ -ne (Join-Path $projectRoot 'src/ecu_probe.c') -and
     $_ -ne (Join-Path $projectRoot 'src/ecu_host_batch.c') })
 if (-not $ControlSource) {

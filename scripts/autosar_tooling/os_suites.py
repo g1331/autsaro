@@ -1,20 +1,134 @@
-"""Build and independently verify the fixed offline Epic 4 OS target."""
+"""Independent native C99 consumers of the controlled automotive OS."""
 
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+from ecu_tools.owner import Owner, OwnershipError
+from ecu_tools.process import OwnedProcess, ProcessSpec
+
+ROOT = Path(__file__).resolve().parents[2]
 KERNEL = ROOT / "third_party/freertos"
 TARGET = ROOT / "runtime/os"
+
+SUITES = (
+    "lifecycle", "stack", "activation", "finish", "resources", "events",
+    "time", "sc1-timing", "public-types", "public-compatibility",
+    "capacity", "error-hooks", "task-hooks", "returned-task",
+    "interrupt-pairing", "isr-cleanup", "nested-interrupts",
+    "counter-types", "nonstatus-errors", "source-repetition",
+    "entry-bodies", "vector-section", "memory-mapping", "status-modes",
+    "calling-context", "idle-state",
+)
+
+
+@dataclass(frozen=True)
+class NativeSession:
+    owner: Owner | None
+    workspace: Path
+    suite: str
+
+
+_SESSION: ContextVar[NativeSession | None] = ContextVar("os_native_session", default=None)
+_TARGET_ID: ContextVar[str] = ContextVar("os_target", default="windows-x64-controlled-v1")
+
+
+@contextmanager
+def native_session(workspace: Path, suite: str) -> Iterator[None]:
+    inherited = os.name != "nt" and os.environ.get("ECU_OWNER_SOCKET") is not None
+    owner = None if os.name == "nt" else Owner.inherited() if inherited else Owner.start()
+    token = _SESSION.set(NativeSession(owner, workspace, suite))
+    try:
+        yield
+    finally:
+        _SESSION.reset(token)
+        if owner is not None and not inherited:
+            owner.close()
+
+
+@contextmanager
+def retained_workspace() -> Iterator[Path]:
+    if os.name == "nt":
+        parent = Path(tempfile.gettempdir())
+    else:
+        parent = Path.home() / ".cache" / "autosar-os"
+        parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        if parent.is_symlink() or parent.stat().st_mode & 0o077:
+            raise OwnershipError(f"Native OS artifact root must be private: {parent}")
+    workspace = Path(tempfile.mkdtemp(prefix="autosar-os-", dir=parent))
+    try:
+        yield workspace
+    except BaseException:
+        print(f"os_suite_artifacts={workspace}", file=sys.stderr, flush=True)
+        raise
+    else:
+        shutil.rmtree(workspace)
+
+
+def run_native(
+    argv: list[str],
+    *,
+    cwd: Path | None = None,
+    env: dict[str, str] | None = None,
+    timeout: int = 180,
+    check: bool = False,
+    input: str | None = None,
+    capture_output: bool = True,
+    text: bool = True,
+) -> subprocess.CompletedProcess[str]:
+    """Launch one bounded argv; log capture remains private until suite success."""
+    session = _SESSION.get()
+    if session is None:
+        raise OwnershipError("Native OS command requires a live owner session")
+    if not capture_output and not check:
+        raise ValueError("A native observation must capture or check its result")
+    if input is not None and not text:
+        raise ValueError("Native OS compiler input must be text")
+    args = [str(argument) for argument in argv]
+    if input is not None:
+        if args.count("-") != 1:
+            raise ValueError("Native compiler input requires one stdin source operand")
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", suffix=".c",
+            prefix="native-input-", dir=session.workspace, delete=False,
+        ) as source:
+            source.write(input)
+            args[args.index("-")] = source.name
+    executable = shutil.which(args[0]) if not Path(args[0]).is_absolute() else args[0]
+    if executable is None:
+        raise FileNotFoundError(f"Native OS executable not found: {args[0]}")
+    args[0] = str(Path(executable).resolve())
+    stage = f"os:{session.suite}:{Path(args[0]).name}"
+    spec = ProcessSpec.seconds(
+        args, Path(cwd or ROOT).resolve(), timeout, session.workspace, stage, env,
+    )
+    result = OwnedProcess(spec, owner=session.owner).wait()
+    for log in (result.stdout, result.stderr):
+        if log.stat().st_size > 1_048_576:
+            raise OwnershipError(f"{stage}: capture exceeded 1 MiB: {log}")
+    stdout = result.stdout.read_text(encoding="utf-8")
+    stderr = result.stderr.read_text(encoding="utf-8")
+    if result.status != "exited" or result.exit_code is None or (
+        check and result.exit_code != 0
+    ):
+        raise OwnershipError(
+            f"{stage}: argv={args!r} deadline_ns={spec.deadline_ns} "
+            f"status={result.status} exit_code={result.exit_code} "
+            f"stdout={result.stdout} stderr={result.stderr}"
+        )
+    return subprocess.CompletedProcess(args, result.exit_code, stdout, stderr)
 
 
 def verify_sources(kernel: Path = KERNEL) -> dict:
@@ -26,20 +140,28 @@ def verify_sources(kernel: Path = KERNEL) -> dict:
             raise ValueError(f"kernel digest mismatch: {name}")
     if manifest["license"] != "MIT":
         raise ValueError("kernel license mismatch")
+    if _TARGET_ID.get() == "linux-x64-controlled-v1":
+        posix = json.loads(
+            (kernel / "posix-source-manifest.json").read_text(encoding="utf-8")
+        )
+        if (
+            posix["commit"] != manifest["commit"]
+            or posix["archive_sha256"] != manifest["archive_sha256"]
+            or posix["license"] != manifest["license"]
+        ):
+            raise ValueError("fixed POSIX port identity mismatch")
+        for name, expected in posix["files"].items():
+            if hashlib.sha256((kernel / name).read_bytes()).hexdigest() != expected:
+                raise ValueError(f"POSIX port digest mismatch: {name}")
     return manifest
 
 
 def compiler() -> str:
     cc = os.environ.get("AUTOSAR_CC", "gcc")
-    version = subprocess.run(
-        [cc, "--version"], capture_output=True, text=True, check=True
-    )
-    machine = subprocess.run(
-        [cc, "-dumpmachine"], capture_output=True, text=True, check=True
-    )
-    pinned = json.loads(
-        (TARGET / "toolchain.json").read_text(encoding="utf-8")
-    )
+    version = run_native([cc, "--version"], capture_output=True, text=True, check=True, timeout=30)
+    machine = run_native([cc, "-dumpmachine"], capture_output=True, text=True, check=True, timeout=30)
+    pinned_path = "toolchain-linux.json" if _TARGET_ID.get() == "linux-x64-controlled-v1" else "toolchain.json"
+    pinned = json.loads((TARGET / pinned_path).read_text(encoding="utf-8"))
     executable = Path(shutil.which(cc) or cc)
     if (
         compiler_description(version.stdout.splitlines()[0])
@@ -48,7 +170,12 @@ def compiler() -> str:
         or hashlib.sha256(executable.read_bytes()).hexdigest()
         != pinned["executable_sha256"]
     ):
-        raise ValueError("target requires GCC 16.1.0 x86_64-w64-mingw32")
+        raise ValueError(f"native OS toolchain identity mismatch: {pinned['identity']}")
+    if _TARGET_ID.get() == "linux-x64-controlled-v1":
+        for name, field in (("objdump", "objdump_sha256"), ("nm", "nm_sha256")):
+            native_tool = executable.parent / name
+            if hashlib.sha256(native_tool.read_bytes()).hexdigest() != pinned[field]:
+                raise ValueError(f"native OS binutils identity mismatch: {name}")
     return cc
 
 
@@ -59,9 +186,7 @@ def compiler_description(identity: str) -> str:
 
 
 def verify_vector_section(binary: Path, tool: Path) -> None:
-    sections = subprocess.run(
-        [str(tool), "-h", str(binary)], capture_output=True, text=True, check=True
-    ).stdout
+    sections = run_native([str(tool), "-h", str(binary)], capture_output=True, text=True, check=True).stdout
     matches = list(re.finditer(
         r"^\s*(\d+)\s+\.os_vec\s+([0-9a-fA-F]+)[^\n]*\n([^\n]+)",
         sections, re.MULTILINE,
@@ -71,17 +196,22 @@ def verify_vector_section(binary: Path, tool: Path) -> None:
     flags = matches[0][3]
     if "DATA" not in flags or "READONLY" in flags or "ALLOC" not in flags:
         raise ValueError("native interrupt vector section must be writable allocated data")
-    symbols = subprocess.run(
-        [str(tool), "-t", str(binary)], capture_output=True, text=True, check=True
-    ).stdout
-    tables = list(re.finditer(
-        r"\(sec\s+(\d+)\)[^\n]*\s0x([0-9a-fA-F]+)\s+Os_InterruptVectorTable$",
-        symbols, re.MULTILINE,
-    ))
-    if (len(tables) != 1 or int(tables[0][1]) != int(matches[0][1]) + 1
-            or int(tables[0][2], 16) != 0):
-        raise ValueError("the actual interrupt vector table is not in its dedicated section")
-
+    symbols = run_native([str(tool), "-t", str(binary)], capture_output=True, text=True, check=True).stdout
+    if _TARGET_ID.get() == "linux-x64-controlled-v1":
+        tables = re.findall(
+            r"^[0-9a-fA-F]+\s+g\s+O\s+\.os_vec\s+([0-9a-fA-F]+)\s+Os_InterruptVectorTable$",
+            symbols, re.MULTILINE,
+        )
+        if len(tables) != 1 or int(tables[0], 16) != 32 * 8:
+            raise ValueError("ELF interrupt vector symbol is not in .os_vec")
+    else:
+        tables = list(re.finditer(
+            r"\(sec\s+(\d+)\)[^\n]*\s0x([0-9a-fA-F]+)\s+Os_InterruptVectorTable$",
+            symbols, re.MULTILINE,
+        ))
+        if (len(tables) != 1 or int(tables[0][1]) != int(matches[0][1]) + 1
+                or int(tables[0][2], 16) != 0):
+            raise ValueError("PE interrupt vector table is not in its dedicated section")
 
 def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...] = (),
           target: Path | None = None,
@@ -91,38 +221,64 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
     cc = compiler()
     copied = directory / "kernel"
     shutil.copytree(KERNEL, copied)
-    patches = sorted((target / "patches").glob("*.patch"))
-    for patch in patches:
-        subprocess.run(
-            ["git", "apply", "--ignore-space-change", "--check", str(patch)],
-            cwd=copied,
-            check=True,
-        )
-        subprocess.run(
-            ["git", "apply", "--ignore-space-change", str(patch)],
-            cwd=copied,
-            check=True,
-        )
-    binary = directory / "os_harness.exe"
+    linux = _TARGET_ID.get() == "linux-x64-controlled-v1"
+    if linux:
+        for name, includes in (
+            ("0003-activation-ready-policy.patch", ("tasks.c", "include/task.h", "include/FreeRTOS.h")),
+            ("0007-controlled-tick.patch", ("tasks.c",)),
+            ("0008-task-hook-boundaries.patch", ("tasks.c",)),
+        ):
+            patch = target / "patches" / name
+            selection = [f"--include={path}" for path in includes]
+            for check in (True, False):
+                run_native(
+                    ["git", "apply", "--ignore-space-change", *selection,
+                     *(["--check"] if check else []), str(patch)],
+                    cwd=copied, check=True,
+                )
+        for patch in sorted((target / "patches/linux").glob("*.patch")):
+            for check in (True, False):
+                run_native(
+                    ["git", "apply", "--ignore-space-change",
+                     *(["--check"] if check else []), str(patch)],
+                    cwd=copied, check=True,
+                )
+    else:
+        for patch in sorted((target / "patches").glob("*.patch")):
+            for check in (True, False):
+                run_native(
+                    ["git", "apply", "--ignore-space-change",
+                     *(["--check"] if check else []), str(patch)],
+                    cwd=copied, check=True,
+                )
+    binary = directory / ("os_harness" if linux else "os_harness.exe")
+    native_sources = (
+        [
+            target / "src/host/linux/Os_StackLinux.c",
+            target / "src/host/linux/Os_HostLinux.c",
+            copied / "portable/ThirdParty/GCC/Posix/port.c",
+        ]
+        if linux else
+        [
+            target / "src/Os_Stack.c",
+            target / "src/host/windows/Os_HostWindows.c",
+            copied / "portable/MSVC-MingW/port.c",
+        ]
+    )
     command = [
         cc,
-        "-std=c99",
-        "-O1",
-        "-Wall",
-        "-Wextra",
-        "-Werror",
-        "-I",
-        str(target),
-        "-I",
-        str(target / "include"),
-        "-I",
-        str(target / "src"),
-        "-I",
-        str(ROOT / "runtime/include"),
-        "-I",
-        str(copied / "include"),
-        "-I",
-        str(copied / "portable/MSVC-MingW"),
+        "-std=c99", "-O1", "-Wall", "-Wextra", "-Werror",
+        *(["-D_GNU_SOURCE", "-pthread"] if linux else []),
+        "-I", str(target),
+        "-I", str(target / "include"),
+        "-I", str(target / "src"),
+        *(
+            ["-I", str(target / "src/host/linux")]
+            if linux else []
+        ),
+        "-I", str(ROOT / "runtime/include"),
+        "-I", str(copied / "include"),
+        "-I", str(copied / ("portable/ThirdParty/GCC/Posix" if linux else "portable/MSVC-MingW")),
         str(target / "src/Os.c"),
         str(target / "src/Os_Error.c"),
         str(target / "src/Arti.c"),
@@ -131,8 +287,7 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
         str(target / "src/Os_Interrupt.c"),
         str(target / "src/Os_Backend.c"),
         str(target / "src/Os_Vector.c"),
-        str(target / "src/Os_Stack.c"),
-        str(target / "src/Os_HostEvent.c"),
+        *(str(source) for source in native_sources),
         str(target / "src/Os_Mailbox.c"),
         str(target / "src/Os_Time.c"),
         str(target / "src/Os_Schedule.c"),
@@ -140,10 +295,8 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
         str(copied / "tasks.c"),
         str(copied / "list.c"),
         str(copied / "queue.c"),
-        str(copied / "portable/MSVC-MingW/port.c"),
-        "-lwinmm",
-        "-o",
-        str(binary),
+        *(["-pthread"] if linux else ["-lwinmm"]),
+        "-o", str(binary),
     ]
     command[1:1] = ["-D" + value for value in defines]
     command[1:1] = [str(source) for source in extra_sources]
@@ -161,14 +314,12 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
         command.insert(1, "-DOS_TIME_TESTS")
     if harness == "idle_state.c":
         command.insert(1, "-DOS_IDLE_TESTS")
-    compiled = subprocess.run(command, capture_output=True, text=True, check=False)
+    compiled = run_native(command, capture_output=True, text=True, check=False)
     if compiled.returncode:
         raise RuntimeError(f"OS C99 build failed:\n{compiled.stdout}{compiled.stderr}")
-    tool = Path(shutil.which(cc) or cc).parent / "objdump.exe"
-    symbols = subprocess.run(
-        [str(tool), "-t", str(binary)], capture_output=True, text=True, check=True
-    ).stdout
-    if "__emutls" in symbols:
+    tool = Path(shutil.which(cc) or cc).parent / ("objdump" if linux else "objdump.exe")
+    symbols = run_native([str(tool), "-t", str(binary)], capture_output=True, text=True, check=True).stdout
+    if not linux and "__emutls" in symbols:
         raise ValueError(
             "native exception path requires PE TLS without emutls allocation"
         )
@@ -186,14 +337,12 @@ def execute(
         env["AUTOSAR_OS_BAD_GUARANTEE"] = invalid_stack
     if failure:
         env["AUTOSAR_OS_FAIL_RESOURCE"] = str(failure)
-    result = subprocess.run(
-        [str(binary), scenario],
-        env=env,
-        timeout=10,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    result = run_native([str(binary), scenario],
+    env=env,
+    timeout=10,
+    capture_output=True,
+    text=True,
+    check=False,)
     return {
         "scenario": scenario,
         "failure": failure,
@@ -709,6 +858,8 @@ def check_lifecycle(binary: Path) -> list[dict]:
 
 def check_stack(binary: Path) -> list[dict]:
     observations = []
+    linux = _TARGET_ID.get() == "linux-x64-controlled-v1"
+    fault_field = "signal" if linux else "exception"
     for scenario, role, code in [
         ("normal", None, None),
         ("task", "T", "C00000FD"),
@@ -723,15 +874,32 @@ def check_stack(binary: Path) -> list[dict]:
     ]:
         result = execute(binary, scenario)
         output = result["stdout"]
+        if linux and role:
+            code = "0000000B"
         require(result["exit"] == (0 if role is None else 13), result)
         require("captured=1" in output if role else "FAULT" not in output, result)
         require("X" not in output.split("trace=")[1].split()[0], result)
         require("D" in output.split("trace=")[1].split()[0], result)
         if role:
             require(
-                f"FAULT role={role} " in output and f"exception={code}" in output,
-                result,
+                f"FAULT role={role} " in output
+                and f"{fault_field}={code}" in output, result,
             )
+            if linux:
+                fault = next(
+                    dict(field.split("=", 1) for field in line.split()[1:])
+                    for line in output.splitlines()
+                    if line.startswith(f"FAULT role={role} ")
+                )
+                native = next(
+                    dict(field.split("=", 1) for field in line.split()[1:])
+                    for line in output.splitlines()
+                    if line.startswith(f"STACK role={role} ")
+                )
+                require(
+                    int(native["low"]) <= int(fault["address"])
+                    < int(native["low"]) + int(native["guard"]), result,
+                )
         records = [
             dict(field.split("=", 1) for field in line.split()[1:])
             for line in output.splitlines()
@@ -744,10 +912,19 @@ def check_stack(binary: Path) -> list[dict]:
             require(
                 int(record["commit"]) > 0
                 and int(record["guard"]) >= 4096
-                and int(record["guarantee"]) >= 16384
                 and int(record["observations"]) > 0,
                 result,
             )
+            if linux:
+                require(
+                    int(record["altstack"]) >= 65536
+                    and record["context"] == "linux-x86_64-ucontext"
+                    and record["valid"] in {"0", "1"}
+                    and int(record["commit"]) + int(record["guard"]) == int(record["reserve"]),
+                    result,
+                )
+            else:
+                require(int(record["guarantee"]) >= 16384, result)
             if record["role"] != "S":
                 require(int(record["reserve"]) == 262144, result)
             if record["role"] in {"T", "B", "I"}:
@@ -774,7 +951,9 @@ def check_stack(binary: Path) -> list[dict]:
     require({fault["role"] for fault in fault_lines} == {"T", "D"}, concurrent)
     for fault in fault_lines:
         require(
-            fault["role"] in {"T", "D"} and fault["exception"] == "C00000FD", concurrent
+            fault["role"] in {"T", "D"}
+            and fault[fault_field] == ("0000000B" if linux else "C00000FD"),
+            concurrent,
         )
         require(
             any(
@@ -791,7 +970,7 @@ def check_stack(binary: Path) -> list[dict]:
     )
     require(
         "FAULT role=C " in double["stdout"]
-        and "exception=C00000FD" in double["stdout"],
+        and f"{fault_field}={'0000000B' if linux else 'C00000FD'}" in double["stdout"],
         double,
     )
     observations.append(double)
@@ -803,13 +982,14 @@ def check_stack(binary: Path) -> list[dict]:
     )
     require(
         "FAULT role=C " in output_failure["stderr"]
-        and "exception=C00000FD" in output_failure["stderr"],
+        and f"{fault_field}={'0000000B' if linux else 'C00000FD'}" in output_failure["stderr"],
         output_failure,
     )
     observations.append(output_failure)
     unrelated = execute(binary, "unrelated")
     require(
-        unrelated["exit"] & 0xFFFFFFFF == 0xC0000005
+        (unrelated["exit"] == 7 if linux else
+         unrelated["exit"] & 0xFFFFFFFF == 0xC0000005)
         and "FAULT" not in unrelated["stdout"],
         unrelated,
     )
@@ -961,11 +1141,9 @@ def check_idle_state(binary: Path) -> list[dict]:
 
 
 def check_status_modes(directory: Path) -> list[dict]:
-    invalid = subprocess.run(
-        [compiler(), "-std=c99", "-E", "-x", "c", "-", "-DOS_STATUS_EXTENDED=2",
-         "-I", str(TARGET / "include")],
-        input='#include "Os_Cfg.h"\n', capture_output=True, text=True, timeout=20,
-    )
+    invalid = run_native([compiler(), "-std=c99", "-E", "-x", "c", "-", "-DOS_STATUS_EXTENDED=2",
+     "-I", str(TARGET / "include")],
+    input='#include "Os_Cfg.h"\n', capture_output=True, text=True, timeout=20,)
     require(invalid.returncode != 0 and "Invalid OS status configuration" in invalid.stderr,
             {"stdout": invalid.stdout, "stderr": invalid.stderr, "exit": invalid.returncode})
     observations = []
@@ -1200,11 +1378,35 @@ def check_arti(binary: Path) -> list[dict]:
     return observations
 
 
+def verify_arti_elf(binary: Path) -> None:
+    toolchain = Path(shutil.which(os.environ.get("AUTOSAR_CC", "gcc")) or "gcc").parent
+    header = run_native(
+        [str(toolchain / "objdump"), "-f", str(binary)], check=True,
+    ).stdout
+    require("file format elf64-x86-64" in header and
+            "architecture: i386:x86-64" in header, header)
+    symbols = run_native(
+        [str(toolchain / "nm"), "--print-size", str(binary)], check=True,
+    ).stdout
+    sizes = {
+        columns[3]: int(columns[1], 16)
+        for line in symbols.splitlines()
+        if len(columns := line.split()) == 4
+    }
+    require(all(sizes.get(name) == 4 for name in (
+        "Arti_EventCount", "Arti_EventsDropped", "Arti_DevelopmentError",
+    )), sizes)
+    require(sizes.get("Os_ArtiNativeContextSize") == 8 and
+            sizes.get("Os_ArtiTaskContexts") == 16 * 8, sizes)
+
+
 def check_arti_native(directory: Path) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     task_dir = directory / "tasks"
     task_dir.mkdir()
     binary, _ = build(task_dir, "arti.c", ("OS_ARTI_TESTS",))
+    if _TARGET_ID.get() == "linux-x64-controlled-v1":
+        verify_arti_elf(binary)
     observations = check_arti(binary)
     nested_dir = directory / "nested"
     nested_dir.mkdir()
@@ -1350,9 +1552,11 @@ def check_capacity(binary: Path) -> list[dict]:
 
 
 def check_public_types(directory: Path) -> None:
-    binary = directory / "public_types.exe"
+    linux = _TARGET_ID.get() == "linux-x64-controlled-v1"
+    binary = directory / ("public_types" if linux else "public_types.exe")
     command = [
         compiler(), "-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic",
+        *(["-D_GNU_SOURCE", "-pthread"] if linux else []),
         "-I" + str(TARGET / "include"), str(TARGET / "tests/public_types.c"),
         "-I" + str(ROOT / "runtime/include"),
         "-o", str(binary),
@@ -1360,39 +1564,44 @@ def check_public_types(directory: Path) -> None:
     expected = "public_types range_and_pointer_contracts=pass access_truth_table=16\n"
     for name, extra in [
         ("header-only", []),
-        ("windows-before", ["-DOS_PUBLIC_TYPES_WINDOWS_BEFORE"]),
-        ("windows-after", ["-DOS_PUBLIC_TYPES_WINDOWS_AFTER"]),
+        ("host-before", ["-DOS_PUBLIC_TYPES_HOST_BEFORE"]),
+        ("host-after", ["-DOS_PUBLIC_TYPES_HOST_AFTER"]),
         ("rte-before-os", ["-DOS_PUBLIC_RTE_BEFORE"]),
-        ("rte-windows-before", ["-DOS_PUBLIC_RTE_BEFORE", "-DOS_PUBLIC_TYPES_WINDOWS_BEFORE"]),
-        ("rte-windows-after", ["-DOS_PUBLIC_RTE_BEFORE", "-DOS_PUBLIC_TYPES_WINDOWS_AFTER"]),
+        ("rte-host-before", ["-DOS_PUBLIC_RTE_BEFORE", "-DOS_PUBLIC_TYPES_HOST_BEFORE"]),
+        ("rte-host-after", ["-DOS_PUBLIC_RTE_BEFORE", "-DOS_PUBLIC_TYPES_HOST_AFTER"]),
     ]:
-        actual_command = command + ["-I" + str(TARGET / "src")] + extra
-        subprocess.run(actual_command, capture_output=True, text=True, check=True)
-        result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=5)
+        actual_command = command + ["-I" + str(TARGET / "src")] + (
+            ["-I" + str(TARGET / "src/host/linux")] if linux else []
+        ) + extra
+        run_native(actual_command, capture_output=True, text=True, check=True)
+        result = run_native([str(binary)], capture_output=True, text=True, timeout=5)
         require(result.returncode == 0 and result.stdout == expected and not result.stderr,
                 {"exit": result.returncode, "stdout": result.stdout, "stderr": result.stderr})
 
 
 def check_public_compatibility(directory: Path) -> None:
-    binary = directory / "public_compatibility.exe"
+    linux = _TARGET_ID.get() == "linux-x64-controlled-v1"
+    binary = directory / ("public_compatibility" if linux else "public_compatibility.exe")
     cc = compiler()
-    nm = Path(shutil.which(cc) or cc).with_name("nm.exe")
+    nm = Path(shutil.which(cc) or cc).with_name("nm" if linux else "nm.exe")
     command = [cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic",
+               *(["-D_GNU_SOURCE", "-pthread"] if linux else []),
                "-I" + str(TARGET / "include"), "-I" + str(TARGET / "src"),
+               *(["-I" + str(TARGET / "src/host/linux")] if linux else []),
                "-I" + str(ROOT / "runtime/include"),
                str(TARGET / "tests/public_compatibility.c"), "-o", str(binary)]
     expected = "public_compatibility declarations=16 evaluations=0 error_codes=23 unique=pass\n"
     for name, extra in [
         ("header-only", []),
-        ("windows-before", ["-DOS_PUBLIC_TYPES_WINDOWS_BEFORE"]),
-        ("windows-after", ["-DOS_PUBLIC_TYPES_WINDOWS_AFTER"]),
+        ("host-before", ["-DOS_PUBLIC_TYPES_HOST_BEFORE"]),
+        ("host-after", ["-DOS_PUBLIC_TYPES_HOST_AFTER"]),
         ("rte-before-os", ["-DOS_PUBLIC_RTE_BEFORE"]),
-        ("rte-windows-before", ["-DOS_PUBLIC_RTE_BEFORE", "-DOS_PUBLIC_TYPES_WINDOWS_BEFORE"]),
-        ("rte-windows-after", ["-DOS_PUBLIC_RTE_BEFORE", "-DOS_PUBLIC_TYPES_WINDOWS_AFTER"]),
+        ("rte-host-before", ["-DOS_PUBLIC_RTE_BEFORE", "-DOS_PUBLIC_TYPES_HOST_BEFORE"]),
+        ("rte-host-after", ["-DOS_PUBLIC_RTE_BEFORE", "-DOS_PUBLIC_TYPES_HOST_AFTER"]),
     ]:
         actual_command = command + extra
-        subprocess.run(actual_command, capture_output=True, text=True, check=True, timeout=30)
-        result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=5)
+        run_native(actual_command, capture_output=True, text=True, check=True, timeout=30)
+        result = run_native([str(binary)], capture_output=True, text=True, timeout=5)
         require(result.returncode == 0 and result.stdout == expected and not result.stderr,
                 {"exit": result.returncode, "stdout": result.stdout, "stderr": result.stderr})
         signatures = []
@@ -1403,8 +1612,8 @@ def check_public_compatibility(directory: Path) -> None:
             object_command.append("-c")
             if baseline:
                 object_command.append("-DOS_PUBLIC_COMPAT_BASELINE")
-            subprocess.run(object_command, capture_output=True, text=True, check=True, timeout=30)
-            symbols = subprocess.run([str(nm), "--defined-only", "--format=posix", str(object_file)],
+            run_native(object_command, capture_output=True, text=True, check=True, timeout=30)
+            symbols = run_native([str(nm), "--defined-only", "--format=posix", str(object_file)],
                                      capture_output=True, text=True, check=True, timeout=5)
             signatures.append(sorted(tuple(line.split()[:2]) for line in symbols.stdout.splitlines()))
         require(signatures[0] == signatures[1], {"actual_symbols": signatures[0],
@@ -1422,7 +1631,22 @@ def check_vector_mutations(directory: Path) -> None:
         output = directory / (name + "-build")
         output.mkdir()
         if name == "old-binding":
-            (target / "patches/0014-relocatable-interrupt-vectors.patch").unlink()
+            if _TARGET_ID.get() == "linux-x64-controlled-v1":
+                patch = target / "patches/linux/0001-controlled-posix-port.patch"
+                text = patch.read_text(encoding="utf-8")
+                old = "Os_InterruptVectorTable[interrupt]"
+                require(text.count(old) == 4, "Linux port vector binding mutation did not apply")
+                marker = "+#define PORT_INTERRUPT_COUNT 32u\n \n"
+                require(text.count(marker) == 1, "Linux vector mutation placement changed")
+                text = text.replace(old, "unbound_handlers[interrupt]")
+                text = text.replace(
+                    marker,
+                    "+#define PORT_INTERRUPT_COUNT 32u\n-\n"
+                    "+static uint32_t (*unbound_handlers[PORT_INTERRUPT_COUNT])(void);\n",
+                )
+                patch.write_text(text, encoding="utf-8")
+            else:
+                (target / "patches/0014-relocatable-interrupt-vectors.patch").unlink()
             mutant, _ = build(output, "entry_bodies.c", target=target)
             result = execute(mutant, "normal")
             require(result["exit"] == 7 and not result["stderr"], result)
@@ -1441,7 +1665,7 @@ def check_vector_mutations(directory: Path) -> None:
 
 
 def verify_code_section(binary: Path, tool: Path, names: list[str]) -> None:
-    output = subprocess.run([str(tool), "-h", str(binary)], capture_output=True,
+    output = run_native([str(tool), "-h", str(binary)], capture_output=True,
                             text=True, check=True).stdout
     code = list(re.finditer(
         r"^\s*(\d+)\s+\.os_code\s+([0-9a-fA-F]+)[^\n]*\n([^\n]+)",
@@ -1451,13 +1675,23 @@ def verify_code_section(binary: Path, tool: Path, names: list[str]) -> None:
         raise ValueError("OS entry code section is missing")
     if not all(flag in code[0][3] for flag in ("CODE", "READONLY", "ALLOC")):
         raise ValueError("OS entry section must be allocated read-only executable code")
-    symbols = subprocess.run([str(tool), "-t", str(binary)], capture_output=True,
+    symbols = run_native([str(tool), "-t", str(binary)], capture_output=True,
                              text=True, check=True).stdout
     for name in names:
-        functions = list(re.finditer(r"\(sec\s+(\d+)\)[^\n]*\s" + re.escape(name) + r"$",
-                                    symbols, re.MULTILINE))
-        if len(functions) != 1 or int(functions[0][1]) != int(code[0][1]) + 1:
-            raise ValueError(f"OS entry is outside its code section: {name}")
+        if _TARGET_ID.get() == "linux-x64-controlled-v1":
+            functions = re.findall(
+                r"^[0-9a-fA-F]+\s+g\s+F\s+\.os_code\s+[0-9a-fA-F]+\s+"
+                + re.escape(name) + r"$", symbols, re.MULTILINE,
+            )
+            if len(functions) != 1:
+                raise ValueError(f"ELF OS entry is outside its code section: {name}")
+        else:
+            functions = list(re.finditer(
+                r"\(sec\s+(\d+)\)[^\n]*\s" + re.escape(name) + r"$",
+                symbols, re.MULTILINE,
+            ))
+            if len(functions) != 1 or int(functions[0][1]) != int(code[0][1]) + 1:
+                raise ValueError(f"PE OS entry is outside its code section: {name}")
 
 
 def check_counter_service(directory: Path, project: Path, counter: str) -> None:
@@ -1507,21 +1741,36 @@ def check_counter_service(directory: Path, project: Path, counter: str) -> None:
             raise AssertionError(f"{name} Counter client linked successfully")
 
 
+def arti_native(directory: Path) -> None:
+    if os.name != "nt" or not directory.is_absolute():
+        raise ValueError("Generated ARTI helper requires a Windows absolute output directory")
+    with native_session(directory.parent, "arti-native"):
+        check_arti_native(directory)
+
+
+def counter_service(directory: Path, project: Path, counter: str) -> None:
+    if os.name != "nt" or not directory.is_absolute() or not project.is_absolute():
+        raise ValueError("Generated OS counter helper requires Windows absolute paths")
+    with native_session(directory, "counter-service"):
+        check_counter_service(directory, project, counter)
+
+
 def check_memory_mapping(directory: Path) -> None:
     cc = compiler()
-    tool = Path(shutil.which(cc) or cc).parent / "objdump.exe"
+    linux = _TARGET_ID.get() == "linux-x64-controlled-v1"
+    tool = Path(shutil.which(cc) or cc).parent / ("objdump" if linux else "objdump.exe")
     headers = directory / "include"
     shutil.copytree(TARGET / "include", headers)
     flags = [cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-I", str(headers),
              "-I", str(ROOT / "runtime/include")]
     source = TARGET / "tests/memory_mapping.c"
-    binary = directory / "memory_mapping.exe"
-    subprocess.run([*flags, str(source), "-o", str(binary)], check=True, timeout=60)
+    binary = directory / ("memory_mapping" if linux else "memory_mapping.exe")
+    run_native([*flags, str(source), "-o", str(binary)], check=True, timeout=60)
     names = ["Os_TaskEntry_FirstTask", "Os_TaskEntry_SecondTask", "Os_IsrEntry_FirstISR",
              "Os_IsrEntry_SecondISR", "AlarmBody", "ErrorHook", "PreTaskHook", "PostTaskHook",
              "StartupHook", "ShutdownHook"]
     verify_code_section(binary, tool, names)
-    ran = subprocess.run([str(binary)], capture_output=True, text=True, timeout=5, check=True)
+    ran = run_native([str(binary)], capture_output=True, text=True, timeout=5, check=True)
     require(ran.stdout.strip() == "memory_mapping calls=10" and not ran.stderr, ran.stdout)
     for name, markers, expected in [
         ("nested", ["OS_START_SEC_CODE", "OS_START_SEC_CODE"], "Nested OS code section"),
@@ -1537,7 +1786,7 @@ def check_memory_mapping(directory: Path) -> None:
         else:
             text = '#include "Os.h"\n' + ''.join(
                 f'#define {marker}\n#include "Os_MemMap.h"\n' for marker in markers)
-        rejected = subprocess.run([*flags, "-x", "c", "-fsyntax-only", "-"], input=text,
+        rejected = run_native([*flags, "-x", "c", "-fsyntax-only", "-"], input=text,
                                   capture_output=True, text=True, check=False, timeout=60)
         require(rejected.returncode != 0 and expected in rejected.stderr, rejected.stderr)
     header = headers / "Os_MemMap.h"
@@ -1545,8 +1794,8 @@ def check_memory_mapping(directory: Path) -> None:
     attribute = '__attribute__((section(".os_code")))'
     require(original.count(attribute) == 1, "code-section mutation did not apply")
     header.write_text(original.replace(attribute, ""), encoding="utf-8")
-    mutant = directory / "missing-code-section.exe"
-    subprocess.run([*flags, str(source), "-o", str(mutant)], check=True, timeout=60)
+    mutant = directory / ("missing-code-section" if linux else "missing-code-section.exe")
+    run_native([*flags, str(source), "-o", str(mutant)], check=True, timeout=60)
     try:
         verify_code_section(mutant, tool, names)
     except ValueError as error:
@@ -1555,59 +1804,28 @@ def check_memory_mapping(directory: Path) -> None:
         raise AssertionError("unmapped entry definitions passed the linked section check")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--suite",
-        choices=[
-            "lifecycle",
-            "stack",
-            "activation",
-            "finish",
-            "resources",
-            "events",
-            "time",
-            "sc1-timing",
-            "public-types",
-            "public-compatibility",
-            "capacity",
-            "error-hooks",
-            "task-hooks",
-            "returned-task",
-            "interrupt-pairing",
-            "isr-cleanup",
-            "nested-interrupts",
-            "counter-types",
-            "nonstatus-errors",
-            "source-repetition",
-            "entry-bodies",
-            "vector-section",
-            "memory-mapping",
-            "status-modes",
-            "calling-context",
-            "idle-state",
-        ],
-        default="lifecycle",
-    )
-    args = parser.parse_args()
-    with tempfile.TemporaryDirectory(prefix="autosar-epic4-os-") as temporary:
-        if args.suite == "memory-mapping":
+def run_suite(suite: str) -> None:
+    if suite not in SUITES:
+        raise ValueError(f"Unknown native OS suite: {suite}")
+    with retained_workspace() as temporary, native_session(temporary, suite):
+        if suite == "memory-mapping":
             check_memory_mapping(Path(temporary))
             print("epic4_os_memory_mapping PASS: 10 linked entries; 6 rejected compile/link cases")
             return
-        if args.suite == "vector-section":
+        if suite == "vector-section":
             check_vector_mutations(Path(temporary))
-            print("epic4_interrupt_vector_section PASS: actual Win64 vector table; 2 rejected compiled mutations")
+            target_label = "ELF64" if _TARGET_ID.get() == "linux-x64-controlled-v1" else "Win64"
+            print(f"epic4_interrupt_vector_section PASS: actual {target_label} vector table; 2 rejected compiled mutations")
             return
-        if args.suite == "status-modes":
+        if suite == "status-modes":
             observations = check_status_modes(Path(temporary))
             print("epic4_sc1_status_modes PASS: 2 native status configurations; 18 Standard capacity vectors")
             return
-        if args.suite == "public-types":
+        if suite == "public-types":
             check_public_types(Path(temporary))
             print("epic4_os_public_type_contracts PASS: independent C99 consumer")
             return
-        if args.suite == "public-compatibility":
+        if suite == "public-compatibility":
             check_public_compatibility(Path(temporary))
             print("epic4_os_public_compatibility PASS: 6 independent C99 consumers")
             return
@@ -1657,13 +1875,15 @@ def main() -> None:
             "calling-context": check_calling_context,
             "idle-state": check_idle_state,
         }
-        binary, _ = build(Path(temporary), harnesses[args.suite])
-        observations = checks[args.suite](binary)
-        if args.suite == "counter-types":
+        binary, _ = build(Path(temporary), harnesses[suite])
+        observations = checks[suite](binary)
+        if suite == "stack" and _TARGET_ID.get() == "linux-x64-controlled-v1":
+            check_arti_native(Path(temporary) / "arti-consumers")
+        if suite == "counter-types":
             headers = Path(temporary) / "public-headers"
             headers.mkdir()
             check_public_types(headers)
-        if args.suite == "error-hooks":
+        if suite == "error-hooks":
             for service_access, parameter_access in [(0, 1), (1, 0), (0, 0)]:
                 variant_dir = Path(temporary) / f"macros-{service_access}{parameter_access}"
                 variant_dir.mkdir()
@@ -1672,10 +1892,10 @@ def main() -> None:
                     f"OS_USE_PARAMETER_ACCESS={parameter_access}",
                 ))
                 observations += check_error_hooks(variant, service_access, parameter_access)
-        if args.suite == "sc1-timing":
+        if suite == "sc1-timing":
             clock_dir = Path(temporary) / "host-timer"
             clock_dir.mkdir()
-            clock, clock_sources = build(clock_dir, "controlled_time.c")
+            clock, _ = build(clock_dir, "controlled_time.c")
             for name, epochs, kernels, values in [
                 ("hardware-counter", list(range(1, 21)), list(range(1, 21)), list(range(1, 16)) + [0, 1, 2, 3, 4]),
                 ("hardware-kernel-wrap", [65535, 65536, 65537], [4294967294, 4294967295, 0], [1, 2, 3]),
@@ -1711,10 +1931,26 @@ def main() -> None:
             "calling-context": "epic4_standard_calling_context",
             "idle-state": "epic4_standard_idle_and_started_state",
         }
-        name = names[args.suite]
-        suffix = "; 6 header orders" if args.suite == "counter-types" else ""
+        name = names[suite]
+        suffix = "; 6 header orders" if suite == "counter-types" else ""
         print(f"{name} PASS: {len(observations)} native vectors{suffix}")
 
 
-if __name__ == "__main__":
-    main()
+def run(target: str, suite: str) -> int:
+    if os.name == "nt":
+        host = "windows-x64-controlled-v1"
+    elif sys.platform == "linux":
+        host = "linux-x64-controlled-v1"
+    else:
+        raise ValueError("Native OS suites require Windows or Ubuntu Linux")
+    if target != host:
+        raise ValueError(f"Native OS suite target {target} cannot execute on {host}")
+    if suite != "all" and suite not in SUITES:
+        raise ValueError(f"Unknown native OS suite: {suite}")
+    token = _TARGET_ID.set(target)
+    try:
+        for name in SUITES if suite == "all" else (suite,):
+            run_suite(name)
+    finally:
+        _TARGET_ID.reset(token)
+    return 0

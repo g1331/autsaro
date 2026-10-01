@@ -3,9 +3,9 @@
 
 static Os_InputRecord records[OS_INPUT_CAPACITY];
 static uint64_t last_ticket;
-static volatile LONG published;
+static volatile Os_Atomic32 published;
 /* Acceptance bit0 and permanent-close bit1; close never waits for the producer. */
-static volatile LONG admission;
+static volatile Os_Atomic32 admission;
 
 static uint32_t input_interrupt(void) {
     if (Os_TargetReady() != 0) {
@@ -39,7 +39,7 @@ StatusType Os_TargetPostInput(const uint8_t *data, uint8_t length, uint64_t *tic
     static unsigned write_index;
     StatusType context;
     Os_InputRecord *record;
-    if (Os_StackCurrent() != NULL) {
+    if (Os_BridgeActorAllowed() == 0) {
         return E_OS_CALLEVEL;
     }
     if ((data == NULL) || (ticket == NULL)) {
@@ -74,15 +74,23 @@ StatusType Os_TargetPostInput(const uint8_t *data, uint8_t length, uint64_t *tic
     InterlockedIncrement(&published);
     InterlockedAnd(&admission, ~1L);
     if (Os_TargetReady() != 0) {
-        vPortGenerateSimulatedInterruptFromWindowsThread(OS_INPUT_INTERRUPT);
+        Os_PortPostInterrupt(OS_INPUT_INTERRUPT);
     }
     return E_OK;
 }
+int Os_BridgeActorAllowed(void) {
+    const Os_NativeStack *actor = Os_StackCurrent();
+#ifdef __linux__
+    return actor == NULL || actor->role == 'H';
+#else
+    return actor == NULL;
+#endif
+}
 StatusType Os_BridgeContext(void) {
-    static volatile LONG producer;
+    static volatile Os_Atomic32 producer;
     LONG thread;
     LONG owner;
-    if (Os_StackCurrent() != NULL) {
+    if (Os_BridgeActorAllowed() == 0) {
         return E_OS_CALLEVEL;
     }
     thread = (LONG)GetCurrentThreadId();

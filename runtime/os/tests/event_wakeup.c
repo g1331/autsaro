@@ -383,9 +383,9 @@ void StartupHook(void) {
 void ShutdownHook(StatusType Error) {
     Os_TargetTrace('Z');
     if (printf("event checks=%u rejected=%u records=%u ticket=%llu entries=%u error=%u "
-               "bridge_rejected=%ld\n",
+               "bridge_rejected=%d\n",
                checks, rejects, consumed, (unsigned long long)consumed_ticket, entries, Error,
-               InterlockedCompareExchange(&bridge_rejected, 0, 0)) < 0) {
+               (int)InterlockedCompareExchange(&bridge_rejected, 0, 0)) < 0) {
         ExitProcess(99u);
     }
 }

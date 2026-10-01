@@ -38,9 +38,9 @@ context:
 
 ## Code Map
 
-- `scripts/verify.py`, `scripts/quality.py`, `scripts/epic4_os.py` — 现有命令入口、独立OS消费者与硬编码工具路径；迁移不产生第二套oracle。
+- `scripts/verify.py`, `scripts/quality.py`, `scripts/autosar_tooling/os_suites.py` — 当前开发检查与唯一 OS 独立 C99 消费者入口；Python 统一工具命令待阶段6。
 - `core/src/execution/{mod,unix,windows_job}.rs`, `core/src/integration/{handoff,link_check}.rs` — 阶段1统一owner入口；原Job已迁出integration，link_check待阶段4随产品切换迁移。
-- `runtime/os/`, `runtime/ecu/` — 固定FreeRTOS、Win64 OS与ECU来源，Linux port须先OS后ECU。
+- `runtime/os/`, `runtime/ecu/`, `third_party/freertos/portable/ThirdParty/GCC/Posix/` — 固定内核与原始 POSIX 端口、Win64生产 OS、Linux 独立 OS；Linux ECU 待阶段4。
 - `core/src/integration/ecu.rs`, `core/src/generator.rs`, `core/build.rs` — 计划、静态资源、纯生成及封存入口。
 - `src-tauri/src/lib.rs`, `ui/src/App.tsx` — IPC和多处交付状态归属。
 - `README.md`, `runtime/README.md`, `docs/project/OWNER_GUIDE.md`, `_bmad-output/planning-artifacts/architecture.md` — 能力/安装/职责文字须同步实际门结果。
@@ -50,7 +50,7 @@ context:
 **Execution:**
 - [x] 阶段0：锁环境、doctor、官方Tauri CLI与新克隆Windows/Ubuntu阶段出口。
 - [x] 阶段1：root owner、Windows Job统一及Python/Rust正反probe阶段出口。
-- [ ] 阶段2：Linux受控OS port及两平台26 suite独立阶段出口。
+- [x] 阶段2：Linux受控OS port及两平台26 suite独立阶段出口。
 - [ ] 阶段3：目标/资源/schema/PreparedProject纯源码双平台阶段出口。
 - [ ] 阶段4：双目标ECU、离线包build/verify及搬移阶段出口。
 - [ ] 阶段5：语义策略替代Epic宏及legacy/integration回归阶段出口。
@@ -73,6 +73,10 @@ context:
 - 首次独立Windows源码副本运行`uv run --locked python scripts/verify.py --scope core`得到7个lib单测通过、end_to_end中109通过1失败：独立ARTI消费脚本导入`lxml`，原全局Python有5.4.0而锁定quality环境未声明。将`lxml==5.4.0`加入`quality`组并更新`uv.lock`，新副本`uv sync --locked --group quality`后精确重跑`epic4_arti_description_and_hooks -- --exact`通过，单独core Clippy通过；此前其余109项在同一代码/目标下已通过，不虚构第一次全绿。Ubuntu与Windows两份环境同步该依赖，两个doctor反例单测再次通过。独立桌面及CLI dev仍是阶段0剩余验证。
 - 阶段0出口：独立Windows源码副本`cargo build --locked --manifest-path src-tauri/Cargo.toml`和`cargo build --locked --bin package_host_reference`通过，既有ECU生成/编译与legacy拒绝/回归由本轮core集成用例实际执行。`uv run --locked python scripts/epic4_desktop.py --binary <独立源码副本的真实桌面程序>`在Windows私有Desktop/Job中返回`epic4_isolated_native_ipc PASS`，用户输入桌面未切换。Ubuntu ext4副本core `cargo test --locked --no-run`、desktop `cargo build --locked`通过；私有`:188` Xvfb且强制`GDK_BACKEND=x11`实际执行`npm run tauri --prefix ui -- dev --no-watch`，真实WebKit显示起始页面；首次导入输入工具未保留换行，拼接来源路径后原生UI的`open_project` IPC返回后端`Not a directory (os error 20)`，没有伪造成功或修改旧Workspace。改为七行路径后尚未提交正例，Linux GUI正向编辑/保存/交付属于阶段7的全路径验收；当前Linux OS/ECU仍未验证。Windows正向IPC已通过；私有Linux Tauri、Xvfb和openbox退出后检查无残留，临时输入脚本已移除。阶段1准入满足。
 - 阶段1出口：Python stdlib `ecu_tools.owner/process/launch/windows_job` 与 Rust `core::execution` 共用POSIX私有socket/capability、受控gate登记与绝对单调deadline；Win侧复用迁移后的Job，原integration旧runner删除，原`handoff`改用同一Job实现。Ubuntu ext4真实执行`.venv/bin/python -m unittest autosar_tooling.test_process`返回11通过（含guardian被杀、supervisor被杀、release失败/未启动、escape显式`cleanup_unconfirmed`且fixture清理自身PID）；`AUTOSAR_PYTHON=<锁定虚拟环境解释器> cargo test --locked --manifest-path core/Cargo.toml execution::tests -- --nocapture`返回6通过，真实检查PID及stderr、退出码、nested/sibling和guardian镜像。Windows锁定Python入口`uv run --locked python -m unittest autosar_tooling.test_process`返回5通过/6项POSIX专属跳过；同样Rust筛选`execution::`返回5通过（含已有Job assign失败在执行前关闭命令）。Windows受改动的`epic4_independent_handoff -- --exact`真实执行203.79s通过；`quality.py --base`及Ruff检查通过。`cargo clippy --lib`返回0但有11条原integration既存lint警告；附加`-D warnings`因此返回101，错误均指向未改的`artifacts/configuration/ecu/graph/plan/mod`，不能表述为零警告或降低规则。原`link_check`/产品工具尚未迁入owner，按阶段4执行，不据此宣称Linux ECU通过。
+- 阶段2固定来源：仍用 FreeRTOS V11.3.1 commit `054e14f3397023aa83813a65aa065fc4597d481b` 与原归档 SHA-256 `dd832f699e6ebee00366d7c737e259860d9d1fd5f2c2311c90dff16e8cfbcf61`；四份未改 POSIX 原件由 `posix-source-manifest.json` 校验，Windows 十四补丁未改序列，Linux 依次从原件应用公共 0003/0007/0008 的适用文件与 `patches/linux/0001-controlled-posix-port.patch`。Ubuntu24.04 x86_64／WSL2 发行版签名 GCC13.3.0 `13.3.0-6ubuntu2~24.04.1`、binutils `2.42-4ubuntu2.10`：gcc SHA-256 `1b99826121ae6682a634e5efe09bd3e3df58ce58e0b28f849114ab5b89139c26`、objdump `325c4205a4c658a9d1e1ebc469ae55975a2b897a3d3c1e79d9b158612d37f745`、nm `3708df3d7ce16e2c1dcdcd722784ae382d4d582276a71ab7bbe2d542f5621202`；专属 `runtime/os/toolchain-linux.json` 已锁且执行时逐项校验。
+- 阶段2机制：Linux Task、唯一 S dispatcher、主／备用健康控制及 host actor 各自使用实际 mmap+pthread 栈、低端 PROT_NONE guard 和预留 sigaltstack；静态代际 SIGRTMIN／futex 停车与独立 fault-stop，注册 guard 故障由健康控制报告；Task 的 FreeRTOS 元数据栈与原生执行栈分开。S 独占 Cat1/Cat2/嵌套 ISR、显式 tick 与单次 `vTaskSwitchContext`，host producer 只 publish/wake；port gate 与 mutex 持有期屏蔽普通 park，T/S/C/D/I/B 的真实 guard、双控制耗尽和未知故障都被独立 C99 消费者检查。Linux ARTI C 消费者额外检查 `ucontext`／真实 SP／guard／altstack／metadata 分离、ELF64 目标和四字节公开原子 cell，Windows 保留 PE/TLS/线程保证区。`runtime/ecu/build.ps1` 已纳入 `os/src/host/windows` 的真实 Windows event adapter，避免仅 OS harness 正常而生成 ECU 缺符号；早期受影响 SC1 回归曾暴露 `Os_HostSetEvent` 未链接，修复该根因后通过。
+- 阶段2独立运行：Windows与Ubuntu24.04各执行 `uv run --locked python -m autosar_tooling os --target <各自目标> --suite <逐项26个>`，26/26 suite 的独立 C99 原生编译／运行和手写正反 oracle 均通过；Ubuntu stack 内额外 ARTI 9项Task/tool＋26项嵌套／拒绝与两项已编译故障拒绝。两平台 `cargo test --locked --manifest-path core/Cargo.toml --test end_to_end epic4_` 严格筛选 OS 注册项各为26通过、0失败，未把 Linux 产品 ECU 测试计入 OS 结果。原生 `lifecycle` Windows46／Linux47向量，Linux stack23、nested26、time44、sc1-timing43、resources26。`uv run --locked python -m unittest autosar_tooling.test_os_suites` 两平台各6通过，Windows Ruff 与 `scripts/quality.py --base` 通过。Windows受影响的 `epic4_sc1_timing_capacity -- --exact`（224.17s）、`epic4_arti_description_and_hooks -- --exact`（189.78s）、`epic4_generated_counter_service -- --exact`（192.49s）、`epic4_independent_handoff -- --exact`（205.62s）各通过，均为实际生成／编译／运行。
+- 阶段2能力边界：Ubuntu 的 `epic4_sc1_timing_capacity` 只执行原生 OS 独立消费者；旧 `epic4_timing::generated_tables` 是 Windows 产品工程验证，显式 `cfg(windows)` 至阶段4 Linux ECU 工程接入，不把其失败掩盖成已支持 Linux ECU。Windows 旧 host-v1 与 Epic4 既有产品行为按当前受影响目标回归；其他 Linux 发行版、CAN/DID 完整 ECU、Mac 原生 GUI/IPC、实机和标准／MISRA 合规认证未因此获得验证。
 
 ## Spec Change Log
 

@@ -33,7 +33,7 @@ void Os_TestIdleObserved(void) {
     if (InterlockedCompareExchange(&requested, 0, 0) != 0 &&
         InterlockedCompareExchange(&observed, 1, 0) == 0) {
         check(Os_StackCurrent()->role == 'I' && isOsStarted() == TRUE);
-        vPortGenerateSimulatedInterruptFromWindowsThread(5u);
+        Os_PortPostInterrupt(5u);
     }
 }
 static uint32_t interrupt(void) {
@@ -58,8 +58,8 @@ void StartupHook(void) {
 }
 void ShutdownHook(StatusType error) {
     check(isOsStarted() == TRUE);
-    printf("idle_state scenario=%s observed=%ld wakes=%u errors=%u reason=%u\n", scenario,
-           InterlockedCompareExchange(&observed, 0, 0), wakes, errors, error);
+    printf("idle_state scenario=%s observed=%d wakes=%u errors=%u reason=%u\n", scenario,
+           (int)InterlockedCompareExchange(&observed, 0, 0), wakes, errors, error);
     for (unsigned i = 0u; i < errors; ++i) {
         printf("idle_error status=%u service=%u\n", error_status[i], error_service[i]);
     }

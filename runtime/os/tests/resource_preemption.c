@@ -146,7 +146,7 @@ static DWORD WINAPI injector(void *argument) {
     while (InterlockedCompareExchange(&task_started, 0, 0) == 0) {
         Sleep(1u);
     }
-    vPortGenerateSimulatedInterruptFromWindowsThread(31u);
+    Os_PortPostInterrupt(31u);
     return 0u;
 }
 void StartupHook(void) {
@@ -162,9 +162,9 @@ void StartupHook(void) {
 }
 void ShutdownHook(StatusType Error) {
     Os_TargetTrace('Z');
-    if (printf("resources h=%u b=%u irq=%ld observer=%u rejected=%u error=%u\n", h_entries,
-               b_entries, InterlockedCompareExchange(&irq_entries, 0, 0), observations, rejected,
-               Error) < 0) {
+    if (printf("resources h=%u b=%u irq=%d observer=%u rejected=%u error=%u\n", h_entries,
+               b_entries, (int)InterlockedCompareExchange(&irq_entries, 0, 0), observations,
+               rejected, Error) < 0) {
         ExitProcess(E_OS_STATE);
     }
 }

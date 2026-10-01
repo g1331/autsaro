@@ -2,6 +2,9 @@
 #include "Os_Backend.h"
 #include <string.h>
 #include <limits.h>
+#ifdef __linux__
+#include <unistd.h>
+#endif
 
 static const char *scenario;
 static volatile unsigned checksum;
@@ -26,11 +29,18 @@ static uint32_t stack_isr(void) {
     Os_TargetTrace('X');
     return 0u;
 }
+#ifdef _WIN32
 static VOID CALLBACK backup_fault(ULONG_PTR argument) {
     (void)argument;
     consume_stack(0u);
     Os_TargetTrace('X');
 }
+#else
+void Os_StackTestBackupFault(void) {
+    consume_stack(0u);
+    Os_TargetTrace('X');
+}
+#endif
 void Os_StackTestIdle(void) {
     if (strcmp(scenario, "idle") == 0) {
         consume_stack(0u);
@@ -61,7 +71,11 @@ void ShutdownHook(StatusType Error) {
     const Os_NativeStack *current = Os_StackCurrent();
     ++hook_entries;
     if (strcmp(scenario, "double-control-output") == 0 && Error == E_OK) {
+#ifdef __linux__
+        (void)close(STDOUT_FILENO);
+#else
         CloseHandle(GetStdHandle(STD_OUTPUT_HANDLE));
+#endif
     }
     if ((strcmp(scenario, "control") == 0 && Error == E_OK) ||
         strcmp(scenario, "double-control") == 0 || strcmp(scenario, "double-control-output") == 0) {
@@ -79,6 +93,11 @@ static void entry(void) {
     if (strcmp(scenario, "task") == 0) {
         consume_stack(0u);
     } else if (strcmp(scenario, "sp-corrupt") == 0) {
+#ifdef __linux__
+        const Os_NativeStack *stack = Os_StackCurrent();
+        volatile unsigned char *outside = (volatile unsigned char *)(stack->reserve_low + 8u);
+        *outside = 42u; /* Actual mapped guard, not a fabricated saved context. */
+#else
         HANDLE thread = Os_StackTestTaskThread(1u);
         CONTEXT context;
         TaskHandle_t task;
@@ -92,6 +111,7 @@ static void entry(void) {
         }
         task = xTaskGetHandle("Inactive");
         vTaskResume(task);
+#endif
     } else if (strncmp(scenario, "api-", 4u) == 0) {
         unsigned operation = strcmp(scenario, "api-suspend") == 0
                                  ? 1u
@@ -112,14 +132,22 @@ static void entry(void) {
         volatile unsigned char *invalid = (volatile unsigned char *)1u;
         *invalid = 42u;
     } else if (strcmp(scenario, "backup") == 0) {
+#ifdef __linux__
+        Os_StackTestTriggerBackupFault();
+#else
         if (QueueUserAPC(backup_fault, Os_StackTestBackupThread(), 0u) == 0u) {
             ShutdownOS(E_OS_STATE);
         }
+#endif
         vTaskSuspend(NULL);
     } else if (strcmp(scenario, "concurrent") == 0) {
+#ifdef __linux__
+        Os_StackTestTriggerBackupFault();
+#else
         if (QueueUserAPC(backup_fault, Os_StackTestBackupThread(), 0u) == 0u) {
             ShutdownOS(E_OS_STATE);
         }
+#endif
         consume_stack(0u);
     } else if (strcmp(scenario, "idle") == 0) {
         vTaskSuspend(NULL);

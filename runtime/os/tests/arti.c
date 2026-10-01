@@ -20,6 +20,20 @@ static void observed_hook(void) {
     check(Os_ArtiTaskStacks[id]->sp >= Os_ArtiTaskStacks[id]->reserve_low);
     check(Os_ArtiTaskStacks[id]->sp < Os_ArtiTaskStacks[id]->high);
     check(Os_ArtiTaskContexts[id] != NULL && Os_ArtiNativeContextSize == sizeof(CONTEXT));
+#ifdef __linux__
+    {
+        const Os_NativeStack *native = Os_ArtiTaskStacks[id];
+        const CONTEXT *saved = Os_ArtiTaskContexts[id];
+        check(native->context_valid == 1u && native->altstack_size >= 65536u);
+        check(native->kernel_buffer_low < native->kernel_buffer_high);
+        check(native->kernel_buffer_high <= native->reserve_low ||
+              native->kernel_buffer_low >= native->high);
+        check(saved->ContextFlags == CONTEXT_CONTROL && saved->Rsp >= native->committed_low &&
+              saved->Rsp < native->high);
+        check((uintptr_t)saved->native.uc_mcontext.gregs[REG_RSP] == saved->Rsp);
+        check(saved->native.uc_mcontext.fpregs == &saved->native.__fpregs_mem);
+    }
+#endif
 }
 void PreTaskHook(void) {
     observed_hook();
@@ -155,9 +169,9 @@ int main(int argc, char **argv) {
             Arti_Events[ARTI_EVENT_CAPACITY - 1u].event_parameter != ARTI_EVENT_CAPACITY - 1u) {
             return 7;
         }
-        Arti_EventsDropped = LONG_MAX;
+        Arti_EventsDropped = INT32_MAX;
         ARTI_TRACE(USER, TOOL_TEST, TestInstance, 0u, Saturated, 0u);
-        if (Arti_EventsDropped != LONG_MAX) {
+        if (Arti_EventsDropped != INT32_MAX) {
             return 7;
         }
         printf("arti buffer=4096 dropped=3 once=1 version=1 error=2 saturated=1\n");

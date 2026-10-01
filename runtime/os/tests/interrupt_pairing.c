@@ -115,21 +115,21 @@ static uint32_t cat2(void) {
         ResumeOSInterrupts();
     } else if (strcmp(scenario, "source-isr") == 0) {
         check(DisableInterruptSource(6u) == E_OK);
-        vPortGenerateSimulatedInterruptFromWindowsThread(6u);
+        Os_PortPostInterrupt(6u);
         check(ClearPendingInterrupt(6u) == E_OK);
         check(EnableInterruptSource(6u, FALSE) == E_OK);
         check(DisableInterruptSource(7u) == E_OK);
-        vPortGenerateSimulatedInterruptFromWindowsThread(7u);
+        Os_PortPostInterrupt(7u);
         check(EnableInterruptSource(7u, TRUE) == E_OK);
         check(DisableInterruptSource(8u) == E_OK);
-        vPortGenerateSimulatedInterruptFromWindowsThread(8u);
+        Os_PortPostInterrupt(8u);
         check(EnableInterruptSource(8u, FALSE) == E_OK);
         check(source_deliveries == 0u && GetISRID() == 5u);
     } else if (strcmp(scenario, "source-outside-isr") == 0) {
         /* Deliberate boundary fault injection on the actual ISR stack: a
          * registered S actor with no active logical interrupt is not Cat2. */
-        vPortGenerateSimulatedInterruptFromWindowsThread(6u);
-        vPortGenerateSimulatedInterruptFromWindowsThread(7u);
+        Os_PortPostInterrupt(6u);
+        Os_PortPostInterrupt(7u);
         Os_BackendInterruptLeave();
         check(DisableInterruptSource(8u) == E_OS_CALLEVEL);
         check(Os_PortInterruptSourceEnabled(8u) != 0);

@@ -11,15 +11,15 @@ const void *Os_StackSavedContext(const Os_NativeStack *stack) {
     /* The caller supplies a record obtained from this module's own array. */
     return &saved_contexts[stack - stacks];
 }
-static volatile LONG stack_count;
+static volatile Os_Atomic32 stack_count;
 static char invalid_guarantee_role;
 static __thread Os_NativeStack *current_stack;
 Os_StackFault Os_Fault;
-static volatile LONG fault_claimed, fault_count;
+static volatile Os_Atomic32 fault_claimed, fault_count;
 static HANDLE fault_output;
 static HANDLE fault_error;
 static char fatal_text[256];
-static volatile LONG fatal_claimed;
+static volatile Os_Atomic32 fatal_claimed;
 static Os_StackFault fault_records[OS_NATIVE_STACKS];
 int Os_StackHasFault(void) { return InterlockedCompareExchange(&fault_count, 0, 0) > 0; }
 LONG Os_StackFaultCount(void) { return InterlockedCompareExchange(&fault_count, 0, 0); }

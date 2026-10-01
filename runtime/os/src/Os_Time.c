@@ -8,14 +8,14 @@ const TickType *const Os_ArtiCounters = values;
 typedef Os_ArtiAlarmState AlarmState;
 static AlarmState alarms[OS_MAX_ALARMS];
 const Os_ArtiAlarmState *const Os_ArtiAlarms = alarms;
-static volatile LONG tick_state;
+static volatile Os_Atomic32 tick_state;
 static uint64_t requested_epoch;
 static uint64_t confirmed_epoch;
 static uint64_t action_count;
 static uint64_t error_count;
 static Os_TickCompletion completion;
 static HANDLE completion_event;
-static volatile LONG signal_failed;
+static volatile Os_Atomic32 signal_failed;
 #define TIME_CLOSED 256L
 #define TIME_RESERVED 1L
 #define TIME_PENDING 2L
@@ -516,7 +516,7 @@ void Os_TimeTick(void) {
 }
 void vApplicationTickHook(void) { Os_TimeTick(); }
 static StatusType native_time_context(void) {
-    if (Os_StackCurrent() != NULL) {
+    if (Os_BridgeActorAllowed() == 0) {
         return E_OS_CALLEVEL;
     }
     if ((Os_TargetReady() == 0) || (Os_Config->time == NULL) ||
@@ -565,7 +565,7 @@ StatusType Os_TargetAdvanceOneTick(uint64_t epoch, uint64_t *ticket) {
         return E_OS_STATE;
     }
     *ticket = epoch;
-    vPortGenerateSimulatedInterruptFromWindowsThread(1u);
+    Os_PortPostInterrupt(1u);
     return E_OK;
 }
 StatusType Os_TargetTickCompletion(uint64_t ticket, Os_TickCompletion *record) {

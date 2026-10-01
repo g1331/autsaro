@@ -7,6 +7,70 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[cfg(any(windows, target_os = "linux"))]
+fn run_native_os_suite(suite: &str) {
+    use std::ffi::OsString;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::Duration;
+
+    static NONCE: AtomicU64 = AtomicU64::new(0);
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let python = std::env::var_os("AUTOSAR_PYTHON")
+        .expect("Set AUTOSAR_PYTHON to the locked absolute CPython interpreter");
+    let logs = std::env::temp_dir().join(format!(
+        "autosar-os-suite-{}-{}-{}",
+        std::process::id(),
+        autosar_config_core::execution::monotonic_ns().unwrap(),
+        NONCE.fetch_add(1, Ordering::Relaxed)
+    ));
+    fs::create_dir(&logs).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&logs, fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let target = if cfg!(windows) {
+        "windows-x64-controlled-v1"
+    } else {
+        "linux-x64-controlled-v1"
+    };
+    let spec = autosar_config_core::execution::ProcessSpec::for_duration(
+        vec![
+            python,
+            OsString::from("-m"),
+            OsString::from("autosar_tooling"),
+            OsString::from("os"),
+            OsString::from("--target"),
+            OsString::from(target),
+            OsString::from("--suite"),
+            OsString::from(suite),
+        ],
+        root.to_path_buf(),
+        vec![],
+        Duration::from_secs(1800),
+        logs.clone(),
+    )
+    .unwrap();
+    let result = autosar_config_core::execution::run_bounded(spec);
+    if let Err(error) = result {
+        panic!(
+            "native OS suite {suite} failed: {error}; retained_logs={}",
+            logs.display()
+        );
+    }
+    fs::remove_dir_all(logs).unwrap();
+}
+
+#[cfg(any(windows, target_os = "linux"))]
+macro_rules! os_native_suite {
+    ($name:ident, $suite:literal) => {
+        #[test]
+        fn $name() {
+            run_native_os_suite($suite);
+        }
+    };
+}
+
 #[path = "support/epic4_reference.rs"]
 mod epic4_reference;
 
@@ -32,6 +96,7 @@ mod epic4_application;
 #[path = "support/epic4_protocol.rs"]
 mod epic4_protocol;
 
+#[cfg(windows)]
 #[path = "support/epic4_timing.rs"]
 mod epic4_timing;
 
@@ -46,6 +111,9 @@ mod epic4_os_configuration;
 
 #[path = "support/epic4_arti.rs"]
 mod epic4_arti;
+
+#[path = "support/tooling.rs"]
+mod tooling;
 
 #[path = "support/epic4_artifacts.rs"]
 mod epic4_artifacts;
@@ -100,27 +168,8 @@ fn epic4_generated_standard_status() {
     epic4_status::verify_generated_standard();
 }
 
-#[cfg(windows)]
-#[test]
-fn epic4_sc1_status_modes() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "status-modes"])
-        .current_dir(root)
-        .output()
-        .expect("run both SC1 status modes on the native OS");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout).trim(),
-        "epic4_sc1_status_modes PASS: 2 native status configurations; 18 Standard capacity vectors"
-    );
-}
+#[cfg(any(windows, target_os = "linux"))]
+os_native_suite!(epic4_sc1_status_modes, "status-modes");
 
 #[test]
 fn epic4_generated_counter_timing_contracts() {
@@ -228,93 +277,10 @@ fn epic4_independent_oracle_contracts() {
     );
 }
 
-#[cfg(windows)]
-#[test]
-fn epic4_interrupt_source_repetition() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "source-repetition"])
-        .current_dir(root)
-        .output()
-        .expect("run actual repeated interrupt-source rejection and pending vectors");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout).trim(),
-        "epic4_interrupt_source_repetition PASS: 12 native vectors"
-    );
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_nonstatus_service_errors() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "nonstatus-errors"])
-        .current_dir(root)
-        .output()
-        .expect("run actual non-StatusType service error-reporting vectors");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout).trim(),
-        "epic4_nonstatus_service_errors PASS: 10 native vectors"
-    );
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_os_public_type_contracts() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "public-types"])
-        .current_dir(root)
-        .output()
-        .expect("compile and run the independent public OS type consumer");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout).trim(),
-        "epic4_os_public_type_contracts PASS: independent C99 consumer"
-    );
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_os_public_compatibility() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "public-compatibility"])
-        .current_dir(root)
-        .output()
-        .expect("compile and run the independent public compatibility consumers");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout).trim(),
-        "epic4_os_public_compatibility PASS: 6 independent C99 consumers"
-    );
-}
+os_native_suite!(epic4_interrupt_source_repetition, "source-repetition");
+os_native_suite!(epic4_nonstatus_service_errors, "nonstatus-errors");
+os_native_suite!(epic4_os_public_type_contracts, "public-types");
+os_native_suite!(epic4_os_public_compatibility, "public-compatibility");
 
 #[cfg(windows)]
 #[test]
@@ -322,454 +288,35 @@ fn epic4_public_consumer_watchdog() {
     epic4_ecu::verify_public_watchdog();
 }
 
-#[cfg(windows)]
-#[test]
-fn epic4_os_memory_mapping() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "memory-mapping"])
-        .current_dir(root)
-        .output()
-        .expect("compile and link OS entry memory mappings and their rejection cases");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(String::from_utf8_lossy(&output.stdout).starts_with(
-        "epic4_os_memory_mapping PASS: 10 linked entries; 6 rejected compile/link cases"
-    ));
-}
+os_native_suite!(epic4_os_memory_mapping, "memory-mapping");
+os_native_suite!(epic4_interrupt_vector_section, "vector-section");
+os_native_suite!(epic4_osek_entry_bodies, "entry-bodies");
+os_native_suite!(epic4_sc1_class_capacity, "capacity");
+os_native_suite!(epic4_returned_task_resource_cleanup, "returned-task");
+os_native_suite!(epic4_real_task_hook_transitions, "task-hooks");
+os_native_suite!(epic4_standard_error_hook_parameters, "error-hooks");
+os_native_suite!(epic4_standard_interrupt_pairing, "interrupt-pairing");
+os_native_suite!(epic4_public_counter_types, "counter-types");
+os_native_suite!(epic4_nested_interrupts, "nested-interrupts");
+os_native_suite!(epic4_standard_calling_context, "calling-context");
+os_native_suite!(epic4_standard_idle_and_started_state, "idle-state");
+os_native_suite!(epic4_category2_exit_cleanup, "isr-cleanup");
+os_native_suite!(epic4_controlled_tick_and_alarm, "time");
 
-#[cfg(windows)]
-#[test]
-fn epic4_interrupt_vector_section() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "vector-section"])
-        .current_dir(root)
-        .output()
-        .expect("check the actual native vector table and compiled rejection cases");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(String::from_utf8_lossy(&output.stdout).starts_with(
-        "epic4_interrupt_vector_section PASS: actual Win64 vector table; 2 rejected compiled mutations"
-    ));
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_osek_entry_bodies() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "entry-bodies"])
-        .current_dir(root)
-        .output()
-        .expect("run the standard OSEK entry bodies on the actual native OS");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout).trim(),
-        "epic4_osek_entry_bodies PASS: 11 native vectors"
-    );
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_sc1_class_capacity() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "capacity"])
-        .current_dir(root)
-        .output()
-        .expect("run independent four-class OS capacity vectors");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout).trim(),
-        "epic4_sc1_class_capacity PASS: 18 native vectors"
-    );
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_returned_task_resource_cleanup() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "returned-task"])
-        .current_dir(root)
-        .output()
-        .expect("run actual returned Task activation cleanup");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout).trim(),
-        "epic4_returned_task_resource_cleanup PASS: 7 native vectors"
-    );
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_real_task_hook_transitions() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "task-hooks"])
-        .current_dir(root)
-        .output()
-        .expect("run real kernel Task hook transitions");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout).trim(),
-        "epic4_real_task_hook_transitions PASS: 8 native vectors"
-    );
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_standard_error_hook_parameters() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "error-hooks"])
-        .current_dir(root)
-        .output()
-        .expect("run standard error hooks with each error-access configuration");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout).trim(),
-        "epic4_standard_error_hook_parameters PASS: 8 native vectors"
-    );
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_standard_interrupt_pairing() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "interrupt-pairing"])
-        .current_dir(root)
-        .output()
-        .expect("run actual interrupt masks, source controls and exit restoration");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout).trim(),
-        "epic4_standard_interrupt_pairing PASS: 28 native vectors"
-    );
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_public_counter_types() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "counter-types"])
-        .current_dir(root)
-        .output()
-        .expect("run public RTE/OS types and wide Counter ID rejection contracts");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout).trim(),
-        "epic4_public_counter_types PASS: 17 native vectors; 6 header orders"
-    );
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_nested_interrupts() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "nested-interrupts"])
-        .current_dir(root)
-        .output()
-        .expect("run native nested ISR identity, resource, Hook and scheduling contracts");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout).trim(),
-        "epic4_nested_interrupts PASS: 26 native vectors"
-    );
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_standard_calling_context() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "calling-context"])
-        .current_dir(root)
-        .output()
-        .expect("run R24 calling-context and logical Hook mask-ownership vectors");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout).trim(),
-        "epic4_standard_calling_context PASS: 9 native vectors"
-    );
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_standard_idle_and_started_state() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "idle-state"])
-        .current_dir(root)
-        .output()
-        .expect("run actual no-halt virtual-core idle and draft startup-state query");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout).trim(),
-        "epic4_standard_idle_and_started_state PASS: 5 native vectors"
-    );
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_category2_exit_cleanup() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "isr-cleanup"])
-        .current_dir(root)
-        .output()
-        .expect("run actual Cat2 resource and interrupt exit cleanup");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout).trim(),
-        "epic4_category2_exit_cleanup PASS: 10 native vectors"
-    );
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_controlled_tick_and_alarm() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "time"])
-        .current_dir(root)
-        .output()
-        .expect("run independent controlled tick and counter/alarm vectors");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(
-        String::from_utf8_lossy(&output.stdout)
-            .starts_with("epic4_controlled_tick_and_alarm PASS:")
-    );
-}
-
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 #[test]
 fn epic4_sc1_timing_capacity() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "sc1-timing"])
-        .current_dir(root)
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(
-        String::from_utf8_lossy(&output.stdout)
-            .starts_with("epic4_sc1_timing_capacity PASS: 43 native vectors")
-    );
+    run_native_os_suite("sc1-timing");
+    #[cfg(windows)]
     epic4_timing::generated_tables();
 }
 
-#[cfg(windows)]
-#[test]
-fn epic4_event_wakeup_races() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "events"])
-        .current_dir(root)
-        .output()
-        .expect("run independent event ownership and publication race vectors");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(String::from_utf8_lossy(&output.stdout).starts_with("epic4_event_wakeup_races PASS:"));
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_resource_and_preemption() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "resources"])
-        .current_dir(root)
-        .output()
-        .expect("run independent resource and mixed-preemption vectors");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(
-        String::from_utf8_lossy(&output.stdout).starts_with("epic4_resource_and_preemption PASS:")
-    );
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_finish_chain_atomicity() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "finish"])
-        .current_dir(root)
-        .output()
-        .expect("run independent atomic finish/chain and native entry vectors");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(
-        String::from_utf8_lossy(&output.stdout).starts_with("epic4_finish_chain_atomicity PASS:")
-    );
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_activation_fifo() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "activation"])
-        .current_dir(root)
-        .output()
-        .expect("run independent activation FIFO and native kernel observer vectors");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(String::from_utf8_lossy(&output.stdout).starts_with("epic4_activation_fifo PASS:"));
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_native_stack_fault_shutdown() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "stack"])
-        .current_dir(root)
-        .output()
-        .expect("start independent native stack verifier");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(
-        String::from_utf8_lossy(&output.stdout).contains("epic4_native_stack_fault_shutdown PASS")
-    );
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_backend_lifecycle() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let output = Command::new("python")
-        .arg(root.join("scripts/epic4_os.py"))
-        .args(["--suite", "lifecycle"])
-        .current_dir(root)
-        .output()
-        .expect("start independent Windows OS verifier");
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(String::from_utf8_lossy(&output.stdout).contains("epic4_backend_lifecycle PASS"));
-}
+os_native_suite!(epic4_event_wakeup_races, "events");
+os_native_suite!(epic4_resource_and_preemption, "resources");
+os_native_suite!(epic4_finish_chain_atomicity, "finish");
+os_native_suite!(epic4_activation_fifo, "activation");
+os_native_suite!(epic4_native_stack_fault_shutdown, "stack");
+os_native_suite!(epic4_backend_lifecycle, "lifecycle");
 
 #[test]
 fn standard_can_host_entry_points_reject_invalid_requests_and_send_valid_frame() {

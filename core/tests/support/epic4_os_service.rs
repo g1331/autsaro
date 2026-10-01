@@ -2,7 +2,6 @@ use autosar_config_core::integration::{InputSource, PlanDependencies, RuntimeCat
 use autosar_config_core::schema;
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 use std::time::Duration;
 
 pub fn verify() {
@@ -105,9 +104,14 @@ pub fn verify() {
         }
         let stage = scratch.0.join(format!("native-{counter}"));
         fs::create_dir(&stage).unwrap();
-        let mut command = Command::new("python");
-        command.args(["-c", "import sys; from pathlib import Path; sys.path.insert(0, str(Path(sys.argv[1]) / 'scripts')); import epic4_os; epic4_os.check_counter_service(Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4])"])
-            .arg(root).arg(&stage).arg(&project).arg(counter);
+        let mut command = super::tooling::python_command();
+        command
+            .args(["os-counter-service", "--directory"])
+            .arg(&stage)
+            .arg("--project")
+            .arg(&project)
+            .arg("--counter")
+            .arg(counter);
         let output = super::epic4_ecu::run_public_command(
             &mut command,
             &stage,

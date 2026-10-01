@@ -45,7 +45,11 @@ extern const Os_ArtiScheduleState *const Os_ArtiScheduleTables;
 extern const TickType *const Os_ArtiCounters;
 extern const unsigned *const Os_ArtiResourceOwners;
 extern const AppModeType *const Os_ArtiAppMode;
+#ifdef _WIN32
 extern const volatile long *const Os_ArtiOsReady;
+#else
+extern const volatile int32_t *const Os_ArtiOsReady;
+#endif
 extern const unsigned *const Os_ArtiCurrentIsr;
 /** @brief Emit a captured task transition while the native OS mutex is owned. */
 void Os_ArtiTask(Os_ArtiTaskEvent event, TaskType task);

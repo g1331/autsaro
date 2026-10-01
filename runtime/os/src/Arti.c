@@ -1,11 +1,10 @@
 #include "Arti.h"
-#include "Os_Windows.h"
-#include <limits.h>
+#include "Os_Host.h"
 
 Arti_Event Arti_Events[ARTI_EVENT_CAPACITY];
-volatile long Arti_EventCount;
-volatile long Arti_EventsDropped;
-volatile long Arti_DevelopmentError;
+volatile ArtiAtomic32 Arti_EventCount;
+volatile ArtiAtomic32 Arti_EventsDropped;
+volatile ArtiAtomic32 Arti_DevelopmentError;
 static __thread Arti_AddressCapture captured_address;
 void Arti_CaptureAddress(uintptr_t address) {
     captured_address.address = address;
@@ -78,9 +77,8 @@ void Arti_Record(const char *context, const char *class_name, const char *instan
         InterlockedExchange(&Arti_Events[slot].published, 1L);
     } else {
         LONG dropped = InterlockedCompareExchange(&Arti_EventsDropped, 0L, 0L);
-        /* Saturation means at least LONG_MAX omitted events, never wrap to an
-         * apparently empty/negative count during a long-lived host session. */
-        while (dropped < LONG_MAX) {
+        /* Saturate the four-byte native cell rather than wrap its drop count. */
+        while (dropped < INT32_MAX) {
             const LONG previous =
                 InterlockedCompareExchange(&Arti_EventsDropped, dropped + 1L, dropped);
             if (previous == dropped) {

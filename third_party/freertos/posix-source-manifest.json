@@ -1,0 +1,12 @@
+{
+  "tag": "V11.3.1",
+  "commit": "054e14f3397023aa83813a65aa065fc4597d481b",
+  "archive_sha256": "dd832f699e6ebee00366d7c737e259860d9d1fd5f2c2311c90dff16e8cfbcf61",
+  "license": "MIT",
+  "files": {
+    "portable/ThirdParty/GCC/Posix/port.c": "84491bcf173fa1a88c14309f63cde334eefc5838477d04120aadd9788d3059f7",
+    "portable/ThirdParty/GCC/Posix/portmacro.h": "73e280ad4925b8259b4a38fea5bfedbb486788b8c21cbd9b1e79eca0fbcfeead",
+    "portable/ThirdParty/GCC/Posix/utils/wait_for_event.c": "8b988fe00757ebae38d5d19d273370bc303305ea9639b0e6996ac7f8b120119f",
+    "portable/ThirdParty/GCC/Posix/utils/wait_for_event.h": "92102eb765fd76582adef63839175621df341c1035a32f386f262d54a2c4a8b7"
+  }
+}

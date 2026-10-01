@@ -1,8 +1,14 @@
-/** @file R24-11 ARTI tool binding for the fixed Win64 host target. */
+/** @file R24-11 ARTI tool binding for the controlled x64 host targets. */
 #ifndef AUTOSAR_HOST_ARTI_H
 #define AUTOSAR_HOST_ARTI_H
 #include "Std_Types.h"
 #include <stddef.h>
+#ifdef _WIN32
+typedef long ArtiAtomic32;
+#else
+typedef int32_t ArtiAtomic32;
+#endif
+typedef char ArtiAtomic32IsFourBytes[(sizeof(ArtiAtomic32) == 4u) ? 1 : -1];
 
 /** @brief Maximum number of retained events; overflow is explicitly counted. */
 #define ARTI_EVENT_CAPACITY 4096u
@@ -17,7 +23,7 @@ typedef struct {
     uint8_t address_valid;
     uint32_t service_status;
     uint8_t status_valid;
-    volatile long published;
+    volatile ArtiAtomic32 published;
 } Arti_Event;
 typedef struct {
     uintptr_t address;
@@ -25,17 +31,17 @@ typedef struct {
     uint32_t service_status;
     uint8_t status_valid;
 } Arti_AddressCapture;
-/** @brief Lossless Win64 side data for standard uint32 pointer payloads. */
+/** @brief Lossless x64 side data for standard uint32 pointer payloads. */
 void Arti_CaptureAddress(uintptr_t address);
 /** @brief Distinguish a failed getter from a genuine UINT32_MAX result. */
 void Arti_CaptureServiceStatus(uint32_t status);
 Arti_AddressCapture Arti_SaveAddressCapture(void);
 void Arti_RestoreAddressCapture(Arti_AddressCapture capture);
 extern Arti_Event Arti_Events[ARTI_EVENT_CAPACITY];
-/* Win64 LONG is a 32-bit long; these are native Interlocked cells. */
-extern volatile long Arti_EventCount;
-extern volatile long Arti_EventsDropped;
-extern volatile long Arti_DevelopmentError;
+/* Native atomics require the host ABI's four-byte cell type. */
+extern volatile ArtiAtomic32 Arti_EventCount;
+extern volatile ArtiAtomic32 Arti_EventsDropped;
+extern volatile ArtiAtomic32 Arti_DevelopmentError;
 #define ARTI_E_INIT_FAILED 0x01u
 #define ARTI_E_PARAM_POINTER 0x02u
 #define ARTI_STOPWATCH_FLAT 0x00u

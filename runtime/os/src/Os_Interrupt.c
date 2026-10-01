@@ -9,8 +9,8 @@ typedef struct {
 /* One cell per physical Task/boot actor, and separate logical ISR cells on
  * the native ISR thread. This preserves ownership across interrupted actors. */
 static __thread InterruptState states[33u * ((unsigned)OS_HOOK_ALARM + 1u)];
-static volatile LONG all_owners;
-static volatile LONG os_owners;
+static volatile Os_Atomic32 all_owners;
+static volatile Os_Atomic32 os_owners;
 
 static InterruptState *owner_state(void) {
     const Os_NativeStack *stack = Os_StackCurrent();

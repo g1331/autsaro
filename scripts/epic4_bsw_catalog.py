@@ -124,7 +124,7 @@ def materialize() -> dict:
 
 
 def probe(current: dict) -> None:
-    from epic4_os import compiler
+    from autosar_tooling.os_suites import compiler, native_session
 
     with tempfile.TemporaryDirectory(prefix="autosar-epic4-bsw-contract-") as temporary:
         directory = Path(temporary)
@@ -151,8 +151,10 @@ def probe(current: dict) -> None:
             for path in (ROOT / "runtime/src").glob("*.c")
             if path.name != "ecu_host_main.c"
         )
+        with native_session(directory, "bsw-compiler"):
+            cc = compiler()
         command = [
-            compiler(),
+            cc,
             "-std=c99",
             "-Wall",
             "-Wextra",

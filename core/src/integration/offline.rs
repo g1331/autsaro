@@ -28,6 +28,10 @@ pub(super) fn sources() -> Result<Vec<(String, Vec<u8>)>, String> {
             include_bytes!("../../../runtime/os/include/Os_Cfg.h"),
         ),
         (
+            "os/include/Os_Host.h",
+            include_bytes!("../../../runtime/os/include/Os_Host.h"),
+        ),
+        (
             "os/include/Os_Hooks.h",
             include_bytes!("../../../runtime/os/include/Os_Hooks.h"),
         ),
@@ -152,8 +156,8 @@ pub(super) fn sources() -> Result<Vec<(String, Vec<u8>)>, String> {
             include_bytes!("../../../runtime/os/src/Os_Backend.h"),
         ),
         (
-            "os/src/Os_HostEvent.c",
-            include_bytes!("../../../runtime/os/src/Os_HostEvent.c"),
+            "os/src/host/windows/Os_HostWindows.c",
+            include_bytes!("../../../runtime/os/src/host/windows/Os_HostWindows.c"),
         ),
         (
             "os/src/Os_Mailbox.c",

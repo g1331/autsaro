@@ -24,7 +24,7 @@ static uint64_t ready_sequences[OS_MAX_TASKS];
 #define OS_RESOURCE_ACTORS (OS_MAX_TASKS + OS_MAX_INTERRUPTS)
 static unsigned resource_depth[OS_RESOURCE_ACTORS];
 static size_t owned_resources[OS_RESOURCE_ACTORS][OS_MAX_RESOURCES];
-static volatile LONG interrupt_ceiling;
+static volatile Os_Atomic32 interrupt_ceiling;
 static unsigned current_interrupt = 32u;
 const unsigned *const Os_ArtiCurrentIsr = &current_interrupt;
 typedef struct {
@@ -39,7 +39,7 @@ typedef struct {
     uint64_t previous;
 } OrderReference;
 static jmp_buf restart_frames[OS_MAX_TASKS];
-static volatile LONG isr_reschedule;
+static volatile Os_Atomic32 isr_reschedule;
 int Os_BackendTakeIsrReschedule(void) { return InterlockedExchange(&isr_reschedule, 0) != 0; }
 void Os_BackendRequestIsrReschedule(void) { InterlockedExchange(&isr_reschedule, 1); }
 unsigned Os_BackendInterruptPriority(unsigned interrupt) {
@@ -66,21 +66,34 @@ static HANDLE backup_thread;
 HANDLE Os_StackTestBackupThread(void) { return backup_thread; }
 #endif
 static HANDLE backup_event;
+#if defined(__linux__) && defined(OS_STACK_TESTS)
+static volatile Os_Atomic32 backup_fault_requested;
+void Os_StackTestTriggerBackupFault(void) {
+    if (backup_thread == NULL || InterlockedExchange(&backup_fault_requested, 1) != 0 ||
+        Os_HostSetEvent(backup_event) == 0) {
+        Os_BackendShutdown(E_OS_STATE);
+    }
+}
+#endif
 static HANDLE main_thread;
 static HANDLE controller_registered[2];
-static volatile LONG controller_healthy[2];
+static volatile Os_Atomic32 controller_healthy[2];
 static HANDLE task_threads[OS_MAX_TASKS + 2u];
 static unsigned task_thread_count;
 #ifdef OS_STACK_TESTS
 HANDLE Os_StackTestTaskThread(unsigned index) { return task_threads[index]; }
 #endif
-static volatile LONG ready;
+static volatile Os_Atomic32 ready;
+#ifdef _WIN32
 const volatile long *const Os_ArtiOsReady = &ready;
-volatile LONG Os_Closing;
+#else
+const volatile int32_t *const Os_ArtiOsReady = &ready;
+#endif
+volatile Os_Atomic32 Os_Closing;
 /* Bit 0: an accepted activation transaction; bit 1: admission permanently closed.
  * Both admission and close linearize on this atomic word. Close never waits for
  * a transaction or a damaged actor holding the ordinary interrupt mutex. */
-static volatile LONG activation_admission;
+static volatile Os_Atomic32 activation_admission;
 static StatusType shutdown_reason;
 static AppModeType startup_mode;
 const AppModeType *const Os_ArtiAppMode = &startup_mode;
@@ -97,7 +110,7 @@ static size_t trace_length;
 static uint64_t trace_dropped;
 static unsigned resource_calls, threads, events, mutexes;
 static unsigned fail_resource;
-static volatile LONG started;
+static volatile Os_Atomic32 started;
 static void task_entry(void *argument);
 static void bootstrap(void *argument);
 static void acquire_internal(size_t index);
@@ -504,6 +517,13 @@ BOOL Os_PortGetThreadContext(HANDLE thread, CONTEXT *context) {
     return operation_fails(2u) ? FALSE : GetThreadContext(thread, context);
 }
 
+void Os_PortPostInterrupt(uint32_t interrupt) {
+#ifdef _WIN32
+    vPortGenerateSimulatedInterruptFromWindowsThread(interrupt);
+#else
+    Os_PosixPostInterrupt(interrupt);
+#endif
+}
 void Os_TargetTrace(char marker) {
     if (marker == '\0') {
         if (InterlockedCompareExchange(&Os_Closing, 0, 0) != 0) {
@@ -537,7 +557,11 @@ static void report_and_exit(void) {
 #endif
     Os_StackReport();
     printf("lifecycle=Closed state=%s reason=%u trace=%s threads=%u events=%u mutexes=%u "
+#ifdef __linux__
+           "resource_calls=%u hidden=2 controllers=2 heap=posix static=freertos "
+#else
            "resource_calls=%u hidden=2 controllers=2 heap=windows static=freertos "
+#endif
            "input_closed=1 tick_closed=1 time_signal_failed=%d trace_dropped=%llu\n",
            shutdown_reason == E_OK ? "Ready" : "Failed", shutdown_reason, trace, threads, events,
            mutexes, resource_calls, Os_TimeSignalFailed(), (unsigned long long)trace_dropped);
@@ -546,9 +570,18 @@ static void report_and_exit(void) {
 }
 static void stop_thread(HANDLE thread) {
     CONTEXT context;
+#ifdef __linux__
+    if (Os_StackHasFault() != 0 && Os_StackThreadHasFault(GetThreadId(thread)) != 0) {
+        return; /* The guard handler parked the damaged actor on its altstack. */
+    }
+    if (Os_HostStopActor(thread, 2000u) == 0) {
+        ExitProcess(E_OS_STATE);
+    }
+#else
     if (SuspendThread(thread) == (DWORD)-1) {
         ExitProcess(E_OS_STATE);
     }
+#endif
     context.ContextFlags = CONTEXT_CONTROL;
     if (!Os_PortGetThreadContext(thread, &context)) {
         ExitProcess(E_OS_STATE);
@@ -576,6 +609,13 @@ static DWORD WINAPI control(void *argument) {
     if (waited != WAIT_OBJECT_0) {
         ExitProcess(E_OS_STATE);
     }
+#if defined(__linux__) && defined(OS_STACK_TESTS)
+    if (index == 1u && InterlockedExchange(&backup_fault_requested, 0) != 0) {
+        void Os_StackTestBackupFault(void);
+        Os_StackTestBackupFault();
+        Os_BackendShutdown(E_OS_STATE);
+    }
+#endif
 #ifdef OS_STACK_TESTS
     {
         void Os_StackTestBeforeClose(void);
@@ -584,6 +624,12 @@ static DWORD WINAPI control(void *argument) {
 #endif
 #ifdef OS_ACTIVATION_TESTS
     Os_TestBeforeClose();
+#endif
+#ifdef __linux__
+    if (Os_StackHasFault() != 0) {
+        Os_TimeClose();
+        Os_MailboxClose();
+    }
 #endif
     vPortEndScheduler();
     /* Stop the ISR owner first, then all execution threads. Never take its mutex. */
@@ -626,6 +672,25 @@ void Os_BackendStackFault(char failed_role) {
     Sleep(INFINITE);
     ExitProcess(E_OS_STACKFAULT);
 }
+#ifdef __linux__
+void Os_BackendSignalStackFault(char failed_role) {
+    (void)InterlockedOr(&activation_admission, 2);
+    (void)InterlockedExchange(&Os_Closing, 1);
+    (void)InterlockedExchange(&ready, 0);
+    shutdown_reason = E_OS_STACKFAULT;
+    if (failed_role == 'C') {
+        (void)InterlockedExchange(&controller_healthy[0], 0);
+    } else if (failed_role == 'D') {
+        (void)InterlockedExchange(&controller_healthy[1], 0);
+    }
+    if (controller_healthy[0] == 0 && controller_healthy[1] == 0) {
+        Os_StackFatalExit();
+    }
+    if (!Os_HostSetEvent(controller_healthy[0] != 0 ? close_event : backup_event)) {
+        ExitProcess(E_OS_STACKFAULT);
+    }
+}
+#endif
 void Os_BackendShutdown(StatusType error) {
     const Os_NativeStack *current = Os_StackCurrent();
     if (error == E_OS_STACKFAULT && Os_StackHasFault() && current != NULL &&
@@ -679,8 +744,14 @@ HANDLE Os_PortMutex(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name) {
 }
 HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes, SIZE_T stack, LPTHREAD_START_ROUTINE start,
                      LPVOID argument, DWORD flags, LPDWORD id) {
+#ifdef __linux__
+    HANDLE result = (attributes != NULL || fail_next())
+                        ? NULL
+                        : Os_HostCreateActor(stack, start, argument, flags, id, 0);
+#else
     HANDLE result =
         fail_next() ? NULL : CreateThread(attributes, stack, start, argument, flags, id);
+#endif
     if (result == NULL) {
         Os_BackendShutdown(E_OS_STATE);
     }
@@ -833,12 +904,18 @@ void Os_BackendStart(AppModeType mode) {
     }
     startup_mode = mode;
     Os_TimeInit(mode);
+#ifdef __linux__
+    Os_StackPrepare();
+#else
     Os_StackInit();
+#endif
     Os_MailboxInstall();
+#ifndef __linux__
     if (!DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &main_thread,
                          0u, FALSE, DUPLICATE_SAME_ACCESS)) {
         Os_BackendShutdown(E_OS_STATE);
     }
+#endif
     close_event = Os_PortEvent(NULL, FALSE, FALSE, NULL);
     backup_event = Os_PortEvent(NULL, FALSE, FALSE, NULL);
     controller_registered[0] = Os_PortEvent(NULL, FALSE, FALSE, NULL);
@@ -870,6 +947,16 @@ void Os_BackendStart(AppModeType mode) {
     vTaskStartScheduler();
     Os_BackendShutdown(E_OS_STATE);
 }
+#ifdef __linux__
+void Os_BackendSetDispatcher(void) {
+    if (!DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &main_thread,
+                         0u, FALSE, DUPLICATE_SAME_ACCESS)) {
+        Os_BackendShutdown(E_OS_STATE);
+    }
+    Os_HostSetDispatcher(main_thread);
+    Os_StackInit();
+}
+#endif
 StatusType Os_BackendState(TaskType id, TaskStateRefType state) {
     size_t i;
     Os_StackCheck();

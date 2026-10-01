@@ -192,9 +192,10 @@ pub fn verify() {
             "arti_consumer os={os} observations=2 getters=2 errors=2 internal_services=0 dropped=0"
         )));
     }
-    let mut native = Command::new("python");
-    native.args(["-c", "import sys; from pathlib import Path; sys.path.insert(0, str(Path(sys.argv[1]) / 'scripts')); import epic4_os; epic4_os.check_arti_native(Path(sys.argv[2]))"])
-        .arg(root).arg(scratch.0.join("native"));
+    let mut native = super::tooling::python_command();
+    native
+        .args(["os-arti-native", "--directory"])
+        .arg(scratch.0.join("native"));
     let result = super::epic4_ecu::run_public_command(
         &mut native,
         &scratch.0,

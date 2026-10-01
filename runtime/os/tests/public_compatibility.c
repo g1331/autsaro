@@ -1,5 +1,5 @@
-#ifdef OS_PUBLIC_TYPES_WINDOWS_BEFORE
-#include "Os_Windows.h"
+#ifdef OS_PUBLIC_TYPES_HOST_BEFORE
+#include "Os_Host.h"
 #endif
 #ifdef OS_PUBLIC_RTE_BEFORE
 #include "Rte_Os_Type.h"
@@ -8,8 +8,8 @@
 #ifndef OS_PUBLIC_RTE_BEFORE
 #include "Rte_Os_Type.h"
 #endif
-#ifdef OS_PUBLIC_TYPES_WINDOWS_AFTER
-#include "Os_Windows.h"
+#ifdef OS_PUBLIC_TYPES_HOST_AFTER
+#include "Os_Host.h"
 #endif
 #include <stdio.h>
 

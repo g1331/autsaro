@@ -67,7 +67,7 @@ static uint32_t leaking_isr(void) {
     }
     check(Os_BackendInterruptEnabled(6u) == 0);
     check(ActivateTask(1u) == E_OK);
-    vPortGenerateSimulatedInterruptFromWindowsThread(6u);
+    Os_PortPostInterrupt(6u);
     if (strcmp(scenario, "balanced") == 0) {
         check(ReleaseResource(1u) == E_OK);
         check(ReleaseResource(0u) == E_OK);

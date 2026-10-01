@@ -31,7 +31,7 @@
 工具版本由根目录 `rust-toolchain.toml`（Rust 1.98.1）、`.node-version`（Node 24.19.0）、`.python-version`（CPython 3.12.9）、`pyproject.toml`/`uv.lock`（Python）、`ui/package.json` 的 npm 11.17.0 engine 约束及 `ui/package-lock.json` 的包完整性记录约束。安装 Rust/rustfmt/clippy、Node/npm、uv、Git 和目标所需的 C99 GCC；在**新的终端**检查安装结果。Cargo 构建产物保留在 `core/target/` 与 `src-tauri/target/`，不改设 `CARGO_TARGET_DIR`。
 
 - Windows：使用 Rust MSVC、Visual Studio C++ Build Tools 和 WebView2。安装 vcpkg 的 `libxml2[iconv,zlib]:x64-windows-static-md`；`VCPKG_ROOT` 指 vcpkg 根目录，`VCPKGRS_TRIPLET=x64-windows-static-md`，`LIBCLANG_PATH` 指含 `libclang.dll` 的目录。可在用户环境中设置这些变量，重新打开终端和 Agent 宿主后再检查；不要把个人安装路径写进工程。`AUTOSAR_CC` 可选，指向原有 Windows 主机工程使用的 GCC；未设置时该工程仍查找 `PATH` 中的 `gcc`。
-- Ubuntu 24.04：安装 `build-essential libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev libxml2-dev libclang-dev clang pkg-config patchelf`，并按锁文件安装 Rust、Node、CPython 与 uv。WSL 构建副本、Cargo target 和 uv 缓存应放在 ext4 文件系统；从 Windows 卷读取官方档案时显式传路径。Linux 原生虚拟 ECU 尚在本轮工程治理中，安装这些包**不等于**已支持 Linux 目标。
+- Ubuntu 24.04：安装 `build-essential libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev libxml2-dev libclang-dev clang pkg-config patchelf`，并按锁文件安装 Rust、Node、CPython 与 uv。WSL 构建副本、Cargo target 和 uv 缓存应放在 ext4 文件系统；从 Windows 卷读取官方档案时显式传路径。固定 GCC13.3.0 的 Linux **OS 独立 C99 消费者**已在 Ubuntu24.04 x86_64／WSL2 原生运行全部 26 项；Linux 生产 ECU、CAN/DID 和桌面 IPC 仍待后续阶段，不能据此宣称 Linux ECU 已交付。
 - macOS：安装 Xcode Command Line Tools、pkg-config/libxml2 和上述版本管理工具。macOS 源码工作台与包配置仍待本轮完成，原生构建和 IPC 未验证；macOS 不提供本机虚拟 ECU。
 
 本地官方材料须由使用者自行合法放置，不随源码或安装包分发：
@@ -55,6 +55,8 @@ cargo build --locked --manifest-path src-tauri/Cargo.toml
 `doctor` 只读报告 `ready`、`missing`、`version_mismatch` 或 `not_applicable`，缺少必需项返回非零并提示安装/配置；不下载规范或更改系统。`npm run tauri --prefix ui -- dev` 使用现有 Tauri/Vite hooks，在**独立桌面会话**交互调试；自动化不得在当前用户桌面弹窗或抢焦点。这里不会执行 `create-tauri-app` 或 `tauri init --force` 重建已有工作台。当前 Windows 生成与构建仍依赖源码目录，正式无checkout bundle 将在本轮最后阶段验证。
 
 受控外部命令已有独立的 `core::execution` 与 `ecu_tools.process` 入口；Rust 侧执行前须把 `AUTOSAR_PYTHON` 设为锁定虚拟环境中 CPython 的**绝对路径**（Windows 为 `.venv/Scripts/python.exe`，POSIX 为 `.venv/bin/python`），不得依赖 PATH 猜测解释器。可运行 `uv run --locked python -m unittest autosar_tooling.test_process` 与 `cargo test --locked --manifest-path core/Cargo.toml execution::tests` 检查真实父/子/孙进程的退出、超时、取消及故障清理。Windows 使用先登记后恢复的 Job；POSIX 仅保证已登记的合作进程组及未逃逸后代在绝对单调期限内关闭。未登记的 `setsid`/daemon 逃逸不视为成功清理，Linux 反例返回 `cleanup_unconfirmed`；这不是 Linux 虚拟 ECU 已可运行的声明。当前产品构建和验证入口将在后续阶段逐一迁入受控执行，不把本轮独立 probe 误写成旧入口已迁移。
+
+当前 OS 独立消费者入口为 `uv run --locked python -m autosar_tooling os --target windows-x64-controlled-v1 --suite all`；在 Ubuntu24.04 原生环境把 target 改为 `linux-x64-controlled-v1`，不能跨宿主运行。26 项适用 suite 已分别接入 core 集成测试。固定内核、补丁、原生执行栈及 Windows PE／Linux ELF 差异见 [`runtime/os/README.md`](runtime/os/README.md)。当前产品生成与构建仍是 Windows-only，正式双目标产品待后续阶段切换。
 
 ## 代码质量检查
 

@@ -3,7 +3,7 @@
 #include "Os_Target.h"
 #include "FreeRTOS.h"
 #include "task.h"
-#include "Os_Windows.h"
+#include "Os_Host.h"
 #include "Os_Stack.h"
 #include "Os_Vector.h"
 #include "Os_Mailbox.h"
@@ -23,10 +23,12 @@ unsigned Os_BackendInterruptPriority(unsigned interrupt);
 int Os_BackendInterruptMaySchedule(unsigned interrupt);
 void Os_BackendRequestIsrReschedule(void);
 void Os_PortDispatchNested(void);
+void Os_PortPostInterrupt(uint32_t interrupt);
 int Os_BackendInputOwner(void);
 int Os_BackendTaskOwner(TaskType id);
 int Os_BackendServiceContext(void);
 StatusType Os_BridgeContext(void);
+int Os_BridgeActorAllowed(void);
 int Os_MailboxQuiescent(void);
 StatusType Os_TimeValidate(const Os_TargetConfig *target);
 void Os_TimeInit(AppModeType mode);
@@ -66,6 +68,10 @@ void Os_TestInputLastTicket(uint64_t ticket);
 void Os_BackendStart(AppModeType mode);
 void Os_BackendShutdown(StatusType error);
 void Os_BackendRequestShutdown(StatusType error);
+#ifdef __linux__
+void Os_BackendSignalStackFault(char role);
+void Os_BackendSetDispatcher(void);
+#endif
 void Os_BackendGuardService(void);
 Os_HookPhase Os_HookContext(void);
 int Os_HookServiceAllowed(OSServiceIdType service);
@@ -118,6 +124,9 @@ HANDLE Os_PortTaskThread(TaskFunction_t code, void *argument, const StackType_t 
 void Os_PortResumeThread(HANDLE thread);
 DWORD Os_PortSuspendThread(HANDLE thread);
 BOOL Os_PortGetThreadContext(HANDLE thread, CONTEXT *context);
+#if defined(__linux__) && defined(OS_STACK_TESTS)
+void Os_StackTestTriggerBackupFault(void);
+#endif
 
 /* Private implementations behind application-only ARTI service wrappers. */
 ISRType Os_Implementation_GetISRID(void);

@@ -1,7 +1,7 @@
 #include "Os_Target.h"
 #include "Os_Backend.h"
 const Os_TargetConfig *Os_Config;
-static volatile LONG start_called;
+static volatile Os_Atomic32 start_called;
 StatusType Os_TargetPrepare(const Os_TargetConfig *config) {
     size_t i, j;
     uint8_t highest_task = 0u;

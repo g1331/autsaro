@@ -1,28 +1,28 @@
-"""Dependency rejection checks for the independent Epic 4 verifier."""
+"""Dependency and oracle rejection checks for the controlled OS verifier."""
 
-import shutil
 import copy
 import json
 import re
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import epic4_os
+from autosar_tooling import os_suites
 
 
 def native_fixture(name):
-    path = epic4_os.ROOT / "core/tests/fixtures/epic4_oracles" / name
+    path = os_suites.ROOT / "core/tests/fixtures/epic4_oracles" / name
     return json.loads(path.read_text(encoding="utf-8"))
 
 
 class DependencyTests(unittest.TestCase):
     def test_activation_gate_rejects_swapped_fifo_and_missing_observer(self):
         original = native_fixture("native-activation.json")
-        with patch("epic4_os.execute", side_effect=copy.deepcopy(original)):
+        with patch("autosar_tooling.os_suites.execute", side_effect=copy.deepcopy(original)):
             self.assertEqual(
-                len(epic4_os.check_activation(Path("unused.exe"))), len(original)
+                len(os_suites.check_activation(Path("unused.exe"))), len(original)
             )
         for mutation in ["order", "observer"]:
             with self.subTest(mutation=mutation):
@@ -37,16 +37,16 @@ class DependencyTests(unittest.TestCase):
                         r"observer=\d+", "observer=0", result["stdout"]
                     )
                 with (
-                    patch("epic4_os.execute", side_effect=records),
+                    patch("autosar_tooling.os_suites.execute", side_effect=records),
                     self.assertRaises(AssertionError),
                 ):
-                    epic4_os.check_activation(Path("unused.exe"))
+                    os_suites.check_activation(Path("unused.exe"))
 
     def test_finish_gate_rejects_entry_order_return_and_missing_observer(self):
         original = native_fixture("native-finish.json")
-        with patch("epic4_os.execute", side_effect=copy.deepcopy(original)):
+        with patch("autosar_tooling.os_suites.execute", side_effect=copy.deepcopy(original)):
             self.assertEqual(
-                len(epic4_os.check_finish(Path("unused.exe"))), len(original)
+                len(os_suites.check_finish(Path("unused.exe"))), len(original)
             )
         for mutation in ["order", "return", "observer"]:
             with self.subTest(mutation=mutation):
@@ -62,10 +62,10 @@ class DependencyTests(unittest.TestCase):
                     )
                 self.assertNotEqual(records[0]["stdout"], original[0]["stdout"])
                 with (
-                    patch("epic4_os.execute", side_effect=records),
+                    patch("autosar_tooling.os_suites.execute", side_effect=records),
                     self.assertRaises(AssertionError),
                 ):
-                    epic4_os.check_finish(Path("unused.exe"))
+                    os_suites.check_finish(Path("unused.exe"))
 
         # Reject the former whole-OS close instead of accepting a returned Task
         # which failed to finish its activation and run the pending monitor.
@@ -74,29 +74,29 @@ class DependencyTests(unittest.TestCase):
         returned["exit"] = 7
         returned["stdout"] = returned["stdout"].replace("trace=ISRLAMZ", "trace=ISRLAZ")
         with (
-            patch("epic4_os.execute", side_effect=records),
+            patch("autosar_tooling.os_suites.execute", side_effect=records),
             self.assertRaises(AssertionError),
         ):
-            epic4_os.check_finish(Path("unused.exe"))
+            os_suites.check_finish(Path("unused.exe"))
 
     def test_missing_and_modified_kernel_rejected(self):
         with tempfile.TemporaryDirectory(prefix="epic4-dependency-") as directory:
             kernel = Path(directory) / "kernel"
-            shutil.copytree(epic4_os.KERNEL, kernel)
-            self.assertEqual(epic4_os.verify_sources(kernel)["license"], "MIT")
+            shutil.copytree(os_suites.KERNEL, kernel)
+            self.assertEqual(os_suites.verify_sources(kernel)["license"], "MIT")
             source = kernel / "tasks.c"
             source.write_bytes(source.read_bytes() + b"\n/* modified */\n")
             with self.assertRaisesRegex(ValueError, "kernel digest mismatch: tasks.c"):
-                epic4_os.verify_sources(kernel)
+                os_suites.verify_sources(kernel)
             source.unlink()
             with self.assertRaises(FileNotFoundError):
-                epic4_os.verify_sources(kernel)
+                os_suites.verify_sources(kernel)
 
     def test_resource_gate_rejects_preemption_wait_and_mask_order(self):
         original = native_fixture("native-resources.json")
-        with patch("epic4_os.execute", side_effect=copy.deepcopy(original)):
+        with patch("autosar_tooling.os_suites.execute", side_effect=copy.deepcopy(original)):
             self.assertEqual(
-                len(epic4_os.check_resources(Path("unused.exe"))), len(original)
+                len(os_suites.check_resources(Path("unused.exe"))), len(original)
             )
         for index, before, after in [
             (1, "trace=ISRAnHaMZ", "trace=ISRAHnaMZ"),
@@ -111,26 +111,16 @@ class DependencyTests(unittest.TestCase):
                 )
                 self.assertNotEqual(records[index]["stdout"], original[index]["stdout"])
                 with (
-                    patch("epic4_os.execute", side_effect=records),
+                    patch("autosar_tooling.os_suites.execute", side_effect=records),
                     self.assertRaises(AssertionError),
                 ):
-                    epic4_os.check_resources(Path("unused.exe"))
-
-    def test_compiler_identity_rejected(self):
-        class Result:
-            stdout = "unexpected compiler"
-
-        with (
-            patch("epic4_os.subprocess.run", return_value=Result()),
-            self.assertRaisesRegex(ValueError, "requires GCC"),
-        ):
-            epic4_os.compiler()
+                    os_suites.check_resources(Path("unused.exe"))
 
     def test_event_gate_rejects_lost_record_ticket_and_missing_restart(self):
         original = native_fixture("native-events.json")
-        with patch("epic4_os.execute", side_effect=copy.deepcopy(original)):
+        with patch("autosar_tooling.os_suites.execute", side_effect=copy.deepcopy(original)):
             self.assertEqual(
-                len(epic4_os.check_events(Path("unused.exe"))), len(original)
+                len(os_suites.check_events(Path("unused.exe"))), len(original)
             )
         for scenario, before, after in [
             ("mailbox-between", "records=2", "records=1"),
@@ -146,16 +136,16 @@ class DependencyTests(unittest.TestCase):
                 next(row["stdout"] for row in original if row["scenario"] == scenario),
             )
             with (
-                patch("epic4_os.execute", side_effect=records),
+                patch("autosar_tooling.os_suites.execute", side_effect=records),
                 self.assertRaises(AssertionError),
             ):
-                epic4_os.check_events(Path("unused.exe"))
+                os_suites.check_events(Path("unused.exe"))
 
     def test_time_gate_rejects_lost_tick_wrap_and_action_error(self):
         original = native_fixture("native-time.json")
-        with patch("epic4_os.execute", side_effect=copy.deepcopy(original)):
+        with patch("autosar_tooling.os_suites.execute", side_effect=copy.deepcopy(original)):
             self.assertEqual(
-                len(epic4_os.check_time(Path("unused.exe"))), len(original)
+                len(os_suites.check_time(Path("unused.exe"))), len(original)
             )
         for scenario, before, after in [
             ("thousand", "ticks=1000", "ticks=999"),
@@ -175,10 +165,10 @@ class DependencyTests(unittest.TestCase):
                 next(row["stdout"] for row in original if row["scenario"] == scenario),
             )
             with (
-                patch("epic4_os.execute", side_effect=records),
+                patch("autosar_tooling.os_suites.execute", side_effect=records),
                 self.assertRaises(AssertionError),
             ):
-                epic4_os.check_time(Path("unused.exe"))
+                os_suites.check_time(Path("unused.exe"))
 
 
 if __name__ == "__main__":

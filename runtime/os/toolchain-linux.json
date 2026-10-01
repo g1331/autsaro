@@ -1,0 +1,8 @@
+{
+  "identity": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "target": "x86_64-linux-gnu",
+  "executable_sha256": "1b99826121ae6682a634e5efe09bd3e3df58ce58e0b28f849114ab5b89139c26",
+  "objdump_sha256": "325c4205a4c658a9d1e1ebc469ae55975a2b897a3d3c1e79d9b158612d37f745",
+  "nm_sha256": "3708df3d7ce16e2c1dcdcd722784ae382d4d582276a71ab7bbe2d542f5621202",
+  "binutils": "2.42-4ubuntu2.10"
+}

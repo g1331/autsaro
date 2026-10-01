@@ -49,7 +49,7 @@ static void pend(unsigned interrupt) {
     if (is("native-call")) {
         vPortGenerateSimulatedInterrupt(interrupt);
     } else {
-        vPortGenerateSimulatedInterruptFromWindowsThread(interrupt);
+        Os_PortPostInterrupt(interrupt);
     }
 }
 void ErrorHook(StatusType error) {

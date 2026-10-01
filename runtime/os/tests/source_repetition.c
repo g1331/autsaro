@@ -72,7 +72,7 @@ static uint32_t parent(void) {
         repeated_disable();
         check(EnableInterruptSource(6u, FALSE) == E_OK);
     } else {
-        vPortGenerateSimulatedInterruptFromWindowsThread(6u);
+        Os_PortPostInterrupt(6u);
         repeated_enable(is("isr-enable-true") ? TRUE : FALSE);
     }
     check(deliveries == 0u && GetISRID() == 5u);
