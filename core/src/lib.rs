@@ -5,7 +5,10 @@ pub mod generator;
 pub mod host;
 pub mod integration;
 pub mod model;
+pub mod prepared;
+pub mod resources;
 pub mod schema;
+pub mod target;
 
 pub use arxml::Workspace;
 pub use model::{
@@ -13,3 +16,4 @@ pub use model::{
     GenerationPreview, GenerationPreviewFile, GenerationReport, Issue, RunReport, SavePreview,
     SavePreviewFile, SignalView, WorkspaceView,
 };
+pub use prepared::{PreparedProject, prepare_ecu_project, prepare_host_project};

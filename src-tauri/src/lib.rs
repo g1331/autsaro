@@ -4,20 +4,27 @@ use autosar_config_core::integration::{
 };
 use autosar_config_core::{
     BuildReport, DiagnosticSettings, Direction, GenerationPreview, GenerationReport, RunReport,
-    SavePreview, Workspace, WorkspaceView, schema,
+    SavePreview, Workspace, WorkspaceView,
 };
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use tauri::State;
+use tauri::{Manager, State};
 
-#[derive(Default)]
 struct AppState {
     workspace: Mutex<Option<Workspace>>,
+    settings_file: PathBuf,
 }
 
-fn archive() -> PathBuf {
-    let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
-    schema::schema_archive(&repo)
+fn resources(state: &AppState) -> Result<PlanDependencies, String> {
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("desktop package has a workspace parent");
+    let legacy = PlanDependencies::from_repository(repo);
+    PlanDependencies::from_settings_file(&state.settings_file, Some(&legacy))
+}
+
+fn archive(state: &AppState) -> Result<PathBuf, String> {
+    Ok(resources(state)?.xsd_archive)
 }
 
 fn with_workspace<T>(
@@ -50,7 +57,7 @@ fn with_integration<T>(
 ) -> Result<T, Vec<PlanDiagnostic>> {
     let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
     let runtime = RuntimeCatalog::from_repository(&repo)?;
-    let dependencies = PlanDependencies::from_repository(&repo);
+    let dependencies = resources(state).map_err(integration_failure)?;
     let mut guard = state
         .workspace
         .lock()
@@ -128,7 +135,7 @@ fn create_project(
     directory: String,
     name: String,
 ) -> Result<WorkspaceView, String> {
-    let workspace = Workspace::create(Path::new(&directory), &name, archive())?;
+    let workspace = Workspace::create(Path::new(&directory), &name, archive(&state)?)?;
     let view = workspace.view();
     *state.workspace.lock().map_err(|_| "工作区状态锁损坏")? = Some(workspace);
     Ok(view)
@@ -144,7 +151,10 @@ fn open_project(
     state: State<'_, Arc<AppState>>,
     paths: Vec<String>,
 ) -> Result<WorkspaceView, String> {
-    let workspace = Workspace::open(paths.into_iter().map(PathBuf::from).collect(), archive())?;
+    let workspace = Workspace::open(
+        paths.into_iter().map(PathBuf::from).collect(),
+        archive(&state)?,
+    )?;
     let view = workspace.view();
     *state.workspace.lock().map_err(|_| "工作区状态锁损坏")? = Some(workspace);
     Ok(view)
@@ -167,15 +177,11 @@ async fn open_handoff_project(
                 let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
                 let runtime =
                     RuntimeCatalog::from_repository(&repo).map_err(|e| format!("{e:?}"))?;
-                Workspace::open_ecu_handoff(
-                    root,
-                    &PlanDependencies::from_repository(&repo),
-                    &runtime,
-                )
-                .map_err(|e| format!("{e:?}"))?
+                Workspace::open_ecu_handoff(root, &resources(&state)?, &runtime)
+                    .map_err(|e| format!("{e:?}"))?
             }
             Some("autosar-host-handoff-v1") => {
-                autosar_config_core::generator::open_handoff(root, archive())?
+                autosar_config_core::generator::open_handoff(root, archive(&state)?)?
             }
             _ => {
                 return Err(
@@ -490,7 +496,14 @@ async fn run_diagnostic(output_directory: String) -> Result<RunReport, String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(Arc::new(AppState::default()))
+        .setup(|app| {
+            let settings_file = app.path().app_config_dir()?.join("settings.json");
+            app.manage(Arc::new(AppState {
+                workspace: Mutex::new(None),
+                settings_file,
+            }));
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             workspace_view,
             inspect_integration,

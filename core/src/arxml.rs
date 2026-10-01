@@ -1508,6 +1508,31 @@ impl Workspace {
         load_sources(paths, schema_zip)
     }
 
+    pub(crate) fn preparation_input_identity(&self) -> String {
+        let mut inputs: Vec<_> = self
+            .files
+            .iter()
+            .map(|file| {
+                (
+                    file.path
+                        .file_name()
+                        .unwrap_or_else(|| file.path.as_os_str())
+                        .to_string_lossy(),
+                    file.text.as_bytes(),
+                )
+            })
+            .collect();
+        inputs.sort_by(|left, right| left.0.cmp(&right.0).then_with(|| left.1.cmp(right.1)));
+        let mut digest = Sha256::new();
+        for (name, contents) in inputs {
+            digest.update((name.len() as u64).to_le_bytes());
+            digest.update(name.as_bytes());
+            digest.update((contents.len() as u64).to_le_bytes());
+            digest.update(contents);
+        }
+        format!("{:x}", digest.finalize())
+    }
+
     pub fn view(&self) -> WorkspaceView {
         WorkspaceView {
             integration_candidate: self.files.iter().any(|file| {

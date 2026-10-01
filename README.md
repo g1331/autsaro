@@ -37,7 +37,7 @@
 本地官方材料须由使用者自行合法放置，不随源码或安装包分发：
 
 - XSD：`docs/official/R24-11/FO/MethodologyAndTemplates/AUTOSAR_FO_MMOD_XMLSchema.zip`（包含 `AUTOSAR_00053.xsd` 与 `xml.xsd`）。
-- MOD：`docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_MOD_ECUConfigurationParameters.zip`。阶段0 `doctor` 可用 `AUTOSAR_XSD_ARCHIVE`/`AUTOSAR_MOD_ARCHIVE` 检查显式来源；Windows 当前工作台仍从上述仓库位置读取，阶段3才将显式路径接入产品命令。
+- MOD：`docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_MOD_ECUConfigurationParameters.zip`。核心计划使用显式 XSD/MOD 路径并核对固定 R24-11 SHA-256；CLI 可传 `--xsd-archive`/`--mod-archive`，进程变量 `AUTOSAR_XSD_ARCHIVE`/`AUTOSAR_MOD_ARCHIVE` 优先于桌面配置但不会写回。桌面应用配置目录（Tauri `app_config_dir`）的 `settings.json` 可写 `{"xsdArchive":"<XSD绝对路径>","modArchive":"<MOD绝对路径>"}`；设置界面将在后续阶段提供。过渡期间未配置路径的 Windows 既有产品入口仍查找上述仓库目录，不等于可搬离源码。
 - 集成样例：`docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_EXP_ModelingShowCases.zip`。核心测试另读取上述两项合法规范档案。
 
 从新克隆的源码根目录运行（须预先准备平台原生依赖与官方档案）：
@@ -57,6 +57,10 @@ cargo build --locked --manifest-path src-tauri/Cargo.toml
 受控外部命令已有独立的 `core::execution` 与 `ecu_tools.process` 入口；Rust 侧执行前须把 `AUTOSAR_PYTHON` 设为锁定虚拟环境中 CPython 的**绝对路径**（Windows 为 `.venv/Scripts/python.exe`，POSIX 为 `.venv/bin/python`），不得依赖 PATH 猜测解释器。可运行 `uv run --locked python -m unittest autosar_tooling.test_process` 与 `cargo test --locked --manifest-path core/Cargo.toml execution::tests` 检查真实父/子/孙进程的退出、超时、取消及故障清理。Windows 使用先登记后恢复的 Job；POSIX 仅保证已登记的合作进程组及未逃逸后代在绝对单调期限内关闭。未登记的 `setsid`/daemon 逃逸不视为成功清理，Linux 反例返回 `cleanup_unconfirmed`；这不是 Linux 虚拟 ECU 已可运行的声明。当前产品构建和验证入口将在后续阶段逐一迁入受控执行，不把本轮独立 probe 误写成旧入口已迁移。
 
 当前 OS 独立消费者入口为 `uv run --locked python -m autosar_tooling os --target windows-x64-controlled-v1 --suite all`；在 Ubuntu24.04 原生环境把 target 改为 `linux-x64-controlled-v1`，不能跨宿主运行。26 项适用 suite 已分别接入 core 集成测试。固定内核、补丁、原生执行栈及 Windows PE／Linux ELF 差异见 [`runtime/os/README.md`](runtime/os/README.md)。当前产品生成与构建仍是 Windows-only，正式双目标产品待后续阶段切换。
+
+源码准备已有固定 `windows-x64-controlled-v1` 与 `linux-x64-controlled-v1` 输出目标，`AssetInventory` 在构建时核对 BSW、OS、FreeRTOS 原件、补丁、目标锁与交付素材的可信摘要；显式目录加载以编译进工作台的清单核对，不相信目录自报的散列。`prepare_ecu_project`/`prepare_host_project` 返回纯内存的源码选集、`autosar-build-target-v1` 元数据与绑定输入/目标/资源字节的 fingerprint，预检为 `not_run`；不调用 Git/GCC/PowerShell，也不安装或封存包。两目标的普通 BSW 选集相同，原生 OS port/补丁按目标分离；Linux ECU bridge、完整离线构建与生产 CAN/DID 尚未接入，不能把这个预览当成可运行的 Linux ECU。旧 Windows 生成、预检和构建仍按既有入口工作，下一阶段一起切换。
+
+明确检查本机能否执行**目标**时另运行 `uv run --locked python -m autosar_tooling doctor --role native --target windows-x64-controlled-v1`，Ubuntu24.04 原生环境将 target 改为 `linux-x64-controlled-v1`。此命令才有界启动 Git、固定 GCC、binutils 与 CPython 身份查询并核对合法 XSD/MOD；缺失或身份不符返回非零。本机不能执行某目标不妨碍上述纯源码预览。
 
 ## 代码质量检查
 

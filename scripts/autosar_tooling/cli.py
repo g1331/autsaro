@@ -12,7 +12,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     check = commands.add_parser("doctor", help="Check the workbench prerequisites")
-    check.add_argument("--role", choices=("workbench",), required=True)
+    check.add_argument("--role", choices=("workbench", "native"), required=True)
+    check.add_argument(
+        "--target",
+        choices=("windows-x64-controlled-v1", "linux-x64-controlled-v1"),
+        help="Required for --role native; identifies the output target, not the workbench",
+    )
     native_os = commands.add_parser("os", help="Run independent native OS C99 suites")
     native_os.add_argument(
         "--target",
@@ -52,6 +57,12 @@ def main() -> int:
     )
     args = parser.parse_args()
     if args.command == "doctor":
+        if args.role == "native":
+            if not args.target:
+                parser.error("--role native requires --target")
+            return doctor.native(args.target)
+        if args.target:
+            parser.error("--role workbench does not take --target")
         return doctor.workbench()
     if args.command == "os":
         return os_suites.run(args.target, args.suite)

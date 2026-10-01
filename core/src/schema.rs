@@ -1,52 +1,116 @@
 use crate::model::Issue;
 use libxml::parser::{Parser, ParserOptions};
 use libxml::schemas::{SchemaParserContext, SchemaValidationContext};
+use sha2::{Digest, Sha256};
 use std::fs;
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 use zip::ZipArchive;
 
 pub const SCHEMA_ZIP: &str =
     "docs/official/R24-11/FO/MethodologyAndTemplates/AUTOSAR_FO_MMOD_XMLSchema.zip";
-static SCHEMA_LOCK: Mutex<()> = Mutex::new(());
+pub const XSD_SHA256: &str = "9db3ab1d2ec4db7cc8ff09f1259ff93a7a5945a9500d4cd3ea4a7090f2a25766";
+static NEXT_SCHEMA_DIR: AtomicU64 = AtomicU64::new(0);
 
 pub fn schema_archive(repo: &Path) -> PathBuf {
     repo.join(SCHEMA_ZIP)
 }
+struct PrivateSchemaDirectory(PathBuf);
 
-fn unpack_schema(archive: &Path) -> Result<PathBuf, String> {
-    let file = fs::File::open(archive)
-        .map_err(|e| format!("无法打开本地 R24-11 XSD 包 {}: {e}", archive.display()))?;
-    let mut zip = ZipArchive::new(file).map_err(|e| format!("XSD 包损坏: {e}"))?;
-    let archive_modified = fs::metadata(archive)
-        .and_then(|m| m.modified())
-        .map_err(|e| e.to_string())?;
-    let target = std::env::temp_dir().join(format!("autosar-r24-11-schema-{}", std::process::id()));
-    fs::create_dir_all(&target).map_err(|e| e.to_string())?;
+impl PrivateSchemaDirectory {
+    fn create() -> Result<Self, String> {
+        for _ in 0..16 {
+            let nonce = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(|error| error.to_string())?
+                .as_nanos();
+            let target = std::env::temp_dir().join(format!(
+                "autosar-r24-11-schema-{}-{nonce}-{}",
+                std::process::id(),
+                NEXT_SCHEMA_DIR.fetch_add(1, Ordering::Relaxed)
+            ));
+            #[cfg(unix)]
+            let mut builder = fs::DirBuilder::new();
+            #[cfg(not(unix))]
+            let builder = fs::DirBuilder::new();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::DirBuilderExt;
+                builder.mode(0o700);
+            }
+            match builder.create(&target) {
+                Ok(()) => return Ok(Self(target)),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => return Err(error.to_string()),
+            }
+        }
+        Err("无法创建唯一的 XSD 校验临时目录".into())
+    }
+
+    fn schema_path(&self) -> PathBuf {
+        self.0.join("AUTOSAR_00053.xsd")
+    }
+}
+
+impl Drop for PrivateSchemaDirectory {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+fn unpack_schema(archive: &Path) -> Result<PrivateSchemaDirectory, String> {
+    let mut file = fs::File::open(archive)
+        .map_err(|error| format!("无法打开本地 R24-11 XSD 包 {}: {error}", archive.display()))?;
+    let mut digest = Sha256::new();
+    let mut buffer = [0u8; 8192];
+    loop {
+        let count = file.read(&mut buffer).map_err(|error| error.to_string())?;
+        if count == 0 {
+            break;
+        }
+        digest.update(&buffer[..count]);
+    }
+    if format!("{:x}", digest.finalize()) != XSD_SHA256 {
+        return Err("R24-11 XSD 包与固定内容身份不符".into());
+    }
+    file.seek(SeekFrom::Start(0))
+        .map_err(|error| error.to_string())?;
+    let mut zip = ZipArchive::new(file).map_err(|error| format!("XSD 包损坏: {error}"))?;
+    const ALLOWED: [&str; 5] = [
+        "_disclaimer.txt",
+        "_readme.txt",
+        "AUTOSAR_00053.xsd",
+        "autosar.soc",
+        "xml.xsd",
+    ];
+    for index in 0..zip.len() {
+        let member = zip.by_index(index).map_err(|error| error.to_string())?;
+        if !ALLOWED.contains(&member.name())
+            || member.is_dir()
+            || member
+                .unix_mode()
+                .is_some_and(|mode| mode & 0o170000 == 0o120000)
+        {
+            return Err(format!("XSD 包包含不允许的路径或链接: {}", member.name()));
+        }
+    }
+    let target = PrivateSchemaDirectory::create()?;
     for name in ["AUTOSAR_00053.xsd", "xml.xsd"] {
         let mut member = zip
             .by_name(name)
-            .map_err(|e| format!("XSD 包缺少 {name}: {e}"))?;
-        let path = target.join(name);
-        if fs::metadata(&path).is_ok_and(|metadata| {
-            metadata.len() == member.size()
-                && metadata
-                    .modified()
-                    .is_ok_and(|modified| modified >= archive_modified)
-        }) {
-            continue;
-        }
-        let mut bytes = Vec::with_capacity(member.size() as usize);
-        member.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
-        fs::write(&path, bytes).map_err(|e| e.to_string())?;
+            .map_err(|error| format!("XSD 包缺少 {name}: {error}"))?;
+        let mut output =
+            fs::File::create(target.0.join(name)).map_err(|error| error.to_string())?;
+        std::io::copy(&mut member, &mut output).map_err(|error| error.to_string())?;
     }
-    Ok(target.join("AUTOSAR_00053.xsd"))
+    Ok(target)
 }
 
 pub fn validate_files(archive: &Path, files: &[(&Path, &str)]) -> Result<Vec<Issue>, String> {
-    let _validation_guard = SCHEMA_LOCK.lock().map_err(|_| "XSD 校验器状态锁损坏")?;
-    let schema_path = unpack_schema(archive)?;
+    let directory = unpack_schema(archive)?;
+    let schema_path = directory.schema_path();
     let mut parser = SchemaParserContext::from_file(&schema_path.to_string_lossy());
     let mut validator = SchemaValidationContext::from_parser(&mut parser).map_err(|errors| {
         format!(

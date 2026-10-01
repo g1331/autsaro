@@ -21,6 +21,10 @@ impl ComponentContractFiles {
         &self.files
     }
 
+    pub(crate) fn into_files(self) -> Vec<(String, Vec<u8>)> {
+        self.files
+    }
+
     /// Inspect all proposed files and existing-output integrity without writing.
     pub fn preview(&self, output: &Path) -> Result<GenerationPreview, String> {
         generator::preview_prepared(&self.files, output)

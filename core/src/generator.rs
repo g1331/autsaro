@@ -3,6 +3,7 @@ use crate::model::{
     BuildReport, DiagnosticView, Direction, GenerationPreview, GenerationPreviewFile,
     GenerationReport, Issue, SignalView,
 };
+use crate::target::BuildTarget;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::ffi::OsStr;
@@ -477,10 +478,13 @@ pub(crate) fn seal_files(mut files: Vec<(String, Vec<u8>)>) -> Vec<(String, Vec<
     files
 }
 
-fn prepared_files(workspace: &mut Workspace) -> Result<Vec<(String, Vec<u8>)>, String> {
+pub(crate) fn render_host_profile(
+    workspace: &mut Workspace,
+    target: BuildTarget,
+) -> Result<Vec<(String, Vec<u8>)>, String> {
     let (frames, signals) = workspace.checked_profile()?;
     let diagnostic = workspace.view().diagnostic;
-    if !cfg!(windows)
+    if target == BuildTarget::LinuxX64ControlledV1
         && diagnostic
             .as_ref()
             .is_some_and(|item| item.security_enabled)
@@ -489,6 +493,21 @@ fn prepared_files(workspace: &mut Workspace) -> Result<Vec<(String, Vec<u8>)>, S
     }
     let (generated, map, externals) =
         config_source(workspace.name(), &frames, &signals, diagnostic.as_ref())?;
+    Ok(vec![
+        ("Dcm_Externals.h".into(), externals.into_bytes()),
+        ("Ecu_Config.c".into(), generated.into_bytes()),
+        ("profile.txt".into(), map.into_bytes()),
+    ])
+}
+
+fn prepared_files(workspace: &mut Workspace) -> Result<Vec<(String, Vec<u8>)>, String> {
+    let target = if cfg!(windows) {
+        BuildTarget::WindowsX64ControlledV1
+    } else {
+        BuildTarget::LinuxX64ControlledV1
+    };
+    let generated = render_host_profile(workspace, target)?;
+    let diagnostic = workspace.view().diagnostic;
     let mut files = Vec::new();
     for (source, name) in source_files(&runtime_dir())? {
         files.push((
@@ -505,10 +524,8 @@ fn prepared_files(workspace: &mut Workspace) -> Result<Vec<(String, Vec<u8>)>, S
             "build.ps1".into(),
             include_bytes!("../../runtime/generated-build.ps1").to_vec(),
         ),
-        ("Dcm_Externals.h".into(), externals.into_bytes()),
-        ("Ecu_Config.c".into(), generated.into_bytes()),
-        ("profile.txt".into(), map.into_bytes()),
     ]);
+    files.extend(generated);
     Ok(seal_files(files))
 }
 

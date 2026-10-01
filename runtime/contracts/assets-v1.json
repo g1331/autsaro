@@ -1,0 +1,1163 @@
+{
+  "format": "autosar-asset-inventory-v1",
+  "externalIdentitySources": [
+    "runtime/contracts/bsw-v1.json",
+    "third_party/freertos/source-manifest.json",
+    "third_party/freertos/posix-source-manifest.json"
+  ],
+  "assets": [
+    {
+      "path": "runtime/ecu/build.ps1",
+      "sha256": "5f0c3251c0a000c89ba31f0f1c4e36a606fde6ceffd8b6ba01dc1d20d3b7c4ff",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/ecu/include/Ecu_HostBatch.h",
+      "sha256": "e22fa0d9876a55b81e3bcf1b2ea2dc60d00eceb30ba359f2294081c078643072",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/ecu/include/Ecu_Target.h",
+      "sha256": "e0ad9a5529edc410cdc5fc6652253e7a5a2c416cabe62b948f1795de85ae68eb",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/ecu/include/Rte_MemMap.h",
+      "sha256": "a0028a9d3cdc2f8db07dd1375218ae477d5c7bbd3feb4d78ee275286ab198a1b",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/ecu/src/ecu_host_batch.c",
+      "sha256": "cae29f452dc501644fc6c8ea64d9dd1e78befcf460ee087c5a33fae4d32941c6",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/ecu/src/Ecu_HostBatch.c",
+      "sha256": "8c24c481b8230c32e16c5f15d8b87dd4f9d750ced508da3f9d449e1b9e9ca13d",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/ecu/src/Ecu_HostBridge.c",
+      "sha256": "a76d4bcc8c38f1c84bffb00971947c0314835dfa3a9c3237c68145a31e08fd07",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/ecu/src/Ecu_OsHooks.c",
+      "sha256": "786bb5625c47ab39c07f3a4e20020abf52d7d6425be6174097ead7ca37e50a4c",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/ecu/src/ecu_probe.c",
+      "sha256": "0e351f47d798eec79e21eb1a066c96116844a188715c6502540c014b9d211f25",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/ecu/src/Ecu_SchM.c",
+      "sha256": "aa5dcf01ce81a58ad5f4c10bf4e2b499a46de89baeca1ff9b5ef27c3ce1fd772",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/ecu/src/Ecu_Target.c",
+      "sha256": "16a702fd432715df63c8766bfd5c197afe24151e0a7b12ff349064e509369813",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/ecu/templates/Application.c.in",
+      "sha256": "b40367938e5e9e4748032fbc7978f3f3b0460377d6d3cda43151949c934a9471",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/ecu/templates/Ecu_Config.c.in",
+      "sha256": "bd56b27f8b5a4b444b032c799f787ede08d79231db24ebb7b5a6b616cc66f2b6",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/ecu/templates/Rte.c.in",
+      "sha256": "bd17136a7ac4d562e047d7a178c7fba929dd05e9536d19bdf6b5b92c0c93360a",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/ecu/verify.ps1",
+      "sha256": "fec3eda60ddec5c764136a5ff14b7d8b3362d92b088a88b10aaee733308e6841",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/generated-build.ps1",
+      "sha256": "9c99aa85bc45b1b12c09656b1ce087a270621d7235e05e2f5234a307f4ce0bab",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench",
+      "profiles": [
+        "host"
+      ]
+    },
+    {
+      "path": "runtime/include/Ecu_Runtime.h",
+      "sha256": "61f8c8455557e195330fbe16651166d6e8c96060fd14b6b23c8944ab23f5be25",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench",
+      "profiles": [
+        "host"
+      ]
+    },
+    {
+      "path": "runtime/include/NvM.h",
+      "sha256": "cd37736a221da03787519d871731696d69a843525122bf43c022a9c96b862a0a",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu",
+        "host"
+      ]
+    },
+    {
+      "path": "runtime/include/Rte.h",
+      "sha256": "aff8c64f0d4406e37bbbe0d635859f1459674f1f8516d159ac7f4718e75e3480",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench",
+      "profiles": [
+        "host"
+      ]
+    },
+    {
+      "path": "runtime/os/FreeRTOSConfig.h",
+      "sha256": "03b64e00357a47db0ce053d10766690c8c72a92caac03beb792704e235b9a23b",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/include/Arti.h",
+      "sha256": "f7168a605623a0928b9ccfbc499c837a74d02f07c2b93d30a09b4003c0e56392",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/include/Os_Arti.h",
+      "sha256": "79f386211d937abe5a38957c6e08f8cb83a0b5a70c469851cffcf1302ebee42a",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/include/Os_Cfg.h",
+      "sha256": "9183e140543aacb4e6cfdface1d9f47c27300fd13a5fe43b4440431e164500b3",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/include/Os_Hooks.h",
+      "sha256": "8da5c2b29ffb34ad8611be6dce993ae1e86dcb5c188094ecbd6656cc69711766",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/include/Os_Host.h",
+      "sha256": "6c764752a02676462497fc2b289f51c7ce9d5c75209e5890dd682a8639db27d6",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/include/Os_Mailbox.h",
+      "sha256": "de31d0af68fe473bcab3ee365066eb1feec3436036a0740b2be996d78719ef4c",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/include/Os_MemMap.h",
+      "sha256": "4e5f81f0096dd5c0c94d09aaca9a4734f2f7dfc7415bda0b5bef490d9addc847",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/include/Os_Target.h",
+      "sha256": "2cb72f46a15d8132820354587ee4e1379f8d04f46f52f3c2b60f8b2226df2c94",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/include/Os_Time.h",
+      "sha256": "02a429a14b8a1b3d50158b4b66801fd06d57172282b375e52faeb09c40f8acd5",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/include/Os_Types.h",
+      "sha256": "212ab88b365359780e7020c5f1a9a015069d0f9267f88a62d077dc4a470ec82e",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/include/Os.h",
+      "sha256": "62505f34f39301846a26e6fde8f8b0fe196864acc53b0f9770048e9c5467537c",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/include/Rte_Os_Type.h",
+      "sha256": "377ca357b946abbf524b4a39cc710f72c155904a248a39848ccc4c29712fcd12",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/patches/0001-controlled-host-lifecycle.patch",
+      "sha256": "b522c8fa69454989be899658d670f6313fb621f455f32a258e06fad18fbbf04f",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "patch",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/patches/0002-native-stack.patch",
+      "sha256": "75e4e04e0de99dd9c1dc3e36e3a93c3d51cad64fec32a09e8b203c3c15040648",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "patch",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/patches/0003-activation-ready-policy.patch",
+      "sha256": "357b1a98a00d8bd197092e4199b710849d08d5684f9d0eabf4459c354c9f979b",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "patch",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/patches/0004-windows-event-namespace.patch",
+      "sha256": "633529f96b0bb46cae34687cae8dd9bffda068b971f0dd22b8da9c5fdaa47bf1",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "patch",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/patches/0005-category2-resource-gate.patch",
+      "sha256": "e43dd1f0998e7ec0a8feb8e397ba37c285bf2c031480a6528297e078c94c82df",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "patch",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/patches/0006-input-handler-ownership.patch",
+      "sha256": "bcb70ae8a8947344c206ff4a0b31d445b6c6bb1956135d45f81c6e1b554a3075",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "patch",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/patches/0007-controlled-tick.patch",
+      "sha256": "d027c76922a4d8d69e639b3cbe5a48c121b4dabfaf116334b4acff1fc472160f",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "patch",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/patches/0008-task-hook-boundaries.patch",
+      "sha256": "bf6d08e9ff0b6e2c8eb866b5c0509559e9d5ab37cf9df25b23824dcc16beccdc",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "patch",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/patches/0009-interrupt-source-control.patch",
+      "sha256": "31b2a63c117986a01ba028b2f7dc4b91bb7b8d9c92bea78265a0240051b90829",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "patch",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/patches/0010-native-interrupt-identities.patch",
+      "sha256": "c27b3887858dcace2630fd9b114eb7c55f8f365af328e7fa8f37897805b707d0",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "patch",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/patches/0011-isr-phase-before-mutex-release.patch",
+      "sha256": "e2aea7b4a24ea564c2cf8fcf85932982a8aec80d642394c37cb4dd1067eb1a4f",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "patch",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/patches/0012-nested-interrupt-dispatch.patch",
+      "sha256": "e14a652b95db9e80bf26eb49354f8f52615af3b2158ae2c2aaf19a1c6947b0aa",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "patch",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/patches/0013-interrupt-source-repetition.patch",
+      "sha256": "834f98c89a173d4eaabf842929dbf4ec27d8e216a1b9b0e9cb14b4fd90660c8c",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "patch",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/patches/0014-relocatable-interrupt-vectors.patch",
+      "sha256": "8324f410501be231047bfb6df88ac97c7f584771f7289125a668e62664fc242f",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "patch",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/patches/linux/0001-controlled-posix-port.patch",
+      "sha256": "2fe906c7836bd93ec965a6861042b23f65bd7135e9379bcdbb69ab95c386e097",
+      "license": "Project-owned",
+      "targets": [
+        "linux-x64-controlled-v1"
+      ],
+      "role": "patch",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/README.md",
+      "sha256": "ab5ba6325f4ab2c649dfa02f434c22d494d06ccbd68b4ec2dfced4e00b4d5a4a",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/src/Arti.c",
+      "sha256": "f625e33c5ae9c16ceb27bab6a0bbb8881be0c8778eeb62f3cb4f10a4443c6a83",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/src/host/linux/Os_HostLinux.c",
+      "sha256": "0abfa037168e8d2d88c0704e2aa72dbd3a2257016a1a734c362eeec8c6508293",
+      "license": "Project-owned",
+      "targets": [
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/src/host/linux/Os_HostLinux.h",
+      "sha256": "ed207bd249aa4c5d4ee50c285a3eb56eeff52428c9c7b722d5d72cdd3fab7d46",
+      "license": "Project-owned",
+      "targets": [
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/src/host/linux/Os_StackLinux.c",
+      "sha256": "a7021f6bda911ca8e722f64bb2b44c5209e31fb1a97f56795cfb9847ec0ca3ea",
+      "license": "Project-owned",
+      "targets": [
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/src/host/windows/Os_HostWindows.c",
+      "sha256": "cd8414ab38d99cfedc97c29fadcbee00d8694ced3e1dce6ab49de27c49540c0b",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/src/Os_Arti.c",
+      "sha256": "10a646a21745c3b22e2542206c5ef96a0ebb991a9127355369c7037b0c5dc7ae",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/src/Os_ArtiServices.c",
+      "sha256": "e7ab8a6da131fe2b432a3f64f5e0f52c2ac83f6facbdf24877fa5967533aafe0",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/src/Os_Backend.c",
+      "sha256": "73cefeab458e0c209478737a63d03d8d236bf1d89e49a73dd6c799b447a85878",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/src/Os_Backend.h",
+      "sha256": "d539459faa474e2e01aeb902795a4f94cf3198eec6bcb9b55dff855266884fb9",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/src/Os_Error.c",
+      "sha256": "c5052e6dddc4fa1749aaa7939005b0fdf7b45e9010bb99a1a5cdfd2f5e10207f",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/src/Os_Interrupt.c",
+      "sha256": "e5e2d8c15d17c46b62aa270cb917d0a389c27a987ddd16e15fae8dd45632973e",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/src/Os_Mailbox.c",
+      "sha256": "84b1f9e6cde9090c2e0011e645ce1f00e1d8640af5cdf03434e8be90081a8625",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/src/Os_Schedule.c",
+      "sha256": "ac4804aa0dbded3e42df47bba1ff03408c69af39e15b788bb0cbdad42ec2b98a",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/src/Os_Stack.c",
+      "sha256": "f319cb4cf8cdc946286b9d6ddabbb0bd2824805927605245e943b2cd389d835c",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/src/Os_Stack.h",
+      "sha256": "f91be075726a579fbaf3732d470020d90b5f1a28178c8e9714f0dd5a6ab6e2fa",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/src/Os_Time.c",
+      "sha256": "ac04288d46afb7861a44d11af0ed58e760f12ecd1fa43a60b4957f85d97dc6b0",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/src/Os_Vector.c",
+      "sha256": "2802f7de4edb0b2f5609dae9335df41e00933d0b38e5227b8180a518f18be8ff",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/src/Os_Vector.h",
+      "sha256": "81752cfb37023adb64bba9a0a2c87100d5b1f360e694589c7c297e87fcdb56a0",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/src/Os_Windows.h",
+      "sha256": "653a7ef7849fcd34545d17eacb4317513b2789f49e38292a69ce2fdfe9782722",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/src/Os.c",
+      "sha256": "bd8279cfc2cc31862ccd27cbb0a4a18b8b77875290e0cbf284afff897fc96187",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/toolchain-linux.json",
+      "sha256": "8f278854021d3be8933701085fb3bdea8c32b87de88fd0cee09576e9fe433eed",
+      "license": "Project-owned",
+      "targets": [
+        "linux-x64-controlled-v1"
+      ],
+      "role": "target",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/toolchain.json",
+      "sha256": "dbb865366e44869eb91e77d6aedfc9ba9ce0ebda0fb4d8ae8bc7a0ec0c31619d",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "target",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/reference-verify.ps1",
+      "sha256": "8fb2427d88006bc235fb08b8022addbf486946f1a8fb5617872d4dbbda0de267",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench",
+      "profiles": [
+        "host"
+      ]
+    },
+    {
+      "path": "runtime/src/Can_HostLock.c",
+      "sha256": "2b041a20750f57a11c1f319d8b79c904b8251c0c7a619131b47a9bc74fb75c9e",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench",
+      "profiles": [
+        "host"
+      ]
+    },
+    {
+      "path": "runtime/src/Can_HostLock.h",
+      "sha256": "dab4a501c0bcf001a967d47d199553f806ac5d6138fc3ce7c11833938368d4b4",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu",
+        "host"
+      ]
+    },
+    {
+      "path": "runtime/src/Dem.c",
+      "sha256": "aa8ade516ef95e273cb646a55f8a0025fda5701afdc15ecc10ee38372a818b2c",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu",
+        "host"
+      ]
+    },
+    {
+      "path": "runtime/src/ecu_host_main.c",
+      "sha256": "ddcdc5303215f7fdc4d51be9e2eab47bb63ecaf063ebb11d57ec2a43a2f33e0b",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench",
+      "profiles": [
+        "host"
+      ]
+    },
+    {
+      "path": "runtime/src/Ecu_Runtime.c",
+      "sha256": "c485f96dd4d30f9aba7cea2ccfa6e3acf9b690780bff50269b91b16d3d05f372",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench",
+      "profiles": [
+        "host"
+      ]
+    },
+    {
+      "path": "runtime/src/Ecu_Status.c",
+      "sha256": "d406944730b6834f29983aad9ee8fa64c77753d2dfcee5798102d0fb5b7a9dc6",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu",
+        "host"
+      ]
+    },
+    {
+      "path": "runtime/src/LSduR.c",
+      "sha256": "45074f864cfa3a590963e5b201c56261910d448a29564a747e3e55fff8a81340",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu",
+        "host"
+      ]
+    },
+    {
+      "path": "runtime/src/NvM_HostStorage.c",
+      "sha256": "4a76561223d025fef6808f2ba16e9ce4704b8bb88bd76f51e4abb08276ed30a0",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu",
+        "host"
+      ]
+    },
+    {
+      "path": "runtime/src/NvM_HostStorage.h",
+      "sha256": "e4d5ce211698ebe01b5a4344697c602bcaf71fd27217f08abace3107cd7c7d55",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu",
+        "host"
+      ]
+    },
+    {
+      "path": "runtime/src/NvM.c",
+      "sha256": "4a9b1219f6d550e3e65918b3655689640a2a00d3f3452d853b80ae5411f55654",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu",
+        "host"
+      ]
+    },
+    {
+      "path": "runtime/src/Os.c",
+      "sha256": "a0d6253e041ac604880b21e662b08115e14812117c84f46ed8dc57ba8d926a6c",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench",
+      "profiles": [
+        "host"
+      ]
+    },
+    {
+      "path": "runtime/src/Rte.c",
+      "sha256": "2fa1be887f66930027e1ef33fb12ac7c50be148c4be34802877ae451c42cf737",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench",
+      "profiles": [
+        "host"
+      ]
+    },
+    {
+      "path": "runtime/src/Security.c",
+      "sha256": "86ab1bd43cf7edac66bd0052fa4458fe7c1dccc7a22415ce84c49b4bbda5ae48",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu",
+        "host"
+      ]
+    }
+  ]
+}

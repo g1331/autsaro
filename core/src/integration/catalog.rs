@@ -49,7 +49,7 @@ fn tool(code: &str, message: impl Into<String>) -> Vec<PlanDiagnostic> {
 }
 
 impl RuntimeCatalog {
-    pub fn from_repository(root: &Path) -> Result<Self, Vec<PlanDiagnostic>> {
+    pub fn embedded() -> Result<Self, Vec<PlanDiagnostic>> {
         let description: Description = serde_json::from_str(DESCRIPTION).map_err(|error| {
             tool(
                 "CATALOG_TOOL",
@@ -59,12 +59,24 @@ impl RuntimeCatalog {
         if description.format_version != 1
             || description.profile != PROFILE
             || description.scope.is_empty()
+            || description.entries.iter().any(|(symbol, entry)| {
+                entry.stage != "current_host_bsw"
+                    || !description.sources.contains_key(&entry.header)
+                    || !description.sources.contains_key(&entry.source)
+                    || entry.module.is_empty()
+                    || !c_identifier(symbol)
+            })
         {
             return Err(tool(
                 "CATALOG_TOOL",
                 "The compiled BSW inventory has an unsupported identity.",
             ));
         }
+        Ok(Self { description })
+    }
+
+    pub fn from_repository(root: &Path) -> Result<Self, Vec<PlanDiagnostic>> {
+        let Self { description } = Self::embedded()?;
         let manifest =
             std::fs::read(root.join("runtime/contracts/bsw-v1.json")).map_err(|error| {
                 tool(

@@ -8,6 +8,8 @@ fn execute() -> Result<(), String> {
     let mut output = None;
     let mut revision = None;
     let mut inputs = Vec::new();
+    let mut xsd_archive = None;
+    let mut mod_archive = None;
     let mut write = false;
     while let Some(argument) = args.next() {
         if argument == "--write" {
@@ -21,6 +23,8 @@ fn execute() -> Result<(), String> {
             "--repository" => repository = Some(PathBuf::from(value)),
             "--output" => output = Some(PathBuf::from(value)),
             "--input" => inputs.push(PathBuf::from(value)),
+            "--xsd-archive" => xsd_archive = Some(PathBuf::from(value)),
+            "--mod-archive" => mod_archive = Some(PathBuf::from(value)),
             "--revision" => revision = Some(value),
             _ => return Err(format!("Unknown argument: {argument}")),
         }
@@ -37,7 +41,22 @@ fn execute() -> Result<(), String> {
     }
     let diagnostics =
         |issues| serde_json::to_string_pretty(&issues).unwrap_or_else(|error| error.to_string());
-    let dependencies = PlanDependencies::from_repository(&repository);
+    let xsd_archive =
+        xsd_archive.or_else(|| std::env::var_os("AUTOSAR_XSD_ARCHIVE").map(PathBuf::from));
+    let mod_archive =
+        mod_archive.or_else(|| std::env::var_os("AUTOSAR_MOD_ARCHIVE").map(PathBuf::from));
+    let dependencies = if xsd_archive.is_none() && mod_archive.is_none() {
+        PlanDependencies::from_repository(&repository)
+    } else {
+        let root = repository
+            .canonicalize()
+            .map_err(|error| error.to_string())?;
+        let legacy = PlanDependencies::from_repository(&root);
+        PlanDependencies::explicit(
+            xsd_archive.unwrap_or(legacy.xsd_archive),
+            mod_archive.unwrap_or(legacy.mod_archive),
+        )?
+    };
     let runtime = RuntimeCatalog::from_repository(&repository).map_err(diagnostics)?;
     let workspace = Workspace::open(inputs, dependencies.xsd_archive)?;
     let plan = workspace

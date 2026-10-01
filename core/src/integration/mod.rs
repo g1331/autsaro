@@ -47,7 +47,7 @@ pub const FORMAT_VERSION: u32 = 1;
 const MOD_PATH: &str =
     "docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_MOD_ECUConfigurationParameters.zip";
 const MOD_SHA256: &str = "df1e3bc992e49de6e14e5c1a679d7ce7ca90d2450d66186cea0b4a0f1f6555fb";
-const XSD_SHA256: &str = "9db3ab1d2ec4db7cc8ff09f1259ff93a7a5945a9500d4cd3ea4a7090f2a25766";
+const XSD_SHA256: &str = crate::schema::XSD_SHA256;
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -199,12 +199,75 @@ pub struct PlanDependencies {
     pub mod_archive: PathBuf,
 }
 
+/// External standards are never part of the embedded source inventory.
+pub type ValidationResources = PlanDependencies;
+
+#[derive(Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ValidationSettings {
+    xsd_archive: Option<PathBuf>,
+    mod_archive: Option<PathBuf>,
+}
+
 impl PlanDependencies {
     pub fn from_repository(root: &Path) -> Self {
         Self {
             xsd_archive: crate::schema::schema_archive(root),
             mod_archive: root.join(MOD_PATH),
         }
+    }
+
+    pub fn explicit(xsd_archive: PathBuf, mod_archive: PathBuf) -> Result<Self, String> {
+        for (kind, path) in [("XSD", &xsd_archive), ("MOD", &mod_archive)] {
+            if !path.is_absolute()
+                || path
+                    .components()
+                    .any(|part| matches!(part, Component::ParentDir))
+            {
+                return Err(format!(
+                    "{kind} archive requires a normalized absolute path: {}",
+                    path.display()
+                ));
+            }
+        }
+        Ok(Self {
+            xsd_archive,
+            mod_archive,
+        })
+    }
+
+    /// The app-config file owns persisted paths; process overrides are applied
+    /// in memory only. A caller may pass a legacy default until the product
+    /// migrates its existing checkout-backed workflow.
+    pub fn from_settings_file(settings: &Path, default: Option<&Self>) -> Result<Self, String> {
+        let stored: ValidationSettings = match std::fs::read(settings) {
+            Ok(bytes) => serde_json::from_slice(&bytes).map_err(|error| {
+                format!(
+                    "Invalid validation settings {}: {error}",
+                    settings.display()
+                )
+            })?,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                ValidationSettings::default()
+            }
+            Err(error) => {
+                return Err(format!(
+                    "Cannot read validation settings {}: {error}",
+                    settings.display()
+                ));
+            }
+        };
+        let xsd_archive = std::env::var_os("AUTOSAR_XSD_ARCHIVE")
+            .map(PathBuf::from)
+            .or(stored.xsd_archive)
+            .or_else(|| default.map(|item| item.xsd_archive.clone()))
+            .ok_or("Set the R24-11 XSD archive path in app settings or AUTOSAR_XSD_ARCHIVE")?;
+        let mod_archive = std::env::var_os("AUTOSAR_MOD_ARCHIVE")
+            .map(PathBuf::from)
+            .or(stored.mod_archive)
+            .or_else(|| default.map(|item| item.mod_archive.clone()))
+            .ok_or("Set the R24-11 MOD archive path in app settings or AUTOSAR_MOD_ARCHIVE")?;
+        Self::explicit(xsd_archive, mod_archive)
     }
 }
 
