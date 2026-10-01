@@ -1,0 +1,275 @@
+"""Real parent/child/grandchild probes for bounded process ownership."""
+
+from __future__ import annotations
+
+import os
+import shutil
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+import unittest
+from pathlib import Path
+
+from ecu_tools.owner import Owner, OwnershipError
+from ecu_tools.process import OwnedProcess, ProcessSpec, run_bounded
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def _records(path: Path, count: int) -> list[tuple[str, int, int]]:
+    end = time.monotonic() + 5
+    while time.monotonic() < end:
+        if path.exists():
+            records = [
+                (parts[0], int(parts[1]), int(parts[2]))
+                for line in path.read_text(encoding="ascii").splitlines()
+                if len(parts := line.split()) == 3
+            ]
+            if len(records) >= count:
+                return records
+        time.sleep(0.01)
+    raise AssertionError(
+        f"only {path.read_text() if path.exists() else 'no'} PID records"
+    )
+
+
+def _gone(pid: int) -> bool:
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel.OpenProcess.restype = wintypes.HANDLE
+        kernel.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+        kernel.WaitForSingleObject.restype = wintypes.DWORD
+        handle = kernel.OpenProcess(0x1000, False, pid)
+        if not handle:
+            return True
+        try:
+            return kernel.WaitForSingleObject(handle, 0) == 0
+        finally:
+            kernel.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+        return False
+    except ProcessLookupError:
+        return True
+
+
+def _assert_closed(
+    test: unittest.TestCase, records: list[tuple[str, int, int]]
+) -> None:
+    end = time.monotonic() + 2
+    for role, pid, _ in records:
+        while not _gone(pid) and time.monotonic() < end:
+            time.sleep(0.01)
+        test.assertTrue(_gone(pid), f"{role} PID {pid} survived owned closure")
+
+
+class BoundedProcessTests(unittest.TestCase):
+    def _spec(
+        self, root: Path, kind: str, seconds: int = 10
+    ) -> tuple[ProcessSpec, Path]:
+        pid_file = root / f"{kind}.pids"
+        spec = ProcessSpec.seconds(
+            [
+                sys.executable,
+                "-m",
+                "autosar_tooling",
+                "probe",
+                "descendant",
+                "--pid-file",
+                str(pid_file),
+                "--kind",
+                kind,
+            ],
+            ROOT,
+            seconds,
+            root,
+            f"probe:{kind}",
+        )
+        return spec, pid_file
+
+    def test_normal_child_and_grandchild_close(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            spec, path = self._spec(Path(name), "normal")
+            result = run_bounded(spec)
+            self.assertTrue(result.success)
+            _assert_closed(self, _records(path, 3))
+
+    def test_timeout_closes_registered_group_and_keeps_logs(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            spec, path = self._spec(Path(name), "hang", 1)
+            with self.assertRaisesRegex(OwnershipError, "timeout") as failure:
+                run_bounded(spec)
+            records = _records(path, 3)
+            _assert_closed(self, records)
+            self.assertIn("stdout=", str(failure.exception))
+            self.assertIn("stderr=", str(failure.exception))
+
+    def test_normal_parent_exit_with_live_children_is_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            spec, path = self._spec(Path(name), "parent-first")
+            with self.assertRaisesRegex(OwnershipError, "orphaned_members"):
+                run_bounded(spec)
+            _assert_closed(self, _records(path, 3))
+
+    def test_nonzero_exit_retains_stderr_and_code(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            spec, _ = self._spec(Path(name), "fail")
+            with self.assertRaisesRegex(OwnershipError, "exit_code=7") as failure:
+                run_bounded(spec)
+            stderr = Path(str(failure.exception).split("stderr=")[-1])
+            self.assertIn("probe failure on stderr", stderr.read_text(encoding="utf-8"))
+
+    def test_cancel_one_scope_does_not_close_another(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            if os.name == "nt":
+                first, path = self._spec(root, "hang")
+                process = OwnedProcess(first)
+                records = _records(path, 3)
+                self.assertEqual(process.cancel().status, "cancelled")
+                _assert_closed(self, records)
+                self.assertTrue(run_bounded(self._spec(root, "normal")[0]).success)
+            else:
+                with Owner.start() as owner:
+                    first, path = self._spec(root, "hang")
+                    process = OwnedProcess(first, owner=owner)
+                    records = _records(path, 3)
+                    sibling, _ = self._spec(root, "normal")
+                    second = OwnedProcess(sibling, owner=owner)
+                    self.assertEqual(process.cancel().status, "cancelled")
+                    _assert_closed(self, records)
+                    self.assertTrue(second.wait().success)
+
+    @unittest.skipIf(
+        os.name == "nt", "POSIX supervisor has the subreaper/escape contract"
+    )
+    def test_unregistered_escape_is_explicitly_unconfirmed(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            spec, path = self._spec(Path(name), "escape")
+            try:
+                with self.assertRaisesRegex(OwnershipError, "cleanup_unconfirmed"):
+                    run_bounded(spec)
+            finally:
+                for role, pid, _ in _records(path, 2):
+                    if role == "escape":
+                        os.kill(
+                            pid, signal.SIGKILL
+                        )  # Fixture owns this non-cooperative PID.
+
+    @unittest.skipIf(
+        os.name == "nt", "nested Unix scopes require the supervisor socket"
+    )
+    def test_nested_scope_runs_under_same_root(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            spec, path = self._spec(Path(name), "nested")
+            result = run_bounded(spec)
+            self.assertTrue(result.success)
+            records = _records(path, 2)
+            self.assertNotEqual(records[0][2], records[1][2])
+            _assert_closed(self, records)
+
+    @unittest.skipIf(os.name == "nt", "guardian death is managed by the POSIX root")
+    def test_guardian_death_closes_supervised_group(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            pid_file = root / "guardian.pids"
+            guardian = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-m",
+                    "autosar_tooling",
+                    "probe",
+                    "descendant",
+                    "--pid-file",
+                    str(pid_file),
+                    "--kind",
+                    "guardian",
+                ],
+                cwd=ROOT,
+                env={**os.environ, "TMPDIR": name},
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            try:
+                records = _records(pid_file, 4)
+                self.assertEqual(records[-1][0], "guardian")
+                guardian.kill()
+                guardian.wait(timeout=3)
+                _assert_closed(self, records[:-1])
+            finally:
+                if guardian.poll() is None:
+                    guardian.kill()
+                    guardian.wait(timeout=3)
+
+    @unittest.skipIf(
+        os.name == "nt", "only the POSIX root can die independently of the guardian"
+    )
+    def test_supervisor_failure_closes_guardian_mirror(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            owner = Owner.start()
+            try:
+                spec, path = self._spec(Path(name), "hang")
+                process = OwnedProcess(spec, owner=owner)
+                records = _records(path, 3)
+                assert owner.process is not None
+                owner.process.kill()
+                owner.process.wait(timeout=3)
+                with self.assertRaisesRegex(OwnershipError, "supervisor_failed"):
+                    process.wait()
+                _assert_closed(self, records)
+            finally:
+                try:
+                    owner.close()
+                except OwnershipError:
+                    pass
+                if owner.directory is not None:
+                    shutil.rmtree(owner.directory)
+
+    @unittest.skipIf(
+        os.name == "nt",
+        "POSIX registration gate is distinct from Windows suspended assignment",
+    )
+    def test_failed_registration_never_runs_a_command(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            public = root / "public"
+            public.mkdir(mode=0o755)
+            spec, path = self._spec(public, "normal")
+            with self.assertRaisesRegex(OwnershipError, "private"):
+                run_bounded(spec)
+            self.assertFalse(path.exists())
+
+    @unittest.skipIf(os.name == "nt", "POSIX release is gated by the supervisor")
+    def test_failed_release_closes_registered_but_unstarted_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as name, Owner.start() as owner:
+            spec, path = self._spec(Path(name), "normal")
+            actual_request = owner.request
+            scopes: list[str] = []
+
+            def fail_release(op: str, **fields: object) -> dict[str, object]:
+                if op == "release":
+                    raise OwnershipError("injected release failure")
+                result = actual_request(op, **fields)
+                if op == "reserve":
+                    scopes.append(str(result["scope"]))
+                return result
+
+            owner.request = fail_release  # type: ignore[method-assign]
+            with self.assertRaisesRegex(OwnershipError, "injected release failure"):
+                OwnedProcess(spec, owner=owner)
+            result = actual_request("closed", scope=scopes[0])
+            self.assertFalse(owner.groups)
+            self.assertEqual(result["status"], "cancelled")
+            self.assertFalse(path.exists())
+
+
+if __name__ == "__main__":
+    unittest.main()

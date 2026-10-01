@@ -322,7 +322,7 @@ fn run_bounded(
         .stdout(fs::File::create(&stdout).map_err(|e| e.to_string())?)
         .stderr(fs::File::create(&stderr).map_err(|e| e.to_string())?);
     #[cfg(windows)]
-    let mut child = super::windows_job::ProcessTree::spawn(command)?;
+    let mut child = crate::execution::ProcessTree::spawn(command)?;
     #[cfg(not(windows))]
     let mut child = command.spawn().map_err(|e| e.to_string())?;
     let started = Instant::now();

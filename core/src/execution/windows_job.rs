@@ -159,12 +159,12 @@ fn resume_primary(process: u32) -> Result<(), String> {
     Ok(())
 }
 
-pub(super) struct ProcessTree {
+pub(crate) struct ProcessTree {
     child: Child,
     job: OwnedHandle,
 }
 impl ProcessTree {
-    pub(super) fn spawn(command: &mut Command) -> Result<Self, String> {
+    pub(crate) fn spawn(command: &mut Command) -> Result<Self, String> {
         // SAFETY: null attributes produce a private, non-inheritable job handle.
         let job = owned(
             unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) },
@@ -214,10 +214,30 @@ impl ProcessTree {
         }
         Ok(tree)
     }
-    pub(super) fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
+    pub(crate) fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
         self.child.try_wait()
     }
-    pub(super) fn stop(&mut self) -> Result<(), String> {
+    pub(crate) fn id(&self) -> u32 {
+        self.child.id()
+    }
+    pub(crate) fn active(&self) -> Result<u32, String> {
+        let mut accounting = Accounting::default();
+        // SAFETY: writable accounting record and live job handle.
+        checked(
+            unsafe {
+                QueryInformationJobObject(
+                    self.job.as_raw_handle(),
+                    1,
+                    &mut accounting as *mut _ as *mut c_void,
+                    size_of::<Accounting>() as u32,
+                    std::ptr::null_mut(),
+                )
+            },
+            "Observe command tree shutdown",
+        )?;
+        Ok(accounting.active)
+    }
+    pub(crate) fn stop(&mut self) -> Result<(), String> {
         // SAFETY: the private job contains only this command and its descendants.
         checked(
             unsafe { TerminateJobObject(self.job.as_raw_handle(), 1) },
@@ -225,21 +245,7 @@ impl ProcessTree {
         )?;
         let started = Instant::now();
         loop {
-            let mut accounting = Accounting::default();
-            // SAFETY: writable accounting record and live job handle.
-            checked(
-                unsafe {
-                    QueryInformationJobObject(
-                        self.job.as_raw_handle(),
-                        1,
-                        &mut accounting as *mut _ as *mut c_void,
-                        size_of::<Accounting>() as u32,
-                        std::ptr::null_mut(),
-                    )
-                },
-                "Observe command tree shutdown",
-            )?;
-            if accounting.active == 0 {
+            if self.active()? == 0 {
                 self.child
                     .wait()
                     .map_err(|e| format!("Wait for closed command: {e}"))?;

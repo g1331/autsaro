@@ -54,6 +54,7 @@ cargo build --locked --manifest-path src-tauri/Cargo.toml
 
 `doctor` 只读报告 `ready`、`missing`、`version_mismatch` 或 `not_applicable`，缺少必需项返回非零并提示安装/配置；不下载规范或更改系统。`npm run tauri --prefix ui -- dev` 使用现有 Tauri/Vite hooks，在**独立桌面会话**交互调试；自动化不得在当前用户桌面弹窗或抢焦点。这里不会执行 `create-tauri-app` 或 `tauri init --force` 重建已有工作台。当前 Windows 生成与构建仍依赖源码目录，正式无checkout bundle 将在本轮最后阶段验证。
 
+受控外部命令已有独立的 `core::execution` 与 `ecu_tools.process` 入口；Rust 侧执行前须把 `AUTOSAR_PYTHON` 设为锁定虚拟环境中 CPython 的**绝对路径**（Windows 为 `.venv/Scripts/python.exe`，POSIX 为 `.venv/bin/python`），不得依赖 PATH 猜测解释器。可运行 `uv run --locked python -m unittest autosar_tooling.test_process` 与 `cargo test --locked --manifest-path core/Cargo.toml execution::tests` 检查真实父/子/孙进程的退出、超时、取消及故障清理。Windows 使用先登记后恢复的 Job；POSIX 仅保证已登记的合作进程组及未逃逸后代在绝对单调期限内关闭。未登记的 `setsid`/daemon 逃逸不视为成功清理，Linux 反例返回 `cleanup_unconfirmed`；这不是 Linux 虚拟 ECU 已可运行的声明。当前产品构建和验证入口将在后续阶段逐一迁入受控执行，不把本轮独立 probe 误写成旧入口已迁移。
 
 ## 代码质量检查
 

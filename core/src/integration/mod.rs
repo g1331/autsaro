@@ -22,8 +22,6 @@ mod os_service;
 mod plan;
 mod routing;
 mod schedule;
-#[cfg(windows)]
-mod windows_job;
 
 pub use catalog::{ContractArgument, RuntimeCatalog, SymbolContract};
 pub use communication::SignalChannel;
