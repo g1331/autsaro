@@ -2,29 +2,36 @@ use super::{
     DiagnosticCategory, InputSource, PlanDependencies, PlanDiagnostic, RuntimeCatalog,
     ValidatedIntegrationPlan, build_plan,
 };
+use crate::execution::{ProcessSpec, run_bounded};
 use crate::generator;
+use crate::target::{BuildTarget, ExecutionSettings};
 use crate::{BuildReport, RunReport};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 const FORMAT: &str = "autosar-ecu-handoff-v1";
 
 fn issue(message: impl Into<String>) -> Vec<PlanDiagnostic> {
     vec![PlanDiagnostic {
-        category: DiagnosticCategory::Input, code: "ECU_HANDOFF".into(), file: None, object: None,
-        message: message.into(), remedy: "Preserve the old package. Restore its declared files and fixed dependencies, or recreate it from the matching saved inputs and workbench source version.".into(),
+        category: DiagnosticCategory::Input,
+        code: "ECU_HANDOFF".into(),
+        file: None,
+        object: None,
+        message: message.into(),
+        remedy: "Preserve the old package. Restore its fixed source/dependency identities or recreate it using the matching original inputs and workbench version.".into(),
     }]
 }
-fn metadata(plan: &ValidatedIntegrationPlan) -> Value {
+
+pub(crate) fn metadata(plan: &ValidatedIntegrationPlan, target: BuildTarget) -> Value {
     let d = plan.description();
     json!({
         "format": FORMAT, "release": "CP/FO R24-11", "toolVersion": env!("CARGO_PKG_VERSION"),
-        "profile": d.profile, "target": "Windows x64 GCC 16.1.0 controlled_logical_ms",
+        "profile": d.profile, "target": target,
         "sources": d.sources, "runtimeSources": d.runtime_sources,
         "validationDependencies": d.validation_dependencies,
         "delivery": {
@@ -35,80 +42,58 @@ fn metadata(plan: &ValidatedIntegrationPlan) -> Value {
     })
 }
 
-pub(super) fn files(
-    plan: &ValidatedIntegrationPlan,
-    project: Vec<(String, Vec<u8>)>,
-) -> Result<Vec<(String, Vec<u8>)>, String> {
-    let mut files: BTreeMap<_, _> = project
-        .into_iter()
-        .filter(|(p, _)| p != "files.list" && p != "files.sha256")
-        .collect();
-    let mut data = serde_json::to_vec_pretty(&metadata(plan)).map_err(|e| e.to_string())?;
-    data.push(b'\n');
-    files.insert("handoff.json".into(), data);
-    files.extend(verification_files(plan)?);
-    files.get_mut("README.md").ok_or("Missing project README")?.extend_from_slice(b"\n## Rebuildable ECU handoff\n\nThis package is explicitly autosar-ecu-handoff-v1, distinct from legacy autosar-host-handoff-v1. Saved ARXML logical paths and original bytes are under inputs/. handoff.json records their identities, fixed runtime producers and external validation dependencies. SHA-256 is an integrity check, not publisher authentication. The same source version of the workbench, plus legally acquired matching XSD/MOD archives, is required for validated reimport/regeneration; compiler binaries and official documents are not included. The complete fixed FreeRTOS source, fourteen patches and MIT notice are included. Product code is delivered for owner-authorized internal use only.\n\nMove the entire source directory; import this package in the workbench, validate and generate into another empty directory. Source identities and every regenerated product file are checked; edited or missing files fail without changing the package. Build with the pinned compiler into a separate empty output directory. Run verify.ps1 -BuildDirectory <another-empty-directory> to independently build and check actual CAN/DID echo, protocol timeout recovery and malformed-input rejection using the production HostBatch entry. Its endpoint input data does not contain a prior pass result. A failure or tool timeout is a failed check, never SC1/hardware approval. Keep local binaries and runtime state outside this sealed source tree.\n");
-    Ok(generator::seal_files(files.into_iter().collect()))
-}
-
 pub(super) fn verification_files(
     plan: &ValidatedIntegrationPlan,
 ) -> Result<BTreeMap<String, Vec<u8>>, String> {
-    let mut files = BTreeMap::new();
     let d = plan.description();
     let read = d
         .component
         .data_ports
         .iter()
-        .find(|p| p.read)
+        .find(|port| port.read)
         .ok_or("Missing selected receive port")?;
     let write = d
         .component
         .data_ports
         .iter()
-        .find(|p| !p.read)
+        .find(|port| !port.read)
         .ok_or("Missing selected transmit port")?;
     let rx = d
         .signals
         .iter()
-        .find(|s| s.port == read.path)
+        .find(|signal| signal.port == read.path)
         .ok_or("Missing receive channel")?;
     let tx = d
         .signals
         .iter()
-        .find(|s| s.port == write.path)
+        .find(|signal| signal.port == write.path)
         .ok_or("Missing transmit channel")?;
-    let verification_inputs = json!({
+    let inputs = json!({
         "format": "autosar-ecu-test-inputs-v1", "periodMs": d.component.period_ms,
         "receiveCanId": rx.can_id, "transmitCanId": tx.can_id,
         "requestCanId": d.diagnostic.request_can_id, "responseCanId": d.diagnostic.response_can_id,
         "did": d.diagnostic.did, "initialReceiveValue": read.initial_value,
         "receiveTimeoutMs": d.diagnostic.n_cr_ms,
-        "scope": "Actual configured endpoints; independent fixed echo bytes and protocol assertions are in verify.ps1. This is test input, not a verification result."
+        "scope": "Actual configured endpoints; independent fixed echo bytes and protocol assertions are in tools/ecu_tools/verify.py. This is test input, not a verification result."
     });
-    files.insert(
+    Ok(BTreeMap::from([(
         "verification/inputs.json".into(),
-        serde_json::to_vec_pretty(&verification_inputs).map_err(|e| e.to_string())?,
-    );
-    files.insert(
-        "verify.ps1".into(),
-        include_bytes!("../../../runtime/ecu/verify.ps1").to_vec(),
-    );
-    files.insert(
-        "process-tree.cs".into(),
-        include_bytes!("../../../runtime/ecu/process-tree.cs").to_vec(),
-    );
-    Ok(files)
+        serde_json::to_vec_pretty(&inputs).map_err(|error| error.to_string())?,
+    )]))
 }
 
-/// Verified source package. Its plan is reconstructed from actual input bytes.
 pub struct EcuHandoff {
     root: PathBuf,
     plan: ValidatedIntegrationPlan,
+    target: BuildTarget,
 }
+
 impl EcuHandoff {
     pub fn plan(&self) -> &ValidatedIntegrationPlan {
         &self.plan
+    }
+    pub fn target(&self) -> BuildTarget {
+        self.target
     }
     pub fn input_root(&self) -> PathBuf {
         self.root.join("inputs")
@@ -117,7 +102,7 @@ impl EcuHandoff {
         self.plan
             .sources()
             .iter()
-            .map(|s| self.input_root().join(s.logical_path()))
+            .map(|source| self.input_root().join(source.logical_path()))
             .collect()
     }
 }
@@ -129,18 +114,20 @@ pub fn open_ecu_handoff(
 ) -> Result<EcuHandoff, Vec<PlanDiagnostic>> {
     let names = generator::verify_build_input(output).map_err(issue)?;
     let data: Value = serde_json::from_slice(
-        &fs::read(output.join("handoff.json")).map_err(|e| issue(e.to_string()))?,
+        &fs::read(output.join("handoff.json")).map_err(|error| issue(error.to_string()))?,
     )
-    .map_err(|e| issue(e.to_string()))?;
+    .map_err(|error| issue(error.to_string()))?;
     if data["format"] != FORMAT
         || data["release"] != "CP/FO R24-11"
         || data["toolVersion"] != env!("CARGO_PKG_VERSION")
     {
         return Err(issue("ECU handoff format, release or tool version differs"));
     }
+    let target: BuildTarget = serde_json::from_value(data["target"].clone())
+        .map_err(|error| issue(format!("Unsupported handoff target: {error}")))?;
     let declarations = data["sources"]
         .as_array()
-        .filter(|s| !s.is_empty())
+        .filter(|sources| !sources.is_empty())
         .ok_or_else(|| issue("ECU handoff has no input identities"))?;
     let mut sources = Vec::new();
     let mut paths = BTreeSet::new();
@@ -148,412 +135,202 @@ pub fn open_ecu_handoff(
         let logical = declaration["logicalPath"]
             .as_str()
             .ok_or_else(|| issue("Invalid logical input identity"))?;
-        let input = InputSource::new(logical, Vec::new()).map_err(|e| vec![e])?;
+        let input = InputSource::new(logical, Vec::new()).map_err(|diagnostic| vec![diagnostic])?;
         let path = format!("inputs/{}", input.logical_path());
         if !names.contains(&path) || !paths.insert(path.clone()) {
             return Err(issue(format!("Missing or repeated input: {path}")));
         }
-        let bytes = fs::read(output.join(&path)).map_err(|e| issue(e.to_string()))?;
+        let bytes = fs::read(output.join(&path)).map_err(|error| issue(error.to_string()))?;
         if declaration["rawSha256"] != format!("{:x}", Sha256::digest(&bytes)) {
             return Err(issue(format!("Input identity differs: {path}")));
         }
-        sources.push(InputSource::new(logical, bytes).map_err(|e| vec![e])?);
+        sources.push(InputSource::new(logical, bytes).map_err(|diagnostic| vec![diagnostic])?);
     }
-    if names.iter().filter(|p| p.starts_with("inputs/")).count() != paths.len() {
-        return Err(issue("Input file closure differs from handoff mapping"));
+    if names
+        .iter()
+        .filter(|path| path.starts_with("inputs/"))
+        .count()
+        != paths.len()
+    {
+        return Err(issue("Input closure differs from the handoff mapping"));
     }
     let plan = build_plan(&sources, dependencies, runtime)?;
-    if metadata(&plan) != data {
+    if metadata(&plan, target) != data {
         return Err(issue(
             "Revalidated input/runtime/dependency identities differ from handoff metadata",
         ));
     }
-    let expected = plan.ecu_handoff_files()?;
-    let expected_names: BTreeSet<_> = expected
-        .files()
-        .iter()
-        .map(|(p, _)| p.as_str())
-        .filter(|p| *p != "files.list" && *p != "files.sha256")
-        .collect();
-    if names.iter().map(String::as_str).collect::<BTreeSet<_>>() != expected_names {
-        return Err(issue("Rebuilt ECU product file closure differs"));
-    }
-    for (path, bytes) in expected.files() {
-        if fs::read(output.join(path)).map_err(|e| issue(e.to_string()))? != *bytes {
-            return Err(issue(format!("Rebuilt ECU product bytes differ: {path}")));
-        }
-    }
+    let expected = plan.ecu_handoff_files(target)?;
+    compare_files(output, &names, expected.files()).map_err(issue)?;
     Ok(EcuHandoff {
-        root: fs::canonicalize(output).map_err(|e| issue(e.to_string()))?,
+        root: output
+            .canonicalize()
+            .map_err(|error| issue(error.to_string()))?,
         plan,
+        target,
     })
 }
 
-fn checked_project(plan: &ValidatedIntegrationPlan, project: &Path) -> Result<(), String> {
-    let names = generator::verify_build_input(project)?;
-    let data: Value = serde_json::from_slice(
-        &fs::read(project.join("integration.json")).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())?;
-    if data["format"] != "autosar-ecu-integration-v1" || data["plan"]["profile"] != super::PROFILE {
-        return Err("The source directory is not the selected ECU integration profile.".into());
-    }
-    let generated = plan.ecu_source_files().map_err(|e| format!("{e:?}"))?;
-    let expected = if project.join("handoff.json").exists() {
-        files(plan, generated.files().to_vec())?
-    } else {
-        generated.files().to_vec()
-    };
+fn compare_files(
+    project: &Path,
+    names: &[String],
+    expected: &[(String, Vec<u8>)],
+) -> Result<(), String> {
     let expected_names: BTreeSet<_> = expected
         .iter()
-        .map(|(p, _)| p.as_str())
-        .filter(|p| *p != "files.list" && *p != "files.sha256")
+        .map(|(path, _)| path.as_str())
+        .filter(|path| *path != "files.list" && *path != "files.sha256")
         .collect();
     if names.iter().map(String::as_str).collect::<BTreeSet<_>>() != expected_names {
-        return Err("Generated ECU file closure differs from the current validated plan.".into());
+        return Err("Rebuilt ECU product file closure differs".into());
     }
-    for (name, bytes) in expected {
-        if fs::read(project.join(&name)).map_err(|e| e.to_string())? != bytes {
-            return Err(format!(
-                "Generated ECU source differs from the current validated plan: {name}"
-            ));
+    for (path, bytes) in expected {
+        if fs::read(project.join(path)).map_err(|error| error.to_string())? != *bytes {
+            return Err(format!("Rebuilt ECU product bytes differ: {path}"));
         }
     }
     Ok(())
 }
-fn powershell(project: &Path, script: &str, output: &Path) -> Command {
-    let mut command = Command::new("powershell.exe");
-    command
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-        ])
-        .arg(project.join(script));
-    command
-        .arg(if script == "build.ps1" {
-            "-OutputDirectory"
-        } else {
-            "-BuildDirectory"
-        })
-        .arg(output);
-    #[cfg(windows)]
+
+fn checked_project(plan: &ValidatedIntegrationPlan, project: &Path) -> Result<BuildTarget, String> {
+    let names = generator::verify_build_input(project)?;
+    let data: Value = serde_json::from_slice(
+        &fs::read(project.join("integration.json")).map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())?;
+    if data["format"] != "autosar-ecu-integration-v1" || data["plan"]["profile"] != super::PROFILE {
+        return Err("The source directory is not the selected ECU integration profile".into());
+    }
+    let target: BuildTarget =
+        serde_json::from_value(data["target"].clone()).map_err(|error| error.to_string())?;
+    let expected = if project.join("handoff.json").exists() {
+        plan.ecu_handoff_files(target)
+    } else {
+        plan.ecu_integration_files(target)
+    }
+    .map_err(|diagnostics| format!("{diagnostics:?}"))?;
+    compare_files(project, &names, expected.files())?;
+    Ok(target)
+}
+
+pub(crate) fn run_tool(
+    project: &Path,
+    settings: &ExecutionSettings,
+    arguments: Vec<OsString>,
+    private: &Path,
+) -> Result<String, String> {
+    let logs = private.join("logs");
+    fs::create_dir(&logs).map_err(|error| error.to_string())?;
+    #[cfg(unix)]
     {
-        use std::os::windows::process::CommandExt;
-        command.creation_flags(0x08000000); // CREATE_NO_WINDOW; no user desktop console.
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&logs, fs::Permissions::from_mode(0o700))
+            .map_err(|error| error.to_string())?;
     }
-    command
+    let mut argv = vec![
+        settings.python.as_os_str().into(),
+        project.join("tools/ecu-tool.py").into_os_string(),
+    ];
+    argv.extend(arguments);
+    let spec = ProcessSpec::for_duration(
+        argv,
+        project.to_path_buf(),
+        vec![
+            ("AUTOSAR_CC".into(), settings.compiler.as_os_str().into()),
+            (
+                "AUTOSAR_OBJDUMP".into(),
+                settings.objdump.as_os_str().into(),
+            ),
+            ("AUTOSAR_GIT".into(), settings.git.as_os_str().into()),
+        ],
+        Duration::from_secs(300),
+        logs,
+    )?;
+    let result = run_bounded(spec)?;
+    Ok(format!(
+        "{}{}",
+        fs::read_to_string(result.stdout).map_err(|error| error.to_string())?,
+        fs::read_to_string(result.stderr).map_err(|error| error.to_string())?
+    ))
 }
 
-struct PrivateDirectory {
-    root: PathBuf,
-    parent: PathBuf,
-    reserved: PathBuf,
-}
-impl PrivateDirectory {
-    fn new() -> Result<Self, String> {
-        let temporary = std::env::temp_dir();
-        let parent = fs::canonicalize(&temporary).map_err(|e| e.to_string())?;
-        let root = generator::reserve_directory(
-            &temporary,
-            "ecu-command",
-            std::ffi::OsStr::new("private"),
-        )?;
-        let reserved = fs::canonicalize(&root).map_err(|e| e.to_string())?;
-        Ok(Self {
-            root,
-            parent,
-            reserved,
-        })
-    }
-    fn cleanup(&self) -> Result<(), String> {
-        if !self.root.exists() {
-            return Ok(());
-        }
-        let root = fs::canonicalize(&self.root).map_err(|e| e.to_string())?;
-        if root != self.reserved || root.parent() != Some(self.parent.as_path()) {
-            return Err("Private ECU cleanup path differs from its reserved directory.".into());
-        }
-        fs::remove_dir_all(root).map_err(|e| e.to_string())
-    }
-    fn finish(&self, result: Result<Output, String>) -> Result<Output, String> {
-        let cleanup = self.cleanup();
-        match (result, cleanup) {
-            (Ok(mut output), Err(error)) => {
-                output.stderr.extend_from_slice(
-                    format!(
-                        "\nTemporary ECU files retained at {}: {error}",
-                        self.root.display()
-                    )
-                    .as_bytes(),
-                );
-                Ok(output)
-            }
-            (Err(error), Err(cleanup)) => Err(format!(
-                "{error}\nTemporary files retained at {}: {cleanup}",
-                self.root.display()
-            )),
-            (result, Ok(())) => result,
-        }
-    }
-}
-impl Drop for PrivateDirectory {
-    fn drop(&mut self) {
-        if let Err(error) = self.cleanup() {
-            eprintln!(
-                "Temporary ECU cleanup failed at {}: {error}",
-                self.root.display()
-            );
-        }
-    }
-}
-
-fn run_bounded(
-    command: &mut Command,
-    directory: &Path,
-    deadline: Duration,
-) -> Result<Output, String> {
-    let stdout = directory.join("command.stdout");
-    let stderr = directory.join("command.stderr");
-    command
-        .stdin(Stdio::null())
-        .stdout(fs::File::create(&stdout).map_err(|e| e.to_string())?)
-        .stderr(fs::File::create(&stderr).map_err(|e| e.to_string())?);
-    #[cfg(windows)]
-    let mut child = crate::execution::ProcessTree::spawn(command)?;
-    #[cfg(not(windows))]
-    let mut child = command.spawn().map_err(|e| e.to_string())?;
-    let started = Instant::now();
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) if started.elapsed() < deadline => {
-                std::thread::sleep(Duration::from_millis(20));
-                continue;
-            }
-            _ => {}
-        }
-        #[cfg(windows)]
-        child.stop()?;
-        #[cfg(not(windows))]
-        {
-            if child.try_wait().map_err(|e| e.to_string())?.is_none() {
-                child.kill().map_err(|e| e.to_string())?;
-            }
-            child.wait().map_err(|e| e.to_string())?;
-        }
-        return Err(format!(
-            "ECU command exceeded its host watchdog or could not be observed; process tree closed.\n{}\n{}",
-            fs::read_to_string(&stdout).unwrap_or_default(),
-            fs::read_to_string(&stderr).unwrap_or_default()
-        ));
-    };
-    #[cfg(windows)]
-    child.stop()?;
-    Ok(Output {
-        status,
-        stdout: fs::read(stdout).map_err(|e| e.to_string())?,
-        stderr: fs::read(stderr).map_err(|e| e.to_string())?,
-    })
-}
 pub fn build_ecu_project(
     plan: &ValidatedIntegrationPlan,
     project: &Path,
     output: &Path,
+    settings: &ExecutionSettings,
 ) -> Result<BuildReport, String> {
+    let target = checked_project(plan, project)?;
+    let capture =
+        generator::reserve_directory(&std::env::temp_dir(), "ecu-build", OsStr::new("private"))?;
+    let log = run_tool(
+        project,
+        settings,
+        vec![
+            "build".into(),
+            "--project".into(),
+            project.as_os_str().into(),
+            "--output".into(),
+            output.as_os_str().into(),
+            "--mode".into(),
+            "host-batch".into(),
+        ],
+        &capture,
+    )
+    .map_err(|error| {
+        format!(
+            "{error}; source/build diagnostics retained at {}",
+            capture.display()
+        )
+    })?;
     checked_project(plan, project)?;
-    let capture = PrivateDirectory::new()?;
-    let result = capture.finish(run_bounded(
-        powershell(project, "build.ps1", output).arg("-HostBatch"),
-        &capture.root,
-        Duration::from_secs(180),
-    ))?;
-    let log = format!(
-        "{}{}",
-        String::from_utf8_lossy(&result.stdout),
-        String::from_utf8_lossy(&result.stderr)
-    );
-    if !result.status.success() {
-        return Err(format!("ECU build failed ({}): {log}", result.status));
-    }
-    checked_project(plan, project)?;
-    let binary = output.join("ecu_host_batch.exe");
+    let binary = output.join(target.spec().binary_name);
     if !binary.is_file() {
-        return Err("Successful build did not produce its declared ECU binary.".into());
+        return Err("Successful build did not produce its declared native binary".into());
     }
+    fs::remove_dir_all(capture).map_err(|error| error.to_string())?;
     Ok(BuildReport {
         binary_path: binary.display().to_string(),
         log,
     })
 }
+
 pub fn verify_ecu_project(
     plan: &ValidatedIntegrationPlan,
     project: &Path,
+    settings: &ExecutionSettings,
 ) -> Result<RunReport, String> {
     checked_project(plan, project)?;
-    let scratch = PrivateDirectory::new()?;
-    let output = scratch.root.join("build");
-    let result = scratch.finish(run_bounded(
-        &mut powershell(project, "verify.ps1", &output),
-        &scratch.root,
-        Duration::from_secs(270),
-    ))?;
-    let log = format!(
-        "{}{}",
-        String::from_utf8_lossy(&result.stdout),
-        String::from_utf8_lossy(&result.stderr)
-    );
-    checked_project(plan, project)?;
-    let passed = result.status.success()
-        && log
-            .lines()
-            .any(|s| s.starts_with("ECU_HANDOFF_VERIFY PASS:"));
-    Ok(RunReport {
-        passed,
-        events: vec![
-            "Independent production HostBatch CAN/DID, N_Cr recovery and malformed admission."
-                .into(),
+    let scratch =
+        generator::reserve_directory(&std::env::temp_dir(), "ecu-verify", OsStr::new("private"))?;
+    let output = scratch.join("build");
+    let log = run_tool(
+        project,
+        settings,
+        vec![
+            "verify".into(),
+            "--project".into(),
+            project.as_os_str().into(),
+            "--build-directory".into(),
+            output.into_os_string(),
         ],
-        log,
-    })
-}
-
-#[cfg(all(test, windows))]
-mod tests {
-    use super::*;
-    use std::os::windows::process::CommandExt;
-
-    #[test]
-    fn ecu_watchdog_closes_tree_when_taskkill_cannot_start() {
-        const PROBE: &str = "AUTOSAR_A1_WATCHDOG_PROBE";
-        if let Some(path) = std::env::var_os(PROBE) {
-            let path = PathBuf::from(path);
-            // Application-directory resolution must hit the invalid utility.
-            let error = Command::new("taskkill.exe")
-                .creation_flags(0x08000000)
-                .spawn()
-                .expect_err("Invalid taskkill fixture unexpectedly started");
-            assert!(matches!(error.raw_os_error(), Some(193 | 216)), "{error}");
-            let mut command = Command::new("python");
-            command.args(["-c", "import os,subprocess,sys,time; leaf=\"import subprocess,sys,time; p=subprocess.Popen([sys.executable,'-c','import time; time.sleep(30)'],creationflags=0x08000000); print(str(p.pid),flush=True); time.sleep(30)\"; p=subprocess.Popen([sys.executable,'-c',leaf],stdout=sys.stdout,stderr=sys.stderr,creationflags=0x08000000); print(str(os.getpid())+' '+str(p.pid),flush=True); time.sleep(30)"]);
-            let error = run_bounded(&mut command, &path, Duration::from_secs(5)).unwrap_err();
-            assert!(
-                error.contains("watchdog") && error.contains("process tree closed"),
-                "{error}"
-            );
-            let pids = fs::read_to_string(path.join("command.stdout")).unwrap();
-            let pids: Vec<u32> = pids
-                .split_whitespace()
-                .map(|pid| pid.parse().unwrap())
-                .collect();
-            assert_eq!(pids.len(), 3);
-            let mut check = Command::new("powershell.exe");
-            check.args([
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                &format!(
-                    "if (Get-Process -Id {},{},{} -ErrorAction SilentlyContinue) {{ exit 1 }}",
-                    pids[0], pids[1], pids[2]
-                ),
-            ]);
-            assert!(
-                run_bounded(&mut check, &path, Duration::from_secs(5))
-                    .unwrap()
-                    .status
-                    .success(),
-                "Watchdog left owned processes alive"
-            );
-            return;
-        }
-        let scratch = PrivateDirectory::new().unwrap();
-        let exe = scratch.root.join("watchdog-test.exe");
-        fs::copy(std::env::current_exe().unwrap(), &exe).unwrap();
-        fs::write(
-            scratch.root.join("taskkill.exe"),
-            b"invalid executable for cleanup failure",
+        &scratch,
+    )
+    .map_err(|error| {
+        format!(
+            "{error}; verification diagnostics retained at {}",
+            scratch.display()
         )
-        .unwrap();
-        let capture = PrivateDirectory::new().unwrap();
-        let mut command = Command::new(exe);
-        command
-            .args([
-                "--exact",
-                "integration::handoff::tests::ecu_watchdog_closes_tree_when_taskkill_cannot_start",
-                "--nocapture",
-            ])
-            .env(PROBE, &scratch.root);
-        let result = capture
-            .finish(run_bounded(
-                &mut command,
-                &capture.root,
-                Duration::from_secs(20),
-            ))
-            .unwrap();
-        assert!(
-            result.status.success(),
-            "{}{}",
-            String::from_utf8_lossy(&result.stdout),
-            String::from_utf8_lossy(&result.stderr)
-        );
+    })?;
+    checked_project(plan, project)?;
+    if !log
+        .lines()
+        .any(|line| line.starts_with("ECU_HANDOFF_VERIFY PASS:"))
+    {
+        return Err(format!(
+            "Independent verifier did not complete its production oracle: {log}"
+        ));
     }
-
-    #[test]
-    fn ecu_command_watchdog_closes_descendants_and_removes_private_files() {
-        let scratch = PrivateDirectory::new().unwrap();
-        let path = scratch.root.clone();
-        let mut command = Command::new("python");
-        command.args(["-c", "import subprocess,sys,time; p=subprocess.Popen([sys.executable,'-c','import time; time.sleep(30)'],creationflags=0x08000000); print('child='+str(p.pid),flush=True); time.sleep(30)"]).creation_flags(0x08000000);
-        let error = run_bounded(&mut command, &path, Duration::from_secs(2)).unwrap_err();
-        assert!(error.contains("watchdog"), "{error}");
-        let pid = fs::read_to_string(path.join("command.stdout"))
-            .unwrap()
-            .trim()
-            .strip_prefix("child=")
-            .unwrap()
-            .parse::<u32>()
-            .unwrap();
-        let status = Command::new("powershell.exe")
-            .args([
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                &format!("if (Get-Process -Id {pid} -ErrorAction SilentlyContinue) {{ exit 1 }}"),
-            ])
-            .creation_flags(0x08000000)
-            .status()
-            .unwrap();
-        assert!(
-            status.success(),
-            "watchdog left its compiler descendant running"
-        );
-        drop(scratch);
-        assert!(!path.exists());
-    }
-
-    #[test]
-    fn ecu_failed_command_and_spawn_failure_remove_private_files() {
-        for missing in [false, true] {
-            let scratch = PrivateDirectory::new().unwrap();
-            let path = scratch.root.clone();
-            let mut command = Command::new(if missing {
-                "missing-ecu-test-tool.exe"
-            } else {
-                "powershell.exe"
-            });
-            command
-                .args(["-NoProfile", "-NonInteractive", "-Command", "exit 7"])
-                .creation_flags(0x08000000);
-            let result = run_bounded(&mut command, &path, Duration::from_secs(5));
-            if missing {
-                assert!(result.is_err());
-            } else {
-                assert!(!result.unwrap().status.success());
-            }
-            drop(scratch);
-            assert!(!path.exists());
-        }
-    }
+    fs::remove_dir_all(scratch).map_err(|error| error.to_string())?;
+    Ok(RunReport { passed: true, log, events: vec!["CAN/DID, actual N_Cr timeout/recovery and malformed admission passed; host behavior only".into()] })
 }

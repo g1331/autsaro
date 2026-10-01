@@ -1,4 +1,5 @@
 #include "Security.h"
+#include <stddef.h>
 #ifdef _WIN32
 #include <errno.h>
 #include <io.h>

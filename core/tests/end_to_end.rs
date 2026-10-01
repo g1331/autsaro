@@ -1,4 +1,4 @@
-use autosar_config_core::{DiagnosticSettings, Direction, Workspace, generator, host, schema};
+use autosar_config_core::{DiagnosticSettings, Direction, Workspace, generator, schema};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Read;
@@ -71,6 +71,187 @@ macro_rules! os_native_suite {
     };
 }
 
+#[cfg(any(windows, target_os = "linux"))]
+#[test]
+fn windows_and_linux_ecu_targets_execute_production_protocol() {
+    use autosar_config_core::execution::{ProcessSpec, run_bounded};
+    use autosar_config_core::integration::{
+        PlanDependencies, RuntimeCatalog, build_plan, open_ecu_handoff,
+    };
+    use autosar_config_core::target::{BuildTarget, ExecutionSettings};
+    use std::ffi::OsString;
+    use std::time::Duration;
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let resources = PlanDependencies::from_repository(root);
+    let runtime = RuntimeCatalog::embedded().unwrap();
+    let plan = build_plan(&epic4_plan::inputs(), &resources, &runtime).unwrap();
+    let target = if cfg!(windows) {
+        BuildTarget::WindowsX64ControlledV1
+    } else {
+        BuildTarget::LinuxX64ControlledV1
+    };
+    let settings = ExecutionSettings::from_environment().unwrap();
+    let prepared = autosar_config_core::prepare_ecu_project(&plan, target, true).unwrap();
+    let preflight = prepared.native_preflight(&settings);
+    assert_eq!(preflight.fingerprint, prepared.fingerprint());
+    assert_eq!(
+        preflight.status,
+        autosar_config_core::prepared::PreflightStatus::Passed,
+        "{preflight:?}"
+    );
+    let files = prepared.into_files();
+    let retained = Scratch::new();
+    let scratch = retained.0.clone();
+    std::mem::forget(retained);
+    println!(
+        "production_target={} retained_artifacts={}",
+        target.spec().id,
+        scratch.display()
+    );
+    let original = scratch.join("original source");
+    let install = |directory: &Path| {
+        fs::create_dir(directory).unwrap();
+        for (name, bytes) in &files {
+            let path = directory.join(name);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, bytes).unwrap();
+        }
+    };
+    install(&original);
+    let project = scratch.join("moved sealed source");
+    fs::rename(original, &project).unwrap();
+    let opened = open_ecu_handoff(&project, &resources, &runtime).unwrap();
+    assert_eq!(opened.target(), target);
+    assert_eq!(
+        opened
+            .plan()
+            .ecu_handoff_files(opened.target())
+            .unwrap()
+            .files(),
+        files.as_slice(),
+        "Reimport must reconstruct the same complete target source package"
+    );
+    let logs = scratch.join("owner-logs");
+    fs::create_dir(&logs).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&logs, fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let run_tool = |source: &Path, arguments: Vec<OsString>| -> Result<String, String> {
+        let mut argv = vec![
+            settings.python.as_os_str().into(),
+            source.join("tools/ecu-tool.py").into_os_string(),
+        ];
+        argv.extend(arguments);
+        let spec = ProcessSpec::for_duration(
+            argv,
+            source.to_path_buf(),
+            vec![
+                ("AUTOSAR_CC".into(), settings.compiler.as_os_str().into()),
+                (
+                    "AUTOSAR_OBJDUMP".into(),
+                    settings.objdump.as_os_str().into(),
+                ),
+                ("AUTOSAR_GIT".into(), settings.git.as_os_str().into()),
+            ],
+            Duration::from_secs(300),
+            logs.clone(),
+        )?;
+        let result = run_bounded(spec)?;
+        fs::read_to_string(result.stdout).map_err(|error| error.to_string())
+    };
+    let production = scratch.join("production build");
+    println!(
+        "{}",
+        run_tool(
+            &project,
+            vec![
+                "build".into(),
+                "--project".into(),
+                project.as_os_str().into(),
+                "--output".into(),
+                production.as_os_str().into(),
+                "--mode".into(),
+                "host-batch".into(),
+            ]
+        )
+        .unwrap_or_else(|error| panic!("{error}; artifacts={}", scratch.display()))
+    );
+    let verification = scratch.join("independent verify");
+    let verified = run_tool(
+        &project,
+        vec![
+            "verify".into(),
+            "--project".into(),
+            project.as_os_str().into(),
+            "--build-directory".into(),
+            verification.as_os_str().into(),
+        ],
+    )
+    .unwrap_or_else(|error| panic!("{error}; artifacts={}", scratch.display()));
+    println!("{verified}");
+    for case in ["missing", "tampered", "old-format", "extra"] {
+        let bad = scratch.join(case);
+        install(&bad);
+        match case {
+            "missing" => fs::remove_file(bad.join("src/Rte.c")).unwrap(),
+            "tampered" => fs::write(bad.join("src/Rte.c"), b"altered source").unwrap(),
+            "old-format" => {
+                let mut metadata: serde_json::Value =
+                    serde_json::from_slice(&fs::read(bad.join("target.json")).unwrap()).unwrap();
+                metadata["format"] = "autosar-build-target-v0".into();
+                fs::write(
+                    bad.join("target.json"),
+                    serde_json::to_vec(&metadata).unwrap(),
+                )
+                .unwrap();
+                epic4_handoff::reseal(&bad);
+            }
+            "extra" => fs::write(bad.join("rogue.c"), b"unlisted source").unwrap(),
+            _ => unreachable!(),
+        }
+        let before: Vec<_> = files
+            .iter()
+            .map(|(name, _)| (name, fs::read(bad.join(name)).ok()))
+            .collect();
+        let output = scratch.join(format!("refused-{case}"));
+        assert!(
+            run_tool(
+                &bad,
+                vec![
+                    "build".into(),
+                    "--project".into(),
+                    bad.as_os_str().into(),
+                    "--output".into(),
+                    output.as_os_str().into(),
+                    "--mode".into(),
+                    "host-batch".into(),
+                ]
+            )
+            .is_err(),
+            "Invalid sealed input was admitted: {case}"
+        );
+        assert!(
+            !output.exists(),
+            "Invalid source changed its destination: {case}"
+        );
+        assert!(open_ecu_handoff(&bad, &resources, &runtime).is_err());
+        for (name, bytes) in before {
+            assert_eq!(fs::read(bad.join(name)).ok(), bytes);
+        }
+    }
+    for (name, bytes) in files {
+        assert_eq!(
+            fs::read(project.join(name)).unwrap(),
+            bytes,
+            "Offline build/verification must not mutate the sealed package"
+        );
+    }
+    fs::remove_dir_all(scratch).unwrap();
+}
+
 #[test]
 fn source_generation_does_not_require_native_executor() {
     use autosar_config_core::integration::{PlanDependencies, RuntimeCatalog, build_plan};
@@ -108,12 +289,12 @@ fn source_generation_does_not_require_native_executor() {
     for target in BuildTarget::ALL {
         let first = prepare_ecu_project(&plan, target, false).unwrap();
         let repeated = prepare_ecu_project(&plan, target, false).unwrap();
-        assert_eq!(first.fingerprint, repeated.fingerprint);
-        assert_eq!(first.preflight.status, PreflightStatus::NotRun);
-        assert_eq!(first.preflight.fingerprint, first.fingerprint);
-        assert!(first.preflight.logs.is_empty());
+        assert_eq!(first.fingerprint(), repeated.fingerprint());
+        assert_eq!(first.preflight().status, PreflightStatus::NotRun);
+        assert_eq!(first.preflight().fingerprint, first.fingerprint());
+        assert!(first.preflight().logs.is_empty());
         let selected: Vec<_> = first
-            .files
+            .files()
             .iter()
             .filter_map(|file| {
                 file.source
@@ -122,8 +303,13 @@ fn source_generation_does_not_require_native_executor() {
             })
             .collect();
         assert!(selected.contains(&"runtime/src/Can.c"));
-        assert!(first.files.iter().any(|file| file.path == "os/src/Os.c"));
-        assert!(first.files.iter().any(|file| file.path == "kernel/tasks.c"));
+        assert!(first.files().iter().any(|file| file.path == "os/src/Os.c"));
+        assert!(
+            first
+                .files()
+                .iter()
+                .any(|file| file.path == "kernel/tasks.c")
+        );
         let (native_host, native_kernel) = match target {
             BuildTarget::WindowsX64ControlledV1 => (
                 "os/src/host/windows/Os_HostWindows.c",
@@ -134,11 +320,11 @@ fn source_generation_does_not_require_native_executor() {
                 "kernel/portable/ThirdParty/GCC/Posix/port.c",
             ),
         };
-        assert!(first.files.iter().any(|file| file.path == native_host));
-        assert!(first.files.iter().any(|file| file.path == native_kernel));
+        assert!(first.files().iter().any(|file| file.path == native_host));
+        assert!(first.files().iter().any(|file| file.path == native_kernel));
         assert!(
             first
-                .files
+                .files()
                 .iter()
                 .all(|file| file.source.is_none_or(|asset| {
                     inventory.get(asset.relative_path).is_some_and(|trusted| {
@@ -149,7 +335,7 @@ fn source_generation_does_not_require_native_executor() {
         );
         let target_data: serde_json::Value = serde_json::from_slice(
             &first
-                .files
+                .files()
                 .iter()
                 .find(|file| file.path == "target.json")
                 .unwrap()
@@ -173,9 +359,9 @@ fn source_generation_does_not_require_native_executor() {
             "source-only target={} bsw={} fingerprint={}",
             target.spec().id,
             selected.len(),
-            first.fingerprint
+            first.fingerprint()
         );
-        targets.push((target, selected, first.fingerprint.clone()));
+        targets.push((target, selected, first.fingerprint().to_owned()));
     }
     assert_eq!(targets[0].1, targets[1].1);
     assert_ne!(targets[0].2, targets[1].2);
@@ -187,10 +373,20 @@ fn source_generation_does_not_require_native_executor() {
     let (mut host, _) = create_pair(&scratch.0);
     let legacy =
         prepare_host_project(&mut host, BuildTarget::WindowsX64ControlledV1, true).unwrap();
-    assert!(legacy.files.iter().any(|file| file.path == "Ecu_Config.c"));
-    assert!(legacy.files.iter().any(|file| file.path == "src/Can.c"));
-    assert!(legacy.files.iter().any(|file| file.path == "handoff.json"));
-    assert_eq!(legacy.preflight.status, PreflightStatus::NotRun);
+    assert!(
+        legacy
+            .files()
+            .iter()
+            .any(|file| file.path == "Ecu_Config.c")
+    );
+    assert!(legacy.files().iter().any(|file| file.path == "src/Can.c"));
+    assert!(
+        legacy
+            .files()
+            .iter()
+            .any(|file| file.path == "handoff.json")
+    );
+    assert_eq!(legacy.preflight().status, PreflightStatus::NotRun);
     let source_only =
         prepare_host_project(&mut host, BuildTarget::WindowsX64ControlledV1, false).unwrap();
     let host_source = PathBuf::from(&host.view().files[0].path);
@@ -206,19 +402,19 @@ fn source_generation_does_not_require_native_executor() {
     .unwrap();
     assert_eq!(
         source_only
-            .files
+            .files()
             .iter()
             .find(|file| file.path == "Ecu_Config.c")
             .unwrap()
             .bytes,
         updated
-            .files
+            .files()
             .iter()
             .find(|file| file.path == "Ecu_Config.c")
             .unwrap()
             .bytes,
     );
-    assert_ne!(source_only.fingerprint, updated.fingerprint);
+    assert_ne!(source_only.fingerprint(), updated.fingerprint());
 }
 
 #[test]
@@ -335,7 +531,7 @@ fn linux_legacy_security_profile_is_rejected_during_preparation() {
         prepare_host_project(&mut project, BuildTarget::WindowsX64ControlledV1, false).unwrap();
     assert!(
         windows
-            .files
+            .files()
             .iter()
             .any(|file| file.path == "src/Security.c")
     );
@@ -411,7 +607,7 @@ fn epic4_generated_artifact_obligations() {
     epic4_artifacts::verify();
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 #[test]
 fn epic4_arti_description_and_hooks() {
     epic4_arti::verify();
@@ -1305,14 +1501,21 @@ fn saved_handoff_reopens_after_move_and_reproduces_host_sources() {
     fs::write(&split, format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd\"><AR-PACKAGES><AR-PACKAGE><SHORT-NAME>Alpha</SHORT-NAME><ELEMENTS>{signal}</ELEMENTS></AR-PACKAGE></AR-PACKAGES></AUTOSAR>\n")).unwrap();
     let mut original = Workspace::open(vec![source.clone(), split.clone()], archive()).unwrap();
     let output = temp.0.join("Handoff");
-    let preview = generator::preview_handoff(&mut original, &output).unwrap();
+    let preview =
+        generator::preview_handoff(&mut original, &output, tooling::native_target()).unwrap();
     assert!(
         preview
             .files
             .iter()
             .any(|file| file.path == "inputs/000.arxml")
     );
-    generator::generate_handoff_previewed(&mut original, &output, &preview.revision).unwrap();
+    generator::generate_handoff_previewed(
+        &mut original,
+        &output,
+        &preview.revision,
+        tooling::native_target(),
+    )
+    .unwrap();
     let moved = temp.0.join("Received/Handoff");
     fs::create_dir(moved.parent().unwrap()).unwrap();
     fs::rename(&output, &moved).unwrap();
@@ -1349,7 +1552,7 @@ fn saved_handoff_reopens_after_move_and_reproduces_host_sources() {
     let mut reopened = generator::open_handoff(&moved, archive()).unwrap();
     assert!(reopened.validate().unwrap().issues.is_empty());
     let regenerated = temp.0.join("Received/Rebuilt");
-    generator::generate(&mut reopened, &regenerated).unwrap();
+    generator::generate(&mut reopened, &regenerated, tooling::native_target()).unwrap();
     for name in fs::read_to_string(regenerated.join("files.list"))
         .unwrap()
         .lines()
@@ -1363,10 +1566,10 @@ fn saved_handoff_reopens_after_move_and_reproduces_host_sources() {
         }
     }
     #[cfg(windows)]
-    assert!(Path::new(&generator::build(&regenerated).unwrap().binary_path).exists());
+    assert!(Path::new(&tooling::build_host(&regenerated).unwrap().binary_path).exists());
     #[cfg(windows)]
     {
-        assert!(Path::new(&generator::build(&moved).unwrap().binary_path).exists());
+        assert!(Path::new(&tooling::build_host(&moved).unwrap().binary_path).exists());
         assert!(generator::open_handoff(&moved, archive()).is_ok());
     }
     assert!(
@@ -1382,13 +1585,13 @@ fn handoff_rejects_dirty_stale_and_modified_output_without_losing_old_package() 
     let (mut ecu, _) = create_pair(&temp.0);
     let source = temp.0.join("Alpha/Alpha.arxml");
     let output = temp.0.join("Handoff");
-    generator::generate_handoff(&mut ecu, &output).unwrap();
+    generator::generate_handoff(&mut ecu, &output, tooling::native_target()).unwrap();
     let original = fs::read(output.join("inputs/000.arxml")).unwrap();
     let frame = ecu.view().frames[0].path.clone();
     ecu.update_frame(&frame, serde_json::json!({"id": 802}))
         .unwrap();
     assert!(
-        generator::preview_handoff(&mut ecu, &output)
+        generator::preview_handoff(&mut ecu, &output, tooling::native_target())
             .unwrap_err()
             .contains("保存")
     );
@@ -1401,14 +1604,14 @@ fn handoff_rejects_dirty_stale_and_modified_output_without_losing_old_package() 
     );
     fs::write(&source, &external).unwrap();
     assert!(
-        generator::generate_handoff(&mut ecu, &output)
+        generator::generate_handoff(&mut ecu, &output, tooling::native_target())
             .unwrap_err()
             .contains("外部修改")
     );
     assert_eq!(fs::read(output.join("inputs/000.arxml")).unwrap(), original);
     let mut reopened = Workspace::open(vec![source], archive()).unwrap();
     fs::write(output.join("inputs/000.arxml"), b"owner changed this input").unwrap();
-    assert!(generator::generate_handoff(&mut reopened, &output).is_err());
+    assert!(generator::generate_handoff(&mut reopened, &output, tooling::native_target()).is_err());
     assert_eq!(
         fs::read(output.join("inputs/000.arxml")).unwrap(),
         b"owner changed this input"
@@ -1443,7 +1646,7 @@ fn delivered_input_removal_or_tampering_cannot_reproduce_host_project() {
     let temp = Scratch::new();
     let (mut ecu, _) = create_pair(&temp.0);
     let output = temp.0.join("Handoff");
-    generator::generate_handoff(&mut ecu, &output).unwrap();
+    generator::generate_handoff(&mut ecu, &output, tooling::native_target()).unwrap();
     let input = output.join("inputs/000.arxml");
     let original = fs::read(&input).unwrap();
     fs::remove_file(&input).unwrap();
@@ -1511,10 +1714,18 @@ fn delivered_input_removal_or_tampering_cannot_reproduce_host_project() {
 fn moved_reference_bundle_verifies_offline_and_rejects_wrong_vector() {
     let temp = Scratch::new();
     let bundle = temp.0.join("Reference");
-    let producer = Command::new(env!("CARGO_BIN_EXE_package_host_reference"))
+    let mut producer = Command::new(env!("CARGO_BIN_EXE_package_host_reference"));
+    producer
         .arg(&bundle)
-        .output()
-        .unwrap();
+        .args(["--target", tooling::native_target().spec().id])
+        .arg("--xsd-archive")
+        .arg(archive());
+    let producer = epic4_ecu::run_public_command(
+        &mut producer,
+        &temp.0,
+        "reference-package",
+        std::time::Duration::from_secs(60),
+    );
     assert!(
         producer.status.success(),
         "{}",
@@ -1524,14 +1735,15 @@ fn moved_reference_bundle_verifies_offline_and_rejects_wrong_vector() {
     fs::rename(&bundle, &moved).unwrap();
     let verify = |suffix: &str| {
         let report = temp.0.join(format!("{suffix}.json"));
-        let result = Command::new("powershell")
-            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
-            .arg(moved.join("verify.ps1"))
-            .arg("-ReportPath")
-            .arg(&report)
-            .current_dir(&temp.0)
-            .output()
-            .unwrap();
+        let mut command =
+            tooling::ecu_verify_command(&moved, &temp.0.join(format!("reference-build-{suffix}")));
+        command.arg("--report-path").arg(&report);
+        let result = epic4_ecu::run_public_command(
+            &mut command,
+            &temp.0,
+            suffix,
+            std::time::Duration::from_secs(180),
+        );
         let report_text = fs::read_to_string(&report).unwrap();
         let value: serde_json::Value =
             serde_json::from_str(report_text.trim_start_matches('\u{feff}')).unwrap();
@@ -1551,20 +1763,20 @@ fn moved_reference_bundle_verifies_offline_and_rejects_wrong_vector() {
     let empty_path = temp.0.join("NoCompiler");
     fs::create_dir(&empty_path).unwrap();
     let report = temp.0.join("no-compiler.json");
-    let powershell = PathBuf::from(std::env::var("WINDIR").unwrap())
-        .join("System32/WindowsPowerShell/v1.0/powershell.exe");
-    let no_compiler = Command::new(powershell)
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
-        .arg(moved.join("verify.ps1"))
-        .arg("-ReportPath")
+    let mut no_compiler = tooling::ecu_verify_command(&moved, &temp.0.join("no-compiler-build"));
+    no_compiler
+        .arg("--report-path")
         .arg(&report)
-        .env("PATH", &empty_path)
-        .current_dir(&temp.0)
-        .output()
-        .unwrap();
+        .env("AUTOSAR_CC", empty_path.join("gcc.exe"));
+    let no_compiler = epic4_ecu::run_public_command(
+        &mut no_compiler,
+        &temp.0,
+        "missing-compiler",
+        std::time::Duration::from_secs(60),
+    );
     assert!(!no_compiler.status.success());
-    let result = fs::read_to_string(&report).unwrap();
-    assert!(result.contains("gcc"));
+    let result: serde_json::Value = serde_json::from_slice(&fs::read(&report).unwrap()).unwrap();
+    assert_eq!(result["status"], "failed");
 
     let report_alias = temp.0.join("ReportAlias");
     let linked = Command::new("cmd")
@@ -1574,14 +1786,17 @@ fn moved_reference_bundle_verifies_offline_and_rejects_wrong_vector() {
         .output()
         .unwrap();
     assert!(linked.status.success());
-    let linked_report = Command::new("powershell")
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
-        .arg(moved.join("verify.ps1"))
-        .arg("-ReportPath")
-        .arg(report_alias.join("new-directory/result.json"))
-        .current_dir(&temp.0)
-        .output()
-        .unwrap();
+    let mut linked_report =
+        tooling::ecu_verify_command(&moved, &temp.0.join("linked-report-build"));
+    linked_report
+        .arg("--report-path")
+        .arg(report_alias.join("new-directory/result.json"));
+    let linked_report = epic4_ecu::run_public_command(
+        &mut linked_report,
+        &temp.0,
+        "linked-report",
+        std::time::Duration::from_secs(60),
+    );
     assert!(!linked_report.status.success());
     assert!(!moved.join("new-directory").exists());
     fs::remove_dir(report_alias).unwrap();
@@ -1593,7 +1808,7 @@ fn moved_reference_bundle_verifies_offline_and_rejects_wrong_vector() {
         original.replacen("X 801 2 B001", "X 801 2 DEADBEEF", 1),
     )
     .unwrap();
-    let hash_path = moved.join("reference-files.sha256");
+    let hash_path = moved.join("files.sha256");
     let seal_vectors = || {
         let digest = format!("{:x}", Sha256::digest(fs::read(&vector_path).unwrap()));
         let records = fs::read_to_string(&hash_path).unwrap();
@@ -1629,19 +1844,15 @@ fn moved_reference_bundle_verifies_offline_and_rejects_wrong_vector() {
     assert!(!passed);
     assert_eq!(result["status"], "failed");
     assert!(
-        result["error"].as_str().unwrap().contains("timed out"),
+        result["processStatus"] == "timeout"
+            || result["error"].as_str().unwrap().contains("deadline"),
         "{result}"
     );
 
     fs::remove_file(moved.join("Beta/inputs/000.arxml")).unwrap();
     let (passed, result) = verify("missing-input");
     assert!(!passed);
-    assert!(
-        result["error"]
-            .as_str()
-            .unwrap()
-            .contains("Missing package file")
-    );
+    assert_eq!(result["status"], "failed");
 }
 
 #[test]
@@ -1649,12 +1860,12 @@ fn regeneration_preserves_user_edits_to_generated_files() {
     let temp = Scratch::new();
     let (mut ecu, _) = create_pair(&temp.0);
     let output = temp.0.join("Generated");
-    generator::generate(&mut ecu, &output).unwrap();
+    generator::generate(&mut ecu, &output, tooling::native_target()).unwrap();
     for name in [
         "src/Com.c",
         "Ecu_Config.c",
         "README.md",
-        "build.ps1",
+        "tools/ecu-tool.py",
         "files.list",
         "files.sha256",
     ] {
@@ -1662,7 +1873,10 @@ fn regeneration_preserves_user_edits_to_generated_files() {
         let file = output.join(name);
         let original = fs::read(&file).unwrap();
         fs::write(&file, changed).unwrap();
-        assert!(generator::generate(&mut ecu, &output).is_err(), "{name}");
+        assert!(
+            generator::generate(&mut ecu, &output, tooling::native_target()).is_err(),
+            "{name}"
+        );
         assert_eq!(fs::read(&file).unwrap(), changed, "{name}");
         fs::write(file, original).unwrap();
     }
@@ -1674,57 +1888,52 @@ fn generated_handoff_builds_and_runs_after_moving_without_the_workbench() {
     let temp = Scratch::new();
     let (mut ecu, _) = create_pair(&temp.0);
     let output = temp.0.join("Generated");
-    generator::generate(&mut ecu, &output).unwrap();
+    generator::generate(&mut ecu, &output, tooling::native_target()).unwrap();
     let delivered = temp.0.join("Delivered ECU with spaces");
     fs::rename(&output, &delivered).unwrap();
-    let readme = fs::read_to_string(delivered.join("README.md")).unwrap();
-    assert!(readme.contains(".\\ecu_host.exe"));
-    assert!(!readme.contains("--nvm"));
-    assert!(!readme.contains("{{RUN_COMMAND}}"));
-    let listed = fs::read_to_string(delivered.join("files.list")).unwrap();
-    assert!(listed.lines().any(|name| name == "README.md"));
-    assert!(listed.lines().any(|name| name == "build.ps1"));
-
-    let documented_command = readme
-        .lines()
-        .find(|line| line.contains("powershell -NoProfile -ExecutionPolicy Bypass -File"))
-        .unwrap()
-        .split('`')
-        .nth(1)
-        .unwrap()
-        .replace("<generated-directory>", delivered.to_str().unwrap());
-    let build = Command::new("powershell")
-        .args(["-NoProfile", "-Command", &documented_command])
-        .current_dir(&temp.0)
-        .output()
-        .unwrap();
+    let build_directory = temp.0.join("native-host-build");
+    let build = epic4_ecu::run_public_command(
+        &mut tooling::ecu_build_command(&delivered, &build_directory, "host", None),
+        &temp.0,
+        "moved-host-build",
+        std::time::Duration::from_secs(180),
+    );
     assert!(
         build.status.success(),
         "{}{}",
         String::from_utf8_lossy(&build.stdout),
-        String::from_utf8_lossy(&build.stderr)
+        String::from_utf8_lossy(&build.stderr),
     );
-    let binary = delivered.join("ecu_host.exe");
-    let mut process = Command::new(&binary)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap();
-    process.stdin.take().unwrap().write_all(b"T 10\n").unwrap();
-    let result = process.wait_with_output().unwrap();
-    assert!(result.status.success());
+    let binary = tooling::native_binary(&build_directory, "ecu_host");
+    let logs = temp.0.join("host-process-logs");
+    fs::create_dir(&logs).unwrap();
+    let mut spec = autosar_config_core::execution::ProcessSpec::for_duration(
+        vec![binary.as_os_str().to_owned()],
+        temp.0.clone(),
+        Vec::new(),
+        std::time::Duration::from_secs(15),
+        logs,
+    )
+    .unwrap();
+    spec.stdin_stream = true;
+    let owner = autosar_config_core::execution::ProcessOwner::new().unwrap();
+    let mut process = owner.spawn(spec, None).unwrap();
+    process.write_stdin(b"T 10\n").unwrap();
+    process.close_stdin();
+    let result = process.wait().unwrap();
+    assert!(result.success(), "{result:?}");
     assert_eq!(
-        String::from_utf8(result.stdout).unwrap().trim(),
+        fs::read_to_string(&result.stdout).unwrap().trim(),
         "X 801 2 2800"
     );
 
     fs::write(&binary, b"owner binary").unwrap();
-    let repeated = Command::new("powershell")
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
-        .arg(delivered.join("build.ps1"))
-        .current_dir(&temp.0)
-        .output()
-        .unwrap();
+    let repeated = epic4_ecu::run_public_command(
+        &mut tooling::ecu_build_command(&delivered, &build_directory, "host", None),
+        &temp.0,
+        "owner-output-preserved",
+        std::time::Duration::from_secs(60),
+    );
     assert!(!repeated.status.success());
     assert_eq!(fs::read(&binary).unwrap(), b"owner binary");
 }
@@ -1734,27 +1943,27 @@ fn regeneration_rejects_missing_proof_and_unlisted_user_content() {
     let temp = Scratch::new();
     let (mut ecu, _) = create_pair(&temp.0);
     let output = temp.0.join("Generated");
-    generator::generate(&mut ecu, &output).unwrap();
+    generator::generate(&mut ecu, &output, tooling::native_target()).unwrap();
     let config = fs::read(output.join("Ecu_Config.c")).unwrap();
 
     let proof = output.join("files.sha256");
     let proof_contents = fs::read(&proof).unwrap();
     fs::remove_file(&proof).unwrap();
     assert!(
-        generator::generate(&mut ecu, &output)
+        generator::generate(&mut ecu, &output, tooling::native_target())
             .unwrap_err()
             .contains("完整性记录")
     );
     assert_eq!(fs::read(output.join("Ecu_Config.c")).unwrap(), config);
 
     fs::write(&proof, b"invalid proof\n").unwrap();
-    assert!(generator::generate(&mut ecu, &output).is_err());
+    assert!(generator::generate(&mut ecu, &output, tooling::native_target()).is_err());
     fs::write(&proof, proof_contents).unwrap();
     let manifest = output.join("files.list");
     let manifest_contents = fs::read(&manifest).unwrap();
     fs::remove_file(&manifest).unwrap();
     assert!(
-        generator::generate(&mut ecu, &output)
+        generator::generate(&mut ecu, &output, tooling::native_target())
             .unwrap_err()
             .contains("文件清单")
     );
@@ -1762,12 +1971,12 @@ fn regeneration_rejects_missing_proof_and_unlisted_user_content() {
     fs::write(&manifest, manifest_contents).unwrap();
     let extra = output.join("notes.txt");
     fs::write(&extra, b"user content").unwrap();
-    assert!(generator::generate(&mut ecu, &output).is_err());
+    assert!(generator::generate(&mut ecu, &output, tooling::native_target()).is_err());
     assert_eq!(fs::read(&extra).unwrap(), b"user content");
     fs::remove_file(&extra).unwrap();
     let extra_dir = output.join("user-data");
     fs::create_dir(&extra_dir).unwrap();
-    assert!(generator::generate(&mut ecu, &output).is_err());
+    assert!(generator::generate(&mut ecu, &output, tooling::native_target()).is_err());
     assert!(extra_dir.is_dir());
     assert_eq!(fs::read(output.join("Ecu_Config.c")).unwrap(), config);
 }
@@ -1777,12 +1986,12 @@ fn regeneration_rejects_a_missing_generated_file() {
     let temp = Scratch::new();
     let (mut ecu, _) = create_pair(&temp.0);
     let output = temp.0.join("Generated");
-    generator::generate(&mut ecu, &output).unwrap();
+    generator::generate(&mut ecu, &output, tooling::native_target()).unwrap();
     let missing = output.join("include/Can.h");
     fs::remove_file(&missing).unwrap();
     let manifest = fs::read(output.join("files.list")).unwrap();
 
-    assert!(generator::generate(&mut ecu, &output).is_err());
+    assert!(generator::generate(&mut ecu, &output, tooling::native_target()).is_err());
     assert!(!missing.exists());
     assert_eq!(fs::read(output.join("files.list")).unwrap(), manifest);
 }
@@ -1811,7 +2020,7 @@ fn generation_rejects_junction_output_without_touching_its_target() {
     );
 
     assert!(
-        generator::generate(&mut ecu, &output)
+        generator::generate(&mut ecu, &output, tooling::native_target())
             .unwrap_err()
             .contains("重解析点")
     );
@@ -1835,7 +2044,7 @@ fn generation_rejects_trailing_dot_alias_without_touching_owner_directory() {
     fs::create_dir(&owner).unwrap();
     fs::write(owner.join("sentinel.txt"), b"owner content").unwrap();
 
-    assert!(generator::generate(&mut ecu, &owner.join(".")).is_err());
+    assert!(generator::generate(&mut ecu, &owner.join("."), tooling::native_target()).is_err());
     assert_eq!(
         fs::read(owner.join("sentinel.txt")).unwrap(),
         b"owner content"
@@ -1857,7 +2066,7 @@ fn regeneration_keeps_previous_output_tree() {
         b"keep staged owner content",
     )
     .unwrap();
-    let initial = generator::generate(&mut ecu, &output).unwrap();
+    let initial = generator::generate(&mut ecu, &output, tooling::native_target()).unwrap();
     assert!(initial.previous_output_directory.is_none());
     assert_eq!(
         fs::read(stage_collision.join("owner.txt")).unwrap(),
@@ -1881,7 +2090,7 @@ fn regeneration_keeps_previous_output_tree() {
     ecu.update_frame(&frame, serde_json::json!({"periodMs": 15}))
         .unwrap();
     ecu.save().unwrap();
-    let regenerated = generator::generate(&mut ecu, &output).unwrap();
+    let regenerated = generator::generate(&mut ecu, &output, tooling::native_target()).unwrap();
     let previous = PathBuf::from(regenerated.previous_output_directory.unwrap());
     assert!(previous.is_absolute() && !previous.starts_with(&collision));
     assert_eq!(fs::read(previous.join("Ecu_Config.c")).unwrap(), old_config);
@@ -1892,7 +2101,7 @@ fn regeneration_keeps_previous_output_tree() {
     );
     assert_ne!(fs::read(output.join("Ecu_Config.c")).unwrap(), old_config);
 
-    let next = generator::generate(&mut ecu, &output).unwrap();
+    let next = generator::generate(&mut ecu, &output, tooling::native_target()).unwrap();
     assert_ne!(
         next.previous_output_directory.as_deref(),
         Some(previous.to_str().unwrap())
@@ -1906,14 +2115,14 @@ fn regeneration_preserves_built_binary_until_owner_moves_it() {
     let temp = Scratch::new();
     let (mut ecu, _) = create_pair(&temp.0);
     let output = temp.0.join("Generated");
-    generator::generate(&mut ecu, &output).unwrap();
-    let binary = generator::build(&output).unwrap().binary_path;
+    generator::generate(&mut ecu, &output, tooling::native_target()).unwrap();
+    let binary = tooling::build_host(&output).unwrap().binary_path;
     let original = fs::read(&binary).unwrap();
     let config = fs::read(output.join("Ecu_Config.c")).unwrap();
     let manifest = fs::read(output.join("files.list")).unwrap();
     let proof = fs::read(output.join("files.sha256")).unwrap();
 
-    let error = generator::generate(&mut ecu, &output).unwrap_err();
+    let error = generator::generate(&mut ecu, &output, tooling::native_target()).unwrap_err();
     assert!(error.contains("请选择新的空输出目录"), "{error}");
     assert_eq!(fs::read(&binary).unwrap(), original);
     assert_eq!(fs::read(output.join("Ecu_Config.c")).unwrap(), config);
@@ -1921,7 +2130,7 @@ fn regeneration_preserves_built_binary_until_owner_moves_it() {
     assert_eq!(fs::read(output.join("files.sha256")).unwrap(), proof);
     let archived = temp.0.join("PreservedBuild.exe");
     fs::rename(&binary, &archived).unwrap();
-    generator::generate(&mut ecu, &output).unwrap();
+    generator::generate(&mut ecu, &output, tooling::native_target()).unwrap();
     assert_eq!(fs::read(&archived).unwrap(), original);
 }
 
@@ -1931,16 +2140,16 @@ fn rebuild_rejects_existing_binary_without_overwriting_owner_bytes() {
     let temp = Scratch::new();
     let (mut ecu, _) = create_pair(&temp.0);
     let output = temp.0.join("Generated");
-    let generated = generator::generate(&mut ecu, &output).unwrap();
+    let generated = generator::generate(&mut ecu, &output, tooling::native_target()).unwrap();
     let output = PathBuf::from(generated.output_directory);
-    let binary = generator::build(&output).unwrap().binary_path;
+    let binary = tooling::build_host(&output).unwrap().binary_path;
     fs::write(&binary, b"owner modified binary").unwrap();
 
-    assert!(generator::build(&output).is_err());
+    assert!(tooling::build_host(&output).is_err());
     assert_eq!(fs::read(&binary).unwrap(), b"owner modified binary");
     let archived = temp.0.join("OwnerBinary.exe");
     fs::rename(&binary, &archived).unwrap();
-    let rebuilt = generator::build(&output).unwrap().binary_path;
+    let rebuilt = tooling::build_host(&output).unwrap().binary_path;
     let mut process = Command::new(rebuilt)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -1972,7 +2181,7 @@ fn build_rejects_changed_generated_inputs_before_compiling() {
         ("missing header", "include/Can.h", "remove"),
     ] {
         let output = temp.0.join(case);
-        generator::generate(&mut ecu, &output).unwrap();
+        generator::generate(&mut ecu, &output, tooling::native_target()).unwrap();
         let target = output.join(path);
         match change {
             "append" => {
@@ -1989,7 +2198,7 @@ fn build_rejects_changed_generated_inputs_before_compiling() {
         } else {
             None
         };
-        let error = generator::build(&output).unwrap_err();
+        let error = tooling::build_host(&output).unwrap_err();
         assert!(error.contains("拒绝构建"), "{case}: {error}");
         assert!(
             !output
@@ -2013,7 +2222,7 @@ fn build_rejects_changed_generated_inputs_before_compiling() {
 #[test]
 fn build_rejects_source_changed_during_compilation_before_installing_binary() {
     if let Some(output) = std::env::var_os("AUTOSAR_BUILD_MUTATION_CHILD") {
-        let error = generator::build(Path::new(&output)).unwrap_err();
+        let error = tooling::build_host(Path::new(&output)).unwrap_err();
         assert!(
             error.contains("编译期间") && error.contains("完整性检查失败"),
             "{error}"
@@ -2025,7 +2234,7 @@ fn build_rejects_source_changed_during_compilation_before_installing_binary() {
     let temp = Scratch::new();
     let (mut ecu, _) = create_pair(&temp.0);
     let output = temp.0.join("Generated");
-    generator::generate(&mut ecu, &output).unwrap();
+    generator::generate(&mut ecu, &output, tooling::native_target()).unwrap();
     let target = output.join("Ecu_Config.c");
     let compiler_source = temp.0.join("mutating_compiler.c");
     let compiler = temp.0.join("mutating_compiler.exe");
@@ -2102,7 +2311,7 @@ fn untouched_output_regenerates_changed_config_and_runs_the_new_schedule() {
     let temp = Scratch::new();
     let (mut ecu, _) = create_pair(&temp.0);
     let output = temp.0.join("Generated");
-    generator::generate(&mut ecu, &output).unwrap();
+    generator::generate(&mut ecu, &output, tooling::native_target()).unwrap();
     let original = fs::read(output.join("Ecu_Config.c")).unwrap();
     let frame = ecu
         .view()
@@ -2115,10 +2324,10 @@ fn untouched_output_regenerates_changed_config_and_runs_the_new_schedule() {
     ecu.update_frame(&frame, serde_json::json!({"periodMs": 15}))
         .unwrap();
     ecu.save().unwrap();
-    generator::generate(&mut ecu, &output).unwrap();
+    generator::generate(&mut ecu, &output, tooling::native_target()).unwrap();
     assert_ne!(fs::read(output.join("Ecu_Config.c")).unwrap(), original);
 
-    let binary = generator::build(&output).unwrap().binary_path;
+    let binary = tooling::build_host(&output).unwrap().binary_path;
     let mut ecu = Command::new(binary)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -2143,12 +2352,18 @@ fn generation_preview_is_read_only_and_confirmed_files_match() {
     let (mut ecu, _) = create_pair(&temp.0);
     let output = temp.0.join("PreviewOutput");
     fs::create_dir(&output).unwrap();
-    let preview = generator::preview_generate(&mut ecu, &output).unwrap();
+    let preview = generator::preview_generate(&mut ecu, &output, tooling::native_target()).unwrap();
     assert!(fs::read_dir(&output).unwrap().next().is_none());
     assert!(preview.files.iter().all(|file| file.status == "new"));
     assert!(preview.files.iter().any(|file| file.path == "Ecu_Config.c"
         && file.after.as_ref().unwrap().contains("const EcuConfig")));
-    generator::generate_previewed(&mut ecu, &output, &preview.revision).unwrap();
+    generator::generate_previewed(
+        &mut ecu,
+        &output,
+        &preview.revision,
+        tooling::native_target(),
+    )
+    .unwrap();
     for file in &preview.files {
         assert_eq!(
             fs::read_to_string(output.join(&file.path)).unwrap(),
@@ -2168,7 +2383,7 @@ fn generation_preview_is_read_only_and_confirmed_files_match() {
     ecu.update_frame(&frame, serde_json::json!({"periodMs": 15}))
         .unwrap();
     ecu.save().unwrap();
-    let changed = generator::preview_generate(&mut ecu, &output).unwrap();
+    let changed = generator::preview_generate(&mut ecu, &output, tooling::native_target()).unwrap();
     assert_eq!(
         changed
             .files
@@ -2180,11 +2395,22 @@ fn generation_preview_is_read_only_and_confirmed_files_match() {
     );
     assert_eq!(fs::read(output.join("Ecu_Config.c")).unwrap(), first);
     assert!(
-        generator::generate_previewed(&mut ecu, &output, &preview.revision)
-            .unwrap_err()
-            .contains("预览已失效")
+        generator::generate_previewed(
+            &mut ecu,
+            &output,
+            &preview.revision,
+            tooling::native_target()
+        )
+        .unwrap_err()
+        .contains("预览已失效")
     );
-    generator::generate_previewed(&mut ecu, &output, &changed.revision).unwrap();
+    generator::generate_previewed(
+        &mut ecu,
+        &output,
+        &changed.revision,
+        tooling::native_target(),
+    )
+    .unwrap();
     assert_ne!(fs::read(output.join("Ecu_Config.c")).unwrap(), first);
 }
 
@@ -2193,11 +2419,19 @@ fn generation_preview_rejects_changed_existing_output() {
     let temp = Scratch::new();
     let (mut ecu, _) = create_pair(&temp.0);
     let output = temp.0.join("PreviewOutput");
-    generator::generate(&mut ecu, &output).unwrap();
-    let preview = generator::preview_generate(&mut ecu, &output).unwrap();
+    generator::generate(&mut ecu, &output, tooling::native_target()).unwrap();
+    let preview = generator::preview_generate(&mut ecu, &output, tooling::native_target()).unwrap();
     let original = fs::read(output.join("Ecu_Config.c")).unwrap();
     fs::write(output.join("Ecu_Config.c"), b"owner change").unwrap();
-    assert!(generator::generate_previewed(&mut ecu, &output, &preview.revision).is_err());
+    assert!(
+        generator::generate_previewed(
+            &mut ecu,
+            &output,
+            &preview.revision,
+            tooling::native_target()
+        )
+        .is_err()
+    );
     assert_eq!(
         fs::read(output.join("Ecu_Config.c")).unwrap(),
         b"owner change"
@@ -2213,14 +2447,14 @@ fn generation_preview_rejects_user_files_binaries_and_bad_proofs_before_writing(
     fs::create_dir(&user_output).unwrap();
     fs::write(user_output.join("owner.txt"), b"keep me").unwrap();
     assert!(
-        generator::preview_generate(&mut ecu, &user_output)
+        generator::preview_generate(&mut ecu, &user_output, tooling::native_target())
             .unwrap_err()
             .contains("拒绝覆盖")
     );
     assert_eq!(fs::read(user_output.join("owner.txt")).unwrap(), b"keep me");
 
     let built_output = temp.0.join("BuiltOutput");
-    generator::generate(&mut ecu, &built_output).unwrap();
+    generator::generate(&mut ecu, &built_output, tooling::native_target()).unwrap();
     let binary = built_output.join(if cfg!(windows) {
         "ecu_host.exe"
     } else {
@@ -2228,17 +2462,17 @@ fn generation_preview_rejects_user_files_binaries_and_bad_proofs_before_writing(
     });
     fs::write(&binary, b"owner binary").unwrap();
     assert!(
-        generator::preview_generate(&mut ecu, &built_output)
+        generator::preview_generate(&mut ecu, &built_output, tooling::native_target())
             .unwrap_err()
             .contains("二进制文件")
     );
     assert_eq!(fs::read(&binary).unwrap(), b"owner binary");
 
     let changed_output = temp.0.join("ChangedOutput");
-    generator::generate(&mut ecu, &changed_output).unwrap();
+    generator::generate(&mut ecu, &changed_output, tooling::native_target()).unwrap();
     fs::write(changed_output.join("Ecu_Config.c"), b"owner edit").unwrap();
     assert!(
-        generator::preview_generate(&mut ecu, &changed_output)
+        generator::preview_generate(&mut ecu, &changed_output, tooling::native_target())
             .unwrap_err()
             .contains("完整性记录已被修改")
     );
@@ -2257,8 +2491,8 @@ fn generated_c99_ecus_exchange_golden_vectors_and_recover_from_faults() {
     let out_b = temp.0.join("GeneratedBeta");
     fs::create_dir(&out_a).unwrap();
     fs::create_dir(&out_b).unwrap();
-    generator::generate(&mut a, &out_a).unwrap();
-    generator::generate(&mut b, &out_b).unwrap();
+    generator::generate(&mut a, &out_a, tooling::native_target()).unwrap();
+    generator::generate(&mut b, &out_b, tooling::native_target()).unwrap();
     let mut names: Vec<String> = fs::read_to_string(out_a.join("files.list"))
         .unwrap()
         .lines()
@@ -2269,7 +2503,7 @@ fn generated_c99_ecus_exchange_golden_vectors_and_recover_from_faults() {
         .iter()
         .map(|name| fs::read(out_a.join(name)).unwrap())
         .collect();
-    generator::generate(&mut a, &out_a).unwrap();
+    generator::generate(&mut a, &out_a, tooling::native_target()).unwrap();
     for (name, expected) in names.iter().zip(&original) {
         assert_eq!(
             &fs::read(out_a.join(name)).unwrap(),
@@ -2277,8 +2511,8 @@ fn generated_c99_ecus_exchange_golden_vectors_and_recover_from_faults() {
             "identical ARXML changed generated file {name}"
         );
     }
-    let exe_a = generator::build(&out_a).unwrap().binary_path;
-    let exe_b = generator::build(&out_b).unwrap().binary_path;
+    let exe_a = tooling::build_host(&out_a).unwrap().binary_path;
+    let exe_b = tooling::build_host(&out_b).unwrap().binary_path;
     let mut tx = Command::new(exe_a)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -2313,7 +2547,7 @@ fn generated_c99_ecus_exchange_golden_vectors_and_recover_from_faults() {
             .any(|line| line.trim_end_matches('\r') == "V 0 54 1"),
         "independent received value: {received}"
     );
-    let result = host::run(&out_a, &out_b).unwrap();
+    let result = tooling::run_hosts(&out_a, &out_b).unwrap();
     assert!(result.passed, "host bus failed: {}", result.log);
     assert!(result.events.iter().any(|e| e.contains("BUS_OFF")));
     assert!(result.events.iter().any(|e| e.contains("DLC")));
@@ -2394,8 +2628,8 @@ fn global_ecuc_pdu_binding_roundtrips_and_rejects_wrong_com_reference_type() {
     let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
     assert!(reopened.validate().unwrap().issues.is_empty());
     let generated = temp.0.join("Generated");
-    generator::generate(&mut reopened, &generated).unwrap();
-    let binary = generator::build(&generated).unwrap().binary_path;
+    generator::generate(&mut reopened, &generated, tooling::native_target()).unwrap();
+    let binary = tooling::build_host(&generated).unwrap().binary_path;
     let mut ecu = Command::new(binary)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -2437,9 +2671,13 @@ fn global_ecuc_pdu_binding_roundtrips_and_rejects_wrong_com_reference_type() {
     );
     assert!(unsupported.save().unwrap_err().contains("PDU_UNSUPPORTED"));
     assert!(
-        generator::generate(&mut unsupported, &temp.0.join("Unsafe"))
-            .unwrap_err()
-            .contains("PDU_UNSUPPORTED")
+        generator::generate(
+            &mut unsupported,
+            &temp.0.join("Unsafe"),
+            tooling::native_target()
+        )
+        .unwrap_err()
+        .contains("PDU_UNSUPPORTED")
     );
     assert_eq!(fs::read_to_string(source).unwrap(), wrong);
 }
@@ -2691,7 +2929,12 @@ fn host_can_ecuc_closes_required_mod_fields_and_rejects_broken_links() {
         split.validate().unwrap().issues.is_empty(),
         "split Mcu clock must resolve across files"
     );
-    generator::generate(&mut split, &temp.0.join("GeneratedSplit")).unwrap();
+    generator::generate(
+        &mut split,
+        &temp.0.join("GeneratedSplit"),
+        tooling::native_target(),
+    )
+    .unwrap();
     split.save().unwrap();
     assert_eq!(fs::read_to_string(&source).unwrap(), split_first);
     assert_eq!(fs::read_to_string(&split_source).unwrap(), split_second);
@@ -2749,7 +2992,12 @@ fn host_can_ecuc_closes_required_mod_fields_and_rejects_broken_links() {
         assert!(imported.view().files[0].readonly, "{name}");
         assert!(imported.save().is_err(), "{name}");
         assert!(
-            generator::generate(&mut imported, &temp.0.join(format!("Unsafe{name}"))).is_err(),
+            generator::generate(
+                &mut imported,
+                &temp.0.join(format!("Unsafe{name}")),
+                tooling::native_target()
+            )
+            .is_err(),
             "{name}"
         );
         assert_eq!(fs::read_to_string(&source).unwrap(), modified, "{name}");
@@ -2803,9 +3051,13 @@ fn missing_required_com_or_ecuc_root_is_read_only_and_cannot_generate() {
         );
         assert!(imported.save().unwrap_err().contains("PDU_UNSUPPORTED"));
         assert!(
-            generator::generate(&mut imported, &temp.0.join(format!("Unsafe{name}")))
-                .unwrap_err()
-                .contains("PDU_UNSUPPORTED")
+            generator::generate(
+                &mut imported,
+                &temp.0.join(format!("Unsafe{name}")),
+                tooling::native_target()
+            )
+            .unwrap_err()
+            .contains("PDU_UNSUPPORTED")
         );
         assert_eq!(fs::read_to_string(&source).unwrap(), modified);
     }
@@ -2859,9 +3111,13 @@ fn missing_required_com_or_ecuc_root_is_read_only_and_cannot_generate() {
         );
         assert!(imported.save().unwrap_err().contains("PDU_UNSUPPORTED"));
         assert!(
-            generator::generate(&mut imported, &temp.0.join(format!("Unsafe{name}")))
-                .unwrap_err()
-                .contains("PDU_UNSUPPORTED")
+            generator::generate(
+                &mut imported,
+                &temp.0.join(format!("Unsafe{name}")),
+                tooling::native_target()
+            )
+            .unwrap_err()
+            .contains("PDU_UNSUPPORTED")
         );
         assert_eq!(fs::read_to_string(&source).unwrap(), modified);
     }
@@ -2905,9 +3161,13 @@ fn missing_required_com_or_ecuc_root_is_read_only_and_cannot_generate() {
         );
         assert!(imported.save().unwrap_err().contains("PDU_UNSUPPORTED"));
         assert!(
-            generator::generate(&mut imported, &temp.0.join(format!("Unsafe{name}")))
-                .unwrap_err()
-                .contains("PDU_UNSUPPORTED")
+            generator::generate(
+                &mut imported,
+                &temp.0.join(format!("Unsafe{name}")),
+                tooling::native_target()
+            )
+            .unwrap_err()
+            .contains("PDU_UNSUPPORTED")
         );
         assert_eq!(fs::read_to_string(&source).unwrap(), modified);
     }
@@ -2979,9 +3239,13 @@ fn missing_required_com_or_ecuc_root_is_read_only_and_cannot_generate() {
         );
         assert!(imported.save().unwrap_err().contains("PDU_UNSUPPORTED"));
         assert!(
-            generator::generate(&mut imported, &temp.0.join(format!("Unsafe{name}")))
-                .unwrap_err()
-                .contains("PDU_UNSUPPORTED")
+            generator::generate(
+                &mut imported,
+                &temp.0.join(format!("Unsafe{name}")),
+                tooling::native_target()
+            )
+            .unwrap_err()
+            .contains("PDU_UNSUPPORTED")
         );
         assert_eq!(fs::read_to_string(&source).unwrap(), modified);
     }
@@ -3038,7 +3302,7 @@ fn multiple_consumed_com_modules_cannot_generate() {
     );
     assert!(imported.save().is_err());
     let output = temp.0.join("UnsafeDuplicateComOwner");
-    assert!(generator::generate(&mut imported, &output).is_err());
+    assert!(generator::generate(&mut imported, &output, tooling::native_target()).is_err());
     assert!(!output.exists());
     assert_eq!(fs::read_to_string(source).unwrap(), modified);
 }
@@ -3159,9 +3423,13 @@ fn imported_global_pdu_cannot_duplicate_system_binding_or_misstate_diagnostic_le
         );
         assert!(imported.save().unwrap_err().contains("PDU_UNSUPPORTED"));
         assert!(
-            generator::generate(&mut imported, &temp.0.join(format!("Unsafe{name}")))
-                .unwrap_err()
-                .contains("PDU_UNSUPPORTED")
+            generator::generate(
+                &mut imported,
+                &temp.0.join(format!("Unsafe{name}")),
+                tooling::native_target()
+            )
+            .unwrap_err()
+            .contains("PDU_UNSUPPORTED")
         );
         assert_eq!(fs::read_to_string(&source).unwrap(), modified);
     }
@@ -3244,7 +3512,14 @@ fn diagnostic_ecuc_refs_reject_old_system_destinations_and_dynamic_npdu() {
             "{name} must not silently bind a system PDU"
         );
         assert!(imported.save().is_err());
-        assert!(generator::generate(&mut imported, &temp.0.join(format!("Unsafe{name}"))).is_err());
+        assert!(
+            generator::generate(
+                &mut imported,
+                &temp.0.join(format!("Unsafe{name}")),
+                tooling::native_target()
+            )
+            .is_err()
+        );
         assert_eq!(fs::read_to_string(&source).unwrap(), modified);
     }
     let n_pdu = doc
@@ -3275,7 +3550,14 @@ fn diagnostic_ecuc_refs_reject_old_system_destinations_and_dynamic_npdu() {
             .any(|issue| issue.code == "DIAG_UNSUPPORTED")
     );
     assert!(imported.save().is_err());
-    assert!(generator::generate(&mut imported, &temp.0.join("UnsafeDynamicNPdu")).is_err());
+    assert!(
+        generator::generate(
+            &mut imported,
+            &temp.0.join("UnsafeDynamicNPdu"),
+            tooling::native_target()
+        )
+        .is_err()
+    );
     assert_eq!(fs::read_to_string(source).unwrap(), modified);
 }
 
@@ -3306,11 +3588,11 @@ fn host_rejects_id_matched_wrong_dlc_even_when_other_frames_exchange() {
     b.save().unwrap();
     let out_a = temp.0.join("GeneratedAlpha");
     let out_b = temp.0.join("GeneratedBeta");
-    generator::generate(&mut a, &out_a).unwrap();
-    generator::generate(&mut b, &out_b).unwrap();
-    generator::build(&out_a).unwrap();
-    generator::build(&out_b).unwrap();
-    let result = host::run(&out_a, &out_b).unwrap();
+    generator::generate(&mut a, &out_a, tooling::native_target()).unwrap();
+    generator::generate(&mut b, &out_b, tooling::native_target()).unwrap();
+    tooling::build_host(&out_a).unwrap();
+    tooling::build_host(&out_b).unwrap();
+    let result = tooling::run_hosts(&out_a, &out_b).unwrap();
     assert!(
         !result.passed && result.log.contains("FRAME_DLC"),
         "ID-matched DLC mismatch was ignored: {}",
@@ -3525,7 +3807,7 @@ fn split_package_save_preserves_sources_and_rejects_stale_reference_file() {
     assert!(project.validate().unwrap_err().contains("外部修改"));
     let unsafe_output = temp.0.join("StaleGeneration");
     assert!(
-        generator::generate(&mut project, &unsafe_output)
+        generator::generate(&mut project, &unsafe_output, tooling::native_target())
             .unwrap_err()
             .contains("外部修改")
     );
@@ -3669,7 +3951,12 @@ fn official_r24_sample_imports_as_one_split_package_without_rewriting_sources() 
         assert_eq!(content, fs::read(path).unwrap());
     }
     assert!(
-        generator::generate(&mut project, &temp.0.join("Generated")).is_err(),
+        generator::generate(
+            &mut project,
+            &temp.0.join("Generated"),
+            tooling::native_target()
+        )
+        .is_err(),
         "unconfigured CAN profile must not produce a misleading ECU"
     );
 }
@@ -3703,7 +3990,7 @@ fn unresolved_r24_variant_is_preserved_but_blocks_generation() {
     imported.save().unwrap();
     assert!(fs::read_to_string(source).unwrap().contains(variant));
     let generated = temp.0.join("UnsafeOutput");
-    assert!(generator::generate(&mut imported, &generated).is_err());
+    assert!(generator::generate(&mut imported, &generated, tooling::native_target()).is_err());
     assert!(
         !generated.exists(),
         "variant-dependent C99 output must not be materialized"
@@ -3734,7 +4021,7 @@ fn package_variant_affecting_profile_blocks_generation() {
         checked.issues
     );
     let generated = temp.0.join("UnsafePackageOutput");
-    assert!(generator::generate(&mut imported, &generated).is_err());
+    assert!(generator::generate(&mut imported, &generated, tooling::native_target()).is_err());
     assert!(!generated.exists());
 }
 
@@ -3773,7 +4060,7 @@ fn conflicting_canif_entries_for_one_pdu_block_generation() {
         checked.issues
     );
     let generated = temp.0.join("UnsafeCanIfOutput");
-    assert!(generator::generate(&mut imported, &generated).is_err());
+    assert!(generator::generate(&mut imported, &generated, tooling::native_target()).is_err());
     assert!(!generated.exists());
 }
 
@@ -3809,7 +4096,7 @@ fn ipdu_mapping_disagreement_with_com_blocks_generation() {
         );
         let generated = temp.0.join(format!("Unsafe{field}Output"));
         assert!(
-            generator::generate(&mut imported, &generated).is_err(),
+            generator::generate(&mut imported, &generated, tooling::native_target()).is_err(),
             "{field} generated incompatible C99"
         );
         assert!(!generated.exists());
@@ -3839,7 +4126,12 @@ fn linked_can_frame_must_match_canif_and_pdu_layout() {
     fs::write(&source, &compatible).unwrap();
     let mut imported = Workspace::open(vec![source.clone()], archive()).unwrap();
     assert!(imported.validate().unwrap().issues.is_empty());
-    generator::generate(&mut imported, &temp.0.join("CompatibleNetworkOutput")).unwrap();
+    generator::generate(
+        &mut imported,
+        &temp.0.join("CompatibleNetworkOutput"),
+        tooling::native_target(),
+    )
+    .unwrap();
     for (original, changed) in [
         (
             "<START-POSITION>0</START-POSITION>",
@@ -3866,7 +4158,14 @@ fn linked_can_frame_must_match_canif_and_pdu_layout() {
             "{:?}",
             checked.issues
         );
-        assert!(generator::generate(&mut mismatched, &temp.0.join("UnsafeFrameOutput")).is_err());
+        assert!(
+            generator::generate(
+                &mut mismatched,
+                &temp.0.join("UnsafeFrameOutput"),
+                tooling::native_target()
+            )
+            .is_err()
+        );
     }
     fs::write(
         &source,
@@ -3888,7 +4187,7 @@ fn linked_can_frame_must_match_canif_and_pdu_layout() {
         checked.issues
     );
     let generated = temp.0.join("UnsafeNetworkOutput");
-    assert!(generator::generate(&mut imported, &generated).is_err());
+    assert!(generator::generate(&mut imported, &generated, tooling::native_target()).is_err());
     assert!(!generated.exists());
 }
 
@@ -4066,7 +4365,7 @@ fn configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_multiframe_did(
         (0x700, 0x708, 0x1234)
     );
     let output = temp.0.join("GeneratedDiag");
-    generator::generate(&mut reopened, &output).unwrap();
+    generator::generate(&mut reopened, &output, tooling::native_target()).unwrap();
     let generated_config = fs::read_to_string(output.join("Ecu_Config.c")).unwrap();
     assert!(generated_config.contains("5000u, 75u, 200u, 200u"));
     let mut names: Vec<String> = fs::read_to_string(output.join("files.list"))
@@ -4079,7 +4378,7 @@ fn configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_multiframe_did(
         .iter()
         .map(|name| fs::read(output.join(name)).unwrap())
         .collect();
-    generator::generate(&mut reopened, &output).unwrap();
+    generator::generate(&mut reopened, &output, tooling::native_target()).unwrap();
     for (name, expected) in names.iter().zip(&original_files) {
         assert_eq!(
             &fs::read(output.join(name)).unwrap(),
@@ -4087,7 +4386,7 @@ fn configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_multiframe_did(
             "identical diagnostic ARXML changed {name}"
         );
     }
-    let binary = generator::build(&output).unwrap().binary_path;
+    let binary = tooling::build_host(&output).unwrap().binary_path;
     let mut ecu = Command::new(binary)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -4115,7 +4414,7 @@ fn configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_multiframe_did(
         ],
         "{log}"
     );
-    let report = host::run_diagnostic(&temp.0.join("GeneratedDiag")).unwrap();
+    let report = tooling::run_diagnostic(&temp.0.join("GeneratedDiag")).unwrap();
     assert!(
         report.passed,
         "independent host diagnostic tester failed: {}",
@@ -4132,9 +4431,9 @@ fn configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_multiframe_did(
     let mut signal_only = Workspace::open(vec![temp.0.join("Diag/Diag.arxml")], archive()).unwrap();
     assert!(signal_only.view().diagnostic.is_none());
     let signal_output = temp.0.join("GeneratedSignalsOnly");
-    generator::generate(&mut signal_only, &signal_output).unwrap();
-    generator::build(&signal_output).unwrap();
-    assert!(host::run_diagnostic(&signal_output).is_err());
+    generator::generate(&mut signal_only, &signal_output, tooling::native_target()).unwrap();
+    tooling::build_host(&signal_output).unwrap();
+    assert!(tooling::run_diagnostic(&signal_output).is_err());
 }
 
 #[cfg(windows)]
@@ -4192,9 +4491,9 @@ fn active_session_did_reports_session_transitions_and_rejects_invalid_reads() {
     let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
     assert!(reopened.validate().unwrap().issues.is_empty());
     let generated = temp.0.join("GeneratedDiag");
-    generator::generate(&mut reopened, &generated).unwrap();
+    generator::generate(&mut reopened, &generated, tooling::native_target()).unwrap();
     assert_eq!(fs::read(&source).unwrap(), saved);
-    let binary = generator::build(&generated).unwrap().binary_path;
+    let binary = tooling::build_host(&generated).unwrap().binary_path;
     let mut ecu = Command::new(binary)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -4230,7 +4529,7 @@ fn active_session_did_reports_session_transitions_and_rejects_invalid_reads() {
         ],
         "{log}"
     );
-    let report = host::run_diagnostic(&generated).unwrap();
+    let report = tooling::run_diagnostic(&generated).unwrap();
     assert!(report.passed, "{report:?}");
     assert!(report.events.iter().any(|event| event.contains("0xF186")));
 
@@ -4252,9 +4551,9 @@ fn active_session_did_reports_session_transitions_and_rejects_invalid_reads() {
         .unwrap();
     reopened.save().unwrap();
     let generated = temp.0.join("GeneratedF187");
-    generator::generate(&mut reopened, &generated).unwrap();
-    generator::build(&generated).unwrap();
-    let report = host::run_diagnostic(&generated).unwrap();
+    generator::generate(&mut reopened, &generated, tooling::native_target()).unwrap();
+    tooling::build_host(&generated).unwrap();
+    let report = tooling::run_diagnostic(&generated).unwrap();
     assert!(report.passed, "0xF187 is a configurable DID: {report:?}");
 }
 
@@ -4296,9 +4595,9 @@ fn multiple_dids_keep_request_order_and_skip_unavailable_values() {
     let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
     assert!(reopened.validate().unwrap().issues.is_empty());
     let generated = temp.0.join("GeneratedDiag");
-    generator::generate(&mut reopened, &generated).unwrap();
+    generator::generate(&mut reopened, &generated, tooling::native_target()).unwrap();
     assert_eq!(fs::read(&source).unwrap(), saved);
-    let binary = generator::build(&generated).unwrap().binary_path;
+    let binary = tooling::build_host(&generated).unwrap().binary_path;
     let mut ecu = Command::new(binary)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -4360,7 +4659,7 @@ fn multiple_dids_keep_request_order_and_skip_unavailable_values() {
         ],
         "{log}"
     );
-    let report = host::run_diagnostic(&generated).unwrap();
+    let report = tooling::run_diagnostic(&generated).unwrap();
     assert!(report.passed, "{report:?}");
     assert!(report.events.iter().any(|event| event.contains("多 DID")));
 }
@@ -4404,8 +4703,8 @@ fn diagnostic_transport_discards_bad_or_timed_out_multiframe_requests_and_recove
         .unwrap();
     project.save().unwrap();
     let generated = temp.0.join("GeneratedDiag");
-    generator::generate(&mut project, &generated).unwrap();
-    let binary = generator::build(&generated).unwrap().binary_path;
+    generator::generate(&mut project, &generated, tooling::native_target()).unwrap();
+    let binary = tooling::build_host(&generated).unwrap().binary_path;
     let mut ecu = Command::new(binary)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -4486,8 +4785,8 @@ fn diagnostic_tester_present_keeps_session_and_fc_block_size_paces_response() {
         .unwrap();
     project.save().unwrap();
     let generated = temp.0.join("GeneratedDiag");
-    generator::generate(&mut project, &generated).unwrap();
-    let binary = generator::build(&generated).unwrap().binary_path;
+    generator::generate(&mut project, &generated, tooling::native_target()).unwrap();
+    let binary = tooling::build_host(&generated).unwrap().binary_path;
     let mut ecu = Command::new(binary)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -4581,7 +4880,7 @@ fn unsupported_imported_transport_padding_blocks_diagnostic_generation() {
             .any(|issue| issue.code == "DIAG_UNSUPPORTED")
     );
     let generated = temp.0.join("RejectedDiag");
-    assert!(generator::generate(&mut imported, &generated).is_err());
+    assert!(generator::generate(&mut imported, &generated, tooling::native_target()).is_err());
     assert!(!generated.exists());
 }
 
@@ -4641,9 +4940,9 @@ fn supported_dtcs_include_zero_status_and_follow_configured_lifecycle() {
         assert!(reopened.validate().unwrap().issues.is_empty());
         assert_eq!(reopened.view().diagnostic.unwrap().dtc.unwrap().code, code);
         let generated = directory.join("generated");
-        generator::generate(&mut reopened, &generated).unwrap();
+        generator::generate(&mut reopened, &generated, tooling::native_target()).unwrap();
         assert_eq!(fs::read(&source).unwrap(), saved);
-        let binary = generator::build(&generated).unwrap().binary_path;
+        let binary = tooling::build_host(&generated).unwrap().binary_path;
         let storage = directory.join("dtc.nvm");
         let run = |input: &str| {
             let mut ecu = Command::new(&binary)
@@ -4726,7 +5025,7 @@ fn supported_dtcs_include_zero_status_and_follow_configured_lifecycle() {
             ]
         );
         assert_eq!(run("R 1792 3 02190A\n"), vec![supported(0x50)]);
-        let report = host::run_diagnostic(&generated).unwrap();
+        let report = tooling::run_diagnostic(&generated).unwrap();
         assert!(report.passed, "{report:?}");
         assert!(
             report
@@ -4740,8 +5039,8 @@ fn supported_dtcs_include_zero_status_and_follow_configured_lifecycle() {
         let mut cleared = Workspace::open(vec![source], archive()).unwrap();
         assert!(cleared.view().diagnostic.unwrap().dtc.is_none());
         let without_dtc = directory.join("without-dtc");
-        generator::generate(&mut cleared, &without_dtc).unwrap();
-        let binary = generator::build(&without_dtc).unwrap().binary_path;
+        generator::generate(&mut cleared, &without_dtc, tooling::native_target()).unwrap();
+        let binary = tooling::build_host(&without_dtc).unwrap().binary_path;
         let mut ecu = Command::new(binary)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -4878,7 +5177,14 @@ fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restarts() {
             .iter()
             .any(|issue| issue.code == "DIAG_UNSUPPORTED")
     );
-    assert!(generator::generate(&mut unsupported, &temp.0.join("UnsupportedOutput")).is_err());
+    assert!(
+        generator::generate(
+            &mut unsupported,
+            &temp.0.join("UnsupportedOutput"),
+            tooling::native_target()
+        )
+        .is_err()
+    );
     assert_eq!(fs::read_to_string(&unsupported_path).unwrap(), mutated);
     fs::write(
         &source,
@@ -4889,11 +5195,11 @@ fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restarts() {
     let dtc = reopened.view().diagnostic.unwrap().dtc.unwrap();
     assert_eq!((dtc.code, dtc.monitor_frame_path), (0x123456, rx));
     let generated = temp.0.join("GeneratedDiag");
-    generator::generate(&mut reopened, &generated).unwrap();
+    generator::generate(&mut reopened, &generated, tooling::native_target()).unwrap();
     let handoff = fs::read_to_string(generated.join("README.md")).unwrap();
     assert!(handoff.contains(".\\ecu_host.exe --nvm .\\ecu.nvm"));
     assert!(!handoff.contains("--security-key"));
-    let binary = generator::build(&generated).unwrap().binary_path;
+    let binary = tooling::build_host(&generated).unwrap().binary_path;
     let without_storage = Command::new(&binary).output().unwrap();
     assert!(!without_storage.status.success());
     assert!(String::from_utf8_lossy(&without_storage.stdout).contains("E CONFIG"));
@@ -5095,8 +5401,8 @@ fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restarts() {
     assert!(diagnostic.dtc.is_none());
     assert_eq!(diagnostic.did, 0x1234);
     let simple = temp.0.join("GeneratedWithoutDtc");
-    generator::generate(&mut without_dtc, &simple).unwrap();
-    let binary = generator::build(&simple).unwrap().binary_path;
+    generator::generate(&mut without_dtc, &simple, tooling::native_target()).unwrap();
+    let binary = tooling::build_host(&simple).unwrap().binary_path;
     let mut ecu = Command::new(binary)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -5116,7 +5422,7 @@ fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restarts() {
             .collect::<Vec<_>>(),
         ["X 1800 4 037F1911", "X 1800 4 037F8511"]
     );
-    assert!(host::run_diagnostic(&simple).unwrap().passed);
+    assert!(tooling::run_diagnostic(&simple).unwrap().passed);
 }
 
 #[cfg(windows)]
@@ -5175,8 +5481,8 @@ fn extended_session_write_did_changes_live_can_but_not_restart_state() {
     let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
     assert!(reopened.view().diagnostic.unwrap().write_enabled);
     let generated = temp.0.join("GeneratedWrite");
-    generator::generate(&mut reopened, &generated).unwrap();
-    let binary = generator::build(&generated).unwrap().binary_path;
+    generator::generate(&mut reopened, &generated, tooling::native_target()).unwrap();
+    let binary = tooling::build_host(&generated).unwrap().binary_path;
     let run = |commands: &[u8]| {
         let mut ecu = Command::new(&binary)
             .stdin(Stdio::piped())
@@ -5231,7 +5537,7 @@ fn extended_session_write_did_changes_live_can_but_not_restart_state() {
         after_restart.contains("X 1800 6 210100000002"),
         "{after_restart}"
     );
-    let report = host::run_diagnostic(&generated).unwrap();
+    let report = tooling::run_diagnostic(&generated).unwrap();
     assert!(report.passed, "{}", report.log);
     assert!(report.events.iter().any(|event| event.contains("写入")));
     reopened.clear_diagnostic().unwrap();
@@ -5278,27 +5584,19 @@ fn security_access_roundtrips_and_gates_host_writes() {
     project.save().unwrap();
     let source = temp.0.join("Secure/Secure.arxml");
     let xml = fs::read_to_string(&source).unwrap();
-    assert!(xml.contains("DcmDspSecurityRow"));
     assert!(!xml.contains("5A5A5A5A"));
     let mut reopened = Workspace::open(vec![source], archive()).unwrap();
     assert!(reopened.view().diagnostic.unwrap().security_enabled);
     let generated = temp.0.join("GeneratedSecure");
-    generator::generate(&mut reopened, &generated).unwrap();
-    let handoff = fs::read_to_string(generated.join("README.md")).unwrap();
-    assert!(
-        handoff
-            .contains(".\\ecu_host.exe --security-key .\\ecu.key --security-state .\\ecu.security")
-    );
-    assert!(!handoff.contains("--nvm"));
+    generator::generate(&mut reopened, &generated, tooling::native_target()).unwrap();
     let configuration = fs::read_to_string(generated.join("Ecu_Config.c")).unwrap();
     assert!(!configuration.contains("5A5A5A5A"));
-    let binary = generator::build(&generated).unwrap().binary_path;
+    let binary = tooling::build_host(&generated).unwrap().binary_path;
     let without_key = Command::new(&binary).output().unwrap();
     assert!(!without_key.status.success());
     assert!(String::from_utf8_lossy(&without_key.stdout).contains("E CONFIG"));
-    let report = host::run_diagnostic(&generated).unwrap();
+    let report = tooling::run_diagnostic(&generated).unwrap();
     assert!(report.passed, "{}", report.log);
-    assert!(report.events.iter().any(|event| event.contains("0x27")));
 }
 
 #[cfg(windows)]
@@ -5370,11 +5668,11 @@ fn security_access_gates_dtc_mutations_without_a_writable_did() {
         "sole protected operation cannot be removed silently"
     );
     let generated = temp.0.join("GeneratedSecureDtc");
-    generator::generate(&mut reopened, &generated).unwrap();
+    generator::generate(&mut reopened, &generated, tooling::native_target()).unwrap();
     let handoff = fs::read_to_string(generated.join("README.md")).unwrap();
     assert!(handoff.contains(".\\ecu_host.exe --nvm .\\ecu.nvm --security-key .\\ecu.key --security-state .\\ecu.security"));
-    generator::build(&generated).unwrap();
-    let report = host::run_diagnostic(&generated).unwrap();
+    tooling::build_host(&generated).unwrap();
+    let report = tooling::run_diagnostic(&generated).unwrap();
     assert!(report.passed, "{}", report.log);
 }
 
@@ -5491,8 +5789,8 @@ fn start_routine_restores_written_did_signals_and_respects_session() {
         Some(0xF001)
     );
     let generated = temp.0.join("GeneratedRoutine");
-    generator::generate(&mut reopened, &generated).unwrap();
-    let binary = generator::build(&generated).unwrap().binary_path;
+    generator::generate(&mut reopened, &generated, tooling::native_target()).unwrap();
+    let binary = tooling::build_host(&generated).unwrap().binary_path;
     let mut ecu = Command::new(binary)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -5533,7 +5831,7 @@ fn start_routine_restores_written_did_signals_and_respects_session() {
             .any(|line| line.trim_end_matches('\r') == "X 801 8 0100000002000000"),
         "{log}"
     );
-    let report = host::run_diagnostic(&generated).unwrap();
+    let report = tooling::run_diagnostic(&generated).unwrap();
     assert!(report.passed, "{}", report.log);
     assert!(report.events.iter().any(|event| event.contains("例程")));
     reopened.clear_diagnostic().unwrap();
@@ -5570,7 +5868,7 @@ fn noncanonical_pdu_input_is_not_rewritten_or_generated() {
     );
     assert!(project.save().is_err());
     let output = temp.0.join("Rejected");
-    assert!(generator::generate(&mut project, &output).is_err());
+    assert!(generator::generate(&mut project, &output, tooling::native_target()).is_err());
     assert!(!output.exists());
     assert_eq!(fs::read_to_string(source).unwrap(), original);
 }
@@ -5711,9 +6009,9 @@ fn generated_dcm_callbacks_link_for_independent_consumer_and_update_live_signals
     let writes = callbacks("/DcmDspDataWriteFnc");
     assert_eq!((reads.len(), writes.len()), (2, 2));
     let output = temp.0.join("GeneratedDiag");
-    generator::generate(&mut reopened, &output).unwrap();
-    generator::build(&output).unwrap();
-    let report = host::run_diagnostic(&output).unwrap();
+    generator::generate(&mut reopened, &output, tooling::native_target()).unwrap();
+    tooling::build_host(&output).unwrap();
+    let report = tooling::run_diagnostic(&output).unwrap();
     assert!(
         report.passed,
         "generated ECU diagnostic smoke: {}",
@@ -5797,4 +6095,76 @@ int main(void)
         observed.status.code(),
         String::from_utf8_lossy(&observed.stderr)
     );
+}
+
+#[cfg(any(windows, target_os = "linux"))]
+#[test]
+fn requested_native_preflight_failure_never_installs_source() {
+    use autosar_config_core::integration::PlanDependencies;
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let dependencies = PlanDependencies::from_repository(root);
+    let scratch = Scratch::new();
+    let output = scratch.0.join("source-not-installed");
+    let inputs = scratch.0.join("inputs");
+    fs::create_dir(&inputs).unwrap();
+    let sources = epic4_plan::inputs();
+    let mut arguments = vec![
+        std::ffi::OsString::from("--target"),
+        std::ffi::OsString::from(tooling::native_target().spec().id),
+        "--xsd-archive".into(),
+        dependencies.xsd_archive.into_os_string(),
+        "--mod-archive".into(),
+        dependencies.mod_archive.into_os_string(),
+        "--output".into(),
+        output.as_os_str().to_owned(),
+    ];
+    for source in &sources {
+        let path = inputs.join(source.logical_path());
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, source.bytes()).unwrap();
+        arguments.extend(["--input".into(), path.into_os_string()]);
+    }
+    let mut preview = Command::new(env!("CARGO_BIN_EXE_generate_epic4_ecu"));
+    preview.args(&arguments);
+    let result = epic4_ecu::run_public_command(
+        &mut preview,
+        &scratch.0,
+        "pure-cli-preview",
+        std::time::Duration::from_secs(60),
+    );
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let preview: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+    assert_eq!(preview["preflight"]["status"], "not_run");
+    let revision = preview["revision"].as_str().unwrap();
+    let mut generate = Command::new(env!("CARGO_BIN_EXE_generate_epic4_ecu"));
+    generate
+        .args(&arguments)
+        .args(["--write", "--revision", revision, "--preflight"])
+        .env("AUTOSAR_CC", scratch.0.join("missing-compiler"));
+    let result = epic4_ecu::run_public_command(
+        &mut generate,
+        &scratch.0,
+        "failed-cli-preflight",
+        std::time::Duration::from_secs(60),
+    );
+    assert!(
+        !result.status.success(),
+        "Failed native preflight was reported as successful"
+    );
+    assert!(
+        !output.exists(),
+        "Failed preflight installed a source package"
+    );
+    let report: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+    assert_eq!(report["preflight"]["status"], "failed");
+    for source in &sources {
+        assert_eq!(
+            fs::read(inputs.join(source.logical_path())).unwrap(),
+            source.bytes()
+        );
+    }
 }

@@ -4,7 +4,6 @@ use autosar_config_core::integration::{
 };
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 pub fn generated_tables() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
@@ -86,7 +85,9 @@ pub fn generated_tables() {
             "accepted {name}"
         );
     }
-    let project = plan.ecu_integration_files().unwrap();
+    let project = plan
+        .ecu_integration_files(super::tooling::native_target())
+        .unwrap();
     let scratch = super::Scratch::new();
     let source = scratch.0.join("tables-source");
     let preview = project.preview(&source).unwrap();
@@ -95,7 +96,8 @@ pub fn generated_tables() {
         .unwrap();
     let build = scratch.0.join("tables-build");
     super::epic4_ecu::compile(&source, &build, None);
-    let output = super::epic4_ecu::run_probe(&build.join("ecu_probe.exe"), None);
+    let output =
+        super::epic4_ecu::run_probe(&super::tooling::native_binary(&build, "ecu_probe"), None);
     assert!(
         output.status.success(),
         "{}{}",
@@ -108,7 +110,10 @@ pub fn generated_tables() {
         &consumer_build,
         Some(&root.join("core/tests/fixtures/ecu_control.c")),
     );
-    let output = super::epic4_ecu::run_probe(&consumer_build.join("ecu_probe.exe"), None);
+    let output = super::epic4_ecu::run_probe(
+        &super::tooling::native_binary(&consumer_build, "ecu_probe"),
+        None,
+    );
     assert!(
         output.status.success(),
         "{}{}",
@@ -194,7 +199,7 @@ pub fn generated_tables() {
         let project = workspace
             .integration_plan(&runtime, dependencies.mod_archive.clone())
             .unwrap()
-            .ecu_integration_files()
+            .ecu_integration_files(super::tooling::native_target())
             .unwrap();
         let edited_source = scratch.0.join(format!("edited-table-source-{offset}"));
         let preview = project.preview(&edited_source).unwrap();
@@ -202,20 +207,17 @@ pub fn generated_tables() {
             .generate_previewed(&edited_source, &preview.revision)
             .unwrap();
         let edited_build = scratch.0.join(format!("edited-table-build-{offset}"));
-        let output = Command::new("powershell.exe")
-            .args([
-                "-NoProfile",
-                "-NonInteractive",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-File",
-            ])
-            .arg(edited_source.join("build.ps1"))
-            .arg("-OutputDirectory")
-            .arg(&edited_build)
-            .arg("-HostBatch")
-            .output()
-            .unwrap();
+        let output = super::epic4_ecu::run_public_command(
+            &mut super::tooling::ecu_build_command(
+                &edited_source,
+                &edited_build,
+                "host-batch",
+                None,
+            ),
+            &scratch.0,
+            &format!("edited-build-{offset}"),
+            std::time::Duration::from_secs(180),
+        );
         assert!(
             output.status.success(),
             "{}{}",
@@ -224,7 +226,7 @@ pub fn generated_tables() {
         );
         // Refresh at tick 30: the unchanged Com RX timeout is 30 ms. There
         // must be no periodic output at 30; the next edited period is tick 40.
-        let text = super::epic4_batch::run_text(&edited_build.join("ecu_host_batch.exe"), &scratch.0.join(format!("edited-observation-{offset}")), b"BEGIN 0\nRX 800 4 78563412\nCOMMIT\nBEGIN 10\nRX 1792 8 0322123400000000\nCOMMIT\nBEGIN 20\nRX 1792 8 0322123400000000\nCOMMIT\nBEGIN 30\nRX 800 4 78563412\nCOMMIT\nBEGIN 40\nRX 1792 8 0322123400000000\nCOMMIT\n");
+        let text = super::epic4_batch::run_text(&super::tooling::native_binary(&edited_build, "ecu_host_batch"), &scratch.0.join(format!("edited-observation-{offset}")), b"BEGIN 0\nRX 800 4 78563412\nCOMMIT\nBEGIN 10\nRX 1792 8 0322123400000000\nCOMMIT\nBEGIN 20\nRX 1792 8 0322123400000000\nCOMMIT\nBEGIN 30\nRX 800 4 78563412\nCOMMIT\nBEGIN 40\nRX 1792 8 0322123400000000\nCOMMIT\n");
         let frames: Vec<_> = text
             .lines()
             .filter(|line| line.starts_with("OUT "))

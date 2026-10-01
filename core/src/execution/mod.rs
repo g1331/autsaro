@@ -26,6 +26,8 @@ pub struct ProcessSpec {
     pub env: Vec<(OsString, OsString)>,
     pub deadline_ns: u64,
     pub log_directory: PathBuf,
+    /// Open a bounded interactive stdin channel; output remains captured in logs.
+    pub stdin_stream: bool,
 }
 
 impl ProcessSpec {
@@ -48,6 +50,7 @@ impl ProcessSpec {
             env,
             deadline_ns,
             log_directory,
+            stdin_stream: false,
         })
     }
 
@@ -145,7 +148,11 @@ impl ProcessOwner {
                 .args(&spec.argv[1..])
                 .current_dir(&spec.cwd)
                 .envs(spec.env.iter().cloned());
-            command.stdin(std::process::Stdio::null());
+            command.stdin(if spec.stdin_stream {
+                std::process::Stdio::piped()
+            } else {
+                std::process::Stdio::null()
+            });
             command.stdout(std::process::Stdio::from(
                 std::fs::OpenOptions::new()
                     .write(true)
@@ -215,6 +222,37 @@ pub struct OwnedProcess {
 }
 
 impl OwnedProcess {
+    pub fn stdout_path(&self) -> &std::path::Path {
+        match &self.backend {
+            #[cfg(unix)]
+            Backend::Unix(process) => process.stdout_path(),
+            #[cfg(windows)]
+            Backend::Windows { stdout, .. } => stdout,
+        }
+    }
+
+    pub fn write_stdin(&mut self, bytes: &[u8]) -> Result<(), String> {
+        match &mut self.backend {
+            #[cfg(unix)]
+            Backend::Unix(process) => process.write_stdin(bytes),
+            #[cfg(windows)]
+            Backend::Windows { tree, finished, .. } => {
+                if *finished {
+                    return Err("Owned process already completed".into());
+                }
+                tree.write_stdin(bytes, self.spec.deadline_ns)
+            }
+        }
+    }
+
+    pub fn close_stdin(&mut self) {
+        match &mut self.backend {
+            #[cfg(unix)]
+            Backend::Unix(process) => process.close_stdin(),
+            #[cfg(windows)]
+            Backend::Windows { tree, .. } => tree.close_stdin(),
+        }
+    }
     pub fn wait(&mut self) -> Result<ProcessResult, String> {
         #[cfg(unix)]
         {

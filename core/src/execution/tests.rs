@@ -55,6 +55,20 @@ impl Fixture {
         .expect("valid spec")
     }
 
+    fn stdin_spec(&self, code: &str, duration: Duration) -> ProcessSpec {
+        let python = std::env::var_os("AUTOSAR_PYTHON").expect("locked CPython interpreter");
+        let mut spec = ProcessSpec::for_duration(
+            vec![python, "-c".into(), code.into()],
+            self.0.clone(),
+            Vec::new(),
+            duration,
+            self.0.clone(),
+        )
+        .unwrap();
+        spec.stdin_stream = true;
+        spec
+    }
+
     fn descendants(&self) -> Vec<u32> {
         std::fs::read_to_string(self.0.join("pids.txt"))
             .expect("probe registered descendants")
@@ -107,8 +121,14 @@ fn assert_descendants_gone(fixture: &Fixture, count: usize) {
         pids.len() >= count,
         "expected {count} fixture PIDs, got {pids:?}"
     );
+    assert_pids_gone(&pids);
+}
+
+fn assert_pids_gone(pids: &[u32]) {
+    // Windows Job accounting can become inactive before the terminated process
+    // object is signaled. Use the same bounded reap window for every PID.
     let end = std::time::Instant::now() + Duration::from_secs(2);
-    for pid in pids {
+    for &pid in pids {
         while alive(pid) && std::time::Instant::now() < end {
             std::thread::sleep(Duration::from_millis(10));
         }
@@ -137,7 +157,9 @@ fn parent_first_and_timeout_close_the_registered_tree() {
             Duration::from_secs(8),
             ProcessStatus::OrphanedMembers,
         ),
-        ("hang", Duration::from_millis(500), ProcessStatus::Timeout),
+        // Three interpreter processes have a five-second registration bound.
+        // A sub-second host deadline can expire before the leaf exists.
+        ("hang", Duration::from_secs(8), ProcessStatus::Timeout),
     ] {
         let fixture = Fixture::new();
         let owner = ProcessOwner::new().unwrap();
@@ -248,4 +270,57 @@ impl Fixture {
             Vec::new()
         }
     }
+}
+
+#[test]
+fn interactive_stdin_preserves_binary_bytes_and_eof_closes_the_child() {
+    use sha2::{Digest, Sha256};
+    let fixture = Fixture::new();
+    let owner = ProcessOwner::new().unwrap();
+    let mut process = owner.spawn(fixture.stdin_spec(
+        "import hashlib,os,sys; print(os.getpid(),flush=True); data=sys.stdin.buffer.read(); print(hashlib.sha256(data).hexdigest(),flush=True)",
+        Duration::from_secs(10),
+    ), None).unwrap();
+    let bytes: Vec<u8> = (0..131_079).map(|value| (value % 251) as u8).collect();
+    for chunk in bytes.chunks(8191) {
+        process.write_stdin(chunk).unwrap();
+    }
+    process.close_stdin();
+    let result = process.wait().unwrap();
+    assert!(result.success(), "{result:?}");
+    let output = std::fs::read_to_string(result.stdout).unwrap();
+    let lines: Vec<_> = output.lines().collect();
+    let actual_pid = lines[0].parse::<u32>().unwrap();
+    assert_eq!(lines[1], format!("{:x}", Sha256::digest(bytes)));
+    assert_pids_gone(&[actual_pid, result.pid]);
+}
+
+#[test]
+fn blocked_interactive_stdin_obeys_the_absolute_deadline_and_closes_its_pid() {
+    let fixture = Fixture::new();
+    let owner = ProcessOwner::new().unwrap();
+    let mut process = owner
+        .spawn(
+            fixture.stdin_spec(
+                "import os,time; print(os.getpid(),flush=True); time.sleep(30)",
+                Duration::from_secs(2),
+            ),
+            None,
+        )
+        .unwrap();
+    let output = process.stdout_path().to_path_buf();
+    let start = std::time::Instant::now();
+    let error = process.write_stdin(&vec![0x41u8; 262_144]).unwrap_err();
+    assert!(start.elapsed() < Duration::from_secs(8), "{error}");
+    let result = process.wait().unwrap();
+    assert!(
+        !result.success(),
+        "Blocked input cannot report a successful command"
+    );
+    let pid = std::fs::read_to_string(output)
+        .unwrap()
+        .trim()
+        .parse::<u32>()
+        .unwrap();
+    assert_pids_gone(&[pid, result.pid]);
 }

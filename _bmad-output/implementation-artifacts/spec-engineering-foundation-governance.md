@@ -39,8 +39,8 @@ context:
 ## Code Map
 
 - `scripts/verify.py`, `scripts/quality.py`, `scripts/autosar_tooling/os_suites.py` — 当前开发检查与唯一 OS 独立 C99 消费者入口；Python 统一工具命令待阶段6。
-- `core/src/execution/{mod,unix,windows_job}.rs`, `core/src/integration/{handoff,link_check}.rs` — 阶段1统一owner入口；原Job已迁出integration，link_check待阶段4随产品切换迁移。
-- `runtime/os/`, `runtime/ecu/`, `third_party/freertos/portable/ThirdParty/GCC/Posix/` — 固定内核与原始 POSIX 端口、Win64生产 OS、Linux 独立 OS；Linux ECU 待阶段4。
+- `core/src/execution/{mod,unix,windows_job}.rs`, `core/src/integration/handoff.rs` — 同一 root owner/Windows Job 与 argv/单调截止时间；阶段4离线工程和legacy实际运行已迁入，旧link_check和PowerShell runner删除。
+- `runtime/os/`, `runtime/ecu/`, `third_party/freertos/portable/ThirdParty/GCC/Posix/` — 固定内核与受控 Win/Linux host adapter；Linux生产ECU已接入并运行有界协议，完整工作台/分发验收仍按阶段7/8。
 - `core/src/integration/ecu.rs`, `core/src/generator.rs`, `core/build.rs` — 计划、静态资源、纯生成及封存入口。
 - `src-tauri/src/lib.rs`, `ui/src/App.tsx` — IPC和多处交付状态归属。
 - `README.md`, `runtime/README.md`, `docs/project/OWNER_GUIDE.md`, `_bmad-output/planning-artifacts/architecture.md` — 能力/安装/职责文字须同步实际门结果。
@@ -52,7 +52,7 @@ context:
 - [x] 阶段1：root owner、Windows Job统一及Python/Rust正反probe阶段出口。
 - [x] 阶段2：Linux受控OS port及两平台26 suite独立阶段出口。
 - [x] 阶段3：目标/资源/schema/PreparedProject纯源码双平台阶段出口。
-- [ ] 阶段4：双目标ECU、离线包build/verify及搬移阶段出口。
+- [x] 阶段4：双目标ECU、离线包build/verify及搬移阶段出口。
 - [ ] 阶段5：语义策略替代Epic宏及legacy/integration回归阶段出口。
 - [ ] 阶段6：工具单入口及职责拆分，双平台all阶段出口。
 - [ ] 阶段7：统一状态与隔离Windows/Linux真实IPC阶段出口。
@@ -81,7 +81,18 @@ context:
 - 阶段3核心已实测：Windows与Ubuntu ext4副本分别以锁定合法XSD/MOD及绝对CPython运行 `cargo test --manifest-path core/Cargo.toml --test end_to_end source_generation_does_not_require_native_executor -- --exact --nocapture`，均1通过；两端相同输入同得34个BSW受控资产，Win fingerprint `4767a95bea5d0e6a89f2718a4e473b882a33264cd4dfcacf05b041e1b81e77cd`、Linux fingerprint `910e77c7b970e0c4ca6ada0f7d0350b6384a4ef3754788f3e37c30777877f4d6`（目标不同、平台运行相同字节），不存在compiler仍可生成预览且preflight=`not_run`。两端 `source_generation_rejects_modified_validation_and_asset_bytes -- --exact` 与 `linux_legacy_security_profile_is_rejected_during_preparation -- --exact` 各1通过，错路径、坏ZIP、同尺寸改动XSD/MOD、可信资产改动与Linux BCrypt安全档案均拒绝。Win/Linux `doctor --role native --target <本机目标>` 的Git、GCC triple/hash、binutils、CPython与外部档案均ready；Windows缺GCC及XSD反例非零。Windows `cargo build --manifest-path src-tauri/Cargo.toml`、Ruff与 `scripts/quality.py --base 4e71799`通过。
 - 阶段3产品兼容实测：首次私有Desktop真实IPC暴露Tauri默认资源路径残留 `..` 而被显式路径契约拒绝；修为从package父目录取规范路径、重建后隔离桌面实际完成标准输入正反校验、ECU源码预览/生成、`ecu_host_batch.exe` 构建、真实 CAN/DID/N_Cr 恢复及非法批拒绝。截图 `ecu-post-save-verified.png` 显示保存、校验、生成、构建及主机行为已通过；该整套GUI脚本在后续legacy部分被外层360秒截止中断，不报告整套通过。独立旧目标 `generated_handoff_builds_and_runs_after_moving_without_the_workbench -- --exact` 1通过。此阶段仅已有Windows产品和双目标纯源码选集，不将 Linux OS 与未封装源码说成 Linux 生产ECU。
 
+- 阶段4实现：ECU生产桥接以阶段2 host adapter 提供事件、锁/原子和宿主时钟，保留owner、ring、真实write/flush确认和5000ms COMMIT watchdog。`tools/ecu-tool.py build|verify`为交付的stdlib-only入口；目标/工具链/源选集来自封存metadata，四种显式mode区分legacy、生产HostBatch及独立probe/test，私有patch副本、独立空输出、PE/ELF/TLS/sections和源闭包在实际工具执行中检查。legacy generator、重导入、Rust/Tauri和固定双ECU参考包已切换；`build.ps1`、`verify.ps1`、`process-tree.cs`及旧legacy构建模板删除。源码准备/预览/重导入不编译，预检独立记录，不把跨目标not_run当成功。
+- 阶段4已运行：最终OS等待边观察修复后，Windows `windows_and_linux_ecu_targets_execute_production_protocol -- --exact --nocapture`实际138.26s通过，Ubuntu ext4同一入口实际28.52s通过；各自正例经handoff、搬移、逐字节重导入、显式native preflight、外部空目录build和独立verify，真实echo五批、N_Cr恢复四批、非法接纳与至多两DID边界通过。Windows `generated_c99_ecus_exchange_golden_vectors_and_recover_from_faults`、`security_access_roundtrips_and_gates_host_writes`、迁移后的`epic4_independent_handoff`（102.17s）、`generated_handoff_builds_and_runs_after_moving_without_the_workbench`（11.36s）、固定参考包`moved_reference_bundle_verifies_offline_and_rejects_wrong_vector`（43.43s）均各1通过；参考包真实拒绝错误向量、1ms绝对deadline、缺编译器、linked report及缺原输入，并保留失败报告/日志。Windows原生ECU完整集成入口327.34s通过。两平台UI TypeScript/Vite与desktop `cargo build --locked`均已通过；本阶段入口和生产关口通过，不把此结果替代后续全量／正式bundle验收。
+- 阶段4过程根因与回归：Win32 verbatim `\\\\?\\`路径传入GNU工具导致源文件不存在，包内统一转换为DOS/UNC工具参数后实际legacy编译/闭环通过。新增真实失败assignment回归先观察到`Assign suspended command`错误被5秒`TimeoutExpired`覆盖且悬挂子进程未退出；Python Job现记录assignment，在分配失败时通过自有句柄结束未加入Job的suspended子进程。锁定Python的assignment失败与三代timeout两测试合计1.040s通过；PID检查申请SYNCHRONIZE并拒绝WAIT_FAILED，不能把查询失败当已关闭。Rust `parent_first_and_timeout_close_the_registered_tree`精确回归8.95s通过。
+- 阶段4CLI拒绝回归：`requested_native_preflight_failure_never_installs_source -- --exact`先实测失败（native preflight failed却以成功退出并安装源码）；显式failed报告现在先输出JSON、非零退出且不安装源码。修后该真实CLI入口9.07s通过，原输入逐字节不变。非本机目标仍可纯源码准备，preflight=not_run且不要求构造本机执行工具。
+- 阶段4原生ARTI根因：Linux host actor可先占用动态栈槽，消费者已改为按唯一角色S查找并保持真实SP范围检查，不把slot0当契约。真实20个ECU epoch完成后ARTI仅有Start=2/Wait=1/Release=1，暴露延迟native切换前已发布完成收据、下一epoch可使WAITING边消失；共同backend现在在挂起事务持锁期、收据发布前记录已提交的等待谓词，不改协议时序/5000ms watchdog。保持原Start>20/Wait≥20/Release≥20、原生PC/SP、getter、两次错误/拒绝和ISR成对断言，`epic4_arti_description_and_hooks -- --exact`最终Ubuntu36.44s／Windows118.81s均1通过。
+- 阶段4OS基线去重：独立ARTI的9项Task/tool、26项嵌套/拒绝及两项编译故障拒绝随stack suite在两平台各执行一次；从ECU ARTI产品用例移除重复的OS-only调用，三个真实ECU配置消费者保留。最终 `autosar_tooling os --target <native> --suite stack` Windows127.45s／Ubuntu与生产入口组合49.34s均通过，stack仍为23个原生向量。增量hygiene/rustfmt/clang-format/Prettier、Python/C99 syntax及现有两个Python包Ruff全部通过；没有以OS suite代替生产ECU证据。
+- 阶段4真实桌面：现有Windows私有Desktop/Job/CDP完整消费者首次364.47s通过；加入“显式编译预检”的实际按钮/IPC后最终421.60s通过。覆盖导入、合法编辑/保存/重开、源码预览、独立预检、取消与确认生成、真实build/协议验证、已有binary保护/恢复、篡改源拒绝、搬移/重导入/精确再生，以及host-v1/未知格式保持旧workspace。实际截图 `ecu-source-preview.png` 与 `ecu-post-save-verified.png`已读取，显示显式target/外部build目录、预检按钮与本次保存/校验/生成/构建/主机行为；程序窗口仅在私有Desktop，输入桌面未切换。Linux真实GUI仍按阶段7验证。
+- 阶段4fresh checkout根因：实际 `git checkout-index`产生新Windows副本，92项封存资产中11项工具/嵌入README因autocrlf转写而摘要错误；`.gitattributes`现固定stdlib工具与交付文本的LF，不改原有BSW/内核字节规则。新独立checkout的92项实际原始SHA-256全部匹配，0差异；临时审计脚本及两份副本已删除，不留共享文件或新增验收账本。
+
 ## Spec Change Log
+- 阶段4：离线Windows/Linux工具和legacy/交接消费者一次切换，保留独立预期与真实拒绝；新增CLI失败不安装及suspended Job assignment关闭回归。每阶段出口仍以完整实际门为准，不修改批准范围。
+
 
 ## Review Triage Log
 

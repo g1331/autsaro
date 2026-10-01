@@ -1,12 +1,11 @@
+use crate::execution::{OwnedProcess, ProcessOwner, ProcessSpec};
 use crate::model::RunReport;
 use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
 use std::fs;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::{self, Receiver};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -316,9 +315,12 @@ impl SecurityFiles {
 }
 
 struct EcuProcess {
-    child: Child,
-    stdin: ChildStdin,
-    lines: Receiver<String>,
+    child: OwnedProcess,
+    reader: Option<BufReader<fs::File>>,
+    pending: String,
+    input: Vec<u8>,
+    logs: PathBuf,
+    closed: bool,
 }
 impl EcuProcess {
     fn start(
@@ -326,48 +328,126 @@ impl EcuProcess {
         nvm_path: Option<&Path>,
         security: Option<&SecurityFiles>,
     ) -> Result<Self, String> {
-        let mut command = Command::new(path);
+        let path = path.canonicalize().map_err(|error| error.to_string())?;
+        let logs = crate::generator::reserve_directory(
+            &std::env::temp_dir(),
+            "legacy-process",
+            std::ffi::OsStr::new("private"),
+        )?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&logs, fs::Permissions::from_mode(0o700))
+                .map_err(|error| error.to_string())?;
+        }
+        let mut argv = vec![path.as_os_str().into()];
         if let Some(storage) = nvm_path {
-            command.arg("--nvm").arg(storage);
+            argv.extend(["--nvm".into(), storage.as_os_str().into()]);
         }
         if let Some(files) = security {
-            command
-                .arg("--security-key")
-                .arg(&files.key.path)
-                .arg("--security-state")
-                .arg(&files.state.path);
+            argv.extend([
+                "--security-key".into(),
+                files.key.path.as_os_str().into(),
+                "--security-state".into(),
+                files.state.path.as_os_str().into(),
+            ]);
         }
-        let mut child = command
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| format!("无法启动 ECU {}: {e}", path.display()))?;
-        let stdin = child.stdin.take().ok_or("ECU stdin 不可用")?;
-        let stdout = child.stdout.take().ok_or("ECU stdout 不可用")?;
-        let (sender, lines) = mpsc::channel();
-        thread::spawn(move || {
-            for line in BufReader::new(stdout).lines() {
-                match line {
-                    Ok(line) => {
-                        if sender.send(line).is_err() {
-                            break;
-                        }
-                    }
-                    Err(_) => break,
-                }
-            }
-        });
+        let mut spec = ProcessSpec::for_duration(
+            argv,
+            path.parent()
+                .ok_or("Native binary has no parent")?
+                .to_path_buf(),
+            Vec::new(),
+            Duration::from_secs(120),
+            logs.clone(),
+        )?;
+        spec.stdin_stream = true;
+        let owner = ProcessOwner::new()?;
+        let child = owner.spawn(spec, None)?;
+        let reader =
+            BufReader::new(fs::File::open(child.stdout_path()).map_err(|error| error.to_string())?);
         Ok(Self {
             child,
-            stdin,
-            lines,
+            reader: Some(reader),
+            pending: String::new(),
+            input: Vec::new(),
+            logs,
+            closed: false,
         })
     }
+
     fn command(&mut self, command: &str) -> Result<(), String> {
-        writeln!(self.stdin, "{command}")
-            .and_then(|_| self.stdin.flush())
-            .map_err(|e| format!("ECU 管道写入失败: {e}"))
+        self.input.clear();
+        self.input.extend_from_slice(command.as_bytes());
+        self.input.push(b'\n');
+        self.child.write_stdin(&self.input)
+    }
+
+    fn next_line(&mut self) -> Result<String, String> {
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let read = self
+                .reader
+                .as_mut()
+                .ok_or("Native stdout reader is closed")?
+                .read_line(&mut self.pending)
+                .map_err(|error| error.to_string())?;
+            if self.pending.ends_with('\n') {
+                let mut line = std::mem::take(&mut self.pending);
+                line.pop();
+                if line.ends_with('\r') {
+                    line.pop();
+                }
+                return Ok(line);
+            }
+            if std::time::Instant::now() >= deadline {
+                return Err(format!(
+                    "ECU did not complete its response; actual logs={}",
+                    self.logs.display()
+                ));
+            }
+            if read == 0 {
+                thread::sleep(Duration::from_millis(2));
+            }
+        }
+    }
+
+    fn finish(&mut self) -> Result<(), String> {
+        self.child.close_stdin();
+        let result = self.child.wait()?;
+        self.closed = true;
+        drop(self.reader.take());
+        if !result.success() {
+            return Err(format!(
+                "Native ECU did not close successfully: {result:?}; stderr={}",
+                fs::read_to_string(&result.stderr).unwrap_or_default()
+            ));
+        }
+        fs::remove_dir_all(&self.logs).map_err(|error| error.to_string())
+    }
+
+    fn expect_corrupt_state_refusal(
+        path: &Path,
+        nvm: Option<&Path>,
+        security: Option<&SecurityFiles>,
+    ) -> Result<(), String> {
+        let mut actor = Self::start(path, nvm, security)?;
+        actor.child.close_stdin();
+        let result = actor.child.wait()?;
+        actor.closed = true;
+        drop(actor.reader.take());
+        let output = fs::read_to_string(&result.stdout).map_err(|error| error.to_string())?;
+        if result.status != crate::execution::ProcessStatus::Exited
+            || result.exit_code == Some(0)
+            || !output
+                .lines()
+                .any(|line| line.trim_end_matches('\r') == "E NVM")
+        {
+            return Err(format!(
+                "Corrupt native state did not produce the actual startup refusal: {result:?}; stdout={output}"
+            ));
+        }
+        fs::remove_dir_all(&actor.logs).map_err(|error| error.to_string())
     }
     fn query(&mut self, commands: &[String], fence: u16) -> Result<(Vec<String>, String), String> {
         for command in commands {
@@ -376,10 +456,7 @@ impl EcuProcess {
         self.command(&format!("G {fence}"))?;
         let mut events = Vec::new();
         loop {
-            let line = self
-                .lines
-                .recv_timeout(Duration::from_secs(5))
-                .map_err(|e| format!("ECU 未响应: {e}"))?;
+            let line = self.next_line()?;
             if line.starts_with("V ") {
                 return Ok((events, line));
             }
@@ -395,8 +472,15 @@ impl EcuProcess {
 }
 impl Drop for EcuProcess {
     fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        drop(self.reader.take());
+        if !self.closed {
+            if let Err(error) = self.child.cancel() {
+                eprintln!(
+                    "Legacy ECU ownership closure failed: {error}; logs={}",
+                    self.logs.display()
+                );
+            }
+        }
     }
 }
 
@@ -559,22 +643,19 @@ fn route_and_check(
     Ok(observed_rx_id.unwrap())
 }
 
-pub fn run(first: &Path, second: &Path) -> Result<RunReport, String> {
+pub fn run(
+    first: &Path,
+    binary_a: &Path,
+    second: &Path,
+    binary_b: &Path,
+) -> Result<RunReport, String> {
+    crate::generator::verify_build_input(first)?;
+    crate::generator::verify_build_input(second)?;
     let a = profile(first)?;
     let b = profile(second)?;
     if a.text == b.text {
         return Err("两个虚拟 ECU 配置相同；请分别生成不同项目".into());
     }
-    let binary_a = first.join(if cfg!(windows) {
-        "ecu_host.exe"
-    } else {
-        "ecu_host"
-    });
-    let binary_b = second.join(if cfg!(windows) {
-        "ecu_host.exe"
-    } else {
-        "ecu_host"
-    });
     if !binary_a.is_file() || !binary_b.is_file() {
         return Err("两个生成目录均须先完成 C99 构建".into());
     }
@@ -591,12 +672,12 @@ pub fn run(first: &Path, second: &Path) -> Result<RunReport, String> {
         None
     };
     let mut ecu_a = EcuProcess::start(
-        &binary_a,
+        binary_a,
         a_nvm.as_ref().map(|state| state.path.as_path()),
         a_security.as_ref(),
     )?;
     let mut ecu_b = EcuProcess::start(
-        &binary_b,
+        binary_b,
         b_nvm.as_ref().map(|state| state.path.as_path()),
         b_security.as_ref(),
     )?;
@@ -673,10 +754,7 @@ pub fn run(first: &Path, second: &Path) -> Result<RunReport, String> {
             "00".repeat(wrong_dlc as usize)
         ))?;
         loop {
-            let line = ecu_b
-                .lines
-                .recv_timeout(Duration::from_secs(5))
-                .map_err(|e| format!("错误帧未响应: {e}"))?;
+            let line = ecu_b.next_line()?;
             if line == "E FRAME_DLC" {
                 break;
             }
@@ -687,6 +765,9 @@ pub fn run(first: &Path, second: &Path) -> Result<RunReport, String> {
         events.push("错误 DLC 被 CanIf 拒绝".into());
         Ok(())
     })();
+    let closed_a = ecu_a.finish();
+    let closed_b = ecu_b.finish();
+    let outcome = outcome.and(closed_a).and(closed_b);
     match outcome {
         Ok(()) => Ok(RunReport {
             passed: true,
@@ -757,10 +838,7 @@ fn diagnostic_request(
 
 fn diagnostic_error(ecu: &mut EcuProcess, command: String, expected: &str) -> Result<(), String> {
     ecu.command(&command)?;
-    let line = ecu
-        .lines
-        .recv_timeout(Duration::from_secs(5))
-        .map_err(|e| format!("诊断错误无响应: {e}"))?;
+    let line = ecu.next_line()?;
     if line == format!("E {expected}") {
         Ok(())
     } else {
@@ -895,7 +973,8 @@ fn security_unlock(
     Ok(key)
 }
 
-pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
+pub fn run_diagnostic(dir: &Path, binary: &Path) -> Result<RunReport, String> {
+    crate::generator::verify_build_input(dir)?;
     let profile = profile(dir)?;
     let diagnostic = profile.diagnostic.as_ref().ok_or("生成配置不含诊断连接")?;
     if diagnostic.signal_ids.is_empty()
@@ -908,11 +987,6 @@ pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
     {
         return Err("诊断清单超出支持范围".into());
     }
-    let binary = dir.join(if cfg!(windows) {
-        "ecu_host.exe"
-    } else {
-        "ecu_host"
-    });
     if !binary.is_file() {
         return Err("诊断虚拟 ECU 尚未完成 C99 构建".into());
     }
@@ -924,7 +998,7 @@ pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
         None
     };
     let mut ecu = EcuProcess::start(
-        &binary,
+        binary,
         initial_nvm.as_ref().map(|state| state.path.as_path()),
         security.as_ref(),
     )?;
@@ -1244,9 +1318,11 @@ pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
         events.push("S3 超时恢复默认会话".into());
         Ok(())
     })();
+    let outcome = outcome.and_then(|()| ecu.finish());
+    drop(ecu);
     let outcome = outcome.and_then(|()| match &profile.dtc {
         Some(dtc) => verify_persistent_dtc(
-            &binary,
+            binary,
             &profile,
             diagnostic,
             dtc,
@@ -1259,7 +1335,7 @@ pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
     let outcome = outcome.and_then(|()| {
         if diagnostic.write_enabled {
             verify_writable_did(
-                &binary,
+                binary,
                 &profile,
                 diagnostic,
                 salt,
@@ -1272,7 +1348,7 @@ pub fn run_diagnostic(dir: &Path) -> Result<RunReport, String> {
     });
     let outcome = outcome.and_then(|()| {
         if diagnostic.security_enabled {
-            verify_security(&binary, &profile, diagnostic, salt, &mut events)
+            verify_security(binary, &profile, diagnostic, salt, &mut events)
         } else {
             Ok(())
         }
@@ -1443,6 +1519,7 @@ fn verify_persistent_dtc(
         diagnostic_frames(&all, &[supported(0x2F)], profile, diagnostic, salt)?;
         let count = diagnostic_request(&mut ecu, fence, count_dtc.clone())?;
         diagnostic_frames(&count, &[counted(1)], profile, diagnostic, salt)?;
+        ecu.finish()?;
     }
     events.push("接收帧超时产生真实 Dem DTC，进程结束前写入 NvM".into());
     events.push(
@@ -1514,6 +1591,7 @@ fn verify_persistent_dtc(
         diagnostic_frames(&all, &[supported(0x50)], profile, diagnostic, salt)?;
         let count = diagnostic_request(&mut ecu, fence, count_dtc.clone())?;
         diagnostic_frames(&count, &[counted(0)], profile, diagnostic, salt)?;
+        ecu.finish()?;
     }
     {
         let mut ecu = EcuProcess::start(binary, Some(&state.path), security)?;
@@ -1523,30 +1601,13 @@ fn verify_persistent_dtc(
         diagnostic_frames(&count, &[counted(0)], profile, diagnostic, salt)?;
         let all = diagnostic_request(&mut ecu, fence, supported_dtc)?;
         diagnostic_frames(&all, &[supported(0x50)], profile, diagnostic, salt)?;
+        ecu.finish()?;
     }
     events.push("重启后 DTC 保持、默认会话拒绝清除、扩展会话清除跨重启生效".into());
     events.push("0x19/0x01 状态掩码计数与 0x19/0x02 在超时、重启、清除前后一致".into());
     events.push("0x19/0x0A 在无故障、暂停记录、超时、重启与清除后均报告配置的 DTC 和当前状态；错误长度与不支持子功能被拒绝后可恢复".into());
     fs::write(&state.path, [0u8; 64]).map_err(|e| format!("故障注入 NvM 损坏失败: {e}"))?;
-    let mut corrupt_command = Command::new(binary);
-    corrupt_command.arg("--nvm").arg(&state.path);
-    if let Some(files) = security {
-        corrupt_command
-            .arg("--security-key")
-            .arg(&files.key.path)
-            .arg("--security-state")
-            .arg(&files.state.path);
-    }
-    let corrupt = corrupt_command
-        .output()
-        .map_err(|e| format!("无法验证 NvM 完整性拒绝路径: {e}"))?;
-    if corrupt.status.success()
-        || !String::from_utf8_lossy(&corrupt.stdout)
-            .lines()
-            .any(|line| line.trim_end_matches('\r') == "E NVM")
-    {
-        return Err("损坏的 NvM 状态未在启动时被明确拒绝".into());
-    }
+    EcuProcess::expect_corrupt_state_refusal(binary, Some(&state.path), security)?;
     events.push("双份 NvM 状态损坏在启动时被拒绝，未伪造空 DTC".into());
     Ok(())
 }
@@ -1833,6 +1894,7 @@ fn verify_writable_did(
             salt,
         )?;
     }
+    ecu.finish()?;
     drop(ecu);
 
     let mut restarted = EcuProcess::start(
@@ -1862,6 +1924,7 @@ fn verify_writable_did(
         initial.extend_from_slice(&signal.initial.to_be_bytes());
     }
     expect_did_bytes(&mut restarted, profile, diagnostic, salt, &initial)?;
+    restarted.finish()?;
     events.push("S3 回默认会话拒绝写入；ECU 重启后 DID 恢复初值且未误称 NvM 持久化".into());
     Ok(())
 }
@@ -1991,6 +2054,7 @@ fn verify_security(
             diagnostic,
             salt,
         )?;
+        ecu.finish()?;
     }
     {
         let mut ecu =
@@ -2031,22 +2095,14 @@ fn verify_security(
             salt,
         )?;
         check_protected(&mut ecu, false)?;
+        ecu.finish()?;
     }
     fs::write(&files.state.path, [0u8; 16]).map_err(|e| format!("无法注入安全计数损坏: {e}"))?;
-    let mut corrupt = Command::new(binary);
-    if let Some(state) = &nvm {
-        corrupt.arg("--nvm").arg(&state.path);
-    }
-    let output = corrupt
-        .arg("--security-key")
-        .arg(&files.key.path)
-        .arg("--security-state")
-        .arg(&files.state.path)
-        .output()
-        .map_err(|e| format!("无法检查损坏安全状态的启动拒绝: {e}"))?;
-    if output.status.success() || !String::from_utf8_lossy(&output.stdout).contains("E NVM") {
-        return Err("损坏的安全计数文件未在启动时拒绝".into());
-    }
+    EcuProcess::expect_corrupt_state_refusal(
+        binary,
+        nvm.as_ref().map(|state| state.path.as_path()),
+        Some(&files),
+    )?;
     events
         .push("0x27 seed/key 解锁、受保护操作、错误 key 次数/延时、重启保持与 S3 复锁通过".into());
     events.push("损坏的安全失败计数文件在启动时被拒绝".into());

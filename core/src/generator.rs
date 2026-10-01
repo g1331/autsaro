@@ -4,55 +4,64 @@ use crate::model::{
     GenerationReport, Issue, SignalView,
 };
 use crate::target::BuildTarget;
-use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::ffi::OsStr;
 use std::fmt::Write;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
-fn runtime_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../runtime")
-}
 
-fn source_files(dir: &Path) -> Result<Vec<(PathBuf, String)>, String> {
-    let mut files = Vec::new();
-    for subdir in ["include", "src"] {
-        let entries =
-            fs::read_dir(dir.join(subdir)).map_err(|e| format!("运行代码缺失 {subdir}: {e}"))?;
-        for entry in entries {
-            let entry = entry.map_err(|e| e.to_string())?;
-            let path = entry.path();
-            if path.extension().is_some_and(|ext| ext == "c" || ext == "h") {
-                files.push((
-                    path,
-                    format!("{subdir}/{}", entry.file_name().to_string_lossy()),
-                ));
-            }
-        }
-    }
-    files.sort_by(|a, b| a.1.cmp(&b.1));
-    Ok(files)
-}
-
-fn handoff_readme(diagnostic: Option<&DiagnosticView>) -> String {
-    let mut run = String::from(".\\ecu_host.exe");
+pub(crate) fn handoff_readme(
+    diagnostic: Option<&DiagnosticView>,
+    target: BuildTarget,
+    handoff: bool,
+) -> Result<String, String> {
+    let binary = if target == BuildTarget::WindowsX64ControlledV1 {
+        "ecu_host.exe"
+    } else {
+        "ecu_host"
+    };
+    let mut run = format!("../build/{binary}");
     let mut notes = String::new();
     if let Some(diagnostic) = diagnostic {
         if diagnostic.dtc.is_some() {
-            run.push_str(" --nvm .\\ecu.nvm");
-            notes.push_str("The `--nvm` path is an exclusive host DTC state file. A missing file is initialized; a damaged or mismatched existing file stops startup.\n\n");
+            run.push_str(" --nvm ../state/ecu.nvm");
+            notes.push_str("Create the external `../state/` directory first. `--nvm` is an exclusive host DTC state file; a missing file is initialized, while a damaged or mismatched existing file stops startup.\n\n");
         }
         if diagnostic.security_enabled {
-            run.push_str(" --security-key .\\ecu.key --security-state .\\ecu.security");
-            notes.push_str("Create `ecu.key` locally as exactly 32 raw secret bytes before starting. It is not generated or listed in the manifest; do not include it when handing off the source project. Give each ECU its own security state file. A missing key or damaged state stops startup.\n\n");
+            run.push_str(" --security-key ../state/ecu.key --security-state ../state/ecu.security");
+            notes.push_str("Create `../state/ecu.key` separately as exactly 32 raw secret bytes. It is not generated or part of the source package. Each ECU needs its own security state file; a missing key or damaged state stops startup. This security profile is supported only by the Windows target.\n\n");
         }
     }
-    include_str!("../../runtime/generated-README.md")
-        .replace("{{RUN_COMMAND}}", &run)
-        .replace("{{RUN_NOTES}}", notes.trim_end())
+    let inputs = if handoff {
+        "Saved original ARXML inputs are included under `inputs/` and mapped in `handoff.json`. Review their raw contents before sharing. Reimport with the same-version workbench and the separately obtained matching XSD, then regenerate the recorded explicit target to reproduce the complete source closure."
+    } else {
+        "The original ARXML sources are not included. Retain them separately to edit or regenerate this source project, or generate the versioned host handoff profile when saved original inputs must travel with it."
+    };
+    let asset = crate::resources::AssetInventory::embedded()
+        .get("runtime/generated-README.md")
+        .ok_or("The trusted host delivery README template is missing")?;
+    let mut remaining = std::str::from_utf8(asset.bytes).map_err(|error| error.to_string())?;
+    let mut result =
+        String::with_capacity(remaining.len() + run.len() + notes.len() + inputs.len());
+    while let Some((prefix, tail)) = remaining.split_once("{{") {
+        result.push_str(prefix);
+        let (name, tail) = tail
+            .split_once("}}")
+            .ok_or("Unclosed host README placeholder")?;
+        result.push_str(match name {
+            "TARGET" => target.spec().id,
+            "BINARY" => binary,
+            "RUN_COMMAND" => &run,
+            "RUN_NOTES" => notes.trim_end(),
+            "INPUT_NOTE" => inputs,
+            _ => return Err(format!("Unknown host README placeholder: {name}")),
+        });
+        remaining = tail;
+    }
+    result.push_str(remaining);
+    Ok(result)
 }
 
 fn config_source(
@@ -356,7 +365,6 @@ fn check_entries(
     dir: &Path,
     root: &Path,
     names: &[String],
-    allow_host_binary: bool,
 ) -> Result<(), String> {
     for entry in fs::read_dir(dir).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
@@ -380,13 +388,7 @@ fn check_entries(
             if !names.iter().any(|item| item.starts_with(&prefix)) {
                 return Err(format!("输出目录含用户目录，拒绝替换: {name}"));
             }
-            check_entries(&path, root, names, allow_host_binary)?;
-        } else if name == "ecu_host.exe" || name == "ecu_host" {
-            if !allow_host_binary || dir != root || !kind.is_file() {
-                return Err(format!(
-                    "输出目录含已构建的二进制文件 {name}，拒绝替换并保留原目录；请选择新的空输出目录，或由文件所有者明确移走旧二进制后重试"
-                ));
-            }
+            check_entries(&path, root, names)?;
         } else if !kind.is_file()
             || (name != "files.list"
                 && name != "files.sha256"
@@ -398,11 +400,7 @@ fn check_entries(
     Ok(())
 }
 
-fn verify_generated_output_with_binary(
-    dir: &Path,
-    names: &[String],
-    allow_host_binary: bool,
-) -> Result<(), String> {
+fn verify_generated_output(dir: &Path, names: &[String]) -> Result<(), String> {
     let metadata = match fs::symlink_metadata(dir) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
@@ -426,7 +424,7 @@ fn verify_generated_output_with_binary(
     if previous != format!("{}\n", names.join("\n")) {
         return Err("已有输出清单不匹配，拒绝删除或覆盖其他生成版本".into());
     }
-    check_entries(dir, dir, names, allow_host_binary)?;
+    check_entries(dir, dir, names)?;
     let recorded = fs::read_to_string(dir.join("files.sha256")).map_err(|_| {
         format!(
             "输出目录缺少完整性记录，拒绝覆盖旧版生成目录: {}",
@@ -439,9 +437,6 @@ fn verify_generated_output_with_binary(
     Ok(())
 }
 
-fn verify_generated_output(dir: &Path, names: &[String]) -> Result<(), String> {
-    verify_generated_output_with_binary(dir, names, false)
-}
 
 pub(crate) fn verify_build_input(output: &Path) -> Result<Vec<String>, String> {
     let list = fs::read_to_string(output.join("files.list"))
@@ -483,16 +478,15 @@ pub(crate) fn render_host_profile(
     target: BuildTarget,
 ) -> Result<Vec<(String, Vec<u8>)>, String> {
     let (frames, signals) = workspace.checked_profile()?;
-    let diagnostic = workspace.view().diagnostic;
+    let diagnostic = workspace.diagnostic_profile();
     if target == BuildTarget::LinuxX64ControlledV1
         && diagnostic
-            .as_ref()
             .is_some_and(|item| item.security_enabled)
     {
         return Err("0x27 主机安全档案目前仅支持 Windows 目标".into());
     }
     let (generated, map, externals) =
-        config_source(workspace.name(), &frames, &signals, diagnostic.as_ref())?;
+        config_source(workspace.name(), &frames, &signals, diagnostic)?;
     Ok(vec![
         ("Dcm_Externals.h".into(), externals.into_bytes()),
         ("Ecu_Config.c".into(), generated.into_bytes()),
@@ -500,76 +494,6 @@ pub(crate) fn render_host_profile(
     ])
 }
 
-fn prepared_files(workspace: &mut Workspace) -> Result<Vec<(String, Vec<u8>)>, String> {
-    let target = if cfg!(windows) {
-        BuildTarget::WindowsX64ControlledV1
-    } else {
-        BuildTarget::LinuxX64ControlledV1
-    };
-    let generated = render_host_profile(workspace, target)?;
-    let diagnostic = workspace.view().diagnostic;
-    let mut files = Vec::new();
-    for (source, name) in source_files(&runtime_dir())? {
-        files.push((
-            name,
-            fs::read(&source).map_err(|e| format!("无法读取运行代码 {}: {e}", source.display()))?,
-        ));
-    }
-    files.extend([
-        (
-            "README.md".into(),
-            handoff_readme(diagnostic.as_ref()).into_bytes(),
-        ),
-        (
-            "build.ps1".into(),
-            include_bytes!("../../runtime/generated-build.ps1").to_vec(),
-        ),
-    ]);
-    files.extend(generated);
-    Ok(seal_files(files))
-}
-
-fn prepared_handoff_files(workspace: &mut Workspace) -> Result<Vec<(String, Vec<u8>)>, String> {
-    let sources = workspace.handoff_sources()?;
-    let mut files = prepared_files(workspace)?;
-    files.truncate(files.len() - 2);
-    let mut mappings = Vec::with_capacity(sources.len());
-    for (index, source) in sources.into_iter().enumerate() {
-        let path = format!("inputs/{index:03}.arxml");
-        mappings.push(json!({
-            "path": path,
-            "originalName": source.original_name,
-            "packageRoots": source.package_roots,
-            "sha256": format!("{:x}", Sha256::digest(&source.contents)),
-        }));
-        files.push((path, source.contents));
-    }
-    let metadata = json!({
-        "format": "autosar-host-handoff-v1",
-        "release": "CP/FO R24-11",
-        "toolVersion": env!("CARGO_PKG_VERSION"),
-        "target": "Windows host virtual ECU; MinGW GCC",
-        "sources": mappings,
-    });
-    let mut metadata = serde_json::to_vec_pretty(&metadata).map_err(|e| e.to_string())?;
-    metadata.push(b'\n');
-    files.push(("handoff.json".into(), metadata));
-    let readme = files
-        .iter_mut()
-        .find(|(name, _)| name == "README.md")
-        .ok_or("交付说明缺失")?;
-    let original = String::from_utf8(readme.1.clone()).map_err(|e| e.to_string())?;
-    let old_note = "The ARXML sources are not included in this directory. Retain them separately if you need to edit or regenerate this project.";
-    if !original.contains(old_note) {
-        return Err("生成工程说明的来源输入声明已变化，拒绝误导性交付".into());
-    }
-    let replacement = format!(
-        "Saved ARXML inputs are included under `inputs/` and mapped in `handoff.json`. Review their original contents before sharing. The XSD, workbench, and verification result are not included here. This package records tool version {} and targets only the fixed Windows host profile.\n\n## Reimport and reproduce\n\n1. Move this complete directory to the receiving machine. Check `files.list` and `files.sha256` before relying on its contents; SHA-256 detects accidental modification, not publisher authenticity.\n2. Prepare the same-version workbench from its source checkout and a separately, legally obtained R24-11 XSD archive as described in the workbench README. In the workbench choose “导入可重建主机交付包” and select this directory. That command checks the manifest, mapping, version, source closure and supported host profile before opening the inputs.\n3. Validate the imported configuration and generate to a new empty output directory. Compare `Ecu_Config.c`, `Dcm_Externals.h`, `profile.txt`, `build.ps1`, `include/` and `src/` with this delivery; `README.md` and manifests differ because the new directory is a plain generated project.\n4. Run its `build.ps1` with PowerShell and MinGW GCC. Generating or building alone does not verify host behavior; use the separate fixed reference bundle and its offline `verify.ps1` for that result. Do not interpret either result as MCU or full AUTOSAR conformance evidence.\n",
-        env!("CARGO_PKG_VERSION")
-    );
-    readme.1 = original.replace(old_note, &replacement).into_bytes();
-    Ok(seal_files(files))
-}
 
 fn output_path(output: &Path) -> Result<PathBuf, String> {
     let output_name = output.file_name().ok_or("输出目录须有名称")?;
@@ -661,68 +585,52 @@ pub(crate) fn preview_prepared(
 pub fn preview_generate(
     workspace: &mut Workspace,
     output: &Path,
+    target: BuildTarget,
 ) -> Result<GenerationPreview, String> {
-    let files = prepared_files(workspace)?;
-    preview_prepared(&files, output)
+    crate::prepare_host_project(workspace, target, false)?.preview(output)
 }
 
 pub fn preview_handoff(
     workspace: &mut Workspace,
     output: &Path,
+    target: BuildTarget,
 ) -> Result<GenerationPreview, String> {
-    let files = prepared_handoff_files(workspace)?;
-    preview_prepared(&files, output)
+    crate::prepare_host_project(workspace, target, true)?.preview(output)
 }
 
 pub fn generate_previewed(
     workspace: &mut Workspace,
     output: &Path,
     revision: &str,
+    target: BuildTarget,
 ) -> Result<GenerationReport, String> {
-    let files = prepared_files(workspace)?;
-    if preview_prepared(&files, output)?.revision != revision {
-        return Err("生成预览已失效：配置、运行源码或旧输出已变化；请重新预览".into());
-    }
-    generate_prepared(files, output, Some(revision))
+    crate::prepare_host_project(workspace, target, false)?.generate_previewed(output, revision)
 }
 
 pub fn generate_handoff_previewed(
     workspace: &mut Workspace,
     output: &Path,
     revision: &str,
+    target: BuildTarget,
 ) -> Result<GenerationReport, String> {
-    let files = prepared_handoff_files(workspace)?;
-    if preview_prepared(&files, output)?.revision != revision {
-        return Err("交付包预览已失效：来源、运行源码或旧输出已变化；请重新预览".into());
-    }
-    generate_prepared(files, output, Some(revision))
+    crate::prepare_host_project(workspace, target, true)?.generate_previewed(output, revision)
 }
 
 pub fn generate_handoff(
     workspace: &mut Workspace,
     output: &Path,
+    target: BuildTarget,
 ) -> Result<GenerationReport, String> {
-    generate_prepared(prepared_handoff_files(workspace)?, output, None)
+    generate_prepared(
+        crate::prepare_host_project(workspace, target, true)?.into_files(),
+        output,
+        None,
+    )
 }
 
 pub fn open_handoff(output: &Path, schema_archive: PathBuf) -> Result<Workspace, String> {
-    let list = fs::read_to_string(output.join("files.list"))
-        .map_err(|e| format!("交付包缺少文件清单: {e}"))?;
-    let names: Vec<String> = list.lines().map(str::to_owned).collect();
-    if names.is_empty()
-        || list != format!("{}\n", names.join("\n"))
-        || names.windows(2).any(|pair| pair[0] >= pair[1])
-        || names.iter().any(|name| {
-            name.contains('\\')
-                || Path::new(name)
-                    .components()
-                    .any(|part| !matches!(part, std::path::Component::Normal(_)))
-        })
-    {
-        return Err("交付包清单格式或路径无效".into());
-    }
-    verify_generated_output_with_binary(output, &names, true)
-        .map_err(|e| format!("交付包完整性检查失败: {e}"))?;
+    let names =
+        verify_build_input(output).map_err(|error| format!("交付包完整性检查失败: {error}"))?;
     let metadata: serde_json::Value = serde_json::from_slice(
         &fs::read(output.join("handoff.json")).map_err(|e| format!("交付映射缺失: {e}"))?,
     )
@@ -730,15 +638,17 @@ pub fn open_handoff(output: &Path, schema_archive: PathBuf) -> Result<Workspace,
     if metadata["format"] != "autosar-host-handoff-v1"
         || metadata["release"] != "CP/FO R24-11"
         || metadata["toolVersion"] != env!("CARGO_PKG_VERSION")
-        || metadata["target"] != "Windows host virtual ECU; MinGW GCC"
     {
         return Err("交付包格式、规范版次、工具版本或目标不匹配".into());
     }
+    let target: BuildTarget = serde_json::from_value(metadata["target"].clone())
+        .map_err(|error| format!("交付包目标不受支持: {error}"))?;
     let sources = metadata["sources"]
         .as_array()
         .filter(|items| !items.is_empty())
         .ok_or("交付包没有输入映射")?;
     let mut paths = Vec::with_capacity(sources.len());
+    let mut original_names = std::collections::BTreeMap::new();
     for (index, source) in sources.iter().enumerate() {
         let expected = format!("inputs/{index:03}.arxml");
         if source["path"] != expected
@@ -757,6 +667,10 @@ pub fn open_handoff(output: &Path, schema_archive: PathBuf) -> Result<Workspace,
         if !names.contains(&expected) || source["sha256"] != file_digest(&path)? {
             return Err(format!("交付输入缺失或摘要不匹配: {expected}"));
         }
+        original_names.insert(
+            path.canonicalize().map_err(|error| error.to_string())?,
+            source["originalName"].as_str().unwrap().to_owned(),
+        );
         paths.push(path);
     }
     if names
@@ -768,18 +682,34 @@ pub fn open_handoff(output: &Path, schema_archive: PathBuf) -> Result<Workspace,
         return Err("交付包输入清单与映射不一致".into());
     }
     let mut workspace = Workspace::open(paths, schema_archive)?;
-    workspace.checked_profile()?;
-    let actual_sources = workspace.handoff_sources()?;
-    for (index, (declared, actual)) in sources.iter().zip(actual_sources).enumerate() {
-        if declared["packageRoots"] != json!(actual.package_roots) {
-            return Err(format!("交付输入 {index} 的逻辑包根与 ARXML 不一致"));
+    workspace.restore_handoff_source_names(original_names)?;
+    let expected = crate::prepare_host_project(&mut workspace, target, true)?.into_files();
+    let expected_names: Vec<_> = expected
+        .iter()
+        .filter(|(name, _)| name != "files.list" && name != "files.sha256")
+        .map(|(name, _)| name.clone())
+        .collect();
+    if names != expected_names {
+        return Err("重建主机交接包的完整文件闭包不匹配".into());
+    }
+    for (name, bytes) in expected {
+        if fs::read(output.join(&name)).map_err(|error| error.to_string())? != bytes {
+            return Err(format!("重建主机交接包的来源字节不匹配: {name}"));
         }
     }
     Ok(workspace)
 }
 
-pub fn generate(workspace: &mut Workspace, output: &Path) -> Result<GenerationReport, String> {
-    generate_prepared(prepared_files(workspace)?, output, None)
+pub fn generate(
+    workspace: &mut Workspace,
+    output: &Path,
+    target: BuildTarget,
+) -> Result<GenerationReport, String> {
+    generate_prepared(
+        crate::prepare_host_project(workspace, target, false)?.into_files(),
+        output,
+        None,
+    )
 }
 
 pub(crate) fn generate_prepared(
@@ -788,6 +718,11 @@ pub(crate) fn generate_prepared(
     expected_revision: Option<&str>,
 ) -> Result<GenerationReport, String> {
     let output = output_path(output)?;
+    if let Some(revision) = expected_revision
+        && preview_prepared(&files, &output)?.revision != revision
+    {
+        return Err("生成预览已失效：配置、来源、目标或旧输出已变化；请重新预览".into());
+    }
     let names = file_names(&files);
     let parent = output.parent().ok_or("输出目录须有父目录")?;
     let output_name = output.file_name().ok_or("输出目录须有名称")?;
@@ -850,105 +785,49 @@ pub(crate) fn generate_prepared(
     })
 }
 
-pub fn build(output: &Path) -> Result<BuildReport, String> {
-    if !output.join("files.list").is_file() || !output.join("Ecu_Config.c").is_file() {
-        return Err("须先生成完整 C99 工程".into());
+pub fn build(
+    project: &Path,
+    output: &Path,
+    settings: &crate::target::ExecutionSettings,
+) -> Result<BuildReport, String> {
+    verify_build_input(project)?;
+    let project = project.canonicalize().map_err(|error| error.to_string())?;
+    let metadata: serde_json::Value = serde_json::from_slice(
+        &fs::read(project.join("target.json")).map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())?;
+    if metadata["format"] != "autosar-build-target-v1" || metadata["profile"] != "host" {
+        return Err("The source package is not the selected legacy host profile".into());
     }
-    let metadata = fs::symlink_metadata(output).map_err(|e| e.to_string())?;
-    if is_reparse_point(&metadata) || !metadata.file_type().is_dir() {
-        return Err(format!(
-            "构建目录不是普通目录或是重解析点: {}",
-            output.display()
-        ));
-    }
-    let binary = output.join(if cfg!(windows) {
+    let target: BuildTarget =
+        serde_json::from_value(metadata["target"].clone()).map_err(|error| error.to_string())?;
+    let output = output_path(output)?;
+    let capture = reserve_directory(&std::env::temp_dir(), "host-build", OsStr::new("private"))?;
+    let log = crate::integration::handoff::run_tool(
+        &project,
+        settings,
+        vec![
+            "build".into(),
+            "--project".into(),
+            project.as_os_str().into(),
+            "--output".into(),
+            output.as_os_str().into(),
+            "--mode".into(),
+            "host".into(),
+        ],
+        &capture,
+    )
+    .map_err(|error| format!("{error}; diagnostics retained at {}", capture.display()))?;
+    verify_build_input(&project)?;
+    let binary = output.join(if target == BuildTarget::WindowsX64ControlledV1 {
         "ecu_host.exe"
     } else {
         "ecu_host"
     });
-    let occupied = || {
-        format!(
-            "已有构建二进制 {}，拒绝覆盖；请选新的空目录重新生成并构建，或由文件所有者明确移走旧二进制后重试",
-            binary.display()
-        )
-    };
-    match fs::symlink_metadata(&binary) {
-        Ok(_) => return Err(occupied()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(error.to_string()),
+    if !binary.is_file() {
+        return Err("Successful legacy build did not produce its declared native binary".into());
     }
-    verify_build_input(output)?;
-    let cc = std::env::var_os("AUTOSAR_CC")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("gcc"));
-    let mut sources = fs::read_dir(output.join("src"))
-        .map_err(|e| e.to_string())?
-        .map(|entry| entry.map(|e| e.path()).map_err(|e| e.to_string()))
-        .collect::<Result<Vec<_>, _>>()?;
-    sources.retain(|p| p.extension().is_some_and(|e| e == "c"));
-    sources.sort();
-    sources.push(output.join("Ecu_Config.c"));
-    let stage = reserve_directory(
-        output.parent().ok_or("构建目录须有父目录")?,
-        "build",
-        binary.file_name().unwrap(),
-    )?;
-    let staged_binary = stage.join(binary.file_name().unwrap());
-    let mut command = Command::new(cc);
-    command
-        .arg("-std=c99")
-        .arg("-Wall")
-        .arg("-Wextra")
-        .arg("-Werror")
-        .arg("-pedantic")
-        .arg("-I")
-        .arg(output.join("include"))
-        .args(sources)
-        .arg("-o")
-        .arg(&staged_binary);
-    if cfg!(windows) {
-        command.arg("-lbcrypt");
-    }
-    let result = command.output().map_err(|e| {
-        format!(
-            "无法启动 C99 编译器: {e}；临时目录保留在 {}",
-            stage.display()
-        )
-    })?;
-    let log = format!(
-        "{}{}",
-        String::from_utf8_lossy(&result.stdout),
-        String::from_utf8_lossy(&result.stderr)
-    );
-    if !result.status.success() {
-        return Err(format!(
-            "C99 构建失败: {log}；临时目录保留在 {}",
-            stage.display()
-        ));
-    }
-    verify_build_input(output).map_err(|e| {
-        format!(
-            "编译期间{e}；临时编译产物保留在 {}",
-            staged_binary.display()
-        )
-    })?;
-    fs::hard_link(&staged_binary, &binary).map_err(|error| {
-        let reason = if error.kind() == std::io::ErrorKind::AlreadyExists {
-            occupied()
-        } else {
-            format!("无法安装已编译的二进制: {error}")
-        };
-        format!("{reason}；临时编译产物保留在 {}", staged_binary.display())
-    })?;
-    let cleanup = fs::remove_file(&staged_binary).and_then(|_| fs::remove_dir(&stage));
-    let log = match cleanup {
-        Ok(()) if log.is_empty() => "C99 构建成功".into(),
-        Ok(()) => log,
-        Err(error) => format!(
-            "{log}C99 构建成功，但临时目录 {} 未完全清理: {error}",
-            stage.display()
-        ),
-    };
+    fs::remove_dir_all(capture).map_err(|error| error.to_string())?;
     Ok(BuildReport {
         binary_path: binary.display().to_string(),
         log,

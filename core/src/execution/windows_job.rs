@@ -214,6 +214,49 @@ impl ProcessTree {
         }
         Ok(tree)
     }
+    pub(crate) fn close_stdin(&mut self) {
+        drop(self.child.stdin.take());
+    }
+
+    pub(crate) fn write_stdin(&mut self, bytes: &[u8], deadline_ns: u64) -> Result<(), String> {
+        use std::io::Write;
+        let remaining = deadline_ns.saturating_sub(super::monotonic_ns()?);
+        if remaining == 0 {
+            return Err("Interactive stdin deadline expired".into());
+        }
+        let mut pipe = self
+            .child
+            .stdin
+            .take()
+            .ok_or("Interactive stdin is not open")?;
+        // A Windows anonymous-pipe write can block. The transferred buffer must
+        // remain owned by the writer if OS cleanup cannot be confirmed.
+        let bytes = bytes.to_vec();
+        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+        let writer = std::thread::spawn(move || {
+            let result = pipe.write_all(&bytes).and_then(|_| pipe.flush());
+            let _ = sender.send((pipe, result));
+        });
+        match receiver.recv_timeout(std::time::Duration::from_nanos(remaining)) {
+            Ok((pipe, result)) => {
+                self.child.stdin = Some(pipe);
+                writer
+                    .join()
+                    .map_err(|_| "Interactive stdin writer panicked")?;
+                result.map_err(|error| error.to_string())
+            }
+            Err(error) => {
+                self.stop()
+                    .map_err(|cleanup| format!("Interactive stdin failed: {error}; {cleanup}"))?;
+                writer
+                    .join()
+                    .map_err(|_| "Interactive stdin writer panicked during closure")?;
+                Err(format!(
+                    "Interactive stdin exceeded its absolute deadline: {error}"
+                ))
+            }
+        }
+    }
     pub(crate) fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
         self.child.try_wait()
     }

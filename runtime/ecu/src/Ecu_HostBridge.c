@@ -1,22 +1,20 @@
 #include "Ecu_Target.h"
 #include "Ecu_TargetConfig.h"
 #include "Ecu_Config.h"
-#include "Os_Windows.h"
+#include "Os_Host.h"
 
 typedef struct {
-    HANDLE cancel;
+    Os_HostHandle cancel;
     uint64_t started;
 } Ecu_HostWatch;
 
-static DWORD WINAPI watch(void *argument) {
+static Os_HostThreadResult watch(void *argument) {
     const Ecu_HostWatch *control = (const Ecu_HostWatch *)argument;
-    uint64_t elapsed = GetTickCount64() - control->started;
-    DWORD waited;
+    uint64_t elapsed = Os_HostMonotonicMs() - control->started;
     if (elapsed >= ECU_BATCH_WATCHDOG_MS) {
         Ecu_TargetAbortNative(E_OS_STATE);
     }
-    waited = WaitForSingleObject(control->cancel, ECU_BATCH_WATCHDOG_MS - (DWORD)elapsed);
-    if (waited != WAIT_OBJECT_0) {
+    if (Os_HostWait(control->cancel, ECU_BATCH_WATCHDOG_MS - (uint32_t)elapsed) == 0) {
         Ecu_TargetAbortNative(E_OS_STATE);
     }
     return 0u;
@@ -38,7 +36,7 @@ static void pump(Ecu_HostBatch *batch, Ecu_HostSink sink, void *context,
     Ecu_OutputRecord output;
     Ecu_ProtocolRecord failure;
     StatusType status;
-    require((GetTickCount64() - control->started) < ECU_BATCH_WATCHDOG_MS);
+    require((Os_HostMonotonicMs() - control->started) < ECU_BATCH_WATCHDOG_MS);
     require(Ecu_TargetState() == ECU_TARGET_READY);
     status = Ecu_TargetTakeProtocolFailure(&failure);
     while (status == E_OK) {
@@ -83,7 +81,7 @@ static void tick(Ecu_HostBatch *batch, uint64_t at, Ecu_HostSink sink, void *con
 
 StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *context) {
     Ecu_HostWatch control;
-    HANDLE monitor;
+    Os_HostHandle monitor;
     Os_TickCompletion previous;
     Ecu_BatchCompletion completed;
     uint64_t at;
@@ -132,12 +130,12 @@ StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *c
     batch->transport_status = ECU_OK;
     batch->transport_epoch = UINT64_C(0);
     batch->transport_count = 0u;
-    control.cancel = CreateEventA(NULL, TRUE, FALSE, NULL);
+    control.cancel = Os_HostOpenManualEvent();
     if (control.cancel == NULL) {
         Ecu_TargetAbortNative(E_OS_STATE);
     }
-    control.started = GetTickCount64();
-    monitor = CreateThread(NULL, 262144u, watch, &control, 0u, NULL);
+    control.started = Os_HostMonotonicMs();
+    monitor = Os_HostSpawnObserverThread(watch, &control);
     if (monitor == NULL) {
         Ecu_TargetAbortNative(E_OS_STATE);
     }
@@ -161,7 +159,7 @@ StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *c
             break;
         }
         require(status == E_OS_NOFUNC);
-        Sleep(1u);
+        Os_HostSleepMs(1u);
     }
     require((completed.epoch == batch->epoch) && (completed.input_count == batch->count));
     pump(batch, sink, context, &control);
@@ -170,11 +168,11 @@ StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *c
                  ? E_OK
                  : E_OS_VALUE;
     require(Ecu_HostBatchComplete(batch) == E_OK);
-    require((GetTickCount64() - control.started) < ECU_BATCH_WATCHDOG_MS);
+    require((Os_HostMonotonicMs() - control.started) < ECU_BATCH_WATCHDOG_MS);
     require(sink(NULL, batch, status, context) != 0);
     require(Os_HostSetEvent(control.cancel) != 0);
-    require(WaitForSingleObject(monitor, ECU_BATCH_WATCHDOG_MS) == WAIT_OBJECT_0);
-    require(CloseHandle(monitor) != 0);
-    require(CloseHandle(control.cancel) != 0);
+    require(Os_HostWait(monitor, ECU_BATCH_WATCHDOG_MS) != 0);
+    require(Os_HostClose(monitor) != 0);
+    require(Os_HostClose(control.cancel) != 0);
     return status;
 }

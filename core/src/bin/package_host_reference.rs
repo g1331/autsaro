@@ -1,4 +1,5 @@
-use autosar_config_core::{DiagnosticSettings, Direction, Workspace, generator, schema};
+use autosar_config_core::target::BuildTarget;
+use autosar_config_core::{DiagnosticSettings, Direction, Workspace, generator};
 use sha2::{Digest, Sha256};
 use std::fmt::Write;
 use std::fs;
@@ -75,7 +76,7 @@ fn prepare_pair(root: &Path, schema_archive: PathBuf) -> Result<(Workspace, Work
     Ok((alpha, beta))
 }
 
-fn run(output: &Path) -> Result<(), String> {
+fn run(output: &Path, target: BuildTarget, archive: PathBuf) -> Result<(), String> {
     if output.exists() {
         return Err("参考包输出目录已存在；请选择新的目录".into());
     }
@@ -88,22 +89,48 @@ fn run(output: &Path) -> Result<(), String> {
     let stage = parent.join(format!(".host-reference-{}-{nonce}", std::process::id()));
     fs::create_dir(&stage).map_err(|e| e.to_string())?;
     let result = (|| {
-        let archive = schema::schema_archive(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."));
+        let archive = archive.clone();
         let sources = stage.join("sources");
         let (mut alpha, mut beta) = prepare_pair(&sources, archive)?;
-        generator::generate_handoff(&mut alpha, &stage.join("Alpha"))?;
-        generator::generate_handoff(&mut beta, &stage.join("Beta"))?;
+        generator::generate_handoff(&mut alpha, &stage.join("Alpha"), target)?;
+        generator::generate_handoff(&mut beta, &stage.join("Beta"), target)?;
         let canonical_stage = fs::canonicalize(&stage).map_err(|e| e.to_string())?;
         let canonical_sources = fs::canonicalize(&sources).map_err(|e| e.to_string())?;
         if !canonical_sources.starts_with(&canonical_stage) {
             return Err("临时来源目录越界".into());
         }
         fs::remove_dir_all(&sources).map_err(|e| e.to_string())?;
+        let mut names = vec![
+            "README.md".to_owned(),
+            "vectors.json".into(),
+            "target.json".into(),
+        ];
+        for name in fs::read_to_string(stage.join("Alpha/files.list"))
+            .map_err(|error| error.to_string())?
+            .lines()
+            .filter(|name| name.starts_with("tools/"))
+        {
+            let destination = stage.join(name);
+            fs::create_dir_all(destination.parent().ok_or("Tool asset has no parent")?)
+                .map_err(|error| error.to_string())?;
+            fs::write(
+                &destination,
+                fs::read(stage.join("Alpha").join(name)).map_err(|error| error.to_string())?,
+            )
+            .map_err(|error| error.to_string())?;
+            names.push(name.to_owned());
+        }
         fs::write(
-            stage.join("verify.ps1"),
-            include_bytes!("../../../runtime/reference-verify.ps1"),
+            stage.join("target.json"),
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "format": "autosar-build-target-v1",
+                "target": target.spec().id,
+                "profile": "host-reference",
+                "members": ["Alpha", "Beta"],
+            }))
+            .map_err(|error| error.to_string())?,
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| error.to_string())?;
         fs::write(
             stage.join("vectors.json"),
             include_bytes!("../../../runtime/reference-vectors.json"),
@@ -114,11 +141,6 @@ fn run(output: &Path) -> Result<(), String> {
             include_bytes!("../../../runtime/reference-README.md"),
         )
         .map_err(|e| e.to_string())?;
-        let mut names = vec![
-            "README.md".to_owned(),
-            "vectors.json".into(),
-            "verify.ps1".into(),
-        ];
         for ecu in ["Alpha", "Beta"] {
             for name in fs::read_to_string(stage.join(ecu).join("files.list"))
                 .map_err(|e| e.to_string())?
@@ -140,14 +162,10 @@ fn run(output: &Path) -> Result<(), String> {
             )
             .map_err(|e| e.to_string())?;
         }
-        writeln!(
-            hashes,
-            "{:x}  reference-files.list",
-            Sha256::digest(list.as_bytes())
-        )
-        .map_err(|e| e.to_string())?;
-        fs::write(stage.join("reference-files.list"), list).map_err(|e| e.to_string())?;
-        fs::write(stage.join("reference-files.sha256"), hashes).map_err(|e| e.to_string())?;
+        writeln!(hashes, "{:x}  files.list", Sha256::digest(list.as_bytes()))
+            .map_err(|e| e.to_string())?;
+        fs::write(stage.join("files.list"), list).map_err(|e| e.to_string())?;
+        fs::write(stage.join("files.sha256"), hashes).map_err(|e| e.to_string())?;
         fs::rename(&stage, output).map_err(|e| e.to_string())
     })();
     if result.is_err() {
@@ -156,17 +174,51 @@ fn run(output: &Path) -> Result<(), String> {
     result
 }
 
-fn main() {
+fn arguments() -> Result<(PathBuf, BuildTarget, PathBuf), String> {
     let mut args = std::env::args_os().skip(1);
-    let Some(output) = args.next() else {
-        eprintln!("Usage: package_host_reference <new-output-directory>");
-        std::process::exit(2);
-    };
-    if args.next().is_some() {
-        eprintln!("Usage: package_host_reference <new-output-directory>");
-        std::process::exit(2);
+    let mut output = None;
+    let mut target = None;
+    let mut archive = None;
+    while let Some(argument) = args.next() {
+        match argument.to_str() {
+            Some("--target") if target.is_none() => {
+                let value = args
+                    .next()
+                    .and_then(|value| value.into_string().ok())
+                    .ok_or("Missing --target identity")?;
+                target = Some(
+                    serde_json::from_value(serde_json::Value::String(value))
+                        .map_err(|error| error.to_string())?,
+                );
+            }
+            Some("--xsd-archive") if archive.is_none() => {
+                archive = Some(PathBuf::from(
+                    args.next().ok_or("Missing --xsd-archive path")?,
+                ));
+            }
+            Some(value) if value.starts_with("--") => {
+                return Err(format!("Unknown or repeated argument: {value}"));
+            }
+            _ if output.is_none() => output = Some(PathBuf::from(argument)),
+            _ => return Err("Supply only one new output directory".into()),
+        }
     }
-    if let Err(error) = run(&PathBuf::from(output)) {
+    let archive = archive
+        .or_else(|| std::env::var_os("AUTOSAR_XSD_ARCHIVE").map(PathBuf::from))
+        .ok_or("Supply --xsd-archive or AUTOSAR_XSD_ARCHIVE")?;
+    if !archive.is_absolute() || !archive.is_file() {
+        return Err("The XSD archive must be an existing absolute file".into());
+    }
+    Ok((
+        output.ok_or("Supply the new reference output directory")?,
+        target.ok_or("Supply --target windows-x64-controlled-v1|linux-x64-controlled-v1")?,
+        archive,
+    ))
+}
+
+fn main() {
+    let result = arguments().and_then(|(output, target, archive)| run(&output, target, archive));
+    if let Err(error) = result {
         eprintln!("{error}");
         std::process::exit(1);
     }

@@ -11,6 +11,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from ecu_tools.owner import Owner, OwnershipError
 from ecu_tools.process import OwnedProcess, ProcessSpec, run_bounded
@@ -45,11 +46,14 @@ def _gone(pid: int) -> bool:
         kernel.OpenProcess.restype = wintypes.HANDLE
         kernel.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
         kernel.WaitForSingleObject.restype = wintypes.DWORD
-        handle = kernel.OpenProcess(0x1000, False, pid)
+        handle = kernel.OpenProcess(0x101000, False, pid)  # SYNCHRONIZE | QUERY_LIMITED_INFORMATION
         if not handle:
             return True
         try:
-            return kernel.WaitForSingleObject(handle, 0) == 0
+            state = kernel.WaitForSingleObject(handle, 0)
+            if state == 0xFFFFFFFF:
+                raise ctypes.WinError(ctypes.get_last_error())
+            return state == 0
         finally:
             kernel.CloseHandle(handle)
     try:
@@ -109,6 +113,49 @@ class BoundedProcessTests(unittest.TestCase):
             _assert_closed(self, records)
             self.assertIn("stdout=", str(failure.exception))
             self.assertIn("stderr=", str(failure.exception))
+
+    @unittest.skipUnless(os.name == "nt", "Windows suspended Job assignment")
+    def test_failed_job_assignment_closes_unstarted_process(self) -> None:
+        from ecu_tools import windows_job
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            spec, pid_file = self._spec(root, "normal")
+            created: list[subprocess.Popen[bytes]] = []
+            spawn = subprocess.Popen
+            assign = windows_job.kernel.AssignProcessToJobObject
+
+            def record_spawn(*args, **kwargs):
+                child = spawn(*args, **kwargs)
+                created.append(child)
+                return child
+
+            def invalid_assignment(job, process):
+                return assign(None, process)
+
+            try:
+                with (
+                    patch.object(windows_job.subprocess, "Popen", record_spawn),
+                    patch.object(
+                        windows_job.kernel,
+                        "AssignProcessToJobObject",
+                        invalid_assignment,
+                    ),
+                    self.assertRaises(OSError),
+                ):
+                    windows_job.WindowsJob(
+                        list(spec.argv), spec.cwd, spec.env,
+                        root / "stdout", root / "stderr",
+                    )
+                self.assertEqual(len(created), 1)
+                self.assertIsNotNone(created[0].poll())
+                _assert_closed(self, [("unstarted", created[0].pid, os.getpid())])
+                self.assertFalse(pid_file.exists(), "Unassigned command executed")
+            finally:
+                for child in created:
+                    if child.poll() is None:
+                        child.kill()
+                    child.wait(timeout=5)
 
     def test_normal_parent_exit_with_live_children_is_failure(self) -> None:
         with tempfile.TemporaryDirectory() as name:

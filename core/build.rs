@@ -29,7 +29,9 @@ fn add(
     profiles: &[&str],
 ) {
     assert!(
-        (path.starts_with("runtime/") || path.starts_with("third_party/freertos/"))
+        (path.starts_with("runtime/")
+            || path.starts_with("third_party/freertos/")
+            || path.starts_with("scripts/ecu_tools/"))
             && !path.contains(['\\', ':'])
             && Path::new(&path)
                 .components()

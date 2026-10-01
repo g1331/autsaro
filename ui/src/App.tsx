@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import type {
   BuildResult,
+  BuildTarget,
   DiagnosticView,
   DtcView,
   Frame,
@@ -410,6 +411,8 @@ export default function App() {
   const [generationPreviewPath, setGenerationPreviewPath] = useState('');
   const [generationKind, setGenerationKind] = useState<'project' | 'handoff'>('project');
   const [handoffGenerated, setHandoffGenerated] = useState(false);
+  const [legacyTarget, setLegacyTarget] = useState<BuildTarget>('windows-x64-controlled-v1');
+  const [buildDirectory, setBuildDirectory] = useState('');
   const [built, setBuilt] = useState<BuildResult | null>(null);
   const [virtualResult, setVirtualResult] = useState<VirtualResult | null>(null);
   const [virtualKind, setVirtualKind] = useState<'signal' | 'diagnostic' | null>(null);
@@ -418,6 +421,7 @@ export default function App() {
   const [busy, setBusy] = useState<string | null>(null);
   const [page, setPage] = useState<Page>('editor');
   const [peerDirectory, setPeerDirectory] = useState('');
+  const [peerBinaryPath, setPeerBinaryPath] = useState('');
   const [savePreview, setSavePreview] = useState<SavePreview | null>(null);
   const [previewPath, setPreviewPath] = useState('');
 
@@ -533,6 +537,15 @@ export default function App() {
       setNotice({ tone: 'error', text: `选择目录失败：${errorText(error)}` });
     }
   }
+  async function chooseBinary(onChoose: (path: string) => void) {
+    if (!native || busy) return;
+    try {
+      const path = await open({ multiple: false, title: '选择已构建的主机二进制' });
+      if (typeof path === 'string') onChoose(path);
+    } catch (error) {
+      setNotice({ tone: 'error', text: `选择二进制失败：${errorText(error)}` });
+    }
+  }
   async function chooseFiles() {
     if (!native || busy) return;
     try {
@@ -604,6 +617,8 @@ export default function App() {
     setVirtualResult(null);
     setOperationIssues([]);
     setPeerDirectory('');
+    setPeerBinaryPath('');
+    setBuildDirectory('');
     setCreating(null);
     setPage(view.integrationCandidate ? 'integration' : 'editor');
     acceptView(view, initialSelection(view));
@@ -914,7 +929,7 @@ export default function App() {
         () =>
           invoke<GenerationPreview>(
             handoff ? 'preview_handoff_project' : 'preview_generate_project',
-            { outputDirectory: directory },
+            { outputDirectory: directory, target: legacyTarget },
           ),
         (preview) => {
           setGenerationKind(handoff ? 'handoff' : 'project');
@@ -945,6 +960,7 @@ export default function App() {
           {
             outputDirectory: preview.outputDirectory,
             revision: preview.revision,
+            target: legacyTarget,
           },
         ).catch((error) => {
           setGenerationPreview(null);
@@ -975,13 +991,17 @@ export default function App() {
     );
   }
   function buildProject() {
-    if (!generated || stages.generate.state !== 'done') return;
+    if (!generated || !buildDirectory.trim() || stages.generate.state !== 'done') return;
     setBuilt(null);
     setVirtualResult(null);
     markStage('virtual', 'stale', '等待本次构建结果');
     void run(
       '构建',
-      () => invoke<BuildResult>('build_project', { outputDirectory: generated.outputDirectory }),
+      () =>
+        invoke<BuildResult>('build_project', {
+          outputDirectory: generated.outputDirectory,
+          buildDirectory,
+        }),
       (result) => {
         setPage('build');
         if (!result.binaryPath) {
@@ -1000,9 +1020,11 @@ export default function App() {
   function runVirtual() {
     if (
       !generated ||
+      !built ||
       stages.generate.state !== 'done' ||
       stages.build.state !== 'done' ||
-      !peerDirectory
+      !peerDirectory ||
+      !peerBinaryPath
     )
       return;
     setVirtualResult(null);
@@ -1012,6 +1034,8 @@ export default function App() {
         invoke<VirtualResult>('run_virtual', {
           firstOutputDirectory: generated.outputDirectory,
           secondOutputDirectory: peerDirectory,
+          firstBinaryPath: built.binaryPath,
+          secondBinaryPath: peerBinaryPath,
         }),
       (result) => {
         setVirtualKind('signal');
@@ -1030,6 +1054,7 @@ export default function App() {
     if (
       !workspace?.diagnostic ||
       !generated ||
+      !built ||
       stages.generate.state !== 'done' ||
       stages.build.state !== 'done' ||
       unapplied
@@ -1041,6 +1066,7 @@ export default function App() {
       () =>
         invoke<VirtualResult>('run_diagnostic', {
           outputDirectory: generated.outputDirectory,
+          binaryPath: built.binaryPath,
         }),
       (result) => {
         setVirtualKind('diagnostic');
@@ -2218,7 +2244,7 @@ export default function App() {
                         <h2>生成与构建</h2>
                         <p>
                           从已保存、无阻断错误的配置生成独立 C99
-                          工程，再构建主机目标。已有二进制时不覆盖；请选新的空目录，或由所有者明确移走旧文件。
+                          工程，再在独立空目录构建主机目标。封存源码不会被构建修改；已有产物不覆盖。
                         </p>
                       </div>
                     </div>
@@ -2260,6 +2286,62 @@ export default function App() {
                         </button>
                       </div>
                     )}
+                    <div className="form-fields ecu-delivery-fields">
+                      <label>
+                        主机构建目标
+                        <select
+                          aria-label="主机构建目标"
+                          value={legacyTarget}
+                          disabled={disabled}
+                          onChange={(event) => {
+                            setLegacyTarget(event.target.value as BuildTarget);
+                            setGenerationPreview(null);
+                            setGenerated(null);
+                            setBuilt(null);
+                            setVirtualResult(null);
+                            markStage('generate', 'pending', '目标已变化，请重新预览和生成');
+                            markStage('build', 'pending', '尚未构建新目标');
+                            markStage('virtual', 'stale', '目标已变化');
+                          }}
+                        >
+                          <option value="windows-x64-controlled-v1">
+                            Windows x64 controlled v1
+                          </option>
+                          <option value="linux-x64-controlled-v1">Linux x64 controlled v1</option>
+                        </select>
+                      </label>
+                      <label>
+                        独立主机构建目录
+                        <input
+                          aria-label="独立主机构建目录"
+                          value={buildDirectory}
+                          disabled={disabled}
+                          onChange={(event) => {
+                            setBuildDirectory(event.target.value);
+                            setBuilt(null);
+                            setVirtualResult(null);
+                            markStage('build', 'pending', '构建目录已变化');
+                            markStage('virtual', 'stale', '构建目录已变化');
+                          }}
+                        />
+                      </label>
+                      <button
+                        className="outline-button small"
+                        type="button"
+                        disabled={disabled}
+                        onClick={() =>
+                          void chooseDirectory((path) => {
+                            setBuildDirectory(path);
+                            setBuilt(null);
+                            setVirtualResult(null);
+                            markStage('build', 'pending', '构建目录已变化');
+                            markStage('virtual', 'stale', '构建目录已变化');
+                          })
+                        }
+                      >
+                        选择独立主机构建目录
+                      </button>
+                    </div>
                     <div className="delivery-actions">
                       <button
                         type="button"
@@ -2292,7 +2374,12 @@ export default function App() {
                         type="button"
                         className="outline-button"
                         onClick={buildProject}
-                        disabled={disabled || unapplied || stages.generate.state !== 'done'}
+                        disabled={
+                          disabled ||
+                          unapplied ||
+                          stages.generate.state !== 'done' ||
+                          !buildDirectory.trim()
+                        }
                       >
                         <Hammer aria-hidden="true" size={15} />
                         构建生成工程
@@ -2308,7 +2395,7 @@ export default function App() {
                           <p>
                             {handoffGenerated
                               ? '交付包含源 ARXML 与 handoff.json；README.md 列明重新导入依赖。生成成功不代表主机行为已验证。'
-                              : '交付目录内的 README.md 与 build.ps1 提供独立构建和启动方法；源 ARXML 未随普通工程交付。'}
+                              : '交付目录内的 README.md 与 tools/ecu-tool.py 提供独立构建和启动方法；源 ARXML 未随普通工程交付。'}
                           </p>
                           <details>
                             <summary>工程文件 · {generated.files.length}</summary>
@@ -2386,7 +2473,9 @@ export default function App() {
                     )}
                     <div className="peer-section">
                       <h3>对端 ECU 工程</h3>
-                      <p>选择另一份已生成并构建的 ECU 工程目录；当前工程与对端在虚拟总线上运行。</p>
+                      <p>
+                        选择对端封存源码目录及独立构建的实际二进制；两份真实 ECU 在虚拟总线上运行。
+                      </p>
                       <div className="path-picker">
                         <input
                           readOnly
@@ -2396,11 +2485,41 @@ export default function App() {
                         />
                         <button
                           type="button"
-                          onClick={() => void chooseDirectory(setPeerDirectory)}
+                          onClick={() =>
+                            void chooseDirectory((path) => {
+                              setPeerDirectory(path);
+                              setPeerBinaryPath('');
+                              setVirtualResult(null);
+                            })
+                          }
                           disabled={disabled || stages.build.state !== 'done'}
                         >
                           <FolderOpen aria-hidden="true" size={15} />
                           选择对端目录
+                        </button>
+                      </div>
+                      <div className="path-picker">
+                        <input
+                          aria-label="对端主机二进制"
+                          value={peerBinaryPath}
+                          disabled={disabled}
+                          placeholder="选择对端独立构建的 ecu_host"
+                          onChange={(event) => {
+                            setPeerBinaryPath(event.target.value);
+                            setVirtualResult(null);
+                          }}
+                        />
+                        <button
+                          type="button"
+                          disabled={disabled || stages.build.state !== 'done'}
+                          onClick={() =>
+                            void chooseBinary((path) => {
+                              setPeerBinaryPath(path);
+                              setVirtualResult(null);
+                            })
+                          }
+                        >
+                          选择对端二进制
                         </button>
                       </div>
                       <button
@@ -2408,7 +2527,11 @@ export default function App() {
                         className="primary-button compact"
                         onClick={runVirtual}
                         disabled={
-                          disabled || unapplied || stages.build.state !== 'done' || !peerDirectory
+                          disabled ||
+                          unapplied ||
+                          stages.build.state !== 'done' ||
+                          !peerDirectory ||
+                          !peerBinaryPath
                         }
                       >
                         <MonitorPlay aria-hidden="true" size={15} />

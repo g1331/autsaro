@@ -27,28 +27,28 @@ typedef struct {
 /* C99 checked storage for one complete mailbox payload. */
 typedef Ecu_Input Ecu_MailboxInput[(sizeof(Ecu_Input) <= OS_INPUT_PAYLOAD) ? 1 : -1];
 typedef struct {
-    volatile LONG state;
+    volatile Os_Atomic32 state;
     Ecu_OutputRecord record;
 } Ecu_OutputSlot;
 
 typedef struct {
-    volatile LONG state;
+    volatile Os_Atomic32 state;
     Ecu_ProtocolRecord record;
 } Ecu_ProtocolSlot;
 
-static volatile LONG lifecycle;
-static volatile LONG native_owner;
-static DWORD native_thread;
+static volatile Os_Atomic32 lifecycle;
+static volatile Os_Atomic32 native_owner;
+static Os_HostThreadId native_thread;
 /* Accessed only by the native producer after its atomic identity publication. */
 static uint64_t native_input_epoch;
 static uint64_t native_batch_ticket;
-static volatile LONG batch_state;
+static volatile Os_Atomic32 batch_state;
 static uint64_t batch_epoch;
 static uint16_t batch_count;
 static uint8_t batch_needs_tick;
 static Ecu_BatchFrame batch_frames[ECU_BATCH_CAPACITY];
 static Ecu_BatchCompletion batch_completion;
-static DWORD initialization_thread;
+static Os_HostThreadId initialization_thread;
 static uint64_t epoch;
 static uint64_t processed_tick;
 static uint64_t next_output_ticket;
@@ -65,10 +65,10 @@ static uint8_t received;
 static uint64_t received_at;
 
 static void fail(void) {
-    (void)InterlockedExchange(&lifecycle, (LONG)ECU_TARGET_FAILED);
+    (void)Os_HostAtomicExchange(&lifecycle, (Os_Atomic32)ECU_TARGET_FAILED);
     ShutdownOS(E_OS_STATE);
 }
-static LONG load(volatile LONG *value) { return InterlockedCompareExchange(value, 0, 0); }
+static Os_Atomic32 load(volatile Os_Atomic32 *value) { return Os_HostAtomicLoad(value); }
 
 static void advance_transport(void) {
     EcuStatus status = CanTp_AdvanceTime(epoch);
@@ -80,7 +80,7 @@ static void advance_transport(void) {
         slot->record.epoch = epoch;
         slot->record.status = status;
         protocol_write = (protocol_write + 1u) % ECU_TARGET_OUTPUT_CAPACITY;
-        (void)InterlockedExchange(&slot->state, 1);
+        (void)Os_HostAtomicExchange(&slot->state, 1);
     } else if (status != ECU_OK) {
         fail();
     } else {
@@ -88,15 +88,15 @@ static void advance_transport(void) {
     }
 }
 uint8_t Ecu_TargetState(void) {
-    LONG state = load(&lifecycle);
-    if ((state == (LONG)ECU_TARGET_READY) && (Os_TargetReady() == 0)) {
+    Os_Atomic32 state = load(&lifecycle);
+    if ((state == (Os_Atomic32)ECU_TARGET_READY) && (Os_TargetReady() == 0)) {
         return ECU_TARGET_INITIALIZING;
     }
     return (uint8_t)state;
 }
 int Ecu_TargetIsOwner(void) {
-    if (load(&lifecycle) == (LONG)ECU_TARGET_INITIALIZING) {
-        return (initialization_thread != 0u) && (GetCurrentThreadId() == initialization_thread);
+    if (load(&lifecycle) == (Os_Atomic32)ECU_TARGET_INITIALIZING) {
+        return (initialization_thread != 0u) && (Os_HostThreadIdentity() == initialization_thread);
     }
     return (Ecu_TargetState() == ECU_TARGET_READY) && (Os_BackendTaskOwner(ECU_TARGET_TASK) == 1);
 }
@@ -110,20 +110,20 @@ uint64_t Ecu_TargetNow(void) {
     return epoch;
 }
 static StatusType native_context(void) {
-    LONG owner;
+    Os_Atomic32 owner;
     if (Ecu_TargetState() != ECU_TARGET_READY) {
         return E_OS_STATE;
     }
     if (Ecu_TargetIsOwner() != 0) {
         return E_OS_CALLEVEL;
     }
-    owner = InterlockedCompareExchange(&native_owner, 1, 0);
+    owner = Os_HostAtomicCompareExchange(&native_owner, 1, 0);
     if (owner == 0) {
-        native_thread = GetCurrentThreadId();
-        (void)InterlockedExchange(&native_owner, 2);
+        native_thread = Os_HostThreadIdentity();
+        (void)Os_HostAtomicExchange(&native_owner, 2);
         return E_OK;
     }
-    return ((owner == 2) && (native_thread == GetCurrentThreadId())) ? E_OK : E_OS_ACCESS;
+    return ((owner == 2) && (native_thread == Os_HostThreadIdentity())) ? E_OK : E_OS_ACCESS;
 }
 
 StatusType Ecu_TargetTakeProtocolFailure(Ecu_ProtocolRecord *record) {
@@ -134,9 +134,9 @@ StatusType Ecu_TargetTakeProtocolFailure(Ecu_ProtocolRecord *record) {
     }
     status = native_context();
     if (status == E_OK) {
-        if (InterlockedCompareExchange(&slot->state, 2, 1) == 1) {
+        if (Os_HostAtomicCompareExchange(&slot->state, 2, 1) == 1) {
             *record = slot->record;
-            (void)InterlockedExchange(&slot->state, 0);
+            (void)Os_HostAtomicExchange(&slot->state, 0);
             protocol_read = (protocol_read + 1u) % ECU_TARGET_OUTPUT_CAPACITY;
         } else {
             status = E_OS_NOFUNC;
@@ -146,12 +146,12 @@ StatusType Ecu_TargetTakeProtocolFailure(Ecu_ProtocolRecord *record) {
 }
 StatusType Ecu_TargetPrepare(void) {
     StatusType status;
-    if (InterlockedCompareExchange(&lifecycle, (LONG)ECU_TARGET_INITIALIZING, 0) != 0) {
+    if (Os_HostAtomicCompareExchange(&lifecycle, (Os_Atomic32)ECU_TARGET_INITIALIZING, 0) != 0) {
         return E_OS_STATE;
     }
     status = Os_TargetPrepare(&Ecu_OsConfig);
     if (status != E_OK) {
-        (void)InterlockedExchange(&lifecycle, (LONG)ECU_TARGET_FAILED);
+        (void)Os_HostAtomicExchange(&lifecycle, (Os_Atomic32)ECU_TARGET_FAILED);
     }
     return status;
 }
@@ -176,7 +176,7 @@ static void stage(unsigned number) {
 void StartupHook(void) {
     const Can_ConfigType driver = {unexpected_sink};
     Can_ControllerStateType mode;
-    initialization_thread = GetCurrentThreadId();
+    initialization_thread = Os_HostThreadIdentity();
     stage(1u);
     if ((Dem_Init(&Ecu_Config, NULL) != ECU_OK) || (Security_Init(0, NULL, NULL) != ECU_OK)) {
         fail();
@@ -213,15 +213,16 @@ void StartupHook(void) {
     Can_MainFunction_Wakeup();
     Os_TargetTrace('s');
     stage(8u);
-    (void)InterlockedExchange(&lifecycle, (LONG)ECU_TARGET_READY);
+    (void)Os_HostAtomicExchange(&lifecycle, (LONG)ECU_TARGET_READY);
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
 void ShutdownHook(StatusType Error) {
-    LONG state = (Error == E_OK) ? (LONG)ECU_TARGET_CLOSED : (LONG)ECU_TARGET_FAILED;
-    (void)InterlockedExchange(&lifecycle, state);
+    Os_Atomic32 state =
+        (Error == E_OK) ? (Os_Atomic32)ECU_TARGET_CLOSED : (Os_Atomic32)ECU_TARGET_FAILED;
+    (void)Os_HostAtomicExchange(&lifecycle, state);
 #ifdef ECU_TARGET_TESTS
     Ecu_TargetTestShutdown(Error);
 #endif
@@ -314,12 +315,12 @@ StatusType Ecu_TargetValidateFrames(const Ecu_BatchFrame *frames, uint16_t count
 }
 void Ecu_TargetAbortNative(StatusType reason) {
     StatusType failure = (reason == E_OK) ? E_OS_STATE : reason;
-    (void)InterlockedExchange(&lifecycle, (LONG)ECU_TARGET_FAILED);
+    (void)Os_HostAtomicExchange(&lifecycle, (Os_Atomic32)ECU_TARGET_FAILED);
     Os_BackendRequestShutdown(failure);
     /* Fault controllers normally close first; blocked host IO must not keep
      * this failed process alive after the native watchdog has expired. */
-    Sleep(600u);
-    ExitProcess((UINT)failure);
+    Os_HostSleepMs(600u);
+    Os_HostExit((uint32_t)failure);
 }
 StatusType Ecu_TargetPostBatch(uint64_t at, const Ecu_BatchFrame *frames, uint16_t count,
                                uint64_t *ticket) {
@@ -345,7 +346,7 @@ StatusType Ecu_TargetPostBatch(uint64_t at, const Ecu_BatchFrame *frames, uint16
     if (native_batch_ticket == UINT64_MAX) {
         return E_OS_LIMIT;
     }
-    if (InterlockedCompareExchange(&batch_state, 1, 0) != 0) {
+    if (Os_HostAtomicCompareExchange(&batch_state, 1, 0) != 0) {
         return E_OS_STATE;
     }
     batch_epoch = at;
@@ -361,14 +362,14 @@ StatusType Ecu_TargetPostBatch(uint64_t at, const Ecu_BatchFrame *frames, uint16
     input.kind = 3u;
     input.epoch = at;
     input.output_ticket = batch_completion.ticket;
-    (void)InterlockedExchange(&batch_state, 2);
+    (void)Os_HostAtomicExchange(&batch_state, 2);
     status = Os_TargetPostInput((const uint8_t *)&input, (uint8_t)sizeof(input), &mailbox_ticket);
     if (status == E_OK) {
         native_batch_ticket = batch_completion.ticket;
         native_input_epoch = at;
         *ticket = native_batch_ticket;
     } else {
-        (void)InterlockedExchange(&batch_state, 0);
+        (void)Os_HostAtomicExchange(&batch_state, 0);
     }
     return status;
 }
@@ -388,7 +389,7 @@ StatusType Ecu_TargetBatchCompletion(uint64_t ticket, Ecu_BatchCompletion *resul
         return E_OS_NOFUNC;
     }
     *result = batch_completion;
-    (void)InterlockedExchange(&batch_state, 0);
+    (void)Os_HostAtomicExchange(&batch_state, 0);
     return E_OK;
 }
 void Ecu_TargetOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate) {
@@ -396,7 +397,7 @@ void Ecu_TargetOnWaiting(TaskType id, EventMaskType pending, EventMaskType predi
         (Os_MailboxQuiescent() != 0) && (output_pending == 0u) && (load(&batch_state) == 4) &&
         (Dcm_TargetPending() == 0u) &&
         ((batch_needs_tick == 0u) || (processed_tick == batch_epoch))) {
-        (void)InterlockedCompareExchange(&batch_state, 5, 4);
+        (void)Os_HostAtomicCompareExchange(&batch_state, 5, 4);
     }
 }
 EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc,
@@ -418,7 +419,7 @@ EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc,
     (void)memcpy(slot->record.data, data, dlc);
     ++output_pending;
     output_write = (output_write + 1u) % ECU_TARGET_OUTPUT_CAPACITY;
-    (void)InterlockedExchange(&slot->state, 1);
+    (void)Os_HostAtomicExchange(&slot->state, 1);
     return ECU_OK;
 }
 StatusType Ecu_TargetTakeOutput(Ecu_OutputRecord *record) {
@@ -429,7 +430,7 @@ StatusType Ecu_TargetTakeOutput(Ecu_OutputRecord *record) {
     }
     status = native_context();
     if (status == E_OK) {
-        if (InterlockedCompareExchange(&slot->state, 2, 1) != 1) {
+        if (Os_HostAtomicCompareExchange(&slot->state, 2, 1) != 1) {
             status = E_OS_NOFUNC;
         } else {
             *record = slot->record;
@@ -449,7 +450,7 @@ StatusType Ecu_TargetConfirmOutput(uint64_t ticket, PduIdType pdu) {
     if ((load(&slot->state) != 2) || (slot->record.ticket != ticket) || (slot->record.pdu != pdu)) {
         return E_OS_ID;
     }
-    if (InterlockedCompareExchange(&slot->state, 3, 2) != 2) {
+    if (Os_HostAtomicCompareExchange(&slot->state, 3, 2) != 2) {
         return E_OS_STATE;
     }
     input.kind = 2u;
@@ -458,7 +459,7 @@ StatusType Ecu_TargetConfirmOutput(uint64_t ticket, PduIdType pdu) {
     status = Os_TargetPostInput((const uint8_t *)&input, (uint8_t)sizeof(input), &mailbox_ticket);
     if (status == E_OK) {
         output_confirm = (output_confirm + 1u) % ECU_TARGET_OUTPUT_CAPACITY;
-    } else if (InterlockedCompareExchange(&slot->state, 2, 3) != 3) {
+    } else if (Os_HostAtomicCompareExchange(&slot->state, 2, 3) != 3) {
         fail();
     } else {
         /* Mailbox refusal keeps the taken output available for a retry. */
@@ -484,7 +485,7 @@ static void consume(const Ecu_Input *input) {
         }
         --output_pending;
         output_retire = (output_retire + 1u) % ECU_TARGET_OUTPUT_CAPACITY;
-        (void)InterlockedExchange(&slot->state, 0);
+        (void)Os_HostAtomicExchange(&slot->state, 0);
         CanIf_TxConfirmation(input->pdu);
         advance_transport();
     } else if (input->kind == 3u) {
@@ -494,7 +495,7 @@ static void consume(const Ecu_Input *input) {
             ((batch_epoch - epoch) > UINT64_C(1))) {
             fail();
         }
-        (void)InterlockedExchange(&batch_state, 3);
+        (void)Os_HostAtomicExchange(&batch_state, 3);
         epoch = batch_epoch;
         for (index = 0u; index < batch_count; ++index) {
             EcuStatus status = Can_Inject(batch_frames[index].id, batch_frames[index].dlc,
@@ -506,7 +507,7 @@ static void consume(const Ecu_Input *input) {
                 batch_completion.input_status = status;
             }
         }
-        (void)InterlockedExchange(&batch_state, 4);
+        (void)Os_HostAtomicExchange(&batch_state, 4);
     } else {
         fail();
     }

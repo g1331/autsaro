@@ -1,6 +1,6 @@
 {
   "format": "autosar-host-reference-v1",
-  "target": "Windows host virtual ECU, fixed 11-bit Classical CAN and physical DoCAN profile",
+  "target": "Host virtual ECU, fixed 11-bit Classical CAN and physical DoCAN profile",
   "timeoutMs": 15000,
   "cases": [
     {

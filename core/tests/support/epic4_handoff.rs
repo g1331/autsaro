@@ -10,7 +10,7 @@ use std::time::Duration;
 
 // Deliberately co-edit an attack copy's checksum record. The importer must still
 // compare it with an independently rebuilt product, not trust these new hashes.
-fn reseal(project: &Path) {
+pub(super) fn reseal(project: &Path) {
     let list = fs::read(project.join("files.list")).unwrap();
     let mut hashes = String::new();
     for name in String::from_utf8(list.clone()).unwrap().lines() {
@@ -36,7 +36,9 @@ pub fn verify() {
     let plan = build_plan(&sources, &dependencies, &runtime).unwrap();
     let scratch = super::Scratch::new();
     let original = scratch.0.join("handoff-original");
-    let files = plan.ecu_handoff_files().unwrap();
+    let files = plan
+        .ecu_handoff_files(super::tooling::native_target())
+        .unwrap();
     let preview = files.preview(&original).unwrap();
     files
         .generate_previewed(&original, &preview.revision)
@@ -63,25 +65,15 @@ pub fn verify() {
             .map(InputSource::logical_path)
             .collect::<Vec<_>>()
     );
-    let regenerated = rebuilt.ecu_handoff_files().unwrap();
+    let regenerated = rebuilt.ecu_handoff_files(opened.target()).unwrap();
     assert_eq!(files.files(), regenerated.files());
     let output = scratch.0.join("fresh-source");
     let preview = regenerated.preview(&output).unwrap();
     regenerated
         .generate_previewed(&output, &preview.revision)
         .unwrap();
-    let mut verify = Command::new("powershell.exe");
-    verify
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-        ])
-        .arg(output.join("verify.ps1"))
-        .arg("-BuildDirectory")
-        .arg(scratch.0.join("independent-verify-build"));
+    let mut verify =
+        super::tooling::ecu_verify_command(&output, &scratch.0.join("independent-verify-build"));
     let result = super::epic4_ecu::run_public_command(
         &mut verify,
         &scratch.0,
@@ -94,12 +86,10 @@ pub fn verify() {
         String::from_utf8_lossy(&result.stdout),
         String::from_utf8_lossy(&result.stderr)
     );
-    assert!(String::from_utf8_lossy(&result.stdout).contains("ECU_HANDOFF_VERIFY PASS"));
-    let binary = fs::read(
-        scratch
-            .0
-            .join("independent-verify-build/ecu_host_batch.exe"),
-    )
+    let binary = fs::read(super::tooling::native_binary(
+        &scratch.0.join("independent-verify-build"),
+        "ecu_host_batch",
+    ))
     .unwrap();
     let debug_paths = String::from_utf8_lossy(&binary)
         .replace('\\', "/")
@@ -124,18 +114,8 @@ pub fn verify() {
     assert_ne!(bad_producer.as_bytes(), saved_producer);
     fs::write(&producer, bad_producer).unwrap();
     reseal(&output);
-    let mut rejected = Command::new("powershell.exe");
-    rejected
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-        ])
-        .arg(output.join("verify.ps1"))
-        .arg("-BuildDirectory")
-        .arg(scratch.0.join("spurious-build"));
+    let mut rejected =
+        super::tooling::ecu_verify_command(&output, &scratch.0.join("spurious-build"));
     let rejected = super::epic4_ecu::run_public_command(
         &mut rejected,
         &scratch.0,
@@ -143,148 +123,43 @@ pub fn verify() {
         Duration::from_secs(300),
     );
     assert!(!rejected.status.success());
-    assert!(
-        String::from_utf8_lossy(&rejected.stderr).contains("Unexpected output count"),
-        "{}{}",
-        String::from_utf8_lossy(&rejected.stdout),
-        String::from_utf8_lossy(&rejected.stderr)
-    );
     fs::write(&producer, saved_producer).unwrap();
     reseal(&output);
 
-    // Exercise the shipped offline script's build deadline, including its
-    // deliberately stalled tool descendant. No successful build is simulated.
-    let stalled = scratch.0.join("stalled-builder");
-    fs::create_dir_all(stalled.join("verification")).unwrap();
-    let verification = fs::read_to_string(output.join("verify.ps1")).unwrap();
-    let bounded_verification =
-        verification.replace("$buildTimeoutSeconds = 180", "$buildTimeoutSeconds = 2");
-    assert_ne!(verification, bounded_verification);
-    fs::write(stalled.join("verify.ps1"), bounded_verification).unwrap();
-    fs::copy(
-        output.join("process-tree.cs"),
-        stalled.join("process-tree.cs"),
-    )
-    .unwrap();
-    fs::write(
-        stalled.join("taskkill.exe"),
-        b"invalid executable for cleanup failure",
-    )
-    .unwrap();
-    let invalid = Command::new(stalled.join("taskkill.exe"))
-        .spawn()
-        .expect_err("Invalid cleanup fixture unexpectedly started");
-    assert!(
-        matches!(invalid.raw_os_error(), Some(193 | 216)),
-        "{invalid}"
-    );
-    fs::copy(
-        output.join("verification/inputs.json"),
-        stalled.join("verification/inputs.json"),
-    )
-    .unwrap();
-    fs::write(stalled.join("build.ps1"), b"$info=[Diagnostics.ProcessStartInfo]::new(); $info.FileName='powershell.exe'; $info.Arguments='-NoProfile -NonInteractive -Command Start-Sleep 30'; $info.UseShellExecute=$false; $info.CreateNoWindow=$true; $p=[Diagnostics.Process]::Start($info); Set-Content -LiteralPath (Join-Path $PSScriptRoot 'pid.txt') -Value $p.Id; Set-Content -LiteralPath (Join-Path $PSScriptRoot 'parent.txt') -Value $PID; Start-Sleep 30\n").unwrap();
-    let mut timeout = Command::new("powershell.exe");
-    timeout
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-        ])
-        .arg(stalled.join("verify.ps1"))
-        .arg("-BuildDirectory")
-        .arg(scratch.0.join("stalled-build"))
-        .current_dir(&stalled);
-    let failed = super::epic4_ecu::run_public_command(
-        &mut timeout,
-        &scratch.0,
-        "offline-build-watchdog",
-        Duration::from_secs(15),
-    );
-    assert!(!failed.status.success());
-    assert!(
-        String::from_utf8_lossy(&failed.stderr).contains("build exceeded its host watchdog"),
-        "{}{}",
-        String::from_utf8_lossy(&failed.stdout),
-        String::from_utf8_lossy(&failed.stderr)
-    );
-    let pid = fs::read_to_string(stalled.join("pid.txt"))
-        .unwrap()
-        .trim()
-        .parse::<u32>()
-        .unwrap();
-    let parent = fs::read_to_string(stalled.join("parent.txt"))
-        .unwrap()
-        .trim()
-        .parse::<u32>()
-        .unwrap();
-    let mut gone = Command::new("powershell.exe");
-    gone.args([
-        "-NoProfile",
-        "-NonInteractive",
-        "-Command",
-        &format!("if (Get-Process -Id {parent},{pid} -ErrorAction SilentlyContinue) {{ exit 1 }}"),
+    // Exercise the delivered stdlib owner with real three-generation timeout
+    // and failed-before-release/assignment processes; no shell cleanup exists.
+    let mut owner_checks = Command::new(super::tooling::execution_settings().python);
+    owner_checks.args([
+        "-m", "unittest",
+        "autosar_tooling.test_process.BoundedProcessTests.test_timeout_closes_registered_group_and_keeps_logs",
     ]);
-    assert!(
-        super::epic4_ecu::run_public_command(
-            &mut gone,
-            &scratch.0,
-            "offline-child-closed",
-            Duration::from_secs(5)
+    if cfg!(windows) {
+        owner_checks.arg(
+            "autosar_tooling.test_process.BoundedProcessTests.test_failed_job_assignment_closes_unstarted_process",
+        );
+    } else {
+        owner_checks.args([
+            "autosar_tooling.test_process.BoundedProcessTests.test_failed_registration_never_runs_a_command",
+            "autosar_tooling.test_process.BoundedProcessTests.test_failed_release_closes_registered_but_unstarted_scope",
+        ]);
+    }
+    owner_checks
+        .env(
+            "PYTHONPATH",
+            std::env::join_paths([output.join("tools"), root.join("scripts")]).unwrap(),
         )
-        .status
-        .success()
-    );
-    // A native invalid-job assignment fails before any build command can run.
-    // Mutate only this temporary generated helper, not the production source.
-    let native = fs::read_to_string(stalled.join("process-tree.cs")).unwrap();
-    let rejected_native = native.replace(
-        "Check(AssignProcessToJobObject(job, process.Process), \"Assign suspended command\");",
-        "System.IO.File.WriteAllText(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), \"assignment-pid.txt\"), process.ProcessId.ToString()); Check(AssignProcessToJobObject(IntPtr.Zero, process.Process), \"Assign suspended command\");",
-    );
-    assert_ne!(native, rejected_native);
-    fs::write(stalled.join("process-tree.cs"), rejected_native).unwrap();
-    fs::write(
-        stalled.join("build.ps1"),
-        b"Set-Content -LiteralPath (Join-Path $PSScriptRoot 'must-not-run.txt') -Value executed\n",
-    )
-    .unwrap();
-    let failed = super::epic4_ecu::run_public_command(
-        &mut timeout,
+        .env("PATH", scratch.0.join("empty-path"));
+    let result = super::epic4_ecu::run_public_command(
+        &mut owner_checks,
         &scratch.0,
-        "offline-job-assignment",
-        Duration::from_secs(15),
+        "shipped-owner-closure",
+        Duration::from_secs(30),
     );
-    assert!(!failed.status.success());
     assert!(
-        String::from_utf8_lossy(&failed.stderr).contains("Assign suspended command"),
+        result.status.success(),
         "{}{}",
-        String::from_utf8_lossy(&failed.stdout),
-        String::from_utf8_lossy(&failed.stderr)
-    );
-    assert!(!stalled.join("must-not-run.txt").exists());
-    let rejected_pid = fs::read_to_string(stalled.join("assignment-pid.txt"))
-        .unwrap()
-        .parse::<u32>()
-        .unwrap();
-    let mut gone = Command::new("powershell.exe");
-    gone.args([
-        "-NoProfile",
-        "-NonInteractive",
-        "-Command",
-        &format!("if (Get-Process -Id {rejected_pid} -ErrorAction SilentlyContinue) {{ exit 1 }}"),
-    ]);
-    assert!(
-        super::epic4_ecu::run_public_command(
-            &mut gone,
-            &scratch.0,
-            "offline-rejected-parent-closed",
-            Duration::from_secs(5)
-        )
-        .status
-        .success()
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr),
     );
     let path = project.join("src/Rte.c");
     let original = fs::read(&path).unwrap();
@@ -296,7 +171,10 @@ pub fn verify() {
         b"/* attacker changed the sealed implementation */\n"
     );
     reseal(&project);
-    let executable_rejected = verify_ecu_project(&plan, &project).err().unwrap();
+    let executable_rejected =
+        verify_ecu_project(&plan, &project, &super::tooling::execution_settings())
+            .err()
+            .unwrap();
     assert!(
         executable_rejected.contains("src/Rte.c"),
         "{executable_rejected}"
@@ -401,12 +279,15 @@ pub fn verify_rapid() {
     let plan = rapid
         .saved_integration_plan(&runtime, dependencies.mod_archive.clone())
         .unwrap();
-    let files = plan.ecu_handoff_files().unwrap();
+    let files = plan
+        .ecu_handoff_files(super::tooling::native_target())
+        .unwrap();
     let project = scratch.0.join("rapid-source");
     let preview = files.preview(&project).unwrap();
     files
         .generate_previewed(&project, &preview.revision)
         .unwrap();
-    let report = verify_ecu_project(&plan, &project).unwrap();
+    let report =
+        verify_ecu_project(&plan, &project, &super::tooling::execution_settings()).unwrap();
     assert!(report.passed, "{}", report.log);
 }

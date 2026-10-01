@@ -19,6 +19,7 @@ class ProcessSpec:
     deadline_ns: int
     log_directory: Path
     stage: str
+    stdin_file: Path | None = None
 
     @classmethod
     def seconds(
@@ -29,6 +30,7 @@ class ProcessSpec:
         log_directory: Path,
         stage: str,
         env: dict[str, str] | None = None,
+        stdin_file: Path | None = None,
     ) -> ProcessSpec:
         return cls(
             tuple(argv),
@@ -37,6 +39,7 @@ class ProcessSpec:
             time.monotonic_ns() + seconds * 1_000_000_000,
             log_directory,
             stage,
+            stdin_file,
         )
 
 
@@ -91,6 +94,7 @@ class OwnedProcess:
                 spec.env,
                 Path(self.registration["stdout"]),
                 Path(self.registration["stderr"]),
+                spec.stdin_file,
             )
             self.registration["pid"] = self.windows.pid
         else:
@@ -109,6 +113,7 @@ class OwnedProcess:
                     spec.deadline_ns,
                     spec.log_directory,
                     parent=parent or os.environ.get("ECU_OWNER_SCOPE"),
+                    stdin_file=spec.stdin_file,
                     env=spec.env,
                 )
                 owner.request("release", scope=self.registration["scope"])

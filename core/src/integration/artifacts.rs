@@ -50,9 +50,9 @@ fn rte_symbol(name: &str, return_type: &str, args: &[(&str, &str, &str)]) -> Sym
 
 /// Product implementation descriptions reference only the sealed project's actual files.
 /// They describe this host profile, not an ICC3 or complete standard API certification.
-pub(super) fn files(
+pub(super) fn files<T>(
     plan: &PlanDescription,
-    sources: &BTreeMap<String, Vec<u8>>,
+    sources: &BTreeMap<String, T>,
 ) -> Result<BTreeMap<String, Vec<u8>>, String> {
     let mut entries: BTreeMap<String, Vec<SymbolContract>> = BTreeMap::new();
     for symbol in &plan.symbols {
@@ -277,7 +277,7 @@ pub(super) fn files(
         )
         .unwrap();
     }
-    docs.push_str("\nRTE initialization is the actual Ecu_TargetInitializeRte called by StartupHook; synchronous S/R and DID calls run on the one owner task. Rte_OsService forwards Counter calls to OS. RTE owns no independent static application data; Application.c owns its state. RTE CODE maps to .rte_code and OS Task/Hook CODE to .os_code. No configured SwAddrMethod hardware location override exists. Native host adapters (Ecu_Target, Ecu_Status, locks, storage and transport bridges) remain host helpers, not additional standard BSW modules. Original source identities are in integration.json; build.ps1 verifies files.list/files.sha256 before building a separate copy.\n");
+    docs.push_str("\nRTE initialization is the actual Ecu_TargetInitializeRte called by StartupHook; synchronous S/R and DID calls run on the one owner task. Rte_OsService forwards Counter calls to OS. RTE owns no independent static application data; Application.c owns its state. RTE CODE maps to .rte_code and OS Task/Hook CODE to .os_code. No configured SwAddrMethod hardware location override exists. Native host adapters (Ecu_Target, Ecu_Status, locks, storage and transport bridges) remain host helpers, not additional standard BSW modules. Original source identities are in integration.json; tools/ecu-tool.py verifies files.list/files.sha256 before building in a separate output directory.\n");
     let description = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <AUTOSAR xmlns="http://autosar.org/schema/r4.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd"><AR-PACKAGES><AR-PACKAGE><SHORT-NAME>HostArtifacts</SHORT-NAME><ELEMENTS>{elements}</ELEMENTS></AR-PACKAGE></AR-PACKAGES></AUTOSAR>

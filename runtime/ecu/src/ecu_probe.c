@@ -1,6 +1,6 @@
 #include "Ecu_Target.h"
 #include "Ecu_TargetConfig.h"
-#include "Os_Windows.h"
+#include "Os_Host.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -15,23 +15,23 @@ int Ecu_TargetTestFailStage(unsigned stage) { return stage == failure_stage; }
 void Ecu_TargetTestShutdown(StatusType reason) {
     if (printf("ecu_shutdown reason=%u state=%u fail_stage=%u\n", reason, Ecu_TargetState(),
                failure_stage) < 0) {
-        ExitProcess(93u);
+        Os_HostExit(93u);
     }
 }
 #endif
-static DWORD WINAPI control(void *argument) {
+static Os_HostThreadResult control(void *argument) {
     uint64_t step;
-    DWORD started = GetTickCount();
+    uint64_t started = Os_HostMonotonicMs();
     (void)argument;
     while (Ecu_TargetState() != ECU_TARGET_READY) {
-        require((GetTickCount() - started) < 5000u);
-        Sleep(1u);
+        require((Os_HostMonotonicMs() - started) < 5000u);
+        Os_HostSleepMs(1u);
     }
     for (step = UINT64_C(1); step <= UINT64_C(20); ++step) {
         uint64_t ticket;
         Os_TickCompletion completion;
         require(Os_TargetAdvanceOneTick(step, &ticket) == E_OK);
-        started = GetTickCount();
+        started = Os_HostMonotonicMs();
         for (;;) {
             Ecu_OutputRecord output;
             StatusType status = Ecu_TargetTakeOutput(&output);
@@ -47,8 +47,8 @@ static DWORD WINAPI control(void *argument) {
             if (status == E_OK) {
                 break;
             }
-            require((status == E_OS_NOFUNC) && ((GetTickCount() - started) < 5000u));
-            Sleep(1u);
+            require((status == E_OS_NOFUNC) && ((Os_HostMonotonicMs() - started) < 5000u));
+            Os_HostSleepMs(1u);
         }
         require((completion.epoch == step) && (completion.kernel_tick == (uint32_t)step));
     }
@@ -57,7 +57,7 @@ static DWORD WINAPI control(void *argument) {
     return 0u;
 }
 int main(int argc, char **argv) {
-    HANDLE thread;
+    Os_HostHandle thread;
 #ifdef ECU_TARGET_TESTS
     if (argc == 2) {
         char *end;
@@ -78,11 +78,11 @@ int main(int argc, char **argv) {
     if (Ecu_TargetPrepare() != E_OK) {
         return 97;
     }
-    thread = CreateThread(NULL, 262144u, control, NULL, 0u, NULL);
+    thread = Os_HostSpawnThread(control, NULL);
     if (thread == NULL) {
         return 96;
     }
-    if (CloseHandle(thread) == 0) {
+    if (Os_HostClose(thread) == 0) {
         return 95;
     }
     StartOS(1u);

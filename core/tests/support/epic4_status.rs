@@ -27,7 +27,9 @@ pub fn verify_generated_standard() {
     for status in ["STANDARD", "EXTENDED"] {
         let inputs = replaced(status);
         let plan = build_plan(&inputs, &dependencies, &runtime).unwrap();
-        let files = plan.ecu_integration_files().unwrap();
+        let files = plan
+            .ecu_integration_files(super::tooling::native_target())
+            .unwrap();
         let header = std::str::from_utf8(
             &files
                 .files()
@@ -70,7 +72,7 @@ pub fn verify_generated_standard() {
                 &output,
                 Some(&root.join("core/tests/fixtures/ecu_standard_control.c")),
             );
-            let binary = output.join("ecu_probe.exe");
+            let binary = super::tooling::native_binary(&output, "ecu_probe");
             let result = super::epic4_ecu::run_probe(&binary, None);
             assert!(
                 result.status.success(),

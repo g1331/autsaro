@@ -3,6 +3,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { requestConfirmation } from './confirmation';
 import type {
   BuildResult,
+  BuildTarget,
+  PreflightReport,
   GenerateResult,
   GenerationPreview,
   IntegrationInspection,
@@ -43,6 +45,7 @@ export function IntegrationDelivery({
   const [buildDirectory, setBuildDirectory] = useState('');
   const [importDirectory, setImportDirectory] = useState('');
   const [handoff, setHandoff] = useState(true);
+  const [target, setTarget] = useState<BuildTarget>('windows-x64-controlled-v1');
   const [preview, setPreview] = useState<GenerationPreview | null>(null);
   const [selected, setSelected] = useState('');
   const [generated, setGenerated] = useState<GenerateResult | null>(null);
@@ -123,11 +126,12 @@ export function IntegrationDelivery({
       const value = await invoke<GenerationPreview>('preview_ecu_project', {
         outputDirectory: output,
         handoff,
+        target,
       });
       setPreview(value);
       setSelected(value.files[0]?.path ?? '');
       setGeneration('未执行');
-      setNotice(`已完成真实编译预检；预览 ${value.files.length} 个文件，尚未写入输出目录。`);
+      setNotice(`纯源码预览 ${value.files.length} 个文件；编译预检未执行，尚未写入输出目录。`);
     } catch (error) {
       setGeneration('失败');
       throw error;
@@ -149,6 +153,7 @@ export function IntegrationDelivery({
         outputDirectory: preview.outputDirectory,
         handoff,
         revision: preview.revision,
+        target,
       });
       setGenerated(value);
       setPreview(null);
@@ -158,6 +163,13 @@ export function IntegrationDelivery({
       setGeneration('失败');
       throw error;
     }
+  }
+  async function preflight() {
+    const report = await invoke<PreflightReport>('preflight_ecu', { target, handoff });
+    const status = { not_run: '未执行（非本机目标）', passed: '已通过', failed: '失败' }[
+      report.status
+    ];
+    setNotice(`编译预检：${status}；源码身份：${report.fingerprint}。${report.logs.join('\n')}`);
   }
   async function compile() {
     if (!generated) return;
@@ -214,7 +226,10 @@ export function IntegrationDelivery({
         <div>
           <p className="eyebrow">ECU SOURCE DELIVERY</p>
           <h2>新目标生成、构建与主机验证</h2>
-          <p>从已保存的标准输入交付真实 Windows x64 ECU。主机行为结果仅覆盖本次执行的向量。</p>
+          <p>
+            从已保存的标准输入交付 Windows／Linux x64 ECU
+            源码。编译预检显式执行，主机行为仅覆盖本次实际向量。
+          </p>
         </div>
       </div>
       <ol className="stage-list">
@@ -231,6 +246,22 @@ export function IntegrationDelivery({
         ))}
       </ol>
       <div className="form-fields ecu-delivery-fields">
+        <label>
+          ECU 构建目标
+          <select
+            aria-label="ECU 构建目标"
+            value={target}
+            disabled={busy || locked}
+            onChange={(event) => {
+              setTarget(event.target.value as BuildTarget);
+              changeOutput(output);
+              setNotice('目标已变化；编译预检未执行，请重新预览和生成。');
+            }}
+          >
+            <option value="windows-x64-controlled-v1">Windows x64 controlled v1</option>
+            <option value="linux-x64-controlled-v1">Linux x64 controlled v1</option>
+          </select>
+        </label>
         <label>
           ECU 输出目录
           <input
@@ -290,6 +321,14 @@ export function IntegrationDelivery({
           onClick={() => void perform(prepare)}
         >
           预览 ECU 交付
+        </button>
+        <button
+          className="outline-button small"
+          type="button"
+          disabled={disabled}
+          onClick={() => void perform(preflight)}
+        >
+          显式编译预检
         </button>
         <button
           className="outline-button small"

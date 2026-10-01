@@ -5,7 +5,6 @@
 
 mod arti;
 mod artifacts;
-mod bsw_sources;
 mod catalog;
 mod communication;
 mod component;
@@ -15,9 +14,7 @@ mod diagnostic;
 mod ecu;
 pub(crate) mod editor;
 mod graph;
-mod handoff;
-mod link_check;
-mod offline;
+pub(crate) mod handoff;
 mod os_service;
 mod plan;
 mod routing;

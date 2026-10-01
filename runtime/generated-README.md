@@ -1,27 +1,33 @@
-# Generated Windows host ECU
+# Legacy host ECU source package
 
-This directory is a self-contained C99 source project for one virtual ECU. It targets Windows with MinGW GCC and does not require the AUTOSAR workbench repository to build. It does not provide a real MCU driver, a third-party BSW interface, or AUTOSAR conformance evidence.
+Target: `{{TARGET}}`. This is the configured C99 host profile, not the FreeRTOS ECU integration profile or an AUTOSAR conformance claim. The sealed source package contains its real BSW sources, generated configuration, fixed build target and standalone standard-library engineering tools. Product and tool bytes are supplied for owner-authorized internal use; no new public license grant is made. Official AUTOSAR archives and compiler binaries are not redistributed.
 
-## Build
+## Independent native build
 
-Install MinGW GCC and PowerShell. From any working directory, run `build.ps1` with PowerShell:
+Use CPython 3.12.9 and the compiler/binutils identities recorded in `target.json`. Set `AUTOSAR_CC`, `AUTOSAR_OBJDUMP` and `AUTOSAR_GIT` to their absolute executable paths. This build does not require a checkout, uv, Rust, npm or the workbench.
 
-```powershell
-pwsh -NoProfile -File "<generated-directory>\build.ps1"
+From this source directory, using the pinned interpreter:
+
+```text
+<CPython3.12> tools/ecu-tool.py build --project . --output ../build --mode host
 ```
 
-On Windows PowerShell 5.1, use `powershell -NoProfile -ExecutionPolicy Bypass -File "<generated-directory>\build.ps1"` instead. Replace `<generated-directory>` with the actual path. The script uses `gcc` from `PATH`, or the compiler named by `AUTOSAR_CC`. It compiles all `src/*.c` and `Ecu_Config.c` with C99, `-Wall -Wextra -Werror -pedantic`, `include/`, and Windows `bcrypt`; the result is `ecu_host.exe` in this directory. An existing executable is never replaced. Move it yourself before rebuilding. Keep all files listed in `files.list` together; `files.sha256` records their contents for regeneration checks, not authentication.
+The build directory must be new or empty and outside the sealed source package. The tool verifies the exact source closure and hashes, refuses links/reparse points and extra files, invokes the real fixed native compiler and binutils through an owned process scope, and installs `{{BINARY}}` without overwriting an existing artifact. Failures are nonzero and preserve real build diagnostics. Do not add binaries, keys, state, logs or unlisted source files to this directory.
 
-## Run
+## Run the actual native host
 
-From this directory:
+Run from this source directory after the independent build:
 
-```powershell
+```text
 {{RUN_COMMAND}}
 ```
 
 {{RUN_NOTES}}
 
-The program reads one command per stdin line. `T <milliseconds>` advances absolute virtual time; `R <decimal CAN ID> <DLC> <uppercase hex bytes>` injects a frame; `S <signal ID> <value>` changes a Tx signal; `G <signal ID>` reads a signal. Output `X <decimal CAN ID> <DLC> <uppercase hex bytes>` is a transmitted frame, `V` is a signal value and validity, and `E` is an error. `profile.txt` maps generated frame and signal IDs to the saved configuration, and lists diagnostic IDs and options when configured. Each ECU process needs its own state files.
+The native protocol accepts the legacy host commands documented in the workbench runtime guide. Host verification covers only the configured native behavior and exercised vectors; neither generating this package nor building it is a behavioral verification result.
 
-The ARXML sources are not included in this directory. Retain them separately if you need to edit or regenerate this project. A successful build or virtual run establishes only the behavior observed on this Windows host target.
+## Original input and reproduction
+
+{{INPUT_NOTE}}
+
+SHA-256 detects accidental modification, not publisher authenticity. Keep the package's tool version and target identity intact. Reimport reconstructs the original saved inputs using a separately and legally obtained matching R24-11 XSD archive, then compares the complete regenerated source closure. It does not silently run a compiler or rewrite an old package.

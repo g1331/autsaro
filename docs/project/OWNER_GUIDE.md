@@ -53,21 +53,21 @@ Agent 应把规范研究放进具体功能任务，不用一轮轮独立审计�
 
 ## 独立 ECU 集成工程
 
-核心提供 `generate_epic4_ecu` 命令，消费同一个已验证标准计划。先运行 `cargo run --manifest-path core/Cargo.toml --bin generate_epic4_ecu -- --repository <匹配的仓库路径> --output <工程目录> --input <文件1.arxml> --input <文件2.arxml> ...`，读取 JSON 预览；再附加 `--write --revision <预览的完整revision>` 安装工程。每份原始输入分别传入 `--input`。过期预览、来源身份变化或输出目录含用户修改会拒绝安装，保留已有内容。
+核心 `generate_epic4_ecu` 命令消费同一个已验证标准计划：`cargo run --manifest-path core/Cargo.toml --bin generate_epic4_ecu -- --target <windows-x64-controlled-v1|linux-x64-controlled-v1> --xsd-archive <合法XSD绝对路径> --mod-archive <合法MOD绝对路径> --output <工程目录> --input <文件1.arxml> --input <文件2.arxml> ...`。先读取 JSON 预览，再附加 `--write --revision <完整revision>` 安装工程；`--handoff` 包含原输入和重建元数据。每份输入分别传 `--input`，不需要 `--repository`。过期预览、来源变化或用户修改会拒绝安装并保留已有内容。
 
-生成前会使用交付的完整构建入口实际编译、链接，检查类型、宏及外部符号闭包。因此生成环境需要 Git 与已锁定的 Windows x64 MSYS2 GCC 16.1.0 Rev5；`AUTOSAR_CC` 可指定该编译器路径，具体版本、目标和二进制 SHA256 必须符合生成工程中的 `toolchain.json`。失败时诊断指出保留的临时来源及编译日志位置，不安装目标目录。
+准备、预览和重导入只渲染源码并核对身份，不启动编译器。需要本机编译证据时显式运行 `--preflight`，报告为 `not_run|passed|failed`；不适用的本机/目标组合为 `not_run`，不升级为通过。实际预检和构建要求 CPython 3.12.9 与绝对 `AUTOSAR_CC`、`AUTOSAR_OBJDUMP`、`AUTOSAR_GIT`、`AUTOSAR_PYTHON`；Windows 使用固定 MSYS2 GCC 16.1.0 Rev5，Linux 使用固定 Ubuntu GCC 13.3.0/binutils，版本、目标和二进制摘要须符合包内工具链。失败报告实际来源和 owned 日志，不安装旧目标目录。
 
-工程包含原始输入、生成配置、RTE/应用、实际 BSW/OS 和固定 FreeRTOS 来源、十四个补丁、来源映射及许可。移到其他目录后，运行工程内 `build.ps1 -OutputDirectory <新的独立构建目录>`，再运行输出的 `ecu_probe.exe` 验证启动与 20 个显式受控 tick。构建目录必须位于工程之外；构建只在该目录的内核副本应用补丁。`-ControlSource <工程外的控制消费者.c>` 可替换 probe 的 `main`，链接相同公共头和运行时，验证独立输入/输出；不会替换 BSW 或应用实现。
+工程包含原始输入、生成配置、RTE/应用、实际 BSW/OS、固定 FreeRTOS 来源、所选目标补丁、来源映射、许可和 stdlib-only 工具。搬移后运行 `<CPython3.12.9> tools/ecu-tool.py build --project <封存源码目录> --output <工程之外的新空目录> --mode probe`，再运行 `ecu_probe.exe`（Windows）或 `ecu_probe`（Linux）。内核补丁只作用于私有构建副本。`--control-source <工程外的消费者.c>` 只适用于 `probe|test`，替换入口而不替换 BSW/应用；`test` 额外启用有用的私有探针。
 
-同一个工程可用 `build.ps1 -OutputDirectory <新的独立构建目录> -HostBatch` 构建生产文本入口 `ecu_host_batch.exe`。它从标准输入逐行读取 `BEGIN <epoch>`、零到256行 `RX <CAN ID> <DLC> <hex>` 和 `COMMIT`；例如 `BEGIN 10`、`RX 0x320 4 78563412`、`COMMIT`。epoch为非递减毫秒整数，单批最多跨1000ms；载荷必须恰好包含DLC所需的十六进制字节。BEGIN/RX只暂存，COMMIT执行完整批；目标epoch前的每个tick逐一完成，目标输入在该epoch的周期处理前消费，同epoch不重跑周期。
+同一工程使用 `tools/ecu-tool.py build --project <封存源码目录> --output <工程之外的新空目录> --mode host-batch` 构建生产 `ecu_host_batch.exe`（Windows）或 `ecu_host_batch`（Linux）。入口逐行读取 `BEGIN <epoch>`、零到256行 `RX <CAN ID> <DLC> <hex>` 和 `COMMIT`；例如 `BEGIN 10`、`RX 0x320 4 78563412`、`COMMIT`。epoch为非递减毫秒整数，单批最多跨1000ms；载荷恰好包含DLC所需字节。BEGIN/RX只暂存，COMMIT执行完整批；目标epoch前每个tick逐一完成，目标输入先于该epoch周期处理，同epoch不重跑周期。
 
-`OUT`携带真实输出的epoch、全局sequence、ticket/PDU及CAN数据；实际写入和flush成功后才确认对应输出。`COMMIT_OK`代表批输入、tick、输出与确认已完成并进入真实等待点，`COMMIT_ERROR`保留已执行前缀及BSW拒绝结果，`REJECT`表示接纳失败。每个COMMIT固定5000ms宿主watchdog，写入失败、阻塞超时或256项输出队列溢出关闭ECU，不声称已执行部分回滚。生命周期诊断仅保留有界前缀，`trace_dropped`明确省略的marker数量；该诊断容量与实际汽车输出容量不同。HostBatch与`-TestMode`或`-ControlSource`不能同时选择。
+`OUT`携带真实输出的epoch、全局sequence、ticket/PDU及CAN数据；实际write/flush成功后才确认。`COMMIT_OK`表示批输入、tick、输出与确认完成且进入真实等待点，`COMMIT_ERROR`保留已执行前缀及BSW拒绝，`REJECT`表示接纳失败。每个COMMIT固定5000ms宿主watchdog；写失败、阻塞超时或256项输出队列溢出关闭ECU，不声明前缀回滚。生命周期诊断保留有界前缀，`trace_dropped`说明省略数量；诊断容量不同于汽车输出容量。生产 `host-batch` 拒绝私有 test flags 和 `--control-source`，不会自动切换为测试模式。
 
-该入口交付 Windows 主机工程。应用／通信与SC1各义务已有正式测试，最终独立交接由4.22复验；编译和启动成功不能升级这些能力声明。官方 XSD、MOD、PDF、编译器及许可受限规范不随生成工程分发。
+入口交付显式 Windows/Linux 主机源码，两个本机生产目标的有界协议已分别实测；历史4.22的完整SC1结论仍限定其原Windows目标和配置，不能从编译或本轮有界检查升级任意用户工程的能力。官方 XSD/MOD/PDF、编译器及许可受限规范不随包分发。
 
 参考应用的S/R Read在未接收时返回初值0／`RTE_E_NEVER_RECEIVED`，有效接收返回实际值／`E_OK`，过期保留最后接收值并返回`RTE_E_MAX_AGE_EXCEEDED`。应用对非成功读取采用配置初值；只有`Rte_Write`成功才提交值和逻辑epoch，失败记录标准状态并保留旧提交。DID 0x1234在默认／扩展会话中，经同Task的同步服务器读取这一提交值并编码为四字节大端；epoch30的新输入先于deadline处理。同一epoch的批次不重复应用周期。
 
-应用集成代码可在owner上调用`Ecu_ApplicationInspect`读取提交值、epoch及最近读写状态；原生线程和空输出拒绝，输出存储保持。独立消费者的`-TestMode`阶段9／10分别位于周期调用前后，使用真实CAN controller状态验证写拒绝和恢复；有界观测由owner发布，原生线程输出。正式后台入口为`cargo test --manifest-path core/Cargo.toml --test end_to_end epic4_application_sr_cs_loop -- --exact`。
+应用集成代码可在owner上调用`Ecu_ApplicationInspect`读取提交值、epoch及最近读写状态；原生线程和空输出拒绝，输出存储保持。独立消费者的`--mode test`阶段9／10分别位于周期调用前后，使用真实CAN controller状态验证写拒绝与恢复；有界观测由owner发布，原生线程输出。正式后台入口为`cargo test --manifest-path core/Cargo.toml --test end_to_end epic4_application_sr_cs_loop -- --exact`。
 
 新目标只开放诊断服务`0x10`、`0x3E`、`0x22`，单次读取最多2个DID；应用DID为`0x1234`，`F186`返回实际会话。FC WAIT按所选WFTmax=0终止交换。N_Bs／N_Cr超时终止对应连接并允许后续合法请求恢复；HostBatch错误回执的`transport_status`、`transport_epoch`和`transport_count`分别记录首个实际失败、其逻辑epoch及失败数量。已执行tick／输入不会回滚，即使批目标比失败epoch更晚。失败记录由owner有界发布，原生桥接复制后消耗全局sequence。实际输出失败、输出队列溢出及宿主watchdog仍关闭ECU。独立协议及旧目标回归入口为`cargo test --manifest-path core/Cargo.toml --test end_to_end epic4_independent_behavior_and_legacy_regression -- --exact`；旧host-v1按其独立配置保留原服务。
 
@@ -83,6 +83,6 @@ RTE周期组也可显式引用`RteUsedOsSchTblExpiryPointRef`／`RteBswUsedOsSch
 
 交接包可整体搬移，在面板填写“重导入 ECU 目录”重新打开，再生成到另一目录。原字节输入、固定运行时、许可、外部 XSD/MOD 身份及每份生成源码会重新核对，不能用包内 JSON 直接恢复一个可信计划。旧 host-v1 保持原读取和离线运行入口。SHA-256 用于完整性检查，不提供发布者签名认证。
 
-保存、校验、生成、构建、本次主机行为分别显示真实结果；输入修改或重新打开会使下游结果失效。完整 SC1 当前工程复验与实机状态保持未验证，不从有界主机向量推断。离线接收者执行包内 `verify.ps1 -BuildDirectory <新的空目录>`；仅重导入和再生成需要同版工作台以及合法、匹配的 XSD/MOD。包内保留固定 FreeRTOS 来源、十四个补丁和 MIT 许可，产品代码仅用于所有者授权的内部用途，不增加公开发布许可。
+保存、校验、显式预检、生成、构建和本次主机行为分别呈现实际结果；输入修改或重新打开使下游结果失效。完整SC1当前工程复验与实机状态不从有界向量推断。离线接收者执行 `<CPython3.12.9> tools/ecu-tool.py verify --project <封存源码目录> --build-directory <工程外的新空目录>`，只需要声明的 CPython/GCC/binutils/Git，不需要 checkout、uv、Rust 或 Node；仅重导入和再生成需要同版工作台以及合法、匹配的 XSD/MOD。包内保留所选 FreeRTOS 来源、补丁与 MIT 许可；产品代码只用于所有者授权的内部用途，不增加公开发布许可。
 
 最后的独立交接入口为`cargo test --manifest-path core/Cargo.toml --test end_to_end epic4_independent_handoff -- --exact`。该入口重新建立临时输入、搬移包、重导入、再生成、编译并核对完整CAN／DID／拒绝／恢复输出；完整主机等级还需执行既有OS／ARTI正式行为测试。BMad 4.22记录非实现者的实际复验结果，工作台不会把一次包内行为检查升级为当前工程完整SC1复验。

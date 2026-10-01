@@ -4,20 +4,19 @@
 
 ## 构建
 
-在工程根目录，将 `generated/Ecu_Config.c` 换成该 ECU 实际生成文件：
+生成工程的 `target.json` 明确声明 `windows-x64-controlled-v1` 或 `linux-x64-controlled-v1`、工具链身份和源文件选集；源码准备/预览不执行编译器。本机编译需要 pinned CPython 3.12.9、目标 GCC/binutils 和 Git。将 `AUTOSAR_CC`、`AUTOSAR_OBJDUMP`、`AUTOSAR_GIT` 设置为绝对工具路径，再运行包内 stdlib-only 入口：
 
-```sh
-# MinGW GCC（Windows 主机目标）
-gcc -std=c99 -Wall -Wextra -pedantic -Iruntime/include runtime/src/*.c generated/Ecu_Config.c -o ecu.exe -lbcrypt
+```text
+<CPython3.12.9> tools/ecu-tool.py build --project <sealed-source-directory> --output <new-empty-outside-directory> --mode host
 ```
 
-在 MSVC 开发者命令提示符中：
+legacy `host` 产出 `ecu_host.exe`（Windows）或 `ecu_host`（Linux）；ECU integration 的 `host-batch` 产出实际生产批入口，`probe` 产出独立启动消费者，`test` 启用私有 OS/ECU 探针。`--control-source <external.c>` 只用于 `probe|test`，生产 HostBatch 拒绝它。编译器版本、目标与摘要必须匹配包内工具链，错误宿主或缺依赖明确失败，不降级到其他编译器。
 
-```bat
-cl /TC /W4 /I runtime\include runtime\src\Can.c runtime\src\Can_HostLock.c runtime\src\CanIf.c runtime\src\CanTp.c runtime\src\Com.c runtime\src\Dcm.c runtime\src\Dem.c runtime\src\Ecu_Runtime.c runtime\src\Ecu_Status.c runtime\src\LSduR.c runtime\src\NvM.c runtime\src\NvM_HostStorage.c runtime\src\Os.c runtime\src\PduR.c runtime\src\Rte.c runtime\src\Security.c runtime\src\ecu_host_main.c generated\Ecu_Config.c bcrypt.lib /Fe:ecu.exe
-```
+构建目录必须位于源码之外且为新目录或空目录，已有所有者内容不覆盖。构建前后检查完整 SHA-256 闭包及缺失/额外文件，拒绝链接/reparse point；补丁只在私有内核副本应用，Windows检查PE/TLS/sections，Linux检查ELF及对应sections。失败保留实际日志，所有子孙进程在 owned scope 的单调截止时间内关闭；不使用 PowerShell、命令字符串或 taskkill fallback。
 
-独立交付工程应保留这些源码和头文件，包括工程根目录的生成回调声明 `Dcm_Externals.h`，并将其中的 include/source 路径调整为工程内路径。输入配置结构和容量上限定义在 `include/Ecu_Config.h`；启动时再次校验生成数据，错误返回 `E CONFIG` 并退出。
+集成工程的独立行为入口为 `tools/ecu-tool.py verify --project <sealed-source-directory> --build-directory <new-empty-outside-directory>`：重建实际生产binary，检查 CAN/DID、至多两个DID、N_Cr超时恢复和非法批次，预期不由生成配置回显提供。离线接收者不需要 checkout、uv、Rust 或 Node。双 ECU 固定参考包见 [`reference-README.md`](reference-README.md)。
+
+输入配置结构和容量上限在 `include/Ecu_Config.h`；启动再次校验，错误返回 `E CONFIG`。Windows BCrypt安全档案不适用于Linux，准备边界拒绝，不生成无安全后端的工程。仅完成有界主机运行验证，不声明 MCU、硬实时、ASIL、完整标准符合性或任意工程已复验。
 
 ## 支持范围与调用链
 

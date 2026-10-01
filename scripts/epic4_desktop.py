@@ -95,8 +95,16 @@ def main() -> int:
     (scratch / "inputs.json").write_text(json.dumps(paths), encoding="utf-8")
     packager = ROOT / "core/target/debug/package_host_reference.exe"
     packaged = subprocess.run(
-        [str(packager), str(scratch / "legacy")], cwd=ROOT,
-        creationflags=subprocess.CREATE_NO_WINDOW, capture_output=True, timeout=180,
+        [
+            str(packager),
+            str(scratch / "legacy"),
+            "--target",
+            "windows-x64-controlled-v1",
+        ],
+        cwd=ROOT,
+        creationflags=subprocess.CREATE_NO_WINDOW,
+        capture_output=True,
+        timeout=180,
     )
     if packaged.returncode:
         raise RuntimeError(packaged.stdout.decode("utf-8", errors="replace") + packaged.stderr.decode("utf-8", errors="replace"))

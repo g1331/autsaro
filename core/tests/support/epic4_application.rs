@@ -8,7 +8,9 @@ pub fn application_loop() {
     let dependencies = PlanDependencies::from_repository(root);
     let runtime = RuntimeCatalog::from_repository(root).unwrap();
     let plan = build_plan(&super::epic4_plan::inputs(), &dependencies, &runtime).unwrap();
-    let project = plan.ecu_integration_files().unwrap();
+    let project = plan
+        .ecu_integration_files(super::tooling::native_target())
+        .unwrap();
     let scratch = super::Scratch::new();
     let source = scratch.0.join("application-source");
     let preview = project.preview(&source).unwrap();
@@ -16,22 +18,18 @@ pub fn application_loop() {
         .generate_previewed(&source, &preview.revision)
         .unwrap();
     let build = scratch.0.join("application-build");
-    let output = Command::new("powershell.exe")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-        ])
-        .arg(source.join("build.ps1"))
-        .arg("-OutputDirectory")
-        .arg(&build)
-        .arg("-ControlSource")
-        .arg(root.join("core/tests/fixtures/application_loop.c"))
-        .arg("-TestMode")
-        .output()
-        .unwrap();
+    let mut command = super::tooling::ecu_build_command(
+        &source,
+        &build,
+        "test",
+        Some(&root.join("core/tests/fixtures/application_loop.c")),
+    );
+    let output = super::epic4_ecu::run_public_command(
+        &mut command,
+        &scratch.0,
+        "application-build",
+        Duration::from_secs(180),
+    );
     assert!(
         output.status.success(),
         "{}{}",
@@ -41,7 +39,7 @@ pub fn application_loop() {
     for mode in ["initial", "stale", "deadline", "write_fail", "extended"] {
         let stdout = scratch.0.join(format!("{mode}.stdout"));
         let stderr = scratch.0.join(format!("{mode}.stderr"));
-        let mut child = Command::new(build.join("ecu_probe.exe"))
+        let mut child = Command::new(super::tooling::native_binary(&build, "ecu_probe"))
             .arg(mode)
             .stdout(std::fs::File::create(&stdout).unwrap())
             .stderr(std::fs::File::create(&stderr).unwrap())

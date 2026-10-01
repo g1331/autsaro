@@ -1877,7 +1877,7 @@ def run_suite(suite: str) -> None:
         }
         binary, _ = build(Path(temporary), harnesses[suite])
         observations = checks[suite](binary)
-        if suite == "stack" and _TARGET_ID.get() == "linux-x64-controlled-v1":
+        if suite == "stack":
             check_arti_native(Path(temporary) / "arti-consumers")
         if suite == "counter-types":
             headers = Path(temporary) / "public-headers"

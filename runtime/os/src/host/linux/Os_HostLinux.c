@@ -203,6 +203,13 @@ HANDLE Os_HostCreateActor(SIZE_T stack, LPTHREAD_START_ROUTINE start, LPVOID arg
     thread->entry = start;
     thread->argument = argument;
     thread->register_host = register_host;
+    thread->thread_id = 0u;
+    thread->requested = 0;
+    thread->acknowledged = 0;
+    thread->resumed = 0;
+    thread->ended = 0;
+    thread->joined = 0;
+    thread->exit_code = 0u;
     status = pthread_attr_init(&attributes);
     if (status == 0) {
         status = pthread_attr_setstack(&attributes, (char *)thread->mapping + page,
@@ -402,15 +409,27 @@ BOOL CloseHandle(HANDLE handle) {
     }
     if (handle->kind == OS_HOST_EVENT && handle->fd >= 0) {
         int result = close(handle->fd);
-        handle->fd = -1;
+        if (result == 0) {
+            handle->fd = -1;
+            __atomic_store_n(&handle->reserved, 0, __ATOMIC_RELEASE);
+        }
         return result == 0;
     }
     if (handle->kind == OS_HOST_MUTEX) {
         return pthread_mutex_destroy(&handle->mutex) == 0;
     }
     if (handle->kind == OS_HOST_THREAD) {
-        /* Windows semantics: the actor continues after its observer closes.
-         * Storage is bounded by OS_HOST_HANDLES and reclaimed at process exit. */
+        if ((handle->register_host == 0) &&
+            (__atomic_load_n(&handle->ended, __ATOMIC_ACQUIRE) != 0) &&
+            (__atomic_load_n(&handle->joined, __ATOMIC_ACQUIRE) != 0)) {
+            if (munmap(handle->mapping, handle->mapping_size) != 0) {
+                return FALSE;
+            }
+            handle->mapping = NULL;
+            __atomic_store_n(&handle->reserved, 0, __ATOMIC_RELEASE);
+        }
+        /* A live actor continues after its observer closes. Automotive/host
+         * registrations retain their stack identity until process exit. */
         return TRUE;
     }
     return FALSE;

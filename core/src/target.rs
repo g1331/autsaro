@@ -15,7 +15,7 @@ pub struct TargetSpec {
     pub id: &'static str,
     pub abi: &'static str,
     pub native_port: &'static str,
-    pub toolchain_lock: &'static str,
+    pub toolchain_asset: &'static str,
     pub kernel_patches: &'static [&'static str],
     pub kernel_patch_includes: &'static [(&'static str, &'static [&'static str])],
     pub link_libraries: &'static [&'static str],
@@ -71,10 +71,10 @@ impl BuildTarget {
                 id: "windows-x64-controlled-v1",
                 abi: "x86_64-w64-mingw32",
                 native_port: "FreeRTOS/MSVC-MingW + Windows host adapter",
-                toolchain_lock: include_str!("../../runtime/os/toolchain.json"),
+                toolchain_asset: "runtime/os/toolchain.json",
                 kernel_patches: WINDOWS_PATCHES,
                 kernel_patch_includes: &[],
-                link_libraries: &["ws2_32", "bcrypt"],
+                link_libraries: &["winmm", "bcrypt"],
                 binary_name: "ecu_host_batch.exe",
                 object_format: "PE32+ x86-64",
                 required_sections: &[".text", ".data", ".rdata", ".tls", ".os_vec", ".os_code"],
@@ -84,7 +84,7 @@ impl BuildTarget {
                 id: "linux-x64-controlled-v1",
                 abi: "x86_64-linux-gnu",
                 native_port: "FreeRTOS/GCC Posix + Linux host adapter",
-                toolchain_lock: include_str!("../../runtime/os/toolchain-linux.json"),
+                toolchain_asset: "runtime/os/toolchain-linux.json",
                 kernel_patches: LINUX_PATCHES,
                 kernel_patch_includes: LINUX_PATCH_INCLUDES,
                 link_libraries: &["pthread"],
@@ -98,8 +98,8 @@ impl BuildTarget {
 
     pub fn is_native(self) -> bool {
         match self {
-            Self::WindowsX64ControlledV1 => cfg!(windows),
-            Self::LinuxX64ControlledV1 => cfg!(target_os = "linux"),
+            Self::WindowsX64ControlledV1 => cfg!(all(windows, target_arch = "x86_64")),
+            Self::LinuxX64ControlledV1 => cfg!(all(target_os = "linux", target_arch = "x86_64")),
         }
     }
 }
@@ -144,6 +144,20 @@ impl ExecutionSettings {
             git,
             python,
         })
+    }
+
+    pub fn from_environment() -> Result<Self, String> {
+        let required = |name: &str| {
+            std::env::var_os(name)
+                .map(PathBuf::from)
+                .ok_or_else(|| format!("Set {name} to the pinned executable's absolute path"))
+        };
+        Self::new(
+            required("AUTOSAR_CC")?,
+            required("AUTOSAR_OBJDUMP")?,
+            required("AUTOSAR_GIT")?,
+            required("AUTOSAR_PYTHON")?,
+        )
     }
 
     pub fn python_from_environment() -> Option<PathBuf> {

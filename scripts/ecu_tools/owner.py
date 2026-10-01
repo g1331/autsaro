@@ -142,6 +142,23 @@ class Registry:
             raise OwnershipError(
                 "log_directory must be a private, non-symlink directory"
             )
+        stdin_path = request.get("stdin_file")
+        stdin_fifo = request.get("stdin_fifo", False)
+        if not isinstance(stdin_fifo, bool) or (stdin_fifo and stdin_path is None):
+            raise OwnershipError("stdin_fifo requires an explicit FIFO path")
+        if stdin_path is not None:
+            selected_input = Path(stdin_path)
+            if not selected_input.is_absolute() or selected_input.is_symlink():
+                raise OwnershipError("stdin requires an absolute non-symlink path")
+            input_metadata = selected_input.lstat()
+            if stdin_fifo:
+                parent_metadata = selected_input.parent.lstat()
+                if (not stat.S_ISFIFO(input_metadata.st_mode)
+                        or not stat.S_ISDIR(parent_metadata.st_mode)
+                        or parent_metadata.st_mode & 0o077):
+                    raise OwnershipError("stdin_fifo requires an owner-private FIFO")
+            elif not stat.S_ISREG(input_metadata.st_mode):
+                raise OwnershipError("stdin_file requires an absolute regular file")
         capture = Path(tempfile.mkdtemp(prefix="ecu-command-", dir=directory))
         identity = secrets.token_hex(16)
         stdout = capture / "stdout.log"
@@ -160,6 +177,7 @@ class Registry:
                 os.fdopen(
                     os.open(stderr, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb"
                 ) as err,
+                open(stdin_path or os.devnull, "rb") as input_stream,
             ):
                 child = subprocess.Popen(
                     [
@@ -172,7 +190,7 @@ class Registry:
                     ],
                     cwd=cwd,
                     env=environment,
-                    stdin=subprocess.DEVNULL,
+                    stdin=input_stream,
                     stdout=out,
                     stderr=err,
                     pass_fds=(read_gate,),
@@ -531,6 +549,7 @@ class Owner:
         *,
         parent: str | None = None,
         env: dict[str, str] | None = None,
+        stdin_file: Path | None = None,
     ) -> dict[str, Any]:
         registration = self.request(
             "reserve",
@@ -540,6 +559,7 @@ class Owner:
             cwd=str(cwd),
             log_directory=str(log_directory),
             env=env,
+            stdin_file=str(stdin_file) if stdin_file is not None else None,
         )
         self.groups[registration["scope"]] = int(registration["pgid"])
         return registration

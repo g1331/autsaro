@@ -365,6 +365,11 @@ void Os_BackendOnSwitch(void) {
     observe_transition();
 }
 static TaskStateType native_task_state(size_t index) {
+    /* A self-suspend inside the critical section defers the native switch.
+     * Its waiting predicate is already committed even while it is current. */
+    if (task_waiting[index] != 0u) {
+        return WAITING;
+    }
     switch (eTaskGetState(handles[index])) {
     case eRunning:
         return RUNNING;
@@ -1297,6 +1302,9 @@ StatusType Os_BackendWait(EventMaskType mask) {
          * predicate represents automotive WAITING. The ISR cannot interleave
          * before this complete transaction releases the port critical section. */
         vTaskSuspend(NULL);
+        /* Publish this edge before the completion receipt admits the next
+         * epoch; wake-up and selection may otherwise collapse the wait. */
+        arti_observe_tasks();
         Os_TimeOnWaiting(Os_Config->tasks[index].id, task_events[index], mask);
     }
     taskEXIT_CRITICAL();

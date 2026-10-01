@@ -107,7 +107,9 @@ pub fn commit() {
     let dependencies = PlanDependencies::from_repository(root);
     let runtime = RuntimeCatalog::from_repository(root).unwrap();
     let plan = build_plan(&super::epic4_plan::inputs(), &dependencies, &runtime).unwrap();
-    let project = plan.ecu_integration_files().unwrap();
+    let project = plan
+        .ecu_integration_files(super::tooling::native_target())
+        .unwrap();
     let scratch = super::Scratch::new();
     let source = scratch.0.join("host-batch-source");
     let preview = project.preview(&source).unwrap();
@@ -115,20 +117,12 @@ pub fn commit() {
         .generate_previewed(&source, &preview.revision)
         .unwrap();
     let build = scratch.0.join("host-batch-build");
-    let output = Command::new("powershell.exe")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-        ])
-        .arg(source.join("build.ps1"))
-        .arg("-OutputDirectory")
-        .arg(&build)
-        .arg("-HostBatch")
-        .output()
-        .unwrap();
+    let output = super::epic4_ecu::run_public_command(
+        &mut super::tooling::ecu_build_command(&source, &build, "host-batch", None),
+        &scratch.0,
+        "host-batch-build",
+        std::time::Duration::from_secs(180),
+    );
     assert!(
         output.status.success(),
         "{}{}",
@@ -136,7 +130,7 @@ pub fn commit() {
         String::from_utf8_lossy(&output.stderr)
     );
     let script = b"BEGIN 0\nRX 0x320 4 78563412\nCOMMIT\nBEGIN 10\nRX 0x700 8 0322123400000000\nCOMMIT\nBEGIN 10\nCOMMIT\nBEGIN 11\nRX 801 4 00000000\nCOMMIT\nBEGIN 11\nCOMMIT\n";
-    let binary = build.join("ecu_host_batch.exe");
+    let binary = super::tooling::native_binary(&build, "ecu_host_batch");
     live_output(&binary);
     let text = run_text(&binary, &scratch.0.join("basic"), script);
     assert!(text.contains("READY HostBatchV1"), "{text}");
@@ -260,22 +254,17 @@ pub fn commit() {
         Some(&root.join("core/tests/fixtures/host_batch_faults.c")),
     );
     let overflow_build = scratch.0.join("overflow-build");
-    let output = Command::new("powershell.exe")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-        ])
-        .arg(source.join("build.ps1"))
-        .arg("-OutputDirectory")
-        .arg(&overflow_build)
-        .arg("-ControlSource")
-        .arg(root.join("core/tests/fixtures/host_batch_faults.c"))
-        .arg("-TestMode")
-        .output()
-        .unwrap();
+    let output = super::epic4_ecu::run_public_command(
+        &mut super::tooling::ecu_build_command(
+            &source,
+            &overflow_build,
+            "test",
+            Some(&root.join("core/tests/fixtures/host_batch_faults.c")),
+        ),
+        &scratch.0,
+        "overflow-build",
+        std::time::Duration::from_secs(180),
+    );
     assert!(
         output.status.success(),
         "{}{}",
@@ -291,7 +280,7 @@ pub fn commit() {
         } else {
             &fault_build
         };
-        let mut child = Command::new(build.join("ecu_probe.exe"))
+        let mut child = Command::new(super::tooling::native_binary(&build, "ecu_probe"))
             .arg(mode)
             .stdout(std::fs::File::create(directory.join("stdout")).unwrap())
             .stderr(std::fs::File::create(directory.join("stderr")).unwrap())
@@ -341,7 +330,9 @@ pub fn native_boundary() {
     let dependencies = PlanDependencies::from_repository(root);
     let runtime = RuntimeCatalog::from_repository(root).unwrap();
     let plan = build_plan(&super::epic4_plan::inputs(), &dependencies, &runtime).unwrap();
-    let project = plan.ecu_integration_files().unwrap();
+    let project = plan
+        .ecu_integration_files(super::tooling::native_target())
+        .unwrap();
     let scratch = super::Scratch::new();
     let source = scratch.0.join("batch-source");
     let preview = project.preview(&source).unwrap();
@@ -354,7 +345,8 @@ pub fn native_boundary() {
         &build,
         Some(&root.join("core/tests/fixtures/host_batch_native.c")),
     );
-    let result = super::epic4_ecu::run_probe(&build.join("ecu_probe.exe"), None);
+    let result =
+        super::epic4_ecu::run_probe(&super::tooling::native_binary(&build, "ecu_probe"), None);
     assert!(
         result.status.success(),
         "{}{}",

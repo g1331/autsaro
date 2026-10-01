@@ -23,6 +23,7 @@ struct SourceFile {
     path: PathBuf,
     text: String,
     saved: String,
+    original_name: Option<String>,
 }
 
 pub(crate) struct HandoffSource {
@@ -688,6 +689,7 @@ fn load_sources(files: Vec<PathBuf>, schema_zip: PathBuf) -> Result<Workspace, S
             path,
             saved: text.clone(),
             text,
+            original_name: None,
         });
     }
     sources.sort_by(|a, b| a.path.cmp(&b.path));
@@ -1514,10 +1516,15 @@ impl Workspace {
             .iter()
             .map(|file| {
                 (
-                    file.path
-                        .file_name()
-                        .unwrap_or_else(|| file.path.as_os_str())
-                        .to_string_lossy(),
+                    file.original_name
+                        .as_deref()
+                        .map(std::borrow::Cow::Borrowed)
+                        .unwrap_or_else(|| {
+                            file.path
+                                .file_name()
+                                .unwrap_or_else(|| file.path.as_os_str())
+                                .to_string_lossy()
+                        }),
                     file.text.as_bytes(),
                 )
             })
@@ -1531,6 +1538,24 @@ impl Workspace {
             digest.update(contents);
         }
         format!("{:x}", digest.finalize())
+    }
+
+    pub(crate) fn restore_handoff_source_names(
+        &mut self,
+        names: BTreeMap<PathBuf, String>,
+    ) -> Result<(), String> {
+        if names.len() != self.files.len()
+            || self
+                .files
+                .iter()
+                .any(|file| !names.contains_key(&file.path))
+        {
+            return Err("交付输入名称映射与实际 ARXML 文件不一致".into());
+        }
+        for file in &mut self.files {
+            file.original_name = names.get(&file.path).cloned();
+        }
+        Ok(())
     }
 
     pub fn view(&self) -> WorkspaceView {
@@ -3245,9 +3270,9 @@ impl Workspace {
         let mut sources = Vec::with_capacity(self.files.len());
         for file in &self.files {
             let original_name = file
-                .path
-                .file_name()
-                .and_then(|name| name.to_str())
+                .original_name
+                .as_deref()
+                .or_else(|| file.path.file_name().and_then(|name| name.to_str()))
                 .ok_or("ARXML 来源文件名不是 UTF-8")?
                 .to_owned();
             let doc = Document::parse(&file.saved).map_err(|e| e.to_string())?;
@@ -3623,6 +3648,10 @@ impl Workspace {
         Ok((self.frames.clone(), self.signals.clone()))
     }
 
+    pub(crate) fn diagnostic_profile(&self) -> Option<&DiagnosticView> {
+        self.diagnostic.as_ref()
+    }
+
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -3664,6 +3693,7 @@ mod tests {
             path: original.clone(),
             saved: "original".into(),
             text: "ours".into(),
+            original_name: None,
         };
         fs::write(&original, &file.saved).unwrap();
         fs::write(&stage, &file.text).unwrap();

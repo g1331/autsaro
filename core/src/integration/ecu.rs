@@ -1,7 +1,10 @@
 use super::component::c_name;
-use super::{DiagnosticCategory, PlanDiagnostic, ValidatedIntegrationPlan, bsw_sources, offline};
+use super::{DiagnosticCategory, PlanDiagnostic, ValidatedIntegrationPlan};
+use crate::resources::AssetInventory;
+use crate::target::BuildTarget;
 use crate::{GenerationPreview, GenerationReport, generator};
 use sha2::{Digest, Sha256};
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::path::Path;
@@ -39,25 +42,44 @@ fn reject(message: impl Into<String>) -> Vec<PlanDiagnostic> {
 }
 
 impl ValidatedIntegrationPlan {
-    pub fn ecu_handoff_files(&self) -> Result<EcuIntegrationFiles, Vec<PlanDiagnostic>> {
-        let project = self.ecu_integration_files()?;
+    pub fn ecu_handoff_files(
+        &self,
+        target: BuildTarget,
+    ) -> Result<EcuIntegrationFiles, Vec<PlanDiagnostic>> {
+        let project = crate::prepare_ecu_project(self, target, true)?;
         Ok(EcuIntegrationFiles {
-            files: super::handoff::files(self, project.files).map_err(reject)?,
+            files: project.into_files(),
         })
     }
-    pub fn ecu_integration_files(&self) -> Result<EcuIntegrationFiles, Vec<PlanDiagnostic>> {
-        let project = self.ecu_source_files()?;
-        super::link_check::verify(project.files()).map_err(reject)?;
-        Ok(project)
+
+    pub fn ecu_integration_files(
+        &self,
+        target: BuildTarget,
+    ) -> Result<EcuIntegrationFiles, Vec<PlanDiagnostic>> {
+        let project = crate::prepare_ecu_project(self, target, false)?;
+        Ok(EcuIntegrationFiles {
+            files: project.into_files(),
+        })
     }
-    pub(super) fn ecu_source_files(&self) -> Result<EcuIntegrationFiles, Vec<PlanDiagnostic>> {
+
+    pub(crate) fn render_ecu_sources(
+        &self,
+        target: BuildTarget,
+    ) -> Result<BTreeMap<String, Cow<'_, [u8]>>, Vec<PlanDiagnostic>> {
         let plan = self.description();
         let contract = self.component_contract_files()?;
-        let mut files: BTreeMap<String, Vec<u8>> = bsw_sources::sources().into_iter().collect();
-        files.insert(
-            "bsw-origin/include/Os.h".into(),
-            include_bytes!("../../../runtime/include/Os.h").to_vec(),
-        );
+        let mut files = BTreeMap::new();
+        for asset in AssetInventory::embedded().selected(target, "ecu") {
+            let delivered = crate::prepared::deliver_path(asset, "ecu").map_err(reject)?;
+            if files
+                .insert(delivered.clone(), Cow::Borrowed(asset.bytes))
+                .is_some()
+            {
+                return Err(reject(format!(
+                    "A trusted asset owner collides: {delivered}"
+                )));
+            }
+        }
         let mut source_paths = BTreeMap::new();
         for (path, expected) in &plan.runtime_sources {
             let delivered = if path == "runtime/include/Os.h" {
@@ -73,7 +95,6 @@ impl ValidatedIntegrationPlan {
             }
             source_paths.insert(path, delivered.to_owned());
         }
-        files.extend(offline::sources().map_err(reject)?);
         let counter_name = c_name(plan.schedule.counter.rsplit('/').next().unwrap());
         let tick_ms = u64::from(plan.schedule.counter_tick_ms);
         let counter_header = format!(
@@ -82,7 +103,11 @@ impl ValidatedIntegrationPlan {
             us = tick_ms * 1_000,
         );
         let counter_symbol = format!("OS_COUNTER_ID_{counter_name}");
-        files.extend(super::os_service::files(&counter_name, &counter_symbol));
+        files.extend(
+            super::os_service::files(&counter_name, &counter_symbol)
+                .into_iter()
+                .map(|(path, bytes)| (path, Cow::Owned(bytes))),
+        );
         let legacy_constants = format!(
             "#define {counter_symbol} 0u\n#define OSMAXALLOWEDVALUE_{counter_name} UINT64_C({maximum})\n#define OSTICKSPERBASE_{counter_name} UINT64_C({base})\n#define OSMINCYCLE_{counter_name} UINT64_C({minimum})\n#define OSMAXALLOWEDVALUE_{counter_symbol} OSMAXALLOWEDVALUE_{counter_name}\n#define OSTICKSPERBASE_{counter_symbol} OSTICKSPERBASE_{counter_name}\n#define OSMINCYCLE_{counter_symbol} OSMINCYCLE_{counter_name}\n#define OSMAXALLOWEDVALUE OSMAXALLOWEDVALUE_{counter_name}\n#define OSTICKSPERBASE OSTICKSPERBASE_{counter_name}\n#define OSMINCYCLE OSMINCYCLE_{counter_name}\n#define OSTICKDURATION UINT64_C({nanoseconds})\n",
             maximum = plan.schedule.counter_maximum,
@@ -95,11 +120,12 @@ impl ValidatedIntegrationPlan {
         counter_header.insert_str(end, &legacy_constants);
         files.insert(
             "os/include/Os_Counter.h".into(),
-            counter_header.into_bytes(),
+            Cow::Owned(counter_header.into_bytes()),
         );
         let configuration = files.get_mut("os/include/Os_Cfg.h").unwrap();
-        let mut configuration_text =
-            String::from_utf8(configuration.clone()).map_err(|error| reject(error.to_string()))?;
+        let mut configuration_text = std::str::from_utf8(configuration)
+            .map_err(|error| reject(error.to_string()))?
+            .to_owned();
         let extended_status = plan
             .configuration
             .iter()
@@ -140,7 +166,7 @@ impl ValidatedIntegrationPlan {
             end,
             &format!("#include \"Os_Counter.h\"\n#define {task_symbol} 0u\n"),
         );
-        *configuration = configuration_text.into_bytes();
+        *configuration = Cow::Owned(configuration_text.into_bytes());
         let mut timer_report = serde_json::to_vec_pretty(&serde_json::json!({
             "format": "autosar-os-generation-timing-v1",
             "requirement": "SWS_Os_00370",
@@ -151,69 +177,25 @@ impl ValidatedIntegrationPlan {
             "kernelTick": { "source": "explicit controlled interrupt1", "periodicHostThread": false,
                 "logicalMillisecondsPerRequest": 1 },
             "hostTimeouts": [
-                { "owner": "Os_TargetWaitTick", "clock": "Windows monotonic milliseconds",
+                { "owner": "Os_TargetWaitTick", "clock": "native monotonic milliseconds",
                     "rangeMilliseconds": [1, 5000], "advancesAutomotiveTime": false },
-                { "owner": "HostBatchV1", "clock": "Windows monotonic milliseconds",
+                { "owner": "HostBatchV1", "clock": "native monotonic milliseconds",
                     "limitMilliseconds": 5000, "advancesAutomotiveTime": false }
             ],
             "scope": "Selected single-core controlled-logical-time target; no hardware timer claim."
         }))
         .map_err(|error| reject(error.to_string()))?;
         timer_report.push(b'\n');
-        files.insert("os-generation-timing.json".into(), timer_report);
-        for (name, bytes) in contract.files() {
+        files.insert("os-generation-timing.json".into(), Cow::Owned(timer_report));
+        for (name, bytes) in contract.into_files() {
             if name.starts_with("include/") || name == "contract.json" {
-                if let Some(previous) = files.insert(name.clone(), bytes.clone()) {
-                    if previous != *bytes {
+                if let Some(previous) = files.get(&name) {
+                    if previous.as_ref() != bytes {
                         return Err(reject(format!("A contract/runtime header differs: {name}")));
                     }
+                } else {
+                    files.insert(name, Cow::Owned(bytes));
                 }
-            }
-        }
-        for (name, bytes) in [
-            (
-                "src/Ecu_HostBridge.c",
-                include_bytes!("../../../runtime/ecu/src/Ecu_HostBridge.c").as_slice(),
-            ),
-            (
-                "src/ecu_host_batch.c",
-                include_bytes!("../../../runtime/ecu/src/ecu_host_batch.c").as_slice(),
-            ),
-            (
-                "include/Ecu_HostBatch.h",
-                include_bytes!("../../../runtime/ecu/include/Ecu_HostBatch.h").as_slice(),
-            ),
-            (
-                "src/Ecu_HostBatch.c",
-                include_bytes!("../../../runtime/ecu/src/Ecu_HostBatch.c").as_slice(),
-            ),
-            (
-                "include/Ecu_Target.h",
-                include_bytes!("../../../runtime/ecu/include/Ecu_Target.h").as_slice(),
-            ),
-            (
-                "src/Ecu_Target.c",
-                include_bytes!("../../../runtime/ecu/src/Ecu_Target.c").as_slice(),
-            ),
-            (
-                "src/Ecu_OsHooks.c",
-                include_bytes!("../../../runtime/ecu/src/Ecu_OsHooks.c").as_slice(),
-            ),
-            (
-                "src/Ecu_SchM.c",
-                include_bytes!("../../../runtime/ecu/src/Ecu_SchM.c").as_slice(),
-            ),
-            (
-                "build.ps1",
-                include_bytes!("../../../runtime/ecu/build.ps1").as_slice(),
-            ),
-            (
-                "src/ecu_probe.c",
-                include_bytes!("../../../runtime/ecu/src/ecu_probe.c").as_slice(),
-            ),
-        ] {
-            if files.insert(name.into(), bytes.to_vec()).is_some() {
-                return Err(reject(format!("An ECU source owner collides: {name}")));
             }
         }
         let component = &plan.component;
@@ -294,7 +276,7 @@ impl ValidatedIntegrationPlan {
         }
         files.insert(
             "include/Ecu_TargetConfig.h".into(),
-            header.as_bytes().to_vec(),
+            Cow::Owned(header.into_bytes()),
         );
         let mut groups = BTreeMap::new();
         let mut table_groups = BTreeMap::new();
@@ -324,7 +306,9 @@ impl ValidatedIntegrationPlan {
                 &groups.keys().cloned().collect::<Vec<_>>(),
                 &table_groups.keys().cloned().collect::<Vec<_>>(),
             )
-            .map_err(reject)?,
+            .map_err(reject)?
+            .into_iter()
+            .map(|(path, bytes)| (path, Cow::Owned(bytes))),
         );
         for (id, (_, (period, event))) in groups.iter().enumerate() {
             writeln!(alarms, "    {{{id}u, 0u, OS_ALARM_EVENT, 0u, {event}u, NULL, 1u, 0u, {period}u, {period}u, 0u}},").unwrap();
@@ -349,7 +333,12 @@ impl ValidatedIntegrationPlan {
         };
         let read = component.data_ports.iter().find(|port| port.read).unwrap();
         let write = component.data_ports.iter().find(|port| !port.read).unwrap();
-        let mut config = include_str!("../../../runtime/ecu/templates/Ecu_Config.c.in").to_owned();
+        let template = AssetInventory::embedded()
+            .get("runtime/ecu/templates/Ecu_Config.c.in")
+            .ok_or_else(|| reject("The trusted ECU configuration template is missing."))?;
+        let mut config = std::str::from_utf8(template.bytes)
+            .map_err(|error| reject(error.to_string()))?
+            .to_owned();
         for (key, value) in [
             ("TASK_SYMBOL", task_symbol),
             (
@@ -439,13 +428,15 @@ impl ValidatedIntegrationPlan {
                 "The generated configuration has an unresolved placeholder.",
             ));
         }
-        files.insert("src/Ecu_Config.c".into(), config.into_bytes());
+        files.insert("src/Ecu_Config.c".into(), Cow::Owned(config.into_bytes()));
         let com = files.get_mut("include/Com.h").unwrap();
-        let mut text = String::from_utf8(com.clone()).map_err(|error| reject(error.to_string()))?;
-        let original_com = com.clone();
+        let mut text = std::str::from_utf8(com)
+            .map_err(|error| reject(error.to_string()))?
+            .to_owned();
+        let original_com = std::mem::replace(com, Cow::Owned(Vec::new()));
         let end = text.rfind("#endif").unwrap();
         text.insert_str(end, "typedef uint16_t Com_SignalIdType;\n#define COM_SERVICE_NOT_AVAILABLE 0x80u\nStd_ReturnType Com_SendSignal(Com_SignalIdType SignalId, const void *SignalDataPtr);\nStd_ReturnType Com_ReceiveSignal(Com_SignalIdType SignalId, void *SignalDataPtr);\n");
-        *com = text.into_bytes();
+        *com = Cow::Owned(text.into_bytes());
         files.insert("bsw-origin/include/Com.h".into(), original_com);
         if let Some((_, delivered)) = source_paths
             .iter_mut()
@@ -474,17 +465,23 @@ impl ValidatedIntegrationPlan {
             ("PERIODIC_API", component.periodic_symbol.clone()),
             ("DATATYPE", datatype),
         ];
-        for (name, template) in [
-            (
-                "src/Rte.c",
-                include_str!("../../../runtime/ecu/templates/Rte.c.in"),
-            ),
+        for (name, template_path) in [
+            ("src/Rte.c", "runtime/ecu/templates/Rte.c.in"),
             (
                 "src/Application.c",
-                include_str!("../../../runtime/ecu/templates/Application.c.in"),
+                "runtime/ecu/templates/Application.c.in",
             ),
         ] {
-            let mut source = template.to_owned();
+            let template = AssetInventory::embedded()
+                .get(template_path)
+                .ok_or_else(|| {
+                    reject(format!(
+                        "The trusted C template is missing: {template_path}"
+                    ))
+                })?;
+            let mut source = std::str::from_utf8(template.bytes)
+                .map_err(|error| reject(error.to_string()))?
+                .to_owned();
             for (placeholder, value) in &substitutions {
                 source = source.replace(&format!("@{placeholder}@"), value);
             }
@@ -493,12 +490,12 @@ impl ValidatedIntegrationPlan {
                     "A generated C template contains an unresolved placeholder.",
                 ));
             }
-            files.insert(name.into(), source.into_bytes());
+            files.insert(name.into(), Cow::Owned(source.into_bytes()));
         }
         for source in self.sources() {
             files.insert(
                 format!("inputs/{}", source.logical_path()),
-                source.bytes().to_vec(),
+                Cow::Borrowed(source.bytes()),
             );
         }
         let mut metadata = serde_json::to_vec_pretty(&serde_json::json!({
@@ -511,36 +508,35 @@ impl ValidatedIntegrationPlan {
                 "transmitFrame": { "comSignal": tx.com_signal, "index": 1, "canIfHandle": tx.can_if_handle },
                 "diagnosticTransmit": { "canIfHandle": plan.diagnostic.response_can_if_handle },
             },
-            "target": "Windows x64 GCC 16.1.0 controlled_logical_ms",
+            "target": target.spec().id,
             "owner": "one generated AUTOSTART extended Task_Ecu; StartupHook owns initialization",
             "time": "uint64 epoch, independent software Counter, uint32 FreeRTOS tick",
             "schm": "single BSW owner checks; native input/output and OS retain atomic protocols",
         })).map_err(|error| reject(error.to_string()))?;
         metadata.push(b'\n');
-        files.insert("integration.json".into(), metadata);
-        files.insert(
-            "toolchain.json".into(),
-            serde_json::to_vec_pretty(&serde_json::json!({
-                "identity": "gcc.exe (Rev5, Built by MSYS2 project) 16.1.0",
-                "target": "x86_64-w64-mingw32",
-                "sha256": "d38d4dd6bea387499487881383e644ab7c193ac8f8364dc4252d6e6cc09700e2",
-            }))
-            .unwrap(),
+        files.insert("integration.json".into(), Cow::Owned(metadata));
+        let readme = format!(
+            "# ECU integration source project\n\nTarget: `{}`. This package contains the validated single-owner ECU, generated RTE/application, real BSW/OS, fixed FreeRTOS V11.3.1 original source and the target's selected controlled patches. Original MIT notices remain in `kernel/LICENSE.md`; product and engineering tool bytes are supplied for owner-authorized internal use, without a new public license grant. AUTOSAR XSD/MOD/PDF archives and compiler binaries are not redistributed.\n\n## Independent native build\n\nUse the pinned CPython 3.12.9 interpreter, GCC/compiler and binutils identities in `target.json`, and Git. Set `AUTOSAR_CC`, `AUTOSAR_OBJDUMP` and `AUTOSAR_GIT` to their absolute executable paths. No checkout, uv, Rust or Node is required. From this source directory run:\n\n```sh\n<CPython3.12.9> tools/ecu-tool.py build --project . --output <new-empty-external-directory> --mode host-batch\n<CPython3.12.9> tools/ecu-tool.py verify --project . --build-directory <another-new-empty-external-directory>\n```\n\nBuild modes: `host-batch` selects the actual production stdin/stdout entry; `probe` drives startup and 20 individual controlled ticks; `test` enables private test hooks. `--control-source <external-consumer.c>` is accepted only with `probe` or `test`, outside this sealed project. HostBatch cannot link TestMode or an external control source. The compiler runs against a private patched kernel copy; immutable source closure, actual PE/ELF sections, native TLS and original tool identity are checked. Source preparation and handoff reimport never run a compiler; explicit native preflight/build are separate operations.\n\n## Production protocol\n\nStage `BEGIN <epoch>`, at most256 `RX <CAN id> <DLC> <exact hex bytes>` records, then `COMMIT`. Epochs never decrease and a batch spans at most1000ms. Every intermediate tick completes individually; input precedes target-epoch processing. Equal epochs do not repeat periodic work. Real output write/flush precedes confirmation. `COMMIT_OK` requires actual Waiting with copied input, tick, output and confirmation drained; `COMMIT_ERROR` records executed work/BSW refusal; `REJECT` is admission failure. The5000ms host watchdog never advances automotive time; failed/blocked output or the257th pending output closes the ECU without claiming rollback.\n\nThe validated OsStatus is `{}`. Standard Status retains mandatory activation-limit/alarm warnings and host protection. `os-generation-timing.json` records Counter resolution, controlled tick and host deadlines; use the generated single-evaluation OS_TICKS2NS/US/MS/SEC macros. The independent verifier checks real CAN, one/two-DID reads, DID capacity refusal, N_Cr timeout/recovery and malformed admission; it does not establish full SC1, MCU, hard-real-time, ASIL or official certification.\n",
+            target.spec().id,
+            if extended_status {
+                "EXTENDED"
+            } else {
+                "STANDARD"
+            },
         );
-        files.insert("README.md".into(), b"# ECU integration source project\n\nThis generated Windows x64 project consumes one validated standard input plan. The actual single Task_Ecu, generated RTE/reference application, BSW target variants, static OS configuration and fixed FreeRTOS sources are included. The native dispatcher uses the generated 32-slot writable .os_vec section. Standard OS Task and Hook declarations use Os_MemMap.h markers and execute from the read-only .os_code section; the selected profile uses default CODE without a SwAddrMethod location override. The original kernel and fourteen product patches are retained; build.ps1 applies the patches only to its separate build copy. MIT notices remain in kernel/LICENSE.md. Product source is included for authorized internal use, without a new public license grant. AUTOSAR XSD/MOD/PDF files and compiler binaries are external and are not redistributed.\n\nRun PowerShell build.ps1 -OutputDirectory <new-empty-directory> with Git and the pinned GCC 16.1.0 x64 toolchain on PATH. The script checks source manifests, compiler identity and native TLS, and builds a bounded startup probe. Source trees stay unchanged. An optional -ControlSource <external-consumer.c> links an independent native consumer instead of the bundled probe; it supplies main only and consumes the same delivered public headers and runtime. Generation itself requires this fixed compiler and Git for a complete compile/link preflight before installing any destination. Run the resulting ecu_probe.exe; it drives individual controlled ticks and consumes/confirms actual outputs outside the automotive task. Build with -HostBatch to select ecu_host_batch.exe, the production HostBatchV1 stdin/stdout entry. Stage BEGIN <epoch>, up to 256 RX <CAN id> <dlc> <exact hex bytes> lines, then COMMIT. Epochs never decrease and each batch spans at most 1000 ms. Each intermediate tick completes individually; inputs precede processing at their target epoch, and equal epochs do not repeat periodic work. OUT records are confirmed only after successful physical write/flush. COMMIT_OK requires real Waiting with copied inputs, ticks, outputs and acknowledgements drained. COMMIT_ERROR reports executed work and BSW input errors; REJECT is admission failure. Each COMMIT has one fixed 5000 ms host watchdog. Failed/blocked output or the 257th pending output closes the ECU without claiming rollback. Diagnostic trace retains a bounded prefix and reports trace_dropped separately. -HostBatch cannot be combined with -TestMode or -ControlSource. Include Os.h for the generated OS_TICKS2NS/US/MS/SEC_<Counter> macros. Pass a TickType value; each argument is evaluated once and integer seconds truncate toward zero. os-generation-timing.json lists the validated Counter resolution and the selected target internal timers and host watchdogs. These watchdogs never advance automotive time. The bundled probe checks bounded startup/control behavior. Application and network tests use the actual HostBatch interface or an independent ControlSource consumer.\n".to_vec());
-        files.get_mut("README.md").unwrap().extend_from_slice(
-            format!(
-                "\nThe validated OsStatus is {}. Os_Cfg.h fixes this selection and rejects a conflicting compiler override. Both SC1 modes retain defensive host checks and report every detected nonzero service result to the configured ErrorHook. Standard Status retains the mandatory activation-limit and alarm warnings; it does not disable interrupt, stack or shutdown protection.\n",
-                if extended_status { "EXTENDED" } else { "STANDARD" }
-            ).as_bytes(),
+        files.insert("README.md".into(), Cow::Owned(readme.into_bytes()));
+        files.extend(
+            super::artifacts::files(plan, &files)
+                .map_err(reject)?
+                .into_iter()
+                .map(|(path, bytes)| (path, Cow::Owned(bytes))),
         );
-        files.insert(
-            "include/Rte_MemMap.h".into(),
-            include_bytes!("../../../runtime/ecu/include/Rte_MemMap.h").to_vec(),
+        files.extend(
+            super::handoff::verification_files(self)
+                .map_err(reject)?
+                .into_iter()
+                .map(|(path, bytes)| (path, Cow::Owned(bytes))),
         );
-        files.extend(super::artifacts::files(plan, &files).map_err(reject)?);
-        files.extend(super::handoff::verification_files(self).map_err(reject)?);
-        let files = generator::seal_files(files.into_iter().collect());
-        Ok(EcuIntegrationFiles { files })
+        Ok(files)
     }
 }

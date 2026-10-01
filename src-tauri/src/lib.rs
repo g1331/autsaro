@@ -2,6 +2,7 @@ use autosar_config_core::integration::{
     DiagnosticCategory, IntegrationEdit, IntegrationInspection, PlanDependencies, PlanDiagnostic,
     RuntimeCatalog, build_ecu_project, verify_ecu_project,
 };
+use autosar_config_core::target::{BuildTarget, ExecutionSettings};
 use autosar_config_core::{
     BuildReport, DiagnosticSettings, Direction, GenerationPreview, GenerationReport, RunReport,
     SavePreview, Workspace, WorkspaceView,
@@ -16,11 +17,7 @@ struct AppState {
 }
 
 fn resources(state: &AppState) -> Result<PlanDependencies, String> {
-    let repo = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("desktop package has a workspace parent");
-    let legacy = PlanDependencies::from_repository(repo);
-    PlanDependencies::from_settings_file(&state.settings_file, Some(&legacy))
+    PlanDependencies::from_settings_file(&state.settings_file, None)
 }
 
 fn archive(state: &AppState) -> Result<PathBuf, String> {
@@ -55,8 +52,7 @@ fn with_integration<T>(
     state: &AppState,
     operation: impl FnOnce(&mut Workspace, &RuntimeCatalog, PathBuf) -> Result<T, Vec<PlanDiagnostic>>,
 ) -> Result<T, Vec<PlanDiagnostic>> {
-    let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
-    let runtime = RuntimeCatalog::from_repository(&repo)?;
+    let runtime = RuntimeCatalog::embedded()?;
     let dependencies = resources(state).map_err(integration_failure)?;
     let mut guard = state
         .workspace
@@ -174,9 +170,7 @@ async fn open_handoff_project(
         .map_err(|e| e.to_string())?;
         let workspace = match metadata["format"].as_str() {
             Some("autosar-ecu-handoff-v1") => {
-                let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
-                let runtime =
-                    RuntimeCatalog::from_repository(&repo).map_err(|e| format!("{e:?}"))?;
+                let runtime = RuntimeCatalog::embedded().map_err(|e| format!("{e:?}"))?;
                 Workspace::open_ecu_handoff(root, &resources(&state)?, &runtime)
                     .map_err(|e| format!("{e:?}"))?
             }
@@ -202,15 +196,16 @@ async fn preview_ecu_project(
     state: State<'_, Arc<AppState>>,
     output_directory: String,
     handoff: bool,
+    target: BuildTarget,
 ) -> Result<GenerationPreview, Vec<PlanDiagnostic>> {
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         with_integration(&state, |workspace, runtime, archive| {
             let plan = workspace.saved_integration_plan(runtime, archive.clone())?;
             let files = if handoff {
-                plan.ecu_handoff_files()?
+                plan.ecu_handoff_files(target)?
             } else {
-                plan.ecu_integration_files()?
+                plan.ecu_integration_files(target)?
             };
             workspace.saved_integration_plan(runtime, archive.clone())?;
             files
@@ -228,15 +223,16 @@ async fn generate_ecu_project(
     output_directory: String,
     handoff: bool,
     revision: String,
+    target: BuildTarget,
 ) -> Result<GenerationReport, Vec<PlanDiagnostic>> {
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         with_integration(&state, |workspace, runtime, archive| {
             let plan = workspace.saved_integration_plan(runtime, archive.clone())?;
             let files = if handoff {
-                plan.ecu_handoff_files()?
+                plan.ecu_handoff_files(target)?
             } else {
-                plan.ecu_integration_files()?
+                plan.ecu_integration_files(target)?
             };
             workspace.saved_integration_plan(runtime, archive.clone())?;
             files
@@ -246,6 +242,34 @@ async fn generate_ecu_project(
     })
     .await
     .map_err(|e| integration_failure(e.to_string()))?
+}
+
+#[tauri::command]
+async fn preflight_ecu(
+    state: State<'_, Arc<AppState>>,
+    target: BuildTarget,
+    handoff: bool,
+) -> Result<autosar_config_core::prepared::PreflightReport, Vec<PlanDiagnostic>> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        with_integration(&state, |workspace, runtime, archive| {
+            let plan = workspace.saved_integration_plan(runtime, archive)?;
+            let project = autosar_config_core::prepare_ecu_project(&plan, target, handoff)?;
+            if !target.is_native() {
+                let mut report = project.preflight().clone();
+                report.logs.push(format!(
+                    "Native preflight is not applicable to this host for {}",
+                    target.spec().id
+                ));
+                return Ok(report);
+            }
+            Ok(project.native_preflight(
+                &ExecutionSettings::from_environment().map_err(integration_failure)?,
+            ))
+        })
+    })
+    .await
+    .map_err(|error| integration_failure(error.to_string()))?
 }
 
 #[tauri::command]
@@ -262,6 +286,7 @@ async fn build_ecu(
                 &plan,
                 Path::new(&output_directory),
                 Path::new(&build_directory),
+                &ExecutionSettings::from_environment().map_err(integration_failure)?,
             )
             .map_err(integration_failure)?;
             current_ecu(workspace, runtime, &archive, Path::new(&output_directory))?;
@@ -281,8 +306,12 @@ async fn verify_ecu(
     tauri::async_runtime::spawn_blocking(move || {
         with_integration(&state, |workspace, runtime, archive| {
             let plan = current_ecu(workspace, runtime, &archive, Path::new(&output_directory))?;
-            let result = verify_ecu_project(&plan, Path::new(&output_directory))
-                .map_err(integration_failure)?;
+            let result = verify_ecu_project(
+                &plan,
+                Path::new(&output_directory),
+                &ExecutionSettings::from_environment().map_err(integration_failure)?,
+            )
+            .map_err(integration_failure)?;
             current_ecu(workspace, runtime, &archive, Path::new(&output_directory))?;
             Ok(result)
         })
@@ -408,12 +437,17 @@ fn validate_project(state: State<'_, Arc<AppState>>) -> Result<WorkspaceView, St
 fn preview_generate_project(
     state: State<'_, Arc<AppState>>,
     output_directory: String,
+    target: BuildTarget,
 ) -> Result<GenerationPreview, String> {
     with_workspace(&state, |workspace| {
         if workspace.view().dirty {
             return Err("请先保存 ARXML，再预览目标工程".into());
         }
-        autosar_config_core::generator::preview_generate(workspace, Path::new(&output_directory))
+        autosar_config_core::generator::preview_generate(
+            workspace,
+            Path::new(&output_directory),
+            target,
+        )
     })
 }
 
@@ -421,9 +455,14 @@ fn preview_generate_project(
 fn preview_handoff_project(
     state: State<'_, Arc<AppState>>,
     output_directory: String,
+    target: BuildTarget,
 ) -> Result<GenerationPreview, String> {
     with_workspace(&state, |workspace| {
-        autosar_config_core::generator::preview_handoff(workspace, Path::new(&output_directory))
+        autosar_config_core::generator::preview_handoff(
+            workspace,
+            Path::new(&output_directory),
+            target,
+        )
     })
 }
 
@@ -432,6 +471,7 @@ fn generate_project(
     state: State<'_, Arc<AppState>>,
     output_directory: String,
     revision: String,
+    target: BuildTarget,
 ) -> Result<GenerationReport, String> {
     with_workspace(&state, |workspace| {
         if workspace.view().dirty {
@@ -441,6 +481,7 @@ fn generate_project(
             workspace,
             Path::new(&output_directory),
             &revision,
+            target,
         )
     })
 }
@@ -450,20 +491,29 @@ fn generate_handoff_project(
     state: State<'_, Arc<AppState>>,
     output_directory: String,
     revision: String,
+    target: BuildTarget,
 ) -> Result<GenerationReport, String> {
     with_workspace(&state, |workspace| {
         autosar_config_core::generator::generate_handoff_previewed(
             workspace,
             Path::new(&output_directory),
             &revision,
+            target,
         )
     })
 }
 
 #[tauri::command]
-async fn build_project(output_directory: String) -> Result<BuildReport, String> {
+async fn build_project(
+    output_directory: String,
+    build_directory: String,
+) -> Result<BuildReport, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        autosar_config_core::generator::build(Path::new(&output_directory))
+        autosar_config_core::generator::build(
+            Path::new(&output_directory),
+            Path::new(&build_directory),
+            &ExecutionSettings::from_environment()?,
+        )
     })
     .await
     .map_err(|e| e.to_string())?
@@ -473,11 +523,15 @@ async fn build_project(output_directory: String) -> Result<BuildReport, String> 
 async fn run_virtual(
     first_output_directory: String,
     second_output_directory: String,
+    first_binary_path: String,
+    second_binary_path: String,
 ) -> Result<RunReport, String> {
     tauri::async_runtime::spawn_blocking(move || {
         autosar_config_core::host::run(
             Path::new(&first_output_directory),
+            Path::new(&first_binary_path),
             Path::new(&second_output_directory),
+            Path::new(&second_binary_path),
         )
     })
     .await
@@ -485,9 +539,15 @@ async fn run_virtual(
 }
 
 #[tauri::command]
-async fn run_diagnostic(output_directory: String) -> Result<RunReport, String> {
+async fn run_diagnostic(
+    output_directory: String,
+    binary_path: String,
+) -> Result<RunReport, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        autosar_config_core::host::run_diagnostic(Path::new(&output_directory))
+        autosar_config_core::host::run_diagnostic(
+            Path::new(&output_directory),
+            Path::new(&binary_path),
+        )
     })
     .await
     .map_err(|e| e.to_string())?
@@ -517,6 +577,7 @@ pub fn run() {
             generate_ecu_project,
             build_ecu,
             verify_ecu,
+            preflight_ecu,
             add_frame,
             add_signal,
             update_frame,

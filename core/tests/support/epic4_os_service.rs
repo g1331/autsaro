@@ -30,7 +30,9 @@ pub fn verify() {
             })
             .collect::<Vec<_>>();
         let plan = build_plan(&inputs, &dependencies, &runtime).unwrap();
-        let files = plan.ecu_integration_files().unwrap();
+        let files = plan
+            .ecu_integration_files(super::tooling::native_target())
+            .unwrap();
         let project = scratch.0.join(counter);
         let preview = files.preview(&project).unwrap();
         files
@@ -141,7 +143,9 @@ pub fn verify() {
             .collect::<Vec<_>>();
         let candidate = build_plan(&inputs, &dependencies, &runtime).unwrap();
         assert!(
-            candidate.ecu_integration_files().is_err(),
+            candidate
+                .ecu_integration_files(super::tooling::native_target())
+                .is_err(),
             "service collision {new}"
         );
     }

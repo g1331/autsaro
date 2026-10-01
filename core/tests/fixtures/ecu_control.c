@@ -2,18 +2,20 @@
 #include "Ecu_Target.h"
 #include "Ecu_TargetConfig.h"
 #include "Rte_Os_Type.h"
-#include "Os_Windows.h"
+#include "Os_Host.h"
 #include "Rte_EchoApplication.h"
 #include <stdio.h>
 #include <string.h>
 
-static void require(int accepted) {
+static void require_at(int accepted, unsigned line) {
     if (accepted == 0) {
+        (void)fprintf(stderr, "ECU consumer assertion failed: line=%u\n", line);
         ShutdownOS(E_OS_STATE);
     }
 }
+#define require(accepted) require_at((accepted), __LINE__)
 
-static DWORD WINAPI control(void *argument) {
+static Os_HostThreadResult control(void *argument) {
     static const uint8_t signal[8] = {0x78u, 0x56u, 0x34u, 0x12u, 0u, 0u, 0u, 0u};
     static const uint8_t request[8] = {3u, 0x22u, 0x12u, 0x34u, 0u, 0u, 0u, 0u};
     static const uint8_t initial[8] = {7u, 0x62u, 0x12u, 0x34u, 0u, 0u, 0u, 0u};
@@ -21,11 +23,11 @@ static DWORD WINAPI control(void *argument) {
     uint64_t step;
     unsigned signal_outputs = 0u;
     unsigned diagnostic_outputs = 0u;
-    DWORD started = GetTickCount();
+    uint64_t started = Os_HostMonotonicMs();
     (void)argument;
     while (Ecu_TargetState() != ECU_TARGET_READY) {
-        require((GetTickCount() - started) < 5000u);
-        Sleep(1u);
+        require((Os_HostMonotonicMs() - started) < 5000u);
+        Os_HostSleepMs(1u);
     }
     {
         uint64_t untouched = UINT64_C(42);
@@ -48,7 +50,7 @@ static DWORD WINAPI control(void *argument) {
             require(Ecu_TargetPostFrame(step, 0x700u, 8u, request, &ticket) == E_OK);
         }
         require(Os_TargetAdvanceOneTick(step, &ticket) == E_OK);
-        started = GetTickCount();
+        started = Os_HostMonotonicMs();
         for (;;) {
             Ecu_OutputRecord output;
             StatusType status = Ecu_TargetTakeOutput(&output);
@@ -78,8 +80,8 @@ static DWORD WINAPI control(void *argument) {
                 require(completion.epoch == step);
                 break;
             }
-            require((status == E_OS_NOFUNC) && ((GetTickCount() - started) < 5000u));
-            Sleep(1u);
+            require((status == E_OS_NOFUNC) && ((Os_HostMonotonicMs() - started) < 5000u));
+            Os_HostSleepMs(1u);
         }
     }
     require((signal_outputs == 2u) && (diagnostic_outputs == 2u));
@@ -104,11 +106,11 @@ int main(void) {
         OSMINCYCLE != time->counters[0u].minimum_cycle || OSTICKDURATION != UINT64_C(1000000)) {
         return 49;
     }
-    HANDLE thread;
+    Os_HostHandle thread;
     require(Ecu_TargetPrepare() == E_OK);
-    thread = CreateThread(NULL, 262144u, control, NULL, 0u, NULL);
+    thread = Os_HostSpawnThread(control, NULL);
     require(thread != NULL);
-    require(CloseHandle(thread) != 0);
+    require(Os_HostClose(thread) != 0);
     StartOS(1u);
     return 94;
 }

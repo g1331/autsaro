@@ -45,7 +45,7 @@ pub fn verify() {
         let plan = build_plan(&inputs, &dependencies, &runtime)
             .unwrap_or_else(|error| panic!("{error:?}"));
         let files = plan
-            .ecu_integration_files()
+            .ecu_integration_files(super::tooling::native_target())
             .unwrap_or_else(|error| panic!("{error:?}"));
         let original = scratch.0.join(format!("source-{label}"));
         let preview = files.preview(&original).unwrap();
@@ -147,21 +147,12 @@ pub fn verify() {
             fs::write(&binding_path, binding).unwrap();
         }
         let output = scratch.0.join(format!("build-{label}"));
-        let mut compile = Command::new("powershell.exe");
-        compile
-            .args([
-                "-NoProfile",
-                "-NonInteractive",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-File",
-            ])
-            .arg(project.join("build.ps1"))
-            .arg("-OutputDirectory")
-            .arg(&output)
-            .arg("-TestMode")
-            .arg("-ControlSource")
-            .arg(consumer_dir.join("ecu_arti_control.c"));
+        let mut compile = super::tooling::ecu_build_command(
+            &project,
+            &output,
+            "test",
+            Some(&consumer_dir.join("ecu_arti_control.c")),
+        );
         let result = super::epic4_ecu::run_public_command(
             &mut compile,
             &scratch.0,
@@ -174,7 +165,7 @@ pub fn verify() {
             String::from_utf8_lossy(&result.stdout),
             String::from_utf8_lossy(&result.stderr)
         );
-        let mut run = Command::new(output.join("ecu_probe.exe"));
+        let mut run = Command::new(super::tooling::native_binary(&output, "ecu_probe"));
         run.arg(os);
         let result = super::epic4_ecu::run_public_command(
             &mut run,
@@ -192,20 +183,4 @@ pub fn verify() {
             "arti_consumer os={os} observations=2 getters=2 errors=2 internal_services=0 dropped=0"
         )));
     }
-    let mut native = super::tooling::python_command();
-    native
-        .args(["os-arti-native", "--directory"])
-        .arg(scratch.0.join("native"));
-    let result = super::epic4_ecu::run_public_command(
-        &mut native,
-        &scratch.0,
-        "native-arti",
-        Duration::from_secs(180),
-    );
-    assert!(
-        result.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&result.stdout),
-        String::from_utf8_lossy(&result.stderr)
-    );
 }

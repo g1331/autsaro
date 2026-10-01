@@ -1,25 +1,27 @@
-# Fixed Windows host reference bundle
+# Rebuildable dual-host reference package
 
-This is a bounded, reproducible reference for two virtual ECUs. `Alpha/` and `Beta/` each contain a rebuildable ARXML handoff and generated C99 source. `vectors.json` gives independent expected CAN and physical diagnostic lines. `verify.ps1` checks the package, builds both ECUs in a temporary directory, runs the vectors with timeouts, and writes a JSON report outside the package.
+`Alpha/` and `Beta/` each contain a same-version ARXML handoff and sealed C99 source. The root `files.list`/`files.sha256` covers both members, the fixed independent `vectors.json`, target metadata and stdlib-only engineering tools. The reference covers 11-bit Classical CAN and physical DoCAN; it is not an MCU target or an AUTOSAR conformance certificate.
 
 ## Produce
 
-From the same-version workbench checkout, with a legally obtained R24-11 XSD archive in the location documented by the workbench, run:
+From a configured developer checkout, select the target explicitly and provide the licensed R24-11 XSD archive:
 
-```powershell
-cargo run --manifest-path core/Cargo.toml --bin package_host_reference -- "<new-output-directory>"
+```text
+cargo run --manifest-path core/Cargo.toml --bin package_host_reference -- "<new-reference-directory>" --target windows-x64-controlled-v1 --xsd-archive "<absolute-licensed-XSD-archive>"
 ```
 
-The bundle contains the source ARXML; it does not contain the workbench, XSD, GCC, or PowerShell. Review the ARXML before sharing. The listed SHA-256 digests detect accidental modification but do not authenticate the publisher.
+Use `linux-x64-controlled-v1` for Linux. Preparing the package renders sources only; it does not compile or mark native behavior as verified. Move the entire package, not individual generated files.
 
-## Verify after moving
+## Verify outside the checkout
 
-On Windows with PowerShell and MinGW GCC on `PATH`, move the whole bundle to a new location and run:
+The receiver needs the pinned CPython 3.12.9 interpreter, the target's GCC/binutils distribution and Git. Set `AUTOSAR_CC`, `AUTOSAR_OBJDUMP` and `AUTOSAR_GIT` to absolute executable paths. Compiler identities are recorded in each member's `target.json`/`toolchain.json`. Windows packages execute only on Windows x64; Linux packages execute only on Linux x64. Rust, uv, Node and the source checkout are not receiver dependencies.
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File "<bundle-directory>\verify.ps1" -ReportPath "<outside-bundle>\reference-result.json"
+```text
+<CPython3.12.9> "<bundle>/tools/ecu-tool.py" verify --project "<bundle>" --build-directory "<new-empty-outside-build-directory>" --report-path "<new-outside-report.json>"
 ```
 
-The report records the actual checks and tool versions. A nonzero exit means failed verification; if the script was not run, the behavior remains unverified. To reimport, choose “导入可重建主机交付包” separately for `Alpha/` and `Beta/` in the same-version workbench, after preparing the R24-11 XSD archive. Regenerate to new empty directories, compare the C99 source and configuration files, and use `build.ps1` to build a single ECU. The verifier builds the delivered source without the workbench.
+The verifier checks the full root and member closures, builds both actual native binaries in separate output directories, runs every fixed input, and compares all output lines in order. It records actual checks and failures in the report. A nonzero exit means verification failed; an unexecuted command is not verification. Failure logs remain in the build directory. Existing output/report files and linked or reparse-point paths are refused, not overwritten.
 
-This confirms only the fixed Windows host inputs and observed vectors. It does not establish complete ECU Extract, SWC/RTE/AUTOSAR OS support, MCU timing or interrupts, persistent storage, third-party interoperability, or complete AUTOSAR conformance. It does not raise the support level of other configurations.
+To rebuild only one member, run `tools/ecu-tool.py build --project <Alpha-or-Beta> --output <new-empty-outside-directory> --mode host` with that member's tool entry. To reimport, choose “导入可重建主机交付包” separately for `Alpha/` and `Beta/` in the same-version workbench and explicitly configure the licensed R24-11 XSD archive. Regenerate into new empty directories and compare the exact sealed source closure.
+
+Only the fixed host inputs and observed vectors are covered. This reference does not establish complete ECU Extract, SWC/RTE or AUTOSAR OS support, MCU timing or interrupts, third-party interoperability, ASIL or complete AUTOSAR conformance. It does not raise the support level of other configurations.

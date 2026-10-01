@@ -1,7 +1,5 @@
 #include "Ecu_Target.h"
-#include "Os_Windows.h"
-#include <fcntl.h>
-#include <io.h>
+#include "Os_Host.h"
 #include <stdio.h>
 
 static Ecu_HostBatch batch;
@@ -72,20 +70,19 @@ static int read_line(char line[ECU_BATCH_LINE_CAPACITY], size_t *length) {
     return 1;
 }
 
-static DWORD WINAPI control(void *argument) {
-    DWORD started = GetTickCount();
+static Os_HostThreadResult control(void *argument) {
+    uint64_t started = Os_HostMonotonicMs();
     char line[ECU_BATCH_LINE_CAPACITY];
     size_t length;
     (void)argument;
     while (Ecu_TargetState() != ECU_TARGET_READY) {
-        if ((GetTickCount() - started) >= ECU_BATCH_WATCHDOG_MS) {
+        if ((Os_HostMonotonicMs() - started) >= ECU_BATCH_WATCHDOG_MS) {
             Ecu_TargetAbortNative(E_OS_STATE);
         }
-        Sleep(1u);
+        Os_HostSleepMs(1u);
     }
     Ecu_HostBatchInitialize(&batch);
-    if ((_setmode(_fileno(stdin), _O_BINARY) == -1) ||
-        (_setmode(_fileno(stdout), _O_BINARY) == -1)) {
+    if (Os_HostSetBinaryStandardStreams() == 0) {
         Ecu_TargetAbortNative(E_OS_STATE);
     }
     if ((printf("READY HostBatchV1\n") < 0) || (fflush(stdout) != 0)) {
@@ -119,15 +116,15 @@ static DWORD WINAPI control(void *argument) {
 }
 
 int main(void) {
-    HANDLE thread;
+    Os_HostHandle thread;
     if (Ecu_TargetPrepare() != E_OK) {
         return 97;
     }
-    thread = CreateThread(NULL, 262144u, control, NULL, 0u, NULL);
+    thread = Os_HostSpawnThread(control, NULL);
     if (thread == NULL) {
         return 96;
     }
-    if (CloseHandle(thread) == 0) {
+    if (Os_HostClose(thread) == 0) {
         return 95;
     }
     StartOS(1u);

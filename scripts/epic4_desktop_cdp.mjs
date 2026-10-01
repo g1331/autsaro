@@ -197,6 +197,8 @@ try {
   await input("ECU 构建目录", path.join(scratch, "ECU build"));
   await click("预览 ECU 交付");
   await until(`Boolean(document.querySelector('[aria-label="ECU 文件预览"]'))`);
+  await click("显式编译预检");
+  await until(`document.body.innerText.includes('编译预检：已通过；源码身份：')`);
   assert.equal(
     await evaluate(`document.querySelector('[data-stage="生成"]').textContent`),
     "未执行",

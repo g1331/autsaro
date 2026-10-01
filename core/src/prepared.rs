@@ -44,16 +44,162 @@ pub struct PreparedFile<'a> {
     pub source: Option<&'static AssetEntry>,
 }
 
-/// A source-only preview. No executable or sealed deliverable can be
-/// installed from this stage's preparation result.
+/// Immutable source preparation. Native preflight is an explicit operation
+/// whose report is bound to this project's generation fingerprint.
 #[derive(Debug)]
 pub struct PreparedProject<'a> {
-    pub target: BuildTarget,
-    pub profile: &'static str,
-    pub handoff: bool,
-    pub files: Vec<PreparedFile<'a>>,
-    pub fingerprint: String,
-    pub preflight: PreflightReport,
+    target: BuildTarget,
+    profile: &'static str,
+    handoff: bool,
+    files: Vec<PreparedFile<'a>>,
+    fingerprint: String,
+    preflight: PreflightReport,
+}
+
+impl<'a> PreparedProject<'a> {
+    pub fn target(&self) -> BuildTarget {
+        self.target
+    }
+    pub fn profile(&self) -> &'static str {
+        self.profile
+    }
+    pub fn handoff(&self) -> bool {
+        self.handoff
+    }
+    pub fn files(&self) -> &[PreparedFile<'a>] {
+        &self.files
+    }
+    pub fn fingerprint(&self) -> &str {
+        &self.fingerprint
+    }
+    pub fn preflight(&self) -> &PreflightReport {
+        &self.preflight
+    }
+
+    pub fn preview(self, output: &std::path::Path) -> Result<crate::GenerationPreview, String> {
+        generator::preview_prepared(&self.into_files(), output)
+    }
+
+    pub fn generate_previewed(
+        self,
+        output: &std::path::Path,
+        revision: &str,
+    ) -> Result<crate::GenerationReport, String> {
+        generator::generate_prepared(self.into_files(), output, Some(revision))
+    }
+
+    pub fn native_preflight(&self, settings: &crate::target::ExecutionSettings) -> PreflightReport {
+        let mut report = PreflightReport {
+            status: PreflightStatus::NotRun,
+            fingerprint: self.fingerprint.clone(),
+            logs: Vec::new(),
+        };
+        if !self.target.is_native() {
+            report.logs.push(format!(
+                "Native preflight is not applicable to this host for {}",
+                self.target.spec().id
+            ));
+            return report;
+        }
+        let result = (|| -> Result<(), String> {
+            use crate::execution::{ProcessSpec, run_bounded};
+            use std::ffi::OsString;
+            use std::fmt::Write;
+            use std::time::Duration;
+
+            let stage = generator::reserve_directory(
+                &std::env::temp_dir(),
+                "ecu-preflight",
+                std::ffi::OsStr::new("private"),
+            )?;
+            report.logs.push(format!(
+                "Native preflight source/log directory: {}",
+                stage.display()
+            ));
+            let source = stage.join("source");
+            let logs = stage.join("logs");
+            std::fs::create_dir(&source).map_err(|error| error.to_string())?;
+            std::fs::create_dir(&logs).map_err(|error| error.to_string())?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&logs, std::fs::Permissions::from_mode(0o700))
+                    .map_err(|error| error.to_string())?;
+            }
+            let mut list = String::new();
+            let mut hashes = String::new();
+            for file in &self.files {
+                let path = source.join(&file.path);
+                std::fs::create_dir_all(path.parent().unwrap())
+                    .map_err(|error| error.to_string())?;
+                std::fs::write(path, &file.bytes).map_err(|error| error.to_string())?;
+                writeln!(list, "{}", file.path).unwrap();
+                writeln!(hashes, "{:x}  {}", Sha256::digest(&file.bytes), file.path).unwrap();
+            }
+            writeln!(hashes, "{:x}  files.list", Sha256::digest(list.as_bytes())).unwrap();
+            std::fs::write(source.join("files.list"), list).map_err(|error| error.to_string())?;
+            std::fs::write(source.join("files.sha256"), hashes)
+                .map_err(|error| error.to_string())?;
+            let modes: &[&str] = if self.profile == "ecu" {
+                &["probe", "host-batch"]
+            } else {
+                &["host"]
+            };
+            for mode in modes {
+                let argv: Vec<OsString> = vec![
+                    settings.python.as_os_str().into(),
+                    source.join("tools/ecu-tool.py").into_os_string(),
+                    "build".into(),
+                    "--project".into(),
+                    source.as_os_str().into(),
+                    "--output".into(),
+                    stage.join(mode).into_os_string(),
+                    "--mode".into(),
+                    (*mode).into(),
+                ];
+                let spec = ProcessSpec::for_duration(
+                    argv,
+                    stage.clone(),
+                    vec![
+                        ("AUTOSAR_CC".into(), settings.compiler.as_os_str().into()),
+                        (
+                            "AUTOSAR_OBJDUMP".into(),
+                            settings.objdump.as_os_str().into(),
+                        ),
+                        ("AUTOSAR_GIT".into(), settings.git.as_os_str().into()),
+                    ],
+                    Duration::from_secs(240),
+                    logs.clone(),
+                )?;
+                let result = run_bounded(spec)?;
+                report.logs.push(
+                    std::fs::read_to_string(result.stdout).map_err(|error| error.to_string())?,
+                );
+                report.logs.push(
+                    std::fs::read_to_string(result.stderr).map_err(|error| error.to_string())?,
+                );
+            }
+            std::fs::remove_dir_all(stage).map_err(|error| error.to_string())?;
+            Ok(())
+        })();
+        match result {
+            Ok(()) => report.status = PreflightStatus::Passed,
+            Err(error) => {
+                report.status = PreflightStatus::Failed;
+                report.logs.push(error);
+            }
+        }
+        report
+    }
+
+    pub fn into_files(self) -> Vec<(String, Vec<u8>)> {
+        generator::seal_files(
+            self.files
+                .into_iter()
+                .map(|file| (file.path, file.bytes.into_owned()))
+                .collect(),
+        )
+    }
 }
 
 fn insert<'a>(
@@ -80,9 +226,17 @@ fn insert<'a>(
     Ok(())
 }
 
-fn deliver_path(asset: &AssetEntry, profile: &str) -> Result<String, String> {
+pub(crate) fn deliver_path(asset: &AssetEntry, profile: &str) -> Result<String, String> {
     let path = asset.relative_path;
     if let Some(path) = path.strip_prefix("runtime/") {
+        if path == "ecu-tool.py" {
+            return Ok("tools/ecu-tool.py".into());
+        }
+        if let Some(relative) = path.strip_prefix("ecu/") {
+            if relative.starts_with("src/") || relative.starts_with("include/") {
+                return Ok(relative.into());
+            }
+        }
         if profile == "ecu" && path == "include/Os.h" {
             return Ok("bsw-origin/include/Os.h".into());
         }
@@ -105,6 +259,9 @@ fn deliver_path(asset: &AssetEntry, profile: &str) -> Result<String, String> {
             return Ok("kernel-compat/include/StackMacros.h".into());
         }
         return Ok(format!("kernel/{path}"));
+    }
+    if let Some(path) = path.strip_prefix("scripts/ecu_tools/") {
+        return Ok(format!("tools/ecu_tools/{path}"));
     }
     Err(format!(
         "Asset is outside the selected source roots: {path}"
@@ -136,41 +293,100 @@ fn finish<'a>(
     input_identity: Option<&str>,
 ) -> Result<PreparedProject<'a>, String> {
     let spec = target.spec();
-    let toolchain: serde_json::Value = serde_json::from_str(spec.toolchain_lock)
+    let toolchain_asset = AssetInventory::embedded()
+        .get(spec.toolchain_asset)
+        .ok_or_else(|| {
+            format!(
+                "Pinned toolchain asset is missing: {}",
+                spec.toolchain_asset
+            )
+        })?;
+    let toolchain: serde_json::Value = serde_json::from_slice(toolchain_asset.bytes)
         .map_err(|error| format!("Invalid pinned toolchain: {error}"))?;
-    let patches: Vec<_> = spec
-        .kernel_patches
-        .iter()
-        .map(|path| {
-            let includes = spec
-                .kernel_patch_includes
-                .iter()
-                .find(|(candidate, _)| candidate == path)
-                .map(|(_, includes)| *includes)
-                .unwrap_or(&[]);
-            serde_json::json!({ "path": path, "includes": includes })
+    let patches: Vec<_> = if profile == "ecu" {
+        spec.kernel_patches
+            .iter()
+            .map(|path| {
+                let includes = spec
+                    .kernel_patch_includes
+                    .iter()
+                    .find(|(candidate, _)| candidate == path)
+                    .map(|(_, includes)| *includes)
+                    .unwrap_or(&[]);
+                serde_json::json!({ "path": path, "includes": includes })
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let linux = target == BuildTarget::LinuxX64ControlledV1;
+    let sources: Vec<_> = files
+        .keys()
+        .filter(|name| {
+            name.ends_with(".c")
+                && (name.starts_with("src/")
+                    || name.starts_with("os/src/")
+                    || name.as_str() == "Ecu_Config.c")
+                && !matches!(name.as_str(), "src/ecu_probe.c" | "src/ecu_host_batch.c")
         })
         .collect();
+    let mut include_paths = vec![".", "include"];
+    let mut compiler_flags = vec!["-std=c99", "-O1", "-g", "-Wall", "-Wextra", "-Werror"];
+    let mut kernel_sources = Vec::new();
+    if profile == "ecu" {
+        compiler_flags.push("-DECU_TARGET_EPIC4");
+        include_paths.extend(["os", "os/include", "os/src", "kernel/include"]);
+        if linux {
+            compiler_flags.extend(["-D_GNU_SOURCE", "-pthread"]);
+            include_paths.extend(["os/src/host/linux", "kernel/portable/ThirdParty/GCC/Posix"]);
+            kernel_sources.push("portable/ThirdParty/GCC/Posix/port.c");
+        } else {
+            include_paths.push("kernel/portable/MSVC-MingW");
+            kernel_sources.push("portable/MSVC-MingW/port.c");
+        }
+        kernel_sources.extend(["tasks.c", "list.c", "queue.c"]);
+    } else {
+        compiler_flags.push("-pedantic");
+    }
+    let link_libraries: &[&str] = if profile == "ecu" {
+        spec.link_libraries
+    } else if linux {
+        &[]
+    } else {
+        &["bcrypt"]
+    };
+    let binary_name = if profile == "ecu" {
+        spec.binary_name
+    } else if linux {
+        "ecu_host"
+    } else {
+        "ecu_host.exe"
+    };
+    let required_sections: &[&str] = if profile == "ecu" {
+        spec.required_sections
+    } else {
+        &[".text", ".data"]
+    };
     let mut metadata = serde_json::to_vec_pretty(&serde_json::json!({
         "format": "autosar-build-target-v1",
         "target": spec.id,
         "abi": spec.abi,
         "toolchain": toolchain,
-        "nativePort": spec.native_port,
+        "nativePort": if profile == "ecu" { spec.native_port } else { "C99 legacy host execution" },
         "kernelPatches": patches,
-        "linkLibraries": spec.link_libraries,
-        "binaryName": spec.binary_name,
+        "linkLibraries": link_libraries,
+        "binaryName": binary_name,
         "objectFormat": spec.object_format,
-        "requiredSections": spec.required_sections,
-        "logicalClock": spec.logical_clock,
+        "requiredSections": required_sections,
+        "logicalClock": if profile == "ecu" { spec.logical_clock } else { "explicit legacy host clock" },
+        "sources": sources,
+        "includePaths": include_paths,
+        "compilerFlags": compiler_flags,
+        "kernelSources": kernel_sources,
         "profile": profile,
         "handoff": handoff,
         "inputSha256": input_identity,
-        "scope": if target == BuildTarget::LinuxX64ControlledV1 && profile == "ecu" {
-            "uninstalled source-only preview; Linux ECU native bridge and build absent"
-        } else {
-            "uninstalled source-only preview; native preflight not run"
-        },
+        "scope": "source-only preparation; native preflight not run",
     }))
     .map_err(|error| error.to_string())?;
     metadata.push(b'\n');
@@ -206,37 +422,37 @@ pub fn prepare_ecu_project<'a>(
     target: BuildTarget,
     handoff: bool,
 ) -> Result<PreparedProject<'a>, Vec<PlanDiagnostic>> {
-    let mut files = start(target, "ecu").map_err(PlanDiagnostic::source_closure)?;
-    let contract = plan.component_contract_files()?;
-    for (path, bytes) in contract.into_files() {
-        if matches!(path.as_str(), "README.md" | "files.list" | "files.sha256") {
-            continue;
-        }
-        if files.get(&path).is_some_and(|asset| asset.bytes == bytes) {
-            continue;
-        }
-        insert(&mut files, path, Cow::Owned(bytes), None)
-            .map_err(PlanDiagnostic::source_closure)?;
+    let rendered = plan.render_ecu_sources(target)?;
+    let inventory = AssetInventory::embedded();
+    let mut source_owners = BTreeMap::new();
+    for asset in inventory.selected(target, "ecu") {
+        let path = deliver_path(asset, "ecu").map_err(PlanDiagnostic::source_closure)?;
+        source_owners.insert(path, asset);
     }
-    for source in plan.sources() {
+    if let Some(asset) = inventory.get("runtime/include/Com.h") {
+        source_owners.insert("bsw-origin/include/Com.h".into(), asset);
+    }
+    let mut files = BTreeMap::new();
+    for (path, bytes) in rendered {
+        let source = source_owners
+            .get(&path)
+            .copied()
+            .filter(|asset| asset.bytes == bytes.as_ref());
+        insert(&mut files, path, bytes, source).map_err(PlanDiagnostic::source_closure)?;
+    }
+    if handoff {
+        let mut metadata =
+            serde_json::to_vec_pretty(&crate::integration::handoff::metadata(plan, target))
+                .map_err(|error| PlanDiagnostic::source_closure(error.to_string()))?;
+        metadata.push(b'\n');
         insert(
             &mut files,
-            format!("inputs/{}", source.logical_path()),
-            Cow::Borrowed(source.bytes()),
+            "handoff.json".into(),
+            Cow::Owned(metadata),
             None,
         )
         .map_err(PlanDiagnostic::source_closure)?;
     }
-    let mut plan_bytes = serde_json::to_vec_pretty(plan.description())
-        .map_err(|error| PlanDiagnostic::source_closure(error.to_string()))?;
-    plan_bytes.push(b'\n');
-    insert(
-        &mut files,
-        "integration.json".into(),
-        Cow::Owned(plan_bytes),
-        None,
-    )
-    .map_err(PlanDiagnostic::source_closure)?;
     finish(target, "ecu", handoff, files, None).map_err(PlanDiagnostic::source_closure)
 }
 
@@ -256,6 +472,13 @@ pub fn prepare_host_project(
     for (path, bytes) in generated {
         insert(&mut files, path, Cow::Owned(bytes), None)?;
     }
+    let readme = generator::handoff_readme(workspace.diagnostic_profile(), target, handoff)?;
+    insert(
+        &mut files,
+        "README.md".into(),
+        Cow::Owned(readme.into_bytes()),
+        None,
+    )?;
     if let Some(sources) = saved {
         let mut identities = Vec::with_capacity(sources.len());
         for (index, source) in sources.into_iter().enumerate() {
@@ -269,7 +492,10 @@ pub fn prepare_host_project(
             insert(&mut files, path, Cow::Owned(source.contents), None)?;
         }
         let mut metadata = serde_json::to_vec_pretty(&serde_json::json!({
-            "format": "autosar-host-source-inputs-v1",
+            "format": "autosar-host-handoff-v1",
+            "release": "CP/FO R24-11",
+            "toolVersion": env!("CARGO_PKG_VERSION"),
+            "target": target,
             "sources": identities,
         }))
         .map_err(|error| error.to_string())?;

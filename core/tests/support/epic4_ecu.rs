@@ -2,8 +2,8 @@ use autosar_config_core::integration::{InputSource, PlanDependencies, RuntimeCat
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::Path;
-use std::process::{Command, Output, Stdio};
-use std::time::{Duration, Instant};
+use std::process::{Command, Output};
+use std::time::Duration;
 
 fn changed_inputs(
     original: &[InputSource],
@@ -49,22 +49,13 @@ fn parameter(text: &str, name: &str, old: u32, new: u32) -> String {
 }
 
 pub(super) fn compile(project: &Path, output: &Path, control: Option<&Path>) {
-    let mut command = Command::new("powershell.exe");
-    command
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-        ])
-        .arg(project.join("build.ps1"))
-        .arg("-OutputDirectory")
-        .arg(output);
-    if let Some(source) = control {
-        command.arg("-ControlSource").arg(source);
-    }
-    let result = command.output().unwrap();
+    let mut command = super::tooling::ecu_build_command(project, output, "probe", control);
+    let result = run_public_command(
+        &mut command,
+        output.parent().unwrap(),
+        "ecu-build",
+        Duration::from_secs(180),
+    );
     assert!(
         result.status.success(),
         "{}{}",
@@ -78,25 +69,12 @@ pub(super) fn run_probe(binary: &Path, stage: Option<u32>) -> Output {
     if let Some(stage) = stage {
         command.arg(stage.to_string());
     }
-    let mut child = command
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    let started = Instant::now();
-    while child.try_wait().unwrap().is_none() {
-        if started.elapsed() >= Duration::from_secs(15) {
-            child.kill().unwrap();
-            let output = child.wait_with_output().unwrap();
-            panic!(
-                "ECU probe exceeded host watchdog: {}{}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    child.wait_with_output().unwrap()
+    run_public_command(
+        &mut command,
+        binary.parent().unwrap(),
+        &format!("ecu-probe-{}", stage.unwrap_or(0)),
+        Duration::from_secs(15),
+    )
 }
 
 fn check_vector_section(binary: &Path) {
@@ -180,66 +158,88 @@ pub(super) fn run_public_command(
     name: &str,
     watchdog: Duration,
 ) -> Output {
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        command.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    }
-    // Files prevent a compiler descendant holding an inherited pipe from
-    // blocking output collection after the watchdog kills the process tree.
-    let stdout = directory.join(format!("{name}.stdout"));
-    let stderr = directory.join(format!("{name}.stderr"));
-    let mut child = command
-        .stdin(Stdio::null())
-        .stdout(fs::File::create(&stdout).unwrap())
-        .stderr(fs::File::create(&stderr).unwrap())
-        .spawn()
-        .unwrap();
-    let started = Instant::now();
-    while child.try_wait().unwrap().is_none() {
-        if started.elapsed() >= watchdog {
-            let mut cleanup_command = Command::new("taskkill.exe");
-            cleanup_command.args(["/PID", &child.id().to_string(), "/T", "/F"]);
-            #[cfg(windows)]
-            {
-                use std::os::windows::process::CommandExt;
-                cleanup_command.creation_flags(0x08000000);
+    use autosar_config_core::execution::{ProcessOwner, ProcessSpec, ProcessStatus};
+    let settings = super::tooling::execution_settings();
+    let program = match command.get_program().to_str() {
+        Some("gcc") => settings.compiler,
+        Some("objdump") => settings.objdump,
+        Some("python") => settings.python,
+        _ => {
+            let path = std::path::PathBuf::from(command.get_program());
+            if path.is_absolute() {
+                path
+            } else {
+                std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+                    .map(|root| root.join(&path))
+                    .find(|path| path.is_file())
+                    .unwrap_or_else(|| {
+                        panic!("Test command executable is unavailable: {}", path.display())
+                    })
             }
-            let cleanup_stdout = directory.join(format!("{name}.cleanup.stdout"));
-            let cleanup_stderr = directory.join(format!("{name}.cleanup.stderr"));
-            let mut cleanup = cleanup_command
-                .stdin(Stdio::null())
-                .stdout(fs::File::create(&cleanup_stdout).unwrap())
-                .stderr(fs::File::create(&cleanup_stderr).unwrap())
-                .spawn()
-                .unwrap();
-            let cleanup_started = Instant::now();
-            while cleanup.try_wait().unwrap().is_none() {
-                if cleanup_started.elapsed() >= Duration::from_secs(3) {
-                    cleanup.kill().unwrap();
-                    break;
-                }
-                std::thread::sleep(Duration::from_millis(10));
-            }
-            let cleanup_status = cleanup.wait().unwrap();
-            if child.try_wait().unwrap().is_none() {
-                child.kill().unwrap();
-            }
-            child.wait().unwrap();
-            panic!(
-                "{name} exceeded host watchdog: {}{}; cleanup {cleanup_status}: {}{}",
-                String::from_utf8_lossy(&fs::read(&stdout).unwrap()),
-                String::from_utf8_lossy(&fs::read(&stderr).unwrap()),
-                String::from_utf8_lossy(&fs::read(cleanup_stdout).unwrap()),
-                String::from_utf8_lossy(&fs::read(cleanup_stderr).unwrap())
-            );
         }
-        std::thread::sleep(Duration::from_millis(10));
+    };
+    let logs = directory.join(format!("{name}.owned-logs"));
+    fs::create_dir_all(&logs).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&logs, fs::Permissions::from_mode(0o700)).unwrap();
     }
+    let mut argv = vec![program.as_os_str().to_owned()];
+    argv.extend(command.get_args().map(std::ffi::OsStr::to_owned));
+    let environment = command
+        .get_envs()
+        .map(|(name, value)| {
+            (
+                name.to_owned(),
+                value
+                    .expect("Test commands do not remove environment variables")
+                    .to_owned(),
+            )
+        })
+        .collect();
+    let spec = ProcessSpec::for_duration(
+        argv,
+        command.get_current_dir().unwrap_or(directory).to_path_buf(),
+        environment,
+        watchdog,
+        logs,
+    )
+    .unwrap();
+    let owner = ProcessOwner::new().unwrap();
+    let result = owner.spawn(spec, None).unwrap().wait().unwrap();
+    let stdout = fs::read(&result.stdout).unwrap();
+    let stderr = fs::read(&result.stderr).unwrap();
+    fs::write(directory.join(format!("{name}.stdout")), &stdout).unwrap();
+    fs::write(directory.join(format!("{name}.stderr")), &stderr).unwrap();
+    assert_eq!(
+        result.status,
+        ProcessStatus::Exited,
+        "{name} exceeded host watchdog or scope closure failed: {result:?}; {}{}",
+        String::from_utf8_lossy(&stdout),
+        String::from_utf8_lossy(&stderr),
+    );
+    let exit_code = result
+        .exit_code
+        .expect("A normally exited root has an observed exit code");
+    #[cfg(windows)]
+    let status = {
+        use std::os::windows::process::ExitStatusExt;
+        std::process::ExitStatus::from_raw(exit_code as u32)
+    };
+    #[cfg(unix)]
+    let status = {
+        use std::os::unix::process::ExitStatusExt;
+        assert!(
+            exit_code >= 0,
+            "Native test command terminated by signal: {exit_code}"
+        );
+        std::process::ExitStatus::from_raw(exit_code << 8)
+    };
     Output {
-        status: child.wait().unwrap(),
-        stdout: fs::read(stdout).unwrap(),
-        stderr: fs::read(stderr).unwrap(),
+        status,
+        stdout,
+        stderr,
     }
 }
 
@@ -291,7 +291,9 @@ pub fn verify() {
     let runtime = RuntimeCatalog::from_repository(root).unwrap();
     let inputs = super::epic4_plan::inputs();
     let plan = build_plan(&inputs, &dependencies, &runtime).unwrap();
-    let project = plan.ecu_integration_files().unwrap();
+    let project = plan
+        .ecu_integration_files(super::tooling::native_target())
+        .unwrap();
     for header in ["Os.h", "Os_Types.h", "Rte_Os_Type.h"] {
         let delivered = &project
             .files()
@@ -334,7 +336,9 @@ pub fn verify() {
     }
     assert_eq!(
         project.files(),
-        plan.ecu_integration_files().unwrap().files()
+        plan.ecu_integration_files(super::tooling::native_target())
+            .unwrap()
+            .files()
     );
     assert!(
         project
@@ -395,29 +399,21 @@ pub fn verify() {
         "public_compatibility declarations=16 evaluations=0 error_codes=23 unique=pass\n"
     );
     let build = scratch.0.join("new-independent-build");
-    let compiled = Command::new("powershell.exe")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-        ])
-        .arg(moved.join("build.ps1"))
-        .arg("-OutputDirectory")
-        .arg(&build)
-        .arg("-TestMode")
-        .output()
-        .unwrap();
+    let compiled = run_public_command(
+        &mut super::tooling::ecu_build_command(&moved, &build, "test", None),
+        &scratch.0,
+        "independent-build",
+        Duration::from_secs(180),
+    );
     assert!(
         compiled.status.success(),
         "{}{}",
         String::from_utf8_lossy(&compiled.stdout),
         String::from_utf8_lossy(&compiled.stderr)
     );
-    check_vector_section(&build.join("ecu_probe.exe"));
-    check_entry_sections(&build.join("ecu_probe.exe"));
-    let normal = run_probe(&build.join("ecu_probe.exe"), None);
+    check_vector_section(&super::tooling::native_binary(&build, "ecu_probe"));
+    check_entry_sections(&super::tooling::native_binary(&build, "ecu_probe"));
+    let normal = run_probe(&super::tooling::native_binary(&build, "ecu_probe"), None);
     assert!(
         normal.status.success(),
         "{}{}",
@@ -448,7 +444,10 @@ pub fn verify() {
     assert_eq!(actual_trace, &expected_trace[..127], "{text}");
     assert!(lifecycle.ends_with("trace_dropped=12"), "{text}");
     for stage in 1..=8 {
-        let failed = run_probe(&build.join("ecu_probe.exe"), Some(stage));
+        let failed = run_probe(
+            &super::tooling::native_binary(&build, "ecu_probe"),
+            Some(stage),
+        );
         assert!(!failed.status.success(), "stage {stage}");
         let text = String::from_utf8(failed.stdout).unwrap();
         assert!(
@@ -467,7 +466,10 @@ pub fn verify() {
         &independent_build,
         Some(&root.join("core/tests/fixtures/ecu_control.c")),
     );
-    let independent = run_probe(&independent_build.join("ecu_probe.exe"), None);
+    let independent = run_probe(
+        &super::tooling::native_binary(&independent_build, "ecu_probe"),
+        None,
+    );
     assert!(
         independent.status.success(),
         "{}{}",
@@ -522,7 +524,7 @@ pub fn verify() {
         build_plan(&variant, &dependencies, &runtime).unwrap_or_else(|issues| panic!("{issues:?}"));
     assert_eq!(variant_plan.description().component.period_ms, 20);
     let variant_project = variant_plan
-        .ecu_integration_files()
+        .ecu_integration_files(super::tooling::native_target())
         .unwrap_or_else(|issues| panic!("{issues:?}"));
     let variant_directory = scratch.0.join("variant-source");
     let preview = variant_project.preview(&variant_directory).unwrap();
@@ -536,7 +538,10 @@ pub fn verify() {
     );
     let variant_build = scratch.0.join("variant-build");
     compile(&variant_directory, &variant_build, None);
-    let output = run_probe(&variant_build.join("ecu_probe.exe"), None);
+    let output = run_probe(
+        &super::tooling::native_binary(&variant_build, "ecu_probe"),
+        None,
+    );
     assert!(
         output.status.success(),
         "{}{}",
@@ -560,7 +565,19 @@ pub fn verify() {
         });
         let candidate = build_plan(&changed, &dependencies, &runtime)
             .unwrap_or_else(|issues| panic!("{symbol}: {issues:?}"));
-        assert!(candidate.ecu_integration_files().is_err(), "{symbol}");
+        let prepared = autosar_config_core::prepared::prepare_ecu_project(
+            &candidate,
+            super::tooling::native_target(),
+            false,
+        )
+        .unwrap();
+        let report = prepared.native_preflight(&super::tooling::execution_settings());
+        assert_eq!(
+            report.status,
+            autosar_config_core::prepared::PreflightStatus::Failed,
+            "{symbol}: {:?}",
+            report.logs,
+        );
     }
     let allowed = changed_inputs(&inputs, |_, text| {
         text.replace(
@@ -571,16 +588,24 @@ pub fn verify() {
     let collision = changed_inputs(&inputs, |_, text| {
         text.replace("Dcm_DataElement_ApplicationValueType", "Os_TargetConfig")
     });
-    assert!(
-        build_plan(&collision, &dependencies, &runtime)
-            .unwrap()
-            .ecu_integration_files()
-            .is_err()
+    let collision = build_plan(&collision, &dependencies, &runtime).unwrap();
+    let prepared = autosar_config_core::prepared::prepare_ecu_project(
+        &collision,
+        super::tooling::native_target(),
+        false,
+    )
+    .unwrap();
+    let report = prepared.native_preflight(&super::tooling::execution_settings());
+    assert_eq!(
+        report.status,
+        autosar_config_core::prepared::PreflightStatus::Failed,
+        "{:?}",
+        report.logs,
     );
     assert!(
         build_plan(&allowed, &dependencies, &runtime)
             .unwrap()
-            .ecu_integration_files()
+            .ecu_integration_files(super::tooling::native_target())
             .is_ok()
     );
     let wide = changed_inputs(&inputs, |_, text| parameter(&text, "CanIfTxPduId", 1, 256));

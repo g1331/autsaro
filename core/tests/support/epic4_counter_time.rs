@@ -61,7 +61,9 @@ pub fn verify() {
         assert_eq!(plan.description().schedule.counter_tick_ms, 1);
         assert_eq!(plan.description().schedule.counter_ticks_per_base, 1);
         assert_eq!(plan.description().schedule.counter_minimum_cycle, 1);
-        let files = plan.ecu_integration_files().unwrap();
+        let files = plan
+            .ecu_integration_files(super::tooling::native_target())
+            .unwrap();
         let project = scratch.0.join(if maximum == 4095 {
             "alternate-maximum"
         } else if renamed {

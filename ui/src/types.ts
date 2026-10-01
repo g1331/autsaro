@@ -1,3 +1,11 @@
+export type BuildTarget = 'windows-x64-controlled-v1' | 'linux-x64-controlled-v1';
+
+export type PreflightReport = {
+  status: 'not_run' | 'passed' | 'failed';
+  fingerprint: string;
+  logs: string[];
+};
+
 export type Issue = {
   severity: 'error' | 'warning' | 'info';
   code: string;

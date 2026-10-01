@@ -136,11 +136,13 @@ class WindowsJob:
         env: dict[str, str] | None,
         stdout: Path,
         stderr: Path,
+        stdin_file: Path | None = None,
     ) -> None:
         job = _check(kernel.CreateJobObjectW(None, None), "Create private job")
         self.job = job
         self.child: subprocess.Popen[bytes] | None = None
         self.closed = False
+        self.assigned = False
         try:
             limits = ExtendedLimits()
             limits.basic.flags = 0x2000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
@@ -150,12 +152,16 @@ class WindowsJob:
                 ),
                 "Configure private job",
             )
-            with stdout.open("xb") as out, stderr.open("xb") as err:
+            with (
+                stdout.open("xb") as out,
+                stderr.open("xb") as err,
+                open(stdin_file or os.devnull, "rb") as input_stream,
+            ):
                 self.child = subprocess.Popen(
                     argv,
                     cwd=cwd,
                     env=env,
-                    stdin=subprocess.DEVNULL,
+                    stdin=input_stream,
                     stdout=out,
                     stderr=err,
                     creationflags=subprocess.CREATE_NO_WINDOW
@@ -170,6 +176,7 @@ class WindowsJob:
                     kernel.AssignProcessToJobObject(job, process),
                     "Assign suspended command",
                 )
+                self.assigned = True
             finally:
                 kernel.CloseHandle(process)
             _resume(self.child.pid)
@@ -216,6 +223,10 @@ class WindowsJob:
             return
         self.closed = True
         try:
+            # A failed assignment leaves a suspended process outside the Job.
+            # It is still ours and must be terminated through its own handle.
+            if self.child is not None and not self.assigned:
+                self.child.kill()
             _check(kernel.TerminateJobObject(self.job, 1), "Terminate private job")
             end = time.monotonic() + 5
             while self._active():

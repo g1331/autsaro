@@ -1,26 +1,51 @@
 use autosar_config_core::Workspace;
 use autosar_config_core::integration::{PlanDependencies, RuntimeCatalog};
+use autosar_config_core::prepare_ecu_project;
+use autosar_config_core::target::{BuildTarget, ExecutionSettings};
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 fn execute() -> Result<(), String> {
     let mut args = std::env::args().skip(1);
-    let mut repository = None;
+    let mut target = None;
     let mut output = None;
     let mut revision = None;
     let mut inputs = Vec::new();
     let mut xsd_archive = None;
     let mut mod_archive = None;
     let mut write = false;
+    let mut handoff = false;
+    let mut preflight_requested = false;
+    let mut seen = BTreeSet::new();
     while let Some(argument) = args.next() {
-        if argument == "--write" {
-            write = true;
-            continue;
+        if argument != "--input" && !seen.insert(argument.clone()) {
+            return Err(format!("Repeated argument: {argument}"));
+        }
+        match argument.as_str() {
+            "--write" => {
+                write = true;
+                continue;
+            }
+            "--handoff" => {
+                handoff = true;
+                continue;
+            }
+            "--preflight" => {
+                preflight_requested = true;
+                continue;
+            }
+            _ => {}
         }
         let value = args
             .next()
             .ok_or_else(|| format!("Missing value after {argument}"))?;
         match argument.as_str() {
-            "--repository" => repository = Some(PathBuf::from(value)),
+            "--target" => {
+                target = Some(
+                    serde_json::from_value::<BuildTarget>(serde_json::Value::String(value))
+                        .map_err(|error| error.to_string())?,
+                )
+            }
             "--output" => output = Some(PathBuf::from(value)),
             "--input" => inputs.push(PathBuf::from(value)),
             "--xsd-archive" => xsd_archive = Some(PathBuf::from(value)),
@@ -29,55 +54,63 @@ fn execute() -> Result<(), String> {
             _ => return Err(format!("Unknown argument: {argument}")),
         }
     }
-    let repository = repository.ok_or("Supply --repository <matching-source-checkout>.")?;
-    let output = output.ok_or("Supply --output <generated-source-directory>.")?;
+    let target =
+        target.ok_or("Supply --target windows-x64-controlled-v1|linux-x64-controlled-v1")?;
+    let output = output.ok_or("Supply --output <generated-source-directory>")?;
     if inputs.is_empty() {
-        return Err("Supply --input <source.arxml> for each original source.".into());
+        return Err("Supply --input <source.arxml> for each original source".into());
     }
-    if write && revision.is_none() {
-        return Err(
-            "Preview first; --write requires the exact --revision from that preview.".into(),
-        );
+    if write != revision.is_some() {
+        return Err("Preview first; --write requires the exact --revision from that preview, and --revision is only valid with --write".into());
     }
+    let xsd_archive = xsd_archive
+        .or_else(|| std::env::var_os("AUTOSAR_XSD_ARCHIVE").map(PathBuf::from))
+        .ok_or("Supply --xsd-archive or AUTOSAR_XSD_ARCHIVE")?;
+    let mod_archive = mod_archive
+        .or_else(|| std::env::var_os("AUTOSAR_MOD_ARCHIVE").map(PathBuf::from))
+        .ok_or("Supply --mod-archive or AUTOSAR_MOD_ARCHIVE")?;
+    let dependencies = PlanDependencies::explicit(xsd_archive, mod_archive)?;
     let diagnostics =
         |issues| serde_json::to_string_pretty(&issues).unwrap_or_else(|error| error.to_string());
-    let xsd_archive =
-        xsd_archive.or_else(|| std::env::var_os("AUTOSAR_XSD_ARCHIVE").map(PathBuf::from));
-    let mod_archive =
-        mod_archive.or_else(|| std::env::var_os("AUTOSAR_MOD_ARCHIVE").map(PathBuf::from));
-    let dependencies = if xsd_archive.is_none() && mod_archive.is_none() {
-        PlanDependencies::from_repository(&repository)
-    } else {
-        let root = repository
-            .canonicalize()
-            .map_err(|error| error.to_string())?;
-        let legacy = PlanDependencies::from_repository(&root);
-        PlanDependencies::explicit(
-            xsd_archive.unwrap_or(legacy.xsd_archive),
-            mod_archive.unwrap_or(legacy.mod_archive),
-        )?
-    };
-    let runtime = RuntimeCatalog::from_repository(&repository).map_err(diagnostics)?;
+    let runtime = RuntimeCatalog::embedded().map_err(diagnostics)?;
     let workspace = Workspace::open(inputs, dependencies.xsd_archive)?;
     let plan = workspace
         .integration_plan(&runtime, dependencies.mod_archive)
         .map_err(diagnostics)?;
-    let project = plan.ecu_integration_files().map_err(diagnostics)?;
-    if write {
-        let report = project.generate_previewed(&output, revision.as_deref().unwrap())?;
+    let project = prepare_ecu_project(&plan, target, handoff).map_err(diagnostics)?;
+    let preflight = if preflight_requested && target.is_native() {
+        project.native_preflight(&ExecutionSettings::from_environment()?)
+    } else {
+        project.preflight().clone()
+    };
+    if preflight.status == autosar_config_core::prepared::PreflightStatus::Failed {
+        let report = serde_json::json!({ "preflight": preflight });
         println!(
             "{}",
             serde_json::to_string_pretty(&report).map_err(|error| error.to_string())?
         );
-    } else {
-        let preview = project.preview(&output)?;
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&preview).map_err(|error| error.to_string())?
-        );
+        return Err("Native preflight failed; no source package was installed".into());
     }
+    let mut report = if write {
+        serde_json::to_value(project.generate_previewed(&output, revision.as_deref().unwrap())?)
+            .map_err(|error| error.to_string())?
+    } else {
+        serde_json::to_value(project.preview(&output)?).map_err(|error| error.to_string())?
+    };
+    report
+        .as_object_mut()
+        .ok_or("Invalid generation report")?
+        .insert(
+            "preflight".into(),
+            serde_json::to_value(preflight).map_err(|error| error.to_string())?,
+        );
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&report).map_err(|error| error.to_string())?
+    );
     Ok(())
 }
+
 fn main() {
     if let Err(error) = execute() {
         eprintln!("{error}");

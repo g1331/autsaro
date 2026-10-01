@@ -45,6 +45,66 @@ fn private_directory() -> Result<PathBuf, String> {
     Err("Unable to reserve a private owner directory".into())
 }
 
+struct UnixInput {
+    directory: PathBuf,
+    path: PathBuf,
+    file: Option<File>,
+}
+
+impl UnixInput {
+    fn new() -> Result<Self, String> {
+        use std::os::unix::ffi::OsStrExt;
+        let directory = private_directory()?;
+        let path = directory.join("stdin.pipe");
+        let mut input = Self {
+            directory,
+            path,
+            file: None,
+        };
+        let name = std::ffi::CString::new(input.path.as_os_str().as_bytes())
+            .map_err(|error| error.to_string())?;
+        // SAFETY: a terminated private path and owner-only FIFO mode.
+        if unsafe { libc::mkfifo(name.as_ptr(), 0o600) } != 0 {
+            return Err(std::io::Error::last_os_error().to_string());
+        }
+        input.file = Some(
+            OpenOptions::new()
+                .read(true)
+                .write(true)
+                .custom_flags(libc::O_NONBLOCK)
+                .open(&input.path)
+                .map_err(|error| error.to_string())?,
+        );
+        Ok(input)
+    }
+
+    fn registered_writer(&mut self) -> Result<(), String> {
+        // The registered, still-gated child already owns the read descriptor.
+        // Remove our temporary reader so child exit produces EPIPE, not a FIFO
+        // held alive by the sender itself.
+        let writer = OpenOptions::new()
+            .write(true)
+            .custom_flags(libc::O_NONBLOCK)
+            .open(&self.path)
+            .map_err(|error| error.to_string())?;
+        self.file = Some(writer);
+        Ok(())
+    }
+}
+
+impl Drop for UnixInput {
+    fn drop(&mut self) {
+        drop(self.file.take());
+        for result in [fs::remove_file(&self.path), fs::remove_dir(&self.directory)] {
+            if let Err(error) = result {
+                if error.kind() != std::io::ErrorKind::NotFound {
+                    eprintln!("Private interactive stdin cleanup failed: {error}");
+                }
+            }
+        }
+    }
+}
+
 pub(super) struct UnixOwner {
     socket: PathBuf,
     token: String,
@@ -246,10 +306,17 @@ impl UnixOwner {
             );
         }
         let inherited_parent = std::env::var("ECU_OWNER_SCOPE").ok();
+        let input = if spec.stdin_stream {
+            Some(UnixInput::new()?)
+        } else {
+            None
+        };
         let response = self.request(json!({
             "op": "reserve", "parent": parent.or(inherited_parent.as_deref()),
             "deadline_ns": spec.deadline_ns, "argv": argv, "cwd": spec.cwd,
             "env": env, "log_directory": spec.log_directory,
+            "stdin_file": input.as_ref().map(|input| &input.path),
+            "stdin_fifo": spec.stdin_stream,
         }))?;
         if response["op"] != "registered" {
             return Err(format!("Expected registered scope, got {response}"));
@@ -261,15 +328,22 @@ impl UnixOwner {
         let pid = response["pid"].as_u64().ok_or("Missing registered PID")? as u32;
         let pgid = response["pgid"].as_i64().ok_or("Missing registered PGID")? as i32;
         self.groups.lock().insert(scope.clone(), pgid);
-        let process = UnixProcess {
+        let mut process = UnixProcess {
             owner: Arc::clone(self),
             scope,
             pid,
             pgid,
             stdout: PathBuf::from(response["stdout"].as_str().ok_or("Missing stdout path")?),
             stderr: PathBuf::from(response["stderr"].as_str().ok_or("Missing stderr path")?),
+            input,
+            deadline_ns: response["deadline_ns"]
+                .as_u64()
+                .ok_or("Missing effective owner deadline")?,
             finished: false,
         };
+        if let Some(input) = &mut process.input {
+            input.registered_writer()?;
+        }
         if let Err(error) = self.request(json!({"op": "release", "scope": process.scope})) {
             let _ =
                 self.request(json!({"op": "close", "scope": process.scope, "reason": "cancelled"}));
@@ -328,10 +402,51 @@ pub(super) struct UnixProcess {
     pgid: i32,
     stdout: PathBuf,
     stderr: PathBuf,
+    input: Option<UnixInput>,
+    deadline_ns: u64,
     finished: bool,
 }
 
 impl UnixProcess {
+    pub(super) fn stdout_path(&self) -> &std::path::Path {
+        &self.stdout
+    }
+
+    pub(super) fn close_stdin(&mut self) {
+        if let Some(input) = &mut self.input {
+            drop(input.file.take());
+        }
+    }
+
+    pub(super) fn write_stdin(&mut self, bytes: &[u8]) -> Result<(), String> {
+        if self.finished {
+            return Err("Owned process already completed".into());
+        }
+        let mut offset = 0;
+        while offset < bytes.len() {
+            if monotonic_ns()? >= self.deadline_ns {
+                self.cancel()?;
+                return Err("Interactive stdin exceeded its absolute deadline".into());
+            }
+            let result = self
+                .input
+                .as_mut()
+                .and_then(|input| input.file.as_mut())
+                .ok_or("Interactive stdin is not open")?
+                .write(&bytes[offset..]);
+            match result {
+                Ok(0) => return Err("Interactive stdin closed during write".into()),
+                Ok(written) => offset += written,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(error) => return Err(error.to_string()),
+            }
+        }
+        Ok(())
+    }
+
     fn result(&self, response: &Value) -> Result<ProcessResult, String> {
         Ok(ProcessResult {
             scope: self.scope.clone(),

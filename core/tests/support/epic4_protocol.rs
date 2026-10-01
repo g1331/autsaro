@@ -92,33 +92,27 @@ pub fn independent_behavior() {
     let dependencies = PlanDependencies::from_repository(root);
     let runtime = RuntimeCatalog::from_repository(root).unwrap();
     let plan = build_plan(&super::epic4_plan::inputs(), &dependencies, &runtime).unwrap();
-    let project = plan.ecu_integration_files().unwrap();
+    let project = plan
+        .ecu_integration_files(super::tooling::native_target())
+        .unwrap();
     let preview = project.preview(&source).unwrap();
     project
         .generate_previewed(&source, &preview.revision)
         .unwrap();
     let build = scratch.0.join("protocol-build");
-    let output = Command::new("powershell.exe")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-        ])
-        .arg(source.join("build.ps1"))
-        .arg("-OutputDirectory")
-        .arg(&build)
-        .arg("-HostBatch")
-        .output()
-        .unwrap();
+    let output = super::epic4_ecu::run_public_command(
+        &mut super::tooling::ecu_build_command(&source, &build, "host-batch", None),
+        &scratch.0,
+        "protocol-build",
+        std::time::Duration::from_secs(180),
+    );
     assert!(
         output.status.success(),
         "{}{}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    let binary = build.join("ecu_host_batch.exe");
+    let binary = super::tooling::native_binary(&build, "ecu_host_batch");
     let cases = oracle["cases"].as_array().unwrap();
     assert_eq!(cases.len(), 11);
     for case in cases {

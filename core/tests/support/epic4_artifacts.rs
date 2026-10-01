@@ -24,7 +24,9 @@ pub fn verify() {
         &runtime,
     )
     .unwrap();
-    let files = plan.ecu_integration_files().unwrap();
+    let files = plan
+        .ecu_integration_files(super::tooling::native_target())
+        .unwrap();
     let original = scratch.0.join("generated");
     let preview = files.preview(&original).unwrap();
     files
@@ -60,7 +62,7 @@ pub fn verify() {
     fs::write(consumer.join("control.c"), "#define main behavior_main\n#include \"ecu_control.c\"\n#undef main\n#include \"Artifact_Probe.h\"\nint main(void) { check_artifact_entries(); return behavior_main(); }\n").unwrap();
     let binary_dir = scratch.0.join("independent-build");
     super::epic4_ecu::compile(&project, &binary_dir, Some(&consumer.join("control.c")));
-    let binary = binary_dir.join("ecu_probe.exe");
+    let binary = super::tooling::native_binary(&binary_dir, "ecu_probe");
     let result = super::epic4_ecu::run_probe(&binary, None);
     assert!(
         result.status.success(),
