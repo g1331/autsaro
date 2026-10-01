@@ -2,11 +2,16 @@
   "name": "autosar-config-workbench",
   "private": true,
   "version": "0.1.0",
+  "engines": {
+    "node": ">=24.19.0 <25",
+    "npm": ">=11.17.0 <12"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
     "lint": "eslint src vite.config.ts",
+    "tauri": "cd .. && tauri",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -17,6 +22,7 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "2.11.0",
     "@eslint/js": "10.0.1",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

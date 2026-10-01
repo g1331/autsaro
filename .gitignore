@@ -12,6 +12,11 @@ docs/official/FreeRTOS/**/*.tar.gz
 src-tauri/gen/
 **/*.tsbuildinfo
 **/__pycache__/
+.venv/
+ui/node_modules/
+*.egg-info/
+dist/
+build/
 .quality-venv/
 .automotive-skills-venv/
 .playwright-cli/

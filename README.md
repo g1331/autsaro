@@ -26,50 +26,40 @@
 
 受支持的 ComIPdu/ComSignal 必须直接归属本工程唯一的 `/{项目名}/ComCfg/ComConfig`，其模块定义和 ComGeneral 必须正确；重命名模块、把子容器挂到其他模块或改动父级 `DEFINITION-REF` 即使保留了可解析的 Pdu/Signal 引用，也只读阻断，不按子容器局部定义猜测所有者。
 
-## 本地开发环境（Windows）
+## 本地开发环境
 
-需要 Rust stable **MSVC** 工具链、Visual Studio C++ Build Tools、WebView2、Node.js/npm、C99 GCC，以及 libxml2 和 libclang。`libxml` Rust 依赖使用 vcpkg 的 `x64-windows-static-md` libxml2（静态库、动态 MSVC CRT），bindgen 需要可用的 `libclang.dll`。
+工具版本由根目录 `rust-toolchain.toml`（Rust 1.98.1）、`.node-version`（Node 24.19.0）、`.python-version`（CPython 3.12.9）、`pyproject.toml`/`uv.lock`（Python）、`ui/package.json` 的 npm 11.17.0 engine 约束及 `ui/package-lock.json` 的包完整性记录约束。安装 Rust/rustfmt/clippy、Node/npm、uv、Git 和目标所需的 C99 GCC；在**新的终端**检查安装结果。Cargo 构建产物保留在 `core/target/` 与 `src-tauri/target/`，不改设 `CARGO_TARGET_DIR`。
 
-根据本机安装情况设置以下环境变量：
+- Windows：使用 Rust MSVC、Visual Studio C++ Build Tools 和 WebView2。安装 vcpkg 的 `libxml2[iconv,zlib]:x64-windows-static-md`；`VCPKG_ROOT` 指 vcpkg 根目录，`VCPKGRS_TRIPLET=x64-windows-static-md`，`LIBCLANG_PATH` 指含 `libclang.dll` 的目录。可在用户环境中设置这些变量，重新打开终端和 Agent 宿主后再检查；不要把个人安装路径写进工程。`AUTOSAR_CC` 可选，指向原有 Windows 主机工程使用的 GCC；未设置时该工程仍查找 `PATH` 中的 `gcc`。
+- Ubuntu 24.04：安装 `build-essential libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev libxml2-dev libclang-dev clang pkg-config patchelf`，并按锁文件安装 Rust、Node、CPython 与 uv。WSL 构建副本、Cargo target 和 uv 缓存应放在 ext4 文件系统；从 Windows 卷读取官方档案时显式传路径。Linux 原生虚拟 ECU 尚在本轮工程治理中，安装这些包**不等于**已支持 Linux 目标。
+- macOS：安装 Xcode Command Line Tools、pkg-config/libxml2 和上述版本管理工具。macOS 源码工作台与包配置仍待本轮完成，原生构建和 IPC 未验证；macOS 不提供本机虚拟 ECU。
 
-- `VCPKG_ROOT` 指向 vcpkg 根目录，`VCPKGRS_TRIPLET` 设为 `x64-windows-static-md`。
-- `LIBCLANG_PATH` 指向包含 `libclang.dll` 的目录。
-- `AUTOSAR_CC` 可选，指向用于构建生成工程的 GCC 可执行文件；未设置时使用 `PATH` 中的 `gcc`。
-- `CARGO_HOME`、`RUSTUP_HOME` 可按需控制 Rust 工具链位置；Cargo 构建产物默认位于 `core/target/` 和 `src-tauri/target/`，已由 `.gitignore` 忽略。`cargo`、`rustc`、`gcc`、`node`、`npm` 仍须能在当前会话调用。
-
-首次安装可运行 `& (Join-Path $env:VCPKG_ROOT "vcpkg.exe") install "libxml2[iconv,zlib]:x64-windows-static-md"`。若从旧 triplet 切换且 Cargo 已缓存 `libxml`，分别对 `core/Cargo.toml` 和 `src-tauri/Cargo.toml` 执行 `cargo clean --manifest-path <manifest> -p libxml` 后重建；仅修改当前会话变量不会重跑已缓存的构建脚本。
-
-本地官方材料须由使用者自行放置，不随源码分发：
+本地官方材料须由使用者自行合法放置，不随源码或安装包分发：
 
 - XSD：`docs/official/R24-11/FO/MethodologyAndTemplates/AUTOSAR_FO_MMOD_XMLSchema.zip`（包含 `AUTOSAR_00053.xsd` 与 `xml.xsd`）。
-- 集成测试样例：`docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_EXP_ModelingShowCases.zip`。测试会导入其中 15 份跨文件 ARXML。
-- ECUC 配置闭包测试：`docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_MOD_ECUConfigurationParameters.zip`。测试以其中的模块定义核对必需参数、重数和引用目标。
+- MOD：`docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_MOD_ECUConfigurationParameters.zip`。阶段0 `doctor` 可用 `AUTOSAR_XSD_ARCHIVE`/`AUTOSAR_MOD_ARCHIVE` 检查显式来源；Windows 当前工作台仍从上述仓库位置读取，阶段3才将显式路径接入产品命令。
+- 集成样例：`docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_EXP_ModelingShowCases.zip`。核心测试另读取上述两项合法规范档案。
 
-```powershell
+从新克隆的源码根目录运行（须预先准备平台原生依赖与官方档案）：
+
+```sh
+uv sync --locked --group quality
 npm ci --prefix ui
+uv run --locked python -m autosar_tooling doctor --role workbench
+npm run tauri --prefix ui -- info
 npm run build --prefix ui
-cargo test --manifest-path core/Cargo.toml
-cargo build --manifest-path src-tauri/Cargo.toml
+uv run --locked python scripts/verify.py --scope core
+cargo build --locked --manifest-path src-tauri/Cargo.toml
 ```
+
+`doctor` 只读报告 `ready`、`missing`、`version_mismatch` 或 `not_applicable`，缺少必需项返回非零并提示安装/配置；不下载规范或更改系统。`npm run tauri --prefix ui -- dev` 使用现有 Tauri/Vite hooks，在**独立桌面会话**交互调试；自动化不得在当前用户桌面弹窗或抢焦点。这里不会执行 `create-tauri-app` 或 `tauri init --force` 重建已有工作台。当前 Windows 生成与构建仍依赖源码目录，正式无checkout bundle 将在本轮最后阶段验证。
+
 
 ## 代码质量检查
 
-首次在本机安装固定版本的 C 格式器与 Python Ruff（虚拟环境被 Git 忽略）；UI 的 Prettier 与 ESLint 由 `npm ci` 按锁文件安装：
+质量工具及独立 ARTI 消费者使用的 `lxml` 由 `uv.lock` 中的 `quality` 组固定；UI Prettier/ESLint 由 npm 锁文件固定。运行 `uv run --locked python scripts/quality.py --base <本轮起始提交>` 检查 UTF-8、末尾换行、空白、Python 语法与增量 rustfmt/clang-format/Prettier、主机 C99 语法。当前 `scripts/verify.py --scope all --base <起始提交>` 组合 Python unittest、前端、核心和桌面检查；后续将迁入 `autosar_tooling verify`，不同时维护两套入口。
 
-```powershell
-python -m venv .quality-venv
-.\.quality-venv\Scripts\python.exe -m pip install -r scripts/requirements-quality.txt
-npm ci --prefix ui
-python scripts/verify.py --scope all
-```
-
-源码检查使用 `python scripts/quality.py`：检查 UTF-8、末尾换行、空白和 Python 语法，对**相对指定 story 起始提交新改的行**分别用 rustfmt、clang-format 和 Prettier 检查格式，并用 GCC 严格 C99 模式检查主机运行时源码和独立头文件的语法。`python scripts/verify.py --scope all` 组合这些检查、UI ESLint 与严格类型构建、核心测试、桌面构建及 Rust Clippy 的 correctness/suspicious 检查；具体运行范围按 BMad 规格选择。
-
-Epic 4 的生成工件测试使用 PATH 中的 Cppcheck 检查两个实际生成的 RTE 翻译单元，参数为 C99、win64 及 warning/style/performance/portability；当前验证版本为 2.21.0。该检查不运行 MISRA 全规则扫描，也不写报告文件。
-
-BMad 开发规格记录起始提交，并用 `--base` 显式指定；省略时，未提交的改动对比 `HEAD`，干净工作区复核上一提交时对比 `HEAD^`。修改旧文件无需顺带全文件重排，但新改行须符合对应格式器。
-
-调试桌面程序时，先在一个终端运行 `npm run dev --prefix ui`（端口 `127.0.0.1:1420`），另一个终端运行 `src-tauri/target/debug/autosar-config-desktop.exe`。当前验证的是源码目录中的本地调试程序；生成器从仓库 `runtime/` 复制目标源码，桌面程序从上述本地路径取得 XSD。没有可脱离源码目录使用的安装包。
+Epic 4 的生成工件测试仍以 PATH 中的 Cppcheck 2.21.0 检查实际 RTE 翻译单元，不是完整 MISRA 扫描。BMad 开发规格记录起始提交；格式检查应指定 `--base`，修改旧文件无需整体重排。交付正式能力仍以相应 BMad spec 的原生运行结果为准。
 
 ## 使用顺序
 

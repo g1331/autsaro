@@ -28,6 +28,7 @@ mod epic4_batch;
 #[path = "support/epic4_application.rs"]
 mod epic4_application;
 
+#[cfg(windows)]
 #[path = "support/epic4_protocol.rs"]
 mod epic4_protocol;
 
@@ -126,6 +127,7 @@ fn epic4_generated_counter_timing_contracts() {
     epic4_counter_time::verify();
 }
 
+#[cfg(windows)]
 #[test]
 fn epic4_independent_behavior_and_legacy_regression() {
     epic4_protocol::independent_behavior();
