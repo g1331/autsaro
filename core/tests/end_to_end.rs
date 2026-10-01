@@ -52,9 +52,11 @@ mod epic4_artifacts;
 #[path = "support/epic4_handoff.rs"]
 mod epic4_handoff;
 
+// The receiving engineer runs the same maintained independent consumer in a
+// fresh temporary tree; this entry does not trust earlier story results.
 #[cfg(windows)]
 #[test]
-fn epic4_rebuildable_handoff() {
+fn epic4_independent_handoff() {
     epic4_handoff::verify();
 }
 

@@ -61,7 +61,7 @@ Agent 应把规范研究放进具体功能任务，不用一轮轮独立审计�
 
 `OUT`携带真实输出的epoch、全局sequence、ticket/PDU及CAN数据；实际写入和flush成功后才确认对应输出。`COMMIT_OK`代表批输入、tick、输出与确认已完成并进入真实等待点，`COMMIT_ERROR`保留已执行前缀及BSW拒绝结果，`REJECT`表示接纳失败。每个COMMIT固定5000ms宿主watchdog，写入失败、阻塞超时或256项输出队列溢出关闭ECU，不声称已执行部分回滚。生命周期诊断仅保留有界前缀，`trace_dropped`明确省略的marker数量；该诊断容量与实际汽车输出容量不同。HostBatch与`-TestMode`或`-ControlSource`不能同时选择。
 
-该入口交付 Windows 主机工程。完整应用/通信向量及完整 SC1／交接仍须分别通过后续验收；编译和启动成功不能升级这些能力声明。官方 XSD、MOD、PDF、编译器及许可受限规范不随生成工程分发。
+该入口交付 Windows 主机工程。应用／通信与SC1各义务已有正式测试，最终独立交接由4.22复验；编译和启动成功不能升级这些能力声明。官方 XSD、MOD、PDF、编译器及许可受限规范不随生成工程分发。
 
 参考应用的S/R Read在未接收时返回初值0／`RTE_E_NEVER_RECEIVED`，有效接收返回实际值／`E_OK`，过期保留最后接收值并返回`RTE_E_MAX_AGE_EXCEEDED`。应用对非成功读取采用配置初值；只有`Rte_Write`成功才提交值和逻辑epoch，失败记录标准状态并保留旧提交。DID 0x1234在默认／扩展会话中，经同Task的同步服务器读取这一提交值并编码为四字节大端；epoch30的新输入先于deadline处理。同一epoch的批次不重复应用周期。
 
@@ -73,7 +73,7 @@ Agent 应把规范研究放进具体功能任务，不用一轮轮独立审计�
 
 RTE周期组也可显式引用`RteUsedOsSchTblExpiryPointRef`／`RteBswUsedOsSchTblExpiryPointRef`。所选参考ECU使用一个重复ExpiryPoint、`NONE`同步策略和同一owner／软件SystemCounter；表duration等于TimingEvent周期，启动值加初始offset等于首个周期。周期编辑会同时更新相关事件、Com周期、表duration和启动值。未知或未绑定的表、混用Alarm与ExpiryPoint、错误Task/Event及不匹配周期会在生成前拒绝。
 
-独立计时验收入口为`cargo test --manifest-path core/Cargo.toml --test end_to_end epic4_sc1_timing_capacity -- --exact`。它运行八个独立软件Counter、八表实际配置、双表封存轨迹、单次／重复／绝对／链接／停止／错误前态和真实生成工程消费者。`Os_CounterConfig.software=0`的宿主定时器Counter由实际受控内核tick ISR推进，不能通过标准`IncrementCounter`写入；读取及elapsed值按该Counter模数调整，内核32位tick回绕不改变已推进的Counter值。该证据限定Win64主机，完整SC1／ARTI／编码与交接出口继续分别验收。
+独立计时验收入口为`cargo test --manifest-path core/Cargo.toml --test end_to_end epic4_sc1_timing_capacity -- --exact`。它运行八个独立软件Counter、八表实际配置、双表封存轨迹、单次／重复／绝对／链接／停止／错误前态和真实生成工程消费者。`Os_CounterConfig.software=0`的宿主定时器Counter由实际受控内核tick ISR推进，不能通过标准`IncrementCounter`写入；读取及elapsed值按该Counter模数调整，内核32位tick回绕不改变已推进的Counter值。该结果限定Win64主机；ARTI、工件及完整交接由其BMad故事记录。
 
 ## 新目标交接与工作台状态
 
@@ -82,3 +82,5 @@ RTE周期组也可显式引用`RteUsedOsSchTblExpiryPointRef`／`RteBswUsedOsSch
 交接包可整体搬移，在面板填写“重导入 ECU 目录”重新打开，再生成到另一目录。原字节输入、固定运行时、许可、外部 XSD/MOD 身份及每份生成源码会重新核对，不能用包内 JSON 直接恢复一个可信计划。旧 host-v1 保持原读取和离线运行入口。SHA-256 用于完整性检查，不提供发布者签名认证。
 
 保存、校验、生成、构建、本次主机行为分别显示真实结果；输入修改或重新打开会使下游结果失效。完整 SC1 当前工程复验与实机状态保持未验证，不从有界主机向量推断。离线接收者执行包内 `verify.ps1 -BuildDirectory <新的空目录>`；仅重导入和再生成需要同版工作台以及合法、匹配的 XSD/MOD。包内保留固定 FreeRTOS 来源、十四个补丁和 MIT 许可，产品代码仅用于所有者授权的内部用途，不增加公开发布许可。
+
+最后的独立交接入口为`cargo test --manifest-path core/Cargo.toml --test end_to_end epic4_independent_handoff -- --exact`。该入口重新建立临时输入、搬移包、重导入、再生成、编译并核对完整CAN／DID／拒绝／恢复输出；完整主机等级还需执行既有OS／ARTI正式行为测试。BMad 4.22记录非实现者的实际复验结果，工作台不会把一次包内行为检查升级为当前工程完整SC1复验。

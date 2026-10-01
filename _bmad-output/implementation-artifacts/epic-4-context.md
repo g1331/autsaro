@@ -45,7 +45,7 @@
 
 HostBatchV1 / controlled_logical_ms 以逐毫秒 ticket/确认推进；同 epoch 输入先于 deadline，应用先于 Dcm。单批最多 256 消息、跨度 1000 ms，输出队列 256，COMMIT watchdog 5000 ms；错误批次在改变状态前拒绝。运行输出失败/溢出/超时/初始化失败关闭目标，不声称已执行批次回滚。阻塞 I/O 位于宿主桥。旧轮询目标保留回归，不与新 OS/RTE 同时链接。
 
-交付固定源码、补丁、摘要、来源、MIT 与工具许可，离线构建不拉浮动依赖；官方 Schema/MOD/showcase 是合法取得的外部校验参考，不自动分发。
+交付显式版本化的可重建包、原始逻辑输入、固定源码、补丁、摘要、来源、MIT 与工具许可，重导入重新校验并建立唯一计划，离线构建不拉浮动依赖；官方 Schema/MOD/showcase 是合法取得的外部校验参考，不自动分发。
 
 ## UX & Interaction Patterns
 

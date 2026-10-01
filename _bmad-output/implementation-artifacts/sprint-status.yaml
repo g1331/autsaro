@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-27-2026 18:43
-last_updated: 10-01-2026 03:41
+last_updated: 10-01-2026 11:01
 project: Autosar
 project_key: NOKEY
 tracking_system: file-system
@@ -38,7 +38,7 @@ story_location: _bmad-output/implementation-artifacts
 # Entry conditions and dependencies: ../planning-artifacts/implementation-readiness.md
 # First candidates: 4.1 and 4.3 independently; 4.9 after 4.3 for early stack-risk validation.
 # W3/4.13 requires 4.3-4.9 and 4.10-4.12 to pass; full SC1/handoff remains the Epic exit gate.
-# Epic 4 build active: W1/W2 gates passed; W3/4.13 development entry open, full SC1/handoff exit remains open.
+# Epic 4 complete: all 22 stories, applicable host SC1 behavior and independent handoff passed through BMad.
 # Epic 2 / Story 2.1 remain deferred backlog pending the diagnostic support matrix.
 development_status:
   epic-1: done
@@ -55,7 +55,7 @@ development_status:
   3-3-verify-delivered-host-behavior-without-the-workbench: done
   epic-3-retrospective: optional
 
-  epic-4: in-progress
+  epic-4: done
   4-1-建立原创参考输入与可定位的拒绝样例: done
   4-2-固定标准义务-依赖来源及独立验收预期: done
   4-3-建立固定内核的唯一-backend-与静态生命周期基础: done
@@ -77,7 +77,7 @@ development_status:
   4-19-生成并验证-r24-11-arti-描述与-hook: done
   4-20-关闭适用-c-工件-模块描述和静态质量证据: done
   4-21-交付新目标可重建包与准确工作台状态: done
-  4-22-独立复核完整等级与工程交接出口: backlog
+  4-22-独立复核完整等级与工程交接出口: done
   epic-4-retrospective: optional
 
   epic-5: backlog

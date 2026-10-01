@@ -7,7 +7,7 @@ epicStructureConfirmed: 2026-09-28
 storiesConfirmed: 2026-09-28
 planningValidation: passed
 workflowCompleted: 2026-09-28
-implementationStatus: in-progress
+implementationStatus: done
 planningBaseline: e5b84a6da244bc8cd6791bb3e974e39a2d73eb7e
 inputDocuments:
   - _bmad-output/planning-artifacts/prd.md
@@ -22,7 +22,7 @@ updated: 2026-10-01
 
 # Autosar Classic 产品成果与实施记录
 
-本文件以[产品简述](product-brief.md)的完整 Classic 产品方向、[PRD](prd.md) 的参考 ECU 用户成果和[架构](architecture.md)的实现边界为依据。Epic 按使用者能交付的工程结果划分，模块是每个结果的支持范围，不把规范目录逐项变成 Epic。编号是稳定标识，不是“前一项全部完成才能出现后一项”的证明。Epic 1 已按固定主机 CAN 切片的原定出口收尾；Epic 2 与其唯一 story 仍在 `backlog`，因产品方向调整不作为近期开发项。**Epic 1、Epic 3 已按其限定范围完成；Epic 4 架构已 final，22 条故事已确认并通过本范围规划校验，4.1～4.21 已完成，剩余 4.22 按已确认依赖继续。Epic 2 暂缓，待诊断支持矩阵核定后决定是否保留。**Epic 4–6 才逐步达到通用 CAN＋诊断完整参考 ECU；Epic 3 完成不代表它们或整套产品已就绪。
+本文件以[产品简述](product-brief.md)的完整 Classic 产品方向、[PRD](prd.md) 的参考 ECU 用户成果和[架构](architecture.md)的实现边界为依据。Epic 按使用者能交付的工程结果划分，模块是每个结果的支持范围，不把规范目录逐项变成 Epic。编号是稳定标识，不是“前一项全部完成才能出现后一项”的证明。Epic 1 已按固定主机 CAN 切片的原定出口收尾；Epic 2 与其唯一 story 仍在 `backlog`，因产品方向调整不作为近期开发项。**Epic 1、Epic 3 已按其限定范围完成；Epic 4 架构已 final，22 条故事已确认并通过本范围规划校验，W0～W5的4.1～4.22全部完成，跨story集成、全部适用主机SC1行为与最终非实现者交接已通过BMad验证／复核。Epic 2 暂缓，待诊断支持矩阵核定后决定是否保留。**Epic 4–6 才逐步达到通用 CAN＋诊断完整参考 ECU；Epic 3 完成不代表它们或整套产品已就绪。
 
 第一条产品链完成，须同时满足 Epic 3 的受限主机工程交接、Epic 4 的标准参考输入与应用/RTE/OS 主机运行、Epic 5 的单网络完整主机行为和 Epic 6 的指定 MCU 复验。中间 Epic 可以交付受限成果，但不能以任一中间结果声明完整 Classic 参考 ECU；一个参考 ECU 的完成也不代表所有 Classic 模块、配置、目标或规范版次均已支持。每个支持声明仍须通过BMad story 验证，主机和硬件证据分别记录。
 
@@ -503,7 +503,7 @@ As a OS 等级验收工程师，
 I want 剩余错误、Hook、启动关闭和模拟中断义务有可执行实现与证据，
 So that 非正常路径也遵守 SC1 的接口与运行契约。
 
-**工作包／依赖：**W5；4.3–4.9、4.2。**覆盖：**FR-6/FR-15，E4-AR-12。**产物：**完整适用调用层级/错误/Hook/中断配对与生命周期路径、BCC1/BCC2/ECC1/ECC2 能力和最小容量向量。**执行入口：**`epic4_sc1_errors_hooks_and_isr`。
+**工作包／依赖：**W5；4.3–4.9、4.2。**覆盖：**FR-6/FR-15，E4-AR-12。**产物：**完整适用调用层级/错误/Hook/中断配对与生命周期路径、BCC1/BCC2/ECC1/ECC2 能力和最小容量向量。**执行入口：**`epic4_standard_calling_context`、`epic4_standard_error_hook_parameters`、`epic4_standard_interrupt_pairing`、`epic4_real_task_hook_transitions`、`epic4_sc1_class_capacity`及父规格中的其余正式生命周期／配置入口。
 
 **Acceptance Criteria:**
 
@@ -545,7 +545,7 @@ As a ECU 工程接收者，
 I want 获得完整新目标包和明确的验证状态，
 So that 可以在新目录重建并离线复验而无需仓库隐含文件。
 
-**工作包／依赖：**W5；4.20。**覆盖：**FR-4/FR-12/FR-14/FR-15，R6/R7、UX-DR3/4、E4-AR-13。**产物：**显式版本化交接格式/来源清单、应用/BSW/内核/补丁/目标闭包、build/verify 入口与独立测试器、工作台预览及阶段状态连接。**执行入口：**`epic4_rebuildable_handoff`；原生 UI/IPC 另在隔离桌面留证。
+**工作包／依赖：**W5；4.20。**覆盖：**FR-4/FR-12/FR-14/FR-15，R6/R7、UX-DR3/4、E4-AR-13。**产物：**显式版本化交接格式/来源清单、应用/BSW/内核/补丁/目标闭包、build/verify 入口与独立测试器、工作台预览及阶段状态连接。**执行入口：**`epic4_independent_handoff`（4.22合并维护同一严格消费者）；原生 UI/IPC 另在隔离桌面留证。
 
 **Acceptance Criteria:**
 

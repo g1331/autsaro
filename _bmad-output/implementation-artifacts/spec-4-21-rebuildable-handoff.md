@@ -46,7 +46,7 @@ context: []
 - [x] `core/src/integration/handoff.rs`／`ecu.rs`／`generator.rs`／`arxml/integration_editor.rs`：显式格式、输入与固定源码身份、重建校验及保护旧输出。
 - [x] `runtime/ecu/build.ps1`／`verify.ps1`：包内成功、诊断恢复和失败验证，编译与来源可在新目录复现。
 - [x] `src-tauri/src/lib.rs`／`ui/src/IntegrationDelivery.tsx`／`App.tsx`／`types.ts`：真实预览、导出、重导入、构建和主机行为；准确阶段及失效反馈，等级／实机缺验证保持未验证。
-- [x] `core/tests/support/epic4_handoff.rs`／`scripts/epic4_desktop*`／`README.md`：正式`epic4_rebuildable_handoff`、关键拒绝、host-v1回归及隔离UI／IPC；结论进入本BMad工件。
+- [x] `core/tests/support/epic4_handoff.rs`／`scripts/epic4_desktop*`／`README.md`：正式`epic4_independent_handoff`、关键拒绝、host-v1回归及隔离UI／IPC；结论进入本BMad工件。
 - [x] 当前BMad spec及`sprint-status.yaml`：所有适用检查有实际结果，未完成保持未完成。
 
 Given声明固定工具和原始合法输入，when接收者从新目录重开、生成、构建并执行实际独立检查，then完整源码稳定、主机向量与拒绝成立，真实界面各阶段结论与动作一致。
@@ -78,7 +78,7 @@ Given声明固定工具和原始合法输入，when接收者从新目录重开�
 
 ## Verification
 
-运行正式入口`epic4_rebuildable_handoff`及受影响生成／保护／旧host-v1回归，UI lint／严格构建、Rust Clippy与增量检查。以隔离桌面运行真实原生路径并检查实际画面及IPC结果；临时截图／中间文件仅临时目录，普通测试不写受版本管理报告。非实现者完整交接重复由4.22承担，不提前标Epic done。
+运行正式入口`epic4_independent_handoff`及受影响生成／保护／旧host-v1回归，UI lint／严格构建、Rust Clippy与增量检查。以隔离桌面运行真实原生路径并检查实际画面及IPC结果；临时截图／中间文件仅临时目录，普通测试不写受版本管理报告。非实现者完整交接重复由4.22承担，不提前标Epic done。
 
 核心已接入显式新格式、固定依赖、嵌套逻辑输入身份及重新生成字节比较。首次往返识别Workspace canonicalize路径与声明逻辑根的Windows前缀差异，已使验证后的包根规范化；不放宽输入根边界断言。
 
@@ -100,3 +100,5 @@ UI lint／严格build、核心与桌面Clippy、桌面实际build、15项Python�
 - [x] [Review][Patch] 离线构建私有180s期限，真实停滞工具及后代退出已复验。
 - [x] [Review][Patch] 完整输出集合拒绝额外帧，独立原生编译故障已复验。
 - [x] [Review][Patch] 原生IPC复验旧格式分派和拒绝未知格式后保留工作区。
+
+4.22最终审查指出两条story重复注册同一耗时消费者。当前正式入口统一为`epic4_independent_handoff`，原4.21入口更名合并；验证函数、全部行为与拒绝断言保持，历史通过记录仍对应同一消费者。
