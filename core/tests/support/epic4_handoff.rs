@@ -162,11 +162,28 @@ pub fn verify() {
     assert_ne!(verification, bounded_verification);
     fs::write(stalled.join("verify.ps1"), bounded_verification).unwrap();
     fs::copy(
+        output.join("process-tree.cs"),
+        stalled.join("process-tree.cs"),
+    )
+    .unwrap();
+    fs::write(
+        stalled.join("taskkill.exe"),
+        b"invalid executable for cleanup failure",
+    )
+    .unwrap();
+    let invalid = Command::new(stalled.join("taskkill.exe"))
+        .spawn()
+        .expect_err("Invalid cleanup fixture unexpectedly started");
+    assert!(
+        matches!(invalid.raw_os_error(), Some(193 | 216)),
+        "{invalid}"
+    );
+    fs::copy(
         output.join("verification/inputs.json"),
         stalled.join("verification/inputs.json"),
     )
     .unwrap();
-    fs::write(stalled.join("build.ps1"), b"$info=[Diagnostics.ProcessStartInfo]::new(); $info.FileName='powershell.exe'; $info.Arguments='-NoProfile -NonInteractive -Command Start-Sleep 30'; $info.UseShellExecute=$false; $info.CreateNoWindow=$true; $p=[Diagnostics.Process]::Start($info); Set-Content -LiteralPath (Join-Path $PSScriptRoot 'pid.txt') -Value $p.Id; Start-Sleep 30\n").unwrap();
+    fs::write(stalled.join("build.ps1"), b"$info=[Diagnostics.ProcessStartInfo]::new(); $info.FileName='powershell.exe'; $info.Arguments='-NoProfile -NonInteractive -Command Start-Sleep 30'; $info.UseShellExecute=$false; $info.CreateNoWindow=$true; $p=[Diagnostics.Process]::Start($info); Set-Content -LiteralPath (Join-Path $PSScriptRoot 'pid.txt') -Value $p.Id; Set-Content -LiteralPath (Join-Path $PSScriptRoot 'parent.txt') -Value $PID; Start-Sleep 30\n").unwrap();
     let mut timeout = Command::new("powershell.exe");
     timeout
         .args([
@@ -178,7 +195,8 @@ pub fn verify() {
         ])
         .arg(stalled.join("verify.ps1"))
         .arg("-BuildDirectory")
-        .arg(scratch.0.join("stalled-build"));
+        .arg(scratch.0.join("stalled-build"))
+        .current_dir(&stalled);
     let failed = super::epic4_ecu::run_public_command(
         &mut timeout,
         &scratch.0,
@@ -197,18 +215,72 @@ pub fn verify() {
         .trim()
         .parse::<u32>()
         .unwrap();
+    let parent = fs::read_to_string(stalled.join("parent.txt"))
+        .unwrap()
+        .trim()
+        .parse::<u32>()
+        .unwrap();
     let mut gone = Command::new("powershell.exe");
     gone.args([
         "-NoProfile",
         "-NonInteractive",
         "-Command",
-        &format!("if (Get-Process -Id {pid} -ErrorAction SilentlyContinue) {{ exit 1 }}"),
+        &format!("if (Get-Process -Id {parent},{pid} -ErrorAction SilentlyContinue) {{ exit 1 }}"),
     ]);
     assert!(
         super::epic4_ecu::run_public_command(
             &mut gone,
             &scratch.0,
             "offline-child-closed",
+            Duration::from_secs(5)
+        )
+        .status
+        .success()
+    );
+    // A native invalid-job assignment fails before any build command can run.
+    // Mutate only this temporary generated helper, not the production source.
+    let native = fs::read_to_string(stalled.join("process-tree.cs")).unwrap();
+    let rejected_native = native.replace(
+        "Check(AssignProcessToJobObject(job, process.Process), \"Assign suspended command\");",
+        "System.IO.File.WriteAllText(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), \"assignment-pid.txt\"), process.ProcessId.ToString()); Check(AssignProcessToJobObject(IntPtr.Zero, process.Process), \"Assign suspended command\");",
+    );
+    assert_ne!(native, rejected_native);
+    fs::write(stalled.join("process-tree.cs"), rejected_native).unwrap();
+    fs::write(
+        stalled.join("build.ps1"),
+        b"Set-Content -LiteralPath (Join-Path $PSScriptRoot 'must-not-run.txt') -Value executed\n",
+    )
+    .unwrap();
+    let failed = super::epic4_ecu::run_public_command(
+        &mut timeout,
+        &scratch.0,
+        "offline-job-assignment",
+        Duration::from_secs(15),
+    );
+    assert!(!failed.status.success());
+    assert!(
+        String::from_utf8_lossy(&failed.stderr).contains("Assign suspended command"),
+        "{}{}",
+        String::from_utf8_lossy(&failed.stdout),
+        String::from_utf8_lossy(&failed.stderr)
+    );
+    assert!(!stalled.join("must-not-run.txt").exists());
+    let rejected_pid = fs::read_to_string(stalled.join("assignment-pid.txt"))
+        .unwrap()
+        .parse::<u32>()
+        .unwrap();
+    let mut gone = Command::new("powershell.exe");
+    gone.args([
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        &format!("if (Get-Process -Id {rejected_pid} -ErrorAction SilentlyContinue) {{ exit 1 }}"),
+    ]);
+    assert!(
+        super::epic4_ecu::run_public_command(
+            &mut gone,
+            &scratch.0,
+            "offline-rejected-parent-closed",
             Duration::from_secs(5)
         )
         .status

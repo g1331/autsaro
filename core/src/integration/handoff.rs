@@ -94,6 +94,10 @@ pub(super) fn verification_files(
         "verify.ps1".into(),
         include_bytes!("../../../runtime/ecu/verify.ps1").to_vec(),
     );
+    files.insert(
+        "process-tree.cs".into(),
+        include_bytes!("../../../runtime/ecu/process-tree.cs").to_vec(),
+    );
     Ok(files)
 }
 
@@ -313,12 +317,14 @@ fn run_bounded(
 ) -> Result<Output, String> {
     let stdout = directory.join("command.stdout");
     let stderr = directory.join("command.stderr");
-    let mut child = command
+    command
         .stdin(Stdio::null())
         .stdout(fs::File::create(&stdout).map_err(|e| e.to_string())?)
-        .stderr(fs::File::create(&stderr).map_err(|e| e.to_string())?)
-        .spawn()
-        .map_err(|e| e.to_string())?;
+        .stderr(fs::File::create(&stderr).map_err(|e| e.to_string())?);
+    #[cfg(windows)]
+    let mut child = super::windows_job::ProcessTree::spawn(command)?;
+    #[cfg(not(windows))]
+    let mut child = command.spawn().map_err(|e| e.to_string())?;
     let started = Instant::now();
     let status = loop {
         match child.try_wait() {
@@ -330,41 +336,22 @@ fn run_bounded(
             _ => {}
         }
         #[cfg(windows)]
+        child.stop()?;
+        #[cfg(not(windows))]
         {
-            use std::os::windows::process::CommandExt;
-            let mut cleanup = Command::new("taskkill.exe")
-                .args(["/PID", &child.id().to_string(), "/T", "/F"])
-                .creation_flags(0x08000000)
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .spawn()
-                .map_err(|e| e.to_string())?;
-            let limit = Instant::now();
-            while cleanup.try_wait().map_err(|e| e.to_string())?.is_none()
-                && limit.elapsed() < Duration::from_secs(3)
-            {
-                std::thread::sleep(Duration::from_millis(10));
-            }
-            if cleanup.try_wait().map_err(|e| e.to_string())?.is_none() {
-                cleanup.kill().map_err(|e| e.to_string())?;
-            }
-            let stopped = cleanup.wait().map_err(|e| e.to_string())?;
-            if !stopped.success() && child.try_wait().map_err(|e| e.to_string())?.is_none() {
+            if child.try_wait().map_err(|e| e.to_string())?.is_none() {
                 child.kill().map_err(|e| e.to_string())?;
-                child.wait().map_err(|e| e.to_string())?;
-                return Err("ECU command timed out; parent closed but descendant cleanup could not be confirmed.".into());
             }
+            child.wait().map_err(|e| e.to_string())?;
         }
-        if child.try_wait().map_err(|e| e.to_string())?.is_none() {
-            child.kill().map_err(|e| e.to_string())?;
-        }
-        child.wait().map_err(|e| e.to_string())?;
         return Err(format!(
             "ECU command exceeded its host watchdog or could not be observed; process tree closed.\n{}\n{}",
             fs::read_to_string(&stdout).unwrap_or_default(),
             fs::read_to_string(&stderr).unwrap_or_default()
         ));
     };
+    #[cfg(windows)]
+    child.stop()?;
     Ok(Output {
         status,
         stdout: fs::read(stdout).map_err(|e| e.to_string())?,
@@ -437,6 +424,81 @@ pub fn verify_ecu_project(
 mod tests {
     use super::*;
     use std::os::windows::process::CommandExt;
+
+    #[test]
+    fn ecu_watchdog_closes_tree_when_taskkill_cannot_start() {
+        const PROBE: &str = "AUTOSAR_A1_WATCHDOG_PROBE";
+        if let Some(path) = std::env::var_os(PROBE) {
+            let path = PathBuf::from(path);
+            // Application-directory resolution must hit the invalid utility.
+            let error = Command::new("taskkill.exe")
+                .creation_flags(0x08000000)
+                .spawn()
+                .expect_err("Invalid taskkill fixture unexpectedly started");
+            assert!(matches!(error.raw_os_error(), Some(193 | 216)), "{error}");
+            let mut command = Command::new("python");
+            command.args(["-c", "import os,subprocess,sys,time; leaf=\"import subprocess,sys,time; p=subprocess.Popen([sys.executable,'-c','import time; time.sleep(30)'],creationflags=0x08000000); print(str(p.pid),flush=True); time.sleep(30)\"; p=subprocess.Popen([sys.executable,'-c',leaf],stdout=sys.stdout,stderr=sys.stderr,creationflags=0x08000000); print(str(os.getpid())+' '+str(p.pid),flush=True); time.sleep(30)"]);
+            let error = run_bounded(&mut command, &path, Duration::from_secs(5)).unwrap_err();
+            assert!(
+                error.contains("watchdog") && error.contains("process tree closed"),
+                "{error}"
+            );
+            let pids = fs::read_to_string(path.join("command.stdout")).unwrap();
+            let pids: Vec<u32> = pids
+                .split_whitespace()
+                .map(|pid| pid.parse().unwrap())
+                .collect();
+            assert_eq!(pids.len(), 3);
+            let mut check = Command::new("powershell.exe");
+            check.args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                &format!(
+                    "if (Get-Process -Id {},{},{} -ErrorAction SilentlyContinue) {{ exit 1 }}",
+                    pids[0], pids[1], pids[2]
+                ),
+            ]);
+            assert!(
+                run_bounded(&mut check, &path, Duration::from_secs(5))
+                    .unwrap()
+                    .status
+                    .success(),
+                "Watchdog left owned processes alive"
+            );
+            return;
+        }
+        let scratch = PrivateDirectory::new().unwrap();
+        let exe = scratch.root.join("watchdog-test.exe");
+        fs::copy(std::env::current_exe().unwrap(), &exe).unwrap();
+        fs::write(
+            scratch.root.join("taskkill.exe"),
+            b"invalid executable for cleanup failure",
+        )
+        .unwrap();
+        let capture = PrivateDirectory::new().unwrap();
+        let mut command = Command::new(exe);
+        command
+            .args([
+                "--exact",
+                "integration::handoff::tests::ecu_watchdog_closes_tree_when_taskkill_cannot_start",
+                "--nocapture",
+            ])
+            .env(PROBE, &scratch.root);
+        let result = capture
+            .finish(run_bounded(
+                &mut command,
+                &capture.root,
+                Duration::from_secs(20),
+            ))
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&result.stdout),
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
 
     #[test]
     fn ecu_command_watchdog_closes_descendants_and_removes_private_files() {

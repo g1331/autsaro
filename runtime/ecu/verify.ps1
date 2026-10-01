@@ -11,33 +11,10 @@ if ($inputs.format -ne 'autosar-ecu-test-inputs-v1') { throw 'Unsupported verifi
 $buildScript = (Join-Path $sourceRoot 'build.ps1').Replace("'", "''")
 $buildOutput = $BuildDirectory.Replace("'", "''")
 $buildCommand = "& '$buildScript' -OutputDirectory '$buildOutput' -HostBatch"
-$buildInfo = [Diagnostics.ProcessStartInfo]::new()
-$buildInfo.FileName = 'powershell.exe'
-$buildInfo.Arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($buildCommand))
-$buildInfo.UseShellExecute = $false
-$buildInfo.CreateNoWindow = $true
-$buildInfo.RedirectStandardOutput = $true
-$buildInfo.RedirectStandardError = $true
-$builder = [Diagnostics.Process]::Start($buildInfo)
-$buildStdout = $builder.StandardOutput.ReadToEndAsync()
-$buildStderr = $builder.StandardError.ReadToEndAsync()
-try {
-    if (-not $builder.WaitForExit($buildTimeoutSeconds * 1000)) {
-        $cleanupInfo = [Diagnostics.ProcessStartInfo]::new()
-        $cleanupInfo.FileName = 'taskkill.exe'
-        $cleanupInfo.Arguments = "/PID $($builder.Id) /T /F"
-        $cleanupInfo.UseShellExecute = $false
-        $cleanupInfo.CreateNoWindow = $true
-        $cleanup = [Diagnostics.Process]::Start($cleanupInfo)
-        try {
-            if (-not $cleanup.WaitForExit(3000)) { $cleanup.Kill(); $null = $cleanup.WaitForExit(3000) }
-        } finally { $cleanup.Dispose() }
-        if (-not $builder.HasExited) { $builder.Kill(); $null = $builder.WaitForExit(5000) }
-        throw 'Independent HostBatch build exceeded its host watchdog.'
-    }
-    Write-Output $buildStdout.Result
-    if ($builder.ExitCode -ne 0) { throw "Independent HostBatch build failed: $($buildStderr.Result)" }
-} finally { $builder.Dispose() }
+Add-Type -Path (Join-Path $sourceRoot 'process-tree.cs')
+$buildResult = [Autosar.EcuProcessTree]::Run($buildCommand, $buildTimeoutSeconds)
+Write-Output $buildResult.Stdout
+if ($buildResult.ExitCode -ne 0) { throw "Independent HostBatch build failed: $($buildResult.Stderr)" }
 $binary = Join-Path ([IO.Path]::GetFullPath($BuildDirectory)) 'ecu_host_batch.exe'
 $watch = [Diagnostics.Stopwatch]::StartNew()
 $script:actor = $null
