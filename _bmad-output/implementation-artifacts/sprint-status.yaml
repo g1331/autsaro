@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-27-2026 18:43
-last_updated: 10-01-2026 12:38
+last_updated: 10-01-2026 12:57
 project: Autosar
 project_key: NOKEY
 tracking_system: file-system
@@ -96,5 +96,5 @@ action_items:
     epic: 4
     action: "在既有隔离原生脚本补齐交付通过后应用编辑并保存的回归，断言四阶段及旧产物清空、重新生成前构建不可用。"
     owner: "开发／测试维护者（工作台）"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-10-01.md"

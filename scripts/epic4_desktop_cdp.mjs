@@ -271,6 +271,105 @@ try {
   await click("标准输入");
   await click("还原草稿");
   await click("生成与构建");
+  // Apply/save is a separate invalidation path from a draft or reimport.
+  for (const name of ["校验", "生成", "构建", "主机行为"]) {
+    await stage(name, "已通过");
+  }
+  const savedInputs = await Promise.all(
+    sources.map((source) => readFile(source)),
+  );
+  const deliveredNames = (
+    await readFile(path.join(delivery, "files.list"), "utf8")
+  )
+    .trim()
+    .split(/\r?\n/);
+  const protectedNames = [...deliveredNames, "files.list", "files.sha256"];
+  const protectedBytes = await Promise.all(
+    protectedNames.map((name) => readFile(path.join(delivery, name))),
+  );
+  const recoveryBinaryPath = path.join(
+    scratch,
+    "ECU recovery build",
+    "ecu_host_batch.exe",
+  );
+  const recoveryBinary = await readFile(recoveryBinaryPath);
+  await click("标准输入");
+  await input("应用周期", "21");
+  await click("应用并校验修改");
+  await until(
+    `document.body.innerText.includes('修改已通过同一计划校验，尚未保存')`,
+  );
+  await click("生成与构建");
+  await stage("校验", "需重新校验");
+  for (const name of ["生成", "构建", "主机行为"]) {
+    await stage(name, "已失效");
+  }
+  async function assertOldDeliveryCleared() {
+    assert(
+      await evaluate(
+        `['ECU 文件预览', 'ECU 构建日志', 'ECU 行为日志'].every(label => !document.querySelector('[aria-label="' + label + '"]'))`,
+      ),
+      "Old delivery preview and logs must be cleared",
+    );
+    for (const text of ["确认生成 ECU", "构建 ECU", "验证 ECU 主机行为"]) {
+      assert(
+        await evaluate(
+          `([...document.querySelectorAll('button')].find(button => button.textContent.trim() === ${JSON.stringify(text)})).disabled`,
+        ),
+        `Old delivery action must stay disabled: ${text}`,
+      );
+    }
+  }
+  await assertOldDeliveryCleared();
+  // The real navigation label includes its dirty-workspace badge after apply.
+  await click("标准输入未保存");
+  await click("预览保存");
+  await until(`Boolean(document.querySelector('[aria-label="标准保存预览"]'))`);
+  for (let index = 0; index < sources.length; index += 1) {
+    assert.deepEqual(await readFile(sources[index]), savedInputs[index]);
+  }
+  await click("确认保存标准输入");
+  await until(
+    `document.body.innerText.includes('标准输入已保存，尚未生成运行工程')`,
+  );
+  const updatedInputs = await Promise.all(
+    sources.map((source) => readFile(source)),
+  );
+  assert(
+    updatedInputs.some((bytes, index) => !bytes.equals(savedInputs[index])),
+  );
+  await click("生成与构建");
+  for (const name of ["校验", "生成", "构建", "主机行为"]) {
+    await stage(name, "未执行");
+  }
+  await assertOldDeliveryCleared();
+  await screenshot("ecu-post-save-invalidated.png");
+  for (let index = 0; index < protectedNames.length; index += 1) {
+    assert.deepEqual(
+      await readFile(path.join(delivery, protectedNames[index])),
+      protectedBytes[index],
+      "Editing/saving inputs must preserve the previous source package",
+    );
+  }
+  assert.deepEqual(await readFile(recoveryBinaryPath), recoveryBinary);
+  const postSave = path.join(scratch, "post-save ECU source");
+  await input("ECU 输出目录", postSave);
+  await input("ECU 构建目录", path.join(scratch, "post-save ECU build"));
+  await assertOldDeliveryCleared();
+  await click("预览 ECU 交付");
+  await until(`Boolean(document.querySelector('[aria-label="ECU 文件预览"]'))`);
+  await writeFile(path.join(scratch, "accept-generation-path.txt"), postSave);
+  await click("确认生成 ECU");
+  await stage("生成", "已通过");
+  const postSaveInputs = JSON.parse(
+    await readFile(path.join(postSave, "verification", "inputs.json"), "utf8"),
+  );
+  assert.equal(postSaveInputs.periodMs, 21);
+  await click("构建 ECU");
+  await stage("构建", "已通过");
+  await click("验证 ECU 主机行为");
+  await stage("主机行为", "已通过");
+  await screenshot("ecu-post-save-verified.png");
   await rename(delivery, moved);
   await input("重导入 ECU 目录", moved);
   await click("重导入 ECU 交接包");
