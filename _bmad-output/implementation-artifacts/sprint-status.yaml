@@ -29,25 +29,23 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-27-2026 18:43
-last_updated: 10-01-2026 13:11
+last_updated: 10-03-2026 01:09
 project: Autosar
 project_key: NOKEY
 tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts
 # Sprint planning baseline: 4844e1d (2026-09-28); Epic 4 planning gate PASS only.
 # Entry conditions and dependencies: ../planning-artifacts/implementation-readiness.md
-# First candidates: 4.1 and 4.3 independently; 4.9 after 4.3 for early stack-risk validation.
-# W3/4.13 requires 4.3-4.9 and 4.10-4.12 to pass; full SC1/handoff remains the Epic exit gate.
+# Epic 4 entry/dependency notes are historical; all 22 stories have completed.
+# New roadmap candidates are not implementation-ready and are not registered here.
 # Epic 4 complete: all 22 stories, applicable host SC1 behavior and independent handoff passed through BMad.
-# Epic 2 / Story 2.1 remain deferred backlog pending the diagnostic support matrix.
+# Epic 2 / Story 2.1 merged into candidate R7 without implementation or completion.
+# Historical scope, backlog and retained obligations: ../planning-artifacts/epics.md#diagnostic-carryover
+# Removed from the independent queue by the authorized planning update on 2026-10-03.
 development_status:
   epic-1: done
   1-1-complete-std-001-host-can-driver-slice: done
   epic-1-retrospective: optional
-
-  epic-2: backlog
-  2-1-independent-host-state-and-diagnostic-reporting-for-two-dtcs: backlog
-  epic-2-retrospective: optional
 
   epic-3: done
   3-1-package-saved-host-arxml-inputs-with-generated-ecu: done
