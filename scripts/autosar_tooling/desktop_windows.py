@@ -16,6 +16,7 @@ import tempfile
 import time
 import urllib.request
 import uuid
+from contextlib import ExitStack
 from ctypes import wintypes as w
 from pathlib import Path
 
@@ -42,6 +43,13 @@ class Startup(ctypes.Structure):
         ("hStdInput", w.HANDLE),
         ("hStdOutput", w.HANDLE),
         ("hStdError", w.HANDLE),
+    ]
+
+
+class StartupEx(ctypes.Structure):
+    _fields_ = [
+        ("startup", Startup),
+        ("attributes", w.LPVOID),
     ]
 
 
@@ -79,38 +87,48 @@ class ExtendedLimits(ctypes.Structure):
     ]
 
 
-def run(binary: Path) -> int:
+class JobAccounting(ctypes.Structure):
+    _fields_ = [
+        ("total_user_time", ctypes.c_int64),
+        ("total_kernel_time", ctypes.c_int64),
+        ("period_user_time", ctypes.c_int64),
+        ("period_kernel_time", ctypes.c_int64),
+        ("page_faults", w.DWORD),
+        ("total_processes", w.DWORD),
+        ("active_processes", w.DWORD),
+        ("terminated_processes", w.DWORD),
+    ]
+
+
+def run(
+    binary: Path,
+    installed: bool = False,
+    source_checkout: Path | None = None,
+) -> int:
     if os.name != "nt":
         raise RuntimeError("Native desktop verification requires Windows")
     binary = binary.resolve(strict=True)
-    from autosar_tooling.desktop import write_resource_inputs
+    source_checkout = source_checkout.resolve() if source_checkout is not None else None
+    if installed and (
+        binary.is_relative_to(ROOT)
+        or (source_checkout is not None and binary.is_relative_to(source_checkout))
+    ):
+        raise RuntimeError(
+            "Installed verification requires a binary outside the checkout"
+        )
+    from autosar_tooling import native_profile
 
     scratch = Path(tempfile.mkdtemp(prefix="autosar-native-windows-"))
-    print(f"Isolated native test directory: {scratch}", flush=True)
-    inputs = scratch / "inputs"
-    shutil.copytree(ROOT / "core/tests/fixtures/epic4/positive", inputs)
-    paths = sorted(str(path) for path in inputs.glob("*.arxml"))
-    (scratch / "inputs.json").write_text(json.dumps(paths), encoding="utf-8")
-    write_resource_inputs(scratch)
-    packager = ROOT / "core/target/debug/package_host_reference.exe"
-    packaged = subprocess.run(
-        [
-            str(packager),
-            str(scratch / "legacy"),
-            "--target",
-            "windows-x64-controlled-v1",
-        ],
-        cwd=ROOT,
-        creationflags=subprocess.CREATE_NO_WINDOW,
-        capture_output=True,
-        timeout=180,
-        check=False,
-    )
-    if packaged.returncode:
-        raise RuntimeError(
-            packaged.stdout.decode("utf-8", errors="replace")
-            + packaged.stderr.decode("utf-8", errors="replace")
-        )
+    mode = "installed" if installed else "dev"
+    print(f"Isolated native test directory ({mode}): {scratch}", flush=True)
+    native_profile.prepare(scratch, "windows", installed, source_checkout)
+    app_cwd = scratch / "app-work" if installed else ROOT
+    if installed:
+        app_cwd.mkdir(exist_ok=True)
+    environment = native_profile.app_environment(scratch, installed)
+    environment.pop("AUTOSAR_XSD_ARCHIVE", None)
+    environment.pop("AUTOSAR_MOD_ARCHIVE", None)
+    environment["WEBVIEW2_USER_DATA_FOLDER"] = str(scratch / "webview-profile")
     user = ctypes.WinDLL("user32", use_last_error=True)
     kernel = ctypes.WinDLL("kernel32", use_last_error=True)
     user.CreateDesktopW.argtypes = [
@@ -168,9 +186,37 @@ def run(binary: Path) -> int:
         ctypes.POINTER(Process),
     ]
     kernel.ResumeThread.argtypes = [w.HANDLE]
+    kernel.ResumeThread.restype = w.DWORD
     kernel.TerminateProcess.argtypes = [w.HANDLE, w.UINT]
     kernel.CloseHandle.argtypes = [w.HANDLE]
     kernel.WaitForSingleObject.argtypes = [w.HANDLE, w.DWORD]
+    kernel.WaitForSingleObject.restype = w.DWORD
+    kernel.GetExitCodeProcess.argtypes = [w.HANDLE, ctypes.POINTER(w.DWORD)]
+    kernel.TerminateJobObject.argtypes = [w.HANDLE, w.UINT]
+    kernel.QueryInformationJobObject.argtypes = [
+        w.HANDLE,
+        ctypes.c_int,
+        w.LPVOID,
+        w.DWORD,
+        ctypes.POINTER(w.DWORD),
+    ]
+    kernel.InitializeProcThreadAttributeList.argtypes = [
+        w.LPVOID,
+        w.DWORD,
+        w.DWORD,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    kernel.UpdateProcThreadAttribute.argtypes = [
+        w.LPVOID,
+        w.DWORD,
+        ctypes.c_size_t,
+        w.LPVOID,
+        ctypes.c_size_t,
+        w.LPVOID,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    kernel.DeleteProcThreadAttributeList.argtypes = [w.LPVOID]
+    kernel.DeleteProcThreadAttributeList.restype = None
 
     def checked(result):
         if not result:
@@ -206,10 +252,12 @@ def run(binary: Path) -> int:
     )
     original = checked(user.OpenInputDesktop(0, False, 1))
     desktop_name = f"AutosarEpic4-{uuid.uuid4().hex}"
-    desktop = checked(user.CreateDesktopW(desktop_name, None, None, 0, 0x1FF, None))
-    job = checked(kernel.CreateJobObjectW(None, None))
+    desktop = None
+    job = None
     processes = []
     try:
+        desktop = checked(user.CreateDesktopW(desktop_name, None, None, 0, 0x1FF, None))
+        job = checked(kernel.CreateJobObjectW(None, None))
         limits = ExtendedLimits()
         limits.basic.flags = 0x2000
         checked(
@@ -223,91 +271,169 @@ def run(binary: Path) -> int:
             raise RuntimeError("Isolation desktop equals the input desktop")
         checked(user.SetThreadDesktop(desktop))
 
-        def launch(command, environment):
-            startup = Startup()
-            startup.cb = ctypes.sizeof(startup)
-            startup.lpDesktop = f"{station}\\{desktop_name}"
-            process = Process()
-            block = ctypes.create_unicode_buffer(
-                "\0".join(
-                    f"{key}={value}"
-                    for key, value in sorted(
-                        environment.items(), key=lambda item: item[0].upper()
+        def launch(command, launch_environment, cwd=ROOT, stdout=None):
+            with ExitStack() as resources:
+                startup = StartupEx()
+                startup.startup.cb = ctypes.sizeof(startup)
+                startup.startup.lpDesktop = f"{station}\\{desktop_name}"
+                process = Process()
+                block = ctypes.create_unicode_buffer(
+                    "\0".join(
+                        f"{key}={value}"
+                        for key, value in sorted(
+                            launch_environment.items(), key=lambda item: item[0].upper()
+                        )
                     )
+                    + "\0\0"
                 )
-                + "\0\0"
-            )
-            command_line = ctypes.create_unicode_buffer(
-                subprocess.list2cmdline(command)
-            )
-            # Suspended + Unicode environment + no console window. Assign the
-            # job before any child can spawn, then verify actual desktop identity.
-            checked(
-                kernel.CreateProcessW(
-                    None,
-                    command_line,
-                    None,
-                    None,
-                    False,
-                    0x08000404,
-                    block,
-                    str(ROOT),
-                    ctypes.byref(startup),
-                    ctypes.byref(process),
+                command_line = ctypes.create_unicode_buffer(
+                    subprocess.list2cmdline(command)
                 )
-            )
-            processes.append(process)
-            if not kernel.AssignProcessToJobObject(job, process.process):
-                error = ctypes.get_last_error()
-                checked(kernel.TerminateProcess(process.process, 1))
-                raise ctypes.WinError(error)
-            if kernel.ResumeThread(process.thread) == 0xFFFFFFFF:
-                raise ctypes.WinError(ctypes.get_last_error())
-            return process
+                attributes = None
+                inherited_handles = []
+                try:
+                    if stdout is not None:
+                        import msvcrt
 
-        with socket.socket() as socket_handle:
-            socket_handle.bind(("127.0.0.1", 1420))
+                        null_input = resources.enter_context(open(os.devnull, "rb"))
+                        handles = (w.HANDLE * 2)(
+                            msvcrt.get_osfhandle(null_input.fileno()),
+                            msvcrt.get_osfhandle(stdout.fileno()),
+                        )
+                        for handle in handles:
+                            was_inheritable = os.get_handle_inheritable(handle)
+                            os.set_handle_inheritable(handle, True)
+                            inherited_handles.append((handle, was_inheritable))
+                        required = ctypes.c_size_t()
+                        kernel.InitializeProcThreadAttributeList(
+                            None, 1, 0, ctypes.byref(required)
+                        )
+                        attributes = ctypes.create_string_buffer(required.value)
+                        checked(
+                            kernel.InitializeProcThreadAttributeList(
+                                attributes, 1, 0, ctypes.byref(required)
+                            )
+                        )
+                        startup.attributes = ctypes.cast(attributes, w.LPVOID)
+                        checked(
+                            kernel.UpdateProcThreadAttribute(
+                                attributes,
+                                0,
+                                0x00020002,
+                                handles,
+                                ctypes.sizeof(handles),
+                                None,
+                                None,
+                            )
+                        )
+                        startup.startup.dwFlags |= 0x100
+                        startup.startup.hStdInput = handles[0]
+                        startup.startup.hStdOutput = handles[1]
+                        startup.startup.hStdError = handles[1]
+                    # Suspended + Unicode environment + no console window. Assign
+                    # the job before any child, including the CDP driver, can spawn.
+                    checked(
+                        kernel.CreateProcessW(
+                            None,
+                            command_line,
+                            None,
+                            None,
+                            stdout is not None,
+                            0x08080404,
+                            block,
+                            str(cwd),
+                            ctypes.cast(ctypes.byref(startup), ctypes.POINTER(Startup)),
+                            ctypes.byref(process),
+                        )
+                    )
+                    processes.append(process)
+                    if not kernel.AssignProcessToJobObject(job, process.process):
+                        error = ctypes.get_last_error()
+                        checked(kernel.TerminateProcess(process.process, 1))
+                        raise ctypes.WinError(error)
+                    if kernel.ResumeThread(process.thread) == 0xFFFFFFFF:
+                        raise ctypes.WinError(ctypes.get_last_error())
+                finally:
+                    if startup.attributes:
+                        kernel.DeleteProcThreadAttributeList(attributes)
+                    for handle, was_inheritable in inherited_handles:
+                        os.set_handle_inheritable(handle, was_inheritable)
+                return process
+
         node = shutil.which("node")
         if node is None:
-            raise RuntimeError("Node.js is required for the existing Vite/CDP test")
-        launch(
-            [
-                node,
-                str(ROOT / "ui/node_modules/vite/bin/vite.js"),
-                "--host",
-                "127.0.0.1",
-                "--port",
-                "1420",
-                "--strictPort",
-                "--config",
-                str(ROOT / "ui/vite.config.ts"),
-                str(ROOT / "ui"),
-            ],
-            os.environ.copy(),
-        )
+            raise RuntimeError("Node.js is required for the external native CDP driver")
+        vite = None
+        if not installed:
+            with socket.socket() as socket_handle:
+                socket_handle.bind(("127.0.0.1", 1420))
+            vite = launch(
+                [
+                    node,
+                    str(ROOT / "ui/node_modules/vite/bin/vite.js"),
+                    "--host",
+                    "127.0.0.1",
+                    "--port",
+                    "1420",
+                    "--strictPort",
+                    "--config",
+                    str(ROOT / "ui/vite.config.ts"),
+                    str(ROOT / "ui"),
+                ],
+                os.environ.copy(),
+            )
         with socket.socket() as socket_handle:
             socket_handle.bind(("127.0.0.1", 0))
             debug_port = socket_handle.getsockname()[1]
-        environment = os.environ.copy()
-        environment.pop("AUTOSAR_XSD_ARCHIVE", None)
-        environment.pop("AUTOSAR_MOD_ARCHIVE", None)
-        environment["APPDATA"] = str(scratch / "app-config")
-        environment["AUTOSAR_CONFIG_DIR"] = str(scratch / "app-config")
-        environment["LOCALAPPDATA"] = str(scratch / "app-local")
-        environment["WEBVIEW2_USER_DATA_FOLDER"] = str(scratch / "webview-profile")
         environment["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = (
             f"--remote-debugging-port={debug_port}"
         )
+        if not installed:
+            deadline = time.monotonic() + 40
+            while True:
+                try:
+                    with urllib.request.urlopen("http://127.0.0.1:1420", timeout=1):
+                        break
+                except OSError:
+                    if time.monotonic() > deadline:
+                        raise RuntimeError(
+                            "Isolated Vite process failed to become ready"
+                        )
+                    time.sleep(0.2)
+        app = launch([str(binary)], environment, cwd=app_cwd)
+        launch_receipt = {
+            "installed": installed,
+            "mode": mode,
+            "binary": str(binary),
+            "cwd": str(app_cwd),
+            "appPid": app.pid,
+            "desktop": name(desktop),
+            "vitePid": vite.pid if vite is not None else None,
+            "environment": {
+                key: environment[key]
+                for key in (
+                    "AUTOSAR_CONFIG_DIR",
+                    "AUTOSAR_CC",
+                    "AUTOSAR_OBJDUMP",
+                    "AUTOSAR_NM",
+                    "AUTOSAR_GIT",
+                    "AUTOSAR_PYTHON",
+                    "PATH",
+                    "APPDATA",
+                    "LOCALAPPDATA",
+                    "WEBVIEW2_USER_DATA_FOLDER",
+                    "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+                )
+                if key in environment
+            },
+        }
+        receipt_path = scratch / "native-launch.json"
+        receipt_path.write_text(json.dumps(launch_receipt, indent=2), encoding="utf-8")
+        print(
+            f"Native launch ({mode}): {binary}; cwd={app_cwd}; pid={app.pid}",
+            flush=True,
+        )
         deadline = time.monotonic() + 40
-        while True:
-            try:
-                with urllib.request.urlopen("http://127.0.0.1:1420", timeout=1):
-                    break
-            except OSError:
-                if time.monotonic() > deadline:
-                    raise RuntimeError("Isolated Vite process failed to become ready")
-                time.sleep(0.2)
-        app = launch([str(binary)], environment)
         while True:
             try:
                 with urllib.request.urlopen(
@@ -332,22 +458,8 @@ def run(binary: Path) -> int:
                 raise RuntimeError("The input desktop changed during the isolated test")
         finally:
             user.CloseDesktop(current)
-        driver_log = (scratch / "native-driver.log").open("w", encoding="utf-8")
-        driver = subprocess.Popen(
-            [
-                node,
-                str(ROOT / "scripts/autosar_tooling/desktop_cdp.mjs"),
-                target["webSocketDebuggerUrl"],
-                str(scratch),
-            ],
-            cwd=ROOT,
-            creationflags=subprocess.CREATE_NO_WINDOW,
-            stdout=driver_log,
-            stderr=subprocess.STDOUT,
-        )
         canceled = 0
         observed = {}
-        deadline = time.monotonic() + 900
 
         def window_text(window, class_name=False):
             buffer = ctypes.create_unicode_buffer(256)
@@ -355,8 +467,34 @@ def run(binary: Path) -> int:
             method(window, buffer, len(buffer))
             return buffer.value
 
+        def poll(process):
+            status = kernel.WaitForSingleObject(process.process, 0)
+            if status == 0x102:
+                return None
+            if status != 0:
+                raise ctypes.WinError(ctypes.get_last_error())
+            exit_code = w.DWORD()
+            checked(kernel.GetExitCodeProcess(process.process, ctypes.byref(exit_code)))
+            return exit_code.value
+
+        driver_log = (scratch / "native-driver.log").open("w", encoding="utf-8")
         try:
-            while driver.poll() is None:
+            driver = launch(
+                [
+                    node,
+                    str(ROOT / "scripts/autosar_tooling/desktop_cdp.mjs"),
+                    target["webSocketDebuggerUrl"],
+                    str(scratch),
+                ],
+                os.environ.copy(),
+                stdout=driver_log,
+            )
+            launch_receipt["driverPid"] = driver.pid
+            receipt_path.write_text(
+                json.dumps(launch_receipt, indent=2), encoding="utf-8"
+            )
+            deadline = time.monotonic() + 900
+            while (driver_result := poll(driver)) is None:
                 if time.monotonic() > deadline:
                     raise RuntimeError(
                         "Native UI driver exceeded its bounded verification time"
@@ -415,21 +553,18 @@ def run(binary: Path) -> int:
                         canceled += 1
                         observed[window] = time.monotonic() + 900
                 time.sleep(0.05)
-            if driver.returncode:
+            if driver_result:
                 driver_log.flush()
                 print(
                     (scratch / "native-driver.log").read_text(encoding="utf-8")[-8000:],
                     flush=True,
                 )
-                return driver.returncode
+                return driver_result
             if canceled < 1:
                 raise RuntimeError(
                     "The native discard confirmation was not actually canceled"
                 )
         finally:
-            if driver.poll() is None:
-                driver.terminate()
-                driver.wait(timeout=5)
             driver_log.close()
         current = checked(user.OpenInputDesktop(0, False, 1))
         try:
@@ -443,22 +578,62 @@ def run(binary: Path) -> int:
             cleanup_errors.append(
                 "Unable to restore the test controller's original desktop"
             )
-        if not kernel.CloseHandle(job):
-            cleanup_errors.append("Unable to close the isolated process job")
+        remaining_job_processes = None
+        if job is not None:
+            if not kernel.TerminateJobObject(job, 1):
+                cleanup_errors.append("Unable to terminate the isolated process job")
+            deadline = time.monotonic() + 5
+            while True:
+                accounting = JobAccounting()
+                if not kernel.QueryInformationJobObject(
+                    job, 1, ctypes.byref(accounting), ctypes.sizeof(accounting), None
+                ):
+                    cleanup_errors.append("Unable to confirm the isolated job is empty")
+                    break
+                remaining_job_processes = accounting.active_processes
+                if remaining_job_processes == 0:
+                    break
+                if time.monotonic() >= deadline:
+                    cleanup_errors.append(
+                        f"Isolated job still owns {remaining_job_processes} processes"
+                    )
+                    break
+                time.sleep(0.05)
+            if not kernel.CloseHandle(job):
+                cleanup_errors.append("Unable to close the isolated process job")
         for process in processes:
             if kernel.WaitForSingleObject(process.process, 5000) != 0:
                 cleanup_errors.append(
                     f"Process {process.pid} did not terminate after closing the job"
                 )
-            kernel.CloseHandle(process.thread)
-            kernel.CloseHandle(process.process)
-        if not user.CloseDesktop(desktop):
+            if not kernel.CloseHandle(process.thread):
+                cleanup_errors.append(
+                    f"Unable to close process {process.pid} thread handle"
+                )
+            if not kernel.CloseHandle(process.process):
+                cleanup_errors.append(f"Unable to close process {process.pid} handle")
+        if desktop is not None and not user.CloseDesktop(desktop):
             cleanup_errors.append("Unable to close the isolated desktop")
         if not user.CloseDesktop(original):
             cleanup_errors.append(
                 "Unable to close the input desktop observation handle"
             )
+        (scratch / "native-cleanup.json").write_text(
+            json.dumps(
+                {
+                    "installed": installed,
+                    "processIds": [process.pid for process in processes],
+                    "remainingJobProcesses": remaining_job_processes,
+                    "errors": cleanup_errors,
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
         if cleanup_errors:
             raise RuntimeError("; ".join(cleanup_errors))
-    print(f"windows_isolated_native_ipc PASS: temporary files {scratch}", flush=True)
+    print(
+        f"windows_isolated_native_ipc PASS ({mode}): temporary files {scratch}",
+        flush=True,
+    )
     return 0

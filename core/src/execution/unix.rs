@@ -224,11 +224,12 @@ impl UnixOwner {
             .open(&log_path)
             .map_err(|error| error.to_string())?;
         let mut child = Command::new(python.as_ref())
-            .args(["-S", "-m", "ecu_tools.owner", "--socket"])
+            .args(["-I", "-S"])
+            .arg(directory.join("ecu_tools/owner.py"))
+            .arg("--socket")
             .arg(&socket)
             .arg("--guardian-pid")
             .arg(std::process::id().to_string())
-            .env("PYTHONPATH", &directory)
             .env("PYTHONDONTWRITEBYTECODE", "1")
             .stdin(Stdio::piped())
             .stdout(Stdio::from(

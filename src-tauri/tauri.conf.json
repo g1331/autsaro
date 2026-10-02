@@ -11,8 +11,27 @@
   },
   "app": {
     "windows": [
-      { "title": "Classic CAN 配置工作台", "width": 1480, "height": 920, "minWidth": 1080, "minHeight": 720 }
+      {
+        "title": "Classic CAN 配置工作台",
+        "width": 1480,
+        "height": 920,
+        "minWidth": 1080,
+        "minHeight": 720
+      }
     ]
   },
-  "bundle": { "active": false }
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "DeveloperTool",
+    "shortDescription": "AUTOSAR Classic configuration and native source delivery",
+    "longDescription": "Edit and validate R24-11 Classic configuration, deliver sealed Windows/Linux C99 projects, and run declared native-host checks. Official AUTOSAR resources and execution toolchains are supplied separately."
+  }
 }

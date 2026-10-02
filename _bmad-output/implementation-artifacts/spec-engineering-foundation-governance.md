@@ -2,7 +2,7 @@
 title: '全生命周期工程基础治理'
 type: 'refactor'
 created: '2026-10-01'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '834b9b996e6e7592ab73a6c788f5a38287796aea'
@@ -56,7 +56,7 @@ context:
 - [x] 阶段5：语义策略替代Epic宏及legacy/integration回归阶段出口。
 - [x] 阶段6：工具单入口及职责拆分，双平台all阶段出口。
 - [x] 阶段7：统一状态与隔离Windows/Linux真实IPC阶段出口。
-- [ ] 阶段8：本机bundle与无checkout真实交付，双平台最终全量门及文档。
+- [x] 阶段8：本机bundle与无checkout真实交付，双平台最终全量门及文档。
 
 **Acceptance Criteria:**
 - Given each stage's declared prerequisites, when its real positive and negative entry points run, then its stated exit gate passes before the next begins; failure stays attributed to the relevant stage and does not lower the final scope.
@@ -115,6 +115,21 @@ context:
 - 阶段7最终all过程：Linux镜像缺少`71db38a`基线对象，质量门明确非零且未执行core；仅从本地Windows仓库fetch对象补齐，不覆盖工作树。随后两平台增量格式门共同发现新配置初始化表达式的换行不符rustfmt；按实际formatter输出修正两行并同步，没有降低规则或重排其他源码。两平台最终all正在运行，阶段7尚待该完整门结果。
 - 阶段7Linux最终完整门：`uv run --locked python -m autosar_tooling verify --scope all --base 71db38a`实际301.51s PASS，owned日志`/tmp/autosar-verify-m5csj2jd`。Python33项（1项Windows专属跳过）、Rust lib13项、core集成82项全部适用通过（229.88s），含新增缺失build父级／非空输出保护、保存事务和root取消回归，以及单次26个OS suite和真实生产协议；增量质量、Ruff、UI lint/build、core Clippy、desktop build/Clippy全部通过。Linux真实UI/native另由上述私有Xvfb门证明；Windows最终all仍在运行，尚未提交或开始阶段8。
 - 阶段7Windows最终完整门：同一`verify --scope all --base 71db38a`实际1333.77s PASS，owned日志`C:\Users\admin\AppData\Local\Temp\autosar-verify-mmztsp7a`。Python33项（8项POSIX专属跳过）、Rust lib12项、集成117项全部通过（1220.48s），26个OS suite只在该Cargo测试内执行一次；增量质量、Ruff、UI lint/build、core Clippy、desktop build/Clippy均通过，desktop build真实回收后代并保持exit0。最终UI资源hash与Linux一致；两平台完整门与真实native门共同满足阶段7出口，按用户授权独立本地提交，不push。阶段8正式bundle／无checkout路径尚未由这些结果声称完成。
+- 阶段7已按授权独立本地提交`b96e99b`，无push。阶段8新增平台配置：Windows MSI、Linux deb/AppImage、macOS app/dmg配置；规范及原生工具仍由使用者单独合法提供。两平台发行构建从独立源码副本执行真实`npm run tauri --prefix ui -- build`，拟解包到副本之外并搬离编译时checkout，避免在checkout尚存时仅凭改变cwd宣称无源码依赖。
+- 用户追加要求重新设计软件logo：以ECU芯片、CAN汇入与源码输出为核心，生成视觉概念并制作唯一可编辑源`ui/public/workbench.svg`；锁定Tauri icon CLI生成PNG/ICO/ICNS，接入启动页、项目导航、favicon及桌面bundle。UI lint/build、JS语法和Ruff通过；新共享fixture／环境准备和Windows suspended Job/日志句柄入口分别完成实际dev模式native复验（Windows300.63s、Linux117.23s），Linux实际截图已显示新标志；安装产物路径仍待实测。
+- 阶段8发行构建记录：Linux最初因临时日志目录非私有权限被owner拒绝，修正仅该自建目录0700后真实release/deb/AppImage125.62s通过。Windowsrelease编译通过，但MSI linker真实LGHT0311失败：中文产品名与默认en-US/1252数据库代码页冲突。保留中文名称，将平台WiX语言明确为zh-CN后继续验证；不屏蔽校验、不将失败计为成功。
+- 阶段8初次真实安装路径：修正WiX语言后MSI46.76s构建成功，保留上游ICE03/40/57/61警告、不关闭检查；第一次行政解包因使用正斜杠路径1619失败，改原生反斜杠后`msiexec /a /qn`退出0。Windows安装应用207.06s、Linux deb52.66s实际native通过，原发行checkout不存在、使用tauri本机origin及未替换invoke；Windows清理回执零Job进程。Windows最初installed入口另暴露plain dict中的SystemRoot大小写，改从Windows大小写不敏感的`os.environ`读取。新logo已在两平台真实安装界面显示。
+- AppImage真实路径315.09s预检失败：AppRun设置的PYTHONHOME使POSIX gate的外部CPython找不到encodings。公开OwnedProcess回归先实际得到exit1而非目标exit7；内部owner/launch改用绝对脚本及`-I -S`，删除仅用于`-m`引导的PYTHONPATH注入，封存工具显式`-I`启动。Linux18个进程测试通过（1项Windows专属跳过）。installed POSIX入口不借用测试器owner/socket，产品须从内嵌helper与声明的base Python建立自己的root；取消／失败／零残留契约不变。
+- owner源码改变后，两平台可信资源构建门实际拒绝旧摘要；核算该唯一变更源码的SHA-256为`f3f08c4f3fb1e30ae7e554cd6af83d8ffa8e1884f95c2a2c6deb3cec9dbe6e50`并更新其清单项，不改其他资产、不降低检查。随后Windows MSI70.54s、Linux deb/AppImage70.14s真实重建通过，须按新源码再次完成安装路径。原始834基线all首次两平台均在增量格式门拒绝两处历史切换遗留空行（generator143／integration mod202）；只删各一行，未重排文件，完整门继续执行。
+- 阶段8源级门曾取得Windows1399.25s PASS（日志`autosar-verify-d4dx7mq5`、集成117项1222.18s）、Linux最终文档修正后332.29s PASS（日志`/tmp/autosar-verify-0xypbmvi`、lib13／集成82项251.19s、Python34项1跳过），各自OS26只经该Cargo门运行一次。随后更严格的installed门仍失败：Windows394.68s／deb326.70s在build暴露`-I`移除脚本路径后的`ecu_tools`导入依赖；AppImage314.48s证明preflight是另一条未隔离Python调用路径。不能用已有all绿色替代安装包结果，阶段8未完成。
+- 封存工具根因修正：`runtime/ecu-tool.py`在禁用字节码后显式添加自身封存tools目录；preflight与handoff均用`-I -S`，不依赖PYTHONHOME／PYTHONPATH／site-packages。工具入口可信SHA更新为`bb72cdeeacd4a4f1bea371f71e3b6acdf23e5950f8b3c20cf37c115c8d76e673`，其余清单保留。既有真实build/verify行为消费者统一添加相同隔离参数，语义双profile用例先实际ModuleNotFound失败（4.31s），修正后实际编译并执行完整同步／队列 CAN/诊断拒绝与恢复向量通过（6.81s）；不新增文字／接线测试。发行包及最终源码门需重验这些变更。
+- 安装门最终修正版本真实构建：Windows MSI84.65s、Linux deb/AppImage63.89s；对应封存入口／owner两项可信摘要与最终源码一致，same-version legacy fixture generator两端重新构建。MSI行政解包退出0，私有Desktop/Job实际installed场景214.40s PASS（`autosar-native-windows-43_4qaio`），原checkout不存在、外部base CPython、无开发工具PATH，真实origin及invoke记录，清理回执`remainingJobProcesses=0`且errors空。
+- Linux GUI环境故障如实保留：并发旧display探测发生共享窗口竞态；随后`-displayfd`全自动分配因WSLg只读`/tmp/.X11-unix`无法创建文件路径socket失败。改为高位display独占flock、本次server readiness回执和仅抽象本地X11（关闭TCP／Unix文件路径listener），不修改WSLg挂载或用户桌面。两个一次性直接Xvfb探针的Windows wrapper停止后Linux子进程仍存活，已按实际命令核对的唯一PID5955／9500定向终止；未处理未知进程。修正后AppImage61.22s PASS（`autosar-native-linux-jnr09qsq`、`:181`）、deb64.37s PASS（`autosar-native-linux-qn3d0mut`、`:180`），各自产品从内嵌工具创建独立root，完成全部同一实际导入／保存／预检／生成／build／CAN-DID-N_Cr／拒绝／取消／搬移逐字节重导入。两者native-runtime记录tauri origin、sourceCheckoutAvailable=false、nativeTransportUnchanged=true；截图五阶段通过，完整SC1和实机仍未升级。完成后实际进程检查无Xvfb／桌面／tauri-driver／WebKitWebDriver残留。
+- Linux最终产品源码完整门316.10s PASS：`verify --scope all --base 834b9b996e6e7592ab73a6c788f5a38287796aea`，日志`/tmp/autosar-verify-pb87tahs`，Python34项1跳过、Rust lib13、集成82项249.96s（含单次OS26）、增量质量／Ruff／UI lint-build／core与desktop Clippy全部通过；既有封存消费者现用`-I -S`，无site-packages依赖。其后仅隔离GUI入口display分配修正及文档记录变更，另有上述真实安装门，最终增量质量待复验；未改产品代码。
+- 本机包已汇集到忽略目录`src-tauri/target/release/bundle/`：MSI6000640字节、SHA256`17ce8763d0e26732eac9ad6af22fc14213d57f6dcb72407402249a8e2a472bfd`；deb5057846字节、`3518debcd9d478d43f632baa0b03395b19f06088e41d176deb96bde9dd703262`；AppImage80513528字节、`f53c57f7b4e43356b16df62dfba30df24427f3f6bb3da2df7cb1f663ae9c7ba4`。实际包为本地未签名成果；未运行系统级安装／卸载／升级及WebView2首装下载，不声明发布。macOS只交付app/dmg配置、图标和源码工作台入口，原生构建／bundle／IPC未运行。
+- 最终GUI入口与文档更新后，两平台针对原始834基线再次运行`quality`：Windows85.26s、Linux73.15s均通过源码卫生、增量格式、Python语法及主机C99语法；Ruff另已通过。上述已通过的产品源码完整门与实际bundle/native结果复用，不把文档或driver调整当成新的OS实现。临时bundle runner与PE检查副本已删除，运行原始证据及真实本地包保留在忽略输出／私有缓存目录；Windows最终产品源码完整门尚待结果。
+- Windows最终产品源码完整门1277.17s PASS：同一原始834基线`verify --scope all`，日志`C:\Users\admin\AppData\Local\Temp\autosar-verify-645u_8no`。Python34项（8项POSIX专属跳过）、Rust lib12、core集成117项1131.11s全部适用通过，OS26仅经此Cargo门一次执行；真实封存build/verify消费者使用`-I -S`。增量质量、Ruff、UI lint/build、core／desktop Clippy全部通过，desktop build关闭其真实后代后保留exit0。与Linux完整门、最终三种实际bundle／隔离native路径及最终质量共同满足阶段8出口。
+- 整轮阶段0–8按原批准顺序完成；新logo追加要求已交付。README、runtime README、OWNER_GUIDE及BMad architecture同步当前主机能力、外部规范／工具依赖、安装与未验证边界，历史失败保留而不当作当前阻塞。阶段8按授权单独本地提交，未push、未发布、未修改既有epic/story验收事实。
 
 
 ## Spec Change Log
@@ -123,11 +138,13 @@ context:
 - 阶段6：开发命令与完整行为函数一次迁移，保留绝对解释器、单次OS注册与严格owner关闭；原生Windows遥测子进程的环境权限失败明确留在阶段记录，不修改验收范围。
 - 阶段6用户授权的契约修正：开发Cargo命令采用显式root完成后回收策略；默认业务严格退出与“结果发布前零受管残留”不变。此修正撤销机器级遥测配置作为准入前提，不删除历史失败、不改变阶段7/8范围。
 - 阶段7：ARXML完整事务及工作台所有权一次迁移，新增真实缺规范／设置拒绝、非空输出归属及target/input并发过期发布回归；统一平台原生入口替代旧顶层脚本，Mac仅源码工作台测试路径，不改变原生能力边界。
+- 阶段8：使用本机发行bundle及编译checkout已不存在的私有安装场景；外部测试器依赖与应用依赖分离，POSIX产品自建内嵌owner，AppImage实际Python污染修正进入公开进程回归。用户追加新logo，统一SVG和生成桌面图标；不改变汽车能力范围、不增加签名或公开发布授权。
 
 
 ## Review Triage Log
 
-- 阶段7只读双切片复核：native snapshot/commit发现1项真实回归（新build目录父级缺失时被canonicalize提前拒绝）；UI owner发现4项真实回归（legacy未应用草稿／缓存inspection导航锁，重构建保留旧build/behavior成功，取消后running阶段未终止，关闭ECU项目残留共享生成预览）。均已按当前责任边界修正：规范化最近现存父级后安全创建新build parent、inspection最终释放锁且App不私设processing、编译前撤销旧结果、epoch取消终止running stage、关闭项目清空project-owned delivery/preview。新增真实native断言核对拒绝重建后禁用按钮及预览关闭，并保留原旧包／binary字节保护断言；Windows场景已通过，Linux场景继续验收。
+- 阶段7只读双切片复核：native snapshot/commit发现1项真实回归（新build目录父级缺失时被canonicalize提前拒绝）；UI owner发现4项真实回归（legacy未应用草稿／缓存inspection导航锁，重构建保留旧build/behavior成功，取消后running阶段未终止，关闭ECU项目残留共享生成预览）。均已按当前责任边界修正：规范化最近现存父级后安全创建新build parent、inspection最终释放锁且App不私设processing、编译前撤销旧结果、epoch取消终止running stage、关闭项目清空project-owned delivery/preview。新增真实native断言核对拒绝重建后禁用按钮及预览关闭，并保留原旧包／binary字节保护断言；两平台实际native及阶段7完整门均已通过，独立提交`b96e99b`。
+- 阶段8两项独立只读复核分别覆盖发行／Python隔离／可信资产／调用边界，以及installed harness／原生transport／环境隔离／Job与display生命周期，均无可操作新发现。复核未运行构建或测试；接受仍取决于实际双平台门和安装路径，不以review结论替代运行证据。
 
 
 ## Verification

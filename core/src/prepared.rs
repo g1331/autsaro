@@ -160,6 +160,8 @@ impl<'a> PreparedProject<'a> {
             for mode in modes {
                 let argv: Vec<OsString> = vec![
                     settings.python.as_os_str().into(),
+                    "-I".into(),
+                    "-S".into(),
                     source.join("tools/ecu-tool.py").into_os_string(),
                     "build".into(),
                     "--project".into(),

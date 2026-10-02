@@ -140,7 +140,6 @@ pub fn generate(
     )
 }
 
-
 pub fn build(
     project: &Path,
     output: &Path,

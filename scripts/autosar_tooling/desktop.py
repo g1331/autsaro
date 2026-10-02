@@ -15,6 +15,8 @@ from pathlib import Path
 
 from ecu_tools.process import OwnedProcess, ProcessSpec, run_bounded
 
+from autosar_tooling.native_profile import app_environment, prepare
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -43,30 +45,28 @@ def ready(url: str) -> None:
     raise RuntimeError(f"Owned native desktop service did not become ready: {url}")
 
 
-def write_resource_inputs(scratch: Path) -> None:
-    resources = {
-        key: str(Path(os.environ[name]).resolve(strict=True))
-        for key, name in (
-            ("xsdArchive", "AUTOSAR_XSD_ARCHIVE"),
-            ("modArchive", "AUTOSAR_MOD_ARCHIVE"),
-        )
-    }
-    (scratch / "resources.json").write_text(json.dumps(resources), encoding="utf-8")
-
-
-def run(platform: str, binary: Path) -> int:
+def run(
+    platform: str,
+    binary: Path,
+    installed: bool = False,
+    source_checkout: Path | None = None,
+) -> int:
     if platform == "windows":
         if sys.platform != "win32":
             raise RuntimeError("Windows native desktop verification requires Windows")
         from autosar_tooling.desktop_windows import run as windows
 
-        return windows(binary)
+        return windows(binary, installed, source_checkout)
     expected = "linux" if platform == "linux" else "darwin"
     if sys.platform != expected:
         raise RuntimeError(
             f"{platform} native desktop verification requires its native host"
         )
     binary = binary.resolve(strict=True)
+    if installed and binary.is_relative_to(ROOT):
+        raise RuntimeError(
+            "Installed verification must launch an extracted app outside checkout"
+        )
     if platform == "macos":
         console_uid = Path("/dev/console").stat().st_uid
         if console_uid == os.getuid() or os.getuid() == 0:
@@ -77,60 +77,47 @@ def run(platform: str, binary: Path) -> int:
     evidence.mkdir(parents=True, exist_ok=True)
     scratch = Path(tempfile.mkdtemp(prefix=f"autosar-native-{platform}-", dir=evidence))
     print(f"Isolated native test directory: {scratch}", flush=True)
-    inputs = scratch / "inputs"
-    shutil.copytree(ROOT / "core/tests/fixtures/epic4/positive", inputs)
-    (scratch / "inputs.json").write_text(
-        json.dumps([str(path) for path in sorted(inputs.glob("*.arxml"))]),
+    prepare(scratch, platform, installed, source_checkout)
+    environment = app_environment(scratch, installed)
+    app_cwd = scratch / "app-work" if installed else ROOT
+    (scratch / "application-launch.json").write_text(
+        json.dumps(
+            {"binary": str(binary), "cwd": str(app_cwd), "installed": installed}
+        ),
         encoding="utf-8",
     )
-    write_resource_inputs(scratch)
-    target = (
-        "linux-x64-controlled-v1"
-        if platform == "linux"
-        else "windows-x64-controlled-v1"
-    )
-    if platform == "linux":
-        packed = run_bounded(
-            ProcessSpec.seconds(
-                [
-                    str(ROOT / "core/target/debug/package_host_reference"),
-                    str(scratch / "legacy"),
-                    "--target",
-                    target,
-                ],
-                ROOT,
-                180,
-                scratch,
-                "native-reference",
-            )
-        )
-        if not packed.success:
-            raise RuntimeError(f"Reference packaging failed: {packed}; logs={scratch}")
-    environment = os.environ.copy()
-    environment["XDG_CONFIG_HOME"] = str(scratch / "config")
-    environment["XDG_DATA_HOME"] = str(scratch / "data")
-    environment["AUTOSAR_CONFIG_DIR"] = str(scratch / "app-config")
     if platform == "macos":
         environment["HOME"] = str(scratch / "home")
         Path(environment["HOME"]).mkdir()
     children: list[OwnedProcess] = []
     driver = None
+    display_lock = None
     try:
         if platform == "linux":
-            display = next(
-                (
-                    number
-                    for number in range(180, 280)
-                    if not Path(f"/tmp/.X{number}-lock").exists()
-                    and not Path(f"/tmp/.X11-unix/X{number}").exists()
-                ),
-                None,
-            )
-            if display is None:
-                raise RuntimeError("No unused private Xvfb display is available")
+            import fcntl
+
+            for number in range(180, 280):
+                candidate = os.open(
+                    evidence / f"display-{number}.lock", os.O_CREAT | os.O_RDWR, 0o600
+                )
+                try:
+                    fcntl.flock(candidate, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    os.close(candidate)
+                    continue
+                if (
+                    Path(f"/tmp/.X{number}-lock").exists()
+                    or Path(f"/tmp/.X11-unix/X{number}").exists()
+                ):
+                    os.close(candidate)
+                    continue
+                display_lock = candidate
+                display = number
+                break
+            else:
+                raise RuntimeError("No private Xvfb display is available")
             environment.update(
                 {
-                    "DISPLAY": f":{display}",
                     "GDK_BACKEND": "x11",
                     "WEBKIT_DISABLE_DMABUF_RENDERER": "1",
                 }
@@ -141,11 +128,15 @@ def run(platform: str, binary: Path) -> int:
                     [
                         executable("Xvfb"),
                         f":{display}",
+                        "-displayfd",
+                        "1",
                         "-screen",
                         "0",
                         "1440x1200x24",
                         "-nolisten",
                         "tcp",
+                        "-nolisten",
+                        "unix",
                     ],
                     ROOT,
                     1800,
@@ -155,6 +146,21 @@ def run(platform: str, binary: Path) -> int:
                 )
             )
             children.append(xvfb)
+            # Hold the per-display lock and require this server's readiness receipt.
+            display_log = Path(xvfb.registration["stdout"])
+            until = time.monotonic() + 10
+            while not display_log.read_text(encoding="ascii").strip():
+                if time.monotonic() >= until:
+                    raise RuntimeError(
+                        f"Private Xvfb did not report a display; logs={scratch}"
+                    )
+                time.sleep(0.05)
+            if int(display_log.read_text(encoding="ascii").strip()) != display:
+                raise RuntimeError("Xvfb reported an unexpected private display")
+            environment["DISPLAY"] = f":{display}"
+            (scratch / "native-display.json").write_text(
+                json.dumps({"display": environment["DISPLAY"]}), encoding="utf-8"
+            )
             until = time.monotonic() + 10
             while True:
                 probe = OwnedProcess(
@@ -177,29 +183,30 @@ def run(platform: str, binary: Path) -> int:
                     )
                 time.sleep(0.05)
         node = executable("node")
-        vite = OwnedProcess(
-            ProcessSpec.seconds(
-                [
-                    node,
-                    str(ROOT / "ui/node_modules/vite/bin/vite.js"),
-                    "--host",
-                    "127.0.0.1",
-                    "--port",
-                    "1420",
-                    "--strictPort",
-                    "--config",
-                    str(ROOT / "ui/vite.config.ts"),
-                    str(ROOT / "ui"),
-                ],
-                ROOT,
-                1800,
-                scratch,
-                "native-vite",
-                env=environment,
+        if not installed:
+            vite = OwnedProcess(
+                ProcessSpec.seconds(
+                    [
+                        node,
+                        str(ROOT / "ui/node_modules/vite/bin/vite.js"),
+                        "--host",
+                        "127.0.0.1",
+                        "--port",
+                        "1420",
+                        "--strictPort",
+                        "--config",
+                        str(ROOT / "ui/vite.config.ts"),
+                        str(ROOT / "ui"),
+                    ],
+                    ROOT,
+                    1800,
+                    scratch,
+                    "native-vite",
+                    env=environment,
+                )
             )
-        )
-        children.append(vite)
-        ready("http://127.0.0.1:1420")
+            children.append(vite)
+            ready("http://127.0.0.1:1420")
         endpoint_port = port()
         # Owner environments are overrides, not replacements; unset at exec time.
         native_command = [
@@ -209,6 +216,20 @@ def run(platform: str, binary: Path) -> int:
             "-u",
             "AUTOSAR_MOD_ARCHIVE",
         ]
+        if installed:
+            for name in (
+                "PYTHONPATH",
+                "PYTHONHOME",
+                "VIRTUAL_ENV",
+                "NODE_OPTIONS",
+                "ECU_OWNER_SOCKET",
+                "ECU_OWNER_TOKEN",
+                "ECU_OWNER_SCOPE",
+            ):
+                native_command.extend(("-u", name))
+            for name in os.environ:
+                if name.startswith(("UV_", "CARGO_", "RUSTUP_", "NPM_CONFIG_")):
+                    native_command.extend(("-u", name))
         if platform == "linux":
             native_port = port()
             server = OwnedProcess(
@@ -223,7 +244,7 @@ def run(platform: str, binary: Path) -> int:
                         "--native-driver",
                         executable("WebKitWebDriver"),
                     ],
-                    ROOT,
+                    app_cwd,
                     1800,
                     scratch,
                     "native-webdriver",
@@ -235,7 +256,7 @@ def run(platform: str, binary: Path) -> int:
             server = OwnedProcess(
                 ProcessSpec.seconds(
                     [*native_command, str(binary)],
-                    ROOT,
+                    app_cwd,
                     1800,
                     scratch,
                     "native-embedded-webdriver",
@@ -345,12 +366,16 @@ def run(platform: str, binary: Path) -> int:
         print(f"{platform}_isolated_native_ipc PASS: {scratch}", flush=True)
         return 0
     finally:
-        if driver is not None and not driver.finished:
-            driver.cancel()
-        for child in reversed(children):
-            if not child.finished:
-                result = child.cancel()
-                if result.status not in ("cancelled", "exited"):
-                    raise RuntimeError(
-                        f"Native service cleanup could not be confirmed: {result}"
-                    )
+        try:
+            if driver is not None and not driver.finished:
+                driver.cancel()
+            for child in reversed(children):
+                if not child.finished:
+                    result = child.cancel()
+                    if result.status not in ("cancelled", "exited"):
+                        raise RuntimeError(
+                            f"Native service cleanup could not be confirmed: {result}"
+                        )
+        finally:
+            if display_lock is not None:
+                os.close(display_lock)

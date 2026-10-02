@@ -8,7 +8,7 @@
   "assets": [
     {
       "path": "runtime/ecu-tool.py",
-      "sha256": "32f46b3993bae71d6945c65513747cc0080b49146258ff8f910d182411d7ad52",
+      "sha256": "bb72cdeeacd4a4f1bea371f71e3b6acdf23e5950f8b3c20cf37c115c8d76e673",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1220,7 +1220,7 @@
     },
     {
       "path": "scripts/ecu_tools/owner.py",
-      "sha256": "633016be45199b044f5f6b95a3428cb3f25d7f0344508fbbc686589be85868c5",
+      "sha256": "f3f08c4f3fb1e30ae7e554cd6af83d8ffa8e1884f95c2a2c6deb3cec9dbe6e50",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",

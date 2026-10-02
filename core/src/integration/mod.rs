@@ -200,7 +200,6 @@ pub struct PlanDependencies {
 /// External standards are never part of the embedded source inventory.
 pub type ValidationResources = PlanDependencies;
 
-
 impl PlanDependencies {
     pub fn from_repository(root: &Path) -> Self {
         Self {

@@ -4,6 +4,9 @@ import path from 'node:path';
 
 export async function runScenario({ evaluate, screenshot, scratch, platform }) {
   const sources = JSON.parse(await readFile(path.join(scratch, 'inputs.json'), 'utf8'));
+  const scenario = JSON.parse(await readFile(path.join(scratch, 'scenario.json'), 'utf8'));
+  assert.equal(typeof scenario.installed, 'boolean');
+  const runtimeEvidence = { ...scenario, platform };
   async function until(expression, expected = true) {
     const deadline = Date.now() + 300000;
     while (Date.now() < deadline) {
@@ -44,12 +47,56 @@ export async function runScenario({ evaluate, screenshot, scratch, platform }) {
   }
   try {
     await until(`Boolean(window.__TAURI_INTERNALS__ && document.querySelector('button'))`);
+    const location = await evaluate(`(() => {
+      window.__NATIVE_VERIFY_LOG__ = [];
+      window.__NATIVE_VERIFY_TRANSPORT__ = window.__TAURI_INTERNALS__.invoke;
+      return {
+        href: window.location.href,
+        protocol: window.location.protocol,
+        hostname: window.location.hostname,
+        port: window.location.port,
+        nativeInvoke: typeof window.__TAURI_INTERNALS__.invoke === 'function'
+      };
+    })()`);
+    runtimeEvidence.location = location;
+    runtimeEvidence.transport = '__TAURI_INTERNALS__.invoke';
+    assert.equal(location.nativeInvoke, true, 'The real native Tauri transport is required');
+    if (scenario.installed) {
+      assert.equal(typeof scenario.sourceCheckout, 'string');
+      assert(path.isAbsolute(scenario.sourceCheckout));
+      await assert.rejects(access(scenario.sourceCheckout), { code: 'ENOENT' });
+      runtimeEvidence.sourceCheckoutAvailable = false;
+      assert(
+        (location.protocol === 'tauri:' && location.hostname === 'localhost') ||
+          (['http:', 'https:'].includes(location.protocol) &&
+            location.hostname === 'tauri.localhost'),
+        `Installed UI must use the embedded native application origin: ${location.href}`,
+      );
+      assert.equal(location.port, '', 'Installed UI must not use a Vite development port');
+    }
     const resources = JSON.parse(await readFile(path.join(scratch, 'resources.json'), 'utf8'));
+    if (scenario.installed) {
+      for (const resource of [resources.xsdArchive, resources.modArchive, ...sources]) {
+        const relative = path.relative(scratch, resource);
+        assert(
+          relative &&
+            !relative.startsWith(`..${path.sep}`) &&
+            relative !== '..' &&
+            !path.isAbsolute(relative),
+          `Installed inputs and archives must belong to private scratch: ${resource}`,
+        );
+      }
+    }
     await until(`Boolean(document.querySelector('[aria-label="XSD 档案路径"]'))`);
     const missingResources = await evaluate(
       "window.__TAURI_INTERNALS__.invoke('workbench_capabilities')",
     );
     assert(missingResources.resourceError, 'Missing archives must open the settings surface');
+    runtimeEvidence.initialCapabilities = missingResources;
+    await evaluate(`window.__NATIVE_VERIFY_LOG__.push({
+      command: 'workbench_capabilities', status: 'returned',
+      evidence: ${JSON.stringify(runtimeEvidence)}
+    })`);
     await screenshot('initial-missing-resources.png');
     await input('XSD 档案路径', resources.xsdArchive);
     await input('MOD 档案路径', resources.modArchive);
@@ -62,8 +109,7 @@ export async function runScenario({ evaluate, screenshot, scratch, platform }) {
     assert.equal(configuredResources.xsdArchive, resources.xsdArchive);
     assert.equal(configuredResources.modArchive, resources.modArchive);
     await click('关闭设置');
-    await evaluate(`window.__NATIVE_VERIFY_LOG__ = [];
-window.__NATIVE_VERIFY_INVOKE__ = async (command, payload = {}) => {
+    await evaluate(`window.__NATIVE_VERIFY_INVOKE__ = async (command, payload = {}) => {
   const caps = await window.__TAURI_INTERNALS__.invoke('workbench_capabilities');
   const event = {command, fingerprint: caps.fingerprint, payload};
   try {
@@ -130,9 +176,7 @@ window.__NATIVE_VERIFY_INVOKE__ = async (command, payload = {}) => {
       `document.querySelector('[aria-label="标准保存预览"]').scrollIntoView({ block: 'end' })`,
     );
     for (const source of sources) {
-      const original = await readFile(
-        path.join('core/tests/fixtures/epic4/positive', path.basename(source)),
-      );
+      const original = await readFile(path.join(scratch, 'expected', path.basename(source)));
       assert.deepEqual(await readFile(source), original, 'Preview must not save original inputs');
     }
     await screenshot('standard-input-preview.png');
@@ -155,7 +199,7 @@ window.__NATIVE_VERIFY_INVOKE__ = async (command, payload = {}) => {
     for (const name of ['types.arxml', 'services.arxml', 'unrelated.arxml']) {
       assert.deepEqual(
         await readFile(path.join(scratch, 'inputs', name)),
-        await readFile(path.join('core/tests/fixtures/epic4/positive', name)),
+        await readFile(path.join(scratch, 'expected', name)),
       );
     }
     await input('接收 CAN ID', '1101');
@@ -192,8 +236,12 @@ window.__NATIVE_VERIFY_INVOKE__ = async (command, payload = {}) => {
         );
       }
       await assert.rejects(access(delivery), { code: 'ENOENT' });
+      runtimeEvidence.nativeExecution = 'unsupported';
+      runtimeEvidence.macosNativeRuntimeVerification = 'unverified';
       await screenshot('macos-source-workbench-preview.png');
-      console.log('macos_isolated_source_workbench_ipc PASS; native ECU execution unsupported');
+      console.log(
+        'macos_isolated_source_workbench_ipc PASS; native ECU execution unsupported; macOS native runtime unverified',
+      );
       return;
     }
     await click('显式编译预检');
@@ -537,10 +585,22 @@ window.__NATIVE_VERIFY_INVOKE__ = async (command, payload = {}) => {
     await screenshot('native-failure.png');
     throw error;
   } finally {
+    runtimeEvidence.nativeTransportUnchanged = await evaluate(
+      'window.__TAURI_INTERNALS__?.invoke === window.__NATIVE_VERIFY_TRANSPORT__',
+    );
+    await writeFile(
+      path.join(scratch, 'native-runtime.json'),
+      JSON.stringify(runtimeEvidence, null, 2) + '\n',
+    );
     const events = await evaluate('window.__NATIVE_VERIFY_LOG__ ?? []');
     await writeFile(
       path.join(scratch, 'native-ipc.jsonl'),
       events.map((event) => JSON.stringify(event)).join('\n') + '\n',
+    );
+    assert.equal(
+      runtimeEvidence.nativeTransportUnchanged,
+      true,
+      'Native verification must not replace the Tauri IPC transport',
     );
   }
 }

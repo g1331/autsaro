@@ -1015,6 +1015,13 @@ button svg,
   padding: 2px 8px 18px;
   border-bottom: 1px solid var(--line);
 }
+.workspace-heading > img {
+  flex: none;
+}
+.workspace-heading > div {
+  flex: 1;
+  min-width: 0;
+}
 .workspace-heading .eyebrow {
   margin: 0;
 }

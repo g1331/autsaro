@@ -25,7 +25,9 @@ def main() -> int:
         required=True,
     )
     native_os.add_argument("--suite", choices=(*os_suites.SUITES, "all"), required=True)
-    native_arti = commands.add_parser("os-arti-native", help="Verify generated ARTI bindings")
+    native_arti = commands.add_parser(
+        "os-arti-native", help="Verify generated ARTI bindings"
+    )
     native_arti.add_argument("--directory", type=Path, required=True)
     native_counter = commands.add_parser(
         "os-counter-service", help="Verify generated OS counter service"
@@ -34,17 +36,43 @@ def main() -> int:
     native_counter.add_argument("--project", type=Path, required=True)
     native_counter.add_argument("--counter", required=True)
     aggregate = commands.add_parser("verify", help="Run owned developer gates once")
-    aggregate.add_argument("--scope", choices=("core", "ui", "desktop", "all"), required=True)
-    aggregate.add_argument("--base", help="Incremental quality baseline for the all gate")
-    desktop = commands.add_parser("desktop", help="Verify actual IPC in an isolated native desktop")
-    desktop.add_argument("--platform", choices=("windows", "linux", "macos"), required=True)
+    aggregate.add_argument(
+        "--scope", choices=("core", "ui", "desktop", "all"), required=True
+    )
+    aggregate.add_argument(
+        "--base", help="Incremental quality baseline for the all gate"
+    )
+    desktop = commands.add_parser(
+        "desktop", help="Verify actual IPC in an isolated native desktop"
+    )
+    desktop.add_argument(
+        "--platform", choices=("windows", "linux", "macos"), required=True
+    )
     desktop.add_argument("--binary", type=Path, required=True)
-    quality = commands.add_parser("quality", help="Check source hygiene and incremental formatting")
+    desktop.add_argument(
+        "--installed",
+        action="store_true",
+        help="Verify extracted release app without Vite",
+    )
+    desktop.add_argument(
+        "--source-checkout",
+        type=Path,
+        help="Original build checkout, required to be absent for installed verification",
+    )
+    quality = commands.add_parser(
+        "quality", help="Check source hygiene and incremental formatting"
+    )
     quality.add_argument("--base")
     quality.add_argument("--all-format", action="store_true")
-    commands.add_parser("protocol-oracles", help="Check independent protocol/OS reference vectors")
-    commands.add_parser("input-oracles", help="Audit original fixture semantics independently")
-    catalog = commands.add_parser("bsw-catalog", help="Check reviewed BSW producers and signatures")
+    commands.add_parser(
+        "protocol-oracles", help="Check independent protocol/OS reference vectors"
+    )
+    commands.add_parser(
+        "input-oracles", help="Audit original fixture semantics independently"
+    )
+    catalog = commands.add_parser(
+        "bsw-catalog", help="Check reviewed BSW producers and signatures"
+    )
     catalog.add_argument("--write", action="store_true")
     catalog.add_argument("--probe", action="store_true")
     probe = commands.add_parser("probe", help="Run a named real-process probe")
@@ -97,7 +125,7 @@ def main() -> int:
     if args.command == "desktop":
         from autosar_tooling.desktop import run
 
-        return run(args.platform, args.binary)
+        return run(args.platform, args.binary, args.installed, args.source_checkout)
     if args.command == "quality":
         from autosar_tooling.quality import main as check_quality
 
@@ -118,7 +146,9 @@ def main() -> int:
     if args.command == "bsw-catalog":
         from autosar_tooling.bsw_catalog import main as check_catalog
 
-        options = (["--write"] if args.write else []) + (["--probe"] if args.probe else [])
+        options = (["--write"] if args.write else []) + (
+            ["--probe"] if args.probe else []
+        )
         check_catalog(options)
         return 0
     if args.command == "probe":

@@ -47,7 +47,9 @@ def _gone(pid: int) -> bool:
         kernel.OpenProcess.restype = wintypes.HANDLE
         kernel.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
         kernel.WaitForSingleObject.restype = wintypes.DWORD
-        handle = kernel.OpenProcess(0x101000, False, pid)  # SYNCHRONIZE | QUERY_LIMITED_INFORMATION
+        handle = kernel.OpenProcess(
+            0x101000, False, pid
+        )  # SYNCHRONIZE | QUERY_LIMITED_INFORMATION
         if not handle:
             return True
         try:
@@ -107,6 +109,30 @@ class BoundedProcessTests(unittest.TestCase):
         )
         return spec, pid_file
 
+    def test_launcher_python_environment_cannot_prevent_target_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            spec = ProcessSpec.seconds(
+                [
+                    sys.executable,
+                    "-I",
+                    "-c",
+                    "import sys; print(sum(range(100))); sys.exit(7)",
+                ],
+                root,
+                10,
+                root,
+                "probe:foreign-python-home",
+                env={
+                    "PYTHONHOME": str(root / "appimage-python-home"),
+                    "PYTHONPATH": str(root / "appimage-python-path"),
+                },
+            )
+            result = OwnedProcess(spec).wait()
+            self.assertEqual(result.status, "exited")
+            self.assertEqual(result.exit_code, 7)
+            self.assertEqual(result.stdout.read_text(encoding="utf-8").strip(), "4950")
+
     def test_normal_child_and_grandchild_close(self) -> None:
         with tempfile.TemporaryDirectory() as name:
             spec, path = self._spec(Path(name), "normal")
@@ -154,8 +180,11 @@ class BoundedProcessTests(unittest.TestCase):
                     self.assertRaises(OSError),
                 ):
                     windows_job.WindowsJob(
-                        list(spec.argv), spec.cwd, spec.env,
-                        root / "stdout", root / "stderr",
+                        list(spec.argv),
+                        spec.cwd,
+                        spec.env,
+                        root / "stdout",
+                        root / "stderr",
                     )
                 self.assertEqual(len(created), 1)
                 self.assertIsNotNone(created[0].poll())
@@ -206,7 +235,9 @@ class BoundedProcessTests(unittest.TestCase):
                     ).wait()
                     self.assertTrue(result.success)
                     _assert_closed(self, _records(path, 3))
-                    self.assertTrue(all(not _gone(pid) for _, pid, _ in sibling_records))
+                    self.assertTrue(
+                        all(not _gone(pid) for _, pid, _ in sibling_records)
+                    )
                 finally:
                     self.assertEqual(sibling.cancel().status, "cancelled")
                     _assert_closed(self, sibling_records)
@@ -227,7 +258,10 @@ class BoundedProcessTests(unittest.TestCase):
     @unittest.skipIf(os.name == "nt", "POSIX registered scopes have independent groups")
     def test_root_exit_closes_unfinished_nested_scope_under_both_policies(self) -> None:
         for completion in CompletionPolicy:
-            with self.subTest(completion=completion), tempfile.TemporaryDirectory() as name:
+            with (
+                self.subTest(completion=completion),
+                tempfile.TemporaryDirectory() as name,
+            ):
                 spec, path = self._spec(Path(name), "nested-parent-first")
                 result = OwnedProcess(replace(spec, completion=completion)).wait()
                 expected = (
@@ -256,7 +290,10 @@ class BoundedProcessTests(unittest.TestCase):
             spec, path = self._spec(Path(name), "normal")
             with patch.dict(
                 os.environ,
-                {"ECU_OWNER_SOCKET": "/tmp/unrelated-owner.sock", "ECU_OWNER_SCOPE": "unrelated"},
+                {
+                    "ECU_OWNER_SOCKET": "/tmp/unrelated-owner.sock",
+                    "ECU_OWNER_SCOPE": "unrelated",
+                },
             ):
                 result = OwnedProcess(spec, owner=owner).wait()
             self.assertTrue(result.success)
@@ -288,7 +325,10 @@ class BoundedProcessTests(unittest.TestCase):
     )
     def test_unregistered_escape_is_explicitly_unconfirmed(self) -> None:
         for completion in CompletionPolicy:
-            with self.subTest(completion=completion), tempfile.TemporaryDirectory() as name:
+            with (
+                self.subTest(completion=completion),
+                tempfile.TemporaryDirectory() as name,
+            ):
                 spec, path = self._spec(Path(name), "escape")
                 try:
                     with self.assertRaisesRegex(OwnershipError, "cleanup_unconfirmed"):

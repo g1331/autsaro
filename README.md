@@ -31,8 +31,8 @@
 工具版本由根目录 `rust-toolchain.toml`（Rust 1.98.1）、`.node-version`（Node 24.19.0）、`.python-version`（CPython 3.12.9）、`pyproject.toml`/`uv.lock`（Python）、`ui/package.json` 的 npm 11.17.0 engine 约束及 `ui/package-lock.json` 的包完整性记录约束。安装 Rust/rustfmt/clippy、Node/npm、uv、Git 和目标所需的 C99 GCC；在**新的终端**检查安装结果。Cargo 构建产物保留在 `core/target/` 与 `src-tauri/target/`，不改设 `CARGO_TARGET_DIR`。
 
 - Windows：使用 Rust MSVC、Visual Studio C++ Build Tools 和 WebView2。安装 vcpkg 的 `libxml2[iconv,zlib]:x64-windows-static-md`；`VCPKG_ROOT` 指 vcpkg 根目录，`VCPKGRS_TRIPLET=x64-windows-static-md`，`LIBCLANG_PATH` 指含 `libclang.dll` 的目录。可在用户环境中设置这些变量，重新打开终端和 Agent 宿主后再检查；不要把个人安装路径写进工程。原生执行另需 `AUTOSAR_CC`、`AUTOSAR_OBJDUMP`、`AUTOSAR_GIT`、`AUTOSAR_PYTHON` 指向目标锁声明的 GCC、objdump、Git 和 CPython 绝对路径；不回退 PATH 工具。
-- Ubuntu 24.04：安装 `build-essential libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2.0-dev libssl-dev libxdo-dev libxml2-dev libclang-dev clang pkg-config patchelf`，并按锁文件安装 Rust、Node、CPython 与 uv。WSL 构建副本、Cargo target 和 uv 缓存应放在 ext4 文件系统；从 Windows 卷读取官方档案时显式传路径。固定 GCC13.3.0 的受控原生 OS 已运行全部 26 项独立 suite；Linux 生产 ECU 的封包、搬移、构建及 CAN/DID/N_Cr 独立协议也已实测，私有 Xvfb 中的真实桌面 IPC 场景已通过。正式 bundle 仍待阶段8验收。
-- macOS：安装 Xcode Command Line Tools、pkg-config/libxml2 和上述版本管理工具。源码工作台代码路径与隔离 IPC 测试入口已实现，正式包配置仍待阶段8完成；macOS 原生构建、bundle 和 IPC 未验证，不提供本机虚拟 ECU。
+- Ubuntu 24.04：安装 `build-essential libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2.0-dev libssl-dev libxdo-dev libxml2-dev libclang-dev clang pkg-config patchelf`，并按锁文件安装 Rust、Node、CPython 与 uv。WSL 构建副本、Cargo target 和 uv 缓存应放在 ext4 文件系统；从 Windows 卷读取官方档案时显式传路径。固定 GCC13.3.0 的受控原生 OS 已运行全部 26 项独立 suite；Linux 生产 ECU 的封包、搬移、构建及 CAN/DID/N_Cr 独立协议已实测。deb 与解包 AppImage 已在私有 Xvfb、无原构建 checkout 和开发工具 PATH 下完成真实桌面 IPC／生成／编译／行为及搬移复验。
+- macOS：安装 Xcode Command Line Tools、pkg-config/libxml2 和上述版本管理工具。源码工作台代码路径、隔离 IPC 测试入口与 app/dmg 配置已实现；macOS 原生构建、bundle 和 IPC 未验证，不提供本机虚拟 ECU。
 
 本地官方材料须由使用者自行合法放置，不随源码或安装包分发：
 
@@ -50,17 +50,29 @@ npm run tauri --prefix ui -- info
 uv run --locked python -m autosar_tooling verify --scope all --base <本轮起始提交>
 ```
 
-`doctor` 只读报告 `ready`、`missing`、`version_mismatch` 或 `not_applicable`，缺少必需项返回非零并提示安装/配置；不下载规范或更改系统。`npm run tauri --prefix ui -- dev` 使用现有 Tauri/Vite hooks，在**独立桌面会话**交互调试；自动化不得在当前用户桌面弹窗或抢焦点。这里不会执行 `create-tauri-app` 或 `tauri init --force` 重建已有工作台。当前 Windows 生成与构建仍依赖源码目录，正式无checkout bundle 将在本轮最后阶段验证。
+`doctor` 只读报告 `ready`、`missing`、`version_mismatch` 或 `not_applicable`，缺少必需项返回非零并提示安装/配置；不下载规范或更改系统。`npm run tauri --prefix ui -- dev` 使用现有 Tauri/Vite hooks，在**独立桌面会话**交互调试；自动化不得在当前用户桌面弹窗或抢焦点。这里不会执行 `create-tauri-app` 或 `tauri init --force` 重建已有工作台。开发构建使用 Vite；发行包使用内嵌界面及可信运行资源，真实安装包路径必须另行原生验收，不能从开发构建成功推定。
 
 受控外部命令已有统一的 `core::execution` 与 `ecu_tools.process` 入口。开发聚合器将当前锁定的 `sys.executable` 作为 `AUTOSAR_PYTHON` 传给 Cargo；直接运行 Cargo 时，须把该变量设为 CPython 的**绝对路径**（开发环境 Windows 为 `.venv/Scripts/python.exe`，POSIX 为 `.venv/bin/python`），不得依赖 PATH 猜测解释器。可运行 `uv run --locked python -m unittest autosar_tooling.test_process` 与 `cargo test --locked --manifest-path core/Cargo.toml execution::tests` 检查真实父/子/孙进程的退出、超时、取消及故障清理。Windows 使用先登记后恢复的 Job；POSIX 保证已登记的合作进程组及未逃逸后代在绝对单调期限内关闭。未登记的 `setsid`/daemon 逃逸不视为成功清理，Linux 反例返回 `cleanup_unconfirmed`。产品构建、离线验证与 legacy 主机运行均已使用这一受控执行入口。
 
 命令完成与进程回收分开判断：默认 `require_tree_exit` 用于 ECU、协议及生命周期检查，主进程退出后遗留活后代仍失败；开发聚合器仅对 Cargo test/build/Clippy 显式选择 `close_tree_on_exit`，主命令结束后 owner 有界关闭其私有 Job/已登记 scope，确认无残留后保留原退出码。发生实际回收时输出 `cleanup=confirmed descendants=reclaimed`；非零、超时、取消、逃逸或无法确认清理均不能转成成功。不按进程名加白名单，不影响同级任务或用户已有进程，不要求关闭机器级编译器遥测。内部测试与产品命令仍维持各自严格契约。
 
-当前 OS 独立消费者入口为 `uv run --locked python -m autosar_tooling os --target windows-x64-controlled-v1 --suite all`；在 Ubuntu24.04 原生环境把 target 改为 `linux-x64-controlled-v1`，不能跨宿主运行。26 项适用 suite 已分别接入 core 集成测试，ARTI 原生消费者随 stack suite 执行一次。固定内核、补丁、原生执行栈及 Windows PE／Linux ELF 差异见 [`runtime/os/README.md`](runtime/os/README.md)。生产 ECU 的两个目标、stdlib-only 离线 build/verify 和隔离桌面真实 IPC 已实际运行；正式分发及无 checkout 验收仍待阶段8完成。
+当前 OS 独立消费者入口为 `uv run --locked python -m autosar_tooling os --target windows-x64-controlled-v1 --suite all`；在 Ubuntu24.04 原生环境把 target 改为 `linux-x64-controlled-v1`，不能跨宿主运行。26 项适用 suite 已分别接入 core 集成测试，ARTI 原生消费者随 stack suite 执行一次。固定内核、补丁、原生执行栈及 Windows PE／Linux ELF 差异见 [`runtime/os/README.md`](runtime/os/README.md)。生产 ECU 的两个目标、stdlib-only 离线 build/verify、Windows MSI 与 Linux deb/AppImage 的无 checkout 隔离桌面真实 IPC 均已实际运行；这些是受控原生主机能力，不是实机或标准认证。
 
 源码准备固定 `windows-x64-controlled-v1` 与 `linux-x64-controlled-v1` 输出目标；`AssetInventory` 在构建时核对 BSW、OS、FreeRTOS 原件、补丁、目标锁与交付素材的可信摘要。显式目录加载以编译进工作台的清单核对，不相信目录自报的散列。`prepare_ecu_project`/`prepare_host_project` 返回纯内存源码、`autosar-build-target-v1` 元数据与输入/目标/资源 fingerprint，预检为 `not_run`；不调用 Git/GCC/PowerShell，也不安装源码包。原生预检是显式独立操作；非本机目标可渲染与重导入，但不能在当前宿主执行。生成后的交付闭包包含 `tools/ecu-tool.py` 和全部 stdlib 工具，接收者无需 checkout、uv、Rust 或 Node。
 
 明确检查本机能否执行**目标**时另运行 `uv run --locked python -m autosar_tooling doctor --role native --target windows-x64-controlled-v1`，Ubuntu24.04 原生环境将 target 改为 `linux-x64-controlled-v1`。此命令才有界启动 Git、固定 GCC、binutils 与 CPython 身份查询并核对合法 XSD/MOD；缺失或身份不符返回非零。本机不能执行某目标不妨碍上述纯源码预览。
+
+## 原生分发与图标
+
+在各自原生宿主、已准备上述开发依赖的源码根目录执行 `npm run tauri --prefix ui -- build`。Tauri 自动合并 `src-tauri/tauri.<platform>.conf.json`：Windows 生成中文 MSI（`zh-CN`，保留中文产品名）；Linux 生成 deb/AppImage，包名使用 `Classic CAN Workbench`；macOS 配置 app/dmg，但尚无原生验证。产物位于 `src-tauri/target/release/bundle/`；没有签名、公证或远端发布声明。
+
+运行已提取或安装的应用不需要 npm、uv、Rust 或 checkout；Windows 需要 WebView2，Linux 需要 WebKitGTK 4.1、Ayatana AppIndicator 与 libxml2。原生 ECU 预检、构建和行为验证另需声明的 CPython 3.12.9、GCC、objdump 与 Git；合法 XSD/MOD 由使用者在“工作台设置”显式配置。安装包不携带这些规范档案或外部编译器。AppImage 在没有 FUSE 的隔离环境可先执行 `./<包名>.AppImage --appimage-extract`，再启动 `squashfs-root/AppRun`。
+
+发行包复验使用已有独立入口，附加 `--installed --source-checkout <发行构建时的原始源码路径>`，该源码路径须已搬离且不存在；`--binary` 指向 checkout 外的真实解包应用。入口复制合法输入及规范到私有目录，使用外部 base CPython 和最小应用 PATH，拒绝仍可见的 Node/npm/uv/Cargo/rustc；应用从私有空 cwd/config 启动，没有 Vite。外部自动化 driver 的开发依赖不注入应用环境。此模式仍执行同一实际导入、编辑、保存、生成、编译、CAN/DID/N_Cr、取消、拒绝与搬移重导入场景。
+
+本轮实际验收采用 Windows MSI 行政解包（`msiexec /a <MSI> /qn TARGETDIR=<私有目录>`，使用原生 Windows 路径）及 Linux deb 解包（`dpkg-deb -x <deb> <私有目录>`）／AppImage 的 `AppRun`。它证明真实包内应用的无 checkout 主路径；未执行系统级安装／卸载、升级、代码签名、公证或发布。MSI 构建保留上游 WiX ICE03/40/57/61 警告，未关闭验证；WebView2 首装下载路径未在本轮验证。
+
+图标唯一源为 `ui/public/workbench.svg`：ECU 芯片、CAN 信号汇入和源码输出箭头。运行 `npm run tauri --prefix ui -- icon ui/public/workbench.svg --output <独立图标输出目录>`，将所需桌面 PNG/ICO/ICNS 更新到 `src-tauri/icons/`；不纳入无关移动平台资源。启动页、项目导航和 favicon 使用同一 SVG。
 
 ## 代码质量检查
 

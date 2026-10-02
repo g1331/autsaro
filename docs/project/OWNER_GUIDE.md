@@ -51,6 +51,10 @@ Agent 应把规范研究放进具体功能任务，不用一轮轮独立审计�
 
 后台原生复验统一使用 `uv run --locked python -m autosar_tooling desktop --platform windows|linux|macos --binary <本次桌面构建路径>`；Windows/Linux 先构建同版 `package_host_reference` 与桌面程序，设置合法规范和声明的原生工具绝对路径。测试程序从私有空配置启动，实际操作缺规范设置页与固定摘要校验。Windows 创建独立 Desktop，通过 `STARTUPINFO.lpDesktop` 指定子进程归属，核对窗口不在输入桌面，不调用 SwitchDesktop；WebView 使用私有数据目录，专属 Job 最终关闭测试树。Linux 使用私有 Xvfb display、`tauri-driver 2.1.0` 与 Ubuntu `WebKitWebDriver`，不连接用户的 DISPLAY/Wayland 会话；另需 `xvfb x11-utils xdotool webkit2gtk-driver`，通过 `cargo install tauri-driver --version 2.1.0 --locked` 安装固定 driver。两种 transport 共用真实 UI/原生 IPC 场景，不替换 Tauri invoke；截图、driver 日志和 `native-ipc.jsonl` 保留在入口报告的私有证据目录，Linux/macOS 使用用户缓存目录以保留跨会话证据。实际验证结论写对应 BMad 工件。
 
+正式发行包使用相同入口追加 `--installed --source-checkout <发行构建时原始源码路径>`，`--binary` 指向 checkout 外实际解包的应用。先搬离仅属本次构建的源码副本，原始路径必须不存在；不得搬动用户工作树。应用不启动 Vite，从私有 cwd/config、复制的合法档案及外部 base CPython 开始，最小 PATH 不包含 Node/npm/uv/Cargo/rustc。Windows driver 与应用均在恢复首线程前登记同一测试 Job；清理回执须显示零受管进程。外部测试器依赖保留在测试环境，不当作安装应用依赖。
+
+Windows MSI、Ubuntu24.04 deb／解包 AppImage 已从不存在的原构建 checkout 完成真实隔离复验；Windows 不切换输入桌面，Linux 用受管 Xvfb 高位 display 和独占文件锁，等待本次 Xvfb 的 `-displayfd` 回执后连接。Linux 只启用抽象本地 X11 传输（关闭 TCP／文件路径 Unix listener），不修改 WSLg 的只读 `/tmp/.X11-unix`。源级 `verify` 和安装路径证据分开记录；没有验证系统级安装／升级或 WebView2 首装下载。
+
 macOS 入口要求独立的非 console GUI 登录会话与 `cargo build --manifest-path src-tauri/Cargo.toml --features native-webdriver` 测试构建；只验收编辑、校验、保存与纯源码预览，同时检查本机预检／构建／运行按钮不可用。专用 capability 和内嵌 loopback WebDriver 只在此 feature/macOS 组合中启用，生产构建不启用。没有 macOS 隔离宿主时该入口标为未原生验证，不得改在用户桌面补测。
 
 “工作台设置”统一配置合法 XSD/MOD 与绝对 CPython/GCC/objdump/Git 路径；环境覆盖仍优先且不写回。配置默认存放于 Tauri `app_config_dir`；显式 `AUTOSAR_CONFIG_DIR` 指定独立绝对目录，后台验收必须设置，单独覆盖 Windows `APPDATA` 不保证隔离 Known Folder。切换目标、修改规范或工具会清除相应预检/交付成功态；取消操作须等原生 owner 关闭受管树，过期结果不会安装到最终目的地。设置失败保留旧配置及当前项目，官方档案不随包交付。

@@ -157,9 +157,11 @@ class Registry:
             input_metadata = selected_input.lstat()
             if stdin_fifo:
                 parent_metadata = selected_input.parent.lstat()
-                if (not stat.S_ISFIFO(input_metadata.st_mode)
-                        or not stat.S_ISDIR(parent_metadata.st_mode)
-                        or parent_metadata.st_mode & 0o077):
+                if (
+                    not stat.S_ISFIFO(input_metadata.st_mode)
+                    or not stat.S_ISDIR(parent_metadata.st_mode)
+                    or parent_metadata.st_mode & 0o077
+                ):
                     raise OwnershipError("stdin_fifo requires an owner-private FIFO")
             elif not stat.S_ISREG(input_metadata.st_mode):
                 raise OwnershipError("stdin_file requires an absolute regular file")
@@ -170,9 +172,6 @@ class Registry:
         read_gate, write_gate = os.pipe()
         environment = os.environ.copy()
         environment.update(request.get("env") or {})
-        environment["PYTHONPATH"] = os.pathsep.join(
-            (str(Path(__file__).resolve().parents[1]), environment.get("PYTHONPATH", ""))
-        )
         environment["ECU_OWNER_SCOPE"] = identity
         environment["ECU_OWNER_SOCKET"] = str(self.path)
         environment["ECU_OWNER_TOKEN"] = self.token
@@ -189,9 +188,9 @@ class Registry:
                 child = subprocess.Popen(
                     [
                         sys.executable,
+                        "-I",
                         "-S",
-                        "-m",
-                        "ecu_tools.launch",
+                        str(Path(__file__).resolve().with_name("launch.py")),
                         str(read_gate),
                         "--",
                         *argv,
@@ -320,7 +319,9 @@ class Registry:
             "exit_code": scope.child.returncode,
             "stdout": str(scope.stdout),
             "stderr": str(scope.stderr),
-            "descendants_reclaimed": reason == "normal" and orphaned and not unconfirmed,
+            "descendants_reclaimed": reason == "normal"
+            and orphaned
+            and not unconfirmed,
         }
         return scope.result
 
@@ -394,7 +395,9 @@ class Registry:
                 exit_code = scope.child.poll()
                 if exit_code is None and time.monotonic_ns() < scope.deadline_ns:
                     return {"op": "running", "scope": identity}
-                return self._close(identity, "timeout" if exit_code is None else "normal")
+                return self._close(
+                    identity, "timeout" if exit_code is None else "normal"
+                )
         raise OwnershipError(f"unknown owner operation: {op}")
 
 
@@ -484,9 +487,6 @@ class Owner:
         path = directory / "owner.sock"
         token = secrets.token_hex(32)
         environment = os.environ.copy()
-        environment["PYTHONPATH"] = os.pathsep.join(
-            (str(Path(__file__).resolve().parents[1]), environment.get("PYTHONPATH", ""))
-        )
         with os.fdopen(
             os.open(
                 directory / "supervisor.log",
@@ -498,9 +498,9 @@ class Owner:
             process = subprocess.Popen(
                 [
                     sys.executable,
+                    "-I",
                     "-S",
-                    "-m",
-                    "ecu_tools.owner",
+                    str(Path(__file__).resolve()),
                     "--socket",
                     str(path),
                     "--guardian-pid",

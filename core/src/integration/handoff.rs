@@ -230,6 +230,8 @@ pub(crate) fn run_tool(
     }
     let mut argv = vec![
         settings.python.as_os_str().into(),
+        "-I".into(),
+        "-S".into(),
         project.join("tools/ecu-tool.py").into_os_string(),
     ];
     argv.extend(arguments);

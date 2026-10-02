@@ -92,6 +92,7 @@ pub(super) fn ecu_build_command(
     let settings = execution_settings();
     let mut command = Command::new(&settings.python);
     command
+        .args(["-I", "-S"])
         .arg(project.join("tools/ecu-tool.py"))
         .arg("build")
         .arg("--project")
@@ -113,6 +114,7 @@ pub(super) fn ecu_verify_command(project: &std::path::Path, output: &std::path::
     let settings = execution_settings();
     let mut command = Command::new(&settings.python);
     command
+        .args(["-I", "-S"])
         .arg(project.join("tools/ecu-tool.py"))
         .arg("verify")
         .arg("--project")

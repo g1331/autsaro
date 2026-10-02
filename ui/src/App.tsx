@@ -101,6 +101,7 @@ export default function App() {
           <div className="source-layout">
             <section className="source-primary" aria-label="项目来源">
               <div className="source-head">
+                <img src="/workbench.svg" alt="Classic CAN 配置工作台" width="64" height="64" />
                 <p className="eyebrow">AUTOSAR CLASSIC / R24-11</p>
                 <h1>配置项目</h1>
                 <p>从空项目开始，或导入同一 ECU 的多份 ARXML。配置始终保存在原始文件集合中。</p>
@@ -258,6 +259,7 @@ export default function App() {
         <main className="workbench">
           <aside className="project-rail">
             <div className="workspace-heading">
+              <img src="/workbench.svg" alt="" aria-hidden="true" width="32" height="32" />
               <div>
                 <p className="eyebrow">当前项目</p>
                 <h1 title={workspace.name}>{workspace.name}</h1>

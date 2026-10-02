@@ -2,6 +2,7 @@
 name = "autosar-config-desktop"
 version = "0.1.0"
 edition = "2024"
+description = "AUTOSAR Classic configuration and native source delivery workbench"
 build = "build.rs"
 
 [lib]
