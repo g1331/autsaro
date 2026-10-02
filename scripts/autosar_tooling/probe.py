@@ -107,6 +107,19 @@ def descendant(pid_file: Path, kind: str) -> int:
     if kind == "fail":
         print("probe failure on stderr", file=sys.stderr, flush=True)
         return 7
+    if kind == "nested-parent-first":
+        from ecu_tools.process import OwnedProcess
+
+        spec = ProcessSpec.seconds(
+            [
+                sys.executable, "-m", "autosar_tooling", "probe", "descendant",
+                "--pid-file", str(pid_file), "--kind", "hang",
+            ],
+            Path.cwd(), 10, pid_file.parent, "unfinished-nested-probe",
+        )
+        OwnedProcess(spec)
+        _wait_for_records(pid_file, 4)
+        return 0
     if kind == "nested":
         spec = ProcessSpec.seconds(
             [
@@ -134,11 +147,31 @@ def descendant(pid_file: Path, kind: str) -> int:
     if kind == "normal":
         child = _spawn(pid_file, "normal-child")
         return child.wait(timeout=5)
-    if kind in ("hang", "parent-first"):
+    if kind in ("hang", "parent-first", "parent-first-fail"):
         _spawn(pid_file, "child")
         _wait_for_records(pid_file, 3)
-        if kind == "parent-first":
+        if kind in ("parent-first", "parent-first-fail"):
+            if kind == "parent-first-fail":
+                print("probe failure with live descendants", file=sys.stderr, flush=True)
+                return 7
             return 0
         time.sleep(30)
         return 0
     raise ValueError(f"Unknown descendant probe kind: {kind}")
+
+
+def stdin(kind: str) -> int:
+    """Exercise real interactive bytes/EOF or deliberate blocked input."""
+    print(os.getpid(), flush=True)
+    if kind == "hang":
+        time.sleep(30)
+        return 0
+    if kind == "hash":
+        import hashlib
+
+        digest = hashlib.sha256()
+        while data := sys.stdin.buffer.read(8192):
+            digest.update(data)
+        print(digest.hexdigest(), flush=True)
+        return 0
+    raise ValueError(f"Unknown stdin probe kind: {kind}")

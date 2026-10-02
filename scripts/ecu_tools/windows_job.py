@@ -203,20 +203,23 @@ class WindowsJob:
         assert self.child is not None
         return self.child.poll()
 
-    def wait(self, deadline_ns: int) -> tuple[str, int | None]:
+    def wait(
+        self, deadline_ns: int, *, close_tree_on_exit: bool = False
+    ) -> tuple[str, int | None, bool]:
         while time.monotonic_ns() < deadline_ns:
             code = self.poll()
             if code is not None:
                 # The active count can lag a reaped cooperative exit briefly.
-                grace = time.monotonic_ns() + 200_000_000
+                grace = min(deadline_ns, time.monotonic_ns() + 200_000_000)
                 while self._active() and time.monotonic_ns() < grace:
                     time.sleep(0.01)
                 orphaned = bool(self._active())
                 self.close()
-                return ("orphaned_members" if orphaned else "exited"), code
+                status = "orphaned_members" if orphaned and not close_tree_on_exit else "exited"
+                return status, code, orphaned
             time.sleep(0.01)
         self.close()
-        return "timeout", self.poll()
+        return "timeout", self.poll(), False
 
     def close(self) -> None:
         if self.closed:

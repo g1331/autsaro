@@ -1,10 +1,10 @@
 """Check independent protocol and OS vectors against the reference ECU configuration."""
 
 import json
-from pathlib import Path
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 ORACLES = ROOT / "core/tests/fixtures/epic4_oracles"
 NS = {"a": "http://autosar.org/schema/r4.0"}
 
@@ -170,7 +170,14 @@ def validate_protocol(protocol: dict, os_oracles: dict, xml: bytes) -> None:
             "independent oracle changed: activation-limit")
 
 
-if __name__ == "__main__":
-    validate_protocol(load(ORACLES / "protocol.json"), load(ORACLES / "os.json"),
-                      (ROOT / "core/tests/fixtures/epic4/positive/ecuc.arxml").read_bytes())
+def main() -> None:
+    validate_protocol(
+        load(ORACLES / "protocol.json"),
+        load(ORACLES / "os.json"),
+        (ROOT / "core/tests/fixtures/epic4/positive/ecuc.arxml").read_bytes(),
+    )
     print("epic4_independent_oracle_contracts PASS")
+
+
+if __name__ == "__main__":
+    main()

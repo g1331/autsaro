@@ -8,17 +8,17 @@ application IPC reaches Rust without replacing the native transport.
 
 import argparse
 import ctypes
-from ctypes import wintypes as w
 import json
 import os
-from pathlib import Path
 import shutil
 import socket
 import subprocess
-import time
 import tempfile
+import time
 import urllib.request
 import uuid
+from ctypes import wintypes as w
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -105,6 +105,7 @@ def main() -> int:
         creationflags=subprocess.CREATE_NO_WINDOW,
         capture_output=True,
         timeout=180,
+        check=False,
     )
     if packaged.returncode:
         raise RuntimeError(packaged.stdout.decode("utf-8", errors="replace") + packaged.stderr.decode("utf-8", errors="replace"))
@@ -312,7 +313,7 @@ def main() -> int:
                 if time.monotonic() > deadline:
                     raise RuntimeError("Isolated native WebView did not expose CDP")
                 time.sleep(0.2)
-        actual = name(desktop)
+        name(desktop)
         isolated_windows = windows(desktop, app.pid)
         if not isolated_windows or windows(original, app.pid):
             raise RuntimeError(
@@ -365,19 +366,19 @@ def main() -> int:
                     accept_buttons = []
 
                     @window_callback
-                    def child(child_window, _):
+                    def child(child_window, _, accept=accept_buttons, cancel=cancel_buttons):
                         # DirectUI TaskDialog buttons can expose ID 0. Use the
                         # actual translated positive label on our owned dialog.
                         if window_text(child_window, True) == "Button" and (
                             user.GetDlgCtrlID(child_window) in (1, 6, 1000, 1004)
                             or window_text(child_window) in ("确定", "确认", "是", "OK", "Ok", "Yes")
                         ):
-                            accept_buttons.append(child_window)
+                            accept.append(child_window)
                         if window_text(child_window, True) == "Button" and (
                             user.GetDlgCtrlID(child_window) == 2
                             or window_text(child_window) in ("取消", "Cancel")
                         ):
-                            cancel_buttons.append(child_window)
+                            cancel.append(child_window)
                         return True
 
                     checked(user.EnumChildWindows(window, child, 0))

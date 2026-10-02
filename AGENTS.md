@@ -21,13 +21,13 @@ cargo test --manifest-path core/Cargo.toml
 cargo build --manifest-path src-tauri/Cargo.toml
 ```
 
-上述命令依次安装锁定的前端依赖、执行 TypeScript 检查并构建界面、运行核心测试、编译桌面程序。`python scripts/verify.py --scope all --base <story起始提交>` 可组合运行项目构建、测试和源码检查；按 BMad 规格选择验证范围，结果记录在该工件中。首次安装检查工具见 `README.md`。界面开发用 `npm run dev --prefix ui`；桌面调试程序从 `src-tauri/target/debug/` 启动。Windows 依赖 Rust MSVC、C++ Build Tools、WebView2、GCC、vcpkg libxml2 和 libclang；具体环境变量见 `README.md`。
+上述命令依次安装锁定的前端依赖、执行 TypeScript 检查并构建界面、运行核心测试、编译桌面程序。`uv run --locked python -m autosar_tooling verify --scope all --base <story起始提交>` 可组合运行项目构建、测试和源码检查；按 BMad 规格选择验证范围，结果记录在该工件中。首次安装检查工具见 `README.md`。界面开发用 `npm run dev --prefix ui`；桌面调试程序从 `src-tauri/target/debug/` 启动。Windows 依赖 Rust MSVC、C++ Build Tools、WebView2、GCC、vcpkg libxml2 和 libclang；具体环境变量见 `README.md`。
 
 ## 代码风格与命名
 
 任务涉及编写或修改 C 源码、头文件、运行时模块或生成器输出的 C 代码时，Agent 必须在设计和编辑前主动读取并使用仓库技能 [misra-c2012](.agents/skills/misra-c2012/SKILL.md)，无需用户提到 MISRA 或显式调用技能。推进功能、story 或 epic 时，根据实际修改范围判断；Rust 中的 C 模板修改也适用，与 BMad 开发流程一并执行。按 MISRA C:2012 的修订基线指导实际编码；适用检查和发现进入 BMad 规格与复核，不默认生成额外文档或矩阵。
 
-Rust 使用四空格及 `snake_case` 函数名；现有文件尚未整体通过 `rustfmt`，避免全仓格式化，但新增或修改的代码行须通过 `scripts/quality.py` 的 rustfmt 增量检查。TypeScript/TSX 沿用两空格、单引号和分号，新改行由锁定版本的 Prettier 检查，严格类型检查包含在 UI 构建中，ESLint 覆盖 UI 源码。C 代码保持 C99、四空格缩进，公开运行时接口沿用 `Can_Transmit` 等模块前缀；新改行由固定版本的 clang-format 检查。`runtime/include/` 的公开 C 接口按 Doxygen 格式说明契约，内部静态函数不强制逐一注释。`.editorconfig` 约定基础空白格式。历史文件不因局部修改全仓重排；检查结论限定于实际运行范围。
+Rust 使用四空格及 `snake_case` 函数名；现有文件尚未整体通过 `rustfmt`，避免全仓格式化，但新增或修改的代码行须通过 `autosar_tooling quality` 的 rustfmt 增量检查。TypeScript/TSX 沿用两空格、单引号和分号，新改行由锁定版本的 Prettier 检查，严格类型检查包含在 UI 构建中，ESLint 覆盖 UI 源码。C 代码保持 C99、四空格缩进，公开运行时接口沿用 `Can_Transmit` 等模块前缀；新改行由固定版本的 clang-format 检查。`runtime/include/` 的公开 C 接口按 Doxygen 格式说明契约，内部静态函数不强制逐一注释。`.editorconfig` 约定基础空白格式。历史文件不因局部修改全仓重排；检查结论限定于实际运行范围。
 
 ## 测试要求
 

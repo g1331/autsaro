@@ -112,7 +112,7 @@ pub fn open_ecu_handoff(
     dependencies: &PlanDependencies,
     runtime: &RuntimeCatalog,
 ) -> Result<EcuHandoff, Vec<PlanDiagnostic>> {
-    let names = generator::verify_build_input(output).map_err(issue)?;
+    let names = generator::output::verify_build_input(output).map_err(issue)?;
     let data: Value = serde_json::from_slice(
         &fs::read(output.join("handoff.json")).map_err(|error| issue(error.to_string()))?,
     )
@@ -193,7 +193,7 @@ fn compare_files(
 }
 
 fn checked_project(plan: &ValidatedIntegrationPlan, project: &Path) -> Result<BuildTarget, String> {
-    let names = generator::verify_build_input(project)?;
+    let names = generator::output::verify_build_input(project)?;
     let data: Value = serde_json::from_slice(
         &fs::read(project.join("integration.json")).map_err(|error| error.to_string())?,
     )
@@ -261,8 +261,11 @@ pub fn build_ecu_project(
     settings: &ExecutionSettings,
 ) -> Result<BuildReport, String> {
     let target = checked_project(plan, project)?;
-    let capture =
-        generator::reserve_directory(&std::env::temp_dir(), "ecu-build", OsStr::new("private"))?;
+    let capture = generator::output::reserve_directory(
+        &std::env::temp_dir(),
+        "ecu-build",
+        OsStr::new("private"),
+    )?;
     let log = run_tool(
         project,
         settings,
@@ -301,8 +304,11 @@ pub fn verify_ecu_project(
     settings: &ExecutionSettings,
 ) -> Result<RunReport, String> {
     checked_project(plan, project)?;
-    let scratch =
-        generator::reserve_directory(&std::env::temp_dir(), "ecu-verify", OsStr::new("private"))?;
+    let scratch = generator::output::reserve_directory(
+        &std::env::temp_dir(),
+        "ecu-verify",
+        OsStr::new("private"),
+    )?;
     let output = scratch.join("build");
     let log = run_tool(
         project,

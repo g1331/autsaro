@@ -207,7 +207,7 @@ pub fn generated_tables() {
             .generate_previewed(&edited_source, &preview.revision)
             .unwrap();
         let edited_build = scratch.0.join(format!("edited-table-build-{offset}"));
-        let output = super::epic4_ecu::run_public_command(
+        let output = super::tooling::run_public_command(
             &mut super::tooling::ecu_build_command(
                 &edited_source,
                 &edited_build,

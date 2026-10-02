@@ -14,7 +14,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from zipfile import ZipFile
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / "core/tests/fixtures/epic4"
 NS = {"a": "http://autosar.org/schema/r4.0"}
 Q = "{" + NS["a"] + "}"

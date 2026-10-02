@@ -12,25 +12,59 @@ import sys
 import tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+from ecu_tools.process import OwnedProcess, ProcessSpec
+
+ROOT = Path(__file__).resolve().parents[2]
 SOURCE_SUFFIXES = {".c", ".h", ".rs", ".ts", ".tsx", ".css", ".py"}
 FORMAT_SUFFIXES = {".c", ".h", ".rs", ".ts", ".tsx", ".css"}
 SOURCE_ROOTS = ("core/", "src-tauri/", "runtime/", "ui/src/", "scripts/")
 HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
 
 
+def _capture(
+    command: list[str], *, input_text: str | None = None
+) -> subprocess.CompletedProcess[bytes]:
+    executable = shutil.which(command[0])
+    if executable is None:
+        raise FileNotFoundError(f"Required quality executable is missing: {command[0]}")
+    argv = [str(Path(executable).absolute()), *command[1:]]
+    logs = Path(tempfile.mkdtemp(prefix="autosar-quality-"))
+    if sys.platform != "win32":
+        logs.chmod(0o700)
+    stdin = None
+    if input_text is not None:
+        stdin = logs / "stdin.txt"
+        stdin.write_text(input_text, encoding="utf-8", newline="\n")
+    stage = f"quality:{Path(argv[0]).name}"
+    spec = ProcessSpec.seconds(argv, ROOT, 60, logs, stage, stdin_file=stdin)
+    try:
+        result = OwnedProcess(spec).wait()
+        stdout = result.stdout.read_bytes()
+        stderr = result.stderr.read_bytes()
+        if result.status != "exited" or result.exit_code is None:
+            raise RuntimeError(
+                f"{stage}: argv={argv!r} deadline_ns={spec.deadline_ns} "
+                f"status={result.status} exit={result.exit_code} owned_logs={logs}"
+            )
+    except BaseException:
+        print(f"{stage}: owned_logs={logs}", file=sys.stderr)
+        raise
+    if result.success:
+        shutil.rmtree(logs)
+    else:
+        print(f"{stage}: exit={result.exit_code} owned_logs={logs}", file=sys.stderr)
+    return subprocess.CompletedProcess(argv, result.exit_code, stdout, stderr)
+
+
 def run(
     command: list[str], *, input_text: str | None = None
 ) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        command,
-        cwd=ROOT,
-        input=input_text,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
+    result = _capture(command, input_text=input_text)
+    return subprocess.CompletedProcess(
+        result.args,
+        result.returncode,
+        result.stdout.decode("utf-8", errors="replace").replace("\r\n", "\n"),
+        result.stderr.decode("utf-8", errors="replace").replace("\r\n", "\n"),
     )
 
 
@@ -40,7 +74,7 @@ def source_paths(*, untracked_only: bool = False) -> list[Path]:
         command.extend(["--others", "--exclude-standard"])
     else:
         command.extend(["--cached", "--others", "--exclude-standard"])
-    result = subprocess.run(command, cwd=ROOT, capture_output=True, check=False)
+    result = _capture(command)
     if result.returncode:
         raise RuntimeError(result.stderr.decode("utf-8", errors="replace"))
     paths = (
@@ -296,7 +330,7 @@ def check(base: str, *, all_format: bool = False) -> list[str]:
     return errors
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--base",
@@ -307,7 +341,7 @@ def main() -> int:
         action="store_true",
         help="Audit formatting of all source files, including legacy code",
     )
-    arguments = parser.parse_args()
+    arguments = parser.parse_args(argv)
     if arguments.base:
         base = arguments.base
     else:

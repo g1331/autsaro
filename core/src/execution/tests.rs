@@ -1,4 +1,4 @@
-use super::{ProcessOwner, ProcessSpec, ProcessStatus, run_bounded};
+use super::{CompletionPolicy, ProcessOwner, ProcessSpec, ProcessStatus, run_bounded};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -55,12 +55,24 @@ impl Fixture {
         .expect("valid spec")
     }
 
-    fn stdin_spec(&self, code: &str, duration: Duration) -> ProcessSpec {
+    fn stdin_spec(&self, kind: &str, duration: Duration) -> ProcessSpec {
         let python = std::env::var_os("AUTOSAR_PYTHON").expect("locked CPython interpreter");
+        let scripts = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("workspace root")
+            .join("scripts");
         let mut spec = ProcessSpec::for_duration(
-            vec![python, "-c".into(), code.into()],
-            self.0.clone(),
-            Vec::new(),
+            vec![
+                python,
+                "-m".into(),
+                "autosar_tooling".into(),
+                "probe".into(),
+                "stdin".into(),
+                "--kind".into(),
+                kind.into(),
+            ],
+            scripts.clone(),
+            vec![("PYTHONPATH".into(), scripts.into_os_string())],
             duration,
             self.0.clone(),
         )
@@ -87,6 +99,14 @@ impl Drop for Fixture {
 
 #[cfg(unix)]
 fn alive(pid: u32) -> bool {
+    #[cfg(target_os = "linux")]
+    if let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat")) {
+        if stat.rsplit_once(") ").is_some_and(|(_, fields)| {
+            matches!(fields.split_ascii_whitespace().next(), Some("Z" | "X"))
+        }) {
+            return false;
+        }
+    }
     // SAFETY: signal zero reads existence of a fixture-owned process.
     unsafe { libc::kill(pid as i32, 0) == 0 }
 }
@@ -171,6 +191,36 @@ fn parent_first_and_timeout_close_the_registered_tree() {
 }
 
 #[test]
+fn tool_completion_reclaims_members_preserves_exit_and_keeps_sibling_alive() {
+    for (kind, exit_code) in [("parent-first", 0), ("parent-first-fail", 7)] {
+        let owner = ProcessOwner::new().unwrap();
+        let sibling_fixture = Fixture::new();
+        let mut sibling = owner
+            .spawn(sibling_fixture.spec("hang", Duration::from_secs(15)), None)
+            .unwrap();
+        let end = std::time::Instant::now() + Duration::from_secs(5);
+        while sibling_fixture.descendants_if_present().len() < 3 && std::time::Instant::now() < end
+        {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let sibling_pids = sibling_fixture.descendants();
+        assert!(sibling_pids.len() >= 3);
+        let fixture = Fixture::new();
+        let mut spec = fixture.spec(kind, Duration::from_secs(8));
+        spec.completion = CompletionPolicy::CloseTreeOnExit;
+        let result = owner.spawn(spec, None).unwrap().wait().unwrap();
+        assert_eq!(result.status, ProcessStatus::Exited);
+        assert_eq!(result.exit_code, Some(exit_code));
+        assert_eq!(result.success(), exit_code == 0);
+        assert!(result.descendants_reclaimed);
+        assert_descendants_gone(&fixture, 3);
+        assert!(sibling_pids.iter().all(|&pid| alive(pid)));
+        assert_eq!(sibling.cancel().unwrap().status, ProcessStatus::Cancelled);
+        assert_pids_gone(&sibling_pids);
+    }
+}
+
+#[test]
 fn cancel_and_nested_scopes_close_without_stale_members() {
     let fixture = Fixture::new();
     let owner = ProcessOwner::new().unwrap();
@@ -222,7 +272,9 @@ fn rejected_registration_never_executes_a_command() {
 #[test]
 fn unexpected_supervisor_death_closes_guardian_mirror() {
     let fixture = Fixture::new();
-    let owner = ProcessOwner::new().unwrap();
+    let owner = ProcessOwner {
+        owner: super::unix::UnixOwner::start_fresh_for_test().unwrap(),
+    };
     let root = std::sync::Arc::clone(&owner.owner);
     let mut process = owner
         .spawn(fixture.spec("hang", Duration::from_secs(8)), None)
@@ -277,10 +329,9 @@ fn interactive_stdin_preserves_binary_bytes_and_eof_closes_the_child() {
     use sha2::{Digest, Sha256};
     let fixture = Fixture::new();
     let owner = ProcessOwner::new().unwrap();
-    let mut process = owner.spawn(fixture.stdin_spec(
-        "import hashlib,os,sys; print(os.getpid(),flush=True); data=sys.stdin.buffer.read(); print(hashlib.sha256(data).hexdigest(),flush=True)",
-        Duration::from_secs(10),
-    ), None).unwrap();
+    let mut process = owner
+        .spawn(fixture.stdin_spec("hash", Duration::from_secs(10)), None)
+        .unwrap();
     let bytes: Vec<u8> = (0..131_079).map(|value| (value % 251) as u8).collect();
     for chunk in bytes.chunks(8191) {
         process.write_stdin(chunk).unwrap();
@@ -300,13 +351,7 @@ fn blocked_interactive_stdin_obeys_the_absolute_deadline_and_closes_its_pid() {
     let fixture = Fixture::new();
     let owner = ProcessOwner::new().unwrap();
     let mut process = owner
-        .spawn(
-            fixture.stdin_spec(
-                "import os,time; print(os.getpid(),flush=True); time.sleep(30)",
-                Duration::from_secs(2),
-            ),
-            None,
-        )
+        .spawn(fixture.stdin_spec("hang", Duration::from_secs(2)), None)
         .unwrap();
     let output = process.stdout_path().to_path_buf();
     let start = std::time::Instant::now();

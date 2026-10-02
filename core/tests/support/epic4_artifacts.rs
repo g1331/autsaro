@@ -6,7 +6,7 @@ use std::process::Command;
 use std::time::Duration;
 
 fn reader(root: &Path, project: &Path, probe: &Path) -> Command {
-    let mut command = Command::new("python");
+    let mut command = super::tooling::python_command();
     command
         .arg(root.join("core/tests/fixtures/artifact_reader.py"))
         .arg(project)
@@ -46,7 +46,7 @@ pub fn verify() {
     )
     .unwrap();
     let probe = consumer.join("Artifact_Probe.h");
-    let result = super::epic4_ecu::run_public_command(
+    let result = super::tooling::run_public_command(
         &mut reader(root, &project, &probe),
         &scratch.0,
         "artifact-reader",
@@ -133,7 +133,7 @@ pub fn verify() {
         .arg(format!("-I{}", project.join("os/include").display()))
         .arg(project.join("src/Rte.c"))
         .arg(project.join("src/Rte_OsService.c"));
-    let result = super::epic4_ecu::run_public_command(
+    let result = super::tooling::run_public_command(
         &mut analysis,
         &scratch.0,
         "rte-static-analysis",
@@ -170,7 +170,7 @@ pub fn verify() {
     ] {
         assert_ne!(changed, xml);
         fs::write(&path, changed).unwrap();
-        let result = super::epic4_ecu::run_public_command(
+        let result = super::tooling::run_public_command(
             &mut reader(root, &project, &consumer.join("rejected.h")),
             &scratch.0,
             label,
@@ -184,7 +184,7 @@ pub fn verify() {
     // An invented BSW API still forms valid XML; the independent native consumer must reject it.
     let changed = xml.replace("CanIf_Transmit", "CanIf_Absent");
     fs::write(&path, changed).unwrap();
-    let result = super::epic4_ecu::run_public_command(
+    let result = super::tooling::run_public_command(
         &mut reader(root, &project, &probe),
         &scratch.0,
         "invented-api-reader",

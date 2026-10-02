@@ -77,7 +77,7 @@ impl<'a> PreparedProject<'a> {
     }
 
     pub fn preview(self, output: &std::path::Path) -> Result<crate::GenerationPreview, String> {
-        generator::preview_prepared(&self.into_files(), output)
+        generator::output::preview_prepared(&self.into_files(), output)
     }
 
     pub fn generate_previewed(
@@ -85,7 +85,7 @@ impl<'a> PreparedProject<'a> {
         output: &std::path::Path,
         revision: &str,
     ) -> Result<crate::GenerationReport, String> {
-        generator::generate_prepared(self.into_files(), output, Some(revision))
+        generator::output::generate_prepared(self.into_files(), output, Some(revision))
     }
 
     pub fn native_preflight(&self, settings: &crate::target::ExecutionSettings) -> PreflightReport {
@@ -107,7 +107,7 @@ impl<'a> PreparedProject<'a> {
             use std::fmt::Write;
             use std::time::Duration;
 
-            let stage = generator::reserve_directory(
+            let stage = generator::output::reserve_directory(
                 &std::env::temp_dir(),
                 "ecu-preflight",
                 std::ffi::OsStr::new("private"),
@@ -193,7 +193,7 @@ impl<'a> PreparedProject<'a> {
     }
 
     pub fn into_files(self) -> Vec<(String, Vec<u8>)> {
-        generator::seal_files(
+        generator::output::seal_files(
             self.files
                 .into_iter()
                 .map(|file| (file.path, file.bytes.into_owned()))
@@ -470,13 +470,14 @@ pub fn prepare_host_project(
     } else {
         None
     };
-    let generated = generator::render_host_profile(workspace, target)?;
+    let generated = generator::render::render_host_profile(workspace, target)?;
     let input_identity = workspace.preparation_input_identity();
     let mut files = start(target, "host")?;
     for (path, bytes) in generated {
         insert(&mut files, path, Cow::Owned(bytes), None)?;
     }
-    let readme = generator::handoff_readme(workspace.diagnostic_profile(), target, handoff)?;
+    let readme =
+        generator::render::handoff_readme(workspace.diagnostic_profile(), target, handoff)?;
     insert(
         &mut files,
         "README.md".into(),

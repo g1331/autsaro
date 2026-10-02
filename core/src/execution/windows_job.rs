@@ -329,7 +329,7 @@ mod tests {
     }
     #[test]
     fn job_assignment_failure_closes_parent_before_command_execution() {
-        let scratch = crate::generator::reserve_directory(
+        let scratch = crate::generator::output::reserve_directory(
             &std::env::temp_dir(),
             "job-rejection",
             std::ffi::OsStr::new("private"),

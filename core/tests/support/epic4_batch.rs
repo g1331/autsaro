@@ -1,9 +1,13 @@
+#[cfg(windows)]
 use std::io::Write;
+#[cfg(windows)]
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::Command;
+#[cfg(windows)]
 use std::process::Stdio;
 
+#[cfg(windows)]
 fn live_output(binary: &Path) {
     let mut child = Command::new(binary)
         .stdin(Stdio::piped())
@@ -72,6 +76,7 @@ fn live_output(binary: &Path) {
     assert!(status.success());
 }
 
+#[cfg(windows)]
 pub(super) fn run_text(binary: &Path, directory: &Path, script: &[u8]) -> String {
     std::fs::create_dir_all(directory).unwrap();
     let mut child = Command::new(binary)
@@ -101,6 +106,7 @@ pub(super) fn run_text(binary: &Path, directory: &Path, script: &[u8]) -> String
     text
 }
 
+#[cfg(windows)]
 pub fn commit() {
     use autosar_config_core::integration::{PlanDependencies, RuntimeCatalog, build_plan};
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
@@ -117,7 +123,7 @@ pub fn commit() {
         .generate_previewed(&source, &preview.revision)
         .unwrap();
     let build = scratch.0.join("host-batch-build");
-    let output = super::epic4_ecu::run_public_command(
+    let output = super::tooling::run_public_command(
         &mut super::tooling::ecu_build_command(&source, &build, "host-batch", None),
         &scratch.0,
         "host-batch-build",
@@ -254,7 +260,7 @@ pub fn commit() {
         Some(&root.join("core/tests/fixtures/host_batch_faults.c")),
     );
     let overflow_build = scratch.0.join("overflow-build");
-    let output = super::epic4_ecu::run_public_command(
+    let output = super::tooling::run_public_command(
         &mut super::tooling::ecu_build_command(
             &source,
             &overflow_build,
@@ -324,6 +330,7 @@ pub fn commit() {
     }
 }
 
+#[cfg(windows)]
 pub fn native_boundary() {
     use autosar_config_core::integration::{PlanDependencies, RuntimeCatalog, build_plan};
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();

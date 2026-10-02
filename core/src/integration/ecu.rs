@@ -19,14 +19,14 @@ impl EcuIntegrationFiles {
         &self.files
     }
     pub fn preview(&self, output: &Path) -> Result<GenerationPreview, String> {
-        generator::preview_prepared(&self.files, output)
+        generator::output::preview_prepared(&self.files, output)
     }
     pub fn generate_previewed(
         &self,
         output: &Path,
         revision: &str,
     ) -> Result<GenerationReport, String> {
-        generator::generate_prepared(self.files.clone(), output, Some(revision))
+        generator::output::generate_prepared(self.files.clone(), output, Some(revision))
     }
 }
 
@@ -214,6 +214,11 @@ impl ValidatedIntegrationPlan {
                     .unwrap()
             )
         );
+        if app_header == super::os_service::HEADER || client_header == super::os_service::HEADER {
+            return Err(reject(
+                "A generated component header collides with the OS service header",
+            ));
+        }
         let rx = plan.signals.iter().find(|signal| signal.receive).unwrap();
         let tx = plan.signals.iter().find(|signal| !signal.receive).unwrap();
         let signal_id = |path: &str| {

@@ -29,7 +29,7 @@ Physical CAN identifiers must remain unique in the selected network.
 `runtime/contracts/bsw-v1.json` records 17 current host BSW entry signatures and
 their actual source/header identities. It is compiled into this workbench and
 the supplied runtime tree must match. Verify it with
-`python scripts/epic4_bsw_catalog.py`; `--probe` also compiles and links typed
+`uv run --locked python -m autosar_tooling bsw-catalog`; `--probe` also compiles and links typed
 function pointers against the existing host runtime. `--write` is for explicitly
 reviewed runtime changes, followed by recompiling the workbench. Product parsing
 does not read fixture expectations or call the inventory materializer.

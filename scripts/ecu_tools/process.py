@@ -6,9 +6,17 @@ import os
 import tempfile
 import time
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 
 from ecu_tools.owner import Owner, OwnershipError
+
+
+class CompletionPolicy(str, Enum):
+    """Separate task completion from bounded reclamation of owned descendants."""
+
+    REQUIRE_TREE_EXIT = "require_tree_exit"
+    CLOSE_TREE_ON_EXIT = "close_tree_on_exit"
 
 
 @dataclass(frozen=True)
@@ -20,6 +28,7 @@ class ProcessSpec:
     log_directory: Path
     stage: str
     stdin_file: Path | None = None
+    completion: CompletionPolicy = CompletionPolicy.REQUIRE_TREE_EXIT
 
     @classmethod
     def seconds(
@@ -31,6 +40,7 @@ class ProcessSpec:
         stage: str,
         env: dict[str, str] | None = None,
         stdin_file: Path | None = None,
+        completion: CompletionPolicy = CompletionPolicy.REQUIRE_TREE_EXIT,
     ) -> ProcessSpec:
         return cls(
             tuple(argv),
@@ -40,6 +50,7 @@ class ProcessSpec:
             log_directory,
             stage,
             stdin_file,
+            completion,
         )
 
 
@@ -52,6 +63,7 @@ class ProcessResult:
     status: str
     stdout: Path
     stderr: Path
+    descendants_reclaimed: bool = False
 
     @property
     def success(self) -> bool:
@@ -107,14 +119,18 @@ class OwnedProcess:
                 self.own_root = owner.process is not None
             self.owner = owner
             try:
+                inherited_parent = (
+                    os.environ.get("ECU_OWNER_SCOPE") if owner.process is None else None
+                )
                 self.registration = owner.reserve(
                     list(spec.argv),
                     spec.cwd,
                     spec.deadline_ns,
                     spec.log_directory,
-                    parent=parent or os.environ.get("ECU_OWNER_SCOPE"),
+                    parent=parent if parent is not None else inherited_parent,
                     stdin_file=spec.stdin_file,
                     env=spec.env,
+                    completion=spec.completion.value,
                 )
                 owner.request("release", scope=self.registration["scope"])
             except BaseException:
@@ -146,6 +162,7 @@ class OwnedProcess:
             str(reply["status"]),
             Path(self.registration["stdout"]),
             Path(self.registration["stderr"]),
+            bool(reply.get("descendants_reclaimed", False)),
         )
 
     def wait(self) -> ProcessResult:
@@ -153,8 +170,13 @@ class OwnedProcess:
             raise OwnershipError("owned scope already completed")
         try:
             if self.windows is not None:
-                status, code = self.windows.wait(self.spec.deadline_ns)
-                return self._result({"status": status, "exit_code": code})
+                status, code, reclaimed = self.windows.wait(
+                    self.spec.deadline_ns,
+                    close_tree_on_exit=self.spec.completion is CompletionPolicy.CLOSE_TREE_ON_EXIT,
+                )
+                return self._result(
+                    {"status": status, "exit_code": code, "descendants_reclaimed": reclaimed}
+                )
             assert self.owner is not None
             while True:
                 response = self.owner.request("closed", scope=self.scope)

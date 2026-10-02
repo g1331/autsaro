@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
+pub(super) const HEADER: &str = "Rte_Os.h";
+
 /// The selected Counter's service description and actual synchronous binding.
 /// Counter state and service error handling remain exclusively in the OS.
 pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec<u8>> {
@@ -81,7 +83,7 @@ pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec
     header.push_str("#endif\n");
     BTreeMap::from([
         ("os/Os_Service.arxml".into(), xml.into_bytes()),
-        ("include/Rte_Os.h".into(), header.into_bytes()),
+        (format!("include/{HEADER}"), header.into_bytes()),
         ("src/Rte_OsService.c".into(), source.into_bytes()),
     ])
 }

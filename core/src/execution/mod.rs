@@ -19,6 +19,17 @@ pub(crate) use windows_job::ProcessTree;
 #[cfg(test)]
 mod tests;
 
+/// A command's root exit and its owned-tree cleanup are separate contracts.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CompletionPolicy {
+    /// Business tasks must not leave live workers after their root exits.
+    #[default]
+    RequireTreeExit,
+    /// One-shot tools may leave helpers; close them before publishing the result.
+    CloseTreeOnExit,
+}
+
 /// The monotonic deadline is absolute; child operations cannot reset it.
 pub struct ProcessSpec {
     pub argv: Vec<OsString>,
@@ -28,6 +39,7 @@ pub struct ProcessSpec {
     pub log_directory: PathBuf,
     /// Open a bounded interactive stdin channel; output remains captured in logs.
     pub stdin_stream: bool,
+    pub completion: CompletionPolicy,
 }
 
 impl ProcessSpec {
@@ -51,6 +63,7 @@ impl ProcessSpec {
             deadline_ns,
             log_directory,
             stdin_stream: false,
+            completion: CompletionPolicy::RequireTreeExit,
         })
     }
 
@@ -100,6 +113,8 @@ pub struct ProcessResult {
     pub status: ProcessStatus,
     pub stdout: PathBuf,
     pub stderr: PathBuf,
+    /// True only after live descendants were reclaimed and closure confirmed.
+    pub descendants_reclaimed: bool,
 }
 
 impl ProcessResult {
@@ -281,17 +296,18 @@ impl OwnedProcess {
                     let orphaned = tree.active()? != 0;
                     tree.stop()?;
                     break (
-                        if orphaned {
+                        if orphaned && self.spec.completion == CompletionPolicy::RequireTreeExit {
                             ProcessStatus::OrphanedMembers
                         } else {
                             ProcessStatus::Exited
                         },
                         status.code(),
+                        orphaned,
                     );
                 }
                 if monotonic_ns()? >= self.spec.deadline_ns {
                     tree.stop()?;
-                    break (ProcessStatus::Timeout, None);
+                    break (ProcessStatus::Timeout, None, false);
                 }
                 std::thread::sleep(Duration::from_millis(20));
             };
@@ -304,6 +320,7 @@ impl OwnedProcess {
                 status: status.0,
                 stdout: stdout.clone(),
                 stderr: stderr.clone(),
+                descendants_reclaimed: status.2,
             })
         }
     }
@@ -339,6 +356,7 @@ impl OwnedProcess {
                 status: ProcessStatus::Cancelled,
                 stdout: stdout.clone(),
                 stderr: stderr.clone(),
+                descendants_reclaimed: false,
             })
         }
     }

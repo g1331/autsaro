@@ -156,11 +156,12 @@ def verify_sources(kernel: Path = KERNEL) -> dict:
     return manifest
 
 
-def compiler() -> str:
+def compiler(target: str | None = None) -> str:
+    target = target or _TARGET_ID.get()
     cc = os.environ.get("AUTOSAR_CC", "gcc")
     version = run_native([cc, "--version"], capture_output=True, text=True, check=True, timeout=30)
     machine = run_native([cc, "-dumpmachine"], capture_output=True, text=True, check=True, timeout=30)
-    pinned_path = "toolchain-linux.json" if _TARGET_ID.get() == "linux-x64-controlled-v1" else "toolchain.json"
+    pinned_path = "toolchain-linux.json" if target == "linux-x64-controlled-v1" else "toolchain.json"
     pinned = json.loads((TARGET / pinned_path).read_text(encoding="utf-8"))
     executable = Path(shutil.which(cc) or cc)
     if (
@@ -171,7 +172,7 @@ def compiler() -> str:
         != pinned["executable_sha256"]
     ):
         raise ValueError(f"native OS toolchain identity mismatch: {pinned['identity']}")
-    if _TARGET_ID.get() == "linux-x64-controlled-v1":
+    if target == "linux-x64-controlled-v1":
         for name, field in (("objdump", "objdump_sha256"), ("nm", "nm_sha256")):
             native_tool = executable.parent / name
             if hashlib.sha256(native_tool.read_bytes()).hexdigest() != pinned[field]:

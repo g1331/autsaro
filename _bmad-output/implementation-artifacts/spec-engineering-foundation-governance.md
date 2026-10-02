@@ -38,7 +38,7 @@ context:
 
 ## Code Map
 
-- `scripts/verify.py`, `scripts/quality.py`, `scripts/autosar_tooling/os_suites.py` — 当前开发检查与唯一 OS 独立 C99 消费者入口；Python 统一工具命令待阶段6。
+- `scripts/autosar_tooling/{cli,verify,quality,protocol_oracles,input_oracles,bsw_catalog,os_suites}.py` — 开发单入口与独立 oracle；原维护顶层脚本已删除，不留代理。26个OS suite在all内仅经Cargo注册执行一次。
 - `core/src/execution/{mod,unix,windows_job}.rs`, `core/src/integration/handoff.rs` — 同一 root owner/Windows Job 与 argv/单调截止时间；阶段4离线工程和legacy实际运行已迁入，旧link_check和PowerShell runner删除。
 - `runtime/os/`, `runtime/ecu/`, `third_party/freertos/portable/ThirdParty/GCC/Posix/` — 固定内核与受控 Win/Linux host adapter；Linux生产ECU已接入并运行有界协议，完整工作台/分发验收仍按阶段7/8。
 - `core/src/integration/ecu.rs`, `core/src/generator.rs`, `core/build.rs` — 计划、静态资源、纯生成及封存入口。
@@ -54,7 +54,7 @@ context:
 - [x] 阶段3：目标/资源/schema/PreparedProject纯源码双平台阶段出口。
 - [x] 阶段4：双目标ECU、离线包build/verify及搬移阶段出口。
 - [x] 阶段5：语义策略替代Epic宏及legacy/integration回归阶段出口。
-- [ ] 阶段6：工具单入口及职责拆分，双平台all阶段出口。
+- [x] 阶段6：工具单入口及职责拆分，双平台all阶段出口。
 - [ ] 阶段7：统一状态与隔离Windows/Linux真实IPC阶段出口。
 - [ ] 阶段8：本机bundle与无checkout真实交付，双平台最终全量门及文档。
 
@@ -93,10 +93,23 @@ context:
 - 阶段5双profile行为已实测：`semantic_profiles_preserve_host_and_integrated_protocol -- --exact --nocapture` Windows44.15s／Ubuntu12.90s各1通过。独立C99消费者编译交付的真实legacy与native执行adapter；同步实际写/flush成功、回调内撤销CanIf导致未确认`ECU_ERR_IO`、恢复后再发成功，native sink真实flush前当前epoch收据仍`E_OS_NOFUNC`，flush后由原mailbox提交。覆盖实际/8字节DLC、WAIT-zero重置/abort及恢复、N_Cr同截止时刻time-before/RX-before差别、默认/扩展DID、0xf186与unsupported跳过、两DID请求顺序、legacy三DID/native第三DID拒绝、P2=50及P2*=500/5000ms、SID0x31拒绝，以及legacy真实256字节response overflow NRC0x14与后续恢复。原生消费者完成214个epoch，无增大5000ms watchdog或更换已验证port。
 - 阶段5回归根因：const route迁移最初未保留CanIf当前配置的Rx方向/连接守卫；新增公开C消费者在Tx-only重初始化后实际失败，修回活动配置守卫后同一入口1.29s通过。Windows十项选定legacy CAN/诊断/故障/安全/写/例程/CanTp回归首轮9通过，DTC安全用例被已失效的README命令字串断言阻挡；删除该措辞断言而不重钉文字，保留实际构建/诊断断言后该用例11.34s通过。所有四个直接Can/CanIf/CanTp编译消费者显式选择profile容量与所需adapter，公共接口不留旧target别名。最终增量质量27.71s通过；两平台新waiting hook的独立stack/ARTI 23向量＋9项Task/tool＋26项嵌套/拒绝及两项已编译故障拒绝通过，Windows123.19s。不以此替代生产ECU。
 - 阶段5完整出口：最终Windows/Ubuntu `windows_and_linux_ecu_targets_execute_production_protocol -- --exact`各140.31s／34.15s通过，包括实际生产object私有probe符号拒绝检查及混合HostBatch/control构建非零、无输出安装。CanIf活动守卫修复后的两平台生产echo/N_Cr/两DID/畸形输入不退化。最后将不再属于BSW直接依赖的legacy `Os.h`归入显式host-clock资产，BSW catalog实际C99 link/address/type消费17项producer通过；双平台纯生成与最终semantic入口仍通过，Windowssemantic44.63s、Ubuntu两入口合计13.01s。源码中旧总宏/include guards/target Dcm接口及旧payload别名零匹配；Ruff通过。实际staged fresh checkout核查127个资产原始SHA-256，0差异。阶段5验收通过，进入阶段6；正式GUI/bundle与最终all仍按原范围执行。
+- 阶段6实现：剩余维护脚本及单测迁入`autosar_tooling`，所有原普通fixture reader保留独立argv消费；聚合CLI注入自身绝对CPython，动态`-c`及bare-python切换到命名probe。`generator/{render,output}`、`host/{profile,process,protocol,scenarios}`按责任拆出，`end_to_end`保留原精确测试名并移动完整行为到support。真实子进程统一OwnedProcess及绝对单调deadline；虚拟环境/rustup可执行路径保留symlink身份，不canonicalize到错误解释器/多调用程序；显式新POSIX owner不继承无关外层scope。嵌套supervisor关闭后不可执行zombie与活成员明确区分，不把仍运行后代视作已清理。
+- 阶段6回归：原非空build目录、旧包再生、公开OS服务符号竞争和Cppcheck工具定位分别以实际编译/拒绝路径修复；删除失效README措辞断言，保留真实运行与文件归属断言。公共生成`OsService`/`Rte_Call_OsService`符号及OS客户端header竞争在生成前拒绝，不用编译失败掩盖模型冲突。Windows真实编译期间修改封存源，构建非零且不安装binary；已有修改binary继续保留。命名`protocol-oracles`与`input-oracles`实际执行通过。
+- 阶段6Ubuntu最终完整门：`uv run --locked python -m autosar_tooling verify --scope all --base 5c4164b`在Ubuntu24.04 ext4原生副本返回PASS，323.30s；Python29项（1项Windows专属跳过）、Rust lib11项、core集成81项全部适用通过，26个OS suite仅在该Cargo测试中一遍；包括Linux生产CAN/DID/N_Cr协议、源码/档案篡改拒绝、搬移精确再生与实际ARXML保存。npm依赖、增量质量、Ruff、UI lint/build、core Clippy、desktop build/Clippy全部通过。owned日志`/tmp/autosar-verify-rn5hqndj`；原生GUI/IPC和bundle未由此执行，仍属阶段7/8。
+- 阶段6Windows最终门尚未通过：同一all命令先通过Python29项（7项POSIX专属跳过）、Rust lib10项及core集成116项（967.42s，包含单次26个OS suite和真实生产协议），UI lint/build、增量质量及Ruff均通过；core Clippy退出0后owner返回`orphaned_members`，故整体非零，未宣称全绿。owned日志`C:\Users\admin\AppData\Local\Temp\autosar-verify-iucqovmr`。独立冷编译的Job成员列表实际定位仍运行的`D:\VS\BuildTools\VC\Tools\MSVC\14.44.35207\bin\Hostx64\x64\vctip.exe`，不是Job accounting延迟；不放宽成员检查、增加grace或忽略退出状态。
+- 阶段6Windows剩余门定向检查：`uv run --locked python -m autosar_tooling verify --scope desktop --base 5c4164b`实际desktop编译退出0（23.59s），同样因root退出后仍有成员而返回`orphaned_members`，owned日志`C:\Users\admin\AppData\Local\Temp\autosar-verify-jvwife3s`；desktop Clippy未执行，不把缓存编译通过替代owner要求。机器级权限是当前阶段准入阻塞，不是Linux运行证据或Windows测试断言失败。
+- 阶段6环境权限阻塞：仅对子进程设置`VSCMD_SKIP_SENDTELEMETRY=1`、`VCTIP_DISABLE=1`以及安装编译器中可见SQM开关分别冷编译，均仍是`orphaned_members`，未写入项目配置。用户已明确批准按Microsoft官方VSCEIP注册表`OptIn=0`关闭Build Tools可选遥测；已读取`HKLM\SOFTWARE\Wow6432Node\Microsoft\VSCommon\17.0\SQM`原`OptIn=1`，首次写入即因“注册表访问权”拒绝，未改原值，尚未触及policy键。当前Agent令牌无该写入权限；需管理员在上述官方键及`HKLM\Software\Policies\Microsoft\VisualStudio\SQM`执行授权设置后先冷编译验证，失败则恢复原值。官方依据：https://learn.microsoft.com/en-us/visualstudio/ide/visual-studio-experience-improvement-program?view=visualstudio 。阶段6保持未完成、未提交，阶段7/8没有提前开始。
+- 阶段6权限原状态补记：只读查询确认`HKLM\Software\Policies\Microsoft\VisualStudio\SQM`整个key原不存在，当前principal `ElevatedAdministrator=False`。因此恢复授权变更时首项`OptIn`应恢复为1，新policy项应回到原不存在；不静默删除其他注册表内容或在用户桌面请求UAC。
+- 阶段6当前决策更新（取代上述权限阻塞路径）：用户明确要求采用工程上最佳处理并继续执行，授权将“业务完成”和“受管树回收”分开建模。Python/Rust `CompletionPolicy`默认`require_tree_exit`；仅开发聚合器的Cargo test/build/Clippy使用显式`close_tree_on_exit`。root正常结束后先有界关闭所拥有的Job/已登记scope，再确认零残留并保留root原退出码；实际回收通过`descendants_reclaimed`结果及阶段日志公开。非零、超时、取消、逃逸、清理无法确认仍失败；协议及生命周期用例继续严格，不按`vctip`名称加白名单、不增加grace或5000ms watchdog、不更改机器遥测。不再依赖管理员设置；此前失败尝试与原值仅保留为历史证据。
+- 阶段6完成策略初步运行证据：Windows真实Python owner16项（7项POSIX专属跳过）通过；随后Ubuntu真实owner17项（1项Windows专属跳过）通过，新增正常/非零root退出后关闭父子孙、同级活任务不受影响、超时仍失败以及两种策略下未完成注册嵌套scope的回收。Windows Rust `execution::tests`7项通过，实际核对被回收PID和仍运行的sibling；原严格parent-first反例仍`orphaned_members`。一个独立冷Cargo/Clippy编译实际返回`exited`/0，但该次无残留，`descendants_reclaimed=false`；额外要求它必然产生后台服务的临时断言失败，因此不把该次说成vctip回收证明。最终双平台all及真实工具回收观察继续执行。
+- 阶段6最终出口：Windows及Ubuntu分别运行`uv run --locked python -m autosar_tooling verify --scope all --base 5c4164b`，均实际PASS。Windows1182.09s：Python33项（8项POSIX专属跳过）、Rust lib11项、集成116项全部通过（1057.67s），UI lint/build、增量质量、Ruff、core Clippy及desktop build/Clippy均通过；desktop build与desktop Clippy真实出现残留后代，分别报告`exit=0 cleanup=confirmed descendants=reclaimed`，不是依赖缓存或跳过owner检查。owned日志`C:\Users\admin\AppData\Local\Temp\autosar-verify-4vjaoxt1`。Ubuntu300.54s：Python33项（1项Windows专属跳过）、Rust lib12项、集成81项全部通过（237.18s），同一完整构建/质量链通过，owned日志`/tmp/autosar-verify-m0rbm7ga`。两端各26个OS suite仅在该次Cargo测试内运行一遍；严格parent-first、工具回收、非零保留、同级隔离、超时及两策略逃逸拒绝均有真实运行结果。先前错误测试循环换行已按实际rustfmt输出修正，不重排历史文件。
+- 阶段6验收通过：无机器级遥测更改、无进程名白名单、无watchdog增大，所有原工具入口完成切换并删除维护顶层旧脚本；编译可信资产清单已同步owner/process/WindowsJob实际源码摘要。GUI/IPC、正式bundle和无checkout全链未由阶段6声称完成，严格继续原阶段7/8。阶段6按用户要求独立本地提交，不push。
 
 ## Spec Change Log
 - 阶段4：离线Windows/Linux工具和legacy/交接消费者一次切换，保留独立预期与真实拒绝；新增CLI失败不安装及suspended Job assignment关闭回归。每阶段出口仍以完整实际门为准，不修改批准范围。
 - 阶段5：生成const业务策略/route和显式profile容量，链接选中发送/时钟/诊断adapter与OS waiting hook；独立C99双profile行为、混合构建拒绝和生产符号隔离进入维护用例，不改变公共BSW ABI及汽车能力声明。
+- 阶段6：开发命令与完整行为函数一次迁移，保留绝对解释器、单次OS注册与严格owner关闭；原生Windows遥测子进程的环境权限失败明确留在阶段记录，不修改验收范围。
+- 阶段6用户授权的契约修正：开发Cargo命令采用显式root完成后回收策略；默认业务严格退出与“结果发布前零受管残留”不变。此修正撤销机器级遥测配置作为准入前提，不删除历史失败、不改变阶段7/8范围。
 
 
 ## Review Triage Log

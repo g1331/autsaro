@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import quality
+from autosar_tooling import quality
 
 
 class QualityTests(unittest.TestCase):

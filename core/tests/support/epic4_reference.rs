@@ -4,7 +4,6 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 pub fn verify() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
@@ -87,11 +86,15 @@ pub fn verify() {
         }
         rows.push(json!({"id": case["id"], "xsd": expected, "diagnostics": issues}));
     }
-    let result = Command::new("python")
-        .arg(root.join("scripts/epic4_input.py"))
-        .current_dir(root)
-        .output()
-        .expect("run independent original-fixture semantic auditor");
+    let scratch = super::Scratch::new();
+    let result = super::tooling::run_public_command(
+        super::tooling::python_command()
+            .args(["-m", "autosar_tooling", "input-oracles"])
+            .current_dir(root),
+        &scratch.0,
+        "input-oracles",
+        std::time::Duration::from_secs(30),
+    );
     assert!(
         result.status.success(),
         "{}{}",

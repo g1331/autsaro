@@ -24,7 +24,7 @@ pub fn application_loop() {
         "test",
         Some(&root.join("core/tests/fixtures/application_loop.c")),
     );
-    let output = super::epic4_ecu::run_public_command(
+    let output = super::tooling::run_public_command(
         &mut command,
         &scratch.0,
         "application-build",

@@ -10,11 +10,12 @@ import sys
 import tempfile
 import time
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
 from ecu_tools.owner import Owner, OwnershipError
-from ecu_tools.process import OwnedProcess, ProcessSpec, run_bounded
+from ecu_tools.process import CompletionPolicy, OwnedProcess, ProcessSpec, run_bounded
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -56,6 +57,15 @@ def _gone(pid: int) -> bool:
             return state == 0
         finally:
             kernel.CloseHandle(handle)
+    if sys.platform == "linux":
+        status = Path(f"/proc/{pid}/stat")
+        try:
+            # A nested owner root may leave a stopped child to its outer
+            # subreaper; a zombie cannot execute and is reaped at root close.
+            if status.read_text().rsplit(")", 1)[-1].split()[0] == "Z":
+                return True
+        except FileNotFoundError:
+            return True
     try:
         os.kill(pid, 0)
         return False
@@ -164,6 +174,74 @@ class BoundedProcessTests(unittest.TestCase):
                 run_bounded(spec)
             _assert_closed(self, _records(path, 3))
 
+    def test_tool_completion_reclaims_tree_without_changing_root_exit(self) -> None:
+        for kind, code in (("parent-first", 0), ("parent-first-fail", 7)):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as name:
+                spec, path = self._spec(Path(name), kind)
+                spec = replace(spec, completion=CompletionPolicy.CLOSE_TREE_ON_EXIT)
+                result = OwnedProcess(spec).wait()
+                self.assertEqual(result.status, "exited")
+                self.assertEqual(result.exit_code, code)
+                self.assertEqual(result.success, code == 0)
+                self.assertTrue(result.descendants_reclaimed)
+                _assert_closed(self, _records(path, 3))
+                if code:
+                    self.assertIn(
+                        "probe failure with live descendants", result.stderr.read_text()
+                    )
+
+    def test_tool_reclamation_does_not_close_live_sibling(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            owner = None if os.name == "nt" else Owner.start()
+            try:
+                sibling_spec, sibling_path = self._spec(root, "hang", 15)
+                sibling = OwnedProcess(sibling_spec, owner=owner)
+                sibling_records = _records(sibling_path, 3)
+                try:
+                    spec, path = self._spec(root, "parent-first")
+                    result = OwnedProcess(
+                        replace(spec, completion=CompletionPolicy.CLOSE_TREE_ON_EXIT),
+                        owner=owner,
+                    ).wait()
+                    self.assertTrue(result.success)
+                    _assert_closed(self, _records(path, 3))
+                    self.assertTrue(all(not _gone(pid) for _, pid, _ in sibling_records))
+                finally:
+                    self.assertEqual(sibling.cancel().status, "cancelled")
+                    _assert_closed(self, sibling_records)
+            finally:
+                if owner is not None:
+                    owner.close()
+
+    def test_tool_completion_timeout_still_fails_and_closes_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            spec, path = self._spec(Path(name), "hang", 2)
+            result = OwnedProcess(
+                replace(spec, completion=CompletionPolicy.CLOSE_TREE_ON_EXIT)
+            ).wait()
+            self.assertEqual(result.status, "timeout")
+            self.assertFalse(result.success)
+            _assert_closed(self, _records(path, 3))
+
+    @unittest.skipIf(os.name == "nt", "POSIX registered scopes have independent groups")
+    def test_root_exit_closes_unfinished_nested_scope_under_both_policies(self) -> None:
+        for completion in CompletionPolicy:
+            with self.subTest(completion=completion), tempfile.TemporaryDirectory() as name:
+                spec, path = self._spec(Path(name), "nested-parent-first")
+                result = OwnedProcess(replace(spec, completion=completion)).wait()
+                expected = (
+                    "exited"
+                    if completion is CompletionPolicy.CLOSE_TREE_ON_EXIT
+                    else "orphaned_members"
+                )
+                self.assertEqual(result.status, expected)
+                self.assertEqual(result.exit_code, 0)
+                self.assertTrue(result.descendants_reclaimed)
+                records = _records(path, 4)
+                self.assertNotEqual(records[0][2], records[1][2])
+                _assert_closed(self, records)
+
     def test_nonzero_exit_retains_stderr_and_code(self) -> None:
         with tempfile.TemporaryDirectory() as name:
             spec, _ = self._spec(Path(name), "fail")
@@ -171,6 +249,18 @@ class BoundedProcessTests(unittest.TestCase):
                 run_bounded(spec)
             stderr = Path(str(failure.exception).split("stderr=")[-1])
             self.assertIn("probe failure on stderr", stderr.read_text(encoding="utf-8"))
+
+    @unittest.skipIf(os.name == "nt", "POSIX supervisor owns independent root scopes")
+    def test_explicit_owner_ignores_unrelated_inherited_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as name, Owner.start() as owner:
+            spec, path = self._spec(Path(name), "normal")
+            with patch.dict(
+                os.environ,
+                {"ECU_OWNER_SOCKET": "/tmp/unrelated-owner.sock", "ECU_OWNER_SCOPE": "unrelated"},
+            ):
+                result = OwnedProcess(spec, owner=owner).wait()
+            self.assertTrue(result.success)
+            _assert_closed(self, _records(path, 3))
 
     def test_cancel_one_scope_does_not_close_another(self) -> None:
         with tempfile.TemporaryDirectory() as name:
@@ -197,17 +287,18 @@ class BoundedProcessTests(unittest.TestCase):
         os.name == "nt", "POSIX supervisor has the subreaper/escape contract"
     )
     def test_unregistered_escape_is_explicitly_unconfirmed(self) -> None:
-        with tempfile.TemporaryDirectory() as name:
-            spec, path = self._spec(Path(name), "escape")
-            try:
-                with self.assertRaisesRegex(OwnershipError, "cleanup_unconfirmed"):
-                    run_bounded(spec)
-            finally:
-                for role, pid, _ in _records(path, 2):
-                    if role == "escape":
-                        os.kill(
-                            pid, signal.SIGKILL
-                        )  # Fixture owns this non-cooperative PID.
+        for completion in CompletionPolicy:
+            with self.subTest(completion=completion), tempfile.TemporaryDirectory() as name:
+                spec, path = self._spec(Path(name), "escape")
+                try:
+                    with self.assertRaisesRegex(OwnershipError, "cleanup_unconfirmed"):
+                        run_bounded(replace(spec, completion=completion))
+                finally:
+                    for role, pid, _ in _records(path, 2):
+                        if role == "escape":
+                            os.kill(
+                                pid, signal.SIGKILL
+                            )  # Fixture owns this non-cooperative PID.
 
     @unittest.skipIf(
         os.name == "nt", "nested Unix scopes require the supervisor socket"

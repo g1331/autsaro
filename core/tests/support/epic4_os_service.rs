@@ -108,13 +108,13 @@ pub fn verify() {
         fs::create_dir(&stage).unwrap();
         let mut command = super::tooling::python_command();
         command
-            .args(["os-counter-service", "--directory"])
+            .args(["-m", "autosar_tooling", "os-counter-service", "--directory"])
             .arg(&stage)
             .arg("--project")
             .arg(&project)
             .arg("--counter")
             .arg(counter);
-        let output = super::epic4_ecu::run_public_command(
+        let output = super::tooling::run_public_command(
             &mut command,
             &stage,
             "counter-service",
@@ -141,12 +141,8 @@ pub fn verify() {
                 InputSource::new(input.logical_path(), text.replace(old, new).into_bytes()).unwrap()
             })
             .collect::<Vec<_>>();
-        let candidate = build_plan(&inputs, &dependencies, &runtime).unwrap();
-        assert!(
-            candidate
-                .ecu_integration_files(super::tooling::native_target())
-                .is_err(),
-            "service collision {new}"
-        );
+        let result = build_plan(&inputs, &dependencies, &runtime)
+            .and_then(|plan| plan.ecu_integration_files(super::tooling::native_target()));
+        assert!(result.is_err(), "service collision {new}");
     }
 }

@@ -203,7 +203,12 @@ fn assemble(
             &component.component,
         ));
     }
+    let counter_name = c_name(schedule.counter.rsplit('/').next().unwrap());
     let mut names = BTreeSet::new();
+    for operation in ["GetCounterValue", "GetElapsedValue"] {
+        names.insert(format!("OsService_{counter_name}_{operation}"));
+        names.insert(format!("Rte_Call_OsService_{operation}"));
+    }
     for symbol in &symbols {
         if !c_identifier(&symbol.symbol) || !names.insert(symbol.symbol.clone()) {
             return Err(vec![graph.diagnostic(context, DiagnosticCategory::Input, "SYMBOL_PRODUCER_DUPLICATE",

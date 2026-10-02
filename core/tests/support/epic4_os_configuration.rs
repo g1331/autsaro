@@ -89,7 +89,7 @@ pub fn verify() {
                 "test",
                 Some(&root.join("core/tests/fixtures/ecu_scheduler_control.c")),
             );
-            let result = super::epic4_ecu::run_public_command(
+            let result = super::tooling::run_public_command(
                 &mut compile,
                 &scratch.0,
                 &format!("compile-{boolean}"),
@@ -103,7 +103,7 @@ pub fn verify() {
             );
             let mut run = Command::new(super::tooling::native_binary(&output, "ecu_probe"));
             run.arg(if enabled { "true" } else { "false" });
-            let result = super::epic4_ecu::run_public_command(
+            let result = super::tooling::run_public_command(
                 &mut run,
                 &scratch.0,
                 &format!("run-{boolean}"),

@@ -27,7 +27,7 @@ impl ComponentContractFiles {
 
     /// Inspect all proposed files and existing-output integrity without writing.
     pub fn preview(&self, output: &Path) -> Result<GenerationPreview, String> {
-        generator::preview_prepared(&self.files, output)
+        generator::output::preview_prepared(&self.files, output)
     }
 
     /// Install exactly the previewed bytes. The existing generator preserves
@@ -37,7 +37,7 @@ impl ComponentContractFiles {
         output: &Path,
         revision: &str,
     ) -> Result<GenerationReport, String> {
-        generator::generate_prepared(self.files.clone(), output, Some(revision))
+        generator::output::generate_prepared(self.files.clone(), output, Some(revision))
     }
 }
 
@@ -258,7 +258,7 @@ impl ValidatedIntegrationPlan {
             application_file.trim_start_matches("include/"), service_file.trim_start_matches("include/")
         ).into_bytes()));
         Ok(ComponentContractFiles {
-            files: generator::seal_files(files),
+            files: generator::output::seal_files(files),
         })
     }
 }

@@ -7,12 +7,8 @@ use std::process::Command;
 use std::time::Duration;
 
 fn run(command: &mut Command, directory: &Path, name: &str, seconds: u64) {
-    let output = super::epic4_ecu::run_public_command(
-        command,
-        directory,
-        name,
-        Duration::from_secs(seconds),
-    );
+    let output =
+        super::tooling::run_public_command(command, directory, name, Duration::from_secs(seconds));
     assert!(
         output.status.success(),
         "{name}: {}{}",

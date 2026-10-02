@@ -2,7 +2,9 @@
 
 import unittest
 import xml.etree.ElementTree as ET
-import epic4_oracles as baseline
+
+from autosar_tooling import protocol_oracles as baseline
+
 
 class OracleTests(unittest.TestCase):
 

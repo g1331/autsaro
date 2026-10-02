@@ -68,14 +68,14 @@ pub fn verify() {
             )
             .unwrap();
         }
-        let mut reader = Command::new("python");
+        let mut reader = super::tooling::python_command();
         reader
             .arg(root.join("core/tests/fixtures/arti_reader.py"))
             .arg(&project)
             .arg(root)
             .arg(os)
             .arg(consumer_dir.join("Arti_ExpressionProbe.h"));
-        let result = super::epic4_ecu::run_public_command(
+        let result = super::tooling::run_public_command(
             &mut reader,
             &scratch.0,
             &format!("reader-{label}"),
@@ -100,14 +100,14 @@ pub fn verify() {
             ] {
                 assert_ne!(changed, xml);
                 fs::write(&path, changed).unwrap();
-                let mut reject = Command::new("python");
+                let mut reject = super::tooling::python_command();
                 reject
                     .arg(root.join("core/tests/fixtures/arti_reader.py"))
                     .arg(&project)
                     .arg(root)
                     .arg(os)
                     .arg(consumer_dir.join("rejected.h"));
-                let result = super::epic4_ecu::run_public_command(
+                let result = super::tooling::run_public_command(
                     &mut reject,
                     &scratch.0,
                     &format!("reject-{}", fault.replace(['/', ' '], "-")),
@@ -127,14 +127,14 @@ pub fn verify() {
             let changed = binding.replace("0u, OsTask_Start,", "0u, OsTask_Absent,");
             assert_ne!(binding, changed);
             fs::write(&binding_path, changed).unwrap();
-            let mut reject = Command::new("python");
+            let mut reject = super::tooling::python_command();
             reject
                 .arg(root.join("core/tests/fixtures/arti_reader.py"))
                 .arg(&project)
                 .arg(root)
                 .arg(os)
                 .arg(consumer_dir.join("rejected.h"));
-            let result = super::epic4_ecu::run_public_command(
+            let result = super::tooling::run_public_command(
                 &mut reject,
                 &scratch.0,
                 "reject-missing-binding",
@@ -153,7 +153,7 @@ pub fn verify() {
             "test",
             Some(&consumer_dir.join("ecu_arti_control.c")),
         );
-        let result = super::epic4_ecu::run_public_command(
+        let result = super::tooling::run_public_command(
             &mut compile,
             &scratch.0,
             &format!("compile-{label}"),
@@ -167,7 +167,7 @@ pub fn verify() {
         );
         let mut run = Command::new(super::tooling::native_binary(&output, "ecu_probe"));
         run.arg(os);
-        let result = super::epic4_ecu::run_public_command(
+        let result = super::tooling::run_public_command(
             &mut run,
             &scratch.0,
             &format!("run-{label}"),

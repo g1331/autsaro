@@ -75,19 +75,21 @@ pub fn independent_behavior() {
         &fs::read(root.join("core/tests/fixtures/epic4_oracles/protocol.json")).unwrap(),
     )
     .unwrap();
-    let checked = Command::new("python")
-        .args(["-X", "utf8"])
-        .arg(root.join("scripts/epic4_oracles.py"))
-        .current_dir(root)
-        .output()
-        .unwrap();
+    let scratch = super::Scratch::new();
+    let checked = super::tooling::run_public_command(
+        super::tooling::python_command()
+            .args(["-m", "autosar_tooling", "protocol-oracles"])
+            .current_dir(root),
+        &scratch.0,
+        "protocol-oracles",
+        std::time::Duration::from_secs(30),
+    );
     assert!(
         checked.status.success(),
         "{}{}",
         String::from_utf8_lossy(&checked.stdout),
         String::from_utf8_lossy(&checked.stderr)
     );
-    let scratch = super::Scratch::new();
     let source = scratch.0.join("protocol-source");
     let dependencies = PlanDependencies::from_repository(root);
     let runtime = RuntimeCatalog::from_repository(root).unwrap();
@@ -100,7 +102,7 @@ pub fn independent_behavior() {
         .generate_previewed(&source, &preview.revision)
         .unwrap();
     let build = scratch.0.join("protocol-build");
-    let output = super::epic4_ecu::run_public_command(
+    let output = super::tooling::run_public_command(
         &mut super::tooling::ecu_build_command(&source, &build, "host-batch", None),
         &scratch.0,
         "protocol-build",

@@ -11,12 +11,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
-import subprocess
 import tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "runtime/contracts/bsw-v1.json"
 SELECTED = {
     "Can_Init": "Can",
@@ -124,7 +124,7 @@ def materialize() -> dict:
 
 
 def probe(current: dict) -> None:
-    from autosar_tooling.os_suites import compiler, native_session
+    from autosar_tooling.os_suites import compiler, native_session, run_native
 
     with tempfile.TemporaryDirectory(prefix="autosar-epic4-bsw-contract-") as temporary:
         directory = Path(temporary)
@@ -154,47 +154,50 @@ def probe(current: dict) -> None:
         )
         lines.append("int main(void) { return " + predicates + "; }")
         source.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        binary = directory / "current_bsw_contract.exe"
+        binary = directory / (
+            "current_bsw_contract.exe" if os.name == "nt" else "current_bsw_contract"
+        )
         inputs = sorted(
             path
             for path in (ROOT / "runtime/src").glob("*.c")
             if path.name != "ecu_host_main.c"
         )
         inputs.extend(sorted((ROOT / "runtime/host/src").glob("*.c")))
-        with native_session(directory, "bsw-compiler"):
-            cc = compiler()
-        command = [
-            cc,
-            "-std=c99",
-            "-Wall",
-            "-Wextra",
-            "-Werror",
-            "-I" + str(ROOT / "runtime/include"),
-            "-I" + str(ROOT / "runtime/src"),
-            "-I" + str(ROOT / "runtime/host/include"),
-            str(source),
-            *map(str, inputs),
-            "-lbcrypt",
-            "-o",
-            str(binary),
-        ]
-        built = subprocess.run(command, capture_output=True, text=True, check=False)
-        if built.returncode != 0 or built.stderr:
-            raise ValueError(
-                f"current BSW contract link failed: {built.returncode}: {built.stderr}"
-            )
-        ran = subprocess.run(
-            [str(binary)], capture_output=True, text=True, timeout=5, check=False
+        target = (
+            "windows-x64-controlled-v1" if os.name == "nt" else "linux-x64-controlled-v1"
         )
+        with native_session(directory, "bsw-contract"):
+            cc = compiler(target)
+            command = [
+                cc,
+                "-std=c99",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-I" + str(ROOT / "runtime/include"),
+                "-I" + str(ROOT / "runtime/src"),
+                "-I" + str(ROOT / "runtime/host/include"),
+                str(source),
+                *map(str, inputs),
+                *(["-lbcrypt"] if os.name == "nt" else []),
+                "-o",
+                str(binary),
+            ]
+            built = run_native(command, timeout=60)
+            if built.returncode != 0 or built.stderr:
+                raise ValueError(
+                    f"current BSW contract link failed: {built.returncode}: {built.stderr}"
+                )
+            ran = run_native([str(binary)], timeout=5)
         if ran.returncode != 0 or ran.stdout or ran.stderr:
             raise ValueError("current BSW address/type probe failed")
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true")
     parser.add_argument("--probe", action="store_true")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     current = materialize()
     if args.write:
         MANIFEST.parent.mkdir(parents=True, exist_ok=True)
@@ -208,7 +211,7 @@ def main() -> None:
     if args.probe:
         probe(current)
     print(
-        f"epic4_bsw_catalog PASS: {len(current['entries'])} selected current producers"
+        f"bsw_catalog PASS: {len(current['entries'])} selected current producers"
     )
 
 

@@ -47,14 +47,14 @@ uv sync --locked --group quality
 npm ci --prefix ui
 uv run --locked python -m autosar_tooling doctor --role workbench
 npm run tauri --prefix ui -- info
-npm run build --prefix ui
-uv run --locked python scripts/verify.py --scope core
-cargo build --locked --manifest-path src-tauri/Cargo.toml
+uv run --locked python -m autosar_tooling verify --scope all --base <本轮起始提交>
 ```
 
 `doctor` 只读报告 `ready`、`missing`、`version_mismatch` 或 `not_applicable`，缺少必需项返回非零并提示安装/配置；不下载规范或更改系统。`npm run tauri --prefix ui -- dev` 使用现有 Tauri/Vite hooks，在**独立桌面会话**交互调试；自动化不得在当前用户桌面弹窗或抢焦点。这里不会执行 `create-tauri-app` 或 `tauri init --force` 重建已有工作台。当前 Windows 生成与构建仍依赖源码目录，正式无checkout bundle 将在本轮最后阶段验证。
 
-受控外部命令已有统一的 `core::execution` 与 `ecu_tools.process` 入口；执行前把 `AUTOSAR_PYTHON` 设为 CPython 的**绝对路径**（开发环境 Windows 为 `.venv/Scripts/python.exe`，POSIX 为 `.venv/bin/python`），不得依赖 PATH 猜测解释器。可运行 `uv run --locked python -m unittest autosar_tooling.test_process` 与 `cargo test --locked --manifest-path core/Cargo.toml execution::tests` 检查真实父/子/孙进程的退出、超时、取消及故障清理。Windows 使用先登记后恢复的 Job；POSIX 保证已登记的合作进程组及未逃逸后代在绝对单调期限内关闭。未登记的 `setsid`/daemon 逃逸不视为成功清理，Linux 反例返回 `cleanup_unconfirmed`。产品构建、离线验证与 legacy 主机运行均已使用这一受控执行入口。
+受控外部命令已有统一的 `core::execution` 与 `ecu_tools.process` 入口。开发聚合器将当前锁定的 `sys.executable` 作为 `AUTOSAR_PYTHON` 传给 Cargo；直接运行 Cargo 时，须把该变量设为 CPython 的**绝对路径**（开发环境 Windows 为 `.venv/Scripts/python.exe`，POSIX 为 `.venv/bin/python`），不得依赖 PATH 猜测解释器。可运行 `uv run --locked python -m unittest autosar_tooling.test_process` 与 `cargo test --locked --manifest-path core/Cargo.toml execution::tests` 检查真实父/子/孙进程的退出、超时、取消及故障清理。Windows 使用先登记后恢复的 Job；POSIX 保证已登记的合作进程组及未逃逸后代在绝对单调期限内关闭。未登记的 `setsid`/daemon 逃逸不视为成功清理，Linux 反例返回 `cleanup_unconfirmed`。产品构建、离线验证与 legacy 主机运行均已使用这一受控执行入口。
+
+命令完成与进程回收分开判断：默认 `require_tree_exit` 用于 ECU、协议及生命周期检查，主进程退出后遗留活后代仍失败；开发聚合器仅对 Cargo test/build/Clippy 显式选择 `close_tree_on_exit`，主命令结束后 owner 有界关闭其私有 Job/已登记 scope，确认无残留后保留原退出码。发生实际回收时输出 `cleanup=confirmed descendants=reclaimed`；非零、超时、取消、逃逸或无法确认清理均不能转成成功。不按进程名加白名单，不影响同级任务或用户已有进程，不要求关闭机器级编译器遥测。内部测试与产品命令仍维持各自严格契约。
 
 当前 OS 独立消费者入口为 `uv run --locked python -m autosar_tooling os --target windows-x64-controlled-v1 --suite all`；在 Ubuntu24.04 原生环境把 target 改为 `linux-x64-controlled-v1`，不能跨宿主运行。26 项适用 suite 已分别接入 core 集成测试，ARTI 原生消费者随 stack suite 执行一次。固定内核、补丁、原生执行栈及 Windows PE／Linux ELF 差异见 [`runtime/os/README.md`](runtime/os/README.md)。生产 ECU 的两个目标与 stdlib-only 离线 build/verify 已实际运行；完整桌面与分发验收仍待本轮后续阶段。
 
@@ -64,7 +64,7 @@ cargo build --locked --manifest-path src-tauri/Cargo.toml
 
 ## 代码质量检查
 
-质量工具及独立 ARTI 消费者使用的 `lxml` 由 `uv.lock` 中的 `quality` 组固定；UI Prettier/ESLint 由 npm 锁文件固定。运行 `uv run --locked python scripts/quality.py --base <本轮起始提交>` 检查 UTF-8、末尾换行、空白、Python 语法与增量 rustfmt/clang-format/Prettier、主机 C99 语法。当前 `scripts/verify.py --scope all --base <起始提交>` 组合 Python unittest、前端、核心和桌面检查；后续将迁入 `autosar_tooling verify`，不同时维护两套入口。
+质量工具及独立 ARTI 消费者使用的 `lxml` 由 `uv.lock` 中的 `quality` 组固定；UI Prettier/ESLint 由 npm 锁文件固定。定向检查使用 `uv run --locked python -m autosar_tooling quality --base <本轮起始提交>`，检查 UTF-8、末尾换行、空白、Python 语法与增量 rustfmt/clang-format/Prettier、主机 C99 语法。唯一聚合入口为 `uv run --locked python -m autosar_tooling verify --scope core|ui|desktop|all --base <起始提交>`：`all` 顺序组合 Git diff/check、Python unittest、npm ci、质量、Ruff、UI lint/build、core test/clippy 和 desktop build/clippy。每个命令使用独立的绝对单调 deadline、进程所有权与日志；失败报告具体子阶段、argv、观测到的退出码和日志位置，不重试或吞错。26 项原生 OS suite 只经注册的 Cargo 测试执行一次，不追加第二次 OS CLI。此构建／测试关口明确报告平台适用范围，**不**验证真实 GUI/IPC 或安装包；这些使用独立 native desktop 和 bundle 关口。
 
 Epic 4 的生成工件测试仍以 PATH 中的 Cppcheck 2.21.0 检查实际 RTE 翻译单元，不是完整 MISRA 扫描。BMad 开发规格记录起始提交；格式检查应指定 `--base`，修改旧文件无需整体重排。交付正式能力仍以相应 BMad spec 的原生运行结果为准。
 

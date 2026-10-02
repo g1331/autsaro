@@ -1,11 +1,15 @@
+#[cfg(windows)]
 use autosar_config_core::Workspace;
+#[cfg(windows)]
 use autosar_config_core::integration::{
     InputSource, PlanDependencies, RuntimeCatalog, build_plan, open_ecu_handoff, verify_ecu_project,
 };
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::Path;
+#[cfg(windows)]
 use std::process::Command;
+#[cfg(windows)]
 use std::time::Duration;
 
 // Deliberately co-edit an attack copy's checksum record. The importer must still
@@ -23,6 +27,7 @@ pub(super) fn reseal(project: &Path) {
     fs::write(project.join("files.sha256"), hashes).unwrap();
 }
 
+#[cfg(windows)]
 pub fn verify() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let dependencies = PlanDependencies::from_repository(root);
@@ -74,7 +79,7 @@ pub fn verify() {
         .unwrap();
     let mut verify =
         super::tooling::ecu_verify_command(&output, &scratch.0.join("independent-verify-build"));
-    let result = super::epic4_ecu::run_public_command(
+    let result = super::tooling::run_public_command(
         &mut verify,
         &scratch.0,
         "handoff-offline",
@@ -116,7 +121,7 @@ pub fn verify() {
     reseal(&output);
     let mut rejected =
         super::tooling::ecu_verify_command(&output, &scratch.0.join("spurious-build"));
-    let rejected = super::epic4_ecu::run_public_command(
+    let rejected = super::tooling::run_public_command(
         &mut rejected,
         &scratch.0,
         "spurious-output",
@@ -149,7 +154,7 @@ pub fn verify() {
             std::env::join_paths([output.join("tools"), root.join("scripts")]).unwrap(),
         )
         .env("PATH", scratch.0.join("empty-path"));
-    let result = super::epic4_ecu::run_public_command(
+    let result = super::tooling::run_public_command(
         &mut owner_checks,
         &scratch.0,
         "shipped-owner-closure",
@@ -245,6 +250,7 @@ pub fn verify() {
     );
 }
 
+#[cfg(windows)]
 pub fn verify_rapid() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let dependencies = PlanDependencies::from_repository(root);

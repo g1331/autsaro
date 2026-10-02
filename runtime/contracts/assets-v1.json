@@ -1220,7 +1220,7 @@
     },
     {
       "path": "scripts/ecu_tools/owner.py",
-      "sha256": "e028220ed8dbe3a29ec78d5749b37f5e850ca19f9003b5f38c6cbe3a90057ab3",
+      "sha256": "232256688f8e9f17f55d09ef1b46c72e30298891f0681c6d880713f76ce37a3d",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1235,7 +1235,7 @@
     },
     {
       "path": "scripts/ecu_tools/process.py",
-      "sha256": "5241e707b266e98b7acded7296b5ca2a25bbc1be57bf44e7708d690823fb0d8d",
+      "sha256": "4dceb9559cf11aa4976cba4efb48b0e54f7c62df3014805a2be195eb9f2d3aac",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1279,7 +1279,7 @@
     },
     {
       "path": "scripts/ecu_tools/windows_job.py",
-      "sha256": "c3878e9a75446280514e5d3149c819156f4bcac6f15efa9f709a874853837c8c",
+      "sha256": "7d9206bca29d2d20e6f544bf6f11037af8e694d981e13e8c38d98a544c87e808",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",

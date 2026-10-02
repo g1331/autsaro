@@ -17,7 +17,45 @@ static NONCE: AtomicU64 = AtomicU64::new(0);
 
 fn group_alive(pgid: i32) -> bool {
     // SAFETY: negative PID addresses only the registered cooperative group.
-    unsafe { libc::kill(-pgid, 0) == 0 }
+    if unsafe { libc::kill(-pgid, 0) != 0 } {
+        return false;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        // An outer subreaper may retain stopped members as zombies after a
+        // nested supervisor dies. killpg(0) still sees them, but they cannot
+        // execute. Unknown /proc state remains unconfirmed, never successful.
+        let Ok(entries) = fs::read_dir("/proc") else {
+            return true;
+        };
+        let mut observed = false;
+        for entry in entries.flatten() {
+            if entry.file_name().to_string_lossy().parse::<u32>().is_err() {
+                continue;
+            }
+            let Ok(stat) = fs::read_to_string(entry.path().join("stat")) else {
+                continue;
+            };
+            let Some((_, fields)) = stat.rsplit_once(") ") else {
+                continue;
+            };
+            let mut fields = fields.split_ascii_whitespace();
+            let (Some(state), Some(_parent), Some(group)) =
+                (fields.next(), fields.next(), fields.next())
+            else {
+                continue;
+            };
+            if group.parse::<i32>() == Ok(pgid) {
+                observed = true;
+                if state != "Z" && state != "X" {
+                    return true;
+                }
+            }
+        }
+        return !observed;
+    }
+    #[cfg(not(target_os = "linux"))]
+    true
 }
 
 fn signal_group(pgid: i32, signal: i32) {
@@ -115,17 +153,28 @@ pub(super) struct UnixOwner {
 
 impl UnixOwner {
     pub(super) fn start() -> Result<Arc<Self>, String> {
-        if let (Some(socket), Some(token)) = (
-            std::env::var_os("ECU_OWNER_SOCKET"),
-            std::env::var_os("ECU_OWNER_TOKEN"),
-        ) {
-            return Ok(Arc::new(Self {
-                socket: PathBuf::from(socket),
-                token: token.to_string_lossy().into_owned(),
-                supervisor: Mutex::new(None),
-                directory: None,
-                groups: Mutex::new(HashMap::new()),
-            }));
+        Self::start_with_inheritance(true)
+    }
+
+    #[cfg(test)]
+    pub(super) fn start_fresh_for_test() -> Result<Arc<Self>, String> {
+        Self::start_with_inheritance(false)
+    }
+
+    fn start_with_inheritance(inherit: bool) -> Result<Arc<Self>, String> {
+        if inherit {
+            if let (Some(socket), Some(token)) = (
+                std::env::var_os("ECU_OWNER_SOCKET"),
+                std::env::var_os("ECU_OWNER_TOKEN"),
+            ) {
+                return Ok(Arc::new(Self {
+                    socket: PathBuf::from(socket),
+                    token: token.to_string_lossy().into_owned(),
+                    supervisor: Mutex::new(None),
+                    directory: None,
+                    groups: Mutex::new(HashMap::new()),
+                }));
+            }
         }
         let python = PathBuf::from(
             std::env::var_os("AUTOSAR_PYTHON")
@@ -305,7 +354,11 @@ impl UnixOwner {
                     .to_owned(),
             );
         }
-        let inherited_parent = std::env::var("ECU_OWNER_SCOPE").ok();
+        let inherited_parent = if self.supervisor.lock().is_none() {
+            std::env::var("ECU_OWNER_SCOPE").ok()
+        } else {
+            None
+        };
         let input = if spec.stdin_stream {
             Some(UnixInput::new()?)
         } else {
@@ -317,6 +370,7 @@ impl UnixOwner {
             "env": env, "log_directory": spec.log_directory,
             "stdin_file": input.as_ref().map(|input| &input.path),
             "stdin_fifo": spec.stdin_stream,
+            "completion": spec.completion,
         }))?;
         if response["op"] != "registered" {
             return Err(format!("Expected registered scope, got {response}"));
@@ -460,6 +514,9 @@ impl UnixProcess {
             exit_code: response["exit_code"].as_i64().map(|value| value as i32),
             stdout: self.stdout.clone(),
             stderr: self.stderr.clone(),
+            descendants_reclaimed: response["descendants_reclaimed"]
+                .as_bool()
+                .ok_or("Missing confirmed descendant cleanup result")?,
         })
     }
 

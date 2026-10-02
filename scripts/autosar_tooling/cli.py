@@ -33,6 +33,17 @@ def main() -> int:
     native_counter.add_argument("--directory", type=Path, required=True)
     native_counter.add_argument("--project", type=Path, required=True)
     native_counter.add_argument("--counter", required=True)
+    aggregate = commands.add_parser("verify", help="Run owned developer gates once")
+    aggregate.add_argument("--scope", choices=("core", "ui", "desktop", "all"), required=True)
+    aggregate.add_argument("--base", help="Incremental quality baseline for the all gate")
+    quality = commands.add_parser("quality", help="Check source hygiene and incremental formatting")
+    quality.add_argument("--base")
+    quality.add_argument("--all-format", action="store_true")
+    commands.add_parser("protocol-oracles", help="Check independent protocol/OS reference vectors")
+    commands.add_parser("input-oracles", help="Audit original fixture semantics independently")
+    catalog = commands.add_parser("bsw-catalog", help="Check reviewed BSW producers and signatures")
+    catalog.add_argument("--write", action="store_true")
+    catalog.add_argument("--probe", action="store_true")
     probe = commands.add_parser("probe", help="Run a named real-process probe")
     probe_kind = probe.add_subparsers(dest="probe", required=True)
     descendant = probe_kind.add_parser("descendant")
@@ -43,9 +54,11 @@ def main() -> int:
             "normal",
             "hang",
             "parent-first",
+            "parent-first-fail",
             "fail",
             "escape",
             "nested",
+            "nested-parent-first",
             "child",
             "normal-child",
             "leaf",
@@ -55,6 +68,8 @@ def main() -> int:
         ),
         required=True,
     )
+    interactive = probe_kind.add_parser("stdin")
+    interactive.add_argument("--kind", choices=("hash", "hang"), required=True)
     args = parser.parse_args()
     if args.command == "doctor":
         if args.role == "native":
@@ -72,8 +87,37 @@ def main() -> int:
     if args.command == "os-counter-service":
         os_suites.counter_service(args.directory, args.project, args.counter)
         return 0
-    if args.command == "probe":
-        from autosar_tooling.probe import descendant as run_descendant
+    if args.command == "verify":
+        from autosar_tooling.verify import verify
 
-        return run_descendant(args.pid_file, args.kind)
+        return verify(args.scope, args.base)
+    if args.command == "quality":
+        from autosar_tooling.quality import main as check_quality
+
+        options = (["--base", args.base] if args.base else []) + (
+            ["--all-format"] if args.all_format else []
+        )
+        return check_quality(options)
+    if args.command == "protocol-oracles":
+        from autosar_tooling.protocol_oracles import main as check_protocol
+
+        check_protocol()
+        return 0
+    if args.command == "input-oracles":
+        from autosar_tooling.input_oracles import main as check_input
+
+        check_input()
+        return 0
+    if args.command == "bsw-catalog":
+        from autosar_tooling.bsw_catalog import main as check_catalog
+
+        options = (["--write"] if args.write else []) + (["--probe"] if args.probe else [])
+        check_catalog(options)
+        return 0
+    if args.command == "probe":
+        from autosar_tooling import probe as process_probe
+
+        if args.probe == "stdin":
+            return process_probe.stdin(args.kind)
+        return process_probe.descendant(args.pid_file, args.kind)
     return 1

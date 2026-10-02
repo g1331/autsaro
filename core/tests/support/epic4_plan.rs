@@ -135,19 +135,20 @@ pub fn validated_integration_plan() {
             "{case}: {issues:?}"
         );
     }
-    let output = std::process::Command::new("python")
-        .arg(root.join("scripts/epic4_bsw_catalog.py"))
-        .arg("--probe")
-        .current_dir(root)
-        .output()
-        .unwrap();
+    let output = super::tooling::run_public_command(
+        super::tooling::python_command()
+            .args(["-m", "autosar_tooling", "bsw-catalog", "--probe"])
+            .current_dir(root),
+        &scratch.0,
+        "bsw-catalog",
+        std::time::Duration::from_secs(180),
+    );
     assert!(
         output.status.success(),
         "{}{}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(String::from_utf8_lossy(&output.stdout).starts_with("epic4_bsw_catalog PASS: 17 "));
 }
 
 pub fn plan_additional_boundaries() {

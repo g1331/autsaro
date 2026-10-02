@@ -95,6 +95,7 @@ class Scope:
     gate: int | None
     stdout: Path
     stderr: Path
+    completion: str
     released: bool = False
     result: dict[str, Any] | None = None
     closing: bool = False
@@ -124,6 +125,9 @@ class Registry:
             deadline = min(deadline, ancestor.deadline_ns)
         if deadline <= time.monotonic_ns():
             raise OwnershipError("deadline expired before registration")
+        completion = request.get("completion", "require_tree_exit")
+        if completion not in ("require_tree_exit", "close_tree_on_exit"):
+            raise OwnershipError("unknown completion policy")
         argv = request["argv"]
         if (
             not isinstance(argv, list)
@@ -220,6 +224,7 @@ class Registry:
                 write_gate,
                 stdout,
                 stderr,
+                completion,
             )
             return {
                 "op": "registered",
@@ -299,7 +304,7 @@ class Registry:
             "cleanup_unconfirmed"
             if unconfirmed
             else "orphaned_members"
-            if orphaned
+            if orphaned and scope.completion == "require_tree_exit"
             else reason
             if reason != "normal"
             else "exited"
@@ -311,15 +316,34 @@ class Registry:
             "exit_code": scope.child.returncode,
             "stdout": str(scope.stdout),
             "stderr": str(scope.stderr),
+            "descendants_reclaimed": reason == "normal" and orphaned and not unconfirmed,
         }
         return scope.result
 
     def _close(self, identity: str, reason: str) -> dict[str, Any]:
         scope = self.scopes[identity]
+        descendant_results = []
+        live_descendants = False
         for child in list(self.scopes.values()):
             if child.parent == identity and child.result is None:
-                self._close(child.identity, reason)
-        return self._finish(scope, reason)
+                live = child.child.poll() is None
+                live_descendants |= live
+                child_reason = "cancelled" if reason == "normal" and live else reason
+                descendant_results.append(self._close(child.identity, child_reason))
+        result = self._finish(scope, reason)
+        if result["status"] == "cleanup_unconfirmed" or any(
+            child["status"] == "cleanup_unconfirmed" for child in descendant_results
+        ):
+            result["status"] = "cleanup_unconfirmed"
+            result["descendants_reclaimed"] = False
+        elif reason == "normal" and (
+            live_descendants
+            or any(child["descendants_reclaimed"] for child in descendant_results)
+        ):
+            if scope.completion == "require_tree_exit":
+                result["status"] = "orphaned_members"
+            result["descendants_reclaimed"] = True
+        return result
 
     def watchdog(self) -> None:
         while not self.terminate.wait(0.02):
@@ -366,7 +390,7 @@ class Registry:
                 exit_code = scope.child.poll()
                 if exit_code is None and time.monotonic_ns() < scope.deadline_ns:
                     return {"op": "running", "scope": identity}
-                return self._finish(scope, "timeout" if exit_code is None else "normal")
+                return self._close(identity, "timeout" if exit_code is None else "normal")
         raise OwnershipError(f"unknown owner operation: {op}")
 
 
@@ -550,6 +574,7 @@ class Owner:
         parent: str | None = None,
         env: dict[str, str] | None = None,
         stdin_file: Path | None = None,
+        completion: str = "require_tree_exit",
     ) -> dict[str, Any]:
         registration = self.request(
             "reserve",
@@ -560,6 +585,7 @@ class Owner:
             log_directory=str(log_directory),
             env=env,
             stdin_file=str(stdin_file) if stdin_file is not None else None,
+            completion=completion,
         )
         self.groups[registration["scope"]] = int(registration["pgid"])
         return registration
