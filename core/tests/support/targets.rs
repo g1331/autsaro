@@ -25,7 +25,7 @@ pub(super) fn windows_and_linux_ecu_targets_execute_production_protocol() {
     };
     let settings = ExecutionSettings::from_environment().unwrap();
     let prepared = autosar_config_core::prepare_ecu_project(&plan, target, true).unwrap();
-    let preflight = prepared.native_preflight(&settings);
+    let preflight = prepared.native_preflight(&settings, &super::tooling::execution_owner());
     assert_eq!(preflight.fingerprint, prepared.fingerprint());
     assert_eq!(
         preflight.status,

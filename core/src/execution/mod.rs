@@ -127,6 +127,10 @@ impl ProcessResult {
 pub struct ProcessOwner {
     #[cfg(unix)]
     owner: std::sync::Arc<unix::UnixOwner>,
+    #[cfg(windows)]
+    cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    #[cfg(windows)]
+    jobs: parking_lot::Mutex<Vec<std::sync::Arc<std::os::windows::io::OwnedHandle>>>,
 }
 
 impl ProcessOwner {
@@ -139,8 +143,43 @@ impl ProcessOwner {
         }
         #[cfg(windows)]
         {
-            Ok(Self {})
+            Ok(Self {
+                cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                jobs: parking_lot::Mutex::new(Vec::new()),
+            })
         }
+    }
+
+    pub fn with_python(python: &std::path::Path) -> Result<Self, String> {
+        if !python.is_absolute() || !python.is_file() {
+            return Err("The configured CPython must name an existing absolute executable".into());
+        }
+        #[cfg(unix)]
+        {
+            Ok(Self {
+                owner: unix::UnixOwner::start_with_python(python)?,
+            })
+        }
+        #[cfg(windows)]
+        {
+            Self::new()
+        }
+    }
+
+    pub fn run(&self, spec: ProcessSpec) -> Result<ProcessResult, String> {
+        let result = self.spawn(spec, None)?.wait()?;
+        if !result.success() {
+            return Err(format!(
+                "Owned command failed: status={:?} exit_code={:?} scope={} pid={} stdout={} stderr={}",
+                result.status,
+                result.exit_code,
+                result.scope,
+                result.pid,
+                result.stdout.display(),
+                result.stderr.display(),
+            ));
+        }
+        Ok(result)
     }
 
     pub fn spawn(&self, spec: ProcessSpec, parent: Option<&str>) -> Result<OwnedProcess, String> {
@@ -155,6 +194,10 @@ impl ProcessOwner {
         #[cfg(windows)]
         {
             let _ = parent; // Nested Windows Jobs remain contained by the root Job.
+            let mut jobs = self.jobs.lock();
+            if self.cancelled.load(std::sync::atomic::Ordering::Acquire) {
+                return Err("Process owner is cancelled; no new command can start".into());
+            }
             let capture = private_capture(&spec.log_directory)?;
             let stdout = capture.join("stdout.log");
             let stderr = capture.join("stderr.log");
@@ -183,6 +226,7 @@ impl ProcessOwner {
                     .map_err(|error| error.to_string())?,
             ));
             let tree = ProcessTree::spawn(&mut command)?;
+            jobs.push(tree.job());
             let pid = tree.id();
             Ok(OwnedProcess {
                 spec,
@@ -192,9 +236,29 @@ impl ProcessOwner {
                     stderr,
                     pid,
                     finished: false,
+                    cancelled: std::sync::Arc::clone(&self.cancelled),
                 },
             })
         }
+    }
+
+    pub fn cancel(&self) -> Result<(), String> {
+        #[cfg(unix)]
+        {
+            self.owner.cancel()
+        }
+        #[cfg(windows)]
+        {
+            self.cancelled
+                .store(true, std::sync::atomic::Ordering::Release);
+            windows_job::stop_jobs(&self.jobs.lock())
+        }
+    }
+}
+
+impl Drop for ProcessOwner {
+    fn drop(&mut self) {
+        let _ = self.cancel();
     }
 }
 
@@ -227,6 +291,7 @@ enum Backend {
         stderr: PathBuf,
         pid: u32,
         finished: bool,
+        cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
     },
 }
 
@@ -282,6 +347,7 @@ impl OwnedProcess {
                 stderr,
                 pid,
                 finished,
+                cancelled,
             } = &mut self.backend;
             if *finished {
                 return Err("Owned process already completed".into());
@@ -296,7 +362,11 @@ impl OwnedProcess {
                     let orphaned = tree.active()? != 0;
                     tree.stop()?;
                     break (
-                        if orphaned && self.spec.completion == CompletionPolicy::RequireTreeExit {
+                        if cancelled.load(std::sync::atomic::Ordering::Acquire) {
+                            ProcessStatus::Cancelled
+                        } else if orphaned
+                            && self.spec.completion == CompletionPolicy::RequireTreeExit
+                        {
                             ProcessStatus::OrphanedMembers
                         } else {
                             ProcessStatus::Exited
@@ -339,6 +409,7 @@ impl OwnedProcess {
                 stderr,
                 pid,
                 finished,
+                ..
             } = &mut self.backend;
             if *finished {
                 return Err("Owned process already completed".into());
@@ -363,21 +434,7 @@ impl OwnedProcess {
 }
 
 pub fn run_bounded(spec: ProcessSpec) -> Result<ProcessResult, String> {
-    let owner = ProcessOwner::new()?;
-    let mut process = owner.spawn(spec, None)?;
-    let result = process.wait()?;
-    if !result.success() {
-        return Err(format!(
-            "Owned command failed: status={:?} exit_code={:?} scope={} pid={} stdout={} stderr={}",
-            result.status,
-            result.exit_code,
-            result.scope,
-            result.pid,
-            result.stdout.display(),
-            result.stderr.display()
-        ));
-    }
-    Ok(result)
+    ProcessOwner::new()?.run(spec)
 }
 
 /// A common OS monotonic clock, not the ECU's logical epoch.

@@ -16,6 +16,17 @@ fn failure(code: &str, message: impl Into<String>) -> Vec<PlanDiagnostic> {
 }
 
 impl Workspace {
+    pub fn prepare_integration_save_previewed(
+        self,
+        runtime: &RuntimeCatalog,
+        mod_archive: PathBuf,
+        revision: &str,
+    ) -> Result<super::PreparedSave, Vec<PlanDiagnostic>> {
+        self.integration_plan(runtime, mod_archive)?;
+        super::PreparedSave::validated(self, revision)
+            .map_err(|error| failure("SAVE_PREVIEW_STALE", error))
+    }
+
     pub fn saved_integration_plan(
         &self,
         runtime: &RuntimeCatalog,

@@ -6,7 +6,6 @@ kill-on-close job. CDP drives actual path-entry UI and the WebView; all
 application IPC reaches Rust without replacing the native transport.
 """
 
-import argparse
 import ctypes
 import json
 import os
@@ -20,7 +19,7 @@ import uuid
 from ctypes import wintypes as w
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class Startup(ctypes.Structure):
@@ -80,19 +79,19 @@ class ExtendedLimits(ctypes.Structure):
     ]
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--binary", required=True, type=Path)
-    args = parser.parse_args()
+def run(binary: Path) -> int:
     if os.name != "nt":
         raise RuntimeError("Native desktop verification requires Windows")
-    binary = args.binary.resolve(strict=True)
-    scratch = Path(tempfile.mkdtemp(prefix="autosar-epic4-desktop-"))
+    binary = binary.resolve(strict=True)
+    from autosar_tooling.desktop import write_resource_inputs
+
+    scratch = Path(tempfile.mkdtemp(prefix="autosar-native-windows-"))
     print(f"Isolated native test directory: {scratch}", flush=True)
     inputs = scratch / "inputs"
     shutil.copytree(ROOT / "core/tests/fixtures/epic4/positive", inputs)
     paths = sorted(str(path) for path in inputs.glob("*.arxml"))
     (scratch / "inputs.json").write_text(json.dumps(paths), encoding="utf-8")
+    write_resource_inputs(scratch)
     packager = ROOT / "core/target/debug/package_host_reference.exe"
     packaged = subprocess.run(
         [
@@ -108,7 +107,10 @@ def main() -> int:
         check=False,
     )
     if packaged.returncode:
-        raise RuntimeError(packaged.stdout.decode("utf-8", errors="replace") + packaged.stderr.decode("utf-8", errors="replace"))
+        raise RuntimeError(
+            packaged.stdout.decode("utf-8", errors="replace")
+            + packaged.stderr.decode("utf-8", errors="replace")
+        )
     user = ctypes.WinDLL("user32", use_last_error=True)
     kernel = ctypes.WinDLL("kernel32", use_last_error=True)
     user.CreateDesktopW.argtypes = [
@@ -287,6 +289,11 @@ def main() -> int:
             socket_handle.bind(("127.0.0.1", 0))
             debug_port = socket_handle.getsockname()[1]
         environment = os.environ.copy()
+        environment.pop("AUTOSAR_XSD_ARCHIVE", None)
+        environment.pop("AUTOSAR_MOD_ARCHIVE", None)
+        environment["APPDATA"] = str(scratch / "app-config")
+        environment["AUTOSAR_CONFIG_DIR"] = str(scratch / "app-config")
+        environment["LOCALAPPDATA"] = str(scratch / "app-local")
         environment["WEBVIEW2_USER_DATA_FOLDER"] = str(scratch / "webview-profile")
         environment["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = (
             f"--remote-debugging-port={debug_port}"
@@ -329,7 +336,7 @@ def main() -> int:
         driver = subprocess.Popen(
             [
                 node,
-                str(ROOT / "scripts/epic4_desktop_cdp.mjs"),
+                str(ROOT / "scripts/autosar_tooling/desktop_cdp.mjs"),
                 target["webSocketDebuggerUrl"],
                 str(scratch),
             ],
@@ -366,12 +373,15 @@ def main() -> int:
                     accept_buttons = []
 
                     @window_callback
-                    def child(child_window, _, accept=accept_buttons, cancel=cancel_buttons):
+                    def child(
+                        child_window, _, accept=accept_buttons, cancel=cancel_buttons
+                    ):
                         # DirectUI TaskDialog buttons can expose ID 0. Use the
                         # actual translated positive label on our owned dialog.
                         if window_text(child_window, True) == "Button" and (
                             user.GetDlgCtrlID(child_window) in (1, 6, 1000, 1004)
-                            or window_text(child_window) in ("确定", "确认", "是", "OK", "Ok", "Yes")
+                            or window_text(child_window)
+                            in ("确定", "确认", "是", "OK", "Ok", "Yes")
                         ):
                             accept.append(child_window)
                         if window_text(child_window, True) == "Button" and (
@@ -383,11 +393,17 @@ def main() -> int:
 
                     checked(user.EnumChildWindows(window, child, 0))
                     permission = scratch / "accept-generation-path.txt"
-                    requested = permission.read_text(encoding="utf-8") if permission.is_file() else ""
+                    requested = (
+                        permission.read_text(encoding="utf-8")
+                        if permission.is_file()
+                        else ""
+                    )
                     # TaskDialog content is not necessarily exposed as child
                     # window text. The driver authorizes only this generation
                     # confirmation, with an output inside its own temp tree.
-                    allowed = requested and Path(requested).resolve().is_relative_to(scratch)
+                    allowed = requested and Path(requested).resolve().is_relative_to(
+                        scratch
+                    )
                     if allowed and window_text(window) == "确认操作" and accept_buttons:
                         user.SendMessageW(accept_buttons[0], 0x00F5, 0, 0)
                         permission.unlink()
@@ -401,7 +417,10 @@ def main() -> int:
                 time.sleep(0.05)
             if driver.returncode:
                 driver_log.flush()
-                print((scratch / "native-driver.log").read_text(encoding="utf-8")[-8000:], flush=True)
+                print(
+                    (scratch / "native-driver.log").read_text(encoding="utf-8")[-8000:],
+                    flush=True,
+                )
                 return driver.returncode
             if canceled < 1:
                 raise RuntimeError(
@@ -441,9 +460,5 @@ def main() -> int:
             )
         if cleanup_errors:
             raise RuntimeError("; ".join(cleanup_errors))
-    print(f"epic4_isolated_native_ipc PASS: temporary files {scratch}", flush=True)
+    print(f"windows_isolated_native_ipc PASS: temporary files {scratch}", flush=True)
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

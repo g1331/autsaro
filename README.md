@@ -31,13 +31,13 @@
 工具版本由根目录 `rust-toolchain.toml`（Rust 1.98.1）、`.node-version`（Node 24.19.0）、`.python-version`（CPython 3.12.9）、`pyproject.toml`/`uv.lock`（Python）、`ui/package.json` 的 npm 11.17.0 engine 约束及 `ui/package-lock.json` 的包完整性记录约束。安装 Rust/rustfmt/clippy、Node/npm、uv、Git 和目标所需的 C99 GCC；在**新的终端**检查安装结果。Cargo 构建产物保留在 `core/target/` 与 `src-tauri/target/`，不改设 `CARGO_TARGET_DIR`。
 
 - Windows：使用 Rust MSVC、Visual Studio C++ Build Tools 和 WebView2。安装 vcpkg 的 `libxml2[iconv,zlib]:x64-windows-static-md`；`VCPKG_ROOT` 指 vcpkg 根目录，`VCPKGRS_TRIPLET=x64-windows-static-md`，`LIBCLANG_PATH` 指含 `libclang.dll` 的目录。可在用户环境中设置这些变量，重新打开终端和 Agent 宿主后再检查；不要把个人安装路径写进工程。原生执行另需 `AUTOSAR_CC`、`AUTOSAR_OBJDUMP`、`AUTOSAR_GIT`、`AUTOSAR_PYTHON` 指向目标锁声明的 GCC、objdump、Git 和 CPython 绝对路径；不回退 PATH 工具。
-- Ubuntu 24.04：安装 `build-essential libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2.0-dev libssl-dev libxdo-dev libxml2-dev libclang-dev clang pkg-config patchelf`，并按锁文件安装 Rust、Node、CPython 与 uv。WSL 构建副本、Cargo target 和 uv 缓存应放在 ext4 文件系统；从 Windows 卷读取官方档案时显式传路径。固定 GCC13.3.0 的受控原生 OS 已运行全部 26 项独立 suite；Linux 生产 ECU 的封包、搬移、构建及 CAN/DID/N_Cr 独立协议也已实测。桌面 IPC 与正式 bundle 仍按后续阶段验收。
-- macOS：安装 Xcode Command Line Tools、pkg-config/libxml2 和上述版本管理工具。macOS 源码工作台与包配置仍待本轮完成，原生构建和 IPC 未验证；macOS 不提供本机虚拟 ECU。
+- Ubuntu 24.04：安装 `build-essential libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2.0-dev libssl-dev libxdo-dev libxml2-dev libclang-dev clang pkg-config patchelf`，并按锁文件安装 Rust、Node、CPython 与 uv。WSL 构建副本、Cargo target 和 uv 缓存应放在 ext4 文件系统；从 Windows 卷读取官方档案时显式传路径。固定 GCC13.3.0 的受控原生 OS 已运行全部 26 项独立 suite；Linux 生产 ECU 的封包、搬移、构建及 CAN/DID/N_Cr 独立协议也已实测，私有 Xvfb 中的真实桌面 IPC 场景已通过。正式 bundle 仍待阶段8验收。
+- macOS：安装 Xcode Command Line Tools、pkg-config/libxml2 和上述版本管理工具。源码工作台代码路径与隔离 IPC 测试入口已实现，正式包配置仍待阶段8完成；macOS 原生构建、bundle 和 IPC 未验证，不提供本机虚拟 ECU。
 
 本地官方材料须由使用者自行合法放置，不随源码或安装包分发：
 
 - XSD：`docs/official/R24-11/FO/MethodologyAndTemplates/AUTOSAR_FO_MMOD_XMLSchema.zip`（包含 `AUTOSAR_00053.xsd` 与 `xml.xsd`）。
-- MOD：`docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_MOD_ECUConfigurationParameters.zip`。核心计划使用显式 XSD/MOD 路径并核对固定 R24-11 SHA-256；CLI 可传 `--xsd-archive`/`--mod-archive`，进程变量 `AUTOSAR_XSD_ARCHIVE`/`AUTOSAR_MOD_ARCHIVE` 优先于桌面配置但不会写回。桌面应用配置目录（Tauri `app_config_dir`）的 `settings.json` 可写 `{"xsdArchive":"<XSD绝对路径>","modArchive":"<MOD绝对路径>"}`；设置界面将在后续阶段提供。未配置时明确报告缺少资源，不查找 checkout 默认路径。
+- MOD：`docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_MOD_ECUConfigurationParameters.zip`。核心计划使用显式 XSD/MOD 路径并核对固定 R24-11 SHA-256；CLI 可传 `--xsd-archive`/`--mod-archive`，进程变量 `AUTOSAR_XSD_ARCHIVE`/`AUTOSAR_MOD_ARCHIVE` 优先于桌面配置但不会写回。桌面“工作台设置”配置规范和原生工具；合法设置原子保存到 Tauri `app_config_dir` 的 `settings.json`。显式 `AUTOSAR_CONFIG_DIR` 可指定独立绝对配置目录，未设置时仍使用普通用户配置；后台验收入口始终指定私有目录，不依赖覆盖 Windows `APPDATA`。首次缺少规范时打开设置页，不查找 checkout 默认路径；错误档案不覆盖旧设置或项目。CPython/GCC/objdump/Git 均须显式绝对路径，进程环境覆盖优先。
 - 集成样例：`docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_EXP_ModelingShowCases.zip`。核心测试另读取上述两项合法规范档案。
 
 从新克隆的源码根目录运行（须预先准备平台原生依赖与官方档案）：
@@ -56,7 +56,7 @@ uv run --locked python -m autosar_tooling verify --scope all --base <本轮起�
 
 命令完成与进程回收分开判断：默认 `require_tree_exit` 用于 ECU、协议及生命周期检查，主进程退出后遗留活后代仍失败；开发聚合器仅对 Cargo test/build/Clippy 显式选择 `close_tree_on_exit`，主命令结束后 owner 有界关闭其私有 Job/已登记 scope，确认无残留后保留原退出码。发生实际回收时输出 `cleanup=confirmed descendants=reclaimed`；非零、超时、取消、逃逸或无法确认清理均不能转成成功。不按进程名加白名单，不影响同级任务或用户已有进程，不要求关闭机器级编译器遥测。内部测试与产品命令仍维持各自严格契约。
 
-当前 OS 独立消费者入口为 `uv run --locked python -m autosar_tooling os --target windows-x64-controlled-v1 --suite all`；在 Ubuntu24.04 原生环境把 target 改为 `linux-x64-controlled-v1`，不能跨宿主运行。26 项适用 suite 已分别接入 core 集成测试，ARTI 原生消费者随 stack suite 执行一次。固定内核、补丁、原生执行栈及 Windows PE／Linux ELF 差异见 [`runtime/os/README.md`](runtime/os/README.md)。生产 ECU 的两个目标与 stdlib-only 离线 build/verify 已实际运行；完整桌面与分发验收仍待本轮后续阶段。
+当前 OS 独立消费者入口为 `uv run --locked python -m autosar_tooling os --target windows-x64-controlled-v1 --suite all`；在 Ubuntu24.04 原生环境把 target 改为 `linux-x64-controlled-v1`，不能跨宿主运行。26 项适用 suite 已分别接入 core 集成测试，ARTI 原生消费者随 stack suite 执行一次。固定内核、补丁、原生执行栈及 Windows PE／Linux ELF 差异见 [`runtime/os/README.md`](runtime/os/README.md)。生产 ECU 的两个目标、stdlib-only 离线 build/verify 和隔离桌面真实 IPC 已实际运行；正式分发及无 checkout 验收仍待阶段8完成。
 
 源码准备固定 `windows-x64-controlled-v1` 与 `linux-x64-controlled-v1` 输出目标；`AssetInventory` 在构建时核对 BSW、OS、FreeRTOS 原件、补丁、目标锁与交付素材的可信摘要。显式目录加载以编译进工作台的清单核对，不相信目录自报的散列。`prepare_ecu_project`/`prepare_host_project` 返回纯内存源码、`autosar-build-target-v1` 元数据与输入/目标/资源 fingerprint，预检为 `not_run`；不调用 Git/GCC/PowerShell，也不安装源码包。原生预检是显式独立操作；非本机目标可渲染与重导入，但不能在当前宿主执行。生成后的交付闭包包含 `tools/ecu-tool.py` 和全部 stdlib 工具，接收者无需 checkout、uv、Rust 或 Node。
 
@@ -65,6 +65,9 @@ uv run --locked python -m autosar_tooling verify --scope all --base <本轮起�
 ## 代码质量检查
 
 质量工具及独立 ARTI 消费者使用的 `lxml` 由 `uv.lock` 中的 `quality` 组固定；UI Prettier/ESLint 由 npm 锁文件固定。定向检查使用 `uv run --locked python -m autosar_tooling quality --base <本轮起始提交>`，检查 UTF-8、末尾换行、空白、Python 语法与增量 rustfmt/clang-format/Prettier、主机 C99 语法。唯一聚合入口为 `uv run --locked python -m autosar_tooling verify --scope core|ui|desktop|all --base <起始提交>`：`all` 顺序组合 Git diff/check、Python unittest、npm ci、质量、Ruff、UI lint/build、core test/clippy 和 desktop build/clippy。每个命令使用独立的绝对单调 deadline、进程所有权与日志；失败报告具体子阶段、argv、观测到的退出码和日志位置，不重试或吞错。26 项原生 OS suite 只经注册的 Cargo 测试执行一次，不追加第二次 OS CLI。此构建／测试关口明确报告平台适用范围，**不**验证真实 GUI/IPC 或安装包；这些使用独立 native desktop 和 bundle 关口。
+
+真实 GUI/IPC 使用独立入口 `uv run --locked python -m autosar_tooling desktop --platform windows|linux|macos --binary <本次桌面程序>`，不由上述 build/test PASS 推定。Windows/Linux 运行前构建同版 `core/target/debug/package_host_reference` 和桌面程序；Windows 用独立 Desktop/Job/CDP，Linux 用私有 Xvfb 与固定 `tauri-driver 2.1.0`/原生 WebKit driver。Linux 另安装 `xvfb x11-utils xdotool webkit2gtk-driver`，并运行 `cargo install tauri-driver --version 2.1.0 --locked`。macOS 的 `native-webdriver` feature/capability 仅用于独立登录会话中的源码工作台测试，目前无原生验证；生产构建不包含它。截图、driver 日志与真实 IPC 记录留在入口报告的私有证据目录，Linux/macOS 使用用户缓存目录保留跨会话结果；结论记录在本轮 BMad spec。
+
 
 Epic 4 的生成工件测试仍以 PATH 中的 Cppcheck 2.21.0 检查实际 RTE 翻译单元，不是完整 MISRA 扫描。BMad 开发规格记录起始提交；格式检查应指定 `--base`，修改旧文件无需整体重排。交付正式能力仍以相应 BMad spec 的原生运行结果为准。
 

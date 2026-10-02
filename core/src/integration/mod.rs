@@ -191,6 +191,7 @@ fn portable_component(part: &str) -> bool {
 
 /// Legally supplied, external validation references. These files are checked
 /// by identity and are never copied into a generated project.
+#[derive(Clone)]
 pub struct PlanDependencies {
     pub xsd_archive: PathBuf,
     pub mod_archive: PathBuf,
@@ -199,12 +200,6 @@ pub struct PlanDependencies {
 /// External standards are never part of the embedded source inventory.
 pub type ValidationResources = PlanDependencies;
 
-#[derive(Default, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct ValidationSettings {
-    xsd_archive: Option<PathBuf>,
-    mod_archive: Option<PathBuf>,
-}
 
 impl PlanDependencies {
     pub fn from_repository(root: &Path) -> Self {
@@ -233,38 +228,10 @@ impl PlanDependencies {
         })
     }
 
-    /// The app-config file owns persisted paths; process overrides are applied
-    /// in memory only. A caller may pass a legacy default until the product
-    /// migrates its existing checkout-backed workflow.
-    pub fn from_settings_file(settings: &Path, default: Option<&Self>) -> Result<Self, String> {
-        let stored: ValidationSettings = match std::fs::read(settings) {
-            Ok(bytes) => serde_json::from_slice(&bytes).map_err(|error| {
-                format!(
-                    "Invalid validation settings {}: {error}",
-                    settings.display()
-                )
-            })?,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                ValidationSettings::default()
-            }
-            Err(error) => {
-                return Err(format!(
-                    "Cannot read validation settings {}: {error}",
-                    settings.display()
-                ));
-            }
-        };
-        let xsd_archive = std::env::var_os("AUTOSAR_XSD_ARCHIVE")
-            .map(PathBuf::from)
-            .or(stored.xsd_archive)
-            .or_else(|| default.map(|item| item.xsd_archive.clone()))
-            .ok_or("Set the R24-11 XSD archive path in app settings or AUTOSAR_XSD_ARCHIVE")?;
-        let mod_archive = std::env::var_os("AUTOSAR_MOD_ARCHIVE")
-            .map(PathBuf::from)
-            .or(stored.mod_archive)
-            .or_else(|| default.map(|item| item.mod_archive.clone()))
-            .ok_or("Set the R24-11 MOD archive path in app settings or AUTOSAR_MOD_ARCHIVE")?;
-        Self::explicit(xsd_archive, mod_archive)
+    pub fn validate(&self) -> Result<(), Vec<PlanDiagnostic>> {
+        read_archive(&self.xsd_archive, XSD_SHA256, false)?;
+        read_archive(&self.mod_archive, MOD_SHA256, false)?;
+        Ok(())
     }
 }
 
@@ -458,10 +425,47 @@ pub fn inspect_inputs(
 }
 
 fn checked_archive(path: &Path, expected: &str) -> Result<Vec<u8>, Vec<PlanDiagnostic>> {
-    let bytes = std::fs::read(path).map_err(|error| vec![PlanDiagnostic::dependency(
-        "DEPENDENCY_MISSING", format!("Cannot read external reference {}: {error}", path.display()),
-        "Supply the legally obtained, pinned R24-11 validation archive; missing checks cannot be skipped.")])?;
-    if format!("{:x}", Sha256::digest(&bytes)) != expected {
+    read_archive(path, expected, true)
+}
+
+fn read_archive(
+    path: &Path,
+    expected: &str,
+    collect: bool,
+) -> Result<Vec<u8>, Vec<PlanDiagnostic>> {
+    let unreadable = |error| {
+        vec![PlanDiagnostic::dependency(
+            "DEPENDENCY_MISSING",
+            format!("Cannot read external reference {}: {error}", path.display()),
+            "Supply the legally obtained, pinned R24-11 validation archive; missing checks cannot be skipped.",
+        )]
+    };
+    let mut file = std::fs::File::open(path).map_err(&unreadable)?;
+    let mut bytes = Vec::new();
+    if collect {
+        let size = file.metadata().map_err(&unreadable)?.len();
+        let capacity = usize::try_from(size).map_err(|error| {
+            vec![PlanDiagnostic::dependency(
+                "DEPENDENCY_IDENTITY",
+                format!("Archive size cannot be represented: {error}"),
+                "Supply the exact pinned R24-11 archive.",
+            )]
+        })?;
+        bytes.reserve_exact(capacity);
+    }
+    let mut digest = Sha256::new();
+    let mut buffer = [0u8; 8192];
+    loop {
+        let count = file.read(&mut buffer).map_err(&unreadable)?;
+        if count == 0 {
+            break;
+        }
+        digest.update(&buffer[..count]);
+        if collect {
+            bytes.extend_from_slice(&buffer[..count]);
+        }
+    }
+    if format!("{:x}", digest.finalize()) != expected {
         return Err(vec![PlanDiagnostic::dependency(
             "DEPENDENCY_IDENTITY",
             format!("External archive identity differs: {}", path.display()),

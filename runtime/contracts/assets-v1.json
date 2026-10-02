@@ -1220,7 +1220,7 @@
     },
     {
       "path": "scripts/ecu_tools/owner.py",
-      "sha256": "232256688f8e9f17f55d09ef1b46c72e30298891f0681c6d880713f76ce37a3d",
+      "sha256": "633016be45199b044f5f6b95a3428cb3f25d7f0344508fbbc686589be85868c5",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",

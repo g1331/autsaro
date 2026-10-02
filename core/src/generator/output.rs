@@ -53,6 +53,15 @@ pub(crate) fn reserve_directory(
     role: &str,
     output_name: &OsStr,
 ) -> Result<PathBuf, String> {
+    #[cfg(unix)]
+    let builder = {
+        use std::os::unix::fs::DirBuilderExt;
+        let mut builder = fs::DirBuilder::new();
+        builder.mode(0o700);
+        builder
+    };
+    #[cfg(not(unix))]
+    let builder = fs::DirBuilder::new();
     for suffix in 0u64.. {
         let candidate = parent.join(format!(
             ".autosar-config-{role}-{}-{suffix}",
@@ -61,7 +70,7 @@ pub(crate) fn reserve_directory(
         if candidate.file_name() == Some(output_name) {
             continue;
         }
-        match fs::create_dir(&candidate) {
+        match builder.create(&candidate) {
             Ok(()) => return Ok(candidate),
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(error) => return Err(format!("无法保留临时目录 {}: {error}", candidate.display())),
@@ -200,9 +209,10 @@ fn file_names(files: &[(String, Vec<u8>)]) -> Vec<String> {
         .collect()
 }
 
-pub(crate) fn preview_prepared(
+fn inspect_prepared(
     files: &[(String, Vec<u8>)],
     output: &Path,
+    include_changes: bool,
 ) -> Result<GenerationPreview, String> {
     let output = output_path(output)?;
     let names = file_names(files);
@@ -228,6 +238,9 @@ pub(crate) fn preview_prepared(
         }
         digest.update((after.len() as u64).to_le_bytes());
         digest.update(after);
+        if !include_changes {
+            continue;
+        }
         let status = if before.is_none() {
             "new"
         } else if before.as_deref() == Some(after) {
@@ -262,35 +275,61 @@ pub(crate) fn preview_prepared(
         files: changes,
     })
 }
-pub(crate) fn generate_prepared(
-    files: Vec<(String, Vec<u8>)>,
+pub(crate) fn preview_prepared(
+    files: &[(String, Vec<u8>)],
     output: &Path,
-    expected_revision: Option<&str>,
-) -> Result<GenerationReport, String> {
-    let output = output_path(output)?;
-    if let Some(revision) = expected_revision
-        && preview_prepared(&files, &output)?.revision != revision
-    {
-        return Err("生成预览已失效：配置、来源、目标或旧输出已变化；请重新预览".into());
-    }
-    let names = file_names(&files);
-    let parent = output.parent().ok_or("输出目录须有父目录")?;
-    let output_name = output.file_name().ok_or("输出目录须有名称")?;
-    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    verify_generated_output(&output, &names)?;
-    let stage = reserve_directory(parent, "stage", output_name)?;
-    let result = (|| {
-        for (name, contents) in &files {
-            let target = stage.join(name);
-            fs::create_dir_all(target.parent().unwrap()).map_err(|e| e.to_string())?;
-            fs::write(target, contents).map_err(|e| e.to_string())?;
+) -> Result<GenerationPreview, String> {
+    inspect_prepared(files, output, true)
+}
+
+/// An owned private source stage; dropping it never alters the destination.
+pub struct StagedGeneration {
+    files: Vec<(String, Vec<u8>)>,
+    names: Vec<String>,
+    output: PathBuf,
+    stage: Option<PathBuf>,
+    revision: String,
+}
+
+impl StagedGeneration {
+    pub(crate) fn new(
+        files: Vec<(String, Vec<u8>)>,
+        output: &Path,
+        expected_revision: Option<&str>,
+    ) -> Result<Self, String> {
+        let output = output_path(output)?;
+        let revision = inspect_prepared(&files, &output, false)?.revision;
+        if expected_revision.is_some_and(|expected| expected != revision) {
+            return Err("生成预览已失效：配置、来源、目标或旧输出已变化；请重新预览".into());
         }
-        verify_generated_output(&output, &names)?;
-        if let Some(revision) = expected_revision
-            && preview_prepared(&files, &output)?.revision != revision
-        {
+        let names = file_names(&files);
+        let parent = output.parent().ok_or("输出目录须有父目录")?;
+        let output_name = output.file_name().ok_or("输出目录须有名称")?;
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        let stage = reserve_directory(parent, "stage", output_name)?;
+        let staged = Self {
+            files,
+            names,
+            output,
+            stage: Some(stage),
+            revision,
+        };
+        for (name, contents) in &staged.files {
+            let target = staged.stage.as_ref().unwrap().join(name);
+            fs::create_dir_all(target.parent().unwrap()).map_err(|error| error.to_string())?;
+            fs::write(target, contents).map_err(|error| error.to_string())?;
+        }
+        Ok(staged)
+    }
+
+    /// Call while holding the workbench's fingerprint/operation commit lock.
+    pub fn commit(mut self) -> Result<GenerationReport, String> {
+        if inspect_prepared(&self.files, &self.output, false)?.revision != self.revision {
             return Err("生成预览已失效：旧输出在确认期间变化；请重新预览".into());
         }
+        let output = &self.output;
+        let parent = output.parent().ok_or("输出目录须有父目录")?;
+        let output_name = output.file_name().ok_or("输出目录须有名称")?;
         let existing = match fs::symlink_metadata(&output) {
             Ok(metadata) if is_reparse_point(&metadata) || !metadata.file_type().is_dir() => {
                 return Err(format!(
@@ -316,21 +355,125 @@ pub(crate) fn generate_prepared(
         } else {
             None
         };
-        if let Err(error) = fs::rename(&stage, &output) {
+        if let Err(error) = fs::rename(self.stage.as_ref().unwrap(), output) {
             let recovery = backup
                 .as_ref()
                 .map(|path| format!("；原输出保留在 {}", path.display()))
                 .unwrap_or_default();
             return Err(format!("无法安装新生成工程: {error}{recovery}"));
         }
-        Ok(backup)
-    })();
-    let backup =
-        result.map_err(|error| format!("{error}；临时生成目录保留在 {}", stage.display()))?;
-    Ok(GenerationReport {
-        output_directory: output.display().to_string(),
-        previous_output_directory: backup.map(|path| path.display().to_string()),
-        files: names,
-        issues: Vec::<Issue>::new(),
-    })
+        self.stage = None;
+        Ok(GenerationReport {
+            output_directory: output.display().to_string(),
+            previous_output_directory: backup.map(|path| path.display().to_string()),
+            files: std::mem::take(&mut self.names),
+            issues: Vec::<Issue>::new(),
+        })
+    }
+}
+
+impl Drop for StagedGeneration {
+    fn drop(&mut self) {
+        if let Some(stage) = &self.stage {
+            let _ = fs::remove_dir_all(stage);
+        }
+    }
+}
+
+pub(crate) fn generate_prepared(
+    files: Vec<(String, Vec<u8>)>,
+    output: &Path,
+    expected_revision: Option<&str>,
+) -> Result<GenerationReport, String> {
+    StagedGeneration::new(files, output, expected_revision)?.commit()
+}
+
+/// Native build output remains private until a fingerprint-checked commit.
+pub struct StagedBuild {
+    root: PathBuf,
+    directory: PathBuf,
+    output: PathBuf,
+}
+
+impl StagedBuild {
+    pub fn new(project: &Path, output: &Path) -> Result<Self, String> {
+        let output = output_path(output)?;
+        for path in output.ancestors().chain(project.ancestors()) {
+            match fs::symlink_metadata(path) {
+                Ok(metadata) if is_reparse_point(&metadata) => {
+                    return Err(format!("构建路径不能经过链接: {}", path.display()));
+                }
+                Ok(_) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.to_string()),
+            }
+        }
+        let project = project.canonicalize().map_err(|error| error.to_string())?;
+        let requested_parent = output.parent().ok_or("构建输出须有父目录")?;
+        let mut existing = requested_parent;
+        while !existing.try_exists().map_err(|error| error.to_string())? {
+            existing = existing.parent().ok_or("构建输出须有现存父目录")?;
+        }
+        let parent = existing
+            .canonicalize()
+            .map_err(|error| error.to_string())?
+            .join(
+                requested_parent
+                    .strip_prefix(existing)
+                    .map_err(|error| error.to_string())?,
+            );
+        let output = parent.join(output.file_name().ok_or("构建输出须有名称")?);
+        if output.starts_with(&project) || project.starts_with(&output) {
+            return Err("构建输出必须位于生成源码之外".into());
+        }
+        check_empty_build_output(&output)?;
+        fs::create_dir_all(&parent).map_err(|error| error.to_string())?;
+        let root = reserve_directory(&parent, "build-stage", output.file_name().unwrap())?;
+        let directory = root.join("build");
+        Ok(Self {
+            root,
+            directory,
+            output,
+        })
+    }
+
+    pub fn directory(&self) -> &Path {
+        &self.directory
+    }
+
+    pub fn commit(mut self) -> Result<PathBuf, String> {
+        check_empty_build_output(&self.output)?;
+        if self.output.exists() {
+            fs::remove_dir(&self.output).map_err(|error| error.to_string())?;
+        }
+        fs::rename(&self.directory, &self.output).map_err(|error| error.to_string())?;
+        Ok(std::mem::take(&mut self.output))
+    }
+}
+
+impl Drop for StagedBuild {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.root);
+    }
+}
+
+fn check_empty_build_output(output: &Path) -> Result<(), String> {
+    match fs::symlink_metadata(output) {
+        Ok(metadata) if is_reparse_point(&metadata) || !metadata.is_dir() => {
+            Err("构建输出不能是链接或非普通目录".into())
+        }
+        Ok(_) => {
+            if fs::read_dir(output)
+                .map_err(|error| error.to_string())?
+                .next()
+                .is_some()
+            {
+                Err("构建输出必须为新目录或空目录；所有者文件未修改".into())
+            } else {
+                Ok(())
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
 }

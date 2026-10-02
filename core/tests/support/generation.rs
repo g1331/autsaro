@@ -2,12 +2,9 @@ use super::{Scratch, archive, create_pair, epic4_plan, tooling};
 use autosar_config_core::{Workspace, generator};
 use sha2::{Digest, Sha256};
 use std::fs;
-#[cfg(windows)]
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
-#[cfg(windows)]
-use std::process::Stdio;
+use std::process::{Command, Stdio};
 
 pub(super) fn saved_handoff_reopens_after_move_and_reproduces_host_sources() {
     let temp = Scratch::new();
@@ -650,6 +647,7 @@ pub(super) fn rebuild_rejects_existing_binary_without_overwriting_owner_bytes() 
         &output,
         &temp.0.join("Rebuilt"),
         &tooling::execution_settings(),
+        &super::tooling::execution_owner(),
     )
     .unwrap()
     .binary_path;
@@ -671,6 +669,42 @@ pub(super) fn rebuild_rejects_existing_binary_without_overwriting_owner_bytes() 
         "X 801 2 B001"
     );
     assert_eq!(fs::read(archived).unwrap(), b"owner modified binary");
+}
+
+pub(super) fn build_creates_missing_parent_directories_without_replacing_owner_output() {
+    let temp = Scratch::new();
+    let (mut ecu, _) = create_pair(&temp.0);
+    let project = temp.0.join("Generated");
+    generator::generate(&mut ecu, &project, tooling::native_target()).unwrap();
+    let output = temp.0.join("New/Independent/Build");
+    let settings = tooling::execution_settings();
+    let owner = tooling::execution_owner();
+    let binary = generator::build(&project, &output, &settings, &owner)
+        .unwrap()
+        .binary_path;
+    let mut process = Command::new(&binary)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    process
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"S 0 54\nT 10\n")
+        .unwrap();
+    let result = process.wait_with_output().unwrap();
+    assert!(result.status.success());
+    assert_eq!(
+        String::from_utf8(result.stdout).unwrap().trim(),
+        "X 801 2 B001"
+    );
+    let original_binary = fs::read(&binary).unwrap();
+    let owner_file = output.join("owner.txt");
+    fs::write(&owner_file, b"owner output").unwrap();
+    assert!(generator::build(&project, &output, &settings, &owner).is_err());
+    assert_eq!(fs::read(&binary).unwrap(), original_binary);
+    assert_eq!(fs::read(&owner_file).unwrap(), b"owner output");
 }
 
 pub(super) fn build_rejects_changed_generated_inputs_before_compiling() {
@@ -733,7 +767,14 @@ pub(super) fn build_rejects_source_changed_during_compilation_before_installing_
     let project = output.clone();
     let destination = build.clone();
     let settings = tooling::execution_settings();
-    let worker = std::thread::spawn(move || generator::build(&project, &destination, &settings));
+    let worker = std::thread::spawn(move || {
+        generator::build(
+            &project,
+            &destination,
+            &settings,
+            &super::tooling::execution_owner(),
+        )
+    });
     let deadline = Instant::now() + Duration::from_secs(60);
     loop {
         let compiling = fs::read_dir(&build)

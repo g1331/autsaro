@@ -7,10 +7,10 @@ use std::fs::{self, DirBuilder, File, OpenOptions};
 use std::io::{Read, Write};
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::os::unix::net::UnixStream;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 static NONCE: AtomicU64 = AtomicU64::new(0);
@@ -149,19 +149,28 @@ pub(super) struct UnixOwner {
     supervisor: Mutex<Option<Child>>,
     directory: Option<PathBuf>,
     groups: Mutex<HashMap<String, i32>>,
+    cancelled: AtomicBool,
+    registration: Mutex<()>,
 }
 
 impl UnixOwner {
     pub(super) fn start() -> Result<Arc<Self>, String> {
-        Self::start_with_inheritance(true)
+        Self::start_with_inheritance(true, None)
+    }
+
+    pub(super) fn start_with_python(python: &Path) -> Result<Arc<Self>, String> {
+        Self::start_with_inheritance(true, Some(python))
     }
 
     #[cfg(test)]
     pub(super) fn start_fresh_for_test() -> Result<Arc<Self>, String> {
-        Self::start_with_inheritance(false)
+        Self::start_with_inheritance(false, None)
     }
 
-    fn start_with_inheritance(inherit: bool) -> Result<Arc<Self>, String> {
+    fn start_with_inheritance(
+        inherit: bool,
+        executable: Option<&Path>,
+    ) -> Result<Arc<Self>, String> {
         if inherit {
             if let (Some(socket), Some(token)) = (
                 std::env::var_os("ECU_OWNER_SOCKET"),
@@ -173,17 +182,31 @@ impl UnixOwner {
                     supervisor: Mutex::new(None),
                     directory: None,
                     groups: Mutex::new(HashMap::new()),
+                    cancelled: AtomicBool::new(false),
+                    registration: Mutex::new(()),
                 }));
             }
         }
-        let python = PathBuf::from(
-            std::env::var_os("AUTOSAR_PYTHON")
-                .ok_or("Set AUTOSAR_PYTHON to the absolute locked CPython executable")?,
-        );
+        let python = match executable {
+            Some(path) => std::borrow::Cow::Borrowed(path),
+            None => std::borrow::Cow::Owned(PathBuf::from(
+                std::env::var_os("AUTOSAR_PYTHON")
+                    .ok_or("Set AUTOSAR_PYTHON to the absolute locked CPython executable")?,
+            )),
+        };
         if !python.is_absolute() || !python.is_file() {
             return Err("AUTOSAR_PYTHON must name an existing absolute executable".into());
         }
         let directory = private_directory()?;
+        for asset in crate::resources::AssetInventory::embedded().entries() {
+            if let Some(relative) = asset.relative_path.strip_prefix("scripts/")
+                && relative.starts_with("ecu_tools/")
+            {
+                let path = directory.join(relative);
+                fs::create_dir_all(path.parent().unwrap()).map_err(|error| error.to_string())?;
+                fs::write(path, asset.bytes).map_err(|error| error.to_string())?;
+            }
+        }
         let socket = directory.join("owner.sock");
         let mut entropy = [0u8; 32];
         File::open("/dev/urandom")
@@ -200,11 +223,13 @@ impl UnixOwner {
             .mode(0o600)
             .open(&log_path)
             .map_err(|error| error.to_string())?;
-        let mut child = Command::new(python)
-            .args(["-m", "ecu_tools.owner", "--socket"])
+        let mut child = Command::new(python.as_ref())
+            .args(["-S", "-m", "ecu_tools.owner", "--socket"])
             .arg(&socket)
             .arg("--guardian-pid")
             .arg(std::process::id().to_string())
+            .env("PYTHONPATH", &directory)
+            .env("PYTHONDONTWRITEBYTECODE", "1")
             .stdin(Stdio::piped())
             .stdout(Stdio::from(
                 log.try_clone().map_err(|error| error.to_string())?,
@@ -251,7 +276,24 @@ impl UnixOwner {
             supervisor: Mutex::new(Some(child)),
             directory: Some(directory),
             groups: Mutex::new(HashMap::new()),
+            cancelled: AtomicBool::new(false),
+            registration: Mutex::new(()),
         }))
+    }
+
+    pub(super) fn cancel(&self) -> Result<(), String> {
+        self.cancelled.store(true, Ordering::Release);
+        let _registration = self.registration.lock();
+        let scopes: Vec<_> = self.groups.lock().keys().cloned().collect();
+        let mut failure = None;
+        for scope in scopes {
+            match self.request(json!({"op": "close", "scope": scope, "reason": "cancelled"})) {
+                Ok(result) if result["status"] != "cleanup_unconfirmed" => {}
+                Ok(result) => failure = Some(format!("cleanup_unconfirmed: {result}")),
+                Err(error) => failure = Some(error),
+            }
+        }
+        failure.map_or(Ok(()), Err)
     }
 
     fn cleanup_mirror(&self) -> bool {
@@ -311,7 +353,7 @@ impl UnixOwner {
                 .unwrap_or("Unknown supervisor error")
                 .to_owned());
         }
-        if response["op"] == "closed" {
+        if response["op"] == "closed" && response["status"] != "cleanup_unconfirmed" {
             if let Some(scope) = response["scope"].as_str() {
                 self.groups.lock().remove(scope);
             }
@@ -324,6 +366,10 @@ impl UnixOwner {
         spec: &ProcessSpec,
         parent: Option<&str>,
     ) -> Result<UnixProcess, String> {
+        let _registration = self.registration.lock();
+        if self.cancelled.load(Ordering::Acquire) {
+            return Err("Process owner is cancelled; no new command can start".into());
+        }
         let argv: Vec<_> = spec
             .argv
             .iter()
@@ -382,6 +428,10 @@ impl UnixOwner {
         let pid = response["pid"].as_u64().ok_or("Missing registered PID")? as u32;
         let pgid = response["pgid"].as_i64().ok_or("Missing registered PGID")? as i32;
         self.groups.lock().insert(scope.clone(), pgid);
+        if self.cancelled.load(Ordering::Acquire) {
+            self.request(json!({"op": "close", "scope": scope, "reason": "cancelled"}))?;
+            return Err("Process owner was cancelled before command release".into());
+        }
         let mut process = UnixProcess {
             owner: Arc::clone(self),
             scope,
@@ -417,9 +467,7 @@ impl UnixOwner {
     #[cfg(test)]
     pub(super) fn remove_failed_test_logs(&self) {
         if let Some(directory) = &self.directory {
-            let _ = fs::remove_file(&self.socket);
-            let _ = fs::remove_file(directory.join("supervisor.log"));
-            let _ = fs::remove_dir(directory);
+            let _ = fs::remove_dir_all(directory);
         }
     }
 }
@@ -440,9 +488,7 @@ impl Drop for UnixOwner {
             }
             if closed {
                 if let Some(directory) = &self.directory {
-                    let _ = fs::remove_file(&self.socket);
-                    let _ = fs::remove_file(directory.join("supervisor.log"));
-                    let _ = fs::remove_dir(directory);
+                    let _ = fs::remove_dir_all(directory);
                 }
             }
         }

@@ -1,222 +1,64 @@
-import { useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { requestConfirmation } from './confirmation';
-import type {
-  BuildResult,
-  BuildTarget,
-  PreflightReport,
-  GenerateResult,
-  GenerationPreview,
-  IntegrationInspection,
-  VirtualResult,
-  WorkspaceView,
-} from './types';
-
-type Props = {
-  workspace: WorkspaceView;
-  native: boolean;
-  active: boolean;
-  locked: boolean;
-  unapplied: boolean;
-  onBusyChange: (busy: boolean) => void;
-  chooseDirectory: (onChoose: (path: string) => void) => Promise<void>;
-  onImport: (directory: string) => void;
-};
-type Status = '未执行' | '执行中' | '已通过' | '失败';
-
-function message(error: unknown): string {
-  if (Array.isArray(error)) {
-    return error.map((item) => `${item.code}: ${item.message}\n${item.remedy}`).join('\n');
-  }
-  return String(error);
-}
+import type { BuildTarget } from './types';
+import type { Workbench } from './workbench/useWorkbench';
 
 export function IntegrationDelivery({
-  workspace,
-  native,
+  controller,
   active,
-  locked,
-  unapplied,
-  onBusyChange,
-  chooseDirectory,
-  onImport,
-}: Props) {
-  const [output, setOutput] = useState('');
-  const [buildDirectory, setBuildDirectory] = useState('');
-  const [importDirectory, setImportDirectory] = useState('');
-  const [handoff, setHandoff] = useState(true);
-  const [target, setTarget] = useState<BuildTarget>('windows-x64-controlled-v1');
-  const [preview, setPreview] = useState<GenerationPreview | null>(null);
-  const [selected, setSelected] = useState('');
-  const [generated, setGenerated] = useState<GenerateResult | null>(null);
-  const [built, setBuilt] = useState<BuildResult | null>(null);
-  const [verified, setVerified] = useState<VirtualResult | null>(null);
-  const [validation, setValidation] = useState<Status>('未执行');
-  const [generation, setGeneration] = useState<Status>('未执行');
-  const [build, setBuild] = useState<Status>('未执行');
-  const [behavior, setBehavior] = useState<Status>('未执行');
-  const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState('请选择新的交付目录；构建产物写入独立空目录。');
-
-  const [source, setSource] = useState(workspace);
-  if (source !== workspace) {
-    setSource(workspace);
-    setPreview(null);
-    setGenerated(null);
-    setBuilt(null);
-    setVerified(null);
-    setValidation('未执行');
-    setGeneration('未执行');
-    setBuild('未执行');
-    setBehavior('未执行');
-    setNotice('输入已变化或重新打开；请重新校验、生成、构建和验证。');
-  }
-
-  const sourceReady = !workspace.dirty && !unapplied;
-  const disabled = !native || busy || locked || !sourceReady;
-  function changeOutput(path: string) {
-    setOutput(path);
-    setPreview(null);
-    setGenerated(null);
-    setBuilt(null);
-    setVerified(null);
-    setGeneration('未执行');
-    setBuild('未执行');
-    setBehavior('未执行');
-  }
-  function changeBuildDirectory(path: string) {
-    setBuildDirectory(path);
-    setBuilt(null);
-    setVerified(null);
-    setBuild('未执行');
-    setBehavior('未执行');
-  }
-  async function perform(action: () => Promise<void>) {
-    if (disabled) return;
-    setBusy(true);
-    onBusyChange(true);
-    try {
-      await action();
-    } catch (error) {
-      setNotice(message(error));
-    } finally {
-      setBusy(false);
-      onBusyChange(false);
-    }
-  }
-  async function prepare() {
-    setPreview(null);
-    setGenerated(null);
-    setBuilt(null);
-    setVerified(null);
-    setValidation('执行中');
-    setGeneration('未执行');
-    setBuild('未执行');
-    setBehavior('未执行');
-    try {
-      const inspection = await invoke<IntegrationInspection>('inspect_integration');
-      if (!inspection.description) throw inspection.diagnostics;
-    } catch (error) {
-      setValidation('失败');
-      throw error;
-    }
-    setValidation('已通过');
-    setGeneration('执行中');
-    try {
-      const value = await invoke<GenerationPreview>('preview_ecu_project', {
-        outputDirectory: output,
-        handoff,
-        target,
-      });
-      setPreview(value);
-      setSelected(value.files[0]?.path ?? '');
-      setGeneration('未执行');
-      setNotice(`纯源码预览 ${value.files.length} 个文件；编译预检未执行，尚未写入输出目录。`);
-    } catch (error) {
-      setGeneration('失败');
-      throw error;
-    }
-  }
-  async function generate() {
-    if (!preview) return;
-    if (
-      !(await requestConfirmation(
-        `确认将 ${preview.files.length} 个文件写入 ${preview.outputDirectory}？`,
-      ))
-    ) {
-      setNotice('已取消生成，输出目录未改动。');
-      return;
-    }
-    setGeneration('执行中');
-    try {
-      const value = await invoke<GenerateResult>('generate_ecu_project', {
-        outputDirectory: preview.outputDirectory,
-        handoff,
-        revision: preview.revision,
-        target,
-      });
-      setGenerated(value);
-      setPreview(null);
-      setGeneration('已通过');
-      setNotice(`已生成 ${value.files.length} 个文件：${value.outputDirectory}`);
-    } catch (error) {
-      setGeneration('失败');
-      throw error;
-    }
-  }
-  async function preflight() {
-    const report = await invoke<PreflightReport>('preflight_ecu', { target, handoff });
-    const status = { not_run: '未执行（非本机目标）', passed: '已通过', failed: '失败' }[
-      report.status
-    ];
-    setNotice(`编译预检：${status}；源码身份：${report.fingerprint}。${report.logs.join('\n')}`);
-  }
-  async function compile() {
-    if (!generated) return;
-    setBuilt(null);
-    setVerified(null);
-    setBuild('执行中');
-    setBehavior('未执行');
-    try {
-      const value = await invoke<BuildResult>('build_ecu', {
-        outputDirectory: generated.outputDirectory,
-        buildDirectory,
-      });
-      setBuilt(value);
-      setBuild('已通过');
-      setNotice(`实际主机二进制：${value.binaryPath}`);
-    } catch (error) {
-      setBuild('失败');
-      throw error;
-    }
-  }
-  async function verify() {
-    if (!generated || !built) return;
-    setVerified(null);
-    setBehavior('执行中');
-    try {
-      const value = await invoke<VirtualResult>('verify_ecu', {
-        outputDirectory: generated.outputDirectory,
-      });
-      setVerified(value);
-      setBehavior(value.passed ? '已通过' : '失败');
-      setNotice(
-        value.passed
-          ? 'CAN/DID、真实 N_Cr 超时恢复与非法批次拒绝通过。'
-          : '主机行为检查失败；请查看实际日志。',
-      );
-    } catch (error) {
-      setBehavior('失败');
-      throw error;
-    }
+}: {
+  controller: Workbench;
+  active: boolean;
+}) {
+  const {
+    workspace,
+    native,
+    ecuOutputDirectory: output,
+    buildDirectory,
+    ecuImportDirectory: importDirectory,
+    legacyTarget: target,
+    generationPreview: preview,
+    generationPreviewPath: selected,
+    generated,
+    built,
+    virtualResult: verified,
+    changeEcuOutput: changeOutput,
+    changeEcuBuildDirectory: changeBuildDirectory,
+    setEcuImportDirectory: setImportDirectory,
+    setGenerationPreviewPath: setSelected,
+    chooseDirectory,
+    importHandoffDirectory: onImport,
+  } = controller;
+  if (!workspace) return null;
+  const busy = Boolean(controller.busy);
+  const locked = busy;
+  const sourceReady = !workspace.dirty && !controller.unapplied;
+  const disabled =
+    !native || busy || !sourceReady || Boolean(controller.capabilities?.resourceError);
+  const executionReason = controller.capabilities?.nativeExecution
+    ? (controller.capabilities.toolError ?? '')
+    : '未执行：本机不支持所选目标执行';
+  const executionDisabled =
+    disabled ||
+    !controller.capabilities?.nativeExecution ||
+    Boolean(controller.capabilities.toolError);
+  const notice = controller.notice?.text ?? '请选择新的交付目录；构建产物写入独立空目录。';
+  const handoff = controller.generationKind === 'handoff';
+  function setHandoff(value: boolean) {
+    controller.setGenerationKind(value ? 'handoff' : 'project');
   }
   const file = preview?.files.find((item) => item.path === selected);
+  const labels = {
+    pending: '未执行',
+    running: '执行中',
+    done: '已通过',
+    failed: '失败',
+    stale: '已失效',
+  };
   const stages = [
     ['保存', sourceReady ? '已保存' : '未保存／草稿未应用'],
-    ['校验', sourceReady ? validation : '需重新校验'],
-    ['生成', sourceReady ? generation : '已失效'],
-    ['构建', sourceReady ? build : '已失效'],
-    ['主机行为', sourceReady ? behavior : '已失效'],
+    ['校验', sourceReady ? labels[controller.stages.validate.state] : '需重新校验'],
+    ['生成', sourceReady ? labels[controller.stages.generate.state] : '已失效'],
+    ['构建', sourceReady ? labels[controller.stages.build.state] : '已失效'],
+    ['主机行为', sourceReady ? labels[controller.stages.virtual.state] : '已失效'],
     ['完整 SC1 工程等级复验', '当前工程未验证'],
     ['实机', '未验证'],
   ];
@@ -252,11 +94,7 @@ export function IntegrationDelivery({
             aria-label="ECU 构建目标"
             value={target}
             disabled={busy || locked}
-            onChange={(event) => {
-              setTarget(event.target.value as BuildTarget);
-              changeOutput(output);
-              setNotice('目标已变化；编译预检未执行，请重新预览和生成。');
-            }}
+            onChange={(event) => void controller.changeTarget(event.target.value as BuildTarget)}
           >
             <option value="windows-x64-controlled-v1">Windows x64 controlled v1</option>
             <option value="linux-x64-controlled-v1">Linux x64 controlled v1</option>
@@ -318,15 +156,16 @@ export function IntegrationDelivery({
           className="outline-button small"
           type="button"
           disabled={disabled || !output.trim()}
-          onClick={() => void perform(prepare)}
+          onClick={controller.previewEcu}
         >
           预览 ECU 交付
         </button>
         <button
           className="outline-button small"
           type="button"
-          disabled={disabled}
-          onClick={() => void perform(preflight)}
+          disabled={executionDisabled}
+          title={executionReason}
+          onClick={controller.preflightEcu}
         >
           显式编译预检
         </button>
@@ -334,23 +173,23 @@ export function IntegrationDelivery({
           className="outline-button small"
           type="button"
           disabled={disabled || !preview}
-          onClick={() => void perform(generate)}
+          onClick={controller.generateEcu}
         >
           确认生成 ECU
         </button>
         <button
           className="outline-button small"
           type="button"
-          disabled={disabled || !generated || !buildDirectory.trim()}
-          onClick={() => void perform(compile)}
+          disabled={executionDisabled || !generated || !buildDirectory.trim()}
+          onClick={controller.buildEcu}
         >
           构建 ECU
         </button>
         <button
           className="outline-button small"
           type="button"
-          disabled={disabled || !built}
-          onClick={() => void perform(verify)}
+          disabled={executionDisabled || !built}
+          onClick={controller.verifyEcu}
         >
           验证 ECU 主机行为
         </button>

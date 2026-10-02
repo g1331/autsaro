@@ -6,6 +6,39 @@ export type PreflightReport = {
   logs: string[];
 };
 
+export interface ExecutionTools {
+  compiler: string;
+  objdump: string;
+  git: string;
+  python: string;
+}
+
+export interface WorkbenchCapabilities {
+  fingerprint: string;
+  target: BuildTarget;
+  targets: BuildTarget[];
+  nativeExecution: boolean;
+  hasWorkspace: boolean;
+  xsdArchive: string | null;
+  modArchive: string | null;
+  resourceError: string | null;
+  executionTools: ExecutionTools | null;
+  toolError: string | null;
+  environmentOverrides: string[];
+  operation: { id: number; stage: string } | null;
+}
+
+export interface WorkbenchReply<T> {
+  value: T;
+  capabilities: WorkbenchCapabilities;
+  inputFingerprint: string;
+}
+
+export interface SaveOutcome {
+  workspace: WorkspaceView;
+  error: string | null;
+}
+
 export type Issue = {
   severity: 'error' | 'warning' | 'info';
   code: string;

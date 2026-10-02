@@ -88,7 +88,19 @@ impl<'a> PreparedProject<'a> {
         generator::output::generate_prepared(self.into_files(), output, Some(revision))
     }
 
-    pub fn native_preflight(&self, settings: &crate::target::ExecutionSettings) -> PreflightReport {
+    pub fn stage_previewed(
+        self,
+        output: &std::path::Path,
+        revision: &str,
+    ) -> Result<generator::StagedGeneration, String> {
+        generator::output::StagedGeneration::new(self.into_files(), output, Some(revision))
+    }
+
+    pub fn native_preflight(
+        &self,
+        settings: &crate::target::ExecutionSettings,
+        owner: &crate::execution::ProcessOwner,
+    ) -> PreflightReport {
         let mut report = PreflightReport {
             status: PreflightStatus::NotRun,
             fingerprint: self.fingerprint.clone(),
@@ -102,7 +114,7 @@ impl<'a> PreparedProject<'a> {
             return report;
         }
         let result = (|| -> Result<(), String> {
-            use crate::execution::{ProcessSpec, run_bounded};
+            use crate::execution::ProcessSpec;
             use std::ffi::OsString;
             use std::fmt::Write;
             use std::time::Duration;
@@ -171,7 +183,7 @@ impl<'a> PreparedProject<'a> {
                     Duration::from_secs(240),
                     logs.clone(),
                 )?;
-                let result = run_bounded(spec)?;
+                let result = owner.run(spec)?;
                 report.logs.push(
                     std::fs::read_to_string(result.stdout).map_err(|error| error.to_string())?,
                 );

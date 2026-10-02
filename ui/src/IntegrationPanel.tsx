@@ -1,7 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { requestConfirmation } from './confirmation';
-import type { IntegrationInspection, PlanDiagnostic, SavePreview, WorkspaceView } from './types';
+import type { Workbench } from './workbench/useWorkbench';
 
 const roleNames: Record<string, string> = {
   ecu_extract: 'ECU Extract',
@@ -14,212 +11,35 @@ const roleNames: Record<string, string> = {
   retained: '保留内容',
 };
 
-function diagnostics(error: unknown): PlanDiagnostic[] {
-  if (Array.isArray(error) && error.every((item) => item && typeof item.code === 'string')) {
-    return error as PlanDiagnostic[];
-  }
-  return [
-    {
-      category: 'tool',
-      code: 'IPC_ERROR',
-      file: null,
-      object: null,
-      message: String(error),
-      remedy: '检查桌面连接及输入来源后重试。',
-    },
-  ];
-}
-
-type Props = {
-  workspace: WorkspaceView;
-  native: boolean;
-  onView: (view: WorkspaceView) => void;
-  onDraftChange: (changed: boolean) => void;
-  onBusyChange: (busy: boolean) => void;
-  locked: boolean;
-};
-
-export function IntegrationPanel({
-  workspace,
-  native,
-  onView,
-  onDraftChange,
-  onBusyChange,
-  locked,
-}: Props) {
-  const [inspection, setInspection] = useState<IntegrationInspection | null>(null);
-  const [issues, setIssues] = useState<PlanDiagnostic[]>([]);
-  const [ids, setIds] = useState<Record<string, string>>({});
-  const [period, setPeriod] = useState('');
-  const [busy, setBusy] = useState(native);
-  const [preview, setPreview] = useState<SavePreview | null>(null);
-  const [notice, setNotice] = useState('尚未检查标准输入');
-  const [selectedFile, setSelectedFile] = useState('');
-
-  function processing(value: boolean) {
-    setBusy(value);
-    onBusyChange(value);
-  }
-
-  const accept = useCallback(
-    (report: IntegrationInspection) => {
-      setInspection(report);
-      setIssues(report.diagnostics);
-      setPreview(null);
-      onDraftChange(false);
-      if (report.description) {
-        setIds(
-          Object.fromEntries(
-            report.description.signals.map((signal) => [signal.port, String(signal.canId)]),
-          ),
-        );
-        setPeriod(String(report.description.component.periodMs));
-      }
-    },
-    [onDraftChange],
-  );
-
-  async function inspect() {
-    if (!native || busy || locked) return;
-    processing(true);
-    try {
-      const report = await invoke<IntegrationInspection>('inspect_integration');
-      accept(report);
-      setNotice(report.description ? '标准输入已校验，尚未生成运行工程' : '输入未通过，无法生成');
-    } catch (error) {
-      setInspection(null);
-      setIssues(diagnostics(error));
-      setNotice('检查失败，无法生成');
-    } finally {
-      processing(false);
-    }
-  }
-
-  useEffect(() => {
-    if (!native) return;
-    let active = true;
-    void invoke<IntegrationInspection>('inspect_integration')
-      .then((report) => {
-        if (!active) return;
-        accept(report);
-        setNotice(report.description ? '标准输入已校验，尚未生成运行工程' : '输入未通过，无法生成');
-      })
-      .catch((error: unknown) => {
-        if (active) {
-          setInspection(null);
-          setIssues(diagnostics(error));
-          setNotice('检查失败，无法生成');
-        }
-      })
-      .finally(() => {
-        if (active) {
-          setBusy(false);
-          onBusyChange(false);
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [native, accept, onBusyChange]);
-
-  async function apply() {
-    if (!inspection?.description || busy || locked) return;
-    const numericIds: Record<string, number> = {};
-    for (const [path, value] of Object.entries(ids)) {
-      if (!/^\d+$/.test(value) || Number(value) > 2047) {
-        setIssues(diagnostics('CAN ID 必须是 0–2047 的十进制整数。'));
-        return;
-      }
-      numericIds[path] = Number(value);
-    }
-    if (!/^\d+$/.test(period) || !Number.isSafeInteger(Number(period)) || Number(period) < 1) {
-      setIssues(diagnostics('周期必须是正整数毫秒。'));
-      return;
-    }
-    processing(true);
-    try {
-      const report = await invoke<IntegrationInspection>('edit_integration', {
-        changes: { canIds: numericIds, applicationPeriodMs: Number(period) },
-      });
-      accept(report);
-      onView(await invoke<WorkspaceView>('workspace_view'));
-      setNotice('修改已通过同一计划校验，尚未保存');
-    } catch (error) {
-      setIssues(diagnostics(error));
-      setNotice('编辑被拒绝，原配置保持');
-    } finally {
-      processing(false);
-    }
-  }
-
-  async function showPreview() {
-    if (busy || locked || !native) return;
-    processing(true);
-    try {
-      const result = await invoke<SavePreview>('preview_integration_save');
-      setPreview(result);
-      setSelectedFile(
-        result.files.find((file) => file.changed)?.path ?? result.files[0]?.path ?? '',
-      );
-      setIssues([]);
-    } catch (error) {
-      setIssues(diagnostics(error));
-      setPreview(null);
-    } finally {
-      processing(false);
-    }
-  }
-
-  async function save() {
-    if (!preview || busy || locked) return;
-    processing(true);
-    try {
-      accept(
-        await invoke<IntegrationInspection>('save_integration', { revision: preview.revision }),
-      );
-      onView(await invoke<WorkspaceView>('workspace_view'));
-      setNotice('标准输入已保存，尚未生成运行工程');
-    } catch (error) {
-      setIssues(diagnostics(error));
-      setNotice('保存未完成，请检查原因与恢复文件');
-    } finally {
-      processing(false);
-    }
-  }
-
-  async function reopen() {
-    if (busy || locked || !native) return;
-    processing(true);
-    try {
-      if (
-        (workspace.dirty || changed) &&
-        !(await requestConfirmation('重开将放弃尚未保存或应用的修改，确定继续？'))
-      )
-        return;
-      onView(
-        await invoke<WorkspaceView>('open_project', {
-          paths: workspace.files.map((file) => file.path),
-        }),
-      );
-      const report = await invoke<IntegrationInspection>('inspect_integration');
-      accept(report);
-      setNotice(report.description ? '已重开并校验保存的标准输入' : '重开输入未通过，无法生成');
-    } catch (error) {
-      setInspection(null);
-      setIssues(diagnostics(error));
-    } finally {
-      processing(false);
-    }
-  }
-
+export function IntegrationPanel({ controller }: { controller: Workbench }) {
+  const {
+    workspace,
+    native,
+    integrationUnapplied: changed,
+    integrationIds: ids,
+    integrationPeriod: period,
+    integrationPreview: preview,
+    integrationPreviewPath: selectedFile,
+    integrationNotice: notice,
+    integrationIssues: issues,
+    integrationInspection: inspection,
+    inspectIntegration: inspect,
+    reopenIntegration: reopen,
+    applyIntegration: apply,
+    previewIntegrationSave: showPreview,
+    saveIntegration: save,
+    restoreIntegrationDraft,
+    setIntegrationIds: setIds,
+    setIntegrationPeriod: setPeriod,
+    setIntegrationPreview: setPreview,
+    setIntegrationPreviewPath: setSelectedFile,
+    setIntegrationUnapplied: onDraftChange,
+  } = controller;
+  if (!workspace) return null;
+  const busy = Boolean(controller.busy);
+  const locked = busy;
   const plan = inspection?.description;
   const selected = preview?.files.find((file) => file.path === selectedFile);
-  const changed = Boolean(
-    plan &&
-    (period !== String(plan.component.periodMs) ||
-      plan.signals.some((signal) => ids[signal.port] !== String(signal.canId))),
-  );
-
   return (
     <div className="workflow-page integration-view" aria-label="标准输入工作区">
       <div className="section-header">
@@ -350,7 +170,7 @@ export function IntegrationPanel({
               </button>
               <button
                 className="outline-button small"
-                onClick={() => accept(inspection)}
+                onClick={() => restoreIntegrationDraft()}
                 disabled={busy || locked || !changed}
               >
                 还原草稿

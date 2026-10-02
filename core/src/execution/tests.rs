@@ -221,6 +221,63 @@ fn tool_completion_reclaims_members_preserves_exit_and_keeps_sibling_alive() {
 }
 
 #[test]
+fn root_cancel_closes_its_scopes_and_rejects_launch_without_touching_other_owner() {
+    let owner = ProcessOwner::new().unwrap();
+    let independent = ProcessOwner::new().unwrap();
+    let first = Fixture::new();
+    let second = Fixture::new();
+    let other = Fixture::new();
+    let mut first_process = owner
+        .spawn(first.spec("hang", Duration::from_secs(15)), None)
+        .unwrap();
+    let mut second_process = owner
+        .spawn(second.spec("hang", Duration::from_secs(15)), None)
+        .unwrap();
+    let mut other_process = independent
+        .spawn(other.spec("hang", Duration::from_secs(15)), None)
+        .unwrap();
+    let end = std::time::Instant::now() + Duration::from_secs(5);
+    while [
+        first.descendants_if_present(),
+        second.descendants_if_present(),
+        other.descendants_if_present(),
+    ]
+    .iter()
+    .any(|pids| pids.len() < 3)
+        && std::time::Instant::now() < end
+    {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let other_pids = other.descendants();
+    assert!(other_pids.len() >= 3);
+    owner.cancel().unwrap();
+    assert_eq!(
+        first_process.wait().unwrap().status,
+        ProcessStatus::Cancelled
+    );
+    assert_eq!(
+        second_process.wait().unwrap().status,
+        ProcessStatus::Cancelled
+    );
+    assert_descendants_gone(&first, 3);
+    assert_descendants_gone(&second, 3);
+    assert!(other_pids.iter().all(|&pid| alive(pid)));
+    let rejected = Fixture::new();
+    assert!(
+        owner
+            .spawn(rejected.spec("normal", Duration::from_secs(8)), None)
+            .is_err()
+    );
+    assert!(!rejected.0.join("pids.txt").exists());
+    independent.cancel().unwrap();
+    assert_eq!(
+        other_process.wait().unwrap().status,
+        ProcessStatus::Cancelled
+    );
+    assert_pids_gone(&other_pids);
+}
+
+#[test]
 fn cancel_and_nested_scopes_close_without_stale_members() {
     let fixture = Fixture::new();
     let owner = ProcessOwner::new().unwrap();

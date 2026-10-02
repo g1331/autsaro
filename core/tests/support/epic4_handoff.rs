@@ -176,10 +176,14 @@ pub fn verify() {
         b"/* attacker changed the sealed implementation */\n"
     );
     reseal(&project);
-    let executable_rejected =
-        verify_ecu_project(&plan, &project, &super::tooling::execution_settings())
-            .err()
-            .unwrap();
+    let executable_rejected = verify_ecu_project(
+        &plan,
+        &project,
+        &super::tooling::execution_settings(),
+        &super::tooling::execution_owner(),
+    )
+    .err()
+    .unwrap();
     assert!(
         executable_rejected.contains("src/Rte.c"),
         "{executable_rejected}"
@@ -293,7 +297,12 @@ pub fn verify_rapid() {
     files
         .generate_previewed(&project, &preview.revision)
         .unwrap();
-    let report =
-        verify_ecu_project(&plan, &project, &super::tooling::execution_settings()).unwrap();
+    let report = verify_ecu_project(
+        &plan,
+        &project,
+        &super::tooling::execution_settings(),
+        &super::tooling::execution_owner(),
+    )
+    .unwrap();
     assert!(report.passed, "{}", report.log);
 }

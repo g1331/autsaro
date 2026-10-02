@@ -5,6 +5,7 @@ use std::io;
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
 use std::os::windows::process::CommandExt;
 use std::process::{Child, Command, ExitStatus};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[repr(C)]
@@ -161,7 +162,7 @@ fn resume_primary(process: u32) -> Result<(), String> {
 
 pub(crate) struct ProcessTree {
     child: Child,
-    job: OwnedHandle,
+    job: Arc<OwnedHandle>,
 }
 impl ProcessTree {
     pub(crate) fn spawn(command: &mut Command) -> Result<Self, String> {
@@ -191,7 +192,10 @@ impl ProcessTree {
             .creation_flags(0x08000004)
             .spawn()
             .map_err(|e| e.to_string())?;
-        let mut tree = Self { child, job };
+        let mut tree = Self {
+            child,
+            job: Arc::new(job),
+        };
         // SAFETY: both handles are live; the child's primary thread is suspended.
         if let Err(error) = checked(
             unsafe {
@@ -213,6 +217,9 @@ impl ProcessTree {
             return Err(error);
         }
         Ok(tree)
+    }
+    pub(super) fn job(&self) -> Arc<OwnedHandle> {
+        Arc::clone(&self.job)
     }
     pub(crate) fn close_stdin(&mut self) {
         drop(self.child.stdin.take());
@@ -264,28 +271,16 @@ impl ProcessTree {
         self.child.id()
     }
     pub(crate) fn active(&self) -> Result<u32, String> {
-        let mut accounting = Accounting::default();
-        // SAFETY: writable accounting record and live job handle.
-        checked(
-            unsafe {
-                QueryInformationJobObject(
-                    self.job.as_raw_handle(),
-                    1,
-                    &mut accounting as *mut _ as *mut c_void,
-                    size_of::<Accounting>() as u32,
-                    std::ptr::null_mut(),
-                )
-            },
-            "Observe command tree shutdown",
-        )?;
-        Ok(accounting.active)
+        job_active(&self.job)
     }
     pub(crate) fn stop(&mut self) -> Result<(), String> {
-        // SAFETY: the private job contains only this command and its descendants.
-        checked(
-            unsafe { TerminateJobObject(self.job.as_raw_handle(), 1) },
-            "Terminate command tree",
-        )?;
+        if self.active()? != 0 {
+            // SAFETY: the private job contains only this command and its descendants.
+            checked(
+                unsafe { TerminateJobObject(self.job.as_raw_handle(), 1) },
+                "Terminate command tree",
+            )?;
+        }
         let started = Instant::now();
         loop {
             if self.active()? == 0 {
@@ -308,6 +303,51 @@ impl Drop for ProcessTree {
         unsafe { TerminateJobObject(self.job.as_raw_handle(), 1) };
         let _ = self.child.kill();
         let _ = self.child.try_wait();
+    }
+}
+
+fn job_active(job: &OwnedHandle) -> Result<u32, String> {
+    let mut accounting = Accounting::default();
+    // SAFETY: writable accounting record and live private job handle.
+    checked(
+        unsafe {
+            QueryInformationJobObject(
+                job.as_raw_handle(),
+                1,
+                &mut accounting as *mut _ as *mut c_void,
+                size_of::<Accounting>() as u32,
+                std::ptr::null_mut(),
+            )
+        },
+        "Observe command tree shutdown",
+    )?;
+    Ok(accounting.active)
+}
+
+pub(super) fn stop_jobs(jobs: &[Arc<OwnedHandle>]) -> Result<(), String> {
+    let mut failure = None;
+    for job in jobs {
+        // SAFETY: only handles for commands registered with this owner are held.
+        if let Err(error) = checked(
+            unsafe { TerminateJobObject(job.as_raw_handle(), 1) },
+            "Cancel owned command tree",
+        ) {
+            failure = Some(error);
+        }
+    }
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let mut active = false;
+        for job in jobs {
+            active |= job_active(job)? != 0;
+        }
+        if !active {
+            return failure.map_or(Ok(()), Err);
+        }
+        if Instant::now() >= deadline {
+            return Err("cleanup_unconfirmed: cancelled Windows owner members remain".into());
+        }
+        std::thread::sleep(Duration::from_millis(10));
     }
 }
 

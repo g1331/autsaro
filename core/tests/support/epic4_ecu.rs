@@ -493,7 +493,10 @@ pub fn verify() {
             false,
         )
         .unwrap();
-        let report = prepared.native_preflight(&super::tooling::execution_settings());
+        let report = prepared.native_preflight(
+            &super::tooling::execution_settings(),
+            &super::tooling::execution_owner(),
+        );
         assert_eq!(
             report.status,
             autosar_config_core::prepared::PreflightStatus::Failed,
@@ -517,7 +520,10 @@ pub fn verify() {
         false,
     )
     .unwrap();
-    let report = prepared.native_preflight(&super::tooling::execution_settings());
+    let report = prepared.native_preflight(
+        &super::tooling::execution_settings(),
+        &super::tooling::execution_owner(),
+    );
     assert_eq!(
         report.status,
         autosar_config_core::prepared::PreflightStatus::Failed,

@@ -5,7 +5,7 @@ use super::protocol::{
     parse_frame, parse_value, prepare, security_seed, security_unlock, send_payload, signal_value,
     tick, value,
 };
-use crate::model::RunReport;
+use crate::{execution::ProcessOwner, model::RunReport};
 use std::fs;
 use std::path::Path;
 
@@ -92,6 +92,7 @@ pub(super) fn run(
     binary_a: &Path,
     second: &Path,
     binary_b: &Path,
+    owner: &ProcessOwner,
 ) -> Result<RunReport, String> {
     crate::generator::output::verify_build_input(first)?;
     crate::generator::output::verify_build_input(second)?;
@@ -119,11 +120,13 @@ pub(super) fn run(
         binary_a,
         a_nvm.as_ref().map(|state| state.path.as_path()),
         a_security.as_ref(),
+        owner,
     )?;
     let mut ecu_b = EcuProcess::start(
         binary_b,
         b_nvm.as_ref().map(|state| state.path.as_path()),
         b_security.as_ref(),
+        owner,
     )?;
     let mut events = Vec::new();
     let outcome = (|| -> Result<(), String> {
@@ -225,7 +228,11 @@ pub(super) fn run(
         }),
     }
 }
-pub(super) fn run_diagnostic(dir: &Path, binary: &Path) -> Result<RunReport, String> {
+pub(super) fn run_diagnostic(
+    dir: &Path,
+    binary: &Path,
+    owner: &ProcessOwner,
+) -> Result<RunReport, String> {
     crate::generator::output::verify_build_input(dir)?;
     let profile = profile(dir)?;
     let diagnostic = profile.diagnostic.as_ref().ok_or("生成配置不含诊断连接")?;
@@ -253,6 +260,7 @@ pub(super) fn run_diagnostic(dir: &Path, binary: &Path) -> Result<RunReport, Str
         binary,
         initial_nvm.as_ref().map(|state| state.path.as_path()),
         security.as_ref(),
+        owner,
     )?;
     let mut events = Vec::new();
     let outcome = (|| -> Result<(), String> {
@@ -581,6 +589,7 @@ pub(super) fn run_diagnostic(dir: &Path, binary: &Path) -> Result<RunReport, Str
             salt,
             security.as_ref(),
             &mut events,
+            owner,
         ),
         None => Ok(()),
     });
@@ -593,6 +602,7 @@ pub(super) fn run_diagnostic(dir: &Path, binary: &Path) -> Result<RunReport, Str
                 salt,
                 security.as_ref(),
                 &mut events,
+                owner,
             )
         } else {
             Ok(())
@@ -600,7 +610,7 @@ pub(super) fn run_diagnostic(dir: &Path, binary: &Path) -> Result<RunReport, Str
     });
     let outcome = outcome.and_then(|()| {
         if diagnostic.security_enabled {
-            verify_security(binary, &profile, diagnostic, salt, &mut events)
+            verify_security(binary, &profile, diagnostic, salt, &mut events, owner)
         } else {
             Ok(())
         }
@@ -643,6 +653,7 @@ fn verify_persistent_dtc(
     salt: u32,
     security: Option<&SecurityFiles>,
     events: &mut Vec<String>,
+    owner: &ProcessOwner,
 ) -> Result<(), String> {
     let state = TempNvm::new();
     let fence = profile.signals[0].id;
@@ -677,7 +688,7 @@ fn verify_persistent_dtc(
         ]
     };
     {
-        let mut ecu = EcuProcess::start(binary, Some(&state.path), security)?;
+        let mut ecu = EcuProcess::start(binary, Some(&state.path), security, owner)?;
         prepare(&mut ecu, profile, salt)?;
         let before = diagnostic_request(&mut ecu, fence, read_dtc.clone())?;
         diagnostic_frames(
@@ -778,7 +789,7 @@ fn verify_persistent_dtc(
         "0x85/0x02 禁用 DTC 设置时 Rx 超时不记录故障；0x85/0x01 恢复后新超时写入 Dem/NvM".into(),
     );
     {
-        let mut ecu = EcuProcess::start(binary, Some(&state.path), security)?;
+        let mut ecu = EcuProcess::start(binary, Some(&state.path), security, owner)?;
         prepare(&mut ecu, profile, salt)?;
         let recovered = diagnostic_request(&mut ecu, fence, read_dtc.clone())?;
         diagnostic_frames(&recovered, &[reported(0x6D)], profile, diagnostic, salt)?;
@@ -846,7 +857,7 @@ fn verify_persistent_dtc(
         ecu.finish()?;
     }
     {
-        let mut ecu = EcuProcess::start(binary, Some(&state.path), security)?;
+        let mut ecu = EcuProcess::start(binary, Some(&state.path), security, owner)?;
         let after_restart = diagnostic_request(&mut ecu, fence, read_dtc)?;
         diagnostic_frames(&after_restart, &[empty], profile, diagnostic, salt)?;
         let count = diagnostic_request(&mut ecu, fence, count_dtc)?;
@@ -859,7 +870,7 @@ fn verify_persistent_dtc(
     events.push("0x19/0x01 状态掩码计数与 0x19/0x02 在超时、重启、清除前后一致".into());
     events.push("0x19/0x0A 在无故障、暂停记录、超时、重启与清除后均报告配置的 DTC 和当前状态；错误长度与不支持子功能被拒绝后可恢复".into());
     fs::write(&state.path, [0u8; 64]).map_err(|e| format!("故障注入 NvM 损坏失败: {e}"))?;
-    EcuProcess::expect_corrupt_state_refusal(binary, Some(&state.path), security)?;
+    EcuProcess::expect_corrupt_state_refusal(binary, Some(&state.path), security, owner)?;
     events.push("双份 NvM 状态损坏在启动时被拒绝，未伪造空 DTC".into());
     Ok(())
 }
@@ -905,12 +916,14 @@ fn verify_writable_did(
     salt: u32,
     security: Option<&SecurityFiles>,
     events: &mut Vec<String>,
+    owner: &ProcessOwner,
 ) -> Result<(), String> {
     let storage = profile.dtc.as_ref().map(|_| TempNvm::new());
     let mut ecu = EcuProcess::start(
         binary,
         storage.as_ref().map(|state| state.path.as_path()),
         security,
+        owner,
     )?;
     let request = diagnostic.request_id;
     let fence = profile.signals[0].id;
@@ -1153,6 +1166,7 @@ fn verify_writable_did(
         binary,
         storage.as_ref().map(|state| state.path.as_path()),
         security,
+        owner,
     )?;
     for signal in &signals {
         let (frames, response) = restarted.query(&[], signal.id)?;
@@ -1187,6 +1201,7 @@ fn verify_security(
     diagnostic: &DiagnosticProfile,
     salt: u32,
     events: &mut Vec<String>,
+    owner: &ProcessOwner,
 ) -> Result<(), String> {
     let files = SecurityFiles::new()?;
     let nvm = profile.dtc.as_ref().map(|_| TempNvm::new());
@@ -1224,8 +1239,12 @@ fn verify_security(
         Ok(())
     };
     {
-        let mut ecu =
-            EcuProcess::start(binary, nvm.as_ref().map(|s| s.path.as_path()), Some(&files))?;
+        let mut ecu = EcuProcess::start(
+            binary,
+            nvm.as_ref().map(|s| s.path.as_path()),
+            Some(&files),
+            owner,
+        )?;
         let before_session = send_payload(&mut ecu, fence, request, &[0x27, 0x01])?;
         diagnostic_frames(
             &before_session,
@@ -1309,8 +1328,12 @@ fn verify_security(
         ecu.finish()?;
     }
     {
-        let mut ecu =
-            EcuProcess::start(binary, nvm.as_ref().map(|s| s.path.as_path()), Some(&files))?;
+        let mut ecu = EcuProcess::start(
+            binary,
+            nvm.as_ref().map(|s| s.path.as_path()),
+            Some(&files),
+            owner,
+        )?;
         let session = send_payload(&mut ecu, fence, request, &[0x10, 0x03])?;
         diagnostic_frames(
             &session,
@@ -1354,6 +1377,7 @@ fn verify_security(
         binary,
         nvm.as_ref().map(|state| state.path.as_path()),
         Some(&files),
+        owner,
     )?;
     events
         .push("0x27 seed/key 解锁、受保护操作、错误 key 次数/延时、重启保持与 S3 复锁通过".into());

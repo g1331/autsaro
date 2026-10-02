@@ -15,6 +15,12 @@ pub(super) fn python_command() -> Command {
     Command::new(executable)
 }
 
+pub(super) fn execution_owner() -> autosar_config_core::execution::ProcessOwner {
+    let command = python_command();
+    autosar_config_core::execution::ProcessOwner::with_python(Path::new(command.get_program()))
+        .expect("configured owner interpreter")
+}
+
 pub(super) fn native_target() -> autosar_config_core::target::BuildTarget {
     use autosar_config_core::target::BuildTarget;
     if cfg!(target_os = "linux") {
@@ -48,6 +54,7 @@ pub(super) fn build_host(
         project,
         &host_build_directory(project),
         &execution_settings(),
+        &super::tooling::execution_owner(),
     )
 }
 
@@ -56,14 +63,24 @@ pub(super) fn run_hosts(
     first: &std::path::Path,
     second: &std::path::Path,
 ) -> Result<autosar_config_core::RunReport, String> {
-    autosar_config_core::host::run(first, &host_binary(first), second, &host_binary(second))
+    autosar_config_core::host::run(
+        first,
+        &host_binary(first),
+        second,
+        &host_binary(second),
+        &super::tooling::execution_owner(),
+    )
 }
 
 #[cfg(windows)]
 pub(super) fn run_diagnostic(
     project: &std::path::Path,
 ) -> Result<autosar_config_core::RunReport, String> {
-    autosar_config_core::host::run_diagnostic(project, &host_binary(project))
+    autosar_config_core::host::run_diagnostic(
+        project,
+        &host_binary(project),
+        &super::tooling::execution_owner(),
+    )
 }
 
 pub(super) fn ecu_build_command(

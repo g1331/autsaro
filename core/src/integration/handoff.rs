@@ -2,7 +2,7 @@ use super::{
     DiagnosticCategory, InputSource, PlanDependencies, PlanDiagnostic, RuntimeCatalog,
     ValidatedIntegrationPlan, build_plan,
 };
-use crate::execution::{ProcessSpec, run_bounded};
+use crate::execution::{ProcessOwner, ProcessSpec};
 use crate::generator;
 use crate::target::{BuildTarget, ExecutionSettings};
 use crate::{BuildReport, RunReport};
@@ -218,6 +218,7 @@ pub(crate) fn run_tool(
     settings: &ExecutionSettings,
     arguments: Vec<OsString>,
     private: &Path,
+    owner: &ProcessOwner,
 ) -> Result<String, String> {
     let logs = private.join("logs");
     fs::create_dir(&logs).map_err(|error| error.to_string())?;
@@ -246,7 +247,7 @@ pub(crate) fn run_tool(
         Duration::from_secs(300),
         logs,
     )?;
-    let result = run_bounded(spec)?;
+    let result = owner.run(spec)?;
     Ok(format!(
         "{}{}",
         fs::read_to_string(result.stdout).map_err(|error| error.to_string())?,
@@ -259,6 +260,7 @@ pub fn build_ecu_project(
     project: &Path,
     output: &Path,
     settings: &ExecutionSettings,
+    owner: &ProcessOwner,
 ) -> Result<BuildReport, String> {
     let target = checked_project(plan, project)?;
     let capture = generator::output::reserve_directory(
@@ -279,6 +281,7 @@ pub fn build_ecu_project(
             "host-batch".into(),
         ],
         &capture,
+        owner,
     )
     .map_err(|error| {
         format!(
@@ -302,6 +305,7 @@ pub fn verify_ecu_project(
     plan: &ValidatedIntegrationPlan,
     project: &Path,
     settings: &ExecutionSettings,
+    owner: &ProcessOwner,
 ) -> Result<RunReport, String> {
     checked_project(plan, project)?;
     let scratch = generator::output::reserve_directory(
@@ -321,6 +325,7 @@ pub fn verify_ecu_project(
             output.into_os_string(),
         ],
         &scratch,
+        owner,
     )
     .map_err(|error| {
         format!(

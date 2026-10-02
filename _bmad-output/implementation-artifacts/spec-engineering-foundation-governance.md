@@ -42,7 +42,7 @@ context:
 - `core/src/execution/{mod,unix,windows_job}.rs`, `core/src/integration/handoff.rs` — 同一 root owner/Windows Job 与 argv/单调截止时间；阶段4离线工程和legacy实际运行已迁入，旧link_check和PowerShell runner删除。
 - `runtime/os/`, `runtime/ecu/`, `third_party/freertos/portable/ThirdParty/GCC/Posix/` — 固定内核与受控 Win/Linux host adapter；Linux生产ECU已接入并运行有界协议，完整工作台/分发验收仍按阶段7/8。
 - `core/src/integration/ecu.rs`, `core/src/generator.rs`, `core/build.rs` — 计划、静态资源、纯生成及封存入口。
-- `src-tauri/src/lib.rs`, `ui/src/App.tsx` — IPC和多处交付状态归属。
+- `src-tauri/src/{lib,workbench}.rs`, `ui/src/workbench/useWorkbench.ts` — 单一后台Session与前台reducer owner、typed fingerprint IPC、immutable snapshot及序列化staging提交。
 - `README.md`, `runtime/README.md`, `docs/project/OWNER_GUIDE.md`, `_bmad-output/planning-artifacts/architecture.md` — 能力/安装/职责文字须同步实际门结果。
 
 ## Tasks & Acceptance
@@ -55,7 +55,7 @@ context:
 - [x] 阶段4：双目标ECU、离线包build/verify及搬移阶段出口。
 - [x] 阶段5：语义策略替代Epic宏及legacy/integration回归阶段出口。
 - [x] 阶段6：工具单入口及职责拆分，双平台all阶段出口。
-- [ ] 阶段7：统一状态与隔离Windows/Linux真实IPC阶段出口。
+- [x] 阶段7：统一状态与隔离Windows/Linux真实IPC阶段出口。
 - [ ] 阶段8：本机bundle与无checkout真实交付，双平台最终全量门及文档。
 
 **Acceptance Criteria:**
@@ -104,15 +104,31 @@ context:
 - 阶段6完成策略初步运行证据：Windows真实Python owner16项（7项POSIX专属跳过）通过；随后Ubuntu真实owner17项（1项Windows专属跳过）通过，新增正常/非零root退出后关闭父子孙、同级活任务不受影响、超时仍失败以及两种策略下未完成注册嵌套scope的回收。Windows Rust `execution::tests`7项通过，实际核对被回收PID和仍运行的sibling；原严格parent-first反例仍`orphaned_members`。一个独立冷Cargo/Clippy编译实际返回`exited`/0，但该次无残留，`descendants_reclaimed=false`；额外要求它必然产生后台服务的临时断言失败，因此不把该次说成vctip回收证明。最终双平台all及真实工具回收观察继续执行。
 - 阶段6最终出口：Windows及Ubuntu分别运行`uv run --locked python -m autosar_tooling verify --scope all --base 5c4164b`，均实际PASS。Windows1182.09s：Python33项（8项POSIX专属跳过）、Rust lib11项、集成116项全部通过（1057.67s），UI lint/build、增量质量、Ruff、core Clippy及desktop build/Clippy均通过；desktop build与desktop Clippy真实出现残留后代，分别报告`exit=0 cleanup=confirmed descendants=reclaimed`，不是依赖缓存或跳过owner检查。owned日志`C:\Users\admin\AppData\Local\Temp\autosar-verify-4vjaoxt1`。Ubuntu300.54s：Python33项（1项Windows专属跳过）、Rust lib12项、集成81项全部通过（237.18s），同一完整构建/质量链通过，owned日志`/tmp/autosar-verify-m0rbm7ga`。两端各26个OS suite仅在该次Cargo测试内运行一遍；严格parent-first、工具回收、非零保留、同级隔离、超时及两策略逃逸拒绝均有真实运行结果。先前错误测试循环换行已按实际rustfmt输出修正，不重排历史文件。
 - 阶段6验收通过：无机器级遥测更改、无进程名白名单、无watchdog增大，所有原工具入口完成切换并删除维护顶层旧脚本；编译可信资产清单已同步owner/process/WindowsJob实际源码摘要。GUI/IPC、正式bundle和无checkout全链未由阶段6声称完成，严格继续原阶段7/8。阶段6按用户要求独立本地提交，不push。
+- 阶段7实现：`Workspace`门面保留，完整XML工具／host profile／Patch与保存事务分别迁入`arxml/{xml,host_profile,persistence}`；保存备份恢复及根owner取消回归已实际通过。Tauri单一`workbench::AppState`拥有Workspace、合法规范、显式工具、target/revision/active operation；耗时worker读取Arc snapshot，最终唯一operation锁内核对fingerprint后提交私有生成／构建staging。TS所有调用方一次迁入`useWorkbench` reducer owner，页面／表单／交付面板为受控消费者；`useDelivery`仅内部纯helper。
+- 阶段7Windows完整门：`uv run --locked python -m autosar_tooling verify --scope all --base 71db38a`实际PASS，1399.53s，owned日志`C:\Users\admin\AppData\Local\Temp\autosar-verify-axwfqxvp`。core集成116项通过（1245.07s），26个OS suite只在该Cargo测试内执行一遍；Python、增量质量、Ruff、UI lint/build、core及desktop build/Clippy均通过，开发Cargo的真实后代回收保留原退出码。随后针对复核修正后的UI，lint/build再次通过；完整原生Windows私有Desktop/Job入口229.17s实际PASS，临时证据`C:\Users\admin\AppData\Local\Temp\autosar-native-windows-glhmepmw`，含真实导入／编辑／保存／预览／预检／确认／build／CAN-DID-N_Cr、旧binary保护、移动重导入精确再生、未知host格式保留旧workspace及target/input变化关闭owner并拒绝旧build发布，原生IPC记录为`native-ipc.jsonl`。
+- 阶段7环境失败保持：跨系统同步命令的变量转义错误误复制编译缓存，D盘耗尽导致WSL只读回退；未修改用户源码，先移走可重建缓存。用户明确要求只重启WSL，实际`wsl --shutdown`后`df`及`findmnt`恢复ext4 `rw`，未离线修复、未注销／重装。改用显式`--exec`与仅指定源码／runtime目录的同步，删除隔离镜像中的混入build缓存后Linux桌面与同版参考包编译通过。Linux native driver目前仍在验收，不用这些构建结果推定GUI通过；已定位WSLg只读X11目录不能以socket文件判断Xvfb就绪，以及`xdotool search`无窗口的正常exit=1须用实际ProcessResult判定。macOS测试feature/capability已实现、无原生宿主，未声称构建或IPC通过。
+- 阶段7Linux真实IPC首次全路径通过：`uv run --locked python -m autosar_tooling desktop --platform linux --binary src-tauri/target/debug/autosar-config-desktop`实际105.91s PASS，私有Xvfb证据`/tmp/autosar-native-linux-vz647js1`。与Windows共用场景实际完成标准输入导入／编辑／保存、取消与确认生成、生产build／CAN-DID-N_Cr、已有binary保护及恢复、篡改拒绝、搬移／重导入／逐字节再生、host-v1拒绝保持旧workspace，以及并发target/input变更取消旧build且目的地无旧工件。实际GTK截图显示Cancel左／OK右，布局会调整源码添加顺序；确认动作改为私有display内按实际窗口尺寸点击右侧按钮，不mock invoke或隐藏拒绝。
+- 阶段7追加消费者回归：新`build_creates_missing_parent_directories_without_replacing_owner_output -- --exact`在Windows实际1通过（6.75s），从缺失父级的新路径构建并运行真实CAN输出，随后非空目的地拒绝重建且owner文件和binary原字节保留。新桌面场景从无规范设置首跑，核对自动设置页、合法固定hash保存、取消草稿及`DEPENDENCY_IDENTITY`拒绝保持workspace。Windows追加场景在目标切换后实际暴露旧预检成功通知仍可见：结构化report已清除，但通知保留旧日志；target/resource/tools成功失效现在同步清除旧notice，正在按同一实际消费者复验，未提前标阶段7完成。
+- 阶段7Linux追加场景实际109.52s PASS，证据已改存`/root/.cache/autosar-tooling/native/autosar-native-linux-jseuwejw`并实际读取`ecu-post-save-verified.png`及`native-ipc.jsonl`；五阶段已通过，完整SC1工程和实机仍明确未验证。日志记录target切换在release前取消旧build、输入变更关闭实际pid8099／SIGTERM并拒绝最终发布，workspace保留新编辑。此前仅从env override map删除规范键不能取消owner继承值；native server改用真实`env -u`执行，故无规范首跑与UI合法配置路径实际成立，不修改owner契约。旧`/tmp`证据目录已不可读取，未推断原因，后续使用持久用户cache。
+- 阶段7Windows配置隔离修正：追加首跑场景第二次发现普通用户规范设置可见，读取实际`Roaming/dev.autosar.classic-can-workbench/settings.json`证实`APPDATA`覆盖未隔离Tauri Known Folder。首跑截图证实原规范草稿为空，实际Windows预检证明原target为Windows；已回退本次测试写入的XSD/MOD及Linux target字段，不触及其他字段。新增显式绝对`AUTOSAR_CONFIG_DIR`，默认仍为Tauri app_config_dir，所有native driver指定私有目录；正在重建并复验此实际隔离路径。UI删除无人消费的preflightReport冗余缓存，只保留当前预检展示通知并在target/resource/tools成功失效时清除；全局声明dark color-scheme使原生表单控件跟随既有深色界面。
+- 阶段7配置隔离修正后的最终native场景：Windows私有Desktop/Job实际269.26s PASS，证据`C:\Users\admin\AppData\Local\Temp\autosar-native-windows-53fxy14r`；Linux私有Xvfb实际113.32s PASS，证据`/root/.cache/autosar-tooling/native/autosar-native-linux-6n7nb2dn`。均实际读取五阶段通过截图与私有`app-config/settings.json`，Windows普通用户配置仍为回退后的原字段值；Linux目标select已按dark color-scheme正确显示。缺规范首跑、合法设置、取消／错误身份保持workspace、target切换撤销旧预检、正反交付及owner并发闭树均在同版真实Tauri中通过，Mac仍未原生验证。
+- 阶段7最终all过程：Linux镜像缺少`71db38a`基线对象，质量门明确非零且未执行core；仅从本地Windows仓库fetch对象补齐，不覆盖工作树。随后两平台增量格式门共同发现新配置初始化表达式的换行不符rustfmt；按实际formatter输出修正两行并同步，没有降低规则或重排其他源码。两平台最终all正在运行，阶段7尚待该完整门结果。
+- 阶段7Linux最终完整门：`uv run --locked python -m autosar_tooling verify --scope all --base 71db38a`实际301.51s PASS，owned日志`/tmp/autosar-verify-m5csj2jd`。Python33项（1项Windows专属跳过）、Rust lib13项、core集成82项全部适用通过（229.88s），含新增缺失build父级／非空输出保护、保存事务和root取消回归，以及单次26个OS suite和真实生产协议；增量质量、Ruff、UI lint/build、core Clippy、desktop build/Clippy全部通过。Linux真实UI/native另由上述私有Xvfb门证明；Windows最终all仍在运行，尚未提交或开始阶段8。
+- 阶段7Windows最终完整门：同一`verify --scope all --base 71db38a`实际1333.77s PASS，owned日志`C:\Users\admin\AppData\Local\Temp\autosar-verify-mmztsp7a`。Python33项（8项POSIX专属跳过）、Rust lib12项、集成117项全部通过（1220.48s），26个OS suite只在该Cargo测试内执行一次；增量质量、Ruff、UI lint/build、core Clippy、desktop build/Clippy均通过，desktop build真实回收后代并保持exit0。最终UI资源hash与Linux一致；两平台完整门与真实native门共同满足阶段7出口，按用户授权独立本地提交，不push。阶段8正式bundle／无checkout路径尚未由这些结果声称完成。
+
 
 ## Spec Change Log
 - 阶段4：离线Windows/Linux工具和legacy/交接消费者一次切换，保留独立预期与真实拒绝；新增CLI失败不安装及suspended Job assignment关闭回归。每阶段出口仍以完整实际门为准，不修改批准范围。
 - 阶段5：生成const业务策略/route和显式profile容量，链接选中发送/时钟/诊断adapter与OS waiting hook；独立C99双profile行为、混合构建拒绝和生产符号隔离进入维护用例，不改变公共BSW ABI及汽车能力声明。
 - 阶段6：开发命令与完整行为函数一次迁移，保留绝对解释器、单次OS注册与严格owner关闭；原生Windows遥测子进程的环境权限失败明确留在阶段记录，不修改验收范围。
 - 阶段6用户授权的契约修正：开发Cargo命令采用显式root完成后回收策略；默认业务严格退出与“结果发布前零受管残留”不变。此修正撤销机器级遥测配置作为准入前提，不删除历史失败、不改变阶段7/8范围。
+- 阶段7：ARXML完整事务及工作台所有权一次迁移，新增真实缺规范／设置拒绝、非空输出归属及target/input并发过期发布回归；统一平台原生入口替代旧顶层脚本，Mac仅源码工作台测试路径，不改变原生能力边界。
 
 
 ## Review Triage Log
+
+- 阶段7只读双切片复核：native snapshot/commit发现1项真实回归（新build目录父级缺失时被canonicalize提前拒绝）；UI owner发现4项真实回归（legacy未应用草稿／缓存inspection导航锁，重构建保留旧build/behavior成功，取消后running阶段未终止，关闭ECU项目残留共享生成预览）。均已按当前责任边界修正：规范化最近现存父级后安全创建新build parent、inspection最终释放锁且App不私设processing、编译前撤销旧结果、epoch取消终止running stage、关闭项目清空project-owned delivery/preview。新增真实native断言核对拒绝重建后禁用按钮及预览关闭，并保留原旧包／binary字节保护断言；Windows场景已通过，Linux场景继续验收。
+
 
 ## Verification
 

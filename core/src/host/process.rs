@@ -59,6 +59,7 @@ impl EcuProcess {
         path: &Path,
         nvm_path: Option<&Path>,
         security: Option<&SecurityFiles>,
+        owner: &ProcessOwner,
     ) -> Result<Self, String> {
         let path = path.canonicalize().map_err(|error| error.to_string())?;
         let logs = crate::generator::output::reserve_directory(
@@ -94,7 +95,6 @@ impl EcuProcess {
             logs.clone(),
         )?;
         spec.stdin_stream = true;
-        let owner = ProcessOwner::new()?;
         let child = owner.spawn(spec, None)?;
         let reader =
             BufReader::new(fs::File::open(child.stdout_path()).map_err(|error| error.to_string())?);
@@ -162,8 +162,9 @@ impl EcuProcess {
         path: &Path,
         nvm: Option<&Path>,
         security: Option<&SecurityFiles>,
+        owner: &ProcessOwner,
     ) -> Result<(), String> {
-        let mut actor = Self::start(path, nvm, security)?;
+        let mut actor = Self::start(path, nvm, security, owner)?;
         actor.child.close_stdin();
         let result = actor.child.wait()?;
         actor.closed = true;

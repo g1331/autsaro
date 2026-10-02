@@ -79,7 +79,9 @@ fn execute() -> Result<(), String> {
         .map_err(diagnostics)?;
     let project = prepare_ecu_project(&plan, target, handoff).map_err(diagnostics)?;
     let preflight = if preflight_requested && target.is_native() {
-        project.native_preflight(&ExecutionSettings::from_environment()?)
+        let settings = ExecutionSettings::from_environment()?;
+        let owner = autosar_config_core::execution::ProcessOwner::with_python(&settings.python)?;
+        project.native_preflight(&settings, &owner)
     } else {
         project.preflight().clone()
     };

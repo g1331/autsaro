@@ -49,7 +49,11 @@ Agent 应把规范研究放进具体功能任务，不用一轮轮独立审计�
 
 点击“预览保存”查看受影响文件及保存前后原文，再确认保存；“重开来源”重新读取并检查磁盘输入。未修改文件保持原字节，外部编辑、失效预览及待恢复备份会阻止保存。输入已校验或已保存，都不表示运行工程已经生成。XSD/MOD 仍须在本机合法提供，不属于交付输入包。
 
-后台原生复验使用 `python scripts/epic4_desktop.py --binary <本次桌面构建路径>`。该脚本创建独立 Windows Desktop，通过 `STARTUPINFO.lpDesktop` 指定子进程归属，核对实际窗口不在输入桌面，不调用 SwitchDesktop。WebView 使用私有数据目录，真实 UI 与原生 Rust IPC 完成编辑、预览、保存、重开及拒绝路径；测试进程由专属 job 关闭。测试截图、输入和桌面句柄中间数据使用临时目录；实际验证结论写入对应 BMad 工件。
+后台原生复验统一使用 `uv run --locked python -m autosar_tooling desktop --platform windows|linux|macos --binary <本次桌面构建路径>`；Windows/Linux 先构建同版 `package_host_reference` 与桌面程序，设置合法规范和声明的原生工具绝对路径。测试程序从私有空配置启动，实际操作缺规范设置页与固定摘要校验。Windows 创建独立 Desktop，通过 `STARTUPINFO.lpDesktop` 指定子进程归属，核对窗口不在输入桌面，不调用 SwitchDesktop；WebView 使用私有数据目录，专属 Job 最终关闭测试树。Linux 使用私有 Xvfb display、`tauri-driver 2.1.0` 与 Ubuntu `WebKitWebDriver`，不连接用户的 DISPLAY/Wayland 会话；另需 `xvfb x11-utils xdotool webkit2gtk-driver`，通过 `cargo install tauri-driver --version 2.1.0 --locked` 安装固定 driver。两种 transport 共用真实 UI/原生 IPC 场景，不替换 Tauri invoke；截图、driver 日志和 `native-ipc.jsonl` 保留在入口报告的私有证据目录，Linux/macOS 使用用户缓存目录以保留跨会话证据。实际验证结论写对应 BMad 工件。
+
+macOS 入口要求独立的非 console GUI 登录会话与 `cargo build --manifest-path src-tauri/Cargo.toml --features native-webdriver` 测试构建；只验收编辑、校验、保存与纯源码预览，同时检查本机预检／构建／运行按钮不可用。专用 capability 和内嵌 loopback WebDriver 只在此 feature/macOS 组合中启用，生产构建不启用。没有 macOS 隔离宿主时该入口标为未原生验证，不得改在用户桌面补测。
+
+“工作台设置”统一配置合法 XSD/MOD 与绝对 CPython/GCC/objdump/Git 路径；环境覆盖仍优先且不写回。配置默认存放于 Tauri `app_config_dir`；显式 `AUTOSAR_CONFIG_DIR` 指定独立绝对目录，后台验收必须设置，单独覆盖 Windows `APPDATA` 不保证隔离 Known Folder。切换目标、修改规范或工具会清除相应预检/交付成功态；取消操作须等原生 owner 关闭受管树，过期结果不会安装到最终目的地。设置失败保留旧配置及当前项目，官方档案不随包交付。
 
 ## 独立 ECU 集成工程
 

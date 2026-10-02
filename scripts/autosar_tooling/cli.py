@@ -36,6 +36,9 @@ def main() -> int:
     aggregate = commands.add_parser("verify", help="Run owned developer gates once")
     aggregate.add_argument("--scope", choices=("core", "ui", "desktop", "all"), required=True)
     aggregate.add_argument("--base", help="Incremental quality baseline for the all gate")
+    desktop = commands.add_parser("desktop", help="Verify actual IPC in an isolated native desktop")
+    desktop.add_argument("--platform", choices=("windows", "linux", "macos"), required=True)
+    desktop.add_argument("--binary", type=Path, required=True)
     quality = commands.add_parser("quality", help="Check source hygiene and incremental formatting")
     quality.add_argument("--base")
     quality.add_argument("--all-format", action="store_true")
@@ -91,6 +94,10 @@ def main() -> int:
         from autosar_tooling.verify import verify
 
         return verify(args.scope, args.base)
+    if args.command == "desktop":
+        from autosar_tooling.desktop import run
+
+        return run(args.platform, args.binary)
     if args.command == "quality":
         from autosar_tooling.quality import main as check_quality
 

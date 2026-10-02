@@ -170,6 +170,9 @@ class Registry:
         read_gate, write_gate = os.pipe()
         environment = os.environ.copy()
         environment.update(request.get("env") or {})
+        environment["PYTHONPATH"] = os.pathsep.join(
+            (str(Path(__file__).resolve().parents[1]), environment.get("PYTHONPATH", ""))
+        )
         environment["ECU_OWNER_SCOPE"] = identity
         environment["ECU_OWNER_SOCKET"] = str(self.path)
         environment["ECU_OWNER_TOKEN"] = self.token
@@ -186,6 +189,7 @@ class Registry:
                 child = subprocess.Popen(
                     [
                         sys.executable,
+                        "-S",
                         "-m",
                         "ecu_tools.launch",
                         str(read_gate),
@@ -479,6 +483,10 @@ class Owner:
         directory.chmod(0o700)
         path = directory / "owner.sock"
         token = secrets.token_hex(32)
+        environment = os.environ.copy()
+        environment["PYTHONPATH"] = os.pathsep.join(
+            (str(Path(__file__).resolve().parents[1]), environment.get("PYTHONPATH", ""))
+        )
         with os.fdopen(
             os.open(
                 directory / "supervisor.log",
@@ -490,6 +498,7 @@ class Owner:
             process = subprocess.Popen(
                 [
                     sys.executable,
+                    "-S",
                     "-m",
                     "ecu_tools.owner",
                     "--socket",
@@ -501,6 +510,7 @@ class Owner:
                 stdout=log,
                 stderr=log,
                 start_new_session=True,
+                env=environment,
             )
         assert process.stdin is not None
         process.stdin.write((token + "\n").encode())

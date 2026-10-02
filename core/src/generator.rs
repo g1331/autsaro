@@ -1,6 +1,8 @@
 pub(crate) mod output;
 pub(crate) mod render;
 
+pub use output::{StagedBuild, StagedGeneration};
+
 use crate::arxml::Workspace;
 use crate::model::{BuildReport, GenerationPreview, GenerationReport};
 use crate::target::BuildTarget;
@@ -143,6 +145,7 @@ pub fn build(
     project: &Path,
     output: &Path,
     settings: &crate::target::ExecutionSettings,
+    owner: &crate::execution::ProcessOwner,
 ) -> Result<BuildReport, String> {
     output::verify_build_input(project)?;
     let project = project.canonicalize().map_err(|error| error.to_string())?;
@@ -171,6 +174,7 @@ pub fn build(
             "host".into(),
         ],
         &capture,
+        owner,
     )
     .map_err(|error| format!("{error}; diagnostics retained at {}", capture.display()))?;
     output::verify_build_input(&project)?;

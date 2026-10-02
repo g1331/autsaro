@@ -401,6 +401,11 @@ fn build_rejects_changed_generated_inputs_before_compiling() {
     generation::build_rejects_changed_generated_inputs_before_compiling();
 }
 
+#[test]
+fn build_creates_missing_parent_directories_without_replacing_owner_output() {
+    generation::build_creates_missing_parent_directories_without_replacing_owner_output();
+}
+
 #[cfg(windows)]
 #[test]
 fn build_rejects_source_changed_during_compilation_before_installing_binary() {
