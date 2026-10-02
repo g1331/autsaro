@@ -1,6 +1,6 @@
 # 主机虚拟 ECU C99 运行时
 
-本目录是 **标准 11 位 Classical CAN 原始信号及单条主机虚拟 DoCAN 物理连接**的独立目标端代码，可选配一个由 Rx 帧超时触发、由主机 NvM 持久化的 UDS DTC。不声称完整 AUTOSAR/ISO 一致性或真实芯片验证。生成器须把本目录 `include/`、`src/` 的文件与自身输出的 `Ecu_Config.c`、`Dcm_Externals.h` 一起纳入每个 ECU 的独立工程；不依赖历史私有协议栈。每个进程只链接**一个** `const EcuConfig Ecu_Config`，未配置诊断时其 `diagnostic` 指针为 `NULL`，未配置故障记忆时其 `diagnostic->dtc` 指针为 `NULL`。
+本目录是 **标准 11 位 Classical CAN 原始信号及单条主机虚拟 DoCAN 物理连接**的独立目标端代码，可选配一个由 Rx 帧超时触发、由主机 NvM 持久化的 UDS DTC。不声称完整 AUTOSAR/ISO 一致性或真实芯片验证。生成器按 `target.json` 的源码与头文件选集交付核心 BSW、所选执行 adapter 和生成配置；不依赖历史私有协议栈。每个进程只链接**一个** `const EcuConfig Ecu_Config` 与 `const EcuPolicyConfig Ecu_Policy`，未配置诊断时其 `diagnostic` 指针为 `NULL`，未配置故障记忆时其 `diagnostic->dtc` 指针为 `NULL`。
 
 ## 构建
 
@@ -18,6 +18,26 @@ legacy `host` 产出 `ecu_host.exe`（Windows）或 `ecu_host`（Linux）；ECU 
 
 输入配置结构和容量上限在 `include/Ecu_Config.h`；启动再次校验，错误返回 `E CONFIG`。Windows BCrypt安全档案不适用于Linux，准备边界拒绝，不生成无安全后端的工程。仅完成有界主机运行验证，不声明 MCU、硬实时、ASIL、完整标准符合性或任意工程已复验。
 
+## 显式 profile 策略与执行边界
+
+`Ecu_Config.h` 定义业务策略，生成的 `Ecu_Config.c` 提供 const 值；核心 BSW 不按操作系统或 Epic 宏选择语义。`Ecu_ProfileLimits.h` 显式提供 `ECU_MAX_PDU_PAYLOAD`，legacy 为 256 字节，当前受支持的 ECU integration plan 为 64 字节。
+
+| 业务边界 | legacy host | ECU integration |
+| --- | --- | --- |
+| 发送确认 | 同步 sink 成功后在原调用中确认；Com 未确认返回 `ECU_ERR_IO` | queued；native sink 实际 write/flush 成功后经 mailbox 在 owner 上确认 |
+| 同 epoch 收帧与 deadline | 先推进传输时间，再处理 RX | 先处理该 epoch 的 RX，再检查 deadline |
+| CanTp DLC | 保留实际长度 | 固定补齐到 8 字节 |
+| WFTmax=0 的 WAIT | 保留旧等待时间重置行为 | 终止当前传输，返回 flow error；后续完整请求可恢复 |
+| 单请求 DID 数 | 不增加服务级上限，仍受 payload 容量约束 | 最多 2 个，不是 1 个 |
+| 已配置 DID 会话 | extended | default/extended，来自验证后的会话掩码 |
+| SID dispatch | `10/3e/27/22/2e/31/85/19/14`；原可选配置拒绝逻辑不变 | `10/3e/22`；其余返回 unsupported-service NRC |
+| P2/P2* | 50/500 ms | 来自验证后的 Dcm 会话参数；固定参考为 50/5000 ms |
+
+ReadData 保留请求顺序、`0xF186`、不可读/unsupported DID 跳过及 response-too-long NRC。const Rx/Tx 表明确区分 CanIf 下层句柄和 Com/CanTp 上层句柄；legacy 表来自帧数据，integration 表来自 canonical PDU 计划。配置重初始化不会将 Tx-only 帧当成 Rx 路由。
+
+发送、时钟和诊断 admission/pending/process 由链接选中的 adapter 实现；queued 请求 ring 与 owner 操作属于 ECU adapter，不进入公共 Dcm 接口。`Os_IntegrationOnWaiting` 在原持锁 quiescence 点、完成收据发布前通知 ECU adapter；无 ECU consumer 的独立 OS harness 使用无观察者 adapter，不发布伪造的 ECU 收据。私有 `OS_*_TESTS`/`ECU_TARGET_TESTS` 仅用于对应测试构建，生产 HostBatch 拒绝混合控制源。
+
+
 ## 支持范围与调用链
 
 每个 ECU 最多 32 帧、64 信号；CAN ID `0..2047`，DLC `1..8`，信号长度 `1..32` 位，无符号 LSB0 小端位序，一帧可有多个不重叠信号。每个信号 ID 在 ECU 内唯一，帧 ID 在 ECU 内唯一；每个信号恰属一帧。Tx 帧设置正周期且超时为零；Rx 帧设置正超时且周期为零。初值必须适合位宽。超出范围、不支持的位序/帧类型/参数不能被默默转换为此结构；生成器必须在生成前拒绝它们。
@@ -32,7 +52,7 @@ legacy `host` 产出 `ecu_host.exe`（Windows）或 `ecu_host`（Linux）；ECU 
 
 标准模式请求先改变虚拟控制器状态，由 `Can_MainFunction_Wakeup` 在随后的一次主机轮询中通知 CanIf；`Ecu_Init` 在启动控制器后执行该轮询，`Os_Advance` 在每次有效的虚拟时间推进时继续轮询。主机注入的 bus-off 立即通知 CanIf。CanIf 据此拒绝非 STARTED 状态的信号和诊断发送；没有 CanSM/CDD 上层派发及真实硬件模式完成检测，故不声明完整标准通知链。`Can.c` 和 `CanIf.c` 通过各自的 MemMap 标记头文件把代码和清零静态数据归入 Windows 默认链接段；不推断 MCU 内存分区。
 
-## 诊断连接（可选）
+## legacy 诊断连接（可选）
 
 一条物理 normal-addressing 11-bit Classical CAN 连接；请求与响应 ID 不相同，也不能与 Com 帧 ID 冲突。`CanIf` 按请求 ID 交给 `LSduR` → `CanTp`，PduR 持有上限 256 字节的 N-SDU 收发缓冲，Dcm 处理完成请求；响应由 Dcm → PduR → CanTp → LSduR → Can 输出。CanTp 按 SF/FF/CF/FC 分段，检查 FF 总长、CF 序号和 DLC，FF 后以 CTS/BS=0/STmin=0 回应；发送方遵守测试器给出的 FC 块大小、STmin（100 μs 单位在 1 ms 主机时钟上向上取整）、N_Bs，发送确认等待 N_As，接收方按 N_Cr 终止不完整请求。错误后丢弃半包，下一个完整请求可以恢复。
 
@@ -62,7 +82,7 @@ Dcm 提供 0x10 默认/扩展会话、0x3E TesterPresent（子功能 0x80 抑制
 
 这是有边界的主机虚拟实现：未实现多事件 Dem、真实 NvM 设备与 Ea/Fee/MemIf 目标、多级 0x27 与其他 0x31 例程/子功能、其他写入 DID/持久写入、其他 0x19 子功能和 0x14 清除组、功能寻址、跨连接并发、实车确认时序或完整 ECUC 外部 ComM 引用；不以 XSD 通过代替 AUTOSAR/ISO 语义与互操作认证。Dem 事件到监测 Rx 帧只在工具专属 SDG 中绑定，操作周期只是进程启动。
 
-主机 CAN 发送路径将 `Can_Write` 接受的 `swPduHandle` 保留到输出成功，再通过 `Can_MainFunction_Write`、`CanIf_TxConfirmation`、LSduR/PduR 送到 Com 或 CanTp。当前输出回调与确认在同一次主机调用内同步完成；CanTp 的该剖面要求同步确认才能继续发送，尚不支持真实控制器延后确认时所需的 N_As 等待与异步会话状态。控制器停止会取消尚未输出的待发帧，不把取消伪装成成功确认。
+主机 CAN 发送路径将 `Can_Write` 接受的 `swPduHandle` 保留到输出成功，再通过 `Can_MainFunction_Write`、`CanIf_TxConfirmation`、LSduR/PduR 送到 Com 或 CanTp。legacy 回调与确认在同一次主机调用内同步完成；queued profile 只在真实输出完成后提交确认，CanTp 维持 N_As 等待与迟到确认释放语义。控制器停止会取消尚未输出的待发帧，不把取消伪装成成功确认；这些受控主机路径不证明实车控制器互操作。
 
 ## 逐行 stdin/stdout 协议
 

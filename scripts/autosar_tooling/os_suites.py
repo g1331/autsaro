@@ -291,6 +291,7 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
         str(target / "src/Os_Mailbox.c"),
         str(target / "src/Os_Time.c"),
         str(target / "src/Os_Schedule.c"),
+        str(ROOT / "core/tests/fixtures/os_no_consumer_hooks.c"),
         str(target / "tests" / harness),
         str(copied / "tasks.c"),
         str(copied / "list.c"),

@@ -23,12 +23,12 @@ EcuStatus PduR_Transmit(size_t frame_index, const uint8_t data[8]);
  */
 void PduR_CanIfTxConfirmation(PduIdType pdu_id, Std_ReturnType result);
 /** @brief Route a configured Rx frame to Com.
- * @param[in] frame_index Index into EcuConfig::frames.
+ * @param[in] rx_pdu_id Canonical lower CanIf receive handle; the table selects its Com frame.
  * @param[in] data Eight-byte frame buffer.
  * @param[in] now_ms Current host clock in milliseconds.
  * @return Host routing status.
  */
-EcuStatus PduR_RxIndication(size_t frame_index, const uint8_t data[8], uint64_t now_ms);
+EcuStatus PduR_RxIndication(size_t rx_pdu_id, const uint8_t data[8], uint64_t now_ms);
 /** @brief Load generated frame routing and reset transport buffers.
  * @param[in] config Generated ECU configuration.
  */
@@ -72,11 +72,5 @@ void PduR_CanTpTxConfirmation(EcuStatus status, uint64_t now_ms);
  */
 EcuStatus PduR_DcmTransmit(const uint8_t *data, size_t length, uint64_t now_ms);
 
-#ifdef ECU_TARGET_EPIC4
-/** @brief Query the owner's physical diagnostic connection availability.
- * @return Nonzero when neither reception nor response owns its buffers.
- */
-int PduR_TargetDiagnosticReady(void);
-#endif
 
 #endif

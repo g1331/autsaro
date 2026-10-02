@@ -179,6 +179,63 @@ fn windows_and_linux_ecu_targets_execute_production_protocol() {
         )
         .unwrap_or_else(|error| panic!("{error}; artifacts={}", scratch.display()))
     );
+    let binary = tooling::native_binary(&production, "ecu_host_batch");
+    let inspection = ProcessSpec::for_duration(
+        vec![
+            settings.objdump.as_os_str().into(),
+            "-t".into(),
+            binary.as_os_str().into(),
+        ],
+        production.clone(),
+        vec![],
+        Duration::from_secs(30),
+        logs.clone(),
+    )
+    .unwrap();
+    let inspected = run_bounded(inspection).unwrap();
+    let symbols = fs::read_to_string(inspected.stdout).unwrap();
+    for symbol in symbols
+        .lines()
+        .filter_map(|line| line.split_whitespace().last())
+    {
+        assert!(
+            ![
+                "Os_Test",
+                "Os_StackTest",
+                "Os_TimeTest",
+                "Os_TargetTest",
+                "Os_ArtiTest",
+                "Ecu_TargetTest",
+                "vTaskOsTest",
+            ]
+            .iter()
+            .any(|prefix| symbol.starts_with(prefix)),
+            "Private test symbol linked into production: {symbol}"
+        );
+    }
+    let mixed = scratch.join("refused-production-control");
+    assert!(
+        run_tool(
+            &project,
+            vec![
+                "build".into(),
+                "--project".into(),
+                project.as_os_str().into(),
+                "--output".into(),
+                mixed.as_os_str().into(),
+                "--mode".into(),
+                "host-batch".into(),
+                "--control-source".into(),
+                root.join("core/tests/fixtures/semantic_ecu.c")
+                    .into_os_string(),
+            ],
+        )
+        .is_err()
+    );
+    assert!(
+        !mixed.exists(),
+        "Rejected mixed build must not install an output"
+    );
     let verification = scratch.join("independent verify");
     let verified = run_tool(
         &project,
@@ -581,6 +638,16 @@ mod epic4_arti;
 #[path = "support/tooling.rs"]
 mod tooling;
 
+#[cfg(any(windows, target_os = "linux"))]
+#[path = "support/semantic_profiles.rs"]
+mod semantic_profiles;
+
+#[cfg(any(windows, target_os = "linux"))]
+#[test]
+fn semantic_profiles_preserve_host_and_integrated_protocol() {
+    semantic_profiles::verify();
+}
+
 #[path = "support/epic4_artifacts.rs"]
 mod epic4_artifacts;
 
@@ -804,6 +871,7 @@ r#"#include "Can.h"
 #else
 #include <pthread.h>
 #endif
+const EcuPolicyConfig Ecu_Policy = {.tx_confirmation = ECU_TX_SYNCHRONOUS};
 static unsigned sent;
 static unsigned received;
 static unsigned confirmed;
@@ -1092,6 +1160,9 @@ int main(void) {
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
         .arg("-pthread")
         .arg(format!("-I{}", root.join("runtime/include").display()))
+        .arg(format!("-I{}", root.join("runtime/host/include").display()))
+        .arg(format!("-I{}", root.join("runtime/src").display()))
+        .arg(root.join("runtime/host/src/Can_Execution.c"))
         .arg(root.join("runtime/src/Can.c"))
         .arg(root.join("runtime/src/Can_HostLock.c"))
         .arg(root.join("runtime/src/Os.c"))
@@ -1129,6 +1200,15 @@ fn standard_canif_rx_callback_keeps_nested_host_status_and_time_separate() {
 #include "LSduR.h"
 #include "Os.h"
 
+static const EcuReceiveRoute receive_routes[] = {{0x321u, 2u, 0u, 0u, ECU_ROUTE_COM}};
+const EcuReceiveRoute *const Ecu_ReceiveRoutes = receive_routes;
+const size_t Ecu_ReceiveRouteCount = 1u;
+static const EcuTransmitRoute transmit_routes[] = {
+    {0u, 0u, ECU_ROUTE_COM},
+    {1u, 1u, ECU_ROUTE_CANTP},
+};
+const EcuTransmitRoute *const Ecu_TransmitRoutes = transmit_routes;
+const size_t Ecu_TransmitRouteCount = 2u;
 static int nested_time_ok;
 static int outer_time_ok;
 static int depth;
@@ -1147,11 +1227,11 @@ void LSduR_CanIfTxConfirmation(PduIdType pdu_id, Std_ReturnType result) {
 EcuStatus LSduR_CanTpRxIndication(uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
     (void)dlc; (void)data; (void)now_ms; return ECU_ERR_CONFIG;
 }
-EcuStatus LSduR_CanIfRxIndication(size_t frame_index, const uint8_t data[8], uint64_t now_ms) {
+EcuStatus LSduR_CanIfRxIndication(size_t rx_pdu_id, const uint8_t data[8], uint64_t now_ms) {
     Can_HwType mailbox = {0x321u, 0u, 0u};
     uint8_t bytes[2] = {0x12u, 0x34u};
     PduInfoType pdu = {bytes, NULL, 2u};
-    (void)frame_index; (void)data;
+    (void)rx_pdu_id; (void)data;
     if (depth != 0) {
         nested_time_ok = now_ms == 99u;
         return ECU_ERR_FRAME_DLC;
@@ -1166,7 +1246,7 @@ int main(void) {
     const EcuFrameConfig frame = {0x321u, 2u, 0u, 0u, 0u, 0u, 1u};
     const EcuConfig config = {"test", &frame, 1u, NULL, 0u, NULL};
     const EcuFrameConfig tx_frame = {0x321u, 2u, 1u, 0u, 0u, 10u, 0u};
-    const EcuDiagnosticConfig diagnostic = {.response_can_id = 0x456u};
+    const EcuDiagnosticConfig diagnostic = {.response_can_id = 0x456u, .tx_pdu_id = 1u};
     const EcuConfig tx_config = {"tx", &tx_frame, 1u, NULL, 0u, &diagnostic};
     const uint8_t data[8] = {0x12u, 0x34u};
     CanIf_Init(&config);
@@ -1175,6 +1255,10 @@ int main(void) {
     CanIf_TxConfirmation(0u);
     if (tx_confirmation_count != 0u) return 3;
     CanIf_Init(&tx_config);
+    outer_time_ok = 0;
+    nested_time_ok = 0;
+    if (CanIf_HostRxIndication(0x321u, 2u, data, 10u) != ECU_OK ||
+        outer_time_ok != 0 || nested_time_ok != 0) return 15;
     if (CanIf_TransmitDiagnostic(2u, data) != ECU_ERR_CONTROLLER || transmit_count != 0u) return 12;
     if (CanIf_Transmit(0u, data) != ECU_ERR_CONTROLLER || transmit_count != 0u) return 6;
     CanIf_ControllerModeIndication(1u, CAN_CS_STARTED);
@@ -1206,6 +1290,9 @@ int main(void) {
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
         .arg("-pthread")
         .arg(format!("-I{}", root.join("runtime/include").display()))
+        .arg(format!("-I{}", root.join("runtime/host/include").display()))
+        .arg(format!("-I{}", root.join("runtime/src").display()))
+        .arg(root.join("runtime/host/src/Ecu_Clock.c"))
         .arg(root.join("runtime/src/CanIf.c"))
         .arg(root.join("runtime/src/Can_HostLock.c"))
         .arg(&harness)
@@ -1242,6 +1329,8 @@ fn cantp_failed_frame_confirmation_ends_host_session() {
 #include "Os.h"
 #include "PduR.h"
 #include <stddef.h>
+const EcuPolicyConfig Ecu_Policy = {.rx_time_order = ECU_TIME_BEFORE_RX,
+                                  .wait_when_wft_max_zero = ECU_WAIT_RESTART};
 static unsigned completion_count;
 static EcuStatus completion_status;
 static unsigned fail_frame;
@@ -1285,6 +1374,7 @@ int main(void) {
     let build = Command::new("gcc")
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
         .arg(format!("-I{}", root.join("runtime/include").display()))
+        .arg(format!("-I{}", root.join("runtime/host/include").display()))
         .arg(root.join("runtime/src/CanTp.c"))
         .arg(&harness)
         .arg("-o")
@@ -1319,6 +1409,8 @@ fn cantp_async_confirmation_respects_n_as_and_late_release() {
 #include "LSduR.h"
 #include "PduR.h"
 #include <stddef.h>
+const EcuPolicyConfig Ecu_Policy = {.rx_time_order = ECU_TIME_BEFORE_RX,
+                                  .wait_when_wft_max_zero = ECU_WAIT_RESTART};
 static unsigned completion_count;
 static EcuStatus completion_status;
 static unsigned frame_count;
@@ -1401,6 +1493,7 @@ int main(void) {
     let build = Command::new("gcc")
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
         .arg(format!("-I{}", root.join("runtime/include").display()))
+        .arg(format!("-I{}", root.join("runtime/host/include").display()))
         .arg(root.join("runtime/src/CanTp.c"))
         .arg(&harness)
         .arg("-o")
@@ -5669,8 +5762,6 @@ fn security_access_gates_dtc_mutations_without_a_writable_did() {
     );
     let generated = temp.0.join("GeneratedSecureDtc");
     generator::generate(&mut reopened, &generated, tooling::native_target()).unwrap();
-    let handoff = fs::read_to_string(generated.join("README.md")).unwrap();
-    assert!(handoff.contains(".\\ecu_host.exe --nvm .\\ecu.nvm --security-key .\\ecu.key --security-state .\\ecu.security"));
     tooling::build_host(&generated).unwrap();
     let report = tooling::run_diagnostic(&generated).unwrap();
     assert!(report.passed, "{}", report.log);

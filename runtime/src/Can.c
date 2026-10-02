@@ -2,9 +2,7 @@
 #include "Can_HostLock.h"
 #include "CanIf.h"
 #include "SchM_Can.h"
-#ifdef ECU_TARGET_EPIC4
-#include "Ecu_Target.h"
-#endif
+#include "Ecu_Execution.h"
 #include <stddef.h>
 
 #define CAN_START_SEC_VAR_CLEARED_UNSPECIFIED
@@ -42,7 +40,8 @@ static EcuStatus rx_result;
 
 void Can_Init(const Can_ConfigType *config) {
     Can_Lock();
-    if ((initialized == 0u) && (config != NULL) && (config->sink != NULL)) {
+    if ((initialized == 0u) && (config != NULL) &&
+        ((Ecu_Policy.tx_confirmation == ECU_TX_QUEUED) || (config->sink != NULL))) {
         tx_sink = config->sink;
         initialized = 1u;
         controller_mode = CAN_STOPPED;
@@ -248,18 +247,12 @@ EcuStatus Can_HostFlush(void) {
         }
         tx_pending = 0u;
         tx_in_flight = 1u;
-#ifdef ECU_TARGET_EPIC4
-        result = Ecu_TargetEnqueueTransmit(tx_handle, id, length, payload);
-#else
-        result = tx_sink(id, length, payload);
-#endif
+        result = Ecu_ExecutionTransmit(tx_sink, tx_handle, id, length, payload);
         tx_in_flight = 0u;
-#ifndef ECU_TARGET_EPIC4
-        if (result == ECU_OK) {
+        if ((result == ECU_OK) && (Ecu_Policy.tx_confirmation == ECU_TX_SYNCHRONOUS)) {
             tx_confirmation_pending = 1u;
             Can_MainFunction_Write();
         }
-#endif
     }
     Can_Unlock();
     return result;

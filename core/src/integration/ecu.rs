@@ -250,17 +250,12 @@ impl ValidatedIntegrationPlan {
             .find(|event| event.path != app.os_event && event.path != work.os_event)
             .ok_or_else(|| reject("No distinct owner IO event exists."))?;
         let header = format!(
-            "/** @file Generated checked target constants and OS configuration. */\n#ifndef ECU_TARGET_CONFIG_H\n#define ECU_TARGET_CONFIG_H\n#include \"Os_Target.h\"\n#include \"{app_header}\"\n#define ECU_TARGET_TASK 0u\n#define ECU_TARGET_EVENT_WORK {}u\n#define ECU_TARGET_EVENT_APP {}u\n#define ECU_TARGET_EVENT_IO {}u\n#define ECU_TARGET_RX_CAN_ID {}u\n#define ECU_TARGET_RX_DEADLINE_MS {}u\n#define ECU_TARGET_TX_CANIF_PDU {}u\n#define ECU_TARGET_DIAG_TX_CANIF_PDU {}u\n#define ECU_TARGET_DCM_P2_MS {}u\n#define ECU_TARGET_DCM_P2_STAR_MS {}u\n#define ECU_TARGET_DCM_BUFFER_BYTES {}u\n#define ECU_TARGET_RUN_APPLICATION() {}()\n#define ECU_TARGET_TRANSMIT() Com_TriggerTransmit(1u)\nextern const Os_TargetConfig Ecu_OsConfig;\nvoid Ecu_ApplicationInitialize(void);\nStd_ReturnType Ecu_TargetReadDid(uint8_t *data);\n#ifdef ECU_TARGET_TESTS\nint Ecu_TargetTestFailStage(unsigned stage);\nvoid Ecu_TargetTestShutdown(StatusType reason);\n#endif\n#endif\n",
+            "/** @file Generated checked target constants and OS configuration. */\n#ifndef ECU_TARGET_CONFIG_H\n#define ECU_TARGET_CONFIG_H\n#include \"Os_Target.h\"\n#include \"{app_header}\"\n#define ECU_TARGET_TASK 0u\n#define ECU_TARGET_EVENT_WORK {}u\n#define ECU_TARGET_EVENT_APP {}u\n#define ECU_TARGET_EVENT_IO {}u\n#define ECU_TARGET_RX_CAN_ID {}u\n#define ECU_TARGET_RX_DEADLINE_MS {}u\n#define ECU_TARGET_RUN_APPLICATION() {}()\n#define ECU_TARGET_TRANSMIT() Com_TriggerTransmit(1u)\nextern const Os_TargetConfig Ecu_OsConfig;\nvoid Ecu_ApplicationInitialize(void);\nStd_ReturnType Ecu_TargetReadDid(uint8_t *data);\n#ifdef ECU_TARGET_TESTS\nint Ecu_TargetTestFailStage(unsigned stage);\nvoid Ecu_TargetTestShutdown(StatusType reason);\n#endif\n#endif\n",
             mask(&work.os_event),
             mask(&app.os_event),
             io.mask,
             rx.can_id,
             rx.deadline_ms.unwrap(),
-            tx.can_if_handle,
-            plan.diagnostic.response_can_if_handle,
-            plan.diagnostic.p2_ms,
-            plan.diagnostic.p2_star_ms,
-            plan.diagnostic.buffer_bytes,
             component.periodic_symbol,
         );
         if plan
@@ -277,6 +272,16 @@ impl ValidatedIntegrationPlan {
         files.insert(
             "include/Ecu_TargetConfig.h".into(),
             Cow::Owned(header.into_bytes()),
+        );
+        files.insert(
+            "include/Ecu_ProfileLimits.h".into(),
+            Cow::Owned(
+                format!(
+                    "/** @file Compile-time capacity of the validated integrated profile. */\n#ifndef ECU_PROFILE_LIMITS_H\n#define ECU_PROFILE_LIMITS_H\n#define ECU_MAX_PDU_PAYLOAD {}u\n#endif\n",
+                    plan.diagnostic.buffer_bytes,
+                )
+                .into_bytes(),
+            ),
         );
         let mut groups = BTreeMap::new();
         let mut table_groups = BTreeMap::new();
@@ -406,6 +411,22 @@ impl ValidatedIntegrationPlan {
             (
                 "DIAG_TX_CAN_ID",
                 plan.diagnostic.response_can_id.to_string(),
+            ),
+            ("P2", plan.diagnostic.p2_ms.to_string()),
+            ("P2_STAR", plan.diagnostic.p2_star_ms.to_string()),
+            (
+                "READ_DID_SESSIONS",
+                plan.diagnostic
+                    .sessions
+                    .iter()
+                    .fold(0u8, |mask, session| mask | (1u8 << session))
+                    .to_string(),
+            ),
+            ("RX_CANIF_PDU", rx.can_if_handle.to_string()),
+            ("TX_CANIF_PDU", tx.can_if_handle.to_string()),
+            (
+                "DIAG_RX_HANDLE",
+                plan.diagnostic.request_can_if_handle.to_string(),
             ),
             ("S3", plan.diagnostic.s3_ms.to_string()),
             ("NAS", plan.diagnostic.n_as_ms.to_string()),

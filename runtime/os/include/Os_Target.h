@@ -1,5 +1,5 @@
-#ifndef AUTOSAR_EPIC4_OS_TARGET_H
-#define AUTOSAR_EPIC4_OS_TARGET_H
+#ifndef AUTOSAR_OS_TARGET_H
+#define AUTOSAR_OS_TARGET_H
 #include "Os.h"
 #include "Os_Time.h"
 #include <stddef.h>

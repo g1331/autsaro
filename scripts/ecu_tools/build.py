@@ -196,7 +196,7 @@ def build(project: Path, output: Path, mode: str, control_source: Path | None = 
             raise ValueError("Independent control source must be a regular file outside the sealed project")
     flags = target.get("compilerFlags")
     allowed_flags = {"-std=c99", "-O1", "-g", "-Wall", "-Wextra", "-Werror",
-                     "-pedantic", "-DECU_TARGET_EPIC4", "-D_GNU_SOURCE", "-pthread"}
+                     "-pedantic", "-D_GNU_SOURCE", "-pthread"}
     if (not isinstance(flags, list) or not flags
             or any(not isinstance(flag, str) or flag not in allowed_flags for flag in flags)
             or len(flags) != len(set(flags))):

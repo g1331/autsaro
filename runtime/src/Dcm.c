@@ -2,28 +2,14 @@
 #include "Dem.h"
 #include "PduR.h"
 #include "Security.h"
-#ifdef ECU_TARGET_EPIC4
-#include "Ecu_TargetConfig.h"
-#include "Ecu_Target.h"
-#include <string.h>
-#endif
+#include "Dcm_Internal.h"
+#include "Ecu_Execution.h"
 
 static const EcuDiagnosticConfig *dcm_config;
 static uint8_t active_session;
 static uint8_t pending_session;
 static uint64_t last_request_ms;
 
-#ifdef ECU_TARGET_EPIC4
-typedef struct {
-    uint64_t received_at;
-    size_t length;
-    uint8_t data[ECU_DIAG_MAX_PAYLOAD];
-} Dcm_TargetRequest;
-static Dcm_TargetRequest requests[ECU_BATCH_CAPACITY];
-static unsigned request_write;
-static unsigned request_read;
-static unsigned request_count;
-#endif
 
 static EcuStatus NegativeResponse(uint8_t service, uint8_t code, uint64_t now_ms) {
     const uint8_t response[3] = {0x7fu, service, code};
@@ -35,11 +21,6 @@ void Dcm_Init(const EcuDiagnosticConfig *config) {
     active_session = 0x01u;
     pending_session = 0u;
     last_request_ms = 0u;
-#ifdef ECU_TARGET_EPIC4
-    request_write = 0u;
-    request_read = 0u;
-    request_count = 0u;
-#endif
 }
 
 void Dcm_TpTxConfirmation(EcuStatus status, uint64_t now_ms) {
@@ -68,11 +49,6 @@ void Dcm_AdvanceTime(uint64_t now_ms) {
         }
         pending_session = 0u;
     }
-#ifdef ECU_TARGET_EPIC4
-    if (Dcm_TargetProcess(now_ms) != ECU_OK) {
-        ShutdownOS(E_OS_STATE);
-    }
-#endif
 }
 
 static EcuStatus HandleSessionControl(const uint8_t *request, size_t length, uint64_t now_ms) {
@@ -85,17 +61,10 @@ static EcuStatus HandleSessionControl(const uint8_t *request, size_t length, uin
         uint8_t response[6];
         response[0] = 0x50u;
         response[1] = request[1];
-#ifdef ECU_TARGET_EPIC4
-        response[2] = (uint8_t)(ECU_TARGET_DCM_P2_MS / 256u);
-        response[3] = (uint8_t)(ECU_TARGET_DCM_P2_MS % 256u);
-        response[4] = (uint8_t)((ECU_TARGET_DCM_P2_STAR_MS / 10u) / 256u);
-        response[5] = (uint8_t)((ECU_TARGET_DCM_P2_STAR_MS / 10u) % 256u);
-#else
-        response[2] = 0x00u;
-        response[3] = 0x32u; /* P2ServerMax: 50 ms */
-        response[4] = 0x00u;
-        response[5] = 0x32u; /* P2*ServerMax: 500 ms in 10 ms units */
-#endif
+        response[2] = (uint8_t)(Ecu_Policy.p2_ms / 256u);
+        response[3] = (uint8_t)(Ecu_Policy.p2_ms % 256u);
+        response[4] = (uint8_t)((Ecu_Policy.p2_star_ms / 10u) / 256u);
+        response[5] = (uint8_t)((Ecu_Policy.p2_star_ms / 10u) % 256u);
         pending_session = request[1];
         result = PduR_DcmTransmit(response, sizeof(response), now_ms);
         if (result != ECU_OK) {
@@ -154,16 +123,13 @@ static EcuStatus HandleSecurityAccess(const uint8_t *request, size_t length, uin
 }
 
 static EcuStatus HandleReadData(const uint8_t *request, size_t length, uint64_t now_ms) {
-    uint8_t response[ECU_DIAG_MAX_PAYLOAD];
+    uint8_t response[ECU_MAX_PDU_PAYLOAD];
     size_t response_length = 1u;
     uint8_t nrc = 0u;
     EcuStatus result;
     response[0] = 0x62u;
-    if ((length < 3u) || ((length & 1u) == 0u)
-#ifdef ECU_TARGET_EPIC4
-        || (length > 5u)
-#endif
-    ) {
+    if ((length < 3u) || ((length & 1u) == 0u) ||
+        ((Ecu_Policy.max_read_dids != 0u) && (((length - 1u) / 2u) > Ecu_Policy.max_read_dids))) {
         nrc = 0x13u;
     } else {
         size_t offset;
@@ -175,11 +141,7 @@ static EcuStatus HandleReadData(const uint8_t *request, size_t length, uint64_t 
                 data_length = 1u;
                 supported = 1u;
             } else if ((did == dcm_config->did) &&
-#ifdef ECU_TARGET_EPIC4
-                       ((active_session == 0x01u) || (active_session == 0x03u))) {
-#else
-                       (active_session == 0x03u)) {
-#endif
+                       ((Ecu_Policy.read_did_sessions & (UINT32_C(1) << active_session)) != 0u)) {
                 data_length = 4u * dcm_config->did_signal_count;
                 supported = 1u;
             } else {
@@ -380,15 +342,20 @@ static EcuStatus HandleClearDtc(const uint8_t *request, size_t length, uint64_t 
     return result;
 }
 
-static EcuStatus DispatchRequest(const uint8_t *request, size_t length, uint64_t now_ms) {
+EcuStatus Dcm_DispatchRequest(const uint8_t *request, size_t length, uint64_t now_ms) {
     EcuStatus result = ECU_ERR_CONFIG;
     if ((dcm_config != NULL) && (request != NULL) && (length != 0u)) {
         last_request_ms = now_ms;
-#ifdef ECU_TARGET_EPIC4
-        if ((request[0] != 0x10u) && (request[0] != 0x3eu) && (request[0] != 0x22u)) {
+        uint8_t allowed = 0u;
+        for (size_t index = 0u; index < Ecu_Policy.allowed_sid_count; ++index) {
+            if (Ecu_Policy.allowed_sids[index] == request[0]) {
+                allowed = 1u;
+                break;
+            }
+        }
+        if (allowed == 0u) {
             return NegativeResponse(request[0], 0x11u, now_ms);
         }
-#endif
         switch (request[0]) {
         case 0x10u:
             result = HandleSessionControl(request, length, now_ms);
@@ -426,48 +393,7 @@ static EcuStatus DispatchRequest(const uint8_t *request, size_t length, uint64_t
 }
 
 EcuStatus Dcm_RxIndication(const uint8_t *request, size_t length, uint64_t now_ms) {
-#ifdef ECU_TARGET_EPIC4
-    Dcm_TargetRequest *pending = &requests[request_write];
-    Ecu_TargetAssertOwner();
-    if ((dcm_config == NULL) || (request == NULL)) {
-        return ECU_ERR_CONFIG;
-    }
-    if ((length == 0u) || (length > sizeof(pending->data))) {
-        return ECU_ERR_TP_LENGTH;
-    }
-    if (request_count == ECU_BATCH_CAPACITY) {
-        return ECU_ERR_TP_BUSY;
-    }
-    pending->received_at = now_ms;
-    pending->length = length;
-    (void)memcpy(pending->data, request, length);
-    request_write = (request_write + 1u) % ECU_BATCH_CAPACITY;
-    ++request_count;
-    /* Reception precedes the S3 check; application data dispatch is deferred. */
-    last_request_ms = now_ms;
-    return ECU_OK;
-#else
-    return DispatchRequest(request, length, now_ms);
-#endif
+    return Ecu_DiagnosticAdmit(dcm_config, request, length, now_ms);
 }
 
-#ifdef ECU_TARGET_EPIC4
-unsigned Dcm_TargetPending(void) {
-    Ecu_TargetAssertOwner();
-    return request_count;
-}
-EcuStatus Dcm_TargetProcess(uint64_t now_ms) {
-    EcuStatus status = ECU_OK;
-    Ecu_TargetAssertOwner();
-    while ((request_count != 0u) && (PduR_TargetDiagnosticReady() != 0) && (status == ECU_OK)) {
-        const Dcm_TargetRequest *pending = &requests[request_read];
-        if (pending->received_at > now_ms) {
-            return ECU_ERR_TIME;
-        }
-        status = DispatchRequest(pending->data, pending->length, pending->received_at);
-        request_read = (request_read + 1u) % ECU_BATCH_CAPACITY;
-        --request_count;
-    }
-    return status;
-}
-#endif
+void Dcm_RecordRequestTime(uint64_t now_ms) { last_request_ms = now_ms; }

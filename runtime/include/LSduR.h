@@ -40,11 +40,11 @@ EcuStatus LSduR_PduRTransmit(size_t frame_index, const uint8_t data[8]);
  */
 void LSduR_CanIfTxConfirmation(PduIdType pdu_id, Std_ReturnType result);
 /** @brief Forward a received configured frame from CanIf.
- * @param[in] frame_index Index into EcuConfig::frames.
+ * @param[in] rx_pdu_id Canonical lower CanIf receive handle from the const route table.
  * @param[in] data Eight-byte frame buffer.
  * @param[in] now_ms Current host clock in milliseconds.
  * @return Host routing status.
  */
-EcuStatus LSduR_CanIfRxIndication(size_t frame_index, const uint8_t data[8], uint64_t now_ms);
+EcuStatus LSduR_CanIfRxIndication(size_t rx_pdu_id, const uint8_t data[8], uint64_t now_ms);
 
 #endif

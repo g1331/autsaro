@@ -1,5 +1,5 @@
-#ifndef AUTOSAR_EPIC4_OS_STACK_H
-#define AUTOSAR_EPIC4_OS_STACK_H
+#ifndef AUTOSAR_OS_STACK_H
+#define AUTOSAR_OS_STACK_H
 #include "Os_Host.h"
 #include <stdint.h>
 #include "FreeRTOS.h"

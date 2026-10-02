@@ -1,5 +1,5 @@
-#ifndef AUTOSAR_EPIC4_OS_WINDOWS_H
-#define AUTOSAR_EPIC4_OS_WINDOWS_H
+#ifndef AUTOSAR_OS_WINDOWS_H
+#define AUTOSAR_OS_WINDOWS_H
 /* The standard OS service and Win32 API share the spelling SetEvent. Import
  * Windows declarations without the owned public OS macro, then restore it.
  * Native users call the separately compiled adapter; apps keep the OS macro. */

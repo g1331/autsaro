@@ -1,7 +1,5 @@
 #include "Os_Backend.h"
-#ifdef ECU_TARGET_EPIC4
-#include "Ecu_Target.h"
-#endif
+#include "Os_IntegrationHooks.h"
 
 static TickType values[OS_MAX_COUNTERS];
 const TickType *const Os_ArtiCounters = values;
@@ -685,9 +683,7 @@ void Os_TimeOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicat
 #ifdef OS_TIME_TESTS
     Os_TimeTestOnWaiting();
 #endif
-#ifdef ECU_TARGET_EPIC4
-    Ecu_TargetOnWaiting(id, pending, predicate);
-#endif
+    Os_IntegrationOnWaiting(id, pending, predicate);
     if ((config != NULL) && (id == config->owner) && (pending == 0u) &&
         ((predicate & config->wake_event) != 0u) && (Os_MailboxQuiescent() != 0) &&
         (InterlockedCompareExchange(&tick_state, TIME_PUBLISHING, TIME_MARKED) == TIME_MARKED)) {

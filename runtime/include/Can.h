@@ -27,7 +27,7 @@ typedef EcuStatus (*CanTxSink)(uint32_t id, uint8_t dlc, const uint8_t data[8]);
 
 /** @brief Hardware-specific Can Driver initialization data for the host target. */
 typedef struct {
-    CanTxSink sink; /**< Host frame output callback. */
+    CanTxSink sink; /**< Required synchronous sink; NULL for the linked queued adapter. */
 } Can_ConfigType;
 
 /** @brief Initialize the host Can Driver in the stopped state; ignore invalid or repeated calls.

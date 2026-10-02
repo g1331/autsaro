@@ -293,6 +293,83 @@ fn config_source(
         "NULL"
     };
     writeln!(source, "const EcuConfig Ecu_Config = {{ \"{name}\", frames, sizeof(frames) / sizeof(frames[0]), signals, sizeof(signals) / sizeof(signals[0]), {diagnostic_ref} }};").unwrap();
+    source.push_str(
+        r#"
+static const uint8_t allowed_sids[] = {
+    0x10u, 0x3eu, 0x27u, 0x22u, 0x2eu, 0x31u, 0x85u, 0x19u, 0x14u,
+};
+const EcuPolicyConfig Ecu_Policy = {
+    .tx_confirmation = ECU_TX_SYNCHRONOUS,
+    .rx_time_order = ECU_TIME_BEFORE_RX,
+    .tx_padding_dlc = 0u,
+    .wft_max = 0u,
+    .wait_when_wft_max_zero = ECU_WAIT_RESTART,
+    .max_read_dids = 0u,
+    .read_did_sessions = 0x08u,
+    .allowed_sids = allowed_sids,
+    .allowed_sid_count = sizeof(allowed_sids) / sizeof(allowed_sids[0]),
+    .p2_ms = 50u,
+    .p2_star_ms = 500u,
+};
+"#,
+    );
+    for (label, table, receive) in [
+        ("Receive", "receive", true),
+        ("Transmit", "transmit", false),
+    ] {
+        let count = frames
+            .iter()
+            .filter(|frame| matches!(frame.direction, Direction::Rx) == receive)
+            .count()
+            + usize::from(diagnostic.is_some());
+        if count != 0 {
+            writeln!(source, "static const Ecu{label}Route {table}_routes[] = {{").unwrap();
+            for (index, frame) in frames
+                .iter()
+                .enumerate()
+                .filter(|(_, frame)| matches!(frame.direction, Direction::Rx) == receive)
+            {
+                if receive {
+                    writeln!(
+                        source,
+                        "    {{ {}u, {}u, {index}u, {index}u, ECU_ROUTE_COM }},",
+                        frame.id, frame.dlc
+                    )
+                    .unwrap();
+                } else {
+                    writeln!(source, "    {{ {index}u, {index}u, ECU_ROUTE_COM }},").unwrap();
+                }
+            }
+            if let Some(connection) = diagnostic {
+                let handle = frames.len();
+                if receive {
+                    writeln!(
+                        source,
+                        "    {{ {}u, 0u, {handle}u, {handle}u, ECU_ROUTE_CANTP }},",
+                        connection.request_id
+                    )
+                    .unwrap();
+                } else {
+                    writeln!(source, "    {{ {handle}u, {handle}u, ECU_ROUTE_CANTP }},").unwrap();
+                }
+            }
+            source.push_str("};\n");
+        }
+        if count == 0 {
+            writeln!(
+                source,
+                "const Ecu{label}Route *const Ecu_{label}Routes = NULL;"
+            )
+            .unwrap();
+        } else {
+            writeln!(
+                source,
+                "const Ecu{label}Route *const Ecu_{label}Routes = {table}_routes;"
+            )
+            .unwrap();
+        }
+        writeln!(source, "const size_t Ecu_{label}RouteCount = {count}u;").unwrap();
+    }
     externals.push_str("\n#endif\n");
     Ok((source, map, externals))
 }

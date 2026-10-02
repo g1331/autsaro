@@ -1,5 +1,5 @@
-#ifndef AUTOSAR_EPIC4_OS_TIME_H
-#define AUTOSAR_EPIC4_OS_TIME_H
+#ifndef AUTOSAR_OS_TIME_H
+#define AUTOSAR_OS_TIME_H
 #include "Os.h"
 #include <stddef.h>
 #define OS_MAX_COUNTERS 8u

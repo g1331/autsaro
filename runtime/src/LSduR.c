@@ -32,6 +32,6 @@ void LSduR_CanIfTxConfirmation(PduIdType pdu_id, Std_ReturnType result) {
     PduR_CanIfTxConfirmation(pdu_id, result);
 }
 
-EcuStatus LSduR_CanIfRxIndication(size_t frame_index, const uint8_t data[8], uint64_t now_ms) {
-    return PduR_RxIndication(frame_index, data, now_ms);
+EcuStatus LSduR_CanIfRxIndication(size_t rx_pdu_id, const uint8_t data[8], uint64_t now_ms) {
+    return PduR_RxIndication(rx_pdu_id, data, now_ms);
 }

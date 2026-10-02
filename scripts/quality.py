@@ -194,7 +194,10 @@ def changed_format_errors(
 
 
 def c_syntax_errors() -> list[str]:
-    sources = sorted((ROOT / "runtime" / "src").glob("*.c"))
+    sources = sorted([
+        *(ROOT / "runtime" / "src").glob("*.c"),
+        *(ROOT / "runtime" / "host" / "src").glob("*.c"),
+    ])
     command = [
         "gcc",
         "-std=c99",
@@ -205,6 +208,10 @@ def c_syntax_errors() -> list[str]:
         "-fsyntax-only",
         "-I",
         str(ROOT / "runtime" / "include"),
+        "-I",
+        str(ROOT / "runtime" / "host" / "include"),
+        "-I",
+        str(ROOT / "runtime" / "src"),
         *(str(path) for path in sources),
     ]
     result = run(command)
@@ -222,6 +229,8 @@ def c_syntax_errors() -> list[str]:
                 "-fsyntax-only",
                 "-I",
                 str(ROOT / "runtime" / "include"),
+                "-I",
+                str(ROOT / "runtime" / "host" / "include"),
                 "-include",
                 str(header),
                 "-x",

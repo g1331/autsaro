@@ -4,13 +4,12 @@
 #include "Com.h"
 #include "Dcm.h"
 #include "LSduR.h"
-#ifdef ECU_TARGET_EPIC4
-#include "Ecu_TargetConfig.h"
-#endif
+#include "PduR_Internal.h"
+#include "Ecu_Execution.h"
 
 static const EcuConfig *pdur_config;
-static uint8_t rx_data[ECU_DIAG_MAX_PAYLOAD];
-static uint8_t tx_data[ECU_DIAG_MAX_PAYLOAD];
+static uint8_t rx_data[ECU_MAX_PDU_PAYLOAD];
+static uint8_t tx_data[ECU_MAX_PDU_PAYLOAD];
 static size_t rx_expected;
 static size_t rx_received;
 static size_t pdur_tx_length;
@@ -32,39 +31,38 @@ EcuStatus PduR_Transmit(size_t frame_index, const uint8_t data[8]) {
 
 void PduR_CanIfTxConfirmation(PduIdType pdu_id, Std_ReturnType result) {
     if (pdur_config != NULL) {
-#ifdef ECU_TARGET_EPIC4
-        if (pdu_id == ECU_TARGET_TX_CANIF_PDU) {
-            Com_TxConfirmation(1u, result);
-        } else if ((pdu_id == ECU_TARGET_DIAG_TX_CANIF_PDU) && (pdur_config->diagnostic != NULL)) {
-            CanTp_TxConfirmation(pdur_config->diagnostic->tx_pdu_id, result);
-        } else {
-            /* The validated CanIf transmit domain has no such handle. */
+        for (size_t index = 0u; index < Ecu_TransmitRouteCount; ++index) {
+            const EcuTransmitRoute *route = &Ecu_TransmitRoutes[index];
+            if (route->canif_pdu == pdu_id) {
+                if (route->consumer == ECU_ROUTE_COM) {
+                    Com_TxConfirmation(route->upper_pdu, result);
+                } else if (pdur_config->diagnostic != NULL) {
+                    CanTp_TxConfirmation(route->upper_pdu, result);
+                } else {
+                    /* No configured physical connection consumes this handle. */
+                }
+                break;
+            }
         }
-#else
-        if ((size_t)pdu_id < pdur_config->frame_count) {
-            Com_TxConfirmation(pdu_id, result);
-        } else if (((size_t)pdu_id == pdur_config->frame_count) &&
-                   (pdur_config->diagnostic != NULL)) {
-            CanTp_TxConfirmation(pdu_id, result);
-        } else {
-            /* No generated upper-layer route corresponds to this handle. */
-        }
-#endif
     }
 }
 
-EcuStatus PduR_RxIndication(size_t frame_index, const uint8_t data[8], uint64_t now_ms) {
-    return Com_RxIndication(frame_index, data, now_ms);
+EcuStatus PduR_RxIndication(size_t rx_pdu_id, const uint8_t data[8], uint64_t now_ms) {
+    EcuStatus result = ECU_ERR_CONFIG;
+    for (size_t index = 0u; index < Ecu_ReceiveRouteCount; ++index) {
+        const EcuReceiveRoute *route = &Ecu_ReceiveRoutes[index];
+        if ((route->consumer == ECU_ROUTE_COM) && ((size_t)route->canif_pdu == rx_pdu_id)) {
+            result = Com_RxIndication(route->upper_pdu, data, now_ms);
+            break;
+        }
+    }
+    return result;
 }
 
 EcuStatus PduR_CanTpStartOfReception(size_t length) {
     EcuStatus result = ECU_ERR_TP_LENGTH;
     if ((pdur_config->diagnostic != NULL) && (length != 0u) && (length <= sizeof(rx_data))) {
-        if ((rx_active != 0u) || (tx_active != 0u)
-#ifdef ECU_TARGET_EPIC4
-            || (Dcm_TargetPending() != 0u)
-#endif
-        ) {
+        if ((rx_active != 0u) || (tx_active != 0u) || (Ecu_DiagnosticPending() != 0u)) {
             result = ECU_ERR_TP_BUSY;
         } else {
             rx_expected = length;
@@ -137,6 +135,4 @@ EcuStatus PduR_DcmTransmit(const uint8_t *data, size_t length, uint64_t now_ms) 
     return result;
 }
 
-#ifdef ECU_TARGET_EPIC4
-int PduR_TargetDiagnosticReady(void) { return (rx_active == 0u) && (tx_active == 0u); }
-#endif
+int PduR_DiagnosticReady(void) { return (rx_active == 0u) && (tx_active == 0u); }

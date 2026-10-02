@@ -8,6 +8,8 @@
 #include <stdint.h>
 #include "Ecu_Status.h"
 #include "Ecu_DcmCallbackTypes.h"
+#include "ComStack_Types.h"
+#include "Ecu_ProfileLimits.h"
 
 /** @brief Configured 11-bit Classical CAN frame. */
 typedef struct {
@@ -76,6 +78,56 @@ typedef struct {
     uint8_t tx_pdu_id;                          /**< Generated diagnostic CAN transmit handle. */
 } EcuDiagnosticConfig;
 
+/** @brief Confirmation boundary declared by the validated static profile. */
+typedef enum { ECU_TX_SYNCHRONOUS = 0, ECU_TX_QUEUED = 1 } EcuTxConfirmation;
+
+/** @brief Receive/deadline precedence within one logical host epoch. */
+typedef enum { ECU_TIME_BEFORE_RX = 0, ECU_RX_BEFORE_DEADLINE = 1 } EcuRxTimeOrder;
+
+/** @brief Explicit WAIT handling when the profile's WFTmax is zero. */
+typedef enum { ECU_WAIT_RESTART = 0, ECU_WAIT_ABORT = 1 } EcuWaitZeroPolicy;
+
+/** @brief Immutable service/transport policy emitted from one validated profile. */
+typedef struct {
+    EcuTxConfirmation tx_confirmation; /**< Sync completion or real sink-flush completion. */
+    EcuRxTimeOrder rx_time_order;      /**< Same-epoch receive/deadline precedence. */
+    uint8_t tx_padding_dlc;            /**< 0 preserves actual DLC; 8 pads Classical CAN frames. */
+    uint8_t wft_max; /**< Zero in both supported profiles; zero handling is explicit below. */
+    EcuWaitZeroPolicy wait_when_wft_max_zero; /**< Explicit zero-limit behavior. */
+    uint16_t max_read_dids;      /**< 0 adds no service limit; payload capacity still applies. */
+    uint8_t read_did_sessions;   /**< Session bit mask: bit 1 default, bit 3 extended. */
+    const uint8_t *allowed_sids; /**< Static supported SID set; optional service checks remain. */
+    uint8_t allowed_sid_count;   /**< Number of entries in allowed_sids. */
+    uint32_t p2_ms;              /**< P2ServerMax in milliseconds. */
+    uint32_t p2_star_ms;         /**< P2*ServerMax in milliseconds. */
+} EcuPolicyConfig;
+
+/** @brief Upper consumer of one generated, type-checked PDU route. */
+typedef enum { ECU_ROUTE_COM = 0, ECU_ROUTE_CANTP = 1 } EcuRouteConsumer;
+
+/** @brief One physical receive route from a validated frame or DoCAN connection. */
+typedef struct {
+    uint32_t can_id;           /**< Physical 11-bit CAN identifier. */
+    uint8_t dlc;               /**< Fixed Com DLC; CanTp validates its own variable DLC. */
+    PduIdType canif_pdu;       /**< Canonical CanIf receive handle. */
+    PduIdType upper_pdu;       /**< Com frame index or CanTp receive handle. */
+    EcuRouteConsumer consumer; /**< Sole, statically selected upper consumer. */
+} EcuReceiveRoute;
+
+/** @brief One transmit-confirmation route with explicit lower/upper handle domains. */
+typedef struct {
+    PduIdType canif_pdu;       /**< Canonical CanIf transmit handle. */
+    PduIdType upper_pdu;       /**< Com frame index or CanTp transmit handle. */
+    EcuRouteConsumer consumer; /**< Sole, statically selected upper consumer. */
+} EcuTransmitRoute;
+
+/** @brief Exactly one immutable policy and route set is supplied by each project. */
+extern const EcuPolicyConfig Ecu_Policy;
+extern const EcuReceiveRoute *const Ecu_ReceiveRoutes;
+extern const size_t Ecu_ReceiveRouteCount;
+extern const EcuTransmitRoute *const Ecu_TransmitRoutes;
+extern const size_t Ecu_TransmitRouteCount;
+
 /** @brief Root of the generated host ECU configuration. */
 typedef struct {
     const char *name;                      /**< Generated ECU name. */
@@ -93,13 +145,6 @@ extern const EcuConfig Ecu_Config;
 #define ECU_MAX_FRAMES 32u
 /** @brief Maximum signal count accepted by the host runtime. */
 #define ECU_MAX_SIGNALS 64u
-/** @brief Maximum diagnostic payload size in bytes. */
-#ifdef ECU_TARGET_EPIC4
-#include "Ecu_TargetConfig.h"
-#define ECU_DIAG_MAX_PAYLOAD ECU_TARGET_DCM_BUFFER_BYTES
-#else
-#define ECU_DIAG_MAX_PAYLOAD 256u
-#endif
 /** @brief Maximum number of 32-bit signals in one DID. */
 #define ECU_DIAG_MAX_DID_SIGNALS 8u
 

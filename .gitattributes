@@ -5,6 +5,7 @@
 # A unified patch uses a single space as the empty context-line marker.
 /runtime/os/** text eol=lf
 /runtime/ecu/** text eol=lf
+/runtime/host/** text eol=lf
 /runtime/os/patches/** -text whitespace=-blank-at-eol
 # Original input raw-byte manifests must survive a fresh checkout unchanged.
 /core/tests/fixtures/epic4/** text eol=lf
@@ -51,3 +52,6 @@
 /runtime/generated-README.md text eol=lf
 /runtime/reference-README.md text eol=lf
 /runtime/reference-vectors.json text eol=lf
+/runtime/src/Ecu_Execution.h text eol=lf
+/runtime/src/Dcm_Internal.h text eol=lf
+/runtime/src/PduR_Internal.h text eol=lf

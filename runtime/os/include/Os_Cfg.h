@@ -1,5 +1,5 @@
-#ifndef AUTOSAR_EPIC4_OS_CFG_H
-#define AUTOSAR_EPIC4_OS_CFG_H
+#ifndef AUTOSAR_OS_CFG_H
+#define AUTOSAR_OS_CFG_H
 /* Both status modes retain defensive host checks and nonzero ErrorHook
  * reporting. The reference ECU selects Extended Status; generated headers
  * select the validated ECUC value. Standard warnings remain mandatory. */

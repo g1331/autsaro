@@ -105,3 +105,30 @@ const EcuConfig Ecu_Config = {
     .signal_count = 2u,
     .diagnostic = &diagnostic,
 };
+
+static const uint8_t allowed_sids[] = {0x10u, 0x3eu, 0x22u};
+const EcuPolicyConfig Ecu_Policy = {
+    .tx_confirmation = ECU_TX_QUEUED,
+    .rx_time_order = ECU_RX_BEFORE_DEADLINE,
+    .tx_padding_dlc = 8u,
+    .wft_max = 0u,
+    .wait_when_wft_max_zero = ECU_WAIT_ABORT,
+    .max_read_dids = 2u,
+    .read_did_sessions = @READ_DID_SESSIONS@u,
+    .allowed_sids = allowed_sids,
+    .allowed_sid_count = sizeof(allowed_sids) / sizeof(allowed_sids[0]),
+    .p2_ms = @P2@u,
+    .p2_star_ms = @P2_STAR@u,
+};
+static const EcuReceiveRoute receive_routes[] = {
+    {@RX_CAN_ID@u, 4u, @RX_CANIF_PDU@u, 0u, ECU_ROUTE_COM},
+    {@DIAG_RX_CAN_ID@u, 0u, @DIAG_RX_HANDLE@u, @DIAG_RX_HANDLE@u, ECU_ROUTE_CANTP},
+};
+const EcuReceiveRoute *const Ecu_ReceiveRoutes = receive_routes;
+const size_t Ecu_ReceiveRouteCount = sizeof(receive_routes) / sizeof(receive_routes[0]);
+static const EcuTransmitRoute transmit_routes[] = {
+    {@TX_CANIF_PDU@u, 1u, ECU_ROUTE_COM},
+    {@DIAG_TX_HANDLE@u, @DIAG_TX_HANDLE@u, ECU_ROUTE_CANTP},
+};
+const EcuTransmitRoute *const Ecu_TransmitRoutes = transmit_routes;
+const size_t Ecu_TransmitRouteCount = sizeof(transmit_routes) / sizeof(transmit_routes[0]);

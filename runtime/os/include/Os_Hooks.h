@@ -1,5 +1,5 @@
-#ifndef AUTOSAR_EPIC4_OS_HOOKS_H
-#define AUTOSAR_EPIC4_OS_HOOKS_H
+#ifndef AUTOSAR_OS_HOOKS_H
+#define AUTOSAR_OS_HOOKS_H
 #include "Os_Types.h"
 #include "Os_Cfg.h"
 typedef struct {

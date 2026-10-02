@@ -37,7 +37,7 @@
     },
     {
       "path": "runtime/ecu/include/Ecu_Target.h",
-      "sha256": "e0ad9a5529edc410cdc5fc6652253e7a5a2c416cabe62b948f1795de85ae68eb",
+      "sha256": "dd255af3d1c9cdd2ff312f67b73167b4c0919b454c382aebd9ac309da102929c",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",
@@ -79,7 +79,7 @@
     },
     {
       "path": "runtime/ecu/src/Ecu_HostBridge.c",
-      "sha256": "5d1cf18ec1b8fde89633c2d63d5659763588d1bc9d73ad350a44596c69b2c1b9",
+      "sha256": "698da38e11c080a03aa33bc4481fa76e251c2a4dbe3617a7ba8408aa363ba3a3",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",
@@ -121,7 +121,7 @@
     },
     {
       "path": "runtime/ecu/src/Ecu_Target.c",
-      "sha256": "37627927ba155965bdfd371a4ae9842f367a306ec04999dadcfc71f021c38c9a",
+      "sha256": "1659fa0fa5c2f5d0fc3842cb737855a73a3a7a00b2524bedc751b9739ed1d7b5",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",
@@ -177,7 +177,7 @@
     },
     {
       "path": "runtime/ecu/templates/Ecu_Config.c.in",
-      "sha256": "bd56b27f8b5a4b444b032c799f787ede08d79231db24ebb7b5a6b616cc66f2b6",
+      "sha256": "22d6a788b12c53c05b501b8c676c774328ec1a22f3a6ed52c2a4c0e0b63cef3c",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",
@@ -262,7 +262,7 @@
     },
     {
       "path": "runtime/os/FreeRTOSConfig.h",
-      "sha256": "03b64e00357a47db0ce053d10766690c8c72a92caac03beb792704e235b9a23b",
+      "sha256": "7b0d18064691e0c8b836236425e962c013e2b66d1edd88185114b0f2051cad57",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",
@@ -304,7 +304,7 @@
     },
     {
       "path": "runtime/os/include/Os.h",
-      "sha256": "62505f34f39301846a26e6fde8f8b0fe196864acc53b0f9770048e9c5467537c",
+      "sha256": "cb2e0625015de7369e185dfc11b17b33cc98d47cecb6e87185466c4ada51cc54",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",
@@ -332,7 +332,7 @@
     },
     {
       "path": "runtime/os/include/Os_Cfg.h",
-      "sha256": "9183e140543aacb4e6cfdface1d9f47c27300fd13a5fe43b4440431e164500b3",
+      "sha256": "4192eee3907102dcb0b0c4fc9a987910509a9757427c0ecbde7896c0867338f6",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",
@@ -346,7 +346,7 @@
     },
     {
       "path": "runtime/os/include/Os_Hooks.h",
-      "sha256": "8da5c2b29ffb34ad8611be6dce993ae1e86dcb5c188094ecbd6656cc69711766",
+      "sha256": "9f632d303e0d8a7c06a45999ede0cd6b5e19f2228d8d291ed60ee0f031a61388",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",
@@ -374,7 +374,7 @@
     },
     {
       "path": "runtime/os/include/Os_Mailbox.h",
-      "sha256": "de31d0af68fe473bcab3ee365066eb1feec3436036a0740b2be996d78719ef4c",
+      "sha256": "dbe391ea752c3c9ffa4c357e1acc239d28a237366bad74dd7e3ac987ce8c5e97",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",
@@ -402,7 +402,7 @@
     },
     {
       "path": "runtime/os/include/Os_Target.h",
-      "sha256": "2cb72f46a15d8132820354587ee4e1379f8d04f46f52f3c2b60f8b2226df2c94",
+      "sha256": "4abbca1583f013fada1c56b5f4853b8299209ccb4b5609d8beb6dd9e50b11bd2",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",
@@ -416,7 +416,7 @@
     },
     {
       "path": "runtime/os/include/Os_Time.h",
-      "sha256": "02a429a14b8a1b3d50158b4b66801fd06d57172282b375e52faeb09c40f8acd5",
+      "sha256": "f049c2f76ba50e55760de15a92b7a46030a0d8b6ddc74436098599dd72b03c14",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",
@@ -430,7 +430,7 @@
     },
     {
       "path": "runtime/os/include/Os_Types.h",
-      "sha256": "212ab88b365359780e7020c5f1a9a015069d0f9267f88a62d077dc4a470ec82e",
+      "sha256": "62ad60816a210f6983d636c2e3a426cd475e4afc637f83d38b24d13856622d33",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",
@@ -444,7 +444,7 @@
     },
     {
       "path": "runtime/os/include/Rte_Os_Type.h",
-      "sha256": "377ca357b946abbf524b4a39cc710f72c155904a248a39848ccc4c29712fcd12",
+      "sha256": "2a3fe104eeee573acf2e96597376e498df0c80974ff8013f08de2ad3b690f191",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",
@@ -726,7 +726,7 @@
     },
     {
       "path": "runtime/os/src/Os_Backend.h",
-      "sha256": "d539459faa474e2e01aeb902795a4f94cf3198eec6bcb9b55dff855266884fb9",
+      "sha256": "13ab6d2bb4af2fa6f272edcec0cb3dd1c20349d9ef869b4202e47b94d401e17b",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",
@@ -823,7 +823,7 @@
     },
     {
       "path": "runtime/os/src/Os_Stack.h",
-      "sha256": "f91be075726a579fbaf3732d470020d90b5f1a28178c8e9714f0dd5a6ab6e2fa",
+      "sha256": "23df16952f481a832617ae429a373ce474b7d23369ddf686e4126e441b3ef8c2",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",
@@ -837,7 +837,7 @@
     },
     {
       "path": "runtime/os/src/Os_Time.c",
-      "sha256": "ac04288d46afb7861a44d11af0ed58e760f12ecd1fa43a60b4957f85d97dc6b0",
+      "sha256": "7c8294c1cf6148fe49d939ae189176852e37e1dc4d390f947a510d203947b2d4",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",
@@ -865,7 +865,7 @@
     },
     {
       "path": "runtime/os/src/Os_Vector.h",
-      "sha256": "81752cfb37023adb64bba9a0a2c87100d5b1f360e694589c7c297e87fcdb56a0",
+      "sha256": "0e021489be714d179b9a984a3eeae48a34d74ebf70ebca55695b4a344492b587",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",
@@ -879,7 +879,7 @@
     },
     {
       "path": "runtime/os/src/Os_Windows.h",
-      "sha256": "653a7ef7849fcd34545d17eacb4317513b2789f49e38292a69ce2fdfe9782722",
+      "sha256": "1c9de16c02fa8ad2cefa06fa71a68d22faf239ab07ef5b2c0144f9e75ece74f9",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1"
@@ -1043,7 +1043,7 @@
     },
     {
       "path": "runtime/src/LSduR.c",
-      "sha256": "45074f864cfa3a590963e5b201c56261910d448a29564a747e3e55fff8a81340",
+      "sha256": "560e57140c18e02def618417d9d65cd106840e8371fd27b9ceb809883b0397b5",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1175,7 +1175,7 @@
     },
     {
       "path": "scripts/ecu_tools/build.py",
-      "sha256": "0d73f1c66bddb51897639f09a4aa614ef4fcb17c459faa1f5fd82ef5048840a7",
+      "sha256": "83df683ba25146ded64a54102d353c1bf6ae39fab184f8230030c0567f678dd5",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1291,6 +1291,163 @@
       ],
       "role": "delivery",
       "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/host/include/Ecu_ProfileLimits.h",
+      "sha256": "a7efa7726c919abd73cd87b47b7a88da3fd1b92c7180f81b8c69df216625dd66",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "host"
+      ],
+      "role": "delivery",
+      "responsibility": "execution adapter"
+    },
+    {
+      "path": "runtime/host/src/Can_Execution.c",
+      "sha256": "bfb5b946e8222e7d2ed3693e7474efdb201fe9a02fe26af9ac89d2d2b6f45c88",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "host"
+      ],
+      "role": "delivery",
+      "responsibility": "execution adapter"
+    },
+    {
+      "path": "runtime/host/src/Ecu_Clock.c",
+      "sha256": "3aff4534a1a0abf25c514c99d307a19472fdb74061b04e4e295887c84d4b7297",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "host"
+      ],
+      "role": "delivery",
+      "responsibility": "execution adapter"
+    },
+    {
+      "path": "runtime/host/src/Dcm_Execution.c",
+      "sha256": "bd9361fd509e5c5cfb04d8b081ceb4fbf796b83817b8aaa68bfa661379033397",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "host"
+      ],
+      "role": "delivery",
+      "responsibility": "execution adapter"
+    },
+    {
+      "path": "runtime/src/Ecu_Execution.h",
+      "sha256": "22e45d2039cf6a9caeb4e296fbde3d5bc09909753addc00d1648cb8242f18b37",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "host",
+        "ecu"
+      ],
+      "role": "delivery",
+      "responsibility": "execution adapter"
+    },
+    {
+      "path": "runtime/src/Dcm_Internal.h",
+      "sha256": "7a7fd28d1a7dd30d5a6c2fc4dd45928acd00a4fa9258c6d15c0ceb6727a65614",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "host",
+        "ecu"
+      ],
+      "role": "delivery",
+      "responsibility": "execution adapter"
+    },
+    {
+      "path": "runtime/src/PduR_Internal.h",
+      "sha256": "1810df68a0acf158cb34afb0f7e5e7644518a2124c07c34394797b31e221d7de",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "host",
+        "ecu"
+      ],
+      "role": "delivery",
+      "responsibility": "execution adapter"
+    },
+    {
+      "path": "runtime/ecu/src/Ecu_Execution.c",
+      "sha256": "6fb641896c31253ef4901440fa4276932f0ce7fea0b86b6bac38776ada95b39b",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "delivery",
+      "responsibility": "execution adapter"
+    },
+    {
+      "path": "runtime/ecu/src/Ecu_Diagnostic.h",
+      "sha256": "38ceae136ef297b94fd89d7dfbc31db64d188f1c0ce204c102274dbd2bedab5a",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "delivery",
+      "responsibility": "execution adapter"
+    },
+    {
+      "path": "runtime/os/include/Os_IntegrationHooks.h",
+      "sha256": "cd9959e15b0dffcb1c27a30cd429240610be28ec88f12a1af1c9387931a6c164",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "os",
+      "responsibility": "AUTOSAR OS"
+    },
+    {
+      "path": "runtime/include/Os.h",
+      "sha256": "46bd20117624b757a533648578466e1cd2e2e7aa374445a638e5bf692bdf1fda",
+      "license": "Project-owned",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "host"
+      ],
+      "role": "delivery",
+      "responsibility": "legacy clock"
     }
   ]
 }

@@ -1,5 +1,5 @@
-#ifndef AUTOSAR_EPIC4_OS_VECTOR_H
-#define AUTOSAR_EPIC4_OS_VECTOR_H
+#ifndef AUTOSAR_OS_VECTOR_H
+#define AUTOSAR_OS_VECTOR_H
 #include <stdint.h>
 /* Private fixed Win64 port binding, including yield/tick and mailbox slots.
  * All access remains under the port's existing interrupt mutex protocol. */

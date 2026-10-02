@@ -1,5 +1,5 @@
-#ifndef AUTOSAR_EPIC4_OS_TYPES_H
-#define AUTOSAR_EPIC4_OS_TYPES_H
+#ifndef AUTOSAR_OS_TYPES_H
+#define AUTOSAR_OS_TYPES_H
 #include <stddef.h>
 #include <stdint.h>
 #include "Std_Types.h"

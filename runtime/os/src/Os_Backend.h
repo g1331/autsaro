@@ -1,5 +1,5 @@
-#ifndef AUTOSAR_EPIC4_OS_BACKEND_H
-#define AUTOSAR_EPIC4_OS_BACKEND_H
+#ifndef AUTOSAR_OS_BACKEND_H
+#define AUTOSAR_OS_BACKEND_H
 #include "Os_Target.h"
 #include "FreeRTOS.h"
 #include "task.h"

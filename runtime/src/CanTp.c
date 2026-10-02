@@ -57,14 +57,9 @@ static EcuStatus SendFrame(uint8_t dlc, const uint8_t data[8], uint64_t now_ms, 
         frame_confirmation_ok = 0u;
         frame_aborted = 0u;
         frame_pending = 1u;
-#ifdef ECU_TARGET_EPIC4
-        /* The selected DoCAN target has a fixed eight-byte Classical CAN
-         * N-PDU. All callers provide a fully initialized eight-byte buffer. */
-        (void)dlc;
-        result = LSduR_CanTpTransmit(8u, data);
-#else
-        result = LSduR_CanTpTransmit(dlc, data);
-#endif
+        /* Every staged N-PDU has a fully initialized eight-byte backing buffer. */
+        result = LSduR_CanTpTransmit(
+            Ecu_Policy.tx_padding_dlc == 0u ? dlc : Ecu_Policy.tx_padding_dlc, data);
         if (result != ECU_OK) {
             frame_pending = 0u;
             frame_kind = CANTP_FRAME_NONE;
@@ -285,7 +280,7 @@ static EcuStatus ReceiveFirst(uint8_t dlc, const uint8_t data[8], uint64_t now_m
     AbortRx();
     if (dlc != 8u) {
         result = ECU_ERR_FRAME_DLC;
-    } else if (length > ECU_DIAG_MAX_PAYLOAD) {
+    } else if (length > ECU_MAX_PDU_PAYLOAD) {
         flow_control[0] = 0x32u; /* FC(OVFLW): no N-SDU was delivered. */
         result = SendFrame(3u, flow_control, now_ms, CANTP_FRAME_OVERFLOW, 0u);
         if (result == ECU_OK) {
@@ -365,13 +360,13 @@ static EcuStatus ReceiveFlowControl(uint8_t dlc, const uint8_t data[8], uint64_t
         } else if (flow_status == 2u) {
             result = FinishTx(ECU_ERR_TP_FLOW, now_ms);
         } else if (flow_status == 1u) {
-#ifdef ECU_TARGET_EPIC4
-            /* The selected target has WFTmax zero: WAIT aborts this exchange. */
-            result = FinishTx(ECU_ERR_TP_FLOW, now_ms);
-#else
-            tx.wait_started_ms = now_ms;
-            result = ECU_OK;
-#endif
+            if ((Ecu_Policy.wft_max == 0u) &&
+                (Ecu_Policy.wait_when_wft_max_zero == ECU_WAIT_ABORT)) {
+                result = FinishTx(ECU_ERR_TP_FLOW, now_ms);
+            } else {
+                tx.wait_started_ms = now_ms;
+                result = ECU_OK;
+            }
         } else {
             uint8_t stmin = data[2];
             if ((stmin > 0x7fu) && ((stmin < 0xf1u) || (stmin > 0xf9u))) {
@@ -394,14 +389,10 @@ static EcuStatus ReceiveFlowControl(uint8_t dlc, const uint8_t data[8], uint64_t
 EcuStatus CanTp_RxIndication(uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
     EcuStatus result = ECU_ERR_CONFIG;
     if ((cantp_config != NULL) && (data != NULL)) {
-        /* The owner drains the epoch's inputs before its transport deadline
-         * phase; an input at the boundary must not expire itself first.
-         * The legacy synchronous target still advances before receiving. */
-#ifndef ECU_TARGET_EPIC4
-        result = CanTp_AdvanceTime(now_ms);
-        if (result == ECU_OK)
-#endif
-        {
+        /* The validated policy fixes whether this input precedes its deadline. */
+        result =
+            Ecu_Policy.rx_time_order == ECU_TIME_BEFORE_RX ? CanTp_AdvanceTime(now_ms) : ECU_OK;
+        if (result == ECU_OK) {
             if ((dlc < 1u) || (dlc > 8u)) {
                 AbortRx();
                 if ((dlc > 8u) && ((data[0] >> 4u) == 3u) && (tx.active != 0u) &&
@@ -446,7 +437,7 @@ EcuStatus CanTp_Transmit(size_t length, uint64_t now_ms) {
     if (cantp_config != NULL) {
         if ((tx.active != 0u) || (frame_pending != 0u)) {
             result = ECU_ERR_TP_BUSY;
-        } else if ((length == 0u) || (length > ECU_DIAG_MAX_PAYLOAD)) {
+        } else if ((length == 0u) || (length > ECU_MAX_PDU_PAYLOAD)) {
             result = ECU_ERR_TP_LENGTH;
         } else {
             size_t count;

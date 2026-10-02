@@ -132,6 +132,15 @@ def probe(current: dict) -> None:
         headers = sorted({entry["header"] for entry in current["entries"].values()})
         lines = ["#include <stddef.h>"]
         lines.extend('#include "' + Path(header).name + '"' for header in headers)
+        # This address/type consumer initializes no ECU and has no routes.
+        # Behavioral profile consumers compile the real generated producers.
+        lines.extend([
+            "const EcuPolicyConfig Ecu_Policy = {.tx_confirmation = ECU_TX_SYNCHRONOUS};",
+            "const EcuReceiveRoute *const Ecu_ReceiveRoutes = NULL;",
+            "const size_t Ecu_ReceiveRouteCount = 0u;",
+            "const EcuTransmitRoute *const Ecu_TransmitRoutes = NULL;",
+            "const size_t Ecu_TransmitRouteCount = 0u;",
+        ])
         for symbol, entry in current["entries"].items():
             arguments = (
                 ", ".join(argument["nativeType"] for argument in entry["arguments"])
@@ -151,6 +160,7 @@ def probe(current: dict) -> None:
             for path in (ROOT / "runtime/src").glob("*.c")
             if path.name != "ecu_host_main.c"
         )
+        inputs.extend(sorted((ROOT / "runtime/host/src").glob("*.c")))
         with native_session(directory, "bsw-compiler"):
             cc = compiler()
         command = [
@@ -161,6 +171,7 @@ def probe(current: dict) -> None:
             "-Werror",
             "-I" + str(ROOT / "runtime/include"),
             "-I" + str(ROOT / "runtime/src"),
+            "-I" + str(ROOT / "runtime/host/include"),
             str(source),
             *map(str, inputs),
             "-lbcrypt",

@@ -1,5 +1,8 @@
 #include "Ecu_Target.h"
 #include "Ecu_TargetConfig.h"
+#include "Ecu_Execution.h"
+#include "Ecu_Diagnostic.h"
+#include "Os_IntegrationHooks.h"
 #include "Os_Backend.h"
 #include "Can.h"
 #include "CanIf.h"
@@ -152,15 +155,10 @@ StatusType Ecu_TargetPrepare(void) {
     status = Os_TargetPrepare(&Ecu_OsConfig);
     if (status != E_OK) {
         (void)Os_HostAtomicExchange(&lifecycle, (Os_Atomic32)ECU_TARGET_FAILED);
+    } else {
+        Ecu_DiagnosticReset();
     }
     return status;
-}
-static EcuStatus unexpected_sink(uint32_t id, uint8_t dlc, const uint8_t data[8]) {
-    (void)id;
-    (void)dlc;
-    (void)data;
-    fail();
-    return ECU_ERR_IO;
 }
 static void stage(unsigned number) {
 #ifdef ECU_TARGET_TESTS
@@ -174,7 +172,7 @@ static void stage(unsigned number) {
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
 void StartupHook(void) {
-    const Can_ConfigType driver = {unexpected_sink};
+    const Can_ConfigType driver = {NULL};
     Can_ControllerStateType mode;
     initialization_thread = Os_HostThreadIdentity();
     stage(1u);
@@ -392,10 +390,10 @@ StatusType Ecu_TargetBatchCompletion(uint64_t ticket, Ecu_BatchCompletion *resul
     (void)Os_HostAtomicExchange(&batch_state, 0);
     return E_OK;
 }
-void Ecu_TargetOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate) {
+void Os_IntegrationOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate) {
     if ((id == ECU_TARGET_TASK) && (pending == 0u) && ((predicate & ECU_TARGET_EVENT_IO) != 0u) &&
         (Os_MailboxQuiescent() != 0) && (output_pending == 0u) && (load(&batch_state) == 4) &&
-        (Dcm_TargetPending() == 0u) &&
+        (Ecu_DiagnosticPending() == 0u) &&
         ((batch_needs_tick == 0u) || (processed_tick == batch_epoch))) {
         (void)Os_HostAtomicCompareExchange(&batch_state, 5, 4);
     }
@@ -573,13 +571,16 @@ void Ecu_TargetTask(void) {
                 Os_TargetTrace('x');
             }
             Dcm_AdvanceTime(epoch);
+            if (Ecu_DiagnosticProcess(epoch) != ECU_OK) {
+                fail();
+            }
             Os_TargetTrace('d');
             processed_tick = ticket;
         } else if ((status != E_OK) && (status != E_OS_NOFUNC)) {
             fail();
         } else {
             /* An IO-only wake consumes callbacks without repeating periodic work. */
-            if ((processed_tick == epoch) && (Dcm_TargetProcess(epoch) != ECU_OK)) {
+            if ((processed_tick == epoch) && (Ecu_DiagnosticProcess(epoch) != ECU_OK)) {
                 fail();
             }
         }

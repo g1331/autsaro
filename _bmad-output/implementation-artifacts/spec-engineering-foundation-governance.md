@@ -53,7 +53,7 @@ context:
 - [x] 阶段2：Linux受控OS port及两平台26 suite独立阶段出口。
 - [x] 阶段3：目标/资源/schema/PreparedProject纯源码双平台阶段出口。
 - [x] 阶段4：双目标ECU、离线包build/verify及搬移阶段出口。
-- [ ] 阶段5：语义策略替代Epic宏及legacy/integration回归阶段出口。
+- [x] 阶段5：语义策略替代Epic宏及legacy/integration回归阶段出口。
 - [ ] 阶段6：工具单入口及职责拆分，双平台all阶段出口。
 - [ ] 阶段7：统一状态与隔离Windows/Linux真实IPC阶段出口。
 - [ ] 阶段8：本机bundle与无checkout真实交付，双平台最终全量门及文档。
@@ -89,9 +89,14 @@ context:
 - 阶段4OS基线去重：独立ARTI的9项Task/tool、26项嵌套/拒绝及两项编译故障拒绝随stack suite在两平台各执行一次；从ECU ARTI产品用例移除重复的OS-only调用，三个真实ECU配置消费者保留。最终 `autosar_tooling os --target <native> --suite stack` Windows127.45s／Ubuntu与生产入口组合49.34s均通过，stack仍为23个原生向量。增量hygiene/rustfmt/clang-format/Prettier、Python/C99 syntax及现有两个Python包Ruff全部通过；没有以OS suite代替生产ECU证据。
 - 阶段4真实桌面：现有Windows私有Desktop/Job/CDP完整消费者首次364.47s通过；加入“显式编译预检”的实际按钮/IPC后最终421.60s通过。覆盖导入、合法编辑/保存/重开、源码预览、独立预检、取消与确认生成、真实build/协议验证、已有binary保护/恢复、篡改源拒绝、搬移/重导入/精确再生，以及host-v1/未知格式保持旧workspace。实际截图 `ecu-source-preview.png` 与 `ecu-post-save-verified.png`已读取，显示显式target/外部build目录、预检按钮与本次保存/校验/生成/构建/主机行为；程序窗口仅在私有Desktop，输入桌面未切换。Linux真实GUI仍按阶段7验证。
 - 阶段4fresh checkout根因：实际 `git checkout-index`产生新Windows副本，92项封存资产中11项工具/嵌入README因autocrlf转写而摘要错误；`.gitattributes`现固定stdlib工具与交付文本的LF，不改原有BSW/内核字节规则。新独立checkout的92项实际原始SHA-256全部匹配，0差异；临时审计脚本及两份副本已删除，不留共享文件或新增验收账本。
+- 阶段4独立本地提交：`9eac2a633b9e58afb276ef4c43ffb45f6d85ec0c`。阶段5采用每工程唯一生成的const `Ecu_Policy`及const Rx/Tx route表；发送、宿主时钟与DCM admission/pending/process由所链接execution adapter负责，DCM核心保留服务业务与静态策略。payload容量由legacy明确256及集成validated plan分别提供，不以目标宏猜默认值；OS waiting hook在原持锁quiescence/收据前边界链接。LSP对C无可用server，引用范围已通过当前源码/CodeGraph及已知符号搜索核对；正式双profile行为入口与两平台生产关口仍待本阶段实现后运行。
+- 阶段5双profile行为已实测：`semantic_profiles_preserve_host_and_integrated_protocol -- --exact --nocapture` Windows44.15s／Ubuntu12.90s各1通过。独立C99消费者编译交付的真实legacy与native执行adapter；同步实际写/flush成功、回调内撤销CanIf导致未确认`ECU_ERR_IO`、恢复后再发成功，native sink真实flush前当前epoch收据仍`E_OS_NOFUNC`，flush后由原mailbox提交。覆盖实际/8字节DLC、WAIT-zero重置/abort及恢复、N_Cr同截止时刻time-before/RX-before差别、默认/扩展DID、0xf186与unsupported跳过、两DID请求顺序、legacy三DID/native第三DID拒绝、P2=50及P2*=500/5000ms、SID0x31拒绝，以及legacy真实256字节response overflow NRC0x14与后续恢复。原生消费者完成214个epoch，无增大5000ms watchdog或更换已验证port。
+- 阶段5回归根因：const route迁移最初未保留CanIf当前配置的Rx方向/连接守卫；新增公开C消费者在Tx-only重初始化后实际失败，修回活动配置守卫后同一入口1.29s通过。Windows十项选定legacy CAN/诊断/故障/安全/写/例程/CanTp回归首轮9通过，DTC安全用例被已失效的README命令字串断言阻挡；删除该措辞断言而不重钉文字，保留实际构建/诊断断言后该用例11.34s通过。所有四个直接Can/CanIf/CanTp编译消费者显式选择profile容量与所需adapter，公共接口不留旧target别名。最终增量质量27.71s通过；两平台新waiting hook的独立stack/ARTI 23向量＋9项Task/tool＋26项嵌套/拒绝及两项已编译故障拒绝通过，Windows123.19s。不以此替代生产ECU。
+- 阶段5完整出口：最终Windows/Ubuntu `windows_and_linux_ecu_targets_execute_production_protocol -- --exact`各140.31s／34.15s通过，包括实际生产object私有probe符号拒绝检查及混合HostBatch/control构建非零、无输出安装。CanIf活动守卫修复后的两平台生产echo/N_Cr/两DID/畸形输入不退化。最后将不再属于BSW直接依赖的legacy `Os.h`归入显式host-clock资产，BSW catalog实际C99 link/address/type消费17项producer通过；双平台纯生成与最终semantic入口仍通过，Windowssemantic44.63s、Ubuntu两入口合计13.01s。源码中旧总宏/include guards/target Dcm接口及旧payload别名零匹配；Ruff通过。实际staged fresh checkout核查127个资产原始SHA-256，0差异。阶段5验收通过，进入阶段6；正式GUI/bundle与最终all仍按原范围执行。
 
 ## Spec Change Log
 - 阶段4：离线Windows/Linux工具和legacy/交接消费者一次切换，保留独立预期与真实拒绝；新增CLI失败不安装及suspended Job assignment关闭回归。每阶段出口仍以完整实际门为准，不修改批准范围。
+- 阶段5：生成const业务策略/route和显式profile容量，链接选中发送/时钟/诊断adapter与OS waiting hook；独立C99双profile行为、混合构建拒绝和生产符号隔离进入维护用例，不改变公共BSW ABI及汽车能力声明。
 
 
 ## Review Triage Log

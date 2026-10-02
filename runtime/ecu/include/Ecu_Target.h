@@ -142,13 +142,6 @@ StatusType Ecu_TargetPostBatch(uint64_t at, const Ecu_BatchFrame *frames, uint16
  * @return E_OK, E_OS_NOFUNC, E_OS_ID or standard context/pointer errors.
  */
 StatusType Ecu_TargetBatchCompletion(uint64_t ticket, Ecu_BatchCompletion *result);
-/** Target-only backend waiting callback; executes in its existing critical
- * transition, without host IO or advancing automotive time.
- * @param id Actual waiting Task.
- * @param pending Remaining event bits.
- * @param predicate Actual WaitEvent predicate.
- */
-void Ecu_TargetOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate);
 /** Copy the next published output from the sole native control consumer.
  * @param record Caller-owned output, unchanged when empty or rejected.
  * @return E_OK, E_OS_NOFUNC, E_OS_ACCESS, E_OS_STATE or E_OS_ILLEGAL_ADDRESS.

@@ -232,6 +232,11 @@ pub(crate) fn deliver_path(asset: &AssetEntry, profile: &str) -> Result<String, 
         if path == "ecu-tool.py" {
             return Ok("tools/ecu-tool.py".into());
         }
+        if let Some(relative) = path.strip_prefix("host/") {
+            if relative.starts_with("src/") || relative.starts_with("include/") {
+                return Ok(relative.into());
+            }
+        }
         if let Some(relative) = path.strip_prefix("ecu/") {
             if relative.starts_with("src/") || relative.starts_with("include/") {
                 return Ok(relative.into());
@@ -334,7 +339,6 @@ fn finish<'a>(
     let mut compiler_flags = vec!["-std=c99", "-O1", "-g", "-Wall", "-Wextra", "-Werror"];
     let mut kernel_sources = Vec::new();
     if profile == "ecu" {
-        compiler_flags.push("-DECU_TARGET_EPIC4");
         include_paths.extend(["os", "os/include", "os/src", "kernel/include"]);
         if linux {
             compiler_flags.extend(["-D_GNU_SOURCE", "-pthread"]);

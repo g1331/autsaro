@@ -89,7 +89,7 @@ StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *c
     uint64_t span;
     uint64_t required;
     uint64_t transport_frames =
-        ((uint64_t)ECU_TARGET_DCM_BUFFER_BYTES + UINT64_C(6)) / UINT64_C(7) + UINT64_C(2);
+        ((uint64_t)ECU_MAX_PDU_PAYLOAD + UINT64_C(6)) / UINT64_C(7) + UINT64_C(2);
     unsigned diagnostic_inputs = 0u;
     uint16_t index;
     StatusType status;
