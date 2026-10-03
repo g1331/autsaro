@@ -1,6 +1,6 @@
-# 2026-09-28 Epic 4 实施就绪判断
+# 实施就绪判断：历史 Epic 4 与当前 R5／Epic 7
 
-> 历史范围说明（2026-10-03）：本文保留 2026-09-28 的 Epic 4 进入判断与当时事实，不是当前开发队列。Epic 4 已完成；历史 Epic 2／Story 2.1 已合并至候选 R7，移出独立实施队列，需求保留在[诊断承接契约](epics.md#diagnostic-carryover)。新版[长期候选路线](product-brief.md#长期候选路线)尚未通过实施就绪检查；当前状态以 sprint 为准。下文当时的 backlog 与 2.1 机械推荐不作为当前派发依据。
+> 历史范围说明（2026-10-03）：下文至“2026-10-03 R5／Epic 7 实施就绪”以前保留 2026-09-28 的 Epic 4 进入判断与当时事实，不是当前开发队列。Epic 4 已完成；历史 Epic 2／Story 2.1 已合并至候选 R7，需求保留在[诊断承接契约](epics.md#diagnostic-carryover)。本轮 R5／Epic 7 的结论见文末，其他[长期候选](product-brief.md#长期候选路线)尚未通过实施就绪；当前状态以 sprint 为准。当时的 backlog 与 2.1 推荐不作为当前派发依据。
 
 **Sprint 规划就绪检查：PASS（仅 Epic 4，基于 `4844e1d` 中已确认的 W0–W5 共 22 条 stories）。**架构、需求追踪、接口与 UX 约束、产物责任、依赖及正反验收已足以支持后续逐条规格化和实施，不需要开发者另行发明跨模块决策。PASS 不表示全部故事前置结果已完成、已有 ready-for-dev 开发工件或功能验收通过；Epic 4 及所有新 stories 初始保持 backlog。本轮仅更新现有 sprint 和相关规划状态，没有开始功能开发、引入生产 OS 依赖或升级能力声明。
 
@@ -62,3 +62,29 @@ Epic 5 的 NM、DTC/NvM 与持久化关口及 Epic 6 的板卡/合法 MCU 依赖
 技能脚本已从唯一权威 `epics.md` 合并现有状态，新增 22 项、保留原有 17 项，无状态降级、孤儿条目、非法状态或从磁盘自动升级。同步后共 6 个 Epic（done=2、backlog=4）、27 条 stories（done=4、backlog=23）及 6 个 optional retrospective。YAML 格式校验通过；两处解析警告对应说明性标题“Epic List：本次结构（已确认）”与“Epic 4 退出条件”，没有遗漏真正的 Epic 或 Story。
 
 `status` 脚本按编号机械推荐首个 backlog 的 2.1，不能识别暂缓的产品排序；此推荐不作为派发依据。实际候选仍为满足上述进入条件后的 4.1/4.3，Epic 2 暂缓约束记录在 sprint 注释及本文中。本轮只验证规划、追踪同步和 Git 差异，不运行全栈功能构建或升级能力证据。
+
+## 2026-10-03 R5 / Epic 7 实施就绪
+
+**PASS，仅选定 CFG-1–CFG-4 / 正式 Epic 7。**基线：暂定 UX `a671cb6`、R5 需求 `49803b6`、增量架构 `2039020`、故事计划 `d1be8cb`。对应 [PRD](prd.md#r5-选定范围与完成契约)、[spine](architecture/epic-7/ARCHITECTURE-SPINE.md)和 [Epic 7](epics.md#epic-7-可独立使用的统一-ecu-工程配置工作台)。全局 PRD 的 draft 由未来 R6／R7 和硬件范围造成，不阻断已收口的 R5。
+
+### 判断依据
+
+- 12 项 CFG 子需求、5 项 CFG-NFR 和 8 项 UX7 要求都有实际故事验收，11 条纵向故事只依赖已完成基础或之前编号；不依赖 R6／R7、旧 Epic 5／6 或 MCU。7.6 默认模板使用既有参考应用路径，7.10 才初始化 live 应用和 v2 snapshot，没有反向依赖。
+- 独立 requirements/rubric、source reality 与 seam 复核确认继承实际核心／Session／reducer、锁定栈、资源身份、预览／封存及原生隔离。初次复核提出 8 项（含重叠）接口问题，已明确 op-tag／新对象寻址、变化预览 token、catalog 身份、current fingerprint 与 reply echo、约束 witness 分域、工程 dirty 保存保护及应用拥有权／seal。
+- 最终独立 contracts 复核返回 PASS。最终覆盖复核余下一项 CFG-NFR-5 验收缺口，已补入 7.1、7.4、7.11：后台重任务期间 GUI／取消可用，筛选展开复用快照，不重复读源／解压，有界呈现及完整 owned 日志复制。不是省略或豁免该要求。
+- Architecture lint 的确定性检查为零 findings；结构／前置检查确认 11 个唯一故事、Given/When/Then 成功与拒绝、无前向依赖及 YAML 可解析。spine 固定部署／资源／环境／协议和 C/OS 继承边界，无需 builder 另行决定跨故事接口。
+- 为保证用户应用可修改而封存工程仍不可变，R5 定义 workbench-ownership.json v1 和 autosar-workbench-handoff-v2；原 v1 仍严格按自身格式验证，不自动转换或放宽 closure。此为待实现的协议，不是已发布格式。
+
+### 进入实施与退出
+
+**下一产品入口：Story 7.1“缺资源时安全打开并检查真实工程”。**先按 bmad-build 在现有 implementation-artifacts 创建对应开发规格，记录起始提交、实际输入／Code Map／拒绝路径及独立预期，再进入 ready-for-dev/in-progress。7.1 的缺资源场景不要求预先装官方档案；定义／生成正例所需合法资料在相应故事核对。不能把本故事尚未实现作为进入自己的循环前置。
+
+新 Epic、11 条 stories 初始 backlog、retrospective optional；既有 36 项状态和两项已关闭 action_items 保留。后续按 story 结果推进，不依数字机械先开始旧 Epic 5／6。首批不需要重开 OS 选型、购买 MCU、安装编译器或完成全部 R6。
+
+R5 完成必须通过 PRD 四类退出与 Story 7.11 的跨故事原生／独立消费者复验，包括不同原创 CAN、标准七文件变体、定义驱动结构／参数和关键拒绝；源码交接与实际编译／行为分别取证。Windows/Linux 在隔离桌面／Xvfb 运行，macOS 无相应宿主时如实未验证。不能用静态原型、mock IPC、框架编译或一个参考工程代替 R5。
+
+### 本轮实际验证与限制
+
+已运行安装的 architecture lint、真实 sprint_plan.py dry-run/generate/validate，并对合并前后状态做比较：新增 13 项（Epic 7＋11 stories＋retrospective），保留 36 项，既有状态无变化、无孤儿／非法状态、无从磁盘升级；两项已关闭 action_items 保留。最终 validate 返回 valid=true、problems=[]；末次 dry-run 为 in_sync=true、保留49项、无新条目。69 条本地规划文件／锚点交叉链接通过。原两个 Epic 4 说明性标题警告保持历史非执行标题，没有遗漏真实故事。
+
+本轮没有代码、C 模板或正式图标迁移，没有运行产品构建、核心行为或原生 UI 验收，也没有 push。规划 PASS 不是软件、生成格式、主机或标准符合性通过。

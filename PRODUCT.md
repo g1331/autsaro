@@ -55,7 +55,7 @@ Vector MICROSAR Classic＋DaVinci Configurator、EB tresos AutoCore＋Studio 是
 
 ### 已确认方向与待决边界
 
-- 近期先细化统一 Configurator 与应用集成：工程对象及关系、参数／引用编辑、搜索、批量修改、问题定位、资源管理、应用／生成物所有权和调度接缝。本轮已完成[界面与交互评审规格](_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/EXPERIENCE.md)及关键原型；正式实施与后续能力的架构／故事仍需 BMad 规划，不由设计交付自动放行开发。
+- 统一 Configurator 的 R5 已收口为正式 Epic 7：选定 CFG-1–CFG-4、[增量架构](_bmad-output/planning-artifacts/architecture/epic-7/ARCHITECTURE-SPINE.md)、11 条故事与实施就绪检查已完成；[暂定界面／交互规格](_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/EXPERIENCE.md)继续作为实现输入。当前仅规划 PASS，新故事全部 backlog，未编码或替换正式图标；下一入口是 7.1 的开发规格与真实缺资源输入检查。R6 只固定共同对象／引用及应用所有权接缝，其他候选仍待规划。
 - 第一条完整参考产品链是通用 CAN＋诊断 ECU。完整交付须包含所声明配置需要的应用接口、OS、生命周期／网络管理与故障恢复；常开 CAN 的中间增量不能替代完整参考 ECU。
 - 长期逐阶段扩大所选 Classic 版次的有效模块与目标覆盖，不要求每个 ECU 启用全部模块，不用历史 story 数量计算未经定义的完成率。
 - 首个 MCU 板卡、驱动及许可、工具链、具体诊断／网络管理剖面、输入覆盖与迁移规则仍按对应产品规划决定。当前没有真实 MCU 验证，不预先宣布硬件支持。

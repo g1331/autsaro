@@ -684,7 +684,7 @@ AD-1–AD-11 位于 [Epic 7 spine](architecture/epic-7/ARCHITECTURE-SPINE.md)，
 - UX7-7：公共命令与 Ctrl/Cmd+K/S/O、Alt+1/4/9、Escape，树键盘／可访问名称、选择非颜色提示、label／aria-invalid／describedby、焦点圈定及归还、温和状态播报与 reduced motion。
 - UX7-8：当前 CAN、诊断／DTC、标准输入与各交付／构建／运行真实动作全部迁入新壳；原型 setter／路径／计时器不能替代 IPC，能力与取消／失效理由就近显示。
 
-### Epic List — selected R5
+### R5 成果分组
 
 **Epic 7：可独立使用的统一 ECU 工程配置工作台。**集成工程师从真实 ARXML 或原创模板建立工程，按定义导航、编辑、批量修复和安全保存，再独立交接可支持的源码；设置与配置不被缺编译器锁住。覆盖全部 CFG-1–CFG-4、CFG-NFR-1–CFG-NFR-5 和 UX7-1–UX7-8。复用已完成 Epic 1／3／4，不依赖尚未实施的 R6／R7、旧 Epic 5／6 或 MCU。
 
