@@ -1,0 +1,351 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-03T00:00:00+08:00",
+  "title": "Design System: Classic CAN 配置工作台",
+  "extensions": {
+    "colorMeta": {
+      "shell": {
+        "role": "neutral",
+        "displayName": "shell"
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "canvas"
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "surface"
+      },
+      "hover": {
+        "role": "neutral",
+        "displayName": "hover"
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "line"
+      },
+      "text-primary": {
+        "role": "neutral",
+        "displayName": "text-primary"
+      },
+      "text-secondary": {
+        "role": "neutral",
+        "displayName": "text-secondary"
+      },
+      "text-muted": {
+        "role": "neutral",
+        "displayName": "text-muted"
+      },
+      "primary": {
+        "role": "primary",
+        "displayName": "珊瑚主行动"
+      },
+      "primary-text": {
+        "role": "secondary",
+        "displayName": "primary-text"
+      },
+      "selection": {
+        "role": "secondary",
+        "displayName": "selection"
+      },
+      "selection-text": {
+        "role": "secondary",
+        "displayName": "selection-text"
+      },
+      "blue": {
+        "role": "secondary",
+        "displayName": "blue"
+      },
+      "teal": {
+        "role": "secondary",
+        "displayName": "teal"
+      },
+      "purple": {
+        "role": "secondary",
+        "displayName": "purple"
+      },
+      "gold": {
+        "role": "secondary",
+        "displayName": "gold"
+      },
+      "success": {
+        "role": "secondary",
+        "displayName": "success"
+      },
+      "warning": {
+        "role": "secondary",
+        "displayName": "warning"
+      },
+      "error": {
+        "role": "secondary",
+        "displayName": "error"
+      },
+      "error-bg": {
+        "role": "secondary",
+        "displayName": "error-bg"
+      },
+      "warning-bg": {
+        "role": "secondary",
+        "displayName": "warning-bg"
+      },
+      "success-bg": {
+        "role": "secondary",
+        "displayName": "success-bg"
+      },
+      "dark-shell": {
+        "role": "neutral",
+        "displayName": "深色 shell"
+      },
+      "dark-canvas": {
+        "role": "neutral",
+        "displayName": "深色 canvas"
+      },
+      "dark-surface": {
+        "role": "neutral",
+        "displayName": "深色 surface"
+      },
+      "dark-hover": {
+        "role": "neutral",
+        "displayName": "深色 hover"
+      },
+      "dark-line": {
+        "role": "neutral",
+        "displayName": "深色 line"
+      },
+      "dark-text-primary": {
+        "role": "neutral",
+        "displayName": "深色 text-primary"
+      },
+      "dark-text-secondary": {
+        "role": "neutral",
+        "displayName": "深色 text-secondary"
+      },
+      "dark-text-muted": {
+        "role": "neutral",
+        "displayName": "深色 text-muted"
+      },
+      "dark-primary": {
+        "role": "primary",
+        "displayName": "深色 primary"
+      },
+      "dark-primary-text": {
+        "role": "secondary",
+        "displayName": "深色 primary-text"
+      },
+      "dark-selection": {
+        "role": "secondary",
+        "displayName": "深色 selection"
+      },
+      "dark-selection-text": {
+        "role": "secondary",
+        "displayName": "深色 selection-text"
+      },
+      "dark-blue": {
+        "role": "secondary",
+        "displayName": "深色 blue"
+      },
+      "dark-teal": {
+        "role": "secondary",
+        "displayName": "深色 teal"
+      },
+      "dark-purple": {
+        "role": "secondary",
+        "displayName": "深色 purple"
+      },
+      "dark-gold": {
+        "role": "secondary",
+        "displayName": "深色 gold"
+      },
+      "dark-success": {
+        "role": "secondary",
+        "displayName": "深色 success"
+      },
+      "dark-warning": {
+        "role": "secondary",
+        "displayName": "深色 warning"
+      },
+      "dark-error": {
+        "role": "secondary",
+        "displayName": "深色 error"
+      },
+      "dark-error-bg": {
+        "role": "secondary",
+        "displayName": "深色 error-bg"
+      },
+      "dark-warning-bg": {
+        "role": "secondary",
+        "displayName": "深色 warning-bg"
+      },
+      "dark-success-bg": {
+        "role": "secondary",
+        "displayName": "深色 success-bg"
+      }
+    },
+    "typographyMeta": {
+      "body": {
+        "displayName": "正文",
+        "purpose": "默认控件与任务文字。"
+      },
+      "code": {
+        "displayName": "工程等宽",
+        "purpose": "标识符、数值和源码。"
+      }
+    },
+    "shadows": [
+      {
+        "name": "menu",
+        "value": "0 8px 24px rgb(0 0 0 / 0.14)",
+        "purpose": "临时菜单。"
+      },
+      {
+        "name": "dialog",
+        "value": "0 20px 70px rgb(0 0 0 / 0.25)",
+        "purpose": "差异与设置对话框。"
+      },
+      {
+        "name": "inspector-overlay",
+        "value": "-10px 0 24px rgb(0 0 0 / 0.08)",
+        "purpose": "窄窗右侧覆盖。"
+      },
+      {
+        "name": "tree-overlay",
+        "value": "10px 0 24px rgb(0 0 0 / 0.1)",
+        "purpose": "小窗左侧覆盖。"
+      }
+    ],
+    "motion": [
+      {
+        "name": "button-feedback",
+        "value": "140ms ease-out",
+        "purpose": "仅在 prefers-reduced-motion: no-preference 时过渡按钮背景和文字颜色。"
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact-desktop-max",
+        "value": "1250px"
+      },
+      {
+        "name": "inspector-overlay-max",
+        "value": "1079px"
+      },
+      {
+        "name": "small-window-max",
+        "value": "700px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "主按钮",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "克制、可扫描；主行动、边界次行动与透明取消各有层级。",
+      "html": "<button class=\"ds-button-primary\">应用更改</button>",
+      "css": ".ds-button-primary{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:30px;padding:5px 10px;border:1px solid transparent;border-radius:5px;cursor:pointer;font-family:'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei', sans-serif;font-size:13px;background:var(--primary, #b64c55);color:var(--primary-text, #ffffff);font-weight:600;}.ds-button-primary:hover:not(:disabled){background:var(--primary, #b64c55);filter:brightness(0.93);}.ds-button-primary:focus-visible{outline:2px solid var(--blue, #285f9e);outline-offset:2px;}.ds-button-primary:disabled{color:var(--text-muted, #6b6b6b);opacity:.65;cursor:not-allowed;}.ds-button-primary:disabled{background:var(--hover, #e9e9e9);filter:none;}"
+    },
+    {
+      "name": "次按钮",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "克制、可扫描；主行动、边界次行动与透明取消各有层级。",
+      "html": "<button class=\"ds-button-secondary\">预览保存</button>",
+      "css": ".ds-button-secondary{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:30px;padding:5px 10px;border:1px solid transparent;border-radius:5px;cursor:pointer;font-family:'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei', sans-serif;font-size:13px;background:var(--canvas, #ffffff);color:var(--text-primary, #252525);border-color:var(--line, #dddddd);}.ds-button-secondary:hover:not(:disabled){background:var(--hover, #e9e9e9);}.ds-button-secondary:focus-visible{outline:2px solid var(--blue, #285f9e);outline-offset:2px;}.ds-button-secondary:disabled{color:var(--text-muted, #6b6b6b);opacity:.65;cursor:not-allowed;}"
+    },
+    {
+      "name": "幽灵按钮",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "克制、可扫描；主行动、边界次行动与透明取消各有层级。",
+      "html": "<button class=\"ds-button-ghost\">取消</button>",
+      "css": ".ds-button-ghost{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:30px;padding:5px 10px;border:1px solid transparent;border-radius:5px;cursor:pointer;font-family:'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei', sans-serif;font-size:13px;background:transparent;color:var(--text-primary, #252525);}.ds-button-ghost:hover:not(:disabled){background:var(--hover, #e9e9e9);}.ds-button-ghost:focus-visible{outline:2px solid var(--blue, #285f9e);outline-offset:2px;}.ds-button-ghost:disabled{color:var(--text-muted, #6b6b6b);opacity:.65;cursor:not-allowed;}"
+    },
+    {
+      "name": "文本输入",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "画布底、中性边界与可见键盘焦点。",
+      "html": "<label class=\"ds-input-label\">对象名称 <input class=\"ds-input\" value=\"EngineSpeed\" /></label>",
+      "css": ".ds-input-label{font-family:'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei', sans-serif;font-size:13px;color:var(--text-primary, #252525);display:grid;gap:8px;}.ds-input{font-family:'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei', sans-serif;font-size:13px;min-width:0;padding:7px 9px;border:1px solid var(--line, #dddddd);background:var(--canvas, #ffffff);color:var(--text-primary, #252525);border-radius:5px;caret-color:var(--primary, #b64c55);}.ds-input:focus-visible{outline:2px solid var(--blue, #285f9e);outline-offset:2px;}.ds-input:disabled{background:var(--shell, #f3f3f3);color:var(--text-secondary, #626262);}.ds-input::placeholder{color:var(--text-muted, #6b6b6b);}"
+    },
+    {
+      "name": "角色标签",
+      "kind": "chip",
+      "refersTo": "role-tag",
+      "description": "类别只改变文字色，标签不是验证结果。",
+      "html": "<span class=\"ds-role ds-role-can\">CAN</span> <span class=\"ds-role ds-role-app\">应用</span> <span class=\"ds-role ds-role-diag\">诊断</span>",
+      "css": ".ds-role{display:inline-flex;gap:5px;font-family:'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei', sans-serif;font-size:13px;font-size:11px;line-height:20px;padding:0 6px;border-radius:3px;background:var(--shell, #f3f3f3);color:var(--text-secondary, #626262);white-space:nowrap;}.ds-role-can{color:var(--blue, #285f9e);}.ds-role-app{color:var(--purple, #7953a5);}.ds-role-diag{color:var(--gold, #856016);}"
+    },
+    {
+      "name": "工程树选中项",
+      "kind": "nav",
+      "refersTo": "tree-selected",
+      "description": "树节点以选择蓝底和文字表达对象焦点。",
+      "html": "<button class=\"ds-tree\" aria-current=\"true\"><svg class=\"ds-tree-icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"4\" y=\"6\" width=\"16\" height=\"12\" rx=\"2\"/><path d=\"M8 3v3M16 3v3M8 18v3M16 18v3\"/></svg><span>PowertrainStatus</span></button>",
+      "css": ".ds-tree{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:30px;padding:5px 10px;border:1px solid transparent;border-radius:5px;cursor:pointer;font-family:'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei', sans-serif;font-size:13px;width:100%;justify-content:flex-start;padding:4px 6px;font-size:12px;background:var(--selection, #e6effc);color:var(--selection-text, #1c4b86);text-align:left;}.ds-tree:hover{background:var(--selection, #e6effc);}.ds-tree:focus-visible{outline:2px solid var(--blue, #285f9e);outline-offset:2px;}.ds-tree-icon{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}"
+    },
+    {
+      "name": "属性检查器面板",
+      "kind": "card",
+      "refersTo": "inspector",
+      "description": "固定工程面板采用平面 surface、边界与 panel 内距。",
+      "html": "<section class=\"ds-inspector\"><h3 class=\"ds-object-title\">EngineSpeed</h3><p class=\"ds-object-path\">Powertrain / Signals</p></section>",
+      "css": ".ds-inspector{box-sizing:border-box;font-family:'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei', sans-serif;font-size:13px;width:290px;max-width:100%;padding:16px;background:var(--surface, #fafafa);color:var(--text-primary, #252525);border-left:1px solid var(--line, #dddddd);}.ds-object-title{font-size:15px;font-weight:600;margin:0 0 9px;}.ds-object-path{font-size:11px;color:var(--text-secondary, #626262);line-height:1.6;margin:0 0 16px;overflow-wrap:anywhere;}"
+    },
+    {
+      "name": "对象表",
+      "kind": "custom",
+      "refersTo": "object-table",
+      "description": "紧凑字号、surface 表头与逐行细分隔；选中优先于悬停。",
+      "html": "<table class=\"ds-table\"><thead><tr><th>信号</th><th>长度</th></tr></thead><tbody><tr class=\"ds-selected\"><td><button class=\"ds-object\">EngineSpeed</button></td><td class=\"ds-mono\">16 bit</td></tr><tr><td>EngineLoad</td><td class=\"ds-mono\">8 bit</td></tr></tbody></table>",
+      "css": ".ds-table{font-family:'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei', sans-serif;font-size:13px;font-size:12px;width:100%;border-collapse:collapse;color:var(--text-primary, #252525);background:var(--canvas, #ffffff);}.ds-table th{text-align:left;color:var(--text-secondary, #626262);font-weight:500;padding:9px 10px;border-bottom:1px solid var(--line, #dddddd);background:var(--surface, #fafafa);white-space:nowrap;}.ds-table td{padding:11px 10px;border-bottom:1px solid var(--line, #dddddd);white-space:nowrap;}.ds-table tr:hover td{background:var(--surface, #fafafa);}.ds-table .ds-selected td,.ds-table .ds-selected:hover td{background:var(--selection, #e6effc);}.ds-object{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:30px;padding:5px 10px;border:1px solid transparent;border-radius:5px;cursor:pointer;font-family:'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei', sans-serif;font-size:13px;font-size:12px;font-weight:500;padding:0;min-height:19px;background:transparent;color:inherit;}.ds-object:hover{background:var(--hover, #e9e9e9);}.ds-object:focus-visible{outline:2px solid var(--blue, #285f9e);outline-offset:2px;}.ds-mono{font-family:'Cascadia Code', Consolas, 'Courier New', monospace;font-size:12px;font-variant-numeric:tabular-nums;}"
+    },
+    {
+      "name": "活动编辑标签",
+      "kind": "nav",
+      "refersTo": "editor-tab-active",
+      "description": "画布底、主体文字与底部主色标线。",
+      "html": "<div class=\"ds-editor-tab\"><button class=\"ds-editor-button\">CAN 信号</button></div>",
+      "css": ".ds-editor-tab{display:inline-flex;background:var(--canvas, #ffffff);border-right:1px solid var(--line, #dddddd);box-shadow:inset 0 -2px var(--primary, #b64c55);}.ds-editor-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:30px;padding:5px 10px;border:1px solid transparent;border-radius:5px;cursor:pointer;font-family:'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei', sans-serif;font-size:13px;border-radius:0;min-height:38px;font-size:12px;padding:7px 13px;color:var(--text-primary, #252525);background:transparent;}.ds-editor-button:hover{background:var(--hover, #e9e9e9);}.ds-editor-button:focus-visible{outline:2px solid var(--blue, #285f9e);outline-offset:2px;}"
+    }
+  ],
+  "narrative": {
+    "northStar": "统一工程工作台",
+    "overview": "以用户固定的 JetBrains 菜单、侧栏与底部工具窗口秩序，结合 ChatGPT 式中性浅深主题，形成安静、连续、可扫描的工程界面。品牌表达落在对象角色、精确对齐和少量主行动上，不采用营销式展示字体或巨型标题。\n\n2026-10-03，用户确认本轮界面与透明珊瑚 A 图标“暂时定稿”，作为后续实施的暂定设计基线；这不是正式软件已实施、已验收或已发布的记录。根 DESIGN.md 是后续实现的唯一可变视觉权威；日期目录的同名文件是本轮冻结导出。正式应用尚未迁移，原型与新图标均不表示生产软件已更新。",
+    "keyCharacteristics": [
+      "浅深主题共享层级与密度。",
+      "工程树、对象表、检查器保持一致的选中语言。",
+      "语义色区分对象类别、选择与结果，不铺满工作区。",
+      "原生系统字体服务中文任务与工程标识符。"
+    ],
+    "rules": [
+      {
+        "name": "Role Before Decoration",
+        "body": "对象色、选择色和状态色各司其职；同一种对象在树、表和检查器中保持同一角色，状态不能只靠颜色表达。",
+        "section": "colors"
+      },
+      {
+        "name": "Native Operate Type",
+        "body": "系统 UI 字体用于任务与控件，等宽字体用于标识符、数值和源码；不把工程界面改造成营销展示页。",
+        "section": "typography"
+      },
+      {
+        "name": "Flat Workspace",
+        "body": "固定工作区依靠中性面层和细边界分区；阴影仅表达菜单、对话框与覆盖式侧面板的前后关系。",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do 使用同一套主题角色映射，深色模式同时替换背景、文字、边界、选择和状态色。",
+      "Do 使用正文、紧凑文字与等宽文字的既定层级，并保留可见键盘焦点。",
+      "Do 在紧凑窗口中收纳侧面板，让对象表在自己的容器内横向滚动。",
+      "Do 以对象标签、图标和文字共同表达语义；保持主行动稀少且上下文明确。"
+    ],
+    "donts": [
+      "Don't 将 logo 固定身份色替换为状态色，或将身份色扩散为大面积工作区装饰。",
+      "Don't 在工作区背景或界面文字添加装饰渐变、网格、营销展示字体及重复的大标题卡片；身份图标可使用用户明确要求的受控渐变。",
+      "Don't 将所有容器卡片化、浮起化；工作区维持平面结构。",
+      "Don't 声称本基线已经迁入正式应用、已获实施批准或通过无障碍符合性认证。"
+    ]
+  }
+}

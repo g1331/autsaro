@@ -1,0 +1,29 @@
+{
+  "source": "preferred-shape-source.png",
+  "sourcePrompt": "flat-logo.prompt.txt",
+  "derivedPrompt": "preferred-logo.prompt.txt",
+  "selection": "User preference A > C > B; transparent single-coral material A provisionally finalized by the user on 2026-10-03; no production implementation or release yet",
+  "constraints": ["Preserve the foreground silhouette", "No green identity", "Do not reuse Toolbox orange-pink-purple progression", "Remove the opaque white carrier", "Share body RGB and alpha across theme variants"],
+  "bodyMask": "source alpha > 0 and r > max(g,b) + 2",
+  "inkMask": "source alpha > 0 and not bodyMask and min(r,g,b) < 247",
+  "normalization": "nx=(x-41)/430; ny=(y-139)/233; foreground bbox=(41,139,471,372)",
+  "baseRGB": [249, 99, 113],
+  "lightRGB": [255, 170, 149],
+  "depthRGB": [157, 42, 65],
+  "lightWeight": "0.58*exp(-(((nx-0.22)/0.52)^2+((ny-0.04)/0.45)^2))",
+  "depthWeight": "0.68*max(0,nx)^1.5*max(0,ny)^0.8",
+  "bodyRGB": "lerp(lerp(baseRGB,lightRGB,lightWeight),depthRGB,depthWeight)",
+  "bodyCoverage": "clamp((r-(g+b)/2)/164.5,0,1); snap coverage > 0.98 to 1",
+  "inkCoverage": "clamp((255-(r+g+b)/3)/226.5,0,1); snap coverage > 0.98 to 1",
+  "outputAlpha": "round(source alpha * coverage); no compositing over white",
+  "otherPixels": [0, 0, 0, 0],
+  "outputs": {
+    "logo-workbench.png": {"body": "bodyRGB", "inkRGB": [35, 31, 42]},
+    "logo-workbench-dark.png": {"body": "bodyRGB", "inkRGB": [255, 237, 231]},
+    "logo-coral.png": {"bodyRGB": [252, 86, 87], "inkRGB": [35, 31, 42]},
+    "logo-coral-dark.png": {"bodyRGB": [252, 86, 87], "inkRGB": [255, 237, 231]},
+    "logo-app.png": {"body": "bodyRGB", "inkRGB": [141, 120, 128], "use": "Fixed desktop export; not automatic OS theme adaptation"}
+  },
+  "interfacePrimary": {"light": "#b64c55", "lightText": "#ffffff", "dark": "#ff979f", "darkText": "#491f29"},
+  "production": "No production UI or installed-icon changes"
+}

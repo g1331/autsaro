@@ -1,0 +1,3368 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>产品界面基线 · Classic CAN 配置工作台</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --shell: #f3f3f3;
+        --canvas: #ffffff;
+        --surface: #fafafa;
+        --hover: #e9e9e9;
+        --line: #dddddd;
+        --text-primary: #252525;
+        --text-secondary: #626262;
+        --text-muted: #6b6b6b;
+        --primary: #b64c55;
+        --primary-text: #ffffff;
+        --selection: #e6effc;
+        --selection-text: #1c4b86;
+        --blue: #285f9e;
+        --teal: #146c63;
+        --purple: #7953a5;
+        --gold: #856016;
+        --success: #257447;
+        --warning: #8c620f;
+        --error: #b23936;
+        --error-bg: #fceeed;
+        --warning-bg: #fff5dd;
+        --success-bg: #eaf5ed;
+        --font-ui:
+          'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei', sans-serif;
+        --font-code: 'Cascadia Code', Consolas, 'Courier New', monospace;
+        --radius: 5px;
+        --panel: 16px;
+        --gap: 8px;
+        --motion: 140ms;
+        font-family: var(--font-ui);
+        font-size: 13px;
+        color: var(--text-primary);
+        background: var(--shell);
+      }
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+        --shell: #1b1b1b;
+        --canvas: #232323;
+        --surface: #202020;
+        --hover: #303030;
+        --line: #3d3d3d;
+        --text-primary: #ededed;
+        --text-secondary: #b4b4b4;
+        --text-muted: #a1a1a1;
+        --primary: #ff979f;
+        --primary-text: #491f29;
+        --selection: #263e5a;
+        --selection-text: #c4dbfa;
+        --blue: #97bcef;
+        --teal: #8fd2c5;
+        --purple: #c0a4e6;
+        --gold: #e2c077;
+        --success: #91cea4;
+        --warning: #e5c27e;
+        --error: #eeaaa4;
+        --error-bg: #3b2827;
+        --warning-bg: #393224;
+        --success-bg: #25352b;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+      }
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+      }
+      button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        color: inherit;
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: var(--radius);
+        cursor: pointer;
+        min-height: 30px;
+        padding: 5px 10px;
+      }
+      button:hover:not(:disabled) {
+        background: var(--hover);
+      }
+      button:disabled {
+        color: var(--text-muted);
+        cursor: not-allowed;
+        opacity: 0.65;
+      }
+      button:focus-visible,
+      input:focus-visible,
+      select:focus-visible,
+      textarea:focus-visible,
+      summary:focus-visible,
+      [tabindex]:focus-visible {
+        outline: 2px solid var(--blue);
+        outline-offset: 2px;
+      }
+      input,
+      select,
+      textarea {
+        width: 100%;
+        min-width: 0;
+        padding: 7px 9px;
+        border: 1px solid var(--line);
+        background: var(--canvas);
+        color: var(--text-primary);
+        border-radius: var(--radius);
+        caret-color: var(--primary);
+      }
+      input::placeholder,
+      textarea::placeholder {
+        color: var(--text-muted);
+      }
+      input:disabled,
+      select:disabled {
+        background: var(--shell);
+        color: var(--text-secondary);
+      }
+      input[type='checkbox'] {
+        width: auto;
+        accent-color: var(--primary);
+      }
+      ::selection {
+        color: var(--selection-text);
+        background: var(--selection);
+      }
+      * {
+        scrollbar-width: thin;
+        scrollbar-color: var(--line) transparent;
+      }
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--line);
+        border-radius: 4px;
+      }
+      a {
+        color: var(--blue);
+        text-underline-offset: 3px;
+      }
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+      h1 {
+        font-size: 24px;
+        font-weight: 600;
+        letter-spacing: -0.025em;
+      }
+      h2 {
+        font-size: 19px;
+        font-weight: 600;
+        letter-spacing: -0.015em;
+      }
+      h3 {
+        font-size: 14px;
+        font-weight: 600;
+      }
+      svg.icon {
+        width: 17px;
+        height: 17px;
+        flex: 0 0 17px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .sprite {
+        position: absolute;
+        width: 0;
+        height: 0;
+        overflow: hidden;
+      }
+      .mono {
+        font-family: var(--font-code);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+      .muted,
+      .hint {
+        color: var(--text-secondary);
+      }
+      .hint {
+        font-size: 12px;
+        line-height: 1.6;
+      }
+      .primary {
+        background: var(--primary);
+        color: var(--primary-text);
+        border-color: transparent;
+        font-weight: 600;
+      }
+      .primary:hover:not(:disabled) {
+        background: var(--primary);
+        filter: brightness(0.93);
+      }
+      .primary:disabled {
+        background: var(--hover);
+        color: var(--text-muted);
+        filter: none;
+      }
+      .secondary {
+        border-color: var(--line);
+        background: var(--canvas);
+      }
+      .text-button {
+        color: var(--blue);
+        padding: 2px 4px;
+      }
+      .icon-button {
+        width: 30px;
+        padding: 4px;
+      }
+      .icon-button[aria-pressed='true'] {
+        color: var(--selection-text);
+        background: var(--selection);
+      }
+      .role-tag,
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        line-height: 20px;
+        padding: 0 6px;
+        border-radius: 3px;
+        background: var(--shell);
+        color: var(--text-secondary);
+        white-space: nowrap;
+      }
+      .tag.blue,
+      .role-blue {
+        color: var(--blue);
+      }
+      .tag.teal,
+      .role-teal {
+        color: var(--teal);
+      }
+      .tag.purple,
+      .role-purple {
+        color: var(--purple);
+      }
+      .tag.gold,
+      .role-gold {
+        color: var(--gold);
+      }
+      .success {
+        color: var(--success);
+      }
+      .warning {
+        color: var(--warning);
+      }
+      .error {
+        color: var(--error);
+      }
+      .prototype-bar {
+        height: 32px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--line);
+        color: var(--text-secondary);
+        font-size: 11px;
+        background: var(--canvas);
+      }
+      .prototype-bar strong {
+        color: var(--text-primary);
+        font-weight: 600;
+      }
+      .prototype-bar select {
+        width: 150px;
+        height: 24px;
+        padding: 1px 6px;
+        font-size: 11px;
+        margin-left: auto;
+      }
+      .window {
+        height: calc(100dvh - 32px);
+        min-height: 560px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .menu-bar {
+        height: 34px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        padding: 0 12px;
+        gap: 4px;
+        background: var(--shell);
+        border-bottom: 1px solid var(--line);
+        position: relative;
+        z-index: 5;
+      }
+      .brand {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding-right: 15px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .logo {
+        width: 23px;
+        height: 23px;
+        flex-shrink: 0;
+      }
+      .menu-button {
+        min-height: 26px;
+        padding: 3px 8px;
+        font-size: 12px;
+      }
+      .menu-button[aria-expanded='true'] {
+        background: var(--hover);
+      }
+      .window-label {
+        margin-left: auto;
+        color: var(--text-muted);
+        font-size: 11px;
+      }
+      .toolbar {
+        height: 48px;
+        flex-shrink: 0;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 0 14px;
+        background: var(--canvas);
+      }
+      .project-select {
+        justify-content: flex-start;
+        width: 230px;
+        font-weight: 600;
+        padding-left: 4px;
+      }
+      .project-select .icon {
+        color: var(--blue);
+      }
+      .project-select small {
+        font-size: 11px;
+        color: var(--text-secondary);
+        font-weight: 400;
+      }
+      .separator {
+        height: 20px;
+        width: 1px;
+        background: var(--line);
+        margin: 0 5px;
+        flex-shrink: 0;
+      }
+      .toolbar-search {
+        margin-left: auto;
+        color: var(--text-muted);
+        font-size: 12px;
+        min-width: 145px;
+        justify-content: space-between;
+      }
+      kbd {
+        font-family: var(--font-ui);
+        border: 1px solid var(--line);
+        border-radius: 3px;
+        padding: 1px 4px;
+        font-size: 10px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+      }
+      .workspace {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+      }
+      .utility-rail {
+        width: 42px;
+        flex-shrink: 0;
+        background: var(--shell);
+        border-right: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 8px 0;
+        gap: 10px;
+      }
+      .utility-rail .bottom {
+        margin-top: auto;
+      }
+      .project-panel {
+        width: 250px;
+        flex-shrink: 0;
+        background: var(--surface);
+        border-right: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      .panel-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 38px;
+        padding: 0 12px;
+        font-weight: 600;
+        font-size: 12px;
+        border-bottom: 1px solid var(--line);
+      }
+      .project-filter {
+        padding: 10px 12px;
+      }
+      .project-filter input {
+        font-size: 12px;
+        height: 30px;
+        background: var(--canvas);
+      }
+      .sub-tabs {
+        display: flex;
+        gap: 14px;
+        border-bottom: 1px solid var(--line);
+        padding: 0 12px;
+      }
+      .sub-tabs button {
+        border-radius: 0;
+        padding: 5px 0 8px;
+        font-size: 12px;
+        color: var(--text-secondary);
+        border-bottom: 2px solid transparent;
+      }
+      .sub-tabs button.active {
+        color: var(--text-primary);
+        border-bottom-color: var(--primary);
+      }
+      .tree-content {
+        overflow: auto;
+        padding: 10px 7px;
+        flex: 1;
+      }
+      .tree-node {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        width: 100%;
+        min-height: 30px;
+        gap: 7px;
+        padding: 4px 6px;
+        text-align: left;
+        font-size: 12px;
+      }
+      .tree-node span.name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .tree-node .tail {
+        margin-left: auto;
+        color: var(--text-muted);
+        font-size: 10px;
+      }
+      .tree-node.selected {
+        background: var(--selection);
+        color: var(--selection-text);
+      }
+      .tree-node.level-1 {
+        padding-left: 18px;
+      }
+      .tree-node.level-2 {
+        padding-left: 37px;
+      }
+      .tree-node.level-3 {
+        padding-left: 56px;
+      }
+      .tree-group {
+        color: var(--text-secondary);
+      }
+      .tree-foot {
+        border-top: 1px solid var(--line);
+        padding: 9px 12px;
+        display: flex;
+        justify-content: space-between;
+        color: var(--text-secondary);
+        font-size: 11px;
+      }
+      .central {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--canvas);
+      }
+      .editors {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+      }
+      .document {
+        min-width: 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+      .editor-tabs {
+        display: flex;
+        min-height: 39px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--line);
+        overflow-x: auto;
+        flex-shrink: 0;
+      }
+      .editor-tab {
+        display: flex;
+        align-items: center;
+        border-right: 1px solid var(--line);
+        position: relative;
+        flex-shrink: 0;
+      }
+      .editor-tab button {
+        border-radius: 0;
+        min-height: 38px;
+        font-size: 12px;
+        color: var(--text-secondary);
+        padding: 7px 13px;
+      }
+      .editor-tab.active {
+        background: var(--canvas);
+        box-shadow: inset 0 -2px var(--primary);
+      }
+      .editor-tab.active button {
+        color: var(--text-primary);
+      }
+      .editor-tab .tab-close {
+        padding: 4px;
+        margin-right: 5px;
+        min-height: 24px;
+      }
+      .editor-tab .tab-close .icon {
+        width: 12px;
+        height: 12px;
+      }
+      .breadcrumb {
+        min-height: 33px;
+        display: flex;
+        align-items: center;
+        padding: 5px 20px;
+        gap: 7px;
+        border-bottom: 1px solid var(--line);
+        font-size: 11px;
+        color: var(--text-secondary);
+        overflow: hidden;
+        flex-shrink: 0;
+      }
+      .breadcrumb .icon {
+        width: 12px;
+        height: 12px;
+      }
+      .breadcrumb strong {
+        font-weight: 500;
+        color: var(--text-primary);
+      }
+      .editor-content {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        padding: 20px;
+      }
+      .content-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+      .content-head p {
+        color: var(--text-secondary);
+        font-size: 12px;
+        margin-top: 6px;
+        line-height: 1.6;
+      }
+      .content-actions {
+        display: flex;
+        gap: 7px;
+        flex-shrink: 0;
+      }
+      .content-search {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 12px;
+      }
+      .content-search input {
+        max-width: 270px;
+        height: 31px;
+        font-size: 12px;
+      }
+      .content-search .count {
+        margin-left: auto;
+        font-size: 11px;
+        color: var(--text-muted);
+      }
+      .table-wrap {
+        overflow-x: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      caption {
+        text-align: left;
+        font-weight: 600;
+        padding: 15px 0 10px;
+      }
+      th {
+        text-align: left;
+        color: var(--text-secondary);
+        font-weight: 500;
+        padding: 9px 10px;
+        border-bottom: 1px solid var(--line);
+        white-space: nowrap;
+        background: var(--surface);
+      }
+      th:first-child,
+      td:first-child {
+        padding-left: 10px;
+      }
+      th button {
+        min-height: 20px;
+        padding: 0;
+        font-size: inherit;
+      }
+      td {
+        padding: 11px 10px;
+        border-bottom: 1px solid var(--line);
+        white-space: nowrap;
+      }
+      tr.selected-row td {
+        background: var(--selection);
+      }
+      tr:hover td {
+        background: var(--surface);
+      }
+      tr.selected-row:hover td {
+        background: var(--selection);
+      }
+      .table-object {
+        padding: 0;
+        min-height: 19px;
+        gap: 8px;
+        font-weight: 500;
+      }
+      .table-object .icon {
+        width: 15px;
+        height: 15px;
+      }
+      .table-meta {
+        font-size: 11px;
+        color: var(--text-muted);
+        padding-top: 4px;
+      }
+      .section-title {
+        margin: 22px 0 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .section-title small {
+        font-weight: 400;
+        color: var(--text-secondary);
+      }
+      .inspector {
+        width: 290px;
+        flex-shrink: 0;
+        background: var(--surface);
+        border-left: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      .inspector-body {
+        padding: 16px;
+        overflow: auto;
+        flex: 1;
+      }
+      .object-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 9px;
+      }
+      .object-title h3 {
+        font-size: 15px;
+      }
+      .object-path {
+        font-size: 11px;
+        color: var(--text-secondary);
+        overflow-wrap: anywhere;
+        line-height: 1.6;
+        margin-bottom: 16px;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-bottom: 14px;
+      }
+      .field span {
+        display: flex;
+        justify-content: space-between;
+        gap: 6px;
+      }
+      .field small {
+        font-size: 10px;
+        font-weight: 400;
+      }
+      .field input,
+      .field select {
+        font-size: 13px;
+        min-height: 32px;
+      }
+      .field-wide {
+        grid-column: 1 / -1;
+      }
+      .inspector-footer {
+        padding: 12px 16px;
+        border-top: 1px solid var(--line);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+      }
+      .inspector-footer .hint {
+        width: 100%;
+        font-size: 11px;
+        margin-top: 2px;
+      }
+      .reference-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        margin: 7px 0;
+        text-align: left;
+        padding: 9px;
+        background: var(--canvas);
+        border-color: var(--line);
+      }
+      .inline-notice {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        background: var(--warning-bg);
+        color: var(--warning);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 10px 12px;
+        font-size: 12px;
+        line-height: 1.6;
+        margin-bottom: 16px;
+      }
+      .inline-notice.error {
+        background: var(--error-bg);
+        color: var(--error);
+      }
+      .summary-line {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--line);
+        font-size: 12px;
+      }
+      .summary-line .tag {
+        margin-left: auto;
+      }
+      .summary-line strong {
+        min-width: 110px;
+        font-weight: 500;
+      }
+      .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0 18px;
+        margin-top: 18px;
+        max-width: 740px;
+      }
+      .check-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin: 12px 0;
+        font-size: 12px;
+      }
+      .tool-window {
+        height: 210px;
+        flex-shrink: 0;
+        border-top: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        background: var(--canvas);
+      }
+      .tool-heading {
+        height: 35px;
+        flex-shrink: 0;
+        padding: 0 14px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--line);
+      }
+      .tool-heading h3 {
+        font-size: 12px;
+      }
+      .tool-heading .tool-actions {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .tool-heading button {
+        min-height: 24px;
+        font-size: 11px;
+        padding: 2px 6px;
+      }
+      .tool-body {
+        overflow: auto;
+        flex: 1;
+        padding: 12px 16px;
+      }
+      .tool-body pre {
+        margin: 0;
+        color: var(--text-secondary);
+        font-size: 11px;
+        line-height: 1.85;
+        white-space: pre-wrap;
+        font-family: var(--font-code);
+      }
+      .tool-tabs {
+        display: flex;
+        align-items: center;
+        min-height: 32px;
+        border-top: 1px solid var(--line);
+        padding-left: 12px;
+        background: var(--shell);
+        gap: 12px;
+        overflow: auto;
+        flex-shrink: 0;
+      }
+      .tool-tabs button {
+        border-radius: 0;
+        min-height: 32px;
+        font-size: 11px;
+        color: var(--text-secondary);
+        padding: 4px 6px;
+        border-top: 2px solid transparent;
+      }
+      .tool-tabs button.active {
+        color: var(--text-primary);
+        border-top-color: var(--primary);
+        background: var(--canvas);
+      }
+      .tool-count {
+        font-size: 10px;
+        background: var(--hover);
+        min-width: 15px;
+        text-align: center;
+        border-radius: 3px;
+      }
+      .issue-row {
+        display: flex;
+        width: 100%;
+        gap: 9px;
+        justify-content: flex-start;
+        padding: 9px;
+        text-align: left;
+        min-height: 34px;
+        border-radius: 2px;
+      }
+      .issue-row .issue-description {
+        flex: 1;
+      }
+      .issue-row small {
+        color: var(--text-secondary);
+        display: block;
+        margin-top: 3px;
+      }
+      .issue-row .mono {
+        color: var(--text-secondary);
+        font-size: 10px;
+      }
+      .empty-result {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        color: var(--text-secondary);
+        padding: 16px 2px;
+        font-size: 12px;
+      }
+      .empty-result .icon {
+        color: var(--success);
+      }
+      .tool-form {
+        display: flex;
+        gap: 10px;
+        align-items: end;
+        margin-bottom: 12px;
+      }
+      .tool-form label {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        flex: 1;
+        color: var(--text-secondary);
+        font-size: 11px;
+      }
+      .tool-form input {
+        height: 30px;
+        font-size: 12px;
+      }
+      .status-bar {
+        height: 27px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        border-top: 1px solid var(--line);
+        background: var(--shell);
+        padding: 0 12px;
+        color: var(--text-secondary);
+        font-size: 10px;
+      }
+      .status-bar .status-right {
+        margin-left: auto;
+      }
+      .status-bar button {
+        min-height: 23px;
+        padding: 0 4px;
+        font-size: 10px;
+      }
+      .status-dot {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--success);
+        margin-right: 5px;
+      }
+      .popup-menu {
+        position: absolute;
+        top: 30px;
+        left: 220px;
+        width: 245px;
+        padding: 5px;
+        background: var(--canvas);
+        box-shadow: 0 8px 24px rgb(0 0 0 / 0.14);
+        border-radius: 6px;
+        z-index: 20;
+      }
+      .popup-menu button {
+        width: 100%;
+        justify-content: flex-start;
+        font-size: 12px;
+        border-radius: 3px;
+        padding: 7px 9px;
+      }
+      .popup-menu kbd {
+        margin-left: auto;
+      }
+      .popup-menu hr {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: 4px 6px;
+      }
+      .empty-workspace {
+        flex: 1;
+        display: grid;
+        place-items: center;
+        padding: 28px;
+        overflow: auto;
+        background: var(--canvas);
+      }
+      .welcome {
+        width: min(730px, 100%);
+      }
+      .welcome-header {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        margin-bottom: 28px;
+      }
+      .welcome-header .logo {
+        width: 48px;
+        height: 48px;
+      }
+      .welcome-header p {
+        margin-top: 8px;
+        font-size: 13px;
+        color: var(--text-secondary);
+      }
+      .welcome-actions {
+        display: flex;
+        gap: 10px;
+        padding-bottom: 26px;
+        border-bottom: 1px solid var(--line);
+      }
+      .welcome .section-title {
+        margin-top: 26px;
+      }
+      .project-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        justify-content: flex-start;
+        padding: 13px 0;
+        border-bottom: 1px solid var(--line);
+        border-radius: 0;
+        text-align: left;
+      }
+      .project-row strong {
+        font-weight: 600;
+        font-size: 13px;
+      }
+      .project-row small {
+        display: block;
+        margin-top: 4px;
+        color: var(--text-secondary);
+        font-size: 11px;
+      }
+      .project-row .icon:last-child {
+        margin-left: auto;
+      }
+      .sources-list td:first-child {
+        white-space: normal;
+      }
+      .code-view {
+        font-family: var(--font-code);
+        font-size: 12px;
+        line-height: 1.9;
+        color: var(--text-secondary);
+        white-space: pre;
+        overflow: auto;
+        background: var(--surface);
+        padding: 16px;
+        margin-top: 16px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+      }
+      .preview-layout {
+        display: grid;
+        grid-template-columns: 220px 1fr;
+        min-height: 300px;
+        max-height: 430px;
+        overflow: hidden;
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+      }
+      .preview-files {
+        background: var(--surface);
+        padding: 10px;
+        overflow: auto;
+        border-right: 1px solid var(--line);
+      }
+      .preview-files button {
+        width: 100%;
+        justify-content: flex-start;
+        font-size: 11px;
+        padding: 7px 6px;
+      }
+      .preview-code {
+        padding: 18px;
+        overflow: auto;
+      }
+      .preview-code pre {
+        font-family: var(--font-code);
+        font-size: 12px;
+        line-height: 1.9;
+        white-space: pre-wrap;
+      }
+      .diff-remove {
+        background: var(--error-bg);
+        color: var(--error);
+        display: block;
+      }
+      .diff-add {
+        background: var(--success-bg);
+        color: var(--success);
+        display: block;
+      }
+      .dialog {
+        border: 0;
+        border-radius: 9px;
+        padding: 0;
+        color: var(--text-primary);
+        background: var(--canvas);
+        width: min(820px, calc(100vw - 40px));
+        max-height: calc(100dvh - 64px);
+        box-shadow: 0 20px 70px rgb(0 0 0 / 0.25);
+      }
+      .dialog::backdrop {
+        background: rgb(0 0 0 / 0.28);
+      }
+      .dialog-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        padding: 20px 24px;
+        gap: 16px;
+      }
+      .dialog-header h2 {
+        font-size: 18px;
+      }
+      .dialog-header p {
+        font-size: 12px;
+        margin-top: 7px;
+        color: var(--text-secondary);
+        line-height: 1.6;
+      }
+      .dialog-body {
+        padding: 0 24px 20px;
+      }
+      .dialog-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 14px 24px;
+        border-top: 1px solid var(--line);
+        background: var(--surface);
+      }
+      .dialog-footer .hint {
+        margin-right: auto;
+        align-self: center;
+      }
+      .settings-layout {
+        display: grid;
+        grid-template-columns: 175px 1fr;
+        border-top: 1px solid var(--line);
+      }
+      .settings-nav {
+        padding: 14px 10px;
+        border-right: 1px solid var(--line);
+        background: var(--surface);
+      }
+      .settings-nav button {
+        width: 100%;
+        justify-content: flex-start;
+        margin-bottom: 5px;
+        padding: 8px 10px;
+      }
+      .settings-nav button.active {
+        background: var(--selection);
+        color: var(--selection-text);
+      }
+      .settings-main {
+        padding: 22px 24px;
+        min-height: 370px;
+        overflow: auto;
+        max-height: 540px;
+      }
+      .settings-main .section-title:first-child {
+        margin-top: 0;
+      }
+      .settings-main .dependency-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 12px 0;
+      }
+      .settings-main .dependency-row input {
+        flex: 1;
+      }
+      .settings-main .dependency-row button {
+        flex: 0 0 auto;
+        white-space: nowrap;
+      }
+      .readonly-value {
+        padding: 7px 0;
+        color: var(--text-primary);
+        min-height: 30px;
+        overflow-wrap: anywhere;
+      }
+      .data-note {
+        margin-top: 14px;
+      }
+      .project-select > span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .settings-main .form-grid {
+        margin-top: 20px;
+      }
+      .settings-main .path-field {
+        display: flex;
+        gap: 6px;
+      }
+      .settings-main .path-field input {
+        flex: 1;
+      }
+      .status-inline {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        margin-top: 12px;
+      }
+      .command-results {
+        padding: 10px 0;
+        max-height: 350px;
+        overflow: auto;
+      }
+      .command-results button {
+        width: 100%;
+        justify-content: space-between;
+        text-align: left;
+      }
+      @media (max-width: 1250px) {
+        .project-panel {
+          width: 220px;
+        }
+        .inspector {
+          width: 260px;
+        }
+        .toolbar-search {
+          min-width: auto;
+        }
+        .toolbar-search kbd {
+          display: none;
+        }
+        .window-label {
+          display: none;
+        }
+        .editor-content {
+          padding: 16px;
+        }
+      }
+      @media (max-width: 1079px) {
+        .inspector {
+          position: absolute;
+          right: 0;
+          top: 114px;
+          bottom: 59px;
+          z-index: 8;
+          width: 300px;
+          box-shadow: -10px 0 24px rgb(0 0 0 / 0.08);
+        }
+        .toolbar-search span {
+          display: none;
+        }
+        .project-select {
+          width: 195px;
+        }
+        .toolbar .optional {
+          display: none;
+        }
+        .menu-bar .brand span {
+          display: none;
+        }
+        .popup-menu {
+          left: 55px;
+        }
+      }
+      @media (max-width: 700px) {
+        .prototype-bar {
+          height: auto;
+          min-height: 40px;
+          padding: 5px 9px;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .prototype-bar .prototype-detail {
+          display: none;
+        }
+        .prototype-bar select {
+          width: 145px;
+        }
+        .window {
+          height: calc(100dvh - 40px);
+          min-height: 560px;
+        }
+        .menu-bar {
+          padding: 0 8px;
+        }
+        .brand {
+          padding-right: 3px;
+        }
+        .menu-button {
+          padding: 3px 7px;
+        }
+        .toolbar {
+          padding: 0 8px;
+          gap: 2px;
+          height: 44px;
+        }
+        .project-select {
+          width: auto;
+          flex: 1;
+          min-width: 0;
+        }
+        .project-select small,
+        .toolbar .separator,
+        .toolbar .toolbar-text,
+        .toolbar .optional {
+          display: none;
+        }
+        .toolbar button {
+          padding: 5px 8px;
+        }
+        .toolbar-search {
+          margin-left: 0;
+          min-width: 0;
+        }
+        .project-panel {
+          position: absolute;
+          left: 42px;
+          top: 118px;
+          bottom: 59px;
+          width: 245px;
+          z-index: 7;
+          box-shadow: 10px 0 24px rgb(0 0 0 / 0.1);
+        }
+        .inspector {
+          top: 118px;
+          bottom: 59px;
+          width: min(300px, calc(100vw - 42px));
+        }
+        .editor-content {
+          padding: 16px 12px;
+        }
+        .breadcrumb {
+          padding: 6px 12px;
+        }
+        .content-head {
+          align-items: flex-start;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .content-head h2 {
+          font-size: 18px;
+        }
+        .content-search {
+          flex-wrap: wrap;
+        }
+        .content-search input {
+          max-width: none;
+        }
+        .content-search .count {
+          display: none;
+        }
+        td,
+        th {
+          padding: 9px 8px;
+        }
+        .table-wrap table {
+          min-width: 560px;
+        }
+        .tool-window {
+          height: 220px;
+        }
+        .tool-tabs {
+          gap: 4px;
+          padding-left: 3px;
+        }
+        .tool-tabs button {
+          font-size: 10px;
+          padding: 5px;
+          white-space: nowrap;
+        }
+        .tool-form {
+          flex-wrap: wrap;
+        }
+        .tool-form label {
+          flex-basis: 100%;
+        }
+        .status-bar {
+          gap: 7px;
+        }
+        .status-bar .desktop-status {
+          display: none;
+        }
+        .form-grid {
+          grid-template-columns: 1fr;
+        }
+        .summary-line {
+          gap: 8px;
+          font-size: 11px;
+        }
+        .summary-line strong {
+          min-width: 85px;
+        }
+        .dialog {
+          width: calc(100vw - 20px);
+        }
+        .dialog-header {
+          padding: 16px;
+        }
+        .dialog-body {
+          padding: 0 16px 16px;
+        }
+        .dialog-footer {
+          padding: 12px 16px;
+          flex-wrap: wrap;
+        }
+        .dialog-footer .hint {
+          flex-basis: 100%;
+        }
+        .settings-layout {
+          grid-template-columns: 1fr;
+        }
+        .settings-nav {
+          display: flex;
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+          padding: 5px;
+        }
+        .settings-nav button {
+          margin: 0;
+          width: auto;
+          flex: 1;
+          font-size: 12px;
+          padding: 6px;
+        }
+        .settings-main {
+          padding: 16px;
+          min-height: 320px;
+          max-height: 400px;
+        }
+        .preview-layout {
+          grid-template-columns: 1fr;
+        }
+        .preview-files {
+          display: flex;
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+        .preview-files button {
+          flex-shrink: 0;
+          width: auto;
+        }
+        .welcome-actions {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .welcome-header {
+          align-items: flex-start;
+        }
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        button {
+          transition:
+            background-color var(--motion) ease-out,
+            color var(--motion) ease-out;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg class="sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <symbol id="i-folder" viewBox="0 0 24 24">
+          <path d="M3 7h6l2-3h9v15H3z" />
+          <path d="M3 7h18" />
+        </symbol>
+        <symbol id="i-file" viewBox="0 0 24 24">
+          <path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6M9 16h6" />
+        </symbol>
+        <symbol id="i-frame" viewBox="0 0 24 24">
+          <rect x="4" y="6" width="16" height="12" rx="2" />
+          <path
+            d="M8 3v3M16 3v3M8 18v3M16 18v3M1 10h3M1 14h3M20 10h3M20 14h3"
+          />
+        </symbol>
+        <symbol id="i-signal" viewBox="0 0 24 24">
+          <path d="M2 12h4l3-7 5 14 3-7h5" />
+        </symbol>
+        <symbol id="i-code" viewBox="0 0 24 24">
+          <path d="m8 6-6 6 6 6m8-12 6 6-6 6M14 3l-4 18" />
+        </symbol>
+        <symbol id="i-check" viewBox="0 0 24 24">
+          <path d="m5 12 4 4L19 6" />
+        </symbol>
+        <symbol id="i-close" viewBox="0 0 24 24">
+          <path d="m6 6 12 12M6 18 18 6" />
+        </symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24">
+          <path d="M12 5v14M5 12h14" />
+        </symbol>
+        <symbol id="i-search" viewBox="0 0 24 24">
+          <circle cx="10.5" cy="10.5" r="6.5" />
+          <path d="m16 16 5 5" />
+        </symbol>
+        <symbol id="i-save" viewBox="0 0 24 24">
+          <path d="M4 3h13l3 3v15H4zM7 3v6h9V3M7 21v-8h10v8" />
+        </symbol>
+        <symbol id="i-play" viewBox="0 0 24 24">
+          <path d="m8 4 12 8-12 8z" />
+        </symbol>
+        <symbol id="i-stop" viewBox="0 0 24 24">
+          <rect x="6" y="6" width="12" height="12" rx="1" />
+        </symbol>
+        <symbol id="i-build" viewBox="0 0 24 24">
+          <path d="m4 21 9-9M12 4l4-2 6 6-2 4-3-3-3 3-3-3 3-3z" />
+        </symbol>
+        <symbol id="i-settings" viewBox="0 0 24 24">
+          <path d="M3 6h18M3 12h18M3 18h18" />
+          <circle cx="8" cy="6" r="2" fill="var(--canvas)" />
+          <circle cx="16" cy="12" r="2" fill="var(--canvas)" />
+          <circle cx="9" cy="18" r="2" fill="var(--canvas)" />
+        </symbol>
+        <symbol id="i-info" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 11v6M12 7v1" />
+        </symbol>
+        <symbol id="i-warning" viewBox="0 0 24 24">
+          <path d="m12 3 10 18H2zM12 9v5M12 17v1" />
+        </symbol>
+        <symbol id="i-chevron" viewBox="0 0 24 24">
+          <path d="m9 5 7 7-7 7" />
+        </symbol>
+        <symbol id="i-down" viewBox="0 0 24 24">
+          <path d="m5 9 7 7 7-7" />
+        </symbol>
+        <symbol id="i-tree" viewBox="0 0 24 24">
+          <path d="M5 3v15h6M5 8h6M16 8h5M16 18h5" />
+          <rect x="11" y="5" width="5" height="6" rx="1" />
+          <rect x="11" y="15" width="5" height="6" rx="1" />
+        </symbol>
+        <symbol id="i-issues" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 6v7M12 17v1" />
+        </symbol>
+        <symbol id="i-refs" viewBox="0 0 24 24">
+          <path
+            d="m10 13 4-4M8 16l-2 2a4 4 0 0 1-6-6l5-5a4 4 0 0 1 6 0M16 8l2-2a4 4 0 0 1 6 6l-5 5a4 4 0 0 1-6 0"
+            transform="translate(1 0) scale(.9)"
+          />
+        </symbol>
+        <symbol id="i-terminal" viewBox="0 0 24 24">
+          <rect x="3" y="4" width="18" height="16" rx="2" />
+          <path d="m7 9 3 3-3 3M13 15h4" />
+        </symbol>
+        <symbol id="i-sun" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="4" />
+          <path
+            d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1 1m12 12 1 1M5 19l1-1M18 6l1-1"
+          />
+        </symbol>
+        <symbol id="i-moon" viewBox="0 0 24 24">
+          <path d="M20 14A8 8 0 0 1 10 4a8 8 0 1 0 10 10z" />
+        </symbol>
+        <symbol id="i-lock" viewBox="0 0 24 24">
+          <rect x="5" y="10" width="14" height="11" rx="2" />
+          <path d="M8 10V6a4 4 0 0 1 8 0v4M12 14v3" />
+        </symbol>
+        <symbol id="i-box" viewBox="0 0 24 24">
+          <path d="m12 3 9 5v9l-9 5-9-5V8zM3 8l9 5 9-5M12 13v9M8 5l9 5" />
+        </symbol>
+        <symbol id="i-app" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <path d="M14 17h7M17.5 14v7" />
+        </symbol>
+      </defs>
+    </svg>
+    <div class="prototype-bar">
+      <strong>交互原型</strong
+      ><span class="prototype-detail"
+        >演示数据 · 不读写项目文件，不编译或运行 ECU</span
+      ><label for="scenario">评审场景</label
+      ><select id="scenario">
+        <option value="default">已打开 CAN 工程</option>
+        <option value="welcome">项目起始页</option>
+        <option value="empty">空 CAN 工程</option>
+        <option value="standard">标准 ECU 输入</option>
+        <option value="missing">缺少规范资源</option>
+        <option value="blocked">校验阻断与定位</option>
+        <option value="external">来源文件已变化</option>
+        <option value="cross">非本机目标</option>
+      </select>
+    </div>
+    <div id="app"></div>
+    <dialog id="modal" class="dialog" aria-labelledby="dialog-title"></dialog>
+    <script src="settings.js"></script>
+    <script>
+      (() => {
+        const $ = (selector) => document.querySelector(selector);
+        const esc = (value) =>
+          String(value ?? '').replace(
+            /[&<>"']/g,
+            (char) =>
+              ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;',
+              })[char],
+          );
+        const icon = (name, cls = '') =>
+          `<svg class="icon ${cls}" aria-hidden="true"><use href="#i-${name}"></use></svg>`;
+        const logoBase =
+          new URLSearchParams(location.search).get('logo') === 'coral'
+            ? 'logo-coral'
+            : 'logo-workbench';
+        let logo = '';
+        const frames = [
+          {
+            name: 'EngineStatus',
+            id: '0x201',
+            dlc: 8,
+            direction: 'Tx',
+            time: 20,
+            signals: [
+              { name: 'EngineSpeed', bit: 0, length: 16, value: 800 },
+              { name: 'EngineLoad', bit: 16, length: 8, value: 0 },
+            ],
+          },
+          {
+            name: 'VehicleStatus',
+            id: '0x301',
+            dlc: 8,
+            direction: 'Rx',
+            time: 250,
+            signals: [
+              { name: 'VehicleSpeed', bit: 0, length: 16, value: 0 },
+              { name: 'GearPosition', bit: 16, length: 8, value: 0 },
+            ],
+          },
+          {
+            name: 'CommandStatus',
+            id: '0x181',
+            dlc: 8,
+            direction: 'Tx',
+            time: 100,
+            signals: [
+              { name: 'RuntimeCounter', bit: 0, length: 32, value: 100 },
+              { name: 'CommandValue', bit: 32, length: 32, value: 0 },
+            ],
+          },
+        ];
+        const files = ['ComCfg.arxml', 'CanIfCfg.arxml', 'DiagnosticCfg.arxml'];
+        const standardFiles = [
+          '01_ecu_extract.arxml',
+          '02_application.arxml',
+          '03_types.arxml',
+          '04_service_client.arxml',
+          '05_bsw_description.arxml',
+          '06_bsw_implementation.arxml',
+          '07_ecuc_values.arxml',
+        ];
+        const viewNames = {
+          can: 'CAN 通信',
+          diagnostic: '诊断配置',
+          inputs: '输入与集成',
+          delivery: '工程交付',
+          source: '来源文件',
+        };
+        const toolNames = {
+          problems: '问题',
+          generation: '生成',
+          build: '构建',
+          run: '主机验证',
+          log: '操作记录',
+        };
+        const stateNames = {
+          pending: '未执行',
+          done: '已完成',
+          running: '执行中',
+          failed: '失败',
+          stale: '已失效',
+          cancelled: '已取消',
+        };
+        const params = new URLSearchParams(location.search);
+        let S;
+        let timer = null;
+        let jobEpoch = 0;
+        let focusReturn = null;
+        function initial() {
+          const mobile = innerWidth < 1080;
+          return {
+            theme: params.get('theme') === 'dark' ? 'dark' : 'light',
+            profile: 'can',
+            view: 'can',
+            selected: 'EngineStatus',
+            tool: 'problems',
+            treeMode: 'objects',
+            treeQuery: '',
+            objectQuery: '',
+            draft: false,
+            dirty: false,
+            revision: 1,
+            savedRevision: 1,
+            stages: {
+              validate: 'done',
+              generate: 'pending',
+              preflight: 'pending',
+              build: 'pending',
+              run: 'pending',
+            },
+            target: 'windows',
+            host: 'windows',
+            resources: {
+              xsd: 'C:\\AUTOSAR\\R24-11\\XSD.zip',
+              mod: 'C:\\AUTOSAR\\R24-11\\MOD.zip',
+              ready: true,
+              error: '',
+            },
+            tools: {
+              compiler: 'C:\\Tools\\gcc.exe',
+              objdump: 'C:\\Tools\\objdump.exe',
+              git: 'C:\\Tools\\git.exe',
+              python: 'C:\\Tools\\python.exe',
+              ready: true,
+            },
+            settingsDraft: null,
+            settingsTab: 'appearance',
+            dialog: null,
+            menu: null,
+            logs: [],
+            busy: null,
+            notice: '',
+            opened: true,
+            showTree: !mobile,
+            showInspector: !mobile,
+            inspectorTab: 'properties',
+            openTabs: ['can', 'diagnostic', 'delivery'],
+            data: structuredClone(frames),
+            form: null,
+            issues: [],
+            blocked: false,
+            external: false,
+            pendingNavigation: null,
+            previewFile: 'src/Ecu_Cfg.c',
+            diagnosticTab: 'connection',
+            diagnosticEnabled: true,
+            dtcEnabled: true,
+            security: false,
+            writeDid: true,
+            routine: true,
+            output: 'C:\\ECU\\source\\Powertrain_ECU',
+            buildDir: 'C:\\ECU\\build\\Powertrain_ECU',
+            handoff: true,
+            sourceFile: files[0],
+            commandQuery: '',
+            sort: 'name',
+            ascending: true,
+          };
+        }
+        const selectedFrame = () =>
+          S.data.find(
+            (f) =>
+              f.name === S.selected ||
+              f.signals.some((s) => s.name === S.selected),
+          ) ?? S.data[0];
+        const selectedSignal = () =>
+          selectedFrame()?.signals.find((s) => s.name === S.selected);
+        function selectionForm() {
+          const f = selectedFrame(),
+            s = selectedSignal();
+          S.form = s
+            ? {
+                name: s.name,
+                bit: String(s.bit),
+                length: String(s.length),
+                value: String(s.value),
+              }
+            : f
+              ? {
+                  name: f.name,
+                  id: f.id,
+                  dlc: String(f.dlc),
+                  time: String(f.time),
+                  direction: f.direction,
+                }
+              : {};
+        }
+        function invalidate(keys) {
+          for (const key of keys)
+            if (S.stages[key] !== 'pending') S.stages[key] = 'stale';
+          if (keys.includes('run') && S.runResults)
+            for (const kind of Object.keys(S.runResults))
+              if (S.runResults[kind] !== 'pending')
+                S.runResults[kind] = 'stale';
+        }
+        function log(text) {
+          S.logs.push(`[演示] ${text}`);
+        }
+        function status(key) {
+          return S.draft && S.stages[key] === 'done' ? 'stale' : S.stages[key];
+        }
+        function statusTag(key) {
+          const st = status(key);
+          return `<span class="tag ${st === 'done' ? 'success' : st === 'failed' ? 'error' : st === 'stale' || st === 'cancelled' ? 'warning' : ''}">${st === 'done' ? icon('check') : ''}${stateNames[st]}</span>`;
+        }
+        function sourceReady() {
+          return (
+            !S.draft &&
+            !S.dirty &&
+            !S.external &&
+            !S.blocked &&
+            S.resources.ready &&
+            !S.busy
+          );
+        }
+        function canGenerate() {
+          return sourceReady() && S.stages.validate === 'done';
+        }
+        function canExecute() {
+          return canGenerate() && S.tools.ready && S.target === S.host;
+        }
+        function currentPath() {
+          return `/${S.projectName}/${S.profile === 'standard' ? 'Standard' : 'ComCfg'}/${selectedFrame()?.name ?? 'ComConfig'}/${selectedSignal()?.name ?? ''}`.replace(
+            /\/$/,
+            '',
+          );
+        }
+        function applyTheme() {
+          const actual =
+            S.theme === 'system'
+              ? matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light'
+              : S.theme;
+          document.documentElement.dataset.theme = actual;
+          const source = `assets/${logoBase}${actual === 'dark' ? '-dark' : ''}.png`;
+          logo = `<img class="logo" src="${source}" alt="" aria-hidden="true">`;
+          for (const image of document.querySelectorAll('#app .logo')) {
+            if (image.getAttribute('src') !== source)
+              image.setAttribute('src', source);
+          }
+        }
+        function button(action, text, name, disabled = false, extra = '') {
+          return `<button type="button" data-action="${action}" ${extra} ${disabled ? 'disabled' : ''}>${name ? icon(name) : ''}${text}</button>`;
+        }
+        function toolbar() {
+          return `<div class="toolbar">${button('project-menu', `${icon('frame')}<span>${S.opened ? 'Powertrain_ECU' : '选择工程'}</span>${icon('down')}`, null, false, 'class="project-select" aria-label="工程操作"')}${S.opened ? '<small class="tag">' + (S.profile === 'standard' ? '标准 ECU 工程' : 'CAN 信号工程') + '</small>' : ''}<span class="separator"></span>${button('save', `${icon('save')}<span class="toolbar-text">保存</span>`, null, !S.opened || !S.dirty || S.draft || !!S.busy || S.external, 'title="预览保存 · Ctrl+S"')}${button('validate', `${icon('check')}<span class="toolbar-text">校验</span>`, null, !S.opened || S.draft || !S.resources.ready || !!S.busy, 'title="运行配置校验"')}${button('delivery', `${icon('box')}<span class="toolbar-text">生成</span>`, null, !S.opened, 'title="打开工程交付"')}${button('build-tool', icon('build'), null, !S.opened, 'class="icon-button optional" aria-label="打开构建窗口"')}${button('run-tool', icon('play'), null, !S.opened, 'class="icon-button optional" aria-label="打开主机验证窗口"')}<span class="separator optional"></span>${S.busy ? button('cancel', `${icon('stop')}<span>取消</span>`, null, false, 'class="error" aria-label="取消当前操作"') : ''}${button('command', `${icon('search')}<span>搜索操作</span><kbd>Ctrl K</kbd>`, null, false, 'class="toolbar-search"')}${button('inspector-toggle', icon('settings'), null, !S.opened, `class="icon-button" aria-label="切换属性检查器" aria-pressed="${S.showInspector}"`)}</div>`;
+        }
+        function menus() {
+          const definitions = {
+            file: [
+              ['new', '新建工程', 'Ctrl N'],
+              ['import', '导入 ARXML', 'Ctrl O'],
+              ['import-handoff', '重导入交接包', ''],
+              null,
+              ['save', '预览保存', 'Ctrl S'],
+              ['close-project', '关闭工程', ''],
+              null,
+              ['settings', '设置', ''],
+            ],
+            edit: [
+              ['restore', '还原未应用草稿', ''],
+              ['add-frame', '添加 CAN 帧', ''],
+              ['add-signal', '添加信号', ''],
+              ['command', '搜索操作', 'Ctrl K'],
+            ],
+            view: [
+              ['tree-toggle', '工程工具窗口', 'Alt 1'],
+              ['inspector-toggle', '属性检查器', ''],
+              ['problems-tool', '问题窗口', ''],
+              ['generation-tool', '生成窗口', ''],
+              ['build-tool', '构建窗口', 'Alt 4'],
+              ['run-tool', '主机验证窗口', 'Alt 9'],
+              ['theme-toggle', '切换浅色 / 深色', ''],
+            ],
+            tools: [
+              ['validate', '校验工程', ''],
+              ['delivery', '工程交付', ''],
+              ['build-tool', '构建生成工程', ''],
+              ['run-tool', '验证主机行为', ''],
+              ['log-tool', '操作记录', ''],
+            ],
+            help: [
+              ['guide', '操作与能力范围', ''],
+              ['about', '关于工作台', ''],
+            ],
+            project: [
+              ['welcome', '切换工程', ''],
+              ['inputs', '查看工程输入', ''],
+              ['delivery', '工程交付', ''],
+              ['close-project', '关闭工程', ''],
+            ],
+          };
+          if (!S.menu) return '';
+          return `<div class="popup-menu" role="menu" aria-label="${S.menu === 'project' ? '工程' : '应用'}菜单">${definitions[S.menu].map((item) => (item ? `<button role="menuitem" data-action="${item[0]}" ${item[0] === 'save' && (!S.dirty || S.draft || !S.opened) ? 'disabled' : ''}>${item[1]}${item[2] ? `<kbd>${item[2]}</kbd>` : ''}</button>` : '<hr>')).join('')}</div>`;
+        }
+        function tree() {
+          const query = S.treeQuery.toLowerCase();
+          const node = (
+            name,
+            kind,
+            level,
+            action = 'select',
+            selected = false,
+            tail = '',
+          ) =>
+            `<button class="tree-node level-${level}${selected ? ' selected' : ''}" data-action="${action}" data-value="${esc(name)}" role="treeitem" aria-selected="${selected}">${icon(kind, kind === 'frame' ? 'role-blue' : kind === 'signal' ? 'role-teal' : kind === 'app' ? 'role-purple' : kind === 'refs' || kind === 'issues' ? 'role-gold' : '')}<span class="name">${esc(name)}</span>${tail ? `<span class="tail">${tail}</span>` : ''}</button>`;
+          const group = (name, children) =>
+            `<button class="tree-node level-1 tree-group" data-action="tree-group" data-value="${name}" role="treeitem" aria-expanded="${query || !S.collapsedGroups.includes(name) ? 'true' : 'false'}">${icon(query || !S.collapsedGroups.includes(name) ? 'down' : 'chevron')}<span class="name">${name}</span></button>${query || !S.collapsedGroups.includes(name) ? '<div role="group">' + children + '</div>' : ''}`;
+          const matched = S.data.filter(
+            (f) =>
+              f.name.toLowerCase().includes(query) ||
+              f.id.toLowerCase().includes(query) ||
+              f.signals.some((s) => s.name.toLowerCase().includes(query)),
+          );
+          const comm = matched
+            .map(
+              (f) =>
+                node(
+                  f.name,
+                  'frame',
+                  2,
+                  'select',
+                  S.selected === f.name,
+                  f.direction,
+                ) +
+                f.signals
+                  .filter(
+                    (s) =>
+                      !query ||
+                      f.name.toLowerCase().includes(query) ||
+                      s.name.toLowerCase().includes(query),
+                  )
+                  .map((s) =>
+                    node(s.name, 'signal', 3, 'select', S.selected === s.name),
+                  )
+                  .join(''),
+            )
+            .join('');
+          const root = `<div class="tree-node">${icon('folder', 'role-blue')}<span class="name">${esc(S.projectName)}</span><span class="tail">R24-11</span></div>`;
+          const objectTree =
+            root +
+            (comm
+              ? group('通信', comm)
+              : query
+                ? '<p class="hint">没有匹配的对象。</p>'
+                : group('通信', '<p class="hint">暂无 CAN 帧。</p>')) +
+            (!query
+              ? group(
+                  '诊断',
+                  node(
+                    '物理连接 / Dcm',
+                    'refs',
+                    2,
+                    'diagnostic',
+                    S.view === 'diagnostic',
+                    '1',
+                  ) +
+                    node(
+                      '故障记忆 / Dem',
+                      'issues',
+                      2,
+                      'dtc',
+                      false,
+                      S.dtcEnabled ? '1' : '—',
+                    ),
+                ) +
+                (S.profile === 'standard'
+                  ? group(
+                      '应用与集成',
+                      node(
+                        '示例 SWC / RTE',
+                        'app',
+                        2,
+                        'inputs',
+                        false,
+                        '只读',
+                      ) +
+                        node(
+                          'BSW 配置 / ECUC',
+                          'box',
+                          2,
+                          'inputs',
+                          false,
+                          '受限',
+                        ),
+                    )
+                  : '') +
+                node('工程交付', 'box', 1, 'delivery', S.view === 'delivery')
+              : '');
+          const sourceTree =
+            root +
+            (S.profile === 'standard' ? standardFiles : files)
+              .filter((f) => f.toLowerCase().includes(query))
+              .map((f) =>
+                node(
+                  f,
+                  'file',
+                  1,
+                  'source',
+                  S.view === 'source' && S.sourceFile === f,
+                  'ARXML',
+                ),
+              )
+              .join('');
+          const selectedHidden =
+            query && !comm.includes(`data-value="${esc(S.selected)}"`);
+          return `<aside class="project-panel" aria-label="工程导航"><div class="panel-heading"><span>工程</span>${button('tree-toggle', icon('close'), null, false, 'class="icon-button" aria-label="隐藏工程窗口"')}</div><div class="sub-tabs"><button data-action="tree-mode" data-value="objects" class="${S.treeMode === 'objects' ? 'active' : ''}">对象</button><button data-action="tree-mode" data-value="files" class="${S.treeMode === 'files' ? 'active' : ''}">源文件</button></div><div class="project-filter"><input data-field="treeQuery" value="${esc(S.treeQuery)}" placeholder="筛选工程对象" aria-label="筛选工程对象"></div><nav class="tree-content" aria-label="工程树" role="tree">${S.treeMode === 'objects' ? objectTree : sourceTree}${selectedHidden ? '<p class="hint">选中对象不在筛选结果中。</p>' : ''}</nav><div class="tree-foot"><span>${S.profile === 'standard' ? '7' : '3'} 份来源文件</span><span>${S.external ? '来源已变化' : '原始文件保留'}</span></div></aside>`;
+        }
+        function canContent() {
+          const q = S.objectQuery.toLowerCase();
+          const rows = S.data
+            .filter(
+              (f) =>
+                f.name.toLowerCase().includes(q) ||
+                f.id.toLowerCase().includes(q),
+            )
+            .sort(
+              (a, b) =>
+                (S.sort === 'id'
+                  ? parseInt(a.id) - parseInt(b.id)
+                  : a.name.localeCompare(b.name)) * (S.ascending ? 1 : -1),
+            );
+          const f = selectedFrame(),
+            s = selectedSignal();
+          return `<div class="content-head"><div><h2>CAN 通信</h2><p>11-bit Classical CAN · 无符号小端信号 · 当前工程配置</p></div><div class="content-actions">${button('add-frame', '添加帧', 'plus', S.profile === 'standard' || !!S.busy, 'class="secondary"')}${button('inspector-toggle', '属性', 'settings', false, 'class="secondary"')}</div></div>${S.profile === 'standard' ? '<div class="inline-notice">' + icon('lock') + '<span>当前标准输入剖面：仅 CAN ID 与应用周期可编辑；信号布局、类型和引用保持只读。</span></div>' : ''}${S.external ? '<div class="inline-notice error">' + icon('warning') + '<span>来源文件已被外部修改。重新导入后才能继续保存或生成。</span>' + button('reimport', '重新导入', null, false, 'class="text-button"') + '</div>' : ''}<div class="content-search"><input data-field="objectQuery" value="${esc(S.objectQuery)}" aria-label="筛选 CAN 帧" placeholder="按名称或 CAN ID 筛选"><span class="count">${rows.length} 帧 · ${S.data.reduce((n, f) => n + f.signals.length, 0)} 信号</span></div><div class="table-wrap"><table><thead><tr><th><button data-action="sort" data-value="name">帧名称 ${S.sort === 'name' ? icon('down') : ''}</button></th><th><button data-action="sort" data-value="id">CAN ID ${S.sort === 'id' ? icon('down') : ''}</button></th><th>方向</th><th>DLC</th><th>周期 / 超时</th><th>信号</th></tr></thead><tbody>${rows.map((frame) => `<tr class="${frame === f ? 'selected-row' : ''}"><td><button class="table-object" data-action="select" data-value="${frame.name}">${icon('frame', 'role-blue')}${frame.name}</button></td><td class="mono">${frame.id}</td><td><span class="tag ${frame.direction === 'Tx' ? 'blue' : 'teal'}">${frame.direction}</span></td><td class="mono">${frame.dlc}</td><td class="mono">${frame.time} ms</td><td class="mono">${frame.signals.length}</td></tr>`).join('')}${!rows.length ? '<tr><td colspan="6"><p class="hint">' + (S.data.length ? '没有匹配的帧。清除筛选后重试。' : '暂无 CAN 帧。添加第一帧开始配置。') + '</p></td></tr>' : ''}</tbody></table></div>${f ? `<div class="section-title"><h3>${f.name} 的信号</h3>${button('add-signal', '添加信号', 'plus', S.profile === 'standard' || !!S.busy, 'class="text-button"')}</div><div class="table-wrap"><table><thead><tr><th>信号名称</th><th>起始位</th><th>长度</th><th>初始值</th><th>编码</th></tr></thead><tbody>${f.signals.map((sig) => `<tr class="${s === sig ? 'selected-row' : ''}"><td><button class="table-object" data-action="select" data-value="${sig.name}">${icon('signal', 'role-teal')}${sig.name}</button></td><td class="mono">${sig.bit}</td><td class="mono">${sig.length} bit</td><td class="mono">${sig.value}</td><td class="mono">uint / LE</td></tr>`).join('')}</tbody></table></div><p class="hint" style="margin-top:14px">数值为原始无符号值。该配置不声明物理量换算或真实硬件时序。</p>` : ''}`;
+        }
+        function field(label, key, value, disabled = false, help = '') {
+          if (Object.hasOwn(S.parameters, key))
+            value = S.parameterDraft[key] ?? S.parameters[key];
+          const title = `<span>${label}${help ? `<small>${help}</small>` : ''}</span>`;
+          return disabled
+            ? `<div class="field">${title}<div class="readonly-value">${esc(value)} <span class="tag">只读</span></div></div>`
+            : `<label class="field">${title}<input data-edit="${key}" aria-label="${label}" value="${esc(value)}" ${S.busy ? 'disabled' : ''}></label>`;
+        }
+        function inspector() {
+          const f = selectedFrame(),
+            s = selectedSignal(),
+            readonly = S.profile === 'standard';
+          const header = `<div class="panel-heading"><span>检查器</span>${button('inspector-toggle', icon('close'), null, false, 'class="icon-button" aria-label="关闭属性检查器"')}</div>`;
+          if (S.view !== 'can') {
+            const details =
+              S.view === 'delivery'
+                ? `<div class="summary-line"><span>配置修订</span><span class="mono">${S.savedRevision}</span></div><div class="summary-line"><span>目标</span><span>${S.target === 'windows' ? 'Windows' : 'Linux'} x64</span></div><div class="summary-line"><span>源码归属</span><span>独立输出</span></div><div class="summary-line"><span>构建归属</span><span>独立空目录</span></div>`
+                : S.view === 'diagnostic'
+                  ? `<div class="summary-line"><span>连接</span><span class="mono">${esc(S.parameters.request)} / ${esc(S.parameters.response)}</span></div><div class="summary-line"><span>会话</span><span>默认 / 扩展</span></div><div class="summary-line"><span>DID</span><span class="mono">${esc(S.parameters.did)}</span></div><div class="summary-line"><span>故障记忆</span><span>${S.dtcEnabled ? '单 DTC' : '未配置'}</span></div>`
+                  : S.view === 'source'
+                    ? `<p class="object-path mono">${esc(S.sourceFile)}</p><span class="tag">来源原文 / 只读</span><p class="hint">修改从受支持对象入口完成；原文不在此直接编辑。</p>`
+                    : `<div class="summary-line"><span>输入剖面</span><span>${readonly ? '受限标准 ECU' : 'CAN 信号'}</span></div><div class="summary-line"><span>来源</span><span>${readonly ? '7' : '3'} 份 ARXML</span></div><div class="summary-line"><span>可编辑</span><span>${readonly ? 'CAN ID / 周期' : '帧 / 信号 / 诊断'}</span></div><p class="hint">输入角色、只读关系与参数属于同一工程。</p>`;
+            return `<aside class="inspector" aria-label="上下文检查器">${header}<div class="inspector-body"><div class="object-title">${icon(S.view === 'delivery' ? 'box' : S.view === 'diagnostic' ? 'refs' : S.view === 'source' ? 'file' : 'app', 'role-purple')}<h3>${viewNames[S.view]}</h3></div>${details}</div></aside>`;
+          }
+          let content = '<p class="hint">选择工程对象以查看属性与引用。</p>';
+          if (f) {
+            content = `<div class="object-title">${icon(s ? 'signal' : 'frame', s ? 'role-teal' : 'role-blue')}<h3>${esc(s?.name ?? f.name)}</h3></div><p class="object-path mono">${esc(currentPath())}</p>`;
+            if (S.inspectorTab === 'references')
+              content += `<p class="hint">关联路径</p><button class="reference-item" data-action="select" data-value="${esc(f.name)}"><span>${icon('frame')} ${esc(f.name)}</span>${icon('chevron')}</button><button class="reference-item" data-action="source" data-value="${readonly ? standardFiles[6] : 'ComCfg.arxml'}"><span>${icon('file')} ${readonly ? standardFiles[6] : 'ComCfg.arxml'}</span>${icon('chevron')}</button><div class="section-title"><h3>跨模块关系</h3></div><p class="hint mono">Com → PduR → CanIf → Can</p>`;
+            else if (s)
+              content += `${field('信号名称', 'name', S.form.name, readonly)}${field('起始位', 'bit', S.form.bit, readonly, 'LSB0')}${field('位长度', 'length', S.form.length, readonly, '1–32 bit')}${field('初始值', 'value', S.form.value, readonly)}<div class="summary-line"><span>编码</span><span class="mono">uint / Little-endian</span></div><div class="summary-line"><span>所属帧</span><button class="text-button" data-action="select" data-value="${esc(f.name)}">${esc(f.name)}</button></div>`;
+            else
+              content += `${field('帧名称', 'name', S.form.name, readonly)}${field('CAN ID', 'id', S.form.id, false, '0–2047')}${field('DLC', 'dlc', S.form.dlc, readonly, '1–8 byte')}${readonly ? '<div class="field"><span>方向</span><div class="readonly-value">' + f.direction + ' <span class="tag">只读</span></div></div>' : `<label class="field"><span>方向</span><select data-edit="direction" aria-label="帧方向"><option value="Tx" ${S.form.direction === 'Tx' ? 'selected' : ''}>发送 Tx</option><option value="Rx" ${S.form.direction === 'Rx' ? 'selected' : ''}>接收 Rx</option></select></label>`}${field(S.form.direction === 'Tx' ? '发送周期' : '接收超时', 'time', S.form.time, readonly, 'ms')}<p class="hint">${readonly ? '仅 CAN ID 可编辑；关联应用周期在“输入与集成”中统一设置。' : '应用更改更新工程；确认保存才写入来源文件。'}</p>`;
+          }
+          const canApply = !readonly || !s;
+          return `<aside class="inspector" aria-label="属性检查器">${header}<div class="sub-tabs"><button data-action="inspector-tab" data-value="properties" class="${S.inspectorTab === 'properties' ? 'active' : ''}">属性</button><button data-action="inspector-tab" data-value="references" class="${S.inspectorTab === 'references' ? 'active' : ''}">引用</button></div><div class="inspector-body">${content}</div>${S.inspectorTab === 'properties' && f && canApply ? `<div class="inspector-footer">${button('apply', '应用更改', 'check', !S.draft || !!S.busy, 'class="primary"')}${button('restore', '还原', null, !S.draft || !!S.busy, 'class="secondary"')}<p class="hint">${S.draft ? '草稿未应用' : S.dirty ? '已应用 · 尚未保存' : '与已保存配置一致'}</p></div>` : ''}</aside>`;
+        }
+        function diagnosticContent() {
+          const ro = S.profile === 'standard',
+            option = (key) => S.optionDraft[key] ?? S[key],
+            choices = S.data.flatMap((f) =>
+              f.direction === 'Tx'
+                ? f.signals.filter((s) => s.length === 32).map((s) => s.name)
+                : [],
+            );
+          const ordered = S.didSignalDraft ?? S.didSignals,
+            available = choices.filter((name) => !ordered.includes(name));
+          const signalEditor = `<div class="section-title"><h3>DID 的有序信号</h3><span class="tag">${ordered.length} / 8</span></div><table><thead><tr><th>顺序</th><th>32-bit Tx 信号</th><th>操作</th></tr></thead><tbody>${ordered.map((name, index) => `<tr><td class="mono">${index + 1}</td><td>${icon('signal', 'role-teal')} ${esc(name)}</td><td>${button('did-up', '上移', null, ro || index === 0, `data-value="${index}" class="text-button"`)}${button('did-down', '下移', null, ro || index === ordered.length - 1, `data-value="${index}" class="text-button"`)}${button('did-remove', '移除', null, ro, `data-value="${index}" class="text-button"`)}</td></tr>`).join('')}</tbody></table>${!ro ? `<div class="content-actions"><label class="field"><span>可选绑定信号</span><select id="did-candidate" aria-label="可选 DID 信号" ${!available.length ? 'disabled' : ''}>${available.map((name) => `<option>${esc(name)}</option>`).join('') || '<option>没有其他合格信号</option>'}</select></label>${button('did-add', '添加信号', 'plus', !available.length || ordered.length >= 8, 'class="secondary"')}</div>` : ''}`;
+          const connection = `<div class="form-grid">${field('请求 CAN ID', 'request', '', ro)}${field('响应 CAN ID', 'response', '', ro)}${field('S3 会话超时', 's3', '', ro, 'ms')}${field('N_Cr 超时', 'ncr', '', ro, 'ms')}${field('N_As 超时', 'nas', '', ro, 'ms')}${field('N_Bs 超时', 'nbs', '', ro, 'ms')}${field('DID', 'did', '', ro)}</div>${signalEditor}<div class="section-title"><h3>扩展会话状态更改</h3></div><label class="check-row"><input type="checkbox" data-option="writeDid" ${option('writeDid') ? 'checked' : ''} ${ro ? 'disabled' : ''}>允许 0x2E 写入绑定信号</label><label class="check-row"><input type="checkbox" data-option="routine" ${option('routine') ? 'checked' : ''} ${ro || !option('writeDid') ? 'disabled' : ''}>启用 0x31/0x01 初值复位例程</label>${option('routine') ? field('复位例程 RID', 'rid', '', ro) : ''}<label class="check-row"><input type="checkbox" data-option="security" ${option('security') ? 'checked' : ''} ${ro || S.target === 'linux' ? 'disabled' : ''}>使用主机 0x27 保护状态更改</label><p class="hint">主机安全档案仅支持 Windows。密钥独立提供，不进入 ARXML 或生成工程。</p>`;
+          const monitorFrames = S.data.filter(
+            (f) => f.direction === 'Rx' && f.time > 0 && f.signals.length,
+          );
+          const dtc = `${!S.diagnosticEnabled ? '<div class="inline-notice">先应用诊断连接，再配置故障记忆。</div>' : ''}<div class="form-grid">${field('UDS DTC', 'dtc', '', ro)}<label class="field"><span>超时监测帧</span><select data-edit="monitor" aria-label="DTC 监测帧" ${ro ? 'disabled' : ''}>${monitorFrames.map((f) => `<option value="${esc(f.name)}" ${(S.parameterDraft.monitor ?? S.parameters.monitor) === f.name ? 'selected' : ''}>${esc(f.name)} · Rx · ${f.time} ms</option>`).join('')}</select></label></div><div class="summary-line"><strong>记录策略</strong><span>首次有效 Rx 后超时才报告故障</span></div><div class="summary-line"><strong>持久后端</strong><span>CRC32 主机文件 · 非 Flash</span></div><p class="hint">当前普通 CAN 工程仅支持单个 DTC。</p>`;
+          return `<div class="content-head"><div><h2>诊断配置</h2><p>一条物理 DoCAN 连接 · 有界主机诊断剖面</p></div><span class="tag gold">${ro ? '当前剖面只读' : S.diagnosticEnabled ? '已配置' : '未配置'}</span></div><div class="sub-tabs"><button data-action="diagnostic-tab" data-value="connection" class="${S.diagnosticTab === 'connection' ? 'active' : ''}">连接与服务</button><button data-action="diagnostic-tab" data-value="dtc" class="${S.diagnosticTab === 'dtc' ? 'active' : ''}">故障记忆</button></div>${ro ? '<div class="inline-notice">' + icon('lock') + '标准 ECU 诊断参数在当前输入剖面保持只读。</div>' : ''}${S.diagnosticTab === 'connection' ? connection : dtc}<div class="section-title">${button('apply-diagnostic', S.diagnosticTab === 'dtc' ? '应用故障配置' : '应用诊断配置', 'check', ro || (!S.draft && (S.diagnosticTab === 'connection' ? S.diagnosticEnabled : S.dtcEnabled)) || !!S.busy || (S.diagnosticTab === 'dtc' && !S.diagnosticEnabled), 'class="primary"')}${button('restore', '还原草稿', null, !S.draft, 'class="secondary"')}${button('remove-diagnostic', S.diagnosticTab === 'dtc' ? '移除故障记忆' : '移除诊断连接', null, ro || !!S.busy || !(S.diagnosticTab === 'dtc' ? S.dtcEnabled : S.diagnosticEnabled), 'class="secondary"')}</div>`;
+        }
+        function inputsContent() {
+          const sources = S.profile === 'standard' ? standardFiles : files;
+          const roles = [
+            'ECU Extract',
+            '应用组件',
+            '数据类型',
+            '服务使用端',
+            'BSW 描述',
+            'BSW 实现',
+            'ECUC 配置值',
+          ];
+          return `<div class="content-head"><div><h2>输入与集成</h2><p>查看来源角色、受支持参数与工程引用，不改变原文件边界。</p></div>${button('inspect', '检查输入', 'check', S.draft || !!S.busy, 'class="secondary"')}</div><div class="table-wrap"><table class="sources-list"><thead><tr><th>来源文件</th><th>实际角色</th><th>编辑边界</th></tr></thead><tbody>${sources.map((file, i) => `<tr><td><button class="table-object" data-action="source" data-value="${file}">${icon('file')}${file}</button></td><td>${S.profile === 'standard' ? roles[i] : ['Com / 信号', 'CanIf / CAN', 'DoCAN / 故障'][i]}</td><td><span class="tag">${S.profile === 'standard' ? '原字节保留' : '受支持参数往返'}</span></td></tr>`).join('')}</tbody></table></div><div class="section-title"><h3>受支持参数</h3><span class="tag">${S.profile === 'standard' ? '固定单实例 S/R + 同步 C/S' : '当前 CAN 信号剖面'}</span></div>${S.profile === 'standard' ? `<div class="form-grid">${field('发送 CAN ID', 'standardTx', '0x201')}${field('接收 CAN ID', 'standardRx', '0x301')}${field('应用 / Com / Alarm 周期', 'standardPeriod', '20', false, 'ms')}</div><p class="hint">诊断 CAN ID、DID、类型、端口和引用在此入口只读。周期修改同时作用于应用与关联调度配置。</p><div class="section-title">${button('apply-standard', '应用并校验修改', 'check', !S.draft || !!S.busy, 'class="primary"')}${button('restore', '还原草稿', null, !S.draft, 'class="secondary"')}</div>` : '<p class="hint">在“CAN 通信”和“诊断配置”编辑受支持参数；源文件列表用于查看原文和保留内容。</p>'}`;
+        }
+        function deliveryContent() {
+          const steps = [
+            ['validate', '配置校验'],
+            ['generate', '源码生成'],
+            ...(S.profile === 'standard'
+              ? [['preflight', '显式编译预检']]
+              : []),
+            ['build', '主机构建'],
+            ['run', '主机行为'],
+          ];
+          return `<div class="content-head"><div><h2>工程交付</h2><p>先交付封存源码，再按需构建和验证。编译工具不是源码准备的前提。</p></div><span class="tag">${S.profile === 'standard' ? '标准 ECU' : 'CAN 信号'} / C99</span></div><div class="summary-line"><strong>配置</strong><span>${S.draft ? '草稿未应用' : S.dirty ? '已应用，未保存' : '已保存'}</span><span class="tag">修订 ${S.revision}</span></div>${steps.map(([key, name]) => `<div class="summary-line"><strong>${name}</strong><span class="muted">${key === 'validate' ? '当前输入与所选规范' : key === 'generate' ? '纯源码准备，不启动编译器' : key === 'preflight' ? '独立可选操作' : key === 'build' ? '独立空构建目录' : '仅本次实际配置和向量'}</span>${statusTag(key)}</div>`).join('')}<div class="form-grid"><label class="field"><span>交付目标</span><select data-field="target" aria-label="交付目标"><option value="windows" ${S.target === 'windows' ? 'selected' : ''}>Windows x64 controlled v1</option><option value="linux" ${S.target === 'linux' ? 'selected' : ''}>Linux x64 controlled v1</option></select></label><label class="field"><span>源码输出目录</span><input data-field="output" value="${esc(S.output)}" aria-label="源码输出目录" ${S.busy ? 'disabled' : ''}></label></div><label class="check-row"><input type="checkbox" data-option="handoff" ${S.handoff ? 'checked' : ''} ${S.busy ? 'disabled' : ''}>包含版本化交接元数据与来源快照</label>${!sourceReady() ? `<div class="inline-notice">${icon('info')}<span>${S.external ? '来源已变化，须重新导入。' : S.draft ? '先应用或还原草稿。' : S.dirty ? '先预览并保存 ARXML。' : !S.resources.ready ? '校验与生成所需规范资源未就绪。' : '校验存在阻断，请定位并修正。'}</span></div>` : ''}<div class="content-actions">${button('generate-preview', '预览源码', 'box', !canGenerate(), 'class="primary"')}${S.profile === 'standard' ? button('preflight', '显式编译预检', 'check', !canExecute(), 'class="secondary"') : ''}${button('build-tool', '构建', 'build', false, 'class="secondary"')}${button('run-tool', '主机验证', 'play', false, 'class="secondary"')}</div><div class="section-title"><h3>支持边界</h3></div><p class="hint">当前工程的完整 SC1 等级复验与真实 MCU 均未验证。生成、编译或有界主机向量通过不能替代这些结论。官方档案、密钥与编译工具不进入交付包。</p>`;
+        }
+        function sourceContent() {
+          return `<div class="content-head"><div><h2>${esc(S.sourceFile)}</h2><p>来源文件只读预览；修改从受支持对象的属性入口进行。</p></div><span class="tag">原文 / 只读</span></div><pre class="code-view">${esc('<?xml version="1.0" encoding="UTF-8"?>\n<AUTOSAR xmlns="http://autosar.org/schema/r4.0">\n  <AR-PACKAGES>\n    <AR-PACKAGE>\n      <SHORT-NAME>Powertrain_ECU</SHORT-NAME>\n      <ELEMENTS>\n        <!-- 演示原文片段，不是可校验或可交付的工程输入 -->\n        <ECUC-MODULE-CONFIGURATION-VALUES>\n          <SHORT-NAME>ComCfg</SHORT-NAME>\n        </ECUC-MODULE-CONFIGURATION-VALUES>\n      </ELEMENTS>\n    </AR-PACKAGE>\n  </AR-PACKAGES>\n</AUTOSAR>')}</pre><p class="hint">演示片段仅用于评审只读原文与对象导航的关系。</p>`;
+        }
+        function tools() {
+          if (!S.tool) return '';
+          const issueCount = S.issues.length;
+          let body = '';
+          if (S.tool === 'problems')
+            body = S.issues.length
+              ? S.issues
+                  .map(
+                    (issue) =>
+                      `<button class="issue-row" data-action="locate-issue" data-value="${esc(issue.object)}">${icon('issues', 'error')}<span class="issue-description">${esc(issue.message)}<small>${esc(issue.file)} · ${esc(issue.object)}</small></span><span class="mono">${esc(issue.code)}</span></button>`,
+                  )
+                  .join('')
+              : `<div class="empty-result">${icon(status('validate') === 'done' ? 'check' : 'info')}<div><strong>${status('validate') === 'done' ? '当前配置无阻断问题' : '当前配置尚未完成校验'}</strong><p class="hint">${S.draft ? '存在未应用草稿，旧结果不代表当前编辑。' : S.dirty ? '已应用修改，保存并重新校验后再交付。' : '问题定位将回到对应对象，不打开另一套配置工作区。'}</p></div></div>`;
+          if (S.tool === 'generation')
+            body =
+              S.stages.generate === 'done'
+                ? `<pre>${esc(`[演示] 已生成封存源码\n${S.output}\n目标：${S.target}-x64-controlled-v1\n输入修订：${S.savedRevision}\n未执行编译或主机行为验证。`)}</pre>`
+                : `<div class="empty-result">${icon('box')}<div><strong>${S.stages.generate === 'stale' ? '源码结果已失效' : '尚未生成源码'}</strong><p class="hint">先查看文件差异，确认后才生成到独立源码目录。</p></div></div>`;
+          if (S.tool === 'build')
+            body = `<div class="tool-form"><label>独立构建目录<input data-field="buildDir" value="${esc(S.buildDir)}" aria-label="独立构建目录"></label>${button('build', '构建生成工程', 'build', !canExecute() || S.stages.generate !== 'done', 'class="primary"')}</div>${S.target !== S.host ? '<p class="hint warning">本机为 Windows，所选 Linux 目标未执行。可以准备源码，不能在当前宿主构建。</p>' : !S.tools.ready ? '<p class="hint warning">原生执行工具未就绪。请在设置中配置；源码预览仍可独立使用。</p>' : ''}<pre>${esc(
+              S.busy === 'build'
+                ? '[演示] 正在构建，可取消…'
+                : S.logs
+                    .filter((l) => l.includes('构建') || l.includes('取消'))
+                    .slice(-4)
+                    .join('\n') || '[演示] 尚无构建日志。',
+            )}</pre>`;
+          if (S.tool === 'run')
+            body = `<div class="tool-form">${S.profile === 'standard' ? '<label>验证方式<input readonly value="CAN / DID / N_Cr 独立向量" aria-label="验证方式"></label>' : `<label>对端封存源码目录<input data-field="peerDirectory" aria-label="对端工程" value="${esc(S.peerDirectory)}"></label><label>对端实际二进制<input data-field="peerBinary" aria-label="对端二进制" value="${esc(S.peerBinary)}"></label>`}${button('run', S.profile === 'standard' ? '验证主机行为' : '运行信号闭环', 'play', !canExecute() || S.stages.build !== 'done' || (S.profile === 'can' && (!S.peerDirectory || !S.peerBinary)), 'class="primary"')}</div><p class="hint">${S.profile === 'standard' ? '核对当前标准工程的有界 CAN / DID / N_Cr 向量。' : '双 ECU 信号闭环与诊断独立测试器分别执行。'}</p>${S.profile === 'can' ? `${button('run-diagnostic', '诊断独立测试器', 'play', !canExecute() || S.stages.build !== 'done' || !S.diagnosticEnabled, 'class="text-button"')}<span class="tag">信号：${stateNames[S.runResults.signal]}</span> <span class="tag">诊断：${stateNames[S.runResults.diagnostic]}</span>` : ''}<pre>${esc(
+              S.busy === 'run'
+                ? '[演示] 正在运行，可取消…'
+                : S.logs
+                    .filter((l) => l.includes('主机') || l.includes('诊断验证'))
+                    .slice(-3)
+                    .join('\n'),
+            )}</pre>`;
+          if (S.tool === 'log')
+            body = `<pre>${esc(S.logs.join('\n') || '[演示] 当前会话尚无操作记录。')}</pre>`;
+          return `<section class="tool-window" aria-label="${toolNames[S.tool]}工具窗口"><div class="tool-heading"><h3>${toolNames[S.tool]}</h3>${S.tool === 'problems' ? `<span class="muted">${issueCount} 个阻断</span>` : statusTag(S.tool === 'generation' ? 'generate' : S.tool === 'log' ? 'validate' : S.tool)}<div class="tool-actions">${S.tool === 'problems' ? button('validate', '重新校验', 'check', S.draft || !S.resources.ready || !!S.busy) : ''}${S.tool === 'generation' ? button('generate-preview', '预览源码', 'box', !canGenerate()) : ''}${button('tool-close', icon('close'), null, false, 'aria-label="关闭工具窗口"')}</div></div><div class="tool-body">${body}</div></section>`;
+        }
+        function welcome() {
+          return `<main class="empty-workspace"><div class="welcome"><div class="welcome-header">${logo}<div><h1>Classic CAN 配置工作台</h1><p>从工程配置到独立源码交付。</p></div></div><div class="welcome-actions">${button('new', '新建工程', 'plus', false, 'class="primary"')}${button('import', '导入 ARXML', 'folder', false, 'class="secondary"')}${button('import-handoff', '重导入交接包', 'box', false, 'class="secondary"')}</div><div class="section-title"><h3>示例工程</h3><span class="tag">原型演示数据</span></div><button class="project-row" data-action="open-can">${icon('frame', 'role-blue')}<div><strong>Powertrain_ECU</strong><small>CAN 信号工程 · 3 份 ARXML · R24-11</small></div>${icon('chevron')}</button><button class="project-row" data-action="open-standard">${icon('app', 'role-purple')}<div><strong>标准 ECU 示例</strong><small>受限标准输入 · 7 份 ARXML · 单实例应用</small></div>${icon('chevron')}</button><div class="section-title"><h3>工作台</h3></div><button class="text-button" data-action="settings">${icon('settings')}设置规范资源与可选执行工具</button><p class="hint">官方 XSD / MOD 由使用者合法取得。配置与源码准备不要求先安装编译器。</p></div></main>`;
+        }
+        function render() {
+          const focus = document.activeElement;
+          const focusKey = focus?.dataset.edit
+            ? 'edit:' + focus.dataset.edit
+            : focus?.dataset.field
+              ? 'field:' + focus.dataset.field
+              : focus?.dataset.setting
+                ? 'setting:' + focus.dataset.setting
+                : null;
+          const selection =
+            focus && 'selectionStart' in focus
+              ? [focus.selectionStart, focus.selectionEnd]
+              : null;
+          applyTheme();
+          $('#app').innerHTML =
+            `<div class="window"><header class="menu-bar"><div class="brand">${logo}<span>Classic CAN 配置工作台</span></div>${[
+              ['file', '文件'],
+              ['edit', '编辑'],
+              ['view', '视图'],
+              ['tools', '工具'],
+              ['help', '帮助'],
+            ]
+              .map(
+                ([key, text]) =>
+                  `<button class="menu-button" data-action="menu" data-value="${key}" aria-haspopup="menu" aria-expanded="${S.menu === key}">${text}</button>`,
+              )
+              .join(
+                '',
+              )}<span class="window-label">本地工程 · R24-11</span>${menus()}</header>${toolbar()}${
+              S.opened
+                ? `<div class="workspace"><nav class="utility-rail" aria-label="工具窗口"><button class="icon-button" data-action="tree-toggle" title="工程 · Alt+1" aria-label="工程工具窗口" aria-pressed="${S.showTree}">${icon('tree')}</button><button class="icon-button" data-action="problems-tool" title="问题" aria-label="问题工具窗口" aria-pressed="${S.tool === 'problems'}">${icon('issues')}</button><button class="icon-button" data-action="delivery" title="工程交付" aria-label="工程交付">${icon('box')}</button><button class="icon-button" data-action="run-tool" title="主机验证 · Alt+9" aria-label="主机验证工具窗口" aria-pressed="${S.tool === 'run'}">${icon('play')}</button><button class="icon-button bottom" data-action="settings" title="设置" aria-label="工作台设置">${icon('settings')}</button></nav>${S.showTree ? tree() : ''}<div class="central"><div class="editors"><main class="document"><div class="editor-tabs" role="tablist" aria-label="编辑文档">${S.openTabs.map((view) => `<div class="editor-tab ${S.view === view ? 'active' : ''}"><button role="tab" aria-selected="${S.view === view}" data-action="view" data-value="${view}">${icon(view === 'can' ? 'frame' : view === 'diagnostic' ? 'refs' : view === 'inputs' ? 'app' : view === 'delivery' ? 'box' : 'file')}${view === 'source' ? esc(S.sourceFile) : viewNames[view]}</button>${button('close-tab', icon('close'), null, false, `class="tab-close" data-value="${view}" aria-label="关闭${viewNames[view]}标签"`)}</div>`).join('')}</div><div class="breadcrumb"><span>Powertrain_ECU</span>${icon('chevron')}<span>${viewNames[S.view]}</span>${selectedFrame() && S.view === 'can' ? `${icon('chevron')}<strong>${esc(S.selected)}</strong>` : ''}<span class="tag ${S.draft || S.dirty ? 'gold' : ''}">${S.draft ? '草稿未应用' : S.dirty ? '未保存修改' : '已保存'}</span></div><div class="editor-content" id="work-area" tabindex="-1">${S.notice ? `<div class="inline-notice" role="status">${icon('info')}<span>${esc(S.notice)}</span>${button('notice-close', icon('close'), null, false, 'class="icon-button" aria-label="关闭通知"')}</div>` : ''}${S.view === 'can' ? canContent() : S.view === 'diagnostic' ? diagnosticContent() : S.view === 'inputs' ? inputsContent() : S.view === 'delivery' ? deliveryContent() : sourceContent()}</div></main>${S.showInspector ? inspector() : ''}</div>${tools()}<nav class="tool-tabs" aria-label="底部工具窗口">${Object.entries(
+                    toolNames,
+                  )
+                    .map(
+                      ([key, text]) =>
+                        `<button data-action="tool" data-value="${key}" class="${S.tool === key ? 'active' : ''}" aria-pressed="${S.tool === key}">${icon(key === 'problems' ? 'issues' : key === 'generation' ? 'box' : key === 'build' ? 'build' : key === 'run' ? 'play' : 'terminal')}${text}${key === 'problems' ? `<span class="tool-count">${S.issues.length}</span>` : ''}</button>`,
+                    )
+                    .join('')}</nav></div></div>`
+                : welcome()
+            }<footer class="status-bar" role="status"><span><i class="status-dot"></i>${S.busy ? '正在执行：' + { build: '构建', run: '主机验证', validate: '校验', generate: '生成', preflight: '预检' }[S.busy] : S.opened ? '工程已打开' : '就绪'}</span><span class="desktop-status">${S.opened ? (S.draft ? '草稿未应用' : S.dirty ? '未保存修改' : '配置已保存') : ''}</span><button data-action="settings">${S.resources.ready ? '规范资源已就绪' : '规范资源未就绪'}</button><span class="status-right">${S.target === 'windows' ? 'Windows' : 'Linux'} x64 · ${S.target === S.host ? '本机目标' : '源码目标'}</span><span class="desktop-status">主机虚拟 ECU</span></footer></div>`;
+          const projectLabel = document.querySelector('.project-select > span');
+          if (projectLabel && S.opened)
+            projectLabel.textContent = S.projectName;
+          const breadcrumbProject =
+            document.querySelector('.breadcrumb > span');
+          if (breadcrumbProject) breadcrumbProject.textContent = S.projectName;
+          renderDialog();
+          if (focusKey) {
+            const [kind, key] = focusKey.split(':');
+            const el = document.querySelector(`[data-${kind}="${key}"]`);
+            if (el) {
+              el.focus({ preventScroll: true });
+              if (selection && el.setSelectionRange && el.type !== 'number') {
+                try {
+                  el.setSelectionRange(...selection);
+                } catch {}
+              }
+            }
+          }
+        }
+        function dialogHeader(title, description = '') {
+          return `<header class="dialog-header"><div><h2 id="dialog-title">${title}</h2>${description ? `<p>${description}</p>` : ''}</div>${button('close-dialog', icon('close'), null, false, 'class="icon-button" aria-label="关闭对话框"')}</header>`;
+        }
+        function renderDialog() {
+          const dialog = $('#modal');
+          if (!S.dialog) {
+            if (dialog.open) dialog.close();
+            return;
+          }
+          let body = '';
+          if (S.dialog === 'settings')
+            body = window.PrototypeSettings.render(S, { escape: esc, icon });
+          if (S.dialog === 'save') {
+            const file = S.previewUnchanged ?? 'ComCfg.arxml',
+              unchanged = file !== 'ComCfg.arxml';
+            const content = unchanged
+              ? '原字节保持不变（演示）。正式预览展示原文件内容。'
+              : `− 已保存：CAN ID / 参数的原值\n+ 当前内存：${selectedFrame()?.name ?? 'ComConfig'} · ${selectedFrame()?.id ?? '空工程'}\n\n演示差异仅表达保存契约，不提供可校验 ARXML。`;
+            body = `${dialogHeader('预览保存 ARXML', '1 份文件将修改，其余来源保持原字节。确认后才保存。')}<div class="preview-layout"><nav class="preview-files" aria-label="保存预览文件">${files.map((f) => `<button data-action="preview-unchanged" data-value="${f}" class="${file === f ? 'selected-row' : ''}">${icon('file')}${f}${f === 'ComCfg.arxml' ? '<span class="tag gold">修改</span>' : ''}</button>`).join('')}</nav><div class="preview-code"><p class="hint">${file} · ${unchanged ? '未修改' : `配置修订 ${S.savedRevision} → ${S.revision}`}</p><pre>${esc(content)}</pre></div></div><footer class="dialog-footer"><span class="hint">预览不写磁盘</span>${button('close-dialog', '取消', null, false, 'class="secondary"')}${button('confirm-save', '确认保存', 'save', false, 'class="primary"')}</footer>`;
+          }
+          if (S.dialog === 'generate')
+            body = `${dialogHeader('预览源码交付', `${S.target === 'windows' ? 'Windows' : 'Linux'} x64 · 输入修订 ${S.savedRevision} · 交接元数据${S.handoff ? '包含' : '不包含'}`)}<div class="preview-layout"><nav class="preview-files" aria-label="源码预览文件">${['src/Ecu_Cfg.c', 'include/Ecu_Cfg.h', 'tools/ecu-tool.py', 'README.md'].map((file) => `<button data-action="preview-file" data-value="${file}" class="${S.previewFile === file ? 'selected-row' : ''}">${icon('file')}${file}</button>`).join('')}</nav><div class="preview-code"><p class="hint">${S.previewFile} · 新增</p><pre>${esc(S.previewFile === 'src/Ecu_Cfg.c' ? `/* 演示源码片段；不作为正式生成物 */\n#include "Ecu_Cfg.h"\n\n/* 当前配置 */\n/* ${selectedFrame()?.name ?? 'ComConfig'}: ${selectedFrame()?.id ?? '—'} */\n/* Target: ${S.target}-x64-controlled-v1 */` : S.previewFile === 'README.md' ? '演示交付说明\n源码、输入、构建输出分开存放。\n生成不代表构建或行为验证通过。' : '演示预览 · 正式文件由核心生成计划提供。')}</pre></div></div><footer class="dialog-footer"><span class="hint">${esc(S.output)}</span>${button('close-dialog', '取消', null, false, 'class="secondary"')}${button('confirm-generate', '确认生成源码', 'box', false, 'class="primary"')}</footer>`;
+          if (S.dialog === 'discard')
+            body = `${dialogHeader('有未应用的更改', '切换对象不会自动应用或丢弃当前草稿。')}<div class="dialog-body"><p class="hint">选择如何处理 ${esc(S.selected)} 的未应用更改。</p></div><footer class="dialog-footer">${button('close-dialog', '继续编辑', null, false, 'class="secondary"')}${button('discard-switch', '放弃草稿', null, false, 'class="secondary"')}${button('apply-switch', '应用后切换', 'check', false, 'class="primary"')}</footer>`;
+          if (S.dialog === 'close-project')
+            body = `${dialogHeader('关闭当前工程', S.dirty ? '当前配置有尚未保存的修改。' : '关闭会清除本次会话的交付与运行状态。')}<div class="dialog-body"><p class="hint">已保存的来源文件不受影响。${S.dirty ? '先取消并预览保存，或明确放弃本次未保存修改。' : ''}</p></div><footer class="dialog-footer">${button('close-dialog', '取消', null, false, 'class="secondary"')}${button('confirm-close', S.dirty ? '放弃修改并关闭' : '关闭工程', null, false, 'class="primary"')}</footer>`;
+          if (S.dialog === 'remove-diagnostic')
+            body = `${dialogHeader(S.diagnosticTab === 'dtc' ? '移除故障记忆？' : '移除诊断连接？', '该操作改变当前配置，保存后才写入来源文件。')}<div class="dialog-body"><p class="hint">${S.diagnosticTab === 'dtc' ? '监测记录不再进入生成工程。' : '移除连接同时移除其故障记忆配置。'}</p></div><footer class="dialog-footer">${button('close-dialog', '取消', null, false, 'class="secondary"')}${button('confirm-remove', '确认移除', null, false, 'class="primary"')}</footer>`;
+          if (S.dialog === 'switch-project')
+            body = `${dialogHeader('当前工程有未保存的编辑', '新建或导入不能悄悄替换当前工程。')}<div class="dialog-body"><p class="hint">先返回应用草稿并预览保存，或明确放弃本次修改后继续。</p></div><footer class="dialog-footer">${button('close-dialog', '留在当前工程', null, false, 'class="secondary"')}${button('discard-open', '放弃修改并继续', null, false, 'class="secondary"')}${button('save-before-open', '应用并预览保存', null, false, 'class="primary"')}</footer>`;
+          if (
+            [
+              'new',
+              'import',
+              'import-handoff',
+              'add-frame',
+              'add-signal',
+            ].includes(S.dialog)
+          ) {
+            const title = {
+              new: '新建工程',
+              import: '导入 ARXML',
+              'import-handoff': '重导入交接包',
+              'add-frame': '添加 CAN 帧',
+              'add-signal': '添加信号',
+            }[S.dialog];
+            body = `${dialogHeader(title, S.dialog === 'import' ? '选择同一 ECU 的完整多文件集合，导入不会拆分其他 ECU。' : S.dialog === 'import-handoff' ? '识别版本化交接格式并核对完整性；不把普通目录当成交接包。' : '原型只演示操作，不创建实际文件。')}<div class="dialog-body"><form id="prototype-form"><label class="field"><span>${S.dialog === 'import' ? 'ARXML 来源路径' : S.dialog === 'import-handoff' ? '交接包目录' : '名称'}</span>${S.dialog === 'import' ? '<textarea rows="4" name="name" aria-label="ARXML 来源路径">C:\\ECU\\input\\ComCfg.arxml\nC:\\ECU\\input\\CanIfCfg.arxml\nC:\\ECU\\input\\DiagnosticCfg.arxml</textarea>' : `<input name="name" aria-label="${S.dialog === 'import-handoff' ? '交接包目录' : '名称'}" value="${S.dialog === 'import-handoff' ? 'C:\\ECU\\handoff\\Powertrain_ECU' : S.dialog === 'new' ? 'New_ECU' : S.dialog === 'add-frame' ? 'NewFrame' : 'NewSignal'}">`}</label>${S.dialog === 'add-frame' ? '<label class="field"><span>CAN ID</span><input name="canid" aria-label="新帧 CAN ID" value="0x401"></label>' : ''}<p class="hint">${S.dialog === 'add-signal' ? '新信号需放在帧剩余有效位中；无空间时明确拒绝。' : S.dialog === 'new' ? '正式实现需先选择 ARXML 保存目录；生成和构建目录保持独立。' : '原型使用已声明的示例工程，不读取输入路径。'}</p></form></div><footer class="dialog-footer">${button('close-dialog', '取消', null, false, 'class="secondary"')}${button('confirm-create', S.dialog === 'add-frame' || S.dialog === 'add-signal' ? '添加' : S.dialog === 'new' ? '创建并打开' : '导入并打开', 'check', false, 'class="primary"')}</footer>`;
+          }
+          if (S.dialog === 'command')
+            body = `${dialogHeader('搜索操作')}<div class="dialog-body"><input data-field="commandQuery" value="${esc(S.commandQuery)}" placeholder="输入操作名称" aria-label="搜索操作"><div class="command-results">${
+              [
+                ['save', '预览保存 ARXML'],
+                ['validate', '校验工程'],
+                ['delivery', '工程交付'],
+                ['problems-tool', '打开问题窗口'],
+                ['build-tool', '打开构建窗口'],
+                ['run-tool', '打开主机验证'],
+                ['settings', '工作台设置'],
+                ['import', '导入 ARXML'],
+              ]
+                .filter(([, name]) => name.includes(S.commandQuery))
+                .map(
+                  ([action, name]) =>
+                    `<button data-action="command-run" data-value="${action}">${name}${icon('chevron')}</button>`,
+                )
+                .join('') || '<p class="hint">没有匹配的操作。</p>'
+            }</div></div>`;
+          if (S.dialog === 'guide' || S.dialog === 'about')
+            body = `${dialogHeader(S.dialog === 'about' ? '关于工作台' : '操作与能力范围')}<div class="dialog-body"><p class="hint">Classic CAN 配置工作台 · CP / FO R24-11</p><div class="section-title"><h3>同一工程的操作链</h3></div><p class="hint">选择对象 → 编辑属性并应用 → 预览保存 → 校验与问题定位 → 预览并交付源码 → 可选构建和主机验证。</p><div class="section-title"><h3>明确的能力边界</h3></div><p class="hint">普通 CAN 信号工程与受限标准 ECU 输入共用界面，但编辑权限不同。主机证据不等于真实 MCU、完整符合性或认证。后续模块不作为已支持入口展示。</p><div class="section-title"><h3>此评审原型</h3></div><p class="hint">全部数据和结果在内存中模拟，不读写项目文件、不调用 Tauri、不编译或运行 ECU。刷新即重置。</p></div><footer class="dialog-footer">${button('close-dialog', '关闭', null, false, 'class="primary"')}</footer>`;
+          if (S.notice && S.dialog !== 'settings')
+            body = body.replace(
+              '<footer class="dialog-footer">',
+              `<div class="dialog-body"><p class="inline-notice" role="alert">${esc(S.notice)}</p></div><footer class="dialog-footer">`,
+            );
+          dialog.innerHTML = body;
+          if (!dialog.open) dialog.showModal();
+        }
+        function openDialog(name) {
+          focusReturn = document.activeElement?.dataset.action
+            ? {
+                action: document.activeElement.dataset.action,
+                value: document.activeElement.dataset.value,
+              }
+            : null;
+          S.dialog = name;
+          S.menu = null;
+          S.notice = '';
+          if (name === 'settings')
+            S.settingsDraft = {
+              theme: S.theme,
+              resources: { ...S.resources },
+              tools: { ...S.tools },
+            };
+          render();
+        }
+        function closeDialog() {
+          S.dialog = null;
+          S.settingsDraft = null;
+          render();
+          if (focusReturn) {
+            const selector = `[data-action="${focusReturn.action}"]${focusReturn.value ? `[data-value="${focusReturn.value}"]` : ''}`;
+            document.querySelector(selector)?.focus({ preventScroll: true });
+          }
+        }
+        function navigate(action, value) {
+          if (S.draft) {
+            S.pendingNavigation = { action, value };
+            openDialog('discard');
+            return;
+          }
+          navigateNow(action, value);
+        }
+        function navigateNow(action, value) {
+          if (action === 'create') {
+            openDialog(value);
+            return;
+          }
+          if (action === 'welcome') {
+            openDialog('close-project');
+            return;
+          }
+          S.notice = '';
+          if (action === 'close-tab') {
+            S.openTabs = S.openTabs.filter((v) => v !== value);
+            if (!S.openTabs.length) S.openTabs = ['can'];
+            if (S.view === value) S.view = S.openTabs[0];
+            render();
+            return;
+          }
+          if (action === 'select') {
+            S.selected = value;
+            S.view = 'can';
+            S.showInspector = true;
+            selectionForm();
+          } else if (action === 'source') {
+            S.sourceFile = value;
+            S.view = 'source';
+          } else S.view = value;
+          if (!S.openTabs.includes(S.view)) S.openTabs.push(S.view);
+          if (innerWidth < 700 && action === 'select') S.showTree = false;
+          render();
+        }
+        function apply() {
+          if (!S.draft) return true;
+          const context = S.draftContext ?? S.view,
+            f = selectedFrame(),
+            s = selectedSignal();
+          if (context === 'can' && S.form) {
+            const name = S.form.name.trim();
+            if (
+              !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) ||
+              S.data.some((frame) =>
+                s
+                  ? frame.signals.some(
+                      (item) => item !== s && item.name === name,
+                    )
+                  : frame !== f && frame.name === name,
+              )
+            ) {
+              S.notice = '名称无效或与现有同类对象重复。请修正后应用。';
+              render();
+              return false;
+            }
+            if (s) {
+              const bit = Number(S.form.bit),
+                len = Number(S.form.length),
+                value = Number(S.form.value);
+              if (
+                !Number.isInteger(bit) ||
+                !Number.isInteger(len) ||
+                len < 1 ||
+                len > 32 ||
+                bit < 0 ||
+                bit + len > f.dlc * 8 ||
+                !Number.isInteger(value) ||
+                value < 0 ||
+                value > 2 ** len - 1 ||
+                f.signals.some(
+                  (item) =>
+                    item !== s &&
+                    bit < item.bit + item.length &&
+                    bit + len > item.bit,
+                )
+              ) {
+                S.notice =
+                  '信号超出帧边界、初值范围或与现有信号重叠。请修正属性。';
+                render();
+                return false;
+              }
+              s.name = name;
+              s.bit = bit;
+              s.length = len;
+              s.value = value;
+              S.selected = name;
+            } else if (f) {
+              const id = Number(S.form.id),
+                dlc = Number(S.form.dlc),
+                time = Number(S.form.time);
+              if (
+                !Number.isInteger(id) ||
+                id < 0 ||
+                id > 2047 ||
+                !Number.isInteger(dlc) ||
+                dlc < 1 ||
+                dlc > 8 ||
+                !Number.isInteger(time) ||
+                time <= 0 ||
+                f.signals.some((item) => item.bit + item.length > dlc * 8) ||
+                S.data.some((item) => item !== f && Number(item.id) === id)
+              ) {
+                S.notice =
+                  'CAN ID、DLC 或周期 / 超时无效，或与已有帧冲突。请修正属性。';
+                render();
+                return false;
+              }
+              f.name = name;
+              f.id = '0x' + id.toString(16).toUpperCase().padStart(3, '0');
+              f.dlc = dlc;
+              f.time = time;
+              f.direction = S.form.direction;
+              S.selected = name;
+            }
+          } else if (context === 'inputs') {
+            const p = { ...S.parameters, ...S.parameterDraft },
+              tx = Number(p.standardTx),
+              rx = Number(p.standardRx),
+              period = Number(p.standardPeriod);
+            if (
+              ![tx, rx, period].every(Number.isInteger) ||
+              tx < 0 ||
+              tx > 2047 ||
+              rx < 0 ||
+              rx > 2047 ||
+              tx === rx ||
+              period < 1 ||
+              period > 2147483647
+            ) {
+              S.notice = 'CAN ID 或应用周期无效，发送与接收 ID 必须不同。';
+              render();
+              return false;
+            }
+            S.data[0].id = '0x' + tx.toString(16).toUpperCase();
+            S.data[1].id = '0x' + rx.toString(16).toUpperCase();
+            S.data[0].time = period;
+          } else if (context === 'diagnostic') {
+            const p = { ...S.parameters, ...S.parameterDraft },
+              request = Number(p.request),
+              response = Number(p.response),
+              did = Number(p.did),
+              dtc = Number(p.dtc),
+              ordered = S.didSignalDraft ?? S.didSignals;
+            if (
+              ![request, response, did].every(Number.isInteger) ||
+              request < 0 ||
+              request > 2047 ||
+              response < 0 ||
+              response > 2047 ||
+              request === response ||
+              S.data.some(
+                (f) => Number(f.id) === request || Number(f.id) === response,
+              ) ||
+              did < 0 ||
+              did > 65535 ||
+              did === 0xf186 ||
+              Number(p.s3) < 5000 ||
+              ['nas', 'nbs', 'ncr'].some(
+                (k) => !Number.isInteger(Number(p[k])) || Number(p[k]) <= 0,
+              ) ||
+              ordered.length < 1 ||
+              ordered.length > 8 ||
+              !Number.isInteger(dtc) ||
+              dtc < 0x100 ||
+              dtc > 0xfffffe
+            ) {
+              S.notice =
+                '诊断 ID、DID、计时或有序信号配置无效，请检查字段与支持范围。';
+              render();
+              return false;
+            }
+            if (
+              (S.optionDraft.routine ?? S.routine) &&
+              (!Number.isInteger(Number(p.rid)) ||
+                Number(p.rid) < 0 ||
+                Number(p.rid) > 65535)
+            ) {
+              S.notice = 'RID 必须为 16-bit 无符号值。';
+              render();
+              return false;
+            }
+            S.diagnosticEnabled = true;
+            if (S.diagnosticTab === 'dtc') S.dtcEnabled = true;
+            S.didSignals = [...ordered];
+          }
+          Object.assign(S.parameters, S.parameterDraft);
+          Object.assign(S, S.optionDraft);
+          S.parameterDraft = {};
+          S.optionDraft = {};
+          S.didSignalDraft = null;
+          S.draftContext = null;
+          S.draft = false;
+          S.dirty = true;
+          S.revision++;
+          invalidate(['validate', 'generate', 'preflight', 'build', 'run']);
+          S.notice = '更改已应用到工程，尚未写入来源文件。';
+          log('应用配置修订 ' + S.revision + '；旧结果不再代表当前配置。');
+          selectionForm();
+          render();
+          return true;
+        }
+        function runStage(key) {
+          if (S.busy) return;
+          const epoch = ++jobEpoch;
+          const revision = S.revision;
+          S.stages[key] = 'running';
+          S.busy = key;
+          S.notice = '';
+          log(
+            '开始' +
+              {
+                validate: '校验',
+                generate: '源码生成',
+                preflight: '编译预检',
+                build: '构建',
+                run: '主机验证',
+              }[key] +
+              '（演示）',
+          );
+          render();
+          timer = setTimeout(() => {
+            if (epoch !== jobEpoch || revision !== S.revision) return;
+            if (key === 'validate') {
+              S.issues = [];
+              for (const frame of S.data)
+                for (const signal of frame.signals)
+                  if (
+                    frame.signals.some(
+                      (other) =>
+                        other !== signal &&
+                        signal.bit < other.bit + other.length &&
+                        signal.bit + signal.length > other.bit,
+                    )
+                  )
+                    S.issues.push({
+                      code: 'SIGNAL_LAYOUT',
+                      message: `${signal.name} 的位段与同帧信号重叠。`,
+                      object: signal.name,
+                      file: 'ComCfg.arxml',
+                    });
+              S.blocked = S.issues.length > 0;
+            }
+            S.busy = null;
+            S.stages[key] = S.blocked && key === 'validate' ? 'failed' : 'done';
+            if (key === 'run') S.runResults[S.runKind] = 'done';
+            log(
+              (key === 'build'
+                ? '构建'
+                : key === 'run'
+                  ? S.runKind === 'diagnostic'
+                    ? '诊断验证'
+                    : '主机验证'
+                  : key === 'generate'
+                    ? '源码生成'
+                    : key === 'preflight'
+                      ? '编译预检'
+                      : '校验') +
+                (S.stages[key] === 'done' ? '完成' : '存在阻断') +
+                '（模拟结果，未执行真实操作）。',
+            );
+            render();
+          }, 800);
+        }
+        function cancel() {
+          if (!S.busy) return;
+          clearTimeout(timer);
+          jobEpoch++;
+          const key = S.busy;
+          S.stages[key] = 'cancelled';
+          if (key === 'run') S.runResults[S.runKind] = 'cancelled';
+          S.busy = null;
+          S.notice = '操作已取消；既有输入与产物保持不变。';
+          log('取消' + key + '，不发布部分结果。');
+          render();
+        }
+        function scenario(name) {
+          clearTimeout(timer);
+          jobEpoch++;
+          const theme = S?.theme;
+          S = initial();
+          if (theme) S.theme = theme;
+          S.tool = null;
+          S.projectName = 'Powertrain_ECU';
+          S.parameters = {
+            request: '0x700',
+            response: '0x708',
+            s3: '5000',
+            nas: '100',
+            nbs: '100',
+            ncr: '100',
+            did: '0xF200',
+            rid: '0x1234',
+            dtc: '0x123456',
+            monitor: 'VehicleStatus',
+            standardTx: '0x201',
+            standardRx: '0x301',
+            standardPeriod: '20',
+          };
+          S.parameterDraft = {};
+          S.optionDraft = {};
+          S.didSignals = ['RuntimeCounter'];
+          S.didSignalDraft = null;
+          S.draftContext = null;
+          S.pendingProjectAction = null;
+          S.savedData = structuredClone(S.data);
+          S.previewUnchanged = null;
+          S.rootCollapsed = false;
+          S.runKind = 'signal';
+          S.runResults = {
+            signal: 'pending',
+            diagnostic: 'pending',
+            standard: 'pending',
+          };
+          S.collapsedGroups = [];
+          S.peerDirectory = 'C:\\ECU\\source\\Peer_ECU';
+          S.peerBinary = 'C:\\ECU\\build\\Peer_ECU\\ecu_host.exe';
+          if (name === 'welcome') S.opened = false;
+          if (name === 'empty') {
+            S.data = [];
+            S.selected = '';
+            S.stages.validate = 'pending';
+            S.tool = null;
+          }
+          if (name === 'standard') {
+            S.profile = 'standard';
+            S.view = 'inputs';
+            S.openTabs = ['inputs', 'can', 'delivery'];
+            S.data = S.data.slice(0, 2);
+            S.data[0].signals = [
+              { name: 'TxValue', bit: 0, length: 32, value: 100 },
+            ];
+            S.data[1].signals = [
+              { name: 'RxValue', bit: 0, length: 32, value: 0 },
+            ];
+            S.didSignals = ['TxValue'];
+          }
+          if (name === 'missing') {
+            S.resources.ready = false;
+            S.resources.xsd = '';
+            S.resources.mod = '';
+            S.stages.validate = 'pending';
+            S.dialog = 'settings';
+            S.settingsTab = 'resources';
+            S.settingsDraft = {
+              theme: S.theme,
+              resources: { ...S.resources },
+              tools: { ...S.tools },
+            };
+          }
+          if (name === 'blocked') {
+            S.blocked = true;
+            S.tool = 'problems';
+            S.stages.validate = 'failed';
+            S.issues = [
+              {
+                code: 'SIGNAL_LAYOUT',
+                message: 'VehicleSpeed 的位段与 GearPosition 重叠。',
+                object: 'VehicleSpeed',
+                file: 'ComCfg.arxml',
+              },
+            ];
+            S.data[1].signals[0].length = 24;
+          }
+          if (name === 'external') {
+            S.external = true;
+            invalidate(['validate', 'generate', 'preflight', 'build', 'run']);
+            S.notice =
+              'ComCfg.arxml 已在工作台之外修改。请重新导入完整来源集合。';
+          }
+          if (name === 'cross') {
+            S.target = 'linux';
+            S.view = 'delivery';
+            S.tool = 'build';
+          }
+          selectionForm();
+          $('#scenario').value = name;
+          render();
+        }
+        function action(name, value) {
+          if (name === 'tree-group') {
+            S.collapsedGroups = S.collapsedGroups.includes(value)
+              ? S.collapsedGroups.filter((item) => item !== value)
+              : [...S.collapsedGroups, value];
+            render();
+            return;
+          }
+          if (name !== 'menu' && name !== 'project-menu') S.menu = null;
+          if (name === 'menu') {
+            S.menu = S.menu === value ? null : value;
+            render();
+            return;
+          }
+          if (name === 'project-menu') {
+            S.menu = S.menu === 'project' ? null : 'project';
+            render();
+            return;
+          }
+          if (name === 'close-dialog') {
+            closeDialog();
+            return;
+          }
+          if (name === 'settings') {
+            S.settingsTab = 'appearance';
+            openDialog('settings');
+            return;
+          }
+          if (name === 'settings-tab') {
+            S.settingsTab = value;
+            render();
+            return;
+          }
+          if (name === 'settings-save') {
+            const patch = window.PrototypeSettings.save(S, value);
+            if (patch.resources || patch.tools) cancel();
+            Object.assign(S, patch);
+            if (patch.resources)
+              invalidate(['validate', 'generate', 'preflight', 'build', 'run']);
+            if (patch.tools)
+              invalidate(['generate', 'preflight', 'build', 'run']);
+            render();
+            return;
+          }
+          if (name === 'browse-setting') {
+            const samples = {
+              xsd: 'C:\\AUTOSAR\\R24-11\\XSD.zip',
+              mod: 'C:\\AUTOSAR\\R24-11\\MOD.zip',
+              compiler: 'C:\\Tools\\gcc.exe',
+              objdump: 'C:\\Tools\\objdump.exe',
+              git: 'C:\\Tools\\git.exe',
+              python: 'C:\\Tools\\python.exe',
+            };
+            S.settingsDraft = window.PrototypeSettings.change(
+              S,
+              value,
+              samples[value],
+            );
+            render();
+            return;
+          }
+          if (name === 'theme-toggle') {
+            S.theme =
+              document.documentElement.dataset.theme === 'dark'
+                ? 'light'
+                : 'dark';
+            render();
+            return;
+          }
+          if (name === 'tree-toggle') {
+            S.showTree = !S.showTree;
+            render();
+            return;
+          }
+          if (name === 'inspector-toggle') {
+            S.showInspector = !S.showInspector;
+            render();
+            return;
+          }
+          if (name === 'tree-mode') {
+            S.treeMode = value;
+            render();
+            return;
+          }
+          if (name === 'inspector-tab') {
+            S.inspectorTab = value;
+            render();
+            return;
+          }
+          if (name === 'sort') {
+            S.ascending = S.sort === value ? !S.ascending : true;
+            S.sort = value;
+            render();
+            return;
+          }
+          if (name === 'select' || name === 'source') {
+            navigate(name, value);
+            return;
+          }
+          if (name === 'view') {
+            navigate('view', value);
+            return;
+          }
+          if (['can', 'inputs', 'diagnostic', 'delivery'].includes(name)) {
+            navigate('view', name);
+            return;
+          }
+          if (name === 'dtc') {
+            S.diagnosticTab = 'dtc';
+            navigate('view', 'diagnostic');
+            return;
+          }
+          if (name === 'diagnostic-tab') {
+            S.diagnosticTab = value;
+            render();
+            return;
+          }
+          if (name === 'close-tab') {
+            if (S.draft && S.view === value) {
+              S.pendingNavigation = { action: 'close-tab', value };
+              openDialog('discard');
+              return;
+            }
+            navigateNow('close-tab', value);
+            return;
+          }
+          if (name === 'tool' || name.endsWith('-tool')) {
+            const key = name === 'tool' ? value : name.replace('-tool', '');
+            S.tool = S.tool === key ? null : key;
+            render();
+            return;
+          }
+          if (name === 'tool-close') {
+            S.tool = null;
+            render();
+            $('#work-area')?.focus();
+            return;
+          }
+          if (
+            name === 'apply' ||
+            name === 'apply-diagnostic' ||
+            name === 'apply-standard'
+          ) {
+            if (
+              name === 'apply-diagnostic' &&
+              (!S.diagnosticEnabled ||
+                (S.diagnosticTab === 'dtc' && !S.dtcEnabled))
+            ) {
+              S.draft = true;
+              S.draftContext = 'diagnostic';
+            }
+            apply();
+            return;
+          }
+          if (name === 'restore') {
+            S.draft = false;
+            S.draftContext = null;
+            S.parameterDraft = {};
+            S.optionDraft = {};
+            S.didSignalDraft = null;
+            S.notice = '未应用草稿已还原。';
+            selectionForm();
+            render();
+            return;
+          }
+          if (name === 'discard-switch' || name === 'apply-switch') {
+            const next = S.pendingNavigation;
+            if (name === 'apply-switch' && !apply()) return;
+            S.draft = false;
+            S.draftContext = null;
+            S.parameterDraft = {};
+            S.optionDraft = {};
+            S.didSignalDraft = null;
+            S.dialog = null;
+            selectionForm();
+            navigateNow(next.action, next.value);
+            return;
+          }
+          if (name === 'save') {
+            if (S.draft || !S.dirty || S.external) return;
+            openDialog('save');
+            return;
+          }
+          if (name === 'confirm-save') {
+            S.dirty = false;
+            S.savedRevision = S.revision;
+            S.savedData = structuredClone(S.data);
+            S.dialog = null;
+            S.notice = 'ARXML 保存完成（演示），请校验当前配置。';
+            log('确认保存输入修订 ' + S.savedRevision + '。');
+            if (S.pendingProjectAction) {
+              const next = S.pendingProjectAction;
+              S.pendingProjectAction = null;
+              openDialog(next);
+            } else render();
+            return;
+          }
+          if (name === 'preview-unchanged') {
+            S.previewUnchanged = value;
+            render();
+            return;
+          }
+          if (name === 'validate' || name === 'inspect') {
+            if (S.draft || !S.resources.ready) return;
+            S.tool = 'problems';
+            runStage('validate');
+            return;
+          }
+          if (name === 'generate-preview') {
+            if (!canGenerate()) {
+              S.notice = '先应用草稿、保存并完成配置校验。';
+              render();
+              return;
+            }
+            S.tool = 'generation';
+            openDialog('generate');
+            return;
+          }
+          if (name === 'preview-file') {
+            S.previewFile = value;
+            render();
+            return;
+          }
+          if (name === 'confirm-generate') {
+            if (!canGenerate()) return;
+            S.dialog = null;
+            S.tool = 'generation';
+            runStage('generate');
+            return;
+          }
+          if (name === 'preflight') {
+            if (S.profile === 'standard' && canExecute()) runStage('preflight');
+            return;
+          }
+          if (name === 'build') {
+            if (!canExecute() || S.stages.generate !== 'done') return;
+            S.tool = 'build';
+            invalidate(['build', 'run']);
+            runStage('build');
+            return;
+          }
+          if (name === 'run' || name === 'run-diagnostic') {
+            if (!canExecute() || S.stages.build !== 'done') return;
+            S.runKind =
+              S.profile === 'standard'
+                ? 'standard'
+                : name === 'run-diagnostic'
+                  ? 'diagnostic'
+                  : 'signal';
+            S.runResults[S.runKind] = 'running';
+            S.tool = 'run';
+            runStage('run');
+            return;
+          }
+          if (name === 'cancel') {
+            cancel();
+            return;
+          }
+          if (name === 'locate-issue') {
+            S.treeQuery = '';
+            S.objectQuery = '';
+            S.collapsedGroups = [];
+            S.showTree = innerWidth >= 700;
+            navigate('select', value);
+            return;
+          }
+          if (
+            name === 'did-add' ||
+            name === 'did-remove' ||
+            name === 'did-up' ||
+            name === 'did-down'
+          ) {
+            const list = [...(S.didSignalDraft ?? S.didSignals)],
+              index = Number(value);
+            if (name === 'did-add') list.push($('#did-candidate').value);
+            if (name === 'did-remove') list.splice(index, 1);
+            if (name === 'did-up')
+              [list[index - 1], list[index]] = [list[index], list[index - 1]];
+            if (name === 'did-down')
+              [list[index + 1], list[index]] = [list[index], list[index + 1]];
+            S.didSignalDraft = list;
+            S.draft = true;
+            S.draftContext = 'diagnostic';
+            render();
+            return;
+          }
+          if (name === 'remove-diagnostic') {
+            openDialog('remove-diagnostic');
+            return;
+          }
+          if (name === 'confirm-remove') {
+            if (S.diagnosticTab === 'dtc') S.dtcEnabled = false;
+            else {
+              S.diagnosticEnabled = false;
+              S.dtcEnabled = false;
+            }
+            S.dialog = null;
+            S.draft = false;
+            S.dirty = true;
+            S.revision++;
+            invalidate(['validate', 'generate', 'preflight', 'build', 'run']);
+            S.notice = '配置已移除（演示），尚未保存。';
+            render();
+            return;
+          }
+          if (name === 'reimport') {
+            S.external = false;
+            S.notice = '来源集合已重新导入（演示），旧交付结果保持失效。';
+            S.stages.validate = 'pending';
+            log('重新导入来源，不复用旧结果。');
+            render();
+            return;
+          }
+          if (name === 'notice-close') {
+            S.notice = '';
+            render();
+            return;
+          }
+          if (
+            [
+              'new',
+              'import',
+              'import-handoff',
+              'add-frame',
+              'add-signal',
+              'command',
+              'guide',
+              'about',
+            ].includes(name)
+          ) {
+            if (
+              (name === 'add-frame' || name === 'add-signal') &&
+              (S.profile === 'standard' || S.busy)
+            )
+              return;
+            if (
+              ['new', 'import', 'import-handoff'].includes(name) &&
+              S.opened &&
+              (S.draft || S.dirty)
+            ) {
+              S.pendingProjectAction = name;
+              openDialog('switch-project');
+              return;
+            }
+            if ((name === 'add-frame' || name === 'add-signal') && S.draft) {
+              S.pendingNavigation = { action: 'create', value: name };
+              openDialog('discard');
+              return;
+            }
+            openDialog(name);
+            return;
+          }
+          if (name === 'discard-open') {
+            const next = S.pendingProjectAction;
+            S.pendingProjectAction = null;
+            S.draft = false;
+            S.dirty = false;
+            S.parameterDraft = {};
+            S.optionDraft = {};
+            openDialog(next);
+            return;
+          }
+          if (name === 'save-before-open') {
+            if (S.draft && !apply()) return;
+            openDialog('save');
+            return;
+          }
+          if (name === 'command-run') {
+            S.dialog = null;
+            action(value);
+            return;
+          }
+          if (name === 'confirm-create') {
+            const form = new FormData($('#prototype-form'));
+            const text = String(form.get('name') || '').trim();
+            if (!text) {
+              S.notice = '名称或路径不能为空。';
+              render();
+              return;
+            }
+            if (S.dialog === 'add-frame') {
+              const id = Number(form.get('canid'));
+              if (
+                !Number.isInteger(id) ||
+                id < 0 ||
+                id > 2047 ||
+                S.data.some((f) => Number(f.id) === id) ||
+                S.data.some((f) => f.name === text)
+              ) {
+                S.notice =
+                  '名称或 CAN ID 与现有帧冲突，或 ID 不在 0–2047 范围。';
+                render();
+                return;
+              }
+              S.data.push({
+                name: text,
+                id: '0x' + id.toString(16).toUpperCase(),
+                dlc: 8,
+                direction: 'Tx',
+                time: 20,
+                signals: [],
+              });
+              S.selected = text;
+              S.dirty = true;
+              S.revision++;
+              invalidate(['validate', 'generate', 'preflight', 'build', 'run']);
+            } else if (S.dialog === 'add-signal') {
+              const f = selectedFrame();
+              if (!f) return;
+              const bit = f.signals.reduce(
+                (max, s) => Math.max(max, s.bit + s.length),
+                0,
+              );
+              if (
+                bit + 8 > f.dlc * 8 ||
+                S.data.some((f) => f.signals.some((s) => s.name === text))
+              ) {
+                S.notice = '该帧无足够连续空间，或信号名称已存在。';
+                render();
+                return;
+              }
+              f.signals.push({ name: text, bit, length: 8, value: 0 });
+              S.selected = text;
+              S.dirty = true;
+              S.revision++;
+              invalidate(['validate', 'generate', 'preflight', 'build', 'run']);
+            } else {
+              const wasNew = S.dialog === 'new';
+              scenario(wasNew ? 'empty' : 'default');
+              S.opened = true;
+              if (wasNew) S.projectName = text;
+              log(
+                wasNew
+                  ? '创建新的空工程（演示）。'
+                  : '导入完整来源集合（演示，不读取路径）。',
+              );
+            }
+            S.dialog = null;
+            selectionForm();
+            render();
+            return;
+          }
+          if (name === 'open-can') {
+            scenario('default');
+            return;
+          }
+          if (name === 'open-standard') {
+            scenario('standard');
+            return;
+          }
+          if (name === 'welcome' || name === 'close-project') {
+            if (S.draft) {
+              S.pendingNavigation = { action: 'welcome', value: 'can' };
+              openDialog('discard');
+              return;
+            }
+            openDialog('close-project');
+            return;
+          }
+          if (name === 'confirm-close') {
+            S.opened = false;
+            S.dirty = false;
+            S.draft = false;
+            S.dialog = null;
+            S.logs = [];
+            S.stages = {
+              validate: 'pending',
+              generate: 'pending',
+              preflight: 'pending',
+              build: 'pending',
+              run: 'pending',
+            };
+            render();
+            return;
+          }
+        }
+        document.addEventListener('click', (event) => {
+          const btn = event.target.closest('button[data-action]');
+          if (btn && !btn.disabled) {
+            action(btn.dataset.action, btn.dataset.value);
+            return;
+          }
+          if (S.menu && !event.target.closest('.popup-menu')) {
+            S.menu = null;
+            render();
+          }
+        });
+        document.addEventListener('input', (event) => {
+          const el = event.target;
+          if (el.dataset.edit && el.tagName !== 'SELECT') {
+            S.draft = true;
+            S.draftContext = S.view;
+            if (Object.hasOwn(S.parameters, el.dataset.edit))
+              S.parameterDraft[el.dataset.edit] = el.value;
+            else S.form[el.dataset.edit] = el.value;
+            render();
+          }
+          if (el.dataset.setting) {
+            S.settingsDraft = window.PrototypeSettings.change(
+              S,
+              el.dataset.setting,
+              el.value,
+            );
+            return;
+          }
+          if (el.dataset.field && el.tagName !== 'SELECT') {
+            S[el.dataset.field] = el.value;
+            if (el.dataset.field === 'output')
+              invalidate(['generate', 'preflight', 'build', 'run']);
+            if (el.dataset.field === 'buildDir') invalidate(['build', 'run']);
+            if (
+              ['treeQuery', 'objectQuery', 'commandQuery'].includes(
+                el.dataset.field,
+              )
+            )
+              render();
+          }
+        });
+        document.addEventListener('change', (event) => {
+          const el = event.target;
+          if (el.dataset.edit && el.tagName === 'SELECT') {
+            S.draft = true;
+            S.draftContext = S.view;
+            if (Object.hasOwn(S.parameters, el.dataset.edit))
+              S.parameterDraft[el.dataset.edit] = el.value;
+            else S.form[el.dataset.edit] = el.value;
+            render();
+          }
+          if (el.dataset.setting) {
+            S.settingsDraft = window.PrototypeSettings.change(
+              S,
+              el.dataset.setting,
+              el.value,
+            );
+            render();
+          }
+          if (el.dataset.option) {
+            if (el.dataset.option === 'handoff') {
+              S.handoff = el.checked;
+              invalidate(['generate', 'preflight', 'build', 'run']);
+            } else {
+              S.optionDraft[el.dataset.option] = el.checked;
+              if (el.dataset.option === 'writeDid' && !el.checked)
+                S.optionDraft.routine = false;
+              S.draft = true;
+              S.draftContext = 'diagnostic';
+            }
+            render();
+          }
+          if (el.dataset.field === 'target') {
+            cancel();
+            S.target = el.value;
+            invalidate(['generate', 'preflight', 'build', 'run']);
+            S.notice = '目标已切换；此前目标的结果不再有效。';
+            render();
+          }
+        });
+        document.addEventListener('keydown', (event) => {
+          const key = event.key.toLowerCase();
+          if (
+            (event.ctrlKey || event.metaKey) &&
+            ['k', 's', 'o'].includes(key)
+          ) {
+            event.preventDefault();
+            action(key === 'k' ? 'command' : key === 's' ? 'save' : 'import');
+            return;
+          }
+          if (event.altKey && ['1', '4', '9'].includes(key)) {
+            event.preventDefault();
+            action(
+              key === '1'
+                ? 'tree-toggle'
+                : key === '4'
+                  ? 'build-tool'
+                  : 'run-tool',
+            );
+            return;
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            if (S.dialog) closeDialog();
+            else if (S.menu) {
+              S.menu = null;
+              render();
+            } else if (S.tool) {
+              S.tool = null;
+              render();
+              $('#work-area')?.focus();
+            }
+          }
+          if (S.menu && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
+            event.preventDefault();
+            const list = [
+              ...document.querySelectorAll('.popup-menu button:not(:disabled)'),
+            ];
+            const i = list.indexOf(document.activeElement);
+            list[
+              (i + (event.key === 'ArrowDown' ? 1 : -1) + list.length) %
+                list.length
+            ]?.focus();
+          }
+          if (
+            event.target.matches('[role="treeitem"]') &&
+            ['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(
+              event.key,
+            )
+          ) {
+            event.preventDefault();
+            const nodes = [
+                ...document.querySelectorAll('.tree-content [role="treeitem"]'),
+              ],
+              index = nodes.indexOf(event.target);
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp')
+              nodes[
+                Math.max(
+                  0,
+                  Math.min(
+                    nodes.length - 1,
+                    index + (event.key === 'ArrowDown' ? 1 : -1),
+                  ),
+                )
+              ]?.focus();
+            else if (event.target.dataset.action === 'tree-group') {
+              const value = event.target.dataset.value,
+                expanded =
+                  event.target.getAttribute('aria-expanded') === 'true';
+              if (
+                (event.key === 'ArrowRight' && !expanded) ||
+                (event.key === 'ArrowLeft' && expanded)
+              )
+                action('tree-group', value);
+              document
+                .querySelector(
+                  `[data-action="tree-group"][data-value="${value}"]`,
+                )
+                ?.focus();
+            }
+          }
+        });
+        $('#modal').addEventListener('cancel', (event) => {
+          event.preventDefault();
+          closeDialog();
+        });
+        $('#scenario').addEventListener('change', (event) =>
+          scenario(event.target.value),
+        );
+        matchMedia('(prefers-color-scheme: dark)').addEventListener(
+          'change',
+          () => {
+            if (S.theme === 'system') applyTheme();
+          },
+        );
+        Object.defineProperty(window, 'prototypeState', {
+          get: () => structuredClone(S),
+        });
+        scenario(params.get('scene') || 'default');
+      })();
+    </script>
+  </body>
+</html>

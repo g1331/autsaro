@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>A 图形与工作台的配色对齐</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f5f5f5;
+        color: #252525;
+        font:
+          14px/1.6 'Segoe UI Variable',
+          'Segoe UI',
+          'Microsoft YaHei',
+          sans-serif;
+      }
+      main {
+        max-width: 1280px;
+        margin: auto;
+        padding: 38px 32px;
+      }
+      h1 {
+        font-size: 28px;
+        line-height: 1.3;
+        font-weight: 600;
+        margin: 0 0 12px;
+      }
+      h2 {
+        font-size: 18px;
+        margin: 0 0 8px;
+        font-weight: 600;
+      }
+      h3 {
+        font-size: 14px;
+        margin: 28px 0 10px;
+        font-weight: 600;
+      }
+      p {
+        color: #626262;
+        max-width: 85ch;
+        margin: 0 0 18px;
+      }
+      .pair {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 32px;
+        margin-top: 28px;
+      }
+      .mark {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        overflow: hidden;
+        place-items: center;
+        background: white;
+        min-height: 224px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+      }
+      .mark figure {
+        display: grid;
+        place-items: center;
+        margin: 0;
+        width: 100%;
+        min-height: 224px;
+      }
+      .mark .dark {
+        background: #1a1a1a;
+        color: #eee;
+      }
+      .mark figcaption {
+        font-size: 11px;
+        margin-bottom: 12px;
+      }
+      .mark img {
+        width: min(196px, 100%);
+        height: auto;
+        aspect-ratio: 1;
+      }
+      .links {
+        display: flex;
+        gap: 18px;
+        flex-wrap: wrap;
+        margin: 16px 0 24px;
+      }
+      a {
+        color: #b64c55;
+        text-underline-offset: 3px;
+      }
+      a:focus-visible {
+        outline: 2px solid #285f9e;
+        outline-offset: 3px;
+      }
+      .context {
+        display: block;
+        width: 100%;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+      }
+      .sizes {
+        display: flex;
+        align-items: center;
+        gap: 22px;
+        padding: 20px;
+        background: #e8e9eb;
+        border-radius: 6px;
+        flex-wrap: wrap;
+      }
+      .sizes.dark {
+        background: #202126;
+      }
+      .sizes figure {
+        margin: 0;
+        text-align: center;
+      }
+      .sizes img {
+        display: block;
+        margin: auto;
+      }
+      .sizes figcaption {
+        font-size: 11px;
+        color: #626262;
+        margin-top: 6px;
+      }
+      .sizes.dark figcaption {
+        color: #b7b7b7;
+      }
+      .column p {
+        min-height: 68px;
+      }
+      .sizes-title {
+        font-size: 12px;
+        color: #626262;
+        margin: 18px 0 8px;
+      }
+      footer {
+        border-top: 1px solid #ddd;
+        margin-top: 34px;
+        padding-top: 20px;
+        font-size: 12px;
+      }
+      @media (max-width: 850px) {
+        main {
+          padding: 28px 20px;
+        }
+        .pair {
+          grid-template-columns: 1fr;
+          gap: 36px;
+        }
+        .column p {
+          min-height: 0;
+        }
+        h1 {
+          font-size: 24px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>保留 A 的形体，靠近工作台的气质</h1>
+        <p>
+          你更认可 A，但它和工程界面有距离。现在保留 A
+          的轮廓与珊瑚色系，使用真正透明的图形与随主题变化的灯位；图标有受控亮暗，界面主行动用沉稳珊瑚实色，布局、中性壳层和对象／结果角色不随品牌重做。
+        </p>
+      </header>
+      <div class="pair">
+        <section class="column">
+          <div class="mark">
+            <figure>
+              <img
+                src="assets/logo-workbench.png"
+                alt="透明珊瑚材质图形，石墨灯位"
+              />
+              <figcaption>浅色 · 石墨灯位</figcaption>
+            </figure>
+            <figure class="dark">
+              <img
+                src="assets/logo-workbench-dark.png"
+                alt="相同透明珊瑚图形，暖白灯位"
+              />
+              <figcaption>深色 · 暖白灯位</figcaption>
+            </figure>
+          </div>
+          <h2>珊瑚材质 · 当前原型默认</h2>
+          <p>
+            浅桃红、珊瑚与深莓红构成同一色系的光色层次。图形不带白底，车窗与灯位周围的留白透出界面；浅色用石墨灯位，深色用暖白灯位。既不走
+            Toolbox 的橙粉紫转色，也不使用绿色适配。
+          </p>
+          <div class="links">
+            <a href="index.html">浅色工作台</a
+            ><a href="index.html?theme=dark">深色工作台</a
+            ><a href="assets/logo-workbench.png">PNG 图形</a>
+          </div>
+          <h3>实际浅色界面</h3>
+          <a href="index.html"
+            ><img
+              class="context"
+              src="screenshots/logo-ui-aligned-light.png"
+              alt="珊瑚材质 A 与珊瑚主行动接入浅色工程工作台，工程树、对象表和检查器保持原样"
+          /></a>
+          <h3>实际深色界面</h3>
+          <a href="index.html?theme=dark"
+            ><img
+              class="context"
+              src="screenshots/logo-ui-aligned-dark.png"
+              alt="珊瑚材质 A 接入深色工程工作台，主行动为柔和珊瑚，对象和结果角色保持独立"
+          /></a>
+          <h3>图标尺寸</h3>
+          <div class="sizes">
+            <figure>
+              <img
+                src="assets/logo-workbench.png"
+                width="128"
+                height="128"
+                alt="适配版128像素"
+              />
+              <figcaption>128 px</figcaption>
+            </figure>
+            <figure>
+              <img
+                src="assets/logo-workbench.png"
+                width="64"
+                height="64"
+                alt="适配版64像素"
+              />
+              <figcaption>64 px</figcaption>
+            </figure>
+            <figure>
+              <img
+                src="assets/logo-workbench.png"
+                width="32"
+                height="32"
+                alt="适配版32像素"
+              />
+              <figcaption>32 px</figcaption>
+            </figure>
+            <figure>
+              <img
+                src="assets/logo-workbench.png"
+                width="16"
+                height="16"
+                alt="适配版16像素"
+              />
+              <figcaption>16 px</figcaption>
+            </figure>
+          </div>
+          <div class="sizes-title">深色承载面</div>
+          <div class="sizes dark">
+            <figure>
+              <img
+                src="assets/logo-workbench-dark.png"
+                width="64"
+                height="64"
+                alt="适配版深色64像素"
+              />
+              <figcaption>64 px</figcaption>
+            </figure>
+            <figure>
+              <img
+                src="assets/logo-workbench-dark.png"
+                width="32"
+                height="32"
+                alt="适配版深色32像素"
+              />
+              <figcaption>32 px</figcaption>
+            </figure>
+            <figure>
+              <img
+                src="assets/logo-workbench-dark.png"
+                width="16"
+                height="16"
+                alt="适配版深色16像素"
+              />
+              <figcaption>16 px</figcaption>
+            </figure>
+          </div>
+        </section>
+        <section class="column">
+          <div class="mark">
+            <figure>
+              <img
+                src="assets/logo-coral.png"
+                alt="透明珊瑚原色图形，石墨灯位"
+              />
+              <figcaption>浅色 · 石墨灯位</figcaption>
+            </figure>
+            <figure class="dark">
+              <img
+                src="assets/logo-coral-dark.png"
+                alt="相同透明原色图形，暖白灯位"
+              />
+              <figcaption>深色 · 暖白灯位</figcaption>
+            </figure>
+          </div>
+          <h2>珊瑚原色 · 保留对照</h2>
+          <p>
+            保留 A
+            的平面珊瑚原色作为对照。两组界面使用相同的中性布局与珊瑚主行动，便于直接比较图标本身的色层是否值得保留，不把多个变化混在一起。
+          </p>
+          <div class="links">
+            <a href="index.html?logo=coral">浅色工作台</a
+            ><a href="index.html?theme=dark&logo=coral">深色工作台</a
+            ><a href="assets/logo-coral.png">PNG 图形</a>
+          </div>
+          <h3>实际浅色界面</h3>
+          <a href="index.html?logo=coral"
+            ><img
+              class="context"
+              src="screenshots/logo-ui-coral-light.png"
+              alt="平面原色 A 接入浅色工程工作台，主行动同样采用珊瑚色"
+          /></a>
+          <h3>实际深色界面</h3>
+          <a href="index.html?theme=dark&logo=coral"
+            ><img
+              class="context"
+              src="screenshots/logo-ui-coral-dark.png"
+              alt="平面原色 A 接入深色工程工作台，布局和对象角色与材质版相同"
+          /></a>
+          <h3>图标尺寸</h3>
+          <div class="sizes">
+            <figure>
+              <img
+                src="assets/logo-coral.png"
+                width="128"
+                height="128"
+                alt="原色128像素"
+              />
+              <figcaption>128 px</figcaption>
+            </figure>
+            <figure>
+              <img
+                src="assets/logo-coral.png"
+                width="64"
+                height="64"
+                alt="原色64像素"
+              />
+              <figcaption>64 px</figcaption>
+            </figure>
+            <figure>
+              <img
+                src="assets/logo-coral.png"
+                width="32"
+                height="32"
+                alt="原色32像素"
+              />
+              <figcaption>32 px</figcaption>
+            </figure>
+            <figure>
+              <img
+                src="assets/logo-coral.png"
+                width="16"
+                height="16"
+                alt="原色16像素"
+              />
+              <figcaption>16 px</figcaption>
+            </figure>
+          </div>
+          <div class="sizes-title">深色承载面</div>
+          <div class="sizes dark">
+            <figure>
+              <img
+                src="assets/logo-coral-dark.png"
+                width="64"
+                height="64"
+                alt="原色深色64像素"
+              />
+              <figcaption>64 px</figcaption>
+            </figure>
+            <figure>
+              <img
+                src="assets/logo-coral-dark.png"
+                width="32"
+                height="32"
+                alt="原色深色32像素"
+              />
+              <figcaption>32 px</figcaption>
+            </figure>
+            <figure>
+              <img
+                src="assets/logo-coral-dark.png"
+                width="16"
+                height="16"
+                alt="原色深色16像素"
+              />
+              <figcaption>16 px</figcaption>
+            </figure>
+          </div>
+        </section>
+      </div>
+      <footer>
+        <p>
+          当前透明珊瑚材质 A 已于 2026-10-03
+          由你确认暂时定稿，平面原色仅保留对照。当前母版为
+          PNG，未声称可编辑矢量品牌稿；不存在白色承载矩形，透明窗口和图形外围保留实际
+          alpha。界面根据主题切换灯位版本；桌面通用导出用中性灯色兼顾明暗背景。画面来自实际静态原型，工程数据与结果均为演示；正式软件与安装包未修改。
+        </p>
+      </footer>
+    </main>
+  </body>
+</html>

@@ -72,7 +72,23 @@ uv run --locked python -m autosar_tooling verify --scope all --base <本轮起�
 
 本轮实际验收采用 Windows MSI 行政解包（`msiexec /a <MSI> /qn TARGETDIR=<私有目录>`，使用原生 Windows 路径）及 Linux deb 解包（`dpkg-deb -x <deb> <私有目录>`）／AppImage 的 `AppRun`。它证明真实包内应用的无 checkout 主路径；未执行系统级安装／卸载、升级、代码签名、公证或发布。MSI 构建保留上游 WiX ICE03/40/57/61 警告，未关闭验证；WebView2 首装下载路径未在本轮验证。
 
-图标唯一源为 `ui/public/workbench.svg`：ECU 芯片、CAN 信号汇入和源码输出箭头。运行 `npm run tauri --prefix ui -- icon ui/public/workbench.svg --output <独立图标输出目录>`，将所需桌面 PNG/ICO/ICNS 更新到 `src-tauri/icons/`；不纳入无关移动平台资源。启动页、项目导航和 favicon 使用同一 SVG。
+当前正式软件的图标源为 `ui/public/workbench.svg`：ECU 芯片、CAN 信号汇入和源码输出箭头。运行 `npm run tauri --prefix ui -- icon ui/public/workbench.svg --output <独立图标输出目录>`，将所需桌面 PNG/ICO/ICNS 更新到 `src-tauri/icons/`；不纳入无关移动平台资源。启动页、项目导航和 favicon 使用同一 SVG。下面的新版设计提案尚未替换这些正式资产。
+
+## 界面设计基线
+
+本轮先完成设计与交互，不修改正式 UI、桌面后端或运行时：
+
+- [视觉系统](DESIGN.md)：浅深主题、语义角色色、字体、布局及组件规范；根目录为后续实施的视觉入口，日期工作区为冻结评审快照。
+- [交互规格](_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/EXPERIENCE.md)：当前操作映射、两种输入剖面、草稿／保存／结果生命周期、关键流程及扩展接入规则。
+- [交互原型](_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/mockups/index.html)与[汽车电子图标提案](_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/mockups/logo.html)：设计评审材料，全部项目数据与操作结果在内存中模拟，刷新重置。
+
+从仓库根目录启动独立静态预览：
+
+```powershell
+uv run --locked python -m http.server 1421 --bind 127.0.0.1 --directory _bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/mockups
+```
+
+访问 `http://127.0.0.1:1421/` 与 `http://127.0.0.1:1421/logo.html`。原型不读取官方档案、不写 ARXML、不生成真实源码、不编译或运行 ECU；设计交付和图标导出均不表示用户已经批准正式接入。
 
 ## 代码质量检查
 
