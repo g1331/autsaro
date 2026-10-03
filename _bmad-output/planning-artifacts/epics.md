@@ -18,7 +18,22 @@ inputDocuments:
   - _bmad-output/planning-artifacts/architecture/epic-4/FREERTOS-FEASIBILITY.md
   - _bmad-output/planning-artifacts/implementation-readiness.md
 updated: 2026-10-03
-roadmapUpdate: candidate-baseline-only
+roadmapUpdate: R5-formalized-Epic-7
+r5WorkflowScope: Epic 7 / candidate R5
+r5WorkflowState: complete
+r5StepsCompleted: [step-01-validate-prerequisites, step-02-design-epics, step-03-create-stories, step-04-final-validation]
+r5InputDocuments:
+  - _bmad-output/planning-artifacts/prd.md
+  - _bmad-output/planning-artifacts/architecture.md
+  - _bmad-output/planning-artifacts/architecture/epic-7/ARCHITECTURE-SPINE.md
+  - DESIGN.md
+  - _bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/DESIGN.md
+  - _bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/EXPERIENCE.md
+r5PlanningValidation: passed
+r5ImplementationStatus: not-started
+r5PlanningBaseline: 2039020
+r5WorkflowCompleted: 2026-10-03
+r5ApprovalMode: delegated-planning / no-code
 ---
 
 # Autosar Classic 产品成果与实施记录
@@ -36,7 +51,7 @@ roadmapUpdate: candidate-baseline-only
 
 **后续规划边界：**Epic 4 的输入、接口与 OS 路线已定案，不重新选型。旧 Epic 5 的诊断／持久部分由 R7 细化，网络管理与生命周期由 R8 细化，更广存储由 R18 扩展；旧 Epic 6 对应 R10 的首个 MCU 成果。保留旧 5、6 的 backlog 和原范围作为追溯基线，在候选正式化时明确拆分／承接，不同时建立重复实现队列。旧定义中的“一 DTC 最小剖面”不取消已承接的双故障需求。
 
-长期范围的唯一目录是[产品简述 R5–R29](product-brief.md#长期候选路线)。近期细化 R5，并共同规划 R6 的 UX、对象关系与架构；已确认需求见 PRD 的 CFG／APP 条目。下一正式 Epic 使用未占用编号并引用候选来源，禁止重用 1–6；本次不建立未就绪的开发 Story。现有 frontmatter 中的 `planningValidation: passed`、`workflowScope: Epic 4 only` 只描述历史 Epic 4 规划，不为新版候选提供就绪结论。早期[实施就绪判断](implementation-readiness.md)同样不是新路线的放行依据。
+长期范围的唯一目录是[产品简述 R5–R29](product-brief.md#长期候选路线)。2026-10-03 用户授权将 R5 收口为正式 Epic 7：统一 Configurator，与 R6 共用对象／引用及应用源码所有权接缝，不在此扩展多组件调度。历史 frontmatter 中的 `planningValidation: passed`、`workflowScope: Epic 4 only` 仍只描述已完成 Epic 4；R5 的阶段、输入和检查结论单独记录，不借用历史放行。旧 Epic 5／6 与诊断承接不变，后续新成果继续使用未占用编号。
 
 ## Epic 1: 主机 CAN 标准接口与可运行信号链
 
@@ -630,3 +645,242 @@ So that Epic 4 的完成结论由可复现结果支持。
 
 
 **历史调查（2026-09-28，非当前状态）：**固定 V11.3.1 实际 commit `054e14f3397023aa83813a65aa065fc4597d481b` 和 GCC 16.1.0，在隔离 Windows 后台进程复现策略反例并验证有限策略扩展与 C99 重启；详见 [调查与采用条件](architecture/epic-4/FREERTOS-FEASIBILITY.md)。当时激活顺序、真实栈、错误／ISR／计时／Hook 和完整证据尚未闭合，故事未就绪。此后 4.1–4.22 已完成生产实现、BMad 验证与独立复核；旧调查缺口不作为当前未完成事项，也不为 R5–R29 提供实施就绪判断。
+
+## R5 实施输入与要求提取
+
+来源为 PRD 的“R5 选定范围与完成契约”；本轮只定义 Epic 7，不编码、不推送。全局 PRD 的 draft 由远期未选定范围造成，R5 requirements status 为 final。既有 Epic 1–6、完成状态、旧验收和 R7 承接需求原样保留。
+
+### Functional Requirements — selected R5
+
+- CFG-1.1：缺档案／工具仍可进入工作台、选择并安全检查真实多文件输入及原文；未校验不报通过。
+- CFG-1.2：原创空 CAN、信号与标准 ECU 模板经文件预览建立完整工程，不覆盖目录、不含官方档案或个人路径。
+- CFG-1.3：工程成员与剖面可重启／搬移恢复，原 ARXML 和两类交接入口仍按真实来源及完整性打开。
+- CFG-2.1：真实模块／容器／参数／引用统一身份、文件归属、名称／路径／定义／值搜索与焦点。
+- CFG-2.2：定义驱动类型、范围、基数、默认来源和只读原因；应用不部分修改，不从 VALUE 猜类型。
+- CFG-2.3：真实合法引用候选与跳转，定义允许的实例创建／改名／移除；入站引用在同批解决，未知影响拒绝。
+- CFG-2.4：可预览多对象变化及关系影响，以输入／定义身份全部应用或全部拒绝，允许安全修复无关旧问题。
+- CFG-2.5：原字节安全保存及真实问题接力，外部改源／失效确认／恢复备份拒绝；保存不伪装为 Schema 通过。
+- CFG-3.1：版次／定义／产品目标／执行工具分层能力、合法来源、注册及环境优先级，不以统一门关掉配置。
+- CFG-3.2：类别隔离设置、相关结果失效和持久浅深主题，不重置工程草稿。
+- CFG-4.1：有限剖面验证后纯源码预览／确认，生成与预检／构建／行为分别报告，未知生成语义拒绝。
+- CFG-4.2：配置／用户应用／产品／生成／目标／构建拥有权明确，重复生成及升级不覆盖用户代码或不明旧产物。
+
+### Non-Functional Requirements — selected R5
+
+CFG-NFR-1：磁盘及原字节安全往返与关键拒绝。CFG-NFR-2：唯一状态、身份和受管取消／晚结果隔离。CFG-NFR-3：暂定桌面设计、统一导航、草稿、键盘／错误／焦点与图标。CFG-NFR-4：Windows/Linux 隔离真实 IPC、无 checkout 配置与独立源码／行为交接，macOS 如实界定。CFG-NFR-5：输入安全边界、非 GUI 线程重任务、快照索引复用及有界日志。
+
+### Additional Architecture Requirements — selected R5
+
+AD-1–AD-11 位于 [Epic 7 spine](architecture/epic-7/ARCHITECTURE-SPINE.md)，约束原字节权威、缺资源源投影、唯一不透明身份、定义／生成能力分离、原子 ChangeSet、PreparedSave、成员 manifest 与原创模板、单 reducer／Session、生成拥有权、合法资源缓存与隔离分发。不是新的绿色项目，不引入 starter、云后端、第二调度器或配置库。
+
+### UX Design Requirements — selected R5
+
+- UX7-1：根 DESIGN 的明暗 tokens、系统／等宽字体、13px 正文与角色色、紧凑树表检查器；1080×720 主链可操作，窄屏只阅读回退。
+- UX7-2：统一菜单／操作条／工具轨、一棵对象与文件树、复用文档标签、属性／引用检查器、底部问题／生成／构建／主机验证／日志和状态栏，不另设孤立工作区。
+- UX7-3：稳定对象选择／筛选、真实只读原文／路径复制、字段 label／单位／范围／错误，真实引用与问题焦点接力。
+- UX7-4：对象、批次、标签、工程切换、重开／交接与退出共用草稿／dirty 保护；应用失败不继续，非破坏面板和主题保留输入。
+- UX7-5：保存与生成的逐文件真实差异／拥有权预览、不同确认动词、失效身份及冲突；预览不写入、不启动编译。
+- UX7-6：外观／官方资源／执行工具类别独立草稿与保存，原生文件选择、身份及环境覆盖；透明珊瑚 A、明暗灯位、固定通用桌面图形与正式 favicon／窗口／安装包同步。
+- UX7-7：公共命令与 Ctrl/Cmd+K/S/O、Alt+1/4/9、Escape，树键盘／可访问名称、选择非颜色提示、label／aria-invalid／describedby、焦点圈定及归还、温和状态播报与 reduced motion。
+- UX7-8：当前 CAN、诊断／DTC、标准输入与各交付／构建／运行真实动作全部迁入新壳；原型 setter／路径／计时器不能替代 IPC，能力与取消／失效理由就近显示。
+
+### Epic List — selected R5
+
+**Epic 7：可独立使用的统一 ECU 工程配置工作台。**集成工程师从真实 ARXML 或原创模板建立工程，按定义导航、编辑、批量修复和安全保存，再独立交接可支持的源码；设置与配置不被缺编译器锁住。覆盖全部 CFG-1–CFG-4、CFG-NFR-1–CFG-NFR-5 和 UX7-1–UX7-8。复用已完成 Epic 1／3／4，不依赖尚未实施的 R6／R7、旧 Epic 5／6 或 MCU。
+
+一个用户成果 Epic 而非分别拆“数据库／API／UI”：源索引、事务、壳层与拥有权反复触及同一工作台，按可实际使用的纵向故事顺序推进。分阶段交付不取消完整 R5 退出。
+
+## Epic 7: 可独立使用的统一 ECU 工程配置工作台
+
+来源：候选 R5；覆盖 CFG-1–CFG-4、CFG-NFR-1–CFG-NFR-5、UX7-1–UX7-8。每个故事贯通实际核心、IPC 和所需界面，不拆出等待未来 UI／后端才能使用的空层。顺序依赖仅指向之前故事；既有配置／生成／主机行为始终保留。原型不是验收工具。
+
+### Story 7.1: 缺资源时安全打开并检查真实工程
+
+As a ECU 集成工程师,
+I want 在缺 XSD/MOD 和编译器时仍能打开真实输入、查看源文件与对象,
+So that 我可以确认工程、定位缺项，而不是被环境总门阻挡。
+
+覆盖 CFG-1.1、CFG-2.1、CFG-3.1、CFG-NFR-1/2/5，UX7-3/8；AD-1/2/3/6/8/11。依赖：已完成的工程基础。
+
+**Acceptance Criteria:**
+
+- **Given** 未配置规范／工具且选择原创 CAN、七文件标准 ECU 或合法未知保留内容，**When** 原生打开与选择文件／对象，**Then** 同一 Workspace 返回真实源结构、epoch/source/object 身份与原文，界面显示未执行校验及每动作原因，**And** 不造帧、关系、通过状态，不要求编译器，不改磁盘。
+- **Given** 相同显示名跨文件、无法识别剖面、坏引用或无效版次，**When** 浏览或定位诊断，**Then** 使用实际身份／归属区分对象，未知语义只读或明确阻断有关目标，**And** 不能由 UI 强选 CAN 绕过来源检查。
+- **Given** 非良构、实体／DTD、50 MiB 以上单输入、危险／链接逃逸路径或工程外任意原文请求，**When** 打开／获取原文，**Then** 拒绝并保留原工程，**And** 缺资源的合法源检查不放宽已有输入安全限制。
+- **Given** 草稿、dirty 或正在执行的旧工程，**When** 新导入或原两类交接入口触发切换，**Then** 先处理保护并遵守旧 fingerprint／ProcessOwner，**And** 被取消或晚到的结果不替换当前输入。
+- **Given** 受限大小内的多文件解析／源索引或主动取消场景，**When** 后台工作尚未结束时切换工具窗口、复制已知路径及请求取消，**Then** 原生 GUI 仍可操作，解析／全文扫描不占 GUI 主线程，取消按实际归属完成或显示未确认，**And** 长错误摘要有界、不假丢弃诊断，完整 owned 详情可按受管身份获取和复制。
+
+### Story 7.2: 注册合法定义并检查参数约束与真实引用
+
+As a BSW 配置工程师,
+I want 注册已核定版次的合法定义并查看参数约束、默认来源和引用,
+So that 我知道哪些配置可以修改以及缺失的真实关系。
+
+覆盖 CFG-2.1/2.2/2.3、CFG-3.1、CFG-NFR-2/5，UX7-3；AD-3/4/10。依赖：7.1。
+
+**Acceptance Criteria:**
+
+- **Given** 合法 R24-11 MOD／原创模块定义及真实多模块嵌套配置，**When** 显式注册并打开对象检查器，**Then** 从定义返回类型、范围、单位、基数、枚举、默认来源和可写原因，**And** 同名冲突、错版次／摘要拒绝，不联网跟随 schemaLocation。
+- **Given** integer/float/boolean/enumeration/string/function-name/reference 与未落盘默认值，**When** 展示描述符，**Then** wire 使用 kind/lexeme 而不是 JS number，默认与 explicit 不混合，**And** unknown expression／variation／instance-reference 明确只读，不猜类型或补值。
+- **Given** 跨文件目标、错误 DEST、缺目标、重复路径与重复显示名，**When** 查看引用、入站关系、合法候选或跳转，**Then** 用同一后台索引及真实身份显示目标／问题，**And** 不能列不存在或错类型对象；定义可读不等于目标可生成。
+- **Given** 已有定义快照及相关草稿，**When** 更换定义／档案或注册失败，**Then** 成功变化使相关身份与结果失效且保留草稿供核对，失败保持旧资源，**And** 非 GUI 线程读取，按摘要复用索引。
+
+### Story 7.3: 按定义应用参数与引用并安全保存
+
+As a BSW 配置工程师,
+I want 修改定义允许的参数和普通引用后应用、预览保存并重开,
+So that 实际 ARXML 对应我的配置，拒绝时输入不会被破坏。
+
+覆盖 CFG-2.2、CFG-2.3、CFG-2.5、CFG-NFR-1/2，UX7-3/5；AD-4/5/6。依赖：7.2。
+
+**Acceptance Criteria:**
+
+- **Given** 可写描述符，**When** 编辑已支持类型及普通引用，经 prepareChange／applyChange 应用，**Then** 使用内部 op 标签、FieldRef、absent/explicit 和当前 capabilities.fingerprint／后台 definitionFingerprint，核对原值与定义约束后一次补丁发布，**And** 下一请求用返回 current token 而非 Reply 请求 echo；大整数保持准确，非有限 float／非法函数名拒绝，未改 lexeme 不重写。
+- **Given** 省略值、默认值、显式清空或错误引用，**When** 应用，**Then** 区分各操作并只按明示动作 materialize，拒绝保留原工程与字段草稿，**And** 未支持定义没有伪可写入口。
+- **Given** 应用后的配置与未改源文件，**When** 原生预览、确认保存及重新打开，**Then** 磁盘只改变对应条目、引用和必要结构，未改文件原字节一致，**And** 保存返回真实 dirty／验证状态，缺 Schema 不标为通过、不让依赖验证的生成可用。
+- **Given** 外部改源、旧预览、写入失败／未恢复备份或无关旧问题，**When** 保存或修复安全字段，**Then** 外部／写入风险拒绝并保留旧文件；按 source-safety/schema/definition/target-generation 分域核对，未变旧 witness 保留，新或恶化违规拒绝，**And** 实际 Schema error 仍阻断保存，未知生成语义不误作所有安全编辑／保存门。
+
+### Story 7.4: 预览并原子应用多对象参数与引用修改
+
+As a 集成工程师,
+I want 搜索并选中多个对象，预览批次的实际影响后一次应用,
+So that 一组相关修正不会成功一半或留下断开的引用。
+
+覆盖 CFG-2.1、CFG-2.4、CFG-NFR-1/2，UX7-3/4/5；AD-3/5/8。依赖：7.3。
+
+**Acceptance Criteria:**
+
+- **Given** 名称／路径／定义／值筛选的真实对象集，**When** prepareChange 跨文件批次，**Then** 后台返回逐项旧／新值、实际展开入站关系、input／definition token 与 changeRevision，预览不改内存／磁盘，**And** 筛选隐藏对象不丢选择／草稿；改草稿即使 Workspace 未变也使确认失效。
+- **Given** 有效预览及全部合法修改，**When** 明确应用，**Then** 一次发布全部变化并推进一次 revision，返回同一选择与逐项结果，**And** 部分无变化项不产生伪修改；未知生成语义仍准确阻断有关目标。
+- **Given** 一项越界／不匹配定义、重复或冲突目标、错 DEST、外部变化或失效预览，**When** 应用，**Then** 整批拒绝、源集合及旧 revision 不变，错误指向实际 change／field，**And** 不以逐项 invoke 拼出批次原子性。
+- **Given** 已建立源／定义快照，**When** 连续更换搜索词、清空筛选并反复展开／收起树或执行校验／全文扫描，**Then** 当前快照索引复用、非 GUI 线程重任务期间仍可操作／取消，**And** 不为筛选或展开重复读源／解压档案；输入或定义身份变化才重建相关索引。
+
+### Story 7.5: 安全创建改名和移除配置实例
+
+As a BSW 配置工程师,
+I want 按定义维护模块与容器实例，并在同批处理引用,
+So that 工程结构不被固定样例锁死，也不会产生悬空关系。
+
+覆盖 CFG-2.3/2.4/2.5、CFG-NFR-1/2，UX7-3/4/5；AD-3/4/5/6。依赖：7.4。
+
+**Acceptance Criteria:**
+
+- **Given** 定义许可的模块／嵌套容器及源归属，**When** 在同批 create-instance、new FieldRef 必需值／子实例和指向 created ObjectRef 的引用预览后确认，**Then** 对 prospective graph 校核父子／choice／基数／名称并原子发布，返回 createdIds／createdFields 映射，可保存重开，**And** 不能先发布不完整父对象，默认值不隐式落盘、未知条件拒绝。
+- **Given** 已被跨文件引用的对象，**When** 改名并确认实际入站影响，**Then** objectId 保持、显示路径和全部可核定引用一致更新，**And** 不改包含旧名字的无关文本／未知有效内容。
+- **Given** 仍有入站引用或重名／不明引用影响，**When** 移除或改名，**Then** 未在同批解决的影响使整个变化拒绝；合法批次同时重定向或移除入站关系，**And** 没有自动级联删除未知内容或旧 ID 复用。
+- **Given** 结构改动将导致已声明剖面规则错误，**When** 应用／保存／生成检查，**Then** 拒绝新约束违规或明确呈现该目标不支持，不替换生成器能力声明，**And** 重开与删除对象后旧草稿不能落到新实例。
+
+### Story 7.6: 从原创模板建立可搬移的工程
+
+As a ECU 集成工程师,
+I want 新建工程、实例化模板并保存成员信息后重开或搬移,
+So that 不依赖个人路径和参考样例，也无需每次手动找齐文件。
+
+覆盖 CFG-1.2/1.3、CFG-3.1、CFG-4.2、CFG-NFR-1/4，UX7-4/5/8；AD-6/7/9。依赖：7.5。
+
+**Acceptance Criteria:**
+
+- **Given** can-empty-v1、can-signals-v1、standard-ecu-v1 和用户选择的新空目录，**When** 检查文件预览并确认合法工程名，**Then** 从产品原创输入创建完整源集合及 v1 成员 manifest，source roles／引用一致，**And** 不含官方档案、密钥、成功日志或个人绝对路径；缺资源保持未校验。
+- **Given** 成员 manifest 与源文件，**When** 重启或整体搬移打开，**Then** 按实际内容重识别剖面、恢复成员和显示归属，**And** 不信任 hint、旧通过状态或并行参数副本；坏版本、越界／链接、重复路径／角色拒绝。
+- **Given** 原来直接打开的不同目录 ARXML 文件集合，**When** 明确保存为新工程，**Then** 先预览复制映射到新空目录、不改原文件；名字冲突明确拒绝／请求用户命名，**And** 成员与源保存用同一事务，失败不留下误认完成的部分工程。
+- **Given** 两个不同 CAN 工程及七文件标准工程模板，**When** 修改合法配置并重开／交接，**Then** 真实模型、引用及已有生成剖面成立，**And** 不是固定结果复制或修改生成器；原两类交接导入验证保持。
+
+### Story 7.7: 在统一工程壳层中使用全部真实操作
+
+As a 集成工程师,
+I want 在同一树表检查器与文档工具窗口内完成配置及交付,
+So that 切页不会变成另一套工程或丢失操作上下文。
+
+覆盖 CFG-2.1、CFG-3.1、CFG-NFR-2/3，UX7-1/2/3/5/8；AD-8/11。依赖：7.6。
+
+**Acceptance Criteria:**
+
+- **Given** 任一实际工程或无工程起始状态，**When** 使用菜单／操作条／工具轨／对象或文件树／中心文档／检查器／底部窗口，**Then** 落实 DESIGN 的 tokens 与层级并共用一个 reducer、选择及真实后台能力，**And** 1480×920 与1080×720主链可用，窄屏收面板、表格局部滚动，不造未来模块目录。
+- **Given** CAN 创建／编辑、原诊断与 DTC、有序 DID、标准输入、两种交接、保存／源码预览、预检／构建／各主机行为与取消，**When** 从任一适用表面执行，**Then** 调同一真实命令与保护／可用性，显示实际文件内容、日志与输入身份，**And** 不用原型数据、成功计时器、不同剖面编辑旁路或第二 store。
+- **Given** 同一对象从树／表／引用或源文件选择，**When** 打开或切换文档，**Then** 标签复用、检查器属性／引用一致、只读说明可复制，非破坏工具窗口保留草稿，**And** 生成、构建、运行各用真实结果，不升级目标或标准声明。
+
+### Story 7.8: 保护草稿并完成键盘与问题焦点接力
+
+As a 长时配置工程师,
+I want 导航保护未应用输入并用键盘定位问题和完成操作,
+So that 修复错误、切工程和退出不会丢失工作。
+
+覆盖 CFG-2.1/2.5、CFG-NFR-2/3，UX7-3/4/7；AD-3/8/11。依赖：7.7。
+
+**Acceptance Criteria:**
+
+- **Given** 对象／批次／诊断／标准参数草稿或 dirty 工程，**When** 切对象、关标签或定位，**Then** 用应用并继续／放弃草稿／留在原处；新建、重开、交接、切工程及退出另用返回并保存／明确放弃／取消替换，必须完成全部应用及保存预览确认才继续，**And** 任一失败不导航、不静默写盘，标签关闭不是关闭工程。
+- **Given** 真实含字段、只含对象、只含源文件或不能定位的问题，**When** 主动定位，**Then** 草稿先保护，再树／文档／行／检查器接力，焦点落到可核定字段或标题；无法解析时保留可复制详情，**And** 不造链接、清空旧问题或把修复回显当成验证通过。
+- **Given** 键盘、屏幕阅读器、reduced motion 与字段输入焦点，**When** 使用 tree、tab、对话框和 Ctrl/Cmd+K/S/O、Alt+1/4/9、Escape，**Then** label／aria-invalid／describedby、非颜色选中、命名／焦点圈定归还和温和状态播报成立，**And** 快捷键不吞文本，面板调整有键盘／折叠入口。
+
+### Story 7.9: 保存分层设置并迁入暂定身份
+
+As a 工作台使用者,
+I want 分别保存外观、合法档案和执行工具，并看到一致的明暗身份,
+So that 配置不受工具缺失阻断，也不因设置变化丢草稿。
+
+覆盖 CFG-3.1/3.2、CFG-NFR-2/3/4，UX7-6/7；AD-2/10/11。依赖：7.8。
+
+**Acceptance Criteria:**
+
+- **Given** 原生外观／资源／工具设置及环境覆盖，**When** 浏览真实路径、只提交当前类别、取消或重开程序，**Then** 使用现有配置目录和原子持久化，类别草稿不串写，覆盖优先且不写回，**And** 失败保持旧配置，已有设置兼容默认新外观字段。
+- **Given** 资源身份、工具或目标成功改变，**When** 回到工程，**Then** 实际依赖结果与预检失效、旧确认拒绝，输入／草稿保留且有具体原因，**And** 缺编译器不阻断源码准备，缺规范不伪造验证。
+- **Given** light/dark/system、系统明暗变化和未应用字段，**When** 保存／取消外观或收到主题事件，**Then** 依据有效主题同步灯位而不重建数据，透明背景与车身一致，**And** 正式启动／导航／favicon／窗口及安装包全部迁入暂定身份、旧图标引用移除；固定 ICO/ICNS 不宣称 OS 自动适配。
+
+### Story 7.10: 独立预览源码并保护用户代码再生成
+
+As a ECU 工程交付者,
+I want 预览明确归属的源码并安全再生成和交接,
+So that 用户算法和旧有效工程不会被生成器或升级覆盖。
+
+覆盖 CFG-4.1/4.2、CFG-NFR-1/2/4，UX7-5/8；AD-7/9。依赖：7.9。
+
+**Acceptance Criteria:**
+
+- **Given** 已保存且通过所需规范／剖面检查的 CAN 或标准 ECU 工程、无编译器，**When** 预览并确认独立源码或原交接种类，**Then** 展示实际 new/changed/unchanged/removed、拥有权及目标／依赖，安装预览字节，**And** 不启动编译；未解释消费参数／模块、变体或资源缺失准确拒绝。
+- **Given** 声明 applicationInputs 的 live 用户源码和新输出 workbench-ownership.json v1，**When** 初始化或重复生成，**Then** live 代码仅在明确初始化且不存在时创建，后续从当前字节做 immutable snapshot，绝不写回 live 树，**And** snapshot／ledger 进入原严格 seal 闭包；旧 snapshot 被改拒绝，应用变化使旧确认／build/run 失效，不能变更 owner 旁路保护。
+- **Given** 用户改过生成文件、未知／旧版清单、目的地变化、失效身份、升级或删除本工具旧产物，**When** 预览／确认，**Then** 冲突列出并拒绝未核定覆盖／迁移；合法新增／移除经显式预览及 owned staging 事务，失败保留旧有效输出，**And** 不自动清目录。
+- **Given** R5 autosar-workbench-handoff-v2 与原 v1 两类包、合法资源和已声明应用槽，**When** 重开／再生成／构建／离线复验，**Then** 预览、staging、保存输入、ledger、重导入和离线工具共同按新协议核对；旧格式仍原严格验证，转换需新空目录明确生成，**And** live 输入与封存副本分开，不带官方包／个人路径，不靠放宽 closure 或手改生成器交付。
+
+### Story 7.11: 独立复核发行配置链与完整工程交接
+
+As a 非实现者的接收工程师,
+I want 在干净隔离环境操作发行工作台并复验生成工程,
+So that R5 的完成来自真实工程而不是截图或模拟成功。
+
+覆盖全部 CFG、CFG-NFR、UX7 的组合出口；AD-1–AD-11。依赖：7.10。
+
+**Acceptance Criteria:**
+
+- **Given** 本次 Windows MSI 和 Linux deb／解包 AppImage、原 checkout 不存在、无 Node/Rust/uv/编译器，**When** 通过现有隔离 desktop 入口建立／导入、定义编辑、批量修复、保存重开及生成源码，**Then** 真实 IPC 与原生文件操作成立，**And** 不切换用户输入桌面或借构建机依赖，受管进程清理回执真实；macOS 无宿主的检查单独标未验证。
+- **Given** 两个原创不同 CAN 工程、七文件标准变体、多模块定义／结构输入及合法官方模型保留项，**When** 按 PRD 四个退出场景独立运行正例和关键拒绝，**Then** 原字节、实际引用／值／作用域、批次全拒绝、用户代码和旧输出保持均有证据，**And** 不重复同一模拟路径或从 Schema 通过推断生成支持。
+- **Given** 封存 CAN／标准工程和锁定独立工具／消费者，**When** 在新位置实际构建并复验 CAN／DID／N_Cr／非法输入恢复及旧目标回归，**Then** 结果对应本次输入与目标，**And** 没有新增 OS／BSW／MCU／认证声明；本机不适用执行明确未运行。
+- **Given** 本轮所有故事、当前类型／源码检查与实际 UI 证据，**When** Epic 出口复核，**Then** 关闭全部必要发现、更新故事／sprint及使用说明，**And** 不把 build/test 或各 story 单独通过替代跨故事退出，不留下伪入口、模拟实现或未接线控件。
+- **Given** 大型受限输入、人为延迟解析／校验／全文扫描、重复筛选展开及超长失败日志，**When** 独立原生复验，**Then** GUI／取消入口仍可操作，记录快照内读源／解压次数确认索引复用，摘要／日志呈现有界且能获取复制完整 owned 日志，**And** 不以快速 mock 或仅引用 AD 代替此性能／资源验收。
+
+### R5 Requirements Coverage Map
+
+| Requirement | Primary stories |
+| --- | --- |
+| CFG-1.1 | 7.1, 7.11 |
+| CFG-1.2, CFG-1.3 | 7.6, 7.11 |
+| CFG-2.1 | 7.1, 7.2, 7.4, 7.7, 7.8 |
+| CFG-2.2 | 7.2, 7.3 |
+| CFG-2.3 | 7.2, 7.3, 7.5 |
+| CFG-2.4 | 7.4, 7.5 |
+| CFG-2.5 | 7.3, 7.5, 7.8 |
+| CFG-3.1 | 7.1, 7.2, 7.6, 7.9 |
+| CFG-3.2 | 7.9 |
+| CFG-4.1, CFG-4.2 | 7.6, 7.10, 7.11 |
+| CFG-NFR-1, CFG-NFR-2 | 7.1–7.6, 7.8–7.11 |
+| CFG-NFR-3 | 7.7–7.9, 7.11 |
+| CFG-NFR-4 | 7.6, 7.9–7.11 |
+| CFG-NFR-5 | 7.1, 7.2, 7.11 |
+| UX7-1, UX7-2 | 7.7 |
+| UX7-3 | 7.1–7.5, 7.7, 7.8 |
+| UX7-4 | 7.4–7.8 |
+| UX7-5 | 7.3–7.7, 7.10 |
+| UX7-6 | 7.9 |
+| UX7-7 | 7.8, 7.9 |
+| UX7-8 | 7.1, 7.6, 7.7, 7.10, 7.11 |
+
