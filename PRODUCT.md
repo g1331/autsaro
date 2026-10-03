@@ -22,7 +22,7 @@ web
 
 构建自有 AUTOSAR Classic 基础软件栈，以及配置、校验和代码生成工作台，将系统需求、软件组件、BSW 与目标之间的关系转化为可理解、可配置、可校验、可生成、可交付的 ECU 工程。
 
-配置主流程应能独立使用：从新建配置或导入真实 ARXML，完成检查、编辑、保存、校验和源码生成；安装编译器和执行虚拟 ECU 不是使用 Configurator 的前提。当前实现中的资源要求与下一增量的独立配置目标须区分，不将目标写成已经具备的能力。
+配置主流程应能独立使用：安装软件后用内置校验规则与自有模块定义，新建或导入真实 ARXML，完成检查、编辑、保存、校验和源码生成；用户不必提供官方 XSD／MOD，安装编译器和执行虚拟 ECU 也不是使用 Configurator 的前提。当前实现仍依赖外部档案，这一新目标尚待 Epic 7 实施，不能写成已经具备的能力。
 
 成功不是展示源码或完成一次示例构建，而是对声明支持的配置交付完整输入、通用栈源码、生成配置与接口、目标依赖及重建方法，并通过独立预期验证实际行为与失败恢复。用户不应每次生成后手工补齐协议栈或缺失符号。
 
@@ -39,7 +39,7 @@ Vector MICROSAR Classic＋DaVinci Configurator、EB tresos AutoCore＋Studio 是
 - 本地工程工作流：新建或导入同一 ECU 的多文件 ARXML → 检查并编辑受支持对象 → 预览差异并保存 → 校验 → 预览并生成独立工程 → 可选构建与主机行为验证 → 交接与重导入。
 - 当前界面有配置、诊断、生成与构建、虚拟运行及工作台设置等入口；统一 Configurator 是下一增量的产品方向，不将候选功能当作现有操作。
 - ARXML、生成源码、构建产物和运行状态有不同所有权与生命周期。预览不写磁盘，确认后才保存或生成；用户输入、应用源码及既有产物不能被静默覆盖。未应用草稿与已保存配置须明确区分。
-- 官方 XSD／MOD 等档案由使用者合法取得并显式配置，不随源码或安装包分发。缺失资源影响依赖它的能力；界面须说明具体缺口，不伪造校验通过。
+- R5 的正常配置链使用软件独立实现、随包提供的版本化规则及自有模块定义。官方 XSD／MOD 用于研发核对和独立对照，不是普通用户设置项；第三方模块定义保留显式可选导入。内置版次／覆盖与实际校验结果分别显示，未知规则不假称通过，损坏的随包规则是安装／工具错误，不要求用户补下载官方档案。
 - Windows 与 Linux 有受控原生主机目标及工程交接记录；macOS 原生构建与 IPC 未验证。跨目标源码准备与当前宿主执行能力是不同结果。
 - 新界面与验证不占用用户正在使用的桌面。真实桌面窗口和 IPC 验收使用隔离会话；无法隔离时明确未验证范围。
 
@@ -55,7 +55,7 @@ Vector MICROSAR Classic＋DaVinci Configurator、EB tresos AutoCore＋Studio 是
 
 ### 已确认方向与待决边界
 
-- 统一 Configurator 的 R5 已收口为正式 Epic 7：选定 CFG-1–CFG-4、[增量架构](_bmad-output/planning-artifacts/architecture/epic-7/ARCHITECTURE-SPINE.md)、11 条故事与实施就绪检查已完成；[暂定界面／交互规格](_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/EXPERIENCE.md)继续作为实现输入。当前仅规划 PASS，新故事全部 backlog，未编码或替换正式图标；下一入口是 7.1 的开发规格与真实缺资源输入检查。R6 只固定共同对象／引用及应用所有权接缝，其他候选仍待规划。
+- 统一 Configurator 的 R5 已正式化为 Epic 7：[选定需求](_bmad-output/planning-artifacts/prd.md#r5-选定范围与完成契约)、[增量架构](_bmad-output/planning-artifacts/architecture/epic-7/ARCHITECTURE-SPINE.md)、11 条 Story 与[交互规格](_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/EXPERIENCE.md)已按用户确认的内置规则方向同步修订，最新就绪结论见[实施就绪](_bmad-output/planning-artifacts/implementation-readiness.md#2026-10-03-r5--epic-7-实施就绪)。新故事仍全部 backlog，未编码或替换正式图标；下一入口是 7.1 的开发规格与真实内置校验／源检查。R6 只固定共同对象／引用及应用所有权接缝，其他候选仍待规划。
 - 第一条完整参考产品链是通用 CAN＋诊断 ECU。完整交付须包含所声明配置需要的应用接口、OS、生命周期／网络管理与故障恢复；常开 CAN 的中间增量不能替代完整参考 ECU。
 - 长期逐阶段扩大所选 Classic 版次的有效模块与目标覆盖，不要求每个 ECU 启用全部模块，不用历史 story 数量计算未经定义的完成率。
 - 首个 MCU 板卡、驱动及许可、工具链、具体诊断／网络管理剖面、输入覆盖与迁移规则仍按对应产品规划决定。当前没有真实 MCU 验证，不预先宣布硬件支持。

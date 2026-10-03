@@ -13,3 +13,20 @@ Independent reviewer result, confidence 0.90: five real cross-story contract gap
 ## Disposition
 
 Parent applied these binding rules before committing the final architecture. Source-member atomicity, numeric lexeme preservation, unsupported-variant readonly behavior and finite generator boundaries were already binding and required no additional changes. This is the original independent review plus parent closure, not an independent re-review of the final text.
+
+## 2026-10-03 native-rule amendment — independent PASS
+
+Fresh independent seam review returned no concrete incompatible compliant pair or blocker, confidence 0.94. Parent persisted this result because the reviewer was read-only; the earlier external-resource resolutions above remain historical and do not override the new native-rule contract.
+
+Pairs checked against the current spine, selected PRD, Epic 7 and prospective EXPERIENCE:
+
+- Rule packager / runtime verifier: the same trusted RuleSetIdentity binds implementation provenance, coverage and immutable metadata.
+- Project catalog / generation and import catalog: all project-accepted definitions and the actual consumer closure are distinguished; consumers rebuild opaque fingerprints rather than trust copied tokens.
+- Prepare / apply, save and generation confirmation: rule, definition, source and draft changes invalidate confirmations.
+- Validator / editor, save and generator: supported native schema rules actually execute and errors reject; unsupported and not_run are distinct; safe unchanged old-definition repairs and unknown-content preservation do not authorize unsupported generation.
+- Extension exporter / importer: catalog acquisition, inventory/member hashes, explicit acceptance and isolation are fixed.
+- v2 producer / importer and legacy dispatch: exact native identity, required extension identities and complete source/rerender/seal closure bind new-directory migration; v1 retains original external identities and separate strict checks, without hash substitution.
+- Ownership writer / downstream consumers: existing Session/reducer, owned staging, immutable application snapshots and strict seals remain shared.
+
+Reviewer ran no builds, lint, tests or formatters and changed no planning/source files. PASS is a planning seam judgment only.
+
