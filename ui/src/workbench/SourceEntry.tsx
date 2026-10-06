@@ -13,7 +13,7 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
         <p>
           {c.workspace
             ? '当前工程保持；只有真实预览确认或导入成功才替换。'
-            : '从原创模板建立工程，或打开真实 ARXML 与成员工程。'}
+            : '从内置模板新建工程，或导入 ARXML、打开已有工程。'}
         </p>
       </header>
       <div className="start-layout">
@@ -73,9 +73,9 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
               </label>
               {!saveAs ? (
                 <label>
-                  原创模板
+                  工程模板
                   <select
-                    aria-label="原创模板"
+                    aria-label="工程模板"
                     value={c.templateId}
                     onChange={(event) => c.setTemplateId(event.target.value as typeof c.templateId)}
                   >

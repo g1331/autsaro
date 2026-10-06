@@ -1,8 +1,29 @@
 import { useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, FileCode2, FolderTree, Search } from 'lucide-react';
+import {
+  Box,
+  Braces,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  FileCode2,
+  FolderTree,
+  Search,
+  Settings2,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import type { Workbench } from './useWorkbench';
 import { labelFromPath } from './forms';
+import { PanelResizeHandle } from './PanelResizeHandle';
+
+const objectIcons = new Map<string, LucideIcon>([
+  ['AR-PACKAGE', FolderTree],
+  ['ECUC-MODULE-CONFIGURATION-VALUES', Settings2],
+  ['ECUC-CONTAINER-VALUE', Box],
+  ['SW-BASE-TYPE', Braces],
+  ['IMPLEMENTATION-DATA-TYPE', Braces],
+  ['APPLICATION-PRIMITIVE-DATA-TYPE', Braces],
+]);
 
 export function ProjectTree({ controller: c }: { controller: Workbench }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -126,10 +147,17 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
   }
   return (
     <aside className="project-tree" aria-label="工程树" hidden={!c.treeVisible}>
+      <PanelResizeHandle kind="tree" />
       <header>
         <strong>{c.workspace?.name ?? '工程'}</strong>
-        <button type="button" aria-label="折叠工程树" onClick={() => c.setTreeVisible(false)}>
-          收起
+        <button
+          type="button"
+          className="panel-icon-button"
+          aria-label="折叠工程树"
+          title="折叠工程树"
+          onClick={() => c.setTreeVisible(false)}
+        >
+          <ChevronLeft size={16} aria-hidden="true" />
         </button>
       </header>
       <div className="panel-tabs" role="tablist" aria-label="工程树视图">
@@ -168,6 +196,7 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
                 !collapsed.has(object.objectId) ||
                 model.revealed.has(object.objectId);
               const selected = c.objectSelection.includes(object.objectId);
+              const Icon = objectIcons.get(object.kind) ?? FileCode2;
               return (
                 <div
                   key={object.objectId}
@@ -180,6 +209,9 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
                   }
                   aria-level={depth}
                   aria-selected={selected}
+                  aria-label={object.shortName}
+                  aria-description={object.kind}
+                  title={`${object.shortName}\n${object.kind}\n${object.path}`}
                   aria-expanded={model.hasChildren.has(object.objectId) ? expanded : undefined}
                   data-object-id={object.objectId}
                   className={`tree-row${selected ? ' selected' : ''}`}
@@ -215,11 +247,8 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
                   ) : (
                     <span className="tree-spacer" />
                   )}
-                  <FolderTree size={14} aria-hidden="true" />
-                  <span className="tree-name" title={object.path}>
-                    {object.shortName}
-                  </span>
-                  <small>{selected ? '已选' : object.kind}</small>
+                  <Icon size={14} aria-hidden="true" />
+                  <span className="tree-name">{object.shortName}</span>
                 </div>
               );
             })
@@ -239,7 +268,9 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
                 onClick={() => void c.readSource(source.sourceId)}
               >
                 <FileCode2 size={14} aria-hidden="true" />
-                <span title={source.path}>{labelFromPath(source.path)}</span>
+                <span className="tree-name" title={source.path}>
+                  {labelFromPath(source.path)}
+                </span>
                 <small>{source.readonly ? '只读' : '源'}</small>
               </button>
             ))}

@@ -226,7 +226,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
     const selected = preview.files.find((file) => file.path === projectFile) ?? preview.files[0];
     return (
       <Dialog
-        title={c.projectPreviewKind === 'create' ? '确认从原创模板创建工程' : '确认保存为成员工程'}
+        title={c.projectPreviewKind === 'create' ? '确认新建工程' : '确认保存为成员工程'}
         onClose={() => {
           if (!c.busy) c.setProjectPreview(null);
         }}

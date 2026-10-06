@@ -414,7 +414,7 @@ export async function runBuiltinScenario({
     await menu('新建工程…');
     await until(`Boolean(document.querySelector(${json(label('工程名称'))}))`, 'new project entry');
     await input(label('工程名称'), name);
-    await input(label('原创模板'), templateId);
+    await input(label('工程模板'), templateId);
     const directory = path.join(scratch, 'projects', name);
     await mkdir(directory);
     await choose(
@@ -431,7 +431,7 @@ export async function runBuiltinScenario({
     );
     await click('预览工程文件');
     await until(
-      `Boolean(document.querySelector('[aria-label="确认从原创模板创建工程"]'))`,
+      `Boolean(document.querySelector('[aria-label="确认新建工程"]'))`,
       'original template preview',
     );
     assert.deepEqual(await readdir(directory), [], 'Template preview must not create source files');

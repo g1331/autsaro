@@ -7,7 +7,8 @@
 - 一个配置项目可包含多份 ARXML；同一 `AR-PACKAGE` 的内容可以分布在不同文件。未支持的有效内容作为保留项保留，未修改的文件不重写。校验、保存和生成都会复核所选的全部来源文件；任一文件被外部修改时拒绝继续使用旧跨文件配置，并提示重新导入。保存时暂存新内容，在替换前再次复核待写文件；无法安全回滚时保留原备份。
 - 编辑配置后，“查看并保存 ARXML”会先列出每份来源文件将修改或保持不变，并显示修改文件的前后差异及完整原文。预览不写磁盘；用户确认后才保存。若预览后配置或来源文件变化，旧预览不能用于保存。
 - 同一工程使用文件／对象树、文档标签、属性与引用检查器及问题／生成／构建／运行／日志工具窗口。参数保持 `kind/lexeme`，未落盘默认值与 explicit 值分开；未知条件、变体、表达式和 instance-reference 不猜值、不伪装成可写。批次与实例结构变化先预览整批，再以当前输入／定义身份原子应用。
-- `workbench-project.json` v1 只记录安全相对成员、应用输入及工程明确接纳的扩展身份；原 ARXML 是配置权威。`can-empty-v1`、`can-signals-v1`、`standard-ecu-v1` 使用原创模板，创建与另存为先预览，只写新空目录。第三方定义通过 `catalog.json` 显式接纳；不可变本机缓存不等于工程已经选择该定义。
+- 工程树优先显示对象名称，以图标区分包、模块、容器和数据类型；悬停可查看完整名称、类型与路径。软件“帮助”菜单内置操作步骤、工具依赖和支持范围，不要求用户取得源码仓库；生成工程附带的构建说明仍属于交付内容。
+- `workbench-project.json` v1 只记录安全相对成员、应用输入及工程明确接纳的扩展身份；原 ARXML 是配置权威。`can-empty-v1`、`can-signals-v1`、`standard-ecu-v1` 是产品内置的工程模板，创建与另存为先预览，只写新空目录。第三方定义通过 `catalog.json` 显式接纳；不可变本机缓存不等于工程已经选择该定义。
 - 分别报告 `source-safety`、`schema`、`definition`、`target-generation`。原生 `schema` 只覆盖产品声明的结构、顺序、基数及类型，不等于完整官方 XSD；`unsupported`、`not_run` 不冒充 `passed`。目标不支持不自动阻止安全浏览或修复；实际原生结构错误仍阻断保存。
 - 标准 11 位 Classical CAN，DLC 1–8；每 ECU 最多 32 帧、64 信号。每帧可映射多个不重叠的 1–32 位无符号 LSB0 小端信号。导入时拒绝与 Com 位段或位序冲突的 I-PDU 映射、重复的 CanIf PDU 映射，以及与 CanIf 不一致的关联 CAN 网络帧 ID 或布局；未解析的配置变体会阻止生成。Tx 帧按虚拟时钟周期发送；Rx 帧按最后有效接收时间判定超时。
 - 生成工程包含独立的 Com、PduR、LSduR、CanIf、CanTp、Dcm、可选 Dem/NvM、虚拟 Can、Os 周期调度、Rte 接口及 ECU 配置；目录内的 `README.md` 和 stdlib-only `tools/ecu-tool.py` 给出锁定工具链的离线构建及按配置启动方法，`profile.txt`、`target.json` 和 `files.list` 描述生成结果，`Dcm_Externals.h` 随工程交付诊断回调声明。未配置诊断时目标仍是纯信号 ECU。legacy 目标产出 `ecu_host.exe`（Windows）或 `ecu_host`（Linux）；源码、ARXML 和构建目录必须分开。Windows BCrypt 安全档案不适用于 Linux，源码准备时明确拒绝，不生成缺少安全后端的工程。
@@ -54,6 +55,10 @@ uv run --locked python -m autosar_tooling verify --scope all --base <本轮起�
 ```
 
 `doctor` 只读报告 `ready`、`missing`、`version_mismatch` 或 `not_applicable`，缺少必需项返回非零并提示安装/配置；不下载规范或更改系统。`npm run tauri --prefix ui -- dev` 使用现有 Tauri/Vite hooks，在**独立桌面会话**交互调试；自动化不得在当前用户桌面弹窗或抢焦点。这里不会执行 `create-tauri-app` 或 `tauri init --force` 重建已有工作台。开发构建使用 Vite；发行包使用内嵌界面及可信运行资源，真实安装包路径必须另行原生验收，不能从开发构建成功推定。
+
+桌面标题与应用菜单合并为同一条浅／深主题栏。顶部空白与标题区域可拖动，双击切换最大化；右侧提供最小化、最大化／还原和关闭，关闭仍先处理未应用草稿及未保存修改。工具窗口、工程树和检查器使用方向图标收起，悬停提示说明操作；底部工具标签及侧栏可重新展开。
+
+工程树右边缘、检查器左边缘和底部工具窗口上边缘提供拖动分隔条，分别调整左右侧栏宽度及底栏高度；其他方向随工作区伸缩。聚焦分隔条后用方向键微调，Shift＋方向键调整更大步幅，Home／End 调到当前允许边界；双击或 Enter 恢复默认。折叠、切换工具标签及缩小后再放大窗口保留本次运行的首选尺寸，重启后恢复默认布局；尺寸边界会为编辑区保留空间。
 
 受控外部命令已有统一的 `core::execution` 与 `ecu_tools.process` 入口。开发聚合器将当前锁定的 `sys.executable` 作为 `AUTOSAR_PYTHON` 传给 Cargo；直接运行 Cargo 时，须把该变量设为 CPython 的**绝对路径**（开发环境 Windows 为 `.venv/Scripts/python.exe`，POSIX 为 `.venv/bin/python`），不得依赖 PATH 猜测解释器。可运行 `uv run --locked python -m unittest autosar_tooling.test_process` 与 `cargo test --locked --manifest-path core/Cargo.toml execution::tests` 检查真实父/子/孙进程的退出、超时、取消及故障清理。Windows 使用先登记后恢复的 Job；POSIX 保证已登记的合作进程组及未逃逸后代在绝对单调期限内关闭。未登记的 `setsid`/daemon 逃逸不视为成功清理，Linux 反例返回 `cleanup_unconfirmed`。产品构建、离线验证与 legacy 主机运行均已使用这一受控执行入口。
 
@@ -112,7 +117,7 @@ Epic 4 的生成工件测试仍以 PATH 中的 Cppcheck 2.21.0 检查实际 RTE 
 
 已提交的 `.agents/skills/` 和 `_bmad/` 可直接供 Codex 使用；重新安装或更新时固定 `bmad-method@6.12.0`、BMM 和 `codex`，先核对安装器差异，不让新版本覆盖团队定制。`_bmad/config.user.toml` 是被 Git 忽略的个人安装答案；团队共用语言和配置放在 `_bmad/custom/config.toml`。从仓库打开 Codex 会话可调用 `bmad-help` 查看当前阶段，也可直接委托一个 story、epic 或规划目标。
 
-1. 从工程入口创建原创模板、打开成员 manifest 或一次选择同一 ECU 的全部 ARXML。直接 ARXML 可继续使用，显式另存为工程才持久化成员与扩展接纳选择；不能信任 manifest 的 profile hint 或旧通过状态。
+1. 从工程入口选择内置模板新建工程、打开成员 manifest 或一次选择同一 ECU 的全部 ARXML。直接 ARXML 可继续使用，显式另存为工程才持久化成员与扩展接纳选择；不能信任 manifest 的 profile hint 或旧通过状态。
 2. 在工程树／对象表选择真实对象，按定义检查与编辑字段、引用或结构；跨对象修改先查看整个批次的实际旧／新值与入站影响，再一次应用。既有 CAN、诊断／DTC 与标准参数编辑仍使用同一 Workspace。未应用草稿不写源；切对象先处理草稿，替换工程另处理 dirty 与保存确认。
 3. 保存先查看各文件差异并确认；外部改源、过期预览或未恢复备份拒绝覆盖。源码生成另选择工程之外的输出目录，预览真实文件与拥有权再确认，不启动编译。构建目录继续独立，编译／运行只在对应工具与本机目标可用时执行。
 4. 在“虚拟运行”页，对已构建、已配置诊断的当前工程点击“验证诊断连接”，由独立测试器检查本次二进制；配置故障记忆时使用隔离 NvM 文件，启用 Windows 0x27 时另用隔离密钥与安全状态文件。不修改真实 ECU 状态，不需要对端 ECU。信号总线验证另选对端 ECU 的封存源码目录与已构建的实际二进制，运行双 ECU 闭环。

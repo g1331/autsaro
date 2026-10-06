@@ -1,6 +1,7 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
+  ChevronRight,
   CircleAlert,
   Code2,
   FolderTree,
@@ -26,6 +27,8 @@ import { ObjectEditor, ObjectInspector } from './workbench/ObjectEditor';
 import { PreviewDialogs } from './workbench/PreviewDialogs';
 import { CopyText, Dialog, rememberDialogOpener, TextSnapshot } from './workbench/Dialog';
 import { ToolWindows } from './workbench/ToolWindows';
+import { WindowControls } from './workbench/WindowControls';
+import { PanelResizeHandle } from './workbench/PanelResizeHandle';
 import { SourceEntry } from './workbench/SourceEntry';
 import { labelFromPath } from './workbench/forms';
 import type { DocumentTab } from './workbench/projectTypes';
@@ -74,9 +77,10 @@ export default function App() {
       ?.setAttribute('content', effectiveTheme === 'dark' ? '#1b1b1b' : '#f3f3f3');
     document.querySelector<HTMLLinkElement>('link[rel="icon"]')?.setAttribute('href', logo);
   }, [effectiveTheme, logo]);
-  const exitRequested = useEffectEvent(async () => {
+  const requestExit = async () => {
     await c.replaceProject('退出工作台', () => getCurrentWindow().destroy());
-  });
+  };
+  const exitRequested = useEffectEvent(requestExit);
   useEffect(() => {
     if (!c.native) return;
     let live = true;
@@ -434,8 +438,14 @@ export default function App() {
       : documentLabels[tab.kind];
   return (
     <div className="app-shell">
-      <header className="menubar">
-        <img src={logo} width="27" height="27" alt="Classic CAN 配置工作台" />
+      <header className="menubar" data-tauri-drag-region>
+        <img
+          src={logo}
+          width="27"
+          height="27"
+          alt="Classic CAN 配置工作台"
+          data-tauri-drag-region
+        />
         <nav aria-label="应用菜单">
           {(['文件', '编辑', '视图', '工具', '帮助'] as const).map((label) => (
             <div className="menu-root" key={label}>
@@ -502,7 +512,9 @@ export default function App() {
             </div>
           ))}
         </nav>
-        <span className="app-title">Classic CAN 配置工作台</span>
+        <div className="titlebar-drag-region" data-tauri-drag-region>
+          <span className="app-title">Classic CAN 配置工作台</span>
+        </div>
         <button
           type="button"
           onClick={() => {
@@ -513,6 +525,14 @@ export default function App() {
         >
           <Search size={16} aria-hidden="true" />
         </button>
+        {c.native ? (
+          <WindowControls
+            onClose={requestExit}
+            onError={(error) =>
+              c.setNotice({ tone: 'error', text: `窗口操作失败：${String(error)}` })
+            }
+          />
+        ) : null}
       </header>
       <div className="context-toolbar">
         <strong>{c.workspace?.name ?? '未打开工程'}</strong>
@@ -721,6 +741,7 @@ export default function App() {
         </section>
         {c.workspace ? (
           <aside className="inspector-pane" hidden={!c.inspectorVisible}>
+            <PanelResizeHandle kind="inspector" />
             <div className="panel-tabs" role="tablist" aria-label="检查器视图">
               {(['properties', 'references'] as const).map((key) => (
                 <button
@@ -735,10 +756,12 @@ export default function App() {
               ))}
               <button
                 type="button"
+                className="panel-icon-button"
                 aria-label="折叠检查器"
+                title="折叠检查器"
                 onClick={() => c.setInspectorVisible(false)}
               >
-                <X size={14} />
+                <ChevronRight size={16} aria-hidden="true" />
               </button>
             </div>
             <div className="inspector-scroll">
@@ -801,6 +824,37 @@ export default function App() {
       ) : null}
       {help ? (
         <Dialog title="支持范围与依赖" onClose={() => setHelp(false)}>
+          <h3>使用说明</h3>
+          <ol>
+            <li>
+              <strong>打开工程：</strong>
+              在“文件”菜单中新建工程、导入 ARXML
+              或打开已有成员工程。新建时选择内置工程模板和新的空目录。
+            </li>
+            <li>
+              <strong>编辑配置：</strong>
+              在工程树中选择对象，在“属性”中编辑可写参数；查看整批修改的影响后应用。只读对象可查看原文和引用。
+            </li>
+            <li>
+              <strong>检查与保存：</strong>
+              使用“校验”查看问题并定位对象；使用“预览保存”检查文件差异，确认后才写入磁盘。未应用草稿不会自动保存。
+            </li>
+            <li>
+              <strong>交付源码：</strong>
+              打开“源码交付”，选择目标和独立输出目录，先预览再确认生成。生成完成不等于编译或运行验证通过。
+            </li>
+          </ol>
+          <p>
+            <strong>面板布局：</strong>
+            拖动工程树与检查器的内侧边缘调整宽度，拖动底部工具窗口的上边缘调整高度。
+            方向键微调，Shift＋方向键加大步幅；双击或 Enter 恢复默认。尺寸在当前运行期间保留。
+          </p>
+          <h3>工具依赖</h3>
+          <p>
+            普通配置编辑、保存和源码准备不需要编译器。构建或主机验证前，在“设置”的执行工具中配置所选目标需要的工具；
+            工具未就绪时仍可继续编辑配置。
+          </p>
+          <h3>支持范围</h3>
           <p>R24-11 原生结构、定义与目标生成分别报告覆盖；不声明完整官方 XSD、SWS 或实机认证。</p>
           <p>
             CAN 信号使用 11 位 Classical CAN、有界 DoCAN / DID 与可选单 DTC；标准 ECU 保留当前受限
@@ -809,8 +863,6 @@ export default function App() {
           <p>
             源码预览不要求编译器。预检、构建、主机行为验证遵守当前工具、宿主和受控目标；存在旧二进制不证明本次通过。
           </p>
-          <p>产品使用说明：README.md · docs/project/OWNER_GUIDE.md</p>
-          <CopyText text="README.md\ndocs/project/OWNER_GUIDE.md" label="复制说明位置" />
         </Dialog>
       ) : null}
     </div>

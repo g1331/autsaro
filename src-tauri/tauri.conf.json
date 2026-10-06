@@ -13,6 +13,7 @@
     "windows": [
       {
         "title": "Classic CAN 配置工作台",
+        "decorations": false,
         "width": 1480,
         "height": 920,
         "minWidth": 1080,

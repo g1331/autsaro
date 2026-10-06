@@ -1,8 +1,10 @@
+import { ChevronDown } from 'lucide-react';
 import type { Workbench } from './useWorkbench';
 import type { ConfigurationDiagnostic, ToolWindow } from './projectTypes';
 import { CopyText, OwnedLog } from './Dialog';
 import { VirtualPage } from '../pages/VirtualPage';
 import { issueTarget } from './forms';
+import { PanelResizeHandle } from './PanelResizeHandle';
 
 export const toolLabels: Record<ToolWindow, string> = {
   problems: '问题',
@@ -49,12 +51,19 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
   }
   return (
     <section className="bottom-tools" aria-label="工具窗口">
+      {c.toolWindow ? <PanelResizeHandle kind="tools" /> : null}
       {c.toolWindow ? (
         <div className="tool-content" role="tabpanel" aria-label={toolLabels[c.toolWindow]}>
           <header>
             <strong>{toolLabels[c.toolWindow]}</strong>
-            <button type="button" onClick={() => c.setToolWindow(null)}>
-              收起工具窗口
+            <button
+              type="button"
+              className="panel-icon-button"
+              aria-label="收起工具窗口"
+              title="收起工具窗口"
+              onClick={() => c.setToolWindow(null)}
+            >
+              <ChevronDown size={16} aria-hidden="true" />
             </button>
           </header>
           <div hidden={c.toolWindow !== 'problems'}>

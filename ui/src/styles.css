@@ -245,7 +245,8 @@ button[aria-pressed='true'],
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 10px 0 7px;
+  padding: 0 0 0 7px;
+  user-select: none;
   background: var(--shell);
   border-bottom: 1px solid var(--line);
 }
@@ -259,10 +260,51 @@ button[aria-pressed='true'],
   background: transparent;
   padding: 4px 9px;
 }
+.titlebar-drag-region {
+  flex: 1;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  overflow: hidden;
+}
 .app-title {
-  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
   font-size: 12px;
   color: var(--secondary);
+}
+.window-controls {
+  display: flex;
+  align-self: stretch;
+  flex: none;
+}
+.menubar .window-control {
+  width: 46px;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  border-radius: 0;
+  color: var(--text);
+}
+.menubar .window-control:focus-visible {
+  outline-offset: -3px;
+}
+.menubar .window-close:hover {
+  color: #ffffff;
+  background: #c42b1c;
+}
+.panel-icon-button {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  flex: none;
 }
 .menu-root {
   position: relative;
@@ -350,7 +392,8 @@ button[aria-pressed='true'],
   flex: 1;
 }
 .project-tree {
-  width: var(--tree-width);
+  position: relative;
+  width: var(--panel-tree-width, var(--tree-width));
   flex: none;
   display: flex;
   flex-direction: column;
@@ -438,14 +481,18 @@ button[aria-pressed='true'],
   padding: 0;
   border: 0;
   width: 14px;
+  flex: none;
   min-height: 22px;
   background: transparent;
 }
 .tree-row > small {
   font-size: 10px;
   margin-left: auto;
+  flex: none;
 }
 .tree-name {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -594,8 +641,9 @@ tbody tr:not(.selected-row):hover {
   margin-right: auto;
 }
 .inspector-pane {
+  position: relative;
   flex: none;
-  width: var(--inspector-width);
+  width: var(--panel-inspector-width, var(--inspector-width));
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -841,6 +889,7 @@ tbody tr:not(.selected-row):hover {
   min-width: 0;
 }
 .bottom-tools {
+  position: relative;
   flex: none;
   margin-top: auto;
   border-top: 1px solid var(--line);
@@ -870,12 +919,48 @@ tbody tr:not(.selected-row):hover {
   border-radius: 3px;
 }
 .tool-content {
-  height: 230px;
+  height: var(--panel-tools-height, 230px);
   min-height: 100px;
   max-height: 60vh;
   overflow: auto;
-  resize: vertical;
   padding: 0 12px 12px;
+}
+.panel-resize-handle {
+  position: absolute;
+  z-index: 12;
+  touch-action: none;
+  user-select: none;
+  background: transparent;
+}
+.panel-resize-handle:hover,
+.panel-resize-handle:focus-visible,
+.panel-resize-handle.is-dragging {
+  background: var(--blue);
+}
+.panel-resize-tree,
+.panel-resize-inspector {
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+}
+.panel-resize-tree {
+  right: -3px;
+}
+.panel-resize-inspector {
+  left: -3px;
+}
+.panel-resize-tools {
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: row-resize;
+}
+.panel-resizing,
+.panel-resizing * {
+  cursor: var(--panel-resize-cursor) !important;
+  user-select: none !important;
 }
 .tool-content > header {
   position: sticky;
@@ -1155,7 +1240,7 @@ details + details {
     right: 0;
     bottom: 0;
     z-index: 10;
-    width: 300px;
+    width: var(--panel-inspector-width, 300px);
     box-shadow: -10px 0 24px rgb(0 0 0 / 0.08);
   }
   .app-title {
@@ -1172,7 +1257,7 @@ details + details {
     left: 42px;
     bottom: 0;
     z-index: 11;
-    width: 250px;
+    width: var(--panel-tree-width, 250px);
     box-shadow: 10px 0 24px rgb(0 0 0 / 0.1);
   }
   .start-page {
@@ -1218,6 +1303,6 @@ details + details {
     flex-wrap: wrap;
   }
   .tool-content {
-    height: 210px;
+    height: var(--panel-tools-height, 210px);
   }
 }
