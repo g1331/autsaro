@@ -1,4 +1,4 @@
-import { writeFile } from 'node:fs/promises';
+import { writeFile, readFile, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { runScenario } from './desktop_scenario.mjs';
 
@@ -34,7 +34,85 @@ try {
     const image = await request('GET', `/session/${session}/screenshot`);
     await writeFile(path.join(scratch, name), Buffer.from(image, 'base64'));
   }
-  await runScenario({ evaluate, screenshot, scratch, platform });
+  async function resize(width, height) {
+    const rectangle = await request('POST', `/session/${session}/window/rect`, { width, height });
+    return { scope: 'native-webdriver-window', rectangle };
+  }
+  async function key(value, modifiers = {}) {
+    const codes = {
+      Escape: '\uE00C',
+      Tab: '\uE004',
+      ArrowDown: '\uE015',
+      ArrowUp: '\uE013',
+      ArrowLeft: '\uE012',
+      ArrowRight: '\uE014',
+      Enter: '\uE007',
+    };
+    const held = Object.entries({ alt: '\uE00A', ctrl: '\uE009', meta: '\uE03D', shift: '\uE008' })
+      .filter(([name]) => modifiers[name])
+      .map(([, code]) => code);
+    const pressed = codes[value] ?? value;
+    await request('POST', `/session/${session}/actions`, {
+      actions: [
+        {
+          type: 'key',
+          id: 'native-keyboard',
+          actions: [
+            ...held.map((code) => ({ type: 'keyDown', value: code })),
+            { type: 'keyDown', value: pressed },
+            { type: 'keyUp', value: pressed },
+            ...held.reverse().map((code) => ({ type: 'keyUp', value: code })),
+          ],
+        },
+      ],
+    });
+    await request('DELETE', `/session/${session}/actions`);
+  }
+  async function pointer(x, y) {
+    await request('POST', `/session/${session}/actions`, {
+      actions: [
+        {
+          type: 'pointer',
+          id: 'native-mouse',
+          parameters: { pointerType: 'mouse' },
+          actions: [
+            {
+              type: 'pointerMove',
+              duration: 0,
+              origin: 'viewport',
+              x: Math.round(x),
+              y: Math.round(y),
+            },
+            { type: 'pointerDown', button: 0 },
+            { type: 'pointerUp', button: 0 },
+          ],
+        },
+      ],
+    });
+    await request('DELETE', `/session/${session}/actions`);
+  }
+  let mediaSequence = 0;
+  async function media(scheme, reduceMotion = false) {
+    if (platform !== 'linux')
+      throw new Error('This native WebDriver host has no isolated system media controller');
+    const value = { requestId: `media-${++mediaSequence}`, scheme, reduceMotion };
+    const staging = path.join(scratch, 'native-media-request.next.json');
+    await writeFile(staging, JSON.stringify(value));
+    await rename(staging, path.join(scratch, 'native-media-request.json'));
+    const deadline = Date.now() + 30000;
+    while (Date.now() < deadline) {
+      let result;
+      try {
+        result = JSON.parse(await readFile(path.join(scratch, 'native-media-result.json'), 'utf8'));
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+      }
+      if (result?.requestId === value.requestId) return result;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    throw new Error('Private XSettings did not acknowledge actual system media preferences');
+  }
+  await runScenario({ evaluate, screenshot, resize, key, pointer, media, scratch, platform });
 } finally {
   if (session) await request('DELETE', `/session/${session}`);
 }

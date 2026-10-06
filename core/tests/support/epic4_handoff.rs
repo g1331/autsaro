@@ -57,7 +57,7 @@ pub fn verify() {
     );
     let workspace = Workspace::open_ecu_handoff(&project, &dependencies, &runtime).unwrap();
     let rebuilt = workspace
-        .saved_integration_plan(&runtime, dependencies.mod_archive.clone())
+        .saved_integration_plan_legacy(&runtime, dependencies.mod_archive.clone())
         .unwrap();
     assert_eq!(
         rebuilt
@@ -222,7 +222,7 @@ pub fn verify() {
     let original = fs::read(&external).unwrap();
     fs::write(&external, b"external editor bytes").unwrap();
     let changed = workspace
-        .saved_integration_plan(&runtime, dependencies.mod_archive.clone())
+        .saved_integration_plan_legacy(&runtime, dependencies.mod_archive.clone())
         .err()
         .unwrap();
     assert!(
@@ -238,7 +238,7 @@ pub fn verify() {
     assert!(open_ecu_handoff(&project, &wrong_dependencies, &runtime).is_err());
     let mut workspace = Workspace::open_ecu_handoff(&project, &dependencies, &runtime).unwrap();
     workspace
-        .edit_integration(
+        .edit_integration_legacy(
             &runtime,
             dependencies.mod_archive.clone(),
             autosar_config_core::integration::IntegrationEdit {
@@ -249,7 +249,7 @@ pub fn verify() {
         .unwrap();
     assert!(
         workspace
-            .saved_integration_plan(&runtime, dependencies.mod_archive.clone())
+            .saved_integration_plan_legacy(&runtime, dependencies.mod_archive.clone())
             .is_err()
     );
 }
@@ -269,9 +269,9 @@ pub fn verify_rapid() {
         fs::write(&path, input.bytes()).unwrap();
         paths.push(path);
     }
-    let mut rapid = Workspace::open(paths, dependencies.xsd_archive.clone()).unwrap();
+    let mut rapid = Workspace::open_legacy(paths, dependencies.xsd_archive.clone()).unwrap();
     rapid
-        .edit_integration(
+        .edit_integration_legacy(
             &runtime,
             dependencies.mod_archive.clone(),
             autosar_config_core::integration::IntegrationEdit {
@@ -281,13 +281,17 @@ pub fn verify_rapid() {
         )
         .unwrap();
     let save = rapid
-        .preview_integration_save(&runtime, dependencies.mod_archive.clone())
+        .preview_integration_save_legacy(&runtime, dependencies.mod_archive.clone())
         .unwrap();
     rapid
-        .save_integration_previewed(&runtime, dependencies.mod_archive.clone(), &save.revision)
+        .save_integration_previewed_legacy(
+            &runtime,
+            dependencies.mod_archive.clone(),
+            &save.revision,
+        )
         .unwrap();
     let plan = rapid
-        .saved_integration_plan(&runtime, dependencies.mod_archive.clone())
+        .saved_integration_plan_legacy(&runtime, dependencies.mod_archive.clone())
         .unwrap();
     let files = plan
         .ecu_handoff_files(super::tooling::native_target())

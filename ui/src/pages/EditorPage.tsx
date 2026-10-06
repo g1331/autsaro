@@ -5,9 +5,15 @@ import { FrameForm } from '../workbench/FrameForm';
 import { SignalForm } from '../workbench/SignalForm';
 import { ReferenceView } from '../workbench/ReferenceView';
 
-export function EditorPage({ controller }: { controller: Workbench }) {
+export function EditorPage({
+  controller,
+  section,
+}: {
+  controller: Workbench;
+  section: 'communication' | 'diagnostic';
+}) {
   const {
-    saveProject,
+    requestSave,
     disabled,
     native,
     busy,
@@ -41,135 +47,59 @@ export function EditorPage({ controller }: { controller: Workbench }) {
   if (!workspace) return null;
   return (
     <>
-      <div className="section-header">
-        <div>
-          <p className="eyebrow">CAN COMMUNICATION</p>
-          <h2>帧与信号</h2>
-          <p>仅支持标准 11-bit CAN、DLC 1–8、原始无符号小端信号。</p>
+      <div className="legacy-editor-content" hidden={section !== 'communication'}>
+        <div className="section-header">
+          <div>
+            <p className="eyebrow">CAN COMMUNICATION</p>
+            <h2>帧与信号</h2>
+            <p>仅支持标准 11-bit CAN、DLC 1–8、原始无符号小端信号。</p>
+          </div>
+          <div className="section-actions">
+            <button
+              type="button"
+              className="outline-button small"
+              onClick={requestSave}
+              disabled={!native || Boolean(busy) || Boolean(unsupportedIssue) || unapplied}
+            >
+              <Save aria-hidden="true" size={15} />
+              查看并保存 ARXML
+            </button>
+            <button
+              type="button"
+              className="outline-button small"
+              onClick={() => openCreator('frame')}
+              disabled={disabled}
+            >
+              <Plus aria-hidden="true" size={15} />
+              添加帧
+            </button>
+          </div>
         </div>
-        <div className="section-actions">
-          <button
-            type="button"
-            className="outline-button small"
-            onClick={saveProject}
-            disabled={!native || Boolean(busy) || Boolean(unsupportedIssue) || unapplied}
-          >
-            <Save aria-hidden="true" size={15} />
-            查看并保存 ARXML
-          </button>
-          <button
-            type="button"
-            className="outline-button small"
-            onClick={() => openCreator('frame')}
-            disabled={disabled}
-          >
-            <Plus aria-hidden="true" size={15} />
-            添加帧
-          </button>
-        </div>
-      </div>
-      {unsupportedIssue && (
-        <div className="page-guidance" role="alert">
-          {unsupportedIssue.message}。原 ARXML
-          保持不变；请在“诊断”页查看问题，当前不能修改、保存或生成。
-        </div>
-      )}
-      <div className="table-wrap">
-        <table>
-          <caption>CAN 帧配置</caption>
-          <thead>
-            <tr>
-              <th scope="col">帧名称</th>
-              <th scope="col">CAN ID</th>
-              <th scope="col">DLC</th>
-              <th scope="col">方向</th>
-              <th scope="col">周期 / 超时</th>
-              <th scope="col">信号</th>
-            </tr>
-          </thead>
-          <tbody>
-            {workspace.frames.map((frame) => (
-              <tr
-                key={frame.path}
-                className={focusedFrame?.path === frame.path ? 'selected-row' : ''}
-                onClick={() => choose({ kind: 'frame', path: frame.path })}
-              >
-                <td>
-                  <button
-                    type="button"
-                    className="table-link"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      choose({ kind: 'frame', path: frame.path });
-                    }}
-                  >
-                    {frame.name}
-                  </button>
-                </td>
-                <td className="mono">0x{frame.id.toString(16).toUpperCase().padStart(3, '0')}</td>
-                <td className="mono">{frame.dlc}</td>
-                <td>
-                  <span className={`direction ${frame.direction}`}>
-                    {frame.direction.toUpperCase()}
-                  </span>
-                </td>
-                <td className="mono">
-                  {frame.direction === 'tx'
-                    ? `${frame.periodMs ?? '—'} ms`
-                    : `${frame.timeoutMs ?? '—'} ms`}
-                </td>
-                <td className="mono">
-                  {workspace.signals.filter((signal) => signal.framePath === frame.path).length}
-                </td>
-              </tr>
-            ))}
-            {!workspace.frames.length && (
+        {unsupportedIssue && (
+          <div className="page-guidance" role="alert">
+            {unsupportedIssue.message}。原 ARXML
+            保持不变；请在“诊断”页查看问题，当前不能修改、保存或生成。
+          </div>
+        )}
+        <div className="table-wrap">
+          <table>
+            <caption>CAN 帧配置</caption>
+            <thead>
               <tr>
-                <td colSpan={6} className="empty-cell">
-                  项目尚无 CAN 帧。使用“添加帧”开始配置。
-                </td>
+                <th scope="col">帧名称</th>
+                <th scope="col">CAN ID</th>
+                <th scope="col">DLC</th>
+                <th scope="col">方向</th>
+                <th scope="col">周期 / 超时</th>
+                <th scope="col">信号</th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      <div className="section-header secondary">
-        <div>
-          <p className="eyebrow">FRAME MAPPING</p>
-          <h2>{focusedFrame ? `${focusedFrame.name} · 信号` : '全部信号'}</h2>
-          <p>{focusedFrame ? `帧路径：${focusedFrame.path}` : '选择一帧可查看信号映射与引用。'}</p>
-        </div>
-        <button
-          type="button"
-          className="outline-button small"
-          onClick={() => openCreator('signal')}
-          disabled={disabled || !focusedFrame}
-        >
-          <Plus aria-hidden="true" size={15} />
-          添加信号
-        </button>
-      </div>
-      <div className="table-wrap">
-        <table>
-          <caption>信号配置</caption>
-          <thead>
-            <tr>
-              <th scope="col">信号名称</th>
-              <th scope="col">所属帧</th>
-              <th scope="col">起始位</th>
-              <th scope="col">长度</th>
-              <th scope="col">初始值</th>
-              <th scope="col">编码</th>
-            </tr>
-          </thead>
-          <tbody>
-            {workspace.signals
-              .filter((signal) => !focusedFrame || signal.framePath === focusedFrame.path)
-              .map((signal) => (
+            </thead>
+            <tbody>
+              {workspace.frames.map((frame) => (
                 <tr
-                  key={signal.path}
-                  className={currentSignal?.path === signal.path ? 'selected-row' : ''}
-                  onClick={() => choose({ kind: 'signal', path: signal.path })}
+                  key={frame.path}
+                  className={focusedFrame?.path === frame.path ? 'selected-row' : ''}
+                  onClick={() => choose({ kind: 'frame', path: frame.path })}
                 >
                   <td>
                     <button
@@ -177,35 +107,119 @@ export function EditorPage({ controller }: { controller: Workbench }) {
                       className="table-link"
                       onClick={(event) => {
                         event.stopPropagation();
-                        choose({ kind: 'signal', path: signal.path });
+                        choose({ kind: 'frame', path: frame.path });
                       }}
                     >
-                      {signal.name}
+                      {frame.name}
                     </button>
                   </td>
+                  <td className="mono">0x{frame.id.toString(16).toUpperCase().padStart(3, '0')}</td>
+                  <td className="mono">{frame.dlc}</td>
                   <td>
-                    {workspace.frames.find((frame) => frame.path === signal.framePath)?.name ??
-                      signal.framePath}
+                    <span className={`direction ${frame.direction}`}>
+                      {frame.direction.toUpperCase()}
+                    </span>
                   </td>
-                  <td className="mono">{signal.startBit}</td>
-                  <td className="mono">{signal.length} bit</td>
-                  <td className="mono">{signal.initialValue}</td>
-                  <td>uint / LE</td>
+                  <td className="mono">
+                    {frame.direction === 'tx'
+                      ? `${frame.periodMs ?? '—'} ms`
+                      : `${frame.timeoutMs ?? '—'} ms`}
+                  </td>
+                  <td className="mono">
+                    {workspace.signals.filter((signal) => signal.framePath === frame.path).length}
+                  </td>
                 </tr>
               ))}
-            {!workspace.signals.some(
-              (signal) => !focusedFrame || signal.framePath === focusedFrame.path,
-            ) && (
+              {!workspace.frames.length && (
+                <tr>
+                  <td colSpan={6} className="empty-cell">
+                    项目尚无 CAN 帧。使用“添加帧”开始配置。
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="section-header secondary">
+          <div>
+            <p className="eyebrow">FRAME MAPPING</p>
+            <h2>{focusedFrame ? `${focusedFrame.name} · 信号` : '全部信号'}</h2>
+            <p>
+              {focusedFrame ? `帧路径：${focusedFrame.path}` : '选择一帧可查看信号映射与引用。'}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="outline-button small"
+            onClick={() => openCreator('signal')}
+            disabled={disabled || !focusedFrame}
+          >
+            <Plus aria-hidden="true" size={15} />
+            添加信号
+          </button>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <caption>信号配置</caption>
+            <thead>
               <tr>
-                <td colSpan={6} className="empty-cell">
-                  当前范围内暂无信号。
-                </td>
+                <th scope="col">信号名称</th>
+                <th scope="col">所属帧</th>
+                <th scope="col">起始位</th>
+                <th scope="col">长度</th>
+                <th scope="col">初始值</th>
+                <th scope="col">编码</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {workspace.signals
+                .filter((signal) => !focusedFrame || signal.framePath === focusedFrame.path)
+                .map((signal) => (
+                  <tr
+                    key={signal.path}
+                    className={currentSignal?.path === signal.path ? 'selected-row' : ''}
+                    onClick={() => choose({ kind: 'signal', path: signal.path })}
+                  >
+                    <td>
+                      <button
+                        type="button"
+                        className="table-link"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          choose({ kind: 'signal', path: signal.path });
+                        }}
+                      >
+                        {signal.name}
+                      </button>
+                    </td>
+                    <td>
+                      {workspace.frames.find((frame) => frame.path === signal.framePath)?.name ??
+                        signal.framePath}
+                    </td>
+                    <td className="mono">{signal.startBit}</td>
+                    <td className="mono">{signal.length} bit</td>
+                    <td className="mono">{signal.initialValue}</td>
+                    <td>uint / LE</td>
+                  </tr>
+                ))}
+              {!workspace.signals.some(
+                (signal) => !focusedFrame || signal.framePath === focusedFrame.path,
+              ) && (
+                <tr>
+                  <td colSpan={6} className="empty-cell">
+                    当前范围内暂无信号。
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-      <section className="diagnostic-editor" aria-labelledby="diagnostic-editor-title">
+      <section
+        className="diagnostic-editor"
+        aria-labelledby="diagnostic-editor-title"
+        hidden={section !== 'diagnostic'}
+      >
         <div className="section-header secondary">
           <div>
             <p className="eyebrow">HOST VIRTUAL / DoCAN</p>

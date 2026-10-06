@@ -26,7 +26,7 @@ pub(super) fn archive() -> PathBuf {
 }
 pub(super) fn create_pair(root: &Path) -> (Workspace, Workspace) {
     let zip = archive();
-    let mut a = Workspace::create(&root.join("Alpha"), "Alpha", zip.clone()).unwrap();
+    let mut a = Workspace::create_legacy(&root.join("Alpha"), "Alpha", zip.clone()).unwrap();
     let tx = a
         .add_frame("Command".into(), 0x321, 2, Direction::Tx, Some(10), None)
         .unwrap()
@@ -45,7 +45,7 @@ pub(super) fn create_pair(root: &Path) -> (Workspace, Workspace) {
     a.add_signal(rx, "RecvStatus".into(), 0, 8, 0).unwrap();
     assert!(a.validate().unwrap().issues.is_empty());
     a.save().unwrap();
-    let mut b = Workspace::create(&root.join("Beta"), "Beta", zip).unwrap();
+    let mut b = Workspace::create_legacy(&root.join("Beta"), "Beta", zip).unwrap();
     let rx = b
         .add_frame("Command".into(), 0x321, 2, Direction::Rx, None, Some(40))
         .unwrap()

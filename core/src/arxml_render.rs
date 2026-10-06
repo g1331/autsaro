@@ -45,8 +45,22 @@ fn function(path: &str, name: &str, value: &str) -> String {
 }
 
 fn reference(path: &str, name: &str, dest: &str, target: &str) -> String {
+    reference_value(path, name, "ECUC-REFERENCE-DEF", dest, target)
+}
+
+fn choice_reference(path: &str, name: &str, dest: &str, target: &str) -> String {
+    reference_value(path, name, "ECUC-CHOICE-REFERENCE-DEF", dest, target)
+}
+
+fn reference_value(
+    path: &str,
+    name: &str,
+    definition_kind: &str,
+    dest: &str,
+    target: &str,
+) -> String {
     format!(
-        "<ECUC-REFERENCE-VALUE><DEFINITION-REF DEST=\"ECUC-REFERENCE-DEF\">{path}/{name}</DEFINITION-REF><VALUE-REF DEST=\"{dest}\">{target}</VALUE-REF></ECUC-REFERENCE-VALUE>"
+        "<ECUC-REFERENCE-VALUE><DEFINITION-REF DEST=\"{definition_kind}\">{path}/{name}</DEFINITION-REF><VALUE-REF DEST=\"{dest}\">{target}</VALUE-REF></ECUC-REFERENCE-VALUE>"
     )
 }
 
@@ -353,7 +367,7 @@ fn render_host_canif_ecuc(project: &str, pdus: &str) -> String {
         "CanIfHrhCanCtrlIdRef",
         "ECUC-CONTAINER-VALUE",
         &ref_path(project, "CanIfCfg/HostDriver/HostController"),
-    ) + &reference(
+    ) + &choice_reference(
         hrh,
         "CanIfHrhIdSymRef",
         "ECUC-CONTAINER-VALUE",
@@ -372,7 +386,7 @@ fn render_host_canif_ecuc(project: &str, pdus: &str) -> String {
         "CanIfHthCanCtrlIdRef",
         "ECUC-CONTAINER-VALUE",
         &ref_path(project, "CanIfCfg/HostDriver/HostController"),
-    ) + &reference(
+    ) + &choice_reference(
         hth,
         "CanIfHthIdSymRef",
         "ECUC-CONTAINER-VALUE",
@@ -636,7 +650,7 @@ fn render_dtc(project: &str, diagnostic: &DiagnosticView, elements: &mut String)
         "Attributes",
         &attrs,
         &number(&attrs, "DemDTCPriority", 1),
-        &reference(
+        &choice_reference(
             &attrs,
             "DemMemoryDestinationRef",
             "ECUC-CONTAINER-VALUE",

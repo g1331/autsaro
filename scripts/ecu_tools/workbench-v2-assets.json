@@ -1,0 +1,10 @@
+{
+  "format": "autosar-workbench-build-tool-inventory-v1",
+  "version": "1.0.0",
+  "files": [
+    {
+      "path": "workbench_v2.py",
+      "sha256": "f06dfa2cc1649278cfff7faa1d346eb7b1bac56c4626b8976b84843b0c6e7086"
+    }
+  ]
+}

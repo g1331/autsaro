@@ -64,7 +64,6 @@ export type DtcFields = { code: string; monitorFramePath: string };
 
 export type Notice = { tone: 'error' | 'info'; text: string } | null;
 
-export type Page = 'editor' | 'diagnostics' | 'build' | 'virtual' | 'integration';
 
 export const frameFields = (frame: Frame): FrameFields => ({
   name: frame.name,

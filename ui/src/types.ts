@@ -1,9 +1,25 @@
+import type {
+  ActionCapability,
+  Appearance,
+  RuleCoverage,
+  RuleSetIdentity,
+} from './workbench/projectTypes';
+
 export type BuildTarget = 'windows-x64-controlled-v1' | 'linux-x64-controlled-v1';
 
 export type PreflightReport = {
   status: 'not_run' | 'passed' | 'failed';
   fingerprint: string;
   logs: string[];
+};
+export type OwnedVerificationFailure = {
+  exitCode: number | null;
+  status: string;
+  scope: string;
+  stdoutPath: string;
+  stderrPath: string;
+  descendantsReclaimed: boolean;
+  log: string;
 };
 
 export interface ExecutionTools {
@@ -23,9 +39,17 @@ export interface WorkbenchCapabilities {
   modArchive: string | null;
   resourceError: string | null;
   executionTools: ExecutionTools | null;
+  configuredExecutionTools: ExecutionTools | null;
   toolError: string | null;
   environmentOverrides: string[];
   operation: { id: number; stage: string } | null;
+  ruleSetIdentity: RuleSetIdentity | null;
+  ruleError: string | null;
+  ruleCoverage: RuleCoverage[];
+  definitionFingerprint: string | null;
+  appearance: Appearance;
+  actions: ActionCapability[];
+  verificationMode: boolean;
 }
 
 export interface WorkbenchReply<T> {
@@ -136,9 +160,12 @@ export type GenerationPreview = {
   revision: string;
   files: {
     path: string;
-    status: 'new' | 'changed' | 'unchanged';
+    status: string;
     before: string | null;
     after: string | null;
+    owner?: string | null;
+    producerId?: string | null;
+    snapshotOf?: string | null;
   }[];
 };
 

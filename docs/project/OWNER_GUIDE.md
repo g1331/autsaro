@@ -20,6 +20,8 @@
 
 Agent 应把规范研究放进具体功能任务，不用一轮轮独立审计替代产品开发。当前做什么须同时核对委托目标、BMad 规划与状态及实际证据，不以本说明中的静态示例为准。
 
+Epic 7 的本轮交付按用户2026-10-06的要求完成开发与单元／集成测试、静态检查、构建和代码复核；不以真机、原生桌面或完整发行验收作为当前开发的前置工作，也不继续扩建相关设施。7.1–7.10 已完成开发，7.11 保留后续CI发行验收，当前为 review。最新开发结果见[中央实施规格](../../_bmad-output/implementation-artifacts/spec-epic-7-configurator.md)，原发行失败及未验范围保留在[交接文件](../../_bmad-output/implementation-artifacts/epic7-handoff.md)。
+
 项目目前由你主动唤起 Agent，不会在你离开后后台自动开发或发送通知。Agent 可作日常技术判断；新标准版次、真实芯片、重大兼容性或费用、对外推送与发布，应带着推荐和影响请你决定。
 
 ## 汽车工程技能怎么用
@@ -43,25 +45,29 @@ Agent 应把规范研究放进具体功能任务，不用一轮轮独立审计�
 
 ## 标准 ECU 输入的检查与保存
 
-在“导入 ARXML”中选择同一输入集合的多份文件，也可展开“直接填写来源路径”，每行填写一份 ARXML 的完整路径。含 ECU_EXTRACT 的集合自动进入“标准输入”；不完整集合也可打开此页查看缺失关系的诊断。原有主机目标仍使用原来的配置、生成和运行入口。
+日常配置使用内置原创 R24-11 规则与受支持模块定义，不要求 XSD/MOD 或编译器。可创建 `can-empty-v1`、`can-signals-v1`、`standard-ecu-v1` 原创模板，打开 `workbench-project.json` v1，或一次选择同一输入集合的 ARXML。工程树、文档、检查器和工具窗口共用真实 Workspace；原 ARXML 字节始终是保存权威。
 
-“标准输入”显示同一核心计划实际识别的来源角色和原字节摘要。当前可编辑所选 S/R 接收/发送 CAN ID，以及应用、Com 发送和对应 Alarm 的共同周期；诊断参数、类型、端口及引用保持只读。应用修改后会重新校验整个计划，冲突时恢复原配置。
+标准输入继续显示实际来源角色、原字节摘要和目标诊断；有限目标的 CAN ID／共同周期编辑与按定义的通用字段／引用／结构编辑分开判断。参数 wire 保留 `kind/lexeme`，默认值不隐式落盘；批次先预览 prospective graph 与实际入站影响，再原子应用。未知条件、变体、表达式或 instance-reference 明确只读／限制消费者，不能由切换剖面绕过。
 
-点击“预览保存”查看受影响文件及保存前后原文，再确认保存；“重开来源”重新读取并检查磁盘输入。未修改文件保持原字节，外部编辑、失效预览及待恢复备份会阻止保存。输入已校验或已保存，都不表示运行工程已经生成。XSD/MOD 仍须在本机合法提供，不属于交付输入包。
+保存先检查原文差异，再确认当前预览；外部编辑、过期确认及待恢复备份会阻止覆盖。未改文件保持原字节。直接 ARXML 显式另存为新工程才记录成员与扩展接纳集合；本机缓存存在不等于工程已接纳。`source-safety`、原生有限 `schema`、`definition`、`target-generation` 各自报告，不以结构检查通过推定完整标准或生成／运行成功。
 
-后台原生复验统一使用 `uv run --locked python -m autosar_tooling desktop --platform windows|linux|macos --binary <本次桌面构建路径>`；Windows/Linux 先构建同版 `package_host_reference` 与桌面程序，设置合法规范和声明的原生工具绝对路径。测试程序从私有空配置启动，实际操作缺规范设置页与固定摘要校验。Windows 创建独立 Desktop，通过 `STARTUPINFO.lpDesktop` 指定子进程归属，核对窗口不在输入桌面，不调用 SwitchDesktop；WebView 使用私有数据目录，专属 Job 最终关闭测试树。Linux 使用私有 Xvfb display、`tauri-driver 2.1.0` 与 Ubuntu `WebKitWebDriver`，不连接用户的 DISPLAY/Wayland 会话；另需 `xvfb x11-utils xdotool webkit2gtk-driver`，通过 `cargo install tauri-driver --version 2.1.0 --locked` 安装固定 driver。两种 transport 共用真实 UI/原生 IPC 场景，不替换 Tauri invoke；截图、driver 日志和 `native-ipc.jsonl` 保留在入口报告的私有证据目录，Linux/macOS 使用用户缓存目录以保留跨会话证据。实际验证结论写对应 BMad 工件。
+后台原生复验统一用 `uv run --locked python -m autosar_tooling desktop --platform windows|linux|macos --binary <本次桌面构建路径>`。正式包追加 `--installed --source-checkout <已搬离的本次 owned 构建副本>`；必须用 checkout 外的实际解包应用，不得搬动用户工作树。`--builtin-only` 验证无官方档案、无 checkout、无开发工具／编译器的默认配置链，独立工程消费者阶段再提供声明工具；默认兼容／oracle 分支仍使用合法固定规范和旧 v1 拒绝条件。
 
-正式发行包使用相同入口追加 `--installed --source-checkout <发行构建时原始源码路径>`，`--binary` 指向 checkout 外实际解包的应用。先搬离仅属本次构建的源码副本，原始路径必须不存在；不得搬动用户工作树。应用不启动 Vite，从私有 cwd/config、复制的合法档案及外部 base CPython 开始，最小 PATH 不包含 Node/npm/uv/Cargo/rustc。Windows driver 与应用均在恢复首线程前登记同一测试 Job；清理回执须显示零受管进程。外部测试器依赖保留在测试环境，不当作安装应用依赖。
+Windows／Linux 验收不使用用户当前桌面或剪贴板：采用私有 WindowStation/Desktop 或 Xvfb、受管进程树、私有配置／日志与明确的离线隔离，清理只作用于本次 owned 资源。Windows 产品进程保持普通权限；如私有 station／进程专属防火墙需要提升，仅在用户授权后提升验收控制器，不提升被测产品、不关闭整台机器网络。外部 driver 不注入产品 PATH。截图和完整 IPC／清理回执留在私有 scratch，实际结论写对应 BMad 工件。
 
-Windows MSI、Ubuntu24.04 deb／解包 AppImage 已从不存在的原构建 checkout 完成真实隔离复验；Windows 不切换输入桌面，Linux 用受管 Xvfb 高位 display 和独占文件锁，等待本次 Xvfb 的 `-displayfd` 回执后连接。Linux 只启用抽象本地 X11 传输（关闭 TCP／文件路径 Unix listener），不修改 WSLg 的只读 `/tmp/.X11-unix`。源级 `verify` 和安装路径证据分开记录；没有验证系统级安装／升级或 WebView2 首装下载。
+此前 Windows MSI、Linux deb／解包 AppImage 的隔离复验是历史证据，不自动适用于 Epic 7 当前产物。当前双平台、不同真实输入、原字节／拒绝、性能／取消及独立 CAN/DID/N_Cr／恢复出口须按本次 spec 重新完成，不能由 helper smoke 或 build/test 推定。系统安装／升级、签名、公证、WebView2 首装及 macOS 无宿主范围如实另报。
 
 macOS 入口要求独立的非 console GUI 登录会话与 `cargo build --manifest-path src-tauri/Cargo.toml --features native-webdriver` 测试构建；只验收编辑、校验、保存与纯源码预览，同时检查本机预检／构建／运行按钮不可用。专用 capability 和内嵌 loopback WebDriver 只在此 feature/macOS 组合中启用，生产构建不启用。没有 macOS 隔离宿主时该入口标为未原生验证，不得改在用户桌面补测。
 
-“工作台设置”统一配置合法 XSD/MOD 与绝对 CPython/GCC/objdump/Git 路径；环境覆盖仍优先且不写回。配置默认存放于 Tauri `app_config_dir`；显式 `AUTOSAR_CONFIG_DIR` 指定独立绝对目录，后台验收必须设置，单独覆盖 Windows `APPDATA` 不保证隔离 Known Folder。切换目标、修改规范或工具会清除相应预检/交付成功态；取消操作须等原生 owner 关闭受管树，过期结果不会安装到最终目的地。设置失败保留旧配置及当前项目，官方档案不随包交付。
+“工作台设置”分别提交外观、规则与模块定义、执行工具类别；内置库存只读，扩展显式接纳并经工程预览保存持久化。外观／工具沿 Tauri `app_config_dir` 原子保存，执行工具环境覆盖优先且不写回；`AUTOSAR_CONFIG_DIR` 指定独立绝对目录，验收不能只覆盖 `APPDATA`。官方 XSD/MOD 属于兼容／开发路径，不替换默认规则。目标／工具／接纳身份变更使对应旧预检与确认失效，主题不重建工程或丢草稿；取消与晚结果按实际 ProcessOwner 归属围栏处理。
 
 ## 独立 ECU 集成工程
 
 核心 `generate_epic4_ecu` 命令消费同一个已验证标准计划：`cargo run --manifest-path core/Cargo.toml --bin generate_epic4_ecu -- --target <windows-x64-controlled-v1|linux-x64-controlled-v1> --xsd-archive <合法XSD绝对路径> --mod-archive <合法MOD绝对路径> --output <工程目录> --input <文件1.arxml> --input <文件2.arxml> ...`。先读取 JSON 预览，再附加 `--write --revision <完整revision>` 安装工程；`--handoff` 包含原输入和重建元数据。每份输入分别传 `--input`，不需要 `--repository`。过期预览、来源变化或用户修改会拒绝安装并保留已有内容。
+
+上述 CLI 是固定官方资源的兼容／开发入口，不是 R5 普通配置的依赖。R5 内置流程从真实已保存 Workspace 准备源码，默认交接为 `autosar-workbench-handoff-v2`；重导入在新空目录重建成员，并按本机可信规则身份、所需接纳扩展、source／rerender／seal 逐字节核对。原两类 v1 精确分派，不能把官方摘要改名当成原生规则。
+
+标准 ECU 可明确预览并初始化实际 `epic4-single-application-v1` 槽，只创建尚不存在的 live 源码和对应 manifest 成员。后续生成从当前用户字节形成 immutable application snapshot，不写回 live 树；拥有权清单、snapshot 与严格 seal 同时核验。修改生成文件、未知 owner／版本、过期输入或目的地冲突拒绝安装，保留旧有效输出。
 
 准备、预览和重导入只渲染源码并核对身份，不启动编译器。需要本机编译证据时显式运行 `--preflight`，报告为 `not_run|passed|failed`；不适用的本机/目标组合为 `not_run`，不升级为通过。实际预检和构建要求 CPython 3.12.9 与绝对 `AUTOSAR_CC`、`AUTOSAR_OBJDUMP`、`AUTOSAR_GIT`、`AUTOSAR_PYTHON`；Windows 使用固定 MSYS2 GCC 16.1.0 Rev5，Linux 使用固定 Ubuntu GCC 13.3.0/binutils，版本、目标和二进制摘要须符合包内工具链。失败报告实际来源和 owned 日志，不安装旧目标目录。
 
@@ -87,10 +93,10 @@ RTE周期组也可显式引用`RteUsedOsSchTblExpiryPointRef`／`RteBswUsedOsSch
 
 ## 新目标交接与工作台状态
 
-标准输入工程的“生成与构建”和“虚拟运行”页使用同一新目标交付面板。填写独立 ECU 输出目录，预览实际文件后确认生成；默认包含 `autosar-ecu-handoff-v1` 元数据。再填写工程之外的新空构建目录，执行“构建 ECU”和“验证 ECU 主机行为”。行为检查会在临时目录重新构建生产 HostBatch 入口，执行 CAN/DID、真实 N_Cr 超时恢复和非法批次拒绝；日志留在界面，过程不会写入仓库报告。
+标准输入的生成与运行工具窗口使用同一新目标交付流程。选择工程之外的 ECU 输出目录，预览实际文件及拥有权，再确认生成；默认 R5 包是 `autosar-workbench-handoff-v2`，显式兼容路径保留原 `autosar-ecu-handoff-v1`。构建另用新空目录与声明工具链；行为检查独立重新构建生产 HostBatch，检查 CAN/DID、真实 N_Cr 超时恢复和非法批次，不能从生成结果推定运行通过。
 
-交接包可整体搬移，在面板填写“重导入 ECU 目录”重新打开，再生成到另一目录。原字节输入、固定运行时、许可、外部 XSD/MOD 身份及每份生成源码会重新核对，不能用包内 JSON 直接恢复一个可信计划。旧 host-v1 保持原读取和离线运行入口。SHA-256 用于完整性检查，不提供发布者签名认证。
+交接包可整体搬移；v2 重导入显式选择新的空工作区目录，核对本机真实内置规则三字段、必需接纳扩展、输入／应用 snapshot／拥有权与重渲染闭包。v1 仍核对原外部 XSD/MOD 身份与完整生成源码，旧 host-v1 的读取和离线运行入口保留。不能用包内 JSON 自授权可信规则或计划；SHA-256 是完整性检查，不是发布者签名认证。
 
-保存、校验、显式预检、生成、构建和本次主机行为分别呈现实际结果；输入修改或重新打开使下游结果失效。完整SC1当前工程复验与实机状态不从有界向量推断。离线接收者执行 `<CPython3.12.9> tools/ecu-tool.py verify --project <封存源码目录> --build-directory <工程外的新空目录>`，只需要声明的 CPython/GCC/binutils/Git，不需要 checkout、uv、Rust 或 Node；仅重导入和再生成需要同版工作台以及合法、匹配的 XSD/MOD。包内保留所选 FreeRTOS 来源、补丁与 MIT 许可；产品代码只用于所有者授权的内部用途，不增加公开发布许可。
+保存、分域校验、显式预检、生成、构建与本次主机行为各自报告；输入／live 应用／目标或依赖身份变化使对应下游结果失效。离线接收者执行 `<CPython3.12.9> tools/ecu-tool.py verify --project <封存源码目录> --build-directory <工程外的新空目录>`，只需声明的 CPython/GCC/binutils/Git，不需要 checkout、uv、Rust 或 Node。v2 重导入／再生成需要兼容的同版工作台及精确所需扩展，不需要官方档案；v1 才保留合法匹配 XSD/MOD 要求。包内许可与既有有限主机能力声明不变，不增加实机、完整 SC1 或认证声明。
 
 最后的独立交接入口为`cargo test --manifest-path core/Cargo.toml --test end_to_end epic4_independent_handoff -- --exact`。该入口重新建立临时输入、搬移包、重导入、再生成、编译并核对完整CAN／DID／拒绝／恢复输出；完整主机等级还需执行既有OS／ARTI正式行为测试。BMad 4.22记录非实现者的实际复验结果，工作台不会把一次包内行为检查升级为当前工程完整SC1复验。

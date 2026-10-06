@@ -18,14 +18,45 @@ def prepare(
     platform: str,
     installed: bool,
     source_checkout: Path | None,
+    builtin_only: bool = False,
 ) -> None:
     if installed:
         if source_checkout is None or not source_checkout.is_absolute():
             raise RuntimeError(
                 "Installed verification requires an absolute unavailable build checkout"
             )
-        if source_checkout.exists():
+        availability_reason = "not_found"
+        stat_errno = None
+        try:
+            source_available = source_checkout.exists()
+        except PermissionError as error:
+            source_available = False
+            availability_reason = "caller_inaccessible"
+            stat_errno = error.errno
+        if source_available:
             raise RuntimeError(f"Build checkout must be unavailable: {source_checkout}")
+        (scratch / "source-checkout-boundary.json").write_text(
+            json.dumps(
+                {
+                    "sourceCheckout": str(source_checkout),
+                    "sourceCheckoutAvailable": False,
+                    "availabilityReason": availability_reason,
+                    "statErrno": stat_errno,
+                    "callerUid": os.getuid() if hasattr(os, "getuid") else None,
+                    "callerPid": os.getpid(),
+                    "platform": platform,
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+    if builtin_only:
+        if not installed:
+            raise RuntimeError("Builtin-only acceptance requires installed mode")
+        from autosar_tooling.native_builtin import prepare as prepare_builtin
+
+        prepare_builtin(scratch, platform, source_checkout)
+        return
     fixture = ROOT / "core/tests/fixtures/epic4/positive"
     shutil.copytree(fixture, scratch / "inputs")
     shutil.copytree(fixture, scratch / "expected")
@@ -59,6 +90,30 @@ def prepare(
     )
     (scratch / "app-work").mkdir()
     if platform != "macos":
+        if installed:
+            from autosar_tooling.native_consumer import hashes
+
+            reference = Path(os.environ["AUTOSAR_NATIVE_LEGACY_REFERENCE"]).resolve(
+                strict=True,
+            )
+            before = hashes(reference)
+            destination = scratch / "legacy"
+            shutil.copytree(reference, destination)
+            copied = hashes(destination)
+            after = hashes(reference)
+            if before != copied or before != after:
+                raise RuntimeError("Declared genuine v1 reference changed during private copy")
+            (scratch / "legacy-reference-copy.json").write_text(
+                json.dumps({
+                    "source": str(reference),
+                    "destination": str(destination),
+                    "before": before,
+                    "copied": copied,
+                    "after": after,
+                }, indent=2),
+                encoding="utf-8",
+            )
+            return
         suffix = ".exe" if platform == "windows" else ""
         target = (
             "windows-x64-controlled-v1"
@@ -81,9 +136,21 @@ def prepare(
         )
 
 
-def app_environment(scratch: Path, installed: bool) -> dict[str, str]:
+def app_environment(
+    scratch: Path, installed: bool, builtin_only: bool = False
+) -> dict[str, str]:
+    if builtin_only:
+        from autosar_tooling.native_builtin import (
+            app_environment as builtin_environment,
+        )
+
+        return builtin_environment(scratch, installed)
     environment = os.environ.copy()
-    for name in ("AUTOSAR_XSD_ARCHIVE", "AUTOSAR_MOD_ARCHIVE"):
+    for name in (
+        "AUTOSAR_XSD_ARCHIVE",
+        "AUTOSAR_MOD_ARCHIVE",
+        "AUTOSAR_NATIVE_LEGACY_REFERENCE",
+    ):
         environment.pop(name, None)
     environment.update(
         {

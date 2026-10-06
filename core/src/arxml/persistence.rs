@@ -147,6 +147,7 @@ impl PreparedSave {
         if workspace.save_revision() != revision {
             return Err("配置已在预览后改变，请重新查看 ARXML 改动再保存".into());
         }
+        workspace.ensure_sources_current()?;
         Ok(Self { workspace })
     }
 
@@ -163,14 +164,7 @@ impl PreparedSave {
 
 impl Workspace {
     pub fn prepare_save_previewed(mut self, revision: &str) -> Result<PreparedSave, String> {
-        self.validate()?;
-        if let Some(issue) = self
-            .issues
-            .iter()
-            .find(|issue| matches!(issue.severity, Severity::Error))
-        {
-            return Err(format!("{}: {}", issue.code, issue.message));
-        }
+        self.ensure_save_allowed()?;
         PreparedSave::validated(self, revision)
     }
 
@@ -433,8 +427,32 @@ impl Workspace {
 
     pub(super) fn ensure_sources_current(&self) -> Result<(), String> {
         for file in &self.files {
-            let disk = fs::read(&file.path)
-                .map_err(|error| format!("无法读取来源文件 {}: {error}", file.path.display()))?;
+            super::project::safe_path(&file.path, false)?;
+        }
+        if let Some(project) = &self.project {
+            super::project::safe_path(&project.path, false)?;
+            if super::project::read_bounded(&project.path)? != project.saved.as_bytes() {
+                return Err(
+                    "Project manifest was externally modified; reopen before changing or saving."
+                        .into(),
+                );
+            }
+            for (path, saved) in &project.application_bytes {
+                let path = project
+                    .path
+                    .parent()
+                    .ok_or("Project root is missing.")?
+                    .join(path);
+                super::project::safe_path(&path, false)?;
+                if super::project::read_bounded(&path)? != *saved {
+                    return Err(
+                        "Application source changed outside the owned project snapshot.".into(),
+                    );
+                }
+            }
+        }
+        for file in &self.files {
+            let disk = super::project::read_bounded(&file.path)?;
             if disk != file.saved.as_bytes() {
                 return Err(format!(
                     "文件已被外部修改，拒绝基于过期配置继续；请重新导入项目: {}",
@@ -446,6 +464,13 @@ impl Workspace {
     }
 
     pub(super) fn save_revision(&self) -> String {
+        self.save_revision_for_project(self.project.as_ref())
+    }
+
+    pub(super) fn save_revision_for_project(
+        &self,
+        membership: Option<&super::project::ProjectMembership>,
+    ) -> String {
         let mut digest = Sha256::new();
         for file in &self.files {
             let path = file.path.to_string_lossy();
@@ -454,33 +479,37 @@ impl Workspace {
                 digest.update(bytes);
             }
         }
+        digest.update(
+            serde_json::to_vec(&crate::rules::rule_set_identity())
+                .expect("Rule identity serializes"),
+        );
+        digest.update(
+            serde_json::to_vec(&self.definition_fingerprint())
+                .expect("Definition identity serializes"),
+        );
+        if let Some(project) = membership {
+            for bytes in [
+                project.path.to_string_lossy().as_bytes(),
+                project.saved.as_bytes(),
+                project.current.as_bytes(),
+            ] {
+                digest.update((bytes.len() as u64).to_le_bytes());
+                digest.update(bytes);
+            }
+            for (path, bytes) in &project.application_bytes {
+                digest.update(path.as_bytes());
+                digest.update((bytes.len() as u64).to_le_bytes());
+                digest.update(bytes);
+            }
+        }
         format!("{:x}", digest.finalize())
     }
 
     pub fn preview_save(&mut self) -> Result<SavePreview, String> {
-        self.validate()?;
-        if let Some(issue) = self
-            .issues
-            .iter()
-            .find(|issue| matches!(issue.severity, Severity::Error))
-        {
-            return Err(format!("{}: {}", issue.code, issue.message));
-        }
+        self.ensure_save_allowed()?;
         Ok(SavePreview {
             revision: self.save_revision(),
-            files: self
-                .files
-                .iter()
-                .map(|file| {
-                    let changed = file.saved != file.text;
-                    SavePreviewFile {
-                        path: file.path.display().to_string(),
-                        changed,
-                        before: changed.then(|| file.saved.clone()),
-                        after: changed.then(|| file.text.clone()),
-                    }
-                })
-                .collect(),
+            files: self.save_preview_files(),
         })
     }
 
@@ -492,27 +521,128 @@ impl Workspace {
     }
 
     pub fn save(&mut self) -> Result<WorkspaceView, String> {
-        self.validate()?;
-        if let Some(issue) = self
-            .issues
-            .iter()
-            .find(|i| matches!(i.severity, Severity::Error))
-        {
-            return Err(format!("{}: {}", issue.code, issue.message));
-        }
+        self.ensure_save_allowed()?;
         // Validation includes references across every imported file, including files this
         // edit leaves untouched. A stale untouched file would invalidate that result.
         self.save_sources()?;
         Ok(self.view())
     }
 
-    pub(super) fn save_sources(&mut self) -> Result<(), String> {
-        self.ensure_sources_current()?;
-        let dirty = self
+    pub(super) fn ensure_save_allowed(&mut self) -> Result<(), String> {
+        self.validate()?;
+        self.ensure_no_recovery_backups()?;
+        if self.uses_legacy_validation() {
+            if let Some(issue) = self
+                .issues
+                .iter()
+                .find(|issue| matches!(issue.severity, Severity::Error))
+            {
+                return Err(format!("{}: {}", issue.code, issue.message));
+            }
+        } else {
+            // Target-generation failures do not close safe configuration persistence.
+            for scope in &self.snapshot.validation {
+                if matches!(
+                    scope.scope,
+                    crate::project_model::ValidationScope::SourceSafety
+                        | crate::project_model::ValidationScope::Schema
+                ) {
+                    if let Some(issue) = scope
+                        .diagnostics
+                        .iter()
+                        .find(|issue| matches!(issue.severity, Severity::Error))
+                    {
+                        return Err(format!("{}: {}", issue.code, issue.message));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub(super) fn save_preview_files(&self) -> Vec<SavePreviewFile> {
+        let mut files: Vec<_> = self
             .files
             .iter()
-            .filter(|f| f.text != f.saved)
+            .map(|file| {
+                let changed = file.saved != file.text;
+                SavePreviewFile {
+                    path: file.path.display().to_string(),
+                    changed,
+                    before: changed.then(|| file.saved.clone()),
+                    after: changed.then(|| file.text.clone()),
+                }
+            })
+            .collect();
+        if let Some(project) = &self.project {
+            let changed = project.saved != project.current;
+            files.push(SavePreviewFile {
+                path: project.path.display().to_string(),
+                changed,
+                before: changed.then(|| project.saved.clone()),
+                after: changed.then(|| project.current.clone()),
+            });
+        }
+        files
+    }
+
+    fn ensure_no_recovery_backups(&self) -> Result<(), String> {
+        for path in self
+            .files
+            .iter()
+            .map(|file| &file.path)
+            .chain(self.project.iter().map(|project| &project.path))
+        {
+            let prefix_path = path.with_extension("arxml.autosar-config-");
+            let prefix = prefix_path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .ok_or("Recovery file path is not UTF-8.")?;
+            for entry in fs::read_dir(path.parent().ok_or("Source directory is missing.")?)
+                .map_err(|error| error.to_string())?
+            {
+                let entry = entry.map_err(|error| error.to_string())?;
+                if entry
+                    .file_name()
+                    .to_str()
+                    .is_some_and(|name| name.starts_with(prefix) && name.ends_with(".bak"))
+                {
+                    return Err(format!(
+                        "Unrecovered source backup prevents saving: {}",
+                        entry.path().display()
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub(super) fn save_sources(&mut self) -> Result<(), String> {
+        self.save_sources_with_cleanup(|backup| fs::remove_file(backup))
+    }
+
+    fn save_sources_with_cleanup(
+        &mut self,
+        remove_backup: impl Fn(&Path) -> std::io::Result<()>,
+    ) -> Result<(), String> {
+        self.ensure_sources_current()?;
+        self.ensure_no_recovery_backups()?;
+        let mut dirty = self
+            .files
+            .iter()
+            .filter(|file| file.text != file.saved)
+            .cloned()
             .collect::<Vec<_>>();
+        if let Some(project) = &self.project {
+            if project.current != project.saved {
+                dirty.push(SourceFile {
+                    path: project.path.clone(),
+                    text: project.current.clone(),
+                    saved: project.saved.clone(),
+                    original_name: None,
+                });
+            }
+        }
         let mut staged = Vec::new();
         for (index, file) in dirty.iter().enumerate() {
             let suffix = format!("arxml.autosar-config-{}-{index}", std::process::id());
@@ -547,7 +677,7 @@ impl Workspace {
                 }
                 return Err(error);
             }
-            staged.push((*file, stage, backup));
+            staged.push((file, stage, backup));
         }
         for index in 0..staged.len() {
             let (file, stage, backup) = &staged[index];
@@ -567,6 +697,14 @@ impl Workspace {
                 ));
             }
         }
+        // Publication is complete. Keep the in-memory baseline aligned with disk
+        // even when a backup must remain for manual recovery.
+        for file in &mut self.files {
+            file.saved = file.text.clone();
+        }
+        if let Some(project) = &mut self.project {
+            project.saved = project.current.clone();
+        }
         let mut cleanup_error = None;
         for (file, _, backup) in &staged {
             if fs::read_to_string(backup).ok().as_deref() != Some(&file.saved) {
@@ -576,16 +714,13 @@ impl Workspace {
                 ));
                 break;
             }
-            if let Err(error) = fs::remove_file(backup) {
+            if let Err(error) = remove_backup(backup) {
                 cleanup_error = Some(format!(
                     "已保存 ARXML，但无法清理备份 {}: {error}",
                     backup.display()
                 ));
                 break;
             }
-        }
-        for file in &mut self.files {
-            file.saved = file.text.clone();
         }
         if let Some(error) = cleanup_error {
             return Err(error);
@@ -618,6 +753,44 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[test]
+    fn published_save_keeps_memory_current_when_backup_cleanup_fails() {
+        let root = Scratch::new();
+        let directory = root.0.join("Project");
+        let preview =
+            crate::Workspace::preview_project_creation(&directory, "Project", "can-signals-v1")
+                .unwrap();
+        let mut workspace = crate::Workspace::create_project_previewed(&preview).unwrap();
+        let source = workspace.files[0].path.clone();
+        let before = workspace.files[0].saved.clone();
+        workspace.files[0].text.push_str("\n<!-- saved edit -->\n");
+        let project = workspace.project.as_mut().unwrap();
+        project.current.push('\n');
+        let error = workspace
+            .save_sources_with_cleanup(|_| {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "backup is locked",
+                ))
+            })
+            .unwrap_err();
+        assert!(error.contains("无法清理备份"), "{error}");
+        assert_ne!(fs::read_to_string(&source).unwrap(), before);
+        for file in &workspace.files {
+            assert_eq!(file.saved, file.text);
+            assert_eq!(fs::read_to_string(&file.path).unwrap(), file.saved);
+        }
+        let project = workspace.project.as_ref().unwrap();
+        assert_eq!(project.saved, project.current);
+        assert_eq!(fs::read_to_string(&project.path).unwrap(), project.saved);
+        workspace.ensure_sources_current().unwrap();
+        assert!(!workspace.view().dirty);
+        assert!(workspace.ensure_no_recovery_backups().is_err());
+        let backup =
+            source.with_extension(format!("arxml.autosar-config-{}-0.bak", std::process::id()));
+        assert_eq!(fs::read_to_string(backup).unwrap(), before);
     }
 
     #[test]

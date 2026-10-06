@@ -205,7 +205,7 @@
     },
     {
       "path": "runtime/generated-README.md",
-      "sha256": "d0597972148fd2a3e40662f82c9fbea623426fe5571f5dcbd6d31b6984986df8",
+      "sha256": "2220161e5ac02ade489a0507bc505803c362ef95a4f25e60b4b579ef6c42ed63",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1220,7 +1220,7 @@
     },
     {
       "path": "scripts/ecu_tools/owner.py",
-      "sha256": "f3f08c4f3fb1e30ae7e554cd6af83d8ffa8e1884f95c2a2c6deb3cec9dbe6e50",
+      "sha256": "db6796c37ca9e4193c811d011e1a448ba5c2538f5b128d63743c9f911bcefa69",
       "license": "Project-owned",
       "targets": [
         "windows-x64-controlled-v1",

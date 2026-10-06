@@ -28,10 +28,11 @@ pub fn verify() {
             path
         })
         .collect();
-    let mut workspace = Workspace::open(paths.clone(), dependencies.xsd_archive.clone()).unwrap();
+    let mut workspace =
+        Workspace::open_legacy(paths.clone(), dependencies.xsd_archive.clone()).unwrap();
     assert!(workspace.view().integration_candidate);
     let before = workspace
-        .integration_plan(&runtime, dependencies.mod_archive.clone())
+        .integration_plan_legacy(&runtime, dependencies.mod_archive.clone())
         .unwrap();
     let rx = before
         .description()
@@ -62,7 +63,7 @@ pub fn verify() {
         application_period_ms: Some(20),
     };
     let report = workspace
-        .edit_integration(&runtime, dependencies.mod_archive.clone(), edit)
+        .edit_integration_legacy(&runtime, dependencies.mod_archive.clone(), edit)
         .unwrap();
     let description = report.description.unwrap();
     assert_eq!(description.component.period_ms, 20);
@@ -92,7 +93,7 @@ pub fn verify() {
     );
     assert!(workspace.view().dirty);
     let preview = workspace
-        .preview_integration_save(&runtime, dependencies.mod_archive.clone())
+        .preview_integration_save_legacy(&runtime, dependencies.mod_archive.clone())
         .unwrap();
     assert_eq!(preview.files.iter().filter(|file| file.changed).count(), 4);
     for path in &paths {
@@ -154,7 +155,7 @@ pub fn verify() {
         },
     ] {
         let issues = workspace
-            .edit_integration(&runtime, dependencies.mod_archive.clone(), edit)
+            .edit_integration_legacy(&runtime, dependencies.mod_archive.clone(), edit)
             .err()
             .unwrap();
         assert!(
@@ -163,7 +164,7 @@ pub fn verify() {
                 .any(|issue| issue.object.is_some() && !issue.remedy.is_empty())
         );
         let unchanged = workspace
-            .preview_integration_save(&runtime, dependencies.mod_archive.clone())
+            .preview_integration_save_legacy(&runtime, dependencies.mod_archive.clone())
             .unwrap();
         assert_eq!(
             serde_json::to_vec(&preview).unwrap(),
@@ -175,7 +176,7 @@ pub fn verify() {
             .is_err()
     );
     let edited = workspace
-        .edit_integration(
+        .edit_integration_legacy(
             &runtime,
             dependencies.mod_archive.clone(),
             IntegrationEdit {
@@ -186,7 +187,7 @@ pub fn verify() {
         .unwrap();
     assert_eq!(edited.description.unwrap().component.period_ms, 25);
     let issues = workspace
-        .save_integration_previewed(
+        .save_integration_previewed_legacy(
             &runtime,
             dependencies.mod_archive.clone(),
             &preview.revision,
@@ -195,7 +196,7 @@ pub fn verify() {
         .unwrap();
     assert_eq!(issues[0].code, "SAVE_PREVIEW_STALE");
     let final_preview = workspace
-        .preview_integration_save(&runtime, dependencies.mod_archive.clone())
+        .preview_integration_save_legacy(&runtime, dependencies.mod_archive.clone())
         .unwrap();
     // Refuse an interrupted prior save's backup, and retain all original input.
     let changed_path = Path::new(
@@ -211,7 +212,7 @@ pub fn verify() {
         changed_path.with_extension(format!("arxml.autosar-config-{}-0.bak", std::process::id()));
     fs::write(&backup, b"prior interrupted save").unwrap();
     let issues = workspace
-        .save_integration_previewed(
+        .save_integration_previewed_legacy(
             &runtime,
             dependencies.mod_archive.clone(),
             &final_preview.revision,
@@ -228,15 +229,15 @@ pub fn verify() {
     }
     fs::remove_file(&backup).unwrap();
     let saved = workspace
-        .save_integration_previewed(
+        .save_integration_previewed_legacy(
             &runtime,
             dependencies.mod_archive.clone(),
             &final_preview.revision,
         )
         .unwrap();
     assert!(!workspace.view().dirty);
-    let reopened = Workspace::open(paths.clone(), dependencies.xsd_archive.clone()).unwrap();
-    let rechecked = reopened.inspect_integration(&runtime, dependencies.mod_archive.clone());
+    let reopened = Workspace::open_legacy(paths.clone(), dependencies.xsd_archive.clone()).unwrap();
+    let rechecked = reopened.inspect_integration_legacy(&runtime, dependencies.mod_archive.clone());
     assert_eq!(
         serde_json::to_vec(&saved).unwrap(),
         serde_json::to_vec(&rechecked).unwrap()
@@ -253,34 +254,39 @@ pub fn verify() {
             .contains("<!-- retained before period -->")
     );
     let old = workspace
-        .preview_integration_save(&runtime, dependencies.mod_archive.clone())
+        .preview_integration_save_legacy(&runtime, dependencies.mod_archive.clone())
         .unwrap();
     let external_path = scratch.0.join("unrelated.arxml");
     let external = originals["unrelated.arxml"].clone() + "\n<!-- external edit -->\n";
     fs::write(&external_path, &external).unwrap();
-    let result = workspace.inspect_integration(&runtime, dependencies.mod_archive.clone());
+    let result = workspace.inspect_integration_legacy(&runtime, dependencies.mod_archive.clone());
     assert!(result.description.is_none());
     assert_eq!(result.diagnostics[0].code, "SOURCE_CHANGED");
     assert!(
         workspace
-            .save_integration_previewed(&runtime, dependencies.mod_archive.clone(), &old.revision)
+            .save_integration_previewed_legacy(
+                &runtime,
+                dependencies.mod_archive.clone(),
+                &old.revision
+            )
             .is_err()
     );
     assert_eq!(fs::read_to_string(&external_path).unwrap(), external);
-    let dependency_workspace = Workspace::open(paths, dependencies.xsd_archive.clone()).unwrap();
-    let missing_mod =
-        dependency_workspace.inspect_integration(&runtime, scratch.0.join("missing-mod.zip"));
+    let dependency_workspace =
+        Workspace::open_legacy(paths, dependencies.xsd_archive.clone()).unwrap();
+    let missing_mod = dependency_workspace
+        .inspect_integration_legacy(&runtime, scratch.0.join("missing-mod.zip"));
     assert!(missing_mod.description.is_none());
     assert!(
         missing_mod.diagnostics.iter().any(|issue| issue.category
             == autosar_config_core::integration::DiagnosticCategory::Dependency)
     );
-    let partial = Workspace::open(
+    let partial = Workspace::open_legacy(
         vec![scratch.0.join("types.arxml")],
         dependencies.xsd_archive.clone(),
     )
     .unwrap();
-    let report = partial.inspect_integration(&runtime, dependencies.mod_archive.clone());
+    let report = partial.inspect_integration_legacy(&runtime, dependencies.mod_archive.clone());
     assert!(report.description.is_none());
     assert!(!report.diagnostics.is_empty());
 
@@ -298,12 +304,12 @@ pub fn verify() {
         })
         .collect();
     let mut mixed_workspace =
-        Workspace::open(mixed_paths.clone(), dependencies.xsd_archive.clone()).unwrap();
+        Workspace::open_legacy(mixed_paths.clone(), dependencies.xsd_archive.clone()).unwrap();
     let unchanged = mixed_workspace
-        .preview_integration_save(&runtime, dependencies.mod_archive.clone())
+        .preview_integration_save_legacy(&runtime, dependencies.mod_archive.clone())
         .unwrap();
     let issues = mixed_workspace
-        .edit_integration(
+        .edit_integration_legacy(
             &runtime,
             dependencies.mod_archive.clone(),
             IntegrationEdit {
@@ -323,7 +329,7 @@ pub fn verify() {
         serde_json::to_vec(&unchanged).unwrap(),
         serde_json::to_vec(
             &mixed_workspace
-                .preview_integration_save(&runtime, dependencies.mod_archive.clone())
+                .preview_integration_save_legacy(&runtime, dependencies.mod_archive.clone())
                 .unwrap()
         )
         .unwrap()

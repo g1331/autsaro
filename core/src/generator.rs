@@ -1,3 +1,4 @@
+pub mod delivery;
 pub(crate) mod output;
 pub(crate) mod render;
 
@@ -109,7 +110,7 @@ pub fn open_handoff(output: &Path, schema_archive: PathBuf) -> Result<Workspace,
     {
         return Err("交付包输入清单与映射不一致".into());
     }
-    let mut workspace = Workspace::open(paths, schema_archive)?;
+    let mut workspace = Workspace::open_legacy(paths, schema_archive)?;
     workspace.restore_handoff_source_names(original_names)?;
     let expected = crate::prepare_host_project(&mut workspace, target, true)?.into_files();
     let expected_names: Vec<_> = expected

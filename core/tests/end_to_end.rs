@@ -3,6 +3,18 @@ use workspace::{Scratch, archive, create_pair};
 #[path = "support/workspace.rs"]
 mod workspace;
 
+#[path = "support/epic7_rules.rs"]
+mod epic7_rules;
+
+#[path = "support/epic7_definitions.rs"]
+mod epic7_definitions;
+
+#[path = "support/epic7_workspace.rs"]
+mod epic7_workspace;
+
+#[path = "support/epic7_delivery.rs"]
+mod epic7_delivery;
+
 #[path = "support/can_contracts.rs"]
 mod can_contracts;
 

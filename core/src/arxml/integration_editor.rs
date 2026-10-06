@@ -1,28 +1,35 @@
-use super::{
-    Document, Patch, SavePreview, SavePreviewFile, Workspace, apply_patches, child_text,
-    patch_child, patch_param, path_of,
-};
+use super::persistence::Patch;
+use super::{Workspace, apply_patches, child_text, patch_child, patch_param, path_of};
 use crate::integration::{
     DiagnosticCategory, IntegrationEdit, IntegrationInspection, PlanDiagnostic, RuntimeCatalog,
     ValidatedIntegrationPlan, editor,
 };
+use crate::model::SavePreview;
+use roxmltree::Document;
 use std::path::PathBuf;
 
-fn failure(code: &str, message: impl Into<String>) -> Vec<PlanDiagnostic> {
-    vec![PlanDiagnostic {
-        category: DiagnosticCategory::Input, code: code.into(), file: None, object: None,
-        message: message.into(), remedy: "Resolve the named source/preview conflict and reopen or preview the original inputs again; recovery files must be preserved.".into(),
-    }]
+pub(super) fn failure(code: &str, message: impl Into<String>) -> Vec<PlanDiagnostic> {
+    vec![PlanDiagnostic { category: DiagnosticCategory::Input, code: code.into(), file: None, object: None,
+        message: message.into(), remedy: "Resolve the source/preview conflict and reopen or preview again; preserve recovery files.".into() }]
 }
 
 impl Workspace {
     pub fn prepare_integration_save_previewed(
         self,
+        _runtime: &RuntimeCatalog,
+        revision: &str,
+    ) -> Result<super::PreparedSave, Vec<PlanDiagnostic>> {
+        self.prepare_save_previewed(revision)
+            .map_err(|error| failure("SAVE_PREVIEW_STALE", error))
+    }
+
+    pub fn prepare_integration_save_previewed_legacy(
+        self,
         runtime: &RuntimeCatalog,
         mod_archive: PathBuf,
         revision: &str,
     ) -> Result<super::PreparedSave, Vec<PlanDiagnostic>> {
-        self.integration_plan(runtime, mod_archive)?;
+        self.integration_plan_legacy(runtime, mod_archive)?;
         super::PreparedSave::validated(self, revision)
             .map_err(|error| failure("SAVE_PREVIEW_STALE", error))
     }
@@ -30,15 +37,32 @@ impl Workspace {
     pub fn saved_integration_plan(
         &self,
         runtime: &RuntimeCatalog,
+    ) -> Result<ValidatedIntegrationPlan, Vec<PlanDiagnostic>> {
+        self.verify_saved_sources().map_err(|error| {
+            let code = if self.is_dirty() {
+                "SOURCE_DIRTY"
+            } else {
+                "SOURCE_CHANGED"
+            };
+            failure(code, error)
+        })?;
+        self.integration_plan(runtime)
+    }
+
+    pub fn saved_integration_plan_legacy(
+        &self,
+        runtime: &RuntimeCatalog,
         mod_archive: PathBuf,
     ) -> Result<ValidatedIntegrationPlan, Vec<PlanDiagnostic>> {
-        if self.files.iter().any(|file| file.text != file.saved) {
-            return Err(failure(
-                "SOURCE_DIRTY",
-                "Save all standard inputs before generating or exporting the ECU project.",
-            ));
-        }
-        self.integration_plan(runtime, mod_archive)
+        self.verify_saved_sources().map_err(|error| {
+            let code = if self.is_dirty() {
+                "SOURCE_DIRTY"
+            } else {
+                "SOURCE_CHANGED"
+            };
+            failure(code, error)
+        })?;
+        self.integration_plan_legacy(runtime, mod_archive)
     }
 
     pub fn open_ecu_handoff(
@@ -47,56 +71,69 @@ impl Workspace {
         runtime: &RuntimeCatalog,
     ) -> Result<Self, Vec<PlanDiagnostic>> {
         let package = crate::integration::open_ecu_handoff(output, dependencies, runtime)?;
-        let mut workspace = Self::open(package.input_paths(), dependencies.xsd_archive.clone())
-            .map_err(|e| failure("ECU_HANDOFF", e))?;
+        let mut workspace =
+            Self::open_legacy(package.input_paths(), dependencies.xsd_archive.clone())
+                .map_err(|error| failure("ECU_HANDOFF", error))?;
         workspace.integration_input_root = Some(package.input_root());
-        let actual = workspace.saved_integration_plan(runtime, dependencies.mod_archive.clone())?;
+        let actual =
+            workspace.saved_integration_plan_legacy(runtime, dependencies.mod_archive.clone())?;
         if serde_json::to_value(actual.description()).unwrap()
             != serde_json::to_value(package.plan().description()).unwrap()
         {
             return Err(failure(
                 "SOURCE_CHANGED",
-                "The delivered inputs changed while opening the ECU package.",
+                "Delivered inputs changed while opening the ECU package.",
             ));
         }
         Ok(workspace)
     }
 
-    pub fn inspect_integration(
+    pub fn inspect_integration(&self, runtime: &RuntimeCatalog) -> IntegrationInspection {
+        inspection(self.integration_plan(runtime))
+    }
+
+    pub fn inspect_integration_legacy(
         &self,
         runtime: &RuntimeCatalog,
         mod_archive: PathBuf,
     ) -> IntegrationInspection {
-        match self.integration_plan(runtime, mod_archive) {
-            Ok(plan) => IntegrationInspection {
-                profile: crate::integration::PROFILE.into(),
-                description: Some(plan.description().clone()),
-                diagnostics: Vec::new(),
-            },
-            Err(diagnostics) => IntegrationInspection {
-                profile: crate::integration::PROFILE.into(),
-                description: None,
-                diagnostics,
-            },
-        }
+        inspection(self.integration_plan_legacy(runtime, mod_archive))
     }
 
-    /// Apply only text-range edits derived from the current validated plan.
-    /// A failed final plan check restores all in-memory source bytes.
     pub fn edit_integration(
+        &mut self,
+        runtime: &RuntimeCatalog,
+        changes: IntegrationEdit,
+    ) -> Result<IntegrationInspection, Vec<PlanDiagnostic>> {
+        self.edit_integration_checked(runtime, None, changes)
+    }
+
+    pub fn edit_integration_legacy(
         &mut self,
         runtime: &RuntimeCatalog,
         mod_archive: PathBuf,
         changes: IntegrationEdit,
     ) -> Result<IntegrationInspection, Vec<PlanDiagnostic>> {
-        let plan = self.integration_plan(runtime, mod_archive.clone())?;
+        self.edit_integration_checked(runtime, Some(mod_archive), changes)
+    }
+
+    fn edit_integration_checked(
+        &mut self,
+        runtime: &RuntimeCatalog,
+        legacy_mod: Option<PathBuf>,
+        changes: IntegrationEdit,
+    ) -> Result<IntegrationInspection, Vec<PlanDiagnostic>> {
+        let plan = match &legacy_mod {
+            Some(archive) => self.integration_plan_legacy(runtime, archive.clone())?,
+            None => self.integration_plan(runtime)?,
+        };
         let fields = editor::fields(&plan, &changes)?;
         let mut patches: Vec<Vec<Patch>> = self.files.iter().map(|_| Vec::new()).collect();
         for field in &fields {
             let mut found = 0;
             for (index, file) in self.files.iter().enumerate() {
                 let document = Document::parse(&file.text).map_err(|error| {
-                    editor::issue(&plan, "EDIT_UNSAFE", &field.object, error.to_string())
+                    failure("EDIT_XML", format!("{}: {error}", file.path.display()))
                 })?;
                 for node in document.descendants().filter(|node| {
                     node.is_element()
@@ -119,69 +156,65 @@ impl Workspace {
                     &plan,
                     "EDIT_UNSAFE",
                     &field.object,
-                    "The selected text-range edit has no unique original source object.",
+                    "Text-range edit has no unique original source object.",
                 ));
             }
         }
-        let previous: Vec<_> = self.files.iter().map(|file| file.text.clone()).collect();
-        let checked: Result<ValidatedIntegrationPlan, Vec<PlanDiagnostic>> = (|| {
-            for (index, edits) in patches.iter_mut().enumerate() {
-                apply_patches(&mut self.files[index].text, edits)
-                    .map_err(|error| failure("EDIT_UNSAFE", error))?;
-            }
-            self.integration_plan(runtime, mod_archive)
-        })();
-        match checked {
-            Ok(plan) => {
-                if let Err(error) = self.refresh() {
-                    for (file, text) in self.files.iter_mut().zip(previous) {
-                        file.text = text;
-                    }
-                    let _ = self.refresh();
-                    return Err(failure("EDIT_UNSAFE", error));
-                }
-                Ok(IntegrationInspection {
-                    profile: crate::integration::PROFILE.into(),
-                    description: Some(plan.description().clone()),
-                    diagnostics: Vec::new(),
-                })
-            }
-            Err(issues) => {
-                for (file, text) in self.files.iter_mut().zip(previous) {
-                    file.text = text;
-                }
-                Err(issues)
-            }
+        let mut candidate = self.clone();
+        for (file, edits) in candidate.files.iter_mut().zip(&mut patches) {
+            apply_patches(&mut file.text, edits).map_err(|error| failure("EDIT_UNSAFE", error))?;
         }
+        candidate
+            .refresh()
+            .map_err(|error| failure("EDIT_UNSAFE", error))?;
+        let checked = match legacy_mod {
+            Some(archive) => candidate.integration_plan_legacy(runtime, archive)?,
+            None => {
+                candidate
+                    .check_configuration_transition(self)
+                    .map_err(|error| failure("EDIT_UNSAFE", error))?;
+                candidate.integration_plan(runtime)?
+            }
+        };
+        candidate.revision += 1;
+        let result = inspection(Ok(checked));
+        *self = candidate;
+        Ok(result)
     }
 
-    /// Standard-input preview validates the same plan, without passing through
-    /// the unrelated legacy host-v1 profile or serializing the source graph.
     pub fn preview_integration_save(
+        &self,
+        _runtime: &RuntimeCatalog,
+    ) -> Result<SavePreview, Vec<PlanDiagnostic>> {
+        let mut candidate = self.clone();
+        candidate
+            .preview_save()
+            .map_err(|error| failure("SAVE_UNSAFE", error))
+    }
+
+    pub fn preview_integration_save_legacy(
         &self,
         runtime: &RuntimeCatalog,
         mod_archive: PathBuf,
     ) -> Result<SavePreview, Vec<PlanDiagnostic>> {
-        self.integration_plan(runtime, mod_archive)?;
+        self.integration_plan_legacy(runtime, mod_archive)?;
         Ok(SavePreview {
             revision: self.save_revision(),
-            files: self
-                .files
-                .iter()
-                .map(|file| {
-                    let changed = file.saved != file.text;
-                    SavePreviewFile {
-                        path: file.path.display().to_string(),
-                        changed,
-                        before: changed.then(|| file.saved.clone()),
-                        after: changed.then(|| file.text.clone()),
-                    }
-                })
-                .collect(),
+            files: self.save_preview_files(),
         })
     }
 
     pub fn save_integration_previewed(
+        &mut self,
+        runtime: &RuntimeCatalog,
+        revision: &str,
+    ) -> Result<IntegrationInspection, Vec<PlanDiagnostic>> {
+        self.save_previewed(revision)
+            .map_err(|error| failure("SAVE_FAILED", error))?;
+        Ok(self.inspect_integration(runtime))
+    }
+
+    pub fn save_integration_previewed_legacy(
         &mut self,
         runtime: &RuntimeCatalog,
         mod_archive: PathBuf,
@@ -190,12 +223,29 @@ impl Workspace {
         if self.save_revision() != revision {
             return Err(failure(
                 "SAVE_PREVIEW_STALE",
-                "The in-memory inputs changed after preview; preview again before saving.",
+                "Inputs changed after preview; preview again.",
             ));
         }
-        self.integration_plan(runtime, mod_archive.clone())?;
+        self.integration_plan_legacy(runtime, mod_archive.clone())?;
         self.save_sources()
             .map_err(|error| failure("SAVE_FAILED", error))?;
-        Ok(self.inspect_integration(runtime, mod_archive))
+        Ok(self.inspect_integration_legacy(runtime, mod_archive))
+    }
+}
+
+fn inspection(
+    result: Result<ValidatedIntegrationPlan, Vec<PlanDiagnostic>>,
+) -> IntegrationInspection {
+    match result {
+        Ok(plan) => IntegrationInspection {
+            profile: crate::integration::PROFILE.into(),
+            description: Some(plan.description().clone()),
+            diagnostics: Vec::new(),
+        },
+        Err(diagnostics) => IntegrationInspection {
+            profile: crate::integration::PROFILE.into(),
+            description: None,
+            diagnostics,
+        },
     }
 }

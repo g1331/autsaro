@@ -1,3 +1,5 @@
+mod configuration;
+mod verification;
 mod workbench;
 
 use autosar_config_core::generator::StagedBuild;
@@ -153,11 +155,7 @@ async fn create_project(
 ) -> Result<Reply<WorkspaceView>, String> {
     background(state, move |state| {
         let operation = state.begin(&fingerprint, "create", OperationKind::Open)?;
-        let workspace = Workspace::create(
-            Path::new(&directory),
-            &name,
-            operation.snapshot.resources.xsd_archive.clone(),
-        )?;
+        let workspace = Workspace::create(Path::new(&directory), &name)?;
         let view = workspace.view();
         operation.publish(workspace, true, view)
     })
@@ -171,10 +169,7 @@ async fn open_project(
 ) -> Result<Reply<WorkspaceView>, String> {
     background(state, move |state| {
         let operation = state.begin(&fingerprint, "open", OperationKind::Open)?;
-        let workspace = Workspace::open(
-            paths.into_iter().map(PathBuf::from).collect(),
-            operation.snapshot.resources.xsd_archive.clone(),
-        )?;
+        let workspace = Workspace::open(paths.into_iter().map(PathBuf::from).collect())?;
         let view = workspace.view();
         operation.publish(workspace, true, view)
     })
@@ -185,22 +180,52 @@ async fn open_handoff_project(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
     directory: String,
+    new_workspace_directory: Option<String>,
 ) -> Result<Reply<WorkspaceView>, String> {
     background(state, move |state| {
         let operation = state.begin(&fingerprint, "open handoff", OperationKind::Open)?;
         let root = Path::new(&directory);
+        let metadata_path = root.join("handoff.json");
+        let file = std::fs::symlink_metadata(&metadata_path).map_err(|error| error.to_string())?;
+        if !file.is_file() || file.file_type().is_symlink() || file.len() > 50 * 1024 * 1024 {
+            return Err("Handoff metadata must be a bounded regular file".into());
+        }
         let metadata: serde_json::Value = serde_json::from_slice(
-            &std::fs::read(root.join("handoff.json")).map_err(|error| error.to_string())?,
+            &std::fs::read(&metadata_path).map_err(|error| error.to_string())?,
         )
         .map_err(|error| error.to_string())?;
         let workspace = match metadata["format"].as_str() {
-            Some("autosar-ecu-handoff-v1") => {
-                Workspace::open_ecu_handoff(root, &operation.snapshot.resources, &state.runtime)
-                    .map_err(|error| format!("{error:?}"))?
+            Some("autosar-workbench-handoff-v2") => {
+                let destination = new_workspace_directory
+                    .as_deref()
+                    .ok_or("Select a new empty workspace directory for a v2 snapshot import")?;
+                let builtin = autosar_config_core::definitions::DefinitionCatalog::builtin()?;
+                let catalog = operation
+                    .snapshot
+                    .workspace
+                    .as_deref()
+                    .map_or(&builtin, Workspace::definition_catalog);
+                return operation.commit(|session| {
+                    let imported = autosar_config_core::generator::delivery::open_handoff(
+                        root,
+                        Path::new(destination),
+                        catalog,
+                    )?;
+                    let view = imported.workspace.view();
+                    session.invalidate()?;
+                    session.workspace = Some(Arc::new(imported.workspace));
+                    Ok(view)
+                });
             }
+            Some("autosar-ecu-handoff-v1") => Workspace::open_ecu_handoff(
+                root,
+                operation.snapshot.legacy_resources()?,
+                &state.runtime,
+            )
+            .map_err(|error| format!("{error:?}"))?,
             Some("autosar-host-handoff-v1") => autosar_config_core::generator::open_handoff(
                 root,
-                operation.snapshot.resources.xsd_archive.clone(),
+                operation.snapshot.legacy_resources()?.xsd_archive.clone(),
             )?,
             _ => {
                 return Err(
@@ -377,14 +402,19 @@ async fn inspect_integration(
         let operation = state
             .begin(&fingerprint, "inspect integration", OperationKind::Read)
             .map_err(integration_failure)?;
-        let value = operation
+        let workspace = operation
             .snapshot
             .workspace()
-            .map_err(integration_failure)?
-            .inspect_integration(
-                &state.runtime,
-                operation.snapshot.resources.mod_archive.clone(),
-            );
+            .map_err(integration_failure)?;
+        let value = if workspace.uses_legacy_validation() {
+            let dependencies = operation
+                .snapshot
+                .legacy_resources()
+                .map_err(integration_failure)?;
+            workspace.inspect_integration_legacy(&state.runtime, dependencies.mod_archive.clone())
+        } else {
+            workspace.inspect_integration(&state.runtime)
+        };
         operation.commit(|_| Ok(value)).map_err(integration_failure)
     })
     .await
@@ -404,11 +434,19 @@ async fn edit_integration(
             .workspace()
             .map_err(integration_failure)?
             .clone();
-        let value = workspace.edit_integration(
-            &state.runtime,
-            operation.snapshot.resources.mod_archive.clone(),
-            changes,
-        )?;
+        let value = if workspace.uses_legacy_validation() {
+            let dependencies = operation
+                .snapshot
+                .legacy_resources()
+                .map_err(integration_failure)?;
+            workspace.edit_integration_legacy(
+                &state.runtime,
+                dependencies.mod_archive.clone(),
+                changes,
+            )?
+        } else {
+            workspace.edit_integration(&state.runtime, changes)?
+        };
         operation
             .publish(workspace, true, value)
             .map_err(integration_failure)
@@ -433,10 +471,16 @@ async fn preview_integration_save(
             .workspace()
             .map_err(integration_failure)?
             .clone();
-        let value = workspace.preview_integration_save(
-            &state.runtime,
-            operation.snapshot.resources.mod_archive.clone(),
-        )?;
+        let value = if workspace.uses_legacy_validation() {
+            let dependencies = operation
+                .snapshot
+                .legacy_resources()
+                .map_err(integration_failure)?;
+            workspace
+                .preview_integration_save_legacy(&state.runtime, dependencies.mod_archive.clone())?
+        } else {
+            workspace.preview_integration_save(&state.runtime)?
+        };
         operation
             .publish(workspace, false, value)
             .map_err(integration_failure)
@@ -453,16 +497,24 @@ async fn save_integration(
         let operation = state
             .begin(&fingerprint, "save integration", OperationKind::Read)
             .map_err(integration_failure)?;
-        let prepared = operation
+        let workspace = operation
             .snapshot
             .workspace()
             .map_err(integration_failure)?
-            .clone()
-            .prepare_integration_save_previewed(
+            .clone();
+        let prepared = if workspace.uses_legacy_validation() {
+            let dependencies = operation
+                .snapshot
+                .legacy_resources()
+                .map_err(integration_failure)?;
+            workspace.prepare_integration_save_previewed_legacy(
                 &state.runtime,
-                operation.snapshot.resources.mod_archive.clone(),
+                dependencies.mod_archive.clone(),
                 &revision,
-            )?;
+            )?
+        } else {
+            workspace.prepare_integration_save_previewed(&state.runtime, &revision)?
+        };
         operation
             .commit(|session| commit_save(session, prepared))
             .map_err(integration_failure)
@@ -474,11 +526,40 @@ fn ecu_plan(
     operation: &Operation,
     runtime: &RuntimeCatalog,
 ) -> Result<ValidatedIntegrationPlan, Vec<PlanDiagnostic>> {
-    operation
+    let workspace = operation
         .snapshot
         .workspace()
-        .map_err(integration_failure)?
-        .saved_integration_plan(runtime, operation.snapshot.resources.mod_archive.clone())
+        .map_err(integration_failure)?;
+    if workspace.uses_legacy_validation() {
+        let dependencies = operation
+            .snapshot
+            .legacy_resources()
+            .map_err(integration_failure)?;
+        workspace.saved_integration_plan_legacy(runtime, dependencies.mod_archive.clone())
+    } else {
+        workspace.saved_integration_plan(runtime)
+    }
+}
+
+fn prepare_ecu_for_operation<'a>(
+    operation: &Operation,
+    plan: &'a ValidatedIntegrationPlan,
+    handoff: bool,
+) -> Result<autosar_config_core::PreparedProject<'a>, Vec<PlanDiagnostic>> {
+    let workspace = operation
+        .snapshot
+        .workspace()
+        .map_err(integration_failure)?;
+    if workspace.uses_legacy_validation() {
+        autosar_config_core::prepare_ecu_project(plan, operation.snapshot.target, handoff)
+    } else {
+        autosar_config_core::prepared::prepare_ecu_project_for_workspace(
+            workspace,
+            plan,
+            operation.snapshot.target,
+            handoff,
+        )
+    }
 }
 
 #[tauri::command]
@@ -493,8 +574,7 @@ async fn preview_ecu_project(
             .begin(&fingerprint, "preview ECU", OperationKind::Read)
             .map_err(integration_failure)?;
         let plan = ecu_plan(&operation, &state.runtime)?;
-        let project =
-            autosar_config_core::prepare_ecu_project(&plan, operation.snapshot.target, handoff)?;
+        let project = prepare_ecu_for_operation(&operation, &plan, handoff)?;
         let value = project
             .preview(Path::new(&output_directory))
             .map_err(integration_failure)?;
@@ -520,8 +600,7 @@ async fn generate_ecu_project(
             .begin(&fingerprint, "generate ECU", OperationKind::Read)
             .map_err(integration_failure)?;
         let plan = ecu_plan(&operation, &state.runtime)?;
-        let project =
-            autosar_config_core::prepare_ecu_project(&plan, operation.snapshot.target, handoff)?;
+        let project = prepare_ecu_for_operation(&operation, &plan, handoff)?;
         let staged = project
             .stage_previewed(Path::new(&output_directory), &revision)
             .map_err(integration_failure)?;
@@ -557,8 +636,7 @@ async fn preflight_ecu(
             )
             .map_err(integration_failure)?;
         let plan = ecu_plan(&operation, &state.runtime)?;
-        let project =
-            autosar_config_core::prepare_ecu_project(&plan, operation.snapshot.target, handoff)?;
+        let project = prepare_ecu_for_operation(&operation, &plan, handoff)?;
         let value = if native {
             project.native_preflight(
                 operation
@@ -916,6 +994,22 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            configuration::project_projection,
+            configuration::read_project_source,
+            configuration::prepare_configuration_change,
+            configuration::apply_configuration_change,
+            configuration::import_definition_catalog,
+            configuration::remove_definition_catalog,
+            configuration::open_member_project,
+            configuration::preview_project_creation,
+            configuration::create_project_previewed,
+            configuration::preview_save_as_project,
+            configuration::save_as_project_previewed,
+            configuration::preview_application_initialization,
+            configuration::initialize_application_previewed,
+            configuration::configure_appearance,
+            configuration::verification_metrics,
+            verification::verification_owned_failure,
             workbench_capabilities,
             configure_validation_resources,
             configure_execution_tools,

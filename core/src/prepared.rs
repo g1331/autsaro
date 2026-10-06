@@ -1,5 +1,8 @@
 use crate::Workspace;
 use crate::generator;
+use crate::generator::delivery::{
+    ApplicationSlotDescriptor, HandoffMetadata, NativeGuard, NativeInputs,
+};
 use crate::integration::{DiagnosticCategory, PlanDiagnostic, ValidatedIntegrationPlan};
 use crate::resources::{AssetEntry, AssetInventory};
 use crate::target::BuildTarget;
@@ -54,6 +57,10 @@ pub struct PreparedProject<'a> {
     files: Vec<PreparedFile<'a>>,
     fingerprint: String,
     preflight: PreflightReport,
+    native_guard: Option<NativeGuard>,
+    native_metadata: Option<HandoffMetadata>,
+    definition_fingerprint: Option<String>,
+    application_slot: Option<ApplicationSlotDescriptor>,
 }
 
 impl<'a> PreparedProject<'a> {
@@ -76,8 +83,26 @@ impl<'a> PreparedProject<'a> {
         &self.preflight
     }
 
-    pub fn preview(self, output: &std::path::Path) -> Result<crate::GenerationPreview, String> {
-        generator::output::preview_prepared(&self.into_files(), output)
+    pub fn rule_set_identity(&self) -> Option<&crate::project_model::RuleSetIdentity> {
+        self.native_metadata
+            .as_ref()
+            .map(|metadata| &metadata.resource_identities.rule_set_identity)
+    }
+
+    pub fn definition_fingerprint(&self) -> Option<&str> {
+        self.definition_fingerprint.as_deref()
+    }
+
+    pub fn application_slot(&self) -> Option<&ApplicationSlotDescriptor> {
+        self.application_slot.as_ref()
+    }
+
+    pub fn preview(mut self, output: &std::path::Path) -> Result<crate::GenerationPreview, String> {
+        let guard = self.native_guard.take();
+        if let Some(guard) = &guard {
+            guard.verify(Some(output))?;
+        }
+        generator::output::preview_prepared_checked(&self.into_files(), output, guard.as_ref())
     }
 
     pub fn generate_previewed(
@@ -85,7 +110,7 @@ impl<'a> PreparedProject<'a> {
         output: &std::path::Path,
         revision: &str,
     ) -> Result<crate::GenerationReport, String> {
-        generator::output::generate_prepared(self.into_files(), output, Some(revision))
+        self.stage(output, Some(revision))?.commit()
     }
 
     pub fn stage_previewed(
@@ -93,7 +118,23 @@ impl<'a> PreparedProject<'a> {
         output: &std::path::Path,
         revision: &str,
     ) -> Result<generator::StagedGeneration, String> {
-        generator::output::StagedGeneration::new(self.into_files(), output, Some(revision))
+        self.stage(output, Some(revision))
+    }
+
+    pub fn generate(self, output: &std::path::Path) -> Result<crate::GenerationReport, String> {
+        self.stage(output, None)?.commit()
+    }
+
+    fn stage(
+        mut self,
+        output: &std::path::Path,
+        revision: Option<&str>,
+    ) -> Result<generator::StagedGeneration, String> {
+        let guard = self.native_guard.take();
+        if let Some(guard) = &guard {
+            guard.verify(Some(output))?;
+        }
+        generator::output::StagedGeneration::new_guarded(self.into_files(), output, revision, guard)
     }
 
     pub fn native_preflight(
@@ -112,6 +153,13 @@ impl<'a> PreparedProject<'a> {
                 self.target.spec().id
             ));
             return report;
+        }
+        if let Some(guard) = &self.native_guard {
+            if let Err(error) = guard.verify(None) {
+                report.status = PreflightStatus::Failed;
+                report.logs.push(error);
+                return report;
+            }
         }
         let result = (|| -> Result<(), String> {
             use crate::execution::ProcessSpec;
@@ -304,12 +352,53 @@ fn start<'a>(
     Ok(files)
 }
 
+struct NativePreparation {
+    metadata: HandoffMetadata,
+    definition_fingerprint: String,
+    preparation_identity: String,
+    guard: NativeGuard,
+    application_slot: Option<ApplicationSlotDescriptor>,
+}
+
+impl NativePreparation {
+    fn new(
+        files: &mut BTreeMap<String, PreparedFile<'_>>,
+        mut inputs: NativeInputs,
+        slot: Option<ApplicationSlotDescriptor>,
+        profile: &str,
+        target: BuildTarget,
+        handoff: bool,
+    ) -> Result<Self, String> {
+        inputs.manifest.profile_hint = profile.into();
+        inputs.refresh_snapshot_identity()?;
+        let snapshots = generator::delivery::populate_inputs(files, &mut inputs, slot.as_ref())?;
+        let metadata = generator::delivery::metadata(profile, target, &inputs, snapshots);
+        generator::delivery::ownership::validate_metadata(&metadata)?;
+        if handoff {
+            generator::delivery::insert_file(
+                files,
+                "handoff.json".into(),
+                Cow::Owned(generator::delivery::json_bytes(&metadata)?),
+            )?;
+        }
+        generator::delivery::append_native_readme(files)?;
+        Ok(Self {
+            metadata,
+            definition_fingerprint: inputs.definition_fingerprint,
+            preparation_identity: inputs.preparation_identity,
+            guard: inputs.guard,
+            application_slot: slot,
+        })
+    }
+}
+
 fn finish<'a>(
     target: BuildTarget,
     profile: &'static str,
     handoff: bool,
     mut files: BTreeMap<String, PreparedFile<'a>>,
     input_identity: Option<&str>,
+    native: Option<NativePreparation>,
 ) -> Result<PreparedProject<'a>, String> {
     let spec = target.spec();
     let toolchain_asset = AssetInventory::embedded()
@@ -405,10 +494,28 @@ fn finish<'a>(
         "handoff": handoff,
         "inputSha256": input_identity,
         "scope": "source-only preparation; native preflight not run",
+        "nativeDelivery": native.as_ref().map(|native| &native.metadata),
+        "definitionFingerprint": native.as_ref().map(|native| &native.definition_fingerprint),
     }))
     .map_err(|error| error.to_string())?;
     metadata.push(b'\n');
+    if native.is_none() {
+        // Legacy target bytes must not gain native-null fields or a new identity.
+        let mut value: serde_json::Value =
+            serde_json::from_slice(&metadata).map_err(|error| error.to_string())?;
+        value.as_object_mut().unwrap().remove("nativeDelivery");
+        value
+            .as_object_mut()
+            .unwrap()
+            .remove("definitionFingerprint");
+        metadata = serde_json::to_vec_pretty(&value).map_err(|error| error.to_string())?;
+        metadata.push(b'\n');
+    }
     insert(&mut files, "target.json".into(), Cow::Owned(metadata), None)?;
+    if let Some(native) = &native {
+        generator::delivery::tools::add(&mut files, &native.metadata)?;
+        generator::delivery::ownership::add_ledger(&mut files, &native.metadata)?;
+    }
     let mut digest = Sha256::new();
     for file in files.values() {
         digest.update((file.path.len() as u64).to_le_bytes());
@@ -420,7 +527,19 @@ fn finish<'a>(
             digest.update(asset.sha256.as_bytes());
         }
     }
+    if let Some(native) = &native {
+        digest.update(native.guard.revision_identity.as_bytes());
+    }
     let fingerprint = format!("{:x}", digest.finalize());
+    let (native_guard, native_metadata, definition_fingerprint, application_slot) = match native {
+        Some(native) => (
+            Some(native.guard),
+            Some(native.metadata),
+            Some(native.definition_fingerprint),
+            native.application_slot,
+        ),
+        None => (None, None, None, None),
+    };
     Ok(PreparedProject {
         target,
         profile,
@@ -432,6 +551,10 @@ fn finish<'a>(
             logs: Vec::new(),
         },
         fingerprint,
+        native_guard,
+        native_metadata,
+        definition_fingerprint,
+        application_slot,
     })
 }
 
@@ -440,7 +563,74 @@ pub fn prepare_ecu_project<'a>(
     target: BuildTarget,
     handoff: bool,
 ) -> Result<PreparedProject<'a>, Vec<PlanDiagnostic>> {
-    let rendered = plan.render_ecu_sources(target)?;
+    let native = if plan.description().rule_set_identity.is_some() {
+        Some(NativeInputs::from_plan(plan).map_err(PlanDiagnostic::source_closure)?)
+    } else {
+        None
+    };
+    prepare_ecu_sources(plan, target, handoff, native)
+}
+
+/// Workspace-aware native source preparation is the application/member entrypoint.
+/// A plan-only native call remains valid for the product reference application.
+pub fn prepare_ecu_project_for_workspace(
+    workspace: &Workspace,
+    plan: &ValidatedIntegrationPlan,
+    target: BuildTarget,
+    handoff: bool,
+) -> Result<PreparedProject<'static>, Vec<PlanDiagnostic>> {
+    if workspace.uses_legacy_validation() || plan.description().rule_set_identity.is_none() {
+        return Err(PlanDiagnostic::source_closure(
+            "Use explicit legacy preparation for legacy workspaces/plans.",
+        ));
+    }
+    let native = NativeInputs::from_workspace(
+        workspace,
+        plan.description().required_extension_definitions.clone(),
+    )
+    .map_err(PlanDiagnostic::source_closure)?;
+    if native.configuration.len() != plan.sources().len()
+        || !plan.sources().iter().all(|source| {
+            native.configuration.iter().any(|(path, bytes)| {
+                path == source.logical_path() && bytes.as_slice() == source.bytes()
+            })
+        })
+        || plan.description().rule_set_identity.as_ref()
+            != Some(&native.resources.rule_set_identity)
+    {
+        return Err(PlanDiagnostic::source_closure(
+            "The plan is stale or does not describe these saved authoritative source members.",
+        ));
+    }
+    if plan
+        .description()
+        .validation_dependencies
+        .get("definitions.sha256")
+        != Some(&native.definition_fingerprint)
+    {
+        let runtime = crate::integration::RuntimeCatalog::embedded()?;
+        let scoped = crate::integration::build_plan_native(
+            &native.sources().map_err(PlanDiagnostic::source_closure)?,
+            &native.guard.catalog,
+            &runtime,
+        )?;
+        prepare_ecu_sources(&scoped, target, handoff, Some(native))
+    } else {
+        prepare_ecu_sources(plan, target, handoff, Some(native))
+    }
+}
+
+fn prepare_ecu_sources(
+    plan: &ValidatedIntegrationPlan,
+    target: BuildTarget,
+    handoff: bool,
+    native: Option<NativeInputs>,
+) -> Result<PreparedProject<'static>, Vec<PlanDiagnostic>> {
+    let live_application = native
+        .as_ref()
+        .and_then(|inputs| inputs.application.first())
+        .map(|(_, bytes)| bytes.as_slice());
+    let rendered = plan.render_ecu_sources(target, live_application)?;
     let inventory = AssetInventory::embedded();
     let mut source_owners = BTreeMap::new();
     for asset in inventory.selected(target, "ecu") {
@@ -452,26 +642,63 @@ pub fn prepare_ecu_project<'a>(
     }
     let mut files = BTreeMap::new();
     for (path, bytes) in rendered {
+        if native.is_some()
+            && (path.starts_with("inputs/")
+                || (live_application.is_some() && path == generator::delivery::APPLICATION_OUTPUT))
+        {
+            continue;
+        }
         let source = source_owners
             .get(&path)
             .copied()
             .filter(|asset| asset.bytes == bytes.as_ref());
+        let bytes = match source {
+            Some(asset) => Cow::Borrowed(asset.bytes),
+            None => Cow::Owned(bytes.into_owned()),
+        };
         insert(&mut files, path, bytes, source).map_err(PlanDiagnostic::source_closure)?;
     }
-    if handoff {
-        let mut metadata =
-            serde_json::to_vec_pretty(&crate::integration::handoff::metadata(plan, target))
-                .map_err(|error| PlanDiagnostic::source_closure(error.to_string()))?;
-        metadata.push(b'\n');
-        insert(
-            &mut files,
-            "handoff.json".into(),
-            Cow::Owned(metadata),
-            None,
+    let native = if let Some(inputs) = native {
+        let slot = plan.application_slot_descriptor()?;
+        Some(
+            NativePreparation::new(
+                &mut files,
+                inputs,
+                Some(slot),
+                crate::integration::PROFILE,
+                target,
+                handoff,
+            )
+            .map_err(PlanDiagnostic::source_closure)?,
         )
-        .map_err(PlanDiagnostic::source_closure)?;
-    }
-    finish(target, "ecu", handoff, files, None).map_err(PlanDiagnostic::source_closure)
+    } else {
+        if handoff {
+            let mut metadata =
+                serde_json::to_vec_pretty(&crate::integration::handoff::metadata(plan, target))
+                    .map_err(|error| PlanDiagnostic::source_closure(error.to_string()))?;
+            metadata.push(b'\n');
+            insert(
+                &mut files,
+                "handoff.json".into(),
+                Cow::Owned(metadata),
+                None,
+            )
+            .map_err(PlanDiagnostic::source_closure)?;
+        }
+        None
+    };
+    let input_identity = native
+        .as_ref()
+        .map(|native| native.preparation_identity.clone());
+    finish(
+        target,
+        "ecu",
+        handoff,
+        files,
+        input_identity.as_deref(),
+        native,
+    )
+    .map_err(PlanDiagnostic::source_closure)
 }
 
 pub fn prepare_host_project(
@@ -479,7 +706,11 @@ pub fn prepare_host_project(
     target: BuildTarget,
     handoff: bool,
 ) -> Result<PreparedProject<'static>, String> {
-    let saved = if handoff {
+    let legacy = workspace.uses_legacy_validation();
+    if !legacy {
+        workspace.verify_saved_sources()?;
+    }
+    let saved = if legacy && handoff {
         Some(workspace.handoff_sources()?)
     } else {
         None
@@ -490,8 +721,12 @@ pub fn prepare_host_project(
     for (path, bytes) in generated {
         insert(&mut files, path, Cow::Owned(bytes), None)?;
     }
-    let readme =
-        generator::render::handoff_readme(workspace.diagnostic_profile(), target, handoff)?;
+    let readme = generator::render::handoff_readme(
+        workspace.diagnostic_profile(),
+        target,
+        handoff,
+        !legacy,
+    )?;
     insert(
         &mut files,
         "README.md".into(),
@@ -526,5 +761,26 @@ pub fn prepare_host_project(
             None,
         )?;
     }
-    finish(target, "host", handoff, files, Some(&input_identity))
+    if legacy {
+        finish(target, "host", handoff, files, Some(&input_identity), None)
+    } else {
+        let inputs = NativeInputs::from_workspace(workspace, Vec::new())?;
+        let native = NativePreparation::new(
+            &mut files,
+            inputs,
+            None,
+            generator::delivery::HOST_PROFILE,
+            target,
+            handoff,
+        )?;
+        let input_identity = native.preparation_identity.clone();
+        finish(
+            target,
+            "host",
+            handoff,
+            files,
+            Some(&input_identity),
+            Some(native),
+        )
+    }
 }

@@ -142,7 +142,9 @@ class BoundedProcessTests(unittest.TestCase):
 
     def test_timeout_closes_registered_group_and_keeps_logs(self) -> None:
         with tempfile.TemporaryDirectory() as name:
-            spec, path = self._spec(Path(name), "hang", 1)
+            # Allow the probe's five-second registration budget before testing
+            # deadline closure of all three generations, not partial startup.
+            spec, path = self._spec(Path(name), "hang")
             with self.assertRaisesRegex(OwnershipError, "timeout") as failure:
                 run_bounded(spec)
             records = _records(path, 3)
@@ -244,6 +246,133 @@ class BoundedProcessTests(unittest.TestCase):
             finally:
                 if owner is not None:
                     owner.close()
+
+    @unittest.skipUnless(sys.platform == "linux", "Linux adopted-child ownership")
+    def test_sibling_zombie_is_reaped_without_changing_root_exit_codes(self) -> None:
+        with tempfile.TemporaryDirectory() as name, Owner.start() as owner:
+            root = Path(name)
+            zombie_record = root / "adopted.pid"
+            release = root / "release"
+            script = (
+                "import os,sys,time\n"
+                "from pathlib import Path\n"
+                "child=os.fork()\n"
+                "if child == 0:\n"
+                "    adopted=os.fork()\n"
+                "    if adopted == 0:\n"
+                "        os._exit(0)\n"
+                "    Path(sys.argv[1]).write_text(str(adopted))\n"
+                "    os._exit(0)\n"
+                "os.waitpid(child,0)\n"
+                "while not Path(sys.argv[2]).exists():\n"
+                "    time.sleep(.01)\n"
+                "sys.exit(23)\n"
+            )
+            sibling = OwnedProcess(
+                ProcessSpec.seconds(
+                    [
+                        sys.executable,
+                        "-I",
+                        "-c",
+                        script,
+                        str(zombie_record),
+                        str(release),
+                    ],
+                    root,
+                    15,
+                    root,
+                    "probe:sibling-zombie",
+                ),
+                owner=owner,
+            )
+            try:
+                assert owner.process is not None
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    if zombie_record.exists():
+                        zombie = int(zombie_record.read_text())
+                        stat = Path(f"/proc/{zombie}/stat").read_text()
+                        fields = stat.rsplit(")", 1)[-1].split()
+                        if fields[0] == "Z" and int(fields[1]) == owner.process.pid:
+                            break
+                    time.sleep(0.01)
+                else:
+                    self.fail("Sibling descendant did not become an adopted zombie")
+                self.assertEqual(int(fields[2]), sibling.registration["pgid"])
+                process = OwnedProcess(
+                    ProcessSpec.seconds(
+                        [sys.executable, "-I", "-c", "import sys;sys.exit(17)"],
+                        root,
+                        5,
+                        root,
+                        "probe:independent-nonzero",
+                    ),
+                    owner=owner,
+                )
+                result = process.wait()
+                self.assertEqual(result.status, "exited")
+                self.assertEqual(result.exit_code, 17)
+                self.assertFalse(Path(f"/proc/{zombie}").exists())
+                release.touch()
+                sibling_result = sibling.wait()
+                self.assertEqual(sibling_result.status, "exited")
+                self.assertEqual(sibling_result.exit_code, 23)
+            finally:
+                release.touch()
+                if not sibling.finished:
+                    sibling.wait()
+
+    @unittest.skipUnless(sys.platform == "linux", "Linux registered-root ownership")
+    def test_pending_sibling_root_preserves_nonzero_exit_during_other_close(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as name, Owner.start() as owner:
+            root = Path(name)
+            sibling = OwnedProcess(
+                ProcessSpec.seconds(
+                    [sys.executable, "-I", "-c", "import sys;sys.exit(23)"],
+                    root,
+                    10,
+                    root,
+                    "probe:pending-sibling-exit",
+                ),
+                owner=owner,
+            )
+            try:
+                pid = int(sibling.registration["pid"])
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    fields = (
+                        Path(f"/proc/{pid}/stat")
+                        .read_bytes()
+                        .rsplit(b")", 1)[-1]
+                        .split()
+                    )
+                    if fields[0] == b"Z":
+                        break
+                    time.sleep(0.01)
+                else:
+                    self.fail(
+                        "Sibling root did not exit before its result was collected"
+                    )
+                result = OwnedProcess(
+                    ProcessSpec.seconds(
+                        [sys.executable, "-I", "-c", "import sys;sys.exit(17)"],
+                        root,
+                        5,
+                        root,
+                        "probe:other-scope-close",
+                    ),
+                    owner=owner,
+                ).wait()
+                self.assertEqual(result.status, "exited")
+                self.assertEqual(result.exit_code, 17)
+                sibling_result = sibling.wait()
+                self.assertEqual(sibling_result.status, "exited")
+                self.assertEqual(sibling_result.exit_code, 23)
+            finally:
+                if not sibling.finished:
+                    sibling.wait()
 
     def test_tool_completion_timeout_still_fails_and_closes_tree(self) -> None:
         with tempfile.TemporaryDirectory() as name:

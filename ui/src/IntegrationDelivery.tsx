@@ -1,3 +1,4 @@
+import { CopyText, OwnedLog } from './workbench/Dialog';
 import type { BuildTarget } from './types';
 import type { Workbench } from './workbench/useWorkbench';
 
@@ -30,9 +31,8 @@ export function IntegrationDelivery({
   if (!workspace) return null;
   const busy = Boolean(controller.busy);
   const locked = busy;
-  const sourceReady = !workspace.dirty && !controller.unapplied;
-  const disabled =
-    !native || busy || !sourceReady || Boolean(controller.capabilities?.resourceError);
+  const sourceReady = !workspace.dirty && !controller.projection?.dirty && !controller.unapplied;
+  const disabled = !native || busy || !sourceReady || Boolean(controller.capabilities?.ruleError);
   const executionReason = controller.capabilities?.nativeExecution
     ? (controller.capabilities.toolError ?? '')
     : '未执行：本机不支持所选目标执行';
@@ -42,9 +42,6 @@ export function IntegrationDelivery({
     Boolean(controller.capabilities.toolError);
   const notice = controller.notice?.text ?? '请选择新的交付目录；构建产物写入独立空目录。';
   const handoff = controller.generationKind === 'handoff';
-  function setHandoff(value: boolean) {
-    controller.setGenerationKind(value ? 'handoff' : 'project');
-  }
   const file = preview?.files.find((item) => item.path === selected);
   const labels = {
     pending: '未执行',
@@ -74,6 +71,41 @@ export function IntegrationDelivery({
           </p>
         </div>
       </div>
+      <section className="document-page">
+        <h3>用户 live 应用源</h3>
+        <p>
+          预览由实际组件契约提供槽、入口符号和
+          seed；确认只创建不存在的源并更新成员清单，生成输出只封存其快照，不写回 live 树。
+        </p>
+        <button
+          type="button"
+          disabled={disabled || Boolean(controller.actionReason('edit'))}
+          onClick={() => void controller.previewApplicationInitialization()}
+        >
+          预览初始化用户应用…
+        </button>
+        {controller.actionReason('edit') ? (
+          <p className="field-help">{controller.actionReason('edit')}</p>
+        ) : null}
+        {controller.applicationWarnings.map((warning, index) => (
+          <p key={index} className="notice info">
+            {warning}
+          </p>
+        ))}
+        {controller.applicationRecoveryFiles.length ? (
+          <>
+            <p className="error-text">后台保留以下恢复文件；勿删除或覆盖，先按实际警告处理。</p>
+            <ul>
+              {controller.applicationRecoveryFiles.map((path) => (
+                <li key={path} className="mono path-text">
+                  {path}
+                  <CopyText text={path} label="复制恢复路径" />
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+      </section>
       <ol className="stage-list">
         {stages.map(([name, state], index) => (
           <li className="stage" key={name}>
@@ -127,7 +159,7 @@ export function IntegrationDelivery({
             checked={handoff}
             disabled={busy || locked}
             onChange={(e) => {
-              setHandoff(e.target.checked);
+              controller.setGenerationKind(e.target.checked ? 'handoff' : 'project');
               changeOutput(output);
             }}
           />
@@ -235,8 +267,8 @@ export function IntegrationDelivery({
           <pre aria-label="ECU 文件预览">{file?.after ?? '二进制或不可显示文件'}</pre>
         </div>
       )}
-      {built && <pre aria-label="ECU 构建日志">{built.log}</pre>}
-      {verified && <pre aria-label="ECU 行为日志">{verified.log}</pre>}
+      {built && <OwnedLog text={built.log} label="ECU 构建日志" />}
+      {verified && <OwnedLog text={verified.log} label="ECU 行为日志" />}
     </div>
   );
 }

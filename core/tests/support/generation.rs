@@ -20,7 +20,8 @@ pub(super) fn saved_handoff_reopens_after_move_and_reproduces_host_sources() {
     let signal = &xml[start..end];
     fs::write(&source, xml.replacen(signal, "", 1)).unwrap();
     fs::write(&split, format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd\"><AR-PACKAGES><AR-PACKAGE><SHORT-NAME>Alpha</SHORT-NAME><ELEMENTS>{signal}</ELEMENTS></AR-PACKAGE></AR-PACKAGES></AUTOSAR>\n")).unwrap();
-    let mut original = Workspace::open(vec![source.clone(), split.clone()], archive()).unwrap();
+    let mut original =
+        Workspace::open_legacy(vec![source.clone(), split.clone()], archive()).unwrap();
     let output = temp.0.join("Handoff");
     let preview =
         generator::preview_handoff(&mut original, &output, tooling::native_target()).unwrap();
@@ -129,7 +130,7 @@ pub(super) fn handoff_rejects_dirty_stale_and_modified_output_without_losing_old
             .contains("外部修改")
     );
     assert_eq!(fs::read(output.join("inputs/000.arxml")).unwrap(), original);
-    let mut reopened = Workspace::open(vec![source], archive()).unwrap();
+    let mut reopened = Workspace::open_legacy(vec![source], archive()).unwrap();
     fs::write(output.join("inputs/000.arxml"), b"owner changed this input").unwrap();
     assert!(generator::generate_handoff(&mut reopened, &output, tooling::native_target()).is_err());
     assert_eq!(
@@ -154,7 +155,7 @@ pub(super) fn source_junction_cannot_be_imported_for_handoff() {
         "{}",
         String::from_utf8_lossy(&linked.stderr)
     );
-    let result = Workspace::open(vec![alias.join("Alpha.arxml")], archive());
+    let result = Workspace::open_legacy(vec![alias.join("Alpha.arxml")], archive());
     assert!(result.err().unwrap().contains("重解析点"));
     fs::remove_dir(&alias).unwrap();
     assert!(temp.0.join("Alpha/Alpha.arxml").exists());

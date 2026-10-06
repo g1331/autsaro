@@ -9,6 +9,8 @@ use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::path::Path;
 
+pub(crate) const APPLICATION_SOURCE_PATH: &str = "application/Application.c";
+
 /// A complete deterministic source project from the same validated plan.
 /// No unchecked constructor or caller-supplied source replacements exist.
 pub struct EcuIntegrationFiles {
@@ -42,6 +44,75 @@ fn reject(message: impl Into<String>) -> Vec<PlanDiagnostic> {
 }
 
 impl ValidatedIntegrationPlan {
+    /// The sole current native application producer. Paths are relative to the
+    /// authoritative project root, not the generated immutable source package.
+    pub fn application_slot_descriptor(
+        &self,
+    ) -> Result<generator::delivery::ApplicationSlotDescriptor, Vec<PlanDiagnostic>> {
+        let component = &self.description().component;
+        let contract = self.component_contract_files()?;
+        let generated_headers = contract
+            .files()
+            .iter()
+            .filter(|(path, _)| path.starts_with("include/") && path.ends_with(".h"))
+            .map(|(path, _)| path.clone())
+            .collect();
+        Ok(generator::delivery::ApplicationSlotDescriptor {
+            producer_slot: generator::delivery::APPLICATION_SLOT.into(),
+            component_path: component.component.clone(),
+            source_paths: vec![APPLICATION_SOURCE_PATH.into()],
+            generated_headers,
+            entry_symbols: vec![
+                "Ecu_ApplicationInitialize".into(),
+                component.periodic_symbol.clone(),
+                "Ecu_ApplicationInspect".into(),
+                component.service.runnable_symbol.clone(),
+            ],
+        })
+    }
+
+    /// Trusted create-only seed; never merges with or overwrites a user source.
+    pub fn application_seed_files(&self) -> Result<Vec<(String, Vec<u8>)>, Vec<PlanDiagnostic>> {
+        Ok(vec![(
+            APPLICATION_SOURCE_PATH.into(),
+            self.render_reference_application()?,
+        )])
+    }
+
+    fn render_reference_application(&self) -> Result<Vec<u8>, Vec<PlanDiagnostic>> {
+        let component = &self.description().component;
+        let read = component
+            .data_ports
+            .iter()
+            .find(|port| port.read)
+            .ok_or_else(|| reject("The validated application read port is missing."))?;
+        let write = component
+            .data_ports
+            .iter()
+            .find(|port| !port.read)
+            .ok_or_else(|| reject("The validated application write port is missing."))?;
+        let substitutions = [
+            (
+                "APP_HEADER",
+                format!(
+                    "Rte_{}.h",
+                    c_name(component.component.rsplit('/').next().unwrap())
+                ),
+            ),
+            ("RX_INITIAL", read.initial_value.to_string()),
+            ("TX_INITIAL", write.initial_value.to_string()),
+            ("READ_API", read.api_symbol.clone()),
+            ("WRITE_API", write.api_symbol.clone()),
+            ("SERVER_API", component.service.runnable_symbol.clone()),
+            ("PERIODIC_API", component.periodic_symbol.clone()),
+            (
+                "DATATYPE",
+                c_name(component.service.array_type.rsplit('/').next().unwrap()),
+            ),
+        ];
+        render_template("runtime/ecu/templates/Application.c.in", &substitutions)
+    }
+
     pub fn ecu_handoff_files(
         &self,
         target: BuildTarget,
@@ -62,10 +133,11 @@ impl ValidatedIntegrationPlan {
         })
     }
 
-    pub(crate) fn render_ecu_sources(
-        &self,
+    pub(crate) fn render_ecu_sources<'a>(
+        &'a self,
         target: BuildTarget,
-    ) -> Result<BTreeMap<String, Cow<'_, [u8]>>, Vec<PlanDiagnostic>> {
+        application: Option<&'a [u8]>,
+    ) -> Result<BTreeMap<String, Cow<'a, [u8]>>, Vec<PlanDiagnostic>> {
         let plan = self.description();
         let contract = self.component_contract_files()?;
         let mut files = BTreeMap::new();
@@ -491,33 +563,20 @@ impl ValidatedIntegrationPlan {
             ("PERIODIC_API", component.periodic_symbol.clone()),
             ("DATATYPE", datatype),
         ];
-        for (name, template_path) in [
-            ("src/Rte.c", "runtime/ecu/templates/Rte.c.in"),
-            (
-                "src/Application.c",
-                "runtime/ecu/templates/Application.c.in",
-            ),
-        ] {
-            let template = AssetInventory::embedded()
-                .get(template_path)
-                .ok_or_else(|| {
-                    reject(format!(
-                        "The trusted C template is missing: {template_path}"
-                    ))
-                })?;
-            let mut source = std::str::from_utf8(template.bytes)
-                .map_err(|error| reject(error.to_string()))?
-                .to_owned();
-            for (placeholder, value) in &substitutions {
-                source = source.replace(&format!("@{placeholder}@"), value);
-            }
-            if source.contains('@') {
-                return Err(reject(
-                    "A generated C template contains an unresolved placeholder.",
-                ));
-            }
-            files.insert(name.into(), Cow::Owned(source.into_bytes()));
-        }
+        files.insert(
+            "src/Rte.c".into(),
+            Cow::Owned(render_template(
+                "runtime/ecu/templates/Rte.c.in",
+                &substitutions,
+            )?),
+        );
+        files.insert(
+            "src/Application.c".into(),
+            match application {
+                Some(bytes) => Cow::Borrowed(bytes),
+                None => Cow::Owned(self.render_reference_application()?),
+            },
+        );
         for source in self.sources() {
             files.insert(
                 format!("inputs/{}", source.logical_path()),
@@ -565,4 +624,33 @@ impl ValidatedIntegrationPlan {
         );
         Ok(files)
     }
+}
+
+fn render_template(
+    path: &str,
+    substitutions: &[(&str, String)],
+) -> Result<Vec<u8>, Vec<PlanDiagnostic>> {
+    let asset = AssetInventory::embedded()
+        .get(path)
+        .ok_or_else(|| reject(format!("The trusted C template is missing: {path}")))?;
+    let mut tail = std::str::from_utf8(asset.bytes).map_err(|error| reject(error.to_string()))?;
+    let mut result = String::with_capacity(tail.len());
+    while let Some((before, token)) = tail.split_once('@') {
+        result.push_str(before);
+        let (name, rest) = token
+            .split_once('@')
+            .ok_or_else(|| reject("A C template contains an unterminated placeholder."))?;
+        let value = substitutions
+            .iter()
+            .find(|(key, _)| *key == name)
+            .ok_or_else(|| {
+                reject(format!(
+                    "A C template contains an unknown placeholder: {name}"
+                ))
+            })?;
+        result.push_str(&value.1);
+        tail = rest;
+    }
+    result.push_str(tail);
+    Ok(result.into_bytes())
 }

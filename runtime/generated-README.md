@@ -30,4 +30,4 @@ The native protocol accepts the legacy host commands documented in the workbench
 
 {{INPUT_NOTE}}
 
-SHA-256 detects accidental modification, not publisher authenticity. Keep the package's tool version and target identity intact. Reimport reconstructs the original saved inputs using a separately and legally obtained matching R24-11 XSD archive, then compares the complete regenerated source closure. It does not silently run a compiler or rewrite an old package.
+SHA-256 detects accidental modification, not publisher authenticity. Keep the package's tool version and target identity intact. Reimport follows the versioned input and resource contract described above, reconstructs the original saved inputs, and compares the complete regenerated source closure. It does not silently run a compiler or rewrite an old package.

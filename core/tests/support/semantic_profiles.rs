@@ -23,7 +23,7 @@ pub(super) fn verify() {
     let scratch = super::Scratch::new();
     let target = super::tooling::native_target();
     let settings = super::tooling::execution_settings();
-    let mut workspace = Workspace::create(
+    let mut workspace = Workspace::create_legacy(
         &scratch.0.join("legacy-input"),
         "SemanticHost",
         schema::schema_archive(root),

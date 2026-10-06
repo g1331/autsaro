@@ -56,26 +56,39 @@ def _reap_group(pgid: int) -> None:
             return
 
 
-def _escaped_child(scope: str, pgid: int) -> bool:
+def _escaped_child(scope: str, pgid: int, registered_roots: set[int]) -> bool:
     if sys.platform != "linux":
         return False
     tasks = Path(f"/proc/{os.getpid()}/task")
+    pids: set[str] = set()
     try:
-        records = list(tasks.glob("*/children"))
-        pids = {
-            item
-            for record in records
-            for item in record.read_text(encoding="ascii").split()
-        }
+        for record in tasks.glob("*/children"):
+            try:
+                pids.update(record.read_text(encoding="ascii").split())
+            except FileNotFoundError:
+                # Connection threads can exit after the proc snapshot; a
+                # vanished task is not an unobservable live child.
+                continue
     except OSError:
         return True  # An unobservable adopted child cannot establish clean closure.
     marker = f"ECU_OWNER_SCOPE={scope}".encode()
     for item in pids:
         pid = int(item)
         try:
-            if os.getpgid(pid) != pgid and marker in Path(
-                f"/proc/{pid}/environ"
-            ).read_bytes().split(b"\0"):
+            if os.getpgid(pid) == pgid:
+                continue
+            fields = Path(f"/proc/{pid}/stat").read_bytes().rsplit(b")", 1)[-1].split()
+            if (
+                fields[0] == b"Z"
+                and int(fields[1]) == os.getpid()
+                and pid not in registered_roots
+            ):
+                # A subreaper can adopt an exited member of another scope.
+                # Reap that exact child; never steal a launcher's Popen status.
+                reaped, _ = os.waitpid(pid, os.WNOHANG)
+                if reaped == pid:
+                    continue
+            if marker in Path(f"/proc/{pid}/environ").read_bytes().split(b"\0"):
                 return True
         except ProcessLookupError:
             continue
@@ -300,8 +313,15 @@ class Registry:
         scope.child.poll()
         if scope.child.returncode is not None:
             _reap_group(scope.pgid)
+        # Poll every registered launcher through Popen before reaping adopted
+        # descendants, so a sibling's original nonzero exit remains observable.
+        registered_roots = {
+            entry.child.pid
+            for entry in self.scopes.values()
+            if entry.child.poll() is None
+        }
         unconfirmed = _group_alive(scope.pgid) or _escaped_child(
-            scope.identity, scope.pgid
+            scope.identity, scope.pgid, registered_roots
         )
         status = (
             "cleanup_unconfirmed"

@@ -76,9 +76,10 @@ pub fn validated_integration_plan() {
         })
         .collect();
     let workspace =
-        autosar_config_core::Workspace::open(paths, dependencies.xsd_archive.clone()).unwrap();
+        autosar_config_core::Workspace::open_legacy(paths, dependencies.xsd_archive.clone())
+            .unwrap();
     let workspace_plan = workspace
-        .integration_plan(&runtime, dependencies.mod_archive.clone())
+        .integration_plan_legacy(&runtime, dependencies.mod_archive.clone())
         .unwrap_or_else(|issues| panic!("{issues:?}"));
     assert_eq!(
         serde_json::to_vec(description).unwrap(),
@@ -93,14 +94,16 @@ pub fn validated_integration_plan() {
             path
         })
         .collect();
-    let stale =
-        autosar_config_core::Workspace::open(copied.clone(), dependencies.xsd_archive.clone())
-            .unwrap();
+    let stale = autosar_config_core::Workspace::open_legacy(
+        copied.clone(),
+        dependencies.xsd_archive.clone(),
+    )
+    .unwrap();
     let mut external = fs::read(&copied[0]).unwrap();
     external.extend_from_slice(b"\n<!-- external edit -->\n");
     fs::write(&copied[0], &external).unwrap();
     let issues = stale
-        .integration_plan(&runtime, dependencies.mod_archive.clone())
+        .integration_plan_legacy(&runtime, dependencies.mod_archive.clone())
         .err()
         .expect("A stale workspace must not produce an integration plan");
     assert!(issues.iter().any(|issue| issue.code == "SOURCE_CHANGED"));

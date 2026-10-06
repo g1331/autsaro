@@ -1,3 +1,4 @@
+import { CopyText, OwnedLog } from '../workbench/Dialog';
 import type { Workbench } from '../workbench/useWorkbench';
 import { CircleAlert, CircleCheck, FolderOpen, MonitorPlay } from 'lucide-react';
 import { stageLabels } from '../workbench/useDelivery';
@@ -7,7 +8,6 @@ export function VirtualPage({ controller }: { controller: Workbench }) {
     unapplied,
     stages,
     built,
-    setPage,
     peerDirectory,
     chooseDirectory,
     setPeerDirectory,
@@ -56,7 +56,12 @@ export function VirtualPage({ controller }: { controller: Workbench }) {
       {(!built || stages.build.state !== 'done' || unapplied) && (
         <div className="page-guidance">
           当前配置尚未完成可运行的主机目标构建。
-          <button type="button" onClick={() => setPage(unapplied ? 'editor' : 'build')}>
+          <button
+            type="button"
+            onClick={() =>
+              controller.openDocument({ kind: unapplied ? 'communication' : 'delivery' })
+            }
+          >
             前往{unapplied ? '配置' : '生成与构建'}
           </button>
         </div>
@@ -158,15 +163,19 @@ export function VirtualPage({ controller }: { controller: Workbench }) {
               {virtualResult.passed ? '通过' : '未通过'}
             </h3>
             <ul className="events-list">
-              {virtualResult.events.map((event, index) => (
+              {virtualResult.events.slice(-100).map((event, index) => (
                 <li key={index} className="mono">
                   {event}
                 </li>
               ))}
             </ul>
+            {virtualResult.events.length > 100 && (
+              <p className="field-help">显示最近 100 条事件；完整返回事件可复制。</p>
+            )}
+            <CopyText text={virtualResult.events.join('\n')} label="复制完整运行事件" />
             <details>
               <summary>完整运行日志</summary>
-              <pre>{virtualResult.log}</pre>
+              <OwnedLog text={virtualResult.log} label="真实运行日志" />
             </details>
           </div>
         )}

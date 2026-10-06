@@ -12,10 +12,22 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+mod application;
+mod changes;
 mod host_profile;
 mod integration_editor;
 mod persistence;
+mod project;
+mod projection;
+mod standard_template;
 mod xml;
+
+pub use application::{ApplicationInitializationOutcome, ApplicationInitializationPreview};
+
+pub use project::{
+    ApplicationInput, GenerationInputSnapshot, GenerationSnapshot, ProjectCreationPreview,
+    ProjectFilePreview, ProjectInput, ProjectManifest,
+};
 
 pub use persistence::{PreparedSave, SaveFailure};
 
@@ -52,24 +64,48 @@ pub struct Workspace {
     signals: Vec<SignalView>,
     diagnostic: Option<DiagnosticView>,
     issues: Vec<Issue>,
-    schema_zip: PathBuf,
+    schema_zip: Option<PathBuf>,
     integration_input_root: Option<PathBuf>,
+    catalog: std::sync::Arc<crate::definitions::DefinitionCatalog>,
+    snapshot: std::sync::Arc<projection::SourceSnapshot>,
+    epoch: String,
+    next_identity: u64,
+    revision: u64,
+    project: Option<project::ProjectMembership>,
 }
 
 impl Workspace {
-    pub fn set_validation_schema(&mut self, archive: PathBuf) {
-        self.schema_zip = archive;
+    pub fn set_legacy_validation_schema(&mut self, archive: PathBuf) -> Result<(), String> {
+        if self.schema_zip.is_none() {
+            return Err("Builtin validation cannot be replaced by external resources.".into());
+        }
+        self.schema_zip = Some(archive);
+        Ok(())
+    }
+
+    pub fn uses_legacy_validation(&self) -> bool {
+        self.schema_zip.is_some()
+    }
+
+    pub fn definition_fingerprint(&self) -> Result<String, String> {
+        crate::rules::rule_set_identity()?;
+        Ok(self.snapshot.definition_fingerprint.clone())
     }
 
     pub fn verify_saved_sources(&self) -> Result<(), String> {
-        if self.files.iter().any(|file| file.text != file.saved) {
+        if self.files.iter().any(|file| file.text != file.saved)
+            || self
+                .project
+                .as_ref()
+                .is_some_and(|project| project.current != project.saved)
+        {
             return Err("请先保存全部 ARXML，再执行交付操作".into());
         }
         self.ensure_sources_current()
     }
 }
 
-fn load_sources(files: Vec<PathBuf>, schema_zip: PathBuf) -> Result<Workspace, String> {
+fn load_sources(files: Vec<PathBuf>, schema_zip: Option<PathBuf>) -> Result<Workspace, String> {
     if files.is_empty() {
         return Err("请选择至少一份 .arxml 文件".into());
     }
@@ -113,25 +149,32 @@ fn load_sources(files: Vec<PathBuf>, schema_zip: PathBuf) -> Result<Workspace, S
         if !path
             .extension()
             .is_some_and(|e| e.eq_ignore_ascii_case("arxml"))
-            || !unique.insert(path.clone())
+            || !unique.insert(path.to_string_lossy().to_uppercase())
         {
             return Err(format!("文件不是唯一的 .arxml: {}", path.display()));
         }
         if fs::metadata(&path).map_err(|e| e.to_string())?.len() > 50 * 1024 * 1024 {
             return Err(format!("单份 ARXML 不得超过 50 MiB: {}", path.display()));
         }
-        let text = fs::read_to_string(&path)
+        let text = String::from_utf8(project::read_bounded(&path)?)
             .map_err(|e| format!("{} 必须是 UTF-8 ARXML: {e}", path.display()))?;
+        if text.contains("<!DOCTYPE") || text.contains("<!ENTITY") {
+            return Err(format!(
+                "{}: DTD and entity declarations are not accepted.",
+                path.display()
+            ));
+        }
         let doc = Document::parse(&text).map_err(|e| format!("{}: {e}", path.display()))?;
         if doc.root_element().tag_name().namespace() != Some(NS)
             || doc.root_element().tag_name().name() != "AUTOSAR"
         {
             return Err(format!("{} 不是 R24-11 AUTOSAR 文档", path.display()));
         }
-        if !doc
-            .root_element()
-            .attribute((XSI, "schemaLocation"))
-            .is_some_and(|s| s.contains("AUTOSAR_00053.xsd"))
+        if schema_zip.is_some()
+            && !doc
+                .root_element()
+                .attribute((XSI, "schemaLocation"))
+                .is_some_and(|s| s.contains("AUTOSAR_00053.xsd"))
         {
             return Err(format!(
                 "{} 未声明 AUTOSAR_00053.xsd；不猜测 ARXML 发布版本",
@@ -146,19 +189,21 @@ fn load_sources(files: Vec<PathBuf>, schema_zip: PathBuf) -> Result<Workspace, S
         });
     }
     sources.sort_by(|a, b| a.path.cmp(&b.path));
-    let schema_issues = schema::validate_files(
-        &schema_zip,
-        &sources
-            .iter()
-            .map(|s| (s.path.as_path(), s.text.as_str()))
-            .collect::<Vec<_>>(),
-    )?;
-    if let Some(first) = schema_issues.first() {
-        return Err(format!(
-            "导入前 XSD 校验失败 {}: {}",
-            first.file.as_deref().unwrap_or(""),
-            first.message
-        ));
+    if let Some(archive) = &schema_zip {
+        let schema_issues = schema::validate_files(
+            archive,
+            &sources
+                .iter()
+                .map(|s| (s.path.as_path(), s.text.as_str()))
+                .collect::<Vec<_>>(),
+        )?;
+        if let Some(first) = schema_issues.first() {
+            return Err(format!(
+                "导入前 XSD 校验失败 {}: {}",
+                first.file.as_deref().unwrap_or(""),
+                first.message
+            ));
+        }
     }
     let name = sources
         .iter()
@@ -181,6 +226,12 @@ fn load_sources(files: Vec<PathBuf>, schema_zip: PathBuf) -> Result<Workspace, S
         issues: Vec::new(),
         schema_zip,
         integration_input_root: None,
+        catalog: std::sync::Arc::new(crate::definitions::DefinitionCatalog::builtin()?),
+        snapshot: std::sync::Arc::new(projection::SourceSnapshot::default()),
+        epoch: projection::new_epoch(),
+        next_identity: 0,
+        revision: 0,
+        project: None,
     };
     workspace.refresh()?;
     if workspace
@@ -220,7 +271,16 @@ fn load_sources(files: Vec<PathBuf>, schema_zip: PathBuf) -> Result<Workspace, S
 }
 
 impl Workspace {
-    pub fn create(directory: &Path, name: &str, schema_zip: PathBuf) -> Result<Self, String> {
+    pub fn create(directory: &Path, name: &str) -> Result<Self, String> {
+        let preview = Self::preview_project_creation(directory, name, "can-empty-v1")?;
+        Self::create_project_previewed(&preview)
+    }
+
+    pub fn create_legacy(
+        directory: &Path,
+        name: &str,
+        schema_zip: PathBuf,
+    ) -> Result<Self, String> {
         if !valid_name(name) {
             return Err(
                 "工程名须以 ASCII 字母开头，且仅含字母、数字和下划线（最多 128 字节）".into(),
@@ -239,11 +299,15 @@ impl Workspace {
             .open(&path)
             .map_err(|e| format!("不会覆盖已有 ARXML {}: {e}", path.display()))?;
         std::io::Write::write_all(&mut file, text.as_bytes()).map_err(|e| e.to_string())?;
-        load_sources(vec![path], schema_zip)
+        load_sources(vec![path], Some(schema_zip))
     }
 
-    pub fn open(paths: Vec<PathBuf>, schema_zip: PathBuf) -> Result<Self, String> {
-        load_sources(paths, schema_zip)
+    pub fn open(paths: Vec<PathBuf>) -> Result<Self, String> {
+        load_sources(paths, None)
+    }
+
+    pub fn open_legacy(paths: Vec<PathBuf>, schema_zip: PathBuf) -> Result<Self, String> {
+        load_sources(paths, Some(schema_zip))
     }
 
     pub(crate) fn preparation_input_identity(&self) -> String {
@@ -296,16 +360,7 @@ impl Workspace {
 
     pub fn view(&self) -> WorkspaceView {
         WorkspaceView {
-            integration_candidate: self.files.iter().any(|file| {
-                Document::parse(&file.text).ok().is_some_and(|document| {
-                    document.descendants().any(|node| {
-                        node.is_element()
-                            && node.tag_name().namespace() == Some(NS)
-                            && node.tag_name().name() == "SYSTEM"
-                            && child_text(node, "CATEGORY").as_deref() == Some("ECU_EXTRACT")
-                    })
-                })
-            }),
+            integration_candidate: self.snapshot.integration_candidate,
             name: self.name.clone(),
             files: self
                 .files
@@ -363,7 +418,7 @@ impl Workspace {
             signals: self.signals.clone(),
             diagnostic: self.diagnostic.clone(),
             issues: self.issues.clone(),
-            dirty: self.files.iter().any(|file| file.saved != file.text),
+            dirty: self.is_dirty(),
         }
     }
 
@@ -1054,18 +1109,10 @@ impl Workspace {
         Ok(sources)
     }
 
-    /// Check the current standard inputs through the single Epic 4 plan path.
-    /// Unsaved in-memory edits can be previewed, but external changes to their
-    /// saved sources are rejected before the plan is constructed.
-    pub fn integration_plan(
+    fn integration_sources(
         &self,
-        runtime: &crate::integration::RuntimeCatalog,
-        mod_archive: PathBuf,
-    ) -> Result<crate::integration::ValidatedIntegrationPlan, Vec<crate::integration::PlanDiagnostic>>
-    {
-        use crate::integration::{
-            DiagnosticCategory, InputSource, PlanDependencies, PlanDiagnostic,
-        };
+    ) -> Result<Vec<crate::integration::InputSource>, Vec<crate::integration::PlanDiagnostic>> {
+        use crate::integration::{DiagnosticCategory, InputSource, PlanDiagnostic};
         let issue = |code: &str, message: String| {
             vec![PlanDiagnostic {
             category: DiagnosticCategory::Input, code: code.into(), file: None, object: None,
@@ -1123,10 +1170,39 @@ impl Workspace {
                     .map_err(|issue| vec![issue])
             })
             .collect::<Result<_, _>>()?;
+        Ok(sources)
+    }
+
+    pub fn integration_plan(
+        &self,
+        runtime: &crate::integration::RuntimeCatalog,
+    ) -> Result<crate::integration::ValidatedIntegrationPlan, Vec<crate::integration::PlanDiagnostic>>
+    {
+        if self.uses_legacy_validation() {
+            return Err(integration_editor::failure(
+                "VALIDATION_MODE",
+                "Use explicit legacy resources for a legacy workspace.",
+            ));
+        }
+        crate::integration::build_plan_native(&self.integration_sources()?, &self.catalog, runtime)
+    }
+
+    pub fn integration_plan_legacy(
+        &self,
+        runtime: &crate::integration::RuntimeCatalog,
+        mod_archive: PathBuf,
+    ) -> Result<crate::integration::ValidatedIntegrationPlan, Vec<crate::integration::PlanDiagnostic>>
+    {
+        let archive = self.schema_zip.clone().ok_or_else(|| {
+            integration_editor::failure(
+                "VALIDATION_MODE",
+                "Legacy integration requires explicit official resources.",
+            )
+        })?;
         crate::integration::build_plan(
-            &sources,
-            &PlanDependencies {
-                xsd_archive: self.schema_zip.clone(),
+            &self.integration_sources()?,
+            &crate::integration::PlanDependencies {
+                xsd_archive: archive,
                 mod_archive,
             },
             runtime,
@@ -1135,14 +1211,27 @@ impl Workspace {
 
     pub fn validate(&mut self) -> Result<WorkspaceView, String> {
         self.refresh()?;
-        self.issues.extend(schema::validate_files(
-            &self.schema_zip,
-            &self
-                .files
-                .iter()
-                .map(|f| (f.path.as_path(), f.text.as_str()))
-                .collect::<Vec<_>>(),
-        )?);
+        if let Some(archive) = &self.schema_zip {
+            self.issues.extend(schema::validate_files(
+                archive,
+                &self
+                    .files
+                    .iter()
+                    .map(|f| (f.path.as_path(), f.text.as_str()))
+                    .collect::<Vec<_>>(),
+            )?);
+        } else {
+            self.issues
+                .extend(self.snapshot.validation.iter().flat_map(|scope| {
+                    scope.diagnostics.iter().map(|diagnostic| Issue {
+                        severity: diagnostic.severity.clone(),
+                        code: diagnostic.code.clone(),
+                        message: diagnostic.message.clone(),
+                        file: diagnostic.file.clone(),
+                        path: diagnostic.path.clone(),
+                    })
+                }));
+        }
         let paths = self.all_paths()?;
         for file in &self.files {
             let doc = Document::parse(&file.text).map_err(|e| e.to_string())?;

@@ -1,3 +1,4 @@
+import { OwnedLog } from '../workbench/Dialog';
 import type { Workbench } from '../workbench/useWorkbench';
 import { Boxes, CircleCheck, Hammer } from 'lucide-react';
 import { buildSteps, stageLabels } from '../workbench/useDelivery';
@@ -8,7 +9,6 @@ export function BuildPage({ controller }: { controller: Workbench }) {
     unapplied,
     stages,
     workspace,
-    setPage,
     legacyTarget,
     disabled,
     changeTarget,
@@ -62,7 +62,11 @@ export function BuildPage({ controller }: { controller: Workbench }) {
           生成前须应用更改、保存配置并完成无阻断错误的校验。
           <button
             type="button"
-            onClick={() => setPage(unapplied || workspace.dirty ? 'editor' : 'diagnostics')}
+            onClick={() =>
+              unapplied || workspace.dirty || controller.projection?.dirty
+                ? controller.openDocument({ kind: 'communication' })
+                : controller.setToolWindow('problems')
+            }
           >
             前往{unapplied || workspace.dirty ? '配置' : '诊断'}
           </button>
@@ -167,7 +171,7 @@ export function BuildPage({ controller }: { controller: Workbench }) {
           <p className="mono path-text">{built.binaryPath}</p>
           <details>
             <summary>构建日志</summary>
-            <pre>{built.log}</pre>
+            <OwnedLog text={built.log} label="真实构建日志" />
           </details>
         </div>
       )}

@@ -154,9 +154,10 @@ pub fn generated_tables() {
                 path
             })
             .collect();
-        let mut workspace = Workspace::open(paths, dependencies.xsd_archive.clone()).unwrap();
+        let mut workspace =
+            Workspace::open_legacy(paths, dependencies.xsd_archive.clone()).unwrap();
         let initial = workspace
-            .integration_plan(&runtime, dependencies.mod_archive.clone())
+            .integration_plan_legacy(&runtime, dependencies.mod_archive.clone())
             .unwrap();
         let app = initial
             .description()
@@ -168,7 +169,7 @@ pub fn generated_tables() {
         assert_eq!(app.table_start, Some(10 - offset));
         assert_eq!(app.expiry_offset, Some(offset));
         workspace
-            .edit_integration(
+            .edit_integration_legacy(
                 &runtime,
                 dependencies.mod_archive.clone(),
                 IntegrationEdit {
@@ -178,7 +179,7 @@ pub fn generated_tables() {
             )
             .unwrap();
         let edited = workspace
-            .integration_plan(&runtime, dependencies.mod_archive.clone())
+            .integration_plan_legacy(&runtime, dependencies.mod_archive.clone())
             .unwrap();
         assert_eq!(edited.description().component.period_ms, 20);
         let app = edited
@@ -191,13 +192,17 @@ pub fn generated_tables() {
         assert_eq!(app.table_start, Some(20 - offset));
         assert_eq!(app.expiry_offset, Some(offset));
         let save = workspace
-            .preview_integration_save(&runtime, dependencies.mod_archive.clone())
+            .preview_integration_save_legacy(&runtime, dependencies.mod_archive.clone())
             .unwrap();
         workspace
-            .save_integration_previewed(&runtime, dependencies.mod_archive.clone(), &save.revision)
+            .save_integration_previewed_legacy(
+                &runtime,
+                dependencies.mod_archive.clone(),
+                &save.revision,
+            )
             .unwrap();
         let project = workspace
-            .integration_plan(&runtime, dependencies.mod_archive.clone())
+            .integration_plan_legacy(&runtime, dependencies.mod_archive.clone())
             .unwrap()
             .ecu_integration_files(super::tooling::native_target())
             .unwrap();

@@ -1703,7 +1703,7 @@ impl Workspace {
         self.signals = signals;
         self.diagnostic = diagnostic;
         self.issues = issues;
-        Ok(())
+        self.rebuild_snapshot()
     }
     pub(super) fn global_pdu_for(&self, system_path: &str) -> Result<String, String> {
         let prefix = format!("/{}/EcuCCfg/", self.name);

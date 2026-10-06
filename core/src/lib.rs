@@ -1,14 +1,19 @@
 pub mod arxml;
 pub mod arxml_render;
+pub mod definitions;
 pub mod execution;
 pub mod generator;
 pub mod host;
 pub mod integration;
 pub mod model;
 pub mod prepared;
+pub mod project_model;
 pub mod resources;
+pub mod rules;
 pub mod schema;
 pub mod target;
+#[cfg(feature = "verification-metrics")]
+pub mod verification;
 
 pub use arxml::Workspace;
 pub use model::{

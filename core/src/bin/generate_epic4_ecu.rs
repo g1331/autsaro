@@ -73,9 +73,9 @@ fn execute() -> Result<(), String> {
     let diagnostics =
         |issues| serde_json::to_string_pretty(&issues).unwrap_or_else(|error| error.to_string());
     let runtime = RuntimeCatalog::embedded().map_err(diagnostics)?;
-    let workspace = Workspace::open(inputs, dependencies.xsd_archive)?;
+    let workspace = Workspace::open_legacy(inputs, dependencies.xsd_archive)?;
     let plan = workspace
-        .integration_plan(&runtime, dependencies.mod_archive)
+        .integration_plan_legacy(&runtime, dependencies.mod_archive)
         .map_err(diagnostics)?;
     let project = prepare_ecu_project(&plan, target, handoff).map_err(diagnostics)?;
     let preflight = if preflight_requested && target.is_native() {

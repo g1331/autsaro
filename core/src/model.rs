@@ -184,6 +184,12 @@ pub struct GenerationPreviewFile {
     pub status: String,
     pub before: Option<String>,
     pub after: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub producer_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub snapshot_of: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

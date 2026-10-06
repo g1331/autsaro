@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-27-2026 18:43
-last_updated: 10-03-2026 19:44
+last_updated: 10-06-2026
 project: Autosar
 project_key: NOKEY
 tracking_system: file-system
@@ -37,15 +37,16 @@ story_location: _bmad-output/implementation-artifacts
 # Historical Epic 4 baseline: 4844e1d (2026-09-28); its completed scope remains unchanged.
 # Entry conditions and dependencies: ../planning-artifacts/implementation-readiness.md
 # Epic 4 entry/dependency notes are historical; all 22 stories have completed.
-# R5 is formal Epic 7; native-rule amendment planning gate PASS, all 11 stories remain backlog.
+# R5 is formal Epic 7; Stories 7.1-7.10 are development-complete, while 7.11 is review pending the deferred CI release acceptance.
 # Epic 4 complete: all 22 stories, applicable host SC1 behavior and independent handoff passed through BMad.
 # Epic 2 / Story 2.1 merged into candidate R7 without implementation or completion.
 # Historical scope, backlog and retained obligations: ../planning-artifacts/epics.md#diagnostic-carryover
 # Removed from the independent queue by the authorized planning update on 2026-10-03.
 # Original R5 architecture: 2039020; original story plan: d1be8cb (2026-10-03).
 # Current native-rule amendment: product-owned builtin rules; official XSD/MOD are development references, not normal user setup.
-# Story 7.1/7.2 titles migrate with their stable IDs and existing states; no implementation upgrade.
-# Next product entry is Story 7.1 after its development spec; not old Epic 5/6 by numeric order.
+# Stable Story IDs remain unchanged. The 2026-10-06 user request limits this handoff to development and unit/integration tests.
+# Native desktop, hardware and full installed acceptance are deferred to the later CI stage; no new isolation facilities are required here.
+# Development completion and the original unverified release exits are recorded separately in spec-epic-7-configurator.md.
 # Remaining roadmap candidates are not implementation-ready or registered here.
 development_status:
   epic-1: done
@@ -89,18 +90,18 @@ development_status:
   epic-6: backlog
   epic-6-retrospective: optional
 
-  epic-7: backlog
-  7-1-以内置规则安全打开并检查真实工程: backlog
-  7-2-使用内置定义检查参数约束与真实引用: backlog
-  7-3-按定义应用参数与引用并安全保存: backlog
-  7-4-预览并原子应用多对象参数与引用修改: backlog
-  7-5-安全创建改名和移除配置实例: backlog
-  7-6-从原创模板建立可搬移的工程: backlog
-  7-7-在统一工程壳层中使用全部真实操作: backlog
-  7-8-保护草稿并完成键盘与问题焦点接力: backlog
-  7-9-保存分层设置并迁入暂定身份: backlog
-  7-10-独立预览源码并保护用户代码再生成: backlog
-  7-11-独立复核发行配置链与完整工程交接: backlog
+  epic-7: in-progress
+  7-1-以内置规则安全打开并检查真实工程: done
+  7-2-使用内置定义检查参数约束与真实引用: done
+  7-3-按定义应用参数与引用并安全保存: done
+  7-4-预览并原子应用多对象参数与引用修改: done
+  7-5-安全创建改名和移除配置实例: done
+  7-6-从原创模板建立可搬移的工程: done
+  7-7-在统一工程壳层中使用全部真实操作: done
+  7-8-保护草稿并完成键盘与问题焦点接力: done
+  7-9-保存分层设置并迁入暂定身份: done
+  7-10-独立预览源码并保护用户代码再生成: done
+  7-11-独立复核发行配置链与完整工程交接: review
   epic-7-retrospective: optional
 action_items:
   - id: "epic-4-retro-item-1-watchdog-cleanup-failure"

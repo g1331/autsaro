@@ -1,11 +1,14 @@
 # Classic CAN 配置工作台
 
-本地桌面工作台：为一个 ECU 新建或导入 AUTOSAR Classic R24-11 ARXML 配置，编辑受支持的 CAN 帧、信号、一条主机虚拟 DoCAN 物理诊断连接与可选的单个超时故障 DTC，使用官方 XSD 校验，生成独立 C99 工程并构建主机目标。两份不同配置可作为两个独立 ECU 进程接入主机虚拟 CAN 总线；诊断连接由独立测试器驱动。**当前不是全模块 AUTOSAR 实现，也没有真实硬件验证或发布包。**
+本地 AUTOSAR Classic R24-11 配置工作台：默认以产品原创的内置结构规则与模块定义打开、检查、编辑和保存真实 ARXML，并准备独立 C99 源码。日常配置与源码准备不需要官方 XSD/MOD、编译器或联网；本机预检、构建与主机行为验证另需声明的工具链。保留既有 CAN、DoCAN、诊断与标准 ECU 有限生成目标。**不是全模块 AUTOSAR 运行时、完整官方 XSD 符合性认证或真实硬件验证。**
 
 ## 当前支持
 
 - 一个配置项目可包含多份 ARXML；同一 `AR-PACKAGE` 的内容可以分布在不同文件。未支持的有效内容作为保留项保留，未修改的文件不重写。校验、保存和生成都会复核所选的全部来源文件；任一文件被外部修改时拒绝继续使用旧跨文件配置，并提示重新导入。保存时暂存新内容，在替换前再次复核待写文件；无法安全回滚时保留原备份。
 - 编辑配置后，“查看并保存 ARXML”会先列出每份来源文件将修改或保持不变，并显示修改文件的前后差异及完整原文。预览不写磁盘；用户确认后才保存。若预览后配置或来源文件变化，旧预览不能用于保存。
+- 同一工程使用文件／对象树、文档标签、属性与引用检查器及问题／生成／构建／运行／日志工具窗口。参数保持 `kind/lexeme`，未落盘默认值与 explicit 值分开；未知条件、变体、表达式和 instance-reference 不猜值、不伪装成可写。批次与实例结构变化先预览整批，再以当前输入／定义身份原子应用。
+- `workbench-project.json` v1 只记录安全相对成员、应用输入及工程明确接纳的扩展身份；原 ARXML 是配置权威。`can-empty-v1`、`can-signals-v1`、`standard-ecu-v1` 使用原创模板，创建与另存为先预览，只写新空目录。第三方定义通过 `catalog.json` 显式接纳；不可变本机缓存不等于工程已经选择该定义。
+- 分别报告 `source-safety`、`schema`、`definition`、`target-generation`。原生 `schema` 只覆盖产品声明的结构、顺序、基数及类型，不等于完整官方 XSD；`unsupported`、`not_run` 不冒充 `passed`。目标不支持不自动阻止安全浏览或修复；实际原生结构错误仍阻断保存。
 - 标准 11 位 Classical CAN，DLC 1–8；每 ECU 最多 32 帧、64 信号。每帧可映射多个不重叠的 1–32 位无符号 LSB0 小端信号。导入时拒绝与 Com 位段或位序冲突的 I-PDU 映射、重复的 CanIf PDU 映射，以及与 CanIf 不一致的关联 CAN 网络帧 ID 或布局；未解析的配置变体会阻止生成。Tx 帧按虚拟时钟周期发送；Rx 帧按最后有效接收时间判定超时。
 - 生成工程包含独立的 Com、PduR、LSduR、CanIf、CanTp、Dcm、可选 Dem/NvM、虚拟 Can、Os 周期调度、Rte 接口及 ECU 配置；目录内的 `README.md` 和 stdlib-only `tools/ecu-tool.py` 给出锁定工具链的离线构建及按配置启动方法，`profile.txt`、`target.json` 和 `files.list` 描述生成结果，`Dcm_Externals.h` 随工程交付诊断回调声明。未配置诊断时目标仍是纯信号 ECU。legacy 目标产出 `ecu_host.exe`（Windows）或 `ecu_host`（Linux）；源码、ARXML 和构建目录必须分开。Windows BCrypt 安全档案不适用于 Linux，源码准备时明确拒绝，不生成缺少安全后端的工程。
 - `files.sha256` 保存生成文件与 `files.list` 的逐项内容摘要，供再次生成前核验；该记录不等于对第三方修改的签名认证。
@@ -22,22 +25,22 @@
 
 生成的主机工程对每个 DID 数据提供可外部链接的 `Ecu_DcmRead_<index>`，启用 0x2E 时还提供 `Ecu_DcmWrite_<index>`；主机 Dcm 实际通过这些回调读写 Com 信号，而不只在 ARXML 中填写函数名。`Dcm_Externals.h` 声明这些回调，`include/Ecu_DcmCallbackTypes.h` 仅定义本主机剖面所需的 `Std_ReturnType` 等类型，不是完整 AUTOSAR `Std_Types.h` 或生成的 RTE 类型头，也不证明第三方 Dcm 可直接接入。0x31 仍由生成工程的内部 `Ecu_HostRestoreDid` 实现；其 R24-11 ECUC 例程函数签名参数属草案，本产品不声明该例程的标准 ECUC 集成。
 
-工作区只按当前 R24-11 配置模型解析和保存：Com/CanIf/CanTp/Dcm 的 ECUC PDU 引用须指向 EcuC 全局 Pdu，主机 CAN 配置须包含上述固定 Mcu/Can/CanIf 闭包，主机专属 0x31 例程只使用 DID 工具 SDG；单 DTC 配置还须包含 DcmDsd 0x85 服务、`DcmDspControlDTCSetting` 禁用选项记录及指向 DemClient 的 `DcmDemClientRef`。没有旧工具格式的自动迁移、回退或保存确认流程；缺少当前必需结构的来源文件可查看诊断，但不自动改写，不能保存或生成。未受支持却不影响有效配置的内容仍作为保留项原样保留。
+既有主机生成目标仍要求当前 R24-11 闭包：Com/CanIf/CanTp/Dcm 的 ECUC PDU 引用指向 EcuC 全局 Pdu，固定主机 CAN 配置包含 Mcu/Can/CanIf 关系，主机专属 0x31 只使用 DID 工具 SDG；单 DTC 还要求 DcmDsd 0x85、`DcmDspControlDTCSetting` 禁用选项记录与真实 `DcmDemClientRef`。缺少或不能解释这些消费者时拒绝相应生成，不自动改源、不扩大运行时 allowlist。默认原生配置按分域规则允许安全浏览及未恶化违规的定义编辑；兼容 v1／开发 oracle 路径仍执行原来的固定官方资源和严格拒绝。
 
-受支持的 ComIPdu/ComSignal 必须直接归属本工程唯一的 `/{项目名}/ComCfg/ComConfig`，其模块定义和 ComGeneral 必须正确；重命名模块、把子容器挂到其他模块或改动父级 `DEFINITION-REF` 即使保留了可解析的 Pdu/Signal 引用，也只读阻断，不按子容器局部定义猜测所有者。
+既有信号生成剖面的 ComIPdu/ComSignal 必须直接归属本工程唯一的 `/{项目名}/ComCfg/ComConfig`，模块定义及 ComGeneral 必须正确；重命名模块、把子容器挂到其他模块或改动父级 `DEFINITION-REF` 会阻断该目标生成，不按局部定义猜测所有者。通用配置编辑另按真实定义与分域违规规则判断，不把生成剖面的限制当成全工程编辑总门。
 
 ## 本地开发环境
 
 工具版本由根目录 `rust-toolchain.toml`（Rust 1.98.1）、`.node-version`（Node 24.19.0）、`.python-version`（CPython 3.12.9）、`pyproject.toml`/`uv.lock`（Python）、`ui/package.json` 的 npm 11.17.0 engine 约束及 `ui/package-lock.json` 的包完整性记录约束。安装 Rust/rustfmt/clippy、Node/npm、uv、Git 和目标所需的 C99 GCC；在**新的终端**检查安装结果。Cargo 构建产物保留在 `core/target/` 与 `src-tauri/target/`，不改设 `CARGO_TARGET_DIR`。
 
 - Windows：使用 Rust MSVC、Visual Studio C++ Build Tools 和 WebView2。安装 vcpkg 的 `libxml2[iconv,zlib]:x64-windows-static-md`；`VCPKG_ROOT` 指 vcpkg 根目录，`VCPKGRS_TRIPLET=x64-windows-static-md`，`LIBCLANG_PATH` 指含 `libclang.dll` 的目录。可在用户环境中设置这些变量，重新打开终端和 Agent 宿主后再检查；不要把个人安装路径写进工程。原生执行另需 `AUTOSAR_CC`、`AUTOSAR_OBJDUMP`、`AUTOSAR_GIT`、`AUTOSAR_PYTHON` 指向目标锁声明的 GCC、objdump、Git 和 CPython 绝对路径；不回退 PATH 工具。
-- Ubuntu 24.04：安装 `build-essential libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2.0-dev libssl-dev libxdo-dev libxml2-dev libclang-dev clang pkg-config patchelf`，并按锁文件安装 Rust、Node、CPython 与 uv。WSL 构建副本、Cargo target 和 uv 缓存应放在 ext4 文件系统；从 Windows 卷读取官方档案时显式传路径。固定 GCC13.3.0 的受控原生 OS 已运行全部 26 项独立 suite；Linux 生产 ECU 的封包、搬移、构建及 CAN/DID/N_Cr 独立协议已实测。deb 与解包 AppImage 已在私有 Xvfb、无原构建 checkout 和开发工具 PATH 下完成真实桌面 IPC／生成／编译／行为及搬移复验。
+- Ubuntu 24.04：安装 `build-essential libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev libxml2-dev libclang-dev clang pkg-config patchelf`，并按锁文件安装 Rust、Node、CPython 与 uv。WSL 构建副本、Cargo target 和 uv 缓存放在 ext4 文件系统；开发 oracle 从 Windows 卷读取官方档案时显式传路径。此前固定 GCC13.3.0 的受控 OS 26 项 suite、生产 ECU 独立协议及 deb／解包 AppImage 隔离桌面路径已有历史实测；当前 Epic 7 仍以本次冻结产物的实际复验为准。
 - macOS：安装 Xcode Command Line Tools、pkg-config/libxml2 和上述版本管理工具。源码工作台代码路径、隔离 IPC 测试入口与 app/dmg 配置已实现；macOS 原生构建、bundle 和 IPC 未验证，不提供本机虚拟 ECU。
 
 本地官方材料须由使用者自行合法放置，不随源码或安装包分发：
 
 - XSD：`docs/official/R24-11/FO/MethodologyAndTemplates/AUTOSAR_FO_MMOD_XMLSchema.zip`（包含 `AUTOSAR_00053.xsd` 与 `xml.xsd`）。
-- MOD：`docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_MOD_ECUConfigurationParameters.zip`。核心计划使用显式 XSD/MOD 路径并核对固定 R24-11 SHA-256；CLI 可传 `--xsd-archive`/`--mod-archive`，进程变量 `AUTOSAR_XSD_ARCHIVE`/`AUTOSAR_MOD_ARCHIVE` 优先于桌面配置但不会写回。桌面“工作台设置”配置规范和原生工具；合法设置原子保存到 Tauri `app_config_dir` 的 `settings.json`。显式 `AUTOSAR_CONFIG_DIR` 可指定独立绝对配置目录，未设置时仍使用普通用户配置；后台验收入口始终指定私有目录，不依赖覆盖 Windows `APPDATA`。首次缺少规范时打开设置页，不查找 checkout 默认路径；错误档案不覆盖旧设置或项目。CPython/GCC/objdump/Git 均须显式绝对路径，进程环境覆盖优先。
+- MOD：`docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_MOD_ECUConfigurationParameters.zip`。开发 oracle 和兼容 v1 路径使用显式 XSD/MOD 并核对固定 R24-11 SHA-256；`AUTOSAR_XSD_ARCHIVE`／`AUTOSAR_MOD_ARCHIVE` 不替换默认内置规则权威。外观、规则与模块定义、执行工具是独立设置类别；外观／工具原子保存到 Tauri `app_config_dir/settings.json`，工具环境覆盖优先且不写回。`AUTOSAR_CONFIG_DIR` 可指定独立绝对配置目录，原生验收必须显式设置，不能仅修改 `APPDATA`。
 - 集成样例：`docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_EXP_ModelingShowCases.zip`。核心测试另读取上述两项合法规范档案。
 
 从新克隆的源码根目录运行（须预先准备平台原生依赖与官方档案）：
@@ -66,17 +69,17 @@ uv run --locked python -m autosar_tooling verify --scope all --base <本轮起�
 
 在各自原生宿主、已准备上述开发依赖的源码根目录执行 `npm run tauri --prefix ui -- build`。Tauri 自动合并 `src-tauri/tauri.<platform>.conf.json`：Windows 生成中文 MSI（`zh-CN`，保留中文产品名）；Linux 生成 deb/AppImage，包名使用 `Classic CAN Workbench`；macOS 配置 app/dmg，但尚无原生验证。产物位于 `src-tauri/target/release/bundle/`；没有签名、公证或远端发布声明。
 
-运行已提取或安装的应用不需要 npm、uv、Rust 或 checkout；Windows 需要 WebView2，Linux 需要 WebKitGTK 4.1、Ayatana AppIndicator 与 libxml2。原生 ECU 预检、构建和行为验证另需声明的 CPython 3.12.9、GCC、objdump 与 Git；合法 XSD/MOD 由使用者在“工作台设置”显式配置。安装包不携带这些规范档案或外部编译器。AppImage 在没有 FUSE 的隔离环境可先执行 `./<包名>.AppImage --appimage-extract`，再启动 `squashfs-root/AppRun`。
+运行已提取或安装的应用不需要 npm、uv、Rust 或 checkout；Windows 需要 WebView2，Linux 需要 WebKitGTK 4.1、Ayatana AppIndicator 与 libxml2。普通配置、保存、原生检查及源码交付不依赖官方档案或外部编译器；开发 oracle／兼容 v1 重导入才需要合法匹配的 XSD/MOD。原生 ECU 预检、构建和行为验证另需声明的 CPython 3.12.9、GCC、objdump 与 Git。安装包不携带官方档案或编译器。无 FUSE 时可解包 AppImage 后运行 `squashfs-root/AppRun`。
 
-发行包复验使用已有独立入口，附加 `--installed --source-checkout <发行构建时的原始源码路径>`，该源码路径须已搬离且不存在；`--binary` 指向 checkout 外的真实解包应用。入口复制合法输入及规范到私有目录，使用外部 base CPython 和最小应用 PATH，拒绝仍可见的 Node/npm/uv/Cargo/rustc；应用从私有空 cwd/config 启动，没有 Vite。外部自动化 driver 的开发依赖不注入应用环境。此模式仍执行同一实际导入、编辑、保存、生成、编译、CAN/DID/N_Cr、取消、拒绝与搬移重导入场景。
+发行包复验使用现有独立入口，附加 `--installed --source-checkout <发行构建时的原始源码路径>`；只能搬离本次 owned 构建副本，不得搬动用户工作树。`--binary` 指 checkout 外的真实解包应用；`--builtin-only` 分支使用无官方资源、无开发工具／编译器的配置环境，独立消费者阶段再提供目标工具链。默认 oracle／v1 分支保留合法参考资源及原拒绝。应用从私有空 cwd/config 与最小 PATH 启动，不使用 Vite；外部自动化 driver 不进入产品环境。各次实际出口结论写对应 BMad 工件，build/test 不替代原生发行验收。
 
-本轮实际验收采用 Windows MSI 行政解包（`msiexec /a <MSI> /qn TARGETDIR=<私有目录>`，使用原生 Windows 路径）及 Linux deb 解包（`dpkg-deb -x <deb> <私有目录>`）／AppImage 的 `AppRun`。它证明真实包内应用的无 checkout 主路径；未执行系统级安装／卸载、升级、代码签名、公证或发布。MSI 构建保留上游 WiX ICE03/40/57/61 警告，未关闭验证；WebView2 首装下载路径未在本轮验证。
+此前验收采用 Windows MSI 行政解包（`msiexec /a <MSI> /qn TARGETDIR=<私有目录>`）及 Linux deb 解包（`dpkg-deb -x <deb> <私有目录>`）／AppImage `AppRun`。历史结果不自动适用于当前变更；本次 Epic 7 的双平台出口以当前 spec 实际运行记录为准。系统级安装／卸载、升级、签名、公证、远端发布及 WebView2 首装下载不由行政解包推定。
 
-当前正式软件的图标源为 `ui/public/workbench.svg`：ECU 芯片、CAN 信号汇入和源码输出箭头。运行 `npm run tauri --prefix ui -- icon ui/public/workbench.svg --output <独立图标输出目录>`，将所需桌面 PNG/ICO/ICNS 更新到 `src-tauri/icons/`；不纳入无关移动平台资源。启动页、项目导航和 favicon 使用同一 SVG。下面的新版设计提案尚未替换这些正式资产。
+暂定身份使用透明珊瑚 A 图形：`ui/public/logo-app.png`、浅／深色 `logo-workbench.png`／`logo-workbench-dark.png` 与 `src-tauri/icons/` 的 PNG/ICO/ICNS。启动、导航、favicon、窗口和包配置不再引用旧 ECU 芯片 SVG。固定 ICO/ICNS 不宣称随 OS 自动切换明暗。
 
 ## 界面设计基线
 
-本轮先完成设计与交互，不修改正式 UI、桌面后端或运行时：
+正式工作台沿用以下设计与交互基线；冻结原型仍只作评审参考：
 
 - [视觉系统](DESIGN.md)：浅深主题、语义角色色、字体、布局及组件规范；根目录为后续实施的视觉入口，日期工作区为冻结评审快照。
 - [交互规格](_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/EXPERIENCE.md)：当前操作映射、两种输入剖面、草稿／保存／结果生命周期、关键流程及扩展接入规则。
@@ -88,9 +91,13 @@ uv run --locked python -m autosar_tooling verify --scope all --base <本轮起�
 uv run --locked python -m http.server 1421 --bind 127.0.0.1 --directory _bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/mockups
 ```
 
-访问 `http://127.0.0.1:1421/` 与 `http://127.0.0.1:1421/logo.html`。原型不读取官方档案、不写 ARXML、不生成真实源码、不编译或运行 ECU；设计交付和图标导出均不表示用户已经批准正式接入。
+访问 `http://127.0.0.1:1421/` 与 `http://127.0.0.1:1421/logo.html`。原型不读取官方档案、不写 ARXML、不生成真实源码、不编译或运行 ECU；它不替代正式 UI／IPC 的实际验收。
 
 ## 代码质量检查
+
+Epic 7 当前按开发收尾推进：使用既有单元／集成测试、静态检查、UI 构建和桌面后端编译／Clippy 检查，不启动桌面程序或执行真机、完整发行场景。发行包的环境与主要使用链验收留给后续 CI 阶段，单独记录结果；不为当前开发新增隔离或验收设施。当前实现与未验发行范围见 [Epic 7 实施规格](_bmad-output/implementation-artifacts/spec-epic-7-configurator.md)。
+
+Windows GBK 终端可使用 `uv run --locked python -X utf8 -m autosar_tooling verify --scope all --base <起始提交>`，避免打印构建工具的 Unicode 日志时因终端编码中断；无需修改系统编码。
 
 质量工具及独立 ARTI 消费者使用的 `lxml` 由 `uv.lock` 中的 `quality` 组固定；UI Prettier/ESLint 由 npm 锁文件固定。定向检查使用 `uv run --locked python -m autosar_tooling quality --base <本轮起始提交>`，检查 UTF-8、末尾换行、空白、Python 语法与增量 rustfmt/clang-format/Prettier、主机 C99 语法。唯一聚合入口为 `uv run --locked python -m autosar_tooling verify --scope core|ui|desktop|all --base <起始提交>`：`all` 顺序组合 Git diff/check、Python unittest、npm ci、质量、Ruff、UI lint/build、core test/clippy 和 desktop build/clippy。每个命令使用独立的绝对单调 deadline、进程所有权与日志；失败报告具体子阶段、argv、观测到的退出码和日志位置，不重试或吞错。26 项原生 OS suite 只经注册的 Cargo 测试执行一次，不追加第二次 OS CLI。此构建／测试关口明确报告平台适用范围，**不**验证真实 GUI/IPC 或安装包；这些使用独立 native desktop 和 bundle 关口。
 
@@ -105,14 +112,16 @@ Epic 4 的生成工件测试仍以 PATH 中的 Cppcheck 2.21.0 检查实际 RTE 
 
 已提交的 `.agents/skills/` 和 `_bmad/` 可直接供 Codex 使用；重新安装或更新时固定 `bmad-method@6.12.0`、BMM 和 `codex`，先核对安装器差异，不让新版本覆盖团队定制。`_bmad/config.user.toml` 是被 Git 忽略的个人安装答案；团队共用语言和配置放在 `_bmad/custom/config.toml`。从仓库打开 Codex 会话可调用 `bmad-help` 查看当前阶段，也可直接委托一个 story、epic 或规划目标。
 
-1. 在起始页新建项目并选择保存 ARXML 的目录，或一次选中同一 ECU 的所有 `.arxml` 文件导入。导入按所选文件集合建模，不自动识别并拆分其他 ECU 的文件。
-2. “配置”页选择帧/信号，在右侧检查器修改并应用；如需诊断，在同页设置物理 CAN ID、计时器、DID 与有序 32-bit Tx 信号，可勾选“允许扩展会话写入此 DID”以启用易失 0x2E，再填写可选 RID 启用 0x31/0x01 初值复位例程；应用诊断配置后可选配一个监测 Rx 帧超时的 DTC。启用写入或配置 DTC 后，可勾选“用 0x27 保护状态更改”，并再次应用诊断配置。先保存，再到“诊断”页运行校验。未应用的草稿不会悄悄写入 ARXML。
-3. “生成与构建”页选择 `windows-x64-controlled-v1` 或 `linux-x64-controlled-v1`，并选择**独立的空源码目录**。先查看完整工程文件的新增、内容变化和内容不变状态，检查前后文本，再确认生成；源码准备与预览不启动编译器。另选工程之外的新空构建目录，使用显式配置的 CPython/GCC/binutils/Git 构建本机目标。取消预览不写入输出目录；预览后配置、目标、运行源码或旧输出变化时须重新预览。再次生成只接受未改动、具备完整性记录的原源码目录，不覆盖用户文件。
+1. 从工程入口创建原创模板、打开成员 manifest 或一次选择同一 ECU 的全部 ARXML。直接 ARXML 可继续使用，显式另存为工程才持久化成员与扩展接纳选择；不能信任 manifest 的 profile hint 或旧通过状态。
+2. 在工程树／对象表选择真实对象，按定义检查与编辑字段、引用或结构；跨对象修改先查看整个批次的实际旧／新值与入站影响，再一次应用。既有 CAN、诊断／DTC 与标准参数编辑仍使用同一 Workspace。未应用草稿不写源；切对象先处理草稿，替换工程另处理 dirty 与保存确认。
+3. 保存先查看各文件差异并确认；外部改源、过期预览或未恢复备份拒绝覆盖。源码生成另选择工程之外的输出目录，预览真实文件与拥有权再确认，不启动编译。构建目录继续独立，编译／运行只在对应工具与本机目标可用时执行。
 4. 在“虚拟运行”页，对已构建、已配置诊断的当前工程点击“验证诊断连接”，由独立测试器检查本次二进制；配置故障记忆时使用隔离 NvM 文件，启用 Windows 0x27 时另用隔离密钥与安全状态文件。不修改真实 ECU 状态，不需要对端 ECU。信号总线验证另选对端 ECU 的封存源码目录与已构建的实际二进制，运行双 ECU 闭环。
 
-需要交给另一位工程师重建时，在“生成与构建”页另选“导出可重建主机交付包”，先预览再确认。该目录额外包含已保存的 ARXML、`handoff.json` 与完整性记录；接收者在同版工作台显式提供合法 R24-11 XSD 后，从导入页选择“导入可重建主机交付包”，再校验并生成到新目录。普通生成工程仍只交付 C99 源码。固定双 ECU 离线参考包通过 `cargo run --manifest-path core/Cargo.toml --bin package_host_reference -- "<new-output-directory>" --target <target> --xsd-archive "<absolute-licensed-XSD-archive>"` 生成；接收者仅需声明的 CPython 3.12.9、目标 GCC/binutils/Git 和包内工具，无需 checkout、uv、Rust 或 Node，详见 [`runtime/reference-README.md`](runtime/reference-README.md)。生成、预检、构建与实际行为复验是不同结果。
+默认 R5 源码交接使用 `autosar-workbench-handoff-v2`，精确封存规则三字段身份、必需接纳扩展、输入、应用 snapshot 与拥有权；同版工作台在新空目录重建原始成员，重新校验、重渲染并逐字节核对。没有把包内 JSON 当成可执行规则，也不把旧官方资源摘要转换成内置规则摘要。原 `autosar-host-handoff-v1`／`autosar-ecu-handoff-v1` 继续精确分派，并保留各自的合法 XSD/MOD 与完整性要求；不会自动升级旧包。
 
-标准 ECU 输入进入“生成与构建”后，使用“预览 ECU 交付”核对实际文件，再“确认生成 ECU”。默认包含显式 `autosar-ecu-handoff-v1` 元数据、原始输入、完整固定源码与许可；旧 `autosar-host-handoff-v1` 仍按原入口读取。新包可整体搬移，通过“重导入 ECU 交接包”重新建立计划和逐字节核对生成结果，再生成到另一空目录。接收方需要同版工作台及合法取得、身份匹配的 R24-11 XSD/MOD；官方原件和编译器不随包分发。
+标准 ECU 的 live 应用初始化先展示真实 `epic4-single-application-v1` 槽描述符、源码与 manifest 变化，明确确认后只创建不存在的文件。声明的 `applicationInputs` 后续从当前用户字节形成不可改的封存 snapshot；生成器不写回 live 源，不覆盖改过的生成文件或未知 owner／清单版本。应用改动也会使旧生成确认和下游结果失效。
+
+固定旧目标双 ECU 离线参考包仍可用 `package_host_reference` 与合法固定 XSD 显式生成，详见 [`runtime/reference-README.md`](runtime/reference-README.md)。生成、预检、构建和实际行为复验分别报告；配置内置定义可读不等于目标可生成。
 
 “本机预检”独立实际编译并返回绑定源码身份的 `not_run|passed|failed`；非本机目标为 `not_run`，不标成功。“构建 ECU”使用独立空目录和包内目标工具链，Windows 得到 `ecu_host_batch.exe`，Linux 得到 `ecu_host_batch`。“验证 ECU 主机行为”独立重建并逐字节核对 CAN/DID、至多两个 DID、真实 N_Cr 超时恢复及非法批次。离线入口为 `<CPython3.12.9> tools/ecu-tool.py verify --project <封存源码目录> --build-directory <工程之外的新空目录>`。两平台生产协议已通过原生核心入口实测；Linux 桌面 IPC 与正式 bundle 不由该结果推定。当前工程完整 SC1 复验及实机状态不从这些有界向量推断。
 

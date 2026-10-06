@@ -15,6 +15,7 @@ mod ecu;
 pub(crate) mod editor;
 mod graph;
 pub(crate) mod handoff;
+mod native_configuration;
 mod os_service;
 mod plan;
 mod routing;
@@ -26,10 +27,13 @@ pub use component::{ComponentContract, DataPort, ServicePort};
 pub use configuration::{ConfigurationRecord, EventAssignment};
 pub use contracts::ComponentContractFiles;
 pub use diagnostic::DiagnosticContract;
+pub(crate) use ecu::APPLICATION_SOURCE_PATH;
 pub use ecu::EcuIntegrationFiles;
 pub use editor::{IntegrationEdit, IntegrationInspection};
 pub use handoff::{EcuHandoff, build_ecu_project, open_ecu_handoff, verify_ecu_project};
-pub use plan::{HandleAssignment, PlanDescription, ValidatedIntegrationPlan, build_plan};
+pub use plan::{
+    HandleAssignment, PlanDescription, ValidatedIntegrationPlan, build_plan, build_plan_native,
+};
 pub use routing::PduRoute;
 pub use schedule::{ScheduleContract, ScheduledEntity};
 
@@ -257,6 +261,10 @@ pub struct InputInspection {
     sources: Vec<InputSource>,
     identities: Vec<SourceIdentity>,
     graph: graph::Graph,
+    validation_dependencies: std::collections::BTreeMap<String, String>,
+    rule_set_identity: Option<crate::project_model::RuleSetIdentity>,
+    required_extension_definitions: Vec<crate::project_model::ExtensionDefinitionIdentity>,
+    definition_catalog: Option<crate::definitions::DefinitionCatalog>,
 }
 
 impl InputInspection {
@@ -420,6 +428,178 @@ pub fn inspect_inputs(
         sources: sorted,
         identities,
         graph,
+        validation_dependencies: std::collections::BTreeMap::from([
+            ("R24-11 XSD".into(), XSD_SHA256.into()),
+            ("R24-11 MOD".into(), MOD_SHA256.into()),
+        ]),
+        rule_set_identity: None,
+        required_extension_definitions: Vec::new(),
+        definition_catalog: None,
+    })
+}
+
+fn check_native_scope(
+    validation: crate::project_model::ScopeValidation,
+    consumers: &BTreeSet<String>,
+) -> Result<(), Vec<PlanDiagnostic>> {
+    let errors: Vec<_> = validation
+        .diagnostics
+        .into_iter()
+        .filter(|diagnostic| {
+            matches!(diagnostic.severity, crate::model::Severity::Error)
+                || (matches!(
+                    diagnostic.code.as_str(),
+                    "NATIVE_UNSUPPORTED" | "DEFINITION_UNKNOWN" | "SEMANTICS_UNSUPPORTED"
+                ) && diagnostic
+                    .path
+                    .as_ref()
+                    .is_some_and(|path| consumers.contains(path)))
+        })
+        .map(|diagnostic| PlanDiagnostic {
+            category: if matches!(
+                diagnostic.code.as_str(),
+                "NATIVE_UNSUPPORTED" | "DEFINITION_UNKNOWN" | "SEMANTICS_UNSUPPORTED"
+            ) {
+                DiagnosticCategory::Unsupported
+            } else {
+                DiagnosticCategory::Input
+            },
+            code: diagnostic.code,
+            file: diagnostic.file,
+            object: diagnostic.path,
+            message: diagnostic.message,
+            remedy: diagnostic.remedy,
+        })
+        .collect();
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
+    }
+}
+
+/// Validate product-supported inputs with the trusted compiled rule inventory
+/// and this project's explicitly accepted definitions. No official archive is read.
+pub fn inspect_inputs_native(
+    sources: &[InputSource],
+    catalog: &crate::definitions::DefinitionCatalog,
+) -> Result<InputInspection, Vec<PlanDiagnostic>> {
+    let tool_error = |message: String| {
+        vec![PlanDiagnostic {
+            category: DiagnosticCategory::Tool,
+            code: "BUILTIN_RULES".into(),
+            file: None,
+            object: None,
+            message,
+            remedy: "Repair the matching installed product rule inventory; official archives cannot replace it.".into(),
+        }]
+    };
+    let identity = crate::rules::rule_set_identity().map_err(&tool_error)?;
+    if sources.is_empty() {
+        return Err(vec![PlanDiagnostic::dependency(
+            "INPUT_MISSING",
+            "No integration ARXML inputs were supplied.",
+            "Supply the ECU Extract, SWC/types, services, BSW description and ECUC values.",
+        )]);
+    }
+    let mut names = BTreeSet::new();
+    for source in sources {
+        if source.bytes.len() > 50 * 1024 * 1024 {
+            return Err(vec![PlanDiagnostic::at_source(
+                source,
+                "SOURCE_SIZE",
+                "A single ARXML input exceeds 50 MiB.",
+                "Split the original input into safe, explicitly selected source members.",
+            )]);
+        }
+        if !names.insert(source.logical_path.to_uppercase()) {
+            return Err(vec![PlanDiagnostic::at_source(
+                source,
+                "SOURCE_DUPLICATE",
+                "Two sources have the same portable file identity.",
+                "Select each source once, using distinct portable relative paths.",
+            )]);
+        }
+    }
+    let mut sorted = sources.to_vec();
+    sorted.sort_by(|left, right| left.logical_path.cmp(&right.logical_path));
+    let files: Vec<_> = sorted
+        .iter()
+        .map(|source| Ok((Path::new(&source.logical_path), source.text()?)))
+        .collect::<Result<_, PlanDiagnostic>>()
+        .map_err(|diagnostic| vec![diagnostic])?;
+    let native_schema = crate::rules::validate_native(&files).map_err(&tool_error)?;
+    let graph = graph::Graph::from_catalog_target_scope(&sorted, catalog)?;
+    let consumers = native_configuration::consumer_objects(&graph);
+    check_native_scope(native_schema, &consumers)?;
+    let reference_errors = graph.reference_diagnostics_for(&consumers);
+    if !reference_errors.is_empty() {
+        return Err(reference_errors);
+    }
+    let mut definition_validation = catalog.validate_documents(&files).map_err(&tool_error)?;
+    definition_validation.diagnostics.retain(|diagnostic| {
+        diagnostic
+            .path
+            .as_ref()
+            .is_some_and(|path| consumers.contains(path))
+    });
+    check_native_scope(definition_validation, &consumers)?;
+    let identities = sorted
+        .iter()
+        .map(|source| {
+            let kinds: BTreeSet<_> = graph
+                .objects
+                .values()
+                .map(|index| &graph.elements[*index])
+                .filter(|element| element.file == source.logical_path)
+                .map(|element| element.tag.as_str())
+                .collect();
+            let mut roles = Vec::new();
+            for (kind, role) in [
+                ("SYSTEM", "ecu_extract"),
+                ("APPLICATION-SW-COMPONENT-TYPE", "application"),
+                ("SERVICE-SW-COMPONENT-TYPE", "service_client"),
+                ("IMPLEMENTATION-DATA-TYPE", "types"),
+                ("BSW-MODULE-DESCRIPTION", "bsw_description"),
+                ("BSW-IMPLEMENTATION", "bsw_implementation"),
+                ("ECUC-MODULE-CONFIGURATION-VALUES", "ecuc_values"),
+            ] {
+                if kinds.contains(kind) {
+                    roles.push(role.into());
+                }
+            }
+            if roles.is_empty() {
+                roles.push("retained".into());
+            }
+            SourceIdentity {
+                logical_path: source.logical_path.clone(),
+                raw_sha256: source.sha256(),
+                roles,
+            }
+        })
+        .collect();
+    let definition_ids: Vec<_> = graph
+        .elements
+        .iter()
+        .filter(|element| element.tag == "DEFINITION-REF")
+        .filter(|element| consumers.contains(&element.object))
+        .map(|element| element.text.clone())
+        .collect();
+    let required_extension_definitions = catalog.required_extensions(&definition_ids);
+    let validation_dependencies = std::collections::BTreeMap::from([
+        ("rules.release".into(), identity.release.clone()),
+        ("rules.version".into(), identity.rules_version.clone()),
+        ("rules.sha256".into(), identity.sha256.clone()),
+        ("definitions.sha256".into(), catalog.fingerprint(&identity)),
+    ]);
+    Ok(InputInspection {
+        sources: sorted,
+        identities,
+        graph,
+        validation_dependencies,
+        rule_set_identity: Some(identity),
+        required_extension_definitions,
+        definition_catalog: Some(catalog.clone()),
     })
 }
 

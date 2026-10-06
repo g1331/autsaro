@@ -9,7 +9,7 @@ build = "build.rs"
 name = "autosar_config_desktop"
 
 [features]
-native-webdriver = ["dep:tauri-plugin-wdio-webdriver"]
+native-webdriver = ["dep:tauri-plugin-wdio-webdriver", "autosar-config-core/verification-metrics"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri-plugin-wdio-webdriver = { version = "=1.4.0", optional = true }

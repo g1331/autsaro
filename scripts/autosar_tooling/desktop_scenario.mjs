@@ -1,8 +1,44 @@
 import assert from 'node:assert/strict';
-import { access, readFile, writeFile, rename } from 'node:fs/promises';
+import { access, readFile, writeFile, rename, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
-export async function runScenario({ evaluate, screenshot, scratch, platform }) {
+export async function assertUnavailableSourceCheckout(scratch, sourceCheckout, platform) {
+  assert.equal(typeof sourceCheckout, 'string');
+  assert(path.isAbsolute(sourceCheckout));
+  const receipt = JSON.parse(
+    await readFile(path.join(scratch, 'source-checkout-boundary.json'), 'utf8'),
+  );
+  assert.equal(receipt.sourceCheckout, sourceCheckout);
+  assert.equal(receipt.sourceCheckoutAvailable, false);
+  assert.equal(receipt.platform, platform);
+  assert.equal(receipt.callerUid, typeof process.getuid === 'function' ? process.getuid() : null);
+  let expectedCode = 'ENOENT';
+  if (receipt.availabilityReason === 'caller_inaccessible') {
+    assert.equal(receipt.statErrno, 13);
+    expectedCode = 'EACCES';
+  } else {
+    assert.equal(receipt.availabilityReason, 'not_found');
+    assert.equal(receipt.statErrno, null);
+  }
+  try {
+    await access(sourceCheckout);
+  } catch (error) {
+    if (error.code !== expectedCode) throw error;
+    if (expectedCode === 'EACCES' && process.platform === 'linux') {
+      assert.equal(error.errno, -13);
+    }
+    return receipt;
+  }
+  assert.fail(`Build checkout is accessible to the scenario caller: ${sourceCheckout}`);
+}
+
+export async function runScenario(options) {
+  const { evaluate, screenshot, scratch, platform } = options;
+  const mode = JSON.parse(await readFile(path.join(scratch, 'scenario.json'), 'utf8'));
+  if (mode.mode === 'builtin-only') {
+    const { runBuiltinScenario } = await import('./desktop_builtin_scenario.mjs');
+    return runBuiltinScenario(options);
+  }
   const sources = JSON.parse(await readFile(path.join(scratch, 'inputs.json'), 'utf8'));
   const scenario = JSON.parse(await readFile(path.join(scratch, 'scenario.json'), 'utf8'));
   assert.equal(typeof scenario.installed, 'boolean');
@@ -31,6 +67,10 @@ export async function runScenario({ evaluate, screenshot, scratch, platform }) {
     throw new Error(`Actual ${name} did not reach ${expected}`);
   }
   async function click(text) {
+    await until(`(() => {
+      const button = [...document.querySelectorAll('button')].find(node => node.textContent.trim() === ${JSON.stringify(text)});
+      return Boolean(button && !button.disabled && button.getClientRects().length);
+    })()`);
     await evaluate(`(() => {
     const button = [...document.querySelectorAll('button')].find(node => node.textContent.trim() === ${JSON.stringify(text)});
     if (!button || button.disabled) throw new Error('Missing/disabled button: ' + ${JSON.stringify(text)});
@@ -44,6 +84,65 @@ export async function runScenario({ evaluate, screenshot, scratch, platform }) {
     Object.getOwnPropertyDescriptor(element.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value').set.call(element, ${JSON.stringify(value)});
     element.dispatchEvent(new Event('input', { bubbles: true }));
   })()`);
+  }
+  async function command(text) {
+    await options.key('k', { ctrl: true });
+    await until(`Boolean(document.querySelector('.command-results'))`);
+    await evaluate(`(() => {
+      const button = [...document.querySelectorAll('.command-results button')].find(node => node.textContent.split('Ctrl+')[0].split('Alt+')[0].trim() === ${JSON.stringify(text)});
+      if (!button || button.disabled) throw new Error('Unavailable public command: ' + ${JSON.stringify(text)});
+      button.click();
+    })()`);
+    await until(`!document.querySelector('.command-results')`);
+  }
+  async function standardReady() {
+    await until(
+      `Boolean(document.querySelector('.integration-view input[aria-label="接收 CAN ID"]:not(:disabled)'))`,
+    );
+  }
+  async function openResourceSettings() {
+    await command('设置…');
+    await click('规则与模块定义');
+    await evaluate(`document.querySelector('.legacy-settings summary').click()`);
+    await until(
+      `Boolean(document.querySelector('[aria-label="历史 XSD 档案路径"]')?.getClientRects().length)`,
+    );
+  }
+  let chooserSequence = 0;
+  async function chooseDirectory(selected, action) {
+    const request = {
+      requestId: `oracle-path-${++chooserSequence}`,
+      kind: 'directory',
+      path: selected,
+    };
+    const staging = path.join(scratch, 'native-dialog-request.next.json');
+    await writeFile(staging, JSON.stringify(request));
+    await rename(staging, path.join(scratch, 'native-dialog-request.json'));
+    await action();
+    await until(
+      `document.querySelector('[aria-label="新的空 live 工作目录"]')?.value === ${JSON.stringify(selected)}`,
+    );
+    const selectedPath = await evaluate(
+      `document.querySelector('[aria-label="新的空 live 工作目录"]').value`,
+    );
+    assert.equal(selectedPath, selected);
+    const result = path.join(scratch, 'native-dialog-result.next.json');
+    await writeFile(result, JSON.stringify({ ...request, selectedPath }));
+    await rename(result, path.join(scratch, 'native-dialog-result.json'));
+    const deadline = Date.now() + 60000;
+    while (Date.now() < deadline) {
+      let reply;
+      try {
+        reply = JSON.parse(
+          await readFile(path.join(scratch, 'native-dialog-consumed.json'), 'utf8'),
+        );
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+      }
+      if (reply?.requestId === request.requestId) return;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    throw new Error('Legacy/oracle private chooser did not submit the authorized path');
   }
   try {
     await until(`Boolean(window.__TAURI_INTERNALS__ && document.querySelector('button'))`);
@@ -62,9 +161,9 @@ export async function runScenario({ evaluate, screenshot, scratch, platform }) {
     runtimeEvidence.transport = '__TAURI_INTERNALS__.invoke';
     assert.equal(location.nativeInvoke, true, 'The real native Tauri transport is required');
     if (scenario.installed) {
-      assert.equal(typeof scenario.sourceCheckout, 'string');
-      assert(path.isAbsolute(scenario.sourceCheckout));
-      await assert.rejects(access(scenario.sourceCheckout), { code: 'ENOENT' });
+      runtimeEvidence.sourceCheckoutBoundary = await assertUnavailableSourceCheckout(
+        scratch, scenario.sourceCheckout, platform,
+      );
       runtimeEvidence.sourceCheckoutAvailable = false;
       assert(
         (location.protocol === 'tauri:' && location.hostname === 'localhost') ||
@@ -87,28 +186,33 @@ export async function runScenario({ evaluate, screenshot, scratch, platform }) {
         );
       }
     }
-    await until(`Boolean(document.querySelector('[aria-label="XSD 档案路径"]'))`);
+    await openResourceSettings();
     const missingResources = await evaluate(
       "window.__TAURI_INTERNALS__.invoke('workbench_capabilities')",
     );
-    assert(missingResources.resourceError, 'Missing archives must open the settings surface');
+    assert(
+      missingResources.resourceError,
+      'Missing archives remain an explicit legacy/oracle resource diagnostic',
+    );
     runtimeEvidence.initialCapabilities = missingResources;
     await evaluate(`window.__NATIVE_VERIFY_LOG__.push({
       command: 'workbench_capabilities', status: 'returned',
       evidence: ${JSON.stringify(runtimeEvidence)}
     })`);
     await screenshot('initial-missing-resources.png');
-    await input('XSD 档案路径', resources.xsdArchive);
-    await input('MOD 档案路径', resources.modArchive);
-    await click('核对并保存规范档案');
-    await until(`document.body.innerText.includes('规范档案已就绪')`);
+    await input('历史 XSD 档案路径', resources.xsdArchive);
+    await input('历史 MOD 档案路径', resources.modArchive);
+    await click('核对并保存兼容资源');
+    await until(
+      `(async()=>!(await window.__TAURI_INTERNALS__.invoke('workbench_capabilities')).resourceError)()`,
+    );
     const configuredResources = await evaluate(
       "window.__TAURI_INTERNALS__.invoke('workbench_capabilities')",
     );
     assert.equal(configuredResources.resourceError, null);
     assert.equal(configuredResources.xsdArchive, resources.xsdArchive);
     assert.equal(configuredResources.modArchive, resources.modArchive);
-    await click('关闭设置');
+    await click('关闭');
     await evaluate(`window.__NATIVE_VERIFY_INVOKE__ = async (command, payload = {}) => {
   const caps = await window.__TAURI_INTERNALS__.invoke('workbench_capabilities');
   const event = {command, fingerprint: caps.fingerprint, payload};
@@ -122,12 +226,14 @@ export async function runScenario({ evaluate, screenshot, scratch, platform }) {
   }
 };`);
     // Use the real path-entry flow. Native Tauri transport remains untouched.
-    await click('导入 ARXML');
-    await evaluate(`document.querySelector('details').open = true`);
+    await command('导入 ARXML…');
     await input('ARXML 来源路径', sources.join('\n'));
-    await until(`document.body.innerText.includes('导入 7 份文件')`);
-    await click('导入 7 份文件');
-    await until(`document.body.innerText.includes('标准输入已校验，尚未生成运行工程')`);
+    await until(`document.body.innerText.includes('7 份输入')`);
+    await click('导入并进入工程');
+    await until(`Boolean(document.querySelector('.document-tabs'))`);
+    await command('标准输入');
+    await click('检查计划');
+    await standardReady();
     const roles = await evaluate(
       `[...document.querySelectorAll('.integration-view tbody tr')].map(node => node.innerText)`,
     );
@@ -139,19 +245,19 @@ export async function runScenario({ evaluate, screenshot, scratch, platform }) {
       "window.__TAURI_INTERNALS__.invoke('workbench_capabilities')",
     );
     const resourceWorkspace = await evaluate("window.__NATIVE_VERIFY_INVOKE__('workspace_view')");
-    await click('工作台设置');
-    await input('XSD 档案路径', resourceCaps.modArchive);
-    await click('关闭设置');
-    await click('工作台设置');
+    await openResourceSettings();
+    await input('历史 XSD 档案路径', resourceCaps.modArchive);
+    await click('关闭');
+    await openResourceSettings();
     assert.equal(
-      await evaluate(`document.querySelector('[aria-label="XSD 档案路径"]').value`),
+      await evaluate(`document.querySelector('[aria-label="历史 XSD 档案路径"]').value`),
       resourceCaps.xsdArchive,
       'Closing settings must discard the unsaved resource draft',
     );
-    await input('XSD 档案路径', resourceCaps.modArchive);
-    await click('核对并保存规范档案');
+    await input('历史 XSD 档案路径', resourceCaps.modArchive);
+    await click('核对并保存兼容资源');
     await until(
-      `document.querySelector('.save-preview-dialog [role="status"]')?.textContent.includes('DEPENDENCY_IDENTITY')`,
+      `document.querySelector('[role="dialog"] [role="status"]')?.textContent.includes('DEPENDENCY_IDENTITY')`,
     );
     const rejectedResources = await evaluate(
       "window.__TAURI_INTERNALS__.invoke('workbench_capabilities')",
@@ -164,14 +270,14 @@ export async function runScenario({ evaluate, screenshot, scratch, platform }) {
       'An archive identity rejection must preserve the open workspace',
     );
     await screenshot('resource-identity-rejection.png');
-    await click('关闭设置');
+    await click('关闭');
     await input('接收 CAN ID', '1100');
     await input('发送 CAN ID', '1101');
     await input('应用周期', '20');
     await click('应用并校验修改');
-    await until(`document.body.innerText.includes('修改已通过同一计划校验，尚未保存')`);
+    await standardReady();
     await click('预览保存');
-    await until(`document.body.innerText.includes('4 个文件将修改')`);
+    await until(`Boolean(document.querySelector('[aria-label="标准保存预览"]'))`);
     await evaluate(
       `document.querySelector('[aria-label="标准保存预览"]').scrollIntoView({ block: 'end' })`,
     );
@@ -181,9 +287,9 @@ export async function runScenario({ evaluate, screenshot, scratch, platform }) {
     }
     await screenshot('standard-input-preview.png');
     await click('确认保存标准输入');
-    await until(`document.body.innerText.includes('标准输入已保存，尚未生成运行工程')`);
+    await until(`!document.querySelector('[aria-label="标准保存预览"]')`);
     await click('重开来源');
-    await until(`document.body.innerText.includes('标准输入已校验，尚未生成运行工程')`);
+    await standardReady();
     assert.equal(
       await evaluate(`document.querySelector('input[aria-label="接收 CAN ID"]').value`),
       '1100',
@@ -204,7 +310,7 @@ export async function runScenario({ evaluate, screenshot, scratch, platform }) {
     }
     await input('接收 CAN ID', '1101');
     await click('应用并校验修改');
-    await until(`document.body.innerText.includes('编辑被拒绝，原配置保持')`);
+    await until(`document.querySelector('.integration-view [role="alert"]')?.textContent.includes('CAN_ID_CONFLICT')`);
     assert(await evaluate(`document.body.innerText.includes('CAN_ID_CONFLICT')`));
     await evaluate(
       `document.querySelector('.integration-view [role="alert"]').scrollIntoView({ block: 'start' })`,
@@ -218,9 +324,14 @@ export async function runScenario({ evaluate, screenshot, scratch, platform }) {
     const delivery = path.join(scratch, 'ECU source');
     const moved = path.join(scratch, 'moved ECU source');
     const regenerated = path.join(scratch, 'regenerated ECU source');
-    await click('生成与构建');
+    await command('源码交付');
     await input('ECU 输出目录', delivery);
     await input('ECU 构建目录', path.join(scratch, 'ECU build'));
+    await evaluate(`(() => {
+      const checkbox = [...document.querySelectorAll('.ecu-delivery-fields input[type=checkbox]')][0];
+      if (!checkbox || checkbox.disabled) throw new Error('Missing enabled versioned handoff choice');
+      if (!checkbox.checked) checkbox.click();
+    })()`);
     await click('预览 ECU 交付');
     await until(`Boolean(document.querySelector('[aria-label="ECU 文件预览"]'))`);
     if (platform === 'macos') {
@@ -332,21 +443,21 @@ export async function runScenario({ evaluate, screenshot, scratch, platform }) {
     await writeFile(runtime, originalRuntime);
     await click('验证 ECU 主机行为');
     await stage('主机行为', '已通过');
-    await click('标准输入');
+    await command('标准输入');
     await until(
       `Boolean(document.querySelector('input[aria-label="应用周期"]') && !document.querySelector('input[aria-label="应用周期"]').disabled)`,
     );
     await input('应用周期', '21');
-    await click('生成与构建');
+    await command('源码交付');
     await stage('生成', '已失效');
     assert(
       await evaluate(
         `([...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='构建 ECU')).disabled`,
       ),
     );
-    await click('标准输入');
+    await command('标准输入');
     await click('还原草稿');
-    await click('生成与构建');
+    await command('源码交付');
     // Apply/save is a separate invalidation path from a draft or reimport.
     for (const name of ['校验', '生成', '构建', '主机行为']) {
       await stage(name, '已通过');
@@ -365,11 +476,11 @@ export async function runScenario({ evaluate, screenshot, scratch, platform }) {
       `ecu_host_batch${platform === 'windows' ? '.exe' : ''}`,
     );
     const recoveryBinary = await readFile(recoveryBinaryPath);
-    await click('标准输入');
+    await command('标准输入');
     await input('应用周期', '21');
     await click('应用并校验修改');
-    await until(`document.body.innerText.includes('修改已通过同一计划校验，尚未保存')`);
-    await click('生成与构建');
+    await standardReady();
+    await command('源码交付');
     await stage('校验', '需重新校验');
     for (const name of ['生成', '构建', '主机行为']) {
       await stage(name, '已失效');
@@ -391,18 +502,21 @@ export async function runScenario({ evaluate, screenshot, scratch, platform }) {
       }
     }
     await assertOldDeliveryCleared();
-    // The real navigation label includes its dirty-workspace badge after apply.
-    await click('标准输入未保存');
+    await command('标准输入');
     await click('预览保存');
     await until(`Boolean(document.querySelector('[aria-label="标准保存预览"]'))`);
     for (let index = 0; index < sources.length; index += 1) {
       assert.deepEqual(await readFile(sources[index]), savedInputs[index]);
     }
     await click('确认保存标准输入');
-    await until(`document.body.innerText.includes('标准输入已保存，尚未生成运行工程')`);
-    const updatedInputs = await Promise.all(sources.map((source) => readFile(source)));
-    assert(updatedInputs.some((bytes, index) => !bytes.equals(savedInputs[index])));
-    await click('生成与构建');
+    await until(`!document.querySelector('[aria-label="标准保存预览"]')`);
+    await click('重开来源');
+    await standardReady();
+    assert.equal(
+      await evaluate(`document.querySelector('input[aria-label="应用周期"]').value`),
+      '21',
+    );
+    await command('源码交付');
     for (const name of ['校验', '生成', '构建', '主机行为']) {
       await stage(name, '未执行');
     }
@@ -437,12 +551,22 @@ export async function runScenario({ evaluate, screenshot, scratch, platform }) {
     await rename(delivery, moved);
     await input('重导入 ECU 目录', moved);
     await click('重导入 ECU 交接包');
-    await until(`document.body.innerText.includes('标准输入已校验，尚未生成运行工程')`);
+    await until(`Boolean(document.querySelector('[role=dialog][aria-label="导入封存交付包"]'))`);
+    const liveImport = path.join(scratch, 'reimported ECU live sources');
+    await mkdir(liveImport);
+    await chooseDirectory(liveImport, () => click('选择新空目录'));
+    await click('核验并导入交付包');
+    await until(
+      `!document.querySelector('[role=dialog]') && Boolean(document.querySelector('.document-tabs'))`,
+    );
+    await command('标准输入');
+    await click('检查计划');
+    await standardReady();
     assert.equal(
       await evaluate(`document.querySelector('input[aria-label="接收 CAN ID"]').value`),
       '1100',
     );
-    await click('生成与构建');
+    await command('源码交付');
     for (const stage of ['校验', '生成', '构建', '主机行为']) {
       assert.equal(
         await evaluate(
@@ -465,7 +589,7 @@ export async function runScenario({ evaluate, screenshot, scratch, platform }) {
         `Reimport/regenerate changed ${file}`,
       );
     }
-    await click('标准输入');
+    await command('标准输入');
     await until(`Boolean(document.querySelector('input[aria-label="应用周期"]'))`);
     const checkedPlan = await evaluate(`window.__NATIVE_VERIFY_INVOKE__('inspect_integration')`);
     assert.equal(checkedPlan.description.component.periodMs, 20);
@@ -477,36 +601,37 @@ export async function runScenario({ evaluate, screenshot, scratch, platform }) {
     await until(
       `Boolean([...document.querySelectorAll('button')].find(node => node.textContent.trim() === '应用并校验修改' && !node.disabled))`,
     );
-    await evaluate(`document.querySelector('button[aria-label="切换项目"]').click()`);
-    await until(`document.querySelector('button[aria-label="切换项目"]').disabled`);
-    await until(`!document.querySelector('button[aria-label="切换项目"]').disabled`);
+    await command('关闭工程');
+    await until(
+      `Boolean([...document.querySelectorAll('[role=dialog] button')].find(node => node.textContent === '取消替换'))`,
+    );
+    await click('取消替换');
     assert.equal(
       await evaluate(`document.querySelector('input[aria-label="应用周期"]').value`),
       '21',
     );
     await click('还原草稿');
-    await click('生成与构建');
+    await command('源码交付');
     await click('预览 ECU 交付');
-    await until(
-      `Boolean(document.querySelector('[aria-label="ECU 文件预览"]')) && !document.querySelector('button[aria-label="切换项目"]').disabled`,
-    );
-    await evaluate(`document.querySelector('button[aria-label="切换项目"]').click()`);
-    await until(`document.body.innerText.includes('配置项目')`);
+    await until(`Boolean(document.querySelector('[aria-label="ECU 文件预览"]'))`);
+    await click('取消');
+    await command('关闭工程');
+    await until(`Boolean(document.querySelector('.start-page'))`);
     assert(
       await evaluate(`!document.querySelector('[aria-label="生成文件预览"]')`),
       'Closing an ECU project must discard its generation preview',
     );
-    await click('导入 ARXML');
-    await evaluate(`document.querySelector('details').open = true`);
+    await command('导入 ARXML…');
     await input(
       'ARXML 来源路径',
       sources.find((source) => path.basename(source) === 'types.arxml'),
     );
-    await until(`document.body.innerText.includes('导入 1 份文件')`);
-    await click('导入 1 份文件');
-    await until(`Boolean(document.querySelector('.project-nav'))`);
-    await click('标准输入');
-    await until(`document.body.innerText.includes('输入未通过，无法生成')`);
+    await until(`document.body.innerText.includes('1 份输入')`);
+    await click('导入并进入工程');
+    await until(`Boolean(document.querySelector('.document-tabs'))`);
+    await command('标准输入');
+    await click('检查计划');
+    await until(`document.querySelector('.integration-view [role="alert"]')?.textContent.includes('TARGET_NOT_UNIQUE')`);
     assert(await evaluate(`document.body.innerText.includes('TARGET_NOT_UNIQUE')`));
     console.log(
       'Native standard-input and ECU preview/export/build/behavior/failure/move/reimport/regenerate passed',

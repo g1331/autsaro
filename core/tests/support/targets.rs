@@ -380,7 +380,8 @@ pub(super) fn source_generation_does_not_require_native_executor() {
     let mut changed_bytes = fs::read(&host_source).unwrap();
     changed_bytes.extend_from_slice(b"\n<!-- preserved source annotation -->\n");
     fs::write(&host_source, changed_bytes).unwrap();
-    let mut changed_host = Workspace::open(vec![host_source], resources.xsd_archive).unwrap();
+    let mut changed_host =
+        Workspace::open_legacy(vec![host_source], resources.xsd_archive).unwrap();
     let updated = prepare_host_project(
         &mut changed_host,
         BuildTarget::WindowsX64ControlledV1,
@@ -474,7 +475,8 @@ pub(super) fn linux_legacy_security_profile_is_rejected_during_preparation() {
     use autosar_config_core::target::BuildTarget;
 
     let scratch = Scratch::new();
-    let mut project = Workspace::create(&scratch.0.join("Secure"), "Secure", archive()).unwrap();
+    let mut project =
+        Workspace::create_legacy(&scratch.0.join("Secure"), "Secure", archive()).unwrap();
     let frame = project
         .add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(100), None)
         .unwrap()

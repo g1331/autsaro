@@ -1,5 +1,5 @@
 import { runScenario } from './desktop_scenario.mjs';
-import { writeFile } from 'node:fs/promises';
+import { writeFile, readFile, rename } from 'node:fs/promises';
 import path from 'node:path';
 
 const [url, scratch] = process.argv.slice(2);
@@ -55,10 +55,94 @@ async function screenshot(name) {
   });
   await writeFile(path.join(scratch, name), Buffer.from(result.data, 'base64'));
 }
+let windowSequence = 0;
+async function resize(width, height) {
+  const request = { requestId: `window-${++windowSequence}`, width, height };
+  const staging = path.join(scratch, 'native-window-request.next.json');
+  await writeFile(staging, JSON.stringify(request));
+  await rename(staging, path.join(scratch, 'native-window-request.json'));
+  const deadline = Date.now() + 30000;
+  while (Date.now() < deadline) {
+    let result;
+    try {
+      result = JSON.parse(await readFile(path.join(scratch, 'native-window-result.json'), 'utf8'));
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    if (result?.requestId === request.requestId) return result;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error('Owned native window did not acknowledge its real physical resize');
+}
+async function key(value, modifiers = {}) {
+  const keys = {
+    Escape: 'Escape',
+    Tab: 'Tab',
+    ArrowDown: 'ArrowDown',
+    ArrowUp: 'ArrowUp',
+    ArrowLeft: 'ArrowLeft',
+    ArrowRight: 'ArrowRight',
+    Enter: 'Enter',
+  };
+  const mask =
+    (modifiers.alt ? 1 : 0) |
+    (modifiers.ctrl ? 2 : 0) |
+    (modifiers.meta ? 4 : 0) |
+    (modifiers.shift ? 8 : 0);
+  const code =
+    keys[value] ??
+    (value.length === 1
+      ? /^\d$/.test(value)
+        ? `Digit${value}`
+        : `Key${value.toUpperCase()}`
+      : value);
+  const params = { key: value, code, modifiers: mask };
+  await cdp('Input.dispatchKeyEvent', { ...params, type: 'keyDown' });
+  await cdp('Input.dispatchKeyEvent', { ...params, type: 'keyUp' });
+}
+async function pointer(x, y) {
+  await cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+  await cdp('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    x,
+    y,
+    button: 'left',
+    clickCount: 1,
+  });
+  await cdp('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    x,
+    y,
+    button: 'left',
+    clickCount: 1,
+  });
+}
+async function media(scheme, reduceMotion = false) {
+  await cdp('Emulation.setEmulatedMedia', {
+    features: [
+      { name: 'prefers-color-scheme', value: scheme },
+      { name: 'prefers-reduced-motion', value: reduceMotion ? 'reduce' : 'no-preference' },
+    ],
+  });
+  return { scheme, reduceMotion, scope: 'native-webview-CDP-media' };
+}
 await cdp('Page.enable');
 try {
-  await runScenario({ evaluate, screenshot, scratch, platform: 'windows' });
+  await runScenario({
+    evaluate,
+    screenshot,
+    resize,
+    key,
+    pointer,
+    media,
+    scratch,
+    platform: 'windows',
+  });
 } finally {
-  for (const entry of pending.values()) clearTimeout(entry.timer);
-  ws.close();
+  try {
+    await cdp('Emulation.setEmulatedMedia', { features: [] });
+  } finally {
+    for (const entry of pending.values()) clearTimeout(entry.timer);
+    ws.close();
+  }
 }

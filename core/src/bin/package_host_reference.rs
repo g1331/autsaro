@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn prepare_pair(root: &Path, schema_archive: PathBuf) -> Result<(Workspace, Workspace), String> {
-    let mut alpha = Workspace::create(&root.join("Alpha"), "Alpha", schema_archive.clone())?;
+    let mut alpha = Workspace::create_legacy(&root.join("Alpha"), "Alpha", schema_archive.clone())?;
     let tx = alpha
         .add_frame("Command".into(), 0x321, 2, Direction::Tx, Some(10), None)?
         .frames[0]
@@ -57,7 +57,7 @@ fn prepare_pair(root: &Path, schema_archive: PathBuf) -> Result<(Workspace, Work
     })?;
     alpha.save()?;
 
-    let mut beta = Workspace::create(&root.join("Beta"), "Beta", schema_archive)?;
+    let mut beta = Workspace::create_legacy(&root.join("Beta"), "Beta", schema_archive)?;
     let rx = beta
         .add_frame("Command".into(), 0x321, 2, Direction::Rx, None, Some(40))?
         .frames[0]

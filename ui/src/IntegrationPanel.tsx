@@ -67,7 +67,7 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
       </div>
       <p>
         必需输入：ECU Extract、应用与类型、服务使用端、所选 BSW 描述/实现及 ECUC 配置值。
-        有效无关内容按原字节保留；XSD 与 MOD 是外部提供的校验依赖。
+        有效无关内容按原字节保留；内置支持范围不要求用户注册官方 XSD 或 MOD。
       </p>
       {issues.length > 0 && (
         <div className="inspector-block" role="alert">

@@ -12,7 +12,8 @@ use std::process::{Command, Stdio};
 pub(super) fn global_ecuc_pdu_binding_roundtrips_and_rejects_wrong_com_reference_type() {
     let temp = Scratch::new();
     let source = temp.0.join("Closure/Closure.arxml");
-    let mut project = Workspace::create(source.parent().unwrap(), "Closure", archive()).unwrap();
+    let mut project =
+        Workspace::create_legacy(source.parent().unwrap(), "Closure", archive()).unwrap();
     let frame = project
         .add_frame("Live".into(), 0x321, 1, Direction::Tx, Some(10), None)
         .unwrap()
@@ -79,7 +80,7 @@ pub(super) fn global_ecuc_pdu_binding_roundtrips_and_rejects_wrong_com_reference
         reference.text(),
         Some("/Closure/EcuCCfg/EcucConfigSet/Pdus/Pdu_Live")
     );
-    let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
+    let mut reopened = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
     assert!(reopened.validate().unwrap().issues.is_empty());
     let generated = temp.0.join("Generated");
     generator::generate(&mut reopened, &generated, tooling::native_target()).unwrap();
@@ -103,7 +104,7 @@ pub(super) fn global_ecuc_pdu_binding_roundtrips_and_rejects_wrong_com_reference
         1,
     );
     fs::write(&source, &wrong).unwrap();
-    let mut unsupported = Workspace::open(vec![source.clone()], archive()).unwrap();
+    let mut unsupported = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
     let issue = unsupported
         .validate()
         .unwrap()
@@ -165,7 +166,7 @@ pub(super) fn host_can_ecuc_closes_required_mod_fields_and_rejects_broken_links(
 
     let temp = Scratch::new();
     let mut project =
-        Workspace::create(&temp.0.join("CanClosure"), "CanClosure", archive()).unwrap();
+        Workspace::create_legacy(&temp.0.join("CanClosure"), "CanClosure", archive()).unwrap();
     let tx = project
         .add_frame("Transmit".into(), 0x321, 4, Direction::Tx, Some(100), None)
         .unwrap()
@@ -377,7 +378,8 @@ pub(super) fn host_can_ecuc_closes_required_mod_fields_and_rejects_broken_links(
     );
     fs::write(&source, &split_first).unwrap();
     fs::write(&split_source, &split_second).unwrap();
-    let mut split = Workspace::open(vec![source.clone(), split_source.clone()], archive()).unwrap();
+    let mut split =
+        Workspace::open_legacy(vec![source.clone(), split_source.clone()], archive()).unwrap();
     assert!(
         split.validate().unwrap().issues.is_empty(),
         "split Mcu clock must resolve across files"
@@ -432,7 +434,7 @@ pub(super) fn host_can_ecuc_closes_required_mod_fields_and_rejects_broken_links(
     ] {
         assert_ne!(modified, xml, "{name} must change the fixture");
         fs::write(&source, &modified).unwrap();
-        let mut imported = Workspace::open(vec![source.clone()], archive()).unwrap();
+        let mut imported = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
         assert!(
             imported
                 .validate()
@@ -460,7 +462,8 @@ pub(super) fn host_can_ecuc_closes_required_mod_fields_and_rejects_broken_links(
 pub(super) fn missing_required_com_or_ecuc_root_is_read_only_and_cannot_generate() {
     let temp = Scratch::new();
     let source = temp.0.join("Closure/Closure.arxml");
-    let mut project = Workspace::create(source.parent().unwrap(), "Closure", archive()).unwrap();
+    let mut project =
+        Workspace::create_legacy(source.parent().unwrap(), "Closure", archive()).unwrap();
     let frame = project
         .add_frame("Live".into(), 0x321, 1, Direction::Tx, Some(10), None)
         .unwrap()
@@ -487,7 +490,7 @@ pub(super) fn missing_required_com_or_ecuc_root_is_read_only_and_cannot_generate
             &xml[required.range().end..]
         );
         fs::write(&source, &modified).unwrap();
-        let mut imported = Workspace::open(vec![source.clone()], archive()).unwrap();
+        let mut imported = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
         let issue = imported
             .validate()
             .unwrap()
@@ -547,7 +550,7 @@ pub(super) fn missing_required_com_or_ecuc_root_is_read_only_and_cannot_generate
     );
     for (name, modified) in [("Partitions", ecuc_extra), ("Groups", com_extra)] {
         fs::write(&source, &modified).unwrap();
-        let mut imported = Workspace::open(vec![source.clone()], archive()).unwrap();
+        let mut imported = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
         let issue = imported
             .validate()
             .unwrap()
@@ -593,7 +596,7 @@ pub(super) fn missing_required_com_or_ecuc_root_is_read_only_and_cannot_generate
             &xml[definition.range().end..]
         );
         fs::write(&source, &modified).unwrap();
-        let mut imported = Workspace::open(vec![source.clone()], archive()).unwrap();
+        let mut imported = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
         let issue = imported
             .validate()
             .unwrap()
@@ -669,7 +672,7 @@ pub(super) fn missing_required_com_or_ecuc_root_is_read_only_and_cannot_generate
         ("ForeignParent", foreign_parent),
     ] {
         fs::write(&source, &modified).unwrap();
-        let mut imported = Workspace::open(vec![source.clone()], archive()).unwrap();
+        let mut imported = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
         assert_eq!(
             imported.view().frames.len(),
             1,
@@ -706,7 +709,8 @@ pub(super) fn missing_required_com_or_ecuc_root_is_read_only_and_cannot_generate
 pub(super) fn multiple_consumed_com_modules_cannot_generate() {
     let temp = Scratch::new();
     let source = temp.0.join("Closure/Closure.arxml");
-    let mut project = Workspace::create(source.parent().unwrap(), "Closure", archive()).unwrap();
+    let mut project =
+        Workspace::create_legacy(source.parent().unwrap(), "Closure", archive()).unwrap();
     let frame = project
         .add_frame("Live".into(), 0x321, 1, Direction::Tx, Some(10), None)
         .unwrap()
@@ -736,7 +740,7 @@ pub(super) fn multiple_consumed_com_modules_cannot_generate() {
     let insertion = xml.find("</ELEMENTS>").unwrap();
     let modified = format!("{}{}{}", &xml[..insertion], duplicate, &xml[insertion..]);
     fs::write(&source, &modified).unwrap();
-    let mut imported = Workspace::open(vec![source.clone()], archive()).unwrap();
+    let mut imported = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
     let issue = imported
         .validate()
         .unwrap()
@@ -761,7 +765,8 @@ pub(super) fn multiple_consumed_com_modules_cannot_generate() {
 pub(super) fn imported_global_pdu_cannot_duplicate_system_binding_or_misstate_diagnostic_length() {
     let temp = Scratch::new();
     let source = temp.0.join("Diag/Diag.arxml");
-    let mut project = Workspace::create(source.parent().unwrap(), "Diag", archive()).unwrap();
+    let mut project =
+        Workspace::create_legacy(source.parent().unwrap(), "Diag", archive()).unwrap();
     let frame = project
         .add_frame("Live".into(), 0x321, 4, Direction::Tx, Some(100), None)
         .unwrap()
@@ -855,7 +860,7 @@ pub(super) fn imported_global_pdu_cannot_duplicate_system_binding_or_misstate_di
         ("dynamic", dynamic),
     ] {
         fs::write(&source, &modified).unwrap();
-        let mut imported = Workspace::open(vec![source.clone()], archive()).unwrap();
+        let mut imported = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
         let issue = imported
             .validate()
             .unwrap()
@@ -888,7 +893,8 @@ pub(super) fn imported_global_pdu_cannot_duplicate_system_binding_or_misstate_di
 pub(super) fn diagnostic_ecuc_refs_reject_old_system_destinations_and_dynamic_npdu() {
     let temp = Scratch::new();
     let source = temp.0.join("Diag/Diag.arxml");
-    let mut project = Workspace::create(source.parent().unwrap(), "Diag", archive()).unwrap();
+    let mut project =
+        Workspace::create_legacy(source.parent().unwrap(), "Diag", archive()).unwrap();
     let frame = project
         .add_frame("Live".into(), 0x321, 4, Direction::Tx, Some(100), None)
         .unwrap()
@@ -950,7 +956,7 @@ pub(super) fn diagnostic_ecuc_refs_reject_old_system_destinations_and_dynamic_np
             &xml[value.range().end..]
         );
         fs::write(&source, &modified).unwrap();
-        let mut imported = Workspace::open(vec![source.clone()], archive()).unwrap();
+        let mut imported = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
         assert!(
             imported
                 .validate()
@@ -989,7 +995,7 @@ pub(super) fn diagnostic_ecuc_refs_reject_old_system_destinations_and_dynamic_np
         &xml[insertion..]
     );
     fs::write(&source, &modified).unwrap();
-    let mut imported = Workspace::open(vec![source.clone()], archive()).unwrap();
+    let mut imported = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
     assert!(
         imported
             .validate()
@@ -1025,7 +1031,8 @@ pub(super) fn imported_unknown_content_survives_supported_edit_without_rewriting
     let other = temp.0.join("Unrelated.arxml");
     let unrelated = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd\"><AR-PACKAGES><AR-PACKAGE><SHORT-NAME>Other</SHORT-NAME><ELEMENTS><I-SIGNAL><SHORT-NAME>Extra</SHORT-NAME><LENGTH>1</LENGTH></I-SIGNAL></ELEMENTS></AR-PACKAGE></AR-PACKAGES></AUTOSAR>";
     fs::write(&other, unrelated).unwrap();
-    let mut imported = Workspace::open(vec![source.clone(), other.clone()], archive()).unwrap();
+    let mut imported =
+        Workspace::open_legacy(vec![source.clone(), other.clone()], archive()).unwrap();
     assert_eq!(imported.view().files.len(), 2);
     let frame = imported
         .view()
@@ -1066,7 +1073,7 @@ pub(super) fn imported_unknown_content_survives_supported_edit_without_rewriting
         fs::read_to_string(&source).unwrap(),
         changed.after.as_deref().unwrap()
     );
-    let reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
+    let reopened = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
     let updated = reopened
         .view()
         .frames
@@ -1174,7 +1181,8 @@ pub(super) fn split_package_save_preserves_sources_and_rejects_stale_reference_f
     fs::write(&source, original.replacen(signal, "", 1)).unwrap();
     fs::write(&other, format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd\"><AR-PACKAGES><AR-PACKAGE><SHORT-NAME>Alpha</SHORT-NAME><ELEMENTS>{signal}</ELEMENTS></AR-PACKAGE></AR-PACKAGES></AUTOSAR>\n")).unwrap();
 
-    let mut project = Workspace::open(vec![source.clone(), other.clone()], archive()).unwrap();
+    let mut project =
+        Workspace::open_legacy(vec![source.clone(), other.clone()], archive()).unwrap();
     assert!(project.validate().unwrap().issues.is_empty());
     let frame = project
         .view()
@@ -1192,7 +1200,8 @@ pub(super) fn split_package_save_preserves_sources_and_rejects_stale_reference_f
         untouched,
         "supported edit must leave the other file byte-identical"
     );
-    let mut project = Workspace::open(vec![source.clone(), other.clone()], archive()).unwrap();
+    let mut project =
+        Workspace::open_legacy(vec![source.clone(), other.clone()], archive()).unwrap();
     assert!(project.validate().unwrap().issues.is_empty());
     assert_eq!(
         project
@@ -1274,7 +1283,7 @@ pub(super) fn three_file_host_can_edit_preserves_retained_and_untouched_sources(
         "<I-SIGNAL><SHORT-NAME>RetainedUnknown</SHORT-NAME><LENGTH>1</LENGTH></I-SIGNAL>";
     fs::write(&signals, wrap(&(system_signal.to_owned() + retained))).unwrap();
 
-    let mut project = Workspace::open(
+    let mut project = Workspace::open_legacy(
         vec![source.clone(), clock.clone(), signals.clone()],
         archive(),
     )
@@ -1302,7 +1311,7 @@ pub(super) fn three_file_host_can_edit_preserves_retained_and_untouched_sources(
     project.save().unwrap();
     assert_eq!(fs::read(&clock).unwrap(), unchanged_clock);
     assert!(fs::read_to_string(&signals).unwrap().contains(retained));
-    let mut reopened = Workspace::open(vec![source, clock, signals], archive()).unwrap();
+    let mut reopened = Workspace::open_legacy(vec![source, clock, signals], archive()).unwrap();
     assert!(reopened.validate().unwrap().issues.is_empty());
     assert_eq!(
         reopened
@@ -1344,7 +1353,7 @@ pub(super) fn official_r24_sample_imports_as_one_split_package_without_rewriting
         15,
         "the official R24 example must have all model files"
     );
-    let mut project = Workspace::open(paths, archive()).unwrap();
+    let mut project = Workspace::open_legacy(paths, archive()).unwrap();
     assert!(
         project.validate().unwrap().issues.is_empty(),
         "split AR-PACKAGE paths may merge across files"
@@ -1382,7 +1391,7 @@ pub(super) fn unresolved_r24_variant_is_preserved_but_blocks_generation() {
         ),
     )
     .unwrap();
-    let mut imported = Workspace::open(vec![source.clone()], archive()).unwrap();
+    let mut imported = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
     let checked = imported.validate().unwrap();
     assert!(
         checked
@@ -1412,7 +1421,7 @@ pub(super) fn package_variant_affecting_profile_blocks_generation() {
         text.replacen("</AR-PACKAGE>", &format!("{variant}</AR-PACKAGE>"), 1),
     )
     .unwrap();
-    let mut imported = Workspace::open(vec![source.clone()], archive()).unwrap();
+    let mut imported = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
     let checked = imported.validate().unwrap();
     assert!(
         checked
@@ -1450,7 +1459,7 @@ pub(super) fn conflicting_canif_entries_for_one_pdu_block_generation() {
         format!("{}{}{}", &text[..end], duplicate, &text[end..]),
     )
     .unwrap();
-    let mut imported = Workspace::open(vec![source], archive()).unwrap();
+    let mut imported = Workspace::open_legacy(vec![source], archive()).unwrap();
     let checked = imported.validate().unwrap();
     assert!(
         checked
@@ -1484,7 +1493,7 @@ pub(super) fn ipdu_mapping_disagreement_with_com_blocks_generation() {
     ] {
         assert!(text.contains(original), "missing {field} fixture");
         fs::write(&source, text.replacen(original, changed, 1)).unwrap();
-        let mut imported = Workspace::open(vec![source.clone()], archive()).unwrap();
+        let mut imported = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
         let checked = imported.validate().unwrap();
         assert!(
             checked
@@ -1523,7 +1532,7 @@ pub(super) fn linked_can_frame_must_match_canif_and_pdu_layout() {
 </CAN-CLUSTER-CONDITIONAL></CAN-CLUSTER-VARIANTS></CAN-CLUSTER>"#;
     let compatible = text.replacen("</ELEMENTS>", &format!("{topology}</ELEMENTS>"), 1);
     fs::write(&source, &compatible).unwrap();
-    let mut imported = Workspace::open(vec![source.clone()], archive()).unwrap();
+    let mut imported = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
     assert!(imported.validate().unwrap().issues.is_empty());
     generator::generate(
         &mut imported,
@@ -1547,7 +1556,7 @@ pub(super) fn linked_can_frame_must_match_canif_and_pdu_layout() {
             text.replacen("</ELEMENTS>", &format!("{altered_topology}</ELEMENTS>"), 1),
         )
         .unwrap();
-        let mut mismatched = Workspace::open(vec![source.clone()], archive()).unwrap();
+        let mut mismatched = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
         let checked = mismatched.validate().unwrap();
         assert!(
             checked
@@ -1575,7 +1584,7 @@ pub(super) fn linked_can_frame_must_match_canif_and_pdu_layout() {
         ),
     )
     .unwrap();
-    imported = Workspace::open(vec![source], archive()).unwrap();
+    imported = Workspace::open_legacy(vec![source], archive()).unwrap();
     let checked = imported.validate().unwrap();
     assert!(
         checked
@@ -1595,7 +1604,7 @@ pub(super) fn noncanonical_pdu_input_is_not_rewritten_or_generated() {
     let source = temp.0.join("Unsupported.arxml");
     let original = include_str!("../fixtures/legacy-signal.arxml");
     fs::write(&source, original).unwrap();
-    let mut project = Workspace::open(vec![source.clone()], archive()).unwrap();
+    let mut project = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
     let view = project.validate().unwrap();
     assert!(!view.dirty);
     assert!(view.files.iter().all(|file| file.readonly));
@@ -1621,7 +1630,7 @@ pub(super) fn noncanonical_pdu_input_is_not_rewritten_or_generated() {
 
 pub(super) fn host_routine_metadata_rejects_unknown_version_and_wrong_session() {
     let temp = Scratch::new();
-    let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
+    let mut project = Workspace::create_legacy(&temp.0.join("Diag"), "Diag", archive()).unwrap();
     let frame = project
         .add_frame("Live".into(), 0x321, 4, Direction::Tx, Some(100), None)
         .unwrap()
@@ -1677,7 +1686,7 @@ pub(super) fn host_routine_metadata_rejects_unknown_version_and_wrong_session() 
     ] {
         assert_ne!(saved, altered);
         fs::write(&source, &altered).unwrap();
-        let error = Workspace::open(vec![source.clone()], archive())
+        let error = Workspace::open_legacy(vec![source.clone()], archive())
             .err()
             .expect("invalid host metadata must not be accepted");
         assert!(

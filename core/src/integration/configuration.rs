@@ -115,7 +115,7 @@ fn reference(graph: &Graph, index: usize, parameter: &str) -> Result<usize, Vec<
         })
 }
 
-fn physical(graph: &Graph, context: usize) -> Result<(), Vec<PlanDiagnostic>> {
+fn physical(graph: &Graph, context: usize, native: bool) -> Result<(), Vec<PlanDiagnostic>> {
     let controller = one(graph, context, "CanController")?;
     let can_if_controller = one(graph, controller, "CanIfCtrlCfg")?;
     if reference(graph, can_if_controller, "CanIfCtrlCanCtrlRef")? != controller
@@ -145,7 +145,13 @@ fn physical(graph: &Graph, context: usize) -> Result<(), Vec<PlanDiagnostic>> {
         ));
     }
     let rate = value(graph, baudrate, "CanControllerBaudRate", false)
-        .and_then(|value| value.parse::<u32>().ok())
+        .and_then(|value| {
+            if native {
+                super::native_configuration::baudrate_kbit(value)
+            } else {
+                value.parse::<u32>().ok()
+            }
+        })
         .and_then(|value| value.checked_mul(1000))
         .filter(|value| *value != 0);
     let ecus = graph.of_kind("ECU-INSTANCE");
@@ -229,12 +235,26 @@ fn physical(graph: &Graph, context: usize) -> Result<(), Vec<PlanDiagnostic>> {
     Ok(())
 }
 
+pub(super) fn inspect_native(
+    graph: &Graph,
+    catalog: &crate::definitions::DefinitionCatalog,
+) -> Result<Configuration, Vec<PlanDiagnostic>> {
+    inspect_with_catalog(graph, Some(catalog))
+}
+
 pub(super) fn inspect(graph: &Graph) -> Result<Configuration, Vec<PlanDiagnostic>> {
+    inspect_with_catalog(graph, None)
+}
+
+fn inspect_with_catalog(
+    graph: &Graph,
+    catalog: Option<&crate::definitions::DefinitionCatalog>,
+) -> Result<Configuration, Vec<PlanDiagnostic>> {
     let allowed: BTreeSet<_> = SUPPORTED_PARAMETERS.split_whitespace().collect();
     let allowed_references: BTreeSet<_> = SUPPORTED_REFERENCES.split_whitespace().collect();
     let modules = graph.of_kind("ECUC-MODULE-CONFIGURATION-VALUES");
     let context = *graph.objects.values().next().unwrap();
-    physical(graph, context)?;
+    physical(graph, context, catalog.is_some())?;
     let mut selected = Vec::new();
     for module in MODULES {
         let definition = format!("/AUTOSAR/EcucDefs/{module}");
@@ -357,6 +377,13 @@ pub(super) fn inspect(graph: &Graph) -> Result<Configuration, Vec<PlanDiagnostic
                     if (!reference && !allowed.contains(name))
                         || (reference && !allowed_references.contains(name))
                     {
+                        if catalog.is_some_and(|catalog| {
+                            super::native_configuration::descriptor_only(
+                                graph, *index, catalog, reference,
+                            )
+                        }) {
+                            continue;
+                        }
                         return Err(reject(
                             graph,
                             *index,

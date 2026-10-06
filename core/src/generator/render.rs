@@ -7,6 +7,7 @@ pub(crate) fn handoff_readme(
     diagnostic: Option<&DiagnosticView>,
     target: BuildTarget,
     handoff: bool,
+    native: bool,
 ) -> Result<String, String> {
     let binary = if target == BuildTarget::WindowsX64ControlledV1 {
         "ecu_host.exe"
@@ -25,7 +26,11 @@ pub(crate) fn handoff_readme(
             notes.push_str("Create `../state/ecu.key` separately as exactly 32 raw secret bytes. It is not generated or part of the source package. Each ECU needs its own security state file; a missing key or damaged state stops startup. This security profile is supported only by the Windows target.\n\n");
         }
     }
-    let inputs = if handoff {
+    let inputs = if native && handoff {
+        "Saved original ARXML/member inputs are included under `inputs/` and mapped by the strict native v2 `handoff.json`. Review their raw contents before sharing. Reimport with the same trusted product rule identity and exact explicitly accepted required definitions into a new live project directory; no official XSD/MOD is required."
+    } else if native {
+        "The immutable native source project includes actual configuration/member snapshots for ownership and reproducibility. Keep editing the separate original live project; source-only preparation is not an explicit handoff and has no handoff.json."
+    } else if handoff {
         "Saved original ARXML inputs are included under `inputs/` and mapped in `handoff.json`. Review their raw contents before sharing. Reimport with the same-version workbench and the separately obtained matching XSD, then regenerate the recorded explicit target to reproduce the complete source closure."
     } else {
         "The original ARXML sources are not included. Retain them separately to edit or regenerate this source project, or generate the versioned host handoff profile when saved original inputs must travel with it."

@@ -15,6 +15,12 @@ pub(super) struct Element {
     pub object: String,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ReferencePolicy {
+    Strict,
+    ConsumerScoped,
+}
+
 /// A lossless-input semantic index. Original bytes remain in InputSource;
 /// this derived graph never becomes the authority for saving XML.
 pub(super) struct Graph {
@@ -25,12 +31,7 @@ pub(super) struct Graph {
 
 impl Graph {
     pub fn new(sources: &[InputSource], definitions: &str) -> Result<Self, Vec<PlanDiagnostic>> {
-        let mut graph = Self {
-            elements: Vec::new(),
-            objects: BTreeMap::new(),
-            external: BTreeMap::new(),
-        };
-        let mut diagnostics = Vec::new();
+        let mut definition_kinds = BTreeMap::new();
         let external = Document::parse(definitions).map_err(|error| {
             vec![PlanDiagnostic::dependency(
                 "MOD_PARSE",
@@ -43,21 +44,84 @@ impl Graph {
             .filter(|node| node.is_element() && node.tag_name().namespace() == Some(NS))
         {
             if short_name(node).is_some() {
-                graph
-                    .external
-                    .insert(path(node), node.tag_name().name().into());
+                definition_kinds.insert(path(node), node.tag_name().name().into());
             }
         }
-        for source in sources {
-            let text = source.text().map_err(|diagnostic| vec![diagnostic])?;
-            let document = Document::parse(text).map_err(|error| {
-                vec![PlanDiagnostic::at_source(
-                    source,
-                    "XML_PARSE",
-                    format!("XML cannot be parsed: {error}"),
-                    "Repair the XML syntax before checking the integration plan.",
-                )]
-            })?;
+        Self::build(sources, definition_kinds, ReferencePolicy::Strict)
+    }
+
+    /// Index original source elements without qualifying unrelated references.
+    /// Before invoking target consumers, the caller must qualify their complete
+    /// object closure with `reference_diagnostics_for`; no unknown kind is inferred.
+    pub fn from_catalog_target_scope(
+        sources: &[InputSource],
+        catalog: &crate::definitions::DefinitionCatalog,
+    ) -> Result<Self, Vec<PlanDiagnostic>> {
+        Self::build(
+            sources,
+            Self::catalog_external(catalog),
+            ReferencePolicy::ConsumerScoped,
+        )
+    }
+
+    fn catalog_external(
+        catalog: &crate::definitions::DefinitionCatalog,
+    ) -> BTreeMap<String, String> {
+        catalog
+            .definitions()
+            .map(|definition| {
+                (
+                    definition.definition_id.clone(),
+                    definition.element_kind.clone(),
+                )
+            })
+            .collect()
+    }
+
+    fn build(
+        sources: &[InputSource],
+        external: BTreeMap<String, String>,
+        reference_policy: ReferencePolicy,
+    ) -> Result<Self, Vec<PlanDiagnostic>> {
+        let documents = sources
+            .iter()
+            .map(|source| {
+                let text = source.text().map_err(|diagnostic| vec![diagnostic])?;
+                Document::parse(text).map_err(|error| {
+                    vec![PlanDiagnostic::at_source(
+                        source,
+                        "XML_PARSE",
+                        format!("XML cannot be parsed: {error}"),
+                        "Repair the XML syntax before checking the integration plan.",
+                    )]
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Self::build_documents(
+            sources
+                .iter()
+                .zip(&documents)
+                .map(|(source, document)| (source.logical_path.as_str(), document)),
+            external,
+            reference_policy,
+        )
+    }
+
+    fn build_documents<'a, 'input>(
+        sources: impl Iterator<Item = (&'a str, &'a Document<'input>)>,
+        external: BTreeMap<String, String>,
+        reference_policy: ReferencePolicy,
+    ) -> Result<Self, Vec<PlanDiagnostic>>
+    where
+        'input: 'a,
+    {
+        let mut graph = Self {
+            elements: Vec::new(),
+            objects: BTreeMap::new(),
+            external,
+        };
+        let mut diagnostics = Vec::new();
+        for (file, document) in sources {
             let mut indices = HashMap::new();
             for node in document
                 .descendants()
@@ -70,14 +134,18 @@ impl Graph {
                 let object = path(node);
                 graph.elements.push(Element {
                     tag: node.tag_name().name().into(),
-                    text: node.text().unwrap_or("").trim().into(),
+                    text: if node.children().any(|child| child.is_element()) {
+                        String::new()
+                    } else {
+                        crate::definitions::xml_text_trimmed(node).into_owned()
+                    },
                     attributes: node
                         .attributes()
                         .map(|a| (a.name().into(), a.value().into()))
                         .collect(),
                     children: Vec::new(),
                     parent,
-                    file: source.logical_path.clone(),
+                    file: file.into(),
                     object: object.clone(),
                 });
                 if let Some(parent) = parent {
@@ -105,6 +173,13 @@ impl Graph {
                     }
                 }
             }
+        }
+        if reference_policy == ReferencePolicy::ConsumerScoped {
+            return if diagnostics.is_empty() {
+                Ok(graph)
+            } else {
+                Err(diagnostics)
+            };
         }
         let mut selected: Vec<_> = graph
             .of_kind("SYSTEM")
@@ -140,52 +215,7 @@ impl Graph {
                 }
             }
         }
-        for (index, element) in graph.elements.iter().enumerate() {
-            if let Some(destination) = element.attributes.get("DEST") {
-                let kind = graph
-                    .objects
-                    .get(&element.text)
-                    .map(|index| graph.elements[*index].tag.as_str())
-                    .or_else(|| graph.external.get(&element.text).map(String::as_str));
-                let (code, message) = match kind {
-                    None => (
-                        "REFERENCE_UNRESOLVED",
-                        "A referenced AUTOSAR object is missing.",
-                    ),
-                    Some(kind) if kind != destination => (
-                        "REFERENCE_DEST",
-                        "The reference DEST differs from the target object kind.",
-                    ),
-                    Some(_) => continue,
-                };
-                if kind.is_none() && destination == "R-PORT-PROTOTYPE" {
-                    if let Some((parent, parent_index)) =
-                        graph.objects.iter().rev().find(|(path, index)| {
-                            element.text.starts_with(&format!("{path}/"))
-                                && graph.elements[**index].tag == "SERVICE-SW-COMPONENT-TYPE"
-                        })
-                    {
-                        let mut issue = graph.diagnostic(*parent_index, DiagnosticCategory::Input,
-                            "SERVICE_CLIENT_MISSING", format!("The declared service client port is absent beneath {parent}."),
-                            "Supply the standard service client port and bind its synchronous call to the local provider.");
-                        issue.object = Some(element.text.clone());
-                        diagnostics.push(issue);
-                    }
-                }
-                if kind.is_none() && destination == "BSW-MODULE-ENTRY" {
-                    let mut issue = graph.diagnostic(index, DiagnosticCategory::Input,
-                        "BSW_ENTRY_MISSING", "A declared BSW implementation or schedulable entity refers to a missing entry.",
-                        "Supply the BSW entry description and its matching implementation/signature; do not substitute an empty entry.");
-                    issue.object = Some(element.text.clone());
-                    diagnostics.push(issue);
-                }
-                diagnostics.push(graph.diagnostic(
-                    index, DiagnosticCategory::Input, code,
-                    format!("{message} Reference: {}", element.text),
-                    "Supply the referenced object and correct the typed reference; do not add an SDG substitute.",
-                ));
-            }
-        }
+        diagnostics.extend(graph.audit_references(|_| true));
         if diagnostics.is_empty() {
             Ok(graph)
         } else {
@@ -274,16 +304,177 @@ impl Graph {
             remedy: remedy.into(),
         }
     }
+
+    pub fn reference_diagnostics_for(
+        &self,
+        consumers: &std::collections::BTreeSet<String>,
+    ) -> Vec<PlanDiagnostic> {
+        self.audit_references(|element| consumers.contains(&element.object))
+    }
+
+    fn audit_references(&self, include: impl Fn(&Element) -> bool) -> Vec<PlanDiagnostic> {
+        let graph = self;
+        let mut diagnostics = Vec::new();
+        for (index, element) in graph
+            .elements
+            .iter()
+            .enumerate()
+            .filter(|(_, element)| include(element))
+        {
+            if let Some(destination) = element.attributes.get("DEST") {
+                let kind = graph
+                    .objects
+                    .get(&element.text)
+                    .map(|index| graph.elements[*index].tag.as_str())
+                    .or_else(|| graph.external.get(&element.text).map(String::as_str));
+                let (code, message) = match kind {
+                    None => (
+                        "REFERENCE_UNRESOLVED",
+                        "A referenced AUTOSAR object is missing.",
+                    ),
+                    Some(kind) if kind != destination => (
+                        "REFERENCE_DEST",
+                        "The reference DEST differs from the target object kind.",
+                    ),
+                    Some(_) => continue,
+                };
+                if kind.is_none() && destination == "R-PORT-PROTOTYPE" {
+                    if let Some((parent, parent_index)) =
+                        graph.objects.iter().rev().find(|(path, index)| {
+                            element.text.starts_with(&format!("{path}/"))
+                                && graph.elements[**index].tag == "SERVICE-SW-COMPONENT-TYPE"
+                        })
+                    {
+                        let mut issue = graph.diagnostic(*parent_index, DiagnosticCategory::Input,
+                            "SERVICE_CLIENT_MISSING", format!("The declared service client port is absent beneath {parent}."),
+                            "Supply the standard service client port and bind its synchronous call to the local provider.");
+                        issue.object = Some(element.text.clone());
+                        diagnostics.push(issue);
+                    }
+                }
+                if kind.is_none() && destination == "BSW-MODULE-ENTRY" {
+                    let mut issue = graph.diagnostic(index, DiagnosticCategory::Input,
+                        "BSW_ENTRY_MISSING", "A declared BSW implementation or schedulable entity refers to a missing entry.",
+                        "Supply the BSW entry description and its matching implementation/signature; do not substitute an empty entry.");
+                    issue.object = Some(element.text.clone());
+                    diagnostics.push(issue);
+                }
+                diagnostics.push(graph.diagnostic(
+                    index, DiagnosticCategory::Input, code,
+                    format!("{message} Reference: {}", element.text),
+                    "Supply the referenced object and correct the typed reference; do not add an SDG substitute.",
+                ));
+            }
+        }
+        diagnostics
+    }
 }
 
-fn short_name<'a, 'input>(node: roxmltree::Node<'a, 'input>) -> Option<&'a str> {
+// Kept beside the private integration graph so native definition validation can
+// reuse existing cross-module rules without exposing graph implementation types.
+impl crate::definitions::DefinitionCatalog {
+    pub(crate) fn legacy_definition_constraints<'a, 'input>(
+        &self,
+        files: impl Iterator<Item = (&'a str, &'a Document<'input>)>,
+    ) -> Option<(bool, Vec<PlanDiagnostic>)>
+    where
+        'input: 'a,
+    {
+        let external = Graph::catalog_external(self);
+        match Graph::build_documents(files, external, ReferencePolicy::ConsumerScoped) {
+            Ok(graph) => {
+                let mut pending = graph.of_kind("SYSTEM");
+                pending.extend(
+                    graph
+                        .of_kind("ECUC-MODULE-CONFIGURATION-VALUES")
+                        .into_iter()
+                        .filter(|index| {
+                            graph
+                                .text(*index, "DEFINITION-REF")
+                                .and_then(|id| id.strip_prefix("/AUTOSAR/EcucDefs/"))
+                                .is_some_and(|name| {
+                                    matches!(
+                                        name,
+                                        "Can"
+                                            | "CanIf"
+                                            | "CanTp"
+                                            | "Com"
+                                            | "Dcm"
+                                            | "EcuC"
+                                            | "Os"
+                                            | "PduR"
+                                            | "Rte"
+                                    )
+                                })
+                        }),
+                );
+                let mut visited = std::collections::BTreeSet::new();
+                let mut consumers = std::collections::BTreeSet::new();
+                while let Some(index) = pending.pop() {
+                    if !visited.insert(index) {
+                        continue;
+                    }
+                    let element = &graph.elements[index];
+                    if element.tag.starts_with("ECUC-")
+                        && graph
+                            .text(index, "DEFINITION-REF")
+                            .is_some_and(|id| self.get(id).is_none())
+                    {
+                        continue;
+                    }
+                    consumers.insert(element.object.clone());
+                    pending.extend(element.children.iter().copied());
+                    if element.attributes.contains_key("DEST") {
+                        if let Some(target) = graph.objects.get(&element.text) {
+                            pending.push(*target);
+                        }
+                    }
+                }
+                let references = graph.reference_diagnostics_for(&consumers);
+                if !references.is_empty() {
+                    return Some((false, references));
+                }
+                match super::component::inspect(&graph) {
+                    Ok(component) => {
+                        let mut diagnostics = super::configuration::inspect_native(&graph, self)
+                            .err()
+                            .unwrap_or_default();
+                        if let Err(issues) = super::schedule::inspect(&graph, &component) {
+                            diagnostics.extend(issues);
+                        }
+                        let signals = super::communication::inspect(&graph, &component);
+                        let diagnostic = super::diagnostic::inspect(&graph, &component);
+                        if let (Ok(signals), Ok(diagnostic)) = (&signals, &diagnostic) {
+                            if let Err(issues) =
+                                super::routing::inspect(&graph, signals, diagnostic)
+                            {
+                                diagnostics.extend(issues);
+                            }
+                        }
+                        if let Err(issues) = signals {
+                            diagnostics.extend(issues);
+                        }
+                        if let Err(issues) = diagnostic {
+                            diagnostics.extend(issues);
+                        }
+                        Some((true, diagnostics))
+                    }
+                    Err(_) => None,
+                }
+            }
+            Err(diagnostics) => Some((false, diagnostics)),
+        }
+    }
+}
+
+fn short_name<'a, 'input>(node: roxmltree::Node<'a, 'input>) -> Option<std::borrow::Cow<'a, str>> {
     node.children()
         .find(|child| {
             child.is_element()
                 && child.tag_name().namespace() == Some(NS)
                 && child.tag_name().name() == "SHORT-NAME"
         })
-        .and_then(|child| child.text())
+        .map(crate::definitions::xml_text_trimmed)
 }
 
 fn path(node: roxmltree::Node<'_, '_>) -> String {

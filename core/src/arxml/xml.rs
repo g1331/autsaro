@@ -3,12 +3,32 @@ use roxmltree::Node;
 use std::fmt::Write;
 
 pub(super) fn child_text(node: Node<'_, '_>, name: &str) -> Option<String> {
-    node.children()
-        .find(|n| {
-            n.is_element() && n.tag_name().namespace() == Some(NS) && n.tag_name().name() == name
-        })?
-        .text()
-        .map(str::to_owned)
+    let leaf = node.children().find(|node| {
+        node.is_element()
+            && node.tag_name().namespace() == Some(NS)
+            && node.tag_name().name() == name
+    })?;
+    let mut text = literal_text(leaf)?;
+    if matches!(name, "SHORT-NAME" | "DEFINITION-REF") {
+        text.truncate(text.trim_end().len());
+        let leading = text.len() - text.trim_start().len();
+        if leading != 0 {
+            text.drain(..leading);
+        }
+    }
+    Some(text)
+}
+
+pub(super) fn literal_text(node: Node<'_, '_>) -> Option<String> {
+    if node.children().any(|child| child.is_element()) {
+        return None;
+    }
+    Some(
+        node.children()
+            .filter(|child| child.is_text())
+            .filter_map(|child| child.text())
+            .collect(),
+    )
 }
 
 pub(super) fn definition(node: Node<'_, '_>) -> Option<String> {

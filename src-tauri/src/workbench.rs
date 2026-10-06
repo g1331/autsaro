@@ -1,12 +1,22 @@
 use autosar_config_core::Workspace;
 use autosar_config_core::execution::ProcessOwner;
 use autosar_config_core::integration::{PlanDependencies, PlanDiagnostic, RuntimeCatalog};
+use autosar_config_core::project_model::{ActionCapability, RuleCoverage, RuleSetIdentity};
 use autosar_config_core::target::{BuildTarget, ExecutionSettings};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+
+#[derive(Clone, Copy, Default, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub(super) enum Appearance {
+    Light,
+    Dark,
+    #[default]
+    System,
+}
 
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -15,6 +25,8 @@ struct Settings {
     mod_archive: Option<PathBuf>,
     execution_tools: Option<ExecutionSettings>,
     build_target: Option<BuildTarget>,
+    #[serde(default)]
+    appearance: Appearance,
 }
 
 #[derive(Clone, Serialize)]
@@ -36,9 +48,17 @@ pub(super) struct Capabilities {
     pub mod_archive: Option<PathBuf>,
     pub resource_error: Option<String>,
     pub execution_tools: Option<ExecutionSettings>,
+    pub configured_execution_tools: Option<ExecutionSettings>,
     pub tool_error: Option<String>,
     pub environment_overrides: Vec<&'static str>,
     pub operation: Option<OperationView>,
+    pub rule_set_identity: Option<RuleSetIdentity>,
+    pub rule_error: Option<String>,
+    pub rule_coverage: Vec<RuleCoverage>,
+    pub definition_fingerprint: Option<String>,
+    pub appearance: Appearance,
+    pub actions: Vec<ActionCapability>,
+    pub verification_mode: bool,
 }
 
 #[derive(Serialize)]
@@ -83,11 +103,14 @@ pub(super) struct AppState {
     settings_file: PathBuf,
     instance: u64,
     pub runtime: Arc<RuntimeCatalog>,
+    rule_set_identity: Option<RuleSetIdentity>,
+    rule_coverage: Vec<RuleCoverage>,
+    rule_error: Option<String>,
 }
 
 pub(super) struct Snapshot {
     pub workspace: Option<Arc<Workspace>>,
-    pub resources: Arc<PlanDependencies>,
+    pub resources: Option<Arc<PlanDependencies>>,
     pub tools: Option<Arc<ExecutionSettings>>,
     pub target: BuildTarget,
     fingerprint: String,
@@ -98,6 +121,12 @@ impl Snapshot {
         self.workspace
             .as_deref()
             .ok_or_else(|| "请先创建或导入 ARXML 项目".into())
+    }
+
+    pub fn legacy_resources(&self) -> Result<&PlanDependencies, String> {
+        self.resources.as_deref().ok_or_else(|| {
+            "旧 v1 交接兼容需要合法的固定 R24-11 XSD/MOD；普通工程不需要这些档案".into()
+        })
     }
 }
 
@@ -196,6 +225,13 @@ impl AppState {
                 BuildTarget::WindowsX64ControlledV1
             });
         let resource_error = resolved_resources.as_ref().err().cloned();
+        let rules = autosar_config_core::rules::rule_set_identity().and_then(|identity| {
+            autosar_config_core::rules::coverage().map(|coverage| (identity, coverage))
+        });
+        let (rule_set_identity, rule_coverage, rule_error) = match rules {
+            Ok((identity, coverage)) => (Some(identity), coverage, None),
+            Err(error) => (None, Vec::new(), Some(error)),
+        };
         Ok(Arc::new(Self {
             session: Mutex::new(Session {
                 workspace: None,
@@ -215,11 +251,31 @@ impl AppState {
             settings_file,
             instance: autosar_config_core::execution::monotonic_ns()?,
             runtime: Arc::new(RuntimeCatalog::embedded().map_err(diagnostics)?),
+            rule_set_identity,
+            rule_coverage,
+            rule_error,
         }))
     }
 
     fn fingerprint(&self, session: &Session) -> String {
-        format!("{}:{}", self.instance, session.revision)
+        let definition = session
+            .workspace
+            .as_deref()
+            .map(Workspace::definition_fingerprint)
+            .transpose();
+        let definition = match &definition {
+            Ok(Some(value)) => value.as_str(),
+            Ok(None) => "no-project",
+            Err(_) => "definition-unavailable",
+        };
+        let rules = self
+            .rule_set_identity
+            .as_ref()
+            .map_or("rules-unavailable", |identity| identity.sha256.as_str());
+        format!(
+            "{}:{}:{rules}:{definition}",
+            self.instance, session.revision
+        )
     }
 
     fn check(&self, session: &Session, fingerprint: &str) -> Result<(), String> {
@@ -249,6 +305,7 @@ impl AppState {
                 .clone()
                 .or_else(|| session.resource_error.clone()),
             execution_tools: session.tools.as_deref().cloned(),
+            configured_execution_tools: session.settings.execution_tools.clone(),
             tool_error: session.tool_error.clone(),
             environment_overrides: [
                 "AUTOSAR_CONFIG_DIR",
@@ -263,12 +320,152 @@ impl AppState {
             .filter(|name| std::env::var_os(name).is_some())
             .collect(),
             operation: session.active.as_ref().map(|active| active.view.clone()),
+            rule_set_identity: self.rule_set_identity.clone(),
+            rule_error: self.rule_error.clone(),
+            rule_coverage: self.rule_coverage.clone(),
+            definition_fingerprint: session
+                .workspace
+                .as_deref()
+                .and_then(|workspace| workspace.definition_fingerprint().ok()),
+            appearance: session.settings.appearance,
+            actions: self.action_capabilities(session),
+            verification_mode: cfg!(feature = "native-webdriver"),
         }
+    }
+
+    fn action_capabilities(&self, session: &Session) -> Vec<ActionCapability> {
+        let rules_available = self.rule_error.is_none();
+        let has_workspace = session.workspace.is_some();
+        let executing = session.active.is_some();
+        let execution_available =
+            session.target.is_native() && session.tools.is_some() && session.tool_error.is_none();
+        let available = |action: &str, ready: bool, reason: &str| ActionCapability {
+            action: action.into(),
+            available: ready,
+            reason: (!ready).then(|| reason.into()),
+        };
+        vec![
+            available("open", !executing, "请先取消当前操作"),
+            available(
+                "create",
+                rules_available && !executing,
+                "内置规则不可用或操作尚未结束",
+            ),
+            available("source-view", has_workspace, "请先打开真实源文件"),
+            available(
+                "validate",
+                has_workspace && rules_available && !executing,
+                "工程、内置规则或操作状态不满足校验条件",
+            ),
+            available(
+                "edit",
+                has_workspace && rules_available && !executing,
+                "工程、内置规则或操作状态不满足编辑条件",
+            ),
+            available(
+                "save",
+                has_workspace && rules_available && !executing,
+                "请先处理工程、规则错误或当前操作",
+            ),
+            available(
+                "generate",
+                has_workspace && rules_available && !executing,
+                "请先处理工程、规则错误或当前操作；不要求编译器",
+            ),
+            available(
+                "preflight",
+                has_workspace && rules_available && execution_available && !executing,
+                "本机目标或执行工具不可用",
+            ),
+            available(
+                "build",
+                has_workspace && rules_available && execution_available && !executing,
+                "本机目标或执行工具不可用",
+            ),
+            available(
+                "run",
+                has_workspace && rules_available && execution_available && !executing,
+                "本机目标或执行工具不可用",
+            ),
+            available(
+                "legacy-import",
+                session.resources.is_some() && !executing,
+                "旧 v1 兼容需显式提供其固定规范档案",
+            ),
+        ]
+    }
+
+    pub fn definition_cache_root(&self) -> Result<PathBuf, String> {
+        self.settings_file
+            .parent()
+            .map(|path| path.join("definition-catalogs"))
+            .ok_or_else(|| "设置目录缺少安全父目录".into())
+    }
+
+    pub fn read_workspace<T>(
+        &self,
+        fingerprint: &str,
+        action: impl FnOnce(&Workspace) -> Result<T, String>,
+    ) -> Result<Reply<T>, String> {
+        let workspace = {
+            let session = self.session.lock().map_err(|_| "工作区状态锁损坏")?;
+            self.check(&session, fingerprint)?;
+            session
+                .workspace
+                .clone()
+                .ok_or("请先创建或导入 ARXML 项目")?
+        };
+        let value = action(&workspace)?;
+        let session = self.session.lock().map_err(|_| "工作区状态锁损坏")?;
+        self.check(&session, fingerprint)?;
+        Ok(Reply {
+            value,
+            capabilities: self.capabilities_locked(&session),
+            input_fingerprint: fingerprint.into(),
+        })
+    }
+
+    pub fn configure_appearance(
+        &self,
+        fingerprint: &str,
+        appearance: Appearance,
+    ) -> Result<Reply<()>, String> {
+        let _gate = self.operation.lock().map_err(|_| "工作台提交锁损坏")?;
+        let mut session = self.session.lock().map_err(|_| "工作区状态锁损坏")?;
+        self.check(&session, fingerprint)?;
+        let mut settings = session.settings.clone();
+        settings.appearance = appearance;
+        let bytes = self.persist(
+            &settings,
+            session.settings_bytes.as_deref(),
+            session.revision,
+        )?;
+        session.settings = settings;
+        session.settings_bytes = Some(bytes);
+        session.settings_error = None;
+        Ok(Reply {
+            value: (),
+            capabilities: self.capabilities_locked(&session),
+            input_fingerprint: fingerprint.into(),
+        })
     }
 
     pub fn capabilities(&self) -> Result<Capabilities, String> {
         let session = self.session.lock().map_err(|_| "工作区状态锁损坏")?;
         Ok(self.capabilities_locked(&session))
+    }
+    #[cfg(feature = "native-webdriver")]
+    pub fn verification_metrics(
+        &self,
+        fingerprint: &str,
+    ) -> Result<Reply<autosar_config_core::verification::Metrics>, String> {
+        let session = self.session.lock().map_err(|_| "工作区状态锁损坏")?;
+        self.check(&session, fingerprint)?;
+        Ok(Reply {
+            value: autosar_config_core::verification::metrics(),
+            capabilities: self.capabilities_locked(&session),
+            input_fingerprint: fingerprint.into(),
+        })
     }
 
     pub fn view(&self) -> Result<Reply<autosar_config_core::WorkspaceView>, String> {
@@ -311,16 +508,14 @@ impl AppState {
         if !matches!(kind, OperationKind::Open) && session.workspace.is_none() {
             return Err("请先创建或导入 ARXML 项目".into());
         }
-        if let Some(error) = session
-            .settings_error
-            .as_ref()
-            .or(session.resource_error.as_ref())
+        if matches!(kind, OperationKind::Edit | OperationKind::Native)
+            && let Some(error) = &self.rule_error
         {
-            return Err(error.clone());
+            return Err(format!("BUILTIN_RULES: {error}"));
         }
         let snapshot = Snapshot {
             workspace: session.workspace.clone(),
-            resources: session.resources.clone().ok_or("请先配置合法规范档案")?,
+            resources: session.resources.clone(),
             tools: session.tools.clone(),
             target: session.target,
             fingerprint: self.fingerprint(&session),
@@ -471,16 +666,12 @@ impl AppState {
         fingerprint: &str,
         value: ExecutionSettings,
     ) -> Result<Reply<()>, String> {
-        let ExecutionSettings {
-            compiler,
-            objdump,
-            git,
-            python,
-        } = value;
-        let value = ExecutionSettings::new(compiler, objdump, git, python)?;
         for path in [&value.compiler, &value.objdump, &value.git, &value.python] {
-            if !path.is_file() {
-                return Err(format!("工具路径不存在: {}", path.display()));
+            if !path.as_os_str().is_empty() && (!path.is_absolute() || !path.is_file()) {
+                return Err(format!(
+                    "配置工具必须为现存绝对路径或留空: {}",
+                    path.display()
+                ));
             }
         }
         self.configure(
@@ -528,7 +719,10 @@ impl AppState {
         )?;
         if let Some(resources) = resolved_resources {
             if let Some(workspace) = &mut session.workspace {
-                Arc::make_mut(workspace).set_validation_schema(resources.xsd_archive.clone());
+                let workspace = Arc::make_mut(workspace);
+                if workspace.uses_legacy_validation() {
+                    workspace.set_legacy_validation_schema(resources.xsd_archive.clone())?;
+                }
             }
             session.resources = Some(resources);
             session.resource_error = None;
@@ -635,6 +829,54 @@ impl Operation {
             }
             session.workspace = Some(Arc::new(workspace));
             Ok(value)
+        })
+    }
+
+    pub fn publish_configuration(
+        &self,
+        workspace: Workspace,
+        mut outcome: autosar_config_core::project_model::ChangeOutcome,
+    ) -> Result<Reply<autosar_config_core::project_model::ChangeOutcome>, String> {
+        let changed =
+            workspace.input_fingerprint()? != self.snapshot.workspace()?.input_fingerprint()?;
+        self.commit(move |session| {
+            if changed {
+                session.invalidate()?;
+            }
+            session.workspace = Some(Arc::new(workspace));
+            outcome.projection.input_fingerprint = self.state.fingerprint(session);
+            Ok(outcome)
+        })
+    }
+
+    pub fn initialize_application(
+        &self,
+        mut workspace: Workspace,
+        preview: &autosar_config_core::arxml::ApplicationInitializationPreview,
+    ) -> Result<Reply<autosar_config_core::arxml::ApplicationInitializationOutcome>, String> {
+        self.commit(move |session| {
+            let next_revision = session
+                .revision
+                .checked_add(1)
+                .ok_or("工作台修订号已耗尽")?;
+            let mut outcome = workspace.initialize_application_previewed(preview)?;
+            session.revision = next_revision;
+            session.workspace = Some(Arc::new(workspace));
+            outcome.projection.input_fingerprint = self.state.fingerprint(session);
+            Ok(outcome)
+        })
+    }
+
+    pub fn publish_projection(
+        &self,
+        workspace: Workspace,
+        mut projection: autosar_config_core::project_model::ProjectProjection,
+    ) -> Result<Reply<autosar_config_core::project_model::ProjectProjection>, String> {
+        self.commit(move |session| {
+            session.invalidate()?;
+            session.workspace = Some(Arc::new(workspace));
+            projection.input_fingerprint = self.state.fingerprint(session);
+            Ok(projection)
         })
     }
 }

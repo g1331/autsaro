@@ -8,7 +8,7 @@ use std::process::{Command, Stdio};
 #[cfg(windows)]
 pub(super) fn configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_multiframe_did() {
     let temp = Scratch::new();
-    let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
+    let mut project = Workspace::create_legacy(&temp.0.join("Diag"), "Diag", archive()).unwrap();
     let frame = project
         .add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(1000), None)
         .unwrap()
@@ -153,7 +153,7 @@ pub(super) fn configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_mult
     }
     assert!(original.contains("CanTpNas"));
     fs::write(&source, original.replacen("CanTpNas", "CanTpMissingNas", 1)).unwrap();
-    let missing_n_as = Workspace::open(vec![source.clone()], archive()).unwrap();
+    let missing_n_as = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
     assert!(
         missing_n_as
             .view()
@@ -166,7 +166,7 @@ pub(super) fn configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_mult
         original.replace("</ELEMENTS>", "<!-- user annotation --></ELEMENTS>"),
     )
     .unwrap();
-    let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
+    let mut reopened = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
     let diagnostic = reopened.view().diagnostic.unwrap();
     assert_eq!((diagnostic.n_as_ms, diagnostic.n_bs_ms), (75, 200));
     assert_eq!(
@@ -241,7 +241,8 @@ pub(super) fn configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_mult
             .unwrap()
             .contains("<!-- user annotation -->")
     );
-    let mut signal_only = Workspace::open(vec![temp.0.join("Diag/Diag.arxml")], archive()).unwrap();
+    let mut signal_only =
+        Workspace::open_legacy(vec![temp.0.join("Diag/Diag.arxml")], archive()).unwrap();
     assert!(signal_only.view().diagnostic.is_none());
     let signal_output = temp.0.join("GeneratedSignalsOnly");
     generator::generate(&mut signal_only, &signal_output, tooling::native_target()).unwrap();
@@ -252,7 +253,7 @@ pub(super) fn configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_mult
 #[cfg(windows)]
 pub(super) fn active_session_did_reports_session_transitions_and_rejects_invalid_reads() {
     let temp = Scratch::new();
-    let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
+    let mut project = Workspace::create_legacy(&temp.0.join("Diag"), "Diag", archive()).unwrap();
     let frame = project
         .add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(1000), None)
         .unwrap()
@@ -300,7 +301,7 @@ pub(super) fn active_session_did_reports_session_transitions_and_rejects_invalid
     project.save().unwrap();
     let source = temp.0.join("Diag/Diag.arxml");
     let saved = fs::read(&source).unwrap();
-    let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
+    let mut reopened = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
     assert!(reopened.validate().unwrap().issues.is_empty());
     let generated = temp.0.join("GeneratedDiag");
     generator::generate(&mut reopened, &generated, tooling::native_target()).unwrap();
@@ -372,7 +373,7 @@ pub(super) fn active_session_did_reports_session_transitions_and_rejects_invalid
 #[cfg(windows)]
 pub(super) fn multiple_dids_keep_request_order_and_skip_unavailable_values() {
     let temp = Scratch::new();
-    let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
+    let mut project = Workspace::create_legacy(&temp.0.join("Diag"), "Diag", archive()).unwrap();
     let frame = project
         .add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(1000), None)
         .unwrap()
@@ -403,7 +404,7 @@ pub(super) fn multiple_dids_keep_request_order_and_skip_unavailable_values() {
     project.save().unwrap();
     let source = temp.0.join("Diag/Diag.arxml");
     let saved = fs::read(&source).unwrap();
-    let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
+    let mut reopened = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
     assert!(reopened.validate().unwrap().issues.is_empty());
     let generated = temp.0.join("GeneratedDiag");
     generator::generate(&mut reopened, &generated, tooling::native_target()).unwrap();
@@ -478,7 +479,7 @@ pub(super) fn multiple_dids_keep_request_order_and_skip_unavailable_values() {
 #[cfg(windows)]
 pub(super) fn diagnostic_transport_discards_bad_or_timed_out_multiframe_requests_and_recovers() {
     let temp = Scratch::new();
-    let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
+    let mut project = Workspace::create_legacy(&temp.0.join("Diag"), "Diag", archive()).unwrap();
     let frame = project
         .add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(1000), None)
         .unwrap()
@@ -554,7 +555,7 @@ pub(super) fn diagnostic_transport_discards_bad_or_timed_out_multiframe_requests
 #[cfg(windows)]
 pub(super) fn diagnostic_tester_present_keeps_session_and_fc_block_size_paces_response() {
     let temp = Scratch::new();
-    let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
+    let mut project = Workspace::create_legacy(&temp.0.join("Diag"), "Diag", archive()).unwrap();
     for (name, id) in [("LiveA", 0x321), ("LiveB", 0x322)] {
         let frame = project
             .add_frame(name.into(), id, 8, Direction::Tx, Some(1000), None)
@@ -647,7 +648,7 @@ pub(super) fn diagnostic_tester_present_keeps_session_and_fc_block_size_paces_re
 #[cfg(windows)]
 pub(super) fn unsupported_imported_transport_padding_blocks_diagnostic_generation() {
     let temp = Scratch::new();
-    let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
+    let mut project = Workspace::create_legacy(&temp.0.join("Diag"), "Diag", archive()).unwrap();
     let frame = project
         .add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(1000), None)
         .unwrap()
@@ -679,7 +680,7 @@ pub(super) fn unsupported_imported_transport_padding_blocks_diagnostic_generatio
     let source = temp.0.join("Diag/Diag.arxml");
     let original = fs::read_to_string(&source).unwrap();
     fs::write(&source, original.replacen(">CANTP_OFF<", ">CANTP_ON<", 1)).unwrap();
-    let mut imported = Workspace::open(vec![source], archive()).unwrap();
+    let mut imported = Workspace::open_legacy(vec![source], archive()).unwrap();
     assert!(
         imported
             .view()
@@ -700,7 +701,7 @@ pub(super) fn supported_dtcs_include_zero_status_and_follow_configured_lifecycle
         ("SupportedB", 0xABCDEF, "ABCDEF"),
     ] {
         let directory = temp.0.join(name);
-        let mut project = Workspace::create(&directory, name, archive()).unwrap();
+        let mut project = Workspace::create_legacy(&directory, name, archive()).unwrap();
         let tx = project
             .add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(1000), None)
             .unwrap()
@@ -743,7 +744,7 @@ pub(super) fn supported_dtcs_include_zero_status_and_follow_configured_lifecycle
         project.save().unwrap();
         let source = directory.join(format!("{name}.arxml"));
         let saved = fs::read(&source).unwrap();
-        let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
+        let mut reopened = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
         assert!(reopened.validate().unwrap().issues.is_empty());
         assert_eq!(reopened.view().diagnostic.unwrap().dtc.unwrap().code, code);
         let generated = directory.join("generated");
@@ -843,7 +844,7 @@ pub(super) fn supported_dtcs_include_zero_status_and_follow_configured_lifecycle
 
         reopened.clear_dtc().unwrap();
         reopened.save().unwrap();
-        let mut cleared = Workspace::open(vec![source], archive()).unwrap();
+        let mut cleared = Workspace::open_legacy(vec![source], archive()).unwrap();
         assert!(cleared.view().diagnostic.unwrap().dtc.is_none());
         let without_dtc = directory.join("without-dtc");
         generator::generate(&mut cleared, &without_dtc, tooling::native_target()).unwrap();
@@ -870,7 +871,7 @@ pub(super) fn supported_dtcs_include_zero_status_and_follow_configured_lifecycle
 #[cfg(windows)]
 pub(super) fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restarts() {
     let temp = Scratch::new();
-    let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
+    let mut project = Workspace::create_legacy(&temp.0.join("Diag"), "Diag", archive()).unwrap();
     let tx = project
         .add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(1000), None)
         .unwrap()
@@ -975,7 +976,8 @@ pub(super) fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restart
     );
     let unsupported_path = temp.0.join("Unsupported.arxml");
     fs::write(&unsupported_path, &mutated).unwrap();
-    let mut unsupported = Workspace::open(vec![unsupported_path.clone()], archive()).unwrap();
+    let mut unsupported =
+        Workspace::open_legacy(vec![unsupported_path.clone()], archive()).unwrap();
     assert!(
         unsupported
             .view()
@@ -997,7 +999,7 @@ pub(super) fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restart
         original.replace("</ELEMENTS>", "<!-- retained by owner --></ELEMENTS>"),
     )
     .unwrap();
-    let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
+    let mut reopened = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
     let dtc = reopened.view().diagnostic.unwrap().dtc.unwrap();
     assert_eq!((dtc.code, dtc.monitor_frame_path), (0x123456, rx));
     let generated = temp.0.join("GeneratedDiag");
@@ -1199,7 +1201,7 @@ pub(super) fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restart
                             .text()
                             .is_some_and(|value| value.ends_with("/DcmDemClientRef"))))
     );
-    let mut without_dtc = Workspace::open(vec![source], archive()).unwrap();
+    let mut without_dtc = Workspace::open_legacy(vec![source], archive()).unwrap();
     let diagnostic = without_dtc.view().diagnostic.unwrap();
     assert!(diagnostic.dtc.is_none());
     assert_eq!(diagnostic.did, 0x1234);
@@ -1231,7 +1233,7 @@ pub(super) fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restart
 #[cfg(windows)]
 pub(super) fn extended_session_write_did_changes_live_can_but_not_restart_state() {
     let temp = Scratch::new();
-    let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
+    let mut project = Workspace::create_legacy(&temp.0.join("Diag"), "Diag", archive()).unwrap();
     let frame = project
         .add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(100), None)
         .unwrap()
@@ -1280,7 +1282,7 @@ pub(super) fn extended_session_write_did_changes_live_can_but_not_restart_state(
         original.replace("</ELEMENTS>", "<!-- owner note --></ELEMENTS>"),
     )
     .unwrap();
-    let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
+    let mut reopened = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
     assert!(reopened.view().diagnostic.unwrap().write_enabled);
     let generated = temp.0.join("GeneratedWrite");
     generator::generate(&mut reopened, &generated, tooling::native_target()).unwrap();
@@ -1354,7 +1356,8 @@ pub(super) fn extended_session_write_did_changes_live_can_but_not_restart_state(
 #[cfg(windows)]
 pub(super) fn security_access_roundtrips_and_gates_host_writes() {
     let temp = Scratch::new();
-    let mut project = Workspace::create(&temp.0.join("Secure"), "Secure", archive()).unwrap();
+    let mut project =
+        Workspace::create_legacy(&temp.0.join("Secure"), "Secure", archive()).unwrap();
     let frame = project
         .add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(100), None)
         .unwrap()
@@ -1386,7 +1389,7 @@ pub(super) fn security_access_roundtrips_and_gates_host_writes() {
     let source = temp.0.join("Secure/Secure.arxml");
     let xml = fs::read_to_string(&source).unwrap();
     assert!(!xml.contains("5A5A5A5A"));
-    let mut reopened = Workspace::open(vec![source], archive()).unwrap();
+    let mut reopened = Workspace::open_legacy(vec![source], archive()).unwrap();
     assert!(reopened.view().diagnostic.unwrap().security_enabled);
     let generated = temp.0.join("GeneratedSecure");
     generator::generate(&mut reopened, &generated, tooling::native_target()).unwrap();
@@ -1403,7 +1406,8 @@ pub(super) fn security_access_roundtrips_and_gates_host_writes() {
 #[cfg(windows)]
 pub(super) fn security_access_gates_dtc_mutations_without_a_writable_did() {
     let temp = Scratch::new();
-    let mut project = Workspace::create(&temp.0.join("SecureDtc"), "SecureDtc", archive()).unwrap();
+    let mut project =
+        Workspace::create_legacy(&temp.0.join("SecureDtc"), "SecureDtc", archive()).unwrap();
     let tx = project
         .add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(1000), None)
         .unwrap()
@@ -1461,7 +1465,7 @@ pub(super) fn security_access_gates_dtc_mutations_without_a_writable_did() {
         .unwrap();
     project.save().unwrap();
     let mut reopened =
-        Workspace::open(vec![temp.0.join("SecureDtc/SecureDtc.arxml")], archive()).unwrap();
+        Workspace::open_legacy(vec![temp.0.join("SecureDtc/SecureDtc.arxml")], archive()).unwrap();
     assert!(reopened.view().diagnostic.unwrap().security_enabled);
     assert!(
         reopened.clear_dtc().is_err(),
@@ -1477,7 +1481,7 @@ pub(super) fn security_access_gates_dtc_mutations_without_a_writable_did() {
 #[cfg(windows)]
 pub(super) fn start_routine_restores_written_did_signals_and_respects_session() {
     let temp = Scratch::new();
-    let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
+    let mut project = Workspace::create_legacy(&temp.0.join("Diag"), "Diag", archive()).unwrap();
     let frame = project
         .add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(100), None)
         .unwrap()
@@ -1580,7 +1584,7 @@ pub(super) fn start_routine_restores_written_did_signals_and_respects_session() 
         original.replace("</ELEMENTS>", "<!-- retained annotation --></ELEMENTS>"),
     )
     .unwrap();
-    let mut reopened = Workspace::open(vec![source.clone()], archive()).unwrap();
+    let mut reopened = Workspace::open_legacy(vec![source.clone()], archive()).unwrap();
     assert_eq!(
         reopened.view().diagnostic.unwrap().reset_routine_id,
         Some(0xF001)
@@ -1643,7 +1647,7 @@ pub(super) fn start_routine_restores_written_did_signals_and_respects_session() 
 #[cfg(windows)]
 pub(super) fn generated_dcm_callbacks_link_for_independent_consumer_and_update_live_signals() {
     let temp = Scratch::new();
-    let mut project = Workspace::create(&temp.0.join("Diag"), "Diag", archive()).unwrap();
+    let mut project = Workspace::create_legacy(&temp.0.join("Diag"), "Diag", archive()).unwrap();
     let frame = project
         .add_frame("Live".into(), 0x321, 8, Direction::Tx, Some(100), None)
         .unwrap()
@@ -1677,7 +1681,7 @@ pub(super) fn generated_dcm_callbacks_link_for_independent_consumer_and_update_l
         .unwrap();
     project.save().unwrap();
     let source_path = temp.0.join("Diag/Diag.arxml");
-    let mut reopened = Workspace::open(vec![source_path.clone()], archive()).unwrap();
+    let mut reopened = Workspace::open_legacy(vec![source_path.clone()], archive()).unwrap();
     reopened
         .update_frame(&frame, serde_json::json!({"periodMs": 110}))
         .unwrap();

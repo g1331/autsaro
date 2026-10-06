@@ -42,6 +42,10 @@ pub struct PlanDescription {
     pub symbols: Vec<SymbolContract>,
     pub runtime_sources: BTreeMap<String, String>,
     pub validation_dependencies: BTreeMap<String, String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rule_set_identity: Option<crate::project_model::RuleSetIdentity>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub required_extension_definitions: Vec<crate::project_model::ExtensionDefinitionIdentity>,
 }
 
 /// All fields are private and construction only follows the checked path.
@@ -97,7 +101,10 @@ fn assemble(
     let signals = communication::inspect(graph, &component)?;
     let diagnostic = diagnostic::inspect(graph, &component)?;
     let routes = routing::inspect(graph, &signals, &diagnostic)?;
-    let configuration = configuration::inspect(graph)?;
+    let configuration = match &inspection.definition_catalog {
+        Some(catalog) => configuration::inspect_native(graph, catalog)?,
+        None => configuration::inspect(graph)?,
+    };
     let mut symbols = catalog::inspect(graph, runtime)?;
     let context = *graph.objects.get(&component.component).unwrap();
     let datatype = component.service.array_type.rsplit('/').next().unwrap();
@@ -327,10 +334,9 @@ fn assemble(
         handles,
         symbols,
         runtime_sources: runtime.source_identities().clone(),
-        validation_dependencies: BTreeMap::from([
-            ("R24-11 XSD".into(), super::XSD_SHA256.into()),
-            ("R24-11 MOD".into(), super::MOD_SHA256.into()),
-        ]),
+        validation_dependencies: inspection.validation_dependencies,
+        rule_set_identity: inspection.rule_set_identity,
+        required_extension_definitions: inspection.required_extension_definitions,
     };
     Ok(ValidatedIntegrationPlan {
         description,
@@ -344,4 +350,13 @@ pub fn build_plan(
     runtime: &RuntimeCatalog,
 ) -> Result<ValidatedIntegrationPlan, Vec<PlanDiagnostic>> {
     assemble(inspect_inputs(sources, dependencies)?, runtime)
+}
+
+/// Construct the same finite target plan using product-native validation.
+pub fn build_plan_native(
+    sources: &[InputSource],
+    catalog: &crate::definitions::DefinitionCatalog,
+    runtime: &RuntimeCatalog,
+) -> Result<ValidatedIntegrationPlan, Vec<PlanDiagnostic>> {
+    assemble(super::inspect_inputs_native(sources, catalog)?, runtime)
 }

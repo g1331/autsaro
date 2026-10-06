@@ -3,6 +3,9 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
+#[path = "src/rules/grammar.rs"]
+mod native_grammar;
+
 #[derive(Clone)]
 struct Source {
     path: String,
@@ -233,8 +236,166 @@ fn main() {
         output,
     )
     .expect("write embedded asset index");
+    build_native_inventory(&core);
     println!(
         "cargo:rerun-if-changed={}",
         root.join("runtime/contracts/assets-v1.json").display()
     );
+}
+
+fn collect_native_sources(core: &Path, relative: &str, paths: &mut Vec<String>) {
+    let path = core.join(relative);
+    println!("cargo:rerun-if-changed={}", path.display());
+    let metadata = fs::symlink_metadata(&path).expect("native rule source metadata");
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        assert_eq!(
+            metadata.file_attributes() & 0x400,
+            0,
+            "native rule sources cannot be reparse points"
+        );
+    }
+    assert!(!metadata.file_type().is_symlink(), "linked native source");
+    if metadata.is_dir() {
+        for entry in fs::read_dir(&path).expect("native rule source directory") {
+            let entry = entry.expect("native rule source entry");
+            let name = entry.file_name().into_string().expect("UTF-8 source name");
+            collect_native_sources(core, &format!("{relative}/{name}"), paths);
+        }
+    } else {
+        assert!(
+            metadata.is_file(),
+            "native rule source is not a regular file"
+        );
+        paths.push(relative.to_owned());
+    }
+}
+
+fn build_native_inventory(core: &Path) {
+    let mut names = std::collections::BTreeSet::new();
+    for (name, shape) in native_grammar::STRUCTURES {
+        assert!(names.insert(*name), "duplicate native structural rule");
+        assert!(
+            shape.split_ascii_whitespace().count() <= 32,
+            "native child group capacity"
+        );
+    }
+    for (name, _) in native_grammar::SCALARS {
+        assert!(names.insert(*name), "duplicate native scalar rule");
+    }
+    for name in native_grammar::REFERENCES {
+        assert!(names.insert(*name), "duplicate native reference rule");
+    }
+    for name in native_grammar::OPEN_CHOICES {
+        assert!(
+            native_grammar::STRUCTURES.iter().any(|(parent, shape)| {
+                parent == name && shape.split_ascii_whitespace().count() == 1
+            }),
+            "open native choice must be a single choice wrapper"
+        );
+    }
+    // Missing definitions during parallel implementation fail the build rather
+    // than publishing a different, apparently successful partial rule identity.
+    let mut paths = Vec::new();
+    for relative in [
+        "build.rs",
+        "src/rules.rs",
+        "src/rules",
+        "src/schema.rs",
+        "src/definitions.rs",
+        "src/model.rs",
+        "src/project_model.rs",
+        "src/arxml.rs",
+        "src/arxml",
+        "src/integration",
+        "src/prepared.rs",
+        "src/generator.rs",
+        "src/generator",
+        "src/verification.rs",
+    ] {
+        collect_native_sources(core, relative, &mut paths);
+    }
+    let definitions = core.join("src/definitions");
+    println!("cargo:rerun-if-changed={}", definitions.display());
+    if definitions.exists() {
+        collect_native_sources(core, "src/definitions", &mut paths);
+    }
+    paths.sort();
+    paths.dedup();
+    let root = core.parent().expect("workspace root");
+    let mut source_paths: Vec<_> = paths
+        .into_iter()
+        .map(|path| (format!("core/{path}"), core.join(path)))
+        .collect();
+    for relative in [
+        "scripts/ecu_tools/workbench_v2.py",
+        "scripts/ecu_tools/workbench-v2-assets.json",
+    ] {
+        let absolute = root.join(relative);
+        let metadata = fs::symlink_metadata(&absolute).expect("native delivery source metadata");
+        assert!(
+            metadata.is_file() && !metadata.file_type().is_symlink(),
+            "native delivery source must be a regular file"
+        );
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+            assert_eq!(
+                metadata.file_attributes() & 0x400,
+                0,
+                "native delivery source cannot be a reparse point"
+            );
+        }
+        println!("cargo:rerun-if-changed={}", absolute.display());
+        source_paths.push((relative.to_owned(), absolute));
+    }
+    source_paths.sort_by(|left, right| left.0.cmp(&right.0));
+    let mut sources = Vec::new();
+    let mut generated = String::from("static INVENTORY_SOURCES: &[InventorySource] = &[\n");
+    for (path, absolute) in source_paths {
+        let bytes = fs::read(&absolute).expect("native implementation bytes");
+        assert!(
+            !bytes.is_empty(),
+            "empty native implementation source: {path}"
+        );
+        let sha256 = format!("{:x}", Sha256::digest(&bytes));
+        sources.push(serde_json::json!({"path": path, "sha256": sha256}));
+        generated.push_str(&format!(
+            "InventorySource {{ path: {path:?}, sha256: {sha256:?}, bytes: include_bytes!({:?}) }},\n",
+            absolute.to_str().expect("UTF-8 source path")
+        ));
+    }
+    generated.push_str("];\n");
+    let coverage: Vec<_> = native_grammar::coverage_rows()
+        .into_iter()
+        .map(|(scope, rule_id, subject)| {
+            serde_json::json!({
+                "ruleId": rule_id, "scope": scope, "subjects": [subject],
+                "supported": true, "reason": null
+            })
+        })
+        .chain(std::iter::once(serde_json::json!({
+            "ruleId": "native.unsupported", "scope": "schema",
+            "subjects": ["unlisted structure, attributes, conditions, variants and expression semantics"],
+            "supported": false,
+            "reason": "Only the listed product-authored native rules execute; this is not full XSD certification."
+        })))
+        .collect();
+    let inventory = serde_json::json!({
+        "format": "autosar-native-rule-inventory-v1",
+        "release": native_grammar::RELEASE,
+        "rulesVersion": native_grammar::RULES_VERSION,
+        "sources": sources,
+        "coverage": coverage
+    });
+    let bytes = serde_json::to_vec(&inventory).expect("deterministic rule inventory");
+    let sha256 = format!("{:x}", Sha256::digest(&bytes));
+    let out = PathBuf::from(std::env::var_os("OUT_DIR").expect("OUT_DIR"));
+    fs::write(out.join("native_rule_inventory.json"), &bytes).expect("native inventory");
+    generated.push_str(&format!(
+        "const TRUSTED_INVENTORY_SHA256: &str = {sha256:?};\n\
+         static INVENTORY_BYTES: &[u8] = include_bytes!(concat!(env!(\"OUT_DIR\"), \"/native_rule_inventory.json\"));\n"
+    ));
+    fs::write(out.join("native_rule_index.rs"), generated).expect("trusted native index");
 }

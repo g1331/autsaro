@@ -166,3 +166,11 @@ pub fn validate_files(archive: &Path, files: &[(&Path, &str)]) -> Result<Vec<Iss
     }
     Ok(issues)
 }
+
+/// Product-authored offline checks, explicitly separate from the pinned oracle
+/// and the legacy XSD identity used by validate_files.
+pub fn validate_native_files(
+    files: &[(&Path, &str)],
+) -> Result<crate::project_model::ScopeValidation, String> {
+    crate::rules::validate_native(files)
+}

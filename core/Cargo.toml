@@ -3,6 +3,9 @@ name = "autosar-config-core"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+verification-metrics = []
+
 [dependencies]
 libxml = "0.3.21"
 libc = "0.2"

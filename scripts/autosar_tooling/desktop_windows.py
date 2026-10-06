@@ -104,9 +104,13 @@ def run(
     binary: Path,
     installed: bool = False,
     source_checkout: Path | None = None,
+    builtin_only: bool = False,
+    *,
+    caller_process: dict | None = None,
 ) -> int:
     if os.name != "nt":
         raise RuntimeError("Native desktop verification requires Windows")
+    ordinary_product = installed or builtin_only
     binary = binary.resolve(strict=True)
     source_checkout = source_checkout.resolve() if source_checkout is not None else None
     if installed and (
@@ -119,13 +123,30 @@ def run(
     from autosar_tooling import native_profile
 
     scratch = Path(tempfile.mkdtemp(prefix="autosar-native-windows-"))
-    mode = "installed" if installed else "dev"
+    mode = "builtin-only" if builtin_only else "installed" if installed else "dev"
     print(f"Isolated native test directory ({mode}): {scratch}", flush=True)
-    native_profile.prepare(scratch, "windows", installed, source_checkout)
+    if ordinary_product:
+        # Elevated verifier-created inputs must remain writable by the ordinary
+        # medium-token product. Apply inheritance only to our new private root.
+        argv = [str(Path(os.environ["SystemRoot"]) / "System32/icacls.exe"),
+                str(scratch), "/setintegritylevel", "(OI)(CI)M"]
+        label = subprocess.run(
+            argv, check=False, capture_output=True, timeout=15,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+        (scratch / "scratch-integrity.stdout.log").write_bytes(label.stdout)
+        (scratch / "scratch-integrity.stderr.log").write_bytes(label.stderr)
+        (scratch / "scratch-integrity.json").write_text(
+            json.dumps({"argv": argv, "exitCode": label.returncode, "scope": "new-private-scratch-only"}),
+            encoding="utf-8",
+        )
+        if label.returncode != 0:
+            raise RuntimeError(f"Private medium-token scratch label failed; exit={label.returncode}; evidence={scratch}")
+    native_profile.prepare(scratch, "windows", installed, source_checkout, builtin_only)
     app_cwd = scratch / "app-work" if installed else ROOT
     if installed:
         app_cwd.mkdir(exist_ok=True)
-    environment = native_profile.app_environment(scratch, installed)
+    environment = native_profile.app_environment(scratch, installed, builtin_only)
     environment.pop("AUTOSAR_XSD_ARCHIVE", None)
     environment.pop("AUTOSAR_MOD_ARCHIVE", None)
     environment["WEBVIEW2_USER_DATA_FOLDER"] = str(scratch / "webview-profile")
@@ -163,6 +184,8 @@ def run(
     user.GetDlgCtrlID.argtypes = [w.HWND]
     user.SendMessageW.argtypes = [w.HWND, w.UINT, w.WPARAM, w.LPARAM]
     user.SendMessageW.restype = w.LPARAM
+    user.IsWindowVisible.argtypes = [w.HWND]
+    user.IsWindowEnabled.argtypes = [w.HWND]
     kernel.GetCurrentThreadId.restype = w.DWORD
     kernel.CreateJobObjectW.argtypes = [w.LPVOID, w.LPCWSTR]
     kernel.CreateJobObjectW.restype = w.HANDLE
@@ -255,8 +278,21 @@ def run(
     desktop = None
     job = None
     processes = []
+    private_station = None
+    medium_token = None
     try:
-        desktop = checked(user.CreateDesktopW(desktop_name, None, None, 0, 0x1FF, None))
+        security = None
+        if ordinary_product:
+            from autosar_tooling.native_station import PrivateStation
+
+            private_station = PrivateStation(user)
+            if name(private_station.handle) == name(private_station.original):
+                raise RuntimeError("Clipboard isolation reused the user's window station")
+            security = ctypes.byref(private_station.security)
+            from autosar_tooling.native_token import MediumToken
+
+            medium_token = MediumToken(caller_process=caller_process)
+        desktop = checked(user.CreateDesktopW(desktop_name, None, None, 0, 0x1FF, security))
         job = checked(kernel.CreateJobObjectW(None, None))
         limits = ExtendedLimits()
         limits.basic.flags = 0x2000
@@ -271,7 +307,7 @@ def run(
             raise RuntimeError("Isolation desktop equals the input desktop")
         checked(user.SetThreadDesktop(desktop))
 
-        def launch(command, launch_environment, cwd=ROOT, stdout=None):
+        def launch(command, launch_environment, cwd=ROOT, stdout=None, ordinary=False):
             with ExitStack() as resources:
                 startup = StartupEx()
                 startup.startup.cb = ctypes.sizeof(startup)
@@ -332,20 +368,27 @@ def run(
                         startup.startup.hStdError = handles[1]
                     # Suspended + Unicode environment + no console window. Assign
                     # the job before any child, including the CDP driver, can spawn.
-                    checked(
-                        kernel.CreateProcessW(
-                            None,
-                            command_line,
-                            None,
-                            None,
-                            stdout is not None,
-                            0x08080404,
-                            block,
-                            str(cwd),
-                            ctypes.cast(ctypes.byref(startup), ctypes.POINTER(Startup)),
-                            ctypes.byref(process),
+                    if ordinary:
+                        if medium_token is None or stdout is not None:
+                            raise RuntimeError("Installed product launch requires its non-elevated token")
+                        medium_token.create(
+                            command[0], command_line, block, str(cwd), startup, process
                         )
-                    )
+                    else:
+                        checked(
+                            kernel.CreateProcessW(
+                                None,
+                                command_line,
+                                None,
+                                None,
+                                stdout is not None,
+                                0x08080404,
+                                block,
+                                str(cwd),
+                                ctypes.cast(ctypes.byref(startup), ctypes.POINTER(Startup)),
+                                ctypes.byref(process),
+                            )
+                        )
                     processes.append(process)
                     if not kernel.AssignProcessToJobObject(job, process.process):
                         error = ctypes.get_last_error()
@@ -387,6 +430,7 @@ def run(
             debug_port = socket_handle.getsockname()[1]
         environment["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = (
             f"--remote-debugging-port={debug_port}"
+            + (" --disable-background-networking --disable-component-update" if builtin_only else "")
         )
         if not installed:
             deadline = time.monotonic() + 40
@@ -400,7 +444,7 @@ def run(
                             "Isolated Vite process failed to become ready"
                         )
                     time.sleep(0.2)
-        app = launch([str(binary)], environment, cwd=app_cwd)
+        app = launch([str(binary)], environment, cwd=app_cwd, ordinary=ordinary_product)
         launch_receipt = {
             "installed": installed,
             "mode": mode,
@@ -408,6 +452,9 @@ def run(
             "cwd": str(app_cwd),
             "appPid": app.pid,
             "desktop": name(desktop),
+            "windowStation": station,
+            "clipboardIsolation": private_station is not None,
+            "appToken": medium_token.process_evidence(app.process) if medium_token is not None else None,
             "vitePid": vite.pid if vite is not None else None,
             "environment": {
                 key: environment[key]
@@ -452,7 +499,10 @@ def run(
             raise RuntimeError(
                 "Native app windows are not exclusively on the isolated desktop"
             )
-        current = checked(user.OpenInputDesktop(0, False, 1))
+        current = (
+            private_station.input_desktop() if private_station is not None
+            else checked(user.OpenInputDesktop(0, False, 1))
+        )
         try:
             if name(current) != input_name:
                 raise RuntimeError("The input desktop changed during the isolated test")
@@ -495,10 +545,25 @@ def run(
             )
             deadline = time.monotonic() + 900
             while (driver_result := poll(driver)) is None:
+                cancellation = os.environ.get("AUTOSAR_NATIVE_CANCEL_PATH")
+                if cancellation is not None and Path(cancellation).is_file():
+                    raise RuntimeError("Elevated native controller canceled by its bounded parent")
                 if time.monotonic() > deadline:
                     raise RuntimeError(
                         "Native UI driver exceeded its bounded verification time"
                     )
+                if builtin_only:
+                    from autosar_tooling.native_window import sample as resize_window
+
+                    resize_window(scratch, app.pid, windows(desktop, app.pid), user, private_station is not None)
+                    from autosar_tooling.native_memory import sample
+
+                    sample(scratch, app.pid, "native-application")
+                    from autosar_tooling.native_clipboard import (
+                        sample as read_clipboard,
+                    )
+
+                    read_clipboard(scratch, environment, private_station is not None)
                 for item in windows(desktop, app.pid):
                     window = item["window"]
                     if window_text(window, True) != "#32770":
@@ -506,6 +571,11 @@ def run(
                     started = observed.setdefault(window, time.monotonic())
                     # Let the renderer show its pending confirmation state.
                     if time.monotonic() - started < 1:
+                        continue
+                    from autosar_tooling.native_dialog import windows as choose_path
+
+                    if choose_path(scratch, window, user, window_callback, window_text):
+                        observed[window] = time.monotonic() + 900
                         continue
                     cancel_buttons = []
                     accept_buttons = []
@@ -560,13 +630,16 @@ def run(
                     flush=True,
                 )
                 return driver_result
-            if canceled < 1:
+            if not builtin_only and canceled < 1:
                 raise RuntimeError(
                     "The native discard confirmation was not actually canceled"
                 )
         finally:
             driver_log.close()
-        current = checked(user.OpenInputDesktop(0, False, 1))
+        current = (
+            private_station.input_desktop() if private_station is not None
+            else checked(user.OpenInputDesktop(0, False, 1))
+        )
         try:
             if name(current) != input_name:
                 raise RuntimeError("Input desktop changed by the test")
@@ -574,6 +647,11 @@ def run(
             user.CloseDesktop(current)
     finally:
         cleanup_errors = []
+        if private_station is not None:
+            try:
+                private_station.restore()
+            except OSError as error:
+                cleanup_errors.append(f"Unable to restore original window station: {error}")
         if not user.SetThreadDesktop(original_thread_desktop):
             cleanup_errors.append(
                 "Unable to restore the test controller's original desktop"
@@ -614,6 +692,13 @@ def run(
                 cleanup_errors.append(f"Unable to close process {process.pid} handle")
         if desktop is not None and not user.CloseDesktop(desktop):
             cleanup_errors.append("Unable to close the isolated desktop")
+        if private_station is not None:
+            try:
+                private_station.close()
+            except OSError as error:
+                cleanup_errors.append(f"Unable to close isolated window station: {error}")
+        if medium_token is not None:
+            medium_token.close()
         if not user.CloseDesktop(original):
             cleanup_errors.append(
                 "Unable to close the input desktop observation handle"
