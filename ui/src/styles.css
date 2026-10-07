@@ -1218,6 +1218,14 @@ details + details {
       background-color 140ms ease-out;
   }
 }
+@media (prefers-reduced-motion: reduce) {
+  button {
+    transition: none;
+  }
+}
+:root[data-reduced-motion='true'] button {
+  transition: none;
+}
 @media (max-width: 1250px) {
   :root {
     --tree-width: 220px;

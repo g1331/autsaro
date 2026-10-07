@@ -1,0 +1,20 @@
+[
+  {
+    "name": "R24-11 XSD",
+    "environment": "AUTOSAR_XSD_ARCHIVE",
+    "path": "docs/official/R24-11/FO/MethodologyAndTemplates/AUTOSAR_FO_MMOD_XMLSchema.zip",
+    "sha256": "9db3ab1d2ec4db7cc8ff09f1259ff93a7a5945a9500d4cd3ea4a7090f2a25766"
+  },
+  {
+    "name": "R24-11 MOD",
+    "environment": "AUTOSAR_MOD_ARCHIVE",
+    "path": "docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_MOD_ECUConfigurationParameters.zip",
+    "sha256": "df1e3bc992e49de6e14e5c1a679d7ce7ca90d2450d66186cea0b4a0f1f6555fb"
+  },
+  {
+    "name": "R24-11 samples",
+    "environment": "AUTOSAR_SAMPLE_ARCHIVE",
+    "path": "docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_EXP_ModelingShowCases.zip",
+    "sha256": null
+  }
+]

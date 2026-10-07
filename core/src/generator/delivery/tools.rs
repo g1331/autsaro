@@ -4,10 +4,10 @@ use serde::Deserialize;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 
-const HELPER: &[u8] = include_bytes!("../../../../scripts/ecu_tools/workbench_v2.py");
-const INVENTORY: &[u8] = include_bytes!("../../../../scripts/ecu_tools/workbench-v2-assets.json");
-const TRUSTED_HELPER_SHA256: &str =
-    "f06dfa2cc1649278cfff7faa1d346eb7b1bac56c4626b8976b84843b0c6e7086";
+const HELPER: &[u8] = include_bytes!("../../../../tools/python/src/ecu_tools/workbench_v2.py");
+const INVENTORY: &[u8] =
+    include_bytes!("../../../../tools/python/src/ecu_tools/workbench-v2-assets.json");
+include!(concat!(env!("OUT_DIR"), "/delivery_helper.rs"));
 const WRAPPER: &str = "tools/ecu-tool.py";
 const LEGACY_ENTRY: &str = "tools/legacy-ecu-tool.py";
 const HELPER_PATH: &str = "tools/workbench_v2.py";

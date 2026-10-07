@@ -135,23 +135,29 @@ pub fn verify() {
     // and failed-before-release/assignment processes; no shell cleanup exists.
     let mut owner_checks = Command::new(super::tooling::execution_settings().python);
     owner_checks.args([
-        "-m", "unittest",
-        "autosar_tooling.test_process.BoundedProcessTests.test_timeout_closes_registered_group_and_keeps_logs",
+        "-m",
+        "unittest",
+        "test_process.BoundedProcessTests.test_timeout_closes_registered_group_and_keeps_logs",
     ]);
     if cfg!(windows) {
         owner_checks.arg(
-            "autosar_tooling.test_process.BoundedProcessTests.test_failed_job_assignment_closes_unstarted_process",
+            "test_process.BoundedProcessTests.test_failed_job_assignment_closes_unstarted_process",
         );
     } else {
         owner_checks.args([
-            "autosar_tooling.test_process.BoundedProcessTests.test_failed_registration_never_runs_a_command",
-            "autosar_tooling.test_process.BoundedProcessTests.test_failed_release_closes_registered_but_unstarted_scope",
+            "test_process.BoundedProcessTests.test_failed_registration_never_runs_a_command",
+            "test_process.BoundedProcessTests.test_failed_release_closes_registered_but_unstarted_scope",
         ]);
     }
     owner_checks
         .env(
             "PYTHONPATH",
-            std::env::join_paths([output.join("tools"), root.join("scripts")]).unwrap(),
+            std::env::join_paths([
+                output.join("tools"),
+                root.join("tools/python/src"),
+                root.join("tests/python/process"),
+            ])
+            .unwrap(),
         )
         .env("PATH", scratch.0.join("empty-path"));
     let result = super::tooling::run_public_command(

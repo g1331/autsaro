@@ -1,26 +1,26 @@
 [project]
 name = "autosar-tooling"
 version = "0.1.0"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.12"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
-
-[project.scripts]
-dev = "autosar_tooling.dev:main"
 
 [build-system]
 requires = ["setuptools==84.0.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-package-dir = {"" = "scripts"}
+package-dir = {"" = "tools/python/src"}
 
 [tool.setuptools.packages.find]
-where = ["scripts"]
+where = ["tools/python/src"]
 include = ["autosar_tooling*", "ecu_tools*"]
 
+[tool.setuptools.package-data]
+ecu_tools = ["*.json"]
+
 [dependency-groups]
-quality = ["clang-format==23.1.1", "ruff==0.16.9", "lxml==5.4.0"]
+quality = ["clang-format==23.1.1", "ruff==0.16.9", "lxml==6.1.3"]
 automotive = ["openpyxl==3.1.5", "et-xmlfile==2.0.0"]
 
 [tool.uv]

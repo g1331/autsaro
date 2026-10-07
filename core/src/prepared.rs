@@ -330,7 +330,7 @@ pub(crate) fn deliver_path(asset: &AssetEntry, profile: &str) -> Result<String, 
         }
         return Ok(format!("kernel/{path}"));
     }
-    if let Some(path) = path.strip_prefix("scripts/ecu_tools/") {
+    if let Some(path) = path.strip_prefix("tools/python/src/ecu_tools/") {
         return Ok(format!("tools/ecu_tools/{path}"));
     }
     Err(format!(

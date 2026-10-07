@@ -9,13 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use zip::ZipArchive;
 
-pub const SCHEMA_ZIP: &str =
-    "docs/official/R24-11/FO/MethodologyAndTemplates/AUTOSAR_FO_MMOD_XMLSchema.zip";
-pub const MOD_ZIP: &str =
-    "docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_MOD_ECUConfigurationParameters.zip";
-pub const SAMPLE_ZIP: &str =
-    "docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_EXP_ModelingShowCases.zip";
-pub const XSD_SHA256: &str = "9db3ab1d2ec4db7cc8ff09f1259ff93a7a5945a9500d4cd3ea4a7090f2a25766";
+include!(concat!(env!("OUT_DIR"), "/official_resources.rs"));
 static NEXT_SCHEMA_DIR: AtomicU64 = AtomicU64::new(0);
 
 pub fn schema_archive(repo: &Path) -> PathBuf {

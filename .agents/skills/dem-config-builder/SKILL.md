@@ -22,7 +22,7 @@ description: '编制Dem 事件、去抖、恢复和存储映射规格工作簿�
 从仓库根目录指定专用 Python、技能脚本和明确输出路径（下列路径是占位示例，需替换为实际输入/输出）：
 
 ```powershell
-& .\.automotive-skills-venv\Scripts\python.exe .agents/skills/dem-config-builder/scripts/generate_dem.py <input.json> <output.xlsx>
+& .\.venv\Scripts\python.exe .agents/skills/dem-config-builder/scripts/generate_dem.py <input.json> <output.xlsx>
 ```
 
 依赖安装见 `docs/project/OWNER_GUIDE.md`。不向技能目录输出工件。普通生成/审阅无需 Office；仅确需公式重算时检查无头工具，缺少时声明未重算，不启动可见窗口。

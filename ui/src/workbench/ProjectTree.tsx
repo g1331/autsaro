@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Braces,
@@ -26,6 +26,10 @@ const objectIcons = new Map<string, LucideIcon>([
 ]);
 
 export function ProjectTree({ controller: c }: { controller: Workbench }) {
+  const actions = useRef(c);
+  useLayoutEffect(() => {
+    actions.current = c;
+  }, [c]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const index = useMemo(() => {
     const projection = c.projection;
@@ -103,6 +107,77 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
     return { rows, revealed, hasChildren: index.hasChildren };
   }, [index, c.treeFilter, c.treeRevealId, collapsed]);
   const activeInRows = model.rows.some((row) => row.object.objectId === c.activeObjectId);
+  const objectRows = useMemo(
+    () =>
+      c.treeMode === 'objects'
+        ? model.rows.map(({ object, depth }) => {
+            const expanded =
+              Boolean(c.treeFilter) ||
+              !collapsed.has(object.objectId) ||
+              model.revealed.has(object.objectId);
+            const selected = c.objectSelection.includes(object.objectId);
+            const Icon = objectIcons.get(object.kind) ?? FileCode2;
+            return (
+              <div
+                key={object.objectId}
+                role="treeitem"
+                tabIndex={
+                  c.activeObjectId === object.objectId ||
+                  (!activeInRows && model.rows[0]?.object.objectId === object.objectId)
+                    ? 0
+                    : -1
+                }
+                aria-level={depth}
+                aria-selected={selected}
+                aria-label={object.shortName}
+                aria-description={object.kind}
+                title={`${object.shortName}\n${object.kind}\n${object.path}`}
+                aria-expanded={model.hasChildren.has(object.objectId) ? expanded : undefined}
+                data-object-id={object.objectId}
+                className={`tree-row${selected ? ' selected' : ''}`}
+                style={{ paddingLeft: `${depth * 12}px` }}
+                onClick={(event) =>
+                  void actions.current.selectObject(object.objectId, event.ctrlKey || event.metaKey)
+                }
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    void actions.current.selectObject(
+                      object.objectId,
+                      event.ctrlKey || event.metaKey,
+                    );
+                  }
+                }}
+              >
+                {model.hasChildren.has(object.objectId) ? (
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    aria-label={`${expanded ? '收起' : '展开'} ${object.shortName}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      actions.current.setTreeRevealId(null);
+                      setCollapsed((previous) => {
+                        const next = new Set(previous);
+                        if (expanded) next.add(object.objectId);
+                        else next.delete(object.objectId);
+                        return next;
+                      });
+                    }}
+                  >
+                    {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                  </button>
+                ) : (
+                  <span className="tree-spacer" />
+                )}
+                <Icon size={14} aria-hidden="true" />
+                <span className="tree-name">{object.shortName}</span>
+              </div>
+            );
+          })
+        : null,
+    [model, collapsed, c.treeMode, c.treeFilter, c.objectSelection, c.activeObjectId, activeInRows],
+  );
   const sources =
     c.projection?.sources.filter(
       (source) =>
@@ -190,68 +265,7 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
         onKeyDown={keyboard}
       >
         {c.treeMode === 'objects'
-          ? model.rows.map(({ object, depth }) => {
-              const expanded =
-                Boolean(c.treeFilter) ||
-                !collapsed.has(object.objectId) ||
-                model.revealed.has(object.objectId);
-              const selected = c.objectSelection.includes(object.objectId);
-              const Icon = objectIcons.get(object.kind) ?? FileCode2;
-              return (
-                <div
-                  key={object.objectId}
-                  role="treeitem"
-                  tabIndex={
-                    c.activeObjectId === object.objectId ||
-                    (!activeInRows && model.rows[0]?.object.objectId === object.objectId)
-                      ? 0
-                      : -1
-                  }
-                  aria-level={depth}
-                  aria-selected={selected}
-                  aria-label={object.shortName}
-                  aria-description={object.kind}
-                  title={`${object.shortName}\n${object.kind}\n${object.path}`}
-                  aria-expanded={model.hasChildren.has(object.objectId) ? expanded : undefined}
-                  data-object-id={object.objectId}
-                  className={`tree-row${selected ? ' selected' : ''}`}
-                  style={{ paddingLeft: `${depth * 12}px` }}
-                  onClick={(event) =>
-                    void c.selectObject(object.objectId, event.ctrlKey || event.metaKey)
-                  }
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      void c.selectObject(object.objectId, event.ctrlKey || event.metaKey);
-                    }
-                  }}
-                >
-                  {model.hasChildren.has(object.objectId) ? (
-                    <button
-                      type="button"
-                      tabIndex={-1}
-                      aria-label={`${expanded ? '收起' : '展开'} ${object.shortName}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        c.setTreeRevealId(null);
-                        setCollapsed((previous) => {
-                          const next = new Set(previous);
-                          if (expanded) next.add(object.objectId);
-                          else next.delete(object.objectId);
-                          return next;
-                        });
-                      }}
-                    >
-                      {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                    </button>
-                  ) : (
-                    <span className="tree-spacer" />
-                  )}
-                  <Icon size={14} aria-hidden="true" />
-                  <span className="tree-name">{object.shortName}</span>
-                </div>
-              );
-            })
+          ? objectRows
           : sources.map((source, index) => (
               <button
                 key={source.sourceId}

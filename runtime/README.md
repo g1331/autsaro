@@ -4,10 +4,10 @@
 
 ## 构建
 
-生成工程的 `target.json` 明确声明 `windows-x64-controlled-v1` 或 `linux-x64-controlled-v1`、工具链身份和源文件选集；源码准备/预览不执行编译器。本机编译需要 pinned CPython 3.12.9、目标 GCC/binutils 和 Git。将 `AUTOSAR_CC`、`AUTOSAR_OBJDUMP`、`AUTOSAR_GIT` 设置为绝对工具路径，再运行包内 stdlib-only 入口：
+生成工程的 `target.json` 明确声明 `windows-x64-controlled-v1` 或 `linux-x64-controlled-v1`、工具链身份和源文件选集；源码准备/预览不执行编译器。本机编译需要 Python 3.11 或更新版本、目标 GCC/binutils 和 Git。将 `AUTOSAR_CC`、`AUTOSAR_OBJDUMP`、`AUTOSAR_GIT` 设置为绝对工具路径，再运行包内 stdlib-only 入口：
 
 ```text
-<CPython3.12.9> tools/ecu-tool.py build --project <sealed-source-directory> --output <new-empty-outside-directory> --mode host
+<python> tools/ecu-tool.py build --project <sealed-source-directory> --output <new-empty-outside-directory> --mode host
 ```
 
 legacy `host` 产出 `ecu_host.exe`（Windows）或 `ecu_host`（Linux）；ECU integration 的 `host-batch` 产出实际生产批入口，`probe` 产出独立启动消费者，`test` 启用私有 OS/ECU 探针。`--control-source <external.c>` 只用于 `probe|test`，生产 HostBatch 拒绝它。编译器版本、目标与摘要必须匹配包内工具链，错误宿主或缺依赖明确失败，不降级到其他编译器。

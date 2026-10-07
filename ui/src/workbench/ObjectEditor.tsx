@@ -116,7 +116,7 @@ export function ObjectEditor({ controller: c }: { controller: Workbench }) {
         </button>
         <button
           type="button"
-          onClick={() => c.setChanges([])}
+          onClick={() => c.discardChanges()}
           disabled={!c.changes.length || Boolean(c.busy)}
         >
           还原批次草稿
@@ -130,14 +130,7 @@ export function ObjectEditor({ controller: c }: { controller: Workbench }) {
               <span>
                 {change.op} · {change.changeId}
               </span>
-              <button
-                type="button"
-                onClick={() =>
-                  c.setChanges((previous) =>
-                    previous.filter((item) => item.changeId !== change.changeId),
-                  )
-                }
-              >
+              <button type="button" onClick={() => c.discardChanges(change.changeId)}>
                 移除此操作
               </button>
               <pre>{JSON.stringify(change, null, 2)}</pre>

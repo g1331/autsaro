@@ -1,0 +1,33 @@
+name: Offline receiver compatibility
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        type: choice
+        options: [Windows, Linux]
+        required: true
+permissions:
+  contents: read
+jobs:
+  receiver:
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.12', '3.13', '3.14']
+    runs-on: [self-hosted, autosar-controlled, "${{ inputs.platform }}"]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: uv sync --locked
+      - name: Select receiver interpreter
+        shell: python
+        env:
+          RECEIVER_VERSION: ${{ matrix.python }}
+        run: |
+          import os, subprocess
+          subprocess.run(['uv', 'python', 'install', '--no-bin', os.environ['RECEIVER_VERSION']], check=True)
+          path = subprocess.check_output(['uv', 'python', 'find', '--no-project', '--managed-python', os.environ['RECEIVER_VERSION']], text=True).strip()
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              output.write('AUTOSAR_RECEIVER_PYTHON=' + path + '\n')
+      - run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_offline_delivery.py

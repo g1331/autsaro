@@ -14,10 +14,10 @@ Use `linux-x64-controlled-v1` for Linux. Package preparation renders source file
 
 ## Verify outside the checkout
 
-The receiver needs the pinned CPython 3.12.9 interpreter, the target's GCC/binutils distribution and Git. Set `AUTOSAR_CC`, `AUTOSAR_OBJDUMP` and `AUTOSAR_GIT` to absolute executable paths. Compiler identities are recorded in each member's `target.json`/`toolchain.json`. Windows packages execute only on Windows x64; Linux packages execute only on Linux x64. Rust, uv, Node and the source checkout are not receiver dependencies.
+The receiver needs Python 3.11 or newer, the target's GCC/binutils distribution and Git. Set `AUTOSAR_CC`, `AUTOSAR_OBJDUMP` and `AUTOSAR_GIT` to absolute executable paths. Compiler identities are recorded in each member's `target.json`/`toolchain.json`. Windows packages execute only on Windows x64; Linux packages execute only on Linux x64. Rust, uv, Node and the source checkout are not receiver dependencies.
 
 ```text
-<CPython3.12.9> "<bundle>/tools/ecu-tool.py" verify --project "<bundle>" --build-directory "<new-empty-outside-build-directory>" --report-path "<new-outside-report.json>"
+<python> "<bundle>/tools/ecu-tool.py" verify --project "<bundle>" --build-directory "<new-empty-outside-build-directory>" --report-path "<new-outside-report.json>"
 ```
 
 The verifier checks all listed files at the root and in both members, builds both native binaries in separate output directories, runs every fixed input, and compares the output lines in order. The report records the checks and any failures. Verification failures return a nonzero exit code and leave logs in the build directory. Existing output or report files, symbolic links and reparse points are rejected.

@@ -13,7 +13,7 @@ on:
         type: boolean
         default: false
       source_checkout:
-        description: Owned build checkout original path (required for installed verification)
+        description: Original build checkout for installed verification
         required: false
       builtin_only:
         type: boolean
@@ -23,42 +23,33 @@ permissions:
 jobs:
   desktop:
     runs-on: [self-hosted, autosar-controlled, "${{ inputs.platform == 'linux' && 'Linux' || inputs.platform == 'windows' && 'Windows' || 'macOS' }}"]
-    env:
-      ACCEPTANCE_PLATFORM: ${{ inputs.platform }}
-      ACCEPTANCE_BINARY: ${{ inputs.binary }}
-      ACCEPTANCE_INSTALLED: ${{ inputs.installed }}
-      ACCEPTANCE_SOURCE: ${{ inputs.source_checkout }}
-      ACCEPTANCE_BUILTIN: ${{ inputs.builtin_only }}
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.2.0
       - run: uv sync --locked
-      - name: Run isolated native acceptance
+      - run: cargo build --locked --manifest-path core/Cargo.toml --bins
+      - name: Run isolated acceptance
         shell: python
+        env:
+          PLATFORM: ${{ inputs.platform }}
+          BINARY: ${{ inputs.binary }}
+          INSTALLED: ${{ inputs.installed }}
+          SOURCE: ${{ inputs.source_checkout }}
+          BUILTIN: ${{ inputs.builtin_only }}
         run: |
-          import os, pathlib, re, shutil, subprocess
-          command = ["uv", "run", "python", "-m", "autosar_tooling", "desktop", "--platform", os.environ["ACCEPTANCE_PLATFORM"], "--binary", os.environ["ACCEPTANCE_BINARY"]]
-          if os.environ["ACCEPTANCE_INSTALLED"] == "true":
-              command += ["--installed", "--source-checkout", os.environ["ACCEPTANCE_SOURCE"]]
-          if os.environ["ACCEPTANCE_BUILTIN"] == "true":
-              command += ["--builtin-only"]
-          destination = pathlib.Path("desktop-results")
-          destination.mkdir(exist_ok=True)
-          evidence = None
-          with (destination / "run.log").open("w", encoding="utf-8") as log:
-              with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace") as process:
-                  for line in process.stdout:
-                      print(line, end="", flush=True)
-                      log.write(line)
-                      match = re.search(r"Isolated native test directory(?: \(.*?\))?: (.+)", line)
-                      if match:
-                          evidence = pathlib.Path(match[1].strip())
-                  code = process.wait()
-          if evidence is not None and evidence.is_dir():
-              shutil.copytree(evidence, destination / "evidence", dirs_exist_ok=True)
-          raise SystemExit(code)
+          import os, subprocess
+          command = ['uv', 'run', '--locked', 'python', '-m', 'autosar_tooling', 'desktop', '--platform', os.environ['PLATFORM'], '--binary', os.environ['BINARY'], '--output-directory', 'desktop-results']
+          if os.environ['INSTALLED'] == 'true':
+              command += ['--installed', '--source-checkout', os.environ['SOURCE']]
+          if os.environ['BUILTIN'] == 'true':
+              command += ['--builtin-only']
+          subprocess.run(command, check=True)
       - uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
           name: desktop-${{ inputs.platform }}
-          path: desktop-results
+          path: |
+            desktop-results
+            !desktop-results/**/dependencies/**
           if-no-files-found: ignore

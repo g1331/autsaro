@@ -6,7 +6,7 @@ use std::time::Duration;
 pub(super) fn python_command() -> Command {
     let executable = PathBuf::from(
         std::env::var_os("AUTOSAR_PYTHON")
-            .expect("Set AUTOSAR_PYTHON to the locked absolute CPython interpreter"),
+            .expect("Set AUTOSAR_PYTHON to the absolute Python interpreter"),
     );
     assert!(
         executable.is_absolute() && executable.is_file(),
@@ -143,12 +143,21 @@ pub(super) fn run_native_os_suite(suite: &str) {
     static NONCE: AtomicU64 = AtomicU64::new(0);
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let python = python_command().get_program().to_os_string();
-    let logs = std::env::temp_dir().join(format!(
-        "autosar-os-suite-{}-{}-{}",
-        std::process::id(),
-        autosar_config_core::execution::monotonic_ns().unwrap(),
-        NONCE.fetch_add(1, Ordering::Relaxed)
-    ));
+    let output_directory = std::env::var_os("AUTOSAR_OS_OUTPUT_DIRECTORY").map(PathBuf::from);
+    let logs = output_directory.as_ref().map_or_else(
+        || {
+            std::env::temp_dir().join(format!(
+                "autosar-os-suite-{}-{}-{}",
+                std::process::id(),
+                autosar_config_core::execution::monotonic_ns().unwrap(),
+                NONCE.fetch_add(1, Ordering::Relaxed)
+            ))
+        },
+        |directory| directory.join(suite),
+    );
+    if let Some(directory) = &output_directory {
+        fs::create_dir_all(directory).unwrap();
+    }
     fs::create_dir(&logs).unwrap();
     #[cfg(unix)]
     {
@@ -160,17 +169,24 @@ pub(super) fn run_native_os_suite(suite: &str) {
     } else {
         "linux-x64-controlled-v1"
     };
+    let mut argv = vec![
+        python,
+        OsString::from("-m"),
+        OsString::from("autosar_tooling"),
+        OsString::from("os"),
+        OsString::from("--target"),
+        OsString::from(target),
+        OsString::from("--suite"),
+        OsString::from(suite),
+    ];
+    if output_directory.is_some() {
+        argv.extend([
+            OsString::from("--output-directory"),
+            logs.join("artifacts").into_os_string(),
+        ]);
+    }
     let spec = autosar_config_core::execution::ProcessSpec::for_duration(
-        vec![
-            python,
-            OsString::from("-m"),
-            OsString::from("autosar_tooling"),
-            OsString::from("os"),
-            OsString::from("--target"),
-            OsString::from(target),
-            OsString::from("--suite"),
-            OsString::from(suite),
-        ],
+        argv,
         root.to_path_buf(),
         vec![],
         Duration::from_secs(1800),
@@ -184,7 +200,9 @@ pub(super) fn run_native_os_suite(suite: &str) {
             logs.display()
         );
     }
-    fs::remove_dir_all(logs).unwrap();
+    if output_directory.is_none() {
+        fs::remove_dir_all(logs).unwrap();
+    }
 }
 pub(super) fn run_public_command(
     command: &mut Command,

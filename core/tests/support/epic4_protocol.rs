@@ -403,11 +403,11 @@ pub fn independent_behavior() {
     assert!(text.contains("COMMIT_OK batch=4 epoch=250"), "{text}");
     // Independently generate/build the old target with its own old settings
     // and literal offline vectors. These are not evidence for the new target.
-    super::diagnostic_transport_discards_bad_or_timed_out_multiframe_requests_and_recovers();
-    super::diagnostic_tester_present_keeps_session_and_fc_block_size_paces_response();
-    super::extended_session_write_did_changes_live_can_but_not_restart_state();
-    super::security_access_roundtrips_and_gates_host_writes();
-    super::start_routine_restores_written_did_signals_and_respects_session();
+    super::diagnostic_host::diagnostic_transport_discards_bad_or_timed_out_multiframe_requests_and_recovers();
+    super::diagnostic_host::diagnostic_tester_present_keeps_session_and_fc_block_size_paces_response();
+    super::diagnostic_host::extended_session_write_did_changes_live_can_but_not_restart_state();
+    super::diagnostic_host::security_access_roundtrips_and_gates_host_writes();
+    super::diagnostic_host::start_routine_restores_written_did_signals_and_respects_session();
     println!("EPIC4_PROTOCOL_LEGACY five independent host-v1 configurations pass");
     for entry in fs::read_dir(&scratch.0).unwrap() {
         let directory = entry.unwrap().path();

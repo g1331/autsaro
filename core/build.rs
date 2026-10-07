@@ -34,7 +34,7 @@ fn add(
     assert!(
         (path.starts_with("runtime/")
             || path.starts_with("third_party/freertos/")
-            || path.starts_with("scripts/ecu_tools/")
+            || path.starts_with("tools/python/src/ecu_tools/")
             || matches!(path.as_str(), "LICENSE" | "NOTICE"))
             && !path.contains(['\\', ':'])
             && Path::new(&path)
@@ -82,6 +82,62 @@ fn add(
 fn main() {
     let core = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
     let root = core.parent().expect("workspace root");
+    let official_path = root.join("core/resources/official.json");
+    let official = read_manifest(root, "core/resources/official.json");
+    let mut official_constants = String::new();
+    for (environment, constant) in [
+        ("AUTOSAR_XSD_ARCHIVE", "SCHEMA_ZIP"),
+        ("AUTOSAR_MOD_ARCHIVE", "MOD_ZIP"),
+        ("AUTOSAR_SAMPLE_ARCHIVE", "SAMPLE_ZIP"),
+    ] {
+        let entry = official
+            .as_array()
+            .expect("official resources")
+            .iter()
+            .find(|entry| entry["environment"] == environment)
+            .expect("official resource");
+        official_constants.push_str(&format!(
+            "pub const {constant}: &str = {:?};\n",
+            entry["path"].as_str().expect("official path")
+        ));
+        if constant == "SCHEMA_ZIP" {
+            official_constants.push_str(&format!(
+                "pub const XSD_SHA256: &str = {:?};\n",
+                entry["sha256"].as_str().expect("XSD identity")
+            ));
+        }
+    }
+    fs::write(
+        PathBuf::from(std::env::var_os("OUT_DIR").expect("OUT_DIR")).join("official_resources.rs"),
+        official_constants,
+    )
+    .expect("official constants");
+    println!("cargo:rerun-if-changed={}", official_path.display());
+    let helper = root.join("tools/python/src/ecu_tools/workbench_v2.py");
+    let helper_digest = format!(
+        "{:x}",
+        Sha256::digest(fs::read(&helper).expect("v2 helper"))
+    );
+    let helper_manifest =
+        read_manifest(root, "tools/python/src/ecu_tools/workbench-v2-assets.json");
+    assert_eq!(helper_manifest["files"][0]["path"], "workbench_v2.py");
+    assert_eq!(
+        helper_manifest["files"][0]["sha256"].as_str(),
+        Some(helper_digest.as_str()),
+        "v2 helper digest differs; review the source and update the asset inventory"
+    );
+    let helper_index = format!("const TRUSTED_HELPER_SHA256: &str = {helper_digest:?};\n");
+    fs::write(
+        PathBuf::from(std::env::var_os("OUT_DIR").expect("OUT_DIR")).join("delivery_helper.rs"),
+        helper_index,
+    )
+    .expect("helper identity");
+    println!("cargo:rerun-if-changed={}", helper.display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        root.join("tools/python/src/ecu_tools/workbench-v2-assets.json")
+            .display()
+    );
     let common: &[&str] = &["windows-x64-controlled-v1", "linux-x64-controlled-v1"];
     let windows: &[&str] = &["windows-x64-controlled-v1"];
     let linux: &[&str] = &["linux-x64-controlled-v1"];
@@ -330,8 +386,8 @@ fn build_native_inventory(core: &Path) {
         .map(|path| (format!("core/{path}"), core.join(path)))
         .collect();
     for relative in [
-        "scripts/ecu_tools/workbench_v2.py",
-        "scripts/ecu_tools/workbench-v2-assets.json",
+        "tools/python/src/ecu_tools/workbench_v2.py",
+        "tools/python/src/ecu_tools/workbench-v2-assets.json",
     ] {
         let absolute = root.join(relative);
         let metadata = fs::symlink_metadata(&absolute).expect("native delivery source metadata");

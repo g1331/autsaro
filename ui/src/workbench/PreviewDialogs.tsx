@@ -46,7 +46,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
       <Dialog
         title="确认原子应用批次"
         onClose={() => {
-          if (!c.busy) c.setChangePreview(null);
+          if (!c.busy) c.cancelChangePreview();
         }}
         footer={
           <>
@@ -54,7 +54,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
             <button
               type="button"
               disabled={Boolean(c.busy)}
-              onClick={() => c.setChangePreview(null)}
+              onClick={() => c.cancelChangePreview()}
             >
               取消确认
             </button>

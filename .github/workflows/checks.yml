@@ -4,118 +4,119 @@ on:
   push:
     branches: [main, master]
   workflow_dispatch:
+    inputs:
+      base:
+        description: Incremental check baseline commit
+        required: true
 permissions:
   contents: read
+env:
+  PYTHONUTF8: '1'
 jobs:
-  ui-and-tooling:
+  ui:
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    env:
-      BASE_REVISION: ${{ github.event.pull_request.base.sha || github.event.before }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7.0.1
-        with:
-          fetch-depth: 0
-      - uses: astral-sh/setup-uv@v10.2.0
-        with:
-          enable-cache: true
       - uses: actions/setup-node@v7.0.0
         with:
           node-version-file: .node-version
           cache: npm
           cache-dependency-path: ui/package-lock.json
-      - name: Select explicit diff baseline
-        shell: python
-        run: |
-          import os, subprocess
-          candidate = os.environ.get("BASE_REVISION") or "HEAD^"
-          result = subprocess.run(["git", "rev-parse", "--verify", candidate + "^{commit}"], capture_output=True, text=True)
-          base = result.stdout.strip() if result.returncode == 0 else subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
-              output.write("CHECK_BASE=" + base + "\n")
-      - run: uv sync --locked
-      - run: uv run dev setup --profile ui
-      - run: uv run dev doctor --profile ui
-      - name: Check tooling and UI
-        shell: python
-        run: |
-          import os, pathlib, subprocess
-          pathlib.Path("check-results").mkdir(exist_ok=True)
-          for scope in ("tooling", "ui"):
-              with open(f"check-results/{scope}.json", "w", encoding="utf-8") as report:
-                  result = subprocess.run(["uv", "run", "dev", "check", "--scope", scope, "--base", os.environ["CHECK_BASE"], "--json"], stdout=report)
-              if result.returncode:
-                  raise SystemExit(result.returncode)
-      - name: Retain execution logs
-        if: always()
-        shell: python
-        run: |
-          import json, pathlib, shutil
-          for report in pathlib.Path("check-results").glob("*.json"):
-              if report.stat().st_size:
-                  result = json.loads(report.read_text())
-                  if result.get("logs"):
-                      shutil.copytree(result["logs"], report.parent / (report.stem + "-logs"), dirs_exist_ok=True)
-      - uses: actions/upload-artifact@v7.0.1
-        if: always()
-        with:
-          name: checks-${{ matrix.os }}
-          path: check-results
-          if-no-files-found: ignore
-  core:
-    runs-on: ubuntu-24.04
+      - run: npm ci --prefix ui
+      - run: npm run lint --prefix ui
+      - run: npm run test --prefix ui
+      - run: npm run build --prefix ui
+  python:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-latest]
+        python: ['3.12', '3.13', '3.14']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     env:
-      BASE_REVISION: ${{ github.event.pull_request.base.sha || github.event.before }}
+      UV_PYTHON: ${{ matrix.python }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v10.2.0
         with:
+          python-version: ${{ matrix.python }}
           enable-cache: true
-      - run: sudo apt-get update && sudo apt-get install -y libxml2-dev libclang-dev clang pkg-config
-      - run: rustup show
       - run: uv sync --locked
-      - name: Select explicit diff baseline
-        shell: python
-        run: |
-          import os, subprocess
-          candidate = os.environ.get("BASE_REVISION") or "HEAD^"
-          result = subprocess.run(["git", "rev-parse", "--verify", candidate + "^{commit}"], capture_output=True, text=True)
-          base = result.stdout.strip() if result.returncode == 0 else subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
-              output.write("CHECK_BASE=" + base + "\n")
-      - run: uv run dev doctor --profile core
-      - name: Check core and process ownership
-        shell: python
-        run: |
-          import os, pathlib, subprocess
-          pathlib.Path("check-results").mkdir(exist_ok=True)
-          commands = {
-              "core": ["check", "--scope", "core", "--base", os.environ["CHECK_BASE"]],
-              "process": ["test", "--suite", "process"],
-          }
-          for name, arguments in commands.items():
-              with open(f"check-results/{name}.json", "w", encoding="utf-8") as report:
-                  result = subprocess.run(["uv", "run", "dev", *arguments, "--json"], stdout=report)
-              if result.returncode:
-                  raise SystemExit(result.returncode)
-      - name: Retain execution logs
-        if: always()
-        shell: python
-        run: |
-          import json, pathlib, shutil
-          for report in pathlib.Path("check-results").glob("*.json"):
-              if report.stat().st_size:
-                  result = json.loads(report.read_text())
-                  if result.get("logs"):
-                      shutil.copytree(result["logs"], report.parent / (report.stem + "-logs"), dirs_exist_ok=True)
+      - run: uv run --locked ruff check tools tests/python scripts
+      - run: uv run --locked python -B -m unittest discover -s tests/python
+      - run: uv build --out-dir build/python
       - uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
-          name: checks-core-linux
-          path: check-results
+          name: python-${{ matrix.os }}-${{ matrix.python }}
+          path: build/python
           if-no-files-found: ignore
+  core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - run: sudo apt-get update && sudo apt-get install -y libxml2-dev libclang-dev clang pkg-config
+      - run: cargo test --locked --manifest-path core/Cargo.toml
+      - run: cargo clippy --locked --manifest-path core/Cargo.toml --all-targets -- -A clippy::all -D clippy::correctness -D clippy::suspicious
+  desktop:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: sudo apt-get update && sudo apt-get install -y libxml2-dev libclang-dev clang pkg-config libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev patchelf
+      - run: npm ci --prefix ui
+      - run: npm run build --prefix ui
+      - run: cargo build --locked --manifest-path src-tauri/Cargo.toml
+  process:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: uv sync --locked
+      - run: uv run --locked python -B -m unittest discover -s tests/python/process
+  quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version-file: .node-version
+      - run: uv sync --locked
+      - run: npm ci --prefix ui
+      - name: Select baseline
+        shell: python
+        env:
+          BASE_REVISION: ${{ github.event.pull_request.base.sha || github.event.before || inputs.base }}
+        run: |
+          import os, subprocess
+          base = os.environ['BASE_REVISION']
+          if base and set(base) == {'0'}:
+              base = subprocess.check_output(['git', 'hash-object', '-w', '-t', 'tree', '--stdin'], input=b'').decode().strip()
+          else:
+              subprocess.run(['git', 'rev-parse', '--verify', base + '^{commit}'], check=True)
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              output.write('CHECK_BASE=' + base + '\n')
+      - run: uv run --locked python -m autosar_tooling quality --scope all --base "${{ env.CHECK_BASE }}"

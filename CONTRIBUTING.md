@@ -1,69 +1,42 @@
 # 参与开发
 
-本指南介绍开发环境、编码约定、测试和提交方式。修复问题可以从已有 Issue 或明确的问题描述开始。
+项目使用 Rust、React/TypeScript、Tauri 和 Python。依赖版本由各包配置和锁文件维护；开发使用 Node 24、npm 11、Python 3.12 或更新版本，Rust 由 rustup 读取 `rust-toolchain.toml`。
 
-## 首次准备
+## 开始开发
 
-安装 Git、[uv](https://docs.astral.sh/uv/getting-started/installation/) 和 [.node-version](.node-version) 声明的 Node。npm 支持 11.x，推荐版本见 [ui/package.json](ui/package.json) 的 packageManager。Python 由 uv 按 .python-version 准备。
+在仓库根目录运行：
 
-在仓库根目录执行：
+```powershell
+npm ci --prefix ui
+npm run dev --prefix ui
+```
 
-~~~sh
-uv sync --locked
-uv run dev setup --profile ui
-uv run dev doctor --profile ui
-uv run dev start ui
-~~~
+桌面调试使用 `npm run tauri --prefix ui -- dev`。先按[环境说明](docs/development/environment.md)准备平台依赖。开发 Python 工具运行 `uv sync --locked`；仅开发界面无需 Python、官方档案或 ECU 编译器。
 
-浏览器开发可检查界面和前端逻辑，完整文件操作及 IPC 需要桌面应用。桌面开发另准备 [平台依赖](docs/development/environment.md)，再执行：
+## 检查改动
 
-~~~sh
-uv run dev doctor --profile desktop
-uv run dev start desktop
-~~~
+```powershell
+npm run lint --prefix ui
+npm run test --prefix ui
+npm run build --prefix ui
+cargo test --locked --manifest-path core/Cargo.toml
+uv run --locked python -B -m unittest discover -s tests/python
+uv run --locked ruff check tools tests/python scripts
+uv run --locked python -m autosar_tooling quality --base <基准提交>
+```
 
-开发者主动启动应用可以使用自己的桌面；自动化 GUI/IPC 验收应使用隔离桌面，避免干扰正在工作的用户。
+默认 Cargo 测试不要求官方资源或受控原生工具。真实进程、官方对照和桌面验收见[测试说明](docs/development/testing.md)。格式检查针对修改行，不整体重排历史代码。
 
-## 修改与检查
+解析、生成和运行行为的修改应有独立预期及关键拒绝路径。修改 C 或生成 C 模板时按仓库 MISRA 指导执行；公开 C 接口说明输入、输出和错误契约。
 
-从最新基线创建分支，保持改动围绕一个问题。以下命令不重装依赖：
+## 资源与提交
 
-~~~sh
-uv run dev check --scope ui
-uv run dev check --scope tooling
-uv run dev check --scope core
-~~~
+修改交付资源后运行 `uv run --locked python -m autosar_tooling assets check`。确认自有源码差异后可显式执行 `assets update`；BSW ABI 和第三方身份不能随来源摘要自动接受，见[资源维护](docs/maintainers/assets.md)。
 
-UI 检查包括 ESLint、行为测试和 TypeScript/Vite 构建。tooling 检查包括 Ruff 和不需要官方档案的 Python 测试。core 检查需要 Rust/libxml2/libclang，运行基础 Rust 与内置配置测试、Clippy 和资产检查，不需要官方档案或固定 ECU 编译器。
+提交前检查整个 diff，包括新增文件与生成内容。标题说明实际改动；PR 说明问题、改动、验证和未运行范围。界面改动附实际截图。不要提交官方下载、个人配置或临时测试产物。主机测试的结论限定为主机能力。
 
-格式检查默认与 HEAD 比较待提交改动；检查整个分支时显式传入 --base，通常为与主分支的 merge-base。setup/start/check/test 可用 --plan 查看执行计划，--json 提供机器可读结果，执行日志同时保存在输出指出的目录。doctor 也支持 --json。
-
-~~~sh
-uv run dev check --scope ui --base <基准提交>
-uv run dev test --suite core --filter builtin
-uv run dev fmt --scope ui
-uv run dev assets check
-~~~
-
-fmt 格式化已变动文件的完整内容，执行后审阅 diff；不要为了局部修改整体重排历史文件。运行时或交付工具的源码变化需要显式更新派生清单，见 [资产维护](docs/maintainers/assets.md)。
-
-测试范围及完整验收见 [测试指南](docs/development/testing.md)。可根据已准备的依赖选择参与的模块，并在 PR 中说明已运行和未运行的检查。
-
-## 编码与测试
-
-- Rust 使用四空格和 snake_case；TypeScript 使用两空格、单引号和分号；以仓库格式配置为准。
-- C 保持 C99 和公开模块接口，公开运行时头文件说明调用契约。修改 C 或生成 C 模板时遵循适用的 MISRA C:2012 指导，并检查生成输出。静态检查结果需注明覆盖范围，完整 MISRA 符合性和 AUTOSAR 认证需要专门验证。
-- 为改变的行为补成功和关键拒绝路径的测试。纯内置配置测试放在 builtin 目标，官方对照测试使用 official-oracles，编译/运行消费者放在 native 目标。
-- 不提交官方 PDF/XSD/MOD/样例档案、私人路径、本地配置和构建结果。保持用户输入、应用代码及已有产物的所有权边界。
-
-## 提交与 PR
-
-提交标题简短说明改动，可用 feat:、fix:、docs: 等前缀。PR 描述问题、改动范围、验证命令和结果；界面改动附截图；生成代码变化说明输入和输出影响。普通修复不要求创建规格或复核报告。
-
-与已有 BMad story 关联的修改，在 PR 中链接并更新对应工件。其他贡献通过 Issue、PR 和 Git 记录即可。使用 Agent 开发时另参阅 [AGENTS.md](AGENTS.md)。
+真实 GUI 验收使用隔离环境，不占用开发者正在使用的桌面。BMad 用于项目规格与状态，不是启动或修改工程的前置条件。
 
 ## 许可与安全报告
 
-项目原创代码与文档采用 [Apache-2.0](LICENSE)。有意提交并纳入项目的原创贡献，除明确另有约定外，按该许可证第 5 条以同一许可提供。第三方组件保留原许可证，不要加入自己无权贡献的内容；适用范围与分发要求见 [许可说明](docs/maintainers/licensing.md)。
-
-安全问题的报告方式见 [SECURITY.md](SECURITY.md)。可复现的普通问题使用仓库 Issue；需求讨论说明用户操作、预期结果和实际限制。
+原创贡献按 [Apache-2.0](LICENSE) 提供，第三方内容保留原许可；加入依赖或代码前确认有权分发。具体分发要求见[许可说明](docs/maintainers/licensing.md)。安全问题按 [SECURITY.md](SECURITY.md) 报告，普通问题可提交包含复现步骤和预期结果的 Issue。
