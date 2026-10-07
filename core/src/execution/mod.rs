@@ -16,7 +16,7 @@ mod windows_job;
 #[cfg(windows)]
 pub(crate) use windows_job::ProcessTree;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "native-tests"))]
 mod tests;
 
 /// A command's root exit and its owned-tree cleanup are separate contracts.

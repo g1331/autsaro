@@ -1,0 +1,43 @@
+name: Build application bundles
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        type: choice
+        options: [Windows, Linux, macOS]
+        required: true
+      revision:
+        description: Commit or branch to build
+        default: master
+        required: true
+permissions:
+  contents: read
+jobs:
+  bundle:
+    runs-on: [self-hosted, autosar-controlled, "${{ inputs.platform }}"]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.revision }}
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm ci --prefix ui
+      - name: Record build revision
+        id: revision
+        shell: python
+        run: |
+          import os, subprocess
+          sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write('sha=' + sha + '\n')
+      - run: npm run tauri --prefix ui -- build
+      - uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: bundles-${{ inputs.platform }}-${{ steps.revision.outputs.sha }}
+          path: src-tauri/target/release/bundle
+          if-no-files-found: warn

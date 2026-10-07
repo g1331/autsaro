@@ -28,7 +28,7 @@ impl Fixture {
 
     fn spec(&self, kind: &str, duration: Duration) -> ProcessSpec {
         let python = std::env::var_os("AUTOSAR_PYTHON")
-            .expect("AUTOSAR_PYTHON must name the locked virtualenv interpreter");
+            .expect("AUTOSAR_PYTHON must name an absolute Python interpreter");
         let argv: Vec<OsString> = [
             python,
             "-m".into(),
@@ -44,7 +44,7 @@ impl Fixture {
         let scripts = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .expect("workspace root")
-            .join("scripts");
+            .join("tools/python/src");
         ProcessSpec::for_duration(
             argv,
             scripts.clone(),
@@ -56,11 +56,11 @@ impl Fixture {
     }
 
     fn stdin_spec(&self, kind: &str, duration: Duration) -> ProcessSpec {
-        let python = std::env::var_os("AUTOSAR_PYTHON").expect("locked CPython interpreter");
+        let python = std::env::var_os("AUTOSAR_PYTHON").expect("Python interpreter");
         let scripts = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .expect("workspace root")
-            .join("scripts");
+            .join("tools/python/src");
         let mut spec = ProcessSpec::for_duration(
             vec![
                 python,

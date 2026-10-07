@@ -205,7 +205,7 @@
     },
     {
       "path": "runtime/generated-README.md",
-      "sha256": "3a426e6a85b2cab08b9a8058773c2f098c9fa3ad1b74b0d6239b549b21ac6d32",
+      "sha256": "8e7130e7085c5ee36839e85d130c7eef44e72eace82da3ac40ca0b346b16df82",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1159,8 +1159,8 @@
       ]
     },
     {
-      "path": "scripts/ecu_tools/__init__.py",
-      "sha256": "bf194adea58119fb1ed9d602db4ef898cff97e953c5cab0ddfb48514390674e1",
+      "path": "tools/python/src/ecu_tools/__init__.py",
+      "sha256": "edd775ac5e7f6d70856e32824fcb0935de61eb523c670a9714abed2124dd9104",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1174,7 +1174,7 @@
       "responsibility": "workbench"
     },
     {
-      "path": "scripts/ecu_tools/build.py",
+      "path": "tools/python/src/ecu_tools/build.py",
       "sha256": "83df683ba25146ded64a54102d353c1bf6ae39fab184f8230030c0567f678dd5",
       "license": "Apache-2.0",
       "targets": [
@@ -1189,8 +1189,8 @@
       "responsibility": "workbench"
     },
     {
-      "path": "scripts/ecu_tools/cli.py",
-      "sha256": "7d6c46c41f7a715efbf17bc06285b8767aa8bbd6dad35661350da123caeddcce",
+      "path": "tools/python/src/ecu_tools/cli.py",
+      "sha256": "7ca90f0553b6b56065659b367dd230ba16d2473560947361d84d9ff14a815b69",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1204,7 +1204,7 @@
       "responsibility": "workbench"
     },
     {
-      "path": "scripts/ecu_tools/launch.py",
+      "path": "tools/python/src/ecu_tools/launch.py",
       "sha256": "ea453c7dfb675c9e7f774f525780a3c631103eb72af289f2efc510f6640c5cfe",
       "license": "Apache-2.0",
       "targets": [
@@ -1219,8 +1219,8 @@
       "responsibility": "workbench"
     },
     {
-      "path": "scripts/ecu_tools/owner.py",
-      "sha256": "db6796c37ca9e4193c811d011e1a448ba5c2538f5b128d63743c9f911bcefa69",
+      "path": "tools/python/src/ecu_tools/owner.py",
+      "sha256": "d95b3c075f7fe124967d04b14785f8dc3160fa1f2056fc14f039a86990278767",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1234,7 +1234,7 @@
       "responsibility": "workbench"
     },
     {
-      "path": "scripts/ecu_tools/process.py",
+      "path": "tools/python/src/ecu_tools/process.py",
       "sha256": "4dceb9559cf11aa4976cba4efb48b0e54f7c62df3014805a2be195eb9f2d3aac",
       "license": "Apache-2.0",
       "targets": [
@@ -1249,7 +1249,7 @@
       "responsibility": "workbench"
     },
     {
-      "path": "scripts/ecu_tools/verify.py",
+      "path": "tools/python/src/ecu_tools/verify.py",
       "sha256": "e8e557f224e25a2111e489a437e039f60af3d2aa81a250166586e8aac4f2aa0f",
       "license": "Apache-2.0",
       "targets": [
@@ -1264,7 +1264,7 @@
       "responsibility": "workbench"
     },
     {
-      "path": "scripts/ecu_tools/reference.py",
+      "path": "tools/python/src/ecu_tools/reference.py",
       "sha256": "9e2e436e40c29a30d4c5e526cb41777ad81863429f19b43b82b96baa2c6bb245",
       "license": "Apache-2.0",
       "targets": [
@@ -1278,7 +1278,7 @@
       "responsibility": "workbench"
     },
     {
-      "path": "scripts/ecu_tools/windows_job.py",
+      "path": "tools/python/src/ecu_tools/windows_job.py",
       "sha256": "7d9206bca29d2d20e6f544bf6f11037af8e694d981e13e8c38d98a544c87e808",
       "license": "Apache-2.0",
       "targets": [

@@ -67,19 +67,19 @@ mod epic4_protocol;
 #[path = "support/epic4_timing.rs"]
 mod epic4_timing;
 
-#[path = "support/epic4_counter_time.rs"]
-mod epic4_counter_time;
+#[path = "support/os/counter_timing.rs"]
+mod os_counter_timing;
 
 #[cfg(windows)]
-#[path = "support/epic4_os_service.rs"]
-mod epic4_os_service;
+#[path = "support/os/services.rs"]
+mod os_services;
 
 #[cfg(windows)]
-#[path = "support/epic4_os_configuration.rs"]
-mod epic4_os_configuration;
+#[path = "support/os/configuration.rs"]
+mod os_configuration;
 
-#[path = "support/epic4_arti.rs"]
-mod epic4_arti;
+#[path = "support/os/arti.rs"]
+mod os_arti;
 
 #[path = "support/tooling.rs"]
 mod tooling;

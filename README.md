@@ -58,30 +58,29 @@ Autsaro 支持从内置模板创建 ECU 工程，或导入多份 ARXML；在同�
 
 ## 本地开发环境
 
-人和 Agent 共用同一开发流程，不需要 Codex 或 BMad。完整说明见 [贡献指南](CONTRIBUTING.md)。准备 Git、uv 和 Node 24 后，在仓库根目录运行：
+准备 Node 和 npm 后，在仓库根目录安装前端依赖并启动开发服务器。版本范围见 [贡献指南](CONTRIBUTING.md)。
 
 ~~~sh
-uv sync --locked
-uv run dev setup --profile ui
-uv run dev doctor --profile ui
-uv run dev start ui
+npm ci --prefix ui
+npm run dev --prefix ui
 ~~~
 
-浏览器可开发界面和前端逻辑；完整文件操作及 IPC 使用桌面应用。Rust 核心和桌面开发需另准备 [平台依赖与本地配置](docs/development/environment.md)，随后运行 uv run dev start desktop。
+浏览器可开发界面和前端逻辑；完整文件操作及 IPC 使用桌面应用。Rust 核心和桌面开发需另准备 [平台依赖与本地配置](docs/development/environment.md)，随后运行 `npm run tauri --prefix ui -- dev`。
 
-推荐版本由 rust-toolchain.toml、.node-version、.python-version 和 ui/package.json 声明，依赖由 Cargo/npm/uv 锁文件固定。正常开发与严格原生验收的版本要求分别说明。官方 XSD/MOD/样例仅用于对应资源测试，不是 UI、内置配置测试或普通应用使用的前置条件。
+`.node-version` 和 `.python-version` 提供默认版本选择；支持范围由 [ui/package.json](ui/package.json) 和 [pyproject.toml](pyproject.toml) 声明，Rust 由 [rust-toolchain.toml](rust-toolchain.toml) 管理。依赖由 Cargo/npm/uv 锁文件固定。正常开发与严格原生验收的版本要求分别说明。官方 XSD/MOD/样例仅用于对应资源测试，不是 UI、内置配置测试或普通应用使用的前置条件。
 
 ## 代码质量检查
 
 ~~~sh
-uv run dev check --scope ui
-uv run dev check --scope tooling
-uv run dev check --scope core
+npm run test --prefix ui
+npm run build --prefix ui
+uv run --locked python -B -m unittest discover -s tests/python
+cargo test --locked --manifest-path core/Cargo.toml
 ~~~
 
-检查不重装依赖，实时显示输出并保留日志；按任务选择范围。--plan 预览命令，--json 输出结构化结果，--base 显式指定分支基准，默认 HEAD 检查待提交改动。
+这些命令直接运行对应工具，失败会保留其诊断与退出状态。Python 工具先执行 `uv sync --locked`。增量格式检查使用 `autosar_tooling quality --base <基准提交>`，本地未指定基准时检查相对 HEAD 的待提交改动。
 
-基础测试、官方对照、原生运行及 GUI/安装包验收分别执行，见 [测试指南](docs/development/testing.md)。完整资源与原生检查使用 uv run dev check --scope all --full；缺失或未运行的层不显示为通过。
+基础测试、官方对照、原生运行及 GUI/安装包验收分别执行，见 [测试指南](docs/development/testing.md)。完整资源与原生检查使用 `uv run --locked python -m autosar_tooling verify --scope all --base <基准提交>`；缺失或未运行的层不显示为通过。
 
 ## 构建与分发
 
@@ -103,14 +102,17 @@ npm run tauri --prefix ui -- build
 | `src-tauri/` | Tauri 桌面后端 |
 | `ui/` | React／TypeScript 配置界面 |
 | `runtime/` | 随生成工程交付的 C99 主机运行时 |
-| `scripts/` | Python 开发与验证工具 |
+| `scripts/` | 官方资料收集 |
+| `tools/python/src/` | 开发检查与随交付包分发的 Python 工具 |
+| `tools/automotive/` | 可选汽车技能的安装与维护 |
+| `tests/` | Python 测试与隔离桌面场景 |
 | `docs/` | 规范资料入口与技术文档 |
 
 ## 文档导航
 
 | 文档 | 用途 |
 | --- | --- |
-| [贡献指南](CONTRIBUTING.md) | 人和 Agent 共用的开发与 PR 流程 |
+| [贡献指南](CONTRIBUTING.md) | 开发与提交流程 |
 | [环境配置](docs/development/environment.md) | 按任务安装依赖及排查环境 |
 | [测试指南](docs/development/testing.md) | 本地检查、测试分层及 CI |
 | [主机运行时](runtime/README.md) | 运行接口、通信与诊断范围 |

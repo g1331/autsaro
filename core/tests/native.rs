@@ -52,19 +52,19 @@ mod epic4_protocol;
 #[path = "support/epic4_timing.rs"]
 mod epic4_timing;
 
-#[path = "support/epic4_counter_time.rs"]
-mod epic4_counter_time;
+#[path = "support/os/counter_timing.rs"]
+mod os_counter_timing;
 
 #[cfg(windows)]
-#[path = "support/epic4_os_service.rs"]
-mod epic4_os_service;
+#[path = "support/os/services.rs"]
+mod os_services;
 
 #[cfg(windows)]
-#[path = "support/epic4_os_configuration.rs"]
-mod epic4_os_configuration;
+#[path = "support/os/configuration.rs"]
+mod os_configuration;
 
-#[path = "support/epic4_arti.rs"]
-mod epic4_arti;
+#[path = "support/os/arti.rs"]
+mod os_arti;
 
 #[path = "support/tooling.rs"]
 mod tooling;
@@ -127,19 +127,19 @@ fn epic4_generated_artifact_obligations() {
 #[cfg(any(windows, target_os = "linux"))]
 #[test]
 fn epic4_arti_description_and_hooks() {
-    epic4_arti::verify();
+    os_arti::verify();
 }
 
 #[cfg(windows)]
 #[test]
 fn epic4_generated_scheduler_configuration() {
-    epic4_os_configuration::verify();
+    os_configuration::verify();
 }
 
 #[cfg(windows)]
 #[test]
 fn epic4_generated_counter_service() {
-    epic4_os_service::verify();
+    os_services::verify();
 }
 
 #[cfg(windows)]
@@ -391,7 +391,7 @@ os_native_suite!(epic4_backend_lifecycle, "lifecycle");
 
 #[test]
 fn epic4_generated_counter_timing_contracts() {
-    epic4_counter_time::verify();
+    os_counter_timing::verify();
 }
 
 #[test]

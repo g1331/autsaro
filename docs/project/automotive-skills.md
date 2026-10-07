@@ -23,7 +23,7 @@
 
 ## 安装与维护
 
-技能位于 `.agents/skills/`，无需安装到个人全局目录。源为 [automotive-skills-suite](https://github.com/jherrodthomas/automotive-skills-suite)，固定提交 `6ad8818b6a566e0c2f5c977d8038a579f9fed9f1`；每个技能包含上游 MIT LICENSE。`scripts/automotive-skills-lock.json` 记录包 SHA-256 和安装文件清单/哈希，不记录任务状态。
+技能位于 `.agents/skills/`，无需安装到个人全局目录。源为 [automotive-skills-suite](https://github.com/jherrodthomas/automotive-skills-suite)，固定提交 `6ad8818b6a566e0c2f5c977d8038a579f9fed9f1`；每个技能包含上游 MIT LICENSE。`tools/automotive/automotive-skills-lock.json` 记录包 SHA-256 和安装文件清单/哈希，不记录任务状态。
 
 原始包按原始字节计算 SHA-256；安装的文本文件和适配源文件按 LF 归一化后计算哈希，兼容 Windows Git 的 CRLF checkout，其他字节改动仍会触发冲突。二进制文件保持原始字节校验。
 
@@ -31,15 +31,15 @@
 
 ~~~sh
 uv sync --locked --group automotive
-uv run --group automotive python scripts/install_automotive_skills.py --check
-uv run --group automotive python scripts/verify_automotive_skills.py
+uv run --locked --group automotive python tools/automotive/install_automotive_skills.py --check
+uv run --locked --group automotive python tools/automotive/verify_automotive_skills.py
 ~~~
 
-依赖为 `openpyxl==3.1.5` 与 `et-xmlfile==2.0.0`。Python 缓存不提交；普通生成与审阅不需要 Office。需要公式重算时只使用可用的无头工具，缺少时报告“未重算”，不启动用户桌面窗口。
+可选依赖由 [pyproject.toml](../../pyproject.toml) 的 `automotive` group 声明。Python 缓存不提交；普通生成与审阅不需要 Office。需要公式重算时只使用可用的无头工具，缺少时报告“未重算”，不启动用户桌面窗口。
 
-全新 Git checkout 已携带团队共用技能。已记录的原样安装运行 `python scripts/install_automotive_skills.py` 只校验；部分缺失/本地修改需先审阅和恢复，安装器拒绝静默覆盖。更新时明确执行 `python scripts/install_automotive_skills.py --ref <完整提交SHA> --update` 并审阅差异；补丁不再匹配时停止。安装器不更新 BMad 文件。
+全新 Git checkout 已携带团队共用技能。已记录的原样安装运行 `python tools/automotive/install_automotive_skills.py` 只校验；部分缺失/本地修改需先审阅和恢复，安装器拒绝静默覆盖。更新时明确执行 `python tools/automotive/install_automotive_skills.py --ref <完整提交SHA> --update` 并审阅差异；补丁不再匹配时停止。安装器不更新 BMad 文件。
 
-本地补丁源位于 `scripts/automotive_skill_adapters.py` 和 `scripts/automotive_skill_patches/`。修改补丁源后对原样安装运行 `--update`，重新生成技能副本及锁文件。不要直接修改已安装副本再要求安装器覆盖。
+本地补丁源位于 `tools/automotive/automotive_skill_adapters.py` 和 `tools/automotive/automotive_skill_patches/`。修改补丁源后对原样安装运行 `--update`，重新生成技能副本及锁文件。不要直接修改已安装副本再要求安装器覆盖。
 
 ## 输入、产物和结论
 
@@ -67,7 +67,7 @@ uv run --group automotive python scripts/verify_automotive_skills.py
 ## Epic 3.3 设计演练
 
 ```powershell
-uv run --group automotive python scripts/verify_automotive_skills.py --demo
+uv run --locked --group automotive python tools/automotive/verify_automotive_skills.py --demo
 ```
 
 演练读取当前 Story 3.3，生成 CAN、诊断及拒绝/恢复路径的测试目录与追踪示例，然后调用配套 reviewer。输入记录 Story 摘要、Git 版本及文件哈希，用例全部标为“尚未执行”。产物在临时目录中生成和检查，Story 状态和能力等级保持不变。演练检查技能脚本的可用性，虚拟 ECU 运行测试需另行执行。

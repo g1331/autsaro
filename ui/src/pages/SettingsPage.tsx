@@ -8,7 +8,7 @@ const toolLabels: { key: keyof ExecutionTools; label: string }[] = [
   { key: 'compiler', label: '编译器' },
   { key: 'objdump', label: 'Objdump' },
   { key: 'git', label: 'Git' },
-  { key: 'python', label: '锁定 CPython' },
+  { key: 'python', label: 'Python 解释器' },
 ];
 
 export function SettingsPage({ controller: c }: { controller: Workbench }) {

@@ -83,6 +83,28 @@ fn private_directory() -> Result<PathBuf, String> {
     Err("Unable to reserve a private owner directory".into())
 }
 
+fn owner_socket(directory: &Path) -> Result<(PathBuf, Option<File>), String> {
+    let socket = directory.join("owner.sock");
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::fd::AsRawFd;
+        use std::os::unix::ffi::OsStrExt;
+
+        // Linux sockaddr_un permits at most 107 pathname bytes. Keep the
+        // socket in its private directory, addressing it through a held fd.
+        if socket.as_os_str().as_bytes().len() >= 108 {
+            let descriptor = File::open(directory).map_err(|error| error.to_string())?;
+            let address = PathBuf::from(format!(
+                "/proc/{}/fd/{}/owner.sock",
+                std::process::id(),
+                descriptor.as_raw_fd()
+            ));
+            return Ok((address, Some(descriptor)));
+        }
+    }
+    Ok((socket, None))
+}
+
 struct UnixInput {
     directory: PathBuf,
     path: PathBuf,
@@ -145,6 +167,7 @@ impl Drop for UnixInput {
 
 pub(super) struct UnixOwner {
     socket: PathBuf,
+    _socket_directory: Option<File>,
     token: String,
     supervisor: Mutex<Option<Child>>,
     directory: Option<PathBuf>,
@@ -162,7 +185,7 @@ impl UnixOwner {
         Self::start_with_inheritance(true, Some(python))
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "native-tests"))]
     pub(super) fn start_fresh_for_test() -> Result<Arc<Self>, String> {
         Self::start_with_inheritance(false, None)
     }
@@ -178,6 +201,7 @@ impl UnixOwner {
             ) {
                 return Ok(Arc::new(Self {
                     socket: PathBuf::from(socket),
+                    _socket_directory: None,
                     token: token.to_string_lossy().into_owned(),
                     supervisor: Mutex::new(None),
                     directory: None,
@@ -191,15 +215,18 @@ impl UnixOwner {
             Some(path) => std::borrow::Cow::Borrowed(path),
             None => std::borrow::Cow::Owned(PathBuf::from(
                 std::env::var_os("AUTOSAR_PYTHON")
-                    .ok_or("Set AUTOSAR_PYTHON to the absolute locked CPython executable")?,
+                    .ok_or("Set AUTOSAR_PYTHON to the absolute Python executable")?,
             )),
         };
         if !python.is_absolute() || !python.is_file() {
             return Err("AUTOSAR_PYTHON must name an existing absolute executable".into());
         }
-        let directory = private_directory()?;
+        Self::start_in_directory(python.as_ref(), private_directory()?)
+    }
+
+    fn start_in_directory(python: &Path, directory: PathBuf) -> Result<Arc<Self>, String> {
         for asset in crate::resources::AssetInventory::embedded().entries() {
-            if let Some(relative) = asset.relative_path.strip_prefix("scripts/")
+            if let Some(relative) = asset.relative_path.strip_prefix("tools/python/src/")
                 && relative.starts_with("ecu_tools/")
             {
                 let path = directory.join(relative);
@@ -207,7 +234,7 @@ impl UnixOwner {
                 fs::write(path, asset.bytes).map_err(|error| error.to_string())?;
             }
         }
-        let socket = directory.join("owner.sock");
+        let (socket, socket_directory) = owner_socket(&directory)?;
         let mut entropy = [0u8; 32];
         File::open("/dev/urandom")
             .and_then(|mut source| source.read_exact(&mut entropy))
@@ -223,7 +250,7 @@ impl UnixOwner {
             .mode(0o600)
             .open(&log_path)
             .map_err(|error| error.to_string())?;
-        let mut child = Command::new(python.as_ref())
+        let mut child = Command::new(python)
             .args(["-I", "-S"])
             .arg(directory.join("ecu_tools/owner.py"))
             .arg("--socket")
@@ -273,6 +300,7 @@ impl UnixOwner {
         }
         Ok(Arc::new(Self {
             socket,
+            _socket_directory: socket_directory,
             token,
             supervisor: Mutex::new(Some(child)),
             directory: Some(directory),
@@ -456,7 +484,7 @@ impl UnixOwner {
         }
         Ok(process)
     }
-    #[cfg(test)]
+    #[cfg(all(test, feature = "native-tests"))]
     pub(super) fn kill_supervisor_for_test(&self) -> Result<(), String> {
         let mut supervisor = self.supervisor.lock();
         let child = supervisor.as_mut().ok_or("Missing test supervisor")?;
@@ -465,7 +493,7 @@ impl UnixOwner {
         Ok(())
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "native-tests"))]
     pub(super) fn remove_failed_test_logs(&self) {
         if let Some(directory) = &self.directory {
             let _ = fs::remove_dir_all(directory);
@@ -597,5 +625,85 @@ impl Drop for UnixProcess {
         if !self.finished {
             let _ = self.cancel();
         }
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod socket_tests {
+    use super::*;
+    use std::os::unix::net::UnixListener;
+
+    struct Directory(PathBuf);
+
+    impl Drop for Directory {
+        fn drop(&mut self) {
+            fs::remove_dir_all(&self.0).unwrap();
+        }
+    }
+
+    #[test]
+    fn private_socket_connects_with_a_long_temporary_directory() {
+        let root = Directory(private_directory().unwrap());
+        let directory = root.0.join("long-temporary-directory-".repeat(6));
+        DirBuilder::new().mode(0o700).create(&directory).unwrap();
+        assert!(UnixListener::bind(directory.join("owner.sock")).is_err());
+
+        let (address, descriptor) = owner_socket(&directory).unwrap();
+        assert!(descriptor.is_some());
+        let listener = UnixListener::bind(&address).unwrap();
+        let mut sender = UnixStream::connect(&address).unwrap();
+        sender.write_all(b"probe").unwrap();
+        let (mut receiver, _) = listener.accept().unwrap();
+        let mut received = [0; 5];
+        receiver.read_exact(&mut received).unwrap();
+        assert_eq!(&received, b"probe");
+        assert!(directory.join("owner.sock").exists());
+    }
+
+    #[cfg(feature = "native-tests")]
+    #[test]
+    fn owner_runs_a_child_and_releases_its_long_path_socket_lease() {
+        use std::os::fd::AsRawFd;
+
+        let root = Directory(private_directory().unwrap());
+        let directory = root.0.join("long-temporary-directory-".repeat(6));
+        DirBuilder::new().mode(0o700).create(&directory).unwrap();
+        let python = PathBuf::from(std::env::var_os("AUTOSAR_PYTHON").expect("Python interpreter"));
+        let owner = UnixOwner::start_in_directory(&python, directory.clone()).unwrap();
+        let descriptor = owner._socket_directory.as_ref().expect("long-path lease");
+        let descriptor_path = PathBuf::from(format!(
+            "/proc/{}/fd/{}",
+            std::process::id(),
+            descriptor.as_raw_fd()
+        ));
+        assert_eq!(fs::read_link(&descriptor_path).unwrap(), directory);
+        let spec = ProcessSpec::for_duration(
+            vec![
+                python.into_os_string(),
+                "-I".into(),
+                "-S".into(),
+                "-c".into(),
+                "print('owned child')".into(),
+            ],
+            root.0.clone(),
+            Vec::new(),
+            Duration::from_secs(8),
+            root.0.clone(),
+        )
+        .unwrap();
+        let mut process = owner.spawn(&spec, None).unwrap();
+        let result = process.wait().unwrap();
+        assert!(result.success(), "{result:?}");
+        assert_eq!(
+            fs::read_to_string(result.stdout).unwrap().trim(),
+            "owned child"
+        );
+        drop(process);
+        drop(owner);
+        assert!(!directory.exists());
+        assert_ne!(
+            fs::read_link(&descriptor_path).ok().as_ref(),
+            Some(&directory)
+        );
     }
 }

@@ -1,28 +1,15 @@
 # Agent 开发指南
 
-人和 Agent 共用 [CONTRIBUTING.md](CONTRIBUTING.md) 中的开发、测试和 PR 规则。先读该指南、README 和相关模块说明，再检查 Git 工作区。不要覆盖用户修改，不要为当前任务重建已有工程。
+先读 [CONTRIBUTING.md](CONTRIBUTING.md)、README 和相关模块说明，再核对目标版本、分支及工作区。保留用户修改，使用项目正常开发入口。
 
-## 导航
+## 结构与开发
 
-- core/src：Rust 配置、解析、生成与主机验证；core/tests：builtin、官方对照及 native 测试目标。
-- ui/src：React/TypeScript；src-tauri：桌面后端。
-- runtime：交付的 C99 运行时；scripts/autosar_tooling：开发工具；scripts/ecu_tools：随工程交付的工具。
-- docs/development：环境与测试；docs/maintainers：资产及发行维护；docs/official：本地参考档案入口。
+- `core/`：Rust 配置、解析、生成及验证；`src-tauri/`：桌面后端；`ui/`：React 界面。
+- `runtime/`：交付的 C99 运行时；`tools/python/src/`：开发工具与离线 ECU 工具；`tests/`：Python 与桌面测试。
+- `scripts/`：官方资料收集；`tools/automotive/`：可选技能维护；`docs/development/` 与 `docs/maintainers/`：开发与发行说明。
 
-## 开发与验证
+采用 npm、Cargo、uv 和正常测试运行器，不新增代理专用编排、报告或状态系统。格式按修改范围检查，不全仓重排。自动 GUI 验收使用隔离入口，不占用用户桌面。
 
-使用 uv run dev --help 查找共同入口，按改动范围执行 dev check；需要官方或原生证据时选择明确测试层。--plan 可预览，--json 供自动处理。检查结果说明运行范围及未验项目，不以构建代替 GUI/发行验收。
+修改 C、头文件或生成 C 的 Rust 模板前读取 [misra-c2012](.agents/skills/misra-c2012/SKILL.md)。交付摘要使用 `python -m autosar_tooling assets check|update`；明确审阅 ABI 与第三方身份，不用摘要更新吸收契约变化。
 
-自动验收优先无头运行。真实 GUI/IPC 使用已有隔离入口，不弹出窗口干扰用户、不抢夺焦点或输入；开发者主动要求交互调试时可以启动应用。无法隔离时报告未验证，不在用户桌面补测。
-
-修改 C 源码、头文件或生成 C 的 Rust 模板之前，读取并使用 [misra-c2012](.agents/skills/misra-c2012/SKILL.md)。共同 C 编码和行为测试要求见贡献指南；技能调用本身不构成符合性证据。纯 Rust/TypeScript、文档及只读任务不触发该技能。
-
-修改交付资产后使用 dev assets check；显式更新身份前审阅源码与清单差异。不要修改固定上游哈希来吸收本地变更，不因局部修改全仓格式化。
-
-## 任务协作
-
-普通 Issue、明确修复和贡献无需先创建 BMad story，也无需生成 Excel 或额外报告。用户委托 BMad/story/epic 时使用相应仓库技能，核对规划、Git、源码和实际结果，更新已有工件；不建立重复状态台账。状态查询只读。
-
-BMad 保留详细规划和历史实施状态，使用说明见 [Owner Guide](docs/project/OWNER_GUIDE.md)。可选 automotive skills 按具体规格或审阅任务使用，模板结果不替代测试，不成为普通贡献的前置条件。
-
-完成时说明改动、实际运行的检查及未验范围。未经用户授权不推送、发布或发送外部消息。
+BMad 是规格与任务状态来源，按安装技能推进；记录结果到相关规格，不额外生成报告、矩阵或台账。状态查询只读。普通项目启动和开发不依赖代理。

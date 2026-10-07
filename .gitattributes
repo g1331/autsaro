@@ -57,7 +57,7 @@
 /runtime/src/Security.c text eol=crlf
 
 # Packaged stdlib tools and embedded delivery text have fixed raw-byte digests.
-/scripts/ecu_tools/** text eol=lf
+/tools/python/src/ecu_tools/** text eol=lf
 /runtime/ecu-tool.py text eol=lf
 /runtime/generated-README.md text eol=lf
 /runtime/reference-README.md text eol=lf

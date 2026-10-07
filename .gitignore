@@ -13,13 +13,12 @@ src-tauri/gen/
 **/*.tsbuildinfo
 **/__pycache__/
 .venv/
+.*-venv/
 dev.local.toml
 ui/node_modules/
 *.egg-info/
 dist/
 build/
-.quality-venv/
-.automotive-skills-venv/
 .playwright-cli/
 .scratch/autosar-platform/research/*.tmp.zip
 .scratch/epic4/

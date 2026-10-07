@@ -1,0 +1,172 @@
+"""Development configuration, diagnostics and resource regression tests."""
+
+from __future__ import annotations
+
+import io
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import unittest
+from contextlib import redirect_stdout
+from pathlib import Path
+from unittest.mock import patch
+
+from autosar_tooling import assets, config, diagnostics, quality
+
+
+class ConfigurationTests(unittest.TestCase):
+    def test_environment_overrides_local_paths_without_global_mutation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "dev.local.toml").write_text(
+                '[environment]\nAUTOSAR_MOD_ARCHIVE="references/mod.zip"\nAUTOSAR_CC="/local/gcc"\n'
+            )
+            with patch.dict(os.environ, {"AUTOSAR_CC": "/selected/gcc"}, clear=True):
+                result = config.environment(root)
+                self.assertEqual(result["AUTOSAR_CC"], "/selected/gcc")
+                self.assertEqual(
+                    result["AUTOSAR_MOD_ARCHIVE"], str(root / "references/mod.zip")
+                )
+                self.assertNotIn("AUTOSAR_MOD_ARCHIVE", os.environ)
+                self.assertEqual(
+                    result["AUTOSAR_PYTHON"], str(Path(sys.executable).absolute())
+                )
+
+    def test_unknown_settings_fail_instead_of_changing_arbitrary_environment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for text in (
+                '[environment]\nHOME="somewhere"\n',
+                '[unexpected]\nx="value"\n',
+            ):
+                (root / "dev.local.toml").write_text(text)
+                with self.assertRaises(ValueError):
+                    config.environment(root)
+
+    def test_resource_identity_comes_from_the_official_resource_catalog(self):
+        entries = config.archives()
+        fixture = json.loads(
+            (config.ROOT / "core/resources/official.json").read_text()
+        )
+        self.assertEqual(entries["R24-11 MOD"][2], next(item["sha256"] for item in fixture if item["environment"] == "AUTOSAR_MOD_ARCHIVE"))
+        self.assertEqual(len(entries), 3)
+        with patch.dict(os.environ, {"AUTOSAR_MOD_ARCHIVE": "custom/mod.zip"}):
+            self.assertEqual(
+                config.archive_path("AUTOSAR_MOD_ARCHIVE", "unused"),
+                config.ROOT / "custom/mod.zip",
+            )
+
+
+class DiagnosticTests(unittest.TestCase):
+    def test_supported_patches_do_not_require_a_specific_node_version(self):
+        for version in ("24.0.0", "24.20.0"):
+            with patch.object(diagnostics.shutil, "which", return_value="/tools/node"), patch.object(diagnostics.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, "v" + version, "")):
+                self.assertEqual(diagnostics.version_check("Node", ["node", "--version"], major=24).status, "ready")
+        with patch.object(diagnostics.shutil, "which", return_value="/tools/node"), patch.object(diagnostics.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, "v22.0.0", "")):
+            self.assertEqual(diagnostics.version_check("Node", ["node", "--version"], major=24).status, "blocked")
+
+    def test_ui_does_not_query_rust_archives_or_desktop_dependencies(self):
+        calls = []
+        def version(name, *args, **kwargs):
+            calls.append(name)
+            return diagnostics.Check(name, "ready", "test")
+        with patch.object(diagnostics, "version_check", side_effect=version), patch.object(diagnostics, "archives", side_effect=AssertionError("UI requested archives")), patch.object(diagnostics, "_platform_dependencies", side_effect=AssertionError("UI requested desktop libraries")):
+            diagnostics.inspect("ui")
+        self.assertEqual(calls, ["Git", "Node", "npm"])
+
+class QualityScopeTests(unittest.TestCase):
+    def test_scoped_formatting_does_not_request_unrelated_tools(self):
+        with patch.object(quality, "scoped_paths", return_value=[]), patch.object(quality, "source_paths", return_value=[]), patch.object(quality, "c_syntax_errors", side_effect=AssertionError("UI requested C")), redirect_stdout(io.StringIO()):
+            self.assertEqual(quality.check("HEAD", scope="ui"), [])
+
+
+class AssetTests(unittest.TestCase):
+    def test_source_digest_update_cannot_accept_an_abi_change(self):
+        from autosar_tooling import bsw_catalog
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'third_party/freertos').mkdir(parents=True)
+            (root / 'runtime/contracts').mkdir(parents=True)
+            for name in ('source-manifest.json', 'posix-source-manifest.json'):
+                (root / 'third_party/freertos' / name).write_text('{"files": {}}')
+            contract = root / 'runtime/contracts/bsw-v1.json'
+            original = '{"types": {"Value": "uint8_t"}, "sources": {}}'
+            contract.write_text(original)
+            with (
+                patch.object(bsw_catalog, 'materialize', return_value={'types': {'Value': 'uint16_t'}, 'sources': {}}),
+                self.assertRaisesRegex(ValueError, 'BSW ABI changed'),
+            ):
+                assets.maintain(update=True, root=root)
+            self.assertEqual(contract.read_text(), original)
+
+    def test_missing_and_traversal_assets_are_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in ("../outside", "/absolute", "missing"):
+                with self.assertRaises(ValueError):
+                    assets.digest(root, name)
+
+    def test_no_change_update_is_idempotent_and_does_not_write(self):
+        import hashlib
+
+        from autosar_tooling import bsw_catalog
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for folder in (
+                "third_party/freertos",
+                "runtime/contracts",
+                "tools/python/src/ecu_tools",
+            ):
+                (root / folder).mkdir(parents=True)
+            for name in ("source-manifest.json", "posix-source-manifest.json"):
+                (root / "third_party/freertos" / name).write_text('{"files": {}}')
+            (root / "runtime/contracts/bsw-v1.json").write_text('{"sources": {}}')
+            (root / "tools/python/src/ecu_tools/workbench-v2-assets.json").write_text(
+                '{"files": []}'
+            )
+            source = root / "owned"
+            source.write_bytes(b"original")
+            manifest = root / "runtime/contracts/assets-v1.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "assets": [
+                            {
+                                "path": "owned",
+                                "license": "Apache-2.0",
+                                "sha256": hashlib.sha256(b"original").hexdigest(),
+                            }
+                        ]
+                    }
+                )
+            )
+            before = manifest.read_bytes()
+            with (
+                patch.object(bsw_catalog, "materialize", return_value={"sources": {}}),
+                redirect_stdout(io.StringIO()),
+            ):
+                self.assertEqual(assets.maintain(update=True, root=root), 0)
+                self.assertEqual(manifest.read_bytes(), before)
+                source.write_bytes(b"reviewed change")
+                self.assertEqual(assets.maintain(root=root), 1)
+                self.assertEqual(manifest.read_bytes(), before)
+                self.assertEqual(assets.maintain(update=True, root=root), 0)
+                self.assertEqual(assets.maintain(root=root), 0)
+
+    def test_upstream_change_cannot_be_accepted_by_asset_update(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            kernel = root / "third_party/freertos"
+            kernel.mkdir(parents=True)
+            (kernel / "tasks.c").write_bytes(b"changed upstream")
+            manifest = {"files": {"tasks.c": "0" * 64}}
+            (kernel / "source-manifest.json").write_text(json.dumps(manifest))
+            with self.assertRaisesRegex(ValueError, "Modified upstream"):
+                assets.maintain(update=True, root=root)
+            self.assertEqual(
+                json.loads((kernel / "source-manifest.json").read_text()), manifest
+            )
