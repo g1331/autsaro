@@ -10,7 +10,7 @@
 
 基础 checks 工作流可在普通 GitHub hosted runner 执行。
 
-专用 acceptance 工作流只由 workflow_dispatch 触发，在带 autosar-controlled 和所选操作系统标签的 self-hosted runner 执行。维护者需准备对应宿主的 Rust/桌面开发依赖、合法资源、本地 dev.local.toml 或环境变量、固定工具链；Windows 原生生成器回归另需 Cppcheck 2.21.0。runner 不应处理不受信任的 fork PR 或在用户日常桌面执行 GUI 自动验收。
+专用 acceptance 工作流只由 workflow_dispatch 触发，在带 autosar-controlled 和所选操作系统标签的 self-hosted runner 执行。runner 使用支持 Node 24 Actions 的当前 GitHub Actions runner。维护者需准备对应宿主的 Rust/桌面开发依赖、合法资源、本地 dev.local.toml 或环境变量、固定工具链；Windows 原生生成器回归另需 Cppcheck 2.21.0。runner 不应处理不受信任的 fork PR 或在用户日常桌面执行 GUI 自动验收。
 
 调用前检查所选 commit，确认 runner 原生平台与目标一致。原生 GUI/安装包验收另使用 desktop 工作流，并提供本次构建/解包应用的绝对路径。所有工作流在失败时保留报告和日志；runner 未配置时专用验收没有执行，不可标记为通过。
 

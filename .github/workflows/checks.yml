@@ -16,13 +16,13 @@ jobs:
     env:
       BASE_REVISION: ${{ github.event.pull_request.base.sha || github.event.before }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version-file: .node-version
           cache: npm
@@ -59,7 +59,7 @@ jobs:
                   result = json.loads(report.read_text())
                   if result.get("logs"):
                       shutil.copytree(result["logs"], report.parent / (report.stem + "-logs"), dirs_exist_ok=True)
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
           name: checks-${{ matrix.os }}
@@ -70,10 +70,10 @@ jobs:
     env:
       BASE_REVISION: ${{ github.event.pull_request.base.sha || github.event.before }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
       - run: sudo apt-get update && sudo apt-get install -y libxml2-dev libclang-dev clang pkg-config
@@ -113,7 +113,7 @@ jobs:
                   result = json.loads(report.read_text())
                   if result.get("logs"):
                       shutil.copytree(result["logs"], report.parent / (report.stem + "-logs"), dirs_exist_ok=True)
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
           name: checks-core-linux
