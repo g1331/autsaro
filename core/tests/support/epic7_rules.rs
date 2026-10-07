@@ -1,7 +1,11 @@
-use super::{Scratch, archive};
+use super::Scratch;
+#[cfg(feature = "official-oracles")]
+use super::archive;
 use autosar_config_core::model::Severity;
 use autosar_config_core::project_model::ValidationStatus;
-use autosar_config_core::{DiagnosticSettings, Direction, Workspace, rules, schema};
+#[cfg(feature = "official-oracles")]
+use autosar_config_core::schema;
+use autosar_config_core::{DiagnosticSettings, Direction, Workspace, rules};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -311,6 +315,7 @@ fn native_inventory_rejects_tampering_even_with_self_recomputed_metadata_hash() 
     assert!(rules::verify_inventory_bytes(&[]).is_err());
 }
 
+#[cfg(feature = "official-oracles")]
 #[test]
 fn native_schema_oracle_agrees_on_independent_positive_and_negative_examples() {
     let legal = document("<I-SIGNAL><SHORT-NAME>Signal</SHORT-NAME><LENGTH>8</LENGTH></I-SIGNAL>");

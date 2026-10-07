@@ -1,0 +1,54 @@
+name: Controlled resource and native acceptance
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Explicit acceptance layer
+        type: choice
+        options: [integration, native, all]
+        default: integration
+      platform:
+        description: Prepared runner operating system
+        type: choice
+        options: [Linux, Windows, macOS]
+        default: Linux
+permissions:
+  contents: read
+jobs:
+  acceptance:
+    runs-on: [self-hosted, autosar-controlled, "${{ inputs.platform }}"]
+    env:
+      ACCEPTANCE_SUITE: ${{ inputs.suite }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run declared layer and retain command logs
+        shell: python
+        run: |
+          import os, pathlib, subprocess
+          pathlib.Path("acceptance-results").mkdir(exist_ok=True)
+          suite = os.environ["ACCEPTANCE_SUITE"]
+          subprocess.run(["uv", "sync", "--locked"], check=True)
+          for profile in (["integration"] if suite == "integration" else ["integration", "native"]):
+              with open(f"acceptance-results/doctor-{profile}.json", "w", encoding="utf-8") as report:
+                  subprocess.run(["uv", "run", "dev", "doctor", "--profile", profile, "--json"], stdout=report, check=True)
+          if suite == "all":
+              subprocess.run(["uv", "run", "dev", "setup", "--profile", "ui"], check=True)
+          with open("acceptance-results/result.json", "w", encoding="utf-8") as report:
+              result = subprocess.run(["uv", "run", "dev", "test", "--suite", suite, "--json"], stdout=report)
+          raise SystemExit(result.returncode)
+      - name: Copy execution logs from the result
+        if: always()
+        shell: python
+        run: |
+          import json, pathlib, shutil
+          report = pathlib.Path("acceptance-results/result.json")
+          if report.exists() and report.stat().st_size:
+              result = json.loads(report.read_text())
+              if result.get("logs"):
+                  shutil.copytree(result["logs"], "acceptance-results/logs", dirs_exist_ok=True)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: acceptance-results
+          path: acceptance-results
+          if-no-files-found: ignore

@@ -250,7 +250,7 @@ pub(super) fn source_generation_does_not_require_native_executor() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let resources = PlanDependencies::explicit(
         schema::schema_archive(root),
-        root.join("docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_MOD_ECUConfigurationParameters.zip"),
+        schema::reference_archive(root, "AUTOSAR_MOD_ARCHIVE", schema::MOD_ZIP),
     ).unwrap();
     let interpreter = std::env::var_os("AUTOSAR_PYTHON")
         .expect("Supply an absolute pinned interpreter for this development test");

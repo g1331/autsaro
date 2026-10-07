@@ -5,6 +5,16 @@ edition = "2024"
 
 [features]
 verification-metrics = []
+official-oracles = []
+native-tests = []
+
+[[test]]
+name = "end_to_end"
+required-features = ["official-oracles"]
+
+[[test]]
+name = "native"
+required-features = ["native-tests"]
 
 [dependencies]
 libxml = "0.3.21"

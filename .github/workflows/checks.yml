@@ -1,0 +1,121 @@
+name: Development checks
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ui-and-tooling:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      BASE_REVISION: ${{ github.event.pull_request.base.sha || github.event.before }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Select explicit diff baseline
+        shell: python
+        run: |
+          import os, subprocess
+          candidate = os.environ.get("BASE_REVISION") or "HEAD^"
+          result = subprocess.run(["git", "rev-parse", "--verify", candidate + "^{commit}"], capture_output=True, text=True)
+          base = result.stdout.strip() if result.returncode == 0 else subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
+              output.write("CHECK_BASE=" + base + "\n")
+      - run: uv sync --locked
+      - run: uv run dev setup --profile ui
+      - run: uv run dev doctor --profile ui
+      - name: Check tooling and UI
+        shell: python
+        run: |
+          import os, pathlib, subprocess
+          pathlib.Path("check-results").mkdir(exist_ok=True)
+          for scope in ("tooling", "ui"):
+              with open(f"check-results/{scope}.json", "w", encoding="utf-8") as report:
+                  result = subprocess.run(["uv", "run", "dev", "check", "--scope", scope, "--base", os.environ["CHECK_BASE"], "--json"], stdout=report)
+              if result.returncode:
+                  raise SystemExit(result.returncode)
+      - name: Retain execution logs
+        if: always()
+        shell: python
+        run: |
+          import json, pathlib, shutil
+          for report in pathlib.Path("check-results").glob("*.json"):
+              if report.stat().st_size:
+                  result = json.loads(report.read_text())
+                  if result.get("logs"):
+                      shutil.copytree(result["logs"], report.parent / (report.stem + "-logs"), dirs_exist_ok=True)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: checks-${{ matrix.os }}
+          path: check-results
+          if-no-files-found: ignore
+  core:
+    runs-on: ubuntu-24.04
+    env:
+      BASE_REVISION: ${{ github.event.pull_request.base.sha || github.event.before }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: sudo apt-get update && sudo apt-get install -y libxml2-dev libclang-dev clang pkg-config
+      - run: rustup show
+      - run: uv sync --locked
+      - name: Select explicit diff baseline
+        shell: python
+        run: |
+          import os, subprocess
+          candidate = os.environ.get("BASE_REVISION") or "HEAD^"
+          result = subprocess.run(["git", "rev-parse", "--verify", candidate + "^{commit}"], capture_output=True, text=True)
+          base = result.stdout.strip() if result.returncode == 0 else subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
+              output.write("CHECK_BASE=" + base + "\n")
+      - run: uv run dev doctor --profile core
+      - name: Check core and process ownership
+        shell: python
+        run: |
+          import os, pathlib, subprocess
+          pathlib.Path("check-results").mkdir(exist_ok=True)
+          commands = {
+              "core": ["check", "--scope", "core", "--base", os.environ["CHECK_BASE"]],
+              "process": ["test", "--suite", "process"],
+          }
+          for name, arguments in commands.items():
+              with open(f"check-results/{name}.json", "w", encoding="utf-8") as report:
+                  result = subprocess.run(["uv", "run", "dev", *arguments, "--json"], stdout=report)
+              if result.returncode:
+                  raise SystemExit(result.returncode)
+      - name: Retain execution logs
+        if: always()
+        shell: python
+        run: |
+          import json, pathlib, shutil
+          for report in pathlib.Path("check-results").glob("*.json"):
+              if report.stat().st_size:
+                  result = json.loads(report.read_text())
+                  if result.get("logs"):
+                      shutil.copytree(result["logs"], report.parent / (report.stem + "-logs"), dirs_exist_ok=True)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: checks-core-linux
+          path: check-results
+          if-no-files-found: ignore

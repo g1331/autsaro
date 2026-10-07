@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 from autosar_tooling import doctor, os_suites
 
 
 def main() -> int:
+    from autosar_tooling.config import environment
+
+    os.environ.update(environment())
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     check = commands.add_parser("doctor", help="Check the workbench prerequisites")
@@ -69,6 +73,11 @@ def main() -> int:
     )
     quality.add_argument("--base")
     quality.add_argument("--all-format", action="store_true")
+    quality.add_argument(
+        "--scope",
+        choices=("ui", "tooling", "core", "desktop", "runtime", "all"),
+        default="all",
+    )
     commands.add_parser(
         "protocol-oracles", help="Check independent protocol/OS reference vectors"
     )
@@ -133,7 +142,10 @@ def main() -> int:
         if args.builtin_only and not args.installed:
             parser.error("--builtin-only requires --installed")
         return run(
-            args.platform, args.binary, args.installed, args.source_checkout,
+            args.platform,
+            args.binary,
+            args.installed,
+            args.source_checkout,
             args.builtin_only,
         )
     if args.command == "quality":
@@ -142,7 +154,7 @@ def main() -> int:
         options = (["--base", args.base] if args.base else []) + (
             ["--all-format"] if args.all_format else []
         )
-        return check_quality(options)
+        return check_quality([*options, "--scope", args.scope])
     if args.command == "protocol-oracles":
         from autosar_tooling.protocol_oracles import main as check_protocol
 

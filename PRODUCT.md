@@ -22,7 +22,7 @@ web
 
 构建自有 AUTOSAR Classic 基础软件栈，以及配置、校验和代码生成工作台，将系统需求、软件组件、BSW 与目标之间的关系转化为可理解、可配置、可校验、可生成、可交付的 ECU 工程。
 
-配置主流程应能独立使用：安装软件后用内置校验规则与自有模块定义，新建或导入真实 ARXML，完成检查、编辑、保存、校验和源码生成；用户不必提供官方 XSD／MOD，安装编译器和执行虚拟 ECU 也不是使用 Configurator 的前提。当前实现仍依赖外部档案，这一新目标尚待 Epic 7 实施，不能写成已经具备的能力。
+配置主流程应能独立使用：安装软件后用内置校验规则与自有模块定义，新建或导入真实 ARXML，完成检查、编辑、保存、校验和源码生成；用户不必提供官方 XSD／MOD，安装编译器和执行虚拟 ECU 也不是使用 Configurator 的前提。当前内置配置链已提供该能力；兼容路径和官方对照测试仍使用外部档案，具体范围见 README 和对应实现。
 
 成功不是展示源码或完成一次示例构建，而是对声明支持的配置交付完整输入、通用栈源码、生成配置与接口、目标依赖及重建方法，并通过独立预期验证实际行为与失败恢复。用户不应每次生成后手工补齐协议栈或缺失符号。
 
@@ -37,7 +37,7 @@ Vector MICROSAR Classic＋DaVinci Configurator、EB tresos AutoCore＋Studio 是
 ## Operating Context
 
 - 本地工程工作流：新建或导入同一 ECU 的多文件 ARXML → 检查并编辑受支持对象 → 预览差异并保存 → 校验 → 预览并生成独立工程 → 可选构建与主机行为验证 → 交接与重导入。
-- 当前界面有配置、诊断、生成与构建、虚拟运行及工作台设置等入口；统一 Configurator 是下一增量的产品方向，不将候选功能当作现有操作。
+- 当前界面与能力以 README 和实际源码为准；候选方向不作为已实现能力。
 - ARXML、生成源码、构建产物和运行状态有不同所有权与生命周期。预览不写磁盘，确认后才保存或生成；用户输入、应用源码及既有产物不能被静默覆盖。未应用草稿与已保存配置须明确区分。
 - R5 的正常配置链使用软件独立实现、随包提供的版本化规则及自有模块定义。官方 XSD／MOD 用于研发核对和独立对照，不是普通用户设置项；第三方模块定义保留显式可选导入。内置版次／覆盖与实际校验结果分别显示，未知规则不假称通过，损坏的随包规则是安装／工具错误，不要求用户补下载官方档案。
 - Windows 与 Linux 有受控原生主机目标及工程交接记录；macOS 原生构建与 IPC 未验证。跨目标源码准备与当前宿主执行能力是不同结果。
@@ -55,7 +55,7 @@ Vector MICROSAR Classic＋DaVinci Configurator、EB tresos AutoCore＋Studio 是
 
 ### 已确认方向与待决边界
 
-- 统一 Configurator 的 R5 已正式化为 Epic 7：[选定需求](_bmad-output/planning-artifacts/prd.md#r5-选定范围与完成契约)、[增量架构](_bmad-output/planning-artifacts/architecture/epic-7/ARCHITECTURE-SPINE.md)、11 条 Story 与[交互规格](_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/EXPERIENCE.md)已按用户确认的内置规则方向同步修订，最新就绪结论见[实施就绪](_bmad-output/planning-artifacts/implementation-readiness.md#2026-10-03-r5--epic-7-实施就绪)。新故事仍全部 backlog，未编码或替换正式图标；下一入口是 7.1 的开发规格与真实内置校验／源检查。R6 只固定共同对象／引用及应用所有权接缝，其他候选仍待规划。
+- 统一 Configurator 的 R5 已正式化为 Epic 7：[选定需求](_bmad-output/planning-artifacts/prd.md#r5-选定范围与完成契约)、[增量架构](_bmad-output/planning-artifacts/architecture/epic-7/ARCHITECTURE-SPINE.md)、11 条 Story 与[交互规格](_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/EXPERIENCE.md)已按用户确认的内置规则方向同步修订，最新就绪结论见[实施就绪](_bmad-output/planning-artifacts/implementation-readiness.md#2026-10-03-r5--epic-7-实施就绪)。实施结果见当前中央实施规格和 Git；本文不复制动态 story 状态。R6 只固定共同对象／引用及应用所有权接缝，其他候选仍待规划。
 - 第一条完整参考产品链是通用 CAN＋诊断 ECU。完整交付须包含所声明配置需要的应用接口、OS、生命周期／网络管理与故障恢复；常开 CAN 的中间增量不能替代完整参考 ECU。
 - 长期逐阶段扩大所选 Classic 版次的有效模块与目标覆盖，不要求每个 ECU 启用全部模块，不用历史 story 数量计算未经定义的完成率。
 - 首个 MCU 板卡、驱动及许可、工具链、具体诊断／网络管理剖面、输入覆盖与迁移规则仍按对应产品规划决定。当前没有真实 MCU 验证，不预先宣布硬件支持。
@@ -66,8 +66,8 @@ Vector MICROSAR Classic＋DaVinci Configurator、EB tresos AutoCore＋Studio 是
 ## Brand Commitments
 
 - 当前应用名称为“Classic CAN 配置工作台”，英文分发名称为 `Classic CAN Workbench`。长期产品方向是更完整的 Autosar Classic 工程平台；初始化不擅自重命名现有应用。
-- 本轮重新设计软件 logo／应用图标，旧 `ui/public/workbench.svg` 是临时版本，不再作为必须保留的视觉约束。新版设计源与桌面图标候选放在 BMad UX 基线的 `mockups/assets/`；正式软件与安装包资产在实施前不替换。不使用 AUTOSAR 官方商标。
-- 图标须能识别汽车电子，同时灵动、有当代桌面品牌的图形性。用户偏好平面 A（1＞3＞2），要求它与工程界面更协调；明确否决绿色适配，并要求有质感的渐变。JetBrains／VS Code 作为层次参考，不复制其橙粉紫配色；当前保留 A 形体，以珊瑚色系建立光色和深浅，界面主行动用克制珊瑚实色。2026-10-03 用户确认当前透明珊瑚材质图标与界面基线“暂时定稿”；暂定设计不表示正式软件已经实施或发布。
+- 当前正式图标位于 ui/public 和 src-tauri/icons，设计源保留在 BMad UX 基线。设计快照不作为当前实施或发行状态记录。不使用 AUTOSAR 官方商标。
+- 图标须能识别汽车电子，同时灵动、有当代桌面品牌的图形性。用户偏好平面 A（1＞3＞2），要求它与工程界面更协调；明确否决绿色适配，并要求有质感的渐变。JetBrains／VS Code 作为层次参考，不复制其橙粉紫配色；当前保留 A 形体，以珊瑚色系建立光色和深浅，界面主行动用克制珊瑚实色。2026-10-03 用户确认当前透明珊瑚材质图标与界面基线“暂时定稿”；设计快照不作为当前软件实施或发行状态记录。
 - 身份图形采用真实透明背景，不保留白色承载底；车身轮廓与珊瑚色层在明暗主题一致，灯位按有效主题切换为石墨／暖白色。跟随系统时同步图形，不丢弃未应用的设置。通用桌面图标兼顾明暗背景，但不声称原生 ICO／ICNS 会自动跟随主题。
 - 当前界面以简体中文表达任务，保留标准术语、模块名、标识符、命令和原始错误的准确含义。能力描述必须具体、可核对，不把研发目标包装成可用功能。
 - 界面基线沿用工程树＋对象表＋属性检查器、JetBrains 式统一菜单／侧栏／底部工具窗口逻辑，以及 ChatGPT 桌面端中性配色与角色色彩。参考应形成完整体系，不拼接控件，不在正常操作界面放设计解释。浅深色共享同一信息层级；具体视觉和交互规则由设计规范承载。
@@ -78,7 +78,7 @@ Vector MICROSAR Classic＋DaVinci Configurator、EB tresos AutoCore＋Studio 是
 - [PRD](_bmad-output/planning-artifacts/prd.md)与[架构](_bmad-output/planning-artifacts/architecture.md)：已确认成果、输入／生成责任与后续待决契约。
 - [README](README.md)、[运行时说明](runtime/README.md)及 BMad story/spec：现有工作流、受限能力、目标依赖和已记录验证范围。旧段落涉及历史状态时，以适用的较新 story/spec 和当前源码核对，不从一句总述推定全部能力。
 - `ui/src/`、`src-tauri/`、`core/src/` 与 `runtime/`：现有 React 界面、桌面后端、配置／生成核心与 C99 运行时；`core/tests/end_to_end.rs` 及 fixtures 承载集成验证输入。
-- `ui/public/workbench.svg` 与 `src-tauri/icons/`：现有产品图标资产。
+- `ui/public/logo-app.png` 与 `src-tauri/icons/`：现有产品图标资产。
 - 尚无可用于宣称真实 MCU 支持、官方认证、客户背书、性能基准或公开发布许可的本次初始化证据，不编造相关内容。本次未重新执行历史主机验收。
 
 ## Product Principles

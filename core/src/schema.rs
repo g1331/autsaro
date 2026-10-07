@@ -11,11 +11,29 @@ use zip::ZipArchive;
 
 pub const SCHEMA_ZIP: &str =
     "docs/official/R24-11/FO/MethodologyAndTemplates/AUTOSAR_FO_MMOD_XMLSchema.zip";
+pub const MOD_ZIP: &str =
+    "docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_MOD_ECUConfigurationParameters.zip";
+pub const SAMPLE_ZIP: &str =
+    "docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_EXP_ModelingShowCases.zip";
 pub const XSD_SHA256: &str = "9db3ab1d2ec4db7cc8ff09f1259ff93a7a5945a9500d4cd3ea4a7090f2a25766";
 static NEXT_SCHEMA_DIR: AtomicU64 = AtomicU64::new(0);
 
 pub fn schema_archive(repo: &Path) -> PathBuf {
-    repo.join(SCHEMA_ZIP)
+    reference_archive(repo, "AUTOSAR_XSD_ARCHIVE", SCHEMA_ZIP)
+}
+
+/// Locate development reference inputs using the same overrides as the doctor.
+/// Builtin product rules do not use these archives.
+pub fn reference_archive(repo: &Path, variable: &str, relative: &str) -> PathBuf {
+    let selected = std::env::var_os(variable)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(relative));
+    if selected.is_absolute() {
+        selected
+    } else {
+        repo.join(selected)
+    }
 }
 struct PrivateSchemaDirectory(PathBuf);
 

@@ -27,16 +27,15 @@
 
 原始包按原始字节计算 SHA-256；安装的文本文件和适配源文件按 LF 归一化后计算哈希，兼容 Windows Git 的 CRLF checkout，其他字节改动仍会触发冲突。二进制文件保持原始字节校验。
 
-在仓库根目录准备独立的 Python 环境：
+可选工作簿任务使用共同 uv 环境：
 
-```powershell
-python -m venv .automotive-skills-venv
-& .\.automotive-skills-venv\Scripts\python.exe -m pip install -r scripts/requirements-automotive-skills.txt
-python scripts/install_automotive_skills.py --check
-& .\.automotive-skills-venv\Scripts\python.exe scripts/verify_automotive_skills.py
-```
+~~~sh
+uv sync --locked --group automotive
+uv run --group automotive python scripts/install_automotive_skills.py --check
+uv run --group automotive python scripts/verify_automotive_skills.py
+~~~
 
-依赖为 `openpyxl==3.1.5` 与 `et-xmlfile==2.0.0`。专用环境和 Python 缓存不提交；普通生成与审阅不需要 Office。需要公式重算时只使用可用的无头工具，缺少时报告“未重算”，不启动用户桌面窗口。
+依赖为 `openpyxl==3.1.5` 与 `et-xmlfile==2.0.0`。Python 缓存不提交；普通生成与审阅不需要 Office。需要公式重算时只使用可用的无头工具，缺少时报告“未重算”，不启动用户桌面窗口。
 
 全新 Git checkout 已携带团队共用技能。已记录的原样安装运行 `python scripts/install_automotive_skills.py` 只校验；部分缺失/本地修改需先审阅和恢复，安装器拒绝静默覆盖。更新时明确执行 `python scripts/install_automotive_skills.py --ref <完整提交SHA> --update` 并审阅差异；补丁不再匹配时停止。安装器不更新 BMad 文件。
 
@@ -51,7 +50,7 @@ python scripts/install_automotive_skills.py --check
 - 上游 AUTOSAR 模板主要基于 R22-11；R24-11 参数和规范义务须对照合法官方资料，未核实就保留待核实。表内的旧版本信息保留为真实来源，不改字符串冒充迁移。
 - 不从模板推断 ASIL/CAL、硬件、已实现模块、批准状态或规范符合性。固定示例、历史修订和建议必须经复核，不能当成项目发生过的事件。
 - 内容检查、结构检查和待确认判断分开解释。空评分、`NA` 和标注 DRAFT 的结果不算通过；脚本退出 0 只证明报告生成成功。上游 95% 等阈值不成为仓库验收门。
-- 追踪覆盖率仅统计输入清单及其关联，不证明规范清单完整，不代表运行测试通过或整个 AUTOSAR 的完成率。开发、验证、复核和进度完全按安装的 BMad；技能评分不产生额外验收或审批要求。
+- 追踪覆盖率仅统计输入清单及其关联，不证明规范清单完整，不代表运行测试通过或整个 AUTOSAR 的完成率。普通开发按贡献指南；受委托的 BMad 任务更新对应工件；技能评分不产生额外验收或审批要求。
 
 ## 安装副本的最小修正
 
@@ -68,7 +67,7 @@ python scripts/install_automotive_skills.py --check
 ## Epic 3.3 设计演练
 
 ```powershell
-& .\.automotive-skills-venv\Scripts\python.exe scripts/verify_automotive_skills.py --demo
+uv run --group automotive python scripts/verify_automotive_skills.py --demo
 ```
 
 演练读取当前 Story 3.3，生成 CAN、诊断及拒绝/恢复路径的测试目录与追踪示例，然后调用配套 reviewer。输入记录 Story 摘要、Git 版本及文件哈希；用例全部标为“尚未执行”。产物仅在临时目录生成和检查，不改变 Story 状态或能力等级。它验证技能可用，不运行虚拟 ECU。

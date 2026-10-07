@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from collections import Counter
@@ -68,7 +69,7 @@ def fetch(item):
     try:
         process = subprocess.run(
             [
-                "curl.exe",
+                shutil.which("curl") or shutil.which("curl.exe") or "curl",
                 "-fsSL",
                 "-C",
                 "-",

@@ -168,7 +168,8 @@ def audit(inputs: dict, external: dict, expectations: dict) -> list[dict]:
     return issues
 
 
-def main() -> None:
+def verify_fixture_manifest() -> dict:
+    """Validate owned fixture bytes without requiring the external oracle."""
     manifest = json.loads((FIXTURE / "manifest.json").read_text(encoding="utf-8"))
     declared = {entry["path"] for entry in manifest["files"]}
     discovered = {
@@ -183,7 +184,14 @@ def main() -> None:
         path = FIXTURE / entry["path"]
         if digest(path) != entry["sha256"]:
             raise ValueError(f"fixture hash mismatch: {entry['path']}")
-    mod = ROOT / manifest["external_mod"]["path"]
+    return manifest
+
+
+def main() -> None:
+    from autosar_tooling.config import archive_path
+
+    manifest = verify_fixture_manifest()
+    mod = archive_path("AUTOSAR_MOD_ARCHIVE", manifest["external_mod"]["path"])
     if not mod.is_file():
         raise ValueError("not_run: required local R24-11 MOD archive is missing")
     if digest(mod) != manifest["external_mod"]["sha256"]:

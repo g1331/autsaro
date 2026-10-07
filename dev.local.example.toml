@@ -1,0 +1,15 @@
+# Copy to dev.local.toml. Environment variables take precedence.
+# Relative archive paths are resolved against the repository root.
+[environment]
+# AUTOSAR_XSD_ARCHIVE = "docs/official/R24-11/FO/MethodologyAndTemplates/AUTOSAR_FO_MMOD_XMLSchema.zip"
+# AUTOSAR_MOD_ARCHIVE = "docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_MOD_ECUConfigurationParameters.zip"
+# AUTOSAR_SAMPLE_ARCHIVE = "docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_EXP_ModelingShowCases.zip"
+# Native consumers require explicit absolute tool paths matching the target lock.
+# AUTOSAR_CC = "/usr/bin/gcc-13"
+# AUTOSAR_OBJDUMP = "/usr/bin/objdump"
+# AUTOSAR_NM = "/usr/bin/nm"
+# AUTOSAR_GIT = "/usr/bin/git"
+# Windows desktop prerequisites:
+# VCPKG_ROOT = "C:/tools/vcpkg"
+# VCPKGRS_TRIPLET = "x64-windows-static-md"
+# LIBCLANG_PATH = "C:/tools/llvm/bin"

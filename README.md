@@ -58,53 +58,30 @@ Autsaro 支持从内置模板创建 ECU 工程，或导入多份 ARXML；在同�
 
 ## 本地开发环境
 
-| 用途 | 工具 |
-| --- | --- |
-| 配置核心与桌面后端 | Rust 1.98.1、rustfmt、Clippy |
-| 前端 | React／TypeScript、Node 24.19.0、npm 11.17.0 |
-| 开发与验证 | CPython 3.12.9、uv、Git |
-| 主机 ECU 构建 | 目标锁声明的 GCC、objdump、Git 与 CPython |
+人和 Agent 共用同一开发流程，不需要 Codex 或 BMad。完整说明见 [贡献指南](CONTRIBUTING.md)。准备 Git、uv 和 Node 24 后，在仓库根目录运行：
 
-版本由 `rust-toolchain.toml`、`.node-version`、`.python-version` 及 Cargo、npm、uv 锁文件固定。源码开发与核心测试需要合法的本地 XSD、MOD 和样例档案，位置见[规范资料入口](docs/official/README.md)；这些档案不随仓库或安装包分发。
+~~~sh
+uv sync --locked
+uv run dev setup --profile ui
+uv run dev doctor --profile ui
+uv run dev start ui
+~~~
 
-<details>
-<summary>平台依赖</summary>
+浏览器可开发界面和前端逻辑；完整文件操作及 IPC 使用桌面应用。Rust 核心和桌面开发需另准备 [平台依赖与本地配置](docs/development/environment.md)，随后运行 uv run dev start desktop。
 
-- **Windows**：Rust MSVC、Visual Studio C++ Build Tools、WebView2；vcpkg 安装 `libxml2[iconv,zlib]:x64-windows-static-md`。设置 `VCPKG_ROOT`、`VCPKGRS_TRIPLET=x64-windows-static-md` 和包含 `libclang.dll` 的 `LIBCLANG_PATH`。
-- **Ubuntu 24.04**：安装 `build-essential libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev libxml2-dev libclang-dev clang pkg-config patchelf`。WSL 构建副本、Cargo target 与 uv 缓存放在 ext4 文件系统。
-- **macOS**：Xcode Command Line Tools、pkg-config/libxml2 与上述版本管理工具；原生构建与 IPC 未验证。
-
-</details>
-
-在仓库根目录安装依赖并检查开发环境：
-
-```sh
-uv sync --locked --group quality
-npm ci --prefix ui
-uv run --locked python -m autosar_tooling doctor --role workbench
-npm run tauri --prefix ui -- info
-```
-
-界面开发使用 `npm run dev --prefix ui`；桌面调试使用 `npm run tauri --prefix ui -- dev`。Cargo 产物位于 `core/target/` 和 `src-tauri/target/`。
-
-直接运行 Cargo 前，将 `AUTOSAR_PYTHON` 设置为项目虚拟环境中 CPython 的绝对路径：Windows 使用 `.venv/Scripts/python.exe`，POSIX 使用 `.venv/bin/python`。核心集成测试另设置 `RUST_TEST_THREADS=2`，避免多个主机 ECU 实例争用 CPU。
+推荐版本由 rust-toolchain.toml、.node-version、.python-version 和 ui/package.json 声明，依赖由 Cargo/npm/uv 锁文件固定。正常开发与严格原生验收的版本要求分别说明。官方 XSD/MOD/样例仅用于对应资源测试，不是 UI、内置配置测试或普通应用使用的前置条件。
 
 ## 代码质量检查
 
-| 检查 | 命令 |
-| --- | --- |
-| 前端静态检查 | `npm run lint --prefix ui` |
-| TypeScript 与界面构建 | `npm run build --prefix ui` |
-| 核心测试 | `cargo test --manifest-path core/Cargo.toml` |
-| 桌面后端编译 | `cargo build --manifest-path src-tauri/Cargo.toml` |
+~~~sh
+uv run dev check --scope ui
+uv run dev check --scope tooling
+uv run dev check --scope core
+~~~
 
-完整开发检查使用统一入口，将 `<起始提交>` 替换为检查差异的基准提交：
+检查不重装依赖，实时显示输出并保留日志；按任务选择范围。--plan 预览命令，--json 输出结构化结果，--base 显式指定分支基准，默认 HEAD 检查待提交改动。
 
-```sh
-uv run --locked python -m autosar_tooling verify --scope all --base <起始提交>
-```
-
-该入口组合格式与静态检查、测试、UI 构建和桌面后端编译。GUI／IPC 与安装包验收单独执行，不由构建或测试通过推定。
+基础测试、官方对照、原生运行及 GUI/安装包验收分别执行，见 [测试指南](docs/development/testing.md)。完整资源与原生检查使用 uv run dev check --scope all --full；缺失或未运行的层不显示为通过。
 
 ## 构建与分发
 
@@ -133,6 +110,9 @@ npm run tauri --prefix ui -- build
 
 | 文档 | 用途 |
 | --- | --- |
+| [贡献指南](CONTRIBUTING.md) | 人和 Agent 共用的开发与 PR 流程 |
+| [环境配置](docs/development/environment.md) | 按任务安装依赖及排查环境 |
+| [测试指南](docs/development/testing.md) | 本地检查、测试分层及 CI |
 | [主机运行时](runtime/README.md) | 运行接口、通信与诊断范围 |
 | [受控 OS 目标](runtime/os/README.md) | 内核、补丁、工具链与平台范围 |
 | [独立交接工程](runtime/reference-README.md) | 离线参考包与独立复验 |

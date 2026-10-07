@@ -40,18 +40,18 @@ SELECTED = {
 OUTPUTS = {("Com_GetSignal", "value"), ("Com_GetSignal", "valid")}
 
 
-def materialize() -> dict:
+def materialize(root: Path = ROOT) -> dict:
     entries = {}
     sources = {}
 
     def record(path: Path) -> str:
-        relative = path.relative_to(ROOT).as_posix()
+        relative = path.relative_to(root).as_posix()
         sources[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
         return relative
 
     for symbol, module in sorted(SELECTED.items()):
-        headers = sorted((ROOT / "runtime/include").glob(f"{module}*.h"))
-        scheduled = ROOT / f"runtime/include/SchM_{module}.h"
+        headers = sorted((root / "runtime/include").glob(f"{module}*.h"))
+        scheduled = root / f"runtime/include/SchM_{module}.h"
         if scheduled.is_file():
             headers.append(scheduled)
         matches = []
@@ -66,7 +66,7 @@ def materialize() -> dict:
         if len(matches) != 1:
             raise ValueError(f"selected declaration is missing/duplicated: {symbol}")
         header, declaration = matches[0]
-        source = ROOT / f"runtime/src/{module}.c"
+        source = root / f"runtime/src/{module}.c"
         definition = re.findall(
             r"^[A-Za-z_]\w*\s+" + re.escape(symbol) + r"\s*\([^;{}]*\)\s*\{",
             source.read_text(encoding="utf-8"),
@@ -106,11 +106,11 @@ def materialize() -> dict:
     pending = list(sources)
     while pending:
         relative = pending.pop()
-        text = (ROOT / relative).read_text(encoding="utf-8")
+        text = (root / relative).read_text(encoding="utf-8")
         for name in re.findall(r'^\s*#include\s+"([^"/\\]+)"', text, re.MULTILINE):
-            dependency = ROOT / "runtime/include" / name
+            dependency = root / "runtime/include" / name
             if dependency.is_file():
-                identity = dependency.relative_to(ROOT).as_posix()
+                identity = dependency.relative_to(root).as_posix()
                 if identity not in sources:
                     record(dependency)
                     pending.append(identity)
@@ -134,13 +134,15 @@ def probe(current: dict) -> None:
         lines.extend('#include "' + Path(header).name + '"' for header in headers)
         # This address/type consumer initializes no ECU and has no routes.
         # Behavioral profile consumers compile the real generated producers.
-        lines.extend([
-            "const EcuPolicyConfig Ecu_Policy = {.tx_confirmation = ECU_TX_SYNCHRONOUS};",
-            "const EcuReceiveRoute *const Ecu_ReceiveRoutes = NULL;",
-            "const size_t Ecu_ReceiveRouteCount = 0u;",
-            "const EcuTransmitRoute *const Ecu_TransmitRoutes = NULL;",
-            "const size_t Ecu_TransmitRouteCount = 0u;",
-        ])
+        lines.extend(
+            [
+                "const EcuPolicyConfig Ecu_Policy = {.tx_confirmation = ECU_TX_SYNCHRONOUS};",
+                "const EcuReceiveRoute *const Ecu_ReceiveRoutes = NULL;",
+                "const size_t Ecu_ReceiveRouteCount = 0u;",
+                "const EcuTransmitRoute *const Ecu_TransmitRoutes = NULL;",
+                "const size_t Ecu_TransmitRouteCount = 0u;",
+            ]
+        )
         for symbol, entry in current["entries"].items():
             arguments = (
                 ", ".join(argument["nativeType"] for argument in entry["arguments"])
@@ -164,7 +166,9 @@ def probe(current: dict) -> None:
         )
         inputs.extend(sorted((ROOT / "runtime/host/src").glob("*.c")))
         target = (
-            "windows-x64-controlled-v1" if os.name == "nt" else "linux-x64-controlled-v1"
+            "windows-x64-controlled-v1"
+            if os.name == "nt"
+            else "linux-x64-controlled-v1"
         )
         with native_session(directory, "bsw-contract"):
             cc = compiler(target)
@@ -210,9 +214,7 @@ def main(argv: list[str] | None = None) -> None:
             )
     if args.probe:
         probe(current)
-    print(
-        f"bsw_catalog PASS: {len(current['entries'])} selected current producers"
-    )
+    print(f"bsw_catalog PASS: {len(current['entries'])} selected current producers")
 
 
 if __name__ == "__main__":
