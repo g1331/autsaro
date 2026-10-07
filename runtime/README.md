@@ -1,6 +1,6 @@
 # 主机虚拟 ECU C99 运行时
 
-本目录是 **标准 11 位 Classical CAN 原始信号及单条主机虚拟 DoCAN 物理连接**的独立目标端代码，可选配一个由 Rx 帧超时触发、由主机 NvM 持久化的 UDS DTC。不声称完整 AUTOSAR/ISO 一致性或真实芯片验证。生成器按 `target.json` 的源码与头文件选集交付核心 BSW、所选执行 adapter 和生成配置；不依赖历史私有协议栈。每个进程只链接**一个** `const EcuConfig Ecu_Config` 与 `const EcuPolicyConfig Ecu_Policy`，未配置诊断时其 `diagnostic` 指针为 `NULL`，未配置故障记忆时其 `diagnostic->dtc` 指针为 `NULL`。
+本目录提供独立的 C99 主机运行时，支持标准 11 位 Classical CAN 原始信号和单条 DoCAN 物理寻址连接。可选配一个由 Rx 帧超时触发、通过主机 NvM 持久化的 UDS DTC。验证范围限于主机行为，尚未完成完整 AUTOSAR/ISO 一致性或真实芯片验证。生成器按 `target.json` 中的源码和头文件清单交付核心 BSW、所选执行 adapter 和生成配置，无需历史私有协议栈。每个进程链接一个 `const EcuConfig Ecu_Config` 和一个 `const EcuPolicyConfig Ecu_Policy`；未配置诊断时 `diagnostic` 为 `NULL`，未配置故障记忆时 `diagnostic->dtc` 为 `NULL`。
 
 ## 构建
 
@@ -12,7 +12,7 @@
 
 legacy `host` 产出 `ecu_host.exe`（Windows）或 `ecu_host`（Linux）；ECU integration 的 `host-batch` 产出实际生产批入口，`probe` 产出独立启动消费者，`test` 启用私有 OS/ECU 探针。`--control-source <external.c>` 只用于 `probe|test`，生产 HostBatch 拒绝它。编译器版本、目标与摘要必须匹配包内工具链，错误宿主或缺依赖明确失败，不降级到其他编译器。
 
-构建目录必须位于源码之外且为新目录或空目录，已有所有者内容不覆盖。构建前后检查完整 SHA-256 闭包及缺失/额外文件，拒绝链接/reparse point；补丁只在私有内核副本应用，Windows检查PE/TLS/sections，Linux检查ELF及对应sections。失败保留实际日志，所有子孙进程在 owned scope 的单调截止时间内关闭；不使用 PowerShell、命令字符串或 taskkill fallback。
+构建目录必须位于源码之外，且为新目录或空目录。构建前后会核对文件清单和 SHA-256，缺失文件、额外文件、链接或 reparse point 均会导致失败。补丁只应用于私有内核副本；Windows 检查 PE/TLS 和段信息，Linux 检查 ELF 和相应段信息。失败日志保留在构建目录中。外部命令使用参数数组启动，子孙进程由受管进程范围按单调截止时间回收，无需 PowerShell 命令拼接或 taskkill 回退。
 
 集成工程的独立行为入口为 `tools/ecu-tool.py verify --project <sealed-source-directory> --build-directory <new-empty-outside-directory>`：重建实际生产binary，检查 CAN/DID、至多两个DID、N_Cr超时恢复和非法批次，预期不由生成配置回显提供。离线接收者不需要 checkout、uv、Rust 或 Node。双 ECU 固定参考包见 [`reference-README.md`](reference-README.md)。
 
@@ -20,7 +20,7 @@ legacy `host` 产出 `ecu_host.exe`（Windows）或 `ecu_host`（Linux）；ECU 
 
 工作台的预检和封存工具调用使用 CPython `-I -S`，忽略外部 Python home/path、用户及环境 site-packages；工具入口只从自身封存 `tools/` 导入 helper，禁用字节码，不向源码增加 `__pycache__`。这也适用于 AppImage 启动器设置 Python 相关变量的场景；开发虚拟环境的可编辑安装不是离线包依赖。
 
-输入配置结构和容量上限在 `include/Ecu_Config.h`；启动再次校验，错误返回 `E CONFIG`。Windows BCrypt安全档案不适用于Linux，准备边界拒绝，不生成无安全后端的工程。仅完成有界主机运行验证，不声明 MCU、硬实时、ASIL、完整标准符合性或任意工程已复验。
+输入配置结构和容量上限见 `include/Ecu_Config.h`；启动时会再次校验，配置错误返回 `E CONFIG`。Windows BCrypt 安全档案仅适用于 Windows，Linux 在准备工程时拒绝此配置。验证结果限于已执行的主机用例，其他工程需单独复验；MCU、硬实时、ASIL 和完整标准符合性尚未验证。
 
 ## 显式 profile 策略与执行边界
 
@@ -32,7 +32,7 @@ legacy `host` 产出 `ecu_host.exe`（Windows）或 `ecu_host`（Linux）；ECU 
 | 同 epoch 收帧与 deadline | 先推进传输时间，再处理 RX | 先处理该 epoch 的 RX，再检查 deadline |
 | CanTp DLC | 保留实际长度 | 固定补齐到 8 字节 |
 | WFTmax=0 的 WAIT | 保留旧等待时间重置行为 | 终止当前传输，返回 flow error；后续完整请求可恢复 |
-| 单请求 DID 数 | 不增加服务级上限，仍受 payload 容量约束 | 最多 2 个，不是 1 个 |
+| 单请求 DID 数 | 不增加服务级上限，仍受 payload 容量约束 | 最多 2 个 |
 | 已配置 DID 会话 | extended | default/extended，来自验证后的会话掩码 |
 | SID dispatch | `10/3e/27/22/2e/31/85/19/14`；原可选配置拒绝逻辑不变 | `10/3e/22`；其余返回 unsupported-service NRC |
 | P2/P2* | 50/500 ms | 来自验证后的 Dcm 会话参数；固定参考为 50/5000 ms |
@@ -84,9 +84,9 @@ Dcm 提供 0x10 默认/扩展会话、0x3E TesterPresent（子功能 0x80 抑制
 
 配置 DTC 的 `ecu_host` **必须**以 `--nvm <独占的文件路径>` 启动；未配置 DTC 的工程不带参数运行。缺少参数返回 `E CONFIG`，既有文件损坏、配置指纹不匹配或写入失败返回 `E NVM`，不降级成空 DTC。不存在的文件会创建两个 32 字节 CRC32 保护槽位；每次状态改变交替写槽并 `fflush`、`fsync`/`_commit` 后才确认，启动要求两个槽位均完整，任一损坏即拒绝使用以避免旧状态覆盖最新故障。主机进程启动作为新的操作周期：初始/清除状态 `0x50`，有效 Rx 首次测试通过 `0x00`，首次超时 `0x2F`，故障后重启 `0x6D`，该周期再收到有效帧 `0x2C`；后续周期才清除 pending 标志。独立测试器为每次验证分配隔离文件，不复用实际 ECU 状态。
 
-这是有边界的主机虚拟实现：未实现多事件 Dem、真实 NvM 设备与 Ea/Fee/MemIf 目标、多级 0x27 与其他 0x31 例程/子功能、其他写入 DID/持久写入、其他 0x19 子功能和 0x14 清除组、功能寻址、跨连接并发、实车确认时序或完整 ECUC 外部 ComM 引用；不以 XSD 通过代替 AUTOSAR/ISO 语义与互操作认证。Dem 事件到监测 Rx 帧只在工具专属 SDG 中绑定，操作周期只是进程启动。
+当前未实现多事件 Dem、真实 NvM 设备与 Ea/Fee/MemIf 目标、多级 0x27、其他 0x31 例程/子功能、其他写入 DID/持久写入、其他 0x19 子功能和 0x14 清除组、功能寻址、跨连接并发、实车确认时序及完整 ECUC 外部 ComM 引用。XSD 检查覆盖 XML 结构，AUTOSAR/ISO 语义和互操作性需另行验证。Dem 事件与监测 Rx 帧通过工具专属 SDG 绑定，每次进程启动作为一个操作周期。
 
-主机 CAN 发送路径将 `Can_Write` 接受的 `swPduHandle` 保留到输出成功，再通过 `Can_MainFunction_Write`、`CanIf_TxConfirmation`、LSduR/PduR 送到 Com 或 CanTp。legacy 回调与确认在同一次主机调用内同步完成；queued profile 只在真实输出完成后提交确认，CanTp 维持 N_As 等待与迟到确认释放语义。控制器停止会取消尚未输出的待发帧，不把取消伪装成成功确认；这些受控主机路径不证明实车控制器互操作。
+主机 CAN 发送路径将 `Can_Write` 接受的 `swPduHandle` 保留到输出成功，再通过 `Can_MainFunction_Write`、`CanIf_TxConfirmation`、LSduR/PduR 送到 Com 或 CanTp。legacy 回调与确认在同一次主机调用内同步完成；queued profile 在输出完成后提交确认，CanTp 保持 N_As 等待和迟到确认的释放语义。控制器停止时会取消尚未输出的待发帧，取消的帧没有成功确认。上述路径只在受控主机上验证，实车控制器互操作性尚未验证。
 
 ## 逐行 stdin/stdout 协议
 

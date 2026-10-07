@@ -1,6 +1,6 @@
 # 可选的 Agent 与 BMad 协作
 
-普通开发从 [贡献指南](../../CONTRIBUTING.md) 开始，人和 Agent 使用同一套命令。Codex、BMad 和工作簿技能是可选协作方式，不是安装、修复或提交 PR 的前置条件。
+开发环境、检查命令和提交方式见 [贡献指南](../../CONTRIBUTING.md)。本文介绍使用 Codex、BMad 和工作簿技能协作开发的方法，可按任务需要选用。
 
 ## 委托任务
 
@@ -14,7 +14,7 @@
 | 看成果 | 展示本次交付用途、验证方法和未验范围 |
 | 复盘 | 基于提交、实施工件和运行记录复盘 Epic |
 
-规划保留在 _bmad-output/planning-artifacts，详细实施状态保留在 _bmad-output/implementation-artifacts。历史研究用于追溯，不直接变成开发队列；本文不复制动态完成状态。BMad 安装信息见 _bmad/_config/manifest.yaml，更新时固定版本并审阅团队定制差异。
+规划记录在 _bmad-output/planning-artifacts，实施状态记录在 _bmad-output/implementation-artifacts。历史研究供追溯参考，当前任务和进度以实施工件为准。BMad 安装信息见 _bmad/_config/manifest.yaml，更新时固定版本并审阅团队定制差异。
 
 ## 共同入口
 
@@ -24,6 +24,6 @@
 - [汽车工程技能](automotive-skills.md)：可选规格工作簿、来源与限制。
 - [Agent 规则](../../AGENTS.md)：后台验收和 C 编码技能等额外约束。
 
-普通配置链和内置规则不依赖官方 XSD/MOD；兼容/官方对照与原生运行分别准备所需资源和工具。具体能力以 README、模块说明和适用实现为准，不从 story 完成数量推定覆盖或标准符合性。
+日常配置和内置规则无需官方 XSD/MOD。兼容测试、官方对照及原生运行需分别准备对应资源和工具。功能覆盖与支持范围见 README、模块说明和相应实现，标准符合性需按适用规范单独核查。
 
-技能变化可由 Codex 自动发现；无 Agent 的开发者遵循贡献指南，不需要安装这些技能。技能模板或工作簿评分不产生额外质量门。
+Codex 可自动发现技能变化。手工开发按贡献指南操作即可；技能模板和工作簿评分仅供相应文档任务参考。

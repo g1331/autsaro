@@ -24,4 +24,4 @@
 
 项目原创代码与文档采用 [Apache-2.0](../../LICENSE)，分发时附带 [NOTICE](../../NOTICE)。生成源码工程和桌面包携带这些文件，Python 分发包在许可目录包含它们。发布前按 [许可说明](licensing.md) 核对实际打包的第三方素材、技能、依赖、内核及其原始声明。
 
-现有研究输入见 docs/research/autosar-platform/open-source-rights.md。它记录待核事项，不是本项目取得授权的证明。官方规范档案不进入源码包或安装包。
+权利研究及待核事项见 docs/research/autosar-platform/open-source-rights.md。分发前需核对具体内容的授权与条款，官方规范档案不随源码包或安装包分发。

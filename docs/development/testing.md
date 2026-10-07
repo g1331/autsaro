@@ -12,9 +12,9 @@
 | uv run dev test --suite native | 原生 OS/ECU/C 消费者、Python/Rust 进程测试 | integration + native profiles；Windows 部分生成器回归需要 Cppcheck 2.21.0 |
 | uv run dev test --suite all | 全部上述自动测试 | 完整开发及受控原生环境 |
 
-这些套件均不代表真实桌面 GUI/IPC 或安装包验收。platform 不适用的测试显示 skipped；不得把 skipped/未运行项写成通过。
+桌面 GUI/IPC 和安装包通过下方的隔离入口单独验证。当前平台不适用的测试显示 skipped，报告中分别记录通过、跳过和未运行项。
 
-每层可用 --plan 查看实际命令，Python/Cargo 套件用 --filter 筛选测试名字。完整验收不要使用筛选来替代整层运行。
+每层可用 --plan 查看执行命令，Python/Cargo 套件可用 --filter 筛选测试名字。调试时可筛选用例，完整验收需运行对应层的全部测试。
 
 ## Cargo 目标
 
@@ -59,4 +59,4 @@ Windows/Linux 使用独立 Desktop/Xvfb 等已有隔离机制，不在用户正�
 
 ## CI
 
-PR 基础 CI 运行 UI、Python 和 Linux 基础核心检查，不读取私人档案或凭据。资源集成和原生验收在维护者配置的专用 self-hosted runner 手动触发；runner 配置说明见维护指南。它们调用同一套 dev 命令，未执行的专用层不会由基础 CI 代替。
+PR 基础 CI 运行 UI、Python 和 Linux 基础核心检查，不读取私人档案或凭据。资源集成和原生验收在维护者配置的专用 self-hosted runner 上手动触发，配置方式见维护指南。各工作流调用相同的 dev 命令，专用层的执行结果单独记录。

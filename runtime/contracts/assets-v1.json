@@ -205,7 +205,7 @@
     },
     {
       "path": "runtime/generated-README.md",
-      "sha256": "f7cab35ebade6b3ea3e0fae1155777958b9881904992883a4e64f4393cc29010",
+      "sha256": "3a426e6a85b2cab08b9a8058773c2f098c9fa3ad1b74b0d6239b549b21ac6d32",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -276,7 +276,7 @@
     },
     {
       "path": "runtime/os/README.md",
-      "sha256": "ab5ba6325f4ab2c649dfa02f434c22d494d06ccbd68b4ec2dfced4e00b4d5a4a",
+      "sha256": "47cde4cd646826abb78306f7bed98da3462581951b8e644677f62cf946ed78ba",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

@@ -1,6 +1,6 @@
 # Legacy host ECU source package
 
-Target: `{{TARGET}}`. This is the configured C99 host profile, not the FreeRTOS ECU integration profile or an AUTOSAR conformance claim. The sealed source package contains its real BSW sources, generated configuration, fixed build target and standalone standard-library engineering tools. Autsaro runtime, tool and template code is licensed under Apache-2.0; see LICENSE and NOTICE in this project. User-provided configurations and application code retain their own licensing. Official AUTOSAR archives and compiler binaries are not redistributed.
+Target: `{{TARGET}}`. This package uses the configured C99 host profile; the FreeRTOS ECU integration profile is documented separately. It contains BSW sources, generated configuration, a fixed build target and standalone engineering tools that use the Python standard library. Autsaro runtime, tool and template code is licensed under Apache-2.0; see LICENSE and NOTICE in this project. User-provided configurations and application code retain their own licensing. Official AUTOSAR archives and compiler binaries are excluded. AUTOSAR conformance certification is outside this package's scope.
 
 ## Independent native build
 
@@ -12,9 +12,9 @@ From this source directory, using the pinned interpreter:
 <CPython3.12> tools/ecu-tool.py build --project . --output ../build --mode host
 ```
 
-The build directory must be new or empty and outside the sealed source package. The tool verifies the exact source closure and hashes, refuses links/reparse points and extra files, invokes the real fixed native compiler and binutils through an owned process scope, and installs `{{BINARY}}` without overwriting an existing artifact. Failures are nonzero and preserve real build diagnostics. Do not add binaries, keys, state, logs or unlisted source files to this directory.
+The build directory must be new or empty and outside the sealed source package. The tool checks the source manifest and hashes, rejects links, reparse points and extra files, and runs the pinned native compiler and binutils in a managed process scope. It installs `{{BINARY}}` only if the destination is unused. Failures return a nonzero exit code and preserve build diagnostics. Keep binaries, keys, state, logs and unlisted source files outside the source directory.
 
-## Run the actual native host
+## Run the native host
 
 Run from this source directory after the independent build:
 
@@ -24,10 +24,10 @@ Run from this source directory after the independent build:
 
 {{RUN_NOTES}}
 
-The native protocol accepts the legacy host commands documented in the workbench runtime guide. Host verification covers only the configured native behavior and exercised vectors; neither generating this package nor building it is a behavioral verification result.
+The native protocol accepts the legacy host commands documented in the workbench runtime guide. After building, run behavior verification separately. Its results apply to the configured host behavior and the test vectors executed.
 
 ## Original input and reproduction
 
 {{INPUT_NOTE}}
 
-SHA-256 detects accidental modification, not publisher authenticity. Keep the package's tool version and target identity intact. Reimport follows the versioned input and resource contract described above, reconstructs the original saved inputs, and compares the complete regenerated source closure. It does not silently run a compiler or rewrite an old package.
+SHA-256 checks file integrity; publisher authentication requires a signature. Keep the package's tool version and target identity intact. Reimport checks the versioned input and resource contract, reconstructs the original saved inputs, and compares all regenerated source files. Compilation is a separate step, and the original package is preserved.

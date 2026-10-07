@@ -6,16 +6,16 @@ XSD/MOD archives, and the current source-backed `RuntimeCatalog`. The result
 has private fields, no unchecked constructor, no mutable accessor and no
 `Deserialize` implementation. Consumers borrow `description()` and `sources()`.
 
-`Workspace::integration_plan` uses that same constructor for the current
-in-memory inputs. It first rejects external edits to saved sources and derives
-portable file identities below their common input root. It does not call the
-legacy host-v1 profile checker or rewrite a source. Unsaved edits are reflected
-in the plan's raw-byte identities; a checked plan does not mean those edits
-have been saved or generated.
+`Workspace::integration_plan` uses the same constructor for the current
+in-memory inputs. It rejects external edits to saved sources and derives
+portable file identities below their common input root. This path preserves
+the sources and operates independently of the legacy host-v1 profile checker.
+The plan's raw-byte identities include unsaved edits. Saving those edits and
+generating an ECU are separate operations.
 
-The staged preflight `InputInspection` is deliberately separate. XSD and
-typed-reference closure alone cannot authorize generation. The final constructor
-also checks selected component/type/service relationships, communication and
+The preflight `InputInspection` checks XSD validity and typed references.
+Before generation, the final constructor also checks the selected
+component/type/service relationships, communication and
 canonical PDU links, task/alarm scheduling, routing, explicit target configuration
 policies, and unique symbols/handles. Original bytes remain the authority for
 roundtrip edits; the semantic graph is never serialized back into XML.
@@ -34,11 +34,11 @@ function pointers against the existing host runtime. `--write` is for explicitly
 reviewed runtime changes, followed by recompiling the workbench. Product parsing
 does not read fixture expectations or call the inventory materializer.
 
-Symbol responsibility is staged: current BSW declarations/definitions have real
-source owners; component headers belong to 4.11, ECU/RTE/BSW adapters to 4.13 and
-the application implementation to 4.15. A valid W2 plan does not assert that
-these future definitions already exist or that a W3 ECU has linked. SC1, ARTI,
-full C quality and independent engineering handoff remain later exits.
+BSW declarations and definitions are mapped to their source files. Component
+headers, ECU/RTE/BSW adapters and the application implementation are handled
+in stories 4.11, 4.13 and 4.15 respectively. W2 plan validation checks the input
+relationships; linking the W3 ECU, SC1 and ARTI behavior, C quality and
+independent engineering handoff require separate checks.
 
 `PlanDiagnostic` distinguishes input errors, unsupported target choices, missing
 external dependencies and tool/source-inventory errors. It carries the logical
@@ -51,5 +51,5 @@ the application and service caller's headers, provenance and integrity records.
 Use `contracts.preview(output)` and then
 `contracts.generate_previewed(output, &preview.revision)` to install exactly
 the reviewed bytes with the existing generator's output protection and backup.
-The contract contains declarations only. Independent application compilation
-does not imply that the subsequent ECU/RTE runtime has linked or run.
+The contract contains declarations only. Application compilation checks these
+interfaces; ECU/RTE linking and runtime behavior are verified separately.

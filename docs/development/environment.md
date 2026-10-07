@@ -13,7 +13,7 @@
 | native | 固定 CPython、显式 GCC/binutils/Git 路径及目标身份 | 独立 OS 消费者不需要官方档案 |
 | all | 上述全部开发和受控工具 | GUI/安装包验收仍另行准备 |
 
-native profile 检查独立 ECU 工具身份；完整 native 测试还消费兼容输入，所以要同时通过 integration profile。默认 doctor 只检查所选 profile，不推断其他能力。
+native profile 检查独立 ECU 工具身份。完整 native 测试还需要兼容输入，因此需同时通过 integration profile。doctor 默认只检查所选 profile 的依赖。
 
 ~~~sh
 uv sync --locked
@@ -24,7 +24,7 @@ uv run dev doctor --profile integration --json
 
 版本以 rust-toolchain.toml、.node-version、.python-version、ui/package.json、pyproject.toml 和各锁文件为准。正常开发允许 Python 3.12 和 npm 11 的其他补丁版本，并提示推荐版本；Node 需要满足 package.json 的最低版本。--strict 要求推荐补丁版本。格式工具保持固定版本；原生 ECU 工具仍按 runtime/os 的目标锁核对版本、目标与原始字节。
 
-uv 默认安装 quality 组，后续 uv run 不会移除它。可选工程工作簿依赖用 uv sync --locked --group automotive，不是普通开发的前置条件。setup 只安装项目依赖，不更改操作系统、下载官方档案或更新锁文件。
+uv 默认安装 quality 组，后续 uv run 会保留该组。编制工程工作簿时，另用 uv sync --locked --group automotive 安装可选依赖。setup 只安装项目依赖，操作系统依赖、官方档案和锁文件更新需分别处理。
 
 ## 本地配置
 
@@ -61,7 +61,7 @@ WSL 的 checkout、Cargo target 和 uv 缓存放在 Linux 文件系统。固定 
 
 ### macOS
 
-准备 Xcode Command Line Tools、pkg-config、libxml2 和 LLVM/libclang。UI 和 Python 检查可以运行；核心/桌面源码开发路径提供入口，但原生桌面、IPC、安装包尚未完成验证。没有 macOS ECU 运行目标。跨平台 CI 通过不代表完整原生发行通过。
+准备 Xcode Command Line Tools、pkg-config、libxml2 和 LLVM/libclang。UI 和 Python 检查可以运行，核心与桌面源码也提供开发入口。macOS 原生桌面、IPC 和安装包尚未完成验证，目前没有 macOS ECU 运行目标；原生发行需单独验证。
 
 ## 官方参考输入
 
