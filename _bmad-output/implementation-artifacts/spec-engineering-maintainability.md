@@ -33,7 +33,7 @@ context: []
 ## Code Map
 
 - `scripts/`：工具、Python包、测试和技能维护混放；迁至 `tools/python/src/`、`tools/automotive/`、`tests/`。Cargo、字节清单和POSIX提取均引用原位置。
-- `pyproject.toml`、`ui/package.json`、版本与隐藏配置：保留原生工具，移除重复精确版本门禁和自动设计hooks。
+- `pyproject.toml`、`ui/package.json`、版本与隐藏配置：保留原生工具，移除重复精确版本门禁；保留 Impeccable 的自动设计检查和相关配置。
 - `ui/src/workbench/useWorkbench.ts`：状态、操作、编辑和交付集中；提示文字控制流程需要改为操作类型。
 - `src-tauri/src/lib.rs`、`workbench.rs`：命令分组，但Session、提交门及Reply保持。
 - `core/src/arxml.rs`、`core/build.rs`、`generator/delivery/tools.rs`：内部职责、交付身份、可信helper；保持输出协议。
@@ -65,6 +65,8 @@ Given 离线包和支持解释器，当构建及验证，Then 不依赖仓库或
 验收发现并修复现有 Windows 目录选择器控件不匹配，以及 v1 同源重开丢失显式历史验证模式。历史场景使用当前支持的 v1 导入入口；原预期和独立 oracle 保留。原生减少动态效果验收保留零过渡断言并等待系统偏好与样式更新。
 
 ## Spec Change Log
+
+- 2026-10-07：用户要求恢复 Impeccable Hook 及相关改动。恢复 `.codex/hooks.json`、`.impeccable/config.json` 和 `ui/.impeccable/live/config.json` 的原配置；编辑后即时检查及 Stop 完整检查保持原样。此前把 `buildPath: "code"` 当成失效目录是错误判断，它是有效的构建方式选项。Vite 的 `index.html` 实时预览配置同样恢复；其余工程优化不变。
 
 ## Review Triage Log
 
