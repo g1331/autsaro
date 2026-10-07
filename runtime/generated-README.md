@@ -1,6 +1,6 @@
 # Legacy host ECU source package
 
-Target: `{{TARGET}}`. This is the configured C99 host profile, not the FreeRTOS ECU integration profile or an AUTOSAR conformance claim. The sealed source package contains its real BSW sources, generated configuration, fixed build target and standalone standard-library engineering tools. Product and tool bytes are supplied for owner-authorized internal use; no new public license grant is made. Official AUTOSAR archives and compiler binaries are not redistributed.
+Target: `{{TARGET}}`. This is the configured C99 host profile, not the FreeRTOS ECU integration profile or an AUTOSAR conformance claim. The sealed source package contains its real BSW sources, generated configuration, fixed build target and standalone standard-library engineering tools. Autsaro runtime, tool and template code is licensed under Apache-2.0; see LICENSE and NOTICE in this project. User-provided configurations and application code retain their own licensing. Official AUTOSAR archives and compiler binaries are not redistributed.
 
 ## Independent native build
 

@@ -25,3 +25,7 @@ The verifier checks the full root and member closures, builds both actual native
 To rebuild only one member, run `tools/ecu-tool.py build --project <Alpha-or-Beta> --output <new-empty-outside-directory> --mode host` with that member's tool entry. To reimport, choose “导入可重建主机交付包” separately for `Alpha/` and `Beta/` in the same-version workbench and explicitly configure the licensed R24-11 XSD archive. Regenerate into new empty directories and compare the exact sealed source closure.
 
 Only the fixed host inputs and observed vectors are covered. This reference does not establish complete ECU Extract, SWC/RTE or AUTOSAR OS support, MCU timing or interrupts, third-party interoperability, ASIL or complete AUTOSAR conformance. It does not raise the support level of other configurations.
+
+## Licensing
+
+Autsaro runtime, tools and template code is licensed under Apache-2.0; see LICENSE and NOTICE. Each member also includes these files. User-provided configurations and application code retain their own licensing.

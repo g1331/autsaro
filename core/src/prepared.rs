@@ -290,6 +290,9 @@ fn insert<'a>(
 
 pub(crate) fn deliver_path(asset: &AssetEntry, profile: &str) -> Result<String, String> {
     let path = asset.relative_path;
+    if matches!(path, "LICENSE" | "NOTICE") {
+        return Ok(path.into());
+    }
     if let Some(path) = path.strip_prefix("runtime/") {
         if path == "ecu-tool.py" {
             return Ok("tools/ecu-tool.py".into());

@@ -108,7 +108,7 @@ fn run(output: &Path, target: BuildTarget, archive: PathBuf) -> Result<(), Strin
         for name in fs::read_to_string(stage.join("Alpha/files.list"))
             .map_err(|error| error.to_string())?
             .lines()
-            .filter(|name| name.starts_with("tools/"))
+            .filter(|name| name.starts_with("tools/") || matches!(*name, "LICENSE" | "NOTICE"))
         {
             let destination = stage.join(name);
             fs::create_dir_all(destination.parent().ok_or("Tool asset has no parent")?)

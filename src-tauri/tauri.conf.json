@@ -33,6 +33,12 @@
     ],
     "category": "DeveloperTool",
     "shortDescription": "AUTOSAR Classic configuration and native source delivery",
-    "longDescription": "Edit and validate R24-11 Classic configuration, deliver sealed Windows/Linux C99 projects, and run declared native-host checks. Official AUTOSAR resources and execution toolchains are supplied separately."
+    "longDescription": "Edit and validate R24-11 Classic configuration, deliver sealed Windows/Linux C99 projects, and run declared native-host checks. Official AUTOSAR resources and execution toolchains are supplied separately.",
+    "license": "Apache-2.0",
+    "licenseFile": "../LICENSE",
+    "resources": {
+      "../LICENSE": "LICENSE",
+      "../NOTICE": "NOTICE"
+    }
   }
 }

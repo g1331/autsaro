@@ -20,8 +20,8 @@
 
 在已准备的平台执行 npm run tauri --prefix ui -- build，产物位于 src-tauri/target/release/bundle/。Windows MSI、Linux deb/AppImage 使用各自原生构建与隔离复验；macOS app/dmg、签名、公证、安装/升级和公开发布仍需分别验证。
 
-## 公开许可决定
+## 许可与分发
 
-仓库当前没有项目根开源许可证。新增协作设施不授予新的公开分发权。公开发布前由维护者确定项目源码和贡献许可，核对第三方素材、技能、内核及生成工程的分发条款，然后加入根 LICENSE 和必要的第三方声明。
+项目原创代码与文档采用 [Apache-2.0](../../LICENSE)，分发时附带 [NOTICE](../../NOTICE)。生成源码工程和桌面包携带这些文件，Python 分发包在许可目录包含它们。发布前按 [许可说明](licensing.md) 核对实际打包的第三方素材、技能、依赖、内核及其原始声明。
 
 现有研究输入见 docs/research/autosar-platform/open-source-rights.md。它记录待核事项，不是本项目取得授权的证明。官方规范档案不进入源码包或安装包。

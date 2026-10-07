@@ -9,7 +9,7 @@
     {
       "path": "runtime/ecu-tool.py",
       "sha256": "bb72cdeeacd4a4f1bea371f71e3b6acdf23e5950f8b3c20cf37c115c8d76e673",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -24,7 +24,7 @@
     {
       "path": "runtime/ecu/include/Ecu_HostBatch.h",
       "sha256": "e22fa0d9876a55b81e3bcf1b2ea2dc60d00eceb30ba359f2294081c078643072",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -38,7 +38,7 @@
     {
       "path": "runtime/ecu/include/Ecu_Target.h",
       "sha256": "dd255af3d1c9cdd2ff312f67b73167b4c0919b454c382aebd9ac309da102929c",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -52,7 +52,7 @@
     {
       "path": "runtime/ecu/include/Rte_MemMap.h",
       "sha256": "a0028a9d3cdc2f8db07dd1375218ae477d5c7bbd3feb4d78ee275286ab198a1b",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -66,7 +66,7 @@
     {
       "path": "runtime/ecu/src/Ecu_HostBatch.c",
       "sha256": "8c24c481b8230c32e16c5f15d8b87dd4f9d750ced508da3f9d449e1b9e9ca13d",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -80,7 +80,7 @@
     {
       "path": "runtime/ecu/src/Ecu_HostBridge.c",
       "sha256": "698da38e11c080a03aa33bc4481fa76e251c2a4dbe3617a7ba8408aa363ba3a3",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -94,7 +94,7 @@
     {
       "path": "runtime/ecu/src/Ecu_OsHooks.c",
       "sha256": "786bb5625c47ab39c07f3a4e20020abf52d7d6425be6174097ead7ca37e50a4c",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -108,7 +108,7 @@
     {
       "path": "runtime/ecu/src/Ecu_SchM.c",
       "sha256": "aa5dcf01ce81a58ad5f4c10bf4e2b499a46de89baeca1ff9b5ef27c3ce1fd772",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -122,7 +122,7 @@
     {
       "path": "runtime/ecu/src/Ecu_Target.c",
       "sha256": "1659fa0fa5c2f5d0fc3842cb737855a73a3a7a00b2524bedc751b9739ed1d7b5",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -136,7 +136,7 @@
     {
       "path": "runtime/ecu/src/ecu_host_batch.c",
       "sha256": "e4ef8c5f90494c458a2714823987f4f9eabbea828b821cdeebfe95c8454908ca",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -150,7 +150,7 @@
     {
       "path": "runtime/ecu/src/ecu_probe.c",
       "sha256": "c17de5076d751293b4df3c0c3e283b6b0292dc61a15309c3fe5124beae2e8d6b",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -164,7 +164,7 @@
     {
       "path": "runtime/ecu/templates/Application.c.in",
       "sha256": "b40367938e5e9e4748032fbc7978f3f3b0460377d6d3cda43151949c934a9471",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -178,7 +178,7 @@
     {
       "path": "runtime/ecu/templates/Ecu_Config.c.in",
       "sha256": "22d6a788b12c53c05b501b8c676c774328ec1a22f3a6ed52c2a4c0e0b63cef3c",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -192,7 +192,7 @@
     {
       "path": "runtime/ecu/templates/Rte.c.in",
       "sha256": "bd17136a7ac4d562e047d7a178c7fba929dd05e9536d19bdf6b5b92c0c93360a",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -205,8 +205,8 @@
     },
     {
       "path": "runtime/generated-README.md",
-      "sha256": "2220161e5ac02ade489a0507bc505803c362ef95a4f25e60b4b579ef6c42ed63",
-      "license": "Project-owned",
+      "sha256": "f7cab35ebade6b3ea3e0fae1155777958b9881904992883a4e64f4393cc29010",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -220,7 +220,7 @@
     {
       "path": "runtime/include/Ecu_Runtime.h",
       "sha256": "61f8c8455557e195330fbe16651166d6e8c96060fd14b6b23c8944ab23f5be25",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -234,7 +234,7 @@
     {
       "path": "runtime/include/NvM.h",
       "sha256": "cd37736a221da03787519d871731696d69a843525122bf43c022a9c96b862a0a",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -249,7 +249,7 @@
     {
       "path": "runtime/include/Rte.h",
       "sha256": "aff8c64f0d4406e37bbbe0d635859f1459674f1f8516d159ac7f4718e75e3480",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -263,7 +263,7 @@
     {
       "path": "runtime/os/FreeRTOSConfig.h",
       "sha256": "7b0d18064691e0c8b836236425e962c013e2b66d1edd88185114b0f2051cad57",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -277,7 +277,7 @@
     {
       "path": "runtime/os/README.md",
       "sha256": "ab5ba6325f4ab2c649dfa02f434c22d494d06ccbd68b4ec2dfced4e00b4d5a4a",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -291,7 +291,7 @@
     {
       "path": "runtime/os/include/Arti.h",
       "sha256": "f7168a605623a0928b9ccfbc499c837a74d02f07c2b93d30a09b4003c0e56392",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -305,7 +305,7 @@
     {
       "path": "runtime/os/include/Os.h",
       "sha256": "cb2e0625015de7369e185dfc11b17b33cc98d47cecb6e87185466c4ada51cc54",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -319,7 +319,7 @@
     {
       "path": "runtime/os/include/Os_Arti.h",
       "sha256": "79f386211d937abe5a38957c6e08f8cb83a0b5a70c469851cffcf1302ebee42a",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -333,7 +333,7 @@
     {
       "path": "runtime/os/include/Os_Cfg.h",
       "sha256": "4192eee3907102dcb0b0c4fc9a987910509a9757427c0ecbde7896c0867338f6",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -347,7 +347,7 @@
     {
       "path": "runtime/os/include/Os_Hooks.h",
       "sha256": "9f632d303e0d8a7c06a45999ede0cd6b5e19f2228d8d291ed60ee0f031a61388",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -361,7 +361,7 @@
     {
       "path": "runtime/os/include/Os_Host.h",
       "sha256": "c1eff107b5c2e3f6e5cb5af590cc4bbe8cfd51975074a6f72751706025c2551a",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -375,7 +375,7 @@
     {
       "path": "runtime/os/include/Os_Mailbox.h",
       "sha256": "dbe391ea752c3c9ffa4c357e1acc239d28a237366bad74dd7e3ac987ce8c5e97",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -389,7 +389,7 @@
     {
       "path": "runtime/os/include/Os_MemMap.h",
       "sha256": "4e5f81f0096dd5c0c94d09aaca9a4734f2f7dfc7415bda0b5bef490d9addc847",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -403,7 +403,7 @@
     {
       "path": "runtime/os/include/Os_Target.h",
       "sha256": "4abbca1583f013fada1c56b5f4853b8299209ccb4b5609d8beb6dd9e50b11bd2",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -417,7 +417,7 @@
     {
       "path": "runtime/os/include/Os_Time.h",
       "sha256": "f049c2f76ba50e55760de15a92b7a46030a0d8b6ddc74436098599dd72b03c14",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -431,7 +431,7 @@
     {
       "path": "runtime/os/include/Os_Types.h",
       "sha256": "62ad60816a210f6983d636c2e3a426cd475e4afc637f83d38b24d13856622d33",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -445,7 +445,7 @@
     {
       "path": "runtime/os/include/Rte_Os_Type.h",
       "sha256": "2a3fe104eeee573acf2e96597376e498df0c80974ff8013f08de2ad3b690f191",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -459,7 +459,7 @@
     {
       "path": "runtime/os/patches/0001-controlled-host-lifecycle.patch",
       "sha256": "b522c8fa69454989be899658d670f6313fb621f455f32a258e06fad18fbbf04f",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1"
       ],
@@ -472,7 +472,7 @@
     {
       "path": "runtime/os/patches/0002-native-stack.patch",
       "sha256": "75e4e04e0de99dd9c1dc3e36e3a93c3d51cad64fec32a09e8b203c3c15040648",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1"
       ],
@@ -485,7 +485,7 @@
     {
       "path": "runtime/os/patches/0003-activation-ready-policy.patch",
       "sha256": "357b1a98a00d8bd197092e4199b710849d08d5684f9d0eabf4459c354c9f979b",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -499,7 +499,7 @@
     {
       "path": "runtime/os/patches/0004-windows-event-namespace.patch",
       "sha256": "633529f96b0bb46cae34687cae8dd9bffda068b971f0dd22b8da9c5fdaa47bf1",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1"
       ],
@@ -512,7 +512,7 @@
     {
       "path": "runtime/os/patches/0005-category2-resource-gate.patch",
       "sha256": "e43dd1f0998e7ec0a8feb8e397ba37c285bf2c031480a6528297e078c94c82df",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1"
       ],
@@ -525,7 +525,7 @@
     {
       "path": "runtime/os/patches/0006-input-handler-ownership.patch",
       "sha256": "bcb70ae8a8947344c206ff4a0b31d445b6c6bb1956135d45f81c6e1b554a3075",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1"
       ],
@@ -538,7 +538,7 @@
     {
       "path": "runtime/os/patches/0007-controlled-tick.patch",
       "sha256": "d027c76922a4d8d69e639b3cbe5a48c121b4dabfaf116334b4acff1fc472160f",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -552,7 +552,7 @@
     {
       "path": "runtime/os/patches/0008-task-hook-boundaries.patch",
       "sha256": "bf6d08e9ff0b6e2c8eb866b5c0509559e9d5ab37cf9df25b23824dcc16beccdc",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -566,7 +566,7 @@
     {
       "path": "runtime/os/patches/0009-interrupt-source-control.patch",
       "sha256": "31b2a63c117986a01ba028b2f7dc4b91bb7b8d9c92bea78265a0240051b90829",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1"
       ],
@@ -579,7 +579,7 @@
     {
       "path": "runtime/os/patches/0010-native-interrupt-identities.patch",
       "sha256": "c27b3887858dcace2630fd9b114eb7c55f8f365af328e7fa8f37897805b707d0",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1"
       ],
@@ -592,7 +592,7 @@
     {
       "path": "runtime/os/patches/0011-isr-phase-before-mutex-release.patch",
       "sha256": "e2aea7b4a24ea564c2cf8fcf85932982a8aec80d642394c37cb4dd1067eb1a4f",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1"
       ],
@@ -605,7 +605,7 @@
     {
       "path": "runtime/os/patches/0012-nested-interrupt-dispatch.patch",
       "sha256": "e14a652b95db9e80bf26eb49354f8f52615af3b2158ae2c2aaf19a1c6947b0aa",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1"
       ],
@@ -618,7 +618,7 @@
     {
       "path": "runtime/os/patches/0013-interrupt-source-repetition.patch",
       "sha256": "834f98c89a173d4eaabf842929dbf4ec27d8e216a1b9b0e9cb14b4fd90660c8c",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1"
       ],
@@ -631,7 +631,7 @@
     {
       "path": "runtime/os/patches/0014-relocatable-interrupt-vectors.patch",
       "sha256": "8324f410501be231047bfb6df88ac97c7f584771f7289125a668e62664fc242f",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1"
       ],
@@ -644,7 +644,7 @@
     {
       "path": "runtime/os/patches/linux/0001-controlled-posix-port.patch",
       "sha256": "2fe906c7836bd93ec965a6861042b23f65bd7135e9379bcdbb69ab95c386e097",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "linux-x64-controlled-v1"
       ],
@@ -657,7 +657,7 @@
     {
       "path": "runtime/os/src/Arti.c",
       "sha256": "f625e33c5ae9c16ceb27bab6a0bbb8881be0c8778eeb62f3cb4f10a4443c6a83",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -671,7 +671,7 @@
     {
       "path": "runtime/os/src/Os.c",
       "sha256": "bd8279cfc2cc31862ccd27cbb0a4a18b8b77875290e0cbf284afff897fc96187",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -685,7 +685,7 @@
     {
       "path": "runtime/os/src/Os_Arti.c",
       "sha256": "10a646a21745c3b22e2542206c5ef96a0ebb991a9127355369c7037b0c5dc7ae",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -699,7 +699,7 @@
     {
       "path": "runtime/os/src/Os_ArtiServices.c",
       "sha256": "e7ab8a6da131fe2b432a3f64f5e0f52c2ac83f6facbdf24877fa5967533aafe0",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -713,7 +713,7 @@
     {
       "path": "runtime/os/src/Os_Backend.c",
       "sha256": "a0db2c837d7373895054b54ab901da1fe56a1b49d9ee9365e581e8946862353b",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -727,7 +727,7 @@
     {
       "path": "runtime/os/src/Os_Backend.h",
       "sha256": "13ab6d2bb4af2fa6f272edcec0cb3dd1c20349d9ef869b4202e47b94d401e17b",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -741,7 +741,7 @@
     {
       "path": "runtime/os/src/Os_Error.c",
       "sha256": "c5052e6dddc4fa1749aaa7939005b0fdf7b45e9010bb99a1a5cdfd2f5e10207f",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -755,7 +755,7 @@
     {
       "path": "runtime/os/src/Os_HostServices.c",
       "sha256": "364b24850b7a521b1109e1c7492ef1327df8cec7467a512c8da5d8c58fd11907",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -769,7 +769,7 @@
     {
       "path": "runtime/os/src/Os_Interrupt.c",
       "sha256": "e5e2d8c15d17c46b62aa270cb917d0a389c27a987ddd16e15fae8dd45632973e",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -783,7 +783,7 @@
     {
       "path": "runtime/os/src/Os_Mailbox.c",
       "sha256": "84b1f9e6cde9090c2e0011e645ce1f00e1d8640af5cdf03434e8be90081a8625",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -797,7 +797,7 @@
     {
       "path": "runtime/os/src/Os_Schedule.c",
       "sha256": "ac4804aa0dbded3e42df47bba1ff03408c69af39e15b788bb0cbdad42ec2b98a",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -811,7 +811,7 @@
     {
       "path": "runtime/os/src/Os_Stack.c",
       "sha256": "f319cb4cf8cdc946286b9d6ddabbb0bd2824805927605245e943b2cd389d835c",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1"
       ],
@@ -824,7 +824,7 @@
     {
       "path": "runtime/os/src/Os_Stack.h",
       "sha256": "23df16952f481a832617ae429a373ce474b7d23369ddf686e4126e441b3ef8c2",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -838,7 +838,7 @@
     {
       "path": "runtime/os/src/Os_Time.c",
       "sha256": "7c8294c1cf6148fe49d939ae189176852e37e1dc4d390f947a510d203947b2d4",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -852,7 +852,7 @@
     {
       "path": "runtime/os/src/Os_Vector.c",
       "sha256": "2802f7de4edb0b2f5609dae9335df41e00933d0b38e5227b8180a518f18be8ff",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -866,7 +866,7 @@
     {
       "path": "runtime/os/src/Os_Vector.h",
       "sha256": "0e021489be714d179b9a984a3eeae48a34d74ebf70ebca55695b4a344492b587",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -880,7 +880,7 @@
     {
       "path": "runtime/os/src/Os_Windows.h",
       "sha256": "1c9de16c02fa8ad2cefa06fa71a68d22faf239ab07ef5b2c0144f9e75ece74f9",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1"
       ],
@@ -893,7 +893,7 @@
     {
       "path": "runtime/os/src/host/linux/Os_HostLinux.c",
       "sha256": "fae8b091566d12dc5865983d3d3ec3a183c988ccf36608b5600ca26c4f1acc50",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "linux-x64-controlled-v1"
       ],
@@ -906,7 +906,7 @@
     {
       "path": "runtime/os/src/host/linux/Os_HostLinux.h",
       "sha256": "ed207bd249aa4c5d4ee50c285a3eb56eeff52428c9c7b722d5d72cdd3fab7d46",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "linux-x64-controlled-v1"
       ],
@@ -919,7 +919,7 @@
     {
       "path": "runtime/os/src/host/linux/Os_StackLinux.c",
       "sha256": "a7021f6bda911ca8e722f64bb2b44c5209e31fb1a97f56795cfb9847ec0ca3ea",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "linux-x64-controlled-v1"
       ],
@@ -932,7 +932,7 @@
     {
       "path": "runtime/os/src/host/windows/Os_HostWindows.c",
       "sha256": "cd8414ab38d99cfedc97c29fadcbee00d8694ced3e1dce6ab49de27c49540c0b",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1"
       ],
@@ -945,7 +945,7 @@
     {
       "path": "runtime/os/toolchain-linux.json",
       "sha256": "8f278854021d3be8933701085fb3bdea8c32b87de88fd0cee09576e9fe433eed",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "linux-x64-controlled-v1"
       ],
@@ -958,7 +958,7 @@
     {
       "path": "runtime/os/toolchain.json",
       "sha256": "dbb865366e44869eb91e77d6aedfc9ba9ce0ebda0fb4d8ae8bc7a0ec0c31619d",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1"
       ],
@@ -971,7 +971,7 @@
     {
       "path": "runtime/src/Can_HostLock.c",
       "sha256": "2b041a20750f57a11c1f319d8b79c904b8251c0c7a619131b47a9bc74fb75c9e",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -985,7 +985,7 @@
     {
       "path": "runtime/src/Can_HostLock.h",
       "sha256": "dab4a501c0bcf001a967d47d199553f806ac5d6138fc3ce7c11833938368d4b4",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1000,7 +1000,7 @@
     {
       "path": "runtime/src/Dem.c",
       "sha256": "aa8ade516ef95e273cb646a55f8a0025fda5701afdc15ecc10ee38372a818b2c",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1015,7 +1015,7 @@
     {
       "path": "runtime/src/Ecu_Runtime.c",
       "sha256": "c485f96dd4d30f9aba7cea2ccfa6e3acf9b690780bff50269b91b16d3d05f372",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1029,7 +1029,7 @@
     {
       "path": "runtime/src/Ecu_Status.c",
       "sha256": "d406944730b6834f29983aad9ee8fa64c77753d2dfcee5798102d0fb5b7a9dc6",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1044,7 +1044,7 @@
     {
       "path": "runtime/src/LSduR.c",
       "sha256": "560e57140c18e02def618417d9d65cd106840e8371fd27b9ceb809883b0397b5",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1059,7 +1059,7 @@
     {
       "path": "runtime/src/NvM.c",
       "sha256": "4a9b1219f6d550e3e65918b3655689640a2a00d3f3452d853b80ae5411f55654",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1074,7 +1074,7 @@
     {
       "path": "runtime/src/NvM_HostStorage.c",
       "sha256": "4a76561223d025fef6808f2ba16e9ce4704b8bb88bd76f51e4abb08276ed30a0",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1089,7 +1089,7 @@
     {
       "path": "runtime/src/NvM_HostStorage.h",
       "sha256": "e4d5ce211698ebe01b5a4344697c602bcaf71fd27217f08abace3107cd7c7d55",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1104,7 +1104,7 @@
     {
       "path": "runtime/src/Os.c",
       "sha256": "a0d6253e041ac604880b21e662b08115e14812117c84f46ed8dc57ba8d926a6c",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1118,7 +1118,7 @@
     {
       "path": "runtime/src/Rte.c",
       "sha256": "2fa1be887f66930027e1ef33fb12ac7c50be148c4be34802877ae451c42cf737",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1132,7 +1132,7 @@
     {
       "path": "runtime/src/Security.c",
       "sha256": "b570f65649ed54a82663eb25bdc812004c51f28609bb0cbea0eec131d6955647",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1147,7 +1147,7 @@
     {
       "path": "runtime/src/ecu_host_main.c",
       "sha256": "ddcdc5303215f7fdc4d51be9e2eab47bb63ecaf063ebb11d57ec2a43a2f33e0b",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1161,7 +1161,7 @@
     {
       "path": "scripts/ecu_tools/__init__.py",
       "sha256": "bf194adea58119fb1ed9d602db4ef898cff97e953c5cab0ddfb48514390674e1",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1176,7 +1176,7 @@
     {
       "path": "scripts/ecu_tools/build.py",
       "sha256": "83df683ba25146ded64a54102d353c1bf6ae39fab184f8230030c0567f678dd5",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1191,7 +1191,7 @@
     {
       "path": "scripts/ecu_tools/cli.py",
       "sha256": "7d6c46c41f7a715efbf17bc06285b8767aa8bbd6dad35661350da123caeddcce",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1206,7 +1206,7 @@
     {
       "path": "scripts/ecu_tools/launch.py",
       "sha256": "ea453c7dfb675c9e7f774f525780a3c631103eb72af289f2efc510f6640c5cfe",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1221,7 +1221,7 @@
     {
       "path": "scripts/ecu_tools/owner.py",
       "sha256": "db6796c37ca9e4193c811d011e1a448ba5c2538f5b128d63743c9f911bcefa69",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1236,7 +1236,7 @@
     {
       "path": "scripts/ecu_tools/process.py",
       "sha256": "4dceb9559cf11aa4976cba4efb48b0e54f7c62df3014805a2be195eb9f2d3aac",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1251,7 +1251,7 @@
     {
       "path": "scripts/ecu_tools/verify.py",
       "sha256": "e8e557f224e25a2111e489a437e039f60af3d2aa81a250166586e8aac4f2aa0f",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1266,7 +1266,7 @@
     {
       "path": "scripts/ecu_tools/reference.py",
       "sha256": "9e2e436e40c29a30d4c5e526cb41777ad81863429f19b43b82b96baa2c6bb245",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1280,7 +1280,7 @@
     {
       "path": "scripts/ecu_tools/windows_job.py",
       "sha256": "7d9206bca29d2d20e6f544bf6f11037af8e694d981e13e8c38d98a544c87e808",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1295,7 +1295,7 @@
     {
       "path": "runtime/host/include/Ecu_ProfileLimits.h",
       "sha256": "a7efa7726c919abd73cd87b47b7a88da3fd1b92c7180f81b8c69df216625dd66",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1309,7 +1309,7 @@
     {
       "path": "runtime/host/src/Can_Execution.c",
       "sha256": "bfb5b946e8222e7d2ed3693e7474efdb201fe9a02fe26af9ac89d2d2b6f45c88",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1323,7 +1323,7 @@
     {
       "path": "runtime/host/src/Ecu_Clock.c",
       "sha256": "3aff4534a1a0abf25c514c99d307a19472fdb74061b04e4e295887c84d4b7297",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1337,7 +1337,7 @@
     {
       "path": "runtime/host/src/Dcm_Execution.c",
       "sha256": "bd9361fd509e5c5cfb04d8b081ceb4fbf796b83817b8aaa68bfa661379033397",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1351,7 +1351,7 @@
     {
       "path": "runtime/src/Ecu_Execution.h",
       "sha256": "22e45d2039cf6a9caeb4e296fbde3d5bc09909753addc00d1648cb8242f18b37",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1366,7 +1366,7 @@
     {
       "path": "runtime/src/Dcm_Internal.h",
       "sha256": "7a7fd28d1a7dd30d5a6c2fc4dd45928acd00a4fa9258c6d15c0ceb6727a65614",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1381,7 +1381,7 @@
     {
       "path": "runtime/src/PduR_Internal.h",
       "sha256": "1810df68a0acf158cb34afb0f7e5e7644518a2124c07c34394797b31e221d7de",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1396,7 +1396,7 @@
     {
       "path": "runtime/ecu/src/Ecu_Execution.c",
       "sha256": "6fb641896c31253ef4901440fa4276932f0ce7fea0b86b6bac38776ada95b39b",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1410,7 +1410,7 @@
     {
       "path": "runtime/ecu/src/Ecu_Diagnostic.h",
       "sha256": "38ceae136ef297b94fd89d7dfbc31db64d188f1c0ce204c102274dbd2bedab5a",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1424,7 +1424,7 @@
     {
       "path": "runtime/os/include/Os_IntegrationHooks.h",
       "sha256": "cd9959e15b0dffcb1c27a30cd429240610be28ec88f12a1af1c9387931a6c164",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1438,7 +1438,7 @@
     {
       "path": "runtime/include/Os.h",
       "sha256": "46bd20117624b757a533648578466e1cd2e2e7aa374445a638e5bf692bdf1fda",
-      "license": "Project-owned",
+      "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
@@ -1448,6 +1448,36 @@
       ],
       "role": "delivery",
       "responsibility": "legacy clock"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu",
+        "host"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "NOTICE",
+      "sha256": "a0a084a2eb5c25be9d7c03383d31a58311abc52f21b8aa521832842ac979a4a9",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu",
+        "host"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench"
     }
   ]
 }

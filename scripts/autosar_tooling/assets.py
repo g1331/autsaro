@@ -58,7 +58,9 @@ def maintain(*, update: bool = False, root: Path = ROOT) -> int:
         seen.add(item["path"])
         actual = digest(root, item["path"])
         if actual != item["sha256"]:
-            if item["license"] != "Project-owned":
+            if item["license"] != "Apache-2.0" or item["path"].startswith(
+                "third_party/"
+            ):
                 raise ValueError(
                     f"Refusing to update third-party asset identity: {item['path']}"
                 )
