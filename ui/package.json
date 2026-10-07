@@ -4,17 +4,18 @@
   "version": "0.1.0",
   "license": "Apache-2.0",
   "engines": {
-    "node": ">=24.19.0 <25",
+    "node": ">=24 <25",
     "npm": ">=11 <12"
   },
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
-    "lint": "eslint src vite.config.ts",
+    "lint": "eslint src tests vite.config.ts vitest.config.ts",
     "tauri": "cd .. && tauri",
     "preview": "vite preview",
-    "test": "node --test tests/*.test.mjs"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
@@ -24,17 +25,19 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "2.11.0",
     "@eslint/js": "10.0.1",
+    "@tauri-apps/cli": "2.11.0",
+    "@testing-library/react": "16.3.3",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",
     "eslint": "10.11.0",
     "eslint-plugin-react-hooks": "7.1.1",
+    "jsdom": "26.1.0",
     "prettier": "3.9.9",
     "typescript": "~5.8.0",
     "typescript-eslint": "8.70.1",
-    "vite": "^6.0.0"
-  },
-  "packageManager": "npm@11.17.0"
+    "vite": "^6.0.0",
+    "vitest": "4.1.11"
+  }
 }

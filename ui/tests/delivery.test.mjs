@@ -1,10 +1,7 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
-import { loadSource } from './load-typescript.mjs';
+import { test } from 'vitest';
 
-const { importedSaveStage } = await loadSource('../src/workbench/useDelivery.ts', {
-  '@tauri-apps/api/core': 'export const isTauri = () => false;',
-});
+import { importedSaveStage } from '../src/workbench/useDelivery';
 
 test('unsupported imports are blocked even when no edits are pending', () => {
   for (const code of ['PDU_UNSUPPORTED', 'DIAG_UNSUPPORTED']) {
