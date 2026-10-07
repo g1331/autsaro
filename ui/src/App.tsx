@@ -71,6 +71,16 @@ export default function App() {
     return () => media.removeEventListener('change', change);
   }, []);
   useEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => {
+      // Native media events can precede CSS media-rule invalidation.
+      document.documentElement.dataset.reducedMotion = String(media.matches);
+    };
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+  useEffect(() => {
     document.documentElement.dataset.theme = effectiveTheme;
     document
       .querySelector<HTMLMetaElement>('meta[name="theme-color"]')
