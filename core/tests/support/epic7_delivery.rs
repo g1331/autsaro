@@ -218,6 +218,60 @@ fn standard_with_application(root: &Path) -> Workspace {
 }
 
 #[test]
+fn builtin_host_and_ecu_deliver_project_license_and_preserve_kernel_notice() {
+    use autosar_config_core::integration::RuntimeCatalog;
+    use autosar_config_core::prepared::prepare_ecu_project_for_workspace;
+    use autosar_config_core::target::BuildTarget;
+
+    let scratch = Scratch::new();
+    let mut host = signals(&scratch.0.join("Host"));
+    let ecu = standard_with_application(&scratch.0.join("ECU"));
+    let plan = ecu
+        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
+        .unwrap();
+    for target in [
+        BuildTarget::WindowsX64ControlledV1,
+        BuildTarget::LinuxX64ControlledV1,
+    ] {
+        let host_output = scratch.0.join(format!("host-{}", target.spec().id));
+        let ecu_output = scratch.0.join(format!("ecu-{}", target.spec().id));
+        prepare_host_project(&mut host, target, true)
+            .unwrap()
+            .generate(&host_output)
+            .unwrap();
+        prepare_ecu_project_for_workspace(&ecu, &plan, target, true)
+            .unwrap()
+            .generate(&ecu_output)
+            .unwrap();
+        for output in [&host_output, &ecu_output] {
+            let names = fs::read_to_string(output.join("files.list")).unwrap();
+            let hashes = fs::read_to_string(output.join("files.sha256")).unwrap();
+            for (name, expected) in [
+                ("LICENSE", include_bytes!("../../../LICENSE").as_slice()),
+                ("NOTICE", include_bytes!("../../../NOTICE").as_slice()),
+            ] {
+                assert_eq!(fs::read(output.join(name)).unwrap(), expected);
+                assert!(names.lines().any(|path| path == name));
+                assert!(
+                    hashes
+                        .lines()
+                        .any(|line| { line == format!("{:x}  {name}", Sha256::digest(expected)) })
+                );
+            }
+            assert!(
+                fs::read_to_string(output.join("README.md"))
+                    .unwrap()
+                    .contains("Apache-2.0")
+            );
+        }
+        assert_eq!(
+            fs::read(ecu_output.join("kernel/LICENSE.md")).unwrap(),
+            include_bytes!("../../../third_party/freertos/LICENSE.md")
+        );
+    }
+}
+
+#[test]
 fn builtin_ecu_handoff_preserves_user_algorithm_in_independent_reconstructed_project() {
     use autosar_config_core::integration::RuntimeCatalog;
     use autosar_config_core::prepared::prepare_ecu_project_for_workspace;

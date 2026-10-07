@@ -101,3 +101,7 @@ Dcm 提供 0x10 默认/扩展会话、0x3E TesterPresent（子功能 0x80 抑制
 | `M <0\|1\|2>` | 依次设置 STOPPED、STARTED、BUS_OFF；关闭时拒绝 Rx 并跳过 Tx 周期，重新 STARTED 不补发已跳过的帧。 |
 
 语义错误（例如未知信号、错误 DLC、诊断序号错误 `E TP_SEQUENCE`、N_As/N_Bs/N_Cr 超时 `E TP_TIMEOUT`、控制器关闭时注入）输出 `E <code>` 并继续处理后续行；非法命令、错误数字或 hex 输出 `E PROTOCOL` 并以非零码退出；时间倒退输出 `E TIME` 并非零退出。未配置 ID 的合法报文被过滤，不是错误。实际总线丢帧由外部主机编排，Rx 信号有效位会随时间真实超时。诊断失败路径不会把半包交给 Dcm，也不会把错误当作诊断正响应。
+
+## 许可证
+
+项目原创运行时、工具及生成模板采用 [Apache-2.0](../LICENSE)。交付工程附带 LICENSE/NOTICE，FreeRTOS 保留独立 MIT 声明，用户配置与应用代码由其权利人决定许可。详见 [许可说明](../docs/maintainers/licensing.md)。

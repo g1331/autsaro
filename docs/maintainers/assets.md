@@ -12,6 +12,8 @@ git diff -- runtime/contracts scripts/ecu_tools/workbench-v2-assets.json
 
 update 显式更新项目所有的 BSW、交付资产及 workbench 工具清单，输出发生变化的源文件。先审阅源码，再审阅清单 diff，最后重新运行相应测试。更新只重算已列出的项目资产，不发现并自动接纳新文件；新增资产必须明确填写角色、许可、目标及责任信息。
 
+项目原创交付资产使用 SPDX 标识 Apache-2.0；LICENSE 和 NOTICE 本身也纳入固定字节清单，并随 host/ECU 工程交付。FreeRTOS 保留 MIT 与固定上游身份，许可变更不修改其源码、摘要或原始声明。
+
 所有上游文件先核对固定清单。第三方来源被改动时，update 拒绝运行，不自动改写 FreeRTOS 身份。多份派生清单更新不是跨文件事务；中断后重新运行 check/update 并审阅完整 diff。
 
 ## 行尾与新 checkout

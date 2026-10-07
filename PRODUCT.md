@@ -61,7 +61,7 @@ Vector MICROSAR Classic＋DaVinci Configurator、EB tresos AutoCore＋Studio 是
 - 首个 MCU 板卡、驱动及许可、工具链、具体诊断／网络管理剖面、输入覆盖与迁移规则仍按对应产品规划决定。当前没有真实 MCU 验证，不预先宣布硬件支持。
 - 主机运行、实机运行、第三方互操作、完整规范义务、MISRA、硬实时、功能安全及官方符合性认证分别取证，不互相外推。
 - Adaptive Platform 是独立的后续立项方向，不预造共用 CP／AP 实现。学习层后期再规划；练习须基于届时真实能力，教学工程与用户工程隔离，通过依据实际配置、构建或运行检查点，不靠点击完成。
-- 目前是本地研发。开源是长期方向；公开发布的许可证、第三方再分发权、支持承诺和发布流程尚需单独核定，本文件不作公开发布或认证承诺。
+- 项目原创代码与文档采用 [Apache-2.0](LICENSE)。第三方再分发权、支持承诺和发布流程仍需按实际产物核定，本文件不作公开发行或认证承诺。
 
 ## Brand Commitments
 
@@ -79,7 +79,7 @@ Vector MICROSAR Classic＋DaVinci Configurator、EB tresos AutoCore＋Studio 是
 - [README](README.md)、[运行时说明](runtime/README.md)及 BMad story/spec：现有工作流、受限能力、目标依赖和已记录验证范围。旧段落涉及历史状态时，以适用的较新 story/spec 和当前源码核对，不从一句总述推定全部能力。
 - `ui/src/`、`src-tauri/`、`core/src/` 与 `runtime/`：现有 React 界面、桌面后端、配置／生成核心与 C99 运行时；`core/tests/end_to_end.rs` 及 fixtures 承载集成验证输入。
 - `ui/public/logo-app.png` 与 `src-tauri/icons/`：现有产品图标资产。
-- 尚无可用于宣称真实 MCU 支持、官方认证、客户背书、性能基准或公开发布许可的本次初始化证据，不编造相关内容。本次未重新执行历史主机验收。
+- 尚无可用于宣称真实 MCU 支持、官方认证、客户背书或性能基准的本次初始化证据，不编造相关内容。本次未重新执行历史主机验收。
 
 ## Product Principles
 

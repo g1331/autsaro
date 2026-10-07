@@ -34,14 +34,15 @@ fn add(
     assert!(
         (path.starts_with("runtime/")
             || path.starts_with("third_party/freertos/")
-            || path.starts_with("scripts/ecu_tools/"))
+            || path.starts_with("scripts/ecu_tools/")
+            || matches!(path.as_str(), "LICENSE" | "NOTICE"))
             && !path.contains(['\\', ':'])
             && Path::new(&path)
                 .components()
                 .all(|component| matches!(component, Component::Normal(_))),
         "uncontrolled asset path {path}"
     );
-    assert!(matches!(license, "MIT" | "Project-owned"));
+    assert!(matches!(license, "MIT" | "Apache-2.0"));
     assert!(matches!(
         role,
         "bsw" | "os" | "kernel" | "patch" | "target" | "delivery" | "provenance"
@@ -113,7 +114,7 @@ fn main() {
         );
     }
     let provenance = [
-        ("runtime/contracts/bsw-v1.json", "Project-owned", common),
+        ("runtime/contracts/bsw-v1.json", "Apache-2.0", common),
         ("third_party/freertos/source-manifest.json", "MIT", common),
         (
             "third_party/freertos/posix-source-manifest.json",
@@ -150,7 +151,7 @@ fn main() {
         &mut rows,
         own_manifest.into(),
         format!("{:x}", Sha256::digest(own_bytes)),
-        "Project-owned",
+        "Apache-2.0",
         "provenance",
         "workbench",
         common,
@@ -163,7 +164,7 @@ fn main() {
             &mut rows,
             path.clone(),
             hash.as_str().expect("BSW SHA-256").into(),
-            "Project-owned",
+            "Apache-2.0",
             "bsw",
             "workbench",
             common,

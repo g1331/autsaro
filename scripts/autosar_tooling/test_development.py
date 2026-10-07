@@ -233,7 +233,7 @@ class AssetTests(unittest.TestCase):
                         "assets": [
                             {
                                 "path": "owned",
-                                "license": "Project-owned",
+                                "license": "Apache-2.0",
                                 "sha256": hashlib.sha256(b"original").hexdigest(),
                             }
                         ]

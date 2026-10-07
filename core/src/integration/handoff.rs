@@ -36,7 +36,7 @@ pub(crate) fn metadata(plan: &ValidatedIntegrationPlan, target: BuildTarget) -> 
         "validationDependencies": d.validation_dependencies,
         "delivery": {
             "kernel": "kernel/source-manifest.json", "kernelLicense": "kernel/LICENSE.md",
-            "compiler": "toolchain.json", "productRights": "owner-authorized internal use; no new public license grant",
+            "compiler": "toolchain.json", "productRights": "Apache-2.0", "productLicense": "LICENSE", "productNotice": "NOTICE",
             "externalInputs": "Legally obtain the pinned R24-11 XSD and MOD archives; not redistributed."
         }
     })
