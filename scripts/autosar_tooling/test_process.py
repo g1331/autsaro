@@ -86,6 +86,18 @@ def _assert_closed(
 
 
 class BoundedProcessTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # Root ownership probes need their own supervisor, even when the test
+        # command itself is a descendant of dev/CI's owned execution scope.
+        environment = {
+            key: value
+            for key, value in os.environ.items()
+            if key not in ("ECU_OWNER_SOCKET", "ECU_OWNER_TOKEN", "ECU_OWNER_SCOPE")
+        }
+        isolated = patch.dict(os.environ, environment, clear=True)
+        isolated.start()
+        self.addCleanup(isolated.stop)
+
     def _spec(
         self, root: Path, kind: str, seconds: int = 10
     ) -> tuple[ProcessSpec, Path]:
@@ -261,7 +273,10 @@ class BoundedProcessTests(unittest.TestCase):
                 "    adopted=os.fork()\n"
                 "    if adopted == 0:\n"
                 "        os._exit(0)\n"
-                "    Path(sys.argv[1]).write_text(str(adopted))\n"
+                "    record=Path(sys.argv[1])\n"
+                "    pending=record.with_suffix('.pending')\n"
+                "    pending.write_text(str(adopted))\n"
+                "    pending.replace(record)\n"
                 "    os._exit(0)\n"
                 "os.waitpid(child,0)\n"
                 "while not Path(sys.argv[2]).exists():\n"
@@ -549,6 +564,7 @@ class BoundedProcessTests(unittest.TestCase):
             root = Path(name)
             public = root / "public"
             public.mkdir(mode=0o755)
+            public.chmod(0o755)  # Exercise public permissions even under umask 077.
             spec, path = self._spec(public, "normal")
             with self.assertRaisesRegex(OwnershipError, "private"):
                 run_bounded(spec)

@@ -1,5 +1,6 @@
 """Independent R24-11 ARTI consumer. Writes only a caller-owned temporary C header."""
 import re
+import os
 import sys
 from pathlib import Path
 from zipfile import ZipFile
@@ -20,7 +21,8 @@ def named(root):
     return {identity(node): node for node in root.iter() if isinstance(node.tag, str) and node.find(Q + "SHORT-NAME") is not None}
 
 def check(project, root, os_name, header):
-    with ZipFile(root / "docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_MOD_ECUConfigurationParameters.zip") as archive:
+    mod = Path(os.environ.get("AUTOSAR_MOD_ARCHIVE", "docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_MOD_ECUConfigurationParameters.zip"))
+    with ZipFile(mod if mod.is_absolute() else root / mod) as archive:
         definitions = named(etree.fromstring(archive.read("AUTOSAR_CP_MOD_ECUConfigurationParameters.arxml")))
     description = etree.parse(str(project / "os/Os_Arti.arxml")).getroot()
     objects = {}

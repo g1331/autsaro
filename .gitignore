@@ -13,6 +13,7 @@ src-tauri/gen/
 **/*.tsbuildinfo
 **/__pycache__/
 .venv/
+dev.local.toml
 ui/node_modules/
 *.egg-info/
 dist/

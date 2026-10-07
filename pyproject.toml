@@ -3,6 +3,9 @@ name = "autosar-tooling"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
 
+[project.scripts]
+dev = "autosar_tooling.dev:main"
+
 [build-system]
 requires = ["setuptools==84.0.0"]
 build-backend = "setuptools.build_meta"
@@ -17,3 +20,6 @@ include = ["autosar_tooling*", "ecu_tools*"]
 [dependency-groups]
 quality = ["clang-format==23.1.1", "ruff==0.16.9", "lxml==5.4.0"]
 automotive = ["openpyxl==3.1.5", "et-xmlfile==2.0.0"]
+
+[tool.uv]
+default-groups = ["quality"]

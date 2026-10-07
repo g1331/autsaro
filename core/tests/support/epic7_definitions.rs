@@ -4,6 +4,7 @@ use autosar_config_core::project_model::{
 };
 use sha2::{Digest, Sha256};
 use std::fs;
+#[cfg(feature = "official-oracles")]
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -549,9 +550,14 @@ fn extension_fingerprint_is_sorted_and_independent_of_source_and_cache_paths() {
     );
 }
 
+#[cfg(feature = "official-oracles")]
 #[test]
 fn fixed_r24_11_oracle_agrees_on_integer_precision_enum_and_default() {
-    let archive_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_MOD_ECUConfigurationParameters.zip");
+    let archive_path = autosar_config_core::schema::reference_archive(
+        Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap(),
+        "AUTOSAR_MOD_ARCHIVE",
+        autosar_config_core::schema::MOD_ZIP,
+    );
     let mut archive =
         zip::ZipArchive::new(fs::File::open(&archive_path).expect("fixed local R24-11 MOD oracle"))
             .unwrap();

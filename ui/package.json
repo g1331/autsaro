@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "engines": {
     "node": ">=24.19.0 <25",
-    "npm": ">=11.17.0 <12"
+    "npm": ">=11 <12"
   },
   "type": "module",
   "scripts": {
@@ -12,7 +12,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint src vite.config.ts",
     "tauri": "cd .. && tauri",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
@@ -33,5 +34,6 @@
     "typescript": "~5.8.0",
     "typescript-eslint": "8.70.1",
     "vite": "^6.0.0"
-  }
+  },
+  "packageManager": "npm@11.17.0"
 }

@@ -1,0 +1,16 @@
+name: Feature request
+description: 描述用户操作及期望结果
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 使用场景与问题
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: 期望操作与结果
+      description: 说明现有替代方法和相关输入/平台。
+    validations:
+      required: true

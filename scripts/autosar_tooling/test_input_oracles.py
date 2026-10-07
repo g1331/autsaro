@@ -18,13 +18,13 @@ class InputIntegrityTests(unittest.TestCase):
             shutil.copytree(input_oracles.FIXTURE, fixture)
             with patch.object(input_oracles, "FIXTURE", fixture):
                 with contextlib.redirect_stdout(io.StringIO()):
-                    input_oracles.main()
+                    input_oracles.verify_fixture_manifest()
                 (fixture / "positive/extra.arxml").write_text(
                     '<AUTOSAR xmlns="http://autosar.org/schema/r4.0"><NOT-AUTOSAR/></AUTOSAR>',
                     encoding="utf-8",
                 )
                 with self.assertRaisesRegex(ValueError, "file set differs"):
-                    input_oracles.main()
+                    input_oracles.verify_fixture_manifest()
 
     def test_local_object_cannot_shadow_pinned_official_definition(self):
         xml = (

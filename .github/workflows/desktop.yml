@@ -1,0 +1,64 @@
+name: Isolated desktop acceptance
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        type: choice
+        options: [linux, windows, macos]
+        required: true
+      binary:
+        description: Absolute path to the current built or extracted application
+        required: true
+      installed:
+        type: boolean
+        default: false
+      source_checkout:
+        description: Owned build checkout original path (required for installed verification)
+        required: false
+      builtin_only:
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  desktop:
+    runs-on: [self-hosted, autosar-controlled, "${{ inputs.platform == 'linux' && 'Linux' || inputs.platform == 'windows' && 'Windows' || 'macOS' }}"]
+    env:
+      ACCEPTANCE_PLATFORM: ${{ inputs.platform }}
+      ACCEPTANCE_BINARY: ${{ inputs.binary }}
+      ACCEPTANCE_INSTALLED: ${{ inputs.installed }}
+      ACCEPTANCE_SOURCE: ${{ inputs.source_checkout }}
+      ACCEPTANCE_BUILTIN: ${{ inputs.builtin_only }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - run: uv sync --locked
+      - name: Run isolated native acceptance
+        shell: python
+        run: |
+          import os, pathlib, re, shutil, subprocess
+          command = ["uv", "run", "python", "-m", "autosar_tooling", "desktop", "--platform", os.environ["ACCEPTANCE_PLATFORM"], "--binary", os.environ["ACCEPTANCE_BINARY"]]
+          if os.environ["ACCEPTANCE_INSTALLED"] == "true":
+              command += ["--installed", "--source-checkout", os.environ["ACCEPTANCE_SOURCE"]]
+          if os.environ["ACCEPTANCE_BUILTIN"] == "true":
+              command += ["--builtin-only"]
+          destination = pathlib.Path("desktop-results")
+          destination.mkdir(exist_ok=True)
+          evidence = None
+          with (destination / "run.log").open("w", encoding="utf-8") as log:
+              with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace") as process:
+                  for line in process.stdout:
+                      print(line, end="", flush=True)
+                      log.write(line)
+                      match = re.search(r"Isolated native test directory(?: \(.*?\))?: (.+)", line)
+                      if match:
+                          evidence = pathlib.Path(match[1].strip())
+                  code = process.wait()
+          if evidence is not None and evidence.is_dir():
+              shutil.copytree(evidence, destination / "evidence", dirs_exist_ok=True)
+          raise SystemExit(code)
+      - uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: desktop-${{ inputs.platform }}
+          path: desktop-results
+          if-no-files-found: ignore

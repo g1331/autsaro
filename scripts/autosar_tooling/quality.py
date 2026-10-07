@@ -15,9 +15,9 @@ from pathlib import Path
 from ecu_tools.process import OwnedProcess, ProcessSpec
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE_SUFFIXES = {".c", ".h", ".rs", ".ts", ".tsx", ".css", ".py"}
-FORMAT_SUFFIXES = {".c", ".h", ".rs", ".ts", ".tsx", ".css"}
-SOURCE_ROOTS = ("core/", "src-tauri/", "runtime/", "ui/src/", "scripts/")
+SOURCE_SUFFIXES = {".c", ".h", ".rs", ".ts", ".tsx", ".css", ".py", ".mjs"}
+FORMAT_SUFFIXES = {".c", ".h", ".rs", ".ts", ".tsx", ".css", ".mjs"}
+SOURCE_ROOTS = ("core/", "src-tauri/", "runtime/", "ui/src/", "ui/tests/", "scripts/")
 HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
 
 
@@ -149,17 +149,6 @@ def changed_lines(path: Path, base: str, untracked: set[Path]) -> set[int]:
 
 
 def clang_format() -> str | None:
-    local = (
-        ROOT
-        / ".quality-venv"
-        / (
-            "Scripts/clang-format.exe"
-            if sys.platform == "win32"
-            else "bin/clang-format"
-        )
-    )
-    if local.is_file():
-        return str(local)
     return shutil.which("clang-format")
 
 
@@ -184,9 +173,7 @@ def formatted_source(path: Path, source: str) -> str:
     if path.suffix in {".c", ".h"}:
         formatter = clang_format()
         if formatter is None:
-            raise RuntimeError(
-                "clang-format is missing; install scripts/requirements-quality.txt into .quality-venv"
-            )
+            raise RuntimeError("clang-format is missing; run uv sync --locked")
         command = [formatter, "--style=file", f"--assume-filename={path.as_posix()}"]
     else:
         prettier = ROOT / "ui" / "node_modules" / "prettier" / "bin" / "prettier.cjs"
@@ -228,10 +215,12 @@ def changed_format_errors(
 
 
 def c_syntax_errors() -> list[str]:
-    sources = sorted([
-        *(ROOT / "runtime" / "src").glob("*.c"),
-        *(ROOT / "runtime" / "host" / "src").glob("*.c"),
-    ])
+    sources = sorted(
+        [
+            *(ROOT / "runtime" / "src").glob("*.c"),
+            *(ROOT / "runtime" / "host" / "src").glob("*.c"),
+        ]
+    )
     command = [
         "gcc",
         "-std=c99",
@@ -280,33 +269,27 @@ def c_syntax_errors() -> list[str]:
     return []
 
 
-def check(base: str, *, all_format: bool = False) -> list[str]:
+def scoped_paths(scope: str) -> list[Path]:
+    prefixes = {
+        "ui": ("ui/",),
+        "tooling": ("scripts/",),
+        "core": ("core/",),
+        "desktop": ("src-tauri/", "core/"),
+        "runtime": ("runtime/", "scripts/ecu_tools/"),
+        "all": (*SOURCE_ROOTS, "ui/vite.config.ts"),
+    }[scope]
+    return [path for path in source_paths() if path.as_posix().startswith(prefixes)]
+
+
+def check(base: str, *, all_format: bool = False, scope: str = "all") -> list[str]:
     errors = []
-    if shutil.which("rustfmt") is None:
-        errors.append("rustfmt is missing; install the rustfmt Rust component")
-    formatter = clang_format()
-    if formatter is None:
-        errors.append(
-            "clang-format is missing; install scripts/requirements-quality.txt into .quality-venv"
-        )
-    else:
-        version = run([formatter, "--version"])
-        if version.returncode or "23.1.1" not in version.stdout:
-            errors.append("clang-format 23.1.1 is required for stable C formatting")
-    if not (
-        ROOT / "ui" / "node_modules" / "prettier" / "bin" / "prettier.cjs"
-    ).is_file():
-        errors.append("Prettier is missing; run npm ci --prefix ui")
-    if errors:
-        return errors
-    paths = source_paths()
     untracked = set(source_paths(untracked_only=True))
-    for path in paths:
+    changed_c = False
+    checked = 0
+    for path in scoped_paths(scope):
         path_errors = hygiene_errors(path)
         errors.extend(path_errors)
         if any("invalid UTF-8" in error for error in path_errors):
-            continue
-        if path.suffix not in FORMAT_SUFFIXES:
             continue
         changed = (
             set(
@@ -317,42 +300,77 @@ def check(base: str, *, all_format: bool = False) -> list[str]:
             if all_format
             else changed_lines(path, base, untracked)
         )
-        if not changed:
+        if path.suffix in {".c", ".h"} and changed:
+            changed_c = True
+        if path.suffix not in FORMAT_SUFFIXES or not changed:
             continue
+        checked += 1
         source = (ROOT / path).read_text(encoding="utf-8")
         try:
+            if path.suffix in {".c", ".h"}:
+                from autosar_tooling.diagnostics import _dependency_version
+
+                formatter = clang_format()
+                if not formatter:
+                    raise RuntimeError("clang-format is missing; run uv sync --locked")
+                version = run([formatter, "--version"])
+                if _dependency_version("clang-format") not in version.stdout:
+                    raise RuntimeError(
+                        "clang-format version differs from pyproject.toml; run uv sync --locked"
+                    )
             formatted = formatted_source(path, source)
         except (OSError, RuntimeError) as error:
             errors.append(f"{path.as_posix()}: formatter failed: {error}")
             continue
         errors.extend(changed_format_errors(path, source, formatted, changed))
-    errors.extend(c_syntax_errors())
+    if changed_c or scope == "runtime" or all_format:
+        errors.extend(c_syntax_errors())
+    print(
+        f"Quality scope={scope} baseline={base}; formatted files checked={checked}; C syntax={'checked' if changed_c or scope == 'runtime' or all_format else 'not requested'}"
+    )
     return errors
+
+
+def fix(base: str, scope: str) -> int:
+    revision = run(["git", "rev-parse", "--verify", f"{base}^{{commit}}"])
+    if revision.returncode:
+        raise ValueError(f"Invalid format baseline {base}")
+    untracked = set(source_paths(untracked_only=True))
+    for path in scoped_paths(scope):
+        if path.suffix not in FORMAT_SUFFIXES or not changed_lines(
+            path, base, untracked
+        ):
+            continue
+        target = ROOT / path
+        raw = target.read_bytes()
+        formatted = formatted_source(path, raw.decode("utf-8").replace("\r\n", "\n"))
+        # Respect raw-byte delivery identities and tracked CRLF policy.
+        eol = "\r\n" if b"\r\n" in raw else "\n"
+        target.write_bytes(
+            formatted.replace("\r\n", "\n").replace("\n", eol).encode("utf-8")
+        )
+        print(f"Formatted changed file: {path}; review the complete diff")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--base",
-        help="Compare source lines against this commit (default: HEAD for pending edits, or HEAD^)",
+        help="Compare source lines against this commit (default: HEAD for pending edits)",
     )
     parser.add_argument(
         "--all-format",
         action="store_true",
         help="Audit formatting of all source files, including legacy code",
     )
+    parser.add_argument(
+        "--scope",
+        choices=("ui", "tooling", "core", "desktop", "runtime", "all"),
+        default="all",
+    )
     arguments = parser.parse_args(argv)
-    if arguments.base:
-        base = arguments.base
-    else:
-        pending = run(["git", "status", "--porcelain", "--untracked-files=normal"])
-        if pending.returncode:
-            print(
-                f"Cannot inspect pending changes: {pending.stderr.strip()}",
-                file=sys.stderr,
-            )
-            return 2
-        base = "HEAD" if pending.stdout else "HEAD^"
+    base = arguments.base or "HEAD"
     revision = run(["git", "rev-parse", "--verify", f"{base}^{{commit}}"])
     if revision.returncode:
         print(
@@ -361,7 +379,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     try:
-        errors = check(base, all_format=arguments.all_format)
+        errors = check(base, all_format=arguments.all_format, scope=arguments.scope)
     except (OSError, RuntimeError) as error:
         print(f"Quality check could not run: {error}", file=sys.stderr)
         return 2
@@ -371,9 +389,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"... {len(errors) - 30} more issues", file=sys.stderr)
     if errors:
         return 1
-    print(
-        "Source hygiene, changed-line formatting, Python syntax, and host C99 syntax passed."
-    )
+    print("Requested source checks passed.")
     return 0
 
 

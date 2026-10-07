@@ -4,7 +4,7 @@ use std::fs;
 use std::io::Read;
 #[cfg(windows)]
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 #[cfg(windows)]
 use std::process::{Command, Stdio};
 
@@ -210,7 +210,11 @@ pub(super) fn host_can_ecuc_closes_required_mod_fields_and_rejects_broken_links(
     let xml = fs::read_to_string(&source).unwrap();
     let doc = roxmltree::Document::parse(&xml).unwrap();
 
-    let mod_zip = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_MOD_ECUConfigurationParameters.zip");
+    let mod_zip = autosar_config_core::schema::reference_archive(
+        Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap(),
+        "AUTOSAR_MOD_ARCHIVE",
+        autosar_config_core::schema::MOD_ZIP,
+    );
     let mut mod_archive = zip::ZipArchive::new(
         fs::File::open(mod_zip).expect("R24-11 ECUC MOD archive is required for this test"),
     )
@@ -1327,8 +1331,10 @@ pub(super) fn three_file_host_can_edit_preserves_retained_and_untouched_sources(
 
 pub(super) fn official_r24_sample_imports_as_one_split_package_without_rewriting_sources() {
     let temp = Scratch::new();
-    let zip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
-        "../docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_EXP_ModelingShowCases.zip",
+    let zip_path = autosar_config_core::schema::reference_archive(
+        Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap(),
+        "AUTOSAR_SAMPLE_ARCHIVE",
+        autosar_config_core::schema::SAMPLE_ZIP,
     );
     let mut zip = zip::ZipArchive::new(fs::File::open(zip_path).unwrap()).unwrap();
     let prefix =

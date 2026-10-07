@@ -45,8 +45,7 @@ use std::path::{Component, Path, PathBuf};
 
 pub const PROFILE: &str = "epic4-win64-sr-cs-v1";
 pub const FORMAT_VERSION: u32 = 1;
-const MOD_PATH: &str =
-    "docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_MOD_ECUConfigurationParameters.zip";
+const MOD_PATH: &str = crate::schema::MOD_ZIP;
 const MOD_SHA256: &str = "df1e3bc992e49de6e14e5c1a679d7ce7ca90d2450d66186cea0b4a0f1f6555fb";
 const XSD_SHA256: &str = crate::schema::XSD_SHA256;
 
@@ -208,7 +207,7 @@ impl PlanDependencies {
     pub fn from_repository(root: &Path) -> Self {
         Self {
             xsd_archive: crate::schema::schema_archive(root),
-            mod_archive: root.join(MOD_PATH),
+            mod_archive: crate::schema::reference_archive(root, "AUTOSAR_MOD_ARCHIVE", MOD_PATH),
         }
     }
 

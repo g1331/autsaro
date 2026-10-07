@@ -16,7 +16,7 @@ legacy `host` 产出 `ecu_host.exe`（Windows）或 `ecu_host`（Linux）；ECU 
 
 集成工程的独立行为入口为 `tools/ecu-tool.py verify --project <sealed-source-directory> --build-directory <new-empty-outside-directory>`：重建实际生产binary，检查 CAN/DID、至多两个DID、N_Cr超时恢复和非法批次，预期不由生成配置回显提供。离线接收者不需要 checkout、uv、Rust 或 Node。双 ECU 固定参考包见 [`reference-README.md`](reference-README.md)。
 
-发行工作台从内嵌可信资源生成同一封存工程；源码及其全部 stdlib 工具随工程交付，后续离线 build/verify 不回读工作台安装目录或原构建 checkout。搬移／重导入／再生成仍需要同版工作台及使用者合法提供、身份匹配的 R24-11 XSD/MOD；它们和 CPython/GCC/binutils/Git 不随工作台或 ECU 包分发。工作台启动依赖与原生发行包后台复验入口见根目录 README 的“原生分发与图标”。
+发行工作台从内嵌可信资源生成同一封存工程；源码及其全部 stdlib 工具随工程交付，后续离线 build/verify 不回读工作台安装目录或原构建 checkout。旧 v1 包的搬移／重导入／再生成仍需要同版工作台及使用者合法提供、身份匹配的 R24-11 XSD/MOD；内置 v2 配置交接不依赖这些档案；它们和 CPython/GCC/binutils/Git 不随工作台或 ECU 包分发。工作台启动依赖与原生发行包后台复验入口见docs/development/testing.md 与 docs/maintainers/releasing.md。
 
 工作台的预检和封存工具调用使用 CPython `-I -S`，忽略外部 Python home/path、用户及环境 site-packages；工具入口只从自身封存 `tools/` 导入 helper，禁用字节码，不向源码增加 `__pycache__`。这也适用于 AppImage 启动器设置 Python 相关变量的场景；开发虚拟环境的可编辑安装不是离线包依赖。
 

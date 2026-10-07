@@ -12,6 +12,14 @@
 /core/tests/fixtures/epic4_oracles/** text eol=lf
 
 # Fixed checkout byte identities for packaged BSW producers.
+/runtime/include/Ecu_Runtime.h text eol=crlf
+/runtime/include/Rte.h text eol=crlf
+/runtime/include/Os.h text eol=crlf
+/runtime/src/Can_HostLock.c text eol=crlf
+/runtime/src/Ecu_Runtime.c text eol=crlf
+/runtime/src/Os.c text eol=crlf
+/runtime/src/Rte.c text eol=crlf
+/runtime/src/ecu_host_main.c text eol=crlf
 /runtime/include/Can.h text eol=crlf
 /runtime/include/CanIf.h text eol=crlf
 /runtime/include/CanIf_MemMap.h text eol=lf

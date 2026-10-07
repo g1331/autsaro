@@ -1,0 +1,28 @@
+name: Bug report
+description: 报告可复现的问题
+body:
+  - type: textarea
+    id: environment
+    attributes:
+      label: 版本与环境
+      description: 提交或版本、操作系统、发生问题的入口；必要时附对应 doctor 结果，移除个人路径。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 提供最小操作或可合法分享的输入，勿上传官方规范档案。
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: 预期与实际结果
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志或截图
+      description: 只提供相关部分，移除凭据和私人信息。
