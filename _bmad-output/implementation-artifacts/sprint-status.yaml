@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-27-2026 18:43
-last_updated: 10-06-2026
+last_updated: 10-09-2026
 project: Autosar
 project_key: NOKEY
 tracking_system: file-system
@@ -45,7 +45,9 @@ story_location: _bmad-output/implementation-artifacts
 # Original R5 architecture: 2039020; original story plan: d1be8cb (2026-10-03).
 # Current native-rule amendment: product-owned builtin rules; official XSD/MOD are development references, not normal user setup.
 # Stable Story IDs remain unchanged. The 2026-10-06 user request limits this handoff to development and unit/integration tests.
-# Native desktop, hardware and full installed acceptance are deferred to the later CI stage; no new isolation facilities are required here.
+# The 2026-10-09 authorization extends development closeout through PR checks, review and merge.
+# Native desktop and hardware acceptance remain deferred to later CI; no new isolation facilities are required here.
+# Real installation is no longer an Epic 7 prerequisite; native behavior may use current built/extracted artifacts without claiming installer verification.
 # Development completion and the original unverified release exits are recorded separately in spec-epic-7-configurator.md.
 # Remaining roadmap candidates are not implementation-ready or registered here.
 development_status:

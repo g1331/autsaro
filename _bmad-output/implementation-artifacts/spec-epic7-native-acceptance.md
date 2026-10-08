@@ -14,6 +14,10 @@ context:
 
 ## 授权与目标
 
+### 2026-10-09 当前验收修订
+
+本轮只完成开发收尾与 PR 合并，7.11 保持 review，以下原生行为验收留给后续 CI。真实安装不再是 Epic 7 强制前置：使用当前 Windows／Linux 构建产物或解包产物，在独立离线原生环境核对无 checkout／开发工具的运行边界。沿用现有 desktop 入口；其中 `--installed` 只表示该独立运行边界，不要求安装器真实安装，也不据此宣称安装器已验证。真实 IPC、取消／晚结果、性能／完整日志、原字节保护和独立消费者要求保持，不修改工具或扩建验收设施。下文的设施实现与运行记录保留原历史身份；完整 installed scene 0／3 是旧包场景计数，不是修订后必须逐包安装补齐的计数，旧失败及未执行结果不改判。
+
 继承用户已批准完整 Epic 7，实现 7.11 必需出口的独立实际验收分支并从非实现者视角取证，不把单项 test 或 mock 当出口。先读取 bmad-build 技能，仅运行一次正确 renderer：`uv run --no-cache "D:/Codebase/Autosar/_bmad/scripts/render_skill.py" --project-root "D:/Codebase/Autosar" --skill "D:/Codebase/Autosar/.agents/skills/bmad-build"`。本 slice 不修改被验收的产品实现；发现真实缺陷发给其负责人。
 
 ## Target / Ownership
@@ -26,17 +30,17 @@ context:
 
 ## Change
 
-1. 新增显式、独立 builtin-only 验收模式，保留旧 development/oracle/v1 路径的全部拒绝边界。普通用户安装环境不得提供官方规范文件、源码 checkout、开发语言工具或编译器；离线验证真实新建/打开/源查看/通用编辑/预览应用/保存重开/校验/源码交付，执行工具只在独立工程消费者阶段提供。
+1. 沿用显式、独立 builtin-only 验收模式，保留旧 development/oracle/v1 路径的全部拒绝边界。独立离线原生产物运行环境不得提供官方规范文件、源码 checkout、开发语言工具或编译器；离线验证真实新建/打开/源查看/通用编辑/预览应用/保存重开/校验/源码交付，执行工具只在独立工程消费者阶段提供。
 2. 覆盖 epics.md 7.11 所有 AC 和 PRD CFG-1–CFG-4 出口：两个不同原创 CAN 工程、七文件标准及不同 ID/周期变体、多模块七值类型/default/普通引用/跨源批次/结构创建改名移除、未知只读和关键拒绝/字节保留。输入不能仅同路径复制；必须实质改变配置数据与独立预期。
 3. 无头 native actual WebDriver 表面验收统一树/文档/属性/工具窗口、settings 类别隔离、light/dark/system、1480×920 与1080×720、键盘/焦点/草稿守卫/问题跳转、owned 日志完整详情与有界摘要、取消和晚回调。保存截图和实际结构化结果于私有运行 scratch，不能提交原机器凭证或规范资料。读真实表面，不以 DOM 字符串存在替代操作行为。
-4. 获准后实际运行隔离 Windows/Linux 发行组合出口；从重新打包或已搬离的构建副本启动发行产物，断网和 unavailable archive/checkout 边界必须可观察。独立工程消费者提供声明的目标工具链，另行执行生成源码构建与真实 CAN/DID/N_Cr/恢复/旧目标行为，结果分开记录。不把 macOS 无宿主改为 Windows/Linux 通过的替代品。
+4. 后续 CI 实际运行隔离 Windows/Linux 原生组合出口；从当前构建产物或解包产物启动，断网和 unavailable archive/checkout 边界必须可观察，不要求安装器真实安装。独立工程消费者提供声明的目标工具链，另行执行生成源码构建与真实 CAN/DID/N_Cr/恢复/旧目标行为，结果分开记录。不把 macOS 无宿主改为 Windows/Linux 通过的替代品。
 5. 对扩大输入与快速筛选/展开记录可比的快照复用、输入 responsiveness、内存/有界日志行为，验证后台索引/解析且不造通过结果。发现 UI/backend locator/能力不符仅通知负责人，正确适配新的真实表面，不弱化用户可见断言。
 
 ## Tasks & Acceptance
 
-- [ ] Given builtin-only installed mode，when 创建/打开/编辑/批次/结构/保存/重开/源码交付，then 无官方资源/checkout/开发工具/编译器仍有实际完整证据，未执行项如实 not_run。
+- [ ] Given builtin-only 独立离线原生产物运行边界（沿用 --installed，不要求真实安装），when 创建/打开/编辑/批次/结构/保存/重开/源码交付，then 无官方资源/checkout/开发工具/编译器仍有实际完整证据，未执行项如实 not_run。
 - [ ] Given 拒绝矩阵和不同输入实例，when 真实操作，then 全批拒绝、外部变化/过期/目录/缓存/未知范围等保留旧字节与草稿，并能独立重验。
-- [ ] Given 双平台隔离发行环境，when 无头实际 UI 验收，then 核心两尺寸/主题/键盘/焦点/草稿/日志/取消成立；macOS 无宿主只报未验证。
+- [ ] Given 双平台当前构建或解包产物的隔离原生环境，when 无头实际 UI 验收，then 核心两尺寸/主题/键盘/焦点/草稿/日志/取消成立；macOS 无宿主只报未验证。
 - [ ] Given 同一交付包和声明工具链的独立消费者，when 实际构建运行，then 真实通信与恢复验证成立，源码状态与执行状态分离。
 
 ## Verification / Coordination
