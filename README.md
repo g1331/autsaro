@@ -2,6 +2,7 @@
   <img src="ui/public/logo-app.png" width="112" alt="Autsaro automotive icon">
   <h1>Autsaro</h1>
   <p>A configuration and code-generation workbench for AUTOSAR Classic</p>
+  <p><sub>Prototype stage — not production-ready.</sub></p>
 </div>
 
 [简体中文](README.zh-CN.md) · **English**
