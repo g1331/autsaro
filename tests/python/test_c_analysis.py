@@ -12,6 +12,25 @@ from ecu_tools.build import target_configuration
 
 
 class CAnalysisTests(unittest.TestCase):
+    def test_compiler_header_paths_use_the_compiler_working_directory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary).resolve(strict=True)
+            include = directory / "include"
+            include.mkdir()
+            reports = ["include", include.as_posix()]
+            if include.drive:
+                reports.append(include.as_posix()[len(include.drive):])
+            for report in reports:
+                with self.subTest(report=report):
+                    log = f"ignoring nonexistent directory absent\n#include <...> search starts here:\n {report}\nEnd of search list.\n"
+                    self.assertEqual(c_check.compiler_include_paths(log, directory), [include.as_posix()])
+            with self.assertRaisesRegex(ValueError, "no system include paths"):
+                c_check.compiler_include_paths("no search list", directory)
+            for invalid in ("absent", "file.h"):
+                (directory / "file.h").write_text("not a directory")
+                with self.subTest(invalid=invalid), self.assertRaises((ValueError, FileNotFoundError)):
+                    c_check.compiler_include_paths(f"#include <...> search starts here:\n {invalid}\nEnd of search list.", directory)
+
     def test_build_configuration_rejects_missing_or_duplicated_units(self):
         target = {"compilerFlags": ["-std=c99"], "sources": ["main.c"], "includePaths": ["."]}
         self.assertEqual(target_configuration(["main.c"], target), (["-std=c99"], ["main.c"], ["."]))

@@ -192,3 +192,9 @@ PR #9 的 46e6f36f3cd9d4a4ca9b0dbefce1cffc241cf341 双平台失败已定位：Li
 Linux 五类均分析完整、error=null，诊断为 234／240／234／1806／1806；两个 ECU 样本各 42 TU，源码仍 passed=false。OS native lifecycle 50 向量亦通过。Blind、edge、verification 三层独立只读复核均无确认缺陷或验证缺口。相对 46e6f36 的增量 quality 通过（本轮只改 Python／CI，无新增 C 语法验证），资产校验与差异检查通过。
 
 99d45c821c44127b43e565875827fb9ce9f0964f 的实际 Windows runner 已确认固定包下载、SHA-256 校验成功，但先装最新 GCC 再降级时，其拆分 cc-libs 元包阻止替换库。固定旧 gcc-libs 元数据提供 cc-libs，故调整为干净 MSYS2 初始化后同步数据库，直接用 pacman -U 事务安装两个固定包及其依赖；不预装最新 GCC，不删除依赖或跳过依赖／签名检查。远端双平台完整结果继续以最终修复提交为准。
+
+8193e996919fb52607b753d671f081e12c77b1e7 的 GitHub Linux 完整 C 分析通过，Windows 固定 GCC 安装也通过，但原生检查器测试发现另一真实跨盘问题。早期原始 GCC 日志复现：在 C 盘临时目录执行时，搜索列表包含 /mingw64/include；在 D 盘仓库执行则不包含它。检查器原先在自己的 D 盘工作目录解析这个无盘符根路径，因此报 WinError 3。路径解析现共用 compiler_include_paths，以 GCC 的实际 cwd 为基准；不存在路径及非目录仍拒绝，GCC 逐 TU 验证、addon 身份、诊断返回码和扫描清单义务不变。
+
+普通 Python 增加相对路径、绝对路径、Windows 无盘符根路径，以及缺搜索清单／不存在路径／非目录的回归，43 项通过；Linux 检查器契约 11 项通过，ruff／actionlint 通过。Windows CI 使用正常 uv 入口，在 C 盘临时目录先运行真实 stdio 预处理与同一解析器，尽早定位工具链错误；原生完整分析测试及最终 CI 仍须复验。AGENTS.md 增加工具输出路径按实际执行目录解析并覆盖跨盘临时目录的要求。
+
+修正后真实 checker 回归 Windows 10 项通过＋2 项 Linux 专用跳过（29.258 秒），Linux 12 项通过（42.085 秒）；三个复核层均无确认缺陷或验证缺口。原始 GCC 报告根路径被解析到实际执行盘，未把它转换为虚构的 MSYS2 安装路径，也未忽略不存在的目录。远端复验使用修复提交的 PR 检查记录，旧提交的重复运行已取消。
