@@ -367,7 +367,7 @@ jobs:
   c-analysis:
     # A skipped/cancelled producer or shard must never make the gate green.
     needs: [c-analysis-prepare, c-analysis-samples]
-    if: always()
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:

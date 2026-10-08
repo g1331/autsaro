@@ -219,3 +219,6 @@ CI 性能增量的三层审查完成：Blind 无确认缺陷，指出每个 Wind
 首轮远端准备任务两平台均通过：Windows 的 vcpkg 6 分 18 秒、Cppcheck 编译 2 分 18 秒、样本生成 1 分 29 秒、三模式故障回归 1 分 6 秒，实际 vcpkg／Cppcheck／Cargo 缓存均已写入。发现 runner 镜像变量虽存在于进程环境，但未自动进入 GitHub env 表达式，缓存键中的镜像字段为空；已通过 GITHUB_ENV 显式导入 ImageOS/ImageVersion。Cppcheck 与 Cargo target 只恢复精确镜像键，vcpkg 可以恢复旧缓存，由自身包 ABI 验证决定复用，不能跨镜像误用原生构建产物。工件添加 overwrite 支持正常重跑同名输出。两项修正独立三层审查无确认缺陷。
 
 GCC 逐 TU 准备仍是单个 ECU 的最长阶段，因此将并发预算改为 min(4, 可用 CPU)，保留独立原始日志、每 TU 三次 GCC 验证、声明顺序合并和失败后的 owned-child 回收。真实并发回归扩展到四个 TU，每个均核对标准宏后缀，无效 helper 仍失败；普通 Python 43 项、Windows checker 10 通过／2 Linux 专用跳过（32.959 秒）、Linux checker 12 项（40.631 秒）通过。Verification 指出必须直接保护高核数上限（medium／patch），现模拟 64 CPU 仍断言四个 worker；双平台该真实回归通过（5.931／4.787 秒）。Blind／Edge 对该增量无确认缺陷。最终提交须在 GitHub 重扫全部十份平台／样本结果，并从实际阶段核对提速；不为已被该提交替代的两 worker 扫描重复等待。
+
+
+实际新提交取消旧运行时出现短暂排队；复核 GitHub 官方取消语义，job 级 always() 在取消时仍为真，会保留汇总任务。汇总改为 !cancelled()，普通准备／分析失败仍运行并拒绝，整轮取消则停止；不会把取消结果改成成功。步骤级失败工件保留逻辑保持。actionlint 与差异检查通过。后续验收按修复后的最新 SHA 核对，取消语义依据 https://docs.github.com/en/actions/how-tos/troubleshoot-workflows 。
