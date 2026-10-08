@@ -160,6 +160,29 @@ jobs:
           done
           printf '%s\n' '10f7c55275f7fbe7924209d61c368a1a6fcf775cffbdeac2eef1f5ccacdd35cd  mingw-w64-x86_64-gcc-16.1.0-5-any.pkg.tar.zst' 'aa560f5438c35b71c3e7b24fd5becbca028f70c5b4d1f1697a86ff80fec947da  mingw-w64-x86_64-gcc-libs-16.1.0-5-any.pkg.tar.zst' | sha256sum --check --strict
           pacman --noconfirm -U mingw-w64-x86_64-gcc-16.1.0-5-any.pkg.tar.zst mingw-w64-x86_64-gcc-libs-16.1.0-5-any.pkg.tar.zst
+      - name: Validate native compiler headers
+        if: runner.os == 'Windows'
+        shell: python
+        env:
+          MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
+        run: |
+          import os, subprocess
+          from pathlib import Path
+          compiler = Path(os.environ['MSYS2_LOCATION']) / 'mingw64/bin/gcc.exe'
+          source = Path('build/native-gcc/headers.c')
+          source.write_text('#include <stdio.h>\nint main(void) { return 0; }\n', encoding='utf-8')
+          result = subprocess.run([str(compiler), '-std=c99', '-E', '-v', str(source)], capture_output=True, text=True, check=True)
+          print('Compiler:', compiler, flush=True)
+          print(result.stderr, flush=True)
+          collecting = False
+          for line in result.stderr.splitlines():
+              if line.strip() == '#include <...> search starts here:':
+                  collecting = True
+              elif line.strip() == 'End of search list.':
+                  collecting = False
+              elif collecting:
+                  print('Header directory:', repr(line.strip()), flush=True)
+                  Path(line.strip()).resolve(strict=True)
       - name: Windows core dependencies
         if: runner.os == 'Windows'
         shell: pwsh
