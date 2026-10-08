@@ -200,3 +200,17 @@ Linux 五类均分析完整、error=null，诊断为 234／240／234／1806／18
 修正后真实 checker 回归 Windows 10 项通过＋2 项 Linux 专用跳过（29.258 秒），Linux 12 项通过（42.085 秒）；三个复核层均无确认缺陷或验证缺口。原始 GCC 报告根路径被解析到实际执行盘，未把它转换为虚构的 MSYS2 安装路径，也未忽略不存在的目录。远端复验使用修复提交的 PR 检查记录，旧提交的重复运行已取消。
 
 5ce28b4ef611d9aeb57510b0aab15c6cd294c82c 的 GitHub 实际运行中，17 项必需检查和 Linux 完整 C 分析通过；Windows 固定工具链、跨盘头文件预检、真实 checker、主机失败边界、样本生成和三模式实际构建亦通过。Windows 全量扫描前三类各 21 TU 完整，292／298／292 条诊断，standard-ecu 42 TU 完整、1821 条诊断；user-application 扫描被 30 分钟 job 总限时中断。单个标准 ECU 分析实际约 10 分 32 秒，含冷启动依赖的五类完整范围超过原先估计，故仅将 Windows job 总时限调整为 45 分钟，Linux 保持 30 分钟；未改变 GCC／Cppcheck 的逐命令超时、输入范围、清单核对或失败条件。此前“保持30分钟”的记录对应实测前的预算，最终 CI 验收须以全部五类完成为准。
+
+
+### 完整扫描 CI 耗时优化
+
+用户要求优化等待时间，单纯增大超时不满足本次目标。旧 Windows 实际阶段为 vcpkg 6 分 9 秒、Cppcheck 构建 1 分 59 秒、样本生成 1 分 16 秒、原生构建 1 分 2 秒；standard-ecu 总扫描 10 分 32 秒，其中 GCC 逐 TU 准备约 7 分 18 秒，两个完整 CTU 入口约 3 分 16 秒。五类串行执行造成等待累积。
+
+改为每个平台准备一次固定工具、运行真实检查器／主机边界／三模式行为回归、重新生成并核对完整五类样本。将当次样本和可迁移 Cppcheck 程序、cfg、addons 通过同轮 artifact 提供给三个并行组（主机三类／标准 ECU／用户应用 ECU）；Linux、Windows 各三组全部重扫，汇总门禁要求所有生产者和分析组成功，取消或跳过不通过。准备与分析分别限时 20 分钟，GCC／Cppcheck 单条命令预算、源封存、TU 清单、addon 回执和非零源码诊断语义均保持。
+
+使用 actions/cache 缓存固定版本 Cppcheck 可迁移工具目录、vcpkg 官方二进制缓存及 Cargo registry/git/target；按平台、runner 镜像和工具／锁文件区分，vcpkg 自身继续核对包 ABI。扫描结果不缓存、样本不跨提交复用；PR 更新自动取消旧运行。重复的 Windows 固定 GCC 安装与跨盘头文件预检通过项目 composite action 共用，现有 17 项必需检查名称保持。文档说明正常 CI 入口与工件布局。AGENTS 增加按实测优化而非只延长超时的要求。
+
+本地 actionlint、ruff、assets check、git diff --check 已通过；可迁移 Cppcheck bundle 的真实 Linux checker 回归 12 项通过（38.397 秒）。三层只读审查及修复后 GitHub CI 正在验证，性能收益尚未宣称为已验证。
+
+
+CI 性能增量的三层审查完成：Blind 无确认缺陷，指出每个 Windows 分组重复初始化 GCC 的总工作量；这是每台独立 runner 获取受控编译器的约一分钟必要准备，不共享跨机绝对路径或弱化工具身份。Edge 无确认缺陷。Verification 指出矩阵误删样本时仅任务成功不足以证明完整覆盖（medium／patch），现每组上传轻量摘要，最终汇总按实际摘要核对两平台各五类、拒绝重复及 error 非空。直接执行工作流中的 Python 汇总代码验证十项通过、缺项失败、解析不完整失败；保留 passed=false 语义。actionlint、增量 quality 与资产检查通过。GitHub 性能与完整结果待推送后实测。

@@ -8,6 +8,9 @@ on:
       base:
         description: Incremental check baseline commit
         required: true
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
 env:
@@ -121,19 +124,17 @@ jobs:
               output.write('CHECK_BASE=' + base + '\n')
       - run: uv run --locked python -m autosar_tooling quality --scope all --base "${{ env.CHECK_BASE }}"
 
-  c-analysis:
+  c-analysis-prepare:
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-24.04
             target: linux-x64-controlled-v1
-            timeout: 30
           - os: windows-latest
             target: windows-x64-controlled-v1
-            timeout: 45
     runs-on: ${{ matrix.os }}
-    timeout-minutes: ${{ matrix.timeout }}
+    timeout-minutes: 20
     env:
       AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
     steps:
@@ -143,56 +144,26 @@ jobs:
       - name: Linux analysis dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y build-essential cmake libxml2-dev libclang-dev clang pkg-config
-      - uses: msys2/setup-msys2@v2
-        id: msys2
-        if: runner.os == 'Windows'
-        with:
-          msystem: MINGW64
-          path-type: inherit
-      - name: Install locked native GCC
-        if: runner.os == 'Windows'
-        shell: msys2 {0}
-        run: |
-          pacman --noconfirm -Sy
-          mkdir -p build/native-gcc
-          cd build/native-gcc
-          for package in mingw-w64-x86_64-gcc-16.1.0-5-any.pkg.tar.zst mingw-w64-x86_64-gcc-libs-16.1.0-5-any.pkg.tar.zst; do
-            curl --fail --location --retry 3 --output "$package" "https://repo.msys2.org/mingw/mingw64/$package"
-            curl --fail --location --retry 3 --output "$package.sig" "https://repo.msys2.org/mingw/mingw64/$package.sig"
-          done
-          printf '%s\n' '10f7c55275f7fbe7924209d61c368a1a6fcf775cffbdeac2eef1f5ccacdd35cd  mingw-w64-x86_64-gcc-16.1.0-5-any.pkg.tar.zst' 'aa560f5438c35b71c3e7b24fd5becbca028f70c5b4d1f1697a86ff80fec947da  mingw-w64-x86_64-gcc-libs-16.1.0-5-any.pkg.tar.zst' | sha256sum --check --strict
-          pacman --noconfirm -U mingw-w64-x86_64-gcc-16.1.0-5-any.pkg.tar.zst mingw-w64-x86_64-gcc-libs-16.1.0-5-any.pkg.tar.zst
-      - name: Validate native compiler headers
+      - uses: ./.github/actions/native-analysis-compiler
+      - name: Create vcpkg binary cache
         if: runner.os == 'Windows'
         shell: pwsh
-        env:
-          MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
-        run: |
-          @'
-          import os, subprocess, tempfile
-          from pathlib import Path
-          from autosar_tooling.c_check import compiler_include_paths
-          compiler = (Path(os.environ['MSYS2_LOCATION']) / 'mingw64/bin/gcc.exe').resolve(strict=True)
-          source = Path('build/native-gcc/headers.c')
-          source.write_text('#include <stdio.h>\nint main(void) { return 0; }\n', encoding='utf-8')
-          with tempfile.TemporaryDirectory() as temporary:
-              directory = Path(temporary).resolve(strict=True)
-              result = subprocess.run([str(compiler), '-std=c99', '-E', '-v', str(source.resolve())], cwd=directory, capture_output=True, text=True, check=True)
-              print('Compiler:', compiler, flush=True)
-              print(result.stderr, flush=True)
-              print('Native header directories:', compiler_include_paths(result.stderr, directory), flush=True)
-          '@ | uv run --locked python -
+        run: New-Item -ItemType Directory -Force -Path build/vcpkg-cache | Out-Null
+      - uses: actions/cache@v6.1.0
+        if: runner.os == 'Windows'
+        with:
+          path: build/vcpkg-cache
+          key: vcpkg-${{ runner.os }}-${{ env.ImageOS }}-${{ env.ImageVersion }}-static-md-v1
+          restore-keys: vcpkg-${{ runner.os }}-${{ env.ImageOS }}-
       - name: Windows core dependencies
         if: runner.os == 'Windows'
         shell: pwsh
-        env:
-          MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
         run: |
+          $env:VCPKG_DEFAULT_BINARY_CACHE = (Resolve-Path build/vcpkg-cache).Path
           vcpkg install 'libxml2[iconv,zlib]:x64-windows-static-md'
           "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
           'VCPKGRS_TRIPLET=x64-windows-static-md' >> $env:GITHUB_ENV
           'LIBCLANG_PATH=C:/Program Files/LLVM/bin' >> $env:GITHUB_ENV
-          (Join-Path $env:MSYS2_LOCATION 'mingw64/bin') >> $env:GITHUB_PATH
       - uses: actions/checkout@v7.0.1
         with:
           repository: cppcheck-opensource/cppcheck
@@ -207,20 +178,50 @@ jobs:
           for name in ['misra.py', 'cppcheckdata.py', 'misra_9.py']:
               data = subprocess.check_output(['git', '-C', str(source), 'show', 'HEAD:addons/' + name])
               (source / 'addons' / name).write_bytes(data)
-      - name: Build pinned open Cppcheck
+      - uses: actions/cache@v6.1.0
+        id: cppcheck-cache
+        with:
+          path: build/c-analysis-tools
+          key: cppcheck-${{ runner.os }}-${{ runner.arch }}-${{ env.ImageOS }}-${{ env.ImageVersion }}-e73bf44c3e49686b7495fab352d03a6c6075516b-v1
+      - name: Configure pinned open Cppcheck
+        if: steps.cppcheck-cache.outputs.cache-hit != 'true'
         run: cmake -S build/cppcheck-source -B build/cppcheck-build -DCMAKE_BUILD_TYPE=Release -DUSE_MATCHCOMPILER=OFF -DBUILD_GUI=OFF -DBUILD_TESTING=OFF
-      - run: cmake --build build/cppcheck-build --config Release --target cppcheck --parallel 2
+      - name: Build pinned open Cppcheck
+        if: steps.cppcheck-cache.outputs.cache-hit != 'true'
+        run: cmake --build build/cppcheck-build --config Release --target cppcheck --parallel 2
+      - name: Package analyzer
+        if: steps.cppcheck-cache.outputs.cache-hit != 'true'
+        shell: python
+        run: |
+          import os, shutil
+          from pathlib import Path
+          bundle = Path('build/c-analysis-tools')
+          binaries = list(Path('build/cppcheck-build/bin').rglob('cppcheck.exe' if os.name == 'nt' else 'cppcheck'))
+          if len(binaries) != 1:
+              raise RuntimeError('Expected one built analyzer')
+          bundle.mkdir()
+          shutil.copy2(binaries[0], bundle / binaries[0].name)
+          for name in ('addons', 'cfg'):
+              shutil.copytree(Path('build/cppcheck-source') / name, bundle / name)
       - name: Select analyzer
         shell: python
         run: |
           import os
           from pathlib import Path
-          binaries = list(Path('build/cppcheck-build/bin').rglob('cppcheck.exe' if os.name == 'nt' else 'cppcheck'))
-          if len(binaries) != 1:
-              raise RuntimeError('Expected one built analyzer')
+          bundle = Path('build/c-analysis-tools').resolve(strict=True)
+          executable = bundle / ('cppcheck.exe' if os.name == 'nt' else 'cppcheck')
+          if os.name != 'nt':
+              executable.chmod(0o755)
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
-              output.write('CPPCHECK=' + str(binaries[0].resolve()) + '\n')
-              output.write('CPPCHECK_ADDON_DIR=' + str(Path('build/cppcheck-source/addons').resolve()) + '\n')
+              output.write('CPPCHECK=' + str(executable) + '\n')
+              output.write('CPPCHECK_ADDON_DIR=' + str(bundle / 'addons') + '\n')
+      - uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            core/target
+          key: c-analysis-cargo-${{ runner.os }}-${{ env.ImageOS }}-${{ env.ImageVersion }}-${{ hashFiles('rust-toolchain.toml', 'core/Cargo.lock') }}-v1
       - name: Analyzer behavior tests
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
       - name: Host I/O and lock failure boundaries
@@ -229,18 +230,89 @@ jobs:
         run: cargo test --locked --manifest-path core/Cargo.toml --test c_analysis
       - name: Sealed ECU build mode fault isolation
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_ecu_build_modes.py
+      - name: Validate generated sample inventory
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          expected = {'signals', 'diagnostic', 'capacity', 'standard-ecu', 'user-application'}
+          if {p.name for p in Path(os.environ['AUTOSAR_C_ANALYSIS_SAMPLES']).iterdir()} != expected:
+              raise RuntimeError('Generated sample inventory is incomplete')
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: c-analysis-inputs-${{ matrix.target }}
+          path: |
+            build/c-analysis-tools
+            build/c-analysis-samples
+          if-no-files-found: error
+          retention-days: 14
+
+  c-analysis-samples:
+    needs: c-analysis-prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: linux-x64-controlled-v1
+            group: host
+            samples: signals,diagnostic,capacity
+          - os: ubuntu-24.04
+            target: linux-x64-controlled-v1
+            group: standard-ecu
+            samples: standard-ecu
+          - os: ubuntu-24.04
+            target: linux-x64-controlled-v1
+            group: user-application
+            samples: user-application
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+            group: host
+            samples: signals,diagnostic,capacity
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+            group: standard-ecu
+            samples: standard-ecu
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+            group: user-application
+            samples: user-application
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: uv sync --locked
+      - uses: ./.github/actions/native-analysis-compiler
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: c-analysis-inputs-${{ matrix.target }}
+          path: build
+      - name: Select analyzer
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          bundle = Path('build/c-analysis-tools').resolve(strict=True)
+          executable = bundle / ('cppcheck.exe' if os.name == 'nt' else 'cppcheck')
+          if os.name != 'nt':
+              executable.chmod(0o755)
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              output.write('CPPCHECK=' + str(executable) + '\n')
+              output.write('CPPCHECK_ADDON_DIR=' + str(bundle / 'addons') + '\n')
       - name: Verify complete generated-project analysis
         shell: python
         env:
           ANALYSIS_TARGET: ${{ matrix.target }}
+          ANALYSIS_SAMPLES: ${{ matrix.samples }}
         run: |
           import json, os, subprocess, sys
           from pathlib import Path
           failed = False
           samples = Path(os.environ['AUTOSAR_C_ANALYSIS_SAMPLES'])
-          expected = {'signals', 'diagnostic', 'capacity', 'standard-ecu', 'user-application'}
-          if {p.name for p in samples.iterdir()} != expected:
-              raise RuntimeError('Generated sample inventory is incomplete')
+          expected = set(os.environ['ANALYSIS_SAMPLES'].split(','))
           for name in sorted(expected):
               output = Path('build/c-analysis-results') / name
               result = subprocess.run(['uv', 'run', '--locked', 'python', '-m', 'autosar_tooling',
@@ -260,18 +332,59 @@ jobs:
       - name: Strict generated source gate
         if: github.event_name == 'workflow_dispatch'
         shell: python
+        env:
+          ANALYSIS_SAMPLES: ${{ matrix.samples }}
         run: |
-          import json, sys
+          import json, os, sys
           from pathlib import Path
           summaries = list(Path('build/c-analysis-results').glob('*/summary.json'))
-          passed = len(summaries) == 5 and all(json.loads(p.read_text(encoding='utf-8'))['passed'] for p in summaries)
+          passed = len(summaries) == len(os.environ['ANALYSIS_SAMPLES'].split(',')) and all(json.loads(p.read_text(encoding='utf-8'))['passed'] for p in summaries)
           sys.exit(0 if passed else 1)
       - uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
-          name: c-analysis-${{ matrix.target }}
-          path: |
-            build/c-analysis-results
-            build/c-analysis-samples
+          name: c-analysis-summaries-${{ matrix.target }}-${{ matrix.group }}
+          path: build/c-analysis-results/*/summary.json
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: c-analysis-${{ matrix.target }}-${{ matrix.group }}
+          path: build/c-analysis-results
           if-no-files-found: ignore
           retention-days: 14
+
+  c-analysis:
+    # A skipped/cancelled producer or shard must never make the gate green.
+    needs: [c-analysis-prepare, c-analysis-samples]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          pattern: c-analysis-summaries-*
+          path: build/c-analysis-summaries
+      - name: Require every platform and sample group
+        env:
+          PREPARE_RESULT: ${{ needs.c-analysis-prepare.result }}
+          ANALYSIS_RESULT: ${{ needs.c-analysis-samples.result }}
+        run: test "$PREPARE_RESULT" = success && test "$ANALYSIS_RESULT" = success
+      - name: Require ten complete sample results
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+          targets = {'linux-x64-controlled-v1', 'windows-x64-controlled-v1'}
+          samples = {'signals', 'diagnostic', 'capacity', 'standard-ecu', 'user-application'}
+          expected = {(target, sample) for target in targets for sample in samples}
+          found = set()
+          for path in Path('build/c-analysis-summaries').glob('*/*/summary.json'):
+              summary = json.loads(path.read_text(encoding='utf-8'))
+              pair = (summary['scope']['target'], path.parent.name)
+              if pair in found or summary['error'] is not None:
+                  raise RuntimeError('Duplicate or incomplete analysis result: ' + str(path))
+              found.add(pair)
+          if found != expected:
+              raise RuntimeError('Expected all ten platform/sample results; missing=' + str(expected - found) + '; extra=' + str(found - expected))
