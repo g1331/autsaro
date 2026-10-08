@@ -195,28 +195,33 @@ static EcuStatus Can_WriteHost(Can_HwHandleType hth, const Can_PduType *pdu) {
         result = ECU_ERR_FRAME_ID;
     } else if ((pdu->length < 1u) || (pdu->length > 8u)) {
         result = ECU_ERR_FRAME_DLC;
-    } else if (Can_TryLock() == 0) {
-        result = ECU_ERR_CAN_BUSY;
     } else {
-        if (initialized == 0u) {
-            /* Can_Init has not installed a host output callback. */
-        } else if (controller_mode != CAN_STARTED) {
+        int locked = Can_TryLock();
+        if (locked < 0) {
             result = ECU_ERR_CONTROLLER;
-        } else if ((tx_pending != 0u) || (tx_in_flight != 0u) || (tx_confirmation_pending != 0u) ||
-                   (tx_confirming != 0u)) {
+        } else if (locked == 0) {
             result = ECU_ERR_CAN_BUSY;
         } else {
-            size_t i;
-            tx_id = pdu->id;
-            tx_handle = pdu->swPduHandle;
-            tx_length = pdu->length;
-            for (i = 0u; i < (size_t)pdu->length; ++i) {
-                tx_payload[i] = pdu->sdu[i];
+            if (initialized == 0u) {
+                /* Can_Init has not installed a host output callback. */
+            } else if (controller_mode != CAN_STARTED) {
+                result = ECU_ERR_CONTROLLER;
+            } else if ((tx_pending != 0u) || (tx_in_flight != 0u) ||
+                       (tx_confirmation_pending != 0u) || (tx_confirming != 0u)) {
+                result = ECU_ERR_CAN_BUSY;
+            } else {
+                size_t i;
+                tx_id = pdu->id;
+                tx_handle = pdu->swPduHandle;
+                tx_length = pdu->length;
+                for (i = 0u; i < (size_t)pdu->length; ++i) {
+                    tx_payload[i] = pdu->sdu[i];
+                }
+                tx_pending = 1u;
+                result = ECU_OK;
             }
-            tx_pending = 1u;
-            result = ECU_OK;
+            Can_Unlock();
         }
-        Can_Unlock();
     }
     return result;
 }
@@ -319,7 +324,6 @@ EcuStatus Can_TransmitPdu(PduIdType pdu_id, uint32_t id, uint8_t dlc, const uint
     Can_PduType pdu;
     EcuStatus result = ECU_ERR_CONFIG;
     if (data != NULL) {
-        Std_ReturnType write_result;
         size_t i;
         for (i = 0u; (i < dlc) && (i < sizeof(payload)); ++i) {
             payload[i] = data[i];
@@ -328,21 +332,9 @@ EcuStatus Can_TransmitPdu(PduIdType pdu_id, uint32_t id, uint8_t dlc, const uint
         pdu.length = dlc;
         pdu.id = id;
         pdu.sdu = payload;
-        write_result = Can_Write(0u, &pdu);
-        if (write_result == E_OK) {
+        result = Can_WriteHost(0u, &pdu);
+        if (result == ECU_OK) {
             result = Can_HostFlush();
-        } else if (write_result == CAN_BUSY) {
-            result = ECU_ERR_CAN_BUSY;
-        } else if (id > 0x7ffu) {
-            result = ECU_ERR_FRAME_ID;
-        } else if ((dlc < 1u) || (dlc > 8u)) {
-            result = ECU_ERR_FRAME_DLC;
-        } else {
-            Can_Lock();
-            if (initialized != 0u) {
-                result = ECU_ERR_CONTROLLER;
-            }
-            Can_Unlock();
         }
     }
     return result;

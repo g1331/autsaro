@@ -43,11 +43,11 @@ static int ParseHex(const char *text, uint8_t dlc, uint8_t bytes[8]) {
         unsigned pair[2];
         unsigned k;
         for (k = 0; k < 2u; ++k) {
-            unsigned char c = (unsigned char)text[i * 2u + k];
+            char c = text[i * 2u + k];
             if (c >= '0' && c <= '9') {
-                pair[k] = c - '0';
+                pair[k] = (unsigned)c - (unsigned)'0';
             } else if (c >= 'A' && c <= 'F') {
-                pair[k] = c - 'A' + 10u;
+                pair[k] = (unsigned)c - (unsigned)'A' + 10u;
             } else {
                 return 0;
             }
@@ -79,11 +79,12 @@ int main(int argc, char **argv) {
     const char *security_key_path = NULL;
     const char *security_state_path = NULL;
     int arg;
-    (void)setvbuf(stdout, NULL, _IONBF, 0);
+    if (setvbuf(stdout, NULL, _IONBF, 0) != 0) {
+        return 3;
+    }
     for (arg = 1; arg < argc; arg += 2) {
         if (arg + 1 >= argc || argv[arg + 1][0] == '\0') {
-            (void)Report(ECU_ERR_CONFIG);
-            return 1;
+            return Report(ECU_ERR_CONFIG) != 0 ? 3 : 1;
         }
         if (strcmp(argv[arg], "--nvm") == 0 && nvm_path == NULL) {
             nvm_path = argv[arg + 1];
@@ -92,21 +93,18 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[arg], "--security-state") == 0 && security_state_path == NULL) {
             security_state_path = argv[arg + 1];
         } else {
-            (void)Report(ECU_ERR_CONFIG);
-            return 1;
+            return Report(ECU_ERR_CONFIG) != 0 ? 3 : 1;
         }
     }
     if ((Ecu_Config.diagnostic != NULL && Ecu_Config.diagnostic->dtc != NULL) !=
             (nvm_path != NULL) ||
         (Ecu_Config.diagnostic != NULL && Ecu_Config.diagnostic->security_enabled != 0u) !=
             (security_key_path != NULL && security_state_path != NULL)) {
-        (void)Report(ECU_ERR_CONFIG);
-        return 1;
+        return Report(ECU_ERR_CONFIG) != 0 ? 3 : 1;
     }
     result = Ecu_Init(&Ecu_Config, EmitFrame, nvm_path, security_key_path, security_state_path);
     if (result != ECU_OK) {
-        (void)Report(result);
-        return 1;
+        return Report(result) != 0 ? 3 : 1;
     }
     while (fgets(line, sizeof(line), stdin) != NULL) {
         char *tokens[5];
@@ -114,8 +112,7 @@ int main(int argc, char **argv) {
         char *token;
         uint64_t number;
         if (strchr(line, '\n') == NULL && !feof(stdin)) {
-            (void)printf("E PROTOCOL\n");
-            return 2;
+            return printf("E PROTOCOL\n") < 0 ? 3 : 2;
         }
         token = strtok(line, " \t\r\n");
         while (token != NULL && count < 5u) {
@@ -128,8 +125,7 @@ int main(int argc, char **argv) {
         if (strcmp(tokens[0], "T") == 0 && count == 2u && ParseDecimal(tokens[1], &number)) {
             result = Os_Advance(number);
             if (result == ECU_ERR_TIME) {
-                (void)Report(result);
-                return 2;
+                return Report(result) != 0 ? 3 : 2;
             }
         } else if (strcmp(tokens[0], "R") == 0 && count == 4u) {
             uint64_t id;
@@ -180,8 +176,7 @@ int main(int argc, char **argv) {
         }
         continue;
     malformed:
-        (void)printf("E PROTOCOL\n");
-        return 2;
+        return printf("E PROTOCOL\n") < 0 ? 3 : 2;
     }
     return ferror(stdin) || ferror(stdout) ? 3 : 0;
 }

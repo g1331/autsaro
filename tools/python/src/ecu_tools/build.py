@@ -83,6 +83,27 @@ def tool_argument(path: Path) -> str:
     return value
 
 
+def target_configuration(names: list[str], target: dict) -> tuple[list[str], list[str], list[str]]:
+    """Read the same validated C flags, translation units and includes for build/analysis."""
+    flags = target.get("compilerFlags")
+    allowed_flags = {"-std=c99", "-O1", "-g", "-Wall", "-Wextra", "-Werror",
+                     "-pedantic", "-D_GNU_SOURCE", "-pthread"}
+    if (not isinstance(flags, list) or "-std=c99" not in flags
+            or any(not isinstance(flag, str) or flag not in allowed_flags for flag in flags)
+            or len(flags) != len(set(flags))):
+        raise ValueError("Pinned compiler flags are invalid or contain private test/unsafe options")
+    sources = target.get("sources")
+    if (not isinstance(sources, list) or not sources
+            or any(not isinstance(name, str) or name not in names or not name.endswith(".c") for name in sources)
+            or len(sources) != len(set(sources))):
+        raise ValueError("Target's real C translation-unit inventory is absent or invalid")
+    includes = target.get("includePaths")
+    if (not isinstance(includes, list) or not includes
+            or any(not isinstance(name, str) or (name != "." and not safe_relative(name)) for name in includes)):
+        raise ValueError("Target's include-path inventory is absent or invalid")
+    return list(flags), list(sources), list(includes)
+
+
 def executable(name: str, variable: str) -> Path:
     requested = os.environ.get(variable)
     if not requested:
@@ -171,6 +192,13 @@ def check_object(binary: Path, objdump: Path, target: dict, project: Path, logs:
         raise ValueError("Described RTE entries are outside their code section")
 
 
+def kernel_patch_environment(kernel: Path) -> dict[str, str]:
+    """Keep git apply include paths relative to the copied standalone kernel."""
+    # Discovering an enclosing checkout prefixes patch paths before --include
+    # matching, silently skipping selected files while returning success.
+    return {**os.environ, "GIT_CEILING_DIRECTORIES": str(kernel.resolve(strict=True).parent)}
+
+
 def build(project: Path, output: Path, mode: str, control_source: Path | None = None) -> Path:
     names, target = sealed_sources(project)
     project = project.resolve(strict=True)
@@ -194,23 +222,11 @@ def build(project: Path, output: Path, mode: str, control_source: Path | None = 
         control_source = control_source.resolve(strict=True)
         if not control_source.is_file() or control_source.is_relative_to(project):
             raise ValueError("Independent control source must be a regular file outside the sealed project")
-    flags = target.get("compilerFlags")
-    allowed_flags = {"-std=c99", "-O1", "-g", "-Wall", "-Wextra", "-Werror",
-                     "-pedantic", "-D_GNU_SOURCE", "-pthread"}
-    if (not isinstance(flags, list) or not flags
-            or any(not isinstance(flag, str) or flag not in allowed_flags for flag in flags)
-            or len(flags) != len(set(flags))):
-        raise ValueError("Pinned compiler flags are invalid or contain private test/unsafe options")
+    flags, source_map, include_paths = target_configuration(names, target)
     output.mkdir(parents=True, exist_ok=True)
     logs = output / "logs"
     logs.mkdir(mode=0o700)
     cc, objdump, git = pinned_tools(target, logs)
-    source_map = target.get("sources")
-    if not isinstance(source_map, list) or not source_map or any(name not in names or not name.endswith(".c") for name in source_map):
-        raise ValueError("Target's real C translation-unit inventory is absent or invalid")
-    include_paths = target.get("includePaths")
-    if not isinstance(include_paths, list) or not include_paths or any(name != "." and not safe_relative(name) for name in include_paths):
-        raise ValueError("Target's include-path inventory is absent or invalid")
     kernel = output / "kernel"
     if profile == "ecu":
         shutil.copytree(project / "kernel", kernel)
@@ -222,7 +238,8 @@ def build(project: Path, output: Path, mode: str, control_source: Path | None = 
             for checked in (True, False):
                 argv = [str(git), "apply", "--ignore-space-change", *patch_flags,
                         *(["--check"] if checked else []), tool_argument(project / relative)]
-                result = OwnedProcess(ProcessSpec.seconds(argv, kernel, 30, logs, "kernel-patch")).wait()
+                result = OwnedProcess(ProcessSpec.seconds(argv, kernel, 30, logs, "kernel-patch",
+                                      env=kernel_patch_environment(kernel))).wait()
                 if not result.success:
                     raise RuntimeError(f"Kernel patch failed: {relative}; logs={logs}")
     sources = [tool_argument(project / name) for name in source_map]
@@ -241,7 +258,7 @@ def build(project: Path, output: Path, mode: str, control_source: Path | None = 
     staged = private / filename
     argv = [str(cc), *flags, f"-ffile-prefix-map={tool_argument(project)}=.", f"-ffile-prefix-map={tool_argument(output)}=build"]
     if mode == "test":
-        argv.append("-DECU_TARGET_TESTS")
+        argv += ["-DECU_TARGET_TESTS", "-DOS_HOST_FAILURE_TESTS"]
     for name in include_paths:
         include = kernel / name.removeprefix("kernel/") if name.startswith("kernel/") else project / name
         argv += ["-I", tool_argument(include)]

@@ -131,6 +131,8 @@ static EcuStatus RouteRx(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64
                 } else {
                     result = LSduR_CanIfRxIndication(route->canif_pdu, data, now_ms);
                 }
+            } else {
+                /* A matching ID without a configured consumer is discarded. */
             }
             break;
         }

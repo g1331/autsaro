@@ -12,7 +12,9 @@ const void *Os_StackSavedContext(const Os_NativeStack *stack) {
     return &saved_contexts[stack - stacks];
 }
 static volatile Os_Atomic32 stack_count;
+#ifdef OS_HOST_FAILURE_TESTS
 static char invalid_guarantee_role;
+#endif
 static __thread Os_NativeStack *current_stack;
 Os_StackFault Os_Fault;
 static volatile Os_Atomic32 fault_claimed, fault_count;
@@ -75,13 +77,16 @@ static LONG CALLBACK stack_exception(EXCEPTION_POINTERS *exception) {
 }
 
 void Os_StackInit(void) {
-    char injected[2] = {0};
+
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
     fault_output = GetStdHandle(STD_OUTPUT_HANDLE);
     fault_error = GetStdHandle(STD_ERROR_HANDLE);
+#ifdef OS_HOST_FAILURE_TESTS
+    char injected[2] = {0};
     if (GetEnvironmentVariableA("AUTOSAR_OS_BAD_GUARANTEE", injected, sizeof(injected)) == 1u) {
         invalid_guarantee_role = injected[0];
     }
+#endif
     if (AddVectoredExceptionHandler(1u, stack_exception) == NULL) {
         Os_BackendShutdown(E_OS_STATE);
     }
@@ -97,9 +102,11 @@ int Os_StackRegister(char role) {
     ULONG guarantee = 16384u;
     LONG index = InterlockedIncrement(&stack_count) - 1;
     Os_NativeStack *record;
+#ifdef OS_HOST_FAILURE_TESTS
     if (invalid_guarantee_role == role) {
         guarantee = 0xffffffffu; /* Actual API rejection: larger than the reserved stack. */
     }
+#endif
     if (index >= (LONG)OS_NATIVE_STACKS || !SetThreadStackGuarantee(&guarantee)) {
         return 0;
     }
@@ -226,30 +233,39 @@ void Os_StackFatalExit(void) {
     ExitProcess(E_OS_STACKFAULT);
 }
 
-void Os_StackReport(void) {
+int Os_StackReport(void) {
+    int result = 0;
     LONG i;
     for (i = 0; i < stack_count && i < (LONG)OS_NATIVE_STACKS; ++i) {
         Os_NativeStack *record = &stacks[i];
         if (record->thread_id == 0u) {
             continue;
         }
-        printf(
-            "STACK role=%c tid=%lu low=%llu high=%llu reserve=%llu commit=%llu "
-            "guard=%llu guarantee=%lu sp=%llu observations=%u buffer_low=%llu buffer_high=%llu\n",
-            record->role, (unsigned long)record->thread_id, (unsigned long long)record->reserve_low,
-            (unsigned long long)record->high, (unsigned long long)record->reserve,
-            (unsigned long long)record->committed, (unsigned long long)record->guard,
-            (unsigned long)record->guarantee, (unsigned long long)record->sp, record->observations,
-            (unsigned long long)record->kernel_buffer_low,
-            (unsigned long long)record->kernel_buffer_high);
+        if (printf("STACK role=%c tid=%lu low=%llu high=%llu reserve=%llu commit=%llu "
+                   "guard=%llu guarantee=%lu sp=%llu observations=%u buffer_low=%llu "
+                   "buffer_high=%llu\n",
+                   record->role, (unsigned long)record->thread_id,
+                   (unsigned long long)record->reserve_low, (unsigned long long)record->high,
+                   (unsigned long long)record->reserve, (unsigned long long)record->committed,
+                   (unsigned long long)record->guard, (unsigned long)record->guarantee,
+                   (unsigned long long)record->sp, record->observations,
+                   (unsigned long long)record->kernel_buffer_low,
+                   (unsigned long long)record->kernel_buffer_high) < 0) {
+            result = -1;
+        }
     }
     for (i = 0; i < (LONG)OS_NATIVE_STACKS; ++i) {
         Os_StackFault *fault = &fault_records[i];
         if (fault->published == 0) {
             continue;
         }
-        printf("FAULT role=%c tid=%lu exception=%08lX sp=%llu address=%llu captured=1 origin=%c\n",
-               fault->role, (unsigned long)fault->thread_id, (unsigned long)fault->exception,
-               (unsigned long long)fault->sp, (unsigned long long)fault->address, fault->origin);
+        if (printf(
+                "FAULT role=%c tid=%lu exception=%08lX sp=%llu address=%llu captured=1 origin=%c\n",
+                fault->role, (unsigned long)fault->thread_id, (unsigned long)fault->exception,
+                (unsigned long long)fault->sp, (unsigned long long)fault->address,
+                fault->origin) < 0) {
+            result = -1;
+        }
     }
+    return result;
 }

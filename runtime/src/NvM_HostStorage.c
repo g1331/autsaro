@@ -14,7 +14,9 @@ static FILE *host_storage;
 
 NvMHostOpenResult NvM_HostOpen(const char *path) {
     NvMHostOpenResult result = NVM_HOST_OPEN_ERROR;
-    NvM_HostClose();
+    if (NvM_HostClose() != 0) {
+        return result;
+    }
     errno = 0;
     host_storage = fopen(path, "r+b");
     if (host_storage != NULL) {
@@ -30,11 +32,17 @@ NvMHostOpenResult NvM_HostOpen(const char *path) {
     return result;
 }
 
-void NvM_HostClose(void) {
+int NvM_HostClose(void) {
+    int result = 0;
     if (host_storage != NULL) {
-        (void)fclose(host_storage);
+        FILE *closing = host_storage;
+        /* fclose invalidates the stream even when it reports an error. */
         host_storage = NULL;
+        if (fclose(closing) != 0) {
+            result = -1;
+        }
     }
+    return result;
 }
 
 long NvM_HostLength(void) {

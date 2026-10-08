@@ -7,17 +7,21 @@ typedef struct {
 } Ecu_BatchToken;
 
 static int equals(Ecu_BatchToken token, const char *word, size_t length) {
-    return (token.length == length) && (memcmp(token.data, word, length) == 0);
+    int result = 0;
+    if ((token.length == length) && (strncmp(token.data, word, length) == 0)) {
+        result = 1;
+    }
+    return result;
 }
 
 static int digit(char value) {
     int result = -1;
     if ((value >= '0') && (value <= '9')) {
-        result = value - '0';
+        result = (int)value - (int)'0';
     } else if ((value >= 'a') && (value <= 'f')) {
-        result = (value - 'a') + 10;
+        result = ((int)value - (int)'a') + 10;
     } else if ((value >= 'A') && (value <= 'F')) {
-        result = (value - 'A') + 10;
+        result = ((int)value - (int)'A') + 10;
     } else {
         /* No sign, Unicode digit or other encoding is accepted. */
     }

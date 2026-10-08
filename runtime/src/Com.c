@@ -57,7 +57,7 @@ EcuStatus Com_SetSignal(uint16_t id, uint32_t value) {
         const EcuSignalConfig *signal = &com_config->signals[i];
         if (com_config->frames[FrameForSignal(i)].direction != 1u) {
             result = ECU_ERR_DIRECTION;
-        } else if ((signal->bit_length < 32u) && (value >= (UINT32_C(1) << signal->bit_length))) {
+        } else if ((signal->bit_length < 32u) && (value >= ((uint32_t)1u << signal->bit_length))) {
             result = ECU_ERR_SIGNAL_VALUE;
         } else {
             signal_values[i] = value;

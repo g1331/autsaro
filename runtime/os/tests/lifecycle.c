@@ -2,6 +2,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
 static unsigned startup_failure;
 static unsigned both_ready;
 void StartupHook(void) {
@@ -112,6 +117,15 @@ int main(int argc, char **argv) {
     {
         TaskStateType state = 99u;
         if (GetTaskState(0u, &state) != E_OS_CALLEVEL || state != 99u) {
+            return 99;
+        }
+    }
+    if ((argc > 1) && (strcmp(argv[1], "output-failure") == 0)) {
+#ifdef _WIN32
+        if (_close(_fileno(stdout)) != 0) {
+#else
+        if (close(fileno(stdout)) != 0) {
+#endif
             return 99;
         }
     }

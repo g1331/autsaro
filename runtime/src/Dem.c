@@ -1,7 +1,7 @@
 #include "Dem.h"
 #include "NvM.h"
 
-#define DTC_AVAILABILITY UINT8_C(0x7f)
+#define DTC_AVAILABILITY 0x7fu
 
 static const EcuDtcConfig *active_dtc;
 static uint8_t event_status;
@@ -33,9 +33,8 @@ EcuStatus Dem_Init(const EcuConfig *config, const char *nvm_path) {
                 active_dtc = config->diagnostic->dtc;
                 event_status = saved;
                 /* A pending DTC survives only when the previous cycle saw a failure. */
-                result = SetStatus((uint8_t)((saved & (uint8_t)~UINT8_C(0x06)) |
-                                             (((saved & 0x02u) != 0u) ? UINT8_C(0x04) : 0u) |
-                                             UINT8_C(0x40)));
+                result = SetStatus(
+                    (uint8_t)((saved & 0xf9u) | (((saved & 0x02u) != 0u) ? 0x04u : 0u) | 0x40u));
             }
         }
     }
@@ -64,7 +63,7 @@ EcuStatus Dem_ReportPassed(uint16_t frame_index) {
     EcuStatus result = ECU_OK;
     if ((active_dtc != NULL) && (active_dtc->monitor_frame_index == frame_index) &&
         (dtc_setting_enabled != 0u)) {
-        result = SetStatus((uint8_t)(event_status & (uint8_t)~UINT8_C(0x51)));
+        result = SetStatus((uint8_t)(event_status & 0xaeu));
     }
     return result;
 }
@@ -73,7 +72,7 @@ EcuStatus Dem_ReportFailed(uint16_t frame_index) {
     EcuStatus result = ECU_OK;
     if ((active_dtc != NULL) && (active_dtc->monitor_frame_index == frame_index) &&
         (dtc_setting_enabled != 0u)) {
-        result = SetStatus((uint8_t)((event_status & (uint8_t)~UINT8_C(0x50)) | UINT8_C(0x2f)));
+        result = SetStatus((uint8_t)((event_status & 0xafu) | 0x2fu));
     }
     return result;
 }

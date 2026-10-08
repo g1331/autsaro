@@ -57,7 +57,7 @@ unsigned Os_BackendInterruptPriority(unsigned interrupt) {
 }
 int Os_BackendInterruptMaySchedule(unsigned interrupt) {
     return (interrupt < OS_MAX_INTERRUPTS) &&
-           ((Os_Config->category1_isrs & (UINT32_C(1) << interrupt)) == 0u);
+           ((Os_Config->category1_isrs & ((uint32_t)1u << interrupt)) == 0u);
 }
 static HANDLE close_event;
 static HANDLE control_thread;
@@ -109,7 +109,9 @@ static char trace[128];
 static size_t trace_length;
 static uint64_t trace_dropped;
 static unsigned resource_calls, threads, events, mutexes;
+#ifdef OS_HOST_FAILURE_TESTS
 static unsigned fail_resource;
+#endif
 static volatile Os_Atomic32 started;
 static void task_entry(void *argument);
 static void bootstrap(void *argument);
@@ -162,7 +164,7 @@ void Os_BackendInterruptLeave(void) {
         Os_InterruptRestoreOwner();
         if ((current_interrupt < 32u) && (current_interrupt != OS_KERNEL_YIELD_INTERRUPT) &&
             (current_interrupt != OS_CONTROLLED_TICK_INTERRUPT) &&
-            ((Os_Config->category1_isrs & (UINT32_C(1) << current_interrupt)) == 0u)) {
+            ((Os_Config->category1_isrs & ((uint32_t)1u << current_interrupt)) == 0u)) {
             (void)Os_ErrorResult(OSServiceId_InterruptMissingEnd, E_OS_DISABLEDINT, &arguments);
         }
     }
@@ -194,7 +196,7 @@ int Os_BackendInterruptEnabled(unsigned interrupt) {
     allowed =
         (Os_BackendInterruptPriority(interrupt) != 0u) && (Os_InterruptAllows(interrupt) != 0) &&
         (Os_PortInterruptSourceEnabled(interrupt) != 0) &&
-        (((interrupt < 32u) && ((Os_Config->category1_isrs & (UINT32_C(1) << interrupt)) != 0u)) ||
+        (((interrupt < 32u) && ((Os_Config->category1_isrs & ((uint32_t)1u << interrupt)) != 0u)) ||
          ((LONG)Os_BackendInterruptPriority(interrupt) >
               InterlockedCompareExchange(&interrupt_ceiling, 0, 0) &&
           Os_HookBlocksCategory2() == 0));
@@ -227,7 +229,7 @@ int Os_BackendServiceContext(void) {
            ((stack->role == 'T') ||
             ((stack->role == 'S') &&
              ((current_interrupt >= 32u) ||
-              ((Os_Config->category1_isrs & (UINT32_C(1) << current_interrupt)) == 0u))));
+              ((Os_Config->category1_isrs & ((uint32_t)1u << current_interrupt)) == 0u))));
 }
 int Os_BackendTaskOwner(TaskType id) {
     size_t index = current_task_index();
@@ -552,6 +554,7 @@ int Os_TargetReady(void) {
            InterlockedCompareExchange(&Os_Closing, 0, 0) == 0;
 }
 static void report_and_exit(void) {
+    int output_failed = 0;
     Os_StackCheck();
     if (Os_StackHasFault() != 0) {
         shutdown_reason = E_OS_STACKFAULT;
@@ -560,18 +563,25 @@ static void report_and_exit(void) {
 #ifdef OS_ARTI_TESTS
     Os_ArtiTestShutdownObserved();
 #endif
-    Os_StackReport();
-    printf("lifecycle=Closed state=%s reason=%u trace=%s threads=%u events=%u mutexes=%u "
+    if (Os_StackReport() != 0) {
+        output_failed = 1;
+    }
+    if (printf("lifecycle=Closed state=%s reason=%u trace=%s threads=%u events=%u mutexes=%u "
 #ifdef __linux__
-           "resource_calls=%u hidden=2 controllers=2 heap=posix static=freertos "
+               "resource_calls=%u hidden=2 controllers=2 heap=posix static=freertos "
 #else
-           "resource_calls=%u hidden=2 controllers=2 heap=windows static=freertos "
+               "resource_calls=%u hidden=2 controllers=2 heap=windows static=freertos "
 #endif
-           "input_closed=1 tick_closed=1 time_signal_failed=%d trace_dropped=%llu\n",
-           shutdown_reason == E_OK ? "Ready" : "Failed", shutdown_reason, trace, threads, events,
-           mutexes, resource_calls, Os_TimeSignalFailed(), (unsigned long long)trace_dropped);
-    fflush(stdout);
-    ExitProcess(shutdown_reason == E_OK ? 0u : shutdown_reason);
+               "input_closed=1 tick_closed=1 time_signal_failed=%d trace_dropped=%llu\n",
+               shutdown_reason == E_OK ? "Ready" : "Failed", shutdown_reason, trace, threads,
+               events, mutexes, resource_calls, Os_TimeSignalFailed(),
+               (unsigned long long)trace_dropped) < 0) {
+        output_failed = 1;
+    }
+    if (fflush(stdout) != 0) {
+        output_failed = 1;
+    }
+    ExitProcess((output_failed != 0 && shutdown_reason == E_OK) ? E_OS_STATE : shutdown_reason);
 }
 static void stop_thread(HANDLE thread) {
     CONTEXT context;
@@ -729,7 +739,11 @@ void Os_BackendAssert(const char *file, int line) {
 }
 static int fail_next(void) {
     ++resource_calls;
+#ifdef OS_HOST_FAILURE_TESTS
     return fail_resource != 0u && resource_calls == fail_resource;
+#else
+    return 0;
+#endif
 }
 HANDLE Os_PortEvent(LPSECURITY_ATTRIBUTES attributes, BOOL manual, BOOL initial, LPCSTR name) {
     HANDLE result = fail_next() ? NULL : CreateEventA(attributes, manual, initial, name);
@@ -884,8 +898,9 @@ static void bootstrap(void *argument) {
 }
 void Os_BackendStart(AppModeType mode) {
     size_t i;
-    const char *failure = getenv("AUTOSAR_OS_FAIL_RESOURCE");
     Os_TargetTrace('I');
+#ifdef OS_HOST_FAILURE_TESTS
+    const char *failure = getenv("AUTOSAR_OS_FAIL_RESOURCE");
     if (failure != NULL) {
         char *end;
         unsigned long value;
@@ -897,6 +912,7 @@ void Os_BackendStart(AppModeType mode) {
         }
         fail_resource = (unsigned)value;
     }
+#endif
     if (InterlockedCompareExchange(&started, 1, 0) != 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
@@ -1193,7 +1209,7 @@ StatusType Os_BackendResource(ResourceType id, int acquire) {
     if (task == OS_MAX_TASKS) {
         if ((Os_TargetReady() == 0) || (stack == NULL) || (stack->role != 'S') ||
             (current_interrupt == OS_KERNEL_YIELD_INTERRUPT) || (current_interrupt >= 32u) ||
-            ((Os_Config->category1_isrs & (UINT32_C(1) << current_interrupt)) != 0u)) {
+            ((Os_Config->category1_isrs & ((uint32_t)1u << current_interrupt)) != 0u)) {
             return E_OS_CALLEVEL;
         }
         task = OS_MAX_TASKS + current_interrupt;
@@ -1217,7 +1233,7 @@ StatusType Os_BackendResource(ResourceType id, int acquire) {
               ((config->isr_access == 0u) &&
                (Os_Config->tasks[task].priority > config->ceiling)))) ||
             ((task >= OS_MAX_TASKS) &&
-             ((config->isr_access & (UINT32_C(1) << current_interrupt)) == 0u))) {
+             ((config->isr_access & ((uint32_t)1u << current_interrupt)) == 0u))) {
             status = E_OS_ACCESS;
         } else {
             saved_priorities[task][depth] =

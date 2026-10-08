@@ -89,20 +89,20 @@ StatusType Os_TargetPrepare(const Os_TargetConfig *config) {
     }
     if (((config->category1_isrs & 3u) != 0u) ||
         ((config->input_event != 0u) &&
-         ((config->category1_isrs & (UINT32_C(1) << OS_INPUT_INTERRUPT)) != 0u))) {
+         ((config->category1_isrs & ((uint32_t)1u << OS_INPUT_INTERRUPT)) != 0u))) {
         return E_OS_VALUE;
     }
     if (config->interrupts != NULL) {
         for (i = 0u; i < OS_MAX_INTERRUPTS; ++i) {
             const uint8_t priority = config->interrupts->priorities[i];
             if ((priority > OS_MAX_ISR_PRIORITY) || ((i < 2u) && (priority != 0u)) ||
-                (((config->category1_isrs & (UINT32_C(1) << i)) != 0u) && (priority == 0u)) ||
+                (((config->category1_isrs & ((uint32_t)1u << i)) != 0u) && (priority == 0u)) ||
                 ((config->input_event != 0u) && (i == OS_INPUT_INTERRUPT) && (priority == 0u))) {
                 return E_OS_VALUE;
             }
             if ((config->interrupts->entries != NULL) && (config->interrupts->entries[i] != NULL) &&
                 ((i < 2u) || (priority == 0u) ||
-                 ((config->category1_isrs & (UINT32_C(1) << i)) != 0u) ||
+                 ((config->category1_isrs & ((uint32_t)1u << i)) != 0u) ||
                  ((config->input_event != 0u) && (i == OS_INPUT_INTERRUPT)))) {
                 return E_OS_VALUE;
             }
@@ -143,7 +143,7 @@ StatusType Os_TargetPrepare(const Os_TargetConfig *config) {
             highest_access = 0u;
         }
         for (j = 2u; j < OS_MAX_INTERRUPTS; ++j) {
-            if ((resource->isr_access & (UINT32_C(1) << j)) != 0u) {
+            if ((resource->isr_access & ((uint32_t)1u << j)) != 0u) {
                 const uint8_t priority = (config->interrupts == NULL)
                                              ? OS_MAX_ISR_PRIORITY
                                              : config->interrupts->priorities[j];
@@ -273,7 +273,7 @@ ISRType Os_Implementation_GetISRID(void) {
     }
     return (stack != NULL && stack->role == 'S' && interrupt < 32u &&
             interrupt != OS_KERNEL_YIELD_INTERRUPT && interrupt != OS_CONTROLLED_TICK_INTERRUPT &&
-            Os_Config != NULL && (Os_Config->category1_isrs & (UINT32_C(1) << interrupt)) == 0u)
+            Os_Config != NULL && (Os_Config->category1_isrs & ((uint32_t)1u << interrupt)) == 0u)
                ? (ISRType)interrupt
                : INVALID_ISR;
 }
