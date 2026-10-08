@@ -275,8 +275,9 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
         return name, unit_macros, unit_modes
 
     # Each TU owns distinct probe/log paths; collect in declared source order.
-    # Two compiler processes overlap header/owner setup without unbounded fan-out.
-    with ThreadPoolExecutor(max_workers=2) as executor:
+    # Use available CPUs while bounding native compiler memory/process fan-out.
+    compiler_workers = min(4, os.cpu_count() or 1)
+    with ThreadPoolExecutor(max_workers=compiler_workers) as executor:
         try:
             for name, macros, modes in executor.map(compiler_unit, enumerate(sources)):
                 per_unit_macros[name] = macros
@@ -299,7 +300,7 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                  "arguments": ["gcc", *flags, *builtins, *per_unit_macros[name], *("-I" + path for path in includes),
                                "-c", tool_argument(root / name)]} for name in sources]
     return root, sources, database, {"target": target_id, "profile": target["profile"],
-                                   "compilerFlags": flags, "compilerWorkers": 2, "includePaths": target["includePaths"],
+                                   "compilerFlags": flags, "compilerWorkers": compiler_workers, "includePaths": target["includePaths"],
                                    "systemIncludePaths": system_includes, "diagnosticCompiler": {"path": compiler, "version": compiler_version, "sha256": digest(Path(compiler))},
                                    "compilerDiscoveredDefines": per_unit_macros,
                                    "platformModel": {"path": str(model), "sha256": digest(model)} if model else None,

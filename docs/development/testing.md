@@ -28,7 +28,7 @@ uv run --locked python -m autosar_tooling c-check --target windows-x64-controlle
 
 Linux 使用 `linux-x64-controlled-v1` 和对应主机 GCC。WSL 的结果目录应放在 Linux 文件系统中；未启用 Unix 元数据的 Windows 挂载目录无法满足受管进程日志的私有目录权限要求。生成目录必须不存在，结果目录必须新建或为空，并与封存工程分离。分析在副本上应用原有内核补丁，检查构建清单、主机入口和补充 C 文件，原始工程不会被修改。
 
-Cppcheck 使用目标平台模型及项目头文件。按[官方建议](https://cppcheck.sourceforge.io/manual.html)，不直接解析编译器的标准库头文件；GCC 以最多两个并发任务逐个验证真实头文件与 C99 语法，并提取代码引用的系统宏和标准整数常量宏的实际后缀。Windows 的 `setvbuf` 参数模型使用该编译器头文件中的三个实际模式值，非法模式仍会报告。Linux 的递归互斥锁枚举及 glibc 动态信号／栈值由有限分析模型补齐；GCC 会校验枚举值和函数原型，动态值保留实际函数调用，模型不匹配即失败。其他 Windows／POSIX 接口仍取决于分析器的库模型，未知符号或解析失败保持失败。
+Cppcheck 使用目标平台模型及项目头文件。按[官方建议](https://cppcheck.sourceforge.io/manual.html)，不直接解析编译器的标准库头文件；GCC 按可用 CPU 数以最多四个并发任务逐个验证真实头文件与 C99 语法，并提取代码引用的系统宏和标准整数常量宏的实际后缀。Windows 的 `setvbuf` 参数模型使用该编译器头文件中的三个实际模式值，非法模式仍会报告。Linux 的递归互斥锁枚举及 glibc 动态信号／栈值由有限分析模型补齐；GCC 会校验枚举值和函数原型，动态值保留实际函数调用，模型不匹配即失败。其他 Windows／POSIX 接口仍取决于分析器的库模型，未知符号或解析失败保持失败。
 
 ECU 的 HostBatch 与 legacy probe 是两个独立可执行程序，跨翻译单元检查分别运行；共同源码在两个链接范围中均检查。`summary.json` 保留各程序清单、命令、退出码和诊断所属程序，原始工件分别位于 `host-batch/` 与 `legacy-probe/`。主机 profile 使用一个分析目录。
 

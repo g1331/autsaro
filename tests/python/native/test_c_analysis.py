@@ -138,10 +138,13 @@ class ActualCAnalysisTests(unittest.TestCase):
             with self.subTest(invalid=invalid), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 project = self.project(root, '#include "helper.h"\nint main(void) { return helper() == UINT32_C(1) ? 0 : 1; }\n', extra_files={
-                    "helper.h": '#include <stdint.h>\nuint32_t helper(void);\n',
+                    "helper.h": '#include <stdint.h>\nuint32_t helper(void);\nuint32_t second(void);\nuint32_t third(void);\n',
+                    "src/second.c": '#include "helper.h"\nuint32_t second(void) { return UINT32_C(2); }\n',
+                    "src/third.c": '#include "helper.h"\nuint32_t third(void) { return UINT32_C(3); }\n',
                     "src/helper.c": 'int broken( { }\n' if invalid else '#include "helper.h"\nuint32_t helper(void) { return UINT32_C(1); }\n'})
                 target = json.loads((project / "target.json").read_text())["target"]
-                code = c_check.check(project, target, root / "analysis")
+                with patch("autosar_tooling.c_check.os.cpu_count", return_value=64):
+                    code = c_check.check(project, target, root / "analysis")
                 summary = json.loads((root / "analysis/summary.json").read_text())
                 self.assertEqual(code, 0 if summary["passed"] else 1)
                 if invalid:
@@ -149,7 +152,7 @@ class ActualCAnalysisTests(unittest.TestCase):
                     self.assertIn("Compiler validation failed for src/helper.c", summary["error"])
                 else:
                     self.assertIsNone(summary["error"])
-                    self.assertEqual(summary["scope"]["compilerWorkers"], 2)
-                    self.assertEqual(set(summary["scope"]["compilerDiscoveredDefines"]), {"src/main.c", "src/helper.c"})
+                    self.assertEqual(summary["scope"]["compilerWorkers"], 4)
+                    self.assertEqual(set(summary["scope"]["compilerDiscoveredDefines"]), {"src/main.c", "src/helper.c", "src/second.c", "src/third.c"})
                     for definitions in summary["scope"]["compilerDiscoveredDefines"].values():
                         self.assertTrue(any(value.startswith("-DUINT32_C(") for value in definitions))

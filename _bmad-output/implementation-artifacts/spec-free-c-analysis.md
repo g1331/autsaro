@@ -214,3 +214,8 @@ Linux 五类均分析完整、error=null，诊断为 234／240／234／1806／18
 
 
 CI 性能增量的三层审查完成：Blind 无确认缺陷，指出每个 Windows 分组重复初始化 GCC 的总工作量；这是每台独立 runner 获取受控编译器的约一分钟必要准备，不共享跨机绝对路径或弱化工具身份。Edge 无确认缺陷。Verification 指出矩阵误删样本时仅任务成功不足以证明完整覆盖（medium／patch），现每组上传轻量摘要，最终汇总按实际摘要核对两平台各五类、拒绝重复及 error 非空。直接执行工作流中的 Python 汇总代码验证十项通过、缺项失败、解析不完整失败；保留 passed=false 语义。actionlint、增量 quality 与资产检查通过。GitHub 性能与完整结果待推送后实测。
+
+
+首轮远端准备任务两平台均通过：Windows 的 vcpkg 6 分 18 秒、Cppcheck 编译 2 分 18 秒、样本生成 1 分 29 秒、三模式故障回归 1 分 6 秒，实际 vcpkg／Cppcheck／Cargo 缓存均已写入。发现 runner 镜像变量虽存在于进程环境，但未自动进入 GitHub env 表达式，缓存键中的镜像字段为空；已通过 GITHUB_ENV 显式导入 ImageOS/ImageVersion。Cppcheck 与 Cargo target 只恢复精确镜像键，vcpkg 可以恢复旧缓存，由自身包 ABI 验证决定复用，不能跨镜像误用原生构建产物。工件添加 overwrite 支持正常重跑同名输出。两项修正独立三层审查无确认缺陷。
+
+GCC 逐 TU 准备仍是单个 ECU 的最长阶段，因此将并发预算改为 min(4, 可用 CPU)，保留独立原始日志、每 TU 三次 GCC 验证、声明顺序合并和失败后的 owned-child 回收。真实并发回归扩展到四个 TU，每个均核对标准宏后缀，无效 helper 仍失败；普通 Python 43 项、Windows checker 10 通过／2 Linux 专用跳过（32.959 秒）、Linux checker 12 项（40.631 秒）通过。Verification 指出必须直接保护高核数上限（medium／patch），现模拟 64 CPU 仍断言四个 worker；双平台该真实回归通过（5.931／4.787 秒）。Blind／Edge 对该增量无确认缺陷。最终提交须在 GitHub 重扫全部十份平台／样本结果，并从实际阶段核对提速；不为已被该提交替代的两 worker 扫描重复等待。

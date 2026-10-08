@@ -139,6 +139,12 @@ jobs:
       AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
     steps:
       - uses: actions/checkout@v7.0.1
+      - name: Identify native build cache inputs
+        shell: python
+        run: |
+          import os
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              output.write('CACHE_IMAGE=' + os.environ['ImageOS'] + '-' + os.environ['ImageVersion'] + '\n')
       - uses: astral-sh/setup-uv@v10.2.0
       - run: uv sync --locked
       - name: Linux analysis dependencies
@@ -153,8 +159,8 @@ jobs:
         if: runner.os == 'Windows'
         with:
           path: build/vcpkg-cache
-          key: vcpkg-${{ runner.os }}-${{ env.ImageOS }}-${{ env.ImageVersion }}-static-md-v1
-          restore-keys: vcpkg-${{ runner.os }}-${{ env.ImageOS }}-
+          key: vcpkg-${{ runner.os }}-${{ env.CACHE_IMAGE }}-static-md-v1
+          restore-keys: vcpkg-${{ runner.os }}-
       - name: Windows core dependencies
         if: runner.os == 'Windows'
         shell: pwsh
@@ -182,7 +188,7 @@ jobs:
         id: cppcheck-cache
         with:
           path: build/c-analysis-tools
-          key: cppcheck-${{ runner.os }}-${{ runner.arch }}-${{ env.ImageOS }}-${{ env.ImageVersion }}-e73bf44c3e49686b7495fab352d03a6c6075516b-v1
+          key: cppcheck-${{ runner.os }}-${{ runner.arch }}-${{ env.CACHE_IMAGE }}-e73bf44c3e49686b7495fab352d03a6c6075516b-v1
       - name: Configure pinned open Cppcheck
         if: steps.cppcheck-cache.outputs.cache-hit != 'true'
         run: cmake -S build/cppcheck-source -B build/cppcheck-build -DCMAKE_BUILD_TYPE=Release -DUSE_MATCHCOMPILER=OFF -DBUILD_GUI=OFF -DBUILD_TESTING=OFF
@@ -221,7 +227,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             core/target
-          key: c-analysis-cargo-${{ runner.os }}-${{ env.ImageOS }}-${{ env.ImageVersion }}-${{ hashFiles('rust-toolchain.toml', 'core/Cargo.lock') }}-v1
+          key: c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'core/Cargo.lock') }}-v1
       - name: Analyzer behavior tests
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
       - name: Host I/O and lock failure boundaries
@@ -241,6 +247,7 @@ jobs:
       - uses: actions/upload-artifact@v7.0.1
         with:
           name: c-analysis-inputs-${{ matrix.target }}
+          overwrite: true
           path: |
             build/c-analysis-tools
             build/c-analysis-samples
@@ -344,6 +351,7 @@ jobs:
         if: always()
         with:
           name: c-analysis-summaries-${{ matrix.target }}-${{ matrix.group }}
+          overwrite: true
           path: build/c-analysis-results/*/summary.json
           if-no-files-found: error
           retention-days: 14
@@ -351,6 +359,7 @@ jobs:
         if: always()
         with:
           name: c-analysis-${{ matrix.target }}-${{ matrix.group }}
+          overwrite: true
           path: build/c-analysis-results
           if-no-files-found: ignore
           retention-days: 14
