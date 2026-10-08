@@ -1,4 +1,5 @@
 import { useLocale } from '../i18n';
+import { displayPath } from '../pathDisplay';
 import type { Workbench } from '../workbench/useWorkbench';
 import { Plus, Save } from 'lucide-react';
 import { diagnosticFields, dtcFields, draftFor, labelFromPath } from '../workbench/forms';
@@ -755,12 +756,12 @@ export function EditorInspector({ controller }: { controller: Workbench }) {
       ) : currentFile ? (
         <>
           <p className="eyebrow">{t('editor.inspector.sourceOverline')}</p>
-          <h2 title={currentFile.path}>{labelFromPath(currentFile.path)}</h2>
+          <h2 title={displayPath(currentFile.path)}>{labelFromPath(currentFile.path)}</h2>
           <p className="inspector-intro">{t('editor.inspector.sourceIntro')}</p>
           <dl className="property-list">
             <div>
               <dt>{t('editor.inspector.absolutePath')}</dt>
-              <dd className="mono path-text">{currentFile.path}</dd>
+              <dd className="mono path-text">{displayPath(currentFile.path)}</dd>
             </div>
             <div>
               <dt>{t('editor.common.access')}</dt>

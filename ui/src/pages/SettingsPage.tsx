@@ -1,4 +1,5 @@
 import { useLocale } from '../i18n';
+import { displayPath } from '../pathDisplay';
 import { useState } from 'react';
 import type { ExecutionTools } from '../types';
 import type { Appearance } from '../workbench/projectTypes';
@@ -280,7 +281,7 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
                   {t('shell.settings.xsd')}
                   <input
                     aria-label={t('shell.settings.xsdPath')}
-                    value={c.resourceDraft.xsdArchive}
+                    value={displayPath(c.resourceDraft.xsdArchive)}
                     disabled={locked}
                     onChange={(event) =>
                       c.setResourceDraft({ ...c.resourceDraft, xsdArchive: event.target.value })
@@ -291,7 +292,7 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
                   {t('shell.settings.mod')}
                   <input
                     aria-label={t('shell.settings.modPath')}
-                    value={c.resourceDraft.modArchive}
+                    value={displayPath(c.resourceDraft.modArchive)}
                     disabled={locked}
                     onChange={(event) =>
                       c.setResourceDraft({ ...c.resourceDraft, modArchive: event.target.value })
@@ -321,7 +322,7 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
                   <div className="path-picker">
                     <input
                       aria-label={t('shell.settings.savedToolPath', { tool: t(label) })}
-                      value={c.toolDraft[key]}
+                      value={displayPath(c.toolDraft[key])}
                       disabled={locked}
                       onChange={(event) =>
                         c.setToolDraft({ ...c.toolDraft, [key]: event.target.value })
@@ -348,7 +349,9 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
                 <div key={key}>
                   <dt>{t(label)}</dt>
                   <dd className="mono path-text">
-                    {c.capabilities?.executionTools?.[key] ?? t('shell.settings.noTool')}
+                    {displayPath(
+                      c.capabilities?.executionTools?.[key] ?? t('shell.settings.noTool'),
+                    )}
                   </dd>
                 </div>
               ))}

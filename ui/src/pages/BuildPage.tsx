@@ -4,6 +4,7 @@ import { Boxes, CircleCheck, Hammer } from 'lucide-react';
 import { buildSteps, stageLabels } from '../workbench/useDelivery';
 import type { BuildTarget } from '../types';
 import { useLocale } from '../i18n';
+import { displayPath } from '../pathDisplay';
 
 export function BuildPage({ controller }: { controller: Workbench }) {
   const { t, text } = useLocale();
@@ -42,10 +43,10 @@ export function BuildPage({ controller }: { controller: Workbench }) {
               <span className="stage-number">{step.number}</span>
               <div className="stage-copy">
                 <strong>{text(step.label)}</strong>
-                <small title={text(stages[step.key].detail)}>
+                <small title={displayPath(text(stages[step.key].detail))}>
                   {state === 'stale' && unapplied
                     ? t('shell.build.draftStale')
-                    : text(stages[step.key].detail)}
+                    : displayPath(text(stages[step.key].detail))}
                 </small>
               </div>
               <span className="stage-pill">
@@ -88,7 +89,7 @@ export function BuildPage({ controller }: { controller: Workbench }) {
           {t('shell.build.directory')}
           <input
             aria-label={t('shell.build.directory')}
-            value={buildDirectory}
+            value={displayPath(buildDirectory)}
             disabled={disabled}
             onChange={(event) => changeEcuBuildDirectory(event.target.value)}
           />
@@ -139,7 +140,7 @@ export function BuildPage({ controller }: { controller: Workbench }) {
       {generated && !unapplied && !workspace.dirty && stages.generate.state === 'done' && (
         <div className="result-section">
           <h3>{t('shell.build.location')}</h3>
-          <p className="mono path-text">{generated.outputDirectory}</p>
+          <p className="mono path-text">{displayPath(generated.outputDirectory)}</p>
           <p>{handoffGenerated ? t('shell.build.handoffHelp') : t('shell.build.projectHelp')}</p>
           <details>
             <summary>{t('shell.build.files', { count: generated.files.length })}</summary>
@@ -156,14 +157,14 @@ export function BuildPage({ controller }: { controller: Workbench }) {
       {generated?.previousOutputDirectory && (
         <div className="page-guidance" role="status">
           {t('shell.build.previousLocation')}
-          <span className="mono path-text">{generated.previousOutputDirectory}</span>
+          <span className="mono path-text">{displayPath(generated.previousOutputDirectory)}</span>
           {t('shell.build.previousHelp')}
         </div>
       )}
       {built && !unapplied && !workspace.dirty && stages.build.state === 'done' && (
         <div className="result-section">
           <h3>{t('shell.build.binary')}</h3>
-          <p className="mono path-text">{built.binaryPath}</p>
+          <p className="mono path-text">{displayPath(built.binaryPath)}</p>
           <details>
             <summary>{t('shell.build.log')}</summary>
             <OwnedLog text={built.log} label={t('shell.build.realLog')} />

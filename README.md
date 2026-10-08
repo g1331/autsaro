@@ -66,6 +66,8 @@ Under **Settings → Appearance**, choose **Follow system**, **简体中文**, o
 
 Localization covers the interface, operation feedback, and the application's own errors, validation explanations, and remedies. AUTOSAR identifiers, user object names, paths, ARXML, generated source, and raw external-tool logs remain unchanged. Switching language does not change the project, field drafts, or validation/generation results. Operating-system file-dialog controls use the system language.
 
+Windows filesystem paths are displayed and copied in ordinary drive-letter or UNC form, without the internal `\\?\` prefix. File operations retain the original paths, and raw external-tool logs are not rewritten. See the [path-display example](docs/images/workbench-path-display-en.png), rendered with sample Windows paths in the browser preview.
+
 The complete [Chinese README](README.zh-CN.md) remains available. Linked technical documents retain their original language.
 
 <a href="docs/images/workbench-language-en.png"><img src="docs/images/workbench-language-en.png" width="980" alt="English language settings in the browser preview, showing independent theme and language preferences"></a>

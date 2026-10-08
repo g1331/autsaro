@@ -1,4 +1,5 @@
 import { useLocale } from '../i18n';
+import { displayPath } from '../pathDisplay';
 import { FolderOpen } from 'lucide-react';
 import type { Workbench } from './useWorkbench';
 
@@ -89,7 +90,7 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
                 {t('editor.source.emptyDirectory')}
                 <div className="path-picker">
                   <input
-                    value={c.projectDirectory}
+                    value={displayPath(c.projectDirectory)}
                     readOnly
                     aria-label={t('editor.source.directory')}
                   />
@@ -132,7 +133,10 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
                 {t('editor.source.pathLines')}
                 <textarea
                   aria-label={t('editor.source.paths')}
-                  value={c.importPathText}
+                  value={c.importPathText
+                    .split(/(\r?\n)/)
+                    .map(displayPath)
+                    .join('')}
                   rows={7}
                   onChange={(event) => {
                     c.setImportPathText(event.target.value);

@@ -5,6 +5,7 @@ import { shellResources } from './shell';
 import { editorResources } from './editors';
 import { workflowResources } from './workflow';
 import { controllerResources } from './controller';
+import { displayPath } from '../pathDisplay';
 
 export type LanguagePreference = 'system' | 'zh-CN' | 'en';
 export type Language = 'zh-CN' | 'en';
@@ -104,9 +105,14 @@ void i18n.use(initReactI18next).init({
   initAsync: false,
 });
 export function translate(key: string, params: MessageParams = {}): string {
-  if (!i18n.exists(key, { ...params, lng: i18n.language }))
+  const displayParams = { ...params };
+  for (const name of ['path', 'file', 'directory', 'backup']) {
+    const value = displayParams[name];
+    if (typeof value === 'string') displayParams[name] = displayPath(value);
+  }
+  if (!i18n.exists(key, { ...displayParams, lng: i18n.language }))
     throw new Error(`Missing localization key: ${i18n.language}:${key}`);
-  return i18n.t(key, params);
+  return i18n.t(key, displayParams);
 }
 export function localize(value: Text | null | undefined): string {
   if (value == null) return '';

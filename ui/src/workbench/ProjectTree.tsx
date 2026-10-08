@@ -1,4 +1,5 @@
 import { useLocale } from '../i18n';
+import { displayPath } from '../pathDisplay';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
@@ -299,7 +300,7 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
                 onClick={() => void c.readSource(source.sourceId)}
               >
                 <FileCode2 size={14} aria-hidden="true" />
-                <span className="tree-name" title={source.path}>
+                <span className="tree-name" title={displayPath(source.path)}>
                   {labelFromPath(source.path)}
                 </span>
                 <small>

@@ -3,6 +3,7 @@ import type { Workbench } from '../workbench/useWorkbench';
 import { CircleAlert, CircleCheck, FolderOpen, MonitorPlay } from 'lucide-react';
 import { stageLabels } from '../workbench/useDelivery';
 import { useLocale } from '../i18n';
+import { displayPath } from '../pathDisplay';
 
 export function VirtualPage({ controller }: { controller: Workbench }) {
   const { t, text } = useLocale();
@@ -74,7 +75,7 @@ export function VirtualPage({ controller }: { controller: Workbench }) {
         <div className="path-picker">
           <input
             readOnly
-            value={peerDirectory}
+            value={displayPath(peerDirectory)}
             placeholder={t('shell.virtual.peerPlaceholder')}
             aria-label={t('shell.virtual.peerDirectory')}
           />
@@ -96,7 +97,7 @@ export function VirtualPage({ controller }: { controller: Workbench }) {
         <div className="path-picker">
           <input
             aria-label={t('shell.virtual.peerBinary')}
-            value={peerBinaryPath}
+            value={displayPath(peerBinaryPath)}
             disabled={disabled}
             placeholder={t('shell.virtual.binaryPlaceholder')}
             onChange={(event) => {

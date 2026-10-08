@@ -1,5 +1,6 @@
 import type { Workbench } from './workbench/useWorkbench';
 import { useLocale } from './i18n';
+import { displayPath } from './pathDisplay';
 
 const roleNames: Record<string, string> = {
   ecu_extract: 'shell.role.ecu_extract',
@@ -78,7 +79,7 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
               </strong>
               <p>{text(issue.message)}</p>
               <p className="mono path-text">
-                {issue.file} {issue.object}
+                {displayPath(issue.file ?? '')} {issue.object}
               </p>
               <p>{text(issue.remedy)}</p>
             </div>

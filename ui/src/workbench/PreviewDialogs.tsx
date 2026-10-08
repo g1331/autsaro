@@ -1,4 +1,5 @@
 import { useLocale } from '../i18n';
+import { displayPath } from '../pathDisplay';
 import { useState } from 'react';
 import type { Workbench } from './useWorkbench';
 import { CopyText, Dialog, TextSnapshot } from './Dialog';
@@ -161,7 +162,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
           <dd>
             {preview.slot.sourcePaths.map((path) => (
               <p key={path} className="mono path-text">
-                {path}
+                {displayPath(path)}
               </p>
             ))}
           </dd>
@@ -282,7 +283,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
         }
       >
         <p className="mono path-text">
-          {preview.directory} · {preview.name} · {preview.templateId}
+          {displayPath(preview.directory)} · {preview.name} · {preview.templateId}
         </p>
         <p>{t('workflow.project.previewExplanation')}</p>
         <div className="preview-layout">
@@ -460,7 +461,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
           </>
         }
       >
-        <p className="mono path-text">{preview.outputDirectory}</p>
+        <p className="mono path-text">{displayPath(preview.outputDirectory)}</p>
         <p>{t('workflow.generation.explanation')}</p>
         <div className="preview-layout">
           <nav aria-label={t('workflow.generation.files')}>

@@ -1,5 +1,6 @@
 import { editorValueKindKeys, editorChangeKeys } from '../i18n/editors';
 import { useLocale } from '../i18n';
+import { displayPath } from '../pathDisplay';
 import { useMemo } from 'react';
 import { Search } from 'lucide-react';
 import type { Workbench } from './useWorkbench';
@@ -395,7 +396,10 @@ export function ObjectInspector({ controller: c }: { controller: Workbench }) {
           <p className="mono path-text">{object.path}</p>
           <CopyText text={object.path} label={t('editor.objects.copyPath')} />
           <p className="mono path-text">
-            {c.projection?.sources.find((source) => source.sourceId === object.sourceId)?.path}
+            {displayPath(
+              c.projection?.sources.find((source) => source.sourceId === object.sourceId)?.path ??
+                '',
+            )}
           </p>
           {object.reason ? <p className="field-help">{text(object.reason ?? '')}</p> : null}
           {c.inspectorTab === 'properties' ? (

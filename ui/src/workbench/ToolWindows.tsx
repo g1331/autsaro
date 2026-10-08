@@ -1,4 +1,5 @@
 import { message, useLocale } from '../i18n';
+import { displayPath } from '../pathDisplay';
 import {
   editorCategoryKeys,
   editorScopeKeys,
@@ -116,7 +117,9 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                         · {issue.code}
                       </strong>
                       <p>{text(issue.message)}</p>
-                      <span className="mono path-text">{issue.path ?? issue.file}</span>
+                      <span className="mono path-text">
+                        {displayPath(issue.path ?? issue.file ?? '')}
+                      </span>
                       <p>{text(issue.remedy)}</p>
                       {resolvable ? (
                         <button type="button" onClick={() => void locate(issue)}>
@@ -140,7 +143,9 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                         {t(editorSeverityKeys[issue.severity])} · {issue.code}
                       </strong>
                       <p>{text(issue.message)}</p>
-                      <span className="mono path-text">{issue.path ?? issue.file}</span>
+                      <span className="mono path-text">
+                        {displayPath(issue.path ?? issue.file ?? '')}
+                      </span>
                       {target ? (
                         <button type="button" onClick={() => void c.choose(target)}>
                           {t('editor.common.locateObject')}
@@ -190,13 +195,14 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
           {c.toolWindow === 'generation' ? (
             <div>
               <p>
-                {t(editorStatusKeys[c.stages.generate.state])} · {text(c.stages.generate.detail)}
+                {t(editorStatusKeys[c.stages.generate.state])} ·{' '}
+                {displayPath(text(c.stages.generate.detail))}
               </p>
               {c.generated ? (
                 <>
-                  <p className="mono path-text">{c.generated.outputDirectory}</p>
+                  <p className="mono path-text">{displayPath(c.generated.outputDirectory)}</p>
                   <CopyText
-                    text={c.generated.outputDirectory}
+                    text={displayPath(c.generated.outputDirectory)}
                     label={t('editor.tools.copyOutput')}
                   />
                   <ul>
@@ -215,7 +221,8 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
           {c.toolWindow === 'build' ? (
             <div>
               <p>
-                {t(editorStatusKeys[c.stages.build.state])} · {text(c.stages.build.detail)}
+                {t(editorStatusKeys[c.stages.build.state])} ·{' '}
+                {displayPath(text(c.stages.build.detail))}
               </p>
               {c.workspace?.integrationCandidate ? (
                 <button
@@ -244,8 +251,11 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
               ) : null}
               {c.built ? (
                 <>
-                  <p className="mono path-text">{c.built.binaryPath}</p>
-                  <CopyText text={c.built.binaryPath} label={t('editor.tools.copyBinary')} />
+                  <p className="mono path-text">{displayPath(c.built.binaryPath)}</p>
+                  <CopyText
+                    text={displayPath(c.built.binaryPath)}
+                    label={t('editor.tools.copyBinary')}
+                  />
                   <OwnedLog text={c.built.log} label={t('editor.tools.buildLog')} />
                 </>
               ) : null}
