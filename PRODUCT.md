@@ -1,90 +1,92 @@
 # Product
 
+[简体中文](PRODUCT.zh-CN.md)
+
 <!-- impeccable:product-schema 1 -->
 
-本文件记录供设计工作使用的稳定产品事实。产品方向和需求以 [BMad 产品简述](_bmad-output/planning-artifacts/product-brief.md)与 [PRD](_bmad-output/planning-artifacts/prd.md)为准，架构、实施范围及任务状态仍由相应 BMad 工件管理；本文件不建立另一份路线、实施规格或完成台账。产品方向与平台归类已在本次初始化中由维护者确认。
+This document records stable product facts for design work. Product direction and requirements are governed by the [BMad product brief](_bmad-output/planning-artifacts/product-brief.md) and [PRD](_bmad-output/planning-artifacts/prd.md); architecture, implementation scope, and task status remain managed in their respective BMad artifacts. This document does not establish a separate roadmap, implementation specification, or completion ledger. The maintainer confirmed the product direction and platform classification during this initialization.
 
 ## Platform
 
 web
 
-实际交付形态是本地 Tauri 桌面工作台，界面使用 React/TypeScript 和 Web 技术；此处的 `web` 指界面技术与设计语言，不表示线上服务、移动端产品或纯浏览器具有完整桌面能力。
+The actual delivery format is a local Tauri desktop workbench, with a React/TypeScript interface built using Web technologies. Here, `web` refers to the interface technology and design language; it does not imply an online service, a mobile product, or full desktop capabilities in a browser alone.
 
 ## Users
 
-主要用户是 ECU 集成工程师和 BSW 开发者。他们需要将系统／ECU 配置、应用接口、基础软件与目标环境组合成可检查、可生成、可交接的 ECU 工程。
+The primary users are ECU integration engineers and BSW developers. They need to combine system/ECU configuration, application interfaces, basic software, and target environments into ECU projects that can be inspected, generated, and handed over.
 
-另一位接收工程师是工程交接路径的参与者：应能依据交付内容和明确依赖，独立重建并复验声明支持的工程，不依赖原作者的 checkout、个人路径或未记录操作。
+A receiving engineer also participates in the project handover workflow: they must be able to independently rebuild and reverify projects within the declared support scope using the delivered content and explicit dependencies, without relying on the original author's checkout, personal paths, or undocumented actions.
 
-学习者不是近期主用户。学习层是多类配置、生成与虚拟运行能力稳定之后的产品方向，目前不进入实施队列。
+Learners are not the primary users in the near term. The learning layer is a product direction for after multiple categories of configuration, generation, and virtual execution capabilities have stabilized; it is not currently in the implementation queue.
 
 ## Product Purpose
 
-构建自有 AUTOSAR Classic 基础软件栈，以及配置、校验和代码生成工作台，将系统需求、软件组件、BSW 与目标之间的关系转化为可理解、可配置、可校验、可生成、可交付的 ECU 工程。
+Build an in-house AUTOSAR Classic basic software stack and a configuration, validation, and code-generation workbench that turns the relationships among system requirements, software components, BSW, and targets into ECU projects that are understandable, configurable, verifiable, generatable, and deliverable.
 
-配置主流程应能独立使用：安装软件后用内置校验规则与自有模块定义，新建或导入真实 ARXML，完成检查、编辑、保存、校验和源码生成；用户不必提供官方 XSD／MOD，安装编译器和执行虚拟 ECU 也不是使用 Configurator 的前提。当前内置配置链已提供该能力；兼容路径和官方对照测试仍使用外部档案，具体范围见 README 和对应实现。
+The main configuration workflow must be independently usable: after installing the software, users can use built-in validation rules and in-house module definitions to create or import real ARXML, then inspect, edit, save, validate, and generate source code. Users do not need to supply official XSD/MOD files, and installing a compiler or running a virtual ECU is not a prerequisite for using the Configurator. The current built-in configuration chain already provides this capability; compatibility paths and comparison tests against official resources still use external archives. See the README and corresponding implementations for the exact scope.
 
-成功不是展示源码或完成一次示例构建，而是对声明支持的配置交付完整输入、通用栈源码、生成配置与接口、目标依赖及重建方法，并通过独立预期验证实际行为与失败恢复。用户不应每次生成后手工补齐协议栈或缺失符号。
+Success is not displaying source code or completing a single example build. For configurations within the declared support scope, it means delivering complete inputs, generic stack source code, generated configuration and interfaces, target dependencies, and a rebuild method, then verifying actual behavior and failure recovery against independent expectations. Users should not have to manually fill in the protocol stack or missing symbols after every generation.
 
 ## Positioning
 
-产品同时承担自有 Classic BSW 实现和工程配置／生成链，不是仅包装另一套现成商业协议栈的编辑器，也不是只生成几份文件的示例工具。
+The product provides both an in-house Classic BSW implementation and a project configuration/generation chain. It is neither an editor that merely wraps an existing commercial protocol stack nor an example tool that generates only a few files.
 
-通用 BSW 由产品维护；按 ECU 生成配置及必要的 RTE／应用接口与集成文件；实际车辆功能算法由使用者提供。源码生成占比不作为质量指标，工程责任清晰与可独立交付才是核心。
+The product maintains generic BSW; it generates configuration and the necessary RTE/application interfaces and integration files for each ECU. Users provide the actual vehicle-function algorithms. The proportion of generated source code is not a quality metric; clear project responsibilities and independent deliverability are central.
 
-Vector MICROSAR Classic＋DaVinci Configurator、EB tresos AutoCore＋Studio 是产品形态参照，不是当前支持范围、互操作或符合性声明。
+Vector MICROSAR Classic + DaVinci Configurator and EB tresos AutoCore + Studio are references for the product format, not statements of current support scope, interoperability, or conformance.
 
 ## Operating Context
 
-- 本地工程工作流：新建或导入同一 ECU 的多文件 ARXML → 检查并编辑受支持对象 → 预览差异并保存 → 校验 → 预览并生成独立工程 → 可选构建与主机行为验证 → 交接与重导入。
-- 当前界面与能力以 README 和实际源码为准；候选方向不作为已实现能力。
-- ARXML、生成源码、构建产物和运行状态有不同所有权与生命周期。预览不写磁盘，确认后才保存或生成；用户输入、应用源码及既有产物不能被静默覆盖。未应用草稿与已保存配置须明确区分。
-- R5 的正常配置链使用软件独立实现、随包提供的版本化规则及自有模块定义。官方 XSD／MOD 用于研发核对和独立对照，不是普通用户设置项；第三方模块定义保留显式可选导入。内置版次／覆盖与实际校验结果分别显示，未知规则不假称通过，损坏的随包规则是安装／工具错误，不要求用户补下载官方档案。
-- Windows 与 Linux 有受控原生主机目标及工程交接记录；macOS 原生构建与 IPC 未验证。跨目标源码准备与当前宿主执行能力是不同结果。
-- 新界面与验证不占用用户正在使用的桌面。真实桌面窗口和 IPC 验收使用隔离会话；无法隔离时明确未验证范围。
+- Local project workflow: create or import multi-file ARXML for the same ECU → inspect and edit supported objects → preview differences and save → validate → preview and generate a standalone project → optionally build and verify host behavior → hand over and reimport.
+- The README and actual source code define the current interface and capabilities; candidate directions are not implemented capabilities.
+- ARXML, generated source code, build artifacts, and runtime state have different ownership and lifecycles. Previews do not write to disk; saving or generation happens only after confirmation. User inputs, application source code, and existing artifacts must not be silently overwritten. Unapplied drafts must be clearly distinguished from saved configuration.
+- R5's normal configuration chain uses independently implemented, versioned rules bundled with the software and in-house module definitions. Official XSD/MOD files serve development cross-checks and independent comparisons, not ordinary user settings; third-party module definitions retain explicit optional import. The built-in edition/coverage and actual validation results are displayed separately. Unknown rules must not be falsely reported as passed, and corrupted bundled rules are installation/tool errors, not a reason to require users to download official archives.
+- Windows and Linux have controlled native host targets and project handover records; native macOS builds and IPC have not been verified. Preparing source code for another target and executing it on the current host are distinct outcomes.
+- New interfaces and verification must not take over the desktop the user is currently using. Acceptance checks involving real desktop windows and IPC use isolated sessions; when isolation is unavailable, the unverified scope is stated explicitly.
 
 ## Capabilities and Constraints
 
-### 当前基线
+### Current Baseline
 
-- 当前采用 CP／FO R24-11，支持有界多文件 ARXML 导入、保留安全的未支持内容、差异预览、保存重开、校验及独立 C99 主机工程生成。任意 ARXML 输入不等于完整 ECU Extract／BSW／SWC 输入覆盖。
-- 已有 11 位 Classical CAN 信号链、有界物理 DoCAN、Dcm 及可选 Dem／主机文件 NvM 行为。容量、SID／子功能与目标差异以当前实现、[README](README.md)和相应 story/spec 为准；这些不是完整 CAN、UDS 或存储标准支持。
-- 旧主机目标的 `Os_Advance` 是虚拟时间调度器。Epic 4 新目标采用固定 FreeRTOS 内核＋自有 AUTOSAR OS 语义＋有限单核策略扩展；该路线已确定，不因界面设计重新选型。
-- Epic 4 有固定 Win64 主机 SC1 行为与独立交接的完成记录。结论绑定实际版次、配置、目标、工具链及证据；任意用户工程仍需复验，不继承参考工程的通过结果。
-- 生成、预检、构建与行为验证是不同状态。旧二进制、部分成功或未运行结果不能显示为当前配置已完成验证。
+- The current baseline uses CP/FO R24-11 and supports bounded multi-file ARXML import, safe preservation of unsupported content, difference previews, saving and reopening, validation, and standalone C99 host-project generation. Accepting arbitrary ARXML input does not mean complete ECU Extract/BSW/SWC input coverage.
+- Existing capabilities include an 11-bit Classical CAN signal chain, bounded physical DoCAN, Dcm, and optional Dem/host-file NvM behavior. Capacity, SID/subfunction coverage, and target differences are defined by the current implementation, [README](README.md), and corresponding story/spec. These are not complete implementations of the CAN, UDS, or storage standards.
+- `Os_Advance` in the legacy host target is a virtual-time scheduler. The new Epic 4 target uses a fixed FreeRTOS kernel + in-house AUTOSAR OS semantics + limited single-core policy extensions. This direction is settled and is not to be reselected as part of interface design.
+- Epic 4 has completion records for fixed Win64 host SC1 behavior and independent handover. Conclusions are tied to the actual edition, configuration, target, toolchain, and evidence. Arbitrary user projects still require reverification and do not inherit the reference project's passing results.
+- Generation, preflight checks, builds, and behavioral verification are distinct states. Old binaries, partial success, or results that have not been run must not be displayed as completed verification of the current configuration.
 
-### 已确认方向与待决边界
+### Confirmed Directions and Unresolved Boundaries
 
-- 统一 Configurator 的 R5 已正式化为 Epic 7：[选定需求](_bmad-output/planning-artifacts/prd.md#r5-选定范围与完成契约)、[增量架构](_bmad-output/planning-artifacts/architecture/epic-7/ARCHITECTURE-SPINE.md)、11 条 Story 与[交互规格](_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/EXPERIENCE.md)已按用户确认的内置规则方向同步修订，最新就绪结论见[实施就绪](_bmad-output/planning-artifacts/implementation-readiness.md#2026-10-03-r5--epic-7-实施就绪)。实施结果见当前中央实施规格和 Git；本文不复制动态 story 状态。R6 只固定共同对象／引用及应用所有权接缝，其他候选仍待规划。
-- 第一条完整参考产品链是通用 CAN＋诊断 ECU。完整交付须包含所声明配置需要的应用接口、OS、生命周期／网络管理与故障恢复；常开 CAN 的中间增量不能替代完整参考 ECU。
-- 长期逐阶段扩大所选 Classic 版次的有效模块与目标覆盖，不要求每个 ECU 启用全部模块，不用历史 story 数量计算未经定义的完成率。
-- 首个 MCU 板卡、驱动及许可、工具链、具体诊断／网络管理剖面、输入覆盖与迁移规则仍按对应产品规划决定。当前没有真实 MCU 验证，不预先宣布硬件支持。
-- 主机运行、实机运行、第三方互操作、完整规范义务、MISRA、硬实时、功能安全及官方符合性认证分别取证，不互相外推。
-- Adaptive Platform 是独立的后续立项方向，不预造共用 CP／AP 实现。学习层后期再规划；练习须基于届时真实能力，教学工程与用户工程隔离，通过依据实际配置、构建或运行检查点，不靠点击完成。
-- 项目原创代码与文档采用 [Apache-2.0](LICENSE)。第三方再分发权、支持承诺和发布流程仍需按实际产物核定，本文件不作公开发行或认证承诺。
+- R5 for the unified Configurator has been formalized as Epic 7: the [selected requirements](_bmad-output/planning-artifacts/prd.md#r5-选定范围与完成契约), [incremental architecture](_bmad-output/planning-artifacts/architecture/epic-7/ARCHITECTURE-SPINE.md), 11 Stories, and [interaction specification](_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/EXPERIENCE.md) have been revised together to reflect the user-confirmed built-in-rules direction. See [implementation readiness](_bmad-output/planning-artifacts/implementation-readiness.md#2026-10-03-r5--epic-7-实施就绪) for the latest readiness conclusion. Implementation results are recorded in the current central implementation specification and Git; this document does not duplicate dynamic story status. R6 fixes only the shared object/reference and application-ownership seams; other candidates remain to be planned.
+- The first complete reference product chain is a generic CAN + diagnostic ECU. Complete delivery must include the application interfaces, OS, lifecycle/network management, and failure recovery required by the declared configuration. An intermediate increment with always-on CAN cannot substitute for the complete reference ECU.
+- Over the long term, expand effective module and target coverage for the selected Classic edition in stages. This does not require every ECU to enable every module, and historical story counts must not be used to calculate an undefined completion percentage.
+- The first MCU board, drivers and licensing, toolchain, specific diagnostic/network-management profiles, input coverage, and migration rules remain subject to their respective product plans. There is currently no real MCU verification, and hardware support must not be announced in advance.
+- Host execution, real-hardware execution, third-party interoperability, complete specification obligations, MISRA, hard real-time behavior, functional safety, and official conformance certification each require separate evidence; none can be inferred from another.
+- Adaptive Platform is a separate future project direction; do not prebuild a shared CP/AP implementation. The learning layer will be planned later. Exercises must use the real capabilities available at that time, keep teaching projects separate from user projects, and determine passing results from actual configuration, build, or runtime checkpoints—not from completing clicks.
+- Original project code and documentation use [Apache-2.0](LICENSE). Third-party redistribution rights, support commitments, and release processes still require assessment against the actual artifacts. This document makes no public-release or certification commitment.
 
 ## Brand Commitments
 
-- 当前应用名称为“Classic CAN 配置工作台”，英文分发名称为 `Classic CAN Workbench`。长期产品方向是更完整的 Autosar Classic 工程平台；初始化不擅自重命名现有应用。
-- 当前正式图标位于 ui/public 和 src-tauri/icons，设计源保留在 BMad UX 基线。设计快照不作为当前实施或发行状态记录。不使用 AUTOSAR 官方商标。
-- 图标须能识别汽车电子，同时灵动、有当代桌面品牌的图形性。用户偏好平面 A（1＞3＞2），要求它与工程界面更协调；明确否决绿色适配，并要求有质感的渐变。JetBrains／VS Code 作为层次参考，不复制其橙粉紫配色；当前保留 A 形体，以珊瑚色系建立光色和深浅，界面主行动用克制珊瑚实色。2026-10-03 用户确认当前透明珊瑚材质图标与界面基线“暂时定稿”；设计快照不作为当前软件实施或发行状态记录。
-- 身份图形采用真实透明背景，不保留白色承载底；车身轮廓与珊瑚色层在明暗主题一致，灯位按有效主题切换为石墨／暖白色。跟随系统时同步图形，不丢弃未应用的设置。通用桌面图标兼顾明暗背景，但不声称原生 ICO／ICNS 会自动跟随主题。
-- 当前界面以简体中文表达任务，保留标准术语、模块名、标识符、命令和原始错误的准确含义。能力描述必须具体、可核对，不把研发目标包装成可用功能。
-- 界面基线沿用工程树＋对象表＋属性检查器、JetBrains 式统一菜单／侧栏／底部工具窗口逻辑，以及 ChatGPT 桌面端中性配色与角色色彩。参考应形成完整体系，不拼接控件，不在正常操作界面放设计解释。浅深色共享同一信息层级；具体视觉和交互规则由设计规范承载。
+- The current application name is “Classic CAN 配置工作台”; its English distribution name is `Classic CAN Workbench`. The long-term product direction is a more complete Autosar Classic engineering platform; initialization must not unilaterally rename the existing application.
+- Current official icons are in ui/public and src-tauri/icons, with design sources retained in the BMad UX baseline. Design snapshots are not records of current implementation or release status. Do not use official AUTOSAR trademarks.
+- The icon must be recognizable as automotive electronics while remaining lively and graphically suited to a contemporary desktop brand. The user prefers flat design A (1 > 3 > 2), requires it to fit the engineering interface more closely, explicitly rejected a green adaptation, and requested gradients with a sense of material quality. JetBrains/VS Code serve as references for layering, without copying their orange-pink-purple palette. The current design retains A's shape, uses coral hues to establish lighting and tonal depth, and uses restrained solid coral for the interface's primary actions. On 2026-10-03, the user confirmed the current transparent coral-material icon and interface baseline as “provisionally finalized”; design snapshots are not records of current software implementation or release status.
+- Identity graphics use a genuinely transparent background, without a white backing. The vehicle silhouette and coral layers remain consistent across light and dark themes, while the lights switch between graphite and warm white according to the effective theme. When following the system theme, synchronize the graphic without discarding unapplied settings. Generic desktop icons must work on both light and dark backgrounds, but must not claim that native ICO/ICNS icons automatically follow the theme.
+- The current interface presents tasks in Simplified Chinese while preserving the accurate meaning of standard terms, module names, identifiers, commands, and original errors. Capability descriptions must be specific and verifiable, without presenting development goals as available features.
+- The interface baseline retains the project tree + object table + property inspector, JetBrains-style unified menu/sidebar/bottom tool-window logic, and the ChatGPT desktop application's neutral palette and role-based colors. References should form a coherent system, not a collage of controls; normal operational interfaces must not contain design explanations. Light and dark themes share the same information hierarchy; the design specifications carry the detailed visual and interaction rules.
 
 ## Evidence on Hand
 
-- [产品简述](_bmad-output/planning-artifacts/product-brief.md)：主要用户、产品机制、长期候选路线与后期学习层边界。
-- [PRD](_bmad-output/planning-artifacts/prd.md)与[架构](_bmad-output/planning-artifacts/architecture.md)：已确认成果、输入／生成责任与后续待决契约。
-- [README](README.md)、[运行时说明](runtime/README.md)及 BMad story/spec：现有工作流、受限能力、目标依赖和已记录验证范围。旧段落涉及历史状态时，以适用的较新 story/spec 和当前源码核对，不从一句总述推定全部能力。
-- `ui/src/`、`src-tauri/`、`core/src/` 与 `runtime/`：现有 React 界面、桌面后端、配置／生成核心与 C99 运行时；`core/tests/end_to_end.rs` 及 fixtures 承载集成验证输入。
-- `ui/public/logo-app.png` 与 `src-tauri/icons/`：现有产品图标资产。
-- 尚无可用于宣称真实 MCU 支持、官方认证、客户背书或性能基准的本次初始化证据，不编造相关内容。本次未重新执行历史主机验收。
+- [Product brief](_bmad-output/planning-artifacts/product-brief.md): primary users, product mechanisms, long-term candidate directions, and boundaries for the later learning layer.
+- [PRD](_bmad-output/planning-artifacts/prd.md) and [architecture](_bmad-output/planning-artifacts/architecture.md): confirmed outcomes, input/generation responsibilities, and future contracts still to be decided.
+- [README](README.md), [runtime documentation](runtime/README.md), and BMad story/spec: existing workflows, bounded capabilities, target dependencies, and recorded verification scope. Where older passages describe historical status, cross-check against applicable newer story/spec and current source code; do not infer all capabilities from a single overview statement.
+- `ui/src/`, `src-tauri/`, `core/src/`, and `runtime/`: the existing React interface, desktop backend, configuration/generation core, and C99 runtime. `core/tests/end_to_end.rs` and fixtures hold integration-verification inputs.
+- `ui/public/logo-app.png` and `src-tauri/icons/`: existing product icon assets.
+- This initialization has no evidence supporting claims of real MCU support, official certification, customer endorsement, or performance benchmarks; do not fabricate such content. Historical host acceptance checks were not rerun during this initialization.
 
 ## Product Principles
 
-1. **真实工程优先。**从配置到完整交付贯通；示例证明接口，不替代真实工程能力或使用者的车辆算法。
-2. **配置独立，验证显式。**配置／生成与可选编译／运行解耦，资源限制准确落在受影响操作上。
-3. **尊重所有权。**安全往返、显式差异和确认操作保护输入、用户代码及旧产物；不静默丢失内容、迁移或覆盖。
-4. **证据决定声明。**状态对应当前配置、产物与实际目标；未运行、失败和未支持清楚呈现，不显示假成功。
-5. **扩大覆盖，不稀释契约。**复用已有模型与已定 OS 路线，逐组合扩展；BMad 保持唯一需求与实施状态来源，后期方向不抢占近期交付。
+1. **Real projects first.** Connect configuration through to complete delivery. Examples demonstrate interfaces; they do not replace real-project capabilities or users' vehicle algorithms.
+2. **Independent configuration, explicit verification.** Decouple configuration/generation from optional compilation/execution, and apply resource limits precisely to the affected operations.
+3. **Respect ownership.** Safe round trips, explicit differences, and confirmation steps protect inputs, user code, and old artifacts. Do not silently lose content, migrate, or overwrite.
+4. **Evidence determines claims.** Status must correspond to the current configuration, artifacts, and actual target. Clearly present unrun, failed, and unsupported states; do not display false success.
+5. **Expand coverage without weakening contracts.** Reuse existing models and the settled OS direction, expanding combination by combination. BMad remains the sole source of requirements and implementation status; later directions must not displace near-term delivery.

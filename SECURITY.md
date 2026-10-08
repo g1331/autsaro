@@ -1,7 +1,9 @@
-# 安全问题报告
+# Reporting Security Issues
 
-如果发现可复现的安全问题，请勿在公开 Issue 中发布敏感输入、凭据或可直接利用的细节。
+[简体中文](SECURITY.zh-CN.md) · **English**
 
-若仓库启用了 GitHub Private Vulnerability Reporting，使用 Security 页的“Report a vulnerability”。未启用时，请先联系仓库维护者建立私下报告渠道；目前没有声明专用邮箱、响应时限或支持版本承诺。
+If you discover a reproducible security issue, do not publish sensitive inputs, credentials, or directly exploitable details in a public issue.
 
-报告包含受影响提交/版本、平台、复现步骤、实际影响和必要的最小输入。普通功能错误使用 Bug Issue 模板。维护者公开发行前应配置私下报告渠道并明确支持范围。
+If GitHub Private Vulnerability Reporting is enabled for this repository, use **Report a vulnerability** on the Security tab. Otherwise, contact the repository maintainers first to arrange a private reporting channel. No dedicated email address, response-time commitment, or supported-version policy is currently declared.
+
+Include the affected commit or version, platform, reproduction steps, actual impact, and the minimum input needed to reproduce the issue. Use the bug issue template for ordinary functional defects. Before a public release, maintainers should configure a private reporting channel and define the supported scope.
