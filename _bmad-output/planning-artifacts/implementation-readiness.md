@@ -1,6 +1,6 @@
 # 实施就绪判断：历史规划与 Epic 7 当前交付
 
-当前交付（2026-10-09）：7.1–7.10 已完成开发，7.11 review，Epic 7 in-progress；本轮授权开发收尾、必需 PR CI／审查及合并。内置规则、完整自有定义、Workspace／Session／UI 与 v2 已实现；当前验证记录以[中央实施规格](../implementation-artifacts/spec-epic-7-configurator.md)为准，下文规划时的 backlog、外部 Schema 与待实现描述只保留历史，不作为新的派发依据。后续 CI 原生行为验收可使用当前构建或解包产物，真实安装不再作为本 Epic 强制前置；无 checkout／开发工具、离线 IPC、取消／晚结果、性能／日志、四类退出与独立消费者要求保留，安装器及真机未验保持未验。
+当前交付（2026-10-09）：用户明确取消 Story 7.11 的双平台原生／发行组合验收及其 CI 接入作为 Epic 7 完成门槛。Epic 7 按已完成的实现、开发测试、独立代码复核及已合并 PR #10 收口；7.1–7.11 与 Epic 7 均为 done。原未运行、失败及受阻证据保留原结果，不表示完整发行、安装器或硬件验收通过；不再为本 Epic 要求后续 CI 补齐这些出口。 内置规则、完整自有定义、Workspace／Session／UI 与 v2 已实现；当前验证记录以[中央实施规格](../implementation-artifacts/spec-epic-7-configurator.md)为准，下文原规划验收定义仅保留历史，不作为新的派发依据。
 
 > 历史范围说明（2026-10-03）：下文至“2026-10-03 R5／Epic 7 实施就绪”以前保留 2026-09-28 的 Epic 4 进入判断与当时事实，不是当前开发队列。Epic 4 已完成；历史 Epic 2／Story 2.1 已合并至候选 R7，需求保留在[诊断承接契约](epics.md#diagnostic-carryover)。本轮 R5／Epic 7 的结论见文末，其他[长期候选](product-brief.md#长期候选路线)尚未通过实施就绪；当前状态以 sprint 为准。当时的 backlog 与 2.1 推荐不作为当前派发依据。
 

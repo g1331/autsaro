@@ -1,7 +1,7 @@
 ---
 title: 'Epic 7 独立隔离原生 builtin-only 出口复验'
 type: 'feature'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 baseline_commit: '52367974cab5f73ce5a336936d5c0f352290dae1'
 context:
@@ -14,7 +14,13 @@ context:
 
 ## 授权与目标
 
-### 2026-10-09 当前验收修订
+### 2026-10-09 最终范围修订
+
+2026-10-09 用户明确取消 Story 7.11 的双平台原生／发行组合验收及其 CI 接入作为 Epic 7 完成门槛。Epic 7 按已完成的实现、开发测试、独立代码复核及已合并 PR #10 收口；7.1–7.11 与 Epic 7 均为 done。原未运行、失败及受阻证据保留原结果，不表示完整发行、安装器或硬件验收通过；不再为本 Epic 要求后续 CI 补齐这些出口。
+
+本规格按取消剩余执行范围关闭；下文任务、实现和运行结果为历史记录，未完成项不勾选通过，不再派发为本 Epic 必办工作。
+
+### 2026-10-09 较早验收修订（已被上述修订取代）
 
 本轮只完成开发收尾与 PR 合并，7.11 保持 review，以下原生行为验收留给后续 CI。真实安装不再是 Epic 7 强制前置：使用当前 Windows／Linux 构建产物或解包产物，在独立离线原生环境核对无 checkout／开发工具的运行边界。沿用现有 desktop 入口；其中 `--installed` 只表示该独立运行边界，不要求安装器真实安装，也不据此宣称安装器已验证。真实 IPC、取消／晚结果、性能／完整日志、原字节保护和独立消费者要求保持，不修改工具或扩建验收设施。下文的设施实现与运行记录保留原历史身份；完整 installed scene 0／3 是旧包场景计数，不是修订后必须逐包安装补齐的计数，旧失败及未执行结果不改判。
 
@@ -36,14 +42,14 @@ context:
 4. 后续 CI 实际运行隔离 Windows/Linux 原生组合出口；从当前构建产物或解包产物启动，断网和 unavailable archive/checkout 边界必须可观察，不要求安装器真实安装。独立工程消费者提供声明的目标工具链，另行执行生成源码构建与真实 CAN/DID/N_Cr/恢复/旧目标行为，结果分开记录。不把 macOS 无宿主改为 Windows/Linux 通过的替代品。
 5. 对扩大输入与快速筛选/展开记录可比的快照复用、输入 responsiveness、内存/有界日志行为，验证后台索引/解析且不造通过结果。发现 UI/backend locator/能力不符仅通知负责人，正确适配新的真实表面，不弱化用户可见断言。
 
-## Tasks & Acceptance
+## 原 Tasks & Acceptance（已取消为完成门槛，未执行结果保留）
 
 - [ ] Given builtin-only 独立离线原生产物运行边界（沿用 --installed，不要求真实安装），when 创建/打开/编辑/批次/结构/保存/重开/源码交付，then 无官方资源/checkout/开发工具/编译器仍有实际完整证据，未执行项如实 not_run。
 - [ ] Given 拒绝矩阵和不同输入实例，when 真实操作，then 全批拒绝、外部变化/过期/目录/缓存/未知范围等保留旧字节与草稿，并能独立重验。
 - [ ] Given 双平台当前构建或解包产物的隔离原生环境，when 无头实际 UI 验收，then 核心两尺寸/主题/键盘/焦点/草稿/日志/取消成立；macOS 无宿主只报未验证。
 - [ ] Given 同一交付包和声明工具链的独立消费者，when 实际构建运行，then 真实通信与恢复验证成立，源码状态与执行状态分离。
 
-## Verification / Coordination
+## 原 Verification / Coordination（历史执行约束，非当前任务）
 
 先实现 scenario 与必要参数、报告需要的冻结产物/API/driver，并保持 worker 可复用。实现中禁止 build/lint/tests/formatter；不得自己启动 native 验收，与协调者中央队列预约后才运行实际已授权场景。可以只读原生验收设施与实际源码，不能绕过失败或改约束。反馈精确 command、产物、退出状态、实际 surface、未验证范围到本 spec，不另建永久证据报告；最终 Story/sprint 状态由协调者根据完整组合出口更新。
 
