@@ -9,11 +9,14 @@ npm run lint --prefix ui
 npm run test --prefix ui
 npm run build --prefix ui
 cargo test --locked --manifest-path core/Cargo.toml
+cargo test --locked --manifest-path src-tauri/Cargo.toml
 uv run --locked python -B -m unittest discover -s tests/python
 uv run --locked ruff check tools tests/python scripts
 ```
 
 前端使用 Vitest；`npm run test:watch --prefix ui` 用于开发。Python 普通测试位于 `tests/python`，进程和平台测试独立选择。默认 Rust 测试不需要外部 Python 或官方档案。
+
+Tauri 后端单测覆盖 Session、设置与请求归属，需先准备[桌面平台依赖](environment.md)并运行 `npm run build --prefix ui`。本地 `verify --scope desktop`／`all` 及 PR 的 desktop job 均执行锁定 Cargo 单测；本地聚合入口继续执行 build／Clippy，PR job 保留 build。这些检查不启动原生窗口，不能替代 GUI／IPC 行为验收。
 
 ## 生成 C 的静态检查
 

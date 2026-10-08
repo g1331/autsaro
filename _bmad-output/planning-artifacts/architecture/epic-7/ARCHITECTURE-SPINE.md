@@ -7,7 +7,7 @@ paradigm: source-backed transactional layered workbench
 scope: CFG-1–CFG-4 / formal Epic 7
 status: final
 created: 2026-10-03
-updated: 2026-10-03
+updated: 2026-10-09
 binds: [CFG-1, CFG-2, CFG-3, CFG-4, CFG-NFR-1, CFG-NFR-2, CFG-NFR-3, CFG-NFR-4, CFG-NFR-5]
 sources:
   - ../../prd.md
@@ -23,7 +23,7 @@ companions: []
 
 源文件支撑的事务式分层工作台。ARXML 原字节是配置权威；Workspace 派生对象／定义投影，Session 串行接受变化，React reducer 管理唯一交互上下文。定义编辑与生成剖面是同一输入的不同消费者，不用配置编辑权限推定生成能力。
 
-本轮为已批准的前瞻性规划更新，不是实现验收：现有软件仍使用外部 XSD/MOD，本任务没有新增原生校验代码。新 R5 默认由软件自带的产品原创规则与模块定义完成校验／编辑；官方档案只作为开发参考 oracle，不是普通使用者的安装、保存或生成前置条件。历史 Epic 1/3/4 的行为与完成证据不改写。
+本架构于 2026-10-03 固定契约。当前 7.1–7.11 与 Epic 7 均为 done；用户已取消原生／发行组合验收完成门槛，未验结果保留，架构及产品契约不改；默认 R5 已由软件自带的产品原创规则与模块定义完成校验／编辑，外部 XSD/MOD 保留在开发 oracle 与严格 v1 兼容路径；默认 R5 中官方档案只作为开发参考 oracle，不是普通使用者的安装、保存或生成前置条件。历史 Epic 1/3/4 的行为与完成证据不改写。
 
 ```mermaid
 flowchart TB
@@ -40,7 +40,7 @@ flowchart TB
 
 ## Inherited Invariants
 
-[根架构](../../architecture.md)的配置原字节权威、唯一 Session／reducer、预览 fingerprint、受管进程、源／执行分离与隔离原生验证保持约束。已批准的新 R5 内置规则方案取代普通用户必须提供官方档案的旧默认，不改变历史格式所需的外部身份／完整性校验。Epic 4 的 OS、输入／集成及 wire identity 不改写；本架构不是 Epic 4 子级，不重编号或复制其 AD。当前行为事实见 core/src/arxml.rs、arxml/persistence.rs、integration/graph.rs、integration/configuration.rs、generator/output.rs，src-tauri/src/workbench.rs 和 ui/src/workbench/useWorkbench.ts；下述内置规则条款是待实现契约。
+[根架构](../../architecture.md)的配置原字节权威、唯一 Session／reducer、预览 fingerprint、受管进程、源／执行分离与隔离原生验证保持约束。已批准的新 R5 内置规则方案取代普通用户必须提供官方档案的旧默认，不改变历史格式所需的外部身份／完整性校验。Epic 4 的 OS、输入／集成及 wire identity 不改写；本架构不是 Epic 4 子级，不重编号或复制其 AD。当前行为事实见 core/src/arxml.rs、arxml/persistence.rs、integration/graph.rs、integration/configuration.rs、generator/output.rs，src-tauri/src/workbench.rs 和 ui/src/workbench/useWorkbench.ts；下述内置规则条款约束已交付开发实现和后续验收，不表示发行或完整标准符合性已验证。
 
 ## Invariants & Rules
 
@@ -108,7 +108,7 @@ flowchart TB
 
 - **Binds:** CFG-NFR-3, CFG-NFR-4, CFG-NFR-5
 - **Prevents:** 只验静态演示、操作用户桌面、包依赖 checkout 或跨目标升级声明。
-- **Rule:** 新壳层内嵌在现有 Tauri 包，不采用生产模拟 invoke、原型计时器或新服务进程。正式组件遵守根 DESIGN 与前瞻性 EXPERIENCE；通用编辑新增表面遵守其扩展接入契约，冻结原型中的官方资源 setup 不作为新要求。Windows/Linux 从私有隔离原生会话验证实际 IPC、发行包无 checkout 配置链和独立源码交接，复用 autosar_tooling desktop；macOS 保留实际受支持边界，无隔离宿主标为未验证。安装图形迁入 ui/public 和 src-tauri/icons 时同批移除旧身份引用，PNG RGBA 及明暗灯位同步；桌面 ICO/ICNS 用固定通用灯色，不假称 OS 自动适配。解析/校验/扫描不在 GUI 线程，继承 50 MiB 单输入、路径与 XML 防护，不为了新界面放宽旧检查。开发验收以合法持有且固定的 R24-11 官方 XSD/MOD 为独立 oracle，对照正例及结构／顺序／基数／类型／值／默认值／引用／跨模块和已知不支持的定向反例；不删合法旧测试、压制错误或将必需验证降为 not_run。用户安装烟测不含官方档案路径／环境文件、checkout、Node/Rust/uv 或编译器，实际覆盖编辑／保存／重开／校验／生成与预期拒绝；构建和行为另验。日志保留实际失败及 owned 输出，支持受管取消，不新增遥测、云后端或持久审计产品；本次仅记录要求，不声称已完成这些验收。
+- **Rule:** 新壳层内嵌在现有 Tauri 包，不采用生产模拟 invoke、原型计时器或新服务进程。正式组件遵守根 DESIGN 与前瞻性 EXPERIENCE；通用编辑新增表面遵守其扩展接入契约，冻结原型中的官方资源 setup 不作为新要求。Windows/Linux 从私有隔离原生会话使用当前构建产物或解包产物，验证实际 IPC、无 checkout 配置链和独立源码交接，复用 autosar_tooling desktop；macOS 保留实际受支持边界，无隔离宿主标为未验证。安装图形迁入 ui/public 和 src-tauri/icons 时同批移除旧身份引用，PNG RGBA 及明暗灯位同步；桌面 ICO/ICNS 用固定通用灯色，不假称 OS 自动适配。解析/校验/扫描不在 GUI 线程，继承 50 MiB 单输入、路径与 XML 防护，不为了新界面放宽旧检查。开发验收以合法持有且固定的 R24-11 官方 XSD/MOD 为独立 oracle，对照正例及结构／顺序／基数／类型／值／默认值／引用／跨模块和已知不支持的定向反例；不删合法旧测试、压制错误或将必需验证降为 not_run。原生运行烟测不含官方档案路径／环境文件、checkout、Node/Rust/uv 或编译器，实际覆盖编辑／保存／重开／校验／生成与预期拒绝；构建和行为另验。日志保留实际失败及 owned 输出，支持受管取消，不新增遥测、云后端或持久审计产品；真实安装不再是 Epic 7 强制前置；安装器未验证保持未验证，开发构建／单测不替代这些原生行为验收。
 
 ## Consistency Conventions
 
@@ -197,7 +197,7 @@ v2 导入先核对完整 seal／身份，再要求本机可信产品规则实现
 
 沿 core/src/arxml 与 integration 的实际解析／安全补丁提取可复用 Source/Definition 索引和 ChangeSet 能力，产品原生结构／模块语义规则及不可变 metadata 进入既有 core／包构建链；generator 继续消费有限计划，src-tauri 增量扩展现有 Session/Operation/Reply。UI 把现有 hook 内部职责分开，统一壳层承载已有编辑器与新增定义编辑文档。具体 Rust 子文件、内部缓存容器及 React 模块命名由实现拥有，禁止为尚无第二消费者的模块建立插件框架。
 
-部署仍是本地 Windows/Linux 桌面包与各自 controlled target；产品规则代码／inventory／内置 metadata 随软件交付，构建及启动核对。官方档案仅留在合法开发 oracle 环境，与用户发行包／模板分离；原始工程、独立输出、构建与私有日志目录物理分离。内置支持范围的安装使用无需官方档案路径、环境文件、checkout 或开发语言工具／编译器；执行工具仍属显式独立能力。可选扩展明确导入并隔离，不成为无关工程的门。源码交接不带原机器路径；既有无 checkout 工具与封存工程协议复用，新增模板／成员元数据及自描述规则／必需扩展身份随实际输入一起交接。
+部署仍是本地 Windows/Linux 桌面包与各自 controlled target；产品规则代码／inventory／内置 metadata 随软件交付，构建及启动核对。官方档案仅留在合法开发 oracle 环境，与用户发行包／模板分离；原始工程、独立输出、构建与私有日志目录物理分离。内置支持范围的运行使用无需官方档案路径、环境文件、checkout 或开发语言工具／编译器；执行工具仍属显式独立能力。可选扩展明确导入并隔离，不成为无关工程的门。源码交接不带原机器路径；既有无 checkout 工具与封存工程协议复用，新增模板／成员元数据及自描述规则／必需扩展身份随实际输入一起交接。
 
 ## Capability → Architecture Map
 

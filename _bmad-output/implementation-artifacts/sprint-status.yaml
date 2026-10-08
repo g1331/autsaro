@@ -37,7 +37,7 @@ story_location: _bmad-output/implementation-artifacts
 # Historical Epic 4 baseline: 4844e1d (2026-09-28); its completed scope remains unchanged.
 # Entry conditions and dependencies: ../planning-artifacts/implementation-readiness.md
 # Epic 4 entry/dependency notes are historical; all 22 stories have completed.
-# R5 is formal Epic 7; Stories 7.1-7.10 are development-complete, while 7.11 is review pending the deferred CI release acceptance.
+# R5 is formal Epic 7; all 11 stories and the Epic are done under the authorized development completion scope.
 # Epic 4 complete: all 22 stories, applicable host SC1 behavior and independent handoff passed through BMad.
 # Epic 2 / Story 2.1 merged into candidate R7 without implementation or completion.
 # Historical scope, backlog and retained obligations: ../planning-artifacts/epics.md#diagnostic-carryover
@@ -45,7 +45,9 @@ story_location: _bmad-output/implementation-artifacts
 # Original R5 architecture: 2039020; original story plan: d1be8cb (2026-10-03).
 # Current native-rule amendment: product-owned builtin rules; official XSD/MOD are development references, not normal user setup.
 # Stable Story IDs remain unchanged. The 2026-10-06 user request limits this handoff to development and unit/integration tests.
-# Native desktop, hardware and full installed acceptance are deferred to the later CI stage; no new isolation facilities are required here.
+# The 2026-10-09 authorization extends development closeout through PR checks, review and merge.
+# The subsequent 2026-10-09 request removes Story 7.11 native/release acceptance and CI integration from the Epic completion gate; historical unverified results remain unverified.
+# Real installation is no longer an Epic 7 prerequisite; native behavior may use current built/extracted artifacts without claiming installer verification.
 # Development completion and the original unverified release exits are recorded separately in spec-epic-7-configurator.md.
 # Remaining roadmap candidates are not implementation-ready or registered here.
 development_status:
@@ -90,7 +92,7 @@ development_status:
   epic-6: backlog
   epic-6-retrospective: optional
 
-  epic-7: in-progress
+  epic-7: done
   7-1-以内置规则安全打开并检查真实工程: done
   7-2-使用内置定义检查参数约束与真实引用: done
   7-3-按定义应用参数与引用并安全保存: done
@@ -101,7 +103,7 @@ development_status:
   7-8-保护草稿并完成键盘与问题焦点接力: done
   7-9-保存分层设置并迁入暂定身份: done
   7-10-独立预览源码并保护用户代码再生成: done
-  7-11-独立复核发行配置链与完整工程交接: review
+  7-11-独立复核发行配置链与完整工程交接: done
   epic-7-retrospective: optional
 
   epic-8: in-progress

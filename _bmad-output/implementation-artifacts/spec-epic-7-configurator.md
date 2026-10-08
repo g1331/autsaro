@@ -16,15 +16,15 @@ context:
 
 ## Intent
 
-**Problem:** 外部规范门禁阻断离线配置，通用工作台尚未实现。
+**Problem:** Epic 7 主体开发已完成，但 Tauri 单测尚未纳入正常开发检查，规划与交接仍有旧实施状态；需要完成开发收尾并交付到 PR 合并。
 
-**Approach:** 完成 Epic 7 的核心、IPC、界面与调用方开发，以及完整单元／集成测试、静态检查、必要构建和代码复核。2026-10-06 用户明确将本次收尾限定为开发与单元测试完整，不执行真机、原生桌面或完整发行场景；后续发行验收交给 CI 阶段，不扩建隔离或验收设施作为开发负担。
+**Approach:** 完成 Epic 7 的核心、IPC、界面与调用方开发，以及完整单元／集成测试、静态检查、必要构建和代码复核。2026-10-06 用户明确将本次收尾限定为开发与单元测试完整，不执行真机、原生桌面或完整发行场景；后续发行验收交给 CI 阶段，不扩建隔离或验收设施作为开发负担。2026-10-09 用户明确授权完成开发收尾并推进到 PR 合并；当时7.11保持review，发行验收留给后续CI；同日最新指示取消该验收完成门槛，7.11与Epic改为done。同日用户明确取消真实安装作为 Epic 7 强制验收前置；后续原生行为可使用当前构建产物或解包产物验证，不能据此宣称安装器已验证。
 
 ## Boundaries & Constraints
 
 **Always:** 原字节权威；唯一 Workspace/Session/reducer；稳定 opaque 身份；四校验域如实报告；原子 prepare/apply/save；全体已支持模块定义；用户代码保护；严格 v1/v2 分派与 seal；固定 R24-11 开发 oracle；开发测试结果与未执行的发行验收分别记录。
 
-**Never:** 内嵌或机械转换官方 XML、削弱旧拒绝、mock IPC、占位控件、改用户桌面、扩大生成 allowlist、提前实施 R6/R7、自动 commit/push。
+**Never:** 内嵌或机械转换官方 XML、削弱旧拒绝、mock IPC、占位控件、改用户桌面、扩大生成 allowlist、提前实施 R6/R7、未经授权的 release/deploy。
 
 ## I/O & Edge-Case Matrix
 
@@ -61,12 +61,12 @@ context:
 - [x] 7.8：`workbench/useWorkbench.ts`、`App.tsx` — 全入口草稿保护、问题焦点、键盘/可访问性。
 - [x] 7.9：`src-tauri/src/workbench.rs`、`ui/src/pages/SettingsPage.tsx`、`ui/public`、`src-tauri/icons` — 分层设置/主题/正式身份。
 - [x] 7.10：`prepared.rs`、`generator/output.rs`、`integration/handoff.rs`、`scripts/ecu_tools` — 拥有权、live/snapshot、严格 v2。
-- [x] 7.11 开发收尾：`core/tests/end_to_end.rs`、既有开发检查入口、`README.md`、`docs/project/OWNER_GUIDE.md`、Story/spec 与 sprint — 完成开发测试与独立复核，更新开发状态；原双平台发行出口保留为后续 CI 验收，当前不执行或扩建相关设施。
+- [x] 7.11 开发收尾：`core/tests/end_to_end.rs`、既有开发检查入口、`README.md`、`docs/project/OWNER_GUIDE.md`、Story/spec 与 sprint — 完成开发测试与独立复核，更新开发状态；按最新用户指示取消原双平台发行出口及其CI接入完成门槛，不执行或扩建相关设施。
 - [x] 跨层：`core/src/{lib,model}.rs`、`src-tauri/src/{lib,workbench}.rs`、UI 类型 — 同批接线全部调用方。
 
 **Acceptance Criteria:**
 - Given 当前 Epic 7 实现，when 本次开发收尾，then 核心、IPC、界面与调用方接线完整，适用单元／集成测试、静态检查和构建通过，独立代码复核的必要发现闭合。
-- Given 原 Story 7.11 发行与跨故事出口，when 本次移交，then 明确记录未完成范围及后续 CI 验收责任，不把开发检查通过写成发行／真机通过，不继续为原生验收扩建脚本。
+- Given 原 Story 7.11 发行与跨故事出口，when 本次移交，then 明确记录未验证范围及已取消的验收门槛，不把开发检查通过写成发行／真机通过，不继续为原生验收扩建脚本。
 
 ## Implementation Notes
 
@@ -190,3 +190,67 @@ context:
 - 侧栏通过实际 `ProjectTree`／`PanelResizeHandle` 和受控布局 fixture 验证，不冒充真实工程 IPC：左右鼠标拖动分别从 180→300px、220→310px；检查器从初始隐藏状态展开后可调整，ArrowLeft 增宽至 320px；Escape 撤销拖动，工程树收起／重开保留 300px，双击／Enter 分别恢复 250／290px。两侧最大化尺寸时中央仍有 320px；从 1480px 窗口缩到 1080px 再放大，工程树 600→200→600px，首选值没有被改写。
 - 700px 窗口下两侧仍采用原覆盖模式，宽度不超出所属框架；浅／深色悬停及键盘焦点可见，无浏览器运行错误。应用帮助与 README 已说明调整方式和当前运行期间的保留范围，临时布局挂载与本次预览服务均已清理。
 - 最终 UI TypeScript／Vite build、ESLint、锁定 Prettier 和 `autosar_tooling quality --base af6235c6ac9dcbf9da7158aab201b7f0c60d0b8d` 通过。没有新增依赖、原生设置字段或验收设施；未运行无关主机回归、未构建发行包、未提交／推送，原生发行验收范围仍交给 CI。
+
+
+## 2026-10-09 开发收尾与 PR 合并
+
+本轮开发交付基线：`a51e81675cacfb0a92e8f8e47cf2efeaa90b6956`。原 baseline_commit 保留，以上基线用于本轮增量审查。用户已明确确认仅开发收尾与 PR 合并，7.11 保持 review，发行验收交给后续 CI；不新增规格台账、不扩建验收设施、不推进免费 MISRA 的独立整改任务。
+
+### 本轮 Code Map
+
+- `../planning-artifacts/{prd,epics,implementation-readiness}.md`：仅修正当前 Epic 7 尚未实施、内置规则尚未实现等过时现状描述；保留历史规划日期、稳定编号与原行为验收；按用户新指示移除当前真实安装强制要求，在相关 PRD、epics、readiness、Epic 7 spine 与 context 保持一致。
+- `epic-7-context.md`、`epic7-handoff.md`、`sprint-status.yaml`：同步本轮授权与开发／发行分层状态；历史失败、旧包身份、未完成验收及行动项保留。handoff 当前接手结论更新为本轮交付，历史段落明确按原身份使用。
+- 本文件：记录本轮开发验证与独立审查；仅在本轮任务完成后恢复开发规格 done，不把 Epic 或 7.11 改为 done。
+- `tools/python/src/autosar_tooling/verify.py`、`.github/workflows/checks.yml`：desktop 入口原先只 build/clippy，现有 Tauri Session/settings 单测未执行；增加锁定 Cargo test，保留构建和静态检查，不把单测当 GUI 验收。
+- `core/tests/builtin.rs` 已注册当前规则／定义／Workspace／交接测试；`ui/package.json` 为 UI 正常 lint/test/build 入口；测试说明更新真实后端单测入口。
+
+### 本轮 Tasks & Acceptance
+
+- [x] 修正上述规划与交接工件中冲突的当前实施状态；取消真实安装强制前置、允许现有构建／解包产物做后续原生行为验收，不取消其他真实行为／独立消费者要求、不重写历史通过或失败。
+- [x] 本地 desktop 聚合入口与 PR desktop job 执行既有 Tauri 单测，补充一个最小入口回归测试。
+- [x] 当前默认 Core 测试、Tauri 单测、UI lint/test/build 及必要静态／资产／链接检查通过；记录实际执行数量与限制。
+- [x] 本轮差异完成独立审查并关闭必要发现，7.1–7.10 done、7.11 review、Epic in-progress 保持。
+远端交付门禁：提交、推送、创建并关联 PR，等待必需 CI 与审查线程关闭，正常合并后核对 master 包含本轮提交；实际结果以对应 PR 的检查和合并记录为准。本规格 done 表示开发修改、本地验证与独立复核完成，不提前声称远端已合并。
+
+验收：Given 已完成的 Epic 7 开发和未完成发行出口，when 本轮交付，then 当前规划／实施／交接一致，既有 Tauri 单测从正常本地与 PR 入口执行，开发回归通过；远端交付另须必需 PR CI 通过、PR 合并且目标分支包含修订，结果以 PR 记录为准；真实安装不再作为本 Epic 强制出口，原生行为／独立消费者及真机的实际未验范围保留，不以普通 CI desktop 构建／单测替代真实桌面验收。
+
+本轮实现方完成规格中本轮 Code Map 与 Tasks 的修改和一个最小入口回归测试；Core、UI、Tauri 实际执行由协调者进行，完成后返回准确修改及剩余事项，不触发远程动作。无产品改动时不重复这些全量检查。
+
+### 本轮实际开发验证
+
+- 当前 Linux 源码的 `cargo test --locked --manifest-path core/Cargo.toml`：17 项库单测、71 项内置规则／定义／Workspace／交接测试、1 项生成样本测试全部通过；未启用 official-oracles/native-tests，未把这些层级记为通过。
+- `cargo test --locked --manifest-path src-tauri/Cargo.toml`：5 项 Session／settings 单测通过（0.14 秒），包含并发外观保存、外部改设置和 staging 冲突保护；没有启动 GUI。
+- UI 正常 lint、Vitest 11 文件／92 项测试、TypeScript／Vite build 通过；保留现有大 chunk 提示，不为此扩大到性能重构。
+- Core Clippy（correctness／suspicious 门禁）、Python 普通 44 项测试（含新增入口失败传播回归）、ruff 与 assets check 通过；资产摘要零变化。桌面 build／Clippy 及正常 `verify --scope desktop` 通过，实际执行 Tauri 单测并保留 build／Clippy；本轮增量 quality 通过。三路独立审查及必要文档修订已完成，见本轮 triage；PR 必需 CI 与合并不在这些本地结果中，另以 PR 记录为准。
+
+
+### 本轮 Review Triage Log
+
+三路独立只读审查：Edge Case 无发现；Verification Gap 无缺口。Blind Hunter 的八项逐项核对如下。
+
+| 发现 | 判定与处理依据 |
+| --- | --- |
+| handoff 当前状态与中央规格阶段不一致 | low／patch：交付前同批恢复中央开发规格 done 与 handoff done，保留 Epic in-progress／7.11 review。 |
+| 活动原生验收规格仍要求 installed | medium／patch：同步该既有规格的当前要求，允许构建／解包产物；沿用 --installed 的隔离运行边界参数，不再要求安装器真实安装，历史结果不重写。 |
+| desktop scope 未准备 ui/dist | false：原 desktop:build 已有相同前置；测试指南明确桌面依赖及先运行 UI build，当前正常入口实际通过。本轮没有引入从干净 checkout 自动准备全部依赖的契约。 |
+| 新回归没有成功后 build／Clippy 断言 | false：原步骤未变；本轮已从正常 verify desktop 入口实际运行并通过 test、build、Clippy。新增回归保护本轮新增的测试失败停止义务，不为未变列表增加镜像断言。 |
+| core／ui scope 没有 Tauri 排除断言 | false：commands 的既有 scope 选择仍按 core／ui／desktop 独立列表，新增命令只在 desktop 列表；源码核对未引入跨 scope 依赖。 |
+| Windows 后端单测覆盖不明确 | low／patch：本轮 Tauri 5 项仅在 Linux 执行，PR desktop job 也仅 Linux；Windows 后端单测没有运行，不将其写成双平台单测通过。 |
+| CI 增加测试可能超过30分钟 | false：目前无超时证据；不据假设扩建缓存或放宽超时，仍等待实际 PR desktop job 的完整通过与耗时，再判断是否需要修复。 |
+| epics 授权字段仍像当前 no-code | low／patch：标明2026-10-03历史规划授权，并记当前开发收尾至PR合并授权，保留旧来源。 |
+
+本轮未递延新的产品问题；历史原生行为未验项沿现有7.11规格继续承接。Windows Tauri 单测本轮未运行；PR 的 desktop job 仅提供 Linux 后端单测与构建证据。
+
+本轮已完成正常检查链与活动验收规格的文档修订，取消真实安装强制要求；测试入口独立提交 `3a3003e92a7bd12eac2bebba5d7fef4e58b2e566`，规划／交接修订随本次 PR 提交。没有本轮产品行为改动、额外隔离设施或新规格台账。
+
+## 2026-10-09 最终范围修订与 Epic 完成
+
+2026-10-09 用户明确取消 Story 7.11 的双平台原生／发行组合验收及其 CI 接入作为 Epic 7 完成门槛。Epic 7 按已完成的实现、开发测试、独立代码复核及已合并 PR #10 收口；7.1–7.11 与 Epic 7 均为 done。原未运行、失败及受阻证据保留原结果，不表示完整发行、安装器或硬件验收通过；不再为本 Epic 要求后续 CI 补齐这些出口。
+
+- [x] 开发收尾 PR #10 已合并至 master（`c39f6c85`），26 项 PR CI 全部通过；合并树与已验证提交一致。
+- [x] Story 7.11 改为开发交付复核收口，取消原双平台原生／发行组合验收及其 CI 接入完成门槛；既有产品行为、测试和验收入口保留。
+- [x] sprint、规划、架构当前状态及交接说明同步为 7.1–7.11 和 Epic 7 done。
+
+前文 review／in-progress 与待后续CI的说明是本次修订前的历史记录，以本节为准。此处完成是授权范围收口，不是原完整发行场景通过。
+
+本次仅修改 BMad 规划／状态文档。校验：sprint_plan validate 返回 valid=true；修正 last_updated 缺少时分的既有格式问题；增量 quality（基线 c39f6c85）与 git diff --check 通过；49 个本地 Markdown 目标存在。差异复核确认仅 Epic 7 状态及范围变化，其他 Epic、产品代码、现有测试和 CI 门禁不变。此次范围修订 PR 的 CI 与合并结果以对应 PR 记录为准。

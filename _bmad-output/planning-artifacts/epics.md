@@ -17,7 +17,7 @@ inputDocuments:
   - _bmad-output/planning-artifacts/architecture/epic-4/R24-11-CONTRACT.md
   - _bmad-output/planning-artifacts/architecture/epic-4/FREERTOS-FEASIBILITY.md
   - _bmad-output/planning-artifacts/implementation-readiness.md
-updated: 2026-10-03
+updated: 2026-10-09
 roadmapUpdate: R5-formalized-Epic-7
 r5WorkflowScope: Epic 7 / candidate R5
 r5WorkflowState: complete
@@ -30,13 +30,14 @@ r5InputDocuments:
   - _bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/DESIGN.md
   - _bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/EXPERIENCE.md
 r5PlanningValidation: passed
-r5ImplementationStatus: not-started
+r5ImplementationStatus: done
 r5PlanningBaseline: 2039020
 r5PreviousWorkflowCompleted: 2026-10-03
 r5PreviousPlanningValidation: passed-before-builtin-rule-amendment
-r5ApprovalMode: delegated-planning / no-code
+r5ApprovalMode: delegated-planning / no-code # Historical planning authorization, 2026-10-03.
+r5CurrentAuthorization: 2026-10-09 / development-completion-with-native-release-gate-removed
 r5ValidationModel: software-native-builtin-rules-and-supported-module-catalog
-r5BacklogState: Epic-7-and-11-stories-not-started / R11-priority-unchanged
+r5BacklogState: Stories-7.1-7.11-done / Epic-7-done / R11-priority-unchanged
 r5PlanningAmendment: 2026-10-03-native-rules / current-working-tree
 r5WorkflowCompleted: 2026-10-03
 r6WorkflowScope: candidate R6 / formal Epic 8
@@ -70,7 +71,7 @@ r6InputDocuments:
 
 **后续规划边界：**Epic 4 的输入、接口与 OS 路线已定案，不重新选型。旧 Epic 5 的诊断／持久部分由 R7 细化，网络管理与生命周期由 R8 细化，更广存储由 R18 扩展；旧 Epic 6 对应 R10 的首个 MCU 成果。保留旧 5、6 的 backlog 和原范围作为追溯基线，在候选正式化时明确拆分／承接，不同时建立重复实现队列。旧定义中的“一 DTC 最小剖面”不取消已承接的双故障需求。
 
-长期范围的唯一目录是[产品简述 R5–R29](product-brief.md#长期候选路线)。2026-10-03 用户授权将 R5 收口为正式 Epic 7：统一 Configurator，与 R6 共用对象／引用及应用源码所有权接缝，不在此扩展多组件调度；本次再按授权改为软件自有内置规则及全部受支持 BSW 定义的规划，普通用户不提供官方 XSD/MOD。历史 frontmatter 中的 `planningValidation: passed`、`workflowScope: Epic 4 only` 仍只描述已完成 Epic 4；R5 原放行不作为本次修订的新通过证据，当前等待独立最终复核。软件尚未实现本次内置校验、当前外部档案依赖未被此文档消除；Epic 7 与 11 个稳定 Story ID 仍未实施，R11 优先级及旧 Epic 5／6 与诊断承接不变，后续新成果继续使用未占用编号。
+长期范围的唯一目录是[产品简述 R5–R29](product-brief.md#长期候选路线)。2026-10-03 用户授权将 R5 收口为正式 Epic 7：统一 Configurator，与 R6 共用对象／引用及应用源码所有权接缝，不在此扩展多组件调度；本次再按授权改为软件自有内置规则及全部受支持 BSW 定义的规划，普通用户不提供官方 XSD/MOD。历史 frontmatter 中的 `planningValidation: passed`、`workflowScope: Epic 4 only` 仍只描述已完成 Epic 4；R5 原放行不作为本次修订的新通过证据，当时等待独立最终复核。当前内置规则、自有定义及统一工作台已完成开发，7.1–7.11 与 Epic 7 为 done；按用户最新授权取消原生／发行组合验收完成门槛，未验结果不改判，R11 优先级及旧 Epic 5／6 与诊断承接不变，后续新成果继续使用未占用编号。
 
 ## Epic 1: 主机 CAN 标准接口与可运行信号链
 
@@ -667,7 +668,7 @@ So that Epic 4 的完成结论由可复现结果支持。
 
 ## R5 实施输入与要求提取
 
-来源为 PRD 的“R5 选定范围与完成契约”及本次软件自有内置校验授权；本轮只修订 Epic 7，不编码、不推送。全局 PRD 的 draft 由远期未选定范围造成，R5 需求范围已选定，本次修订的就绪／放行结论由独立最终复核确定。既有 Epic 1–6、完成状态、旧验收和 R7 承接需求原样保留。
+来源为 PRD 的“R5 选定范围与完成契约”及 2026-10-03 软件自有内置校验授权；该规划轮只修订 Epic 7，不编码、不推送。当前实施与交付范围以中央规格和 sprint 为准。全局 PRD 的 draft 由远期未选定范围造成，R5 需求范围已选定，本次修订的就绪／放行结论由独立最终复核确定。既有 Epic 1–6、完成状态、旧验收和 R7 承接需求原样保留。
 
 ### Functional Requirements — selected R5
 
@@ -707,11 +708,13 @@ AD-1–AD-11 位于 [Epic 7 spine](architecture/epic-7/ARCHITECTURE-SPINE.md)，
 
 **Epic 7：可独立使用的统一 ECU 工程配置工作台。**集成工程师从真实 ARXML 或原创模板建立工程，无需下载／注册官方 XSD/MOD，即可凭软件自有规则与全部受支持 BSW 定义导航、编辑、批量修复、安全保存和验证，再独立交接受支持的源码；设置与配置不被缺编译器锁住。可选第三方定义是隔离扩展，其缺失／无效仅影响消费者，不覆盖内置定义或授予生成能力。覆盖全部 CFG-1–CFG-4、CFG-NFR-1–CFG-NFR-5 和 UX7-1–UX7-8。复用已完成 Epic 1／3／4，不依赖尚未实施的 R6／R7、旧 Epic 5／6 或 MCU。
 
-一个用户成果 Epic 而非分别拆“数据库／API／UI”：源索引、事务、壳层与拥有权反复触及同一工作台，按可实际使用的纵向故事顺序推进。分阶段交付不取消完整 R5 退出。
+一个用户成果 Epic 而非分别拆“数据库／API／UI”：源索引、事务、壳层与拥有权反复触及同一工作台，按可实际使用的纵向故事顺序推进。当前完成范围按下述用户修订执行，原完整发行退出不再作为 Epic 7 完成门槛。
 
 ## Epic 7: 可独立使用的统一 ECU 工程配置工作台
 
 来源：候选 R5；覆盖 CFG-1–CFG-4、CFG-NFR-1–CFG-NFR-5、UX7-1–UX7-8。每个故事贯通实际核心、IPC 和所需界面，不拆出等待未来 UI／后端才能使用的空层。11 个 Story ID 和顺序依赖不变，仅指向之前故事；既有配置／生成／主机行为始终保留。四个校验域及目标 allowlist 不放宽：schema 只表示明确支持范围内的原生结构检查，未知／不支持覆盖必须明确，不声称完整标准通过；未知内容原字节保留、不安全语义只读，其消费语义不支持阻断有关生成而非所有浏览／安全修复。原型不是验收工具。
+
+2026-10-09 用户明确取消 Story 7.11 的双平台原生／发行组合验收及其 CI 接入作为 Epic 7 完成门槛。Epic 7 按已完成的实现、开发测试、独立代码复核及已合并 PR #10 收口；7.1–7.11 与 Epic 7 均为 done。原未运行、失败及受阻证据保留原结果，不表示完整发行、安装器或硬件验收通过；不再为本 Epic 要求后续 CI 补齐这些出口。
 
 ### Story 7.1: 以内置规则安全打开并检查真实工程
 
@@ -867,18 +870,24 @@ So that 用户算法和旧有效工程不会被生成器或升级覆盖。
 
 ### Story 7.11: 独立复核发行配置链与完整工程交接
 
-As a 非实现者的接收工程师,
-I want 在干净隔离环境操作发行工作台并复验生成工程,
-So that R5 的完成来自真实工程而不是截图或模拟成功。
+As a 项目维护者,
+I want 依据已完成的开发、测试、代码复核和 PR 合并关闭本 Epic,
+So that 已取消的原生／发行验收不再阻塞开发成果收口。
 
-覆盖全部 CFG、CFG-NFR、UX7 的组合出口；AD-1–AD-11。依赖：7.10。
+覆盖开发交付收尾；依赖：7.10。状态：done。
 
-**Acceptance Criteria:**
+**当前 Acceptance Criteria（2026-10-09 用户范围修订）：**
 
-- **Given** 本次 Windows MSI 和 Linux deb／解包 AppImage、原 checkout 不存在、无 Node/Rust/uv/编译器，且无官方 XSD/MOD 档案、路径设置或环境文件、网络不可用，**When** 通过现有隔离 desktop 入口建立／导入支持范围内工程、内置定义编辑、批量修复、保存重开、原生验证及生成源码，并执行预期拒绝，**Then** 完整正常 R5 配置链由打包内置规则与全部受支持模块定义通过真实 IPC／原生文件操作完成，而非借官方资源或开发机依赖，**And** 不切换用户输入桌面，受管进程清理回执真实；macOS 无宿主的检查单独标未验证，原 v1 兼容所需资源另验、不偷换默认流程。
+- 7.1–7.10 的实现及开发验证已完成，独立代码复核的必要发现已关闭。
+- 开发收尾 PR #10 已合并，26 项 PR CI 检查通过；规格、交接说明与 sprint 状态一致。
+- 取消双平台隔离原生组合验收、断网独立运行、额外独立消费者组合复验及对应 CI 设施作为本 Epic 完成门槛；保留现有测试、工具和产品行为约束，不将旧失败／未执行记录改为通过。
+
+**原发行验收记录（已取消为本 Epic 完成门槛，不再作为后续 CI 必办队列）：**
+
+- **Given** 本次 Windows／Linux 当前构建产物或解包产物、原 checkout 不存在、无 Node/Rust/uv/编译器，且无官方 XSD/MOD 档案、路径设置或环境文件、网络不可用，**When** 通过现有隔离 desktop 入口建立／导入支持范围内工程、内置定义编辑、批量修复、保存重开、原生验证及生成源码，并执行预期拒绝，**Then** 完整正常 R5 配置链由打包内置规则与全部受支持模块定义通过真实 IPC／原生文件操作完成，而非借官方资源或开发机依赖，**And** 不切换用户输入桌面，受管进程清理回执真实；macOS 无宿主的检查单独标未验证，原 v1 兼容所需资源另验、不偷换默认流程。
 - **Given** 两个原创不同 CAN 工程、七文件标准变体、真实多模块内置定义／结构输入及合法官方模型保留项，**When** 按 PRD 四个退出场景独立运行正例和关键拒绝，**Then** 通用类型／结构／批次／引用编辑、原字节、实际引用／值／作用域、批次全拒绝、用户代码和旧输出保持均有证据，缺失／损坏内置库存报软件错误；可选第三方定义导入／冲突／错版次／摘要及缺失影响单独验证，**And** 不重复同一模拟路径、不将少数内置表单字段当成完整目录、不从原生 schema 域通过推断生成支持或完整标准符合。
 - **Given** 封存 CAN／标准工程和锁定独立工具／消费者，**When** 在新位置实际构建并复验 CAN／DID／N_Cr／非法输入恢复及旧目标回归，**Then** 结果对应本次输入与目标，**And** 没有新增 OS／BSW／MCU／认证声明；本机不适用执行明确未运行。
-- **Given** 本轮所有故事、开发者固定 R24-11 合法 oracle 对比、当前类型／源码检查与实际 UI 证据，**When** Epic 出口复核，**Then** 关闭全部必要发现、更新故事／sprint及使用说明，并核对 7.1/7.2 开发对比与无外部档案离线安装跨故事证据，**And** 不把 build/test 或各 story 单独通过替代跨故事退出，不删有效旧测试、不压低验收、不用“未运行”或伪通过替代必要证据，不留下伪入口、模拟实现或未接线控件；本次规划修订不提前声明这些检查已通过。
+- **Given** 本轮所有故事、开发者固定 R24-11 合法 oracle 对比、当前类型／源码检查与实际 UI 证据，**When** Epic 出口复核，**Then** 关闭全部必要发现、更新故事／sprint及使用说明，并核对 7.1/7.2 开发对比与无外部档案离线原生跨故事证据，**And** 不把 build/test 或各 story 单独通过替代跨故事退出，不删有效旧测试、不压低验收、不用“未运行”或伪通过替代必要证据，不留下伪入口、模拟实现或未接线控件；开发检查不提前声明这些跨故事原生检查已通过。
 - **Given** 大型受限输入、人为延迟解析／校验／全文扫描、重复筛选展开及超长失败日志，**When** 独立原生复验，**Then** GUI／取消入口仍可操作，记录快照内读源／规则加载／可选定义解压次数确认索引复用，摘要／日志呈现有界且能获取复制完整 owned 日志，**And** 不以快速 mock 或仅引用 AD 代替此性能／资源验收。
 
 ### R5 Requirements Coverage Map
@@ -897,7 +906,7 @@ So that R5 的完成来自真实工程而不是截图或模拟成功。
 | CFG-4.1, CFG-4.2 | 7.6, 7.10, 7.11 |
 | CFG-NFR-1, CFG-NFR-2 | 7.1–7.6, 7.8–7.11 |
 | CFG-NFR-3 | 7.7–7.9, 7.11 |
-| CFG-NFR-4（无官方档案离线安装／严格新旧交接） | 7.1, 7.2, 7.6, 7.9–7.11 |
+| CFG-NFR-4（无官方档案离线原生行为／严格新旧交接） | 7.1, 7.2, 7.6, 7.9–7.11 |
 | CFG-NFR-5 | 7.1, 7.2, 7.4, 7.11 |
 | UX7-1, UX7-2 | 7.7 |
 | UX7-3 | 7.1–7.5, 7.7, 7.8 |

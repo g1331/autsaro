@@ -2,20 +2,20 @@
 
 ## 1. 接手结论
 
-Epic 7 的 7.1–7.10 主体实现、Core／Tauri IPC／React 接线，以及开发测试和代码复核已完成。用户2026-10-06明确将当前收尾限定为开发与测试，真机、原生桌面和完整发行验收留给后续CI；本次继续整理开发成果的本地提交，不push、不重启原生编排或扩建隔离设施。
+2026-10-09 用户明确取消 Story 7.11 的双平台原生／发行组合验收及其 CI 接入作为 Epic 7 完成门槛。Epic 7 按已完成的实现、开发测试、独立代码复核及已合并 PR #10 收口；7.1–7.11 与 Epic 7 均为 done。原未运行、失败及受阻证据保留原结果，不表示完整发行、安装器或硬件验收通过；不再为本 Epic 要求后续 CI 补齐这些出口。 PR #10 已合并（`c39f6c85`），26 项 PR CI 检查全部通过。
 
-当前中央开发规格为 **done；Story 7.1–7.10 为 done，7.11 为 review，Epic整体仍为 in-progress**。完整发行场景0/3及四个跨故事出口保留未闭合，不当成当前开发提交的前置工作，也不改写为passed。原停机时0/11 Done属于历史状态，以当前中央规格和sprint为准。
+当前中央开发规格、**Story 7.1–7.11 与 Epic 7 均为 done（已取消原生／发行组合验收完成门槛）**。历史完整发行场景0/3及四个跨故事出口保留未闭合，不当成当前开发提交的前置工作，也不改写为passed；0/3属于旧包场景计数，修订后的验收范围不要求逐包安装或补齐这个计数。原停机时0/11 Done属于历史状态，以当前中央规格和sprint为准。
 
-接手开发成果以[中央实施规格](spec-epic-7-configurator.md)的最终验证与复核记录为准：全量177项集成通过，最终代码补跑13项库单元与19项Workspace回归，UI／质量／Core及桌面Clippy通过。原生安装链另按后续CI范围验证；以下历史包和旧场景记录不代表最终修复后的发行结果，不自动恢复长场景或重复未变检查。
+接手开发成果以[中央实施规格](spec-epic-7-configurator.md)的本轮验证与复核记录为准。此前2026-10-06开发证据为：全量177项集成通过，最终代码补跑13项库单元与19项Workspace回归，UI／质量／Core及桌面Clippy通过。原生行为及独立消费者的额外组合验收已取消为完成门槛；以下历史包和旧场景记录不代表最终修复后的发行结果，不自动恢复长场景或重复未变检查。
 
 ## 2. 权威工件与工作区
 
-- 原需求和故事验收：`_bmad-output/planning-artifacts/epics.md` 的 Epic 7，特别是 Story 7.11；PRD 的四个跨故事退出要求不由本文替代。
+- 当前需求修订和原故事验收记录：`_bmad-output/planning-artifacts/epics.md` 的 Epic 7，特别是 Story 7.11；PRD 的四个跨故事退出要求不由本文替代。
 - 架构：`_bmad-output/planning-artifacts/architecture/epic-7/ARCHITECTURE-SPINE.md`。
 - 中央实施规格：`spec-epic-7-configurator.md`。
 - 分项规格：`spec-epic7-native-rules.md`、`spec-epic7-definitions.md`、`spec-epic7-source-project.md`、`spec-epic7-workbench-ui.md`、`spec-epic7-native-delivery.md`、`spec-epic7-native-acceptance.md`；均位于本文同目录。
 - 状态：同目录 `sprint-status.yaml`。继续开发、复核和状态同步仍使用仓库安装的 BMad；本文是用户要求的交接，不另建任务体系。
-- 分析开始时 `git status --short` 报告 staged 0、unstaged 71、untracked 57 个条目；其中包含完整实现、资产、规格、测试及验收脚本。未提交、未 push，不能用 `reset`／`clean` 恢复整洁；untracked 不等于可删除缓存。本文及停机说明不属于原产品冻结清单。
+- 历史停机分析开始时 `git status --short` 报告 staged 0、unstaged 71、untracked 57 个条目；其中包含完整实现、资产、规格、测试及验收脚本。未提交、未 push，不能用 `reset`／`clean` 恢复整洁；untracked 不等于可删除缓存。本文及停机说明不属于原产品冻结清单。
 
 ### 实现定位
 
@@ -50,7 +50,7 @@ Epic 7 的 7.1–7.10 主体实现、Core／Tauri IPC／React 接线，以及开
 | CAN generated README | `2220161e5ac02ade489a0507bc505803c362ef95a4f25e60b4b579ef6c42ed63` |
 | RuleSet | `7ac95f470079dcad8169d2f096f241f5d8b646dca0bca96593e3baef804f3a07` |
 
-三个历史包在清理前另存并逐一核对上述摘要，不删除或重新seal。当前产品修复已改变构建输入；后续CI发行验收须从提交后的源码重新构建，不以这些旧包代替。
+三个历史包在清理前另存并逐一核对上述摘要，不删除或重新seal。当前产品修复已改变构建输入；若另行开展发行验收，应从当前源码重新构建，不以这些旧包代替；这不是本 Epic 的必办工作。
 
 ### 历史已证明行为（按原输入与身份复用）
 
@@ -61,7 +61,9 @@ Epic 7 的 7.1–7.10 主体实现、Core／Tauri IPC／React 接线，以及开
 - 最终 deb 原检查 1–8、focused 9–16 及自然 17 已有真实分段证据，不能拼成完整 scene。覆盖创建、编辑、保存重开、结构／引用、搬移、v2 快照导入与关键拒绝、用户应用、七类值／跨文件批次、安全拒绝、扩展缺失／恢复、主题／尺寸／键盘和问题焦点。
 - 大输入自然检查：16,000 preserved types／2,661,220 字节；取消 229.52ms；快照内读源／规则加载等计数未增加。四次 filter+工具切换实测约 2.29／8.01／2.13／6.51 秒，不能说全部小于 5 秒。
 
-## 4. 后续CI未闭合项（本次开发提交不执行）
+## 4. 历史未闭合项（已取消为本 Epic 完成门槛）
+
+下表保留原结果与当时的后续建议，不再作为必须执行的 CI 队列。未验仍为未验。
 
 | 剩余项 | 当前事实 | 接手动作／完成条件 |
 | --- | --- | --- |
@@ -69,11 +71,11 @@ Epic 7 的 7.1–7.10 主体实现、Core／Tauri IPC／React 接线，以及开
 | deb 检查 19：取消和晚结果 | 原完整取消、延迟结果／epoch/source 保留尚未通过 | 保留原取消、5.1s late fence、输入身份和原字节断言，在同一真实产品路径完成，不用 mock 或只观察父进程退出替代 |
 | 当前及历史 cleanup_unconfirmed | 最新外层 Node PID2667／scope `a019c059ab46429ea6b897707e32f6a1`、exit1 为真实 strict RED，原因 UNKNOWN；它与内层无后代 Exited23/false 是两件事 | 未来只对真实新失败当场获取足以区分根因的证据。旧记录保持 RED／UNKNOWN；后来 absence、boot 改变或插桩通过不能追认旧关闭成功 |
 | 完整deb场景 | 历史场景未整场通过；2026-10-06新尝试1–7项passed、第8项STALE_DELIVERY失败 | 后续CI从当前源码重建后验证原端到端正常／拒绝／收尾；不把分段汇总标整场通过 |
-| AppImage | 历史包已构建，完整AppRun未通过；当前源码又有产品修复 | 后续CI使用当前源码的新AppImage验证真实AppRun安装边界与组合链，不借用deb结论 |
-| Windows MSI | 最终包已构建／quiet extraction；隔离激活收到 provider `cyber_policy` 拒绝 | 需要允许且不干扰用户桌面的隔离执行环境。不能重试原提升原语、换模型、绕过限制、修改全局网络策略或靠脚本补丁宣称通过 |
+| AppImage | 历史包已构建，完整AppRun未通过；当前源码又有产品修复 | 后续CI可使用当前Linux构建或解包产物完成真实运行边界与组合链；AppRun历史结果保留，不借用deb结论或声明安装器通过 |
+| Windows MSI | 最终包已构建／quiet extraction；隔离激活收到 provider `cyber_policy` 拒绝 | 后续CI可使用当前Windows构建或解包产物，MSI安装不再必需；仍需要允许且不干扰用户桌面的隔离执行环境。不能重试原提升原语、换模型、绕过限制、修改全局网络策略或靠脚本补丁宣称通过 |
 | 旧兼容／官方资源链 | 两份官方档案配置成功；旧七文件经普通 native 入口真实 MULTIPLICITY90 拒绝；原诊断／DTC／有序 DID、旧 v1 GUI 完整链未闭合 | 普通 `open_project` 不因配置档案自动变 legacy；显式 `open_handoff_project` 按 v1 格式选 legacy。原资源种子只有 Alpha／Beta host-v1，没有已确认 sealed ECU-v1 启动包。先核清原入口／输入契约，完成实际 GUI producer 和独立消费；不擅造新 producer/fixture，不能拿 v1 CLI 已通过冒充 GUI 闭环 |
 | 最新父级 legacy GUI 尝试 | 父 PID60892 exited1；最早可读内层原因是 `Native chooser closed without an observed authorized result`，未取得完整 v1 GUI 成功证据 | 这不是已证明的产品校验失败或 Owner 回收缺陷；保存原 chooser／ACK 失败，不因外层 `OwnershipError` 类名误判。临时 focused 驱动已恢复，不再自动重试 |
-| 最终复核／状态／说明 | 开发复核和测试已完成；7.1–7.10 done，7.11 review，Epic in-progress；完整发行0/3 | 提交开发成果时保留原PRD／story发行要求，后续CI结果再更新发行出口；不把未运行写成通过 |
+| 最终复核／状态／说明 | 开发复核、测试与 PR #10 合并已完成；7.1–7.11 和 Epic done；历史完整发行0/3 | 按2026-10-09最新修订取消原生／发行组合验收完成门槛及后续CI必办队列；不把未运行写成通过 |
 
 ### 已知验收前提，避免重新踩坑
 
@@ -122,13 +124,15 @@ Orca 先因 `user_takeover` 保留生命周期资源，随后按本次用户明�
 
 **不删除**仓库源码／untracked 实现、官方 XSD/MOD、`third_party`、仓库现有 `core/target`／`src-tauri/target`／`ui/node_modules`、共享 Cargo/npm/uv 缓存、vcpkg、安装工具、用户应用状态或 WSL 发行版。它们的历史归属不全是 Epic 7 私有环境。WSL 内文件删除不等于宿主 VHDX 自动压缩；本次不关闭／压缩／重建 WSL 来追求宿主磁盘数字。
 
-## 7. 后续CI发行收口顺序（不在当前提交阶段执行）
+## 7. 原后续CI发行收口计划（已取消为本 Epic 必办队列）
 
-1. 从当前提交源码构建新的发行包，在允许的隔离环境恢复一个最小Linux执行环境，不恢复所有历史副本。
+以下保留旧计划供历史追溯；不再阻塞 7.11 或 Epic 7，也不要求为此配置 runner 或扩建设施。
+
+1. 从当前提交源码取得构建产物或解包产物，在允许的隔离环境恢复一个最小Linux执行环境，不恢复所有历史副本；不要求真实安装，不能据此声明安装器已验证。
 2. 第18项无子进程flag前提已修正；后续CI定点运行真实owned日志／完整复制、取消／晚结果和严格关闭。必要修复只针对最早契约违反，不另造通用验证设施。
 3. 核清原 legacy 入口和既有种子，完成原诊断／DTC／有序 DID、两类 v1 GUI 与独立 consumer 的实际闭环。明确不存在现成 ECU-v1 seed 的当前前提，不默换普通 native 工程或虚构成功。
-4. 验证当前源码的新deb、AppRun；Windows使用允许的隔离环境独立完成，不绕过现有provider拒绝，不能用Linux替代Windows。
-5. 历史四份GUI v2消费按原输入与身份保留；产品输入变化时复验受影响行为。根据新发行证据关闭7.11剩余出口，再同步Epic和使用说明，不回退已完成的开发状态。
+4. 使用当前Linux／Windows构建或解包产物分别完成原生行为验收，旧deb／AppRun／MSI的未通过结果按历史身份保留，不要求逐包安装。Windows使用允许的隔离环境独立完成，不绕过现有provider拒绝，不能用Linux替代Windows。
+5. 历史四份GUI v2消费按原输入与身份保留；产品输入变化时复验受影响行为。原计划中的7.11剩余出口关闭要求已取消，当前状态以本文第1节及sprint为准。
 
 第5／6节记录原停机和缓存清理事实；当前开发收尾结果见第8节。本文及本地提交不宣称Epic 7完整发行验收已通过。
 
@@ -144,7 +148,7 @@ Orca 先因 `user_takeover` 保留生命周期资源，随后按本次用户明�
 
 2026-10-06开发提交前检查点：中央及五份实现规格为done，Story 7.1–7.10为done；7.11为review，原发行出口留待CI，Epic整体仍为in-progress。全量177项集成、最终13项库单元与19项Workspace回归、Python单元、质量／lint、UI构建及Core／桌面Clippy通过；当时尚未commit／push。未来发行包须从修复后的源码重建，原保留包不作为新版本发行证据。
 
-## 9. 本地开发提交范围
+## 9. 2026-10-06 本地开发提交范围（历史）
 
 用户随后要求接续完成收尾。本次只整理并记录已有开发成果的本地提交，更新本文开头的当前状态及历史包适用边界；不修改产品代码，不重跑未变的耗时集成测试，不启动原生场景、重建发行包或恢复编排，也不push。
 
