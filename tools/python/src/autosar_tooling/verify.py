@@ -67,6 +67,11 @@ def commands(scope: str, base: str | None) -> list[tuple[str, list[str], int]]:
     )
     desktop = [
         (
+            "desktop:test",
+            ["cargo", "test", "--locked", "--manifest-path", "src-tauri/Cargo.toml"],
+            1800,
+        ),
+        (
             "desktop:build",
             ["cargo", "build", "--locked", "--manifest-path", "src-tauri/Cargo.toml"],
             1800,

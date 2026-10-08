@@ -1,4 +1,6 @@
-# 实施就绪判断：历史 Epic 4 与当前 R5／Epic 7
+# 实施就绪判断：历史规划与 Epic 7 当前交付
+
+当前交付（2026-10-09）：7.1–7.10 已完成开发，7.11 review，Epic 7 in-progress；本轮授权开发收尾、必需 PR CI／审查及合并。内置规则、完整自有定义、Workspace／Session／UI 与 v2 已实现；当前验证记录以[中央实施规格](../implementation-artifacts/spec-epic-7-configurator.md)为准，下文规划时的 backlog、外部 Schema 与待实现描述只保留历史，不作为新的派发依据。后续 CI 原生行为验收可使用当前构建或解包产物，真实安装不再作为本 Epic 强制前置；无 checkout／开发工具、离线 IPC、取消／晚结果、性能／日志、四类退出与独立消费者要求保留，安装器及真机未验保持未验。
 
 > 历史范围说明（2026-10-03）：下文至“2026-10-03 R5／Epic 7 实施就绪”以前保留 2026-09-28 的 Epic 4 进入判断与当时事实，不是当前开发队列。Epic 4 已完成；历史 Epic 2／Story 2.1 已合并至候选 R7，需求保留在[诊断承接契约](epics.md#diagnostic-carryover)。本轮 R5／Epic 7 的结论见文末，其他[长期候选](product-brief.md#长期候选路线)尚未通过实施就绪；当前状态以 sprint 为准。当时的 backlog 与 2.1 推荐不作为当前派发依据。
 
@@ -64,6 +66,8 @@ Epic 5 的 NM、DTC/NvM 与持久化关口及 Epic 6 的板卡/合法 MCU 依赖
 `status` 脚本按编号机械推荐首个 backlog 的 2.1，不能识别暂缓的产品排序；此推荐不作为派发依据。实际候选仍为满足上述进入条件后的 4.1/4.3，Epic 2 暂缓约束记录在 sprint 注释及本文中。本轮只验证规划、追踪同步和 Git 差异，不运行全栈功能构建或升级能力证据。
 
 ## 2026-10-03 R5 / Epic 7 实施就绪
+
+以下为2026-10-03历史规划记录；当前交付及安装验收边界以文首2026-10-09说明为准。
 
 **PASS，本次软件内置规则修订，仅选定 CFG-1–CFG-4 / 正式 Epic 7。**本结论依据当前修订的 [PRD](prd.md#r5-选定范围与完成契约)、[spine](architecture/epic-7/ARCHITECTURE-SPINE.md)、[交互规格](ux-designs/ux-Autosar-2026-10-03/EXPERIENCE.md)、[Epic 7](epics.md#epic-7-可独立使用的统一-ecu-工程配置工作台)与下文的新独立复核，不借用旧放行。原外部档案方案曾在 UX `a671cb6`、需求 `49803b6`、架构 `2039020`、故事 `d1be8cb` 基线上 PASS，保留为历史。全局 PRD draft 仍来自未来 R6／R7 和硬件范围，不阻断已收口的 R5；新校验能力尚未实现。
 
