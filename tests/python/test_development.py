@@ -13,7 +13,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-from autosar_tooling import assets, config, diagnostics, quality
+from autosar_tooling import assets, config, diagnostics, quality, verify
 
 
 class ConfigurationTests(unittest.TestCase):
@@ -80,6 +80,31 @@ class QualityScopeTests(unittest.TestCase):
     def test_scoped_formatting_does_not_request_unrelated_tools(self):
         with patch.object(quality, "scoped_paths", return_value=[]), patch.object(quality, "source_paths", return_value=[]), patch.object(quality, "c_syntax_errors", side_effect=AssertionError("UI requested C")), redirect_stdout(io.StringIO()):
             self.assertEqual(quality.check("HEAD", scope="ui"), [])
+
+
+class VerificationTests(unittest.TestCase):
+    def test_desktop_and_all_scopes_stop_on_backend_test_failure(self):
+        expected = ["cargo", "test", "--locked", "--manifest-path", "src-tauri/Cargo.toml"]
+        for scope in ("desktop", "all"):
+            with self.subTest(scope=scope):
+                calls = []
+
+                def run(command, calls=calls, **kwargs):
+                    calls.append(command)
+                    return subprocess.CompletedProcess(command, 7 if command == expected else 0)
+
+                with (
+                    patch.object(verify.sys, "platform", "linux"),
+                    patch.object(verify, "executable", side_effect=lambda name: name),
+                    patch.object(verify, "npm_command", side_effect=lambda *args: ["npm", *args]),
+                    patch.object(verify, "environment", return_value={}),
+                    patch.object(verify.subprocess, "run", side_effect=run),
+                    redirect_stdout(io.StringIO()),
+                ):
+                    self.assertEqual(verify.verify(scope), 7)
+                self.assertEqual(calls[-1], expected)
+                self.assertEqual(calls.count(expected), 1)
+                self.assertNotIn(["cargo", "build", "--locked", "--manifest-path", "src-tauri/Cargo.toml"], calls)
 
 
 class AssetTests(unittest.TestCase):
