@@ -39,9 +39,23 @@ r5ValidationModel: software-native-builtin-rules-and-supported-module-catalog
 r5BacklogState: Epic-7-and-11-stories-not-started / R11-priority-unchanged
 r5PlanningAmendment: 2026-10-03-native-rules / current-working-tree
 r5WorkflowCompleted: 2026-10-03
+r6WorkflowScope: candidate R6 / formal Epic 8
+r6WorkflowState: complete
+r6StepsCompleted: [step-01-validate-prerequisites, step-02-design-epics, step-03-create-stories, step-04-final-validation]
+r6PlanningValidation: passed
+r6PlanningBaseline: a51e816
+r6ApprovalMode: delegated-planning-and-build / user-2026-10-09
+r6InputDocuments:
+  - _bmad-output/specs/spec-multi-component-scheduling/SPEC.md
+  - _bmad-output/specs/spec-multi-component-scheduling/application-contract.md
+  - _bmad-output/specs/spec-multi-component-scheduling/acceptance.md
+  - _bmad-output/specs/spec-multi-component-scheduling/compliance-references.md
+  - _bmad-output/planning-artifacts/architecture/epic-8/ARCHITECTURE-SPINE.md
 ---
 
 # Autosar Classic 产品成果与实施记录
+
+2026-10-09 增量：候选 R6 的正式编号分配为 **Epic 8**，不复用历史 Epic 6；Epic 7 的发行收尾不在本任务，也不构成整体前置。以下增量规划／状态不改写历史范围，是否完成以实际实施证据与 sprint 为准。
 
 本文件以[产品简述](product-brief.md)的完整 Classic 产品方向、[PRD](prd.md) 的用户成果和[架构](architecture.md)的实现边界为依据。Epic 按使用者能交付的工程结果划分，模块是支持范围；编号是稳定历史标识，不代表强制串行顺序。**Epic 1、3、4 保留原定范围的完成记录；Epic 4 的 22 条故事、跨故事集成、适用主机 SC1 行为和独立交接已经完成。历史 Epic 2／Story 2.1 的需求已转入候选 R7，不再独立实施，不标为 done。**既有 Epic 5、6 是尚未实施的正式成果定义；新路线以 R5–R29 标识候选，不能与正式 Epic ID 混用。
 
@@ -893,3 +907,113 @@ So that R5 的完成来自真实工程而不是截图或模拟成功。
 | UX7-7 | 7.8, 7.9 |
 | UX7-8 | 7.1, 7.6, 7.7, 7.10, 7.11 |
 
+## R6 Requirements Inventory
+
+来源：[完整规格](../specs/spec-multi-component-scheduling/SPEC.md)、[首批配置](../specs/spec-multi-component-scheduling/application-contract.md)、[独立预期](../specs/spec-multi-component-scheduling/acceptance.md)、[架构](architecture/epic-8/ARCHITECTURE-SPINE.md)。本次按用户授权直接完成规划与实施，不重复流程菜单或冻结历史Epic。
+
+- APP-1／CAP-1：SWC类型、实例、平坦组合、端口、数据类型、S/R／C/S连接、ECU与event/task映射可表达、校验与安全编辑。
+- APP-2／CAP-2／CAP-3：同一计划共同生成接口、RTE／SchM、OS／BSW／目标与构建闭包；真实多组件通信和调度必须先验证。
+- CFG-4／CAP-4：每组件live用户源码、create-only初始化、原字节快照、stale拒绝、再生成保护与独立交接。
+- CAP-5／FR-14／FR-15：旧profile与交接格式回归、失败关闭、R11类型／通道／映射接缝明确，未支持输入拒绝。
+- NFR8-1：R24-11、C99及实际角色的MISRA修订基线；实际生成受影响profile运行c-check，扫描完整性／源码诊断／人工评估分别报告。
+- NFR8-2：ARXML原文权威、唯一事务与OS backend；输入／live源／sealed工程／build目录隔离，确定生成，未知身份／外部变更拒绝。
+- NFR8-3：不依赖Epic7整体done、编译器或官方档案进行普通配置／源码生成；Windows／Linux及未执行GUI／MCU验收分层。
+- UX8-1：复用工程树、对象检查器、引用选择、问题焦点与batch/save预览，多组件对象使用后台身份；长名称和键盘行为遵循既有设计。
+- UX8-2：源码入口列出全部可信组件槽，初始化／预览／确认可定位到真实源；不得硬编码旧Application.c或在前端推导producer。
+- UX8-3：真实数据、窄窗口、浅深主题与中文／英文反馈保持一致；新文字使用既有i18n资源，外部日志／对象名原样保留。
+
+## R6 正式成果
+
+正式 **Epic 8：多组件应用与调度工程**，来源候选R6。使用者从多个真实SWC和映射得到可运行、可再生成、可独立交接的工程。Epic6保留历史MCU范围；Epic7发行收尾不纳入。五条故事依序形成可独立验证的成果，无未来故事依赖。
+
+## Epic 8: 多组件应用与调度工程
+
+用户成果：支持首批有界多组件配置，真实S/R和同步C/S经共同生成的RTE／SchM／OS路径运行，源码保护和异地交接闭合。对应APP-1、APP-2、CFG-4、FR-1–FR-6、FR-12、FR-14、FR-15与CAP-1–CAP-5。
+
+### Story 8.1: 从多组件输入生成一致的应用契约
+
+As a 应用集成工程师,
+I want 导入多个SWC的组合、连接及映射并得到各自准确接口,
+So that 应用开发者可以独立实现所声明的组件而不猜测模型关系。
+
+**Acceptance Criteria:**
+
+**Given** R24-11原创多文件三组件配置和固定首批支持范围，
+**When** 从正常内置规则入口建立只读计划并生成组件接口，
+**Then** CAP-1、AD-1／2／6、AC-1／5／6的身份、ECU映射、连接、type mapping和签名闭合，纯local组件不要求专属CAN／DID；每个header呈现组件标准API并使用唯一内部符号，非声明应用错误的server为void，
+**And** 非法连接／归属／类型／重复实例、保留名与文件／符号碰撞生成前拒绝，输入／旧输出不变；正式旧组件契约回归保持。生成header的实际C编译检查与相关c-check记录属于本story，不等待8.2。
+
+依赖：已交付源、规则与OS基础；不依赖Epic7发行出口。进入时核对官方RTE／SWCT／System／ECUC和当前来源。覆盖CAP-1、CAP-2签名、CAP-5、NFR8-1／2／3。
+
+### Story 8.2: 经真实 OS 调度运行多组件通信
+
+As a 应用开发者,
+I want 多组件通过生成的本地S/R、同步C/S与真实task按配置执行,
+So that 可从独立向量确认接口、状态和调度确实一致。
+
+**Acceptance Criteria:**
+
+**Given** 8.1可验证计划与完整用户测试应用，
+**When** 共同生成RTE／SchM／OS／BSW及目标工程，独立构建并通过正常probe/test与生产HostBatch运行，
+**Then** AC-1–AC-8准确通过：三组件顺序、local0x12345679、scalar服务OUT、Ingress CAN／DID固定字节、初始值7／9、fanout42、同epoch不重复、server仅caller上下文执行，
+**And** 缺失／错误task、event、position、alarm、period和call graph拒绝；停止CAN不阻断local；空OUT不改输出。核对并关闭本profile所消费Com／Dcm／OS／SchM直接契约差距，实际生成multi与受影响single运行c-check并保留旧运行回归。
+
+依赖：仅8.1。本story是真实生成／调度高风险门，未通过不展开8.3／8.4／8.5。覆盖CAP-2、CAP-3、CAP-5、NFR8-1／2／3。
+
+### Story 8.3: 保护每个组件的用户源码再生成
+
+As a 应用开发者,
+I want 显式初始化并维护各组件live源码后安全重新生成,
+So that 自己的实现不会被产品参考算法或旧确认覆盖。
+
+**Acceptance Criteria:**
+
+**Given** 8.2真实闭环通过与可信多组件slots，
+**When** 从正常核心源码入口预览并初始化所有live成员、编辑实际用户源、预览及再次生成，
+**Then** AC-9通过，producer、componentPath和live→sealed路径由同一计划核定，每份用户C保持原字节，manifest成员与源码初始化原子接纳，
+**And** 任一预先存在路径、late外部变更、未知槽、重复成员或stale manifest确认拒绝且不留下部分工程；旧单槽初始化与生成回归保持。
+
+依赖：仅8.2。覆盖CAP-4、CAP-5、AD-7／8、NFR8-2／3。
+
+### Story 8.4: 在工作区安全编辑应用组合与调度
+
+As a ECU集成工程师,
+I want 在现有对象、引用和预览入口编辑多组件结构及映射并使用全部源码槽,
+So that 可从真实工程完成配置流程而无需手改生成器。
+
+**Acceptance Criteria:**
+
+**Given** 8.3已提供真实多组件计划与源码槽，
+**When** 按UX8-1–UX8-3使用工程树、对象检查、引用选择、批次与保存预览、源码初始化／预览入口，
+**Then** CAP-1和AC-5–AC-9经实际入口检查与安全编辑，保存重开保持未改字节、引用和对象身份；语义错误可定位到真实对象，未支持生成不成为全局保存门，
+**And** 使用真实数据与长名称验证键盘／窄窗口／主题和中英反馈，DTO／后端／前端共同迁移，不另造配置或调度界面。若现有界面已完整承载某对象则复用并以运行证据验收，不为story增添无关控件。
+
+依赖：仅8.3。覆盖CAP-1、CAP-4、AD-8、UX8-1–UX8-3、NFR8-2／3。
+
+### Story 8.5: 独立交接并复验多组件工程
+
+As a 工程接收者,
+I want 在新目录恢复全部应用输入并独立生成、构建和运行,
+So that 工程交付可以脱离原作者工作区复验。
+
+**Acceptance Criteria:**
+
+**Given** 8.4完整工程、真实用户源码及标准封存输出，
+**When** 通过Rust重导入与包内Python离线工具搬移、恢复、重新生成并独立构建运行，
+**Then** AC-10–AC-12通过，全部slot／输入／owner／producer／source mapping精确核对，新目录真实S/R、C/S、调度和CAN／DID向量成立，无原机器绝对路径或官方档案依赖，
+**And** sealed篡改、未知owner／producer、路径逃逸和身份不符拒绝；旧v1／v2和host／single回归保持。各平台／GUI／MCU未执行范围如实记录，必要CI与独立代码审查完成后创建PR，不合并。
+
+依赖：仅8.4。覆盖CAP-4、CAP-5、FR-4／FR-12／FR-15、NFR8-1–NFR8-3。
+
+### R6 Coverage Map
+
+| 要求 | 故事 |
+| --- | --- |
+| CAP-1／APP-1 | 8.1, 8.4 |
+| CAP-2／APP-2通信 | 8.1, 8.2 |
+| CAP-3／APP-2共同生成调度 | 8.2 |
+| CAP-4／CFG-4 | 8.3, 8.4, 8.5 |
+| CAP-5／FR-14／FR-15 | 8.1–8.5 |
+| NFR8-1 | 8.1, 8.2, 8.5 |
+| NFR8-2／NFR8-3 | 8.1–8.5 |
+| UX8-1–UX8-3 | 8.4 |
