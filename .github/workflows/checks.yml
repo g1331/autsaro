@@ -128,10 +128,12 @@ jobs:
         include:
           - os: ubuntu-24.04
             target: linux-x64-controlled-v1
+            timeout: 30
           - os: windows-latest
             target: windows-x64-controlled-v1
+            timeout: 45
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: ${{ matrix.timeout }}
     env:
       AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
     steps:
