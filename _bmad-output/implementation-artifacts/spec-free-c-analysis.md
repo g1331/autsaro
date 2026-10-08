@@ -189,4 +189,6 @@ PR #9 的 46e6f36f3cd9d4a4ca9b0dbefce1cffc241cf341 双平台失败已定位：Li
 
 普通 Python 42 项、ruff／actionlint／assets check 通过；真实仓库内构建三模式／12 场景 Windows 58.967 秒、Linux 11.094 秒通过。资产只更新交付 tools/python/src/ecu_tools/build.py 摘要，公开 C ABI 和第三方内核身份不变。AGENTS.md 补充选择补丁实际应用与 CI 固定工具链要求。五类 Linux 工件分析正在实际执行，最终结果及独立审查回写下文。
 
-Linux 已确认 standard-ecu 42 TU 分析完整、error=null、1806 条原始诊断，源码仍 passed=false；前三类各 21 TU 分析完整，234／240／234 条诊断。Blind、edge、verification 三层独立只读复核均无确认缺陷或验证缺口。相对 46e6f36 的增量 quality 通过（本轮只改 Python／CI，无新增 C 语法验证），资产校验与差异检查通过；完整五类结果及远端 CI 尚待收尾，不提前写成通过。
+Linux 五类均分析完整、error=null，诊断为 234／240／234／1806／1806；两个 ECU 样本各 42 TU，源码仍 passed=false。OS native lifecycle 50 向量亦通过。Blind、edge、verification 三层独立只读复核均无确认缺陷或验证缺口。相对 46e6f36 的增量 quality 通过（本轮只改 Python／CI，无新增 C 语法验证），资产校验与差异检查通过。
+
+99d45c821c44127b43e565875827fb9ce9f0964f 的实际 Windows runner 已确认固定包下载、SHA-256 校验成功，但先装最新 GCC 再降级时，其拆分 cc-libs 元包阻止替换库。固定旧 gcc-libs 元数据提供 cc-libs，故调整为干净 MSYS2 初始化后同步数据库，直接用 pacman -U 事务安装两个固定包及其依赖；不预装最新 GCC，不删除依赖或跳过依赖／签名检查。远端双平台完整结果继续以最终修复提交为准。

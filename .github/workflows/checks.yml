@@ -147,11 +147,11 @@ jobs:
         with:
           msystem: MINGW64
           path-type: inherit
-          install: mingw-w64-x86_64-gcc
       - name: Install locked native GCC
         if: runner.os == 'Windows'
         shell: msys2 {0}
         run: |
+          pacman --noconfirm -Sy
           mkdir -p build/native-gcc
           cd build/native-gcc
           for package in mingw-w64-x86_64-gcc-16.1.0-5-any.pkg.tar.zst mingw-w64-x86_64-gcc-libs-16.1.0-5-any.pkg.tar.zst; do
