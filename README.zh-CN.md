@@ -2,6 +2,7 @@
   <img src="ui/public/logo-app.png" width="112" alt="Autsaro 汽车图标">
   <h1>Autsaro</h1>
   <p>面向 AUTOSAR Classic 的配置与代码生成工作台</p>
+  <p><sub>当前处于原型阶段，不具备生产可用性。</sub></p>
 </div>
 
 **简体中文** · [English](README.md)
