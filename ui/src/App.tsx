@@ -1,4 +1,5 @@
 import { message, useLocale } from './i18n';
+import { displayPath } from './pathDisplay';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
@@ -725,9 +726,12 @@ export default function App() {
                 {activeDocument.kind === 'source' ? (
                   <div className="source-document">
                     <h2>{labelFromPath(source?.path ?? '')}</h2>
-                    <p className="mono path-text">{source?.path}</p>
+                    <p className="mono path-text">{displayPath(source?.path ?? '')}</p>
                     {source ? (
-                      <CopyText text={source.path} label={t('shell.app.copySourcePath')} />
+                      <CopyText
+                        text={displayPath(source.path)}
+                        label={t('shell.app.copySourcePath')}
+                      />
                     ) : null}
                     <p>
                       {t('shell.app.readonlySource')} ·{' '}

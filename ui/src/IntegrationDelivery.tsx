@@ -1,5 +1,6 @@
 import { CopyText, OwnedLog } from './workbench/Dialog';
 import { useLocale } from './i18n';
+import { displayPath } from './pathDisplay';
 import type { BuildTarget } from './types';
 import type { Workbench } from './workbench/useWorkbench';
 
@@ -106,8 +107,8 @@ export function IntegrationDelivery({
             <ul>
               {controller.applicationRecoveryFiles.map((path) => (
                 <li key={path} className="mono path-text">
-                  {path}
-                  <CopyText text={path} label={t('shell.delivery.copyRecovery')} />
+                  {displayPath(path)}
+                  <CopyText text={displayPath(path)} label={t('shell.delivery.copyRecovery')} />
                 </li>
               ))}
             </ul>
@@ -144,7 +145,7 @@ export function IntegrationDelivery({
           {t('shell.delivery.output')}
           <input
             aria-label={t('shell.delivery.output')}
-            value={output}
+            value={displayPath(output)}
             disabled={busy || locked}
             onChange={(e) => changeOutput(e.target.value)}
           />
@@ -177,7 +178,7 @@ export function IntegrationDelivery({
           {t('shell.delivery.buildDirectory')}
           <input
             aria-label={t('shell.delivery.buildInput')}
-            value={buildDirectory}
+            value={displayPath(buildDirectory)}
             disabled={busy || locked}
             onChange={(e) => changeBuildDirectory(e.target.value)}
           />
@@ -239,7 +240,7 @@ export function IntegrationDelivery({
           {t('shell.delivery.importDirectory')}
           <input
             aria-label={t('shell.delivery.importDirectory')}
-            value={importDirectory}
+            value={displayPath(importDirectory)}
             disabled={busy || locked}
             onChange={(e) => setImportDirectory(e.target.value)}
           />
