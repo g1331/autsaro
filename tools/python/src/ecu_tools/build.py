@@ -192,6 +192,13 @@ def check_object(binary: Path, objdump: Path, target: dict, project: Path, logs:
         raise ValueError("Described RTE entries are outside their code section")
 
 
+def kernel_patch_environment(kernel: Path) -> dict[str, str]:
+    """Keep git apply include paths relative to the copied standalone kernel."""
+    # Discovering an enclosing checkout prefixes patch paths before --include
+    # matching, silently skipping selected files while returning success.
+    return {**os.environ, "GIT_CEILING_DIRECTORIES": str(kernel.resolve(strict=True).parent)}
+
+
 def build(project: Path, output: Path, mode: str, control_source: Path | None = None) -> Path:
     names, target = sealed_sources(project)
     project = project.resolve(strict=True)
@@ -231,7 +238,8 @@ def build(project: Path, output: Path, mode: str, control_source: Path | None = 
             for checked in (True, False):
                 argv = [str(git), "apply", "--ignore-space-change", *patch_flags,
                         *(["--check"] if checked else []), tool_argument(project / relative)]
-                result = OwnedProcess(ProcessSpec.seconds(argv, kernel, 30, logs, "kernel-patch")).wait()
+                result = OwnedProcess(ProcessSpec.seconds(argv, kernel, 30, logs, "kernel-patch",
+                                      env=kernel_patch_environment(kernel))).wait()
                 if not result.success:
                     raise RuntimeError(f"Kernel patch failed: {relative}; logs={logs}")
     sources = [tool_argument(project / name) for name in source_map]

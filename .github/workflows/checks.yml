@@ -148,6 +148,18 @@ jobs:
           msystem: MINGW64
           path-type: inherit
           install: mingw-w64-x86_64-gcc
+      - name: Install locked native GCC
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          mkdir -p build/native-gcc
+          cd build/native-gcc
+          for package in mingw-w64-x86_64-gcc-16.1.0-5-any.pkg.tar.zst mingw-w64-x86_64-gcc-libs-16.1.0-5-any.pkg.tar.zst; do
+            curl --fail --location --retry 3 --output "$package" "https://repo.msys2.org/mingw/mingw64/$package"
+            curl --fail --location --retry 3 --output "$package.sig" "https://repo.msys2.org/mingw/mingw64/$package.sig"
+          done
+          printf '%s\n' '10f7c55275f7fbe7924209d61c368a1a6fcf775cffbdeac2eef1f5ccacdd35cd  mingw-w64-x86_64-gcc-16.1.0-5-any.pkg.tar.zst' 'aa560f5438c35b71c3e7b24fd5becbca028f70c5b4d1f1697a86ff80fec947da  mingw-w64-x86_64-gcc-libs-16.1.0-5-any.pkg.tar.zst' | sha256sum --check --strict
+          pacman --noconfirm -U mingw-w64-x86_64-gcc-16.1.0-5-any.pkg.tar.zst mingw-w64-x86_64-gcc-libs-16.1.0-5-any.pkg.tar.zst
       - name: Windows core dependencies
         if: runner.os == 'Windows'
         shell: pwsh

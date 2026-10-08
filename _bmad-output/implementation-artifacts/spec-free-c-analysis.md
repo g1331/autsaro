@@ -177,3 +177,16 @@ R21.6 保留限定主机 I/O 的申请，R21.8 仅申请上述三个终止点；
 PR #9 首次实际运行暴露两项接入问题：macOS 的临时目录经过 /var 符号链接，新检查器测试在调用前未取真实临时路径；Cppcheck 固定源的 cmake/options.cmake 强制输出到 PROJECT_BINARY_DIR/bin，工作流却查找额外指定的目录。测试现使用已创建临时目录的 resolve(strict=True)，未改变交付入口拒绝符号链接的策略；工作流取消被上游覆盖的输出参数，并从实际 bin 目录查找单配置／多配置产物。
 
 修正后检查器契约测试 Windows／Linux 各 10 项通过；Linux 额外以经过符号链接的临时根运行同组测试通过，同时显式链接仍被 refuse_links 拒绝。ruff、actionlint 与差异检查通过。CMake 输出路径由固定上游源码与失败 runner 的实际链接日志交叉确认；本地 WSL 没有 cmake，未声称已在本地重建该 CMake 产物。更新后的 GitHub CI 结果以 PR 检查为准。
+
+### 实际双平台 C 分析 CI 失败整改
+
+PR #9 的 46e6f36f3cd9d4a4ca9b0dbefce1cffc241cf341 双平台失败已定位：Linux 分析副本位于 checkout 内，git apply 对选择路径加仓库前缀，--include=tasks.c 等不匹配后跳过且返回 0，Os_Backend.c 因缺少四个补丁接口声明编译失败；独立 Git 实验复现原始路径零返回码、文件不变，隔离后实际修改。Windows 的滚动安装得到 GCC 16.2.0 Rev4，与交付目标 GCC 16.1.0 Rev5 的固定身份不符，真实构建三模式因此被拒绝。
+
+- [x] 静态分析、封存离线构建和 OS native harness 共用 kernel_patch_environment，在复制的 kernel 父目录设置进程级 GIT_CEILING_DIRECTORIES，不改宿主配置、原始源码或补丁选取范围。
+- [x] 普通 Python 增加真实 Git 仓库内／外的选择补丁测试，断言选中文件改变、排除文件不变；三模式离线构建回归输出亦放在临时 Git 仓库内。
+- [x] Windows CI 安装官方固定 GCC／gcc-libs 16.1.0-5 包，校验两个包的 SHA-256 并保留包签名；已从官方归档提取 gcc.exe，确认与 runtime/os/toolchain.json 的 d38d4dd6bea387499487881383e644ab7c193ac8f8364dc4252d6e6cc09700e2 完全一致，不修改目标锁。
+- [ ] 完成全量 Linux 工件分析、独立审查和修复提交的双平台 GitHub CI 复验。
+
+普通 Python 42 项、ruff／actionlint／assets check 通过；真实仓库内构建三模式／12 场景 Windows 58.967 秒、Linux 11.094 秒通过。资产只更新交付 tools/python/src/ecu_tools/build.py 摘要，公开 C ABI 和第三方内核身份不变。AGENTS.md 补充选择补丁实际应用与 CI 固定工具链要求。五类 Linux 工件分析正在实际执行，最终结果及独立审查回写下文。
+
+Linux 已确认 standard-ecu 42 TU 分析完整、error=null、1806 条原始诊断，源码仍 passed=false；前三类各 21 TU 分析完整，234／240／234 条诊断。Blind、edge、verification 三层独立只读复核均无确认缺陷或验证缺口。相对 46e6f36 的增量 quality 通过（本轮只改 Python／CI，无新增 C 语法验证），资产校验与差异检查通过；完整五类结果及远端 CI 尚待收尾，不提前写成通过。

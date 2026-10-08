@@ -1175,7 +1175,7 @@
     },
     {
       "path": "tools/python/src/ecu_tools/build.py",
-      "sha256": "8482c26c039ba24a8bc28f1c05f0ab706370b6af65d8a69451f49797be71213a",
+      "sha256": "53fb711609db7ddb9da90ec62e9422daf0d4799998646411ac539b1e754f6df0",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

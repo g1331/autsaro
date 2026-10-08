@@ -35,6 +35,9 @@ class EcuBuildModeTests(unittest.TestCase):
                 return OwnedProcess(ProcessSpec.seconds(argv, directory, 180, directory, stage,
                                     env=run_env, stdin_file=input_file)).wait()
 
+            initialized = execute([env["AUTOSAR_GIT"], "init", "--quiet", str(directory)], "init-checkout", env)
+            self.assertTrue(initialized.success, initialized.stderr.read_text())
+
             for mode in ("host-batch", "probe", "test"):
                 with self.subTest(mode=mode):
                     output = directory / mode

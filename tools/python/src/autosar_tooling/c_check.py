@@ -15,6 +15,7 @@ from pathlib import Path
 from ecu_tools.build import (
     TARGETS,
     digest,
+    kernel_patch_environment,
     refuse_links,
     safe_relative,
     sealed_sources,
@@ -173,7 +174,8 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
             argv = [str(Path(git).resolve()), "apply", "--ignore-space-change",
                     *("--include=" + name for name in patch["includes"]), str(root / patch_path)]
             # Apply only inside the copied kernel, never the authoritative source.
-            result = OwnedProcess(ProcessSpec.seconds(argv, root / "kernel", 30, output, f"patch-{index}")).wait()
+            result = OwnedProcess(ProcessSpec.seconds(argv, root / "kernel", 30, output, f"patch-{index}",
+                                  env=kernel_patch_environment(root / "kernel"))).wait()
             if not result.success:
                 raise ValueError(f"Kernel patch {index} failed; raw logs retained")
         sources.extend("kernel/" + name for name in kernel_sources)

@@ -16,6 +16,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 
+from ecu_tools.build import kernel_patch_environment
 from ecu_tools.owner import Owner, OwnershipError
 from ecu_tools.process import OwnedProcess, ProcessSpec
 
@@ -239,14 +240,14 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
                 run_native(
                     ["git", "apply", "--ignore-space-change", *selection,
                      *(["--check"] if check else []), str(patch)],
-                    cwd=copied, check=True,
+                    cwd=copied, check=True, env=kernel_patch_environment(copied),
                 )
         for patch in sorted((target / "patches/linux").glob("*.patch")):
             for check in (True, False):
                 run_native(
                     ["git", "apply", "--ignore-space-change",
                      *(["--check"] if check else []), str(patch)],
-                    cwd=copied, check=True,
+                    cwd=copied, check=True, env=kernel_patch_environment(copied),
                 )
     else:
         for patch in sorted((target / "patches").glob("*.patch")):
@@ -254,7 +255,7 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
                 run_native(
                     ["git", "apply", "--ignore-space-change",
                      *(["--check"] if check else []), str(patch)],
-                    cwd=copied, check=True,
+                    cwd=copied, check=True, env=kernel_patch_environment(copied),
                 )
     binary = directory / ("os_harness" if linux else "os_harness.exe")
     native_sources = (
