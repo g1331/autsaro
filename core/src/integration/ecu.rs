@@ -55,7 +55,7 @@ impl ValidatedIntegrationPlan {
     pub fn application_slot_descriptor(
         &self,
     ) -> Result<generator::delivery::ApplicationSlotDescriptor, Vec<PlanDiagnostic>> {
-        let component = &self.description().component;
+        let component = self.description().legacy_component().map_err(reject)?;
         let contract = self.component_contract_files()?;
         let generated_headers = contract
             .files()
@@ -86,7 +86,7 @@ impl ValidatedIntegrationPlan {
     }
 
     fn render_reference_application(&self) -> Result<Vec<u8>, Vec<PlanDiagnostic>> {
-        let component = &self.description().component;
+        let component = self.description().legacy_component().map_err(reject)?;
         let read = component
             .data_ports
             .iter()
@@ -153,6 +153,8 @@ impl ValidatedIntegrationPlan {
         application: Option<&'a [u8]>,
     ) -> Result<BTreeMap<String, Cow<'a, [u8]>>, Vec<PlanDiagnostic>> {
         let plan = self.description();
+        let component = plan.legacy_component().map_err(reject)?;
+        let diagnostic = plan.legacy_diagnostic().map_err(reject)?;
         let contract = self.component_contract_files()?;
         let mut files = BTreeMap::new();
         for asset in AssetInventory::embedded().selected(target, "ecu") {
@@ -290,7 +292,7 @@ impl ValidatedIntegrationPlan {
                 }
             }
         }
-        let component = &plan.component;
+
         let app_header = format!(
             "Rte_{}.h",
             c_name(component.component.rsplit('/').next().unwrap())
@@ -383,7 +385,7 @@ impl ValidatedIntegrationPlan {
             Cow::Owned(
                 format!(
                     "/** @file Compile-time capacity of the validated integrated profile. */\n#ifndef ECU_PROFILE_LIMITS_H\n#define ECU_PROFILE_LIMITS_H\n#define ECU_MAX_PDU_PAYLOAD {}u\n#endif\n",
-                    plan.diagnostic.buffer_bytes,
+                    diagnostic.buffer_bytes,
                 )
                 .into_bytes(),
             ),
@@ -403,8 +405,8 @@ impl ValidatedIntegrationPlan {
                 );
             } else {
                 groups.insert(
-                entity.alarm.clone(),
-                (entity.period_ms, mask(&entity.os_event)),
+                    entity.alarm.clone(),
+                    (entity.period_ms, mask(&entity.os_event)),
                 );
             }
         }
@@ -516,16 +518,13 @@ impl ValidatedIntegrationPlan {
             ("TX_ID", tx_id.to_string()),
             ("RX_INITIAL", read.initial_value.to_string()),
             ("TX_INITIAL", write.initial_value.to_string()),
-            ("DIAG_RX_CAN_ID", plan.diagnostic.request_can_id.to_string()),
-            (
-                "DIAG_TX_CAN_ID",
-                plan.diagnostic.response_can_id.to_string(),
-            ),
-            ("P2", plan.diagnostic.p2_ms.to_string()),
-            ("P2_STAR", plan.diagnostic.p2_star_ms.to_string()),
+            ("DIAG_RX_CAN_ID", diagnostic.request_can_id.to_string()),
+            ("DIAG_TX_CAN_ID", diagnostic.response_can_id.to_string()),
+            ("P2", diagnostic.p2_ms.to_string()),
+            ("P2_STAR", diagnostic.p2_star_ms.to_string()),
             (
                 "READ_DID_SESSIONS",
-                plan.diagnostic
+                diagnostic
                     .sessions
                     .iter()
                     .fold(0u8, |mask, session| mask | (1u8 << session))
@@ -535,16 +534,16 @@ impl ValidatedIntegrationPlan {
             ("TX_CANIF_PDU", tx.can_if_handle.to_string()),
             (
                 "DIAG_RX_HANDLE",
-                plan.diagnostic.request_can_if_handle.to_string(),
+                diagnostic.request_can_if_handle.to_string(),
             ),
-            ("S3", plan.diagnostic.s3_ms.to_string()),
-            ("NAS", plan.diagnostic.n_as_ms.to_string()),
-            ("NBS", plan.diagnostic.n_bs_ms.to_string()),
-            ("NCR", plan.diagnostic.n_cr_ms.to_string()),
-            ("DID", plan.diagnostic.did.to_string()),
+            ("S3", diagnostic.s3_ms.to_string()),
+            ("NAS", diagnostic.n_as_ms.to_string()),
+            ("NBS", diagnostic.n_bs_ms.to_string()),
+            ("NCR", diagnostic.n_cr_ms.to_string()),
+            ("DID", diagnostic.did.to_string()),
             (
                 "DIAG_TX_HANDLE",
-                plan.diagnostic.response_can_if_handle.to_string(),
+                diagnostic.response_can_if_handle.to_string(),
             ),
             (
                 "ECU_NAME",
@@ -623,7 +622,7 @@ impl ValidatedIntegrationPlan {
                 "counter": { "path": plan.schedule.counter, "id": 0 },
                 "receiveFrame": { "comSignal": rx.com_signal, "index": 0, "canIfHandle": rx.can_if_handle },
                 "transmitFrame": { "comSignal": tx.com_signal, "index": 1, "canIfHandle": tx.can_if_handle },
-                "diagnosticTransmit": { "canIfHandle": plan.diagnostic.response_can_if_handle },
+                "diagnosticTransmit": { "canIfHandle": diagnostic.response_can_if_handle },
             },
             "target": target.spec().id,
             "owner": "one generated AUTOSTART extended Task_Ecu; StartupHook owns initialization",

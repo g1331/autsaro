@@ -913,10 +913,10 @@ fn legacy_constraints(
     .iter()
     .map(|module| format!("/AUTOSAR/EcucDefs/{module}"))
     .collect();
-    if !standard || !required.iter().all(|id| modules.contains(id.as_str())) {
+    if !standard {
         return Ok(());
     }
-    let Some((graph_valid, issues)) = catalog.legacy_definition_constraints(
+    let Some((graph_valid, multi, issues)) = catalog.legacy_definition_constraints(
         documents
             .iter()
             .zip(files)
@@ -924,6 +924,9 @@ fn legacy_constraints(
     ) else {
         return Ok(());
     };
+    if !multi && !required.iter().all(|id| modules.contains(id.as_str())) {
+        return Ok(());
+    }
     let registered = |code: &str| {
         matches!(
             code,
@@ -937,6 +940,8 @@ fn legacy_constraints(
                 | "TIMEOUT_CONFLICT"
                 | "DIAGNOSTIC_TIMING"
                 | "DIAGNOSTIC_REFERENCE"
+                | "OFFSET_UNSUPPORTED"
+                | "MINIMUM_START_INTERVAL_UNSUPPORTED"
         )
     };
     let supported = graph_valid;
@@ -961,7 +966,10 @@ fn legacy_constraints(
     } else {
         Vec::new()
     };
-    for issue in issues.into_iter().filter(|issue| registered(&issue.code)) {
+    for issue in issues
+        .into_iter()
+        .filter(|issue| multi || registered(&issue.code))
+    {
         let values: Vec<_> = issue
             .object
             .as_ref()

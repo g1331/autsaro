@@ -121,3 +121,5 @@ APP-1／APP-2、CFG-4、CAP-1–CAP-5、NFR8-1–NFR8-3及UX8-1–UX8-3全部有
 Epic7发行收尾由其他任务负责，当前不以其整体done为门；唯一具体依赖是本次使用的Workspace／规则／生成／源保护正常行为，实际失败才阻塞消费者。R11只核对endpoint、应用类型与network/channel mapping接缝，未创建运行实现；R10硬件／硬实时及认证另验。
 
 本结论为规划进入许可，不是实现／行为／标准符合性通过。用户授权阶段提交、推送及创建PR，未授权merge。实际实现、审查、命令、结果、剩余标准／平台缺口记录到对应BMad故事，不增加报告或台账。
+
+实施期进一步核对发现具体配置依赖：无I-PDU group的PDU虽按SWS_Com_00840启动，但Rx deadline monitoring按SWS_Com_00772禁用；网络receiver正数aliveTimeout需要真实COM→RTE timeout回调闭包（SWS_Rte_08061／08062／08103／08104）。已向用户提出首批范围选择：最小Rx group与标准DM闭环，或无group并明确拒绝网络超时配置。8.1类型／连接／header工作继续；8.2依赖此选择的实现与进入出口在答复前保持未通过，不将旧host私有计时当作标准证据。此前PASS不是对这一新发现的豁免。

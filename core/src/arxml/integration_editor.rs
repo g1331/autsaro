@@ -258,7 +258,7 @@ fn inspection(
 ) -> IntegrationInspection {
     match result {
         Ok(plan) => IntegrationInspection {
-            profile: crate::integration::PROFILE.into(),
+            profile: plan.description().profile.clone(),
             description: Some(plan.description().clone()),
             diagnostics: Vec::new(),
         },

@@ -181,7 +181,10 @@ pub fn generated_tables() {
         let edited = workspace
             .integration_plan_legacy(&runtime, dependencies.mod_archive.clone())
             .unwrap();
-        assert_eq!(edited.description().component.period_ms, 20);
+        assert_eq!(
+            edited.description().component.as_ref().unwrap().period_ms,
+            20
+        );
         let app = edited
             .description()
             .schedule

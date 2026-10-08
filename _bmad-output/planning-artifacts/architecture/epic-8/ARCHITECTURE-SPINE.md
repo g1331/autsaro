@@ -62,19 +62,19 @@ flowchart TD
 
 - **Binds:** CAP-2, CAP-5
 - **Prevents:** 扇出互相覆盖、local写入被CAN停止阻断或同一R具有两个数据权威。
-- **Rule:** 每个使用R endpoint恰有一个local P或network映射，P可扇出。连接接口及显式type mapping相容后，按producer endpoint建立local最后值与发布状态；首次发布前按各receiver明确ComSpec初值分别读取，冲突时receiver优先，缺init拒绝。首批local handleNeverReceived=false／aliveTimeout0／NONE，无invalidValue；其他freshness拒绝。本地标准Read／Write仅检查实际owner和指针，不检查CAN；网络适配独立处理Com状态／deadline。初始化在通信开放之前，运行仅owner串行修改。
+- **Rule:** 每个使用R endpoint恰有一个local P或network映射，P可扇出。连接接口及显式type mapping相容后，按producer endpoint建立local最后值与发布状态；首次发布前按各receiver明确ComSpec初值分别读取，冲突时receiver优先，缺init拒绝。首批local handleNeverReceived=false／aliveTimeout0／NONE，无invalidValue；其他freshness拒绝。本地标准Read／Write仅检查实际owner和指针，不检查CAN；网络适配独立处理Com状态／deadline。新multi的未分组PDU按SWS_Com_00840隐式启动且不可停止，CAN停机不等于COM不可用；RTE仅按实际COM返回映射COM_STOPPED（SWS_Rte_06830／07822），Read仍回填last/init和freshness，Write更新缓冲，lower TX失败独立。标准COM模块拥有uint8 Send／Receive、lifecycle／status、真实PduInfo callbacks及MainFunction，必需ECUC配置明确核定；Rx／deadline不受旧host Dem策略失败阻断。旧profile保持历史gate／ABI。初始化在通信开放之前，运行仅owner串行修改。
 
 ### AD-4 — 同步 C/S 与服务器状态
 
 - **Binds:** CAP-2, CAP-3
 - **Prevents:** 直调server、参数方向漂移、周期调用服务器或两线程并发进入非重入实例。
-- **Rule:** operation参数从声明方向／类型生成，uint32值IN、OUT／INOUT指针及byte[4] OUT以标准签名公开。调用仅通过组件Rte_Call进入可信目标，server在调用者owner上下文执行；每个调用方operation绑定唯一server／OperationInvokedEvent。调用环、async、并发与跨task配置拒绝；空OUT／INOUT拒绝且不改输出。首批无possible application errors，server entry返回void（SWS_Rte_08913），客户端Rte_Call返回Std_ReturnType，成功E_OK；两者ABI分别校验。
+- **Rule:** operation参数从声明方向／类型生成，uint32值IN、OUT／INOUT指针及byte[4] OUT以标准签名公开。调用仅通过组件Rte_Call进入可信目标，server在调用者owner上下文执行；每个调用方operation绑定唯一server／OperationInvokedEvent。接口操作、ComSpec和invoked event双向闭合；缺省/USE-ARGUMENT-TYPE为首批参数policy，USE-VOID拒绝；无参数operation保持void参数列表。调用环、async、并发与跨task配置拒绝；空OUT／INOUT拒绝且不改输出。首批无possible application errors，server entry返回void（SWS_Rte_08913），客户端Rte_Call返回Std_ReturnType，成功E_OK；两者ABI分别校验。
 
 ### AD-5 — 共同调度契约
 
 - **Binds:** CAP-3
 - **Prevents:** template另设周期、位置顺序不一致、漏掉第二组件或同tick重复执行。
-- **Rule:** 首批每个周期runnable恰有一个TimingEvent，全部共用正整数ms周期、offset=0，映射到唯一Extended Task_Ecu合法OsEvent与所选Alarm／ExpiryPoint；所有使用event必须唯一映射，position唯一且排序，同runnable多TimingEvent拒绝。每个真实due tick按计划执行全部应用runnable一次，重复epoch不重跑；每个OperationInvokedEvent仍有RteEventToTaskMapping容器，RteEventIsMappedToTask=false且无task／alarm／event／position引用，不加入周期表。BSW输入／时间处理、应用、发送、诊断顺序保持；SchM无锁只基于同owner证明，越过owner的配置拒绝。
+- **Rule:** 首批每个周期runnable恰有一个TimingEvent，全部共用正整数ms周期、offset=0，映射到唯一Extended Task_Ecu合法OsEvent与所选Alarm／ExpiryPoint；应用/BSW周期mapping必须显式isMappedToTask=true并有task ref，缺省/false带task ref拒绝；合法显式零offset与缺省等价。所有使用event必须唯一映射，position唯一且排序，同runnable多TimingEvent拒绝。每个真实due tick按计划执行全部应用runnable一次，重复epoch不重跑；每个OperationInvokedEvent仍有RteEventToTaskMapping容器，RteEventIsMappedToTask=false且无task／alarm／event／position引用，不加入周期表。BSW输入／时间处理、应用、发送、诊断顺序保持；SchM无锁只基于同owner证明，越过owner的配置拒绝。
 
 ### AD-6 — 接口及 profile 版本
 

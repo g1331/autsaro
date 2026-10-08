@@ -251,7 +251,21 @@ pub(super) fn inspect(
     graph: &Graph,
     component: &ComponentContract,
 ) -> Result<DiagnosticContract, Vec<PlanDiagnostic>> {
-    let context = *graph.objects.get(&component.component).unwrap();
+    inspect_service(
+        graph,
+        &component.component,
+        &component.service.name,
+        &component.service.client_port,
+    )
+}
+
+pub(super) fn inspect_service(
+    graph: &Graph,
+    component_path: &str,
+    port_name: &str,
+    client_port: &str,
+) -> Result<DiagnosticContract, Vec<PlanDiagnostic>> {
+    let context = *graph.objects.get(component_path).unwrap();
     let data = one(graph, context, "DcmDspData")?;
     let did = one(graph, data, "DcmDspDid")?;
     if value(graph, data, "DcmDspDataUsePort", false) != Some("USE_DATA_SYNCH_CLIENT_SERVER")
@@ -262,7 +276,7 @@ pub(super) fn inspect(
             value(graph, data, "DcmDspDataConditionCheckReadFncUsed", false),
             Some("false" | "0")
         )
-        || graph.text(data, "SHORT-NAME") != Some(component.service.name.as_str())
+        || graph.text(data, "SHORT-NAME") != Some(port_name)
     {
         return Err(reject(
             graph,
@@ -612,7 +626,7 @@ pub(super) fn inspect(
         data: graph.elements[data].object.clone(),
         did_object: graph.elements[did].object.clone(),
         did: did_id,
-        client_port: component.service.client_port.clone(),
+        client_port: client_port.into(),
         rx_sdu: graph.elements[rx_sdu].object.clone(),
         tx_sdu: graph.elements[tx_sdu].object.clone(),
         rx_npdu: graph.elements[rx_npdu].object.clone(),

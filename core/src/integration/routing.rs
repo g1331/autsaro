@@ -39,14 +39,24 @@ pub(super) fn inspect(
     signals: &[SignalChannel],
     diagnostic: &DiagnosticContract,
 ) -> Result<Vec<PduRoute>, Vec<PlanDiagnostic>> {
+    inspect_optional(graph, signals, Some(diagnostic))
+}
+
+pub(super) fn inspect_optional(
+    graph: &Graph,
+    signals: &[SignalChannel],
+    diagnostic: Option<&DiagnosticContract>,
+) -> Result<Vec<PduRoute>, Vec<PlanDiagnostic>> {
     let mut selected: Vec<_> = signals
         .iter()
         .map(|signal| (signal.global_pdu.as_str(), signal.receive, false))
         .collect();
-    selected.extend([
-        (diagnostic.rx_sdu.as_str(), true, true),
-        (diagnostic.tx_sdu.as_str(), false, true),
-    ]);
+    if let Some(diagnostic) = diagnostic {
+        selected.extend([
+            (diagnostic.rx_sdu.as_str(), true, true),
+            (diagnostic.tx_sdu.as_str(), false, true),
+        ]);
+    }
     let mut routes = Vec::new();
     let mut source_handles = BTreeSet::new();
     let mut destination_handles = BTreeSet::new();

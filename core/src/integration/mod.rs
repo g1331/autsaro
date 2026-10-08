@@ -15,7 +15,13 @@ mod ecu;
 pub(crate) mod editor;
 mod graph;
 pub(crate) mod handoff;
+mod multi;
 mod native_configuration;
+pub use multi::{
+    Component as MultiComponent, Connection as ComponentConnection, Endpoint as ComponentEndpoint,
+    MultiComponentContract, Operation as ComponentOperation,
+};
+pub const MULTI_PROFILE: &str = multi::PROFILE;
 mod os_service;
 mod plan;
 mod routing;

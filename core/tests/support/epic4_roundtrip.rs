@@ -66,7 +66,7 @@ pub fn verify() {
         .edit_integration_legacy(&runtime, dependencies.mod_archive.clone(), edit)
         .unwrap();
     let description = report.description.unwrap();
-    assert_eq!(description.component.period_ms, 20);
+    assert_eq!(description.component.as_ref().unwrap().period_ms, 20);
     assert!(
         description
             .signals
@@ -185,7 +185,16 @@ pub fn verify() {
             },
         )
         .unwrap();
-    assert_eq!(edited.description.unwrap().component.period_ms, 25);
+    assert_eq!(
+        edited
+            .description
+            .unwrap()
+            .component
+            .as_ref()
+            .unwrap()
+            .period_ms,
+        25
+    );
     let issues = workspace
         .save_integration_previewed_legacy(
             &runtime,

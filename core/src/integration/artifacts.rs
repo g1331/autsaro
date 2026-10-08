@@ -54,6 +54,7 @@ pub(super) fn files<T>(
     plan: &PlanDescription,
     sources: &BTreeMap<String, T>,
 ) -> Result<BTreeMap<String, Vec<u8>>, crate::message::LocalizedText> {
+    let component = plan.legacy_component()?;
     let mut entries: BTreeMap<String, Vec<SymbolContract>> = BTreeMap::new();
     for symbol in &plan.symbols {
         if let Some(path) = symbol.definition_owner.strip_prefix("runtime/src/") {
@@ -139,17 +140,8 @@ pub(super) fn files<T>(
             "EcuStatus" | "uint32" | "uint32_t" | "CounterType"
         ) {
             32
-        } else if native
-            == &c_name(
-                plan.component
-                    .service
-                    .array_type
-                    .rsplit('/')
-                    .next()
-                    .unwrap(),
-            )
-        {
-            plan.component.service.array_length * 8
+        } else if native == &c_name(component.service.array_type.rsplit('/').next().unwrap()) {
+            component.service.array_length * 8
         } else {
             return Err(
                 crate::product_message!("backend.integration.artifacts.native_object_size_missing", "native" => native),

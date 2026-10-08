@@ -70,7 +70,7 @@ fn reject(
     )]
 }
 
-fn one(
+pub(super) fn one(
     graph: &Graph,
     context: usize,
     values: Vec<usize>,
@@ -90,7 +90,7 @@ fn one(
     }
 }
 
-fn referenced(
+pub(super) fn referenced(
     graph: &Graph,
     context: usize,
     tag: &str,
@@ -108,7 +108,7 @@ fn referenced(
     })
 }
 
-fn name(graph: &Graph, index: usize) -> String {
+pub(super) fn name(graph: &Graph, index: usize) -> String {
     graph.text(index, "SHORT-NAME").unwrap_or("").into()
 }
 
@@ -163,7 +163,7 @@ pub(super) fn milliseconds(value: &str) -> Option<u32> {
     u32::try_from(amount).ok().filter(|amount| *amount != 0)
 }
 
-fn implementation(
+pub(super) fn implementation(
     graph: &Graph,
     context: usize,
     behavior: usize,
@@ -350,6 +350,17 @@ pub(super) fn inspect(graph: &Graph) -> Result<ComponentContract, Vec<PlanDiagno
         graph.descendants(behavior, "TIMING-EVENT"),
         "SCHEDULE_NOT_UNIQUE",
     )?;
+    if graph
+        .text(event, "OFFSET")
+        .is_some_and(|value| !super::multi::zero_seconds(value))
+    {
+        return Err(reject(
+            graph,
+            event,
+            "OFFSET_UNSUPPORTED",
+            crate::product_message!("backend.integration.component.tag_outside_supported_profile", "tag" => "OFFSET"),
+        ));
+    }
     let runnable = referenced(graph, event, "START-ON-EVENT-REF", "SCHEDULE_NOT_UNIQUE")?;
     let period = graph
         .text(event, "PERIOD")
@@ -782,6 +793,23 @@ pub(super) fn inspect(graph: &Graph) -> Result<ComponentContract, Vec<PlanDiagno
             .collect(),
         "SERVICE_CLIENT_MISSING",
     )?;
+    for runnable in graph
+        .descendants(component, "RUNNABLE-ENTITY")
+        .into_iter()
+        .chain(graph.descendants(client_component, "RUNNABLE-ENTITY"))
+    {
+        if graph
+            .text(runnable, "MINIMUM-START-INTERVAL")
+            .is_some_and(|value| !super::multi::zero_seconds(value))
+        {
+            return Err(reject(
+                graph,
+                runnable,
+                "MINIMUM_START_INTERVAL_UNSUPPORTED",
+                crate::product_message!("backend.integration.component.tag_outside_supported_profile", "tag" => "MINIMUM-START-INTERVAL"),
+            ));
+        }
+    }
     for bound_instance in [instance, client_instance] {
         let binding = one(
             graph,

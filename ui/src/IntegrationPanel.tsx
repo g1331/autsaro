@@ -42,6 +42,7 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
   const busy = Boolean(controller.busy);
   const locked = busy;
   const plan = inspection?.description;
+  const component = plan?.component;
   const selected = preview?.files.find((file) => file.path === selectedFile);
   return (
     <div className="workflow-page integration-view" aria-label={t('shell.integration.workspace')}>
@@ -115,31 +116,60 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
               </tbody>
             </table>
           </div>
-          <div className="inspector-block">
-            <h3>{t('shell.integration.parameters')}</h3>
-            <p className="mono path-text">{plan.component.instance}</p>
-            <div className="integration-fields">
-              {plan.signals.map((signal) => (
-                <label className="field" key={signal.port}>
-                  <span>
-                    {signal.receive
-                      ? t('shell.integration.receiveId')
-                      : t('shell.integration.transmitId')}{' '}
-                    · {signal.port}
-                  </span>
-                  <input
-                    aria-label={
-                      signal.receive
+          {plan.multi && (
+            <div className="inspector-block">
+              <p>{t('shell.integration.multiReadOnly')}</p>
+              {plan.multi.components.map((item) => (
+                <p className="mono path-text" key={item.instance}>
+                  {item.component} · {item.instance}
+                </p>
+              ))}
+            </div>
+          )}
+          {component && (
+            <div className="inspector-block">
+              <h3>{t('shell.integration.parameters')}</h3>
+              <p className="mono path-text">{component.instance}</p>
+              <div className="integration-fields">
+                {plan.signals.map((signal) => (
+                  <label className="field" key={signal.port}>
+                    <span>
+                      {signal.receive
                         ? t('shell.integration.receiveId')
-                        : t('shell.integration.transmitId')
-                    }
-                    value={ids[signal.port] ?? ''}
+                        : t('shell.integration.transmitId')}{' '}
+                      · {signal.port}
+                    </span>
+                    <input
+                      aria-label={
+                        signal.receive
+                          ? t('shell.integration.receiveId')
+                          : t('shell.integration.transmitId')
+                      }
+                      value={ids[signal.port] ?? ''}
+                      onChange={(event) => {
+                        const next = { ...ids, [signal.port]: event.target.value };
+                        setIds(next);
+                        onDraftChange(
+                          period !== String(component.periodMs) ||
+                            plan.signals.some((item) => next[item.port] !== String(item.canId)),
+                        );
+                        setPreview(null);
+                      }}
+                      disabled={busy || locked}
+                      inputMode="numeric"
+                    />
+                  </label>
+                ))}
+                <label className="field">
+                  <span>{t('shell.integration.period')}</span>
+                  <input
+                    aria-label={t('shell.integration.periodA11y')}
+                    value={period}
                     onChange={(event) => {
-                      const next = { ...ids, [signal.port]: event.target.value };
-                      setIds(next);
+                      setPeriod(event.target.value);
                       onDraftChange(
-                        period !== String(plan.component.periodMs) ||
-                          plan.signals.some((item) => next[item.port] !== String(item.canId)),
+                        event.target.value !== String(component.periodMs) ||
+                          plan.signals.some((item) => ids[item.port] !== String(item.canId)),
                       );
                       setPreview(null);
                     }}
@@ -147,56 +177,41 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
                     inputMode="numeric"
                   />
                 </label>
-              ))}
-              <label className="field">
-                <span>{t('shell.integration.period')}</span>
-                <input
-                  aria-label={t('shell.integration.periodA11y')}
-                  value={period}
-                  onChange={(event) => {
-                    setPeriod(event.target.value);
-                    onDraftChange(
-                      event.target.value !== String(plan.component.periodMs) ||
-                        plan.signals.some((item) => ids[item.port] !== String(item.canId)),
-                    );
-                    setPreview(null);
-                  }}
-                  disabled={busy || locked}
-                  inputMode="numeric"
-                />
-              </label>
+              </div>
+              {plan.diagnostic && (
+                <p>
+                  {t('shell.integration.diagnostic', {
+                    request: plan.diagnostic.requestCanId,
+                    response: plan.diagnostic.responseCanId,
+                    did: plan.diagnostic.did.toString(16).toUpperCase(),
+                  })}
+                </p>
+              )}
+              <div className="section-actions">
+                <button
+                  className="primary-button compact"
+                  onClick={apply}
+                  disabled={busy || locked || !changed}
+                >
+                  {t('shell.integration.apply')}
+                </button>
+                <button
+                  className="outline-button small"
+                  onClick={() => restoreIntegrationDraft()}
+                  disabled={busy || locked || !changed}
+                >
+                  {t('shell.integration.restore')}
+                </button>
+                <button
+                  className="outline-button small"
+                  onClick={showPreview}
+                  disabled={busy || locked || changed || !workspace.dirty}
+                >
+                  {t('shell.command.save')}
+                </button>
+              </div>
             </div>
-            <p>
-              {t('shell.integration.diagnostic', {
-                request: plan.diagnostic.requestCanId,
-                response: plan.diagnostic.responseCanId,
-                did: plan.diagnostic.did.toString(16).toUpperCase(),
-              })}
-            </p>
-            <div className="section-actions">
-              <button
-                className="primary-button compact"
-                onClick={apply}
-                disabled={busy || locked || !changed}
-              >
-                {t('shell.integration.apply')}
-              </button>
-              <button
-                className="outline-button small"
-                onClick={() => restoreIntegrationDraft()}
-                disabled={busy || locked || !changed}
-              >
-                {t('shell.integration.restore')}
-              </button>
-              <button
-                className="outline-button small"
-                onClick={showPreview}
-                disabled={busy || locked || changed || !workspace.dirty}
-              >
-                {t('shell.command.save')}
-              </button>
-            </div>
-          </div>
+          )}
         </>
       )}
       {preview && (

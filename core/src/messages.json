@@ -1298,7 +1298,10 @@
     "backend.workbench.tool_required": "请配置原生工具 {{name}}",
     "backend.workbench.validation_unavailable": "工程、内置规则或操作状态不满足校验条件",
     "backend.workbench.workspace_required": "请先创建或导入 ARXML 项目",
-    "backend.workbench.xsd_required": "请配置合法的 R24-11 XSD 档案"
+    "backend.workbench.xsd_required": "请配置合法的 R24-11 XSD 档案",
+    "backend.integration.multi.contract_invalid": "多组件契约不满足约束：{{code}}。",
+    "backend.integration.multi.repair_contract": "修复所定位对象的类型、连接、归属或调度关系。",
+    "backend.integration.multi.consumer_unsupported": "该操作尚不支持多组件配置；可先生成组件契约。"
   },
   "en": {
     "backend.arxml.application.application_retained_pending_recovery": "New application retained until manifest recovery: {{path}}",
@@ -2599,6 +2602,9 @@
     "backend.workbench.tool_required": "Configure native tool {{name}}",
     "backend.workbench.validation_unavailable": "The project, built-in rules or operation state does not allow validation",
     "backend.workbench.workspace_required": "Create or import an ARXML project first",
-    "backend.workbench.xsd_required": "Configure a valid R24-11 XSD archive"
+    "backend.workbench.xsd_required": "Configure a valid R24-11 XSD archive",
+    "backend.integration.multi.contract_invalid": "Multi-component contract violates constraint: {{code}}.",
+    "backend.integration.multi.repair_contract": "Repair the located object's type, connection, ownership or scheduling relationship.",
+    "backend.integration.multi.consumer_unsupported": "This operation does not yet support the multi-component profile; component contracts can be generated."
   }
 }

@@ -80,7 +80,11 @@ afterEach(() => {
   previewLanguage('system');
 });
 
-async function openConsumer(rejection, projection = baseProjection) {
+async function openConsumer(
+  rejection,
+  projection = baseProjection,
+  inspection = { profile: 'standard', diagnostics: [], description: null },
+) {
   let opened = false;
   native.invoke.mockImplementation(async (command) => {
     const currentCapabilities = { ...capabilities, hasWorkspace: opened };
@@ -101,7 +105,7 @@ async function openConsumer(rejection, projection = baseProjection) {
       };
     if (command === 'inspect_integration')
       return {
-        value: { profile: 'standard', diagnostics: [], description: null },
+        value: inspection,
         capabilities: currentCapabilities,
         inputFingerprint: 'unchanged-input',
       };
@@ -142,6 +146,56 @@ async function openConsumer(rejection, projection = baseProjection) {
   await waitFor(() => expect(controller.integrationInspection).not.toBeNull());
   return { view, current: () => controller };
 }
+
+test.each(['zh-CN', 'en'])(
+  '%s multi-component inspection and draft restoration never read a missing single component',
+  async (language) => {
+    previewLanguage(language);
+    const components = ['Ingress', 'Process', 'Observe', 'DcmService'].map((name) => ({
+      component: `/Application/${name}`,
+      instance: `/Application/Pipeline/${name}Instance`,
+    }));
+    const inspection = {
+      profile: 'singlecore-multi-swc-v1',
+      diagnostics: [],
+      description: {
+        sources: [
+          { logicalPath: 'process.arxml', rawSha256: 'a'.repeat(64), roles: ['application'] },
+        ],
+        multi: { components },
+        signals: [{ port: '/Application/Ingress/Received', canId: 0x320, receive: true, dlc: 4 }],
+      },
+    };
+    const { view, current } = await openConsumer(undefined, baseProjection, inspection);
+    act(() => current().setLanguageDraft(language));
+    expect(current().integrationPeriod).toBe('');
+    expect(view.getByText(translate('shell.integration.multiReadOnly'))).toBeTruthy();
+    for (const component of components) {
+      expect(view.getByText(`${component.component} · ${component.instance}`)).toBeTruthy();
+    }
+    expect(view.queryByLabelText(translate('shell.integration.periodA11y'))).toBeNull();
+    expect(view.queryByRole('button', { name: translate('shell.integration.apply') })).toBeNull();
+    act(() => current().restoreIntegrationDraft());
+    expect(current().integrationInspection).toBe(inspection);
+    expect(current().integrationPeriod).toBe('');
+    act(() => {
+      current().setIntegrationIds({ '/Application/Ingress/Received': '100' });
+      current().setIntegrationPeriod('100');
+      current().setIntegrationUnapplied(true);
+    });
+    act(() => current().restoreAllDrafts());
+    expect(current().integrationIds).toEqual({ '/Application/Ingress/Received': '800' });
+    expect(current().integrationPeriod).toBe('');
+    expect(current().integrationUnapplied).toBe(false);
+    act(() => current().applyIntegration());
+    expect(native.invoke.mock.calls.some(([command]) => command === 'edit_integration')).toBe(
+      false,
+    );
+    expect(localize(current().integrationNotice)).toBe(
+      translate('shell.integration.multiReadOnly'),
+    );
+  },
+);
 
 test('application recovery message aggregates remain feedback rather than integration diagnostics', async () => {
   const raw = 'C:\\用户\\project.autosar.autosar.bak: hard-link permission denied <raw>';

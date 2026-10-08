@@ -213,13 +213,27 @@ pub(super) fn inspect(
     graph: &Graph,
     component: &ComponentContract,
 ) -> Result<Vec<SignalChannel>, Vec<PlanDiagnostic>> {
+    inspect_ports(
+        graph,
+        &component.data_ports,
+        &component.instance,
+        component.period_ms,
+    )
+}
+
+pub(super) fn inspect_ports(
+    graph: &Graph,
+    ports: &[super::component::DataPort],
+    instance: &str,
+    period_ms: u32,
+) -> Result<Vec<SignalChannel>, Vec<PlanDiagnostic>> {
     let system = graph
         .of_kind("SYSTEM")
         .into_iter()
         .find(|index| graph.text(*index, "CATEGORY") == Some("ECU_EXTRACT"))
         .unwrap();
     let mut channels = Vec::new();
-    for port in &component.data_ports {
+    for port in ports {
         let context = *graph.objects.get(&port.path).unwrap();
         let mapping = one(
             graph,
@@ -242,7 +256,7 @@ pub(super) fn inspect(
             graph.children(mapping, "DATA-ELEMENT-IREF"),
             "SIGNAL_MAPPING",
         )?;
-        if graph.text(iref, "CONTEXT-COMPONENT-REF") != Some(component.instance.as_str())
+        if graph.text(iref, "CONTEXT-COMPONENT-REF") != Some(instance)
             || graph.text(iref, "TARGET-DATA-PROTOTYPE-REF") != Some(port.element.as_str())
             || graph.text(mapping, "COMMUNICATION-DIRECTION")
                 != Some(if port.read { "IN" } else { "OUT" })
@@ -548,8 +562,13 @@ pub(super) fn inspect(
                 )
                 || value(graph, com_signal, "ComFirstTimeout", false) != Some("0")
                 || value(graph, com_signal, "ComRxDataTimeoutAction", false) != Some("NONE")
-                || value(graph, com_signal, "ComTimeout", false).and_then(milliseconds)
-                    != port.alive_timeout_ms
+                || value(graph, com_signal, "ComTimeout", false).and_then(|value| {
+                    if super::multi::selected(graph) && super::multi::zero_seconds(value) {
+                        Some(0)
+                    } else {
+                        milliseconds(value)
+                    }
+                }) != port.alive_timeout_ms
             {
                 return Err(reject(
                     graph,
@@ -579,7 +598,7 @@ pub(super) fn inspect(
             )?;
             if value(graph, mode, "ComTxModeMode", false) != Some("PERIODIC")
                 || value(graph, mode, "ComTxModeTimePeriod", false).and_then(milliseconds)
-                    != Some(component.period_ms)
+                    != Some(period_ms)
             {
                 return Err(reject(
                     graph,
@@ -590,7 +609,7 @@ pub(super) fn inspect(
                     ),
                 ));
             }
-            Some(component.period_ms)
+            Some(period_ms)
         };
         channels.push(SignalChannel {
             port: port.path.clone(),
@@ -614,7 +633,13 @@ pub(super) fn inspect(
             transmit_period_ms: transmit_period,
         });
     }
-    if channels[0].can_id == channels[1].can_id {
+    if channels
+        .iter()
+        .map(|channel| channel.can_id)
+        .collect::<std::collections::BTreeSet<_>>()
+        .len()
+        != channels.len()
+    {
         return Err(reject(
             graph,
             system,

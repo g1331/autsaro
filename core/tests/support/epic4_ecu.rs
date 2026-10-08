@@ -444,7 +444,15 @@ pub fn verify() {
     });
     let variant_plan =
         build_plan(&variant, &dependencies, &runtime).unwrap_or_else(|issues| panic!("{issues:?}"));
-    assert_eq!(variant_plan.description().component.period_ms, 20);
+    assert_eq!(
+        variant_plan
+            .description()
+            .component
+            .as_ref()
+            .unwrap()
+            .period_ms,
+        20
+    );
     let variant_project = variant_plan
         .ecu_integration_files(super::tooling::native_target())
         .unwrap_or_else(|issues| panic!("{issues:?}"));

@@ -392,7 +392,7 @@ impl crate::definitions::DefinitionCatalog {
     pub(crate) fn legacy_definition_constraints<'a, 'input>(
         &self,
         files: impl Iterator<Item = (&'a str, &'a Document<'input>)>,
-    ) -> Option<(bool, Vec<PlanDiagnostic>)>
+    ) -> Option<(bool, bool, Vec<PlanDiagnostic>)>
     where
         'input: 'a,
     {
@@ -448,7 +448,13 @@ impl crate::definitions::DefinitionCatalog {
                 }
                 let references = graph.reference_diagnostics_for(&consumers);
                 if !references.is_empty() {
-                    return Some((false, references));
+                    return Some((false, super::multi::selected(&graph), references));
+                }
+                if super::multi::selected(&graph) {
+                    let result = super::RuntimeCatalog::embedded().and_then(|runtime| {
+                        super::plan::inspect_multi(&graph, Some(self), &runtime)
+                    });
+                    return Some((true, true, result.err().unwrap_or_default()));
                 }
                 match super::component::inspect(&graph) {
                     Ok(component) => {
@@ -473,12 +479,23 @@ impl crate::definitions::DefinitionCatalog {
                         if let Err(issues) = diagnostic {
                             diagnostics.extend(issues);
                         }
-                        Some((true, diagnostics))
+                        Some((true, false, diagnostics))
                     }
-                    Err(_) => None,
+                    Err(issues) => {
+                        let diagnostics: Vec<_> = issues
+                            .into_iter()
+                            .filter(|issue| {
+                                matches!(
+                                    issue.code.as_str(),
+                                    "OFFSET_UNSUPPORTED" | "MINIMUM_START_INTERVAL_UNSUPPORTED"
+                                )
+                            })
+                            .collect();
+                        (!diagnostics.is_empty()).then_some((true, false, diagnostics))
+                    }
                 }
             }
-            Err(diagnostics) => Some((false, diagnostics)),
+            Err(diagnostics) => Some((false, false, diagnostics)),
         }
     }
 }

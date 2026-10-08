@@ -896,6 +896,8 @@ fn operating_system(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedT
             0,
             Some(1),
         )?;
+        a.booleans(&map, &format!("{prefix}EventIsMappedToTask"), 0)?;
+        a.default(&map, &format!("{prefix}EventIsMappedToTask"), "false");
         if prefix == "Rte" {
             a.foreign(
                 path,

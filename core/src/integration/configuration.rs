@@ -36,7 +36,7 @@ OsCounterTicksPerBase OsCounterType OsSecondsPerTick OsEventMask OsErrorHook OsP
 OsPreTaskHook OsProtectionHook OsShutdownHook OsStartupHook OsScalabilityClass OsStatus
 OsUseGetServiceId OsUseParameterAccess OsUseResScheduler OsTaskActivation OsTaskPriority OsTaskSchedule
 PduRDestPduHandleId PduRTransmissionConfirmation PduRSourcePduHandleId PduRSrcPduUpTxConf
-RteBswPositionInTask RtePositionInTask";
+RteBswPositionInTask RtePositionInTask RteEventIsMappedToTask RteBswEventIsMappedToTask";
 
 const MODULES: &[&str] = &[
     "Can", "CanIf", "CanTp", "Com", "Dcm", "EcuC", "Os", "PduR", "Rte",

@@ -74,6 +74,8 @@ export const shellResources: { 'zh-CN': Record<string, string>; en: Record<strin
     'shell.integration.actualRoles': '实际角色',
     'shell.integration.sha': '原字节 SHA-256',
     'shell.integration.parameters': '受支持参数',
+    'shell.integration.multiReadOnly':
+      '此组合包含多个组件。此处展示检查结果，集成参数快捷编辑仅支持单组件工程。',
     'shell.integration.period': '应用 / Com 发送 / 对应 Alarm 周期（ms）',
     'shell.integration.apply': '应用并校验修改',
     'shell.integration.restore': '还原草稿',
@@ -413,6 +415,8 @@ export const shellResources: { 'zh-CN': Record<string, string>; en: Record<strin
     'shell.integration.actualRoles': 'Actual roles',
     'shell.integration.sha': 'Original-byte SHA-256',
     'shell.integration.parameters': 'Supported parameters',
+    'shell.integration.multiReadOnly':
+      'This composition contains multiple components. Inspection results are shown here; integration parameter shortcuts support single-component projects.',
     'shell.integration.period': 'Application / Com transmission / corresponding Alarm period (ms)',
     'shell.integration.apply': 'Apply and validate changes',
     'shell.integration.restore': 'Restore draft',
