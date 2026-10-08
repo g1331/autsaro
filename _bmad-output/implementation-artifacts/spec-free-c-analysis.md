@@ -185,7 +185,7 @@ PR #9 的 46e6f36f3cd9d4a4ca9b0dbefce1cffc241cf341 双平台失败已定位：Li
 - [x] 静态分析、封存离线构建和 OS native harness 共用 kernel_patch_environment，在复制的 kernel 父目录设置进程级 GIT_CEILING_DIRECTORIES，不改宿主配置、原始源码或补丁选取范围。
 - [x] 普通 Python 增加真实 Git 仓库内／外的选择补丁测试，断言选中文件改变、排除文件不变；三模式离线构建回归输出亦放在临时 Git 仓库内。
 - [x] Windows CI 安装官方固定 GCC／gcc-libs 16.1.0-5 包，校验两个包的 SHA-256 并保留包签名；已从官方归档提取 gcc.exe，确认与 runtime/os/toolchain.json 的 d38d4dd6bea387499487881383e644ab7c193ac8f8364dc4252d6e6cc09700e2 完全一致，不修改目标锁。
-- [ ] 完成全量 Linux 工件分析、独立审查和修复提交的双平台 GitHub CI 复验。
+- [x] 完成全量 Linux 工件分析、独立审查和修复提交的双平台 GitHub CI 复验。
 
 普通 Python 42 项、ruff／actionlint／assets check 通过；真实仓库内构建三模式／12 场景 Windows 58.967 秒、Linux 11.094 秒通过。资产只更新交付 tools/python/src/ecu_tools/build.py 摘要，公开 C ABI 和第三方内核身份不变。AGENTS.md 补充选择补丁实际应用与 CI 固定工具链要求。五类 Linux 工件分析正在实际执行，最终结果及独立审查回写下文。
 
@@ -222,3 +222,10 @@ GCC 逐 TU 准备仍是单个 ECU 的最长阶段，因此将并发预算改为 
 
 
 实际新提交取消旧运行时出现短暂排队；复核 GitHub 官方取消语义，job 级 always() 在取消时仍为真，会保留汇总任务。汇总改为 !cancelled()，普通准备／分析失败仍运行并拒绝，整轮取消则停止；不会把取消结果改成成功。步骤级失败工件保留逻辑保持。actionlint 与差异检查通过。后续验收按修复后的最新 SHA 核对，取消语义依据 https://docs.github.com/en/actions/how-tos/troubleshoot-workflows 。
+
+
+最终代码提交 4a781e555f47c6b72cdff3cc4bb012fe0c799f6b 的 GitHub Actions 37788942749 全部 26 项通过，PR #9 状态 CLEAN／MERGEABLE。任务启动至结束 19 分 13 秒；含排队自创建起为 20 分 22 秒。Windows 准备 6 分 59 秒（vcpkg 已命中缓存，6 分 18 秒降至 12 秒；Cppcheck、Cargo 的正确镜像键首次建立），主机组 2 分 17 秒，两个 ECU 组并行各约 12 分钟（含各自受控 GCC 安装与工件处理）。标准 ECU 的扫描 10 分 42 秒，旧串行样本为 10 分 32 秒；GCC 准备约 6 分 40 秒，两个 CTU 入口约 4 分钟。四 worker 对 Windows 单样本总耗时尚无明显收益，本轮关键提速来自消除两个 ECU 串行等待和依赖复用，不能把配置并发数当作性能证明。
+
+实际下载核对全部十份摘要：Linux 234／240／234／1806／1806，Windows 292／298／292／1821／1821；每个平台三类主机各 21 TU、两个 ECU 各 42 TU／2 个完整 CTU 程序，全部 compilerWorkers=4、error=null，源码保持 passed=false，与此前诊断一致。最终汇总实际读取十份摘要后通过，没有用缺项、解析错误或源码违规伪造通过。准备与样本日志、摘要、原始样本保留 14 天，源资产一致、工作区干净。CI 运行：https://github.com/g1331/autsaro/actions/runs/37788942749 。
+
+CI 修复与并行化开发验收已通过；完整免费 MISRA 任务继续 in-progress，人工义务、历史整改和未批准偏离仍待处理。此文档提交不改变代码或工作流，用自动触发的正常 CI 验证新镜像键下 Cppcheck／Cargo 缓存复用；最终性能对比以该次实际运行及 PR 检查记录为准。
