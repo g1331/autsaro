@@ -1,85 +1,89 @@
 <div align="center">
-  <img src="ui/public/logo-app.png" width="112" alt="Autsaro 汽车图标">
+  <img src="ui/public/logo-app.png" width="112" alt="Autsaro automotive icon">
   <h1>Autsaro</h1>
-  <p>面向 AUTOSAR Classic 的配置与代码生成工作台</p>
+  <p>A configuration and code-generation workbench for AUTOSAR Classic</p>
 </div>
 
-**简体中文** · [English](README.en.md)
+[简体中文](README.zh-CN.md) · **English**
 
-[功能一览](#功能一览) · [能力范围](#当前支持) · [使用流程](#使用顺序) · [本地开发](#本地开发环境) · [验证](#代码质量检查) · [文档](#文档导航) · [许可](#许可证)
+[Features](#features) · [Supported capabilities](#supported-capabilities) · [Workflow](#workflow) · [Development](#local-development) · [Verification](#quality-checks) · [Documentation](#documentation) · [License](#license)
 
-Autsaro 支持从内置模板创建 ECU 工程，或导入多份 ARXML；在同一工作区编辑配置、检查引用、预览保存差异，并生成独立 C99 源码工程。当前采用 AUTOSAR Classic R24-11。
+Autsaro creates ECU projects from built-in templates or imports multiple ARXML files. In a single workspace, you can edit configuration, inspect references, preview changes before saving, and generate a standalone C99 source project. The current AUTOSAR Classic release is R24-11.
 
-日常配置与源码生成可离线使用，无需官方 XSD/MOD 或编译器。执行本机预检、构建和主机行为验证前，需要准备对应目标的工具链。
+Everyday configuration and source generation work offline without official XSD/MOD archives or a compiler. Native preflight, builds, and host-behavior verification require the toolchain for the selected target.
 
-## 功能一览
+## Features
 
-<h3><img src="docs/images/icon-configuration.svg" width="22" alt=""> 配置编辑与引用检查</h3>
+<h3><img src="docs/images/icon-configuration.svg" width="22" alt=""> Configuration editing and reference inspection</h3>
 
-工程树、帧与信号表、属性检查器共用同一工作区。选择对象后，可检查参数与引用关系，编辑 CAN ID、信号布局和发送周期。
+The project tree, frame and signal tables, and property inspector share one workspace. Select an object to inspect parameters and references, and edit CAN IDs, signal layouts, and transmission periods.
 
-<a href="docs/images/workbench-configuration.png"><img src="docs/images/workbench-configuration.png" width="980" alt="CAN 配置工作区：左侧工程树、中间帧与信号表、右侧属性和引用检查器"></a>
+<a href="docs/images/workbench-configuration.png"><img src="docs/images/workbench-configuration.png" width="980" alt="CAN configuration workspace: project tree on the left, frame and signal tables in the center, and property and reference inspectors on the right"></a>
 
 <table>
   <tr>
     <td width="50%" valign="top">
-      <h3><img src="docs/images/icon-files.svg" width="22" alt=""> 多文件工程</h3>
-      <p>在同一工程中组织应用、BSW、ECUC 与系统描述，查看各文件的来源角色。</p>
-      <a href="docs/images/workbench-files.png"><img src="docs/images/workbench-files.png" width="480" alt="标准输入视图：七份 ARXML 文件及其来源角色"></a>
+      <h3><img src="docs/images/icon-files.svg" width="22" alt=""> Multi-file projects</h3>
+      <p>Organize application, BSW, ECUC, and system descriptions in one project and inspect each file's source role.</p>
+      <a href="docs/images/workbench-files.png"><img src="docs/images/workbench-files.png" width="480" alt="Standard-input view showing seven ARXML files and their source roles"></a>
     </td>
     <td width="50%" valign="top">
-      <h3><img src="docs/images/icon-validation.svg" width="22" alt=""> 校验与问题定位</h3>
-      <p>结构、定义与生成约束分别报告；从问题详情定位到对应配置对象。</p>
-      <a href="docs/images/workbench-validation.png"><img src="docs/images/workbench-validation.png" width="480" alt="问题工具窗口：分域校验结果、基数错误与定位到真实来源操作"></a>
+      <h3><img src="docs/images/icon-validation.svg" width="22" alt=""> Validation and issue navigation</h3>
+      <p>Structure, definition, and generation constraints are reported separately. Navigate from an issue to the relevant configuration object.</p>
+      <a href="docs/images/workbench-validation.png"><img src="docs/images/workbench-validation.png" width="480" alt="Problems tool window showing validation scopes, a multiplicity error, and navigation to the actual source"></a>
     </td>
   </tr>
 </table>
 
-## 当前支持
+The screenshots show the Chinese interface.
 
-| 范围 | 支持内容 |
+## Supported capabilities
+
+| Area | Support |
 | --- | --- |
-| 工程与 ARXML | 多文件导入、跨文件引用、内置模板、项目成员管理与安全保存 |
-| 配置编辑 | 对象树、字段与引用检查、批量修改、实例结构编辑 |
-| CAN 信号 | 11 位 Classical CAN，DLC 1 至 8；每 ECU 最多 32 帧、64 信号；1 至 32 位无符号 LSB0 小端信号 |
-| 主机诊断 | 有限 DoCAN、会话与 DID 服务；部分目标可配置写入、例程、DTC 与主机文件持久化 |
-| 源码交付 | BSW、OS、RTE／应用接口、配置、目标依赖与离线构建工具 |
+| Projects and ARXML | Multi-file import, cross-file references, built-in templates, project-member management, and safe saving |
+| Configuration editing | Object tree, field and reference inspection, batch changes, and instance-structure editing |
+| CAN signals | 11-bit Classical CAN, DLC 1–8; up to 32 frames and 64 signals per ECU; 1–32-bit unsigned LSB0 little-endian signals |
+| Host diagnostics | Bounded DoCAN, sessions, and DID services; selected targets support configurable writes, routines, DTCs, and host-file persistence |
+| Source delivery | BSW, OS, RTE/application interfaces, configuration, target dependencies, and offline build tools |
 
-各生成目标支持的诊断服务和容量不同，详见[运行时支持范围](runtime/README.md)。未支持的配置会保留为只读，或限制相关操作。保存和生成各有独立的检查条件。
+Diagnostic services and capacities differ by generated target. See the [runtime support scope](runtime/README.md). Unsupported configuration is retained as read-only or limits the corresponding operations. Saving and generation have separate checks.
 
-当前运行目标为受控 Windows／Linux 主机环境，不提供真实 MCU、硬实时、功能安全或官方符合性认证。macOS 原生构建与 IPC 尚未验证，不提供本机虚拟 ECU。
+Current execution targets are controlled Windows/Linux host environments. Real MCU operation, hard real-time guarantees, functional safety, and official conformance certification are not provided. Native macOS builds and IPC have not been verified; a native virtual ECU is not provided on macOS.
 
-## 使用顺序
+## Workflow
 
-1. 从内置模板新建工程，打开已有工程，或一次导入同一 ECU 的全部 ARXML。
-2. 在工程树中选择对象，检查参数与引用；批量修改先查看整批影响，再应用。
-3. 保存前查看文件差异并确认。预览不写磁盘；来源文件被外部修改后须重新导入。
-4. 选择工程之外的目录交付源码。需要构建或主机验证时，再配置对应目标的工具链；构建目录与源码目录分开。
+1. Create a project from a built-in template, open an existing project, or import all ARXML files for the same ECU together.
+2. Select objects in the project tree and inspect parameters and references. Review the complete impact of a batch change before applying it.
+3. Review and confirm file differences before saving. Previewing does not write to disk. Reimport source files if they have been modified externally.
+4. Choose a directory outside the project for source delivery. Configure the target toolchain when you need a build or host verification. Keep build and source directories separate.
 
-未修改的来源文件保留原字节。重复生成会核对文件完整性，旧工程保留为备份，不覆盖用户修改；应用与来源变化会使已有预检、生成确认和下游结果失效。
+Unmodified source files retain their original bytes. Regeneration checks file integrity, retains the previous project as a backup, and does not overwrite user changes. Application and source changes invalidate existing preflight, generation confirmation, and downstream results.
 
-## 界面语言
+## Interface language
 
-在“设置 → 外观”中选择“跟随系统”“简体中文”或“English”。选择后即时预览，保存后在下次启动恢复；未保存直接关闭会恢复原选择。跟随系统时，中文环境使用简体中文，其他环境使用英文。
+Under **Settings → Appearance**, choose **Follow system**, **简体中文**, or **English**. The selection is previewed immediately and restored on the next launch after saving. Closing settings without saving restores the previous selection. Follow-system mode uses Simplified Chinese in a Chinese-language environment and English otherwise.
 
-语言覆盖界面、操作反馈及软件自身的错误、校验说明和修复建议。AUTOSAR 标识符、用户对象名、路径、ARXML、生成源码和外部工具原始日志保持原文；切换语言不改变工程、字段草稿或校验／生成结果。操作系统提供的文件对话框控件使用系统语言。
+Localization covers the interface, operation feedback, and the application's own errors, validation explanations, and remedies. AUTOSAR identifiers, user object names, paths, ARXML, generated source, and raw external-tool logs remain unchanged. Switching language does not change the project, field drafts, or validation/generation results. Operating-system file-dialog controls use the system language.
 
-本页提供完整[英文版本](README.en.md)。链接的技术文档保留各自原有语言。
+The complete [Chinese README](README.zh-CN.md) remains available. Linked technical documents retain their original language.
 
-## 本地开发环境
+<a href="docs/images/workbench-language-en.png"><img src="docs/images/workbench-language-en.png" width="980" alt="English language settings in the browser preview, showing independent theme and language preferences"></a>
 
-准备 Node 和 npm 后，在仓库根目录安装前端依赖并启动开发服务器。版本范围见 [贡献指南](CONTRIBUTING.md)。
+## Local development
+
+With Node and npm installed, install frontend dependencies and start the development server from the repository root. Version requirements are in the [contributor guide](CONTRIBUTING.md).
 
 ~~~sh
 npm ci --prefix ui
 npm run dev --prefix ui
 ~~~
 
-浏览器可开发界面和前端逻辑；完整文件操作及 IPC 使用桌面应用。Rust 核心和桌面开发需另准备 [平台依赖与本地配置](docs/development/environment.md)，随后运行 `npm run tauri --prefix ui -- dev`。
+The browser supports interface and frontend-logic development; complete file operations and IPC require the desktop application. For Rust-core and desktop development, prepare the [platform dependencies and local configuration](docs/development/environment.md), then run `npm run tauri --prefix ui -- dev`.
 
-`.node-version` 和 `.python-version` 提供默认版本选择；支持范围由 [ui/package.json](ui/package.json) 和 [pyproject.toml](pyproject.toml) 声明，Rust 由 [rust-toolchain.toml](rust-toolchain.toml) 管理。依赖由 Cargo/npm/uv 锁文件固定。正常开发与严格原生验收的版本要求分别说明。官方 XSD/MOD/样例仅用于对应资源测试，不是 UI、内置配置测试或普通应用使用的前置条件。
+`.node-version` and `.python-version` provide default version selections. Supported ranges are declared in [ui/package.json](ui/package.json) and [pyproject.toml](pyproject.toml); rustup reads [rust-toolchain.toml](rust-toolchain.toml). Cargo, npm, and uv lockfiles pin dependencies. Normal development and strict native acceptance have separately documented version requirements. Official XSD/MOD archives and samples are needed only for the corresponding resource tests, not for the UI, built-in configuration tests, or everyday use.
 
-## 代码质量检查
+## Quality checks
 
 ~~~sh
 npm run test --prefix ui
@@ -88,49 +92,49 @@ uv run --locked python -B -m unittest discover -s tests/python
 cargo test --locked --manifest-path core/Cargo.toml
 ~~~
 
-这些命令直接运行对应工具，失败会保留其诊断与退出状态。Python 工具先执行 `uv sync --locked`。增量格式检查使用 `autosar_tooling quality --base <基准提交>`，本地未指定基准时检查相对 HEAD 的待提交改动。
+These commands run the underlying tools directly and preserve their diagnostics and exit statuses on failure. Run `uv sync --locked` before using the Python tooling. Incremental formatting checks use `autosar_tooling quality --base <baseline-commit>`; without an explicit baseline, local checks inspect pending changes relative to HEAD.
 
-基础测试、官方对照、原生运行及 GUI/安装包验收分别执行，见 [测试指南](docs/development/testing.md)。完整资源与原生检查使用 `uv run --locked python -m autosar_tooling verify --scope all --base <基准提交>`；缺失或未运行的层不显示为通过。
+Basic tests, official comparisons, native execution, and GUI/package acceptance are separate layers; see the [testing guide](docs/development/testing.md). Complete resource and native checks use `uv run --locked python -m autosar_tooling verify --scope all --base <baseline-commit>`. Missing or unexecuted layers are not reported as passed.
 
-## 构建与分发
+## Build and distribution
 
-在已准备平台依赖的原生宿主上运行：
+On a native host with the platform dependencies installed, run:
 
 ```sh
 npm run tauri --prefix ui -- build
 ```
 
-产物位于 `src-tauri/target/release/bundle/`。Windows 配置 MSI，Linux 配置 deb／AppImage；macOS 配置 app／dmg，但尚未完成原生验证。签名、公证与公开发行尚未验证。
+Artifacts are written under `src-tauri/target/release/bundle/`. Windows is configured for MSI, Linux for deb/AppImage, and macOS for app/dmg; native macOS verification is not complete. Signing, notarization, and public release have not been verified.
 
-安装后的应用不需要 Rust、Node、npm 或 uv。Windows 需要 WebView2，Linux 需要 WebKitGTK 4.1、Ayatana AppIndicator 和 libxml2。安装包不包含官方规范档案或编译器；ECU 构建与主机验证另需对应工具链。
+The installed application does not require Rust, Node, npm, or uv. Windows requires WebView2; Linux requires WebKitGTK 4.1, Ayatana AppIndicator, and libxml2. Packages do not include official specification archives or compilers. ECU builds and host verification require the corresponding toolchain separately.
 
-## 项目结构
+## Project layout
 
-| 路径 | 职责 |
+| Path | Responsibility |
 | --- | --- |
-| `core/` | Rust 配置模型、ARXML 解析、代码生成与主机验证 |
-| `src-tauri/` | Tauri 桌面后端 |
-| `ui/` | React／TypeScript 配置界面 |
-| `runtime/` | 随生成工程交付的 C99 主机运行时 |
-| `scripts/` | 官方资料收集 |
-| `tools/python/src/` | 开发检查与随交付包分发的 Python 工具 |
-| `tools/automotive/` | 可选汽车技能的安装与维护 |
-| `tests/` | Python 测试与隔离桌面场景 |
-| `docs/` | 规范资料入口与技术文档 |
+| `core/` | Rust configuration model, ARXML parsing, code generation, and host verification |
+| `src-tauri/` | Tauri desktop backend |
+| `ui/` | React/TypeScript configuration interface |
+| `runtime/` | C99 host runtime delivered with generated projects |
+| `scripts/` | Official-resource collection |
+| `tools/python/src/` | Development checks and Python tools distributed with delivery packages |
+| `tools/automotive/` | Optional automotive-skill installation and maintenance |
+| `tests/` | Python tests and isolated desktop scenarios |
+| `docs/` | Specification-resource entrypoints and technical documentation |
 
-## 文档导航
+## Documentation
 
-| 文档 | 用途 |
+| Document | Purpose |
 | --- | --- |
-| [贡献指南](CONTRIBUTING.md) | 开发与提交流程 |
-| [环境配置](docs/development/environment.md) | 按任务安装依赖及排查环境 |
-| [测试指南](docs/development/testing.md) | 本地检查、测试分层及 CI |
-| [主机运行时](runtime/README.md) | 运行接口、通信与诊断范围 |
-| [受控 OS 目标](runtime/os/README.md) | 内核、补丁、工具链与平台范围 |
-| [独立交接工程](runtime/reference-README.md) | 离线参考包与独立复验 |
-| [规范资料入口](docs/official/README.md) | 本地规范档案的位置与分发限制 |
-| [界面设计](DESIGN.md) | 视觉与组件规范 |
+| [Contributor guide](CONTRIBUTING.md) | Development and contribution workflow |
+| [Environment setup](docs/development/environment.md) | Task-specific dependencies and environment troubleshooting |
+| [Testing guide](docs/development/testing.md) | Local checks, test layers, and CI |
+| [Host runtime](runtime/README.md) | Runtime interfaces, communication, and diagnostic scope |
+| [Controlled OS target](runtime/os/README.md) | Kernel, patches, toolchains, and platform scope |
+| [Standalone handoff project](runtime/reference-README.md) | Offline reference package and independent verification |
+| [Specification resources](docs/official/README.md) | Local archive locations and distribution restrictions |
+| [Interface design](DESIGN.md) | Visual and component standards |
 
-## 许可证
+## License
 
-项目原创代码与文档采用 [Apache-2.0](LICENSE)，版权声明见 [NOTICE](NOTICE)。第三方组件保留各自许可证；用户配置与应用代码的许可由其权利人决定。生成工程附带项目许可证和声明，具体范围及分发要求见 [许可说明](docs/maintainers/licensing.md)。
+Original source and documentation are licensed under [Apache-2.0](LICENSE); copyright notices are in [NOTICE](NOTICE). Third-party components retain their respective licenses. Rights holders determine the licenses of user configuration and application code. Generated projects include the project license and notices. See the [licensing guide](docs/maintainers/licensing.md) for distribution requirements and scope.

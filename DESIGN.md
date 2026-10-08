@@ -1,6 +1,6 @@
 ---
-name: Classic CAN 配置工作台
-description: 中性双主题、紧凑工程密度与明确语义角色的统一工作台视觉基线
+name: Classic CAN Workbench
+description: A unified workbench visual baseline with neutral light and dark themes, compact engineering density, and clear semantic roles
 colors:
   shell: '#f3f3f3'
   canvas: '#ffffff'
@@ -144,134 +144,136 @@ components:
     rounded: '{rounded.dialog}'
 ---
 
-# Design System: Classic CAN 配置工作台
+[简体中文](DESIGN.zh-CN.md)
+
+# Design System: Classic CAN Workbench
 
 ## Overview
 
-**Creative North Star: "统一工程工作台"**
+**Creative North Star: "Unified Engineering Workbench"**
 
-以用户固定的 JetBrains 菜单、侧栏与底部工具窗口秩序，结合 ChatGPT 式中性浅深主题，形成安静、连续、可扫描的工程界面。品牌表达落在对象角色、精确对齐和少量主行动上，不采用营销式展示字体或巨型标题。
+Combine the user-established JetBrains arrangement of menus, sidebars, and bottom tool windows with ChatGPT-style neutral light and dark themes to create a calm, continuous, scannable engineering interface. Brand expression comes from object roles, precise alignment, and a small number of primary actions—not marketing-style display fonts or oversized headings.
 
-2026-10-03，用户确认本轮界面与透明珊瑚 A 图标“暂时定稿”，作为后续实施的暂定设计基线；这不是正式软件已实施、已验收或已发布的记录。根 DESIGN.md 是后续实现的唯一可变视觉权威；日期目录的同名文件是本轮冻结导出。正式应用尚未迁移，原型与新图标均不表示生产软件已更新。
+On 2026-10-03, the user confirmed that this iteration of the interface and the transparent coral A icon were “provisionally finalized,” establishing a provisional design baseline for subsequent implementation. This is not a record that the production software has been implemented, accepted, or released. Root DESIGN.md is the sole mutable visual authority for subsequent implementation; the file of the same name in the dated directory is this iteration's frozen export. The production application has not yet been migrated, and neither the prototype nor the new icon indicates that production software has been updated.
 
 **Key Characteristics:**
 
-- 浅深主题共享层级与密度。
-- 工程树、对象表、检查器保持一致的选中语言。
-- 语义色区分对象类别、选择与结果，不铺满工作区。
-- 原生系统字体服务中文任务与工程标识符。
+- Light and dark themes share hierarchy and density.
+- The project tree, object table, and inspector use consistent selection styling.
+- Semantic colors distinguish object categories, selection, and results without filling the workspace.
+- Native system fonts support Chinese-language tasks and engineering identifiers.
 
-视觉取值来自 [完成原型](_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/mockups/index.html) 的主题变量与复用组件，不采纳现有生产 UI 的样式；交互、状态与任务契约见 [EXPERIENCE](_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/EXPERIENCE.md)，本文不重复功能规格。
+Visual values come from the theme variables and reusable components of the [completed prototype](_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/mockups/index.html), not from the existing production UI's styling. Interaction, state, and task contracts are documented in [EXPERIENCE](_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/EXPERIENCE.md); this document does not repeat the functional specifications.
 
 ## Colors
 
-浅色采用纸白与浅灰，深色采用石墨面层；前置 YAML 中无前缀 token 为浅色，`dark-` 同名 token 为深色。运行时以 `data-theme` 成组切换，不混用两组。`colors.text-primary`、`colors.selection` 是跨规格稳定引用；深色消费方映射到对应 `dark-` token。
+The light theme uses paper white and light gray; the dark theme uses graphite surfaces. In the YAML frontmatter, unprefixed tokens belong to the light theme, and corresponding `dark-` tokens belong to the dark theme. At runtime, switch the complete set through `data-theme`; do not mix the two sets. `colors.text-primary` and `colors.selection` are stable cross-specification references; dark-theme consumers map them to the corresponding `dark-` tokens.
 
 ### Primary
 
-- **主行动珊瑚**：`primary`／`primary-text` 用于主按钮和活动标签标线，以克制的实色衔接 A 图形；不把图标渐变铺到控件上，也不等于成功或失败状态。
-- **选择蓝底**：`selection`／`selection-text` 用于树焦点、选中行和按下工具按钮；`blue` 也承担链接、焦点轮廓与 CAN 对象角色。
+- **Primary-action coral**: `primary` / `primary-text` are used for primary buttons and active-tab indicator lines, connecting to the A graphic through restrained solid colors. Do not spread the icon's gradient across controls; this color does not represent success or failure.
+- **Selection blue background**: `selection` / `selection-text` are used for tree focus, selected rows, and pressed toolbar buttons; `blue` also serves links, focus outlines, and the CAN object role.
 
 ### Secondary
 
-- **对象角色**：蓝色 `blue` 对应 CAN，青绿 `teal` 对应系统／基础软件语境，紫色 `purple` 对应应用对象，金色 `gold` 对应诊断。颜色附着小图标与标签，正文仍使用中性文字。
-- **结果语义**：`success`、`warning`、`error` 分别配 `success-bg`、`warning-bg`、`error-bg`；用于提示、问题和差异行，不与对象色交换意义。
+- **Object roles**: Blue `blue` represents CAN, teal `teal` represents system / basic-software contexts, purple `purple` represents application objects, and gold `gold` represents diagnostics. Apply these colors to small icons and tags; body text remains neutral.
+- **Result semantics**: Pair `success`, `warning`, and `error` with `success-bg`, `warning-bg`, and `error-bg`, respectively. Use them for notices, issues, and difference rows; do not interchange their meanings with object colors.
 
 ### Neutral
 
-- `shell` 为外围壳层，`canvas` 为主编辑面，`surface` 为工程树、检查器及表头，`hover` 为控件悬停反馈。
-- `text-primary` 表示任务主体，`text-secondary` 表示路径与说明，`text-muted` 表示弱元信息；`line` 为细分隔与输入边界。
+- `shell` is the outer shell, `canvas` is the main editing surface, `surface` is used for the project tree, inspector, and table headers, and `hover` provides control hover feedback.
+- `text-primary` indicates primary task content, `text-secondary` indicates paths and explanations, and `text-muted` indicates low-emphasis metadata; `line` is used for fine separators and input boundaries.
 
-**The Role Before Decoration Rule.** 对象色、选择色和状态色各司其职；同一种对象在树、表和检查器中保持同一角色，状态不能只靠颜色表达。
+**The Role Before Decoration Rule.** Object colors, selection colors, and status colors each serve their own purpose. The same object retains the same role in the tree, table, and inspector; status must not be conveyed by color alone.
 
 ### Identity
 
-身份资产与 UI 语义色分离。用户偏好 A（1＞3＞2），但要求它与工作台更协调；绿色适配已被明确否决。当前保留 A 的形体，以浅桃红、珊瑚与深莓红形成受控亮暗，不采用近似 JetBrains Toolbox 的橙粉紫转色。JetBrains／VS Code 只校准层次与质感，不提供可复制的品牌配色；主行动使用同一珊瑚色系的可读实色，布局、中性壳层及对象／结果角色保持独立。当前透明珊瑚材质版已由用户暂时定稿，后续变更回到本规格；正式资产在实施时替换。
+Identity assets are separate from UI semantic colors. The user prefers A (1＞3＞2), but requires it to harmonize better with the workbench; a green adaptation was explicitly rejected. Retain A's current form, using light peach pink, coral, and dark berry red for controlled light and dark tones, rather than an orange-pink-purple transition resembling JetBrains Toolbox. JetBrains / VS Code serve only to calibrate hierarchy and texture, not as sources of brand palettes to copy. Primary actions use readable solid colors from the same coral family; layout, the neutral shell, and object / result roles remain independent. The current transparent coral-material version has been provisionally finalized by the user; subsequent changes must return to this specification, and production assets will be replaced during implementation.
 
-当前 PNG 图形为 `logo-workbench.png`，原色 A 为 `logo-coral.png`；两者均为真实 RGBA 透明图形，图形外围、车窗及灯位留白透出实际背景，不带白色承载底。浅色用石墨灯位，深色用对应 `-dark.png` 的暖白灯位；仅灯位 RGB 改变，车身色层、轮廓与 alpha 一致。有效主题变化时同步图形，不重置未应用的输入。桌面通用母图 `logo-app.png` 使用中性灯色，ICO／ICNS 不声称随系统主题自动切换。保留生成形体，未声称已有可编辑矢量品牌母版。浅深背景与 16、32、64、128 CSS px 用于比较整体轮廓，较大尺寸看色层；颜色不代表额外产品能力。实际原型与图标评审见 [A 与界面对照](_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/mockups/logo.html)，默认展示渐变适配，`?logo=coral` 保留平面原色对照。正式图标尚未替换，不使用 AUTOSAR 官方商标。
+The current PNG graphic is `logo-workbench.png`, and the original-color A is `logo-coral.png`. Both are genuine RGBA transparent graphics: the areas outside the graphic, windows, and light cutouts reveal the actual background, with no white backing. The light theme uses graphite lights; the dark theme uses warm-white lights in the corresponding `-dark.png` file. Only the lights' RGB values change; the body color layers, contours, and alpha remain identical. Synchronize the graphic when the effective theme changes without resetting unapplied input. The general-purpose desktop master image `logo-app.png` uses neutral light colors; ICO / ICNS assets are not claimed to switch automatically with the system theme. Retain the generated form; there is no claim that an editable vector brand master already exists. Light and dark backgrounds and sizes of 16, 32, 64, and 128 CSS px are used to compare the overall silhouette; larger sizes are used to inspect color layers. Colors do not represent additional product capabilities. See [A and interface comparison](_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/mockups/logo.html) for the actual prototype and icon review. The gradient adaptation is shown by default; `?logo=coral` preserves the flat original-color comparison. The production icon has not yet been replaced, and the official AUTOSAR trademark is not used.
 
 ## Typography
 
-**Body Font:** 原生 Windows UI 字体，中文回退 Microsoft YaHei，最终 sans-serif。
-**Label/Mono Font:** UI 标签沿用正文字体；工程标识符及源码使用 Cascadia Code、Consolas、Courier New 与 monospace。
+**Body Font:** Native Windows UI fonts, with Microsoft YaHei as the Chinese fallback and sans-serif as the final fallback.
+**Label/Mono Font:** UI labels use the body font; engineering identifiers and source code use Cascadia Code, Consolas, Courier New, and monospace.
 
 ### Hierarchy
 
-- **Headline**：起始页标题，权重与紧缩字距见 token。
-- **Title**：编辑区标题；小窗与对话框实际使用 18px 变体，不扩大为展示型标题。
-- **Section**：分区标题；检查器对象名实际使用 15px 变体。
-- **Body**：默认控件与任务文字。
-- **Compact / Hint**：树、表、字段说明；Hint 的行高用于连续说明。
-- **Label**：小角色标签与状态元信息。
-- **Code**：等宽标识符；数值采用 tabular-nums，日志和预览可按阅读需要增加行高。
+- **Headline**: Start-page heading; see the tokens for weight and tight letter spacing.
+- **Title**: Editor-area heading; compact windows and dialogs actually use an 18px variant, rather than enlarging it into a display heading.
+- **Section**: Section heading; inspector object names actually use a 15px variant.
+- **Body**: Default control and task text.
+- **Compact / Hint**: Trees, tables, and field explanations; Hint line height supports continuous explanatory text.
+- **Label**: Small role tags and status metadata.
+- **Code**: Monospaced identifiers; numbers use tabular-nums, and logs and previews may use increased line height as needed for readability.
 
-未设置全局固定行高，不捏造统一比例尺或展示字体 token；正文尺寸的稳定引用为 `typography.body.fontSize`。
+No globally fixed line height is defined. Do not invent a uniform type scale or display-font tokens; the stable reference for body size is `typography.body.fontSize`.
 
-**The Native Operate Type Rule.** 系统 UI 字体用于任务与控件，等宽字体用于标识符、数值和源码；不把工程界面改造成营销展示页。
+**The Native Operate Type Rule.** Use system UI fonts for tasks and controls, and monospaced fonts for identifiers, numbers, and source code; do not turn the engineering interface into a marketing showcase.
 
 ## Layout
 
-采用纵向壳层与横向工程区，不使用居中的营销内容容器。左工具轨宽 42px、工程树宽 250px、检查器宽 290px，中心弹性填充且允许独立滚动。菜单高 34px，编辑标签带最小高 39px；树节点最小高 30px。面板内距引用 `spacing.panel`，控件间距引用 `spacing.gap`，编辑区和对话框内距引用各自 token。
+Use a vertical shell and a horizontal engineering area, not a centered marketing-content container. The left tool rail is 42px wide, the project tree is 250px wide, and the inspector is 290px wide. The center fills the remaining space flexibly and allows independent scrolling. The menu is 34px high, the editor tab strip has a minimum height of 39px, and tree nodes have a minimum height of 30px. Panel padding references `spacing.panel`, control spacing references `spacing.gap`, and editor and dialog padding reference their respective tokens.
 
-在最大宽度 1250px 的规则内，工程树／检查器缩至 220／260px，编辑区内距缩至 panel；最大宽度 1079px 时检查器成为宽 300px 的覆盖面板；最大宽度 700px 时工程树也成为覆盖面板，表格保留最小 560px 宽并在容器中横向滚动，表单与设置转为单列。小窗不是移动产品能力声明。
+Under the maximum-width 1250px rule, the project tree / inspector shrink to 220 / 260px, and editor padding shrinks to panel padding. At a maximum width of 1079px, the inspector becomes a 300px-wide overlay panel. At a maximum width of 700px, the project tree also becomes an overlay panel, tables retain a minimum width of 560px and scroll horizontally within their containers, and forms and settings switch to a single column. Compact windows are not a claim of mobile-product capability.
 
-表头内距 9px 10px、表行 11px 10px，小窗统一至 9px 8px。密度服务比较与定位，不把每条数据改成独立卡片。
+Table-header padding is 9px 10px, and table-row padding is 11px 10px; both become 9px 8px in compact windows. Density supports comparison and navigation; do not turn each data item into a separate card.
 
 ## Elevation & Depth
 
-**The Flat Workspace Rule.** 固定工作区依靠中性面层和细边界分区；阴影仅表达菜单、对话框与覆盖式侧面板的前后关系。
+**The Flat Workspace Rule.** Fixed workspace areas are separated by neutral surfaces and fine boundaries; shadows express layering only for menus, dialogs, and overlay side panels.
 
 ### Shadow Vocabulary
 
-- **菜单浮层**（`0 8px 24px rgb(0 0 0 / 0.14)`）：临时菜单。
-- **模态对话框**（`0 20px 70px rgb(0 0 0 / 0.25)`）：差异与设置；背景遮罩为 `rgb(0 0 0 / 0.28)`。
-- **覆盖检查器**（`-10px 0 24px rgb(0 0 0 / 0.08)`）：窄窗右侧覆盖。
-- **覆盖工程树**（`10px 0 24px rgb(0 0 0 / 0.1)`）：小窗左侧覆盖。
+- **Menu overlay** (`0 8px 24px rgb(0 0 0 / 0.14)`): Temporary menus.
+- **Modal dialog** (`0 20px 70px rgb(0 0 0 / 0.25)`): Differences and settings; the backdrop is `rgb(0 0 0 / 0.28)`.
+- **Overlay inspector** (`-10px 0 24px rgb(0 0 0 / 0.08)`): Right-side overlay in narrow windows.
+- **Overlay project tree** (`10px 0 24px rgb(0 0 0 / 0.1)`): Left-side overlay in compact windows.
 
-活动编辑标签的 `inset 0 -2px` 主色标线是状态指示，不是容器升起。动效只记录成品按钮背景／文字的 140ms ease-out 过渡；仅在不要求减少动态效果时启用，不把方向稿中的面板动画意图当作已实现规则。
+The active editor tab's `inset 0 -2px` primary-color indicator line denotes state, not a raised container. The only recorded motion is the completed buttons' 140ms ease-out background / text transition. Enable it only when reduced motion is not requested; do not treat panel-animation intentions from the design-direction draft as implemented rules.
 
 ## Shapes
 
-输入和按钮采用轻微圆角，标签更紧凑，菜单与对话框采用各自容器圆角；值以 `rounded` 为准。结构标签页保持直角，工作区用 1px 中性边界衔接。图标使用内联描边 SVG，通常 17px、1.6 描边、圆端点，不以字符字形冒充图标。应用身份图标独立遵循其 SVG 几何，不套用控件圆角。
+Inputs and buttons use subtle rounding, tags are more compact, and menus and dialogs use their own container radii; `rounded` defines the values. Structural tabs remain square, and workspace areas join through 1px neutral boundaries. Icons use inline stroke SVG, typically 17px with a 1.6 stroke and round caps; do not substitute character glyphs for icons. The application identity icon independently follows its SVG geometry and does not inherit control corner radii.
 
 ## Components
 
 ### Buttons
 
-克制、可扫描。主按钮用主行动色与对应反色文字，权重 600；次按钮为画布底与细边界，幽灵按钮为透明底。悬停使用 hover，主按钮保持主色并 brightness(0.93)。禁用文字使用 muted、透明度 0.65；主按钮禁用底为 hover。键盘焦点为 2px blue 轮廓、偏移 2px。
+Restrained and scannable. Primary buttons use the primary-action color and its corresponding contrasting text color, with weight 600. Secondary buttons use the canvas background and a fine boundary; ghost buttons have a transparent background. Hover uses hover; primary buttons retain the primary color with brightness(0.93). Disabled text uses muted with opacity 0.65; disabled primary buttons use hover as their background. Keyboard focus uses a 2px blue outline with a 2px offset.
 
 ### Chips
 
-角色标签采用 shell 底、tag 圆角与小字号；类别只改变文字色。标签不是主按钮，也不将对象类别误写成验证结果。
+Role tags use a shell background, tag corner radius, and small text; categories change only the text color. Tags are not primary buttons, and object categories must not be mislabeled as validation results.
 
 ### Cards / Containers
 
-固定工程面板采用 surface、细边界与面板内距，中心编辑器用 canvas；不是装饰卡片。临时菜单和模态层才使用 Elevation 的阴影与对应圆角。
+Fixed engineering panels use surface, fine boundaries, and panel padding; the central editor uses canvas. These are not decorative cards. Only temporary menus and modal layers use the shadows defined under Elevation and their corresponding corner radii.
 
 ### Inputs / Fields
 
-画布底、中性细边界与 control 圆角；内距见 input token。插入符使用 primary，占位文字用 muted；禁用输入用 shell 底与 secondary 文字。焦点沿用按钮轮廓，错误上下文使用带文字的语义提示，不编造未出现的输入错误边框。
+Use a canvas background, a fine neutral boundary, and control corner radius; see the input token for padding. The caret uses primary, and placeholder text uses muted; disabled inputs use a shell background and secondary text. Focus uses the same outline as buttons. Error contexts use semantic notices with text; do not invent input-error borders that are not present.
 
 ### Navigation
 
-统一菜单、工具轨与标签保持工程密度。树节点选中使用 selection 与 selection-text；层级以缩进表达。编辑标签活动状态采用画布底、主体文字与底部主色标线；底部工具标签在顶部使用主色边界。两种位置有意区分，不转换成大号导航卡片。
+Unified menus, the tool rail, and tabs retain engineering density. Selected tree nodes use selection and selection-text; indentation conveys hierarchy. Active editor tabs use a canvas background, primary text, and a bottom primary-color indicator line; bottom tool tabs use a primary-color border at the top. The two positions are deliberately distinct; do not convert them into oversized navigation cards.
 
 ### Object Table & Inspector
 
-对象表采用紧凑字号、surface 表头和逐行细分隔，选中行用 selection，悬停用 surface，选中优先于悬停。检查器采用同一对象色和 panel 内距，不另建配色世界。
+Object tables use compact text, surface table headers, and fine row separators. Selected rows use selection, hover uses surface, and selection takes precedence over hover. The inspector uses the same object colors and panel padding rather than establishing a separate palette.
 
 ## Do's and Don'ts
 
 ### Do:
 
-- **Do** 使用同一套主题角色映射，深色模式同时替换背景、文字、边界、选择和状态色。
-- **Do** 使用正文、紧凑文字与等宽文字的既定层级，并保留可见键盘焦点。
-- **Do** 在紧凑窗口中收纳侧面板，让对象表在自己的容器内横向滚动。
-- **Do** 以对象标签、图标和文字共同表达语义；保持主行动稀少且上下文明确。
+- **Do** use the same theme-role mapping, replacing backgrounds, text, boundaries, selection, and status colors together in dark mode.
+- **Do** use the established hierarchy of body, compact, and monospaced text, and retain visible keyboard focus.
+- **Do** collapse side panels in compact windows and allow object tables to scroll horizontally within their own containers.
+- **Do** convey semantics through object tags, icons, and text together; keep primary actions sparse and their context clear.
 
 ### Don't:
 
-- **Don't** 将 logo 固定身份色替换为状态色，或将身份色扩散为大面积工作区装饰。
-- **Don't** 在工作区背景或界面文字添加装饰渐变、网格、营销展示字体及重复的大标题卡片；身份图标可使用用户明确要求的受控渐变。
-- **Don't** 将所有容器卡片化、浮起化；工作区维持平面结构。
-- **Don't** 声称本基线已经迁入正式应用、已获实施批准或通过无障碍符合性认证。
+- **Don't** replace the logo's fixed identity colors with status colors or spread identity colors into large areas of workspace decoration.
+- **Don't** add decorative gradients, grids, marketing display fonts, or repeated oversized heading cards to workspace backgrounds or interface text; the identity icon may use the controlled gradient explicitly requested by the user.
+- **Don't** turn every container into a card or an elevated surface; maintain the workspace's flat structure.
+- **Don't** claim that this baseline has already been migrated into the production application, approved for implementation, or certified for accessibility conformance.

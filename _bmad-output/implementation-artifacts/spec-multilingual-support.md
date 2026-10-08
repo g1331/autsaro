@@ -52,7 +52,7 @@ baseline_commit: '96095c9a6ade6550a800818aa7c08ac60dd1ed2c'
 - [x] `src-tauri/src/{workbench,configuration,lib}.rs`、`ui/src/pages/SettingsPage.tsx`、`ui/src/workbench/{state,useWorkbench,settingsActions}.ts` -- 增加 `system | zh-CN | en` 偏好，中文系统选中文，否则英文；预览／保存／取消与主题一致，旧设置默认跟随系统，失败保留旧值；浏览器也能切换。
 - [x] `ui/src/`、`src-tauri/tauri{,.windows}.conf.json` -- 迁移全部界面与原生标题；MSI 中英文安装资源独立于应用偏好。系统提供的对话框控件由系统语言决定。
 - [x] `ui/tests/`、`core/tests/`、`src-tauri/src/`、`tests/desktop/` -- 覆盖状态保持、旧设置、失败、插值，完成中英文真实工作流验收。
-- [x] `README.md`、`README.en.md` -- 增加完整英文版本、双向语言入口及语言使用说明。
+- [x] `README.md`、`README.zh-CN.md` -- 英文默认入口、完整中文版、双向语言入口及语言使用说明。
 
 **Acceptance Criteria:**
 - Given 中／英文，when 操作打开、编辑、校验、保存、生成、构建与运行及失败路径，then 全部产品文案与无障碍名称使用当前语言。
