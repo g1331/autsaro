@@ -171,3 +171,9 @@ R21.6 保留限定主机 I/O 的申请，R21.8 仅申请上述三个终止点；
 | Verification：正式 ECU 构建模式未直接验证 | medium／patch／关闭 | 原 native fixtures 与 os_suites 构建器不能保护 ecu_tools.build 的模式分支。新增封存离线 CLI 三模式真实构建与十二场景执行，双平台通过；reviewer 复核测试、CI 和文档后确认关闭。 |
 
 本轮主机处置已完成；完整免费 MISRA 检查任务仍 in-progress，历史诊断、人工义务、第三方评估和正式偏离批准不因局部整改完成而标记完成。上述验证与审查为提交前本地证据；GitHub CI 结果须以远端实际运行记录为准。
+
+### 首次 PR CI 接入修正
+
+PR #9 首次实际运行暴露两项接入问题：macOS 的临时目录经过 /var 符号链接，新检查器测试在调用前未取真实临时路径；Cppcheck 固定源的 cmake/options.cmake 强制输出到 PROJECT_BINARY_DIR/bin，工作流却查找额外指定的目录。测试现使用已创建临时目录的 resolve(strict=True)，未改变交付入口拒绝符号链接的策略；工作流取消被上游覆盖的输出参数，并从实际 bin 目录查找单配置／多配置产物。
+
+修正后检查器契约测试 Windows／Linux 各 10 项通过；Linux 额外以经过符号链接的临时根运行同组测试通过，同时显式链接仍被 refuse_links 拒绝。ruff、actionlint 与差异检查通过。CMake 输出路径由固定上游源码与失败 runner 的实际链接日志交叉确认；本地 WSL 没有 cmake，未声称已在本地重建该 CMake 产物。更新后的 GitHub CI 结果以 PR 检查为准。

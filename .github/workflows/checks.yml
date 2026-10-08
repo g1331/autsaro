@@ -174,14 +174,14 @@ jobs:
               data = subprocess.check_output(['git', '-C', str(source), 'show', 'HEAD:addons/' + name])
               (source / 'addons' / name).write_bytes(data)
       - name: Build pinned open Cppcheck
-        run: cmake -S build/cppcheck-source -B build/cppcheck-build -DCMAKE_BUILD_TYPE=Release -DUSE_MATCHCOMPILER=OFF -DBUILD_GUI=OFF -DBUILD_TESTING=OFF -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=${{ github.workspace }}/build/cppcheck-bin
+        run: cmake -S build/cppcheck-source -B build/cppcheck-build -DCMAKE_BUILD_TYPE=Release -DUSE_MATCHCOMPILER=OFF -DBUILD_GUI=OFF -DBUILD_TESTING=OFF
       - run: cmake --build build/cppcheck-build --config Release --target cppcheck --parallel 2
       - name: Select analyzer
         shell: python
         run: |
           import os
           from pathlib import Path
-          binaries = list(Path('build/cppcheck-bin').rglob('cppcheck.exe' if os.name == 'nt' else 'cppcheck'))
+          binaries = list(Path('build/cppcheck-build/bin').rglob('cppcheck.exe' if os.name == 'nt' else 'cppcheck'))
           if len(binaries) != 1:
               raise RuntimeError('Expected one built analyzer')
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:

@@ -27,7 +27,7 @@ class CAnalysisTests(unittest.TestCase):
 
     def test_output_conflicts_preserve_existing_files(self):
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve(strict=True)
             project = root / "source"
             project.mkdir()
             for output in (project, project / "analysis", root):
@@ -43,7 +43,7 @@ class CAnalysisTests(unittest.TestCase):
     def test_tool_failures_are_nonzero_and_retained(self):
         for error in (ValueError("missing tool"), ValueError("version mismatch"), RuntimeError("timed out"), OSError("addon crash")):
             with self.subTest(error=str(error)), tempfile.TemporaryDirectory() as temporary:
-                root = Path(temporary)
+                root = Path(temporary).resolve(strict=True)
                 project = root / "source"
                 project.mkdir()
                 output = root / "analysis"
@@ -56,7 +56,7 @@ class CAnalysisTests(unittest.TestCase):
 
     def test_xml_preserves_rule_locations_and_separates_adopted_code(self):
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve(strict=True)
             xml = f'<results><errors><error id="misra-c2012-10.4" severity="style" msg="type mismatch"><location file="{root.as_posix()}/src/Can.c" line="9" column="2"/></error><error id="style" severity="style" msg="kernel"><location file="{root.as_posix()}/kernel/tasks.c" line="1"/></error></errors></results>'
             errors = c_check.parse_diagnostics(xml, root)
             self.assertEqual(errors[0]["locations"][0]["file"], "src/Can.c")
@@ -68,7 +68,7 @@ class CAnalysisTests(unittest.TestCase):
 
     def test_wrong_cppcheck_version_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve(strict=True)
             fake = root / "cppcheck"
             fake.write_text("not executed")
             with patch.dict(c_check.os.environ, {"CPPCHECK": str(fake)}), patch.object(c_check, "run", return_value=(0, "Cppcheck 2.20", "")), self.assertRaisesRegex(ValueError, "version mismatch"):
@@ -76,7 +76,7 @@ class CAnalysisTests(unittest.TestCase):
 
     def test_addons_from_a_different_release_are_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve(strict=True)
             fake = root / "cppcheck"
             fake.write_text("not executed")
             addons = root / "addons"
@@ -88,7 +88,7 @@ class CAnalysisTests(unittest.TestCase):
 
     def test_incomplete_inventory_never_leaves_a_green_summary(self):
         with tempfile.TemporaryDirectory() as temporary:
-            directory = Path(temporary)
+            directory = Path(temporary).resolve(strict=True)
             source = directory / "source"
             source.mkdir()
             (source / "files.sha256").write_text("test seal")
@@ -107,7 +107,7 @@ class CAnalysisTests(unittest.TestCase):
 
     def test_native_entry_programs_keep_separate_link_boundaries_and_failures(self):
         with tempfile.TemporaryDirectory() as temporary:
-            directory = Path(temporary)
+            directory = Path(temporary).resolve(strict=True)
             source = directory / "source"
             source.mkdir()
             (source / "files.sha256").write_text("seal")
@@ -132,7 +132,7 @@ class CAnalysisTests(unittest.TestCase):
 
     def test_malformed_second_program_receipt_cannot_leave_green_summary(self):
         with tempfile.TemporaryDirectory() as temporary:
-            directory = Path(temporary)
+            directory = Path(temporary).resolve(strict=True)
             source = directory / "source"
             source.mkdir()
             (source / "files.sha256").write_text("seal")
