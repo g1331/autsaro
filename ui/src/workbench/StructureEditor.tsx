@@ -1,3 +1,5 @@
+import { editorValueKindKeys } from '../i18n/editors';
+import { useLocale } from '../i18n';
 import type { Workbench } from './useWorkbench';
 import type {
   ConfigurationChange,
@@ -18,6 +20,7 @@ export function StructureEditor({
   controller: Workbench;
   object: ObjectProjection;
 }) {
+  const { t, text } = useLocale();
   const options =
     c.projection?.instanceDefinitions.filter((option) => option.parentId === object.objectId) ?? [];
   const creations = c.changes.filter(
@@ -105,16 +108,13 @@ export function StructureEditor({
   if (!options.length && !creations.length) return null;
   return (
     <section className="structure-editor">
-      <h3>实例结构批次</h3>
-      <p className="field-help">
-        创建、必需字段和子实例在同一批次预览后一次发布。尚未创建对象只使用批次键，不冒充后台
-        objectId；默认值不自动落盘。
-      </p>
+      <h3>{t('editor.structure.heading')}</h3>
+      <p className="field-help">{t('editor.structure.intro')}</p>
       {options.length ? (
         <label>
-          创建允许的实例
+          {t('editor.structure.create')}
           <select
-            aria-label="创建实例定义"
+            aria-label={t('editor.structure.definitionLabel')}
             value=""
             disabled={blocked || !object.writable}
             onChange={(event) => {
@@ -126,7 +126,7 @@ export function StructureEditor({
                 );
             }}
           >
-            <option value="">选择后台提供的定义，加入草稿</option>
+            <option value="">{t('editor.structure.chooseDefinition')}</option>
             {options.map((option) => (
               <option
                 key={option.definition.definitionId}
@@ -134,8 +134,8 @@ export function StructureEditor({
                 disabled={!option.definition.writable}
               >
                 {option.definition.definitionId} · {option.definition.lowerMultiplicity}–
-                {option.definition.upperMultiplicity ?? '不限'}
-                {option.definition.reason ? ` · ${option.definition.reason}` : ''}
+                {option.definition.upperMultiplicity ?? t('editor.common.unlimited')}
+                {option.definition.reason ? ` · ${text(option.definition.reason)}` : ''}
               </option>
             ))}
           </select>
@@ -151,20 +151,24 @@ export function StructureEditor({
               );
         return (
           <section key={creation.changeId} className="pending-creation">
-            <h3>待创建 · {creation.definitionId.split('/').pop()}</h3>
+            <h3>
+              {t('editor.structure.pendingCreation', {
+                name: creation.definitionId.split('/').pop() ?? creation.definitionId,
+              })}
+            </h3>
             <label>
               SHORT-NAME
               <input
-                aria-label={`待创建名称 ${creation.changeId}`}
+                aria-label={t('editor.structure.pendingName', { id: creation.changeId })}
                 value={creation.shortName}
                 disabled={blocked}
                 onChange={(event) => c.stageChange({ ...creation, shortName: event.target.value })}
               />
             </label>
             <p className="mono path-text">
-              待核定路径{' '}
+              {t('editor.structure.pendingPath')}{' '}
               {proposedPath({ kind: 'created', changeId: creation.changeId }) ??
-                '请填写名称并完成父实例'}
+                t('editor.structure.needName')}
             </p>
             {option?.fields.map((descriptor) => {
               const change = c.changes.find(
@@ -210,7 +214,10 @@ export function StructureEditor({
                       dest: permitted.dest,
                       target: { kind: 'created', changeId: target.changeId },
                     },
-                    label: `${rawPath} · ${permitted.dest} · 同批待创建`,
+                    label: t('editor.structure.createdTarget', {
+                      path: rawPath,
+                      dest: permitted.dest,
+                    }),
                   });
                 }
               }
@@ -231,11 +238,17 @@ export function StructureEditor({
                   <label htmlFor={`new-field-${creation.changeId}-${descriptor.definitionId}`}>
                     {descriptor.definitionId.split('/').pop()}{' '}
                     <small>
-                      {descriptor.kind} · 必需 {descriptor.lowerMultiplicity} · {descriptor.unit}
+                      {t('editor.structure.requiredField', {
+                        kind: descriptor.kind
+                          ? t(editorValueKindKeys[descriptor.kind])
+                          : descriptor.elementKind,
+                        count: descriptor.lowerMultiplicity,
+                        unit: descriptor.unit,
+                      })}
                     </small>
                   </label>
                   {!descriptor.writable ? (
-                    <p>{descriptor.reason}</p>
+                    <p>{text(descriptor.reason ?? '')}</p>
                   ) : descriptor.kind === 'reference' ? (
                     <>
                       <select
@@ -249,7 +262,7 @@ export function StructureEditor({
                           if (candidate) stageField(creation, descriptor, candidate.value);
                         }}
                       >
-                        <option value="">明确选择引用</option>
+                        <option value="">{t('editor.structure.chooseReference')}</option>
                         {candidates.map((candidate) => (
                           <option key={candidate.key} value={candidate.key}>
                             {candidate.label}
@@ -258,7 +271,10 @@ export function StructureEditor({
                       </select>
                       {selectedReference ? (
                         <p className="mono path-text">
-                          草稿引用 {selectedReference.rawPath} · {selectedReference.dest}
+                          {t('editor.structure.draftReference', {
+                            path: selectedReference.rawPath,
+                            dest: selectedReference.dest,
+                          })}
                         </p>
                       ) : null}
                       {selectedCandidate &&
@@ -269,13 +285,10 @@ export function StructureEditor({
                           disabled={blocked}
                           onClick={() => stageField(creation, descriptor, selectedCandidate.value)}
                         >
-                          按当前核定候选更新草稿路径
+                          {t('editor.structure.updatePath')}
                         </button>
                       ) : null}
-                      <p className="field-help">
-                        现有目标与同批目标的定义 / DEST
-                        均来自此父实例范围内的后台核定；完整批次预览核对最终图与路径。
-                      </p>
+                      <p className="field-help">{t('editor.structure.referenceHelp')}</p>
                     </>
                   ) : descriptor.kind === 'boolean' || descriptor.enumeration.length ? (
                     <select
@@ -295,7 +308,7 @@ export function StructureEditor({
                         )
                       }
                     >
-                      <option value="">未设置</option>
+                      <option value="">{t('editor.common.unset')}</option>
                       {(descriptor.kind === 'boolean'
                         ? ['true', 'false']
                         : descriptor.enumeration
@@ -320,11 +333,17 @@ export function StructureEditor({
                   )}
                   <p className="field-help">
                     {descriptor.minimum !== null || descriptor.maximum !== null
-                      ? `范围 ${descriptor.minimum ?? '不限'}–${descriptor.maximum ?? '不限'} · `
+                      ? t('editor.structure.range', {
+                          minimum: descriptor.minimum ?? t('editor.common.unlimited'),
+                          maximum: descriptor.maximum ?? t('editor.common.unlimited'),
+                        })
                       : ''}
                     {descriptor.defaultValue
-                      ? `默认 ${descriptor.defaultValue.lexeme} (${descriptor.defaultOrigin})，未落盘`
-                      : '无默认值'}
+                      ? t('editor.structure.default', {
+                          value: descriptor.defaultValue.lexeme,
+                          origin: descriptor.defaultOrigin,
+                        })
+                      : t('editor.structure.noDefault')}
                   </p>
                   {descriptor.defaultValue && descriptor.writable ? (
                     <button
@@ -337,7 +356,7 @@ export function StructureEditor({
                         })
                       }
                     >
-                      明确采用默认值
+                      {t('editor.objects.useDefault')}
                     </button>
                   ) : null}
                   {change ? (
@@ -346,7 +365,7 @@ export function StructureEditor({
                       disabled={blocked}
                       onClick={() => stageField(creation, descriptor, { state: 'absent' })}
                     >
-                      明确取消字段值
+                      {t('editor.structure.cancelValue')}
                     </button>
                   ) : null}
                 </div>
@@ -354,10 +373,10 @@ export function StructureEditor({
             })}
             {option?.children.length ? (
               <label>
-                同批子实例
+                {t('editor.structure.children')}
                 <select
                   value=""
-                  aria-label={`同批子实例 ${creation.changeId}`}
+                  aria-label={t('editor.structure.childLabel', { id: creation.changeId })}
                   disabled={blocked}
                   onChange={(event) => {
                     if (event.target.value)
@@ -368,24 +387,23 @@ export function StructureEditor({
                       );
                   }}
                 >
-                  <option value="">选择后台允许的子定义</option>
+                  <option value="">{t('editor.structure.chooseChild')}</option>
                   {option.children.map((child) => (
                     <option
                       key={child.definitionId}
                       value={child.definitionId}
                       disabled={!child.writable}
                     >
-                      {child.definitionId} · 必需 {child.lowerMultiplicity}
+                      {t('editor.structure.childRequired', {
+                        definition: child.definitionId,
+                        count: child.lowerMultiplicity,
+                      })}
                     </option>
                   ))}
                 </select>
               </label>
             ) : null}
-            {!option ? (
-              <p className="error-text">
-                此创建项不再具有当前父实例范围内的后台定义描述；请还原批次并重新选择。
-              </p>
-            ) : null}
+            {!option ? <p className="error-text">{t('editor.structure.missingOption')}</p> : null}
           </section>
         );
       })}

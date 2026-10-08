@@ -1,3 +1,4 @@
+import { useLocale } from '../i18n';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
@@ -26,6 +27,7 @@ const objectIcons = new Map<string, LucideIcon>([
 ]);
 
 export function ProjectTree({ controller: c }: { controller: Workbench }) {
+  const { t, language } = useLocale();
   const actions = useRef(c);
   useLayoutEffect(() => {
     actions.current = c;
@@ -153,7 +155,10 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
                   <button
                     type="button"
                     tabIndex={-1}
-                    aria-label={`${expanded ? '收起' : '展开'} ${object.shortName}`}
+                    aria-label={t(
+                      expanded ? 'editor.tree.collapseObject' : 'editor.tree.expandObject',
+                      { name: object.shortName, lng: language },
+                    )}
                     onClick={(event) => {
                       event.stopPropagation();
                       actions.current.setTreeRevealId(null);
@@ -176,7 +181,17 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
             );
           })
         : null,
-    [model, collapsed, c.treeMode, c.treeFilter, c.objectSelection, c.activeObjectId, activeInRows],
+    [
+      model,
+      collapsed,
+      c.treeMode,
+      c.treeFilter,
+      c.objectSelection,
+      c.activeObjectId,
+      activeInRows,
+      language,
+      t,
+    ],
   );
   const sources =
     c.projection?.sources.filter(
@@ -221,21 +236,21 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
     }
   }
   return (
-    <aside className="project-tree" aria-label="工程树" hidden={!c.treeVisible}>
+    <aside className="project-tree" aria-label={t('editor.tree.heading')} hidden={!c.treeVisible}>
       <PanelResizeHandle kind="tree" />
       <header>
-        <strong>{c.workspace?.name ?? '工程'}</strong>
+        <strong>{c.workspace?.name ?? t('editor.tree.project')}</strong>
         <button
           type="button"
           className="panel-icon-button"
-          aria-label="折叠工程树"
-          title="折叠工程树"
+          aria-label={t('editor.tree.collapse')}
+          title={t('editor.tree.collapse')}
           onClick={() => c.setTreeVisible(false)}
         >
           <ChevronLeft size={16} aria-hidden="true" />
         </button>
       </header>
-      <div className="panel-tabs" role="tablist" aria-label="工程树视图">
+      <div className="panel-tabs" role="tablist" aria-label={t('editor.tree.views')}>
         {(['objects', 'files'] as const).map((mode) => (
           <button
             key={mode}
@@ -244,23 +259,25 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
             aria-selected={c.treeMode === mode}
             onClick={() => c.setTreeMode(mode)}
           >
-            {mode === 'objects' ? '对象' : '文件'}
+            {mode === 'objects' ? t('editor.tree.objects') : t('editor.tree.files')}
           </button>
         ))}
       </div>
       <label className="search-field">
         <Search size={14} aria-hidden="true" />
         <input
-          aria-label="搜索工程树名称、路径、定义、值"
+          aria-label={t('editor.tree.search')}
           value={c.treeFilter}
           onChange={(event) => c.setTreeFilter(event.target.value)}
-          placeholder="名称 / 路径 / 定义 / 值"
+          placeholder={t('editor.tree.placeholder')}
         />
       </label>
       <div
         className="tree-content"
         role="tree"
-        aria-label={c.treeMode === 'objects' ? '配置对象' : '源文件'}
+        aria-label={
+          c.treeMode === 'objects' ? t('editor.objects.heading') : t('editor.tree.sourceFiles')
+        }
         aria-multiselectable
         onKeyDown={keyboard}
       >
@@ -285,14 +302,16 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
                 <span className="tree-name" title={source.path}>
                   {labelFromPath(source.path)}
                 </span>
-                <small>{source.readonly ? '只读' : '源'}</small>
+                <small>
+                  {source.readonly ? t('editor.common.readonly') : t('editor.tree.source')}
+                </small>
               </button>
             ))}
-        {!c.projection ? <p className="empty-state">正在读取真实工程投影。</p> : null}
+        {!c.projection ? <p className="empty-state">{t('editor.tree.loading')}</p> : null}
       </div>
       {c.activeObjectId && c.treeMode === 'objects' && !activeInRows ? (
         <p className="filter-retained">
-          当前对象在树中不可见；选择与草稿保留。
+          {t('editor.tree.retained')}
           <button
             type="button"
             onClick={() => {
@@ -300,7 +319,7 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
               c.setTreeRevealId(c.activeObjectId);
             }}
           >
-            揭示当前对象
+            {t('editor.tree.reveal')}
           </button>
         </p>
       ) : null}

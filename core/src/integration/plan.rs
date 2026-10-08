@@ -138,8 +138,11 @@ fn assemble(
     {
         let index = *graph.objects.get(&component.service.array_type).unwrap();
         return Err(vec![graph.diagnostic(index, DiagnosticCategory::Input, "SYMBOL_NORMALIZATION_COLLISION",
-            "The generated service array type collides with a native C type, keyword or existing scalar contract.",
-            "Give the service implementation type a distinct C name without changing its four-byte OUT shape.")]);
+            crate::product_message!("backend.integration.plan.service_array_type_c_name_collision"),
+            crate::product_message!(
+                "backend.integration.plan.rename_service_type_preserving_out_shape"
+            ),
+        )]);
     }
     for port in &component.data_ports {
         let argument_type = if port.read { "uint32 *" } else { "uint32" };
@@ -219,8 +222,8 @@ fn assemble(
     for symbol in &symbols {
         if !c_identifier(&symbol.symbol) || !names.insert(symbol.symbol.clone()) {
             return Err(vec![graph.diagnostic(context, DiagnosticCategory::Input, "SYMBOL_PRODUCER_DUPLICATE",
-                format!("External C symbol {} is invalid or has multiple producers.", symbol.symbol),
-                "Use distinct valid declared C symbols and resolve the competing source/stage responsibility before generating.")]);
+                crate::product_message!("backend.integration.plan.external_c_symbol_invalid_or_multiple_producers", "value0" => symbol.symbol),
+                crate::product_message!("backend.integration.plan.resolve_c_symbol_and_producer_conflicts"))]);
         }
     }
     let mut handles = Vec::new();
@@ -275,9 +278,17 @@ fn assemble(
         if let Some(previous) = handle_names.insert(&handle.c_name, &handle.path) {
             if previous != &handle.path {
                 let index = *graph.objects.get(&handle.path).unwrap();
-                return Err(vec![graph.diagnostic(index, DiagnosticCategory::Input, "SYMBOL_NORMALIZATION_COLLISION",
-                    "Two distinct complete object paths normalize to the same generated C identifier.",
-                    "Rename one affected object or parent so both complete identities remain distinct after C normalization.")]);
+                return Err(vec![graph.diagnostic(
+                    index,
+                    DiagnosticCategory::Input,
+                    "SYMBOL_NORMALIZATION_COLLISION",
+                    crate::product_message!(
+                        "backend.integration.plan.normalized_object_c_identifier_collision"
+                    ),
+                    crate::product_message!(
+                        "backend.integration.plan.rename_object_to_avoid_c_normalization_collision"
+                    ),
+                )]);
             }
         }
     }
@@ -296,8 +307,8 @@ fn assemble(
             context,
             DiagnosticCategory::Unsupported,
             "CANIF_HANDLE_WIDTH",
-            "A selected CanIf PDU handle does not fit the target's declared UINT8 PduIdType.",
-            "Use handles between 0 and 255 in each CanIf direction domain; this target does not narrow wider handles.",
+            crate::product_message!("backend.integration.plan.canif_pdu_handle_out_of_range"),
+            crate::product_message!("backend.integration.plan.use_uint8_canif_handles"),
         )]);
     }
     if rx.can_if_handle == diagnostic.request_can_if_handle
@@ -313,9 +324,17 @@ fn assemble(
         .len()
             != 4
     {
-        return Err(vec![graph.diagnostic(context, DiagnosticCategory::Input, "CAN_ID_CONFLICT",
-            "Selected channels share a physical identifier or a handle within the same CanIf direction domain.",
-            "Assign distinct physical CAN identifiers and distinct PDU handles within each Rx/Tx namespace.")]);
+        return Err(vec![graph.diagnostic(
+            context,
+            DiagnosticCategory::Input,
+            "CAN_ID_CONFLICT",
+            crate::product_message!(
+                "backend.integration.plan.selected_channel_identifier_or_handle_collision"
+            ),
+            crate::product_message!(
+                "backend.integration.plan.assign_distinct_can_identifiers_and_pdu_handles"
+            ),
+        )]);
     }
     symbols.sort_by(|left, right| left.symbol.cmp(&right.symbol));
     let objects = inspection.objects();

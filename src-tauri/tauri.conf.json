@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Classic CAN 配置工作台",
+        "title": "Classic CAN Configuration Workbench",
         "decorations": false,
         "width": 1480,
         "height": 920,

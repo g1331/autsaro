@@ -6,14 +6,16 @@ impl Workspace {
         frames: Vec<FrameView>,
         signals: Vec<SignalView>,
         diagnostic: Option<DiagnosticView>,
-    ) -> Result<(), String> {
+    ) -> Result<(), crate::message::LocalizedText> {
         let index = self
             .files
             .iter()
             .position(|f| self.is_managed_file(f))
-            .ok_or(
-                "当前项目没有可安全重建的配置文件；已保留导入内容，不执行可能破坏未知项的新增操作",
-            )?;
+            .ok_or_else(|| {
+                crate::product_message!(
+                    "backend.arxml.legacy_editor.managed_configuration_unavailable"
+                )
+            })?;
         let mut frames = frames;
         let mut signals = signals;
         frames.sort_by(|a, b| a.path.cmp(&b.path));
@@ -23,14 +25,20 @@ impl Workspace {
             issues.extend(validate_diagnostic(diagnostic, &frames, &signals));
         }
         if let Some(first) = issues.first() {
-            return Err(format!("{}: {}", first.code, first.message));
+            return Err(crate::message::LocalizedText::messages([
+                crate::product_message!(
+                    "backend.arxml.legacy_editor.validation_issue_code",
+                    "code" => first.code
+                ),
+                first.message.clone(),
+            ]));
         }
         let previous = self.files[index].text.clone();
         self.files[index].text = render_profile(&self.name, &frames, &signals, diagnostic.as_ref());
         if let Err(error) = self.refresh() {
             self.files[index].text = previous;
             let _ = self.refresh();
-            return Err(error);
+            return Err(error.into());
         }
         // A new Rx frame has no ComSignal/ComTimeout until its first signal is added.
         // Keep the requested timeout in the editing model; validation/save still reject
@@ -58,10 +66,16 @@ impl Workspace {
             .iter()
             .find(|i| matches!(i.severity, Severity::Error))
         {
-            let error = format!("{}: {}", issue.code, issue.message);
+            let error = crate::message::LocalizedText::messages([
+                crate::product_message!(
+                    "backend.arxml.legacy_editor.validation_issue_code",
+                    "code" => issue.code
+                ),
+                issue.message.clone(),
+            ]);
             self.files[index].text = previous;
             self.refresh()?;
-            return Err(error);
+            return Err(error.into());
         }
         Ok(())
     }
@@ -74,13 +88,17 @@ impl Workspace {
         direction: Direction,
         period_ms: Option<u32>,
         timeout_ms: Option<u32>,
-    ) -> Result<WorkspaceView, String> {
+    ) -> Result<WorkspaceView, crate::message::LocalizedText> {
         if !valid_name(&name) {
-            return Err("帧名称只能包含 ASCII 字母、数字与下划线，且须以字母开头".into());
+            return Err(crate::product_message!(
+                "backend.arxml.legacy_editor.frame_name_invalid"
+            ));
         }
         let path = format!("/{}/Pdu_{}", self.name, name);
         if self.frames.iter().any(|f| f.path == path) {
-            return Err("同名帧已经存在".into());
+            return Err(crate::product_message!(
+                "backend.arxml.legacy_editor.frame_name_duplicate"
+            ));
         }
         let mut frames = self.frames.clone();
         frames.push(FrameView {
@@ -103,16 +121,22 @@ impl Workspace {
         start_bit: u8,
         length: u8,
         initial_value: u32,
-    ) -> Result<WorkspaceView, String> {
+    ) -> Result<WorkspaceView, crate::message::LocalizedText> {
         if !valid_name(&name) {
-            return Err("信号名称只能包含 ASCII 字母、数字与下划线，且须以字母开头".into());
+            return Err(crate::product_message!(
+                "backend.arxml.legacy_editor.signal_name_invalid"
+            ));
         }
         if !self.frames.iter().any(|f| f.path == frame_path) {
-            return Err("关联帧不存在".into());
+            return Err(crate::product_message!(
+                "backend.arxml.legacy_editor.associated_frame_missing"
+            ));
         }
         let path = format!("/{}/ComCfg/ComConfig/{}", self.name, name);
         if self.signals.iter().any(|s| s.path == path) {
-            return Err("同名信号已经存在".into());
+            return Err(crate::product_message!(
+                "backend.arxml.legacy_editor.signal_name_duplicate"
+            ));
         }
         let mut signals = self.signals.clone();
         signals.push(SignalView {
@@ -129,7 +153,7 @@ impl Workspace {
     pub fn configure_diagnostic(
         &mut self,
         settings: DiagnosticSettings,
-    ) -> Result<WorkspaceView, String> {
+    ) -> Result<WorkspaceView, crate::message::LocalizedText> {
         let diagnostic = DiagnosticView {
             path: format!("/{}/DcmCfg/DcmConfigSet/DcmDsp/Did", self.name),
             request_id: settings.request_id,
@@ -155,30 +179,41 @@ impl Workspace {
         &mut self,
         code: u32,
         monitor_frame_path: String,
-    ) -> Result<WorkspaceView, String> {
-        let mut diagnostic = self
-            .diagnostic
-            .clone()
-            .ok_or("须先配置诊断服务，再配置 UDS DTC")?;
+    ) -> Result<WorkspaceView, crate::message::LocalizedText> {
+        let mut diagnostic = self.diagnostic.clone().ok_or_else(|| {
+            crate::product_message!("backend.arxml.legacy_editor.dtc_requires_diagnostic_services")
+        })?;
         diagnostic.dtc = Some(DtcView {
             path: format!("/{}/DemCfg/DemConfigSet/DTC", self.name),
             code,
             monitor_frame_path,
         });
         if let Some(issue) = validate_diagnostic(&diagnostic, &self.frames, &self.signals).first() {
-            return Err(format!("{}: {}", issue.code, issue.message));
+            return Err(crate::message::LocalizedText::messages([
+                crate::product_message!(
+                    "backend.arxml.legacy_editor.validation_issue_code",
+                    "code" => issue.code
+                ),
+                issue.message.clone(),
+            ]));
         }
         self.replace_managed(self.frames.clone(), self.signals.clone(), Some(diagnostic))?;
         Ok(self.view())
     }
 
-    pub fn clear_dtc(&mut self) -> Result<WorkspaceView, String> {
-        let mut diagnostic = self.diagnostic.clone().ok_or("当前工程没有诊断配置")?;
+    pub fn clear_dtc(&mut self) -> Result<WorkspaceView, crate::message::LocalizedText> {
+        let mut diagnostic = self.diagnostic.clone().ok_or_else(|| {
+            crate::product_message!("backend.arxml.legacy_editor.diagnostic_configuration_missing")
+        })?;
         if diagnostic.dtc.is_none() {
-            return Err("当前工程没有可移除的受支持 DTC".into());
+            return Err(crate::product_message!(
+                "backend.arxml.legacy_editor.removable_dtc_missing"
+            ));
         }
         if diagnostic.security_enabled && !diagnostic.write_enabled {
-            return Err("先关闭 0x27 安全档案，再移除唯一受保护的 DTC".into());
+            return Err(crate::product_message!(
+                "backend.arxml.legacy_editor.dtc_removal_requires_security_disabled"
+            ));
         }
         diagnostic.dtc = None;
         if self.files.iter().any(|file| self.is_managed_file(file)) {
@@ -247,7 +282,10 @@ impl Workspace {
                         "/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsl/DcmDslProtocol/DcmDslProtocolRow",
                     )
                 {
-                    return Err(format!("{row_path} 定义不匹配，拒绝移除 DTC"));
+                    return Err(crate::product_message!(
+                        "backend.arxml.legacy_editor.dtc_protocol_definition_mismatch",
+                        "path" => row_path
+                    ));
                 }
                 let mut references = row
                     .children()
@@ -256,21 +294,35 @@ impl Workspace {
                     })
                     .flat_map(|group| group.children().filter(|node| node.is_element()))
                     .filter(|node| definition(*node).as_deref() == Some(client_definition));
-                let link = references
-                    .next()
-                    .ok_or_else(|| format!("{row_path} 缺少 DcmDemClientRef"))?;
+                let link = references.next().ok_or_else(|| {
+                    crate::product_message!(
+                        "backend.arxml.legacy_editor.dtc_client_reference_missing",
+                        "path" => row_path
+                    )
+                })?;
                 if references.next().is_some() || removed_client_ref.is_some() {
-                    return Err(format!("{row_path} 有重复的 DcmDemClientRef"));
+                    return Err(crate::product_message!(
+                        "backend.arxml.legacy_editor.dtc_client_reference_duplicate",
+                        "path" => row_path
+                    ));
                 }
                 let target = link
                     .children()
                     .find(|node| node.is_element() && node.tag_name().name() == "VALUE-REF")
-                    .ok_or_else(|| format!("{row_path} 的 DcmDemClientRef 缺少目标"))?;
+                    .ok_or_else(|| {
+                        crate::product_message!(
+                            "backend.arxml.legacy_editor.dtc_client_reference_target_missing",
+                            "path" => row_path
+                        )
+                    })?;
                 if link.tag_name().name() != "ECUC-REFERENCE-VALUE"
                     || target.attribute("DEST") != Some("ECUC-CONTAINER-VALUE")
                     || target.text() != Some(client_path.as_str())
                 {
-                    return Err(format!("{row_path} 的 DcmDemClientRef 不属于当前 DTC 配置"));
+                    return Err(crate::product_message!(
+                        "backend.arxml.legacy_editor.dtc_client_reference_not_owned",
+                        "path" => row_path
+                    ));
                 }
                 let range = link.range();
                 patches[index].push(Patch {
@@ -286,10 +338,16 @@ impl Workspace {
             }) {
                 let path = path_of(node);
                 if expected_nodes.get(&path) != Some(&structural_node(node)) {
-                    return Err(format!("{path} 含未知或非工具所有的内容，拒绝删除"));
+                    return Err(crate::product_message!(
+                        "backend.arxml.legacy_editor.dtc_node_not_owned",
+                        "path" => path
+                    ));
                 }
                 if !removed.insert(path.clone()) {
-                    return Err(format!("重复的 DTC 元素 {path}"));
+                    return Err(crate::product_message!(
+                        "backend.arxml.legacy_editor.dtc_element_duplicate",
+                        "path" => path
+                    ));
                 }
                 owned_paths.extend(
                     node.descendants()
@@ -303,10 +361,15 @@ impl Workspace {
             }
         }
         if removed_client_ref.is_none() {
-            return Err(format!("{row_path} 缺少唯一的 DcmDemClientRef"));
+            return Err(crate::product_message!(
+                "backend.arxml.legacy_editor.dtc_unique_client_reference_missing",
+                "path" => row_path
+            ));
         }
         if removed != targets {
-            return Err("DTC ARXML 节点不完整，拒绝部分删除".into());
+            return Err(crate::product_message!(
+                "backend.arxml.legacy_editor.dtc_nodes_incomplete"
+            ));
         }
         for (index, file) in self.files.iter().enumerate() {
             let doc = Document::parse(&file.text).map_err(|e| e.to_string())?;
@@ -331,7 +394,10 @@ impl Workspace {
                     {
                         continue;
                     }
-                    return Err(format!("外部引用 {target} 仍依赖 DTC 配置，拒绝删除"));
+                    return Err(crate::product_message!(
+                        "backend.arxml.legacy_editor.dtc_external_reference_blocks_removal",
+                        "target" => target
+                    ));
                 }
             }
         }
@@ -344,9 +410,11 @@ impl Workspace {
         Ok(self.view())
     }
 
-    pub fn clear_diagnostic(&mut self) -> Result<WorkspaceView, String> {
+    pub fn clear_diagnostic(&mut self) -> Result<WorkspaceView, crate::message::LocalizedText> {
         if self.diagnostic.is_none() {
-            return Err("当前工程没有可移除的受支持诊断配置".into());
+            return Err(crate::product_message!(
+                "backend.arxml.legacy_editor.removable_diagnostic_configuration_missing"
+            ));
         }
         if self.files.iter().any(|file| self.is_managed_file(file)) {
             self.replace_managed(self.frames.clone(), self.signals.clone(), None)?;
@@ -432,7 +500,9 @@ impl Workspace {
                     && path == format!("/{}/EcuCCfg/EcucConfigSet/Pdus", self.name)
                 {
                     if updated_pdu_length_type {
-                        return Err("重复的 EcuC 全局 PDU 集合".into());
+                        return Err(crate::product_message!(
+                            "backend.arxml.legacy_editor.global_pdu_collection_duplicate"
+                        ));
                     }
                     patch_param(
                         node,
@@ -455,10 +525,16 @@ impl Workspace {
                     continue;
                 }
                 if expected_nodes.get(&path) != Some(&structural_node(node)) {
-                    return Err(format!("{path} 含非工具所有的 ARXML 内容，拒绝删除"));
+                    return Err(crate::product_message!(
+                        "backend.arxml.legacy_editor.diagnostic_node_not_owned",
+                        "path" => path
+                    ));
                 }
                 if !removed.insert(path.clone()) {
-                    return Err(format!("重复的诊断元素 {path}"));
+                    return Err(crate::product_message!(
+                        "backend.arxml.legacy_editor.diagnostic_element_duplicate",
+                        "path" => path
+                    ));
                 }
                 patches[index].push(Patch {
                     range: node.range(),
@@ -467,7 +543,9 @@ impl Workspace {
             }
         }
         if !updated_pdu_length_type || removed.len() != targets.len() + canif_targets.len() {
-            return Err("诊断 ARXML 或全局 PDU 节点不完整，拒绝部分删除".into());
+            return Err(crate::product_message!(
+                "backend.arxml.legacy_editor.diagnostic_nodes_incomplete"
+            ));
         }
         for file in &self.files {
             let doc = Document::parse(&file.text).map_err(|e| e.to_string())?;
@@ -492,10 +570,11 @@ impl Workspace {
                     {
                         continue;
                     }
-                    return Err(format!(
-                        "{}: 外部内容 {} 仍引用诊断配置 {target}，拒绝删除",
-                        file.path.display(),
-                        path_of(node.parent_element().unwrap_or(node))
+                    return Err(crate::product_message!(
+                        "backend.arxml.legacy_editor.diagnostic_external_content_blocks_removal",
+                        "file" => file.path.display(),
+                        "path" => path_of(node.parent_element().unwrap_or(node)),
+                        "target" => target
                     ));
                 }
             }
@@ -504,37 +583,55 @@ impl Workspace {
         Ok(self.view())
     }
 
-    pub fn update_frame(&mut self, path: &str, changes: Value) -> Result<WorkspaceView, String> {
+    pub fn update_frame(
+        &mut self,
+        path: &str,
+        changes: Value,
+    ) -> Result<WorkspaceView, crate::message::LocalizedText> {
         let old = self
             .frames
             .iter()
             .find(|f| f.path == path)
-            .ok_or("帧不存在")?
+            .ok_or_else(|| crate::product_message!("backend.arxml.legacy_editor.frame_missing"))?
             .clone();
         let mut frames = self.frames.clone();
         let frame = frames
             .iter_mut()
             .find(|f| f.path == path)
-            .ok_or("帧不存在")?;
+            .ok_or_else(|| crate::product_message!("backend.arxml.legacy_editor.frame_missing"))?;
         if changes
             .get("name")
             .is_some_and(|v| v.as_str() != Some(&frame.name))
         {
-            return Err("重命名可能破坏跨文件引用；当前不允许重命名现有帧".into());
+            return Err(crate::product_message!(
+                "backend.arxml.legacy_editor.frame_rename_unsupported"
+            ));
         }
         if let Some(v) = changes.get("id") {
             frame.id = v
                 .as_u64()
-                .ok_or("CAN 标识符须为无符号整数")?
+                .ok_or_else(|| {
+                    crate::product_message!(
+                        "backend.arxml.legacy_editor.can_identifier_requires_unsigned_integer"
+                    )
+                })?
                 .try_into()
-                .map_err(|_| "CAN 标识符超出范围")?;
+                .map_err(|_| {
+                    crate::product_message!(
+                        "backend.arxml.legacy_editor.can_identifier_out_of_range"
+                    )
+                })?;
         }
         if let Some(v) = changes.get("dlc") {
             frame.dlc = v
                 .as_u64()
-                .ok_or("DLC 须为整数")?
+                .ok_or_else(|| {
+                    crate::product_message!("backend.arxml.legacy_editor.dlc_requires_integer")
+                })?
                 .try_into()
-                .map_err(|_| "DLC 超出范围")?;
+                .map_err(|_| {
+                    crate::product_message!("backend.arxml.legacy_editor.dlc_out_of_range")
+                })?;
         }
         if let Some(v) = changes.get("periodMs") {
             frame.period_ms = if v.is_null() {
@@ -542,9 +639,17 @@ impl Workspace {
             } else {
                 Some(
                     v.as_u64()
-                        .ok_or("周期须为整数")?
+                        .ok_or_else(|| {
+                            crate::product_message!(
+                                "backend.arxml.legacy_editor.period_requires_integer"
+                            )
+                        })?
                         .try_into()
-                        .map_err(|_| "周期超出范围")?,
+                        .map_err(|_| {
+                            crate::product_message!(
+                                "backend.arxml.legacy_editor.period_out_of_range"
+                            )
+                        })?,
                 )
             };
         }
@@ -554,9 +659,17 @@ impl Workspace {
             } else {
                 Some(
                     v.as_u64()
-                        .ok_or("超时须为整数")?
+                        .ok_or_else(|| {
+                            crate::product_message!(
+                                "backend.arxml.legacy_editor.timeout_requires_integer"
+                            )
+                        })?
                         .try_into()
-                        .map_err(|_| "超时超出范围")?,
+                        .map_err(|_| {
+                            crate::product_message!(
+                                "backend.arxml.legacy_editor.timeout_out_of_range"
+                            )
+                        })?,
                 )
             };
         }
@@ -566,16 +679,30 @@ impl Workspace {
                 Direction::Rx => "rx",
             };
             if v.as_str() != Some(current) {
-                return Err("切换方向需要重新建立 Com/CanIf 映射；请创建新帧".into());
+                return Err(crate::product_message!(
+                    "backend.arxml.legacy_editor.frame_direction_change_unsupported"
+                ));
             }
         }
         if let Some(issue) = validate_profile(&frames, &self.signals).first() {
-            return Err(format!("{}: {}", issue.code, issue.message));
+            return Err(crate::message::LocalizedText::messages([
+                crate::product_message!(
+                    "backend.arxml.legacy_editor.validation_issue_code",
+                    "code" => issue.code
+                ),
+                issue.message.clone(),
+            ]));
         }
         if let Some(diagnostic) = &self.diagnostic
             && let Some(issue) = validate_diagnostic(diagnostic, &frames, &self.signals).first()
         {
-            return Err(format!("{}: {}", issue.code, issue.message));
+            return Err(crate::message::LocalizedText::messages([
+                crate::product_message!(
+                    "backend.arxml.legacy_editor.validation_issue_code",
+                    "code" => issue.code
+                ),
+                issue.message.clone(),
+            ]));
         }
         let updated = frames.iter().find(|f| f.path == path).unwrap().clone();
         if self.files.iter().any(|file| self.is_managed_file(file)) {
@@ -586,18 +713,22 @@ impl Workspace {
         Ok(self.view())
     }
 
-    pub fn update_signal(&mut self, path: &str, changes: Value) -> Result<WorkspaceView, String> {
+    pub fn update_signal(
+        &mut self,
+        path: &str,
+        changes: Value,
+    ) -> Result<WorkspaceView, crate::message::LocalizedText> {
         let old = self
             .signals
             .iter()
             .find(|s| s.path == path)
-            .ok_or("信号不存在")?
+            .ok_or_else(|| crate::product_message!("backend.arxml.legacy_editor.signal_missing"))?
             .clone();
         let mut signals = self.signals.clone();
         let signal = signals
             .iter_mut()
             .find(|s| s.path == path)
-            .ok_or("信号不存在")?;
+            .ok_or_else(|| crate::product_message!("backend.arxml.legacy_editor.signal_missing"))?;
         if changes
             .get("name")
             .is_some_and(|v| v.as_str() != Some(&signal.name))
@@ -605,36 +736,70 @@ impl Workspace {
                 .get("framePath")
                 .is_some_and(|v| v.as_str() != Some(&signal.frame_path))
         {
-            return Err("重命名或迁移信号可能破坏跨文件引用；请创建新信号".into());
+            return Err(crate::product_message!(
+                "backend.arxml.legacy_editor.signal_rename_or_move_unsupported"
+            ));
         }
         if let Some(v) = changes.get("startBit") {
             signal.start_bit = v
                 .as_u64()
-                .ok_or("起始位须为整数")?
+                .ok_or_else(|| {
+                    crate::product_message!(
+                        "backend.arxml.legacy_editor.start_bit_requires_integer"
+                    )
+                })?
                 .try_into()
-                .map_err(|_| "起始位超出范围")?;
+                .map_err(|_| {
+                    crate::product_message!("backend.arxml.legacy_editor.start_bit_out_of_range")
+                })?;
         }
         if let Some(v) = changes.get("length") {
             signal.length = v
                 .as_u64()
-                .ok_or("位长须为整数")?
+                .ok_or_else(|| {
+                    crate::product_message!(
+                        "backend.arxml.legacy_editor.bit_length_requires_integer"
+                    )
+                })?
                 .try_into()
-                .map_err(|_| "位长超出范围")?;
+                .map_err(|_| {
+                    crate::product_message!("backend.arxml.legacy_editor.bit_length_out_of_range")
+                })?;
         }
         if let Some(v) = changes.get("initialValue") {
             signal.initial_value = v
                 .as_u64()
-                .ok_or("初始值须为整数")?
+                .ok_or_else(|| {
+                    crate::product_message!(
+                        "backend.arxml.legacy_editor.initial_value_requires_integer"
+                    )
+                })?
                 .try_into()
-                .map_err(|_| "初始值超出范围")?;
+                .map_err(|_| {
+                    crate::product_message!(
+                        "backend.arxml.legacy_editor.initial_value_out_of_range"
+                    )
+                })?;
         }
         if let Some(issue) = validate_profile(&self.frames, &signals).first() {
-            return Err(format!("{}: {}", issue.code, issue.message));
+            return Err(crate::message::LocalizedText::messages([
+                crate::product_message!(
+                    "backend.arxml.legacy_editor.validation_issue_code",
+                    "code" => issue.code
+                ),
+                issue.message.clone(),
+            ]));
         }
         if let Some(diagnostic) = &self.diagnostic
             && let Some(issue) = validate_diagnostic(diagnostic, &self.frames, &signals).first()
         {
-            return Err(format!("{}: {}", issue.code, issue.message));
+            return Err(crate::message::LocalizedText::messages([
+                crate::product_message!(
+                    "backend.arxml.legacy_editor.validation_issue_code",
+                    "code" => issue.code
+                ),
+                issue.message.clone(),
+            ]));
         }
         let updated = signals.iter().find(|s| s.path == path).unwrap().clone();
         if self.files.iter().any(|file| self.is_managed_file(file)) {
@@ -645,9 +810,13 @@ impl Workspace {
         Ok(self.view())
     }
 
-    pub(crate) fn handoff_sources(&mut self) -> Result<Vec<HandoffSource>, String> {
+    pub(crate) fn handoff_sources(
+        &mut self,
+    ) -> Result<Vec<HandoffSource>, crate::message::LocalizedText> {
         if self.files.iter().any(|file| file.text != file.saved) {
-            return Err("请先保存全部 ARXML，再导出可重建交付包".into());
+            return Err(crate::product_message!(
+                "backend.arxml.legacy_editor.handoff_requires_saved_sources"
+            ));
         }
         self.ensure_sources_current()?;
         self.checked_profile()?;
@@ -657,7 +826,11 @@ impl Workspace {
                 .original_name
                 .as_deref()
                 .or_else(|| file.path.file_name().and_then(|name| name.to_str()))
-                .ok_or("ARXML 来源文件名不是 UTF-8")?
+                .ok_or_else(|| {
+                    crate::product_message!(
+                        "backend.arxml.legacy_editor.source_filename_not_utf_eight"
+                    )
+                })?
                 .to_owned();
             let doc = Document::parse(&file.saved).map_err(|e| e.to_string())?;
             let package_roots = doc

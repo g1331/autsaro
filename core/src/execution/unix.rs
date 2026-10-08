@@ -1,4 +1,5 @@
 use super::{ProcessResult, ProcessSpec, monotonic_ns};
+use crate::message::LocalizedText;
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -63,7 +64,7 @@ fn signal_group(pgid: i32, signal: i32) {
     unsafe { libc::kill(-pgid, signal) };
 }
 
-fn private_directory() -> Result<PathBuf, String> {
+fn private_directory() -> Result<PathBuf, LocalizedText> {
     for _ in 0..100 {
         let name = format!(
             "ecu-owner-{}-{}-{}",
@@ -77,13 +78,15 @@ fn private_directory() -> Result<PathBuf, String> {
         match builder.create(&path) {
             Ok(()) => return Ok(path),
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(error) => return Err(error.to_string()),
+            Err(error) => return Err(error.to_string().into()),
         }
     }
-    Err("Unable to reserve a private owner directory".into())
+    Err(crate::product_message!(
+        "backend.execution.owner_directory_failed"
+    ))
 }
 
-fn owner_socket(directory: &Path) -> Result<(PathBuf, Option<File>), String> {
+fn owner_socket(directory: &Path) -> Result<(PathBuf, Option<File>), LocalizedText> {
     let socket = directory.join("owner.sock");
     #[cfg(target_os = "linux")]
     {
@@ -112,7 +115,7 @@ struct UnixInput {
 }
 
 impl UnixInput {
-    fn new() -> Result<Self, String> {
+    fn new() -> Result<Self, LocalizedText> {
         use std::os::unix::ffi::OsStrExt;
         let directory = private_directory()?;
         let path = directory.join("stdin.pipe");
@@ -125,7 +128,7 @@ impl UnixInput {
             .map_err(|error| error.to_string())?;
         // SAFETY: a terminated private path and owner-only FIFO mode.
         if unsafe { libc::mkfifo(name.as_ptr(), 0o600) } != 0 {
-            return Err(std::io::Error::last_os_error().to_string());
+            return Err(std::io::Error::last_os_error().to_string().into());
         }
         input.file = Some(
             OpenOptions::new()
@@ -138,7 +141,7 @@ impl UnixInput {
         Ok(input)
     }
 
-    fn registered_writer(&mut self) -> Result<(), String> {
+    fn registered_writer(&mut self) -> Result<(), LocalizedText> {
         // The registered, still-gated child already owns the read descriptor.
         // Remove our temporary reader so child exit produces EPIPE, not a FIFO
         // held alive by the sender itself.
@@ -158,7 +161,10 @@ impl Drop for UnixInput {
         for result in [fs::remove_file(&self.path), fs::remove_dir(&self.directory)] {
             if let Err(error) = result {
                 if error.kind() != std::io::ErrorKind::NotFound {
-                    eprintln!("Private interactive stdin cleanup failed: {error}");
+                    eprintln!(
+                        "{}",
+                        crate::product_message!("backend.execution.stdin_cleanup_failed", "error" => error)
+                    );
                 }
             }
         }
@@ -177,23 +183,23 @@ pub(super) struct UnixOwner {
 }
 
 impl UnixOwner {
-    pub(super) fn start() -> Result<Arc<Self>, String> {
+    pub(super) fn start() -> Result<Arc<Self>, LocalizedText> {
         Self::start_with_inheritance(true, None)
     }
 
-    pub(super) fn start_with_python(python: &Path) -> Result<Arc<Self>, String> {
+    pub(super) fn start_with_python(python: &Path) -> Result<Arc<Self>, LocalizedText> {
         Self::start_with_inheritance(true, Some(python))
     }
 
     #[cfg(all(test, feature = "native-tests"))]
-    pub(super) fn start_fresh_for_test() -> Result<Arc<Self>, String> {
+    pub(super) fn start_fresh_for_test() -> Result<Arc<Self>, LocalizedText> {
         Self::start_with_inheritance(false, None)
     }
 
     fn start_with_inheritance(
         inherit: bool,
         executable: Option<&Path>,
-    ) -> Result<Arc<Self>, String> {
+    ) -> Result<Arc<Self>, LocalizedText> {
         if inherit {
             if let (Some(socket), Some(token)) = (
                 std::env::var_os("ECU_OWNER_SOCKET"),
@@ -214,17 +220,20 @@ impl UnixOwner {
         let python = match executable {
             Some(path) => std::borrow::Cow::Borrowed(path),
             None => std::borrow::Cow::Owned(PathBuf::from(
-                std::env::var_os("AUTOSAR_PYTHON")
-                    .ok_or("Set AUTOSAR_PYTHON to the absolute Python executable")?,
+                std::env::var_os("AUTOSAR_PYTHON").ok_or_else(|| {
+                    crate::product_message!("backend.execution.python_environment")
+                })?,
             )),
         };
         if !python.is_absolute() || !python.is_file() {
-            return Err("AUTOSAR_PYTHON must name an existing absolute executable".into());
+            return Err(crate::product_message!(
+                "backend.execution.python_environment_invalid"
+            ));
         }
         Self::start_in_directory(python.as_ref(), private_directory()?)
     }
 
-    fn start_in_directory(python: &Path, directory: PathBuf) -> Result<Arc<Self>, String> {
+    fn start_in_directory(python: &Path, directory: PathBuf) -> Result<Arc<Self>, LocalizedText> {
         for asset in crate::resources::AssetInventory::embedded().entries() {
             if let Some(relative) = asset.relative_path.strip_prefix("tools/python/src/")
                 && relative.starts_with("ecu_tools/")
@@ -238,7 +247,7 @@ impl UnixOwner {
         let mut entropy = [0u8; 32];
         File::open("/dev/urandom")
             .and_then(|mut source| source.read_exact(&mut entropy))
-            .map_err(|error| format!("Cannot obtain owner capability: {error}"))?;
+            .map_err(|error| crate::product_message!("backend.execution.capability_failed", "error" => error))?;
         let mut token = String::with_capacity(64);
         for byte in entropy {
             write!(&mut token, "{byte:02x}").map_err(|error| error.to_string())?;
@@ -264,20 +273,23 @@ impl UnixOwner {
             ))
             .stderr(Stdio::from(log))
             .spawn()
-            .map_err(|error| format!("Cannot start supervisor: {error}"))?;
+            .map_err(|error| crate::product_message!("backend.execution.supervisor_start_failed", "error" => error))?;
         let handshake = child
             .stdin
             .take()
-            .ok_or_else(|| "Supervisor stdin was unavailable".to_owned())
+            .ok_or_else(|| crate::product_message!("backend.execution.supervisor_stdin_missing"))
             .and_then(|mut input| {
                 input
                     .write_all(format!("{token}\n").as_bytes())
-                    .map_err(|error| error.to_string())
+                    .map_err(|error| error.to_string().into())
             });
         if let Err(error) = handshake {
             let _ = child.kill();
             let _ = child.wait();
-            return Err(format!("supervisor_failed: capability transfer: {error}"));
+            return Err(LocalizedText::messages([
+                crate::product_message!("backend.execution.capability_transfer_failed"),
+                error,
+            ]));
         }
         let started = Instant::now();
         while !socket.exists() {
@@ -286,15 +298,16 @@ impl UnixOwner {
                 .map_err(|error| error.to_string())?
                 .is_some()
             {
-                return Err(format!("supervisor_failed: {}", log_path.display()));
+                return Err(
+                    crate::product_message!("backend.execution.supervisor_failed", "log" => log_path.display()),
+                );
             }
             if started.elapsed() >= Duration::from_secs(30) {
                 child.kill().map_err(|error| error.to_string())?;
                 child.wait().map_err(|error| error.to_string())?;
-                return Err(format!(
-                    "supervisor_failed: socket not ready at {}",
-                    socket.display()
-                ));
+                return Err(
+                    crate::product_message!("backend.execution.socket_not_ready", "path" => socket.display()),
+                );
             }
             std::thread::sleep(Duration::from_millis(10));
         }
@@ -310,7 +323,7 @@ impl UnixOwner {
         }))
     }
 
-    pub(super) fn cancel(&self) -> Result<(), String> {
+    pub(super) fn cancel(&self) -> Result<(), LocalizedText> {
         self.cancelled.store(true, Ordering::Release);
         let _registration = self.registration.lock();
         let scopes: Vec<_> = self.groups.lock().keys().cloned().collect();
@@ -318,7 +331,11 @@ impl UnixOwner {
         for scope in scopes {
             match self.request(json!({"op": "close", "scope": scope, "reason": "cancelled"})) {
                 Ok(result) if result["status"] != "cleanup_unconfirmed" => {}
-                Ok(result) => failure = Some(format!("cleanup_unconfirmed: {result}")),
+                Ok(result) => {
+                    failure = Some(
+                        crate::product_message!("backend.execution.cleanup_unconfirmed", "result" => result),
+                    )
+                }
                 Err(error) => failure = Some(error),
             }
         }
@@ -342,7 +359,7 @@ impl UnixOwner {
         !groups.values().any(|&pgid| group_alive(pgid))
     }
 
-    fn exchange(&self, mut request: Value) -> Result<Value, String> {
+    fn exchange(&self, mut request: Value) -> Result<Value, LocalizedText> {
         request["token"] = Value::String(self.token.clone());
         let mut stream = UnixStream::connect(&self.socket).map_err(|error| error.to_string())?;
         stream
@@ -362,25 +379,27 @@ impl UnixOwner {
             .read_to_end(&mut response)
             .map_err(|error| error.to_string())?;
         if response.len() > 1_048_576 || response.last() != Some(&b'\n') {
-            return Err("Supervisor response incomplete or too large".into());
+            return Err(crate::product_message!(
+                "backend.execution.response_incomplete"
+            ));
         }
-        serde_json::from_slice(&response).map_err(|error| error.to_string())
+        serde_json::from_slice(&response).map_err(|error| error.to_string().into())
     }
 
-    pub(super) fn request(&self, request: Value) -> Result<Value, String> {
+    pub(super) fn request(&self, request: Value) -> Result<Value, LocalizedText> {
         let response = self.exchange(request).map_err(|error| {
             let status = if self.cleanup_mirror() {
                 "supervisor_failed"
             } else {
                 "cleanup_unconfirmed"
             };
-            format!("{status}: {error}")
+            LocalizedText::messages([crate::product_message!("backend.execution.supervisor_exchange_failed", "status" => status), error])
         })?;
         if response["op"] == "error" {
-            return Err(response["message"]
-                .as_str()
-                .unwrap_or("Unknown supervisor error")
-                .to_owned());
+            return Err(match response["message"].as_str() {
+                Some(message) => LocalizedText::evidence(message),
+                None => crate::product_message!("backend.execution.supervisor_unknown_error"),
+            });
         }
         if response["op"] == "closed" && response["status"] != "cleanup_unconfirmed" {
             if let Some(scope) = response["scope"].as_str() {
@@ -394,38 +413,38 @@ impl UnixOwner {
         self: &Arc<Self>,
         spec: &ProcessSpec,
         parent: Option<&str>,
-    ) -> Result<UnixProcess, String> {
+    ) -> Result<UnixProcess, LocalizedText> {
         let _registration = self.registration.lock();
         if self.cancelled.load(Ordering::Acquire) {
-            return Err("Process owner is cancelled; no new command can start".into());
+            return Err(crate::product_message!("backend.execution.owner_cancelled"));
         }
         let argv: Vec<_> = spec
             .argv
             .iter()
             .map(|item| {
                 item.to_str()
-                    .ok_or("Command argv must be UTF-8 for the supervisor protocol")
+                    .ok_or_else(|| crate::product_message!("backend.execution.argv_utf8"))
             })
             .collect::<Result<_, _>>()?;
         let mut env: HashMap<String, String> = std::env::vars_os()
             .map(|(key, value)| {
                 Ok((
                     key.into_string()
-                        .map_err(|_| "Non-UTF-8 environment variable name")?,
+                        .map_err(|_| crate::product_message!("backend.execution.env_name_utf8"))?,
                     value
                         .into_string()
-                        .map_err(|_| "Non-UTF-8 environment variable value")?,
+                        .map_err(|_| crate::product_message!("backend.execution.env_value_utf8"))?,
                 ))
             })
-            .collect::<Result<_, &str>>()?;
+            .collect::<Result<_, LocalizedText>>()?;
         for (key, value) in &spec.env {
             env.insert(
                 key.to_str()
-                    .ok_or("Non-UTF-8 environment variable name")?
+                    .ok_or_else(|| crate::product_message!("backend.execution.env_name_utf8"))?
                     .to_owned(),
                 value
                     .to_str()
-                    .ok_or("Non-UTF-8 environment variable value")?
+                    .ok_or_else(|| crate::product_message!("backend.execution.env_value_utf8"))?
                     .to_owned(),
             );
         }
@@ -448,32 +467,47 @@ impl UnixOwner {
             "completion": spec.completion,
         }))?;
         if response["op"] != "registered" {
-            return Err(format!("Expected registered scope, got {response}"));
+            return Err(
+                crate::product_message!("backend.execution.registration_expected", "response" => response),
+            );
         }
         let scope = response["scope"]
             .as_str()
-            .ok_or("Missing registered scope")?
+            .ok_or_else(|| crate::product_message!("backend.execution.scope_missing"))?
             .to_owned();
-        let pid = response["pid"].as_u64().ok_or("Missing registered PID")? as u32;
-        let pgid = response["pgid"].as_i64().ok_or("Missing registered PGID")? as i32;
+        let pid = response["pid"]
+            .as_u64()
+            .ok_or_else(|| crate::product_message!("backend.execution.pid_missing"))?
+            as u32;
+        let pgid = response["pgid"]
+            .as_i64()
+            .ok_or_else(|| crate::product_message!("backend.execution.pgid_missing"))?
+            as i32;
         self.groups.lock().insert(scope.clone(), pgid);
         if self.cancelled.load(Ordering::Acquire) {
             self.request(json!({"op": "close", "scope": scope, "reason": "cancelled"}))?;
-            return Err("Process owner was cancelled before command release".into());
+            return Err(crate::product_message!(
+                "backend.execution.cancelled_before_release"
+            ));
         }
-        let mut process = UnixProcess {
-            owner: Arc::clone(self),
-            scope,
-            pid,
-            pgid,
-            stdout: PathBuf::from(response["stdout"].as_str().ok_or("Missing stdout path")?),
-            stderr: PathBuf::from(response["stderr"].as_str().ok_or("Missing stderr path")?),
-            input,
-            deadline_ns: response["deadline_ns"]
-                .as_u64()
-                .ok_or("Missing effective owner deadline")?,
-            finished: false,
-        };
+        let mut process =
+            UnixProcess {
+                owner: Arc::clone(self),
+                scope,
+                pid,
+                pgid,
+                stdout: PathBuf::from(response["stdout"].as_str().ok_or_else(|| {
+                    crate::product_message!("backend.execution.stdout_path_missing")
+                })?),
+                stderr: PathBuf::from(response["stderr"].as_str().ok_or_else(|| {
+                    crate::product_message!("backend.execution.stderr_path_missing")
+                })?),
+                input,
+                deadline_ns: response["deadline_ns"].as_u64().ok_or_else(|| {
+                    crate::product_message!("backend.execution.owner_deadline_missing")
+                })?,
+                finished: false,
+            };
         if let Some(input) = &mut process.input {
             input.registered_writer()?;
         }
@@ -485,9 +519,11 @@ impl UnixOwner {
         Ok(process)
     }
     #[cfg(all(test, feature = "native-tests"))]
-    pub(super) fn kill_supervisor_for_test(&self) -> Result<(), String> {
+    pub(super) fn kill_supervisor_for_test(&self) -> Result<(), LocalizedText> {
         let mut supervisor = self.supervisor.lock();
-        let child = supervisor.as_mut().ok_or("Missing test supervisor")?;
+        let child = supervisor
+            .as_mut()
+            .ok_or_else(|| crate::product_message!("backend.execution.test_supervisor_missing"))?;
         child.kill().map_err(|error| error.to_string())?;
         child.wait().map_err(|error| error.to_string())?;
         Ok(())
@@ -547,55 +583,59 @@ impl UnixProcess {
         }
     }
 
-    pub(super) fn write_stdin(&mut self, bytes: &[u8]) -> Result<(), String> {
+    pub(super) fn write_stdin(&mut self, bytes: &[u8]) -> Result<(), LocalizedText> {
         if self.finished {
-            return Err("Owned process already completed".into());
+            return Err(crate::product_message!(
+                "backend.execution.already_completed"
+            ));
         }
         let mut offset = 0;
         while offset < bytes.len() {
             if monotonic_ns()? >= self.deadline_ns {
                 self.cancel()?;
-                return Err("Interactive stdin exceeded its absolute deadline".into());
+                return Err(crate::product_message!("backend.execution.stdin_deadline"));
             }
             let result = self
                 .input
                 .as_mut()
                 .and_then(|input| input.file.as_mut())
-                .ok_or("Interactive stdin is not open")?
+                .ok_or_else(|| crate::product_message!("backend.execution.stdin_closed"))?
                 .write(&bytes[offset..]);
             match result {
-                Ok(0) => return Err("Interactive stdin closed during write".into()),
+                Ok(0) => {
+                    return Err(crate::product_message!(
+                        "backend.execution.stdin_closed_during_write"
+                    ));
+                }
                 Ok(written) => offset += written,
                 Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                     std::thread::sleep(Duration::from_millis(1));
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
-                Err(error) => return Err(error.to_string()),
+                Err(error) => return Err(error.to_string().into()),
             }
         }
         Ok(())
     }
 
-    fn result(&self, response: &Value) -> Result<ProcessResult, String> {
+    fn result(&self, response: &Value) -> Result<ProcessResult, LocalizedText> {
         Ok(ProcessResult {
             scope: self.scope.clone(),
             pid: self.pid,
             pgid: Some(self.pgid),
-            status: super::ProcessStatus::from_owner(
-                response["status"]
-                    .as_str()
-                    .ok_or("Missing closure status")?,
-            )?,
+            status: super::ProcessStatus::from_owner(response["status"].as_str().ok_or_else(
+                || crate::product_message!("backend.execution.closure_status_missing"),
+            )?)?,
             exit_code: response["exit_code"].as_i64().map(|value| value as i32),
             stdout: self.stdout.clone(),
             stderr: self.stderr.clone(),
-            descendants_reclaimed: response["descendants_reclaimed"]
-                .as_bool()
-                .ok_or("Missing confirmed descendant cleanup result")?,
+            descendants_reclaimed: response["descendants_reclaimed"].as_bool().ok_or_else(
+                || crate::product_message!("backend.execution.cleanup_result_missing"),
+            )?,
         })
     }
 
-    pub(super) fn wait(&mut self) -> Result<ProcessResult, String> {
+    pub(super) fn wait(&mut self) -> Result<ProcessResult, LocalizedText> {
         loop {
             let response = self
                 .owner
@@ -606,12 +646,16 @@ impl UnixProcess {
                     return self.result(&response);
                 }
                 Some("running") => std::thread::sleep(Duration::from_millis(20)),
-                _ => return Err(format!("Unexpected owner status: {response}")),
+                _ => {
+                    return Err(
+                        crate::product_message!("backend.execution.unexpected_owner_status", "response" => response),
+                    );
+                }
             }
         }
     }
 
-    pub(super) fn cancel(&mut self) -> Result<ProcessResult, String> {
+    pub(super) fn cancel(&mut self) -> Result<ProcessResult, LocalizedText> {
         let response = self.owner.request(json!({
             "op": "close", "scope": self.scope, "reason": "cancelled"
         }))?;

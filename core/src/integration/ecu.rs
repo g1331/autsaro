@@ -20,26 +20,32 @@ impl EcuIntegrationFiles {
     pub fn files(&self) -> &[(String, Vec<u8>)] {
         &self.files
     }
-    pub fn preview(&self, output: &Path) -> Result<GenerationPreview, String> {
+    pub fn preview(
+        &self,
+        output: &Path,
+    ) -> Result<GenerationPreview, crate::message::LocalizedText> {
         generator::output::preview_prepared(&self.files, output)
     }
     pub fn generate_previewed(
         &self,
         output: &Path,
         revision: &str,
-    ) -> Result<GenerationReport, String> {
+    ) -> Result<GenerationReport, crate::message::LocalizedText> {
         generator::output::generate_prepared(self.files.clone(), output, Some(revision))
     }
 }
 
-fn reject(message: impl Into<String>) -> Vec<PlanDiagnostic> {
+fn reject(message: crate::message::LocalizedText) -> Vec<PlanDiagnostic> {
     vec![PlanDiagnostic {
         category: DiagnosticCategory::Tool,
         code: "ECU_SOURCE_CLOSURE".into(),
         file: None,
         object: None,
         message: message.into(),
-        remedy: "Restore the matching compiled source/plan identities and resolve the located integration contract before generating.".into(),
+        remedy: crate::product_message!(
+            "backend.integration.ecu.generation_identity_contract_repair_required"
+        )
+        .into(),
     }]
 }
 
@@ -85,12 +91,20 @@ impl ValidatedIntegrationPlan {
             .data_ports
             .iter()
             .find(|port| port.read)
-            .ok_or_else(|| reject("The validated application read port is missing."))?;
+            .ok_or_else(|| {
+                reject(crate::product_message!(
+                    "backend.integration.ecu.validated_application_read_port_missing"
+                ))
+            })?;
         let write = component
             .data_ports
             .iter()
             .find(|port| !port.read)
-            .ok_or_else(|| reject("The validated application write port is missing."))?;
+            .ok_or_else(|| {
+                reject(crate::product_message!(
+                    "backend.integration.ecu.validated_application_write_port_missing"
+                ))
+            })?;
         let substitutions = [
             (
                 "APP_HEADER",
@@ -147,9 +161,9 @@ impl ValidatedIntegrationPlan {
                 .insert(delivered.clone(), Cow::Borrowed(asset.bytes))
                 .is_some()
             {
-                return Err(reject(format!(
-                    "A trusted asset owner collides: {delivered}"
-                )));
+                return Err(reject(
+                    crate::product_message!("backend.integration.ecu.trusted_asset_owner_collision", "delivered" => delivered),
+                ));
             }
         }
         let mut source_paths = BTreeMap::new();
@@ -161,9 +175,11 @@ impl ValidatedIntegrationPlan {
             };
             let bytes = files
                 .get(delivered)
-                .ok_or_else(|| reject(format!("The plan source is not delivered: {path}")))?;
+                .ok_or_else(|| reject(crate::product_message!("backend.integration.ecu.plan_source_not_delivered", "path" => path)))?;
             if format!("{:x}", Sha256::digest(bytes)) != *expected {
-                return Err(reject(format!("The plan/source identity differs: {path}")));
+                return Err(reject(
+                    crate::product_message!("backend.integration.ecu.plan_source_identity_mismatch", "path" => path),
+                ));
             }
             source_paths.insert(path, delivered.to_owned());
         }
@@ -196,7 +212,7 @@ impl ValidatedIntegrationPlan {
         );
         let configuration = files.get_mut("os/include/Os_Cfg.h").unwrap();
         let mut configuration_text = std::str::from_utf8(configuration)
-            .map_err(|error| reject(error.to_string()))?
+            .map_err(|error| reject(error.to_string().into()))?
             .to_owned();
         let extended_status = plan
             .configuration
@@ -231,7 +247,9 @@ impl ValidatedIntegrationPlan {
             })
             .map(|values| matches!(values[0].as_str(), "true" | "1"))
             .ok_or_else(|| {
-                reject("The validated OS scheduler resource configuration is missing.")
+                reject(crate::product_message!(
+                    "backend.integration.ecu.validated_os_scheduler_resource_config_missing"
+                ))
             })?;
         let end = configuration_text.rfind("#endif").unwrap();
         configuration_text.insert_str(
@@ -256,14 +274,16 @@ impl ValidatedIntegrationPlan {
             ],
             "scope": "Selected single-core controlled-logical-time target; no hardware timer claim."
         }))
-        .map_err(|error| reject(error.to_string()))?;
+        .map_err(|error| reject(error.to_string().into()))?;
         timer_report.push(b'\n');
         files.insert("os-generation-timing.json".into(), Cow::Owned(timer_report));
         for (name, bytes) in contract.into_files() {
             if name.starts_with("include/") || name == "contract.json" {
                 if let Some(previous) = files.get(&name) {
                     if previous.as_ref() != bytes {
-                        return Err(reject(format!("A contract/runtime header differs: {name}")));
+                        return Err(reject(
+                            crate::product_message!("backend.integration.ecu.contract_runtime_header_mismatch", "name" => name),
+                        ));
                     }
                 } else {
                     files.insert(name, Cow::Owned(bytes));
@@ -287,9 +307,9 @@ impl ValidatedIntegrationPlan {
             )
         );
         if app_header == super::os_service::HEADER || client_header == super::os_service::HEADER {
-            return Err(reject(
-                "A generated component header collides with the OS service header",
-            ));
+            return Err(reject(crate::product_message!(
+                "backend.integration.ecu.generated_component_os_header_collision"
+            )));
         }
         let rx = plan.signals.iter().find(|signal| signal.receive).unwrap();
         let tx = plan.signals.iter().find(|signal| !signal.receive).unwrap();
@@ -313,7 +333,11 @@ impl ValidatedIntegrationPlan {
             .entities
             .iter()
             .find(|entity| entity.period_ms == 1 && entity.os_event != app.os_event)
-            .ok_or_else(|| reject("No distinct fixed owner work event exists."))?;
+            .ok_or_else(|| {
+                reject(crate::product_message!(
+                    "backend.integration.ecu.distinct_fixed_owner_work_event_missing"
+                ))
+            })?;
         let mask = |path: &str| {
             plan.events
                 .iter()
@@ -325,7 +349,11 @@ impl ValidatedIntegrationPlan {
             .events
             .iter()
             .find(|event| event.path != app.os_event && event.path != work.os_event)
-            .ok_or_else(|| reject("No distinct owner IO event exists."))?;
+            .ok_or_else(|| {
+                reject(crate::product_message!(
+                    "backend.integration.ecu.distinct_owner_io_event_missing"
+                ))
+            })?;
         let header = format!(
             "/** @file Generated checked target constants and OS configuration. */\n#ifndef ECU_TARGET_CONFIG_H\n#define ECU_TARGET_CONFIG_H\n#include \"Os_Target.h\"\n#include \"{app_header}\"\n#define ECU_TARGET_TASK 0u\n#define ECU_TARGET_EVENT_WORK {}u\n#define ECU_TARGET_EVENT_APP {}u\n#define ECU_TARGET_EVENT_IO {}u\n#define ECU_TARGET_RX_CAN_ID {}u\n#define ECU_TARGET_RX_DEADLINE_MS {}u\n#define ECU_TARGET_RUN_APPLICATION() {}()\n#define ECU_TARGET_TRANSMIT() Com_TriggerTransmit(1u)\nextern const Os_TargetConfig Ecu_OsConfig;\nvoid Ecu_ApplicationInitialize(void);\nStd_ReturnType Ecu_TargetReadDid(uint8_t *data);\n#ifdef ECU_TARGET_TESTS\nint Ecu_TargetTestFailStage(unsigned stage);\nvoid Ecu_TargetTestShutdown(StatusType reason);\n#endif\n#endif\n",
             mask(&work.os_event),
@@ -342,9 +370,9 @@ impl ValidatedIntegrationPlan {
             .filter(|entity| entity.period_ms == 1 && entity.os_event != app.os_event)
             .any(|entity| entity.trigger() != work.trigger() || entity.os_event != work.os_event)
         {
-            return Err(reject(
-                "The fixed owner work cycle does not have one alarm/event.",
-            ));
+            return Err(reject(crate::product_message!(
+                "backend.integration.ecu.fixed_owner_work_cycle_alarm_event_invalid"
+            )));
         }
         files.insert(
             "include/Ecu_TargetConfig.h".into(),
@@ -417,9 +445,13 @@ impl ValidatedIntegrationPlan {
         let write = component.data_ports.iter().find(|port| !port.read).unwrap();
         let template = AssetInventory::embedded()
             .get("runtime/ecu/templates/Ecu_Config.c.in")
-            .ok_or_else(|| reject("The trusted ECU configuration template is missing."))?;
+            .ok_or_else(|| {
+                reject(crate::product_message!(
+                    "backend.integration.ecu.trusted_ecu_config_template_missing"
+                ))
+            })?;
         let mut config = std::str::from_utf8(template.bytes)
-            .map_err(|error| reject(error.to_string()))?
+            .map_err(|error| reject(error.to_string().into()))?
             .to_owned();
         for (key, value) in [
             ("TASK_SYMBOL", task_symbol),
@@ -522,14 +554,14 @@ impl ValidatedIntegrationPlan {
             config = config.replace(&format!("@{key}@"), &value);
         }
         if config.contains('@') {
-            return Err(reject(
-                "The generated configuration has an unresolved placeholder.",
-            ));
+            return Err(reject(crate::product_message!(
+                "backend.integration.ecu.generated_config_placeholder_unresolved"
+            )));
         }
         files.insert("src/Ecu_Config.c".into(), Cow::Owned(config.into_bytes()));
         let com = files.get_mut("include/Com.h").unwrap();
         let mut text = std::str::from_utf8(com)
-            .map_err(|error| reject(error.to_string()))?
+            .map_err(|error| reject(error.to_string().into()))?
             .to_owned();
         let original_com = std::mem::replace(com, Cow::Owned(Vec::new()));
         let end = text.rfind("#endif").unwrap();
@@ -597,7 +629,7 @@ impl ValidatedIntegrationPlan {
             "owner": "one generated AUTOSTART extended Task_Ecu; StartupHook owns initialization",
             "time": "uint64 epoch, independent software Counter, uint32 FreeRTOS tick",
             "schm": "single BSW owner checks; native input/output and OS retain atomic protocols",
-        })).map_err(|error| reject(error.to_string()))?;
+        })).map_err(|error| reject(error.to_string().into()))?;
         metadata.push(b'\n');
         files.insert("integration.json".into(), Cow::Owned(metadata));
         let readme = format!(
@@ -632,21 +664,22 @@ fn render_template(
 ) -> Result<Vec<u8>, Vec<PlanDiagnostic>> {
     let asset = AssetInventory::embedded()
         .get(path)
-        .ok_or_else(|| reject(format!("The trusted C template is missing: {path}")))?;
-    let mut tail = std::str::from_utf8(asset.bytes).map_err(|error| reject(error.to_string()))?;
+        .ok_or_else(|| reject(crate::product_message!("backend.integration.ecu.trusted_c_template_missing", "path" => path)))?;
+    let mut tail =
+        std::str::from_utf8(asset.bytes).map_err(|error| reject(error.to_string().into()))?;
     let mut result = String::with_capacity(tail.len());
     while let Some((before, token)) = tail.split_once('@') {
         result.push_str(before);
-        let (name, rest) = token
-            .split_once('@')
-            .ok_or_else(|| reject("A C template contains an unterminated placeholder."))?;
+        let (name, rest) = token.split_once('@').ok_or_else(|| {
+            reject(crate::product_message!(
+                "backend.integration.ecu.c_template_placeholder_unterminated"
+            ))
+        })?;
         let value = substitutions
             .iter()
             .find(|(key, _)| *key == name)
             .ok_or_else(|| {
-                reject(format!(
-                    "A C template contains an unknown placeholder: {name}"
-                ))
+                reject(crate::product_message!("backend.integration.ecu.c_template_placeholder_unknown", "name" => name))
             })?;
         result.push_str(&value.1);
         tail = rest;

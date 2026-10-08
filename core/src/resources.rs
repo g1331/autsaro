@@ -33,17 +33,20 @@ impl AssetInventory {
 
     /// A caller-provided checkout is checked against the compiled identities,
     /// not against a manifest that can be edited alongside its source files.
-    pub fn from_directory(root: &Path) -> Result<Self, String> {
+    pub fn from_directory(root: &Path) -> Result<Self, crate::message::LocalizedText> {
         for entry in EMBEDDED_ASSETS {
             check_entry(root, entry)?;
         }
         Ok(Self::embedded())
     }
 
-    pub fn verify_directory_asset(root: &Path, relative_path: &str) -> Result<(), String> {
+    pub fn verify_directory_asset(
+        root: &Path,
+        relative_path: &str,
+    ) -> Result<(), crate::message::LocalizedText> {
         let entry = Self::embedded()
             .get(relative_path)
-            .ok_or_else(|| format!("Not in the compiled inventory: {relative_path}"))?;
+            .ok_or_else(|| crate::product_message!("backend.resources.not_in_inventory", "path" => relative_path))?;
         check_entry(root, entry)
     }
 
@@ -68,17 +71,14 @@ impl AssetInventory {
     }
 }
 
-fn check_entry(root: &Path, entry: &AssetEntry) -> Result<(), String> {
+fn check_entry(root: &Path, entry: &AssetEntry) -> Result<(), crate::message::LocalizedText> {
     let source = root.join(entry.relative_path);
     if !fs::symlink_metadata(&source)
-        .map_err(|error| format!("{}: {error}", source.display()))?
+        .map_err(|error| crate::product_message!("backend.resources.inspect_failed", "path" => source.display(), "error" => error))?
         .file_type()
         .is_file()
     {
-        return Err(format!(
-            "Trusted asset is not a regular file: {}",
-            source.display()
-        ));
+        return Err(crate::product_message!("backend.resources.not_regular_file", "path" => source.display()));
     }
     let mut file = fs::File::open(&source).map_err(|error| error.to_string())?;
     let mut digest = Sha256::new();
@@ -91,10 +91,23 @@ fn check_entry(root: &Path, entry: &AssetEntry) -> Result<(), String> {
         digest.update(&chunk[..count]);
     }
     if format!("{:x}", digest.finalize()) != entry.sha256 {
-        return Err(format!(
-            "Trusted asset identity differs: {}",
-            entry.relative_path
-        ));
+        return Err(
+            crate::product_message!("backend.resources.identity_differs", "path" => entry.relative_path),
+        );
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unknown_asset_preserves_path_as_message_parameter() {
+        let path = "用户/unknown-asset.txt";
+        let error = AssetInventory::verify_directory_asset(Path::new("."), path).unwrap_err();
+        let wire = serde_json::to_value(&error).unwrap();
+        assert_eq!(wire["key"], "backend.resources.not_in_inventory");
+        assert_eq!(wire["params"]["path"], path);
+    }
 }

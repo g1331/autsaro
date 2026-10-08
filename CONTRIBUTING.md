@@ -37,6 +37,16 @@ uv run --locked python -m autosar_tooling quality --base <基准提交>
 
 真实 GUI 验收使用隔离环境，不占用开发者正在使用的桌面。BMad 用于项目规格与状态，不是启动或修改工程的前置条件。
 
+## 界面文案与语言
+
+前端文案位于 `ui/src/i18n/` 的分域资源；后端文案以 `core/src/messages.json` 为唯一来源，由 Cargo 构建生成 Rust 静态模板，前端直接导入同一资源。新增产品消息使用稳定的语义键，并同时维护中英文完整句子和相同的插值参数；不要通过原句匹配或 DOM 替换翻译。
+
+控制器和 IPC 保存消息键及参数，在显示时翻译，避免语言切换后旧提示残留。AUTOSAR 标识符、用户数据及外部工具证据保持原文。语言偏好不得参与工程指纹、生成内容或结果失效判断。修改文案后走正常 npm/Cargo 检查，并实际检查中英文的成功、失败及窄窗场景。
+
+Windows MSI 分别构建 `zh-CN` 与 `en-US` 安装界面。英文 WiX 资源 `src-tauri/wix/locales/en-US.wxl` 使用代码页 936，容纳既有中文产品身份；不能恢复默认代码页 1252，否则英文 MSI 会因品牌与安装路径字符无法编码而链接失败。安装包语言与应用保存的语言偏好独立。
+
+修改 README 时同步 `README.md` 与 `README.en.md` 的功能、命令、限制和链接；技术文档保持各自原有语言。
+
 ## 许可与安全报告
 
 原创贡献按 [Apache-2.0](LICENSE) 提供，第三方内容保留原许可；加入依赖或代码前确认有权分发。具体分发要求见[许可说明](docs/maintainers/licensing.md)。安全问题按 [SECURITY.md](SECURITY.md) 报告，普通问题可提交包含复现步骤和预期结果的 Issue。

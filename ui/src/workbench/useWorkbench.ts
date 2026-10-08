@@ -1,4 +1,15 @@
+import type { Text } from '../i18n';
+import {
+  composedMessage,
+  isLocalizedText,
+  message,
+  previewLanguage,
+  ProductError,
+  translate,
+  useLocale,
+} from '../i18n';
 import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { Dispatch, SetStateAction } from 'react';
 import { useEffect, useEffectEvent, useReducer, useRef } from 'react';
 import type {
@@ -66,6 +77,7 @@ export interface Workbench
         | 'treeRevealId'
         | 'objectFilter'
         | 'appearanceDraft'
+        | 'languageDraft'
         | 'integrationUnapplied'
         | 'draft'
         | 'diagnosticDraft'
@@ -101,7 +113,7 @@ export interface Workbench
     > {
   native: boolean;
   executionDisabled: boolean;
-  executionReason: string;
+  executionReason: Text;
   currentFrame: Frame | undefined;
   currentSignal: Signal | undefined;
   signalFrame: Frame | undefined;
@@ -124,7 +136,7 @@ export interface Workbench
   chooseDirectory(onChoose: (path: string) => void): Promise<void>;
   chooseBinary(onChoose: (path: string) => void): Promise<void>;
   chooseFiles(): Promise<void>;
-  confirmAction(message: string): Promise<boolean>;
+  confirmAction(message: Text): Promise<boolean>;
   choose(selection: Selection): Promise<void>;
   openCreator(kind: 'frame' | 'signal'): Promise<void>;
   startProject(source?: 'empty' | 'import'): Promise<void>;
@@ -166,14 +178,14 @@ export interface Workbench
   verifyEcu(): void;
   changeEcuOutput(path: string): void;
   changeEcuBuildDirectory(path: string): void;
-  actionReason(action: string): string;
+  actionReason(action: string): Text;
   refreshProjection(): Promise<void>;
   selectObject(objectId: string, multiple?: boolean): Promise<void>;
   readSource(sourceId: string): Promise<void>;
   openDocument(tab: DocumentTab): void;
   closeDocument(tab: DocumentTab): Promise<void>;
-  guardContext(title: string, action: () => void | Promise<void>): Promise<void>;
-  replaceProject(title: string, action: () => void | Promise<void>): Promise<void>;
+  guardContext(title: Text, action: () => void | Promise<void>): Promise<void>;
+  replaceProject(title: Text, action: () => void | Promise<void>): Promise<void>;
   resolveGuard(choice: 'apply' | 'discard' | 'cancel'): Promise<void>;
   requestSave(): Promise<void>;
   stageChange(change: ConfigurationChange): void;
@@ -182,6 +194,7 @@ export interface Workbench
   prepareChanges(): Promise<void>;
   applyChanges(): Promise<boolean>;
   configureAppearance(): Promise<void>;
+  configureLanguage(): Promise<void>;
   importDefinitionCatalog(): Promise<void>;
   removeDefinitionCatalog(catalogId: string): Promise<void>;
   openMemberProject(): Promise<void>;
@@ -195,7 +208,26 @@ export interface Workbench
   restoreAllDrafts(): void;
 }
 export function useWorkbench(): Workbench {
+  const { language } = useLocale();
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
+  useEffect(() => {
+    previewLanguage(state.languageDraft);
+  }, [state.languageDraft]);
+  const updateNativeTitle = useEffectEvent(() => {
+    void getCurrentWindow()
+      .setTitle(translate('controller.app.title'))
+      .catch((error: unknown) => {
+        patchState({
+          notice: {
+            tone: 'error',
+            text: composedMessage('controller.error.windowTitle', { error: errorText(error) }),
+          },
+        });
+      });
+  });
+  useEffect(() => {
+    if (native) updateNativeTitle();
+  }, [language]);
 
   const capabilitiesRef = useRef<WorkbenchCapabilities | null>(null);
 
@@ -220,6 +252,8 @@ export function useWorkbench(): Workbench {
           capabilities,
           legacyTarget: capabilities.target,
           appearanceDraft: capabilities.appearance,
+          languageDraft: capabilities.language ?? 'system',
+          savedLanguage: capabilities.language ?? 'system',
           resourceDraft: {
             xsdArchive: capabilities.xsdArchive ?? '',
             modArchive: capabilities.modArchive ?? '',
@@ -243,13 +277,13 @@ export function useWorkbench(): Workbench {
 
   async function call<T>(command: string, payload: Record<string, unknown> = {}): Promise<T> {
     const capabilities = capabilitiesRef.current;
-    if (!capabilities) throw new Error('工作台能力尚未就绪');
+    if (!capabilities) throw new ProductError(message('controller.error.capabilitiesNotReady'));
     const generation = epoch.current;
     const fingerprint = capabilities.fingerprint;
     try {
       const reply = await invoke<WorkbenchReply<T>>(command, { ...payload, fingerprint });
       if (generation !== epoch.current || reply.inputFingerprint !== fingerprint) {
-        throw new Error('STALE_DELIVERY: 当前操作结果已过期');
+        throw new ProductError(message('controller.error.staleDelivery'));
       }
       const previous = capabilitiesRef.current;
       capabilitiesRef.current = reply.capabilities;
@@ -273,11 +307,11 @@ export function useWorkbench(): Workbench {
             : stateRef.current.applicationPreview,
       });
       const value = typeof reply.value === 'object' && reply.value !== null ? reply.value : null;
-      const detail =
+      const detail: Text =
         value && 'log' in value
-          ? String(value.log)
+          ? errorText(value.log)
           : value && 'logs' in value && Array.isArray(value.logs)
-            ? value.logs.join('\n')
+            ? (value.logs as Text[])
             : command;
       const failed = Boolean(
         value &&
@@ -300,12 +334,14 @@ export function useWorkbench(): Workbench {
         const current = await invoke<WorkbenchCapabilities>('workbench_capabilities');
         if (generation === epoch.current) {
           capabilitiesRef.current = current;
+          const presentationOnly =
+            command === 'configure_language' || command === 'configure_appearance';
           patchState({
             capabilities: current,
             legacyTarget: current.target,
-            changePreview: null,
-            preparedChangeSet: null,
-            applicationPreview: null,
+            ...(presentationOnly
+              ? {}
+              : { changePreview: null, preparedChangeSet: null, applicationPreview: null }),
           });
         }
       }
@@ -332,7 +368,7 @@ export function useWorkbench(): Workbench {
       const next = { ...previous };
       for (const key of Object.keys(next) as Stage[]) {
         if (next[key].state === 'running') {
-          next[key] = { state: 'stale', detail: '操作已取消；旧结果未提交' };
+          next[key] = { state: 'stale', detail: message('controller.operation.cancelledResult') };
         }
       }
       return next;
@@ -344,9 +380,12 @@ export function useWorkbench(): Workbench {
     invalidateOperation();
     try {
       await call<void>('cancel_operation');
-      patchState({ notice: { tone: 'info', text: '操作已取消，受管进程已关闭；旧结果未提交。' } });
+      patchState({ notice: { tone: 'info', text: message('controller.operation.cancelled') } });
     } catch (error) {
-      setNotice({ tone: 'error', text: `取消未确认：${errorText(error)}` });
+      setNotice({
+        tone: 'error',
+        text: composedMessage('controller.operation.cancelFailed', { error: errorText(error) }),
+      });
     }
   }
 
@@ -581,11 +620,11 @@ export function useWorkbench(): Workbench {
 
   function invalidateAfterEdit() {
     setStages({
-      save: { state: 'stale', detail: '配置已修改，尚未保存' },
-      validate: { state: 'stale', detail: '配置已修改，需重新校验' },
-      generate: { state: 'stale', detail: '生成结果基于旧配置' },
-      build: { state: 'stale', detail: '构建结果基于旧配置' },
-      virtual: { state: 'stale', detail: '运行结果基于旧配置' },
+      save: { state: 'stale', detail: message('controller.stage.editedSave') },
+      validate: { state: 'stale', detail: message('controller.stage.editedValidate') },
+      generate: { state: 'stale', detail: message('controller.stage.editedGenerate') },
+      build: { state: 'stale', detail: message('controller.stage.editedBuild') },
+      virtual: { state: 'stale', detail: message('controller.stage.editedVirtual') },
     });
     setGenerationPreview(null);
     setGenerated(null);
@@ -596,32 +635,32 @@ export function useWorkbench(): Workbench {
     setNotice(null);
   }
 
-  function markStage(key: Stage, state: StageState, detail: string) {
+  function markStage(key: Stage, state: StageState, detail: Text) {
     setStages((previous) => ({ ...previous, [key]: { state, detail } }));
   }
 
   function requireReady(allowed?: 'frame' | 'diagnostic' | 'dtc') {
-    if (!native) throw new Error('需要桌面运行环境');
+    if (!native) throw new ProductError(message('controller.error.desktopRequired'));
     const current = stateRef.current;
     if (current.creating && allowed !== 'frame')
-      throw new Error('创建表单尚未应用，请先应用或还原');
+      throw new ProductError(message('controller.error.creatorDraft'));
     if (hasUnapplied(current.workspace, current.draft) && allowed !== 'frame')
-      throw new Error('检查器中有未应用的更改，请先应用或还原');
+      throw new ProductError(message('controller.error.inspectorDraft'));
     if (
       current.workspace &&
       JSON.stringify(current.diagnosticDraft) !==
         JSON.stringify(diagnosticFields(current.workspace.diagnostic)) &&
       allowed !== 'diagnostic'
     )
-      throw new Error('DoCAN 配置有未应用的更改，请先应用或还原');
+      throw new ProductError(message('controller.error.diagnosticDraft'));
     if (
       current.workspace?.diagnostic &&
       JSON.stringify(current.dtcDraft) !==
         JSON.stringify(dtcFields(current.workspace.diagnostic.dtc)) &&
       allowed !== 'dtc'
     )
-      throw new Error('故障记忆有未应用的更改，请先应用或还原');
-    if (current.changes.length) throw new Error('批次草稿尚未应用，请预览应用或还原');
+      throw new ProductError(message('controller.error.dtcDraft'));
+    if (current.changes.length) throw new ProductError(message('controller.error.batchDraft'));
   }
 
   async function run<T>(
@@ -640,7 +679,8 @@ export function useWorkbench(): Workbench {
       running.current = true;
       setBusy(label);
       setNotice(null);
-      if (stage) markStage(stage, 'running', `${label}中…`);
+      if (stage)
+        markStage(stage, 'running', composedMessage('controller.operation.running', { label }));
       const result = await job();
       if (generation !== epoch.current) return;
       onSuccess(result);
@@ -649,13 +689,40 @@ export function useWorkbench(): Workbench {
     } catch (error) {
       if (generation !== epoch.current) return;
       const text = errorText(error);
-      setNotice({ tone: 'error', text: `${label}失败：${text}` });
+      setNotice({
+        tone: 'error',
+        text: composedMessage('controller.operation.failed', { label, error: text }),
+      });
       if (operation.kind === 'handoffImport') field('handoffImportOpen')(true);
       if (stateRef.current.settingsOpen) setSettingsNotice(text);
-      if (workspace?.integrationCandidate && Array.isArray(error)) {
+      if (
+        workspace?.integrationCandidate &&
+        Array.isArray(error) &&
+        error.length > 0 &&
+        error.every(
+          (issue: unknown) =>
+            typeof issue === 'object' &&
+            issue !== null &&
+            'category' in issue &&
+            typeof issue.category === 'string' &&
+            ['input', 'unsupported', 'dependency', 'tool'].includes(issue.category) &&
+            'code' in issue &&
+            typeof issue.code === 'string' &&
+            'file' in issue &&
+            (issue.file === null || typeof issue.file === 'string') &&
+            'object' in issue &&
+            (issue.object === null || typeof issue.object === 'string') &&
+            'message' in issue &&
+            isLocalizedText(issue.message) &&
+            'remedy' in issue &&
+            isLocalizedText(issue.remedy),
+        )
+      ) {
         setIntegrationIssues(error as PlanDiagnostic[]);
         setIntegrationNotice(
-          operation.kind === 'integrationEdit' ? '编辑被拒绝，原配置保持' : `${label}失败`,
+          operation.kind === 'integrationEdit'
+            ? message('controller.integration.editRejected')
+            : composedMessage('controller.operation.failedLabel', { label }),
         );
       }
       if (stage) markStage(stage, 'failed', text);
@@ -701,7 +768,7 @@ export function useWorkbench(): Workbench {
     !native || !state.capabilities || Boolean(state.capabilities.ruleError) || Boolean(busy);
   const executionReason = state.capabilities?.nativeExecution
     ? (state.capabilities.toolError ?? '')
-    : '未执行：本机不支持所选目标执行';
+    : message('controller.execution.unsupported');
   const executionDisabled =
     disabled || !state.capabilities?.nativeExecution || Boolean(state.capabilities.toolError);
 
@@ -727,12 +794,16 @@ export function useWorkbench(): Workbench {
 
   function inspectIntegration() {
     void run(
-      { kind: 'action', label: '检查标准输入' },
+      { kind: 'action', label: message('controller.integration.inspect') },
       () => call<IntegrationInspection>('inspect_integration'),
       (report) => {
         acceptIntegration(report);
         setIntegrationNotice(
-          report.description ? '标准输入已校验，尚未生成运行工程' : '输入未通过，无法生成',
+          message(
+            report.description
+              ? 'controller.integration.validated'
+              : 'controller.integration.failed',
+          ),
         );
       },
     );
@@ -744,9 +815,14 @@ export function useWorkbench(): Workbench {
       for (const [path, value] of Object.entries(state.integrationIds)) {
         ids[path] = intInRange(value, 'CAN ID', 0, 2047);
       }
-      const period = intInRange(state.integrationPeriod, '应用周期', 1, 2147483647);
+      const period = intInRange(
+        state.integrationPeriod,
+        message('controller.field.applicationPeriod'),
+        1,
+        2147483647,
+      );
       void run(
-        { kind: 'integrationEdit', label: '应用标准参数' },
+        { kind: 'integrationEdit', label: message('controller.integration.apply') },
         async () => {
           const report = await call<IntegrationInspection>('edit_integration', {
             changes: { canIds: ids, applicationPeriodMs: period },
@@ -758,7 +834,7 @@ export function useWorkbench(): Workbench {
           acceptView(view);
           invalidateAfterEdit();
           acceptIntegration(report);
-          setIntegrationNotice('修改已通过同一计划校验，尚未保存');
+          setIntegrationNotice(message('controller.integration.modified'));
         },
       );
     } catch (error) {
@@ -769,9 +845,9 @@ export function useWorkbench(): Workbench {
   async function reopenIntegration() {
     if (!workspace) return;
     const path = stateRef.current.memberProjectPath;
-    await replaceProject('重开来源', () =>
+    await replaceProject(message('controller.project.reopen'), () =>
       run(
-        { kind: 'action', label: '重开来源' },
+        { kind: 'action', label: message('controller.project.reopen') },
         () =>
           path
             ? call<WorkspaceView>('open_member_project', { path })
@@ -792,16 +868,16 @@ export function useWorkbench(): Workbench {
   }
 
   function actionReason(action: string) {
-    if (!native) return '需要桌面运行环境';
-    if (!state.capabilities) return '正在读取后台能力';
-    if (state.busy) return `正在${state.busy}`;
+    if (!native) return message('controller.error.desktopRequired');
+    if (!state.capabilities) return message('controller.capability.reading');
+    if (state.busy) return composedMessage('controller.operation.busy', { label: state.busy });
     const capability =
       state.projection?.capabilities.find((item) => item.action === action) ??
       state.capabilities.actions.find((item) => item.action === action);
     return !capability
-      ? '后台未提供该动作'
+      ? message('controller.capability.missingAction')
       : !capability.available
-        ? (capability.reason ?? '后台未提供此能力')
+        ? (capability.reason ?? message('controller.capability.unavailable'))
         : '';
   }
 
@@ -811,20 +887,36 @@ export function useWorkbench(): Workbench {
       const projection = await call<ProjectProjection>('project_projection');
       patchState({ projection, memberProjectPath: projection.projectPath });
     } catch (error) {
-      setNotice({ tone: 'error', text: `读取工程投影失败：${errorText(error)}` });
+      setNotice({
+        tone: 'error',
+        text: composedMessage('controller.project.projectionFailed', { error: errorText(error) }),
+      });
     }
   }
 
   async function verificationOwnedFailure(delayMs = 0) {
-    await guardContext('验证专用受管失败', () =>
+    await guardContext(message('controller.verification.failure'), () =>
       run(
-        { kind: 'action', label: '验证专用受管失败' },
+        { kind: 'action', label: message('controller.verification.failure') },
         () => call<OwnedVerificationFailure>('verification_owned_failure', { delayMs }),
         (result) => {
           field('toolWindow')('log');
           setNotice({
             tone: 'error',
-            text: `${result.scope} · ${result.status} · exit ${result.exitCode ?? '无退出码'} · descendants reclaimed: ${result.descendantsReclaimed}`,
+            text: composedMessage(
+              'controller.verification.result',
+              {
+                exitCode:
+                  result.exitCode == null
+                    ? message('controller.verification.noExitCode')
+                    : String(result.exitCode),
+              },
+              {
+                scope: result.scope,
+                status: result.status,
+                reclaimed: result.descendantsReclaimed,
+              },
+            ),
           });
         },
       ),
@@ -911,8 +1003,13 @@ export function useWorkbench(): Workbench {
   });
   const { stageChange, prepareChanges, applyChanges, discardChanges, cancelChangePreview } =
     createBatchEditing(session, { invalidateAfterEdit, acceptIntegration });
-  const { changeTarget, configureResources, configureTools, configureAppearance } =
-    createSettingsActions(session, { invalidateOperation });
+  const {
+    changeTarget,
+    configureResources,
+    configureTools,
+    configureAppearance,
+    configureLanguage,
+  } = createSettingsActions(session, { invalidateOperation });
   const {
     saveProject,
     confirmSave,
@@ -999,6 +1096,7 @@ export function useWorkbench(): Workbench {
     setTreeRevealId: field('treeRevealId'),
     setObjectFilter: field('objectFilter'),
     setAppearanceDraft: field('appearanceDraft'),
+    setLanguageDraft: field('languageDraft'),
     actionReason,
     refreshProjection,
     selectObject,
@@ -1015,6 +1113,7 @@ export function useWorkbench(): Workbench {
     prepareChanges,
     applyChanges,
     configureAppearance,
+    configureLanguage,
     verificationOwnedFailure,
     importDefinitionCatalog,
     removeDefinitionCatalog,

@@ -12,7 +12,7 @@ pub fn run(
     second: &Path,
     binary_b: &Path,
     owner: &ProcessOwner,
-) -> Result<RunReport, String> {
+) -> Result<RunReport, crate::message::LocalizedText> {
     scenarios::run(first, binary_a, second, binary_b, owner)
 }
 
@@ -20,6 +20,6 @@ pub fn run_diagnostic(
     dir: &Path,
     binary: &Path,
     owner: &ProcessOwner,
-) -> Result<RunReport, String> {
+) -> Result<RunReport, crate::message::LocalizedText> {
     scenarios::run_diagnostic(dir, binary, owner)
 }

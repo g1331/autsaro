@@ -1,3 +1,4 @@
+import { useLocale } from '../i18n';
 import { useState } from 'react';
 import type { ExecutionTools } from '../types';
 import type { Appearance } from '../workbench/projectTypes';
@@ -5,13 +6,14 @@ import type { Workbench } from '../workbench/useWorkbench';
 import { CopyText, Dialog } from '../workbench/Dialog';
 
 const toolLabels: { key: keyof ExecutionTools; label: string }[] = [
-  { key: 'compiler', label: '编译器' },
-  { key: 'objdump', label: 'Objdump' },
-  { key: 'git', label: 'Git' },
-  { key: 'python', label: 'Python 解释器' },
+  { key: 'compiler', label: 'shell.settings.compiler' },
+  { key: 'objdump', label: 'shell.settings.objdump' },
+  { key: 'git', label: 'shell.settings.git' },
+  { key: 'python', label: 'shell.settings.python' },
 ];
 
 export function SettingsPage({ controller: c }: { controller: Workbench }) {
+  const { t, text } = useLocale();
   const [category, setCategory] = useState<'appearance' | 'definitions' | 'tools'>('appearance');
   if (
     !c.settingsOpen ||
@@ -25,10 +27,11 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
     c.handoffImportOpen
   )
     return null;
-  const locked = Boolean(c.busy) || !c.native;
+  const locked = Boolean(c.busy) || c.languageSaving || !c.native;
   function close() {
-    if (c.busy) return;
+    if (c.busy || c.languageSaving) return;
     c.setAppearanceDraft(c.capabilities?.appearance ?? 'system');
+    c.setLanguageDraft(c.savedLanguage);
     c.setResourceDraft({
       xsdArchive: c.capabilities?.xsdArchive ?? '',
       modArchive: c.capabilities?.modArchive ?? '',
@@ -47,23 +50,34 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
   const identity = c.projection?.ruleSetIdentity ?? c.capabilities?.ruleSetIdentity;
   return (
     <Dialog
-      title="设置"
+      title={t('shell.settings.title')}
       onClose={close}
       footer={
         <>
-          <span role="status">{c.settingsNotice}</span>
-          <button type="button" onClick={close} disabled={Boolean(c.busy)}>
-            关闭
+          <span role="status">{text(c.settingsNotice)}</span>
+          <button type="button" onClick={close} disabled={Boolean(c.busy) || c.languageSaving}>
+            {t('shell.settings.close')}
           </button>
           {category === 'appearance' ? (
-            <button
-              className="primary-button"
-              type="button"
-              disabled={locked}
-              onClick={() => void c.configureAppearance()}
-            >
-              保存外观
-            </button>
+            <>
+              <button
+                className="primary-button"
+                type="button"
+                disabled={locked}
+                onClick={() => void c.configureAppearance()}
+              >
+                {t('shell.settings.saveAppearance')}
+              </button>
+              <button
+                className="primary-button"
+                type="button"
+                disabled={Boolean(c.busy) || c.languageSaving}
+                aria-busy={c.languageSaving}
+                onClick={() => void c.configureLanguage()}
+              >
+                {t('shell.settings.saveLanguage')}
+              </button>
+            </>
           ) : category === 'tools' ? (
             <button
               className="primary-button"
@@ -71,19 +85,19 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
               disabled={locked}
               onClick={() => void c.configureTools()}
             >
-              保存执行工具
+              {t('shell.settings.saveTools')}
             </button>
           ) : null}
         </>
       }
     >
       <div className="settings-layout">
-        <nav aria-label="设置类别">
+        <nav aria-label={t('shell.settings.categories')}>
           {(
             [
-              ['appearance', '外观'],
-              ['definitions', '规则与模块定义'],
-              ['tools', '执行工具'],
+              ['appearance', 'shell.settings.appearance'],
+              ['definitions', 'shell.settings.definitions'],
+              ['tools', 'shell.settings.tools'],
             ] as const
           ).map(([key, label]) => (
             <button
@@ -93,46 +107,63 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
               className={category === key ? 'selected' : ''}
               onClick={() => setCategory(key)}
             >
-              {label}
+              {t(label)}
             </button>
           ))}
         </nav>
         <div className="settings-content">
           <section hidden={category !== 'appearance'}>
-            <h3>外观</h3>
-            <p>预览仅改变呈现；关闭恢复已保存选择，工程与字段草稿保持。</p>
+            <h3>{t('shell.settings.appearance')}</h3>
+            <p>{t('shell.settings.previewHelp')}</p>
             <label>
-              主题
+              {t('shell.settings.theme')}
               <select
-                aria-label="主题"
+                aria-label={t('shell.settings.theme')}
                 value={c.appearanceDraft}
                 onChange={(event) => c.setAppearanceDraft(event.target.value as Appearance)}
               >
-                <option value="light">浅色</option>
-                <option value="dark">深色</option>
-                <option value="system">跟随系统</option>
+                <option value="light">{t('shell.settings.light')}</option>
+                <option value="dark">{t('shell.settings.dark')}</option>
+                <option value="system">{t('shell.settings.system')}</option>
+              </select>
+            </label>
+            <label>
+              {t('shell.settings.language')}
+              <select
+                name="language"
+                aria-label={t('shell.settings.language')}
+                value={c.languageDraft}
+                disabled={Boolean(c.busy) || c.languageSaving}
+                onChange={(event) =>
+                  c.setLanguageDraft(event.target.value as typeof c.languageDraft)
+                }
+              >
+                <option value="system">{t('shell.settings.system')}</option>
+                <option value="zh-CN">{t('shell.settings.chinese')}</option>
+                <option value="en">{t('shell.settings.english')}</option>
               </select>
             </label>
           </section>
           <section hidden={category !== 'definitions'}>
-            <h3>产品内置规则</h3>
+            <h3>{t('shell.settings.rules')}</h3>
             {c.capabilities?.ruleError ? (
               <p className="notice error" role="alert">
-                {c.capabilities.ruleError}。修复或重装匹配发布版；官方档案不能替代产品规则。
+                {text(c.capabilities.ruleError)}
+                {t('shell.settings.ruleRemedy')}
               </p>
             ) : null}
             {identity ? (
               <dl className="property-list">
                 <div>
-                  <dt>版次</dt>
+                  <dt>{t('shell.settings.release')}</dt>
                   <dd>{identity.release}</dd>
                 </div>
                 <div>
-                  <dt>规则版号</dt>
+                  <dt>{t('shell.settings.ruleVersion')}</dt>
                   <dd>{identity.rulesVersion}</dd>
                 </div>
                 <div>
-                  <dt>库存 SHA-256</dt>
+                  <dt>{t('shell.settings.sha')}</dt>
                   <dd className="mono path-text">
                     {identity.sha256}
                     <CopyText text={identity.sha256} />
@@ -140,17 +171,17 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
                 </div>
               </dl>
             ) : (
-              <p>尚未获得后台可信规则身份。</p>
+              <p>{t('shell.settings.noIdentity')}</p>
             )}
             <details>
-              <summary>完整声明覆盖</summary>
+              <summary>{t('shell.settings.coverage')}</summary>
               <div className="table-wrap">
                 <table>
                   <thead>
                     <tr>
-                      <th>作用域 / Rule ID</th>
-                      <th>对象 / 模块</th>
-                      <th>覆盖</th>
+                      <th>{t('shell.settings.scope')}</th>
+                      <th>{t('shell.settings.subject')}</th>
+                      <th>{t('shell.settings.coverageColumn')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -161,10 +192,12 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
                           <br />
                           {coverage.ruleId}
                         </td>
-                        <td>{coverage.subjects.join('、')}</td>
+                        <td>{coverage.subjects.join(t('shell.listSeparator'))}</td>
                         <td>
-                          {coverage.supported ? '支持' : '不支持'}
-                          <small>{coverage.reason}</small>
+                          {coverage.supported
+                            ? t('shell.settings.supported')
+                            : t('shell.settings.unsupported')}
+                          <small>{text(coverage.reason)}</small>
                         </td>
                       </tr>
                     ))}
@@ -172,17 +205,14 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
                 </table>
               </div>
             </details>
-            <h3>工程明确接纳的扩展</h3>
-            <p>
-              内置定义不可替换。扩展只约束实际消费者，不自动授予生成能力；接纳变化须保存工程，直接
-              ARXML 会话重开不隐式恢复。
-            </p>
+            <h3>{t('shell.settings.extensions')}</h3>
+            <p>{t('shell.settings.extensionHelp')}</p>
             <button
               type="button"
               disabled={locked || !c.workspace}
               onClick={() => void c.importDefinitionCatalog()}
             >
-              选择并明确接纳 catalog.json
+              {t('shell.settings.acceptCatalog')}
             </button>
             {(c.projection?.acceptedExtensionDefinitions ?? []).map((identity) => (
               <section className="catalog-row" key={identity.catalogId}>
@@ -191,24 +221,34 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
                   {identity.release} · {identity.version}
                 </span>
                 <p className="mono path-text">{identity.sha256}</p>
-                <CopyText text={JSON.stringify(identity, null, 2)} label="复制精确身份" />
+                <CopyText
+                  text={JSON.stringify(identity, null, 2)}
+                  label={t('shell.settings.copyIdentity')}
+                />
                 <button
                   type="button"
                   disabled={locked}
                   onClick={() => void c.removeDefinitionCatalog(identity.catalogId)}
                 >
-                  明确移除
+                  {t('shell.settings.remove')}
                 </button>
               </section>
             ))}
             {c.projection?.extensionDefinitions.map((extension) => (
               <details key={extension.identity.catalogId}>
                 <summary>
-                  {extension.identity.catalogId} · {extension.available ? '可用' : '不可用'}
+                  {extension.identity.catalogId} ·{' '}
+                  {extension.available
+                    ? t('shell.settings.available')
+                    : t('shell.settings.unavailable')}
                 </summary>
-                <p className="mono path-text">来源 {extension.source ?? '后台未提供来源路径'}</p>
-                <p>{extension.reason}</p>
-                <h3>实际消费者</h3>
+                <p className="mono path-text">
+                  {t('shell.settings.source', {
+                    source: extension.source ?? t('shell.settings.noSource'),
+                  })}
+                </p>
+                <p>{text(extension.reason)}</p>
+                <h3>{t('shell.settings.consumers')}</h3>
                 {extension.consumers.length ? (
                   <ul>
                     {extension.consumers.map((consumer) => (
@@ -218,25 +258,28 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
                     ))}
                   </ul>
                 ) : (
-                  <p>后台没有返回当前消费者。</p>
+                  <p>{t('shell.settings.noConsumers')}</p>
                 )}
-                <CopyText text={JSON.stringify(extension, null, 2)} label="复制来源与消费者" />
+                <CopyText
+                  text={JSON.stringify(extension, null, 2)}
+                  label={t('shell.settings.copyConsumers')}
+                />
               </details>
             ))}
             {c.projection?.dirty ? (
-              <p className="warning-text">接纳集合或源配置尚未保存；返回工程预览保存。</p>
+              <p className="warning-text">{t('shell.settings.unsaved')}</p>
             ) : null}
             <details className="legacy-settings">
-              <summary>历史兼容 / 开发：官方资源</summary>
-              <p>仅用于旧 v1 交接兼容或开发 oracle；不是正常配置门禁，不能替换内置规则。</p>
+              <summary>{t('shell.settings.legacy')}</summary>
+              <p>{t('shell.settings.legacyHelp')}</p>
               {c.capabilities?.resourceError ? (
-                <p className="error-text">{c.capabilities.resourceError}</p>
+                <p className="error-text">{text(c.capabilities.resourceError)}</p>
               ) : null}
               <div className="form-fields">
                 <label>
-                  XSD 档案
+                  {t('shell.settings.xsd')}
                   <input
-                    aria-label="历史 XSD 档案路径"
+                    aria-label={t('shell.settings.xsdPath')}
                     value={c.resourceDraft.xsdArchive}
                     disabled={locked}
                     onChange={(event) =>
@@ -245,9 +288,9 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
                   />
                 </label>
                 <label>
-                  MOD 档案
+                  {t('shell.settings.mod')}
                   <input
-                    aria-label="历史 MOD 档案路径"
+                    aria-label={t('shell.settings.modPath')}
                     value={c.resourceDraft.modArchive}
                     disabled={locked}
                     onChange={(event) =>
@@ -261,25 +304,23 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
                 disabled={locked || !c.resourceDraft.xsdArchive || !c.resourceDraft.modArchive}
                 onClick={() => void c.configureResources()}
               >
-                核对并保存兼容资源
+                {t('shell.settings.saveResources')}
               </button>
             </details>
           </section>
           <section hidden={category !== 'tools'}>
-            <h3>执行工具保存值</h3>
-            <p>
-              仅此类别明确保存的路径写入设置。留空不指定保存路径；环境覆盖优先，不自动复制回保存值。保存不等于编译预检通过；缺编译器不阻断配置与纯源码准备。
-            </p>
+            <h3>{t('shell.settings.savedTools')}</h3>
+            <p>{t('shell.settings.toolsHelp')}</p>
             {c.capabilities?.toolError ? (
-              <p className="error-text">{c.capabilities.toolError}</p>
+              <p className="error-text">{text(c.capabilities.toolError)}</p>
             ) : null}
             <div className="form-fields">
               {toolLabels.map(({ key, label }) => (
                 <label key={key}>
-                  {label}
+                  {t(label)}
                   <div className="path-picker">
                     <input
-                      aria-label={`${label}保存路径`}
+                      aria-label={t('shell.settings.savedToolPath', { tool: t(label) })}
                       value={c.toolDraft[key]}
                       disabled={locked}
                       onChange={(event) =>
@@ -295,24 +336,24 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
                         )
                       }
                     >
-                      浏览
+                      {t('shell.settings.browse')}
                     </button>
                   </div>
                 </label>
               ))}
             </div>
-            <h3>当前有效工具（只读）</h3>
+            <h3>{t('shell.settings.effectiveTools')}</h3>
             <dl>
               {toolLabels.map(({ key, label }) => (
                 <div key={key}>
-                  <dt>{label}</dt>
+                  <dt>{t(label)}</dt>
                   <dd className="mono path-text">
-                    {c.capabilities?.executionTools?.[key] ?? '后台未提供有效路径'}
+                    {c.capabilities?.executionTools?.[key] ?? t('shell.settings.noTool')}
                   </dd>
                 </div>
               ))}
             </dl>
-            <h3>环境覆盖（只读）</h3>
+            <h3>{t('shell.settings.environment')}</h3>
             {c.capabilities?.environmentOverrides.length ? (
               <ul>
                 {c.capabilities.environmentOverrides.map((entry) => (
@@ -322,7 +363,7 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
                 ))}
               </ul>
             ) : (
-              <p>无环境覆盖。</p>
+              <p>{t('shell.settings.noEnvironment')}</p>
             )}
           </section>
         </div>

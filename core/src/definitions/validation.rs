@@ -16,7 +16,7 @@ pub(crate) fn identifier(value: &str) -> bool {
         && bytes.all(|b| b.is_ascii_alphanumeric() || b == b'_')
 }
 
-fn integer(raw: &str) -> Result<i128, String> {
+fn integer(raw: &str) -> Result<i128, crate::message::LocalizedText> {
     let (negative, raw) = match raw.strip_prefix('-') {
         Some(raw) => (true, raw),
         None => (false, raw.strip_prefix('+').unwrap_or(raw)),
@@ -26,19 +26,26 @@ fn integer(raw: &str) -> Result<i128, String> {
     } else {
         raw.parse::<i128>()
     }
-    .map_err(|_| "Value must be an exact integer lexeme".to_string())?;
+    .map_err(|_| {
+        crate::product_message!("backend.definitions.validation.exact_integer_required")
+    })?;
     if negative {
-        result
-            .checked_neg()
-            .ok_or_else(|| "Integer overflow".into())
+        result.checked_neg().ok_or_else(|| {
+            crate::product_message!("backend.definitions.validation.integer_overflow")
+        })
     } else {
         Ok(result)
     }
 }
 
-pub(super) fn value(definition: &DefinitionDescriptor, value: &TypedValue) -> Result<(), String> {
+pub(super) fn value(
+    definition: &DefinitionDescriptor,
+    value: &TypedValue,
+) -> Result<(), crate::message::LocalizedText> {
     if definition.kind != Some(value.kind) {
-        return Err("Value kind differs from the definition kind".into());
+        return Err(crate::product_message!(
+            "backend.definitions.validation.value_kind_mismatch"
+        ));
     }
     let raw = value.lexeme.trim();
     match value.kind {
@@ -57,19 +64,26 @@ pub(super) fn value(definition: &DefinitionDescriptor, value: &TypedValue) -> Re
                     .transpose()?
                     .is_some_and(|max| parsed > max)
             {
-                return Err("Integer lies outside its definition range".into());
+                return Err(crate::product_message!(
+                    "backend.definitions.validation.integer_out_of_range"
+                ));
             }
         }
         ValueKind::Float => {
-            let parsed = raw
-                .parse::<f64>()
-                .map_err(|_| "Value must be a float lexeme")?;
+            let parsed = raw.parse::<f64>().map_err(|_| {
+                crate::product_message!("backend.definitions.validation.float_lexeme_required")
+            })?;
             if !parsed.is_finite() {
-                return Err("Nonfinite floating-point values are forbidden".into());
+                return Err(crate::product_message!(
+                    "backend.definitions.validation.nonfinite_float_forbidden"
+                ));
             }
             let bound = |raw: &str| {
-                raw.parse::<f64>()
-                    .map_err(|_| "Invalid metadata float bound".to_string())
+                raw.parse::<f64>().map_err(|_| {
+                    crate::product_message!(
+                        "backend.definitions.validation.invalid_metadata_float_bound"
+                    )
+                })
             };
             if definition
                 .minimum
@@ -84,14 +98,20 @@ pub(super) fn value(definition: &DefinitionDescriptor, value: &TypedValue) -> Re
                     .transpose()?
                     .is_some_and(|max| parsed > max)
             {
-                return Err("Float lies outside its definition range".into());
+                return Err(crate::product_message!(
+                    "backend.definitions.validation.float_out_of_range"
+                ));
             }
         }
         ValueKind::Boolean if !matches!(raw, "true" | "false" | "1" | "0") => {
-            return Err("Boolean must be true, false, 1 or 0".into());
+            return Err(crate::product_message!(
+                "backend.definitions.validation.boolean_lexeme_required"
+            ));
         }
         ValueKind::Enumeration if !definition.enumeration.iter().any(|literal| literal == raw) => {
-            return Err("Value is not a declared enumeration literal".into());
+            return Err(crate::product_message!(
+                "backend.definitions.validation.undeclared_enumeration_literal"
+            ));
         }
         ValueKind::FunctionName
             if !identifier(raw)
@@ -136,14 +156,16 @@ pub(super) fn value(definition: &DefinitionDescriptor, value: &TypedValue) -> Re
                         | "_Imaginary"
                 ) =>
         {
-            return Err(
-                "Function name must be a C identifier, not an expression or keyword".into(),
-            );
+            return Err(crate::product_message!(
+                "backend.definitions.validation.function_identifier_required"
+            ));
         }
         ValueKind::Reference
             if !raw.starts_with('/') || raw.split('/').skip(1).any(|part| !identifier(part)) =>
         {
-            return Err("Reference must be an absolute AUTOSAR object path".into());
+            return Err(crate::product_message!(
+                "backend.definitions.validation.absolute_reference_required"
+            ));
         }
         _ => {}
     }
@@ -174,10 +196,10 @@ pub(super) fn diagnostic(
     path: Option<String>,
     code: &str,
     severity: Severity,
-    message: String,
-    remedy: &str,
-    constraint: &str,
-    counterexample: &str,
+    message: crate::message::LocalizedText,
+    remedy: crate::message::LocalizedText,
+    constraint: crate::message::LocalizedText,
+    counterexample: crate::message::LocalizedText,
 ) -> ConfigurationDiagnostic {
     ConfigurationDiagnostic {
         scope: ValidationScope::Definition,
@@ -185,7 +207,7 @@ pub(super) fn diagnostic(
         severity,
         code: code.into(),
         message,
-        remedy: remedy.into(),
+        remedy,
         file,
         path,
         source_id: None,
@@ -194,8 +216,8 @@ pub(super) fn diagnostic(
         witness: Some(ValidationWitness {
             rule_id: format!("native.definition.{code}"),
             subjects: Vec::new(), // Workspace binds these to stable subject identities.
-            constraint: constraint.into(),
-            counterexample: counterexample.into(),
+            constraint,
+            counterexample,
         }),
     }
 }
@@ -203,7 +225,7 @@ pub(super) fn diagnostic(
 pub(super) fn documents(
     catalog: &DefinitionCatalog,
     files: &[(&Path, &str)],
-) -> Result<ScopeValidation, String> {
+) -> Result<ScopeValidation, crate::message::LocalizedText> {
     let documents: Vec<_> = files
         .iter()
         .map(|(file, source)| {
@@ -211,9 +233,9 @@ pub(super) fn documents(
                 || source.contains("<!DOCTYPE")
                 || source.contains("<!ENTITY")
             {
-                return Err(format!(
-                    "Unsafe definition validation source: {}",
-                    file.display()
+                return Err(crate::product_message!(
+                    "backend.definitions.validation.unsafe_source",
+                    "file" => file.display()
                 ));
             }
             let document =
@@ -221,9 +243,9 @@ pub(super) fn documents(
             if document.root_element().tag_name().name() != "AUTOSAR"
                 || document.root_element().tag_name().namespace() != Some(NS)
             {
-                return Err(format!(
-                    "Definition validation requires AUTOSAR CP XML: {}",
-                    file.display()
+                return Err(crate::product_message!(
+                    "backend.definitions.validation.autosar_cp_xml_required",
+                    "file" => file.display()
                 ));
             }
             Ok(document)
@@ -249,10 +271,16 @@ pub(super) fn documents(
                         Some(path.clone()),
                         "OBJECT_DUPLICATE",
                         Severity::Error,
-                        "Duplicate complete AUTOSAR object path".into(),
-                        "Give each source object a unique full path.",
-                        "unique object paths",
-                        &path,
+                        crate::product_message!(
+                            "backend.definitions.validation.duplicate_object_path"
+                        ),
+                        crate::product_message!(
+                            "backend.definitions.validation.assign_unique_object_paths"
+                        ),
+                        crate::product_message!(
+                            "backend.definitions.validation.unique_object_paths_constraint"
+                        ),
+                        path.as_str().into(),
                     ));
                 }
             }
@@ -275,16 +303,18 @@ pub(super) fn documents(
             let path = Some(object(node));
             let mut issue = |code: &str,
                              severity,
-                             message: &str,
-                             constraint: &str,
-                             example: &str| {
+                             message: crate::message::LocalizedText,
+                             constraint: crate::message::LocalizedText,
+                             example: crate::message::LocalizedText| {
                 let mut issue = diagnostic(
                     file.clone(),
                     path.clone(),
                     code,
                     severity,
-                    message.into(),
-                    "Repair the value, structure or typed reference using its declared definition.",
+                    message,
+                    crate::product_message!(
+                        "backend.definitions.validation.repair_using_definition"
+                    ),
                     constraint,
                     example,
                 );
@@ -305,16 +335,22 @@ pub(super) fn documents(
                 issue(
                     "DEFINITION_UNKNOWN",
                     Severity::Warning,
-                    "Definition is unavailable; this consumer is readonly",
-                    "accepted definition identity",
-                    id,
+                    crate::product_message!(
+                        "backend.definitions.validation.definition_unavailable"
+                    ),
+                    crate::product_message!(
+                        "backend.definitions.validation.accepted_definition_constraint"
+                    ),
+                    id.into(),
                 );
                 result.coverage.push(RuleCoverage {
                     rule_id: "native.definition.coverage".into(),
                     scope: ValidationScope::Definition,
                     subjects: vec![id.into()],
                     supported: false,
-                    reason: Some("No explicitly accepted definition".into()),
+                    reason: Some(crate::product_message!(
+                        "backend.definitions.validation.no_accepted_definition"
+                    )),
                 });
                 continue;
             };
@@ -340,18 +376,22 @@ pub(super) fn documents(
                 issue(
                     "DEFINITION_CARDINALITY",
                     Severity::Error,
-                    "Configuration entry requires one definition reference",
-                    "1",
-                    &definition_refs.to_string(),
+                    crate::product_message!(
+                        "backend.definitions.validation.definition_reference_cardinality"
+                    ),
+                    "1".into(),
+                    definition_refs.to_string().into(),
                 );
             }
             if def_ref.attribute("DEST") != Some(definition.element_kind.as_str()) {
                 issue(
                     "DEFINITION_DEST",
                     Severity::Error,
-                    "DEFINITION-REF DEST differs from the metadata kind",
-                    &metadata,
-                    def_ref.attribute("DEST").unwrap_or(""),
+                    crate::product_message!(
+                        "backend.definitions.validation.definition_dest_mismatch"
+                    ),
+                    metadata.as_str().into(),
+                    def_ref.attribute("DEST").unwrap_or("").into(),
                 );
             }
             let tag = node.tag_name().name();
@@ -375,9 +415,9 @@ pub(super) fn documents(
                 issue(
                     "DEFINITION_KIND",
                     Severity::Error,
-                    "Configuration entry kind differs from its definition",
-                    expected,
-                    tag,
+                    crate::product_message!("backend.definitions.validation.entry_kind_mismatch"),
+                    expected.into(),
+                    tag.into(),
                 );
             }
             let wrapper = node
@@ -396,9 +436,11 @@ pub(super) fn documents(
                 issue(
                     "DEFINITION_STRUCTURE",
                     Severity::Error,
-                    "Entry is outside its required XML owner wrapper",
-                    expected,
-                    wrapper,
+                    crate::product_message!(
+                        "backend.definitions.validation.entry_wrapper_mismatch"
+                    ),
+                    expected.into(),
+                    wrapper.into(),
                 );
             }
             if !definition.writable
@@ -424,16 +466,20 @@ pub(super) fn documents(
                 issue(
                     "SEMANTICS_UNSUPPORTED",
                     Severity::Warning,
-                    "Conditional, expression or instance-reference semantics are readonly",
-                    &metadata,
-                    id,
+                    crate::product_message!(
+                        "backend.definitions.validation.unsupported_semantics_readonly"
+                    ),
+                    metadata.as_str().into(),
+                    id.into(),
                 );
                 result.coverage.push(RuleCoverage {
                     rule_id: "native.definition.opaque".into(),
                     scope: ValidationScope::Definition,
                     subjects: vec![id.into()],
                     supported: false,
-                    reason: Some("Unselected or unsupported value semantics".into()),
+                    reason: Some(crate::product_message!(
+                        "backend.definitions.validation.unsupported_value_semantics"
+                    )),
                 });
                 continue;
             }
@@ -449,9 +495,11 @@ pub(super) fn documents(
                     issue(
                         "MODULE_MULTIPLICITY",
                         Severity::Error,
-                        "Module configuration multiplicity is invalid",
-                        &metadata,
-                        &count.to_string(),
+                        crate::product_message!(
+                            "backend.definitions.validation.invalid_module_multiplicity"
+                        ),
+                        metadata.as_str().into(),
+                        count.to_string().into(),
                     );
                 }
             }
@@ -474,9 +522,11 @@ pub(super) fn documents(
                     issue(
                         "DEFINITION_PARENT",
                         Severity::Error,
-                        "Entry is placed beneath the wrong definition owner",
-                        parent(id).unwrap_or(""),
-                        owner_id,
+                        crate::product_message!(
+                            "backend.definitions.validation.definition_parent_mismatch"
+                        ),
+                        parent(id).unwrap_or("").into(),
+                        owner_id.into(),
                     );
                 }
             }
@@ -486,9 +536,13 @@ pub(super) fn documents(
                         issue(
                             "REFERENCE_MISSING",
                             Severity::Error,
-                            "Ordinary reference has no VALUE-REF",
-                            &metadata,
-                            "absent",
+                            crate::product_message!(
+                                "backend.definitions.validation.reference_missing"
+                            ),
+                            metadata.as_str().into(),
+                            crate::product_message!(
+                                "backend.definitions.validation.reference_absent_witness"
+                            ),
                         );
                         continue;
                     };
@@ -512,9 +566,11 @@ pub(super) fn documents(
                         issue(
                             "REFERENCE_DUPLICATE",
                             Severity::Error,
-                            "A repeated reference duplicates the same target",
-                            &metadata,
-                            dest,
+                            crate::product_message!(
+                                "backend.definitions.validation.duplicate_reference_target"
+                            ),
+                            metadata.as_str().into(),
+                            dest.into(),
                         );
                     }
                     if !definition
@@ -525,27 +581,33 @@ pub(super) fn documents(
                         issue(
                             "REFERENCE_DESTINATION",
                             Severity::Error,
-                            "Reference DEST is not allowed by its definition",
-                            &metadata,
-                            dest,
+                            crate::product_message!(
+                                "backend.definitions.validation.reference_destination_not_allowed"
+                            ),
+                            metadata.as_str().into(),
+                            dest.into(),
                         );
                     }
                     match objects.get(raw) {
                         None => issue(
                             "REFERENCE_UNRESOLVED",
                             Severity::Error,
-                            "Reference target is absent from this source set",
-                            &metadata,
-                            raw,
+                            crate::product_message!(
+                                "backend.definitions.validation.reference_unresolved"
+                            ),
+                            metadata.as_str().into(),
+                            raw.into(),
                         ),
                         Some(target) => {
                             if target.tag_name().name() != dest {
                                 issue(
                                     "REFERENCE_DEST",
                                     Severity::Error,
-                                    "Reference DEST differs from the actual target kind",
-                                    target.tag_name().name(),
-                                    dest,
+                                    crate::product_message!(
+                                        "backend.definitions.validation.reference_dest_mismatch"
+                                    ),
+                                    target.tag_name().name().into(),
+                                    dest.into(),
                                 );
                             }
                             if let Some(targets) = catalog.targets.get(id) {
@@ -554,9 +616,11 @@ pub(super) fn documents(
                                     issue(
                                         "REFERENCE_TARGET",
                                         Severity::Error,
-                                        "Target configuration definition is not allowed",
-                                        &targets.join("|"),
-                                        &target_id,
+                                        crate::product_message!(
+                                            "backend.definitions.validation.reference_target_not_allowed"
+                                        ),
+                                        targets.join("|").into(),
+                                        target_id.as_ref().into(),
                                     );
                                 }
                             }
@@ -572,9 +636,11 @@ pub(super) fn documents(
                         issue(
                             "VALUE_CARDINALITY",
                             Severity::Error,
-                            "Parameter requires exactly one explicit VALUE",
-                            "1",
-                            &values.len().to_string(),
+                            crate::product_message!(
+                                "backend.definitions.validation.value_cardinality"
+                            ),
+                            "1".into(),
+                            values.len().to_string().into(),
                         );
                     } else {
                         let typed = TypedValue {
@@ -585,9 +651,9 @@ pub(super) fn documents(
                             issue(
                                 "VALUE_RANGE",
                                 Severity::Error,
-                                &error,
-                                &metadata,
-                                &typed.lexeme,
+                                error,
+                                metadata.as_str().into(),
+                                typed.lexeme.as_str().into(),
                             );
                         }
                     }
@@ -644,10 +710,9 @@ pub(super) fn documents(
                             scope: ValidationScope::Definition,
                             subjects: vec![child.definition_id.clone()],
                             supported: false,
-                            reason: Some(
-                                "Unselected or unsupported entry multiplicity cannot be certified"
-                                    .into(),
-                            ),
+                            reason: Some(crate::product_message!(
+                                "backend.definitions.validation.uncertifiable_entry_multiplicity"
+                            )),
                         });
                         continue;
                     }
@@ -659,9 +724,13 @@ pub(super) fn documents(
                         issue(
                             "MULTIPLICITY",
                             Severity::Error,
-                            "Required or repeated entry cardinality is invalid",
-                            &serde_json::to_string(child).map_err(|error| error.to_string())?,
-                            &count.to_string(),
+                            crate::product_message!(
+                                "backend.definitions.validation.invalid_entry_cardinality"
+                            ),
+                            serde_json::to_string(child)
+                                .map_err(|error| error.to_string())?
+                                .into(),
+                            count.to_string().into(),
                         );
                     }
                 }
@@ -673,9 +742,11 @@ pub(super) fn documents(
                         issue(
                             "CHOICE_CARDINALITY",
                             Severity::Error,
-                            "A choice container must select exactly one child",
-                            "1",
-                            &count.to_string(),
+                            crate::product_message!(
+                                "backend.definitions.validation.choice_cardinality"
+                            ),
+                            "1".into(),
+                            count.to_string().into(),
                         );
                     }
                 }
@@ -789,12 +860,18 @@ fn cross_constraints<'a, 'input>(
                         Some(object(node)),
                         "CAN_SIGNAL_OVERLAP",
                         Severity::Error,
-                        "Signals in one ComIPdu overlap".into(),
-                        "Assign disjoint signal bit ranges.",
-                        "disjoint bit ranges",
-                        &format!(
-                            "{previous_start}:{previous_length}:{start}:{length}:{previous_endian}:{big_endian}:{bits:?}"
+                        crate::product_message!(
+                            "backend.definitions.validation.signal_overlap"
                         ),
+                        crate::product_message!(
+                            "backend.definitions.validation.assign_disjoint_signal_ranges"
+                        ),
+                        crate::product_message!(
+                            "backend.definitions.validation.disjoint_bit_ranges_constraint"
+                        ),
+                        format!(
+                            "{previous_start}:{previous_length}:{start}:{length}:{previous_endian}:{big_endian}:{bits:?}"
+                        ).into(),
                     );
                     if let Some(witness) = &mut issue.witness {
                         witness.subjects.push(object(previous));
@@ -817,7 +894,7 @@ fn legacy_constraints(
     files: &[(&Path, &str)],
     objects: &BTreeMap<String, Node<'_, '_>>,
     result: &mut ScopeValidation,
-) -> Result<(), String> {
+) -> Result<(), crate::message::LocalizedText> {
     let modules: BTreeSet<_> = documents
         .iter()
         .flat_map(|document| document.descendants())
@@ -869,7 +946,9 @@ fn legacy_constraints(
         subjects: required,
         supported,
         reason: (!supported).then(|| {
-            "Actual cross-module consumers contain unresolved or unqualified references".into()
+            crate::product_message!(
+                "backend.definitions.validation.unresolved_cross_module_references"
+            )
         }),
     });
     let rates: Vec<_> = if issues.iter().any(|issue| issue.code == "BAUDRATE_CONFLICT") {
@@ -916,9 +995,9 @@ fn legacy_constraints(
             &issue.code,
             Severity::Error,
             issue.message,
-            &issue.remedy,
-            &issue.code,
-            &counterexample,
+            issue.remedy,
+            issue.code.as_str().into(),
+            counterexample.into(),
         );
         if let Some(witness) = &mut diagnostic.witness {
             witness.subjects = subjects;

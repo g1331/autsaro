@@ -8,7 +8,7 @@ pub(crate) fn handoff_readme(
     target: BuildTarget,
     handoff: bool,
     native: bool,
-) -> Result<String, String> {
+) -> Result<String, crate::LocalizedText> {
     let binary = if target == BuildTarget::WindowsX64ControlledV1 {
         "ecu_host.exe"
     } else {
@@ -37,22 +37,25 @@ pub(crate) fn handoff_readme(
     };
     let asset = crate::resources::AssetInventory::embedded()
         .get("runtime/generated-README.md")
-        .ok_or("The trusted host delivery README template is missing")?;
-    let mut remaining = std::str::from_utf8(asset.bytes).map_err(|error| error.to_string())?;
+        .ok_or_else(|| {
+            crate::product_message!("backend.generation.host_readme_template_missing")
+        })?;
+    let mut remaining = std::str::from_utf8(asset.bytes)
+        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     let mut result =
         String::with_capacity(remaining.len() + run.len() + notes.len() + inputs.len());
     while let Some((prefix, tail)) = remaining.split_once("{{") {
         result.push_str(prefix);
-        let (name, tail) = tail
-            .split_once("}}")
-            .ok_or("Unclosed host README placeholder")?;
+        let (name, tail) = tail.split_once("}}").ok_or_else(|| {
+            crate::product_message!("backend.generation.host_readme_placeholder_unclosed")
+        })?;
         result.push_str(match name {
             "TARGET" => target.spec().id,
             "BINARY" => binary,
             "RUN_COMMAND" => &run,
             "RUN_NOTES" => notes.trim_end(),
             "INPUT_NOTE" => inputs,
-            _ => return Err(format!("Unknown host README placeholder: {name}")),
+            _ => return Err(crate::product_message!("backend.generation.host_readme_placeholder_unknown", "name" => name)),
         });
         remaining = tail;
     }
@@ -64,7 +67,7 @@ fn config_source(
     frames: &[crate::model::FrameView],
     signals: &[SignalView],
     diagnostic: Option<&DiagnosticView>,
-) -> Result<(String, String, String), String> {
+) -> Result<(String, String, String), crate::LocalizedText> {
     let mut source = String::from("#include \"Ecu_Config.h\"\n#include \"Dcm_Externals.h\"\n");
     if diagnostic.is_some() {
         source.push_str("#include \"Rte.h\"\n");
@@ -154,7 +157,7 @@ fn config_source(
         for (index, path) in diagnostic.signal_paths.iter().enumerate() {
             let id = signal_ids
                 .get(path.as_str())
-                .ok_or_else(|| format!("诊断 DID 信号没有生成 ID: {path}"))?;
+                .ok_or_else(|| crate::product_message!("backend.generation.did_signal_id_missing", "path" => path))?;
             if index != 0 {
                 source.push_str(", ");
                 map.push(',');
@@ -168,7 +171,7 @@ fn config_source(
         for (index, path) in diagnostic.signal_paths.iter().enumerate() {
             let id = signal_ids
                 .get(path.as_str())
-                .ok_or_else(|| format!("诊断 DID 信号没有生成 ID: {path}"))?;
+                .ok_or_else(|| crate::product_message!("backend.generation.did_signal_id_missing", "path" => path))?;
             writeln!(
                 externals,
                 "Std_ReturnType Ecu_DcmRead_{index}(uint8_t *data);"
@@ -200,7 +203,7 @@ fn config_source(
             for (index, path) in diagnostic.signal_paths.iter().enumerate() {
                 let id = signal_ids
                     .get(path.as_str())
-                    .ok_or_else(|| format!("诊断 DID 信号没有生成 ID: {path}"))?;
+                    .ok_or_else(|| crate::product_message!("backend.generation.did_signal_id_missing", "path" => path))?;
                 writeln!(externals, "Std_ReturnType Ecu_DcmWrite_{index}(const uint8_t *data, Dcm_NegativeResponseCodeType *error_code);").unwrap();
                 writeln!(source, "Std_ReturnType Ecu_DcmWrite_{index}(const uint8_t *data, Dcm_NegativeResponseCodeType *error_code) {{").unwrap();
                 source.push_str("    uint32_t value;\n");
@@ -233,11 +236,11 @@ fn config_source(
             for path in &diagnostic.signal_paths {
                 let id = signal_ids
                     .get(path.as_str())
-                    .ok_or_else(|| format!("诊断 DID 信号没有生成 ID: {path}"))?;
+                    .ok_or_else(|| crate::product_message!("backend.generation.did_signal_id_missing", "path" => path))?;
                 let initial_value = signals
                     .iter()
                     .find(|signal| signal.path == *path)
-                    .ok_or_else(|| format!("诊断 DID 信号不存在: {path}"))?
+                    .ok_or_else(|| crate::product_message!("backend.generation.did_signal_missing", "path" => path))?
                     .initial_value;
                 writeln!(
                     source,
@@ -257,7 +260,7 @@ fn config_source(
                 .iter()
                 .enumerate()
                 .find(|(_, frame)| frame.path == dtc.monitor_frame_path)
-                .ok_or_else(|| format!("DTC 监控帧未生成: {}", dtc.monitor_frame_path))?;
+                .ok_or_else(|| crate::product_message!("backend.generation.dtc_monitor_frame_missing", "path" => dtc.monitor_frame_path))?;
             writeln!(
                 map,
                 "DTC code={} frame={} id={} dlc={} timeout={}",
@@ -371,13 +374,15 @@ const EcuPolicyConfig Ecu_Policy = {
 pub(crate) fn render_host_profile(
     workspace: &mut Workspace,
     target: BuildTarget,
-) -> Result<Vec<(String, Vec<u8>)>, String> {
+) -> Result<Vec<(String, Vec<u8>)>, crate::LocalizedText> {
     let (frames, signals) = workspace.checked_profile()?;
     let diagnostic = workspace.diagnostic_profile();
     if target == BuildTarget::LinuxX64ControlledV1
         && diagnostic.is_some_and(|item| item.security_enabled)
     {
-        return Err("0x27 主机安全档案目前仅支持 Windows 目标".into());
+        return Err(crate::product_message!(
+            "backend.generation.security_target_unsupported"
+        ));
     }
     let (generated, map, externals) =
         config_source(workspace.name(), &frames, &signals, diagnostic)?;

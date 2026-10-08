@@ -96,9 +96,11 @@ pub(crate) struct NativeGuard {
 }
 
 impl NativeGuard {
-    pub(crate) fn verify(&self, output: Option<&Path>) -> Result<(), String> {
+    pub(crate) fn verify(&self, output: Option<&Path>) -> Result<(), crate::LocalizedText> {
         if crate::rules::rule_set_identity()? != self.resources.rule_set_identity {
-            return Err("The trusted product rule identity changed; prepare source again.".into());
+            return Err(crate::product_message!(
+                "backend.delivery.rule_identity_changed"
+            ));
         }
         consumer_catalog(
             &self.catalog,
@@ -107,10 +109,9 @@ impl NativeGuard {
         for source in &self.sources {
             let bytes = read_source(&source.path)?;
             if digest(&bytes) != source.sha256 {
-                return Err(format!(
-                    "Source or live application changed after preparation: {}",
-                    source.path.display()
-                ));
+                return Err(
+                    crate::product_message!("backend.delivery.source_changed", "path" => source.path.display()),
+                );
             }
         }
         if let Some(output) = output {
@@ -118,10 +119,9 @@ impl NativeGuard {
             for root in &self.roots {
                 let root = comparison_path(root)?;
                 if output.starts_with(&root) || root.starts_with(&output) {
-                    return Err(
-                        "Generated sources must be independent of the live input/application tree."
-                            .into(),
-                    );
+                    return Err(crate::product_message!(
+                        "backend.delivery.output_source_overlap"
+                    ));
                 }
             }
         }
@@ -143,13 +143,14 @@ pub(crate) fn digest(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
-pub(crate) fn json_bytes(value: &impl Serialize) -> Result<Vec<u8>, String> {
-    let mut bytes = serde_json::to_vec_pretty(value).map_err(|error| error.to_string())?;
+pub(crate) fn json_bytes(value: &impl Serialize) -> Result<Vec<u8>, crate::LocalizedText> {
+    let mut bytes = serde_json::to_vec_pretty(value)
+        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     bytes.push(b'\n');
     Ok(bytes)
 }
 
-pub(crate) fn safe_relative(value: &str) -> Result<&Path, String> {
+pub(crate) fn safe_relative(value: &str) -> Result<&Path, crate::LocalizedText> {
     let path = Path::new(value);
     if value.is_empty()
         || value.contains(['\\', ':'])
@@ -167,30 +168,34 @@ pub(crate) fn safe_relative(value: &str) -> Result<&Path, String> {
             .components()
             .all(|part| matches!(part, Component::Normal(_)))
     {
-        return Err(format!("Unsafe portable delivery path: {value}"));
+        return Err(
+            crate::product_message!("backend.delivery.portable_path_unsafe", "path" => value),
+        );
     }
     Ok(path)
 }
 
-pub(crate) fn refuse_links(path: &Path, allow_missing: bool) -> Result<(), String> {
+pub(crate) fn refuse_links(path: &Path, allow_missing: bool) -> Result<(), crate::LocalizedText> {
     if path
         .components()
         .any(|part| matches!(part, Component::ParentDir))
     {
-        return Err("Delivery paths cannot contain parent traversal.".into());
+        return Err(crate::product_message!(
+            "backend.delivery.parent_traversal_forbidden"
+        ));
     }
     let absolute = if path.is_absolute() {
         path.to_owned()
     } else {
         std::env::current_dir()
-            .map_err(|error| error.to_string())?
+            .map_err(|error| crate::LocalizedText::from(error.to_string()))?
             .join(path)
     };
     for ancestor in absolute.ancestors() {
         let metadata = match fs::symlink_metadata(ancestor) {
             Ok(metadata) => metadata,
             Err(error) if allow_missing && error.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(error) => return Err(format!("{}: {error}", ancestor.display())),
+            Err(error) => return Err(format!("{}: {error}", ancestor.display()).into()),
         };
         #[cfg(windows)]
         let linked = {
@@ -200,10 +205,9 @@ pub(crate) fn refuse_links(path: &Path, allow_missing: bool) -> Result<(), Strin
         #[cfg(not(windows))]
         let linked = metadata.file_type().is_symlink();
         if linked {
-            return Err(format!(
-                "Linked/reparse delivery paths are refused: {}",
-                ancestor.display()
-            ));
+            return Err(
+                crate::product_message!("backend.delivery.linked_path_refused", "path" => ancestor.display()),
+            );
         }
     }
     Ok(())
@@ -212,13 +216,13 @@ pub(crate) fn refuse_links(path: &Path, allow_missing: bool) -> Result<(), Strin
 /// Canonicalize the existing prefix, preserving only validated future children.
 /// This gives source roots and new destinations the same Windows verbatim/case
 /// representation without creating anything or following links.
-pub(crate) fn comparison_path(path: &Path) -> Result<PathBuf, String> {
+pub(crate) fn comparison_path(path: &Path) -> Result<PathBuf, crate::LocalizedText> {
     refuse_links(path, true)?;
     let mut existing = if path.is_absolute() {
         path.to_owned()
     } else {
         std::env::current_dir()
-            .map_err(|error| error.to_string())?
+            .map_err(|error| crate::LocalizedText::from(error.to_string()))?
             .join(path)
     };
     let mut children = Vec::new();
@@ -226,40 +230,47 @@ pub(crate) fn comparison_path(path: &Path) -> Result<PathBuf, String> {
         match fs::symlink_metadata(&existing) {
             Ok(_) => break,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                let child = existing
-                    .file_name()
-                    .ok_or("Destination has no existing ancestor.")?;
+                let child = existing.file_name().ok_or_else(|| {
+                    crate::product_message!("backend.delivery.existing_ancestor_required")
+                })?;
                 children.push(child.to_owned());
                 if !existing.pop() {
-                    return Err("Destination has no existing ancestor.".into());
+                    return Err(crate::product_message!(
+                        "backend.delivery.existing_ancestor_required"
+                    ));
                 }
             }
-            Err(error) => return Err(format!("{}: {error}", existing.display())),
+            Err(error) => return Err(format!("{}: {error}", existing.display()).into()),
         }
     }
-    let mut canonical = fs::canonicalize(&existing).map_err(|error| error.to_string())?;
+    let mut canonical = fs::canonicalize(&existing)
+        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     for child in children.into_iter().rev() {
         canonical.push(child);
     }
     Ok(canonical)
 }
 
-pub(crate) fn read_source(path: &Path) -> Result<Vec<u8>, String> {
+pub(crate) fn read_source(path: &Path) -> Result<Vec<u8>, crate::LocalizedText> {
     refuse_links(path, false)?;
-    let file = fs::File::open(path).map_err(|error| format!("{}: {error}", path.display()))?;
-    let metadata = file.metadata().map_err(|error| error.to_string())?;
+    let file = fs::File::open(path)
+        .map_err(|error| crate::LocalizedText::from(format!("{}: {error}", path.display())))?;
+    let metadata = file
+        .metadata()
+        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     if !metadata.is_file() || metadata.len() > 50 * 1024 * 1024 {
-        return Err(format!(
-            "Source must be a regular file of at most 50 MiB: {}",
-            path.display()
-        ));
+        return Err(
+            crate::product_message!("backend.delivery.source_boundary_invalid", "path" => path.display()),
+        );
     }
     let mut bytes = Vec::with_capacity(metadata.len() as usize);
     file.take(50 * 1024 * 1024 + 1)
         .read_to_end(&mut bytes)
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     if bytes.len() > 50 * 1024 * 1024 {
-        return Err("Source grew beyond the 50 MiB input boundary.".into());
+        return Err(crate::product_message!(
+            "backend.delivery.source_size_exceeded"
+        ));
     }
     Ok(bytes)
 }
@@ -267,7 +278,7 @@ pub(crate) fn read_source(path: &Path) -> Result<Vec<u8>, String> {
 pub(crate) fn consumer_catalog(
     catalog: &DefinitionCatalog,
     required: &[ExtensionDefinitionIdentity],
-) -> Result<DefinitionCatalog, String> {
+) -> Result<DefinitionCatalog, crate::LocalizedText> {
     let mut selected = catalog.clone();
     let accepted = selected.accepted_extensions();
     let mut previous = None;
@@ -276,10 +287,9 @@ pub(crate) fn consumer_catalog(
             || identity.release != "R24-11"
             || !accepted.iter().any(|present| present == identity)
         {
-            return Err(format!(
-                "The exact required extension is not explicitly accepted: {}",
-                identity.catalog_id
-            ));
+            return Err(
+                crate::product_message!("backend.delivery.required_extension_unaccepted", "catalog" => identity.catalog_id),
+            );
         }
         previous = Some(identity.catalog_id.as_str());
     }
@@ -297,7 +307,7 @@ fn snapshot_identity(
     application: &[(String, Vec<u8>)],
     rule: &RuleSetIdentity,
     definitions: &str,
-) -> Result<String, String> {
+) -> Result<String, crate::LocalizedText> {
     let mut hash = Sha256::new();
     hash.update(b"autosar-native-consumer-snapshot-v1\0");
     hash.update(json_bytes(rule)?);
@@ -315,7 +325,7 @@ fn snapshot_identity(
 }
 
 impl NativeInputs {
-    pub(crate) fn refresh_snapshot_identity(&mut self) -> Result<(), String> {
+    pub(crate) fn refresh_snapshot_identity(&mut self) -> Result<(), crate::LocalizedText> {
         self.preparation_identity = snapshot_identity(
             &self.manifest,
             &self.configuration,
@@ -332,11 +342,11 @@ impl NativeInputs {
     pub(crate) fn from_workspace(
         workspace: &Workspace,
         required: Vec<ExtensionDefinitionIdentity>,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, crate::LocalizedText> {
         if workspace.uses_legacy_validation() {
-            return Err(
-                "Native delivery cannot reinterpret a legacy workspace's resource identity.".into(),
-            );
+            return Err(crate::product_message!(
+                "backend.delivery.legacy_workspace_forbidden"
+            ));
         }
         let snapshot = workspace.generation_snapshot()?;
         let rule_set_identity = crate::rules::rule_set_identity()?;
@@ -412,14 +422,16 @@ impl NativeInputs {
         })
     }
 
-    pub(crate) fn from_plan(plan: &ValidatedIntegrationPlan) -> Result<Self, String> {
+    pub(crate) fn from_plan(plan: &ValidatedIntegrationPlan) -> Result<Self, crate::LocalizedText> {
         let description = plan.description();
         let identity = description
             .rule_set_identity
             .clone()
-            .ok_or("A legacy plan cannot be converted to native resource identities.")?;
+            .ok_or_else(|| crate::product_message!("backend.delivery.legacy_plan_forbidden"))?;
         if identity != crate::rules::rule_set_identity()? {
-            return Err("The validated plan uses a different trusted rule inventory.".into());
+            return Err(crate::product_message!(
+                "backend.delivery.plan_rule_identity_mismatch"
+            ));
         }
         let catalog = DefinitionCatalog::builtin()?;
         let catalog = consumer_catalog(&catalog, &description.required_extension_definitions)?;
@@ -472,7 +484,7 @@ impl NativeInputs {
         })
     }
 
-    pub(crate) fn sources(&self) -> Result<Vec<InputSource>, String> {
+    pub(crate) fn sources(&self) -> Result<Vec<InputSource>, crate::LocalizedText> {
         self.configuration
             .iter()
             .map(|(path, bytes)| {
@@ -486,7 +498,7 @@ pub(crate) fn insert_file<'a>(
     files: &mut BTreeMap<String, PreparedFile<'a>>,
     path: String,
     bytes: Cow<'a, [u8]>,
-) -> Result<(), String> {
+) -> Result<(), crate::LocalizedText> {
     safe_relative(&path)?;
     if files
         .insert(
@@ -499,7 +511,9 @@ pub(crate) fn insert_file<'a>(
         )
         .is_some()
     {
-        return Err(format!("Two delivery producers own the same file: {path}"));
+        return Err(
+            crate::product_message!("backend.delivery.producer_path_collision", "path" => path),
+        );
     }
     Ok(())
 }
@@ -508,34 +522,38 @@ pub(crate) fn populate_inputs<'a>(
     files: &mut BTreeMap<String, PreparedFile<'a>>,
     inputs: &mut NativeInputs,
     slot: Option<&ApplicationSlotDescriptor>,
-) -> Result<Vec<InputSnapshot>, String> {
+) -> Result<Vec<InputSnapshot>, crate::LocalizedText> {
     let mut snapshots = Vec::new();
     let mut logical = BTreeSet::new();
     if inputs.configuration.len() != inputs.manifest.inputs.len()
         || inputs.application.len() != inputs.manifest.application_inputs.len()
     {
-        return Err(
-            "Workspace generation snapshot does not match its actual member manifest.".into(),
-        );
+        return Err(crate::product_message!(
+            "backend.delivery.workspace_snapshot_mismatch"
+        ));
     }
     for member in &inputs.manifest.inputs {
         safe_relative(&member.path)?;
         if !logical.insert(member.path.to_ascii_lowercase()) {
-            return Err("Duplicate portable input identity in native delivery.".into());
+            return Err(crate::product_message!(
+                "backend.delivery.input_identity_duplicate"
+            ));
         }
         let bytes = inputs
             .configuration
             .iter_mut()
             .find(|(path, _)| path == &member.path)
             .map(|(_, bytes)| bytes)
-            .ok_or("A declared ARXML member has no authoritative snapshot.")?;
+            .ok_or_else(|| crate::product_message!("backend.delivery.arxml_snapshot_missing"))?;
         let package_path = format!("inputs/{}", member.path);
         let sha256 = digest(bytes);
         // Standard rendering already delivers its real ARXML inputs. Equality is
         // mandatory; a second source cannot silently replace the plan's bytes.
         if let Some(existing) = files.get(&package_path) {
             if existing.bytes.as_ref() != bytes.as_slice() {
-                return Err(format!("Plan/source snapshot differs: {}", member.path));
+                return Err(
+                    crate::product_message!("backend.delivery.plan_snapshot_mismatch", "path" => member.path),
+                );
             }
         } else {
             insert_file(
@@ -554,16 +572,16 @@ pub(crate) fn populate_inputs<'a>(
         });
     }
     for member in &inputs.manifest.application_inputs {
-        let slot = slot.ok_or("This generation profile has no live application producer slot.")?;
+        let slot = slot
+            .ok_or_else(|| crate::product_message!("backend.delivery.application_slot_missing"))?;
         if member.producer_slot != slot.producer_slot
             || member.producer_slot != APPLICATION_SLOT
             || slot.source_paths != [member.path.clone()]
             || !logical.insert(member.path.to_ascii_lowercase())
         {
-            return Err(
-                "The application membership does not match the actual component producer slot."
-                    .into(),
-            );
+            return Err(crate::product_message!(
+                "backend.delivery.application_membership_mismatch"
+            ));
         }
         safe_relative(&member.path)?;
         let bytes = inputs
@@ -571,9 +589,11 @@ pub(crate) fn populate_inputs<'a>(
             .iter_mut()
             .find(|(path, _)| path == &member.path)
             .map(|(_, bytes)| bytes)
-            .ok_or("A declared live application source is missing.")?;
+            .ok_or_else(|| {
+                crate::product_message!("backend.delivery.application_source_missing")
+            })?;
         std::str::from_utf8(bytes)
-            .map_err(|_| "Live application source must be UTF-8 text for source preview.")?;
+            .map_err(|_| crate::product_message!("backend.delivery.application_source_not_utf8"))?;
         let sha256 = digest(bytes);
         let contents = Cow::Owned(std::mem::take(bytes));
         if let Some(reference) = files.get_mut(APPLICATION_OUTPUT) {
@@ -619,12 +639,12 @@ pub(crate) fn metadata(
 
 pub(crate) fn append_native_readme(
     files: &mut BTreeMap<String, PreparedFile<'_>>,
-) -> Result<(), String> {
+) -> Result<(), crate::LocalizedText> {
     let readme = files
         .get_mut("README.md")
-        .ok_or("The actual generated source README is missing.")?;
+        .ok_or_else(|| crate::product_message!("backend.delivery.readme_missing"))?;
     let mut text = std::str::from_utf8(&readme.bytes)
-        .map_err(|error| error.to_string())?
+        .map_err(|error| crate::LocalizedText::from(error.to_string()))?
         .to_owned();
     text.push_str("\n## Native workbench source ownership\n\nThis package uses product-authored R24-11 rules, not official XSD/MOD certification. No official archive, compiler, checkout or network is needed to prepare these sources. `workbench-ownership.json` records every payload producer; the ledger, configuration/member snapshots and any user application snapshot are protected by `files.list` and `files.sha256`. These hashes detect accidental changes; they are not a publisher signature.\n\nThe live project remains separate. Explicit application initialization creates only a previously absent source for the recorded `epic4-single-application-v1` component contract. Subsequent generation reads its current bytes into the immutable compiled `src/Application.c` snapshot and never writes the live source. Do not edit a sealed snapshot or generated file, change its owner, or update hashes to hide an edit. Change the original live project and prepare a new preview instead.\n\nFor v2 handoffs, import with the matching installed product rule identity and explicitly accepted exact required extension identities into a new empty live project directory. The importer verifies the seal, rebuilds from real configuration/application snapshots and compares all regenerated bytes before publication. Legacy host/ECU v1 packages retain their original explicit official-resource compatibility checks; they are not silently upgraded.\n\nNative build and behavior verification remain separate, require the declared fixed tools, and do not inherit success from source generation. Run this package's `tools/ecu-tool.py` from its immutable tree; its v2 ownership checks precede the original sealed standalone build/verify implementation. Generated sources, live configuration/application inputs and build output must remain in separate directories.\n");
     readme.bytes = Cow::Owned(text.into_bytes());

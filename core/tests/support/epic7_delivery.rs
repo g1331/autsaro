@@ -774,3 +774,146 @@ fn builtin_ecu_generation_rejects_second_core_zero_without_replacing_output() {
         changed
     });
 }
+
+#[test]
+fn generation_refusal_serializes_stable_key_and_verbatim_owner_path() {
+    let scratch = Scratch::new();
+    let mut workspace = signals(&scratch.0.join("Live"));
+    let output = scratch.0.join("package");
+    prepare_host_project(&mut workspace, tooling::native_target(), true)
+        .unwrap()
+        .generate(&output)
+        .unwrap();
+    let original = payload(&output);
+    let owner_name = "用户 {{name}}.txt";
+    fs::write(output.join(owner_name), b"owner bytes").unwrap();
+    let error = prepare_host_project(&mut workspace, tooling::native_target(), true)
+        .unwrap()
+        .preview(&output)
+        .unwrap_err();
+    assert_eq!(
+        serde_json::to_value(error).unwrap(),
+        serde_json::json!({
+            "key": "backend.generation.output_user_file_refused",
+            "params": {"path": owner_name},
+        })
+    );
+    assert_eq!(payload(&output), original);
+    assert_eq!(fs::read(output.join(owner_name)).unwrap(), b"owner bytes");
+}
+
+#[test]
+fn prepared_source_change_keeps_localized_identity_and_existing_payload() {
+    let scratch = Scratch::new();
+    let mut workspace = signals(&scratch.0.join("Live"));
+    let output = scratch.0.join("package");
+    prepare_host_project(&mut workspace, tooling::native_target(), true)
+        .unwrap()
+        .generate(&output)
+        .unwrap();
+    let original = payload(&output);
+    let source = workspace.generation_snapshot().unwrap().inputs[0]
+        .disk_path
+        .clone();
+    let prepared = prepare_host_project(&mut workspace, tooling::native_target(), true).unwrap();
+    let mut changed = fs::read(&source).unwrap();
+    changed.extend_from_slice(b"\n<!-- external source evidence -->\n");
+    fs::write(&source, &changed).unwrap();
+    let error = prepared.generate(&output).unwrap_err();
+    assert_eq!(
+        serde_json::to_value(error).unwrap(),
+        serde_json::json!({
+            "key": "backend.delivery.source_changed",
+            "params": {"path": source.display().to_string()},
+        })
+    );
+    assert_eq!(payload(&output), original);
+    assert_eq!(fs::read(source).unwrap(), changed);
+}
+
+#[test]
+fn source_only_import_refusal_keeps_localized_contract_and_package_bytes() {
+    let scratch = Scratch::new();
+    let mut workspace = signals(&scratch.0.join("Live"));
+    let output = scratch.0.join("package");
+    prepare_host_project(&mut workspace, tooling::native_target(), false)
+        .unwrap()
+        .generate(&output)
+        .unwrap();
+    let original = payload(&output);
+    let receiver = scratch.0.join("Receiver");
+    let error =
+        match delivery::open_handoff(&output, &receiver, &DefinitionCatalog::builtin().unwrap()) {
+            Err(error) => error,
+            Ok(_) => panic!("Source-only output must not be accepted as an explicit handoff"),
+        };
+    assert_eq!(
+        serde_json::to_value(error).unwrap(),
+        serde_json::json!({
+            "key": "backend.delivery.explicit_handoff_required",
+            "params": {},
+        })
+    );
+    assert!(!receiver.exists());
+    assert_eq!(payload(&output), original);
+}
+
+#[test]
+fn product_message_consumption_does_not_change_preparation_or_fixed_readme_bytes() {
+    let scratch = Scratch::new();
+    let mut workspace = signals(&scratch.0.join("Live"));
+    let before = prepare_host_project(&mut workspace, tooling::native_target(), true).unwrap();
+    let fingerprint = before.fingerprint().to_owned();
+    let bytes = before.into_files();
+    let readme = &bytes
+        .iter()
+        .find(|(path, _)| path == "README.md")
+        .unwrap()
+        .1;
+    assert!(std::str::from_utf8(readme).unwrap().contains(
+        "This package uses product-authored R24-11 rules, not official XSD/MOD certification."
+    ));
+    let refused_output = scratch.0.join("owned-output");
+    fs::create_dir(&refused_output).unwrap();
+    fs::write(refused_output.join("用户.txt"), b"owner bytes").unwrap();
+    let error = prepare_host_project(&mut workspace, tooling::native_target(), true)
+        .unwrap()
+        .preview(&refused_output)
+        .unwrap_err();
+    let descriptor = serde_json::to_value(error).unwrap();
+    assert_eq!(
+        descriptor["key"],
+        "backend.generation.output_inventory_missing"
+    );
+    let after = prepare_host_project(&mut workspace, tooling::native_target(), true).unwrap();
+    assert_eq!(after.fingerprint(), fingerprint);
+    assert_eq!(after.into_files(), bytes);
+}
+
+#[test]
+fn preflight_logs_keep_structured_envelopes_and_verbatim_external_evidence() {
+    use autosar_config_core::LocalizedText;
+    use autosar_config_core::prepared::{PreflightReport, PreflightStatus};
+    let evidence = "工具 {{key}}: ERROR C123\r\n原始 stderr\n";
+    let report = PreflightReport {
+        status: PreflightStatus::Failed,
+        fingerprint: "unchanged-machine-identity".into(),
+        logs: vec![
+            autosar_config_core::product_message!(
+                "backend.prepared.preflight_capture_directory",
+                "path" => "D:/用户/{{tool}}",
+            ),
+            LocalizedText::from(evidence),
+        ],
+    };
+    let serialized = serde_json::to_value(report).unwrap();
+    assert_eq!(serialized["fingerprint"], "unchanged-machine-identity");
+    assert_eq!(
+        serialized["logs"][0],
+        serde_json::json!({
+            "key": "backend.prepared.preflight_capture_directory",
+            "params": {"path": "D:/用户/{{tool}}"},
+        })
+    );
+    assert_eq!(serialized["logs"][1], evidence);
+}

@@ -20,22 +20,22 @@ pub struct ApplicationInitializationPreview {
 #[serde(rename_all = "camelCase")]
 pub struct ApplicationInitializationOutcome {
     pub projection: ProjectProjection,
-    pub warnings: Vec<String>,
+    pub warnings: Vec<crate::message::LocalizedText>,
     pub retained_recovery_files: Vec<String>,
 }
 
-fn absent(path: &Path) -> Result<(), String> {
+fn absent(path: &Path) -> Result<(), crate::message::LocalizedText> {
     match fs::symlink_metadata(path) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(format!("{}: {error}", path.display())),
-        Ok(_) => Err(format!(
-            "Initialization never overwrites an existing path: {}",
-            path.display()
+        Err(error) => Err(format!("{}: {error}", path.display()).into()),
+        Ok(_) => Err(crate::product_message!(
+            "backend.arxml.application.initialization_existing_path",
+            "path" => path.display()
         )),
     }
 }
 
-fn target(root: &Path, logical: &str) -> Result<PathBuf, String> {
+fn target(root: &Path, logical: &str) -> Result<PathBuf, crate::message::LocalizedText> {
     let relative = super::project::relative_path(logical)?;
     super::project::safe_path(root, false)?;
     let mut path = root.to_owned();
@@ -50,34 +50,38 @@ fn target(root: &Path, logical: &str) -> Result<PathBuf, String> {
             Ok(metadata) => {
                 super::project::safe_path(&path, false)?;
                 if index + 1 == components.len() || !metadata.is_dir() {
-                    return Err(format!(
-                        "Initialization path is occupied: {}",
-                        path.display()
+                    return Err(crate::product_message!(
+                        "backend.arxml.application.initialization_path_occupied",
+                        "path" => path.display()
                     ));
                 }
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => missing = true,
-            Err(error) => return Err(format!("{}: {error}", path.display())),
+            Err(error) => return Err(format!("{}: {error}", path.display()).into()),
         }
     }
     Ok(path)
 }
 
-fn create_parents(root: &Path, logical: &str, created: &mut Vec<PathBuf>) -> Result<(), String> {
+fn create_parents(
+    root: &Path,
+    logical: &str,
+    created: &mut Vec<PathBuf>,
+) -> Result<(), crate::message::LocalizedText> {
     let relative = super::project::relative_path(logical)?;
     let mut current = root.to_owned();
     for component in relative
         .parent()
-        .ok_or("Application member has no parent.")?
+        .ok_or_else(|| crate::product_message!("backend.arxml.application.member_parent_missing"))?
         .components()
     {
         current.push(component.as_os_str());
         match fs::symlink_metadata(&current) {
             Ok(metadata) if metadata.is_dir() => super::project::safe_path(&current, false)?,
             Ok(_) => {
-                return Err(format!(
-                    "Application parent is not a directory: {}",
-                    current.display()
+                return Err(crate::product_message!(
+                    "backend.arxml.application.parent_not_directory",
+                    "path" => current.display()
                 ));
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -86,13 +90,17 @@ fn create_parents(root: &Path, logical: &str, created: &mut Vec<PathBuf>) -> Res
                 created.push(current.clone());
                 super::project::safe_path(&current, false)?;
             }
-            Err(error) => return Err(format!("{}: {error}", current.display())),
+            Err(error) => return Err(format!("{}: {error}", current.display()).into()),
         }
     }
     Ok(())
 }
 
-fn stage_file(path: &Path, bytes: &[u8], created: &mut Vec<PathBuf>) -> Result<(), String> {
+fn stage_file(
+    path: &Path,
+    bytes: &[u8],
+    created: &mut Vec<PathBuf>,
+) -> Result<(), crate::message::LocalizedText> {
     let mut handle = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -102,21 +110,21 @@ fn stage_file(path: &Path, bytes: &[u8], created: &mut Vec<PathBuf>) -> Result<(
     handle
         .write_all(bytes)
         .and_then(|_| handle.sync_all())
-        .map_err(|error| format!("{}: {error}", path.display()))
+        .map_err(|error| format!("{}: {error}", path.display()).into())
 }
 
-fn remove_owned(path: &Path, bytes: &[u8]) -> Result<(), String> {
+fn remove_owned(path: &Path, bytes: &[u8]) -> Result<(), crate::message::LocalizedText> {
     if super::project::read_bounded(path)? != bytes {
-        return Err(format!(
-            "Externally changed bytes are retained: {}",
-            path.display()
+        return Err(crate::product_message!(
+            "backend.arxml.application.externally_changed_bytes_retained",
+            "path" => path.display()
         ));
     }
     super::project::safe_path(path, false)?;
-    fs::remove_file(path).map_err(|error| format!("{}: {error}", path.display()))
+    fs::remove_file(path).map_err(|error| format!("{}: {error}", path.display()).into())
 }
 
-fn cleanup_stage(stage: &Path, files: &[PathBuf]) -> Vec<String> {
+fn cleanup_stage(stage: &Path, files: &[PathBuf]) -> Vec<crate::message::LocalizedText> {
     let mut errors = Vec::new();
     for path in files.iter().rev() {
         if fs::symlink_metadata(path)
@@ -125,19 +133,25 @@ fn cleanup_stage(stage: &Path, files: &[PathBuf]) -> Vec<String> {
             continue;
         }
         if let Err(error) = super::project::safe_path(path, false)
-            .and_then(|_| fs::remove_file(path).map_err(|error| error.to_string()))
+            .and_then(|_| fs::remove_file(path).map_err(|error| error.to_string().into()))
         {
-            errors.push(format!(
-                "Private staging path retained at {}: {error}",
-                path.display()
-            ));
+            errors.push(crate::message::LocalizedText::messages([
+                crate::product_message!(
+                    "backend.arxml.application.staging_path_retained",
+                    "path" => path.display()
+                ),
+                error,
+            ]));
         }
     }
     if let Err(error) = fs::remove_dir(stage) {
-        errors.push(format!(
-            "Private staging directory retained at {}: {error}",
-            stage.display()
-        ));
+        errors.push(crate::message::LocalizedText::messages([
+            crate::product_message!(
+                "backend.arxml.application.staging_directory_retained",
+                "path" => stage.display()
+            ),
+            error.to_string().into(),
+        ]));
     }
     errors
 }
@@ -146,46 +160,54 @@ impl Workspace {
     /// Derives a real application slot and seed exclusively from the saved native plan.
     pub fn preview_application_initialization(
         &self,
-    ) -> Result<ApplicationInitializationPreview, String> {
+    ) -> Result<ApplicationInitializationPreview, crate::message::LocalizedText> {
         if self.uses_legacy_validation() {
-            return Err("Native application initialization requires builtin validation.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.application.builtin_validation_required"
+            ));
         }
         crate::rules::rule_set_identity()?;
         if self.is_dirty() {
-            return Err("Save the complete project before application initialization.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.application.save_before_initialization"
+            ));
         }
         self.verify_saved_sources()?;
-        let project = self
-            .project
-            .as_ref()
-            .ok_or("Save direct ARXML as a portable project before initializing an application.")?;
+        let project = self.project.as_ref().ok_or_else(|| {
+            crate::product_message!("backend.arxml.application.portable_project_required")
+        })?;
         if !project.manifest.application_inputs.is_empty() {
-            return Err("The project already declares live application ownership; initialization will not overwrite it.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.application.live_ownership_already_declared"
+            ));
         }
         if project.manifest.accepted_extension_definitions != self.catalog.accepted_extensions() {
-            return Err("Current catalog acceptance differs from saved project membership.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.application.catalog_acceptance_mismatch"
+            ));
         }
-        let root = project.path.parent().ok_or("Project root is missing.")?;
-        let runtime = crate::integration::RuntimeCatalog::embedded()
-            .map_err(|issues| format!("{issues:?}"))?;
+        let root = project.path.parent().ok_or_else(|| {
+            crate::product_message!("backend.arxml.application.project_root_missing")
+        })?;
+        let runtime =
+            crate::integration::RuntimeCatalog::embedded().map_err(super::integration_errors)?;
         let plan = self
             .saved_integration_plan(&runtime)
-            .map_err(|issues| format!("{issues:?}"))?;
+            .map_err(super::integration_errors)?;
         let slot = plan
             .application_slot_descriptor()
-            .map_err(|issues| format!("{issues:?}"))?;
+            .map_err(super::integration_errors)?;
         let seeds = plan
             .application_seed_files()
-            .map_err(|issues| format!("{issues:?}"))?;
+            .map_err(super::integration_errors)?;
         if slot.producer_slot != "epic4-single-application-v1"
             || seeds.len() != 1
             || slot.source_paths.len() != 1
             || seeds[0].0 != slot.source_paths[0]
         {
-            return Err(
-                "Trusted application producer does not match the supported v1 slot contract."
-                    .into(),
-            );
+            return Err(crate::product_message!(
+                "backend.arxml.application.producer_slot_contract_mismatch"
+            ));
         }
         let mut manifest = project.manifest.clone();
         let mut files = Vec::with_capacity(seeds.len());
@@ -197,8 +219,9 @@ impl Workspace {
             });
             files.push(ProjectFilePreview {
                 path,
-                contents: String::from_utf8(bytes)
-                    .map_err(|_| "Trusted application source is not UTF-8.")?,
+                contents: String::from_utf8(bytes).map_err(|_| {
+                    crate::product_message!("backend.arxml.application.source_not_utf_eight")
+                })?,
             });
         }
         super::project::validate_manifest(&manifest)?;
@@ -234,21 +257,22 @@ impl Workspace {
     pub fn initialize_application_previewed(
         &mut self,
         preview: &ApplicationInitializationPreview,
-    ) -> Result<ApplicationInitializationOutcome, String> {
+    ) -> Result<ApplicationInitializationOutcome, crate::message::LocalizedText> {
         let expected = self.preview_application_initialization()?;
         if expected != *preview {
-            return Err(
-                "Application initialization preview is stale or modified; preview again.".into(),
-            );
+            return Err(crate::product_message!(
+                "backend.arxml.application.initialization_preview_stale"
+            ));
         }
-        let project = self
-            .project
-            .as_ref()
-            .ok_or("Project membership is missing.")?;
+        let project = self.project.as_ref().ok_or_else(|| {
+            crate::product_message!("backend.arxml.application.project_membership_missing")
+        })?;
         let manifest_path = project.path.clone();
         let root = manifest_path
             .parent()
-            .ok_or("Project root is missing.")?
+            .ok_or_else(|| {
+                crate::product_message!("backend.arxml.application.project_root_missing")
+            })?
             .to_owned();
         let mut membership = (*project).clone();
         membership.manifest =
@@ -260,10 +284,9 @@ impl Workspace {
                 .application_bytes
                 .insert(file.path.clone(), file.contents.as_bytes().to_vec());
         }
-        let next_revision = self
-            .revision
-            .checked_add(1)
-            .ok_or("Workspace revision is exhausted.")?;
+        let next_revision = self.revision.checked_add(1).ok_or_else(|| {
+            crate::product_message!("backend.arxml.application.workspace_revision_exhausted")
+        })?;
         let mut projection = self.project_projection(
             &self.input_fingerprint_for_project(next_revision, Some(&membership))?,
         )?;
@@ -280,7 +303,7 @@ impl Workspace {
         let mut installed = Vec::new();
         let mut backup_created = false;
         let mut manifest_removed = false;
-        let result = (|| -> Result<(), String> {
+        let result = (|| -> Result<(), crate::message::LocalizedText> {
             for (index, file) in expected.files.iter().enumerate() {
                 let path = stage.join(format!("{index}.application"));
                 stage_file(&path, file.contents.as_bytes(), &mut staged)?;
@@ -302,9 +325,9 @@ impl Workspace {
             self.verify_saved_sources()?;
             for (path, bytes) in &installed {
                 if super::project::read_bounded(path)? != *bytes {
-                    return Err(format!(
-                        "New application bytes changed before manifest publication: {}",
-                        path.display()
+                    return Err(crate::product_message!(
+                        "backend.arxml.application.bytes_changed_before_publication",
+                        "path" => path.display()
                     ));
                 }
             }
@@ -315,7 +338,9 @@ impl Workspace {
                 .map_err(|error| format!("{}: {error}", backup.display()))?;
             backup_created = true;
             if super::project::read_bounded(&backup)? != expected.manifest_before.as_bytes() {
-                return Err("Project manifest changed before backup confirmation.".into());
+                return Err(crate::product_message!(
+                    "backend.arxml.application.manifest_changed_before_backup_confirmation"
+                ));
             }
             self.verify_saved_sources()?;
             fs::remove_file(&manifest_path).map_err(|error| error.to_string())?;
@@ -330,10 +355,13 @@ impl Workspace {
             if manifest_removed {
                 match fs::hard_link(&backup, &manifest_path) {
                     Ok(()) => restored = true,
-                    Err(restore) => failures.push(format!(
-                        "Original manifest backup retained at {}: {restore}",
-                        backup.display()
-                    )),
+                    Err(restore) => failures.push(crate::message::LocalizedText::messages([
+                        crate::product_message!(
+                            "backend.arxml.application.original_manifest_backup_retained",
+                            "path" => backup.display()
+                        ),
+                        restore.to_string().into(),
+                    ])),
                 }
             }
             for (path, bytes) in installed.iter().rev() {
@@ -342,9 +370,9 @@ impl Workspace {
                         failures.push(rollback);
                     }
                 } else {
-                    failures.push(format!(
-                        "New application retained until manifest recovery: {}",
-                        path.display()
+                    failures.push(crate::product_message!(
+                        "backend.arxml.application.application_retained_pending_recovery",
+                        "path" => path.display()
                     ));
                 }
             }
@@ -363,16 +391,21 @@ impl Workspace {
             failures.extend(cleanup_stage(&stage, &staged));
             for path in created_directories.iter().rev() {
                 if let Err(cleanup) = fs::remove_dir(path) {
-                    failures.push(format!(
-                        "New directory retained at {}: {cleanup}",
-                        path.display()
-                    ));
+                    failures.push(crate::message::LocalizedText::messages([
+                        crate::product_message!(
+                            "backend.arxml.application.new_directory_retained",
+                            "path" => path.display()
+                        ),
+                        cleanup.to_string().into(),
+                    ]));
                 }
             }
-            return Err(format!(
-                "Application initialization failed: {error}; recovery: {}",
-                failures.join("; ")
-            ));
+            return Err(crate::message::LocalizedText::messages([
+                crate::product_message!("backend.arxml.application.initialization_failed"),
+                error,
+                crate::product_message!("backend.arxml.application.recovery_details"),
+                crate::message::LocalizedText::messages(failures),
+            ]));
         }
         // Publication succeeded. Cleanup cannot undo live membership or turn it
         // into a false failure; retained recovery paths are returned explicitly.

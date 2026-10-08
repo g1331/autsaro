@@ -1,17 +1,19 @@
 import type { Workbench } from './workbench/useWorkbench';
+import { useLocale } from './i18n';
 
 const roleNames: Record<string, string> = {
-  ecu_extract: 'ECU Extract',
-  application: '应用组件',
-  service_client: '服务使用端',
-  types: '数据类型',
-  bsw_description: 'BSW 描述',
-  bsw_implementation: 'BSW 实现',
-  ecuc_values: 'ECUC 配置值',
-  retained: '保留内容',
+  ecu_extract: 'shell.role.ecu_extract',
+  application: 'shell.role.application',
+  service_client: 'shell.role.service_client',
+  types: 'shell.role.types',
+  bsw_description: 'shell.role.bsw_description',
+  bsw_implementation: 'shell.role.bsw_implementation',
+  ecuc_values: 'shell.role.ecuc_values',
+  retained: 'shell.role.retained',
 };
 
 export function IntegrationPanel({ controller }: { controller: Workbench }) {
+  const { t, text } = useLocale();
   const {
     workspace,
     native,
@@ -41,12 +43,12 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
   const plan = inspection?.description;
   const selected = preview?.files.find((file) => file.path === selectedFile);
   return (
-    <div className="workflow-page integration-view" aria-label="标准输入工作区">
+    <div className="workflow-page integration-view" aria-label={t('shell.integration.workspace')}>
       <div className="section-header">
         <div>
-          <p className="eyebrow">STANDARD ECU INPUTS</p>
-          <h2>标准输入</h2>
-          <p role="status">{busy ? '正在处理…' : notice}</p>
+          <p className="eyebrow">{t('shell.integration.eyebrow')}</p>
+          <h2>{t('shell.document.integration')}</h2>
+          <p role="status">{busy ? t('shell.integration.busy') : text(notice)}</p>
         </div>
         <div className="section-actions">
           <button
@@ -54,34 +56,31 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
             onClick={inspect}
             disabled={busy || locked || !native || changed}
           >
-            检查计划
+            {t('shell.integration.inspect')}
           </button>
           <button
             className="outline-button small"
             onClick={reopen}
             disabled={busy || locked || !native}
           >
-            重开来源
+            {t('shell.integration.reopen')}
           </button>
         </div>
       </div>
-      <p>
-        必需输入：ECU Extract、应用与类型、服务使用端、所选 BSW 描述/实现及 ECUC 配置值。
-        有效无关内容按原字节保留；内置支持范围不要求用户注册官方 XSD 或 MOD。
-      </p>
+      <p>{t('shell.integration.required')}</p>
       {issues.length > 0 && (
         <div className="inspector-block" role="alert">
-          <h3>阻断原因与补救</h3>
+          <h3>{t('shell.integration.blockers')}</h3>
           {issues.map((issue, index) => (
             <div key={`${issue.code}-${index}`}>
               <strong>
-                {issue.code} · {issue.category}
+                {issue.code} · {t(`shell.integration.category.${issue.category}`)}
               </strong>
-              <p>{issue.message}</p>
+              <p>{text(issue.message)}</p>
               <p className="mono path-text">
                 {issue.file} {issue.object}
               </p>
-              <p>{issue.remedy}</p>
+              <p>{text(issue.remedy)}</p>
             </div>
           ))}
         </div>
@@ -89,20 +88,24 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
       {plan && (
         <>
           <div className="inspector-block">
-            <h3>来源角色</h3>
+            <h3>{t('shell.integration.roles')}</h3>
             <table>
               <thead>
                 <tr>
-                  <th>来源</th>
-                  <th>实际角色</th>
-                  <th>原字节 SHA-256</th>
+                  <th>{t('shell.integration.source')}</th>
+                  <th>{t('shell.integration.actualRoles')}</th>
+                  <th>{t('shell.integration.sha')}</th>
                 </tr>
               </thead>
               <tbody>
                 {plan.sources.map((source) => (
                   <tr key={source.logicalPath}>
                     <td>{source.logicalPath}</td>
-                    <td>{source.roles.map((role) => roleNames[role] ?? role).join('、')}</td>
+                    <td>
+                      {source.roles
+                        .map((role) => (roleNames[role] ? t(roleNames[role]) : role))
+                        .join(t('shell.listSeparator'))}
+                    </td>
                     <td className="mono path-text" title={source.rawSha256}>
                       {source.rawSha256.slice(0, 16)}…
                     </td>
@@ -112,16 +115,23 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
             </table>
           </div>
           <div className="inspector-block">
-            <h3>受支持参数</h3>
+            <h3>{t('shell.integration.parameters')}</h3>
             <p className="mono path-text">{plan.component.instance}</p>
             <div className="integration-fields">
               {plan.signals.map((signal) => (
                 <label className="field" key={signal.port}>
                   <span>
-                    {signal.receive ? '接收' : '发送'} CAN ID · {signal.port}
+                    {signal.receive
+                      ? t('shell.integration.receiveId')
+                      : t('shell.integration.transmitId')}{' '}
+                    · {signal.port}
                   </span>
                   <input
-                    aria-label={signal.receive ? '接收 CAN ID' : '发送 CAN ID'}
+                    aria-label={
+                      signal.receive
+                        ? t('shell.integration.receiveId')
+                        : t('shell.integration.transmitId')
+                    }
                     value={ids[signal.port] ?? ''}
                     onChange={(event) => {
                       const next = { ...ids, [signal.port]: event.target.value };
@@ -138,9 +148,9 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
                 </label>
               ))}
               <label className="field">
-                <span>应用 / Com 发送 / 对应 Alarm 周期（ms）</span>
+                <span>{t('shell.integration.period')}</span>
                 <input
-                  aria-label="应用周期"
+                  aria-label={t('shell.integration.periodA11y')}
                   value={period}
                   onChange={(event) => {
                     setPeriod(event.target.value);
@@ -156,9 +166,11 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
               </label>
             </div>
             <p>
-              诊断 CAN ID {plan.diagnostic.requestCanId} / {plan.diagnostic.responseCanId}，DID 0x
-              {plan.diagnostic.did.toString(16).toUpperCase()}。
-              诊断参数、类型、端口和引用在此入口保持只读。
+              {t('shell.integration.diagnostic', {
+                request: plan.diagnostic.requestCanId,
+                response: plan.diagnostic.responseCanId,
+                did: plan.diagnostic.did.toString(16).toUpperCase(),
+              })}
             </p>
             <div className="section-actions">
               <button
@@ -166,31 +178,33 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
                 onClick={apply}
                 disabled={busy || locked || !changed}
               >
-                应用并校验修改
+                {t('shell.integration.apply')}
               </button>
               <button
                 className="outline-button small"
                 onClick={() => restoreIntegrationDraft()}
                 disabled={busy || locked || !changed}
               >
-                还原草稿
+                {t('shell.integration.restore')}
               </button>
               <button
                 className="outline-button small"
                 onClick={showPreview}
                 disabled={busy || locked || changed || !workspace.dirty}
               >
-                预览保存
+                {t('shell.command.save')}
               </button>
             </div>
           </div>
         </>
       )}
       {preview && (
-        <div className="inspector-block" aria-label="标准保存预览">
-          <h3>保存预览</h3>
+        <div className="inspector-block" aria-label={t('shell.integration.savePreviewA11y')}>
+          <h3>{t('shell.integration.savePreview')}</h3>
           <p>
-            {preview.files.filter((file) => file.changed).length} 个文件将修改；其余文件保持原字节。
+            {t('shell.integration.changedFiles', {
+              count: preview.files.filter((file) => file.changed).length,
+            })}
           </p>
           <div className="section-actions">
             {preview.files.map((file) => (
@@ -199,7 +213,8 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
                 key={file.path}
                 onClick={() => setSelectedFile(file.path)}
               >
-                {file.path.split(/[\\/]/).pop()} · {file.changed ? '将修改' : '不变'}
+                {file.path.split(/[\\/]/).pop()} ·{' '}
+                {file.changed ? t('shell.integration.changed') : t('shell.integration.unchanged')}
               </button>
             ))}
           </div>
@@ -209,16 +224,16 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
               {selected.changed ? (
                 <div className="integration-diff">
                   <details>
-                    <summary>保存前原文</summary>
+                    <summary>{t('shell.integration.before')}</summary>
                     <pre>{selected.before}</pre>
                   </details>
                   <details>
-                    <summary>保存后原文</summary>
+                    <summary>{t('shell.integration.after')}</summary>
                     <pre>{selected.after}</pre>
                   </details>
                 </div>
               ) : (
-                <p>此文件原字节保持不变。</p>
+                <p>{t('shell.integration.unchangedBytes')}</p>
               )}
             </>
           )}
@@ -227,7 +242,7 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
             onClick={save}
             disabled={busy || locked || changed}
           >
-            确认保存标准输入
+            {t('shell.integration.confirmSave')}
           </button>
         </div>
       )}

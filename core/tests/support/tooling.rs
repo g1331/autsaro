@@ -49,7 +49,7 @@ pub(super) fn host_binary(project: &std::path::Path) -> PathBuf {
 
 pub(super) fn build_host(
     project: &std::path::Path,
-) -> Result<autosar_config_core::BuildReport, String> {
+) -> Result<autosar_config_core::BuildReport, autosar_config_core::LocalizedText> {
     autosar_config_core::generator::build(
         project,
         &host_build_directory(project),
@@ -62,7 +62,7 @@ pub(super) fn build_host(
 pub(super) fn run_hosts(
     first: &std::path::Path,
     second: &std::path::Path,
-) -> Result<autosar_config_core::RunReport, String> {
+) -> Result<autosar_config_core::RunReport, autosar_config_core::LocalizedText> {
     autosar_config_core::host::run(
         first,
         &host_binary(first),
@@ -75,7 +75,7 @@ pub(super) fn run_hosts(
 #[cfg(windows)]
 pub(super) fn run_diagnostic(
     project: &std::path::Path,
-) -> Result<autosar_config_core::RunReport, String> {
+) -> Result<autosar_config_core::RunReport, autosar_config_core::LocalizedText> {
     autosar_config_core::host::run_diagnostic(
         project,
         &host_binary(project),

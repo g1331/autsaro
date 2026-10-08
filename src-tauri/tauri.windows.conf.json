@@ -4,7 +4,10 @@
     "targets": ["msi"],
     "windows": {
       "wix": {
-        "language": "zh-CN"
+        "language": {
+          "zh-CN": {},
+          "en-US": { "localePath": "wix/locales/en-US.wxl" }
+        }
       }
     }
   }

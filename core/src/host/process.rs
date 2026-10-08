@@ -1,4 +1,5 @@
 use crate::execution::{OwnedProcess, ProcessOwner, ProcessSpec};
+use crate::message::LocalizedText;
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -35,13 +36,13 @@ pub(super) struct SecurityFiles {
     pub(super) state: TempNvm,
 }
 impl SecurityFiles {
-    pub(super) fn new() -> Result<Self, String> {
+    pub(super) fn new() -> Result<Self, LocalizedText> {
         let files = Self {
             key: TempNvm::new(),
             state: TempNvm::new(),
         };
         fs::write(&files.key.path, [0x5au8; 32])
-            .map_err(|e| format!("无法准备隔离的测试密钥: {e}"))?;
+            .map_err(|e| crate::product_message!("backend.host.prepare_key", "error" => e))?;
         Ok(files)
     }
 }
@@ -60,7 +61,7 @@ impl EcuProcess {
         nvm_path: Option<&Path>,
         security: Option<&SecurityFiles>,
         owner: &ProcessOwner,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, LocalizedText> {
         let path = path.canonicalize().map_err(|error| error.to_string())?;
         let logs = crate::generator::output::reserve_directory(
             &std::env::temp_dir(),
@@ -88,7 +89,7 @@ impl EcuProcess {
         let mut spec = ProcessSpec::for_duration(
             argv,
             path.parent()
-                .ok_or("Native binary has no parent")?
+                .ok_or_else(|| crate::product_message!("backend.host.binary_parent_missing"))?
                 .to_path_buf(),
             Vec::new(),
             Duration::from_secs(120),
@@ -108,20 +109,20 @@ impl EcuProcess {
         })
     }
 
-    pub(super) fn command(&mut self, command: &str) -> Result<(), String> {
+    pub(super) fn command(&mut self, command: &str) -> Result<(), LocalizedText> {
         self.input.clear();
         self.input.extend_from_slice(command.as_bytes());
         self.input.push(b'\n');
         self.child.write_stdin(&self.input)
     }
 
-    pub(super) fn next_line(&mut self) -> Result<String, String> {
+    pub(super) fn next_line(&mut self) -> Result<String, LocalizedText> {
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
         loop {
             let read = self
                 .reader
                 .as_mut()
-                .ok_or("Native stdout reader is closed")?
+                .ok_or_else(|| crate::product_message!("backend.host.stdout_closed"))?
                 .read_line(&mut self.pending)
                 .map_err(|error| error.to_string())?;
             if self.pending.ends_with('\n') {
@@ -133,10 +134,9 @@ impl EcuProcess {
                 return Ok(line);
             }
             if std::time::Instant::now() >= deadline {
-                return Err(format!(
-                    "ECU did not complete its response; actual logs={}",
-                    self.logs.display()
-                ));
+                return Err(
+                    crate::product_message!("backend.host.response_timeout", "logs" => self.logs.display()),
+                );
             }
             if read == 0 {
                 thread::sleep(Duration::from_millis(2));
@@ -144,18 +144,17 @@ impl EcuProcess {
         }
     }
 
-    pub(super) fn finish(&mut self) -> Result<(), String> {
+    pub(super) fn finish(&mut self) -> Result<(), LocalizedText> {
         self.child.close_stdin();
         let result = self.child.wait()?;
         self.closed = true;
         drop(self.reader.take());
         if !result.success() {
-            return Err(format!(
-                "Native ECU did not close successfully: {result:?}; stderr={}",
-                fs::read_to_string(&result.stderr).unwrap_or_default()
-            ));
+            return Err(
+                crate::product_message!("backend.host.close_failed", "result" => format!("{result:?}"), "stderr" => fs::read_to_string(&result.stderr).unwrap_or_default()),
+            );
         }
-        fs::remove_dir_all(&self.logs).map_err(|error| error.to_string())
+        fs::remove_dir_all(&self.logs).map_err(|error| error.to_string().into())
     }
 
     pub(super) fn expect_corrupt_state_refusal(
@@ -163,7 +162,7 @@ impl EcuProcess {
         nvm: Option<&Path>,
         security: Option<&SecurityFiles>,
         owner: &ProcessOwner,
-    ) -> Result<(), String> {
+    ) -> Result<(), LocalizedText> {
         let mut actor = Self::start(path, nvm, security, owner)?;
         actor.child.close_stdin();
         let result = actor.child.wait()?;
@@ -176,17 +175,17 @@ impl EcuProcess {
                 .lines()
                 .any(|line| line.trim_end_matches('\r') == "E NVM")
         {
-            return Err(format!(
-                "Corrupt native state did not produce the actual startup refusal: {result:?}; stdout={output}"
-            ));
+            return Err(
+                crate::product_message!("backend.host.corrupt_state_not_refused", "result" => format!("{result:?}"), "output" => output),
+            );
         }
-        fs::remove_dir_all(&actor.logs).map_err(|error| error.to_string())
+        fs::remove_dir_all(&actor.logs).map_err(|error| error.to_string().into())
     }
     pub(super) fn query(
         &mut self,
         commands: &[String],
         fence: u16,
-    ) -> Result<(Vec<String>, String), String> {
+    ) -> Result<(Vec<String>, String), LocalizedText> {
         for command in commands {
             self.command(command)?;
         }
@@ -198,10 +197,14 @@ impl EcuProcess {
                 return Ok((events, line));
             }
             if line.starts_with("E ") {
-                return Err(format!("ECU 拒绝命令: {line}"));
+                return Err(
+                    crate::product_message!("backend.host.command_refused", "line" => line),
+                );
             }
             if !line.starts_with("X ") {
-                return Err(format!("ECU 返回未知协议: {line}"));
+                return Err(
+                    crate::product_message!("backend.host.unknown_protocol", "line" => line),
+                );
             }
             events.push(line);
         }
@@ -213,8 +216,8 @@ impl Drop for EcuProcess {
         if !self.closed {
             if let Err(error) = self.child.cancel() {
                 eprintln!(
-                    "Legacy ECU ownership closure failed: {error}; logs={}",
-                    self.logs.display()
+                    "{}",
+                    crate::product_message!("backend.host.ownership_close_failed", "error" => error, "logs" => self.logs.display())
                 );
             }
         }

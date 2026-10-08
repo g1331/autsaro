@@ -1,3 +1,4 @@
+import { useLocale } from '../i18n';
 import type { SignalFields } from './forms';
 
 export function SignalForm({
@@ -9,10 +10,11 @@ export function SignalForm({
   onChange: (fields: SignalFields) => void;
   disabled: boolean;
 }) {
+  const { t } = useLocale();
   return (
     <div className="form-fields">
       <label>
-        信号名称
+        {t('editor.can.signalName')}
         <input
           value={fields.name}
           onChange={(event) => onChange({ ...fields, name: event.target.value })}
@@ -22,7 +24,7 @@ export function SignalForm({
       </label>
       <div className="form-pair">
         <label>
-          起始位 <small>0–63</small>
+          {t('editor.can.startBit')} <small>0–63</small>
           <input
             type="number"
             min="0"
@@ -34,7 +36,7 @@ export function SignalForm({
           />
         </label>
         <label>
-          长度 <small>1–32 bit</small>
+          {t('editor.can.length')} <small>1–32 bit</small>
           <input
             type="number"
             min="1"
@@ -47,7 +49,7 @@ export function SignalForm({
         </label>
       </div>
       <label>
-        初始值 <small>原始无符号值</small>
+        {t('editor.can.initial')} <small>{t('editor.can.rawUnsigned')}</small>
         <input
           type="number"
           min="0"
@@ -57,7 +59,7 @@ export function SignalForm({
           disabled={disabled}
         />
       </label>
-      <p className="field-help">按 little-endian 位序写入所属 CAN 帧；位范围不可超过帧 DLC。</p>
+      <p className="field-help">{t('editor.can.signalHelp')}</p>
     </div>
   );
 }

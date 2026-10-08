@@ -1,3 +1,4 @@
+import type { LanguagePreference, LocalizedText } from './i18n';
 import type {
   ActionCapability,
   Appearance,
@@ -10,7 +11,7 @@ export type BuildTarget = 'windows-x64-controlled-v1' | 'linux-x64-controlled-v1
 export type PreflightReport = {
   status: 'not_run' | 'passed' | 'failed';
   fingerprint: string;
-  logs: string[];
+  logs: LocalizedText[];
 };
 export type OwnedVerificationFailure = {
   exitCode: number | null;
@@ -37,17 +38,18 @@ export interface WorkbenchCapabilities {
   hasWorkspace: boolean;
   xsdArchive: string | null;
   modArchive: string | null;
-  resourceError: string | null;
+  resourceError: LocalizedText | null;
   executionTools: ExecutionTools | null;
   configuredExecutionTools: ExecutionTools | null;
-  toolError: string | null;
+  toolError: LocalizedText | null;
   environmentOverrides: string[];
-  operation: { id: number; stage: string } | null;
+  operation: { id: number; stage: LocalizedText } | null;
   ruleSetIdentity: RuleSetIdentity | null;
-  ruleError: string | null;
+  ruleError: LocalizedText | null;
   ruleCoverage: RuleCoverage[];
   definitionFingerprint: string | null;
   appearance: Appearance;
+  language: LanguagePreference;
   actions: ActionCapability[];
   verificationMode: boolean;
 }
@@ -60,13 +62,13 @@ export interface WorkbenchReply<T> {
 
 export interface SaveOutcome {
   workspace: WorkspaceView;
-  error: string | null;
+  error: LocalizedText | null;
 }
 
 export type Issue = {
   severity: 'error' | 'warning' | 'info';
   code: string;
-  message: string;
+  message: LocalizedText;
   path?: string;
   file?: string;
 };
@@ -128,8 +130,8 @@ export type PlanDiagnostic = {
   code: string;
   file: string | null;
   object: string | null;
-  message: string;
-  remedy: string;
+  message: LocalizedText;
+  remedy: LocalizedText;
 };
 
 export type IntegrationInspection = {
@@ -170,4 +172,4 @@ export type GenerationPreview = {
 };
 
 export type BuildResult = { binaryPath: string; log: string };
-export type VirtualResult = { passed: boolean; log: string; events: string[] };
+export type VirtualResult = { passed: boolean; log: LocalizedText; events: LocalizedText[] };

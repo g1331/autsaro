@@ -53,9 +53,21 @@ pub struct ComponentContract {
     pub period_ms: u32,
 }
 
-fn reject(graph: &Graph, index: usize, code: &str, message: &str) -> Vec<PlanDiagnostic> {
-    vec![graph.diagnostic(index, DiagnosticCategory::Input, code, message,
-        "Restore a unique, explicit relationship within the selected single-instance uint32 S/R and synchronous four-byte C/S profile.")]
+fn reject(
+    graph: &Graph,
+    index: usize,
+    code: &str,
+    message: crate::message::LocalizedText,
+) -> Vec<PlanDiagnostic> {
+    vec![graph.diagnostic(
+        index,
+        DiagnosticCategory::Input,
+        code,
+        message,
+        crate::product_message!(
+            "backend.integration.component.sr_cs_profile_unique_relationship_restore"
+        ),
+    )]
 }
 
 fn one(
@@ -71,7 +83,9 @@ fn one(
             graph,
             context,
             code,
-            "The selected relationship must identify exactly one object.",
+            crate::product_message!(
+                "backend.integration.component.selected_relationship_unique_object_required"
+            ),
         ))
     }
 }
@@ -87,7 +101,9 @@ fn referenced(
             graph,
             context,
             code,
-            "A required typed reference is absent.",
+            crate::product_message!(
+                "backend.integration.component.required_typed_reference_missing"
+            ),
         )
     })
 }
@@ -186,7 +202,9 @@ fn implementation(
             graph,
             context,
             "TYPE_CONFLICT",
-            "S/R requires an explicitly mapped uint32 implementation type.",
+            crate::product_message!(
+                "backend.integration.component.sr_mapped_uint32_implementation_type_required"
+            ),
         ));
     }
     Ok(implementation)
@@ -220,8 +238,10 @@ pub(super) fn inspect(graph: &Graph) -> Result<ComponentContract, Vec<PlanDiagno
     let context = *graph.objects.values().next().ok_or_else(|| {
         vec![PlanDiagnostic::dependency(
             "INPUT_MISSING",
-            "No AUTOSAR objects were supplied.",
-            "Supply the selected ECU Extract and its dependencies.",
+            crate::product_message!("backend.integration.component.autosar_objects_missing"),
+            crate::product_message!(
+                "backend.integration.component.ecu_extract_dependencies_required"
+            ),
         )]
     })?;
     let system = one(graph, context, roots, "TARGET_NOT_UNIQUE")?;
@@ -230,7 +250,7 @@ pub(super) fn inspect(graph: &Graph) -> Result<ComponentContract, Vec<PlanDiagno
             graph,
             system,
             "TARGET_CATEGORY",
-            "The target must be an already expanded ECU_EXTRACT.",
+            crate::product_message!("backend.integration.component.expanded_ecu_extract_required"),
         ));
     }
     let ecu = one(
@@ -278,7 +298,9 @@ pub(super) fn inspect(graph: &Graph) -> Result<ComponentContract, Vec<PlanDiagno
             graph,
             behavior,
             "MULTIPLE_INSTANCES",
-            "The application must declare single-instance behavior.",
+            crate::product_message!(
+                "backend.integration.component.application_single_instance_required"
+            ),
         ));
     }
     for (root, tags) in [
@@ -305,8 +327,8 @@ pub(super) fn inspect(graph: &Graph) -> Result<ComponentContract, Vec<PlanDiagno
         for (tag, code) in tags {
             if let Some(index) = graph.descendants(root, tag).first() {
                 return Err(vec![graph.diagnostic(*index, DiagnosticCategory::Unsupported, code,
-                    format!("{tag} is outside the selected supported profile."),
-                    "Use explicit nonqueued S/R, a selected variant and synchronous local services without mode or transformer access.")]);
+                    crate::product_message!("backend.integration.component.tag_outside_supported_profile", "tag" => tag),
+                    crate::product_message!("backend.integration.component.supported_application_features_required"))]);
             }
         }
     }
@@ -316,7 +338,9 @@ pub(super) fn inspect(graph: &Graph) -> Result<ComponentContract, Vec<PlanDiagno
                 graph,
                 runnable,
                 "REENTRANCY_UNSUPPORTED",
-                "Application runnables must be nonreentrant.",
+                crate::product_message!(
+                    "backend.integration.component.application_runnables_nonreentrant"
+                ),
             ));
         }
     }
@@ -335,7 +359,9 @@ pub(super) fn inspect(graph: &Graph) -> Result<ComponentContract, Vec<PlanDiagno
                 graph,
                 event,
                 "PERIOD_UNSUPPORTED",
-                "The runnable period must be a positive whole logical millisecond.",
+                crate::product_message!(
+                    "backend.integration.component.runnable_period_positive_integer_ms"
+                ),
             )
         })?;
     let mut ports = Vec::new();
@@ -365,7 +391,9 @@ pub(super) fn inspect(graph: &Graph) -> Result<ComponentContract, Vec<PlanDiagno
                     graph,
                     port,
                     "TYPE_CONFLICT",
-                    "The explicit S/R port cannot refer to a C/S interface.",
+                    crate::product_message!(
+                        "backend.integration.component.sr_port_cs_interface_forbidden"
+                    ),
                 ));
             }
             continue;
@@ -375,7 +403,9 @@ pub(super) fn inspect(graph: &Graph) -> Result<ComponentContract, Vec<PlanDiagno
                 graph,
                 port,
                 "TYPE_CONFLICT",
-                "Unsupported application port interface.",
+                crate::product_message!(
+                    "backend.integration.component.unsupported_application_port_interface"
+                ),
             ));
         }
         let element = one(
@@ -413,7 +443,9 @@ pub(super) fn inspect(graph: &Graph) -> Result<ComponentContract, Vec<PlanDiagno
                 graph,
                 port,
                 "TYPE_CONFLICT",
-                "The nonqueued communication specification must bind the same element, initial zero and no invalid-value operation.",
+                crate::product_message!(
+                    "backend.integration.component.nonqueued_communication_contract_required"
+                ),
             ));
         }
         let alive_timeout = if read {
@@ -426,7 +458,9 @@ pub(super) fn inspect(graph: &Graph) -> Result<ComponentContract, Vec<PlanDiagno
                     graph,
                     port,
                     "TYPE_CONFLICT",
-                    "Receive semantics require never-received handling and timeout type NONE.",
+                    crate::product_message!(
+                        "backend.integration.component.receive_semantics_required"
+                    ),
                 ));
             }
             Some(
@@ -438,7 +472,9 @@ pub(super) fn inspect(graph: &Graph) -> Result<ComponentContract, Vec<PlanDiagno
                             graph,
                             port,
                             "TYPE_CONFLICT",
-                            "The receive deadline must be a positive whole logical millisecond.",
+                            crate::product_message!(
+                                "backend.integration.component.receive_deadline_positive_integer_ms"
+                            ),
                         )
                     })?,
             )
@@ -467,7 +503,9 @@ pub(super) fn inspect(graph: &Graph) -> Result<ComponentContract, Vec<PlanDiagno
                 graph,
                 port,
                 "TYPE_CONFLICT",
-                "Runnable access must identify the same port and data element.",
+                crate::product_message!(
+                    "backend.integration.component.runnable_access_binding_mismatch"
+                ),
             ));
         }
         let port_name = name(graph, port);
@@ -497,7 +535,9 @@ pub(super) fn inspect(graph: &Graph) -> Result<ComponentContract, Vec<PlanDiagno
             graph,
             component,
             "TYPE_CONFLICT",
-            "The profile requires one explicit receive and one send data port.",
+            crate::product_message!(
+                "backend.integration.component.explicit_receive_send_ports_required"
+            ),
         ));
     }
     let operation_event = one(
@@ -551,7 +591,9 @@ pub(super) fn inspect(graph: &Graph) -> Result<ComponentContract, Vec<PlanDiagno
             graph,
             service_port,
             "SERVICE_TYPE_CONFLICT",
-            "The synchronous service port must declare exactly the selected ReadData operation with queue length one.",
+            crate::product_message!(
+                "backend.integration.component.synchronous_service_operation_required"
+            ),
         ));
     }
     let arguments = graph.descendants(operation, "ARGUMENT-DATA-PROTOTYPE");
@@ -591,7 +633,7 @@ pub(super) fn inspect(graph: &Graph) -> Result<ComponentContract, Vec<PlanDiagno
             graph,
             argument,
             "SERVICE_TYPE_CONFLICT",
-            "ReadData requires one fixed uint8[4] OUT argument.",
+            crate::product_message!("backend.integration.component.read_data_argument_required"),
         ));
     }
     let service_interface = referenced(
@@ -614,7 +656,9 @@ pub(super) fn inspect(graph: &Graph) -> Result<ComponentContract, Vec<PlanDiagno
             graph,
             operation_event,
             "SERVICE_TYPE_CONFLICT",
-            "The local service operation and runnable must belong to the selected application and service interface.",
+            crate::product_message!(
+                "backend.integration.component.local_service_ownership_mismatch"
+            ),
         ));
     }
     let connector = one(
@@ -671,7 +715,9 @@ pub(super) fn inspect(graph: &Graph) -> Result<ComponentContract, Vec<PlanDiagno
             graph,
             client_port,
             "SERVICE_CLIENT_MISSING",
-            "The client communication specification must declare the same connected operation.",
+            crate::product_message!(
+                "backend.integration.component.client_operation_binding_mismatch"
+            ),
         ));
     }
     if graph.target(provider, "CONTEXT-COMPONENT-REF") != Some(instance)
@@ -683,7 +729,9 @@ pub(super) fn inspect(graph: &Graph) -> Result<ComponentContract, Vec<PlanDiagno
             graph,
             connector,
             "SERVICE_CLIENT_MISSING",
-            "The connector must bind the same application instance to its declared local service client.",
+            crate::product_message!(
+                "backend.integration.component.connector_client_binding_mismatch"
+            ),
         ));
     }
     if !graph
@@ -694,8 +742,10 @@ pub(super) fn inspect(graph: &Graph) -> Result<ComponentContract, Vec<PlanDiagno
             client_component,
             DiagnosticCategory::Unsupported,
             "ASYNC_UNSUPPORTED",
-            "The service client requests asynchronous execution.",
-            "Use a synchronous server call in the same ECU owner task.",
+            crate::product_message!("backend.integration.component.service_client_requests_async"),
+            crate::product_message!(
+                "backend.integration.component.synchronous_owner_task_call_required"
+            ),
         )]);
     }
     let client_call = one(
@@ -717,7 +767,9 @@ pub(super) fn inspect(graph: &Graph) -> Result<ComponentContract, Vec<PlanDiagno
             graph,
             client_call,
             "SERVICE_CLIENT_MISSING",
-            "The synchronous client call must reference the same connected service operation.",
+            crate::product_message!(
+                "backend.integration.component.synchronous_call_operation_mismatch"
+            ),
         ));
     }
     let client_runnable = one(
@@ -753,7 +805,9 @@ pub(super) fn inspect(graph: &Graph) -> Result<ComponentContract, Vec<PlanDiagno
                 graph,
                 binding,
                 "SERVICE_ECU_CONFLICT",
-                "Application and service client must map to the same selected ECU.",
+                crate::product_message!(
+                    "backend.integration.component.application_client_ecu_mapping_mismatch"
+                ),
             ));
         }
     }

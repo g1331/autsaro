@@ -125,7 +125,10 @@ fn validate_host_can_ecuc(
         Err(error) => {
             return vec![Issue::error(
                 "PDU_UNSUPPORTED",
-                format!("当前输入无法形成固定主机 CAN 剖面: {error}"),
+                crate::product_message!(
+                    "backend.arxml.host_profile.host_can_profile_unrenderable",
+                    "error" => error.to_string()
+                ),
                 None,
             )];
         }
@@ -164,7 +167,7 @@ fn validate_host_can_ecuc(
                     file: Some(file.path.display().to_string()),
                     ..Issue::error(
                         "PDU_UNSUPPORTED",
-                        "额外的 Mcu/Can/CanIf 模块不属于固定主机剖面",
+                        crate::product_message!("backend.arxml.host_profile.extra_host_can_module"),
                         Some(path),
                     )
                 });
@@ -181,7 +184,9 @@ fn validate_host_can_ecuc(
                     file: Some(file.path.display().to_string()),
                     ..Issue::error(
                         "PDU_UNSUPPORTED",
-                        "主机 Mcu/Can/CanIf 模块路径重复",
+                        crate::product_message!(
+                            "backend.arxml.host_profile.duplicate_host_can_module_path"
+                        ),
                         Some(path),
                     )
                 });
@@ -195,7 +200,9 @@ fn validate_host_can_ecuc(
                 file: files.first().map(|file| file.path.display().to_string()),
                 ..Issue::error(
                     "PDU_UNSUPPORTED",
-                    "缺少固定主机 Mcu/Can/CanIf ECUC 模块",
+                    crate::product_message!(
+                        "backend.arxml.host_profile.missing_host_can_ecuc_module"
+                    ),
                     Some(path),
                 )
             }),
@@ -203,7 +210,9 @@ fn validate_host_can_ecuc(
                 file: Some(file.clone()),
                 ..Issue::error(
                     "PDU_UNSUPPORTED",
-                    "无 CAN PDU 的工程不应含主机 Mcu/Can/CanIf 配置",
+                    crate::product_message!(
+                        "backend.arxml.host_profile.host_can_configuration_without_pdu"
+                    ),
                     Some(path),
                 )
             }),
@@ -211,11 +220,17 @@ fn validate_host_can_ecuc(
                 let missing = want.iter().find(|record| !got.contains(record));
                 let extra = got.iter().find(|record| !want.contains(record));
                 let record = missing.or(extra).unwrap();
-                let field = record.definition.rsplit('/').next().unwrap_or("配置");
+                let field = record.definition.rsplit('/').next().unwrap_or_default();
                 let message = if missing.is_some() {
-                    format!("主机 CAN ECUC 缺少或不匹配必需项 {field}")
+                    crate::product_message!(
+                        "backend.arxml.host_profile.host_can_ecuc_required_item_mismatch",
+                        "field" => field
+                    )
                 } else {
-                    format!("主机 CAN ECUC 含未支持的配置项 {field}")
+                    crate::product_message!(
+                        "backend.arxml.host_profile.host_can_ecuc_unsupported_item",
+                        "field" => field
+                    )
                 };
                 issues.push(Issue {
                     file: Some(file.clone()),
@@ -227,7 +242,10 @@ fn validate_host_can_ecuc(
     }
     issues
 }
-fn tool_global_pdu(node: Node<'_, '_>, file: &SourceFile) -> Result<GlobalPduBinding, String> {
+fn tool_global_pdu(
+    node: Node<'_, '_>,
+    file: &SourceFile,
+) -> Result<GlobalPduBinding, crate::message::LocalizedText> {
     let groups: Vec<_> = node
         .descendants()
         .filter(|child| {
@@ -239,7 +257,9 @@ fn tool_global_pdu(node: Node<'_, '_>, file: &SourceFile) -> Result<GlobalPduBin
         })
         .collect();
     let [group] = groups.as_slice() else {
-        return Err("缺少唯一版本化全局 PDU 绑定".into());
+        return Err(crate::product_message!(
+            "backend.arxml.host_profile.missing_unique_versioned_global_pdu_binding"
+        ));
     };
     if group.attribute("GID") != Some("AutosarWorkbenchGlobalPduV1")
         || !group.parent_element().is_some_and(|sdgs| {
@@ -249,7 +269,9 @@ fn tool_global_pdu(node: Node<'_, '_>, file: &SourceFile) -> Result<GlobalPduBin
                 })
         })
     {
-        return Err("全局 PDU 绑定版本或位置不受支持".into());
+        return Err(crate::product_message!(
+            "backend.arxml.host_profile.unsupported_global_pdu_binding_version_or_location"
+        ));
     }
     let all_groups: Vec<_> = node
         .descendants()
@@ -282,7 +304,9 @@ fn tool_global_pdu(node: Node<'_, '_>, file: &SourceFile) -> Result<GlobalPduBin
                         )
             })
     {
-        return Err("全局 PDU 只接受 PduLength，不支持 DynamicLength、引用或未知工具数据".into());
+        return Err(crate::product_message!(
+            "backend.arxml.host_profile.global_pdu_length_only"
+        ));
     }
     let fields: Vec<_> = group
         .children()
@@ -292,16 +316,24 @@ fn tool_global_pdu(node: Node<'_, '_>, file: &SourceFile) -> Result<GlobalPduBin
         || fields[0].tag_name().name() != "SD"
         || fields[0].attribute("GID") != Some("SystemPduRef")
     {
-        return Err("全局 PDU 绑定必须有唯一 SystemPduRef".into());
+        return Err(crate::product_message!(
+            "backend.arxml.host_profile.global_pdu_unique_system_reference_required"
+        ));
     }
     let system_path = fields[0]
         .text()
         .filter(|value| value.starts_with('/'))
-        .ok_or("全局 PDU SystemPduRef 必须为绝对路径")?
+        .ok_or_else(|| {
+            crate::product_message!(
+                "backend.arxml.host_profile.global_pdu_system_reference_absolute_path_required"
+            )
+        })?
         .to_owned();
     let length = param(node, "PduLength")
         .and_then(|value| value.parse::<u32>().ok())
-        .ok_or("全局 PDU 缺少有效 PduLength")?;
+        .ok_or_else(|| {
+            crate::product_message!("backend.arxml.host_profile.global_pdu_valid_length_required")
+        })?;
     Ok(GlobalPduBinding {
         system_path,
         length,
@@ -458,7 +490,9 @@ type DiagnosticShape = BTreeMap<
     ),
 >;
 
-fn diagnostic_shape(docs: &[Document<'_>]) -> Result<DiagnosticShape, String> {
+fn diagnostic_shape(
+    docs: &[Document<'_>],
+) -> Result<DiagnosticShape, crate::message::LocalizedText> {
     let mut shape = BTreeMap::new();
     for doc in docs {
         for module in doc.descendants().filter(|n| {
@@ -495,9 +529,18 @@ fn diagnostic_shape(docs: &[Document<'_>]) -> Result<DiagnosticShape, String> {
                                 "VALUE"
                             },
                         )
-                        .ok_or_else(|| format!("{} 缺少 ECUC 值", path_of(node)))?;
-                        let definition = definition(item)
-                            .ok_or_else(|| format!("{} 缺少 ECUC 参数定义", path_of(node)))?;
+                        .ok_or_else(|| {
+                            crate::product_message!(
+                                "backend.arxml.host_profile.missing_ecuc_value",
+                                "path" => path_of(node)
+                            )
+                        })?;
+                        let definition = definition(item).ok_or_else(|| {
+                            crate::product_message!(
+                                "backend.arxml.host_profile.missing_ecuc_parameter_definition",
+                                "path" => path_of(node)
+                            )
+                        })?;
                         let definition_dest = item
                             .children()
                             .find(|n| n.is_element() && n.tag_name().name() == "DEFINITION-REF")
@@ -541,7 +584,10 @@ fn diagnostic_shape(docs: &[Document<'_>]) -> Result<DiagnosticShape, String> {
                     )
                     .is_some()
                 {
-                    return Err(format!("重复的诊断 ECUC 容器 {path}"));
+                    return Err(crate::product_message!(
+                        "backend.arxml.host_profile.duplicate_diagnostic_ecuc_container",
+                        "path" => path
+                    ));
                 }
             }
         }
@@ -555,7 +601,7 @@ pub(super) fn parse_host_routine(
     did: Node<'_, '_>,
     project: &str,
     nodes: &[Node<'_, '_>],
-) -> Result<Option<u16>, String> {
+) -> Result<Option<u16>, crate::message::LocalizedText> {
     let label = path_of(did);
     let mut groups = nodes.iter().copied().filter(|node| {
         node.tag_name().name() == "SDG"
@@ -565,7 +611,10 @@ pub(super) fn parse_host_routine(
     });
     let group = groups.next();
     if groups.next().is_some() {
-        return Err(format!("{label}: 主机复位例程 SDG 重复"));
+        return Err(crate::product_message!(
+            "backend.arxml.host_profile.duplicate_host_restore_routine_group",
+            "path" => label
+        ));
     }
     let Some(group) = group else {
         return Ok(None);
@@ -579,7 +628,10 @@ pub(super) fn parse_host_routine(
                 })
         })
     {
-        return Err(format!("{label}: 主机复位例程 SDG 版本或所在 DID 不受支持"));
+        return Err(crate::product_message!(
+            "backend.arxml.host_profile.unsupported_host_restore_routine_group",
+            "path" => label
+        ));
     }
     let fields: Vec<_> = group.children().filter(|node| node.is_element()).collect();
     if fields.len() != 2
@@ -587,7 +639,10 @@ pub(super) fn parse_host_routine(
             .iter()
             .any(|node| node.tag_name().name() != "SD" || node.attributes().len() != 1)
     {
-        return Err(format!("{label}: 主机复位例程须有唯一 Rid 和 SessionRef"));
+        return Err(crate::product_message!(
+            "backend.arxml.host_profile.host_restore_routine_unique_fields_required",
+            "path" => label
+        ));
     }
     let field = |name: &str| {
         let mut found = fields
@@ -597,12 +652,26 @@ pub(super) fn parse_host_routine(
         if found.next().is_some() { None } else { value }
     };
     let rid = field("Rid")
-        .ok_or_else(|| format!("{label}: 主机复位例程缺少唯一 Rid"))?
+        .ok_or_else(|| {
+            crate::product_message!(
+                "backend.arxml.host_profile.host_restore_routine_missing_unique_rid",
+                "path" => label
+            )
+        })?
         .parse::<u16>()
-        .map_err(|_| format!("{label}: 主机复位例程 Rid 须为 16 位十进制整数"))?;
+        .map_err(|_| {
+            crate::product_message!(
+                "backend.arxml.host_profile.host_restore_routine_rid_range",
+                "path" => label
+            )
+        })?;
     let session = format!("/{project}/DcmCfg/DcmConfigSet/DcmDsp/Sessions/Extended");
     if field("SessionRef") != Some(session.as_str()) {
-        return Err(format!("{label}: 主机复位例程 SessionRef 须指向 {session}"));
+        return Err(crate::product_message!(
+            "backend.arxml.host_profile.host_restore_routine_session_reference_required",
+            "path" => label,
+            "session" => session
+        ));
     }
     Ok(Some(rid))
 }
@@ -612,7 +681,7 @@ fn parse_diagnostic(
     project: &str,
     frames: &[FrameView],
     signals: &[SignalView],
-) -> Result<Option<DiagnosticView>, String> {
+) -> Result<Option<DiagnosticView>, crate::message::LocalizedText> {
     let docs: Vec<_> = files
         .iter()
         .map(|file| Document::parse(&file.text).map_err(|e| e.to_string()))
@@ -629,24 +698,36 @@ fn parse_diagnostic(
                     .attribute("GID")
                     .is_some_and(|gid| gid.starts_with("AutosarWorkbenchHostRestoreDid"))
         }) {
-            return Err("主机例程工具记录存在，但缺少 DID 与诊断 ECUC 配置".into());
+            return Err(crate::product_message!(
+                "backend.arxml.host_profile.host_routine_without_diagnostic_configuration"
+            ));
         }
         let request = format!("/{project}/NPdu_DiagRequest");
         let response = format!("/{project}/NPdu_DiagResponse");
         if nodes.iter().any(|n| {
             n.tag_name().name() == "N-PDU" && (path_of(*n) == request || path_of(*n) == response)
         }) {
-            return Err("诊断 N-PDU 存在，但缺少对应的 CanTp/Dcm 配置".into());
+            return Err(crate::product_message!(
+                "backend.arxml.host_profile.diagnostic_network_pdu_without_configuration"
+            ));
         }
         return Ok(None);
     }
-    let unique = |def: &str| -> Result<Node<'_, '_>, String> {
+    let unique = |def: &str| -> Result<Node<'_, '_>, crate::message::LocalizedText> {
         let mut found = nodes.iter().copied().filter(|n| {
             n.tag_name().name() == "ECUC-CONTAINER-VALUE" && definition(*n).as_deref() == Some(def)
         });
-        let node = found.next().ok_or_else(|| format!("诊断配置缺少 {def}"))?;
+        let node = found.next().ok_or_else(|| {
+            crate::product_message!(
+                "backend.arxml.host_profile.missing_diagnostic_container",
+                "definition" => def
+            )
+        })?;
         if found.next().is_some() {
-            return Err(format!("诊断配置含多个 {def}"));
+            return Err(crate::product_message!(
+                "backend.arxml.host_profile.multiple_diagnostic_containers",
+                "definition" => def
+            ));
         }
         Ok(node)
     };
@@ -672,7 +753,9 @@ fn parse_diagnostic(
         &path_of(did_node),
     )
     .map_err(|e| e.message)?;
-    let did: u16 = did.try_into().map_err(|_| "诊断 DID 超出 16 位范围")?;
+    let did: u16 = did.try_into().map_err(|_| {
+        crate::product_message!("backend.arxml.host_profile.diagnostic_did_out_of_range")
+    })?;
     let request = format!("/{project}/NPdu_DiagRequest");
     let response = format!("/{project}/NPdu_DiagResponse");
     let mut ids = Vec::new();
@@ -684,7 +767,10 @@ fn parse_diagnostic(
             .filter(|n| n.tag_name().name() == "DCM-I-PDU" && path_of(*n) == path)
             .collect();
         if pdus.len() != 1 || child_text(pdus[0], "LENGTH").as_deref() != Some("256") {
-            return Err(format!("{path} 必须是唯一的最大 256 字节 DCM-I-PDU"));
+            return Err(crate::product_message!(
+                "backend.arxml.host_profile.diagnostic_dcm_pdu_shape_required",
+                "path" => path
+            ));
         }
     }
     for (pdu, tx) in [(&request, false), (&response, true)] {
@@ -694,10 +780,16 @@ fn parse_diagnostic(
             .filter(|n| n.tag_name().name() == "N-PDU" && path_of(*n) == *pdu)
             .collect();
         if pdus.len() != 1 || child_text(pdus[0], "LENGTH").as_deref() != Some("8") {
-            return Err(format!("{pdu} 必须是唯一的 8 字节 N-PDU"));
+            return Err(crate::product_message!(
+                "backend.arxml.host_profile.diagnostic_network_pdu_shape_required",
+                "path" => pdu
+            ));
         }
         if child_text(pdus[0], "HAS-DYNAMIC-LENGTH").is_some() {
-            return Err(format!("{pdu} 不适用 HAS-DYNAMIC-LENGTH"));
+            return Err(crate::product_message!(
+                "backend.arxml.host_profile.diagnostic_network_pdu_dynamic_length_unsupported",
+                "path" => pdu
+            ));
         }
         let global = format!(
             "/{project}/EcuCCfg/EcucConfigSet/Pdus/{}",
@@ -710,7 +802,10 @@ fn parse_diagnostic(
                 && path_of(*node) == global
         });
         if !configured {
-            return Err(format!("{pdu} 缺少对应的 EcuC 全局 Pdu"));
+            return Err(crate::product_message!(
+                "backend.arxml.host_profile.diagnostic_pdu_missing_global_pdu",
+                "path" => pdu
+            ));
         }
         let def = if tx {
             "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfTxPduCfg"
@@ -728,7 +823,10 @@ fn parse_diagnostic(
             })
             .collect();
         if canif.len() != 1 {
-            return Err(format!("{pdu} 缺少唯一且方向正确的 CanIf 全局 Pdu 映射"));
+            return Err(crate::product_message!(
+                "backend.arxml.host_profile.diagnostic_pdu_missing_directional_canif_mapping",
+                "path" => pdu
+            ));
         }
         let field = if tx {
             "CanIfTxPduCanId"
@@ -742,7 +840,10 @@ fn parse_diagnostic(
                         != Some("STANDARD_NO_FD_CAN")
                     || param(canif[0], "CanIfRxPduDataLengthCheck").as_deref() != Some("false"))
         {
-            return Err(format!("{pdu} 须配置不检查变长 DLC 的经典 11 位 CAN"));
+            return Err(crate::product_message!(
+                "backend.arxml.host_profile.diagnostic_pdu_classic_can_required",
+                "path" => pdu
+            ));
         }
         let expected_params: &[&str] = if tx {
             &[
@@ -812,8 +913,9 @@ fn parse_diagnostic(
             || param(canif[0], if tx { "CanIfTxPduId" } else { "CanIfRxPduId" }).as_deref()
                 != Some(frames.len().to_string().as_str())
         {
-            return Err(format!(
-                "{pdu} 的诊断 CanIf 参数或引用不属于受支持的静态配置"
+            return Err(crate::product_message!(
+                "backend.arxml.host_profile.unsupported_diagnostic_canif_configuration",
+                "path" => pdu
             ));
         }
         let wrong_direction = nodes.iter().any(|n| {
@@ -828,7 +930,10 @@ fn parse_diagnostic(
                     == Some(global.as_str())
         });
         if wrong_direction {
-            return Err(format!("{pdu} 同时配置了反向 CanIf 映射"));
+            return Err(crate::product_message!(
+                "backend.arxml.host_profile.diagnostic_pdu_reverse_canif_mapping",
+                "path" => pdu
+            ));
         }
         ids.push(parse_u32(param(canif[0], field), field, pdu).map_err(|e| e.message)?);
     }
@@ -845,7 +950,11 @@ fn parse_diagnostic(
             &path_of(item),
         )
         .map_err(|e| e.message)?;
-        let data_ref = ref_value(item, "DcmDspDidDataRef").ok_or("诊断 DID 信号缺少数据引用")?;
+        let data_ref = ref_value(item, "DcmDspDidDataRef").ok_or_else(|| {
+            crate::product_message!(
+                "backend.arxml.host_profile.diagnostic_did_signal_missing_data_reference"
+            )
+        })?;
         let data: Vec<_> = nodes
             .iter()
             .copied()
@@ -856,7 +965,10 @@ fn parse_diagnostic(
             })
             .collect();
         if data.len() != 1 {
-            return Err(format!("{data_ref} 诊断数据引用未唯一解析"));
+            return Err(crate::product_message!(
+                "backend.arxml.host_profile.diagnostic_data_reference_not_unique",
+                "path" => data_ref
+            ));
         }
         let metadata: Vec<_> = data[0]
             .descendants()
@@ -867,7 +979,10 @@ fn parse_diagnostic(
             })
             .collect();
         if metadata.len() != 1 {
-            return Err(format!("{data_ref} 必须有唯一的工具域绑定"));
+            return Err(crate::product_message!(
+                "backend.arxml.host_profile.diagnostic_data_unique_tool_binding_required",
+                "path" => data_ref
+            ));
         }
         let refs: Vec<_> = metadata[0].children().filter(|n| n.is_element()).collect();
         if refs.len() != 1
@@ -875,7 +990,10 @@ fn parse_diagnostic(
             || refs[0].attribute("GID") != Some("ComSignalRef")
             || refs[0].text().is_none_or(str::is_empty)
         {
-            return Err(format!("{data_ref} 缺少唯一的工具域 ComSignalRef 绑定"));
+            return Err(crate::product_message!(
+                "backend.arxml.host_profile.diagnostic_data_missing_unique_signal_binding",
+                "path" => data_ref
+            ));
         }
         bindings.push((offset, refs[0].text().unwrap().to_owned()));
     }
@@ -886,7 +1004,9 @@ fn parse_diagnostic(
             .enumerate()
             .any(|(i, (offset, _))| *offset != i as u32 * 4)
     {
-        return Err("诊断 DID 数据字节偏移必须是从零开始的连续 32 位信号".into());
+        return Err(crate::product_message!(
+            "backend.arxml.host_profile.diagnostic_did_contiguous_signal_offsets_required"
+        ));
     }
     let dem_dtc_def = "/AUTOSAR/EcucDefs/Dem/DemConfigSet/DemDTC";
     let dem_event_def = "/AUTOSAR/EcucDefs/Dem/DemConfigSet/DemEventParameter";
@@ -902,7 +1022,9 @@ fn parse_diagnostic(
         None
     } else {
         if dtc_nodes.len() != 1 {
-            return Err("仅支持一个 Dem UDS DTC".into());
+            return Err(crate::product_message!(
+                "backend.arxml.host_profile.single_dem_uds_dtc_supported"
+            ));
         }
         let node = dtc_nodes[0];
         let code = parse_u32(param(node, "DemDtcValue"), "DemDtcValue", &path_of(node))
@@ -918,7 +1040,9 @@ fn parse_diagnostic(
         if event_nodes.len() != 1
             || ref_value(event_nodes[0], "DemDTCRef").as_deref() != Some(path_of(node).as_str())
         {
-            return Err("Dem 事件须唯一地关联 UDS DTC".into());
+            return Err(crate::product_message!(
+                "backend.arxml.host_profile.dem_event_unique_dtc_association_required"
+            ));
         }
         let event = event_nodes[0];
         let metadata: Vec<_> = event
@@ -930,19 +1054,27 @@ fn parse_diagnostic(
             })
             .collect();
         if metadata.len() != 1 {
-            return Err("Dem 事件缺少唯一的工具域 Rx 帧绑定".into());
+            return Err(crate::product_message!(
+                "backend.arxml.host_profile.dem_event_missing_unique_rx_frame_binding"
+            ));
         }
         let refs: Vec<_> = metadata[0].children().filter(|n| n.is_element()).collect();
         if refs.len() != 1
             || refs[0].tag_name().name() != "SD"
             || refs[0].attribute("GID") != Some("MonitorFrameRef")
         {
-            return Err("Dem 事件须有唯一 MonitorFrameRef 工具域绑定".into());
+            return Err(crate::product_message!(
+                "backend.arxml.host_profile.dem_event_unique_monitor_reference_required"
+            ));
         }
         let monitor_frame_path = refs[0]
             .text()
             .filter(|s| !s.is_empty())
-            .ok_or("Dem 事件缺少监控 Rx 帧绝对路径")?
+            .ok_or_else(|| {
+                crate::product_message!(
+                    "backend.arxml.host_profile.dem_event_missing_monitor_frame_path"
+                )
+            })?
             .to_owned();
         Some(DtcView {
             path: path_of(node),
@@ -959,7 +1091,9 @@ fn parse_diagnostic(
                 )
         })
     {
-        return Err("Dem/NvM 配置存在但缺少受支持的单个 UDS DTC".into());
+        return Err(crate::product_message!(
+            "backend.arxml.host_profile.dem_nvm_without_supported_dtc"
+        ));
     }
     let reset_routine_id = parse_host_routine(did_node, project, &nodes)?;
     let security_enabled = nodes.iter().any(|node| {
@@ -991,15 +1125,21 @@ fn parse_diagnostic(
         }),
     };
     if let Some(issue) = validate_diagnostic(&diagnostic, frames, signals).first() {
-        return Err(format!("{}: {}", issue.code, issue.message));
+        return Err(crate::message::LocalizedText::messages([
+            crate::product_message!(
+                "backend.arxml.host_profile.diagnostic_validation_failure",
+                "code" => issue.code
+            ),
+            issue.message.clone(),
+        ]));
     }
     let expected = render_profile(project, frames, signals, Some(&diagnostic));
     let expected_doc = Document::parse(&expected).map_err(|e| e.to_string())?;
     let expected_shape = diagnostic_shape(&[expected_doc])?;
     if actual != expected_shape {
-        return Err(
-            "CanTp/Dcm/Dem/NvM 配置含未知、不一致或不受支持的参数、引用、方向、会话或变体".into(),
-        );
+        return Err(crate::product_message!(
+            "backend.arxml.host_profile.unsupported_diagnostic_configuration_shape"
+        ));
     }
     Ok(Some(diagnostic))
 }
@@ -1015,7 +1155,7 @@ impl Workspace {
             )
     }
 
-    pub(super) fn refresh(&mut self) -> Result<(), String> {
+    pub(super) fn refresh(&mut self) -> Result<(), crate::message::LocalizedText> {
         let mut issues = Vec::new();
         let mut pdus = BTreeMap::new();
         let mut signal_lengths = BTreeMap::new();
@@ -1047,7 +1187,9 @@ impl Workspace {
                     {
                         issues.push(Issue::error(
                             "DUPLICATE_PATH",
-                            "ARXML 绝对路径重复",
+                            crate::product_message!(
+                                "backend.arxml.host_profile.duplicate_arxml_absolute_path"
+                            ),
                             Some(path),
                         ));
                     }
@@ -1072,7 +1214,9 @@ impl Workspace {
                                 file: Some(file.path.display().to_string()),
                                 ..Issue::error(
                                     "PDU_UNSUPPORTED",
-                                    "消耗的 Com 配置必须有唯一的模块所有者",
+                                    crate::product_message!(
+                                        "backend.arxml.host_profile.consumed_com_unique_module_owner_required"
+                                    ),
                                     Some(path.clone()),
                                 )
                             });
@@ -1087,7 +1231,9 @@ impl Workspace {
                             file: Some(file.path.display().to_string()),
                             ..Issue::error(
                                 "PDU_UNSUPPORTED",
-                                "Com 模块所有者、ComConfig/ComGeneral 必需容器或参数不受支持",
+                                crate::product_message!(
+                                    "backend.arxml.host_profile.unsupported_com_module_structure"
+                                ),
                                 Some(path),
                             )
                         });
@@ -1101,7 +1247,9 @@ impl Workspace {
                         file: Some(file.path.display().to_string()),
                         ..Issue::error(
                             "PDU_UNSUPPORTED",
-                            "EcuCCfg 根定义、虚拟核心、Pdu 集合或必需类型参数不完整",
+                            crate::product_message!(
+                                "backend.arxml.host_profile.incomplete_ecuc_root_configuration"
+                            ),
                             Some(path_of(node)),
                         )
                     });
@@ -1177,7 +1325,9 @@ impl Workspace {
                             file: Some(file.path.display().to_string()),
                             ..Issue::error(
                                 "PDU_UNSUPPORTED",
-                                "Com 容器必须直接属于唯一受支持的 ComCfg/ComConfig",
+                                crate::product_message!(
+                                    "backend.arxml.host_profile.com_container_direct_owner_required"
+                                ),
                                 Some(path_of(node)),
                             )
                         });
@@ -1194,7 +1344,9 @@ impl Workspace {
                                             file: Some(file.path.display().to_string()),
                                             ..Issue::error(
                                                 "PDU_UNSUPPORTED",
-                                                "全局 PDU 路径重复",
+                                                crate::product_message!(
+                                                    "backend.arxml.host_profile.duplicate_global_pdu_path"
+                                                ),
                                                 Some(path),
                                             )
                                         });
@@ -1260,7 +1412,9 @@ impl Workspace {
                             {
                                 issues.push(Issue::error(
                                     "CANIF_PDU_DUPLICATE",
-                                    "同一 I-PDU 有多个 CanIf 映射",
+                                    crate::product_message!(
+                                        "backend.arxml.host_profile.multiple_canif_mappings"
+                                    ),
                                     Some(pdu),
                                 ));
                             }
@@ -1284,7 +1438,9 @@ impl Workspace {
                             {
                                 issues.push(Issue::error(
                                     "CANIF_PDU_DUPLICATE",
-                                    "同一 I-PDU 有多个 CanIf 映射",
+                                    crate::product_message!(
+                                        "backend.arxml.host_profile.multiple_canif_mappings"
+                                    ),
                                     Some(pdu),
                                 ));
                             }
@@ -1303,7 +1459,10 @@ impl Workspace {
                     file: Some(pdu.file.clone()),
                     ..Issue::error(
                         "PDU_UNSUPPORTED",
-                        format!("CanIf 引用没有正确解析到 EcuC Pdu: {target}"),
+                        crate::product_message!(
+                            "backend.arxml.host_profile.canif_reference_unresolved_global_pdu",
+                            "target" => target
+                        ),
                         Some(pdu.path.clone()),
                     )
                 });
@@ -1327,9 +1486,9 @@ impl Workspace {
                     file: Some(binding.file.clone()),
                     ..Issue::error(
                         "PDU_UNSUPPORTED",
-                        format!(
-                            "全局 PDU 与系统 PDU 必须一一对应且长度一致: {}",
-                            binding.system_path
+                        crate::product_message!(
+                            "backend.arxml.host_profile.global_system_pdu_bijection_required",
+                            "path" => binding.system_path
                         ),
                         Some(path.clone()),
                     )
@@ -1343,7 +1502,9 @@ impl Workspace {
             let Some(pdu_ref) = record.target else {
                 issues.push(Issue::error(
                     "COM_PDU_REF",
-                    "ComIPdu 缺少 PDU 引用",
+                    crate::product_message!(
+                        "backend.arxml.host_profile.com_ipdu_missing_pdu_reference"
+                    ),
                     Some(path),
                 ));
                 continue;
@@ -1358,7 +1519,9 @@ impl Workspace {
                         file: Some(record.file.clone()),
                         ..Issue::error(
                             "PDU_UNSUPPORTED",
-                            "Com PDU 引用 DEST 或必需参数不属于受支持的全局 PDU 配置",
+                            crate::product_message!(
+                                "backend.arxml.host_profile.unsupported_com_global_pdu_configuration"
+                            ),
                             Some(path.clone()),
                         )
                     });
@@ -1369,7 +1532,10 @@ impl Workspace {
                     file: Some(record.file),
                     ..Issue::error(
                         "PDU_UNSUPPORTED",
-                        format!("ComPduIdRef 必须指向绑定的 EcuC 全局 Pdu: {pdu_ref}"),
+                        crate::product_message!(
+                            "backend.arxml.host_profile.com_pdu_reference_bound_global_pdu_required",
+                            "reference" => pdu_ref
+                        ),
                         Some(path),
                     )
                 });
@@ -1378,7 +1544,10 @@ impl Workspace {
             let Some(pdu) = pdus.get(system_path) else {
                 issues.push(Issue::error(
                     "PDU_UNSUPPORTED",
-                    format!("全局 PDU 未绑定可解析的系统 I-PDU: {system_path}"),
+                    crate::product_message!(
+                        "backend.arxml.host_profile.global_pdu_unresolved_system_ipdu",
+                        "path" => system_path
+                    ),
                     Some(pdu_ref),
                 ));
                 continue;
@@ -1386,7 +1555,9 @@ impl Workspace {
             let Some(canif_pdu) = canif.get(&pdu_ref) else {
                 issues.push(Issue::error(
                     "CANIF_PDU_REF",
-                    "CanIf 没有引用同一个 PDU",
+                    crate::product_message!(
+                        "backend.arxml.host_profile.canif_same_pdu_reference_required"
+                    ),
                     Some(pdu_ref),
                 ));
                 continue;
@@ -1394,7 +1565,9 @@ impl Workspace {
             if canif_pdu.dest.as_deref() != Some("ECUC-CONTAINER-VALUE") {
                 issues.push(Issue::error(
                     "PDU_UNSUPPORTED",
-                    "CanIf PDU 引用 DEST 必须指向 EcuC Pdu 容器",
+                    crate::product_message!(
+                        "backend.arxml.host_profile.canif_pdu_reference_container_destination_required"
+                    ),
                     Some(pdu_ref.clone()),
                 ));
             }
@@ -1404,7 +1577,9 @@ impl Workspace {
                 _ => {
                     issues.push(Issue::error(
                         "PDU_DIRECTION",
-                        "Com 与 CanIf 方向不一致或未知",
+                        crate::product_message!(
+                            "backend.arxml.host_profile.com_canif_direction_mismatch"
+                        ),
                         Some(pdu_ref),
                     ));
                     continue;
@@ -1418,7 +1593,7 @@ impl Workspace {
             if canif_pdu.id_type.as_deref() != Some(expected_id_type) {
                 issues.push(Issue::error(
                     "CAN_ID_TYPE",
-                    "仅支持经典 11 位 CAN",
+                    crate::product_message!("backend.arxml.host_profile.classic_can_only"),
                     Some(pdu_ref.clone()),
                 ));
             }
@@ -1432,7 +1607,9 @@ impl Workspace {
             {
                 issues.push(Issue::error(
                     "PDU_UNSUPPORTED",
-                    "全局 PDU 长度与系统 I-PDU 不一致",
+                    crate::product_message!(
+                        "backend.arxml.host_profile.global_system_ipdu_length_mismatch"
+                    ),
                     Some(pdu_ref.clone()),
                 ));
             }
@@ -1462,7 +1639,9 @@ impl Workspace {
                 else {
                     issues.push(Issue::error(
                         "COM_SIGNAL_REF",
-                        "ComIPduSignalRef 未解析",
+                        crate::product_message!(
+                            "backend.arxml.host_profile.unresolved_com_ipdu_signal_reference"
+                        ),
                         Some(signal_ref),
                     ));
                     continue;
@@ -1474,7 +1653,9 @@ impl Workspace {
                 {
                     issues.push(Issue::error(
                         "SIGNAL_VARIANT",
-                        "仅支持小端无符号标量信号",
+                        crate::product_message!(
+                            "backend.arxml.host_profile.little_endian_unsigned_scalar_signals_only"
+                        ),
                         Some(signal_ref.clone()),
                     ));
                 }
@@ -1502,7 +1683,9 @@ impl Workspace {
                 if start > u8::MAX as u32 || length > u8::MAX as u32 {
                     issues.push(Issue::error(
                         "SIGNAL_RANGE",
-                        "信号位位置或长度超出范围",
+                        crate::product_message!(
+                            "backend.arxml.host_profile.signal_position_or_length_out_of_range"
+                        ),
                         Some(signal_ref),
                     ));
                     continue;
@@ -1515,7 +1698,9 @@ impl Workspace {
                         }
                         Ok(_) => issues.push(Issue::error(
                             "RX_TIMEOUT_MISMATCH",
-                            "同帧接收信号超时须一致",
+                            crate::product_message!(
+                                "backend.arxml.host_profile.receive_signal_timeouts_must_match"
+                            ),
                             Some(signal_ref.clone()),
                         )),
                         Err(e) => issues.push(e),
@@ -1560,7 +1745,9 @@ impl Workspace {
                 if !supported || mapped_layout != com_layout {
                     issues.push(Issue::error(
                         "PDU_MAPPING",
-                        "I-PDU 信号映射的位序或位段与 Com 配置不一致",
+                        crate::product_message!(
+                            "backend.arxml.host_profile.ipdu_signal_mapping_layout_mismatch"
+                        ),
                         Some(system_path.to_owned()),
                     ));
                 }
@@ -1588,7 +1775,9 @@ impl Workspace {
                     {
                         issues.push(Issue::error(
                             "CAN_FRAME_MAPPING",
-                            "网络帧须以小端、零偏移完整承载该 I-PDU",
+                            crate::product_message!(
+                                "backend.arxml.host_profile.network_frame_complete_ipdu_mapping_required"
+                            ),
                             Some(trigger_path.clone()),
                         ));
                     }
@@ -1599,7 +1788,9 @@ impl Workspace {
                     {
                         issues.push(Issue::error(
                             "CAN_ID_MISMATCH",
-                            "CAN-FRAME-TRIGGERING 与 CanIf 的 CAN 标识符不一致",
+                            crate::product_message!(
+                                "backend.arxml.host_profile.network_canif_identifier_mismatch"
+                            ),
                             Some(trigger_path.clone()),
                         ));
                     }
@@ -1613,7 +1804,9 @@ impl Workspace {
             {
                 issues.push(Issue::error(
                     "PDU_DLC",
-                    "I-PDU 与 CanIf 的数据长度不一致",
+                    crate::product_message!(
+                        "backend.arxml.host_profile.ipdu_canif_data_length_mismatch"
+                    ),
                     Some(system_path.to_owned()),
                 ));
             }
@@ -1679,7 +1872,10 @@ impl Workspace {
                                 .map(|file| file.path.display().to_string()),
                             ..Issue::error(
                                 "PDU_UNSUPPORTED",
-                                format!("诊断全局 PDU {path} 缺失或未绑定对应系统 PDU"),
+                                crate::product_message!(
+                                    "backend.arxml.host_profile.diagnostic_global_pdu_missing_system_binding",
+                                    "path" => path
+                                ),
                                 Some(path),
                             )
                         });
@@ -1692,7 +1888,9 @@ impl Workspace {
                         file: Some(binding.file.clone()),
                         ..Issue::error(
                             "PDU_UNSUPPORTED",
-                            "全局 PDU 没有唯一受支持的 Com/诊断用途",
+                            crate::product_message!(
+                                "backend.arxml.host_profile.global_pdu_unique_supported_usage_required"
+                            ),
                             Some(path.clone()),
                         )
                     });
@@ -1705,7 +1903,10 @@ impl Workspace {
         self.issues = issues;
         self.rebuild_snapshot()
     }
-    pub(super) fn global_pdu_for(&self, system_path: &str) -> Result<String, String> {
+    pub(super) fn global_pdu_for(
+        &self,
+        system_path: &str,
+    ) -> Result<String, crate::message::LocalizedText> {
         let prefix = format!("/{}/EcuCCfg/", self.name);
         let mut found = None;
         for file in &self.files {
@@ -1721,10 +1922,18 @@ impl Workspace {
                 }
                 let binding = tool_global_pdu(node, file)?;
                 if binding.system_path == system_path && found.replace(path_of(node)).is_some() {
-                    return Err(format!("{system_path} 有多个全局 PDU 绑定"));
+                    return Err(crate::product_message!(
+                        "backend.arxml.host_profile.multiple_global_pdu_bindings",
+                        "path" => system_path
+                    ));
                 }
             }
         }
-        found.ok_or_else(|| format!("{system_path} 缺少可定位的全局 PDU 绑定"))
+        found.ok_or_else(|| {
+            crate::product_message!(
+                "backend.arxml.host_profile.missing_locatable_global_pdu_binding",
+                "path" => system_path
+            )
+        })
     }
 }

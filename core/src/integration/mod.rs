@@ -65,12 +65,16 @@ pub struct PlanDiagnostic {
     pub code: String,
     pub file: Option<String>,
     pub object: Option<String>,
-    pub message: String,
-    pub remedy: String,
+    pub message: crate::message::LocalizedText,
+    pub remedy: crate::message::LocalizedText,
 }
 
 impl PlanDiagnostic {
-    fn dependency(code: &str, message: impl Into<String>, remedy: &str) -> Self {
+    fn dependency(
+        code: &str,
+        message: crate::message::LocalizedText,
+        remedy: crate::message::LocalizedText,
+    ) -> Self {
         Self {
             category: DiagnosticCategory::Dependency,
             code: code.into(),
@@ -84,8 +88,8 @@ impl PlanDiagnostic {
     fn at_source(
         source: &InputSource,
         code: &str,
-        message: impl Into<String>,
-        remedy: &str,
+        message: crate::message::LocalizedText,
+        remedy: crate::message::LocalizedText,
     ) -> Self {
         Self {
             category: DiagnosticCategory::Input,
@@ -132,8 +136,12 @@ impl InputSource {
             return Err(PlanDiagnostic::at_source(
                 &source,
                 "SOURCE_IDENTITY",
-                "Input identity must be a relative ARXML path without aliases or parent traversal.",
-                "Use a unique, portable relative file path beneath the input root.",
+                crate::product_message!(
+                    "backend.integration.mod.input_identity_relative_arxml_required"
+                ),
+                crate::product_message!(
+                    "backend.integration.mod.use_unique_portable_relative_path"
+                ),
             ));
         }
         let text = source.text()?;
@@ -141,8 +149,12 @@ impl InputSource {
             return Err(PlanDiagnostic::at_source(
                 &source,
                 "XML_DTD",
-                "External entities and DTDs are not accepted.",
-                "Provide self-contained AUTOSAR XML without DTD or entity declarations.",
+                crate::product_message!(
+                    "backend.integration.mod.external_entities_and_dtd_rejected"
+                ),
+                crate::product_message!(
+                    "backend.integration.mod.supply_self_contained_autosar_xml"
+                ),
             ));
         }
         Ok(source)
@@ -160,8 +172,8 @@ impl InputSource {
 
     fn text(&self) -> Result<&str, PlanDiagnostic> {
         std::str::from_utf8(&self.bytes).map_err(|error| PlanDiagnostic::at_source(self,
-            "XML_ENCODING", format!("Input is not UTF-8 XML: {error}"),
-            "Convert the source to a valid UTF-8 ARXML file without changing its semantic content."))
+            "XML_ENCODING", crate::product_message!("backend.integration.mod.input_not_utf8_xml", "error" => error),
+            crate::product_message!("backend.integration.mod.convert_source_to_utf8_arxml")))
     }
 }
 
@@ -211,17 +223,19 @@ impl PlanDependencies {
         }
     }
 
-    pub fn explicit(xsd_archive: PathBuf, mod_archive: PathBuf) -> Result<Self, String> {
+    pub fn explicit(
+        xsd_archive: PathBuf,
+        mod_archive: PathBuf,
+    ) -> Result<Self, crate::message::LocalizedText> {
         for (kind, path) in [("XSD", &xsd_archive), ("MOD", &mod_archive)] {
             if !path.is_absolute()
                 || path
                     .components()
                     .any(|part| matches!(part, Component::ParentDir))
             {
-                return Err(format!(
-                    "{kind} archive requires a normalized absolute path: {}",
-                    path.display()
-                ));
+                return Err(
+                    crate::product_message!("backend.integration.mod.archive_normalized_absolute_path_required", "kind" => kind, "value0" => path.display()),
+                );
             }
         }
         Ok(Self {
@@ -326,8 +340,8 @@ pub fn inspect_inputs(
     if sources.is_empty() {
         return Err(vec![PlanDiagnostic::dependency(
             "INPUT_MISSING",
-            "No integration ARXML inputs were supplied.",
-            "Supply the ECU Extract, SWC/types, services, BSW description and ECUC values.",
+            crate::product_message!("backend.integration.mod.integration_arxml_inputs_missing"),
+            crate::product_message!("backend.integration.mod.supply_integration_arxml_inputs"),
         )]);
     }
     let mut names = BTreeSet::new();
@@ -338,8 +352,12 @@ pub fn inspect_inputs(
             return Err(vec![PlanDiagnostic::at_source(
                 source,
                 "SOURCE_DUPLICATE",
-                "Two sources have the same portable file identity.",
-                "Select each source once, using distinct relative paths without case aliases.",
+                crate::product_message!(
+                    "backend.integration.mod.portable_source_identity_duplicate"
+                ),
+                crate::product_message!(
+                    "backend.integration.mod.select_distinct_sources_without_case_aliases"
+                ),
             )]);
         }
     }
@@ -349,8 +367,8 @@ pub fn inspect_inputs(
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(archive)).map_err(|error| {
         vec![PlanDiagnostic::dependency(
             "MOD_ARCHIVE",
-            format!("Invalid MOD archive: {error}"),
-            "Provide the pinned, unmodified R24-11 MOD ZIP archive.",
+            crate::product_message!("backend.integration.mod.mod_archive_invalid", "error" => error),
+            crate::product_message!("backend.integration.mod.supply_pinned_unmodified_mod_archive"),
         )]
     })?;
     let mut definitions = String::new();
@@ -364,8 +382,8 @@ pub fn inspect_inputs(
         .map_err(|error| {
             vec![PlanDiagnostic::dependency(
                 "MOD_CONTENT",
-                format!("Cannot read ECUC definitions: {error}"),
-                "Restore the complete external R24-11 MOD ZIP archive.",
+                crate::product_message!("backend.integration.mod.ecuc_definitions_read_failed", "error" => error),
+                crate::product_message!("backend.integration.mod.restore_complete_external_mod_archive"),
             )]
         })?;
     checked_archive(&dependencies.xsd_archive, XSD_SHA256)?;
@@ -374,19 +392,35 @@ pub fn inspect_inputs(
         .map(|source| Ok((Path::new(&source.logical_path), source.text()?)))
         .collect::<Result<_, PlanDiagnostic>>()
         .map_err(|diagnostic| vec![diagnostic])?;
-    let issues = crate::schema::validate_files(&dependencies.xsd_archive, &files).map_err(|error| {
-        vec![PlanDiagnostic {
-            category: DiagnosticCategory::Tool, code: "XSD_TOOL".into(), file: None,
-            object: None, message: error,
-            remedy: "Check the local schema archive and libxml2 validator; this is not a successful input check.".into(),
-        }]
-    })?;
+    let issues =
+        crate::schema::validate_files(&dependencies.xsd_archive, &files).map_err(|error| {
+            vec![PlanDiagnostic {
+                category: DiagnosticCategory::Tool,
+                code: "XSD_TOOL".into(),
+                file: None,
+                object: None,
+                message: error,
+                remedy: crate::product_message!(
+                    "backend.integration.mod.check_schema_archive_and_validator"
+                )
+                .into(),
+            }]
+        })?;
     if !issues.is_empty() {
-        return Err(issues.into_iter().map(|issue| PlanDiagnostic {
-            category: DiagnosticCategory::Input, code: issue.code, file: issue.file,
-            object: issue.path.or_else(|| Some("/".into())), message: issue.message,
-            remedy: "Repair the located input against AUTOSAR_00053.xsd before semantic integration validation.".into(),
-        }).collect());
+        return Err(issues
+            .into_iter()
+            .map(|issue| PlanDiagnostic {
+                category: DiagnosticCategory::Input,
+                code: issue.code,
+                file: issue.file,
+                object: issue.path.or_else(|| Some("/".into())),
+                message: issue.message,
+                remedy: crate::product_message!(
+                    "backend.integration.mod.repair_input_against_autosar_schema"
+                )
+                .into(),
+            })
+            .collect());
     }
     let graph = graph::Graph::new(&sorted, &definitions)?;
     let identities = sorted
@@ -483,22 +517,25 @@ pub fn inspect_inputs_native(
     sources: &[InputSource],
     catalog: &crate::definitions::DefinitionCatalog,
 ) -> Result<InputInspection, Vec<PlanDiagnostic>> {
-    let tool_error = |message: String| {
+    let tool_error = |message: crate::message::LocalizedText| {
         vec![PlanDiagnostic {
             category: DiagnosticCategory::Tool,
             code: "BUILTIN_RULES".into(),
             file: None,
             object: None,
             message,
-            remedy: "Repair the matching installed product rule inventory; official archives cannot replace it.".into(),
+            remedy: crate::product_message!(
+                "backend.integration.mod.repair_installed_product_rule_inventory"
+            )
+            .into(),
         }]
     };
     let identity = crate::rules::rule_set_identity().map_err(&tool_error)?;
     if sources.is_empty() {
         return Err(vec![PlanDiagnostic::dependency(
             "INPUT_MISSING",
-            "No integration ARXML inputs were supplied.",
-            "Supply the ECU Extract, SWC/types, services, BSW description and ECUC values.",
+            crate::product_message!("backend.integration.mod.integration_arxml_inputs_missing"),
+            crate::product_message!("backend.integration.mod.supply_integration_arxml_inputs"),
         )]);
     }
     let mut names = BTreeSet::new();
@@ -507,16 +544,22 @@ pub fn inspect_inputs_native(
             return Err(vec![PlanDiagnostic::at_source(
                 source,
                 "SOURCE_SIZE",
-                "A single ARXML input exceeds 50 MiB.",
-                "Split the original input into safe, explicitly selected source members.",
+                crate::product_message!("backend.integration.mod.arxml_input_size_exceeded"),
+                crate::product_message!(
+                    "backend.integration.mod.split_input_into_explicit_source_members"
+                ),
             )]);
         }
         if !names.insert(source.logical_path.to_uppercase()) {
             return Err(vec![PlanDiagnostic::at_source(
                 source,
                 "SOURCE_DUPLICATE",
-                "Two sources have the same portable file identity.",
-                "Select each source once, using distinct portable relative paths.",
+                crate::product_message!(
+                    "backend.integration.mod.portable_source_identity_duplicate"
+                ),
+                crate::product_message!(
+                    "backend.integration.mod.select_distinct_portable_source_paths"
+                ),
             )]);
         }
     }
@@ -611,11 +654,13 @@ fn read_archive(
     expected: &str,
     collect: bool,
 ) -> Result<Vec<u8>, Vec<PlanDiagnostic>> {
-    let unreadable = |error| {
+    let unreadable = |error: std::io::Error| {
         vec![PlanDiagnostic::dependency(
             "DEPENDENCY_MISSING",
-            format!("Cannot read external reference {}: {error}", path.display()),
-            "Supply the legally obtained, pinned R24-11 validation archive; missing checks cannot be skipped.",
+            crate::product_message!("backend.integration.mod.external_reference_read_failed", "value0" => path.display(), "error" => error),
+            crate::product_message!(
+                "backend.integration.mod.supply_legal_pinned_validation_archive"
+            ),
         )]
     };
     let mut file = std::fs::File::open(path).map_err(&unreadable)?;
@@ -625,8 +670,8 @@ fn read_archive(
         let capacity = usize::try_from(size).map_err(|error| {
             vec![PlanDiagnostic::dependency(
                 "DEPENDENCY_IDENTITY",
-                format!("Archive size cannot be represented: {error}"),
-                "Supply the exact pinned R24-11 archive.",
+                crate::product_message!("backend.integration.mod.archive_size_unrepresentable", "error" => error),
+                crate::product_message!("backend.integration.mod.supply_exact_pinned_archive"),
             )]
         })?;
         bytes.reserve_exact(capacity);
@@ -646,8 +691,10 @@ fn read_archive(
     if format!("{:x}", digest.finalize()) != expected {
         return Err(vec![PlanDiagnostic::dependency(
             "DEPENDENCY_IDENTITY",
-            format!("External archive identity differs: {}", path.display()),
-            "Restore the exact R24-11 archive pinned by this target; do not silently change its baseline.",
+            crate::product_message!("backend.integration.mod.external_archive_identity_mismatch", "value0" => path.display()),
+            crate::product_message!(
+                "backend.integration.mod.restore_target_pinned_archive_baseline"
+            ),
         )]);
     }
     Ok(bytes)

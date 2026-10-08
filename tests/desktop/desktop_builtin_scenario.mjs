@@ -657,6 +657,14 @@ export async function runBuiltinScenario({
       `Boolean(window.__TAURI_INTERNALS__ && document.querySelector('button'))`,
       'native startup',
     );
+    // Keep the existing Chinese scenario deterministic on every host locale.
+    const startupBoot = await evaluate('performance.timeOrigin');
+    await invoke('configure_language', { language: 'zh-CN' });
+    await evaluate('setTimeout(() => location.reload(), 0); true');
+    await until(
+      `performance.timeOrigin !== ${startupBoot} && Boolean(window.__TAURI_INTERNALS__ && document.querySelector('[aria-label="设置"]'))`,
+      'explicit Chinese native startup',
+    );
     await evaluate(`window.__BUILTIN_NATIVE_TRANSPORT__ = window.__TAURI_INTERNALS__.invoke`);
     const location = await evaluate(
       `({href:location.href, protocol:location.protocol, hostname:location.hostname, port:location.port})`,
@@ -1985,6 +1993,67 @@ export async function runBuiltinScenario({
         categoriesIsolated: true,
       };
     });
+    await checked('language-preview-save-preserves-project-and-draft', async () => {
+      const before = await projection();
+      const field = fieldBy(before, '/OsEventMask');
+      await selectObject(field.objectId);
+      const draftSelector = `[data-field-id=${json(field.fieldId)}]`;
+      const draftValue = '18446744073709551614';
+      await input(draftSelector, draftValue);
+      const caps = await capabilities();
+      await click('设置');
+      await input(label('界面语言'), 'en');
+      await until(`document.documentElement.lang === 'en'`, 'English language preview');
+      assert.equal((await capabilities()).language, 'zh-CN', 'Preview must not save');
+      assert.equal((await capabilities()).fingerprint, caps.fingerprint);
+      await screenshot('language-english-preview.png');
+      await key('Escape');
+      await until(`document.documentElement.lang === 'zh-CN'`, 'Canceled language preview');
+      assert.equal(
+        await evaluate(`document.querySelector(${json(draftSelector)}).value`),
+        draftValue,
+      );
+      await click('设置');
+      await input(label('界面语言'), 'en');
+      await until(`document.documentElement.lang === 'en'`, 'English settings');
+      await click('Save language', "document.querySelector('[role=dialog]')");
+      await until(
+        `(async()=> (await window.__TAURI_INTERNALS__.invoke('workbench_capabilities')).language === 'en')()`,
+        'Saved English preference',
+      );
+      await key('Escape');
+      await until(`!document.querySelector('[role=dialog]')`, 'English settings close');
+      assert.equal((await capabilities()).fingerprint, caps.fingerprint);
+      const after = await projection();
+      assert.deepEqual(after.sources, before.sources);
+      assert.deepEqual(after.diagnostics, before.diagnostics);
+      assert.equal(
+        await evaluate(`document.querySelector(${json(draftSelector)}).value`),
+        draftValue,
+      );
+      await screenshot('language-english-saved.png');
+      await click('Settings');
+      await input(label('Interface language'), 'zh-CN');
+      await until(`document.documentElement.lang === 'zh-CN'`, 'Chinese settings');
+      await click('保存语言', "document.querySelector('[role=dialog]')");
+      await until(
+        `(async()=> (await window.__TAURI_INTERNALS__.invoke('workbench_capabilities')).language === 'zh-CN')()`,
+        'Saved Chinese preference',
+      );
+      await key('Escape');
+      assert.equal((await capabilities()).fingerprint, caps.fingerprint);
+      assert.equal(
+        await evaluate(`document.querySelector(${json(draftSelector)}).value`),
+        draftValue,
+      );
+      // Restore the clean editor needed by the following independent scenarios.
+      await refreshSurface(null, authored.sources);
+      return {
+        previewCanceled: true,
+        savedLanguages: ['en', 'zh-CN'],
+        fingerprint: caps.fingerprint,
+      };
+    });
     await checked('problem-focus', async () => {
       const view = await projection();
       const issueIndex = view.diagnostics.findIndex((issue) => issue.objectId && issue.fieldId);
@@ -2006,7 +2075,7 @@ export async function runBuiltinScenario({
       const location = await evaluate(`(() => {
         const rows = [...document.querySelectorAll('.problem-list li')].filter(${visible});
         const row = rows[${issueIndex}];
-        if (!row?.textContent.includes(${json(issue.code)}) || !row.textContent.includes(${json(issue.message)}) || !row.textContent.includes(${json(issue.path ?? issue.file)}))
+        if (!row?.textContent.includes(${json(issue.code)}) || !row.textContent.includes(${json(issue.path ?? issue.file)}))
           throw new Error('Actual projected diagnostic row identity changed');
         const button = row.querySelector('button'); if (!button) throw new Error('Genuine issue locator missing');
         button.scrollIntoView({block:'nearest'}); const box=button.getBoundingClientRect();

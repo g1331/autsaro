@@ -4,6 +4,7 @@
 //! result is published. POSIX uses a short-lived supervisor; Windows reuses
 //! the suspended-create, non-breakaway, kill-on-close Job implementation.
 
+use crate::message::LocalizedText;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -49,13 +50,13 @@ impl ProcessSpec {
         env: Vec<(OsString, OsString)>,
         duration: Duration,
         log_directory: PathBuf,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, LocalizedText> {
         let deadline_ns = monotonic_ns()?
             .checked_add(
                 u64::try_from(duration.as_nanos())
-                    .map_err(|_| "Process deadline duration exceeds u64 nanoseconds")?,
+                    .map_err(|_| crate::product_message!("backend.execution.duration_overflow"))?,
             )
-            .ok_or("Process deadline overflow")?;
+            .ok_or_else(|| crate::product_message!("backend.execution.deadline_overflow"))?;
         Ok(Self {
             argv,
             cwd,
@@ -67,15 +68,21 @@ impl ProcessSpec {
         })
     }
 
-    fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> Result<(), LocalizedText> {
         if self.argv.is_empty() || !std::path::Path::new(&self.argv[0]).is_absolute() {
-            return Err("ProcessSpec requires an absolute executable argv".into());
+            return Err(crate::product_message!(
+                "backend.execution.absolute_argv_required"
+            ));
         }
         if self.deadline_ns <= monotonic_ns()? {
-            return Err("Process deadline expired before launch".into());
+            return Err(crate::product_message!(
+                "backend.execution.expired_before_launch"
+            ));
         }
         if !self.cwd.is_dir() || !self.log_directory.is_dir() {
-            return Err("Process working/log directory is missing".into());
+            return Err(crate::product_message!(
+                "backend.execution.directories_missing"
+            ));
         }
         Ok(())
     }
@@ -92,14 +99,16 @@ pub enum ProcessStatus {
 
 impl ProcessStatus {
     #[cfg(unix)]
-    fn from_owner(value: &str) -> Result<Self, String> {
+    fn from_owner(value: &str) -> Result<Self, LocalizedText> {
         match value {
             "exited" => Ok(Self::Exited),
             "timeout" => Ok(Self::Timeout),
             "cancelled" => Ok(Self::Cancelled),
             "orphaned_members" => Ok(Self::OrphanedMembers),
             "cleanup_unconfirmed" => Ok(Self::CleanupUnconfirmed),
-            _ => Err(format!("Unknown supervisor closure status: {value}")),
+            _ => {
+                Err(crate::product_message!("backend.execution.unknown_closure", "status" => value))
+            }
         }
     }
 }
@@ -134,7 +143,7 @@ pub struct ProcessOwner {
 }
 
 impl ProcessOwner {
-    pub fn new() -> Result<Self, String> {
+    pub fn new() -> Result<Self, LocalizedText> {
         #[cfg(unix)]
         {
             return Ok(Self {
@@ -150,9 +159,9 @@ impl ProcessOwner {
         }
     }
 
-    pub fn with_python(python: &std::path::Path) -> Result<Self, String> {
+    pub fn with_python(python: &std::path::Path) -> Result<Self, LocalizedText> {
         if !python.is_absolute() || !python.is_file() {
-            return Err("The configured CPython must name an existing absolute executable".into());
+            return Err(crate::product_message!("backend.execution.python_required"));
         }
         #[cfg(unix)]
         {
@@ -166,23 +175,21 @@ impl ProcessOwner {
         }
     }
 
-    pub fn run(&self, spec: ProcessSpec) -> Result<ProcessResult, String> {
+    pub fn run(&self, spec: ProcessSpec) -> Result<ProcessResult, LocalizedText> {
         let result = self.spawn(spec, None)?.wait()?;
         if !result.success() {
-            return Err(format!(
-                "Owned command failed: status={:?} exit_code={:?} scope={} pid={} stdout={} stderr={}",
-                result.status,
-                result.exit_code,
-                result.scope,
-                result.pid,
-                result.stdout.display(),
-                result.stderr.display(),
-            ));
+            return Err(
+                crate::product_message!("backend.execution.command_failed", "status" => format!("{:?}", result.status), "exitCode" => format!("{:?}", result.exit_code), "scope" => &result.scope, "pid" => result.pid, "stdout" => result.stdout.display(), "stderr" => result.stderr.display()),
+            );
         }
         Ok(result)
     }
 
-    pub fn spawn(&self, spec: ProcessSpec, parent: Option<&str>) -> Result<OwnedProcess, String> {
+    pub fn spawn(
+        &self,
+        spec: ProcessSpec,
+        parent: Option<&str>,
+    ) -> Result<OwnedProcess, LocalizedText> {
         spec.validate()?;
         #[cfg(unix)]
         {
@@ -196,7 +203,7 @@ impl ProcessOwner {
             let _ = parent; // Nested Windows Jobs remain contained by the root Job.
             let mut jobs = self.jobs.lock();
             if self.cancelled.load(std::sync::atomic::Ordering::Acquire) {
-                return Err("Process owner is cancelled; no new command can start".into());
+                return Err(crate::product_message!("backend.execution.owner_cancelled"));
             }
             let capture = private_capture(&spec.log_directory)?;
             let stdout = capture.join("stdout.log");
@@ -242,7 +249,7 @@ impl ProcessOwner {
         }
     }
 
-    pub fn cancel(&self) -> Result<(), String> {
+    pub fn cancel(&self) -> Result<(), LocalizedText> {
         #[cfg(unix)]
         {
             self.owner.cancel()
@@ -263,7 +270,7 @@ impl Drop for ProcessOwner {
 }
 
 #[cfg(windows)]
-fn private_capture(directory: &std::path::Path) -> Result<PathBuf, String> {
+fn private_capture(directory: &std::path::Path) -> Result<PathBuf, LocalizedText> {
     use std::sync::atomic::{AtomicU64, Ordering};
     static NONCE: AtomicU64 = AtomicU64::new(0);
     for _ in 0..100 {
@@ -275,10 +282,12 @@ fn private_capture(directory: &std::path::Path) -> Result<PathBuf, String> {
         match std::fs::create_dir(&path) {
             Ok(()) => return Ok(path),
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(error) => return Err(error.to_string()),
+            Err(error) => return Err(error.to_string().into()),
         }
     }
-    Err("Cannot reserve private process log directory".into())
+    Err(crate::product_message!(
+        "backend.execution.capture_reservation_failed"
+    ))
 }
 
 enum Backend {
@@ -311,14 +320,16 @@ impl OwnedProcess {
         }
     }
 
-    pub fn write_stdin(&mut self, bytes: &[u8]) -> Result<(), String> {
+    pub fn write_stdin(&mut self, bytes: &[u8]) -> Result<(), LocalizedText> {
         match &mut self.backend {
             #[cfg(unix)]
             Backend::Unix(process) => process.write_stdin(bytes),
             #[cfg(windows)]
             Backend::Windows { tree, finished, .. } => {
                 if *finished {
-                    return Err("Owned process already completed".into());
+                    return Err(crate::product_message!(
+                        "backend.execution.already_completed"
+                    ));
                 }
                 tree.write_stdin(bytes, self.spec.deadline_ns)
             }
@@ -333,7 +344,7 @@ impl OwnedProcess {
             Backend::Windows { tree, .. } => tree.close_stdin(),
         }
     }
-    pub fn wait(&mut self) -> Result<ProcessResult, String> {
+    pub fn wait(&mut self) -> Result<ProcessResult, LocalizedText> {
         #[cfg(unix)]
         {
             let Backend::Unix(process) = &mut self.backend;
@@ -350,7 +361,9 @@ impl OwnedProcess {
                 cancelled,
             } = &mut self.backend;
             if *finished {
-                return Err("Owned process already completed".into());
+                return Err(crate::product_message!(
+                    "backend.execution.already_completed"
+                ));
             }
             let status = loop {
                 if let Some(status) = tree.try_wait().map_err(|error| error.to_string())? {
@@ -395,7 +408,7 @@ impl OwnedProcess {
         }
     }
 
-    pub fn cancel(&mut self) -> Result<ProcessResult, String> {
+    pub fn cancel(&mut self) -> Result<ProcessResult, LocalizedText> {
         #[cfg(unix)]
         {
             let Backend::Unix(process) = &mut self.backend;
@@ -412,7 +425,9 @@ impl OwnedProcess {
                 ..
             } = &mut self.backend;
             if *finished {
-                return Err("Owned process already completed".into());
+                return Err(crate::product_message!(
+                    "backend.execution.already_completed"
+                ));
             }
             tree.stop()?;
             *finished = true;
@@ -433,29 +448,29 @@ impl OwnedProcess {
     }
 }
 
-pub fn run_bounded(spec: ProcessSpec) -> Result<ProcessResult, String> {
+pub fn run_bounded(spec: ProcessSpec) -> Result<ProcessResult, LocalizedText> {
     ProcessOwner::new()?.run(spec)
 }
 
 /// A common OS monotonic clock, not the ECU's logical epoch.
 #[cfg(target_os = "linux")]
-pub fn monotonic_ns() -> Result<u64, String> {
+pub fn monotonic_ns() -> Result<u64, LocalizedText> {
     let mut value = libc::timespec {
         tv_sec: 0,
         tv_nsec: 0,
     };
     // SAFETY: a writable timespec is passed to CLOCK_MONOTONIC.
     if unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut value) } != 0 {
-        return Err(std::io::Error::last_os_error().to_string());
+        return Err(std::io::Error::last_os_error().to_string().into());
     }
     let nanos = (value.tv_sec as u128) * 1_000_000_000 + (value.tv_nsec as u128);
     nanos
         .try_into()
-        .map_err(|_| "Monotonic clock overflow".into())
+        .map_err(|_| crate::product_message!("backend.execution.clock_overflow"))
 }
 
 #[cfg(target_os = "macos")]
-pub fn monotonic_ns() -> Result<u64, String> {
+pub fn monotonic_ns() -> Result<u64, LocalizedText> {
     use std::sync::LazyLock;
     #[repr(C)]
     struct Timebase {
@@ -466,12 +481,12 @@ pub fn monotonic_ns() -> Result<u64, String> {
         fn mach_absolute_time() -> u64;
         fn mach_timebase_info(info: *mut Timebase) -> i32;
     }
-    static TIMEBASE: LazyLock<Result<(u32, u32), String>> = LazyLock::new(|| {
+    static TIMEBASE: LazyLock<Result<(u32, u32), LocalizedText>> = LazyLock::new(|| {
         let mut info = Timebase { numer: 0, denom: 0 };
         // SAFETY: the kernel writes the timebase into a valid record.
         let status = unsafe { mach_timebase_info(&mut info) };
         if status != 0 || info.denom == 0 {
-            Err(format!("mach_timebase_info failed: {status}"))
+            Err(crate::product_message!("backend.execution.timebase_failed", "status" => status))
         } else {
             Ok((info.numer, info.denom))
         }
@@ -481,26 +496,25 @@ pub fn monotonic_ns() -> Result<u64, String> {
     let value = unsafe { mach_absolute_time() };
     ((value as u128) * (numer as u128) / (denom as u128))
         .try_into()
-        .map_err(|_| "Monotonic clock overflow".into())
+        .map_err(|_| crate::product_message!("backend.execution.clock_overflow"))
 }
 
 #[cfg(windows)]
-pub fn monotonic_ns() -> Result<u64, String> {
+pub fn monotonic_ns() -> Result<u64, LocalizedText> {
     use std::sync::LazyLock;
     #[link(name = "kernel32")]
     unsafe extern "system" {
         fn QueryPerformanceCounter(value: *mut i64) -> i32;
         fn QueryPerformanceFrequency(value: *mut i64) -> i32;
     }
-    static FREQUENCY: LazyLock<Result<i64, String>> = LazyLock::new(|| {
+    static FREQUENCY: LazyLock<Result<i64, LocalizedText>> = LazyLock::new(|| {
         let mut value = 0;
         // SAFETY: the kernel writes a frequency into a valid i64.
         let status = unsafe { QueryPerformanceFrequency(&mut value) };
         if status == 0 || value <= 0 {
-            Err(format!(
-                "QueryPerformanceFrequency failed: {}",
-                std::io::Error::last_os_error()
-            ))
+            Err(
+                crate::product_message!("backend.execution.frequency_failed", "error" => std::io::Error::last_os_error()),
+            )
         } else {
             Ok(value)
         }
@@ -509,12 +523,11 @@ pub fn monotonic_ns() -> Result<u64, String> {
     let mut value = 0;
     // SAFETY: the kernel writes the current counter into a valid i64.
     if unsafe { QueryPerformanceCounter(&mut value) } == 0 || value < 0 {
-        return Err(format!(
-            "QueryPerformanceCounter failed: {}",
-            std::io::Error::last_os_error()
-        ));
+        return Err(
+            crate::product_message!("backend.execution.counter_failed", "error" => std::io::Error::last_os_error()),
+        );
     }
     ((value as u128) * 1_000_000_000 / (frequency as u128))
         .try_into()
-        .map_err(|_| "Monotonic clock overflow".into())
+        .map_err(|_| crate::product_message!("backend.execution.clock_overflow"))
 }

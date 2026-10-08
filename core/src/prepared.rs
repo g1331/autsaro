@@ -11,15 +11,14 @@ use sha2::{Digest, Sha256};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 impl PlanDiagnostic {
-    fn source_closure(message: impl Into<String>) -> Vec<Self> {
+    fn source_closure(message: impl Into<crate::LocalizedText>) -> Vec<Self> {
         vec![Self {
             category: DiagnosticCategory::Tool,
             code: "SOURCE_CLOSURE".into(),
             file: None,
             object: None,
             message: message.into(),
-            remedy: "Restore the matching compiled resource inventory and validated input plan."
-                .into(),
+            remedy: crate::product_message!("backend.prepared.source_closure_remedy"),
         }]
     }
 }
@@ -37,7 +36,7 @@ pub enum PreflightStatus {
 pub struct PreflightReport {
     pub status: PreflightStatus,
     pub fingerprint: String,
-    pub logs: Vec<String>,
+    pub logs: Vec<crate::LocalizedText>,
 }
 
 #[derive(Debug)]
@@ -97,7 +96,10 @@ impl<'a> PreparedProject<'a> {
         self.application_slot.as_ref()
     }
 
-    pub fn preview(mut self, output: &std::path::Path) -> Result<crate::GenerationPreview, String> {
+    pub fn preview(
+        mut self,
+        output: &std::path::Path,
+    ) -> Result<crate::GenerationPreview, crate::LocalizedText> {
         let guard = self.native_guard.take();
         if let Some(guard) = &guard {
             guard.verify(Some(output))?;
@@ -109,7 +111,7 @@ impl<'a> PreparedProject<'a> {
         self,
         output: &std::path::Path,
         revision: &str,
-    ) -> Result<crate::GenerationReport, String> {
+    ) -> Result<crate::GenerationReport, crate::LocalizedText> {
         self.stage(output, Some(revision))?.commit()
     }
 
@@ -117,11 +119,14 @@ impl<'a> PreparedProject<'a> {
         self,
         output: &std::path::Path,
         revision: &str,
-    ) -> Result<generator::StagedGeneration, String> {
+    ) -> Result<generator::StagedGeneration, crate::LocalizedText> {
         self.stage(output, Some(revision))
     }
 
-    pub fn generate(self, output: &std::path::Path) -> Result<crate::GenerationReport, String> {
+    pub fn generate(
+        self,
+        output: &std::path::Path,
+    ) -> Result<crate::GenerationReport, crate::LocalizedText> {
         self.stage(output, None)?.commit()
     }
 
@@ -129,7 +134,7 @@ impl<'a> PreparedProject<'a> {
         mut self,
         output: &std::path::Path,
         revision: Option<&str>,
-    ) -> Result<generator::StagedGeneration, String> {
+    ) -> Result<generator::StagedGeneration, crate::LocalizedText> {
         let guard = self.native_guard.take();
         if let Some(guard) = &guard {
             guard.verify(Some(output))?;
@@ -148,10 +153,7 @@ impl<'a> PreparedProject<'a> {
             logs: Vec::new(),
         };
         if !self.target.is_native() {
-            report.logs.push(format!(
-                "Native preflight is not applicable to this host for {}",
-                self.target.spec().id
-            ));
+            report.logs.push(crate::product_message!("backend.prepared.preflight_not_applicable", "target" => self.target.spec().id));
             return report;
         }
         if let Some(guard) = &self.native_guard {
@@ -161,7 +163,7 @@ impl<'a> PreparedProject<'a> {
                 return report;
             }
         }
-        let result = (|| -> Result<(), String> {
+        let result = (|| -> Result<(), crate::LocalizedText> {
             use crate::execution::ProcessSpec;
             use std::ffi::OsString;
             use std::fmt::Write;
@@ -172,34 +174,35 @@ impl<'a> PreparedProject<'a> {
                 "ecu-preflight",
                 std::ffi::OsStr::new("private"),
             )?;
-            report.logs.push(format!(
-                "Native preflight source/log directory: {}",
-                stage.display()
-            ));
+            report.logs.push(crate::product_message!("backend.prepared.preflight_capture_directory", "path" => stage.display()));
             let source = stage.join("source");
             let logs = stage.join("logs");
-            std::fs::create_dir(&source).map_err(|error| error.to_string())?;
-            std::fs::create_dir(&logs).map_err(|error| error.to_string())?;
+            std::fs::create_dir(&source)
+                .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
+            std::fs::create_dir(&logs)
+                .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
                 std::fs::set_permissions(&logs, std::fs::Permissions::from_mode(0o700))
-                    .map_err(|error| error.to_string())?;
+                    .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
             }
             let mut list = String::new();
             let mut hashes = String::new();
             for file in &self.files {
                 let path = source.join(&file.path);
                 std::fs::create_dir_all(path.parent().unwrap())
-                    .map_err(|error| error.to_string())?;
-                std::fs::write(path, &file.bytes).map_err(|error| error.to_string())?;
+                    .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
+                std::fs::write(path, &file.bytes)
+                    .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
                 writeln!(list, "{}", file.path).unwrap();
                 writeln!(hashes, "{:x}  {}", Sha256::digest(&file.bytes), file.path).unwrap();
             }
             writeln!(hashes, "{:x}  files.list", Sha256::digest(list.as_bytes())).unwrap();
-            std::fs::write(source.join("files.list"), list).map_err(|error| error.to_string())?;
+            std::fs::write(source.join("files.list"), list)
+                .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
             std::fs::write(source.join("files.sha256"), hashes)
-                .map_err(|error| error.to_string())?;
+                .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
             let modes: &[&str] = if self.profile == "ecu" {
                 &["probe", "host-batch"]
             } else {
@@ -235,13 +238,18 @@ impl<'a> PreparedProject<'a> {
                 )?;
                 let result = owner.run(spec)?;
                 report.logs.push(
-                    std::fs::read_to_string(result.stdout).map_err(|error| error.to_string())?,
+                    std::fs::read_to_string(result.stdout)
+                        .map_err(|error| crate::LocalizedText::from(error.to_string()))?
+                        .into(),
                 );
                 report.logs.push(
-                    std::fs::read_to_string(result.stderr).map_err(|error| error.to_string())?,
+                    std::fs::read_to_string(result.stderr)
+                        .map_err(|error| crate::LocalizedText::from(error.to_string()))?
+                        .into(),
                 );
             }
-            std::fs::remove_dir_all(stage).map_err(|error| error.to_string())?;
+            std::fs::remove_dir_all(stage)
+                .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
             Ok(())
         })();
         match result {
@@ -269,7 +277,7 @@ fn insert<'a>(
     path: String,
     bytes: Cow<'a, [u8]>,
     source: Option<&'static AssetEntry>,
-) -> Result<(), String> {
+) -> Result<(), crate::LocalizedText> {
     if files
         .insert(
             path.clone(),
@@ -281,14 +289,17 @@ fn insert<'a>(
         )
         .is_some()
     {
-        return Err(format!(
-            "Generated source path collides with a trusted asset: {path}"
-        ));
+        return Err(
+            crate::product_message!("backend.prepared.source_asset_collision", "path" => path),
+        );
     }
     Ok(())
 }
 
-pub(crate) fn deliver_path(asset: &AssetEntry, profile: &str) -> Result<String, String> {
+pub(crate) fn deliver_path(
+    asset: &AssetEntry,
+    profile: &str,
+) -> Result<String, crate::LocalizedText> {
     let path = asset.relative_path;
     if matches!(path, "LICENSE" | "NOTICE") {
         return Ok(path.into());
@@ -323,7 +334,9 @@ pub(crate) fn deliver_path(asset: &AssetEntry, profile: &str) -> Result<String, 
     }
     if let Some(path) = path.strip_prefix("third_party/freertos/") {
         if profile != "ecu" {
-            return Err("A legacy host project cannot include a FreeRTOS kernel".into());
+            return Err(crate::product_message!(
+                "backend.prepared.legacy_kernel_forbidden"
+            ));
         }
         if path == "include/StackMacros.h" {
             return Ok("kernel-compat/include/StackMacros.h".into());
@@ -333,15 +346,13 @@ pub(crate) fn deliver_path(asset: &AssetEntry, profile: &str) -> Result<String, 
     if let Some(path) = path.strip_prefix("tools/python/src/ecu_tools/") {
         return Ok(format!("tools/ecu_tools/{path}"));
     }
-    Err(format!(
-        "Asset is outside the selected source roots: {path}"
-    ))
+    Err(crate::product_message!("backend.prepared.asset_source_root_invalid", "path" => path))
 }
 
 fn start<'a>(
     target: BuildTarget,
     profile: &'static str,
-) -> Result<BTreeMap<String, PreparedFile<'a>>, String> {
+) -> Result<BTreeMap<String, PreparedFile<'a>>, crate::LocalizedText> {
     let inventory = AssetInventory::embedded();
     let mut files = BTreeMap::new();
     for asset in inventory.selected(target, profile) {
@@ -371,7 +382,7 @@ impl NativePreparation {
         profile: &str,
         target: BuildTarget,
         handoff: bool,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, crate::LocalizedText> {
         inputs.manifest.profile_hint = profile.into();
         inputs.refresh_snapshot_identity()?;
         let snapshots = generator::delivery::populate_inputs(files, &mut inputs, slot.as_ref())?;
@@ -402,18 +413,15 @@ fn finish<'a>(
     mut files: BTreeMap<String, PreparedFile<'a>>,
     input_identity: Option<&str>,
     native: Option<NativePreparation>,
-) -> Result<PreparedProject<'a>, String> {
+) -> Result<PreparedProject<'a>, crate::LocalizedText> {
     let spec = target.spec();
     let toolchain_asset = AssetInventory::embedded()
         .get(spec.toolchain_asset)
         .ok_or_else(|| {
-            format!(
-                "Pinned toolchain asset is missing: {}",
-                spec.toolchain_asset
-            )
+            crate::product_message!("backend.prepared.toolchain_asset_missing", "path" => spec.toolchain_asset)
         })?;
     let toolchain: serde_json::Value = serde_json::from_slice(toolchain_asset.bytes)
-        .map_err(|error| format!("Invalid pinned toolchain: {error}"))?;
+        .map_err(|error| crate::product_message!("backend.prepared.toolchain_invalid", "error" => error.to_string()))?;
     let patches: Vec<_> = if profile == "ecu" {
         spec.kernel_patches
             .iter()
@@ -500,18 +508,19 @@ fn finish<'a>(
         "nativeDelivery": native.as_ref().map(|native| &native.metadata),
         "definitionFingerprint": native.as_ref().map(|native| &native.definition_fingerprint),
     }))
-    .map_err(|error| error.to_string())?;
+    .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     metadata.push(b'\n');
     if native.is_none() {
         // Legacy target bytes must not gain native-null fields or a new identity.
-        let mut value: serde_json::Value =
-            serde_json::from_slice(&metadata).map_err(|error| error.to_string())?;
+        let mut value: serde_json::Value = serde_json::from_slice(&metadata)
+            .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
         value.as_object_mut().unwrap().remove("nativeDelivery");
         value
             .as_object_mut()
             .unwrap()
             .remove("definitionFingerprint");
-        metadata = serde_json::to_vec_pretty(&value).map_err(|error| error.to_string())?;
+        metadata = serde_json::to_vec_pretty(&value)
+            .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
         metadata.push(b'\n');
     }
     insert(&mut files, "target.json".into(), Cow::Owned(metadata), None)?;
@@ -583,9 +592,9 @@ pub fn prepare_ecu_project_for_workspace(
     handoff: bool,
 ) -> Result<PreparedProject<'static>, Vec<PlanDiagnostic>> {
     if workspace.uses_legacy_validation() || plan.description().rule_set_identity.is_none() {
-        return Err(PlanDiagnostic::source_closure(
-            "Use explicit legacy preparation for legacy workspaces/plans.",
-        ));
+        return Err(PlanDiagnostic::source_closure(crate::product_message!(
+            "backend.prepared.legacy_preparation_required"
+        )));
     }
     let native = NativeInputs::from_workspace(
         workspace,
@@ -601,9 +610,9 @@ pub fn prepare_ecu_project_for_workspace(
         || plan.description().rule_set_identity.as_ref()
             != Some(&native.resources.rule_set_identity)
     {
-        return Err(PlanDiagnostic::source_closure(
-            "The plan is stale or does not describe these saved authoritative source members.",
-        ));
+        return Err(PlanDiagnostic::source_closure(crate::product_message!(
+            "backend.prepared.plan_source_members_stale"
+        )));
     }
     if plan
         .description()
@@ -708,7 +717,7 @@ pub fn prepare_host_project(
     workspace: &mut Workspace,
     target: BuildTarget,
     handoff: bool,
-) -> Result<PreparedProject<'static>, String> {
+) -> Result<PreparedProject<'static>, crate::LocalizedText> {
     let legacy = workspace.uses_legacy_validation();
     if !legacy {
         workspace.verify_saved_sources()?;
@@ -755,7 +764,7 @@ pub fn prepare_host_project(
             "target": target,
             "sources": identities,
         }))
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
         metadata.push(b'\n');
         insert(
             &mut files,
@@ -785,5 +794,36 @@ pub fn prepare_host_project(
             Some(&input_identity),
             Some(native),
         )
+    }
+}
+
+#[cfg(test)]
+mod localization_tests {
+    use crate::LocalizedText;
+    use crate::integration::PlanDiagnostic;
+
+    #[test]
+    fn source_closure_preserves_product_message_without_rendering() {
+        let message = crate::product_message!(
+            "backend.delivery.source_changed",
+            "path" => "D:/用户/{{name}}.arxml",
+        );
+        let diagnostics = PlanDiagnostic::source_closure(message.clone());
+        assert_eq!(diagnostics[0].code, "SOURCE_CLOSURE");
+        assert_eq!(diagnostics[0].message, message);
+        assert_eq!(
+            serde_json::to_value(&diagnostics[0].remedy).unwrap(),
+            serde_json::json!({"key": "backend.prepared.source_closure_remedy", "params": {}})
+        );
+    }
+
+    #[test]
+    fn source_closure_preserves_raw_system_error_evidence() {
+        let evidence = "外部 {{path}}: permission denied\r\n";
+        let diagnostics = PlanDiagnostic::source_closure(LocalizedText::from(evidence));
+        assert_eq!(
+            serde_json::to_value(&diagnostics[0].message).unwrap(),
+            evidence
+        );
     }
 }

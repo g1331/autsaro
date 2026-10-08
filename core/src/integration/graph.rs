@@ -35,8 +35,8 @@ impl Graph {
         let external = Document::parse(definitions).map_err(|error| {
             vec![PlanDiagnostic::dependency(
                 "MOD_PARSE",
-                format!("ECUC definition XML cannot be parsed: {error}"),
-                "Provide the pinned, unmodified R24-11 MOD archive.",
+                crate::product_message!("backend.integration.graph.ecuc_definition_xml_parse_failed", "error" => error),
+                crate::product_message!("backend.integration.graph.pinned_unmodified_mod_archive_required"),
             )]
         })?;
         for node in external
@@ -91,8 +91,8 @@ impl Graph {
                     vec![PlanDiagnostic::at_source(
                         source,
                         "XML_PARSE",
-                        format!("XML cannot be parsed: {error}"),
-                        "Repair the XML syntax before checking the integration plan.",
+                        crate::product_message!("backend.integration.graph.xml_parse_failed", "error" => error),
+                        crate::product_message!("backend.integration.graph.xml_syntax_repair_required"),
                     )]
                 })
             })
@@ -158,8 +158,12 @@ impl Graph {
                             index,
                             DiagnosticCategory::Input,
                             "OBJECT_DUPLICATE",
-                            "Two input objects have the same complete AUTOSAR path.",
-                            "Remove the duplicate object or give it a distinct complete path.",
+                            crate::product_message!(
+                                "backend.integration.graph.duplicate_autosar_object_path"
+                            ),
+                            crate::product_message!(
+                                "backend.integration.graph.duplicate_object_path_repair_required"
+                            ),
                         ));
                     }
                     if graph.external.contains_key(&object) {
@@ -167,8 +171,8 @@ impl Graph {
                             index,
                             DiagnosticCategory::Input,
                             "DEFINITION_SHADOWED",
-                            "An input object shadows a pinned ECUC definition.",
-                            "Remove the local replacement of the external MOD definition.",
+                            crate::product_message!("backend.integration.graph.input_object_shadows_pinned_ecuc_definition"),
+                            crate::product_message!("backend.integration.graph.local_mod_definition_replacement_remove_required"),
                         ));
                     }
                 }
@@ -210,8 +214,8 @@ impl Graph {
             ] {
                 for index in graph.descendants(root, tag) {
                     diagnostics.push(graph.diagnostic(index, DiagnosticCategory::Unsupported,
-                        code, format!("{tag} affects the selected target and is outside its supported profile."),
-                        "Use explicit nonqueued S/R and synchronous local services with fully selected variants, without implicit, mode or transformer access."));
+                        code, crate::product_message!("backend.integration.graph.target_profile_tag_unsupported", "tag" => tag),
+                        crate::product_message!("backend.integration.graph.explicit_sr_synchronous_service_profile_required")));
                 }
             }
         }
@@ -291,8 +295,8 @@ impl Graph {
         index: usize,
         category: DiagnosticCategory,
         code: &str,
-        message: impl Into<String>,
-        remedy: &str,
+        message: crate::message::LocalizedText,
+        remedy: crate::message::LocalizedText,
     ) -> PlanDiagnostic {
         let node = &self.elements[index];
         PlanDiagnostic {
@@ -330,11 +334,15 @@ impl Graph {
                 let (code, message) = match kind {
                     None => (
                         "REFERENCE_UNRESOLVED",
-                        "A referenced AUTOSAR object is missing.",
+                        crate::product_message!(
+                            "backend.integration.graph.referenced_autosar_object_missing"
+                        ),
                     ),
                     Some(kind) if kind != destination => (
                         "REFERENCE_DEST",
-                        "The reference DEST differs from the target object kind.",
+                        crate::product_message!(
+                            "backend.integration.graph.reference_dest_kind_mismatch"
+                        ),
                     ),
                     Some(_) => continue,
                 };
@@ -346,23 +354,31 @@ impl Graph {
                         })
                     {
                         let mut issue = graph.diagnostic(*parent_index, DiagnosticCategory::Input,
-                            "SERVICE_CLIENT_MISSING", format!("The declared service client port is absent beneath {parent}."),
-                            "Supply the standard service client port and bind its synchronous call to the local provider.");
+                            "SERVICE_CLIENT_MISSING", crate::product_message!("backend.integration.graph.declared_service_client_port_missing", "parent" => parent),
+                            crate::product_message!("backend.integration.graph.service_client_local_provider_binding_required"));
                         issue.object = Some(element.text.clone());
                         diagnostics.push(issue);
                     }
                 }
                 if kind.is_none() && destination == "BSW-MODULE-ENTRY" {
-                    let mut issue = graph.diagnostic(index, DiagnosticCategory::Input,
-                        "BSW_ENTRY_MISSING", "A declared BSW implementation or schedulable entity refers to a missing entry.",
-                        "Supply the BSW entry description and its matching implementation/signature; do not substitute an empty entry.");
+                    let mut issue = graph.diagnostic(
+                        index,
+                        DiagnosticCategory::Input,
+                        "BSW_ENTRY_MISSING",
+                        crate::product_message!(
+                            "backend.integration.graph.bsw_entry_reference_missing"
+                        ),
+                        crate::product_message!(
+                            "backend.integration.graph.supply_bsw_entry_and_implementation"
+                        ),
+                    );
                     issue.object = Some(element.text.clone());
                     diagnostics.push(issue);
                 }
                 diagnostics.push(graph.diagnostic(
                     index, DiagnosticCategory::Input, code,
-                    format!("{message} Reference: {}", element.text),
-                    "Supply the referenced object and correct the typed reference; do not add an SDG substitute.",
+                    crate::message::LocalizedText::messages([message, crate::product_message!("backend.integration.graph.reference_target", "target" => element.text)]),
+                    crate::product_message!("backend.integration.graph.supply_object_and_correct_typed_reference"),
                 ));
             }
         }

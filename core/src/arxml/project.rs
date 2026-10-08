@@ -76,12 +76,17 @@ pub struct ProjectCreationPreview {
     pub accepted_extension_definitions: Vec<ExtensionDefinitionIdentity>,
 }
 
-pub(super) fn safe_path(path: &Path, allow_missing_leaf: bool) -> Result<(), String> {
+pub(super) fn safe_path(
+    path: &Path,
+    allow_missing_leaf: bool,
+) -> Result<(), crate::message::LocalizedText> {
     if path
         .components()
         .any(|part| matches!(part, std::path::Component::ParentDir))
     {
-        return Err("Path must not contain parent traversal.".into());
+        return Err(crate::product_message!(
+            "backend.arxml.project.parent_traversal_forbidden"
+        ));
     }
     for ancestor in path.ancestors() {
         let metadata = match fs::symlink_metadata(ancestor) {
@@ -93,7 +98,7 @@ pub(super) fn safe_path(path: &Path, allow_missing_leaf: bool) -> Result<(), Str
             {
                 continue;
             }
-            Err(error) => return Err(format!("{}: {error}", ancestor.display())),
+            Err(error) => return Err(format!("{}: {error}", ancestor.display()).into()),
         };
         #[cfg(windows)]
         let linked = {
@@ -103,16 +108,16 @@ pub(super) fn safe_path(path: &Path, allow_missing_leaf: bool) -> Result<(), Str
         #[cfg(not(windows))]
         let linked = metadata.file_type().is_symlink();
         if linked {
-            return Err(format!(
-                "Link/reparse point is not accepted: {}",
-                ancestor.display()
+            return Err(crate::product_message!(
+                "backend.arxml.project.link_not_accepted",
+                "path" => ancestor.display()
             ));
         }
     }
     Ok(())
 }
 
-pub(super) fn read_bounded(path: &Path) -> Result<Vec<u8>, String> {
+pub(super) fn read_bounded(path: &Path) -> Result<Vec<u8>, crate::message::LocalizedText> {
     use std::io::Read;
     safe_path(path, false)?;
     #[cfg(feature = "verification-metrics")]
@@ -120,9 +125,9 @@ pub(super) fn read_bounded(path: &Path) -> Result<Vec<u8>, String> {
     let file = fs::File::open(path).map_err(|error| format!("{}: {error}", path.display()))?;
     let metadata = file.metadata().map_err(|error| error.to_string())?;
     if !metadata.is_file() || metadata.len() > 50 * 1024 * 1024 {
-        return Err(format!(
-            "Input must be a regular file of at most 50 MiB: {}",
-            path.display()
+        return Err(crate::product_message!(
+            "backend.arxml.project.input_file_size_limit",
+            "path" => path.display()
         ));
     }
     let mut bytes = Vec::with_capacity(metadata.len() as usize);
@@ -130,15 +135,15 @@ pub(super) fn read_bounded(path: &Path) -> Result<Vec<u8>, String> {
         .read_to_end(&mut bytes)
         .map_err(|error| error.to_string())?;
     if bytes.len() > 50 * 1024 * 1024 {
-        return Err(format!(
-            "Input grew beyond 50 MiB while reading: {}",
-            path.display()
+        return Err(crate::product_message!(
+            "backend.arxml.project.input_grew_beyond_limit",
+            "path" => path.display()
         ));
     }
     Ok(bytes)
 }
 
-pub(super) fn relative_path(value: &str) -> Result<&Path, String> {
+pub(super) fn relative_path(value: &str) -> Result<&Path, crate::message::LocalizedText> {
     let path = Path::new(value);
     if value.is_empty()
         || value.contains('\\')
@@ -157,14 +162,15 @@ pub(super) fn relative_path(value: &str) -> Result<&Path, String> {
             .components()
             .all(|part| matches!(part, std::path::Component::Normal(_)))
     {
-        return Err(format!(
-            "Project member must be a unique safe relative path: {value}"
+        return Err(crate::product_message!(
+            "backend.arxml.project.member_path_must_be_safe",
+            "path" => value
         ));
     }
     Ok(path)
 }
 
-fn destination(directory: &Path) -> Result<PathBuf, String> {
+fn destination(directory: &Path) -> Result<PathBuf, crate::message::LocalizedText> {
     let selected = if directory.is_absolute() {
         directory.to_owned()
     } else {
@@ -180,35 +186,43 @@ fn destination(directory: &Path) -> Result<PathBuf, String> {
                 .next()
                 .is_some()
         {
-            return Err("Project destination must be a new or empty directory.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.project.destination_must_be_new_or_empty"
+            ));
         }
-        fs::canonicalize(selected).map_err(|error| error.to_string())
+        fs::canonicalize(selected).map_err(|error| error.to_string().into())
     } else {
-        let parent = selected
-            .parent()
-            .ok_or("Project destination has no parent.")?;
-        let name = selected
-            .file_name()
-            .ok_or("Project destination has no directory name.")?;
+        let parent = selected.parent().ok_or_else(|| {
+            crate::product_message!("backend.arxml.project.destination_parent_missing")
+        })?;
+        let name = selected.file_name().ok_or_else(|| {
+            crate::product_message!("backend.arxml.project.destination_name_missing")
+        })?;
         Ok(fs::canonicalize(parent)
             .map_err(|error| error.to_string())?
             .join(name))
     }
 }
 
-pub(super) fn render_manifest(manifest: &ProjectManifest) -> Result<String, String> {
+pub(super) fn render_manifest(
+    manifest: &ProjectManifest,
+) -> Result<String, crate::message::LocalizedText> {
     Ok(format!(
         "{}\n",
         serde_json::to_string_pretty(manifest).map_err(|error| error.to_string())?
     ))
 }
 
-pub(super) fn validate_manifest(manifest: &ProjectManifest) -> Result<(), String> {
+pub(super) fn validate_manifest(
+    manifest: &ProjectManifest,
+) -> Result<(), crate::message::LocalizedText> {
     if manifest.format_version != 1
         || manifest.declared_release != "R24-11"
         || manifest.inputs.is_empty()
     {
-        return Err("Unsupported project manifest version/release or empty input set.".into());
+        return Err(crate::product_message!(
+            "backend.arxml.project.manifest_version_release_or_inputs_invalid"
+        ));
     }
     let mut paths = BTreeSet::new();
     for input in &manifest.inputs {
@@ -218,7 +232,9 @@ pub(super) fn validate_manifest(manifest: &ProjectManifest) -> Result<(), String
             .is_some_and(|extension| extension.eq_ignore_ascii_case("arxml"))
             || !paths.insert(input.path.to_ascii_lowercase())
         {
-            return Err("Project ARXML input paths must be unique and use .arxml.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.project.arxml_paths_must_be_unique"
+            ));
         }
     }
     let mut slots = BTreeSet::new();
@@ -228,7 +244,9 @@ pub(super) fn validate_manifest(manifest: &ProjectManifest) -> Result<(), String
             || !slots.insert(&input.producer_slot)
             || !paths.insert(input.path.to_ascii_lowercase())
         {
-            return Err("Application member slot/path is unsupported or conflicting.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.project.application_slot_or_path_invalid"
+            ));
         }
     }
     let mut catalogs = BTreeSet::new();
@@ -242,9 +260,9 @@ pub(super) fn validate_manifest(manifest: &ProjectManifest) -> Result<(), String
             || !catalogs.insert(&identity.catalog_id)
             || previous.is_some_and(|id: &String| id >= &identity.catalog_id)
         {
-            return Err(
-                "Accepted catalog identities must be unique, exact and sorted by catalogId.".into(),
-            );
+            return Err(crate::product_message!(
+                "backend.arxml.project.accepted_catalog_identities_invalid"
+            ));
         }
         previous = Some(&identity.catalog_id);
     }
@@ -254,9 +272,11 @@ pub(super) fn validate_manifest(manifest: &ProjectManifest) -> Result<(), String
 fn template_files(
     name: &str,
     template: &str,
-) -> Result<(String, Vec<ProjectFilePreview>, Vec<ProjectInput>), String> {
+) -> Result<(String, Vec<ProjectFilePreview>, Vec<ProjectInput>), crate::message::LocalizedText> {
     if !valid_name(name) {
-        return Err("Project name must start with an ASCII letter and contain only letters, digits and underscores (128 bytes maximum).".into());
+        return Err(crate::product_message!(
+            "backend.arxml.project.project_name_constraints"
+        ));
     }
     let mut files = Vec::new();
     let profile;
@@ -358,7 +378,11 @@ fn template_files(
                 });
             }
         }
-        _ => return Err("Unknown project template ID.".into()),
+        _ => {
+            return Err(crate::product_message!(
+                "backend.arxml.project.unknown_template_id"
+            ));
+        }
     }
     let inputs = files
         .iter()
@@ -374,7 +398,7 @@ fn preview_revision(
     preview: &ProjectCreationPreview,
     input: &str,
     catalog: &crate::definitions::DefinitionCatalog,
-) -> Result<String, String> {
+) -> Result<String, crate::message::LocalizedText> {
     let mut content = preview.clone();
     content.revision.clear();
     let mut digest = Sha256::new();
@@ -390,13 +414,13 @@ fn from_preview(
     preview: &ProjectCreationPreview,
     catalog: Arc<crate::definitions::DefinitionCatalog>,
     require_definition: bool,
-) -> Result<Workspace, String> {
+) -> Result<Workspace, crate::message::LocalizedText> {
     let root = PathBuf::from(&preview.directory);
     let manifest_file = preview
         .files
         .iter()
         .find(|file| file.path == MANIFEST)
-        .ok_or("Project preview has no manifest.")?;
+        .ok_or_else(|| crate::product_message!("backend.arxml.project.preview_manifest_missing"))?;
     let manifest: ProjectManifest =
         serde_json::from_str(&manifest_file.contents).map_err(|error| error.to_string())?;
     validate_manifest(&manifest)?;
@@ -406,18 +430,24 @@ fn from_preview(
             .files
             .iter()
             .find(|file| file.path == input.path)
-            .ok_or("Project preview is missing an ARXML member.")?;
+            .ok_or_else(|| {
+                crate::product_message!("backend.arxml.project.preview_arxml_member_missing")
+            })?;
         if file.contents.len() > 50 * 1024 * 1024
             || file.contents.contains("<!DOCTYPE")
             || file.contents.contains("<!ENTITY")
         {
-            return Err("Unsafe project source.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.project.unsafe_source"
+            ));
         }
         let document = Document::parse(&file.contents).map_err(|error| error.to_string())?;
         if document.root_element().tag_name().namespace() != Some(NS)
             || document.root_element().tag_name().name() != "AUTOSAR"
         {
-            return Err("Project source is not AUTOSAR XML.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.project.source_not_autosar_xml"
+            ));
         }
         files.push(SourceFile {
             path: root.join(&input.path),
@@ -446,7 +476,11 @@ fn from_preview(
                 .iter()
                 .find(|file| file.path == input.path)
                 .map(|file| (input.path.clone(), file.contents.as_bytes().to_vec()))
-                .ok_or("Project application member is missing.")
+                .ok_or_else(|| {
+                    crate::product_message!(
+                        "backend.arxml.project.preview_application_member_missing"
+                    )
+                })
         })
         .collect::<Result<_, _>>()?;
     let mut workspace = Workspace {
@@ -482,22 +516,33 @@ fn from_preview(
                 .iter()
                 .find(|issue| matches!(issue.severity, Severity::Error))
             {
-                return Err(format!("{}: {}", issue.code, issue.message));
+                return Err(crate::message::LocalizedText::messages([
+                    crate::product_message!(
+                        "backend.arxml.project.preview_validation_failed",
+                        "code" => &issue.code
+                    ),
+                    issue.message.clone(),
+                ]));
             }
         }
     }
     Ok(workspace)
 }
 
-fn publish(preview: &ProjectCreationPreview, workspace: Workspace) -> Result<Workspace, String> {
+fn publish(
+    preview: &ProjectCreationPreview,
+    workspace: Workspace,
+) -> Result<Workspace, crate::message::LocalizedText> {
     let target = destination(Path::new(&preview.directory))?;
-    let parent = target.parent().ok_or("Project directory has no parent.")?;
+    let parent = target
+        .parent()
+        .ok_or_else(|| crate::product_message!("backend.arxml.project.directory_parent_missing"))?;
     let stage = parent.join(format!(
         ".autosar-project-{}",
         super::projection::new_epoch()
     ));
     fs::create_dir(&stage).map_err(|error| error.to_string())?;
-    let result = (|| -> Result<(), String> {
+    let result = (|| -> Result<(), crate::message::LocalizedText> {
         for file in &preview.files {
             let relative = relative_path(&file.path)?;
             let path = stage.join(relative);
@@ -527,7 +572,11 @@ fn publish(preview: &ProjectCreationPreview, workspace: Workspace) -> Result<Wor
         let cleanup = fs::remove_dir_all(&stage);
         return Err(match cleanup {
             Ok(()) => error,
-            Err(cleanup) => format!("{error}; private staging cleanup failed: {cleanup}"),
+            Err(cleanup) => crate::message::LocalizedText::messages([
+                error,
+                crate::product_message!("backend.arxml.project.private_staging_cleanup_failed"),
+                cleanup.to_string().into(),
+            ]),
         });
     }
     Ok(workspace)
@@ -535,25 +584,26 @@ fn publish(preview: &ProjectCreationPreview, workspace: Workspace) -> Result<Wor
 
 impl Workspace {
     /// Captures only saved, owned members after checking the live source boundary.
-    pub fn generation_snapshot(&self) -> Result<GenerationSnapshot, String> {
+    pub fn generation_snapshot(&self) -> Result<GenerationSnapshot, crate::message::LocalizedText> {
         if self.uses_legacy_validation() {
-            return Err("Native generation snapshot requires builtin validation.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.project.generation_requires_builtin_validation"
+            ));
         }
         crate::rules::rule_set_identity()?;
         if self.is_dirty() {
-            return Err(
-                "Save source and project membership before preparing native delivery.".into(),
-            );
+            return Err(crate::product_message!(
+                "backend.arxml.project.save_before_native_delivery"
+            ));
         }
         self.verify_saved_sources()?;
         let accepted = self.catalog.accepted_extensions();
         let (manifest, manifest_bytes, manifest_path, root) = if let Some(project) = &self.project {
             validate_manifest(&project.manifest)?;
             if project.manifest.accepted_extension_definitions != accepted {
-                return Err(
-                    "Saved project acceptance differs from the current exact catalog selection."
-                        .into(),
-                );
+                return Err(crate::product_message!(
+                    "backend.arxml.project.saved_catalog_acceptance_mismatch"
+                ));
             }
             (
                 project.manifest.clone(),
@@ -563,7 +613,9 @@ impl Workspace {
                     project
                         .path
                         .parent()
-                        .ok_or("Project root is missing.")?
+                        .ok_or_else(|| {
+                            crate::product_message!("backend.arxml.project.project_root_missing")
+                        })?
                         .to_owned(),
                 ),
             )
@@ -575,13 +627,14 @@ impl Workspace {
                     .path
                     .file_name()
                     .and_then(|name| name.to_str())
-                    .ok_or("Source file name is not UTF-8.")?;
+                    .ok_or_else(|| {
+                        crate::product_message!("backend.arxml.project.source_name_not_utf_eight")
+                    })?;
                 relative_path(name)?;
                 if !names.insert(name.to_ascii_lowercase()) {
-                    return Err(
-                        "Direct source logical names collide; save as a portable project first."
-                            .into(),
-                    );
+                    return Err(crate::product_message!(
+                        "backend.arxml.project.direct_source_names_collide"
+                    ));
                 }
                 inputs.push(ProjectInput {
                     path: name.into(),
@@ -600,7 +653,9 @@ impl Workspace {
             (manifest, bytes, None, None)
         };
         if manifest.inputs.len() != self.files.len() {
-            return Err("Project source membership is not exact.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.project.source_membership_not_exact"
+            ));
         }
         let mut inputs = Vec::with_capacity(manifest.inputs.len());
         let mut owned = BTreeSet::new();
@@ -615,9 +670,13 @@ impl Workspace {
                             == Some(member.path.as_str())
                     }
                 })
-                .ok_or("Declared source is not owned by the workspace.")?;
+                .ok_or_else(|| {
+                    crate::product_message!("backend.arxml.project.declared_source_not_owned")
+                })?;
             if !owned.insert(&file.path) {
-                return Err("Source member identity is duplicated.".into());
+                return Err(crate::product_message!(
+                    "backend.arxml.project.duplicate_source_identity"
+                ));
             }
             inputs.push(GenerationInputSnapshot {
                 logical_path: member.path.clone(),
@@ -628,19 +687,29 @@ impl Workspace {
         let mut applications = Vec::with_capacity(manifest.application_inputs.len());
         if let Some(project) = &self.project {
             if project.application_bytes.len() != manifest.application_inputs.len() {
-                return Err("Application membership and saved byte ownership differ.".into());
+                return Err(crate::product_message!(
+                    "backend.arxml.project.application_byte_ownership_mismatch"
+                ));
             }
             for member in &manifest.application_inputs {
                 applications.push(GenerationInputSnapshot {
                     logical_path: member.path.clone(),
                     disk_path: root
                         .as_ref()
-                        .ok_or("Application project root is missing.")?
+                        .ok_or_else(|| {
+                            crate::product_message!(
+                                "backend.arxml.project.application_root_missing"
+                            )
+                        })?
                         .join(&member.path),
                     bytes: project
                         .application_bytes
                         .get(&member.path)
-                        .ok_or("Declared application bytes are missing.")?
+                        .ok_or_else(|| {
+                            crate::product_message!(
+                                "backend.arxml.project.declared_application_bytes_missing"
+                            )
+                        })?
                         .clone(),
                 });
             }
@@ -661,7 +730,7 @@ impl Workspace {
         directory: &Path,
         name: &str,
         template_id: &str,
-    ) -> Result<ProjectCreationPreview, String> {
+    ) -> Result<ProjectCreationPreview, crate::message::LocalizedText> {
         let directory = destination(directory)?;
         let (profile, mut files, inputs) = template_files(name, template_id)?;
         let manifest = ProjectManifest {
@@ -690,16 +759,18 @@ impl Workspace {
         Ok(preview)
     }
 
-    pub fn create_project_previewed(preview: &ProjectCreationPreview) -> Result<Self, String> {
+    pub fn create_project_previewed(
+        preview: &ProjectCreationPreview,
+    ) -> Result<Self, crate::message::LocalizedText> {
         let expected = Self::preview_project_creation(
             Path::new(&preview.directory),
             &preview.name,
             &preview.template_id,
         )?;
         if *preview != expected {
-            return Err(
-                "Project creation preview bytes or rule identity changed; preview again.".into(),
-            );
+            return Err(crate::product_message!(
+                "backend.arxml.project.creation_preview_changed"
+            ));
         }
         let workspace = from_preview(
             &expected,
@@ -713,9 +784,11 @@ impl Workspace {
         &self,
         directory: &Path,
         name: &str,
-    ) -> Result<ProjectCreationPreview, String> {
+    ) -> Result<ProjectCreationPreview, crate::message::LocalizedText> {
         if !valid_name(name) {
-            return Err("Invalid project name.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.project.invalid_project_name"
+            ));
         }
         self.ensure_sources_current()?;
         self.check_configuration_transition(self)?;
@@ -729,18 +802,24 @@ impl Workspace {
                     .strip_prefix(project.path.parent().unwrap())
                     .map_err(|error| error.to_string())?
                     .to_str()
-                    .ok_or("Member path is not UTF-8.")?
+                    .ok_or_else(|| {
+                        crate::product_message!("backend.arxml.project.member_path_not_utf_eight")
+                    })?
                     .replace('\\', "/")
             } else {
                 file.path
                     .file_name()
                     .and_then(|name| name.to_str())
-                    .ok_or("Source file name is not UTF-8.")?
+                    .ok_or_else(|| {
+                        crate::product_message!("backend.arxml.project.source_name_not_utf_eight")
+                    })?
                     .to_owned()
             };
             relative_path(&path)?;
             if !paths.insert(path.to_ascii_lowercase()) {
-                return Err("Save-as source file names conflict; rename the files explicitly before copying.".into());
+                return Err(crate::product_message!(
+                    "backend.arxml.project.save_as_source_names_conflict"
+                ));
             }
             inputs.push(ProjectInput {
                 path: path.clone(),
@@ -758,14 +837,16 @@ impl Workspace {
             .unwrap_or_default();
         if let Some(project) = &self.project {
             for input in &application_inputs {
-                let bytes = project
-                    .application_bytes
-                    .get(&input.path)
-                    .ok_or("Application snapshot is missing.")?;
+                let bytes = project.application_bytes.get(&input.path).ok_or_else(|| {
+                    crate::product_message!("backend.arxml.project.application_snapshot_missing")
+                })?;
                 files.push(ProjectFilePreview {
                     path: input.path.clone(),
-                    contents: String::from_utf8(bytes.clone())
-                        .map_err(|_| "Application source must be UTF-8.")?,
+                    contents: String::from_utf8(bytes.clone()).map_err(|_| {
+                        crate::product_message!(
+                            "backend.arxml.project.application_source_must_be_utf_eight"
+                        )
+                    })?,
                 });
             }
         }
@@ -798,17 +879,22 @@ impl Workspace {
     pub fn save_as_project_previewed(
         &self,
         preview: &ProjectCreationPreview,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, crate::message::LocalizedText> {
         let expected =
             self.preview_save_as_project(Path::new(&preview.directory), &preview.name)?;
         if *preview != expected {
-            return Err("Save-as preview is stale or returned bytes were modified.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.project.save_as_preview_stale"
+            ));
         }
         let workspace = from_preview(&expected, self.catalog.clone(), false)?;
         publish(&expected, workspace)
     }
 
-    pub fn open_project_manifest(path: &Path, cache_root: &Path) -> Result<Self, String> {
+    pub fn open_project_manifest(
+        path: &Path,
+        cache_root: &Path,
+    ) -> Result<Self, crate::message::LocalizedText> {
         Self::open_project_using(path, |manifest| {
             let mut catalog = crate::definitions::DefinitionCatalog::builtin()?;
             let diagnostics =
@@ -821,14 +907,14 @@ impl Workspace {
     pub fn open_project_with_catalog(
         path: &Path,
         accepted: &crate::definitions::DefinitionCatalog,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, crate::message::LocalizedText> {
         Self::open_project_using(path, |manifest| {
             let identities = accepted.accepted_extensions();
             for required in &manifest.accepted_extension_definitions {
                 if !identities.contains(required) {
-                    return Err(format!(
-                        "Exact project catalog is not explicitly accepted: {}",
-                        required.catalog_id
+                    return Err(crate::product_message!(
+                        "backend.arxml.project.exact_catalog_not_accepted",
+                        "catalog_id" => &required.catalog_id
                     ));
                 }
             }
@@ -851,9 +937,9 @@ impl Workspace {
                 crate::definitions::DefinitionCatalog,
                 Vec<ConfigurationDiagnostic>,
             ),
-            String,
+            crate::message::LocalizedText,
         >,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, crate::message::LocalizedText> {
         let selected = if path.is_absolute() {
             path.to_owned()
         } else {
@@ -868,10 +954,14 @@ impl Workspace {
                 .len()
                 > 50 * 1024 * 1024
         {
-            return Err("Invalid project manifest file.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.project.invalid_manifest_file"
+            ));
         }
         let path = fs::canonicalize(selected).map_err(|error| error.to_string())?;
-        let root = path.parent().ok_or("Manifest has no project root.")?;
+        let root = path.parent().ok_or_else(|| {
+            crate::product_message!("backend.arxml.project.manifest_root_missing")
+        })?;
         let saved = String::from_utf8(read_bounded(&path)?).map_err(|error| error.to_string())?;
         let manifest: ProjectManifest =
             serde_json::from_str(&saved).map_err(|error| error.to_string())?;
@@ -913,15 +1003,15 @@ impl Workspace {
             let inspection = crate::integration::inspect_inputs_native(
                 &workspace
                     .integration_sources()
-                    .map_err(|issues| format!("{issues:?}"))?,
+                    .map_err(super::integration_errors)?,
                 &workspace.catalog,
             )
-            .map_err(|issues| format!("{issues:?}"))?;
+            .map_err(super::integration_errors)?;
             // Producer ownership depends on the real single-application
             // contract, not on unrelated target-only ECUC restrictions.
             inspection
                 .component_contract()
-                .map_err(|issues| format!("{issues:?}"))?;
+                .map_err(super::integration_errors)?;
             if workspace
                 .project
                 .as_ref()
@@ -934,7 +1024,9 @@ impl Workspace {
                         || input.path != crate::integration::APPLICATION_SOURCE_PATH
                 })
             {
-                return Err("Application membership does not match its live producer slot.".into());
+                return Err(crate::product_message!(
+                    "backend.arxml.project.application_live_slot_mismatch"
+                ));
             }
         }
         workspace.ensure_sources_current()?;
@@ -945,7 +1037,7 @@ impl Workspace {
         &mut self,
         path: &Path,
         cache_root: &Path,
-    ) -> Result<ExtensionDefinitionIdentity, String> {
+    ) -> Result<ExtensionDefinitionIdentity, crate::message::LocalizedText> {
         self.ensure_sources_current()?;
         let mut candidate = self.clone();
         let mut catalog = (*candidate.catalog).clone();
@@ -958,7 +1050,10 @@ impl Workspace {
         Ok(identity)
     }
 
-    pub fn remove_definition_catalog(&mut self, id: &str) -> Result<(), String> {
+    pub fn remove_definition_catalog(
+        &mut self,
+        id: &str,
+    ) -> Result<(), crate::message::LocalizedText> {
         self.ensure_sources_current()?;
         let mut candidate = self.clone();
         let mut catalog = (*candidate.catalog).clone();
@@ -971,7 +1066,7 @@ impl Workspace {
         Ok(())
     }
 
-    fn sync_project_acceptance(&mut self) -> Result<(), String> {
+    fn sync_project_acceptance(&mut self) -> Result<(), crate::message::LocalizedText> {
         if let Some(project) = &mut self.project {
             project.manifest.accepted_extension_definitions = self.catalog.accepted_extensions();
             project.current = render_manifest(&project.manifest)?;

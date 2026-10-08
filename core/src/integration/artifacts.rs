@@ -53,7 +53,7 @@ fn rte_symbol(name: &str, return_type: &str, args: &[(&str, &str, &str)]) -> Sym
 pub(super) fn files<T>(
     plan: &PlanDescription,
     sources: &BTreeMap<String, T>,
-) -> Result<BTreeMap<String, Vec<u8>>, String> {
+) -> Result<BTreeMap<String, Vec<u8>>, crate::message::LocalizedText> {
     let mut entries: BTreeMap<String, Vec<SymbolContract>> = BTreeMap::new();
     for symbol in &plan.symbols {
         if let Some(path) = symbol.definition_owner.strip_prefix("runtime/src/") {
@@ -151,7 +151,9 @@ pub(super) fn files<T>(
         {
             plan.component.service.array_length * 8
         } else {
-            return Err(format!("No target C object size is defined for {native}"));
+            return Err(
+                crate::product_message!("backend.integration.artifacts.native_object_size_missing", "native" => native),
+            );
         };
         write!(elements, "<SW-BASE-TYPE><SHORT-NAME>Native{i}</SHORT-NAME><CATEGORY>FIXED_LENGTH</CATEGORY><BASE-TYPE-SIZE>{bits}</BASE-TYPE-SIZE><BASE-TYPE-ENCODING>NONE</BASE-TYPE-ENCODING><NATIVE-DECLARATION>{}</NATIVE-DECLARATION></SW-BASE-TYPE>", xml(native)).unwrap();
     }
@@ -184,7 +186,9 @@ pub(super) fn files<T>(
             .cloned()
             .collect();
         if !paths.iter().any(|p| p.ends_with(".c")) {
-            return Err(format!("No delivered C implementation for {module}"));
+            return Err(
+                crate::product_message!("backend.integration.artifacts.module_implementation_missing", "module" => module),
+            );
         }
         let contracts = entries.get(module).map(Vec::as_slice).unwrap_or(&[]);
         let mut refs = String::new();

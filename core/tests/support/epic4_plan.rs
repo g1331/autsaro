@@ -4,6 +4,52 @@ use autosar_config_core::integration::{
 use std::fs;
 use std::path::Path;
 
+#[test]
+fn integration_diagnostics_keep_message_identity_and_source_evidence() {
+    let source = InputSource::new("用户/input.arxml", vec![0xff]).unwrap_err();
+    let wire = serde_json::to_value(&source).unwrap();
+    assert_eq!(wire["code"], "XML_ENCODING");
+    assert_eq!(wire["file"], "用户/input.arxml");
+    assert_eq!(wire["object"], "/");
+    assert_eq!(
+        wire["message"]["key"],
+        "backend.integration.mod.input_not_utf8_xml"
+    );
+    assert!(
+        wire["message"]["params"]["error"]
+            .as_str()
+            .unwrap()
+            .contains("utf-8")
+    );
+    assert_eq!(
+        wire["remedy"]["key"],
+        "backend.integration.mod.convert_source_to_utf8_arxml"
+    );
+    assert!(wire["message"].get("english").is_none());
+
+    let bytes = b"<AUTOSAR><!-- retained evidence --></AUTOSAR>".to_vec();
+    let source = InputSource::new("用户/input.arxml", bytes.clone()).unwrap();
+    let identity = source.sha256();
+    let diagnostic = InputSource::new("../input.arxml", bytes.clone()).unwrap_err();
+    let messages = autosar_config_core::message::LocalizedText::messages([
+        diagnostic.message.clone(),
+        diagnostic.remedy.clone(),
+        autosar_config_core::message::LocalizedText::evidence("用户/<tool output>"),
+    ]);
+    let wire = serde_json::to_value(messages).unwrap();
+    assert_eq!(
+        wire[0]["key"],
+        "backend.integration.mod.input_identity_relative_arxml_required"
+    );
+    assert_eq!(
+        wire[1]["key"],
+        "backend.integration.mod.use_unique_portable_relative_path"
+    );
+    assert_eq!(wire[2], "用户/<tool output>");
+    assert_eq!(source.bytes(), bytes);
+    assert_eq!(source.sha256(), identity);
+}
+
 pub fn inputs() -> Vec<InputSource> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let directory = root.join("core/tests/fixtures/epic4/positive");
@@ -134,7 +180,7 @@ pub fn validated_integration_plan() {
                 .iter()
                 .any(|issue| issue.code == case["category"].as_str().unwrap()
                     && issue.file.as_deref() == case["file"].as_str()
-                    && !issue.remedy.is_empty()),
+                    && matches!(&issue.remedy, autosar_config_core::message::LocalizedText::Message(message) if message.key.starts_with("backend."))),
             "{case}: {issues:?}"
         );
     }
@@ -575,7 +621,7 @@ pub fn graph_identity_and_references() {
             issues.iter().any(|issue| issue.code == code
                 && issue.file.as_deref() == Some("application.arxml")
                 && issue.object.is_some()
-                && !issue.remedy.is_empty()),
+                && matches!(&issue.remedy, autosar_config_core::message::LocalizedText::Message(message) if message.key.starts_with("backend."))),
             "{issues:?}"
         );
     }
@@ -883,7 +929,7 @@ pub fn component_semantic_rejections() {
                 .iter()
                 .any(|issue| issue.code == case["category"].as_str().unwrap()
                     && issue.file.as_deref() == case["file"].as_str()
-                    && !issue.remedy.is_empty()),
+                    && matches!(&issue.remedy, autosar_config_core::message::LocalizedText::Message(message) if message.key.starts_with("backend."))),
             "{case}: {issues:?}"
         );
     }

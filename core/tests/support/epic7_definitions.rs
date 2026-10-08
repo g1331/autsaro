@@ -246,12 +246,10 @@ fn builtin_default_is_metadata_not_a_synthesized_explicit_entry() {
         .unwrap();
     assert!(result.diagnostics.iter().any(|issue| {
         issue.code == "MULTIPLICITY"
-            && issue
-                .witness
-                .as_ref()
-                .unwrap()
-                .constraint
-                .contains("CanDevErrorDetect")
+            && matches!(
+                &issue.witness.as_ref().unwrap().constraint,
+                autosar_config_core::LocalizedText::Raw(metadata) if metadata.contains("CanDevErrorDetect")
+            )
     }));
     assert_eq!(xml, before);
     let explicit = field(&catalog, &id, "true");
@@ -271,12 +269,10 @@ fn builtin_default_is_metadata_not_a_synthesized_explicit_entry() {
     );
     assert!(!result.diagnostics.iter().any(|issue| {
         issue.code == "MULTIPLICITY"
-            && issue
-                .witness
-                .as_ref()
-                .unwrap()
-                .constraint
-                .contains("CanDevErrorDetect")
+            && matches!(
+                &issue.witness.as_ref().unwrap().constraint,
+                autosar_config_core::LocalizedText::Raw(metadata) if metadata.contains("CanDevErrorDetect")
+            )
     }));
 }
 
@@ -736,12 +732,10 @@ fn builtin_standard_ecu_consumers_have_real_types_and_boundaries() {
         .unwrap();
     assert!(result.diagnostics.iter().any(|issue| {
         issue.code == "VALUE_RANGE"
-            && issue
-                .witness
-                .as_ref()
-                .unwrap()
-                .constraint
-                .contains("CanControllerId")
+            && matches!(
+                &issue.witness.as_ref().unwrap().constraint,
+                autosar_config_core::LocalizedText::Raw(metadata) if metadata.contains("CanControllerId")
+            )
     }));
 }
 
@@ -803,7 +797,10 @@ fn extension_cannot_shadow_builtin_definition_namespace() {
     let error = catalog
         .accept_extension(&path, &temp.0.join("cache"))
         .unwrap_err();
-    assert!(error.contains("builtin module namespace"), "{error}");
+    assert_eq!(
+        serde_json::to_value(&error).unwrap()["key"],
+        "backend.definitions.extension.builtin_namespace_replacement_forbidden"
+    );
     assert_eq!(old, catalog.fingerprint(&identity()));
     assert_eq!(
         catalog
@@ -828,7 +825,10 @@ fn extension_rejects_linked_source_members() {
     let error = catalog
         .accept_extension(&path, &temp.0.join("cache"))
         .unwrap_err();
-    assert!(error.contains("Links are forbidden"), "{error}");
+    assert_eq!(
+        serde_json::to_value(&error).unwrap()["key"],
+        "backend.definitions.extension.catalog_links_forbidden"
+    );
     assert!(catalog.accepted_extensions().is_empty());
 }
 
@@ -930,8 +930,11 @@ fn builtin_can_signal_overlap_uses_endianness_and_stable_value_witnesses() {
         .find(|issue| issue.code == "CAN_SIGNAL_OVERLAP")
         .unwrap();
     let witness = issue.witness.as_ref().unwrap();
-    assert!(!witness.counterexample.contains("/Project"));
-    assert!(witness.counterexample.contains("7:8:0:8"));
+    let autosar_config_core::LocalizedText::Raw(counterexample) = &witness.counterexample else {
+        panic!("Signal layout evidence must remain raw machine data");
+    };
+    assert!(!counterexample.contains("/Project"));
+    assert!(counterexample.contains("7:8:0:8"));
 }
 
 #[test]
@@ -1068,7 +1071,9 @@ fn builtin_overlap_reports_every_pair_so_removing_one_bad_signal_preserves_other
         .as_ref()
         .unwrap();
     assert_eq!(witness.counterexample, previous.counterexample);
-    assert!(witness.counterexample.contains("[0, 1, 2, 3, 4, 5, 6, 7]"));
+    assert!(matches!(&witness.counterexample,
+        autosar_config_core::LocalizedText::Raw(evidence) if evidence.contains("[0, 1, 2, 3, 4, 5, 6, 7]")
+    ));
 }
 
 #[test]
@@ -1113,12 +1118,10 @@ fn split_simple_literals_use_complete_text_and_keep_source_witness_ranges() {
         .iter()
         .find(|issue| {
             issue.code == "VALUE_RANGE"
-                && issue
-                    .witness
-                    .as_ref()
-                    .unwrap()
-                    .constraint
-                    .contains("ComBitSize")
+                && matches!(
+                    &issue.witness.as_ref().unwrap().constraint,
+                    autosar_config_core::LocalizedText::Raw(metadata) if metadata.contains("ComBitSize")
+                )
         })
         .unwrap();
     assert_eq!(issue.path.as_deref(), Some("/Project/Com/Config/AB"));
@@ -1143,7 +1146,10 @@ fn split_simple_literals_use_complete_text_and_keep_source_witness_ranges() {
             .subjects
             .contains(&format!("entry-range:{}:{}", range.start, range.end))
     );
-    assert_eq!(issue.witness.as_ref().unwrap().counterexample, "65");
+    assert_eq!(
+        issue.witness.as_ref().unwrap().counterexample,
+        autosar_config_core::LocalizedText::Raw("65".into())
+    );
     assert!(
         !result
             .diagnostics

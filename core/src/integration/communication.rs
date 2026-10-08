@@ -28,9 +28,21 @@ pub struct SignalChannel {
     pub transmit_period_ms: Option<u32>,
 }
 
-fn reject(graph: &Graph, index: usize, code: &str, message: &str) -> Vec<PlanDiagnostic> {
-    vec![graph.diagnostic(index, DiagnosticCategory::Input, code, message,
-        "Correct the explicit Extract/SWC/Com/CanIf/PDU relationship and preserve the selected single-network Classical CAN uint32 profile.")]
+fn reject(
+    graph: &Graph,
+    index: usize,
+    code: &str,
+    message: crate::message::LocalizedText,
+) -> Vec<PlanDiagnostic> {
+    vec![graph.diagnostic(
+        index,
+        DiagnosticCategory::Input,
+        code,
+        message,
+        crate::product_message!(
+            "backend.integration.communication.communication_relationship_correct"
+        ),
+    )]
 }
 
 fn one(
@@ -46,7 +58,9 @@ fn one(
             graph,
             context,
             code,
-            "The communication relationship is missing or not unique.",
+            crate::product_message!(
+                "backend.integration.communication.communication_relationship_missing_or_ambiguous"
+            ),
         ))
     }
 }
@@ -74,7 +88,9 @@ pub(super) fn check_trigger(
                 graph,
                 trigger,
                 "SIGNAL_MAPPING",
-                "The frame trigger has no physical CAN channel.",
+                crate::product_message!(
+                    "backend.integration.communication.frame_trigger_physical_can_channel_missing"
+                ),
             )
         })?;
     let reference = one(
@@ -91,7 +107,9 @@ pub(super) fn check_trigger(
             graph,
             trigger,
             "SIGNAL_MAPPING",
-            "The frame trigger refers to a different PDU or physical channel.",
+            crate::product_message!(
+                "backend.integration.communication.frame_trigger_pdu_or_channel_mismatch"
+            ),
         ));
     }
     for (owner, tag) in [(trigger, "FRAME-PORT-REF"), (pdu_trigger, "I-PDU-PORT-REF")] {
@@ -107,7 +125,9 @@ pub(super) fn check_trigger(
                 graph,
                 port,
                 "DIRECTION_CONFLICT",
-                "The selected frame/PDU port has a conflicting communication direction.",
+                crate::product_message!(
+                    "backend.integration.communication.frame_pdu_port_direction_conflict"
+                ),
             ));
         }
         let connector = graph
@@ -117,7 +137,9 @@ pub(super) fn check_trigger(
                     graph,
                     port,
                     "SIGNAL_MAPPING",
-                    "The communication port has no CAN connector.",
+                    crate::product_message!(
+                        "backend.integration.communication.communication_port_can_connector_missing"
+                    ),
                 )
             })?;
         let channel_connectors = graph.descendants(channel, "COMMUNICATION-CONNECTOR-REF");
@@ -128,7 +150,9 @@ pub(super) fn check_trigger(
                 graph,
                 port,
                 "SIGNAL_MAPPING",
-                "The communication port and channel connector differ.",
+                crate::product_message!(
+                    "backend.integration.communication.communication_port_channel_connector_mismatch"
+                ),
             ));
         }
     }
@@ -147,7 +171,9 @@ pub(super) fn check_trigger(
                 graph,
                 signal_trigger,
                 "SIGNAL_MAPPING",
-                "The PDU trigger refers to a different signal or channel.",
+                crate::product_message!(
+                    "backend.integration.communication.pdu_trigger_signal_or_channel_mismatch"
+                ),
             ));
         }
         let reference = one(
@@ -162,7 +188,9 @@ pub(super) fn check_trigger(
                 graph,
                 port,
                 "DIRECTION_CONFLICT",
-                "The signal port and selected channel direction disagree.",
+                crate::product_message!(
+                    "backend.integration.communication.signal_port_channel_direction_mismatch"
+                ),
             ));
         }
     } else if !graph
@@ -173,7 +201,9 @@ pub(super) fn check_trigger(
             graph,
             pdu_trigger,
             "SIGNAL_MAPPING",
-            "A diagnostic N-PDU must not acquire an S/R signal trigger.",
+            crate::product_message!(
+                "backend.integration.communication.diagnostic_npdu_sr_signal_trigger_forbidden"
+            ),
         ));
     }
     Ok(())
@@ -221,7 +251,9 @@ pub(super) fn inspect(
                 graph,
                 mapping,
                 "DIRECTION_CONFLICT",
-                "The Extract data mapping differs from the selected component instance, element or port direction.",
+                crate::product_message!(
+                    "backend.integration.communication.extract_data_mapping_mismatch"
+                ),
             ));
         }
         let system_signal = graph.target(mapping, "SYSTEM-SIGNAL-REF").ok_or_else(|| {
@@ -229,7 +261,7 @@ pub(super) fn inspect(
                 graph,
                 mapping,
                 "SIGNAL_MAPPING",
-                "The application data mapping lacks its system signal.",
+                crate::product_message!("backend.integration.communication.application_data_mapping_system_signal_missing"),
             )
         })?;
         let signal = one(
@@ -247,8 +279,8 @@ pub(super) fn inspect(
                 signal,
                 DiagnosticCategory::Unsupported,
                 "TRANSFORMER_UNSUPPORTED",
-                "A transformer affects the selected communication signal.",
-                "Use the explicit untransformed uint32 communication profile.",
+                crate::product_message!("backend.integration.communication.communication_signal_transformer_present"),
+                crate::product_message!("backend.integration.communication.untransformed_uint32_communication_profile_required"),
             )]);
         }
         if graph
@@ -260,7 +292,9 @@ pub(super) fn inspect(
                 graph,
                 signal,
                 "LENGTH_CONFLICT",
-                "The uint32 application value and I-SIGNAL bit length disagree.",
+                crate::product_message!(
+                    "backend.integration.communication.uint32_application_signal_bit_length_mismatch"
+                ),
             ));
         }
         let signal_mapping = one(
@@ -280,7 +314,9 @@ pub(super) fn inspect(
                     graph,
                     signal_mapping,
                     "SIGNAL_MAPPING",
-                    "The signal mapping has no owning I-PDU.",
+                    crate::product_message!(
+                        "backend.integration.communication.signal_mapping_owning_ipdu_missing"
+                    ),
                 )
             })?;
         if graph.text(signal_mapping, "START-POSITION") != Some("0")
@@ -292,7 +328,9 @@ pub(super) fn inspect(
                 graph,
                 signal_mapping,
                 "LENGTH_CONFLICT",
-                "The selected uint32 signal requires one four-byte little-endian PDU mapping at bit zero.",
+                crate::product_message!(
+                    "backend.integration.communication.uint32_four_byte_little_endian_pdu_mapping_required"
+                ),
             ));
         }
         let frame_mapping = one(
@@ -310,7 +348,9 @@ pub(super) fn inspect(
                 graph,
                 frame_mapping,
                 "SIGNAL_MAPPING",
-                "The PDU mapping has no owning CAN frame.",
+                crate::product_message!(
+                    "backend.integration.communication.pdu_mapping_owning_can_frame_missing"
+                ),
             )
         })?;
         if graph.text(frame, "FRAME-LENGTH") != Some("4")
@@ -321,7 +361,9 @@ pub(super) fn inspect(
                 graph,
                 frame,
                 "LENGTH_CONFLICT",
-                "The CAN frame length or PDU position differs from the supported four-byte profile.",
+                crate::product_message!(
+                    "backend.integration.communication.can_frame_length_or_pdu_position_mismatch"
+                ),
             ));
         }
         let trigger = one(
@@ -344,7 +386,7 @@ pub(super) fn inspect(
                     graph,
                     trigger,
                     "CAN_ID_CONFLICT",
-                    "The Classical CAN identifier must be a valid standard 11-bit value.",
+                    crate::product_message!("backend.integration.communication.classical_can_standard_identifier_invalid"),
                 )
             })?;
         if graph.text(trigger, "CAN-ADDRESSING-MODE") != Some("STANDARD") {
@@ -352,7 +394,9 @@ pub(super) fn inspect(
                 graph,
                 trigger,
                 "CAN_ID_CONFLICT",
-                "Only standard Classical CAN addressing is supported.",
+                crate::product_message!(
+                    "backend.integration.communication.classical_can_addressing_unsupported"
+                ),
             ));
         }
         let frame_port_ref = one(
@@ -372,7 +416,9 @@ pub(super) fn inspect(
                 graph,
                 frame_port,
                 "DIRECTION_CONFLICT",
-                "The frame port and SWC/Com direction disagree.",
+                crate::product_message!(
+                    "backend.integration.communication.frame_port_swc_com_direction_mismatch"
+                ),
             ));
         }
         let com_signal = one(
@@ -398,7 +444,9 @@ pub(super) fn inspect(
                 graph,
                 com_signal,
                 "TYPE_CONFLICT",
-                "The Com signal bit layout, type, initial value or transfer policy differs from its explicit application/Extract mapping.",
+                crate::product_message!(
+                    "backend.integration.communication.com_signal_application_extract_mapping_mismatch"
+                ),
             ));
         }
         let com_pdu = one(
@@ -421,7 +469,9 @@ pub(super) fn inspect(
                 graph,
                 com_pdu,
                 "DIRECTION_CONFLICT",
-                "The Com I-PDU direction or signal membership differs from the selected channel.",
+                crate::product_message!(
+                    "backend.integration.communication.com_ipdu_direction_or_signal_membership_mismatch"
+                ),
             ));
         }
         let global_pdu = value(graph, com_pdu, "ComPduIdRef", true)
@@ -431,7 +481,7 @@ pub(super) fn inspect(
                     graph,
                     com_pdu,
                     "SIGNAL_MAPPING",
-                    "The Com I-PDU has no unique canonical ECUC PDU reference.",
+                    crate::product_message!("backend.integration.communication.com_ipdu_canonical_ecuc_pdu_reference_not_unique"),
                 )
             })?;
         if !definition_is(graph, global_pdu, "Pdu")
@@ -441,7 +491,9 @@ pub(super) fn inspect(
                 graph,
                 global_pdu,
                 "LENGTH_CONFLICT",
-                "The canonical ECUC PDU length differs from the mapped four-byte frame.",
+                crate::product_message!(
+                    "backend.integration.communication.canonical_ecuc_pdu_length_mismatch"
+                ),
             ));
         }
         let can_prefix = if port.read {
@@ -471,7 +523,9 @@ pub(super) fn inspect(
                 graph,
                 can_if,
                 "CAN_ID_CONFLICT",
-                "The CanIf identifier or addressing type differs from the selected Extract frame.",
+                crate::product_message!(
+                    "backend.integration.communication.canif_identifier_or_addressing_type_mismatch"
+                ),
             ));
         }
         let can_handle = value(graph, can_if, &format!("{can_prefix}Id"), false)
@@ -481,7 +535,9 @@ pub(super) fn inspect(
                     graph,
                     can_if,
                     "CAN_ID_CONFLICT",
-                    "The CanIf PDU handle is absent or outside its supported range.",
+                    crate::product_message!(
+                        "backend.integration.communication.canif_pdu_handle_missing_or_out_of_range"
+                    ),
                 )
             })?;
         let deadline = if port.read {
@@ -499,7 +555,9 @@ pub(super) fn inspect(
                     graph,
                     com_signal,
                     "TIMEOUT_CONFLICT",
-                    "The Rx DLC/deadline/first-timeout/action differs from the declared receive contract.",
+                    crate::product_message!(
+                        "backend.integration.communication.rx_timing_or_action_contract_mismatch"
+                    ),
                 ));
             }
             port.alive_timeout_ms
@@ -527,7 +585,9 @@ pub(super) fn inspect(
                     graph,
                     mode,
                     "PERIOD_ALARM_CONFLICT",
-                    "The Com transmit period differs from the application period.",
+                    crate::product_message!(
+                        "backend.integration.communication.com_transmit_application_period_mismatch"
+                    ),
                 ));
             }
             Some(component.period_ms)
@@ -559,7 +619,9 @@ pub(super) fn inspect(
             graph,
             system,
             "CAN_ID_CONFLICT",
-            "Distinct S/R channels cannot share the same physical CAN identifier.",
+            crate::product_message!(
+                "backend.integration.communication.sr_channels_physical_can_identifier_conflict"
+            ),
         ));
     }
     channels.sort_by(|left, right| left.port.cmp(&right.port));

@@ -154,6 +154,18 @@ export async function runScenario(options) {
     }
     try {
       await until(`Boolean(window.__TAURI_INTERNALS__ && document.querySelector('button'))`);
+      // These interaction selectors deliberately exercise the Chinese interface.
+      const startupBoot = await evaluate('performance.timeOrigin');
+      await evaluate(`(async () => {
+        const caps = await window.__TAURI_INTERNALS__.invoke('workbench_capabilities');
+        await window.__TAURI_INTERNALS__.invoke('configure_language', {
+          fingerprint: caps.fingerprint, language: 'zh-CN',
+        });
+        setTimeout(() => location.reload(), 0);
+      })()`);
+      await until(
+        `performance.timeOrigin !== ${startupBoot} && Boolean(window.__TAURI_INTERNALS__ && document.querySelector('[aria-label="设置"]'))`,
+      );
       const location = await evaluate(`(() => {
       window.__NATIVE_VERIFY_LOG__ = [];
       window.__NATIVE_VERIFY_TRANSPORT__ = window.__TAURI_INTERNALS__.invoke;

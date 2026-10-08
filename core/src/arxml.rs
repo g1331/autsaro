@@ -76,9 +76,14 @@ pub struct Workspace {
 }
 
 impl Workspace {
-    pub fn set_legacy_validation_schema(&mut self, archive: PathBuf) -> Result<(), String> {
+    pub fn set_legacy_validation_schema(
+        &mut self,
+        archive: PathBuf,
+    ) -> Result<(), crate::message::LocalizedText> {
         if self.schema_zip.is_none() {
-            return Err("Builtin validation cannot be replaced by external resources.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.builtin_validation_locked"
+            ));
         }
         self.schema_zip = Some(archive);
         Ok(())
@@ -88,27 +93,50 @@ impl Workspace {
         self.schema_zip.is_some()
     }
 
-    pub fn definition_fingerprint(&self) -> Result<String, String> {
+    pub fn definition_fingerprint(&self) -> Result<String, crate::message::LocalizedText> {
         crate::rules::rule_set_identity()?;
         Ok(self.snapshot.definition_fingerprint.clone())
     }
 
-    pub fn verify_saved_sources(&self) -> Result<(), String> {
+    pub fn verify_saved_sources(&self) -> Result<(), crate::message::LocalizedText> {
         if self.files.iter().any(|file| file.text != file.saved)
             || self
                 .project
                 .as_ref()
                 .is_some_and(|project| project.current != project.saved)
         {
-            return Err("请先保存全部 ARXML，再执行交付操作".into());
+            return Err(crate::product_message!("backend.arxml.save_before_handoff"));
         }
         self.ensure_sources_current()
     }
 }
 
-fn load_sources(files: Vec<PathBuf>, schema_zip: Option<PathBuf>) -> Result<Workspace, String> {
+fn integration_errors(
+    diagnostics: Vec<crate::integration::PlanDiagnostic>,
+) -> crate::message::LocalizedText {
+    crate::message::LocalizedText::messages(diagnostics.into_iter().map(|diagnostic| {
+        crate::message::LocalizedText::messages([
+            crate::product_message!(
+                "backend.arxml.integration_diagnostic_context",
+                "code" => &diagnostic.code,
+                "category" => serde_json::to_string(&diagnostic.category).expect("Diagnostic category serializes"),
+                "file" => diagnostic.file.as_deref().unwrap_or_default(),
+                "object" => diagnostic.object.as_deref().unwrap_or_default()
+            ),
+            diagnostic.message,
+            diagnostic.remedy,
+        ])
+    }))
+}
+
+fn load_sources(
+    files: Vec<PathBuf>,
+    schema_zip: Option<PathBuf>,
+) -> Result<Workspace, crate::message::LocalizedText> {
     if files.is_empty() {
-        return Err("请选择至少一份 .arxml 文件".into());
+        return Err(crate::product_message!(
+            "backend.arxml.input_files_required"
+        ));
     }
     let mut sources = Vec::new();
     let mut unique = BTreeSet::new();
@@ -124,9 +152,9 @@ fn load_sources(files: Vec<PathBuf>, schema_zip: Option<PathBuf>) -> Result<Work
             .components()
             .any(|part| matches!(part, std::path::Component::ParentDir))
         {
-            return Err(format!(
-                "ARXML 来源路径包含 ..，拒绝导入: {}",
-                path.display()
+            return Err(crate::product_message!(
+                "backend.arxml.source_parent_traversal",
+                "path" => path.display()
             ));
         }
         for ancestor in selected.ancestors() {
@@ -140,9 +168,9 @@ fn load_sources(files: Vec<PathBuf>, schema_zip: Option<PathBuf>) -> Result<Work
             #[cfg(not(windows))]
             let linked = metadata.file_type().is_symlink();
             if linked {
-                return Err(format!(
-                    "ARXML 来源路径包含链接或重解析点: {}",
-                    ancestor.display()
+                return Err(crate::product_message!(
+                    "backend.arxml.source_link_rejected",
+                    "path" => ancestor.display()
                 ));
             }
         }
@@ -152,24 +180,40 @@ fn load_sources(files: Vec<PathBuf>, schema_zip: Option<PathBuf>) -> Result<Work
             .is_some_and(|e| e.eq_ignore_ascii_case("arxml"))
             || !unique.insert(path.to_string_lossy().to_uppercase())
         {
-            return Err(format!("文件不是唯一的 .arxml: {}", path.display()));
+            return Err(crate::product_message!(
+                "backend.arxml.unique_arxml_required",
+                "path" => path.display()
+            ));
         }
         if fs::metadata(&path).map_err(|e| e.to_string())?.len() > 50 * 1024 * 1024 {
-            return Err(format!("单份 ARXML 不得超过 50 MiB: {}", path.display()));
+            return Err(crate::product_message!(
+                "backend.arxml.arxml_size_limit",
+                "path" => path.display()
+            ));
         }
-        let text = String::from_utf8(project::read_bounded(&path)?)
-            .map_err(|e| format!("{} 必须是 UTF-8 ARXML: {e}", path.display()))?;
+        let text = String::from_utf8(project::read_bounded(&path)?).map_err(|e| {
+            crate::message::LocalizedText::messages([
+                crate::product_message!(
+                    "backend.arxml.utf8_arxml_required",
+                    "path" => path.display()
+                ),
+                e.to_string().into(),
+            ])
+        })?;
         if text.contains("<!DOCTYPE") || text.contains("<!ENTITY") {
-            return Err(format!(
-                "{}: DTD and entity declarations are not accepted.",
-                path.display()
+            return Err(crate::product_message!(
+                "backend.arxml.xml_declarations_rejected",
+                "path" => path.display()
             ));
         }
         let doc = Document::parse(&text).map_err(|e| format!("{}: {e}", path.display()))?;
         if doc.root_element().tag_name().namespace() != Some(NS)
             || doc.root_element().tag_name().name() != "AUTOSAR"
         {
-            return Err(format!("{} 不是 R24-11 AUTOSAR 文档", path.display()));
+            return Err(crate::product_message!(
+                "backend.arxml.autosar_document_required",
+                "path" => path.display()
+            ));
         }
         if schema_zip.is_some()
             && !doc
@@ -177,9 +221,9 @@ fn load_sources(files: Vec<PathBuf>, schema_zip: Option<PathBuf>) -> Result<Work
                 .attribute((XSI, "schemaLocation"))
                 .is_some_and(|s| s.contains("AUTOSAR_00053.xsd"))
         {
-            return Err(format!(
-                "{} 未声明 AUTOSAR_00053.xsd；不猜测 ARXML 发布版本",
-                path.display()
+            return Err(crate::product_message!(
+                "backend.arxml.schema_release_required",
+                "path" => path.display()
             ));
         }
         sources.push(SourceFile {
@@ -199,11 +243,13 @@ fn load_sources(files: Vec<PathBuf>, schema_zip: Option<PathBuf>) -> Result<Work
                 .collect::<Vec<_>>(),
         )?;
         if let Some(first) = schema_issues.first() {
-            return Err(format!(
-                "导入前 XSD 校验失败 {}: {}",
-                first.file.as_deref().unwrap_or(""),
-                first.message
-            ));
+            return Err(crate::message::LocalizedText::messages([
+                crate::product_message!(
+                    "backend.arxml.import_xsd_failed",
+                    "file" => first.file.as_deref().unwrap_or("")
+                ),
+                first.message.clone(),
+            ]));
         }
     }
     let name = sources
@@ -261,10 +307,20 @@ fn load_sources(files: Vec<PathBuf>, schema_zip: Option<PathBuf>) -> Result<Work
                                 == Some("/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsp/DcmDspDid")
                     })
                     .ok_or_else(|| {
-                        format!("{}: 主机复位例程不在 DID 容器中", file.path.display())
+                        crate::product_message!(
+                            "backend.arxml.host_restore_did_container_required",
+                            "path" => file.path.display()
+                        )
                     })?;
-                parse_host_routine(did, &workspace.name, &nodes)
-                    .map_err(|error| format!("{}: {error}", file.path.display()))?;
+                parse_host_routine(did, &workspace.name, &nodes).map_err(|error| {
+                    crate::message::LocalizedText::messages([
+                        crate::product_message!(
+                            "backend.arxml.source_file_context",
+                            "path" => file.path.display()
+                        ),
+                        error.into(),
+                    ])
+                })?;
             }
         }
     }
@@ -272,7 +328,7 @@ fn load_sources(files: Vec<PathBuf>, schema_zip: Option<PathBuf>) -> Result<Work
 }
 
 impl Workspace {
-    pub fn create(directory: &Path, name: &str) -> Result<Self, String> {
+    pub fn create(directory: &Path, name: &str) -> Result<Self, crate::message::LocalizedText> {
         let preview = Self::preview_project_creation(directory, name, "can-empty-v1")?;
         Self::create_project_previewed(&preview)
     }
@@ -281,33 +337,47 @@ impl Workspace {
         directory: &Path,
         name: &str,
         schema_zip: PathBuf,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, crate::message::LocalizedText> {
         if !valid_name(name) {
-            return Err(
-                "工程名须以 ASCII 字母开头，且仅含字母、数字和下划线（最多 128 字节）".into(),
-            );
+            return Err(crate::product_message!(
+                "backend.arxml.project_name_invalid"
+            ));
         }
         fs::create_dir_all(directory).map_err(|e| e.to_string())?;
         let path = directory.join(format!("{name}.arxml"));
         let text = render_profile(name, &[], &[], None);
         let issues = schema::validate_files(&schema_zip, &[(path.as_path(), text.as_str())])?;
         if let Some(first) = issues.first() {
-            return Err(format!("空项目 XSD 校验失败: {}", first.message));
+            return Err(crate::message::LocalizedText::messages([
+                crate::product_message!("backend.arxml.empty_project_xsd_failed"),
+                first.message.clone(),
+            ]));
         }
         let mut file = fs::OpenOptions::new()
             .write(true)
             .create_new(true)
             .open(&path)
-            .map_err(|e| format!("不会覆盖已有 ARXML {}: {e}", path.display()))?;
+            .map_err(|e| {
+                crate::message::LocalizedText::messages([
+                    crate::product_message!(
+                        "backend.arxml.arxml_create_failed_no_overwrite",
+                        "path" => path.display()
+                    ),
+                    e.to_string().into(),
+                ])
+            })?;
         std::io::Write::write_all(&mut file, text.as_bytes()).map_err(|e| e.to_string())?;
         load_sources(vec![path], Some(schema_zip))
     }
 
-    pub fn open(paths: Vec<PathBuf>) -> Result<Self, String> {
+    pub fn open(paths: Vec<PathBuf>) -> Result<Self, crate::message::LocalizedText> {
         load_sources(paths, None)
     }
 
-    pub fn open_legacy(paths: Vec<PathBuf>, schema_zip: PathBuf) -> Result<Self, String> {
+    pub fn open_legacy(
+        paths: Vec<PathBuf>,
+        schema_zip: PathBuf,
+    ) -> Result<Self, crate::message::LocalizedText> {
         load_sources(paths, Some(schema_zip))
     }
 
@@ -344,14 +414,16 @@ impl Workspace {
     pub(crate) fn restore_handoff_source_names(
         &mut self,
         names: BTreeMap<PathBuf, String>,
-    ) -> Result<(), String> {
+    ) -> Result<(), crate::message::LocalizedText> {
         if names.len() != self.files.len()
             || self
                 .files
                 .iter()
                 .any(|file| !names.contains_key(&file.path))
         {
-            return Err("交付输入名称映射与实际 ARXML 文件不一致".into());
+            return Err(crate::product_message!(
+                "backend.arxml.handoff_names_mismatch"
+            ));
         }
         for file in &mut self.files {
             file.original_name = names.get(&file.path).cloned();
@@ -427,14 +499,18 @@ impl Workspace {
         &self,
     ) -> Result<Vec<crate::integration::InputSource>, Vec<crate::integration::PlanDiagnostic>> {
         use crate::integration::{DiagnosticCategory, InputSource, PlanDiagnostic};
-        let issue = |code: &str, message: String| {
+        let issue = |code: &str, message: crate::message::LocalizedText| {
             vec![PlanDiagnostic {
-            category: DiagnosticCategory::Input, code: code.into(), file: None, object: None,
-            message, remedy: "Reopen the original input set and resolve external changes before checking its integration plan.".into(),
-        }]
+                category: DiagnosticCategory::Input,
+                code: code.into(),
+                file: None,
+                object: None,
+                message,
+                remedy: crate::product_message!("backend.arxml.reopen_inputs_remedy"),
+            }]
         };
         self.ensure_sources_current()
-            .map_err(|error| issue("SOURCE_CHANGED", error))?;
+            .map_err(|error| issue("SOURCE_CHANGED", error.into()))?;
         let mut root = self
             .integration_input_root
             .as_deref()
@@ -442,7 +518,7 @@ impl Workspace {
             .ok_or_else(|| {
                 issue(
                     "INPUT_MISSING",
-                    "No input source directory is available.".into(),
+                    crate::product_message!("backend.arxml.input_directory_missing"),
                 )
             })?;
         while !self
@@ -453,13 +529,13 @@ impl Workspace {
             if self.integration_input_root.is_some() {
                 return Err(issue(
                     "SOURCE_IDENTITY",
-                    "A delivered source escaped its declared logical input root.".into(),
+                    crate::product_message!("backend.arxml.source_outside_input_root"),
                 ));
             }
             root = root.parent().ok_or_else(|| {
                 issue(
                     "SOURCE_IDENTITY",
-                    "The source files do not share a portable input root.".into(),
+                    crate::product_message!("backend.arxml.portable_input_root_required"),
                 )
             })?;
         }
@@ -470,13 +546,13 @@ impl Workspace {
                 let relative = file
                     .path
                     .strip_prefix(root)
-                    .map_err(|error| issue("SOURCE_IDENTITY", error.to_string()))?;
+                    .map_err(|error| issue("SOURCE_IDENTITY", error.to_string().into()))?;
                 let logical = relative
                     .to_str()
                     .ok_or_else(|| {
                         issue(
                             "SOURCE_IDENTITY",
-                            "The source identity is not UTF-8.".into(),
+                            crate::product_message!("backend.arxml.source_identity_utf8_required"),
                         )
                     })?
                     .replace('\\', "/");
@@ -495,7 +571,7 @@ impl Workspace {
         if self.uses_legacy_validation() {
             return Err(integration_editor::failure(
                 "VALIDATION_MODE",
-                "Use explicit legacy resources for a legacy workspace.",
+                crate::product_message!("backend.arxml.legacy_resources_required"),
             ));
         }
         crate::integration::build_plan_native(&self.integration_sources()?, &self.catalog, runtime)
@@ -510,7 +586,7 @@ impl Workspace {
         let archive = self.schema_zip.clone().ok_or_else(|| {
             integration_editor::failure(
                 "VALIDATION_MODE",
-                "Legacy integration requires explicit official resources.",
+                crate::product_message!("backend.arxml.legacy_integration_resources_required"),
             )
         })?;
         crate::integration::build_plan(
@@ -523,7 +599,7 @@ impl Workspace {
         )
     }
 
-    pub fn validate(&mut self) -> Result<WorkspaceView, String> {
+    pub fn validate(&mut self) -> Result<WorkspaceView, crate::message::LocalizedText> {
         self.refresh()?;
         if let Some(archive) = &self.schema_zip {
             self.issues.extend(schema::validate_files(
@@ -563,7 +639,10 @@ impl Workspace {
                         file: Some(file.path.display().to_string()),
                         ..Issue::error(
                             "UNRESOLVED_REF",
-                            format!("跨文件引用未解析: {reference}"),
+                            crate::product_message!(
+                                "backend.arxml.unresolved_reference",
+                                "reference" => reference
+                            ),
                             Some(path_of(node.parent_element().unwrap_or(node))),
                         )
                     });
@@ -601,7 +680,7 @@ impl Workspace {
                     self.issues.push(Issue {
                         severity: Severity::Warning,
                         code: "VARIANT_DEPENDENCY".into(),
-                        message: "配置含未解析变体，可保存但禁止生成".into(),
+                        message: crate::product_message!("backend.arxml.unresolved_variant"),
                         path: Some(path_of(node)),
                         file: Some(file.path.display().to_string()),
                     });
@@ -612,7 +691,7 @@ impl Workspace {
         Ok(self.view())
     }
 
-    fn all_paths(&self) -> Result<BTreeSet<String>, String> {
+    fn all_paths(&self) -> Result<BTreeSet<String>, crate::message::LocalizedText> {
         let mut paths = BTreeSet::new();
         for file in &self.files {
             let doc = Document::parse(&file.text).map_err(|e| e.to_string())?;
@@ -626,29 +705,43 @@ impl Workspace {
         Ok(paths)
     }
 
-    pub fn checked_profile(&mut self) -> Result<(Vec<FrameView>, Vec<SignalView>), String> {
+    pub fn checked_profile(
+        &mut self,
+    ) -> Result<(Vec<FrameView>, Vec<SignalView>), crate::message::LocalizedText> {
         self.validate()?;
         if let Some(issue) = self
             .issues
             .iter()
             .find(|i| matches!(i.severity, Severity::Error))
         {
-            return Err(format!("{}: {}", issue.code, issue.message));
+            return Err(crate::message::LocalizedText::messages([
+                crate::product_message!(
+                    "backend.arxml.diagnostic_code_context",
+                    "code" => issue.code.as_str()
+                ),
+                issue.message.clone(),
+            ]));
         }
         if let Some(issue) = self.issues.iter().find(|i| i.code == "VARIANT_DEPENDENCY") {
-            return Err(format!("{}: {}", issue.code, issue.message));
+            return Err(crate::message::LocalizedText::messages([
+                crate::product_message!(
+                    "backend.arxml.diagnostic_code_context",
+                    "code" => issue.code.as_str()
+                ),
+                issue.message.clone(),
+            ]));
         }
         if self.frames.is_empty() || self.signals.is_empty() {
-            return Err("NO_SIGNALS: 至少需要一帧和一个信号才能生成".into());
+            return Err(crate::product_message!("backend.arxml.signals_required"));
         }
         if let Some(frame) = self
             .frames
             .iter()
             .find(|f| !self.signals.iter().any(|s| s.frame_path == f.path))
         {
-            return Err(format!(
-                "FRAME_EMPTY: {} 没有信号，C99 运行代码无法初始化",
-                frame.path
+            return Err(crate::product_message!(
+                "backend.arxml.empty_frame_generation_blocked",
+                "path" => frame.path.as_str()
             ));
         }
         Ok((self.frames.clone(), self.signals.clone()))

@@ -35,13 +35,15 @@ pub(crate) async fn verification_owned_failure(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
     delay_ms: u64,
-) -> Result<Reply<OwnedFailure>, String> {
+) -> Result<Reply<OwnedFailure>, autosar_config_core::LocalizedText> {
     if delay_ms > 5_000 {
-        return Err("Owned verification delay exceeds 5000 ms".into());
+        return Err(
+            autosar_config_core::product_message!("backend.verification.delay_limit").into(),
+        );
     }
     background(state, move |state| {
-        let operation = state.begin(&fingerprint, "owned verification failure", OperationKind::Native)?;
-        let tools = operation.snapshot.tools.as_ref().ok_or("Configure the declared external execution tools first")?;
+        let operation = state.begin(&fingerprint, autosar_config_core::product_message!("backend.operation.owned_verification_failure"), OperationKind::Native)?;
+        let tools = operation.snapshot.tools.as_ref().ok_or(autosar_config_core::product_message!("backend.verification.tools_required"))?;
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|error| error.to_string())?.as_nanos();
         let directory = std::env::temp_dir().join(format!("autosar-owned-verification-{}-{stamp}", std::process::id()));
         std::fs::create_dir(&directory).map_err(|error| error.to_string())?;
@@ -75,6 +77,7 @@ pub(crate) async fn verification_owned_failure(
 
 #[cfg(not(feature = "native-webdriver"))]
 #[tauri::command]
-pub(crate) async fn verification_owned_failure() -> Result<Reply<()>, String> {
-    Err("Owned verification requires the native-webdriver verification build".into())
+pub(crate) async fn verification_owned_failure()
+-> Result<Reply<()>, autosar_config_core::LocalizedText> {
+    Err(autosar_config_core::product_message!("backend.verification.build_required").into())
 }

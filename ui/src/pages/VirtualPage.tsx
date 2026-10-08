@@ -2,8 +2,10 @@ import { CopyText, OwnedLog } from '../workbench/Dialog';
 import type { Workbench } from '../workbench/useWorkbench';
 import { CircleAlert, CircleCheck, FolderOpen, MonitorPlay } from 'lucide-react';
 import { stageLabels } from '../workbench/useDelivery';
+import { useLocale } from '../i18n';
 
 export function VirtualPage({ controller }: { controller: Workbench }) {
+  const { t, text } = useLocale();
   const {
     unapplied,
     stages,
@@ -27,9 +29,9 @@ export function VirtualPage({ controller }: { controller: Workbench }) {
     <div className="workflow-page virtual-view">
       <div className="section-header">
         <div>
-          <p className="eyebrow">HOST VIRTUAL BUS</p>
-          <h2>主机虚拟运行</h2>
-          <p>双 ECU 信号闭环与独立测试器诊断验证分别运行；结果不代表真实硬件符合性。</p>
+          <p className="eyebrow">{t('shell.virtual.eyebrow')}</p>
+          <h2>{t('shell.virtual.title')}</h2>
+          <p>{t('shell.virtual.description')}</p>
         </div>
       </div>
       <div
@@ -37,11 +39,11 @@ export function VirtualPage({ controller }: { controller: Workbench }) {
       >
         <span className="stage-number">05</span>
         <div className="stage-copy">
-          <strong>主机虚拟验证</strong>
+          <strong>{t('shell.virtual.stage')}</strong>
           <small>
             {unapplied && stages.virtual.state === 'done'
-              ? '草稿未应用，结果已过期'
-              : stages.virtual.detail}
+              ? t('shell.virtual.draftStale')
+              : text(stages.virtual.detail)}
           </small>
         </div>
         <span className="stage-pill">
@@ -49,32 +51,32 @@ export function VirtualPage({ controller }: { controller: Workbench }) {
             <CircleCheck aria-hidden="true" size={13} />
           )}
           {unapplied && stages.virtual.state === 'done'
-            ? stageLabels.stale
-            : stageLabels[stages.virtual.state]}
+            ? text(stageLabels.stale)
+            : text(stageLabels[stages.virtual.state])}
         </span>
       </div>
       {(!built || stages.build.state !== 'done' || unapplied) && (
         <div className="page-guidance">
-          当前配置尚未完成可运行的主机目标构建。
+          {t('shell.virtual.guidance')}
           <button
             type="button"
             onClick={() =>
               controller.openDocument({ kind: unapplied ? 'communication' : 'delivery' })
             }
           >
-            前往{unapplied ? '配置' : '生成与构建'}
+            {unapplied ? t('shell.go.configuration') : t('shell.go.build')}
           </button>
         </div>
       )}
       <div className="peer-section">
-        <h3>对端 ECU 工程</h3>
-        <p>选择对端封存源码目录及独立构建的实际二进制；两份真实 ECU 在虚拟总线上运行。</p>
+        <h3>{t('shell.virtual.peer')}</h3>
+        <p>{t('shell.virtual.peerHelp')}</p>
         <div className="path-picker">
           <input
             readOnly
             value={peerDirectory}
-            placeholder="选择对端生成工程目录"
-            aria-label="对端生成工程目录"
+            placeholder={t('shell.virtual.peerPlaceholder')}
+            aria-label={t('shell.virtual.peerDirectory')}
           />
           <button
             type="button"
@@ -88,15 +90,15 @@ export function VirtualPage({ controller }: { controller: Workbench }) {
             disabled={disabled || stages.build.state !== 'done'}
           >
             <FolderOpen aria-hidden="true" size={15} />
-            选择对端目录
+            {t('shell.virtual.choosePeer')}
           </button>
         </div>
         <div className="path-picker">
           <input
-            aria-label="对端主机二进制"
+            aria-label={t('shell.virtual.peerBinary')}
             value={peerBinaryPath}
             disabled={disabled}
-            placeholder="选择对端独立构建的 ecu_host"
+            placeholder={t('shell.virtual.binaryPlaceholder')}
             onChange={(event) => {
               setPeerBinaryPath(event.target.value);
               setVirtualResult(null);
@@ -112,14 +114,14 @@ export function VirtualPage({ controller }: { controller: Workbench }) {
               })
             }
           >
-            选择对端二进制
+            {t('shell.virtual.chooseBinary')}
           </button>
         </div>
         <button
           type="button"
           className="primary-button compact"
           onClick={runVirtual}
-          title={controller.executionReason}
+          title={text(controller.executionReason)}
           disabled={
             controller.executionDisabled ||
             unapplied ||
@@ -129,27 +131,25 @@ export function VirtualPage({ controller }: { controller: Workbench }) {
           }
         >
           <MonitorPlay aria-hidden="true" size={15} />
-          运行虚拟闭环
+          {t('shell.virtual.run')}
         </button>
       </div>
       {workspace.diagnostic && (
         <div className="peer-section">
-          <h3>诊断独立测试器</h3>
+          <h3>{t('shell.virtual.tester')}</h3>
           <p>
-            对当前生成 ECU 注入物理诊断 CAN 帧，核对会话、0xF186 活动会话 DID、实时 DID、多 DID
-            顺序、流控、超时与故障恢复；无需对端 ECU 工程。
-            {workspace.diagnostic.dtc &&
-              '配置故障记忆时，还核对 Rx 超时 DTC、0x19 状态查询及支持的 DTC 列表、扩展会话 0x14/0xFFFFFF 清除，以及 0x85/0x02 暂停记录、0x85/0x01 恢复记录和隔离主机存储的跨进程重启持久化。'}
+            {t('shell.virtual.diagnosticHelp')}
+            {workspace.diagnostic.dtc && t('shell.virtual.dtcHelp')}
           </p>
           <button
             type="button"
             className="primary-button compact"
             onClick={runDiagnostic}
-            title={controller.executionReason}
+            title={text(controller.executionReason)}
             disabled={controller.executionDisabled || unapplied || stages.build.state !== 'done'}
           >
             <MonitorPlay aria-hidden="true" size={15} />
-            验证诊断连接
+            {t('shell.virtual.verifyDiagnostic')}
           </button>
         </div>
       )}
@@ -159,29 +159,34 @@ export function VirtualPage({ controller }: { controller: Workbench }) {
         (stages.virtual.state === 'done' || stages.virtual.state === 'failed') && (
           <div className="result-section">
             <h3>
-              {virtualKind === 'diagnostic' ? '诊断独立测试器' : '双 ECU 信号闭环'} ·{' '}
-              {virtualResult.passed ? '通过' : '未通过'}
+              {virtualKind === 'diagnostic'
+                ? t('shell.virtual.tester')
+                : t('shell.virtual.signalLoop')}{' '}
+              · {virtualResult.passed ? t('shell.virtual.passed') : t('shell.virtual.failed')}
             </h3>
             <ul className="events-list">
               {virtualResult.events.slice(-100).map((event, index) => (
                 <li key={index} className="mono">
-                  {event}
+                  {text(event)}
                 </li>
               ))}
             </ul>
             {virtualResult.events.length > 100 && (
-              <p className="field-help">显示最近 100 条事件；完整返回事件可复制。</p>
+              <p className="field-help">{t('shell.virtual.recentEvents')}</p>
             )}
-            <CopyText text={virtualResult.events.join('\n')} label="复制完整运行事件" />
+            <CopyText
+              text={virtualResult.events.map((event) => text(event)).join('\n')}
+              label={t('shell.virtual.copyEvents')}
+            />
             <details>
-              <summary>完整运行日志</summary>
-              <OwnedLog text={virtualResult.log} label="真实运行日志" />
+              <summary>{t('shell.virtual.fullLog')}</summary>
+              <OwnedLog text={virtualResult.log} label={t('shell.virtual.realLog')} />
             </details>
           </div>
         )}
       <div className="hardware-note">
         <CircleAlert aria-hidden="true" size={16} />
-        <span>真实硬件未验证；主机虚拟运行结果不代表已上板。</span>
+        <span>{t('shell.virtual.hardware')}</span>
       </div>
     </div>
   );

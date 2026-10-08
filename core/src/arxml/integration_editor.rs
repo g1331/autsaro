@@ -8,9 +8,20 @@ use crate::model::SavePreview;
 use roxmltree::Document;
 use std::path::PathBuf;
 
-pub(super) fn failure(code: &str, message: impl Into<String>) -> Vec<PlanDiagnostic> {
-    vec![PlanDiagnostic { category: DiagnosticCategory::Input, code: code.into(), file: None, object: None,
-        message: message.into(), remedy: "Resolve the source/preview conflict and reopen or preview again; preserve recovery files.".into() }]
+pub(super) fn failure(
+    code: &str,
+    message: impl Into<crate::message::LocalizedText>,
+) -> Vec<PlanDiagnostic> {
+    vec![PlanDiagnostic {
+        category: DiagnosticCategory::Input,
+        code: code.into(),
+        file: None,
+        object: None,
+        message: message.into(),
+        remedy: crate::product_message!(
+            "backend.arxml.integration_editor.source_preview_conflict_remedy"
+        ),
+    }]
 }
 
 impl Workspace {
@@ -82,7 +93,9 @@ impl Workspace {
         {
             return Err(failure(
                 "SOURCE_CHANGED",
-                "Delivered inputs changed while opening the ECU package.",
+                crate::product_message!(
+                    "backend.arxml.integration_editor.delivered_inputs_changed"
+                ),
             ));
         }
         Ok(workspace)
@@ -133,7 +146,10 @@ impl Workspace {
             let mut found = 0;
             for (index, file) in self.files.iter().enumerate() {
                 let document = Document::parse(&file.text).map_err(|error| {
-                    failure("EDIT_XML", format!("{}: {error}", file.path.display()))
+                    failure("EDIT_XML", crate::message::LocalizedText::messages([
+                        crate::product_message!("backend.arxml.integration_editor.xml_source_context", "path" => file.path.display()),
+                        error.to_string().into(),
+                    ]))
                 })?;
                 for node in document.descendants().filter(|node| {
                     node.is_element()
@@ -156,7 +172,9 @@ impl Workspace {
                     &plan,
                     "EDIT_UNSAFE",
                     &field.object,
-                    "Text-range edit has no unique original source object.",
+                    crate::product_message!(
+                        "backend.arxml.integration_editor.edit_source_not_unique"
+                    ),
                 ));
             }
         }
@@ -223,7 +241,9 @@ impl Workspace {
         if self.save_revision() != revision {
             return Err(failure(
                 "SAVE_PREVIEW_STALE",
-                "Inputs changed after preview; preview again.",
+                crate::product_message!(
+                    "backend.arxml.integration_editor.inputs_changed_after_preview"
+                ),
             ));
         }
         self.integration_plan_legacy(runtime, mod_archive.clone())?;

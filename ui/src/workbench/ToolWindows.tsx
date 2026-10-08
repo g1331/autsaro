@@ -1,3 +1,11 @@
+import { message, useLocale } from '../i18n';
+import {
+  editorCategoryKeys,
+  editorScopeKeys,
+  editorSeverityKeys,
+  editorStatusKeys,
+} from '../i18n/editors';
+import type { Message } from '../i18n';
 import { ChevronDown } from 'lucide-react';
 import { useMemo } from 'react';
 import type { Workbench } from './useWorkbench';
@@ -7,15 +15,16 @@ import { VirtualPage } from '../pages/VirtualPage';
 import { issueTarget } from './forms';
 import { PanelResizeHandle } from './PanelResizeHandle';
 
-export const toolLabels: Record<ToolWindow, string> = {
-  problems: '问题',
-  generation: '生成',
-  build: '构建',
-  host: '主机验证',
-  log: '操作日志',
+export const toolLabels: Record<ToolWindow, Message> = {
+  problems: message('editor.tools.tab.problems'),
+  generation: message('editor.tools.tab.generation'),
+  build: message('editor.tools.tab.build'),
+  host: message('editor.tools.tab.host'),
+  log: message('editor.tools.tab.log'),
 };
 
 export function ToolWindows({ controller: c }: { controller: Workbench }) {
+  const { t, text } = useLocale();
   const targets = useMemo(
     () => ({
       objects: new Set(c.projection?.objects.map((object) => object.objectId)),
@@ -27,7 +36,7 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
     [c.projection],
   );
   async function locate(issue: ConfigurationDiagnostic) {
-    await c.guardContext('定位问题', async () => {
+    await c.guardContext(message('editor.tools.locateIssue'), async () => {
       const objectId =
         issue.objectId ?? (issue.fieldId ? targets.fields.get(issue.fieldId) : undefined);
       c.setTreeVisible(true);
@@ -57,17 +66,17 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
     });
   }
   return (
-    <section className="bottom-tools" aria-label="工具窗口">
+    <section className="bottom-tools" aria-label={t('editor.tools.heading')}>
       {c.toolWindow ? <PanelResizeHandle kind="tools" /> : null}
       {c.toolWindow ? (
-        <div className="tool-content" role="tabpanel" aria-label={toolLabels[c.toolWindow]}>
+        <div className="tool-content" role="tabpanel" aria-label={text(toolLabels[c.toolWindow])}>
           <header>
-            <strong>{toolLabels[c.toolWindow]}</strong>
+            <strong>{text(toolLabels[c.toolWindow])}</strong>
             <button
               type="button"
               className="panel-icon-button"
-              aria-label="收起工具窗口"
-              title="收起工具窗口"
+              aria-label={t('editor.tools.collapse')}
+              title={t('editor.tools.collapse')}
               onClick={() => c.setToolWindow(null)}
             >
               <ChevronDown size={16} aria-hidden="true" />
@@ -79,12 +88,15 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                 {c.projection?.validation.map((scope) => (
                   <details key={scope.scope}>
                     <summary>
-                      {scope.scope} · {scope.status}
+                      {t(editorScopeKeys[scope.scope])} · {t(editorStatusKeys[scope.status])}
                     </summary>
                     {scope.coverage.map((coverage) => (
                       <p key={coverage.ruleId}>
-                        {coverage.ruleId} · {coverage.supported ? '支持' : '不支持'} ·{' '}
-                        {coverage.reason}
+                        {coverage.ruleId} ·{' '}
+                        {coverage.supported
+                          ? t('editor.tools.supported')
+                          : t('editor.tools.unsupported')}{' '}
+                        · {text(coverage.reason ?? '')}
                       </p>
                     ))}
                   </details>
@@ -100,19 +112,23 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                   return (
                     <li key={`${issue.code}-${issue.fieldId}-${index}`} className={issue.severity}>
                       <strong>
-                        {issue.severity.toUpperCase()} · {issue.scope} · {issue.code}
+                        {t(editorSeverityKeys[issue.severity])} · {t(editorScopeKeys[issue.scope])}{' '}
+                        · {issue.code}
                       </strong>
-                      <p>{issue.message}</p>
+                      <p>{text(issue.message)}</p>
                       <span className="mono path-text">{issue.path ?? issue.file}</span>
-                      <p>{issue.remedy}</p>
+                      <p>{text(issue.remedy)}</p>
                       {resolvable ? (
                         <button type="button" onClick={() => void locate(issue)}>
-                          定位真实来源
+                          {t('editor.tools.locateSource')}
                         </button>
                       ) : (
-                        <span>无法核定定位目标</span>
+                        <span>{t('editor.tools.unqualifiedTarget')}</span>
                       )}
-                      <CopyText text={JSON.stringify(issue, null, 2)} label="复制详情" />
+                      <CopyText
+                        text={JSON.stringify(issue, null, 2)}
+                        label={t('editor.common.copyDetails')}
+                      />
                     </li>
                   );
                 })}
@@ -121,16 +137,19 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                   return (
                     <li key={`legacy-${issue.code}-${index}`} className={issue.severity}>
                       <strong>
-                        {issue.severity.toUpperCase()} · {issue.code}
+                        {t(editorSeverityKeys[issue.severity])} · {issue.code}
                       </strong>
-                      <p>{issue.message}</p>
+                      <p>{text(issue.message)}</p>
                       <span className="mono path-text">{issue.path ?? issue.file}</span>
                       {target ? (
                         <button type="button" onClick={() => void c.choose(target)}>
-                          定位对象
+                          {t('editor.common.locateObject')}
                         </button>
                       ) : null}
-                      <CopyText text={JSON.stringify(issue, null, 2)} label="复制详情" />
+                      <CopyText
+                        text={JSON.stringify(issue, null, 2)}
+                        label={t('editor.common.copyDetails')}
+                      />
                     </li>
                   );
                 })}
@@ -140,20 +159,23 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                   return (
                     <li key={`standard-${issue.code}-${index}`} className="error">
                       <strong>
-                        {issue.code} · {issue.category}
+                        {issue.code} · {t(editorCategoryKeys[issue.category])}
                       </strong>
-                      <p>{issue.message}</p>
-                      <p>{issue.remedy}</p>
+                      <p>{text(issue.message)}</p>
+                      <p>{text(issue.remedy)}</p>
                       {object ? (
                         <button type="button" onClick={() => void c.selectObject(object.objectId)}>
-                          定位对象
+                          {t('editor.common.locateObject')}
                         </button>
                       ) : source ? (
                         <button type="button" onClick={() => void c.readSource(source.sourceId)}>
-                          查看来源
+                          {t('editor.common.viewSource')}
                         </button>
                       ) : null}
-                      <CopyText text={JSON.stringify(issue, null, 2)} label="复制详情" />
+                      <CopyText
+                        text={JSON.stringify(issue, null, 2)}
+                        label={t('editor.common.copyDetails')}
+                      />
                     </li>
                   );
                 })}
@@ -161,19 +183,22 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
               {!c.projection?.diagnostics.length &&
               !c.issues.length &&
               !c.integrationIssues.length ? (
-                <p className="empty-state">当前后台没有返回问题；各校验域的实际执行状态见上方。</p>
+                <p className="empty-state">{t('editor.tools.noProblems')}</p>
               ) : null}
             </div>
           ) : null}
           {c.toolWindow === 'generation' ? (
             <div>
               <p>
-                {c.stages.generate.state} · {c.stages.generate.detail}
+                {t(editorStatusKeys[c.stages.generate.state])} · {text(c.stages.generate.detail)}
               </p>
               {c.generated ? (
                 <>
                   <p className="mono path-text">{c.generated.outputDirectory}</p>
-                  <CopyText text={c.generated.outputDirectory} label="复制输出路径" />
+                  <CopyText
+                    text={c.generated.outputDirectory}
+                    label={t('editor.tools.copyOutput')}
+                  />
                   <ul>
                     {c.generated.files.map((file) => (
                       <li key={file} className="mono">
@@ -183,14 +208,14 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                   </ul>
                 </>
               ) : (
-                <p>尚无本次生成结果；从源码交付文档预览。</p>
+                <p>{t('editor.tools.noGeneration')}</p>
               )}
             </div>
           ) : null}
           {c.toolWindow === 'build' ? (
             <div>
               <p>
-                {c.stages.build.state} · {c.stages.build.detail}
+                {t(editorStatusKeys[c.stages.build.state])} · {text(c.stages.build.detail)}
               </p>
               {c.workspace?.integrationCandidate ? (
                 <button
@@ -198,7 +223,7 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                   disabled={c.executionDisabled || c.unapplied || Boolean(c.workspace?.dirty)}
                   onClick={c.preflightEcu}
                 >
-                  显式编译预检
+                  {t('editor.tools.preflight')}
                 </button>
               ) : null}
               <button
@@ -206,20 +231,22 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                 disabled={c.executionDisabled || !c.generated || !c.buildDirectory.trim()}
                 onClick={c.workspace?.integrationCandidate ? c.buildEcu : c.buildProject}
               >
-                独立构建
+                {t('editor.tools.build')}
               </button>
-              <p className="field-help">{c.executionReason}</p>
+              <p className="field-help">{text(c.executionReason)}</p>
               {c.preflight ? (
                 <OwnedLog
-                  text={c.preflight.logs.join('\n')}
-                  label={`编译预检 ${c.preflight.status}`}
+                  text={c.preflight.logs.map(text).join('\n')}
+                  label={t('editor.tools.preflightLabel', {
+                    status: t(editorStatusKeys[c.preflight.status]),
+                  })}
                 />
               ) : null}
               {c.built ? (
                 <>
                   <p className="mono path-text">{c.built.binaryPath}</p>
-                  <CopyText text={c.built.binaryPath} label="复制二进制路径" />
-                  <OwnedLog text={c.built.log} label="真实构建日志" />
+                  <CopyText text={c.built.binaryPath} label={t('editor.tools.copyBinary')} />
+                  <OwnedLog text={c.built.log} label={t('editor.tools.buildLog')} />
                 </>
               ) : null}
             </div>
@@ -233,13 +260,17 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                     disabled={c.executionDisabled || !c.built}
                     onClick={c.verifyEcu}
                   >
-                    验证本次 CAN / DID / N_Cr
+                    {t('editor.tools.verify')}
                   </button>
-                  <p>{c.executionReason}</p>
+                  <p>{text(c.executionReason)}</p>
                   {c.virtualResult ? (
                     <OwnedLog
                       text={c.virtualResult.log}
-                      label={c.virtualResult.passed ? '本次主机行为通过' : '本次主机行为失败'}
+                      label={
+                        c.virtualResult.passed
+                          ? t('editor.tools.hostPassed')
+                          : t('editor.tools.hostFailed')
+                      }
                     />
                   ) : null}
                 </>
@@ -253,25 +284,28 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
               <CopyText
                 text={() =>
                   c.operationLog
-                    .map((entry) => `${entry.command} · ${entry.outcome}\n${entry.detail}`)
+                    .map(
+                      (entry) =>
+                        `${entry.command} · ${t(editorStatusKeys[entry.outcome])}\n${text(entry.detail)}`,
+                    )
                     .join('\n\n')
                 }
-                label="复制完整会话操作日志"
+                label={t('editor.tools.copySession')}
               />
-              <p className="field-help">摘要显示最近 100 次真实 IPC 返回，不是持久审计记录。</p>
+              <p className="field-help">{t('editor.tools.sessionHelp')}</p>
               {c.operationLog.slice(-100).map((entry, index) => (
                 <details key={`${entry.command}-${index}`}>
                   <summary>
-                    {entry.command} · {entry.outcome}
+                    {entry.command} · {t(editorStatusKeys[entry.outcome])}
                   </summary>
-                  <OwnedLog text={entry.detail} label="后台返回详情" />
+                  <OwnedLog text={entry.detail} label={t('editor.tools.replyDetails')} />
                 </details>
               ))}
             </div>
           ) : null}
         </div>
       ) : null}
-      <nav className="tool-tabs" aria-label="底部工具窗口">
+      <nav className="tool-tabs" aria-label={t('editor.tools.bottom')}>
         {(Object.keys(toolLabels) as ToolWindow[]).map((key) => (
           <button
             key={key}
@@ -279,7 +313,7 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
             aria-pressed={c.toolWindow === key}
             onClick={() => c.setToolWindow(c.toolWindow === key ? null : key)}
           >
-            {toolLabels[key]}
+            {text(toolLabels[key])}
             {key === 'problems' ? (
               <small>
                 {(c.projection?.diagnostics.length ?? 0) +

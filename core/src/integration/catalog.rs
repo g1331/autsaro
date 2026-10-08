@@ -42,10 +42,18 @@ pub struct RuntimeCatalog {
     description: Description,
 }
 
-fn tool(code: &str, message: impl Into<String>) -> Vec<PlanDiagnostic> {
-    vec![PlanDiagnostic { category: DiagnosticCategory::Tool, code: code.into(),
-        file: None, object: None, message: message.into(),
-        remedy: "Restore the matching runtime source inventory for this workbench version. Review source/contract changes and rebuild the workbench before changing the inventory.".into() }]
+fn tool(code: &str, message: crate::message::LocalizedText) -> Vec<PlanDiagnostic> {
+    vec![PlanDiagnostic {
+        category: DiagnosticCategory::Tool,
+        code: code.into(),
+        file: None,
+        object: None,
+        message: message.into(),
+        remedy: crate::product_message!(
+            "backend.integration.catalog.runtime_source_inventory_restore"
+        )
+        .into(),
+    }]
 }
 
 impl RuntimeCatalog {
@@ -53,7 +61,7 @@ impl RuntimeCatalog {
         let description: Description = serde_json::from_str(DESCRIPTION).map_err(|error| {
             tool(
                 "CATALOG_TOOL",
-                format!("Invalid compiled BSW inventory: {error}"),
+                crate::product_message!("backend.integration.catalog.compiled_bsw_inventory_invalid", "error" => error),
             )
         })?;
         if description.format_version != 1
@@ -69,7 +77,9 @@ impl RuntimeCatalog {
         {
             return Err(tool(
                 "CATALOG_TOOL",
-                "The compiled BSW inventory has an unsupported identity.",
+                crate::product_message!(
+                    "backend.integration.catalog.compiled_bsw_inventory_identity_unsupported"
+                ),
             ));
         }
         Ok(Self { description })
@@ -81,13 +91,13 @@ impl RuntimeCatalog {
             std::fs::read(root.join("runtime/contracts/bsw-v1.json")).map_err(|error| {
                 tool(
                     "CATALOG_MISSING",
-                    format!("BSW inventory is missing: {error}"),
+                    crate::product_message!("backend.integration.catalog.bsw_inventory_missing", "error" => error),
                 )
             })?;
         if manifest != DESCRIPTION.as_bytes() {
             return Err(tool(
                 "CATALOG_IDENTITY",
-                "The on-disk BSW inventory differs from this compiled workbench.",
+                crate::product_message!("backend.integration.catalog.disk_bsw_inventory_mismatch"),
             ));
         }
         for (relative, expected) in &description.sources {
@@ -101,19 +111,21 @@ impl RuntimeCatalog {
             {
                 return Err(tool(
                     "CATALOG_TOOL",
-                    "The compiled inventory contains an invalid source identity.",
+                    crate::product_message!(
+                        "backend.integration.catalog.compiled_inventory_source_identity_invalid"
+                    ),
                 ));
             }
             let bytes = std::fs::read(root.join(path)).map_err(|error| {
                 tool(
                     "CATALOG_SOURCE",
-                    format!("Cannot read BSW source {relative}: {error}"),
+                    crate::product_message!("backend.integration.catalog.bsw_source_read_failed", "relative" => relative, "error" => error),
                 )
             })?;
             if format!("{:x}", Sha256::digest(bytes)) != *expected {
                 return Err(tool(
                     "CATALOG_SOURCE",
-                    format!("BSW source identity differs: {relative}"),
+                    crate::product_message!("backend.integration.catalog.bsw_source_identity_mismatch", "relative" => relative),
                 ));
             }
         }
@@ -126,7 +138,7 @@ impl RuntimeCatalog {
             {
                 return Err(tool(
                     "CATALOG_TOOL",
-                    format!("Invalid current BSW producer contract: {symbol}"),
+                    crate::product_message!("backend.integration.catalog.bsw_producer_contract_invalid", "symbol" => symbol),
                 ));
             }
         }
@@ -183,8 +195,8 @@ pub(super) fn inspect(
         if found.len() != 1 {
             return Err(vec![graph.diagnostic(found.first().copied().unwrap_or(context),
                 DiagnosticCategory::Input, if found.is_empty() { "BSW_ENTRY_MISSING" } else { "SYMBOL_PRODUCER_DUPLICATE" },
-                format!("Current BSW entry {symbol} must have one description and one source producer."),
-                "Supply exactly one BSW entry description matching the fixed current runtime source inventory.")]);
+                crate::product_message!("backend.integration.catalog.bsw_entry_description_and_producer_required", "symbol" => symbol),
+                crate::product_message!("backend.integration.catalog.bsw_entry_description_supply"))]);
         }
         let entry = found[0];
         let returns = graph.children(entry, "RETURN-TYPE");
@@ -203,8 +215,12 @@ pub(super) fn inspect(
                     argument,
                     DiagnosticCategory::Input,
                     "BSW_SIGNATURE_CONFLICT",
-                    "A BSW argument has no unique native type.",
-                    "Supply one base type declaration with the matching native C signature.",
+                    crate::product_message!(
+                        "backend.integration.catalog.bsw_argument_native_type_not_unique"
+                    ),
+                    crate::product_message!(
+                        "backend.integration.catalog.bsw_matching_base_type_declaration_supply"
+                    ),
                 )]
             })?;
             actual.push(ContractArgument {
@@ -225,8 +241,8 @@ pub(super) fn inspect(
             || !matches!(graph.text(entry, "IS-SYNCHRONOUS"), Some("true" | "1"))
         {
             return Err(vec![graph.diagnostic(entry, DiagnosticCategory::Input, "BSW_SIGNATURE_CONFLICT",
-                format!("BSW description {symbol} differs from its current native source contract."),
-                "Correct the return type, argument order/type/direction and synchronous declaration; changing a short name cannot repair an ABI mismatch.")]);
+                crate::product_message!("backend.integration.catalog.bsw_description_source_contract_mismatch", "symbol" => symbol),
+                crate::product_message!("backend.integration.catalog.bsw_abi_contract_correct"))]);
         }
         let owners: Vec<_> = graph
             .of_kind("BSW-MODULE-DESCRIPTION")
@@ -243,8 +259,12 @@ pub(super) fn inspect(
                 entry,
                 DiagnosticCategory::Input,
                 "SYMBOL_PRODUCER_DUPLICATE",
-                "The BSW entry must belong to one declared module description.",
-                "Supply one implemented-entry relationship and remove competing descriptions.",
+                crate::product_message!(
+                    "backend.integration.catalog.bsw_entry_module_description_required"
+                ),
+                crate::product_message!(
+                    "backend.integration.catalog.bsw_implemented_entry_relationship_supply"
+                ),
             )]);
         }
         let owner = owners[0];
@@ -265,8 +285,12 @@ pub(super) fn inspect(
                 owner,
                 DiagnosticCategory::Input,
                 "SYMBOL_PRODUCER_DUPLICATE",
-                "The current BSW module requires one matching C implementation description.",
-                "Supply the selected C implementation and its unique behavior relationship.",
+                crate::product_message!(
+                    "backend.integration.catalog.bsw_matching_c_implementation_required"
+                ),
+                crate::product_message!(
+                    "backend.integration.catalog.bsw_c_implementation_and_behavior_supply"
+                ),
             )]);
         }
         symbols.push(SymbolContract {
@@ -283,9 +307,17 @@ pub(super) fn inspect(
             let entry = *graph.objects.get(&graph.elements[reference].text).unwrap();
             let symbol = graph.text(entry, "SHORT-NAME").unwrap_or("");
             if !catalog.description.entries.contains_key(symbol) {
-                return Err(vec![graph.diagnostic(entry, DiagnosticCategory::Input, "BSW_ENTRY_MISSING",
-                    "A selected module declares an entry without a current source producer.",
-                    "Supply a reviewed source/type contract for this entry or remove it from the selected supported module.")]);
+                return Err(vec![graph.diagnostic(
+                    entry,
+                    DiagnosticCategory::Input,
+                    "BSW_ENTRY_MISSING",
+                    crate::product_message!(
+                        "backend.integration.catalog.bsw_selected_entry_source_producer_missing"
+                    ),
+                    crate::product_message!(
+                        "backend.integration.catalog.bsw_entry_source_type_contract_supply"
+                    ),
+                )]);
             }
         }
     }

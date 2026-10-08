@@ -1,3 +1,4 @@
+import { useLocale } from '../i18n';
 import type { Workbench } from '../workbench/useWorkbench';
 import { Plus, Save } from 'lucide-react';
 import { diagnosticFields, dtcFields, draftFor, labelFromPath } from '../workbench/forms';
@@ -12,6 +13,7 @@ export function EditorPage({
   controller: Workbench;
   section: 'communication' | 'diagnostic';
 }) {
+  const { t, text } = useLocale();
   const {
     requestSave,
     disabled,
@@ -50,9 +52,9 @@ export function EditorPage({
       <div className="legacy-editor-content" hidden={section !== 'communication'}>
         <div className="section-header">
           <div>
-            <p className="eyebrow">CAN COMMUNICATION</p>
-            <h2>帧与信号</h2>
-            <p>仅支持标准 11-bit CAN、DLC 1–8、原始无符号小端信号。</p>
+            <p className="eyebrow">{t('editor.can.overline')}</p>
+            <h2>{t('editor.can.heading')}</h2>
+            <p>{t('editor.can.support')}</p>
           </div>
           <div className="section-actions">
             <button
@@ -62,7 +64,7 @@ export function EditorPage({
               disabled={!native || Boolean(busy) || Boolean(unsupportedIssue) || unapplied}
             >
               <Save aria-hidden="true" size={15} />
-              查看并保存 ARXML
+              {t('editor.can.save')}
             </button>
             <button
               type="button"
@@ -71,27 +73,27 @@ export function EditorPage({
               disabled={disabled}
             >
               <Plus aria-hidden="true" size={15} />
-              添加帧
+              {t('editor.can.addFrame')}
             </button>
           </div>
         </div>
         {unsupportedIssue && (
           <div className="page-guidance" role="alert">
-            {unsupportedIssue.message}。原 ARXML
-            保持不变；请在“诊断”页查看问题，当前不能修改、保存或生成。
+            {text(unsupportedIssue.message)}
+            {t('editor.can.unsupportedHelp')}
           </div>
         )}
         <div className="table-wrap">
           <table>
-            <caption>CAN 帧配置</caption>
+            <caption>{t('editor.can.caption')}</caption>
             <thead>
               <tr>
-                <th scope="col">帧名称</th>
+                <th scope="col">{t('editor.can.frameName')}</th>
                 <th scope="col">CAN ID</th>
                 <th scope="col">DLC</th>
-                <th scope="col">方向</th>
-                <th scope="col">周期 / 超时</th>
-                <th scope="col">信号</th>
+                <th scope="col">{t('editor.can.direction')}</th>
+                <th scope="col">{t('editor.can.timing')}</th>
+                <th scope="col">{t('editor.can.signals')}</th>
               </tr>
             </thead>
             <tbody>
@@ -133,7 +135,7 @@ export function EditorPage({
               {!workspace.frames.length && (
                 <tr>
                   <td colSpan={6} className="empty-cell">
-                    项目尚无 CAN 帧。使用“添加帧”开始配置。
+                    {t('editor.can.emptyFrames')}
                   </td>
                 </tr>
               )}
@@ -142,10 +144,16 @@ export function EditorPage({
         </div>
         <div className="section-header secondary">
           <div>
-            <p className="eyebrow">FRAME MAPPING</p>
-            <h2>{focusedFrame ? `${focusedFrame.name} · 信号` : '全部信号'}</h2>
+            <p className="eyebrow">{t('editor.can.mappingOverline')}</p>
+            <h2>
+              {focusedFrame
+                ? t('editor.can.frameSignals', { name: focusedFrame.name })
+                : t('editor.can.allSignals')}
+            </h2>
             <p>
-              {focusedFrame ? `帧路径：${focusedFrame.path}` : '选择一帧可查看信号映射与引用。'}
+              {focusedFrame
+                ? t('editor.can.framePath', { path: focusedFrame.path })
+                : t('editor.can.chooseFrame')}
             </p>
           </div>
           <button
@@ -155,20 +163,20 @@ export function EditorPage({
             disabled={disabled || !focusedFrame}
           >
             <Plus aria-hidden="true" size={15} />
-            添加信号
+            {t('editor.can.addSignal')}
           </button>
         </div>
         <div className="table-wrap">
           <table>
-            <caption>信号配置</caption>
+            <caption>{t('editor.can.signalCaption')}</caption>
             <thead>
               <tr>
-                <th scope="col">信号名称</th>
-                <th scope="col">所属帧</th>
-                <th scope="col">起始位</th>
-                <th scope="col">长度</th>
-                <th scope="col">初始值</th>
-                <th scope="col">编码</th>
+                <th scope="col">{t('editor.can.signalName')}</th>
+                <th scope="col">{t('editor.can.parentFrame')}</th>
+                <th scope="col">{t('editor.can.startBit')}</th>
+                <th scope="col">{t('editor.can.length')}</th>
+                <th scope="col">{t('editor.can.initial')}</th>
+                <th scope="col">{t('editor.can.encoding')}</th>
               </tr>
             </thead>
             <tbody>
@@ -207,7 +215,7 @@ export function EditorPage({
               ) && (
                 <tr>
                   <td colSpan={6} className="empty-cell">
-                    当前范围内暂无信号。
+                    {t('editor.can.emptySignals')}
                   </td>
                 </tr>
               )}
@@ -222,21 +230,26 @@ export function EditorPage({
       >
         <div className="section-header secondary">
           <div>
-            <p className="eyebrow">HOST VIRTUAL / DoCAN</p>
-            <h2 id="diagnostic-editor-title">诊断通信配置</h2>
-            <p>单条 11-bit 物理连接；扩展会话中一个 DID 按顺序读取实时 32-bit Tx 信号。</p>
+            <p className="eyebrow">{t('editor.diagnostic.overline')}</p>
+            <h2 id="diagnostic-editor-title">{t('editor.diagnostic.heading')}</h2>
+            <p>{t('editor.diagnostic.intro')}</p>
           </div>
-          <span className="diagnostic-state">{workspace.diagnostic ? '已配置' : '未配置'}</span>
+          <span className="diagnostic-state">
+            {workspace.diagnostic
+              ? t('editor.common.configured')
+              : t('editor.common.notConfigured')}
+          </span>
         </div>
         {workspace.diagnostic && (
           <p className="diagnostic-path">
-            配置路径 <span className="mono path-text">{workspace.diagnostic.path}</span>
+            {t('editor.common.path')}{' '}
+            <span className="mono path-text">{workspace.diagnostic.path}</span>
           </p>
         )}
         <div className="diagnostic-fields form-fields">
           <div className="form-pair">
             <label>
-              请求 CAN ID <small>0–2047 · 十进制或 0x 十六进制</small>
+              {t('editor.diagnostic.requestId')} <small>{t('editor.diagnostic.idHelp')}</small>
               <input
                 value={diagnosticDraft.requestId}
                 onChange={(event) =>
@@ -245,13 +258,14 @@ export function EditorPage({
                     requestId: event.target.value,
                   })
                 }
-                placeholder="例如 0x700"
+                placeholder={t('editor.diagnostic.exampleRequest')}
                 disabled={disabled}
                 autoComplete="off"
               />
             </label>
             <label>
-              响应 CAN ID <small>不与 Com 帧冲突</small>
+              {t('editor.diagnostic.responseId')}{' '}
+              <small>{t('editor.diagnostic.responseHelp')}</small>
               <input
                 value={diagnosticDraft.responseId}
                 onChange={(event) =>
@@ -260,7 +274,7 @@ export function EditorPage({
                     responseId: event.target.value,
                   })
                 }
-                placeholder="例如 0x708"
+                placeholder={t('editor.diagnostic.exampleResponse')}
                 disabled={disabled}
                 autoComplete="off"
               />
@@ -334,20 +348,21 @@ export function EditorPage({
             </label>
           </div>
           <label>
-            DID <small>0–65535 · 0xF186 保留</small>
+            DID <small>{t('editor.diagnostic.didHelp')}</small>
             <input
               value={diagnosticDraft.did}
               onChange={(event) =>
                 setDiagnosticDraft({ ...diagnosticDraft, did: event.target.value })
               }
-              placeholder="例如 0xF190"
+              placeholder={t('editor.diagnostic.exampleDid')}
               disabled={disabled}
               autoComplete="off"
             />
           </label>
           <div className="signal-picker">
             <label htmlFor="diagnostic-signal">
-              DID 信号顺序 <small>1–8 个 32-bit Tx 信号；每项占 4 字节</small>
+              {t('editor.diagnostic.signalOrder')}{' '}
+              <small>{t('editor.diagnostic.signalHelp')}</small>
             </label>
             <div className="signal-picker-controls">
               <select
@@ -362,7 +377,7 @@ export function EditorPage({
                   )
                 }
               >
-                <option value="">选择 32-bit Tx 信号</option>
+                <option value="">{t('editor.diagnostic.chooseSignal')}</option>
                 {eligibleSignals
                   .filter((signal) => !diagnosticDraft.signalPaths.includes(signal.path))
                   .map((signal) => (
@@ -388,11 +403,11 @@ export function EditorPage({
                 disabled={disabled || !diagnosticSignal || diagnosticDraft.signalPaths.length >= 8}
               >
                 <Plus aria-hidden="true" size={14} />
-                添加
+                {t('editor.common.add')}
               </button>
             </div>
             {!eligibleSignals.length && (
-              <p className="field-help">先在 Tx CAN 帧中配置至少一个 32-bit 信号。</p>
+              <p className="field-help">{t('editor.diagnostic.needSignal')}</p>
             )}
             <ol className="diagnostic-signal-list">
               {diagnosticDraft.signalPaths.map((path, index) => {
@@ -401,13 +416,13 @@ export function EditorPage({
                   <li key={path}>
                     <span className="signal-order">{String(index + 1).padStart(2, '0')}</span>
                     <span className="signal-description">
-                      <strong>{signal?.name ?? '信号不可用'}</strong>
+                      <strong>{signal?.name ?? t('editor.diagnostic.signalUnavailable')}</strong>
                       <small className="mono path-text">{path}</small>
                     </span>
                     <div className="signal-order-actions">
                       <button
                         type="button"
-                        aria-label={`上移 ${signal?.name ?? path}`}
+                        aria-label={t('editor.diagnostic.moveUp', { name: signal?.name ?? path })}
                         onClick={() => {
                           const paths = [...diagnosticDraft.signalPaths];
                           [paths[index - 1], paths[index]] = [paths[index], paths[index - 1]];
@@ -422,7 +437,7 @@ export function EditorPage({
                       </button>
                       <button
                         type="button"
-                        aria-label={`下移 ${signal?.name ?? path}`}
+                        aria-label={t('editor.diagnostic.moveDown', { name: signal?.name ?? path })}
                         onClick={() => {
                           const paths = [...diagnosticDraft.signalPaths];
                           [paths[index], paths[index + 1]] = [paths[index + 1], paths[index]];
@@ -437,7 +452,9 @@ export function EditorPage({
                       </button>
                       <button
                         type="button"
-                        aria-label={`移除 ${signal?.name ?? path}`}
+                        aria-label={t('editor.diagnostic.removeSignal', {
+                          name: signal?.name ?? path,
+                        })}
                         onClick={() =>
                           setDiagnosticDraft({
                             ...diagnosticDraft,
@@ -448,7 +465,7 @@ export function EditorPage({
                         }
                         disabled={disabled}
                       >
-                        移除
+                        {t('editor.diagnostic.remove')}
                       </button>
                     </div>
                   </li>
@@ -470,15 +487,12 @@ export function EditorPage({
               disabled={disabled}
             />
             <span>
-              允许扩展会话写入此 DID (0x2E)
-              <small>
-                仅修改主机虚拟运行的应用状态；重启后恢复初始值。关闭写入也会关闭下方复位例程。
-              </small>
+              {t('editor.diagnostic.allowWrite')}
+              <small>{t('editor.diagnostic.writeHelp')}</small>
             </span>
           </label>
           <label className="diagnostic-routine">
-            复位例程 RID (0x31/0x01){' '}
-            <small>可选 · 0–65535 · 十进制或 0x 十六进制；留空即关闭</small>
+            {t('editor.diagnostic.resetRid')} <small>{t('editor.diagnostic.ridHelp')}</small>
             <input
               value={diagnosticDraft.resetRoutineId}
               onChange={(event) =>
@@ -487,14 +501,11 @@ export function EditorPage({
                   resetRoutineId: event.target.value,
                 })
               }
-              placeholder="例如 0x0201"
+              placeholder={t('editor.diagnostic.exampleRid')}
               disabled={disabled || !diagnosticDraft.writeEnabled}
               autoComplete="off"
             />
-            <small>
-              仅在扩展会话中，将当前可写 DID 的 Tx 信号恢复为配置初始值；仅主机虚拟易失状态，不写入
-              Flash/NvM；启用 0x27 档案时须先解锁。
-            </small>
+            <small>{t('editor.diagnostic.resetHelp')}</small>
           </label>
           <label className="diagnostic-write">
             <input
@@ -509,17 +520,14 @@ export function EditorPage({
               disabled={disabled}
             />
             <span>
-              用 0x27 保护状态更改
-              <small>
-                可选 · 单级 seed/key；保护 0x2E、0x31、0x14 和 0x85。须先启用写入或配置
-                DTC。密钥在运行时从独立文件提供，不保存在 ARXML 中；仅限 Windows 主机虚拟目标。
-              </small>
+              {t('editor.diagnostic.security')}
+              <small>{t('editor.diagnostic.securityHelp')}</small>
             </span>
           </label>
         </div>
         {diagnosticError && (
           <p className="diagnostic-error" role="alert">
-            {diagnosticError}
+            {text(diagnosticError)}
           </p>
         )}
         <div className="diagnostic-actions">
@@ -529,7 +537,7 @@ export function EditorPage({
             onClick={configureDiagnostic}
             disabled={disabled || !diagnosticUnapplied || dtcUnapplied || frameUnapplied}
           >
-            {workspace.diagnostic ? '应用诊断更改' : '创建诊断配置'}
+            {workspace.diagnostic ? t('editor.diagnostic.apply') : t('editor.diagnostic.create')}
           </button>
           <button
             type="button"
@@ -541,7 +549,7 @@ export function EditorPage({
             }}
             disabled={disabled || !diagnosticUnapplied}
           >
-            还原草稿
+            {t('editor.common.restoreDraft')}
           </button>
           {workspace.diagnostic && (
             <button
@@ -550,49 +558,47 @@ export function EditorPage({
               onClick={clearDiagnostic}
               disabled={disabled || diagnosticUnapplied || dtcUnapplied || frameUnapplied}
             >
-              移除诊断配置
+              {t('editor.diagnostic.removeConfig')}
             </button>
           )}
-          {diagnosticUnapplied && <span role="status">未应用的诊断草稿</span>}
+          {diagnosticUnapplied && <span role="status">{t('editor.diagnostic.draft')}</span>}
         </div>
         <section className="dtc-editor" aria-labelledby="dtc-editor-title">
           <div className="dtc-heading">
             <div>
-              <p className="eyebrow">HOST VIRTUAL / DEM + NVM</p>
+              <p className="eyebrow">{t('editor.dtc.overline')}</p>
               <h3 id="dtc-editor-title">
-                故障记忆 <span className="dtc-optional">可选 · 单个 DTC</span>
+                {t('editor.dtc.heading')}{' '}
+                <span className="dtc-optional">{t('editor.dtc.optional')}</span>
               </h3>
             </div>
             <span className="diagnostic-state">
-              {workspace.diagnostic?.dtc ? '已配置' : '未配置'}
+              {workspace.diagnostic?.dtc
+                ? t('editor.common.configured')
+                : t('editor.common.notConfigured')}
             </span>
           </div>
-          <p className="dtc-copy">
-            有效 Rx 帧首次到达后，若该帧超时，Dem 记录故障状态并由主机 NvM 持久化。支持
-            0x19/0x01、0x19/0x02 状态掩码查询、0x19/0x0A 读取支持的 DTC
-            列表（无故障时也可发现监测项）、扩展会话 0x14/0xFFFFFF 清除，以及扩展会话 0x85/0x02
-            暂停、0x85/0x01 恢复 DTC 设置。暂停时已有故障仍可读取和清除；切回默认会话（含 S3
-            超时）或重启后自动恢复记录。不代表完整 Dem/NvM、硬件或标准符合性。
-          </p>
+          <p className="dtc-copy">{t('editor.dtc.help')}</p>
           {!workspace.diagnostic ? (
-            <p className="field-help">先应用上方 DoCAN 配置，再添加故障记忆。</p>
+            <p className="field-help">{t('editor.dtc.needDiagnostic')}</p>
           ) : (
             <>
               {workspace.diagnostic.dtc && (
                 <p className="diagnostic-path">
-                  配置路径 <span className="mono path-text">{workspace.diagnostic.dtc.path}</span>
+                  {t('editor.common.path')}{' '}
+                  <span className="mono path-text">{workspace.diagnostic.dtc.path}</span>
                 </p>
               )}
               <div className="dtc-fields form-fields">
                 <label>
-                  DTC 代码 <small>24-bit · 0x000100–0xFFFFFE · 十进制或 0x 十六进制</small>
+                  {t('editor.dtc.code')} <small>{t('editor.dtc.codeHelp')}</small>
                   <input
                     value={dtcDraft.code}
                     onChange={(event) => {
                       setDtcDraft({ ...dtcDraft, code: event.target.value });
                       setDtcError('');
                     }}
-                    placeholder="例如 0x123456"
+                    placeholder={t('editor.dtc.example')}
                     disabled={disabled}
                     autoComplete="off"
                     aria-invalid={Boolean(dtcError)}
@@ -600,7 +606,7 @@ export function EditorPage({
                   />
                 </label>
                 <label>
-                  监测 Rx CAN 帧 <small>至少一个信号 · 接收超时大于 0</small>
+                  {t('editor.dtc.monitor')} <small>{t('editor.dtc.monitorHelp')}</small>
                   <select
                     value={dtcDraft.monitorFramePath}
                     onChange={(event) => {
@@ -614,13 +620,13 @@ export function EditorPage({
                     aria-invalid={Boolean(dtcError)}
                     aria-describedby={dtcError ? 'dtc-error' : undefined}
                   >
-                    <option value="">选择监测帧</option>
+                    <option value="">{t('editor.dtc.choose')}</option>
                     {dtcDraft.monitorFramePath &&
                       !eligibleMonitorFrames.some(
                         (frame) => frame.path === dtcDraft.monitorFramePath,
                       ) && (
                         <option value={dtcDraft.monitorFramePath}>
-                          原监测帧已不符合条件 · 请重新选择
+                          {t('editor.dtc.invalidFrame')}
                         </option>
                       )}
                     {eligibleMonitorFrames.map((frame) => (
@@ -634,13 +640,11 @@ export function EditorPage({
                 </label>
               </div>
               {!eligibleMonitorFrames.length && (
-                <p className="field-help">
-                  先添加一条接收超时大于 0 的 Rx 帧，并在帧中添加至少一个信号。
-                </p>
+                <p className="field-help">{t('editor.dtc.needFrame')}</p>
               )}
               {dtcError && (
                 <p id="dtc-error" className="diagnostic-error" role="alert">
-                  {dtcError}
+                  {text(dtcError)}
                 </p>
               )}
               <div className="diagnostic-actions">
@@ -650,7 +654,7 @@ export function EditorPage({
                   onClick={configureDtc}
                   disabled={disabled || !dtcUnapplied || diagnosticUnapplied || frameUnapplied}
                 >
-                  {workspace.diagnostic.dtc ? '应用故障记忆更改' : '配置故障记忆'}
+                  {workspace.diagnostic.dtc ? t('editor.dtc.apply') : t('editor.dtc.configure')}
                 </button>
                 <button
                   type="button"
@@ -661,7 +665,7 @@ export function EditorPage({
                   }}
                   disabled={disabled || !dtcUnapplied}
                 >
-                  还原草稿
+                  {t('editor.common.restoreDraft')}
                 </button>
                 {workspace.diagnostic.dtc && (
                   <button
@@ -670,10 +674,10 @@ export function EditorPage({
                     onClick={clearDtc}
                     disabled={disabled || unapplied}
                   >
-                    移除故障记忆
+                    {t('editor.dtc.remove')}
                   </button>
                 )}
-                {dtcUnapplied && <span role="status">未应用的故障记忆草稿</span>}
+                {dtcUnapplied && <span role="status">{t('editor.dtc.draft')}</span>}
               </div>
             </>
           )}
@@ -684,6 +688,7 @@ export function EditorPage({
 }
 
 export function EditorInspector({ controller }: { controller: Workbench }) {
+  const { t, text } = useLocale();
   const {
     creating,
     focusedFrame,
@@ -709,16 +714,24 @@ export function EditorInspector({ controller }: { controller: Workbench }) {
   } = controller;
   if (!workspace) return null;
   return (
-    <aside className="inspector" aria-label="对象检查器">
-      <div className="pane-overline">OBJECT INSPECTOR</div>
+    <aside className="inspector" aria-label={t('editor.inspector.label')}>
+      <div className="pane-overline">{t('editor.inspector.overline')}</div>
       {creating ? (
         <>
-          <p className="eyebrow">CREATE / {creating.toUpperCase()}</p>
-          <h2>{creating === 'frame' ? '添加 CAN 帧' : '添加信号'}</h2>
+          <p className="eyebrow">
+            {t(
+              creating === 'frame'
+                ? 'editor.inspector.createFrameOverline'
+                : 'editor.inspector.createSignalOverline',
+            )}
+          </p>
+          <h2>{creating === 'frame' ? t('editor.can.addCanFrame') : t('editor.can.addSignal')}</h2>
           <p className="inspector-intro">
             {creating === 'frame'
-              ? '标准 11-bit ID，最多 8 字节。'
-              : `所属帧：${focusedFrame?.name ?? '未选择'}`}
+              ? t('editor.inspector.frameIntro')
+              : t('editor.inspector.parentFrame', {
+                  name: focusedFrame?.name ?? t('editor.common.noSelection'),
+                })}
           </p>
           {creating === 'frame' ? (
             <FrameForm fields={frameInput} onChange={setFrameInput} disabled={disabled} />
@@ -732,42 +745,46 @@ export function EditorInspector({ controller }: { controller: Workbench }) {
               onClick={creating === 'frame' ? addFrame : addSignal}
               disabled={disabled || (creating === 'signal' && !focusedFrame)}
             >
-              添加{creating === 'frame' ? '帧' : '信号'}
+              {creating === 'frame' ? t('editor.can.addFrame') : t('editor.can.addSignal')}
             </button>
             <button type="button" className="quiet-button" onClick={() => setCreating(null)}>
-              取消
+              {t('editor.common.cancel')}
             </button>
           </div>
         </>
       ) : currentFile ? (
         <>
-          <p className="eyebrow">SOURCE FILE</p>
+          <p className="eyebrow">{t('editor.inspector.sourceOverline')}</p>
           <h2 title={currentFile.path}>{labelFromPath(currentFile.path)}</h2>
-          <p className="inspector-intro">源文件属于当前项目配置集合。</p>
+          <p className="inspector-intro">{t('editor.inspector.sourceIntro')}</p>
           <dl className="property-list">
             <div>
-              <dt>绝对路径</dt>
+              <dt>{t('editor.inspector.absolutePath')}</dt>
               <dd className="mono path-text">{currentFile.path}</dd>
             </div>
             <div>
-              <dt>访问</dt>
-              <dd>{currentFile.readonly ? '只读' : '可写'}</dd>
+              <dt>{t('editor.common.access')}</dt>
+              <dd>
+                {currentFile.readonly ? t('editor.common.readonly') : t('editor.common.writable')}
+              </dd>
             </div>
             <div>
-              <dt>保留项</dt>
+              <dt>{t('editor.inspector.retained')}</dt>
               <dd>{currentFile.retainedCount}</dd>
             </div>
           </dl>
           <div className="inspector-block">
-            <h3>保留策略</h3>
-            <p>
-              未支持内容保持原文件语义；编辑关联对象时由内核判断引用安全。不提供保留项的直接编辑。
-            </p>
+            <h3>{t('editor.inspector.policy')}</h3>
+            <p>{t('editor.inspector.policyHelp')}</p>
           </div>
         </>
       ) : currentFrame && draft?.kind === 'frame' ? (
         <>
-          <p className="eyebrow">CAN FRAME / {currentFrame.direction.toUpperCase()}</p>
+          <p className="eyebrow">
+            {t('editor.inspector.frameOverline', {
+              direction: currentFrame.direction.toUpperCase(),
+            })}
+          </p>
           <h2>{currentFrame.name}</h2>
           <p className="inspector-intro mono path-text">{currentFrame.path}</p>
           <FrameForm
@@ -782,7 +799,7 @@ export function EditorInspector({ controller }: { controller: Workbench }) {
               onClick={updateSelected}
               disabled={disabled || !unapplied}
             >
-              应用更改
+              {t('editor.common.apply')}
             </button>
             <button
               type="button"
@@ -790,7 +807,7 @@ export function EditorInspector({ controller }: { controller: Workbench }) {
               onClick={() => setDraft(draftFor(workspace, selection))}
               disabled={!unapplied}
             >
-              还原
+              {t('editor.common.restore')}
             </button>
           </div>
           <ReferenceView
@@ -800,7 +817,7 @@ export function EditorInspector({ controller }: { controller: Workbench }) {
         </>
       ) : currentSignal && draft?.kind === 'signal' ? (
         <>
-          <p className="eyebrow">CAN SIGNAL / UINT LE</p>
+          <p className="eyebrow">{t('editor.inspector.signalOverline')}</p>
           <h2>{currentSignal.name}</h2>
           <p className="inspector-intro mono path-text">{currentSignal.path}</p>
           <SignalForm
@@ -815,7 +832,7 @@ export function EditorInspector({ controller }: { controller: Workbench }) {
               onClick={updateSelected}
               disabled={disabled || !unapplied}
             >
-              应用更改
+              {t('editor.common.apply')}
             </button>
             <button
               type="button"
@@ -823,26 +840,26 @@ export function EditorInspector({ controller }: { controller: Workbench }) {
               onClick={() => setDraft(draftFor(workspace, selection))}
               disabled={!unapplied}
             >
-              还原
+              {t('editor.common.restore')}
             </button>
           </div>
           {signalFrame && <ReferenceView frame={signalFrame} signal={currentSignal} />}
         </>
       ) : (
         <div className="inspector-empty">
-          <strong>选择对象</strong>
-          <p>在工程树或表格中选择文件、帧或信号，以检查属性及真实引用。</p>
+          <strong>{t('editor.inspector.select')}</strong>
+          <p>{t('editor.inspector.empty')}</p>
         </div>
       )}
       {selection &&
         issues.some((issue) => issue.path === selection.path || issue.file === selection.path) && (
           <div className="inspector-issues">
-            <h3>相关诊断</h3>
+            <h3>{t('editor.inspector.diagnostics')}</h3>
             {issues
               .filter((issue) => issue.path === selection.path || issue.file === selection.path)
               .map((issue, index) => (
                 <p key={`${issue.code}-${index}`} className={issue.severity}>
-                  {issue.code} · {issue.message}
+                  {issue.code} · {text(issue.message)}
                 </p>
               ))}
           </div>

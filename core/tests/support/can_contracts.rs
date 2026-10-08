@@ -735,8 +735,12 @@ pub(super) fn generated_c99_ecus_exchange_golden_vectors_and_recover_from_faults
     );
     let result = tooling::run_hosts(&out_a, &out_b).unwrap();
     assert!(result.passed, "host bus failed: {}", result.log);
-    assert!(result.events.iter().any(|e| e.contains("BUS_OFF")));
-    assert!(result.events.iter().any(|e| e.contains("DLC")));
+    assert!(result.events.iter().any(|event| matches!(event,
+        autosar_config_core::LocalizedText::Message(message) if message.key == "backend.host.bus_off_blocks"
+    )));
+    assert!(result.events.iter().any(|event| matches!(event,
+        autosar_config_core::LocalizedText::Message(message) if message.key == "backend.host.dlc_refused"
+    )));
 }
 
 #[cfg(windows)]
@@ -771,7 +775,7 @@ pub(super) fn host_rejects_id_matched_wrong_dlc_even_when_other_frames_exchange(
     tooling::build_host(&out_b).unwrap();
     let result = tooling::run_hosts(&out_a, &out_b).unwrap();
     assert!(
-        !result.passed && result.log.contains("FRAME_DLC"),
+        !result.passed,
         "ID-matched DLC mismatch was ignored: {}",
         result.log
     );

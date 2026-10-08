@@ -21,28 +21,43 @@ fn change_id(change: &ConfigurationChange) -> &str {
     }
 }
 
-fn object_id(reference: &ObjectRef, created: &BTreeMap<String, String>) -> Result<String, String> {
+fn object_id(
+    reference: &ObjectRef,
+    created: &BTreeMap<String, String>,
+) -> Result<String, crate::message::LocalizedText> {
     match reference {
         ObjectRef::Existing { object_id } => Ok(object_id.clone()),
-        ObjectRef::Created { change_id } => created
-            .get(change_id)
-            .cloned()
-            .ok_or_else(|| format!("Unknown or cyclic create-instance dependency: {change_id}")),
+        ObjectRef::Created { change_id } => created.get(change_id).cloned().ok_or_else(|| {
+            crate::product_message!(
+                "backend.arxml.changes.unknown_or_cyclic_create_dependency",
+                "change_id" => change_id
+            )
+        }),
     }
 }
 
-fn object<'a>(workspace: &'a Workspace, id: &str) -> Result<&'a IndexedObject, String> {
+fn object<'a>(
+    workspace: &'a Workspace,
+    id: &str,
+) -> Result<&'a IndexedObject, crate::message::LocalizedText> {
     workspace
         .snapshot
         .object_by_id
         .get(id)
         .map(|index| &workspace.snapshot.objects[*index])
-        .ok_or_else(|| format!("Object ID is not in the current workspace: {id}"))
+        .ok_or_else(|| {
+            crate::product_message!(
+                "backend.arxml.changes.object_not_in_workspace",
+                "object_id" => id
+            )
+        })
 }
 
-fn escape(text: &str) -> Result<String, String> {
+fn escape(text: &str) -> Result<String, crate::message::LocalizedText> {
     if text.chars().any(|ch| !matches!(ch, '\u{9}' | '\u{a}' | '\u{d}' | '\u{20}'..='\u{d7ff}' | '\u{e000}'..='\u{fffd}' | '\u{10000}'..='\u{10ffff}')) {
-        return Err("XML value contains an invalid Unicode character.".into());
+        return Err(crate::product_message!(
+            "backend.arxml.changes.invalid_xml_unicode"
+        ));
     }
     Ok(text
         .replace('&', "&amp;")
@@ -58,12 +73,12 @@ pub(super) fn group_insert(
     group: &str,
     xml: &str,
     patches: &mut Vec<Patch>,
-) -> Result<(), String> {
+) -> Result<(), crate::message::LocalizedText> {
     let document = Document::parse(text).map_err(|error| error.to_string())?;
     let node = document
         .descendants()
         .find(|node| node.is_element() && node.range() == object_range)
-        .ok_or("Insertion owner is no longer present.")?;
+        .ok_or_else(|| crate::product_message!("backend.arxml.changes.insertion_owner_missing"))?;
     let container = node
         .children()
         .find(|node| node.is_element() && node.tag_name().name() == group);
@@ -84,19 +99,21 @@ pub(super) fn group_insert(
             let name = original[1..]
                 .split(|ch: char| ch.is_whitespace() || ch == '/' || ch == '>')
                 .next()
-                .ok_or("Group tag name is missing.")?;
-            let close = original
-                .rfind("/>")
-                .ok_or("Self-closing group is missing its end.")?;
+                .ok_or_else(|| {
+                    crate::product_message!("backend.arxml.changes.group_tag_name_missing")
+                })?;
+            let close = original.rfind("/>").ok_or_else(|| {
+                crate::product_message!("backend.arxml.changes.self_closing_group_end_missing")
+            })?;
             patches.push(Patch {
                 range,
                 value: format!("{}>{xml}</{name}>", &original[..close]),
             });
         } else {
             let offset = range.start
-                + original
-                    .rfind("</")
-                    .ok_or("Container closing tag is missing.")?;
+                + original.rfind("</").ok_or_else(|| {
+                    crate::product_message!("backend.arxml.changes.container_closing_tag_missing")
+                })?;
             patches.push(Patch {
                 range: offset..offset,
                 value: xml.into_owned(),
@@ -126,9 +143,9 @@ pub(super) fn group_insert(
             .map(|child| child.range().start)
             .unwrap_or(
                 object_range.start
-                    + text[object_range.clone()]
-                        .rfind("</")
-                        .ok_or("Object closing tag is missing.")?,
+                    + text[object_range.clone()].rfind("</").ok_or_else(|| {
+                        crate::product_message!("backend.arxml.changes.object_closing_tag_missing")
+                    })?,
             );
         patches.push(Patch {
             range: offset..offset,
@@ -167,7 +184,7 @@ fn apply_local(
     workspace: &mut Workspace,
     source: usize,
     patches: &mut Vec<Patch>,
-) -> Result<(), String> {
+) -> Result<(), crate::message::LocalizedText> {
     // Retire removed entry IDs before rebuilding; repeated siblings must not inherit
     // the identity of a deleted earlier entry merely because their ordinal shifted.
     let snapshot = Arc::make_mut(&mut workspace.snapshot);
@@ -219,7 +236,11 @@ fn impact(
     }
 }
 
-fn value_patch(workspace: &Workspace, field: &IndexedField, lexeme: &str) -> Result<Patch, String> {
+fn value_patch(
+    workspace: &Workspace,
+    field: &IndexedField,
+    lexeme: &str,
+) -> Result<Patch, crate::message::LocalizedText> {
     if let Some(range) = &field.value_range {
         return Ok(Patch {
             range: range.clone(),
@@ -231,19 +252,21 @@ fn value_patch(workspace: &Workspace, field: &IndexedField, lexeme: &str) -> Res
     let entry = document
         .descendants()
         .find(|node| node.is_element() && field.entry_range.as_ref() == Some(&node.range()))
-        .ok_or("Value entry is missing.")?;
+        .ok_or_else(|| crate::product_message!("backend.arxml.changes.value_entry_missing"))?;
     let leaf = entry
         .children()
         .find(|node| node.is_element() && node.tag_name().name() == "VALUE")
-        .ok_or("Simple VALUE is missing.")?;
+        .ok_or_else(|| crate::product_message!("backend.arxml.changes.simple_value_missing"))?;
     let original = &workspace.files[field.source].text[leaf.range()];
     if !original.ends_with("/>") || leaf.children().any(|node| !node.is_text()) {
-        return Err("Existing field has mixed or uneditable value content.".into());
+        return Err(crate::product_message!(
+            "backend.arxml.changes.existing_value_content_uneditable"
+        ));
     }
     let name = original[1..]
         .split(|ch: char| ch.is_whitespace() || ch == '/' || ch == '>')
         .next()
-        .ok_or("Value tag name is missing.")?;
+        .ok_or_else(|| crate::product_message!("backend.arxml.changes.value_tag_name_missing"))?;
     Ok(Patch {
         range: leaf.range(),
         value: format!(
@@ -255,7 +278,10 @@ fn value_patch(workspace: &Workspace, field: &IndexedField, lexeme: &str) -> Res
 }
 
 impl Workspace {
-    pub fn prepare_change(&self, changes: &ChangeSet) -> Result<ChangePreview, String> {
+    pub fn prepare_change(
+        &self,
+        changes: &ChangeSet,
+    ) -> Result<ChangePreview, crate::message::LocalizedText> {
         let mut candidate = self.change_candidate(changes)?;
         let change_revision = self.change_revision(changes, &candidate)?;
         let created: BTreeMap<_, _> = candidate
@@ -338,10 +364,12 @@ impl Workspace {
         &mut self,
         changes: &ChangeSet,
         revision: &str,
-    ) -> Result<ChangeOutcome, String> {
+    ) -> Result<ChangeOutcome, crate::message::LocalizedText> {
         let mut candidate = self.change_candidate(changes)?;
         if self.change_revision(changes, &candidate)? != revision {
-            return Err("Change preview is stale or the normalized batch changed.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.changes.stale_change_preview"
+            ));
         }
         if self
             .files
@@ -349,10 +377,9 @@ impl Workspace {
             .zip(&candidate.workspace.files)
             .any(|(before, after)| before.text != after.text)
         {
-            candidate.workspace.revision = self
-                .revision
-                .checked_add(1)
-                .ok_or("Workspace revision overflow.")?;
+            candidate.workspace.revision = self.revision.checked_add(1).ok_or_else(|| {
+                crate::product_message!("backend.arxml.changes.workspace_revision_overflow")
+            })?;
         }
         let fingerprint = candidate.workspace.input_fingerprint()?;
         let projection = candidate.workspace.project_projection(&fingerprint)?;
@@ -370,7 +397,7 @@ impl Workspace {
         &self,
         changes: &ChangeSet,
         candidate: &Candidate,
-    ) -> Result<String, String> {
+    ) -> Result<String, crate::message::LocalizedText> {
         let mut normalized = changes.clone();
         normalized
             .changes
@@ -388,7 +415,10 @@ impl Workspace {
         Ok(format!("{:x}", digest.finalize()))
     }
 
-    fn change_candidate(&self, changes: &ChangeSet) -> Result<Candidate, String> {
+    fn change_candidate(
+        &self,
+        changes: &ChangeSet,
+    ) -> Result<Candidate, crate::message::LocalizedText> {
         self.ensure_sources_current()?;
         // AppState validates both Session-token echoes before entering this core
         // transaction. Confirmation independently binds actual bytes/revision/catalog.
@@ -396,23 +426,27 @@ impl Workspace {
             || changes.input_fingerprint.is_empty()
             || changes.definition_fingerprint != self.definition_fingerprint()?
         {
-            return Err("ChangeSet workspace/input/definition identity is stale.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.changes.stale_change_set_identity"
+            ));
         }
         let mut ids = BTreeSet::new();
         let mut targets = BTreeSet::new();
         let mut entry_keys = BTreeSet::new();
         for change in &changes.changes {
             if change_id(change).is_empty() || !ids.insert(change_id(change)) {
-                return Err("changeId must be nonempty and unique.".into());
+                return Err(crate::product_message!(
+                    "backend.arxml.changes.change_id_required_unique"
+                ));
             }
             let target = match change {
                 ConfigurationChange::SetValue { field, .. }
                 | ConfigurationChange::SetReference { field, .. } => {
                     if let FieldRef::New { entry_key, .. } = field {
                         if entry_key.is_empty() || !entry_keys.insert(entry_key) {
-                            return Err(
-                                "new entryKey must be nonempty and unique in the batch.".into()
-                            );
+                            return Err(crate::product_message!(
+                                "backend.arxml.changes.new_entry_key_required_unique"
+                            ));
                         }
                     }
                     format!(
@@ -428,7 +462,9 @@ impl Workspace {
                 ConfigurationChange::CreateInstance { .. } => continue,
             };
             if !targets.insert(target) {
-                return Err("Conflicting operations address the same target.".into());
+                return Err(crate::product_message!(
+                    "backend.arxml.changes.conflicting_target_operations"
+                ));
             }
         }
         // Normalized traversal makes previews independent of caller array ordering.
@@ -474,7 +510,15 @@ impl Workspace {
                         definition_id,
                         short_name,
                     )
-                    .map_err(|message| format!("changeId={change_id}: {message}"))?;
+                    .map_err(|message| {
+                        crate::message::LocalizedText::messages([
+                            crate::product_message!(
+                                "backend.arxml.changes.change_context",
+                                "change_id" => change_id
+                            ),
+                            message,
+                        ])
+                    })?;
                 created.insert(
                     change_id.clone(),
                     candidate.created.last().unwrap().object_id.clone(),
@@ -482,7 +526,9 @@ impl Workspace {
                 progressed = true;
             }
             if !progressed {
-                return Err("Unknown or cyclic create-instance parent dependency.".into());
+                return Err(crate::product_message!(
+                    "backend.arxml.changes.unknown_or_cyclic_create_parent"
+                ));
             }
             remaining = deferred;
         }
@@ -499,11 +545,13 @@ impl Workspace {
                         .field_by_id
                         .get(field_id)
                         .map(|index| &self.snapshot.fields[*index])
-                        .ok_or("Field ID is stale.")?;
+                        .ok_or_else(|| {
+                            crate::product_message!("backend.arxml.changes.stale_field_id")
+                        })?;
                     if original.view.current != *expected {
-                        return Err(format!(
-                            "{}: expected original value changed.",
-                            change_id(change)
+                        return Err(crate::product_message!(
+                            "backend.arxml.changes.expected_original_value_changed",
+                            "change_id" => change_id(change)
                         ));
                     }
                 }
@@ -517,11 +565,13 @@ impl Workspace {
                         .field_by_id
                         .get(field_id)
                         .map(|index| &self.snapshot.fields[*index])
-                        .ok_or("Field ID is stale.")?;
+                        .ok_or_else(|| {
+                            crate::product_message!("backend.arxml.changes.stale_field_id")
+                        })?;
                     if original.view.reference.as_ref() != Some(expected) {
-                        return Err(format!(
-                            "{}: expected original reference changed.",
-                            change_id(change)
+                        return Err(crate::product_message!(
+                            "backend.arxml.changes.expected_original_reference_changed",
+                            "change_id" => change_id(change)
                         ));
                     }
                 }
@@ -539,7 +589,16 @@ impl Workspace {
                 let id = object_id(object, &created)?;
                 candidate
                     .rename_instance(change_id, &id, expected_short_name, short_name)
-                    .map_err(|message| format!("changeId={change_id} objectId={id}: {message}"))?;
+                    .map_err(|message| {
+                        crate::message::LocalizedText::messages([
+                            crate::product_message!(
+                                "backend.arxml.changes.object_change_context",
+                                "change_id" => change_id,
+                                "object_id" => &id
+                            ),
+                            message,
+                        ])
+                    })?;
             }
         }
         for change in &ordered {
@@ -552,10 +611,14 @@ impl Workspace {
                 } => candidate
                     .set_value(change_id, field, expected, value, &created)
                     .map_err(|message| {
-                        format!(
-                            "changeId={change_id} field={}: {message}",
-                            serde_json::to_string(field).unwrap()
-                        )
+                        crate::message::LocalizedText::messages([
+                            crate::product_message!(
+                                "backend.arxml.changes.field_change_context",
+                                "change_id" => change_id,
+                                "field" => serde_json::to_string(field).unwrap()
+                            ),
+                            message,
+                        ])
                     })?,
                 ConfigurationChange::SetReference {
                     change_id,
@@ -565,10 +628,14 @@ impl Workspace {
                 } => candidate
                     .set_reference(change_id, field, expected, value, &created)
                     .map_err(|message| {
-                        format!(
-                            "changeId={change_id} field={}: {message}",
-                            serde_json::to_string(field).unwrap()
-                        )
+                        crate::message::LocalizedText::messages([
+                            crate::product_message!(
+                                "backend.arxml.changes.field_change_context",
+                                "change_id" => change_id,
+                                "field" => serde_json::to_string(field).unwrap()
+                            ),
+                            message,
+                        ])
                     })?,
                 _ => {}
             }
@@ -583,7 +650,7 @@ impl Workspace {
                 }
             })
             .collect::<Result<_, _>>()?;
-        let removed_owner = |id: &str| -> Result<bool, String> {
+        let removed_owner = |id: &str| -> Result<bool, crate::message::LocalizedText> {
             let mut current = Some(id.to_owned());
             while let Some(id) = current {
                 if removed_ids.contains(&id) {
@@ -595,9 +662,9 @@ impl Workspace {
         };
         for created in &candidate.created {
             if removed_owner(&created.object_id)? {
-                return Err(
-                    "Conflicting batch creates an instance inside its removal closure.".into(),
-                );
+                return Err(crate::product_message!(
+                    "backend.arxml.changes.create_instance_in_removal_closure"
+                ));
             }
         }
         for created in &candidate.fields {
@@ -607,9 +674,15 @@ impl Workspace {
                 .field_by_id
                 .get(&created.field_id)
                 .map(|index| &candidate.workspace.snapshot.fields[*index])
-                .ok_or("Created field is not in the prospective graph.")?;
+                .ok_or_else(|| {
+                    crate::product_message!(
+                        "backend.arxml.changes.created_field_missing_from_graph"
+                    )
+                })?;
             if removed_owner(&field.view.object_id)? {
-                return Err("Conflicting batch creates a field inside its removal closure.".into());
+                return Err(crate::product_message!(
+                    "backend.arxml.changes.create_field_in_removal_closure"
+                ));
             }
         }
         // Remove child instances first. References from any instance in the batch removal closure do not survive.
@@ -632,7 +705,11 @@ impl Workspace {
                                 .map(|index| {
                                     candidate.workspace.snapshot.objects[*index].view.path.len()
                                 })
-                                .ok_or("Removed object is missing.")?,
+                                .ok_or_else(|| {
+                                    crate::product_message!(
+                                        "backend.arxml.changes.removed_object_missing"
+                                    )
+                                })?,
                             change_id,
                             id,
                             expected_short_name,
@@ -642,18 +719,30 @@ impl Workspace {
                     None
                 }
             })
-            .collect::<Result<_, String>>()?;
+            .collect::<Result<_, crate::message::LocalizedText>>()?;
         removals.sort_by_key(|item| std::cmp::Reverse(item.0));
         for (_, change, id, expected) in removals {
             candidate
                 .remove_instance(change, &id, expected, &removed_ids)
-                .map_err(|message| format!("changeId={change} objectId={id}: {message}"))?;
+                .map_err(|message| {
+                    crate::message::LocalizedText::messages([
+                        crate::product_message!(
+                            "backend.arxml.changes.object_change_context",
+                            "change_id" => change,
+                            "object_id" => &id
+                        ),
+                        message,
+                    ])
+                })?;
         }
         candidate.workspace.check_configuration_transition(self)?;
         Ok(candidate)
     }
 
-    pub(super) fn check_configuration_transition(&self, before: &Workspace) -> Result<(), String> {
+    pub(super) fn check_configuration_transition(
+        &self,
+        before: &Workspace,
+    ) -> Result<(), crate::message::LocalizedText> {
         for scope in &self.snapshot.validation {
             if scope.scope == ValidationScope::Schema {
                 if let Some(issue) = scope
@@ -696,7 +785,13 @@ impl Workspace {
                 .map(|file| (file.path.as_path(), file.text.as_str()))
                 .collect();
             if let Some(issue) = schema::validate_files(archive, &files)?.first() {
-                return Err(format!("{}: {}", issue.code, issue.message));
+                return Err(crate::message::LocalizedText::messages([
+                    crate::product_message!(
+                        "backend.arxml.changes.schema_diagnostic_context",
+                        "code" => &issue.code
+                    ),
+                    issue.message.clone(),
+                ]));
             }
         }
         Ok(())
@@ -707,7 +802,7 @@ fn configuration_error(
     issue: &ConfigurationDiagnostic,
     before: &Workspace,
     snapshot: &super::projection::SourceSnapshot,
-) -> String {
+) -> crate::message::LocalizedText {
     let mut diagnostic = issue.clone();
     if diagnostic
         .object_id
@@ -740,7 +835,34 @@ fn configuration_error(
             }
         }
     }
-    serde_json::to_string(&diagnostic).expect("Configuration diagnostic serializes")
+    crate::message::LocalizedText::messages(
+        [
+            crate::product_message!(
+                "backend.arxml.changes.configuration_diagnostic_context",
+                "code" => &diagnostic.code,
+                "rule_id" => &diagnostic.rule_id,
+                "scope" => serde_json::to_string(&diagnostic.scope).expect("Diagnostic scope serializes"),
+                "severity" => serde_json::to_string(&diagnostic.severity).expect("Diagnostic severity serializes"),
+                "file" => diagnostic.file.as_deref().unwrap_or_default(),
+                "source_id" => diagnostic.source_id.as_deref().unwrap_or_default(),
+                "path" => diagnostic.path.as_deref().unwrap_or_default(),
+                "object_id" => diagnostic.object_id.as_deref().unwrap_or_default(),
+                "field_id" => diagnostic.field_id.as_deref().unwrap_or_default()
+            ),
+            diagnostic.message.clone(),
+            diagnostic.remedy.clone(),
+        ]
+        .into_iter()
+        .chain(diagnostic.witness.iter().flat_map(|witness| [
+            crate::product_message!(
+                "backend.arxml.changes.validation_witness_context",
+                "rule_id" => &witness.rule_id,
+                "subjects" => serde_json::to_string(&witness.subjects).expect("Witness subjects serialize")
+            ),
+            witness.constraint.clone(),
+            witness.counterexample.clone(),
+        ])),
+    )
 }
 
 impl Candidate {
@@ -751,23 +873,27 @@ impl Candidate {
         source_id: &str,
         definition_id: &str,
         short_name: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), crate::message::LocalizedText> {
         if !valid_name(short_name) {
-            return Err(format!("{change}: invalid instance SHORT-NAME."));
+            return Err(crate::product_message!(
+                "backend.arxml.changes.invalid_instance_short_name",
+                "change_id" => change
+            ));
         }
         let parent = object(&self.workspace, parent_id)?.clone();
         if !parent.view.writable || parent.view.source_id != source_id {
-            return Err(format!(
-                "{change}: parent is read-only or source ownership differs."
+            return Err(crate::product_message!(
+                "backend.arxml.changes.parent_read_only_or_source_mismatch",
+                "change_id" => change
             ));
         }
-        let descriptor = self
-            .workspace
-            .catalog
-            .get(definition_id)
-            .ok_or("Unknown instance definition.")?;
+        let descriptor = self.workspace.catalog.get(definition_id).ok_or_else(|| {
+            crate::product_message!("backend.arxml.changes.unknown_instance_definition")
+        })?;
         if !descriptor.writable || descriptor.kind.is_some() {
-            return Err("Definition does not permit instance creation.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.changes.instance_creation_not_permitted"
+            ));
         }
         let module = descriptor.element_kind == "ECUC-MODULE-DEF";
         let allowed = if module {
@@ -787,11 +913,15 @@ impl Candidate {
             })
         };
         if !allowed {
-            return Err("Definition parent/child relation does not permit this instance.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.changes.instance_parent_relation_not_permitted"
+            ));
         }
         let path = format!("{}/{short_name}", parent.view.path);
         if self.workspace.snapshot.paths.contains_key(&path) {
-            return Err("Instance path or sibling name already exists.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.changes.instance_path_or_sibling_exists"
+            ));
         }
         let (kind, group, category) = if module {
             (
@@ -834,7 +964,11 @@ impl Candidate {
             .paths
             .get(&path)
             .and_then(|items| (items.len() == 1).then_some(items[0]))
-            .ok_or("Created instance was not uniquely indexed.")?;
+            .ok_or_else(|| {
+                crate::product_message!(
+                    "backend.arxml.changes.created_instance_not_uniquely_indexed"
+                )
+            })?;
         let id = self.workspace.snapshot.objects[index]
             .view
             .object_id
@@ -853,7 +987,7 @@ impl Candidate {
         id: &str,
         expected: &str,
         short_name: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), crate::message::LocalizedText> {
         let owner = object(&self.workspace, id)?.clone();
         if self
             .workspace
@@ -862,12 +996,15 @@ impl Candidate {
             .get(&owner.view.path)
             .is_none_or(|items| items.len() != 1)
         {
-            return Err("Ambiguous source instance path cannot be renamed.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.changes.ambiguous_instance_path_cannot_rename"
+            ));
         }
         self.ensure_known_reference_impact(&owner.view.path)?;
         if !owner.view.writable || owner.view.short_name != expected || !valid_name(short_name) {
-            return Err(format!(
-                "{change}: rename is invalid, read-only or has a stale original name."
+            return Err(crate::product_message!(
+                "backend.arxml.changes.rename_invalid_read_only_or_stale",
+                "change_id" => change
             ));
         }
         if owner.view.short_name == short_name {
@@ -878,11 +1015,15 @@ impl Candidate {
             .view
             .path
             .rsplit_once('/')
-            .ok_or("Object path has no parent.")?
+            .ok_or_else(|| {
+                crate::product_message!("backend.arxml.changes.object_path_parent_missing")
+            })?
             .0;
         let new_path = format!("{prefix}/{short_name}");
         if self.workspace.snapshot.paths.contains_key(&new_path) {
-            return Err("Rename conflicts with an existing instance.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.changes.rename_conflicts_with_instance"
+            ));
         }
         let mut patches: Vec<Vec<Patch>> =
             self.workspace.files.iter().map(|_| Vec::new()).collect();
@@ -900,7 +1041,9 @@ impl Candidate {
                 continue;
             }
             if edge.target_id.is_none() {
-                return Err("Rename has unresolved or ambiguous incoming reference impact.".into());
+                return Err(crate::product_message!(
+                    "backend.arxml.changes.rename_incoming_reference_unresolved"
+                ));
             }
             let field = &self.workspace.snapshot.fields[*self
                 .workspace
@@ -910,19 +1053,20 @@ impl Candidate {
                 .unwrap()];
             let ref_owner = object(&self.workspace, &edge.object_id)?;
             if ref_owner.unsafe_semantics {
-                return Err(
-                    "Rename affects unsupported instance-reference or variant semantics.".into(),
-                );
+                return Err(crate::product_message!(
+                    "backend.arxml.changes.rename_unsupported_reference_or_variant"
+                ));
             }
             if field.element == "ECUC-REFERENCE-VALUE"
                 && field.view.definition.kind != Some(ValueKind::Reference)
             {
-                return Err("Rename affects an ordinary reference whose definition semantics are unavailable.".into());
+                return Err(crate::product_message!(
+                    "backend.arxml.changes.rename_reference_definition_unavailable"
+                ));
             }
-            let range = field
-                .value_range
-                .clone()
-                .ok_or("Rename cannot preserve mixed reference content.")?;
+            let range = field.value_range.clone().ok_or_else(|| {
+                crate::product_message!("backend.arxml.changes.rename_mixed_reference_content")
+            })?;
             let next_path = format!("{new_path}{}", &edge.raw_path[owner.view.path.len()..]);
             patches[field.source].push(Patch {
                 range,
@@ -976,7 +1120,7 @@ impl Candidate {
         &self,
         reference: &FieldRef,
         created: &BTreeMap<String, String>,
-    ) -> Result<IndexedField, String> {
+    ) -> Result<IndexedField, crate::message::LocalizedText> {
         match reference {
             FieldRef::Existing { field_id } => self
                 .workspace
@@ -984,7 +1128,7 @@ impl Candidate {
                 .field_by_id
                 .get(field_id)
                 .map(|index| self.workspace.snapshot.fields[*index].clone())
-                .ok_or_else(|| "Field ID is stale.".into()),
+                .ok_or_else(|| crate::product_message!("backend.arxml.changes.stale_field_id")),
             FieldRef::New {
                 object: reference,
                 definition_id,
@@ -993,13 +1137,19 @@ impl Candidate {
                 let id = object_id(reference, created)?;
                 let owner = object(&self.workspace, &id)?;
                 if !owner.view.writable {
-                    return Err("New field owner is read-only.".into());
+                    return Err(crate::product_message!(
+                        "backend.arxml.changes.new_field_owner_read_only"
+                    ));
                 }
                 let descriptor = self
                     .workspace
                     .catalog
                     .get(definition_id)
-                    .ok_or("Unknown new field definition.")?
+                    .ok_or_else(|| {
+                        crate::product_message!(
+                            "backend.arxml.changes.unknown_new_field_definition"
+                        )
+                    })?
                     .clone();
                 if !owner.view.definition_id.as_deref().is_some_and(|parent| {
                     self.workspace
@@ -1008,11 +1158,13 @@ impl Candidate {
                         .iter()
                         .any(|child| child.definition_id == *definition_id)
                 }) {
-                    return Err("New field definition does not belong to its owner.".into());
+                    return Err(crate::product_message!(
+                        "backend.arxml.changes.new_field_definition_owner_mismatch"
+                    ));
                 }
-                let kind = descriptor
-                    .kind
-                    .ok_or("New field must be a parameter or reference definition.")?;
+                let kind = descriptor.kind.ok_or_else(|| {
+                    crate::product_message!("backend.arxml.changes.new_field_kind_required")
+                })?;
                 let ordinal = self
                     .workspace
                     .snapshot
@@ -1049,13 +1201,18 @@ impl Candidate {
         expected: &ValueState,
         value: &ValueState,
         created: &BTreeMap<String, String>,
-    ) -> Result<(), String> {
+    ) -> Result<(), crate::message::LocalizedText> {
         let field = self.field(reference, created)?;
         if !field.view.definition.writable || field.view.reference.is_some() {
-            return Err(format!("{change}: field does not support value editing."));
+            return Err(crate::product_message!(
+                "backend.arxml.changes.field_value_editing_unsupported",
+                "change_id" => change
+            ));
         }
         if matches!(reference, FieldRef::New { .. }) && *expected != ValueState::Absent {
-            return Err("New field expected state must be absent.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.changes.new_field_expected_absent"
+            ));
         }
         if let ValueState::Explicit { value } = value {
             self.workspace
@@ -1123,17 +1280,20 @@ impl Candidate {
         expected: &ReferenceState,
         value: &ReferenceState,
         created: &BTreeMap<String, String>,
-    ) -> Result<(), String> {
+    ) -> Result<(), crate::message::LocalizedText> {
         let field = self.field(reference, created)?;
         if !field.view.definition.writable
             || field.view.definition.kind != Some(ValueKind::Reference)
         {
-            return Err(format!(
-                "{change}: field does not support ordinary reference editing."
+            return Err(crate::product_message!(
+                "backend.arxml.changes.field_reference_editing_unsupported",
+                "change_id" => change
             ));
         }
         if matches!(reference, FieldRef::New { .. }) && *expected != ReferenceState::Absent {
-            return Err("New reference expected state must be absent.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.changes.new_reference_expected_absent"
+            ));
         }
         let owner = object(&self.workspace, &field.view.object_id)?.clone();
         let mut patches = Vec::new();
@@ -1152,9 +1312,11 @@ impl Candidate {
                 target,
             } => {
                 let target_id = object_id(
-                    target
-                        .as_ref()
-                        .ok_or("New reference must resolve to an actual object.")?,
+                    target.as_ref().ok_or_else(|| {
+                        crate::product_message!(
+                            "backend.arxml.changes.new_reference_target_required"
+                        )
+                    })?,
                     created,
                 )?;
                 let target = object(&self.workspace, &target_id)?;
@@ -1168,7 +1330,9 @@ impl Candidate {
                         .get(raw_path)
                         .is_none_or(|items| items.len() != 1)
                 {
-                    return Err("Reference path/DEST/target does not match the prospective graph and definition.".into());
+                    return Err(crate::product_message!(
+                        "backend.arxml.changes.reference_graph_definition_mismatch"
+                    ));
                 }
                 let xml = format!(
                     "<{}><DEFINITION-REF DEST=\"{}\">{}</DEFINITION-REF><VALUE-REF DEST=\"{}\">{}</VALUE-REF></{}>",
@@ -1185,32 +1349,45 @@ impl Candidate {
                     let node = document
                         .descendants()
                         .find(|node| node.is_element() && node.range() == *range)
-                        .ok_or("Reference entry is missing.")?;
+                        .ok_or_else(|| {
+                            crate::product_message!("backend.arxml.changes.reference_entry_missing")
+                        })?;
                     let leaf = node
                         .children()
                         .find(|node| node.is_element() && node.tag_name().name() == "VALUE-REF")
-                        .ok_or("Reference value is missing.")?;
-                    let value_range = field
-                        .value_range
-                        .clone()
-                        .ok_or("Mixed reference content is read-only.")?;
+                        .ok_or_else(|| {
+                            crate::product_message!("backend.arxml.changes.reference_value_missing")
+                        })?;
+                    let value_range = field.value_range.clone().ok_or_else(|| {
+                        crate::product_message!(
+                            "backend.arxml.changes.mixed_reference_content_read_only"
+                        )
+                    })?;
                     patches.push(Patch {
                         range: value_range,
                         value: escape(raw_path)?,
                     });
                     if leaf.attribute("DEST") != Some(dest.as_str()) {
-                        let attribute = leaf
-                            .attribute_node("DEST")
-                            .ok_or("Reference DEST is missing.")?;
+                        let attribute = leaf.attribute_node("DEST").ok_or_else(|| {
+                            crate::product_message!("backend.arxml.changes.reference_dest_missing")
+                        })?;
                         let range = attribute.range();
                         let original = &self.workspace.files[field.source].text[range.clone()];
                         let quote = original
                             .bytes()
                             .position(|byte| byte == b'\'' || byte == b'"')
-                            .ok_or("Reference DEST quote is missing.")?;
+                            .ok_or_else(|| {
+                                crate::product_message!(
+                                    "backend.arxml.changes.reference_dest_quote_missing"
+                                )
+                            })?;
                         let last = original
                             .rfind(original.as_bytes()[quote] as char)
-                            .ok_or("Reference DEST closing quote is missing.")?;
+                            .ok_or_else(|| {
+                                crate::product_message!(
+                                    "backend.arxml.changes.reference_dest_closing_quote_missing"
+                                )
+                            })?;
                         patches.push(Patch {
                             range: range.start + quote + 1..range.start + last,
                             value: escape(dest)?,
@@ -1247,7 +1424,11 @@ impl Candidate {
         Ok(())
     }
 
-    fn record_field(&mut self, reference: &FieldRef, field: &IndexedField) -> Result<(), String> {
+    fn record_field(
+        &mut self,
+        reference: &FieldRef,
+        field: &IndexedField,
+    ) -> Result<(), crate::message::LocalizedText> {
         if let FieldRef::New { entry_key, .. } = reference {
             let created = self
                 .workspace
@@ -1260,7 +1441,11 @@ impl Candidate {
                         && item.ordinal == field.ordinal
                         && item.entry_range.is_some()
                 })
-                .ok_or("New field was not uniquely indexed after materialization.")?;
+                .ok_or_else(|| {
+                    crate::product_message!(
+                        "backend.arxml.changes.materialized_field_not_uniquely_indexed"
+                    )
+                })?;
             self.fields.push(CreatedField {
                 entry_key: entry_key.clone(),
                 field_id: created.view.field_id.clone(),
@@ -1287,7 +1472,7 @@ impl Candidate {
         id: &str,
         expected: &str,
         removed: &BTreeSet<String>,
-    ) -> Result<(), String> {
+    ) -> Result<(), crate::message::LocalizedText> {
         let owner = object(&self.workspace, id)?.clone();
         if self
             .workspace
@@ -1296,12 +1481,15 @@ impl Candidate {
             .get(&owner.view.path)
             .is_none_or(|items| items.len() != 1)
         {
-            return Err("Ambiguous source instance path cannot be removed.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.changes.ambiguous_instance_path_cannot_remove"
+            ));
         }
         self.ensure_known_reference_impact(&owner.view.path)?;
         if !owner.view.writable || owner.view.short_name != expected {
-            return Err(format!(
-                "{change}: remove is read-only or has a stale name."
+            return Err(crate::product_message!(
+                "backend.arxml.changes.remove_read_only_or_stale",
+                "change_id" => change
             ));
         }
         let inside = |path: &str| {
@@ -1326,7 +1514,9 @@ impl Candidate {
                 })
             });
             if !inside(&ref_owner.view.path) && !removed_owner {
-                return Err("Remove leaves an incoming or unresolved reference; resolve it in the same batch.".into());
+                return Err(crate::product_message!(
+                    "backend.arxml.changes.remove_leaves_reference"
+                ));
             }
         }
         // Do not silently discard unknown source content inside a known instance.
@@ -1339,14 +1529,18 @@ impl Candidate {
                     && diagnostic.path.as_deref().is_some_and(inside)
             })
         }) {
-            return Err("Unsupported source content prevents safe removal.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.changes.unsupported_content_prevents_removal"
+            ));
         }
         let document = Document::parse(&self.workspace.files[owner.source].text)
             .map_err(|error| error.to_string())?;
         let node = document
             .descendants()
             .find(|node| node.is_element() && node.range() == owner.range)
-            .ok_or("Removed instance is missing.")?;
+            .ok_or_else(|| {
+                crate::product_message!("backend.arxml.changes.removed_instance_missing")
+            })?;
         if node.descendants().any(|node| {
             node.is_element()
                 && (node.tag_name().namespace() != Some(NS)
@@ -1361,7 +1555,9 @@ impl Candidate {
                             .is_none_or(|definition| !definition.writable)
                     }))
         }) {
-            return Err("Unknown reference or variant impact prevents safe removal.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.changes.unknown_reference_or_variant_prevents_removal"
+            ));
         }
         self.impacts.push(impact(
             change,
@@ -1384,7 +1580,10 @@ impl Candidate {
         Ok(())
     }
 
-    fn ensure_known_reference_impact(&self, path: &str) -> Result<(), String> {
+    fn ensure_known_reference_impact(
+        &self,
+        path: &str,
+    ) -> Result<(), crate::message::LocalizedText> {
         if self
             .workspace
             .snapshot
@@ -1392,7 +1591,9 @@ impl Candidate {
             .iter()
             .any(|value| value.contains(path))
         {
-            return Err("Opaque extension content may refer to the affected instance; reference impact cannot be determined.".into());
+            return Err(crate::product_message!(
+                "backend.arxml.changes.opaque_extension_reference_impact_unknown"
+            ));
         }
         for field in &self.workspace.snapshot.fields {
             if field.view.definition.kind.is_some() || field.view.reference.is_some() {
@@ -1400,7 +1601,9 @@ impl Candidate {
             }
             if let ValueState::Explicit { value } = &field.view.current {
                 if value.lexeme.contains(path) {
-                    return Err("An opaque source field may refer to the affected instance; reference impact cannot be determined.".into());
+                    return Err(crate::product_message!(
+                        "backend.arxml.changes.opaque_field_reference_impact_unknown"
+                    ));
                 }
             }
         }

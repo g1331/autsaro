@@ -1,3 +1,4 @@
+use autosar_config_core::LocalizedText;
 use autosar_config_core::Workspace;
 use autosar_config_core::integration::{PlanDependencies, RuntimeCatalog};
 use autosar_config_core::prepare_ecu_project;
@@ -5,7 +6,7 @@ use autosar_config_core::target::{BuildTarget, ExecutionSettings};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-fn execute() -> Result<(), String> {
+fn execute() -> Result<(), LocalizedText> {
     let mut args = std::env::args().skip(1);
     let mut target = None;
     let mut output = None;
@@ -19,7 +20,9 @@ fn execute() -> Result<(), String> {
     let mut seen = BTreeSet::new();
     while let Some(argument) = args.next() {
         if argument != "--input" && !seen.insert(argument.clone()) {
-            return Err(format!("Repeated argument: {argument}"));
+            return Err(
+                autosar_config_core::product_message!("backend.cli.repeated_argument", "argument" => argument),
+            );
         }
         match argument.as_str() {
             "--write" => {
@@ -38,7 +41,7 @@ fn execute() -> Result<(), String> {
         }
         let value = args
             .next()
-            .ok_or_else(|| format!("Missing value after {argument}"))?;
+            .ok_or_else(|| autosar_config_core::product_message!("backend.cli.argument_value_missing", "argument" => &argument))?;
         match argument.as_str() {
             "--target" => {
                 target = Some(
@@ -51,27 +54,37 @@ fn execute() -> Result<(), String> {
             "--xsd-archive" => xsd_archive = Some(PathBuf::from(value)),
             "--mod-archive" => mod_archive = Some(PathBuf::from(value)),
             "--revision" => revision = Some(value),
-            _ => return Err(format!("Unknown argument: {argument}")),
+            _ => {
+                return Err(
+                    autosar_config_core::product_message!("backend.cli.unknown_argument", "argument" => argument),
+                );
+            }
         }
     }
-    let target =
-        target.ok_or("Supply --target windows-x64-controlled-v1|linux-x64-controlled-v1")?;
-    let output = output.ok_or("Supply --output <generated-source-directory>")?;
+    let target = target
+        .ok_or_else(|| autosar_config_core::product_message!("backend.cli.target_required"))?;
+    let output = output
+        .ok_or_else(|| autosar_config_core::product_message!("backend.cli.output_required"))?;
     if inputs.is_empty() {
-        return Err("Supply --input <source.arxml> for each original source".into());
+        return Err(autosar_config_core::product_message!(
+            "backend.cli.inputs_required"
+        ));
     }
     if write != revision.is_some() {
-        return Err("Preview first; --write requires the exact --revision from that preview, and --revision is only valid with --write".into());
+        return Err(autosar_config_core::product_message!(
+            "backend.cli.preview_revision_required"
+        ));
     }
     let xsd_archive = xsd_archive
         .or_else(|| std::env::var_os("AUTOSAR_XSD_ARCHIVE").map(PathBuf::from))
-        .ok_or("Supply --xsd-archive or AUTOSAR_XSD_ARCHIVE")?;
+        .ok_or_else(|| autosar_config_core::product_message!("backend.cli.xsd_required"))?;
     let mod_archive = mod_archive
         .or_else(|| std::env::var_os("AUTOSAR_MOD_ARCHIVE").map(PathBuf::from))
-        .ok_or("Supply --mod-archive or AUTOSAR_MOD_ARCHIVE")?;
+        .ok_or_else(|| autosar_config_core::product_message!("backend.cli.mod_required"))?;
     let dependencies = PlanDependencies::explicit(xsd_archive, mod_archive)?;
-    let diagnostics =
-        |issues| serde_json::to_string_pretty(&issues).unwrap_or_else(|error| error.to_string());
+    let diagnostics = |issues: Vec<autosar_config_core::integration::PlanDiagnostic>| {
+        LocalizedText::messages(issues.into_iter().map(|issue| issue.message))
+    };
     let runtime = RuntimeCatalog::embedded().map_err(diagnostics)?;
     let workspace = Workspace::open_legacy(inputs, dependencies.xsd_archive)?;
     let plan = workspace
@@ -91,7 +104,9 @@ fn execute() -> Result<(), String> {
             "{}",
             serde_json::to_string_pretty(&report).map_err(|error| error.to_string())?
         );
-        return Err("Native preflight failed; no source package was installed".into());
+        return Err(autosar_config_core::product_message!(
+            "backend.cli.preflight_failed"
+        ));
     }
     let mut report = if write {
         serde_json::to_value(project.generate_previewed(&output, revision.as_deref().unwrap())?)
@@ -101,7 +116,7 @@ fn execute() -> Result<(), String> {
     };
     report
         .as_object_mut()
-        .ok_or("Invalid generation report")?
+        .ok_or_else(|| autosar_config_core::product_message!("backend.cli.invalid_report"))?
         .insert(
             "preflight".into(),
             serde_json::to_value(preflight).map_err(|error| error.to_string())?,

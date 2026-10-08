@@ -165,8 +165,8 @@ fn normal_and_nonzero_preserve_logs_and_exit_code() {
     assert_descendants_gone(&fixture, 3);
 
     let result = run_bounded(fixture.spec("fail", Duration::from_secs(8))).unwrap_err();
-    assert!(result.contains("exit_code=Some(7)"), "{result}");
-    assert!(result.contains("stderr.log"), "{result}");
+    assert!(result.to_string().contains("exit_code=Some(7)"), "{result}");
+    assert!(result.to_string().contains("stderr.log"), "{result}");
 }
 
 #[test]
@@ -342,7 +342,10 @@ fn unexpected_supervisor_death_closes_guardian_mirror() {
     }
     root.kill_supervisor_for_test().unwrap();
     let failure = process.wait().unwrap_err();
-    assert!(failure.contains("supervisor_failed"), "{failure}");
+    assert!(
+        failure.to_string().contains("supervisor_failed"),
+        "{failure}"
+    );
     assert_descendants_gone(&fixture, 3);
     drop(process);
     drop(owner);

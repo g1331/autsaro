@@ -19,9 +19,19 @@ pub struct PduRoute {
     pub transport: bool,
 }
 
-fn reject(graph: &Graph, index: usize, code: &str, message: &str) -> Vec<PlanDiagnostic> {
-    vec![graph.diagnostic(index, DiagnosticCategory::Input, code, message,
-        "Supply exactly one explicit PduR source/destination route for each selected canonical PDU, with supported confirmation and handle declarations.")]
+fn reject(
+    graph: &Graph,
+    index: usize,
+    code: &str,
+    message: crate::message::LocalizedText,
+) -> Vec<PlanDiagnostic> {
+    vec![graph.diagnostic(
+        index,
+        DiagnosticCategory::Input,
+        code,
+        message,
+        crate::product_message!("backend.integration.routing.supply_single_explicit_pdur_route"),
+    )]
 }
 
 pub(super) fn inspect(
@@ -63,7 +73,9 @@ pub(super) fn inspect(
                 graph,
                 context,
                 "PDU_ROUTE_NOT_UNIQUE",
-                "A selected canonical PDU has a missing or duplicated PduR endpoint.",
+                crate::product_message!(
+                    "backend.integration.routing.canonical_pdu_endpoint_missing_or_duplicate"
+                ),
             ));
         }
         let source = sources[0];
@@ -84,7 +96,9 @@ pub(super) fn inspect(
                 graph,
                 source,
                 "PDU_ROUTE_NOT_UNIQUE",
-                "The canonical PDU endpoints require one connecting routing path without fan-out.",
+                crate::product_message!(
+                    "backend.integration.routing.canonical_pdu_requires_single_routing_path"
+                ),
             ));
         }
         if !matches!(
@@ -98,7 +112,9 @@ pub(super) fn inspect(
                 graph,
                 paths[0],
                 "PDU_ROUTE_CONFIRMATION",
-                "The supported routing profile requires the declared transmission confirmation path.",
+                crate::product_message!(
+                    "backend.integration.routing.routing_profile_requires_transmission_confirmation_path"
+                ),
             ));
         }
         let source_handle = value(graph, source, "PduRSourcePduHandleId", false)
@@ -108,7 +124,9 @@ pub(super) fn inspect(
                     graph,
                     source,
                     "PDU_ROUTE_HANDLE",
-                    "The source handle is missing or outside its supported range.",
+                    crate::product_message!(
+                        "backend.integration.routing.source_handle_missing_or_out_of_range"
+                    ),
                 )
             })?;
         let destination_handle = value(graph, destination, "PduRDestPduHandleId", false)
@@ -118,7 +136,9 @@ pub(super) fn inspect(
                     graph,
                     destination,
                     "PDU_ROUTE_HANDLE",
-                    "The destination handle is missing or outside its supported range.",
+                    crate::product_message!(
+                        "backend.integration.routing.destination_handle_missing_or_out_of_range"
+                    ),
                 )
             })?;
         if !source_handles.insert((receive, transport, source_handle))
@@ -128,7 +148,7 @@ pub(super) fn inspect(
                 graph,
                 paths[0],
                 "PDU_ROUTE_HANDLE",
-                "Two endpoints share a handle in the same direction and upper/lower API domain.",
+                crate::product_message!("backend.integration.routing.endpoint_handle_conflict"),
             ));
         }
         routes.push(PduRoute {
@@ -156,7 +176,9 @@ pub(super) fn inspect(
                 graph,
                 path,
                 "PDU_ROUTE_UNSUPPORTED",
-                "A selected routing table contains an additional path outside the supported four-channel profile.",
+                crate::product_message!(
+                    "backend.integration.routing.routing_table_has_unsupported_extra_path"
+                ),
             ));
         }
     }

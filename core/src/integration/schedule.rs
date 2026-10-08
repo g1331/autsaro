@@ -43,9 +43,21 @@ pub struct ScheduleContract {
     pub synchronous_event: String,
 }
 
-fn reject(graph: &Graph, index: usize, code: &str, message: &str) -> Vec<PlanDiagnostic> {
-    vec![graph.diagnostic(index, DiagnosticCategory::Input, code, message,
-        "Supply one explicit event/task/alarm mapping with matching logical period and a unique declared position in the ECU owner task.")]
+fn reject(
+    graph: &Graph,
+    index: usize,
+    code: &str,
+    message: crate::message::LocalizedText,
+) -> Vec<PlanDiagnostic> {
+    vec![graph.diagnostic(
+        index,
+        DiagnosticCategory::Input,
+        code,
+        message,
+        crate::product_message!(
+            "backend.integration.schedule.explicit_event_task_alarm_mapping_required"
+        ),
+    )]
 }
 
 pub(super) fn definition_is(graph: &Graph, index: usize, kind: &str) -> bool {
@@ -113,7 +125,9 @@ fn container(graph: &Graph, kind: &str, context: usize) -> Result<usize, Vec<Pla
             graph,
             context,
             "SCHEDULE_NOT_UNIQUE",
-            "A required ECUC scheduling object is missing or duplicated.",
+            crate::product_message!(
+                "backend.integration.schedule.ecuc_scheduling_object_missing_or_duplicate"
+            ),
         ))
     }
 }
@@ -126,7 +140,9 @@ fn reference(graph: &Graph, mapping: usize, name: &str) -> Result<usize, Vec<Pla
                 graph,
                 mapping,
                 "SCHEDULE_NOT_UNIQUE",
-                "The scheduling reference is missing or duplicated.",
+                crate::product_message!(
+                    "backend.integration.schedule.scheduling_reference_missing_or_duplicate"
+                ),
             )
         })
 }
@@ -156,7 +172,9 @@ pub(super) fn inspect(
             graph,
             task,
             "TASK_PROFILE",
-            "The ECU owner must be one autostart FULL Extended Task with activation limit one and three explicit events.",
+            crate::product_message!(
+                "backend.integration.schedule.ecu_owner_task_configuration_required"
+            ),
         ));
     }
     let maximum = value(graph, counter, "OsCounterMaxAllowedValue", false)
@@ -179,7 +197,9 @@ pub(super) fn inspect(
             graph,
             counter,
             "COUNTER_PROFILE",
-            "SystemCounter must be a software counter with one logical millisecond per tick and unit base/minimum cycle.",
+            crate::product_message!(
+                "backend.integration.schedule.system_counter_configuration_required"
+            ),
         ));
     }
     let task_events: BTreeSet<_> = values(graph, task, "OsTaskEventRef", true)
@@ -205,7 +225,9 @@ pub(super) fn inspect(
             graph,
             task_autostart,
             "TASK_PROFILE",
-            "The owner task requires one explicit selected autostart application mode.",
+            crate::product_message!(
+                "backend.integration.schedule.owner_task_autostart_application_mode_required"
+            ),
         ));
     }
     if task_events.len() != 3 {
@@ -213,7 +235,9 @@ pub(super) fn inspect(
             graph,
             task,
             "TASK_PROFILE",
-            "The owner task's three event references must be distinct.",
+            crate::product_message!(
+                "backend.integration.schedule.owner_task_event_references_must_be_distinct"
+            ),
         ));
     }
     let mut entities = Vec::new();
@@ -237,7 +261,9 @@ pub(super) fn inspect(
                 graph,
                 mapping,
                 "INSTANCE_MAPPING",
-                "The event mapping has no owning component/module instance.",
+                crate::product_message!(
+                    "backend.integration.schedule.event_mapping_owner_instance_missing"
+                ),
             )
         })?;
         if application {
@@ -248,7 +274,9 @@ pub(super) fn inspect(
                     graph,
                     mapping,
                     "INSTANCE_MAPPING",
-                    "The application event mapping refers to a different component instance.",
+                    crate::product_message!(
+                        "backend.integration.schedule.application_event_mapping_component_mismatch"
+                    ),
                 ));
             }
         } else {
@@ -261,7 +289,9 @@ pub(super) fn inspect(
                             graph,
                             instance,
                             "BSW_ENTRY_MISSING",
-                            "The selected BSW implementation has no behavior description.",
+                            crate::product_message!(
+                                "backend.integration.schedule.bsw_implementation_behavior_missing"
+                            ),
                         )
                     })?;
             if !graph.within(event, implementation_behavior)
@@ -271,7 +301,9 @@ pub(super) fn inspect(
                     graph,
                     mapping,
                     "INSTANCE_MAPPING",
-                    "The BSW event must belong to the selected C implementation's behavior.",
+                    crate::product_message!(
+                        "backend.integration.schedule.bsw_event_implementation_behavior_mismatch"
+                    ),
                 ));
             }
         }
@@ -280,7 +312,7 @@ pub(super) fn inspect(
                 graph,
                 mapping,
                 "SCHEDULE_NOT_UNIQUE",
-                "An event is mapped more than once.",
+                crate::product_message!("backend.integration.schedule.event_mapped_multiple_times"),
             ));
         }
         if graph.elements[event].tag == "OPERATION-INVOKED-EVENT" {
@@ -297,7 +329,9 @@ pub(super) fn inspect(
                     graph,
                     mapping,
                     "SERVICE_ASYNC_MAPPING",
-                    "The synchronous operation must not activate a separate task or periodic alarm.",
+                    crate::product_message!(
+                        "backend.integration.schedule.synchronous_operation_separate_activation_forbidden"
+                    ),
                 ));
             }
             synchronous = Some(graph.elements[event].object.clone());
@@ -311,7 +345,7 @@ pub(super) fn inspect(
                     graph,
                     event,
                     "PERIOD_UNSUPPORTED",
-                    "The mapped period must be a positive whole millisecond.",
+                    crate::product_message!("backend.integration.schedule.mapped_period_must_be_positive_whole_millisecond"),
                 )
             })?;
         let mapped_task = reference(graph, mapping, &format!("{prefix}MappedToTaskRef"))?;
@@ -327,7 +361,9 @@ pub(super) fn inspect(
                 graph,
                 mapping,
                 "SCHEDULE_NOT_UNIQUE",
-                "Use exactly one Alarm or ScheduleTable ExpiryPoint timing source.",
+                crate::product_message!(
+                    "backend.integration.schedule.single_alarm_or_expiry_point_timing_source_required"
+                ),
             ));
         }
         let using_table = !expiry_refs.is_empty();
@@ -357,7 +393,7 @@ pub(super) fn inspect(
                     graph,
                     mapping,
                     "SCHEDULE_NOT_UNIQUE",
-                    "Each periodic mapping requires a positive explicit task position.",
+                    crate::product_message!("backend.integration.schedule.periodic_mapping_positive_task_position_required"),
                 )
             })?;
         if mapped_task != task
@@ -381,7 +417,9 @@ pub(super) fn inspect(
                 graph,
                 mapping,
                 "SCHEDULE_NOT_UNIQUE",
-                "Task, event, counter, alarm or task position is inconsistent.",
+                crate::product_message!(
+                    "backend.integration.schedule.scheduling_mapping_inconsistent"
+                ),
             ));
         }
         let autostarts: Vec<_> = graph
@@ -419,7 +457,9 @@ pub(super) fn inspect(
                 graph,
                 alarm,
                 "PERIOD_ALARM_CONFLICT",
-                "The periodic alarm needs one explicit autostart and SetEvent action.",
+                crate::product_message!(
+                    "backend.integration.schedule.periodic_alarm_autostart_and_set_event_required"
+                ),
             ));
         }
         let autostart = autostarts[0];
@@ -440,7 +480,9 @@ pub(super) fn inspect(
                 graph,
                 autostart,
                 "PERIOD_ALARM_CONFLICT",
-                "The periodic alarm and ECU owner task use different autostart modes.",
+                crate::product_message!(
+                    "backend.integration.schedule.periodic_alarm_owner_task_autostart_mode_mismatch"
+                ),
             ));
         }
         let expiry_offset = using_table
@@ -497,7 +539,9 @@ pub(super) fn inspect(
                     graph,
                     mapping,
                     "PERIOD_SCHEDULE_TABLE_CONFLICT",
-                    "The selected periodic RTE group needs one NONE-synchronized repeating ExpiryPoint, matching duration, first deadline and owner SetEvent action.",
+                    crate::product_message!(
+                        "backend.integration.schedule.periodic_rte_group_expiry_point_configuration_required"
+                    ),
                 ));
             }
         } else if value(graph, autostart, "OsAlarmAutostartType", false) != Some("RELATIVE")
@@ -514,7 +558,9 @@ pub(super) fn inspect(
                 graph,
                 event,
                 "PERIOD_ALARM_CONFLICT",
-                "The event period, relative alarm start/cycle and SetEvent action disagree.",
+                crate::product_message!(
+                    "backend.integration.schedule.event_period_alarm_and_set_event_mismatch"
+                ),
             ));
         }
         let entity = graph
@@ -531,7 +577,9 @@ pub(super) fn inspect(
                     graph,
                     event,
                     "SCHEDULE_NOT_UNIQUE",
-                    "The scheduled event has no unique entity.",
+                    crate::product_message!(
+                        "backend.integration.schedule.scheduled_event_unique_entity_missing"
+                    ),
                 )
             })?;
         let symbol = if application {
@@ -542,7 +590,9 @@ pub(super) fn inspect(
                     graph,
                     event,
                     "SCHEDULE_NOT_UNIQUE",
-                    "The application timing mapping targets a different behavior.",
+                    crate::product_message!(
+                        "backend.integration.schedule.application_timing_mapping_behavior_mismatch"
+                    ),
                 ));
             }
             graph.text(entity, "SYMBOL").unwrap_or("").to_owned()
@@ -554,7 +604,7 @@ pub(super) fn inspect(
                         graph,
                         entity,
                         "BSW_ENTRY_MISSING",
-                        "The schedulable BSW entity lacks its implementation entry.",
+                        crate::product_message!("backend.integration.schedule.schedulable_bsw_entity_implementation_entry_missing"),
                     )
                 })?;
             graph.text(entry, "SHORT-NAME").unwrap_or("").to_owned()
@@ -585,7 +635,9 @@ pub(super) fn inspect(
             graph,
             behavior,
             "SCHEDULE_NOT_UNIQUE",
-            "The selected application requires one periodic and one synchronous operation mapping.",
+            crate::product_message!(
+                "backend.integration.schedule.application_periodic_and_synchronous_mappings_required"
+            ),
         ));
     }
     for event in graph.of_kind("BSW-TIMING-EVENT") {
@@ -594,7 +646,9 @@ pub(super) fn inspect(
                 graph,
                 event,
                 "SCHEDULE_NOT_UNIQUE",
-                "A declared BSW timing event has no ECU task mapping.",
+                crate::product_message!(
+                    "backend.integration.schedule.bsw_timing_event_ecu_task_mapping_missing"
+                ),
             ));
         }
     }
@@ -614,7 +668,9 @@ pub(super) fn inspect(
             graph,
             behavior,
             "SCHEDULE_TABLE_UNBOUND",
-            "Every table in the selected reference ECU must have an explicit periodic RTE group; unsupported unused tables cannot be silently omitted.",
+            crate::product_message!(
+                "backend.integration.schedule.reference_ecu_tables_require_periodic_rte_groups"
+            ),
         ));
     }
     let expected_order = [
@@ -635,7 +691,9 @@ pub(super) fn inspect(
             graph,
             behavior,
             "SCHEDULE_ORDER",
-            "Declared task positions do not match the target's required driver, transport, receive, application, transmit and diagnostic order.",
+            crate::product_message!(
+                "backend.integration.schedule.declared_task_positions_order_mismatch"
+            ),
         ));
     }
     Ok(ScheduleContract {

@@ -31,9 +31,9 @@ struct ToolIdentity {
 pub(crate) fn add<'a>(
     files: &mut BTreeMap<String, PreparedFile<'a>>,
     metadata: &HandoffMetadata,
-) -> Result<(), String> {
-    let inventory: ToolInventory =
-        serde_json::from_slice(INVENTORY).map_err(|error| error.to_string())?;
+) -> Result<(), crate::LocalizedText> {
+    let inventory: ToolInventory = serde_json::from_slice(INVENTORY)
+        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     if inventory.format != "autosar-workbench-build-tool-inventory-v1"
         || inventory.version != "1.0.0"
         || inventory.files.len() != 1
@@ -41,20 +41,20 @@ pub(crate) fn add<'a>(
         || inventory.files[0].sha256 != TRUSTED_HELPER_SHA256
         || digest(HELPER) != TRUSTED_HELPER_SHA256
     {
-        return Err(
-            "The compiled v2 build-tool inventory or actual helper bytes are corrupt.".into(),
-        );
+        return Err(crate::product_message!(
+            "backend.delivery.tool_inventory_corrupt"
+        ));
     }
     let original = files
         .get(WRAPPER)
-        .ok_or("The original sealed standalone tool is missing.")?;
+        .ok_or_else(|| crate::product_message!("backend.delivery.standalone_tool_missing"))?;
     let source = original
         .source
-        .ok_or("The standalone v1 entrypoint has no trusted compiled producer.")?;
+        .ok_or_else(|| crate::product_message!("backend.delivery.standalone_producer_missing"))?;
     if source.bytes != original.bytes.as_ref() {
-        return Err(
-            "The original standalone v1 tool bytes were altered before native wrapping.".into(),
-        );
+        return Err(crate::product_message!(
+            "backend.delivery.standalone_tool_modified"
+        ));
     }
     let original_bytes = original.bytes.clone();
     insert_file(files, LEGACY_ENTRY.into(), original_bytes)?;
@@ -87,10 +87,14 @@ pub(crate) fn add<'a>(
             )
         })
         .collect();
-    let metadata_json = serde_json::to_string(metadata).map_err(|error| error.to_string())?;
-    let policy_json = serde_json::to_string(&policy).map_err(|error| error.to_string())?;
-    let payload_json = serde_json::to_string(&payload).map_err(|error| error.to_string())?;
-    let tool_json = serde_json::to_string(&tool_bytes).map_err(|error| error.to_string())?;
+    let metadata_json = serde_json::to_string(metadata)
+        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
+    let policy_json = serde_json::to_string(&policy)
+        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
+    let payload_json = serde_json::to_string(&payload)
+        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
+    let tool_json = serde_json::to_string(&tool_bytes)
+        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     let wrapper = format!(
         r#""""Native v2 guard before the unchanged sealed standalone engineering tool."""
 import argparse

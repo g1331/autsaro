@@ -1,7 +1,9 @@
+import { useLocale } from '../i18n';
 import { FolderOpen } from 'lucide-react';
 import type { Workbench } from './useWorkbench';
 
 export function SourceEntry({ controller: c, logo }: { controller: Workbench; logo: string }) {
+  const { t, text } = useLocale();
   const openReason = c.actionReason('open');
   const createReason = c.actionReason('create');
   const saveAs = c.source === 'save-as';
@@ -9,28 +11,24 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
     <div className="start-page">
       <header>
         <img src={logo} width="76" height="76" alt="" />
-        <h1>{c.workspace ? '工程来源' : 'Classic CAN 配置工作台'}</h1>
-        <p>
-          {c.workspace
-            ? '当前工程保持；只有真实预览确认或导入成功才替换。'
-            : '从内置模板新建工程，或导入 ARXML、打开已有工程。'}
-        </p>
+        <h1>{c.workspace ? t('editor.source.heading') : t('editor.source.workbench')}</h1>
+        <p>{c.workspace ? t('editor.source.retained') : t('editor.source.intro')}</p>
       </header>
       <div className="start-layout">
-        <nav aria-label="工程来源">
+        <nav aria-label={t('editor.source.heading')}>
           <button
             type="button"
             className={c.source === 'empty' ? 'selected' : ''}
             onClick={() => c.openProjectEntry('empty')}
           >
-            新建工程
+            {t('editor.source.new')}
           </button>
           <button
             type="button"
             className={c.source === 'import' ? 'selected' : ''}
             onClick={() => c.openProjectEntry('import')}
           >
-            导入 ARXML
+            {t('editor.source.import')}
           </button>
           {c.workspace ? (
             <button
@@ -38,7 +36,7 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
               className={saveAs ? 'selected' : ''}
               onClick={() => c.openProjectEntry('save-as')}
             >
-              保存为成员工程
+              {t('editor.source.saveAs')}
             </button>
           ) : null}
           <button
@@ -46,26 +44,26 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
             onClick={() => void c.openMemberProject()}
             disabled={Boolean(openReason)}
           >
-            打开成员工程…
+            {t('editor.source.open')}
           </button>
           <button type="button" onClick={c.importHandoff} disabled={Boolean(openReason)}>
-            导入主机交付包…
+            {t('editor.source.importHost')}
           </button>
           <button
             type="button"
             onClick={() => void c.chooseDirectory(c.importHandoffDirectory)}
             disabled={Boolean(openReason)}
           >
-            重导入 ECU 交接包…
+            {t('editor.source.importEcu')}
           </button>
         </nav>
         <section>
           {c.source !== 'import' ? (
             <div className="form-fields">
               <label>
-                工程名称
+                {t('editor.source.name')}
                 <input
-                  aria-label="工程名称"
+                  aria-label={t('editor.source.name')}
                   value={c.projectName}
                   onChange={(event) => c.setProjectName(event.target.value)}
                   autoComplete="off"
@@ -73,31 +71,35 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
               </label>
               {!saveAs ? (
                 <label>
-                  工程模板
+                  {t('editor.source.template')}
                   <select
-                    aria-label="工程模板"
+                    aria-label={t('editor.source.template')}
                     value={c.templateId}
                     onChange={(event) => c.setTemplateId(event.target.value as typeof c.templateId)}
                   >
-                    <option value="can-empty-v1">空 CAN 工程</option>
-                    <option value="can-signals-v1">CAN 信号工程</option>
-                    <option value="standard-ecu-v1">标准 ECU 工程</option>
+                    <option value="can-empty-v1">{t('editor.source.emptyCan')}</option>
+                    <option value="can-signals-v1">{t('editor.source.signalsCan')}</option>
+                    <option value="standard-ecu-v1">{t('editor.source.standardEcu')}</option>
                   </select>
                 </label>
               ) : (
-                <p>从当前工程预览复制原始源集合与明确接纳的定义身份；原目录不被覆盖。</p>
+                <p>{t('editor.source.saveAsHelp')}</p>
               )}
               <label>
-                新空目录
+                {t('editor.source.emptyDirectory')}
                 <div className="path-picker">
-                  <input value={c.projectDirectory} readOnly aria-label="新工程目录" />
+                  <input
+                    value={c.projectDirectory}
+                    readOnly
+                    aria-label={t('editor.source.directory')}
+                  />
                   <button
                     type="button"
                     onClick={() => void c.chooseDirectory(c.setProjectDirectory)}
                     disabled={!c.native || Boolean(c.busy)}
                   >
                     <FolderOpen size={15} />
-                    选择
+                    {t('editor.common.select')}
                   </button>
                 </div>
               </label>
@@ -107,14 +109,14 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
                 onClick={() => (saveAs ? void c.previewSaveAs() : c.createProject())}
                 disabled={Boolean(saveAs ? c.actionReason('save') : createReason)}
               >
-                {saveAs ? '预览保存为工程' : '预览工程文件'}
+                {saveAs ? t('editor.source.previewSaveAs') : t('editor.source.previewFiles')}
               </button>
               {saveAs ? (
                 c.actionReason('save') ? (
-                  <p className="field-help">{c.actionReason('save')}</p>
+                  <p className="field-help">{text(c.actionReason('save'))}</p>
                 ) : null
               ) : createReason ? (
-                <p className="field-help">{createReason}</p>
+                <p className="field-help">{text(createReason)}</p>
               ) : null}
             </div>
           ) : (
@@ -124,12 +126,12 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
                 onClick={() => void c.chooseFiles()}
                 disabled={Boolean(openReason)}
               >
-                选择多份 .arxml 文件
+                {t('editor.source.chooseFiles')}
               </button>
               <label>
-                每行一份 ARXML 路径
+                {t('editor.source.pathLines')}
                 <textarea
-                  aria-label="ARXML 来源路径"
+                  aria-label={t('editor.source.paths')}
                   value={c.importPathText}
                   rows={7}
                   onChange={(event) => {
@@ -143,16 +145,16 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
                   }}
                 />
               </label>
-              <p>{c.importPaths.length} 份输入 · 未知有效内容保持</p>
+              <p>{t('editor.source.inputCount', { count: c.importPaths.length })}</p>
               <button
                 type="button"
                 className="primary-button"
                 disabled={Boolean(openReason) || !c.importPaths.length}
                 onClick={c.importProject}
               >
-                导入并进入工程
+                {t('editor.source.enter')}
               </button>
-              {openReason ? <p className="field-help">{openReason}</p> : null}
+              {openReason ? <p className="field-help">{text(openReason)}</p> : null}
             </div>
           )}
         </section>
