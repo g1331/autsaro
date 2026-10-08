@@ -78,10 +78,9 @@ static void EncodeSlot(uint8_t slot[SLOT_SIZE], uint64_t number, uint8_t status)
 
 static int ValidSlot(const uint8_t slot[SLOT_SIZE]) {
     int valid = 1;
-    if ((slot[0] != UINT8_C(0x4e)) || (slot[1] != UINT8_C(0x56)) || (slot[2] != UINT8_C(0x48)) ||
-        (slot[3] != UINT8_C(0x31)) || (Load64(&slot[4]) == 0u) ||
-        (Load32(&slot[12]) != fingerprint) || ((slot[16] & 0x80u) != 0u) ||
-        (Load32(&slot[28]) != Checksum(slot, 28u))) {
+    if ((slot[0] != 0x4eu) || (slot[1] != 0x56u) || (slot[2] != 0x48u) || (slot[3] != 0x31u) ||
+        (Load64(&slot[4]) == 0u) || (Load32(&slot[12]) != fingerprint) ||
+        ((slot[16] & 0x80u) != 0u) || (Load32(&slot[28]) != Checksum(slot, 28u))) {
         valid = 0;
     } else {
         size_t i;
@@ -110,7 +109,9 @@ static EcuStatus WriteSlot(unsigned index, uint64_t number, uint8_t status) {
 EcuStatus NvM_Init(const EcuConfig *config, const char *path, uint8_t *status) {
     uint8_t slots[SLOT_COUNT][SLOT_SIZE];
     EcuStatus result = ECU_ERR_CONFIG;
-    NvM_HostClose();
+    if (NvM_HostClose() != 0) {
+        return ECU_ERR_NVM;
+    }
     if ((path != NULL) && (path[0] != '\0') && (config != NULL) && (config->diagnostic != NULL) &&
         (config->diagnostic->dtc != NULL) && (status != NULL)) {
         fingerprint = ConfigFingerprint(config);
@@ -156,7 +157,9 @@ EcuStatus NvM_Init(const EcuConfig *config, const char *path, uint8_t *status) {
             break;
         }
         if (result != ECU_OK) {
-            NvM_HostClose();
+            if (NvM_HostClose() != 0) {
+                result = ECU_ERR_NVM;
+            }
         }
     }
     return result;

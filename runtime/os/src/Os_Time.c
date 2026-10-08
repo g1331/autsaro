@@ -65,7 +65,7 @@ StatusType Os_TimeValidate(const Os_TargetConfig *target) {
     size_t i;
     size_t j;
     int system_found = 0;
-    uint8_t increments[OS_MAX_COUNTERS][OS_MAX_COUNTERS] = {{0}};
+    uint8_t increments[OS_MAX_COUNTERS][OS_MAX_COUNTERS] = {0};
     if (config == NULL) {
         return E_OK;
     }

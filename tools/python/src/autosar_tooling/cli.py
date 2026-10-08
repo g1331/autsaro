@@ -82,6 +82,10 @@ def main() -> int:
         choices=("ui", "tooling", "core", "desktop", "runtime", "all"),
         default="all",
     )
+    c_check = commands.add_parser("c-check", help="Run pinned free C/MISRA analysis on sealed sources")
+    c_check.add_argument("--target", choices=("windows-x64-controlled-v1", "linux-x64-controlled-v1"), required=True)
+    c_check.add_argument("--project", type=Path, required=True)
+    c_check.add_argument("--output-directory", type=Path, required=True)
     commands.add_parser(
         "protocol-oracles", help="Check independent protocol/OS reference vectors"
     )
@@ -122,6 +126,9 @@ def main() -> int:
     asset = commands.add_parser("assets", help="Check or update project-owned resource digests")
     asset.add_argument("action", choices=("check", "update"))
     args = parser.parse_args()
+    if args.command == "c-check":
+        from autosar_tooling.c_check import check
+        return check(args.project, args.target, args.output_directory)
     if args.command == "assets":
         from autosar_tooling.assets import maintain
         return maintain(update=args.action == "update")

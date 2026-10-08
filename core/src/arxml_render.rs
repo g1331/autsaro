@@ -1302,6 +1302,15 @@ fn render_diagnostic(
             "",
             &row_value,
         ));
+    } else {
+        // DcmDspSecurity is mandatory; the absence of rows disables security.
+        dsp_children.push_str(&container(
+            "Security",
+            &format!("{dsp}/DcmDspSecurity"),
+            "",
+            "",
+            "",
+        ));
     }
     if diagnostic.dtc.is_some() {
         dsp_children.push_str(&container(

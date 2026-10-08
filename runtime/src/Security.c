@@ -13,7 +13,8 @@
 #define SECURITY_MAX_ATTEMPTS 3u
 #define SECURITY_DELAY_MS UINT64_C(5000)
 
-static const uint8_t key_domain[] = "AUTOSAR-HOST-SECURITY-v1";
+static const uint8_t state_tag[4] = {0x53u, 0x45u, 0x43u, 0x31u};
+static const uint8_t state_reserved[7] = {0};
 static uint8_t secret[SECURITY_SECRET_SIZE];
 static uint8_t pending_seed[ECU_SECURITY_SEED_SIZE];
 static const char *state_file;
@@ -45,7 +46,8 @@ static EcuStatus SaveAttempts(uint8_t value) {
     uint8_t record[SECURITY_STATE_SIZE] = {0};
     uint32_t crc;
     FILE *file;
-    memcpy(record, "SEC1", 4u);
+    EcuStatus result = ECU_ERR_NVM;
+    (void)memcpy(record, state_tag, sizeof(state_tag));
     record[4] = value;
     crc = Checksum(record, 12u);
     record[12] = (uint8_t)crc;
@@ -56,22 +58,25 @@ static EcuStatus SaveAttempts(uint8_t value) {
     if (file == NULL) {
         return ECU_ERR_NVM;
     }
-    if (fwrite(record, 1u, sizeof(record), file) != sizeof(record) || fflush(file) != 0 ||
-        _commit(_fileno(file)) != 0) {
-        (void)fclose(file);
-        return ECU_ERR_NVM;
+    if ((fwrite(record, 1u, sizeof(record), file) == sizeof(record)) && (fflush(file) == 0) &&
+        (_commit(_fileno(file)) == 0)) {
+        result = ECU_OK;
     }
     if (fclose(file) != 0) {
-        return ECU_ERR_NVM;
+        result = ECU_ERR_NVM;
     }
-    attempts = value;
-    return ECU_OK;
+    if (result == ECU_OK) {
+        attempts = value;
+    }
+    return result;
 }
 
 static EcuStatus LoadAttempts(void) {
     uint8_t record[SECURITY_STATE_SIZE];
-    FILE *file = fopen(state_file, "rb");
-    int valid;
+    FILE *file;
+    _Bool valid;
+    errno = 0;
+    file = fopen(state_file, "rb");
     if (file == NULL) {
         if (errno != ENOENT) {
             return ECU_ERR_NVM;
@@ -83,8 +88,8 @@ static EcuStatus LoadAttempts(void) {
     if (fclose(file) != 0 || !valid) {
         return ECU_ERR_NVM;
     }
-    if (memcmp(record, "SEC1", 4u) != 0 || record[4] > SECURITY_MAX_ATTEMPTS ||
-        memcmp(&record[5], "\0\0\0\0\0\0\0", 7u) != 0 ||
+    if (memcmp(record, state_tag, sizeof(state_tag)) != 0 || record[4] > SECURITY_MAX_ATTEMPTS ||
+        memcmp(&record[5], state_reserved, sizeof(state_reserved)) != 0 ||
         Load32(&record[12]) != Checksum(record, 12u)) {
         return ECU_ERR_NVM;
     }
@@ -106,17 +111,22 @@ EcuStatus Security_SetAttemptCounter(uint8_t value) {
     return ECU_OK;
 }
 
-static int ExpectedKey(uint8_t result[ECU_SECURITY_KEY_SIZE]) {
+static _Bool ExpectedKey(uint8_t result[ECU_SECURITY_KEY_SIZE]) {
+    /* ASCII domain separator: AUTOSAR-HOST-SECURITY-v1. */
+    uint8_t key_domain[] = {0x41u, 0x55u, 0x54u, 0x4fu, 0x53u, 0x41u, 0x52u, 0x2du,
+                            0x48u, 0x4fu, 0x53u, 0x54u, 0x2du, 0x53u, 0x45u, 0x43u,
+                            0x55u, 0x52u, 0x49u, 0x54u, 0x59u, 0x2du, 0x76u, 0x31u};
     BCRYPT_ALG_HANDLE algorithm = NULL;
     BCRYPT_HASH_HANDLE hash = NULL;
     uint8_t digest[32];
-    NTSTATUS status = BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA256_ALGORITHM, NULL,
-                                                  BCRYPT_ALG_HANDLE_HMAC_FLAG);
+    NTSTATUS status;
+    status = BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA256_ALGORITHM, NULL,
+                                         BCRYPT_ALG_HANDLE_HMAC_FLAG);
     if (status >= 0) {
         status = BCryptCreateHash(algorithm, &hash, NULL, 0u, secret, sizeof(secret), 0u);
     }
     if (status >= 0) {
-        status = BCryptHashData(hash, (PUCHAR)key_domain, (ULONG)(sizeof(key_domain) - 1u), 0u);
+        status = BCryptHashData(hash, key_domain, (ULONG)sizeof(key_domain), 0u);
     }
     if (status >= 0) {
         status = BCryptHashData(hash, pending_seed, sizeof(pending_seed), 0u);
@@ -125,9 +135,9 @@ static int ExpectedKey(uint8_t result[ECU_SECURITY_KEY_SIZE]) {
         status = BCryptFinishHash(hash, digest, sizeof(digest), 0u);
     }
     if (status >= 0) {
-        memcpy(result, digest, ECU_SECURITY_KEY_SIZE);
+        (void)memcpy(result, digest, ECU_SECURITY_KEY_SIZE);
     }
-    SecureZeroMemory(digest, sizeof(digest));
+    (void)SecureZeroMemory(digest, sizeof(digest));
     if (hash != NULL) {
         (void)BCryptDestroyHash(hash);
     }
@@ -139,9 +149,9 @@ static int ExpectedKey(uint8_t result[ECU_SECURITY_KEY_SIZE]) {
 
 EcuStatus Security_Init(int enabled, const char *key_path, const char *state_path) {
     FILE *file;
-    int valid;
+    _Bool valid;
     Security_Lock();
-    SecureZeroMemory(secret, sizeof(secret));
+    (void)SecureZeroMemory(secret, sizeof(secret));
     state_file = NULL;
     attempts = 0u;
     faulted = 0u;
@@ -160,12 +170,12 @@ EcuStatus Security_Init(int enabled, const char *key_path, const char *state_pat
     valid = fread(secret, 1u, sizeof(secret), file) == sizeof(secret) && fgetc(file) == EOF &&
             !ferror(file);
     if (fclose(file) != 0 || !valid) {
-        SecureZeroMemory(secret, sizeof(secret));
+        (void)SecureZeroMemory(secret, sizeof(secret));
         return ECU_ERR_CONFIG;
     }
     state_file = state_path;
     if (LoadAttempts() != ECU_OK) {
-        SecureZeroMemory(secret, sizeof(secret));
+        (void)SecureZeroMemory(secret, sizeof(secret));
         return ECU_ERR_NVM;
     }
     if (attempts >= SECURITY_MAX_ATTEMPTS) {
@@ -177,7 +187,7 @@ EcuStatus Security_Init(int enabled, const char *key_path, const char *state_pat
 void Security_Lock(void) {
     unlocked = 0u;
     pending = 0u;
-    SecureZeroMemory(pending_seed, sizeof(pending_seed));
+    (void)SecureZeroMemory(pending_seed, sizeof(pending_seed));
 }
 
 int Security_IsUnlocked(void) { return unlocked != 0u && faulted == 0u; }
@@ -197,7 +207,7 @@ uint8_t Security_RequestSeed(uint8_t seed[ECU_SECURITY_SEED_SIZE], uint64_t now_
         }
     }
     if (unlocked != 0u) {
-        memset(seed, 0, ECU_SECURITY_SEED_SIZE);
+        (void)memset(seed, 0, ECU_SECURITY_SEED_SIZE);
         return 0u;
     }
     if (BCryptGenRandom(NULL, pending_seed, sizeof(pending_seed), BCRYPT_USE_SYSTEM_PREFERRED_RNG) <
@@ -205,7 +215,7 @@ uint8_t Security_RequestSeed(uint8_t seed[ECU_SECURITY_SEED_SIZE], uint64_t now_
         Security_Lock();
         return 0x22u;
     }
-    memcpy(seed, pending_seed, ECU_SECURITY_SEED_SIZE);
+    (void)memcpy(seed, pending_seed, ECU_SECURITY_SEED_SIZE);
     pending = 1u;
     return 0u;
 }
@@ -227,9 +237,9 @@ uint8_t Security_SendKey(const uint8_t key[ECU_SECURITY_KEY_SIZE], uint64_t now_
     for (i = 0u; i < sizeof(expected); ++i) {
         difference |= (uint8_t)(expected[i] ^ key[i]);
     }
-    SecureZeroMemory(expected, sizeof(expected));
+    (void)SecureZeroMemory(expected, sizeof(expected));
     pending = 0u;
-    SecureZeroMemory(pending_seed, sizeof(pending_seed));
+    (void)SecureZeroMemory(pending_seed, sizeof(pending_seed));
     if (difference == 0u) {
         if (SaveAttempts(0u) != ECU_OK) {
             faulted = 1u;

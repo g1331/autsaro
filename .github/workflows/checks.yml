@@ -120,3 +120,124 @@ jobs:
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
               output.write('CHECK_BASE=' + base + '\n')
       - run: uv run --locked python -m autosar_tooling quality --scope all --base "${{ env.CHECK_BASE }}"
+
+  c-analysis:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: linux-x64-controlled-v1
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: uv sync --locked
+      - name: Linux analysis dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake libxml2-dev libclang-dev clang pkg-config
+      - uses: msys2/setup-msys2@v2
+        id: msys2
+        if: runner.os == 'Windows'
+        with:
+          msystem: MINGW64
+          path-type: inherit
+          install: mingw-w64-x86_64-gcc
+      - name: Windows core dependencies
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
+        run: |
+          vcpkg install 'libxml2[iconv,zlib]:x64-windows-static-md'
+          "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+          'VCPKGRS_TRIPLET=x64-windows-static-md' >> $env:GITHUB_ENV
+          'LIBCLANG_PATH=C:/Program Files/LLVM/bin' >> $env:GITHUB_ENV
+          (Join-Path $env:MSYS2_LOCATION 'mingw64/bin') >> $env:GITHUB_PATH
+      - uses: actions/checkout@v7.0.1
+        with:
+          repository: cppcheck-opensource/cppcheck
+          ref: e73bf44c3e49686b7495fab352d03a6c6075516b
+          path: build/cppcheck-source
+      - name: Preserve pinned addon bytes
+        shell: python
+        run: |
+          import subprocess
+          from pathlib import Path
+          source = Path('build/cppcheck-source')
+          for name in ['misra.py', 'cppcheckdata.py', 'misra_9.py']:
+              data = subprocess.check_output(['git', '-C', str(source), 'show', 'HEAD:addons/' + name])
+              (source / 'addons' / name).write_bytes(data)
+      - name: Build pinned open Cppcheck
+        run: cmake -S build/cppcheck-source -B build/cppcheck-build -DCMAKE_BUILD_TYPE=Release -DUSE_MATCHCOMPILER=OFF -DBUILD_GUI=OFF -DBUILD_TESTING=OFF -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=${{ github.workspace }}/build/cppcheck-bin
+      - run: cmake --build build/cppcheck-build --config Release --target cppcheck --parallel 2
+      - name: Select analyzer
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          binaries = list(Path('build/cppcheck-bin').rglob('cppcheck.exe' if os.name == 'nt' else 'cppcheck'))
+          if len(binaries) != 1:
+              raise RuntimeError('Expected one built analyzer')
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              output.write('CPPCHECK=' + str(binaries[0].resolve()) + '\n')
+              output.write('CPPCHECK_ADDON_DIR=' + str(Path('build/cppcheck-source/addons').resolve()) + '\n')
+      - name: Analyzer behavior tests
+        run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
+      - name: Host I/O and lock failure boundaries
+        run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_host_boundaries.py
+      - name: Generate complete analysis samples
+        run: cargo test --locked --manifest-path core/Cargo.toml --test c_analysis
+      - name: Sealed ECU build mode fault isolation
+        run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_ecu_build_modes.py
+      - name: Verify complete generated-project analysis
+        shell: python
+        env:
+          ANALYSIS_TARGET: ${{ matrix.target }}
+        run: |
+          import json, os, subprocess, sys
+          from pathlib import Path
+          failed = False
+          samples = Path(os.environ['AUTOSAR_C_ANALYSIS_SAMPLES'])
+          expected = {'signals', 'diagnostic', 'capacity', 'standard-ecu', 'user-application'}
+          if {p.name for p in samples.iterdir()} != expected:
+              raise RuntimeError('Generated sample inventory is incomplete')
+          for name in sorted(expected):
+              output = Path('build/c-analysis-results') / name
+              result = subprocess.run(['uv', 'run', '--locked', 'python', '-m', 'autosar_tooling',
+                  'c-check', '--target', os.environ['ANALYSIS_TARGET'], '--project', str(samples / name),
+                  '--output-directory', str(output)])
+              try:
+                  summary = json.loads((output / 'summary.json').read_text(encoding='utf-8'))
+                  complete = summary['error'] is None and result.returncode == (0 if summary['passed'] else 1)
+                  print(name, 'analysis_complete=' + str(complete), 'source_passed=' + str(summary['passed']))
+                  failed = not complete or failed
+              except (OSError, ValueError, KeyError) as error:
+                  print(name, error)
+                  failed = True
+          sys.exit(1 if failed else 0)
+      # Existing source remediation precedes automatic strict source gating.
+      # Readiness above verifies complete analysis; it does not approve violations.
+      - name: Strict generated source gate
+        if: github.event_name == 'workflow_dispatch'
+        shell: python
+        run: |
+          import json, sys
+          from pathlib import Path
+          summaries = list(Path('build/c-analysis-results').glob('*/summary.json'))
+          passed = len(summaries) == 5 and all(json.loads(p.read_text(encoding='utf-8'))['passed'] for p in summaries)
+          sys.exit(0 if passed else 1)
+      - uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: c-analysis-${{ matrix.target }}
+          path: |
+            build/c-analysis-results
+            build/c-analysis-samples
+          if-no-files-found: ignore
+          retention-days: 14

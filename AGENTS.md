@@ -10,7 +10,7 @@
 
 采用 npm、Cargo、uv 和正常测试运行器，不新增代理专用编排、报告或状态系统。格式按修改范围检查，不全仓重排。自动 GUI 验收使用隔离入口，不占用用户桌面。
 
-修改 C、头文件或生成 C 的 Rust 模板前读取 [misra-c2012](.agents/skills/misra-c2012/SKILL.md)。交付摘要使用 `python -m autosar_tooling assets check|update`；明确审阅 ABI 与第三方身份，不用摘要更新吸收契约变化。
+修改 C、头文件或生成 C 的 Rust 模板前读取 [misra-c2012](.agents/skills/misra-c2012/SKILL.md)。相关改动按[测试说明](docs/development/testing.md)对实际生成的受影响 profile 运行 `c-check`；区分分析完整性、源码诊断与人工规范评估，不能用 CI 链路通过替代源码合规结论。申请偏离前核对适用的 amendment／TC 与实际调用路径；不能把旧 checker 的规则编号直接当作当前规范依据。交付摘要使用 `python -m autosar_tooling assets check|update`；明确审阅 ABI 与第三方身份，不用摘要更新吸收契约变化。更新交付资源摘要前，核对 `.gitattributes` 要求的固定换行字节；避免把本机编辑器产生、重新检出后会变化的字节写进受信摘要。
 
 BMad 是规格与任务状态来源，按安装技能推进；记录结果到相关规格，不额外生成报告、矩阵或台账。状态查询只读。普通项目启动和开发不依赖代理。
 

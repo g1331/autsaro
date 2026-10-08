@@ -35,8 +35,8 @@ static EcuStatus ValidateConfig(const EcuConfig *config) {
     size_t j;
 
     if (config == NULL || config->name == NULL || config->name[0] == '\0' ||
-        config->frames == NULL || config->signals == NULL || config->frame_count == 0 ||
-        config->frame_count > ECU_MAX_FRAMES || config->signal_count == 0 ||
+        config->frames == NULL || config->signals == NULL || config->frame_count == 0u ||
+        config->frame_count > ECU_MAX_FRAMES || config->signal_count == 0u ||
         config->signal_count > ECU_MAX_SIGNALS) {
         return ECU_ERR_CONFIG;
     }
@@ -68,13 +68,13 @@ static EcuStatus ValidateConfig(const EcuConfig *config) {
             if (assigned[j] || signal->bit_length == 0u || signal->bit_length > 32u ||
                 (unsigned)signal->start_bit + signal->bit_length > (unsigned)frame->dlc * 8u ||
                 (signal->bit_length < 32u &&
-                 signal->initial_value >= (UINT32_C(1) << signal->bit_length))) {
+                 signal->initial_value >= ((uint32_t)1u << signal->bit_length))) {
                 return ECU_ERR_CONFIG;
             }
             assigned[j] = 1u;
             for (bit = signal->start_bit; bit < (unsigned)signal->start_bit + signal->bit_length;
                  ++bit) {
-                uint64_t mask = UINT64_C(1) << bit;
+                uint64_t mask = (uint64_t)1u << bit;
                 if ((occupied & mask) != 0u) {
                     return ECU_ERR_CONFIG;
                 }

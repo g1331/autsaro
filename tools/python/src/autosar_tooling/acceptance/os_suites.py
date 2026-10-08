@@ -219,7 +219,8 @@ def verify_vector_section(binary: Path, tool: Path) -> None:
 
 def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...] = (),
           target: Path | None = None,
-          extra_sources: tuple[Path, ...] = ()) -> tuple[Path, dict]:
+          extra_sources: tuple[Path, ...] = (),
+          host_failure_injection: bool = True) -> tuple[Path, dict]:
     target = TARGET if target is None else target
     verify_sources()
     cc = compiler()
@@ -304,6 +305,8 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
         "-o", str(binary),
     ]
     command[1:1] = ["-D" + value for value in defines]
+    if host_failure_injection:
+        command.insert(1, "-DOS_HOST_FAILURE_TESTS")
     command[1:1] = [str(source) for source in extra_sources]
     if harness == "native_stack.c":
         command.insert(1, "-DOS_STACK_TESTS")
@@ -847,6 +850,9 @@ def check_lifecycle(binary: Path) -> list[dict]:
         result = execute(binary, "normal", failure)
         require(result["exit"] == 8 and "trace=ID " in result["stdout"], result)
         observations.append(result)
+    failed_output = execute(binary, "output-failure")
+    require(failed_output["exit"] == 7, failed_output)
+    observations.append(failed_output)
     normal = observations[0]["stdout"]
     calls = int(normal.split("resource_calls=")[1].split()[0])
     # Every actual native resource acquisition, including bootstrap and idle.
@@ -1882,6 +1888,15 @@ def run_suite(suite: str, output_directory: Path | None = None) -> None:
         }
         binary, _ = build(Path(temporary), harnesses[suite])
         observations = checks[suite](binary)
+        if suite == "lifecycle":
+            production_dir = Path(temporary) / "production-resource-boundary"
+            production_dir.mkdir()
+            production, _ = build(production_dir, "lifecycle.c", host_failure_injection=False)
+            for failure in ("invalid", 1):
+                observation = execute(production, "normal", failure, invalid_stack="S")
+                require(observation["exit"] == 0 and "trace=ISRAD " in observation["stdout"], observation)
+                observation["production_resource_injection_disabled"] = True
+                observations.append(observation)
         if suite == "stack":
             check_arti_native(Path(temporary) / "arti-consumers")
         if suite == "counter-types":

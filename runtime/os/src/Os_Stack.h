@@ -41,7 +41,8 @@ int Os_StackThreadHasFault(DWORD thread_id);
 int Os_StackRegister(char role);
 void Os_StackCheck(void);
 void Os_StackObserve(HANDLE thread, const CONTEXT *context);
-void Os_StackReport(void);
+/* Reports all available records; returns -1 if any stream write fails. */
+int Os_StackReport(void);
 const Os_NativeStack *Os_StackCurrent(void);
 const void *Os_StackSavedContext(const Os_NativeStack *stack);
 void Os_StackRecordBuffer(const StackType_t *top);

@@ -11,7 +11,8 @@ typedef enum {
 } NvMHostOpenResult;
 
 NvMHostOpenResult NvM_HostOpen(const char *path);
-void NvM_HostClose(void);
+/* Returns 0 after closing (or if already closed), -1 on close failure. */
+int NvM_HostClose(void);
 long NvM_HostLength(void);
 int NvM_HostRead(uint8_t *data, size_t length);
 int NvM_HostWrite(size_t offset, const uint8_t *data, size_t length);

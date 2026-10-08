@@ -29,7 +29,9 @@ static volatile Os_Atomic32 fatal_claimed;
 static volatile int32_t fault_park;
 static Os_StackFault fault_records[OS_NATIVE_STACKS];
 static __thread Os_NativeStack *current_stack;
+#ifdef OS_HOST_FAILURE_TESTS
 static char invalid_alt_role;
+#endif
 Os_StackFault Os_Fault;
 
 const void *Os_StackSavedContext(const Os_NativeStack *stack) {
@@ -105,10 +107,12 @@ static void guard_signal(int signum, siginfo_t *details, void *native_context) {
 
 void Os_StackPrepare(void) {
     struct sigaction handler = {0};
+#ifdef OS_HOST_FAILURE_TESTS
     const char *invalid = getenv("AUTOSAR_OS_BAD_GUARANTEE");
     if (invalid != NULL && invalid[0] != '\0' && invalid[1] == '\0') {
         invalid_alt_role = invalid[0];
     }
+#endif
     if (Os_HostInstallSignals() == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
@@ -133,7 +137,12 @@ int Os_StackRegister(char role) {
     uintptr_t low = 0u;
     uintptr_t high = 0u;
     size_t guard = 0u;
-    if (index < 0 || index >= (LONG)OS_NATIVE_STACKS || role == invalid_alt_role ||
+#ifdef OS_HOST_FAILURE_TESTS
+    if (role == invalid_alt_role) {
+        return 0;
+    }
+#endif
+    if (index < 0 || index >= (LONG)OS_NATIVE_STACKS ||
         Os_HostCurrentStackRange(&low, &high, &guard) == 0 || low >= high || guard >= high - low) {
         return 0;
     }
@@ -255,30 +264,38 @@ void Os_StackFatalExit(void) {
     _exit(E_OS_STACKFAULT);
 }
 
-void Os_StackReport(void) {
+int Os_StackReport(void) {
+    int result = 0;
     LONG index;
     for (index = 0; index < stack_count && index < (LONG)OS_NATIVE_STACKS; ++index) {
         const Os_NativeStack *record = &stacks[index];
         if (record->thread_id == 0u) {
             continue;
         }
-        printf("STACK role=%c tid=%u low=%llu high=%llu reserve=%llu commit=%llu "
-               "guard=%llu altstack=%llu sp=%llu observations=%u buffer_low=%llu buffer_high=%llu "
-               "context=linux-x86_64-ucontext valid=%u\n",
-               record->role, record->thread_id, (unsigned long long)record->reserve_low,
-               (unsigned long long)record->high, (unsigned long long)record->reserve,
-               (unsigned long long)record->committed, (unsigned long long)record->guard,
-               (unsigned long long)record->altstack_size, (unsigned long long)record->sp,
-               record->observations, (unsigned long long)record->kernel_buffer_low,
-               (unsigned long long)record->kernel_buffer_high, record->context_valid);
+        if (printf(
+                "STACK role=%c tid=%u low=%llu high=%llu reserve=%llu commit=%llu "
+                "guard=%llu altstack=%llu sp=%llu observations=%u buffer_low=%llu buffer_high=%llu "
+                "context=linux-x86_64-ucontext valid=%u\n",
+                record->role, record->thread_id, (unsigned long long)record->reserve_low,
+                (unsigned long long)record->high, (unsigned long long)record->reserve,
+                (unsigned long long)record->committed, (unsigned long long)record->guard,
+                (unsigned long long)record->altstack_size, (unsigned long long)record->sp,
+                record->observations, (unsigned long long)record->kernel_buffer_low,
+                (unsigned long long)record->kernel_buffer_high, record->context_valid) < 0) {
+            result = -1;
+        }
     }
     for (index = 0; index < (LONG)OS_NATIVE_STACKS; ++index) {
         const Os_StackFault *fault = &fault_records[index];
         if (__atomic_load_n(&fault->published, __ATOMIC_ACQUIRE) != 0) {
-            printf("FAULT role=%c tid=%u signal=%08X sp=%llu address=%llu captured=1 origin=%c\n",
-                   fault->role, fault->thread_id, fault->signal_number,
-                   (unsigned long long)fault->sp, (unsigned long long)fault->address,
-                   fault->origin);
+            if (printf(
+                    "FAULT role=%c tid=%u signal=%08X sp=%llu address=%llu captured=1 origin=%c\n",
+                    fault->role, fault->thread_id, fault->signal_number,
+                    (unsigned long long)fault->sp, (unsigned long long)fault->address,
+                    fault->origin) < 0) {
+                result = -1;
+            }
         }
     }
+    return result;
 }
