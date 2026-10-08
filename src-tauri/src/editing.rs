@@ -17,7 +17,7 @@ pub(super) async fn add_frame(
     direction: Direction,
     period_ms: Option<u32>,
     timeout_ms: Option<u32>,
-) -> Result<Reply<WorkspaceView>, String> {
+) -> Result<Reply<WorkspaceView>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
         edit(&state, &fingerprint, |workspace| {
             workspace.add_frame(name, id, dlc, direction, period_ms, timeout_ms)
@@ -34,7 +34,7 @@ pub(super) async fn add_signal(
     start_bit: u8,
     length: u8,
     initial_value: u32,
-) -> Result<Reply<WorkspaceView>, String> {
+) -> Result<Reply<WorkspaceView>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
         edit(&state, &fingerprint, |workspace| {
             workspace.add_signal(frame_path, name, start_bit, length, initial_value)
@@ -48,7 +48,7 @@ pub(super) async fn update_frame(
     fingerprint: String,
     path: String,
     changes: serde_json::Value,
-) -> Result<Reply<WorkspaceView>, String> {
+) -> Result<Reply<WorkspaceView>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
         edit(&state, &fingerprint, |workspace| {
             workspace.update_frame(&path, changes)
@@ -62,7 +62,7 @@ pub(super) async fn update_signal(
     fingerprint: String,
     path: String,
     changes: serde_json::Value,
-) -> Result<Reply<WorkspaceView>, String> {
+) -> Result<Reply<WorkspaceView>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
         edit(&state, &fingerprint, |workspace| {
             workspace.update_signal(&path, changes)
@@ -75,7 +75,7 @@ pub(super) async fn configure_diagnostic(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
     settings: DiagnosticSettings,
-) -> Result<Reply<WorkspaceView>, String> {
+) -> Result<Reply<WorkspaceView>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
         edit(&state, &fingerprint, |workspace| {
             workspace.configure_diagnostic(settings)
@@ -87,7 +87,7 @@ pub(super) async fn configure_diagnostic(
 pub(super) async fn clear_diagnostic(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
-) -> Result<Reply<WorkspaceView>, String> {
+) -> Result<Reply<WorkspaceView>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
         edit(&state, &fingerprint, Workspace::clear_diagnostic)
     })
@@ -99,7 +99,7 @@ pub(super) async fn configure_dtc(
     fingerprint: String,
     code: u32,
     monitor_frame_path: String,
-) -> Result<Reply<WorkspaceView>, String> {
+) -> Result<Reply<WorkspaceView>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
         edit(&state, &fingerprint, |workspace| {
             workspace.configure_dtc(code, monitor_frame_path)
@@ -111,7 +111,7 @@ pub(super) async fn configure_dtc(
 pub(super) async fn clear_dtc(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
-) -> Result<Reply<WorkspaceView>, String> {
+) -> Result<Reply<WorkspaceView>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
         edit(&state, &fingerprint, Workspace::clear_dtc)
     })
@@ -121,9 +121,13 @@ pub(super) async fn clear_dtc(
 pub(super) async fn validate_project(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
-) -> Result<Reply<WorkspaceView>, String> {
+) -> Result<Reply<WorkspaceView>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
-        let operation = state.begin(&fingerprint, "validate", OperationKind::Read)?;
+        let operation = state.begin(
+            &fingerprint,
+            autosar_config_core::product_message!("backend.operation.validate"),
+            OperationKind::Read,
+        )?;
         let mut workspace = operation.snapshot.workspace()?.clone();
         let value = workspace.validate()?;
         operation.publish(workspace, false, value)
@@ -137,7 +141,11 @@ pub(super) async fn inspect_integration(
 ) -> Result<Reply<IntegrationInspection>, Vec<PlanDiagnostic>> {
     integration_background(state, move |state| {
         let operation = state
-            .begin(&fingerprint, "inspect integration", OperationKind::Read)
+            .begin(
+                &fingerprint,
+                autosar_config_core::product_message!("backend.operation.inspect_integration"),
+                OperationKind::Read,
+            )
             .map_err(integration_failure)?;
         let workspace = operation
             .snapshot
@@ -164,7 +172,11 @@ pub(super) async fn edit_integration(
 ) -> Result<Reply<IntegrationInspection>, Vec<PlanDiagnostic>> {
     integration_background(state, move |state| {
         let operation = state
-            .begin(&fingerprint, "edit integration", OperationKind::Edit)
+            .begin(
+                &fingerprint,
+                autosar_config_core::product_message!("backend.operation.edit_integration"),
+                OperationKind::Edit,
+            )
             .map_err(integration_failure)?;
         let mut workspace = operation
             .snapshot
@@ -199,7 +211,7 @@ pub(super) async fn preview_integration_save(
         let operation = state
             .begin(
                 &fingerprint,
-                "preview integration save",
+                autosar_config_core::product_message!("backend.operation.preview_integration_save"),
                 OperationKind::Read,
             )
             .map_err(integration_failure)?;
@@ -232,7 +244,11 @@ pub(super) async fn save_integration(
 ) -> Result<Reply<SaveOutcome>, Vec<PlanDiagnostic>> {
     integration_background(state, move |state| {
         let operation = state
-            .begin(&fingerprint, "save integration", OperationKind::Read)
+            .begin(
+                &fingerprint,
+                autosar_config_core::product_message!("backend.operation.save_integration"),
+                OperationKind::Read,
+            )
             .map_err(integration_failure)?;
         let workspace = operation
             .snapshot

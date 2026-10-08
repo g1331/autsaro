@@ -18,6 +18,17 @@ pub(super) enum Appearance {
     System,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+pub(super) enum Language {
+    #[default]
+    #[serde(rename = "system")]
+    System,
+    #[serde(rename = "zh-CN")]
+    Chinese,
+    #[serde(rename = "en")]
+    English,
+}
+
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Settings {
@@ -27,13 +38,15 @@ struct Settings {
     build_target: Option<BuildTarget>,
     #[serde(default)]
     appearance: Appearance,
+    #[serde(default)]
+    language: Language,
 }
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct OperationView {
     id: u64,
-    stage: String,
+    stage: autosar_config_core::LocalizedText,
 }
 
 #[derive(Serialize)]
@@ -46,17 +59,18 @@ pub(super) struct Capabilities {
     pub has_workspace: bool,
     pub xsd_archive: Option<PathBuf>,
     pub mod_archive: Option<PathBuf>,
-    pub resource_error: Option<String>,
+    pub resource_error: Option<autosar_config_core::LocalizedText>,
     pub execution_tools: Option<ExecutionSettings>,
     pub configured_execution_tools: Option<ExecutionSettings>,
-    pub tool_error: Option<String>,
+    pub tool_error: Option<autosar_config_core::LocalizedText>,
     pub environment_overrides: Vec<&'static str>,
     pub operation: Option<OperationView>,
     pub rule_set_identity: Option<RuleSetIdentity>,
-    pub rule_error: Option<String>,
+    pub rule_error: Option<autosar_config_core::LocalizedText>,
     pub rule_coverage: Vec<RuleCoverage>,
     pub definition_fingerprint: Option<String>,
     pub appearance: Appearance,
+    pub language: Language,
     pub actions: Vec<ActionCapability>,
     pub verification_mode: bool,
 }
@@ -81,17 +95,22 @@ pub(super) struct Session {
     pub target: BuildTarget,
     settings: Settings,
     settings_bytes: Option<Vec<u8>>,
-    settings_error: Option<String>,
-    resource_error: Option<String>,
-    tool_error: Option<String>,
+    settings_error: Option<autosar_config_core::LocalizedText>,
+    resource_error: Option<autosar_config_core::LocalizedText>,
+    tool_error: Option<autosar_config_core::LocalizedText>,
     revision: u64,
     next_operation: u64,
     active: Option<ActiveOperation>,
 }
 
 impl Session {
-    pub fn invalidate(&mut self) -> Result<(), String> {
-        self.revision = self.revision.checked_add(1).ok_or("工作台修订号已耗尽")?;
+    pub fn invalidate(&mut self) -> Result<(), autosar_config_core::LocalizedText> {
+        self.revision =
+            self.revision
+                .checked_add(1)
+                .ok_or(autosar_config_core::product_message!(
+                    "backend.workbench.revision_exhausted"
+                ))?;
         Ok(())
     }
 }
@@ -105,7 +124,7 @@ pub(super) struct AppState {
     pub runtime: Arc<RuntimeCatalog>,
     rule_set_identity: Option<RuleSetIdentity>,
     rule_coverage: Vec<RuleCoverage>,
-    rule_error: Option<String>,
+    rule_error: Option<autosar_config_core::LocalizedText>,
 }
 
 pub(super) struct Snapshot {
@@ -117,15 +136,18 @@ pub(super) struct Snapshot {
 }
 
 impl Snapshot {
-    pub fn workspace(&self) -> Result<&Workspace, String> {
-        self.workspace
-            .as_deref()
-            .ok_or_else(|| "请先创建或导入 ARXML 项目".into())
+    pub fn workspace(&self) -> Result<&Workspace, autosar_config_core::LocalizedText> {
+        self.workspace.as_deref().ok_or_else(|| {
+            autosar_config_core::product_message!("backend.workbench.workspace_required").into()
+        })
     }
 
-    pub fn legacy_resources(&self) -> Result<&PlanDependencies, String> {
+    pub fn legacy_resources(
+        &self,
+    ) -> Result<&PlanDependencies, autosar_config_core::LocalizedText> {
         self.resources.as_deref().ok_or_else(|| {
-            "旧 v1 交接兼容需要合法的固定 R24-11 XSD/MOD；普通工程不需要这些档案".into()
+            autosar_config_core::product_message!("backend.workbench.legacy_resources_required")
+                .into()
         })
     }
 }
@@ -145,35 +167,41 @@ pub(super) struct Operation {
     pub owner: Option<Arc<ProcessOwner>>,
 }
 
-pub(super) fn diagnostics(issues: Vec<PlanDiagnostic>) -> String {
-    issues
-        .iter()
-        .map(|issue| format!("{}: {}\n{}", issue.code, issue.message, issue.remedy))
-        .collect::<Vec<_>>()
-        .join("\n")
+pub(super) fn diagnostics(issues: Vec<PlanDiagnostic>) -> autosar_config_core::LocalizedText {
+    autosar_config_core::LocalizedText::messages(issues.into_iter().flat_map(|issue| {
+        [
+            autosar_config_core::LocalizedText::evidence(issue.code),
+            issue.message,
+            issue.remedy,
+        ]
+    }))
 }
 
-fn resources(settings: &Settings) -> Result<PlanDependencies, String> {
+fn resources(settings: &Settings) -> Result<PlanDependencies, autosar_config_core::LocalizedText> {
     let xsd = std::env::var_os("AUTOSAR_XSD_ARCHIVE")
         .map(PathBuf::from)
         .or_else(|| settings.xsd_archive.clone())
-        .ok_or("请配置合法的 R24-11 XSD 档案")?;
+        .ok_or(autosar_config_core::product_message!(
+            "backend.workbench.xsd_required"
+        ))?;
     let mod_archive = std::env::var_os("AUTOSAR_MOD_ARCHIVE")
         .map(PathBuf::from)
         .or_else(|| settings.mod_archive.clone())
-        .ok_or("请配置合法的 R24-11 MOD 档案")?;
+        .ok_or(autosar_config_core::product_message!(
+            "backend.workbench.mod_required"
+        ))?;
     let result = PlanDependencies::explicit(xsd, mod_archive)?;
     result.validate().map_err(diagnostics)?;
     Ok(result)
 }
 
-fn tools(settings: &Settings) -> Result<ExecutionSettings, String> {
+fn tools(settings: &Settings) -> Result<ExecutionSettings, autosar_config_core::LocalizedText> {
     let stored = settings.execution_tools.as_ref();
-    let path = |name, value: Option<&PathBuf>| {
+    let path = |name: &str, value: Option<&PathBuf>| {
         std::env::var_os(name)
             .map(PathBuf::from)
             .or_else(|| value.cloned())
-            .ok_or_else(|| format!("请配置原生工具 {name}"))
+            .ok_or_else(|| autosar_config_core::product_message!("backend.workbench.tool_required", "name" => name))
     };
     let result = ExecutionSettings::new(
         path("AUTOSAR_CC", stored.map(|value| &value.compiler))?,
@@ -188,21 +216,20 @@ fn tools(settings: &Settings) -> Result<ExecutionSettings, String> {
         ("python", &result.python),
     ] {
         if !path.is_file() {
-            return Err(format!(
-                "{name} 不是存在的可执行文件路径: {}",
-                path.display()
-            ));
+            return Err(
+                autosar_config_core::product_message!("backend.workbench.tool_path_invalid", "name" => name, "path" => path.display()),
+            );
         }
     }
     Ok(result)
 }
 
 impl AppState {
-    pub fn new(settings_file: PathBuf) -> Result<Arc<Self>, String> {
+    pub fn new(settings_file: PathBuf) -> Result<Arc<Self>, autosar_config_core::LocalizedText> {
         let (bytes, settings_error) = match fs::read(&settings_file) {
             Ok(bytes) => (Some(bytes), None),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => (None, None),
-            Err(error) => (None, Some(error.to_string())),
+            Err(error) => (None, Some(error.to_string().into())),
         };
         let parsed = bytes
             .as_deref()
@@ -212,7 +239,9 @@ impl AppState {
             Ok(settings) => (settings.unwrap_or_default(), settings_error),
             Err(error) => (
                 Settings::default(),
-                Some(format!("设置文件无效，原文件保留: {error}")),
+                Some(
+                    autosar_config_core::product_message!("backend.workbench.settings_invalid", "error" => error),
+                ),
             ),
         };
         let resolved_resources = resources(&settings);
@@ -278,9 +307,15 @@ impl AppState {
         )
     }
 
-    fn check(&self, session: &Session, fingerprint: &str) -> Result<(), String> {
+    fn check(
+        &self,
+        session: &Session,
+        fingerprint: &str,
+    ) -> Result<(), autosar_config_core::LocalizedText> {
         if self.fingerprint(session) != fingerprint {
-            return Err("STALE_DELIVERY: 当前项目、规范、工具或目标已变化；旧操作未提交".into());
+            return Err(
+                autosar_config_core::product_message!("backend.workbench.stale_delivery").into(),
+            );
         }
         Ok(())
     }
@@ -328,6 +363,7 @@ impl AppState {
                 .as_deref()
                 .and_then(|workspace| workspace.definition_fingerprint().ok()),
             appearance: session.settings.appearance,
+            language: session.settings.language,
             actions: self.action_capabilities(session),
             verification_mode: cfg!(feature = "native-webdriver"),
         }
@@ -339,84 +375,112 @@ impl AppState {
         let executing = session.active.is_some();
         let execution_available =
             session.target.is_native() && session.tools.is_some() && session.tool_error.is_none();
-        let available = |action: &str, ready: bool, reason: &str| ActionCapability {
-            action: action.into(),
-            available: ready,
-            reason: (!ready).then(|| reason.into()),
-        };
+        let available =
+            |action: &str, ready: bool, reason: fn() -> autosar_config_core::LocalizedText| {
+                ActionCapability {
+                    action: action.into(),
+                    available: ready,
+                    reason: (!ready).then(reason),
+                }
+            };
         vec![
-            available("open", !executing, "请先取消当前操作"),
-            available(
-                "create",
-                rules_available && !executing,
-                "内置规则不可用或操作尚未结束",
-            ),
-            available("source-view", has_workspace, "请先打开真实源文件"),
+            available("open", !executing, || {
+                autosar_config_core::product_message!("backend.workbench.cancel_first")
+            }),
+            available("create", rules_available && !executing, || {
+                autosar_config_core::product_message!(
+                    "backend.workbench.rules_or_operation_unavailable"
+                )
+            }),
+            available("source-view", has_workspace, || {
+                autosar_config_core::product_message!("backend.workbench.source_required")
+            }),
             available(
                 "validate",
                 has_workspace && rules_available && !executing,
-                "工程、内置规则或操作状态不满足校验条件",
+                || {
+                    autosar_config_core::product_message!(
+                        "backend.workbench.validation_unavailable"
+                    )
+                },
             ),
             available(
                 "edit",
                 has_workspace && rules_available && !executing,
-                "工程、内置规则或操作状态不满足编辑条件",
+                || autosar_config_core::product_message!("backend.workbench.edit_unavailable"),
             ),
             available(
                 "save",
                 has_workspace && rules_available && !executing,
-                "请先处理工程、规则错误或当前操作",
+                || autosar_config_core::product_message!("backend.workbench.save_unavailable"),
             ),
             available(
                 "generate",
                 has_workspace && rules_available && !executing,
-                "请先处理工程、规则错误或当前操作；不要求编译器",
+                || {
+                    autosar_config_core::product_message!(
+                        "backend.workbench.generation_unavailable"
+                    )
+                },
             ),
             available(
                 "preflight",
                 has_workspace && rules_available && execution_available && !executing,
-                "本机目标或执行工具不可用",
+                || autosar_config_core::product_message!("backend.workbench.native_unavailable"),
             ),
             available(
                 "build",
                 has_workspace && rules_available && execution_available && !executing,
-                "本机目标或执行工具不可用",
+                || autosar_config_core::product_message!("backend.workbench.native_unavailable"),
             ),
             available(
                 "run",
                 has_workspace && rules_available && execution_available && !executing,
-                "本机目标或执行工具不可用",
+                || autosar_config_core::product_message!("backend.workbench.native_unavailable"),
             ),
             available(
                 "legacy-import",
                 session.resources.is_some() && !executing,
-                "旧 v1 兼容需显式提供其固定规范档案",
+                || {
+                    autosar_config_core::product_message!(
+                        "backend.workbench.legacy_import_unavailable"
+                    )
+                },
             ),
         ]
     }
 
-    pub fn definition_cache_root(&self) -> Result<PathBuf, String> {
+    pub fn definition_cache_root(&self) -> Result<PathBuf, autosar_config_core::LocalizedText> {
         self.settings_file
             .parent()
             .map(|path| path.join("definition-catalogs"))
-            .ok_or_else(|| "设置目录缺少安全父目录".into())
+            .ok_or_else(|| {
+                autosar_config_core::product_message!("backend.workbench.settings_parent_missing")
+                    .into()
+            })
     }
 
     pub fn read_workspace<T>(
         &self,
         fingerprint: &str,
-        action: impl FnOnce(&Workspace) -> Result<T, String>,
-    ) -> Result<Reply<T>, String> {
+        action: impl FnOnce(&Workspace) -> Result<T, autosar_config_core::LocalizedText>,
+    ) -> Result<Reply<T>, autosar_config_core::LocalizedText> {
         let workspace = {
-            let session = self.session.lock().map_err(|_| "工作区状态锁损坏")?;
+            let session = self.session.lock().map_err(|_| {
+                autosar_config_core::product_message!("backend.workbench.session_lock_poisoned")
+            })?;
             self.check(&session, fingerprint)?;
             session
                 .workspace
                 .clone()
-                .ok_or("请先创建或导入 ARXML 项目")?
+                .ok_or(autosar_config_core::product_message!(
+                    "backend.workbench.workspace_required"
+                ))?
         };
         let value = action(&workspace)?;
-        let session = self.session.lock().map_err(|_| "工作区状态锁损坏")?;
+        let session = self.session.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.session_lock_poisoned")
+        })?;
         self.check(&session, fingerprint)?;
         Ok(Reply {
             value,
@@ -429,9 +493,13 @@ impl AppState {
         &self,
         fingerprint: &str,
         appearance: Appearance,
-    ) -> Result<Reply<()>, String> {
-        let _gate = self.operation.lock().map_err(|_| "工作台提交锁损坏")?;
-        let mut session = self.session.lock().map_err(|_| "工作区状态锁损坏")?;
+    ) -> Result<Reply<()>, autosar_config_core::LocalizedText> {
+        let _gate = self.operation.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.commit_lock_poisoned")
+        })?;
+        let mut session = self.session.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.session_lock_poisoned")
+        })?;
         self.check(&session, fingerprint)?;
         let mut settings = session.settings.clone();
         settings.appearance = appearance;
@@ -450,16 +518,51 @@ impl AppState {
         })
     }
 
-    pub fn capabilities(&self) -> Result<Capabilities, String> {
-        let session = self.session.lock().map_err(|_| "工作区状态锁损坏")?;
+    pub fn configure_language(
+        &self,
+        fingerprint: &str,
+        language: Language,
+    ) -> Result<Reply<()>, autosar_config_core::LocalizedText> {
+        let _gate = self.operation.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.commit_lock_poisoned")
+        })?;
+        let mut session = self.session.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.session_lock_poisoned")
+        })?;
+        self.check(&session, fingerprint)?;
+        let mut settings = session.settings.clone();
+        settings.language = language;
+        let bytes = self.persist(
+            &settings,
+            session.settings_bytes.as_deref(),
+            session.revision,
+        )?;
+        // Presentation commits retain the project revision and active operation.
+        session.settings = settings;
+        session.settings_bytes = Some(bytes);
+        session.settings_error = None;
+        Ok(Reply {
+            value: (),
+            capabilities: self.capabilities_locked(&session),
+            input_fingerprint: fingerprint.into(),
+        })
+    }
+
+    pub fn capabilities(&self) -> Result<Capabilities, autosar_config_core::LocalizedText> {
+        let session = self.session.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.session_lock_poisoned")
+        })?;
         Ok(self.capabilities_locked(&session))
     }
     #[cfg(feature = "native-webdriver")]
     pub fn verification_metrics(
         &self,
         fingerprint: &str,
-    ) -> Result<Reply<autosar_config_core::verification::Metrics>, String> {
-        let session = self.session.lock().map_err(|_| "工作区状态锁损坏")?;
+    ) -> Result<Reply<autosar_config_core::verification::Metrics>, autosar_config_core::LocalizedText>
+    {
+        let session = self.session.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.session_lock_poisoned")
+        })?;
         self.check(&session, fingerprint)?;
         Ok(Reply {
             value: autosar_config_core::verification::metrics(),
@@ -468,12 +571,18 @@ impl AppState {
         })
     }
 
-    pub fn view(&self) -> Result<Reply<autosar_config_core::WorkspaceView>, String> {
-        let session = self.session.lock().map_err(|_| "工作区状态锁损坏")?;
+    pub fn view(
+        &self,
+    ) -> Result<Reply<autosar_config_core::WorkspaceView>, autosar_config_core::LocalizedText> {
+        let session = self.session.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.session_lock_poisoned")
+        })?;
         let value = session
             .workspace
             .as_deref()
-            .ok_or("请先创建或导入 ARXML 项目")?
+            .ok_or(autosar_config_core::product_message!(
+                "backend.workbench.workspace_required"
+            ))?
             .view();
         Ok(Reply {
             value,
@@ -485,14 +594,21 @@ impl AppState {
     pub fn begin(
         self: &Arc<Self>,
         fingerprint: &str,
-        stage: &str,
+        stage: autosar_config_core::LocalizedText,
         kind: OperationKind,
-    ) -> Result<Operation, String> {
-        let _gate = self.operation.lock().map_err(|_| "工作台提交锁损坏")?;
-        let mut session = self.session.lock().map_err(|_| "工作区状态锁损坏")?;
+    ) -> Result<Operation, autosar_config_core::LocalizedText> {
+        let _gate = self.operation.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.commit_lock_poisoned")
+        })?;
+        let mut session = self.session.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.session_lock_poisoned")
+        })?;
         self.check(&session, fingerprint)?;
         if session.active.is_some() && !matches!(kind, OperationKind::Edit | OperationKind::Open) {
-            return Err("工作台已有运行中的操作".into());
+            return Err(autosar_config_core::product_message!(
+                "backend.workbench.operation_active"
+            )
+            .into());
         }
         let previous = if session.active.is_some() {
             session.invalidate()?;
@@ -504,14 +620,24 @@ impl AppState {
         if let Some(owner) = previous {
             owner.cancel()?;
         }
-        let mut session = self.session.lock().map_err(|_| "工作区状态锁损坏")?;
+        let mut session = self.session.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.session_lock_poisoned")
+        })?;
         if !matches!(kind, OperationKind::Open) && session.workspace.is_none() {
-            return Err("请先创建或导入 ARXML 项目".into());
+            return Err(autosar_config_core::product_message!(
+                "backend.workbench.workspace_required"
+            )
+            .into());
         }
         if matches!(kind, OperationKind::Edit | OperationKind::Native)
             && let Some(error) = &self.rule_error
         {
-            return Err(format!("BUILTIN_RULES: {error}"));
+            return Err(autosar_config_core::LocalizedText::messages([
+                autosar_config_core::product_message!(
+                    "backend.workbench.builtin_rules_unavailable"
+                ),
+                error.clone(),
+            ]));
         }
         let snapshot = Snapshot {
             workspace: session.workspace.clone(),
@@ -521,24 +647,37 @@ impl AppState {
             fingerprint: self.fingerprint(&session),
         };
         if matches!(kind, OperationKind::Native) && !snapshot.target.is_native() {
-            return Err("未执行：本机不支持所选目标执行".into());
+            return Err(autosar_config_core::product_message!(
+                "backend.workbench.target_not_native"
+            )
+            .into());
         }
-        session.next_operation = session
-            .next_operation
-            .checked_add(1)
-            .ok_or("操作序号已耗尽")?;
+        session.next_operation =
+            session
+                .next_operation
+                .checked_add(1)
+                .ok_or(autosar_config_core::product_message!(
+                    "backend.workbench.operation_id_exhausted"
+                ))?;
         let id = session.next_operation;
         drop(session);
         let owner = if matches!(kind, OperationKind::Native) {
             let settings = snapshot
                 .tools
                 .as_ref()
-                .ok_or("请先配置原生执行工具；尚未预检")?;
+                .ok_or(autosar_config_core::product_message!(
+                    "backend.workbench.native_tools_required"
+                ))?;
             Some(Arc::new(ProcessOwner::with_python(&settings.python)?))
         } else {
             None
         };
-        self.session.lock().map_err(|_| "工作区状态锁损坏")?.active = Some(ActiveOperation {
+        self.session
+            .lock()
+            .map_err(|_| {
+                autosar_config_core::product_message!("backend.workbench.session_lock_poisoned")
+            })?
+            .active = Some(ActiveOperation {
             view: OperationView {
                 id,
                 stage: stage.into(),
@@ -566,21 +705,33 @@ impl AppState {
         }
     }
 
-    fn detach(&self, session: &mut Session) -> Result<Option<Arc<ProcessOwner>>, String> {
+    fn detach(
+        &self,
+        session: &mut Session,
+    ) -> Result<Option<Arc<ProcessOwner>>, autosar_config_core::LocalizedText> {
         session.invalidate()?;
         Ok(session.active.take().and_then(|active| active.owner))
     }
 
-    pub fn cancel(&self, fingerprint: &str) -> Result<Reply<()>, String> {
-        let _gate = self.operation.lock().map_err(|_| "工作台提交锁损坏")?;
-        let mut session = self.session.lock().map_err(|_| "工作区状态锁损坏")?;
+    pub fn cancel(
+        &self,
+        fingerprint: &str,
+    ) -> Result<Reply<()>, autosar_config_core::LocalizedText> {
+        let _gate = self.operation.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.commit_lock_poisoned")
+        })?;
+        let mut session = self.session.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.session_lock_poisoned")
+        })?;
         self.check(&session, fingerprint)?;
         let owner = self.detach(&mut session)?;
         drop(session);
         if let Some(owner) = owner {
             owner.cancel()?;
         }
-        let session = self.session.lock().map_err(|_| "工作区状态锁损坏")?;
+        let session = self.session.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.session_lock_poisoned")
+        })?;
         Ok(Reply {
             value: (),
             capabilities: self.capabilities_locked(&session),
@@ -588,16 +739,25 @@ impl AppState {
         })
     }
 
-    pub fn close(&self, fingerprint: &str) -> Result<Reply<()>, String> {
-        let _gate = self.operation.lock().map_err(|_| "工作台提交锁损坏")?;
-        let mut session = self.session.lock().map_err(|_| "工作区状态锁损坏")?;
+    pub fn close(
+        &self,
+        fingerprint: &str,
+    ) -> Result<Reply<()>, autosar_config_core::LocalizedText> {
+        let _gate = self.operation.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.commit_lock_poisoned")
+        })?;
+        let mut session = self.session.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.session_lock_poisoned")
+        })?;
         self.check(&session, fingerprint)?;
         let owner = self.detach(&mut session)?;
         drop(session);
         if let Some(owner) = owner {
             owner.cancel()?;
         }
-        let mut session = self.session.lock().map_err(|_| "工作区状态锁损坏")?;
+        let mut session = self.session.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.session_lock_poisoned")
+        })?;
         session.workspace = None;
         Ok(Reply {
             value: (),
@@ -611,16 +771,24 @@ impl AppState {
         settings: &Settings,
         previous: Option<&[u8]>,
         revision: u64,
-    ) -> Result<Vec<u8>, String> {
+    ) -> Result<Vec<u8>, autosar_config_core::LocalizedText> {
         let actual = match fs::read(&self.settings_file) {
             Ok(bytes) => Some(bytes),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-            Err(error) => return Err(error.to_string()),
+            Err(error) => return Err(error.to_string().into()),
         };
         if actual.as_deref() != previous {
-            return Err("设置已被外部修改；原文件未覆盖".into());
+            return Err(autosar_config_core::product_message!(
+                "backend.workbench.settings_changed"
+            )
+            .into());
         }
-        let parent = self.settings_file.parent().ok_or("设置文件须有父目录")?;
+        let parent = self
+            .settings_file
+            .parent()
+            .ok_or(autosar_config_core::product_message!(
+                "backend.workbench.settings_file_parent_missing"
+            ))?;
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
         let stage = parent.join(format!(".settings-{}-{revision}.tmp", std::process::id()));
         let bytes = serde_json::to_vec_pretty(settings).map_err(|error| error.to_string())?;
@@ -633,11 +801,11 @@ impl AppState {
         drop(file);
         if let Err(error) = result {
             let _ = fs::remove_file(&stage);
-            return Err(error.to_string());
+            return Err(error.to_string().into());
         }
         if let Err(error) = fs::rename(&stage, &self.settings_file) {
             let _ = fs::remove_file(&stage);
-            return Err(error.to_string());
+            return Err(error.to_string().into());
         }
         Ok(bytes)
     }
@@ -647,7 +815,7 @@ impl AppState {
         fingerprint: &str,
         xsd: PathBuf,
         mod_archive: PathBuf,
-    ) -> Result<Reply<()>, String> {
+    ) -> Result<Reply<()>, autosar_config_core::LocalizedText> {
         PlanDependencies::explicit(xsd.clone(), mod_archive.clone())?
             .validate()
             .map_err(diagnostics)?;
@@ -665,13 +833,12 @@ impl AppState {
         &self,
         fingerprint: &str,
         value: ExecutionSettings,
-    ) -> Result<Reply<()>, String> {
+    ) -> Result<Reply<()>, autosar_config_core::LocalizedText> {
         for path in [&value.compiler, &value.objdump, &value.git, &value.python] {
             if !path.as_os_str().is_empty() && (!path.is_absolute() || !path.is_file()) {
-                return Err(format!(
-                    "配置工具必须为现存绝对路径或留空: {}",
-                    path.display()
-                ));
+                return Err(
+                    autosar_config_core::product_message!("backend.workbench.configured_tool_path_invalid", "path" => path.display()),
+                );
             }
         }
         self.configure(
@@ -686,9 +853,11 @@ impl AppState {
         fingerprint: &str,
         update: impl FnOnce(&mut Settings),
         validation: bool,
-    ) -> Result<Reply<()>, String> {
+    ) -> Result<Reply<()>, autosar_config_core::LocalizedText> {
         let mut settings = {
-            let session = self.session.lock().map_err(|_| "工作区状态锁损坏")?;
+            let session = self.session.lock().map_err(|_| {
+                autosar_config_core::product_message!("backend.workbench.session_lock_poisoned")
+            })?;
             self.check(&session, fingerprint)?;
             session.settings.clone()
         };
@@ -703,15 +872,24 @@ impl AppState {
         } else {
             None
         };
-        let _gate = self.operation.lock().map_err(|_| "工作台提交锁损坏")?;
-        let mut session = self.session.lock().map_err(|_| "工作区状态锁损坏")?;
+        let _gate = self.operation.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.commit_lock_poisoned")
+        })?;
+        let mut session = self.session.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.session_lock_poisoned")
+        })?;
         self.check(&session, fingerprint)?;
         let owner = self.detach(&mut session)?;
         drop(session);
         if let Some(owner) = owner {
             owner.cancel()?;
         }
-        let mut session = self.session.lock().map_err(|_| "工作区状态锁损坏")?;
+        let mut session = self.session.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.session_lock_poisoned")
+        })?;
+        // Presentation saves do not advance the engineering fingerprint during validation.
+        settings.language = session.settings.language;
+        settings.appearance = session.settings.appearance;
         let bytes = self.persist(
             &settings,
             session.settings_bytes.as_deref(),
@@ -745,9 +923,13 @@ impl AppState {
         &self,
         fingerprint: &str,
         target: BuildTarget,
-    ) -> Result<Reply<()>, String> {
-        let _gate = self.operation.lock().map_err(|_| "工作台提交锁损坏")?;
-        let mut session = self.session.lock().map_err(|_| "工作区状态锁损坏")?;
+    ) -> Result<Reply<()>, autosar_config_core::LocalizedText> {
+        let _gate = self.operation.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.commit_lock_poisoned")
+        })?;
+        let mut session = self.session.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.session_lock_poisoned")
+        })?;
         self.check(&session, fingerprint)?;
         if let Some(error) = &session.settings_error {
             return Err(error.clone());
@@ -764,7 +946,9 @@ impl AppState {
         if let Some(owner) = owner {
             owner.cancel()?;
         }
-        let mut session = self.session.lock().map_err(|_| "工作区状态锁损坏")?;
+        let mut session = self.session.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.session_lock_poisoned")
+        })?;
         let mut settings = session.settings.clone();
         settings.build_target = Some(target);
         let bytes = self.persist(
@@ -784,29 +968,32 @@ impl AppState {
 }
 
 impl Operation {
-    pub fn native_owner(&self) -> Result<&ProcessOwner, String> {
-        self.owner
-            .as_deref()
-            .ok_or_else(|| "原生操作没有已配置的进程 owner".into())
+    pub fn native_owner(&self) -> Result<&ProcessOwner, autosar_config_core::LocalizedText> {
+        self.owner.as_deref().ok_or_else(|| {
+            autosar_config_core::product_message!("backend.workbench.native_owner_missing").into()
+        })
     }
 
     pub fn commit<T>(
         &self,
-        action: impl FnOnce(&mut Session) -> Result<T, String>,
-    ) -> Result<Reply<T>, String> {
-        let _gate = self
-            .state
-            .operation
-            .lock()
-            .map_err(|_| "工作台提交锁损坏")?;
-        let mut session = self.state.session.lock().map_err(|_| "工作区状态锁损坏")?;
+        action: impl FnOnce(&mut Session) -> Result<T, autosar_config_core::LocalizedText>,
+    ) -> Result<Reply<T>, autosar_config_core::LocalizedText> {
+        let _gate = self.state.operation.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.commit_lock_poisoned")
+        })?;
+        let mut session = self.state.session.lock().map_err(|_| {
+            autosar_config_core::product_message!("backend.workbench.session_lock_poisoned")
+        })?;
         self.state.check(&session, &self.snapshot.fingerprint)?;
         if !session
             .active
             .as_ref()
             .is_some_and(|active| active.view.id == self.id)
         {
-            return Err("STALE_DELIVERY: 操作已被取消；旧结果未提交".into());
+            return Err(autosar_config_core::product_message!(
+                "backend.workbench.operation_cancelled"
+            )
+            .into());
         }
         let value = action(&mut session)?;
         session.active = None;
@@ -822,7 +1009,7 @@ impl Operation {
         workspace: Workspace,
         changed: bool,
         value: T,
-    ) -> Result<Reply<T>, String> {
+    ) -> Result<Reply<T>, autosar_config_core::LocalizedText> {
         self.commit(move |session| {
             if changed {
                 session.invalidate()?;
@@ -836,7 +1023,10 @@ impl Operation {
         &self,
         workspace: Workspace,
         mut outcome: autosar_config_core::project_model::ChangeOutcome,
-    ) -> Result<Reply<autosar_config_core::project_model::ChangeOutcome>, String> {
+    ) -> Result<
+        Reply<autosar_config_core::project_model::ChangeOutcome>,
+        autosar_config_core::LocalizedText,
+    > {
         let changed =
             workspace.input_fingerprint()? != self.snapshot.workspace()?.input_fingerprint()?;
         self.commit(move |session| {
@@ -853,12 +1043,18 @@ impl Operation {
         &self,
         mut workspace: Workspace,
         preview: &autosar_config_core::arxml::ApplicationInitializationPreview,
-    ) -> Result<Reply<autosar_config_core::arxml::ApplicationInitializationOutcome>, String> {
+    ) -> Result<
+        Reply<autosar_config_core::arxml::ApplicationInitializationOutcome>,
+        autosar_config_core::LocalizedText,
+    > {
         self.commit(move |session| {
-            let next_revision = session
-                .revision
-                .checked_add(1)
-                .ok_or("工作台修订号已耗尽")?;
+            let next_revision =
+                session
+                    .revision
+                    .checked_add(1)
+                    .ok_or(autosar_config_core::product_message!(
+                        "backend.workbench.revision_exhausted"
+                    ))?;
             let mut outcome = workspace.initialize_application_previewed(preview)?;
             session.revision = next_revision;
             session.workspace = Some(Arc::new(workspace));
@@ -871,7 +1067,10 @@ impl Operation {
         &self,
         workspace: Workspace,
         mut projection: autosar_config_core::project_model::ProjectProjection,
-    ) -> Result<Reply<autosar_config_core::project_model::ProjectProjection>, String> {
+    ) -> Result<
+        Reply<autosar_config_core::project_model::ProjectProjection>,
+        autosar_config_core::LocalizedText,
+    > {
         self.commit(move |session| {
             session.invalidate()?;
             session.workspace = Some(Arc::new(workspace));
@@ -884,5 +1083,218 @@ impl Operation {
 impl Drop for Operation {
     fn drop(&mut self) {
         self.state.finish(self.id);
+    }
+}
+
+#[cfg(test)]
+mod language_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    struct Fixture(PathBuf);
+    impl Fixture {
+        fn new() -> Self {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let path = std::env::temp_dir().join(format!(
+                "autosar-language-{}-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos(),
+                NEXT.fetch_add(1, Ordering::Relaxed),
+            ));
+            fs::create_dir(&path).unwrap();
+            Self(path)
+        }
+        fn settings(&self) -> PathBuf {
+            self.0.join("settings.json")
+        }
+    }
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn legacy_settings_follow_system_and_language_wire_values_are_explicit() {
+        let settings: Settings = serde_json::from_str(r#"{"appearance":"dark"}"#).unwrap();
+        assert_eq!(settings.language, Language::System);
+        for (wire, language) in [
+            ("system", Language::System),
+            ("zh-CN", Language::Chinese),
+            ("en", Language::English),
+        ] {
+            assert_eq!(serde_json::to_value(language).unwrap(), wire);
+            assert_eq!(
+                serde_json::from_value::<Language>(serde_json::json!(wire)).unwrap(),
+                language
+            );
+        }
+        assert!(serde_json::from_str::<Language>(r#""fr""#).is_err());
+    }
+
+    #[test]
+    fn language_commit_preserves_project_fingerprint_drafts_and_active_operation() {
+        let fixture = Fixture::new();
+        let state = AppState::new(fixture.settings()).unwrap();
+        let workspace = Arc::new(Workspace::create(&fixture.0.join("Project"), "Project").unwrap());
+        match state.session.lock() {
+            Ok(mut session) => session.workspace = Some(workspace.clone()),
+            Err(error) => panic!("Test workspace setup failed: {error}"),
+        }
+        let before = state.capabilities().unwrap().fingerprint;
+        let operation = state
+            .begin(
+                &before,
+                autosar_config_core::product_message!("backend.operation.validate"),
+                OperationKind::Read,
+            )
+            .unwrap();
+        let operation_id = operation.id;
+        let reply = state
+            .configure_language(&before, Language::English)
+            .unwrap();
+        assert_eq!(reply.input_fingerprint, before);
+        assert_eq!(reply.capabilities.fingerprint, before);
+        assert_eq!(reply.capabilities.language, Language::English);
+        assert_eq!(reply.capabilities.operation.unwrap().id, operation_id);
+        match state.session.lock() {
+            Ok(session) => {
+                assert!(Arc::ptr_eq(session.workspace.as_ref().unwrap(), &workspace));
+                assert_eq!(session.revision, 0);
+            }
+            Err(error) => panic!("Test workspace inspection failed: {error}"),
+        }
+        assert!(operation.commit(|_| Ok(())).is_ok());
+        let restarted = AppState::new(fixture.settings()).unwrap();
+        assert_eq!(
+            restarted.capabilities().unwrap().language,
+            Language::English
+        );
+    }
+
+    #[test]
+    fn configuration_commit_retains_concurrent_presentation_saves() {
+        let fixture = Fixture::new();
+        let initial = Settings {
+            xsd_archive: Some(fixture.0.join("configured-xsd.zip")),
+            mod_archive: Some(fixture.0.join("configured-mod.zip")),
+            execution_tools: None,
+            build_target: Some(BuildTarget::WindowsX64ControlledV1),
+            appearance: Appearance::Dark,
+            language: Language::Chinese,
+        };
+        fs::write(fixture.settings(), serde_json::to_vec(&initial).unwrap()).unwrap();
+        let state = AppState::new(fixture.settings()).unwrap();
+        let fingerprint = state.capabilities().unwrap().fingerprint;
+        let executable = std::env::current_exe().unwrap();
+        let configured_tools = ExecutionSettings::new(
+            executable.clone(),
+            executable.clone(),
+            executable.clone(),
+            executable,
+        )
+        .unwrap();
+        let (snapshot_ready, snapshot_taken) = std::sync::mpsc::sync_channel(0);
+        let (resume, continue_preparation) = std::sync::mpsc::sync_channel(0);
+        let configuring_state = state.clone();
+        let configuring_fingerprint = fingerprint.clone();
+        let new_tools = configured_tools.clone();
+        let configuration = std::thread::spawn(move || {
+            configuring_state.configure(
+                &configuring_fingerprint,
+                move |settings| {
+                    settings.execution_tools = Some(new_tools);
+                    // Hold preparation after its snapshot, without holding either commit lock.
+                    snapshot_ready.send(()).unwrap();
+                    continue_preparation.recv().unwrap();
+                },
+                false,
+            )
+        });
+        snapshot_taken
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
+        state
+            .configure_language(&fingerprint, Language::English)
+            .unwrap();
+        state
+            .configure_appearance(&fingerprint, Appearance::Light)
+            .unwrap();
+        assert_eq!(state.capabilities().unwrap().fingerprint, fingerprint);
+        resume.send(()).unwrap();
+        let reply = configuration.join().unwrap().unwrap();
+        assert_eq!(reply.capabilities.language, Language::English);
+        assert_eq!(
+            serde_json::to_value(reply.capabilities.appearance).unwrap(),
+            "light"
+        );
+        assert_eq!(
+            reply.capabilities.configured_execution_tools,
+            Some(configured_tools.clone())
+        );
+        let persisted: Settings =
+            serde_json::from_slice(&fs::read(fixture.settings()).unwrap()).unwrap();
+        assert_eq!(persisted.language, Language::English);
+        assert_eq!(serde_json::to_value(persisted.appearance).unwrap(), "light");
+        assert_eq!(persisted.execution_tools, Some(configured_tools.clone()));
+        assert_eq!(persisted.xsd_archive, initial.xsd_archive);
+        assert_eq!(persisted.mod_archive, initial.mod_archive);
+        assert_eq!(persisted.build_target, initial.build_target);
+        let restarted = AppState::new(fixture.settings())
+            .unwrap()
+            .capabilities()
+            .unwrap();
+        assert_eq!(restarted.language, Language::English);
+        assert_eq!(serde_json::to_value(restarted.appearance).unwrap(), "light");
+        assert_eq!(restarted.configured_execution_tools, Some(configured_tools));
+        assert_eq!(restarted.target, BuildTarget::WindowsX64ControlledV1);
+    }
+
+    #[test]
+    fn external_settings_change_retains_original_file_and_saved_language() {
+        let fixture = Fixture::new();
+        let original = br#"{"language":"zh-CN"}"#;
+        fs::write(fixture.settings(), original).unwrap();
+        let state = AppState::new(fixture.settings()).unwrap();
+        let fingerprint = state.capabilities().unwrap().fingerprint;
+        let external = br#"{"language":"zh-CN","appearance":"dark"}"#;
+        fs::write(fixture.settings(), external).unwrap();
+        let error = state
+            .configure_language(&fingerprint, Language::English)
+            .err()
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(error).unwrap()["key"],
+            "backend.workbench.settings_changed"
+        );
+        assert_eq!(fs::read(fixture.settings()).unwrap(), external);
+        let capabilities = state.capabilities().unwrap();
+        assert_eq!(capabilities.language, Language::Chinese);
+        assert_eq!(capabilities.fingerprint, fingerprint);
+    }
+
+    #[test]
+    fn failed_settings_stage_keeps_preference_and_original_bytes() {
+        let fixture = Fixture::new();
+        let original = br#"{"language":"zh-CN"}"#;
+        fs::write(fixture.settings(), original).unwrap();
+        let state = AppState::new(fixture.settings()).unwrap();
+        let fingerprint = state.capabilities().unwrap().fingerprint;
+        let stage = fixture
+            .0
+            .join(format!(".settings-{}-0.tmp", std::process::id()));
+        fs::write(&stage, b"external staging file").unwrap();
+        assert!(
+            state
+                .configure_language(&fingerprint, Language::English)
+                .is_err()
+        );
+        assert_eq!(state.capabilities().unwrap().language, Language::Chinese);
+        assert_eq!(state.capabilities().unwrap().fingerprint, fingerprint);
+        assert_eq!(fs::read(fixture.settings()).unwrap(), original);
+        assert_eq!(fs::read(stage).unwrap(), b"external staging file");
     }
 }

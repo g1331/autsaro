@@ -1,3 +1,4 @@
+import { useLocale } from '../i18n';
 import { useEffect, useEffectEvent, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Copy, Minus, Square, X } from 'lucide-react';
@@ -8,6 +9,7 @@ type Props = {
 };
 
 export function WindowControls({ onClose, onError }: Props) {
+  const { t } = useLocale();
   const [maximized, setMaximized] = useState(false);
   const reportError = useEffectEvent(onError);
   useEffect(() => {
@@ -39,14 +41,14 @@ export function WindowControls({ onClose, onError }: Props) {
     };
   }, []);
 
-  const maximizeLabel = maximized ? '还原窗口' : '最大化窗口';
+  const maximizeLabel = maximized ? t('editor.window.restore') : t('editor.window.maximize');
   return (
-    <div className="window-controls" role="group" aria-label="窗口操作">
+    <div className="window-controls" role="group" aria-label={t('editor.window.actions')}>
       <button
         type="button"
         className="window-control"
-        aria-label="最小化窗口"
-        title="最小化窗口"
+        aria-label={t('editor.window.minimize')}
+        title={t('editor.window.minimize')}
         onClick={() => void getCurrentWindow().minimize().catch(onError)}
       >
         <Minus size={14} aria-hidden="true" />
@@ -67,8 +69,8 @@ export function WindowControls({ onClose, onError }: Props) {
       <button
         type="button"
         className="window-control window-close"
-        aria-label="关闭工作台"
-        title="关闭工作台"
+        aria-label={t('editor.window.close')}
+        title={t('editor.window.close')}
         onClick={() => void onClose().catch(onError)}
       >
         <X size={16} aria-hidden="true" />

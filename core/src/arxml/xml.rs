@@ -93,7 +93,10 @@ pub(super) fn parse_u32(value: Option<String>, field: &str, path: &str) -> Resul
         .ok_or_else(|| {
             Issue::error(
                 "MISSING_PARAMETER",
-                format!("缺少 {field}"),
+                crate::product_message!(
+                    "backend.arxml.xml.missing_parameter",
+                    "field" => field
+                ),
                 Some(path.into()),
             )
         })?
@@ -101,7 +104,10 @@ pub(super) fn parse_u32(value: Option<String>, field: &str, path: &str) -> Resul
         .map_err(|_| {
             Issue::error(
                 "INVALID_PARAMETER",
-                format!("{field} 须为无符号整数"),
+                crate::product_message!(
+                    "backend.arxml.xml.unsigned_integer_required",
+                    "field" => field
+                ),
                 Some(path.into()),
             )
         })
@@ -115,7 +121,10 @@ pub(super) fn parse_milliseconds(
     let text = value.ok_or_else(|| {
         Issue::error(
             "MISSING_PARAMETER",
-            format!("缺少 {field}"),
+            crate::product_message!(
+                "backend.arxml.xml.missing_parameter",
+                "field" => field
+            ),
             Some(path.into()),
         )
     })?;
@@ -123,25 +132,50 @@ pub(super) fn parse_milliseconds(
     if fraction.len() > 3 || !fraction.bytes().all(|b| b.is_ascii_digit()) {
         return Err(Issue::error(
             "TIME_PRECISION",
-            format!("{field} 仅支持整毫秒"),
+            crate::product_message!(
+                "backend.arxml.xml.whole_milliseconds_required",
+                "field" => field
+            ),
             Some(path.into()),
         ));
     }
-    let seconds = seconds
-        .parse::<u32>()
-        .map_err(|_| Issue::error("INVALID_PARAMETER", field, Some(path.into())))?;
+    let seconds = seconds.parse::<u32>().map_err(|_| {
+        Issue::error(
+            "INVALID_PARAMETER",
+            crate::product_message!(
+                "backend.arxml.xml.invalid_time_value",
+                "field" => field
+            ),
+            Some(path.into()),
+        )
+    })?;
     let fraction = if fraction.is_empty() {
         0
     } else {
-        fraction
-            .parse::<u32>()
-            .map_err(|_| Issue::error("INVALID_PARAMETER", field, Some(path.into())))?
-            * 10u32.pow((3 - fraction.len()) as u32)
+        fraction.parse::<u32>().map_err(|_| {
+            Issue::error(
+                "INVALID_PARAMETER",
+                crate::product_message!(
+                    "backend.arxml.xml.invalid_time_value",
+                    "field" => field
+                ),
+                Some(path.into()),
+            )
+        })? * 10u32.pow((3 - fraction.len()) as u32)
     };
     seconds
         .checked_mul(1000)
         .and_then(|s| s.checked_add(fraction))
-        .ok_or_else(|| Issue::error("TIME_RANGE", field, Some(path.into())))
+        .ok_or_else(|| {
+            Issue::error(
+                "TIME_RANGE",
+                crate::product_message!(
+                    "backend.arxml.xml.time_out_of_range",
+                    "field" => field
+                ),
+                Some(path.into()),
+            )
+        })
 }
 
 pub(super) fn valid_name(name: &str) -> bool {

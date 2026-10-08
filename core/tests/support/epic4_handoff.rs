@@ -191,14 +191,18 @@ pub fn verify() {
     .err()
     .unwrap();
     assert!(
-        executable_rejected.contains("src/Rte.c"),
+        serde_json::to_string(&executable_rejected)
+            .unwrap()
+            .contains("src/Rte.c"),
         "{executable_rejected}"
     );
     let rejected = open_ecu_handoff(&project, &dependencies, &runtime)
         .err()
         .unwrap();
     assert!(
-        rejected.iter().any(|d| d.message.contains("src/Rte.c")),
+        rejected.iter().any(|d| serde_json::to_string(&d.message)
+            .unwrap()
+            .contains("src/Rte.c")),
         "{rejected:?}"
     );
     fs::write(&path, &original).unwrap();

@@ -34,9 +34,21 @@ pub struct DiagnosticContract {
     pub sessions: Vec<u8>,
 }
 
-fn reject(graph: &Graph, index: usize, code: &str, message: &str) -> Vec<PlanDiagnostic> {
-    vec![graph.diagnostic(index, DiagnosticCategory::Input, code, message,
-        "Use one physical normal-addressed DoCAN connection, the same synchronous four-byte service, explicit canonical PDUs and matching transport/diagnostic declarations.")]
+fn reject(
+    graph: &Graph,
+    index: usize,
+    code: &str,
+    message: crate::message::LocalizedText,
+) -> Vec<PlanDiagnostic> {
+    vec![graph.diagnostic(
+        index,
+        DiagnosticCategory::Input,
+        code,
+        message,
+        crate::product_message!(
+            "backend.integration.diagnostic.docan_connection_contract_required"
+        ),
+    )]
 }
 
 fn one(graph: &Graph, context: usize, kind: &str) -> Result<usize, Vec<PlanDiagnostic>> {
@@ -52,7 +64,9 @@ fn one(graph: &Graph, context: usize, kind: &str) -> Result<usize, Vec<PlanDiagn
             graph,
             context,
             "DIAGNOSTIC_NOT_UNIQUE",
-            "A required diagnostic/transport object is missing or duplicated.",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_transport_object_missing_or_duplicate"
+            ),
         ))
     }
 }
@@ -65,7 +79,9 @@ fn reference(graph: &Graph, context: usize, parameter: &str) -> Result<usize, Ve
                 graph,
                 context,
                 "DIAGNOSTIC_REFERENCE",
-                "A required diagnostic reference is missing or duplicated.",
+                crate::product_message!(
+                    "backend.integration.diagnostic.diagnostic_reference_missing_or_duplicate"
+                ),
             )
         })
 }
@@ -78,7 +94,9 @@ fn timer(graph: &Graph, context: usize, parameter: &str) -> Result<u32, Vec<Plan
                 graph,
                 context,
                 "DIAGNOSTIC_TIMING",
-                "The configured timer must be a positive whole logical millisecond.",
+                crate::product_message!(
+                    "backend.integration.diagnostic.configured_timer_positive_integer_ms"
+                ),
             )
         })
 }
@@ -99,7 +117,9 @@ fn can_link(graph: &Graph, pdu: usize, receive: bool) -> Result<(u32, u16), Vec<
             graph,
             pdu,
             "DIAGNOSTIC_REFERENCE",
-            "The diagnostic N-PDU requires one matching CanIf route.",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_npdu_canif_route_required"
+            ),
         ));
     }
     let can_if = found[0];
@@ -111,7 +131,9 @@ fn can_link(graph: &Graph, pdu: usize, receive: bool) -> Result<(u32, u16), Vec<
                 graph,
                 can_if,
                 "CAN_ID_CONFLICT",
-                "The diagnostic CAN identifier is outside the standard 11-bit range.",
+                crate::product_message!(
+                    "backend.integration.diagnostic.diagnostic_can_identifier_out_of_range"
+                ),
             )
         })?;
     let handle = value(graph, can_if, &format!("{prefix}Id"), false)
@@ -121,7 +143,9 @@ fn can_link(graph: &Graph, pdu: usize, receive: bool) -> Result<(u32, u16), Vec<
                 graph,
                 can_if,
                 "CAN_ID_CONFLICT",
-                "The diagnostic CanIf handle is missing or outside its supported range.",
+                crate::product_message!(
+                    "backend.integration.diagnostic.diagnostic_canif_handle_invalid"
+                ),
             )
         })?;
     if value(graph, can_if, &format!("{prefix}CanIdType"), false) != Some("STANDARD_CAN")
@@ -131,7 +155,9 @@ fn can_link(graph: &Graph, pdu: usize, receive: bool) -> Result<(u32, u16), Vec<
             graph,
             pdu,
             "LENGTH_CONFLICT",
-            "The diagnostic link requires a standard Classical CAN eight-byte N-PDU.",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_classical_can_npdu_required"
+            ),
         ));
     }
     let triggers: Vec<_> = graph
@@ -149,7 +175,9 @@ fn can_link(graph: &Graph, pdu: usize, receive: bool) -> Result<(u32, u16), Vec<
             graph,
             can_if,
             "CAN_ID_CONFLICT",
-            "The diagnostic identifier has no unique matching Extract trigger.",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_extract_trigger_not_unique"
+            ),
         ));
     }
     let trigger = triggers[0];
@@ -160,7 +188,9 @@ fn can_link(graph: &Graph, pdu: usize, receive: bool) -> Result<(u32, u16), Vec<
             graph,
             frame,
             "LENGTH_CONFLICT",
-            "The diagnostic frame requires one complete N-PDU mapping at byte zero.",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_npdu_mapping_required"
+            ),
         ));
     }
     let system_pdu = graph.target(mappings[0], "PDU-REF").unwrap();
@@ -169,7 +199,9 @@ fn can_link(graph: &Graph, pdu: usize, receive: bool) -> Result<(u32, u16), Vec<
             graph,
             system_pdu,
             "LENGTH_CONFLICT",
-            "The diagnostic frame maps a different N-PDU kind or length.",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_npdu_kind_or_length_mismatch"
+            ),
         ));
     }
     check_trigger(graph, trigger, system_pdu, None, receive)?;
@@ -182,7 +214,9 @@ fn can_link(graph: &Graph, pdu: usize, receive: bool) -> Result<(u32, u16), Vec<
             graph,
             trigger,
             "LENGTH_CONFLICT",
-            "The diagnostic Extract trigger/frame differs from its eight-byte Classical CAN link.",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_extract_can_link_mismatch"
+            ),
         ));
     }
     let port = *graph.objects.get(&graph.elements[ports[0]].text).unwrap();
@@ -191,7 +225,9 @@ fn can_link(graph: &Graph, pdu: usize, receive: bool) -> Result<(u32, u16), Vec<
             graph,
             port,
             "DIRECTION_CONFLICT",
-            "The diagnostic Extract frame port and CanIf direction disagree.",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_frame_port_direction_mismatch"
+            ),
         ));
     }
     if receive
@@ -205,7 +241,7 @@ fn can_link(graph: &Graph, pdu: usize, receive: bool) -> Result<(u32, u16), Vec<
             graph,
             can_if,
             "LENGTH_CONFLICT",
-            "Diagnostic Rx must enforce the declared eight-byte DLC.",
+            crate::product_message!("backend.integration.diagnostic.diagnostic_rx_dlc_required"),
         ));
     }
     Ok((id, handle))
@@ -232,7 +268,9 @@ pub(super) fn inspect(
             graph,
             data,
             "SERVICE_TYPE_CONFLICT",
-            "Dcm data must bind the declared synchronous UINT8_N four-byte port without condition-check or byte swapping.",
+            crate::product_message!(
+                "backend.integration.diagnostic.dcm_data_port_binding_required"
+            ),
         ));
     }
     let bindings: Vec<_> = graph
@@ -248,7 +286,7 @@ pub(super) fn inspect(
             graph,
             did,
             "DIAGNOSTIC_REFERENCE",
-            "The DID must contain the same four-byte data at byte offset zero.",
+            crate::product_message!("backend.integration.diagnostic.did_data_offset_mismatch"),
         ));
     }
     let did_id = value(graph, did, "DcmDspDidIdentifier", false)
@@ -258,7 +296,7 @@ pub(super) fn inspect(
                 graph,
                 did,
                 "DIAGNOSTIC_IDENTIFIER",
-                "The DID identifier is absent or outside uint16.",
+                crate::product_message!("backend.integration.diagnostic.did_identifier_invalid"),
             )
         })?;
     let info = reference(graph, did, "DcmDspDidInfoRef")?;
@@ -277,7 +315,7 @@ pub(super) fn inspect(
             graph,
             info,
             "SERVICE_UNSUPPORTED",
-            "Dynamic, write or control DID operations are outside the selected synchronous read profile.",
+            crate::product_message!("backend.integration.diagnostic.did_operation_unsupported"),
         ));
     }
     let read = one(graph, info, "DcmDspDidRead")?;
@@ -292,7 +330,9 @@ pub(super) fn inspect(
                     graph,
                     session,
                     "DIAGNOSTIC_SESSION",
-                    "The declared session has no supported numeric level.",
+                    crate::product_message!(
+                        "backend.integration.diagnostic.diagnostic_session_level_unsupported"
+                    ),
                 )
             })?;
         if !matches!(level, 1 | 3) || !sessions.insert(level) {
@@ -300,7 +340,9 @@ pub(super) fn inspect(
                 graph,
                 session,
                 "DIAGNOSTIC_SESSION",
-                "Only distinct default and extended sessions are supported.",
+                crate::product_message!(
+                    "backend.integration.diagnostic.diagnostic_session_pair_required"
+                ),
             ));
         }
         let pair = (
@@ -312,7 +354,9 @@ pub(super) fn inspect(
                 graph,
                 session,
                 "DIAGNOSTIC_TIMING",
-                "The selected sessions require one shared explicit P2/P2* timing contract.",
+                crate::product_message!(
+                    "backend.integration.diagnostic.diagnostic_session_timing_contract_required"
+                ),
             ));
         }
         timing = Some(pair);
@@ -322,7 +366,9 @@ pub(super) fn inspect(
             graph,
             read,
             "DIAGNOSTIC_SESSION",
-            "The application DID must be readable in the declared default and extended sessions.",
+            crate::product_message!(
+                "backend.integration.diagnostic.application_did_session_read_required"
+            ),
         ));
     }
     let protocol = one(graph, data, "DcmDslProtocolRow")?;
@@ -341,7 +387,9 @@ pub(super) fn inspect(
                     graph,
                     service,
                     "SERVICE_UNSUPPORTED",
-                    "The diagnostic service identifier is not a supported uint8 value.",
+                    crate::product_message!(
+                        "backend.integration.diagnostic.diagnostic_service_identifier_invalid"
+                    ),
                 )
             })?;
         let expected_subfunctions = match id {
@@ -353,7 +401,9 @@ pub(super) fn inspect(
                     graph,
                     service,
                     "SERVICE_UNSUPPORTED",
-                    "The selected read-only profile supports SessionControl, ReadDataByIdentifier and TesterPresent only.",
+                    crate::product_message!(
+                        "backend.integration.diagnostic.diagnostic_read_only_services_required"
+                    ),
                 ));
             }
         };
@@ -371,7 +421,9 @@ pub(super) fn inspect(
                         graph,
                         subfunction,
                         "SERVICE_UNSUPPORTED",
-                        "The declared subfunction is not a supported uint8 value.",
+                        crate::product_message!(
+                            "backend.integration.diagnostic.diagnostic_subfunction_invalid"
+                        ),
                     )
                 })?;
             if !actual_subfunctions.insert(id)
@@ -384,7 +436,9 @@ pub(super) fn inspect(
                     graph,
                     subfunction,
                     "SERVICE_UNSUPPORTED",
-                    "Subfunctions must be enabled and unique within their service.",
+                    crate::product_message!(
+                        "backend.integration.diagnostic.diagnostic_subfunction_enabled_unique_required"
+                    ),
                 ));
             }
         }
@@ -404,7 +458,9 @@ pub(super) fn inspect(
                 graph,
                 service,
                 "SERVICE_UNSUPPORTED",
-                "Service availability, subfunction policy or numeric identity differs from the supported read-only profile.",
+                crate::product_message!(
+                    "backend.integration.diagnostic.diagnostic_read_only_profile_mismatch"
+                ),
             ));
         }
     }
@@ -413,7 +469,9 @@ pub(super) fn inspect(
             graph,
             table,
             "SERVICE_UNSUPPORTED",
-            "The selected diagnostic service table is incomplete.",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_service_table_incomplete"
+            ),
         ));
     }
     let rx = one(graph, protocol, "DcmDslProtocolRx")?;
@@ -429,7 +487,9 @@ pub(super) fn inspect(
             graph,
             protocol,
             "SERVICE_UNSUPPORTED",
-            "The protocol must declare one enabled physical UDS-on-CAN connection.",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_physical_connection_required"
+            ),
         ));
     }
     let rx_sdu = reference(graph, rx, "DcmDslProtocolRxPduRef")?;
@@ -441,7 +501,9 @@ pub(super) fn inspect(
                 graph,
                 sdu,
                 "LENGTH_CONFLICT",
-                "The diagnostic N-SDU capacity must be explicitly 64 bytes.",
+                crate::product_message!(
+                    "backend.integration.diagnostic.diagnostic_nsdu_capacity_required"
+                ),
             ));
         }
     }
@@ -452,7 +514,9 @@ pub(super) fn inspect(
                 graph,
                 buffer,
                 "LENGTH_CONFLICT",
-                "The selected diagnostic buffer must match its 64-byte N-SDU capacity.",
+                crate::product_message!(
+                    "backend.integration.diagnostic.diagnostic_buffer_capacity_mismatch"
+                ),
             ));
         }
     }
@@ -475,7 +539,9 @@ pub(super) fn inspect(
             graph,
             protocol,
             "SERVICE_UNSUPPORTED",
-            "Nonzero padding, timer adjustment, transport cancellation or restart PENDING behavior is outside the selected profile.",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_transport_behavior_unsupported"
+            ),
         ));
     }
     if reference(graph, rx_transport, "CanTpRxNSduRef")? != rx_sdu
@@ -494,7 +560,9 @@ pub(super) fn inspect(
             graph,
             rx_transport,
             "SERVICE_UNSUPPORTED",
-            "Transport requires matching physical normal-addressed padded SDUs with the selected zero Bs/STmin/Wft profile.",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_transport_sdu_profile_required"
+            ),
         ));
     }
     let rx_npdu_cfg = one(graph, rx_transport, "CanTpRxNPdu")?;
@@ -510,7 +578,9 @@ pub(super) fn inspect(
             graph,
             rx_transport,
             "DIAGNOSTIC_REFERENCE",
-            "Flow-control frames must use the same paired physical NPDU routes.",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_flow_control_routes_mismatch"
+            ),
         ));
     }
     let (request_can_id, request_handle) = can_link(graph, rx_npdu, true)?;
@@ -520,7 +590,7 @@ pub(super) fn inspect(
             graph,
             protocol,
             "CAN_ID_CONFLICT",
-            "Diagnostic request and response routes must be distinct.",
+            crate::product_message!("backend.integration.diagnostic.diagnostic_routes_must_differ"),
         ));
     }
     let (p2_ms, p2_star_ms) = timing.unwrap();
@@ -533,7 +603,9 @@ pub(super) fn inspect(
             graph,
             protocol,
             "DIAGNOSTIC_TIMING",
-            "P2/P2* must fit their UDS response fields and P2* ten-millisecond resolution, with P2* at least P2.",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_response_timing_invalid"
+            ),
         ));
     }
     Ok(DiagnosticContract {

@@ -1,14 +1,20 @@
+import { useLocale } from '../i18n';
 import { useEffect, useRef, useState } from 'react';
 
 const panels = {
-  tree: { variable: '--panel-tree-width', label: '工程树宽度', minimum: 180, direction: 1 },
+  tree: { variable: '--panel-tree-width', label: 'editor.resize.tree', minimum: 180, direction: 1 },
   inspector: {
     variable: '--panel-inspector-width',
-    label: '检查器宽度',
+    label: 'editor.resize.inspector',
     minimum: 220,
     direction: -1,
   },
-  tools: { variable: '--panel-tools-height', label: '工具窗口高度', minimum: 100, direction: -1 },
+  tools: {
+    variable: '--panel-tools-height',
+    label: 'editor.resize.tools',
+    minimum: 100,
+    direction: -1,
+  },
 } as const;
 type Panel = keyof typeof panels;
 
@@ -50,6 +56,7 @@ function geometry(handle: HTMLElement, kind: Panel) {
 }
 
 export function PanelResizeHandle({ kind }: { kind: Panel }) {
+  const { t } = useLocale();
   const handle = useRef<HTMLDivElement>(null);
   const drag = useRef<{
     pointerId: number;
@@ -136,13 +143,13 @@ export function PanelResizeHandle({ kind }: { kind: Panel }) {
       className={`panel-resize-handle panel-resize-${kind}${dragging ? ' is-dragging' : ''}`}
       role="separator"
       tabIndex={0}
-      aria-label={`调整${spec.label}`}
+      aria-label={t('editor.resize.label', { panel: t(spec.label) })}
       aria-orientation={vertical ? 'horizontal' : 'vertical'}
       aria-valuemin={range.minimum}
       aria-valuemax={range.maximum}
       aria-valuenow={range.size}
       aria-valuetext={`${range.size}px`}
-      title={`拖动调整${spec.label}；方向键调整，双击或 Enter 恢复默认`}
+      title={t('editor.resize.help', { panel: t(spec.label) })}
       onPointerDown={(event) => {
         if (event.button !== 0 || !event.isPrimary) return;
         const current = geometry(event.currentTarget, kind);

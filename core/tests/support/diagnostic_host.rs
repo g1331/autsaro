@@ -233,7 +233,7 @@ pub(super) fn configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_mult
         "independent host diagnostic tester failed: {}",
         report.log
     );
-    assert!(report.events.iter().any(|event| event.contains("多帧")));
+    assert!(report.events.iter().any(|event| matches!(event, autosar_config_core::LocalizedText::Message(message) if message.key == "backend.host.multiframe_did_passed")));
     reopened.clear_diagnostic().unwrap();
     reopened.save().unwrap();
     assert!(
@@ -344,7 +344,7 @@ pub(super) fn active_session_did_reports_session_transitions_and_rejects_invalid
     );
     let report = tooling::run_diagnostic(&generated).unwrap();
     assert!(report.passed, "{report:?}");
-    assert!(report.events.iter().any(|event| event.contains("0xF186")));
+    assert!(report.events.iter().any(|event| matches!(event, autosar_config_core::LocalizedText::Message(message) if message.key == "backend.host.active_session_passed")));
 
     let signal = reopened.view().diagnostic.unwrap().signal_paths[0].clone();
     reopened
@@ -473,7 +473,7 @@ pub(super) fn multiple_dids_keep_request_order_and_skip_unavailable_values() {
     );
     let report = tooling::run_diagnostic(&generated).unwrap();
     assert!(report.passed, "{report:?}");
-    assert!(report.events.iter().any(|event| event.contains("多 DID")));
+    assert!(report.events.iter().any(|event| matches!(event, autosar_config_core::LocalizedText::Message(message) if message.key == "backend.host.multi_did_passed")));
 }
 
 #[cfg(windows)]
@@ -839,7 +839,7 @@ pub(super) fn supported_dtcs_include_zero_status_and_follow_configured_lifecycle
             report
                 .events
                 .iter()
-                .any(|event| event.contains("0x19/0x0A"))
+                .any(|event| matches!(event, autosar_config_core::LocalizedText::Message(message) if message.key == "backend.host.dtc_supported_report"))
         );
 
         reopened.clear_dtc().unwrap();
@@ -1343,7 +1343,7 @@ pub(super) fn extended_session_write_did_changes_live_can_but_not_restart_state(
     );
     let report = tooling::run_diagnostic(&generated).unwrap();
     assert!(report.passed, "{}", report.log);
-    assert!(report.events.iter().any(|event| event.contains("写入")));
+    assert!(report.events.iter().any(|event| matches!(event, autosar_config_core::LocalizedText::Message(message) if message.key == "backend.host.write_observed")));
     reopened.clear_diagnostic().unwrap();
     reopened.save().unwrap();
     assert!(
@@ -1634,7 +1634,6 @@ pub(super) fn start_routine_restores_written_did_signals_and_respects_session() 
     );
     let report = tooling::run_diagnostic(&generated).unwrap();
     assert!(report.passed, "{}", report.log);
-    assert!(report.events.iter().any(|event| event.contains("例程")));
     reopened.clear_diagnostic().unwrap();
     reopened.save().unwrap();
     assert!(

@@ -1,3 +1,4 @@
+import { composedMessage, message, ProductError } from '../i18n';
 import type { IntegrationInspection, WorkspaceView } from '../types';
 import {
   diagnosticFields,
@@ -63,17 +64,21 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
       changes: current.changes,
     };
     running.current = true;
-    setBusy('预览批次影响');
+    setBusy(message('workflow.action.previewBatch'));
     const generation = epoch.current;
     try {
       const preview = await call<ChangePreview>('prepare_configuration_change', { changeSet });
       if (generation !== epoch.current) return;
-      if (stateRef.current.changes !== current.changes) throw new Error('草稿已变化，请重新预览');
+      if (stateRef.current.changes !== current.changes)
+        throw new ProductError(message('workflow.error.draftChanged'));
       patchState({ changePreview: preview, preparedChangeSet: changeSet });
     } catch (error) {
       if (generation !== epoch.current) return;
       patchState({ changePreview: null, preparedChangeSet: null });
-      setNotice({ tone: 'error', text: `批次被拒绝：${errorText(error)}` });
+      setNotice({
+        tone: 'error',
+        text: composedMessage('workflow.error.batchPreview', { error: errorText(error) }),
+      });
     } finally {
       if (generation === epoch.current) {
         running.current = false;
@@ -87,7 +92,7 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
     const { changePreview, preparedChangeSet } = before;
     if (!changePreview || !preparedChangeSet || running.current) return false;
     running.current = true;
-    setBusy('原子应用批次');
+    setBusy(message('workflow.action.applyBatch'));
     const generation = epoch.current;
     const fingerprintBefore = capabilitiesRef.current?.fingerprint;
     try {
@@ -129,7 +134,10 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
         view = await call<WorkspaceView>('workspace_view');
       } catch (error) {
         if (generation !== epoch.current) return false;
-        setNotice({ tone: 'error', text: `批次已应用；读取工程视图失败：${errorText(error)}` });
+        setNotice({
+          tone: 'error',
+          text: composedMessage('workflow.error.batchReadView', { error: errorText(error) }),
+        });
         changeConfirmation.current?.(true);
         changeConfirmation.current = null;
         return true;
@@ -166,7 +174,7 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
           integrationInspection: null,
           integrationIssues: [],
           integrationPreview: null,
-          integrationNotice: '配置已变化，正在重新检查标准输入',
+          integrationNotice: message('workflow.integration.rechecking'),
         });
         try {
           const report = await call<IntegrationInspection>('inspect_integration');
@@ -180,13 +188,20 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
               integrationUnapplied: true,
             });
           setIntegrationNotice(
-            report.description ? '标准输入已重新检查，尚未保存' : '输入未通过，无法生成',
+            report.description
+              ? message('workflow.integration.recheckedUnsaved')
+              : message('workflow.integration.failed'),
           );
         } catch (error) {
           if (generation !== epoch.current) return false;
           const text = errorText(error);
-          setIntegrationNotice(`标准输入须重新检查：${text}`);
-          setNotice({ tone: 'error', text: `批次已应用；重新检查标准输入失败：${text}` });
+          setIntegrationNotice(
+            composedMessage('workflow.error.integrationRecheckRequired', { error: text }),
+          );
+          setNotice({
+            tone: 'error',
+            text: composedMessage('workflow.error.batchRecheck', { error: text }),
+          });
         }
       }
       changeConfirmation.current?.(true);
@@ -195,7 +210,10 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
     } catch (error) {
       if (generation !== epoch.current) return false;
       patchState({ changePreview: null, preparedChangeSet: null });
-      setNotice({ tone: 'error', text: `整批应用被拒绝，草稿保留：${errorText(error)}` });
+      setNotice({
+        tone: 'error',
+        text: composedMessage('workflow.error.batchRejected', { error: errorText(error) }),
+      });
       changeConfirmation.current?.(false);
       changeConfirmation.current = null;
       return false;

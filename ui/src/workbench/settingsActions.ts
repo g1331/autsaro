@@ -1,3 +1,5 @@
+import { message, persistLanguagePreference } from '../i18n';
+import { native } from './useDelivery';
 import type { BuildTarget } from '../types';
 import { errorText } from './forms';
 import type { WorkbenchSession } from './session';
@@ -55,13 +57,13 @@ export function createSettingsActions(session: WorkbenchSession, dependencies: D
         notice: null,
         stages: {
           ...stages,
-          validate: { state: 'stale', detail: '规范档案已变化，须重新校验' },
+          validate: { state: 'stale', detail: message('controller.settings.resourcesChanged') },
           generate: stageDefaults.generate,
           build: stageDefaults.build,
           virtual: stageDefaults.virtual,
         },
       });
-      setSettingsNotice('规范档案已核对固定摘要并保存；须重新校验。');
+      setSettingsNotice(message('controller.settings.resourcesSaved'));
     } catch (error) {
       setSettingsNotice(errorText(error));
     }
@@ -72,7 +74,7 @@ export function createSettingsActions(session: WorkbenchSession, dependencies: D
     setSettingsNotice('');
     const generation = epoch.current;
     running.current = true;
-    setBusy('保存执行工具');
+    setBusy(message('controller.settings.saveTools'));
     try {
       await call<void>('configure_execution_tools', { tools: stateRef.current.toolDraft });
       setGenerated(null);
@@ -86,7 +88,7 @@ export function createSettingsActions(session: WorkbenchSession, dependencies: D
         build: stageDefaults.build,
         virtual: stageDefaults.virtual,
       }));
-      setSettingsNotice('执行工具已保存；原生预检尚未执行。');
+      setSettingsNotice(message('controller.settings.toolsSaved'));
     } catch (error) {
       setSettingsNotice(errorText(error));
     } finally {
@@ -101,10 +103,10 @@ export function createSettingsActions(session: WorkbenchSession, dependencies: D
     if (running.current) return;
     const generation = epoch.current;
     running.current = true;
-    setBusy('保存外观');
+    setBusy(message('controller.settings.saveAppearance'));
     try {
       await call<void>('configure_appearance', { appearance: stateRef.current.appearanceDraft });
-      setSettingsNotice('外观已保存；工程输入保持。');
+      setSettingsNotice(message('controller.settings.appearanceSaved'));
     } catch (error) {
       setSettingsNotice(errorText(error));
     } finally {
@@ -114,5 +116,27 @@ export function createSettingsActions(session: WorkbenchSession, dependencies: D
       }
     }
   }
-  return { changeTarget, configureResources, configureTools, configureAppearance };
+  async function configureLanguage() {
+    if (stateRef.current.languageSaving) return;
+    const language = stateRef.current.languageDraft;
+    setSettingsNotice('');
+    patchState({ languageSaving: true });
+    try {
+      if (native) await call<void>('configure_language', { language });
+      else persistLanguagePreference(language);
+      patchState({ savedLanguage: language });
+      setSettingsNotice(message('controller.settings.languageSaved'));
+    } catch (error) {
+      setSettingsNotice(errorText(error));
+    } finally {
+      patchState({ languageSaving: false });
+    }
+  }
+  return {
+    changeTarget,
+    configureResources,
+    configureTools,
+    configureAppearance,
+    configureLanguage,
+  };
 }

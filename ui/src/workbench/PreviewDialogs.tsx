@@ -1,42 +1,50 @@
+import { useLocale } from '../i18n';
 import { useState } from 'react';
 import type { Workbench } from './useWorkbench';
 import { CopyText, Dialog, TextSnapshot } from './Dialog';
 
 export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
+  const { t, text } = useLocale();
   const [projectFile, setProjectFile] = useState('');
   const [applicationFile, setApplicationFile] = useState('');
   if (c.guard) {
     const project = c.guard.kind === 'project';
     return (
       <Dialog
-        title={c.guard.title}
+        title={text(c.guard.title)}
         onClose={() => void c.resolveGuard('cancel')}
         footer={
           <>
             <button type="button" onClick={() => void c.resolveGuard('cancel')}>
-              {project ? '取消替换' : '留在原处'}
+              {project ? t('workflow.guard.cancelReplacement') : t('workflow.guard.stay')}
             </button>
             <button type="button" onClick={() => void c.resolveGuard('discard')}>
-              {project ? '明确放弃并继续' : '放弃草稿并继续'}
+              {project ? t('workflow.guard.discardContinue') : t('workflow.guard.discardDrafts')}
             </button>
             <button
               type="button"
               className="primary-button"
               onClick={() => void c.resolveGuard('apply')}
             >
-              {project ? '返回并保存' : '应用并继续'}
+              {project ? t('workflow.guard.saveFirst') : t('workflow.guard.applyContinue')}
             </button>
           </>
         }
       >
         <p>
           {project
-            ? '此操作将替换或关闭当前工程。返回保存会先应用全部草稿，再显示真实保存预览；只有明确确认保存成功才继续。'
-            : '当前上下文有未应用输入。应用成功后继续；任何拒绝保持当前位置与输入。'}
+            ? t('workflow.guard.projectExplanation')
+            : t('workflow.guard.contextExplanation')}
         </p>
         <p>
-          尚未保存：{c.workspace?.dirty || c.projection?.dirty ? '是' : '否'} · 未应用：
-          {c.unapplied || c.creating ? '是' : '否'}
+          {t('workflow.guard.state', {
+            unsaved: t(
+              c.workspace?.dirty || c.projection?.dirty
+                ? 'workflow.common.yes'
+                : 'workflow.common.no',
+            ),
+            unapplied: t(c.unapplied || c.creating ? 'workflow.common.yes' : 'workflow.common.no'),
+          })}
         </p>
       </Dialog>
     );
@@ -44,19 +52,19 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
   if (c.changePreview)
     return (
       <Dialog
-        title="确认原子应用批次"
+        title={t('workflow.batch.title')}
         onClose={() => {
           if (!c.busy) c.cancelChangePreview();
         }}
         footer={
           <>
-            <span>{c.changePreview.impacts.length} 项真实影响 · 不写磁盘</span>
+            <span>{t('workflow.batch.count', { count: c.changePreview.impacts.length })}</span>
             <button
               type="button"
               disabled={Boolean(c.busy)}
               onClick={() => c.cancelChangePreview()}
             >
-              取消确认
+              {t('workflow.batch.cancel')}
             </button>
             <button
               type="button"
@@ -64,26 +72,28 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
               disabled={Boolean(c.busy) || !c.preparedChangeSet}
               onClick={() => void c.applyChanges()}
             >
-              确认应用全部变化
+              {t('workflow.batch.apply')}
             </button>
           </>
         }
       >
         <p className="mono path-text">
-          输入 {c.changePreview.inputFingerprint}
+          {t('workflow.batch.inputIdentity', { fingerprint: c.changePreview.inputFingerprint })}
           <br />
-          定义 {c.changePreview.definitionFingerprint}
+          {t('workflow.batch.definitionIdentity', {
+            fingerprint: c.changePreview.definitionFingerprint,
+          })}
           <br />
-          确认 {c.changePreview.changeRevision}
+          {t('workflow.batch.confirmationIdentity', { revision: c.changePreview.changeRevision })}
         </p>
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>对象 / Change ID</th>
-                <th>旧值</th>
-                <th>新值</th>
-                <th>影响</th>
+                <th>{t('workflow.batch.objectChangeId')}</th>
+                <th>{t('workflow.batch.before')}</th>
+                <th>{t('workflow.batch.after')}</th>
+                <th>{t('workflow.batch.impact')}</th>
               </tr>
             </thead>
             <tbody>
@@ -95,7 +105,9 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
                   </td>
                   <td className="mono">{impact.before}</td>
                   <td className="mono">{impact.after}</td>
-                  <td>{impact.incoming ? '入站引用联动' : '显式修改'}</td>
+                  <td>
+                    {impact.incoming ? t('workflow.batch.incoming') : t('workflow.batch.explicit')}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -106,7 +118,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
             key={`${issue.code}-${index}`}
             className={issue.severity === 'error' ? 'error-text' : 'field-help'}
           >
-            {issue.scope} · {issue.code} · {issue.message} · {issue.remedy}
+            {issue.scope} · {issue.code} · {text(issue.message)} · {text(issue.remedy)}
           </p>
         ))}
       </Dialog>
@@ -120,13 +132,13 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
     };
     return (
       <Dialog
-        title="确认 create-only 用户应用初始化"
+        title={t('workflow.application.title')}
         onClose={close}
         footer={
           <>
-            <span>{preview.files.length} 份后台 seed 文件 · 仅创建不存在的源</span>
+            <span>{t('workflow.application.seedCount', { count: preview.files.length })}</span>
             <button type="button" disabled={Boolean(c.busy)} onClick={close}>
-              取消初始化
+              {t('workflow.application.cancel')}
             </button>
             <button
               type="button"
@@ -134,21 +146,18 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
               disabled={Boolean(c.busy)}
               onClick={() => void c.initializeApplicationPreviewed()}
             >
-              确认创建用户应用与成员记录
+              {t('workflow.application.confirm')}
             </button>
           </>
         }
       >
-        <p>
-          预览不写入；确认重新核对真实组件契约、源字节、规则、定义、成员清单与目的路径。任何现存
-          live 源都不能覆盖，封存副本不作为 live 源。
-        </p>
+        <p>{t('workflow.application.explanation')}</p>
         <dl>
-          <dt>真实应用槽</dt>
+          <dt>{t('workflow.application.slot')}</dt>
           <dd className="mono">{preview.slot.producerSlot}</dd>
-          <dt>组件</dt>
+          <dt>{t('workflow.application.component')}</dt>
           <dd className="mono path-text">{preview.slot.componentPath}</dd>
-          <dt>源成员</dt>
+          <dt>{t('workflow.application.sources')}</dt>
           <dd>
             {preview.slot.sourcePaths.map((path) => (
               <p key={path} className="mono path-text">
@@ -156,7 +165,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
               </p>
             ))}
           </dd>
-          <dt>生成接口头</dt>
+          <dt>{t('workflow.application.headers')}</dt>
           <dd>
             {preview.slot.generatedHeaders.map((path) => (
               <p key={path} className="mono path-text">
@@ -164,12 +173,15 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
               </p>
             ))}
           </dd>
-          <dt>入口符号</dt>
+          <dt>{t('workflow.application.entries')}</dt>
           <dd className="mono">{preview.slot.entrySymbols.join('\n')}</dd>
         </dl>
-        <CopyText text={JSON.stringify(preview.slot, null, 2)} label="复制完整后台槽描述" />
+        <CopyText
+          text={JSON.stringify(preview.slot, null, 2)}
+          label={t('workflow.application.copySlot')}
+        />
         <div className="preview-layout">
-          <nav aria-label="用户应用 seed 文件">
+          <nav aria-label={t('workflow.application.seedFiles')}>
             {preview.files.map((file) => (
               <button
                 key={file.path}
@@ -185,37 +197,49 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
             {selected ? (
               <>
                 <h3 className="mono path-text">{selected.path}</h3>
-                <CopyText text={selected.contents} label="复制完整 seed 文件" />
+                <CopyText text={selected.contents} label={t('workflow.application.copySeed')} />
                 <TextSnapshot
                   key={selected.path}
                   text={selected.contents}
-                  label="后台提供的完整应用 seed"
+                  label={t('workflow.application.seedSnapshot')}
                 />
               </>
             ) : null}
           </section>
         </div>
         <details>
-          <summary>成员清单真实变化</summary>
+          <summary>{t('workflow.application.manifestChanges')}</summary>
           <div className="preview-compare">
             <section>
-              <h3>初始化前</h3>
-              <CopyText text={preview.manifestBefore} label="复制完整原成员清单" />
-              <TextSnapshot text={preview.manifestBefore} label="初始化前成员清单" />
+              <h3>{t('workflow.application.before')}</h3>
+              <CopyText
+                text={preview.manifestBefore}
+                label={t('workflow.application.copyManifestBefore')}
+              />
+              <TextSnapshot
+                text={preview.manifestBefore}
+                label={t('workflow.application.manifestBefore')}
+              />
             </section>
             <section>
-              <h3>拟写入成员清单</h3>
-              <CopyText text={preview.manifestAfter} label="复制完整拟写成员清单" />
-              <TextSnapshot text={preview.manifestAfter} label="拟写入成员清单" />
+              <h3>{t('workflow.application.manifestAfter')}</h3>
+              <CopyText
+                text={preview.manifestAfter}
+                label={t('workflow.application.copyManifestAfter')}
+              />
+              <TextSnapshot
+                text={preview.manifestAfter}
+                label={t('workflow.application.manifestAfter')}
+              />
             </section>
           </div>
         </details>
         {c.notice?.tone === 'error' ? (
           <>
             <p role="alert" className="error-text">
-              {c.notice.text.slice(0, 2000)}
+              {text(c.notice.text).slice(0, 2000)}
             </p>
-            <CopyText text={c.notice.text} label="复制完整初始化错误" />
+            <CopyText text={text(c.notice.text)} label={t('workflow.application.copyError')} />
           </>
         ) : null}
       </Dialog>
@@ -226,19 +250,23 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
     const selected = preview.files.find((file) => file.path === projectFile) ?? preview.files[0];
     return (
       <Dialog
-        title={c.projectPreviewKind === 'create' ? '确认新建工程' : '确认保存为成员工程'}
+        title={
+          c.projectPreviewKind === 'create'
+            ? t('workflow.project.createTitle')
+            : t('workflow.project.saveAsTitle')
+        }
         onClose={() => {
           if (!c.busy) c.setProjectPreview(null);
         }}
         footer={
           <>
-            <span>{preview.files.length} 份文件 · 新空目录</span>
+            <span>{t('workflow.project.fileCount', { count: preview.files.length })}</span>
             <button
               type="button"
               disabled={Boolean(c.busy)}
               onClick={() => c.setProjectPreview(null)}
             >
-              取消
+              {t('workflow.common.cancel')}
             </button>
             <button
               type="button"
@@ -246,7 +274,9 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
               className="primary-button"
               onClick={() => void c.confirmProjectPreview()}
             >
-              {c.projectPreviewKind === 'create' ? '确认创建工程' : '确认保存为工程'}
+              {c.projectPreviewKind === 'create'
+                ? t('workflow.project.confirmCreate')
+                : t('workflow.project.confirmSaveAs')}
             </button>
           </>
         }
@@ -254,9 +284,9 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
         <p className="mono path-text">
           {preview.directory} · {preview.name} · {preview.templateId}
         </p>
-        <p>预览未写入；原始输入不被覆盖。</p>
+        <p>{t('workflow.project.previewExplanation')}</p>
         <div className="preview-layout">
-          <nav aria-label="工程创建文件">
+          <nav aria-label={t('workflow.project.files')}>
             {preview.files.map((file) => (
               <button
                 key={file.path}
@@ -272,14 +302,22 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
             {selected ? (
               <>
                 <h3>{selected.path}</h3>
-                <CopyText text={selected.contents} label="复制完整文件" />
-                <TextSnapshot key={selected.path} text={selected.contents} label="完整工程文件" />
+                <CopyText text={selected.contents} label={t('workflow.project.copyFile')} />
+                <TextSnapshot
+                  key={selected.path}
+                  text={selected.contents}
+                  label={t('workflow.project.snapshot')}
+                />
               </>
             ) : null}
           </section>
         </div>
         <details>
-          <summary>精确扩展接纳集合（{preview.acceptedExtensionDefinitions.length}）</summary>
+          <summary>
+            {t('workflow.project.extensionCount', {
+              count: preview.acceptedExtensionDefinitions.length,
+            })}
+          </summary>
           <pre>{JSON.stringify(preview.acceptedExtensionDefinitions, null, 2)}</pre>
         </details>
       </Dialog>
@@ -293,15 +331,17 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
     const close = () => c.cancelSavePreview();
     return (
       <Dialog
-        title="确认保存源配置"
+        title={t('workflow.save.title')}
         onClose={close}
         footer={
           <>
             <span>
-              {save.files.filter((file) => file.changed).length} 份将修改 · 其余原字节保持
+              {t('workflow.save.changedCount', {
+                count: save.files.filter((file) => file.changed).length,
+              })}
             </span>
             <button type="button" onClick={close} disabled={Boolean(c.busy)}>
-              取消
+              {t('workflow.common.cancel')}
             </button>
             <button
               type="button"
@@ -312,14 +352,14 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
                 (!save.files.some((file) => file.changed) && !c.savingForReplacement)
               }
             >
-              确认保存
+              {t('workflow.save.confirm')}
             </button>
           </>
         }
       >
-        <p>预览不会写入；确认仍核对原字节、规则、定义、路径与外部状态。</p>
+        <p>{t('workflow.save.explanation')}</p>
         <div className="preview-layout">
-          <nav aria-label="保存文件">
+          <nav aria-label={t('workflow.save.files')}>
             {save.files.map((file) => (
               <button
                 type="button"
@@ -330,7 +370,9 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
                 }
               >
                 {file.path}
-                <small>{file.changed ? '将修改' : '保持不变'}</small>
+                <small>
+                  {file.changed ? t('workflow.save.changed') : t('workflow.save.unchanged')}
+                </small>
               </button>
             ))}
           </nav>
@@ -340,33 +382,33 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
                 <p className="mono path-text">{selected.path}</p>
                 <div className="preview-compare">
                   <div>
-                    <h3>当前原文</h3>
+                    <h3>{t('workflow.save.original')}</h3>
                     {selected.before !== null ? (
                       <>
-                        <CopyText text={selected.before} label="复制完整原文" />
+                        <CopyText text={selected.before} label={t('workflow.save.copyOriginal')} />
                         <TextSnapshot
                           key={selected.path + ':before'}
                           text={selected.before}
-                          label="完整保存前原文"
+                          label={t('workflow.save.snapshotBefore')}
                         />
                       </>
                     ) : (
-                      <p>没有可展示原文。</p>
+                      <p>{t('workflow.save.noOriginal')}</p>
                     )}
                   </div>
                   <div>
-                    <h3>拟保存</h3>
+                    <h3>{t('workflow.save.proposed')}</h3>
                     {selected.after !== null ? (
                       <>
-                        <CopyText text={selected.after} label="复制完整拟保存内容" />
+                        <CopyText text={selected.after} label={t('workflow.save.copyProposed')} />
                         <TextSnapshot
                           key={selected.path + ':after'}
                           text={selected.after}
-                          label="完整拟保存原文"
+                          label={t('workflow.save.snapshotAfter')}
                         />
                       </>
                     ) : (
-                      <p>没有可展示文本。</p>
+                      <p>{t('workflow.save.noText')}</p>
                     )}
                   </div>
                 </div>
@@ -386,15 +428,22 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
     };
     return (
       <Dialog
-        title={c.generationKind === 'handoff' ? '确认导出可重建交接包' : '确认生成独立源码'}
+        title={
+          c.generationKind === 'handoff'
+            ? t('workflow.generation.handoffTitle')
+            : t('workflow.generation.title')
+        }
         onClose={close}
         footer={
           <>
             <span>
-              {preview.files.length} 个文件 · {c.legacyTarget}
+              {t('workflow.generation.fileCount', {
+                count: preview.files.length,
+                target: c.legacyTarget,
+              })}
             </span>
             <button type="button" disabled={Boolean(c.busy)} onClick={close}>
-              取消
+              {t('workflow.common.cancel')}
             </button>
             <button
               type="button"
@@ -404,15 +453,17 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
                 c.workspace?.integrationCandidate ? void c.generateEcu() : c.confirmGenerate()
               }
             >
-              {c.generationKind === 'handoff' ? '确认导出' : '确认生成'}
+              {c.generationKind === 'handoff'
+                ? t('workflow.generation.confirmExport')
+                : t('workflow.generation.confirm')}
             </button>
           </>
         }
       >
         <p className="mono path-text">{preview.outputDirectory}</p>
-        <p>源码预览不运行编译器；确认安装本次预览字节，构建与行为验证另行执行。</p>
+        <p>{t('workflow.generation.explanation')}</p>
         <div className="preview-layout">
-          <nav aria-label="生成文件">
+          <nav aria-label={t('workflow.generation.files')}>
             {preview.files.map((item) => (
               <button
                 type="button"
@@ -422,7 +473,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
               >
                 {item.path}
                 <small>
-                  {item.status} · {item.owner ?? '兼容 DTO 未提供拥有权'}
+                  {item.status} · {item.owner ?? t('workflow.generation.ownerUnavailable')}
                 </small>
               </button>
             ))}
@@ -432,46 +483,52 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
               <>
                 <h3 className="mono path-text">{file.path}</h3>
                 <dl>
-                  <dt>拥有权</dt>
-                  <dd>{file.owner ?? '后台未提供'}</dd>
-                  <dt>生产者</dt>
-                  <dd className="mono path-text">{file.producerId ?? '后台未提供'}</dd>
+                  <dt>{t('workflow.generation.owner')}</dt>
+                  <dd>{file.owner ?? t('workflow.generation.backendUnavailable')}</dd>
+                  <dt>{t('workflow.generation.producer')}</dt>
+                  <dd className="mono path-text">
+                    {file.producerId ?? t('workflow.generation.backendUnavailable')}
+                  </dd>
                   {file.snapshotOf ? (
                     <>
-                      <dt>快照来源</dt>
+                      <dt>{t('workflow.generation.snapshotSource')}</dt>
                       <dd className="mono path-text">{file.snapshotOf}</dd>
                     </>
                   ) : null}
                 </dl>
                 <div className="preview-compare">
                   <div>
-                    <h3>此前内容</h3>
+                    <h3>{t('workflow.generation.before')}</h3>
                     {file.before !== null ? (
                       <>
-                        <CopyText text={file.before} label="复制完整此前内容" />
+                        <CopyText text={file.before} label={t('workflow.generation.copyBefore')} />
                         <TextSnapshot
                           key={file.path + ':before'}
                           text={file.before}
-                          label="完整此前源码"
+                          label={t('workflow.generation.snapshotBefore')}
                         />
                       </>
                     ) : (
-                      <p>新文件或不可展示的二进制。</p>
+                      <p>{t('workflow.generation.newOrBinary')}</p>
                     )}
                   </div>
                   <div>
-                    <h3>拟生成内容</h3>
+                    <h3>{t('workflow.generation.after')}</h3>
                     {file.after !== null ? (
                       <>
-                        <CopyText text={file.after} label="复制完整拟生成内容" />
+                        <CopyText text={file.after} label={t('workflow.generation.copyAfter')} />
                         <TextSnapshot
                           key={file.path + ':after'}
                           text={file.after}
-                          label="完整拟生成源码"
+                          label={t('workflow.generation.snapshotAfter')}
                         />
                       </>
                     ) : (
-                      <p>{file.status === 'removed' ? '核定移除' : '二进制或不可展示内容'}</p>
+                      <p>
+                        {file.status === 'removed'
+                          ? t('workflow.generation.removed')
+                          : t('workflow.generation.binary')}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -489,12 +546,12 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
     const v2 = c.handoffImportMode === 'v2';
     return (
       <Dialog
-        title="导入封存交付包"
+        title={t('workflow.handoff.title')}
         onClose={close}
         footer={
           <>
             <button type="button" disabled={Boolean(c.busy)} onClick={close}>
-              取消导入
+              {t('workflow.handoff.cancel')}
             </button>
             <button
               type="button"
@@ -504,47 +561,48 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
               }
               onClick={() => void c.confirmHandoffImport()}
             >
-              核验并导入交付包
+              {t('workflow.handoff.confirm')}
             </button>
           </>
         }
       >
-        <p>
-          后台按真实 handoff.format 精确分派，核对身份、源、seal
-          与重新生成闭包；全部成功才替换当前工程，失败保留当前工程与封存包。
-        </p>
+        <p>{t('workflow.handoff.explanation')}</p>
         <div className="form-fields">
           <label>
-            交付包目录
+            {t('workflow.handoff.directory')}
             <div className="path-picker">
-              <input aria-label="交付包目录" value={c.ecuImportDirectory} readOnly />
+              <input
+                aria-label={t('workflow.handoff.directory')}
+                value={c.ecuImportDirectory}
+                readOnly
+              />
               <button
                 type="button"
                 disabled={Boolean(c.busy)}
                 onClick={() => void c.chooseDirectory(c.setEcuImportDirectory)}
               >
-                选择交付包
+                {t('workflow.handoff.choosePackage')}
               </button>
             </div>
           </label>
           <label>
-            源目录方式
+            {t('workflow.handoff.sourceMode')}
             <select
-              aria-label="交付包源目录方式"
+              aria-label={t('workflow.handoff.sourceModeLabel')}
               value={c.handoffImportMode}
               disabled={Boolean(c.busy)}
               onChange={(event) => c.setHandoffImportMode(event.target.value as 'v2' | 'legacy')}
             >
-              <option value="v2">v2：在新空目录重建 live 源</option>
-              <option value="legacy">旧 v1：按原兼容规则打开</option>
+              <option value="v2">{t('workflow.handoff.v2')}</option>
+              <option value="legacy">{t('workflow.handoff.legacy')}</option>
             </select>
           </label>
           {v2 ? (
             <label>
-              新的空 live 工作目录
+              {t('workflow.handoff.destination')}
               <div className="path-picker">
                 <input
-                  aria-label="新的空 live 工作目录"
+                  aria-label={t('workflow.handoff.destination')}
                   value={c.handoffImportDestination}
                   readOnly
                 />
@@ -553,22 +611,19 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
                   disabled={Boolean(c.busy)}
                   onClick={() => void c.chooseDirectory(c.setHandoffImportDestination)}
                 >
-                  选择新空目录
+                  {t('workflow.handoff.chooseDestination')}
                 </button>
               </div>
             </label>
           ) : null}
         </div>
-        <p className="field-help">
-          v2 必须使用新的空 live 目录，封存源不变为可写应用树；选择的目标目录只用于实际 v2 包。旧
-          host/ECU v1 仍核对原固定官方档案与完整性，不自动升级；未知格式拒绝。
-        </p>
+        <p className="field-help">{t('workflow.handoff.sourceHelp')}</p>
         {c.notice?.tone === 'error' ? (
           <>
             <p role="alert" className="error-text">
-              {c.notice.text.slice(0, 2000)}
+              {text(c.notice.text).slice(0, 2000)}
             </p>
-            <CopyText text={c.notice.text} label="复制完整导入错误" />
+            <CopyText text={text(c.notice.text)} label={t('workflow.handoff.copyError')} />
           </>
         ) : null}
       </Dialog>

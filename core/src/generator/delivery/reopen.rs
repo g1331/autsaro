@@ -30,15 +30,20 @@ struct VerifiedPackage {
     files: BTreeMap<String, Vec<u8>>,
 }
 
-fn diagnostics(errors: Vec<crate::integration::PlanDiagnostic>) -> String {
-    errors
-        .into_iter()
-        .map(|error| format!("{}: {}", error.code, error.message))
-        .collect::<Vec<_>>()
-        .join("\n")
+fn diagnostics(errors: Vec<crate::integration::PlanDiagnostic>) -> crate::LocalizedText {
+    crate::LocalizedText::messages(errors.into_iter().map(|error| {
+        crate::LocalizedText::messages([
+            crate::product_message!("backend.delivery.plan_diagnostic", "code" => error.code),
+            error.message,
+            error.remedy,
+        ])
+    }))
 }
 
-fn verify_members(manifest: &ProjectManifest, metadata: &HandoffMetadata) -> Result<(), String> {
+fn verify_members(
+    manifest: &ProjectManifest,
+    metadata: &HandoffMetadata,
+) -> Result<(), crate::LocalizedText> {
     if manifest.declared_release != "R24-11"
         || manifest.format_version != 1
         || manifest.accepted_extension_definitions
@@ -46,10 +51,9 @@ fn verify_members(manifest: &ProjectManifest, metadata: &HandoffMetadata) -> Res
         || manifest.inputs.len() + manifest.application_inputs.len()
             != metadata.input_snapshots.len()
     {
-        return Err(
-            "Native source membership/release/accepted identities differ from the sealed snapshot."
-                .into(),
-        );
+        return Err(crate::product_message!(
+            "backend.delivery.source_membership_mismatch"
+        ));
     }
     for input in &metadata.input_snapshots {
         let matched = match input.kind {
@@ -63,21 +67,23 @@ fn verify_members(manifest: &ProjectManifest, metadata: &HandoffMetadata) -> Res
             }),
         };
         if !matched {
-            return Err(format!(
-                "The source manifest does not own snapshot {}",
-                input.logical_path
-            ));
+            return Err(
+                crate::product_message!("backend.delivery.manifest_snapshot_unowned", "path" => input.logical_path),
+            );
         }
     }
     Ok(())
 }
 
-fn prepare_package(package: &Path, catalog: &DefinitionCatalog) -> Result<VerifiedPackage, String> {
+fn prepare_package(
+    package: &Path,
+    catalog: &DefinitionCatalog,
+) -> Result<VerifiedPackage, crate::LocalizedText> {
     refuse_links(package, false)?;
     let names = super::super::output::verify_build_input(package)?;
     let target = read_source(&package.join("target.json"))?;
     let metadata = super::ownership::metadata_from_target(&target)?
-        .ok_or("Use the explicit legacy importer for v1; a native v2 identity is required.")?;
+        .ok_or_else(|| crate::product_message!("backend.delivery.native_v2_required"))?;
     let selected = consumer_catalog(
         catalog,
         &metadata.resource_identities.required_extension_definitions,
@@ -92,9 +98,11 @@ fn prepare_package(package: &Path, catalog: &DefinitionCatalog) -> Result<Verifi
         let bytes = read_source(&package.join(path))?;
         total = total
             .checked_add(bytes.len())
-            .ok_or("Native package size overflow.")?;
+            .ok_or_else(|| crate::product_message!("backend.delivery.package_size_overflow"))?;
         if total > 512 * 1024 * 1024 {
-            return Err("Native package exceeds the 512 MiB source boundary.".into());
+            return Err(crate::product_message!(
+                "backend.delivery.package_size_exceeded"
+            ));
         }
         payload.insert(path.to_owned(), bytes);
     }
@@ -105,9 +113,9 @@ fn prepare_package(package: &Path, catalog: &DefinitionCatalog) -> Result<Verifi
     super::ownership::verify_ledger_bytes(&borrowed, &metadata)?;
     let manifest_bytes = payload
         .get(PROJECT_PATH)
-        .ok_or("The native source manifest is missing.")?;
-    let manifest: ProjectManifest =
-        serde_json::from_slice(manifest_bytes).map_err(|error| error.to_string())?;
+        .ok_or_else(|| crate::product_message!("backend.delivery.source_manifest_missing"))?;
+    let manifest: ProjectManifest = serde_json::from_slice(manifest_bytes)
+        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     verify_members(&manifest, &metadata)?;
     let directory = PrivateDirectory(super::super::output::reserve_directory(
         &std::env::temp_dir(),
@@ -115,30 +123,32 @@ fn prepare_package(package: &Path, catalog: &DefinitionCatalog) -> Result<Verifi
         std::ffi::OsStr::new("source"),
     )?);
     fs::write(directory.0.join("workbench-project.json"), manifest_bytes)
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     for input in &metadata.input_snapshots {
         let path = directory.0.join(super::safe_relative(&input.logical_path)?);
         fs::create_dir_all(
             path.parent()
-                .ok_or("An input requires a parent directory.")?,
+                .ok_or_else(|| crate::product_message!("backend.delivery.input_parent_required"))?,
         )
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
         let bytes = payload
             .get(&input.package_path)
-            .ok_or("The owned input snapshot is missing.")?;
-        fs::write(path, bytes).map_err(|error| error.to_string())?;
+            .ok_or_else(|| crate::product_message!("backend.delivery.owned_snapshot_missing"))?;
+        fs::write(path, bytes).map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     }
     let mut workspace = Workspace::open_project_with_catalog(
         &directory.0.join("workbench-project.json"),
         &selected,
     )?;
     let handoff = serde_json::from_slice::<serde_json::Value>(&target)
-        .map_err(|error| error.to_string())?
+        .map_err(|error| crate::LocalizedText::from(error.to_string()))?
         .get("handoff")
         .and_then(serde_json::Value::as_bool)
-        .ok_or("Native target must declare handoff mode.")?;
+        .ok_or_else(|| crate::product_message!("backend.delivery.handoff_mode_required"))?;
     if handoff != payload.contains_key("handoff.json") {
-        return Err("Native handoff mode and actual metadata file differ.".into());
+        return Err(crate::product_message!(
+            "backend.delivery.handoff_mode_mismatch"
+        ));
     }
     let prepared = if metadata.profile_id == super::HOST_PROFILE {
         crate::prepared::prepare_host_project(&mut workspace, metadata.target_id, handoff)?
@@ -158,9 +168,9 @@ fn prepare_package(package: &Path, catalog: &DefinitionCatalog) -> Result<Verifi
         if plan.description().required_extension_definitions
             != metadata.resource_identities.required_extension_definitions
         {
-            return Err(
-                "Declared extension closure is not the real native consumer dependency set.".into(),
-            );
+            return Err(crate::product_message!(
+                "backend.delivery.extension_dependency_mismatch"
+            ));
         }
         crate::prepared::prepare_ecu_project_for_workspace(
             &workspace,
@@ -172,15 +182,15 @@ fn prepare_package(package: &Path, catalog: &DefinitionCatalog) -> Result<Verifi
     };
     let regenerated: BTreeMap<_, _> = prepared.into_files().into_iter().collect();
     if regenerated.len() != payload.len() {
-        return Err(
-            "Native source reconstruction changes the entire sealed ownership closure.".into(),
-        );
+        return Err(crate::product_message!(
+            "backend.delivery.reconstructed_closure_mismatch"
+        ));
     }
     for (path, bytes) in &regenerated {
         if payload.get(path) != Some(bytes) {
-            return Err(format!(
-                "Native payload differs from its actual trusted source producer: {path}"
-            ));
+            return Err(
+                crate::product_message!("backend.delivery.trusted_payload_mismatch", "path" => path),
+            );
         }
     }
     Ok(VerifiedPackage {
@@ -191,7 +201,10 @@ fn prepare_package(package: &Path, catalog: &DefinitionCatalog) -> Result<Verifi
     })
 }
 
-pub(crate) fn verify_package(package: &Path, catalog: &DefinitionCatalog) -> Result<(), String> {
+pub(crate) fn verify_package(
+    package: &Path,
+    catalog: &DefinitionCatalog,
+) -> Result<(), crate::LocalizedText> {
     prepare_package(package, catalog).map(|_| ())
 }
 
@@ -202,62 +215,76 @@ pub fn open_handoff(
     package: &Path,
     new_workspace_directory: &Path,
     catalog: &DefinitionCatalog,
-) -> Result<NativeHandoff, String> {
+) -> Result<NativeHandoff, crate::LocalizedText> {
     let verified = prepare_package(package, catalog)?;
     if !verified.files.contains_key("handoff.json") {
-        return Err("This is source-only output, not an explicitly sealed v2 handoff.".into());
+        return Err(crate::product_message!(
+            "backend.delivery.explicit_handoff_required"
+        ));
     }
     let output = super::super::output::output_path(new_workspace_directory)?;
     let output_identity = super::comparison_path(&output)?;
     let package = super::comparison_path(package)?;
     if output_identity.starts_with(&package) || package.starts_with(&output_identity) {
-        return Err("Imported project and immutable handoff must remain independent.".into());
+        return Err(crate::product_message!(
+            "backend.delivery.import_output_overlap"
+        ));
     }
     let existed = match fs::symlink_metadata(&output) {
         Ok(metadata) if metadata.is_dir() => {
             if fs::read_dir(&output)
-                .map_err(|error| error.to_string())?
+                .map_err(|error| crate::LocalizedText::from(error.to_string()))?
                 .next()
                 .is_some()
             {
-                return Err("Native import requires a new or empty project directory.".into());
+                return Err(crate::product_message!(
+                    "backend.delivery.import_empty_directory_required"
+                ));
             }
             true
         }
-        Ok(_) => return Err("Native import destination is not a plain directory.".into()),
+        Ok(_) => {
+            return Err(crate::product_message!(
+                "backend.delivery.import_plain_directory_required"
+            ));
+        }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
-        Err(error) => return Err(error.to_string()),
+        Err(error) => return Err(error.to_string().into()),
     };
     let parent = output
         .parent()
-        .ok_or("Native import requires a parent directory.")?;
-    fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        .ok_or_else(|| crate::product_message!("backend.delivery.import_parent_required"))?;
+    fs::create_dir_all(parent).map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     let publish = PrivateDirectory(super::super::output::reserve_directory(
         parent,
         "native-source",
         output
             .file_name()
-            .ok_or("Native import requires a directory name.")?,
+            .ok_or_else(|| crate::product_message!("backend.delivery.import_name_required"))?,
     )?);
     fs::write(
         publish.0.join("workbench-project.json"),
         &verified.files[PROJECT_PATH],
     )
-    .map_err(|error| error.to_string())?;
+    .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     for input in &verified.metadata.input_snapshots {
         let path = publish.0.join(super::safe_relative(&input.logical_path)?);
-        fs::create_dir_all(path.parent().ok_or("Input requires a parent directory.")?)
-            .map_err(|error| error.to_string())?;
-        fs::write(path, &verified.files[&input.package_path]).map_err(|error| error.to_string())?;
+        fs::create_dir_all(
+            path.parent()
+                .ok_or_else(|| crate::product_message!("backend.delivery.input_parent_required"))?,
+        )
+        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
+        fs::write(path, &verified.files[&input.package_path])
+            .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     }
     // The private source reconstruction remains owned until publication; verify
     // the original complete seal again so late edits cannot be confirmed.
     super::super::output::verify_build_input(&package)?;
     for (path, bytes) in &verified.files {
         if digest(&read_source(&package.join(path))?) != digest(bytes) {
-            return Err(format!(
-                "Native handoff changed during import confirmation: {path}"
-            ));
+            return Err(
+                crate::product_message!("backend.delivery.import_confirmation_stale", "path" => path),
+            );
         }
     }
     let check = Workspace::open_project_with_catalog(
@@ -267,15 +294,17 @@ pub fn open_handoff(
     check.generation_snapshot()?;
     refuse_links(&output, true)?;
     if existed {
-        fs::remove_dir(&output).map_err(|error| error.to_string())?;
+        fs::remove_dir(&output).map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     }
     if let Err(error) = fs::rename(&publish.0, &output) {
         if existed {
             fs::create_dir(&output).map_err(|restore| {
-                format!("Import failed: {error}; empty directory restore failed: {restore}")
+                crate::product_message!("backend.delivery.import_restore_failed", "error" => error.to_string(), "restore" => restore.to_string())
             })?;
         }
-        return Err(format!("Native project publication failed: {error}"));
+        return Err(
+            crate::product_message!("backend.delivery.import_publication_failed", "error" => error.to_string()),
+        );
     }
     let workspace = Workspace::open_project_with_catalog(
         &output.join("workbench-project.json"),
@@ -287,4 +316,32 @@ pub fn open_handoff(
         workspace,
         metadata: verified.metadata,
     })
+}
+
+#[cfg(test)]
+mod localization_tests {
+    use super::diagnostics;
+    use crate::LocalizedText;
+    use crate::integration::{DiagnosticCategory, PlanDiagnostic};
+
+    #[test]
+    fn plan_errors_preserve_code_message_remedy_and_external_evidence() {
+        let evidence = "xml parser {{name}}\r\n原始证据";
+        let error = diagnostics(vec![PlanDiagnostic {
+            category: DiagnosticCategory::Tool,
+            code: "SOURCE_CLOSURE".into(),
+            file: None,
+            object: None,
+            message: LocalizedText::from(evidence),
+            remedy: crate::product_message!("backend.prepared.source_closure_remedy",),
+        }]);
+        assert_eq!(
+            serde_json::to_value(error).unwrap(),
+            serde_json::json!([[
+                {"key": "backend.delivery.plan_diagnostic", "params": {"code": "SOURCE_CLOSURE"}},
+                evidence,
+                {"key": "backend.prepared.source_closure_remedy", "params": {}},
+            ]])
+        );
+    }
 }

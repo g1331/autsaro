@@ -32,11 +32,11 @@ pub fn reference_archive(repo: &Path, variable: &str, relative: &str) -> PathBuf
 struct PrivateSchemaDirectory(PathBuf);
 
 impl PrivateSchemaDirectory {
-    fn create() -> Result<Self, String> {
+    fn create() -> Result<Self, crate::LocalizedText> {
         for _ in 0..16 {
             let nonce = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .map_err(|error| error.to_string())?
+                .map_err(|error| crate::LocalizedText::from(error.to_string()))?
                 .as_nanos();
             let target = std::env::temp_dir().join(format!(
                 "autosar-r24-11-schema-{}-{nonce}-{}",
@@ -55,10 +55,12 @@ impl PrivateSchemaDirectory {
             match builder.create(&target) {
                 Ok(()) => return Ok(Self(target)),
                 Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
-                Err(error) => return Err(error.to_string()),
+                Err(error) => return Err(error.to_string().into()),
             }
         }
-        Err("无法创建唯一的 XSD 校验临时目录".into())
+        Err(crate::product_message!(
+            "backend.schema.temporary_directory"
+        ))
     }
 
     fn schema_path(&self) -> PathBuf {
@@ -72,24 +74,28 @@ impl Drop for PrivateSchemaDirectory {
     }
 }
 
-fn unpack_schema(archive: &Path) -> Result<PrivateSchemaDirectory, String> {
+fn unpack_schema(archive: &Path) -> Result<PrivateSchemaDirectory, crate::LocalizedText> {
     let mut file = fs::File::open(archive)
-        .map_err(|error| format!("无法打开本地 R24-11 XSD 包 {}: {error}", archive.display()))?;
+        .map_err(|error| crate::product_message!("backend.schema.archive_open", "path" => archive.display(), "error" => error))?;
     let mut digest = Sha256::new();
     let mut buffer = [0u8; 8192];
     loop {
-        let count = file.read(&mut buffer).map_err(|error| error.to_string())?;
+        let count = file
+            .read(&mut buffer)
+            .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
         if count == 0 {
             break;
         }
         digest.update(&buffer[..count]);
     }
     if format!("{:x}", digest.finalize()) != XSD_SHA256 {
-        return Err("R24-11 XSD 包与固定内容身份不符".into());
+        return Err(crate::product_message!("backend.schema.archive_identity"));
     }
     file.seek(SeekFrom::Start(0))
-        .map_err(|error| error.to_string())?;
-    let mut zip = ZipArchive::new(file).map_err(|error| format!("XSD 包损坏: {error}"))?;
+        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
+    let mut zip = ZipArchive::new(file).map_err(
+        |error| crate::product_message!("backend.schema.archive_corrupt", "error" => error),
+    )?;
     const ALLOWED: [&str; 5] = [
         "_disclaimer.txt",
         "_readme.txt",
@@ -98,41 +104,47 @@ fn unpack_schema(archive: &Path) -> Result<PrivateSchemaDirectory, String> {
         "xml.xsd",
     ];
     for index in 0..zip.len() {
-        let member = zip.by_index(index).map_err(|error| error.to_string())?;
+        let member = zip
+            .by_index(index)
+            .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
         if !ALLOWED.contains(&member.name())
             || member.is_dir()
             || member
                 .unix_mode()
                 .is_some_and(|mode| mode & 0o170000 == 0o120000)
         {
-            return Err(format!("XSD 包包含不允许的路径或链接: {}", member.name()));
+            return Err(
+                crate::product_message!("backend.schema.archive_member", "path" => member.name()),
+            );
         }
     }
     let target = PrivateSchemaDirectory::create()?;
     for name in ["AUTOSAR_00053.xsd", "xml.xsd"] {
         let mut member = zip
             .by_name(name)
-            .map_err(|error| format!("XSD 包缺少 {name}: {error}"))?;
-        let mut output =
-            fs::File::create(target.0.join(name)).map_err(|error| error.to_string())?;
-        std::io::copy(&mut member, &mut output).map_err(|error| error.to_string())?;
+            .map_err(|error| crate::product_message!("backend.schema.archive_missing_member", "name" => name, "error" => error))?;
+        let mut output = fs::File::create(target.0.join(name))
+            .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
+        std::io::copy(&mut member, &mut output)
+            .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     }
     Ok(target)
 }
 
-pub fn validate_files(archive: &Path, files: &[(&Path, &str)]) -> Result<Vec<Issue>, String> {
+pub fn validate_files(
+    archive: &Path,
+    files: &[(&Path, &str)],
+) -> Result<Vec<Issue>, crate::LocalizedText> {
     let directory = unpack_schema(archive)?;
     let schema_path = directory.schema_path();
     let mut parser = SchemaParserContext::from_file(&schema_path.to_string_lossy());
     let mut validator = SchemaValidationContext::from_parser(&mut parser).map_err(|errors| {
-        format!(
-            "AUTOSAR_00053.xsd 无法加载: {}",
-            errors
+        crate::product_message!("backend.schema.schema_load",
+            "error" => errors
                 .iter()
                 .map(|e| e.message.as_deref().unwrap_or(""))
                 .collect::<Vec<_>>()
-                .join("; ")
-        )
+                .join("; "))
     })?;
     let xml_parser = Parser::default();
     let mut issues = Vec::new();
@@ -140,7 +152,11 @@ pub fn validate_files(archive: &Path, files: &[(&Path, &str)]) -> Result<Vec<Iss
         if text.contains("<!DOCTYPE") || text.contains("<!ENTITY") {
             issues.push(Issue {
                 file: Some(path.display().to_string()),
-                ..Issue::error("XML_DTD", "不接受外部实体或 DTD", None)
+                ..Issue::error(
+                    "XML_DTD",
+                    crate::product_message!("backend.schema.xml_entities"),
+                    None,
+                )
             });
             continue;
         }
@@ -158,7 +174,11 @@ pub fn validate_files(archive: &Path, files: &[(&Path, &str)]) -> Result<Vec<Iss
             Err(error) => {
                 issues.push(Issue {
                     file: Some(path.display().to_string()),
-                    ..Issue::error("XML_PARSE", format!("XML 解析失败: {error}"), None)
+                    ..Issue::error(
+                        "XML_PARSE",
+                        crate::product_message!("backend.schema.xml_parse", "error" => error),
+                        None,
+                    )
                 });
                 continue;
             }
@@ -169,7 +189,9 @@ pub fn validate_files(archive: &Path, files: &[(&Path, &str)]) -> Result<Vec<Iss
                     file: Some(path.display().to_string()),
                     ..Issue::error(
                         "R24_XSD",
-                        error.message.as_deref().unwrap_or("").trim().to_owned(),
+                        crate::LocalizedText::from(
+                            error.message.as_deref().unwrap_or("").trim().to_owned(),
+                        ),
                         None,
                     )
                 });
@@ -183,6 +205,6 @@ pub fn validate_files(archive: &Path, files: &[(&Path, &str)]) -> Result<Vec<Iss
 /// and the legacy XSD identity used by validate_files.
 pub fn validate_native_files(
     files: &[(&Path, &str)],
-) -> Result<crate::project_model::ScopeValidation, String> {
+) -> Result<crate::project_model::ScopeValidation, crate::LocalizedText> {
     crate::rules::validate_native(files)
 }

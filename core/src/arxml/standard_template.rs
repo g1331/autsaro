@@ -5,11 +5,10 @@ use crate::project_model::{DefinitionDescriptor, TypedValue, ValueKind};
 
 const ROOT: &str = "/AUTOSAR/EcucDefs/";
 
-fn value(id: &str) -> Result<&'static str, String> {
-    let name = id
-        .rsplit('/')
-        .next()
-        .ok_or("Template definition has no name.")?;
+fn value(id: &str) -> Result<&'static str, crate::message::LocalizedText> {
+    let name = id.rsplit('/').next().ok_or_else(|| {
+        crate::product_message!("backend.arxml.standard_template.definition_name_missing")
+    })?;
     Ok(match name {
         "EcucCoreId" => "0",
         "CanControllerBaseAddress"
@@ -133,19 +132,19 @@ fn value(id: &str) -> Result<&'static str, String> {
         "DemOperationCycleRef" => "/Configuration/Dem/General/OperationCycle",
         "DcmDemClientRef" => "/Configuration/Dem/General/Client",
         _ => {
-            return Err(format!(
-                "Required template field has no explicitly authored source policy: {id}"
+            return Err(crate::product_message!(
+                "backend.arxml.standard_template.required_field_source_policy_missing",
+                "id" => id
             ));
         }
     })
 }
 
-fn instance_name(id: &str) -> Result<&'static str, String> {
+fn instance_name(id: &str) -> Result<&'static str, crate::message::LocalizedText> {
     Ok(
-        match id
-            .strip_prefix(ROOT)
-            .ok_or("Template definition is not builtin.")?
-        {
+        match id.strip_prefix(ROOT).ok_or_else(|| {
+            crate::product_message!("backend.arxml.standard_template.definition_not_builtin")
+        })? {
             "EcuC/EcucHardware" => "Hardware",
             "EcuC/EcucHardware/EcucCoreDefinition" => "VirtualCore",
             "Can/CanGeneral"
@@ -180,8 +179,9 @@ fn instance_name(id: &str) -> Result<&'static str, String> {
                 "MonitorInternal"
             }
             _ => {
-                return Err(format!(
-                    "Required template instance has no explicitly authored source policy: {id}"
+                return Err(crate::product_message!(
+                    "backend.arxml.standard_template.required_instance_source_policy_missing",
+                    "id" => id
                 ));
             }
         },
@@ -191,10 +191,10 @@ fn instance_name(id: &str) -> Result<&'static str, String> {
 fn field_xml(
     catalog: &crate::definitions::DefinitionCatalog,
     field: &DefinitionDescriptor,
-) -> Result<String, String> {
-    let kind = field
-        .kind
-        .ok_or("Template field is an instance definition.")?;
+) -> Result<String, crate::message::LocalizedText> {
+    let kind = field.kind.ok_or_else(|| {
+        crate::product_message!("backend.arxml.standard_template.field_is_instance_definition")
+    })?;
     let lexeme = value(&field.definition_id)?;
     let leaf = if kind == ValueKind::Reference {
         format!("<VALUE-REF DEST=\"ECUC-CONTAINER-VALUE\">{lexeme}</VALUE-REF>")
@@ -218,7 +218,7 @@ fn field_xml(
 fn instance_xml(
     catalog: &crate::definitions::DefinitionCatalog,
     definition: &DefinitionDescriptor,
-) -> Result<String, String> {
+) -> Result<String, crate::message::LocalizedText> {
     let module = definition.element_kind == "ECUC-MODULE-DEF";
     let element = if module {
         "ECUC-MODULE-CONFIGURATION-VALUES"
@@ -258,7 +258,9 @@ fn instance_xml(
         == "/AUTOSAR/EcucDefs/Dem/DemConfigSet/DemEventParameter/DemDebounceAlgorithmClass"
     {
         let branch = catalog.get("/AUTOSAR/EcucDefs/Dem/DemConfigSet/DemEventParameter/DemDebounceAlgorithmClass/DemDebounceMonitorInternal")
-            .ok_or("Authored monitor-internal debounce metadata is missing.")?;
+            .ok_or_else(|| crate::product_message!(
+                "backend.arxml.standard_template.monitor_internal_debounce_metadata_missing"
+            ))?;
         instance_xml(catalog, branch)?
     } else {
         children
@@ -280,7 +282,7 @@ fn instance_xml(
     Ok(xml)
 }
 
-pub(super) fn complete(contents: &mut String) -> Result<(), String> {
+pub(super) fn complete(contents: &mut String) -> Result<(), crate::message::LocalizedText> {
     let catalog = crate::definitions::DefinitionCatalog::builtin()?;
     let document = Document::parse(contents).map_err(|error| error.to_string())?;
     let mut patches = Vec::new();
@@ -291,12 +293,18 @@ pub(super) fn complete(contents: &mut String) -> Result<(), String> {
                 && node.tag_name().name() == "AR-PACKAGE"
                 && path_of(*node) == "/Configuration"
         })
-        .ok_or("Original standard template configuration package is missing.")?;
+        .ok_or_else(|| {
+            crate::product_message!(
+                "backend.arxml.standard_template.original_configuration_package_missing"
+            )
+        })?;
     let mut supporting_modules = String::new();
     for id in ["/AUTOSAR/EcucDefs/Mcu", "/AUTOSAR/EcucDefs/Dem"] {
-        let definition = catalog
-            .get(id)
-            .ok_or("Builtin supporting module metadata is missing.")?;
+        let definition = catalog.get(id).ok_or_else(|| {
+            crate::product_message!(
+                "backend.arxml.standard_template.supporting_module_metadata_missing"
+            )
+        })?;
         supporting_modules.push_str(&instance_xml(&catalog, definition)?);
     }
     super::changes::group_insert(

@@ -15,7 +15,7 @@ pub fn preview_generate(
     workspace: &mut Workspace,
     output: &Path,
     target: BuildTarget,
-) -> Result<GenerationPreview, String> {
+) -> Result<GenerationPreview, crate::LocalizedText> {
     crate::prepare_host_project(workspace, target, false)?.preview(output)
 }
 
@@ -23,7 +23,7 @@ pub fn preview_handoff(
     workspace: &mut Workspace,
     output: &Path,
     target: BuildTarget,
-) -> Result<GenerationPreview, String> {
+) -> Result<GenerationPreview, crate::LocalizedText> {
     crate::prepare_host_project(workspace, target, true)?.preview(output)
 }
 
@@ -32,7 +32,7 @@ pub fn generate_previewed(
     output: &Path,
     revision: &str,
     target: BuildTarget,
-) -> Result<GenerationReport, String> {
+) -> Result<GenerationReport, crate::LocalizedText> {
     crate::prepare_host_project(workspace, target, false)?.generate_previewed(output, revision)
 }
 
@@ -41,7 +41,7 @@ pub fn generate_handoff_previewed(
     output: &Path,
     revision: &str,
     target: BuildTarget,
-) -> Result<GenerationReport, String> {
+) -> Result<GenerationReport, crate::LocalizedText> {
     crate::prepare_host_project(workspace, target, true)?.generate_previewed(output, revision)
 }
 
@@ -49,7 +49,7 @@ pub fn generate_handoff(
     workspace: &mut Workspace,
     output: &Path,
     target: BuildTarget,
-) -> Result<GenerationReport, String> {
+) -> Result<GenerationReport, crate::LocalizedText> {
     output::generate_prepared(
         crate::prepare_host_project(workspace, target, true)?.into_files(),
         output,
@@ -57,25 +57,36 @@ pub fn generate_handoff(
     )
 }
 
-pub fn open_handoff(output: &Path, schema_archive: PathBuf) -> Result<Workspace, String> {
-    let names = output::verify_build_input(output)
-        .map_err(|error| format!("交付包完整性检查失败: {error}"))?;
+pub fn open_handoff(
+    output: &Path,
+    schema_archive: PathBuf,
+) -> Result<Workspace, crate::LocalizedText> {
+    let names = output::verify_build_input(output).map_err(|error| {
+        crate::LocalizedText::messages([
+            crate::product_message!("backend.generation.legacy_handoff_integrity_failed"),
+            error,
+        ])
+    })?;
     let metadata: serde_json::Value = serde_json::from_slice(
-        &fs::read(output.join("handoff.json")).map_err(|e| format!("交付映射缺失: {e}"))?,
+        &fs::read(output.join("handoff.json")).map_err(|e| crate::product_message!("backend.generation.legacy_handoff_mapping_missing", "error" => e.to_string()))?,
     )
-    .map_err(|e| format!("交付映射无效: {e}"))?;
+    .map_err(|e| crate::product_message!("backend.generation.legacy_handoff_mapping_invalid", "error" => e.to_string()))?;
     if metadata["format"] != "autosar-host-handoff-v1"
         || metadata["release"] != "CP/FO R24-11"
         || metadata["toolVersion"] != env!("CARGO_PKG_VERSION")
     {
-        return Err("交付包格式、规范版次、工具版本或目标不匹配".into());
+        return Err(crate::product_message!(
+            "backend.generation.legacy_handoff_identity_mismatch"
+        ));
     }
     let target: BuildTarget = serde_json::from_value(metadata["target"].clone())
-        .map_err(|error| format!("交付包目标不受支持: {error}"))?;
+        .map_err(|error| crate::product_message!("backend.generation.legacy_handoff_target_unsupported", "error" => error.to_string()))?;
     let sources = metadata["sources"]
         .as_array()
         .filter(|items| !items.is_empty())
-        .ok_or("交付包没有输入映射")?;
+        .ok_or_else(|| {
+            crate::product_message!("backend.generation.legacy_handoff_inputs_missing")
+        })?;
     let mut paths = Vec::with_capacity(sources.len());
     let mut original_names = std::collections::BTreeMap::new();
     for (index, source) in sources.iter().enumerate() {
@@ -90,14 +101,19 @@ pub fn open_handoff(output: &Path, schema_archive: PathBuf) -> Result<Workspace,
             })
             || source["packageRoots"].as_array().is_none()
         {
-            return Err(format!("交付输入映射无效: {expected}"));
+            return Err(
+                crate::product_message!("backend.generation.legacy_handoff_input_mapping_invalid", "path" => expected),
+            );
         }
         let path = output.join(&expected);
         if !names.contains(&expected) || source["sha256"] != output::file_digest(&path)? {
-            return Err(format!("交付输入缺失或摘要不匹配: {expected}"));
+            return Err(
+                crate::product_message!("backend.generation.legacy_handoff_input_digest_mismatch", "path" => expected),
+            );
         }
         original_names.insert(
-            path.canonicalize().map_err(|error| error.to_string())?,
+            path.canonicalize()
+                .map_err(|error| crate::LocalizedText::from(error.to_string()))?,
             source["originalName"].as_str().unwrap().to_owned(),
         );
         paths.push(path);
@@ -108,7 +124,9 @@ pub fn open_handoff(output: &Path, schema_archive: PathBuf) -> Result<Workspace,
         .count()
         != paths.len()
     {
-        return Err("交付包输入清单与映射不一致".into());
+        return Err(crate::product_message!(
+            "backend.generation.legacy_handoff_inputs_mismatch"
+        ));
     }
     let mut workspace = Workspace::open_legacy(paths, schema_archive)?;
     workspace.restore_handoff_source_names(original_names)?;
@@ -119,11 +137,18 @@ pub fn open_handoff(output: &Path, schema_archive: PathBuf) -> Result<Workspace,
         .map(|(name, _)| name.clone())
         .collect();
     if names != expected_names {
-        return Err("重建主机交接包的完整文件闭包不匹配".into());
+        return Err(crate::product_message!(
+            "backend.generation.legacy_handoff_closure_mismatch"
+        ));
     }
     for (name, bytes) in expected {
-        if fs::read(output.join(&name)).map_err(|error| error.to_string())? != bytes {
-            return Err(format!("重建主机交接包的来源字节不匹配: {name}"));
+        if fs::read(output.join(&name))
+            .map_err(|error| crate::LocalizedText::from(error.to_string()))?
+            != bytes
+        {
+            return Err(
+                crate::product_message!("backend.generation.legacy_handoff_source_mismatch", "path" => name),
+            );
         }
     }
     Ok(workspace)
@@ -133,7 +158,7 @@ pub fn generate(
     workspace: &mut Workspace,
     output: &Path,
     target: BuildTarget,
-) -> Result<GenerationReport, String> {
+) -> Result<GenerationReport, crate::LocalizedText> {
     output::generate_prepared(
         crate::prepare_host_project(workspace, target, false)?.into_files(),
         output,
@@ -146,18 +171,23 @@ pub fn build(
     output: &Path,
     settings: &crate::target::ExecutionSettings,
     owner: &crate::execution::ProcessOwner,
-) -> Result<BuildReport, String> {
+) -> Result<BuildReport, crate::LocalizedText> {
     output::verify_build_input(project)?;
-    let project = project.canonicalize().map_err(|error| error.to_string())?;
+    let project = project
+        .canonicalize()
+        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     let metadata: serde_json::Value = serde_json::from_slice(
-        &fs::read(project.join("target.json")).map_err(|error| error.to_string())?,
+        &fs::read(project.join("target.json"))
+            .map_err(|error| crate::LocalizedText::from(error.to_string()))?,
     )
-    .map_err(|error| error.to_string())?;
+    .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     if metadata["format"] != "autosar-build-target-v1" || metadata["profile"] != "host" {
-        return Err("The source package is not the selected legacy host profile".into());
+        return Err(crate::product_message!(
+            "backend.generation.legacy_host_profile_mismatch"
+        ));
     }
-    let target: BuildTarget =
-        serde_json::from_value(metadata["target"].clone()).map_err(|error| error.to_string())?;
+    let target: BuildTarget = serde_json::from_value(metadata["target"].clone())
+        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     let output = output::output_path(output)?;
     let capture =
         output::reserve_directory(&std::env::temp_dir(), "host-build", OsStr::new("private"))?;
@@ -176,7 +206,7 @@ pub fn build(
         &capture,
         owner,
     )
-    .map_err(|error| format!("{error}; diagnostics retained at {}", capture.display()))?;
+    .map_err(|error| crate::LocalizedText::messages([error, crate::product_message!("backend.generation.build_diagnostics_retained", "path" => capture.display())]))?;
     output::verify_build_input(&project)?;
     let binary = output.join(if target == BuildTarget::WindowsX64ControlledV1 {
         "ecu_host.exe"
@@ -184,9 +214,11 @@ pub fn build(
         "ecu_host"
     });
     if !binary.is_file() {
-        return Err("Successful legacy build did not produce its declared native binary".into());
+        return Err(crate::product_message!(
+            "backend.generation.legacy_binary_missing"
+        ));
     }
-    fs::remove_dir_all(capture).map_err(|error| error.to_string())?;
+    fs::remove_dir_all(capture).map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     Ok(BuildReport {
         binary_path: binary.display().to_string(),
         log,

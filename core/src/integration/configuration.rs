@@ -79,9 +79,21 @@ pub(super) struct Configuration {
     pub events: Vec<EventAssignment>,
 }
 
-fn reject(graph: &Graph, index: usize, code: &str, message: &str) -> Vec<PlanDiagnostic> {
-    vec![graph.diagnostic(index, DiagnosticCategory::Unsupported, code, message,
-        "Use a parameter/value supported by the selected fixed target and its explicit source/type contracts; retained unrelated content cannot supply a missing target implementation.")]
+fn reject(
+    graph: &Graph,
+    index: usize,
+    code: &str,
+    message: crate::message::LocalizedText,
+) -> Vec<PlanDiagnostic> {
+    vec![graph.diagnostic(
+        index,
+        DiagnosticCategory::Unsupported,
+        code,
+        message,
+        crate::product_message!(
+            "backend.integration.configuration.fixed_target_implementation_contract_required"
+        ),
+    )]
 }
 
 fn one(graph: &Graph, context: usize, kind: &str) -> Result<usize, Vec<PlanDiagnostic>> {
@@ -97,7 +109,9 @@ fn one(graph: &Graph, context: usize, kind: &str) -> Result<usize, Vec<PlanDiagn
             graph,
             context,
             "CONFIGURATION_NOT_UNIQUE",
-            "A required physical/configuration object is missing or duplicated.",
+            crate::product_message!(
+                "backend.integration.configuration.physical_configuration_object_missing_or_duplicate"
+            ),
         ))
     }
 }
@@ -110,7 +124,7 @@ fn reference(graph: &Graph, index: usize, parameter: &str) -> Result<usize, Vec<
                 graph,
                 index,
                 "CONFIGURATION_REFERENCE",
-                "A required physical/configuration reference is missing or duplicated.",
+                crate::product_message!("backend.integration.configuration.physical_configuration_reference_missing_or_duplicate"),
             )
         })
 }
@@ -130,7 +144,9 @@ fn physical(graph: &Graph, context: usize, native: bool) -> Result<(), Vec<PlanD
             graph,
             can_if_controller,
             "CONTROLLER_MAPPING",
-            "The one CanIf controller must reference the selected CAN controller with valid logical IDs.",
+            crate::product_message!(
+                "backend.integration.configuration.canif_controller_binding_required"
+            ),
         ));
     }
     let baudrate = reference(graph, controller, "CanControllerDefaultBaudrate")?;
@@ -141,7 +157,9 @@ fn physical(graph: &Graph, context: usize, native: bool) -> Result<(), Vec<PlanD
             graph,
             controller,
             "CONTROLLER_MAPPING",
-            "The selected default baudrate must belong to the same controller.",
+            crate::product_message!(
+                "backend.integration.configuration.default_baudrate_controller_mismatch"
+            ),
         ));
     }
     let rate = value(graph, baudrate, "CanControllerBaudRate", false)
@@ -160,7 +178,9 @@ fn physical(graph: &Graph, context: usize, native: bool) -> Result<(), Vec<PlanD
             graph,
             controller,
             "CONTROLLER_MAPPING",
-            "The target requires one selected ECU instance.",
+            crate::product_message!(
+                "backend.integration.configuration.single_selected_ecu_instance_required"
+            ),
         ));
     }
     let channel = super::component::selected_channel(graph, ecus[0])?;
@@ -171,7 +191,9 @@ fn physical(graph: &Graph, context: usize, native: bool) -> Result<(), Vec<PlanD
             graph,
             baudrate,
             "BAUDRATE_CONFLICT",
-            "The controller's default kbps and Extract cluster bitrate disagree.",
+            crate::product_message!(
+                "backend.integration.configuration.controller_cluster_bitrate_mismatch"
+            ),
         ));
     }
     for (kind, symbol_ref, controller_ref, direction) in [
@@ -202,7 +224,9 @@ fn physical(graph: &Graph, context: usize, native: bool) -> Result<(), Vec<PlanD
                 graph,
                 handle,
                 "CONTROLLER_MAPPING",
-                "The CAN hardware object/CanIf handle has a different controller or direction.",
+                crate::product_message!(
+                    "backend.integration.configuration.can_hardware_controller_direction_mismatch"
+                ),
             ));
         }
         for pdu in graph.of_kind("ECUC-CONTAINER-VALUE") {
@@ -226,7 +250,9 @@ fn physical(graph: &Graph, context: usize, native: bool) -> Result<(), Vec<PlanD
                         graph,
                         pdu,
                         "CONTROLLER_MAPPING",
-                        "The PDU references a different physical CanIf hardware handle.",
+                        crate::product_message!(
+                            "backend.integration.configuration.pdu_hardware_handle_mismatch"
+                        ),
                     ));
                 }
             }
@@ -268,7 +294,9 @@ fn inspect_with_catalog(
                 graph,
                 found.first().copied().unwrap_or(context),
                 "MODULE_NOT_UNIQUE",
-                "The selected target requires one configuration value set for each declared module.",
+                crate::product_message!(
+                    "backend.integration.configuration.module_configuration_value_set_required"
+                ),
             ));
         }
         selected.push(found[0]);
@@ -286,7 +314,9 @@ fn inspect_with_catalog(
             graph,
             hooks,
             "OS_CONFIGURATION",
-            "OsHooks must belong to the selected OsOS.",
+            crate::product_message!(
+                "backend.integration.configuration.os_hooks_ownership_mismatch"
+            ),
         ));
     }
     let os_policies = [
@@ -321,7 +351,9 @@ fn inspect_with_catalog(
                 graph,
                 container,
                 "OS_CONFIGURATION",
-                "A required supported OS configuration parameter is missing or duplicated.",
+                crate::product_message!(
+                    "backend.integration.configuration.os_configuration_parameter_missing_or_duplicate"
+                ),
             ));
         }
     }
@@ -333,7 +365,9 @@ fn inspect_with_catalog(
             graph,
             os,
             "OS_CONFIGURATION",
-            "OsUseResScheduler must be an explicit ECUC boolean.",
+            crate::product_message!(
+                "backend.integration.configuration.scheduler_resource_explicit_boolean_required"
+            ),
         ));
     }
     let mut records = Vec::new();
@@ -358,7 +392,9 @@ fn inspect_with_catalog(
                 graph,
                 container,
                 "OS_RESOURCE_PROFILE",
-                "The selected generated profile supports the virtual scheduler resource only; this explicit resource has no implementation mapping.",
+                crate::product_message!(
+                    "backend.integration.configuration.explicit_scheduler_resource_unsupported"
+                ),
             ));
         }
         let mut parameters = BTreeMap::<String, Vec<String>>::new();
@@ -388,7 +424,9 @@ fn inspect_with_catalog(
                             graph,
                             *index,
                             "TARGET_PARAMETER_UNSUPPORTED",
-                            "An explicit parameter affecting the selected target has no supported implementation contract.",
+                            crate::product_message!(
+                                "backend.integration.configuration.explicit_parameter_implementation_unsupported"
+                            ),
                         ));
                     }
                     target
@@ -403,7 +441,9 @@ fn inspect_with_catalog(
                 graph,
                 container,
                 "PARAMETER_NOT_UNIQUE",
-                "A scalar configuration parameter is duplicated.",
+                crate::product_message!(
+                    "backend.integration.configuration.scalar_configuration_parameter_duplicate"
+                ),
             ));
         }
         records.push(ConfigurationRecord {
@@ -466,7 +506,9 @@ fn inspect_with_catalog(
                     graph,
                     index,
                     "OS_CONFIGURATION",
-                    "An OS policy parameter is placed in a different configuration container.",
+                    crate::product_message!(
+                        "backend.integration.configuration.os_policy_container_mismatch"
+                    ),
                 ));
             }
         }
@@ -476,7 +518,9 @@ fn inspect_with_catalog(
                     graph,
                     index,
                     "TARGET_PARAMETER_UNSUPPORTED",
-                    "The SC1 target supports only STANDARD or EXTENDED OsStatus.",
+                    crate::product_message!(
+                        "backend.integration.configuration.sc1_os_status_unsupported"
+                    ),
                 ));
             }
         }
@@ -487,7 +531,9 @@ fn inspect_with_catalog(
                         graph,
                         index,
                         "TARGET_PARAMETER_UNSUPPORTED",
-                        "A fixed target policy differs from the declared supported value.",
+                        crate::product_message!(
+                            "backend.integration.configuration.fixed_target_policy_value_mismatch"
+                        ),
                     ));
                 }
             }
@@ -504,7 +550,9 @@ fn inspect_with_catalog(
                         graph,
                         index,
                         "TARGET_PARAMETER_UNSUPPORTED",
-                        "A fixed target boolean policy differs from its supported value.",
+                        crate::product_message!(
+                            "backend.integration.configuration.fixed_target_boolean_policy_mismatch"
+                        ),
                     ));
                 }
             }
@@ -517,7 +565,9 @@ fn inspect_with_catalog(
                     graph,
                     index,
                     "PERIOD_ALARM_CONFLICT",
-                    "The declared BSW main-function period must match the one-millisecond owner schedule.",
+                    crate::product_message!(
+                        "backend.integration.configuration.bsw_main_function_period_mismatch"
+                    ),
                 ));
             }
         }
@@ -532,7 +582,9 @@ fn inspect_with_catalog(
                     graph,
                     index,
                     "CONFIGURATION_IDENTIFIER",
-                    "A configured public identifier is outside the supported uint16 domain.",
+                    crate::product_message!(
+                        "backend.integration.configuration.public_identifier_out_of_range"
+                    ),
                 ));
             }
         }
@@ -547,7 +599,7 @@ fn inspect_with_catalog(
             graph,
             context,
             "TASK_PROFILE",
-            "The ECU owner task is missing.",
+            crate::product_message!("backend.integration.configuration.ecu_owner_task_missing"),
         )
     })?;
     let task_events: BTreeSet<_> = values(graph, task, "OsTaskEventRef", true)
@@ -581,7 +633,9 @@ fn inspect_with_catalog(
                         graph,
                         *event,
                         "EVENT_MASK",
-                        "An explicit event mask must be one representable nonzero bit.",
+                        crate::product_message!(
+                            "backend.integration.configuration.event_mask_single_bit_required"
+                        ),
                     )
                 })?;
             if used & mask != 0 {
@@ -589,7 +643,9 @@ fn inspect_with_catalog(
                     graph,
                     *event,
                     "EVENT_MASK",
-                    "Two owner events use the same mask bit.",
+                    crate::product_message!(
+                        "backend.integration.configuration.owner_event_mask_bit_duplicate"
+                    ),
                 ));
             }
             used |= mask;
@@ -608,7 +664,9 @@ fn inspect_with_catalog(
                         graph,
                         event,
                         "EVENT_MASK",
-                        "No representable event bit remains for AUTO allocation.",
+                        crate::product_message!(
+                            "backend.integration.configuration.auto_event_bits_exhausted"
+                        ),
                     )
                 })?;
             used |= 1u32 << bit;

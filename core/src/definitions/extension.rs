@@ -73,23 +73,23 @@ fn sha(value: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
-fn no_link(path: &Path) -> Result<(), String> {
+fn no_link(path: &Path) -> Result<(), crate::message::LocalizedText> {
     for ancestor in path.ancestors().filter(|path| !path.as_os_str().is_empty()) {
         let metadata = fs::symlink_metadata(ancestor)
             .map_err(|error| format!("{}: {error}", ancestor.display()))?;
         if metadata.file_type().is_symlink() {
-            return Err(format!(
-                "Links are forbidden in definition catalogs: {}",
-                ancestor.display()
+            return Err(crate::product_message!(
+                "backend.definitions.extension.catalog_links_forbidden",
+                "path" => ancestor.display()
             ));
         }
         #[cfg(windows)]
         {
             use std::os::windows::fs::MetadataExt;
             if metadata.file_attributes() & 0x400 != 0 {
-                return Err(format!(
-                    "Reparse points are forbidden: {}",
-                    ancestor.display()
+                return Err(crate::product_message!(
+                    "backend.definitions.extension.reparse_points_forbidden",
+                    "path" => ancestor.display()
                 ));
             }
         }
@@ -97,7 +97,7 @@ fn no_link(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn bounded_read(path: &Path, maximum: u64) -> Result<Vec<u8>, String> {
+fn bounded_read(path: &Path, maximum: u64) -> Result<Vec<u8>, crate::message::LocalizedText> {
     no_link(path)?;
     let mut options = OpenOptions::new();
     options.read(true);
@@ -114,9 +114,9 @@ fn bounded_read(path: &Path, maximum: u64) -> Result<Vec<u8>, String> {
     let file = options.open(path).map_err(|error| error.to_string())?;
     let metadata = file.metadata().map_err(|error| error.to_string())?;
     if !metadata.is_file() || metadata.len() > maximum {
-        return Err(format!(
-            "Catalog member is not a bounded regular file: {}",
-            path.display()
+        return Err(crate::product_message!(
+            "backend.definitions.extension.member_not_bounded_regular_file",
+            "path" => path.display()
         ));
     }
     let mut bytes = Vec::with_capacity(metadata.len() as usize);
@@ -126,9 +126,9 @@ fn bounded_read(path: &Path, maximum: u64) -> Result<Vec<u8>, String> {
         .read_to_end(&mut bytes)
         .map_err(|error| error.to_string())?;
     if bytes.len() as u64 > maximum {
-        return Err(format!(
-            "Catalog member exceeded its size limit: {}",
-            path.display()
+        return Err(crate::product_message!(
+            "backend.definitions.extension.member_size_limit_exceeded",
+            "path" => path.display()
         ));
     }
     no_link(path)?;
@@ -140,7 +140,7 @@ fn collect(
     directory: &Path,
     expected: &BTreeSet<String>,
     files: &mut BTreeSet<String>,
-) -> Result<(), String> {
+) -> Result<(), crate::message::LocalizedText> {
     no_link(directory)?;
     for entry in fs::read_dir(directory).map_err(|error| error.to_string())? {
         let path = entry.map_err(|error| error.to_string())?.path();
@@ -149,11 +149,17 @@ fn collect(
         if metadata.is_dir() {
             let relative = path.strip_prefix(root).map_err(|error| error.to_string())?;
             if relative.components().count() > 64 {
-                return Err("Catalog directory nesting exceeds the safety limit".into());
+                return Err(crate::product_message!(
+                    "backend.definitions.extension.directory_nesting_limit_exceeded"
+                ));
             }
             let mut prefix = relative
                 .to_str()
-                .ok_or("Catalog paths must be UTF-8")?
+                .ok_or_else(|| {
+                    crate::product_message!(
+                        "backend.definitions.extension.catalog_path_requires_utf_eight"
+                    )
+                })?
                 .replace('\\', "/");
             prefix.push('/');
             let member = expected
@@ -163,7 +169,9 @@ fn collect(
                 ))
                 .next();
             if !member.is_some_and(|member| member.starts_with(&prefix)) {
-                return Err("Catalog contains a directory outside its complete inventory".into());
+                return Err(crate::product_message!(
+                    "backend.definitions.extension.directory_outside_inventory"
+                ));
             }
             collect(root, &path, expected, files)?;
         } else if metadata.is_file() {
@@ -171,26 +179,42 @@ fn collect(
                 .strip_prefix(root)
                 .map_err(|error| error.to_string())?
                 .to_str()
-                .ok_or("Catalog paths must be UTF-8")?
+                .ok_or_else(|| {
+                    crate::product_message!(
+                        "backend.definitions.extension.catalog_path_requires_utf_eight"
+                    )
+                })?
                 .replace('\\', "/");
             if !relative(&name) || !files.insert(name) || files.len() > 1025 {
-                return Err("Unsafe, duplicate, or excessive catalog membership".into());
+                return Err(crate::product_message!(
+                    "backend.definitions.extension.unsafe_duplicate_or_excessive_members"
+                ));
             }
         } else {
-            return Err("Catalog contains a nonregular payload".into());
+            return Err(crate::product_message!(
+                "backend.definitions.extension.nonregular_payload"
+            ));
         }
     }
     Ok(())
 }
 
-fn load(path: &Path) -> Result<Loaded, String> {
+fn load(path: &Path) -> Result<Loaded, crate::message::LocalizedText> {
     if path.file_name().and_then(|name| name.to_str()) != Some("catalog.json") {
-        return Err("Select catalog.json, not an individual definition member".into());
+        return Err(crate::product_message!(
+            "backend.definitions.extension.select_catalog_inventory"
+        ));
     }
-    let root = path.parent().ok_or("Catalog has no parent directory")?;
+    let root = path.parent().ok_or_else(|| {
+        crate::product_message!("backend.definitions.extension.catalog_parent_missing")
+    })?;
     let raw = bounded_read(path, 1024 * 1024)?;
-    let inventory: Inventory =
-        serde_json::from_slice(&raw).map_err(|error| format!("Invalid catalog.json: {error}"))?;
+    let inventory: Inventory = serde_json::from_slice(&raw).map_err(|error| {
+        crate::message::LocalizedText::messages([
+            crate::product_message!("backend.definitions.extension.invalid_catalog_inventory"),
+            error.to_string().into(),
+        ])
+    })?;
     if inventory.format_version != 1
         || inventory.release != RELEASE
         || !segment(&inventory.catalog_id)
@@ -199,7 +223,9 @@ fn load(path: &Path) -> Result<Loaded, String> {
         || inventory.files.is_empty()
         || inventory.files.len() > 1024
     {
-        return Err("Catalog requires formatVersion 1, CP R24-11, a portable catalogId, version and members".into());
+        return Err(crate::product_message!(
+            "backend.definitions.extension.catalog_header_requirements"
+        ));
     }
     let mut expected = BTreeSet::from(["catalog.json".to_string()]);
     let mut folded = BTreeSet::from(["catalog.json".to_string()]);
@@ -212,17 +238,18 @@ fn load(path: &Path) -> Result<Loaded, String> {
             || !folded.insert(member.path.to_ascii_lowercase())
             || previous.is_some_and(|path| path >= member.path.as_str())
         {
-            return Err(
-                "Inventory members must be unique sorted safe ARXML paths with lowercase SHA-256"
-                    .into(),
-            );
+            return Err(crate::product_message!(
+                "backend.definitions.extension.inventory_member_requirements"
+            ));
         }
         previous = Some(&member.path);
     }
     let mut actual = BTreeSet::new();
     collect(root, root, &expected, &mut actual)?;
     if actual != expected {
-        return Err("Catalog payload differs from its complete inventory".into());
+        return Err(crate::product_message!(
+            "backend.definitions.extension.payload_inventory_mismatch"
+        ));
     }
     let identity = ExtensionDefinitionIdentity {
         catalog_id: inventory.catalog_id,
@@ -241,13 +268,13 @@ fn load(path: &Path) -> Result<Loaded, String> {
     let mut total = 0usize;
     for member in inventory.files {
         let raw = bounded_read(&root.join(&member.path), 50 * 1024 * 1024)?;
-        total = total
-            .checked_add(raw.len())
-            .ok_or("Catalog size overflow")?;
+        total = total.checked_add(raw.len()).ok_or_else(|| {
+            crate::product_message!("backend.definitions.extension.catalog_size_overflow")
+        })?;
         if total > 512 * 1024 * 1024 || digest(&raw) != member.sha256 {
-            return Err(format!(
-                "Definition member digest or size mismatch: {}",
-                member.path
+            return Err(crate::product_message!(
+                "backend.definitions.extension.member_digest_or_size_mismatch",
+                "path" => member.path
             ));
         }
         let text = std::str::from_utf8(&raw).map_err(|error| error.to_string())?;
@@ -259,7 +286,9 @@ fn load(path: &Path) -> Result<Loaded, String> {
         .values()
         .any(|entry| entry.element_kind == "ECUC-MODULE-DEF")
     {
-        return Err("Catalog does not contain a native module definition".into());
+        return Err(crate::product_message!(
+            "backend.definitions.extension.native_module_missing"
+        ));
     }
     metadata.check_metadata()?;
     // Every native reference destination must belong to this catalog or the
@@ -273,15 +302,21 @@ fn load(path: &Path) -> Result<Loaded, String> {
             let entry = metadata
                 .get(target)
                 .or_else(|| builtin.get(target))
-                .ok_or_else(|| format!("Definition target is unavailable: {target}"))?;
+                .ok_or_else(|| {
+                    crate::product_message!(
+                        "backend.definitions.extension.definition_target_unavailable",
+                        "target" => target
+                    )
+                })?;
             if entry.kind.is_some()
                 || !matches!(
                     entry.element_kind.as_str(),
                     "ECUC-PARAM-CONF-CONTAINER-DEF" | "ECUC-CHOICE-CONTAINER-DEF"
                 )
             {
-                return Err(format!(
-                    "Ordinary reference destination is not a container definition: {target}"
+                return Err(crate::product_message!(
+                    "backend.definitions.extension.reference_destination_not_container",
+                    "target" => target
                 ));
             }
         }
@@ -293,12 +328,15 @@ fn load(path: &Path) -> Result<Loaded, String> {
     })
 }
 
-fn install(catalog: &mut DefinitionCatalog, loaded: &Loaded) -> Result<(), String> {
+fn install(
+    catalog: &mut DefinitionCatalog,
+    loaded: &Loaded,
+) -> Result<(), crate::message::LocalizedText> {
     if let Some(old) = catalog.extensions.get(&loaded.identity.catalog_id) {
         if old != &loaded.identity {
-            return Err(
-                "An accepted catalogId cannot be silently replaced by another identity".into(),
-            );
+            return Err(crate::product_message!(
+                "backend.definitions.extension.accepted_catalog_identity_replacement_forbidden"
+            ));
         }
     }
     let builtin = DefinitionCatalog::builtin()?;
@@ -313,15 +351,17 @@ fn install(catalog: &mut DefinitionCatalog, loaded: &Loaded) -> Result<(), Strin
                         .is_some_and(|tail| tail.starts_with('/'))
             })
         {
-            return Err(format!(
-                "Extensions cannot replace a builtin module namespace: {id}"
+            return Err(crate::product_message!(
+                "backend.definitions.extension.builtin_namespace_replacement_forbidden",
+                "id" => id
             ));
         }
         if catalog.entries.contains_key(id)
             && catalog.owners.get(id) != Some(&loaded.identity.catalog_id)
         {
-            return Err(format!(
-                "Extension conflicts with an existing definition: {id}"
+            return Err(crate::product_message!(
+                "backend.definitions.extension.existing_definition_conflict",
+                "id" => id
             ));
         }
     }
@@ -352,7 +392,7 @@ pub(super) fn accept(
     catalog: &mut DefinitionCatalog,
     path: &Path,
     root: &Path,
-) -> Result<ExtensionDefinitionIdentity, String> {
+) -> Result<ExtensionDefinitionIdentity, crate::message::LocalizedText> {
     let loaded = load(path)?;
     let mut prospective = catalog.clone();
     install(&mut prospective, &loaded)?;
@@ -368,7 +408,9 @@ pub(super) fn accept(
     if fs::symlink_metadata(&destination).is_ok() {
         let cached = load(&destination.join("catalog.json"))?;
         if cached.identity != loaded.identity {
-            return Err("Existing cache does not match the accepted exact identity".into());
+            return Err(crate::product_message!(
+                "backend.definitions.extension.existing_cache_identity_mismatch"
+            ));
         }
     } else {
         static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -381,8 +423,10 @@ pub(super) fn accept(
         let guard = Staging(stage.clone());
         for (relative, bytes) in &loaded.bytes {
             let path = stage.join(relative);
-            fs::create_dir_all(path.parent().ok_or("Invalid staged member")?)
-                .map_err(|error| error.to_string())?;
+            fs::create_dir_all(path.parent().ok_or_else(|| {
+                crate::product_message!("backend.definitions.extension.invalid_staged_member")
+            })?)
+            .map_err(|error| error.to_string())?;
             let mut file = OpenOptions::new()
                 .create_new(true)
                 .write(true)
@@ -394,16 +438,21 @@ pub(super) fn accept(
         }
         let verified = load(&stage.join("catalog.json"))?;
         if verified.identity != loaded.identity {
-            return Err("Staged cache identity changed".into());
+            return Err(crate::product_message!(
+                "backend.definitions.extension.staged_cache_identity_changed"
+            ));
         }
         // No overwrite: a competing publisher must produce the same verified cache.
         if let Err(error) = fs::rename(&stage, &destination) {
             if !destination.exists()
                 || load(&destination.join("catalog.json"))?.identity != loaded.identity
             {
-                return Err(format!(
-                    "Cannot publish immutable definition cache: {error}"
-                ));
+                return Err(crate::message::LocalizedText::messages([
+                    crate::product_message!(
+                        "backend.definitions.extension.immutable_cache_publish_failed"
+                    ),
+                    error.to_string().into(),
+                ]));
             }
         }
         drop(guard);
@@ -416,7 +465,7 @@ pub(super) fn restore(
     catalog: &mut DefinitionCatalog,
     identities: &[ExtensionDefinitionIdentity],
     root: &Path,
-) -> Result<Vec<ConfigurationDiagnostic>, String> {
+) -> Result<Vec<ConfigurationDiagnostic>, crate::message::LocalizedText> {
     let mut prospective = DefinitionCatalog::builtin()?;
     let mut diagnostics = Vec::new();
     let mut seen = BTreeSet::new();
@@ -427,11 +476,15 @@ pub(super) fn restore(
             || identity.version.is_empty()
             || !seen.insert(&identity.catalog_id)
         {
-            return Err("Invalid or duplicate required extension identity".into());
+            return Err(crate::product_message!(
+                "backend.definitions.extension.invalid_or_duplicate_required_identity"
+            ));
         }
         let result = load(&root.join(&identity.sha256).join("catalog.json")).and_then(|loaded| {
             if loaded.identity != *identity {
-                return Err("Cached identity differs from the exact project requirement".into());
+                return Err(crate::product_message!(
+                    "backend.definitions.extension.cached_project_identity_mismatch"
+                ));
             }
             install(&mut prospective, &loaded)
         });
@@ -452,13 +505,18 @@ pub(super) fn restore(
                 None,
                 "EXTENSION_MISSING",
                 Severity::Warning,
-                format!(
-                    "Exact extension {} is unavailable: {error}",
-                    identity.catalog_id
+                crate::message::LocalizedText::messages([
+                    crate::product_message!(
+                        "backend.definitions.extension.exact_extension_unavailable",
+                        "catalog_id" => identity.catalog_id
+                    ),
+                    error,
+                ]),
+                crate::product_message!(
+                    "backend.definitions.extension.import_exact_catalog_remedy"
                 ),
-                "Explicitly import the exact catalog and all inventory members.",
-                &identity.catalog_id,
-                &identity.sha256,
+                identity.catalog_id.clone().into(),
+                identity.sha256.clone().into(),
             ));
         }
     }
@@ -478,15 +536,19 @@ fn parse(
     catalog: &mut DefinitionCatalog,
     text: &str,
     identity: &ExtensionDefinitionIdentity,
-) -> Result<(), String> {
+) -> Result<(), crate::message::LocalizedText> {
     if text.contains("<!DOCTYPE") || text.contains("<!ENTITY") {
-        return Err("DTD and entity declarations are forbidden".into());
+        return Err(crate::product_message!(
+            "backend.definitions.extension.dtd_and_entities_forbidden"
+        ));
     }
     let document = Document::parse(text).map_err(|error| error.to_string())?;
     if document.root_element().tag_name().name() != "AUTOSAR"
         || document.root_element().tag_name().namespace() != Some(NS)
     {
-        return Err("Definition document must be AUTOSAR CP XML".into());
+        return Err(crate::product_message!(
+            "backend.definitions.extension.definition_requires_autosar_cp_xml"
+        ));
     }
     if document.root_element().attributes().any(|attribute| {
         attribute.name() == "schemaLocation"
@@ -495,7 +557,9 @@ fn parse(
                 .split_whitespace()
                 .any(|value| value.contains("AUTOSAR_") && !value.ends_with("AUTOSAR_00053.xsd"))
     }) {
-        return Err("Extension XML declares a different AUTOSAR schema release".into());
+        return Err(crate::product_message!(
+            "backend.definitions.extension.schema_release_mismatch"
+        ));
     }
     for node in document
         .descendants()
@@ -524,7 +588,9 @@ fn parse(
                 .skip(1)
                 .any(|owner| owner.tag_name().name() == "ECUC-MODULE-DEF")
         {
-            return Err("Native definitions must belong to an explicit module definition".into());
+            return Err(crate::product_message!(
+                "backend.definitions.extension.explicit_module_required"
+            ));
         }
         let mut names: Vec<_> = node
             .ancestors()
@@ -535,7 +601,9 @@ fn parse(
                 .iter()
                 .any(|name| !super::validation::identifier(name))
         {
-            return Err("Definition SHORT-NAME must be a portable native identifier".into());
+            return Err(crate::product_message!(
+                "backend.definitions.extension.short_name_requires_portable_identifier"
+            ));
         }
         names.reverse();
         let id = format!("/{}", names.join("/"));
@@ -544,7 +612,9 @@ fn parse(
             .as_deref()
             .unwrap_or("0")
             .parse()
-            .map_err(|_| "Invalid lower multiplicity")?;
+            .map_err(|_| {
+                crate::product_message!("backend.definitions.extension.invalid_lower_multiplicity")
+            })?;
         entry.upper_multiplicity =
             if child(node, "UPPER-MULTIPLICITY-INFINITE").as_deref() == Some("true") {
                 None
@@ -554,7 +624,11 @@ fn parse(
                         .as_deref()
                         .unwrap_or("1")
                         .parse()
-                        .map_err(|_| "Invalid upper multiplicity")?,
+                        .map_err(|_| {
+                            crate::product_message!(
+                                "backend.definitions.extension.invalid_upper_multiplicity"
+                            )
+                        })?,
                 )
             };
         entry.minimum = child(node, "MIN").map(std::borrow::Cow::into_owned);
@@ -571,7 +645,9 @@ fn parse(
                 || entry.enumeration.iter().collect::<BTreeSet<_>>().len()
                     != entry.enumeration.len()
             {
-                return Err("Enumeration requires unique literals".into());
+                return Err(crate::product_message!(
+                    "backend.definitions.extension.enumeration_requires_unique_literals"
+                ));
             }
         }
         entry.unit = child(node, "UNIT-REF").map(std::borrow::Cow::into_owned);
@@ -582,11 +658,16 @@ fn parse(
         }) {
             if default.children().any(|child| child.is_element()) {
                 entry.writable = false;
-                entry.reason =
-                    Some("Structured default expression semantics are unsupported".into());
+                entry.reason = Some(crate::product_message!(
+                    "backend.definitions.extension.structured_default_semantics_unsupported"
+                ));
             } else {
                 entry.default_value = Some(TypedValue {
-                    kind: kind.ok_or("A container cannot have a parameter default")?,
+                    kind: kind.ok_or_else(|| {
+                        crate::product_message!(
+                            "backend.definitions.extension.container_parameter_default_forbidden"
+                        )
+                    })?,
                     lexeme: super::xml_text(default).into_owned(),
                 });
                 entry.default_origin = Some(format!(
@@ -613,7 +694,9 @@ fn parse(
                 || (tag != "ECUC-FOREIGN-REFERENCE-DEF" && targets.is_empty())
             {
                 entry.writable = false;
-                entry.reason = Some("Reference destination semantics are unavailable".into());
+                entry.reason = Some(crate::product_message!(
+                    "backend.definitions.extension.reference_destination_semantics_unavailable"
+                ));
             }
         }
         let opaque = node.ancestors().any(|ancestor| {
@@ -628,14 +711,15 @@ fn parse(
         });
         if opaque || tag == "ECUC-INSTANCE-REFERENCE-DEF" {
             entry.writable = false;
-            entry.reason = Some(
-                if tag == "ECUC-INSTANCE-REFERENCE-DEF" {
-                    "Instance-reference context semantics are unsupported"
-                } else {
-                    "Conditional or variation-dependent definition is unsupported"
-                }
-                .into(),
-            );
+            entry.reason = Some(if tag == "ECUC-INSTANCE-REFERENCE-DEF" {
+                crate::product_message!(
+                    "backend.definitions.extension.instance_reference_context_unsupported"
+                )
+            } else {
+                crate::product_message!(
+                    "backend.definitions.extension.conditional_or_variant_definition_unsupported"
+                )
+            });
         } else if node.children().any(|child| {
             matches!(
                 child.tag_name().name(),
@@ -643,8 +727,9 @@ fn parse(
             )
         }) {
             entry.writable = false;
-            entry.reason =
-                Some("Additional expression or textual constraints are unsupported".into());
+            entry.reason = Some(crate::product_message!(
+                "backend.definitions.extension.additional_expression_or_text_constraints_unsupported"
+            ));
         }
         catalog.insert(entry, targets)?;
     }

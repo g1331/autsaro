@@ -213,17 +213,23 @@ pub(super) fn files(
     scheduler: bool,
     alarms: &[String],
     tables: &[String],
-) -> Result<Vec<(String, Vec<u8>)>, String> {
-    let os = selected(&plan.configuration, "OsOS")
-        .ok_or("ARTI requires the selected OS configuration")?;
+) -> Result<Vec<(String, Vec<u8>)>, crate::message::LocalizedText> {
+    let os = selected(&plan.configuration, "OsOS").ok_or(crate::product_message!(
+        "backend.integration.arti.arti_selected_os_configuration_required"
+    ))?;
     let module = os
         .path
         .rsplit_once('/')
-        .ok_or("ARTI requires an OS module path")?
+        .ok_or(crate::product_message!(
+            "backend.integration.arti.arti_os_module_path_required"
+        ))?
         .0;
     let name = module.rsplit('/').next().unwrap();
     if super::component::c_name(name) != name {
-        return Err("The OS SHORT-NAME cannot be represented by an ARTI literal C token".into());
+        return Err(crate::product_message!(
+            "backend.integration.arti.arti_os_short_name_not_representable"
+        )
+        .into());
     }
     let mut d = Description::default();
     let mut states = String::new();
@@ -270,8 +276,9 @@ pub(super) fn files(
         "",
         &states,
     ));
-    let mode = selected(&plan.configuration, "OsAppMode")
-        .ok_or("ARTI requires the selected application mode")?;
+    let mode = selected(&plan.configuration, "OsAppMode").ok_or(crate::product_message!(
+        "backend.integration.arti.arti_selected_application_mode_required"
+    ))?;
     d.type_map("AppModes", &[(1, mode.path.clone())]);
     d.class("", &[("AppMode", Some("AppModes"))]);
     d.instance(
@@ -563,12 +570,15 @@ pub(super) fn files(
         include_str!("../../../runtime/os/src/Os_Arti.c").replace(", Os,", &format!(", {name},"));
     let mut hooks = std::collections::BTreeSet::new();
     for call in binding.split("ARTI_TRACE(").skip(1) {
-        let (arguments, _) = call
-            .split_once(';')
-            .ok_or("Malformed ARTI trace invocation")?;
+        let (arguments, _) = call.split_once(';').ok_or(crate::product_message!(
+            "backend.integration.arti.arti_trace_invocation_malformed"
+        ))?;
         let arguments = arguments.split(',').collect::<Vec<_>>();
         if arguments.len() != 6 {
-            return Err("Malformed single-parameter ARTI trace invocation".into());
+            return Err(crate::product_message!(
+                "backend.integration.arti.arti_single_parameter_trace_invocation_malformed"
+            )
+            .into());
         }
         let context = arguments[0].trim();
         let class = arguments[1].trim();
@@ -617,11 +627,15 @@ pub(super) fn files(
     let start = d
         .objects
         .find("<SHORT-NAME>OperatingSystem</SHORT-NAME>")
-        .ok_or("Missing generated ARTI OS instance")?;
+        .ok_or(crate::product_message!(
+            "backend.integration.arti.arti_generated_os_instance_missing"
+        ))?;
     let at = start
         + d.objects[start..]
             .find(instance_end)
-            .ok_or("Missing generated ARTI OS instance references")?;
+            .ok_or(crate::product_message!(
+                "backend.integration.arti.arti_generated_os_instance_references_missing"
+            ))?;
     d.objects.insert_str(at, &hook_refs);
     let children = container("Values", &format!("{DEF}/ArtiValues"), "", "", &d.values)
         + &container("Os", &format!("{DEF}/ArtiOs"), "", "", &d.objects)

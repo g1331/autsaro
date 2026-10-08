@@ -1,3 +1,5 @@
+import { message, useLocale } from '../i18n';
+import type { Text } from '../i18n';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
@@ -22,11 +24,12 @@ export function Dialog({
   onClose,
   footer,
 }: {
-  title: string;
+  title: Text;
   children: ReactNode;
   onClose: () => void;
   footer?: ReactNode;
 }) {
+  const { t, text } = useLocale();
   const dialog = useRef<HTMLElement>(null);
   const close = useEffectEvent(onClose);
   useEffect(() => {
@@ -80,13 +83,17 @@ export function Dialog({
         className="workbench-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label={title}
+        aria-label={text(title)}
         tabIndex={-1}
       >
         <header>
-          <h2>{title}</h2>
-          <button type="button" onClick={onClose} aria-label={`关闭${title}`}>
-            关闭
+          <h2>{text(title)}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t('editor.dialog.closeLabel', { title: text(title) })}
+          >
+            {t('editor.dialog.close')}
           </button>
         </header>
         <div className="dialog-body">{children}</div>
@@ -98,12 +105,13 @@ export function Dialog({
 
 export function CopyText({
   text,
-  label = '复制',
+  label = message('editor.dialog.copy'),
 }: {
   text: string | (() => string);
-  label?: string;
+  label?: Text;
 }) {
-  const [error, setError] = useState('');
+  const { text: renderText } = useLocale();
+  const [error, setError] = useState<Text>('');
   return (
     <>
       <button
@@ -112,42 +120,43 @@ export function CopyText({
           void navigator.clipboard
             .writeText(typeof text === 'function' ? text() : text)
             .then(() => setError(''))
-            .catch(() => setError('复制失败，请选择文本手动复制'));
+            .catch(() => setError(message('editor.dialog.copyFailed')));
         }}
       >
-        {label}
+        {renderText(label)}
       </button>
       {error ? (
         <span role="status" className="error-text">
-          {error}
+          {renderText(error)}
         </span>
       ) : null}
     </>
   );
 }
-export function OwnedLog({ text, label }: { text: string; label: string }) {
+export function OwnedLog({ text, label }: { text: Text; label: Text }) {
+  const { t, text: renderText } = useLocale();
+  const content = renderText(text);
   return (
     <section className="owned-log">
       <div className="log-header">
-        <strong>{label}</strong>
-        <CopyText text={text} label="复制完整日志" />
+        <strong>{renderText(label)}</strong>
+        <CopyText text={content} label={t('editor.dialog.copyLog')} />
       </div>
-      {text.length > 12000 ? (
-        <p className="field-help">显示末尾 12000 字符；完整 owned 返回日志可复制。</p>
-      ) : null}
-      <pre aria-label={label}>{text.slice(-12000)}</pre>
+      {content.length > 12000 ? <p className="field-help">{t('editor.dialog.logTail')}</p> : null}
+      <pre aria-label={renderText(label)}>{content.slice(-12000)}</pre>
     </section>
   );
 }
 
-export function TextSnapshot({ text, label }: { text: string; label: string }) {
+export function TextSnapshot({ text, label }: { text: string; label: Text }) {
+  const { t, text: renderText } = useLocale();
   const [offset, setOffset] = useState(0);
   const pageSize = 40000;
   const start = Math.min(offset, Math.floor(Math.max(0, text.length - 1) / pageSize) * pageSize);
   return (
     <section className="text-snapshot">
       <div className="log-header">
-        <CopyText text={text} label={`复制${label}`} />
+        <CopyText text={text} label={t('editor.dialog.copyLabel', { label: renderText(label) })} />
         {text.length > pageSize ? (
           <div>
             <button
@@ -155,25 +164,27 @@ export function TextSnapshot({ text, label }: { text: string; label: string }) {
               disabled={!start}
               onClick={() => setOffset(Math.max(0, start - pageSize))}
             >
-              上一段
+              {t('editor.dialog.previous')}
             </button>
             <button
               type="button"
               disabled={start + pageSize >= text.length}
               onClick={() => setOffset(start + pageSize)}
             >
-              下一段
+              {t('editor.dialog.next')}
             </button>
           </div>
         ) : null}
       </div>
       {text.length > pageSize ? (
         <p className="field-help">
-          显示第 {start + 1}–{Math.min(start + pageSize, text.length)}{' '}
-          个字符；完整后台原文保持并可复制。
+          {t('editor.dialog.segmentHelp', {
+            start: start + 1,
+            end: Math.min(start + pageSize, text.length),
+          })}
         </p>
       ) : null}
-      <pre aria-label={label}>{text.slice(start, start + pageSize)}</pre>
+      <pre aria-label={renderText(label)}>{text.slice(start, start + pageSize)}</pre>
     </section>
   );
 }

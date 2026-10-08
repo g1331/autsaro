@@ -59,7 +59,11 @@ pub(super) async fn preview_ecu_project(
 ) -> Result<Reply<GenerationPreview>, Vec<PlanDiagnostic>> {
     integration_background(state, move |state| {
         let operation = state
-            .begin(&fingerprint, "preview ECU", OperationKind::Read)
+            .begin(
+                &fingerprint,
+                autosar_config_core::product_message!("backend.operation.preview_ecu"),
+                OperationKind::Read,
+            )
             .map_err(integration_failure)?;
         let plan = ecu_plan(&operation, &state.runtime)?;
         let project = prepare_ecu_for_operation(&operation, &plan, handoff)?;
@@ -85,7 +89,11 @@ pub(super) async fn generate_ecu_project(
 ) -> Result<Reply<GenerationReport>, Vec<PlanDiagnostic>> {
     integration_background(state, move |state| {
         let operation = state
-            .begin(&fingerprint, "generate ECU", OperationKind::Read)
+            .begin(
+                &fingerprint,
+                autosar_config_core::product_message!("backend.operation.generate_ecu"),
+                OperationKind::Read,
+            )
             .map_err(integration_failure)?;
         let plan = ecu_plan(&operation, &state.runtime)?;
         let project = prepare_ecu_for_operation(&operation, &plan, handoff)?;
@@ -115,7 +123,7 @@ pub(super) async fn preflight_ecu(
         let operation = state
             .begin(
                 &fingerprint,
-                "preflight ECU",
+                autosar_config_core::product_message!("backend.operation.preflight_ecu"),
                 if native {
                     OperationKind::Native
                 } else {
@@ -131,15 +139,12 @@ pub(super) async fn preflight_ecu(
                     .snapshot
                     .tools
                     .as_deref()
-                    .ok_or_else(|| integration_failure("尚未配置执行工具"))?,
+                    .ok_or_else(|| integration_failure(autosar_config_core::product_message!("backend.workbench.execution_tools_missing")))?,
                 operation.native_owner().map_err(integration_failure)?,
             )
         } else {
             let mut report = project.preflight().clone();
-            report.logs.push(format!(
-                "Native preflight is not applicable to this host for {}",
-                operation.snapshot.target.spec().id
-            ));
+            report.logs.push(autosar_config_core::product_message!("backend.delivery.native_preflight_not_applicable", "target" => operation.snapshot.target.spec().id));
             report
         };
         operation
@@ -152,13 +157,18 @@ pub(super) async fn preflight_ecu(
     .await
 }
 
-pub(super) fn check_target(output: &Path, target: BuildTarget) -> Result<(), String> {
+pub(super) fn check_target(
+    output: &Path,
+    target: BuildTarget,
+) -> Result<(), autosar_config_core::LocalizedText> {
     let value: serde_json::Value = serde_json::from_slice(
         &std::fs::read(output.join("target.json")).map_err(|error| error.to_string())?,
     )
     .map_err(|error| error.to_string())?;
     if value["target"] != serde_json::to_value(target).map_err(|error| error.to_string())? {
-        return Err("生成目录不属于当前目标；请重新生成".into());
+        return Err(
+            autosar_config_core::product_message!("backend.delivery.target_mismatch").into(),
+        );
     }
     Ok(())
 }
@@ -178,9 +188,9 @@ pub(super) fn current_ecu(
         != serde_json::to_value(plan.description())
             .map_err(|error| integration_failure(error.to_string()))?
     {
-        return Err(integration_failure(
-            "Generated source identities differ from the saved workspace. Regenerate before building or verifying.",
-        ));
+        return Err(integration_failure(autosar_config_core::product_message!(
+            "backend.delivery.saved_source_mismatch"
+        )));
     }
     Ok(plan)
 }
@@ -194,7 +204,11 @@ pub(super) async fn build_ecu(
 ) -> Result<Reply<BuildReport>, Vec<PlanDiagnostic>> {
     integration_background(state, move |state| {
         let operation = state
-            .begin(&fingerprint, "build ECU", OperationKind::Native)
+            .begin(
+                &fingerprint,
+                autosar_config_core::product_message!("backend.operation.build_ecu"),
+                OperationKind::Native,
+            )
             .map_err(integration_failure)?;
         let source = Path::new(&output_directory);
         let plan = current_ecu(&operation, &state.runtime, source)?;
@@ -204,11 +218,11 @@ pub(super) async fn build_ecu(
             &plan,
             source,
             staged.directory(),
-            operation
-                .snapshot
-                .tools
-                .as_deref()
-                .ok_or_else(|| integration_failure("尚未配置执行工具"))?,
+            operation.snapshot.tools.as_deref().ok_or_else(|| {
+                integration_failure(autosar_config_core::product_message!(
+                    "backend.workbench.execution_tools_missing"
+                ))
+            })?,
             operation.native_owner().map_err(integration_failure)?,
         )
         .map_err(integration_failure)?;
@@ -216,9 +230,9 @@ pub(super) async fn build_ecu(
         operation
             .commit(|_| {
                 operation.snapshot.workspace()?.verify_saved_sources()?;
-                let binary = Path::new(&result.binary_path)
-                    .file_name()
-                    .ok_or("构建未返回二进制名称")?;
+                let binary = Path::new(&result.binary_path).file_name().ok_or(
+                    autosar_config_core::product_message!("backend.delivery.binary_name_missing"),
+                )?;
                 let destination = staged.commit()?;
                 Ok(BuildReport {
                     binary_path: destination.join(binary).display().to_string(),
@@ -237,18 +251,22 @@ pub(super) async fn verify_ecu(
 ) -> Result<Reply<RunReport>, Vec<PlanDiagnostic>> {
     integration_background(state, move |state| {
         let operation = state
-            .begin(&fingerprint, "verify ECU", OperationKind::Native)
+            .begin(
+                &fingerprint,
+                autosar_config_core::product_message!("backend.operation.verify_ecu"),
+                OperationKind::Native,
+            )
             .map_err(integration_failure)?;
         let source = Path::new(&output_directory);
         let plan = current_ecu(&operation, &state.runtime, source)?;
         let value = verify_ecu_project(
             &plan,
             source,
-            operation
-                .snapshot
-                .tools
-                .as_deref()
-                .ok_or_else(|| integration_failure("尚未配置执行工具"))?,
+            operation.snapshot.tools.as_deref().ok_or_else(|| {
+                integration_failure(autosar_config_core::product_message!(
+                    "backend.workbench.execution_tools_missing"
+                ))
+            })?,
             operation.native_owner().map_err(integration_failure)?,
         )
         .map_err(integration_failure)?;
@@ -268,8 +286,12 @@ pub(super) fn preview_host(
     fingerprint: &str,
     output: &Path,
     handoff: bool,
-) -> Result<Reply<GenerationPreview>, String> {
-    let operation = state.begin(fingerprint, "preview host", OperationKind::Read)?;
+) -> Result<Reply<GenerationPreview>, autosar_config_core::LocalizedText> {
+    let operation = state.begin(
+        fingerprint,
+        autosar_config_core::product_message!("backend.operation.preview_host"),
+        OperationKind::Read,
+    )?;
     let mut workspace = operation.snapshot.workspace()?.clone();
     let value = autosar_config_core::prepare_host_project(
         &mut workspace,
@@ -288,8 +310,12 @@ pub(super) fn generate_host(
     output: &Path,
     revision: &str,
     handoff: bool,
-) -> Result<Reply<GenerationReport>, String> {
-    let operation = state.begin(fingerprint, "generate host", OperationKind::Read)?;
+) -> Result<Reply<GenerationReport>, autosar_config_core::LocalizedText> {
+    let operation = state.begin(
+        fingerprint,
+        autosar_config_core::product_message!("backend.operation.generate_host"),
+        OperationKind::Read,
+    )?;
     let mut workspace = operation.snapshot.workspace()?.clone();
     let staged = autosar_config_core::prepare_host_project(
         &mut workspace,
@@ -307,7 +333,7 @@ pub(super) async fn preview_generate_project(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
     output_directory: String,
-) -> Result<Reply<GenerationPreview>, String> {
+) -> Result<Reply<GenerationPreview>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
         preview_host(&state, &fingerprint, Path::new(&output_directory), false)
     })
@@ -318,7 +344,7 @@ pub(super) async fn preview_handoff_project(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
     output_directory: String,
-) -> Result<Reply<GenerationPreview>, String> {
+) -> Result<Reply<GenerationPreview>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
         preview_host(&state, &fingerprint, Path::new(&output_directory), true)
     })
@@ -330,7 +356,7 @@ pub(super) async fn generate_project(
     fingerprint: String,
     output_directory: String,
     revision: String,
-) -> Result<Reply<GenerationReport>, String> {
+) -> Result<Reply<GenerationReport>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
         generate_host(
             &state,
@@ -348,7 +374,7 @@ pub(super) async fn generate_handoff_project(
     fingerprint: String,
     output_directory: String,
     revision: String,
-) -> Result<Reply<GenerationReport>, String> {
+) -> Result<Reply<GenerationReport>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
         generate_host(
             &state,
@@ -367,28 +393,33 @@ pub(super) async fn build_project(
     fingerprint: String,
     output_directory: String,
     build_directory: String,
-) -> Result<Reply<BuildReport>, String> {
+) -> Result<Reply<BuildReport>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
-        let operation = state.begin(&fingerprint, "build host", OperationKind::Native)?;
+        let operation = state.begin(
+            &fingerprint,
+            autosar_config_core::product_message!("backend.operation.build_host"),
+            OperationKind::Native,
+        )?;
         let source = Path::new(&output_directory);
         check_target(source, operation.snapshot.target)?;
         operation.snapshot.workspace()?.verify_saved_sources()?;
         let staged = StagedBuild::new(source, Path::new(&build_directory))?;
-        let result = autosar_config_core::generator::build(
-            source,
-            staged.directory(),
-            operation
-                .snapshot
-                .tools
-                .as_deref()
-                .ok_or("尚未配置执行工具")?,
-            operation.native_owner()?,
-        )?;
+        let result =
+            autosar_config_core::generator::build(
+                source,
+                staged.directory(),
+                operation.snapshot.tools.as_deref().ok_or(
+                    autosar_config_core::product_message!(
+                        "backend.workbench.execution_tools_missing"
+                    ),
+                )?,
+                operation.native_owner()?,
+            )?;
         operation.commit(|_| {
             operation.snapshot.workspace()?.verify_saved_sources()?;
-            let binary = Path::new(&result.binary_path)
-                .file_name()
-                .ok_or("构建未返回二进制名称")?;
+            let binary = Path::new(&result.binary_path).file_name().ok_or(
+                autosar_config_core::product_message!("backend.delivery.binary_name_missing"),
+            )?;
             let destination = staged.commit()?;
             Ok(BuildReport {
                 binary_path: destination.join(binary).display().to_string(),
@@ -406,9 +437,13 @@ pub(super) async fn run_virtual(
     second_output_directory: String,
     first_binary_path: String,
     second_binary_path: String,
-) -> Result<Reply<RunReport>, String> {
+) -> Result<Reply<RunReport>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
-        let operation = state.begin(&fingerprint, "run virtual", OperationKind::Native)?;
+        let operation = state.begin(
+            &fingerprint,
+            autosar_config_core::product_message!("backend.operation.run_virtual"),
+            OperationKind::Native,
+        )?;
         check_target(
             Path::new(&first_output_directory),
             operation.snapshot.target,
@@ -438,9 +473,13 @@ pub(super) async fn run_diagnostic(
     fingerprint: String,
     output_directory: String,
     binary_path: String,
-) -> Result<Reply<RunReport>, String> {
+) -> Result<Reply<RunReport>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
-        let operation = state.begin(&fingerprint, "run diagnostic", OperationKind::Native)?;
+        let operation = state.begin(
+            &fingerprint,
+            autosar_config_core::product_message!("backend.operation.run_diagnostic"),
+            OperationKind::Native,
+        )?;
         check_target(Path::new(&output_directory), operation.snapshot.target)?;
         operation.snapshot.workspace()?.verify_saved_sources()?;
         let value = autosar_config_core::host::run_diagnostic(

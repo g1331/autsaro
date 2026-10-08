@@ -50,19 +50,25 @@ pub(super) struct SourceSnapshot {
     pub profile: String,
     pub definition_fingerprint: String,
     pub integration_candidate: bool,
-    pub rule_fault: Option<String>,
+    pub rule_fault: Option<crate::message::LocalizedText>,
     pub opaque_values: Vec<String>,
 }
 
-pub(super) fn simple_text_range(node: Node<'_, '_>) -> Result<Range<usize>, String> {
+pub(super) fn simple_text_range(
+    node: Node<'_, '_>,
+) -> Result<Range<usize>, crate::message::LocalizedText> {
     if node.children().any(|child| !child.is_text()) {
-        return Err("Mixed XML content cannot be edited safely.".into());
+        return Err(crate::product_message!(
+            "backend.arxml.projection.mixed_xml_content"
+        ));
     }
     let range = node.range();
     let text = node.document().input_text();
     let original = &text[range.clone()];
     if original.trim_end().ends_with("/>") {
-        return Err("Self-closing XML values require an explicit entry replacement.".into());
+        return Err(crate::product_message!(
+            "backend.arxml.projection.self_closing_value_requires_replacement"
+        ));
     }
     let mut quote = None;
     let start = original
@@ -80,10 +86,14 @@ pub(super) fn simple_text_range(node: Node<'_, '_>) -> Result<Range<usize>, Stri
                 byte == b'>'
             }
         })
-        .ok_or("Missing XML opening tag.")?
+        .ok_or_else(|| {
+            crate::product_message!("backend.arxml.projection.missing_xml_opening_tag")
+        })?
         + range.start
         + 1;
-    let end = original.rfind('<').ok_or("Missing XML closing tag.")? + range.start;
+    let end = original.rfind('<').ok_or_else(|| {
+        crate::product_message!("backend.arxml.projection.missing_xml_closing_tag")
+    })? + range.start;
     Ok(start..end)
 }
 
@@ -108,7 +118,11 @@ fn unsafe_object(node: Node<'_, '_>) -> bool {
         })
 }
 
-fn readonly_definition(id: String, element: &str, reason: &str) -> DefinitionDescriptor {
+fn readonly_definition(
+    id: String,
+    element: &str,
+    reason: impl Into<crate::message::LocalizedText>,
+) -> DefinitionDescriptor {
     DefinitionDescriptor {
         definition_id: id,
         element_kind: element.into(),
@@ -214,7 +228,7 @@ fn definition_template(
 }
 
 impl Workspace {
-    pub(super) fn rebuild_snapshot(&mut self) -> Result<(), String> {
+    pub(super) fn rebuild_snapshot(&mut self) -> Result<(), crate::message::LocalizedText> {
         #[cfg(feature = "verification-metrics")]
         crate::verification::before(crate::verification::Phase::SnapshotBuild);
         let previous = self.snapshot.clone();
@@ -331,18 +345,21 @@ impl Workspace {
                 let writable = !unsafe_semantics
                     && (kind == "AR-PACKAGE" || descriptor.is_some_and(|item| item.writable));
                 let reason = if unsupported_edition {
-                    Some(
-                        "Unsupported ECUC definition edition is read-only; R24-11 requires 4.10.0."
-                            .into(),
-                    )
+                    Some(crate::product_message!(
+                        "backend.arxml.projection.unsupported_definition_edition"
+                    ))
                 } else if unsafe_semantics {
-                    Some("Variant or instance-reference impact is not safely determined.".into())
+                    Some(crate::product_message!(
+                        "backend.arxml.projection.unsafe_variant_or_instance_reference"
+                    ))
                 } else if writable {
                     None
                 } else {
-                    descriptor
-                        .and_then(|item| item.reason.clone())
-                        .or_else(|| Some("No supported writable instance definition.".into()))
+                    descriptor.and_then(|item| item.reason.clone()).or_else(|| {
+                        Some(crate::product_message!(
+                            "backend.arxml.projection.no_writable_instance_definition"
+                        ))
+                    })
                 };
                 let ordinal = object_ordinals
                     .entry((path.clone(), kind.clone()))
@@ -454,7 +471,9 @@ impl Workspace {
                             readonly_definition(
                                 definition_id.clone(),
                                 element,
-                                "Unknown definition or unsupported source field.",
+                                crate::product_message!(
+                                    "backend.arxml.projection.unknown_definition_or_source_field"
+                                ),
                             )
                         });
                 let permitted_owner = !is_parameter
@@ -477,10 +496,9 @@ impl Workspace {
                     || value_node.is_none_or(|value| value.children().any(|child| !child.is_text()))
                 {
                     descriptor.writable = false;
-                    descriptor.reason = Some(
-                        "Unknown ownership, variant, expression or mixed content is read-only."
-                            .into(),
-                    );
+                    descriptor.reason = Some(crate::product_message!(
+                        "backend.arxml.projection.unsafe_field_context"
+                    ));
                 }
                 let reference = (element == "ECUC-REFERENCE-VALUE" || is_reference).then(|| {
                     value_node
@@ -640,9 +658,9 @@ impl Workspace {
                 raw_path: raw_path.clone(),
                 dest: dest.clone(),
                 target_id: target_id.clone(),
-                reason: target_id
-                    .is_none()
-                    .then(|| "Reference path is missing, ambiguous or has the wrong DEST.".into()),
+                reason: target_id.is_none().then(|| {
+                    crate::product_message!("backend.arxml.projection.unresolved_reference_path")
+                }),
             });
         }
         let files: Vec<_> = self
@@ -669,8 +687,14 @@ impl Workspace {
             Err(message) => {
                 snapshot.rule_fault = Some(message.clone());
                 let diagnostic = ConfigurationDiagnostic {
-                    scope: ValidationScope::Schema, rule_id: "builtin.inventory".into(), severity: Severity::Error,
-                    code: "BUILTIN_RULES".into(), message, remedy: "Repair the installed matching product inventory; official archives cannot replace it.".into(),
+                    scope: ValidationScope::Schema,
+                    rule_id: "builtin.inventory".into(),
+                    severity: Severity::Error,
+                    code: "BUILTIN_RULES".into(),
+                    message,
+                    remedy: crate::product_message!(
+                        "backend.arxml.projection.repair_product_inventory"
+                    ),
                     file: None, path: None, source_id: None, object_id: None, field_id: None, witness: None,
                 };
                 snapshot.validation = vec![
@@ -690,11 +714,15 @@ impl Workspace {
                 ];
                 for object in &mut snapshot.objects {
                     object.view.writable = false;
-                    object.view.reason = Some("Product rule inventory is unavailable; source-only viewing remains available.".into());
+                    object.view.reason = Some(crate::product_message!(
+                        "backend.arxml.projection.product_inventory_unavailable"
+                    ));
                 }
                 for field in &mut snapshot.fields {
                     field.view.definition.writable = false;
-                    field.view.definition.reason = Some("Product rule inventory is unavailable; source-only viewing remains available.".into());
+                    field.view.definition.reason = Some(crate::product_message!(
+                        "backend.arxml.projection.product_inventory_unavailable"
+                    ));
                 }
             }
         }
@@ -735,7 +763,9 @@ impl Workspace {
                 severity: issue.severity.clone(),
                 code: issue.code.clone(),
                 message: issue.message.clone(),
-                remedy: "Resolve the target-specific input constraint before generating.".into(),
+                remedy: crate::product_message!(
+                    "backend.arxml.projection.resolve_target_input_constraint"
+                ),
                 file: issue.file.clone(),
                 path: issue.path.clone(),
                 source_id: None,
@@ -902,9 +932,19 @@ impl Workspace {
                 let owned = consumers
                     .remove(identity.catalog_id.as_str())
                     .unwrap_or_default();
-                snapshot.extension_definitions.push(ExtensionDefinitionView { identity, source: None,
-                    consumers: owned.into_iter().collect(), available,
-                    reason: (!available).then(|| "Exact catalog metadata is unavailable; affected consumers remain read-only until explicit restoration.".into()) });
+                snapshot
+                    .extension_definitions
+                    .push(ExtensionDefinitionView {
+                        identity,
+                        source: None,
+                        consumers: owned.into_iter().collect(),
+                        available,
+                        reason: (!available).then(|| {
+                            crate::product_message!(
+                                "backend.arxml.projection.extension_metadata_unavailable"
+                            )
+                        }),
+                    });
             }
         }
         snapshot.definition_fingerprint = self
@@ -915,17 +955,22 @@ impl Workspace {
         Ok(())
     }
 
-    pub fn source_text(&self, source_id: &str) -> Result<String, String> {
+    pub fn source_text(&self, source_id: &str) -> Result<String, crate::message::LocalizedText> {
         let source = self
             .snapshot
             .sources
             .iter()
             .position(|source| source.source_id == source_id)
-            .ok_or("Source ID does not belong to this workspace epoch.")?;
+            .ok_or_else(|| {
+                crate::product_message!("backend.arxml.projection.source_outside_workspace_epoch")
+            })?;
         Ok(self.files[source].text.clone())
     }
 
-    pub fn project_projection(&self, input_fingerprint: &str) -> Result<ProjectProjection, String> {
+    pub fn project_projection(
+        &self,
+        input_fingerprint: &str,
+    ) -> Result<ProjectProjection, crate::message::LocalizedText> {
         let identity = crate::rules::rule_set_identity()
             .unwrap_or_else(|_| crate::rules::trusted_rule_set_identity());
         Ok(ProjectProjection {
@@ -992,7 +1037,7 @@ impl Workspace {
         })
     }
 
-    pub fn input_fingerprint(&self) -> Result<String, String> {
+    pub fn input_fingerprint(&self) -> Result<String, crate::message::LocalizedText> {
         self.input_fingerprint_for_project(self.revision, self.project.as_ref())
     }
 
@@ -1000,7 +1045,7 @@ impl Workspace {
         &self,
         revision: u64,
         membership: Option<&super::project::ProjectMembership>,
-    ) -> Result<String, String> {
+    ) -> Result<String, crate::message::LocalizedText> {
         let identity = crate::rules::rule_set_identity()?;
         let mut digest = Sha256::new();
         for bytes in [
@@ -1109,7 +1154,12 @@ fn bind_diagnostic(
         witness.subjects = normalized;
         if let Some(object) = &diagnostic.object_id {
             witness.subjects.push(object.clone());
-            let definition = serde_json::from_str::<DefinitionDescriptor>(&witness.constraint).ok();
+            let definition = match &witness.constraint {
+                crate::message::LocalizedText::Raw(constraint) => {
+                    serde_json::from_str::<DefinitionDescriptor>(constraint).ok()
+                }
+                _ => None,
+            };
             if diagnostic.field_id.is_none() {
                 if let Some(definition) = definition {
                     let matching: Vec<_> = fields

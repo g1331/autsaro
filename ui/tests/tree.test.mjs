@@ -1,13 +1,16 @@
 // @vitest-environment jsdom
 import { createElement } from 'react';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { ProjectTree } from '../src/workbench/ProjectTree';
-import { ToolWindows } from '../src/workbench/ToolWindows';
+import { ToolWindows, toolLabels } from '../src/workbench/ToolWindows';
+import { EditorPage } from '../src/pages/EditorPage';
+import { localize, message, previewLanguage, translate } from '../src/i18n';
 import { initialState } from '../src/workbench/state';
 
 afterEach(() => {
   cleanup();
+  previewLanguage('system');
   vi.unstubAllGlobals();
 });
 
@@ -77,7 +80,7 @@ test('tool windows mount active content and retain source navigation when switch
         {
           severity: 'error',
           code: 'SOURCE_ERROR',
-          scope: 'source',
+          scope: 'source-safety',
           message: 'Source diagnostic',
           sourceId: 'source',
         },
@@ -99,7 +102,7 @@ test('tool windows mount active content and retain source navigation when switch
     createElement(ToolWindows, { controller: { ...controller, toolWindow: 'problems' } }),
   );
   expect(view.getByText('Source diagnostic')).toBeTruthy();
-  fireEvent.click(view.getByRole('button', { name: '定位真实来源' }));
+  fireEvent.click(view.getByRole('button', { name: translate('editor.tools.locateSource') }));
   expect(controller.readSource).toHaveBeenCalledWith('source');
   view.rerender(
     createElement(ToolWindows, {
@@ -107,5 +110,37 @@ test('tool windows mount active content and retain source navigation when switch
     }),
   );
   expect(view.queryByText('Source diagnostic')).toBeNull();
-  expect(view.getByRole('tabpanel', { name: '构建' })).toBeTruthy();
+  expect(view.getByRole('tabpanel', { name: localize(toolLabels.build) })).toBeTruthy();
+});
+
+test('changing language renders stored diagnostics and preserves editor drafts', () => {
+  previewLanguage('zh-CN');
+  const state = initialState();
+  const draft = { ...state.diagnosticDraft, requestId: '0x777' };
+  const diagnostic = message('editor.diagnostic.signalUnavailable');
+  const workspace = { name: 'Example', frames: [], signals: [], diagnostic: null };
+  const controller = {
+    ...state,
+    workspace,
+    diagnosticDraft: draft,
+    diagnosticError: diagnostic,
+    eligibleSignals: [],
+    eligibleMonitorFrames: [],
+    issues: [],
+    setDiagnosticDraft: vi.fn(),
+  };
+  const view = render(createElement(EditorPage, { controller, section: 'diagnostic' }));
+  const input = view.getByDisplayValue('0x777');
+  const originalDiagnostic = view.getByRole('alert').textContent;
+  act(() => previewLanguage('en'));
+  expect(view.getByRole('alert').textContent).toBe(localize(diagnostic));
+  expect(view.getByRole('alert').textContent).not.toBe(originalDiagnostic);
+  expect(view.getByDisplayValue('0x777')).toBe(input);
+  expect(controller.diagnosticDraft).toBe(draft);
+  expect(controller.workspace).toBe(workspace);
+  expect(controller.diagnosticError).toBe(diagnostic);
+  expect(controller.setDiagnosticDraft).not.toHaveBeenCalled();
+  act(() => previewLanguage('zh-CN'));
+  expect(view.getByRole('alert').textContent).toBe(originalDiagnostic);
+  expect(view.getByDisplayValue('0x777')).toBe(input);
 });

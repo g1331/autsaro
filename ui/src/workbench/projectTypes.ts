@@ -1,3 +1,4 @@
+import type { LocalizedText, Text } from '../i18n';
 export type Appearance = 'light' | 'dark' | 'system';
 export type RuleSetIdentity = { release: string; rulesVersion: string; sha256: string };
 export type ValidationScope = 'source-safety' | 'schema' | 'definition' | 'target-generation';
@@ -7,9 +8,9 @@ export type RuleCoverage = {
   scope: ValidationScope;
   subjects: string[];
   supported: boolean;
-  reason: string | null;
+  reason: LocalizedText | null;
 };
-export type ActionCapability = { action: string; available: boolean; reason: string | null };
+export type ActionCapability = { action: string; available: boolean; reason: LocalizedText | null };
 export type ValueKind =
   'integer' | 'float' | 'boolean' | 'enumeration' | 'string' | 'function-name' | 'reference';
 export type TypedValue = { kind: ValueKind; lexeme: string };
@@ -36,7 +37,7 @@ export type DefinitionDescriptor = {
   defaultOrigin: string | null;
   referenceDestinations: string[];
   writable: boolean;
-  reason: string | null;
+  reason: LocalizedText | null;
 };
 export type FieldDescriptor = DefinitionDescriptor & {
   fieldId: string;
@@ -59,7 +60,7 @@ export type ObjectProjection = {
   kind: string;
   definitionId: string | null;
   writable: boolean;
-  reason: string | null;
+  reason: LocalizedText | null;
 };
 export type ReferenceEdge = {
   objectId: string;
@@ -67,15 +68,15 @@ export type ReferenceEdge = {
   rawPath: string;
   dest: string;
   targetId: string | null;
-  reason: string | null;
+  reason: LocalizedText | null;
 };
 export type ConfigurationDiagnostic = {
   scope: ValidationScope;
   ruleId: string;
   severity: 'error' | 'warning' | 'info';
   code: string;
-  message: string;
-  remedy: string;
+  message: LocalizedText;
+  remedy: LocalizedText;
   file: string | null;
   path: string | null;
   sourceId: string | null;
@@ -84,8 +85,8 @@ export type ConfigurationDiagnostic = {
   witness: {
     ruleId: string;
     subjects: string[];
-    constraint: string;
-    counterexample: string;
+    constraint: LocalizedText;
+    counterexample: LocalizedText;
   } | null;
 };
 export type ReferenceCandidate = {
@@ -124,7 +125,7 @@ export type ExtensionDefinitionView = {
   source: string | null;
   consumers: string[];
   available: boolean;
-  reason: string | null;
+  reason: LocalizedText | null;
 };
 export type ScopeValidation = {
   scope: ValidationScope;
@@ -223,7 +224,7 @@ export type DocumentKind =
   | 'project-entry';
 export type DocumentTab = { kind: DocumentKind; sourceId?: string };
 export type ToolWindow = 'problems' | 'generation' | 'build' | 'host' | 'log';
-export type DraftGuard = { kind: 'context' | 'project'; title: string };
+export type DraftGuard = { kind: 'context' | 'project'; title: Text };
 export type ProjectCreationPreview = {
   revision: string;
   templateId: string;
@@ -248,6 +249,6 @@ export type ApplicationInitializationPreview = {
 };
 export type ApplicationInitializationOutcome = {
   projection: ProjectProjection;
-  warnings: string[];
+  warnings: LocalizedText[];
   retainedRecoveryFiles: string[];
 };

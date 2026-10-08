@@ -3,8 +3,10 @@ import type { Workbench } from '../workbench/useWorkbench';
 import { Boxes, CircleCheck, Hammer } from 'lucide-react';
 import { buildSteps, stageLabels } from '../workbench/useDelivery';
 import type { BuildTarget } from '../types';
+import { useLocale } from '../i18n';
 
 export function BuildPage({ controller }: { controller: Workbench }) {
+  const { t, text } = useLocale();
   const {
     unapplied,
     stages,
@@ -26,12 +28,9 @@ export function BuildPage({ controller }: { controller: Workbench }) {
     <div className="workflow-page delivery-view">
       <div className="section-header">
         <div>
-          <p className="eyebrow">GENERATION / BUILD</p>
-          <h2>生成与构建</h2>
-          <p>
-            从已保存、无阻断错误的配置生成独立 C99
-            工程，再在独立空目录构建主机目标。封存源码不会被构建修改；已有产物不覆盖。
-          </p>
+          <p className="eyebrow">{t('shell.build.eyebrow')}</p>
+          <h2>{t('shell.build.title')}</h2>
+          <p>{t('shell.build.description')}</p>
         </div>
       </div>
       <ol className="stage-list">
@@ -42,16 +41,16 @@ export function BuildPage({ controller }: { controller: Workbench }) {
             <li key={step.key} className={`stage ${state}`}>
               <span className="stage-number">{step.number}</span>
               <div className="stage-copy">
-                <strong>{step.label}</strong>
-                <small title={stages[step.key].detail}>
+                <strong>{text(step.label)}</strong>
+                <small title={text(stages[step.key].detail)}>
                   {state === 'stale' && unapplied
-                    ? '草稿未应用，需重新保存并校验'
-                    : stages[step.key].detail}
+                    ? t('shell.build.draftStale')
+                    : text(stages[step.key].detail)}
                 </small>
               </div>
               <span className="stage-pill">
                 {state === 'done' && <CircleCheck aria-hidden="true" size={13} />}
-                {stageLabels[state]}
+                {text(stageLabels[state])}
               </span>
             </li>
           );
@@ -59,7 +58,7 @@ export function BuildPage({ controller }: { controller: Workbench }) {
       </ol>
       {(unapplied || workspace.dirty || stages.validate.state !== 'done') && (
         <div className="page-guidance">
-          生成前须应用更改、保存配置并完成无阻断错误的校验。
+          {t('shell.build.guidance')}
           <button
             type="button"
             onClick={() =>
@@ -68,15 +67,15 @@ export function BuildPage({ controller }: { controller: Workbench }) {
                 : controller.setToolWindow('problems')
             }
           >
-            前往{unapplied || workspace.dirty ? '配置' : '诊断'}
+            {unapplied || workspace.dirty ? t('shell.go.configuration') : t('shell.go.diagnostics')}
           </button>
         </div>
       )}
       <div className="form-fields ecu-delivery-fields">
         <label>
-          主机构建目标
+          {t('shell.build.target')}
           <select
-            aria-label="主机构建目标"
+            aria-label={t('shell.build.target')}
             value={legacyTarget}
             disabled={!controller.native}
             onChange={(event) => void changeTarget(event.target.value as BuildTarget)}
@@ -86,9 +85,9 @@ export function BuildPage({ controller }: { controller: Workbench }) {
           </select>
         </label>
         <label>
-          独立主机构建目录
+          {t('shell.build.directory')}
           <input
-            aria-label="独立主机构建目录"
+            aria-label={t('shell.build.directory')}
             value={buildDirectory}
             disabled={disabled}
             onChange={(event) => changeEcuBuildDirectory(event.target.value)}
@@ -100,7 +99,7 @@ export function BuildPage({ controller }: { controller: Workbench }) {
           disabled={disabled}
           onClick={() => void chooseDirectory(changeEcuBuildDirectory)}
         >
-          选择独立主机构建目录
+          {t('shell.build.chooseDirectory')}
         </button>
       </div>
       <div className="delivery-actions">
@@ -111,7 +110,7 @@ export function BuildPage({ controller }: { controller: Workbench }) {
           disabled={disabled || unapplied || workspace.dirty || stages.validate.state !== 'done'}
         >
           <Boxes aria-hidden="true" size={15} />
-          选择目录并预览工程
+          {t('shell.build.preview')}
         </button>
         <button
           type="button"
@@ -119,13 +118,13 @@ export function BuildPage({ controller }: { controller: Workbench }) {
           onClick={() => generateProject(true)}
           disabled={disabled || unapplied || workspace.dirty || stages.validate.state !== 'done'}
         >
-          导出可重建主机交付包
+          {t('shell.build.handoff')}
         </button>
         <button
           type="button"
           className="outline-button"
           onClick={buildProject}
-          title={controller.executionReason}
+          title={text(controller.executionReason)}
           disabled={
             controller.executionDisabled ||
             unapplied ||
@@ -134,20 +133,16 @@ export function BuildPage({ controller }: { controller: Workbench }) {
           }
         >
           <Hammer aria-hidden="true" size={15} />
-          构建生成工程
+          {t('shell.build.build')}
         </button>
       </div>
       {generated && !unapplied && !workspace.dirty && stages.generate.state === 'done' && (
         <div className="result-section">
-          <h3>生成工程位置</h3>
+          <h3>{t('shell.build.location')}</h3>
           <p className="mono path-text">{generated.outputDirectory}</p>
-          <p>
-            {handoffGenerated
-              ? '交付包含源 ARXML 与 handoff.json；README.md 列明重新导入依赖。生成成功不代表主机行为已验证。'
-              : '交付目录内的 README.md 与 tools/ecu-tool.py 提供独立构建和启动方法；源 ARXML 未随普通工程交付。'}
-          </p>
+          <p>{handoffGenerated ? t('shell.build.handoffHelp') : t('shell.build.projectHelp')}</p>
           <details>
-            <summary>工程文件 · {generated.files.length}</summary>
+            <summary>{t('shell.build.files', { count: generated.files.length })}</summary>
             <ul>
               {generated.files.map((file, index) => (
                 <li key={`${file}-${index}`} className="mono">
@@ -160,18 +155,18 @@ export function BuildPage({ controller }: { controller: Workbench }) {
       )}
       {generated?.previousOutputDirectory && (
         <div className="page-guidance" role="status">
-          旧生成工程保留位置：
+          {t('shell.build.previousLocation')}
           <span className="mono path-text">{generated.previousOutputDirectory}</span>
-          。工具不会自动清理；确认不再需要后由文件所有者自行移走或删除。
+          {t('shell.build.previousHelp')}
         </div>
       )}
       {built && !unapplied && !workspace.dirty && stages.build.state === 'done' && (
         <div className="result-section">
-          <h3>构建二进制</h3>
+          <h3>{t('shell.build.binary')}</h3>
           <p className="mono path-text">{built.binaryPath}</p>
           <details>
-            <summary>构建日志</summary>
-            <OwnedLog text={built.log} label="真实构建日志" />
+            <summary>{t('shell.build.log')}</summary>
+            <OwnedLog text={built.log} label={t('shell.build.realLog')} />
           </details>
         </div>
       )}

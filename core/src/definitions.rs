@@ -28,13 +28,13 @@ pub struct DefinitionCatalog {
 }
 
 impl DefinitionCatalog {
-    pub fn builtin() -> Result<Self, String> {
-        static BUILTIN: LazyLock<Result<DefinitionCatalog, String>> =
+    pub fn builtin() -> Result<Self, crate::message::LocalizedText> {
+        static BUILTIN: LazyLock<Result<DefinitionCatalog, crate::message::LocalizedText>> =
             LazyLock::new(DefinitionCatalog::build_builtin);
         BUILTIN.clone()
     }
 
-    fn build_builtin() -> Result<Self, String> {
+    fn build_builtin() -> Result<Self, crate::message::LocalizedText> {
         let mut catalog = Self {
             entries: Arc::new(BTreeMap::new()),
             targets: Arc::new(BTreeMap::new()),
@@ -123,14 +123,17 @@ impl DefinitionCatalog {
 
     /// Deterministic metadata bytes for the trusted rule inventory, independent of
     /// filesystem locations and explicit project extension acceptance.
-    pub fn builtin_metadata_sha256() -> Result<String, String> {
+    pub fn builtin_metadata_sha256() -> Result<String, crate::message::LocalizedText> {
         let catalog = Self::builtin()?;
         let bytes = serde_json::to_vec(&(catalog.entries.as_ref(), catalog.targets.as_ref()))
             .map_err(|error| error.to_string())?;
         Ok(digest(&bytes))
     }
 
-    pub fn validate_documents(&self, files: &[(&Path, &str)]) -> Result<ScopeValidation, String> {
+    pub fn validate_documents(
+        &self,
+        files: &[(&Path, &str)],
+    ) -> Result<ScopeValidation, crate::message::LocalizedText> {
         validation::documents(self, files)
     }
 
@@ -138,13 +141,19 @@ impl DefinitionCatalog {
         &mut self,
         catalog_path: &Path,
         cache_root: &Path,
-    ) -> Result<ExtensionDefinitionIdentity, String> {
+    ) -> Result<ExtensionDefinitionIdentity, crate::message::LocalizedText> {
         extension::accept(self, catalog_path, cache_root)
     }
 
-    pub fn remove_extension(&mut self, catalog_id: &str) -> Result<(), String> {
+    pub fn remove_extension(
+        &mut self,
+        catalog_id: &str,
+    ) -> Result<(), crate::message::LocalizedText> {
         if self.extensions.remove(catalog_id).is_none() {
-            return Err(format!("Extension catalog is not accepted: {catalog_id}"));
+            return Err(crate::product_message!(
+                "backend.definitions.extension_catalog_not_accepted",
+                "catalog_id" => catalog_id
+            ));
         }
         let ids: Vec<_> = self
             .owners
@@ -165,20 +174,26 @@ impl DefinitionCatalog {
         &mut self,
         identities: &[ExtensionDefinitionIdentity],
         cache_root: &Path,
-    ) -> Result<Vec<ConfigurationDiagnostic>, String> {
+    ) -> Result<Vec<ConfigurationDiagnostic>, crate::message::LocalizedText> {
         extension::restore(self, identities, cache_root)
     }
 
     /// Validates without numeric wire coercion or changing the original lexeme.
-    pub fn validate_value(&self, definition_id: &str, value: &TypedValue) -> Result<(), String> {
-        let descriptor = self
-            .get(definition_id)
-            .ok_or_else(|| format!("Definition is unavailable: {definition_id}"))?;
+    pub fn validate_value(
+        &self,
+        definition_id: &str,
+        value: &TypedValue,
+    ) -> Result<(), crate::message::LocalizedText> {
+        let descriptor = self.get(definition_id).ok_or_else(|| {
+            crate::product_message!(
+                "backend.definitions.definition_unavailable",
+                "definition_id" => definition_id
+            )
+        })?;
         if !descriptor.writable {
-            return Err(descriptor
-                .reason
-                .clone()
-                .unwrap_or_else(|| "Definition is readonly".into()));
+            return Err(descriptor.reason.clone().unwrap_or_else(|| {
+                crate::product_message!("backend.definitions.definition_readonly")
+            }));
         }
         validation::value(descriptor, value)
     }
@@ -202,10 +217,13 @@ impl DefinitionCatalog {
         &mut self,
         descriptor: DefinitionDescriptor,
         targets: Vec<String>,
-    ) -> Result<(), String> {
+    ) -> Result<(), crate::message::LocalizedText> {
         let id = descriptor.definition_id.clone();
         if self.entries.contains_key(&id) {
-            return Err(format!("Definition identity conflict: {id}"));
+            return Err(crate::product_message!(
+                "backend.definitions.definition_identity_conflict",
+                "definition_id" => id
+            ));
         }
         if !targets.is_empty() {
             self.targets_mut().insert(id.clone(), targets);
@@ -214,13 +232,16 @@ impl DefinitionCatalog {
         Ok(())
     }
 
-    fn check_metadata(&self) -> Result<(), String> {
+    fn check_metadata(&self) -> Result<(), crate::message::LocalizedText> {
         for entry in self.entries.values() {
             if entry
                 .upper_multiplicity
                 .is_some_and(|upper| upper < entry.lower_multiplicity)
             {
-                return Err(format!("Invalid multiplicity: {}", entry.definition_id));
+                return Err(crate::product_message!(
+                    "backend.definitions.invalid_multiplicity",
+                    "definition_id" => entry.definition_id
+                ));
             }
             if let Some(kind @ (ValueKind::Integer | ValueKind::Float)) = entry.kind {
                 for bound in [&entry.minimum, &entry.maximum].into_iter().flatten() {
@@ -236,7 +257,10 @@ impl DefinitionCatalog {
             if let Some(default) = &entry.default_value {
                 validation::value(entry, default)?;
                 if entry.default_origin.is_none() {
-                    return Err(format!("Missing default origin: {}", entry.definition_id));
+                    return Err(crate::product_message!(
+                        "backend.definitions.missing_default_origin",
+                        "definition_id" => entry.definition_id
+                    ));
                 }
             }
         }

@@ -120,7 +120,7 @@ impl ExecutionSettings {
         objdump: PathBuf,
         git: PathBuf,
         python: PathBuf,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, crate::message::LocalizedText> {
         for (name, path) in [
             ("compiler", &compiler),
             ("objdump", &objdump),
@@ -132,10 +132,9 @@ impl ExecutionSettings {
                     .components()
                     .any(|part| matches!(part, std::path::Component::ParentDir))
             {
-                return Err(format!(
-                    "{name} must have a normalized absolute path: {}",
-                    path.display()
-                ));
+                return Err(
+                    crate::product_message!("backend.target.normalized_path", "name" => name, "path" => path.display()),
+                );
             }
         }
         Ok(Self {
@@ -146,11 +145,11 @@ impl ExecutionSettings {
         })
     }
 
-    pub fn from_environment() -> Result<Self, String> {
+    pub fn from_environment() -> Result<Self, crate::message::LocalizedText> {
         let required = |name: &str| {
-            std::env::var_os(name)
-                .map(PathBuf::from)
-                .ok_or_else(|| format!("Set {name} to the pinned executable's absolute path"))
+            std::env::var_os(name).map(PathBuf::from).ok_or_else(
+                || crate::product_message!("backend.target.executable_environment", "name" => name),
+            )
         };
         Self::new(
             required("AUTOSAR_CC")?,
@@ -164,5 +163,26 @@ impl ExecutionSettings {
         std::env::var_os("AUTOSAR_PYTHON")
             .map(PathBuf::from)
             .filter(|path| Path::new(path).is_absolute())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn invalid_executable_path_is_structured_without_changing_the_path() {
+        let relative = PathBuf::from("用户/compiler");
+        let error = ExecutionSettings::new(
+            relative.clone(),
+            relative.clone(),
+            relative.clone(),
+            relative.clone(),
+        )
+        .unwrap_err();
+        let wire = serde_json::to_value(&error).unwrap();
+        assert_eq!(wire["key"], "backend.target.normalized_path");
+        assert_eq!(wire["params"]["name"], "compiler");
+        assert_eq!(wire["params"]["path"], relative.display().to_string());
     }
 }

@@ -6,15 +6,15 @@ use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-pub(super) fn file_digest(path: &Path) -> Result<String, String> {
+pub(super) fn file_digest(path: &Path) -> Result<String, crate::LocalizedText> {
     let mut file = fs::File::open(path)
-        .map_err(|e| format!("生成文件缺失或无法读取 {}: {e}", path.display()))?;
+        .map_err(|e| crate::product_message!("backend.generation.generated_file_missing", "path" => path.display(), "error" => e.to_string()))?;
     let mut digest = Sha256::new();
     let mut buffer = [0u8; 8192];
     loop {
         let count = file
             .read(&mut buffer)
-            .map_err(|e| format!("生成文件无法读取 {}: {e}", path.display()))?;
+            .map_err(|e| crate::product_message!("backend.generation.generated_file_unreadable", "path" => path.display(), "error" => e.to_string()))?;
         if count == 0 {
             break;
         }
@@ -23,7 +23,7 @@ pub(super) fn file_digest(path: &Path) -> Result<String, String> {
     Ok(format!("{:x}", digest.finalize()))
 }
 
-fn integrity_record(dir: &Path, names: &[String]) -> Result<String, String> {
+fn integrity_record(dir: &Path, names: &[String]) -> Result<String, crate::LocalizedText> {
     let mut record = String::new();
     for name in names
         .iter()
@@ -52,7 +52,7 @@ pub(crate) fn reserve_directory(
     parent: &Path,
     role: &str,
     output_name: &OsStr,
-) -> Result<PathBuf, String> {
+) -> Result<PathBuf, crate::LocalizedText> {
     #[cfg(unix)]
     let builder = {
         use std::os::unix::fs::DirBuilderExt;
@@ -73,25 +73,34 @@ pub(crate) fn reserve_directory(
         match builder.create(&candidate) {
             Ok(()) => return Ok(candidate),
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(error) => return Err(format!("无法保留临时目录 {}: {error}", candidate.display())),
+            Err(error) => {
+                return Err(
+                    crate::product_message!("backend.generation.temporary_directory_failed", "path" => candidate.display(), "error" => error.to_string()),
+                );
+            }
         }
     }
-    Err("无法分配唯一的临时目录".into())
+    Err(crate::product_message!(
+        "backend.generation.temporary_directory_exhausted"
+    ))
 }
 
-fn check_entries(dir: &Path, root: &Path, names: &[String]) -> Result<(), String> {
-    for entry in fs::read_dir(dir).map_err(|e| e.to_string())? {
-        let entry = entry.map_err(|e| e.to_string())?;
+fn check_entries(dir: &Path, root: &Path, names: &[String]) -> Result<(), crate::LocalizedText> {
+    for entry in fs::read_dir(dir).map_err(|e| crate::LocalizedText::from(e.to_string()))? {
+        let entry = entry.map_err(|e| crate::LocalizedText::from(e.to_string()))?;
         let path = entry.path();
         let name = path
             .strip_prefix(root)
-            .map_err(|e| e.to_string())?
+            .map_err(|e| crate::LocalizedText::from(e.to_string()))?
             .to_str()
-            .ok_or("输出目录包含非 UTF-8 文件名")?
+            .ok_or_else(|| crate::product_message!("backend.generation.output_name_not_utf8"))?
             .replace('\\', "/");
-        let metadata = fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
+        let metadata =
+            fs::symlink_metadata(&path).map_err(|e| crate::LocalizedText::from(e.to_string()))?;
         if is_reparse_point(&metadata) {
-            return Err(format!("输出目录含链接或重解析点，拒绝替换: {name}"));
+            return Err(
+                crate::product_message!("backend.generation.output_link_refused", "path" => name),
+            );
         }
         let kind = metadata.file_type();
         if kind.is_dir() {
@@ -100,7 +109,9 @@ fn check_entries(dir: &Path, root: &Path, names: &[String]) -> Result<(), String
             // arbitrary owner directories, even empty ones, still refuse.
             let prefix = format!("{name}/");
             if !names.iter().any(|item| item.starts_with(&prefix)) {
-                return Err(format!("输出目录含用户目录，拒绝替换: {name}"));
+                return Err(
+                    crate::product_message!("backend.generation.output_user_directory_refused", "path" => name),
+                );
             }
             check_entries(&path, root, names)?;
         } else if !kind.is_file()
@@ -108,52 +119,54 @@ fn check_entries(dir: &Path, root: &Path, names: &[String]) -> Result<(), String
                 && name != "files.sha256"
                 && names.binary_search(&name).is_err())
         {
-            return Err(format!("输出目录含用户文件或链接，拒绝替换: {name}"));
+            return Err(
+                crate::product_message!("backend.generation.output_user_file_refused", "path" => name),
+            );
         }
     }
     Ok(())
 }
 
-fn verify_generated_output(dir: &Path, names: &[String]) -> Result<(), String> {
+fn verify_generated_output(dir: &Path, names: &[String]) -> Result<(), crate::LocalizedText> {
     let metadata = match fs::symlink_metadata(dir) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(error) => return Err(error.to_string()),
+        Err(error) => return Err(error.to_string().into()),
     };
     if is_reparse_point(&metadata) || !metadata.file_type().is_dir() {
-        return Err(format!(
-            "输出目录不是普通目录或是重解析点，拒绝覆盖: {}",
-            dir.display()
-        ));
+        return Err(
+            crate::product_message!("backend.generation.output_not_plain_directory", "path" => dir.display()),
+        );
     }
     if fs::read_dir(dir)
-        .map_err(|e| e.to_string())?
+        .map_err(|e| crate::LocalizedText::from(e.to_string()))?
         .next()
         .is_none()
     {
         return Ok(());
     }
     let previous = fs::read_to_string(dir.join("files.list"))
-        .map_err(|_| format!("输出目录缺少受支持的文件清单，拒绝覆盖: {}", dir.display()))?;
+        .map_err(|_| crate::product_message!("backend.generation.output_inventory_missing", "path" => dir.display()))?;
     if previous != format!("{}\n", names.join("\n")) {
-        return Err("已有输出清单不匹配，拒绝删除或覆盖其他生成版本".into());
+        return Err(crate::product_message!(
+            "backend.generation.output_inventory_mismatch"
+        ));
     }
     check_entries(dir, dir, names)?;
     let recorded = fs::read_to_string(dir.join("files.sha256")).map_err(|_| {
-        format!(
-            "输出目录缺少完整性记录，拒绝覆盖旧版生成目录: {}",
-            dir.display()
-        )
+        crate::product_message!("backend.generation.output_integrity_missing", "path" => dir.display())
     })?;
     if recorded != integrity_record(dir, names)? {
-        return Err("生成文件或完整性记录已被修改，拒绝覆盖用户内容".into());
+        return Err(crate::product_message!(
+            "backend.generation.output_modified"
+        ));
     }
     Ok(())
 }
 
-pub(crate) fn verify_build_input(output: &Path) -> Result<Vec<String>, String> {
+pub(crate) fn verify_build_input(output: &Path) -> Result<Vec<String>, crate::LocalizedText> {
     let list = fs::read_to_string(output.join("files.list"))
-        .map_err(|e| format!("生成工程缺少可读文件清单: {e}"))?;
+        .map_err(|e| crate::product_message!("backend.generation.build_inventory_missing", "error" => e.to_string()))?;
     let names: Vec<String> = list.lines().map(str::to_owned).collect();
     if names.is_empty()
         || list != format!("{}\n", names.join("\n"))
@@ -165,10 +178,16 @@ pub(crate) fn verify_build_input(output: &Path) -> Result<Vec<String>, String> {
                     .any(|component| !matches!(component, std::path::Component::Normal(_)))
         })
     {
-        return Err("生成工程文件清单格式或路径无效，拒绝构建".into());
+        return Err(crate::product_message!(
+            "backend.generation.build_inventory_invalid"
+        ));
     }
-    verify_generated_output(output, &names)
-        .map_err(|e| format!("生成工程完整性检查失败，拒绝构建: {e}"))?;
+    verify_generated_output(output, &names).map_err(|error| {
+        crate::LocalizedText::messages([
+            crate::product_message!("backend.generation.build_integrity_failed"),
+            error,
+        ])
+    })?;
     super::delivery::ownership::verify_directory(output, &names)?;
     Ok(names)
 }
@@ -186,17 +205,23 @@ pub(crate) fn seal_files(mut files: Vec<(String, Vec<u8>)>) -> Vec<(String, Vec<
     files.push(("files.sha256".into(), record.into_bytes()));
     files
 }
-pub(super) fn output_path(output: &Path) -> Result<PathBuf, String> {
-    let output_name = output.file_name().ok_or("输出目录须有名称")?;
-    let parent = output.parent().ok_or("输出目录须有父目录")?;
+pub(super) fn output_path(output: &Path) -> Result<PathBuf, crate::LocalizedText> {
+    let output_name = output
+        .file_name()
+        .ok_or_else(|| crate::product_message!("backend.generation.output_name_required"))?;
+    let parent = output
+        .parent()
+        .ok_or_else(|| crate::product_message!("backend.generation.output_parent_required"))?;
     if output_name == "." || output_name == ".." || parent.join(output_name) != output {
-        return Err("输出目录须为明确的命名路径，不能以 . 或 .. 结尾".into());
+        return Err(crate::product_message!(
+            "backend.generation.output_named_path_required"
+        ));
     }
     let parent = if parent.is_absolute() {
         parent.to_path_buf()
     } else {
         std::env::current_dir()
-            .map_err(|e| e.to_string())?
+            .map_err(|e| crate::LocalizedText::from(e.to_string()))?
             .join(parent)
     };
     Ok(parent.join(output_name))
@@ -215,7 +240,7 @@ fn inspect_prepared(
     output: &Path,
     include_changes: bool,
     guard: Option<&super::delivery::NativeGuard>,
-) -> Result<GenerationPreview, String> {
+) -> Result<GenerationPreview, crate::LocalizedText> {
     if let Some(guard) = guard {
         guard.verify(Some(output))?;
     }
@@ -226,8 +251,8 @@ fn inspect_prepared(
         .iter()
         .find(|(path, _)| path == super::delivery::OWNERSHIP_PATH)
     {
-        let ledger: super::delivery::OwnershipLedger =
-            serde_json::from_slice(bytes).map_err(|error| error.to_string())?;
+        let ledger: super::delivery::OwnershipLedger = serde_json::from_slice(bytes)
+            .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
         ledger
             .files
             .into_iter()
@@ -252,7 +277,11 @@ fn inspect_prepared(
         let before = match fs::read(&path) {
             Ok(bytes) => Some(bytes),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-            Err(error) => return Err(format!("无法读取旧生成文件 {}: {error}", path.display())),
+            Err(error) => {
+                return Err(
+                    crate::product_message!("backend.generation.previous_file_unreadable", "path" => path.display(), "error" => error.to_string()),
+                );
+            }
         };
         digest.update((name.len() as u64).to_le_bytes());
         digest.update(name.as_bytes());
@@ -304,7 +333,7 @@ fn inspect_prepared(
             before: if status == "changed" {
                 Some(
                     String::from_utf8(before.unwrap())
-                        .map_err(|_| format!("旧生成文件不是 UTF-8 文本: {name}"))?,
+                        .map_err(|_| crate::product_message!("backend.generation.previous_file_not_utf8", "path" => name))?,
                 )
             } else {
                 None
@@ -312,7 +341,7 @@ fn inspect_prepared(
             after: if status != "unchanged" {
                 Some(
                     String::from_utf8(after.clone())
-                        .map_err(|_| format!("新生成文件不是 UTF-8 文本: {name}"))?,
+                        .map_err(|_| crate::product_message!("backend.generation.new_file_not_utf8", "path" => name))?,
                 )
             } else {
                 None
@@ -328,7 +357,7 @@ fn inspect_prepared(
 pub(crate) fn preview_prepared(
     files: &[(String, Vec<u8>)],
     output: &Path,
-) -> Result<GenerationPreview, String> {
+) -> Result<GenerationPreview, crate::LocalizedText> {
     inspect_prepared(files, output, true, None)
 }
 
@@ -336,7 +365,7 @@ pub(crate) fn preview_prepared_checked(
     files: &[(String, Vec<u8>)],
     output: &Path,
     guard: Option<&super::delivery::NativeGuard>,
-) -> Result<GenerationPreview, String> {
+) -> Result<GenerationPreview, crate::LocalizedText> {
     inspect_prepared(files, output, true, guard)
 }
 
@@ -355,7 +384,7 @@ impl StagedGeneration {
         files: Vec<(String, Vec<u8>)>,
         output: &Path,
         expected_revision: Option<&str>,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, crate::LocalizedText> {
         Self::new_guarded(files, output, expected_revision, None)
     }
 
@@ -364,16 +393,21 @@ impl StagedGeneration {
         output: &Path,
         expected_revision: Option<&str>,
         guard: Option<super::delivery::NativeGuard>,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, crate::LocalizedText> {
         let output = output_path(output)?;
         let revision = inspect_prepared(&files, &output, false, guard.as_ref())?.revision;
         if expected_revision.is_some_and(|expected| expected != revision) {
-            return Err("生成预览已失效：配置、来源、目标或旧输出已变化；请重新预览".into());
+            return Err(crate::product_message!("backend.generation.preview_stale"));
         }
         let names = file_names(&files);
-        let parent = output.parent().ok_or("输出目录须有父目录")?;
-        let output_name = output.file_name().ok_or("输出目录须有名称")?;
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        let parent = output
+            .parent()
+            .ok_or_else(|| crate::product_message!("backend.generation.output_parent_required"))?;
+        let output_name = output
+            .file_name()
+            .ok_or_else(|| crate::product_message!("backend.generation.output_name_required"))?;
+        fs::create_dir_all(parent)
+            .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
         let stage = reserve_directory(parent, "stage", output_name)?;
         let staged = Self {
             files,
@@ -385,32 +419,39 @@ impl StagedGeneration {
         };
         for (name, contents) in &staged.files {
             let target = staged.stage.as_ref().unwrap().join(name);
-            fs::create_dir_all(target.parent().unwrap()).map_err(|error| error.to_string())?;
-            fs::write(target, contents).map_err(|error| error.to_string())?;
+            fs::create_dir_all(target.parent().unwrap())
+                .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
+            fs::write(target, contents)
+                .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
         }
         Ok(staged)
     }
 
     /// Call while holding the workbench's fingerprint/operation commit lock.
-    pub fn commit(mut self) -> Result<GenerationReport, String> {
+    pub fn commit(mut self) -> Result<GenerationReport, crate::LocalizedText> {
         if inspect_prepared(&self.files, &self.output, false, self.guard.as_ref())?.revision
             != self.revision
         {
-            return Err("生成预览已失效：旧输出在确认期间变化；请重新预览".into());
+            return Err(crate::product_message!(
+                "backend.generation.confirmation_stale"
+            ));
         }
         let output = &self.output;
-        let parent = output.parent().ok_or("输出目录须有父目录")?;
-        let output_name = output.file_name().ok_or("输出目录须有名称")?;
+        let parent = output
+            .parent()
+            .ok_or_else(|| crate::product_message!("backend.generation.output_parent_required"))?;
+        let output_name = output
+            .file_name()
+            .ok_or_else(|| crate::product_message!("backend.generation.output_name_required"))?;
         let existing = match fs::symlink_metadata(&output) {
             Ok(metadata) if is_reparse_point(&metadata) || !metadata.file_type().is_dir() => {
-                return Err(format!(
-                    "输出目录已变为链接或非普通目录，拒绝替换: {}",
-                    output.display()
-                ));
+                return Err(
+                    crate::product_message!("backend.generation.output_changed_type", "path" => output.display()),
+                );
             }
             Ok(_) => true,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
-            Err(error) => return Err(error.to_string()),
+            Err(error) => return Err(error.to_string().into()),
         };
         // Producer/source validation can re-render a complete existing package.
         // Re-read live bytes again at the installation boundary, not just before
@@ -422,22 +463,18 @@ impl StagedGeneration {
             let backup_root = reserve_directory(parent, "backup", output_name)?;
             let preserved = backup_root.join(output_name);
             fs::rename(&output, &preserved).map_err(|e| {
-                format!(
-                    "无法保留旧生成工程 {} 至 {}: {e}",
-                    output.display(),
-                    preserved.display()
-                )
+                crate::product_message!("backend.generation.previous_output_backup_failed", "path" => output.display(), "backup" => preserved.display(), "error" => e.to_string())
             })?;
             Some(preserved)
         } else {
             None
         };
         if let Err(error) = fs::rename(self.stage.as_ref().unwrap(), output) {
-            let recovery = backup
-                .as_ref()
-                .map(|path| format!("；原输出保留在 {}", path.display()))
-                .unwrap_or_default();
-            return Err(format!("无法安装新生成工程: {error}{recovery}"));
+            return Err(if let Some(path) = &backup {
+                crate::product_message!("backend.generation.output_install_failed_backup", "error" => error.to_string(), "path" => path.display())
+            } else {
+                crate::product_message!("backend.generation.output_install_failed", "error" => error.to_string())
+            });
         }
         self.stage = None;
         Ok(GenerationReport {
@@ -461,7 +498,7 @@ pub(crate) fn generate_prepared(
     files: Vec<(String, Vec<u8>)>,
     output: &Path,
     expected_revision: Option<&str>,
-) -> Result<GenerationReport, String> {
+) -> Result<GenerationReport, crate::LocalizedText> {
     StagedGeneration::new(files, output, expected_revision)?.commit()
 }
 
@@ -473,38 +510,55 @@ pub struct StagedBuild {
 }
 
 impl StagedBuild {
-    pub fn new(project: &Path, output: &Path) -> Result<Self, String> {
+    pub fn new(project: &Path, output: &Path) -> Result<Self, crate::LocalizedText> {
         let output = output_path(output)?;
         for path in output.ancestors().chain(project.ancestors()) {
             match fs::symlink_metadata(path) {
                 Ok(metadata) if is_reparse_point(&metadata) => {
-                    return Err(format!("构建路径不能经过链接: {}", path.display()));
+                    return Err(
+                        crate::product_message!("backend.generation.build_link_refused", "path" => path.display()),
+                    );
                 }
                 Ok(_) => {}
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => return Err(error.to_string()),
+                Err(error) => return Err(error.to_string().into()),
             }
         }
-        let project = project.canonicalize().map_err(|error| error.to_string())?;
-        let requested_parent = output.parent().ok_or("构建输出须有父目录")?;
+        let project = project
+            .canonicalize()
+            .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
+        let requested_parent = output
+            .parent()
+            .ok_or_else(|| crate::product_message!("backend.generation.build_parent_required"))?;
         let mut existing = requested_parent;
-        while !existing.try_exists().map_err(|error| error.to_string())? {
-            existing = existing.parent().ok_or("构建输出须有现存父目录")?;
+        while !existing
+            .try_exists()
+            .map_err(|error| crate::LocalizedText::from(error.to_string()))?
+        {
+            existing = existing.parent().ok_or_else(|| {
+                crate::product_message!("backend.generation.build_existing_parent_required")
+            })?;
         }
         let parent = existing
             .canonicalize()
-            .map_err(|error| error.to_string())?
+            .map_err(|error| crate::LocalizedText::from(error.to_string()))?
             .join(
                 requested_parent
                     .strip_prefix(existing)
-                    .map_err(|error| error.to_string())?,
+                    .map_err(|error| crate::LocalizedText::from(error.to_string()))?,
             );
-        let output = parent.join(output.file_name().ok_or("构建输出须有名称")?);
+        let output =
+            parent.join(output.file_name().ok_or_else(|| {
+                crate::product_message!("backend.generation.build_name_required")
+            })?);
         if output.starts_with(&project) || project.starts_with(&output) {
-            return Err("构建输出必须位于生成源码之外".into());
+            return Err(crate::product_message!(
+                "backend.generation.build_independent_output_required"
+            ));
         }
         check_empty_build_output(&output)?;
-        fs::create_dir_all(&parent).map_err(|error| error.to_string())?;
+        fs::create_dir_all(&parent)
+            .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
         let root = reserve_directory(&parent, "build-stage", output.file_name().unwrap())?;
         let directory = root.join("build");
         Ok(Self {
@@ -518,12 +572,14 @@ impl StagedBuild {
         &self.directory
     }
 
-    pub fn commit(mut self) -> Result<PathBuf, String> {
+    pub fn commit(mut self) -> Result<PathBuf, crate::LocalizedText> {
         check_empty_build_output(&self.output)?;
         if self.output.exists() {
-            fs::remove_dir(&self.output).map_err(|error| error.to_string())?;
+            fs::remove_dir(&self.output)
+                .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
         }
-        fs::rename(&self.directory, &self.output).map_err(|error| error.to_string())?;
+        fs::rename(&self.directory, &self.output)
+            .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
         Ok(std::mem::take(&mut self.output))
     }
 }
@@ -534,23 +590,61 @@ impl Drop for StagedBuild {
     }
 }
 
-fn check_empty_build_output(output: &Path) -> Result<(), String> {
+fn check_empty_build_output(output: &Path) -> Result<(), crate::LocalizedText> {
     match fs::symlink_metadata(output) {
-        Ok(metadata) if is_reparse_point(&metadata) || !metadata.is_dir() => {
-            Err("构建输出不能是链接或非普通目录".into())
-        }
+        Ok(metadata) if is_reparse_point(&metadata) || !metadata.is_dir() => Err(
+            crate::product_message!("backend.generation.build_plain_directory_required"),
+        ),
         Ok(_) => {
             if fs::read_dir(output)
-                .map_err(|error| error.to_string())?
+                .map_err(|error| crate::LocalizedText::from(error.to_string()))?
                 .next()
                 .is_some()
             {
-                Err("构建输出必须为新目录或空目录；所有者文件未修改".into())
+                Err(crate::product_message!(
+                    "backend.generation.build_empty_output_required"
+                ))
             } else {
                 Ok(())
             }
         }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error.to_string()),
+        Err(error) => Err(error.to_string().into()),
+    }
+}
+
+#[cfg(test)]
+mod localization_tests {
+    use super::{output_path, reserve_directory};
+    use crate::LocalizedText;
+    use std::ffi::OsStr;
+    use std::path::Path;
+
+    #[test]
+    fn unnamed_output_uses_structured_product_error() {
+        let error = output_path(Path::new("")).unwrap_err();
+        assert_eq!(
+            serde_json::to_value(error).unwrap(),
+            serde_json::json!({"key": "backend.generation.output_name_required", "params": {}})
+        );
+    }
+
+    #[test]
+    fn temporary_directory_failure_preserves_path_and_system_evidence() {
+        let parent = Path::new("missing\0parent");
+        let error = reserve_directory(parent, "stage", OsStr::new("output")).unwrap_err();
+        match error {
+            LocalizedText::Message(message) => {
+                assert_eq!(message.key, "backend.generation.temporary_directory_failed");
+                assert!(
+                    message.params["path"]
+                        .as_str()
+                        .unwrap()
+                        .contains("missing\0parent")
+                );
+                assert!(!message.params["error"].as_str().unwrap().is_empty());
+            }
+            other => panic!("Expected a product envelope, got {other:?}"),
+        }
     }
 }

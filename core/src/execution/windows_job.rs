@@ -86,26 +86,36 @@ unsafe extern "system" {
     fn ResumeThread(thread: *mut c_void) -> u32;
 }
 
-fn checked(result: i32, operation: &str) -> Result<(), String> {
+use crate::message::LocalizedText;
+fn checked(result: i32, operation: LocalizedText) -> Result<(), LocalizedText> {
     if result == 0 {
-        Err(format!("{operation}: {}", io::Error::last_os_error()))
+        Err(LocalizedText::messages([
+            operation,
+            io::Error::last_os_error().to_string().into(),
+        ]))
     } else {
         Ok(())
     }
 }
-fn owned(raw: *mut c_void, operation: &str) -> Result<OwnedHandle, String> {
+fn owned(raw: *mut c_void, operation: LocalizedText) -> Result<OwnedHandle, LocalizedText> {
     if raw.is_null() || raw == (-1isize as *mut c_void) {
-        return Err(format!("{operation}: {}", io::Error::last_os_error()));
+        return Err(LocalizedText::messages([
+            operation,
+            io::Error::last_os_error().to_string().into(),
+        ]));
     }
     // SAFETY: successful Win32 calls return a new, exclusively owned handle.
     Ok(unsafe { OwnedHandle::from_raw_handle(raw) })
 }
 
-fn resume_primary(process: u32) -> Result<(), String> {
+fn resume_primary(process: u32) -> Result<(), LocalizedText> {
     // ChildExt::main_thread_handle is nightly-only. Toolhelp plus creation time
     // finds the original (earliest) thread while the new process is suspended.
     // SAFETY: the snapshot and output records have the documented Win32 layout.
-    let snapshot = owned(unsafe { CreateToolhelp32Snapshot(4, 0) }, "Thread snapshot")?;
+    let snapshot = owned(
+        unsafe { CreateToolhelp32Snapshot(4, 0) },
+        crate::product_message!("backend.execution.thread_snapshot"),
+    )?;
     let mut entry = ThreadEntry {
         size: size_of::<ThreadEntry>() as u32,
         ..Default::default()
@@ -114,7 +124,7 @@ fn resume_primary(process: u32) -> Result<(), String> {
     // SAFETY: entry is writable and its size is set before enumeration.
     checked(
         unsafe { Thread32First(snapshot.as_raw_handle(), &mut entry) },
-        "First thread",
+        crate::product_message!("backend.execution.first_thread"),
     )?;
     loop {
         if entry.process == process {
@@ -122,7 +132,7 @@ fn resume_primary(process: u32) -> Result<(), String> {
             // query-time and suspend/resume rights do not grant tree-wide access.
             let thread = owned(
                 unsafe { OpenThread(0x42, 0, entry.thread) },
-                "Open primary thread",
+                crate::product_message!("backend.execution.open_primary"),
             )?;
             let mut times: [FileTime; 4] = std::array::from_fn(|_| FileTime::default());
             let [created_time, exited, kernel, user] = &mut times;
@@ -131,7 +141,7 @@ fn resume_primary(process: u32) -> Result<(), String> {
                 unsafe {
                     GetThreadTimes(thread.as_raw_handle(), created_time, exited, kernel, user)
                 },
-                "Thread creation time",
+                crate::product_message!("backend.execution.thread_creation"),
             )?;
             let created = (u64::from(times[0].high) << 32) | u64::from(times[0].low);
             if primary.as_ref().is_none_or(|(prior, _)| created < *prior) {
@@ -143,19 +153,21 @@ fn resume_primary(process: u32) -> Result<(), String> {
         if unsafe { Thread32Next(snapshot.as_raw_handle(), &mut entry) } == 0 {
             let error = io::Error::last_os_error();
             if error.raw_os_error() != Some(18) {
-                return Err(format!("Next thread: {error}"));
+                return Err(
+                    crate::product_message!("backend.execution.next_thread", "error" => error),
+                );
             }
             break;
         }
     }
-    let (_, thread) = primary.ok_or("Suspended command has no primary thread")?;
+    let (_, thread) =
+        primary.ok_or_else(|| crate::product_message!("backend.execution.primary_missing"))?;
     // SAFETY: the primary thread belongs to this live, suspended child.
     let prior = unsafe { ResumeThread(thread.as_raw_handle()) };
     if prior != 1 {
-        return Err(format!(
-            "Resume primary thread returned {prior}: {}",
-            io::Error::last_os_error()
-        ));
+        return Err(
+            crate::product_message!("backend.execution.resume_primary_failed", "prior" => prior, "error" => io::Error::last_os_error()),
+        );
     }
     Ok(())
 }
@@ -165,11 +177,11 @@ pub(crate) struct ProcessTree {
     job: Arc<OwnedHandle>,
 }
 impl ProcessTree {
-    pub(crate) fn spawn(command: &mut Command) -> Result<Self, String> {
+    pub(crate) fn spawn(command: &mut Command) -> Result<Self, LocalizedText> {
         // SAFETY: null attributes produce a private, non-inheritable job handle.
         let job = owned(
             unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) },
-            "Create job",
+            crate::product_message!("backend.execution.create_job"),
         )?;
         let mut limits = ExtendedLimits::default();
         limits.basic.flags = 0x2000; // JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
@@ -183,11 +195,11 @@ impl ProcessTree {
                     size_of::<ExtendedLimits>() as u32,
                 )
             },
-            "Configure private job",
+            crate::product_message!("backend.execution.configure_job"),
         )?;
         Self::spawn_in_job(command, job)
     }
-    fn spawn_in_job(command: &mut Command, job: OwnedHandle) -> Result<Self, String> {
+    fn spawn_in_job(command: &mut Command, job: OwnedHandle) -> Result<Self, LocalizedText> {
         let child = command
             .creation_flags(0x08000004)
             .spawn()
@@ -201,19 +213,19 @@ impl ProcessTree {
             unsafe {
                 AssignProcessToJobObject(tree.job.as_raw_handle(), tree.child.as_raw_handle())
             },
-            "Assign suspended command",
+            crate::product_message!("backend.execution.assign_suspended"),
         ) {
             tree.child.kill().map_err(|cleanup| {
-                format!("{error}; suspended parent cleanup failed: {cleanup}")
+                LocalizedText::messages([error.clone(), crate::product_message!("backend.execution.parent_cleanup_failed", "error" => cleanup)])
             })?;
             tree.child
                 .wait()
-                .map_err(|cleanup| format!("{error}; suspended parent wait failed: {cleanup}"))?;
+                .map_err(|cleanup| LocalizedText::messages([error.clone(), crate::product_message!("backend.execution.parent_wait_failed", "error" => cleanup)]))?;
             return Err(error);
         }
         if let Err(error) = resume_primary(tree.child.id()) {
             tree.stop()
-                .map_err(|cleanup| format!("{error}; {cleanup}"))?;
+                .map_err(|cleanup| LocalizedText::messages([error.clone(), cleanup]))?;
             return Err(error);
         }
         Ok(tree)
@@ -225,17 +237,21 @@ impl ProcessTree {
         drop(self.child.stdin.take());
     }
 
-    pub(crate) fn write_stdin(&mut self, bytes: &[u8], deadline_ns: u64) -> Result<(), String> {
+    pub(crate) fn write_stdin(
+        &mut self,
+        bytes: &[u8],
+        deadline_ns: u64,
+    ) -> Result<(), LocalizedText> {
         use std::io::Write;
         let remaining = deadline_ns.saturating_sub(super::monotonic_ns()?);
         if remaining == 0 {
-            return Err("Interactive stdin deadline expired".into());
+            return Err(crate::product_message!("backend.execution.stdin_expired"));
         }
         let mut pipe = self
             .child
             .stdin
             .take()
-            .ok_or("Interactive stdin is not open")?;
+            .ok_or_else(|| crate::product_message!("backend.execution.stdin_closed"))?;
         // A Windows anonymous-pipe write can block. The transferred buffer must
         // remain owned by the writer if OS cleanup cannot be confirmed.
         let bytes = bytes.to_vec();
@@ -249,18 +265,22 @@ impl ProcessTree {
                 self.child.stdin = Some(pipe);
                 writer
                     .join()
-                    .map_err(|_| "Interactive stdin writer panicked")?;
-                result.map_err(|error| error.to_string())
+                    .map_err(|_| crate::product_message!("backend.execution.writer_panicked"))?;
+                result.map_err(|error| error.to_string().into())
             }
             Err(error) => {
-                self.stop()
-                    .map_err(|cleanup| format!("Interactive stdin failed: {error}; {cleanup}"))?;
-                writer
-                    .join()
-                    .map_err(|_| "Interactive stdin writer panicked during closure")?;
-                Err(format!(
-                    "Interactive stdin exceeded its absolute deadline: {error}"
-                ))
+                self.stop().map_err(|cleanup| {
+                    LocalizedText::messages([
+                        crate::product_message!("backend.execution.stdin_failed", "error" => error),
+                        cleanup,
+                    ])
+                })?;
+                writer.join().map_err(|_| {
+                    crate::product_message!("backend.execution.writer_close_panicked")
+                })?;
+                Err(
+                    crate::product_message!("backend.execution.stdin_deadline_exceeded", "error" => error),
+                )
             }
         }
     }
@@ -270,15 +290,15 @@ impl ProcessTree {
     pub(crate) fn id(&self) -> u32 {
         self.child.id()
     }
-    pub(crate) fn active(&self) -> Result<u32, String> {
+    pub(crate) fn active(&self) -> Result<u32, LocalizedText> {
         job_active(&self.job)
     }
-    pub(crate) fn stop(&mut self) -> Result<(), String> {
+    pub(crate) fn stop(&mut self) -> Result<(), LocalizedText> {
         if self.active()? != 0 {
             // SAFETY: the private job contains only this command and its descendants.
             checked(
                 unsafe { TerminateJobObject(self.job.as_raw_handle(), 1) },
-                "Terminate command tree",
+                crate::product_message!("backend.execution.terminate_tree"),
             )?;
         }
         let started = Instant::now();
@@ -286,11 +306,13 @@ impl ProcessTree {
             if self.active()? == 0 {
                 self.child
                     .wait()
-                    .map_err(|e| format!("Wait for closed command: {e}"))?;
+                    .map_err(|e| crate::product_message!("backend.execution.wait_closed_failed", "error" => e))?;
                 return Ok(());
             }
             if started.elapsed() >= Duration::from_secs(5) {
-                return Err("Command descendant shutdown could not be confirmed within 5s.".into());
+                return Err(crate::product_message!(
+                    "backend.execution.shutdown_unconfirmed"
+                ));
             }
             std::thread::sleep(Duration::from_millis(10));
         }
@@ -306,7 +328,7 @@ impl Drop for ProcessTree {
     }
 }
 
-fn job_active(job: &OwnedHandle) -> Result<u32, String> {
+fn job_active(job: &OwnedHandle) -> Result<u32, LocalizedText> {
     let mut accounting = Accounting::default();
     // SAFETY: writable accounting record and live private job handle.
     checked(
@@ -319,18 +341,18 @@ fn job_active(job: &OwnedHandle) -> Result<u32, String> {
                 std::ptr::null_mut(),
             )
         },
-        "Observe command tree shutdown",
+        crate::product_message!("backend.execution.observe_shutdown"),
     )?;
     Ok(accounting.active)
 }
 
-pub(super) fn stop_jobs(jobs: &[Arc<OwnedHandle>]) -> Result<(), String> {
+pub(super) fn stop_jobs(jobs: &[Arc<OwnedHandle>]) -> Result<(), LocalizedText> {
     let mut failure = None;
     for job in jobs {
         // SAFETY: only handles for commands registered with this owner are held.
         if let Err(error) = checked(
             unsafe { TerminateJobObject(job.as_raw_handle(), 1) },
-            "Cancel owned command tree",
+            crate::product_message!("backend.execution.cancel_tree"),
         ) {
             failure = Some(error);
         }
@@ -345,7 +367,9 @@ pub(super) fn stop_jobs(jobs: &[Arc<OwnedHandle>]) -> Result<(), String> {
             return failure.map_or(Ok(()), Err);
         }
         if Instant::now() >= deadline {
-            return Err("cleanup_unconfirmed: cancelled Windows owner members remain".into());
+            return Err(crate::product_message!(
+                "backend.execution.cancel_cleanup_unconfirmed"
+            ));
         }
         std::thread::sleep(Duration::from_millis(10));
     }
@@ -381,7 +405,7 @@ mod tests {
         // are borrowed and must not be closed.
         let job = owned(
             unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) },
-            "Create test job",
+            crate::product_message!("backend.execution.test_create_job"),
         )
         .unwrap();
         let mut duplicate = std::ptr::null_mut();
@@ -397,10 +421,14 @@ mod tests {
                     0,
                 )
             },
-            "Query-only job",
+            crate::product_message!("backend.execution.test_query_job"),
         )
         .unwrap();
-        let limited = owned(duplicate, "Duplicate test job").unwrap();
+        let limited = owned(
+            duplicate,
+            crate::product_message!("backend.execution.test_duplicate_job"),
+        )
+        .unwrap();
         let mut command = Command::new("powershell.exe");
         command.args([
             "-NoProfile",
@@ -414,7 +442,10 @@ mod tests {
         let error = ProcessTree::spawn_in_job(&mut command, limited)
             .err()
             .unwrap();
-        assert!(error.contains("Assign suspended command"), "{error}");
+        assert!(
+            error.to_string().contains("Assign suspended command"),
+            "{error}"
+        );
         assert!(
             !marker.exists(),
             "Rejected command ran before job assignment"

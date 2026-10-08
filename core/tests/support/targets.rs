@@ -71,7 +71,9 @@ pub(super) fn windows_and_linux_ecu_targets_execute_production_protocol() {
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&logs, fs::Permissions::from_mode(0o700)).unwrap();
     }
-    let run_tool = |source: &Path, arguments: Vec<OsString>| -> Result<String, String> {
+    let run_tool = |source: &Path,
+                    arguments: Vec<OsString>|
+     -> Result<String, autosar_config_core::LocalizedText> {
         let mut argv = vec![
             settings.python.as_os_str().into(),
             source.join("tools/ecu-tool.py").into_os_string(),
@@ -92,7 +94,7 @@ pub(super) fn windows_and_linux_ecu_targets_execute_production_protocol() {
             logs.clone(),
         )?;
         let result = run_bounded(spec)?;
-        fs::read_to_string(result.stdout).map_err(|error| error.to_string())
+        fs::read_to_string(result.stdout).map_err(|error| error.to_string().into())
     };
     let production = scratch.join("production build");
     println!(

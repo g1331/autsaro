@@ -8,6 +8,32 @@ use std::path::Path;
 #[cfg(windows)]
 use std::process::{Command, Stdio};
 
+fn message_has_key(text: &autosar_config_core::LocalizedText, key: &str) -> bool {
+    match text {
+        autosar_config_core::LocalizedText::Message(message) => message.key == key,
+        autosar_config_core::LocalizedText::Messages(messages) => {
+            messages.iter().any(|text| message_has_key(text, key))
+        }
+        autosar_config_core::LocalizedText::Raw(_) => false,
+    }
+}
+
+fn message_has_parameter(
+    text: &autosar_config_core::LocalizedText,
+    name: &str,
+    expected: &str,
+) -> bool {
+    match text {
+        autosar_config_core::LocalizedText::Message(message) => {
+            message.params.get(name).and_then(serde_json::Value::as_str) == Some(expected)
+        }
+        autosar_config_core::LocalizedText::Messages(messages) => messages
+            .iter()
+            .any(|text| message_has_parameter(text, name, expected)),
+        autosar_config_core::LocalizedText::Raw(_) => false,
+    }
+}
+
 #[cfg(windows)]
 pub(super) fn global_ecuc_pdu_binding_roundtrips_and_rejects_wrong_com_reference_type() {
     let temp = Scratch::new();
@@ -124,16 +150,21 @@ pub(super) fn global_ecuc_pdu_binding_roundtrips_and_rejects_wrong_com_reference
             .as_deref()
             .is_some_and(|path| path.contains("Pdu_Live"))
     );
-    assert!(unsupported.save().unwrap_err().contains("PDU_UNSUPPORTED"));
-    assert!(
-        generator::generate(
+    assert!(message_has_parameter(
+        &unsupported.save().unwrap_err(),
+        "code",
+        "PDU_UNSUPPORTED"
+    ));
+    assert!(message_has_parameter(
+        &generator::generate(
             &mut unsupported,
             &temp.0.join("Unsafe"),
             tooling::native_target()
         )
-        .unwrap_err()
-        .contains("PDU_UNSUPPORTED")
-    );
+        .unwrap_err(),
+        "code",
+        "PDU_UNSUPPORTED"
+    ));
     assert_eq!(fs::read_to_string(source).unwrap(), wrong);
 }
 
@@ -508,16 +539,21 @@ pub(super) fn missing_required_com_or_ecuc_root_is_read_only_and_cannot_generate
                 .as_deref()
                 .is_some_and(|file| file.contains("Closure.arxml"))
         );
-        assert!(imported.save().unwrap_err().contains("PDU_UNSUPPORTED"));
-        assert!(
-            generator::generate(
+        assert!(message_has_parameter(
+            &imported.save().unwrap_err(),
+            "code",
+            "PDU_UNSUPPORTED"
+        ));
+        assert!(message_has_parameter(
+            &generator::generate(
                 &mut imported,
                 &temp.0.join(format!("Unsafe{name}")),
                 tooling::native_target()
             )
-            .unwrap_err()
-            .contains("PDU_UNSUPPORTED")
-        );
+            .unwrap_err(),
+            "code",
+            "PDU_UNSUPPORTED"
+        ));
         assert_eq!(fs::read_to_string(&source).unwrap(), modified);
     }
     let doc = roxmltree::Document::parse(&xml).unwrap();
@@ -568,16 +604,21 @@ pub(super) fn missing_required_com_or_ecuc_root_is_read_only_and_cannot_generate
                 .as_deref()
                 .is_some_and(|file| file.contains("Closure.arxml"))
         );
-        assert!(imported.save().unwrap_err().contains("PDU_UNSUPPORTED"));
-        assert!(
-            generator::generate(
+        assert!(message_has_parameter(
+            &imported.save().unwrap_err(),
+            "code",
+            "PDU_UNSUPPORTED"
+        ));
+        assert!(message_has_parameter(
+            &generator::generate(
                 &mut imported,
                 &temp.0.join(format!("Unsafe{name}")),
                 tooling::native_target()
             )
-            .unwrap_err()
-            .contains("PDU_UNSUPPORTED")
-        );
+            .unwrap_err(),
+            "code",
+            "PDU_UNSUPPORTED"
+        ));
         assert_eq!(fs::read_to_string(&source).unwrap(), modified);
     }
     for name in ["ComCfg", "EcuCCfg"] {
@@ -618,16 +659,21 @@ pub(super) fn missing_required_com_or_ecuc_root_is_read_only_and_cannot_generate
                 .as_deref()
                 .is_some_and(|file| file.contains("Closure.arxml"))
         );
-        assert!(imported.save().unwrap_err().contains("PDU_UNSUPPORTED"));
-        assert!(
-            generator::generate(
+        assert!(message_has_parameter(
+            &imported.save().unwrap_err(),
+            "code",
+            "PDU_UNSUPPORTED"
+        ));
+        assert!(message_has_parameter(
+            &generator::generate(
                 &mut imported,
                 &temp.0.join(format!("Unsafe{name}")),
                 tooling::native_target()
             )
-            .unwrap_err()
-            .contains("PDU_UNSUPPORTED")
-        );
+            .unwrap_err(),
+            "code",
+            "PDU_UNSUPPORTED"
+        ));
         assert_eq!(fs::read_to_string(&source).unwrap(), modified);
     }
     let renamed = xml
@@ -696,16 +742,21 @@ pub(super) fn missing_required_com_or_ecuc_root_is_read_only_and_cannot_generate
                 .as_deref()
                 .is_some_and(|file| file.contains("Closure.arxml"))
         );
-        assert!(imported.save().unwrap_err().contains("PDU_UNSUPPORTED"));
-        assert!(
-            generator::generate(
+        assert!(message_has_parameter(
+            &imported.save().unwrap_err(),
+            "code",
+            "PDU_UNSUPPORTED"
+        ));
+        assert!(message_has_parameter(
+            &generator::generate(
                 &mut imported,
                 &temp.0.join(format!("Unsafe{name}")),
                 tooling::native_target()
             )
-            .unwrap_err()
-            .contains("PDU_UNSUPPORTED")
-        );
+            .unwrap_err(),
+            "code",
+            "PDU_UNSUPPORTED"
+        ));
         assert_eq!(fs::read_to_string(&source).unwrap(), modified);
     }
 }
@@ -750,7 +801,13 @@ pub(super) fn multiple_consumed_com_modules_cannot_generate() {
         .unwrap()
         .issues
         .into_iter()
-        .find(|issue| issue.code == "PDU_UNSUPPORTED" && issue.message.contains("唯一"))
+        .find(|issue| {
+            issue.code == "PDU_UNSUPPORTED"
+                && message_has_key(
+                    &issue.message,
+                    "backend.arxml.host_profile.consumed_com_unique_module_owner_required",
+                )
+        })
         .expect("two consumed Com modules must not produce a host profile");
     assert_eq!(issue.path.as_deref(), Some("/Closure/AltCom"));
     assert!(
@@ -880,16 +937,21 @@ pub(super) fn imported_global_pdu_cannot_duplicate_system_binding_or_misstate_di
                 .as_deref()
                 .is_some_and(|file| file.contains("Diag.arxml"))
         );
-        assert!(imported.save().unwrap_err().contains("PDU_UNSUPPORTED"));
-        assert!(
-            generator::generate(
+        assert!(message_has_parameter(
+            &imported.save().unwrap_err(),
+            "code",
+            "PDU_UNSUPPORTED"
+        ));
+        assert!(message_has_parameter(
+            &generator::generate(
                 &mut imported,
                 &temp.0.join(format!("Unsafe{name}")),
                 tooling::native_target()
             )
-            .unwrap_err()
-            .contains("PDU_UNSUPPORTED")
-        );
+            .unwrap_err(),
+            "code",
+            "PDU_UNSUPPORTED"
+        ));
         assert_eq!(fs::read_to_string(&source).unwrap(), modified);
     }
 }
@@ -1115,7 +1177,10 @@ pub(super) fn save_does_not_overwrite_external_changes_to_managed_arxml() {
     let external = original.replacen("<VALUE>801</VALUE>", "<VALUE>803</VALUE>", 1);
     assert_ne!(original, external);
     fs::write(&source, &external).unwrap();
-    assert!(project.save().unwrap_err().contains("外部修改"));
+    assert!(message_has_key(
+        &project.save().unwrap_err(),
+        "backend.arxml.persistence.stale_source_reimport_required"
+    ));
     assert_eq!(fs::read_to_string(&source).unwrap(), external);
     assert!(project.view().dirty);
     assert_eq!(
@@ -1142,12 +1207,10 @@ pub(super) fn save_preview_rejects_edits_and_external_changes_after_preview() {
     project
         .update_frame(&frame.path, serde_json::json!({"id": 804}))
         .unwrap();
-    assert!(
-        project
-            .save_previewed(&first.revision)
-            .unwrap_err()
-            .contains("重新查看")
-    );
+    assert!(message_has_key(
+        &project.save_previewed(&first.revision).unwrap_err(),
+        "backend.arxml.persistence.save_preview_stale"
+    ));
     assert!(
         fs::read_to_string(&source)
             .unwrap()
@@ -1161,13 +1224,14 @@ pub(super) fn save_preview_rejects_edits_and_external_changes_after_preview() {
         1,
     );
     fs::write(&source, &external).unwrap();
-    assert!(
-        project
-            .save_previewed(&second.revision)
-            .unwrap_err()
-            .contains("外部修改")
-    );
-    assert!(project.preview_save().unwrap_err().contains("外部修改"));
+    assert!(message_has_key(
+        &project.save_previewed(&second.revision).unwrap_err(),
+        "backend.arxml.persistence.stale_source_reimport_required"
+    ));
+    assert!(message_has_key(
+        &project.preview_save().unwrap_err(),
+        "backend.arxml.persistence.stale_source_reimport_required"
+    ));
     assert_eq!(fs::read_to_string(&source).unwrap(), external);
 }
 
@@ -1223,13 +1287,15 @@ pub(super) fn split_package_save_preserves_sources_and_rejects_stale_reference_f
             .unwrap()
             .replacen("<LENGTH>8</LENGTH>", "<LENGTH>7</LENGTH>", 1);
     fs::write(&other, &external).unwrap();
-    assert!(project.validate().unwrap_err().contains("外部修改"));
+    assert!(message_has_key(
+        &project.validate().unwrap_err(),
+        "backend.arxml.persistence.stale_source_reimport_required"
+    ));
     let unsafe_output = temp.0.join("StaleGeneration");
-    assert!(
-        generator::generate(&mut project, &unsafe_output, tooling::native_target())
-            .unwrap_err()
-            .contains("外部修改")
-    );
+    assert!(message_has_key(
+        &generator::generate(&mut project, &unsafe_output, tooling::native_target()).unwrap_err(),
+        "backend.arxml.persistence.stale_source_reimport_required"
+    ));
     assert!(
         !unsafe_output.exists(),
         "stale sources must not materialize C99 output"
@@ -1239,7 +1305,10 @@ pub(super) fn split_package_save_preserves_sources_and_rejects_stale_reference_f
         .unwrap();
     let before_save = fs::read(&source).unwrap();
 
-    assert!(project.save().unwrap_err().contains("外部修改"));
+    assert!(message_has_key(
+        &project.save().unwrap_err(),
+        "backend.arxml.persistence.stale_source_reimport_required"
+    ));
     assert_eq!(
         fs::read(&source).unwrap(),
         before_save,
@@ -1621,12 +1690,11 @@ pub(super) fn noncanonical_pdu_input_is_not_rewritten_or_generated() {
                 .as_deref()
                 .is_some_and(|path| path.contains("ComCfg"))
     }));
-    assert!(
-        project
-            .preview_save()
-            .unwrap_err()
-            .contains("PDU_UNSUPPORTED")
-    );
+    assert!(message_has_parameter(
+        &project.preview_save().unwrap_err(),
+        "code",
+        "PDU_UNSUPPORTED"
+    ));
     assert!(project.save().is_err());
     let output = temp.0.join("Rejected");
     assert!(generator::generate(&mut project, &output, tooling::native_target()).is_err());
@@ -1678,17 +1746,23 @@ pub(super) fn host_routine_metadata_rejects_unknown_version_and_wrong_session() 
                 "AutosarWorkbenchHostRestoreDidV1",
                 "AutosarWorkbenchHostRestoreDidV2",
             ),
-            "版本",
+            "backend.arxml.host_profile.unsupported_host_restore_routine_group",
         ),
         (
             saved.replace(
                 "<SD GID=\"SessionRef\">/Diag/DcmCfg/DcmConfigSet/DcmDsp/Sessions/Extended</SD>",
                 "<SD GID=\"SessionRef\">/Diag/DcmCfg/DcmConfigSet/DcmDsp/Sessions/Default</SD>",
             ),
-            "SessionRef",
+            "backend.arxml.host_profile.host_restore_routine_session_reference_required",
         ),
-        (saved.replace("<SD GID=\"Rid\">61441</SD>", ""), "Rid"),
-        (saved.replacen(group, &format!("{group}{group}"), 1), "重复"),
+        (
+            saved.replace("<SD GID=\"Rid\">61441</SD>", ""),
+            "backend.arxml.host_profile.host_restore_routine_unique_fields_required",
+        ),
+        (
+            saved.replacen(group, &format!("{group}{group}"), 1),
+            "backend.arxml.host_profile.duplicate_host_restore_routine_group",
+        ),
     ] {
         assert_ne!(saved, altered);
         fs::write(&source, &altered).unwrap();
@@ -1696,7 +1770,12 @@ pub(super) fn host_routine_metadata_rejects_unknown_version_and_wrong_session() 
             .err()
             .expect("invalid host metadata must not be accepted");
         assert!(
-            error.contains(reason) && error.contains("Diag.arxml"),
+            message_has_key(&error, reason)
+                && message_has_parameter(
+                    &error,
+                    "path",
+                    &fs::canonicalize(&source).unwrap().display().to_string()
+                ),
             "{error}"
         );
         assert_eq!(fs::read_to_string(&source).unwrap(), altered);

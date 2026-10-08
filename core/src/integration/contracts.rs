@@ -26,7 +26,10 @@ impl ComponentContractFiles {
     }
 
     /// Inspect all proposed files and existing-output integrity without writing.
-    pub fn preview(&self, output: &Path) -> Result<GenerationPreview, String> {
+    pub fn preview(
+        &self,
+        output: &Path,
+    ) -> Result<GenerationPreview, crate::message::LocalizedText> {
         generator::output::preview_prepared(&self.files, output)
     }
 
@@ -36,7 +39,7 @@ impl ComponentContractFiles {
         &self,
         output: &Path,
         revision: &str,
-    ) -> Result<GenerationReport, String> {
+    ) -> Result<GenerationReport, crate::message::LocalizedText> {
         generator::output::generate_prepared(self.files.clone(), output, Some(revision))
     }
 }
@@ -55,7 +58,10 @@ fn declaration(output: &mut String, brief: &str, prototype: &str, parameters: &s
     writeln!(output, "{prototype}\n").unwrap();
 }
 
-fn reject(plan: &ValidatedIntegrationPlan, message: &str) -> Vec<PlanDiagnostic> {
+fn reject(
+    plan: &ValidatedIntegrationPlan,
+    message: crate::message::LocalizedText,
+) -> Vec<PlanDiagnostic> {
     let component = &plan.description().component;
     vec![PlanDiagnostic {
         category: DiagnosticCategory::Input,
@@ -68,8 +74,10 @@ fn reject(plan: &ValidatedIntegrationPlan, message: &str) -> Vec<PlanDiagnostic>
             .map(|object| object.file.clone()),
         object: Some(component.component.clone()),
         message: message.into(),
-        remedy: "Use distinct non-reserved component, type and API names in the input description."
-            .into(),
+        remedy: crate::product_message!(
+            "backend.integration.contracts.distinct_nonreserved_names_required"
+        )
+        .into(),
     }]
 }
 
@@ -87,7 +95,9 @@ impl ValidatedIntegrationPlan {
             .ok_or_else(|| {
                 reject(
                     self,
-                    "The validated service client instance has no identity.",
+                    crate::product_message!(
+                        "backend.integration.contracts.service_client_identity_missing"
+                    ),
                 )
             })?;
         // The prototype is the component-scoped API owner; its full identity
@@ -101,7 +111,9 @@ impl ValidatedIntegrationPlan {
             if reserved_identifier(name) {
                 return Err(reject(
                     self,
-                    "A generated identifier would occupy a reserved C namespace.",
+                    crate::product_message!(
+                        "backend.integration.contracts.generated_identifier_reserved_namespace"
+                    ),
                 ));
             }
         }
@@ -115,7 +127,9 @@ impl ValidatedIntegrationPlan {
             if !names.insert(name.to_uppercase()) {
                 return Err(reject(
                     self,
-                    "Generated header filenames collide on the target filesystem.",
+                    crate::product_message!(
+                        "backend.integration.contracts.generated_header_filename_collision"
+                    ),
                 ));
             }
         }
@@ -145,7 +159,9 @@ impl ValidatedIntegrationPlan {
             if !identifiers.insert(name) {
                 return Err(reject(
                     self,
-                    "A type or header guard collides with another generated identifier.",
+                    crate::product_message!(
+                        "backend.integration.contracts.type_or_header_guard_collision"
+                    ),
                 ));
             }
         }
@@ -153,7 +169,9 @@ impl ValidatedIntegrationPlan {
             if reserved_identifier(&symbol.symbol) || !identifiers.insert(&symbol.symbol) {
                 return Err(reject(
                     self,
-                    "A generated external symbol collides with a type or header macro.",
+                    crate::product_message!(
+                        "backend.integration.contracts.generated_external_symbol_collision"
+                    ),
                 ));
             }
         }
@@ -199,7 +217,9 @@ impl ValidatedIntegrationPlan {
         if symbols.len() != 2 {
             return Err(reject(
                 self,
-                "The validated service must have one caller and one synchronous RTE binding.",
+                crate::product_message!(
+                    "backend.integration.contracts.service_caller_rte_binding_required"
+                ),
             ));
         }
         for symbol in symbols {
@@ -250,7 +270,7 @@ impl ValidatedIntegrationPlan {
             "runtimeImplementation": "Separate W3 ECU integration stage; no stubs are delivered."
         });
         let mut bytes = serde_json::to_vec_pretty(&provenance)
-            .map_err(|error| reject(self, &error.to_string()))?;
+            .map_err(|error| reject(self, error.to_string().into()))?;
         bytes.push(b'\n');
         files.push(("contract.json".into(), bytes));
         files.push(("README.md".into(), format!(

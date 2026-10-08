@@ -1,3 +1,4 @@
+import { useLocale } from '../i18n';
 import type { FrameFields } from './forms';
 
 export function FrameForm({
@@ -9,10 +10,11 @@ export function FrameForm({
   onChange: (fields: FrameFields) => void;
   disabled: boolean;
 }) {
+  const { t } = useLocale();
   return (
     <div className="form-fields">
       <label>
-        帧名称
+        {t('editor.can.frameName')}
         <input
           value={fields.name}
           onChange={(event) => onChange({ ...fields, name: event.target.value })}
@@ -22,7 +24,7 @@ export function FrameForm({
       </label>
       <div className="form-pair">
         <label>
-          标准 CAN ID <small>0–2047 · 十进制</small>
+          {t('editor.can.standardId')} <small>{t('editor.can.decimalId')}</small>
           <input
             type="number"
             min="0"
@@ -34,7 +36,7 @@ export function FrameForm({
           />
         </label>
         <label>
-          DLC <small>字节</small>
+          DLC <small>{t('editor.can.bytes')}</small>
           <input
             type="number"
             min="1"
@@ -47,7 +49,7 @@ export function FrameForm({
         </label>
       </div>
       <label>
-        方向
+        {t('editor.can.direction')}
         <select
           value={fields.direction}
           onChange={(event) =>
@@ -60,13 +62,13 @@ export function FrameForm({
           }
           disabled={disabled}
         >
-          <option value="tx">TX · 周期发送</option>
-          <option value="rx">RX · 接收超时</option>
+          <option value="tx">{t('editor.can.tx')}</option>
+          <option value="rx">{t('editor.can.rx')}</option>
         </select>
       </label>
       {fields.direction === 'tx' ? (
         <label>
-          发送周期 <small>ms</small>
+          {t('editor.can.period')} <small>ms</small>
           <input
             type="number"
             min="1"
@@ -78,7 +80,7 @@ export function FrameForm({
         </label>
       ) : (
         <label>
-          接收超时 <small>ms</small>
+          {t('editor.can.timeout')} <small>ms</small>
           <input
             type="number"
             min="1"

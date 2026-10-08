@@ -1,3 +1,5 @@
+import { message, ProductError } from '../i18n';
+import type { Text } from '../i18n';
 import type { Frame, WorkspaceView } from '../types';
 import type { DiagnosticChanges, FrameChanges, Selection, SignalChanges, Stage } from './forms';
 import { diagnosticChanges, dtcChanges, errorText, frameChanges, signalChanges } from './forms';
@@ -18,7 +20,7 @@ interface Dependencies {
   diagnosticUnapplied: boolean;
   frameUnapplied: boolean;
   unapplied: boolean;
-  confirmAction: (message: string) => Promise<boolean>;
+  confirmAction: (message: Text) => Promise<boolean>;
   dtcUnapplied: boolean;
 }
 
@@ -50,7 +52,7 @@ export function createLegacyEditing(session: WorkbenchSession, dependencies: Dep
       return;
     }
     void run(
-      { kind: 'action', label: '添加帧' },
+      { kind: 'action', label: message('workflow.action.addFrame') },
       () => call<WorkspaceView>('add_frame', values),
       (view) => {
         invalidateAfterEdit();
@@ -76,7 +78,7 @@ export function createLegacyEditing(session: WorkbenchSession, dependencies: Dep
     }
     const framePath = focusedFrame.path;
     void run(
-      { kind: 'action', label: '添加信号' },
+      { kind: 'action', label: message('workflow.action.addSignal') },
       () => call<WorkspaceView>('add_signal', { framePath, ...values }),
       (view) => {
         invalidateAfterEdit();
@@ -101,7 +103,7 @@ export function createLegacyEditing(session: WorkbenchSession, dependencies: Dep
         const changes = frameChanges(draft.fields);
         const oldPath = draft.path;
         void run(
-          { kind: 'action', label: '修改帧' },
+          { kind: 'action', label: message('workflow.action.updateFrame') },
           () => call<WorkspaceView>('update_frame', { path: oldPath, changes }),
           (view) => {
             invalidateAfterEdit();
@@ -121,11 +123,11 @@ export function createLegacyEditing(session: WorkbenchSession, dependencies: Dep
           (frame) =>
             frame.path === workspace.signals.find((item) => item.path === draft.path)?.framePath,
         );
-        if (!owner) throw new Error('所属帧不存在，无法修改信号');
+        if (!owner) throw new ProductError(message('workflow.error.updateSignalFrameMissing'));
         const changes = signalChanges(draft.fields, owner);
         const oldPath = draft.path;
         void run(
-          { kind: 'action', label: '修改信号' },
+          { kind: 'action', label: message('workflow.action.updateSignal') },
           () => call<WorkspaceView>('update_signal', { path: oldPath, changes }),
           (view) => {
             invalidateAfterEdit();
@@ -159,7 +161,7 @@ export function createLegacyEditing(session: WorkbenchSession, dependencies: Dep
       return;
     }
     void run(
-      { kind: 'action', label: '配置 DoCAN' },
+      { kind: 'action', label: message('workflow.action.configureDiagnostic') },
       () =>
         call<WorkspaceView>('configure_diagnostic', { settings: values }).catch((error) => {
           setDiagnosticError(errorText(error));
@@ -185,7 +187,7 @@ export function createLegacyEditing(session: WorkbenchSession, dependencies: Dep
       return;
     }
     void run(
-      { kind: 'action', label: '配置故障记忆' },
+      { kind: 'action', label: message('workflow.action.configureDtc') },
       () =>
         call<WorkspaceView>('configure_dtc', values).catch((error) => {
           setDtcError(errorText(error));
@@ -202,9 +204,9 @@ export function createLegacyEditing(session: WorkbenchSession, dependencies: Dep
 
   async function clearDtc() {
     if (!workspace?.diagnostic?.dtc || unapplied) return;
-    if (!(await confirmAction('移除当前故障记忆配置？应用后仍需保存 ARXML 才会写入文件。'))) return;
+    if (!(await confirmAction(message('workflow.confirm.removeDtc')))) return;
     void run(
-      { kind: 'action', label: '移除故障记忆' },
+      { kind: 'action', label: message('workflow.action.removeDtc') },
       () => call<WorkspaceView>('clear_dtc'),
       (view) => {
         invalidateAfterEdit();
@@ -215,10 +217,9 @@ export function createLegacyEditing(session: WorkbenchSession, dependencies: Dep
 
   async function clearDiagnostic() {
     if (!workspace?.diagnostic || diagnosticUnapplied || dtcUnapplied || frameUnapplied) return;
-    if (!(await confirmAction('移除当前工程的诊断配置？应用后仍需保存 ARXML 才会写入文件。')))
-      return;
+    if (!(await confirmAction(message('workflow.confirm.removeDiagnostic')))) return;
     void run(
-      { kind: 'action', label: '移除 DoCAN' },
+      { kind: 'action', label: message('workflow.action.removeDiagnostic') },
       () => call<WorkspaceView>('clear_diagnostic'),
       (view) => {
         invalidateAfterEdit();

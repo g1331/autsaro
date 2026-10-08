@@ -1,10 +1,12 @@
+import type { Text } from '../i18n';
+import { composedMessage, isMessage, message, ProductError } from '../i18n';
 import type { DiagnosticView, DtcView, Frame, Issue, Signal, WorkspaceView } from '../types';
 
 export type Stage = 'save' | 'validate' | 'generate' | 'build' | 'virtual';
 
 export type StageState = 'pending' | 'running' | 'done' | 'failed' | 'stale';
 
-export type StageRecord = { state: StageState; detail: string };
+export type StageRecord = { state: StageState; detail: Text };
 
 export type Selection = { kind: 'file' | 'frame' | 'signal'; path: string };
 
@@ -62,7 +64,7 @@ export type DiagnosticChanges = Pick<
 
 export type DtcFields = { code: string; monitorFramePath: string };
 
-export type Notice = { tone: 'error' | 'info'; text: string } | null;
+export type Notice = { tone: 'error' | 'info'; text: Text } | null;
 
 
 export const frameFields = (frame: Frame): FrameFields => ({
@@ -138,8 +140,8 @@ export function dtcChanges(
   fields: DtcFields,
   view: WorkspaceView,
 ): { code: number; monitorFramePath: string } {
-  const code = canNumber(fields.code, 'DTC 代码', 0xfffffe);
-  if (code < 0x100) throw new Error('DTC 代码须为 0x000100–0xFFFFFE 的 24-bit 整数');
+  const code = canNumber(fields.code, message('controller.field.dtcCode'), 0xfffffe);
+  if (code < 0x100) throw new ProductError(message('controller.error.dtcRange'));
   const frame = view.frames.find((item) => item.path === fields.monitorFramePath);
   if (
     !frame ||
@@ -148,18 +150,20 @@ export function dtcChanges(
     frame.timeoutMs <= 0 ||
     !view.signals.some((signal) => signal.framePath === frame.path)
   ) {
-    throw new Error('监测帧须为当前项目中含至少一个信号、接收超时大于 0 的 Rx CAN 帧');
+    throw new ProductError(message('controller.error.monitorFrame'));
   }
   return { code, monitorFramePath: frame.path };
 }
 
-export function canNumber(value: string, label: string, max: number): number {
+export function canNumber(value: string, label: Text, max: number): number {
   const input = value.trim();
   if (!/^(?:0x[0-9a-f]+|\d+)$/i.test(input))
-    throw new Error(`${label}须为十进制或 0x 开头的十六进制整数`);
+    throw new ProductError(composedMessage('controller.error.numberFormat', { label }));
   const parsed = Number(input);
   if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > max)
-    throw new Error(`${label}须为 0–${max} 的整数`);
+    throw new ProductError(
+      composedMessage('controller.error.integerRange', { label }, { min: 0, max }),
+    );
   return parsed;
 }
 
@@ -167,22 +171,22 @@ export function diagnosticChanges(
   fields: DiagnosticFields,
   view: WorkspaceView,
 ): DiagnosticChanges {
-  const requestId = canNumber(fields.requestId, '请求 CAN ID', 2047);
-  const responseId = canNumber(fields.responseId, '响应 CAN ID', 2047);
+  const requestId = canNumber(fields.requestId, message('controller.field.requestId'), 2047);
+  const responseId = canNumber(fields.responseId, message('controller.field.responseId'), 2047);
   if (
     requestId === responseId ||
     view.frames.some((frame) => frame.id === requestId || frame.id === responseId)
   ) {
-    throw new Error('请求与响应 CAN ID 须不同，且不可与现有 Com 帧 CAN ID 冲突');
+    throw new ProductError(message('controller.error.canIdConflict'));
   }
   const did = canNumber(fields.did, 'DID', 65535);
-  if (did === 0xf186) throw new Error('DID 0xF186 保留给当前会话标识，请选择其他 DID');
+  if (did === 0xf186) throw new ProductError(message('controller.error.reservedDid'));
   if (
     fields.signalPaths.length < 1 ||
     fields.signalPaths.length > 8 ||
     new Set(fields.signalPaths).size !== fields.signalPaths.length
   ) {
-    throw new Error('按顺序选择 1–8 个不同的 32-bit Tx 信号');
+    throw new ProductError(message('controller.error.signalCount'));
   }
   if (
     fields.signalPaths.some(
@@ -197,16 +201,16 @@ export function diagnosticChanges(
         ),
     )
   ) {
-    throw new Error('所选信号须为当前项目中的 32-bit Tx 信号');
+    throw new ProductError(message('controller.error.txSignals'));
   }
   if (!fields.writeEnabled && fields.resetRoutineId.trim()) {
-    throw new Error('启用 0x31/0x01 复位例程前，须先允许 0x2E 写入此 DID');
+    throw new ProductError(message('controller.error.routineWrite'));
   }
   const resetRoutineId = fields.resetRoutineId.trim()
-    ? canNumber(fields.resetRoutineId, '复位例程 RID', 65535)
+    ? canNumber(fields.resetRoutineId, message('controller.field.rid'), 65535)
     : null;
   if (fields.securityEnabled && !fields.writeEnabled && !view.diagnostic?.dtc) {
-    throw new Error('启用 0x27 前，须先启用 DID 写入或配置故障记忆');
+    throw new ProductError(message('controller.error.securityRequiresWrite'));
   }
   return {
     requestId,
@@ -227,7 +231,7 @@ export function labelFromPath(path: string): string {
   return path.split(/[\\/]/).filter(Boolean).at(-1) ?? path;
 }
 
-export function intInRange(value: string, label: string, min: number, max: number): number {
+export function intInRange(value: string, label: Text, min: number, max: number): number {
   const parsed = Number(value);
   if (
     !/^\d+$/.test(value.trim()) ||
@@ -235,7 +239,9 @@ export function intInRange(value: string, label: string, min: number, max: numbe
     parsed < min ||
     parsed > max
   ) {
-    throw new Error(`${label}须为 ${min}–${max} 的整数`);
+    throw new ProductError(
+      composedMessage('controller.error.integerRange', { label }, { min, max }),
+    );
   }
   return parsed;
 }
@@ -243,7 +249,7 @@ export function intInRange(value: string, label: string, min: number, max: numbe
 export function requiredName(value: string): string {
   const name = value.trim();
   if (!name || !/^[A-Za-z][A-Za-z0-9_]*$/.test(name)) {
-    throw new Error('名称须以英文字母开头，仅包含字母、数字和下划线');
+    throw new ProductError(message('controller.error.name'));
   }
   return name;
 }
@@ -251,12 +257,16 @@ export function requiredName(value: string): string {
 export function frameChanges(fields: FrameFields): FrameChanges {
   const direction = fields.direction;
   const periodMs =
-    direction === 'tx' ? intInRange(fields.periodMs, '发送周期 (ms)', 1, 2147483647) : null;
+    direction === 'tx'
+      ? intInRange(fields.periodMs, message('controller.field.period'), 1, 2147483647)
+      : null;
   const timeoutMs =
-    direction === 'rx' ? intInRange(fields.timeoutMs, '接收超时 (ms)', 1, 2147483647) : null;
+    direction === 'rx'
+      ? intInRange(fields.timeoutMs, message('controller.field.timeout'), 1, 2147483647)
+      : null;
   return {
     name: requiredName(fields.name),
-    id: intInRange(fields.id, '标准 CAN ID', 0, 2047),
+    id: intInRange(fields.id, message('controller.field.canId'), 0, 2047),
     dlc: intInRange(fields.dlc, 'DLC', 1, 8),
     direction,
     periodMs,
@@ -265,26 +275,37 @@ export function frameChanges(fields: FrameFields): FrameChanges {
 }
 
 export function signalChanges(fields: SignalFields, frame: Frame): SignalChanges {
-  const length = intInRange(fields.length, '信号长度', 1, 32);
-  const startBit = intInRange(fields.startBit, '起始位', 0, 63);
-  if (startBit + length > frame.dlc * 8) throw new Error('信号位范围超出所属帧 DLC');
+  const length = intInRange(fields.length, message('controller.field.signalLength'), 1, 32);
+  const startBit = intInRange(fields.startBit, message('controller.field.startBit'), 0, 63);
+  if (startBit + length > frame.dlc * 8)
+    throw new ProductError(message('controller.error.signalDlc'));
   return {
     name: requiredName(fields.name),
     startBit,
     length,
-    initialValue: intInRange(fields.initialValue, '初始值', 0, 2 ** length - 1),
+    initialValue: intInRange(
+      fields.initialValue,
+      message('controller.field.initialValue'),
+      0,
+      2 ** length - 1,
+    ),
   };
 }
 
-export function errorText(error: unknown): string {
-  if (Array.isArray(error)) {
-    return error
-      .map((item) =>
-        item && typeof item === 'object' && 'message' in item
-          ? `${'code' in item ? String(item.code) + ': ' : ''}${String(item.message)}${'remedy' in item ? '\n' + String(item.remedy) : ''}`
-          : String(item),
-      )
-      .join('\n');
+export function errorText(error: unknown): Text {
+  if (error instanceof ProductError) return error.text;
+  if (isMessage(error)) return error;
+  if (Array.isArray(error)) return error.map(errorText);
+  if (error && typeof error === 'object' && 'message' in error && !(error instanceof Error)) {
+    const diagnostic = error as { message: unknown; code?: unknown; remedy?: unknown };
+    return composedMessage(
+      'controller.error.diagnostic',
+      {
+        detail: errorText(diagnostic.message),
+        remedy: diagnostic.remedy == null ? '' : errorText(diagnostic.remedy),
+      },
+      { code: diagnostic.code == null ? '' : String(diagnostic.code) },
+    );
   }
   return error instanceof Error ? error.message : String(error);
 }

@@ -30,13 +30,21 @@ pub(crate) fn issue(
     plan: &ValidatedIntegrationPlan,
     code: &str,
     object: &str,
-    message: impl Into<String>,
+    message: crate::message::LocalizedText,
 ) -> Vec<PlanDiagnostic> {
     vec![PlanDiagnostic {
-        category: DiagnosticCategory::Input, code: code.into(), object: Some(object.into()),
-        file: plan.description().objects.iter().find(|item| item.path == object)
-            .map(|item| item.file.clone()), message: message.into(),
-        remedy: "Use supported values on the selected plan, resolve source/relationship errors, and preview again before saving.".into(),
+        category: DiagnosticCategory::Input,
+        code: code.into(),
+        object: Some(object.into()),
+        file: plan
+            .description()
+            .objects
+            .iter()
+            .find(|item| item.path == object)
+            .map(|item| item.file.clone()),
+        message: message.into(),
+        remedy: crate::product_message!("backend.integration.editor.plan_repair_preview_required")
+            .into(),
     }]
 }
 
@@ -56,7 +64,9 @@ pub(crate) fn fields(
                     plan,
                     "EDIT_UNSUPPORTED",
                     port,
-                    "Only the selected S/R channels' CAN identifiers are editable.",
+                    crate::product_message!(
+                        "backend.integration.editor.only_selected_sr_can_ids_editable"
+                    ),
                 )
             })?;
         if *id > 0x7ff {
@@ -64,7 +74,9 @@ pub(crate) fn fields(
                 plan,
                 "EDIT_RANGE",
                 port,
-                "A standard Classical CAN ID must be between 0 and 2047.",
+                crate::product_message!(
+                    "backend.integration.editor.standard_classical_can_id_out_of_range"
+                ),
             ));
         }
         if *id == channel.can_id {
@@ -90,7 +102,7 @@ pub(crate) fn fields(
                 plan,
                 "EDIT_RANGE",
                 &description.component.timing_event,
-                "The application period must be positive and fit the selected Counter.",
+                crate::product_message!("backend.integration.editor.application_period_invalid"),
             ));
         }
         if period != description.component.period_ms {
@@ -149,7 +161,9 @@ pub(crate) fn fields(
                     plan,
                     "EDIT_UNSAFE",
                     application.trigger(),
-                    "The checked period must have a uniquely located Com mode and timing-source autostart.",
+                    crate::product_message!(
+                        "backend.integration.editor.period_com_mode_timing_autostart_required"
+                    ),
                 ));
             }
             edits.insert(
@@ -163,7 +177,9 @@ pub(crate) fn fields(
                         plan,
                         "EDIT_RANGE",
                         table,
-                        "The table's initial expiry offset must remain below the edited period.",
+                        crate::product_message!(
+                            "backend.integration.editor.table_initial_expiry_offset_exceeds_period"
+                        ),
                     ));
                 }
                 edits.insert(

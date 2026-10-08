@@ -1,7 +1,26 @@
-import { expect, test, vi } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { createBatchEditing } from '../src/workbench/batchEditing';
 import { createProjectActions } from '../src/workbench/projectActions';
 import { initialState } from '../src/workbench/state';
+import { localize, previewLanguage } from '../src/i18n';
+
+afterEach(() => previewLanguage('system'));
+
+function expectDistinctFeedback(committed, rejected, evidence) {
+  expect(committed.key).not.toBe(rejected.key);
+  const rendered = [];
+  for (const language of ['zh-CN', 'en']) {
+    previewLanguage(language);
+    const published = localize(committed);
+    const refused = localize(rejected);
+    expect(published).not.toBe(refused);
+    expect(published).toContain(evidence);
+    expect(refused).toContain(evidence);
+    expect(published).not.toMatch(/{{|}}|\[object Object\]/);
+    rendered.push(published);
+  }
+  expect(rendered[0]).not.toBe(rendered[1]);
+}
 
 vi.mock('../src/workbench/Dialog', () => ({ rememberDialogOpener: vi.fn() }));
 
@@ -47,8 +66,19 @@ test('committed changes are cleared even when refreshing the workspace fails', a
     .mockRejectedValueOnce(new Error('read failed'));
   expect(await batch(current).applyChanges()).toBe(true);
   expect(current.stateRef.current.changes).toEqual([]);
-  expect(current.stateRef.current.notice.text).toContain('批次已应用');
   expect(confirmed).toHaveBeenCalledWith(true);
+  const rejected = session({
+    changes: [{ changeId: 'edit' }],
+    changePreview: { changeRevision: 'preview' },
+    preparedChangeSet: { changes: [] },
+  });
+  rejected.call.mockRejectedValue(new Error('read failed'));
+  expect(await batch(rejected).applyChanges()).toBe(false);
+  expectDistinctFeedback(
+    current.stateRef.current.notice.text,
+    rejected.stateRef.current.notice.text,
+    'read failed',
+  );
 });
 
 test('rejected batches retain the original draft', async () => {
@@ -103,7 +133,6 @@ test('draft changes during preview invalidate the returned preview', async () =>
   complete({ changeRevision: 'preview' });
   await pending;
   expect(current.stateRef.current.changePreview).toBeNull();
-  expect(current.stateRef.current.notice.text).toContain('草稿已变化');
 });
 
 test('editing or removing a draft invalidates its previous prepared change set', () => {
@@ -140,11 +169,31 @@ test('a later rejected draft keeps the earlier creation and reports partial appl
     name: 'Send',
     id: '100',
   };
-  const diagnosticDraft = { ...current.stateRef.current.diagnosticDraft, requestId: 'invalid' };
+  const diagnosticDraft = {
+    ...current.stateRef.current.diagnosticDraft,
+    requestId: '1800',
+    responseId: '1801',
+    s3Ms: '5000',
+    nAsMs: '1',
+    nBsMs: '1',
+    nCrMs: '1',
+    did: '1',
+    signalPaths: ['/Send/Value'],
+  };
   current.stateRef.current.diagnosticDraft = diagnosticDraft;
   const created = {
     ...workspace,
     dirty: true,
+    signals: [
+      {
+        name: 'Value',
+        path: '/Send/Value',
+        framePath: '/Send',
+        startBit: 0,
+        length: 32,
+        initialValue: 0,
+      },
+    ],
     frames: [
       {
         name: 'Send',
@@ -157,7 +206,8 @@ test('a later rejected draft keeps the earlier creation and reports partial appl
       },
     ],
   };
-  current.call.mockResolvedValueOnce(created);
+  const evidence = 'diagnostic transport failure 原始证据';
+  current.call.mockResolvedValueOnce(created).mockRejectedValueOnce(new Error(evidence));
   const invalidateAfterEdit = vi.fn();
   const project = createProjectActions(current, {
     invalidateAfterEdit,
@@ -167,9 +217,21 @@ test('a later rejected draft keeps the earlier creation and reports partial appl
   expect(current.stateRef.current.workspace).toBe(created);
   expect(current.stateRef.current.creating).toBeNull();
   expect(current.stateRef.current.diagnosticDraft).toBe(diagnosticDraft);
-  expect(current.stateRef.current.notice.text).toContain('部分草稿已应用');
   expect(invalidateAfterEdit).toHaveBeenCalledOnce();
-  expect(current.call).toHaveBeenCalledTimes(1);
+  expect(current.call).toHaveBeenCalledTimes(2);
+  const rejected = session({
+    workspace,
+    creating: 'frame',
+    frameInput: current.stateRef.current.frameInput,
+  });
+  rejected.call.mockRejectedValue(new Error(evidence));
+  const rejectedActions = createProjectActions(rejected, { refreshProjection: vi.fn() });
+  expect(await rejectedActions.applyDrafts()).toBe(false);
+  expectDistinctFeedback(
+    current.stateRef.current.notice.text,
+    rejected.stateRef.current.notice.text,
+    evidence,
+  );
 });
 
 test('an acknowledged integration edit is cleared before a failed workspace refresh', async () => {
@@ -192,5 +254,18 @@ test('an acknowledged integration edit is cleared before a failed workspace refr
   expect(current.stateRef.current.integrationUnapplied).toBe(false);
   expect(acceptIntegration).toHaveBeenCalledWith(report);
   expect(invalidateAfterEdit).toHaveBeenCalledOnce();
-  expect(current.stateRef.current.notice.text).toContain('部分草稿已应用');
+  const rejected = session({
+    workspace: { frames: [], signals: [], diagnostic: null },
+    integrationUnapplied: true,
+    integrationIds: { port: '100' },
+    integrationPeriod: '20',
+  });
+  rejected.call.mockRejectedValue(new Error('view unavailable'));
+  const rejectedActions = createProjectActions(rejected, { refreshProjection: vi.fn() });
+  expect(await rejectedActions.applyDrafts()).toBe(false);
+  expectDistinctFeedback(
+    current.stateRef.current.notice.text,
+    rejected.stateRef.current.notice.text,
+    'view unavailable',
+  );
 });

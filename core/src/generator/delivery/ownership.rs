@@ -64,7 +64,7 @@ fn classification(
     path: &str,
     metadata: &HandoffMetadata,
     source: Option<&crate::resources::AssetEntry>,
-) -> Result<(FileOwner, String, Option<String>), String> {
+) -> Result<(FileOwner, String, Option<String>), crate::LocalizedText> {
     if path == PROJECT_PATH
         || metadata
             .input_snapshots
@@ -79,7 +79,9 @@ fn classification(
         .find(|input| input.kind == InputKind::Application && input.package_path == path)
     {
         if path != APPLICATION_OUTPUT || input.producer_slot.as_deref() != Some(APPLICATION_SLOT) {
-            return Err("Unrecognized application snapshot producer or source location.".into());
+            return Err(crate::product_message!(
+                "backend.delivery.application_snapshot_unknown"
+            ));
         }
         return Ok((
             FileOwner::UserApplication,
@@ -103,14 +105,16 @@ fn classification(
 pub(crate) fn ledger<'a>(
     files: &BTreeMap<String, PreparedFile<'a>>,
     metadata: &HandoffMetadata,
-) -> Result<OwnershipLedger, String> {
+) -> Result<OwnershipLedger, crate::LocalizedText> {
     let mut entries = Vec::with_capacity(files.len());
     for (path, file) in files {
         if matches!(
             path.as_str(),
             OWNERSHIP_PATH | "files.list" | "files.sha256"
         ) {
-            return Err("An ownership ledger cannot enumerate itself or seal metadata.".into());
+            return Err(crate::product_message!(
+                "backend.delivery.ownership_self_reference"
+            ));
         }
         safe_relative(path)?;
         let (owner, producer_id, snapshot_of) = classification(path, metadata, file.source)?;
@@ -133,7 +137,7 @@ pub(crate) fn ledger<'a>(
 pub(crate) fn add_ledger<'a>(
     files: &mut BTreeMap<String, PreparedFile<'a>>,
     metadata: &HandoffMetadata,
-) -> Result<(), String> {
+) -> Result<(), crate::LocalizedText> {
     let ledger = ledger(files, metadata)?;
     super::insert_file(
         files,
@@ -142,17 +146,19 @@ pub(crate) fn add_ledger<'a>(
     )
 }
 
-pub(crate) fn metadata_from_target(bytes: &[u8]) -> Result<Option<HandoffMetadata>, String> {
-    let target: serde_json::Value =
-        serde_json::from_slice(bytes).map_err(|error| error.to_string())?;
+pub(crate) fn metadata_from_target(
+    bytes: &[u8],
+) -> Result<Option<HandoffMetadata>, crate::LocalizedText> {
+    let target: serde_json::Value = serde_json::from_slice(bytes)
+        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     let Some(native) = target.get("nativeDelivery") else {
         return Ok(None);
     };
-    let metadata: HandoffMetadata =
-        serde_json::from_value(native.clone()).map_err(|error| error.to_string())?;
+    let metadata: HandoffMetadata = serde_json::from_value(native.clone())
+        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     validate_metadata(&metadata)?;
-    let recorded_target: BuildTarget =
-        serde_json::from_value(target["target"].clone()).map_err(|error| error.to_string())?;
+    let recorded_target: BuildTarget = serde_json::from_value(target["target"].clone())
+        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     if recorded_target != metadata.target_id
         || target["format"] != "autosar-build-target-v1"
         || target["profile"]
@@ -165,12 +171,14 @@ pub(crate) fn metadata_from_target(bytes: &[u8]) -> Result<Option<HandoffMetadat
             .as_str()
             .is_none_or(|value| value.len() != 64)
     {
-        return Err("Native delivery does not agree with its actual build profile/target/definition identity.".into());
+        return Err(crate::product_message!(
+            "backend.delivery.build_identity_mismatch"
+        ));
     }
     Ok(Some(metadata))
 }
 
-pub(crate) fn validate_metadata(metadata: &HandoffMetadata) -> Result<(), String> {
+pub(crate) fn validate_metadata(metadata: &HandoffMetadata) -> Result<(), crate::LocalizedText> {
     if metadata.format != FORMAT
         || metadata.producer_version != env!("CARGO_PKG_VERSION")
         || !matches!(
@@ -182,10 +190,9 @@ pub(crate) fn validate_metadata(metadata: &HandoffMetadata) -> Result<(), String
         || metadata.resource_identities.rule_set_identity != crate::rules::rule_set_identity()?
         || metadata.input_snapshots.is_empty()
     {
-        return Err(
-            "Unsupported v2 producer/profile/target or incompatible trusted native rule identity."
-                .into(),
-        );
+        return Err(crate::product_message!(
+            "backend.delivery.native_identity_unsupported"
+        ));
     }
     let mut logical = BTreeSet::new();
     let mut package = BTreeSet::new();
@@ -198,7 +205,9 @@ pub(crate) fn validate_metadata(metadata: &HandoffMetadata) -> Result<(), String
             || !package.insert(input.package_path.to_ascii_lowercase())
             || input.role.is_empty()
         {
-            return Err("Invalid or duplicate native input snapshot identity.".into());
+            return Err(crate::product_message!(
+                "backend.delivery.snapshot_identity_invalid"
+            ));
         }
         match input.kind {
             InputKind::Arxml => {
@@ -208,7 +217,9 @@ pub(crate) fn validate_metadata(metadata: &HandoffMetadata) -> Result<(), String
                         .is_some_and(|extension| extension.eq_ignore_ascii_case("arxml"))
                     || input.producer_slot.is_some()
                 {
-                    return Err("Invalid native configuration source mapping.".into());
+                    return Err(crate::product_message!(
+                        "backend.delivery.configuration_mapping_invalid"
+                    ));
                 }
             }
             InputKind::Application => {
@@ -217,9 +228,9 @@ pub(crate) fn validate_metadata(metadata: &HandoffMetadata) -> Result<(), String
                     || input.producer_slot.as_deref() != Some(APPLICATION_SLOT)
                     || input.role != "user-application"
                 {
-                    return Err(
-                        "Unsupported native application producer slot or source boundary.".into(),
-                    );
+                    return Err(crate::product_message!(
+                        "backend.delivery.application_boundary_unsupported"
+                    ));
                 }
             }
         }
@@ -235,7 +246,9 @@ pub(crate) fn validate_metadata(metadata: &HandoffMetadata) -> Result<(), String
                 || !identity.sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
         })
     {
-        return Err("Invalid required extension identity closure.".into());
+        return Err(crate::product_message!(
+            "backend.delivery.extension_closure_invalid"
+        ));
     }
     Ok(())
 }
@@ -243,14 +256,14 @@ pub(crate) fn validate_metadata(metadata: &HandoffMetadata) -> Result<(), String
 pub(crate) fn verify_ledger_bytes(
     files: &BTreeMap<String, &[u8]>,
     metadata: &HandoffMetadata,
-) -> Result<OwnershipLedger, String> {
+) -> Result<OwnershipLedger, crate::LocalizedText> {
     validate_metadata(metadata)?;
     let ledger: OwnershipLedger = serde_json::from_slice(
         files
             .get(OWNERSHIP_PATH)
-            .ok_or("Native package is missing its ownership ledger.")?,
+            .ok_or_else(|| crate::product_message!("backend.delivery.ownership_ledger_missing"))?,
     )
-    .map_err(|error| error.to_string())?;
+    .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     if ledger.format_version != 1
         || ledger.producer_version != env!("CARGO_PKG_VERSION")
         || ledger.profile_id != metadata.profile_id
@@ -259,9 +272,9 @@ pub(crate) fn verify_ledger_bytes(
             .windows(2)
             .any(|pair| pair[0].path >= pair[1].path)
     {
-        return Err(
-            "Unknown ownership version/producer/profile or noncanonical owner order.".into(),
-        );
+        return Err(crate::product_message!(
+            "backend.delivery.ownership_identity_invalid"
+        ));
     }
     let profile = if metadata.profile_id == HOST_PROFILE {
         "host"
@@ -275,7 +288,7 @@ pub(crate) fn verify_ledger_bytes(
     if profile == "ecu" {
         let origin = AssetInventory::embedded()
             .get("runtime/include/Com.h")
-            .ok_or("The trusted Com adaptation origin is missing.")?;
+            .ok_or_else(|| crate::product_message!("backend.delivery.com_origin_missing"))?;
         trusted_assets.insert("bsw-origin/include/Com.h".into(), origin);
     }
     let mut owned = BTreeSet::new();
@@ -288,13 +301,17 @@ pub(crate) fn verify_ledger_bytes(
         ) || !owned.insert(entry.path.as_str())
             || !portable.insert(entry.path.to_ascii_lowercase())
         {
-            return Err("The ownership closure contains duplicate/reserved paths.".into());
+            return Err(crate::product_message!(
+                "backend.delivery.ownership_paths_invalid"
+            ));
         }
         let bytes = files
             .get(&entry.path)
-            .ok_or_else(|| format!("Owned payload is missing: {}", entry.path))?;
+            .ok_or_else(|| crate::product_message!("backend.delivery.owned_payload_missing", "path" => entry.path))?;
         if digest(bytes) != entry.sha256 {
-            return Err(format!("Owned payload changed: {}", entry.path));
+            return Err(
+                crate::product_message!("backend.delivery.owned_payload_changed", "path" => entry.path),
+            );
         }
         let source = trusted_assets
             .get(&entry.path)
@@ -305,10 +322,9 @@ pub(crate) fn verify_ledger_bytes(
             || producer_id != entry.producer_id
             || snapshot_of != entry.snapshot_of
         {
-            return Err(format!(
-                "Ownership cannot grant write authority to this producer/path: {}",
-                entry.path
-            ));
+            return Err(
+                crate::product_message!("backend.delivery.ownership_write_authority_invalid", "path" => entry.path),
+            );
         }
     }
     let payload: BTreeSet<_> = files
@@ -317,27 +333,27 @@ pub(crate) fn verify_ledger_bytes(
         .filter(|path| !matches!(*path, OWNERSHIP_PATH | "files.list" | "files.sha256"))
         .collect();
     if owned != payload {
-        return Err("Native ownership must describe the entire sealed payload, without extra or missing files.".into());
+        return Err(crate::product_message!(
+            "backend.delivery.ownership_closure_mismatch"
+        ));
     }
     for input in &metadata.input_snapshots {
         let bytes = files
             .get(&input.package_path)
-            .ok_or("Mapped native input is not in the owned payload.")?;
+            .ok_or_else(|| crate::product_message!("backend.delivery.mapped_input_missing"))?;
         if digest(bytes) != input.sha256 {
-            return Err(format!(
-                "Mapped input snapshot identity changed: {}",
-                input.logical_path
-            ));
+            return Err(
+                crate::product_message!("backend.delivery.mapped_snapshot_changed", "path" => input.logical_path),
+            );
         }
     }
     if let Some(handoff) = files.get("handoff.json") {
-        let declared: HandoffMetadata =
-            serde_json::from_slice(handoff).map_err(|error| error.to_string())?;
+        let declared: HandoffMetadata = serde_json::from_slice(handoff)
+            .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
         if declared != *metadata {
-            return Err(
-                "Handoff and build metadata do not bind the same native input/resource snapshot."
-                    .into(),
-            );
+            return Err(crate::product_message!(
+                "backend.delivery.handoff_snapshot_mismatch"
+            ));
         }
     }
     Ok(ledger)
@@ -346,7 +362,7 @@ pub(crate) fn verify_ledger_bytes(
 pub(crate) fn verify_directory(
     directory: &Path,
     names: &[String],
-) -> Result<Option<HandoffMetadata>, String> {
+) -> Result<Option<HandoffMetadata>, crate::LocalizedText> {
     if !names.iter().any(|path| path == OWNERSHIP_PATH) {
         if fs::read(directory.join("target.json"))
             .ok()
@@ -355,13 +371,15 @@ pub(crate) fn verify_directory(
             .flatten()
             .is_some()
         {
-            return Err("Native build metadata cannot omit its ownership ledger.".into());
+            return Err(crate::product_message!(
+                "backend.delivery.native_ledger_required"
+            ));
         }
         return Ok(None);
     }
     let target = super::read_source(&directory.join("target.json"))?;
     let metadata = metadata_from_target(&target)?
-        .ok_or("An ownership ledger requires actual native delivery metadata.")?;
+        .ok_or_else(|| crate::product_message!("backend.delivery.native_metadata_required"))?;
     let mut owned_bytes = BTreeMap::new();
     for path in names {
         owned_bytes.insert(path.clone(), super::read_source(&directory.join(path))?);

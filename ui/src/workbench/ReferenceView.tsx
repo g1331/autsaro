@@ -1,3 +1,4 @@
+import { useLocale } from '../i18n';
 import type { Frame, Signal } from '../types';
 
 export function ReferenceView({
@@ -9,36 +10,43 @@ export function ReferenceView({
   signal?: Signal;
   signals?: Signal[];
 }) {
+  const { t } = useLocale();
   return (
     <div className="reference-view">
-      <h3>引用与依赖</h3>
-      <p>以下关系来自当前配置模型，不推断未显示的跨模块引用。</p>
+      <h3>{t('editor.references.heading')}</h3>
+      <p>{t('editor.references.intro')}</p>
       <div className="reference-chain">
         {signal && (
           <>
             <div>
-              <small>信号</small>
+              <small>{t('editor.references.signal')}</small>
               <strong>{signal.path}</strong>
             </div>
             <span aria-hidden="true">↓</span>
           </>
         )}
         <div>
-          <small>所属 CAN 帧</small>
+          <small>{t('editor.references.frame')}</small>
           <strong>{frame.path}</strong>
         </div>
         <span aria-hidden="true">↓</span>
         <div>
-          <small>总线标识</small>
+          <small>{t('editor.references.bus')}</small>
           <strong>
-            标准 11-bit · 0x{frame.id.toString(16).toUpperCase().padStart(3, '0')} ·{' '}
-            {frame.direction.toUpperCase()}
+            {t('editor.references.busValue', {
+              id: `0x${frame.id.toString(16).toUpperCase().padStart(3, '0')}`,
+              direction: frame.direction.toUpperCase(),
+            })}
           </strong>
         </div>
       </div>
       {signals && (
         <p className="reference-note">
-          关联信号：{signals.length ? signals.map((item) => item.name).join('、') : '无'}
+          {t('editor.references.relatedSignals', {
+            names: signals.length
+              ? signals.map((item) => item.name).join(', ')
+              : t('editor.common.none'),
+          })}
         </p>
       )}
     </div>

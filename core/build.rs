@@ -293,11 +293,63 @@ fn main() {
         output,
     )
     .expect("write embedded asset index");
+    build_message_templates(&core);
     build_native_inventory(&core);
     println!(
         "cargo:rerun-if-changed={}",
         root.join("runtime/contracts/assets-v1.json").display()
     );
+}
+
+fn build_message_templates(core: &Path) {
+    use std::collections::BTreeSet;
+
+    fn placeholders(template: &str) -> BTreeSet<&str> {
+        template
+            .split("{{")
+            .skip(1)
+            .map(|part| {
+                part.split_once("}}")
+                    .expect("closed message interpolation")
+                    .0
+            })
+            .collect()
+    }
+
+    let path = core.join("src/messages.json");
+    println!("cargo:rerun-if-changed={}", path.display());
+    let resources: BTreeMap<String, BTreeMap<String, String>> =
+        serde_json::from_slice(&fs::read(path).expect("backend message catalog"))
+            .expect("valid backend message catalog");
+    let chinese = resources.get("zh-CN").expect("Chinese backend messages");
+    let english = resources.get("en").expect("English backend messages");
+    assert_eq!(resources.len(), 2, "unexpected backend catalog language");
+    assert_eq!(
+        chinese.keys().collect::<Vec<_>>(),
+        english.keys().collect::<Vec<_>>(),
+        "backend catalog language keys differ",
+    );
+    let mut generated = String::from("const ENGLISH_TEMPLATES: &[(&str, &str)] = &[\n");
+    for (key, template) in english {
+        assert!(
+            key.starts_with("backend."),
+            "backend message namespace: {key}"
+        );
+        assert!(
+            !template.is_empty() && !chinese[key].is_empty(),
+            "empty backend message: {key}"
+        );
+        assert_eq!(
+            placeholders(&chinese[key]),
+            placeholders(template),
+            "backend message interpolation differs: {key}",
+        );
+        generated.push_str(&format!("({key:?}, {template:?}),\n"));
+    }
+    generated.push_str("];\n");
+    let output = PathBuf::from(std::env::var_os("OUT_DIR").expect("OUT_DIR"));
+    fs::write(output.join("message_templates.rs"), generated)
+        .expect("write static backend message templates");
 }
 
 fn collect_native_sources(core: &Path, relative: &str, paths: &mut Vec<String>) {

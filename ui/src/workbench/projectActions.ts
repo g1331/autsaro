@@ -1,3 +1,5 @@
+import { composedMessage, message, ProductError, translate } from '../i18n';
+import type { Text } from '../i18n';
 import { open } from '@tauri-apps/plugin-dialog';
 import { requestConfirmation } from '../confirmation';
 import type { IntegrationInspection, WorkspaceView } from '../types';
@@ -42,7 +44,7 @@ interface Dependencies {
     allowed?: 'frame' | 'diagnostic' | 'dtc',
   ) => Promise<void>;
   invalidateAfterEdit: () => void;
-  markStage: (key: Stage, state: StageState, detail: string) => void;
+  markStage: (key: Stage, state: StageState, detail: Text) => void;
   acceptIntegration: (report: IntegrationInspection) => void;
   prepareChanges: () => Promise<void>;
   previewIntegrationSave: () => void;
@@ -106,20 +108,33 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
   async function chooseDirectory(onChoose: (path: string) => void) {
     if (!native || busy) return;
     try {
-      const path = await open({ directory: true, multiple: false, title: '选择目录' });
+      const path = await open({
+        directory: true,
+        multiple: false,
+        title: translate('workflow.dialog.chooseDirectory'),
+      });
       if (typeof path === 'string') onChoose(path);
     } catch (error) {
-      setNotice({ tone: 'error', text: `选择目录失败：${errorText(error)}` });
+      setNotice({
+        tone: 'error',
+        text: composedMessage('workflow.error.chooseDirectory', { error: errorText(error) }),
+      });
     }
   }
 
   async function chooseBinary(onChoose: (path: string) => void) {
     if (!native || busy) return;
     try {
-      const path = await open({ multiple: false, title: '选择已构建的主机二进制' });
+      const path = await open({
+        multiple: false,
+        title: translate('workflow.dialog.chooseBinary'),
+      });
       if (typeof path === 'string') onChoose(path);
     } catch (error) {
-      setNotice({ tone: 'error', text: `选择二进制失败：${errorText(error)}` });
+      setNotice({
+        tone: 'error',
+        text: composedMessage('workflow.error.chooseBinary', { error: errorText(error) }),
+      });
     }
   }
 
@@ -129,7 +144,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       const paths = await open({
         multiple: true,
         filters: [{ name: 'AUTOSAR ARXML', extensions: ['arxml'] }],
-        title: '选择项目 ARXML 文件',
+        title: translate('workflow.dialog.chooseArxml'),
       });
       if (paths) {
         const selected = Array.isArray(paths) ? paths : [paths];
@@ -137,17 +152,23 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
         setImportPathText(selected.join('\n'));
       }
     } catch (error) {
-      setNotice({ tone: 'error', text: `选择文件失败：${errorText(error)}` });
+      setNotice({
+        tone: 'error',
+        text: composedMessage('workflow.error.chooseFiles', { error: errorText(error) }),
+      });
     }
   }
 
-  async function confirmAction(message: string): Promise<boolean> {
+  async function confirmAction(prompt: Text): Promise<boolean> {
     if (busy || integrationProcessing) return false;
-    setBusy('确认操作');
+    setBusy(message('workflow.action.confirm'));
     try {
-      return await requestConfirmation(message);
+      return await requestConfirmation(prompt);
     } catch (error) {
-      setNotice({ tone: 'error', text: `确认操作失败：${errorText(error)}` });
+      setNotice({
+        tone: 'error',
+        text: composedMessage('workflow.error.confirm', { error: errorText(error) }),
+      });
       return false;
     } finally {
       setBusy(null);
@@ -155,7 +176,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
   }
 
   async function choose(selectionNext: Selection) {
-    await guardContext('切换对象', () => {
+    await guardContext(message('workflow.action.chooseObject'), () => {
       setSelection(selectionNext);
       if (stateRef.current.workspace) setDraft(draftFor(stateRef.current.workspace, selectionNext));
       setCreating(null);
@@ -172,7 +193,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
 
   async function openCreator(kind: 'frame' | 'signal') {
     if (!native || busy || !workspace || workspace.integrationCandidate) return;
-    await guardContext('创建对象', () => {
+    await guardContext(message('workflow.action.createObject'), () => {
       setDraft(draftFor(stateRef.current.workspace!, stateRef.current.selection));
       setCreating(kind);
       field('inspectorVisible')(true);
@@ -194,7 +215,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       integrationPeriod: '',
       integrationPreview: null,
       integrationPreviewPath: '',
-      integrationNotice: '尚未检查标准输入',
+      integrationNotice: message('workflow.integration.unchecked'),
       ecuOutputDirectory: '',
       ecuImportDirectory: '',
       generationKind: view.integrationCandidate ? 'handoff' : 'project',
@@ -238,7 +259,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
 
   async function startProject(nextSource: 'empty' | 'import' = 'empty') {
     if (integrationProcessing) return;
-    await replaceProject('切换工程', async () => {
+    await replaceProject(message('workflow.action.switchProject'), async () => {
       try {
         await call<void>('close_project');
         invalidateOperation();
@@ -264,7 +285,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
         integrationPeriod: '',
         integrationPreview: null,
         integrationPreviewPath: '',
-        integrationNotice: '尚未检查标准输入',
+        integrationNotice: message('workflow.integration.unchecked'),
         ecuOutputDirectory: '',
         ecuImportDirectory: '',
         peerDirectory: '',
@@ -299,14 +320,14 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
   }
 
   function createProject() {
-    void replaceProject('新建工程', async () => {
+    void replaceProject(message('workflow.action.newProject'), async () => {
       const current = stateRef.current;
       if (!current.projectDirectory || !current.projectName.trim()) {
-        setNotice({ tone: 'error', text: '请输入工程名称并选择新空目录。' });
+        setNotice({ tone: 'error', text: message('workflow.project.requireNameDirectory') });
         return;
       }
       await run(
-        { kind: 'action', label: '预览新建工程' },
+        { kind: 'action', label: message('workflow.action.previewNewProject') },
         () =>
           call<ProjectCreationPreview>('preview_project_creation', {
             directory: current.projectDirectory,
@@ -320,12 +341,12 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
 
   function importProject() {
     if (!importPaths.length) {
-      setNotice({ tone: 'error', text: '请至少选择一份 ARXML 文件' });
+      setNotice({ tone: 'error', text: message('workflow.project.requireArxml') });
       return;
     }
-    void replaceProject('导入 ARXML', () =>
+    void replaceProject(message('workflow.action.importArxml'), () =>
       run(
-        { kind: 'action', label: '导入项目' },
+        { kind: 'action', label: message('workflow.action.importProject') },
         () => call<WorkspaceView>('open_project', { paths: importPaths }),
         applyProject,
       ),
@@ -362,10 +383,10 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     const newWorkspaceDirectory =
       current.handoffImportMode === 'v2' ? current.handoffImportDestination : null;
     if (!directory || (current.handoffImportMode === 'v2' && !newWorkspaceDirectory)) return;
-    await replaceProject('导入交付包并替换工程', async () => {
+    await replaceProject(message('workflow.action.replaceWithHandoff'), async () => {
       field('handoffImportOpen')(false);
       await run(
-        { kind: 'handoffImport', label: '导入交付包' },
+        { kind: 'handoffImport', label: message('workflow.action.importHandoff') },
         () => call<WorkspaceView>('open_handoff_project', { directory, newWorkspaceDirectory }),
         (view) => {
           field('handoffImportDestination')('');
@@ -376,9 +397,9 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
   }
 
   async function previewApplicationInitialization() {
-    await guardContext('初始化用户应用', () =>
+    await guardContext(message('workflow.action.initializeApplication'), () =>
       run(
-        { kind: 'action', label: '预览用户应用初始化' },
+        { kind: 'action', label: message('workflow.action.previewApplication') },
         () => call<ApplicationInitializationPreview>('preview_application_initialization'),
         (applicationPreview) => field('applicationPreview')(applicationPreview),
       ),
@@ -389,7 +410,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     const preview = stateRef.current.applicationPreview;
     if (!preview) return;
     await run(
-      { kind: 'action', label: '初始化用户应用' },
+      { kind: 'action', label: message('workflow.action.initializeApplication') },
       () => call<ApplicationInitializationOutcome>('initialize_application_previewed', { preview }),
       (outcome) => {
         patchState({
@@ -399,10 +420,14 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
           applicationRecoveryFiles: outcome.retainedRecoveryFiles,
         });
         invalidateAfterEdit();
-        if (!outcome.projection.dirty) markStage('save', 'done', '用户应用与成员清单已按预览写入');
+        if (!outcome.projection.dirty)
+          markStage('save', 'done', message('workflow.stage.applicationWritten'));
         setNotice({
           tone: 'info',
-          text: `用户应用初始化已返回；${outcome.warnings.length} 条警告，${outcome.retainedRecoveryFiles.length} 个待处理恢复文件。旧生成、构建与运行结果已失效。`,
+          text: message('workflow.application.initialized', {
+            warnings: outcome.warnings.length,
+            recoveryFiles: outcome.retainedRecoveryFiles.length,
+          }),
         });
       },
     );
@@ -418,7 +443,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
   }
 
   async function closeDocument(tab: DocumentTab) {
-    await guardContext('关闭文档', async () => {
+    await guardContext(message('workflow.action.closeDocument'), async () => {
       const current = stateRef.current;
       const tabs = current.tabs.filter(
         (other) => other.kind !== tab.kind || other.sourceId !== tab.sourceId,
@@ -486,7 +511,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     });
   }
 
-  async function guardContext(title: string, action: () => void | Promise<void>) {
+  async function guardContext(title: Text, action: () => void | Promise<void>) {
     if (running.current || stateRef.current.guard) return;
     rememberDialogOpener();
     if (!hasDrafts()) {
@@ -497,7 +522,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     patchState({ guard: { kind: 'context', title } });
   }
 
-  async function replaceProject(title: string, action: () => void | Promise<void>) {
+  async function replaceProject(title: Text, action: () => void | Promise<void>) {
     if (running.current || stateRef.current.guard) return;
     rememberDialogOpener();
     if (!hasDrafts() && !stateRef.current.workspace?.dirty && !stateRef.current.projection?.dirty) {
@@ -513,7 +538,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     if (!current.workspace || running.current) return false;
     const generation = epoch.current;
     running.current = true;
-    setBusy('应用草稿');
+    setBusy(message('workflow.action.applyDrafts'));
     let view = current.workspace;
     let applied = false;
     try {
@@ -535,7 +560,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
             ? current.selection.path
             : view.signals.find((item) => item.path === current.selection?.path)?.framePath;
         const owner = view.frames.find((item) => item.path === framePath);
-        if (!owner) throw new Error('请选择待创建信号的真实所属帧');
+        if (!owner) throw new ProductError(message('workflow.error.selectSignalFrame'));
         const values = signalChanges(current.signalInput, owner);
         view = await call<WorkspaceView>('add_signal', { framePath: owner.path, ...values });
         applied = true;
@@ -562,7 +587,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
               frame.path ===
               view.signals.find((signal) => signal.path === current.draft?.path)?.framePath,
           );
-          if (!owner) throw new Error('信号所属帧不存在');
+          if (!owner) throw new ProductError(message('workflow.error.signalFrameMissing'));
           view = await call<WorkspaceView>('update_signal', {
             path: current.draft.path,
             changes: signalChanges(current.draft.fields, owner),
@@ -600,7 +625,12 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
         const report = await call<IntegrationInspection>('edit_integration', {
           changes: {
             canIds,
-            applicationPeriodMs: intInRange(current.integrationPeriod, '应用周期', 1, 2147483647),
+            applicationPeriodMs: intInRange(
+              current.integrationPeriod,
+              message('workflow.field.applicationPeriod'),
+              1,
+              2147483647,
+            ),
           },
         });
         applied = true;
@@ -619,8 +649,8 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       setNotice({
         tone: 'error',
         text: applied
-          ? `部分草稿已应用；其余输入保持，请修正后继续：${errorText(error)}`
-          : `应用被拒绝，保持当前位置与未应用输入：${errorText(error)}`,
+          ? composedMessage('workflow.error.draftsPartiallyApplied', { error: errorText(error) })
+          : composedMessage('workflow.error.draftsRejected', { error: errorText(error) }),
       });
       return false;
     } finally {
@@ -661,14 +691,14 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
 
   async function requestSave() {
     if (hasDrafts()) {
-      await guardContext('预览保存', requestSave);
+      await guardContext(message('workflow.action.previewSave'), requestSave);
       return;
     }
     if (stateRef.current.workspace?.integrationCandidate) previewIntegrationSave();
     else saveProject();
   }
 
-  async function continueReplacement(saved: WorkspaceView, error: string | null) {
+  async function continueReplacement(saved: WorkspaceView, error: Text | null) {
     if (error || saved.dirty || !pendingReplacement.current) return;
     patchState({ replacementReady: true });
   }
@@ -704,14 +734,14 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       openDocument({ kind: 'configuration' });
     };
     if (multiple) select();
-    else await guardContext('切换配置对象', select);
+    else await guardContext(message('workflow.action.chooseConfiguration'), select);
   }
 
   async function readSource(sourceId: string) {
     if (!native || running.current) return;
     const generation = epoch.current;
     running.current = true;
-    setBusy('读取源原文');
+    setBusy(message('workflow.action.readSource'));
     patchState({ activeSourceId: sourceId, sourceText: null, treeMode: 'files' });
     openDocument({ kind: 'source', sourceId });
     try {
@@ -727,7 +757,10 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       patchState({ sourceText: contents });
     } catch (error) {
       if (generation === epoch.current)
-        setNotice({ tone: 'error', text: `原文读取失败：${errorText(error)}` });
+        setNotice({
+          tone: 'error',
+          text: composedMessage('workflow.error.readSource', { error: errorText(error) }),
+        });
     } finally {
       if (generation === epoch.current) {
         running.current = false;
@@ -741,62 +774,55 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     try {
       const catalogPath = await open({
         multiple: false,
-        filters: [{ name: 'Definition catalog', extensions: ['json'] }],
-        title: '选择扩展 catalog.json',
+        filters: [{ name: translate('workflow.dialog.catalogFilter'), extensions: ['json'] }],
+        title: translate('workflow.dialog.chooseCatalog'),
       });
       if (typeof catalogPath !== 'string') return;
-      if (
-        !(await confirmAction(
-          `明确接纳此扩展定义目录？后台将核对版次、完整成员和两层摘要；失败保留旧目录。\\n${catalogPath}`,
-        ))
-      )
+      if (!(await confirmAction(message('workflow.confirm.acceptCatalog', { path: catalogPath }))))
         return;
-      await guardContext('接纳扩展定义', () =>
+      await guardContext(message('workflow.action.acceptDefinitions'), () =>
         run(
-          { kind: 'action', label: '接纳扩展定义' },
+          { kind: 'action', label: message('workflow.action.acceptDefinitions') },
           () => call<ProjectProjection>('import_definition_catalog', { catalogPath }),
           (projection) => {
             patchState({ projection });
             invalidateAfterEdit();
-            setSettingsNotice('扩展已明确接纳；请预览保存工程以持久化接纳集合。');
+            setSettingsNotice(message('workflow.definitions.accepted'));
           },
         ),
       );
     } catch (error) {
-      setSettingsNotice(`导入被拒绝：${errorText(error)}`);
+      setSettingsNotice(
+        composedMessage('workflow.error.importDefinitions', { error: errorText(error) }),
+      );
     }
   }
 
   async function removeDefinitionCatalog(catalogId: string) {
-    if (
-      !(await confirmAction(
-        `移除工程接纳的扩展 ${catalogId}？源文件保留，受影响消费者将失去对应定义。`,
-      ))
-    )
-      return;
-    await guardContext('移除扩展定义', () =>
+    if (!(await confirmAction(message('workflow.confirm.removeCatalog', { catalogId })))) return;
+    await guardContext(message('workflow.action.removeDefinitions'), () =>
       run(
-        { kind: 'action', label: '移除扩展定义' },
+        { kind: 'action', label: message('workflow.action.removeDefinitions') },
         () => call<ProjectProjection>('remove_definition_catalog', { catalogId }),
         (projection) => {
           patchState({ projection });
           invalidateAfterEdit();
-          setSettingsNotice('接纳集合已改变，尚未保存；原 ARXML 与本机缓存保持。');
+          setSettingsNotice(message('workflow.definitions.changed'));
         },
       ),
     );
   }
 
   async function openMemberProject() {
-    await replaceProject('打开成员工程', async () => {
+    await replaceProject(message('workflow.action.openMemberProject'), async () => {
       const path = await open({
         multiple: false,
-        filters: [{ name: 'Workbench project', extensions: ['json'] }],
-        title: '选择 workbench-project.json',
+        filters: [{ name: translate('workflow.dialog.projectFilter'), extensions: ['json'] }],
+        title: translate('workflow.dialog.chooseMemberProject'),
       });
       if (typeof path !== 'string') return;
       await run(
-        { kind: 'action', label: '打开成员工程' },
+        { kind: 'action', label: message('workflow.action.openMemberProject') },
         () => call<WorkspaceView>('open_member_project', { path }),
         (view) => {
           applyProject(view);
@@ -807,14 +833,14 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
   }
 
   async function previewSaveAs() {
-    await guardContext('保存为工程', async () => {
+    await guardContext(message('workflow.action.saveAs'), async () => {
       const current = stateRef.current;
       if (!current.projectDirectory || !current.projectName.trim()) {
-        setNotice({ tone: 'error', text: '请输入工程名称并选择新空目录。' });
+        setNotice({ tone: 'error', text: message('workflow.project.requireNameDirectory') });
         return;
       }
       await run(
-        { kind: 'action', label: '预览保存为工程' },
+        { kind: 'action', label: message('workflow.action.previewSaveAs') },
         () =>
           call<ProjectCreationPreview>('preview_save_as_project', {
             directory: current.projectDirectory,
@@ -832,7 +858,10 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     await run(
       {
         kind: 'action',
-        label: current.projectPreviewKind === 'create' ? '创建工程' : '保存为工程',
+        label:
+          current.projectPreviewKind === 'create'
+            ? message('workflow.action.createProject')
+            : message('workflow.action.saveAs'),
       },
       () =>
         call<WorkspaceView>(

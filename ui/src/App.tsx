@@ -1,3 +1,4 @@
+import { message, useLocale } from './i18n';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
@@ -34,24 +35,25 @@ import { labelFromPath } from './workbench/forms';
 import type { DocumentTab } from './workbench/projectTypes';
 
 const documentLabels = {
-  configuration: '配置对象',
-  communication: 'CAN 通信',
-  diagnostic: '诊断配置',
-  integration: '标准输入',
-  delivery: '源码交付',
-  source: '源原文',
-  'project-entry': '工程来源',
+  configuration: 'shell.document.configuration',
+  communication: 'shell.document.communication',
+  diagnostic: 'shell.document.diagnostic',
+  integration: 'shell.document.integration',
+  delivery: 'shell.document.delivery',
+  source: 'shell.document.source',
+  'project-entry': 'shell.document.project-entry',
 };
 type Command = {
   id: string;
   label: string;
-  menu?: '文件' | '编辑' | '视图' | '工具' | '帮助';
+  menu?: 'file' | 'edit' | 'view' | 'tools' | 'help';
   shortcut?: string;
   reason: string;
   run: () => void | Promise<unknown>;
 };
 
 export default function App() {
+  const { t, text } = useLocale();
   const c = useWorkbench();
   const [menu, setMenu] = useState<string | null>(null);
   const [palette, setPalette] = useState(false);
@@ -88,7 +90,7 @@ export default function App() {
     document.querySelector<HTMLLinkElement>('link[rel="icon"]')?.setAttribute('href', logo);
   }, [effectiveTheme, logo]);
   const requestExit = async () => {
-    await c.replaceProject('退出工作台', () => getCurrentWindow().destroy());
+    await c.replaceProject(message('shell.command.exit'), () => getCurrentWindow().destroy());
   };
   const exitRequested = useEffectEvent(requestExit);
   useEffect(() => {
@@ -110,176 +112,180 @@ export default function App() {
     };
   }, [c.native]);
   const workspaceReason = !c.workspace
-    ? '请先打开工程'
+    ? t('shell.reason.noProject')
     : c.disabled
       ? c.busy
-        ? `正在${c.busy}`
-        : (c.capabilities?.ruleError ?? '后台能力尚未就绪')
+        ? t('shell.busy', { operation: text(c.busy) })
+        : c.capabilities?.ruleError
+          ? text(c.capabilities.ruleError)
+          : t('shell.reason.backend')
       : '';
   const sourceReason =
     workspaceReason ||
-    (c.workspace?.dirty || c.projection?.dirty ? '请先预览并确认保存工程' : '') ||
-    (c.unapplied ? '请先应用或还原草稿' : '');
+    (c.workspace?.dirty || c.projection?.dirty ? t('shell.reason.save') : '') ||
+    (c.unapplied ? t('shell.reason.draft') : '');
   const legacyReason =
-    workspaceReason || (c.workspace?.integrationCandidate ? '标准输入不使用普通 CAN 创建器' : '');
+    workspaceReason || (c.workspace?.integrationCandidate ? t('shell.reason.standardCreator') : '');
   const commands: Command[] = [
     {
       id: 'new',
-      label: '新建工程…',
-      menu: '文件',
-      reason: c.actionReason('create'),
+      label: t('shell.command.new'),
+      menu: 'file',
+      reason: text(c.actionReason('create')),
       run: () => c.openProjectEntry('empty'),
     },
     {
       id: 'open',
-      label: '导入 ARXML…',
-      menu: '文件',
+      label: t('shell.command.open'),
+      menu: 'file',
       shortcut: 'Ctrl+O',
-      reason: c.actionReason('open'),
+      reason: text(c.actionReason('open')),
       run: () => c.openProjectEntry('import'),
     },
     {
       id: 'member',
-      label: '打开成员工程…',
-      menu: '文件',
-      reason: c.busy || !c.native ? '后台繁忙或非桌面环境' : '',
+      label: t('shell.command.member'),
+      menu: 'file',
+      reason: c.busy || !c.native ? t('shell.reason.desktopBusy') : '',
       run: c.openMemberProject,
     },
     {
       id: 'host-package',
-      label: '导入可重建主机交付包…',
-      menu: '文件',
-      reason: c.busy || !c.native ? '后台繁忙或非桌面环境' : '',
+      label: t('shell.command.hostPackage'),
+      menu: 'file',
+      reason: c.busy || !c.native ? t('shell.reason.desktopBusy') : '',
       run: c.importHandoff,
     },
     {
       id: 'ecu-package',
-      label: '重导入 ECU 交接包…',
-      menu: '文件',
-      reason: c.busy || !c.native ? '后台繁忙或非桌面环境' : '',
+      label: t('shell.command.ecuPackage'),
+      menu: 'file',
+      reason: c.busy || !c.native ? t('shell.reason.desktopBusy') : '',
       run: () => c.chooseDirectory((directory) => c.importHandoffDirectory(directory)),
     },
     {
       id: 'save',
-      label: '预览保存',
-      menu: '文件',
+      label: t('shell.command.save'),
+      menu: 'file',
       shortcut: 'Ctrl+S',
       reason: workspaceReason,
       run: c.requestSave,
     },
     {
       id: 'save-as',
-      label: '保存为成员工程…',
-      menu: '文件',
-      reason: workspaceReason || c.actionReason('save'),
+      label: t('shell.command.saveAs'),
+      menu: 'file',
+      reason: workspaceReason || text(c.actionReason('save')),
       run: () => c.openProjectEntry('save-as'),
     },
     {
       id: 'close',
-      label: '关闭工程',
-      menu: '文件',
-      reason: !c.workspace ? '请先打开工程' : c.actionReason('open'),
+      label: t('shell.command.close'),
+      menu: 'file',
+      reason: !c.workspace ? t('shell.reason.noProject') : text(c.actionReason('open')),
       run: () => c.startProject(),
     },
     {
       id: 'settings',
-      label: '设置…',
-      menu: '文件',
+      label: t('shell.command.settings'),
+      menu: 'file',
       reason: '',
       run: () => c.setSettingsOpen(true),
     },
     {
       id: 'apply',
-      label: '应用当前草稿',
-      menu: '编辑',
-      reason: workspaceReason || (!c.unapplied ? '没有未应用更改' : ''),
+      label: t('shell.command.apply'),
+      menu: 'edit',
+      reason: workspaceReason || (!c.unapplied ? t('shell.reason.noChanges') : ''),
       run: c.applyCurrentDrafts,
     },
     {
       id: 'restore',
-      label: '还原未应用草稿',
-      menu: '编辑',
-      reason: workspaceReason || (!c.unapplied && !c.creating ? '没有未应用草稿' : ''),
+      label: t('shell.command.restore'),
+      menu: 'edit',
+      reason: workspaceReason || (!c.unapplied && !c.creating ? t('shell.reason.noDrafts') : ''),
       run: c.restoreAllDrafts,
     },
     {
       id: 'frame',
-      label: '添加 CAN 帧',
-      menu: '编辑',
+      label: t('shell.command.frame'),
+      menu: 'edit',
       reason: legacyReason,
       run: () => c.openCreator('frame'),
     },
     {
       id: 'signal',
-      label: '添加 CAN 信号',
-      menu: '编辑',
-      reason: legacyReason || (!c.focusedFrame ? '请先选择所属帧' : ''),
+      label: t('shell.command.signal'),
+      menu: 'edit',
+      reason: legacyReason || (!c.focusedFrame ? t('shell.reason.frame') : ''),
       run: () => c.openCreator('signal'),
     },
     {
       id: 'tree',
-      label: '工程树',
-      menu: '视图',
+      label: t('shell.command.tree'),
+      menu: 'view',
       shortcut: 'Alt+1',
       reason: '',
       run: () => c.setTreeVisible((previous) => !previous),
     },
     {
       id: 'inspector',
-      label: '检查器',
-      menu: '视图',
+      label: t('shell.command.inspector'),
+      menu: 'view',
       reason: '',
       run: () => c.setInspectorVisible((previous) => !previous),
     },
     {
       id: 'objects',
-      label: '配置对象',
-      menu: '视图',
+      label: t('shell.document.configuration'),
+      menu: 'view',
       reason: workspaceReason,
       run: () => c.openDocument({ kind: 'configuration' }),
     },
     {
       id: 'communication',
-      label: 'CAN 通信',
-      menu: '视图',
+      label: t('shell.document.communication'),
+      menu: 'view',
       reason: legacyReason,
       run: () => c.openDocument({ kind: 'communication' }),
     },
     {
       id: 'diagnostic',
-      label: '诊断配置',
-      menu: '视图',
+      label: t('shell.document.diagnostic'),
+      menu: 'view',
       reason: legacyReason,
       run: () => c.openDocument({ kind: 'diagnostic' }),
     },
     {
       id: 'standard',
-      label: '标准输入',
-      menu: '视图',
+      label: t('shell.document.integration'),
+      menu: 'view',
       reason: workspaceReason,
       run: () => c.openDocument({ kind: 'integration' }),
     },
     {
       id: 'delivery',
-      label: '源码交付',
-      menu: '视图',
+      label: t('shell.document.delivery'),
+      menu: 'view',
       reason: workspaceReason,
       run: () => c.openDocument({ kind: 'delivery' }),
     },
     {
       id: 'validate',
-      label: c.workspace?.integrationCandidate ? '检查标准输入' : '校验工程',
-      menu: '工具',
+      label: c.workspace?.integrationCandidate
+        ? t('shell.command.inspect')
+        : t('shell.command.validate'),
+      menu: 'tools',
       reason: workspaceReason,
       run: () =>
-        c.guardContext('校验工程', () =>
+        c.guardContext(message('shell.command.validate'), () =>
           c.workspace?.integrationCandidate ? c.inspectIntegration() : c.validateProject(),
         ),
     },
     {
       id: 'preview',
-      label: '预览源码…',
-      menu: '工具',
+      label: t('shell.command.preview'),
+      menu: 'tools',
       reason: sourceReason,
       run: () => {
         c.openDocument({ kind: 'delivery' });
@@ -291,68 +297,78 @@ export default function App() {
     },
     {
       id: 'preflight',
-      label: '显式编译预检',
-      menu: '工具',
+      label: t('shell.command.preflight'),
+      menu: 'tools',
       reason:
         sourceReason ||
-        c.executionReason ||
-        (!c.workspace?.integrationCandidate ? '此入口适用于标准 ECU' : ''),
+        text(c.executionReason) ||
+        (!c.workspace?.integrationCandidate ? t('shell.reason.standard') : ''),
       run: c.preflightEcu,
     },
     {
       id: 'initialize-application',
-      label: '预览初始化用户应用…',
-      menu: '工具',
+      label: t('shell.command.initialize'),
+      menu: 'tools',
       reason:
         sourceReason ||
-        c.actionReason('edit') ||
-        (!c.workspace?.integrationCandidate ? '当前 CAN 剖面没有用户应用槽' : ''),
+        text(c.actionReason('edit')) ||
+        (!c.workspace?.integrationCandidate ? t('shell.reason.noSlots') : ''),
       run: c.previewApplicationInitialization,
     },
     {
       id: 'build',
-      label: '构建窗口',
-      menu: '工具',
+      label: t('shell.command.build'),
+      menu: 'tools',
       shortcut: 'Alt+4',
       reason: '',
       run: () => c.setToolWindow('build'),
     },
     {
       id: 'host',
-      label: '主机验证窗口',
-      menu: '工具',
+      label: t('shell.command.host'),
+      menu: 'tools',
       shortcut: 'Alt+9',
       reason: '',
       run: () => c.setToolWindow('host'),
     },
     {
       id: 'problems',
-      label: '问题窗口',
-      menu: '工具',
+      label: t('shell.command.problems'),
+      menu: 'tools',
       reason: '',
       run: () => c.setToolWindow('problems'),
     },
     {
       id: 'cancel',
-      label: '取消当前操作',
-      menu: '工具',
-      reason: !c.busy ? '没有运行中的操作' : '',
+      label: t('shell.command.cancel'),
+      menu: 'tools',
+      reason: !c.busy ? t('shell.reason.idle') : '',
       run: c.cancelOperation,
     },
-    { id: 'help', label: '支持范围与依赖', menu: '帮助', reason: '', run: () => setHelp(true) },
+    {
+      id: 'help',
+      label: t('shell.command.help'),
+      menu: 'help',
+      reason: '',
+      run: () => setHelp(true),
+    },
   ];
   if (c.capabilities?.verificationMode === true) {
-    const reason = !c.native ? '需要桌面运行环境' : c.busy ? `正在${c.busy}` : '';
+    const reason = !c.native
+      ? t('shell.reason.desktop')
+      : c.busy
+        ? t('shell.busy', { operation: text(c.busy) })
+        : '';
     commands.push(
       {
         id: 'verification-owned-long-failure',
-        label: '验证：受管长日志失败',
+        label: t('shell.command.verifyFailure'),
         reason,
         run: () => c.verificationOwnedFailure(0),
       },
       {
         id: 'verification-owned-cancel',
-        label: '验证：受管取消',
+        label: t('shell.command.verifyCancel'),
         reason,
         run: () => c.verificationOwnedFailure(5000),
       },
@@ -443,21 +459,15 @@ export default function App() {
     tab.kind === 'source'
       ? labelFromPath(
           c.projection?.sources.find((item) => item.sourceId === tab.sourceId)?.path ??
-            documentLabels.source,
+            t(documentLabels.source),
         )
-      : documentLabels[tab.kind];
+      : t(documentLabels[tab.kind]);
   return (
     <div className="app-shell">
       <header className="menubar" data-tauri-drag-region>
-        <img
-          src={logo}
-          width="27"
-          height="27"
-          alt="Classic CAN 配置工作台"
-          data-tauri-drag-region
-        />
-        <nav aria-label="应用菜单">
-          {(['文件', '编辑', '视图', '工具', '帮助'] as const).map((label) => (
+        <img src={logo} width="27" height="27" alt={t('shell.app.title')} data-tauri-drag-region />
+        <nav aria-label={t('shell.app.menu')}>
+          {(['file', 'edit', 'view', 'tools', 'help'] as const).map((label) => (
             <div className="menu-root" key={label}>
               <button
                 type="button"
@@ -465,13 +475,13 @@ export default function App() {
                 aria-haspopup="menu"
                 onClick={() => setMenu(menu === label ? null : label)}
               >
-                {label}
+                {t(`shell.menu.${label}`)}
               </button>
               {menu === label ? (
                 <div
                   className="menu-popup"
                   role="menu"
-                  aria-label={label}
+                  aria-label={t(`shell.menu.${label}`)}
                   onKeyDown={(event) => {
                     if (event.key === 'Escape') {
                       event.preventDefault();
@@ -523,7 +533,7 @@ export default function App() {
           ))}
         </nav>
         <div className="titlebar-drag-region" data-tauri-drag-region>
-          <span className="app-title">Classic CAN 配置工作台</span>
+          <span className="app-title">{t('shell.app.title')}</span>
         </div>
         <button
           type="button"
@@ -531,7 +541,7 @@ export default function App() {
             setQuery('');
             setPalette(true);
           }}
-          aria-label="命令搜索 Ctrl+K"
+          aria-label={t('shell.app.commandShortcut')}
         >
           <Search size={16} aria-hidden="true" />
         </button>
@@ -539,19 +549,24 @@ export default function App() {
           <WindowControls
             onClose={requestExit}
             onError={(error) =>
-              c.setNotice({ tone: 'error', text: `窗口操作失败：${String(error)}` })
+              c.setNotice({
+                tone: 'error',
+                text: message('shell.windowError', { error: String(error) }),
+              })
             }
           />
         ) : null}
       </header>
       <div className="context-toolbar">
-        <strong>{c.workspace?.name ?? '未打开工程'}</strong>
+        <strong>{c.workspace?.name ?? t('shell.app.noProject')}</strong>
         <span className="toolbar-separator" />
         {c.workspace ? (
           <>
             <span>
               {c.projection?.profile ??
-                (c.workspace.integrationCandidate ? '标准 ECU' : 'CAN 信号')}
+                (c.workspace.integrationCandidate
+                  ? t('shell.app.standardEcu')
+                  : t('shell.app.canSignals'))}
             </span>
             <button
               type="button"
@@ -559,7 +574,7 @@ export default function App() {
               disabled={Boolean(workspaceReason)}
             >
               <Save size={15} aria-hidden="true" />
-              预览保存
+              {t('shell.command.save')}
             </button>
             <button
               type="button"
@@ -567,34 +582,38 @@ export default function App() {
               disabled={Boolean(workspaceReason)}
             >
               <ListChecks size={15} aria-hidden="true" />
-              校验
+              {t('shell.app.validate')}
             </button>
             <button type="button" onClick={() => dispatchCommand('delivery')}>
               <Code2 size={15} aria-hidden="true" />
-              源码交付
+              {t('shell.document.delivery')}
             </button>
           </>
         ) : null}
         <span className="toolbar-spacer" />
         {c.busy ? (
           <>
-            <span role="status">正在{c.busy}</span>
+            <span role="status">{t('shell.busy', { operation: text(c.busy) })}</span>
             <button type="button" onClick={() => dispatchCommand('cancel')}>
               <Square size={13} aria-hidden="true" />
-              取消
+              {t('shell.app.cancel')}
             </button>
           </>
         ) : null}
-        <button type="button" aria-label="设置" onClick={() => dispatchCommand('settings')}>
+        <button
+          type="button"
+          aria-label={t('shell.settings.title')}
+          onClick={() => dispatchCommand('settings')}
+        >
           <Settings size={16} aria-hidden="true" />
         </button>
       </div>
       <main className="workspace-frame">
-        <nav className="tool-rail" aria-label="工作台工具轨">
+        <nav className="tool-rail" aria-label={t('shell.app.rail')}>
           <button
             type="button"
-            aria-label="工程树 Alt+1"
-            title="工程树 Alt+1"
+            aria-label={t('shell.app.treeShortcut')}
+            title={t('shell.app.treeShortcut')}
             aria-pressed={c.treeVisible}
             onClick={() => dispatchCommand('tree')}
           >
@@ -602,8 +621,8 @@ export default function App() {
           </button>
           <button
             type="button"
-            aria-label="问题"
-            title="问题"
+            aria-label={t('shell.app.problems')}
+            title={t('shell.app.problems')}
             aria-pressed={c.toolWindow === 'problems'}
             onClick={() => dispatchCommand('problems')}
           >
@@ -611,8 +630,8 @@ export default function App() {
           </button>
           <button
             type="button"
-            aria-label="构建 Alt+4"
-            title="构建 Alt+4"
+            aria-label={t('shell.app.buildShortcut')}
+            title={t('shell.app.buildShortcut')}
             aria-pressed={c.toolWindow === 'build'}
             onClick={() => dispatchCommand('build')}
           >
@@ -620,8 +639,8 @@ export default function App() {
           </button>
           <button
             type="button"
-            aria-label="主机验证 Alt+9"
-            title="主机验证 Alt+9"
+            aria-label={t('shell.app.hostShortcut')}
+            title={t('shell.app.hostShortcut')}
             aria-pressed={c.toolWindow === 'host'}
             onClick={() => dispatchCommand('host')}
           >
@@ -630,8 +649,8 @@ export default function App() {
           <span />
           <button
             type="button"
-            aria-label="检查器"
-            title="检查器"
+            aria-label={t('shell.command.inspector')}
+            title={t('shell.command.inspector')}
             aria-pressed={c.inspectorVisible}
             onClick={() => dispatchCommand('inspector')}
           >
@@ -642,7 +661,7 @@ export default function App() {
         <section className="central-workspace">
           {c.workspace ? (
             <>
-              <div className="document-tabs" role="tablist" aria-label="工程文档">
+              <div className="document-tabs" role="tablist" aria-label={t('shell.app.documents')}>
                 {c.tabs.map((tab) => (
                   <div
                     key={`${tab.kind}-${tab.sourceId ?? ''}`}
@@ -668,7 +687,7 @@ export default function App() {
                     </button>
                     <button
                       type="button"
-                      aria-label={`关闭 ${tabLabel(tab)}`}
+                      aria-label={t('shell.app.closeTab', { tab: tabLabel(tab) })}
                       onClick={() => void c.closeDocument(tab)}
                     >
                       <X size={12} />
@@ -677,7 +696,7 @@ export default function App() {
                 ))}
                 <button
                   type="button"
-                  aria-label="打开配置对象文档"
+                  aria-label={t('shell.app.openConfiguration')}
                   onClick={() => c.openDocument({ kind: 'configuration' })}
                 >
                   <Plus size={14} />
@@ -707,19 +726,26 @@ export default function App() {
                   <div className="source-document">
                     <h2>{labelFromPath(source?.path ?? '')}</h2>
                     <p className="mono path-text">{source?.path}</p>
-                    {source ? <CopyText text={source.path} label="复制源路径" /> : null}
-                    <p>只读原文 · {source?.readonly ? '来源只读' : '通过配置事务修改'}</p>
+                    {source ? (
+                      <CopyText text={source.path} label={t('shell.app.copySourcePath')} />
+                    ) : null}
+                    <p>
+                      {t('shell.app.readonlySource')} ·{' '}
+                      {source?.readonly
+                        ? t('shell.app.sourceReadonly')
+                        : t('shell.app.sourceTransaction')}
+                    </p>
                     {source && c.activeSourceId === source.sourceId && c.sourceText !== null ? (
                       <>
-                        <CopyText text={c.sourceText} label="复制完整原文" />
+                        <CopyText text={c.sourceText} label={t('shell.app.copySource')} />
                         <TextSnapshot
                           key={source?.sourceId}
                           text={c.sourceText}
-                          label="完整源原文"
+                          label={t('shell.app.fullSource')}
                         />
                       </>
                     ) : (
-                      <p>原文未读取。</p>
+                      <p>{t('shell.app.noSource')}</p>
                     )}
                   </div>
                 ) : null}
@@ -733,18 +759,16 @@ export default function App() {
               className={`notice ${c.notice.tone}`}
               role={c.notice.tone === 'error' ? 'alert' : 'status'}
             >
-              <span>{c.notice.text.slice(0, 3000)}</span>
-              {c.notice.text.length > 3000 ? (
-                <CopyText text={c.notice.text} label="复制完整详情" />
+              <span>{text(c.notice.text).slice(0, 3000)}</span>
+              {text(c.notice.text).length > 3000 ? (
+                <CopyText text={text(c.notice.text)} label={t('shell.app.copyDetails')} />
               ) : null}
             </div>
           ) : null}
-          {!c.native ? (
-            <p className="notice info">需要桌面运行环境；浏览器不提供文件、内核或 ECU 执行能力。</p>
-          ) : null}
+          {!c.native ? <p className="notice info">{t('shell.app.browser')}</p> : null}
           {c.capabilities?.ruleError ? (
             <p className="notice error" role="alert">
-              内置规则安装错误：{c.capabilities.ruleError}
+              {t('shell.app.ruleError', { error: text(c.capabilities.ruleError) })}
             </p>
           ) : null}
           <ToolWindows controller={c} />
@@ -752,7 +776,7 @@ export default function App() {
         {c.workspace ? (
           <aside className="inspector-pane" hidden={!c.inspectorVisible}>
             <PanelResizeHandle kind="inspector" />
-            <div className="panel-tabs" role="tablist" aria-label="检查器视图">
+            <div className="panel-tabs" role="tablist" aria-label={t('shell.app.inspectorViews')}>
               {(['properties', 'references'] as const).map((key) => (
                 <button
                   key={key}
@@ -761,14 +785,14 @@ export default function App() {
                   aria-selected={c.inspectorTab === key}
                   onClick={() => c.setInspectorTab(key)}
                 >
-                  {key === 'properties' ? '属性' : '引用'}
+                  {key === 'properties' ? t('shell.app.properties') : t('shell.app.references')}
                 </button>
               ))}
               <button
                 type="button"
                 className="panel-icon-button"
-                aria-label="折叠检查器"
-                title="折叠检查器"
+                aria-label={t('shell.app.collapseInspector')}
+                title={t('shell.app.collapseInspector')}
                 onClick={() => c.setInspectorVisible(false)}
               >
                 <ChevronRight size={16} aria-hidden="true" />
@@ -786,38 +810,43 @@ export default function App() {
       </main>
       <footer className="statusbar">
         <span>
-          {c.projection?.release ?? c.capabilities?.ruleSetIdentity?.release ?? '内置规则尚未就绪'}
+          {c.projection?.release ??
+            c.capabilities?.ruleSetIdentity?.release ??
+            t('shell.app.rulesNotReady')}
         </span>
         <span>
           {c.unapplied || c.creating
-            ? '未应用草稿'
+            ? t('shell.app.unapplied')
             : c.workspace?.dirty || c.projection?.dirty
-              ? '未保存'
+              ? t('shell.app.unsaved')
               : c.workspace
-                ? '已保存'
-                : '未打开工程'}
+                ? t('shell.stage.saved')
+                : t('shell.app.noProject')}
         </span>
         <span className="toolbar-spacer" />
         <button type="button" onClick={() => c.setToolWindow(c.busy ? 'log' : 'problems')}>
-          {c.busy ? `正在${c.busy}` : c.stages.validate.detail}
+          {c.busy ? t('shell.busy', { operation: text(c.busy) }) : text(c.stages.validate.detail)}
         </button>
         <span>
-          {c.legacyTarget} · {c.capabilities?.nativeExecution ? '本机可执行' : '本机不适用执行'}
+          {c.legacyTarget} ·{' '}
+          {c.capabilities?.nativeExecution
+            ? t('shell.app.nativeExecution')
+            : t('shell.app.noNativeExecution')}
         </span>
       </footer>
       <SettingsPage controller={c} />
       <PreviewDialogs controller={c} />
       {palette ? (
-        <Dialog title="命令搜索" onClose={() => setPalette(false)}>
+        <Dialog title={t('shell.app.commandSearch')} onClose={() => setPalette(false)}>
           <label className="search-field">
             <Search size={16} />
             <input
               autoFocus
               data-initial-focus
               value={query}
-              aria-label="搜索当前可用命令"
+              aria-label={t('shell.app.searchAvailable')}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="搜索命令"
+              placeholder={t('shell.app.searchPlaceholder')}
             />
           </label>
           <div className="command-results">
@@ -833,46 +862,36 @@ export default function App() {
         </Dialog>
       ) : null}
       {help ? (
-        <Dialog title="支持范围与依赖" onClose={() => setHelp(false)}>
-          <h3>使用说明</h3>
+        <Dialog title={t('shell.command.help')} onClose={() => setHelp(false)}>
+          <h3>{t('shell.help.instructions')}</h3>
           <ol>
             <li>
-              <strong>打开工程：</strong>
-              在“文件”菜单中新建工程、导入 ARXML
-              或打开已有成员工程。新建时选择内置工程模板和新的空目录。
+              <strong>{t('shell.help.openTitle')}</strong>
+              {t('shell.help.open')}
             </li>
             <li>
-              <strong>编辑配置：</strong>
-              在工程树中选择对象，在“属性”中编辑可写参数；查看整批修改的影响后应用。只读对象可查看原文和引用。
+              <strong>{t('shell.help.editTitle')}</strong>
+              {t('shell.help.edit')}
             </li>
             <li>
-              <strong>检查与保存：</strong>
-              使用“校验”查看问题并定位对象；使用“预览保存”检查文件差异，确认后才写入磁盘。未应用草稿不会自动保存。
+              <strong>{t('shell.help.saveTitle')}</strong>
+              {t('shell.help.save')}
             </li>
             <li>
-              <strong>交付源码：</strong>
-              打开“源码交付”，选择目标和独立输出目录，先预览再确认生成。生成完成不等于编译或运行验证通过。
+              <strong>{t('shell.help.deliverTitle')}</strong>
+              {t('shell.help.deliver')}
             </li>
           </ol>
           <p>
-            <strong>面板布局：</strong>
-            拖动工程树与检查器的内侧边缘调整宽度，拖动底部工具窗口的上边缘调整高度。
-            方向键微调，Shift＋方向键加大步幅；双击或 Enter 恢复默认。尺寸在当前运行期间保留。
+            <strong>{t('shell.help.layoutTitle')}</strong>
+            {t('shell.help.layout')}
           </p>
-          <h3>工具依赖</h3>
-          <p>
-            普通配置编辑、保存和源码准备不需要编译器。构建或主机验证前，在“设置”的执行工具中配置所选目标需要的工具；
-            工具未就绪时仍可继续编辑配置。
-          </p>
-          <h3>支持范围</h3>
-          <p>R24-11 原生结构、定义与目标生成分别报告覆盖；不声明完整官方 XSD、SWS 或实机认证。</p>
-          <p>
-            CAN 信号使用 11 位 Classical CAN、有界 DoCAN / DID 与可选单 DTC；标准 ECU 保留当前受限
-            CAN ID 与应用周期编辑，类型、端口和映射只读。
-          </p>
-          <p>
-            源码预览不要求编译器。预检、构建、主机行为验证遵守当前工具、宿主和受控目标；存在旧二进制不证明本次通过。
-          </p>
+          <h3>{t('shell.help.dependencies')}</h3>
+          <p>{t('shell.help.dependencyText')}</p>
+          <h3>{t('shell.help.support')}</h3>
+          <p>{t('shell.help.coverage')}</p>
+          <p>{t('shell.help.can')}</p>
+          <p>{t('shell.help.preflight')}</p>
         </Dialog>
       ) : null}
     </div>

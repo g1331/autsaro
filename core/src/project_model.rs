@@ -1,3 +1,4 @@
+use crate::message::LocalizedText;
 use crate::model::Severity;
 use serde::{Deserialize, Serialize};
 
@@ -34,7 +35,7 @@ pub struct RuleCoverage {
     pub scope: ValidationScope,
     pub subjects: Vec<String>,
     pub supported: bool,
-    pub reason: Option<String>,
+    pub reason: Option<LocalizedText>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -42,8 +43,8 @@ pub struct RuleCoverage {
 pub struct ValidationWitness {
     pub rule_id: String,
     pub subjects: Vec<String>,
-    pub constraint: String,
-    pub counterexample: String,
+    pub constraint: LocalizedText,
+    pub counterexample: LocalizedText,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -53,8 +54,8 @@ pub struct ConfigurationDiagnostic {
     pub rule_id: String,
     pub severity: Severity,
     pub code: String,
-    pub message: String,
-    pub remedy: String,
+    pub message: LocalizedText,
+    pub remedy: LocalizedText,
     pub file: Option<String>,
     pub path: Option<String>,
     pub source_id: Option<String>,
@@ -157,7 +158,7 @@ pub struct DefinitionDescriptor {
     pub default_origin: Option<String>,
     pub reference_destinations: Vec<String>,
     pub writable: bool,
-    pub reason: Option<String>,
+    pub reason: Option<LocalizedText>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -191,7 +192,7 @@ pub struct ObjectProjection {
     pub kind: String,
     pub definition_id: Option<String>,
     pub writable: bool,
-    pub reason: Option<String>,
+    pub reason: Option<LocalizedText>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -202,7 +203,7 @@ pub struct ReferenceEdge {
     pub raw_path: String,
     pub dest: String,
     pub target_id: Option<String>,
-    pub reason: Option<String>,
+    pub reason: Option<LocalizedText>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -219,7 +220,7 @@ pub struct ExtensionDefinitionIdentity {
 pub struct ActionCapability {
     pub action: String,
     pub available: bool,
-    pub reason: Option<String>,
+    pub reason: Option<LocalizedText>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -285,7 +286,7 @@ pub struct ExtensionDefinitionView {
     pub source: Option<String>,
     pub consumers: Vec<String>,
     pub available: bool,
-    pub reason: Option<String>,
+    pub reason: Option<LocalizedText>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

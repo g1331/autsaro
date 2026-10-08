@@ -5,6 +5,7 @@ use super::protocol::{
     parse_frame, parse_value, prepare, security_seed, security_unlock, send_payload, signal_value,
     tick, value,
 };
+use crate::message::LocalizedText;
 use crate::{execution::ProcessOwner, model::RunReport};
 use std::fs;
 use std::path::Path;
@@ -16,8 +17,8 @@ fn route_and_check(
     b: &Profile,
     a_out: &[String],
     b_out: &[String],
-    events: &mut Vec<String>,
-) -> Result<u32, String> {
+    events: &mut Vec<LocalizedText>,
+) -> Result<u32, LocalizedText> {
     let mut bus = Vec::new();
     for (owner, lines) in [(0, a_out), (1, b_out)] {
         for line in lines {
@@ -27,7 +28,7 @@ fn route_and_check(
     }
     bus.sort_by_key(|(id, _, _)| *id);
     if bus.windows(2).any(|pair| pair[0].0 == pair[1].0) {
-        return Err("同一时隙两个 ECU 发送相同 CAN ID，仲裁无法区分冲突载荷".into());
+        return Err(crate::product_message!("backend.host.can_collision"));
     }
     let mut matched = [0u32; 2];
     let mut observed_rx_id = None;
@@ -41,16 +42,14 @@ fn route_and_check(
             .frames
             .iter()
             .find(|f| f.tx && f.id == *id && f.dlc as usize == payload.len())
-            .ok_or("ECU 发送了未配置的 CAN 帧")?;
+            .ok_or_else(|| crate::product_message!("backend.host.unconfigured_can"))?;
         let expected = expected_payload(tx_frame, tx, salt);
         if *payload != expected {
-            return Err(format!(
-                "CAN 位向量不匹配：id={id} 预期={expected:02X?} 实际={payload:02X?}"
-            ));
+            return Err(
+                crate::product_message!("backend.host.can_vector_mismatch", "id" => id, "expected" => format!("{expected:02X?}"), "actual" => format!("{payload:02X?}")),
+            );
         }
-        events.push(format!(
-            "总线 ID 优先级 id={id} payload={payload:02X?} 与独立位向量一致"
-        ));
+        events.push(crate::product_message!("backend.host.can_vector_matches", "id" => id, "payload" => format!("{payload:02X?}")));
         if let Some(rx_frame) = rx.frames.iter().find(|f| !f.tx && f.id == *id) {
             let hex = payload
                 .iter()
@@ -65,15 +64,11 @@ fn route_and_check(
                 let (actual, valid) = parse_value(&response)?;
                 let expected = signal_value(payload, signal);
                 if !valid || actual != expected {
-                    return Err(format!(
-                        "接收信号 {} 不匹配：预期 {expected} valid=1，实际 {actual} valid={valid}",
-                        signal.id
-                    ));
+                    return Err(
+                        crate::product_message!("backend.host.received_signal_mismatch", "id" => signal.id, "expected" => expected, "actual" => actual, "valid" => valid),
+                    );
                 }
-                events.push(format!(
-                    "接收 signal={} value={} valid=1",
-                    signal.id, actual
-                ));
+                events.push(crate::product_message!("backend.host.signal_received", "id" => signal.id, "value" => actual));
             }
             matched[*owner] += 1;
             if *owner == 0 {
@@ -82,7 +77,7 @@ fn route_and_check(
         }
     }
     if matched.contains(&0) {
-        return Err("两个 ECU 必须各自发送至少一个由对端接收的信号帧".into());
+        return Err(crate::product_message!("backend.host.peer_frame_required"));
     }
     Ok(observed_rx_id.unwrap())
 }
@@ -93,16 +88,16 @@ pub(super) fn run(
     second: &Path,
     binary_b: &Path,
     owner: &ProcessOwner,
-) -> Result<RunReport, String> {
+) -> Result<RunReport, LocalizedText> {
     crate::generator::output::verify_build_input(first)?;
     crate::generator::output::verify_build_input(second)?;
     let a = profile(first)?;
     let b = profile(second)?;
     if a.text == b.text {
-        return Err("两个虚拟 ECU 配置相同；请分别生成不同项目".into());
+        return Err(crate::product_message!("backend.host.identical_ecus"));
     }
     if !binary_a.is_file() || !binary_b.is_file() {
-        return Err("两个生成目录均须先完成 C99 构建".into());
+        return Err(crate::product_message!("backend.host.build_both_required"));
     }
     let a_nvm = a.dtc.as_ref().map(|_| TempNvm::new());
     let b_nvm = b.dtc.as_ref().map(|_| TempNvm::new());
@@ -129,7 +124,7 @@ pub(super) fn run(
         owner,
     )?;
     let mut events = Vec::new();
-    let outcome = (|| -> Result<(), String> {
+    let outcome = (|| -> Result<(), LocalizedText> {
         let max_period = a
             .frames
             .iter()
@@ -137,7 +132,8 @@ pub(super) fn run(
             .filter(|f| f.tx)
             .map(|f| f.period)
             .max()
-            .ok_or("没有周期发送帧")? as u64;
+            .ok_or_else(|| crate::product_message!("backend.host.periodic_missing"))?
+            as u64;
         prepare(&mut ecu_a, &a, 0x1357_9BDF)?;
         prepare(&mut ecu_b, &b, 0x2468_ACE0)?;
         tick(&mut ecu_a, &a, 0)?;
@@ -153,15 +149,12 @@ pub(super) fn run(
             .filter(|f| !f.tx)
             .map(|f| f.timeout)
             .max()
-            .ok_or("没有接收超时配置")? as u64;
+            .ok_or_else(|| crate::product_message!("backend.host.rx_timeout_missing"))?
+            as u64;
         let timeout_tick = max_period + max_timeout + 1;
         let dropped_a = tick(&mut ecu_a, &a, timeout_tick)?;
         let dropped_b = tick(&mut ecu_b, &b, timeout_tick)?;
-        events.push(format!(
-            "故障注入：丢弃 {} + {} 个发送帧",
-            dropped_a.len(),
-            dropped_b.len()
-        ));
+        events.push(crate::product_message!("backend.host.drop_frames", "a" => dropped_a.len(), "b" => dropped_b.len()));
         for (ecu, profile) in [(&mut ecu_a, &a), (&mut ecu_b, &b)] {
             for signal in profile
                 .signals
@@ -170,30 +163,34 @@ pub(super) fn run(
             {
                 let (_, response) = ecu.query(&[], signal.id)?;
                 if parse_value(&response)?.1 {
-                    return Err(format!("接收信号 {} 在超时后仍有效", signal.id));
+                    return Err(
+                        crate::product_message!("backend.host.signal_still_valid", "id" => signal.id),
+                    );
                 }
             }
         }
-        events.push(format!("虚拟时钟推进至 {timeout_tick}ms，接收信号全部失效"));
+        events.push(crate::product_message!("backend.host.clock_invalidated_signals", "time" => timeout_tick));
 
         ecu_a.query(&["M 2".into()], a.signals[0].id)?;
         let off_out = tick(&mut ecu_a, &a, timeout_tick + max_period)?;
         if !off_out.is_empty() {
-            return Err("BUS_OFF 状态仍然发出了 CAN 帧".into());
+            return Err(crate::product_message!("backend.host.bus_off_transmitted"));
         }
-        events.push("BUS_OFF 状态禁止发送".into());
+        events.push(crate::product_message!("backend.host.bus_off_blocks"));
         ecu_a.query(&["M 1".into()], a.signals[0].id)?;
         let on_out = tick(&mut ecu_a, &a, timeout_tick + 2 * max_period)?;
         if on_out.is_empty() {
-            return Err("控制器恢复 STARTED 后没有发送".into());
+            return Err(crate::product_message!(
+                "backend.host.started_no_transmission"
+            ));
         }
-        events.push("STARTED 恢复周期发送".into());
+        events.push(crate::product_message!("backend.host.started_resumes"));
 
         let configured_dlc = b
             .frames
             .iter()
             .find(|f| !f.tx && f.id == b_rx_id)
-            .ok_or("接收帧丢失")?
+            .ok_or_else(|| crate::product_message!("backend.host.rx_frame_missing"))?
             .dlc;
         let wrong_dlc = if configured_dlc == 1 { 2 } else { 1 };
         ecu_b.command(&format!(
@@ -206,10 +203,12 @@ pub(super) fn run(
                 break;
             }
             if line.starts_with("E ") {
-                return Err(format!("错误帧返回意外状态: {line}"));
+                return Err(
+                    crate::product_message!("backend.host.unexpected_frame_status", "line" => line),
+                );
             }
         }
-        events.push("错误 DLC 被 CanIf 拒绝".into());
+        events.push(crate::product_message!("backend.host.dlc_refused"));
         Ok(())
     })();
     let closed_a = ecu_a.finish();
@@ -218,7 +217,7 @@ pub(super) fn run(
     match outcome {
         Ok(()) => Ok(RunReport {
             passed: true,
-            log: "双 ECU CAN 位向量、超时、BUS_OFF 与 DLC 错误路径通过".into(),
+            log: crate::product_message!("backend.host.dual_ecu_passed"),
             events,
         }),
         Err(error) => Ok(RunReport {
@@ -232,10 +231,13 @@ pub(super) fn run_diagnostic(
     dir: &Path,
     binary: &Path,
     owner: &ProcessOwner,
-) -> Result<RunReport, String> {
+) -> Result<RunReport, LocalizedText> {
     crate::generator::output::verify_build_input(dir)?;
     let profile = profile(dir)?;
-    let diagnostic = profile.diagnostic.as_ref().ok_or("生成配置不含诊断连接")?;
+    let diagnostic = profile
+        .diagnostic
+        .as_ref()
+        .ok_or_else(|| crate::product_message!("backend.host.diagnostic_connection_missing"))?;
     if diagnostic.signal_ids.is_empty()
         || diagnostic.signal_ids.len() > 8
         || diagnostic.request_id == diagnostic.response_id
@@ -244,10 +246,14 @@ pub(super) fn run_diagnostic(
         || diagnostic.n_bs_ms == 0
         || diagnostic.n_cr_ms == 0
     {
-        return Err("诊断清单超出支持范围".into());
+        return Err(crate::product_message!(
+            "backend.host.diagnostic_out_of_scope"
+        ));
     }
     if !binary.is_file() {
-        return Err("诊断虚拟 ECU 尚未完成 C99 构建".into());
+        return Err(crate::product_message!(
+            "backend.host.diagnostic_build_required"
+        ));
     }
     let salt = 0x1357_9BDF;
     let initial_nvm = profile.dtc.as_ref().map(|_| TempNvm::new());
@@ -263,7 +269,7 @@ pub(super) fn run_diagnostic(
         owner,
     )?;
     let mut events = Vec::new();
-    let outcome = (|| -> Result<(), String> {
+    let outcome = (|| -> Result<(), LocalizedText> {
         let fence = profile.signals[0].id;
         let request = diagnostic.request_id;
         let did = diagnostic.did;
@@ -271,20 +277,20 @@ pub(super) fn run_diagnostic(
         let mut expected_did = vec![0x62, (did >> 8) as u8, did as u8];
         for (index, id) in diagnostic.signal_ids.iter().enumerate() {
             if diagnostic.signal_ids[..index].contains(id) {
-                return Err("诊断清单重复引用信号".into());
+                return Err(crate::product_message!("backend.host.duplicate_signal"));
             }
             let signal = profile
                 .signals
                 .iter()
                 .find(|signal| signal.id == *id)
-                .ok_or("诊断清单引用不存在的信号")?;
+                .ok_or_else(|| crate::product_message!("backend.host.signal_missing"))?;
             if signal.length != 32
                 || !profile
                     .frames
                     .iter()
                     .any(|frame| frame.tx && frame.path == signal.frame)
             {
-                return Err("诊断 DID 只能引用 32 位发送信号".into());
+                return Err(crate::product_message!("backend.host.did_signal_scope"));
             }
             expected_did.extend_from_slice(&value(signal, salt).to_be_bytes());
         }
@@ -348,7 +354,7 @@ pub(super) fn run_diagnostic(
             diagnostic,
             salt,
         )?;
-        events.push("默认会话拒绝受限 DID".into());
+        events.push(crate::product_message!("backend.host.default_refuses_did"));
 
         let session = diagnostic_request(&mut ecu, fence, format!("R {request} 3 021003"))?;
         diagnostic_frames(
@@ -446,14 +452,16 @@ pub(super) fn run_diagnostic(
         )?;
         let suppressed = diagnostic_request(&mut ecu, fence, format!("R {request} 3 023E80"))?;
         diagnostic_frames(&suppressed, &[], &profile, diagnostic, salt)?;
-        events.push("扩展会话与 TesterPresent 抑制响应通过".into());
+        events.push(crate::product_message!(
+            "backend.host.extended_tester_passed"
+        ));
 
         let first = diagnostic_request(&mut ecu, fence, did_request.clone())?;
         if expected_did.len() <= 7 {
             let mut single = vec![expected_did.len() as u8];
             single.extend_from_slice(&expected_did);
             diagnostic_frames(&first, &[single], &profile, diagnostic, salt)?;
-            events.push("读取实时 DID 单帧载荷通过".into());
+            events.push(crate::product_message!("backend.host.single_did_passed"));
         } else {
             let mut ff = vec![
                 0x10 | ((expected_did.len() >> 8) as u8 & 0x0F),
@@ -474,10 +482,7 @@ pub(super) fn run_diagnostic(
                 sequence = (sequence + 1) & 0x0F;
             }
             diagnostic_frames(&cf, &expected, &profile, diagnostic, salt)?;
-            events.push(format!(
-                "实时 DID {} 字节多帧响应及流控通过",
-                expected_did.len()
-            ));
+            events.push(crate::product_message!("backend.host.multiframe_did_passed", "bytes" => expected_did.len()));
 
             let pending = diagnostic_request(&mut ecu, fence, did_request.clone())?;
             let mut ff = vec![
@@ -491,7 +496,9 @@ pub(super) fn run_diagnostic(
                 format!("T {}", diagnostic.n_bs_ms as u64 + 1),
                 "TP_TIMEOUT",
             )?;
-            events.push("N_Bs 流控超时终止发送".into());
+            events.push(crate::product_message!(
+                "backend.host.nbs_stops_transmission"
+            ));
         }
 
         for (request_dids, configured_first) in [
@@ -526,7 +533,7 @@ pub(super) fn run_diagnostic(
                 .collect();
             diagnostic_frames(&rest, &expected, &profile, diagnostic, salt)?;
         }
-        events.push("0x22 多 DID 按请求顺序经流控返回实时值和活动会话；无效 DID、默认会话受限 DID 与错误长度按范围处理".into());
+        events.push(crate::product_message!("backend.host.multi_did_passed"));
 
         let padded = [0x22, (did >> 8) as u8, did as u8, 0, 0, 0, 0, 0, 0];
         let request_ff = format!("R {request} 8 1009{}", hex_payload(&padded[..6]));
@@ -545,7 +552,9 @@ pub(super) fn run_diagnostic(
             diagnostic,
             salt,
         )?;
-        events.push("接收序号错误、N_Cr 超时与后续请求恢复通过".into());
+        events.push(crate::product_message!(
+            "backend.host.receive_recovery_passed"
+        ));
 
         let session = diagnostic_request(&mut ecu, fence, format!("R {request} 3 021003"))?;
         diagnostic_frames(
@@ -574,8 +583,10 @@ pub(super) fn run_diagnostic(
             diagnostic,
             salt,
         )?;
-        events.push("0xF186 活动会话 DID 在默认、扩展、主动切回和 S3 回退后与实际状态一致；未知 DID 与错误长度被拒绝".into());
-        events.push("S3 超时恢复默认会话".into());
+        events.push(crate::product_message!(
+            "backend.host.active_session_passed"
+        ));
+        events.push(crate::product_message!("backend.host.s3_default"));
         Ok(())
     })();
     let outcome = outcome.and_then(|()| ecu.finish());
@@ -617,20 +628,21 @@ pub(super) fn run_diagnostic(
     });
     match outcome {
         Ok(()) => {
-            let mut log = if profile.dtc.is_some() {
-                "独立测试器验证 CAN 诊断会话、实时 DID、流控及 Dem/NvM DTC 跨进程保持".to_owned()
+            let mut messages = vec![if profile.dtc.is_some() {
+                crate::product_message!("backend.host.diagnostic_dtc_verified")
             } else {
-                "独立测试器验证 CAN 诊断会话、实时 DID、传输流控与故障恢复".to_owned()
-            };
+                crate::product_message!("backend.host.diagnostic_verified")
+            }];
             if diagnostic.write_enabled {
-                log.push_str("；扩展会话 0x2E 易失写入");
+                messages.push(crate::product_message!("backend.host.volatile_write"));
             }
             if diagnostic.reset_routine_id.is_some() {
-                log.push_str("；0x31 恢复 DID 初值例程");
+                messages.push(crate::product_message!("backend.host.restore_routine"));
             }
             if diagnostic.security_enabled {
-                log.push_str("；0x27 单级安全访问与受限操作");
+                messages.push(crate::product_message!("backend.host.security_access"));
             }
+            let log = LocalizedText::messages(messages);
             Ok(RunReport {
                 passed: true,
                 log,
@@ -652,9 +664,9 @@ fn verify_persistent_dtc(
     dtc: &DtcProfile,
     salt: u32,
     security: Option<&SecurityFiles>,
-    events: &mut Vec<String>,
+    events: &mut Vec<LocalizedText>,
     owner: &ProcessOwner,
-) -> Result<(), String> {
+) -> Result<(), LocalizedText> {
     let state = TempNvm::new();
     let fence = profile.signals[0].id;
     let request = diagnostic.request_id;
@@ -784,10 +796,8 @@ fn verify_persistent_dtc(
         diagnostic_frames(&count, &[counted(1)], profile, diagnostic, salt)?;
         ecu.finish()?;
     }
-    events.push("接收帧超时产生真实 Dem DTC，进程结束前写入 NvM".into());
-    events.push(
-        "0x85/0x02 禁用 DTC 设置时 Rx 超时不记录故障；0x85/0x01 恢复后新超时写入 Dem/NvM".into(),
-    );
+    events.push(crate::product_message!("backend.host.dtc_persisted"));
+    events.push(crate::product_message!("backend.host.dtc_setting_control"));
     {
         let mut ecu = EcuProcess::start(binary, Some(&state.path), security, owner)?;
         prepare(&mut ecu, profile, salt)?;
@@ -866,12 +876,13 @@ fn verify_persistent_dtc(
         diagnostic_frames(&all, &[supported(0x50)], profile, diagnostic, salt)?;
         ecu.finish()?;
     }
-    events.push("重启后 DTC 保持、默认会话拒绝清除、扩展会话清除跨重启生效".into());
-    events.push("0x19/0x01 状态掩码计数与 0x19/0x02 在超时、重启、清除前后一致".into());
-    events.push("0x19/0x0A 在无故障、暂停记录、超时、重启与清除后均报告配置的 DTC 和当前状态；错误长度与不支持子功能被拒绝后可恢复".into());
-    fs::write(&state.path, [0u8; 64]).map_err(|e| format!("故障注入 NvM 损坏失败: {e}"))?;
+    events.push(crate::product_message!("backend.host.dtc_restart_clear"));
+    events.push(crate::product_message!("backend.host.dtc_mask_count"));
+    events.push(crate::product_message!("backend.host.dtc_supported_report"));
+    fs::write(&state.path, [0u8; 64])
+        .map_err(|e| crate::product_message!("backend.host.inject_nvm_failed", "error" => e))?;
     EcuProcess::expect_corrupt_state_refusal(binary, Some(&state.path), security, owner)?;
-    events.push("双份 NvM 状态损坏在启动时被拒绝，未伪造空 DTC".into());
+    events.push(crate::product_message!("backend.host.corrupt_nvm_refused"));
     Ok(())
 }
 
@@ -881,7 +892,7 @@ fn expect_did_bytes(
     diagnostic: &DiagnosticProfile,
     salt: u32,
     data: &[u8],
-) -> Result<(), String> {
+) -> Result<(), LocalizedText> {
     let fence = profile.signals[0].id;
     let request = diagnostic.request_id;
     let did = diagnostic.did;
@@ -915,9 +926,9 @@ fn verify_writable_did(
     diagnostic: &DiagnosticProfile,
     salt: u32,
     security: Option<&SecurityFiles>,
-    events: &mut Vec<String>,
+    events: &mut Vec<LocalizedText>,
     owner: &ProcessOwner,
-) -> Result<(), String> {
+) -> Result<(), LocalizedText> {
     let storage = profile.dtc.as_ref().map(|_| TempNvm::new());
     let mut ecu = EcuProcess::start(
         binary,
@@ -970,7 +981,7 @@ fn verify_writable_did(
                 .signals
                 .iter()
                 .find(|signal| signal.id == *id)
-                .ok_or("写入 DID 引用不存在的信号")
+                .ok_or_else(|| crate::product_message!("backend.host.write_signal_missing"))
         })
         .collect::<Result<_, _>>()?;
     let written: Vec<u32> = signals.iter().map(|signal| !value(signal, salt)).collect();
@@ -1025,14 +1036,16 @@ fn verify_writable_did(
     for (signal, expected) in signals.iter().zip(&written) {
         let (frames, response) = ecu.query(&[], signal.id)?;
         if !frames.is_empty() || parse_value(&response)? != (*expected, true) {
-            return Err(format!("0x2E 未更新实际 Com 信号 {}", signal.id));
+            return Err(
+                crate::product_message!("backend.host.write_signal_not_updated", "id" => signal.id),
+            );
         }
     }
     let monitored_frame = profile
         .frames
         .iter()
         .find(|frame| frame.path == signals[0].frame && frame.tx)
-        .ok_or("写入 DID 未关联发送帧")?;
+        .ok_or_else(|| crate::product_message!("backend.host.write_tx_missing"))?;
     let periodic = tick(&mut ecu, profile, monitored_frame.period as u64)?;
     let mut observed = false;
     for line in periodic {
@@ -1041,7 +1054,7 @@ fn verify_writable_did(
             .frames
             .iter()
             .find(|frame| frame.tx && frame.id == id && frame.dlc as usize == payload.len())
-            .ok_or("0x2E 后 ECU 发送了未知 CAN 帧")?;
+            .ok_or_else(|| crate::product_message!("backend.host.write_unknown_can"))?;
         for signal in profile
             .signals
             .iter()
@@ -1054,15 +1067,19 @@ fn verify_writable_did(
                 .map(|index| written[index])
                 .unwrap_or_else(|| value(signal, salt));
             if signal_value(&payload, signal) != expected {
-                return Err(format!("0x2E 后 CAN 帧未携带更新的信号 {}", signal.id));
+                return Err(
+                    crate::product_message!("backend.host.write_can_not_updated", "id" => signal.id),
+                );
             }
         }
         observed |= frame.id == monitored_frame.id;
     }
     if !observed {
-        return Err("0x2E 后未观察到被写入信号的周期 CAN 帧".into());
+        return Err(crate::product_message!(
+            "backend.host.write_can_not_observed"
+        ));
     }
-    events.push("扩展会话 0x2E 实际写入 Com 信号，0x22 与周期 CAN 均观察到新值".into());
+    events.push(crate::product_message!("backend.host.write_observed"));
     if let Some(rid) = diagnostic.reset_routine_id {
         let session = diagnostic_request(&mut ecu, fence, format!("R {request} 3 021003"))?;
         diagnostic_frames(
@@ -1106,7 +1123,9 @@ fn verify_writable_did(
         for (signal, expected) in signals.iter().zip(&written) {
             let (frames, response) = ecu.query(&[], signal.id)?;
             if !frames.is_empty() || parse_value(&response)? != (*expected, true) {
-                return Err(format!("被拒绝的 0x31 请求改动了信号 {}", signal.id));
+                return Err(
+                    crate::product_message!("backend.host.refused_routine_changed_signal", "id" => signal.id),
+                );
             }
         }
         if diagnostic.security_enabled {
@@ -1129,16 +1148,18 @@ fn verify_writable_did(
         for signal in &signals {
             let (frames, response) = ecu.query(&[], signal.id)?;
             if !frames.is_empty() || parse_value(&response)? != (signal.initial, true) {
-                return Err(format!("0x31 例程未恢复实际 Com 信号 {}", signal.id));
+                return Err(
+                    crate::product_message!("backend.host.routine_not_restored", "id" => signal.id),
+                );
             }
         }
-        events.push("0x31/0x01 例程将可写 DID 恢复至配置初值，0x22 与 Com 信号均观察到恢复".into());
+        events.push(crate::product_message!("backend.host.routine_restored"));
     }
     let expired_at = monitored_frame.period as u64 + diagnostic.s3_ms as u64 + 1;
     for line in tick(&mut ecu, profile, expired_at)? {
         let (id, _) = parse_frame(&line)?;
         if id == diagnostic.response_id {
-            return Err("会话超时推进中出现未请求的诊断响应".into());
+            return Err(crate::product_message!("backend.host.unsolicited_response"));
         }
     }
     let denied = diagnostic_request(&mut ecu, fence, format!("R {request} 4 032E{did:04X}"))?;
@@ -1171,10 +1192,9 @@ fn verify_writable_did(
     for signal in &signals {
         let (frames, response) = restarted.query(&[], signal.id)?;
         if !frames.is_empty() || parse_value(&response)? != (signal.initial, true) {
-            return Err(format!(
-                "易失 DID 信号 {} 在重启后未恢复配置初值",
-                signal.id
-            ));
+            return Err(
+                crate::product_message!("backend.host.volatile_not_restored", "id" => signal.id),
+            );
         }
     }
     let session = diagnostic_request(&mut restarted, fence, format!("R {request} 3 021003"))?;
@@ -1191,7 +1211,7 @@ fn verify_writable_did(
     }
     expect_did_bytes(&mut restarted, profile, diagnostic, salt, &initial)?;
     restarted.finish()?;
-    events.push("S3 回默认会话拒绝写入；ECU 重启后 DID 恢复初值且未误称 NvM 持久化".into());
+    events.push(crate::product_message!("backend.host.volatile_restart"));
     Ok(())
 }
 
@@ -1200,9 +1220,9 @@ fn verify_security(
     profile: &Profile,
     diagnostic: &DiagnosticProfile,
     salt: u32,
-    events: &mut Vec<String>,
+    events: &mut Vec<LocalizedText>,
     owner: &ProcessOwner,
-) -> Result<(), String> {
+) -> Result<(), LocalizedText> {
     let files = SecurityFiles::new()?;
     let nvm = profile.dtc.as_ref().map(|_| TempNvm::new());
     let fence = profile.signals[0].id;
@@ -1220,7 +1240,7 @@ fn verify_security(
         protected.push(vec![0x14, 0xff, 0xff, 0xff]);
         protected.push(vec![0x85, 0x01]);
     }
-    let check_protected = |ecu: &mut EcuProcess, unlocked: bool| -> Result<(), String> {
+    let check_protected = |ecu: &mut EcuProcess, unlocked: bool| -> Result<(), LocalizedText> {
         for payload in &protected {
             let result = send_payload(ecu, fence, request, payload)?;
             let expected = if !unlocked {
@@ -1231,7 +1251,11 @@ fn verify_security(
                     0x31 => vec![0x04, 0x71, 0x01, payload[2], payload[3]],
                     0x14 => vec![0x01, 0x54],
                     0x85 => vec![0x02, 0xc5, 0x01],
-                    _ => return Err("安全档案含未知受保护服务".into()),
+                    _ => {
+                        return Err(crate::product_message!(
+                            "backend.host.unknown_protected_service"
+                        ));
+                    }
                 }
             };
             diagnostic_frames(&result, &[expected], profile, diagnostic, salt)?;
@@ -1277,7 +1301,9 @@ fn verify_security(
         )?;
         let used_key = security_unlock(&mut ecu, profile, diagnostic, salt)?;
         if security_seed(&mut ecu, profile, diagnostic, salt)? != [0u8; 16] {
-            return Err("已解锁级别请求 seed 时未返回零 seed".into());
+            return Err(crate::product_message!(
+                "backend.host.unlocked_seed_not_zero"
+            ));
         }
         let mut replay = vec![0x27, 0x02];
         replay.extend_from_slice(&used_key);
@@ -1372,15 +1398,18 @@ fn verify_security(
         check_protected(&mut ecu, false)?;
         ecu.finish()?;
     }
-    fs::write(&files.state.path, [0u8; 16]).map_err(|e| format!("无法注入安全计数损坏: {e}"))?;
+    fs::write(&files.state.path, [0u8; 16]).map_err(
+        |e| crate::product_message!("backend.host.inject_security_failed", "error" => e),
+    )?;
     EcuProcess::expect_corrupt_state_refusal(
         binary,
         nvm.as_ref().map(|state| state.path.as_path()),
         Some(&files),
         owner,
     )?;
-    events
-        .push("0x27 seed/key 解锁、受保护操作、错误 key 次数/延时、重启保持与 S3 复锁通过".into());
-    events.push("损坏的安全失败计数文件在启动时被拒绝".into());
+    events.push(crate::product_message!("backend.host.security_passed"));
+    events.push(crate::product_message!(
+        "backend.host.security_corruption_refused"
+    ));
     Ok(())
 }

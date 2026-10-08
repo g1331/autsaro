@@ -9,11 +9,15 @@ use std::path::Path;
 use std::sync::Arc;
 use tauri::State;
 
-fn check_batch_token(fingerprint: &str, changes: &ChangeSet) -> Result<(), String> {
+fn check_batch_token(
+    fingerprint: &str,
+    changes: &ChangeSet,
+) -> Result<(), autosar_config_core::LocalizedText> {
     if changes.input_fingerprint != fingerprint {
-        return Err(
-            "STALE_DELIVERY: ChangeSet input identity differs from the current request".into(),
-        );
+        return Err(autosar_config_core::product_message!(
+            "backend.configuration.change_identity_mismatch"
+        )
+        .into());
     }
     Ok(())
 }
@@ -22,7 +26,7 @@ fn check_batch_token(fingerprint: &str, changes: &ChangeSet) -> Result<(), Strin
 pub(crate) async fn project_projection(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
-) -> Result<Reply<ProjectProjection>, String> {
+) -> Result<Reply<ProjectProjection>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
         state.read_workspace(&fingerprint, |workspace| {
             workspace.project_projection(&fingerprint)
@@ -36,7 +40,7 @@ pub(crate) async fn read_project_source(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
     source_id: String,
-) -> Result<Reply<String>, String> {
+) -> Result<Reply<String>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
         state.read_workspace(&fingerprint, |workspace| workspace.source_text(&source_id))
     })
@@ -48,12 +52,12 @@ pub(crate) async fn prepare_configuration_change(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
     change_set: ChangeSet,
-) -> Result<Reply<ChangePreview>, String> {
+) -> Result<Reply<ChangePreview>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
         check_batch_token(&fingerprint, &change_set)?;
         let operation = state.begin(
             &fingerprint,
-            "preview configuration change",
+            autosar_config_core::product_message!("backend.operation.preview_configuration_change"),
             OperationKind::Edit,
         )?;
         let preview = operation
@@ -71,12 +75,12 @@ pub(crate) async fn apply_configuration_change(
     fingerprint: String,
     change_set: ChangeSet,
     change_revision: String,
-) -> Result<Reply<ChangeOutcome>, String> {
+) -> Result<Reply<ChangeOutcome>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
         check_batch_token(&fingerprint, &change_set)?;
         let operation = state.begin(
             &fingerprint,
-            "apply configuration change",
+            autosar_config_core::product_message!("backend.operation.apply_configuration_change"),
             OperationKind::Edit,
         )?;
         let mut workspace = operation.snapshot.workspace()?.clone();
@@ -91,11 +95,11 @@ pub(crate) async fn import_definition_catalog(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
     catalog_path: String,
-) -> Result<Reply<ProjectProjection>, String> {
+) -> Result<Reply<ProjectProjection>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
         let operation = state.begin(
             &fingerprint,
-            "accept definition catalog",
+            autosar_config_core::product_message!("backend.operation.accept_definition_catalog"),
             OperationKind::Edit,
         )?;
         let mut workspace = operation.snapshot.workspace()?.clone();
@@ -112,11 +116,11 @@ pub(crate) async fn remove_definition_catalog(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
     catalog_id: String,
-) -> Result<Reply<ProjectProjection>, String> {
+) -> Result<Reply<ProjectProjection>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
         let operation = state.begin(
             &fingerprint,
-            "remove definition catalog",
+            autosar_config_core::product_message!("backend.operation.remove_definition_catalog"),
             OperationKind::Edit,
         )?;
         let mut workspace = operation.snapshot.workspace()?.clone();
@@ -132,9 +136,13 @@ pub(crate) async fn open_member_project(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
     path: String,
-) -> Result<Reply<WorkspaceView>, String> {
+) -> Result<Reply<WorkspaceView>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
-        let operation = state.begin(&fingerprint, "open member project", OperationKind::Open)?;
+        let operation = state.begin(
+            &fingerprint,
+            autosar_config_core::product_message!("backend.operation.open_member_project"),
+            OperationKind::Open,
+        )?;
         let workspace =
             Workspace::open_project_manifest(Path::new(&path), &state.definition_cache_root()?)?;
         let view = workspace.view();
@@ -150,11 +158,11 @@ pub(crate) async fn preview_project_creation(
     directory: String,
     name: String,
     template_id: String,
-) -> Result<Reply<ProjectCreationPreview>, String> {
+) -> Result<Reply<ProjectCreationPreview>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
         let operation = state.begin(
             &fingerprint,
-            "preview project creation",
+            autosar_config_core::product_message!("backend.operation.preview_project_creation"),
             OperationKind::Open,
         )?;
         let preview =
@@ -169,11 +177,11 @@ pub(crate) async fn create_project_previewed(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
     preview: ProjectCreationPreview,
-) -> Result<Reply<WorkspaceView>, String> {
+) -> Result<Reply<WorkspaceView>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
         let operation = state.begin(
             &fingerprint,
-            "create previewed project",
+            autosar_config_core::product_message!("backend.operation.create_previewed_project"),
             OperationKind::Open,
         )?;
         operation.commit(move |session| {
@@ -193,10 +201,13 @@ pub(crate) async fn preview_save_as_project(
     fingerprint: String,
     directory: String,
     name: String,
-) -> Result<Reply<ProjectCreationPreview>, String> {
+) -> Result<Reply<ProjectCreationPreview>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
-        let operation =
-            state.begin(&fingerprint, "preview save as project", OperationKind::Edit)?;
+        let operation = state.begin(
+            &fingerprint,
+            autosar_config_core::product_message!("backend.operation.preview_save_as_project"),
+            OperationKind::Edit,
+        )?;
         let preview = operation
             .snapshot
             .workspace()?
@@ -211,11 +222,11 @@ pub(crate) async fn save_as_project_previewed(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
     preview: ProjectCreationPreview,
-) -> Result<Reply<WorkspaceView>, String> {
+) -> Result<Reply<WorkspaceView>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
         let operation = state.begin(
             &fingerprint,
-            "save as previewed project",
+            autosar_config_core::product_message!("backend.operation.save_as_previewed_project"),
             OperationKind::Edit,
         )?;
         operation.commit(|session| {
@@ -237,9 +248,21 @@ pub(crate) async fn configure_appearance(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
     appearance: Appearance,
-) -> Result<Reply<()>, String> {
+) -> Result<Reply<()>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
         state.configure_appearance(&fingerprint, appearance)
+    })
+    .await
+}
+
+#[tauri::command]
+pub(crate) async fn configure_language(
+    state: State<'_, Arc<AppState>>,
+    fingerprint: String,
+    language: crate::workbench::Language,
+) -> Result<Reply<()>, autosar_config_core::LocalizedText> {
+    background(state, move |state| {
+        state.configure_language(&fingerprint, language)
     })
     .await
 }
@@ -249,25 +272,31 @@ pub(crate) async fn configure_appearance(
 pub(crate) async fn verification_metrics(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
-) -> Result<Reply<autosar_config_core::verification::Metrics>, String> {
+) -> Result<Reply<autosar_config_core::verification::Metrics>, autosar_config_core::LocalizedText> {
     background(state, move |state| state.verification_metrics(&fingerprint)).await
 }
 
 #[cfg(not(feature = "native-webdriver"))]
 #[tauri::command]
-pub(crate) async fn verification_metrics() -> Result<Reply<()>, String> {
-    Err("Verification metrics require the native-webdriver verification build".into())
+pub(crate) async fn verification_metrics() -> Result<Reply<()>, autosar_config_core::LocalizedText>
+{
+    Err(autosar_config_core::product_message!("backend.verification.metrics_build_required").into())
 }
 
 #[tauri::command]
 pub(crate) async fn preview_application_initialization(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
-) -> Result<Reply<autosar_config_core::arxml::ApplicationInitializationPreview>, String> {
+) -> Result<
+    Reply<autosar_config_core::arxml::ApplicationInitializationPreview>,
+    autosar_config_core::LocalizedText,
+> {
     background(state, move |state| {
         let operation = state.begin(
             &fingerprint,
-            "preview application initialization",
+            autosar_config_core::product_message!(
+                "backend.operation.preview_application_initialization"
+            ),
             OperationKind::Edit,
         )?;
         let preview = operation
@@ -284,11 +313,16 @@ pub(crate) async fn initialize_application_previewed(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
     preview: autosar_config_core::arxml::ApplicationInitializationPreview,
-) -> Result<Reply<autosar_config_core::arxml::ApplicationInitializationOutcome>, String> {
+) -> Result<
+    Reply<autosar_config_core::arxml::ApplicationInitializationOutcome>,
+    autosar_config_core::LocalizedText,
+> {
     background(state, move |state| {
         let operation = state.begin(
             &fingerprint,
-            "initialize application sources",
+            autosar_config_core::product_message!(
+                "backend.operation.initialize_application_sources"
+            ),
             OperationKind::Edit,
         )?;
         let workspace = operation.snapshot.workspace()?.clone();

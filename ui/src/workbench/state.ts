@@ -1,3 +1,5 @@
+import type { LanguagePreference, Text } from '../i18n';
+import { message, readLanguagePreference } from '../i18n';
 import type {
   BuildResult,
   BuildTarget,
@@ -46,9 +48,9 @@ export type WorkbenchState = {
   draft: Draft;
   diagnosticDraft: DiagnosticFields;
   diagnosticSignal: string;
-  diagnosticError: string;
+  diagnosticError: Text;
   dtcDraft: DtcFields;
-  dtcError: string;
+  dtcError: Text;
   source: 'empty' | 'import' | 'save-as';
   projectName: string;
   projectDirectory: string;
@@ -70,7 +72,7 @@ export type WorkbenchState = {
   virtualKind: 'signal' | 'diagnostic' | null;
   operationIssues: Issue[];
   notice: Notice;
-  busy: string | null;
+  busy: Text | null;
   peerDirectory: string;
   peerBinaryPath: string;
   savePreview: SavePreview | null;
@@ -79,7 +81,7 @@ export type WorkbenchState = {
   settingsOpen: boolean;
   resourceDraft: { xsdArchive: string; modArchive: string };
   toolDraft: ExecutionTools;
-  settingsNotice: string;
+  settingsNotice: Text;
   operationGeneration: number;
   integrationInspection: IntegrationInspection | null;
   integrationIssues: PlanDiagnostic[];
@@ -87,7 +89,7 @@ export type WorkbenchState = {
   integrationPeriod: string;
   integrationPreview: SavePreview | null;
   integrationPreviewPath: string;
-  integrationNotice: string;
+  integrationNotice: Text;
   ecuOutputDirectory: string;
   ecuImportDirectory: string;
   handoffImportOpen: boolean;
@@ -113,13 +115,16 @@ export type WorkbenchState = {
   treeRevealId: string | null;
   objectFilter: string;
   appearanceDraft: Appearance;
+  languageDraft: LanguagePreference;
+  savedLanguage: LanguagePreference;
+  languageSaving: boolean;
   preflight: PreflightReport | null;
-  operationLog: { command: string; outcome: 'done' | 'failed'; detail: string }[];
+  operationLog: { command: string; outcome: 'done' | 'failed'; detail: Text }[];
   templateId: 'can-empty-v1' | 'can-signals-v1' | 'standard-ecu-v1';
   projectPreview: ProjectCreationPreview | null;
   projectPreviewKind: 'create' | 'save-as';
   applicationPreview: ApplicationInitializationPreview | null;
-  applicationWarnings: string[];
+  applicationWarnings: Text[];
   applicationRecoveryFiles: string[];
   replacementReady: boolean;
   savingForReplacement: boolean;
@@ -183,7 +188,7 @@ export function initialState(): WorkbenchState {
     integrationPeriod: '',
     integrationPreview: null,
     integrationPreviewPath: '',
-    integrationNotice: '尚未检查标准输入',
+    integrationNotice: message('controller.integration.notInspected'),
     ecuOutputDirectory: '',
     ecuImportDirectory: '',
     handoffImportOpen: false,
@@ -209,6 +214,9 @@ export function initialState(): WorkbenchState {
     treeRevealId: null,
     objectFilter: '',
     appearanceDraft: 'system',
+    languageDraft: readLanguagePreference(),
+    savedLanguage: readLanguagePreference(),
+    languageSaving: false,
     preflight: null,
     operationLog: [],
     templateId: 'can-empty-v1',

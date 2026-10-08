@@ -13,7 +13,12 @@ const PDU: &str = "EcuC/EcucConfigSet/EcucPduCollection/Pdu";
 
 struct Author<'a>(&'a mut DefinitionCatalog);
 impl Author<'_> {
-    fn container(&mut self, path: &str, lower: u32, upper: Option<u32>) -> Result<(), String> {
+    fn container(
+        &mut self,
+        path: &str,
+        lower: u32,
+        upper: Option<u32>,
+    ) -> Result<(), crate::message::LocalizedText> {
         let id = format!("{ROOT}{path}");
         if let Some((parent, _)) = path.rsplit_once('/') {
             if self.0.get(&format!("{ROOT}{parent}")).is_none() {
@@ -35,7 +40,12 @@ impl Author<'_> {
         Ok(())
     }
 
-    fn choice(&mut self, path: &str, lower: u32, upper: Option<u32>) -> Result<(), String> {
+    fn choice(
+        &mut self,
+        path: &str,
+        lower: u32,
+        upper: Option<u32>,
+    ) -> Result<(), crate::message::LocalizedText> {
         self.container(path, lower, upper)?;
         self.0
             .entries_mut()
@@ -45,7 +55,13 @@ impl Author<'_> {
         Ok(())
     }
 
-    fn field(&mut self, path: &str, name: &str, kind: ValueKind, lower: u32) -> Result<(), String> {
+    fn field(
+        &mut self,
+        path: &str,
+        name: &str,
+        kind: ValueKind,
+        lower: u32,
+    ) -> Result<(), crate::message::LocalizedText> {
         let tag = match kind {
             ValueKind::Integer => "ECUC-INTEGER-PARAM-DEF",
             ValueKind::Float => "ECUC-FLOAT-PARAM-DEF",
@@ -63,7 +79,12 @@ impl Author<'_> {
         self.0.insert(entry, Vec::new())
     }
 
-    fn booleans(&mut self, path: &str, names: &str, lower: u32) -> Result<(), String> {
+    fn booleans(
+        &mut self,
+        path: &str,
+        names: &str,
+        lower: u32,
+    ) -> Result<(), crate::message::LocalizedText> {
         for name in names.split_whitespace() {
             self.field(path, name, ValueKind::Boolean, lower)?;
         }
@@ -77,7 +98,7 @@ impl Author<'_> {
         minimum: &str,
         maximum: &str,
         lower: u32,
-    ) -> Result<(), String> {
+    ) -> Result<(), crate::message::LocalizedText> {
         for name in names.split_whitespace() {
             self.field(path, name, ValueKind::Integer, lower)?;
             let entry = self
@@ -97,7 +118,7 @@ impl Author<'_> {
         names: &str,
         maximum: Option<&str>,
         lower: u32,
-    ) -> Result<(), String> {
+    ) -> Result<(), crate::message::LocalizedText> {
         for name in names.split_whitespace() {
             self.field(path, name, ValueKind::Float, lower)?;
             let entry = self
@@ -118,7 +139,7 @@ impl Author<'_> {
         names: &str,
         literals: &str,
         lower: u32,
-    ) -> Result<(), String> {
+    ) -> Result<(), crate::message::LocalizedText> {
         for name in names.split_whitespace() {
             self.field(path, name, ValueKind::Enumeration, lower)?;
             self.0
@@ -137,7 +158,7 @@ impl Author<'_> {
         target: &str,
         lower: u32,
         upper: Option<u32>,
-    ) -> Result<(), String> {
+    ) -> Result<(), crate::message::LocalizedText> {
         self.field(path, name, ValueKind::Reference, lower)?;
         let id = format!("{ROOT}{path}/{name}");
         let entry = self.0.entries_mut().get_mut(&id).unwrap();
@@ -160,7 +181,7 @@ impl Author<'_> {
         destinations: &str,
         lower: u32,
         upper: Option<u32>,
-    ) -> Result<(), String> {
+    ) -> Result<(), crate::message::LocalizedText> {
         self.field(path, name, ValueKind::Reference, lower)?;
         let entry = self
             .0
@@ -190,7 +211,9 @@ impl Author<'_> {
     }
 }
 
-pub(super) fn populate(catalog: &mut DefinitionCatalog) -> Result<(), String> {
+pub(super) fn populate(
+    catalog: &mut DefinitionCatalog,
+) -> Result<(), crate::message::LocalizedText> {
     let mut a = Author(catalog);
     for module in [
         "Can", "CanIf", "CanTp", "Com", "Dcm", "EcuC", "Os", "PduR", "Rte", "Mcu", "Dem", "NvM",
@@ -205,7 +228,7 @@ pub(super) fn populate(catalog: &mut DefinitionCatalog) -> Result<(), String> {
     Ok(())
 }
 
-fn communication(a: &mut Author<'_>) -> Result<(), String> {
+fn communication(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedText> {
     a.container("EcuC/EcucConfigSet", 0, Some(1))?;
     a.container("EcuC/EcucConfigSet/EcucPduCollection", 0, Some(1))?;
     a.container(PDU, 0, None)?;
@@ -519,7 +542,7 @@ fn communication(a: &mut Author<'_>) -> Result<(), String> {
     Ok(())
 }
 
-fn diagnostic(a: &mut Author<'_>) -> Result<(), String> {
+fn diagnostic(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedText> {
     let base = "Dcm/DcmConfigSet";
     a.container(base, 1, Some(1))?;
     let dsd = format!("{base}/DcmDsd");
@@ -719,7 +742,7 @@ fn diagnostic(a: &mut Author<'_>) -> Result<(), String> {
     Ok(())
 }
 
-fn operating_system(a: &mut Author<'_>) -> Result<(), String> {
+fn operating_system(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedText> {
     a.container("Os/OsAppMode", 1, None)?;
     let os = "Os/OsOS";
     a.container(os, 1, Some(1))?;
@@ -908,7 +931,7 @@ fn operating_system(a: &mut Author<'_>) -> Result<(), String> {
     Ok(())
 }
 
-fn persistence(a: &mut Author<'_>) -> Result<(), String> {
+fn persistence(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedText> {
     let general = "Mcu/McuGeneralConfiguration";
     a.container(general, 1, Some(1))?;
     a.booleans(general, "McuDevErrorDetect McuGetRamStateApi McuInitClock McuNoPll McuPerformResetApi McuVersionInfoApi", 1)?;

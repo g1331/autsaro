@@ -161,7 +161,7 @@ pub fn verify() {
         assert!(
             issues
                 .iter()
-                .any(|issue| issue.object.is_some() && !issue.remedy.is_empty())
+                .any(|issue| issue.object.is_some() && matches!(&issue.remedy, autosar_config_core::message::LocalizedText::Message(message) if message.key.starts_with("backend.")))
         );
         let unchanged = workspace
             .preview_integration_save_legacy(&runtime, dependencies.mod_archive.clone())

@@ -61,25 +61,28 @@ pub fn inventory_bytes() -> &'static [u8] {
     INVENTORY_BYTES
 }
 
-fn read_inventory(bytes: &[u8]) -> Result<Inventory, String> {
+fn read_inventory(bytes: &[u8]) -> Result<Inventory, crate::LocalizedText> {
     if format!("{:x}", Sha256::digest(bytes)) != TRUSTED_INVENTORY_SHA256 {
-        return Err("内置规则库存 SHA-256 与产品可信身份不符".into());
+        return Err(crate::product_message!("backend.rules.inventory_hash"));
     }
-    let inventory: Inventory =
-        serde_json::from_slice(bytes).map_err(|error| format!("内置规则库存无法解析: {error}"))?;
+    let inventory: Inventory = serde_json::from_slice(bytes).map_err(
+        |error| crate::product_message!("backend.rules.inventory_parse", "error" => error),
+    )?;
     if inventory.format != "autosar-native-rule-inventory-v1"
         || inventory.release != grammar::RELEASE
         || inventory.rules_version != grammar::RULES_VERSION
         || inventory.sources.len() != INVENTORY_SOURCES.len()
     {
-        return Err("内置规则库存的版次、版本或成员闭包不符".into());
+        return Err(crate::product_message!("backend.rules.inventory_members"));
     }
     for (declared, source) in inventory.sources.iter().zip(INVENTORY_SOURCES) {
         if declared.path != source.path
             || declared.sha256 != source.sha256
             || format!("{:x}", Sha256::digest(source.bytes)) != source.sha256
         {
-            return Err(format!("内置规则实现或定义内容损坏: {}", source.path));
+            return Err(
+                crate::product_message!("backend.rules.inventory_source", "path" => source.path),
+            );
         }
     }
     let supported: Vec<_> = inventory
@@ -104,19 +107,19 @@ fn read_inventory(bytes: &[u8]) -> Result<Inventory, String> {
                         }
             })
     {
-        return Err("内置规则覆盖声明与实际执行规则不符".into());
+        return Err(crate::product_message!("backend.rules.inventory_coverage"));
     }
     Ok(inventory)
 }
 
 /// Validate an installed/copied inventory against compiled authority, not its own hashes.
-pub fn verify_inventory_bytes(bytes: &[u8]) -> Result<RuleSetIdentity, String> {
+pub fn verify_inventory_bytes(bytes: &[u8]) -> Result<RuleSetIdentity, crate::LocalizedText> {
     read_inventory(bytes)?;
     Ok(trusted_rule_set_identity())
 }
 
-fn verified_inventory() -> Result<&'static Inventory, String> {
-    static VERIFIED: LazyLock<Result<Inventory, String>> = LazyLock::new(|| {
+fn verified_inventory() -> Result<&'static Inventory, crate::LocalizedText> {
+    static VERIFIED: LazyLock<Result<Inventory, crate::LocalizedText>> = LazyLock::new(|| {
         #[cfg(feature = "verification-metrics")]
         crate::verification::record_rule_load();
         read_inventory(INVENTORY_BYTES)
@@ -124,13 +127,21 @@ fn verified_inventory() -> Result<&'static Inventory, String> {
     VERIFIED.as_ref().map_err(Clone::clone)
 }
 
-pub fn rule_set_identity() -> Result<RuleSetIdentity, String> {
+pub fn rule_set_identity() -> Result<RuleSetIdentity, crate::LocalizedText> {
     verified_inventory()?;
     Ok(trusted_rule_set_identity())
 }
 
-pub fn coverage() -> Result<Vec<RuleCoverage>, String> {
-    Ok(verified_inventory()?.coverage.clone())
+pub fn coverage() -> Result<Vec<RuleCoverage>, crate::LocalizedText> {
+    let mut coverage = verified_inventory()?.coverage.clone();
+    for row in &mut coverage {
+        if row.rule_id == "native.unsupported" {
+            row.reason = Some(crate::product_message!(
+                "backend.rules.inventory_partial_coverage"
+            ));
+        }
+    }
+    Ok(coverage)
 }
 
 struct ChildGroup {
@@ -177,7 +188,7 @@ fn native_grammar() -> &'static NativeGrammar {
     &GRAMMAR
 }
 
-fn check_source(path: &Path, text: &str) -> Result<(), String> {
+fn check_source(path: &Path, text: &str) -> Result<(), crate::LocalizedText> {
     if path
         .components()
         .any(|component| matches!(component, Component::ParentDir))
@@ -185,13 +196,13 @@ fn check_source(path: &Path, text: &str) -> Result<(), String> {
             .extension()
             .is_some_and(|ext| ext.eq_ignore_ascii_case("arxml"))
     {
-        return Err(format!("ARXML 路径不安全或扩展名不符: {}", path.display()));
+        return Err(crate::product_message!("backend.rules.source_path", "path" => path.display()));
     }
     let absolute = if path.is_absolute() {
         path.to_path_buf()
     } else {
         std::env::current_dir()
-            .map_err(|error| error.to_string())?
+            .map_err(|error| crate::LocalizedText::from(error.to_string()))?
             .join(path)
     };
     // Prospective/new source paths need not exist. Existing ancestors still
@@ -207,21 +218,22 @@ fn check_source(path: &Path, text: &str) -> Result<(), String> {
                 #[cfg(not(windows))]
                 let linked = metadata.file_type().is_symlink();
                 if linked || (ancestor == absolute && !metadata.is_file()) {
-                    return Err(format!(
-                        "ARXML 路径包含链接或非普通文件: {}",
-                        ancestor.display()
-                    ));
+                    return Err(
+                        crate::product_message!("backend.rules.source_link", "path" => ancestor.display()),
+                    );
                 }
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(format!("{}: {error}", ancestor.display())),
+            Err(error) => return Err(format!("{}: {error}", ancestor.display()).into()),
         }
     }
     if text.len() > MAX_SOURCE_BYTES {
-        return Err(format!("单份 ARXML 不得超过 50 MiB: {}", path.display()));
+        return Err(crate::product_message!("backend.rules.source_size", "path" => path.display()));
     }
     if text.contains("<!DOCTYPE") || text.contains("<!ENTITY") {
-        return Err(format!("不接受 DTD 或实体声明: {}", path.display()));
+        return Err(
+            crate::product_message!("backend.rules.source_entities", "path" => path.display()),
+        );
     }
     if let Some(declaration) = text.trim_start_matches('\u{feff}').strip_prefix("<?xml") {
         let declaration = declaration.split("?>").next().unwrap_or(declaration);
@@ -239,7 +251,9 @@ fn check_source(path: &Path, text: &str) -> Result<(), String> {
                 .next()
                 .unwrap_or("");
             if !value.eq_ignore_ascii_case("UTF-8") {
-                return Err(format!("ARXML 必须声明 UTF-8 编码: {}", path.display()));
+                return Err(
+                    crate::product_message!("backend.rules.source_encoding", "path" => path.display()),
+                );
             }
         }
     }
@@ -285,8 +299,8 @@ fn diagnostic(
     file: &Path,
     node: Node<'_, '_>,
     rule_id: String,
-    constraint: String,
-    counterexample: String,
+    constraint: crate::LocalizedText,
+    counterexample: crate::LocalizedText,
     unsupported: bool,
 ) -> ConfigurationDiagnostic {
     let path = xml_path(node);
@@ -304,13 +318,12 @@ fn diagnostic(
             "NATIVE_SCHEMA"
         }
         .into(),
-        message: format!("{constraint}: {counterexample}"),
+        message: crate::LocalizedText::messages([constraint.clone(), counterexample.clone()]),
         remedy: if unsupported {
-            "保留原字节；未覆盖内容不能作为相关消费者的已通过校验证据。"
+            crate::product_message!("backend.rules.remedy_unsupported")
         } else {
-            "修复已覆盖的 XML 结构、顺序、基数或类型后重新校验。"
-        }
-        .into(),
+            crate::product_message!("backend.rules.remedy_schema")
+        },
         file: Some(file.display().to_string()),
         path: Some(path.clone()),
         source_id: None,
@@ -531,12 +544,12 @@ fn context_accepts(container: &str, owner: &str, child: &str) -> bool {
 
 /// Execute native rules on authoritative/prospective UTF-8 text, without fetching
 /// schemaLocation or consulting XSD/MOD settings. Safety failures are hard errors.
-pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, String> {
+pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, crate::LocalizedText> {
     #[cfg(feature = "verification-metrics")]
     crate::verification::before(crate::verification::Phase::SchemaCheck);
     let inventory = verified_inventory()?;
     if files.is_empty() {
-        return Err("原生校验需要至少一份 ARXML 输入".into());
+        return Err(crate::product_message!("backend.rules.source_required"));
     }
     let grammar = native_grammar();
     let mut diagnostics = Vec::new();
@@ -554,50 +567,52 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, Strin
             file.to_path_buf()
         } else {
             std::env::current_dir()
-                .map_err(|error| error.to_string())?
+                .map_err(|error| crate::LocalizedText::from(error.to_string()))?
                 .join(file)
         };
         let identity = if absolute.exists() {
-            fs::canonicalize(&absolute).map_err(|error| error.to_string())?
+            fs::canonicalize(&absolute)
+                .map_err(|error| crate::LocalizedText::from(error.to_string()))?
         } else {
             absolute
         };
         if !paths.insert(identity) {
-            return Err(format!("重复 ARXML 来源: {}", file.display()));
+            return Err(
+                crate::product_message!("backend.rules.source_duplicate", "path" => file.display()),
+            );
         }
         let doc = Document::parse(text)
-            .map_err(|error| format!("{}: XML 良构检查失败: {error}", file.display()))?;
+            .map_err(|error| crate::product_message!("backend.rules.source_parse", "path" => file.display(), "error" => error))?;
         let root = doc.root_element();
         if !root.has_tag_name((NS, "AUTOSAR")) {
-            return Err(format!(
-                "{} 不是 AUTOSAR R24-11 命名空间的文档",
-                file.display()
-            ));
+            return Err(
+                crate::product_message!("backend.rules.source_namespace", "path" => file.display()),
+            );
         }
         let location = root.attribute((XSI, "schemaLocation")).unwrap_or("");
         let mut locations = location.split_ascii_whitespace();
         let mut release_declared = false;
         while let Some(namespace) = locations.next() {
             let Some(location) = locations.next() else {
-                return Err(format!(
-                    "{} 的 schemaLocation 不是命名空间/位置对",
-                    file.display()
-                ));
+                return Err(
+                    crate::product_message!("backend.rules.schema_location_pair", "path" => file.display()),
+                );
             };
             if namespace == NS {
                 if release_declared
                     || location.rsplit(['/', '\\']).next() != Some("AUTOSAR_00053.xsd")
                 {
-                    return Err(format!(
-                        "{} 未明确声明 R24-11 AUTOSAR_00053.xsd",
-                        file.display()
-                    ));
+                    return Err(
+                        crate::product_message!("backend.rules.schema_release_ambiguous", "path" => file.display()),
+                    );
                 }
                 release_declared = true;
             }
         }
         if !release_declared {
-            return Err(format!("{} 未声明 R24-11；不猜测发布版次", file.display()));
+            return Err(
+                crate::product_message!("backend.rules.schema_release_missing", "path" => file.display()),
+            );
         }
         let mut skip_end = 0;
         for node in doc.descendants().filter(Node::is_element) {
@@ -619,7 +634,7 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, Strin
                     file,
                     node,
                     "native.unsupported".into(),
-                    "未覆盖的 XML 子树，原字节保留".into(),
+                    crate::product_message!("backend.rules.constraint_unknown_subtree"),
                     name.into(),
                     true,
                 ));
@@ -645,8 +660,8 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, Strin
                         file,
                         node,
                         "native.unsupported".into(),
-                        "未覆盖的 XML 属性".into(),
-                        subject,
+                        crate::product_message!("backend.rules.constraint_unknown_attribute"),
+                        subject.into(),
                         true,
                     ));
                 }
@@ -663,8 +678,8 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, Strin
                             "type"
                         }
                     ),
-                    "特殊数据必须有 GID".into(),
-                    "GID absent".into(),
+                    crate::product_message!("backend.rules.constraint_gid"),
+                    crate::product_message!("backend.rules.witness_gid_absent"),
                     false,
                 ));
             }
@@ -679,7 +694,7 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, Strin
                             file,
                             node,
                             rule_id.clone(),
-                            "结构节点不接受文本值".into(),
+                            crate::product_message!("backend.rules.constraint_structure_text"),
                             child.text().unwrap_or("").into(),
                             false,
                         ));
@@ -706,7 +721,7 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, Strin
                                 file,
                                 child,
                                 rule_id.clone(),
-                                format!("{name} 在 {owner} 中不接受此子节点"),
+                                crate::product_message!("backend.rules.constraint_context_child", "name" => name, "owner" => owner),
                                 child_name.into(),
                                 false,
                             ));
@@ -716,7 +731,7 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, Strin
                                 file,
                                 child,
                                 rule_id.clone(),
-                                "已覆盖子节点必须按声明顺序出现".into(),
+                                crate::product_message!("backend.rules.constraint_child_order"),
                                 child_name.into(),
                                 false,
                             ));
@@ -730,7 +745,7 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, Strin
                             file,
                             child,
                             rule_id.clone(),
-                            format!("{name} 不允许此已知子节点"),
+                            crate::product_message!("backend.rules.constraint_known_child", "name" => name),
                             child_name.into(),
                             false,
                         ));
@@ -750,17 +765,11 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, Strin
                             file,
                             node,
                             rule_id.clone(),
-                            format!(
-                                "{} 基数 {}..{}",
-                                group.names.join("|"),
-                                group.min,
-                                if group.max == usize::MAX {
-                                    "n".into()
-                                } else {
-                                    group.max.to_string()
-                                }
-                            ),
-                            count.to_string(),
+                            crate::product_message!("backend.rules.constraint_cardinality",
+                                "names" => group.names.join("|"),
+                                "min" => group.min,
+                                "max" => if group.max == usize::MAX { "n".into() } else { group.max.to_string() }),
+                            count.to_string().into(),
                             false,
                         ));
                     }
@@ -790,7 +799,7 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, Strin
                         file,
                         node,
                         "native.unsupported".into(),
-                        "未解释的数值表达式".into(),
+                        crate::product_message!("backend.rules.constraint_expression"),
                         value.into(),
                         true,
                     ));
@@ -803,7 +812,7 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, Strin
                         file,
                         node,
                         rule_id.clone(),
-                        "标量或引用不能包含 XML 子节点".into(),
+                        crate::product_message!("backend.rules.constraint_scalar_children"),
                         name.into(),
                         false,
                     ));
@@ -814,7 +823,7 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, Strin
                             file,
                             node,
                             rule_id,
-                            format!("XML 类型 {kind}"),
+                            crate::product_message!("backend.rules.constraint_xml_type", "kind" => kind),
                             value.into(),
                             false,
                         ));
@@ -831,11 +840,10 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, Strin
                             file,
                             node,
                             rule_id,
-                            "引用必须含合法绝对 AUTOSAR 路径及匹配的 DEST".into(),
-                            format!(
-                                "{value}; DEST={}",
-                                node.attribute("DEST").unwrap_or("<absent>")
-                            ),
+                            crate::product_message!("backend.rules.constraint_reference"),
+                            crate::product_message!("backend.rules.witness_reference",
+                                "value" => value,
+                                "dest" => node.attribute("DEST").unwrap_or("<absent>")),
                             false,
                         ));
                     }
@@ -849,7 +857,7 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, Strin
             scope: ValidationScope::Schema,
             subjects: unknown.into_iter().collect(),
             supported: false,
-            reason: Some("未列入原生结构/类型库存的内容没有获得全范围通过声明。".into()),
+            reason: Some(crate::product_message!("backend.rules.reason_uncovered")),
         });
     }
     let status = if diagnostics

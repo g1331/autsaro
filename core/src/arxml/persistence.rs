@@ -10,18 +10,25 @@ pub(super) fn patch_child(
     child_name: &str,
     value: String,
     patches: &mut Vec<Patch>,
-) -> Result<(), String> {
+) -> Result<(), crate::message::LocalizedText> {
     let leaf = node
         .children()
         .find(|n| n.is_element() && n.tag_name().name() == child_name)
-        .ok_or_else(|| format!("{} 缺少 {child_name}，拒绝不安全编辑", path_of(node)))?;
+        .ok_or_else(|| {
+            crate::product_message!(
+                "backend.arxml.persistence.missing_child",
+                "path" => path_of(node),
+                "child" => child_name
+            )
+        })?;
     let mut content = leaf.children();
-    let text = content
-        .next()
-        .filter(|n| n.is_text())
-        .ok_or("值不是简单文本；拒绝不安全编辑")?;
+    let text = content.next().filter(|n| n.is_text()).ok_or_else(|| {
+        crate::product_message!("backend.arxml.persistence.value_not_simple_text")
+    })?;
     if content.next().is_some() {
-        return Err("值有混合内容；拒绝不安全编辑".into());
+        return Err(crate::product_message!(
+            "backend.arxml.persistence.value_has_mixed_content"
+        ));
     }
     patches.push(Patch {
         range: text.range(),
@@ -35,7 +42,7 @@ pub(super) fn patch_param(
     name: &str,
     value: String,
     patches: &mut Vec<Patch>,
-) -> Result<(), String> {
+) -> Result<(), crate::message::LocalizedText> {
     let mut found = node
         .descendants()
         .filter(|n| {
@@ -46,21 +53,32 @@ pub(super) fn patch_param(
                 )
         })
         .filter(|n| definition(*n).is_some_and(|d| d.ends_with(&format!("/{name}"))));
-    let parameter = found
-        .next()
-        .ok_or_else(|| format!("缺少 {name}，拒绝不安全编辑"))?;
+    let parameter = found.next().ok_or_else(|| {
+        crate::product_message!(
+            "backend.arxml.persistence.missing_parameter",
+            "name" => name
+        )
+    })?;
     if found.next().is_some() {
-        return Err(format!("{name} 存在多个变体，拒绝不安全编辑"));
+        return Err(crate::product_message!(
+            "backend.arxml.persistence.multiple_parameter_variants",
+            "name" => name
+        ));
     }
     patch_child(parameter, "VALUE", value, patches)
 }
 
-pub(super) fn apply_patches(text: &mut String, patches: &mut Vec<Patch>) -> Result<(), String> {
+pub(super) fn apply_patches(
+    text: &mut String,
+    patches: &mut Vec<Patch>,
+) -> Result<(), crate::message::LocalizedText> {
     patches.sort_by_key(|patch| std::cmp::Reverse(patch.range.start));
     let mut next_start = text.len();
     for patch in patches {
         if patch.range.end > next_start {
-            return Err("编辑范围重叠；保留原 ARXML".into());
+            return Err(crate::product_message!(
+                "backend.arxml.persistence.overlapping_patch_ranges"
+            ));
         }
         next_start = patch.range.start;
         text.replace_range(patch.range.clone(), &patch.value);
@@ -68,42 +86,62 @@ pub(super) fn apply_patches(text: &mut String, patches: &mut Vec<Patch>) -> Resu
     Ok(())
 }
 
-fn restore_backup(original: &Path, backup: &Path, installed: Option<&str>) -> Result<(), String> {
+fn restore_backup(
+    original: &Path,
+    backup: &Path,
+    installed: Option<&str>,
+) -> Result<(), crate::message::LocalizedText> {
     if original.exists() {
         let owned = installed
             .is_some_and(|text| fs::read_to_string(original).is_ok_and(|current| current == text));
         if !owned {
-            return Err(format!(
-                "外部文件 {} 未覆盖；原备份保留在 {}",
-                original.display(),
-                backup.display()
+            return Err(crate::product_message!(
+                "backend.arxml.persistence.external_file_preserved",
+                "original" => original.display(),
+                "backup" => backup.display()
             ));
         }
         fs::remove_file(original).map_err(|e| format!("{}: {e}", original.display()))?;
     }
     fs::rename(backup, original)
-        .map_err(|e| format!("{} -> {}: {e}", backup.display(), original.display()))
+        .map_err(|e| format!("{} -> {}: {e}", backup.display(), original.display()).into())
 }
 
-fn install_staged(file: &SourceFile, stage: &Path, backup: &Path) -> Result<(), String> {
+fn install_staged(
+    file: &SourceFile,
+    stage: &Path,
+    backup: &Path,
+) -> Result<(), crate::message::LocalizedText> {
     fs::rename(&file.path, backup)
         .map_err(|e| format!("{} -> {}: {e}", file.path.display(), backup.display()))?;
     let result = fs::read_to_string(backup)
-        .map_err(|e| format!("无法复核原文件 {}: {e}", backup.display()))
+        .map_err(|e| {
+            crate::message::LocalizedText::messages([
+                crate::product_message!(
+                    "backend.arxml.persistence.original_file_recheck_failed",
+                    "path" => backup.display()
+                ),
+                e.to_string().into(),
+            ])
+        })
         .and_then(|actual| {
             if actual != file.saved {
-                return Err(format!(
-                    "文件已被外部修改，拒绝覆盖: {}",
-                    file.path.display()
+                return Err(crate::product_message!(
+                    "backend.arxml.persistence.external_modification_overwrite_refused",
+                    "path" => file.path.display()
                 ));
             }
             fs::rename(stage, &file.path)
-                .map_err(|e| format!("{} -> {}: {e}", stage.display(), file.path.display()))
+                .map_err(|e| format!("{} -> {}: {e}", stage.display(), file.path.display()).into())
         });
     if let Err(error) = result {
         return Err(match restore_backup(&file.path, backup, None) {
             Ok(()) => error,
-            Err(rollback) => format!("{error}; 回滚问题: {rollback}"),
+            Err(rollback) => crate::message::LocalizedText::messages([
+                error,
+                crate::product_message!("backend.arxml.persistence.rollback_problems"),
+                rollback,
+            ]),
         });
     }
     Ok(())
@@ -116,11 +154,11 @@ pub struct PreparedSave {
 
 pub struct SaveFailure {
     workspace: Workspace,
-    message: String,
+    message: crate::message::LocalizedText,
 }
 
 impl SaveFailure {
-    pub fn into_parts(self) -> (Workspace, String) {
+    pub fn into_parts(self) -> (Workspace, crate::message::LocalizedText) {
         (self.workspace, self.message)
     }
 }
@@ -136,16 +174,21 @@ impl std::fmt::Debug for SaveFailure {
 
 impl std::fmt::Display for SaveFailure {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(&self.message)
+        write!(formatter, "{}", self.message)
     }
 }
 
 impl std::error::Error for SaveFailure {}
 
 impl PreparedSave {
-    pub(super) fn validated(workspace: Workspace, revision: &str) -> Result<Self, String> {
+    pub(super) fn validated(
+        workspace: Workspace,
+        revision: &str,
+    ) -> Result<Self, crate::message::LocalizedText> {
         if workspace.save_revision() != revision {
-            return Err("配置已在预览后改变，请重新查看 ARXML 改动再保存".into());
+            return Err(crate::product_message!(
+                "backend.arxml.persistence.save_preview_stale"
+            ));
         }
         workspace.ensure_sources_current()?;
         Ok(Self { workspace })
@@ -163,7 +206,10 @@ impl PreparedSave {
 }
 
 impl Workspace {
-    pub fn prepare_save_previewed(mut self, revision: &str) -> Result<PreparedSave, String> {
+    pub fn prepare_save_previewed(
+        mut self,
+        revision: &str,
+    ) -> Result<PreparedSave, crate::message::LocalizedText> {
         self.ensure_save_allowed()?;
         PreparedSave::validated(self, revision)
     }
@@ -172,7 +218,7 @@ impl Workspace {
         &mut self,
         mut patches: Vec<Vec<Patch>>,
         matches: impl FnOnce(&Workspace) -> bool,
-    ) -> Result<(), String> {
+    ) -> Result<(), crate::message::LocalizedText> {
         let mut previous = Vec::new();
         for (index, edits) in patches.iter_mut().enumerate() {
             if edits.is_empty() {
@@ -192,11 +238,19 @@ impl Workspace {
                 .iter()
                 .find(|i| matches!(i.severity, Severity::Error))
             {
-                Err(format!("{}: {}", issue.code, issue.message))
+                Err(crate::message::LocalizedText::messages([
+                    crate::product_message!(
+                        "backend.arxml.persistence.blocking_diagnostic",
+                        "code" => issue.code
+                    ),
+                    issue.message.clone(),
+                ]))
             } else if matches(self) {
                 Ok(())
             } else {
-                Err("编辑后的 ARXML 与配置模型不一致".into())
+                Err(crate::product_message!(
+                    "backend.arxml.persistence.edited_model_mismatch"
+                ))
             }
         });
         if let Err(error) = checked {
@@ -213,7 +267,7 @@ impl Workspace {
         &mut self,
         old: &FrameView,
         new: &FrameView,
-    ) -> Result<(), String> {
+    ) -> Result<(), crate::message::LocalizedText> {
         let global_pdu = self.global_pdu_for(&old.path)?;
         let mut patches: Vec<Vec<Patch>> = (0..self.files.len()).map(|_| Vec::new()).collect();
         let mut found_id = false;
@@ -286,7 +340,11 @@ impl Workspace {
                         patch_param(
                             node,
                             "ComTxModeTimePeriod",
-                            seconds(new.period_ms.ok_or("发送周期不可为空")?),
+                            seconds(new.period_ms.ok_or_else(|| {
+                                crate::product_message!(
+                                    "backend.arxml.persistence.transmit_period_required"
+                                )
+                            })?),
                             &mut patches[index],
                         )?;
                         found_period = true;
@@ -297,22 +355,25 @@ impl Workspace {
                         patch_param(
                             node,
                             "ComTimeout",
-                            seconds(new.timeout_ms.ok_or("接收超时不可为空")?),
+                            seconds(new.timeout_ms.ok_or_else(|| {
+                                crate::product_message!(
+                                    "backend.arxml.persistence.receive_timeout_required"
+                                )
+                            })?),
                             &mut patches[index],
                         )?;
                         found_timeout += 1;
                     }
                 }
                 if old.id != new.id && node.tag_name().name() == "CAN-FRAME-TRIGGERING" {
-                    return Err(
-                        "导入项目包含 CAN 网络触发配置，修改标识符需同步网络模型；已阻止不安全编辑"
-                            .into(),
-                    );
+                    return Err(crate::product_message!(
+                        "backend.arxml.persistence.identifier_requires_network_sync"
+                    ));
                 }
                 if old.dlc != new.dlc && node.tag_name().name() == "CAN-FRAME" {
-                    return Err(
-                        "导入项目包含 CAN-FRAME，修改 DLC 需同步网络模型；已阻止不安全编辑".into(),
-                    );
+                    return Err(crate::product_message!(
+                        "backend.arxml.persistence.dlc_requires_network_sync"
+                    ));
                 }
             }
         }
@@ -321,7 +382,9 @@ impl Workspace {
             || (old.period_ms != new.period_ms && !found_period)
             || (old.timeout_ms != new.timeout_ms && found_timeout != receive_signals.len())
         {
-            return Err("导入项目缺少可定位的标准参数，已拒绝修改且保留原文件".into());
+            return Err(crate::product_message!(
+                "backend.arxml.persistence.standard_parameters_not_locatable"
+            ));
         }
         self.commit_patches(patches, |w| {
             w.frames.iter().any(|f| {
@@ -339,7 +402,7 @@ impl Workspace {
         &mut self,
         old: &SignalView,
         new: &SignalView,
-    ) -> Result<(), String> {
+    ) -> Result<(), crate::message::LocalizedText> {
         let mut patches: Vec<Vec<Patch>> = (0..self.files.len()).map(|_| Vec::new()).collect();
         let mut found_com = false;
         let mut found_mapping = false;
@@ -412,7 +475,9 @@ impl Workspace {
             || (layout_changed && !found_mapping)
             || (old.length != new.length && !found_system_signal)
         {
-            return Err("信号系统映射不完整；拒绝破坏未知引用或位布局".into());
+            return Err(crate::product_message!(
+                "backend.arxml.persistence.incomplete_signal_system_mapping"
+            ));
         }
         self.commit_patches(patches, |w| {
             w.signals.iter().any(|s| {
@@ -425,38 +490,39 @@ impl Workspace {
         Ok(())
     }
 
-    pub(super) fn ensure_sources_current(&self) -> Result<(), String> {
+    pub(super) fn ensure_sources_current(&self) -> Result<(), crate::message::LocalizedText> {
         for file in &self.files {
             super::project::safe_path(&file.path, false)?;
         }
         if let Some(project) = &self.project {
             super::project::safe_path(&project.path, false)?;
             if super::project::read_bounded(&project.path)? != project.saved.as_bytes() {
-                return Err(
-                    "Project manifest was externally modified; reopen before changing or saving."
-                        .into(),
-                );
+                return Err(crate::product_message!(
+                    "backend.arxml.persistence.project_manifest_externally_modified"
+                ));
             }
             for (path, saved) in &project.application_bytes {
                 let path = project
                     .path
                     .parent()
-                    .ok_or("Project root is missing.")?
+                    .ok_or_else(|| {
+                        crate::product_message!("backend.arxml.persistence.project_root_missing")
+                    })?
                     .join(path);
                 super::project::safe_path(&path, false)?;
                 if super::project::read_bounded(&path)? != *saved {
-                    return Err(
-                        "Application source changed outside the owned project snapshot.".into(),
-                    );
+                    return Err(crate::product_message!(
+                        "backend.arxml.persistence.application_source_externally_modified"
+                    ));
                 }
             }
         }
         for file in &self.files {
             let disk = super::project::read_bounded(&file.path)?;
             if disk != file.saved.as_bytes() {
-                return Err(format!(
-                    "文件已被外部修改，拒绝基于过期配置继续；请重新导入项目: {}",
-                    file.path.display()
+                return Err(crate::product_message!(
+                    "backend.arxml.persistence.stale_source_reimport_required",
+                    "path" => file.path.display()
                 ));
             }
         }
@@ -505,7 +571,7 @@ impl Workspace {
         format!("{:x}", digest.finalize())
     }
 
-    pub fn preview_save(&mut self) -> Result<SavePreview, String> {
+    pub fn preview_save(&mut self) -> Result<SavePreview, crate::message::LocalizedText> {
         self.ensure_save_allowed()?;
         Ok(SavePreview {
             revision: self.save_revision(),
@@ -513,14 +579,19 @@ impl Workspace {
         })
     }
 
-    pub fn save_previewed(&mut self, revision: &str) -> Result<WorkspaceView, String> {
+    pub fn save_previewed(
+        &mut self,
+        revision: &str,
+    ) -> Result<WorkspaceView, crate::message::LocalizedText> {
         if self.save_revision() != revision {
-            return Err("配置已在预览后改变，请重新查看 ARXML 改动再保存".into());
+            return Err(crate::product_message!(
+                "backend.arxml.persistence.save_preview_stale"
+            ));
         }
         self.save()
     }
 
-    pub fn save(&mut self) -> Result<WorkspaceView, String> {
+    pub fn save(&mut self) -> Result<WorkspaceView, crate::message::LocalizedText> {
         self.ensure_save_allowed()?;
         // Validation includes references across every imported file, including files this
         // edit leaves untouched. A stale untouched file would invalidate that result.
@@ -528,7 +599,7 @@ impl Workspace {
         Ok(self.view())
     }
 
-    pub(super) fn ensure_save_allowed(&mut self) -> Result<(), String> {
+    pub(super) fn ensure_save_allowed(&mut self) -> Result<(), crate::message::LocalizedText> {
         self.validate()?;
         self.ensure_no_recovery_backups()?;
         if self.uses_legacy_validation() {
@@ -537,7 +608,13 @@ impl Workspace {
                 .iter()
                 .find(|issue| matches!(issue.severity, Severity::Error))
             {
-                return Err(format!("{}: {}", issue.code, issue.message));
+                return Err(crate::message::LocalizedText::messages([
+                    crate::product_message!(
+                        "backend.arxml.persistence.blocking_diagnostic",
+                        "code" => issue.code
+                    ),
+                    issue.message.clone(),
+                ]));
             }
         } else {
             // Target-generation failures do not close safe configuration persistence.
@@ -552,7 +629,13 @@ impl Workspace {
                         .iter()
                         .find(|issue| matches!(issue.severity, Severity::Error))
                     {
-                        return Err(format!("{}: {}", issue.code, issue.message));
+                        return Err(crate::message::LocalizedText::messages([
+                            crate::product_message!(
+                                "backend.arxml.persistence.blocking_diagnostic",
+                                "code" => issue.code
+                            ),
+                            issue.message.clone(),
+                        ]));
                     }
                 }
             }
@@ -586,7 +669,7 @@ impl Workspace {
         files
     }
 
-    fn ensure_no_recovery_backups(&self) -> Result<(), String> {
+    fn ensure_no_recovery_backups(&self) -> Result<(), crate::message::LocalizedText> {
         for path in self
             .files
             .iter()
@@ -597,9 +680,13 @@ impl Workspace {
             let prefix = prefix_path
                 .file_name()
                 .and_then(|name| name.to_str())
-                .ok_or("Recovery file path is not UTF-8.")?;
-            for entry in fs::read_dir(path.parent().ok_or("Source directory is missing.")?)
-                .map_err(|error| error.to_string())?
+                .ok_or_else(|| {
+                    crate::product_message!("backend.arxml.persistence.recovery_path_not_utf_eight")
+                })?;
+            for entry in fs::read_dir(path.parent().ok_or_else(|| {
+                crate::product_message!("backend.arxml.persistence.source_directory_missing")
+            })?)
+            .map_err(|error| error.to_string())?
             {
                 let entry = entry.map_err(|error| error.to_string())?;
                 if entry
@@ -607,9 +694,9 @@ impl Workspace {
                     .to_str()
                     .is_some_and(|name| name.starts_with(prefix) && name.ends_with(".bak"))
                 {
-                    return Err(format!(
-                        "Unrecovered source backup prevents saving: {}",
-                        entry.path().display()
+                    return Err(crate::product_message!(
+                        "backend.arxml.persistence.unrecovered_backup_blocks_save",
+                        "path" => entry.path().display()
                     ));
                 }
             }
@@ -617,14 +704,14 @@ impl Workspace {
         Ok(())
     }
 
-    pub(super) fn save_sources(&mut self) -> Result<(), String> {
+    pub(super) fn save_sources(&mut self) -> Result<(), crate::message::LocalizedText> {
         self.save_sources_with_cleanup(|backup| fs::remove_file(backup))
     }
 
     fn save_sources_with_cleanup(
         &mut self,
         remove_backup: impl Fn(&Path) -> std::io::Result<()>,
-    ) -> Result<(), String> {
+    ) -> Result<(), crate::message::LocalizedText> {
         self.ensure_sources_current()?;
         self.ensure_no_recovery_backups()?;
         let mut dirty = self
@@ -648,28 +735,47 @@ impl Workspace {
             let suffix = format!("arxml.autosar-config-{}-{index}", std::process::id());
             let stage = file.path.with_extension(format!("{suffix}.tmp"));
             let backup = file.path.with_extension(format!("{suffix}.bak"));
-            let prepared = (|| -> Result<(), String> {
+            let prepared = (|| -> Result<(), crate::message::LocalizedText> {
                 if backup.exists() {
-                    return Err(format!("待恢复备份已存在，拒绝覆盖: {}", backup.display()));
+                    return Err(crate::product_message!(
+                        "backend.arxml.persistence.recovery_backup_already_exists",
+                        "path" => backup.display()
+                    ));
                 }
                 if fs::read_to_string(&file.path).map_err(|e| e.to_string())? != file.saved {
-                    return Err(format!(
-                        "文件已被外部修改，拒绝覆盖: {}",
-                        file.path.display()
+                    return Err(crate::product_message!(
+                        "backend.arxml.persistence.external_modification_overwrite_refused",
+                        "path" => file.path.display()
                     ));
                 }
                 let mut handle = fs::OpenOptions::new()
                     .write(true)
                     .create_new(true)
                     .open(&stage)
-                    .map_err(|e| format!("暂存文件不可创建 {}: {e}", stage.display()))?;
+                    .map_err(|e| {
+                        crate::message::LocalizedText::messages([
+                            crate::product_message!(
+                                "backend.arxml.persistence.staged_file_creation_failed",
+                                "path" => stage.display()
+                            ),
+                            e.to_string().into(),
+                        ])
+                    })?;
                 let written = std::io::Write::write_all(&mut handle, file.text.as_bytes())
                     .and_then(|_| handle.sync_all());
                 drop(handle);
                 if written.is_err() {
                     let _ = fs::remove_file(&stage);
                 }
-                written.map_err(|e| format!("暂存文件写入失败 {}: {e}", stage.display()))
+                written.map_err(|e| {
+                    crate::message::LocalizedText::messages([
+                        crate::product_message!(
+                            "backend.arxml.persistence.staged_file_write_failed",
+                            "path" => stage.display()
+                        ),
+                        e.to_string().into(),
+                    ])
+                })
             })();
             if let Err(error) = prepared {
                 for (_, stage, _) in &staged {
@@ -691,10 +797,12 @@ impl Workspace {
                 for (_, stage, _) in &staged {
                     let _ = fs::remove_file(stage);
                 }
-                return Err(format!(
-                    "ARXML 保存失败: {error}; 回滚问题: {}",
-                    rollback_errors.join("; ")
-                ));
+                return Err(crate::message::LocalizedText::messages([
+                    crate::product_message!("backend.arxml.persistence.arxml_save_failed"),
+                    error,
+                    crate::product_message!("backend.arxml.persistence.rollback_problems"),
+                    crate::message::LocalizedText::messages(rollback_errors),
+                ]));
             }
         }
         // Publication is complete. Keep the in-memory baseline aligned with disk
@@ -708,17 +816,20 @@ impl Workspace {
         let mut cleanup_error = None;
         for (file, _, backup) in &staged {
             if fs::read_to_string(backup).ok().as_deref() != Some(&file.saved) {
-                cleanup_error = Some(format!(
-                    "备份内容发生变化，保留备份供检查: {}",
-                    backup.display()
+                cleanup_error = Some(crate::product_message!(
+                    "backend.arxml.persistence.backup_contents_changed",
+                    "path" => backup.display()
                 ));
                 break;
             }
             if let Err(error) = remove_backup(backup) {
-                cleanup_error = Some(format!(
-                    "已保存 ARXML，但无法清理备份 {}: {error}",
-                    backup.display()
-                ));
+                cleanup_error = Some(crate::message::LocalizedText::messages([
+                    crate::product_message!(
+                        "backend.arxml.persistence.backup_cleanup_failed_after_save",
+                        "path" => backup.display()
+                    ),
+                    error.to_string().into(),
+                ]));
                 break;
             }
         }
@@ -776,7 +887,20 @@ mod tests {
                 ))
             })
             .unwrap_err();
-        assert!(error.contains("无法清理备份"), "{error}");
+        assert_eq!(
+            error,
+            crate::message::LocalizedText::messages([
+                crate::product_message!(
+                    "backend.arxml.persistence.backup_cleanup_failed_after_save",
+                    "path" => source
+                        .with_extension(format!("arxml.autosar-config-{}-0.bak", std::process::id()))
+                        .display()
+                ),
+                std::io::Error::new(std::io::ErrorKind::PermissionDenied, "backup is locked",)
+                    .to_string()
+                    .into(),
+            ])
+        );
         assert_ne!(fs::read_to_string(&source).unwrap(), before);
         for file in &workspace.files {
             assert_eq!(file.saved, file.text);
@@ -809,7 +933,13 @@ mod tests {
         fs::write(&stage, &file.text).unwrap();
         fs::write(&original, "external").unwrap();
         let conflict = install_staged(&file, &stage, &backup).unwrap_err();
-        assert!(conflict.contains("外部修改"), "{conflict}");
+        assert_eq!(
+            conflict,
+            crate::product_message!(
+                "backend.arxml.persistence.external_modification_overwrite_refused",
+                "path" => original.display()
+            )
+        );
         assert_eq!(fs::read_to_string(&original).unwrap(), "external");
         assert!(!backup.exists());
         assert!(stage.exists());

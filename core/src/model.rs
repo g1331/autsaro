@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 pub struct Issue {
     pub severity: Severity,
     pub code: String,
-    pub message: String,
+    pub message: crate::message::LocalizedText,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -21,7 +21,11 @@ pub enum Severity {
 }
 
 impl Issue {
-    pub fn error(code: &str, message: impl Into<String>, path: Option<String>) -> Self {
+    pub fn error(
+        code: &str,
+        message: impl Into<crate::message::LocalizedText>,
+        path: Option<String>,
+    ) -> Self {
         Self {
             severity: Severity::Error,
             code: code.into(),
@@ -211,8 +215,8 @@ pub struct BuildReport {
 #[serde(rename_all = "camelCase")]
 pub struct RunReport {
     pub passed: bool,
-    pub log: String,
-    pub events: Vec<String>,
+    pub log: crate::message::LocalizedText,
+    pub events: Vec<crate::message::LocalizedText>,
 }
 
 pub fn validate_profile(frames: &[FrameView], signals: &[SignalView]) -> Vec<Issue> {
@@ -220,7 +224,7 @@ pub fn validate_profile(frames: &[FrameView], signals: &[SignalView]) -> Vec<Iss
     if frames.len() > 32 || signals.len() > 64 {
         issues.push(Issue::error(
             "PROFILE_LIMIT",
-            "最多支持 32 个帧、64 个信号",
+            crate::product_message!("backend.model.profile_limit"),
             None,
         ));
     }
@@ -228,14 +232,14 @@ pub fn validate_profile(frames: &[FrameView], signals: &[SignalView]) -> Vec<Iss
         if frame.id > 0x7ff || !(1..=8).contains(&frame.dlc) {
             issues.push(Issue::error(
                 "CAN_FRAME_RANGE",
-                "仅支持 11 位 CAN 标识符与 DLC 1–8",
+                crate::product_message!("backend.model.can_frame_range"),
                 Some(frame.path.clone()),
             ));
         }
         if frames[..i].iter().any(|prior| prior.id == frame.id) {
             issues.push(Issue::error(
                 "CAN_ID_DUPLICATE",
-                "同一 ECU 的 CAN 标识符不能重复",
+                crate::product_message!("backend.model.can_id_duplicate"),
                 Some(frame.path.clone()),
             ));
         }
@@ -243,14 +247,14 @@ pub fn validate_profile(frames: &[FrameView], signals: &[SignalView]) -> Vec<Iss
             Direction::Tx if frame.period_ms.unwrap_or(0) == 0 || frame.timeout_ms.is_some() => {
                 issues.push(Issue::error(
                     "TX_PERIOD",
-                    "发送帧必须有正周期，不能设置接收超时",
+                    crate::product_message!("backend.model.tx_period"),
                     Some(frame.path.clone()),
                 ));
             }
             Direction::Rx if frame.timeout_ms.unwrap_or(0) == 0 || frame.period_ms.is_some() => {
                 issues.push(Issue::error(
                     "RX_TIMEOUT",
-                    "接收帧必须有正超时，不能设置发送周期",
+                    crate::product_message!("backend.model.rx_timeout"),
                     Some(frame.path.clone()),
                 ));
             }
@@ -265,7 +269,7 @@ pub fn validate_profile(frames: &[FrameView], signals: &[SignalView]) -> Vec<Iss
             if !(1..=32).contains(&signal.length) || end > u32::from(frame.dlc) * 8 {
                 issues.push(Issue::error(
                     "SIGNAL_RANGE",
-                    "信号须为帧内 1–32 位无符号小端原始值",
+                    crate::product_message!("backend.model.signal_range"),
                     Some(signal.path.clone()),
                 ));
                 continue;
@@ -274,7 +278,7 @@ pub fn validate_profile(frames: &[FrameView], signals: &[SignalView]) -> Vec<Iss
             if occupied & mask != 0 || (u64::from(signal.initial_value) >> signal.length) != 0 {
                 issues.push(Issue::error(
                     "SIGNAL_LAYOUT",
-                    "信号位重叠或初始值超出位宽",
+                    crate::product_message!("backend.model.signal_layout"),
                     Some(signal.path.clone()),
                 ));
             }
@@ -285,7 +289,7 @@ pub fn validate_profile(frames: &[FrameView], signals: &[SignalView]) -> Vec<Iss
         if !frames.iter().any(|frame| frame.path == signal.frame_path) {
             issues.push(Issue::error(
                 "MISSING_FRAME",
-                "信号引用的帧不存在",
+                crate::product_message!("backend.model.missing_frame"),
                 Some(signal.path.clone()),
             ));
         }
@@ -309,7 +313,7 @@ pub fn validate_diagnostic(
     {
         issues.push(Issue::error(
             "DIAG_CAN_ID",
-            "诊断请求/响应须使用不与 Com 帧冲突的不同 11 位 CAN 标识符",
+            crate::product_message!("backend.model.diagnostic_can_ids"),
             path.clone(),
         ));
     }
@@ -320,21 +324,21 @@ pub fn validate_diagnostic(
     {
         issues.push(Issue::error(
             "DIAG_TIMING",
-            "S3 至少 5000 ms，N_As/N_Bs/N_Cr 须为正毫秒，计时器不得超过 2^31-1 ms",
+            crate::product_message!("backend.model.diagnostic_timing"),
             path.clone(),
         ));
     }
     if diagnostic.did == 0xf186 {
         issues.push(Issue::error(
             "DIAG_DID",
-            "DID 0xF186 保留给活动会话",
+            crate::product_message!("backend.model.reserved_session_did"),
             path.clone(),
         ));
     }
     if !(1..=8).contains(&diagnostic.signal_paths.len()) {
         issues.push(Issue::error(
             "DIAG_SIGNAL_COUNT",
-            "诊断 DID 须绑定 1–8 个信号",
+            crate::product_message!("backend.model.diagnostic_signal_count"),
             path.clone(),
         ));
     }
@@ -342,7 +346,7 @@ pub fn validate_diagnostic(
         if diagnostic.signal_paths[..index].contains(signal_path) {
             issues.push(Issue::error(
                 "DIAG_SIGNAL_DUPLICATE",
-                "诊断 DID 信号不能重复",
+                crate::product_message!("backend.model.diagnostic_signal_duplicate"),
                 Some(signal_path.clone()),
             ));
         }
@@ -358,7 +362,7 @@ pub fn validate_diagnostic(
         if !valid {
             issues.push(Issue::error(
                 "DIAG_SIGNAL",
-                "诊断 DID 只支持存在的 32 位 Tx Com 信号",
+                crate::product_message!("backend.model.diagnostic_signal"),
                 Some(signal_path.clone()),
             ));
         }
@@ -366,14 +370,14 @@ pub fn validate_diagnostic(
     if diagnostic.reset_routine_id.is_some() && !diagnostic.write_enabled {
         issues.push(Issue::error(
             "RESET_ROUTINE_WRITE",
-            "重置例程要求 DID 可通过 0x2E 写入",
+            crate::product_message!("backend.model.reset_routine_write"),
             path.clone(),
         ));
     }
     if diagnostic.security_enabled && !diagnostic.write_enabled && diagnostic.dtc.is_none() {
         issues.push(Issue::error(
             "SECURITY_TARGET",
-            "安全访问须保护可写 DID 或故障记忆操作",
+            crate::product_message!("backend.model.security_target"),
             path.clone(),
         ));
     }
@@ -381,7 +385,7 @@ pub fn validate_diagnostic(
         if !(0x100..=0xfffffe).contains(&dtc.code) {
             issues.push(Issue::error(
                 "DTC_RANGE",
-                "UDS DTC 须为 0x000100–0xFFFFFE，低于 0x100 或全 DTC 组代码不可用",
+                crate::product_message!("backend.model.dtc_range"),
                 Some(dtc.path.clone()),
             ));
         }
@@ -393,7 +397,7 @@ pub fn validate_diagnostic(
         }) {
             issues.push(Issue::error(
                 "DTC_MONITOR",
-                "DTC 须绑定至少含一个信号且有正超时的 Rx CAN 帧",
+                crate::product_message!("backend.model.dtc_monitor"),
                 Some(dtc.monitor_frame_path.clone()),
             ));
         }

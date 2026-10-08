@@ -199,6 +199,64 @@ fn native_schema_rejects_structure_order_cardinality_and_lexical_types() {
         let witness = issue.witness.as_ref().unwrap();
         assert_eq!(witness.rule_id, rule_id);
         assert_eq!(witness.subjects, [issue.path.clone().unwrap()]);
+        let message = serde_json::to_value(&issue.message).unwrap();
+        let constraint = serde_json::to_value(&witness.constraint).unwrap();
+        assert!(
+            constraint["key"]
+                .as_str()
+                .unwrap()
+                .starts_with("backend.rules.constraint_")
+        );
+        assert_eq!(message[0], constraint);
+        assert_eq!(
+            message[1],
+            serde_json::to_value(&witness.counterexample).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_value(&issue.remedy).unwrap()["key"],
+            "backend.rules.remedy_schema"
+        );
+    }
+}
+
+#[test]
+fn cardinality_diagnostics_preserve_actual_bounds_and_counterexamples() {
+    for (elements, names, min, max, count) in [
+        (
+            "<I-SIGNAL><LENGTH>8</LENGTH></I-SIGNAL>",
+            "SHORT-NAME",
+            "1",
+            "1",
+            "0",
+        ),
+        (
+            "<I-SIGNAL><SHORT-NAME>Signal</SHORT-NAME><LENGTH>8</LENGTH><LENGTH>9</LENGTH></I-SIGNAL>",
+            "LENGTH",
+            "0",
+            "1",
+            "2",
+        ),
+    ] {
+        let result = check(&document(elements));
+        let issue = result
+            .diagnostics
+            .iter()
+            .find(|issue| {
+                let constraint =
+                    serde_json::to_value(&issue.witness.as_ref().unwrap().constraint).unwrap();
+                constraint["key"] == "backend.rules.constraint_cardinality"
+                    && constraint["params"]["names"] == names
+            })
+            .expect("cardinality failure for the affected child");
+        let value = serde_json::to_value(&issue.message).unwrap();
+        assert_eq!(value[0]["params"]["min"], min);
+        assert_eq!(value[0]["params"]["max"], max);
+        assert_eq!(value[1], count);
+        let presented = issue.message.to_string();
+        assert!(presented.contains(names));
+        assert!(presented.contains(&format!("{min}..{max}")));
+        assert!(presented.ends_with(count));
+        assert!(!presented.contains("{{"));
     }
 }
 
@@ -210,6 +268,34 @@ fn native_schema_unknown_content_and_numeric_expressions_are_unsupported() {
     );
     let result = check(&unknown);
     assert_eq!(result.status, ValidationStatus::Unsupported);
+    assert_eq!(
+        serde_json::to_value(
+            result
+                .coverage
+                .iter()
+                .find(|row| !row.supported)
+                .unwrap()
+                .reason
+                .as_ref()
+                .unwrap()
+        )
+        .unwrap()["key"],
+        "backend.rules.reason_uncovered"
+    );
+    let unknown_issue = result
+        .diagnostics
+        .iter()
+        .find(|issue| issue.code == "NATIVE_UNSUPPORTED")
+        .unwrap();
+    let unknown_witness = unknown_issue.witness.as_ref().unwrap();
+    assert_eq!(
+        serde_json::to_value(&unknown_witness.counterexample).unwrap(),
+        "COMPU-METHOD"
+    );
+    assert_eq!(
+        serde_json::to_value(&unknown_issue.remedy).unwrap()["key"],
+        "backend.rules.remedy_unsupported"
+    );
     assert!(result.coverage.iter().any(|row| {
         !row.supported
             && row
@@ -266,7 +352,10 @@ fn native_schema_rejects_unsafe_xml_paths_release_and_size() {
     }
     assert!(rules::validate_native(&[(Path::new("../escape.arxml"), &valid)]).is_err());
     assert!(rules::validate_native(&[(Path::new("input.txt"), &valid)]).is_err());
-    assert!(rules::validate_native(&[]).is_err());
+    assert_eq!(
+        serde_json::to_value(rules::validate_native(&[]).unwrap_err()).unwrap(),
+        serde_json::json!({"key": "backend.rules.source_required", "params": {}})
+    );
     assert!(
         rules::validate_native(&[
             (Path::new("same.arxml"), &valid),
@@ -276,6 +365,11 @@ fn native_schema_rejects_unsafe_xml_paths_release_and_size() {
     );
     let oversized = " ".repeat(50 * 1024 * 1024 + 1);
     assert!(rules::validate_native(&[(Path::new("large.arxml"), &oversized)]).is_err());
+    let path_error = rules::validate_native(&[(Path::new("../escape.arxml"), &valid)]).unwrap_err();
+    assert_eq!(
+        serde_json::to_value(&path_error).unwrap(),
+        serde_json::json!({"key": "backend.rules.source_path", "params": {"path": "../escape.arxml"}})
+    );
 }
 
 #[cfg(unix)]
@@ -295,6 +389,18 @@ fn native_inventory_rejects_tampering_even_with_self_recomputed_metadata_hash() 
     let expected = rules::verify_inventory_bytes(rules::inventory_bytes()).unwrap();
     assert_eq!(expected.release, "R24-11");
     assert_eq!(expected.rules_version, "1.0.0");
+    let inventory_bytes = rules::inventory_bytes().to_vec();
+    let unsupported = rules::coverage()
+        .unwrap()
+        .into_iter()
+        .find(|row| row.rule_id == "native.unsupported")
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(unsupported.reason.unwrap()).unwrap(),
+        serde_json::json!({"key": "backend.rules.inventory_partial_coverage", "params": {}})
+    );
+    assert_eq!(rules::inventory_bytes(), inventory_bytes);
+    assert_eq!(rules::rule_set_identity().unwrap(), expected);
     let mut inventory: serde_json::Value =
         serde_json::from_slice(rules::inventory_bytes()).unwrap();
     inventory["sources"][0]["sha256"] = serde_json::Value::String(format!(

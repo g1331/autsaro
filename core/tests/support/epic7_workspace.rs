@@ -160,11 +160,17 @@ fn builtin_batch_preserves_existing_definition_violations_but_rejects_changed_wi
         ],
     );
     let error = workspace.prepare_change(&replacement).unwrap_err();
-    assert!(error.contains("CAN_SIGNAL_OVERLAP"), "{error}");
+    assert_eq!(
+        serde_json::to_value(&error).unwrap()[0]["params"]["code"],
+        "CAN_SIGNAL_OVERLAP"
+    );
     let error = workspace
         .apply_change(&replacement, "unissued-preview")
         .unwrap_err();
-    assert!(error.contains("CAN_SIGNAL_OVERLAP"), "{error}");
+    assert_eq!(
+        serde_json::to_value(&error).unwrap()[0]["params"]["code"],
+        "CAN_SIGNAL_OVERLAP"
+    );
     assert_eq!(
         serde_json::to_value(projection(&workspace)).unwrap(),
         serde_json::to_value(&before).unwrap()

@@ -14,23 +14,23 @@ use std::sync::Arc;
 use tauri::{Manager, State};
 use workbench::{AppState, OperationKind, Reply, Session};
 
-fn integration_failure(message: impl Into<String>) -> Vec<PlanDiagnostic> {
+fn integration_failure(
+    message: impl Into<autosar_config_core::LocalizedText>,
+) -> Vec<PlanDiagnostic> {
     vec![PlanDiagnostic {
         category: DiagnosticCategory::Tool,
         code: "WORKBENCH_CONTEXT".into(),
         file: None,
         object: None,
         message: message.into(),
-        remedy:
-            "Resolve the workspace, configuration or stale-operation conflict before continuing."
-                .into(),
+        remedy: autosar_config_core::product_message!("backend.workbench.resolve_context"),
     }]
 }
 
 async fn background<T: Send + 'static>(
     state: State<'_, Arc<AppState>>,
-    action: impl FnOnce(Arc<AppState>) -> Result<T, String> + Send + 'static,
-) -> Result<T, String> {
+    action: impl FnOnce(Arc<AppState>) -> Result<T, autosar_config_core::LocalizedText> + Send + 'static,
+) -> Result<T, autosar_config_core::LocalizedText> {
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || action(state))
         .await
@@ -50,9 +50,13 @@ async fn integration_background<T: Send + 'static>(
 fn edit<T>(
     state: &Arc<AppState>,
     fingerprint: &str,
-    action: impl FnOnce(&mut Workspace) -> Result<T, String>,
-) -> Result<Reply<T>, String> {
-    let operation = state.begin(fingerprint, "edit", OperationKind::Edit)?;
+    action: impl FnOnce(&mut Workspace) -> Result<T, autosar_config_core::LocalizedText>,
+) -> Result<Reply<T>, autosar_config_core::LocalizedText> {
+    let operation = state.begin(
+        fingerprint,
+        autosar_config_core::product_message!("backend.operation.edit"),
+        OperationKind::Edit,
+    )?;
     let mut workspace = operation.snapshot.workspace()?.clone();
     let value = action(&mut workspace)?;
     operation.publish(workspace, true, value)
@@ -62,13 +66,13 @@ fn edit<T>(
 #[serde(rename_all = "camelCase")]
 struct SaveOutcome {
     workspace: WorkspaceView,
-    error: Option<String>,
+    error: Option<autosar_config_core::LocalizedText>,
 }
 
 fn commit_save(
     session: &mut Session,
     prepared: autosar_config_core::arxml::PreparedSave,
-) -> Result<SaveOutcome, String> {
+) -> Result<SaveOutcome, autosar_config_core::LocalizedText> {
     session.invalidate()?;
     let (workspace, error) = match prepared.commit() {
         Ok(workspace) => (workspace, None),
@@ -97,7 +101,9 @@ pub fn run() {
                     if !path.is_absolute() {
                         return Err(std::io::Error::new(
                             std::io::ErrorKind::InvalidInput,
-                            "AUTOSAR_CONFIG_DIR must be an absolute directory",
+                            autosar_config_core::product_message!(
+                                "backend.workbench.config_dir_absolute"
+                            ),
                         )
                         .into());
                     }
@@ -125,6 +131,7 @@ pub fn run() {
             configuration::preview_application_initialization,
             configuration::initialize_application_previewed,
             configuration::configure_appearance,
+            configuration::configure_language,
             configuration::verification_metrics,
             verification::verification_owned_failure,
             settings::workbench_capabilities,
@@ -166,5 +173,5 @@ pub fn run() {
             delivery::run_diagnostic
         ])
         .run(tauri::generate_context!())
-        .expect("Tauri 桌面工作台无法启动");
+        .unwrap_or_else(|error| panic!("{error}"));
 }
