@@ -166,12 +166,13 @@ jobs:
         env:
           MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
         run: |
-          import os, subprocess
+          import os, subprocess, tempfile
           from pathlib import Path
-          compiler = Path(os.environ['MSYS2_LOCATION']) / 'mingw64/bin/gcc.exe'
+          compiler = (Path(os.environ['MSYS2_LOCATION']) / 'mingw64/bin/gcc.exe').resolve(strict=True)
           source = Path('build/native-gcc/headers.c')
           source.write_text('#include <stdio.h>\nint main(void) { return 0; }\n', encoding='utf-8')
-          result = subprocess.run([str(compiler), '-std=c99', '-E', '-v', str(source)], capture_output=True, text=True, check=True)
+          with tempfile.TemporaryDirectory() as temporary:
+              result = subprocess.run([str(compiler), '-std=c99', '-E', '-v', str(source.resolve())], cwd=temporary, capture_output=True, text=True, check=True)
           print('Compiler:', compiler, flush=True)
           print(result.stderr, flush=True)
           collecting = False
