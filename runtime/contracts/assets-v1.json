@@ -1478,6 +1478,104 @@
       ],
       "role": "delivery",
       "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/multi/include/Det.h",
+      "sha256": "f242dc7f4002dce00a720eb41ed269c0a9a0b66b92a3895fed27d7110eafee44",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu-multi"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/multi/include/Det_MemMap.h",
+      "sha256": "e08916e1d564fd8ce1a6984122dff610ad50d1ce2d39de0688e32a033e327685",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu-multi"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/multi/include/Platform_Types.h",
+      "sha256": "d46afc49c9c1e3ea2bbb1de5c22216e79b105694d6d71e563a68cb8c03dce005",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu-multi"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/multi/include/Std_Types.h",
+      "sha256": "f3da9199fb37375a33f114ab9b01fd4dc2da9f91c2dc29ef2107ab649c2ef69b",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu-multi"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/multi/src/Det.c",
+      "sha256": "fa19aee0ed1102e7cf3ed2701cc06abb017fab06cc710eda9021040ea46fe2d6",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu-multi"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/multi/src/Det_Host.c",
+      "sha256": "c541e69c539777b00b150c28c2f911327b2f1097a9c65262759f88f120f9e92c",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu-multi"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/multi/src/Det_Host.h",
+      "sha256": "a73555f27de5e036763cdd52d1d306886133d7265ed502224a8ef8ca03874e68",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu-multi"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
     }
   ]
 }
