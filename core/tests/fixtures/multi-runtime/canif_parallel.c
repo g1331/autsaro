@@ -136,7 +136,7 @@ static const Com_ConfigType com = {com_pdus, 2u, 0u, NULL_PTR, NULL_PTR, PduR_Co
 static const PduR_TxRouteType pdur_tx[] = {
     {PDUR_UP_COM, 1u, 41u, LSduR_PduRTransmit, confirmed, Com_TriggerTransmit},
     {PDUR_UP_COM, 2u, 42u, LSduR_PduRTransmit, confirmed, Com_TriggerTransmit}};
-static const PduR_PBConfigType pdur = {23u, NULL_PTR, 0u, pdur_tx, 2u};
+static const PduR_PBConfigType pdur = {23u, NULL_PTR, 0u, pdur_tx, 2u, NULL_PTR, 0u};
 static const LSduR_TxRouteType ls_tx[] = {
     {LSDUR_UP_PDUR, 41u, 51u, PduR_CanIfTxConfirmation, PduR_CanIfTriggerTransmit},
     {LSDUR_UP_PDUR, 42u, 61u, PduR_CanIfTxConfirmation, PduR_CanIfTriggerTransmit}};

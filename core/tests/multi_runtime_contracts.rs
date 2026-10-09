@@ -156,6 +156,8 @@ fn chain_consumer(scratch: &Path, fixture: &str) -> PathBuf {
         "SchM_CanIf.h",
         "SchM_ComM.h",
         "SchM_BswM.h",
+        "SchM_Dcm.h",
+        "SchM_CanTp.h",
     ] {
         std::fs::copy(
             root.join("core/tests/fixtures/multi-runtime").join(name),
@@ -190,6 +192,9 @@ fn chain_consumer(scratch: &Path, fixture: &str) -> PathBuf {
         "runtime/multi/src/BswM.c",
         "runtime/multi/src/Ecu_HostBusSM.c",
         "runtime/multi/src/SchM_Mode_Host.c",
+        "runtime/multi/src/Dcm.c",
+        "runtime/multi/src/CanTp.c",
+        "runtime/multi/src/SchM_Diagnostic_Host.c",
         "runtime/multi/src/Det.c",
         "runtime/multi/src/Det_Host.c",
         "runtime/src/Can.c",
@@ -256,6 +261,19 @@ fn canif_different_pdus_and_actual_confirmation_stop_interleave_safely() {
 fn comm_cdd_mode_demand_and_immediate_bswm_use_actual_lower_modes() {
     let scratch = Scratch::new();
     let executable = chain_consumer(&scratch.0, "mode_contract.c");
+    let output = Command::new(executable).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    assert!(
+        output.stdout.is_empty() && output.stderr.is_empty(),
+        "{:?}",
+        output
+    );
+}
+
+#[test]
+fn diagnostic_transport_owns_buffers_and_obeys_real_mode_and_confirmation() {
+    let scratch = Scratch::new();
+    let executable = chain_consumer(&scratch.0, "diagnostic_contract.c");
     let output = Command::new(executable).output().unwrap();
     assert!(output.status.success(), "{:?}", output);
     assert!(
