@@ -38,6 +38,9 @@ OsUseGetServiceId OsUseParameterAccess OsUseResScheduler OsTaskActivation OsTask
 PduRDestPduHandleId PduRTransmissionConfirmation PduRSourcePduHandleId PduRSrcPduUpTxConf
 RteBswPositionInTask RtePositionInTask RteEventIsMappedToTask RteBswEventIsMappedToTask";
 
+const MULTI_COM_PARAMETERS: &str = "ComSupportedIPduGroups ComIPduGroupHandleId ComMainRxTimeBase ComMainTxTimeBase ComUserHeaderInclude ComUserCbkHandleId ComUserCallbackName ComUserCallbackType";
+const MULTI_COM_REFERENCES: &str = "ComIPduGroupRef ComIPduMainFunctionRef ComUserCallbackRef ComUserSystemTemplateSystemSignalRef";
+
 const MODULES: &[&str] = &[
     "Can", "CanIf", "CanTp", "Com", "Dcm", "EcuC", "Os", "PduR", "Rte",
 ];
@@ -276,8 +279,15 @@ fn inspect_with_catalog(
     graph: &Graph,
     catalog: Option<&crate::definitions::DefinitionCatalog>,
 ) -> Result<Configuration, Vec<PlanDiagnostic>> {
-    let allowed: BTreeSet<_> = SUPPORTED_PARAMETERS.split_whitespace().collect();
-    let allowed_references: BTreeSet<_> = SUPPORTED_REFERENCES.split_whitespace().collect();
+    let multi = super::multi::selected(graph);
+    let mut allowed: BTreeSet<_> = SUPPORTED_PARAMETERS.split_whitespace().collect();
+    if multi {
+        allowed.extend(MULTI_COM_PARAMETERS.split_ascii_whitespace());
+    }
+    let mut allowed_references: BTreeSet<_> = SUPPORTED_REFERENCES.split_whitespace().collect();
+    if multi {
+        allowed_references.extend(MULTI_COM_REFERENCES.split_ascii_whitespace());
+    }
     let modules = graph.of_kind("ECUC-MODULE-CONFIGURATION-VALUES");
     let context = *graph.objects.values().next().unwrap();
     physical(graph, context, catalog.is_some())?;

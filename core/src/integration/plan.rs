@@ -35,6 +35,8 @@ pub struct PlanDescription {
     pub component: Option<ComponentContract>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub multi: Option<super::multi::MultiComponentContract>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub com_runtime: Option<super::multi_com::ComRuntimeContract>,
     pub schedule: ScheduleContract,
     pub signals: Vec<SignalChannel>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -368,6 +370,7 @@ fn assemble(
         objects,
         component: Some(component),
         multi: None,
+        com_runtime: None,
         schedule,
         signals,
         diagnostic: Some(diagnostic),
@@ -389,6 +392,7 @@ fn assemble(
 
 // Both normal definition validation and plan construction consume this closure.
 pub(super) struct MultiPlanInputs {
+    com_runtime: Option<super::multi_com::ComRuntimeContract>,
     multi: super::multi::MultiComponentContract,
     schedule: ScheduleContract,
     signals: Vec<SignalChannel>,
@@ -530,6 +534,7 @@ pub(super) fn inspect_multi(
             }
         }
     }
+    let com_runtime = super::multi_com::inspect(graph, &signals, &schedule)?;
     let routes = routing::inspect_optional(graph, &signals, diagnostic.as_ref())?;
     let configuration = match definition_catalog {
         Some(catalog) => configuration::inspect_native(graph, catalog)?,
@@ -548,7 +553,12 @@ pub(super) fn inspect_multi(
     };
     let mut symbols = catalog::inspect(graph, runtime)?;
     symbols.extend(super::multi::symbols(&multi));
-    let mut names = BTreeSet::new();
+    let mut names = com_runtime.as_ref().map_or_else(BTreeSet::new, |com| {
+        BTreeSet::from([
+            com.receive_main.symbol.clone(),
+            com.transmit_main.symbol.clone(),
+        ])
+    });
     for symbol in &symbols {
         if !c_identifier(&symbol.symbol) || !names.insert(symbol.symbol.clone()) {
             return Err(vec![graph.diagnostic(*graph.objects.get(&multi.composition).unwrap(), DiagnosticCategory::Input, "SYMBOL_PRODUCER_DUPLICATE", crate::product_message!("backend.integration.plan.external_c_symbol_invalid_or_multiple_producers", "value0" => symbol.symbol), crate::product_message!("backend.integration.plan.resolve_c_symbol_and_producer_conflicts"))]);
@@ -671,6 +681,7 @@ pub(super) fn inspect_multi(
     }
     symbols.sort_by(|left, right| left.symbol.cmp(&right.symbol));
     Ok(MultiPlanInputs {
+        com_runtime,
         multi,
         schedule,
         signals,
@@ -687,6 +698,7 @@ fn assemble_multi(
     runtime: &RuntimeCatalog,
 ) -> Result<ValidatedIntegrationPlan, Vec<PlanDiagnostic>> {
     let MultiPlanInputs {
+        com_runtime,
         multi,
         schedule,
         signals,
@@ -709,6 +721,7 @@ fn assemble_multi(
             objects,
             component: None,
             multi: Some(multi),
+            com_runtime,
             schedule,
             signals,
             diagnostic,

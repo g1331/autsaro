@@ -519,6 +519,27 @@ fn communication(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedText
     a.enumeration(pdu, "ComIPduType", "NORMAL TP", 1)?;
     a.integers(pdu, "ComIPduHandleId", "0", U16, 0)?;
     a.reference(pdu, "ComIPduSignalRef", signal, 0, None)?;
+    let group = "Com/ComConfig/ComIPduGroup";
+    a.container(group, 0, None)?;
+    a.integers(group, "ComIPduGroupHandleId", "0", U16, 1)?;
+    a.reference(group, "ComIPduGroupGroupRef", group, 0, None)?;
+    a.reference(pdu, "ComIPduGroupRef", group, 0, None)?;
+    for (kind, timebase) in [("Rx", "ComMainRxTimeBase"), ("Tx", "ComMainTxTimeBase")] {
+        let path = format!("Com/ComConfig/ComMainFunction{kind}");
+        a.container(&path, 0, None)?;
+        a.floats(&path, timebase, None, 1)?;
+    }
+    a.reference(
+        pdu,
+        "ComIPduMainFunctionRef",
+        "Com/ComConfig/ComMainFunctionRx Com/ComConfig/ComMainFunctionTx",
+        0,
+        Some(1),
+    )?;
+    a.0.entries_mut()
+        .get_mut(&format!("{ROOT}{pdu}/ComIPduMainFunctionRef"))
+        .unwrap()
+        .element_kind = "ECUC-CHOICE-REFERENCE-DEF".into();
     a.reference(pdu, "ComPduIdRef", PDU, 1, Some(1))?;
     let tx = "Com/ComConfig/ComIPdu/ComTxIPdu";
     a.container(tx, 0, Some(1))?;
@@ -930,6 +951,31 @@ fn operating_system(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedT
             )?;
         }
     }
+    let user = "Rte/RteComUser";
+    a.container(user, 0, None)?;
+    let config = "Rte/RteComUser/ComUserModuleCnf";
+    a.container(config, 0, Some(1))?;
+    a.field(config, "ComUserHeaderInclude", ValueKind::String, 0)?;
+    let callback = "Rte/RteComUser/ComUserModuleCnf/ComUserCallback";
+    a.container(callback, 0, None)?;
+    a.field(callback, "ComUserCallbackName", ValueKind::FunctionName, 1)?;
+    a.enumeration(
+        callback,
+        "ComUserCallbackType",
+        "COM_RX_ACK COM_RX_INV COM_RX_TOUT COM_TX_ACK COM_TX_ERR COM_TX_TOUT",
+        1,
+    )?;
+    let signal = "Rte/RteComUser/ComUserModuleCnf/ComUserSignal";
+    a.container(signal, 0, None)?;
+    a.integers(signal, "ComUserCbkHandleId", "0", U16, 0)?;
+    a.reference(signal, "ComUserCallbackRef", callback, 0, None)?;
+    a.foreign(
+        signal,
+        "ComUserSystemTemplateSystemSignalRef",
+        "I-SIGNAL-TO-I-PDU-MAPPING",
+        0,
+        Some(1),
+    )?;
     Ok(())
 }
 

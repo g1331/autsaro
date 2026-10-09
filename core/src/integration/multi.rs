@@ -1205,9 +1205,10 @@ fn check_names(graph: &Graph, plan: &MultiComponentContract) -> Result<(), Vec<P
     let mut filenames = BTreeSet::from([
         "INCLUDE/RTE.H".to_owned(),
         "INCLUDE/RTE_TYPE.H".to_owned(),
+        "INCLUDE/RTE_COM.H".to_owned(),
         "INCLUDE/STD_TYPES.H".to_owned(),
     ]);
-    let mut names: BTreeSet<String> = "RTE_H RTE_TYPE_H STD_TYPES_H uint8 uint16 uint32 uint64 sint8 sint16 sint32 sint64 EcuStatus boolean Std_ReturnType Std_VersionInfoType TRUE FALSE E_OK E_NOT_OK RTE_E_COM_STOPPED RTE_E_NEVER_RECEIVED RTE_E_MAX_AGE_EXCEEDED intptr_t uintptr_t intmax_t uintmax_t INTMAX_MIN INTMAX_MAX UINTMAX_MAX INTPTR_MIN INTPTR_MAX UINTPTR_MAX PTRDIFF_MIN PTRDIFF_MAX SIZE_MAX SIG_ATOMIC_MIN SIG_ATOMIC_MAX WCHAR_MIN WCHAR_MAX WINT_MIN WINT_MAX INTMAX_C UINTMAX_C".split_whitespace().map(str::to_owned).collect();
+    let mut names: BTreeSet<String> = "RTE_H RTE_TYPE_H RTE_COM_H Rte_COMCbk Rte_COMCbkRxTOut CbkHandleIdType STD_TYPES_H uint8 uint16 uint32 uint64 sint8 sint16 sint32 sint64 EcuStatus boolean Std_ReturnType Std_VersionInfoType TRUE FALSE E_OK E_NOT_OK RTE_E_COM_STOPPED RTE_E_NEVER_RECEIVED RTE_E_MAX_AGE_EXCEEDED intptr_t uintptr_t intmax_t uintmax_t INTMAX_MIN INTMAX_MAX UINTMAX_MAX INTPTR_MIN INTPTR_MAX UINTPTR_MAX PTRDIFF_MIN PTRDIFF_MAX SIZE_MAX SIG_ATOMIC_MIN SIG_ATOMIC_MAX WCHAR_MIN WCHAR_MAX WINT_MIN WINT_MAX INTMAX_C UINTMAX_C".split_whitespace().map(str::to_owned).collect();
     for width in [8, 16, 32, 64] {
         for signedness in ["int", "uint"] {
             for size in ["", "_least", "_fast"] {

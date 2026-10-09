@@ -128,6 +128,253 @@ fn source_derived_multi_contract_is_deterministic_and_keeps_local_identity() {
 }
 
 #[test]
+fn multi_com_plan_keeps_real_group_timebase_and_notification_identity() {
+    let plan = build(&inputs()).unwrap();
+    let com = plan.description().com_runtime.as_ref().unwrap();
+    assert_eq!(com.callback_header, "Rte_Com.h");
+    assert_eq!(com.receive_group.path, "/Configuration/Com/Config/RxGroup");
+    assert_eq!(com.receive_group.handle, 0);
+    assert_eq!(
+        com.receive_group.members,
+        ["/Configuration/Com/Config/RxValuePdu"]
+    );
+    assert_eq!(com.receive_main.symbol, "Com_MainFunctionRx_Rx");
+    assert_eq!(com.receive_main.period_ms, 1);
+    assert_eq!(com.transmit_main.symbol, "Com_MainFunctionTx_Tx");
+    assert_eq!(com.transmit_main.period_ms, 10);
+    let reception = &com.receptions[0];
+    assert_eq!(reception.signal, "/Configuration/Com/Config/RxValue");
+    assert_eq!(
+        reception.user_signal,
+        "/Configuration/Rte/ComUser/Callbacks/RxValue"
+    );
+    assert_eq!(reception.callback_handle, 17);
+    assert_eq!(reception.first_timeout_ms, 0);
+    assert_eq!(reception.timeout_ms, 30);
+    assert_eq!(reception.receive_callback, "Rte_COMCbk");
+    assert_eq!(reception.timeout_callback, "Rte_COMCbkRxTOut");
+    let mut zero = inputs();
+    xml_edit(
+        &mut zero,
+        "ecuc.arxml",
+        |node| {
+            node.children().any(|child| {
+                child.has_tag_name("DEFINITION-REF")
+                    && child
+                        .text()
+                        .is_some_and(|text| text.ends_with("/ComFirstTimeout"))
+            })
+        },
+        |text| text.replace("<VALUE>0</VALUE>", "<VALUE>0.0e3</VALUE>"),
+    );
+    assert_eq!(
+        build(&zero)
+            .unwrap()
+            .description()
+            .com_runtime
+            .as_ref()
+            .unwrap()
+            .receptions[0]
+            .first_timeout_ms,
+        0
+    );
+    let mut renamed = inputs();
+    replace_all(
+        &mut renamed,
+        "/Com/Config/RxGroup",
+        "/Com/Config/ReceptionGroup",
+    );
+    xml_edit(
+        &mut renamed,
+        "ecuc.arxml",
+        |node| named(node, "ECUC-CONTAINER-VALUE", "RxGroup"),
+        |text| {
+            text.replace(
+                "<SHORT-NAME>RxGroup</SHORT-NAME>",
+                "<SHORT-NAME>ReceptionGroup</SHORT-NAME>",
+            )
+        },
+    );
+    assert_eq!(
+        build(&renamed)
+            .unwrap()
+            .description()
+            .com_runtime
+            .as_ref()
+            .unwrap()
+            .receive_group
+            .path,
+        "/Configuration/Com/Config/ReceptionGroup"
+    );
+}
+
+#[test]
+fn multi_com_control_configuration_rejects_inconsistent_group_timebase_and_callbacks() {
+    for (field, original, replacement, code) in [
+        ("ComSupportedIPduGroups", "1", "0", "COM_RX_GROUP"),
+        ("ComIPduGroupHandleId", "0", "1", "COM_RX_GROUP"),
+        ("ComMainRxTimeBase", "0.001", "0.002", "COM_TIMEBASE"),
+        ("ComMainTxTimeBase", "0.01", "0.001", "COM_TIMEBASE"),
+        (
+            "ComUserHeaderInclude",
+            "Rte_Com.h",
+            "Wrong.h",
+            "COM_CALLBACK",
+        ),
+        ("ComUserCallbackName", "Rte_COMCbk", "Wrong", "COM_CALLBACK"),
+        (
+            "ComUserCallbackType",
+            "COM_RX_ACK",
+            "COM_TX_ACK",
+            "COM_CALLBACK",
+        ),
+    ] {
+        let mut sources = inputs();
+        xml_edit(
+            &mut sources,
+            "ecuc.arxml",
+            |node| {
+                node.children().any(|child| {
+                    child.has_tag_name("DEFINITION-REF")
+                        && child
+                            .text()
+                            .is_some_and(|text| text.ends_with(&format!("/{field}")))
+                })
+            },
+            |text| {
+                text.replace(
+                    &format!("<VALUE>{original}</VALUE>"),
+                    &format!("<VALUE>{replacement}</VALUE>"),
+                )
+            },
+        );
+        rejects_in_both(&sources, code);
+    }
+    for (field, code) in [
+        ("ComIPduGroupRef", "COM_RX_GROUP"),
+        ("ComIPduMainFunctionRef", "COM_RX_GROUP"),
+        ("ComUserCallbackRef", "COM_CALLBACK"),
+    ] {
+        let mut sources = inputs();
+        xml_edit(
+            &mut sources,
+            "ecuc.arxml",
+            |node| {
+                node.children().any(|child| {
+                    child.has_tag_name("DEFINITION-REF")
+                        && child
+                            .text()
+                            .is_some_and(|text| text.ends_with(&format!("/{field}")))
+                })
+            },
+            |_| String::new(),
+        );
+        rejects_in_both(&sources, code);
+    }
+    let mut sources = inputs();
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| {
+            node.has_tag_name("PARAMETER-VALUES")
+                && node.parent().is_some_and(|parent| {
+                    parent.children().any(|child| {
+                        child.has_tag_name("DEFINITION-REF")
+                            && child
+                                .text()
+                                .is_some_and(|text| text.ends_with("/ComUserSignal"))
+                    })
+                })
+        },
+        |_| String::new(),
+    );
+    rejects_in_both(&sources, "COM_CALLBACK");
+    // A live target exists, so rejection proves direction/ownership rather than a dangling ref.
+    let mut sources = inputs();
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| {
+            node.children().any(|child| {
+                child.has_tag_name("DEFINITION-REF")
+                    && child
+                        .text()
+                        .is_some_and(|text| text.ends_with("/ComIPduGroupRef"))
+            })
+        },
+        |text| {
+            text.replace(
+                "/Configuration/Com/Config/RxGroup",
+                "/Configuration/Com/Config/TxValuePdu",
+            )
+        },
+    );
+    rejects_in_both(&sources, "COM_RX_GROUP");
+    let mut sources = inputs();
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| {
+            node.children().any(|child| {
+                child.has_tag_name("DEFINITION-REF")
+                    && child
+                        .text()
+                        .is_some_and(|text| text.ends_with("/ComUserCallbackRef"))
+            })
+        },
+        |text| format!("{text}{text}"),
+    );
+    rejects_in_both(&sources, "COM_CALLBACK");
+    let mut sources = inputs();
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| named(node, "ECUC-CONTAINER-VALUE", "RxGroup"),
+        |text| {
+            format!(
+                "{text}{}",
+                text.replace(
+                    "<SHORT-NAME>RxGroup</SHORT-NAME>",
+                    "<SHORT-NAME>DuplicateGroup</SHORT-NAME>"
+                )
+            )
+        },
+    );
+    rejects_in_both(&sources, "COM_RX_GROUP");
+    let mut sources = inputs();
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| {
+            node.children().any(|child| {
+                child.has_tag_name("DEFINITION-REF")
+                    && child
+                        .text()
+                        .is_some_and(|text| text.ends_with("/ComIPduGroupRef"))
+            })
+        },
+        |text| format!("{text}{text}"),
+    );
+    rejects_in_both(&sources, "COM_RX_GROUP");
+    let mut sources = inputs();
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| {
+            named(node, "ECUC-CONTAINER-VALUE", "TxValuePdu")
+                && node.children().any(|child| {
+                    child.has_tag_name("DEFINITION-REF")
+                        && child.text().is_some_and(|text| text.ends_with("/ComIPdu"))
+                })
+        },
+        |text| {
+            text.replacen("<REFERENCE-VALUES>", r#"<REFERENCE-VALUES><ECUC-REFERENCE-VALUE><DEFINITION-REF DEST="ECUC-REFERENCE-DEF">/AUTOSAR/EcucDefs/Com/ComConfig/ComIPdu/ComIPduGroupRef</DEFINITION-REF><VALUE-REF DEST="ECUC-CONTAINER-VALUE">/Configuration/Com/Config/RxGroup</VALUE-REF></ECUC-REFERENCE-VALUE>"#, 1)
+        },
+    );
+    rejects_in_both(&sources, "COM_RX_GROUP");
+}
+
+#[test]
 fn malformed_multi_contracts_are_rejected_at_real_source_objects() {
     let vectors = [
         (
@@ -466,6 +713,10 @@ fn collisions_are_rejected_with_all_references_still_valid() {
         ("Dcm_DataElement_ApplicationValueType", "uint_fast32_t"),
         ("Process", "ingress"),
         ("Process_Periodic", "Rte_Read_Value_Value"),
+        ("Process_Periodic", "Rte_COMCbk"),
+        ("Process_Periodic", "Rte_COMCbkRxTOut"),
+        ("Process_Periodic", "Com_MainFunctionRx_Rx"),
+        ("Process_Periodic", "Com_MainFunctionTx_Tx"),
         (
             "<SHORT-NAME>Input</SHORT-NAME>",
             "<SHORT-NAME>uint32</SHORT-NAME>",

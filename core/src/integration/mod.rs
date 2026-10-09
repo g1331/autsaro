@@ -16,6 +16,8 @@ pub(crate) mod editor;
 mod graph;
 pub(crate) mod handoff;
 mod multi;
+mod multi_com;
+pub use multi_com::{ComMainFunction, ComReception, ComRuntimeContract, ComRxGroup};
 mod native_configuration;
 pub use multi::{
     Component as MultiComponent, Connection as ComponentConnection, Endpoint as ComponentEndpoint,

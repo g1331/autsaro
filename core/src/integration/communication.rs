@@ -560,7 +560,13 @@ pub(super) fn inspect_ports(
                     value(graph, can_if, "CanIfRxPduDataLengthCheck", false),
                     Some("true" | "1")
                 )
-                || value(graph, com_signal, "ComFirstTimeout", false) != Some("0")
+                || !value(graph, com_signal, "ComFirstTimeout", false).is_some_and(|value| {
+                    if super::multi::selected(graph) {
+                        super::multi::zero_seconds(value)
+                    } else {
+                        value == "0"
+                    }
+                })
                 || value(graph, com_signal, "ComRxDataTimeoutAction", false) != Some("NONE")
                 || value(graph, com_signal, "ComTimeout", false).and_then(|value| {
                     if super::multi::selected(graph) && super::multi::zero_seconds(value) {

@@ -1,6 +1,6 @@
 # R24-11 契约核定与直接依赖差距
 
-2026-10-09 已实际取得十六份官方PDF并与CP官方SHA-256清单匹配；原件仅保留本机，不入Git。以下是配置适用性与独立验收依据，不由ABI inventory或绿色测试替代。
+2026-10-09 已实际取得十九份官方PDF并与CP官方SHA-256清单匹配；原件仅保留本机，不入Git。以下是配置适用性与独立验收依据，不由ABI inventory或绿色测试替代。
 
 | 官方文档 | SHA-256 | 本范围依据 |
 | --- | --- | --- |
@@ -20,6 +20,9 @@
 | AUTOSAR_CP_SWS_COMManager.pdf | 564560db2899fa0f8695e5fad607f3cc477a4c84abfccfe968e916117cf2ef34 | SWS_ComM_00866／00873／00874／00861／00957、ECUC_ComM_00888，单通道 NM NONE／显式 host CDD BusSM 接缝 |
 | AUTOSAR_CP_SWS_CANStateManager.pdf | 9f215f2f532e94a9d8f2bbbf4ba4208d31117d1b82f5277792638f3b6f0fcceb | 核对 CAN BusSM 义务和所选 host CDD 边界；未实现或宣称完整 CanSM |
 | AUTOSAR_CP_SWS_BSWModeManager.pdf | a6ce38abd020c3aef91bc90ebc35243b888d05b899c36eba33a2305bfbe08ab3 | SWS_BswM_00047／00078／00091，实际 mode input／初始化／范围与所选规则消费 |
+| AUTOSAR_CP_SWS_DefaultErrorTracer.pdf | f5caa8cb8f2b9ef2e2578a96d940abb795fbf7dfc09a1899b0b81797c2835e1f | 必需 CanIf runtime report、实际 Det Init／runtime hook，development halt 与 runtime 返回分别核定 |
+| AUTOSAR_CP_SWS_PlatformTypes.pdf | c0e4b1b97900ebea81d701542e55de05326fe18e245cfb81dbe9c154c493e78b | 公共 uint8／uint16／uint32、boolean 及控制目标 CPU／bit／byte order 身份 |
+| AUTOSAR_CP_SWS_MemoryMapping.pdf | 9dc38d360e4a154f627ede71cc5207f7be193c55cbb9f87875e2731af14c891c | 00020／00028／00029／00032，各实际模块与SWC MemMap 及所选 build 段映射 |
 
 官方入口均为 `https://www.autosar.org/fileadmin/standards/R24-11/CP/<上述文件名>`。ECUC原件 `AUTOSAR_CP_MOD_ECUConfigurationParameters.zip` 已取得；身份必须匹配仓库official.json固定df1e3bc992e49de6e14e5c1a679d7ce7ca90d2450d66186cea0b4a0f1f6555fb。RteSwComponentInstance／RteEventToTaskMapping、OsTask／OsEvent／OsAlarm和所用Com关系按实际定义核对；研发oracle缺失不改变普通用户的内置规则入口。
 
@@ -61,3 +64,7 @@ Dcm↔ComM 适用性已实际确认：不存在 DcmComMControl 配置。Dcm_Init
 CDD 模式闭包的精确公开入口：ComM_Init(const ComM_ConfigType*)；ComM_RequestComMode(ComM_UserHandleType,ComM_ModeType)；ComM_CommunicationAllowed(NetworkHandleType,boolean)；ComM_DCM_ActiveDiagnostic／InactiveDiagnostic(NetworkHandleType)；ComM_BusSM_ModeIndication(NetworkHandleType,ComM_ModeType)，第二参是值而非指针；SchM_ComM.h 的 ComM_MainFunction_<真实channel短名>(void)。ComM_ModeType=uint8（NO=0／SILENT=1／FULL=2，普通user仅NO/FULL），ComM_UserHandleType=uint16（65535保留）。CDD provider RequestComMode(Channel,Mode)／GetCurrentComMode(Channel,Mode*) 都为 Std_ReturnType。BswM_Init(const BswM_ConfigType*) 与 BswM_ComM_CurrentMode(NetworkHandleType,ComM_ModeType) 必须真实消费配置。
 
 BswM 选择一个 IMMEDIATE ComM mode input（BswMComMIndication／BswMComMChannelRef，00880／00883）及实际网络适配 admission/output 规则；Full 开放该网络能力，No/Silent按实际方向约束。规则不得因 CAN stop 自动停止 COM Rx group 或阻断缓冲 Read／Write，保持 AC-4 的 COM 与 lower availability 分离；COM group／DM explicit control 的向量仍独立。模式初始NO，Allowed初始false，真实初始化后Allowed(true)与持久FULL user。所选 ComMTMinFullComModeDuration／MainFunction周期、静态user映射、NvM禁用边界明确生成；Repeated Full不得复位缓冲或DM。CDD在真实controller STARTED且PDU ONLINE后才通知Full；失败不得将desired当current。未知channel、invalid user/mode、Allowed pending、minimum timer、user/diagnostic独立需求合并及mode/BswM真实方向拒绝都须独立执行。
+
+所选错误链亦已核对：CanIf SWS_CANIF_00382 的 OFFLINE Tx、00168 的启用 length-check 拒绝及适用 DATA_LENGTH_MISMATCH 必须真实 Det_ReportRuntimeError，关闭 DevErrorDetect 不免除此 runtime 义务。Det_Init(const Det_ConfigType*)、Det_Start(void)、Std_ReturnType Det_ReportRuntimeError(uint16,uint8,uint8,uint8) 与实际配置的同形 Std_ReturnType runtime callouts 对应 SWS_Det_00008／00010／00183／00184；runtime report 始终返回 E_OK，未Init按00024立即无动作，已Init按00014／00018／00503调用全部配置 hooks，不能只返回 E_OK。当选择关闭开发错误检测时不增加伪造 ReportError：R24-11 Det_ReportError 与 runtime不同，00026／00208要求 stop execution，不把其旧版返回行为当本次预期。首批显式无 DLT／持久错误恢复；runtime hook 实际消费并可独立观察报告 module／instance／API／error，不静默吞错。Det_Start 在无需startup动作的所选配置允许空体，须仅按官方允许位置限定，不由此推导其余接口可空实现。
+
+内存与公共类型只按实际 controlled Linux/Windows x64 C99 profile核定，不用host默认推断：Platform_Types.h 的类型/CPU模型与 Std_Types.h/ComStack_Cfg.h 所有真实消费者一致。按SWS_MemMap_00020／00028／00032交付实际BSWMD所需模块MemMap（无显式shared MEMMAP则按实际module shortName），00029为每个SWC type提供MemMap；选定平坦主机段的真实标记／链接映射需说明，不能用无条件空壳header宣称目标MCU段已符合。边界是本次实际编译／链接布局，目标MCU段和权限以R10实际toolchain/layout为退出。新增独立检查含 runtime报告成功／未初始化及typed消费，实际头类型／宏配置和生成翻译单元，未执行的构造保持未核实。
