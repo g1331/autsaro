@@ -6,7 +6,7 @@
 
 - `core/`：Rust 配置、解析、生成及验证；`src-tauri/`：桌面后端；`ui/`：React 界面。
 - `runtime/`：交付的 C99 运行时；`tools/python/src/`：开发工具与离线 ECU 工具；`tests/`：Python 与桌面测试。
-- `scripts/`：官方资料收集；`tools/automotive/`：可选技能维护；`docs/development/` 与 `docs/maintainers/`：开发与发行说明。
+- `scripts/`：官方资料收集；`docs/development/` 与 `docs/maintainers/`：开发与发行说明。
 
 采用 npm、Cargo、uv 和正常测试运行器，不新增代理专用编排、报告或状态系统。格式按修改范围检查，不全仓重排。自动 GUI 验收使用隔离入口，不占用用户桌面。
 

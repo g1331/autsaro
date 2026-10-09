@@ -21,7 +21,6 @@ ecu_tools = ["*.json"]
 
 [dependency-groups]
 quality = ["clang-format==23.1.1", "ruff==0.16.9", "lxml==6.1.3"]
-automotive = ["openpyxl==3.1.5", "et-xmlfile==2.0.0"]
 
 [tool.uv]
 default-groups = ["quality"]

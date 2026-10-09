@@ -115,7 +115,6 @@ npm run tauri --prefix ui -- build
 | `runtime/` | 随生成工程交付的 C99 主机运行时 |
 | `scripts/` | 官方资料收集 |
 | `tools/python/src/` | 开发检查与随交付包分发的 Python 工具 |
-| `tools/automotive/` | 可选汽车技能的安装与维护 |
 | `tests/` | Python 测试与隔离桌面场景 |
 | `docs/` | 规范资料入口与技术文档 |
 
