@@ -37,6 +37,8 @@ pub struct PlanDescription {
     pub multi: Option<super::multi::MultiComponentContract>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub com_runtime: Option<super::multi_com::ComRuntimeContract>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub communication_runtime: Option<super::multi_bsw::CommunicationRuntimeContract>,
     pub schedule: ScheduleContract,
     pub signals: Vec<SignalChannel>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -371,6 +373,7 @@ fn assemble(
         component: Some(component),
         multi: None,
         com_runtime: None,
+        communication_runtime: None,
         schedule,
         signals,
         diagnostic: Some(diagnostic),
@@ -393,6 +396,7 @@ fn assemble(
 // Both normal definition validation and plan construction consume this closure.
 pub(super) struct MultiPlanInputs {
     com_runtime: Option<super::multi_com::ComRuntimeContract>,
+    communication_runtime: super::multi_bsw::CommunicationRuntimeContract,
     multi: super::multi::MultiComponentContract,
     schedule: ScheduleContract,
     signals: Vec<SignalChannel>,
@@ -536,6 +540,7 @@ pub(super) fn inspect_multi(
     }
     let com_runtime = super::multi_com::inspect(graph, &signals, &schedule)?;
     let routes = routing::inspect_optional(graph, &signals, diagnostic.as_ref())?;
+    let communication_runtime = super::multi_bsw::inspect(graph, &schedule)?;
     let configuration = match definition_catalog {
         Some(catalog) => configuration::inspect_native(graph, catalog)?,
         None => configuration::inspect_native(
@@ -682,6 +687,7 @@ pub(super) fn inspect_multi(
     symbols.sort_by(|left, right| left.symbol.cmp(&right.symbol));
     Ok(MultiPlanInputs {
         com_runtime,
+        communication_runtime,
         multi,
         schedule,
         signals,
@@ -699,6 +705,7 @@ fn assemble_multi(
 ) -> Result<ValidatedIntegrationPlan, Vec<PlanDiagnostic>> {
     let MultiPlanInputs {
         com_runtime,
+        communication_runtime,
         multi,
         schedule,
         signals,
@@ -722,6 +729,7 @@ fn assemble_multi(
             component: None,
             multi: Some(multi),
             com_runtime,
+            communication_runtime: Some(communication_runtime),
             schedule,
             signals,
             diagnostic,

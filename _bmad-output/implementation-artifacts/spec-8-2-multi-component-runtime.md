@@ -111,6 +111,12 @@ Dcm_ConfigType新增实际buffer_length，bounded storage仍最多256而admissio
 
 已审阅共享driver／SchM新增公开entry及仍不变的旧config结构、第三方身份与原profile选择；Can.c／SchM_Can.h保留.gitattributes要求的固定CRLF，正常assets update仅刷新这两个已登记来源摘要，未用摘要更新接受ABI变化。新multi源码资产注册、source-derivedPB配置／通信uint16类型、BSWMD／exclusive-area、RTE／OS／多slot准备、实际multi c-check及CI样本仍pending；全部Story Tasks及8.3–8.5状态保持。
 
+2026-10-09 阶段7（通信配置闭包，未放行生成）：新增 multi_bsw 的不可变communicationRuntime，正常validation与plan共用一次检查，保留真实EcuC PduIdTypeEnum／PduLengthTypeEnum、Can controller／CanIf controller ID、Rx／Tx hardware完整path及不同HOH、实际POLLING选择、RW／BusOff／Mode周期。每个配置PDUhandle及PduLength必须能由所选公开类型表达；独立输入验证UINT8 IDs／UINT32长度与真实ID／HOH／period实例变名，不以默认UINT16或名字猜关系。旧profile不序列化新字段。
+
+原multi source补齐一个真实CanMainFunctionRWPeriods、两个HOH的CanMainFunctionRWPeriodRef和CanMainFunctionBusoffPeriod，均1ms并由同源OS tick核定；未改变应用position4／5／6。builtin按ECUC_Can_00437／00438／00484／00355／00486补齐真实container／field／reference及TriggerTransmit缺省false；固定官方MOD oracle全量核对通过。首批单RWperiod用标准Read／Write未加suffix（SWS_Can_00441／00442仅多period时要求suffix）；不能把新增EcuC period当作BSWMD／schedule迁移已完成。fullgen仍须真实调这些main，并关闭normalowner多RX／confirmation drainage。
+
+新的配置身份揭示必要后续driver接线：原source RxHOH0／TxHOH1，而此前consumer和共享driver只用0；正式CanIf不得把真实HTH1默改0。配置变名向量还核验controller7／CanIf9与TxHOH17保留，fullgen必须相应派生真实driver／CanIf ID及HOH映射（legacy缺省0），同步公开说明／回调翻译／catalog身份并真实运行，当前guards仍保留。ComM／BswM sourcecontainers、Dcm mandatory ComMchannel ref、配置规则／静态UserCallout、SchM／BSWMD生产者闭包及其余fullgen仍pending，本阶段没有消费caller源码或生成可运行multi。
+
 ## Spec Change Log
 
 ## Review Triage Log
@@ -160,3 +166,5 @@ Dcm_ConfigType新增实际buffer_length，bounded storage仍最多256而admissio
 阶段6actualsingle c-check：正常c_analysis sample生成测试1passed，仍生成原5个sealed样本；在standard-ecu上使用固定Cppcheck2.21.0／官方固定addons和GCC13运行linux-x64-controlled-v1的正常c-check，42translationunits、host-batch及legacy-probe两program均完成，summary.error=null且无工具定义的incomplete/parsingdiagnostic。最终1808源码诊断、两programexit1、passed=false；Can.c保留8.7公共接口作用域及20.1MemMap include诊断，不能写成源码合规通过。首轮1810中两处本阶段零数组部分初始化9.3已改显式8元素初始化，重新正常生成sealedsource并完整重跑后该两诊断消失；历史首轮失败未抹去。既有generatedsingle的广泛源码诊断需按真实规则／调用路径继续评估，不申请虚构偏离；没有授权主文／人工221项评估，不声称完整MISRA符合。实际multi仍被generationguard拒绝，无法把上述single分析或module编译替代multi c-check，正常multi样本及CI membership将在fullgen闭环加入。
 
 阶段6源码冻结交协调者审阅，尚未提交本阶段；全部Story Tasks维持unchecked，完整8.2生成／真实OS验收和Windows执行仍pending，不推进8.3–8.5。
+
+阶段7验证：正常multi_component_contracts 31tests通过，含新增communication source derivation及两入口range／period／reference拒绝，最后新增UINT8长度溢出和重复HOH向量聚焦复验通过。正常defaultCargo的17unit／71builtin／31multi均通过；default下没有执行native module行为，不把0native写成通过。固定official-oracles MOD全量definition对照1passed，正常Clippy及quality core26formattingfiles／Csyntaxpassed，assets check0changes与gitdiffcheckpassed。本阶段仅Rust配置计划、builtin与输入fixture，不改C／生成模板或已登记来源，因此复用阶段6实际single C分析范围，不声称实际multi C分析／OS验收或完整标准／MISRA符合。全部Tasks、8.3–8.5状态保持。

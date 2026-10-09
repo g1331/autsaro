@@ -2527,3 +2527,124 @@ fn normal_legacy_definition_validation_rejects_only_new_nonzero_execution_constr
             .any(|issue| issue.code == "MULTIPLE_INSTANCES")
     );
 }
+
+#[test]
+fn communication_types_and_polling_periods_are_source_derived() {
+    let plan = build(&inputs()).unwrap_or_else(|issues| panic!("{issues:?}"));
+    let runtime = plan.description().communication_runtime.as_ref().unwrap();
+    let json = serde_json::to_value(runtime).unwrap();
+    assert_eq!(json["pduIdType"], "UINT16");
+    assert_eq!(json["pduLengthType"], "UINT16");
+    assert_eq!(
+        runtime.can.read_write_period,
+        "/Configuration/Can/General/Polling"
+    );
+    assert_eq!(runtime.can.read_write_period_ms, 1);
+    assert_eq!(runtime.can.controller_id, 0);
+    assert_eq!(runtime.can.can_if_controller_id, 0);
+    assert_eq!(runtime.can.receive_handle, 0);
+    assert_eq!(runtime.can.transmit_handle, 1);
+    assert_eq!(runtime.can.busoff_period_ms, 1);
+    assert_eq!(runtime.can.mode_period_ms, 1);
+    assert!(runtime.can.receive_polling && runtime.can.transmit_polling);
+    assert!(runtime.can.busoff_polling && runtime.can.wakeup_polling);
+    let mut sources = inputs();
+    parameter(&mut sources, "Pdus", "PduIdTypeEnum", "UINT8");
+    parameter(&mut sources, "Pdus", "PduLengthTypeEnum", "UINT32");
+    replace_all(&mut sources, "/General/Polling", "/General/PollCycle");
+    change(
+        &mut sources,
+        "ecuc.arxml",
+        "<SHORT-NAME>Polling</SHORT-NAME>",
+        "<SHORT-NAME>PollCycle</SHORT-NAME>",
+    );
+    parameter(&mut sources, "Controller", "CanControllerId", "7");
+    parameter(&mut sources, "Controller", "CanIfCtrlId", "9");
+    parameter(&mut sources, "Transmit", "CanObjectId", "17");
+    let renamed = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
+    let runtime = renamed
+        .description()
+        .communication_runtime
+        .as_ref()
+        .unwrap();
+    let json = serde_json::to_value(runtime).unwrap();
+    assert_eq!(json["pduIdType"], "UINT8");
+    assert_eq!(json["pduLengthType"], "UINT32");
+    assert!(runtime.can.read_write_period.ends_with("/PollCycle"));
+    assert_eq!(runtime.can.controller_id, 7);
+    assert_eq!(runtime.can.can_if_controller_id, 9);
+    assert_eq!(runtime.can.transmit_handle, 17);
+    assert!(normal_validation(&sources).diagnostics.is_empty());
+}
+
+#[test]
+fn multi_communication_rejects_truncation_and_unbound_polling_in_both_entries() {
+    for (owner, field, new_value, code) in [
+        (
+            "Polling",
+            "CanMainFunctionPeriod",
+            "0.002",
+            "CAN_POLLING_TIMEBASE",
+        ),
+        (
+            "General",
+            "CanMainFunctionBusoffPeriod",
+            "0.002",
+            "CAN_POLLING_TIMEBASE",
+        ),
+        (
+            "General",
+            "CanMainFunctionModePeriod",
+            "0.002",
+            "CAN_POLLING_TIMEBASE",
+        ),
+        (
+            "Controller",
+            "CanBusoffProcessing",
+            "INTERRUPT",
+            "CAN_PROCESSING",
+        ),
+        (
+            "General",
+            "CanDevErrorDetect",
+            "true",
+            "CAN_FEATURE_UNSUPPORTED",
+        ),
+        ("Transmit", "CanObjectId", "0", "CAN_HARDWARE_HANDLES"),
+    ] {
+        let mut sources = inputs();
+        parameter(&mut sources, owner, field, new_value);
+        rejects_in_both(&sources, code);
+    }
+    let mut sources = inputs();
+    parameter(&mut sources, "Pdus", "PduIdTypeEnum", "UINT8");
+    parameter(&mut sources, "RxValue", "CanIfRxPduId", "256");
+    rejects_in_both(&sources, "COMMUNICATION_HANDLE_RANGE");
+    let mut sources = inputs();
+    parameter(&mut sources, "Pdus", "PduLengthTypeEnum", "UINT8");
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| named(node, "ECUC-CONTAINER-VALUE", "RxValuePdu"),
+        |text| {
+            format!(
+                "{}\n{}",
+                text,
+                text.replace(
+                    "<SHORT-NAME>RxValuePdu</SHORT-NAME>",
+                    "<SHORT-NAME>AdditionalPdu</SHORT-NAME>"
+                )
+                .replace("<VALUE>4</VALUE>", "<VALUE>256</VALUE>")
+            )
+        },
+    );
+    rejects_in_both(&sources, "COMMUNICATION_LENGTH_RANGE");
+    let mut sources = inputs();
+    change(
+        &mut sources,
+        "ecuc.arxml",
+        "/Configuration/Can/General/Polling</VALUE-REF>",
+        "/Configuration/Can/General</VALUE-REF>",
+    );
+    rejects_in_both(&sources, "CAN_POLLING_REFERENCE");
+}

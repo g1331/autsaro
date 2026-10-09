@@ -16,7 +16,9 @@ pub(crate) mod editor;
 mod graph;
 pub(crate) mod handoff;
 mod multi;
+mod multi_bsw;
 mod multi_com;
+pub use multi_bsw::{CanRuntimeContract, CommunicationIntegerType, CommunicationRuntimeContract};
 pub use multi_com::{ComMainFunction, ComReception, ComRuntimeContract, ComRxGroup};
 mod native_configuration;
 pub use multi::{

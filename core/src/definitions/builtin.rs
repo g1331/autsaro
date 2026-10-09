@@ -301,11 +301,24 @@ fn communication(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedText
     a.enumeration(hardware, "CanObjectType", "RECEIVE TRANSMIT", 1)?;
     a.enumeration(hardware, "CanObjectPayloadLength", "CAN_OBJECT_PL_8 CAN_OBJECT_PL_12 CAN_OBJECT_PL_16 CAN_OBJECT_PL_20 CAN_OBJECT_PL_24 CAN_OBJECT_PL_32 CAN_OBJECT_PL_48 CAN_OBJECT_PL_64", 0)?;
     a.reference(hardware, "CanControllerRef", controller, 1, Some(1))?;
+    a.booleans(hardware, "CanTriggerTransmitEnable", 0)?;
+    a.default(hardware, "CanTriggerTransmitEnable", "false");
+    a.reference(
+        hardware,
+        "CanMainFunctionRWPeriodRef",
+        "Can/CanGeneral/CanMainFunctionRWPeriods",
+        0,
+        Some(1),
+    )?;
     let general = "Can/CanGeneral";
     a.container(general, 1, Some(1))?;
     a.booleans(general, "CanDevErrorDetect CanEnableSecurityEventReporting CanGlobalTimeSupport CanMultiplexedTransmission CanVersionInfoApi", 1)?;
     a.integers(general, "CanIndex", "0", U8, 1)?;
     a.floats(general, "CanMainFunctionModePeriod", None, 1)?;
+    a.floats(general, "CanMainFunctionBusoffPeriod", None, 0)?;
+    let rw = "Can/CanGeneral/CanMainFunctionRWPeriods";
+    a.container(rw, 0, None)?;
+    a.floats(rw, "CanMainFunctionPeriod", None, 1)?;
     a.floats(general, "CanTimeoutDuration", Some("65.535"), 1)?;
     a.0.entries_mut()
         .get_mut(&format!("{ROOT}{general}/CanTimeoutDuration"))
