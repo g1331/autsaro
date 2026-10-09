@@ -47,7 +47,7 @@ context:
 - `runtime/{include,src,ecu}`：旧 COM 主机签名／计时及单入口保留；新 profile 选择真实标准实现，Ecu_Target 的 mailbox／owner／tick 是唯一调度源。
 - `core/tests/{multi_component_contracts.rs,support/epic4_ecu.rs,support/tooling.rs}`：复用正常生成／离线构建／probe／HostBatch；实际 C 行为测试置 native-tests。
 - `runtime/contracts`、`tools/python/src/ecu_tools`：资产身份、包内工具与归属同步；审阅 ABI 后处理固定 CRLF 摘要。
-- `/tmp/autsaro-r6-official/*.txt`：十九份官方 PDF 已匹配官方 SHA；COM／RTE handle-bearing 通知属于 R24-11 draft 条款，不能套旧零参回调。
+- `/tmp/autsaro-r6-official/*.txt`：二十一份官方 PDF 已匹配官方 SHA；COM／RTE handle-bearing 通知属于 R24-11 draft 条款，不能套旧零参回调。
 
 ## Tasks & Acceptance
 
@@ -72,6 +72,23 @@ DET 的 cleared state 和 code 使用可核对、成对的 module MemMap 标记�
 
 COM 计数相位仍是后续高风险机制：当前正常 owner 的 epoch0 输入分支不调用周期 COM，首次周期在 epoch1；“新接收跳过下一次 main”的孤立设计会使 epoch0 reception 滑到 31ms，不能采用。必须根据真实启动、copied input、owner tick 的先后共同设计标准周期 DM，并由正常 HostBatch 验证 epoch0→30ms、epoch30 先接收免假超时、重复 epoch 不重放。无 update-bit 的 DM 必须按 PDU 取全部适用信号的最小非零 first／regular timeout（SWS_Com_00290／00291），不能按 signal 分别计时。阶段 2 尚未实现 COM 或其余标准链；所有 Tasks 保持 unchecked，baseline 与 8.3–8.5 状态保持。
 
+
+2026-10-09 主代理继续实现中的 COM 切片（尚未提交）：`runtime/multi/{include/Com.h,include/ComStack_Types.h,include/Com_MemMap.h,src/Com.c,src/Com_Internal.h}` 接纳标准 COM 生命周期／Send／Receive／group／DM／Rx／pull-copy／confirmation 形状，first timeout 仅零、NONE、每 PDU 一个四字节 UINT32，最多 32 PDUs 对应既有工程 frame 上限。Rx DM 仅由私有 main 实现逐周期递减，owner phase adapter 只提供 reception 是否先于本周期 main，不接纳 timestamp／deadline；epoch0 的 reception phase=false，先于待处理周期的 reception phase=true。该相位尚未接入实际 owner，不能认定真实 OS 30ms 边界通过。独立 Rx-only 消费者的三个 PDU 分别使用 handle17／43／59、timeout30／50／0，真实核验 group／DM／NONE／handle隔离／初值／非法参数／启停与恢复。`ComStack_Cfg.h` 目前只是独立消费者的预期宽度 fixture，正式生成必须由真实 EcuC 闭包核定。配置的标准 SchM 实例 wrappers、标准 Tx 周期／下层拒绝／实际确认语义、新 BSW catalog／assets 和全部生成路径仍 pending；不能将这一源码切片直接放行 full multi。尤其 Tx PERIODIC 不能因未收到上一次确认就跳过后续 configured 周期，须按 COM 所选义务和真实 lower BUSY 拒绝完善并验证。
+
+Windows DET 测试的明确后续缺口：MinGW CRT 的 abort 可产生 stderr／WER dialog，现有广泛非零退出码和 stderr-empty 断言不构成可靠 Windows oracle。按 [Microsoft CRT abort](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/abort?view=msvc-170) 与 [MinGW 原维护讨论](https://sourceforge.net/p/mingw-w64/mailman/message/59347344/) 核定进程内测试 CRT 行为、准确终止结果及断言失败区别；不修改全局 host 设置、不宣称 Windows 已执行。
+
+2026-10-09 阶段 3：COM IF 源码切片及真实下层消费者（尚未完整接入生成 profile）。完善此前主代理 COM 切片，PERIODIC Tx 每次 configured main 都发出真实请求，不由上次 confirmation 决定是否跳过；实际 CanIf／Can_Write 的接受／BUSY 决定下层结果。`multi_com::inspect` 同时拒绝 Tx PDU period 与 configured Tx main 不同的首批配置；独立有效向量把 COM Tx main／BSW period及现有 alarm/event 一起改成1ms而保留 application／PDU10ms，在 definition 与 plan 两入口获得 source-located COM_TIMEBASE，不用失效引用掩盖拒绝。
+
+新增 `runtime/multi` 的标准 PduR／LSduR／CanIf IF 接缝、不可变 route 配置和实际模块 MemMap；公共 `Can.h`／`Can_GeneralTypes.h` 复用原有受信资源及其原字节，独立消费者按正常flat include布局物化它们，未保留重复契约来源；legacy交付头／Can.c均未改变。PduR／LSduR 在所选一对一、无 metadata、同 partition 路由中翻译各自真实 handle，原样转发结果、不缓冲／复制 LSduR 载荷、不代替 CanIf 长度 admission。CanIf 实际调用既有 Can_Write／Can_GetControllerMode／Can_SetControllerMode，跟踪每个 PDU 已接纳但未向 upper 报告的请求数量，实际 STOPPED 给每个准确 E_NOT_OK；OFFLINE／TX_OFFLINE普通positiveconfirmation被抑制，后续STOPPED仍能准确取消。STOPPED／SLEEP成功请求立即关闭PDU通道，SetPduMode以实际driver状态拒绝旧cache重新开放；STARTED不自动ONLINE。BusOff按真实driver已进入STOPPED的查询结果收敛，随后通知配置的真实provider，重复事件和旧confirmation不重复失败。真实Det runtime hooks消费OFFLINE、Rx minimum-length、Classical最大载荷及globalPDU长度错误。HostRx adapter只转换Mailbox／PduInfo，不将timestamp用于COM DM。
+
+独立 `com_chain_contract.c` 链接实际 COM／PduR／LSduR／CanIf／DET、未改动的 Can.c／Can_HostLock.c 和正常 host 输出 adapter；fixture 只提供不可变模块配置及输出／mode／runtime-error／callback观察者，confirmation观察者实际调用Com_TxConfirmation，无假标准模块函数。正常 host 配套 ProfileLimits header用于独立driver消费者，这不是新 sealed ECU 的容量／生成证据。CanIf对多个未确认接纳请求的计数由真实queued driver验证；仍 pending 的 CanTp／Dcm TP callbacks／ComM／CDD／BswM 不由已声明的可配置 IF transmit入口替代。
+
+阶段边界：尚未注册／交付新COM等资产，未解开multi ECU generation guards。真实 EcuC→PB config、所有 configured standard main符号的BSWMD／catalog／signature／scheduler同源身份、RTE callback freshness与NeverReceived自systemstart的状态、实际OSowner／HostBatch30ms、完整诊断／mode链、不可变多slot caller source准备、normal multi c-analysis sample及CI membership仍待后续阶段。新profile公共types／macros也须进入正常pre-generation namespace collision拒绝，不能等编译才发现。旧Can driver zero-lengthWrite边界及Windows DET精确CRT终止oracle仍明确pending，详见linked compliance／上述记录。所有Tasks保持unchecked，Storybaseline/status及8.3–8.5状态不变。
+
+阶段3审阅修正：已删除未提交的相同Can.h／Can_GeneralTypes.h副本；原受信asset原始字节与checkout一致，链消费者在正常Scratch flat include目录放置这些原头、实际新类型头及独立Cfg／SchM声明。CanIf所有public共享状态路径（Init／DeInit、mode请求／查询、Transmit、Rx／Tx callbacks、STOP cancellation及BusOff收敛）使用同一真实SchM critical area。controlled-host adapter直接进入／退出既有Can_HostLock的同一递归资源，没有第二mutex或反向锁序。Can_Write的接纳至outstanding发布保持同一area，driver flush／confirmation不能在接受发布前丢通知；真实输出callback再调用CanIf getter也不会自锁。SWS_CANIF_00005仅要求不同PduIds重入、同一PduId非重入；新消费者遵守此输入约束，仍检验真实异步确认与stop交错，不以single-owner说明代替所选同步机制。
+
+当前consumer的SchM_CanIf.h只含声明，实际函数体是交付源码候选中的真实host adapter，非测试标准函数桩。最终profile仍必须由真实BSWMD exclusive-area身份生成SchM声明／wrapper及source provenance，不能将当前fixture的area名字当作已完成生成闭包。同步机制不引入scheduler／timer，不改变COM DM周期来源或legacydriver bytes；新host adapter资产注册仍待fullgen阶段。
+
 ## Spec Change Log
 
 ## Review Triage Log
@@ -87,3 +104,19 @@ COM 计数相位仍是后续高风险机制：当前正常 owner 的 epoch0 输�
 2026-10-09 阶段 2 已执行：`cargo test --manifest-path core/Cargo.toml --features native-tests --test multi_runtime_contracts` 2 tests passed，使用已验证 embedded asset 的真实 DET 两个源码及独立消费者，由固定 GCC 13 以 `-std=c99 -Wall -Wextra -Werror -pedantic` 编译、链接和运行。主消费者真实覆盖未初始化 runtime report、原参数和 hook 顺序、首 hook 返回 E_NOT_OK 后继续调用、嵌套 runtime report、re-init 与 NULL 配置；独立子进程覆盖未初始化 development report、完整 development hooks、递归 development hook、非法 hook list，Linux 实际结束信号均为 SIGABRT（6），精确 stdout 及空 stderr 排除普通拒绝／断言失败假通过。第二消费者使用真实 pthread 双线程，各 1000 次 runtime reports，调用方 TLS 观测各自恰好 1000 次且报告仍 E_OK。预期依据为固定官方 DET SWS_00008／00009／00010／01001／00014／00018／00024／00026／00208／00501／00503 和 Platform／StandardTypes 条款，未从 ABI inventory 生成预期。
 
 阶段 2 正常 `cargo test --manifest-path core/Cargo.toml` 117 tests passed；正常项目 Clippy passed；`quality --scope core --base 319d39f9c688c59b6a19ff8c2b7c399874534cba` passed（12 files formatting，C syntax checked）；`assets check` 0 changes 和 `git diff --check` passed。这里的 C syntax／独立模块行为证据不等于 sealed multi ECU 行为、实际 OS 调度或生成 profile 的 `c-check`；后者和完整链路验收仍 pending。Windows consumer 已保留正常编译入口但本次未执行。已按 MISRA C:2012 Third Edition＋AMD1–AMD4＋TC1–TC2 的相关指导核对声明、初始化、循环边界、指针与函数指针、host 库终止及跨 TU 类型；没有授权 MISRA 主文及完整新 profile 分析／人工审核证据，不声明完整 MISRA 符合。
+
+主代理当前 COM 切片已执行：固定 GCC13 环境下 `cargo test --locked --manifest-path core/Cargo.toml --features native-tests --test multi_runtime_contracts com_standard_consumer` 1 passed／2 filtered，严格 C99 编译链接和真实 Rx-only 模块运行；这不是完整 native suites、Tx 链或 sealed ECU 证据。尚未更新新 COM 资产清单或运行实际 profile c-check。
+
+
+2026-10-09 阶段 3 已执行：固定GCC13正常工具链环境下 `cargo test --locked --manifest-path core/Cargo.toml --features native-tests --test multi_runtime_contracts --test multi_component_contracts` 分别4／30 passed；新增链消费者严格C99（`-Wall -Wextra -Werror -pedantic`）真实编译、链接、运行。Rx-only3PDU消费者覆盖first0、regular30／50／0、handle17／43／59隔离、重复enable不复位、NONE／group stop-start／初值／非法参数；链消费者固定独立标准函数签名，真实Driver→CanIf→LSduR→PduR→COM Rx及callback，真实CAN_BUSY保留已复制payload、queued confirmation之前仍按周期接纳下一发送、非同值域handle翻译、pull短buffer拒绝不改写、runtime错误61／62／70／90、多个未确认发送STOPPED逐个失败、TX_OFFLINE delayedpositive抑制、pre-indication重新ONLINE拒绝、真实modepolling、重复busOff／lateconfirmation不重复失败及SLEEP即刻OFFLINE。其DM逐周期运行仍只是模块消费者，不是实际OSowner时间验收。
+
+阶段3 `cargo test --locked --manifest-path core/Cargo.toml` 全部passed（unit17／builtin71／multi_component29）；正常项目Clippy（`-A clippy::all -D clippy::correctness -D clippy::suspicious`）passed。`quality --scope core --base 319d39f9c688c59b6a19ff8c2b7c399874534cba` passed（15 formatting files与正常Csyntax）；runtime扩展scope第一次发现此前DET提交的6处formatting差异，按配置formatter仅调整Det.h／Det.c，API／行为不变，正常assets update只更新这两项固定LF摘要。新COM等资产未注册，assets check的一致性证据仅覆盖当前已登记资产，不能声称新profile已交付。实际新源码同时由上述严格native编译检查；最终 `quality --scope runtime --base 319d39f9c688c59b6a19ff8c2b7c399874534cba` passed（29 formatting files与正常Csyntax）；摘要刷新后4个native模块测试再次passed，`assets check` 0 changes及`git diff --check` passed。
+
+历史失败保留：新链第一次编译缺少正常generated ProfileLimits include；正常driver消费者加入实际host配套header目录后通过。第一次Tx20ms向量额外加入第四owner event，先被现有TASK_PROFILE（三个event）边界拒绝；替换为引用有效、正常已有1ms alarm/event的Txperiod不一致向量后COM_TIMEBASE两入口通过。BusOff后额外请求STOPPED的早期consumer预期被真实旧driver的已STOPPED拒绝暴露；核对实际driver模式与官方CanIf义务后改由真实state-query／transition收敛，保留legacydriver不变。没有把这些失败记为验收通过，Windows、sealedmulti ECU、完整标准/MISRA符合与actual-profile c-check均未执行／未宣称。
+
+主代理阶段审阅追加核定：R24-11 SWS_CANIF_00005 的 CanIf_Transmit Service ID 为0x49，而旧值0x05不能沿用。阶段消费者与实现曾共同使用旧值，绿色测试没有识别这项契约差距；已按官方独立服务表同时修正真实DET报告及消费者固定预期。相关native重跑结果随后记录，不以先前通过代替此修正的验证。
+
+
+2026-10-09 阶段3审阅修正已执行：固定GCC13及正常native工具链环境下 `cargo test --locked --manifest-path core/Cargo.toml --features native-tests --test multi_runtime_contracts` 5 passed（0 failed／ignored）；重新执行包含已修正的CanIf_Transmit DET service0x49、复用受信原始CAN头的真实链及新增不同PDU并发消费者。新增消费者使用两个真实producer各1000次发送，四种barrier轮次交错真实driver flush／positive confirmation和实际STOP／mode poll，逐轮逐PDU核对accepted等于positive加negative、真实frame等于positive；固定延后flush／stop轮次各自证明一接纳一BUSY且复制载荷保持。实际输出callback在driver资源内重入CanIf getter，正常ProcessOwner以30秒期限运行并核对成功退出与空stdout／stderr；没有测试标准函数体、第二production mutex或额外scheduler。Windows分支未执行，不将此结果扩大为Windows、sealed ECU或完整重入配置符合证据。
+
+审阅修正正常Clippy（native-tests、multi_runtime_contracts目标，`-A clippy::all -D clippy::correctness -D clippy::suspicious`）passed；正常 `quality --scope core --base 319d39f9c688c59b6a19ff8c2b7c399874534cba` passed（17 formatting files与Csyntax），runtime对应scope passed（28 formatting files与Csyntax）；`assets check` 0 changes、`git diff --check` passed。新增host SchM adapter尚未登记asset，正式configured BSWMD exclusive-area wrapper／provenance以及actual-profile c-check仍待fullgen阶段。历史失败保留：新增并发消费者第一次正常ProcessOwner运行因缺少required private execution-log目录而被拒绝（directories_missing）；按既有ProcessOwner约束在Scratch创建正常0700目录后重新运行通过，未放宽隔离或退出判定。全部Tasks及完整Story运行关口保持pending。

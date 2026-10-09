@@ -32,8 +32,8 @@ DET_CODE void Det_Init(const Det_ConfigType *ConfigPtr) {
     configuration = NULL;
     if (ConfigPtr != NULL) {
         if ((Det_ValidHooks(ConfigPtr->error_hooks, ConfigPtr->error_hook_count) == FALSE) ||
-            (Det_ValidHooks(ConfigPtr->runtime_callouts,
-                            ConfigPtr->runtime_callout_count) == FALSE)) {
+            (Det_ValidHooks(ConfigPtr->runtime_callouts, ConfigPtr->runtime_callout_count) ==
+             FALSE)) {
             Ecu_DetHalt();
         }
     }
@@ -45,8 +45,8 @@ DET_CODE void Det_Start(void) {
     /* SWS_Det_00025 permits no action when startup storage is not selected. */
 }
 
-DET_CODE Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId, uint8 InstanceId,
-                                              uint8 ApiId, uint8 ErrorId) {
+DET_CODE Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId, uint8 InstanceId, uint8 ApiId,
+                                               uint8 ErrorId) {
     uint16 index;
     if ((initialized == TRUE) && (configuration != NULL)) {
         for (index = 0u; index < configuration->runtime_callout_count; ++index) {
@@ -56,8 +56,8 @@ DET_CODE Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId, uint8 InstanceId
     return E_OK;
 }
 
-DET_CODE Std_ReturnType Det_ReportError(uint16 ModuleId, uint8 InstanceId,
-                                       uint8 ApiId, uint8 ErrorId) {
+DET_CODE Std_ReturnType Det_ReportError(uint16 ModuleId, uint8 InstanceId, uint8 ApiId,
+                                        uint8 ErrorId) {
     uint16 index;
     if ((initialized == TRUE) && (configuration != NULL) &&
         (Ecu_DetEnterDevelopmentReport() == TRUE)) {

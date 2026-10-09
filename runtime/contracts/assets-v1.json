@@ -1481,7 +1481,7 @@
     },
     {
       "path": "runtime/multi/include/Det.h",
-      "sha256": "f242dc7f4002dce00a720eb41ed269c0a9a0b66b92a3895fed27d7110eafee44",
+      "sha256": "45d75348b5843a0b251398341e21f356d4bd1fd9252c9efe1580ea97a3892baf",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1537,7 +1537,7 @@
     },
     {
       "path": "runtime/multi/src/Det.c",
-      "sha256": "fa19aee0ed1102e7cf3ed2701cc06abb017fab06cc710eda9021040ea46fe2d6",
+      "sha256": "743497ab1f77600f2b29d55615d83a5c5d191eb1321f69fd690ec0dfe909778b",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

@@ -164,6 +164,17 @@ pub(super) fn inspect(
     };
     let (rx_main, receive_main) = main(true)?;
     let (tx_main, transmit_main) = main(false)?;
+    // This first profile emits one PERIODIC request per configured Tx main call.
+    // A different PDU period needs counters and is not silently approximated.
+    for signal in signals.iter().filter(|signal| !signal.receive) {
+        if signal.transmit_period_ms != Some(transmit_main.period_ms) {
+            return Err(fail(
+                graph,
+                *graph.objects.get(&signal.com_pdu).unwrap(),
+                "COM_TIMEBASE",
+            ));
+        }
+    }
     let rx_paths: BTreeSet<_> = signals
         .iter()
         .filter(|signal| signal.receive)

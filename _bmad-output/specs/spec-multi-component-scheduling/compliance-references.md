@@ -1,6 +1,8 @@
 # R24-11 契约核定与直接依赖差距
 
-2026-10-09 已实际取得十九份官方PDF并与CP官方SHA-256清单匹配；原件仅保留本机，不入Git。以下是配置适用性与独立验收依据，不由ABI inventory或绿色测试替代。
+2026-10-09 已实际取得二十一份官方PDF并与CP官方SHA-256清单匹配；原件仅保留本机，不入Git。以下是配置适用性与独立验收依据，不由ABI inventory或绿色测试替代。
+
+版次与文件身份以 [AUTOSAR R24-11 CP 官方 SHA-256 清单](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_TR_SpecificationHashes.sha256) 为准。新增直接依赖原文为 [LSduRouter](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_LSduRouter.pdf) 和 [CANDriver](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_CANDriver.pdf)，下表记录实际下载文件的身份和适用条款。
 
 | 官方文档 | SHA-256 | 本范围依据 |
 | --- | --- | --- |
@@ -14,6 +16,8 @@
 | AUTOSAR_CP_SWS_DiagnosticCommunicationManager.pdf | cf5aeee78fda6e5a25f982f04cb146ce4a75586de7ba41913d46b0cea1cc2407 | 既有DID USE_DATA_SYNCH_CLIENT_SERVER／UINT8_N消费者及无possibleErrors的生成server接缝，同源RTE回调和独立UDS向量 |
 | AUTOSAR_CP_SWS_PDURouter.pdf | 3f97e95f6b36c876daeddc1bd90db7d0b24ebd0aa652078349d323ad6664ad6f | SWS_PduR_00334 Init/PostBuild config；00406 upper transmit；lower Rx/Trigger及TP buffer callbacks，实际COM/Dcm运输接缝 |
 | AUTOSAR_CP_SWS_CANInterface.pdf | 84bf624c9e497d765653c8df4d62a6e3835efb64f76c742d727b177a64c10f53 | 实际 CanIf 配置、Transmit、控制器／PDU mode、RX／TX 回调与路由 |
+| AUTOSAR_CP_SWS_LSduRouter.pdf | 2cd776bc9d54dd8d7f12fa300f24bbf4b790560f9fe7cc9702d20c76b24fdd3a | R24-11 DRAFT：91006 Init／91009 upper transmit／91011 Rx／91013 confirmation／91014 pull；00008／00012／00015–19，真实无缓冲一对一路由 |
+| AUTOSAR_CP_SWS_CANDriver.pdf | d04d35b80d8f445b66f960fd9b5be4f02f324e73cc4be239887e8c1235b172aa | 00233 typed Can_Write；00212–214／00275 实际 BUSY 与已复制帧；00282 STOP 取消、00370／00373 真实 polling mode indication |
 | AUTOSAR_CP_SWS_CANTransportLayer.pdf | 7334d633b02c443aacbe0ca25e20c319e977104eeb4bf8e67ac0358cfea34a22 | 所选 Classical CAN physical normal addressing 的真实 Init／Shutdown／Transmit、buffer 与完成／失败接缝 |
 | AUTOSAR_CP_SWS_CommunicationStackTypes.pdf | 31f62487c5e27ec1863b3febc79e336ef42eb4a50f2dc52776518d92741a7786 | SWS_COMTYPE_00005／00008／00011／00012／00027／00037／91001，PduId／Length／Info、BufReq、Retry、Cbk handle 类型 |
 | AUTOSAR_CP_SWS_StandardTypes.pdf | a9f0cc790f8b325485b6b4a2c6f44c89d9f64192274a2a0ca8e827976bc06a81 | Std_ReturnType、boolean 及标准常量的实际类型／身份 |
@@ -68,3 +72,13 @@ BswM 选择一个 IMMEDIATE ComM mode input（BswMComMIndication／BswMComMChann
 所选错误链亦已核对：CanIf SWS_CANIF_00382 的 OFFLINE Tx、00168 的启用 length-check 拒绝及适用 DATA_LENGTH_MISMATCH 必须真实 Det_ReportRuntimeError，关闭 DevErrorDetect 不免除此 runtime 义务。Det_Init(const Det_ConfigType*)、Det_Start(void)、Std_ReturnType Det_ReportRuntimeError(uint16,uint8,uint8,uint8) 与实际配置的同形 Std_ReturnType runtime callouts 对应 SWS_Det_00008／00010／00183／00184；runtime report 始终返回 E_OK，未Init按00024立即无动作，已Init按00014／00018／00503调用全部配置 hooks，不能只返回 E_OK。当选择关闭开发错误检测时不增加伪造 ReportError：R24-11 Det_ReportError 与 runtime不同，00026／00208要求 stop execution，不把其旧版返回行为当本次预期。首批显式无 DLT／持久错误恢复；runtime hook 实际消费并可独立观察报告 module／instance／API／error，不静默吞错。Det_Start 在无需startup动作的所选配置允许空体，须仅按官方允许位置限定，不由此推导其余接口可空实现。
 
 内存与公共类型只按实际 controlled Linux/Windows x64 C99 profile核定，不用host默认推断：Platform_Types.h 的类型/CPU模型与 Std_Types.h/ComStack_Cfg.h 所有真实消费者一致。按SWS_MemMap_00020／00028／00032交付实际BSWMD所需模块MemMap（无显式shared MEMMAP则按实际module shortName），00029为每个SWC type提供MemMap；选定平坦主机段的真实标记／链接映射需说明，不能用无条件空壳header宣称目标MCU段已符合。边界是本次实际编译／链接布局，目标MCU段和权限以R10实际toolchain/layout为退出。新增独立检查含 runtime报告成功／未初始化及typed消费，实际头类型／宏配置和生成翻译单元，未执行的构造保持未核实。
+
+
+2026-10-09 COM 下层直接接缝的阶段核定：R24-11 CanIf 接收与确认的真实目标是 LSduR；其文档标记 DRAFT，不将本次实现宣称为成熟标准认证。保留显式 LSduR 路由，未选择 ZeroCostOperation；若以后选择00024／00025的直接调用，须由真实 pre-compile 路由配置证明，不能无条件绕过该层。当前一对一、同 partition、无 metadata 的 selected IF 路由翻译真实 PDU ID并原样传播 lower 返回值／confirmation结果；00012／00015／00017明确 LSduR 无 Rx/Tx 长度检查或 Tx buffering，长度 admission 属 CanIf／实际 upper。TP routing 与所有真实生成来源仍由 Story8.2 剩余工作关闭。
+
+CanIf 00865／00866：成功请求 SLEEP／STOPPED 当场将 PDU channel 改为 OFFLINE／TX_OFFLINE；真实 mode indication 与实际 driver getter 分开，00874禁止用旧 STARTED cache重新开放已停止的 driver。00229 getter调用真实 Can_GetControllerMode。00073／00489抑制OFFLINE／TX_OFFLINE普通 positive upper confirmations；00739在真实进入STOPPED时给每个尚未报告的已接纳发送准确negative结果，不能按任意PDU mode变化伪造。旧实际driver在BusOff直接进入STOPPED而仅回调ControllerBusOff，新层查询实际状态并只在真实STOPPED transition收敛，再通知真实配置的CDD provider。反复bus-off／late旧confirmation不重复negative。00893的Classical payload>8需报告runtime62，00900的globalPDU长度超限且truncation=false需报告90并拒绝；所选固定4-byte Tx下payload5只触发90，payload9独立观测62及90，Rx minimum-length检查按00168报61，OFFLINE请求按00382报70。
+
+Can.c 复用仍须显式在真实新配置核定 DevErrorDetect=false／TriggerTransmitEnable=false、单controller／HOH0／Classical11bit 与真实通知 provider；当前模块消费者不替代这些生成义务。旧driver拒绝zero-byteWrite（00218并非规定最小1byte）；当前信号PDU固定4-byte、诊断segmentation需要非空PCI，并不因此声明所有CAN配置已符合。后续生成阶段须核对该边界对可达调用的适用性并关闭或明确所选源拒绝，不能让新的标准名字掩盖未核定路径。真实硬件 counters／wakeup／controller layout仍按既有R10目标退出，本次主机模块证据不等同实机验收。
+
+
+阶段3审阅补充：SWS_CANIF_00005的Transmit service ID为0x49（RxIndication仍0x14），仅different PduIds要求reentrant、same PduId nonreentrant。独立预期固定使用官方服务表，不能由旧模块编号或实现常量推导。当前selected controlled-host实际SchM critical area与driver共用同一递归hostlock，保护接纳至计数发布、异步confirmation、mode及STOP cancellation；避免driver持锁callback与另建CanIf mutex的反向等待。正常1000-round、two-different-PDU真实driver消费者逐轮独立核对accepted=positive+negative、emitted=positive及copy/BUSY，不以串行owner或无锁源码自洽作重入证明。真实生成profile的exclusive-area／wrapper source identity仍为Story8.2剩余交付义务，不把fixture声明当生产配置。

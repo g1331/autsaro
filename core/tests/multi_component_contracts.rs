@@ -209,6 +209,40 @@ fn multi_com_plan_keeps_real_group_timebase_and_notification_identity() {
 }
 
 #[test]
+fn multi_com_rejects_tx_main_period_different_from_periodic_pdu() {
+    let mut sources = inputs();
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| named(node, "ECUC-CONTAINER-VALUE", "Transmit10ms"),
+        |text| {
+            text.replace("Alarm_App", "Alarm_Work")
+                .replace("Ev_App", "Ev_Work")
+        },
+    );
+    xml_edit(
+        &mut sources,
+        "bsw.arxml",
+        |node| named(node, "BSW-TIMING-EVENT", "Com_TriggerTransmit_10ms"),
+        |text| text.replace("<PERIOD>0.01</PERIOD>", "<PERIOD>0.001</PERIOD>"),
+    );
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| {
+            node.children().any(|child| {
+                child.has_tag_name("DEFINITION-REF")
+                    && child
+                        .text()
+                        .is_some_and(|value| value.ends_with("/ComMainTxTimeBase"))
+            })
+        },
+        |text| text.replace("<VALUE>0.01</VALUE>", "<VALUE>0.001</VALUE>"),
+    );
+    rejects_in_both(&sources, "COM_TIMEBASE");
+}
+
+#[test]
 fn multi_com_control_configuration_rejects_inconsistent_group_timebase_and_callbacks() {
     for (field, original, replacement, code) in [
         ("ComSupportedIPduGroups", "1", "0", "COM_RX_GROUP"),
