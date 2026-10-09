@@ -156,3 +156,57 @@ fn generated_c_analysis_samples() {
     }
     assert_eq!(fs::read_dir(&output).unwrap().count(), 5);
 }
+
+#[test]
+fn historical_host_diagnostic_generation_accepts_formatting_but_rejects_new_data() {
+    use autosar_config_core::definitions::DefinitionCatalog;
+    use autosar_config_core::project_model::ValidationStatus;
+    let scratch = workspace::Scratch::new();
+    let root = scratch.0.join("formatted");
+    let workspace = host(&root, "formatted", false, true);
+    let source = root.join("formatted.arxml");
+    let original = fs::read_to_string(&source).unwrap();
+    drop(workspace);
+    let formatted = original
+        .replace("><", ">\r\n  <")
+        .replace("<AR-PACKAGES>", "<AR-PACKAGES><!-- formatting only -->");
+    fs::write(&source, &formatted).unwrap();
+    let mut workspace = Workspace::open_project_manifest(
+        &root.join("workbench-project.json"),
+        &scratch.0.join("cache"),
+    )
+    .unwrap();
+    let target = if cfg!(windows) {
+        BuildTarget::WindowsX64ControlledV1
+    } else {
+        BuildTarget::LinuxX64ControlledV1
+    };
+    prepare_host_project(&mut workspace, target, true)
+        .unwrap()
+        .generate(&scratch.0.join("delivery"))
+        .unwrap();
+    let catalog = DefinitionCatalog::builtin().unwrap();
+    let validation = catalog
+        .validate_documents(&[(source.as_path(), formatted.as_str())])
+        .unwrap();
+    assert!(validation.diagnostics.is_empty());
+    assert_eq!(validation.status, ValidationStatus::Unsupported);
+    assert!(validation.coverage.iter().any(|rule| rule.rule_id
+        == "native.definition.legacy-dcm-mode-dependency"
+        && !rule.supported));
+    let changed = formatted.replacen("<ELEMENTS>", "<ELEMENTS><APPLICATION-SW-COMPONENT-TYPE><SHORT-NAME>NewComponent</SHORT-NAME></APPLICATION-SW-COMPONENT-TYPE>", 1);
+    let validation = catalog
+        .validate_documents(&[(source.as_path(), changed.as_str())])
+        .unwrap();
+    assert!(
+        validation
+            .diagnostics
+            .iter()
+            .any(|issue| issue.code == "MULTIPLICITY"
+                && issue.witness.as_ref().is_some_and(|witness| format!(
+                    "{:?}",
+                    witness.constraint
+                )
+                .contains("DcmDslProtocolComMChannelRef")))
+    );
+}

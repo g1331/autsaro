@@ -38,8 +38,8 @@ OsUseGetServiceId OsUseParameterAccess OsUseResScheduler OsTaskActivation OsTask
 PduRDestPduHandleId PduRTransmissionConfirmation PduRSourcePduHandleId PduRSrcPduUpTxConf
 RteBswPositionInTask RtePositionInTask RteEventIsMappedToTask RteBswEventIsMappedToTask";
 
-const MULTI_RUNTIME_PARAMETERS: &str = "ComSupportedIPduGroups ComIPduGroupHandleId ComMainRxTimeBase ComMainTxTimeBase ComUserHeaderInclude ComUserCbkHandleId ComUserCallbackName ComUserCallbackType PduIdTypeEnum PduLengthTypeEnum CanDevErrorDetect CanMainFunctionPeriod CanMainFunctionModePeriod CanMainFunctionBusoffPeriod CanTriggerTransmitEnable";
-const MULTI_RUNTIME_REFERENCES: &str = "ComIPduGroupRef ComIPduMainFunctionRef ComUserCallbackRef ComUserSystemTemplateSystemSignalRef CanMainFunctionRWPeriodRef";
+const MULTI_RUNTIME_PARAMETERS: &str = "ComSupportedIPduGroups ComIPduGroupHandleId ComMainRxTimeBase ComMainTxTimeBase ComUserHeaderInclude ComUserCbkHandleId ComUserCallbackName ComUserCallbackType PduIdTypeEnum PduLengthTypeEnum CanDevErrorDetect CanMainFunctionPeriod CanMainFunctionModePeriod CanMainFunctionBusoffPeriod CanTriggerTransmitEnable ComMDevErrorDetect ComMDynamicPncToChannelMappingSupport ComMModeLimitationEnabled ComMPncSupport ComMResetAfterForcingNoComm ComMSynchronousWakeUp ComMVersionInfoApi ComMWakeupInhibitionEnabled ComMEcuGroupClassification ComMTMinFullComModeDuration ComMBusType ComMChannelId ComMCDDBusPrefix ComMMainFunctionPeriod ComMFullCommRequestNotificationEnabled ComMNoCom ComMNoWakeup ComMNoWakeUpInhibitionNvmStorage ComMNmVariant ComMUserIdentifier BswMCanSMEnabled BswMComMEnabled BswMDcmEnabled BswMDevErrorDetect BswMEcuMEnabled BswMEthIfEnabled BswMEthSMEnabled BswMFrSMEnabled BswMGenericRequestEnabled BswMJ1939DcmEnabled BswMJ1939NmEnabled BswMLinSMEnabled BswMLinTPEnabled BswMNmEnabled BswMNvMEnabled BswMSdControlEnabled BswMSdEnabled BswMVersionInfoApi BswMUserIncludeFile BswMRequestProcessing BswMBswModeInitValue BswMConditionType BswMBswRequestedMode BswMLogicalOperator BswMRuleInitState BswMNestedExecutionOnly BswMUserCalloutFunction BswMActionListExecution BswMActionListPriority BswMActionListItemIndex BswMAbortOnFail";
+const MULTI_RUNTIME_REFERENCES: &str = "ComIPduGroupRef ComIPduMainFunctionRef ComUserCallbackRef ComUserSystemTemplateSystemSignalRef CanMainFunctionRWPeriodRef ComMUserChannel BswMComMChannelRef BswMConditionMode BswMArgumentRef BswMRuleExpressionRef BswMRuleTrueActionList BswMActionListItemRef DcmDslProtocolComMChannelRef";
 
 const MODULES: &[&str] = &[
     "Can", "CanIf", "CanTp", "Com", "Dcm", "EcuC", "Os", "PduR", "Rte",
@@ -310,6 +310,25 @@ fn inspect_with_catalog(
             ));
         }
         selected.push(found[0]);
+    }
+    if multi {
+        for name in ["ComM", "BswM"] {
+            let definition = format!("/AUTOSAR/EcucDefs/{name}");
+            let found: Vec<_> = modules
+                .iter()
+                .copied()
+                .filter(|index| graph.text(*index, "DEFINITION-REF") == Some(definition.as_str()))
+                .collect();
+            if found.len() != 1 {
+                return Err(reject(
+                    graph,
+                    context,
+                    "MODE_CONFIGURATION",
+                    crate::product_message!("backend.integration.multi.contract_invalid", "code" => "MODE_CONFIGURATION"),
+                ));
+            }
+            selected.push(found[0]);
+        }
     }
     let os = one(graph, context, "OsOS")?;
     let hooks = one(graph, os, "OsHooks")?;

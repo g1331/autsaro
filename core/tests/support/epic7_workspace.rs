@@ -1539,8 +1539,17 @@ fn builtin_live_application_reopens_generic_configuration_without_authorizing_ta
             .find(|scope| scope.scope == ValidationScope::Definition)
             .unwrap()
             .status,
-        ValidationStatus::Passed,
+        ValidationStatus::Unsupported,
     );
+    let definition = view
+        .validation
+        .iter()
+        .find(|scope| scope.scope == ValidationScope::Definition)
+        .unwrap();
+    assert!(definition.diagnostics.is_empty());
+    assert!(definition.coverage.iter().any(|rule| rule.rule_id
+        == "native.definition.legacy-dcm-mode-dependency"
+        && !rule.supported));
     let target = view
         .validation
         .iter()

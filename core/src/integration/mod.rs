@@ -18,8 +18,10 @@ pub(crate) mod handoff;
 mod multi;
 mod multi_bsw;
 mod multi_com;
+mod multi_mode;
 pub use multi_bsw::{CanRuntimeContract, CommunicationIntegerType, CommunicationRuntimeContract};
 pub use multi_com::{ComMainFunction, ComReception, ComRuntimeContract, ComRxGroup};
+pub use multi_mode::{ModeRule, ModeRuntimeContract, ModeUser};
 mod native_configuration;
 pub use multi::{
     Component as MultiComponent, Connection as ComponentConnection, Endpoint as ComponentEndpoint,

@@ -2510,7 +2510,8 @@ fn normal_legacy_definition_validation_rejects_only_new_nonzero_execution_constr
         assert!(normal_validation(&sources).diagnostics.is_empty());
         assert!(build(&sources).is_ok());
     }
-    // The historical projection does not adopt unrelated component diagnostics.
+    // A capability flag does not change the actual historical graph.
+    // Definition editing stays valid; native generation keeps its own refusal.
     let mut unrelated = legacy_inputs();
     change(
         &mut unrelated,
@@ -2518,7 +2519,15 @@ fn normal_legacy_definition_validation_rejects_only_new_nonzero_execution_constr
         "<SUPPORTS-MULTIPLE-INSTANTIATION>false",
         "<SUPPORTS-MULTIPLE-INSTANTIATION>true",
     );
-    assert!(normal_validation(&unrelated).diagnostics.is_empty());
+    let validation = normal_validation(&unrelated);
+    assert!(validation.diagnostics.is_empty());
+    assert_eq!(
+        validation.status,
+        autosar_config_core::project_model::ValidationStatus::Unsupported
+    );
+    assert!(validation.coverage.iter().any(|rule| rule.rule_id
+        == "native.definition.legacy-dcm-mode-dependency"
+        && !rule.supported));
     assert!(
         build(&unrelated)
             .err()
@@ -2647,4 +2656,291 @@ fn multi_communication_rejects_truncation_and_unbound_polling_in_both_entries() 
         "/Configuration/Can/General</VALUE-REF>",
     );
     rejects_in_both(&sources, "CAN_POLLING_REFERENCE");
+}
+
+#[test]
+fn mode_configuration_preserves_channel_users_rules_and_static_callouts() {
+    let plan = build(&inputs()).unwrap();
+    let mode = plan.description().mode_runtime.as_ref().unwrap();
+    assert_eq!(mode.channel, "/Configuration/ComM/Config/Host");
+    assert_eq!(mode.channel_handle, 0);
+    assert_eq!(mode.main_symbol, "ComM_MainFunction_Host");
+    assert_eq!((mode.period_ms, mode.minimum_full_ms), (1, 5));
+    assert_eq!(mode.users.len(), 1);
+    assert_eq!(mode.users[0].handle, 0);
+    assert_eq!(mode.include, "Ecu_HostBusSM.h");
+    assert_eq!(mode.initial_mode, 0);
+    assert_eq!(
+        mode.rules.iter().map(|rule| rule.mode).collect::<Vec<_>>(),
+        [0, 1, 2]
+    );
+    assert_eq!(mode.dcm_connections.len(), 1);
+    assert!(mode.rules.iter().all(|rule| {
+        rule.callout
+            .starts_with("Ecu_HostBusSM_ApplyMode(0u, COMM_")
+    }));
+    let mut sources = inputs();
+    replace_all(&mut sources, "/Config/Host/", "/Config/Vehicle/");
+    change(
+        &mut sources,
+        "ecuc.arxml",
+        "<SHORT-NAME>Host</SHORT-NAME>",
+        "<SHORT-NAME>Vehicle</SHORT-NAME>",
+    );
+    replace_all(&mut sources, "/Config/Host<", "/Config/Vehicle<");
+    parameter(&mut sources, "Vehicle", "ComMChannelId", "7");
+    parameter(&mut sources, "HostUser", "ComMUserIdentifier", "19");
+    replace_all(
+        &mut sources,
+        "Ecu_HostBusSM_ApplyMode(0u,",
+        "Ecu_HostBusSM_ApplyMode(7u,",
+    );
+    let renamed = build(&sources).unwrap();
+    let mode = renamed.description().mode_runtime.as_ref().unwrap();
+    assert_eq!(mode.channel, "/Configuration/ComM/Config/Vehicle");
+    assert_eq!(mode.main_symbol, "ComM_MainFunction_Vehicle");
+    assert_eq!(mode.channel_handle, 7);
+    assert_eq!(mode.users[0].handle, 19);
+    assert!(normal_validation(&sources).diagnostics.is_empty());
+}
+
+#[test]
+fn selected_mode_configuration_rejects_unbound_features_and_dynamic_callouts() {
+    for (owner, field, new_value, code) in [
+        (
+            "Host",
+            "ComMBusType",
+            "COMM_BUS_TYPE_CAN",
+            "MODE_BUS_PROVIDER",
+        ),
+        (
+            "Host",
+            "ComMCDDBusPrefix",
+            "OtherBusSM",
+            "MODE_BUS_PROVIDER",
+        ),
+        (
+            "NetworkManagement",
+            "ComMNmVariant",
+            "FULL",
+            "MODE_NM_VARIANT",
+        ),
+        ("Host", "ComMMainFunctionPeriod", "0.002", "MODE_TIMEBASE"),
+        (
+            "CurrentMode",
+            "BswMRequestProcessing",
+            "BSWM_DEFERRED",
+            "MODE_PROCESSING",
+        ),
+        (
+            "Includes",
+            "BswMUserIncludeFile",
+            "../Ecu_HostBusSM.h",
+            "MODE_INCLUDE",
+        ),
+        (
+            "NoRule",
+            "BswMNestedExecutionOnly",
+            "true",
+            "MODE_FEATURE_UNSUPPORTED",
+        ),
+        (
+            "NoList",
+            "BswMActionListExecution",
+            "BSWM_TRIGGER",
+            "MODE_RULE",
+        ),
+        (
+            "FullAction",
+            "BswMUserCalloutFunction",
+            "Ecu_HostBusSM_ApplyMode(0u, currentMode)",
+            "MODE_STATIC_CALLOUT",
+        ),
+        (
+            "SilentAction",
+            "BswMUserCalloutFunction",
+            "Ecu_HostBusSM_ApplyMode(0u, COMM_FULL_COMMUNICATION)",
+            "MODE_STATIC_CALLOUT",
+        ),
+    ] {
+        let mut sources = inputs();
+        parameter(&mut sources, owner, field, new_value);
+        rejects_in_both(&sources, code);
+    }
+}
+
+#[test]
+fn required_dcm_channel_reference_has_only_verified_historical_compatibility() {
+    use autosar_config_core::project_model::ValidationStatus;
+    let legacy = legacy_inputs();
+    let validation = normal_validation(&legacy);
+    assert!(validation.diagnostics.is_empty());
+    assert_eq!(validation.status, ValidationStatus::Unsupported);
+    assert!(validation.coverage.iter().any(|rule| rule.rule_id
+        == "native.definition.legacy-dcm-mode-dependency"
+        && !rule.supported));
+    let plan = build(&legacy).unwrap();
+    assert_eq!(
+        plan.description().profile,
+        autosar_config_core::integration::PROFILE
+    );
+    assert!(plan.description().mode_runtime.is_none());
+    assert!(
+        plan.ecu_integration_files(autosar_config_core::target::BuildTarget::LinuxX64ControlledV1)
+            .is_ok()
+    );
+    let mut multi = inputs();
+    xml_edit(
+        &mut multi,
+        "ecuc.arxml",
+        |node| {
+            node.tag_name().name() == "ECUC-REFERENCE-VALUE"
+                && node.children().any(|child| {
+                    child.tag_name().name() == "DEFINITION-REF"
+                        && child
+                            .text()
+                            .is_some_and(|text| text.ends_with("/DcmDslProtocolComMChannelRef"))
+                })
+        },
+        |_| String::new(),
+    );
+    assert!(
+        normal_validation(&multi)
+            .diagnostics
+            .iter()
+            .any(|issue| issue.code == "MULTIPLICITY")
+    );
+    assert!(build(&multi).is_err());
+    // An explicit new mode module is a new configuration, even when the
+    // remaining files retain the historical single-component shape.
+    for module in ["ComM", "BswM"] {
+        let mut sources = legacy.clone();
+        change(
+            &mut sources,
+            "ecuc.arxml",
+            "</ELEMENTS>",
+            &format!(
+                "<ECUC-MODULE-CONFIGURATION-VALUES><SHORT-NAME>{module}</SHORT-NAME><DEFINITION-REF DEST=\"ECUC-MODULE-DEF\">/AUTOSAR/EcucDefs/{module}</DEFINITION-REF></ECUC-MODULE-CONFIGURATION-VALUES></ELEMENTS>"
+            ),
+        );
+        assert!(
+            normal_validation(&sources)
+                .diagnostics
+                .iter()
+                .any(|issue| issue.code == "MULTIPLICITY"
+                    && issue.witness.as_ref().is_some_and(|witness| format!(
+                        "{:?}",
+                        witness.constraint
+                    )
+                    .contains("DcmDslProtocolComMChannelRef")))
+        );
+    }
+    let source = legacy
+        .iter()
+        .find(|source| source.logical_path() == "ecuc.arxml")
+        .unwrap();
+    let text = std::str::from_utf8(source.bytes()).unwrap();
+    let document = roxmltree::Document::parse(text).unwrap();
+    let dcm = document
+        .descendants()
+        .find(|node| named(*node, "ECUC-MODULE-CONFIGURATION-VALUES", "Dcm"))
+        .unwrap();
+    let standalone = format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?><AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\"><AR-PACKAGES><AR-PACKAGE><SHORT-NAME>Configuration</SHORT-NAME><ELEMENTS>{}</ELEMENTS></AR-PACKAGE></AR-PACKAGES></AUTOSAR>",
+        &text[dcm.range()]
+    );
+    let standalone = [InputSource::new("dcm.arxml", standalone.into_bytes()).unwrap()];
+    let validation = normal_validation(&standalone);
+    assert!(
+        validation
+            .diagnostics
+            .iter()
+            .any(|issue| issue.code == "MULTIPLICITY"
+                && issue.witness.as_ref().is_some_and(|witness| format!(
+                    "{:?}",
+                    witness.constraint
+                )
+                .contains("DcmDslProtocolComMChannelRef"))),
+        "{:?}",
+        validation.diagnostics
+    );
+}
+
+#[test]
+fn historical_profile_identity_uses_bindings_instead_of_runnable_capabilities() {
+    let mut concurrent = legacy_inputs();
+    change(
+        &mut concurrent,
+        "application.arxml",
+        "<CAN-BE-INVOKED-CONCURRENTLY>false",
+        "<CAN-BE-INVOKED-CONCURRENTLY>true",
+    );
+    let validation = normal_validation(&concurrent);
+    assert!(validation.diagnostics.is_empty());
+    assert_eq!(
+        validation.status,
+        autosar_config_core::project_model::ValidationStatus::Unsupported
+    );
+    let issues = build(&concurrent).err().unwrap();
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.code == "REENTRANCY_UNSUPPORTED"),
+        "{issues:?}"
+    );
+    assert!(!issues.iter().any(|issue| issue.code == "MULTIPLICITY"));
+    let mut wrong_rte = legacy_inputs();
+    xml_edit(
+        &mut wrong_rte,
+        "ecuc.arxml",
+        |node| {
+            node.tag_name().name() == "VALUE-REF"
+                && node.parent().is_some_and(|parent| {
+                    parent.children().any(|child| {
+                        child.tag_name().name() == "DEFINITION-REF"
+                            && child.text().is_some_and(|text| {
+                                text.ends_with("/RteSoftwareComponentInstanceRef")
+                            })
+                    })
+                })
+        },
+        |_| {
+            "<VALUE-REF DEST=\"SW-COMPONENT-PROTOTYPE\">/Application/ReferenceComposition/DcmService</VALUE-REF>".into()
+        },
+    );
+    let mut unmapped = legacy_inputs();
+    xml_edit(
+        &mut unmapped,
+        "extract.arxml",
+        |node| {
+            node.tag_name().name() == "COMPONENT-IREF"
+                && node.children().any(|child| {
+                    child.tag_name().name() == "TARGET-COMPONENT-REF"
+                        && child.text() == Some("/Application/ReferenceComposition/EchoApplication")
+                })
+        },
+        |_| String::new(),
+    );
+    for sources in [wrong_rte, unmapped] {
+        let validation = normal_validation(&sources);
+        assert!(
+            validation
+                .diagnostics
+                .iter()
+                .any(|issue| issue.code == "MULTIPLICITY"
+                    && issue.witness.as_ref().is_some_and(|witness| format!(
+                        "{:?}",
+                        witness.constraint
+                    )
+                    .contains("DcmDslProtocolComMChannelRef"))),
+            "{:?}",
+            validation.diagnostics
+        );
+        assert!(
+            !validation
+                .coverage
+                .iter()
+                .any(|rule| rule.rule_id == "native.definition.legacy-dcm-mode-dependency")
+        );
+    }
 }

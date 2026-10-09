@@ -1144,18 +1144,128 @@ fn parse_diagnostic(
     Ok(Some(diagnostic))
 }
 
-impl Workspace {
-    pub(super) fn is_managed_file(&self, file: &SourceFile) -> bool {
-        file.text
-            == render_profile(
-                &self.name,
-                &self.frames,
-                &self.signals,
-                self.diagnostic.as_ref(),
-            )
-    }
+struct HostSourceProfile<'a> {
+    name: &'a str,
+    files: &'a [SourceFile],
+    frames: Vec<FrameView>,
+    signals: Vec<SignalView>,
+    diagnostic: Option<DiagnosticView>,
+    issues: Vec<Issue>,
+}
 
-    pub(super) fn refresh(&mut self) -> Result<(), crate::message::LocalizedText> {
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+struct HostSourceElement {
+    name: String,
+    namespace: Option<String>,
+    attributes: Vec<(Option<String>, String, String)>,
+    text: String,
+    children: Vec<HostSourceElement>,
+}
+
+// Whitespace, comments and ordering of independently named configuration
+// entries do not change profile identity. Every element, attribute and value
+// remains in this comparison, including unknown or additional business data.
+fn host_source_element(node: Node<'_, '_>) -> HostSourceElement {
+    let mut attributes: Vec<_> = node
+        .attributes()
+        .map(|attribute| {
+            (
+                attribute.namespace().map(str::to_owned),
+                attribute.name().into(),
+                attribute.value().into(),
+            )
+        })
+        .collect();
+    attributes.sort();
+    let mut children: Vec<_> = node
+        .children()
+        .filter(|node| node.is_element())
+        .map(host_source_element)
+        .collect();
+    children.sort();
+    HostSourceElement {
+        name: node.tag_name().name().into(),
+        namespace: node.tag_name().namespace().map(str::to_owned),
+        attributes,
+        text: node
+            .children()
+            .filter(|node| node.is_text())
+            .filter_map(|node| node.text())
+            .map(str::trim)
+            .collect(),
+        children,
+    }
+}
+
+/// Recognize the complete product host source shape, without opening a
+/// workspace or entering definition validation again.
+pub(crate) fn historical_host_mode_dependency(documents: &[&Document<'_>]) -> bool {
+    if documents.len() != 1 {
+        return false;
+    }
+    let document = &documents[0];
+    let packages: Vec<_> = document
+        .root_element()
+        .children()
+        .filter(|node| node.tag_name().name() == "AR-PACKAGES")
+        .flat_map(|node| {
+            node.children()
+                .filter(|node| node.tag_name().name() == "AR-PACKAGE")
+        })
+        .collect();
+    if packages.len() != 1 {
+        return false;
+    }
+    let Some(name) = child_text(packages[0], "SHORT-NAME") else {
+        return false;
+    };
+    let files = [SourceFile {
+        path: PathBuf::from("host.arxml"),
+        text: document.input_text().into(),
+        saved: document.input_text().into(),
+        original_name: None,
+    }];
+    let mut profile = HostSourceProfile {
+        name: &name,
+        files: &files,
+        frames: Vec::new(),
+        signals: Vec::new(),
+        diagnostic: None,
+        issues: Vec::new(),
+    };
+    if profile.refresh().is_err() {
+        return false;
+    }
+    if !profile.issues.is_empty() || profile.diagnostic.is_none() {
+        return false;
+    }
+    // Recover caller order because source-generated handle assignments depend
+    // on it; the ordinary parsed workspace views are sorted for presentation.
+    let positions: BTreeMap<_, _> = document
+        .descendants()
+        .filter(|node| child_text(*node, "SHORT-NAME").is_some())
+        .map(|node| (path_of(node), node.range().start))
+        .collect();
+    profile
+        .frames
+        .sort_by_key(|frame| positions.get(&frame.path).copied());
+    profile
+        .signals
+        .sort_by_key(|signal| positions.get(&signal.path).copied());
+    let expected = render_profile(
+        &name,
+        &profile.frames,
+        &profile.signals,
+        profile.diagnostic.as_ref(),
+    );
+    let Ok(expected) = Document::parse(&expected) else {
+        return false;
+    };
+    host_source_element(document.root_element()) == host_source_element(expected.root_element())
+}
+
+impl HostSourceProfile<'_> {
+    fn refresh(&mut self) -> Result<(), crate::message::LocalizedText> {
         let mut issues = Vec::new();
         let mut pdus = BTreeMap::new();
         let mut signal_lengths = BTreeMap::new();
@@ -1172,7 +1282,7 @@ impl Workspace {
         let own_com_config_path = format!("{own_com_module_path}/ComConfig");
         let mut consumed_com_modules = 0usize;
         let mut com_owner_issues = Vec::new();
-        for file in &self.files {
+        for file in self.files {
             let doc =
                 Document::parse(&file.text).map_err(|e| format!("{}: {e}", file.path.display()))?;
             for node in doc
@@ -1901,8 +2011,38 @@ impl Workspace {
         self.signals = signals;
         self.diagnostic = diagnostic;
         self.issues = issues;
+        Ok(())
+    }
+}
+
+impl Workspace {
+    pub(super) fn is_managed_file(&self, file: &SourceFile) -> bool {
+        file.text
+            == render_profile(
+                &self.name,
+                &self.frames,
+                &self.signals,
+                self.diagnostic.as_ref(),
+            )
+    }
+
+    pub(super) fn refresh(&mut self) -> Result<(), crate::message::LocalizedText> {
+        let mut profile = HostSourceProfile {
+            name: &self.name,
+            files: &self.files,
+            frames: Vec::new(),
+            signals: Vec::new(),
+            diagnostic: None,
+            issues: Vec::new(),
+        };
+        profile.refresh()?;
+        self.frames = profile.frames;
+        self.signals = profile.signals;
+        self.diagnostic = profile.diagnostic;
+        self.issues = profile.issues;
         self.rebuild_snapshot()
     }
+
     pub(super) fn global_pdu_for(
         &self,
         system_path: &str,

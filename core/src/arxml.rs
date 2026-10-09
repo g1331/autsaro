@@ -32,6 +32,7 @@ pub use project::{
 
 pub use persistence::{PreparedSave, SaveFailure};
 
+pub(crate) use host_profile::historical_host_mode_dependency;
 use host_profile::parse_host_routine;
 use persistence::{Patch, apply_patches, patch_child, patch_param};
 use xml::{
@@ -55,7 +56,6 @@ pub(crate) struct HandoffSource {
     pub package_roots: Vec<String>,
     pub contents: Vec<u8>,
 }
-
 
 #[derive(Clone)]
 pub struct Workspace {

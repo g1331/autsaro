@@ -221,10 +221,199 @@ pub(super) fn populate(
         a.container(module, 0, if module == "Can" { None } else { Some(1) })?;
     }
     communication(&mut a)?;
+    mode_management(&mut a)?;
     diagnostic(&mut a)?;
     operating_system(&mut a)?;
     persistence(&mut a)?;
     defaults(&mut a);
+    Ok(())
+}
+
+fn mode_management(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedText> {
+    a.container("ComM", 0, Some(1))?;
+    let general = "ComM/ComMGeneral";
+    a.container(general, 1, Some(1))?;
+    let disabled = "ComMDevErrorDetect ComMDynamicPncToChannelMappingSupport ComMModeLimitationEnabled ComMPncSupport ComMResetAfterForcingNoComm ComMVersionInfoApi ComMWakeupInhibitionEnabled";
+    a.booleans(general, disabled, 1)?;
+    for name in disabled.split_whitespace() {
+        a.default(general, name, "false");
+    }
+    a.booleans(general, "ComMSynchronousWakeUp", 1)?;
+    a.default(general, "ComMSynchronousWakeUp", "true");
+    a.integers(general, "ComMEcuGroupClassification", "0", U8, 1)?;
+    a.default(general, "ComMEcuGroupClassification", "3");
+    a.floats(general, "ComMTMinFullComModeDuration", Some("65"), 1)?;
+    a.0.entries_mut()
+        .get_mut(&format!("{ROOT}{general}/ComMTMinFullComModeDuration"))
+        .unwrap()
+        .minimum = Some("0.001".into());
+    a.default(general, "ComMTMinFullComModeDuration", "5");
+    a.container("ComM/ComMConfigSet", 1, Some(1))?;
+    let channel = "ComM/ComMConfigSet/ComMChannel";
+    let user = "ComM/ComMConfigSet/ComMUser";
+    a.container(channel, 1, Some(256))?;
+    a.container(user, 0, Some(65535))?;
+    a.integers(user, "ComMUserIdentifier", "0", "65534", 1)?;
+    a.enumeration(channel, "ComMBusType", "COMM_BUS_TYPE_CAN COMM_BUS_TYPE_CDD COMM_BUS_TYPE_ETH COMM_BUS_TYPE_FR COMM_BUS_TYPE_INTERNAL COMM_BUS_TYPE_LIN", 1)?;
+    a.integers(channel, "ComMChannelId", "0", U8, 1)?;
+    a.field(channel, "ComMCDDBusPrefix", ValueKind::String, 0)?;
+    a.floats(channel, "ComMMainFunctionPeriod", None, 1)?;
+    a.default(channel, "ComMMainFunctionPeriod", "0.02");
+    let flags = "ComMFullCommRequestNotificationEnabled ComMNoCom ComMNoWakeup";
+    a.booleans(channel, flags, 1)?;
+    for name in flags.split_whitespace() {
+        a.default(channel, name, "false");
+    }
+    a.booleans(channel, "ComMNoWakeUpInhibitionNvmStorage", 1)?;
+    let management = format!("{channel}/ComMNetworkManagement");
+    a.container(&management, 1, Some(1))?;
+    a.enumeration(
+        &management,
+        "ComMNmVariant",
+        "FULL LIGHT NONE PASSIVE SLAVE_ACTIVE SLAVE_PASSIVE",
+        1,
+    )?;
+    a.default(&management, "ComMNmVariant", "FULL");
+    let users = format!("{channel}/ComMUserPerChannel");
+    a.container(&users, 0, Some(255))?;
+    a.reference(&users, "ComMUserChannel", user, 1, Some(1))?;
+    let main = "Dcm/DcmConfigSet/DcmDsl/DcmDslProtocol/DcmDslProtocolRow/DcmDslConnection/DcmDslMainConnection";
+    a.reference(main, "DcmDslProtocolComMChannelRef", channel, 1, Some(1))?;
+
+    a.container("BswM", 0, Some(1))?;
+    let general = "BswM/BswMGeneral";
+    a.container(general, 1, Some(1))?;
+    let flags = "BswMCanSMEnabled BswMComMEnabled BswMDcmEnabled BswMDevErrorDetect BswMEcuMEnabled BswMEthIfEnabled BswMEthSMEnabled BswMFrSMEnabled BswMGenericRequestEnabled BswMJ1939DcmEnabled BswMJ1939NmEnabled BswMLinSMEnabled BswMLinTPEnabled BswMNmEnabled BswMNvMEnabled BswMSdControlEnabled BswMSdEnabled BswMVersionInfoApi";
+    a.booleans(general, flags, 1)?;
+    for name in flags.split_whitespace() {
+        a.default(general, name, "false");
+    }
+    a.floats(general, "BswMMainFunctionPeriod", None, 0)?;
+    a.container("BswM/BswMGeneral/BswMUserIncludeFiles", 0, Some(1))?;
+    a.field(
+        "BswM/BswMGeneral/BswMUserIncludeFiles",
+        "BswMUserIncludeFile",
+        ValueKind::String,
+        1,
+    )?;
+    a.0.entries_mut()
+        .get_mut(&format!(
+            "{ROOT}BswM/BswMGeneral/BswMUserIncludeFiles/BswMUserIncludeFile"
+        ))
+        .unwrap()
+        .upper_multiplicity = None;
+    let config = "BswM/BswMConfig";
+    a.container(config, 1, None)?;
+    let arbitration = format!("{config}/BswMArbitration");
+    let control = format!("{config}/BswMModeControl");
+    a.container(&arbitration, 1, Some(1))?;
+    a.container(&control, 1, Some(1))?;
+    let input = format!("{arbitration}/BswMModeRequestPort");
+    a.container(&input, 0, None)?;
+    a.enumeration(
+        &input,
+        "BswMRequestProcessing",
+        "BSWM_DEFERRED BSWM_IMMEDIATE",
+        1,
+    )?;
+    let source = format!("{input}/BswMModeRequestSource");
+    a.choice(&source, 1, Some(1))?;
+    let indication = format!("{source}/BswMComMIndication");
+    a.container(&indication, 0, Some(1))?;
+    a.reference(&indication, "BswMComMChannelRef", channel, 1, Some(1))?;
+    let initial = format!("{input}/BswMModeInitValue");
+    a.container(&initial, 0, Some(1))?;
+    a.field(&initial, "BswMBswModeInitValue", ValueKind::String, 0)?;
+    let condition = format!("{arbitration}/BswMModeCondition");
+    a.container(&condition, 0, None)?;
+    a.enumeration(
+        &condition,
+        "BswMConditionType",
+        "BSWM_EQUALS BSWM_EQUALS_NOT BSWM_EVENT_IS_CLEARED BSWM_EVENT_IS_SET",
+        1,
+    )?;
+    a.reference(
+        &condition,
+        "BswMConditionMode",
+        &format!("{input} {arbitration}/BswMEventRequestPort"),
+        1,
+        Some(1),
+    )?;
+    a.0.entries_mut()
+        .get_mut(&format!("{ROOT}{condition}/BswMConditionMode"))
+        .unwrap()
+        .element_kind = "ECUC-CHOICE-REFERENCE-DEF".into();
+    let expected = format!("{condition}/BswMConditionValue");
+    a.choice(&expected, 0, Some(1))?;
+    let mode = format!("{expected}/BswMBswMode");
+    a.container(&mode, 0, Some(1))?;
+    a.field(&mode, "BswMBswRequestedMode", ValueKind::String, 1)?;
+    let expression = format!("{arbitration}/BswMLogicalExpression");
+    a.container(&expression, 0, None)?;
+    a.enumeration(
+        &expression,
+        "BswMLogicalOperator",
+        "BSWM_AND BSWM_NAND BSWM_NOT BSWM_OR BSWM_XOR",
+        0,
+    )?;
+    a.reference(
+        &expression,
+        "BswMArgumentRef",
+        &format!("{expression} {condition}"),
+        1,
+        None,
+    )?;
+    a.0.entries_mut()
+        .get_mut(&format!("{ROOT}{expression}/BswMArgumentRef"))
+        .unwrap()
+        .element_kind = "ECUC-CHOICE-REFERENCE-DEF".into();
+    let rule = format!("{arbitration}/BswMRule");
+    let action = format!("{control}/BswMAction");
+    let list = format!("{control}/BswMActionList");
+    a.container(&rule, 0, None)?;
+    a.booleans(&rule, "BswMNestedExecutionOnly", 1)?;
+    a.default(&rule, "BswMNestedExecutionOnly", "false");
+    a.enumeration(
+        &rule,
+        "BswMRuleInitState",
+        "BSWM_FALSE BSWM_TRUE BSWM_UNDEFINED",
+        1,
+    )?;
+    a.reference(&rule, "BswMRuleExpressionRef", &expression, 1, Some(1))?;
+    for name in ["BswMRuleTrueActionList", "BswMRuleFalseActionList"] {
+        a.reference(&rule, name, &list, 0, Some(1))?;
+    }
+    a.container(&action, 0, None)?;
+    let available = format!("{action}/BswMAvailableActions");
+    a.choice(&available, 1, Some(1))?;
+    let callout = format!("{available}/BswMUserCallout");
+    a.container(&callout, 0, Some(1))?;
+    a.field(&callout, "BswMUserCalloutFunction", ValueKind::String, 1)?;
+    a.container(&list, 0, None)?;
+    a.enumeration(
+        &list,
+        "BswMActionListExecution",
+        "BSWM_CONDITION BSWM_TRIGGER",
+        1,
+    )?;
+    a.integers(&list, "BswMActionListPriority", "0", U8, 0)?;
+    a.default(&list, "BswMActionListPriority", "0");
+    let item = format!("{list}/BswMActionListItem");
+    a.container(&item, 1, None)?;
+    a.integers(&item, "BswMActionListItemIndex", "0", U8, 1)?;
+    a.booleans(&item, "BswMAbortOnFail", 1)?;
+    a.default(&item, "BswMAbortOnFail", "false");
+    a.reference(
+        &item,
+        "BswMActionListItemRef",
+        &format!("{action} {list} {rule}"),
+        1,
+        Some(1),
+    )?;
+    a.0.entries_mut()
+        .get_mut(&format!("{ROOT}{item}/BswMActionListItemRef"))
+        .unwrap()
+        .element_kind = "ECUC-CHOICE-REFERENCE-DEF".into();
     Ok(())
 }
 

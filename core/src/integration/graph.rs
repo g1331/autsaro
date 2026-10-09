@@ -386,9 +386,119 @@ impl Graph {
     }
 }
 
+impl Graph {
+    fn integration_consumers(
+        &self,
+        catalog: &crate::definitions::DefinitionCatalog,
+    ) -> std::collections::BTreeSet<String> {
+        let mut pending = self.of_kind("SYSTEM");
+        pending.extend(
+            self.of_kind("ECUC-MODULE-CONFIGURATION-VALUES")
+                .into_iter()
+                .filter(|index| {
+                    self.text(*index, "DEFINITION-REF")
+                        .and_then(|id| id.strip_prefix("/AUTOSAR/EcucDefs/"))
+                        .is_some_and(|name| {
+                            matches!(
+                                name,
+                                "ComM"
+                                    | "BswM"
+                                    | "Can"
+                                    | "CanIf"
+                                    | "CanTp"
+                                    | "Com"
+                                    | "Dcm"
+                                    | "EcuC"
+                                    | "Os"
+                                    | "PduR"
+                                    | "Rte"
+                            )
+                        })
+                }),
+        );
+        let mut visited = std::collections::BTreeSet::new();
+        let mut consumers = std::collections::BTreeSet::new();
+        while let Some(index) = pending.pop() {
+            if !visited.insert(index) {
+                continue;
+            }
+            let element = &self.elements[index];
+            if element.tag.starts_with("ECUC-")
+                && self
+                    .text(index, "DEFINITION-REF")
+                    .is_some_and(|id| catalog.get(id).is_none())
+            {
+                continue;
+            }
+            consumers.insert(element.object.clone());
+            pending.extend(element.children.iter().copied());
+            if element.attributes.contains_key("DEST") {
+                if let Some(target) = self.objects.get(&element.text) {
+                    pending.push(*target);
+                }
+            }
+        }
+        consumers
+    }
+}
+
 // Kept beside the private integration graph so native definition validation can
 // reuse existing cross-module rules without exposing graph implementation types.
 impl crate::definitions::DefinitionCatalog {
+    /// Only the completely recognized historical integration profile retains
+    /// its missing mode dependency. Merely being non-multi is insufficient.
+    pub(crate) fn legacy_mode_dependency_compatibility<'a, 'input>(
+        &self,
+        files: impl Iterator<Item = (&'a str, &'a Document<'input>)>,
+    ) -> bool
+    where
+        'input: 'a,
+    {
+        let files: Vec<_> = files.collect();
+        let documents: Vec<_> = files.iter().map(|(_, document)| *document).collect();
+        if crate::arxml::historical_host_mode_dependency(&documents) {
+            return true;
+        }
+        let modules: std::collections::BTreeSet<_> = files
+            .iter()
+            .flat_map(|(_, document)| {
+                document
+                    .descendants()
+                    .filter(|node| node.tag_name().name() == "ECUC-MODULE-CONFIGURATION-VALUES")
+                    .filter_map(|node| {
+                        node.children()
+                            .find(|child| child.tag_name().name() == "DEFINITION-REF")
+                            .and_then(|child| child.text())
+                    })
+            })
+            .collect();
+        if ["ComM", "BswM"]
+            .iter()
+            .any(|module| modules.contains(format!("/AUTOSAR/EcucDefs/{module}").as_str()))
+            || ![
+                "Can", "CanIf", "CanTp", "Com", "Dcm", "EcuC", "Os", "PduR", "Rte",
+            ]
+            .iter()
+            .all(|module| modules.contains(format!("/AUTOSAR/EcucDefs/{module}").as_str()))
+        {
+            return false;
+        }
+        let Ok(graph) = Graph::build_documents(
+            files.into_iter(),
+            Graph::catalog_external(self),
+            ReferencePolicy::ConsumerScoped,
+        ) else {
+            return false;
+        };
+        if !super::component::historical_source_identity(&graph) {
+            return false;
+        }
+        // No capability inspection participates in historical source identity.
+        // Keep all retained objects and references available for normal validation.
+        let consumers = graph.integration_consumers(self);
+        graph.reference_diagnostics_for(&consumers).is_empty()
+    }
+
     pub(crate) fn legacy_definition_constraints<'a, 'input>(
         &self,
         files: impl Iterator<Item = (&'a str, &'a Document<'input>)>,
@@ -399,53 +509,7 @@ impl crate::definitions::DefinitionCatalog {
         let external = Graph::catalog_external(self);
         match Graph::build_documents(files, external, ReferencePolicy::ConsumerScoped) {
             Ok(graph) => {
-                let mut pending = graph.of_kind("SYSTEM");
-                pending.extend(
-                    graph
-                        .of_kind("ECUC-MODULE-CONFIGURATION-VALUES")
-                        .into_iter()
-                        .filter(|index| {
-                            graph
-                                .text(*index, "DEFINITION-REF")
-                                .and_then(|id| id.strip_prefix("/AUTOSAR/EcucDefs/"))
-                                .is_some_and(|name| {
-                                    matches!(
-                                        name,
-                                        "Can"
-                                            | "CanIf"
-                                            | "CanTp"
-                                            | "Com"
-                                            | "Dcm"
-                                            | "EcuC"
-                                            | "Os"
-                                            | "PduR"
-                                            | "Rte"
-                                    )
-                                })
-                        }),
-                );
-                let mut visited = std::collections::BTreeSet::new();
-                let mut consumers = std::collections::BTreeSet::new();
-                while let Some(index) = pending.pop() {
-                    if !visited.insert(index) {
-                        continue;
-                    }
-                    let element = &graph.elements[index];
-                    if element.tag.starts_with("ECUC-")
-                        && graph
-                            .text(index, "DEFINITION-REF")
-                            .is_some_and(|id| self.get(id).is_none())
-                    {
-                        continue;
-                    }
-                    consumers.insert(element.object.clone());
-                    pending.extend(element.children.iter().copied());
-                    if element.attributes.contains_key("DEST") {
-                        if let Some(target) = graph.objects.get(&element.text) {
-                            pending.push(*target);
-                        }
-                    }
-                }
+                let consumers = graph.integration_consumers(self);
                 let references = graph.reference_diagnostics_for(&consumers);
                 if !references.is_empty() {
                     return Some((false, super::multi::selected(&graph), references));

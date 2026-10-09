@@ -339,7 +339,15 @@ pub(super) fn complete(contents: &mut String) -> Result<(), crate::message::Loca
             .collect();
         let missing: Vec<_> = children
             .into_iter()
-            .filter(|child| child.lower_multiplicity > 0 && !present.contains(&child.definition_id))
+            .filter(|child| {
+                child.lower_multiplicity > 0
+                    && !present.contains(&child.definition_id)
+                    // This function only completes the product-original historical
+                    // single-component template, which has no ComM source. Keep
+                    // that explicit gap; definition validation reports it as
+                    // unsupported only after recognizing the complete old profile.
+                    && child.definition_id != "/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsl/DcmDslProtocol/DcmDslProtocolRow/DcmDslConnection/DcmDslMainConnection/DcmDslProtocolComMChannelRef"
+            })
             .collect();
         let nested = missing
             .iter()
