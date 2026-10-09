@@ -501,6 +501,9 @@ impl AppState {
             autosar_config_core::product_message!("backend.workbench.session_lock_poisoned")
         })?;
         self.check(&session, fingerprint)?;
+        if let Some(error) = &session.settings_error {
+            return Err(error.clone());
+        }
         let mut settings = session.settings.clone();
         settings.appearance = appearance;
         let bytes = self.persist(
@@ -530,6 +533,9 @@ impl AppState {
             autosar_config_core::product_message!("backend.workbench.session_lock_poisoned")
         })?;
         self.check(&session, fingerprint)?;
+        if let Some(error) = &session.settings_error {
+            return Err(error.clone());
+        }
         let mut settings = session.settings.clone();
         settings.language = language;
         let bytes = self.persist(
@@ -1156,6 +1162,9 @@ mod language_tests {
         let reply = state
             .configure_language(&before, Language::English)
             .unwrap();
+        state
+            .configure_appearance(&before, Appearance::Light)
+            .unwrap();
         assert_eq!(reply.input_fingerprint, before);
         assert_eq!(reply.capabilities.fingerprint, before);
         assert_eq!(reply.capabilities.language, Language::English);
@@ -1173,6 +1182,208 @@ mod language_tests {
             restarted.capabilities().unwrap().language,
             Language::English
         );
+    }
+
+    #[test]
+    fn rejected_settings_preserve_bytes_and_session_for_both_presentation_saves() {
+        for original in [
+            br#"{"xsdArchive":"configured-xsd.zip","modArchive":"configured-mod.zip","buildTarget":"windows-x64-controlled-v1","futureSetting":{"retain":true}}"#.as_slice(),
+            b"{broken json".as_slice(),
+        ] {
+            for appearance in [false, true] {
+                let fixture = Fixture::new();
+                fs::write(fixture.settings(), original).unwrap();
+                let state = AppState::new(fixture.settings()).unwrap();
+                let workspace =
+                    Arc::new(Workspace::create(&fixture.0.join("Project"), "Project").unwrap());
+                state.session.lock().unwrap().workspace = Some(workspace.clone());
+                let fingerprint = state.capabilities().unwrap().fingerprint;
+                let operation = state
+                    .begin(
+                        &fingerprint,
+                        autosar_config_core::product_message!("backend.operation.validate"),
+                        OperationKind::Read,
+                    )
+                    .unwrap();
+                let before = serde_json::to_value(state.capabilities().unwrap()).unwrap();
+                let error = state
+                    .session
+                    .lock()
+                    .unwrap()
+                    .settings_error
+                    .clone()
+                    .unwrap();
+                let result = if appearance {
+                    state.configure_appearance(&fingerprint, Appearance::Light)
+                } else {
+                    state.configure_language(&fingerprint, Language::English)
+                };
+                assert_eq!(result.err().unwrap(), error);
+                assert_eq!(fs::read(fixture.settings()).unwrap(), original);
+                assert_eq!(
+                    serde_json::to_value(state.capabilities().unwrap()).unwrap(),
+                    before
+                );
+                let session = state.session.lock().unwrap();
+                assert_eq!(session.settings_bytes.as_deref(), Some(original));
+                assert_eq!(session.settings_error.as_ref(), Some(&error));
+                assert_eq!(session.revision, 0);
+                assert!(Arc::ptr_eq(session.workspace.as_ref().unwrap(), &workspace));
+                drop(session);
+                operation.commit(|_| Ok(())).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn cancelled_and_superseded_operations_never_run_commit_actions() {
+        for cancel in [true, false] {
+            let fixture = Fixture::new();
+            let state = AppState::new(fixture.settings()).unwrap();
+            let workspace =
+                Arc::new(Workspace::create(&fixture.0.join("Project"), "Project").unwrap());
+            state.session.lock().unwrap().workspace = Some(workspace.clone());
+            let fingerprint = state.capabilities().unwrap().fingerprint;
+            let old = state
+                .begin(
+                    &fingerprint,
+                    autosar_config_core::product_message!("backend.operation.validate"),
+                    OperationKind::Read,
+                )
+                .unwrap();
+            let replacement = if cancel {
+                state.cancel(&fingerprint).unwrap();
+                None
+            } else {
+                Some(
+                    state
+                        .begin(
+                            &fingerprint,
+                            autosar_config_core::product_message!("backend.operation.validate"),
+                            OperationKind::Edit,
+                        )
+                        .unwrap(),
+                )
+            };
+            let before = serde_json::to_value(state.capabilities().unwrap()).unwrap();
+            let mut called = false;
+            let error = old
+                .commit(|session| {
+                    called = true;
+                    session.workspace = None;
+                    Ok(())
+                })
+                .err()
+                .unwrap();
+            assert!(!called);
+            assert_eq!(
+                error,
+                autosar_config_core::product_message!("backend.workbench.stale_delivery")
+            );
+            assert_eq!(
+                serde_json::to_value(state.capabilities().unwrap()).unwrap(),
+                before
+            );
+            assert!(Arc::ptr_eq(
+                state.session.lock().unwrap().workspace.as_ref().unwrap(),
+                &workspace
+            ));
+            if let Some(operation) = replacement {
+                operation.commit(|_| Ok(())).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn target_configuration_change_invalidates_old_operation_without_mutating_new_state() {
+        let fixture = Fixture::new();
+        let state = AppState::new(fixture.settings()).unwrap();
+        let workspace = Arc::new(Workspace::create(&fixture.0.join("Project"), "Project").unwrap());
+        state.session.lock().unwrap().workspace = Some(workspace.clone());
+        let capabilities = state.capabilities().unwrap();
+        let old = state
+            .begin(
+                &capabilities.fingerprint,
+                autosar_config_core::product_message!("backend.operation.validate"),
+                OperationKind::Read,
+            )
+            .unwrap();
+        let target = if capabilities.target == BuildTarget::LinuxX64ControlledV1 {
+            BuildTarget::WindowsX64ControlledV1
+        } else {
+            BuildTarget::LinuxX64ControlledV1
+        };
+        state
+            .select_target(&capabilities.fingerprint, target)
+            .unwrap();
+        let current = state.capabilities().unwrap();
+        assert_ne!(current.fingerprint, capabilities.fingerprint);
+        assert_eq!(current.target, target);
+        let before = serde_json::to_value(current).unwrap();
+        let settings = fs::read(fixture.settings()).unwrap();
+        let mut called = false;
+        let error = old
+            .commit(|session| {
+                called = true;
+                session.workspace = None;
+                Ok(())
+            })
+            .err()
+            .unwrap();
+        assert!(!called);
+        assert_eq!(
+            error,
+            autosar_config_core::product_message!("backend.workbench.stale_delivery")
+        );
+        assert_eq!(
+            serde_json::to_value(state.capabilities().unwrap()).unwrap(),
+            before
+        );
+        assert_eq!(fs::read(fixture.settings()).unwrap(), settings);
+        let session = state.session.lock().unwrap();
+        assert_eq!(session.settings.build_target, Some(target));
+        assert_eq!(session.settings_bytes.as_deref(), Some(settings.as_slice()));
+        assert!(Arc::ptr_eq(session.workspace.as_ref().unwrap(), &workspace));
+    }
+
+    #[test]
+    fn completed_operation_rejects_a_second_commit_without_running_the_action() {
+        let fixture = Fixture::new();
+        let state = AppState::new(fixture.settings()).unwrap();
+        let workspace = Arc::new(Workspace::create(&fixture.0.join("Project"), "Project").unwrap());
+        state.session.lock().unwrap().workspace = Some(workspace.clone());
+        let fingerprint = state.capabilities().unwrap().fingerprint;
+        let operation = state
+            .begin(
+                &fingerprint,
+                autosar_config_core::product_message!("backend.operation.validate"),
+                OperationKind::Read,
+            )
+            .unwrap();
+        operation.commit(|_| Ok(())).unwrap();
+        let before = serde_json::to_value(state.capabilities().unwrap()).unwrap();
+        let mut called = false;
+        let error = operation
+            .commit(|session| {
+                called = true;
+                session.workspace = None;
+                Ok(())
+            })
+            .err()
+            .unwrap();
+        assert!(!called);
+        assert_eq!(
+            error,
+            autosar_config_core::product_message!("backend.workbench.operation_cancelled")
+        );
+        assert_eq!(
+            serde_json::to_value(state.capabilities().unwrap()).unwrap(),
+            before
+        );
+        assert!(Arc::ptr_eq(
+            state.session.lock().unwrap().workspace.as_ref().unwrap(),
+            &workspace
+        ));
     }
 
     #[test]
