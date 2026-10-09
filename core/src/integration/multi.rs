@@ -377,6 +377,19 @@ fn inspect_dcm_declarations(
 }
 
 pub(super) fn inspect(graph: &Graph) -> Result<MultiComponentContract, Vec<PlanDiagnostic>> {
+    inspect_with_transport(graph, true)
+}
+
+pub(super) fn inspect_ownership(
+    graph: &Graph,
+) -> Result<MultiComponentContract, Vec<PlanDiagnostic>> {
+    inspect_with_transport(graph, false)
+}
+
+fn inspect_with_transport(
+    graph: &Graph,
+    include_transport: bool,
+) -> Result<MultiComponentContract, Vec<PlanDiagnostic>> {
     let context = *graph
         .objects
         .values()
@@ -1309,37 +1322,40 @@ pub(super) fn inspect(graph: &Graph) -> Result<MultiComponentContract, Vec<PlanD
                 network_ports.push(port.clone());
             }
         }
-        let signals = super::communication::inspect_ports(
-            graph,
-            &network_ports,
-            &component.instance,
-            common_period.ok_or_else(|| fail(graph, composition, "SCHEDULE_NOT_UNIQUE"))?,
-        )?;
-        for transport in signals {
-            let channel = graph
-                .ancestor(
-                    *graph.objects.get(&transport.trigger).unwrap(),
-                    "CAN-PHYSICAL-CHANNEL",
-                )
-                .ok_or_else(|| fail(graph, composition, "SIGNAL_MAPPING"))?;
-            let network = graph
-                .ancestor(channel, "CAN-CLUSTER")
-                .ok_or_else(|| fail(graph, channel, "SIGNAL_MAPPING"))?;
-            let port = component
-                .data_ports
-                .iter()
-                .find(|port| port.path == transport.port)
-                .unwrap();
-            network_endpoints.push(NetworkEndpoint {
-                endpoint: Endpoint {
-                    instance: component.instance.clone(),
-                    port: port.path.clone(),
-                    member: port.element.clone(),
-                },
-                network: path(graph, network),
-                channel: path(graph, channel),
-                transport,
-            });
+        // Live-source ownership needs application identities, not target transport eligibility.
+        if include_transport {
+            let signals = super::communication::inspect_ports(
+                graph,
+                &network_ports,
+                &component.instance,
+                common_period.ok_or_else(|| fail(graph, composition, "SCHEDULE_NOT_UNIQUE"))?,
+            )?;
+            for transport in signals {
+                let channel = graph
+                    .ancestor(
+                        *graph.objects.get(&transport.trigger).unwrap(),
+                        "CAN-PHYSICAL-CHANNEL",
+                    )
+                    .ok_or_else(|| fail(graph, composition, "SIGNAL_MAPPING"))?;
+                let network = graph
+                    .ancestor(channel, "CAN-CLUSTER")
+                    .ok_or_else(|| fail(graph, channel, "SIGNAL_MAPPING"))?;
+                let port = component
+                    .data_ports
+                    .iter()
+                    .find(|port| port.path == transport.port)
+                    .unwrap();
+                network_endpoints.push(NetworkEndpoint {
+                    endpoint: Endpoint {
+                        instance: component.instance.clone(),
+                        port: port.path.clone(),
+                        member: port.element.clone(),
+                    },
+                    network: path(graph, network),
+                    channel: path(graph, channel),
+                    transport,
+                });
+            }
         }
         for operation in component
             .operations
@@ -1373,14 +1389,23 @@ pub(super) fn inspect(graph: &Graph) -> Result<MultiComponentContract, Vec<PlanD
         let port = referenced(graph, iref, "CONTEXT-PORT-REF", "SIGNAL_MAPPING")?;
         let member = referenced(graph, iref, "TARGET-DATA-PROTOTYPE-REF", "SIGNAL_MAPPING")?;
         if graph.target(iref, "CONTEXT-COMPOSITION-REF") != Some(root)
-            || !network_endpoints.iter().any(|checked| {
-                checked.endpoint
-                    == (Endpoint {
-                        instance: path(graph, instance),
-                        port: path(graph, port),
-                        member: path(graph, member),
-                    })
-            })
+            || if include_transport {
+                !network_endpoints.iter().any(|checked| {
+                    checked.endpoint
+                        == (Endpoint {
+                            instance: path(graph, instance),
+                            port: path(graph, port),
+                            member: path(graph, member),
+                        })
+                })
+            } else {
+                !components.iter().any(|component| {
+                    component.instance == path(graph, instance)
+                        && component.data_ports.iter().any(|data| {
+                            data.path == path(graph, port) && data.element == path(graph, member)
+                        })
+                })
+            }
         {
             return Err(fail(graph, mapping, "SIGNAL_MAPPING"));
         }

@@ -90,10 +90,70 @@ impl ValidatedIntegrationPlan {
 
     /// Trusted create-only seed; never merges with or overwrites a user source.
     pub fn application_seed_files(&self) -> Result<Vec<(String, Vec<u8>)>, Vec<PlanDiagnostic>> {
-        Ok(vec![(
-            APPLICATION_SOURCE_PATH.into(),
-            self.render_reference_application()?,
-        )])
+        let Some(multi) = &self.description().multi else {
+            return Ok(vec![(
+                APPLICATION_SOURCE_PATH.into(),
+                self.render_reference_application()?,
+            )]);
+        };
+        let mut files = Vec::new();
+        for slot in self.application_slot_descriptors()? {
+            let component = multi
+                .components
+                .iter()
+                .find(|component| component.component == slot.component_path)
+                .unwrap();
+            let scope = c_name(component.component.rsplit('/').next().unwrap());
+            let mut source = format!(
+                "/** @file User-owned application entry points. */\n#include \"{}\"\n#define RTE_{scope}_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n",
+                component.header.trim_start_matches("include/")
+            );
+            for symbol in self
+                .description()
+                .symbols
+                .iter()
+                .filter(|symbol| symbol.definition_owner == slot.source_paths[0])
+            {
+                let parameters = symbol
+                    .arguments
+                    .iter()
+                    .map(|argument| format!("{} {}", argument.native_type, argument.name))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                writeln!(
+                    source,
+                    "RTE_{scope}_CODE {} {}({}) {{",
+                    symbol.return_type,
+                    symbol.symbol,
+                    if parameters.is_empty() {
+                        "void"
+                    } else {
+                        &parameters
+                    }
+                )
+                .unwrap();
+                for argument in &symbol.arguments {
+                    if argument.direction != "OUT" {
+                        writeln!(source, "    (void){};", argument.name).unwrap();
+                    } else if argument.native_type == "uint32 *" {
+                        writeln!(source, "    *{} = 0u;", argument.name).unwrap();
+                    } else {
+                        // The checked contract supports only fixed uint8[4] OUT arrays.
+                        for index in 0..4 {
+                            writeln!(source, "    {}[{index}] = 0u;", argument.name).unwrap();
+                        }
+                    }
+                }
+                source.push_str("}\n");
+            }
+            writeln!(
+                source,
+                "#define RTE_{scope}_STOP_SEC_CODE\n#include \"Rte_MemMap.h\""
+            )
+            .unwrap();
+            files.push((slot.source_paths[0].clone(), source.into_bytes()));
+        }
+        Ok(files)
     }
 
     fn render_reference_application(&self) -> Result<Vec<u8>, Vec<PlanDiagnostic>> {
@@ -525,7 +585,7 @@ pub(crate) fn source_assets(
     Ok(files)
 }
 
-fn application_slots(
+pub(super) fn application_slots(
     multi: &super::multi::MultiComponentContract,
     symbols: &[super::catalog::SymbolContract],
 ) -> Vec<generator::delivery::ApplicationSlotDescriptor> {
@@ -562,8 +622,21 @@ fn application_slots(
 pub(crate) fn application_slots_from_sources(
     sources: &[super::InputSource],
 ) -> Result<Vec<generator::delivery::ApplicationSlotDescriptor>, Vec<PlanDiagnostic>> {
+    workspace_application_slots(sources)?.ok_or_else(|| {
+        reject(crate::product_message!(
+            "backend.arxml.project.application_live_slot_mismatch"
+        ))
+    })
+}
+
+pub(crate) fn workspace_application_slots(
+    sources: &[super::InputSource],
+) -> Result<Option<Vec<generator::delivery::ApplicationSlotDescriptor>>, Vec<PlanDiagnostic>> {
     let catalog = crate::definitions::DefinitionCatalog::builtin().map_err(reject)?;
     let graph = super::graph::Graph::from_catalog_target_scope(sources, &catalog)?;
+    if !super::multi::selected(&graph) {
+        return Ok(None);
+    }
     // Only the structural application/instance consumers participate here.
     // Unrelated ECUC modules and their extension definitions are not authorized
     // by an ownership proof; native preparation checks them separately.
@@ -605,8 +678,11 @@ pub(crate) fn application_slots_from_sources(
     if !references.is_empty() {
         return Err(references);
     }
-    let multi = super::multi::inspect(&graph)?;
-    Ok(application_slots(&multi, &super::multi::symbols(&multi)))
+    let multi = super::multi::inspect_ownership(&graph)?;
+    Ok(Some(application_slots(
+        &multi,
+        &super::multi::symbols(&multi),
+    )))
 }
 
 /// Shared OS producer for both validated application profiles. Its inputs are

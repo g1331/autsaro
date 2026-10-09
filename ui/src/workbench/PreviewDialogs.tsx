@@ -153,32 +153,34 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
         }
       >
         <p>{t('workflow.application.explanation')}</p>
-        <dl>
-          <dt>{t('workflow.application.slot')}</dt>
-          <dd className="mono">{preview.slot.producerSlot}</dd>
-          <dt>{t('workflow.application.component')}</dt>
-          <dd className="mono path-text">{preview.slot.componentPath}</dd>
-          <dt>{t('workflow.application.sources')}</dt>
-          <dd>
-            {preview.slot.sourcePaths.map((path) => (
-              <p key={path} className="mono path-text">
-                {displayPath(path)}
-              </p>
-            ))}
-          </dd>
-          <dt>{t('workflow.application.headers')}</dt>
-          <dd>
-            {preview.slot.generatedHeaders.map((path) => (
-              <p key={path} className="mono path-text">
-                {path}
-              </p>
-            ))}
-          </dd>
-          <dt>{t('workflow.application.entries')}</dt>
-          <dd className="mono">{preview.slot.entrySymbols.join('\n')}</dd>
-        </dl>
+        {preview.slots.map((slot) => (
+          <dl key={slot.producerSlot}>
+            <dt>{t('workflow.application.slot')}</dt>
+            <dd className="mono path-text">{slot.producerSlot}</dd>
+            <dt>{t('workflow.application.component')}</dt>
+            <dd className="mono path-text">{slot.componentPath}</dd>
+            <dt>{t('workflow.application.sources')}</dt>
+            <dd>
+              {slot.sourcePaths.map((path) => (
+                <p key={path} className="mono path-text">
+                  {displayPath(path)}
+                </p>
+              ))}
+            </dd>
+            <dt>{t('workflow.application.headers')}</dt>
+            <dd>
+              {slot.generatedHeaders.map((path) => (
+                <p key={path} className="mono path-text">
+                  {path}
+                </p>
+              ))}
+            </dd>
+            <dt>{t('workflow.application.entries')}</dt>
+            <dd className="mono path-text">{slot.entrySymbols.join('\n')}</dd>
+          </dl>
+        ))}
         <CopyText
-          text={JSON.stringify(preview.slot, null, 2)}
+          text={JSON.stringify(preview.slots, null, 2)}
           label={t('workflow.application.copySlot')}
         />
         <div className="preview-layout">

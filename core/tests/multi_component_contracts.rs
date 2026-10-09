@@ -49,6 +49,433 @@ fn change(sources: &mut [InputSource], file: &str, before: &str, after: &str) {
     *source = InputSource::new(file, text.replacen(before, after, 1).into_bytes()).unwrap();
 }
 
+fn live_multi_workspace(root: &Path, sources: &[InputSource]) -> autosar_config_core::Workspace {
+    std::fs::create_dir_all(root).unwrap();
+    for source in sources {
+        std::fs::write(root.join(source.logical_path()), source.bytes()).unwrap();
+    }
+    let manifest = autosar_config_core::arxml::ProjectManifest {
+        format_version: 1,
+        declared_release: "R24-11".into(),
+        profile_hint: "singlecore-multi-swc-v1".into(),
+        inputs: sources
+            .iter()
+            .map(|source| autosar_config_core::arxml::ProjectInput {
+                path: source.logical_path().into(),
+                role_hint: "standard".into(),
+            })
+            .collect(),
+        application_inputs: Vec::new(),
+        accepted_extension_definitions: Vec::new(),
+    };
+    let path = root.join("workbench-project.json");
+    std::fs::write(&path, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+    autosar_config_core::Workspace::open_project_manifest(&path, &root.join("cache")).unwrap()
+}
+
+#[test]
+fn multi_workspace_initialization_reopen_and_regeneration_preserve_every_user_source() {
+    use autosar_config_core::{
+        Workspace, prepared::prepare_ecu_project_for_workspace, target::BuildTarget,
+    };
+    for renamed in [false, true] {
+        let scratch = Scratch::new();
+        let root = scratch.0.join("live");
+        let mut arxml = inputs();
+        if renamed {
+            for (before, after) in [
+                ("Process</", "Compute</"),
+                ("Process/", "Compute/"),
+                ("Process_", "Compute_"),
+                ("ProcessInstance", "ComputeInstance"),
+                ("ResultService", "Calculation"),
+                ("Transform", "Calculate"),
+            ] {
+                replace_all(&mut arxml, before, after);
+            }
+        }
+        let mut workspace = live_multi_workspace(&root, &arxml);
+        let preview = workspace.preview_application_initialization().unwrap();
+        assert_eq!(preview.slots.len(), 3);
+        assert_eq!(preview.files.len(), 3);
+        let mut stale = preview.clone();
+        stale.slots[1].component_path.push_str("/untrusted");
+        assert!(workspace.initialize_application_previewed(&stale).is_err());
+        assert!(
+            preview
+                .files
+                .iter()
+                .all(|file| !root.join(&file.path).exists())
+        );
+        for path in [
+            root.join("workbench-project.json"),
+            root.join(arxml[0].logical_path()),
+        ] {
+            let before = std::fs::read(&path).unwrap();
+            let mut edited = before.clone();
+            edited.push(b'\n');
+            std::fs::write(&path, &edited).unwrap();
+            assert!(
+                workspace
+                    .initialize_application_previewed(&preview)
+                    .is_err()
+            );
+            assert_eq!(std::fs::read(&path).unwrap(), edited);
+            assert!(
+                preview
+                    .files
+                    .iter()
+                    .all(|file| !root.join(&file.path).exists())
+            );
+            std::fs::write(&path, before).unwrap();
+        }
+        let outcome = workspace
+            .initialize_application_previewed(&preview)
+            .unwrap();
+        assert!(outcome.warnings.is_empty());
+        assert!(outcome.retained_recovery_files.is_empty());
+        let mut user_sources = std::collections::BTreeMap::new();
+        for (index, file) in preview.files.iter().enumerate() {
+            let mut bytes = file.contents.as_bytes().to_vec();
+            bytes.extend_from_slice(
+                format!("\r\n/* User edit {index}: 用户源码. */\r\n").as_bytes(),
+            );
+            std::fs::write(root.join(&file.path), &bytes).unwrap();
+            user_sources.insert(file.path.clone(), bytes);
+        }
+        assert!(workspace.generation_snapshot().is_err());
+        let workspace = Workspace::open_project_manifest(
+            &root.join("workbench-project.json"),
+            &root.join("cache"),
+        )
+        .unwrap();
+        let runtime = RuntimeCatalog::embedded().unwrap();
+        let plan = workspace.saved_integration_plan(&runtime).unwrap();
+        let output = scratch.0.join("sealed");
+        let prepared = || {
+            prepare_ecu_project_for_workspace(
+                &workspace,
+                &plan,
+                BuildTarget::LinuxX64ControlledV1,
+                true,
+            )
+            .unwrap()
+        };
+        let generation = prepared().preview(&output).unwrap();
+        prepared()
+            .generate_previewed(&output, &generation.revision)
+            .unwrap();
+        for (path, bytes) in &user_sources {
+            assert_eq!(&std::fs::read(root.join(path)).unwrap(), bytes);
+            assert_eq!(
+                &std::fs::read(output.join(path.replace("application/", "src/"))).unwrap(),
+                bytes
+            );
+        }
+        for source in &arxml {
+            assert_eq!(
+                std::fs::read(root.join(source.logical_path())).unwrap(),
+                source.bytes()
+            );
+        }
+        let original_output = std::fs::read(output.join("files.sha256")).unwrap();
+        let old_preview = prepared().preview(&output).unwrap();
+        let mut guarded = user_sources
+            .iter()
+            .map(|(path, bytes)| (root.join(path), bytes.clone()))
+            .collect::<Vec<_>>();
+        guarded.push((
+            root.join("workbench-project.json"),
+            std::fs::read(root.join("workbench-project.json")).unwrap(),
+        ));
+        guarded.push((
+            root.join(arxml[0].logical_path()),
+            arxml[0].bytes().to_vec(),
+        ));
+        for (path, bytes) in guarded {
+            let pending = prepared();
+            let mut changed = bytes.clone();
+            changed.push(b'\n');
+            std::fs::write(&path, &changed).unwrap();
+            assert!(
+                pending
+                    .generate_previewed(&output, &old_preview.revision)
+                    .is_err()
+            );
+            assert_eq!(std::fs::read(&path).unwrap(), changed);
+            assert_eq!(
+                std::fs::read(output.join("files.sha256")).unwrap(),
+                original_output
+            );
+            for (source, bytes) in &user_sources {
+                assert_eq!(
+                    &std::fs::read(output.join(source.replace("application/", "src/"))).unwrap(),
+                    bytes
+                );
+            }
+            std::fs::write(&path, bytes).unwrap();
+        }
+    }
+}
+
+#[test]
+fn multi_workspace_reopen_rejects_incomplete_unknown_and_wrong_slot_membership() {
+    use autosar_config_core::Workspace;
+    let scratch = Scratch::new();
+    let root = scratch.0.join("live");
+    let mut workspace = live_multi_workspace(&root, &inputs());
+    let preview = workspace.preview_application_initialization().unwrap();
+    workspace
+        .initialize_application_previewed(&preview)
+        .unwrap();
+    let original = workspace.project_manifest().unwrap().clone();
+    for mutation in 0..5 {
+        let mut manifest = original.clone();
+        match mutation {
+            0 => {
+                manifest.application_inputs.pop();
+            }
+            1 => manifest.application_inputs[0]
+                .producer_slot
+                .push_str("/unknown"),
+            2 => manifest.application_inputs.swap(0, 1),
+            3 => manifest
+                .application_inputs
+                .push(manifest.application_inputs[0].clone()),
+            4 => manifest.application_inputs[0].path = "application/Unknown.c".into(),
+            _ => unreachable!(),
+        }
+        if mutation == 2 {
+            let slot = manifest.application_inputs[0].producer_slot.clone();
+            manifest.application_inputs[0].producer_slot =
+                manifest.application_inputs[1].producer_slot.clone();
+            manifest.application_inputs[1].producer_slot = slot;
+        }
+        if mutation == 4 {
+            std::fs::write(root.join("application/Unknown.c"), "/* unknown */").unwrap();
+        }
+        let path = root.join("workbench-project.json");
+        std::fs::write(&path, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+        assert!(
+            Workspace::open_project_manifest(&path, &root.join("cache")).is_err(),
+            "mutation {mutation}"
+        );
+    }
+    std::fs::write(
+        root.join("workbench-project.json"),
+        serde_json::to_vec_pretty(&original).unwrap(),
+    )
+    .unwrap();
+    // Ownership remains structurally valid while an unrelated target restriction blocks generation.
+    let ecuc_path = root.join("ecuc.arxml");
+    let ecuc = std::fs::read_to_string(&ecuc_path).unwrap();
+    let changed = ecuc.replacen("<VALUE>IMMEDIATE</VALUE>", "<VALUE>DEFERRED</VALUE>", 1);
+    assert_ne!(ecuc, changed);
+    std::fs::write(&ecuc_path, changed).unwrap();
+    let reopened =
+        Workspace::open_project_manifest(&root.join("workbench-project.json"), &root.join("cache"))
+            .unwrap();
+    assert!(
+        reopened
+            .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
+            .is_err()
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn multi_workspace_initialization_and_reopen_refuse_symlink_members() {
+    use autosar_config_core::{Workspace, prepared::prepare_ecu_project_for_workspace};
+    use std::os::unix::fs::symlink;
+    let scratch = Scratch::new();
+    let root = scratch.0.join("live");
+    let mut workspace = live_multi_workspace(&root, &inputs());
+    let preview = workspace.preview_application_initialization().unwrap();
+    let source = root.join(&preview.files[1].path);
+    std::fs::create_dir_all(source.parent().unwrap()).unwrap();
+    let external = scratch.0.join("external.c");
+    let bytes = b"/* external user source */\n";
+    std::fs::write(&external, bytes).unwrap();
+    symlink(&external, &source).unwrap();
+    assert!(
+        workspace
+            .initialize_application_previewed(&preview)
+            .is_err()
+    );
+    assert_eq!(std::fs::read(&external).unwrap(), bytes);
+    assert!(
+        preview
+            .files
+            .iter()
+            .filter(|file| root.join(&file.path) != source)
+            .all(|file| !root.join(&file.path).exists())
+    );
+    std::fs::remove_file(&source).unwrap();
+    workspace
+        .initialize_application_previewed(&preview)
+        .unwrap();
+    let plan = workspace
+        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
+        .unwrap();
+    let prepared = prepare_ecu_project_for_workspace(
+        &workspace,
+        &plan,
+        autosar_config_core::target::BuildTarget::LinuxX64ControlledV1,
+        true,
+    )
+    .unwrap();
+    std::fs::remove_file(&source).unwrap();
+    symlink(&external, &source).unwrap();
+    assert!(
+        Workspace::open_project_manifest(&root.join("workbench-project.json"), &root.join("cache"))
+            .is_err()
+    );
+    let output = scratch.0.join("sealed");
+    assert!(prepared.generate(&output).is_err());
+    assert!(!output.exists());
+    assert_eq!(std::fs::read(&external).unwrap(), bytes);
+}
+
+#[test]
+fn multi_workspace_missing_or_directory_source_refuses_reopen_and_prepared_generation() {
+    use autosar_config_core::{
+        Workspace, prepared::prepare_ecu_project_for_workspace, target::BuildTarget,
+    };
+    let scratch = Scratch::new();
+    let root = scratch.0.join("live");
+    let mut workspace = live_multi_workspace(&root, &inputs());
+    let initialization = workspace.preview_application_initialization().unwrap();
+    workspace
+        .initialize_application_previewed(&initialization)
+        .unwrap();
+    let plan = workspace
+        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
+        .unwrap();
+    let prepare = || {
+        prepare_ecu_project_for_workspace(
+            &workspace,
+            &plan,
+            BuildTarget::LinuxX64ControlledV1,
+            true,
+        )
+        .unwrap()
+    };
+    let output = scratch.0.join("sealed");
+    let report = prepare().generate(&output).unwrap();
+    let sealed_before = report
+        .files
+        .iter()
+        .map(|file| (file.clone(), std::fs::read(output.join(file)).unwrap()))
+        .collect::<Vec<_>>();
+    let user_before = initialization
+        .files
+        .iter()
+        .map(|file| {
+            (
+                file.path.clone(),
+                std::fs::read(root.join(&file.path)).unwrap(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let manifest = root.join("workbench-project.json");
+    let manifest_before = std::fs::read(&manifest).unwrap();
+    let source = root.join(&user_before[1].0);
+    for directory in [false, true] {
+        let pending = prepare();
+        std::fs::remove_file(&source).unwrap();
+        if directory {
+            std::fs::create_dir(&source).unwrap();
+            std::fs::write(source.join("external"), b"external directory contents").unwrap();
+        }
+        assert!(Workspace::open_project_manifest(&manifest, &root.join("cache")).is_err());
+        assert!(pending.generate(&output).is_err());
+        assert_eq!(std::fs::read(&manifest).unwrap(), manifest_before);
+        for (path, bytes) in user_before
+            .iter()
+            .filter(|(path, _)| root.join(path) != source)
+        {
+            assert_eq!(&std::fs::read(root.join(path)).unwrap(), bytes);
+        }
+        for (path, bytes) in &sealed_before {
+            assert_eq!(&std::fs::read(output.join(path)).unwrap(), bytes);
+        }
+        if directory {
+            assert_eq!(
+                std::fs::read(source.join("external")).unwrap(),
+                b"external directory contents"
+            );
+            std::fs::remove_file(source.join("external")).unwrap();
+            std::fs::remove_dir(&source).unwrap();
+        } else {
+            assert!(!source.exists());
+        }
+        std::fs::write(&source, &user_before[1].1).unwrap();
+    }
+}
+
+#[test]
+fn multi_workspace_ownership_rejects_existing_foreign_signal_mapping_member() {
+    use autosar_config_core::Workspace;
+    let scratch = Scratch::new();
+    let root = scratch.0.join("live");
+    let mut arxml = inputs();
+    change(
+        &mut arxml,
+        "types.arxml",
+        "</SENDER-RECEIVER-INTERFACE>",
+        r#"</SENDER-RECEIVER-INTERFACE>
+        <SENDER-RECEIVER-INTERFACE>
+          <SHORT-NAME>ForeignInterface</SHORT-NAME>
+          <IS-SERVICE>false</IS-SERVICE>
+          <DATA-ELEMENTS>
+            <VARIABLE-DATA-PROTOTYPE>
+              <SHORT-NAME>ForeignValue</SHORT-NAME>
+              <TYPE-TREF DEST="APPLICATION-PRIMITIVE-DATA-TYPE">/Types/ApplicationUint32</TYPE-TREF>
+            </VARIABLE-DATA-PROTOTYPE>
+          </DATA-ELEMENTS>
+        </SENDER-RECEIVER-INTERFACE>"#,
+    );
+    let mut workspace = live_multi_workspace(&root, &arxml);
+    let initialization = workspace.preview_application_initialization().unwrap();
+    workspace
+        .initialize_application_previewed(&initialization)
+        .unwrap();
+    let extract = root.join("extract.arxml");
+    let before = std::fs::read_to_string(&extract).unwrap();
+    let member = r#"<TARGET-DATA-PROTOTYPE-REF DEST="VARIABLE-DATA-PROTOTYPE">/Types/ValueInterface/Value</TARGET-DATA-PROTOTYPE-REF>"#;
+    assert!(before.contains(member));
+    std::fs::write(&extract, before.replacen(member,
+        r#"<TARGET-DATA-PROTOTYPE-REF DEST="VARIABLE-DATA-PROTOTYPE">/Types/ForeignInterface/ForeignValue</TARGET-DATA-PROTOTYPE-REF>"#, 1)).unwrap();
+    let paths = arxml
+        .iter()
+        .map(|source| root.join(source.logical_path()))
+        .chain(
+            initialization
+                .files
+                .iter()
+                .map(|file| root.join(&file.path)),
+        )
+        .chain(std::iter::once(root.join("workbench-project.json")));
+    let bytes_before = paths
+        .map(|path| {
+            let bytes = std::fs::read(&path).unwrap();
+            (path, bytes)
+        })
+        .collect::<Vec<_>>();
+    let error =
+        Workspace::open_project_manifest(&root.join("workbench-project.json"), &root.join("cache"))
+            .err()
+            .unwrap();
+    assert!(error.to_string().contains("SIGNAL_MAPPING"), "{error}");
+    assert!(
+        !error.to_string().contains("REFERENCE_UNRESOLVED"),
+        "{error}"
+    );
+    for (path, bytes) in bytes_before {
+        assert_eq!(std::fs::read(path).unwrap(), bytes);
+    }
+}
+
 // Consume the normal complete producer rather than a public source-fragment API.
 fn prepared_multi_files(plan: &ValidatedIntegrationPlan) -> Vec<(String, Vec<u8>)> {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-application");
@@ -3451,8 +3878,86 @@ fn actual_partition_owns_all_instances_and_all_com_producers() {
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[test]
+fn initialized_multi_scaffolds_compile_link_and_initialize_only_out_arguments() {
+    use autosar_config_core::prepared::prepare_ecu_project_for_workspace;
+    let scratch = Scratch::new();
+    let live = scratch.0.join("live");
+    let mut workspace = live_multi_workspace(&live, &inputs());
+    let preview = workspace.preview_application_initialization().unwrap();
+    workspace
+        .initialize_application_previewed(&preview)
+        .unwrap();
+    let plan = workspace
+        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
+        .unwrap();
+    let project = scratch.0.join("sealed");
+    prepare_ecu_project_for_workspace(&workspace, &plan, tooling::native_target(), true)
+        .unwrap()
+        .generate(&project)
+        .unwrap();
+    let build = scratch.0.join("build");
+    let compiled = tooling::ecu_build_command(&project, &build, "host-batch", None)
+        .output()
+        .unwrap();
+    assert!(
+        compiled.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&compiled.stdout),
+        String::from_utf8_lossy(&compiled.stderr)
+    );
+    let harness = scratch.0.join("scaffold_contract.c");
+    std::fs::write(
+        &harness,
+        r#"#define RTE_CORE
+#include "Rte_Process.h"
+#include "Rte_Ingress.h"
+#include <assert.h>
+int main(void) {
+    uint32 output = 99u;
+    uint32 state = 17u;
+    Dcm_DataElement_ApplicationValueType data = {1u, 2u, 3u, 4u};
+    void (*scalar_server)(uint32, uint32 *, uint32 *) = &Process_Transform;
+    void (*array_server)(Dcm_DataElement_ApplicationValueType) = &Ingress_ReadData;
+    scalar_server(23u, &output, &state);
+    array_server(data);
+    assert(output == 0u);
+    assert(state == 17u);
+    assert((data[0] == 0u) && (data[1] == 0u) && (data[2] == 0u) && (data[3] == 0u));
+    return 0;
+}
+"#,
+    )
+    .unwrap();
+    let binary = tooling::native_binary(&scratch.0, "scaffold_contract");
+    let settings = tooling::execution_settings();
+    let compiled = std::process::Command::new(settings.compiler)
+        .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic", "-I"])
+        .arg(project.join("include"))
+        .arg(project.join("src/Process.c"))
+        .arg(project.join("src/Ingress.c"))
+        .arg(project.join("src/Observe.c"))
+        .arg(&harness)
+        .arg("-o")
+        .arg(&binary)
+        .output()
+        .unwrap();
+    assert!(
+        compiled.status.success(),
+        "{}",
+        String::from_utf8_lossy(&compiled.stderr)
+    );
+    assert!(
+        std::process::Command::new(binary)
+            .status()
+            .unwrap()
+            .success()
+    );
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
 fn sealed_multi_project_builds_and_runs_production_owner() {
-    use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
+    use autosar_config_core::{Workspace, prepared::prepare_ecu_project_for_workspace};
     for (renamed, swapped, p2_star) in [
         (false, false, None),
         (true, false, None),
@@ -3484,52 +3989,48 @@ fn sealed_multi_project_builds_and_runs_production_owner() {
             }
             arxml.reverse();
         }
+        let live = scratch.0.join("live");
+        let mut workspace = live_multi_workspace(&live, &arxml);
+        let initialization = workspace.preview_application_initialization().unwrap();
+        workspace
+            .initialize_application_previewed(&initialization)
+            .unwrap();
         let plan = build(&arxml).unwrap();
-        let sources: Vec<_> = plan
-            .application_slot_descriptors()
-            .unwrap()
-            .iter()
-            .map(|slot| {
-                let file = slot.source_paths[0].rsplit('/').next().unwrap();
-                let original = file
-                    .replace("Gateway", "Ingress")
-                    .replace("Compute", "Process");
-                let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
-                    .join("tests/fixtures/multi-application")
-                    .join(original);
-                let mut text = std::fs::read_to_string(fixture).unwrap();
-                if renamed {
-                    for (before, after) in [
-                        ("Ingress", "Gateway"),
-                        ("Process", "Compute"),
-                        ("ResultService", "Calculation"),
-                        ("Transform", "Calculate"),
-                    ] {
-                        text = text.replace(before, after);
-                    }
+        for slot in plan.application_slot_descriptors().unwrap().iter() {
+            let file = slot.source_paths[0].rsplit('/').next().unwrap();
+            let original = file
+                .replace("Gateway", "Ingress")
+                .replace("Compute", "Process");
+            let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/multi-application")
+                .join(original);
+            let mut text = std::fs::read_to_string(fixture).unwrap();
+            if renamed {
+                for (before, after) in [
+                    ("Ingress", "Gateway"),
+                    ("Process", "Compute"),
+                    ("ResultService", "Calculation"),
+                    ("Transform", "Calculate"),
+                ] {
+                    text = text.replace(before, after);
                 }
-                let path = scratch.0.join(file);
-                std::fs::write(&path, text).unwrap();
-                ApplicationSource {
-                    component_instance: slot
-                        .producer_slot
-                        .strip_prefix("singlecore-multi-swc-v1:")
-                        .unwrap()
-                        .into(),
-                    path,
-                }
-            })
-            .collect();
+            }
+            std::fs::write(live.join(&slot.source_paths[0]), text).unwrap();
+        }
+        let workspace = Workspace::open_project_manifest(
+            &live.join("workbench-project.json"),
+            &scratch.0.join("cache"),
+        )
+        .unwrap();
+        let plan = workspace
+            .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
+            .unwrap();
         let prepared =
-            prepare_ecu_project_with_applications(&plan, tooling::native_target(), &sources)
+            prepare_ecu_project_for_workspace(&workspace, &plan, tooling::native_target(), true)
                 .unwrap_or_else(|issues| panic!("{issues:?}"));
         assert_eq!(prepared.application_slots().len(), 3);
         let project = scratch.0.join("multi-project");
-        for (path, bytes) in prepared.into_files() {
-            let path = project.join(path);
-            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-            std::fs::write(path, bytes).unwrap();
-        }
+        prepared.generate(&project).unwrap();
         let output = scratch.0.join("multi-build");
         let result = tooling::ecu_build_command(&project, &output, "host-batch", None)
             .output()

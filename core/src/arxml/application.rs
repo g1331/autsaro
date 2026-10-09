@@ -10,7 +10,7 @@ const MANIFEST: &str = "workbench-project.json";
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ApplicationInitializationPreview {
     pub revision: String,
-    pub slot: ApplicationSlotDescriptor,
+    pub slots: Vec<ApplicationSlotDescriptor>,
     pub files: Vec<ProjectFilePreview>,
     pub manifest_before: String,
     pub manifest_after: String,
@@ -113,15 +113,43 @@ fn stage_file(
         .map_err(|error| format!("{}: {error}", path.display()).into())
 }
 
-fn remove_owned(path: &Path, bytes: &[u8]) -> Result<(), crate::message::LocalizedText> {
-    if super::project::read_bounded(path)? != bytes {
-        return Err(crate::product_message!(
-            "backend.arxml.application.externally_changed_bytes_retained",
-            "path" => path.display()
-        ));
+fn remove_owned(
+    path: &Path,
+    bytes: &[u8],
+    recovery: &Path,
+    publish: impl Fn(&Path, &Path) -> std::io::Result<()>,
+) -> Result<(), crate::message::LocalizedText> {
+    // Capture before checking bytes so a replacement at the live path is never unlinked.
+    let reservation = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(recovery)
+        .map_err(|error| format!("{}: {error}", recovery.display()))?;
+    drop(reservation);
+    if let Err(error) = super::persistence::capture_file(path, recovery) {
+        fs::remove_file(recovery)
+            .map_err(|cleanup| format!("{}: {cleanup}", recovery.display()))?;
+        return Err(format!("{}: {error}", path.display()).into());
     }
-    super::project::safe_path(path, false)?;
-    fs::remove_file(path).map_err(|error| format!("{}: {error}", path.display()).into())
+    if super::project::read_bounded(recovery).is_ok_and(|actual| actual == bytes) {
+        return fs::remove_file(recovery)
+            .map_err(|error| format!("{}: {error}", recovery.display()).into());
+    }
+    let retained = crate::product_message!(
+        "backend.arxml.application.externally_changed_bytes_retained",
+        "path" => path.display()
+    );
+    match publish(recovery, path) {
+        Ok(()) => {
+            fs::remove_file(recovery)
+                .map_err(|error| format!("{}: {error}", recovery.display()))?;
+            Err(retained)
+        }
+        Err(error) => Err(crate::message::LocalizedText::messages([
+            retained,
+            format!("{} -> {}: {error}", recovery.display(), path.display()).into(),
+        ])),
+    }
 }
 
 fn cleanup_stage(stage: &Path, files: &[PathBuf]) -> Vec<crate::message::LocalizedText> {
@@ -194,16 +222,28 @@ impl Workspace {
         let plan = self
             .saved_integration_plan(&runtime)
             .map_err(super::integration_errors)?;
-        let slot = plan
-            .application_slot_descriptor()
+        let slots = plan
+            .application_slot_descriptors()
             .map_err(super::integration_errors)?;
         let seeds = plan
             .application_seed_files()
             .map_err(super::integration_errors)?;
-        if slot.producer_slot != "epic4-single-application-v1"
-            || seeds.len() != 1
-            || slot.source_paths.len() != 1
-            || seeds[0].0 != slot.source_paths[0]
+        if slots.is_empty()
+            || slots
+                .iter()
+                .map(|slot| slot.source_paths.len())
+                .sum::<usize>()
+                != seeds.len()
+            || slots
+                .iter()
+                .flat_map(|slot| &slot.source_paths)
+                .any(|path| {
+                    seeds
+                        .iter()
+                        .filter(|(seed_path, _)| seed_path == path)
+                        .count()
+                        != 1
+                })
         {
             return Err(crate::product_message!(
                 "backend.arxml.application.producer_slot_contract_mismatch"
@@ -215,7 +255,12 @@ impl Workspace {
             target(root, &path)?;
             manifest.application_inputs.push(ApplicationInput {
                 path: path.clone(),
-                producer_slot: slot.producer_slot.clone(),
+                producer_slot: slots
+                    .iter()
+                    .find(|slot| slot.source_paths.contains(&path))
+                    .unwrap()
+                    .producer_slot
+                    .clone(),
             });
             files.push(ProjectFilePreview {
                 path,
@@ -233,7 +278,7 @@ impl Workspace {
             self.definition_fingerprint()?,
             project.saved.clone(),
             manifest_after.clone(),
-            serde_json::to_string(&slot).map_err(|error| error.to_string())?,
+            serde_json::to_string(&slots).map_err(|error| error.to_string())?,
         ] {
             digest.update((value.len() as u64).to_le_bytes());
             digest.update(value.as_bytes());
@@ -246,7 +291,7 @@ impl Workspace {
         }
         Ok(ApplicationInitializationPreview {
             revision: format!("{:x}", digest.finalize()),
-            slot,
+            slots,
             files,
             manifest_before: project.saved.clone(),
             manifest_after,
@@ -257,6 +302,14 @@ impl Workspace {
     pub fn initialize_application_previewed(
         &mut self,
         preview: &ApplicationInitializationPreview,
+    ) -> Result<ApplicationInitializationOutcome, crate::message::LocalizedText> {
+        self.initialize_application_with_publish(preview, |from, to| fs::hard_link(from, to))
+    }
+
+    fn initialize_application_with_publish(
+        &mut self,
+        preview: &ApplicationInitializationPreview,
+        publish: impl Fn(&Path, &Path) -> std::io::Result<()>,
     ) -> Result<ApplicationInitializationOutcome, crate::message::LocalizedText> {
         let expected = self.preview_application_initialization()?;
         if expected != *preview {
@@ -301,8 +354,7 @@ impl Workspace {
         let mut staged = Vec::new();
         let mut created_directories = Vec::new();
         let mut installed = Vec::new();
-        let mut backup_created = false;
-        let mut manifest_removed = false;
+        let manifest_published = std::cell::Cell::new(false);
         let result = (|| -> Result<(), crate::message::LocalizedText> {
             for (index, file) in expected.files.iter().enumerate() {
                 let path = stage.join(format!("{index}.application"));
@@ -318,7 +370,7 @@ impl Workspace {
             for (index, file) in expected.files.iter().enumerate() {
                 create_parents(&root, &file.path, &mut created_directories)?;
                 let path = target(&root, &file.path)?;
-                fs::hard_link(&staged[index], &path)
+                publish(&staged[index], &path)
                     .map_err(|error| format!("{}: {error}", path.display()))?;
                 installed.push((path, file.contents.as_bytes()));
             }
@@ -332,41 +384,76 @@ impl Workspace {
                 }
             }
             super::project::safe_path(&manifest_path, false)?;
-            // Both backup and publication are no-clobber links. A raced path is
-            // refused rather than overwritten by platform-specific rename semantics.
-            fs::hard_link(&manifest_path, &backup)
-                .map_err(|error| format!("{}: {error}", backup.display()))?;
-            backup_created = true;
-            if super::project::read_bounded(&backup)? != expected.manifest_before.as_bytes() {
-                return Err(crate::product_message!(
-                    "backend.arxml.application.manifest_changed_before_backup_confirmation"
-                ));
-            }
-            self.verify_saved_sources()?;
-            fs::remove_file(&manifest_path).map_err(|error| error.to_string())?;
-            manifest_removed = true;
-            fs::hard_link(&staged_manifest, &manifest_path)
-                .map_err(|error| format!("{}: {error}", manifest_path.display()))?;
+            let manifest = SourceFile {
+                path: manifest_path.clone(),
+                saved: expected.manifest_before.clone(),
+                text: expected.manifest_after.clone(),
+                original_name: None,
+            };
+            let verify_members = || -> Result<(), crate::message::LocalizedText> {
+                for file in &self.files {
+                    if super::project::read_bounded(&file.path)? != file.saved.as_bytes() {
+                        return Err(crate::product_message!(
+                            "backend.arxml.application.bytes_changed_before_publication",
+                            "path" => file.path.display()
+                        ));
+                    }
+                }
+                for (path, bytes) in &installed {
+                    if super::project::read_bounded(path)? != *bytes {
+                        return Err(crate::product_message!(
+                            "backend.arxml.application.bytes_changed_before_publication",
+                            "path" => path.display()
+                        ));
+                    }
+                }
+                Ok(())
+            };
+            super::persistence::install_staged_with_publish(
+                &manifest,
+                &staged_manifest,
+                &backup,
+                |from, to| {
+                    if to == manifest_path {
+                        verify_members()
+                            .map_err(|error| std::io::Error::other(error.to_string()))?;
+                    }
+                    publish(from, to)?;
+                    if to == manifest_path {
+                        manifest_published.set(true);
+                        verify_members()
+                            .map_err(|error| std::io::Error::other(error.to_string()))?;
+                        if super::project::read_bounded(to)
+                            .map_err(|error| std::io::Error::other(error.to_string()))?
+                            != expected.manifest_after.as_bytes()
+                        {
+                            return Err(std::io::Error::other(
+                                crate::product_message!(
+                                    "backend.arxml.application.bytes_changed_before_publication",
+                                    "path" => manifest_path.display()
+                                )
+                                .to_string(),
+                            ));
+                        }
+                    }
+                    Ok(())
+                },
+            )?;
             Ok(())
         })();
         if let Err(error) = result {
             let mut failures = Vec::new();
-            let mut restored = !manifest_removed;
-            if manifest_removed {
-                match fs::hard_link(&backup, &manifest_path) {
-                    Ok(()) => restored = true,
-                    Err(restore) => failures.push(crate::message::LocalizedText::messages([
-                        crate::product_message!(
-                            "backend.arxml.application.original_manifest_backup_retained",
-                            "path" => backup.display()
-                        ),
-                        restore.to_string().into(),
-                    ])),
-                }
-            }
-            for (path, bytes) in installed.iter().rev() {
-                if restored {
-                    if let Err(rollback) = remove_owned(path, bytes) {
+            let manifest_restored = !manifest_published.get()
+                || super::project::read_bounded(&manifest_path)
+                    .is_ok_and(|bytes| bytes == expected.manifest_before.as_bytes());
+            for (index, (path, bytes)) in installed.iter().enumerate().rev() {
+                if manifest_restored {
+                    if let Err(rollback) = remove_owned(
+                        path,
+                        bytes,
+                        &stage.join(format!("{index}.rollback")),
+                        &publish,
+                    ) {
                         failures.push(rollback);
                     }
                 } else {
@@ -376,17 +463,11 @@ impl Workspace {
                     ));
                 }
             }
-            if backup_created && !manifest_removed {
-                if let Err(cleanup) = remove_owned(&backup, expected.manifest_before.as_bytes()) {
-                    failures.push(cleanup);
-                }
-            } else if backup_created
-                && super::project::read_bounded(&manifest_path)
-                    .is_ok_and(|bytes| bytes == expected.manifest_before.as_bytes())
-            {
-                if let Err(cleanup) = remove_owned(&backup, expected.manifest_before.as_bytes()) {
-                    failures.push(cleanup);
-                }
+            if !manifest_restored && fs::symlink_metadata(&backup).is_ok() {
+                failures.push(crate::product_message!(
+                    "backend.arxml.application.original_manifest_backup_retained",
+                    "path" => backup.display()
+                ));
             }
             failures.extend(cleanup_stage(&stage, &staged));
             for path in created_directories.iter().rev() {
@@ -411,9 +492,19 @@ impl Workspace {
         // into a false failure; retained recovery paths are returned explicitly.
         let mut warnings = Vec::new();
         let mut retained_recovery_files = Vec::new();
-        if let Err(error) = remove_owned(&backup, expected.manifest_before.as_bytes()) {
+        let captured_backup = stage.join("manifest.rollback");
+        if let Err(error) = remove_owned(
+            &backup,
+            expected.manifest_before.as_bytes(),
+            &captured_backup,
+            &publish,
+        ) {
             warnings.push(error);
-            retained_recovery_files.push(backup.display().to_string());
+            for path in [&backup, &captured_backup] {
+                if fs::symlink_metadata(path).is_ok() {
+                    retained_recovery_files.push(path.display().to_string());
+                }
+            }
         }
         let stage_warnings = cleanup_stage(&stage, &staged);
         if !stage_warnings.is_empty() {
@@ -427,5 +518,343 @@ impl Workspace {
             warnings,
             retained_recovery_files,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Scratch(PathBuf);
+    impl Scratch {
+        fn new() -> Self {
+            let root = std::env::temp_dir().join(format!(
+                "autosar-application-{}-{}",
+                std::process::id(),
+                super::super::projection::new_epoch()
+            ));
+            fs::create_dir(&root).unwrap();
+            Self(root)
+        }
+    }
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn multi_workspace(root: &Path) -> Workspace {
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-component");
+        let mut inputs = Vec::new();
+        for entry in fs::read_dir(fixtures).unwrap() {
+            let entry = entry.unwrap();
+            let name = entry.file_name().to_str().unwrap().to_owned();
+            fs::copy(entry.path(), root.join(&name)).unwrap();
+            inputs.push(ProjectInput {
+                path: name,
+                role_hint: "standard".into(),
+            });
+        }
+        inputs.sort_by(|left, right| left.path.cmp(&right.path));
+        let manifest = ProjectManifest {
+            format_version: 1,
+            declared_release: "R24-11".into(),
+            profile_hint: crate::integration::MULTI_PROFILE.into(),
+            inputs,
+            application_inputs: Vec::new(),
+            accepted_extension_definitions: Vec::new(),
+        };
+        let path = root.join(MANIFEST);
+        fs::write(
+            &path,
+            super::super::project::render_manifest(&manifest).unwrap(),
+        )
+        .unwrap();
+        Workspace::open_project_manifest(&path, &root.join("cache")).unwrap()
+    }
+
+    #[test]
+    fn later_application_collision_rolls_back_earlier_members() {
+        let scratch = Scratch::new();
+        let mut workspace = multi_workspace(&scratch.0);
+        let preview = workspace.preview_application_initialization().unwrap();
+        assert_eq!(preview.slots.len(), 3);
+        let before = workspace.input_fingerprint().unwrap();
+        let collision = scratch.0.join(&preview.files[1].path);
+        let error = workspace
+            .initialize_application_with_publish(&preview, |from, to| {
+                if to == collision {
+                    fs::write(to, "external source at publication")?;
+                }
+                fs::hard_link(from, to)
+            })
+            .unwrap_err();
+        assert!(error.to_string().contains(&collision.display().to_string()));
+        assert_eq!(
+            fs::read_to_string(&collision).unwrap(),
+            "external source at publication"
+        );
+        assert!(!scratch.0.join(&preview.files[0].path).exists());
+        assert!(!scratch.0.join(&preview.files[2].path).exists());
+        assert_eq!(
+            fs::read_to_string(scratch.0.join(MANIFEST)).unwrap(),
+            preview.manifest_before
+        );
+        assert_eq!(workspace.input_fingerprint().unwrap(), before);
+        assert!(
+            workspace
+                .project_manifest()
+                .unwrap()
+                .application_inputs
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn manifest_replacements_preserve_external_bytes_and_original_recovery() {
+        for before_capture in [true, false] {
+            let scratch = Scratch::new();
+            let mut workspace = multi_workspace(&scratch.0);
+            let preview = workspace.preview_application_initialization().unwrap();
+            let before = workspace.input_fingerprint().unwrap();
+            let manifest = scratch.0.join(MANIFEST);
+            let backup = PathBuf::from(format!("{}.autosar.bak", manifest.display()));
+            let error = workspace
+                .initialize_application_with_publish(&preview, |from, to| {
+                    if (before_capture && to == backup) || (!before_capture && to == manifest) {
+                        fs::remove_file(&manifest).or_else(|error| {
+                            if error.kind() == std::io::ErrorKind::NotFound {
+                                Ok(())
+                            } else {
+                                Err(error)
+                            }
+                        })?;
+                        fs::write(&manifest, "external manifest replacement")?;
+                    }
+                    fs::hard_link(from, to)
+                })
+                .unwrap_err();
+            assert_eq!(
+                fs::read_to_string(&manifest).unwrap(),
+                "external manifest replacement"
+            );
+            for file in &preview.files {
+                assert!(!scratch.0.join(&file.path).exists());
+            }
+            assert_eq!(workspace.input_fingerprint().unwrap(), before);
+            assert_eq!(
+                workspace.project.as_ref().unwrap().saved,
+                preview.manifest_before
+            );
+            if before_capture {
+                assert!(!backup.exists());
+            } else {
+                assert_eq!(
+                    fs::read_to_string(&backup).unwrap(),
+                    preview.manifest_before
+                );
+                assert!(error.to_string().contains(&backup.display().to_string()));
+            }
+        }
+    }
+
+    #[test]
+    fn source_replacements_before_or_during_manifest_publication_abort_membership() {
+        for (after_publication, in_place) in
+            [(false, false), (true, false), (false, true), (true, true)]
+        {
+            let scratch = Scratch::new();
+            let mut workspace = multi_workspace(&scratch.0);
+            let preview = workspace.preview_application_initialization().unwrap();
+            let baseline = workspace.input_fingerprint().unwrap();
+            let source = scratch.0.join(&preview.files[1].path);
+            let manifest = scratch.0.join(MANIFEST);
+            let backup = PathBuf::from(format!("{}.autosar.bak", manifest.display()));
+            workspace
+                .initialize_application_with_publish(&preview, |from, to| {
+                    fs::hard_link(from, to)?;
+                    if (!after_publication && to == backup) || (after_publication && to == manifest)
+                    {
+                        if !in_place {
+                            fs::remove_file(&source)?;
+                        }
+                        fs::write(&source, "external source replacement")?;
+                    }
+                    Ok(())
+                })
+                .unwrap_err();
+            assert_eq!(
+                fs::read_to_string(&source).unwrap(),
+                "external source replacement"
+            );
+            assert_eq!(
+                fs::read_to_string(&manifest).unwrap(),
+                preview.manifest_before
+            );
+            for file in preview
+                .files
+                .iter()
+                .filter(|file| scratch.0.join(&file.path) != source)
+            {
+                assert!(!scratch.0.join(&file.path).exists());
+            }
+            assert_eq!(workspace.input_fingerprint().unwrap(), baseline);
+            assert_eq!(
+                workspace.project.as_ref().unwrap().saved,
+                preview.manifest_before
+            );
+            assert!(
+                workspace
+                    .project_manifest()
+                    .unwrap()
+                    .application_inputs
+                    .is_empty()
+            );
+        }
+    }
+
+    #[test]
+    fn failed_manifest_restoration_retains_every_referenced_source_and_original_baseline() {
+        let scratch = Scratch::new();
+        let mut workspace = multi_workspace(&scratch.0);
+        let preview = workspace.preview_application_initialization().unwrap();
+        let baseline = workspace.input_fingerprint().unwrap();
+        let manifest = scratch.0.join(MANIFEST);
+        let backup = PathBuf::from(format!("{}.autosar.bak", manifest.display()));
+        let recovery = backup.with_extension("rollback");
+        let source = scratch.0.join(&preview.files[1].path);
+        let error = workspace
+            .initialize_application_with_publish(&preview, |from, to| {
+                fs::hard_link(from, to)?;
+                if to == manifest {
+                    fs::create_dir(&recovery)?;
+                    fs::write(recovery.join("external"), "external recovery evidence")?;
+                    fs::write(&source, "external in-place source edit")?;
+                }
+                Ok(())
+            })
+            .unwrap_err();
+        assert_eq!(
+            fs::read_to_string(&manifest).unwrap(),
+            preview.manifest_after
+        );
+        let published: ProjectManifest =
+            serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+        assert_eq!(published.application_inputs.len(), 3);
+        for member in &published.application_inputs {
+            let path = scratch.0.join(&member.path);
+            assert!(path.is_file());
+            assert!(error.to_string().contains(&path.display().to_string()));
+            if path != source {
+                let expected = preview
+                    .files
+                    .iter()
+                    .find(|file| file.path == member.path)
+                    .unwrap();
+                assert_eq!(fs::read_to_string(path).unwrap(), expected.contents);
+            }
+        }
+        assert_eq!(
+            fs::read_to_string(source).unwrap(),
+            "external in-place source edit"
+        );
+        assert_eq!(
+            fs::read_to_string(&backup).unwrap(),
+            preview.manifest_before
+        );
+        assert_eq!(
+            fs::read_to_string(recovery.join("external")).unwrap(),
+            "external recovery evidence"
+        );
+        assert!(error.to_string().contains(&backup.display().to_string()));
+        assert!(error.to_string().contains(&recovery.display().to_string()));
+        assert_eq!(workspace.input_fingerprint().unwrap(), baseline);
+        assert_eq!(
+            workspace.project.as_ref().unwrap().saved,
+            preview.manifest_before
+        );
+        assert!(
+            workspace
+                .project_manifest()
+                .unwrap()
+                .application_inputs
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn successful_publication_reports_actual_captured_backup_recovery_path() {
+        use std::cell::Cell;
+        let scratch = Scratch::new();
+        let mut workspace = multi_workspace(&scratch.0);
+        let preview = workspace.preview_application_initialization().unwrap();
+        let manifest = scratch.0.join(MANIFEST);
+        let backup = PathBuf::from(format!("{}.autosar.bak", manifest.display()));
+        let backup_calls = Cell::new(0);
+        let outcome = workspace
+            .initialize_application_with_publish(&preview, |from, to| {
+                if to == backup {
+                    backup_calls.set(backup_calls.get() + 1);
+                    if backup_calls.get() == 2 {
+                        fs::write(to, "external recovery collision")?;
+                    }
+                }
+                fs::hard_link(from, to)?;
+                if to == manifest {
+                    fs::remove_file(&backup)?;
+                    fs::write(&backup, "external backup replacement")?;
+                }
+                Ok(())
+            })
+            .unwrap();
+        let captured = outcome
+            .retained_recovery_files
+            .iter()
+            .find(|path| path.ends_with("manifest.rollback"))
+            .unwrap();
+        assert_eq!(
+            fs::read_to_string(captured).unwrap(),
+            "external backup replacement"
+        );
+        assert_eq!(
+            fs::read_to_string(&backup).unwrap(),
+            "external recovery collision"
+        );
+        assert!(
+            outcome
+                .retained_recovery_files
+                .iter()
+                .all(|path| fs::symlink_metadata(path).is_ok())
+        );
+        assert!(!outcome.warnings.is_empty());
+        assert!(!outcome.projection.dirty);
+        assert_eq!(
+            fs::read_to_string(&manifest).unwrap(),
+            preview.manifest_after
+        );
+        workspace.ensure_sources_current().unwrap();
+        assert_eq!(
+            workspace.project.as_ref().unwrap().saved,
+            preview.manifest_after
+        );
+    }
+
+    #[test]
+    fn rollback_preserves_a_directory_replacing_a_source() {
+        let scratch = Scratch::new();
+        let source = scratch.0.join("Application.c");
+        fs::create_dir(&source).unwrap();
+        fs::write(source.join("external"), "external directory data").unwrap();
+        assert!(
+            remove_owned(&source, b"ours", &scratch.0.join("rollback"), |from, to| {
+                fs::hard_link(from, to)
+            })
+            .is_err()
+        );
+        assert_eq!(
+            fs::read_to_string(source.join("external")).unwrap(),
+            "external directory data"
+        );
+        assert!(!scratch.0.join("rollback").exists());
     }
 }

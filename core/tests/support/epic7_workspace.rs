@@ -1282,7 +1282,8 @@ fn builtin_application_initialization_is_reviewed_create_only_and_owns_real_live
         .collect();
     let old_identity = workspace.input_fingerprint().unwrap();
     let preview = workspace.preview_application_initialization().unwrap();
-    let application = directory.join(&preview.slot.source_paths[0]);
+    assert_eq!(preview.slots.len(), 1);
+    let application = directory.join(&preview.slots[0].source_paths[0]);
     let mut altered = preview.clone();
     altered.files[0].contents = "/* untrusted replacement */\n".into();
     assert!(
@@ -1305,7 +1306,7 @@ fn builtin_application_initialization_is_reviewed_create_only_and_owns_real_live
     assert_eq!(
         snapshot.manifest.application_inputs,
         vec![autosar_config_core::arxml::ApplicationInput {
-            path: preview.slot.source_paths[0].clone(),
+            path: preview.slots[0].source_paths[0].clone(),
             producer_slot: "epic4-single-application-v1".into(),
         }]
     );
@@ -1346,7 +1347,8 @@ fn builtin_application_initialization_refuses_a_late_user_path_without_touching_
     let manifest = directory.join("workbench-project.json");
     let original_manifest = fs::read(&manifest).unwrap();
     let before = workspace.input_fingerprint().unwrap();
-    let application = directory.join(&preview.slot.source_paths[0]);
+    assert_eq!(preview.slots.len(), 1);
+    let application = directory.join(&preview.slots[0].source_paths[0]);
     fs::create_dir_all(application.parent().unwrap()).unwrap();
     let user_bytes = b"/* This pre-existing source is owned by the user, not the initializer. */\n";
     fs::write(&application, user_bytes).unwrap();

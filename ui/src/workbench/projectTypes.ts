@@ -242,7 +242,7 @@ export type ApplicationSlotDescriptor = {
 };
 export type ApplicationInitializationPreview = {
   revision: string;
-  slot: ApplicationSlotDescriptor;
+  slots: ApplicationSlotDescriptor[];
   files: { path: string; contents: string }[];
   manifestBefore: string;
   manifestAfter: string;

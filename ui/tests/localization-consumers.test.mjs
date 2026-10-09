@@ -68,7 +68,7 @@ const baseProjection = {
 };
 const applicationPreview = {
   revision: 'preview',
-  slot: {},
+  slots: [],
   files: [],
   manifestBefore: 'raw-before',
   manifestAfter: 'raw-after',
@@ -84,6 +84,7 @@ async function openConsumer(
   rejection,
   projection = baseProjection,
   inspection = { profile: 'standard', diagnostics: [], description: null },
+  preview = applicationPreview,
 ) {
   let opened = false;
   native.invoke.mockImplementation(async (command) => {
@@ -111,7 +112,7 @@ async function openConsumer(
       };
     if (command === 'preview_application_initialization')
       return {
-        value: applicationPreview,
+        value: preview,
         capabilities: currentCapabilities,
         inputFingerprint: 'unchanged-input',
       };
@@ -339,4 +340,50 @@ test('Problems renders serialized cardinality child names, bounds and actual cou
     else delete navigator.clipboard;
   }
   expect(localize(diagnostics[1].witness.counterexample)).toBe('2');
+});
+
+test('real application controller transfers complete multi preview and revision unchanged to IPC', async () => {
+  const slots = ['Ingress', 'Process', 'Observe'].map((name) => ({
+    producerSlot: `singlecore-multi-swc-v1:/Application/Pipeline/${name}Instance`,
+    componentPath: `/Application/${name}`,
+    sourcePaths: [`application/${name}.c`],
+    generatedHeaders: [`include/Rte_${name}.h`, 'include/Rte.h', 'include/Rte_Type.h'],
+    entrySymbols: [`${name}_Periodic`],
+  }));
+  const preview = {
+    revision: 'complete-multi-source-revision',
+    slots,
+    files: slots.map((slot) => ({
+      path: slot.sourcePaths[0],
+      contents: `/* ${slot.componentPath} */\r\n`,
+    })),
+    manifestBefore: '{"applicationInputs":[]}',
+    manifestAfter: JSON.stringify({
+      applicationInputs: slots.map((slot) => ({
+        path: slot.sourcePaths[0],
+        producerSlot: slot.producerSlot,
+      })),
+    }),
+  };
+  const expected = structuredClone(preview);
+  const { current } = await openConsumer(
+    new Error('retained test workspace'),
+    baseProjection,
+    undefined,
+    preview,
+  );
+  await act(async () => {
+    await current().previewApplicationInitialization();
+  });
+  expect(current().applicationPreview).toEqual(expected);
+  await act(async () => {
+    await current().initializeApplicationPreviewed();
+  });
+  const initialization = native.invoke.mock.calls.find(
+    ([command]) => command === 'initialize_application_previewed',
+  );
+  expect(initialization).toBeTruthy();
+  expect(initialization[1].preview).toEqual(expected);
+  expect(initialization[1].preview).toBe(preview);
+  expect(preview).toEqual(expected);
 });

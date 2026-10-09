@@ -1339,14 +1339,15 @@ export async function runBuiltinScenario({
       const manifestBytes = await readFile(manifestPath);
       const originalSources = await sourceBytes(before);
       const preview = await invoke('preview_application_initialization');
-      assert.equal(preview.slot.producerSlot, 'epic4-single-application-v1');
+      assert.equal(preview.slots.length, 1);
+      assert.equal(preview.slots[0].producerSlot, 'epic4-single-application-v1');
       assert.equal(preview.files.length, 1);
       assert.deepEqual(
-        preview.slot.sourcePaths,
+        preview.slots[0].sourcePaths,
         preview.files.map((file) => file.path),
       );
       assert(
-        preview.slot.generatedHeaders.some((header) => header.startsWith('include/Rte_')),
+        preview.slots[0].generatedHeaders.some((header) => header.startsWith('include/Rte_')),
         'Actual application contract supplies generated RTE headers',
       );
       const live = path.join(root, preview.files[0].path);
@@ -1390,7 +1391,7 @@ export async function runBuiltinScenario({
       assert.deepEqual(await readFile(live), Buffer.from(preview.files[0].contents));
       const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
       assert.deepEqual(manifest.applicationInputs, [
-        { path: preview.files[0].path, producerSlot: preview.slot.producerSlot },
+        { path: preview.files[0].path, producerSlot: preview.slots[0].producerSlot },
       ]);
       await unchanged(originalSources);
       await refuse(
@@ -1417,7 +1418,7 @@ export async function runBuiltinScenario({
       );
       const owner = ledger.files.find((entry) => entry.path === 'src/Application.c');
       assert.equal(owner.owner, 'user-application');
-      assert.equal(owner.producerId, preview.slot.producerSlot);
+      assert.equal(owner.producerId, preview.slots[0].producerSlot);
       assert.equal(owner.snapshotOf, preview.files[0].path);
       const immutable = await packageBytes(delivered.directory);
       const output = path.join(scratch, 'deliveries', 'RefusedLateApplication-source');
@@ -1478,7 +1479,7 @@ export async function runBuiltinScenario({
         userApplication: 'uint32-low31-mask',
       };
       return {
-        slot: preview.slot,
+        slots: preview.slots,
         live,
         createOnly: true,
         actualPublicCommand: initializationCommand,
