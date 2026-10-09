@@ -2,7 +2,7 @@
 title: 'Epic 7 保存数据保护与后端提交围栏整改'
 type: 'bugfix'
 created: '2026-10-09'
-status: 'in-review'
+status: 'done'
 baseline_commit: '977e9100d37b48eb58fef41a23d2bc96acca4b3d'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -53,8 +53,8 @@ context: []
 - [x] `core/src/arxml/persistence.rs` — 最终安装及必要回滚采用拒绝覆盖发布；复核所有相关调用与失败清理，确定性制造发布窗口冲突，断言外部字节和备份。审查回滚的读取／移除边界，避免仅把覆盖窗口转移到恢复路径。
 - [x] `src-tauri/src/workbench.rs` — 真实 AppState 取消及输入失效回归，断言旧提交闭包不执行与当前状态不变；保留有效操作及表面保存正例。
 - [x] `spec-epic7-source-project.md`、中央规格 — 对齐发布失败与发布成功但清理失败的说明，记录本次实际验证范围。
-- [ ] `.github/workflows/checks.yml` — 在已有双平台构建入口执行保存回归，取得 Windows 与 Linux 的真实结果。
-- [ ] 原回顾、sprint、本规格 — 审查与验证后按独立完成条件更新四项行动及当前验收判定；完成 PR 关联、必需 CI、合并与远端 master 核对。
+- [x] `.github/workflows/checks.yml` — 在已有双平台构建入口执行保存回归，取得 Windows 与 Linux 的真实结果。
+- [x] 原回顾、sprint、本规格 — 按独立完成条件更新四项行动及当前验收判定，并将远端交付关联到 [PR #13](https://github.com/g1331/autsaro/pull/13)；最终 CI、合并及 master 核对以该 PR 实际结果和交付核对为准。
 
 **Acceptance Criteria:**
 
@@ -72,6 +72,11 @@ context: []
 
 - 评审补强后完整本地验证：Core 24 lib＋71 builtin＋1 c_analysis（96）；Tauri9；UI92；build、quality、diff检查均通过。新增双语stage别名错误、发布前备份预留、rollback残留保护、真实多文件事务及目标设置变化回归。7项评审问题全部关闭，定向复查无剩余发现。
 
+- 首轮PR CI run `37882013957` 的17项必需检查通过；Windows保存回归9通过／1失败（外部目录原位置断言），Linux10通过。保留失败证据，补Windows文件句柄捕获后重跑。
+
+- Windows平台修复提交 `97bb803c4c6ff04d348a2d178860788d782c7a23` 按已打开普通文件句柄捕获，应用到初始备份和回滚；定向ABI／路径／生命周期复查无发现。第二轮CI `37882612373` 已实际验证Linux11／Windows12项保存回归全部通过，Windows含长中文路径和打开后路径替换。最终本地Core97、Tauri9、UI92、build与quality通过。
+- 四项行动全部done，原回顾复评accepted，11条故事无pending。此规格done为整改实现、审查、开发验证与复评完成；远端合并以PR13实际记录为准，提交本节时尚未执行合并。完整交付授权仍按冻结意图执行至master核对。
+
 ## Spec Change Log
 
 ## Review Triage Log
@@ -85,6 +90,7 @@ context: []
 | blind-5：stage 清理错误语义缺失 | medium／patch | 新错误只有裸路径，与产品本地化反馈不一致；补双语消息说明已发布及恢复限制。 |
 | blind-6：恢复检测遗漏 rollback 目录 | medium／patch | ensure_no_recovery_backups 只扫描 bak，手工移除 bak 后遗留恢复目录可能进入下一保存；纳入现有守卫。 |
 | edge-1：外部目录被捕获后无法硬链接恢复 | medium／patch | rename 能移动目录，后续 hard_link 拒绝目录导致原位置空缺；捕获前用硬链接预留文件目标，避免移动目录。 |
+| CI-Windows：目录仍被移动 | medium／patch | 首轮 hosted Windows 的目录回归9/10通过、original.is_dir失败；Linux普通文件预留不能代表Windows目录移动语义。按已打开普通文件句柄捕获，并应用到初始备份及回滚，不弱化断言。 |
 | verification-gap | 无发现 | 独立镜头未报告验证缺口；Windows 及最终交付证据仍待实际 CI，不作为已通过。 |
 
 ## Verification

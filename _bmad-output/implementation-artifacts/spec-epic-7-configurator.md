@@ -262,3 +262,7 @@ context:
 源与 manifest 的最终发布及恢复使用拒绝覆盖硬链接；移动原文件前预留备份并验证原语能力。回滚先预留普通文件位置再捕获／核验，外部文件或目录不被删除；冲突保留可定位恢复资料。备份与 rollback 目录均阻断后续保存。全部发布成功后的 stage／backup 清理失败保留 clean saved 基线、返回错误；stage 是正式源的硬链接别名，错误明确说明其共享内容及恢复限制。分项规格已同步，未将 clean 改回 dirty。
 
 本地 Linux 正常入口：Core 24 lib＋71 builtin integration＋1 c_analysis 共96通过，0 failed／ignored／filtered；Tauri 9通过，UI92通过，build及增量quality通过。保存10项回归覆盖最终发布／恢复冲突、真实源＋manifest 后期冲突回滚、清理失败、硬链接不支持、既有备份及外部目录；三镜头审查的7项问题已修复，定向复查无剩余发现。Windows 保存回归已接入既有双平台构建任务，实际结果待 PR CI；不宣称 Windows Tauri 单测、原生 IPC、安装器、硬件或官方符合性通过，不恢复取消的组合验收门槛。
+
+Windows首轮保存回归9通过／1失败（外部目录原位置断言），保留于[首轮CI](https://github.com/g1331/autsaro/actions/runs/37882013957)，不以同轮17项绿色必需检查抵消。提交 `97bb803c4c6ff04d348a2d178860788d782c7a23` 将Windows初始备份及回滚捕获改为已打开普通文件句柄的重命名，拒绝目录并避免重新按变化的路径选对象；ABI、UTF-16长度／对齐、句柄生命周期按官方接口核对，定向审查无剩余发现。
+
+[第二轮CI](https://github.com/g1331/autsaro/actions/runs/37882612373) 的Linux11／Windows12项保存回归全部通过；Windows包含原路径打开后替换为目录及超过260字符中文路径，0 failed／ignored，14项非保存库测试按明确筛选未运行。修正后的完整本地Core97、Tauri9通过。原回顾已按既有开发范围复评为accepted，四项行动全部done；初始失败、未执行证据及取消范围保留。最终PR合并与master核对由 [PR #13](https://github.com/g1331/autsaro/pull/13) 的实际交付结果承载。
