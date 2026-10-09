@@ -233,6 +233,8 @@ jobs:
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
       - name: Host I/O and lock failure boundaries
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_host_boundaries.py
+      - name: Source save publication and recovery regressions
+        run: cargo test --locked --manifest-path core/Cargo.toml --lib arxml::persistence::tests
       - name: Generate complete analysis samples
         run: cargo test --locked --manifest-path core/Cargo.toml --test c_analysis
       - name: Sealed ECU build mode fault isolation
