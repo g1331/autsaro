@@ -140,11 +140,34 @@ int main(void) {
     PduInfoType query = {NULL_PTR, NULL_PTR, 0u};
     PduInfoType info = {buffer, NULL_PTR, 3u};
     RetryInfoType retry = {TP_CONFPENDING, 0u};
+    Std_ReturnType (*session_get)(Dcm_SesCtrlType *) = Dcm_GetSesCtrlType;
+    Std_ReturnType (*security_get)(Dcm_SecLevelType *) = Dcm_GetSecurityLevel;
+    Std_ReturnType (*session_reset)(void) = Dcm_ResetToDefaultSession;
+    Rte_ModeType_DcmDiagnosticSessionControl (*published_session)(void) =
+        SchM_Mode_Dcm_DcmDiagnosticSessionControl;
+    Dcm_SesCtrlType session_value = 99u;
+    Dcm_SecLevelType security_value = 99u;
     unsigned saved;
     unsigned i;
     assert(start_rx(17u, NULL_PTR, 3u, &available) == BUFREQ_E_NOT_OK && available == 99u);
     assert(Dcm_SetActiveDiagnostic(FALSE) == E_OK);
+    assert(sizeof(Dcm_SesCtrlType) == 1u && sizeof(Dcm_SecLevelType) == 1u);
+    assert(DCM_DEFAULT_SESSION == 1u && DCM_EXTENDED_DIAGNOSTIC_SESSION == 3u &&
+           DCM_SEC_LEV_LOCKED == 0u);
+    assert(session_get(&session_value) == E_OK && session_value == 99u);
+    assert(security_get(&security_value) == E_OK && security_value == 99u);
+    assert(session_get(NULL_PTR) == E_OK && security_get(NULL_PTR) == E_OK);
+    assert(session_reset() == E_OK);
+    {
+        Dcm_ConfigType collision = dcm;
+        collision.did = 0xf186u;
+        Dcm_Init(&collision);
+        assert(session_get(&session_value) == E_OK && session_value == 99u);
+    }
     start();
+    assert(session_get(&session_value) == E_OK && session_value == 1u);
+    assert(security_get(&security_value) == E_OK && security_value == 0u);
+    assert(published_session() == 0u);
     assert(start_rx(99u, NULL_PTR, 3u, &available) == BUFREQ_E_NOT_OK && available == 99u);
     assert(start_rx(17u, NULL_PTR, 0u, &available) == BUFREQ_E_NOT_OK && available == 99u);
     assert(start_rx(17u, NULL_PTR, 257u, &available) == BUFREQ_E_OVFL && available == 99u);
@@ -325,6 +348,9 @@ int main(void) {
         Dcm_MainFunction();
         flush();
         assert(output[count - 1u][0] == 6u && output[count - 1u][1] == 0x50u);
+        assert(session_get(&session_value) == E_OK && session_value == 3u);
+        assert(published_session() == 2u && security_get(&security_value) == E_OK &&
+               security_value == 0u);
         for (i = 0u; i < 4u; ++i) {
             assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED);
         }
@@ -334,6 +360,8 @@ int main(void) {
         assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED);
         Dcm_MainFunction();
         assert(ComM_RunChannel() == COMM_FULL_COM_READY_SLEEP);
+        assert(session_get(&session_value) == E_OK && session_value == 1u);
+        assert(published_session() == 0u);
     }
     /* N_Bs and malformed padded CF release accepted requests without replay. */
     assert(ComM_RequestComMode(43u, COMM_FULL_COMMUNICATION) == E_OK);
@@ -434,6 +462,75 @@ int main(void) {
         assert(output[count - 1u][0] == 3u && output[count - 1u][1] == 0x7fu &&
                output[count - 1u][2] == 0x22u && output[count - 1u][3] == 0x14u);
         Dcm_Init(&dcm); /* Retire the caller-owned configuration before its lifetime ends. */
+    }
+    /* Public reset, suppressed session completion and internal F186 use actual state. */
+    Dcm_ComM_FullComModeEntered(7u);
+    {
+        const uint8 active_session[8] = {3u, 0x22u, 0xf1u, 0x86u, 0u, 0u, 0u, 0u};
+        const uint8 extended[8] = {2u, 0x10u, 3u, 0u, 0u, 0u, 0u, 0u};
+        const uint8 suppressed[8] = {2u, 0x10u, 0x83u, 0u, 0u, 0u, 0u, 0u};
+        const uint8 unknown[8] = {2u, 0x10u, 0x85u, 0u, 0u, 0u, 0u, 0u};
+        const uint8 tester_unknown[8] = {2u, 0x3eu, 0x81u, 0u, 0u, 0u, 0u, 0u};
+        const uint8 tester_suppressed[8] = {2u, 0x3eu, 0x80u, 0u, 0u, 0u, 0u, 0u};
+        saved = reads;
+        receive(active_session);
+        Dcm_MainFunction();
+        flush();
+        assert(output[count - 1u][0] == 4u && output[count - 1u][1] == 0x62u &&
+               output[count - 1u][2] == 0xf1u && output[count - 1u][3] == 0x86u &&
+               output[count - 1u][4] == 1u && reads == saved);
+        receive(extended);
+        Dcm_MainFunction(); /* Accepted response remains owned until actual confirmation. */
+        assert(session_get(&session_value) == E_OK && session_value == 1u &&
+               published_session() == 0u);
+        assert(session_reset() == E_OK);
+        available = 99u;
+        assert(start_rx(17u, NULL_PTR, 3u, &available) == BUFREQ_E_NOT_OK && available == 99u);
+        flush(); /* Late successful confirmation must not re-enter extended. */
+        assert(output[count - 1u][1] == 0x50u && output[count - 1u][2] == 3u);
+        assert(session_get(&session_value) == E_OK && session_value == 1u &&
+               published_session() == 0u);
+        receive(extended);
+        assert(session_reset() == E_OK); /* Also cancels an accepted, unprocessed 0x10. */
+        Dcm_MainFunction();
+        flush();
+        assert(session_get(&session_value) == E_OK && session_value == 1u &&
+               published_session() == 0u);
+        saved = count;
+        receive(suppressed);
+        Dcm_MainFunction();
+        flush();
+        assert(count == saved && session_get(&session_value) == E_OK && session_value == 3u);
+        assert(published_session() == 2u);
+        receive(active_session);
+        Dcm_MainFunction();
+        flush();
+        assert(output[count - 1u][4] == 3u);
+        assert(session_reset() == E_OK && published_session() == 0u);
+        receive(active_session);
+        Dcm_MainFunction();
+        flush();
+        assert(output[count - 1u][4] == 1u);
+        saved = count;
+        receive(tester_suppressed);
+        Dcm_MainFunction();
+        flush();
+        assert(count == saved);
+        receive(unknown);
+        Dcm_MainFunction();
+        flush();
+        assert(output[count - 1u][0] == 3u && output[count - 1u][1] == 0x7fu &&
+               output[count - 1u][2] == 0x10u && output[count - 1u][3] == 0x12u);
+        receive(tester_unknown);
+        Dcm_MainFunction();
+        flush();
+        assert(output[count - 1u][0] == 3u && output[count - 1u][1] == 0x7fu &&
+               output[count - 1u][2] == 0x3eu && output[count - 1u][3] == 0x12u);
+        request_read();
+        Dcm_MainFunction();
+        flush();
+        assert(output[count - 1u][0] == 7u && output[count - 1u][1] == 0x62u &&
+               output[count - 1u][2] == 0x12u && output[count - 1u][3] == 0x34u);
     }
     return 0;
 }

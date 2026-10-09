@@ -2951,3 +2951,28 @@ fn historical_profile_identity_uses_bindings_instead_of_runnable_capabilities() 
         );
     }
 }
+
+#[test]
+fn multi_internal_active_session_did_cannot_be_replaced_by_application_source() {
+    let mut sources = inputs();
+    parameter(
+        &mut sources,
+        "ApplicationDid",
+        "DcmDspDidIdentifier",
+        "61830",
+    );
+    rejects_in_both(&sources, "DIAGNOSTIC_IDENTIFIER");
+}
+
+#[test]
+fn selected_dcm_subfunction_availability_matches_actual_service_dispatch() {
+    for (service, available) in [
+        ("SessionControl", "false"),
+        ("TesterPresent", "false"),
+        ("ReadDataByIdentifier", "true"),
+    ] {
+        let mut sources = inputs();
+        parameter(&mut sources, service, "DcmDsdSidTabSubfuncAvail", available);
+        rejects_in_both(&sources, "SERVICE_UNSUPPORTED");
+    }
+}

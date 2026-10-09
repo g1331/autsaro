@@ -18,8 +18,9 @@ static PduLengthType confirmed DCM_VAR_CLEARED;
 static boolean active_enabled DCM_VAR_CLEARED;
 static boolean diagnostic DCM_VAR_CLEARED;
 static uint8 communication DCM_VAR_CLEARED;
-static uint8 session DCM_VAR_CLEARED;
-static uint8 pending_session DCM_VAR_CLEARED;
+static Dcm_SesCtrlType session DCM_VAR_CLEARED;
+static Dcm_SesCtrlType pending_session DCM_VAR_CLEARED;
+static boolean session_change_cancelled DCM_VAR_CLEARED;
 static uint32 s3_remaining DCM_VAR_CLEARED;
 static uint16 p2_remaining DCM_VAR_CLEARED;
 #define DCM_STOP_SEC_VAR_CLEARED_UNSPECIFIED
@@ -31,16 +32,25 @@ static DCM_CODE void Dcm_Release(void) {
     copied = 0u;
     confirmed = 0u;
     pending_session = 0u;
+    session_change_cancelled = FALSE;
     if ((diagnostic == TRUE) && (session == 1u)) {
         diagnostic = FALSE;
         ComM_DCM_InactiveDiagnostic(configuration->channel);
     }
 }
+static DCM_CODE void Dcm_SetSession(Dcm_SesCtrlType next) {
+    const Rte_ModeType_DcmDiagnosticSessionControl mode =
+        (next == DCM_DEFAULT_SESSION)
+            ? RTE_MODE_DcmDiagnosticSessionControl_DCM_DEFAULT_SESSION
+            : RTE_MODE_DcmDiagnosticSessionControl_DCM_EXTENDED_DIAGNOSTIC_SESSION;
+    session = next;
+    (void)SchM_Switch_Dcm_DcmDiagnosticSessionControl(mode);
+}
 DCM_CODE void Dcm_Init(const Dcm_ConfigType *ConfigPtr) {
     SchM_Enter_Dcm_DCM_STATE();
     if ((ConfigPtr != NULL_PTR) && (ConfigPtr->read != NULL_PTR) && (ConfigPtr->p2_ticks > 0u) &&
         (ConfigPtr->s3_ticks > 0u) && (ConfigPtr->buffer_length >= 7u) &&
-        (ConfigPtr->buffer_length <= 256u)) {
+        (ConfigPtr->buffer_length <= 256u) && (ConfigPtr->did != 0xf186u)) {
         if ((configuration != NULL_PTR) && (diagnostic == TRUE)) {
             ComM_DCM_InactiveDiagnostic(configuration->channel);
         }
@@ -49,13 +59,45 @@ DCM_CODE void Dcm_Init(const Dcm_ConfigType *ConfigPtr) {
         active_enabled = TRUE;
         diagnostic = FALSE;
         communication = 0u;
-        session = 1u;
+        Dcm_SetSession(DCM_DEFAULT_SESSION);
         pending_session = 0u;
+        session_change_cancelled = FALSE;
         s3_remaining = 0u;
         copied = 0u;
         confirmed = 0u;
     }
     SchM_Exit_Dcm_DCM_STATE();
+}
+DCM_CODE Std_ReturnType Dcm_GetSecurityLevel(Dcm_SecLevelType *SecLevel) {
+    SchM_Enter_Dcm_DCM_STATE();
+    if ((configuration != NULL_PTR) && (SecLevel != NULL_PTR)) {
+        /* No SecurityAccess service is selected; no transition can unlock it. */
+        *SecLevel = DCM_SEC_LEV_LOCKED;
+    }
+    SchM_Exit_Dcm_DCM_STATE();
+    return E_OK;
+}
+DCM_CODE Std_ReturnType Dcm_GetSesCtrlType(Dcm_SesCtrlType *SesCtrlType) {
+    SchM_Enter_Dcm_DCM_STATE();
+    if ((configuration != NULL_PTR) && (SesCtrlType != NULL_PTR)) {
+        *SesCtrlType = session;
+    }
+    SchM_Exit_Dcm_DCM_STATE();
+    return E_OK;
+}
+DCM_CODE Std_ReturnType Dcm_ResetToDefaultSession(void) {
+    SchM_Enter_Dcm_DCM_STATE();
+    if (configuration != NULL_PTR) {
+        Dcm_SetSession(DCM_DEFAULT_SESSION);
+        pending_session = 0u; /* An older queued 0x10 response cannot undo the reset. */
+        session_change_cancelled = (state != DCM_IDLE);
+        s3_remaining = 0u;
+        if ((state == DCM_IDLE) && (diagnostic == TRUE)) {
+            Dcm_Release();
+        }
+    }
+    SchM_Exit_Dcm_DCM_STATE();
+    return E_OK;
 }
 DCM_CODE Std_ReturnType Dcm_SetActiveDiagnostic(boolean active) {
     SchM_Enter_Dcm_DCM_STATE();
@@ -82,6 +124,7 @@ DCM_CODE BufReq_ReturnType Dcm_StartOfReception(PduIdType id, const PduInfoType 
             request_length = TpSduLength;
             received = 0u;
             state = DCM_RECEIVING;
+            session_change_cancelled = FALSE;
             *bufferSizePtr = configuration->buffer_length;
             result = BUFREQ_OK;
         }
@@ -132,7 +175,12 @@ static DCM_CODE void Dcm_Negative(uint8 code) {
     response_length = 3u;
 }
 static DCM_CODE void Dcm_Process(void) {
+    boolean suppress = FALSE;
     response_length = 0u;
+    if (((request[0] == 0x10u) || (request[0] == 0x3eu)) && (request_length >= 2u)) {
+        suppress = (request[1] & 0x80u) != 0u;
+        request[1] &= 0x7fu;
+    }
     if (request[0] == 0x22u) {
         if ((request_length < 3u) || ((request_length % 2u) == 0u)) {
             Dcm_Negative(0x13u);
@@ -142,7 +190,16 @@ static DCM_CODE void Dcm_Process(void) {
             response_length = 1u;
             for (i = 1u; (i < request_length) && (response[0] == 0x62u); i += 2u) {
                 const uint16 did = ((uint16)request[i] * 256u) + request[i + 1u];
-                if (did == configuration->did) {
+                if (did == 0xf186u) {
+                    if (response_length > (configuration->buffer_length - 3u)) {
+                        Dcm_Negative(0x14u);
+                    } else {
+                        response[response_length] = 0xf1u;
+                        response[response_length + 1u] = 0x86u;
+                        response[response_length + 2u] = session;
+                        response_length += 3u;
+                    }
+                } else if (did == configuration->did) {
                     if (response_length > (configuration->buffer_length - 6u)) {
                         Dcm_Negative(0x14u);
                     } else {
@@ -166,9 +223,11 @@ static DCM_CODE void Dcm_Process(void) {
         } else if ((request[1] != 1u) && (request[1] != 3u)) {
             Dcm_Negative(0x12u);
         } else {
-            pending_session = request[1];
+            if (session_change_cancelled == FALSE) {
+                pending_session = request[1];
+            }
             response[0] = 0x50u;
-            response[1] = pending_session;
+            response[1] = request[1];
             response[2] = (uint8)(configuration->p2_ms / 256u);
             response[3] = (uint8)(configuration->p2_ms % 256u);
             response[4] = (uint8)((configuration->p2_star_ms / 10u) / 256u);
@@ -178,8 +237,6 @@ static DCM_CODE void Dcm_Process(void) {
     } else if (request[0] == 0x3eu) {
         if (request_length != 2u) {
             Dcm_Negative(0x13u);
-        } else if (request[1] == 0x80u) {
-            Dcm_Release();
         } else if (request[1] != 0u) {
             Dcm_Negative(0x12u);
         } else {
@@ -189,6 +246,14 @@ static DCM_CODE void Dcm_Process(void) {
         }
     } else {
         Dcm_Negative(0x11u);
+    }
+    if ((suppress == TRUE) && (response_length != 0u) && (response[0] != 0x7fu)) {
+        /* Suppressed positives still complete DSP processing (00238/00240). */
+        if (pending_session != 0u) {
+            Dcm_SetSession(pending_session);
+        }
+        response_length = 0u;
+        Dcm_Release();
     }
     if (response_length != 0u) {
         state = DCM_RESPONSE;
@@ -202,7 +267,7 @@ DCM_CODE void Dcm_MainFunction(void) {
         if ((session != 1u) && (state == DCM_IDLE) && (s3_remaining > 0u)) {
             --s3_remaining;
             if (s3_remaining == 0u) {
-                session = 1u;
+                Dcm_SetSession(DCM_DEFAULT_SESSION);
                 Dcm_Release();
             }
         }
@@ -279,7 +344,7 @@ DCM_CODE void Dcm_TpTxConfirmation(PduIdType id, Std_ReturnType result) {
     if ((configuration != NULL_PTR) && (id == configuration->transmit) &&
         (state == DCM_TRANSMITTING)) {
         if ((result == E_OK) && (pending_session != 0u)) {
-            session = pending_session;
+            Dcm_SetSession(pending_session);
         }
         Dcm_Release();
     }

@@ -313,6 +313,14 @@ pub(super) fn inspect_service(
                 crate::product_message!("backend.integration.diagnostic.did_identifier_invalid"),
             )
         })?;
+    if super::multi::selected(graph) && did_id == 0xf186 {
+        return Err(reject(
+            graph,
+            did,
+            "DIAGNOSTIC_IDENTIFIER",
+            crate::product_message!("backend.integration.diagnostic.did_identifier_invalid"),
+        ));
+    }
     let info = reference(graph, did, "DcmDspDidInfoRef")?;
     if !matches!(
         value(graph, info, "DcmDspDidDynamicallyDefined", false),

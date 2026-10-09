@@ -5,6 +5,7 @@
 #ifndef DCM_H
 #define DCM_H
 #include "ComStack_Types.h"
+#include "Rte_Dcm_Type.h"
 typedef Std_ReturnType (*Dcm_ReadDidType)(uint8 *data);
 typedef struct {
     PduIdType receive;
@@ -19,6 +20,12 @@ typedef struct {
     PduLengthType buffer_length;
 } Dcm_ConfigType;
 void Dcm_Init(const Dcm_ConfigType *ConfigPtr);
+/** Selected DevErrorDetect=false: all three APIs always return E_OK.
+ * Uninitialized or NULL getters preserve output; reset before Init has no action.
+ */
+Std_ReturnType Dcm_GetSecurityLevel(Dcm_SecLevelType *SecLevel);
+Std_ReturnType Dcm_GetSesCtrlType(Dcm_SesCtrlType *SesCtrlType);
+Std_ReturnType Dcm_ResetToDefaultSession(void);
 Std_ReturnType Dcm_SetActiveDiagnostic(boolean active);
 BufReq_ReturnType Dcm_StartOfReception(PduIdType id, const PduInfoType *info,
                                        PduLengthType TpSduLength, PduLengthType *bufferSizePtr);

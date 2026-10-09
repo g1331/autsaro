@@ -147,7 +147,6 @@ fn chain_consumer(scratch: &Path, fixture: &str) -> PathBuf {
         "ComStack_Cfg.h",
         "SchM_CanIf.h",
         "SchM_ComM.h",
-        "SchM_Dcm.h",
         "SchM_CanTp.h",
     ] {
         std::fs::copy(
