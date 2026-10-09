@@ -13,7 +13,7 @@ FreeRTOS 继续采用 MIT，ECU 工程保留 kernel/LICENSE.md 中的上游声�
 ## 第三方与参考资料
 
 - [FreeRTOS](../../third_party/freertos/LICENSE.md) 保留 MIT 许可证及原版权声明。
-- 仓库中 vendored 的 BMad/automotive skills 按其文件、来源及组件自身的许可使用；有独立 LICENSE 的技能保留该许可证。
+- 仓库中 vendored 的 BMad 及其他技能按其文件、来源及组件自身的许可使用；有独立 LICENSE 的技能保留该许可证。
 - Rust、npm、Python 和系统依赖各自遵循上游许可，项目的根许可证不替换这些条款。
 - AUTOSAR、ISO 等官方标准、XSD/MOD、样例和其他参考资料不由项目根许可证授权，仍按来源方条款取得和使用，且不随交付工程重新分发。
 

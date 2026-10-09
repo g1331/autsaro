@@ -9,7 +9,7 @@ npm ci --prefix ui
 uv sync --locked
 ```
 
-`.python-version` 提供默认解释器选择。使用本地另一受支持的 Python 时，可通过 `uv sync --locked --python <解释器路径>` 指定它。只开发界面不必执行 Python 安装。汽车规格工作簿的可选依赖使用 `uv sync --locked --group automotive`。锁文件固定包依赖，`uv.lock` 不要求指定的 uv 程序版本。
+`.python-version` 提供默认解释器选择。使用本地另一受支持的 Python 时，可通过 `uv sync --locked --python <解释器路径>` 指定它。只开发界面不必执行 Python 安装。锁文件固定包依赖，`uv.lock` 不要求指定的 uv 程序版本。
 
 ## 平台依赖
 
