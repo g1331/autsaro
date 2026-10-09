@@ -95,13 +95,17 @@ static const CanIf_ConfigType canif = {canif_rx,
                                        canif_tx,
                                        1u,
                                        Ecu_HostBusSM_ControllerModeIndication,
-                                       Ecu_HostBusSM_ControllerBusOff};
+                                       Ecu_HostBusSM_ControllerBusOff,
+                                       9u,
+                                       7u,
+                                       11u,
+                                       17u};
 static const Can_ConfigType can = {sink};
 static const ComM_UserHandleType users[] = {17u, 43u};
 static const ComM_ConfigType comm = {
     7u,         users, 2u, 3u, Ecu_HostBusSM_RequestComMode, Ecu_HostBusSM_GetCurrentComMode,
     indication, 3u};
-static const Ecu_HostBusSM_ConfigType cdd = {7u, 0u};
+static const Ecu_HostBusSM_ConfigType cdd = {7u, 9u};
 static const BswM_ConfigType bswm = {7u, COMM_NO_COMMUNICATION, action};
 static void current(ComM_ModeType expected) {
     ComM_ModeType value = 99u;
@@ -133,7 +137,10 @@ int main(void) {
     ComM_ModeType value = 99u;
     ComM_InhibitionStatusType inhibition = 0xa5u;
     ComM_InitStatusType status = COMM_INIT;
-    Can_ErrorStateType error_state = CAN_ERRORSTATE_ACTIVE;
+    Std_ReturnType (*canif_error)(uint8, Can_ErrorStateType *) = CanIf_GetControllerErrorState;
+    Can_ErrorStateType error_state = CAN_ERRORSTATE_PASSIVE;
+    Can_ControllerStateType controller_state = CAN_CS_SLEEP;
+    CanIf_PduModeType pdu_mode = CANIF_ONLINE;
     uint8 bytes[8] = {42u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
     const PduInfoType info = {bytes, NULL_PTR, 4u};
     unsigned saved;
@@ -157,6 +164,7 @@ int main(void) {
     assert(bus_get(7u, &value) == E_NOT_OK && value == 99u);
     bswm_mode(7u, COMM_FULL_COMMUNICATION);
     assert(actions == 0u);
+    assert(canif_error(9u, &error_state) == E_NOT_OK && error_state == CAN_ERRORSTATE_PASSIVE);
     Det_Init(&det);
     Com_Init(&com);
     Com_IpduGroupStart(0u, TRUE);
@@ -165,6 +173,28 @@ int main(void) {
     LSduR_Init(&ls);
     CanIf_Init(&canif);
     Can_Init(&can);
+    assert(Can_SetBaudrate(0u, 0u) == E_NOT_OK);
+    assert(Can_SetBaudrate(7u, 0u) == E_OK);
+    assert(Can_GetControllerMode(0u, &controller_state) == E_NOT_OK &&
+           controller_state == CAN_CS_SLEEP);
+    assert(Can_GetControllerMode(7u, &controller_state) == E_OK &&
+           controller_state == CAN_CS_STOPPED);
+    assert(CanIf_GetControllerMode(7u, &controller_state) == E_NOT_OK);
+    assert(CanIf_GetControllerMode(9u, &controller_state) == E_OK &&
+           controller_state == CAN_CS_STOPPED);
+    assert(CanIf_GetPduMode(7u, &pdu_mode) == E_NOT_OK && pdu_mode == CANIF_ONLINE);
+    assert(CanIf_GetPduMode(9u, &pdu_mode) == E_OK && pdu_mode == CANIF_OFFLINE);
+    assert(canif_error(9u, &error_state) == E_OK && error_state == CAN_ERRORSTATE_ACTIVE);
+    error_state = CAN_ERRORSTATE_PASSIVE;
+    assert(canif_error(7u, &error_state) == E_NOT_OK && error_state == CAN_ERRORSTATE_PASSIVE);
+    assert(canif_error(9u, NULL_PTR) == E_NOT_OK);
+    assert(CanIf_SetControllerMode(7u, CAN_CS_STARTED) == E_NOT_OK);
+    assert(Can_SetControllerMode(0u, CAN_CS_STARTED) == E_NOT_OK);
+    {
+        const Ecu_HostBusSM_ConfigType invalid_provider = {7u, 7u};
+        Ecu_HostBusSM_Init(&invalid_provider);
+        assert(bus_get(7u, &value) == E_NOT_OK && value == 99u);
+    }
     Ecu_HostBusSM_Init(&cdd);
     bswm_init(&bswm);
     init(&comm);
@@ -207,10 +237,23 @@ int main(void) {
     assert(classification(1u) == E_OK); /* Runtime mask does not activate disabled features. */
     assert(inhibition_status(7u, &inhibition) == E_OK && inhibition == 0u);
     current(COMM_FULL_COMMUNICATION);
+    {
+        const Can_HwType wrong_controller = {0x123u, 11u, 7u};
+        const Can_HwType wrong_hoh = {0x123u, 0u, 9u};
+        CanIf_RxIndication(&wrong_controller, &info);
+        CanIf_RxIndication(&wrong_hoh, &info);
+        assert(receptions == 0u);
+    }
     assert(CanIf_HostRxIndication(0x123u, 4u, bytes, 0u) == ECU_OK && receptions == 1u);
     buffer();
     Ecu_ComMainFunctionTx();
     assert(Can_HostFlush() == ECU_OK && frames == 1u);
+    {
+        const Can_PduType wrong_hth = {51u, 4u, 0x456u, bytes};
+        assert(Can_Write(0u, &wrong_hth) == E_NOT_OK);
+        assert(Can_TransmitPdu(51u, 0x456u, 4u, bytes) == ECU_OK);
+        assert(frames == 2u); /* Host adapter must also use the configured HTH17. */
+    }
     assert(request(43u, COMM_FULL_COMMUNICATION) == E_OK);
     assert(request(17u, COMM_NO_COMMUNICATION) == E_OK);
     assert(ComM_GetRequestedComMode(17u, &value) == E_OK && value == COMM_NO_COMMUNICATION);
@@ -241,19 +284,22 @@ int main(void) {
     /* Actual bus-off with persistent FULL: every subsequent main remains factual. */
     allowed(7u, TRUE);
     assert(request(17u, COMM_FULL_COMMUNICATION) == E_OK);
+    assert(canif_error(9u, &error_state) == E_OK && error_state == CAN_ERRORSTATE_ACTIVE);
     Can_SetMode(CAN_BUS_OFF);
+    assert(canif_error(9u, &error_state) == E_OK && error_state == CAN_ERRORSTATE_BUSOFF);
     current(COMM_NO_COMMUNICATION);
     saved = indications[2];
     for (i = 0u; i < 10u; ++i) {
         assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED);
         current(COMM_NO_COMMUNICATION);
-        assert(Can_GetControllerErrorState(0u, &error_state) == E_OK &&
+        assert(Can_GetControllerErrorState(7u, &error_state) == E_OK &&
                error_state == CAN_ERRORSTATE_BUSOFF);
         assert(indications[2] == saved);
         buffer(); /* lower loss never stops COM groups or buffered access */
     }
     assert(CanIf_Transmit(51u, &info) == E_NOT_OK && errors == 1u);
     Can_SetMode(CAN_STARTED); /* Explicit existing controlled-host recovery. */
+    assert(canif_error(9u, &error_state) == E_OK && error_state == CAN_ERRORSTATE_ACTIVE);
     current(COMM_FULL_COMMUNICATION);
     assert(indications[2] == saved + 1u);
     /* Normal owner STOP precursor: release persistent user, then actual provider stop. */

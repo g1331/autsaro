@@ -6,6 +6,16 @@
 #include <stddef.h>
 
 /* Static controller options are supplied by the validated integrated configuration. */
+/* Driver IDs and callback IDs are distinct configured namespaces. */
+#ifndef CAN_CONTROLLER_ID
+#define CAN_CONTROLLER_ID 0u
+#endif
+#ifndef CAN_CANIF_CONTROLLER_ID
+#define CAN_CANIF_CONTROLLER_ID 0u
+#endif
+#ifndef CAN_TX_HOH
+#define CAN_TX_HOH 0u
+#endif
 #ifndef CAN_RX_POLLING
 #define CAN_RX_POLLING 0
 #endif
@@ -100,7 +110,7 @@ void Can_DeInit(void) {
 Std_ReturnType Can_SetBaudrate(uint8_t controller, uint16_t baud_rate_config_id) {
     Std_ReturnType result = E_NOT_OK;
     Can_Lock();
-    if ((initialized != 0u) && (controller == 0u) && (baud_rate_config_id == 0u)) {
+    if ((initialized != 0u) && (controller == CAN_CONTROLLER_ID) && (baud_rate_config_id == 0u)) {
         /* The fixed virtual target has one baud-rate configuration and no registers to change. */
         result = E_OK;
     }
@@ -111,8 +121,8 @@ Std_ReturnType Can_SetBaudrate(uint8_t controller, uint16_t baud_rate_config_id)
 Std_ReturnType Can_SetControllerMode(uint8_t controller, Can_ControllerStateType transition) {
     Std_ReturnType result = E_NOT_OK;
     Can_Lock();
-    if ((initialized != 0u) && (controller == 0u) && (mode_notification_pending == 0u) &&
-        (busoff_notification_pending == 0u) &&
+    if ((initialized != 0u) && (controller == CAN_CONTROLLER_ID) &&
+        (mode_notification_pending == 0u) && (busoff_notification_pending == 0u) &&
         ((transition == CAN_CS_STARTED) || (transition == CAN_CS_STOPPED) ||
          (transition == CAN_CS_SLEEP))) {
         if ((transition == CAN_CS_STARTED) && (controller_mode == CAN_STOPPED)) {
@@ -147,7 +157,7 @@ Std_ReturnType Can_SetControllerMode(uint8_t controller, Can_ControllerStateType
 Std_ReturnType Can_GetControllerMode(uint8_t controller, Can_ControllerStateType *mode) {
     Std_ReturnType result = E_NOT_OK;
     Can_Lock();
-    if ((initialized != 0u) && (controller == 0u) && (mode != NULL)) {
+    if ((initialized != 0u) && (controller == CAN_CONTROLLER_ID) && (mode != NULL)) {
         if (controller_mode == CAN_STARTED) {
             *mode = CAN_CS_STARTED;
         } else if (controller_mode == CAN_SLEEP) {
@@ -164,7 +174,7 @@ Std_ReturnType Can_GetControllerMode(uint8_t controller, Can_ControllerStateType
 Std_ReturnType Can_GetControllerErrorState(uint8_t controller, Can_ErrorStateType *error_state) {
     Std_ReturnType result = E_NOT_OK;
     Can_Lock();
-    if ((initialized != 0u) && (controller == 0u) && (error_state != NULL)) {
+    if ((initialized != 0u) && (controller == CAN_CONTROLLER_ID) && (error_state != NULL)) {
         *error_state = (bus_off != 0u) ? CAN_ERRORSTATE_BUSOFF : CAN_ERRORSTATE_ACTIVE;
         result = E_OK;
     }
@@ -186,7 +196,8 @@ Std_ReturnType Can_GetControllerTxErrorCounter(uint8_t controller, uint8_t *erro
 
 void Can_DisableControllerInterrupts(uint8_t controller) {
     Can_Lock();
-    if ((initialized != 0u) && (controller == 0u) && (interrupt_disable_count < UINT32_MAX)) {
+    if ((initialized != 0u) && (controller == CAN_CONTROLLER_ID) &&
+        (interrupt_disable_count < UINT32_MAX)) {
         ++interrupt_disable_count;
     }
     Can_Unlock();
@@ -194,7 +205,8 @@ void Can_DisableControllerInterrupts(uint8_t controller) {
 
 void Can_EnableControllerInterrupts(uint8_t controller) {
     Can_Lock();
-    if ((initialized != 0u) && (controller == 0u) && (interrupt_disable_count != 0u)) {
+    if ((initialized != 0u) && (controller == CAN_CONTROLLER_ID) &&
+        (interrupt_disable_count != 0u)) {
         --interrupt_disable_count;
     }
     Can_Unlock();
@@ -207,7 +219,7 @@ Std_ReturnType Can_CheckWakeup(uint8_t controller) {
 
 static EcuStatus Can_WriteHost(Can_HwHandleType hth, const Can_PduType *pdu) {
     EcuStatus result = ECU_ERR_CONFIG;
-    if ((hth != 0u) || (pdu == NULL) || (pdu->sdu == NULL)) {
+    if ((hth != CAN_TX_HOH) || (pdu == NULL) || (pdu->sdu == NULL)) {
         /* Invalid host configuration or caller input. */
     } else if (pdu->id > 0x7ffu) {
         result = ECU_ERR_FRAME_ID;
@@ -307,7 +319,7 @@ void Can_SetMode(CanMode mode) {
         bus_off = 1u;
         tx_pending = 0u;
 #if CAN_BUSOFF_POLLING == 0
-        CanIf_ControllerBusOff(0u);
+        CanIf_ControllerBusOff(CAN_CANIF_CONTROLLER_ID);
 #endif
     } else {
         mode_notification_pending = 0u;
@@ -317,11 +329,11 @@ void Can_SetMode(CanMode mode) {
             tx_pending = 0u;
         }
         if (mode == CAN_STARTED) {
-            CanIf_ControllerModeIndication(0u, CAN_CS_STARTED);
+            CanIf_ControllerModeIndication(CAN_CANIF_CONTROLLER_ID, CAN_CS_STARTED);
         } else if (mode == CAN_STOPPED) {
-            CanIf_ControllerModeIndication(0u, CAN_CS_STOPPED);
+            CanIf_ControllerModeIndication(CAN_CANIF_CONTROLLER_ID, CAN_CS_STOPPED);
         } else if (mode == CAN_SLEEP) {
-            CanIf_ControllerModeIndication(0u, CAN_CS_SLEEP);
+            CanIf_ControllerModeIndication(CAN_CANIF_CONTROLLER_ID, CAN_CS_SLEEP);
         } else {
             /* Bus-off was handled above; other values have no CanIf mode. */
         }
@@ -333,7 +345,7 @@ void Can_MainFunction_BusOff(void) {
     Can_Lock();
     if (busoff_notification_pending != 0u) {
         busoff_notification_pending = 0u;
-        CanIf_ControllerBusOff(0u);
+        CanIf_ControllerBusOff(CAN_CANIF_CONTROLLER_ID);
     }
     Can_Unlock();
 }
@@ -344,7 +356,7 @@ static void Can_PollMode(void) {
         Can_ControllerStateType mode = pending_controller_mode;
         mode_notification_pending = 0u;
         mode_notification_processing = 1u;
-        CanIf_ControllerModeIndication(0u, mode);
+        CanIf_ControllerModeIndication(CAN_CANIF_CONTROLLER_ID, mode);
         mode_notification_processing = 0u;
     }
     Can_Unlock();
@@ -377,7 +389,7 @@ EcuStatus Can_TransmitPdu(PduIdType pdu_id, uint32_t id, uint8_t dlc, const uint
         pdu.length = dlc;
         pdu.id = id;
         pdu.sdu = payload;
-        result = Can_WriteHost(0u, &pdu);
+        result = Can_WriteHost(CAN_TX_HOH, &pdu);
         if (result == ECU_OK) {
             result = Can_HostFlush();
         }

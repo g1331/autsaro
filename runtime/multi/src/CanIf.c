@@ -78,8 +78,8 @@ CANIF_CODE Std_ReturnType CanIf_SetControllerMode(uint8 ControllerId,
                                                   Can_ControllerStateType ControllerMode) {
     Std_ReturnType result = E_NOT_OK;
     SchM_Enter_CanIf_CANIF_STATE();
-    if ((configuration != NULL_PTR) && (ControllerId == 0u)) {
-        result = Can_SetControllerMode(ControllerId, ControllerMode);
+    if ((configuration != NULL_PTR) && (ControllerId == configuration->controller)) {
+        result = Can_SetControllerMode(configuration->driver_controller, ControllerMode);
         if (result == E_OK) {
             if (ControllerMode == CAN_CS_STOPPED) {
                 pdu_mode = CANIF_TX_OFFLINE;
@@ -95,8 +95,20 @@ CANIF_CODE Std_ReturnType CanIf_GetControllerMode(uint8 ControllerId,
                                                   Can_ControllerStateType *ControllerModePtr) {
     Std_ReturnType result = E_NOT_OK;
     SchM_Enter_CanIf_CANIF_STATE();
-    if ((configuration != NULL_PTR) && (ControllerId == 0u) && (ControllerModePtr != NULL_PTR)) {
-        result = Can_GetControllerMode(ControllerId, ControllerModePtr);
+    if ((configuration != NULL_PTR) && (ControllerId == configuration->controller) &&
+        (ControllerModePtr != NULL_PTR)) {
+        result = Can_GetControllerMode(configuration->driver_controller, ControllerModePtr);
+    }
+    SchM_Exit_CanIf_CANIF_STATE();
+    return result;
+}
+CANIF_CODE Std_ReturnType CanIf_GetControllerErrorState(uint8 ControllerId,
+                                                        Can_ErrorStateType *ErrorStatePtr) {
+    Std_ReturnType result = E_NOT_OK;
+    SchM_Enter_CanIf_CANIF_STATE();
+    if ((configuration != NULL_PTR) && (ControllerId == configuration->controller) &&
+        (ErrorStatePtr != NULL_PTR)) {
+        result = Can_GetControllerErrorState(configuration->driver_controller, ErrorStatePtr);
     }
     SchM_Exit_CanIf_CANIF_STATE();
     return result;
@@ -105,8 +117,8 @@ CANIF_CODE Std_ReturnType CanIf_SetPduMode(uint8 ControllerId, CanIf_PduModeType
     Std_ReturnType result = E_NOT_OK;
     Can_ControllerStateType actual_mode = CAN_CS_UNINIT;
     SchM_Enter_CanIf_CANIF_STATE();
-    if ((configuration != NULL_PTR) && (ControllerId == 0u) &&
-        (Can_GetControllerMode(ControllerId, &actual_mode) == E_OK) &&
+    if ((configuration != NULL_PTR) && (ControllerId == configuration->controller) &&
+        (Can_GetControllerMode(configuration->driver_controller, &actual_mode) == E_OK) &&
         (actual_mode == CAN_CS_STARTED) &&
         ((PduModeRequest == CANIF_OFFLINE) || (PduModeRequest == CANIF_TX_OFFLINE) ||
          (PduModeRequest == CANIF_ONLINE))) {
@@ -119,7 +131,8 @@ CANIF_CODE Std_ReturnType CanIf_SetPduMode(uint8 ControllerId, CanIf_PduModeType
 CANIF_CODE Std_ReturnType CanIf_GetPduMode(uint8 ControllerId, CanIf_PduModeType *PduModePtr) {
     Std_ReturnType result = E_NOT_OK;
     SchM_Enter_CanIf_CANIF_STATE();
-    if ((configuration != NULL_PTR) && (ControllerId == 0u) && (PduModePtr != NULL_PTR)) {
+    if ((configuration != NULL_PTR) && (ControllerId == configuration->controller) &&
+        (PduModePtr != NULL_PTR)) {
         *PduModePtr = pdu_mode;
         result = E_OK;
     }
@@ -145,7 +158,7 @@ CANIF_CODE Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *P
                 } else if ((controller_mode == CAN_CS_STARTED) && (outstanding[i] < UINT32_MAX)) {
                     Can_PduType pdu = {TxPduId, (uint8)PduInfoPtr->SduLength, route->can_id,
                                        PduInfoPtr->SduDataPtr};
-                    if (Can_Write(0u, &pdu) == E_OK) {
+                    if (Can_Write(configuration->transmit_hoh, &pdu) == E_OK) {
                         ++outstanding[i];
                         result = E_OK;
                     }
@@ -186,7 +199,7 @@ static CANIF_CODE void CanIf_CancelOutstanding(void) {
 CANIF_CODE void CanIf_ControllerModeIndication(uint8 ControllerId,
                                                Can_ControllerStateType ControllerMode) {
     SchM_Enter_CanIf_CANIF_STATE();
-    if ((configuration != NULL_PTR) && (ControllerId == 0u) &&
+    if ((configuration != NULL_PTR) && (ControllerId == configuration->controller) &&
         ((ControllerMode == CAN_CS_STARTED) || (ControllerMode == CAN_CS_STOPPED) ||
          (ControllerMode == CAN_CS_SLEEP))) {
         controller_mode = ControllerMode;
@@ -202,13 +215,13 @@ CANIF_CODE void CanIf_ControllerModeIndication(uint8 ControllerId,
 }
 CANIF_CODE void CanIf_ControllerBusOff(uint8 ControllerId) {
     SchM_Enter_CanIf_CANIF_STATE();
-    if ((configuration != NULL_PTR) && (ControllerId == 0u)) {
+    if ((configuration != NULL_PTR) && (ControllerId == configuration->controller)) {
         Can_ControllerStateType actual_mode = CAN_CS_UNINIT;
         pdu_mode = CANIF_TX_OFFLINE;
         /* The host driver enters STOPPED on bus-off without a separate mode
          * indication. Converge only from its actual reported transition.
          */
-        if ((Can_GetControllerMode(ControllerId, &actual_mode) == E_OK) &&
+        if ((Can_GetControllerMode(configuration->driver_controller, &actual_mode) == E_OK) &&
             (actual_mode == CAN_CS_STOPPED) && (controller_mode != CAN_CS_STOPPED)) {
             controller_mode = CAN_CS_STOPPED;
             CanIf_CancelOutstanding();
@@ -221,8 +234,10 @@ static CANIF_CODE EcuStatus CanIf_Receive(const Can_HwType *Mailbox,
                                           const PduInfoType *PduInfoPtr) {
     EcuStatus result = ECU_ERR_FRAME_ID;
     if ((configuration != NULL_PTR) && (Mailbox != NULL_PTR) && (PduInfoPtr != NULL_PTR) &&
-        (PduInfoPtr->SduDataPtr != NULL_PTR) && (Mailbox->ControllerId == 0u) &&
-        (Mailbox->Hoh == 0u) && (Mailbox->CanId <= 0x7ffu) && (controller_mode == CAN_CS_STARTED) &&
+        (PduInfoPtr->SduDataPtr != NULL_PTR) &&
+        (Mailbox->ControllerId == configuration->controller) &&
+        (Mailbox->Hoh == configuration->receive_hoh) && (Mailbox->CanId <= 0x7ffu) &&
+        (controller_mode == CAN_CS_STARTED) &&
         ((pdu_mode == CANIF_ONLINE) || (pdu_mode == CANIF_TX_OFFLINE))) {
         uint16 i;
         for (i = 0u; i < configuration->receive_count; ++i) {
@@ -251,12 +266,12 @@ CANIF_CODE EcuStatus CanIf_HostRxIndication(uint32 id, uint8 dlc, const uint8 da
                                             uint64 now_ms) {
     uint8 bytes[8];
     uint8 i;
-    const Can_HwType mailbox = {id, 0u, 0u};
     PduInfoType info = {bytes, NULL_PTR, dlc};
     EcuStatus result = ECU_ERR_FRAME_DLC;
     SchM_Enter_CanIf_CANIF_STATE();
     (void)now_ms;
-    if ((data != NULL_PTR) && (dlc <= 8u)) {
+    if ((configuration != NULL_PTR) && (data != NULL_PTR) && (dlc <= 8u)) {
+        const Can_HwType mailbox = {id, configuration->receive_hoh, configuration->controller};
         for (i = 0u; i < dlc; ++i) {
             bytes[i] = data[i];
         }

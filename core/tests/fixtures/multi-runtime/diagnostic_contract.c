@@ -85,7 +85,11 @@ static const CanIf_ConfigType canif = {canif_rx,
                                        canif_tx,
                                        1u,
                                        Ecu_HostBusSM_ControllerModeIndication,
-                                       Ecu_HostBusSM_ControllerBusOff};
+                                       Ecu_HostBusSM_ControllerBusOff,
+                                       0u,
+                                       0u,
+                                       0u,
+                                       0u};
 static const Can_ConfigType can = {sink};
 static const ComM_UserHandleType users[] = {43u};
 static const ComM_ConfigType comm = {

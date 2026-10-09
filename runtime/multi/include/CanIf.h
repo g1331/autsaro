@@ -29,6 +29,10 @@ typedef struct {
     uint16 transmit_count;
     CanIf_ModeNotificationType controller_mode;
     CanIf_BusOffNotificationType bus_off;
+    uint8 controller;
+    uint8 driver_controller;
+    Can_HwHandleType receive_hoh;
+    Can_HwHandleType transmit_hoh;
 } CanIf_ConfigType;
 void CanIf_Init(const CanIf_ConfigType *ConfigPtr);
 void CanIf_DeInit(void);
@@ -36,6 +40,10 @@ Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr);
 Std_ReturnType CanIf_SetControllerMode(uint8 ControllerId, Can_ControllerStateType ControllerMode);
 Std_ReturnType CanIf_GetControllerMode(uint8 ControllerId,
                                        Can_ControllerStateType *ControllerModePtr);
+/** Query the actual driver mapped to this abstract CanIf controller ID.
+ * Refused requests preserve ErrorStatePtr; selected DevErrorDetect is false.
+ */
+Std_ReturnType CanIf_GetControllerErrorState(uint8 ControllerId, Can_ErrorStateType *ErrorStatePtr);
 Std_ReturnType CanIf_SetPduMode(uint8 ControllerId, CanIf_PduModeType PduModeRequest);
 Std_ReturnType CanIf_GetPduMode(uint8 ControllerId, CanIf_PduModeType *PduModePtr);
 void CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType *PduInfoPtr);

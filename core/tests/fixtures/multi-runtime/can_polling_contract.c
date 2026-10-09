@@ -66,7 +66,7 @@ static void busoff(uint8 controller) {
 static const Can_ConfigType can = {sink};
 static const CanIf_RxPduConfigType rx[] = {{0x320u, 21u, 0u}};
 static const CanIf_TxPduConfigType tx[] = {{0x321u, 51u, 4u}};
-static const CanIf_ConfigType canif = {rx, 1u, tx, 1u, mode, busoff};
+static const CanIf_ConfigType canif = {rx, 1u, tx, 1u, mode, busoff, 0u, 0u, 0u, 1u};
 static const LSduR_RxRouteType ls_rx[] = {{21u, 31u, PduR_CanIfRxIndication}};
 static const LSduR_TxRouteType ls_tx[] = {
     {LSDUR_UP_PDUR, 41u, 51u, PduR_CanIfTxConfirmation, NULL_PTR}};
@@ -91,6 +91,10 @@ int main(void) {
     poll_mode();
     assert(modes == 1u);
     assert(CanIf_SetPduMode(0u, CANIF_ONLINE) == E_OK);
+    {
+        const Can_PduType wrong_hth = {51u, 0u, 0x321u, bytes};
+        assert(Can_Write(0u, &wrong_hth) == E_NOT_OK);
+    }
     expected_length = 0u;
     assert(CanIf_Transmit(51u, &zero) == E_OK);
     assert(CanIf_Transmit(51u, &zero) == E_NOT_OK); /* Actual driver BUSY. */

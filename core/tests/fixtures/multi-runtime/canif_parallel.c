@@ -142,7 +142,7 @@ static const LSduR_TxRouteType ls_tx[] = {
     {LSDUR_UP_PDUR, 42u, 61u, PduR_CanIfTxConfirmation, PduR_CanIfTriggerTransmit}};
 static const LSduR_PBConfigType ls = {29u, NULL_PTR, 0u, ls_tx, 2u};
 static const CanIf_TxPduConfigType tx[] = {{0x456u, 51u, 4u}, {0x457u, 61u, 4u}};
-static const CanIf_ConfigType canif = {NULL_PTR, 0u, tx, 2u, mode, bus_off};
+static const CanIf_ConfigType canif = {NULL_PTR, 0u, tx, 2u, mode, bus_off, 0u, 0u, 0u, 0u};
 static const Can_ConfigType can = {sink};
 static void produce(Worker *worker) {
     unsigned round;

@@ -37,56 +37,56 @@ void Can_Init(const Can_ConfigType *config);
 /** @brief De-initialize a stopped or sleeping host CAN controller. */
 void Can_DeInit(void);
 /** @brief Select the generated host baud-rate configuration, ID zero.
- * @param[in] controller Generated controller identifier, currently zero.
+ * @param[in] controller Configured driver controller identifier; legacy profile uses zero.
  * @param[in] baud_rate_config_id Generated baud-rate configuration identifier, currently zero.
  * @return E_OK if the configuration was selected, otherwise E_NOT_OK.
  */
 Std_ReturnType Can_SetBaudrate(uint8_t controller, uint16_t baud_rate_config_id);
-/** @brief Request a controller state transition on controller zero.
- * @param[in] controller Generated controller identifier, currently zero.
+/** @brief Request a transition of the configured controller.
+ * @param[in] controller Configured driver controller identifier; legacy profile uses zero.
  * @param[in] transition Requested standard controller state.
  * @return E_OK if the transition was accepted, otherwise E_NOT_OK.
  */
 Std_ReturnType Can_SetControllerMode(uint8_t controller, Can_ControllerStateType transition);
-/** @brief Read the standard state of controller zero.
- * @param[in] controller Generated controller identifier, currently zero.
+/** @brief Read the standard state of the configured controller.
+ * @param[in] controller Configured driver controller identifier; legacy profile uses zero.
  * @param[out] mode Current standard controller state.
  * @return E_OK when the state was read, otherwise E_NOT_OK.
  */
 Std_ReturnType Can_GetControllerMode(uint8_t controller, Can_ControllerStateType *mode);
 /** @brief Read the host controller's active or bus-off error state.
- * @param[in] controller Generated controller identifier, currently zero.
+ * @param[in] controller Configured driver controller identifier; legacy profile uses zero.
  * @param[out] error_state Current CAN error state.
  * @return E_OK when the state was read, otherwise E_NOT_OK.
  */
 Std_ReturnType Can_GetControllerErrorState(uint8_t controller, Can_ErrorStateType *error_state);
 /** @brief Query the unavailable host Rx hardware error counter.
- * @param[in] controller Generated controller identifier, currently zero.
+ * @param[in] controller Configured driver controller identifier; legacy profile uses zero.
  * @param[out] error_counter Unchanged because the virtual target has no hardware counter.
  * @return E_NOT_OK; the host target has no Rx error counter.
  */
 Std_ReturnType Can_GetControllerRxErrorCounter(uint8_t controller, uint8_t *error_counter);
 /** @brief Query the unavailable host Tx hardware error counter.
- * @param[in] controller Generated controller identifier, currently zero.
+ * @param[in] controller Configured driver controller identifier; legacy profile uses zero.
  * @param[out] error_counter Unchanged because the virtual target has no hardware counter.
  * @return E_NOT_OK; the host target has no Tx error counter.
  */
 Std_ReturnType Can_GetControllerTxErrorCounter(uint8_t controller, uint8_t *error_counter);
 /** @brief Increment the nested host interrupt-disable count.
- * @param[in] controller Generated controller identifier, currently zero.
+ * @param[in] controller Configured driver controller identifier; legacy profile uses zero.
  */
 void Can_DisableControllerInterrupts(uint8_t controller);
 /** @brief Decrement the nested host interrupt-disable count if nonzero.
- * @param[in] controller Generated controller identifier, currently zero.
+ * @param[in] controller Configured driver controller identifier; legacy profile uses zero.
  */
 void Can_EnableControllerInterrupts(uint8_t controller);
 /** @brief Report that the host target has no hardware wakeup source.
- * @param[in] controller Generated controller identifier, currently zero.
+ * @param[in] controller Configured driver controller identifier; legacy profile uses zero.
  * @return E_NOT_OK because no hardware wakeup event can be detected.
  */
 Std_ReturnType Can_CheckWakeup(uint8_t controller);
-/** @brief Queue one CAN L-SDU through hardware transmit handle zero without waiting for output.
- * @param[in] hth Generated hardware transmit handle, currently zero.
+/** @brief Queue one CAN L-SDU through the configured transmit handle without waiting for output.
+ * @param[in] hth Configured hardware transmit handle; legacy profile uses zero.
  * @param[in] pdu Caller-owned CAN L-SDU.
  * @return E_OK when accepted, CAN_BUSY if the handle is occupied, otherwise E_NOT_OK.
  */

@@ -1,5 +1,4 @@
 #include "Ecu_HostBusSM.h"
-#include "Can.h"
 #include "Can_HostLock.h"
 #define ECU_HOSTBUSSM_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Ecu_HostBusSM_MemMap.h"
@@ -17,8 +16,9 @@ static ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Publish(ComM_ModeType mode) {
     ComM_BusSM_ModeIndication(configuration->channel, mode);
 }
 ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Init(const Ecu_HostBusSM_ConfigType *ConfigPtr) {
+    CanIf_PduModeType mode = CANIF_OFFLINE;
     Can_Lock();
-    if ((ConfigPtr != NULL_PTR) && (ConfigPtr->controller == 0u)) {
+    if ((ConfigPtr != NULL_PTR) && (CanIf_GetPduMode(ConfigPtr->controller, &mode) == E_OK)) {
         configuration = ConfigPtr;
         requested_mode = COMM_NO_COMMUNICATION;
         transition_pending = FALSE;
@@ -96,7 +96,7 @@ ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_RequestComMode(NetworkHandleType
         const Std_ReturnType controller_result =
             CanIf_GetControllerMode(configuration->controller, &controller);
         const Std_ReturnType error_result =
-            Can_GetControllerErrorState(configuration->controller, &error);
+            CanIf_GetControllerErrorState(configuration->controller, &error);
         if ((controller_result == E_OK) && (error_result == E_OK) &&
             ((ComMode == COMM_NO_COMMUNICATION) || (error != CAN_ERRORSTATE_BUSOFF))) {
             if ((transition_pending == TRUE) && (requested_mode == ComMode)) {

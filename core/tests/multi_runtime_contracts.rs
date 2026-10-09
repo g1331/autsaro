@@ -168,6 +168,14 @@ fn chain_consumer(scratch: &Path, fixture: &str) -> PathBuf {
     if cfg!(target_os = "linux") {
         command.arg("-pthread");
     }
+    if fixture == "mode_contract.c" {
+        // Independent non-equal namespace oracle; final generation derives source IDs.
+        command.args([
+            "-DCAN_CONTROLLER_ID=7u",
+            "-DCAN_CANIF_CONTROLLER_ID=9u",
+            "-DCAN_TX_HOH=17u",
+        ]);
+    }
     command
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
         .arg("-I")

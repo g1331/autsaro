@@ -2567,9 +2567,8 @@ fn communication_types_and_polling_periods_are_source_derived() {
         "<SHORT-NAME>Polling</SHORT-NAME>",
         "<SHORT-NAME>PollCycle</SHORT-NAME>",
     );
-    parameter(&mut sources, "Controller", "CanControllerId", "7");
-    parameter(&mut sources, "Controller", "CanIfCtrlId", "9");
-    parameter(&mut sources, "Transmit", "CanObjectId", "17");
+    parameter(&mut sources, "Receive", "CanObjectId", "1");
+    parameter(&mut sources, "Transmit", "CanObjectId", "0");
     let renamed = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
     let runtime = renamed
         .description()
@@ -2580,9 +2579,10 @@ fn communication_types_and_polling_periods_are_source_derived() {
     assert_eq!(json["pduIdType"], "UINT8");
     assert_eq!(json["pduLengthType"], "UINT32");
     assert!(runtime.can.read_write_period.ends_with("/PollCycle"));
-    assert_eq!(runtime.can.controller_id, 7);
-    assert_eq!(runtime.can.can_if_controller_id, 9);
-    assert_eq!(runtime.can.transmit_handle, 17);
+    assert_eq!(runtime.can.controller_id, 0);
+    assert_eq!(runtime.can.can_if_controller_id, 0);
+    assert_eq!(runtime.can.receive_handle, 1);
+    assert_eq!(runtime.can.transmit_handle, 0);
     assert!(normal_validation(&sources).diagnostics.is_empty());
 }
 
@@ -2620,6 +2620,10 @@ fn multi_communication_rejects_truncation_and_unbound_polling_in_both_entries() 
             "CAN_FEATURE_UNSUPPORTED",
         ),
         ("Transmit", "CanObjectId", "0", "CAN_HARDWARE_HANDLES"),
+        ("Transmit", "CanObjectId", "17", "CAN_HARDWARE_HANDLES"),
+        ("Receive", "CanObjectId", "17", "CAN_HARDWARE_HANDLES"),
+        ("Controller", "CanControllerId", "7", "CAN_CONTROLLER_ID"),
+        ("Controller", "CanIfCtrlId", "9", "CAN_CONTROLLER_ID"),
     ] {
         let mut sources = inputs();
         parameter(&mut sources, owner, field, new_value);
