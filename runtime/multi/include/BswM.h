@@ -4,6 +4,8 @@
 #ifndef BSWM_H
 #define BSWM_H
 #include "ComM.h"
+typedef uint16 BswM_ModeType;
+typedef uint16 BswM_UserType;
 typedef Std_ReturnType (*BswM_ModeActionType)(NetworkHandleType Network, ComM_ModeType Mode);
 typedef struct {
     NetworkHandleType channel;

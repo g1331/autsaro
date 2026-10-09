@@ -31,6 +31,7 @@ pub struct ModeRuntimeContract {
     pub main_symbol: String,
     pub period_ms: u32,
     pub minimum_full_ms: u32,
+    pub ecu_group_classification: u8,
     pub bus_prefix: String,
     pub users: Vec<ModeUser>,
     pub bswm_configuration: String,
@@ -117,6 +118,9 @@ pub(super) fn inspect(
         general,
         "ComMDevErrorDetect ComMDynamicPncToChannelMappingSupport ComMModeLimitationEnabled ComMPncSupport ComMResetAfterForcingNoComm ComMSynchronousWakeUp ComMVersionInfoApi ComMWakeupInhibitionEnabled",
     )?;
+    let ecu_group_classification = value(graph, general, "ComMEcuGroupClassification", false)
+        .and_then(|text| text.parse::<u8>().ok())
+        .ok_or_else(|| fail(graph, general, "MODE_HANDLE"))?;
     let minimum_full_ms = value(graph, general, "ComMTMinFullComModeDuration", false)
         .and_then(milliseconds)
         .filter(|duration| (1..=65000).contains(duration))
@@ -325,6 +329,7 @@ pub(super) fn inspect(
         main_symbol: format!("ComM_MainFunction_{name}"),
         period_ms,
         minimum_full_ms,
+        ecu_group_classification,
         bus_prefix: "Ecu_HostBusSM".into(),
         users,
         bswm_configuration: graph.elements[config].object.clone(),

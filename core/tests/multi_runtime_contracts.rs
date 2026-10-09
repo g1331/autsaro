@@ -147,7 +147,6 @@ fn chain_consumer(scratch: &Path, fixture: &str) -> PathBuf {
         "ComStack_Cfg.h",
         "SchM_CanIf.h",
         "SchM_ComM.h",
-        "SchM_BswM.h",
         "SchM_Dcm.h",
         "SchM_CanTp.h",
     ] {

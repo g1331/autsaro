@@ -31,6 +31,12 @@ BSWM_CODE void BswM_Deinit(void) {
     pending = FALSE;
     SchM_Exit_BswM_BSWM_STATE();
 }
+BSWM_CODE void BswM_MainFunction(void) {
+    /* SWS_BswM_00075 evaluates rules with DEFERRED inputs here. The selected
+     * configuration contains only IMMEDIATE inputs, evaluated in their actual
+     * callbacks. There is no deferred work and no added periodic arbitration.
+     */
+}
 BSWM_CODE void BswM_ComM_CurrentMode(NetworkHandleType Network, ComM_ModeType RequestedMode) {
     SchM_Enter_BswM_BSWM_STATE();
     if ((configuration != NULL_PTR) && (Network == configuration->channel) &&

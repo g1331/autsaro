@@ -89,7 +89,7 @@ static const CanIf_ConfigType canif = {canif_rx,
 static const Can_ConfigType can = {sink};
 static const ComM_UserHandleType users[] = {43u};
 static const ComM_ConfigType comm = {
-    7u, users, 1u, 3u, Ecu_HostBusSM_RequestComMode, Ecu_HostBusSM_GetCurrentComMode, mode};
+    7u, users, 1u, 3u, Ecu_HostBusSM_RequestComMode, Ecu_HostBusSM_GetCurrentComMode, mode, 3u};
 static const Ecu_HostBusSM_ConfigType cdd = {7u, 0u};
 static const BswM_ConfigType bswm = {7u, COMM_NO_COMMUNICATION, Ecu_HostBusSM_ApplyMode};
 static const Dcm_ConfigType dcm = {17u, 18u, 7u, 0x1234u, read_did, 50u, 50u, 5000u, 20u, 256u};

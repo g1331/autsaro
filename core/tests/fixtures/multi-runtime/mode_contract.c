@@ -4,9 +4,11 @@
 #include "ComM.h"
 #include "ComM_BswM.h"
 #include "ComM_Dcm.h"
+#include "ComM_EcuM.h"
 #include "ComM_Internal.h"
 #include "BswM.h"
 #include "BswM_ComM.h"
+#include "SchM_BswM.h"
 #include "Ecu_HostBusSM.h"
 #include "Can.h"
 #include "SchM_Can.h"
@@ -97,7 +99,8 @@ static const CanIf_ConfigType canif = {canif_rx,
 static const Can_ConfigType can = {sink};
 static const ComM_UserHandleType users[] = {17u, 43u};
 static const ComM_ConfigType comm = {
-    7u, users, 2u, 3u, Ecu_HostBusSM_RequestComMode, Ecu_HostBusSM_GetCurrentComMode, indication};
+    7u,         users, 2u, 3u, Ecu_HostBusSM_RequestComMode, Ecu_HostBusSM_GetCurrentComMode,
+    indication, 3u};
 static const Ecu_HostBusSM_ConfigType cdd = {7u, 0u};
 static const BswM_ConfigType bswm = {7u, COMM_NO_COMMUNICATION, action};
 static void current(ComM_ModeType expected) {
@@ -114,6 +117,12 @@ int main(void) {
     void (*init)(const ComM_ConfigType *) = ComM_Init;
     Std_ReturnType (*request)(ComM_UserHandleType, ComM_ModeType) = ComM_RequestComMode;
     void (*allowed)(NetworkHandleType, boolean) = ComM_CommunicationAllowed;
+    Std_ReturnType (*inhibition_status)(NetworkHandleType, ComM_InhibitionStatusType *) =
+        ComM_GetInhibitionStatus;
+    Std_ReturnType (*classification)(ComM_InhibitionStatusType) = ComM_SetECUGroupClassification;
+    Std_ReturnType (*pnc_current)(ComM_UserHandleType, ComM_ModeType *) = ComM_GetCurrentPNCComMode;
+    void (*wake_up)(NetworkHandleType) = ComM_EcuM_WakeUpIndication;
+    void (*bswm_main)(void) = BswM_MainFunction;
     void (*active)(NetworkHandleType) = ComM_DCM_ActiveDiagnostic;
     void (*inactive)(NetworkHandleType) = ComM_DCM_InactiveDiagnostic;
     void (*bus_indication)(NetworkHandleType, ComM_ModeType) = ComM_BusSM_ModeIndication;
@@ -122,6 +131,7 @@ int main(void) {
     Std_ReturnType (*bus_request)(NetworkHandleType, ComM_ModeType) = Ecu_HostBusSM_RequestComMode;
     Std_ReturnType (*bus_get)(NetworkHandleType, ComM_ModeType *) = Ecu_HostBusSM_GetCurrentComMode;
     ComM_ModeType value = 99u;
+    ComM_InhibitionStatusType inhibition = 0xa5u;
     ComM_InitStatusType status = COMM_INIT;
     Can_ErrorStateType error_state = CAN_ERRORSTATE_ACTIVE;
     uint8 bytes[8] = {42u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
@@ -129,6 +139,16 @@ int main(void) {
     unsigned saved;
     unsigned i;
     assert(sizeof(ComM_ModeType) == 1u && sizeof(ComM_UserHandleType) == 2u);
+    assert(sizeof(BswM_ModeType) == 2u && sizeof(BswM_UserType) == 2u);
+    assert(sizeof(ComM_InhibitionStatusType) == 1u);
+    assert(COMM_E_MODE_LIMITATION == 2u && COMM_E_MULTIPLE_PNC_ASSIGNED == 3u &&
+           COMM_E_NO_PNC_ASSIGNED == 4u);
+    assert(inhibition_status(7u, &inhibition) == E_NOT_OK && inhibition == 0xa5u);
+    assert(classification(3u) == E_NOT_OK);
+    assert(pnc_current(17u, &value) == E_NOT_OK && value == 99u);
+    wake_up(7u);
+    bswm_main();
+    assert(actions == 0u);
     assert(COMM_NO_COMMUNICATION == 0u && COMM_SILENT_COMMUNICATION == 1u &&
            COMM_FULL_COMMUNICATION == 2u && COMM_NOT_USED_USER_ID == 65535u);
     assert(ComM_GetStatus(&status) == E_OK && status == COMM_UNINIT);
@@ -151,6 +171,16 @@ int main(void) {
     assert(actions == 0u && indications[0] == 0u); /* No init mode notification. */
     assert(ComM_GetStatus(&status) == E_OK && status == COMM_INIT);
     assert(ComM_GetStatus(NULL_PTR) == E_NOT_OK);
+    assert(inhibition_status(7u, &inhibition) == E_OK && inhibition == 0u);
+    inhibition = 0xa5u;
+    assert(inhibition_status(99u, &inhibition) == E_NOT_OK && inhibition == 0xa5u);
+    assert(inhibition_status(7u, NULL_PTR) == E_NOT_OK);
+    assert(classification(0u) == E_OK && classification(3u) == E_OK);
+    assert(inhibition_status(7u, &inhibition) == E_OK && inhibition == 0u);
+    assert(pnc_current(17u, &value) == 4u && value == 99u);
+    assert(pnc_current(43u, &value) == COMM_E_NO_PNC_ASSIGNED && value == 99u);
+    assert(pnc_current(99u, &value) == E_NOT_OK && value == 99u);
+    assert(pnc_current(17u, NULL_PTR) == E_NOT_OK);
     assert(request(65535u, COMM_FULL_COMMUNICATION) == E_NOT_OK);
     assert(request(17u, COMM_SILENT_COMMUNICATION) == E_NOT_OK);
     assert(request(17u, 3u) == E_NOT_OK);
@@ -174,6 +204,9 @@ int main(void) {
     Can_MainFunction_Wakeup();
     current(COMM_FULL_COMMUNICATION);
     assert(indications[2] == 1u && actions == 1u);
+    assert(classification(1u) == E_OK); /* Runtime mask does not activate disabled features. */
+    assert(inhibition_status(7u, &inhibition) == E_OK && inhibition == 0u);
+    current(COMM_FULL_COMMUNICATION);
     assert(CanIf_HostRxIndication(0x123u, 4u, bytes, 0u) == ECU_OK && receptions == 1u);
     buffer();
     Ecu_ComMainFunctionTx();
@@ -274,6 +307,7 @@ int main(void) {
     /* ComM restart resets demand/Allowed; it must obtain actual mode via provider. */
     saved = indications[0];
     init(&comm);
+    assert(inhibition_status(7u, &inhibition) == E_OK && inhibition == 0u);
     current(COMM_NO_COMMUNICATION);  /* Re-init requests actual NO, not inherited FULL. */
     assert(indications[0] == saved); /* Default NO is not a mode change notification. */
     assert(request(17u, COMM_FULL_COMMUNICATION) == E_OK);
@@ -293,6 +327,71 @@ int main(void) {
     ComM_DeInit();
     assert(ComM_GetStatus(&status) == E_OK && status == COMM_UNINIT);
     assert(request(17u, COMM_FULL_COMMUNICATION) == E_NOT_OK);
+    /* A mapped EcuM wake-up is an independent pending request, even with no
+     * ordinary user or diagnostic activity. Only actual CAN completion opens it.
+     */
+    saved = actions;
+    wake_up(7u); /* UNINIT: no state effect. */
+    assert(ComM_GetStatus(&status) == E_OK && status == COMM_UNINIT);
+    bswm_main();
+    assert(actions == saved);
+    init(&comm);
+    wake_up(99u);
+    assert(ComM_RunChannel() == COMM_NO_COM_NO_PENDING_REQUEST);
+    current(COMM_NO_COMMUNICATION);
+    wake_up(7u);
+    for (i = 0u; i < 3u; ++i) {
+        assert(ComM_RunChannel() == COMM_NO_COM_REQUEST_PENDING);
+        current(COMM_NO_COMMUNICATION);
+    }
+    assert(ComM_GetRequestedComMode(17u, &value) == E_OK && value == COMM_NO_COMMUNICATION);
+    assert(request(17u, COMM_NO_COMMUNICATION) == E_OK);
+    inactive(7u);
+    assert(ComM_RunChannel() == COMM_NO_COM_REQUEST_PENDING);
+    ComM_DeInit();
+    assert(ComM_GetStatus(&status) == E_OK && status == COMM_INIT);
+    init(&comm); /* Re-init discards the previous lifetime's wake-up request. */
+    assert(ComM_RunChannel() == COMM_NO_COM_NO_PENDING_REQUEST);
+    wake_up(7u);
+    allowed(99u, TRUE);
+    assert(ComM_RunChannel() == COMM_NO_COM_REQUEST_PENDING);
+    bswm_main();
+    assert(actions == saved); /* All-IMMEDIATE main does not rerun any action. */
+    saved = indications[2];
+    allowed(7u, TRUE);
+    current(COMM_NO_COMMUNICATION);
+    assert(indications[2] == saved);
+    Can_MainFunction_Mode();
+    current(COMM_FULL_COMMUNICATION);
+    assert(indications[2] == saved + 1u);
+    assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED); /* minimum tick 1 */
+    wake_up(7u); /* A wake-up in FULL does not restart the selected timer. */
+    assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED); /* minimum tick 2 */
+    assert(ComM_RunChannel() == COMM_FULL_COM_READY_SLEEP);       /* minimum tick 3 */
+    for (i = 0u; i < 5u; ++i) {
+        assert(ComM_RunChannel() == COMM_FULL_COM_READY_SLEEP);
+        current(COMM_FULL_COMMUNICATION);
+    }
+    assert(bus_request(7u, COMM_NO_COMMUNICATION) == E_OK);
+    Can_MainFunction_Mode();
+    current(COMM_NO_COMMUNICATION);
+    ComM_DeInit();
+    init(&comm);
+    allowed(7u, TRUE); /* Permission alone does not request FULL. */
+    assert(ComM_RunChannel() == COMM_NO_COM_NO_PENDING_REQUEST);
+    saved = indications[2];
+    wake_up(7u);
+    current(COMM_NO_COMMUNICATION);
+    Can_MainFunction_Mode();
+    current(COMM_FULL_COMMUNICATION);
+    assert(indications[2] == saved + 1u);
+    assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED);
+    assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED);
+    assert(ComM_RunChannel() == COMM_FULL_COM_READY_SLEEP);
+    assert(bus_request(7u, COMM_NO_COMMUNICATION) == E_OK);
+    Can_MainFunction_Mode();
+    ComM_DeInit();
+    assert(ComM_GetStatus(&status) == E_OK && status == COMM_UNINIT);
     Ecu_HostBusSM_DeInit();
     value = 99u;
     assert(bus_get(7u, &value) == E_NOT_OK && value == 99u);

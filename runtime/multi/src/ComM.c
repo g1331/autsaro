@@ -1,6 +1,7 @@
 #include "ComM.h"
 #include "ComM_BswM.h"
 #include "ComM_Dcm.h"
+#include "ComM_EcuM.h"
 #include "ComM_Internal.h"
 #include "BswM_ComM.h"
 #include "SchM_ComM.h"
@@ -12,6 +13,13 @@ static ComM_ModeType current_mode COMM_VAR_CLEARED;
 static ComM_StateType channel_state COMM_VAR_CLEARED;
 static boolean allowed COMM_VAR_CLEARED;
 static boolean diagnostic COMM_VAR_CLEARED;
+static boolean wakeup_pending COMM_VAR_CLEARED;
+/* The ECU classification mask belongs to ECU lifetime, not one ComM lifetime.
+ * Both inhibition features are disabled in this selected configuration. Its
+ * runtime setter still updates the real mask without enabling those features.
+ */
+static ComM_InhibitionStatusType group_classification COMM_VAR_CLEARED;
+static boolean group_classification_initialized COMM_VAR_CLEARED;
 static uint32 minimum_remaining COMM_VAR_CLEARED;
 static Std_ReturnType bus_result COMM_VAR_CLEARED;
 #define COMM_STOP_SEC_VAR_CLEARED_UNSPECIFIED
@@ -53,7 +61,7 @@ static COMM_CODE uint16 ComM_User(ComM_UserHandleType User) {
     return index;
 }
 static COMM_CODE boolean ComM_Demand(void) {
-    boolean demand = diagnostic;
+    boolean demand = (diagnostic == TRUE) || (wakeup_pending == TRUE);
     uint16 i;
     for (i = 0u; i < configuration->user_count; ++i) {
         if (requests[i] == COMM_FULL_COMMUNICATION) {
@@ -73,6 +81,7 @@ static COMM_CODE void ComM_Evaluate(void) {
         } else if (allowed == TRUE) {
             channel_state = COMM_FULL_COM_NETWORK_REQUESTED;
             minimum_remaining = configuration->minimum_full_ticks;
+            wakeup_pending = FALSE;
         } else {
             /* Only REQUEST_PENDING evaluates CommunicationAllowed. */
         }
@@ -110,6 +119,10 @@ COMM_CODE void ComM_Init(const ComM_ConfigType *ConfigPtr) {
     if (ComM_Valid(ConfigPtr) == TRUE) {
         uint16 i;
         configuration = ConfigPtr;
+        if (group_classification_initialized == FALSE) {
+            group_classification = ConfigPtr->ecu_group_classification;
+            group_classification_initialized = TRUE;
+        }
         for (i = 0u; i < 32u; ++i) {
             requests[i] = COMM_NO_COMMUNICATION;
         }
@@ -117,6 +130,7 @@ COMM_CODE void ComM_Init(const ComM_ConfigType *ConfigPtr) {
         channel_state = COMM_NO_COM_NO_PENDING_REQUEST;
         allowed = FALSE;
         diagnostic = FALSE;
+        wakeup_pending = FALSE;
         minimum_remaining = 0u;
         bus_result = E_NOT_OK;
         ComM_RequestBus(); /* NO entry must disable actual lower communication. */
@@ -133,6 +147,7 @@ COMM_CODE void ComM_DeInit(void) {
             configuration = NULL_PTR;
             allowed = FALSE;
             diagnostic = FALSE;
+            wakeup_pending = FALSE;
             minimum_remaining = 0u;
         }
     }
@@ -143,6 +158,31 @@ COMM_CODE Std_ReturnType ComM_GetStatus(ComM_InitStatusType *Status) {
     SchM_Enter_ComM_COMM_STATE();
     if (Status != NULL_PTR) {
         *Status = (configuration == NULL_PTR) ? COMM_UNINIT : COMM_INIT;
+        result = E_OK;
+    }
+    SchM_Exit_ComM_COMM_STATE();
+    return result;
+}
+COMM_CODE Std_ReturnType ComM_GetInhibitionStatus(NetworkHandleType Channel,
+                                                  ComM_InhibitionStatusType *Status) {
+    Std_ReturnType result = E_NOT_OK;
+    SchM_Enter_ComM_COMM_STATE();
+    if ((configuration != NULL_PTR) && (Channel == configuration->channel) &&
+        (Status != NULL_PTR)) {
+        /* The configured wake-up inhibition and mode limitation are disabled.
+         * Changing their classification mask cannot make either active.
+         */
+        *Status = 0u;
+        result = E_OK;
+    }
+    SchM_Exit_ComM_COMM_STATE();
+    return result;
+}
+COMM_CODE Std_ReturnType ComM_SetECUGroupClassification(ComM_InhibitionStatusType Status) {
+    Std_ReturnType result = E_NOT_OK;
+    SchM_Enter_ComM_COMM_STATE();
+    if (configuration != NULL_PTR) {
+        group_classification = Status;
         result = E_OK;
     }
     SchM_Exit_ComM_COMM_STATE();
@@ -185,6 +225,20 @@ COMM_CODE Std_ReturnType ComM_GetCurrentComMode(ComM_UserHandleType User, ComM_M
     SchM_Exit_ComM_COMM_STATE();
     return result;
 }
+COMM_CODE Std_ReturnType ComM_GetCurrentPNCComMode(ComM_UserHandleType User,
+                                                   ComM_ModeType *ComMode) {
+    Std_ReturnType result = E_NOT_OK;
+    SchM_Enter_ComM_COMM_STATE();
+    if ((ComM_User(User) < 32u) && (ComMode != NULL_PTR)) {
+        /* PncSupport=false gives every configured static user zero PNCs.
+         * The API and service Possible Errors put this in the return status;
+         * the output mode remains untouched on this refusal.
+         */
+        result = COMM_E_NO_PNC_ASSIGNED;
+    }
+    SchM_Exit_ComM_COMM_STATE();
+    return result;
+}
 COMM_CODE Std_ReturnType ComM_GetMaxComMode(ComM_UserHandleType User, ComM_ModeType *ComMode) {
     Std_ReturnType result = E_NOT_OK;
     SchM_Enter_ComM_COMM_STATE();
@@ -200,6 +254,21 @@ COMM_CODE void ComM_CommunicationAllowed(NetworkHandleType Channel, boolean Allo
     SchM_Enter_ComM_COMM_STATE();
     if ((configuration != NULL_PTR) && (Channel == configuration->channel)) {
         allowed = Allowed;
+        ComM_Evaluate();
+        ComM_RequestBus();
+    }
+    SchM_Exit_ComM_COMM_STATE();
+}
+COMM_CODE void ComM_EcuM_WakeUpIndication(NetworkHandleType Channel) {
+    SchM_Enter_ComM_COMM_STATE();
+    if ((configuration != NULL_PTR) && (Channel == configuration->channel) &&
+        (channel_state == COMM_NO_COM_NO_PENDING_REQUEST)) {
+        /* A wake-up is a pending request of its own. Ordinary NO requests must
+         * not cancel it while communication is still waiting for permission.
+         * The selected single channel has SynchronousWakeUp=false and NM NONE.
+         */
+        wakeup_pending = TRUE;
+        channel_state = COMM_NO_COM_REQUEST_PENDING;
         ComM_Evaluate();
         ComM_RequestBus();
     }
