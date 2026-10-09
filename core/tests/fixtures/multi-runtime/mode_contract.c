@@ -138,6 +138,9 @@ int main(void) {
     ComM_InhibitionStatusType inhibition = 0xa5u;
     ComM_InitStatusType status = COMM_INIT;
     Std_ReturnType (*canif_error)(uint8, Can_ErrorStateType *) = CanIf_GetControllerErrorState;
+    Std_ReturnType (*rx_counter)(uint8, uint8 *) = CanIf_GetControllerRxErrorCounter;
+    Std_ReturnType (*tx_counter)(uint8, uint8 *) = CanIf_GetControllerTxErrorCounter;
+    uint8 counter = 0xa5u;
     Can_ErrorStateType error_state = CAN_ERRORSTATE_PASSIVE;
     Can_ControllerStateType controller_state = CAN_CS_SLEEP;
     CanIf_PduModeType pdu_mode = CANIF_ONLINE;
@@ -165,6 +168,8 @@ int main(void) {
     bswm_mode(7u, COMM_FULL_COMMUNICATION);
     assert(actions == 0u);
     assert(canif_error(9u, &error_state) == E_NOT_OK && error_state == CAN_ERRORSTATE_PASSIVE);
+    assert(rx_counter(9u, &counter) == E_NOT_OK && counter == 0xa5u);
+    assert(tx_counter(9u, &counter) == E_NOT_OK && counter == 0xa5u);
     Det_Init(&det);
     Com_Init(&com);
     Com_IpduGroupStart(0u, TRUE);
@@ -173,6 +178,12 @@ int main(void) {
     LSduR_Init(&ls);
     CanIf_Init(&canif);
     Can_Init(&can);
+    assert(rx_counter(9u, &counter) == E_NOT_OK && counter == 0xa5u);
+    assert(tx_counter(9u, &counter) == E_NOT_OK && counter == 0xa5u);
+    assert(rx_counter(7u, &counter) == E_NOT_OK && counter == 0xa5u);
+    assert(tx_counter(7u, &counter) == E_NOT_OK && counter == 0xa5u);
+    assert(rx_counter(9u, NULL_PTR) == E_NOT_OK);
+    assert(tx_counter(9u, NULL_PTR) == E_NOT_OK);
     assert(Can_SetBaudrate(0u, 0u) == E_NOT_OK);
     assert(Can_SetBaudrate(7u, 0u) == E_OK);
     assert(Can_GetControllerMode(0u, &controller_state) == E_NOT_OK &&
@@ -287,6 +298,8 @@ int main(void) {
     assert(canif_error(9u, &error_state) == E_OK && error_state == CAN_ERRORSTATE_ACTIVE);
     Can_SetMode(CAN_BUS_OFF);
     assert(canif_error(9u, &error_state) == E_OK && error_state == CAN_ERRORSTATE_BUSOFF);
+    assert(rx_counter(9u, &counter) == E_NOT_OK && counter == 0xa5u);
+    assert(tx_counter(9u, &counter) == E_NOT_OK && counter == 0xa5u);
     current(COMM_NO_COMMUNICATION);
     saved = indications[2];
     for (i = 0u; i < 10u; ++i) {
@@ -299,6 +312,8 @@ int main(void) {
     }
     assert(CanIf_Transmit(51u, &info) == E_NOT_OK && errors == 1u);
     Can_SetMode(CAN_STARTED); /* Explicit existing controlled-host recovery. */
+    assert(rx_counter(9u, &counter) == E_NOT_OK && counter == 0xa5u);
+    assert(tx_counter(9u, &counter) == E_NOT_OK && counter == 0xa5u);
     assert(canif_error(9u, &error_state) == E_OK && error_state == CAN_ERRORSTATE_ACTIVE);
     current(COMM_FULL_COMMUNICATION);
     assert(indications[2] == saved + 1u);

@@ -192,6 +192,26 @@ COM_CODE Std_ReturnType Com_TriggerTransmit(PduIdType TxPduId, PduInfoType *PduI
     }
     return result;
 }
+static COM_CODE Std_ReturnType Com_TransmitPdu(uint16 index) {
+    uint8 bytes[4];
+    PduInfoType info = {bytes, NULL_PTR, 4u};
+    const PduIdType id = configuration->pdus[index].pdu;
+    Std_ReturnType result = E_NOT_OK;
+    if (Com_TriggerTransmit(id, &info) == E_OK) {
+        result = configuration->transmit(id, &info);
+    }
+    return result;
+}
+COM_CODE Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId) {
+    Std_ReturnType result = E_NOT_OK;
+    if (configuration != NULL_PTR) {
+        const uint16 index = Com_FindPdu(PduId);
+        if ((index < configuration->pdu_count) && (configuration->pdus[index].receive == FALSE)) {
+            result = Com_TransmitPdu(index);
+        }
+    }
+    return result;
+}
 COM_CODE void Com_TxConfirmation(PduIdType TxPduId, Std_ReturnType result) {
     /* The selected periodic PDUs have no Tx ACK/NACK callback or Tx DM.
      * Lower acceptance/confirmation does not suppress the next periodic request.
@@ -223,11 +243,7 @@ COM_CODE void Ecu_ComMainFunctionTx(void) {
         uint16 index;
         for (index = 0u; index < configuration->pdu_count; ++index) {
             if (configuration->pdus[index].receive == FALSE) {
-                uint8 bytes[4];
-                PduInfoType info = {bytes, NULL_PTR, 4u};
-                if (Com_TriggerTransmit(configuration->pdus[index].pdu, &info) == E_OK) {
-                    (void)configuration->transmit(configuration->pdus[index].pdu, &info);
-                }
+                (void)Com_TransmitPdu(index);
             }
         }
     }

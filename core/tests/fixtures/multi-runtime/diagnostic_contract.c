@@ -53,7 +53,8 @@ static Std_ReturnType read_did(uint8 *data) {
 static Std_ReturnType error(uint16 module, uint8 instance, uint8 api, uint8 code) {
     assert(instance == 0u);
     assert(((module == 60u) && (api == 0x49u) && (code == 70u)) ||
-           ((module == 35u) && (api == 0x42u) && ((code == 0xb0u) || (code == 0x70u))));
+           ((module == 35u) && (api == 0x42u) && ((code == 0xb0u) || (code == 0x70u))) ||
+           ((module == 35u) && (api == 0x4cu) && (code == 0xa0u)));
     ++reports;
     return E_OK;
 }
@@ -135,6 +136,7 @@ int main(void) {
     void (*rx_done)(PduIdType, Std_ReturnType) = Dcm_TpRxIndication;
     void (*tx_done)(PduIdType, Std_ReturnType) = Dcm_TpTxConfirmation;
     Std_ReturnType (*transmit)(PduIdType, const PduInfoType *) = CanTp_Transmit;
+    Std_ReturnType (*cancel_rx)(PduIdType) = CanTp_CancelReceive;
     uint8 buffer[256];
     PduLengthType available = 99u;
     PduInfoType query = {NULL_PTR, NULL_PTR, 0u};
@@ -149,6 +151,7 @@ int main(void) {
     Dcm_SecLevelType security_value = 99u;
     unsigned saved;
     unsigned i;
+    assert(cancel_rx(11u) == E_NOT_OK);
     assert(start_rx(17u, NULL_PTR, 3u, &available) == BUFREQ_E_NOT_OK && available == 99u);
     assert(Dcm_SetActiveDiagnostic(FALSE) == E_OK);
     assert(sizeof(Dcm_SesCtrlType) == 1u && sizeof(Dcm_SecLevelType) == 1u);
@@ -531,6 +534,50 @@ int main(void) {
         flush();
         assert(output[count - 1u][0] == 7u && output[count - 1u][1] == 0x62u &&
                output[count - 1u][2] == 0x12u && output[count - 1u][3] == 0x34u);
+    }
+    request_read(); /* SF already completed to Dcm; cancellation cannot revoke it. */
+    saved = reports;
+    assert(cancel_rx(11u) == E_NOT_OK && reports == saved + 1u);
+    Dcm_MainFunction();
+    flush();
+    assert(output[count - 1u][0] == 7u && output[count - 1u][1] == 0x62u);
+    /* Last-CF exclusion starts at actual FC confirmation/N_Cr, not at FF admission. */
+    for (i = 0u; i < 4u; ++i) {
+        uint8 first[8] = {0x10u, 13u, 0x22u, 0x12u, 0x34u, 0x12u, 0x34u, 0x12u};
+        const uint8 last[8] = {0x21u, 0x34u, 0x12u, 0x34u, 0x12u, 0x34u, 0x12u, 0x34u};
+        boolean confirmed = (i >= 2u);
+        first[1] = (uint8)(13u + (i % 2u)); /* Seven/eight bytes remain after FF. */
+        Dcm_Init(&dcm);
+        Dcm_ComM_FullComModeEntered(7u);
+        receive(first);
+        CanTp_MainFunction(); /* Actual FC accepted by the driver. */
+        if (confirmed) {
+            flush();
+        }
+        saved = reports;
+        assert(cancel_rx(99u) == E_NOT_OK && reports == saved);
+        if (confirmed && first[1] == 13u) {
+            assert(cancel_rx(11u) == E_NOT_OK && reports == saved);
+            available = 99u;
+            assert(start_rx(17u, NULL_PTR, 3u, &available) == BUFREQ_E_NOT_OK && available == 99u);
+            receive(last); /* Preserved reservation completes normally. */
+            Dcm_Init(
+                &dcm); /* Retire the accepted request without creating an unrelated response. */
+        } else {
+            assert(cancel_rx(11u) == E_OK && reports == saved);
+            assert(cancel_rx(11u) == E_NOT_OK && reports == saved + 1u);
+            request_read(); /* Negative Rx indication really released the Dcm reservation. */
+            saved = count;
+            Dcm_MainFunction();
+            if (!confirmed) {
+                assert(count == saved); /* Outstanding FC owns the lower mailbox. */
+                flush(); /* Old real FC confirmation releases quarantine, never new Rx state. */
+                assert(count == saved + 1u && output[count - 1u][0] == 0x30u);
+                Dcm_MainFunction();
+            }
+            flush();
+            assert(output[count - 1u][0] == 7u && output[count - 1u][1] == 0x62u);
+        }
     }
     return 0;
 }

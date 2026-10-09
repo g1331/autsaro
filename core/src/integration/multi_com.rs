@@ -196,6 +196,20 @@ pub(super) fn inspect(
         } else {
             Vec::new()
         };
+        if value(graph, pdu, "ComIPduCallout", false).is_some() {
+            return Err(fail(graph, pdu, "COM_FEATURE_UNSUPPORTED"));
+        }
+        for tx in graph
+            .descendants(pdu, "ECUC-CONTAINER-VALUE")
+            .into_iter()
+            .filter(|index| definition_is(graph, *index, "ComTxIPdu"))
+        {
+            if value(graph, tx, "ComMinimumDelayTime", false)
+                .is_some_and(|text| text.parse::<f64>().ok() != Some(0.0))
+            {
+                return Err(fail(graph, tx, "COM_FEATURE_UNSUPPORTED"));
+            }
+        }
         let expected_main = if receive { rx_main } else { tx_main };
         if !selected_paths.contains(path)
             || groups != required

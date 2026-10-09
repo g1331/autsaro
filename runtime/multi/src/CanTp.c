@@ -155,6 +155,26 @@ CANTP_CODE Std_ReturnType CanTp_Transmit(PduIdType TxPduId, const PduInfoType *P
     SchM_Exit_CanTp_CANTP_STATE();
     return result;
 }
+CANTP_CODE Std_ReturnType CanTp_CancelReceive(PduIdType RxPduId) {
+    Std_ReturnType result = E_NOT_OK;
+    SchM_Enter_CanTp_CANTP_STATE();
+    if ((configuration != NULL_PTR) && (RxPduId == configuration->receive)) {
+        if ((state == CANTP_RX_FLOW_SEND) || (state == CANTP_RX_FLOW_CONFIRM) ||
+            (state == CANTP_RX_DATA)) {
+            if ((state != CANTP_RX_DATA) || (((uint32)total - (uint32)position) > 7u)) {
+                /* Retain lower_pending: a late FC confirmation must not be
+                 * attributed to a new transmission on this physical connection.
+                 */
+                CanTp_FinishRx(E_NOT_OK);
+                result = E_OK;
+            }
+        } else {
+            (void)Det_ReportRuntimeError(35u, 0u, 0x4cu, 0xa0u);
+        }
+    }
+    SchM_Exit_CanTp_CANTP_STATE();
+    return result;
+}
 static CANTP_CODE void CanTp_Flow(boolean overflow) {
     CanTp_Pad();
     frame[0] = (overflow == TRUE) ? 0x32u : 0x30u;

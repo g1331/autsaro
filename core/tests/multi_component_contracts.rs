@@ -2962,6 +2962,37 @@ fn multi_internal_active_session_did_cannot_be_replaced_by_application_source() 
         "61830",
     );
     rejects_in_both(&sources, "DIAGNOSTIC_IDENTIFIER");
+    let issues = build(&sources).err().expect("reserved DID refused");
+    let message = issues
+        .iter()
+        .find(|issue| issue.code == "DIAGNOSTIC_IDENTIFIER")
+        .unwrap()
+        .message
+        .to_string();
+    assert!(
+        message.contains("0xF186") && message.contains("reserved") && message.contains("internal"),
+        "{message}"
+    );
+    let validation = normal_validation(&sources);
+    let message = validation
+        .diagnostics
+        .iter()
+        .find(|issue| issue.code == "DIAGNOSTIC_IDENTIFIER")
+        .unwrap()
+        .message
+        .to_string();
+    assert!(
+        message.contains("0xF186") && message.contains("reserved") && message.contains("internal"),
+        "{message}"
+    );
+    let catalog: serde_json::Value =
+        serde_json::from_str(include_str!("../src/messages.json")).unwrap();
+    assert!(
+        catalog["zh-CN"]["backend.integration.diagnostic.did_identifier_reserved"]
+            .as_str()
+            .unwrap()
+            .contains("保留")
+    );
 }
 
 #[test]
@@ -2975,4 +3006,27 @@ fn selected_dcm_subfunction_availability_matches_actual_service_dispatch() {
         parameter(&mut sources, service, "DcmDsdSidTabSubfuncAvail", available);
         rejects_in_both(&sources, "SERVICE_UNSUPPORTED");
     }
+}
+
+#[test]
+fn selected_com_manual_trigger_requires_zero_minimum_delay_and_no_callout() {
+    let mut sources = inputs();
+    parameter(&mut sources, "Transmit", "ComMinimumDelayTime", "0.001");
+    rejects_in_both(&sources, "COM_FEATURE_UNSUPPORTED");
+    let mut sources = inputs();
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| {
+            named(node, "ECUC-CONTAINER-VALUE", "TxValuePdu")
+                && node.children().any(|child| {
+                    child.has_tag_name("DEFINITION-REF")
+                        && child.text().is_some_and(|text| text.ends_with("/ComIPdu"))
+                })
+        },
+        |text| {
+            text.replacen("<PARAMETER-VALUES>", r#"<PARAMETER-VALUES><ECUC-TEXTUAL-PARAM-VALUE><DEFINITION-REF DEST="ECUC-FUNCTION-NAME-DEF">/AUTOSAR/EcucDefs/Com/ComConfig/ComIPdu/ComIPduCallout</DEFINITION-REF><VALUE>ApplicationCallout</VALUE></ECUC-TEXTUAL-PARAM-VALUE>"#, 1)
+        },
+    );
+    rejects_in_both(&sources, "COM_FEATURE_UNSUPPORTED");
 }

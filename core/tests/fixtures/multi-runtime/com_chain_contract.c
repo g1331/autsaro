@@ -104,12 +104,14 @@ int main(void) {
     void (*ls_confirm)(PduIdType, Std_ReturnType) = LSduR_CanIfTxConfirmation;
     Std_ReturnType (*can_write)(Can_HwHandleType, const Can_PduType *) = Can_Write;
     Std_ReturnType (*can_mode)(uint8, Can_ControllerStateType) = Can_SetControllerMode;
+    Std_ReturnType (*manual_send)(PduIdType) = Com_TriggerIPDUSend;
     uint8 bytes[8] = {42u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
     PduInfoType info = {bytes, NULL_PTR, 4u};
     uint32 value = 99u;
     CanIf_PduModeType channel = CANIF_ONLINE;
     Can_ControllerStateType state = CAN_CS_UNINIT;
     Can_PduType direct = {51u, 4u, 0x456u, bytes};
+    assert(manual_send(2u) == E_NOT_OK);
     assert(ls_tp(41u, &info) == E_NOT_OK);
     ls_rx(21u, &info);
     ls_confirm(51u, E_OK);
@@ -217,6 +219,30 @@ int main(void) {
     assert(CanIf_SetControllerMode(0u, CAN_CS_SLEEP) == E_OK);
     assert(CanIf_GetPduMode(0u, &channel) == E_OK && channel == CANIF_OFFLINE);
     Can_MainFunction_Wakeup();
+    assert(CanIf_SetControllerMode(0u, CAN_CS_STOPPED) == E_OK);
+    Can_MainFunction_Wakeup();
+    assert(CanIf_SetControllerMode(0u, CAN_CS_STARTED) == E_OK);
+    Can_MainFunction_Wakeup();
+    assert(Com_TriggerIPDUSend(1u) == E_NOT_OK); /* Rx is not a Tx request. */
+    assert(Com_TriggerIPDUSend(99u) == E_NOT_OK);
+    assert(Com_TriggerIPDUSend(2u) == E_NOT_OK); /* Actual lower remains offline. */
+    assert(CanIf_SetPduMode(0u, CANIF_ONLINE) == E_OK);
+    assert(Can_HostFlush() == ECU_OK && frames == 5u); /* No deferred manual trigger. */
+    Com_IpduGroupStop(0u); /* Selected group contains Rx only; ungrouped Tx stays started. */
+    assert(Com_TriggerIPDUSend(2u) == E_OK);
+    value = 44u;
+    assert(Com_SendSignal(11u, &value) == E_OK);
+    assert(Com_TriggerIPDUSend(2u) == E_NOT_OK); /* Actual lower BUSY, no queue. */
+    assert(Can_HostFlush() == ECU_OK && frames == 6u && emitted[5] == 43u);
+    CanIf_TxConfirmation(51u);
+    assert(Can_HostFlush() == ECU_OK && frames == 6u);
+    assert(Com_TriggerIPDUSend(2u) == E_OK);
+    assert(Can_HostFlush() == ECU_OK && frames == 7u && emitted[6] == 44u);
+    CanIf_TxConfirmation(51u);
+    Com_DeInit();
+    assert(Com_TriggerIPDUSend(2u) == E_NOT_OK);
+    Com_Init(&com_config);
+    assert(Can_HostFlush() == ECU_OK && frames == 7u);
     Com_DeInit();
     CanIf_DeInit();
     Can_DeInit();

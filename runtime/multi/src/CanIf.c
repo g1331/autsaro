@@ -113,6 +113,30 @@ CANIF_CODE Std_ReturnType CanIf_GetControllerErrorState(uint8 ControllerId,
     SchM_Exit_CanIf_CANIF_STATE();
     return result;
 }
+CANIF_CODE Std_ReturnType CanIf_GetControllerRxErrorCounter(uint8 ControllerId,
+                                                            uint8 *RxErrorCounterPtr) {
+    Std_ReturnType result = E_NOT_OK;
+    SchM_Enter_CanIf_CANIF_STATE();
+    if ((configuration != NULL_PTR) && (ControllerId == configuration->controller) &&
+        (RxErrorCounterPtr != NULL_PTR)) {
+        result =
+            Can_GetControllerRxErrorCounter(configuration->driver_controller, RxErrorCounterPtr);
+    }
+    SchM_Exit_CanIf_CANIF_STATE();
+    return result;
+}
+CANIF_CODE Std_ReturnType CanIf_GetControllerTxErrorCounter(uint8 ControllerId,
+                                                            uint8 *TxErrorCounterPtr) {
+    Std_ReturnType result = E_NOT_OK;
+    SchM_Enter_CanIf_CANIF_STATE();
+    if ((configuration != NULL_PTR) && (ControllerId == configuration->controller) &&
+        (TxErrorCounterPtr != NULL_PTR)) {
+        result =
+            Can_GetControllerTxErrorCounter(configuration->driver_controller, TxErrorCounterPtr);
+    }
+    SchM_Exit_CanIf_CANIF_STATE();
+    return result;
+}
 CANIF_CODE Std_ReturnType CanIf_SetPduMode(uint8 ControllerId, CanIf_PduModeType PduModeRequest) {
     Std_ReturnType result = E_NOT_OK;
     Can_ControllerStateType actual_mode = CAN_CS_UNINIT;

@@ -44,6 +44,9 @@ Std_ReturnType CanIf_GetControllerMode(uint8 ControllerId,
  * Refused requests preserve ErrorStatePtr; selected DevErrorDetect is false.
  */
 Std_ReturnType CanIf_GetControllerErrorState(uint8 ControllerId, Can_ErrorStateType *ErrorStatePtr);
+/** Query mapped hardware counters; unavailable counters preserve output. */
+Std_ReturnType CanIf_GetControllerRxErrorCounter(uint8 ControllerId, uint8 *RxErrorCounterPtr);
+Std_ReturnType CanIf_GetControllerTxErrorCounter(uint8 ControllerId, uint8 *TxErrorCounterPtr);
 Std_ReturnType CanIf_SetPduMode(uint8 ControllerId, CanIf_PduModeType PduModeRequest);
 Std_ReturnType CanIf_GetPduMode(uint8 ControllerId, CanIf_PduModeType *PduModePtr);
 void CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType *PduInfoPtr);

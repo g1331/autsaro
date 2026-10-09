@@ -43,6 +43,10 @@ void Com_IpduGroupStop(Com_IpduGroupIdType IpduGroupId);
 void Com_EnableReceptionDM(Com_IpduGroupIdType IpduGroupId);
 void Com_DisableReceptionDM(Com_IpduGroupIdType IpduGroupId);
 void Com_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr);
+/** Trigger an actual lower request using current data; no deferred trigger is stored.
+ * Selected Tx PDUs have no group and are started by Init (00840), with zero MDT.
+ */
+Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId);
 Std_ReturnType Com_TriggerTransmit(PduIdType TxPduId, PduInfoType *PduInfoPtr);
 void Com_TxConfirmation(PduIdType TxPduId, Std_ReturnType result);
 #endif

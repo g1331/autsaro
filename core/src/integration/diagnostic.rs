@@ -318,7 +318,7 @@ pub(super) fn inspect_service(
             graph,
             did,
             "DIAGNOSTIC_IDENTIFIER",
-            crate::product_message!("backend.integration.diagnostic.did_identifier_invalid"),
+            crate::product_message!("backend.integration.diagnostic.did_identifier_reserved"),
         ));
     }
     let info = reference(graph, did, "DcmDspDidInfoRef")?;

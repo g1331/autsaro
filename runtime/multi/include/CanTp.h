@@ -23,6 +23,10 @@ typedef struct {
 void CanTp_Init(const CanTp_ConfigType *CfgPtr);
 void CanTp_Shutdown(void);
 Std_ReturnType CanTp_Transmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr);
+/** Cancel an accepted segmented reception, excluding final-CF N_Cr waiting.
+ * An outstanding flow-control frame remains quarantined until its confirmation.
+ */
+Std_ReturnType CanTp_CancelReceive(PduIdType RxPduId);
 void CanTp_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr);
 void CanTp_TxConfirmation(PduIdType TxPduId, Std_ReturnType result);
 #endif

@@ -721,6 +721,7 @@ fn communication(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedText
     a.enumeration(pdu, "ComIPduType", "NORMAL TP", 1)?;
     a.integers(pdu, "ComIPduHandleId", "0", U16, 0)?;
     a.reference(pdu, "ComIPduSignalRef", signal, 0, None)?;
+    a.field(pdu, "ComIPduCallout", ValueKind::FunctionName, 0)?;
     let group = "Com/ComConfig/ComIPduGroup";
     a.container(group, 0, None)?;
     a.integers(group, "ComIPduGroupHandleId", "0", U16, 1)?;
@@ -746,6 +747,7 @@ fn communication(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedText
     let tx = "Com/ComConfig/ComIPdu/ComTxIPdu";
     a.container(tx, 0, Some(1))?;
     a.integers(tx, "ComTxIPduUnusedAreasDefault", "0", U8, 1)?;
+    a.floats(tx, "ComMinimumDelayTime", Some("3600"), 0)?;
     for branch in ["ComTxModeTrue", "ComTxModeFalse"] {
         let path = format!("{tx}/{branch}");
         a.container(&path, 0, Some(1))?;
