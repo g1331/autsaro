@@ -86,34 +86,230 @@ pub(super) fn apply_patches(
     Ok(())
 }
 
+#[cfg(not(windows))]
+fn capture_file(original: &Path, captured: &Path) -> std::io::Result<()> {
+    fs::rename(original, captured)
+}
+
+#[cfg(windows)]
+fn capture_file(original: &Path, captured: &Path) -> std::io::Result<()> {
+    capture_file_with_open(original, captured, || Ok(()))
+}
+
+#[cfg(windows)]
+fn capture_file_with_open(
+    original: &Path,
+    captured: &Path,
+    after_open: impl FnOnce() -> std::io::Result<()>,
+) -> std::io::Result<()> {
+    use std::ffi::c_void;
+    use std::os::windows::ffi::OsStrExt;
+    use std::os::windows::fs::OpenOptionsExt;
+    use std::os::windows::io::AsRawHandle;
+
+    #[repr(C)]
+    struct RenameInfo {
+        replace: u32,
+        root: *mut c_void,
+        length: u32,
+        name: [u16; 1],
+    }
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn SetFileInformationByHandle(
+            file: *mut c_void,
+            class: i32,
+            info: *const c_void,
+            size: u32,
+        ) -> i32;
+    }
+    // DELETE access permits handle-based rename. Omitting BACKUP_SEMANTICS
+    // rejects directories at open; the live handle pins the file through capture.
+    let file = fs::OpenOptions::new()
+        .access_mode(0x0001_0000)
+        .custom_flags(0x0020_0000) // FILE_FLAG_OPEN_REPARSE_POINT
+        .open(original)?;
+    if !file.metadata()?.is_file() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "capture requires an ordinary file",
+        ));
+    }
+    after_open()?;
+    // canonicalize supplies an absolute verbatim UTF-16 path, including long paths.
+    let name = fs::canonicalize(captured)?
+        .as_os_str()
+        .encode_wide()
+        .collect::<Vec<_>>();
+    let name_bytes = u32::try_from(name.len() * size_of::<u16>()).map_err(|_| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "capture path too long")
+    })?;
+    let name_offset = std::mem::offset_of!(RenameInfo, name);
+    let bytes = (name_offset + name_bytes as usize + size_of::<u16>()).max(size_of::<RenameInfo>());
+    let size = u32::try_from(bytes).map_err(|_| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "capture path too long")
+    })?;
+    let mut buffer = vec![0usize; bytes.div_ceil(size_of::<usize>())];
+    // SAFETY: pointer-aligned storage holds the repr(C) FILE_RENAME_INFO union,
+    // HANDLE, DWORD and trailing UTF-16 array; byte length excludes a terminator.
+    unsafe {
+        let info = buffer.as_mut_ptr().cast::<RenameInfo>();
+        info.write(RenameInfo {
+            replace: 1,
+            root: std::ptr::null_mut(),
+            length: name_bytes,
+            name: [0],
+        });
+        std::ptr::copy_nonoverlapping(
+            name.as_ptr(),
+            buffer
+                .as_mut_ptr()
+                .cast::<u8>()
+                .add(name_offset)
+                .cast::<u16>(),
+            name.len(),
+        );
+        // FileRenameInfo = 3; replacement is only the reserved owned file.
+        // The File owns the handle until this synchronous call returns.
+        if SetFileInformationByHandle(file.as_raw_handle(), 3, info.cast(), size) == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+    }
+    Ok(())
+}
+
 fn restore_backup(
     original: &Path,
     backup: &Path,
     installed: Option<&str>,
 ) -> Result<(), crate::message::LocalizedText> {
-    if original.exists() {
-        let owned = installed
-            .is_some_and(|text| fs::read_to_string(original).is_ok_and(|current| current == text));
-        if !owned {
-            return Err(crate::product_message!(
-                "backend.arxml.persistence.external_file_preserved",
-                "original" => original.display(),
-                "backup" => backup.display()
-            ));
-        }
-        fs::remove_file(original).map_err(|e| format!("{}: {e}", original.display()))?;
-    }
-    fs::rename(backup, original)
-        .map_err(|e| format!("{} -> {}: {e}", backup.display(), original.display()).into())
+    restore_backup_with_publish(original, backup, installed, |from, to| {
+        fs::hard_link(from, to)
+    })
 }
 
+fn restore_backup_with_publish(
+    original: &Path,
+    backup: &Path,
+    installed: Option<&str>,
+    publish: impl Fn(&Path, &Path) -> std::io::Result<()>,
+) -> Result<(), crate::message::LocalizedText> {
+    let recovery = backup.with_extension("rollback");
+    let captured = recovery.join("original");
+    let mut captured_ours = false;
+    if installed.is_some() {
+        fs::create_dir(&recovery).map_err(|e| format!("{}: {e}", recovery.display()))?;
+        let reservation = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&captured);
+        match reservation {
+            Ok(handle) => drop(handle),
+            Err(error) => {
+                let cleanup = fs::remove_dir(&recovery);
+                return Err(crate::message::LocalizedText::messages([
+                    format!("{}: {error}", captured.display()).into(),
+                    cleanup
+                        .err()
+                        .map(|e| format!("{}: {e}", recovery.display()))
+                        .unwrap_or_default()
+                        .into(),
+                ]));
+            }
+        }
+        // A reserved ordinary file also rejects a raced directory before moving it.
+        match capture_file(original, &captured) {
+            Ok(()) => {
+                // Inspect the captured file, never unlink a path after checking its bytes.
+                captured_ours = fs::read_to_string(&captured)
+                    .is_ok_and(|current| Some(current.as_str()) == installed);
+                if !captured_ours {
+                    let restored = publish(&captured, original);
+                    if restored.is_ok() {
+                        fs::remove_file(&captured)
+                            .map_err(|e| format!("{}: {e}", captured.display()))?;
+                        fs::remove_dir(&recovery)
+                            .map_err(|e| format!("{}: {e}", recovery.display()))?;
+                    }
+                    let error = crate::product_message!(
+                        "backend.arxml.persistence.external_file_preserved",
+                        "original" => original.display(),
+                        "backup" => backup.display()
+                    );
+                    return Err(match restored {
+                        Ok(()) => error,
+                        Err(e) => crate::message::LocalizedText::messages([
+                            error,
+                            format!("{} -> {}: {e}", captured.display(), original.display()).into(),
+                        ]),
+                    });
+                }
+            }
+            Err(error) => {
+                fs::remove_file(&captured)
+                    .map_err(|e| format!("{}: {e}; {error}", captured.display()))?;
+                fs::remove_dir(&recovery)
+                    .map_err(|e| format!("{}: {e}; {error}", recovery.display()))?;
+                if error.kind() != std::io::ErrorKind::NotFound {
+                    return Err(format!(
+                        "{} -> {}: {error}",
+                        original.display(),
+                        captured.display()
+                    )
+                    .into());
+                }
+            }
+        }
+    }
+    publish(backup, original).map_err(|e| {
+        if captured_ours {
+            format!(
+                "{} -> {}: {e}; {}",
+                backup.display(),
+                original.display(),
+                captured.display()
+            )
+        } else {
+            format!("{} -> {}: {e}", backup.display(), original.display())
+        }
+    })?;
+    if captured_ours {
+        fs::remove_file(&captured).map_err(|e| format!("{}: {e}", captured.display()))?;
+        fs::remove_dir(&recovery).map_err(|e| format!("{}: {e}", recovery.display()))?;
+    }
+    fs::remove_file(backup).map_err(|e| format!("{}: {e}", backup.display()))?;
+    Ok(())
+}
+
+#[cfg(test)]
 fn install_staged(
     file: &SourceFile,
     stage: &Path,
     backup: &Path,
 ) -> Result<(), crate::message::LocalizedText> {
-    fs::rename(&file.path, backup)
-        .map_err(|e| format!("{} -> {}: {e}", file.path.display(), backup.display()))?;
+    install_staged_with_publish(file, stage, backup, |from, to| fs::hard_link(from, to))
+}
+
+fn install_staged_with_publish(
+    file: &SourceFile,
+    stage: &Path,
+    backup: &Path,
+    publish: impl Fn(&Path, &Path) -> std::io::Result<()>,
+) -> Result<(), crate::message::LocalizedText> {
+    // Reserve the backup and verify hard-link support before moving the original.
+    publish(stage, backup)
+        .map_err(|e| format!("{} -> {}: {e}", stage.display(), backup.display()))?;
+    if let Err(error) = capture_file(&file.path, backup) {
+        let cleanup = fs::remove_file(backup);
+        return Err(crate::message::LocalizedText::messages([
+            format!("{} -> {}: {error}", file.path.display(), backup.display()).into(),
+            cleanup
+                .err()
+                .map(|e| format!("{}: {e}", backup.display()))
+                .unwrap_or_default()
+                .into(),
+        ]));
+    }
     let result = fs::read_to_string(backup)
         .map_err(|e| {
             crate::message::LocalizedText::messages([
@@ -131,7 +327,7 @@ fn install_staged(
                     "path" => file.path.display()
                 ));
             }
-            fs::rename(stage, &file.path)
+            publish(stage, &file.path)
                 .map_err(|e| format!("{} -> {}: {e}", stage.display(), file.path.display()).into())
         });
     if let Err(error) = result {
@@ -144,6 +340,7 @@ fn install_staged(
             ]),
         });
     }
+    // Keep the staged link until the transaction finishes so failures stay recoverable.
     Ok(())
 }
 
@@ -689,11 +886,10 @@ impl Workspace {
             .map_err(|error| error.to_string())?
             {
                 let entry = entry.map_err(|error| error.to_string())?;
-                if entry
-                    .file_name()
-                    .to_str()
-                    .is_some_and(|name| name.starts_with(prefix) && name.ends_with(".bak"))
-                {
+                if entry.file_name().to_str().is_some_and(|name| {
+                    name.starts_with(prefix)
+                        && (name.ends_with(".bak") || name.ends_with(".rollback"))
+                }) {
                     return Err(crate::product_message!(
                         "backend.arxml.persistence.unrecovered_backup_blocks_save",
                         "path" => entry.path().display()
@@ -705,12 +901,27 @@ impl Workspace {
     }
 
     pub(super) fn save_sources(&mut self) -> Result<(), crate::message::LocalizedText> {
-        self.save_sources_with_cleanup(|backup| fs::remove_file(backup))
+        self.save_sources_with_cleanup(
+            |stage| fs::remove_file(stage),
+            |backup| fs::remove_file(backup),
+        )
     }
 
     fn save_sources_with_cleanup(
         &mut self,
+        remove_stage: impl Fn(&Path) -> std::io::Result<()>,
         remove_backup: impl Fn(&Path) -> std::io::Result<()>,
+    ) -> Result<(), crate::message::LocalizedText> {
+        self.save_sources_with_publish(remove_stage, remove_backup, |from, to| {
+            fs::hard_link(from, to)
+        })
+    }
+
+    fn save_sources_with_publish(
+        &mut self,
+        remove_stage: impl Fn(&Path) -> std::io::Result<()>,
+        remove_backup: impl Fn(&Path) -> std::io::Result<()>,
+        publish: impl Fn(&Path, &Path) -> std::io::Result<()>,
     ) -> Result<(), crate::message::LocalizedText> {
         self.ensure_sources_current()?;
         self.ensure_no_recovery_backups()?;
@@ -787,7 +998,7 @@ impl Workspace {
         }
         for index in 0..staged.len() {
             let (file, stage, backup) = &staged[index];
-            if let Err(error) = install_staged(file, stage, backup) {
+            if let Err(error) = install_staged_with_publish(file, stage, backup, &publish) {
                 let mut rollback_errors = Vec::new();
                 for (file, _, backup) in staged[..index].iter().rev() {
                     if let Err(rollback) = restore_backup(&file.path, backup, Some(&file.text)) {
@@ -814,7 +1025,18 @@ impl Workspace {
             project.saved = project.current.clone();
         }
         let mut cleanup_error = None;
-        for (file, _, backup) in &staged {
+        for (file, stage, backup) in &staged {
+            if let Err(error) = remove_stage(stage) {
+                cleanup_error = Some(crate::message::LocalizedText::messages([
+                    crate::product_message!(
+                        "backend.arxml.persistence.linked_stage_cleanup_failed_after_save",
+                        "stage" => stage.display(),
+                        "backup" => backup.display()
+                    ),
+                    error.to_string().into(),
+                ]));
+                break;
+            }
             if fs::read_to_string(backup).ok().as_deref() != Some(&file.saved) {
                 cleanup_error = Some(crate::product_message!(
                     "backend.arxml.persistence.backup_contents_changed",
@@ -842,7 +1064,10 @@ impl Workspace {
 
 #[cfg(test)]
 mod tests {
-    use super::{SourceFile, install_staged, restore_backup};
+    use super::{
+        SourceFile, install_staged, install_staged_with_publish, restore_backup,
+        restore_backup_with_publish,
+    };
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -880,12 +1105,15 @@ mod tests {
         let project = workspace.project.as_mut().unwrap();
         project.current.push('\n');
         let error = workspace
-            .save_sources_with_cleanup(|_| {
-                Err(std::io::Error::new(
-                    std::io::ErrorKind::PermissionDenied,
-                    "backup is locked",
-                ))
-            })
+            .save_sources_with_cleanup(
+                |stage| fs::remove_file(stage),
+                |_| {
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::PermissionDenied,
+                        "backup is locked",
+                    ))
+                },
+            )
             .unwrap_err();
         assert_eq!(
             error,
@@ -915,6 +1143,251 @@ mod tests {
         let backup =
             source.with_extension(format!("arxml.autosar-config-{}-0.bak", std::process::id()));
         assert_eq!(fs::read_to_string(backup).unwrap(), before);
+    }
+
+    #[test]
+    fn published_save_stage_cleanup_failure_retains_clean_baseline_and_backup() {
+        let root = Scratch::new();
+        let mut workspace = crate::Workspace::create(&root.0.join("Project"), "Project").unwrap();
+        let source = workspace.files[0].path.clone();
+        let before = workspace.files[0].saved.clone();
+        workspace.files[0].text.push_str("\n<!-- saved edit -->\n");
+        let error = workspace
+            .save_sources_with_cleanup(
+                |_| {
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::PermissionDenied,
+                        "stage is locked",
+                    ))
+                },
+                |backup| fs::remove_file(backup),
+            )
+            .unwrap_err();
+        let stage =
+            source.with_extension(format!("arxml.autosar-config-{}-0.tmp", std::process::id()));
+        let backup =
+            source.with_extension(format!("arxml.autosar-config-{}-0.bak", std::process::id()));
+        assert!(error.to_string().contains(&stage.display().to_string()));
+        assert!(error.to_string().contains(&backup.display().to_string()));
+        assert_eq!(
+            fs::read_to_string(&source).unwrap(),
+            workspace.files[0].saved
+        );
+        assert_eq!(
+            fs::read_to_string(&stage).unwrap(),
+            workspace.files[0].saved
+        );
+        assert_eq!(fs::read_to_string(&backup).unwrap(), before);
+        assert!(!workspace.view().dirty);
+        assert!(workspace.ensure_no_recovery_backups().is_err());
+        fs::write(&stage, "external edit through linked stage").unwrap();
+        assert_eq!(
+            fs::read_to_string(&source).unwrap(),
+            "external edit through linked stage"
+        );
+        assert!(workspace.save_sources().is_err());
+        assert_eq!(
+            fs::read_to_string(&source).unwrap(),
+            "external edit through linked stage"
+        );
+        assert_eq!(fs::read_to_string(&backup).unwrap(), before);
+    }
+
+    #[test]
+    fn unsupported_backup_reservation_leaves_original_untouched() {
+        let root = Scratch::new();
+        let original = root.0.join("Ecu.arxml");
+        let stage = root.0.join("Ecu.tmp");
+        let backup = root.0.join("Ecu.bak");
+        let file = SourceFile {
+            path: original.clone(),
+            saved: "original".into(),
+            text: "ours".into(),
+            original_name: None,
+        };
+        fs::write(&original, &file.saved).unwrap();
+        fs::write(&stage, &file.text).unwrap();
+        let error = install_staged_with_publish(&file, &stage, &backup, |from, to| {
+            assert_eq!(from, stage);
+            assert_eq!(to, backup);
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                "hard links unsupported",
+            ))
+        })
+        .unwrap_err();
+        assert!(error.to_string().contains("hard links unsupported"));
+        assert_eq!(fs::read_to_string(&original).unwrap(), "original");
+        assert_eq!(fs::read_to_string(&stage).unwrap(), "ours");
+        assert!(!backup.exists());
+        fs::write(&backup, "external raced backup").unwrap();
+        assert!(install_staged(&file, &stage, &backup).is_err());
+        assert_eq!(fs::read_to_string(&original).unwrap(), "original");
+        assert_eq!(
+            fs::read_to_string(&backup).unwrap(),
+            "external raced backup"
+        );
+    }
+
+    #[test]
+    fn later_manifest_publication_conflict_rolls_back_source_transaction() {
+        let root = Scratch::new();
+        let preview = crate::Workspace::preview_project_creation(
+            &root.0.join("Project"),
+            "Project",
+            "can-signals-v1",
+        )
+        .unwrap();
+        let mut workspace = crate::Workspace::create_project_previewed(&preview).unwrap();
+        let source = workspace.files[0].path.clone();
+        let source_before = workspace.files[0].saved.clone();
+        workspace.files[0]
+            .text
+            .push_str("\n<!-- pending edit -->\n");
+        let source_pending = workspace.files[0].text.clone();
+        let project = workspace.project.as_mut().unwrap();
+        let manifest = project.path.clone();
+        let manifest_before = project.saved.clone();
+        project.current.push('\n');
+        let manifest_pending = project.current.clone();
+        let error = workspace
+            .save_sources_with_publish(
+                |stage| fs::remove_file(stage),
+                |backup| fs::remove_file(backup),
+                |from, to| {
+                    if to == manifest {
+                        fs::write(to, "external manifest during publication").unwrap();
+                    }
+                    fs::hard_link(from, to)
+                },
+            )
+            .unwrap_err();
+        let backup =
+            manifest.with_extension(format!("arxml.autosar-config-{}-1.bak", std::process::id()));
+        assert!(error.to_string().contains(&backup.display().to_string()));
+        assert_eq!(fs::read_to_string(&source).unwrap(), source_before);
+        assert_eq!(
+            fs::read_to_string(&manifest).unwrap(),
+            "external manifest during publication"
+        );
+        assert_eq!(fs::read_to_string(&backup).unwrap(), manifest_before);
+        assert!(
+            !source
+                .with_extension(format!("arxml.autosar-config-{}-0.bak", std::process::id()))
+                .exists()
+        );
+        assert_eq!(workspace.files[0].saved, source_before);
+        assert_eq!(workspace.files[0].text, source_pending);
+        let project = workspace.project.as_ref().unwrap();
+        assert_eq!(project.saved, manifest_before);
+        assert_eq!(project.current, manifest_pending);
+        assert!(workspace.view().dirty);
+        assert!(workspace.ensure_no_recovery_backups().is_err());
+        assert!(workspace.save_sources().is_err());
+        assert_eq!(
+            fs::read_to_string(&manifest).unwrap(),
+            "external manifest during publication"
+        );
+        assert_eq!(fs::read_to_string(&backup).unwrap(), manifest_before);
+    }
+
+    #[test]
+    fn rollback_only_recovery_directory_blocks_before_mutation() {
+        let root = Scratch::new();
+        let mut workspace = crate::Workspace::create(&root.0.join("Project"), "Project").unwrap();
+        let source = workspace.files[0].path.clone();
+        let before = workspace.files[0].saved.clone();
+        workspace.files[0]
+            .text
+            .push_str("\n<!-- pending edit -->\n");
+        let recovery = source.with_extension("arxml.autosar-config-old-0.rollback");
+        fs::create_dir(&recovery).unwrap();
+        fs::write(recovery.join("original"), "retained recovery bytes").unwrap();
+        let error = workspace.save_sources().unwrap_err();
+        assert!(error.to_string().contains(&recovery.display().to_string()));
+        assert_eq!(fs::read_to_string(&source).unwrap(), before);
+        assert_eq!(workspace.files[0].saved, before);
+        assert!(workspace.view().dirty);
+        assert_eq!(
+            fs::read_to_string(recovery.join("original")).unwrap(),
+            "retained recovery bytes"
+        );
+    }
+
+    #[test]
+    fn installation_preserves_external_directory_at_original_path() {
+        let root = Scratch::new();
+        let original = root.0.join("Ecu.arxml");
+        let stage = root.0.join("Ecu.tmp");
+        let backup = root.0.join("Ecu.bak");
+        fs::create_dir(&original).unwrap();
+        fs::write(original.join("external"), "directory contents").unwrap();
+        fs::write(&stage, "ours").unwrap();
+        let file = SourceFile {
+            path: original.clone(),
+            saved: "original".into(),
+            text: "ours".into(),
+            original_name: None,
+        };
+        assert!(install_staged(&file, &stage, &backup).is_err());
+        assert!(original.is_dir());
+        assert_eq!(
+            fs::read_to_string(original.join("external")).unwrap(),
+            "directory contents"
+        );
+        assert_eq!(fs::read_to_string(&stage).unwrap(), "ours");
+        assert!(!backup.exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_capture_pins_file_when_long_unicode_original_path_becomes_directory() {
+        let root = Scratch::new();
+        let directory = root
+            .0
+            .join("long-segment".repeat(8))
+            .join("nested-segment".repeat(8))
+            .join("恢复资料");
+        fs::create_dir_all(&directory).unwrap();
+        let original = directory.join("原始源.arxml");
+        let moved = directory.join("外部移动.arxml");
+        let captured = directory.join("捕获源.arxml");
+        assert!(original.as_os_str().len() > 260);
+        fs::write(&original, "pinned source").unwrap();
+        fs::write(&captured, "owned reservation").unwrap();
+        super::capture_file_with_open(&original, &captured, || {
+            fs::rename(&original, &moved)?;
+            fs::create_dir(&original)?;
+            fs::write(original.join("external"), "directory contents")
+        })
+        .unwrap();
+        assert!(original.is_dir());
+        assert_eq!(
+            fs::read_to_string(original.join("external")).unwrap(),
+            "directory contents"
+        );
+        assert_eq!(fs::read_to_string(&captured).unwrap(), "pinned source");
+        assert!(!moved.exists());
+        // The capture handle has closed, so ordinary cleanup can remove the file.
+        fs::remove_file(&captured).unwrap();
+    }
+
+    #[test]
+    fn rollback_preserves_external_directory_at_original_path() {
+        let root = Scratch::new();
+        let original = root.0.join("Ecu.arxml");
+        let backup = root.0.join("Ecu.bak");
+        fs::create_dir(&original).unwrap();
+        fs::write(original.join("external"), "directory contents").unwrap();
+        fs::write(&backup, "original").unwrap();
+        assert!(restore_backup(&original, &backup, Some("ours")).is_err());
+        assert!(original.is_dir());
+        assert_eq!(
+            fs::read_to_string(original.join("external")).unwrap(),
+            "directory contents"
+        );
+        assert_eq!(fs::read_to_string(&backup).unwrap(), "original");
+        assert!(!backup.with_extension("rollback").exists());
     }
 
     #[test]
@@ -950,6 +1423,67 @@ mod tests {
         assert_eq!(fs::read_to_string(&backup).unwrap(), "original");
         restore_backup(&original, &backup, Some(&file.text)).unwrap();
         assert_eq!(fs::read_to_string(&original).unwrap(), "original");
+    }
+
+    #[test]
+    fn staged_save_refuses_external_file_created_at_final_publication() {
+        let root = Scratch::new();
+        let original = root.0.join("Ecu.arxml");
+        let stage = root.0.join("Ecu.tmp");
+        let backup = root.0.join("Ecu.bak");
+        let file = SourceFile {
+            path: original.clone(),
+            saved: "original".into(),
+            text: "ours".into(),
+            original_name: None,
+        };
+        fs::write(&original, &file.saved).unwrap();
+        fs::write(&stage, &file.text).unwrap();
+        let error = install_staged_with_publish(&file, &stage, &backup, |from, to| {
+            if to == original {
+                assert_eq!(fs::read_to_string(&backup).unwrap(), "original");
+                fs::write(to, "external").unwrap();
+            }
+            fs::hard_link(from, to)
+        })
+        .unwrap_err();
+        assert!(error.to_string().contains(&backup.display().to_string()));
+        assert_eq!(fs::read_to_string(&original).unwrap(), "external");
+        assert_eq!(fs::read_to_string(&backup).unwrap(), "original");
+        assert_eq!(fs::read_to_string(&stage).unwrap(), "ours");
+    }
+
+    #[test]
+    fn rollback_publication_conflict_preserves_external_and_recovery_files() {
+        for installed in [None, Some("ours"), Some("external replaced ours")] {
+            let root = Scratch::new();
+            let original = root.0.join("Ecu.arxml");
+            let backup = root.0.join("Ecu.bak");
+            fs::write(&backup, "original").unwrap();
+            if let Some(text) = installed {
+                fs::write(&original, text).unwrap();
+            }
+            let error = restore_backup_with_publish(
+                &original,
+                &backup,
+                installed.map(|_| "ours"),
+                |from, to| {
+                    fs::write(to, "external during restore").unwrap();
+                    fs::hard_link(from, to)
+                },
+            )
+            .unwrap_err();
+            assert_eq!(
+                fs::read_to_string(&original).unwrap(),
+                "external during restore"
+            );
+            assert_eq!(fs::read_to_string(&backup).unwrap(), "original");
+            if let Some(text) = installed {
+                let captured = backup.with_extension("rollback").join("original");
+                assert_eq!(fs::read_to_string(&captured).unwrap(), text);
+                assert!(error.to_string().contains(&captured.display().to_string()));
+            }
+        }
     }
 
     #[test]

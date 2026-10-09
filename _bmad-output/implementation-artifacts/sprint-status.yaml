@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-27-2026 18:43
-last_updated: 10-09-2026 01:45
+last_updated: 10-09-2026 12:15
 project: Autosar
 project_key: NOKEY
 tracking_system: file-system
@@ -104,7 +104,7 @@ development_status:
   7-9-保存分层设置并迁入暂定身份: done
   7-10-独立预览源码并保护用户代码再生成: done
   7-11-独立复核发行配置链与完整工程交接: done
-  epic-7-retrospective: optional
+  epic-7-retrospective: done
 action_items:
   - id: "epic-4-retro-item-1-watchdog-cleanup-failure"
     epic: 4
@@ -118,3 +118,27 @@ action_items:
     owner: "开发／测试维护者（工作台）"
     status: done
     ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-10-01.md"
+  - id: "epic-7-retro-item-1-rejected-settings-preservation"
+    epic: 7
+    action: "阻断被拒绝设置状态下的外观／语言隐式覆盖；补齐未知字段、损坏 JSON 和原字节保留的 Tauri 回归，保留正常／并发／外部变化行为。"
+    owner: "桌面后端维护者"
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-10-09.md"
+  - id: "epic-7-retro-item-2-save-publication-no-clobber"
+    epic: 7
+    action: "关闭源保存最终发布及必要回滚的外部文件覆盖窗口；验证平台适用语义、外部原字节与可恢复备份，不只增加 exists 检查。"
+    owner: "Core 保存事务维护者"
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-10-09.md"
+  - id: "epic-7-retro-item-3-save-cleanup-spec-alignment"
+    epic: 7
+    action: "对齐 source-project 分项说明与中央规格及实际故障测试，区分发布失败和发布成功但备份清理失败的基线／恢复语义。"
+    owner: "BMad 规格维护者"
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-10-09.md"
+  - id: "epic-7-retro-item-4-stale-operation-regression"
+    epic: 7
+    action: "在现有后端单测补齐取消／输入失效后旧 Operation 提交拒绝；观察闭包未执行及当前 workspace/fingerprint 保留，不恢复原生／发行门槛。"
+    owner: "桌面后端测试维护者"
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-10-09.md"
