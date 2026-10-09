@@ -3,9 +3,68 @@ use super::component::{DataPort, c_name, implementation, milliseconds, name, one
 use super::graph::Graph;
 use super::{ContractArgument, DiagnosticCategory, PlanDiagnostic, SymbolContract};
 use serde::Serialize;
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub const PROFILE: &str = "singlecore-multi-swc-v1";
+
+// Fixed R24-11 Dcm declarations. Dormant groups do not enable their services.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DcmModeDefinition {
+    pub group: Cow<'static, str>,
+    pub port: Cow<'static, str>,
+    pub prototype: Cow<'static, str>,
+    pub modes: &'static [&'static str],
+}
+pub(super) const DCM_MODES: &[DcmModeDefinition] = &[
+    DcmModeDefinition {
+        group: Cow::Borrowed("DcmDiagnosticSessionControl"),
+        port: Cow::Borrowed("DiagnosticSessionControlModeSwitchInterface"),
+        prototype: Cow::Borrowed("diagnosticSession"),
+        modes: &[
+            "DCM_DEFAULT_SESSION",
+            "DCM_PROGRAMMING_SESSION",
+            "DCM_EXTENDED_DIAGNOSTIC_SESSION",
+            "DCM_SAFETY_SYSTEM_DIAGNOSTIC_SESSION",
+        ],
+    },
+    DcmModeDefinition {
+        group: Cow::Borrowed("DcmEcuReset"),
+        port: Cow::Borrowed("EcuResetModeSwitchInterface"),
+        prototype: Cow::Borrowed("ecuReset"),
+        modes: &[
+            "DCM_NONE",
+            "DCM_HARD",
+            "DCM_KEYONOFF",
+            "DCM_SOFT",
+            "DCM_JUMPTOBOOTLOADER",
+            "DCM_JUMPTOSYSSUPPLIERBOOTLOADER",
+            "DCM_EXECUTE",
+        ],
+    },
+    DcmModeDefinition {
+        group: Cow::Borrowed("DcmModeRapidPowerShutDown"),
+        port: Cow::Borrowed("ModeRapidPowerShutDownModeSwitchInterface"),
+        prototype: Cow::Borrowed("modeRapidPowerShutDown"),
+        modes: &[
+            "DCM_ENABLE_RAPIDPOWERSHUTDOWN",
+            "DCM_DISABLE_RAPIDPOWERSHUTDOWN",
+        ],
+    },
+    DcmModeDefinition {
+        group: Cow::Borrowed("DcmControlDTCSetting"),
+        port: Cow::Borrowed("ControlDTCSettingModeSwitchInterface"),
+        prototype: Cow::Borrowed("controlDTCSetting"),
+        modes: &["DCM_ENABLEDTCSETTING", "DCM_DISABLEDTCSETTING"],
+    },
+    DcmModeDefinition {
+        group: Cow::Borrowed("DcmSecurityAccess"),
+        port: Cow::Borrowed("SecurityAccessModeSwitchInterface"),
+        prototype: Cow::Borrowed("securityAccess"),
+        modes: &["DCM_SEC_LEV_LOCKED"],
+    },
+];
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "camelCase")]
@@ -61,6 +120,16 @@ pub struct DataAccess {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DiagnosticSessionPort {
+    pub port: String,
+    pub interface: String,
+    pub prototype: String,
+    pub mode_group: String,
+    pub mode_type: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Component {
     pub component: String,
     pub instance: String,
@@ -70,6 +139,8 @@ pub struct Component {
     pub behavior: String,
     pub header: String,
     pub interfaces: BTreeMap<String, String>,
+    pub diagnostic_session_port: Option<DiagnosticSessionPort>,
+    pub diagnostic_mode_ports: Vec<DiagnosticSessionPort>,
     pub data_ports: Vec<DataPort>,
     pub data_accesses: Vec<DataAccess>,
     pub operations: Vec<Operation>,
@@ -95,6 +166,7 @@ pub struct MultiComponentContract {
     pub connections: Vec<Connection>,
     pub network_endpoints: Vec<NetworkEndpoint>,
     pub array_types: BTreeMap<String, String>,
+    pub dcm_modes: Vec<DcmModeDefinition>,
 }
 
 fn fail(graph: &Graph, index: usize, code: &str) -> Vec<PlanDiagnostic> {
@@ -236,12 +308,82 @@ fn native_type(
     Ok((native, path(graph, datatype)))
 }
 
+fn dcm_mode_definitions(
+    graph: &Graph,
+    context: usize,
+) -> Result<Vec<DcmModeDefinition>, Vec<PlanDiagnostic>> {
+    let connections: Vec<_> = graph.of_kind("ECUC-CONTAINER-VALUE").into_iter().filter(|index| graph.text(*index, "DEFINITION-REF") == Some("/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsl/DcmDslProtocol/DcmDslProtocolRow/DcmDslConnection/DcmDslMainConnection")).collect();
+    let connection = one(graph, context, connections, "DIAGNOSTIC_REFERENCE")?;
+    let suffix = name(graph, connection);
+    let mut definitions = DCM_MODES.to_vec();
+    definitions.push(DcmModeDefinition {
+        group: Cow::Owned(format!("DcmAuthenticationState_{suffix}")),
+        port: Cow::Owned(format!("AuthenticationStateModeSwitchInterface_{suffix}")),
+        prototype: Cow::Borrowed("authenticationState"),
+        modes: &["DCM_DEAUTHENTICATED", "DCM_AUTHENTICATED"],
+    });
+    Ok(definitions)
+}
+
+fn inspect_dcm_declarations(
+    graph: &Graph,
+    context: usize,
+    definitions: &[DcmModeDefinition],
+) -> Result<(), Vec<PlanDiagnostic>> {
+    let dcm = graph
+        .objects
+        .get("/AUTOSAR_Dcm/Dcm")
+        .copied()
+        .ok_or_else(|| fail(graph, context, "TYPE_CONFLICT"))?;
+    let provided = graph.descendants(dcm, "MODE-DECLARATION-GROUP-PROTOTYPE");
+    if provided.len() != definitions.len() {
+        return Err(fail(graph, dcm, "TYPE_CONFLICT"));
+    }
+    for definition in definitions {
+        let group = graph
+            .objects
+            .get(&format!("/AUTOSAR_Dcm/{}", definition.group))
+            .copied()
+            .ok_or_else(|| fail(graph, dcm, "TYPE_CONFLICT"))?;
+        let prototype = one(
+            graph,
+            dcm,
+            provided
+                .iter()
+                .copied()
+                .filter(|index| name(graph, *index) == definition.group)
+                .collect(),
+            "TYPE_CONFLICT",
+        )?;
+        let modes = graph.descendants(group, "MODE-DECLARATION");
+        if graph.target(prototype, "TYPE-TREF") != Some(group)
+            || graph.text(group, "CATEGORY") != Some("EXPLICIT_ORDER")
+            || graph.text(group, "ON-TRANSITION-VALUE") != Some("255")
+            || graph.target(group, "INITIAL-MODE-REF").is_none_or(|index| {
+                !modes.contains(&index) || name(graph, index) != definition.modes[0]
+            })
+            || modes.len() != definition.modes.len()
+            || !definition.modes.iter().enumerate().all(|(value, mode)| {
+                modes.iter().any(|index| {
+                    name(graph, *index) == *mode
+                        && graph.text(*index, "VALUE") == Some(value.to_string().as_str())
+                })
+            })
+        {
+            return Err(fail(graph, group, "TYPE_CONFLICT"));
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn inspect(graph: &Graph) -> Result<MultiComponentContract, Vec<PlanDiagnostic>> {
     let context = *graph
         .objects
         .values()
         .next()
         .ok_or_else(|| Vec::<PlanDiagnostic>::new())?;
+    let dcm_modes = dcm_mode_definitions(graph, context)?;
+    inspect_dcm_declarations(graph, context, &dcm_modes)?;
     let system = one(graph, context, graph.of_kind("SYSTEM"), "TARGET_NOT_UNIQUE")?;
     if graph.text(system, "CATEGORY") != Some("ECU_EXTRACT") {
         return Err(fail(graph, system, "TARGET_CATEGORY"));
@@ -439,6 +581,8 @@ pub(super) fn inspect(graph: &Graph) -> Result<MultiComponentContract, Vec<PlanD
         let mut interfaces = BTreeMap::new();
         let mut data_accesses = Vec::new();
         let mut operations = Vec::new();
+        let mut diagnostic_session_port = None;
+        let mut diagnostic_mode_ports = Vec::new();
         for port in graph
             .descendants(component, "P-PORT-PROTOTYPE")
             .into_iter()
@@ -742,6 +886,127 @@ pub(super) fn inspect(graph: &Graph) -> Result<MultiComponentContract, Vec<PlanD
                         event,
                     });
                 }
+            } else if graph.elements[interface].tag == "MODE-SWITCH-INTERFACE" {
+                // Only the fixed Dcm BSW service publisher is in scope; this
+                // does not enable mode communication for application SWCs.
+                if read
+                    || graph.elements[component].tag != "SERVICE-SW-COMPONENT-TYPE"
+                    || diagnostic_mode_ports
+                        .iter()
+                        .any(|mode: &DiagnosticSessionPort| {
+                            mode.interface == path(graph, interface)
+                        })
+                    || graph.text(interface, "IS-SERVICE") != Some("true")
+                {
+                    return Err(fail(graph, port, "TYPE_CONFLICT"));
+                }
+                let prototype = one(
+                    graph,
+                    interface,
+                    graph.descendants(interface, "MODE-GROUP"),
+                    "TYPE_CONFLICT",
+                )?;
+                let group = referenced(graph, prototype, "TYPE-TREF", "TYPE_CONFLICT")?;
+                let dcm = graph
+                    .objects
+                    .get("/AUTOSAR_Dcm/Dcm")
+                    .copied()
+                    .ok_or_else(|| fail(graph, port, "TYPE_CONFLICT"))?;
+                let definition = dcm_modes
+                    .iter()
+                    .find(|definition| {
+                        path(graph, group) == format!("/AUTOSAR_Dcm/{}", definition.group)
+                    })
+                    .ok_or_else(|| fail(graph, port, "TYPE_CONFLICT"))?;
+                let provided = one(
+                    graph,
+                    dcm,
+                    graph
+                        .descendants(dcm, "MODE-DECLARATION-GROUP-PROTOTYPE")
+                        .into_iter()
+                        .filter(|index| name(graph, *index) == definition.group)
+                        .collect(),
+                    "TYPE_CONFLICT",
+                )?;
+                let spec = one(
+                    graph,
+                    port,
+                    graph.descendants(port, "MODE-SWITCH-SENDER-COM-SPEC"),
+                    "TYPE_CONFLICT",
+                )?;
+                if name(graph, provided) != definition.group
+                    || graph.target(provided, "TYPE-TREF") != Some(group)
+                    || graph.target(spec, "MODE-GROUP-REF") != Some(prototype)
+                    || graph.text(spec, "ENHANCED-MODE-API") != Some("false")
+                    || path(graph, group) != format!("/AUTOSAR_Dcm/{}", definition.group)
+                {
+                    return Err(fail(graph, port, "TYPE_CONFLICT"));
+                }
+                let modes = graph.descendants(group, "MODE-DECLARATION");
+                if modes.len() != definition.modes.len()
+                    || !definition.modes.iter().enumerate().all(|(value, mode)| {
+                        modes.iter().any(|index| {
+                            name(graph, *index) == *mode
+                                && graph.text(*index, "VALUE") == Some(value.to_string().as_str())
+                        })
+                    })
+                    || graph.target(group, "INITIAL-MODE-REF").is_none_or(|index| {
+                        !modes.contains(&index) || name(graph, index) != definition.modes[0]
+                    })
+                    || name(graph, port) != definition.port
+                    || name(graph, interface) != format!("Dcm_{}", definition.port)
+                    || name(graph, prototype) != definition.prototype
+                    || graph.text(group, "CATEGORY") != Some("EXPLICIT_ORDER")
+                    || graph.text(group, "ON-TRANSITION-VALUE") != Some("255")
+                {
+                    return Err(fail(graph, port, "TYPE_CONFLICT"));
+                }
+                let maps: Vec<_> = graph
+                    .descendants(behavior, "DATA-TYPE-MAPPING-REF")
+                    .into_iter()
+                    .filter_map(|reference| {
+                        graph.objects.get(&graph.elements[reference].text).copied()
+                    })
+                    .flat_map(|mapping| graph.descendants(mapping, "MODE-REQUEST-TYPE-MAP"))
+                    .filter(|mapping| graph.target(*mapping, "MODE-GROUP-REF") == Some(group))
+                    .collect();
+                let mapping = one(graph, prototype, maps, "TYPE_CONFLICT")?;
+                let mode_type = referenced(
+                    graph,
+                    mapping,
+                    "IMPLEMENTATION-DATA-TYPE-REF",
+                    "TYPE_CONFLICT",
+                )?;
+                let base_ref = one(
+                    graph,
+                    mode_type,
+                    graph.descendants(mode_type, "BASE-TYPE-REF"),
+                    "TYPE_CONFLICT",
+                )?;
+                let base = graph
+                    .objects
+                    .get(&graph.elements[base_ref].text)
+                    .copied()
+                    .ok_or_else(|| fail(graph, base_ref, "TYPE_CONFLICT"))?;
+                if name(graph, mode_type) != format!("Rte_ModeType_{}", definition.group)
+                    || graph.text(mode_type, "CATEGORY") != Some("VALUE")
+                    || graph.text(base, "BASE-TYPE-SIZE") != Some("8")
+                    || graph.text(base, "BASE-TYPE-ENCODING") != Some("NONE")
+                    || graph.text(base, "NATIVE-DECLARATION") != Some("uint8")
+                {
+                    return Err(fail(graph, mode_type, "TYPE_CONFLICT"));
+                }
+                let mode = DiagnosticSessionPort {
+                    port: path(graph, port),
+                    interface: path(graph, interface),
+                    prototype: path(graph, prototype),
+                    mode_group: path(graph, group),
+                    mode_type: path(graph, mode_type),
+                };
+                if definition.group == "DcmDiagnosticSessionControl" {
+                    diagnostic_session_port = Some(mode.clone());
+                }
+                diagnostic_mode_ports.push(mode);
             } else {
                 return Err(fail(graph, port, "TYPE_CONFLICT"));
             }
@@ -800,6 +1065,8 @@ pub(super) fn inspect(graph: &Graph) -> Result<MultiComponentContract, Vec<PlanD
             behavior: path(graph, behavior),
             header: format!("include/Rte_{}.h", c_name(&name(graph, component))),
             interfaces,
+            diagnostic_session_port,
+            diagnostic_mode_ports,
             data_ports,
             data_accesses,
             operations,
@@ -1188,6 +1455,7 @@ pub(super) fn inspect(graph: &Graph) -> Result<MultiComponentContract, Vec<PlanD
         connections,
         network_endpoints,
         array_types: arrays,
+        dcm_modes,
     };
     check_names(graph, &plan)?;
     Ok(plan)
@@ -1201,14 +1469,103 @@ pub(super) fn data_symbol(component: &Component, port: &DataPort) -> String {
     )
 }
 
+// These are the actual delivered OS/target and locked FreeRTOS symbol families.
+// Source component names cannot claim a producer in those existing namespaces.
+fn runtime_namespace(name: &str) -> bool {
+    [
+        "Os_",
+        "OS_",
+        "Ecu_",
+        "Arti_",
+        "ARTI_",
+        "E_OS_",
+        "OSMEMORY_",
+        "OSServiceId_",
+        "OSError_",
+        "eTask",
+        "pcQueue",
+        "pcTask",
+        "pcTimer",
+        "pvPort",
+        "pvTask",
+        "pvTimer",
+        "pxPort",
+        "ucQueue",
+        "ucStreamBuffer",
+        "ulPort",
+        "ulTask",
+        "uxEventGroup",
+        "uxList",
+        "uxQueue",
+        "uxStreamBuffer",
+        "uxTask",
+        "uxTimer",
+        "vEventGroup",
+        "vList",
+        "vMessageBuffer",
+        "vPort",
+        "vQueue",
+        "vStreamBuffer",
+        "vTask",
+        "vTimer",
+        "xEventGroup",
+        "xMessageBuffer",
+        "xPort",
+        "xQueue",
+        "xStreamBuffer",
+        "xTask",
+        "xTimer",
+    ]
+    .iter()
+    .any(|prefix| name.starts_with(prefix))
+}
+
+// These actual generated runtime scopes have fixed MemMap producer ownership.
+// Component and partition scopes must not merge with their sections or prefixes.
+pub(super) fn reserved_memory_scope(name: &str) -> bool {
+    matches!(
+        name,
+        "Rte"
+            | "Ecu"
+            | "Can"
+            | "CanIf"
+            | "CanTp"
+            | "Com"
+            | "Dcm"
+            | "PduR"
+            | "LSduR"
+            | "ComM"
+            | "BswM"
+            | "Ecu_HostBusSM"
+    )
+}
+
 fn check_names(graph: &Graph, plan: &MultiComponentContract) -> Result<(), Vec<PlanDiagnostic>> {
     let mut filenames = BTreeSet::from([
         "INCLUDE/RTE.H".to_owned(),
         "INCLUDE/RTE_TYPE.H".to_owned(),
         "INCLUDE/RTE_COM.H".to_owned(),
+        "INCLUDE/RTE_MAIN.H".to_owned(),
+        "INCLUDE/RTE_MEMMAP.H".to_owned(),
+        "INCLUDE/RTE_DCM_TYPE.H".to_owned(),
+        "INCLUDE/RTE_COMM_TYPE.H".to_owned(),
         "INCLUDE/STD_TYPES.H".to_owned(),
     ]);
     let mut names: BTreeSet<String> = "RTE_H RTE_TYPE_H RTE_COM_H Rte_COMCbk Rte_COMCbkRxTOut CbkHandleIdType STD_TYPES_H uint8 uint16 uint32 uint64 sint8 sint16 sint32 sint64 EcuStatus boolean Std_ReturnType Std_VersionInfoType TRUE FALSE E_OK E_NOT_OK RTE_E_COM_STOPPED RTE_E_NEVER_RECEIVED RTE_E_MAX_AGE_EXCEEDED intptr_t uintptr_t intmax_t uintmax_t INTMAX_MIN INTMAX_MAX UINTMAX_MAX INTPTR_MIN INTPTR_MAX UINTPTR_MAX PTRDIFF_MIN PTRDIFF_MAX SIZE_MAX SIG_ATOMIC_MIN SIG_ATOMIC_MAX WCHAR_MIN WCHAR_MAX WINT_MIN WINT_MAX INTMAX_C UINTMAX_C".split_whitespace().map(str::to_owned).collect();
+    names.extend("RTE_CORE RTE_MAIN_H RTE_E_OK RTE_E_LIMIT Rte_Start Rte_Stop SchM_ConfigType SchM_Init SchM_Start SchM_StartTiming SchM_Deinit RTE_CODE RTE_VAR_CLEARED Rte_MemMap_HeaderCheck rte_started rte_allocated SchM_Switch_Dcm_DcmDiagnosticSessionControl SchM_Mode_Dcm_DcmDiagnosticSessionControl Dcm_SecLevelType Dcm_SesCtrlType Rte_ModeType_DcmDiagnosticSessionControl Dcm_GetSecurityLevel Dcm_GetSesCtrlType Dcm_ResetToDefaultSession Can_HostTransmitToken Can_HostCompleteTransmit CanIf_GetControllerRxErrorCounter CanIf_GetControllerTxErrorCounter CanTp_CancelReceive Com_TriggerIPDUSend ComM_GetInhibitionStatus ComM_SetECUGroupClassification ComM_GetCurrentPNCComMode ComM_EcuM_WakeUpIndication".split_whitespace().map(str::to_owned));
+    for index in 0..plan
+        .components
+        .iter()
+        .map(|component| component.data_ports.iter().filter(|port| port.read).count())
+        .sum::<usize>()
+    {
+        for suffix in ["", "_received", "_expired"] {
+            names.insert(format!("rte_value_{index}{suffix}"));
+        }
+    }
+    names.extend("StatusType TaskType TaskRefType TaskStateType TaskStateRefType AppModeType DONOTCARE TotalNumberOfCores ResourceType EventMaskType EventMaskRefType CounterType AlarmType ApplicationType INVALID_OSAPPLICATION ApplicationStateType ApplicationStateRefType APPLICATION_ACCESSIBLE APPLICATION_TERMINATED TrustedFunctionIndexType TrustedFunctionParameterRefType AccessType OSMEMORY_IS_READABLE OSMEMORY_IS_WRITEABLE OSMEMORY_IS_EXECUTABLE OSMEMORY_IS_STACKSPACE ObjectAccessType ACCESS NO_ACCESS ObjectTypeType OBJECT_TASK OBJECT_ISR OBJECT_ALARM OBJECT_RESOURCE OBJECT_COUNTER OBJECT_SCHEDULETABLE MemoryStartAddressType MemorySizeType ISRType INVALID_ISR INVALID_TASK ProtectionReturnType PRO_IGNORE PRO_TERMINATETASKISR PRO_TERMINATEAPPL PRO_SHUTDOWN PRO_PREVENT_ARRIVAL_RATE RestartType PhysicalTimeType CoreIdType SpinlockIdType INVALID_SPINLOCK TryToGetSpinlockType TRYTOGETSPINLOCK_NOSUCCESS TRYTOGETSPINLOCK_SUCCESS IdleModeType IDLE_NO_HALT AreaIdType OSServiceIdType ScheduleTableType ScheduleTableStatusType ScheduleTableStatusRefType SCHEDULETABLE_STOPPED SCHEDULETABLE_NEXT SCHEDULETABLE_WAITING SCHEDULETABLE_RUNNING SCHEDULETABLE_RUNNING_AND_SYNCHRONOUS TickType TickRefType AlarmBaseType AlarmBaseRefType RES_SCHEDULER RUNNING WAITING READY SUSPENDED".split_whitespace().map(str::to_owned));
+    names.extend("ActivateTask CancelAlarm ChainTask ClearEvent ClearPendingInterrupt ControlIdle DisableAllInterrupts DisableInterruptSource EnableAllInterrupts EnableInterruptSource GetActiveApplicationMode GetAlarm GetAlarmBase GetCounterValue GetElapsedValue GetEvent GetISRID GetResource GetScheduleTableStatus GetTaskID GetTaskState IncrementCounter NextScheduleTable ReleaseResource ResumeAllInterrupts ResumeOSInterrupts Schedule SetAbsAlarm SetRelAlarm SetEvent ShutdownHook ShutdownOS StartOS StartScheduleTableAbs StartScheduleTableRel StartupHook StopScheduleTable SuspendAllInterrupts SuspendOSInterrupts TerminateTask WaitEvent isOsStarted ErrorHook PostTaskHook PreTaskHook".split_whitespace().map(str::to_owned));
+    names.extend("main abort exit _Exit malloc calloc realloc free memcpy memmove memset memcmp memchr strlen strcpy strncpy strcat strncat strcmp strncmp strchr strrchr strspn strcspn strpbrk strstr strtok strcoll strxfrm strerror printf fprintf sprintf snprintf vprintf vfprintf vsprintf vsnprintf scanf fscanf sscanf getchar putchar puts fputs fgets fopen fclose freopen fread fwrite fflush feof ferror clearerr fseek ftell rewind fgetpos fsetpos remove rename tmpfile tmpnam setbuf setvbuf ungetc fgetc getc fputc putc perror atoi atol atoll atof strtol strtoul strtoll strtoull strtod strtof strtold rand srand getenv system bsearch qsort abs labs llabs div ldiv lldiv mblen mbtowc wctomb mbstowcs wcstombs signal raise setjmp longjmp assert atexit clock time difftime mktime asctime ctime gmtime localtime strftime size_t ptrdiff_t wchar_t FILE fpos_t tm jmp_buf va_list sig_atomic_t clock_t time_t div_t ldiv_t lldiv_t".split_whitespace().map(str::to_owned));
     for width in [8, 16, 32, 64] {
         for signedness in ["int", "uint"] {
             for size in ["", "_least", "_fast"] {
@@ -1230,7 +1587,10 @@ fn check_names(graph: &Graph, plan: &MultiComponentContract) -> Result<(), Vec<P
         names.insert(format!("UINT{width}_C"));
     }
     for (path, native) in &plan.array_types {
-        if super::contracts::reserved_identifier(native) || !names.insert(native.clone()) {
+        if super::contracts::reserved_identifier(native)
+            || runtime_namespace(native)
+            || !names.insert(native.clone())
+        {
             return Err(fail(
                 graph,
                 *graph.objects.get(path).unwrap(),
@@ -1248,6 +1608,7 @@ fn check_names(graph: &Graph, plan: &MultiComponentContract) -> Result<(), Vec<P
             .trim_end_matches(".h");
         let guard = format!("RTE_{}_H", type_name.to_uppercase());
         if super::contracts::reserved_identifier(type_name)
+            || reserved_memory_scope(type_name)
             || !filenames.insert(component.header.to_uppercase())
             || !names.insert(guard.clone())
         {
@@ -1276,6 +1637,7 @@ fn check_names(graph: &Graph, plan: &MultiComponentContract) -> Result<(), Vec<P
         for runnable in &component.runnables {
             local_names.insert(runnable.symbol.clone());
             if super::contracts::reserved_identifier(&runnable.symbol)
+                || runtime_namespace(&runnable.symbol)
                 || !names.insert(runnable.symbol.clone())
             {
                 return Err(fail(

@@ -197,6 +197,19 @@ impl Author<'_> {
         Ok(())
     }
 
+    fn instance(&mut self, path: &str, name: &str) -> Result<(), crate::message::LocalizedText> {
+        self.field(path, name, ValueKind::Reference, 0)?;
+        let entry = self
+            .0
+            .entries_mut()
+            .get_mut(&format!("{ROOT}{path}/{name}"))
+            .unwrap();
+        entry.element_kind = "ECUC-INSTANCE-REFERENCE-DEF".into();
+        entry.upper_multiplicity = None;
+        entry.reference_destinations = vec!["SW-COMPONENT-PROTOTYPE".into()];
+        Ok(())
+    }
+
     fn default(&mut self, path: &str, name: &str, lexeme: &str) {
         let entry = self
             .0
@@ -435,6 +448,25 @@ fn communication(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedText
         U16,
         1,
     )?;
+    a.foreign(
+        "EcuC/EcucHardware/EcucCoreDefinition",
+        "EcucCoreHwRef",
+        "HW-ELEMENT",
+        0,
+        Some(1),
+    )?;
+    a.container("EcuC/EcucPartitionCollection", 0, Some(1))?;
+    let partition = "EcuC/EcucPartitionCollection/EcucPartition";
+    a.container(partition, 0, None)?;
+    a.integers(partition, "EcucPartitionId", "0", U16, 1)?;
+    a.reference(
+        partition,
+        "EcucPartitionCoreRef",
+        "EcuC/EcucHardware/EcucCoreDefinition",
+        1,
+        Some(1),
+    )?;
+    a.instance(partition, "EcucPartitionSoftwareComponentInstanceRef")?;
     a.container("Can/CanConfigSet", 1, Some(1))?;
     let controller = "Can/CanConfigSet/CanController";
     a.container(controller, 1, None)?;
@@ -731,6 +763,13 @@ fn communication(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedText
         let path = format!("Com/ComConfig/ComMainFunction{kind}");
         a.container(&path, 0, None)?;
         a.floats(&path, timebase, None, 1)?;
+        a.reference(
+            &path,
+            &format!("ComMain{kind}PartitionRef"),
+            "EcuC/EcucPartitionCollection/EcucPartition",
+            0,
+            Some(1),
+        )?;
     }
     a.reference(
         pdu,
@@ -1157,6 +1196,13 @@ fn operating_system(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedT
     }
     let user = "Rte/RteComUser";
     a.container(user, 0, None)?;
+    a.reference(
+        user,
+        "RteComUserEcucPartitionRef",
+        "EcuC/EcucPartitionCollection/EcucPartition",
+        0,
+        None,
+    )?;
     let config = "Rte/RteComUser/ComUserModuleCnf";
     a.container(config, 0, Some(1))?;
     a.field(config, "ComUserHeaderInclude", ValueKind::String, 0)?;

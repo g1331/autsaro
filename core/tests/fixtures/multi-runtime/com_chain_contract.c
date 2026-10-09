@@ -21,6 +21,7 @@ static unsigned frames;
 static unsigned successes;
 static unsigned failures;
 static uint32 emitted[8];
+static uint64_t emitted_tokens[8];
 static unsigned acknowledgments;
 static unsigned timeouts;
 static unsigned errors;
@@ -37,6 +38,8 @@ const EcuPolicyConfig Ecu_Policy = {
     5000u};
 static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8]) {
     assert(id == 0x456u && length == 4u && frames < 8u);
+    emitted_tokens[frames] = Can_HostTransmitToken();
+    assert(emitted_tokens[frames] != UINT64_C(0));
     emitted[frames++] = (uint32)data[0] | ((uint32)data[1] << 8u) | ((uint32)data[2] << 16u) |
                         ((uint32)data[3] << 24u);
     return ECU_OK;
@@ -111,6 +114,8 @@ int main(void) {
     CanIf_PduModeType channel = CANIF_ONLINE;
     Can_ControllerStateType state = CAN_CS_UNINIT;
     Can_PduType direct = {51u, 4u, 0x456u, bytes};
+    assert(Can_HostTransmitToken() == UINT64_C(0));
+    assert(Can_HostCompleteTransmit(51u, UINT64_C(1)) == E_NOT_OK);
     assert(manual_send(2u) == E_NOT_OK);
     assert(ls_tp(41u, &info) == E_NOT_OK);
     ls_rx(21u, &info);
@@ -162,8 +167,14 @@ int main(void) {
     assert(Can_HostFlush() == ECU_OK && frames == 1u && emitted[0] == 0x12345678u);
     Ecu_ComMainFunctionTx(); /* Queued confirmation is still outstanding. */
     assert(Can_HostFlush() == ECU_OK && frames == 2u && emitted[1] == 43u);
-    CanIf_TxConfirmation(51u);
-    CanIf_TxConfirmation(51u);
+    assert(Can_HostCompleteTransmit(51u, emitted_tokens[0]) == E_OK);
+    assert(successes == 0u);
+    assert(Can_HostCompleteTransmit(51u, emitted_tokens[1]) == CAN_BUSY);
+    Can_MainFunction_Write();
+    assert(successes == 1u);
+    assert(Can_HostCompleteTransmit(51u, emitted_tokens[0]) == E_NOT_OK);
+    assert(Can_HostCompleteTransmit(51u, emitted_tokens[1]) == E_OK);
+    Can_MainFunction_Write();
     assert(successes == 2u && failures == 0u);
     CanIf_TxConfirmation(51u); /* Late duplicate ignored. */
     assert(successes == 2u);
@@ -234,18 +245,45 @@ int main(void) {
     assert(Com_SendSignal(11u, &value) == E_OK);
     assert(Com_TriggerIPDUSend(2u) == E_NOT_OK); /* Actual lower BUSY, no queue. */
     assert(Can_HostFlush() == ECU_OK && frames == 6u && emitted[5] == 43u);
-    CanIf_TxConfirmation(51u);
+    /* Old STOP/bus-off outputs cannot consume the recovered same-ID request. */
+    assert(Can_HostCompleteTransmit(51u, emitted_tokens[3]) == E_NOT_OK);
+    assert(Can_HostCompleteTransmit(51u, emitted_tokens[4]) == E_NOT_OK);
+    Can_MainFunction_Write();
+    assert(successes == 2u && failures == 3u);
+    assert(Can_HostCompleteTransmit(51u, emitted_tokens[5]) == E_OK);
+    Can_MainFunction_Write();
+    assert(successes == 3u && failures == 3u);
     assert(Can_HostFlush() == ECU_OK && frames == 6u);
     assert(Com_TriggerIPDUSend(2u) == E_OK);
     assert(Can_HostFlush() == ECU_OK && frames == 7u && emitted[6] == 44u);
-    CanIf_TxConfirmation(51u);
+    assert(Can_HostCompleteTransmit(51u, emitted_tokens[6]) == E_OK);
+    Can_MainFunction_Write();
+    assert(successes == 4u);
     Com_DeInit();
     assert(Com_TriggerIPDUSend(2u) == E_NOT_OK);
     Com_Init(&com_config);
     assert(Can_HostFlush() == ECU_OK && frames == 7u);
     Com_DeInit();
+    assert(CanIf_SetControllerMode(0u, CAN_CS_STOPPED) == E_OK);
+    Can_MainFunction_Wakeup();
     CanIf_DeInit();
     Can_DeInit();
+    assert(Can_HostCompleteTransmit(51u, emitted_tokens[6]) == E_NOT_OK);
     assert(CanIf_GetPduMode(0u, &channel) == E_NOT_OK);
+    Can_Init(&can_config);
+    CanIf_Init(&canif_config);
+    Com_Init(&com_config);
+    assert(CanIf_SetControllerMode(0u, CAN_CS_STARTED) == E_OK);
+    Can_MainFunction_Wakeup();
+    assert(CanIf_SetPduMode(0u, CANIF_ONLINE) == E_OK);
+    assert(Com_TriggerIPDUSend(2u) == E_OK);
+    assert(Can_HostFlush() == ECU_OK && frames == 8u);
+    assert(emitted_tokens[7] > emitted_tokens[6]);
+    assert(Can_HostCompleteTransmit(51u, emitted_tokens[6]) == E_NOT_OK);
+    Can_MainFunction_Write();
+    assert(successes == 4u);
+    assert(Can_HostCompleteTransmit(51u, emitted_tokens[7]) == E_OK);
+    Can_MainFunction_Write();
+    assert(successes == 5u && failures == 3u);
     return 0;
 }

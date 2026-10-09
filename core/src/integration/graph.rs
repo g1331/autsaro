@@ -219,7 +219,7 @@ impl Graph {
                 }
             }
         }
-        diagnostics.extend(graph.audit_references(|_| true));
+        diagnostics.extend(graph.audit_references(|_, _| true));
         if diagnostics.is_empty() {
             Ok(graph)
         } else {
@@ -313,17 +313,26 @@ impl Graph {
         &self,
         consumers: &std::collections::BTreeSet<String>,
     ) -> Vec<PlanDiagnostic> {
-        self.audit_references(|element| consumers.contains(&element.object))
+        self.audit_references(|_, element| consumers.contains(&element.object))
     }
 
-    fn audit_references(&self, include: impl Fn(&Element) -> bool) -> Vec<PlanDiagnostic> {
+    /// Qualify only references consumed by a structural source-owner proof.
+    /// This permits excluding unrelated ECUC definition authorization.
+    pub fn reference_diagnostics_for_indices(
+        &self,
+        consumers: &std::collections::BTreeSet<usize>,
+    ) -> Vec<PlanDiagnostic> {
+        self.audit_references(|index, _| consumers.contains(&index))
+    }
+
+    fn audit_references(&self, include: impl Fn(usize, &Element) -> bool) -> Vec<PlanDiagnostic> {
         let graph = self;
         let mut diagnostics = Vec::new();
         for (index, element) in graph
             .elements
             .iter()
             .enumerate()
-            .filter(|(_, element)| include(element))
+            .filter(|(index, element)| include(*index, element))
         {
             if let Some(destination) = element.attributes.get("DEST") {
                 let kind = graph
@@ -338,12 +347,18 @@ impl Graph {
                             "backend.integration.graph.referenced_autosar_object_missing"
                         ),
                     ),
-                    Some(kind) if kind != destination => (
-                        "REFERENCE_DEST",
-                        crate::product_message!(
-                            "backend.integration.graph.reference_dest_kind_mismatch"
-                        ),
-                    ),
+                    Some(kind)
+                        if kind != destination
+                            && !(kind == "MODE-GROUP"
+                                && destination == "MODE-DECLARATION-GROUP-PROTOTYPE") =>
+                    {
+                        (
+                            "REFERENCE_DEST",
+                            crate::product_message!(
+                                "backend.integration.graph.reference_dest_kind_mismatch"
+                            ),
+                        )
+                    }
                     Some(_) => continue,
                 };
                 if kind.is_none() && destination == "R-PORT-PROTOTYPE" {

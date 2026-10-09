@@ -23,4 +23,7 @@ pub use model::{
     GenerationPreview, GenerationPreviewFile, GenerationReport, Issue, RunReport, SavePreview,
     SavePreviewFile, SignalView, WorkspaceView,
 };
-pub use prepared::{PreparedProject, prepare_ecu_project, prepare_host_project};
+pub use prepared::{
+    ApplicationSource, PreparedProject, prepare_ecu_project, prepare_ecu_project_with_applications,
+    prepare_host_project,
+};

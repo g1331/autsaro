@@ -1,4 +1,5 @@
 #include "Os_Backend.h"
+#include "Os_IntegrationHooks.h"
 #include <errno.h>
 #include <limits.h>
 #include <stdio.h>
@@ -880,6 +881,10 @@ static void bootstrap(void *argument) {
         }
     }
     Os_HookInvoke(&StartupHook, OS_HOOK_STARTUP);
+    if (Os_IntegrationTimingAuthorized() == 0) {
+        Os_BackendShutdown(E_OS_STATE);
+        return;
+    }
     taskENTER_CRITICAL();
     for (i = 0u; i < Os_Config->task_count; ++i) {
         if ((Os_Config->tasks[i].autostart_modes & startup_mode) != 0u) {

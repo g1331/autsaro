@@ -1,5 +1,5 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<AUTOSAR xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd" xmlns="http://autosar.org/schema/r4.0">
+<?xml version='1.0' encoding='utf-8'?>
+<AUTOSAR xmlns="http://autosar.org/schema/r4.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd">
   <AR-PACKAGES>
     <AR-PACKAGE>
       <SHORT-NAME>Services</SHORT-NAME>
@@ -16,10 +16,73 @@
               </REQUIRED-COM-SPECS>
               <REQUIRED-INTERFACE-TREF DEST="CLIENT-SERVER-INTERFACE">/Types/DataServices_ApplicationValue</REQUIRED-INTERFACE-TREF>
             </R-PORT-PROTOTYPE>
+            <P-PORT-PROTOTYPE>
+              <SHORT-NAME>DiagnosticSessionControlModeSwitchInterface</SHORT-NAME>
+              <PROVIDED-COM-SPECS>
+                <MODE-SWITCH-SENDER-COM-SPEC>
+                  <ENHANCED-MODE-API>false</ENHANCED-MODE-API>
+                  <MODE-GROUP-REF DEST="MODE-DECLARATION-GROUP-PROTOTYPE">/Services/Dcm_DiagnosticSessionControlModeSwitchInterface/diagnosticSession</MODE-GROUP-REF>
+                </MODE-SWITCH-SENDER-COM-SPEC>
+              </PROVIDED-COM-SPECS>
+              <PROVIDED-INTERFACE-TREF DEST="MODE-SWITCH-INTERFACE">/Services/Dcm_DiagnosticSessionControlModeSwitchInterface</PROVIDED-INTERFACE-TREF>
+            </P-PORT-PROTOTYPE>
+            <P-PORT-PROTOTYPE>
+              <SHORT-NAME>EcuResetModeSwitchInterface</SHORT-NAME>
+              <PROVIDED-COM-SPECS>
+                <MODE-SWITCH-SENDER-COM-SPEC>
+                  <ENHANCED-MODE-API>false</ENHANCED-MODE-API>
+                  <MODE-GROUP-REF DEST="MODE-DECLARATION-GROUP-PROTOTYPE">/Services/Dcm_EcuResetModeSwitchInterface/ecuReset</MODE-GROUP-REF>
+                </MODE-SWITCH-SENDER-COM-SPEC>
+              </PROVIDED-COM-SPECS>
+              <PROVIDED-INTERFACE-TREF DEST="MODE-SWITCH-INTERFACE">/Services/Dcm_EcuResetModeSwitchInterface</PROVIDED-INTERFACE-TREF>
+            </P-PORT-PROTOTYPE>
+            <P-PORT-PROTOTYPE>
+              <SHORT-NAME>ModeRapidPowerShutDownModeSwitchInterface</SHORT-NAME>
+              <PROVIDED-COM-SPECS>
+                <MODE-SWITCH-SENDER-COM-SPEC>
+                  <ENHANCED-MODE-API>false</ENHANCED-MODE-API>
+                  <MODE-GROUP-REF DEST="MODE-DECLARATION-GROUP-PROTOTYPE">/Services/Dcm_ModeRapidPowerShutDownModeSwitchInterface/modeRapidPowerShutDown</MODE-GROUP-REF>
+                </MODE-SWITCH-SENDER-COM-SPEC>
+              </PROVIDED-COM-SPECS>
+              <PROVIDED-INTERFACE-TREF DEST="MODE-SWITCH-INTERFACE">/Services/Dcm_ModeRapidPowerShutDownModeSwitchInterface</PROVIDED-INTERFACE-TREF>
+            </P-PORT-PROTOTYPE>
+            <P-PORT-PROTOTYPE>
+              <SHORT-NAME>ControlDTCSettingModeSwitchInterface</SHORT-NAME>
+              <PROVIDED-COM-SPECS>
+                <MODE-SWITCH-SENDER-COM-SPEC>
+                  <ENHANCED-MODE-API>false</ENHANCED-MODE-API>
+                  <MODE-GROUP-REF DEST="MODE-DECLARATION-GROUP-PROTOTYPE">/Services/Dcm_ControlDTCSettingModeSwitchInterface/controlDTCSetting</MODE-GROUP-REF>
+                </MODE-SWITCH-SENDER-COM-SPEC>
+              </PROVIDED-COM-SPECS>
+              <PROVIDED-INTERFACE-TREF DEST="MODE-SWITCH-INTERFACE">/Services/Dcm_ControlDTCSettingModeSwitchInterface</PROVIDED-INTERFACE-TREF>
+            </P-PORT-PROTOTYPE>
+            <P-PORT-PROTOTYPE>
+              <SHORT-NAME>SecurityAccessModeSwitchInterface</SHORT-NAME>
+              <PROVIDED-COM-SPECS>
+                <MODE-SWITCH-SENDER-COM-SPEC>
+                  <ENHANCED-MODE-API>false</ENHANCED-MODE-API>
+                  <MODE-GROUP-REF DEST="MODE-DECLARATION-GROUP-PROTOTYPE">/Services/Dcm_SecurityAccessModeSwitchInterface/securityAccess</MODE-GROUP-REF>
+                </MODE-SWITCH-SENDER-COM-SPEC>
+              </PROVIDED-COM-SPECS>
+              <PROVIDED-INTERFACE-TREF DEST="MODE-SWITCH-INTERFACE">/Services/Dcm_SecurityAccessModeSwitchInterface</PROVIDED-INTERFACE-TREF>
+            </P-PORT-PROTOTYPE>
+            <P-PORT-PROTOTYPE>
+              <SHORT-NAME>AuthenticationStateModeSwitchInterface_Physical</SHORT-NAME>
+              <PROVIDED-COM-SPECS>
+                <MODE-SWITCH-SENDER-COM-SPEC>
+                  <ENHANCED-MODE-API>false</ENHANCED-MODE-API>
+                  <MODE-GROUP-REF DEST="MODE-DECLARATION-GROUP-PROTOTYPE">/Services/Dcm_AuthenticationStateModeSwitchInterface_Physical/authenticationState</MODE-GROUP-REF>
+                </MODE-SWITCH-SENDER-COM-SPEC>
+              </PROVIDED-COM-SPECS>
+              <PROVIDED-INTERFACE-TREF DEST="MODE-SWITCH-INTERFACE">/Services/Dcm_AuthenticationStateModeSwitchInterface_Physical</PROVIDED-INTERFACE-TREF>
+            </P-PORT-PROTOTYPE>
           </PORTS>
           <INTERNAL-BEHAVIORS>
             <SWC-INTERNAL-BEHAVIOR>
               <SHORT-NAME>Behavior</SHORT-NAME>
+              <DATA-TYPE-MAPPING-REFS>
+                <DATA-TYPE-MAPPING-REF DEST="DATA-TYPE-MAPPING-SET">/Services/DcmModeTypes</DATA-TYPE-MAPPING-REF>
+              </DATA-TYPE-MAPPING-REFS>
               <RUNNABLES>
                 <RUNNABLE-ENTITY>
                   <SHORT-NAME>DcmReadData</SHORT-NAME>
@@ -40,6 +103,83 @@
             </SWC-INTERNAL-BEHAVIOR>
           </INTERNAL-BEHAVIORS>
         </SERVICE-SW-COMPONENT-TYPE>
+        <MODE-SWITCH-INTERFACE>
+          <SHORT-NAME>Dcm_DiagnosticSessionControlModeSwitchInterface</SHORT-NAME>
+          <IS-SERVICE>true</IS-SERVICE>
+          <MODE-GROUP>
+            <SHORT-NAME>diagnosticSession</SHORT-NAME>
+            <TYPE-TREF DEST="MODE-DECLARATION-GROUP">/AUTOSAR_Dcm/DcmDiagnosticSessionControl</TYPE-TREF>
+          </MODE-GROUP>
+        </MODE-SWITCH-INTERFACE>
+        <DATA-TYPE-MAPPING-SET>
+          <SHORT-NAME>DcmModeTypes</SHORT-NAME>
+          <MODE-REQUEST-TYPE-MAPS>
+            <MODE-REQUEST-TYPE-MAP>
+              <IMPLEMENTATION-DATA-TYPE-REF DEST="IMPLEMENTATION-DATA-TYPE">/AUTOSAR_Dcm/Rte_ModeType_DcmDiagnosticSessionControl</IMPLEMENTATION-DATA-TYPE-REF>
+              <MODE-GROUP-REF DEST="MODE-DECLARATION-GROUP">/AUTOSAR_Dcm/DcmDiagnosticSessionControl</MODE-GROUP-REF>
+            </MODE-REQUEST-TYPE-MAP>
+            <MODE-REQUEST-TYPE-MAP>
+              <IMPLEMENTATION-DATA-TYPE-REF DEST="IMPLEMENTATION-DATA-TYPE">/AUTOSAR_Dcm/Rte_ModeType_DcmEcuReset</IMPLEMENTATION-DATA-TYPE-REF>
+              <MODE-GROUP-REF DEST="MODE-DECLARATION-GROUP">/AUTOSAR_Dcm/DcmEcuReset</MODE-GROUP-REF>
+            </MODE-REQUEST-TYPE-MAP>
+            <MODE-REQUEST-TYPE-MAP>
+              <IMPLEMENTATION-DATA-TYPE-REF DEST="IMPLEMENTATION-DATA-TYPE">/AUTOSAR_Dcm/Rte_ModeType_DcmModeRapidPowerShutDown</IMPLEMENTATION-DATA-TYPE-REF>
+              <MODE-GROUP-REF DEST="MODE-DECLARATION-GROUP">/AUTOSAR_Dcm/DcmModeRapidPowerShutDown</MODE-GROUP-REF>
+            </MODE-REQUEST-TYPE-MAP>
+            <MODE-REQUEST-TYPE-MAP>
+              <IMPLEMENTATION-DATA-TYPE-REF DEST="IMPLEMENTATION-DATA-TYPE">/AUTOSAR_Dcm/Rte_ModeType_DcmControlDTCSetting</IMPLEMENTATION-DATA-TYPE-REF>
+              <MODE-GROUP-REF DEST="MODE-DECLARATION-GROUP">/AUTOSAR_Dcm/DcmControlDTCSetting</MODE-GROUP-REF>
+            </MODE-REQUEST-TYPE-MAP>
+            <MODE-REQUEST-TYPE-MAP>
+              <IMPLEMENTATION-DATA-TYPE-REF DEST="IMPLEMENTATION-DATA-TYPE">/AUTOSAR_Dcm/Rte_ModeType_DcmSecurityAccess</IMPLEMENTATION-DATA-TYPE-REF>
+              <MODE-GROUP-REF DEST="MODE-DECLARATION-GROUP">/AUTOSAR_Dcm/DcmSecurityAccess</MODE-GROUP-REF>
+            </MODE-REQUEST-TYPE-MAP>
+            <MODE-REQUEST-TYPE-MAP>
+              <IMPLEMENTATION-DATA-TYPE-REF DEST="IMPLEMENTATION-DATA-TYPE">/AUTOSAR_Dcm/Rte_ModeType_DcmAuthenticationState_Physical</IMPLEMENTATION-DATA-TYPE-REF>
+              <MODE-GROUP-REF DEST="MODE-DECLARATION-GROUP">/AUTOSAR_Dcm/DcmAuthenticationState_Physical</MODE-GROUP-REF>
+            </MODE-REQUEST-TYPE-MAP>
+          </MODE-REQUEST-TYPE-MAPS>
+        </DATA-TYPE-MAPPING-SET>
+        <MODE-SWITCH-INTERFACE>
+          <SHORT-NAME>Dcm_EcuResetModeSwitchInterface</SHORT-NAME>
+          <IS-SERVICE>true</IS-SERVICE>
+          <MODE-GROUP>
+            <SHORT-NAME>ecuReset</SHORT-NAME>
+            <TYPE-TREF DEST="MODE-DECLARATION-GROUP">/AUTOSAR_Dcm/DcmEcuReset</TYPE-TREF>
+          </MODE-GROUP>
+        </MODE-SWITCH-INTERFACE>
+        <MODE-SWITCH-INTERFACE>
+          <SHORT-NAME>Dcm_ModeRapidPowerShutDownModeSwitchInterface</SHORT-NAME>
+          <IS-SERVICE>true</IS-SERVICE>
+          <MODE-GROUP>
+            <SHORT-NAME>modeRapidPowerShutDown</SHORT-NAME>
+            <TYPE-TREF DEST="MODE-DECLARATION-GROUP">/AUTOSAR_Dcm/DcmModeRapidPowerShutDown</TYPE-TREF>
+          </MODE-GROUP>
+        </MODE-SWITCH-INTERFACE>
+        <MODE-SWITCH-INTERFACE>
+          <SHORT-NAME>Dcm_ControlDTCSettingModeSwitchInterface</SHORT-NAME>
+          <IS-SERVICE>true</IS-SERVICE>
+          <MODE-GROUP>
+            <SHORT-NAME>controlDTCSetting</SHORT-NAME>
+            <TYPE-TREF DEST="MODE-DECLARATION-GROUP">/AUTOSAR_Dcm/DcmControlDTCSetting</TYPE-TREF>
+          </MODE-GROUP>
+        </MODE-SWITCH-INTERFACE>
+        <MODE-SWITCH-INTERFACE>
+          <SHORT-NAME>Dcm_SecurityAccessModeSwitchInterface</SHORT-NAME>
+          <IS-SERVICE>true</IS-SERVICE>
+          <MODE-GROUP>
+            <SHORT-NAME>securityAccess</SHORT-NAME>
+            <TYPE-TREF DEST="MODE-DECLARATION-GROUP">/AUTOSAR_Dcm/DcmSecurityAccess</TYPE-TREF>
+          </MODE-GROUP>
+        </MODE-SWITCH-INTERFACE>
+        <MODE-SWITCH-INTERFACE>
+          <SHORT-NAME>Dcm_AuthenticationStateModeSwitchInterface_Physical</SHORT-NAME>
+          <IS-SERVICE>true</IS-SERVICE>
+          <MODE-GROUP>
+            <SHORT-NAME>authenticationState</SHORT-NAME>
+            <TYPE-TREF DEST="MODE-DECLARATION-GROUP">/AUTOSAR_Dcm/DcmAuthenticationState_Physical</TYPE-TREF>
+          </MODE-GROUP>
+        </MODE-SWITCH-INTERFACE>
       </ELEMENTS>
     </AR-PACKAGE>
   </AR-PACKAGES>

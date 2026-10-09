@@ -198,7 +198,7 @@ pub(super) fn inspect_events(
     }
     let maximum = value(graph, counter, "OsCounterMaxAllowedValue", false)
         .and_then(|value| value.parse::<u32>().ok())
-        .filter(|value| *value != 0);
+        .filter(|value| *value <= 65535 && (multi || *value != 0));
     let counter_tick_ms = value(graph, counter, "OsSecondsPerTick", false).and_then(milliseconds);
     let counter_ticks_per_base = value(graph, counter, "OsCounterTicksPerBase", false)
         .and_then(|text| text.parse::<u32>().ok());
@@ -453,7 +453,7 @@ pub(super) fn inspect_events(
         let os_event = reference(graph, mapping, &format!("{prefix}UsedOsEventRef"))?;
         let position = value(graph, mapping, &format!("{prefix}PositionInTask"), false)
             .and_then(|value| value.parse::<u32>().ok())
-            .filter(|value| *value != 0)
+            .filter(|value| *value <= 65535 && (multi || *value != 0))
             .ok_or_else(|| {
                 reject(
                     graph,
@@ -747,51 +747,78 @@ pub(super) fn inspect_events(
             ),
         ));
     }
-    let mut expected_order = vec![
-        "Can_MainFunction_Wakeup",
-        "CanTp_AdvanceTime",
-        "Com_AdvanceTime",
-    ];
-    if multi {
-        expected_order.extend(
-            entities
-                .iter()
-                .filter(|entity| entity.application)
-                .map(|entity| entity.symbol.as_str()),
-        );
-        if entities
+    let configured_symbol = |kind: &str, prefix: &str| {
+        graph
+            .of_kind("ECUC-CONTAINER-VALUE")
+            .into_iter()
+            .find(|index| definition_is(graph, *index, kind))
+            .map(|index| format!("{prefix}_{}", graph.text(index, "SHORT-NAME").unwrap_or("")))
+            .or_else(|| {
+                entities
+                    .iter()
+                    .find(|entity| entity.symbol.starts_with(&format!("{prefix}_")))
+                    .map(|entity| entity.symbol.clone())
+            })
+            .unwrap_or_default()
+    };
+    let mut expected_order: Vec<String> = if multi {
+        vec![
+            configured_symbol("ComMChannel", "ComM_MainFunction"),
+            "Can_MainFunction_Wakeup".into(),
+            "CanTp_MainFunction".into(),
+            configured_symbol("ComMainFunctionRx", "Com_MainFunctionRx"),
+        ]
+    } else {
+        vec![
+            "Can_MainFunction_Wakeup".into(),
+            "CanTp_AdvanceTime".into(),
+            "Com_AdvanceTime".into(),
+        ]
+    };
+    expected_order.extend(
+        entities
+            .iter()
+            .filter(|entity| entity.application)
+            .map(|entity| entity.symbol.clone()),
+    );
+    if multi
+        && entities
             .iter()
             .filter(|entity| entity.application)
             .map(|entity| entity.period_ms)
             .collect::<BTreeSet<_>>()
             .len()
             != 1
-        {
-            return Err(reject(
-                graph,
-                behavior,
-                "PERIOD_UNSUPPORTED",
-                crate::product_message!(
-                    "backend.integration.schedule.declared_task_positions_order_mismatch"
-                ),
-            ));
-        }
-    } else {
-        expected_order.push(
-            entities
-                .iter()
-                .find(|entity| entity.application)
-                .unwrap()
-                .symbol
-                .as_str(),
-        );
+    {
+        return Err(reject(
+            graph,
+            behavior,
+            "PERIOD_UNSUPPORTED",
+            crate::product_message!(
+                "backend.integration.schedule.declared_task_positions_order_mismatch"
+            ),
+        ));
     }
-    expected_order.extend(["Com_TriggerTransmit", "Dcm_AdvanceTime"]);
+    if multi {
+        expected_order.extend([
+            configured_symbol("ComMainFunctionTx", "Com_MainFunctionTx"),
+            "Dcm_MainFunction".into(),
+            "Can_MainFunction_Read".into(),
+            "Can_MainFunction_Write".into(),
+            "Can_MainFunction_Mode".into(),
+            "Can_MainFunction_BusOff".into(),
+        ]);
+    } else {
+        expected_order.extend(["Com_TriggerTransmit".into(), "Dcm_AdvanceTime".into()]);
+    }
     if entities
         .iter()
         .map(|entity| entity.symbol.as_str())
         .collect::<Vec<_>>()
         != expected_order
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>()
     {
         return Err(reject(
             graph,

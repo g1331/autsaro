@@ -453,7 +453,9 @@ pub(super) fn documents(
                 || node.children().any(|n| {
                     matches!(
                         n.tag_name().name(),
-                        "VARIATION-POINT" | "VALUE-IREF" | "VALUE-EXPR"
+                        "VARIATION-POINT" | "VALUE-EXPR"
+                    ) || (n.tag_name().name() == "VALUE-IREF"
+                        && definition.definition_id != "/AUTOSAR/EcucDefs/EcuC/EcucPartitionCollection/EcucPartition/EcucPartitionSoftwareComponentInstanceRef"
                     )
                 })
                 || node
@@ -538,7 +540,69 @@ pub(super) fn documents(
             }
             if let Some(kind) = definition.kind {
                 if kind == ValueKind::Reference {
-                    let Some(reference) = child(node, "VALUE-REF") else {
+                    let instance = definition.element_kind == "ECUC-INSTANCE-REFERENCE-DEF";
+                    let iref = child(node, "VALUE-IREF");
+                    if instance {
+                        let context = iref.and_then(|iref| child(iref, "CONTEXT-ELEMENT-REF"));
+                        let target = iref.and_then(|iref| child(iref, "TARGET-REF"));
+                        let valid = node
+                            .children()
+                            .filter(|child| child.has_tag_name("VALUE-IREF"))
+                            .count()
+                            == 1
+                            && iref.is_some_and(|iref| {
+                                iref.children().filter(|n| n.is_element()).count() == 2
+                            })
+                            && context.is_some_and(|context| {
+                                context.attribute("DEST") == Some("ROOT-SW-COMPOSITION-PROTOTYPE")
+                                    && objects
+                                        .get(super::xml_text_trimmed(context).as_ref())
+                                        .is_some_and(|root| {
+                                            root.tag_name().name()
+                                                == "ROOT-SW-COMPOSITION-PROTOTYPE"
+                                                && text(*root, "SOFTWARE-COMPOSITION-TREF")
+                                                    .is_some_and(|composition| {
+                                                        target.is_some_and(|target| {
+                                                            objects
+                                                                .get(
+                                                                    super::xml_text_trimmed(target)
+                                                                        .as_ref(),
+                                                                )
+                                                                .is_some_and(|target| {
+                                                                    target.ancestors().skip(1).find(
+                                                                        |owner| {
+                                                                            child(
+                                                                                *owner,
+                                                                                "SHORT-NAME",
+                                                                            )
+                                                                            .is_some()
+                                                                        },
+                                                                    ) == objects
+                                                                        .get(composition.as_ref())
+                                                                        .copied()
+                                                                })
+                                                        })
+                                                    })
+                                        })
+                            });
+                        if !valid {
+                            issue(
+                                "REFERENCE_CONTEXT",
+                                Severity::Error,
+                                crate::product_message!(
+                                    "backend.definitions.validation.reference_target_not_allowed"
+                                ),
+                                "ROOT-SW-COMPOSITION-PROTOTYPE/SW-COMPONENT-PROTOTYPE".into(),
+                                metadata.as_str().into(),
+                            );
+                        }
+                    }
+                    let reference = if instance {
+                        iref.and_then(|iref| child(iref, "TARGET-REF"))
+                    } else {
+                        child(node, "VALUE-REF")
+                    };
+                    let Some(reference) = reference else {
                         issue(
                             "REFERENCE_MISSING",
                             Severity::Error,

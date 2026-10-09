@@ -107,7 +107,13 @@ StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *c
     }
     span = batch->epoch - batch->completed_epoch;
     for (index = 0u; index < batch->count; ++index) {
-        if (batch->frames[index].id == Ecu_Config.diagnostic->request_can_id) {
+        if (batch->frames[index].id ==
+#if defined(ECU_MULTI_COMPONENT)
+            ECU_TARGET_DIAGNOSTIC_RX_CAN_ID
+#else
+            Ecu_Config.diagnostic->request_can_id
+#endif
+        ) {
             ++diagnostic_inputs;
         }
     }

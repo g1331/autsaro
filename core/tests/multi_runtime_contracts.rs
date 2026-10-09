@@ -167,6 +167,12 @@ fn chain_consumer(scratch: &Path, fixture: &str) -> PathBuf {
     if cfg!(target_os = "linux") {
         command.arg("-pthread");
     }
+    if matches!(
+        fixture,
+        "com_chain_contract.c" | "diagnostic_queued_contract.c"
+    ) {
+        command.arg("-DCAN_HOST_QUEUED_COMPLETION=1");
+    }
     if fixture == "mode_contract.c" {
         // Independent non-equal namespace oracle; final generation derives source IDs.
         command.args([
@@ -292,6 +298,19 @@ fn diagnostic_transport_owns_buffers_and_obeys_real_mode_and_confirmation() {
 fn configured_can_polling_and_zero_dlc_preserve_real_admission_and_callbacks() {
     let scratch = Scratch::new();
     let executable = chain_consumer(&scratch.0, "can_polling_contract.c");
+    let output = Command::new(executable).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    assert!(
+        output.stdout.is_empty() && output.stderr.is_empty(),
+        "{:?}",
+        output
+    );
+}
+
+#[test]
+fn queued_diagnostic_cancelled_token_cannot_release_reused_transport_buffer() {
+    let scratch = Scratch::new();
+    let executable = chain_consumer(&scratch.0, "diagnostic_queued_contract.c");
     let output = Command::new(executable).output().unwrap();
     assert!(output.status.success(), "{:?}", output);
     assert!(

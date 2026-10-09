@@ -9,7 +9,7 @@
 
 /** @brief Encoded CAN identifier; this host profile accepts only 11-bit Classic IDs. */
 typedef uint32_t Can_IdType;
-/** @brief Hardware transmit handle; the current host profile has one handle, zero. */
+/** @brief Hardware object handle; its value comes from the selected controller configuration. */
 typedef uint16_t Can_HwHandleType;
 
 /** @brief Hardware object, controller and identifier of a received CAN L-PDU. */

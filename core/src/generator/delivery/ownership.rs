@@ -64,6 +64,7 @@ fn classification(
     path: &str,
     metadata: &HandoffMetadata,
     source: Option<&crate::resources::AssetEntry>,
+    slots: &[super::ApplicationSlotDescriptor],
 ) -> Result<(FileOwner, String, Option<String>), crate::LocalizedText> {
     if path == PROJECT_PATH
         || metadata
@@ -78,14 +79,32 @@ fn classification(
         .iter()
         .find(|input| input.kind == InputKind::Application && input.package_path == path)
     {
-        if path != APPLICATION_OUTPUT || input.producer_slot.as_deref() != Some(APPLICATION_SLOT) {
+        let producer = if metadata.profile_id == crate::integration::MULTI_PROFILE {
+            slots
+                .iter()
+                .find(|slot| {
+                    input.producer_slot.as_deref() == Some(slot.producer_slot.as_str())
+                        && slot.source_paths == [input.logical_path.clone()]
+                        && slot.source_paths[0]
+                            .strip_prefix("application/")
+                            .is_some_and(|relative| path == format!("src/{relative}"))
+                })
+                .map(|slot| slot.producer_slot.as_str())
+        } else if path == APPLICATION_OUTPUT
+            && input.producer_slot.as_deref() == Some(APPLICATION_SLOT)
+        {
+            Some(APPLICATION_SLOT)
+        } else {
+            None
+        };
+        let Some(producer) = producer else {
             return Err(crate::product_message!(
                 "backend.delivery.application_snapshot_unknown"
             ));
-        }
+        };
         return Ok((
             FileOwner::UserApplication,
-            APPLICATION_SLOT.into(),
+            producer.into(),
             Some(input.logical_path.clone()),
         ));
     }
@@ -102,10 +121,97 @@ fn classification(
     }
 }
 
+fn application_slots(
+    files: &BTreeMap<String, &[u8]>,
+    metadata: &HandoffMetadata,
+) -> Result<Vec<super::ApplicationSlotDescriptor>, crate::LocalizedText> {
+    if metadata.profile_id != crate::integration::MULTI_PROFILE {
+        return Ok(Vec::new());
+    }
+    let manifest: crate::arxml::ProjectManifest = serde_json::from_slice(
+        files
+            .get(PROJECT_PATH)
+            .ok_or_else(|| crate::product_message!("backend.delivery.mapped_input_missing"))?,
+    )
+    .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
+    if manifest.format_version != 1
+        || manifest.declared_release != "R24-11"
+        || manifest.accepted_extension_definitions
+            != metadata.resource_identities.required_extension_definitions
+        || manifest.profile_hint != metadata.profile_id
+        || manifest.inputs.len()
+            != metadata
+                .input_snapshots
+                .iter()
+                .filter(|input| input.kind == InputKind::Arxml)
+                .count()
+        || manifest.application_inputs.len()
+            != metadata
+                .input_snapshots
+                .iter()
+                .filter(|input| input.kind == InputKind::Application)
+                .count()
+        || !manifest.inputs.iter().all(|member| {
+            metadata.input_snapshots.iter().any(|input| {
+                input.kind == InputKind::Arxml
+                    && input.logical_path == member.path
+                    && input.role == member.role_hint
+            })
+        })
+        || !metadata
+            .input_snapshots
+            .iter()
+            .filter(|input| input.kind == InputKind::Arxml)
+            .all(|input| {
+                manifest.inputs.iter().any(|member| {
+                    member.path == input.logical_path && member.role_hint == input.role
+                })
+            })
+        || !manifest.application_inputs.iter().all(|member| {
+            metadata.input_snapshots.iter().any(|input| {
+                input.kind == InputKind::Application
+                    && input.logical_path == member.path
+                    && input.producer_slot.as_deref() == Some(member.producer_slot.as_str())
+            })
+        })
+    {
+        return Err(crate::product_message!(
+            "backend.delivery.application_membership_mismatch"
+        ));
+    }
+    let sources = metadata.input_snapshots.iter().filter(|input| input.kind == InputKind::Arxml).map(|input| {
+        let bytes = files.get(&input.package_path).ok_or_else(|| crate::product_message!("backend.delivery.mapped_input_missing"))?;
+        if digest(bytes) != input.sha256 {
+            return Err(crate::product_message!("backend.delivery.mapped_snapshot_changed", "path" => input.logical_path));
+        }
+        crate::integration::InputSource::new(&input.logical_path, bytes.to_vec()).map_err(|issue| issue.message)
+    }).collect::<Result<Vec<_>, crate::LocalizedText>>()?;
+    let slots = crate::integration::ecu::application_slots_from_sources(&sources)
+        .map_err(|issues| issues.into_iter().next().unwrap().message)?;
+    if slots.len() != manifest.application_inputs.len()
+        || !slots.iter().all(|slot| {
+            manifest.application_inputs.iter().any(|member| {
+                member.producer_slot == slot.producer_slot
+                    && slot.source_paths == [member.path.clone()]
+            })
+        })
+    {
+        return Err(crate::product_message!(
+            "backend.delivery.application_membership_mismatch"
+        ));
+    }
+    Ok(slots)
+}
+
 pub(crate) fn ledger<'a>(
     files: &BTreeMap<String, PreparedFile<'a>>,
     metadata: &HandoffMetadata,
 ) -> Result<OwnershipLedger, crate::LocalizedText> {
+    let payload = files
+        .iter()
+        .map(|(path, file)| (path.clone(), file.bytes.as_ref()))
+        .collect();
+    let slots = application_slots(&payload, metadata)?;
     let mut entries = Vec::with_capacity(files.len());
     for (path, file) in files {
         if matches!(
@@ -117,7 +223,8 @@ pub(crate) fn ledger<'a>(
             ));
         }
         safe_relative(path)?;
-        let (owner, producer_id, snapshot_of) = classification(path, metadata, file.source)?;
+        let (owner, producer_id, snapshot_of) =
+            classification(path, metadata, file.source, &slots)?;
         entries.push(OwnershipEntry {
             path: path.clone(),
             owner,
@@ -183,7 +290,7 @@ pub(crate) fn validate_metadata(metadata: &HandoffMetadata) -> Result<(), crate:
         || metadata.producer_version != env!("CARGO_PKG_VERSION")
         || !matches!(
             metadata.profile_id.as_str(),
-            HOST_PROFILE | crate::integration::PROFILE
+            HOST_PROFILE | crate::integration::PROFILE | crate::integration::MULTI_PROFILE
         )
         || metadata.project_path != PROJECT_PATH
         || metadata.ownership_path != OWNERSHIP_PATH
@@ -223,11 +330,22 @@ pub(crate) fn validate_metadata(metadata: &HandoffMetadata) -> Result<(), crate:
                 }
             }
             InputKind::Application => {
-                if metadata.profile_id != crate::integration::PROFILE
-                    || input.package_path != APPLICATION_OUTPUT
-                    || input.producer_slot.as_deref() != Some(APPLICATION_SLOT)
-                    || input.role != "user-application"
-                {
+                let mapping = if metadata.profile_id == crate::integration::MULTI_PROFILE {
+                    input
+                        .logical_path
+                        .strip_prefix("application/")
+                        .is_some_and(|relative| {
+                            input.package_path == format!("src/{relative}")
+                                && relative.ends_with(".c")
+                                && !relative.contains('/')
+                        })
+                        && input.producer_slot.is_some()
+                } else {
+                    metadata.profile_id == crate::integration::PROFILE
+                        && input.package_path == APPLICATION_OUTPUT
+                        && input.producer_slot.as_deref() == Some(APPLICATION_SLOT)
+                };
+                if !mapping || input.role != "user-application" {
                     return Err(crate::product_message!(
                         "backend.delivery.application_boundary_unsupported"
                     ));
@@ -258,6 +376,7 @@ pub(crate) fn verify_ledger_bytes(
     metadata: &HandoffMetadata,
 ) -> Result<OwnershipLedger, crate::LocalizedText> {
     validate_metadata(metadata)?;
+    let slots = application_slots(files, metadata)?;
     let ledger: OwnershipLedger = serde_json::from_slice(
         files
             .get(OWNERSHIP_PATH)
@@ -281,16 +400,17 @@ pub(crate) fn verify_ledger_bytes(
     } else {
         "ecu"
     };
-    let mut trusted_assets = BTreeMap::new();
-    for asset in AssetInventory::embedded().selected(metadata.target_id, profile) {
-        trusted_assets.insert(crate::prepared::deliver_path(asset, profile)?, asset);
-    }
-    if profile == "ecu" {
-        let origin = AssetInventory::embedded()
-            .get("runtime/include/Com.h")
-            .ok_or_else(|| crate::product_message!("backend.delivery.com_origin_missing"))?;
-        trusted_assets.insert("bsw-origin/include/Com.h".into(), origin);
-    }
+    let trusted_assets = if profile == "ecu" {
+        crate::integration::ecu::source_assets(
+            metadata.target_id,
+            metadata.profile_id == crate::integration::MULTI_PROFILE,
+        )?
+    } else {
+        AssetInventory::embedded()
+            .selected(metadata.target_id, profile)
+            .map(|asset| crate::prepared::deliver_path(asset, profile).map(|path| (path, asset)))
+            .collect::<Result<BTreeMap<_, _>, _>>()?
+    };
     let mut owned = BTreeSet::new();
     let mut portable = BTreeSet::new();
     for entry in &ledger.files {
@@ -317,7 +437,8 @@ pub(crate) fn verify_ledger_bytes(
             .get(&entry.path)
             .copied()
             .filter(|asset| asset.bytes == *bytes);
-        let (owner, producer_id, snapshot_of) = classification(&entry.path, metadata, source)?;
+        let (owner, producer_id, snapshot_of) =
+            classification(&entry.path, metadata, source, &slots)?;
         if owner != entry.owner
             || producer_id != entry.producer_id
             || snapshot_of != entry.snapshot_of

@@ -23,21 +23,24 @@
 #include <string.h>
 static unsigned count;
 static uint8 output[128][8];
+#if defined(CAN_DIAGNOSTIC_QUEUED)
+static uint64_t output_tokens[128];
+#endif
 static unsigned reads;
 static unsigned reports;
-const EcuPolicyConfig Ecu_Policy = {ECU_TX_SYNCHRONOUS,
-                                    ECU_RX_BEFORE_DEADLINE,
-                                    0u,
-                                    0u,
-                                    ECU_WAIT_ABORT,
-                                    0u,
-                                    0u,
-                                    NULL_PTR,
-                                    0u,
-                                    50u,
-                                    5000u};
+const EcuPolicyConfig Ecu_Policy = {
+#if defined(CAN_DIAGNOSTIC_QUEUED)
+    ECU_TX_QUEUED,
+#else
+    ECU_TX_SYNCHRONOUS,
+#endif
+    ECU_RX_BEFORE_DEADLINE, 0u, 0u, ECU_WAIT_ABORT, 0u, 0u, NULL_PTR, 0u, 50u, 5000u};
 static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8]) {
     assert(id == 0x708u && length == 8u && count < 128u);
+#if defined(CAN_DIAGNOSTIC_QUEUED)
+    output_tokens[count] = Can_HostTransmitToken();
+    assert(output_tokens[count] != UINT64_C(0));
+#endif
     memcpy(output[count], data, 8u);
     ++count;
     return ECU_OK;
@@ -69,11 +72,11 @@ static void mode(NetworkHandleType channel, ComM_ModeType value) {
 }
 static const Det_ErrorHookType hooks[] = {error};
 static const Det_ConfigType det = {NULL_PTR, 0u, hooks, 1u};
-static const PduR_TpRouteType tp_routes[] = {{11u, 17u, 12u, 18u, Dcm_StartOfReception,
+static const PduR_TpRouteType tp_routes[] = {{71u, 17u, 72u, 18u, Dcm_StartOfReception,
                                               Dcm_CopyRxData, Dcm_TpRxIndication, Dcm_CopyTxData,
                                               Dcm_TpTxConfirmation}};
 static const PduR_TxRouteType pdur_tx[] = {
-    {PDUR_UP_DCM, 18u, 12u, CanTp_Transmit, Dcm_TpTxConfirmation, NULL_PTR}};
+    {PDUR_UP_DCM, 81u, 12u, CanTp_Transmit, Dcm_TpTxConfirmation, NULL_PTR}};
 static const PduR_PBConfigType pdur = {23u, NULL_PTR, 0u, pdur_tx, 1u, tp_routes, 1u};
 static const LSduR_RxRouteType ls_rx[] = {{21u, 31u, CanTp_RxIndication}};
 static const LSduR_TxRouteType ls_tx[] = {
@@ -97,8 +100,12 @@ static const ComM_ConfigType comm = {
     7u, users, 1u, 3u, Ecu_HostBusSM_RequestComMode, Ecu_HostBusSM_GetCurrentComMode, mode, 3u};
 static const Ecu_HostBusSM_ConfigType cdd = {7u, 0u};
 static const BswM_ConfigType bswm = {7u, COMM_NO_COMMUNICATION, Ecu_HostBusSM_ApplyMode};
-static const Dcm_ConfigType dcm = {17u, 18u, 7u, 0x1234u, read_did, 50u, 50u, 5000u, 20u, 256u};
-static const CanTp_ConfigType tp = {11u, 12u, 31u, 41u, 256u, 5u, 5u, 5u, 5u, 5u, 1u, 2u, 0u};
+static uint8 authentication_mode = 255u;
+static void publish_authentication(uint8 state) { authentication_mode = state; }
+static const Dcm_ConfigType dcm = {17u, 18u,   7u,  0x1234u, read_did, 50u,
+                                   50u, 5000u, 20u, 256u,    81u,      publish_authentication};
+static const CanTp_ConfigType tp = {11u, 12u, 31u, 41u, 256u, 5u,  5u, 5u,
+                                    5u,  5u,  1u,  2u,  0u,   71u, 72u};
 static void receive(const uint8 bytes[8]) {
     assert(Can_Inject(0x700u, 8u, bytes, 0u) == ECU_OK);
     Can_MainFunction_Read();
@@ -121,6 +128,8 @@ static void start(void) {
     Ecu_HostBusSM_Init(&cdd);
     BswM_Init(&bswm);
     Dcm_Init(&dcm);
+    assert(authentication_mode == 0u);
+    assert(SCHM_E_OK == 0u && SCHM_E_LIMIT == 130u);
     CanTp_Init(&tp);
     ComM_Init(&comm);
     ComM_CommunicationAllowed(7u, TRUE);
@@ -151,6 +160,71 @@ int main(void) {
     Dcm_SecLevelType security_value = 99u;
     unsigned saved;
     unsigned i;
+#if defined(CAN_DIAGNOSTIC_QUEUED)
+    start();
+    request_read();
+    tick();
+    assert(count == 0u);
+    flush();
+    assert(count == 1u && reads == 1u && output[0][0] == 7u && output[0][1] == 0x62u);
+    available = 99u;
+    assert(copy_tx(18u, &query, NULL_PTR, &available) == BUFREQ_OK && available == 0u);
+    assert(CanIf_SetControllerMode(0u, CAN_CS_STOPPED) == E_OK);
+    Can_MainFunction_Wakeup();
+    available = 99u;
+    assert(copy_tx(18u, &query, NULL_PTR, &available) == BUFREQ_E_NOT_OK && available == 99u);
+    assert(CanIf_SetControllerMode(0u, CAN_CS_STARTED) == E_OK);
+    Can_MainFunction_Wakeup();
+    request_read();
+    tick();
+    flush();
+    assert(count == 2u && reads == 2u && output_tokens[1] != output_tokens[0]);
+    assert(memcmp(output[0], output[1], 8u) == 0);
+    available = 99u;
+    assert(copy_tx(18u, &query, NULL_PTR, &available) == BUFREQ_OK && available == 0u);
+    assert(Can_HostCompleteTransmit(51u, output_tokens[0]) == E_NOT_OK);
+    Can_MainFunction_Write();
+    available = 99u;
+    assert(copy_tx(18u, &query, NULL_PTR, &available) == BUFREQ_OK && available == 0u);
+    assert(count == 2u && reads == 2u);
+    assert(Can_HostCompleteTransmit(51u, output_tokens[1]) == E_OK);
+    Can_MainFunction_Write();
+    available = 99u;
+    assert(copy_tx(18u, &query, NULL_PTR, &available) == BUFREQ_E_NOT_OK && available == 99u);
+    assert(Can_HostCompleteTransmit(51u, output_tokens[1]) == E_NOT_OK);
+    Can_MainFunction_Write();
+    request_read();
+    tick();
+    flush();
+    assert(count == 3u && reads == 3u);
+    assert(Can_HostCompleteTransmit(51u, output_tokens[2]) == E_OK);
+    Can_MainFunction_Write();
+    /* A queued physical frame survives a TP-only restart, but cannot finish its successor. */
+    request_read();
+    tick();
+    flush();
+    assert(count == 4u && reads == 4u);
+    CanTp_Shutdown();
+    Dcm_Init(&dcm);
+    CanTp_Init(&tp);
+    Dcm_ComM_FullComModeEntered(7u);
+    request_read();
+    tick();
+    flush();
+    assert(count == 4u && reads == 5u);
+    assert(Can_HostCompleteTransmit(51u, output_tokens[3]) == E_OK);
+    Can_MainFunction_Write();
+    tick();
+    flush();
+    assert(count == 5u && reads == 5u);
+    available = 99u;
+    assert(copy_tx(18u, &query, NULL_PTR, &available) == BUFREQ_OK && available == 0u);
+    assert(Can_HostCompleteTransmit(51u, output_tokens[4]) == E_OK);
+    Can_MainFunction_Write();
+    available = 99u;
+    assert(copy_tx(18u, &query, NULL_PTR, &available) == BUFREQ_E_NOT_OK && available == 99u);
+    return 0;
+#endif
     assert(cancel_rx(11u) == E_NOT_OK);
     assert(start_rx(17u, NULL_PTR, 3u, &available) == BUFREQ_E_NOT_OK && available == 99u);
     assert(Dcm_SetActiveDiagnostic(FALSE) == E_OK);
@@ -169,6 +243,9 @@ int main(void) {
     }
     start();
     assert(session_get(&session_value) == E_OK && session_value == 1u);
+    assert(transmit(72u, &info) == E_NOT_OK); /* Router ID is not a CanTp NSdu ID. */
+    assert(cancel_rx(71u) == E_NOT_OK);       /* Router callback ID is not an own Rx NSdu ID. */
+
     assert(security_get(&security_value) == E_OK && security_value == 0u);
     assert(published_session() == 0u);
     assert(start_rx(99u, NULL_PTR, 3u, &available) == BUFREQ_E_NOT_OK && available == 99u);
@@ -285,6 +362,8 @@ int main(void) {
         info.SduLength = 3u;
         CanTp_Shutdown();
         Dcm_Init(&dcm);
+        assert(authentication_mode == 0u);
+        assert(SCHM_E_OK == 0u && SCHM_E_LIMIT == 130u);
         CanTp_Init(&tp);
         Dcm_ComM_FullComModeEntered(7u);
     }
@@ -320,6 +399,8 @@ int main(void) {
     Dcm_MainFunction();
     CanTp_Shutdown();
     Dcm_Init(&dcm);
+    assert(authentication_mode == 0u);
+    assert(SCHM_E_OK == 0u && SCHM_E_LIMIT == 130u);
     flush();
     assert(transmit(12u, &info) == E_NOT_OK);
     CanTp_Init(&tp);
@@ -416,6 +497,8 @@ int main(void) {
         assert(count == saved + 1u && output[count - 1u][0] == 0x21u);
         CanTp_Shutdown();
         Dcm_Init(&dcm);
+        assert(authentication_mode == 0u);
+        assert(SCHM_E_OK == 0u && SCHM_E_LIMIT == 130u);
     }
     /* Real driver BUSY refuses the SF immediately, releasing Dcm without a retry. */
     CanTp_Init(&tp);
@@ -464,7 +547,9 @@ int main(void) {
         flush();
         assert(output[count - 1u][0] == 3u && output[count - 1u][1] == 0x7fu &&
                output[count - 1u][2] == 0x22u && output[count - 1u][3] == 0x14u);
-        Dcm_Init(&dcm); /* Retire the caller-owned configuration before its lifetime ends. */
+        Dcm_Init(&dcm);
+        assert(authentication_mode ==
+               0u); /* Retire the caller-owned configuration before its lifetime ends. */
     }
     /* Public reset, suppressed session completion and internal F186 use actual state. */
     Dcm_ComM_FullComModeEntered(7u);
@@ -548,6 +633,8 @@ int main(void) {
         boolean confirmed = (i >= 2u);
         first[1] = (uint8)(13u + (i % 2u)); /* Seven/eight bytes remain after FF. */
         Dcm_Init(&dcm);
+        assert(authentication_mode == 0u);
+        assert(SCHM_E_OK == 0u && SCHM_E_LIMIT == 130u);
         Dcm_ComM_FullComModeEntered(7u);
         receive(first);
         CanTp_MainFunction(); /* Actual FC accepted by the driver. */

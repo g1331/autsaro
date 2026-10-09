@@ -121,18 +121,16 @@ pub(super) fn inspect(
         return Err(fail(graph, group, "COM_RX_GROUP"));
     }
     let main = |receive: bool| -> Result<(usize, ComMainFunction), Vec<PlanDiagnostic>> {
-        let (kind, timebase, role, prefix) = if receive {
+        let (kind, timebase, prefix) = if receive {
             (
                 "ComMainFunctionRx",
                 "ComMainRxTimeBase",
-                "Com_AdvanceTime",
                 "Com_MainFunctionRx",
             )
         } else {
             (
                 "ComMainFunctionTx",
                 "ComMainTxTimeBase",
-                "Com_TriggerTransmit",
                 "Com_MainFunctionTx",
             )
         };
@@ -142,13 +140,11 @@ pub(super) fn inspect(
             .ok_or_else(|| fail(graph, index, "COM_TIMEBASE"))?;
         let name = graph.text(index, "SHORT-NAME").unwrap_or("");
         let symbol = format!("{prefix}_{name}");
-        // The current BSW description names the logical role; the selected
-        // configured instance symbol is retained for the runtime consumer.
         if !graph.within(index, config)
             || !super::catalog::c_identifier(&symbol)
             || super::contracts::reserved_identifier(name)
             || !schedule.entities.iter().any(|entity| {
-                !entity.application && entity.symbol == role && entity.period_ms == period
+                !entity.application && entity.symbol == symbol && entity.period_ms == period
             })
         {
             return Err(fail(graph, index, "COM_TIMEBASE"));
@@ -196,6 +192,9 @@ pub(super) fn inspect(
         } else {
             Vec::new()
         };
+        if value(graph, pdu, "ComIPduSignalProcessing", false) != Some("IMMEDIATE") {
+            return Err(fail(graph, pdu, "COM_FEATURE_UNSUPPORTED"));
+        }
         if value(graph, pdu, "ComIPduCallout", false).is_some() {
             return Err(fail(graph, pdu, "COM_FEATURE_UNSUPPORTED"));
         }

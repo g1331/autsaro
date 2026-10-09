@@ -30,17 +30,18 @@ static PduLengthType total CANTP_VAR_CLEARED;
 static PduLengthType position CANTP_VAR_CLEARED;
 static PduLengthType frame_payload CANTP_VAR_CLEARED;
 static boolean lower_pending CANTP_VAR_CLEARED;
+static PduIdType pending_lower_id CANTP_VAR_CLEARED;
 #define CANTP_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "CanTp_MemMap.h"
 #define CANTP_START_SEC_CODE
 #include "CanTp_MemMap.h"
 static CANTP_CODE void CanTp_FinishTx(Std_ReturnType result) {
     state = CANTP_IDLE;
-    PduR_CanTpTxConfirmation(configuration->transmit, result);
+    PduR_CanTpTxConfirmation(configuration->upper_transmit, result);
 }
 static CANTP_CODE void CanTp_FinishRx(Std_ReturnType result) {
     state = CANTP_IDLE;
-    PduR_CanTpRxIndication(configuration->receive, result);
+    PduR_CanTpRxIndication(configuration->upper_receive, result);
 }
 CANTP_CODE void CanTp_Init(const CanTp_ConfigType *CfgPtr) {
     SchM_Enter_CanTp_CANTP_STATE();
@@ -49,7 +50,6 @@ CANTP_CODE void CanTp_Init(const CanTp_ConfigType *CfgPtr) {
         (CfgPtr->n_cs > 0u) && (CfgPtr->main_period_ms > 0u)) {
         configuration = CfgPtr;
         state = CANTP_IDLE;
-        lower_pending = FALSE;
     }
     SchM_Exit_CanTp_CANTP_STATE();
 }
@@ -57,7 +57,7 @@ CANTP_CODE void CanTp_Shutdown(void) {
     SchM_Enter_CanTp_CANTP_STATE();
     configuration = NULL_PTR;
     state = CANTP_IDLE;
-    lower_pending = FALSE;
+    /* A copied lower frame retains its identity until its actual confirmation. */
     SchM_Exit_CanTp_CANTP_STATE();
 }
 static CANTP_CODE void CanTp_Pad(void) {
@@ -94,7 +94,7 @@ static CANTP_CODE void CanTp_Copy(void) {
     info.SduDataPtr = &frame[header];
     info.MetaDataPtr = NULL_PTR;
     info.SduLength = frame_payload;
-    result = PduR_CanTpCopyTxData(configuration->transmit, &info, NULL_PTR, &available);
+    result = PduR_CanTpCopyTxData(configuration->upper_transmit, &info, NULL_PTR, &available);
     if (result == BUFREQ_OK) {
         state = CANTP_TX_SEND;
         timer = configuration->n_as;
@@ -111,6 +111,7 @@ static CANTP_CODE void CanTp_Send(void) {
         return;
     }
     lower_pending = TRUE;
+    pending_lower_id = configuration->lower_transmit;
     if (previous == CANTP_TX_SEND) {
         state = CANTP_TX_CONFIRM;
     } else if (previous == CANTP_RX_FLOW_SEND) {
@@ -200,14 +201,15 @@ static CANTP_CODE void CanTp_StartRx(const PduInfoType *info, boolean first) {
     payload.SduDataPtr = &info->SduDataPtr[header];
     payload.MetaDataPtr = NULL_PTR;
     payload.SduLength = (first == TRUE) ? 6u : length;
-    result = PduR_CanTpStartOfReception(configuration->receive, &payload, length, &available);
+    result = PduR_CanTpStartOfReception(configuration->upper_receive, &payload, length, &available);
     if (result == BUFREQ_OK) {
         total = length;
         position = 0u;
         sequence = 1u;
         state = CANTP_RX_DATA;
         if ((available < length) || (length > configuration->maximum_length) ||
-            (PduR_CanTpCopyRxData(configuration->receive, &payload, &available) != BUFREQ_OK)) {
+            (PduR_CanTpCopyRxData(configuration->upper_receive, &payload, &available) !=
+             BUFREQ_OK)) {
             (void)Det_ReportRuntimeError(35u, 0u, 0x42u, 0xb0u);
             CanTp_FinishRx(E_NOT_OK);
         } else {
@@ -288,7 +290,7 @@ CANTP_CODE void CanTp_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfo
                 if (payload.SduLength > 7u) {
                     payload.SduLength = 7u;
                 }
-                if (PduR_CanTpCopyRxData(configuration->receive, &payload, &available) !=
+                if (PduR_CanTpCopyRxData(configuration->upper_receive, &payload, &available) !=
                     BUFREQ_OK) {
                     (void)Det_ReportRuntimeError(35u, 0u, 0x42u, 0xb0u);
                     CanTp_FinishRx(E_NOT_OK);
@@ -309,9 +311,11 @@ CANTP_CODE void CanTp_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfo
 }
 CANTP_CODE void CanTp_TxConfirmation(PduIdType TxPduId, Std_ReturnType result) {
     SchM_Enter_CanTp_CANTP_STATE();
-    if ((configuration != NULL_PTR) && (TxPduId == configuration->lower_transmit)) {
+    if ((lower_pending == TRUE) && (TxPduId == pending_lower_id)) {
         lower_pending = FALSE;
-        if (state == CANTP_TX_CONFIRM) {
+        if (configuration == NULL_PTR) {
+            /* OFF retires the lower frame without notifying an upper connection. */
+        } else if (state == CANTP_TX_CONFIRM) {
             if (result != E_OK) {
                 CanTp_FinishTx(E_NOT_OK);
             } else {

@@ -16,4 +16,10 @@
  */
 void Os_IntegrationOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate);
 
+/** Authorize the actual bootstrap release of periodic resources after StartupHook.
+ * A linked RTE/SchM consumer returns nonzero only after StartTiming. A standalone
+ * OS consumer authorizes its native configured timers directly. No clock advances.
+ */
+int Os_IntegrationTimingAuthorized(void);
+
 #endif

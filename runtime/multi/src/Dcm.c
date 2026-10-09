@@ -23,6 +23,7 @@ static Dcm_SesCtrlType pending_session DCM_VAR_CLEARED;
 static boolean session_change_cancelled DCM_VAR_CLEARED;
 static uint32 s3_remaining DCM_VAR_CLEARED;
 static uint16 p2_remaining DCM_VAR_CLEARED;
+static uint8 authentication_state DCM_VAR_CLEARED;
 #define DCM_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Dcm_MemMap.h"
 #define DCM_START_SEC_CODE
@@ -48,13 +49,15 @@ static DCM_CODE void Dcm_SetSession(Dcm_SesCtrlType next) {
 }
 DCM_CODE void Dcm_Init(const Dcm_ConfigType *ConfigPtr) {
     SchM_Enter_Dcm_DCM_STATE();
-    if ((ConfigPtr != NULL_PTR) && (ConfigPtr->read != NULL_PTR) && (ConfigPtr->p2_ticks > 0u) &&
-        (ConfigPtr->s3_ticks > 0u) && (ConfigPtr->buffer_length >= 7u) &&
-        (ConfigPtr->buffer_length <= 256u) && (ConfigPtr->did != 0xf186u)) {
+    if ((ConfigPtr != NULL_PTR) && (ConfigPtr->p2_ticks > 0u) && (ConfigPtr->s3_ticks > 0u) &&
+        (ConfigPtr->buffer_length >= 7u) && (ConfigPtr->buffer_length <= 256u) &&
+        (ConfigPtr->did != 0xf186u) && (ConfigPtr->authentication_mode != NULL_PTR)) {
         if ((configuration != NULL_PTR) && (diagnostic == TRUE)) {
             ComM_DCM_InactiveDiagnostic(configuration->channel);
         }
         configuration = ConfigPtr;
+        authentication_state = 0u;
+        configuration->authentication_mode(authentication_state);
         state = DCM_IDLE;
         active_enabled = TRUE;
         diagnostic = FALSE;
@@ -199,7 +202,7 @@ static DCM_CODE void Dcm_Process(void) {
                         response[response_length + 2u] = session;
                         response_length += 3u;
                     }
-                } else if (did == configuration->did) {
+                } else if ((configuration->read != NULL_PTR) && (did == configuration->did)) {
                     if (response_length > (configuration->buffer_length - 6u)) {
                         Dcm_Negative(0x14u);
                     } else {
@@ -279,7 +282,7 @@ DCM_CODE void Dcm_MainFunction(void) {
                 const PduInfoType info = {NULL_PTR, NULL_PTR, response_length};
                 /* Publish before calling lower: confirmation can be synchronous. */
                 state = DCM_TRANSMITTING;
-                if (PduR_DcmTransmit(configuration->transmit, &info) != E_OK) {
+                if (PduR_DcmTransmit(configuration->router_transmit, &info) != E_OK) {
                     state = DCM_RESPONSE;
                 }
             }

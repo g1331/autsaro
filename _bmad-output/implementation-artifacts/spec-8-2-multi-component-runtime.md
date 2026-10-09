@@ -2,7 +2,7 @@
 title: '经真实 OS 调度运行多组件通信'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 319d39f9c688c59b6a19ff8c2b7c399874534cba
@@ -51,10 +51,10 @@ context:
 
 ## Tasks & Acceptance
 
-- [ ] 模型／fixture／定义：真实 Rx group、timeout、通知 handle、主函数 timebase 和完整调度共同核定，所有非法关系有拒绝测试。
-- [ ] 模板／运行时／调用方：生成多组件 RTE、标准选定链路配置、回调及真实任务调用；最小可信应用准备入口接纳所有计划槽。
-- [ ] 正常工程入口：用户应用真实执行矩阵及 AC-1–AC-8；变名、fanout、DM 和下层拒绝验证全部运行，不跳过。
-- [ ] 交付资源／BMad：审阅 ABI／第三方／换行；实际 multi 与受影响 single c-check，记录完整性与诊断，必要回归通过。
+- [x] 模型／fixture／定义：真实 Rx group、timeout、通知 handle、主函数 timebase 和完整调度共同核定，所有非法关系有拒绝测试。
+- [x] 模板／运行时／调用方：生成多组件 RTE、标准选定链路配置、回调及真实任务调用；最小可信应用准备入口接纳所有计划槽。
+- [x] 正常工程入口：用户应用真实执行矩阵及 AC-1–AC-8；变名、fanout、DM 和下层拒绝验证全部运行，不跳过。
+- [x] 交付资源／BMad：审阅 ABI／第三方／换行；实际 multi 与受影响 single c-check，记录完整性与诊断，必要回归通过。
 
 验收：真实生成与 OS 运行关口全部通过，才推进 8.3–8.5；无授权 MISRA 主文不声明完整符合。
 
@@ -256,3 +256,119 @@ fullgen生命周期义务由固定R24-11另核定，纳入同源RTE／SchM／OS�
 阶段12验证：Linux固定GCC13／正常objdump／git／Python native39配置tests及8runtime tests全部passed，无ignored／filtered；标准新增API独立typed编译链接和上述真实状态／资源向量执行。固定官方MOD oracle1passed／72filtered，正常17unit／71builtin／2c_analysis全部passed；normal default multi38passed（无ignored／filtered，含两入口实际F186 message最终断言）。Clippy两个native目标通过，quality core36／runtime59 formatting及Csyntax通过，assets check0changes／diffcheck通过。未改变已登记legacy C资源，复用阶段10实际single分析完整但1808diagnostics／passed=false；actualmulti生成与其c-check仍未完成，不声明完整标准／MISRA或Windows验收。
 
 历史失败保留：新增显式MDT0最初遗漏multi目标参数白名单，使18个有效配置向量被TARGET_PARAMETER_UNSUPPORTED拒绝；补齐同一来源闭包后原断言全部通过，未删字段或放宽测试。CanTp remaining算术首次在uint16独立fixture触发GCC -Werror sign-compare，按明确uint32运算修正后native8通过；未关闭警告。新增Rust失败断言一度误用unwrap_err要求成功plan的Debug，改为err().expect；所有失败都已定位并关闭。阶段12完成必要通信API合并后冻结交协调者独立审阅提交，随后优先actualmulti生成／OS高风险关口，完整8.2仍in-progress。
+
+
+2026-10-09 阶段13实现中（未冻结，尚未完整生成／运行验收）：可信计划现按真实 runnable producer ownership 派生全部 APPLICATION 实例的 caller source slots，no-event Dcm SERVICE 桥仍由 RTE 生成，不固化验收样本三个应用或名字。RTE 候选实现具有各 R 独立初值／fanout、同步 CS、COM 实际 ReceiveSignal 值与 freshness 状态、STOPPED 优先于 NEVER_RECEIVED／MAX_AGE，普通 API 检查 actual owner；Start／Stop 分别采用真实 OS startup/shutdown hook 的 trusted context，重复 Start 拒绝。新增片段验证入口只是当前机制验证手段，完整交付时收敛到正常 prepare／render_ecu_sources 的私有 producer，不作为并列半工程产品入口。
+
+本轮核定并修正 source/runtime 差距：旧 multi fixture 的 ComIPduSignalProcessing=DEFERRED 与实际立即 unpack／notify 不一致。依据 SWS_Com_00300／00301，首批 multi 明确 IMMEDIATE，fixture 两 PDU 改为 IMMEDIATE，两正常入口拒绝 DEFERRED；旧 profile 原行为与 source 保留，这不是实现 deferred 能力。唯一 EcucPartition 由真实 source 明确 ID0、Core0、全部 APPLICATION／SERVICE root-context instance refs；RteComUser 与 COM Rx／Tx main 显式指向同一 partition。官方 metadata 保留一般 multiplicity，首批 inspector 限唯一来源。普通 native grammar／definition validation 有限接纳并核验 ECUC_EcuC_00036 的准确 ROOT-SW-COMPOSITION-PROTOTYPE→SW-COMPONENT-PROTOTYPE 关系，其余未支持复杂 IREF 不自动放行。
+
+SWS_Rte_05088／07422／07424 的 component 短名 scope 用于实际 RTE data/API memory allocation keywords；draft04615／07710的 COM callbacks 使用 source partition 短名，07427为 CALLOUT_CODE，实际映射到 controlled x64 sections，不仅放空 marker。全工程 namespace 在正常 validation 与 trusted plan 阶段拒绝公开 RTE／SchM／通信、实际 OS／target／FreeRTOS、main 和标准 C 全局 producer 碰撞。普通 lifecycle helper 是 additive controlled-host seam，保持 Ecu_Target 两文件 LF 与受信摘要一致；未改变 legacy 普通 task owner 检查。
+
+尚未完成：所有 caller source snapshots／guard（包括原 manifest raw bytes 身份）与 sealed ownership 接纳、正常 multi 完整配置／catalog／BSWMD／SchM/RTE/OS 生成、唯一 owner bootstrap／tick／shutdown 接线、物理输出后实际 driver polling confirmation、多同 epoch RX、epoch0实际 STARTED通知且不推进 COM DM、configured周期推进 Dcm/CanTp而非 IO唤醒、真实 group Stop/Start(TRUE/FALSE) 的网络值／状态向量、AC-1–AC-8及 actual multi／受影响 single c-check。模块和源码片段不能替代以上关口；全部 Tasks 继续 unchecked。
+
+
+阶段13补核：07592 Note允许无assigned SwAddrMethod的AutosarDataPrototype选定段名，仍保留05088的真实关键词／section义务。05089／05090还要求共同生成的真实 BSWModuleDescription MemorySection 描述usedsegments／attributes，以及 BswImplementation.generatedArtifact 关联实际工件；source注释或JSON catalog不能替代。现有native类型消费者已追加实际RTE源码编译与objdump，含变名及scalar／void CS形状，实际组件text／bss与partition CALLOUT_CODE存在；仅为编译／段属性证据，未执行RTE行为。固定MOD新增metadata oracle通过，默认42配置全通过；随后额外Os_Types碰撞向量与完整native复验仍待必要最终检查。
+
+queued confirmation实际接线选择：保持宿主write／flush后post原kind2，owner验证实际output slot ticket／pdu／state并retire后，以明确Can host completion adapter发布driver TX-complete事件，再由实际Can_MainFunction_Write通知标准CanIf；owner逐项立即poll-drain避免覆盖单pending handle，并保留source-derived周期Write调用。不得切同步或在接纳队列时确认，adapter不另带payload队列。真实Can_Write→queued sink→flush→owner completion→Write polling及STOP/BUSOFF／late cancellation仍待完整normal工程向量，不以手工adapter调用伪造成功。
+
+
+阶段13 queued接缝已开始接线（仍未完整生成）：shared Can.c 新 controlled host token API 仅在明确 CAN_HOST_QUEUED_COMPLETION=1 生效，缺省关闭保留旧路径。实际 Can_Write 接纳分配 lifetime 单调 token，flush 内实际 output sink 捕获；STOP／busoff／DeInit／re-init取消边界使旧 token 无法消费同PduId新 outstanding，token不在Init归零。completion独立保存确认 handle，不覆盖尚未flush的新frame handle，busy拒绝不覆写，实际MainFunction_Write才通知标准CanIf。新 Ecu_Target profile 分支在私有output slot保存token，复用TakeOutput／ConfirmOutput／consume三重FIFO与ticket／Pdu proof；实际物理write／flush后kind2才retire并发布／poll，取消token丢弃。公开输出格式未增加字段；高水位token要求FIFO，正常owner已严格实施，adapter并不为任意token/Pdu伪造proof。
+
+独立COM链消费者已经实际queueddriver→sink／flush→completion→Write poll运行，涵盖busy不覆写、重复token、STOP和busoff后的same-ID复用旧晚确认不得消费新请求、re-init后token不重用；native8通过，root独立复验native8与配置native43通过。该证据不是完整owner物理stdout／TP/Dcmbuffer复用证据：generated flag、bootstrap/timing/quiescence及正常sealed同IDbuffer向量仍pending。
+
+生命周期拒绝修正：不能依赖fail()中ShutdownOS在非法hook/interrupt上下文不返回。controlled Ecu_TargetCheckLifecycleContext按TRUE/FALSE分别检查真实STARTUP/SHUTDOWN并返回状态，generated Start/Stop拒绝后立即返回标准table的RTE_E_LIMIT，不继续变更资源；普通RTE API直接拒绝非actual owner并保持OUT，void COM callback非owner无动作。actualRTE C原名／变名及scalar／void producer编译和scopedsection objdump再验通过；完整BSW/SchM/OS顺序仍pending。
+
+
+完整生成期间核定的 TP 身份接缝：CanTp own Rx／Tx NSdu IDs（ECUC_CanTp_00301／00268、SWS_CanTp_00212）与 PduR callback IDs（ECUC_PduR_00311／00322，SWS_PduR_00507／00518／00375）属于不同 namespace，按共同 canonical Pdu refs 绑定；DcmDslTxConfirmationPduId（ECUC_Dcm_00864）也独立于 Dcm 请求 PduR 的 router ID。原模块消费者虽有分层不同handle，CanTp own NSdu／router callbacks 和 Dcm own Tx／router请求仍同值，未覆盖此差距。当前配置结构已拆 CanTp upper_receive／upper_transmit 与 Dcm router_transmit，标准公开函数签名未改，真实调用按各自实际配置翻译；不是修改原 source ID 抹去差距。独立真实诊断链现在使用 CanTp own11／12、PduR callback71／72、Dcm own17／18及router请求81，严格native实际编译链接运行1passed／7filtered，旧buffer／mode／timeout／confirmation向量继续有效。固定LF交付摘要按这项已审阅自定配置ABI更新，完整source→PB mapping／正常工程仍pending。
+
+多槽准备正在接入正常入口：source按实际instance匹配trustedproducer槽，物理文件经既有read_source／链接／size／UTF8检查，精确成员数及canonical file复用拒绝，所有字节及路径纳入guard；live application/<type>.c映射sealed src/<type>.c。原manifest raw字节身份作为不可变seed保留，guard revision同时覆盖完整canonical consumer快照。latest单元18tests实际通过，含全部application与rawmanifest相互独立身份。ledger结构证明从真实sealed ARXML重建同一multi符号producer，验证实际type／instance／Rte binding的DEST及target；不接受ECUC extension定义、不把归属证明写成definition验证通过。native accepted catalog与完整再生成字节比较仍由prepare／reopen负责，尚未完成正常multi renderer／owner及全部验收。
+
+阶段13正常完整工程已取得运行里程碑，仍未冻结／未完成8.2：多槽 caller bytes 经正常 prepare、封存、离线 CLI C99 build 和 production HostBatch／唯一 OS owner 运行，精确比较全部输出 epoch／ID／DLC／payload、全部COMMIT receipts与重复epoch。初始DID在epoch1为00000000，epoch10／20为12345678，TX321各一次；epoch0双帧接收前真实CAN STARTED polling callback已发布，COM DM周期没有启动偏移。root独立复验首个正常owner测试通过；之后本轮实际精确记录测试再通过，未将之等同全AC。
+
+有效来源模型改为实际selected标准契约，不复用legacy17项ABI：source entry与references迁至TPS_BSWMDT_04016／04017规定的/AUTOSAR_<module>/BswModuleEntrys；独立签名／direction／synchronous／reentrant核验，actual runtime/multi与shared CAN受信字节及实际multi_ecu／multi_rte／artifacts／ecu／contracts编译期producer指纹同属runtime_sources。PduR_ComTransmit的实际declaration owner为PduR_Com.h，不能记录不存在的PduR.h声明。实际COM／ComM source名void wrappers定义在Ecu_RuntimeConfig.c，无fixture fallback；新ComM position0及CAN Read／Write／Mode／BusOff positions9–12由同一RteBsw source rows与1ms周期派生，APP4／5／6、COM7、Dcm8不变。Rte position0依据ECUC_Rte_09068范围0..65535合法，legacy非零要求保持。
+
+标准metadata按当前TPS和固定XSD建模：RTE08404生成AUTOSAR_Rte，05177 implementedEntry包含Rte与SchM真实lifecycle／COM callbacks；05179／05180的旧role文字与当前TPS BSWMDT表4.1／4.17不一致，采用明确replacement后的Description implementedEntry／expectedEntry及独立BswModuleDependency targetModuleId／targetModuleRef，未生成已移除role或非法dependency子元素。Rte2／Com50 reciprocal实际依赖，模块ID依据固定General BSW Table13.2核定。CanIf/PduR Transmit与COM Send／Receive的不同对象reentrancy按实际表；COM Send异步，COM callbacks91123／91127同步非reentrant。Dcm新增实际Reset／TpConfirmation／ComM callbacks的metadata使用独立SWS同步／reentrant表，Init非reentrant。Dcm00806 provided session prototype及实际Init／Reset／Main／TpConfirmation managed发布、module-local canEnter areas正接入；无实际production读取不虚构accessed消费者，现有Mode getter作为有意义可用接缝，07261的条件式存在要求不宣称其在本profile强制生成。完整mode/type／service映射与metadata最终schema／reference验收仍pending。
+
+生成配置按SWS_MemMap_00072实际CONFIG_DATA_PREBUILD_UNSPECIFIED类、component／partition／module scopes和controlled section属性映射，实际BSWImplementation ResourceConsumption MemorySections／prefixes与generatedArtifacts关联真实工件；MemorySection并非Description非法直系child。含pointer relocation的prebuild配置从导致assembler incorrect-section-attributes警告的.rodata改为.data.rel.ro，配置分类保持；最终Linux链接GNU_RELRO／实际段和Windows目标内存属性仍须核验，不宣称跨平台只读保证。
+
+网络初始化纠正：selected communication inspector明确ComSignalInitValue=0，producer必须使用该COM source值，不能以R/P ComSpec初值替换。RTE06009／06010 receiver保持自身init至真实接收，sender init不直接由RTE使用／不虚构startup Write；06830 stopped回填RTE实际last/init。新正常sealed --control-source owner探针实际R init7／COM0，未接收group Stop／Start(FALSE/TRUE)仍RTE7、COM0，非ownerRead保持OUT且RteStart/Stop返回LIMIT；在epoch31 main之前或之后真实RX42，epoch60仍E_OK、61超龄，未提前减新counter。local R init7／9也在owner观察。该测试本地与root独立均通过（root1passed、45filtered、无ignored，9.09s）；不把filtered写全验收。
+
+完整生成的optional边界也已实际运行：保留诊断物理route但无用户DID时，真实nullable read config允许内部F186读取默认session1且未配置1234返回NRC31，COM周期仍实际输出；无诊断routes形状保留原始未用DSL/CanTp/BSW source描述，但有效plan、owner调用与generated BSWMD timing events均移除未初始化的CanTp/Dcm周期，不伪造routes或调用uninit mains。两形状经正常caller-source封存／CLI／productionHostBatch通过1test（2真实完整工程，17.05s）；partial route仍必须拒绝，destination-only负向验收待补齐。
+
+当前normal c_analysis入口已产生第六个实际完整multi样本，CI按两个目标四组并行保留原五样本与新增multi、十二个结果摘要及分析complete/source_passed区分；最近样本生成1passed／1filtered、12.56s，不能当作Cppcheck或MISRA通过。历史失败保留：position0的旧非零检查曾拒绝28有效向量，source rows与合法scope修正；新memory CODE scope未登记曾使实际C编译失败，补齐同源mapping后Werror正常通过；external control初次试图调用未交付private Can_Lock声明失败，改用已有host atomic接口复制观测，未增加产品API；future batch completion等待tick曾使探针超时，改为正常PostFrame+owner观察publication验证pre-main，不修改batch契约；optional native test一度在临时ProcessOwner被drop后写stdin得到BrokenPipe，修复测试owner lifetime后两工程真实通过。未关闭warning、削弱assert或更改独立预期。
+
+剩余完整8.2：owner local fanout／同步server执行上下文与逐应用周期count／顺序、DM Disable/Enable及真实接收后Stop/Start向量、late同ID queued TP/Dcm buffer、multi source guard全部拒绝与determinism、完整mode/exclusive-area/dependency/memory/artifact语义与固定schema、actual multi及受影响legacy c-check、normal全回归与最后bytes／assets审阅；temporary public RTE fragment入口交付前收敛。所有Tasks保持unchecked，8.3–8.5和完整标准／MISRA／Windows验收不借本里程碑改done。
+
+2026-10-09 阶段13后续实证：root独立optional-DID／network-only完整sealed工程通过1test、46filtered、0ignored、17.30s，关闭先前MODULE-ID grammar中间态失败。保留真实Linux链接证据：GNU_RELRO VA[0x24790,0x25000)，.data.rel.ro section26 VA0x247a0 size0x456位于其中；实际20项runtime配置对象／数组以及Ecu_SchMConfig、Ecu_OsConfig均在该段。此为当时实际Linux产物的重定位后只读放置证据，不推出Windows属性或后续修改自动通过。root旧generated快照c-check正常exit1、error=None、50unique TU、49host-batch＋49legacy-probe、2580诊断／692 adopted、source_passed=false；两个error与旧single样本同源（mmap fd模型／kernel IDLE边界），不抹除。实际generated wrapper缺兼容声明的R8.4已通过include真实SchM_Com.h／SchM_ComM.h修复；最终修改仍需重新生成分析。
+
+Dcm模式生产归属修正：selected session mode storage及SchM_Switch／Mode真实实现移入generated SchM.c，并使用有实际Service时该Atomic type的CODE／VAR_CLEARED scope、无Service时Dcm BSW fallback；旧module consumer／legacy adapter通过显式ComStack_Cfg.h选择保留，避免宏未载入导致双重定义。getter保留为可用但production Dcm未使用的表面，不声称Rte07261强制生成或虚构accessed consumer。增强owner测试独立观察runnable／server计数、执行顺序、owner／调用上下文、local fanout、NULL拒绝输出保持和重复同epoch RX；另实际canonical RX0x12345678→local Result、CS OUT／INOUT均0x12345679且成功状态E_OK。normal native exact本地1passed、47filtered、0ignored、9.01s；较早count版本root独立1passed、46filtered、9.04s。filtered范围不写成全AC。
+
+固定R24-11 Dcm01327／00777／00807／00781及91021／23／27／31、91034／35／37／39、91022／24／28／32明确兄弟provided groups和固定Service端口声明；端口Variation无SID27／11／85豁免。selected source及generated BSWMD补齐EcuReset（NONE0及标准1..6）、RapidShutdown（ENABLE0／DISABLE1）、DTCSetting（ENABLED0／DISABLED1）、Security（LOCKED0，无配置security rows故不虚构1..63），均EXPLICIT_ORDER、transition255与真实初值。Service存在时逐一同步相同groupType的真实PPort／prototype；无对应Service时按TPS5.11不虚构SwcBsw mapping，BSW声明保留。只有session有实际managed entities及Switch／Mode producer， dormant groups无虚构访问、切换API或可选诊断处理器；CommunicationControl／ROE无配置channel／event故无实例。通用application mode仍拒绝。新normal definition＋trusted plan固定session mode来源拒绝向量已通过1test、43filtered；兄弟声明及最终schema／owner全矩阵仍按实际后续结果核验，所有Tasks保持unchecked。
+
+
+阶段13继续闭合所选来源与正常工程验收：DCM01477/01478/01480要求每配置connection真实authentication state及provided group，未找到SID29豁免。首批无persist规则／SID29，Dcm_Init实际初始化DEAUTHENTICATED并调用source-derived DcmDslMainConnection短名（Physical）的SchM publisher；91067/91074/91075的两状态声明、固定接口／PPort、type mapping和Service同步mapping实际派生，未增加authentication服务、持久化或虚构生产访问者。独立module consumer观察Init前255→Init后0，正常8 native runtime消费者0failed/ignored/filtered、1.00s；完整owner包含该真实生成publisher的exact本地通过9.54s。固定mode初值引用严格要求该group内真实成员，跨group同短名合法ref已在两个normal入口拒绝。
+
+RTE05180／TPS04017的实际Os依赖补齐：Rte_OsService.c调用GetCounterValue／GetElapsedValue，生成canonical Os entries、Rte expectedEntry和targetModuleId1真实ref，签名及OS00383/00392同步／重入属性独立核定。TPS constr10260–10264要求callType、executionContext、reentrant、synchronous、swServiceImplPolicy；新multi显式STANDARD和CONCRETE。bswEntryKind本身可缺省concrete，不能把其显式输出误记为该列表强制项。Rte COM callbacks、Dcm Tp confirmation及ComM mode callbacks输出CALLBACK，实际周期mains输出SCHEDULED，普通GetCounter/Elapsed/reset输出REGULAR。独立正常prepare metadata断言1passed／45filtered、1.38s。其它所选通信调用依赖仍需同源闭合，未以这些局部条目宣称全部完成。
+
+正常owner DM矩阵已加入真实epoch0 RX21：逐周期1..29返回E_OK且值21，周期30返回MAX_AGE且保留21，与before／after／canonical／controls同一sealed工程一起执行，本地exact1passed／48filtered、9.61s。此前controls扩展版本root独立exact1passed／48filtered、10.14s。zero ComTimeout由既有真实COM consumer第三PDU实际30／50周期无超时观察及normal source aliveTimeout/ComTimeout同改0双入口通过验证；该owner快照配置30ms，不声称source拒绝zero。
+
+实际变名和源序验收：Ingress→Gateway、Process→Compute、ResultService→Calculation、Transform→Calculate，全部真实caller bytes同步修改，ARXML输入逆序后沿normal plural prepare／sealed CLI build／production HostBatch执行，固定完整epoch／CAN ID／DLC／payload／次数与重复COMMIT无重放断言通过，与原工程合计exact1passed／49filtered、16.72s。历史第一次测试错误地按substring替换Process，损坏官方Processing定义引用并被正常validation拒绝；改为实际用户identity／symbol匹配后通过，没有改变官方定义或关闭拒绝。临时rte_runtime_files收为pub(super)，原三项测试改从normal完整prepare消费实际工件；生成组件和partition独立MemorySection身份保留，目标代码段可合并到.rte_code。全8.2仍in-progress，late同ID queued TP/Dcm、完整调用依赖／最终schema和actual c-check／全回归与bytes/assets仍未完成，不更新Tasks为done。
+
+2026-10-09 阶段 13 收敛验证（完整最终门禁仍待刷新）：正常 owner 已覆盖六相位 before／after／canonical／controls／epoch0／late。epoch0 真实接收在 30ms 变为 MAX_AGE；canonical 同时观察本地 Result、C/S OUT／INOUT 为 0x12345679 和 Rte_Call E_OK；late 在实际输出未确认时拒绝推进周期／接收输入，以真实 STOP callback 释放 Dcm buffer，旧帧真正 write／flush／确认后再接纳并确认同 PDU 新响应。独立 queued TP 消费者进一步验证旧取消 token 不释放已复用的新 Dcm buffer，新 token 实际 Write polling 确认才释放：新增正常 native case 1 passed／8 filtered（0.57s）。六相位本地 1 passed／50 filtered（10.02s），协调者独立 1 passed／50 filtered（10.49s）。协调者同一稳定快照完整 default 19 unit／71 builtin／2 c_analysis／47 multi 全部通过，无 failed／ignored／filtered；此证据包含 Auth、PBcfg 和 canonical-path／flags，不替代最后修改后的最终检查。
+
+完整生产 HostBatch 工程同时验证正常身份与 Gateway／Compute 等真实变名、ARXML 源序反转，两者均逐条比较固定 epoch／CAN ID／payload／count 和重复 COMMIT 无重放，PBcfg 拆分后本地 exact 1 passed／50 filtered（16.98s）。最初盲替换 Process 误改官方 Processing 定义导致 REFERENCE_UNRESOLVED，已改为实际组件身份替换，保留该失败而不放宽解析。rte_runtime_files 收为内部入口，原三项片段测试改从正常 plural prepare 消费工件，独立签名消费者 exact 1 passed／49 filtered（4.57s）。
+
+适用 LSduR_00035／PduR_00241 的真实 PBConfigType producer 已分别拆至 LSduR_PBcfg.c／PduR_PBcfg.c，配置对象、route arrays、声明头、MemMap CONFIG_DATA_PREBUILD 属性和 BSWMD generatedArtifact／模块所属 MemorySection 共同迁移；首批仍预编译选择，不支持 ONLINE 再 Init 切换配置。标准 LSduR 的 moduleId 为 132，Arti 为 5，不能归入 CDD255。所选 LSduR 的无 metadata／非 zero-cost／同 partition／一对一路由政策由真实路由派生，不接受额外 LSduR ECUC module override；两正常入口已有拒绝向量，destination-only diagnostic routing 亦拒绝而不伪造 route。该 exact 1 passed／47 filtered（1.26s）；第一版删除 source 而遗留 route 引用只获得 REFERENCE_UNRESOLVED，修为完整有效引用反例后核验 PDU_ROUTE_NOT_UNIQUE。
+
+生成 BSWMD 的实际标准 imported interface 闭包包括 Rte→Com／Os，Dcm／CanTp／PduR／LSduR／CanIf／Can／ComM／BswM 的真实调用与 callback，全部 refs 按完整 canonical path 和 DEST 核对，固定 sync／reentrant／callType 预期独立来自 R24-11 表；不同对象可重入不许可同一对象无同步并发。正常 metadata exact 1 passed／46 filtered（1.32s）。源 multi BSW entry 现显式声明 STANDARD policy 和 CONCRETE kind；catalog 拒绝缺 callType／executionContext／sync／reentrant／policy、错误实际 callType、MACRO policy 或 ABSTRACT producer，native grammar 按固定 XSD 枚举接纳。constr_10260–10264 强制 policy 等属性；bswEntryKind 的 CONCRETE 默认仍与强制存在区分。新增两入口反例 exact 1 passed／51 filtered（8.39s）。首次 fixture 编辑只补 UNSPECIFIED 而漏 TASK，导致 CanIf_Transmit BSW_SIGNATURE_CONFLICT；已补齐全部源 entry，未调整拒绝预期。旧 profile 不套新增必填 guard。
+
+Auth connection 实际改名 Physical→Link 正常生成真实 publisher 和 source-derived service mapping；非法 authenticated 值／缺 PPort 两入口拒绝，exact 1 passed／46 filtered（2.46s）。standard session 名称拒绝反馈现有准确中英消息，未改变 legacy 通用 session 判断。共享 Can_GeneralTypes 旧“唯一 handle zero”注释修为实际配置身份，无 ABI 改动；最终固定换行和资产摘要仍须在最后字节状态核对。全部 Tasks 仍待最终六样本／schema／实际 multi 和受影响 single c-check、完整 native／quality 验证后勾选，不声明完整 MISRA 或目标硬件符合。
+
+2026-10-09 最终稳定源码快照常规验证：正常 native-tests 完整 52 multi_component_contracts（36.79s）和 9 multi_runtime_contracts（1.26s）全部通过，0 failed／ignored／filtered；包含六相位实际 owner、真实变名／源序、完整与无用户 DID／无路由工程、独立 typed producer／module consumers。正常 default Cargo exit0：19 unit（0.37s）／71 builtin（21.32s）／2 c_analysis（13.36s）／48 multi（33.03s），全部通过、无跳过；默认未编译 native-only cases，不能以其 runtime 0 cases 代替已执行的 native9。core quality 56 格式文件、runtime quality66 格式文件及 C syntax 均通过；Python 正常44 tests 和 Ruff 通过；Clippy 按项目既有 correctness／suspicious 策略、all-targets＋native-tests 通过（12.92s）。第一次 core quality 因 PATH 无 rustfmt 拒绝，补正常 Cargo PATH 后通过；额外 -D warnings 探查停于 baseline 未改 build.rs 的 too_many_arguments style finding，未改实现或既有策略来掩盖。最后 source bytes：82 个固定 EOL 文件核对通过、assets check 0 changes、git diff --check 通过。协调者仍在最终六实际样本／固定 XSD／multi＋standard-ecu c-check；这些与人工 MISRA 全面评估保持分开，Tasks 尚未勾选。
+
+最终独立生成与标准 metadata 关口：协调者在全新正常 AUTOSAR_C_ANALYSIS_SAMPLES 目录生成六样本，c_analysis exact 1 passed／1 filtered（17.31s）；实际35份 ARXML（capacity1／diagnostic1／multi12／signals1／standard-ecu10／user-application10）均通过固定 R24-11 XSD，官方 ZIP SHA 和解出 XSD 原始字节重新核对。multi Host_Implementation 的645个完整 path＋DEST refs 均解析到真实生成或封存输入对象，0 errors；初版只读 collector 将 XML MODE-GROUP 标签误当 M2 类，按固定 XSD 的 MODE-DECLARATION-GROUP-PROTOTYPE 修正，未修改产品内容。最终多组件封存 CLI 正常 host-batch build exit0，实际 Linux ELF GNU_RELRO VA[0x24770,0x25000)，section26 .data.rel.ro VA0x24780／size0x472 全在范围内；实际 LSduR_Config／PduR_Config／route arrays／Ecu_OsConfig／Ecu_SchMConfig 位于该段。这是 PBcfg 拆分后的 Linux 重定位只读证据，不推导 Windows 内存保证。
+
+最终 actual multi c-check 使用固定 Cppcheck2.21.0（binary SHA256 434155fc2a092b4dd98042052fef93a501111bb18849e5b1db05e8854f8ba795）及已核对 addons，正常命令 exit1、error=None，52 unique TUs，host-batch／legacy-probe 各51 TUs／exit1；工具及 addon receipt／TU 完整性成立。原始2608 diagnostics：2574 style／30 warning／2 error／1 portability／1 information，692 adopted，source_passed=false。两 error-severity 仍为既有 mmap fd=-1 平台模型和 adopted kernel IDLE bound；非style项目诊断仍在原 Os_Time depth／Os_Backend pointercast／mmap 模型路径，未新增实际 producer warning／error。新增 Ecu_RuntimeConfig／Rte／SchM／PBcfg 可见兼容声明的 R8.4 缺口已关闭。原始诊断完整保留，未 suppression／追认偏离；200 rules＋21 directives 自动/人工 assessment 仍 not_assessed，不声明完整 MISRA／源码符合。最终受影响 single c-check 尚在运行，结果待追加。
+
+最终 single standard-ecu c-check 已独立执行完成：正常 exit1／error=None／source_passed=false，42 unique TUs；host-batch／legacy-probe 各41 TUs、各 exit1。1814 diagnostics＝1780 style／30 warning／2 error／1 portability／1 information，691 adopted；固定工具与扫描完整性成立。两 errors 与 multi 同源；只读核查 adopted IDLE 字符串拷贝读到第五字节 NUL 即 break，Os_Time depth guard 为原配置验证／断言路径且本 profile 无 counter-chain action，mmap 原 MAP_PRIVATE|MAP_ANONYMOUS／-1 调用与模型判断有差异。这些局部分析保留原始诊断，不作为关闭全部诊断或完整 MISRA 通过的依据。
+
+冻结前最后命名审阅确实发现 component／partition memory scope 会与实际 Rte／Ecu／ComM 等固定 producer 合并；有效引用的 Rte 组件向量在修复前正常入口被接纳。只修改 Rust source validation，按实际已交付12个 runtime scope 拒绝 component type 和 EcucPartition 同短名，源位置返回 CONTRACT_NAME_COLLISION，不改生成模板／C／资产。独立两入口反例 exact 1 passed／48 filtered（12.74s）。首次测试还同时改 ECUC instance 容器短名，Com 向量只得 OBJECT_DUPLICATE；修为仅实际 component type 及对应完整 type refs，排除无关重复路径后核验原碰撞，不弱化预期。
+
+新增 guard 后正常六样本重新生成 exact 1 passed／1 filtered（12.82s）。792个完整交付文件中35个来源身份／seal／编译后 verifier metadata 随真实校验源变化，未冒称 seal 相同；所有599份 C／H／ARXML 逐字节相同，六 target 的 ABI、编译参数、includePaths、sources、kernel source／patches、linkLibraries、nativePort、requiredSections、scope／target／toolchain 均相同，因此以上 XSD／实际 C 分析／ELF 放置证据按同一 C 与构建范围复用，不把旧 seal 追认为新 identity。core quality 再次通过（56 files）；正常完整 native／default 正在最后刷新，产物来源再次冻结。
+
+2026-10-09 阶段 13 最终实施冻结：最后 memory-scope guard 后，正常完整 native53 multi（40.37s）＋9 runtime（1.17s）全部通过，无 failed／ignored／filtered；正常 default19 unit（0.44s）／71 builtin（19.71s）／2 c_analysis（12.64s）／49 multi（30.75s）全部通过。core quality 最后刷新56 files／C syntax通过，项目既有 Clippy correctness／suspicious all-targets＋native-tests最后刷新通过（7.11s）；runtime quality、Python44／Ruff 和固定 EOL82 files 复用未变来源的既有通过证据，assets最终check 0 changes、diffcheck通过。协调者另独立核对792完整inventory／599 C-H-ARXML原字节及两 actual target17个存在的 build-contract字段一致；旧分析 summary 的 sourceSeal 不变，复用仅对应完全相同 C／build scope。四项8.2实施Tasks已满足并勾选，frontmatter仍in-progress供正常独立审阅；尚未声明review完成、提交该最终切片、Windows实际执行、硬件／完整AUTOSAR或MISRA认证。8.3 live初始化／再生成和8.5完整异地交接继续各自未开，不纳入8.2完成声明。
+
+
+独立实施审阅与矩阵核验：主代理已完整读取自 baseline 的统一差异（含阶段提交与新增文件），逐项核验四项 Tasks。通信／任务行由 sealed_multi_project_builds_and_runs_production_owner 的原名、变名、倒序输入和实际 HostBatch 输出覆盖；初值／隔离与同步调用行由 sealed_multi_owner_preserves_network_init_and_deadline_phase 的 canonical／controls 实际 owner 观测覆盖；Rx DM 行由同一测试 before／after／epoch0／controls 与 com_standard_consumer_executes_group_and_reception_monitoring 的独立多 PDU／零 timeout／重复到期覆盖。非法连接、类型、调度及 group／callback／timebase 行由 multi_component_contracts 的两入口拒绝向量覆盖；公开接口行由 generated_headers_compile_and_link_independent_scalar_and_void_server_signatures 和全部九项 multi_runtime_contracts 覆盖；来源行由 plural_application_preparation_freezes_every_real_producer_and_refuses_bad_members、实际生产者／metadata 测试和既有 builtin／c_analysis／Python 回归覆盖。上述 covering tests 均在最终完整 native53＋runtime9／default19＋71＋2＋49 中实际执行通过，0 ignored；native-only 测试以 native 输出为据。实际生成 multi 与 single 的 C 分析完整性已核验，原始源码诊断与未完成人工规范评估保留。审阅状态仅表示进入独立 review，不代表 Windows／硬件或后续 8.3–8.5 已完成。
+
+## Review Triage Log
+
+三层独立 reviewer 已全部返回后逐项裁决；下列编号保留原发现，不在裁决前去重。修复仍待执行和验证，原实施子代理已不在可继续的 agent 列表中，按 Step 4 由主代理应用最小 patch。
+
+| 发现 | 裁决 | 证据与处理 |
+| --- | --- | --- |
+| B1：N_As／N_Ar 到期保留 lower_pending 导致永久阻塞 | false | 超时释放上层但保留真实下层未退役确认，防止同 ID 复用误认。实际 CanIf STOP／BusOff 的 CancelOutstanding 经 LSduR 负确认清除该 token；正常 owner 也禁止未 flush 输出时推进时间。不能在仍有物理帧时无证据清除身份；补查超时后实际退役和恢复向量。 |
+| B2：旧 FC 未确认时新 FF 导致新接收损坏 | false | 新 FF 先 FinishRx(E_NOT_OK)，重新建立 RX_FLOW_SEND；下层已复制旧 FC，旧确认只清 lower_pending，不会将新事务推进 RX_DATA。下一 main 才发送新 FC；其独立确认才开启 N_Cr。 |
+| B3：CanTp Shutdown／Init 清 pending 后旧确认误完成新事务 | high | 两个生命周期函数均清 lower_pending，而标准回调只有 PDU ID；独立重启不取消实际 driver 已复制帧。patch：保留下层退役身份并按实际记录 ID 接纳确认，OFF 时只退役、不向 upper 回调；新事务待旧确认退役后接纳，真实 queued 链验证。 |
+| B4：接收 WAIT 未用 WFTmax 限次 | false | 固定 SWS_CanTp_00315 要求每个收到的 FC(WT) 重启 N_Bs；WFTmax 限制接收方发送的 WAIT（00223／ECUC 00251），不是发送方收到的 WAIT。独立 fixture 已覆盖超过配置值的 WAIT 后 CTS 成功。 |
+| B5：polling RX 跨 STOP／BusOff 后重启仍交付旧帧 | high | Can_SetControllerMode STOP 与实际 BusOff 清 TX 而未清 rx_pending；Can_MainFunction_Read 不按控制器生命周期拒绝旧帧。patch：仅新 polling 路径在真实停止／busoff 边界清待接收槽，验证旧帧丢弃及新帧成功；保留 legacy 即时路径。 |
+| B6：HostCompleteTransmit token 与错误 handle 可伪确认 | false | host adapter 契约要求 caller 已证明物理 write／flush 与 ticket／handle／token；唯一生产 caller Ecu_Target consume 校验 slot state3、真实 ticket、PDU、output_pending 后才读取该槽 token 并调用。产品输入不能任意替换 handle；不存在所述未验证调用链。 |
+| B7：OFFLINE 后保留 outstanding 并 STOP 负确认错误 | false | SWS_CANIF_00073／00489 禁止 OFFLINE／TX_OFFLINE 的 positive upper callback；00739 要求 STOPPED 时 every outstanding TxConfirmation 负确认。计数表示 upper 未报告事务，不是物理 slot；reviewer 按固定原文复核后撤回。 |
+| B8：Dcm CopyRx／CopyTx 忽略 MetaDataPtr | false | 所选 CanTp 实际全部 chunk MetaDataPtr=NULL，whole-message StartOfReception 拒绝不支持的 metadata。固定 Dcm 00443／00996／00346／00350 定义 payload copy，不要求把 chunk unused metadata 作为另一寻址输入或自动拒绝；未证明所选调用链的错误结果。 |
+| B9：COM callback 修改生命周期使循环状态失效 | false | 所选生成配置固定使用 Rte_COMCbk／RxTOut，仅访问 endpoint 状态和 Com_ReceiveSignal，不调用用户 runnable 或 group／DM／DeInit；任意外部 callback 并非生成配置。reviewer 沿实际 producer 复核后撤回。 |
+| B10：Silent 下 P2 到期无响应是缺陷 | false | Dcm 01142 要求等 FullCom 且不得超过 P2ServerMax，00153／00156 禁止 Silent 发送；01143 只适用于未选择的 FORCE_RCRRP。实际 bounded release 符合选定同步请求，reviewer 按固定原文撤回。 |
+| E1：合法 P2* 毫秒值超过 uint16 | high | source inspector 接纳至 655350ms，但 Dcm_ConfigType 使用 uint16 毫秒字段，100000ms 会严格编译失败／截断。patch：内部配置字段 uint32，正常生成工程和 0x50 wire 的 10ms 单位独立断言。 |
+| V1：合法 Rx1／Tx0 仅 plan 测试 | medium | verification-gap 独立核对正常生成测试均仍 Rx0／Tx1，CAN_TX_HOH 和 CanIf 配置两个 producer 可独立漂移。patch：现有 sealed production-owner 测试增加真实 swapped ARXML，复用精确 RX、COM、DID 输出断言；当前代码尚未发生该回归。 |
+| R1：全本地连接且无系统信号触发 unwrap panic | high | multi_com::inspect 对空 signals 返回 None，inspect_multi 后续两次 unwrap；合法引用的全本地连接和去掉 COM 路由可达此状态。首批已选择真实 Rx group 的网络 profile，patch：在构造 trusted plan 时返回源定位 COM_CONFIGURATION，两个正常入口拒绝且不写输出；不扩展另一个无网络 ECU profile。 |
+
+B3、B5、E1、V1、R1 各有独立根因，均为所选配置内直接更正或既有测试扩展，不新增公开接口；route=patch。其余逐项按上述实际调用链和固定条款拒绝，无 defer 台账。
+
+审阅 patch 已实施并验证：Dcm 私有配置的 p2_star_ms 扩为 uint32，标准公开函数签名、P2* 的 10ms wire 编码、第三方身份不变；固定 ECUC_Dcm_00768 的合法范围实际为0–100秒，正常完整 source validation 保持此范围。实际封存工程新增100秒（wire2710）及65.54秒（wire199a）SessionControl精确响应，两者均严格编译链接并经真实 HostBatch 输出；同时 Rx1／Tx0 通过全部原 CAN／DID／周期输出。TP 私有 pending_lower_id 保留实际下层已复制帧的身份，Shutdown 释放连接并关闭上层动作，OFF 或重启后的迟到确认仅退役旧帧；真实 queued 链验证新请求暂不发送、旧确认退役后新请求实际发送，只有新确认释放新 Dcm buffer。新 polling RX 在 STOP／BusOff／host 非STARTED边界清待接收槽，独立 driver consumer 核对旧帧不交付、新帧仍成功；缺省即时 legacy 路径不变。全本地有效连接的来源输入现返回源定位 COM_CONFIGURATION，两个正常入口不 panic。
+
+本次 patch 完整 native54 multi（59.12s）＋runtime9（1.22s），default19 unit（0.36s）／71 builtin（25.81s）／2 c_analysis（14.09s）／50 multi（44.04s）全部通过，无 failed／ignored／filtered。Clippy 项目 correctness／suspicious 策略 all-targets＋native-tests通过（5.74s），core56／runtime66 quality和实际Csyntax通过；Python44／Ruff复用未改来源证据。已核对固定LF／Can.c CRLF及上述私有配置ABI变化后正常assets update，仅本次受影响源摘要及模块ABI摘要变化，无第三方身份变动，最终check待收尾。
+
+历史失败保留：首次构建在旧Dcm.h摘要上明确拒绝，完成ABI与固定换行审阅并更新摘要后通过。最初额外655.35秒边界向量被正常ECUC source validation正确拒绝（VALUE_RANGE），按官方0–100秒范围修正为100秒和65.54秒，不放宽范围；首次全本地反例只删除一个mapping，得到未绑定Tx端点，改为删除完整DATA-MAPPINGS并提供真实本地连接后正常源定位拒绝成立。六实际样本重新生成 exact1 passed／1 filtered（13.26s）；35 ARXML与前次固定R24-11 XSD通过的实际字节一致，0 changed，复用该XSD和645引用闭包证据。受影响multi与single新C内容正在分别重跑实际c-check，未复用旧C诊断作为新源码通过证据。
+
+审阅后实际C分析已完成：固定Cppcheck2.21／e73bf44、binary SHA434155fc2a092b4dd98042052fef93a501111bb18849e5b1db05e8854f8ba795及addon identity保持；multi52 unique TUs、host-batch与legacy-probe各51完整TU／exit1，2607原始诊断＝2573style／30warning／2error／1portability／1information，692adopted，error=None／passed=false。受影响single42 unique TUs、两个程序各41完整TU／exit1，1814诊断＝1780style／30warning／2error／1portability／1information，691adopted，error=None／passed=false。按ID、severity、message、完整source locations对比前次原始结果，两profile新增非style诊断均为0；两error仍是既有mmap平台模型和adopted IDLE bound。221条assessment仍not_assessed，不声明源码/MISRA全面通过，不关闭规则或追认偏离。最终assets check 0 changes、固定EOL82文件和diffcheck通过。
+
+8.2 独立三层 review 及主代理逐项审查完成，五个独立patch已关闭并由上述正常检查验证；无延期发现、无新增台账。done仅指本story所选受控Linux生成／通信／调度及审查范围，8.3–8.5、Windows运行、真实MCU与完整标准／MISRA认证不由此完成。六样本、源码诊断和未评估范围保持既有准确边界。

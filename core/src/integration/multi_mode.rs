@@ -323,6 +323,13 @@ pub(super) fn inspect(
         dcm_connections.push(graph.elements[connection].object.clone());
     }
     dcm_connections.sort();
+    if !schedule.entities.iter().any(|entity| {
+        !entity.application
+            && entity.symbol == format!("ComM_MainFunction_{name}")
+            && entity.period_ms == period_ms
+    }) {
+        return Err(fail(graph, channel, "MODE_TIMEBASE"));
+    }
     Ok(ModeRuntimeContract {
         channel: graph.elements[channel].object.clone(),
         channel_handle,

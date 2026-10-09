@@ -2,6 +2,8 @@
 #ifndef SCHM_DCM_H
 #define SCHM_DCM_H
 #include "Rte_Dcm_Type.h"
+#define SCHM_E_OK 0u
+#define SCHM_E_LIMIT 130u
 void SchM_Enter_Dcm_DCM_STATE(void);
 void SchM_Exit_Dcm_DCM_STATE(void);
 void Dcm_MainFunction(void);

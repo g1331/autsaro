@@ -49,6 +49,60 @@ fn change(sources: &mut [InputSource], file: &str, before: &str, after: &str) {
     *source = InputSource::new(file, text.replacen(before, after, 1).into_bytes()).unwrap();
 }
 
+// Consume the normal complete producer rather than a public source-fragment API.
+fn prepared_multi_files(plan: &ValidatedIntegrationPlan) -> Vec<(String, Vec<u8>)> {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-application");
+    let scratch = Scratch::new();
+    let renamed = plan
+        .application_slot_descriptors()
+        .unwrap()
+        .iter()
+        .any(|slot| slot.source_paths[0] == "application/Compute.c");
+    let sources: Vec<_> = plan
+        .application_slot_descriptors()
+        .unwrap()
+        .iter()
+        .map(|slot| {
+            let file = slot.source_paths[0].rsplit('/').next().unwrap();
+            let mut text = std::fs::read_to_string(fixture.join(if file == "Compute.c" {
+                "Process.c"
+            } else {
+                file
+            }))
+            .unwrap();
+            if renamed {
+                for (before, after) in [
+                    ("Process", "Compute"),
+                    ("ResultService", "Calculation"),
+                    ("Transform", "Calculate"),
+                ] {
+                    text = text.replace(before, after);
+                }
+                if file == "Compute.c" {
+                    text = text.replace("Rte_Read_Value_Value", "Rte_Read_InputValue_Value");
+                }
+            }
+            let path = scratch.0.join(file);
+            std::fs::write(&path, text).unwrap();
+            autosar_config_core::ApplicationSource {
+                component_instance: slot
+                    .producer_slot
+                    .strip_prefix("singlecore-multi-swc-v1:")
+                    .unwrap()
+                    .into(),
+                path,
+            }
+        })
+        .collect();
+    autosar_config_core::prepare_ecu_project_with_applications(
+        plan,
+        autosar_config_core::target::BuildTarget::LinuxX64ControlledV1,
+        &sources,
+    )
+    .unwrap()
+    .into_files()
+}
+
 #[test]
 fn source_derived_multi_contract_is_deterministic_and_keeps_local_identity() {
     let sources = inputs();
@@ -223,7 +277,7 @@ fn multi_com_rejects_tx_main_period_different_from_periodic_pdu() {
     xml_edit(
         &mut sources,
         "bsw.arxml",
-        |node| named(node, "BSW-TIMING-EVENT", "Com_TriggerTransmit_10ms"),
+        |node| named(node, "BSW-TIMING-EVENT", "Com_MainFunctionTx_Tx_10ms"),
         |text| text.replace("<PERIOD>0.01</PERIOD>", "<PERIOD>0.001</PERIOD>"),
     );
     xml_edit(
@@ -719,6 +773,92 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
             output.status.success(),
             "{}",
             String::from_utf8_lossy(&output.stderr)
+        );
+        // Compile the actual generated producer too: the consumer definitions
+        // above validate independent signatures, not this implementation's bodies.
+        std::fs::create_dir_all(directory.join("src")).unwrap();
+        let produced = prepared_multi_files(&plan);
+        let metadata = std::str::from_utf8(
+            &produced
+                .iter()
+                .find(|(file, _)| file == "descriptions/Host_Implementation.arxml")
+                .unwrap()
+                .1,
+        )
+        .unwrap();
+        assert!(metadata.contains(if renamed {
+            "<SHORT-NAME>Compute_CODE</SHORT-NAME>"
+        } else {
+            "<SHORT-NAME>Process_CODE</SHORT-NAME>"
+        }));
+        let partition = plan
+            .description()
+            .communication_runtime
+            .as_ref()
+            .unwrap()
+            .partition
+            .path
+            .rsplit('/')
+            .next()
+            .unwrap();
+        assert!(metadata.contains(&format!(
+            "<SHORT-NAME>{partition}_CALLOUT_CODE</SHORT-NAME>"
+        )));
+        for (file, bytes) in produced {
+            if file.starts_with("include/") || file == "src/Rte.c" {
+                std::fs::write(directory.join(file), bytes).unwrap();
+            }
+        }
+        let repository = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap();
+        let settings = tooling::execution_settings();
+        let mut compiler = std::process::Command::new(&settings.compiler);
+        compiler.current_dir(&directory).args([
+            "-std=c99",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-pedantic",
+            "-Iinclude",
+        ]);
+        for include in [
+            "runtime/ecu/include",
+            "runtime/os/include",
+            "runtime/include",
+        ] {
+            compiler.arg("-I").arg(repository.join(include));
+        }
+        compiler.args(["-c", "src/Rte.c", "-o", "Rte.o"]);
+        let output = tooling::run_public_command(
+            &mut compiler,
+            &directory,
+            "rte-producer-compile",
+            std::time::Duration::from_secs(60),
+        );
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let output = tooling::run_public_command(
+            std::process::Command::new(&settings.objdump)
+                .current_dir(&directory)
+                .args(["-h", "Rte.o"]),
+            &directory,
+            "rte-producer-sections",
+            std::time::Duration::from_secs(30),
+        );
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let sections = String::from_utf8_lossy(&output.stdout);
+        assert!(sections.contains(".rte_code"), "{sections}");
+        assert!(
+            sections.contains(".bss.rte.Observe.VAR_CLEARED_UNSPECIFIED"),
+            "{sections}"
         );
         std::fs::remove_dir_all(directory).unwrap();
     }
@@ -1340,6 +1480,52 @@ fn normal_definition_validation_closes_multi_schedule_routes_types_and_handles()
 }
 
 #[test]
+fn selected_network_profile_rejects_all_local_endpoints_without_panicking() {
+    let mut sources = inputs();
+    xml_edit(
+        &mut sources,
+        "extract.arxml",
+        |node| node.has_tag_name("DATA-MAPPINGS"),
+        |_| String::new(),
+    );
+    xml_edit(
+        &mut sources,
+        "ingress.arxml",
+        |node| named(node, "R-PORT-PROTOTYPE", "RxValue"),
+        |text| {
+            text.replace(
+                "<HANDLE-NEVER-RECEIVED>true</HANDLE-NEVER-RECEIVED>",
+                "<HANDLE-NEVER-RECEIVED>false</HANDLE-NEVER-RECEIVED>",
+            )
+            .replace(
+                "<ALIVE-TIMEOUT>0.03</ALIVE-TIMEOUT>",
+                "<ALIVE-TIMEOUT>0</ALIVE-TIMEOUT>",
+            )
+        },
+    );
+    let connector = subtree(
+        &sources,
+        "composition.arxml",
+        "ASSEMBLY-SW-CONNECTOR",
+        "IngressProcess",
+    )
+    .replace("IngressProcess", "LocalIngress")
+    .replace("/Application/Ingress/Value", "/Application/Ingress/TxValue")
+    .replace(
+        "/Application/Pipeline/ProcessInstance",
+        "/Application/Pipeline/IngressInstance",
+    )
+    .replace("/Application/Process/Value", "/Application/Ingress/RxValue");
+    change(
+        &mut sources,
+        "composition.arxml",
+        "</CONNECTORS>",
+        &format!("{connector}</CONNECTORS>"),
+    );
+    rejects_in_both(&sources, "COM_CONFIGURATION");
+}
+
+#[test]
 fn network_freshness_and_runnable_execution_constraints_are_explicit() {
     for (before, after) in [
         (
@@ -1446,8 +1632,7 @@ fn dcm_bridge_requires_actual_service_identity_and_follows_renames() {
     assert!(normal_validation(&sources).diagnostics.is_empty());
 }
 
-#[test]
-fn network_routing_is_checked_without_optional_did() {
+fn sources_without_application_did(retain_routes: bool) -> Vec<InputSource> {
     let mut sources = inputs();
     for name in [
         "ApplicationValue",
@@ -1459,7 +1644,10 @@ fn network_routing_is_checked_without_optional_did() {
         "DiagRequestDestination",
         "DiagResponseSource",
         "DiagResponseDestination",
-    ] {
+    ]
+    .into_iter()
+    .filter(|name| !retain_routes || !name.starts_with("Diag"))
+    {
         xml_edit(
             &mut sources,
             "ecuc.arxml",
@@ -1497,8 +1685,38 @@ fn network_routing_is_checked_without_optional_did() {
         },
         |_| String::new(),
     );
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| {
+            node.has_tag_name("ECUC-INSTANCE-REFERENCE-VALUE")
+                && node.descendants().any(|child| {
+                    child.has_tag_name("TARGET-REF")
+                        && child.text() == Some("/Application/Pipeline/DcmService")
+                })
+        },
+        |_| String::new(),
+    );
+    sources
+}
+
+#[test]
+fn network_routing_is_checked_without_optional_did() {
+    let mut sources = sources_without_application_did(false);
     let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
     assert!(plan.description().diagnostic.is_none());
+    assert!(plan.description().diagnostic_transport.is_none());
+    assert!(
+        !plan
+            .description()
+            .schedule
+            .entities
+            .iter()
+            .any(|entity| matches!(
+                entity.symbol.as_str(),
+                "CanTp_MainFunction" | "Dcm_MainFunction"
+            ))
+    );
     assert_eq!(plan.description().routes.len(), 2);
     assert!(normal_validation(&sources).diagnostics.is_empty());
     xml_edit(
@@ -2397,6 +2615,14 @@ fn serialized_symbol_consumers_include_all_runnable_accesses_and_client_callers(
     );
     parameter(&mut sources, "Transmit10ms", "RteBswPositionInTask", "8");
     parameter(&mut sources, "Dcm", "RteBswPositionInTask", "9");
+    for (name, position) in [
+        ("Can_MainFunction_Read", "10"),
+        ("Can_MainFunction_Write", "11"),
+        ("Can_MainFunction_Mode", "12"),
+        ("Can_MainFunction_BusOff", "13"),
+    ] {
+        parameter(&mut sources, name, "RteBswPositionInTask", position);
+    }
     xml_edit(
         &mut sources,
         "ecuc.arxml",
@@ -2693,6 +2919,11 @@ fn mode_configuration_preserves_channel_users_rules_and_static_callouts() {
         "<SHORT-NAME>Vehicle</SHORT-NAME>",
     );
     replace_all(&mut sources, "/Config/Host<", "/Config/Vehicle<");
+    replace_all(
+        &mut sources,
+        "ComM_MainFunction_Host",
+        "ComM_MainFunction_Vehicle",
+    );
     parameter(&mut sources, "Vehicle", "ComMChannelId", "7");
     parameter(&mut sources, "HostUser", "ComMUserIdentifier", "19");
     parameter(&mut sources, "General", "ComMEcuGroupClassification", "1");
@@ -3029,4 +3260,1384 @@ fn selected_com_manual_trigger_requires_zero_minimum_delay_and_no_callout() {
         },
     );
     rejects_in_both(&sources, "COM_FEATURE_UNSUPPORTED");
+}
+
+#[test]
+fn actual_runtime_source_owners_derive_all_application_slots_and_keep_service_generated() {
+    let plan = build(&inputs()).unwrap();
+    let slots = plan.application_slot_descriptors().unwrap();
+    assert_eq!(slots.len(), 3);
+    assert_eq!(
+        slots
+            .iter()
+            .map(|slot| slot.source_paths[0].as_str())
+            .collect::<Vec<_>>(),
+        [
+            "application/Ingress.c",
+            "application/Process.c",
+            "application/Observe.c"
+        ]
+    );
+    for slot in &slots {
+        assert!(
+            slot.producer_slot
+                .starts_with("singlecore-multi-swc-v1:/Application/Pipeline/")
+        );
+        assert!(!slot.entry_symbols.is_empty());
+        assert!(
+            slot.entry_symbols.iter().all(|entry| plan
+                .description()
+                .symbols
+                .iter()
+                .any(|symbol| symbol.symbol == *entry
+                    && symbol.definition_owner == slot.source_paths[0]))
+        );
+    }
+    assert!(
+        plan.description()
+            .symbols
+            .iter()
+            .any(|symbol| symbol.symbol == "DcmService_ReadData"
+                && symbol.definition_owner == "src/Rte.c")
+    );
+    let files = prepared_multi_files(&plan);
+    assert!(files.iter().any(|(path, _)| path == "src/Rte.c"));
+}
+
+#[test]
+fn component_memory_scopes_cannot_alias_selected_runtime_producers() {
+    for name in [
+        "Rte",
+        "Ecu",
+        "Com",
+        "ComM",
+        "Can",
+        "CanIf",
+        "CanTp",
+        "Dcm",
+        "PduR",
+        "LSduR",
+        "BswM",
+        "Ecu_HostBusSM",
+    ] {
+        let mut sources = inputs();
+        replace_all(
+            &mut sources,
+            "/Application/Process",
+            &format!("/Application/{name}"),
+        );
+        change(
+            &mut sources,
+            "process.arxml",
+            "<SHORT-NAME>Process</SHORT-NAME>",
+            &format!("<SHORT-NAME>{name}</SHORT-NAME>"),
+        );
+        rejects_in_both(&sources, "CONTRACT_NAME_COLLISION");
+        let mut partition_sources = inputs();
+        replace_all(&mut partition_sources, "OwnerPartition", name);
+        rejects_in_both(&partition_sources, "CONTRACT_NAME_COLLISION");
+    }
+}
+
+#[test]
+fn shared_rte_lifecycle_os_target_kernel_and_c_runtime_producers_cannot_be_shadowed() {
+    for symbol in [
+        "Rte_Start",
+        "Rte_Stop",
+        "SchM_Init",
+        "SchM_StartTiming",
+        "Dcm_GetSesCtrlType",
+        "CanTp_CancelReceive",
+        "StartOS",
+        "ShutdownOS",
+        "Ecu_TargetTask",
+        "xTaskCreate",
+        "Os_TargetPrepare",
+        "Arti_Trace",
+        "main",
+        "memcpy",
+        "printf",
+        "abort",
+        "TaskType",
+        "SCHEDULETABLE_STOPPED",
+    ] {
+        let mut sources = inputs();
+        change(
+            &mut sources,
+            "ingress.arxml",
+            "<SYMBOL>Ingress_Periodic</SYMBOL>",
+            &format!("<SYMBOL>{symbol}</SYMBOL>"),
+        );
+        rejects_in_both(&sources, "SYMBOL_PRODUCER_DUPLICATE");
+    }
+}
+
+#[test]
+fn multi_signal_processing_matches_actual_immediate_notification_contract() {
+    for pdu in ["RxValuePdu", "TxValuePdu"] {
+        let mut sources = inputs();
+        parameter(&mut sources, pdu, "ComIPduSignalProcessing", "DEFERRED");
+        rejects_in_both(&sources, "COM_FEATURE_UNSUPPORTED");
+    }
+}
+
+#[test]
+fn actual_partition_owns_all_instances_and_all_com_producers() {
+    let plan = build(&inputs()).unwrap();
+    let partition = &plan
+        .description()
+        .communication_runtime
+        .as_ref()
+        .unwrap()
+        .partition;
+    assert_eq!(partition.name, "OwnerPartition");
+    assert_eq!(partition.id, 0);
+    assert_eq!(partition.instances.len(), 4);
+    assert!(
+        partition
+            .instances
+            .iter()
+            .any(|instance| instance.ends_with("/DcmService"))
+    );
+    let files = prepared_multi_files(&plan);
+    let source = String::from_utf8(
+        files
+            .iter()
+            .find(|(name, _)| name == "src/Rte.c")
+            .unwrap()
+            .1
+            .clone(),
+    )
+    .unwrap();
+    assert!(source.contains("RTE_Ingress_START_SEC_CODE"));
+    assert!(source.contains("RTE_Observe_START_SEC_VAR_CLEARED_UNSPECIFIED"));
+    assert!(source.contains("RTE_OwnerPartition_START_SEC_CALLOUT_CODE"));
+    let mut sources = inputs();
+    parameter(&mut sources, "OwnerPartition", "EcucPartitionId", "1");
+    rejects_in_both(&sources, "RTE_PARTITION_CONFIGURATION");
+    let mut sources = inputs();
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| {
+            node.has_tag_name("REFERENCE-VALUES")
+                && node.descendants().any(|child| {
+                    child.has_tag_name("DEFINITION-REF")
+                        && child
+                            .text()
+                            .is_some_and(|text| text.ends_with("/RteComUserEcucPartitionRef"))
+                })
+        },
+        |_| String::new(),
+    );
+    rejects_in_both(&sources, "RTE_PARTITION_CONFIGURATION");
+    let mut sources = inputs();
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| {
+            node.has_tag_name("ECUC-INSTANCE-REFERENCE-VALUE")
+                && node.descendants().any(|child| {
+                    child.has_tag_name("TARGET-REF")
+                        && child
+                            .text()
+                            .is_some_and(|text| text.ends_with("/DcmService"))
+                })
+        },
+        |_| String::new(),
+    );
+    rejects_in_both(&sources, "RTE_PARTITION_CONFIGURATION");
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn sealed_multi_project_builds_and_runs_production_owner() {
+    use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
+    for (renamed, swapped, p2_star) in [
+        (false, false, None),
+        (true, false, None),
+        (false, true, Some(("100", "2710"))),
+        (false, false, Some(("65.54", "199a"))),
+    ] {
+        let scratch = Scratch::new();
+        let mut arxml = inputs();
+        if swapped {
+            parameter(&mut arxml, "Receive", "CanObjectId", "1");
+            parameter(&mut arxml, "Transmit", "CanObjectId", "0");
+        }
+        if let Some((seconds, _)) = p2_star {
+            for session in ["DCM_DEFAULT_SESSION", "DCM_EXTENDED_DIAGNOSTIC_SESSION"] {
+                parameter(&mut arxml, session, "DcmDspSessionP2StarServerMax", seconds);
+            }
+        }
+        if renamed {
+            for (before, after) in [
+                ("Ingress", "Gateway"),
+                ("Process</", "Compute</"),
+                ("Process/", "Compute/"),
+                ("Process_", "Compute_"),
+                ("ProcessInstance", "ComputeInstance"),
+                ("ResultService", "Calculation"),
+                ("Transform", "Calculate"),
+            ] {
+                replace_all(&mut arxml, before, after);
+            }
+            arxml.reverse();
+        }
+        let plan = build(&arxml).unwrap();
+        let sources: Vec<_> = plan
+            .application_slot_descriptors()
+            .unwrap()
+            .iter()
+            .map(|slot| {
+                let file = slot.source_paths[0].rsplit('/').next().unwrap();
+                let original = file
+                    .replace("Gateway", "Ingress")
+                    .replace("Compute", "Process");
+                let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests/fixtures/multi-application")
+                    .join(original);
+                let mut text = std::fs::read_to_string(fixture).unwrap();
+                if renamed {
+                    for (before, after) in [
+                        ("Ingress", "Gateway"),
+                        ("Process", "Compute"),
+                        ("ResultService", "Calculation"),
+                        ("Transform", "Calculate"),
+                    ] {
+                        text = text.replace(before, after);
+                    }
+                }
+                let path = scratch.0.join(file);
+                std::fs::write(&path, text).unwrap();
+                ApplicationSource {
+                    component_instance: slot
+                        .producer_slot
+                        .strip_prefix("singlecore-multi-swc-v1:")
+                        .unwrap()
+                        .into(),
+                    path,
+                }
+            })
+            .collect();
+        let prepared =
+            prepare_ecu_project_with_applications(&plan, tooling::native_target(), &sources)
+                .unwrap_or_else(|issues| panic!("{issues:?}"));
+        assert_eq!(prepared.application_slots().len(), 3);
+        let project = scratch.0.join("multi-project");
+        for (path, bytes) in prepared.into_files() {
+            let path = project.join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, bytes).unwrap();
+        }
+        let output = scratch.0.join("multi-build");
+        let result = tooling::ecu_build_command(&project, &output, "host-batch", None)
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&result.stdout),
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let binary = tooling::native_binary(&output, "ecu_host_batch");
+        let logs = scratch.0.join("owner-logs");
+        std::fs::create_dir(&logs).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&logs, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        let mut spec = autosar_config_core::execution::ProcessSpec::for_duration(
+            vec![binary.into_os_string()],
+            scratch.0.clone(),
+            vec![],
+            std::time::Duration::from_secs(30),
+            logs,
+        )
+        .unwrap();
+        spec.stdin_stream = true;
+        let owner = tooling::execution_owner();
+        let mut process = owner.spawn(spec, None).unwrap();
+        process.write_stdin(b"BEGIN 0\nRX 800 4 78563412\nRX 1792 8 0322123400000000\nCOMMIT\nBEGIN 1\nCOMMIT\nBEGIN 10\nRX 1792 8 0322123400000000\nCOMMIT\nBEGIN 10\nCOMMIT\nBEGIN 20\nRX 1792 8 0322123400000000\nCOMMIT\n").unwrap();
+        if p2_star.is_some() {
+            process
+                .write_stdin(b"BEGIN 30\nRX 1792 8 0210030000000000\nCOMMIT\n")
+                .unwrap();
+        }
+        process.close_stdin();
+        let result = process.wait().unwrap();
+        assert!(result.success(), "{result:?}");
+        let text = std::fs::read_to_string(&result.stdout).unwrap();
+        let records: Vec<_> = text
+            .lines()
+            .filter(|line| line.starts_with("OUT "))
+            .map(|line| {
+                let fields: std::collections::BTreeMap<_, _> = line
+                    .split_whitespace()
+                    .skip(1)
+                    .map(|field| field.split_once('=').unwrap())
+                    .collect();
+                (
+                    fields["epoch"].parse::<u64>().unwrap(),
+                    fields["id"].parse::<u32>().unwrap(),
+                    fields["dlc"].parse::<u8>().unwrap(),
+                    fields["data"].to_string(),
+                )
+            })
+            .collect();
+        let mut expected = vec![
+            (1, 1800, 8, "0762123400000000".into()),
+            (10, 801, 4, "78563412".into()),
+            (10, 1800, 8, "0762123412345678".into()),
+            (20, 801, 4, "78563412".into()),
+            (20, 1800, 8, "0762123412345678".into()),
+        ];
+        if let Some((_, wire)) = p2_star {
+            expected.push((30, 801, 4, "78563412".into()));
+            expected.push((30, 1800, 8, format!("0650030032{wire}00")));
+        }
+        assert_eq!(records, expected, "{text}");
+        let receipts: Vec<_> = text
+            .lines()
+            .filter(|line| line.starts_with("COMMIT_OK "))
+            .map(|line| {
+                line.split_whitespace()
+                    .find_map(|field| field.strip_prefix("epoch="))
+                    .unwrap()
+                    .parse::<u64>()
+                    .unwrap()
+            })
+            .collect();
+        let mut expected_receipts = vec![0, 1, 10, 10, 20];
+        if p2_star.is_some() {
+            expected_receipts.push(30);
+        }
+        assert_eq!(receipts, expected_receipts, "{text}");
+        assert!(
+            !text
+                .lines()
+                .any(|line| line.starts_with("REJECT ") || line.starts_with("COMMIT_ERROR ")),
+            "{text}"
+        );
+        assert!(
+            std::fs::read(&result.stderr).unwrap().is_empty(),
+            "{result:?}"
+        );
+    }
+}
+
+#[test]
+fn multi_selected_catalog_binds_standard_signatures_and_actual_periodic_producers() {
+    let plan = build(&inputs()).unwrap();
+    let description = plan.description();
+    assert_eq!(
+        description
+            .schedule
+            .entities
+            .iter()
+            .map(|entity| (entity.position, entity.symbol.as_str()))
+            .collect::<Vec<_>>(),
+        [
+            (0, "ComM_MainFunction_Host"),
+            (1, "Can_MainFunction_Wakeup"),
+            (2, "CanTp_MainFunction"),
+            (3, "Com_MainFunctionRx_Rx"),
+            (4, "Ingress_Periodic"),
+            (5, "Process_Periodic"),
+            (6, "Observe_Periodic"),
+            (7, "Com_MainFunctionTx_Tx"),
+            (8, "Dcm_MainFunction"),
+            (9, "Can_MainFunction_Read"),
+            (10, "Can_MainFunction_Write"),
+            (11, "Can_MainFunction_Mode"),
+            (12, "Can_MainFunction_BusOff"),
+        ]
+    );
+    assert!(
+        !description
+            .runtime_sources
+            .contains_key("runtime/src/Com.c")
+    );
+    assert!(
+        description
+            .runtime_sources
+            .contains_key("runtime/multi/src/Com.c")
+    );
+    assert!(
+        description
+            .runtime_sources
+            .contains_key("core/src/integration/multi_ecu.rs")
+    );
+    for name in [
+        "Com_MainFunctionRx_Rx",
+        "Com_MainFunctionTx_Tx",
+        "ComM_MainFunction_Host",
+    ] {
+        let symbol = description
+            .symbols
+            .iter()
+            .find(|symbol| symbol.symbol == name)
+            .unwrap();
+        assert_eq!(symbol.return_type, "void");
+        assert!(symbol.arguments.is_empty());
+        assert_eq!(symbol.definition_owner, "src/Ecu_RuntimeConfig.c");
+    }
+    let transmit = description
+        .symbols
+        .iter()
+        .find(|symbol| symbol.symbol == "CanIf_Transmit")
+        .unwrap();
+    assert_eq!(transmit.return_type, "Std_ReturnType");
+    assert_eq!(
+        transmit
+            .arguments
+            .iter()
+            .map(|argument| argument.native_type.as_str())
+            .collect::<Vec<_>>(),
+        ["PduIdType", "const PduInfoType *"]
+    );
+    for (name, field, old, new) in [
+        ("Com_SendSignal", "IS-SYNCHRONOUS", "false", "true"),
+        ("Com_ReceiveSignal", "IS-REENTRANT", "true", "false"),
+        ("CanIf_Transmit", "IS-REENTRANT", "true", "false"),
+    ] {
+        let mut sources = inputs();
+        xml_edit(
+            &mut sources,
+            "bsw.arxml",
+            |node| named(node, "BSW-MODULE-ENTRY", name),
+            |text| {
+                text.replace(
+                    &format!("<{field}>{old}</{field}>"),
+                    &format!("<{field}>{new}</{field}>"),
+                )
+            },
+        );
+        rejects_in_both(&sources, "BSW_SIGNATURE_CONFLICT");
+    }
+    for (field, value) in [
+        ("IS-REENTRANT", "false"),
+        ("IS-SYNCHRONOUS", "true"),
+        ("CALL-TYPE", "REGULAR"),
+        ("EXECUTION-CONTEXT", "UNSPECIFIED"),
+        ("SW-SERVICE-IMPL-POLICY", "STANDARD"),
+    ] {
+        let mut sources = inputs();
+        xml_edit(
+            &mut sources,
+            "bsw.arxml",
+            |node| named(node, "BSW-MODULE-ENTRY", "Can_Init"),
+            |text| text.replace(&format!("<{field}>{value}</{field}>"), ""),
+        );
+        rejects_in_both(&sources, "BSW_SIGNATURE_CONFLICT");
+    }
+    for (field, old, new) in [
+        ("CALL-TYPE", "REGULAR", "CALLBACK"),
+        ("SW-SERVICE-IMPL-POLICY", "STANDARD", "MACRO"),
+        ("BSW-ENTRY-KIND", "CONCRETE", "ABSTRACT"),
+    ] {
+        let mut sources = inputs();
+        xml_edit(
+            &mut sources,
+            "bsw.arxml",
+            |node| named(node, "BSW-MODULE-ENTRY", "Can_Init"),
+            |text| {
+                text.replace(
+                    &format!("<{field}>{old}</{field}>"),
+                    &format!("<{field}>{new}</{field}>"),
+                )
+            },
+        );
+        rejects_in_both(&sources, "BSW_SIGNATURE_CONFLICT");
+    }
+    for (old, new) in [
+        ("<MODULE-ID>80</MODULE-ID>", "<MODULE-ID>60</MODULE-ID>"),
+        ("<CATEGORY>BSW_MODULE</CATEGORY>", "<CATEGORY></CATEGORY>"),
+    ] {
+        let mut sources = inputs();
+        change(&mut sources, "bsw.arxml", old, new);
+        rejects_in_both(&sources, "BSW_ENTRY_IDENTITY");
+    }
+    let pdu_router = description
+        .symbols
+        .iter()
+        .find(|symbol| symbol.symbol == "PduR_ComTransmit")
+        .unwrap();
+    assert_eq!(
+        pdu_router.declaration_owner,
+        "runtime/multi/include/PduR_Com.h"
+    );
+    for path in [
+        "core/src/integration/ecu.rs",
+        "core/src/integration/contracts.rs",
+    ] {
+        assert!(description.runtime_sources.contains_key(path));
+    }
+    let mut sources = inputs();
+    replace_all(
+        &mut sources,
+        "AUTOSAR_Com</SHORT-NAME>",
+        "Vendor_Com</SHORT-NAME>",
+    );
+    replace_all(&mut sources, "/AUTOSAR_Com/", "/Vendor_Com/");
+    rejects_in_both(&sources, "BSW_ENTRY_IDENTITY");
+}
+
+#[test]
+fn dcm_service_mode_source_requires_the_fixed_standard_contract() {
+    let plan = build(&inputs()).unwrap();
+    let service = plan
+        .description()
+        .multi
+        .as_ref()
+        .unwrap()
+        .components
+        .iter()
+        .find(|component| component.component == "/Services/DcmService")
+        .unwrap();
+    let mode = service.diagnostic_session_port.as_ref().unwrap();
+    assert_eq!(
+        mode.port,
+        "/Services/DcmService/DiagnosticSessionControlModeSwitchInterface"
+    );
+    assert_eq!(
+        mode.prototype,
+        "/Services/Dcm_DiagnosticSessionControlModeSwitchInterface/diagnosticSession"
+    );
+    assert_eq!(mode.mode_group, "/AUTOSAR_Dcm/DcmDiagnosticSessionControl");
+    for (file, tag, name, before, after) in [
+        (
+            "services.arxml",
+            "MODE-SWITCH-INTERFACE",
+            "Dcm_DiagnosticSessionControlModeSwitchInterface",
+            "<IS-SERVICE>true</IS-SERVICE>",
+            "<IS-SERVICE>false</IS-SERVICE>",
+        ),
+        (
+            "services.arxml",
+            "P-PORT-PROTOTYPE",
+            "DiagnosticSessionControlModeSwitchInterface",
+            "<ENHANCED-MODE-API>false</ENHANCED-MODE-API>",
+            "<ENHANCED-MODE-API>true</ENHANCED-MODE-API>",
+        ),
+        (
+            "bsw.arxml",
+            "MODE-DECLARATION-GROUP",
+            "DcmDiagnosticSessionControl",
+            "<ON-TRANSITION-VALUE>255</ON-TRANSITION-VALUE>",
+            "<ON-TRANSITION-VALUE>254</ON-TRANSITION-VALUE>",
+        ),
+        (
+            "bsw.arxml",
+            "MODE-DECLARATION-GROUP",
+            "DcmDiagnosticSessionControl",
+            "<CATEGORY>EXPLICIT_ORDER</CATEGORY>",
+            "<CATEGORY>ALPHABETIC_ORDER</CATEGORY>",
+        ),
+        (
+            "bsw.arxml",
+            "MODE-DECLARATION",
+            "DCM_PROGRAMMING_SESSION",
+            "<VALUE>1</VALUE>",
+            "<VALUE>4</VALUE>",
+        ),
+    ] {
+        let mut sources = inputs();
+        xml_edit(
+            &mut sources,
+            file,
+            |node| named(node, tag, name),
+            |text| {
+                assert!(text.contains(before));
+                text.replace(before, after)
+            },
+        );
+        rejects_in_both(&sources, "TYPE_CONFLICT");
+    }
+    let mut sources = inputs();
+    xml_edit(
+        &mut sources,
+        "bsw.arxml",
+        |node| named(node, "AR-PACKAGE", "AUTOSAR_Dcm"),
+        |text| {
+            text.replacen("</ELEMENTS>", "<MODE-DECLARATION-GROUP><SHORT-NAME>ForeignModes</SHORT-NAME><CATEGORY>EXPLICIT_ORDER</CATEGORY><INITIAL-MODE-REF DEST=\"MODE-DECLARATION\">/AUTOSAR_Dcm/ForeignModes/DCM_DEFAULT_SESSION</INITIAL-MODE-REF><MODE-DECLARATIONS><MODE-DECLARATION><SHORT-NAME>DCM_DEFAULT_SESSION</SHORT-NAME><VALUE>0</VALUE></MODE-DECLARATION></MODE-DECLARATIONS><ON-TRANSITION-VALUE>255</ON-TRANSITION-VALUE></MODE-DECLARATION-GROUP></ELEMENTS>", 1)
+        },
+    );
+    xml_edit(
+        &mut sources,
+        "bsw.arxml",
+        |node| {
+            named(
+                node,
+                "MODE-DECLARATION-GROUP",
+                "DcmDiagnosticSessionControl",
+            )
+        },
+        |text| {
+            text.replace(
+                "/AUTOSAR_Dcm/DcmDiagnosticSessionControl/DCM_DEFAULT_SESSION</INITIAL-MODE-REF>",
+                "/AUTOSAR_Dcm/ForeignModes/DCM_DEFAULT_SESSION</INITIAL-MODE-REF>",
+            )
+        },
+    );
+    rejects_in_both(&sources, "TYPE_CONFLICT");
+    let mut sources = inputs();
+    xml_edit(
+        &mut sources,
+        "services.arxml",
+        |node| {
+            named(
+                node,
+                "P-PORT-PROTOTYPE",
+                "SecurityAccessModeSwitchInterface",
+            )
+        },
+        |_| String::new(),
+    );
+    rejects_in_both(&sources, "SERVICE_TYPE_CONFLICT");
+    for original in ["DCM_DEFAULT_SESSION", "DCM_EXTENDED_DIAGNOSTIC_SESSION"] {
+        let mut sources = inputs();
+        let source = sources
+            .iter_mut()
+            .find(|source| source.logical_path() == "ecuc.arxml")
+            .unwrap();
+        // Preserve all reference identities while editing only the ECUC row.
+        replace_all(
+            std::slice::from_mut(source),
+            original,
+            &format!("{original}_Changed"),
+        );
+        rejects_in_both(&sources, "DIAGNOSTIC_SESSION");
+    }
+}
+
+#[test]
+fn plural_application_preparation_freezes_every_real_producer_and_refuses_bad_members() {
+    use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
+    let scratch = Scratch::new();
+    let plan = build(&inputs()).unwrap();
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-application");
+    let sources: Vec<_> = plan
+        .application_slot_descriptors()
+        .unwrap()
+        .iter()
+        .map(|slot| {
+            let file = slot.source_paths[0].rsplit('/').next().unwrap();
+            let path = scratch.0.join(file);
+            std::fs::copy(fixture.join(file), &path).unwrap();
+            ApplicationSource {
+                component_instance: slot
+                    .producer_slot
+                    .strip_prefix("singlecore-multi-swc-v1:")
+                    .unwrap()
+                    .into(),
+                path,
+            }
+        })
+        .collect();
+    let prepare = |members: &[ApplicationSource]| {
+        prepare_ecu_project_with_applications(
+            &plan,
+            autosar_config_core::target::BuildTarget::LinuxX64ControlledV1,
+            members,
+        )
+    };
+    assert!(prepare(&sources[..2]).is_err());
+    let mut wrong = sources.clone();
+    wrong[1].component_instance = wrong[0].component_instance.clone();
+    assert!(prepare(&wrong).is_err());
+    wrong = sources.clone();
+    wrong[1].path = wrong[0].path.clone();
+    assert!(prepare(&wrong).is_err());
+    wrong = sources.clone();
+    wrong[0].component_instance = "/Application/Pipeline/Unexpected".into();
+    assert!(prepare(&wrong).is_err());
+    wrong = sources.clone();
+    wrong.push(sources[0].clone());
+    assert!(prepare(&wrong).is_err());
+    let first: std::collections::BTreeMap<_, _> = prepare(&sources)
+        .unwrap()
+        .into_files()
+        .into_iter()
+        .collect();
+    let mut reversed = sources.clone();
+    reversed.reverse();
+    assert_eq!(
+        first,
+        prepare(&reversed)
+            .unwrap()
+            .into_files()
+            .into_iter()
+            .collect()
+    );
+    for source in &sources {
+        let file = source.path.file_name().unwrap().to_str().unwrap();
+        assert_eq!(
+            first[&format!("src/{file}")],
+            std::fs::read(&source.path).unwrap()
+        );
+        assert!(!first.contains_key(&format!("application/{file}")));
+    }
+    // Each independent caller source is checked again at the normal staging
+    // boundary; a stale later member must not publish a partial project.
+    for (index, source) in sources.iter().enumerate() {
+        let prepared = prepare(&sources).unwrap();
+        let original = std::fs::read(&source.path).unwrap();
+        let mut changed = original.clone();
+        changed.extend_from_slice(b"\n/* changed after preparation */\n");
+        std::fs::write(&source.path, changed).unwrap();
+        let output = scratch.0.join(format!("stale-{index}"));
+        assert!(prepared.generate(&output).is_err());
+        assert!(!output.exists());
+        std::fs::write(&source.path, original).unwrap();
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::symlink;
+        let linked = scratch.0.join("linked.c");
+        symlink(&sources[0].path, &linked).unwrap();
+        wrong = sources.clone();
+        wrong[1].path = linked;
+        assert!(prepare(&wrong).is_err());
+    }
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn sealed_multi_owner_preserves_network_init_and_deadline_phase() {
+    use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
+    let scratch = Scratch::new();
+    let mut source = inputs();
+    change(
+        &mut source,
+        "ingress.arxml",
+        "<VALUE>0</VALUE>",
+        "<VALUE>7</VALUE>",
+    );
+    let plan = build(&source).unwrap();
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-application");
+    let applications: Vec<_> = plan
+        .application_slot_descriptors()
+        .unwrap()
+        .iter()
+        .map(|slot| ApplicationSource {
+            component_instance: slot
+                .producer_slot
+                .strip_prefix("singlecore-multi-swc-v1:")
+                .unwrap()
+                .into(),
+            path: fixture.join(slot.source_paths[0].rsplit('/').next().unwrap()),
+        })
+        .collect();
+    let prepared =
+        prepare_ecu_project_with_applications(&plan, tooling::native_target(), &applications)
+            .unwrap();
+    let project = scratch.0.join("project");
+    for (path, bytes) in prepared.into_files() {
+        let path = project.join(path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, bytes).unwrap();
+    }
+    let output = scratch.0.join("build");
+    let built = tooling::ecu_build_command(
+        &project,
+        &output,
+        "test",
+        Some(&fixture.join("owner_probe.c")),
+    )
+    .output()
+    .unwrap();
+    assert!(
+        built.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&built.stdout),
+        String::from_utf8_lossy(&built.stderr)
+    );
+    for phase in ["before", "after", "canonical", "controls", "epoch0", "late"] {
+        let logs = scratch.0.join(phase);
+        std::fs::create_dir(&logs).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&logs, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        let spec = autosar_config_core::execution::ProcessSpec::for_duration(
+            vec![
+                tooling::native_binary(&output, "ecu_probe").into_os_string(),
+                phase.into(),
+            ],
+            scratch.0.clone(),
+            vec![],
+            std::time::Duration::from_secs(30),
+            logs,
+        )
+        .unwrap();
+        let result = tooling::execution_owner()
+            .spawn(spec, None)
+            .unwrap()
+            .wait()
+            .unwrap();
+        let text = std::fs::read_to_string(&result.stdout).unwrap();
+        assert!(
+            result.success(),
+            "{phase}: {result:?}\n{text}\n{}",
+            std::fs::read_to_string(&result.stderr).unwrap()
+        );
+        let observations: Vec<_> = text
+            .lines()
+            .filter_map(|line| {
+                let fields: Vec<_> = line.split_whitespace().collect();
+                (fields.first() == Some(&"OBS")).then(|| {
+                    (
+                        fields[1].to_string(),
+                        fields[2].parse::<u64>().unwrap(),
+                        fields[3].parse::<u8>().unwrap(),
+                        fields[4].parse::<u32>().unwrap(),
+                    )
+                })
+            })
+            .collect();
+        let expected: Vec<_> = if phase == "late" {
+            assert_eq!(
+                text.lines()
+                    .filter(|line| line.starts_with("LATE "))
+                    .collect::<Vec<_>>(),
+                [
+                    "LATE 1 1800 0762123400000000",
+                    "LATE 2 1800 0762123400000000"
+                ]
+            );
+            vec![("rx".into(), 1, 0, 21), ("rx".into(), 2, 0, 21)]
+        } else if phase == "epoch0" {
+            std::iter::once(("rx".to_string(), 0, 0, 21))
+                .chain((1..=30u64).map(|epoch| {
+                    (
+                        "main".to_string(),
+                        epoch,
+                        if epoch == 30 { 64 } else { 0 },
+                        21,
+                    )
+                }))
+                .collect()
+        } else if phase == "controls" {
+            (1..=120u64)
+                .flat_map(|epoch| {
+                    let (status, value) = match epoch {
+                        1 => (133, 7),
+                        2..=20 => (0, 21),
+                        21..=42 => (0, 42),
+                        43..=71 => (0, 43),
+                        72 | 74 => (64, 43),
+                        73 => (128, 43),
+                        75 => (0, 0),
+                        76..=104 => (0, 45),
+                        105..=109 => (64, 45),
+                        _ => (128, 45),
+                    };
+                    let mut rows = vec![("main".to_string(), epoch, status, value)];
+                    match epoch {
+                        1 => rows.push(("rx".into(), epoch, 0, 21)),
+                        20 => rows.push(("rx".into(), epoch, 0, 42)),
+                        42 => rows.push(("rx".into(), epoch, 0, 43)),
+                        73 => rows.push(("rx".into(), epoch, 128, 43)),
+                        74 => rows.push(("rx".into(), epoch, 0, 44)),
+                        75 => rows.push(("rx".into(), epoch, 0, 45)),
+                        _ => {}
+                    }
+                    rows
+                })
+                .collect()
+        } else {
+            (1..=if phase == "canonical" { 20u64 } else { 61u64 })
+                .flat_map(|epoch| {
+                    let value = if epoch == 1 {
+                        7
+                    } else if phase == "canonical" {
+                        0x12345678
+                    } else if epoch < 31 || (epoch == 31 && phase == "after") {
+                        21
+                    } else {
+                        42
+                    };
+                    let status = if epoch == 1 {
+                        133
+                    } else if epoch == 61 || (epoch == 31 && phase == "after") {
+                        64
+                    } else {
+                        0
+                    };
+                    let mut rows = vec![("main".to_string(), epoch, status, value)];
+                    if epoch == 1 {
+                        rows.push((
+                            "rx".into(),
+                            epoch,
+                            0,
+                            if phase == "canonical" { 0x12345678 } else { 21 },
+                        ));
+                    }
+                    if epoch == 31 && phase == "after" {
+                        rows.push(("rx".into(), epoch, 0, 42));
+                        rows.push(("rx".into(), epoch, 0, 42));
+                    }
+                    if epoch == 30 && phase == "before" {
+                        rows.push(("rx".into(), 31, 0, 42));
+                        rows.push(("rx".into(), 31, 0, 42));
+                    }
+                    rows
+                })
+                .collect()
+        };
+        assert_eq!(observations, expected, "{phase}: {text}");
+        assert!(std::fs::read(&result.stderr).unwrap().is_empty());
+    }
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn sealed_multi_optional_did_and_network_only_routes_use_real_producers() {
+    use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
+    for diagnostic in [true, false] {
+        let scratch = Scratch::new();
+        let plan = build(&sources_without_application_did(diagnostic)).unwrap();
+        assert!(plan.description().diagnostic.is_none());
+        assert_eq!(
+            plan.description().diagnostic_transport.is_some(),
+            diagnostic
+        );
+        let fixtures =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-application");
+        let applications: Vec<_> = plan
+            .application_slot_descriptors()
+            .unwrap()
+            .iter()
+            .map(|slot| ApplicationSource {
+                component_instance: slot
+                    .producer_slot
+                    .strip_prefix("singlecore-multi-swc-v1:")
+                    .unwrap()
+                    .into(),
+                path: fixtures.join(slot.source_paths[0].rsplit('/').next().unwrap()),
+            })
+            .collect();
+        let prepared =
+            prepare_ecu_project_with_applications(&plan, tooling::native_target(), &applications)
+                .unwrap();
+        let project = scratch.0.join("project");
+        for (path, bytes) in prepared.into_files() {
+            let path = project.join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, bytes).unwrap();
+        }
+        let output = scratch.0.join("build");
+        let built = tooling::ecu_build_command(&project, &output, "host-batch", None)
+            .output()
+            .unwrap();
+        assert!(
+            built.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&built.stdout),
+            String::from_utf8_lossy(&built.stderr)
+        );
+        let logs = scratch.0.join("logs");
+        std::fs::create_dir(&logs).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&logs, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        let mut spec = autosar_config_core::execution::ProcessSpec::for_duration(
+            vec![tooling::native_binary(&output, "ecu_host_batch").into_os_string()],
+            scratch.0.clone(),
+            vec![],
+            std::time::Duration::from_secs(30),
+            logs,
+        )
+        .unwrap();
+        spec.stdin_stream = true;
+        let owner = tooling::execution_owner();
+        let mut child = owner.spawn(spec, None).unwrap();
+        let input_result = child.write_stdin(b"BEGIN 0\nRX 800 4 2A000000\nRX 1792 8 0322F18600000000\nCOMMIT\nBEGIN 1\nCOMMIT\nBEGIN 1\nRX 1792 8 0322123400000000\nCOMMIT\nBEGIN 2\nCOMMIT\nBEGIN 10\nCOMMIT\n");
+        child.close_stdin();
+        let result = child.wait().unwrap();
+        let text = std::fs::read_to_string(&result.stdout).unwrap();
+        assert!(
+            result.success(),
+            "{diagnostic}: {result:?} input={input_result:?}\n{text}\n{}",
+            std::fs::read_to_string(&result.stderr).unwrap()
+        );
+        let records: Vec<_> = text
+            .lines()
+            .filter(|line| line.starts_with("OUT "))
+            .map(|line| {
+                let fields: std::collections::BTreeMap<_, _> = line
+                    .split_whitespace()
+                    .skip(1)
+                    .map(|item| item.split_once('=').unwrap())
+                    .collect();
+                (
+                    fields["epoch"].parse::<u64>().unwrap(),
+                    fields["id"].parse::<u32>().unwrap(),
+                    fields["dlc"].parse::<u8>().unwrap(),
+                    fields["data"].to_string(),
+                )
+            })
+            .collect();
+        let expected = if diagnostic {
+            vec![
+                (1, 1800, 8, "0462f18601000000".to_string()),
+                (2, 1800, 8, "037f223100000000".into()),
+                (10, 801, 4, "2a000000".into()),
+            ]
+        } else {
+            vec![(10, 801, 4, "2a000000".into())]
+        };
+        assert_eq!(records, expected, "{diagnostic}: {text}");
+        assert!(
+            !text
+                .lines()
+                .any(|line| line.starts_with("REJECT ") || line.starts_with("COMMIT_ERROR ")),
+            "{text}"
+        );
+        assert!(std::fs::read(&result.stderr).unwrap().is_empty());
+        let config = std::fs::read_to_string(project.join("src/Ecu_RuntimeConfig.c")).unwrap();
+        let metadata =
+            std::fs::read_to_string(project.join("descriptions/Host_Implementation.arxml"))
+                .unwrap();
+        if !diagnostic {
+            assert!(!config.contains("CanTp_MainFunction();"));
+            assert!(!config.contains("Dcm_MainFunction();"));
+            let document = roxmltree::Document::parse(&metadata).unwrap();
+            assert!(
+                !document
+                    .descendants()
+                    .filter(|node| node.has_tag_name("BSW-TIMING-EVENT"))
+                    .any(|node| node.descendants().any(|child| child
+                        .text()
+                        .is_some_and(|text| text.contains("CanTp_MainFunction")
+                            || text.contains("Dcm_MainFunction"))))
+            );
+        }
+    }
+}
+
+#[test]
+fn prepared_multi_bsw_entries_describe_actual_call_mechanisms_and_implementation_policy() {
+    let plan = build(&inputs()).unwrap();
+    let files = prepared_multi_files(&plan);
+    let bytes = &files
+        .iter()
+        .find(|(path, _)| path == "descriptions/Host_Implementation.arxml")
+        .unwrap()
+        .1;
+    let document = roxmltree::Document::parse(std::str::from_utf8(bytes).unwrap()).unwrap();
+    let imported_refs: Vec<_> = document
+        .descendants()
+        .filter(|node| node.has_tag_name("EXPECTED-ENTRYS"))
+        .flat_map(|node| {
+            node.descendants()
+                .filter(|child| child.has_tag_name("BSW-MODULE-ENTRY-REF"))
+        })
+        .map(|node| node.text().unwrap())
+        .collect();
+    for required in [
+        "/AUTOSAR_Can/BswModuleEntrys/Can_Write",
+        "/AUTOSAR_CanIf/BswModuleEntrys/CanIf_RxIndication",
+        "/AUTOSAR_CanTp/BswModuleEntrys/CanTp_Transmit",
+        "/AUTOSAR_Dcm/BswModuleEntrys/Dcm_StartOfReception",
+        "/AUTOSAR_ComM/BswModuleEntrys/ComM_DCM_ActiveDiagnostic",
+        "/AUTOSAR_PduR/BswModuleEntrys/PduR_CanTpCopyTxData",
+        "/AUTOSAR_LSduR/BswModuleEntrys/LSduR_CanTpTransmit",
+        "/AUTOSAR_Os/BswModuleEntrys/GetElapsedValue",
+    ] {
+        assert!(imported_refs.contains(&required), "{required}");
+    }
+    let actual_entries: std::collections::BTreeMap<_, _> = document
+        .descendants()
+        .filter(|node| node.has_tag_name("BSW-MODULE-ENTRY"))
+        .map(|node| {
+            let mut packages: Vec<_> = node
+                .ancestors()
+                .filter(|ancestor| ancestor.has_tag_name("AR-PACKAGE"))
+                .map(|package| {
+                    package
+                        .children()
+                        .find(|child| child.has_tag_name("SHORT-NAME"))
+                        .unwrap()
+                        .text()
+                        .unwrap()
+                })
+                .collect();
+            packages.reverse();
+            let name = node
+                .children()
+                .find(|child| child.has_tag_name("SHORT-NAME"))
+                .unwrap()
+                .text()
+                .unwrap();
+            (format!("/{}/{name}", packages.join("/")), node)
+        })
+        .collect();
+    for reference in document
+        .descendants()
+        .filter(|node| node.has_tag_name("BSW-MODULE-ENTRY-REF"))
+    {
+        assert_eq!(reference.attribute("DEST"), Some("BSW-MODULE-ENTRY"));
+        assert!(
+            actual_entries.contains_key(reference.text().unwrap()),
+            "{}",
+            reference.text().unwrap()
+        );
+    }
+    for (module, name, reentrant, synchronous, call_type) in [
+        ("Can", "Can_Write", "true", "true", "REGULAR"),
+        ("Can", "Can_SetControllerMode", "false", "false", "REGULAR"),
+        ("Can", "Can_GetControllerMode", "false", "true", "REGULAR"),
+        (
+            "Can",
+            "Can_GetControllerErrorState",
+            "true",
+            "true",
+            "REGULAR",
+        ),
+        (
+            "Can",
+            "Can_GetControllerRxErrorCounter",
+            "true",
+            "true",
+            "REGULAR",
+        ),
+        (
+            "Can",
+            "Can_GetControllerTxErrorCounter",
+            "true",
+            "true",
+            "REGULAR",
+        ),
+        (
+            "CanIf",
+            "CanIf_SetControllerMode",
+            "true",
+            "false",
+            "REGULAR",
+        ),
+        (
+            "CanIf",
+            "CanIf_GetControllerMode",
+            "false",
+            "true",
+            "REGULAR",
+        ),
+        (
+            "CanIf",
+            "CanIf_GetControllerErrorState",
+            "true",
+            "true",
+            "REGULAR",
+        ),
+        ("CanIf", "CanIf_GetPduMode", "true", "true", "REGULAR"),
+        ("CanIf", "CanIf_SetPduMode", "false", "true", "REGULAR"),
+        ("CanIf", "CanIf_RxIndication", "true", "true", "CALLBACK"),
+        ("CanIf", "CanIf_TxConfirmation", "true", "true", "CALLBACK"),
+        (
+            "CanIf",
+            "CanIf_ControllerModeIndication",
+            "true",
+            "true",
+            "CALLBACK",
+        ),
+        (
+            "CanIf",
+            "CanIf_ControllerBusOff",
+            "true",
+            "true",
+            "CALLBACK",
+        ),
+        ("CanTp", "CanTp_Transmit", "true", "true", "REGULAR"),
+        ("CanTp", "CanTp_RxIndication", "true", "true", "CALLBACK"),
+        ("CanTp", "CanTp_TxConfirmation", "true", "true", "CALLBACK"),
+        ("Dcm", "Dcm_CopyTxData", "true", "true", "CALLBACK"),
+        ("PduR", "PduR_CanTpCopyTxData", "true", "true", "CALLBACK"),
+        ("PduR", "PduR_CanIfRxIndication", "true", "true", "CALLBACK"),
+        ("PduR", "PduR_DcmTransmit", "true", "true", "REGULAR"),
+        ("LSduR", "LSduR_CanTpTransmit", "true", "true", "REGULAR"),
+        (
+            "LSduR",
+            "LSduR_CanIfTxConfirmation",
+            "true",
+            "true",
+            "CALLBACK",
+        ),
+        ("Com", "Com_SendSignal", "true", "false", "REGULAR"),
+        ("Com", "Com_TriggerTransmit", "true", "true", "CALLBACK"),
+        (
+            "ComM",
+            "ComM_DCM_ActiveDiagnostic",
+            "true",
+            "true",
+            "CALLBACK",
+        ),
+        (
+            "ComM",
+            "ComM_BusSM_ModeIndication",
+            "true",
+            "false",
+            "CALLBACK",
+        ),
+        ("BswM", "BswM_ComM_CurrentMode", "true", "true", "CALLBACK"),
+        ("Rte", "Rte_COMCbk", "false", "true", "CALLBACK"),
+    ] {
+        let path = format!("/AUTOSAR_{module}/BswModuleEntrys/{name}");
+        let entry = actual_entries[&path];
+        for (tag, expected) in [
+            ("IS-REENTRANT", reentrant),
+            ("IS-SYNCHRONOUS", synchronous),
+            ("CALL-TYPE", call_type),
+        ] {
+            assert_eq!(
+                entry
+                    .children()
+                    .find(|child| child.has_tag_name(tag))
+                    .unwrap()
+                    .text(),
+                Some(expected),
+                "{path}: {tag}"
+            );
+        }
+    }
+    for entry in document
+        .descendants()
+        .filter(|node| node.has_tag_name("BSW-MODULE-ENTRY"))
+    {
+        let field = |tag| {
+            entry
+                .children()
+                .find(|child| child.has_tag_name(tag))
+                .and_then(|child| child.text())
+                .unwrap()
+        };
+        let name = field("SHORT-NAME");
+        assert_eq!(field("SW-SERVICE-IMPL-POLICY"), "STANDARD", "{name}");
+        assert_eq!(field("BSW-ENTRY-KIND"), "CONCRETE", "{name}");
+        for tag in [
+            "IS-REENTRANT",
+            "IS-SYNCHRONOUS",
+            "CALL-TYPE",
+            "EXECUTION-CONTEXT",
+        ] {
+            assert!(!field(tag).is_empty(), "{name}: {tag}");
+        }
+        if matches!(
+            name,
+            "Rte_COMCbk"
+                | "Rte_COMCbkRxTOut"
+                | "Dcm_TpTxConfirmation"
+                | "Dcm_ComM_NoComModeEntered"
+                | "Dcm_ComM_SilentComModeEntered"
+                | "Dcm_ComM_FullComModeEntered"
+        ) {
+            assert_eq!(field("CALL-TYPE"), "CALLBACK", "{name}");
+        }
+        if matches!(
+            name,
+            "Dcm_ResetToDefaultSession" | "GetCounterValue" | "GetElapsedValue"
+        ) {
+            assert_eq!(field("IS-REENTRANT"), "true", "{name}");
+            assert_eq!(field("IS-SYNCHRONOUS"), "true", "{name}");
+            assert_eq!(field("CALL-TYPE"), "REGULAR", "{name}");
+        }
+        if name == "Dcm_MainFunction" {
+            assert_eq!(field("CALL-TYPE"), "SCHEDULED");
+        }
+    }
+}
+
+#[test]
+fn authentication_mode_source_follows_actual_connection_and_rejects_invalid_standard_state() {
+    let mut source = inputs();
+    replace_all(&mut source, "Physical", "Link");
+    let plan = build(&source).unwrap();
+    assert!(
+        plan.description()
+            .multi
+            .as_ref()
+            .unwrap()
+            .dcm_modes
+            .iter()
+            .any(|mode| mode.group == "DcmAuthenticationState_Link")
+    );
+    let files: std::collections::BTreeMap<_, _> = prepared_multi_files(&plan).into_iter().collect();
+    for (path, symbol) in [
+        (
+            "src/Ecu_RuntimeConfig.c",
+            "SchM_Switch_Dcm_DcmAuthenticationState_Link",
+        ),
+        ("src/SchM.c", "SchM_Mode_Dcm_DcmAuthenticationState_Link"),
+        (
+            "include/SchM_Dcm.h",
+            "SchM_Switch_Dcm_DcmAuthenticationState_Link",
+        ),
+    ] {
+        let text = std::str::from_utf8(&files[path]).unwrap();
+        assert!(text.contains(symbol), "{path}");
+        assert!(!text.contains("DcmAuthenticationState_Physical"), "{path}");
+    }
+    let mut source = inputs();
+    xml_edit(
+        &mut source,
+        "bsw.arxml",
+        |node| named(node, "MODE-DECLARATION", "DCM_AUTHENTICATED"),
+        |text| text.replace("<VALUE>1</VALUE>", "<VALUE>2</VALUE>"),
+    );
+    rejects_in_both(&source, "TYPE_CONFLICT");
+    let mut source = inputs();
+    xml_edit(
+        &mut source,
+        "services.arxml",
+        |node| {
+            named(
+                node,
+                "P-PORT-PROTOTYPE",
+                "AuthenticationStateModeSwitchInterface_Physical",
+            )
+        },
+        |_| String::new(),
+    );
+    rejects_in_both(&source, "SERVICE_TYPE_CONFLICT");
+}
+
+#[test]
+fn destination_only_diagnostic_routes_and_explicit_lsdu_policy_cannot_be_ignored() {
+    let mut source = sources_without_application_did(true);
+    xml_edit(
+        &mut source,
+        "ecuc.arxml",
+        |node| named(node, "ECUC-CONTAINER-VALUE", "DiagRequestSource"),
+        |_| String::new(),
+    );
+    xml_edit(
+        &mut source,
+        "ecuc.arxml",
+        |node| {
+            named(node, "ECUC-CONTAINER-VALUE", "DiagRequest")
+                && node.children().any(|child| {
+                    child.has_tag_name("DEFINITION-REF")
+                        && child
+                            .text()
+                            .is_some_and(|text| text.ends_with("/PduRRoutingPath"))
+                })
+        },
+        |_| String::new(),
+    );
+    rejects_in_both(&source, "PDU_ROUTE_NOT_UNIQUE");
+    let mut source = inputs();
+    xml_edit(
+        &mut source,
+        "ecuc.arxml",
+        |node| named(node, "AR-PACKAGE", "Configuration"),
+        |text| {
+            text.replacen("</ELEMENTS>", "<ECUC-MODULE-CONFIGURATION-VALUES><SHORT-NAME>LSduR</SHORT-NAME><DEFINITION-REF DEST=\"ECUC-MODULE-DEF\">/AUTOSAR/EcucDefs/LSduR</DEFINITION-REF></ECUC-MODULE-CONFIGURATION-VALUES></ELEMENTS>", 1)
+        },
+    );
+    rejects_in_both(&source, "MODULE_UNSUPPORTED");
 }

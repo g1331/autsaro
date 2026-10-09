@@ -154,7 +154,45 @@ fn generated_c_analysis_samples() {
             .generate(&output.join(case))
             .unwrap();
     }
-    assert_eq!(fs::read_dir(&output).unwrap().count(), 5);
+    let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-component");
+    let mut sources: Vec<_> = fs::read_dir(directory)
+        .unwrap()
+        .map(|entry| {
+            let entry = entry.unwrap();
+            autosar_config_core::integration::InputSource::new(
+                entry.file_name().to_str().unwrap(),
+                fs::read(entry.path()).unwrap(),
+            )
+            .unwrap()
+        })
+        .collect();
+    sources.sort_by(|left, right| left.logical_path().cmp(right.logical_path()));
+    let plan = autosar_config_core::integration::build_plan_native(
+        &sources,
+        &autosar_config_core::definitions::DefinitionCatalog::builtin().unwrap(),
+        &RuntimeCatalog::embedded().unwrap(),
+    )
+    .unwrap();
+    let applications: Vec<_> = plan
+        .application_slot_descriptors()
+        .unwrap()
+        .iter()
+        .map(|slot| autosar_config_core::ApplicationSource {
+            component_instance: slot
+                .producer_slot
+                .strip_prefix("singlecore-multi-swc-v1:")
+                .unwrap()
+                .into(),
+            path: Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/multi-application")
+                .join(slot.source_paths[0].rsplit('/').next().unwrap()),
+        })
+        .collect();
+    autosar_config_core::prepare_ecu_project_with_applications(&plan, target, &applications)
+        .unwrap()
+        .generate(&output.join("multi-component"))
+        .unwrap();
+    assert_eq!(fs::read_dir(&output).unwrap().count(), 6);
 }
 
 #[test]

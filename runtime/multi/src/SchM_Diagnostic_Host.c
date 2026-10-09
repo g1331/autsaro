@@ -1,4 +1,5 @@
 /** Diagnostic buffers share the existing recursive CAN resource with callbacks. */
+#include "ComStack_Cfg.h"
 #include "SchM_Dcm.h"
 #include "SchM_CanTp.h"
 #include "Can_HostLock.h"
@@ -7,6 +8,7 @@ void SchM_Exit_Dcm_DCM_STATE(void) { Can_Unlock(); }
 void SchM_Enter_CanTp_CANTP_STATE(void) { Can_Lock(); }
 void SchM_Exit_CanTp_CANTP_STATE(void) { Can_Unlock(); }
 
+#if !defined(ECU_MULTI_COMPONENT)
 /* No connected mode-switch events in this selected profile. Publication still
  * stores the actual provided mode synchronously under the existing resource.
  * Full generation supplies matching BSW mode-group relations and ownership.
@@ -35,3 +37,4 @@ DCM_CODE Rte_ModeType_DcmDiagnosticSessionControl SchM_Mode_Dcm_DcmDiagnosticSes
 
 #define DCM_STOP_SEC_CODE
 #include "Dcm_MemMap.h"
+#endif

@@ -62,7 +62,7 @@ flowchart TD
 
 - **Binds:** CAP-2, CAP-5
 - **Prevents:** 扇出互相覆盖、local写入被CAN停止阻断或同一R具有两个数据权威。
-- **Rule:** 每个使用R endpoint恰有一个local P或network映射，P可扇出。连接接口及显式type mapping相容后，按producer endpoint建立local最后值与发布状态；首次发布前按各receiver明确ComSpec初值分别读取，冲突时receiver优先，缺init拒绝。首批local handleNeverReceived=false／aliveTimeout0／NONE，无invalidValue；其他freshness拒绝。本地标准Read／Write仅检查实际owner和指针，不检查CAN；网络适配独立处理Com状态／deadline。新multi按用户选择生成最小真实Rx I-PDU group、标准reception DM与COM→RTE通知，支持正数aliveTimeout；成员／handle／timebase／timeout／回调由同一计划核定。未分组Tx PDU按SWS_Com_00840隐式启动且不可停止，CAN停机不等于COM不可用；RTE仅按实际COM返回映射COM_STOPPED（SWS_Rte_06830／07822），Read仍回填last/init和freshness，Write更新缓冲，lower TX失败独立。标准COM模块拥有uint8 Send／Receive、lifecycle／status、真实PduInfo callbacks及MainFunction，必需ECUC配置明确核定；Rx／deadline不受旧host Dem策略失败阻断。旧profile保持历史gate／ABI。初始化在通信开放之前，运行仅owner串行修改。
+- **Rule:** 每个使用R endpoint恰有一个local P或network映射，P可扇出。连接接口及显式type mapping相容后，按producer endpoint建立local最后值与发布状态；首次发布前按各receiver明确ComSpec初值分别读取，冲突时receiver优先，缺init拒绝。首批local handleNeverReceived=false／aliveTimeout0／NONE，无invalidValue；其他freshness拒绝。本地标准Read／Write仅检查实际owner和指针，不检查CAN；网络适配独立处理Com状态／deadline。新multi只选择IMMEDIATE信号处理，DEFERRED生成前拒绝；网络ComSignalInitValue首批明确为0，RTE接收初值独立取R ComSpec并保持至首次真实接收，sender初值不产生隐式启动Write；显式ComIPduHandleId首批仍拒绝，生成handle来自可信计划。新multi按用户选择生成最小真实Rx I-PDU group、标准reception DM与COM→RTE通知，支持正数aliveTimeout；成员／handle／timebase／timeout／回调由同一计划核定。未分组Tx PDU按SWS_Com_00840隐式启动且不可停止，CAN停机不等于COM不可用；RTE仅按实际COM返回映射COM_STOPPED（SWS_Rte_06830／07822），Read仍回填last/init和freshness，Write更新缓冲，lower TX失败独立。标准COM模块拥有uint8 Send／Receive、lifecycle／status、真实PduInfo callbacks及MainFunction，必需ECUC配置明确核定；Rx／deadline不受旧host Dem策略失败阻断。旧profile保持历史gate／ABI。初始化在通信开放之前，运行仅owner串行修改。
 
 ### AD-4 — 同步 C/S 与服务器状态
 
@@ -74,7 +74,7 @@ flowchart TD
 
 - **Binds:** CAP-3
 - **Prevents:** template另设周期、位置顺序不一致、漏掉第二组件或同tick重复执行。
-- **Rule:** 首批每个周期runnable恰有一个TimingEvent，全部共用正整数ms周期、offset=0，映射到唯一Extended Task_Ecu合法OsEvent与所选Alarm／ExpiryPoint；应用/BSW周期mapping必须显式isMappedToTask=true并有task ref，缺省/false带task ref拒绝；合法显式零offset与缺省等价。所有使用event必须唯一映射，position唯一且排序，同runnable多TimingEvent拒绝。每个真实due tick按计划执行全部应用runnable一次，重复epoch不重跑；每个OperationInvokedEvent仍有RteEventToTaskMapping容器，RteEventIsMappedToTask=false且无task／alarm／event／position引用，不加入周期表。BSW输入／COM周期DM、应用、发送、诊断顺序保持；应用与COM周期状态保持同owner。真实异步CAN confirmation／mode callback涉及的CanIf、ComM、BswM共享状态以同一递归CAN资源的SchM exclusive area保护，BSWMD、声明、wrapper与source provenance共同闭合，不能以owner假设删除保护；应用跨owner配置仍拒绝。首批PERIODIC Tx PDU period与configured Tx main period相等。
+- **Rule:** 首批每个周期runnable恰有一个TimingEvent，全部共用正整数ms周期、offset=0，映射到唯一Extended Task_Ecu合法OsEvent与所选Alarm／ExpiryPoint；应用/BSW周期mapping必须显式isMappedToTask=true并有task ref，缺省/false带task ref拒绝；合法显式零offset与缺省等价。所有使用event必须唯一映射，position唯一且排序，同runnable多TimingEvent拒绝。每个真实due tick按计划执行全部应用runnable一次，重复epoch不重跑；每个OperationInvokedEvent仍有RteEventToTaskMapping容器，RteEventIsMappedToTask=false且无task／alarm／event／position引用，不加入周期表。BSW输入／COM周期DM、应用、发送、诊断顺序保持；应用与COM周期状态保持同owner。真实异步CAN confirmation／mode callback涉及的CanIf、ComM、BswM共享状态以同一递归CAN资源的SchM exclusive area保护，BSWMD、声明、wrapper与source provenance共同闭合，不能以owner假设删除保护；应用跨owner配置仍拒绝。首批PERIODIC Tx PDU period与configured Tx main period相等、minimum delay为零且无callout。唯一显式EcucPartition ID0关联唯一CoreId0并包含全部APPLICATION/SERVICE真实root实例，RteComUser与COM Rx/Tx指向该partition；不启用OsApplication。
 
 ### AD-6 — 接口及 profile 版本
 
@@ -98,7 +98,7 @@ flowchart TD
 
 - **Binds:** CAP-5
 - **Prevents:** 应用uint32、短名或controller0变成未来CAN通道／类型权威。
-- **Rule:** 本地endpoint、应用／实现数据类型、network／channel／SystemSignal／ComSignal／PDU／frame分开保留并交叉验证；wire width／endianness不代表应用类型。仅当前11-bit Classical CAN单通道实际行为；29-bit、FD、signed、multi-channel与其他转换输入拒绝。本次保留模型接缝，不生成R11运行支持。
+- **Rule:** 本地endpoint、应用／实现数据类型、network／channel／SystemSignal／ComSignal／PDU／frame分开保留并交叉验证；wire width／endianness不代表应用类型。仅当前11-bit Classical CAN单通道实际行为；29-bit、FD、signed、multi-channel与其他转换输入拒绝。完整physical诊断路由可省略应用DID，仍有内部F186/0x10/0x3E；两条诊断路由均未选择时仅生成network-only，半条路由拒绝。本次保留模型接缝，不生成R11运行支持。
 
 ## Structural Seed
 

@@ -38,8 +38,8 @@ OsUseGetServiceId OsUseParameterAccess OsUseResScheduler OsTaskActivation OsTask
 PduRDestPduHandleId PduRTransmissionConfirmation PduRSourcePduHandleId PduRSrcPduUpTxConf
 RteBswPositionInTask RtePositionInTask RteEventIsMappedToTask RteBswEventIsMappedToTask";
 
-const MULTI_RUNTIME_PARAMETERS: &str = "ComMinimumDelayTime ComSupportedIPduGroups ComIPduGroupHandleId ComMainRxTimeBase ComMainTxTimeBase ComUserHeaderInclude ComUserCbkHandleId ComUserCallbackName ComUserCallbackType PduIdTypeEnum PduLengthTypeEnum CanDevErrorDetect CanMainFunctionPeriod CanMainFunctionModePeriod CanMainFunctionBusoffPeriod CanTriggerTransmitEnable ComMDevErrorDetect ComMDynamicPncToChannelMappingSupport ComMModeLimitationEnabled ComMPncSupport ComMResetAfterForcingNoComm ComMSynchronousWakeUp ComMVersionInfoApi ComMWakeupInhibitionEnabled ComMEcuGroupClassification ComMTMinFullComModeDuration ComMBusType ComMChannelId ComMCDDBusPrefix ComMMainFunctionPeriod ComMFullCommRequestNotificationEnabled ComMNoCom ComMNoWakeup ComMNoWakeUpInhibitionNvmStorage ComMNmVariant ComMUserIdentifier BswMCanSMEnabled BswMComMEnabled BswMDcmEnabled BswMDevErrorDetect BswMEcuMEnabled BswMEthIfEnabled BswMEthSMEnabled BswMFrSMEnabled BswMGenericRequestEnabled BswMJ1939DcmEnabled BswMJ1939NmEnabled BswMLinSMEnabled BswMLinTPEnabled BswMNmEnabled BswMNvMEnabled BswMSdControlEnabled BswMSdEnabled BswMVersionInfoApi BswMUserIncludeFile BswMRequestProcessing BswMBswModeInitValue BswMConditionType BswMBswRequestedMode BswMLogicalOperator BswMRuleInitState BswMNestedExecutionOnly BswMUserCalloutFunction BswMActionListExecution BswMActionListPriority BswMActionListItemIndex BswMAbortOnFail";
-const MULTI_RUNTIME_REFERENCES: &str = "ComIPduGroupRef ComIPduMainFunctionRef ComUserCallbackRef ComUserSystemTemplateSystemSignalRef CanMainFunctionRWPeriodRef ComMUserChannel BswMComMChannelRef BswMConditionMode BswMArgumentRef BswMRuleExpressionRef BswMRuleTrueActionList BswMActionListItemRef DcmDslProtocolComMChannelRef";
+const MULTI_RUNTIME_PARAMETERS: &str = "EcucPartitionId ComIPduSignalProcessing ComMinimumDelayTime ComSupportedIPduGroups ComIPduGroupHandleId ComMainRxTimeBase ComMainTxTimeBase ComUserHeaderInclude ComUserCbkHandleId ComUserCallbackName ComUserCallbackType PduIdTypeEnum PduLengthTypeEnum CanDevErrorDetect CanMainFunctionPeriod CanMainFunctionModePeriod CanMainFunctionBusoffPeriod CanTriggerTransmitEnable ComMDevErrorDetect ComMDynamicPncToChannelMappingSupport ComMModeLimitationEnabled ComMPncSupport ComMResetAfterForcingNoComm ComMSynchronousWakeUp ComMVersionInfoApi ComMWakeupInhibitionEnabled ComMEcuGroupClassification ComMTMinFullComModeDuration ComMBusType ComMChannelId ComMCDDBusPrefix ComMMainFunctionPeriod ComMFullCommRequestNotificationEnabled ComMNoCom ComMNoWakeup ComMNoWakeUpInhibitionNvmStorage ComMNmVariant ComMUserIdentifier BswMCanSMEnabled BswMComMEnabled BswMDcmEnabled BswMDevErrorDetect BswMEcuMEnabled BswMEthIfEnabled BswMEthSMEnabled BswMFrSMEnabled BswMGenericRequestEnabled BswMJ1939DcmEnabled BswMJ1939NmEnabled BswMLinSMEnabled BswMLinTPEnabled BswMNmEnabled BswMNvMEnabled BswMSdControlEnabled BswMSdEnabled BswMVersionInfoApi BswMUserIncludeFile BswMRequestProcessing BswMBswModeInitValue BswMConditionType BswMBswRequestedMode BswMLogicalOperator BswMRuleInitState BswMNestedExecutionOnly BswMUserCalloutFunction BswMActionListExecution BswMActionListPriority BswMActionListItemIndex BswMAbortOnFail";
+const MULTI_RUNTIME_REFERENCES: &str = "EcucPartitionCoreRef EcucPartitionSoftwareComponentInstanceRef RteComUserEcucPartitionRef ComMainRxPartitionRef ComMainTxPartitionRef ComIPduGroupRef ComIPduMainFunctionRef ComUserCallbackRef ComUserSystemTemplateSystemSignalRef CanMainFunctionRWPeriodRef ComMUserChannel BswMComMChannelRef BswMConditionMode BswMArgumentRef BswMRuleExpressionRef BswMRuleTrueActionList BswMActionListItemRef DcmDslProtocolComMChannelRef";
 
 const MODULES: &[&str] = &[
     "Can", "CanIf", "CanTp", "Com", "Dcm", "EcuC", "Os", "PduR", "Rte",
@@ -289,6 +289,22 @@ fn inspect_with_catalog(
         allowed_references.extend(MULTI_RUNTIME_REFERENCES.split_ascii_whitespace());
     }
     let modules = graph.of_kind("ECUC-MODULE-CONFIGURATION-VALUES");
+    if multi {
+        if let Some(module) = modules
+            .iter()
+            .copied()
+            .find(|module| graph.text(*module, "DEFINITION-REF") == Some("/AUTOSAR/EcucDefs/LSduR"))
+        {
+            return Err(reject(
+                graph,
+                module,
+                "MODULE_UNSUPPORTED",
+                crate::product_message!(
+                    "backend.integration.configuration.fixed_target_implementation_contract_required"
+                ),
+            ));
+        }
+    }
     let context = *graph.objects.values().next().unwrap();
     physical(graph, context, catalog.is_some())?;
     let mut selected = Vec::new();
@@ -457,6 +473,19 @@ fn inspect_with_catalog(
                                 "backend.integration.configuration.explicit_parameter_implementation_unsupported"
                             ),
                         ));
+                    }
+                    if graph.elements[*index].tag == "ECUC-INSTANCE-REFERENCE-VALUE" {
+                        // Preserve both actual IREF members; the typed partition contract
+                        // separately proves their root composition and instance ownership.
+                        for iref in graph.children(*index, "VALUE-IREF") {
+                            for member in &graph.elements[iref].children {
+                                target
+                                    .entry(format!("{definition}/{}", graph.elements[*member].tag))
+                                    .or_default()
+                                    .push(graph.elements[*member].text.clone());
+                            }
+                        }
+                        continue;
                     }
                     target
                         .entry(definition.into())

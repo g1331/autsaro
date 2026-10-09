@@ -34,6 +34,36 @@ pub struct DiagnosticContract {
     pub sessions: Vec<u8>,
 }
 
+/// The physical UDS transport exists independently of an optional application DID.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiagnosticTransportContract {
+    pub rx_sdu: String,
+    pub tx_sdu: String,
+    pub rx_npdu: String,
+    pub tx_npdu: String,
+    pub request_can_id: u32,
+    pub response_can_id: u32,
+    pub request_can_if_handle: u16,
+    pub response_can_if_handle: u16,
+    pub p2_ms: u32,
+    pub p2_star_ms: u32,
+    pub s3_ms: u32,
+    pub n_ar_ms: u32,
+    pub n_br_ms: u32,
+    pub n_cr_ms: u32,
+    pub n_as_ms: u32,
+    pub n_bs_ms: u32,
+    pub n_cs_ms: u32,
+    pub buffer_bytes: u32,
+    pub receive_nsdu: u16,
+    pub transmit_nsdu: u16,
+    pub receive_npdu: u16,
+    pub transmit_npdu: u16,
+    pub dcm_receive: u16,
+    pub dcm_transmit: u16,
+}
+
 fn reject(
     graph: &Graph,
     index: usize,
@@ -393,7 +423,107 @@ pub(super) fn inspect_service(
             ),
         ));
     }
-    let protocol = one(graph, data, "DcmDslProtocolRow")?;
+    let transport = inspect_transport(graph, context, super::multi::selected(graph))?;
+    if timing != Some((transport.p2_ms, transport.p2_star_ms)) {
+        return Err(reject(
+            graph,
+            read,
+            "DIAGNOSTIC_TIMING",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_session_timing_contract_required"
+            ),
+        ));
+    }
+    Ok(DiagnosticContract {
+        data: graph.elements[data].object.clone(),
+        did_object: graph.elements[did].object.clone(),
+        did: did_id,
+        client_port: client_port.into(),
+        rx_sdu: transport.rx_sdu,
+        tx_sdu: transport.tx_sdu,
+        rx_npdu: transport.rx_npdu,
+        tx_npdu: transport.tx_npdu,
+        request_can_id: transport.request_can_id,
+        response_can_id: transport.response_can_id,
+        request_can_if_handle: transport.request_can_if_handle,
+        response_can_if_handle: transport.response_can_if_handle,
+        p2_ms: transport.p2_ms,
+        p2_star_ms: transport.p2_star_ms,
+        s3_ms: transport.s3_ms,
+        n_ar_ms: transport.n_ar_ms,
+        n_br_ms: transport.n_br_ms,
+        n_cr_ms: transport.n_cr_ms,
+        n_as_ms: transport.n_as_ms,
+        n_bs_ms: transport.n_bs_ms,
+        n_cs_ms: transport.n_cs_ms,
+        buffer_bytes: transport.buffer_bytes,
+        sessions: sessions.into_iter().collect(),
+    })
+}
+
+/// Validate the selected transport even when there is no application read service.
+pub(super) fn inspect_transport(
+    graph: &Graph,
+    context: usize,
+    standard_session_names: bool,
+) -> Result<DiagnosticTransportContract, Vec<PlanDiagnostic>> {
+    let mut sessions = BTreeSet::new();
+    let mut timing = None;
+    for session in graph
+        .of_kind("ECUC-CONTAINER-VALUE")
+        .into_iter()
+        .filter(|index| definition_is(graph, *index, "DcmDspSessionRow"))
+    {
+        let level = identifier(graph, session, "DcmDspSessionLevel")?;
+        let pair = (
+            timer(graph, session, "DcmDspSessionP2ServerMax")?,
+            timer(graph, session, "DcmDspSessionP2StarServerMax")?,
+        );
+        if standard_session_names
+            && matches!(level, 1 | 3)
+            && graph.text(session, "SHORT-NAME")
+                != Some(if level == 1 {
+                    "DCM_DEFAULT_SESSION"
+                } else {
+                    "DCM_EXTENDED_DIAGNOSTIC_SESSION"
+                })
+        {
+            return Err(reject(
+                graph,
+                session,
+                "DIAGNOSTIC_SESSION",
+                crate::product_message!(
+                    "backend.integration.diagnostic.standard_session_names_required"
+                ),
+            ));
+        }
+        if !matches!(level, 1 | 3)
+            || !sessions.insert(level)
+            || timing.is_some_and(|expected| expected != pair)
+        {
+            return Err(reject(
+                graph,
+                session,
+                "DIAGNOSTIC_SESSION",
+                crate::product_message!(
+                    "backend.integration.diagnostic.diagnostic_session_pair_required"
+                ),
+            ));
+        }
+        timing = Some(pair);
+    }
+    if sessions != BTreeSet::from([1u16, 3u16]) {
+        return Err(reject(
+            graph,
+            context,
+            "DIAGNOSTIC_SESSION",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_session_pair_required"
+            ),
+        ));
+    }
+    let (p2_ms, p2_star_ms) = timing.unwrap();
+    let protocol = one(graph, context, "DcmDslProtocolRow")?;
     let table = reference(graph, protocol, "DcmDslProtocolSIDTable")?;
     let services: Vec<_> = graph
         .descendants(table, "ECUC-CONTAINER-VALUE")
@@ -542,9 +672,9 @@ pub(super) fn inspect_service(
             ));
         }
     }
-    let rx_transport = one(graph, data, "CanTpRxNSdu")?;
-    let tx_transport = one(graph, data, "CanTpTxNSdu")?;
-    let general = one(graph, data, "CanTpGeneral")?;
+    let rx_transport = one(graph, context, "CanTpRxNSdu")?;
+    let tx_transport = one(graph, context, "CanTpTxNSdu")?;
+    let general = one(graph, context, "CanTpGeneral")?;
     if value(graph, general, "CanTpPaddingByte", false) != Some("0")
         || !matches!(
             value(graph, tx_transport, "CanTpTc", false),
@@ -615,7 +745,7 @@ pub(super) fn inspect_service(
             crate::product_message!("backend.integration.diagnostic.diagnostic_routes_must_differ"),
         ));
     }
-    let (p2_ms, p2_star_ms) = timing.unwrap();
+
     if p2_ms > u16::MAX as u32
         || p2_star_ms > (u16::MAX as u32 * 10)
         || p2_star_ms % 10 != 0
@@ -630,11 +760,24 @@ pub(super) fn inspect_service(
             ),
         ));
     }
-    Ok(DiagnosticContract {
-        data: graph.elements[data].object.clone(),
-        did_object: graph.elements[did].object.clone(),
-        did: did_id,
-        client_port: client_port.into(),
+
+    let receive_npdu = identifier(graph, rx_npdu_cfg, "CanTpRxNPduId")?;
+    let transmit_npdu = identifier(graph, tx_npdu_cfg, "CanTpTxNPduConfirmationPduId")?;
+    // This bounded connection uses the same N-PDU for data and flow control.
+    // The selected implementation has one receive and one confirmation entry.
+    if receive_npdu != identifier(graph, rx_flow, "CanTpRxFcNPduId")?
+        || transmit_npdu != identifier(graph, tx_flow, "CanTpTxFcNPduConfirmationPduId")?
+    {
+        return Err(reject(
+            graph,
+            context,
+            "DIAGNOSTIC_IDENTIFIER",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_flow_control_routes_mismatch"
+            ),
+        ));
+    }
+    Ok(DiagnosticTransportContract {
         rx_sdu: graph.elements[rx_sdu].object.clone(),
         tx_sdu: graph.elements[tx_sdu].object.clone(),
         rx_npdu: graph.elements[rx_npdu].object.clone(),
@@ -653,6 +796,25 @@ pub(super) fn inspect_service(
         n_bs_ms: timer(graph, tx_transport, "CanTpNbs")?,
         n_cs_ms: timer(graph, tx_transport, "CanTpNcs")?,
         buffer_bytes: 64,
-        sessions: sessions.into_iter().collect(),
+        receive_nsdu: identifier(graph, rx_transport, "CanTpRxNSduId")?,
+        transmit_nsdu: identifier(graph, tx_transport, "CanTpTxNSduId")?,
+        receive_npdu,
+        transmit_npdu,
+        dcm_receive: identifier(graph, rx, "DcmDslProtocolRxPduId")?,
+        dcm_transmit: identifier(graph, tx, "DcmDslTxConfirmationPduId")?,
     })
+}
+fn identifier(graph: &Graph, context: usize, parameter: &str) -> Result<u16, Vec<PlanDiagnostic>> {
+    value(graph, context, parameter, false)
+        .and_then(|value| value.parse::<u16>().ok())
+        .ok_or_else(|| {
+            reject(
+                graph,
+                context,
+                "DIAGNOSTIC_IDENTIFIER",
+                crate::product_message!(
+                    "backend.integration.diagnostic.diagnostic_service_identifier_invalid"
+                ),
+            )
+        })
 }

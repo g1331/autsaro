@@ -14,6 +14,9 @@
 | C/S | 本地同步调用、非重入服务器；一个 required operation 恰对应一个提供 operation 和 OperationInvokedEvent。每个接口至少一个operation，全部ComSpec与invoked event反向闭合；参数policy仅缺省或USE-ARGUMENT-TYPE，USE-VOID拒绝；无参数operation合法。首批不声明possible application errors，server runnable返回void（SWS_Rte_08913），客户端Rte_Call返回Std_ReturnType／E_OK或基础设施错误，不能混用两种返回形状。首批不支持递归调用环、并发、多任务服务、noReturnValueProvided或可能异步配置 |
 | runnable／event | 非并发 runnable；TimingEvent 与 OperationInvokedEvent。每个周期runnable恰有一个TimingEvent，周期均为相同的正整数毫秒、offset=0；多TimingEvent指向同一runnable、其他event／offset／异周期拒绝。服务器不被周期调用或额外ActivateTask；每个OperationInvokedEvent仍必须有RteEventToTaskMapping容器，但无task／alarm／event／position引用，RteEventIsMappedToTask=false。应用与BSW周期mapping显式isMappedToTask=true并含task ref，缺省/false带task ref拒绝（RTE CONSTR08936/08938）；零offset显式与缺省等价。周期runnable的符号、访问点、event必须一致 |
 | OS／SchM | 唯一 Extended Task_Ecu owner；沿既有 Alarm／ScheduleTable 支持选择同一周期触发闭包，按 RtePositionInTask 执行全部到期 runnable；BSW 消费输入→COM 周期 DM→应用顺序→传输→诊断。应用及 COM 周期状态由 owner 访问；真实异步 CAN confirmation／mode callback 与 CanIf、ComM、BswM 的共享状态使用同一递归 CAN 资源的 SchM exclusive area，声明与调用由实际 BSWMD 身份共同生成，不以 owner 假设省略保护。非法 task／event／位置／周期拒绝；首批 PERIODIC Tx PDU period 必须与 configured Tx main period 相等 |
+| COM 处理与实例 | 新 multi 的 ComSignalInitValue 明确为0；RTE 接收端初值独立来自 R ComSpec，首次真实接收前保留该值，包括 stopped Read。发送端 ComSpec 初值不代替 COM 源配置，也不触发虚构 startup Write。新 multi 仅选择 IMMEDIATE 信号处理；DEFERRED 在生成前拒绝，不把即时通知冒充 deferred。Rx／Tx configured main 名、周期和 RteBsw 调度行来自同一配置；PERIODIC Tx 的 minimum delay 为零、无 callout，显式 ComIPduHandleId 首批仍拒绝，由可信计划确定生成 handle。旧 profile 的历史处理行为保留 |
+| partition／core | 显式唯一 EcucPartition、ID0，关联实际唯一 CoreId0，包含全部 APPLICATION／SERVICE 的真实 root-context instance refs；RteComUser 与 COM Rx／Tx 同指该 partition。首批不启用 OsApplication，不由单 partition 推导多 partition 支持 |
+| 诊断路由 | 完整 physical Dcm→PduR→CanTp 路由可有或无应用 DID；无应用 DID 时保留标准内部 F186、0x10／0x3E，未知 DID 返回 NRC31，不生成替代应用 callback。两条诊断路由均不选时交付 network-only；任一端点／半条路由不能构成 active diagnostic chain |
 | CAN | 维持已支持的 11 位 Classical CAN／单通道／uint32 little-endian；同步 DID 仍通过实际 RTE 服务使用应用状态；已有 BSW 与受控 target 共同交付 |
 
 支持多组件不要求每个 SWC 都具有 CAN 端口或 DID 服务；纯本地组件、仅生产者、仅消费者及服务提供／调用组件是必要输入形状。不得复制完整旧 EchoApplication 和它的专属 DID 约束给每个组件来代替模型扩展。
@@ -37,3 +40,7 @@
 已定位 integration/component、communication、schedule、plan、contracts、ecu 的单实例假设；generation application slots、arxml/application、delivery／ownership／reopen 与包内工具需同步核对。native rules、模板、原创 fixtures、所有 plan consumers 和 IPC／UI 按实际 DTO 影响同步迁移。仅修改本次必要调用链；不得更新 Epic 7 done／发行结论或无关运行模块。
 
 8.2 的所选诊断模式依赖：单一 host CDD ComM channel（COMM_BUS_TYPE_CDD／Ecu_HostBusSM／NM NONE），保持真实 System CAN 身份。真实 BusSM 控制/查询 Can／CanIf模式，ComM消费诊断活动与 ordinary request，Dcm按 NoCom／Silent／Full通知门控，BswM消费所选模式规则；配置、状态与回调共同派生并独立验证。无完整 CanSM 或硬件模式完成符合声明，固定 R24-11 对 CDD prefix 的许可与后续 CAN variant 退出见 compliance-references。
+
+首批实际路由采用一对一、同一 EcucPartition、无 metadata、非 zero-cost 的 LSduR 标准实现；配置由已核定 PduR／CanIf／CanTp 路由来源派生，不接受额外 LSduR ECUC override 或在线配置切换。PBConfigType 实际 producer 为模块所属 PduR_PBcfg.c／LSduR_PBcfg.c，随正常 sealed 工程交付。诊断路由只能完整选择或全部不选择；完整路由可没有用户 DID，仍提供标准内部会话 DID／会话服务；无路由的网络工程不生成虚构的活动诊断调用。新 multi BSW 输入描述须显式提供标准要求的 callType、executionContext、同步／重入属性和与真实普通函数一致的 STANDARD implementation policy，不能用缺省值替代缺失契约。
+
+组件类型与 EcucPartition 的短名不能占用实际已交付的 Rte／Ecu／Can／CanIf／CanTp／Com／Dcm／PduR／LSduR／ComM／BswM／Ecu_HostBusSM 内存 scope；在正常 definition／可信计划入口定位来源拒绝，避免 MemMap section 或其 BSWMD prefix 与固定 runtime producer 合并。

@@ -419,6 +419,7 @@ fn destination_allowed(node: Node<'_, '_>, dest: &str) -> bool {
                     | "ECUC-FUNCTION-NAME-DEF"
                     | "ECUC-LINKER-SYMBOL-DEF"
             ),
+            Some("ECUC-INSTANCE-REFERENCE-VALUE") => dest == "ECUC-INSTANCE-REFERENCE-DEF",
             Some("ECUC-REFERENCE-VALUE") => matches!(
                 dest,
                 "ECUC-REFERENCE-DEF"
@@ -428,7 +429,7 @@ fn destination_allowed(node: Node<'_, '_>, dest: &str) -> bool {
             ),
             _ => false,
         },
-        "VALUE-REF" => {
+        "VALUE-REF" | "CONTEXT-ELEMENT-REF" | "TARGET-REF" => {
             !dest.is_empty()
                 && dest
                     .bytes()
@@ -441,10 +442,11 @@ fn destination_allowed(node: Node<'_, '_>, dest: &str) -> bool {
                 | "APPLICATION-SW-COMPONENT-TYPE"
                 | "SERVICE-SW-COMPONENT-TYPE"
                 | "COMPOSITION-SW-COMPONENT-TYPE"
+                | "MODE-DECLARATION-GROUP"
         ),
         "PROVIDED-INTERFACE-TREF" | "REQUIRED-INTERFACE-TREF" => matches!(
             dest,
-            "SENDER-RECEIVER-INTERFACE" | "CLIENT-SERVER-INTERFACE"
+            "SENDER-RECEIVER-INTERFACE" | "CLIENT-SERVER-INTERFACE" | "MODE-SWITCH-INTERFACE"
         ),
         "CONTEXT-COMPONENT-REF" | "TARGET-COMPONENT-REF" => dest == "SW-COMPONENT-PROTOTYPE",
         "CONTEXT-COMPOSITION-REF" => matches!(
@@ -460,6 +462,11 @@ fn destination_allowed(node: Node<'_, '_>, dest: &str) -> bool {
         "OPERATION-REF" | "TARGET-PROVIDED-OPERATION-REF" | "TARGET-REQUIRED-OPERATION-REF" => {
             dest == "CLIENT-SERVER-OPERATION"
         }
+        "MODE-GROUP-REF" => matches!(
+            dest,
+            "MODE-DECLARATION-GROUP-PROTOTYPE" | "MODE-DECLARATION-GROUP"
+        ),
+        "INITIAL-MODE-REF" => dest == "MODE-DECLARATION",
         "START-ON-EVENT-REF" => dest == "RUNNABLE-ENTITY",
         "STARTS-ON-EVENT-REF" => dest == "BSW-SCHEDULABLE-ENTITY",
         "IMPLEMENTED-ENTRY-REF" => dest == "BSW-MODULE-ENTRY",

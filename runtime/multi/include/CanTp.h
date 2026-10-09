@@ -19,6 +19,11 @@ typedef struct {
     uint16 main_period_ms;
     uint8 wait_frame_max;
     uint8 padding;
+    /** Router callback IDs derived from the NSdu's canonical Pdu references.
+     * These are distinct from this module's public receive/transmit NSdu IDs.
+     */
+    PduIdType upper_receive;
+    PduIdType upper_transmit;
 } CanTp_ConfigType;
 void CanTp_Init(const CanTp_ConfigType *CfgPtr);
 void CanTp_Shutdown(void);

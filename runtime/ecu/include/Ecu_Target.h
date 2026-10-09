@@ -112,6 +112,10 @@ uint8_t Ecu_TargetState(void);
 int Ecu_TargetIsOwner(void);
 /** Enforce the single-owner proof at an internal BSW/SchM boundary. */
 void Ecu_TargetAssertOwner(void);
+/** Check trusted startup (TRUE) or shutdown (FALSE) OS hook context.
+ * Refusal returns E_NOT_OK without changing owner/lifecycle state.
+ */
+Std_ReturnType Ecu_TargetCheckLifecycleContext(boolean starting);
 /** Read the owner's explicitly delivered logical epoch.
  * @return Logical milliseconds; caller must own the ECU state.
  */

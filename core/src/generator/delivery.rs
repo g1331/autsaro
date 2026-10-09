@@ -137,6 +137,9 @@ pub(crate) struct NativeInputs {
     pub definition_fingerprint: String,
     pub preparation_identity: String,
     pub guard: NativeGuard,
+    // Workspace identity includes the original on-disk manifest bytes. Keep
+    // that immutable seed separate from canonical consumer preparation bytes.
+    revision_source_identity: Option<String>,
 }
 
 pub(crate) fn digest(bytes: &[u8]) -> String {
@@ -333,9 +336,16 @@ impl NativeInputs {
             &self.resources.rule_set_identity,
             &self.definition_fingerprint,
         )?;
-        if self.guard.sources.is_empty() {
-            self.guard.revision_identity = self.preparation_identity.clone();
-        }
+        self.guard.revision_identity = match &self.revision_source_identity {
+            Some(source) => {
+                let mut hash = Sha256::new();
+                hash.update(b"autosar-native-guarded-consumer-snapshot-v1\0");
+                hash.update(source.as_bytes());
+                hash.update(self.preparation_identity.as_bytes());
+                format!("{:x}", hash.finalize())
+            }
+            None => self.preparation_identity.clone(),
+        };
         Ok(())
     }
 
@@ -399,7 +409,9 @@ impl NativeInputs {
             &rule_set_identity,
             &definition_fingerprint,
         )?;
+        let revision_source_identity = format!("{:x}", identity.finalize());
         Ok(Self {
+            revision_source_identity: Some(revision_source_identity.clone()),
             manifest,
             configuration,
             application,
@@ -417,7 +429,7 @@ impl NativeInputs {
                 sources: guards,
                 roots: roots.into_iter().collect(),
                 catalog,
-                revision_identity: format!("{:x}", identity.finalize()),
+                revision_identity: revision_source_identity,
             },
         })
     }
@@ -468,6 +480,7 @@ impl NativeInputs {
             &definition_fingerprint,
         )?;
         Ok(Self {
+            revision_source_identity: None,
             manifest,
             configuration,
             application: Vec::new(),
@@ -521,7 +534,7 @@ pub(crate) fn insert_file<'a>(
 pub(crate) fn populate_inputs<'a>(
     files: &mut BTreeMap<String, PreparedFile<'a>>,
     inputs: &mut NativeInputs,
-    slot: Option<&ApplicationSlotDescriptor>,
+    slots: &[ApplicationSlotDescriptor],
 ) -> Result<Vec<InputSnapshot>, crate::LocalizedText> {
     let mut snapshots = Vec::new();
     let mut logical = BTreeSet::new();
@@ -572,10 +585,11 @@ pub(crate) fn populate_inputs<'a>(
         });
     }
     for member in &inputs.manifest.application_inputs {
-        let slot = slot
+        let slot = slots
+            .iter()
+            .find(|slot| slot.producer_slot == member.producer_slot)
             .ok_or_else(|| crate::product_message!("backend.delivery.application_slot_missing"))?;
         if member.producer_slot != slot.producer_slot
-            || member.producer_slot != APPLICATION_SLOT
             || slot.source_paths != [member.path.clone()]
             || !logical.insert(member.path.to_ascii_lowercase())
         {
@@ -596,15 +610,25 @@ pub(crate) fn populate_inputs<'a>(
             .map_err(|_| crate::product_message!("backend.delivery.application_source_not_utf8"))?;
         let sha256 = digest(bytes);
         let contents = Cow::Owned(std::mem::take(bytes));
-        if let Some(reference) = files.get_mut(APPLICATION_OUTPUT) {
+        let output = if slot.producer_slot == APPLICATION_SLOT {
+            APPLICATION_OUTPUT.to_owned()
+        } else {
+            let relative = slot.source_paths[0]
+                .strip_prefix("application/")
+                .ok_or_else(|| {
+                    crate::product_message!("backend.delivery.application_membership_mismatch")
+                })?;
+            format!("src/{relative}")
+        };
+        if let Some(reference) = files.get_mut(&output) {
             reference.bytes = contents;
             reference.source = None;
         } else {
-            insert_file(files, APPLICATION_OUTPUT.into(), contents)?;
+            insert_file(files, output.clone(), contents)?;
         }
         snapshots.push(InputSnapshot {
             logical_path: member.path.clone(),
-            package_path: APPLICATION_OUTPUT.into(),
+            package_path: output,
             kind: InputKind::Application,
             sha256,
             role: "user-application".into(),
@@ -650,4 +674,72 @@ pub(crate) fn append_native_readme(
     readme.bytes = Cow::Owned(text.into_bytes());
     readme.source = None;
     Ok(())
+}
+
+#[cfg(test)]
+mod snapshot_identity_tests {
+    use super::*;
+
+    fn snapshot(raw_manifest: &[u8]) -> NativeInputs {
+        let resources = ResourceIdentities {
+            rule_set_identity: crate::rules::rule_set_identity().unwrap(),
+            required_extension_definitions: Vec::new(),
+        };
+        NativeInputs {
+            manifest: ProjectManifest {
+                format_version: 1,
+                declared_release: "R24-11".into(),
+                profile_hint: crate::integration::MULTI_PROFILE.into(),
+                inputs: Vec::new(),
+                application_inputs: Vec::new(),
+                accepted_extension_definitions: Vec::new(),
+            },
+            configuration: vec![("extract.arxml".into(), b"configuration snapshot".to_vec())],
+            application: vec![
+                (
+                    "application/Ingress.c".into(),
+                    b"first application".to_vec(),
+                ),
+                (
+                    "application/Observe.c".into(),
+                    b"second application".to_vec(),
+                ),
+            ],
+            resources: resources.clone(),
+            definition_fingerprint: "definition identity".into(),
+            preparation_identity: String::new(),
+            revision_source_identity: Some(digest(raw_manifest)),
+            guard: NativeGuard {
+                resources,
+                sources: vec![SourceGuard {
+                    path: PathBuf::from("extract.arxml"),
+                    sha256: digest(b"configuration snapshot"),
+                }],
+                roots: Vec::new(),
+                catalog: DefinitionCatalog::builtin().unwrap(),
+                revision_identity: "original disk identity".into(),
+            },
+        }
+    }
+
+    #[test]
+    fn guarded_revision_covers_every_application_and_preserves_raw_manifest_identity() {
+        let mut inputs = snapshot(b"{}\n");
+        inputs.refresh_snapshot_identity().unwrap();
+        let original = inputs.guard.revision_identity.clone();
+        let canonical = inputs.preparation_identity.clone();
+        inputs.application[1].1 = b"modified second application".to_vec();
+        inputs.refresh_snapshot_identity().unwrap();
+        assert_ne!(original, inputs.guard.revision_identity);
+        let changed = inputs.guard.revision_identity.clone();
+        inputs.refresh_snapshot_identity().unwrap();
+        assert_eq!(changed, inputs.guard.revision_identity);
+        inputs.application[1].1 = b"second application".to_vec();
+        inputs.refresh_snapshot_identity().unwrap();
+        assert_eq!(original, inputs.guard.revision_identity);
+        let mut formatted = snapshot(b"{ }\n");
+        formatted.refresh_snapshot_identity().unwrap();
+        assert_eq!(canonical, formatted.preparation_identity);
+        assert_ne!(original, formatted.guard.revision_identity);
+    }
 }

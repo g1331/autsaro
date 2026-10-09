@@ -44,11 +44,23 @@ pub struct CanRuntimeContract {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PartitionRuntimeContract {
+    pub path: String,
+    pub name: String,
+    pub id: u16,
+    pub core: String,
+    pub root_composition: String,
+    pub instances: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CommunicationRuntimeContract {
     pub pdu_collection: String,
     pub pdu_id_type: CommunicationIntegerType,
     pub pdu_length_type: CommunicationIntegerType,
     pub can: CanRuntimeContract,
+    pub partition: PartitionRuntimeContract,
 }
 
 fn fail(graph: &Graph, index: usize, code: &str) -> Vec<PlanDiagnostic> {
@@ -100,10 +112,97 @@ fn period(
         .ok_or_else(|| fail(graph, container, "CAN_POLLING_TIMEBASE"))
 }
 
+fn partition(
+    graph: &Graph,
+    multi: &super::multi::MultiComponentContract,
+) -> Result<PartitionRuntimeContract, Vec<PlanDiagnostic>> {
+    let index = one(graph, "EcucPartition")?;
+    if super::multi::reserved_memory_scope(graph.text(index, "SHORT-NAME").unwrap_or("")) {
+        return Err(fail(graph, index, "CONTRACT_NAME_COLLISION"));
+    }
+
+    let core = one(graph, "EcucCoreDefinition")?;
+    if value(graph, index, "EcucPartitionId", false).and_then(|id| id.parse::<u16>().ok())
+        != Some(0)
+        || value(graph, core, "EcucCoreId", false).and_then(|id| id.parse::<u16>().ok()) != Some(0)
+        || value(graph, index, "EcucPartitionCoreRef", true)
+            != Some(graph.elements[core].object.as_str())
+    {
+        return Err(fail(graph, index, "RTE_PARTITION_CONFIGURATION"));
+    }
+    let roots = graph.of_kind("ROOT-SW-COMPOSITION-PROTOTYPE");
+    let root = roots
+        .iter()
+        .copied()
+        .filter(|root| {
+            graph.text(*root, "SOFTWARE-COMPOSITION-TREF") == Some(multi.composition.as_str())
+                && graph
+                    .objects
+                    .get(&multi.system)
+                    .is_some_and(|system| graph.within(*root, *system))
+        })
+        .collect::<Vec<_>>();
+    if root.len() != 1 {
+        return Err(fail(graph, index, "RTE_PARTITION_CONFIGURATION"));
+    }
+    let root_path = graph.elements[root[0]].object.as_str();
+    let mut instances = Vec::new();
+    for group in graph.children(index, "REFERENCE-VALUES") {
+        for reference in &graph.elements[group].children {
+            if graph
+                .text(*reference, "DEFINITION-REF")
+                .is_some_and(|id| id.ends_with("/EcucPartitionSoftwareComponentInstanceRef"))
+            {
+                let irefs = graph.children(*reference, "VALUE-IREF");
+                if irefs.len() != 1
+                    || graph.elements[irefs[0]].children.len() != 2
+                    || graph.text(irefs[0], "CONTEXT-ELEMENT-REF") != Some(root_path)
+                {
+                    return Err(fail(graph, *reference, "RTE_PARTITION_CONFIGURATION"));
+                }
+                let target = graph
+                    .text(irefs[0], "TARGET-REF")
+                    .ok_or_else(|| fail(graph, *reference, "RTE_PARTITION_CONFIGURATION"))?;
+                instances.push(target.to_string());
+            }
+        }
+    }
+    instances.sort();
+    let mut expected = multi
+        .components
+        .iter()
+        .map(|component| component.instance.clone())
+        .collect::<Vec<_>>();
+    expected.sort();
+    if instances != expected {
+        return Err(fail(graph, index, "RTE_PARTITION_CONFIGURATION"));
+    }
+    for (kind, reference) in [
+        ("RteComUser", "RteComUserEcucPartitionRef"),
+        ("ComMainFunctionRx", "ComMainRxPartitionRef"),
+        ("ComMainFunctionTx", "ComMainTxPartitionRef"),
+    ] {
+        let consumer = one(graph, kind)?;
+        if values(graph, consumer, reference, true) != [graph.elements[index].object.as_str()] {
+            return Err(fail(graph, consumer, "RTE_PARTITION_CONFIGURATION"));
+        }
+    }
+    Ok(PartitionRuntimeContract {
+        path: graph.elements[index].object.clone(),
+        name: graph.text(index, "SHORT-NAME").unwrap().into(),
+        id: 0,
+        core: graph.elements[core].object.clone(),
+        root_composition: root_path.into(),
+        instances,
+    })
+}
+
 pub(super) fn inspect(
     graph: &Graph,
     schedule: &ScheduleContract,
+    multi: &super::multi::MultiComponentContract,
 ) -> Result<CommunicationRuntimeContract, Vec<PlanDiagnostic>> {
+    let partition = partition(graph, multi)?;
     let collection = one(graph, "EcucPduCollection")?;
     let pdu_id_type = integer_type(graph, collection, "PduIdTypeEnum")?;
     let pdu_length_type = integer_type(graph, collection, "PduLengthTypeEnum")?;
@@ -217,7 +316,32 @@ pub(super) fn inspect(
         .and_then(|text| text.parse::<u8>().ok())
         .filter(|id| *id == 0)
         .ok_or_else(|| fail(graph, can_if_controller, "CAN_CONTROLLER_ID"))?;
+    for (symbol, configured) in [
+        (
+            "Can_MainFunction_Read",
+            period(graph, rw, "CanMainFunctionPeriod", schedule)?,
+        ),
+        (
+            "Can_MainFunction_Write",
+            period(graph, rw, "CanMainFunctionPeriod", schedule)?,
+        ),
+        (
+            "Can_MainFunction_Mode",
+            period(graph, general, "CanMainFunctionModePeriod", schedule)?,
+        ),
+        (
+            "Can_MainFunction_BusOff",
+            period(graph, general, "CanMainFunctionBusoffPeriod", schedule)?,
+        ),
+    ] {
+        if !schedule.entities.iter().any(|entity| {
+            !entity.application && entity.symbol == symbol && entity.period_ms == configured
+        }) {
+            return Err(fail(graph, general, "CAN_POLLING_TIMEBASE"));
+        }
+    }
     Ok(CommunicationRuntimeContract {
+        partition,
         pdu_collection: graph.elements[collection].object.clone(),
         pdu_id_type,
         pdu_length_type,

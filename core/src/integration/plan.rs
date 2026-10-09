@@ -45,6 +45,8 @@ pub struct PlanDescription {
     pub signals: Vec<SignalChannel>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub diagnostic: Option<DiagnosticContract>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub diagnostic_transport: Option<super::diagnostic::DiagnosticTransportContract>,
     pub routes: Vec<PduRoute>,
     pub configuration: Vec<ConfigurationRecord>,
     pub events: Vec<EventAssignment>,
@@ -380,6 +382,7 @@ fn assemble(
         schedule,
         signals,
         diagnostic: Some(diagnostic),
+        diagnostic_transport: None,
         routes,
         configuration: configuration.records,
         events: configuration.events,
@@ -405,6 +408,7 @@ pub(super) struct MultiPlanInputs {
     schedule: ScheduleContract,
     signals: Vec<SignalChannel>,
     diagnostic: Option<DiagnosticContract>,
+    diagnostic_transport: Option<super::diagnostic::DiagnosticTransportContract>,
     routes: Vec<PduRoute>,
     configuration: configuration::Configuration,
     handles: Vec<HandleAssignment>,
@@ -414,7 +418,7 @@ pub(super) struct MultiPlanInputs {
 pub(super) fn inspect_multi(
     graph: &super::graph::Graph,
     definition_catalog: Option<&crate::definitions::DefinitionCatalog>,
-    runtime: &RuntimeCatalog,
+    _runtime: &RuntimeCatalog,
 ) -> Result<MultiPlanInputs, Vec<PlanDiagnostic>> {
     let multi = super::multi::inspect(graph)?;
     let bindings: Vec<_> = multi
@@ -436,7 +440,7 @@ pub(super) fn inspect_multi(
         .filter(|runnable| runnable.period_ms.is_none() && runnable.event.is_some())
         .map(|runnable| runnable.path.clone())
         .collect();
-    let schedule = schedule::inspect_events(graph, &bindings, &periodic, &servers, true)?;
+    let mut schedule = schedule::inspect_events(graph, &bindings, &periodic, &servers, true)?;
     let signals: Vec<_> = multi
         .network_endpoints
         .iter()
@@ -542,9 +546,71 @@ pub(super) fn inspect_multi(
             }
         }
     }
+    if let Some(diagnostic) = &diagnostic {
+        let service = multi
+            .components
+            .iter()
+            .find(|component| {
+                component
+                    .operations
+                    .iter()
+                    .any(|operation| operation.read && operation.port == diagnostic.client_port)
+            })
+            .unwrap();
+        if service.diagnostic_session_port.is_none()
+            || service.diagnostic_mode_ports.len() != multi.dcm_modes.len()
+            || multi.components.iter().any(|component| {
+                component.instance != service.instance
+                    && component.diagnostic_session_port.is_some()
+            })
+        {
+            return Err(vec![graph.diagnostic(*graph.objects.get(&service.component).unwrap(), DiagnosticCategory::Input, "SERVICE_TYPE_CONFLICT", crate::product_message!("backend.integration.multi.contract_invalid", "code" => "SERVICE_TYPE_CONFLICT"), crate::product_message!("backend.integration.multi.repair_contract"))]);
+        }
+    } else if multi
+        .components
+        .iter()
+        .any(|component| component.diagnostic_session_port.is_some())
+    {
+        return Err(vec![graph.diagnostic(*graph.objects.get(&multi.composition).unwrap(), DiagnosticCategory::Input, "SERVICE_TYPE_CONFLICT", crate::product_message!("backend.integration.multi.contract_invalid", "code" => "SERVICE_TYPE_CONFLICT"), crate::product_message!("backend.integration.multi.repair_contract"))]);
+    }
     let com_runtime = super::multi_com::inspect(graph, &signals, &schedule)?;
-    let routes = routing::inspect_optional(graph, &signals, diagnostic.as_ref())?;
-    let communication_runtime = super::multi_bsw::inspect(graph, &schedule)?;
+    if com_runtime.is_none() {
+        return Err(vec![graph.diagnostic(
+            *graph.objects.get(&multi.composition).unwrap(),
+            DiagnosticCategory::Input,
+            "COM_CONFIGURATION",
+            crate::product_message!("backend.integration.multi.contract_invalid", "code" => "COM_CONFIGURATION"),
+            crate::product_message!("backend.integration.multi.repair_contract"),
+        )]);
+    }
+    let diagnostic_transport = diagnostic::inspect_transport(
+        graph,
+        *graph.objects.get(&multi.composition).unwrap(),
+        true,
+    )?;
+    let routed_transport = graph
+        .of_kind("ECUC-CONTAINER-VALUE")
+        .into_iter()
+        .any(|index| {
+            [
+                ("PduRSrcPdu", "PduRSrcPduRef"),
+                ("PduRDestPdu", "PduRDestPduRef"),
+            ]
+            .iter()
+            .any(|(kind, reference)| {
+                schedule::definition_is(graph, index, kind)
+                    && schedule::value(graph, index, reference, true).is_some_and(|pdu| {
+                        pdu == diagnostic_transport.rx_sdu || pdu == diagnostic_transport.tx_sdu
+                    })
+            })
+        });
+    let diagnostic_transport =
+        (routed_transport || diagnostic.is_some()).then_some(diagnostic_transport);
+    let routes = match &diagnostic_transport {
+        Some(transport) => routing::inspect_transport(graph, &signals, transport)?,
+        None => routing::inspect_optional(graph, &signals, None)?,
+    };
+    let communication_runtime = super::multi_bsw::inspect(graph, &schedule, &multi)?;
     let mode_runtime = super::multi_mode::inspect(graph, &schedule)?;
     let configuration = match definition_catalog {
         Some(catalog) => configuration::inspect_native(graph, catalog)?,
@@ -561,14 +627,40 @@ pub(super) fn inspect_multi(
             })?,
         )?,
     };
-    let mut symbols = catalog::inspect(graph, runtime)?;
+    let selected_runtime = catalog::multi_catalog(com_runtime.as_ref().unwrap(), &mode_runtime);
+    let mut symbols = catalog::inspect(graph, &selected_runtime)?;
     symbols.extend(super::multi::symbols(&multi));
-    let mut names = com_runtime.as_ref().map_or_else(BTreeSet::new, |com| {
-        BTreeSet::from([
-            com.receive_main.symbol.clone(),
-            com.transmit_main.symbol.clone(),
-        ])
-    });
+    for symbol in ["Rte_COMCbk", "Rte_COMCbkRxTOut"] {
+        symbols.push(SymbolContract {
+            symbol: symbol.into(),
+            return_type: "void".into(),
+            arguments: vec![ContractArgument {
+                name: "HandleId".into(),
+                native_type: "CbkHandleIdType".into(),
+                direction: "IN".into(),
+            }],
+            declaration_owner: "include/Rte_Com.h".into(),
+            definition_owner: "src/Rte.c".into(),
+            consumers: com_runtime
+                .as_ref()
+                .unwrap()
+                .receptions
+                .iter()
+                .map(|reception| reception.user_signal.clone())
+                .collect(),
+        });
+    }
+    if diagnostic_transport.is_none() {
+        // Preserve the raw source descriptors, but the effective selected plan
+        // schedules only initialized producers with an actual routing path.
+        schedule.entities.retain(|entity| {
+            !matches!(
+                entity.symbol.as_str(),
+                "CanTp_MainFunction" | "Dcm_MainFunction"
+            )
+        });
+    }
+    let mut names = BTreeSet::new();
     for symbol in &symbols {
         if !c_identifier(&symbol.symbol) || !names.insert(symbol.symbol.clone()) {
             return Err(vec![graph.diagnostic(*graph.objects.get(&multi.composition).unwrap(), DiagnosticCategory::Input, "SYMBOL_PRODUCER_DUPLICATE", crate::product_message!("backend.integration.plan.external_c_symbol_invalid_or_multiple_producers", "value0" => symbol.symbol), crate::product_message!("backend.integration.plan.resolve_c_symbol_and_producer_conflicts"))]);
@@ -655,16 +747,16 @@ pub(super) fn inspect_multi(
                 signal.receive,
             )
         })
-        .chain(diagnostic.iter().flat_map(|diagnostic| {
+        .chain(diagnostic_transport.iter().flat_map(|diagnostic| {
             [
                 (
-                    diagnostic.data.as_str(),
+                    diagnostic.rx_sdu.as_str(),
                     diagnostic.request_can_id,
                     diagnostic.request_can_if_handle,
                     true,
                 ),
                 (
-                    diagnostic.data.as_str(),
+                    diagnostic.tx_sdu.as_str(),
                     diagnostic.response_can_id,
                     diagnostic.response_can_if_handle,
                     false,
@@ -698,6 +790,7 @@ pub(super) fn inspect_multi(
         schedule,
         signals,
         diagnostic,
+        diagnostic_transport,
         routes,
         configuration,
         handles,
@@ -717,6 +810,7 @@ fn assemble_multi(
         schedule,
         signals,
         diagnostic,
+        diagnostic_transport,
         routes,
         configuration,
         handles,
@@ -741,12 +835,13 @@ fn assemble_multi(
             schedule,
             signals,
             diagnostic,
+            diagnostic_transport,
             routes,
             configuration: configuration.records,
             events: configuration.events,
             handles,
             symbols,
-            runtime_sources: runtime.source_identities().clone(),
+            runtime_sources: catalog::multi_source_identities(),
             validation_dependencies: inspection.validation_dependencies,
             rule_set_identity: inspection.rule_set_identity,
             required_extension_definitions: inspection.required_extension_definitions,

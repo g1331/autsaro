@@ -95,6 +95,20 @@ Std_ReturnType Can_Write(Can_HwHandleType hth, const Can_PduType *pdu);
  * @return Host output status, or ECU_OK if no frame is pending.
  */
 EcuStatus Can_HostFlush(void);
+/** @brief Capture the actual queued transmission token inside the host sink.
+ * @return Nonzero lifetime token only during the current queued driver flush;
+ * zero when the selected profile does not enable queued completion.
+ */
+uint64_t Can_HostTransmitToken(void);
+/** @brief Publish a physically completed, owner-verified queued output.
+ * @param[in] handle Actual swPduHandle stored with the output ticket.
+ * @param[in] token Token captured during that output's driver flush.
+ * @return E_OK when queued for Write polling, CAN_BUSY if a previous event
+ * needs draining, E_NOT_OK for disabled/uninitialized, stale or cancelled tokens.
+ * The controlled owner must prove the actual output ticket/handle/token and
+ * physical write/flush before calling; no payload is queued or synthesized here.
+ */
+Std_ReturnType Can_HostCompleteTransmit(PduIdType handle, uint64_t token);
 
 /** @brief Change the virtual controller state.
  * @param[in] mode New controller state.

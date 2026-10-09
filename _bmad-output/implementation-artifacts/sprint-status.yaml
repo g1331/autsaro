@@ -108,7 +108,7 @@ development_status:
 
   epic-8: in-progress
   8-1-从多组件输入生成一致的应用契约: review
-  8-2-经真实-os-调度运行多组件通信: in-progress
+  8-2-经真实-os-调度运行多组件通信: review
   8-3-保护每个组件的用户源码再生成: backlog
   8-4-在工作区安全编辑应用组合与调度: backlog
   8-5-独立交接并复验多组件工程: backlog

@@ -77,6 +77,17 @@ impl ValidatedIntegrationPlan {
         })
     }
 
+    /// Every caller-owned producer is derived from the actual trusted symbol owner.
+    /// The generated no-event Dcm service bridge is not a caller source slot.
+    pub fn application_slot_descriptors(
+        &self,
+    ) -> Result<Vec<generator::delivery::ApplicationSlotDescriptor>, Vec<PlanDiagnostic>> {
+        let Some(multi) = &self.description().multi else {
+            return self.application_slot_descriptor().map(|slot| vec![slot]);
+        };
+        Ok(application_slots(multi, &self.description().symbols))
+    }
+
     /// Trusted create-only seed; never merges with or overwrites a user source.
     pub fn application_seed_files(&self) -> Result<Vec<(String, Vec<u8>)>, Vec<PlanDiagnostic>> {
         Ok(vec![(
@@ -153,6 +164,14 @@ impl ValidatedIntegrationPlan {
         application: Option<&'a [u8]>,
     ) -> Result<BTreeMap<String, Cow<'a, [u8]>>, Vec<PlanDiagnostic>> {
         let plan = self.description();
+        if plan.multi.is_some() {
+            if application.is_none() {
+                return Err(reject(crate::product_message!(
+                    "backend.integration.multi.consumer_unsupported"
+                )));
+            }
+            return super::multi_ecu::files(self, target);
+        }
         let component = plan.legacy_component().map_err(reject)?;
         let diagnostic = plan.legacy_diagnostic().map_err(reject)?;
         let contract = self.component_contract_files()?;
@@ -185,100 +204,12 @@ impl ValidatedIntegrationPlan {
             }
             source_paths.insert(path, delivered.to_owned());
         }
-        let counter_name = c_name(plan.schedule.counter.rsplit('/').next().unwrap());
-        let tick_ms = u64::from(plan.schedule.counter_tick_ms);
-        let counter_header = format!(
-            "/** @file Generated Counter time conversions (SWS_Os_00393).\n * Argument: a TickType value in0..UINT32_MAX; evaluated once.\n * Result: PhysicalTimeType. Integer seconds truncate toward zero.\n * The validated Counter resolution is {tick_ms} logical millisecond(s).\n * The largest nanosecond result fits uint64_t without overflow.\n */\n#ifndef AUTOSAR_GENERATED_OS_COUNTER_H\n#define AUTOSAR_GENERATED_OS_COUNTER_H\n#include \"Os_Types.h\"\nstatic inline PhysicalTimeType Os_TicksToNs_{counter_name}(TickType ticks) {{\n    return (PhysicalTimeType)ticks * UINT64_C({ns});\n}}\nstatic inline PhysicalTimeType Os_TicksToUs_{counter_name}(TickType ticks) {{\n    return (PhysicalTimeType)ticks * UINT64_C({us});\n}}\nstatic inline PhysicalTimeType Os_TicksToMs_{counter_name}(TickType ticks) {{\n    return (PhysicalTimeType)ticks * UINT64_C({tick_ms});\n}}\nstatic inline PhysicalTimeType Os_TicksToSec_{counter_name}(TickType ticks) {{\n    return ((PhysicalTimeType)ticks * UINT64_C({tick_ms})) / UINT64_C(1000);\n}}\n#define OS_TICKS2NS_{counter_name}(ticks) (Os_TicksToNs_{counter_name}((ticks)))\n#define OS_TICKS2US_{counter_name}(ticks) (Os_TicksToUs_{counter_name}((ticks)))\n#define OS_TICKS2MS_{counter_name}(ticks) (Os_TicksToMs_{counter_name}((ticks)))\n#define OS_TICKS2SEC_{counter_name}(ticks) (Os_TicksToSec_{counter_name}((ticks)))\n#endif\n",
-            ns = tick_ms * 1_000_000,
-            us = tick_ms * 1_000,
-        );
-        let counter_symbol = format!("OS_COUNTER_ID_{counter_name}");
-        files.extend(
-            super::os_service::files(&counter_name, &counter_symbol)
-                .into_iter()
-                .map(|(path, bytes)| (path, Cow::Owned(bytes))),
-        );
-        let legacy_constants = format!(
-            "#define {counter_symbol} 0u\n#define OSMAXALLOWEDVALUE_{counter_name} UINT64_C({maximum})\n#define OSTICKSPERBASE_{counter_name} UINT64_C({base})\n#define OSMINCYCLE_{counter_name} UINT64_C({minimum})\n#define OSMAXALLOWEDVALUE_{counter_symbol} OSMAXALLOWEDVALUE_{counter_name}\n#define OSTICKSPERBASE_{counter_symbol} OSTICKSPERBASE_{counter_name}\n#define OSMINCYCLE_{counter_symbol} OSMINCYCLE_{counter_name}\n#define OSMAXALLOWEDVALUE OSMAXALLOWEDVALUE_{counter_name}\n#define OSTICKSPERBASE OSTICKSPERBASE_{counter_name}\n#define OSMINCYCLE OSMINCYCLE_{counter_name}\n#define OSTICKDURATION UINT64_C({nanoseconds})\n",
-            maximum = plan.schedule.counter_maximum,
-            base = plan.schedule.counter_ticks_per_base,
-            minimum = plan.schedule.counter_minimum_cycle,
-            nanoseconds = tick_ms * 1_000_000,
-        );
-        let mut counter_header = counter_header;
-        let end = counter_header.rfind("#endif").unwrap();
-        counter_header.insert_str(end, &legacy_constants);
-        files.insert(
-            "os/include/Os_Counter.h".into(),
-            Cow::Owned(counter_header.into_bytes()),
-        );
-        let configuration = files.get_mut("os/include/Os_Cfg.h").unwrap();
-        let mut configuration_text = std::str::from_utf8(configuration)
-            .map_err(|error| reject(error.to_string().into()))?
-            .to_owned();
-        let extended_status = plan
-            .configuration
-            .iter()
-            .find_map(|record| {
-                record.parameters.iter().find_map(|(name, values)| {
-                    name.ends_with("/OsStatus").then(|| values[0].as_str())
-                })
-            })
-            .unwrap_or("EXTENDED")
-            == "EXTENDED";
-        configuration_text = configuration_text.replace(
-            "#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED 1\n#endif",
-            if extended_status {
-                "#if defined(OS_STATUS_EXTENDED) && (OS_STATUS_EXTENDED != 1)\n#error OsStatus differs from the validated plan\n#endif\n#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED 1\n#endif"
-            } else {
-                "#if defined(OS_STATUS_EXTENDED) && (OS_STATUS_EXTENDED != 0)\n#error OsStatus differs from the validated plan\n#endif\n#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED 0\n#endif"
-            },
-        );
-        let task_symbol = format!(
-            "OS_TASK_ID_{}",
-            plan.schedule.task.rsplit('/').next().unwrap()
-        );
-        let use_res_scheduler = plan
-            .configuration
-            .iter()
-            .find(|record| record.definition == "/AUTOSAR/EcucDefs/Os/OsOS")
-            .and_then(|record| {
-                record
-                    .parameters
-                    .get("/AUTOSAR/EcucDefs/Os/OsOS/OsUseResScheduler")
-            })
-            .map(|values| matches!(values[0].as_str(), "true" | "1"))
-            .ok_or_else(|| {
-                reject(crate::product_message!(
-                    "backend.integration.ecu.validated_os_scheduler_resource_config_missing"
-                ))
-            })?;
-        let end = configuration_text.rfind("#endif").unwrap();
-        configuration_text.insert_str(
-            end,
-            &format!("#include \"Os_Counter.h\"\n#define {task_symbol} 0u\n"),
-        );
-        *configuration = Cow::Owned(configuration_text.into_bytes());
-        let mut timer_report = serde_json::to_vec_pretty(&serde_json::json!({
-            "format": "autosar-os-generation-timing-v1",
-            "requirement": "SWS_Os_00370",
-            "counter": { "path": plan.schedule.counter, "name": counter_name,
-                "tickNanoseconds": tick_ms * 1_000_000, "maximum": plan.schedule.counter_maximum },
-            "internalPeriodicTimers": [],
-            "kernelSoftwareTimers": { "enabled": false, "configUSE_TIMERS": 0 },
-            "kernelTick": { "source": "explicit controlled interrupt1", "periodicHostThread": false,
-                "logicalMillisecondsPerRequest": 1 },
-            "hostTimeouts": [
-                { "owner": "Os_TargetWaitTick", "clock": "native monotonic milliseconds",
-                    "rangeMilliseconds": [1, 5000], "advancesAutomotiveTime": false },
-                { "owner": "HostBatchV1", "clock": "native monotonic milliseconds",
-                    "limitMilliseconds": 5000, "advancesAutomotiveTime": false }
-            ],
-            "scope": "Selected single-core controlled-logical-time target; no hardware timer claim."
-        }))
-        .map_err(|error| reject(error.to_string().into()))?;
-        timer_report.push(b'\n');
-        files.insert("os-generation-timing.json".into(), Cow::Owned(timer_report));
+        let OsGeneration {
+            counter_symbol,
+            task_symbol,
+            use_res_scheduler,
+            extended_status,
+        } = configure_os(plan, &mut files)?;
         for (name, bytes) in contract.into_files() {
             if name.starts_with("include/") || name == "contract.json" {
                 if let Some(previous) = files.get(&name) {
@@ -390,126 +321,16 @@ impl ValidatedIntegrationPlan {
                 .into_bytes(),
             ),
         );
-        let mut groups = BTreeMap::new();
-        let mut table_groups = BTreeMap::new();
-        for entity in &plan.schedule.entities {
-            if let Some(table) = &entity.schedule_table {
-                table_groups.insert(
-                    table.clone(),
-                    (
-                        entity.period_ms,
-                        mask(&entity.os_event),
-                        entity.expiry_offset.unwrap(),
-                        entity.table_start.unwrap(),
-                    ),
-                );
-            } else {
-                groups.insert(
-                    entity.alarm.clone(),
-                    (entity.period_ms, mask(&entity.os_event)),
-                );
-            }
-        }
-        let mut alarms = String::new();
-        files.extend(
-            super::arti::files(
-                plan,
-                use_res_scheduler,
-                &groups.keys().cloned().collect::<Vec<_>>(),
-                &table_groups.keys().cloned().collect::<Vec<_>>(),
-            )
-            .map_err(reject)?
-            .into_iter()
-            .map(|(path, bytes)| (path, Cow::Owned(bytes))),
-        );
-        for (id, (_, (period, event))) in groups.iter().enumerate() {
-            writeln!(alarms, "    {{{id}u, 0u, OS_ALARM_EVENT, 0u, {event}u, NULL, 1u, 0u, {period}u, {period}u, 0u}},").unwrap();
-        }
-        let mut tables = String::new();
-        let mut table_entries = String::new();
-        for (id, (_, (period, event, offset, start))) in table_groups.iter().enumerate() {
-            writeln!(tables, "static const Os_ExpiryAction table_actions_{id}[] = {{{{OS_ALARM_EVENT, 0u, {event}u}}}};\nstatic const Os_ExpiryPoint table_points_{id}[] = {{{{{offset}u, table_actions_{id}, 1u}}}};").unwrap();
-            writeln!(table_entries, "    {{{id}u, 0u, {period}u, table_points_{id}, 1u, 1u, OS_SCHEDULE_SYNC_NONE, 1u, 0u, {start}u}},").unwrap();
-        }
-        if !table_groups.is_empty() {
-            writeln!(
-                tables,
-                "static const Os_ScheduleTableConfig schedule_tables[] = {{\n{table_entries}}};"
-            )
-            .unwrap();
-        }
-        let alarm_declaration = if groups.is_empty() {
-            String::new()
-        } else {
-            format!("static const Os_AlarmConfig alarms[] = {{\n{alarms}}};")
-        };
         let read = component.data_ports.iter().find(|port| port.read).unwrap();
         let write = component.data_ports.iter().find(|port| !port.read).unwrap();
-        let template = AssetInventory::embedded()
-            .get("runtime/ecu/templates/Ecu_Config.c.in")
-            .ok_or_else(|| {
-                reject(crate::product_message!(
-                    "backend.integration.ecu.trusted_ecu_config_template_missing"
-                ))
-            })?;
-        let mut config = std::str::from_utf8(template.bytes)
-            .map_err(|error| reject(error.to_string().into()))?
-            .to_owned();
+        let mut config = os_configuration(
+            plan,
+            &mut files,
+            &counter_symbol,
+            &task_symbol,
+            use_res_scheduler,
+        )?;
         for (key, value) in [
-            ("TASK_SYMBOL", task_symbol),
-            (
-                "TASK_NAME",
-                serde_json::to_string(plan.schedule.task.rsplit('/').next().unwrap()).unwrap(),
-            ),
-            ("TASK_PRIORITY", plan.schedule.task_priority.to_string()),
-            (
-                "SCHEDULER_RESOURCE",
-                if use_res_scheduler {
-                    format!(
-                        "static const Os_ResourceConfig scheduler_resource = {{RES_SCHEDULER, {}u, UINT16_C(1), UINT32_C(0)}};",
-                        plan.schedule.task_priority
-                    )
-                } else {
-                    String::new()
-                },
-            ),
-            (
-                "RESOURCE_PTR",
-                if use_res_scheduler {
-                    "&scheduler_resource"
-                } else {
-                    "NULL"
-                }
-                .to_owned(),
-            ),
-            ("RESOURCE_COUNT", usize::from(use_res_scheduler).to_string()),
-            ("COUNTER_MAX", plan.schedule.counter_maximum.to_string()),
-            ("COUNTER_SYMBOL", counter_symbol),
-            (
-                "COUNTER_BASE",
-                plan.schedule.counter_ticks_per_base.to_string(),
-            ),
-            (
-                "COUNTER_MIN_CYCLE",
-                plan.schedule.counter_minimum_cycle.to_string(),
-            ),
-            ("ALARMS", alarm_declaration),
-            (
-                "ALARM_PTR",
-                if groups.is_empty() { "NULL" } else { "alarms" }.to_owned(),
-            ),
-            ("ALARM_COUNT", groups.len().to_string()),
-            ("SCHEDULE_TABLES", tables),
-            (
-                "SCHEDULE_PTR",
-                if table_groups.is_empty() {
-                    "NULL"
-                } else {
-                    "schedule_tables"
-                }
-                .to_owned(),
-            ),
-            ("SCHEDULE_COUNT", table_groups.len().to_string()),
             ("RX_CAN_ID", rx.can_id.to_string()),
             ("TX_CAN_ID", tx.can_id.to_string()),
             ("RX_DEADLINE", rx.deadline_ms.unwrap().to_string()),
@@ -657,6 +478,392 @@ impl ValidatedIntegrationPlan {
     }
 }
 
+/// The same delivery selection drives rendering, provenance and ledger checks.
+/// Multi reuses the actual shared driver/OS/kernel and replaces only its BSW
+/// implementations; the build target remains the normal ECU target.
+pub(crate) fn source_assets(
+    target: BuildTarget,
+    multi: bool,
+) -> Result<BTreeMap<String, &'static crate::resources::AssetEntry>, crate::LocalizedText> {
+    let inventory = AssetInventory::embedded();
+    let mut files = BTreeMap::new();
+    for asset in inventory.selected(target, "ecu") {
+        if multi
+            && asset.relative_path.starts_with("runtime/src/")
+            && !matches!(
+                asset.relative_path,
+                "runtime/src/Can.c"
+                    | "runtime/src/Can_HostLock.c"
+                    | "runtime/src/Can_HostLock.h"
+                    | "runtime/src/Ecu_Status.c"
+            )
+        {
+            continue;
+        }
+        if multi
+            && matches!(
+                asset.relative_path,
+                "runtime/ecu/src/Ecu_Execution.c" | "runtime/ecu/src/Ecu_SchM.c"
+            )
+        {
+            continue;
+        }
+        files.insert(crate::prepared::deliver_path(asset, "ecu")?, asset);
+    }
+    if multi {
+        for path in ["runtime/src/Can_HostLock.c", "runtime/src/Can_HostLock.h"] {
+            if let Some(asset) = inventory.get(path) {
+                files.insert(crate::prepared::deliver_path(asset, "ecu")?, asset);
+            }
+        }
+        for asset in inventory.selected(target, "ecu-multi") {
+            files.insert(crate::prepared::deliver_path(asset, "ecu-multi")?, asset);
+        }
+    } else if let Some(asset) = inventory.get("runtime/include/Com.h") {
+        files.insert("bsw-origin/include/Com.h".into(), asset);
+    }
+    Ok(files)
+}
+
+fn application_slots(
+    multi: &super::multi::MultiComponentContract,
+    symbols: &[super::catalog::SymbolContract],
+) -> Vec<generator::delivery::ApplicationSlotDescriptor> {
+    let mut slots = Vec::new();
+    for component in &multi.components {
+        let source = format!(
+            "application/{}.c",
+            c_name(component.component.rsplit('/').next().unwrap())
+        );
+        let entries: Vec<_> = symbols
+            .iter()
+            .filter(|symbol| symbol.definition_owner == source)
+            .map(|symbol| symbol.symbol.clone())
+            .collect();
+        if !entries.is_empty() {
+            slots.push(generator::delivery::ApplicationSlotDescriptor {
+                producer_slot: format!("{}:{}", super::MULTI_PROFILE, component.instance),
+                component_path: component.component.clone(),
+                source_paths: vec![source],
+                generated_headers: vec![
+                    component.header.clone(),
+                    "include/Rte.h".into(),
+                    "include/Rte_Type.h".into(),
+                ],
+                entry_symbols: entries,
+            });
+        }
+    }
+    slots
+}
+
+/// Structural ownership proof only. This neither authorizes extension catalogs
+/// nor substitutes for native definition validation and regenerated-byte checks.
+pub(crate) fn application_slots_from_sources(
+    sources: &[super::InputSource],
+) -> Result<Vec<generator::delivery::ApplicationSlotDescriptor>, Vec<PlanDiagnostic>> {
+    let catalog = crate::definitions::DefinitionCatalog::builtin().map_err(reject)?;
+    let graph = super::graph::Graph::from_catalog_target_scope(sources, &catalog)?;
+    // Only the structural application/instance consumers participate here.
+    // Unrelated ECUC modules and their extension definitions are not authorized
+    // by an ownership proof; native preparation checks them separately.
+    let rte_instances: Vec<_> = graph
+        .of_kind("ECUC-CONTAINER-VALUE")
+        .into_iter()
+        .filter(|index| super::schedule::definition_is(&graph, *index, "RteSwComponentInstance"))
+        .collect();
+    let mut pending = graph.of_kind("SYSTEM");
+    let mut visited = std::collections::BTreeSet::new();
+    let mut consumers = std::collections::BTreeSet::new();
+    // The only ECUC reference used for application identity is the actual
+    // RteSwComponentInstance -> composition prototype binding. Its definition
+    // identity selects this field; no extension definition is accepted here.
+    for root in &rte_instances {
+        for value in graph.descendants(*root, "ECUC-REFERENCE-VALUE") {
+            if graph.text(value, "DEFINITION-REF").is_some_and(|definition| {
+                definition == "/AUTOSAR/EcucDefs/Rte/RteSwComponentInstance/RteSoftwareComponentInstanceRef"
+            }) {
+                consumers.extend(graph.descendants(value, "VALUE-REF"));
+            }
+        }
+    }
+    while let Some(index) = pending.pop() {
+        if !visited.insert(index) {
+            continue;
+        }
+        let element = &graph.elements[index];
+        if element.tag.starts_with("ECUC-") {
+            continue;
+        }
+        consumers.insert(index);
+        pending.extend(element.children.iter().copied());
+        if element.attributes.contains_key("DEST") {
+            pending.extend(graph.objects.get(&element.text).copied());
+        }
+    }
+    let references = graph.reference_diagnostics_for_indices(&consumers);
+    if !references.is_empty() {
+        return Err(references);
+    }
+    let multi = super::multi::inspect(&graph)?;
+    Ok(application_slots(&multi, &super::multi::symbols(&multi)))
+}
+
+/// Shared OS producer for both validated application profiles. Its inputs are
+/// the checked counter/task/event contract, never caller-provided C fragments.
+pub(super) struct OsGeneration {
+    pub counter_symbol: String,
+    pub task_symbol: String,
+    pub use_res_scheduler: bool,
+    pub extended_status: bool,
+}
+
+pub(super) fn configure_os(
+    plan: &super::PlanDescription,
+    files: &mut BTreeMap<String, Cow<'_, [u8]>>,
+) -> Result<OsGeneration, Vec<PlanDiagnostic>> {
+    let counter_name = c_name(plan.schedule.counter.rsplit('/').next().unwrap());
+    let tick_ms = u64::from(plan.schedule.counter_tick_ms);
+    let counter_header = format!(
+        "/** @file Generated Counter time conversions (SWS_Os_00393).\n * Argument: a TickType value in0..UINT32_MAX; evaluated once.\n * Result: PhysicalTimeType. Integer seconds truncate toward zero.\n * The validated Counter resolution is {tick_ms} logical millisecond(s).\n * The largest nanosecond result fits uint64_t without overflow.\n */\n#ifndef AUTOSAR_GENERATED_OS_COUNTER_H\n#define AUTOSAR_GENERATED_OS_COUNTER_H\n#include \"Os_Types.h\"\nstatic inline PhysicalTimeType Os_TicksToNs_{counter_name}(TickType ticks) {{\n    return (PhysicalTimeType)ticks * UINT64_C({ns});\n}}\nstatic inline PhysicalTimeType Os_TicksToUs_{counter_name}(TickType ticks) {{\n    return (PhysicalTimeType)ticks * UINT64_C({us});\n}}\nstatic inline PhysicalTimeType Os_TicksToMs_{counter_name}(TickType ticks) {{\n    return (PhysicalTimeType)ticks * UINT64_C({tick_ms});\n}}\nstatic inline PhysicalTimeType Os_TicksToSec_{counter_name}(TickType ticks) {{\n    return ((PhysicalTimeType)ticks * UINT64_C({tick_ms})) / UINT64_C(1000);\n}}\n#define OS_TICKS2NS_{counter_name}(ticks) (Os_TicksToNs_{counter_name}((ticks)))\n#define OS_TICKS2US_{counter_name}(ticks) (Os_TicksToUs_{counter_name}((ticks)))\n#define OS_TICKS2MS_{counter_name}(ticks) (Os_TicksToMs_{counter_name}((ticks)))\n#define OS_TICKS2SEC_{counter_name}(ticks) (Os_TicksToSec_{counter_name}((ticks)))\n#endif\n",
+        ns = tick_ms * 1_000_000,
+        us = tick_ms * 1_000,
+    );
+    let counter_symbol = format!("OS_COUNTER_ID_{counter_name}");
+    files.extend(
+        super::os_service::files(&counter_name, &counter_symbol)
+            .into_iter()
+            .map(|(path, bytes)| (path, Cow::Owned(bytes))),
+    );
+    let legacy_constants = format!(
+        "#define {counter_symbol} 0u\n#define OSMAXALLOWEDVALUE_{counter_name} UINT64_C({maximum})\n#define OSTICKSPERBASE_{counter_name} UINT64_C({base})\n#define OSMINCYCLE_{counter_name} UINT64_C({minimum})\n#define OSMAXALLOWEDVALUE_{counter_symbol} OSMAXALLOWEDVALUE_{counter_name}\n#define OSTICKSPERBASE_{counter_symbol} OSTICKSPERBASE_{counter_name}\n#define OSMINCYCLE_{counter_symbol} OSMINCYCLE_{counter_name}\n#define OSMAXALLOWEDVALUE OSMAXALLOWEDVALUE_{counter_name}\n#define OSTICKSPERBASE OSTICKSPERBASE_{counter_name}\n#define OSMINCYCLE OSMINCYCLE_{counter_name}\n#define OSTICKDURATION UINT64_C({nanoseconds})\n",
+        maximum = plan.schedule.counter_maximum,
+        base = plan.schedule.counter_ticks_per_base,
+        minimum = plan.schedule.counter_minimum_cycle,
+        nanoseconds = tick_ms * 1_000_000,
+    );
+    let mut counter_header = counter_header;
+    let end = counter_header.rfind("#endif").unwrap();
+    counter_header.insert_str(end, &legacy_constants);
+    files.insert(
+        "os/include/Os_Counter.h".into(),
+        Cow::Owned(counter_header.into_bytes()),
+    );
+    let configuration = files.get_mut("os/include/Os_Cfg.h").unwrap();
+    let mut configuration_text = std::str::from_utf8(configuration)
+        .map_err(|error| reject(error.to_string().into()))?
+        .to_owned();
+    let extended_status =
+        plan.configuration
+            .iter()
+            .find_map(|record| {
+                record.parameters.iter().find_map(|(name, values)| {
+                    name.ends_with("/OsStatus").then(|| values[0].as_str())
+                })
+            })
+            .unwrap_or("EXTENDED")
+            == "EXTENDED";
+    configuration_text = configuration_text.replace(
+        "#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED 1\n#endif",
+        if extended_status {
+            "#if defined(OS_STATUS_EXTENDED) && (OS_STATUS_EXTENDED != 1)\n#error OsStatus differs from the validated plan\n#endif\n#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED 1\n#endif"
+        } else {
+            "#if defined(OS_STATUS_EXTENDED) && (OS_STATUS_EXTENDED != 0)\n#error OsStatus differs from the validated plan\n#endif\n#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED 0\n#endif"
+        },
+    );
+    let task_symbol = format!(
+        "OS_TASK_ID_{}",
+        plan.schedule.task.rsplit('/').next().unwrap()
+    );
+    let use_res_scheduler = plan
+        .configuration
+        .iter()
+        .find(|record| record.definition == "/AUTOSAR/EcucDefs/Os/OsOS")
+        .and_then(|record| {
+            record
+                .parameters
+                .get("/AUTOSAR/EcucDefs/Os/OsOS/OsUseResScheduler")
+        })
+        .map(|values| matches!(values[0].as_str(), "true" | "1"))
+        .ok_or_else(|| {
+            reject(crate::product_message!(
+                "backend.integration.ecu.validated_os_scheduler_resource_config_missing"
+            ))
+        })?;
+    let end = configuration_text.rfind("#endif").unwrap();
+    configuration_text.insert_str(
+        end,
+        &format!("#include \"Os_Counter.h\"\n#define {task_symbol} 0u\n"),
+    );
+    *configuration = Cow::Owned(configuration_text.into_bytes());
+    let mut timer_report = serde_json::to_vec_pretty(&serde_json::json!({
+        "format": "autosar-os-generation-timing-v1",
+        "requirement": "SWS_Os_00370",
+        "counter": { "path": plan.schedule.counter, "name": counter_name,
+            "tickNanoseconds": tick_ms * 1_000_000, "maximum": plan.schedule.counter_maximum },
+        "internalPeriodicTimers": [],
+        "kernelSoftwareTimers": { "enabled": false, "configUSE_TIMERS": 0 },
+        "kernelTick": { "source": "explicit controlled interrupt1", "periodicHostThread": false,
+            "logicalMillisecondsPerRequest": 1 },
+        "hostTimeouts": [
+            { "owner": "Os_TargetWaitTick", "clock": "native monotonic milliseconds",
+                "rangeMilliseconds": [1, 5000], "advancesAutomotiveTime": false },
+            { "owner": "HostBatchV1", "clock": "native monotonic milliseconds",
+                "limitMilliseconds": 5000, "advancesAutomotiveTime": false }
+        ],
+        "scope": "Selected single-core controlled-logical-time target; no hardware timer claim."
+    }))
+    .map_err(|error| reject(error.to_string().into()))?;
+    timer_report.push(b'\n');
+    files.insert("os-generation-timing.json".into(), Cow::Owned(timer_report));
+    Ok(OsGeneration {
+        counter_symbol,
+        task_symbol,
+        use_res_scheduler,
+        extended_status,
+    })
+}
+
+/// Emit the real OS task/counter/alarm/table configuration once for either
+/// application profile. The remaining BSW portion is supplied by its producer.
+pub(super) fn os_configuration(
+    plan: &super::PlanDescription,
+    files: &mut BTreeMap<String, Cow<'_, [u8]>>,
+    counter_symbol: &str,
+    task_symbol: &str,
+    use_res_scheduler: bool,
+) -> Result<String, Vec<PlanDiagnostic>> {
+    let mask = |path: &str| {
+        plan.events
+            .iter()
+            .find(|event| event.path == path)
+            .unwrap()
+            .mask
+    };
+    let mut groups = BTreeMap::new();
+    let mut table_groups = BTreeMap::new();
+    for entity in &plan.schedule.entities {
+        if let Some(table) = &entity.schedule_table {
+            table_groups.insert(
+                table.clone(),
+                (
+                    entity.period_ms,
+                    mask(&entity.os_event),
+                    entity.expiry_offset.unwrap(),
+                    entity.table_start.unwrap(),
+                ),
+            );
+        } else {
+            groups.insert(
+                entity.alarm.clone(),
+                (entity.period_ms, mask(&entity.os_event)),
+            );
+        }
+    }
+    let mut alarms = String::new();
+    files.extend(
+        super::arti::files(
+            plan,
+            use_res_scheduler,
+            &groups.keys().cloned().collect::<Vec<_>>(),
+            &table_groups.keys().cloned().collect::<Vec<_>>(),
+        )
+        .map_err(reject)?
+        .into_iter()
+        .map(|(path, bytes)| (path, Cow::Owned(bytes))),
+    );
+    for (id, (_, (period, event))) in groups.iter().enumerate() {
+        writeln!(alarms, "    {{{id}u, 0u, OS_ALARM_EVENT, 0u, {event}u, NULL, 1u, 0u, {period}u, {period}u, 0u}},").unwrap();
+    }
+    let mut tables = String::new();
+    let mut table_entries = String::new();
+    for (id, (_, (period, event, offset, start))) in table_groups.iter().enumerate() {
+        writeln!(tables, "static const Os_ExpiryAction table_actions_{id}[] = {{{{OS_ALARM_EVENT, 0u, {event}u}}}};\nstatic const Os_ExpiryPoint table_points_{id}[] = {{{{{offset}u, table_actions_{id}, 1u}}}};").unwrap();
+        writeln!(table_entries, "    {{{id}u, 0u, {period}u, table_points_{id}, 1u, 1u, OS_SCHEDULE_SYNC_NONE, 1u, 0u, {start}u}},").unwrap();
+    }
+    if !table_groups.is_empty() {
+        writeln!(
+            tables,
+            "static const Os_ScheduleTableConfig schedule_tables[] = {{\n{table_entries}}};"
+        )
+        .unwrap();
+    }
+    let alarm_declaration = if groups.is_empty() {
+        String::new()
+    } else {
+        format!("static const Os_AlarmConfig alarms[] = {{\n{alarms}}};")
+    };
+    let template = AssetInventory::embedded()
+        .get("runtime/ecu/templates/Ecu_Config.c.in")
+        .ok_or_else(|| {
+            reject(crate::product_message!(
+                "backend.integration.ecu.trusted_ecu_config_template_missing"
+            ))
+        })?;
+    let mut config = std::str::from_utf8(template.bytes)
+        .map_err(|error| reject(error.to_string().into()))?
+        .to_owned();
+    for (key, value) in [
+        ("TASK_SYMBOL", task_symbol.to_owned()),
+        (
+            "TASK_NAME",
+            serde_json::to_string(plan.schedule.task.rsplit('/').next().unwrap()).unwrap(),
+        ),
+        ("TASK_PRIORITY", plan.schedule.task_priority.to_string()),
+        (
+            "SCHEDULER_RESOURCE",
+            if use_res_scheduler {
+                format!(
+                    "static const Os_ResourceConfig scheduler_resource = {{RES_SCHEDULER, {}u, UINT16_C(1), UINT32_C(0)}};",
+                    plan.schedule.task_priority
+                )
+            } else {
+                String::new()
+            },
+        ),
+        (
+            "RESOURCE_PTR",
+            if use_res_scheduler {
+                "&scheduler_resource"
+            } else {
+                "NULL"
+            }
+            .to_owned(),
+        ),
+        ("RESOURCE_COUNT", usize::from(use_res_scheduler).to_string()),
+        ("COUNTER_MAX", plan.schedule.counter_maximum.to_string()),
+        ("COUNTER_SYMBOL", counter_symbol.to_owned()),
+        (
+            "COUNTER_BASE",
+            plan.schedule.counter_ticks_per_base.to_string(),
+        ),
+        (
+            "COUNTER_MIN_CYCLE",
+            plan.schedule.counter_minimum_cycle.to_string(),
+        ),
+        ("ALARMS", alarm_declaration),
+        (
+            "ALARM_PTR",
+            if groups.is_empty() { "NULL" } else { "alarms" }.to_owned(),
+        ),
+        ("ALARM_COUNT", groups.len().to_string()),
+        ("SCHEDULE_TABLES", tables),
+        (
+            "SCHEDULE_PTR",
+            if table_groups.is_empty() {
+                "NULL"
+            } else {
+                "schedule_tables"
+            }
+            .to_owned(),
+        ),
+        ("SCHEDULE_COUNT", table_groups.len().to_string()),
+    ] {
+        config = config.replace(&format!("@{key}@"), &value);
+    }
+    Ok(config)
+}
+
 fn render_template(
     path: &str,
     substitutions: &[(&str, String)],
@@ -685,4 +892,99 @@ fn render_template(
     }
     result.push_str(tail);
     Ok(result.into_bytes())
+}
+
+#[cfg(test)]
+mod ownership_tests {
+    use super::application_slots_from_sources;
+    use crate::integration::InputSource;
+
+    fn sources() -> Vec<InputSource> {
+        let root =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-component");
+        let mut sources = std::fs::read_dir(root)
+            .unwrap()
+            .map(|entry| {
+                let entry = entry.unwrap();
+                InputSource::new(
+                    entry.file_name().to_str().unwrap(),
+                    std::fs::read(entry.path()).unwrap(),
+                )
+                .unwrap()
+            })
+            .collect::<Vec<_>>();
+        sources.sort_by(|left, right| left.logical_path().cmp(right.logical_path()));
+        sources
+    }
+
+    #[test]
+    fn sealed_structural_ownership_uses_real_application_producers_and_typed_bindings() {
+        let source = sources();
+        let slots =
+            application_slots_from_sources(&source).unwrap_or_else(|issues| panic!("{issues:?}"));
+        assert_eq!(slots.len(), 3);
+        assert_eq!(
+            slots
+                .iter()
+                .map(|slot| slot.source_paths[0].as_str())
+                .collect::<std::collections::BTreeSet<_>>(),
+            std::collections::BTreeSet::from([
+                "application/Ingress.c",
+                "application/Observe.c",
+                "application/Process.c"
+            ])
+        );
+        assert!(
+            !slots
+                .iter()
+                .any(|slot| slot.component_path.ends_with("DcmService"))
+        );
+        for (file, before, after) in [
+            (
+                "composition.arxml",
+                "TYPE-TREF DEST=\"APPLICATION-SW-COMPONENT-TYPE\"",
+                "TYPE-TREF DEST=\"SERVICE-SW-COMPONENT-TYPE\"",
+            ),
+            (
+                "ecuc.arxml",
+                "<VALUE-REF DEST=\"SW-COMPONENT-PROTOTYPE\">/Application/Pipeline/IngressInstance",
+                "<VALUE-REF DEST=\"APPLICATION-SW-COMPONENT-TYPE\">/Application/Pipeline/IngressInstance",
+            ),
+        ] {
+            let mut changed = source.clone();
+            let input = changed
+                .iter_mut()
+                .find(|input| input.logical_path() == file)
+                .unwrap();
+            let text = std::str::from_utf8(input.bytes()).unwrap();
+            assert!(text.contains(before));
+            *input = InputSource::new(file, text.replacen(before, after, 1).into_bytes()).unwrap();
+            assert!(
+                application_slots_from_sources(&changed)
+                    .unwrap_err()
+                    .iter()
+                    .any(|issue| issue.code == "REFERENCE_DEST")
+            );
+        }
+        // Ownership does not authorize a catalog: unrelated ECUC definition
+        // identities remain native validation's responsibility, outside this proof.
+        let mut unrelated = source;
+        let input = unrelated
+            .iter_mut()
+            .find(|input| input.logical_path() == "ecuc.arxml")
+            .unwrap();
+        let text = std::str::from_utf8(input.bytes()).unwrap();
+        assert!(text.contains("/AUTOSAR/EcucDefs/Can/CanGeneral/CanDevErrorDetect"));
+        *input = InputSource::new(
+            "ecuc.arxml",
+            text.replacen(
+                "/AUTOSAR/EcucDefs/Can/CanGeneral/CanDevErrorDetect",
+                "/Vendor/Extension/CanDevErrorDetect",
+                1,
+            )
+            .into_bytes(),
+        )
+        .unwrap();
+        assert_eq!(application_slots_from_sources(&unrelated).unwrap(), slots);
+    }
 }

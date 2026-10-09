@@ -7,17 +7,23 @@
 #include "ComStack_Types.h"
 #include "Rte_Dcm_Type.h"
 typedef Std_ReturnType (*Dcm_ReadDidType)(uint8 *data);
+/** Generated connection-specific SchM publisher; no authentication service is selected. */
+typedef void (*Ecu_DcmAuthenticationModeType)(uint8 state);
 typedef struct {
     PduIdType receive;
     PduIdType transmit;
     NetworkHandleType channel;
     uint16 did;
+    /** NULL selects no application DID; internal session DID F186 remains available. */
     Dcm_ReadDidType read;
     uint16 p2_ticks;
     uint16 p2_ms;
-    uint16 p2_star_ms;
+    uint32 p2_star_ms;
     uint32 s3_ticks;
     PduLengthType buffer_length;
+    /** Router transmit request ID, distinct from Dcm's own confirmation ID. */
+    PduIdType router_transmit;
+    Ecu_DcmAuthenticationModeType authentication_mode;
 } Dcm_ConfigType;
 void Dcm_Init(const Dcm_ConfigType *ConfigPtr);
 /** Selected DevErrorDetect=false: all three APIs always return E_OK.

@@ -10,8 +10,9 @@ pub(super) fn reserved_identifier(name: &str) -> bool {
         .split_whitespace().any(|keyword| keyword == name)
 }
 
-/// Deterministic W2 headers and provenance, with no runtime implementations
-/// or test stubs. Construction requires a validated integration plan.
+/// Deterministic component artifacts from a validated integration plan.
+/// Contract generation provides declarations; runtime generation also supplies
+/// actual RTE producers. Neither entry generates application algorithms.
 pub struct ComponentContractFiles {
     files: Vec<(String, Vec<u8>)>,
 }
@@ -300,6 +301,68 @@ impl ValidatedIntegrationPlan {
 }
 
 impl ValidatedIntegrationPlan {
+    /// Generate actual bounded multi RTE producers and their component headers.
+    /// This source fragment requires configured COM and caller-owned application
+    /// producers; it does not replace complete sealed ECU/OS preparation.
+    pub(super) fn rte_runtime_files(&self) -> Result<ComponentContractFiles, Vec<PlanDiagnostic>> {
+        if self.description().multi.is_none() {
+            return Err(vec![PlanDiagnostic {
+                category: DiagnosticCategory::Unsupported,
+                code: "RTE_PROFILE_UNSUPPORTED".into(),
+                file: None,
+                object: None,
+                message: crate::product_message!("backend.integration.multi.contract_invalid", "code" => "RTE_PROFILE_UNSUPPORTED"),
+                remedy: crate::product_message!("backend.integration.multi.repair_contract"),
+            }]);
+        }
+        let mut files: BTreeMap<_, _> = self
+            .component_contract_files()?
+            .into_files()
+            .into_iter()
+            .collect();
+        files.extend(super::multi_rte::files(self));
+        files.insert(
+            "include/Std_Types.h".into(),
+            include_bytes!("../../../runtime/multi/include/Std_Types.h").to_vec(),
+        );
+        files.insert(
+            "include/Platform_Types.h".into(),
+            include_bytes!("../../../runtime/multi/include/Platform_Types.h").to_vec(),
+        );
+        let integer = |kind: super::CommunicationIntegerType| match kind {
+            super::CommunicationIntegerType::Uint8 => "uint8",
+            super::CommunicationIntegerType::Uint16 => "uint16",
+            super::CommunicationIntegerType::Uint32 => "uint32",
+        };
+        let communication = self.description().communication_runtime.as_ref().unwrap();
+        files.insert("include/ComStack_Cfg.h".into(), format!("/** @file EcuC-selected communication widths. */\n#ifndef COMSTACK_CFG_H\n#define COMSTACK_CFG_H\n#include \"Platform_Types.h\"\ntypedef {} PduIdType;\ntypedef {} PduLengthType;\n#endif\n", integer(communication.pdu_id_type), integer(communication.pdu_length_type)).into_bytes());
+        files.insert(
+            "include/ComStack_Types.h".into(),
+            include_bytes!("../../../runtime/multi/include/ComStack_Types.h").to_vec(),
+        );
+        files.insert(
+            "include/Com.h".into(),
+            include_bytes!("../../../runtime/multi/include/Com.h").to_vec(),
+        );
+        let types = files.get_mut("include/Rte_Type.h").unwrap();
+        *types = String::from_utf8(std::mem::take(types))
+            .unwrap()
+            .replace("typedef uint8_t uint8;\ntypedef uint32_t uint32;\n", "")
+            .into_bytes();
+        let rte = files.get_mut("include/Rte.h").unwrap();
+        *rte = String::from_utf8(std::mem::take(rte))
+            .unwrap()
+            .replace(
+                "#include \"Rte_Type.h\"",
+                "#include \"Rte_Type.h\"\n#include \"Rte_Main.h\"\n#define RTE_E_OK 0U\n#define RTE_E_LIMIT 130U",
+            )
+            .into_bytes();
+        files.insert("README.md".into(), b"# Multi-component RTE sources\n\nThese sources implement the validated local communication graph, synchronous calls, generated Dcm service bridge and handle-bearing COM freshness notifications. Rte_Start initializes each receiver's own explicit initial value; Rte_Stop retires access. Invoke lifecycle only from the trusted ECU context, after required BSW/SchM initialization and before BSW shutdown. User application algorithms are separate caller-owned producers. The configured COM implementation, complete SchM/BSW configuration, OS owner and immutable ECU package are provided by complete ECU preparation; this source fragment alone is not a runnable ECU.\n".to_vec());
+        Ok(ComponentContractFiles {
+            files: files.into_iter().collect(),
+        })
+    }
+
     fn multi_contract_files(
         &self,
         multi: &super::multi::MultiComponentContract,
@@ -398,6 +461,7 @@ impl ValidatedIntegrationPlan {
                     &docs,
                 );
             }
+            body.push_str("#if !defined(RTE_CORE)\n");
             for port in &component.data_ports {
                 writeln!(
                     body,
@@ -419,6 +483,7 @@ impl ValidatedIntegrationPlan {
                 )
                 .unwrap();
             }
+            body.push_str("#endif\n");
             let name = component
                 .header
                 .trim_start_matches("include/Rte_")
