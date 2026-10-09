@@ -4,6 +4,11 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
+#if defined(_WIN32)
+#include <signal.h>
+#include <stdlib.h>
+static void observed_abort(int signal_number) { _Exit((signal_number == SIGABRT) ? 86 : 87); }
+#endif
 
 static unsigned events[16];
 static unsigned event_count;
@@ -61,6 +66,13 @@ static const Det_ErrorHookType development_hooks[] = {development_first, develop
 static const Det_ConfigType config = {development_hooks, 2u, runtime_hooks, 2u};
 
 int main(int argc, char **argv) {
+#if defined(_WIN32)
+    /* Observe this process's real abort before the CRT starts WER or a dialog. */
+    (void)_set_error_mode(_OUT_TO_STDERR);
+    if (signal(SIGABRT, observed_abort) == SIG_ERR) {
+        return 88;
+    }
+#endif
     /* These expectations come from SWS_Det_00008/00009/00010/01001,
      * 00014/00018/00024/00026/00208/00501/00503, independent of inventory.
      */

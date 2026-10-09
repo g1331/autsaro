@@ -1,4 +1,4 @@
-/** @file Selected physical UDS connection with Dcm-owned 256-byte buffers.
+/** @file Selected physical UDS connection with configured buffers up to 256 bytes.
  * Configuration and callouts remain valid until the next Init. Only the
  * configured channel/PDU identities are accepted; failed copies preserve outputs.
  */
@@ -16,6 +16,7 @@ typedef struct {
     uint16 p2_ms;
     uint16 p2_star_ms;
     uint32 s3_ticks;
+    PduLengthType buffer_length;
 } Dcm_ConfigType;
 void Dcm_Init(const Dcm_ConfigType *ConfigPtr);
 Std_ReturnType Dcm_SetActiveDiagnostic(boolean active);

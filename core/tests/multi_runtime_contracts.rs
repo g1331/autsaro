@@ -72,15 +72,7 @@ fn det_standard_consumer_executes_runtime_and_halt_contracts() {
                 assert_eq!(output.status.signal(), Some(6), "{mode}: {:?}", output);
             }
             #[cfg(windows)]
-            assert!(
-                !output.status.success()
-                    && output.status.code() != Some(90)
-                    && output.status.code() != Some(91)
-                    && output.status.code() != Some(92)
-                    && output.status.code() != Some(93),
-                "{mode}: {:?}",
-                output
-            );
+            assert_eq!(output.status.code(), Some(86), "{mode}: {:?}", output);
         } else {
             assert!(output.status.success(), "{mode}: {:?}", output);
         }
@@ -162,6 +154,13 @@ fn chain_consumer(scratch: &Path, fixture: &str) -> PathBuf {
         std::fs::copy(
             root.join("core/tests/fixtures/multi-runtime").join(name),
             include.join(name),
+        )
+        .unwrap();
+    }
+    if fixture == "can_polling_contract.c" {
+        std::fs::copy(
+            root.join("core/tests/fixtures/multi-runtime/Ecu_ProfileLimits_Polling.h"),
+            include.join("Ecu_ProfileLimits.h"),
         )
         .unwrap();
     }
@@ -274,6 +273,19 @@ fn comm_cdd_mode_demand_and_immediate_bswm_use_actual_lower_modes() {
 fn diagnostic_transport_owns_buffers_and_obeys_real_mode_and_confirmation() {
     let scratch = Scratch::new();
     let executable = chain_consumer(&scratch.0, "diagnostic_contract.c");
+    let output = Command::new(executable).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    assert!(
+        output.stdout.is_empty() && output.stderr.is_empty(),
+        "{:?}",
+        output
+    );
+}
+
+#[test]
+fn configured_can_polling_and_zero_dlc_preserve_real_admission_and_callbacks() {
+    let scratch = Scratch::new();
+    let executable = chain_consumer(&scratch.0, "can_polling_contract.c");
     let output = Command::new(executable).output().unwrap();
     assert!(output.status.success(), "{:?}", output);
     assert!(

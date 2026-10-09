@@ -5,11 +5,26 @@
 #include "Ecu_Execution.h"
 #include <stddef.h>
 
+/* Static controller options are supplied by the validated integrated configuration. */
+#ifndef CAN_RX_POLLING
+#define CAN_RX_POLLING 0
+#endif
+#ifndef CAN_TX_POLLING
+#define CAN_TX_POLLING 0
+#endif
+#ifndef CAN_BUSOFF_POLLING
+#define CAN_BUSOFF_POLLING 0
+#endif
+#ifndef CAN_ZERO_LENGTH_SUPPORTED
+#define CAN_ZERO_LENGTH_SUPPORTED 0
+#endif
+
 #define CAN_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Can_MemMap.h"
 
 static CanMode controller_mode;
 static uint8_t bus_off;
+static uint8_t busoff_notification_pending;
 static CanTxSink tx_sink;
 static uint8_t initialized;
 static uint8_t tx_pending;
@@ -46,6 +61,7 @@ void Can_Init(const Can_ConfigType *config) {
         initialized = 1u;
         controller_mode = CAN_STOPPED;
         bus_off = 0u;
+        busoff_notification_pending = 0u;
         tx_pending = 0u;
         tx_in_flight = 0u;
         tx_confirmation_pending = 0u;
@@ -62,11 +78,12 @@ void Can_Init(const Can_ConfigType *config) {
 void Can_DeInit(void) {
     Can_Lock();
     if ((initialized != 0u) && (controller_mode != CAN_STARTED) &&
-        (mode_notification_pending == 0u)) {
+        (mode_notification_pending == 0u) && (busoff_notification_pending == 0u)) {
         initialized = 0u;
         tx_sink = NULL;
         controller_mode = CAN_STOPPED;
         bus_off = 0u;
+        busoff_notification_pending = 0u;
         tx_pending = 0u;
         tx_in_flight = 0u;
         tx_confirmation_pending = 0u;
@@ -95,6 +112,7 @@ Std_ReturnType Can_SetControllerMode(uint8_t controller, Can_ControllerStateType
     Std_ReturnType result = E_NOT_OK;
     Can_Lock();
     if ((initialized != 0u) && (controller == 0u) && (mode_notification_pending == 0u) &&
+        (busoff_notification_pending == 0u) &&
         ((transition == CAN_CS_STARTED) || (transition == CAN_CS_STOPPED) ||
          (transition == CAN_CS_SLEEP))) {
         if ((transition == CAN_CS_STARTED) && (controller_mode == CAN_STOPPED)) {
@@ -193,8 +211,12 @@ static EcuStatus Can_WriteHost(Can_HwHandleType hth, const Can_PduType *pdu) {
         /* Invalid host configuration or caller input. */
     } else if (pdu->id > 0x7ffu) {
         result = ECU_ERR_FRAME_ID;
-    } else if ((pdu->length < 1u) || (pdu->length > 8u)) {
+    } else if (pdu->length > 8u) {
         result = ECU_ERR_FRAME_DLC;
+#if CAN_ZERO_LENGTH_SUPPORTED == 0
+    } else if (pdu->length == 0u) {
+        result = ECU_ERR_FRAME_DLC;
+#endif
     } else {
         int locked = Can_TryLock();
         if (locked < 0) {
@@ -245,7 +267,7 @@ EcuStatus Can_HostFlush(void) {
     if (tx_pending != 0u) {
         uint32_t id = tx_id;
         uint8_t length = tx_length;
-        uint8_t payload[8];
+        uint8_t payload[8] = {0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
         size_t i;
         for (i = 0u; i < (size_t)length; ++i) {
             payload[i] = tx_payload[i];
@@ -256,7 +278,9 @@ EcuStatus Can_HostFlush(void) {
         tx_in_flight = 0u;
         if ((result == ECU_OK) && (Ecu_Policy.tx_confirmation == ECU_TX_SYNCHRONOUS)) {
             tx_confirmation_pending = 1u;
+#if CAN_TX_POLLING == 0
             Can_MainFunction_Write();
+#endif
         }
     }
     Can_Unlock();
@@ -270,12 +294,21 @@ void Can_SetMode(CanMode mode) {
         /* Ignore unsupported host mode values without changing a pending indication. */
     } else if ((controller_mode == CAN_SLEEP) && (mode != CAN_STOPPED)) {
         /* Logical sleep can only exit via STOPPED. */
+    } else if ((busoff_notification_pending != 0u) && (mode != CAN_BUS_OFF)) {
+        /* Publish the observed bus-off before an explicit host recovery. */
     } else if (mode == CAN_BUS_OFF) {
+#if CAN_BUSOFF_POLLING == 1
+        if ((initialized != 0u) && (bus_off == 0u)) {
+            busoff_notification_pending = 1u;
+        }
+#endif
         mode_notification_pending = 0u;
         controller_mode = CAN_STOPPED;
         bus_off = 1u;
         tx_pending = 0u;
+#if CAN_BUSOFF_POLLING == 0
         CanIf_ControllerBusOff(0u);
+#endif
     } else {
         mode_notification_pending = 0u;
         controller_mode = mode;
@@ -296,7 +329,16 @@ void Can_SetMode(CanMode mode) {
     Can_Unlock();
 }
 
-void Can_MainFunction_Wakeup(void) {
+void Can_MainFunction_BusOff(void) {
+    Can_Lock();
+    if (busoff_notification_pending != 0u) {
+        busoff_notification_pending = 0u;
+        CanIf_ControllerBusOff(0u);
+    }
+    Can_Unlock();
+}
+
+static void Can_PollMode(void) {
     Can_Lock();
     if ((mode_notification_pending != 0u) && (mode_notification_processing == 0u)) {
         Can_ControllerStateType mode = pending_controller_mode;
@@ -307,6 +349,9 @@ void Can_MainFunction_Wakeup(void) {
     }
     Can_Unlock();
 }
+
+void Can_MainFunction_Wakeup(void) { Can_PollMode(); }
+void Can_MainFunction_Mode(void) { Can_PollMode(); }
 
 CanMode Can_GetMode(void) {
     CanMode mode;
@@ -357,13 +402,17 @@ EcuStatus Can_Inject(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t n
     Can_Lock();
     if (id > 0x7ffu) {
         result = ECU_ERR_FRAME_ID;
-    } else if ((dlc < 1u) || (dlc > 8u)) {
+    } else if (dlc > 8u) {
         result = ECU_ERR_FRAME_DLC;
+#if CAN_ZERO_LENGTH_SUPPORTED == 0
+    } else if (dlc == 0u) {
+        result = ECU_ERR_FRAME_DLC;
+#endif
     } else if (controller_mode != CAN_STARTED) {
         result = ECU_ERR_CONTROLLER;
     } else if (data == NULL) {
         result = ECU_ERR_CONFIG;
-    } else if (rx_processing != 0u) {
+    } else if ((rx_processing != 0u) || (rx_pending != 0u)) {
         result = ECU_ERR_CAN_BUSY;
     } else {
         size_t i;
@@ -374,8 +423,10 @@ EcuStatus Can_Inject(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t n
             rx_payload[i] = data[i];
         }
         rx_pending = 1u;
+#if CAN_RX_POLLING == 0
         Can_MainFunction_Read();
         result = rx_result;
+#endif
     }
     Can_Unlock();
     return result;
@@ -386,7 +437,7 @@ void Can_MainFunction_Read(void) {
     if ((rx_processing == 0u) && (rx_pending != 0u)) {
         uint32_t id = rx_id;
         uint8_t length = rx_length;
-        uint8_t payload[8];
+        uint8_t payload[8] = {0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
         uint64_t now_ms = rx_time_ms;
         size_t i;
         for (i = 0u; i < (size_t)length; ++i) {

@@ -92,7 +92,7 @@ static const ComM_ConfigType comm = {
     7u, users, 1u, 3u, Ecu_HostBusSM_RequestComMode, Ecu_HostBusSM_GetCurrentComMode, mode};
 static const Ecu_HostBusSM_ConfigType cdd = {7u, 0u};
 static const BswM_ConfigType bswm = {7u, COMM_NO_COMMUNICATION, Ecu_HostBusSM_ApplyMode};
-static const Dcm_ConfigType dcm = {17u, 18u, 7u, 0x1234u, read_did, 50u, 50u, 5000u, 20u};
+static const Dcm_ConfigType dcm = {17u, 18u, 7u, 0x1234u, read_did, 50u, 50u, 5000u, 20u, 256u};
 static const CanTp_ConfigType tp = {11u, 12u, 31u, 41u, 256u, 5u, 5u, 5u, 5u, 5u, 1u, 2u, 0u};
 static void receive(const uint8 bytes[8]) {
     assert(Can_Inject(0x700u, 8u, bytes, 0u) == ECU_OK);
@@ -407,5 +407,29 @@ int main(void) {
         assert(count == saved + 2u && output[count - 1u][0] == 7u);
     }
     assert(reports == 2u);
+    /* Configured 64-byte admission and response bounds, independent of physical storage. */
+    {
+        Dcm_ConfigType bounded = dcm;
+        bounded.buffer_length = 64u;
+        Dcm_Init(&bounded);
+        Dcm_ComM_FullComModeEntered(7u);
+        available = 99u;
+        assert(start_rx(17u, NULL_PTR, 65u, &available) == BUFREQ_E_OVFL && available == 99u);
+        assert(start_rx(17u, NULL_PTR, 63u, &available) == BUFREQ_OK && available == 64u);
+        assert(copy_rx(17u, &query, &available) == BUFREQ_OK && available == 64u);
+        buffer[0] = 0x22u;
+        for (i = 1u; i < 63u; i += 2u) {
+            buffer[i] = 0x12u;
+            buffer[i + 1u] = 0x34u;
+        }
+        info.SduLength = 63u;
+        assert(copy_rx(17u, &info, &available) == BUFREQ_OK && available == 1u);
+        rx_done(17u, E_OK);
+        Dcm_MainFunction();
+        flush();
+        assert(output[count - 1u][0] == 3u && output[count - 1u][1] == 0x7fu &&
+               output[count - 1u][2] == 0x22u && output[count - 1u][3] == 0x14u);
+        Dcm_Init(&dcm); /* Retire the caller-owned configuration before its lifetime ends. */
+    }
     return 0;
 }

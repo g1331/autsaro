@@ -39,7 +39,8 @@ static DCM_CODE void Dcm_Release(void) {
 DCM_CODE void Dcm_Init(const Dcm_ConfigType *ConfigPtr) {
     SchM_Enter_Dcm_DCM_STATE();
     if ((ConfigPtr != NULL_PTR) && (ConfigPtr->read != NULL_PTR) && (ConfigPtr->p2_ticks > 0u) &&
-        (ConfigPtr->s3_ticks > 0u)) {
+        (ConfigPtr->s3_ticks > 0u) && (ConfigPtr->buffer_length >= 7u) &&
+        (ConfigPtr->buffer_length <= 256u)) {
         if ((configuration != NULL_PTR) && (diagnostic == TRUE)) {
             ComM_DCM_InactiveDiagnostic(configuration->channel);
         }
@@ -74,14 +75,14 @@ DCM_CODE BufReq_ReturnType Dcm_StartOfReception(PduIdType id, const PduInfoType 
         ((info == NULL_PTR) ||
          ((info->MetaDataPtr == NULL_PTR) && (info->SduLength <= TpSduLength) &&
           ((info->SduLength == 0u) || (info->SduDataPtr != NULL_PTR))))) {
-        if (TpSduLength > 256u) {
+        if (TpSduLength > configuration->buffer_length) {
             result = BUFREQ_E_OVFL;
         } else {
             /* Start reserves the whole message; CopyRxData supplies its bytes. */
             request_length = TpSduLength;
             received = 0u;
             state = DCM_RECEIVING;
-            *bufferSizePtr = 256u;
+            *bufferSizePtr = configuration->buffer_length;
             result = BUFREQ_OK;
         }
     }
@@ -101,7 +102,7 @@ DCM_CODE BufReq_ReturnType Dcm_CopyRxData(PduIdType id, const PduInfoType *info,
             request[received + i] = info->SduDataPtr[i];
         }
         received += info->SduLength;
-        *bufferSizePtr = 256u - received;
+        *bufferSizePtr = configuration->buffer_length - received;
         result = BUFREQ_OK;
     }
     SchM_Exit_Dcm_DCM_STATE();
@@ -142,7 +143,7 @@ static DCM_CODE void Dcm_Process(void) {
             for (i = 1u; (i < request_length) && (response[0] == 0x62u); i += 2u) {
                 const uint16 did = ((uint16)request[i] * 256u) + request[i + 1u];
                 if (did == configuration->did) {
-                    if (response_length > 250u) {
+                    if (response_length > (configuration->buffer_length - 6u)) {
                         Dcm_Negative(0x14u);
                     } else {
                         response[response_length] = request[i];
