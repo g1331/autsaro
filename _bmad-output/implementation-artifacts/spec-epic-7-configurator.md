@@ -254,3 +254,15 @@ context:
 前文 review／in-progress 与待后续CI的说明是本次修订前的历史记录，以本节为准。此处完成是授权范围收口，不是原完整发行场景通过。
 
 本次仅修改 BMad 规划／状态文档。校验：sprint_plan validate 返回 valid=true；修正 last_updated 缺少时分的既有格式问题；增量 quality（基线 c39f6c85）与 git diff --check 通过；49 个本地 Markdown 目标存在。差异复核确认仅 Epic 7 状态及范围变化，其他 Epic、产品代码、现有测试和 CI 门禁不变。此次范围修订 PR 的 CI 与合并结果以对应 PR 记录为准。
+
+## 2026-10-09 回顾整改开发验证
+
+按用户批准处理原回顾四项行动，实施规格见 [保存整改规格](spec-epic-7-save-remediation.md)。设置与 Operation 修复提交 `6fba29f6fdec60268455530bead2cda67e8e69ee`，源保存修复提交 `9fd6f418657c1e7832834520255b7fd3b282d406`。被拒绝设置的外观／语言保存保持原 bytes 和错误；取消、编辑归属替换、真实目标设置变化及完成后重复提交均由现有后端单测保护。
+
+源与 manifest 的最终发布及恢复使用拒绝覆盖硬链接；移动原文件前预留备份并验证原语能力。回滚先预留普通文件位置再捕获／核验，外部文件或目录不被删除；冲突保留可定位恢复资料。备份与 rollback 目录均阻断后续保存。全部发布成功后的 stage／backup 清理失败保留 clean saved 基线、返回错误；stage 是正式源的硬链接别名，错误明确说明其共享内容及恢复限制。分项规格已同步，未将 clean 改回 dirty。
+
+本地 Linux 正常入口：Core 24 lib＋71 builtin integration＋1 c_analysis 共96通过，0 failed／ignored／filtered；Tauri 9通过，UI92通过，build及增量quality通过。保存10项回归覆盖最终发布／恢复冲突、真实源＋manifest 后期冲突回滚、清理失败、硬链接不支持、既有备份及外部目录；三镜头审查的7项问题已修复，定向复查无剩余发现。Windows 保存回归已接入既有双平台构建任务，实际结果待 PR CI；不宣称 Windows Tauri 单测、原生 IPC、安装器、硬件或官方符合性通过，不恢复取消的组合验收门槛。
+
+Windows首轮保存回归9通过／1失败（外部目录原位置断言），保留于[首轮CI](https://github.com/g1331/autsaro/actions/runs/37882013957)，不以同轮17项绿色必需检查抵消。提交 `97bb803c4c6ff04d348a2d178860788d782c7a23` 将Windows初始备份及回滚捕获改为已打开普通文件句柄的重命名，拒绝目录并避免重新按变化的路径选对象；ABI、UTF-16长度／对齐、句柄生命周期按官方接口核对，定向审查无剩余发现。
+
+[第二轮CI](https://github.com/g1331/autsaro/actions/runs/37882612373) 的Linux11／Windows12项保存回归全部通过；Windows包含原路径打开后替换为目录及超过260字符中文路径，0 failed／ignored，14项非保存库测试按明确筛选未运行。修正后的完整本地Core97、Tauri9通过。原回顾已按既有开发范围复评为accepted，四项行动全部done；初始失败、未执行证据及取消范围保留。最终PR合并与master核对由 [PR #13](https://github.com/g1331/autsaro/pull/13) 的实际交付结果承载。

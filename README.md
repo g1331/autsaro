@@ -119,7 +119,6 @@ The installed application does not require Rust, Node, npm, or uv. Windows requi
 | `runtime/` | C99 host runtime delivered with generated projects |
 | `scripts/` | Official-resource collection |
 | `tools/python/src/` | Development checks and Python tools distributed with delivery packages |
-| `tools/automotive/` | Optional automotive-skill installation and maintenance |
 | `tests/` | Python tests and isolated desktop scenarios |
 | `docs/` | Specification-resource entrypoints and technical documentation |
 
