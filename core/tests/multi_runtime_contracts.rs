@@ -151,7 +151,12 @@ fn chain_consumer(scratch: &Path, fixture: &str) -> PathBuf {
         let entry = entry.unwrap();
         std::fs::copy(entry.path(), include.join(entry.file_name())).unwrap();
     }
-    for name in ["ComStack_Cfg.h", "SchM_CanIf.h"] {
+    for name in [
+        "ComStack_Cfg.h",
+        "SchM_CanIf.h",
+        "SchM_ComM.h",
+        "SchM_BswM.h",
+    ] {
         std::fs::copy(
             root.join("core/tests/fixtures/multi-runtime").join(name),
             include.join(name),
@@ -181,6 +186,10 @@ fn chain_consumer(scratch: &Path, fixture: &str) -> PathBuf {
         "runtime/multi/src/LSduR.c",
         "runtime/multi/src/CanIf.c",
         "runtime/multi/src/SchM_CanIf_Host.c",
+        "runtime/multi/src/ComM.c",
+        "runtime/multi/src/BswM.c",
+        "runtime/multi/src/Ecu_HostBusSM.c",
+        "runtime/multi/src/SchM_Mode_Host.c",
         "runtime/multi/src/Det.c",
         "runtime/multi/src/Det_Host.c",
         "runtime/src/Can.c",
@@ -240,5 +249,18 @@ fn canif_different_pdus_and_actual_confirmation_stop_interleave_safely() {
     assert!(
         std::fs::read(&result.stderr).unwrap().is_empty(),
         "{result:?}"
+    );
+}
+
+#[test]
+fn comm_cdd_mode_demand_and_immediate_bswm_use_actual_lower_modes() {
+    let scratch = Scratch::new();
+    let executable = chain_consumer(&scratch.0, "mode_contract.c");
+    let output = Command::new(executable).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    assert!(
+        output.stdout.is_empty() && output.stderr.is_empty(),
+        "{:?}",
+        output
     );
 }

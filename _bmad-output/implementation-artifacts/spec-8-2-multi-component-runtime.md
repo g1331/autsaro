@@ -89,6 +89,10 @@ Windows DET 测试的明确后续缺口：MinGW CRT 的 abort 可产生 stderr�
 
 当前consumer的SchM_CanIf.h只含声明，实际函数体是交付源码候选中的真实host adapter，非测试标准函数桩。最终profile仍必须由真实BSWMD exclusive-area身份生成SchM声明／wrapper及source provenance，不能将当前fixture的area名字当作已完成生成闭包。同步机制不引入scheduler／timer，不改变COM DM周期来源或legacydriver bytes；新host adapter资产注册仍待fullgen阶段。
 
+2026-10-09 阶段4：新增真实ComM／主机CDD BusSM／BswM源码切片。ComM单channel、静态users、NM NONE，无PNC／inhibition／NvM；普通FULL请求与诊断活动独立合并，Allowed默认false且只在REQUEST_PENDING评估（00884／00896），进入NETWORK_REQUESTED按configured周期计数最小FULL duration（00886／00889），NONE的READY_SLEEP不虚构自动关网。Init及re-init真实请求lower NO（00073），不通知默认NO（00313）；公开getters查询真实provider而非把desired当current。生成的configured-channel void main及完整EcuC user／channel／period来源仍pending，私有ComM_RunChannel一次只消费一个周期，没有新增调度器或主机时钟。
+
+Ecu_HostBusSM通过实际CanIf／Can调用完成mode，FULL要求真实STARTED indication及ONLINE；pending启动时getter保持NO，不能因driver已改变但CanIf尚未确认就放行Rx。真实bus-off持续阻止普通FULL请求恢复，需要既有明确host CAN mode命令；normal owner STOP须先释放持久user，再请求实际provider NO，不能用Allowed(false)强停FULL。BswM选一个ComM IMMEDIATE input和真实lower方向action，不停止COM group；重入input按00069／00281延后到当前action完成再仲裁，失败不伪成功，未选择可选action-failure runtime reporting。标准mode/user类型由Rte_ComM_Type.h提供，最终RTE生产归属仍待生成闭包。异步mode路径的ComM／BswM状态与CanIf一样进入既有同一递归CAN资源，不增加mutex或scheduler；真实BSWMD exclusive-area声明／wrapper/provenance仍pending。阶段4源码尚未注册交付assets，完整Dcm mode notification尚未绑定，consumer观察者只用于验证实际mode，不声称诊断链或sealed ECU已完成。全部Tasks及8.3–8.5状态保持。
+
 ## Spec Change Log
 
 ## Review Triage Log
@@ -120,3 +124,7 @@ Windows DET 测试的明确后续缺口：MinGW CRT 的 abort 可产生 stderr�
 2026-10-09 阶段3审阅修正已执行：固定GCC13及正常native工具链环境下 `cargo test --locked --manifest-path core/Cargo.toml --features native-tests --test multi_runtime_contracts` 5 passed（0 failed／ignored）；重新执行包含已修正的CanIf_Transmit DET service0x49、复用受信原始CAN头的真实链及新增不同PDU并发消费者。新增消费者使用两个真实producer各1000次发送，四种barrier轮次交错真实driver flush／positive confirmation和实际STOP／mode poll，逐轮逐PDU核对accepted等于positive加negative、真实frame等于positive；固定延后flush／stop轮次各自证明一接纳一BUSY且复制载荷保持。实际输出callback在driver资源内重入CanIf getter，正常ProcessOwner以30秒期限运行并核对成功退出与空stdout／stderr；没有测试标准函数体、第二production mutex或额外scheduler。Windows分支未执行，不将此结果扩大为Windows、sealed ECU或完整重入配置符合证据。
 
 审阅修正正常Clippy（native-tests、multi_runtime_contracts目标，`-A clippy::all -D clippy::correctness -D clippy::suspicious`）passed；正常 `quality --scope core --base 319d39f9c688c59b6a19ff8c2b7c399874534cba` passed（17 formatting files与Csyntax），runtime对应scope passed（28 formatting files与Csyntax）；`assets check` 0 changes、`git diff --check` passed。新增host SchM adapter尚未登记asset，正式configured BSWMD exclusive-area wrapper／provenance以及actual-profile c-check仍待fullgen阶段。历史失败保留：新增并发消费者第一次正常ProcessOwner运行因缺少required private execution-log目录而被拒绝（directories_missing）；按既有ProcessOwner约束在Scratch创建正常0700目录后重新运行通过，未放宽隔离或退出判定。全部Tasks及完整Story运行关口保持pending。
+
+2026-10-09 阶段4恢复后独立复核：固定GCC13／Python／objdump／git环境运行`cargo test --locked --manifest-path core/Cargo.toml --features native-tests --test multi_runtime_contracts`，6 passed、0 failed／ignored／filtered；严格C99编译链接实际mode模块与既有真实CAN／新COM链。新consumer独立核验mode/user宽度与数值、标准typed签名、未知user／channel及空输出拒绝、初始Allowed、两个user与诊断需求、3周期最小FULL／重复请求不重置、NONE READY_SLEEP保持、真实bus-off持续10 main且无假FULL、显式恢复、释放user后真实STOP持续10 main、SILENT允许Rx拒绝Tx、COM缓冲保持、BswM即时方向效果／下层失败／重入延后／Deinit、ComM re-init关闭实际lower及STOP→START待确认期间拒绝Rx。此前5个模块／并发消费者同时重新通过。
+
+阶段4正常Clippy（native-tests／multi_runtime_contracts目标，`-A clippy::all -D clippy::correctness -D clippy::suspicious`）passed；正常quality core／runtime以原story baseline检查，分别20／43 formatting files及Csyntax passed；assets check 0 changes。历史失败保留：恢复后的首次core quality因当前PATH没有rustfmt而退出1；给该正常命令添加本地Cargo工具目录后重跑通过，没有修改全局环境或关闭规则。新mode源码未登记assets，摘要检查不构成其交付证据；Windows、实际generated multi／OS调度闭环、完整Dcm／CanTp及actual-profile c-check仍pending，不能将模块切片结果写为完整Story或完整标准／MISRA符合。

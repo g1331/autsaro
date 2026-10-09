@@ -74,7 +74,7 @@ flowchart TD
 
 - **Binds:** CAP-3
 - **Prevents:** template另设周期、位置顺序不一致、漏掉第二组件或同tick重复执行。
-- **Rule:** 首批每个周期runnable恰有一个TimingEvent，全部共用正整数ms周期、offset=0，映射到唯一Extended Task_Ecu合法OsEvent与所选Alarm／ExpiryPoint；应用/BSW周期mapping必须显式isMappedToTask=true并有task ref，缺省/false带task ref拒绝；合法显式零offset与缺省等价。所有使用event必须唯一映射，position唯一且排序，同runnable多TimingEvent拒绝。每个真实due tick按计划执行全部应用runnable一次，重复epoch不重跑；每个OperationInvokedEvent仍有RteEventToTaskMapping容器，RteEventIsMappedToTask=false且无task／alarm／event／position引用，不加入周期表。BSW输入／时间处理、应用、发送、诊断顺序保持；SchM无锁只基于同owner证明，越过owner的配置拒绝。
+- **Rule:** 首批每个周期runnable恰有一个TimingEvent，全部共用正整数ms周期、offset=0，映射到唯一Extended Task_Ecu合法OsEvent与所选Alarm／ExpiryPoint；应用/BSW周期mapping必须显式isMappedToTask=true并有task ref，缺省/false带task ref拒绝；合法显式零offset与缺省等价。所有使用event必须唯一映射，position唯一且排序，同runnable多TimingEvent拒绝。每个真实due tick按计划执行全部应用runnable一次，重复epoch不重跑；每个OperationInvokedEvent仍有RteEventToTaskMapping容器，RteEventIsMappedToTask=false且无task／alarm／event／position引用，不加入周期表。BSW输入／COM周期DM、应用、发送、诊断顺序保持；应用与COM周期状态保持同owner。真实异步CAN confirmation／mode callback涉及的CanIf、ComM、BswM共享状态以同一递归CAN资源的SchM exclusive area保护，BSWMD、声明、wrapper与source provenance共同闭合，不能以owner假设删除保护；应用跨owner配置仍拒绝。首批PERIODIC Tx PDU period与configured Tx main period相等。
 
 ### AD-6 — 接口及 profile 版本
 
