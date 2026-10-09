@@ -86,6 +86,98 @@ pub(super) fn apply_patches(
     Ok(())
 }
 
+#[cfg(not(windows))]
+fn capture_file(original: &Path, captured: &Path) -> std::io::Result<()> {
+    fs::rename(original, captured)
+}
+
+#[cfg(windows)]
+fn capture_file(original: &Path, captured: &Path) -> std::io::Result<()> {
+    capture_file_with_open(original, captured, || Ok(()))
+}
+
+#[cfg(windows)]
+fn capture_file_with_open(
+    original: &Path,
+    captured: &Path,
+    after_open: impl FnOnce() -> std::io::Result<()>,
+) -> std::io::Result<()> {
+    use std::ffi::c_void;
+    use std::os::windows::ffi::OsStrExt;
+    use std::os::windows::fs::OpenOptionsExt;
+    use std::os::windows::io::AsRawHandle;
+
+    #[repr(C)]
+    struct RenameInfo {
+        replace: u32,
+        root: *mut c_void,
+        length: u32,
+        name: [u16; 1],
+    }
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn SetFileInformationByHandle(
+            file: *mut c_void,
+            class: i32,
+            info: *const c_void,
+            size: u32,
+        ) -> i32;
+    }
+    // DELETE access permits handle-based rename. Omitting BACKUP_SEMANTICS
+    // rejects directories at open; the live handle pins the file through capture.
+    let file = fs::OpenOptions::new()
+        .access_mode(0x0001_0000)
+        .custom_flags(0x0020_0000) // FILE_FLAG_OPEN_REPARSE_POINT
+        .open(original)?;
+    if !file.metadata()?.is_file() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "capture requires an ordinary file",
+        ));
+    }
+    after_open()?;
+    // canonicalize supplies an absolute verbatim UTF-16 path, including long paths.
+    let name = fs::canonicalize(captured)?
+        .as_os_str()
+        .encode_wide()
+        .collect::<Vec<_>>();
+    let name_bytes = u32::try_from(name.len() * size_of::<u16>()).map_err(|_| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "capture path too long")
+    })?;
+    let name_offset = std::mem::offset_of!(RenameInfo, name);
+    let bytes = (name_offset + name_bytes as usize + size_of::<u16>()).max(size_of::<RenameInfo>());
+    let size = u32::try_from(bytes).map_err(|_| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "capture path too long")
+    })?;
+    let mut buffer = vec![0usize; bytes.div_ceil(size_of::<usize>())];
+    // SAFETY: pointer-aligned storage holds the repr(C) FILE_RENAME_INFO union,
+    // HANDLE, DWORD and trailing UTF-16 array; byte length excludes a terminator.
+    unsafe {
+        let info = buffer.as_mut_ptr().cast::<RenameInfo>();
+        info.write(RenameInfo {
+            replace: 1,
+            root: std::ptr::null_mut(),
+            length: name_bytes,
+            name: [0],
+        });
+        std::ptr::copy_nonoverlapping(
+            name.as_ptr(),
+            buffer
+                .as_mut_ptr()
+                .cast::<u8>()
+                .add(name_offset)
+                .cast::<u16>(),
+            name.len(),
+        );
+        // FileRenameInfo = 3; replacement is only the reserved owned file.
+        // The File owns the handle until this synchronous call returns.
+        if SetFileInformationByHandle(file.as_raw_handle(), 3, info.cast(), size) == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+    }
+    Ok(())
+}
+
 fn restore_backup(
     original: &Path,
     backup: &Path,
@@ -126,7 +218,7 @@ fn restore_backup_with_publish(
             }
         }
         // A reserved ordinary file also rejects a raced directory before moving it.
-        match fs::rename(original, &captured) {
+        match capture_file(original, &captured) {
             Ok(()) => {
                 // Inspect the captured file, never unlink a path after checking its bytes.
                 captured_ours = fs::read_to_string(&captured)
@@ -207,7 +299,7 @@ fn install_staged_with_publish(
     // Reserve the backup and verify hard-link support before moving the original.
     publish(stage, backup)
         .map_err(|e| format!("{} -> {}: {e}", stage.display(), backup.display()))?;
-    if let Err(error) = fs::rename(&file.path, backup) {
+    if let Err(error) = capture_file(&file.path, backup) {
         let cleanup = fs::remove_file(backup);
         return Err(crate::message::LocalizedText::messages([
             format!("{} -> {}: {error}", file.path.display(), backup.display()).into(),
@@ -1220,6 +1312,64 @@ mod tests {
             fs::read_to_string(recovery.join("original")).unwrap(),
             "retained recovery bytes"
         );
+    }
+
+    #[test]
+    fn installation_preserves_external_directory_at_original_path() {
+        let root = Scratch::new();
+        let original = root.0.join("Ecu.arxml");
+        let stage = root.0.join("Ecu.tmp");
+        let backup = root.0.join("Ecu.bak");
+        fs::create_dir(&original).unwrap();
+        fs::write(original.join("external"), "directory contents").unwrap();
+        fs::write(&stage, "ours").unwrap();
+        let file = SourceFile {
+            path: original.clone(),
+            saved: "original".into(),
+            text: "ours".into(),
+            original_name: None,
+        };
+        assert!(install_staged(&file, &stage, &backup).is_err());
+        assert!(original.is_dir());
+        assert_eq!(
+            fs::read_to_string(original.join("external")).unwrap(),
+            "directory contents"
+        );
+        assert_eq!(fs::read_to_string(&stage).unwrap(), "ours");
+        assert!(!backup.exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_capture_pins_file_when_long_unicode_original_path_becomes_directory() {
+        let root = Scratch::new();
+        let directory = root
+            .0
+            .join("long-segment".repeat(8))
+            .join("nested-segment".repeat(8))
+            .join("恢复资料");
+        fs::create_dir_all(&directory).unwrap();
+        let original = directory.join("原始源.arxml");
+        let moved = directory.join("外部移动.arxml");
+        let captured = directory.join("捕获源.arxml");
+        assert!(original.as_os_str().len() > 260);
+        fs::write(&original, "pinned source").unwrap();
+        fs::write(&captured, "owned reservation").unwrap();
+        super::capture_file_with_open(&original, &captured, || {
+            fs::rename(&original, &moved)?;
+            fs::create_dir(&original)?;
+            fs::write(original.join("external"), "directory contents")
+        })
+        .unwrap();
+        assert!(original.is_dir());
+        assert_eq!(
+            fs::read_to_string(original.join("external")).unwrap(),
+            "directory contents"
+        );
+        assert_eq!(fs::read_to_string(&captured).unwrap(), "pinned source");
+        assert!(!moved.exists());
+        // The capture handle has closed, so ordinary cleanup can remove the file.
+        fs::remove_file(&captured).unwrap();
     }
 
     #[test]
