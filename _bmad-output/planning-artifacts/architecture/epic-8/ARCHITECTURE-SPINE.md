@@ -62,7 +62,7 @@ flowchart TD
 
 - **Binds:** CAP-2, CAP-5
 - **Prevents:** 扇出互相覆盖、local写入被CAN停止阻断或同一R具有两个数据权威。
-- **Rule:** 每个使用R endpoint恰有一个local P或network映射，P可扇出。连接接口及显式type mapping相容后，按producer endpoint建立local最后值与发布状态；首次发布前按各receiver明确ComSpec初值分别读取，冲突时receiver优先，缺init拒绝。首批local handleNeverReceived=false／aliveTimeout0／NONE，无invalidValue；其他freshness拒绝。本地标准Read／Write仅检查实际owner和指针，不检查CAN；网络适配独立处理Com状态／deadline。新multi的未分组PDU按SWS_Com_00840隐式启动且不可停止，CAN停机不等于COM不可用；RTE仅按实际COM返回映射COM_STOPPED（SWS_Rte_06830／07822），Read仍回填last/init和freshness，Write更新缓冲，lower TX失败独立。标准COM模块拥有uint8 Send／Receive、lifecycle／status、真实PduInfo callbacks及MainFunction，必需ECUC配置明确核定；Rx／deadline不受旧host Dem策略失败阻断。旧profile保持历史gate／ABI。初始化在通信开放之前，运行仅owner串行修改。
+- **Rule:** 每个使用R endpoint恰有一个local P或network映射，P可扇出。连接接口及显式type mapping相容后，按producer endpoint建立local最后值与发布状态；首次发布前按各receiver明确ComSpec初值分别读取，冲突时receiver优先，缺init拒绝。首批local handleNeverReceived=false／aliveTimeout0／NONE，无invalidValue；其他freshness拒绝。本地标准Read／Write仅检查实际owner和指针，不检查CAN；网络适配独立处理Com状态／deadline。新multi按用户选择生成最小真实Rx I-PDU group、标准reception DM与COM→RTE通知，支持正数aliveTimeout；成员／handle／timebase／timeout／回调由同一计划核定。未分组Tx PDU按SWS_Com_00840隐式启动且不可停止，CAN停机不等于COM不可用；RTE仅按实际COM返回映射COM_STOPPED（SWS_Rte_06830／07822），Read仍回填last/init和freshness，Write更新缓冲，lower TX失败独立。标准COM模块拥有uint8 Send／Receive、lifecycle／status、真实PduInfo callbacks及MainFunction，必需ECUC配置明确核定；Rx／deadline不受旧host Dem策略失败阻断。旧profile保持历史gate／ABI。初始化在通信开放之前，运行仅owner串行修改。
 
 ### AD-4 — 同步 C/S 与服务器状态
 

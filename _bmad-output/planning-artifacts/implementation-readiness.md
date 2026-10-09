@@ -126,4 +126,4 @@ Epic7发行收尾由其他任务负责，当前不以其整体done为门；唯�
 
 本结论为规划进入许可，不是实现／行为／标准符合性通过。用户授权阶段提交、推送及创建PR，未授权merge。实际实现、审查、命令、结果、剩余标准／平台缺口记录到对应BMad故事，不增加报告或台账。
 
-实施期进一步核对发现具体配置依赖：无I-PDU group的PDU虽按SWS_Com_00840启动，但Rx deadline monitoring按SWS_Com_00772禁用；网络receiver正数aliveTimeout需要真实COM→RTE timeout回调闭包（SWS_Rte_08061／08062／08103／08104）。已向用户提出首批范围选择：最小Rx group与标准DM闭环，或无group并明确拒绝网络超时配置。8.1类型／连接／header工作继续；8.2依赖此选择的实现与进入出口在答复前保持未通过，不将旧host私有计时当作标准证据。此前PASS不是对这一新发现的豁免。
+实施期进一步核对发现具体配置依赖：无I-PDU group的PDU虽按SWS_Com_00840启动，但Rx deadline monitoring按SWS_Com_00772禁用；网络receiver正数aliveTimeout需要真实COM→RTE timeout回调闭包（SWS_Rte_08061／08062／08103／08104）。2026-10-09用户已选择最小Rx group与标准DM／COM→RTE回调闭环，保留网络超时配置。产品选择已解除；8.1已完成审查验证并交付draft PR #12，26项远端CI通过。8.2按该范围规格化并实施，真实生成／OS／通信／超时及受影响profile c-check通过前不放行8.3–8.5；不将旧host私有计时或本次范围答复当作运行证据。

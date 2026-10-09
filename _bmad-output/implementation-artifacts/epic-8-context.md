@@ -19,7 +19,7 @@
 - 固定 R24-11、C99、单核 SC1 与既定 FreeRTOS。配置和源码准备不依赖官方档案或编译器；开发验收必须实际构建运行。
 - 首批一个 ECU_EXTRACT、一个 ECU、一个平坦组合；多个不同应用类型，每种一个实例，禁止多实例支持。纯本地生产者、消费者、服务提供者和调用者都是必要形状。
 - 显式非排队 uint32 S/R、P→R assembly、P 可扇出；每个使用的 R 恰有一个本地生产者或网络映射。按真实接口和应用→实现→基础类型映射验证，等宽不构成兼容。
-- S/R 明确初值；首次发布前各 R 保留自身初值。本地仅支持 handleNeverReceived=false、aliveTimeout=0、handleTimeoutType=NONE、无 invalidValue，不受 CAN 停止影响。新 profile 的网络缓冲 Read／Write 按实际 COM 状态处理，CAN 停止不能推导 COM_STOPPED；旧 profile 保持历史语义。无 group 时 reception deadline monitoring 禁用，首批是否加入最小 Rx group 与标准超时闭环待用户选择，不能沿用私有 host timer 冒充标准通知。
+- S/R 明确初值；首次发布前各 R 保留自身初值。本地仅支持 handleNeverReceived=false、aliveTimeout=0、handleTimeoutType=NONE、无 invalidValue，不受 CAN 停止影响。用户已选择新 profile 支持最小真实 Rx I-PDU group、标准 reception deadline monitoring 和 COM→RTE 回调，保留正数网络 aliveTimeout；无 group 不启用 monitoring，私有 host timer 不能替代标准通知。网络 Read／Write 按实际 COM 状态处理，CAN 停止不能推导 COM_STOPPED；NONE 超时保留 last value，旧 profile 保持历史语义。
 - 同步本地 C/S 支持 uint32 IN／OUT／INOUT 和固定 uint8[4] OUT；无 possibleErrors 时服务器返回 void，客户端 Rte_Call 返回 Std_ReturnType。唯一服务器在调用者 owner 上下文执行；拒绝空输出指针、调用环、异步、重入和跨任务关系。
 - 非并发 runnable，只支持 TimingEvent／OperationInvokedEvent。周期 runnable 各一个事件，共同正整数毫秒周期、offset=0；按唯一 Task_Ecu 的合法映射位置执行。服务器仍需无 task／alarm／event／position 引用的 mapping 容器，且不进入周期表。
 - 嵌套／delegation、重复类型实例、更多类型、队列、隐式／模式通信及未选变体明确拒绝。R11 仅保留信号类型、网络通道和应用映射身份接缝，不实现其运行扩展。
@@ -30,7 +30,7 @@
 - ARXML 原字节是权威；私有不可变计划核定完整身份、关系、符号、调度和源码槽。消费者不重读 XML 或猜关系；失败保留输入、会话和旧输出。
 - 新 profile 为 `singlecore-multi-swc-v1`；组件头暴露各自标准 API，映射到唯一内部实现符号。拒绝 C 标识符、保留名、大小写不敏感文件名和 include guard 碰撞；旧 profile／槽／交接仍按原形状分派。
 - 本地存储和网络 transport 分离；SchM 无锁依据唯一 owner。既有 OS backend 裁定 tick，顺序为 BSW 输入／时间、全部应用、发送、诊断；同 epoch 不重复执行，无第二调度器。
-- 关闭选定配置直接消费的 Com 生命周期、状态、信号接口、标准回调和 Dcm 服务接缝差距；标准 TriggerTransmit 是 pull-copy，主机主动发送及时间另用明确适配接口。同步修正所有生产者、调用者和交付资源，摘要更新不能授权 ABI 变化。
+- 关闭选定配置直接消费的 Com 生命周期、状态、信号接口、标准回调和 Dcm／PduR 服务接缝差距；标准 TriggerTransmit 是 pull-copy，主机主动发送及时间另用明确适配接口。Rx group 成员与启停、deadline 配置和 COM→RTE 接收／超时通知由同一可信计划共同生成，按实际 COM 状态更新 RTE freshness；验证启用、禁用、超时与恢复，不能依赖旧 host Dem 策略或第二计时器。其他未选 group 组合仍明确拒绝，不扩大为通用 group 支持。同步修正所有生产者、调用者和交付资源，摘要更新不能授权 ABI 变化。
 - 可信计划派生全部源码槽：`componentPath` 是 full type path，槽名为 `singlecore-multi-swc-v1:<full instance path>`，live `application/<checked type C name>.c` 对应 sealed `src/<same name>.c`。初始化 create-only，与 manifest 原子接纳；每份 live 源逐字节快照，任何外部变化使旧确认失效。
 - v2 数组可承载多槽，但输出归属必须由真实 profile／计划重建，未知槽／路径、身份不符和 sealed 篡改拒绝。异地导入在新 live 工程恢复来源；sealed 输出永不转成可写输入。
 
@@ -42,10 +42,12 @@
 
 ## Cross-Story Dependencies
 
-8.1 → 8.2 → 8.3 → 8.4 → 8.5；真实生成／调度关口通过后才展开依赖它的流程。复用已交付源、规则、事务和 OS 基础；Epic 7 整体 done 不构成门禁，仅相关具体缺陷阻塞受影响工作。共享接口修改由协调者统一处理，保留其他任务修改。结果写回 BMad；授权覆盖本地修改、验证、阶段提交、推送及创建 PR，未授权 merge。
+8.1 → 8.2 → 8.3 → 8.4 → 8.5；8.2 的网络超时产品选择已解除，最小 Rx group／标准 DM／COM→RTE 闭环仍须实际实施和验收，选择确认不等于运行退出通过。真实生成／调度关口通过后才展开依赖它的流程。复用已交付源、规则、事务和 OS 基础；Epic 7 整体 done 不构成门禁，仅相关具体缺陷阻塞受影响工作。共享接口修改由协调者统一处理，保留其他任务修改。结果写回 BMad；授权覆盖本地修改、验证、阶段提交、推送及创建 PR，未授权 merge。
 
 ## 已核实的后续源码／交接调用链
 
 在 8.2 实际运行退出条件通过后，8.3／8.5 必须共同核对以下已存在的单槽检查，不能只把 DTO 改成数组：`arxml/application.rs` 的 preview/create-only 原子接纳；`arxml/project.rs` 的 manifest 校验和打开时真实 component contract／槽验证；`prepared.rs` 的单个 application_slot 与生成闭包；`generator/delivery.rs` 的 live→sealed 快照与槽／路径匹配；`generator/delivery/{ownership,reopen}.rs` 的归属与重建；`tools/python/src/ecu_tools/workbench_v2.py` 的独立 v2 接收边界。现有 `application_inputs`／InputSnapshot 已是数组，数组本身不授权新槽。旧 `epic4-single-application-v1`／`src/Application.c` 分派保留，新 profile 的所有槽与文件都由同一可信计划派生，Rust 与包内 Python 同步验证。正常源码初始化仍不得依赖 compiler／官方档案；源码只读检查覆盖未知槽、路径大小写、成员数量、逐字节 stale 和跨目录导入。这是当前源码核对结果，尚未实施或验收，不推进 8.3／8.5 状态。
 
 8.1 targeted native GUI 的额外发现：原有 WorkspaceView 继续保存 host-can 专用解析 diagnostics，标准输入 projection 则明确排除这些旧目标解析诊断。多组件实际 import 的 projection 为零 diagnostics、计划成功，但底栏仍叠加 8 项旧 PDU_UNSUPPORTED/DIAG_UNSUPPORTED，和历史单组件标准输入共享此入口；只读计划本身可运行。8.4 必须从实际 profile/原生 projection 统一问题显示及可编辑状态，不用清空所有 diagnostics 或在前端按错误代码猜过滤；验证同一来源的合法成功、真实非法关系和 host-can 回归。本条为当前实际 IPC 发现，未修复，不能将现阶段标准输入 UI 宣称为完整编辑体验。
+
+8.2 的真实运行验证必须有用户提供的全部应用源码。当前单槽准备无法运行 AC-2；因此按计划接纳每个实例真实磁盘源、来源 guard、immutable snapshot 与准确 owner 的最小准备切片属于 8.2 必要依赖，不生成业务算法或修改 sealed 产物补测。8.3 仍负责 live create-only 初始化／manifest／再生成，8.5 仍负责完整重导入与交接，两者未提前完成。
