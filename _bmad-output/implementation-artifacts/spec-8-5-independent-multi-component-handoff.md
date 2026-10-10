@@ -96,3 +96,5 @@ context:
 - 对实际重新生成multi及single封存工程运行 `c-check --target linux-x64-controlled-v1`，保留passed=false源码诊断与未评估人工项，分析完整不等于完整MISRA符合。
 
 - 2026-10-10 13:32：实施及三层独立审查完成，规格状态done、sprint故事review；提交／PR／远端CI／合并继续按既有授权执行，Epic当前仍in-progress。
+
+- 2026-10-10 13:52：提交 `a46167351d0e7f0209b7a9ac16dc81167cfd5920` 经 [PR #16](https://github.com/g1331/autsaro/pull/16) 的全部28项远端检查通过，已于05:52:16Z合并；master `e3b14a3c5e39386cc07ae06280d58b4f83f00943` 包含8.1–8.5。主代理fetch后验证实施head为origin/master祖先。全部五条故事与Epic更新done；本次仅同步现有BMad收口记录，保留原失败、源码passed=false及未执行验收范围。

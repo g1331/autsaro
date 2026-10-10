@@ -939,6 +939,8 @@ So that 已取消的原生／发行验收不再阻塞开发成果收口。
 
 ## Epic 8: 多组件应用与调度工程
 
+2026-10-10 当前状态：五条故事与 Epic 均 done，独立交接已实际完成；[PR #15](https://github.com/g1331/autsaro/pull/15) 与 [PR #16](https://github.com/g1331/autsaro/pull/16) 各28项检查通过并已合并。下列故事保留原验收契约，实际结果及未验证范围见[现有验收规格](../specs/spec-multi-component-scheduling/acceptance.md#2026-10-10-首批配置验收结果)；源码 passed=false 不被此完成状态改写。
+
 用户成果：支持首批有界多组件配置，真实S/R和同步C/S经共同生成的RTE／SchM／OS路径运行，源码保护和异地交接闭合。对应APP-1、APP-2、CFG-4、FR-1–FR-6、FR-12、FR-14、FR-15与CAP-1–CAP-5。
 
 ### Story 8.1: 从多组件输入生成一致的应用契约

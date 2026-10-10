@@ -22,3 +22,16 @@
 内部值、计数、执行顺序与server调用上下文由实际用户测试应用记录不可变观测，使用既有probe／test的工程外 `--control-source` 在真实OS owner阶段读取，宿主线程仅输出已复制结果。生产HostBatch另验上述固定CAN／DID和重复epoch向量；控制源不能链接进生产入口，不新增产品调度／诊断接口或函数桩。
 
 8.2范围已由用户确定：最小真实Rx group＋标准DM及COM→RTE回调。网络独立向量：ComFirstTimeout=0，首次接收前任意tick仍NEVER_RECEIVED且保留明确初值；接收后30ms到期产生真实timeout通知，Read返回MAX_AGE_EXCEEDED并保留last value，持续无接收按每30ms重复通知；同epoch先接收后DM检查避免边界假超时。DisableReceptionDM后不通知且不停止接收；Enable重新按first timeout启动，重复enable不重置已启用timer；GroupStop禁收并取消DM，Read返回实际COM_STOPPED，Start(FALSE)保留buffer，Start(TRUE)按init重置；恢复帧清除超时并回填新值。零ComTimeout禁用监测，错误/重复group handle、dangling或Tx成员、缺member和不一致timebase/timeout/callback生成前拒绝。原有旧profile失败语义与Dem主机计时保持回归；该向量只定义预期，未冒称已实现。
+
+
+## 2026-10-10 首批配置验收结果
+
+| 验收 | 真实证据与结果 |
+| --- | --- |
+| AC-1–AC-8 | [8.1](../../implementation-artifacts/spec-8-1-multi-component-contracts.md)与[8.2](../../implementation-artifacts/spec-8-2-multi-component-runtime.md)：真实生成、独立 typed consumers、实际 OS owner、六相位接收／DM／恢复、同步服务、变名及源序反转、非法连接／类型／调度拒绝已通过。 |
+| AC-9 | [8.3](../../implementation-artifacts/spec-8-3-multi-component-source-protection.md)与[8.4](../../implementation-artifacts/spec-8-4-multi-component-workbench-editing.md)：create-only 初始化、manifest 接纳、stale 确认拒绝、全部用户源字节保护、安全编辑与保存重开已通过；8.4 开发原生工作台完整 21／21。 |
+| AC-10 | [8.5](../../implementation-artifacts/spec-8-5-independent-multi-component-handoff.md)：实际搬移完整包并移除原 live，Rust 导入、新目录重新生成全 payload 相同，包内 Python -I -S 独立构建生产与 canonical owner；固定 CAN／DID、四 runnable 次数／顺序／上下文及 local／C/S 值通过。六类篡改／权属／路径／身份拒绝同时经过 Rust 与 Python 正常入口，输入、接收者旧文件和外部 sentinel 原字节保持。非实现者独立重跑 native handoff 3／3，24.74s。 |
+| AC-11 | 8.5 原四生产 owner 案例、72／72 builtin 与实际旧 v1 host／ECU 协议回归通过；旧 host／single README 逐字节保持，未将不同生成规则的旧 multi 包静默升级。 |
+| AC-12 | 实际重新导入／生成 multi 52 个翻译单元、受影响 single 42 个翻译单元分析完整，固定工具身份成立、error=null；源码结果均 passed=false，分别保留 2607／1814 条诊断，221 项人工规范 assessment 未完成。此项要求如实记录分析，不等于源码全面合规。 |
+
+三层 8.5 独立审查无待处置或 deferred 发现；实施结果覆盖首批配置，未扩展同类型多实例、任意类型转换、R11 多通道或 MCU。[PR #15](https://github.com/g1331/autsaro/pull/15) 和 [PR #16](https://github.com/g1331/autsaro/pull/16) 各28项远端检查通过并已合并，master `e3b14a3c5e39386cc07ae06280d58b4f83f00943` 已包含完整实现；Epic与五条故事均done。跨平台CI分析完整性不证明Windows实际交接运行，安装／MCU／认证仍未验证。

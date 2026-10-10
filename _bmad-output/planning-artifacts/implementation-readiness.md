@@ -127,3 +127,10 @@ Epic7发行收尾由其他任务负责，当前不以其整体done为门；唯�
 本结论为规划进入许可，不是实现／行为／标准符合性通过。用户授权阶段提交、推送及创建PR，未授权merge。实际实现、审查、命令、结果、剩余标准／平台缺口记录到对应BMad故事，不增加报告或台账。
 
 实施期进一步核对发现具体配置依赖：无I-PDU group的PDU虽按SWS_Com_00840启动，但Rx deadline monitoring按SWS_Com_00772禁用；网络receiver正数aliveTimeout需要真实COM→RTE timeout回调闭包（SWS_Rte_08061／08062／08103／08104）。2026-10-09用户已选择最小Rx group与标准DM／COM→RTE回调闭环，保留网络超时配置。产品选择已解除；8.1已完成审查验证并交付draft PR #12，26项远端CI通过。8.2按该范围规格化并实施，真实生成／OS／通信／超时及受影响profile c-check通过前不放行8.3–8.5；不将旧host私有计时或本次范围答复当作运行证据。
+
+
+## 2026-10-10 R6／Epic 8 完成交付
+
+此前 R6 实施就绪及阶段调查记录保留为历史，2026-10-10 的整个 Epic 授权包括提交、推送、PR、必需 CI 与合并，并撤回8.5延期。当前五条故事已全部实现、独立审查并按首批配置完成实际验收；[PR #15](https://github.com/g1331/autsaro/pull/15) 和 [PR #16](https://github.com/g1331/autsaro/pull/16) 各28项远端检查通过且已合并，master `e3b14a3c5e39386cc07ae06280d58b4f83f00943` 包含完整工程。sprint的Epic／故事均done；无需再派发历史“待实施”的8.2或8.5。
+
+独立搬移／导入／重新生成／离线构建运行、六类拒绝与源字节保护闭包已通过，实际证据回到[现有验收规格](../specs/spec-multi-component-scheduling/acceptance.md#2026-10-10-首批配置验收结果)和五份实施规格。C分析完整性与源码诊断分别保留：multi52／single42翻译单元，error=null、passed=false；人工MISRA评估、Windows交接运行、安装、硬件与认证仍未完成，不借Epic完成状态外推。

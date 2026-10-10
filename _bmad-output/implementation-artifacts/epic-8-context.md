@@ -42,12 +42,12 @@
 
 ## Cross-Story Dependencies
 
-8.1 → 8.2 → 8.3 → 8.4 → 8.5；真实生成／调度关口通过后才展开依赖流程。8.2 已完成所选受控 Linux 的真实生成、通信、调度及独立审查，实施证据为提交 `c9e5e9bc6e8b286faa9d4c132de16bfbf812219d` 与[8.2 规格](spec-8-2-multi-component-runtime.md)。真实 Rx group、标准 DM、COM→RTE 回调已实现并验证；按可信计划接纳全部实际用户源与不可变快照的最小准备切片也是 8.2 运行所需依赖。它不完成 8.3 的 create-only 初始化／manifest／再生成、8.4 的完整 UI 或 8.5 的异地恢复／交接。实际生成 multi／受影响 single 的 c-check 分析完整性已核验，但原始诊断仍使 passed=false，人工规范评估仍未完成；不声明源码全面符合。Windows 运行、MCU 与未执行原生 GUI 范围不得继承 Linux 通过结论。
+8.1 → 8.2 → 8.3 → 8.4 → 8.5 已依序完成，先通过真实生成／调度关口再展开源码、编辑和交接。8.2 已实现真实 Rx group、标准 deadline monitoring 与 COM→RTE 回调，并在实际 OS owner 验证通信、周期与拒绝；具体标准接缝及历史分析见[8.2 规格](spec-8-2-multi-component-runtime.md)。旧 profile 保持原行为，Epic 7 整体状态不构成门禁，R11 未实施。
 
-8.3／8.5 须共同覆盖源码初始化、manifest 接纳、打开时真实组件契约、准备快照、live→sealed 来源、输出归属、重导入及包内离线接收边界。现有输入数组不授权新槽；全部槽、文件、owner 与 producer 由同一可信计划派生，旧单槽分派精确保留。源码准备仍不得依赖 compiler／官方档案。
+8.3 的初始化／manifest／再生成与 8.5 的异地恢复共同闭合全部可信槽、live→sealed、owner／producer 和输入来源。接收者 README 已按真实组件槽显示全部源码、实例、headers 与 runnable；旧 host／single 说明逐字节保持。8.5 实际搬移包并移除原工作区后，正常 Rust 导入与重新生成保持全 payload，包内 Python -I -S 构建并实际运行生产和 canonical owner；成功与六类拒绝由非实现者独立重跑，3／3 通过，三层审查无待处置发现。证据见[8.3](spec-8-3-multi-component-source-protection.md)与[8.5](spec-8-5-independent-multi-component-handoff.md)。
 
-8.5 后续还需核对接收者说明：`core/src/generator/delivery.rs::append_native_readme` 当前沿用旧单组件契约与 `src/Application.c` 的源码归属说明，不能作为多组件源码路径指南。该故事须按真实组件槽修正说明，并以新目录恢复、重新生成及包内离线构建运行验证全部来源和归属；本次 8.1–8.4 阶段合并不宣称此交接闭包已完成。
+8.4 修复标准工程混入旧 host-can diagnostics 的具体问题，标准字段、实例引用与连接按既有事务安全编辑；已初始化成员身份变更拒绝以保护用户源码。完整开发原生工作台 21／21 及嵌套引用创建、SYMBOL 身份保护回归已通过；实际范围与历史失败见[8.4 规格](spec-8-4-multi-component-workbench-editing.md)。
 
-8.4 已修复标准工程混入旧 host-can diagnostics 的问题：共享 source projection 决定实际 profile，保留 schema／definition 错误并单独定位目标生成约束；不通过前端过滤或清空 diagnostics 处理。标准字段、实例引用及连接批次沿现有检查器安全编辑，已初始化成员身份变更拒绝以保护用户源码。2026-10-10 完整 core 234 项及后续受影响 builtin72／workbench7 通过，完整开发原生 21 项已实际通过，三层独立审查结束，嵌套引用创建与 SYMBOL 源码身份回归已修复，受影响 workbench8、quality22 和 Clippy 通过；通过范围及历史失败以[8.4 规格](spec-8-4-multi-component-workbench-editing.md)为准，8.4 实施规格 done／sprint review，远端交付按真实 PR 状态核验。
+2026-10-10：五条故事与 Epic 8 均 done。[PR #15](https://github.com/g1331/autsaro/pull/15) 与 [PR #16](https://github.com/g1331/autsaro/pull/16) 各 28 项远端检查通过并已合并，master 提交 e3b14a3c5e39386cc07ae06280d58b4f83f00943 包含完整实现；最终 BMad 收口分支为 `docs/complete-multi-component-epic`。用户撤回 8.5 延期后的整个 Epic 授权范围已完成，原分阶段安排保留在规划历史。
 
-复用已交付源、规则、事务和 OS 基础；Epic 7 整体状态不构成门禁，仅相关具体缺陷阻塞受影响工作。共享接口修改统一协调并保留其他任务修改。结果写回 BMad；当前分支 `feat/multi-component-handoff`。2026-10-10 PR #15 的28项CI通过并已合并，master提交660c0217e126ebd5208e052f0c2c59d9f23d9675包含8.1–8.4；8.5正在真实异地交接、审查与分析。2026-10-10 用户撤回 8.5 延期安排，本任务继续整个 Epic 8：完成 8.1–8.4 后提交、推送、创建 PR、通过必需 CI 并合并，随后继续 8.5 的独立多组件异地交接闭包和相应审查、验证、PR 合并。全部必需验收完成前 Epic 8 保持进行中，未执行的交接不记作通过。
+完成结论限首批配置、受控 Linux 实际运行、原生开发工作台与跨平台开发／分析 CI。实际重新生成 multi／受影响 single 的 c-check 分析完整，源码 passed=false、人工规范 assessment 未完成；Windows 交接运行、真实安装、网络 namespace、MCU 与认证未验证，不继承上述通过结论。完整验收结果见[现有验收规格](../specs/spec-multi-component-scheduling/acceptance.md#2026-10-10-首批配置验收结果)。
