@@ -93,6 +93,8 @@ edge-case-hunter 返回空列表；三层全部收齐后再逐项判断与修复
 
 ## Verification
 
+- PR #15 首轮跨平台 CI：Linux Python 3.12–3.14、UI macOS／Linux、quality及进程检查通过；Windows／macOS Python 测试暴露新增 unit test 固定选择 Linux、错误依赖 Linux 系统工具。测试改为实际宿主平台选择，所有工具隔离断言保持，本地47项与Ruff通过；远端重跑结果以 PR checks 为准，不将本地 Linux 当作其他平台已通过。
+
 - 审查后 core all-targets correctness／suspicious Clippy 与增量 quality22 通过。首次 quality 未把受控 Rust 工具加入 PATH，明确报 rustfmt 不可用；修正本次命令环境后重跑正常入口，Requested source checks passed。没有修改全局配置或放宽检查。
 
 - 独立审查后的受影响 workbench 8／8 passed（含四种嵌套创建与 SYMBOL 身份保护），17.38s；初次新增断言把 LocalizedText 当作 struct 导致编译错误，已按公开序列化消息形状修正，未改变产品代码拒绝语义。原完整 21 项 native 的其他实现保持；本轮共享 XML 插入修复由公开事务／保存重开测试覆盖。

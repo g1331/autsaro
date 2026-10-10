@@ -209,7 +209,7 @@ class NativeBuiltinModeTests(unittest.TestCase):
                 ("AUTOSAR_CC", "AUTOSAR_OBJDUMP", "AUTOSAR_GIT", "AUTOSAR_PYTHON"), str(tool)
             )
             with patch.dict(os.environ, {**declared, "AUTOSAR_XSD_ARCHIVE": "/private/xsd", "CARGO_HOME": "/private/cargo"}):
-                prepare(root, "linux", False, None, builtin_only=True)
+                prepare(root, "windows" if os.name == "nt" else "macos" if sys.platform == "darwin" else "linux", False, None, builtin_only=True)
                 environment = app_environment(root, False, builtin_only=True)
             scenario = json.loads((root / "scenario.json").read_text())
             self.assertFalse(scenario["installed"])
