@@ -2,7 +2,7 @@ use super::component::{ComponentContract, milliseconds};
 use super::graph::Graph;
 use super::{DiagnosticCategory, PlanDiagnostic};
 use serde::Serialize;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -722,6 +722,24 @@ pub(super) fn inspect_events(
                 "SCHEDULE_NOT_UNIQUE",
                 crate::product_message!(
                     "backend.integration.schedule.bsw_timing_event_ecu_task_mapping_missing"
+                ),
+            ));
+        }
+    }
+    // Each admitted alarm/table first fires at period_ms and repeats at that
+    // period. A task event cannot distinguish different cadences or triggers.
+    let mut event_periods = BTreeMap::new();
+    for entity in &entities {
+        if event_periods
+            .insert((&entity.task, &entity.os_event), entity.period_ms)
+            .is_some_and(|period| period != entity.period_ms)
+        {
+            return Err(reject(
+                graph,
+                graph.objects[&entity.mapping],
+                "SCHEDULE_NOT_UNIQUE",
+                crate::product_message!(
+                    "backend.integration.schedule.shared_event_period_mismatch"
                 ),
             ));
         }
