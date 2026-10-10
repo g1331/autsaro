@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-27-2026 18:43
-last_updated: 10-10-2026 16:33
+last_updated: 10-10-2026 18:44
 project: Autosar
 project_key: NOKEY
 tracking_system: file-system
@@ -51,7 +51,8 @@ story_location: _bmad-output/implementation-artifacts
 # Development completion and the original unverified release exits are recorded separately in spec-epic-7-configurator.md.
 # Remaining roadmap candidates are not implementation-ready or registered here.
 # Formal Epics 9/10 were added by the 2026-10-10 course correction, not candidate R9/R10.
-# Both remain backlog without executable stories; scope/design readiness is recorded in implementation-readiness.md.
+# Epic 9 has 20 planned stories, all backlog pending scoped readiness; Epic 10 has outcome definitions only.
+# Scope, entry conditions and planning concerns: ../planning-artifacts/implementation-readiness.md
 development_status:
   epic-1: done
   1-1-complete-std-001-host-can-driver-slice: done
@@ -119,6 +120,26 @@ development_status:
   epic-8-retrospective: done
 
   epic-9: backlog
+  9-1-固定共享契约与逐模块进入依据: backlog
+  9-2-分离-can-标准接口与主机适配: backlog
+  9-3-明确-ecu-批次执行与收据责任: backlog
+  9-4-闭合-canif-配置-路由与异步接口: backlog
+  9-5-整理-lsdur-与-pdur-路由和缓冲契约: backlog
+  9-6-整理-com-状态与模块生成配置: backlog
+  9-7-整理-cantp-传输与可信计时: backlog
+  9-8-整理-dcm-会话与诊断生成链: backlog
+  9-9-整理-comm-与-bswm-模式衔接: backlog
+  9-10-分离-det-标准报告与主机控制: backlog
+  9-11-整理-nvm-与主机持久原语: backlog
+  9-12-整理-dem-状态与持久消费者: backlog
+  9-13-整理-security-会话与-windows-密钥边界: backlog
+  9-14-整理-os-schm-与固定内核责任链: backlog
+  9-15-整理-rte-共享类型与模块生成阶段: backlog
+  9-16-验证兼容交付-旧工程与离线工具: backlog
+  9-17-让日常修改获得快速有效反馈: backlog
+  9-18-优化实际-ci-等待与重复工作: backlog
+  9-19-让严格源码结果真正阻止错误-pr-合并: backlog
+  9-20-完成非实现者独立接手与-epic-出口: backlog
   epic-9-retrospective: optional
 
   epic-10: backlog
