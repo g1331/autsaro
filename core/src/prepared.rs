@@ -412,7 +412,7 @@ impl NativePreparation {
                 Cow::Owned(generator::delivery::json_bytes(&metadata)?),
             )?;
         }
-        generator::delivery::append_native_readme(files)?;
+        generator::delivery::append_native_readme(files, &metadata, &slots)?;
         Ok(Self {
             metadata,
             definition_fingerprint: inputs.definition_fingerprint,

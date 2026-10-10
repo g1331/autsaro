@@ -9,6 +9,9 @@ use autosar_config_core::{
 use std::fs;
 use std::path::Path;
 
+#[path = "support/delivery.rs"]
+#[allow(dead_code)]
+mod delivery_support;
 #[path = "support/workspace.rs"]
 #[allow(dead_code)]
 mod workspace;
@@ -188,10 +191,78 @@ fn generated_c_analysis_samples() {
                 .join(slot.source_paths[0].rsplit('/').next().unwrap()),
         })
         .collect();
-    autosar_config_core::prepare_ecu_project_with_applications(&plan, target, &applications)
-        .unwrap()
-        .generate(&output.join("multi-component"))
+    let live = scratch.0.join("multi-author");
+    fs::create_dir(&live).unwrap();
+    for source in &sources {
+        fs::write(live.join(source.logical_path()), source.bytes()).unwrap();
+    }
+    let manifest = autosar_config_core::arxml::ProjectManifest {
+        format_version: 1,
+        declared_release: "R24-11".into(),
+        profile_hint: "singlecore-multi-swc-v1".into(),
+        inputs: sources
+            .iter()
+            .map(|source| autosar_config_core::arxml::ProjectInput {
+                path: source.logical_path().into(),
+                role_hint: "standard".into(),
+            })
+            .collect(),
+        application_inputs: Vec::new(),
+        accepted_extension_definitions: Vec::new(),
+    };
+    let manifest_path = live.join("workbench-project.json");
+    fs::write(
+        &manifest_path,
+        serde_json::to_vec_pretty(&manifest).unwrap(),
+    )
+    .unwrap();
+    let mut workspace =
+        Workspace::open_project_manifest(&manifest_path, &scratch.0.join("cache")).unwrap();
+    let preview = workspace.preview_application_initialization().unwrap();
+    workspace
+        .initialize_application_previewed(&preview)
         .unwrap();
+    for (slot, application) in plan
+        .application_slot_descriptors()
+        .unwrap()
+        .iter()
+        .zip(&applications)
+    {
+        fs::copy(&application.path, live.join(&slot.source_paths[0])).unwrap();
+    }
+    let workspace =
+        Workspace::open_project_manifest(&manifest_path, &scratch.0.join("cache")).unwrap();
+    let plan = workspace
+        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
+        .unwrap();
+    let original = scratch.0.join("multi-author-package");
+    prepare_ecu_project_for_workspace(&workspace, &plan, target, true)
+        .unwrap()
+        .generate(&original)
+        .unwrap();
+    let package = scratch.0.join("moved-multi-package");
+    fs::rename(&original, &package).unwrap();
+    fs::remove_dir_all(&live).unwrap();
+    assert!(!original.exists() && !live.exists());
+    let imported = autosar_config_core::generator::delivery::open_handoff(
+        &package,
+        &scratch.0.join("received-multi"),
+        &autosar_config_core::definitions::DefinitionCatalog::builtin().unwrap(),
+    )
+    .unwrap();
+    let plan = imported
+        .workspace
+        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
+        .unwrap();
+    let regenerated = output.join("multi-component");
+    prepare_ecu_project_for_workspace(&imported.workspace, &plan, target, true)
+        .unwrap()
+        .generate(&regenerated)
+        .unwrap();
+    assert_eq!(
+        delivery_support::payload(&package),
+        delivery_support::payload(&regenerated)
+    );
     assert_eq!(fs::read_dir(&output).unwrap().count(), 6);
 }
 

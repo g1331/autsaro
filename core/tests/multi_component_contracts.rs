@@ -12,6 +12,8 @@ mod tooling;
 #[path = "support/workspace.rs"]
 mod workspace;
 use workspace::Scratch;
+#[path = "support/delivery.rs"]
+mod delivery_support;
 
 fn inputs() -> Vec<InputSource> {
     let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-component");
@@ -71,6 +73,330 @@ fn live_multi_workspace(root: &Path, sources: &[InputSource]) -> autosar_config_
     let path = root.join("workbench-project.json");
     std::fs::write(&path, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
     autosar_config_core::Workspace::open_project_manifest(&path, &root.join("cache")).unwrap()
+}
+
+fn initialized_multi_user_workspace(root: &Path) -> autosar_config_core::Workspace {
+    let mut arxml = inputs();
+    change(
+        &mut arxml,
+        "ingress.arxml",
+        "<VALUE>0</VALUE>",
+        "<VALUE>7</VALUE>",
+    );
+    let mut workspace = live_multi_workspace(root, &arxml);
+    let initialization = workspace.preview_application_initialization().unwrap();
+    workspace
+        .initialize_application_previewed(&initialization)
+        .unwrap();
+    for file in &initialization.files {
+        let name = Path::new(&file.path).file_name().unwrap();
+        std::fs::copy(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/multi-application")
+                .join(name),
+            root.join(&file.path),
+        )
+        .unwrap();
+    }
+    autosar_config_core::Workspace::open_project_manifest(
+        &root.join("workbench-project.json"),
+        &root.join("cache"),
+    )
+    .unwrap()
+}
+
+#[test]
+fn moved_multi_handoff_reconstructs_every_user_source_and_exact_producer() {
+    use autosar_config_core::{generator::delivery, prepared::prepare_ecu_project_for_workspace};
+    let scratch = Scratch::new();
+    let live = scratch.0.join("author");
+    let workspace = initialized_multi_user_workspace(&live);
+    let expected = workspace.generation_snapshot().unwrap();
+    let plan = workspace
+        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
+        .unwrap();
+    let prepared =
+        prepare_ecu_project_for_workspace(&workspace, &plan, native_delivery_target(), true)
+            .unwrap();
+    let package = scratch.0.join("original-package");
+    prepared.generate(&package).unwrap();
+    let moved = scratch.0.join("consumer/package");
+    std::fs::create_dir(moved.parent().unwrap()).unwrap();
+    std::fs::rename(&package, &moved).unwrap();
+    std::fs::remove_dir_all(&live).unwrap();
+    assert!(!live.exists() && !package.exists());
+    let receiver = scratch.0.join("consumer/live");
+    let imported =
+        delivery::open_handoff(&moved, &receiver, &DefinitionCatalog::builtin().unwrap()).unwrap();
+    let actual = imported.workspace.generation_snapshot().unwrap();
+    assert_eq!(actual.manifest, expected.manifest);
+    for (before, after) in [
+        (&expected.inputs, &actual.inputs),
+        (&expected.applications, &actual.applications),
+    ] {
+        let bytes = |sources: &[autosar_config_core::arxml::GenerationInputSnapshot]| {
+            sources
+                .iter()
+                .map(|source| (source.logical_path.clone(), source.bytes.clone()))
+                .collect::<std::collections::BTreeMap<_, _>>()
+        };
+        assert_eq!(bytes(before), bytes(after));
+        assert!(after.iter().all(|source| {
+            source
+                .disk_path
+                .canonicalize()
+                .unwrap()
+                .starts_with(receiver.canonicalize().unwrap())
+        }));
+    }
+    let applications = imported
+        .metadata
+        .input_snapshots
+        .iter()
+        .filter(|input| input.kind == delivery::InputKind::Application)
+        .map(|input| {
+            (
+                input.producer_slot.as_deref().unwrap(),
+                input.logical_path.as_str(),
+                input.package_path.as_str(),
+            )
+        })
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(
+        applications,
+        std::collections::BTreeSet::from([
+            (
+                "singlecore-multi-swc-v1:/Application/Pipeline/IngressInstance",
+                "application/Ingress.c",
+                "src/Ingress.c"
+            ),
+            (
+                "singlecore-multi-swc-v1:/Application/Pipeline/ProcessInstance",
+                "application/Process.c",
+                "src/Process.c"
+            ),
+            (
+                "singlecore-multi-swc-v1:/Application/Pipeline/ObserveInstance",
+                "application/Observe.c",
+                "src/Observe.c"
+            ),
+        ])
+    );
+    let plan = imported
+        .workspace
+        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
+        .unwrap();
+    let regenerated = scratch.0.join("consumer/regenerated");
+    let prepared = prepare_ecu_project_for_workspace(
+        &imported.workspace,
+        &plan,
+        native_delivery_target(),
+        true,
+    )
+    .unwrap();
+    let slots = prepared.application_slots().to_vec();
+    prepared.generate(&regenerated).unwrap();
+    assert_eq!(
+        delivery_support::payload(&moved),
+        delivery_support::payload(&regenerated)
+    );
+    let readme = std::fs::read_to_string(regenerated.join("README.md")).unwrap();
+    assert!(
+        !readme.contains("epic4-single-application-v1") && !readme.contains("src/Application.c")
+    );
+    for slot in &slots {
+        for identity in std::iter::once(&slot.component_path)
+            .chain(std::iter::once(&slot.producer_slot))
+            .chain(slot.source_paths.iter())
+            .chain(slot.generated_headers.iter())
+            .chain(slot.entry_symbols.iter())
+        {
+            assert!(
+                readme.contains(identity),
+                "missing README identity: {identity}"
+            );
+        }
+    }
+    for (producer, logical, compiled) in applications {
+        let ledger: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(regenerated.join("workbench-ownership.json")).unwrap(),
+        )
+        .unwrap();
+        let row = ledger["files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["path"] == compiled)
+            .unwrap();
+        assert_eq!(row["owner"], "user-application");
+        assert_eq!(row["producerId"], producer);
+        assert_eq!(row["snapshotOf"], logical);
+    }
+    #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+    verify_received_multi_owner(&regenerated, moved.parent().unwrap());
+    let payload = delivery_support::payload(&regenerated);
+    assert_eq!(payload, delivery_support::payload(&moved));
+    for bytes in payload.values() {
+        assert!(
+            !bytes
+                .windows(live.to_str().unwrap().len())
+                .any(|window| window == live.to_str().unwrap().as_bytes())
+        );
+        assert!(
+            !bytes
+                .windows(package.to_str().unwrap().len())
+                .any(|window| window == package.to_str().unwrap().as_bytes())
+        );
+    }
+}
+
+fn native_delivery_target() -> autosar_config_core::target::BuildTarget {
+    if cfg!(windows) {
+        autosar_config_core::target::BuildTarget::WindowsX64ControlledV1
+    } else {
+        autosar_config_core::target::BuildTarget::LinuxX64ControlledV1
+    }
+}
+
+#[test]
+fn multi_handoff_rejects_resealed_authority_and_snapshot_forgery() {
+    use autosar_config_core::{generator::delivery, prepared::prepare_ecu_project_for_workspace};
+    let scratch = Scratch::new();
+    let workspace = initialized_multi_user_workspace(&scratch.0.join("live"));
+    let plan = workspace
+        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
+        .unwrap();
+    let source = workspace.generation_snapshot().unwrap();
+    let sentinel = scratch.0.join("outside.c");
+    std::fs::write(&sentinel, b"outside owner bytes").unwrap();
+    for (case, rust_reason, python_reason) in [
+        (
+            "application",
+            "mapped_snapshot_changed",
+            "Immutable native product/generated/input bytes changed",
+        ),
+        (
+            "owner",
+            "unknown variant",
+            "Unknown native owner or payload path",
+        ),
+        (
+            "producer",
+            "ownership_write_authority_invalid",
+            "Ownership cannot grant this path write authority",
+        ),
+        (
+            "snapshot-path",
+            "ownership_write_authority_invalid",
+            "Ownership cannot grant this path write authority",
+        ),
+        (
+            "payload-path",
+            "portable_path_unsafe",
+            "Unsafe v2 portable path",
+        ),
+        (
+            "identity",
+            "native_identity_unsupported",
+            "Native input/resource identity differs",
+        ),
+    ] {
+        let package = scratch.0.join(case);
+        let prepared =
+            prepare_ecu_project_for_workspace(&workspace, &plan, native_delivery_target(), true)
+                .unwrap();
+        prepared.generate(&package).unwrap();
+        let ledger_path = package.join("workbench-ownership.json");
+        let mut ledger: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&ledger_path).unwrap()).unwrap();
+        let row = ledger["files"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|row| row["path"] == "src/Process.c")
+            .unwrap();
+        match case {
+            "application" => {
+                let mut bytes = std::fs::read(package.join("src/Process.c")).unwrap();
+                bytes.extend_from_slice(b"\n/* forged snapshot */\n");
+                std::fs::write(package.join("src/Process.c"), bytes).unwrap();
+            }
+            "owner" => row["owner"] = "unrecognized-authority".into(),
+            "producer" => row["producerId"] = "unrecognized-producer".into(),
+            "snapshot-path" => row["snapshotOf"] = "../outside.c".into(),
+            "payload-path" => row["path"] = "../outside.c".into(),
+            "identity" => {
+                let mut target: serde_json::Value =
+                    serde_json::from_slice(&std::fs::read(package.join("target.json")).unwrap())
+                        .unwrap();
+                target["nativeDelivery"]["resourceIdentities"]["ruleSetIdentity"]["rulesVersion"] =
+                    "unrecognized-rule-version".into();
+                std::fs::write(
+                    package.join("handoff.json"),
+                    serde_json::to_vec_pretty(&target["nativeDelivery"]).unwrap(),
+                )
+                .unwrap();
+                std::fs::write(
+                    package.join("target.json"),
+                    serde_json::to_vec_pretty(&target).unwrap(),
+                )
+                .unwrap();
+            }
+            _ => unreachable!(),
+        }
+        ledger["files"]
+            .as_array_mut()
+            .unwrap()
+            .sort_by(|left, right| left["path"].as_str().cmp(&right["path"].as_str()));
+        std::fs::write(&ledger_path, serde_json::to_vec_pretty(&ledger).unwrap()).unwrap();
+        if case == "payload-path" {
+            delivery_support::seal(&package);
+        } else {
+            delivery_support::reseal(&package);
+        }
+        let bytes = delivery_support::payload(&package);
+        let receiver = scratch.0.join(format!("{case}-receiver"));
+        let error =
+            delivery::open_handoff(&package, &receiver, &DefinitionCatalog::builtin().unwrap())
+                .err()
+                .unwrap();
+        let evidence = serde_json::to_string(&error).unwrap();
+        assert!(evidence.contains(rust_reason), "{case}: {evidence}");
+        assert!(!receiver.exists());
+        std::fs::create_dir(&receiver).unwrap();
+        std::fs::write(receiver.join("user.txt"), b"receiver owner bytes").unwrap();
+        let retained =
+            delivery::open_handoff(&package, &receiver, &DefinitionCatalog::builtin().unwrap())
+                .err()
+                .unwrap();
+        assert_eq!(retained, error);
+        assert_eq!(
+            std::fs::read(receiver.join("user.txt")).unwrap(),
+            b"receiver owner bytes"
+        );
+        assert_eq!(std::fs::read_dir(&receiver).unwrap().count(), 1);
+        #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+        {
+            let output = scratch.0.join(format!("{case}-build"));
+            let result = tooling::ecu_build_command(&package, &output, "host-batch", None)
+                .current_dir(&scratch.0)
+                .env_remove("PYTHONPATH")
+                .env_remove("PYTHONHOME")
+                .output()
+                .unwrap();
+            assert!(!result.status.success());
+            let stderr = String::from_utf8_lossy(&result.stderr);
+            assert!(stderr.contains(python_reason), "{case}: {stderr}");
+            assert!(!output.exists());
+        }
+        #[cfg(not(all(feature = "native-tests", any(windows, target_os = "linux"))))]
+        let _ = python_reason;
+        assert_eq!(delivery_support::payload(&package), bytes);
+        assert_eq!(std::fs::read(&sentinel).unwrap(), b"outside owner bytes");
+        for input in source.inputs.iter().chain(source.applications.iter()) {
+            assert_eq!(std::fs::read(&input.disk_path).unwrap(), input.bytes);
+        }
+    }
 }
 
 #[test]
@@ -4031,101 +4357,193 @@ fn sealed_multi_project_builds_and_runs_production_owner() {
         assert_eq!(prepared.application_slots().len(), 3);
         let project = scratch.0.join("multi-project");
         prepared.generate(&project).unwrap();
-        let output = scratch.0.join("multi-build");
-        let result = tooling::ecu_build_command(&project, &output, "host-batch", None)
-            .output()
-            .unwrap();
-        assert!(
-            result.status.success(),
-            "{}\n{}",
-            String::from_utf8_lossy(&result.stdout),
-            String::from_utf8_lossy(&result.stderr)
-        );
-        let binary = tooling::native_binary(&output, "ecu_host_batch");
-        let logs = scratch.0.join("owner-logs");
-        std::fs::create_dir(&logs).unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&logs, std::fs::Permissions::from_mode(0o700)).unwrap();
-        }
-        let mut spec = autosar_config_core::execution::ProcessSpec::for_duration(
-            vec![binary.into_os_string()],
-            scratch.0.clone(),
-            vec![],
-            std::time::Duration::from_secs(30),
-            logs,
-        )
+        verify_multi_production_owner(&project, &scratch.0, p2_star);
+    }
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+fn verify_multi_production_owner(project: &Path, consumer: &Path, p2_star: Option<(&str, &str)>) {
+    let output = consumer.join("multi-build");
+    let result = tooling::ecu_build_command(&project, &output, "host-batch", None)
+        .current_dir(consumer)
+        .env_remove("PYTHONPATH")
+        .env_remove("PYTHONHOME")
+        .output()
         .unwrap();
-        spec.stdin_stream = true;
-        let owner = tooling::execution_owner();
-        let mut process = owner.spawn(spec, None).unwrap();
-        process.write_stdin(b"BEGIN 0\nRX 800 4 78563412\nRX 1792 8 0322123400000000\nCOMMIT\nBEGIN 1\nCOMMIT\nBEGIN 10\nRX 1792 8 0322123400000000\nCOMMIT\nBEGIN 10\nCOMMIT\nBEGIN 20\nRX 1792 8 0322123400000000\nCOMMIT\n").unwrap();
-        if p2_star.is_some() {
-            process
-                .write_stdin(b"BEGIN 30\nRX 1792 8 0210030000000000\nCOMMIT\n")
-                .unwrap();
-        }
-        process.close_stdin();
-        let result = process.wait().unwrap();
-        assert!(result.success(), "{result:?}");
-        let text = std::fs::read_to_string(&result.stdout).unwrap();
-        let records: Vec<_> = text
+    assert!(
+        result.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let binary = tooling::native_binary(&output, "ecu_host_batch");
+    let logs = consumer.join("owner-logs");
+    std::fs::create_dir(&logs).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&logs, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let mut spec = autosar_config_core::execution::ProcessSpec::for_duration(
+        vec![binary.into_os_string()],
+        consumer.to_path_buf(),
+        vec![],
+        std::time::Duration::from_secs(30),
+        logs,
+    )
+    .unwrap();
+    spec.stdin_stream = true;
+    let owner = tooling::execution_owner();
+    let mut process = owner.spawn(spec, None).unwrap();
+    process.write_stdin(b"BEGIN 0\nRX 800 4 78563412\nRX 1792 8 0322123400000000\nCOMMIT\nBEGIN 1\nCOMMIT\nBEGIN 10\nRX 1792 8 0322123400000000\nCOMMIT\nBEGIN 10\nCOMMIT\nBEGIN 20\nRX 1792 8 0322123400000000\nCOMMIT\n").unwrap();
+    if p2_star.is_some() {
+        process
+            .write_stdin(b"BEGIN 30\nRX 1792 8 0210030000000000\nCOMMIT\n")
+            .unwrap();
+    }
+    process.close_stdin();
+    let result = process.wait().unwrap();
+    assert!(result.success(), "{result:?}");
+    let text = std::fs::read_to_string(&result.stdout).unwrap();
+    let records: Vec<_> = text
+        .lines()
+        .filter(|line| line.starts_with("OUT "))
+        .map(|line| {
+            let fields: std::collections::BTreeMap<_, _> = line
+                .split_whitespace()
+                .skip(1)
+                .map(|field| field.split_once('=').unwrap())
+                .collect();
+            (
+                fields["epoch"].parse::<u64>().unwrap(),
+                fields["id"].parse::<u32>().unwrap(),
+                fields["dlc"].parse::<u8>().unwrap(),
+                fields["data"].to_string(),
+            )
+        })
+        .collect();
+    let mut expected = vec![
+        (1, 1800, 8, "0762123400000000".into()),
+        (10, 801, 4, "78563412".into()),
+        (10, 1800, 8, "0762123412345678".into()),
+        (20, 801, 4, "78563412".into()),
+        (20, 1800, 8, "0762123412345678".into()),
+    ];
+    if let Some((_, wire)) = p2_star {
+        expected.push((30, 801, 4, "78563412".into()));
+        expected.push((30, 1800, 8, format!("0650030032{wire}00")));
+    }
+    assert_eq!(records, expected, "{text}");
+    let receipts: Vec<_> = text
+        .lines()
+        .filter(|line| line.starts_with("COMMIT_OK "))
+        .map(|line| {
+            line.split_whitespace()
+                .find_map(|field| field.strip_prefix("epoch="))
+                .unwrap()
+                .parse::<u64>()
+                .unwrap()
+        })
+        .collect();
+    let mut expected_receipts = vec![0, 1, 10, 10, 20];
+    if p2_star.is_some() {
+        expected_receipts.push(30);
+    }
+    assert_eq!(receipts, expected_receipts, "{text}");
+    assert!(
+        !text
             .lines()
-            .filter(|line| line.starts_with("OUT "))
-            .map(|line| {
-                let fields: std::collections::BTreeMap<_, _> = line
-                    .split_whitespace()
-                    .skip(1)
-                    .map(|field| field.split_once('=').unwrap())
-                    .collect();
+            .any(|line| line.starts_with("REJECT ") || line.starts_with("COMMIT_ERROR ")),
+        "{text}"
+    );
+    assert!(
+        std::fs::read(&result.stderr).unwrap().is_empty(),
+        "{result:?}"
+    );
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+fn verify_received_multi_owner(project: &Path, consumer: &Path) {
+    verify_multi_production_owner(project, consumer, None);
+    let control = consumer.join("owner_probe.c");
+    std::fs::copy(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/multi-application/owner_probe.c"),
+        &control,
+    )
+    .unwrap();
+    let output = consumer.join("probe-build");
+    let result = tooling::ecu_build_command(project, &output, "test", Some(&control))
+        .current_dir(consumer)
+        .env_remove("PYTHONPATH")
+        .env_remove("PYTHONHOME")
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let logs = consumer.join("probe-logs");
+    std::fs::create_dir(&logs).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&logs, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let spec = autosar_config_core::execution::ProcessSpec::for_duration(
+        vec![
+            tooling::native_binary(&output, "ecu_probe").into_os_string(),
+            "canonical".into(),
+        ],
+        consumer.to_path_buf(),
+        vec![],
+        std::time::Duration::from_secs(30),
+        logs,
+    )
+    .unwrap();
+    let result = tooling::execution_owner()
+        .spawn(spec, None)
+        .unwrap()
+        .wait()
+        .unwrap();
+    let text = std::fs::read_to_string(&result.stdout).unwrap();
+    assert!(
+        result.success(),
+        "{result:?}\n{text}\n{}",
+        std::fs::read_to_string(&result.stderr).unwrap()
+    );
+    let observations = text
+        .lines()
+        .filter_map(|line| {
+            let fields = line.split_whitespace().collect::<Vec<_>>();
+            (fields.first() == Some(&"OBS")).then(|| {
                 (
-                    fields["epoch"].parse::<u64>().unwrap(),
-                    fields["id"].parse::<u32>().unwrap(),
-                    fields["dlc"].parse::<u8>().unwrap(),
-                    fields["data"].to_string(),
+                    fields[1].to_owned(),
+                    fields[2].parse::<u64>().unwrap(),
+                    fields[3].parse::<u8>().unwrap(),
+                    fields[4].parse::<u32>().unwrap(),
                 )
             })
-            .collect();
-        let mut expected = vec![
-            (1, 1800, 8, "0762123400000000".into()),
-            (10, 801, 4, "78563412".into()),
-            (10, 1800, 8, "0762123412345678".into()),
-            (20, 801, 4, "78563412".into()),
-            (20, 1800, 8, "0762123412345678".into()),
-        ];
-        if let Some((_, wire)) = p2_star {
-            expected.push((30, 801, 4, "78563412".into()));
-            expected.push((30, 1800, 8, format!("0650030032{wire}00")));
-        }
-        assert_eq!(records, expected, "{text}");
-        let receipts: Vec<_> = text
-            .lines()
-            .filter(|line| line.starts_with("COMMIT_OK "))
-            .map(|line| {
-                line.split_whitespace()
-                    .find_map(|field| field.strip_prefix("epoch="))
-                    .unwrap()
-                    .parse::<u64>()
-                    .unwrap()
-            })
-            .collect();
-        let mut expected_receipts = vec![0, 1, 10, 10, 20];
-        if p2_star.is_some() {
-            expected_receipts.push(30);
-        }
-        assert_eq!(receipts, expected_receipts, "{text}");
-        assert!(
-            !text
-                .lines()
-                .any(|line| line.starts_with("REJECT ") || line.starts_with("COMMIT_ERROR ")),
-            "{text}"
-        );
-        assert!(
-            std::fs::read(&result.stderr).unwrap().is_empty(),
-            "{result:?}"
-        );
-    }
+        })
+        .collect::<Vec<_>>();
+    let expected = (1..=20u64)
+        .flat_map(|epoch| {
+            let mut records = vec![(
+                "main".to_owned(),
+                epoch,
+                if epoch == 1 { 133 } else { 0 },
+                if epoch == 1 { 7 } else { 0x12345678 },
+            )];
+            if epoch == 1 {
+                records.push(("rx".to_owned(), epoch, 0, 0x12345678));
+            }
+            records
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(observations, expected, "{text}");
+    assert!(std::fs::read(&result.stderr).unwrap().is_empty());
 }
 
 #[test]
