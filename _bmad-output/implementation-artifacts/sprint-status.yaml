@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-27-2026 18:43
-last_updated: 10-10-2026 15:27
+last_updated: 10-10-2026 16:33
 project: Autosar
 project_key: NOKEY
 tracking_system: file-system
@@ -50,6 +50,8 @@ story_location: _bmad-output/implementation-artifacts
 # Real installation is no longer an Epic 7 prerequisite; native behavior may use current built/extracted artifacts without claiming installer verification.
 # Development completion and the original unverified release exits are recorded separately in spec-epic-7-configurator.md.
 # Remaining roadmap candidates are not implementation-ready or registered here.
+# Formal Epics 9/10 were added by the 2026-10-10 course correction, not candidate R9/R10.
+# Both remain backlog without executable stories; scope/design readiness is recorded in implementation-readiness.md.
 development_status:
   epic-1: done
   1-1-complete-std-001-host-can-driver-slice: done
@@ -115,6 +117,12 @@ development_status:
   8-4-在工作区安全编辑应用组合与调度: done
   8-5-独立交接并复验多组件工程: done
   epic-8-retrospective: done
+
+  epic-9: backlog
+  epic-9-retrospective: optional
+
+  epic-10: backlog
+  epic-10-retrospective: optional
 action_items:
   - id: "epic-4-retro-item-1-watchdog-cleanup-failure"
     epic: 4
