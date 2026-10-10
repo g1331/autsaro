@@ -11,11 +11,25 @@ mod component;
 mod configuration;
 mod contracts;
 mod diagnostic;
-mod ecu;
+pub(crate) mod ecu;
 pub(crate) mod editor;
 mod graph;
 pub(crate) mod handoff;
+mod multi;
+mod multi_bsw;
+mod multi_com;
+mod multi_ecu;
+mod multi_mode;
+mod multi_rte;
+pub use multi_bsw::{CanRuntimeContract, CommunicationIntegerType, CommunicationRuntimeContract};
+pub use multi_com::{ComMainFunction, ComReception, ComRuntimeContract, ComRxGroup};
+pub use multi_mode::{ModeRule, ModeRuntimeContract, ModeUser};
 mod native_configuration;
+pub use multi::{
+    Component as MultiComponent, Connection as ComponentConnection, Endpoint as ComponentEndpoint,
+    MultiComponentContract, Operation as ComponentOperation,
+};
+pub const MULTI_PROFILE: &str = multi::PROFILE;
 mod os_service;
 mod plan;
 mod routing;
@@ -698,4 +712,13 @@ fn read_archive(
         )]);
     }
     Ok(bytes)
+}
+
+/// Use the same source-derived selection as the trusted plan, even when generation is unsupported.
+pub(crate) fn is_multi_source(
+    sources: &[InputSource],
+    catalog: &crate::definitions::DefinitionCatalog,
+) -> bool {
+    graph::Graph::from_catalog_target_scope(sources, catalog)
+        .is_ok_and(|graph| multi::selected(&graph))
 }

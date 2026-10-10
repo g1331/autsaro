@@ -1,21 +1,33 @@
 #include "Ecu_Target.h"
 #include "Ecu_TargetConfig.h"
 #include "Ecu_Execution.h"
+#if !defined(ECU_MULTI_COMPONENT)
 #include "Ecu_Diagnostic.h"
+#endif
 #include "Os_IntegrationHooks.h"
 #include "Os_Backend.h"
 #include "Can.h"
 #include "CanIf.h"
 #include "CanTp.h"
 #include "Com.h"
+#if defined(ECU_MULTI_COMPONENT)
+#include "Com_Internal.h"
+#endif
 #include "Dcm.h"
+#if !defined(ECU_MULTI_COMPONENT)
 #include "Dem.h"
+#endif
 #include "LSduR.h"
 #include "Os_Mailbox.h"
 #include "PduR.h"
 #include "Rte.h"
+#if !defined(ECU_MULTI_COMPONENT)
 #include "Security.h"
+#endif
 #include "SchM_Can.h"
+#if defined(ECU_MULTI_COMPONENT)
+#include "Rte_Main.h"
+#endif
 #include <string.h>
 
 typedef struct {
@@ -32,6 +44,9 @@ typedef Ecu_Input Ecu_MailboxInput[(sizeof(Ecu_Input) <= OS_INPUT_PAYLOAD) ? 1 :
 typedef struct {
     volatile Os_Atomic32 state;
     Ecu_OutputRecord record;
+#if defined(ECU_MULTI_COMPONENT)
+    uint64_t driver_token;
+#endif
 } Ecu_OutputSlot;
 
 typedef struct {
@@ -54,6 +69,9 @@ static Ecu_BatchCompletion batch_completion;
 static Os_HostThreadId initialization_thread;
 static uint64_t epoch;
 static uint64_t processed_tick;
+#if defined(ECU_MULTI_COMPONENT)
+static uint64_t processed_epoch;
+#endif
 static uint64_t next_output_ticket;
 static unsigned output_write;
 static unsigned output_read;
@@ -62,7 +80,9 @@ static unsigned output_retire;
 static unsigned output_pending;
 static Ecu_OutputSlot outputs[ECU_TARGET_OUTPUT_CAPACITY];
 static Ecu_ProtocolSlot protocol_failures[ECU_TARGET_OUTPUT_CAPACITY];
+#if !defined(ECU_MULTI_COMPONENT)
 static unsigned protocol_write;
+#endif
 static unsigned protocol_read;
 static uint8_t received;
 static uint64_t received_at;
@@ -73,6 +93,7 @@ static void fail(void) {
 }
 static Os_Atomic32 load(volatile Os_Atomic32 *value) { return Os_HostAtomicLoad(value); }
 
+#if !defined(ECU_MULTI_COMPONENT)
 static void advance_transport(void) {
     EcuStatus status = CanTp_AdvanceTime(epoch);
     if (status == ECU_ERR_TP_TIMEOUT) {
@@ -90,6 +111,7 @@ static void advance_transport(void) {
         /* CanTp has already aborted the timed-out connection before reporting. */
     }
 }
+#endif
 uint8_t Ecu_TargetState(void) {
     Os_Atomic32 state = load(&lifecycle);
     if ((state == (Os_Atomic32)ECU_TARGET_READY) && (Os_TargetReady() == 0)) {
@@ -107,6 +129,13 @@ void Ecu_TargetAssertOwner(void) {
     if (Ecu_TargetIsOwner() == 0) {
         fail();
     }
+}
+Std_ReturnType Ecu_TargetCheckLifecycleContext(boolean starting) {
+    const Os_HookPhase phase = Os_HookContext();
+    return (((starting == TRUE) && (phase == OS_HOOK_STARTUP)) ||
+            ((starting == FALSE) && (phase == OS_HOOK_SHUTDOWN)))
+               ? E_OK
+               : E_NOT_OK;
 }
 uint64_t Ecu_TargetNow(void) {
     Ecu_TargetAssertOwner();
@@ -155,11 +184,15 @@ StatusType Ecu_TargetPrepare(void) {
     status = Os_TargetPrepare(&Ecu_OsConfig);
     if (status != E_OK) {
         (void)Os_HostAtomicExchange(&lifecycle, (Os_Atomic32)ECU_TARGET_FAILED);
-    } else {
+    }
+#if !defined(ECU_MULTI_COMPONENT)
+    else {
         Ecu_DiagnosticReset();
     }
+#endif
     return status;
 }
+#if !defined(ECU_MULTI_COMPONENT) || defined(ECU_TARGET_TESTS)
 static void stage(unsigned number) {
 #ifdef ECU_TARGET_TESTS
     if (Ecu_TargetTestFailStage(number) != 0) {
@@ -169,9 +202,17 @@ static void stage(unsigned number) {
     (void)number;
 #endif
 }
+#endif
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
 void StartupHook(void) {
+#if defined(ECU_MULTI_COMPONENT)
+    initialization_thread = Os_HostThreadIdentity();
+    if (Ecu_MultiBootstrap() != E_OK) {
+        fail();
+        return;
+    }
+#else
     const Can_ConfigType driver = {NULL};
     Can_ControllerStateType mode;
     initialization_thread = Os_HostThreadIdentity();
@@ -211,6 +252,7 @@ void StartupHook(void) {
     Can_MainFunction_Wakeup();
     Os_TargetTrace('s');
     stage(8u);
+#endif
     (void)Os_HostAtomicExchange(&lifecycle, (LONG)ECU_TARGET_READY);
 }
 #define OS_STOP_SEC_CODE
@@ -220,6 +262,9 @@ void StartupHook(void) {
 void ShutdownHook(StatusType Error) {
     Os_Atomic32 state =
         (Error == E_OK) ? (Os_Atomic32)ECU_TARGET_CLOSED : (Os_Atomic32)ECU_TARGET_FAILED;
+#if defined(ECU_MULTI_COMPONENT)
+    Ecu_MultiRetire();
+#endif
     (void)Os_HostAtomicExchange(&lifecycle, state);
 #ifdef ECU_TARGET_TESTS
     Ecu_TargetTestShutdown(Error);
@@ -289,6 +334,11 @@ static StatusType batch_time(uint64_t at, Os_TickCompletion *completed) {
     }
     return (status == E_OS_ID) ? E_OS_VALUE : ((status == E_OS_NOFUNC) ? E_OS_STATE : status);
 }
+#if defined(ECU_MULTI_COMPONENT)
+static int frame_shape(const Ecu_BatchFrame *frame) {
+    return Ecu_MultiFrameShape(frame->id, frame->dlc);
+}
+#else
 static int frame_shape(const Ecu_BatchFrame *frame) {
     return (frame->id <= 0x7ffu) && (frame->dlc > 0u) && (frame->dlc <= 8u) &&
            ((frame->id != Ecu_Config.frames[0].id) || (frame->dlc == Ecu_Config.frames[0].dlc)) &&
@@ -296,6 +346,7 @@ static int frame_shape(const Ecu_BatchFrame *frame) {
            (frame->id != Ecu_Config.frames[1].id) &&
            (frame->id != Ecu_Config.diagnostic->response_can_id);
 }
+#endif
 StatusType Ecu_TargetValidateFrames(const Ecu_BatchFrame *frames, uint16_t count) {
     uint16_t index;
     if ((frames == NULL) && (count != 0u)) {
@@ -390,10 +441,19 @@ StatusType Ecu_TargetBatchCompletion(uint64_t ticket, Ecu_BatchCompletion *resul
     (void)Os_HostAtomicExchange(&batch_state, 0);
     return E_OK;
 }
+int Os_IntegrationTimingAuthorized(void) {
+#if defined(ECU_MULTI_COMPONENT)
+    return Ecu_SchMTimingActive() == TRUE;
+#else
+    return 1;
+#endif
+}
 void Os_IntegrationOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate) {
     if ((id == ECU_TARGET_TASK) && (pending == 0u) && ((predicate & ECU_TARGET_EVENT_IO) != 0u) &&
         (Os_MailboxQuiescent() != 0) && (output_pending == 0u) && (load(&batch_state) == 4) &&
+#if !defined(ECU_MULTI_COMPONENT)
         (Ecu_DiagnosticPending() == 0u) &&
+#endif
         ((batch_needs_tick == 0u) || (processed_tick == batch_epoch))) {
         (void)Os_HostAtomicCompareExchange(&batch_state, 5, 4);
     }
@@ -401,12 +461,29 @@ void Os_IntegrationOnWaiting(TaskType id, EventMaskType pending, EventMaskType p
 EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc,
                                     const uint8_t data[8]) {
     Ecu_OutputSlot *slot = &outputs[output_write];
+#if defined(ECU_MULTI_COMPONENT)
+    if (Ecu_TargetIsOwner() == 0) {
+        return ECU_ERR_IO;
+    }
+#else
     Ecu_TargetAssertOwner();
-    if ((dlc == 0u) || (dlc > 8u) || (data == NULL) || (id > 0x7ffu) ||
-        (next_output_ticket == UINT64_MAX) || (load(&slot->state) != 0)) {
+#endif
+    if (
+#if !defined(ECU_MULTI_COMPONENT)
+        (dlc == 0u) ||
+#endif
+        (dlc > 8u) || (data == NULL) || (id > 0x7ffu) || (next_output_ticket == UINT64_MAX) ||
+        (load(&slot->state) != 0)) {
         fail();
         return ECU_ERR_IO;
     }
+#if defined(ECU_MULTI_COMPONENT)
+    slot->driver_token = Can_HostTransmitToken();
+    if (slot->driver_token == UINT64_C(0)) {
+        fail();
+        return ECU_ERR_IO;
+    }
+#endif
     ++next_output_ticket;
     slot->record.ticket = next_output_ticket;
     slot->record.epoch = epoch;
@@ -472,11 +549,24 @@ static void consume(const Ecu_Input *input) {
         }
         epoch = input->epoch;
         status = Can_Inject(input->can_id, input->dlc, input->data, epoch);
+#if defined(ECU_MULTI_COMPONENT)
+        Ecu_ComReceptionBeforeMain(input->epoch > processed_epoch);
+        Can_MainFunction_Read();
+#ifdef ECU_TARGET_TESTS
+        stage(11u);
+#endif
+        if (Can_HostFlush() != ECU_OK) {
+            fail();
+        }
+#endif
         if ((status == ECU_OK) && (input->can_id == ECU_TARGET_RX_CAN_ID)) {
             Ecu_TargetRecordReceive(epoch);
         }
     } else if (input->kind == 2u) {
         Ecu_OutputSlot *slot = &outputs[output_retire];
+#if defined(ECU_MULTI_COMPONENT)
+        const uint64_t driver_token = slot->driver_token;
+#endif
         if ((load(&slot->state) != 3) || (slot->record.ticket != input->output_ticket) ||
             (slot->record.pdu != input->pdu) || (output_pending == 0u)) {
             fail();
@@ -484,8 +574,17 @@ static void consume(const Ecu_Input *input) {
         --output_pending;
         output_retire = (output_retire + 1u) % ECU_TARGET_OUTPUT_CAPACITY;
         (void)Os_HostAtomicExchange(&slot->state, 0);
+#if defined(ECU_MULTI_COMPONENT)
+        /* The output ticket proof above establishes real write/flush completion.
+         * A cancelled token is discarded even after the same PDU ID is reused. */
+        if (Can_HostCompleteTransmit(input->pdu, driver_token) == CAN_BUSY) {
+            fail();
+        }
+        Can_MainFunction_Write();
+#else
         CanIf_TxConfirmation(input->pdu);
         advance_transport();
+#endif
     } else if (input->kind == 3u) {
         uint16_t index;
         if ((load(&batch_state) != 2) || (input->output_ticket != batch_completion.ticket) ||
@@ -498,6 +597,16 @@ static void consume(const Ecu_Input *input) {
         for (index = 0u; index < batch_count; ++index) {
             EcuStatus status = Can_Inject(batch_frames[index].id, batch_frames[index].dlc,
                                           batch_frames[index].data, epoch);
+#if defined(ECU_MULTI_COMPONENT)
+            Ecu_ComReceptionBeforeMain(batch_epoch > processed_epoch);
+            Can_MainFunction_Read();
+#ifdef ECU_TARGET_TESTS
+            stage(11u);
+#endif
+            if (Can_HostFlush() != ECU_OK) {
+                fail();
+            }
+#endif
             if ((status == ECU_OK) && (batch_frames[index].id == ECU_TARGET_RX_CAN_ID)) {
                 Ecu_TargetRecordReceive(epoch);
             }
@@ -552,6 +661,17 @@ void Ecu_TargetTask(void) {
                 fail();
             }
             epoch = delivered;
+#if defined(ECU_MULTI_COMPONENT)
+#ifdef ECU_TARGET_TESTS
+            stage(9u);
+#endif
+            if (Ecu_MultiRunCycle(events) != E_OK) {
+                fail();
+            }
+#ifdef ECU_TARGET_TESTS
+            stage(10u);
+#endif
+#else
             Can_MainFunction_Wakeup();
             Os_TargetTrace('w');
             advance_transport();
@@ -575,14 +695,20 @@ void Ecu_TargetTask(void) {
                 fail();
             }
             Os_TargetTrace('d');
+#endif
             processed_tick = ticket;
+#if defined(ECU_MULTI_COMPONENT)
+            processed_epoch = delivered;
+#endif
         } else if ((status != E_OK) && (status != E_OS_NOFUNC)) {
             fail();
         } else {
+#if !defined(ECU_MULTI_COMPONENT)
             /* An IO-only wake consumes callbacks without repeating periodic work. */
             if ((processed_tick == epoch) && (Ecu_DiagnosticProcess(epoch) != ECU_OK)) {
                 fail();
             }
+#endif
         }
         if ((status == E_OK) && (output_pending == 0u) && (Os_TargetCompleteTick(ticket) != E_OK)) {
             fail();

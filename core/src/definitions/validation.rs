@@ -257,6 +257,12 @@ pub(super) fn documents(
         coverage: Vec::new(),
         diagnostics: Vec::new(),
     };
+    let legacy_mode_dependency = catalog.legacy_mode_dependency_compatibility(
+        documents
+            .iter()
+            .zip(files)
+            .map(|(document, (file, _))| (file.to_str().unwrap_or("<non-UTF8-source>"), document)),
+    );
     let mut objects = BTreeMap::new();
     for (document, (file, _)) in documents.iter().zip(files) {
         for node in document
@@ -447,7 +453,9 @@ pub(super) fn documents(
                 || node.children().any(|n| {
                     matches!(
                         n.tag_name().name(),
-                        "VARIATION-POINT" | "VALUE-IREF" | "VALUE-EXPR"
+                        "VARIATION-POINT" | "VALUE-EXPR"
+                    ) || (n.tag_name().name() == "VALUE-IREF"
+                        && definition.definition_id != "/AUTOSAR/EcucDefs/EcuC/EcucPartitionCollection/EcucPartition/EcucPartitionSoftwareComponentInstanceRef"
                     )
                 })
                 || node
@@ -532,7 +540,69 @@ pub(super) fn documents(
             }
             if let Some(kind) = definition.kind {
                 if kind == ValueKind::Reference {
-                    let Some(reference) = child(node, "VALUE-REF") else {
+                    let instance = definition.element_kind == "ECUC-INSTANCE-REFERENCE-DEF";
+                    let iref = child(node, "VALUE-IREF");
+                    if instance {
+                        let context = iref.and_then(|iref| child(iref, "CONTEXT-ELEMENT-REF"));
+                        let target = iref.and_then(|iref| child(iref, "TARGET-REF"));
+                        let valid = node
+                            .children()
+                            .filter(|child| child.has_tag_name("VALUE-IREF"))
+                            .count()
+                            == 1
+                            && iref.is_some_and(|iref| {
+                                iref.children().filter(|n| n.is_element()).count() == 2
+                            })
+                            && context.is_some_and(|context| {
+                                context.attribute("DEST") == Some("ROOT-SW-COMPOSITION-PROTOTYPE")
+                                    && objects
+                                        .get(super::xml_text_trimmed(context).as_ref())
+                                        .is_some_and(|root| {
+                                            root.tag_name().name()
+                                                == "ROOT-SW-COMPOSITION-PROTOTYPE"
+                                                && text(*root, "SOFTWARE-COMPOSITION-TREF")
+                                                    .is_some_and(|composition| {
+                                                        target.is_some_and(|target| {
+                                                            objects
+                                                                .get(
+                                                                    super::xml_text_trimmed(target)
+                                                                        .as_ref(),
+                                                                )
+                                                                .is_some_and(|target| {
+                                                                    target.ancestors().skip(1).find(
+                                                                        |owner| {
+                                                                            child(
+                                                                                *owner,
+                                                                                "SHORT-NAME",
+                                                                            )
+                                                                            .is_some()
+                                                                        },
+                                                                    ) == objects
+                                                                        .get(composition.as_ref())
+                                                                        .copied()
+                                                                })
+                                                        })
+                                                    })
+                                        })
+                            });
+                        if !valid {
+                            issue(
+                                "REFERENCE_CONTEXT",
+                                Severity::Error,
+                                crate::product_message!(
+                                    "backend.definitions.validation.reference_target_not_allowed"
+                                ),
+                                "ROOT-SW-COMPOSITION-PROTOTYPE/SW-COMPONENT-PROTOTYPE".into(),
+                                metadata.as_str().into(),
+                            );
+                        }
+                    }
+                    let reference = if instance {
+                        iref.and_then(|iref| child(iref, "TARGET-REF"))
+                    } else {
+                        child(node, "VALUE-REF")
+                    };
+                    let Some(reference) = reference else {
                         issue(
                             "REFERENCE_MISSING",
                             Severity::Error,
@@ -702,6 +772,24 @@ pub(super) fn documents(
                         .get(child.definition_id.as_str())
                         .copied()
                         .unwrap_or(0);
+                    if count == 0
+                        && legacy_mode_dependency
+                        && child.definition_id
+                            == "/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsl/DcmDslProtocol/DcmDslProtocolRow/DcmDslConnection/DcmDslMainConnection/DcmDslProtocolComMChannelRef"
+                    {
+                        // Preserve the identified old ABI/configuration profile;
+                        // official metadata and every new profile remain strict.
+                        result.coverage.push(RuleCoverage {
+                            rule_id: "native.definition.legacy-dcm-mode-dependency".into(),
+                            scope: ValidationScope::Definition,
+                            subjects: vec![child.definition_id.clone()],
+                            supported: false,
+                            reason: Some(crate::product_message!(
+                                "backend.definitions.validation.uncertifiable_entry_multiplicity"
+                            )),
+                        });
+                        continue;
+                    }
                     if opaque_entries.contains(child.definition_id.as_str())
                         || (!child.writable && (count > 0 || child.lower_multiplicity > 0))
                     {
@@ -913,10 +1001,10 @@ fn legacy_constraints(
     .iter()
     .map(|module| format!("/AUTOSAR/EcucDefs/{module}"))
     .collect();
-    if !standard || !required.iter().all(|id| modules.contains(id.as_str())) {
+    if !standard {
         return Ok(());
     }
-    let Some((graph_valid, issues)) = catalog.legacy_definition_constraints(
+    let Some((graph_valid, multi, issues)) = catalog.legacy_definition_constraints(
         documents
             .iter()
             .zip(files)
@@ -924,6 +1012,9 @@ fn legacy_constraints(
     ) else {
         return Ok(());
     };
+    if !multi && !required.iter().all(|id| modules.contains(id.as_str())) {
+        return Ok(());
+    }
     let registered = |code: &str| {
         matches!(
             code,
@@ -937,6 +1028,8 @@ fn legacy_constraints(
                 | "TIMEOUT_CONFLICT"
                 | "DIAGNOSTIC_TIMING"
                 | "DIAGNOSTIC_REFERENCE"
+                | "OFFSET_UNSUPPORTED"
+                | "MINIMUM_START_INTERVAL_UNSUPPORTED"
         )
     };
     let supported = graph_valid;
@@ -961,7 +1054,10 @@ fn legacy_constraints(
     } else {
         Vec::new()
     };
-    for issue in issues.into_iter().filter(|issue| registered(&issue.code)) {
+    for issue in issues
+        .into_iter()
+        .filter(|issue| multi || registered(&issue.code))
+    {
         let values: Vec<_> = issue
             .object
             .as_ref()
@@ -999,8 +1095,13 @@ fn legacy_constraints(
             issue.code.as_str().into(),
             counterexample.into(),
         );
+        if multi {
+            diagnostic.scope = ValidationScope::TargetGeneration;
+            diagnostic.rule_id = format!("native.target-generation.{}", diagnostic.code);
+        }
         if let Some(witness) = &mut diagnostic.witness {
             witness.subjects = subjects;
+            witness.rule_id = diagnostic.rule_id.clone();
         }
         result.diagnostics.push(diagnostic);
     }

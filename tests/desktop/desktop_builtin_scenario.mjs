@@ -14,10 +14,17 @@ import {
 } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import { createBuiltinInputs, createExtensionInputs } from './desktop_builtin_inputs.mjs';
+import {
+  createBuiltinInputs,
+  createExtensionInputs,
+  createMultiComponentInputs,
+} from './desktop_builtin_inputs.mjs';
 import { assertUnavailableSourceCheckout } from './desktop_scenario.mjs';
 
-const explicit = (kind, lexeme) => ({ state: 'explicit', value: { kind, lexeme } });
+const explicit = (kind, lexeme) => ({
+  state: 'explicit',
+  value: { kind, lexeme },
+});
 const existing = (objectId) => ({ kind: 'existing', objectId });
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
@@ -51,7 +58,7 @@ export async function runBuiltinScenario({
     memory: { status: 'not_run', samples: [] },
     error: null,
   };
-  const ipc = [];
+  const ipcLog = await open(path.join(scratch, 'native-builtin-ipc.jsonl'), 'w');
   let sequence = 0;
   const json = JSON.stringify;
   const visible = `node => node.getClientRects().length > 0 && !node.closest('[hidden]')`;
@@ -81,13 +88,15 @@ export async function runBuiltinScenario({
       try { return { ok: true, reply: await window.__TAURI_INTERNALS__.invoke(${json(command)}, ${json({ ...payload, fingerprint: current })}) }; }
       catch (error) { return { ok: false, error }; }
     })()`);
-    ipc.push({
-      command,
-      payload,
-      fingerprint: current,
-      durationMs: performance.now() - started,
-      ...result,
-    });
+    await ipcLog.writeFile(
+      json({
+        command,
+        payload,
+        fingerprint: current,
+        durationMs: performance.now() - started,
+        ...result,
+      }) + '\n',
+    );
     if (!result.ok) throw new Error(json(result.error));
     assert.equal(
       result.reply.inputFingerprint,
@@ -377,7 +386,9 @@ export async function runBuiltinScenario({
   async function apply(view, changes) {
     const batch = changeSet(view, changes);
     const bytes = await sourceBytes(view);
-    const preview = await invoke('prepare_configuration_change', { changeSet: batch });
+    const preview = await invoke('prepare_configuration_change', {
+      changeSet: batch,
+    });
     await unchanged(bytes);
     assert.deepEqual(await projection(), view, 'prepare must not publish even a partial graph');
     const outcome = await invoke('apply_configuration_change', {
@@ -403,7 +414,9 @@ export async function runBuiltinScenario({
     const bytes = await sourceBytes(before);
     const preview = await invoke('preview_save_project');
     await unchanged(bytes);
-    const outcome = await invoke('save_project', { revision: preview.revision });
+    const outcome = await invoke('save_project', {
+      revision: preview.revision,
+    });
     for (const file of preview.files) {
       if (file.after !== null)
         assert.deepEqual(
@@ -460,8 +473,12 @@ export async function runBuiltinScenario({
   }
   async function awaitProjectSurfaceReady() {
     await until(
-      `!document.querySelector('[role=status]')?.textContent.startsWith('正在') && (!document.querySelector('[aria-label="标准输入工作区"]') || Boolean(document.querySelector('[aria-label="标准输入工作区"] input[aria-label="接收 CAN ID"]:not(:disabled)')))`,
+      `!document.querySelector('[role=status]')?.textContent.startsWith('正在') && (!document.querySelector('[aria-label="标准输入工作区"]') || !document.querySelector('[aria-label="标准输入工作区"] input[aria-label="接收 CAN ID"]') || Boolean(document.querySelector('[aria-label="标准输入工作区"] input[aria-label="接收 CAN ID"]:not(:disabled)')))`,
       'actual opened project and automatic inspection operation completed',
+    );
+    await until(
+      `(async () => !(await window.__TAURI_INTERNALS__.invoke('workbench_capabilities')).operation)()`,
+      'actual project automatic inspection backend operation completed',
     );
   }
   async function openMember(manifest) {
@@ -520,7 +537,9 @@ export async function runBuiltinScenario({
       `Boolean(document.querySelector('[aria-label="完整源原文"]'))`,
       'real source document',
     );
-    const actual = await invoke('read_project_source', { sourceId: source.sourceId });
+    const actual = await invoke('read_project_source', {
+      sourceId: source.sourceId,
+    });
     assert.deepEqual(Buffer.from(actual), await readFile(source.path));
     const rendered = await evaluate(
       `document.querySelector('[aria-label="完整源原文"]').textContent`,
@@ -537,7 +556,9 @@ export async function runBuiltinScenario({
         'source A is the sole existing fallback document before opening B',
       );
       const second = view.sources[1];
-      const secondText = await invoke('read_project_source', { sourceId: second.sourceId });
+      const secondText = await invoke('read_project_source', {
+        sourceId: second.sourceId,
+      });
       assert.notEqual(secondText, actual, 'Raw fallback requires two genuinely different sources');
       await click(
         path.basename(second.path),
@@ -573,7 +594,10 @@ export async function runBuiltinScenario({
     const output = path.join(scratch, 'deliveries', name);
     const previewCommand = standard ? 'preview_ecu_project' : 'preview_handoff_project';
     const generateCommand = standard ? 'generate_ecu_project' : 'generate_handoff_project';
-    const payload = { outputDirectory: output, ...(standard ? { handoff: true } : {}) };
+    const payload = {
+      outputDirectory: output,
+      ...(standard ? { handoff: true } : {}),
+    };
     const before = await projection();
     const preview = await invoke(previewCommand, payload);
     await assert.rejects(access(output), { code: 'ENOENT' });
@@ -651,7 +675,7 @@ export async function runBuiltinScenario({
     await writeFile(path.join(directory, 'files.sha256'), hashes.join('\n') + '\n');
   }
   try {
-    assert.equal(scenario.installed, true);
+    assert.equal(typeof scenario.installed, 'boolean');
     assert.equal(scenario.mode, 'builtin-only');
     await until(
       `Boolean(window.__TAURI_INTERNALS__ && document.querySelector('button'))`,
@@ -669,55 +693,64 @@ export async function runBuiltinScenario({
     const location = await evaluate(
       `({href:location.href, protocol:location.protocol, hostname:location.hostname, port:location.port})`,
     );
-    assert(
-      (location.protocol === 'tauri:' && location.hostname === 'localhost') ||
-        (['http:', 'https:'].includes(location.protocol) &&
-          location.hostname === 'tauri.localhost'),
-    );
-    assert.equal(location.port, '');
     evidence.location = location;
-    evidence.sourceCheckoutBoundary = await assertUnavailableSourceCheckout(
-      scratch,
-      scenario.sourceCheckout,
-      platform,
-    );
     const boundary = JSON.parse(
       await readFile(path.join(scratch, 'application-environment.json'), 'utf8'),
     );
     assert.equal(boundary.mode, 'builtin-only');
-    const network = JSON.parse(
-      await readFile(path.join(scratch, 'network-isolation.json'), 'utf8'),
-    );
-    assert.equal(network.platform, platform);
-    assert.equal(network.status, 'enforced');
-    assert.equal(network.userNetworkChanged, false);
-    if (platform === 'linux') {
-      const namespace = await readFile('/proc/self/net/route', 'utf8');
-      assert(network.namespace !== network.outerNamespace);
-      assert.equal(await readlink('/proc/self/ns/net'), network.namespace);
-      assert(network.interfaces.every((item) => item.ifname === 'lo'));
+    assert.equal(boundary.installed, scenario.installed);
+    let network = null;
+    if (scenario.installed) {
       assert(
-        !namespace
-          .split('\n')
-          .slice(1)
-          .some((line) => line && !line.startsWith('lo\t')),
-        'Driver and native child must have no non-loopback routes',
+        (location.protocol === 'tauri:' && location.hostname === 'localhost') ||
+          (['http:', 'https:'].includes(location.protocol) &&
+            location.hostname === 'tauri.localhost'),
       );
+      assert.equal(location.port, '');
+      evidence.sourceCheckoutBoundary = await assertUnavailableSourceCheckout(
+        scratch,
+        scenario.sourceCheckout,
+        platform,
+      );
+      network = JSON.parse(await readFile(path.join(scratch, 'network-isolation.json'), 'utf8'));
+      assert.equal(network.platform, platform);
+      assert.equal(network.status, 'enforced');
+      assert.equal(network.userNetworkChanged, false);
+      if (platform === 'linux') {
+        const namespace = await readFile('/proc/self/net/route', 'utf8');
+        assert(network.namespace !== network.outerNamespace);
+        assert.equal(await readlink('/proc/self/ns/net'), network.namespace);
+        assert(network.interfaces.every((item) => item.ifname === 'lo'));
+        assert(
+          !namespace
+            .split('\n')
+            .slice(1)
+            .some((line) => line && !line.startsWith('lo\t')),
+          'Driver and native child must have no non-loopback routes',
+        );
+      } else {
+        const launch = JSON.parse(await readFile(path.join(scratch, 'native-launch.json'), 'utf8'));
+        assert.equal(launch.clipboardIsolation, true);
+        assert.notEqual(launch.windowStation.toLowerCase(), 'winsta0');
+        assert.equal(
+          launch.appToken.elevated,
+          false,
+          'Only the controller may be elevated; installed application must be an ordinary user process',
+        );
+        assert(launch.appToken.integrityRid >= 0x2000 && launch.appToken.integrityRid < 0x3000);
+        assert.equal(path.resolve(network.binary), path.resolve(launch.binary));
+      }
+      evidence.networkIsolation = { status: 'enforced', receipt: network };
     } else {
-      const launch = JSON.parse(await readFile(path.join(scratch, 'native-launch.json'), 'utf8'));
-      assert.equal(launch.clipboardIsolation, true);
-      assert.notEqual(launch.windowStation.toLowerCase(), 'winsta0');
-      assert.equal(
-        launch.appToken.elevated,
-        false,
-        'Only the controller may be elevated; installed application must be an ordinary user process',
-      );
-      assert(launch.appToken.integrityRid >= 0x2000 && launch.appToken.integrityRid < 0x3000);
-      assert.equal(path.resolve(network.binary), path.resolve(launch.binary));
+      assert.equal(location.href.startsWith('http://127.0.0.1:1420/'), true);
+      evidence.sourceCheckoutBoundary = {
+        status: 'not_run',
+        reason: 'development',
+      };
+      evidence.networkIsolation = { status: 'not_run', reason: 'development' };
     }
-    evidence.networkIsolation = { status: 'enforced', receipt: network };
     assert(Object.values(boundary.tools).every((value) => value === null));
-    await checked('installed-boundary', async () => {
+    await checked(scenario.installed ? 'installed-boundary' : 'development-boundary', async () => {
       const caps = await capabilities();
       assert.equal(caps.ruleError, null);
       assert(caps.ruleSetIdentity?.sha256 && caps.ruleCoverage.length > 0);
@@ -727,12 +760,204 @@ export async function runBuiltinScenario({
         !(await evaluate(`Boolean(document.querySelector('[aria-label="设置"][role=dialog]'))`)),
         'No resource setup gate',
       );
-      return { capabilities: caps, boundary, checkout: 'unavailable', network };
+      return {
+        capabilities: caps,
+        boundary,
+        checkout: scenario.installed ? 'unavailable' : 'development',
+        network,
+      };
     });
     assert.equal(typeof resize, 'function');
     assert.equal(typeof key, 'function');
     assert.equal(typeof pointer, 'function');
     await resize(1480, 920);
+    if (!scenario.installed) {
+      const multi = await createMultiComponentInputs(scratch);
+      await openMember(multi.manifest);
+      await checked('multi-component-shared-editing-and-source-protection', async () => {
+        let view = await projection();
+        assert.equal(view.profile, 'singlecore-multi-swc-v1');
+        assert.equal(view.diagnostics.filter((issue) => issue.severity === 'error').length, 0);
+        const original = await sourceBytes(view);
+        const periodic = view.objects.find(
+          (object) => object.path === '/Application/Process/Behavior/Periodic10ms',
+        );
+        const period = view.fields.find(
+          (field) =>
+            field.objectId === periodic.objectId && field.definitionId === 'TIMING-EVENT#PERIOD',
+        );
+        assert(period?.writable);
+        const longPeriodicName =
+          'Periodic10msForPipelineProcessingWithAnExplicitLongObjectIdentity';
+        await selectObject(periodic.objectId);
+        await input(label('实例名称'), longPeriodicName);
+        await input(`[data-field-id=${json(period.fieldId)}]`, '0.0100');
+        await resize(1080, 720);
+        await screenshot('multi-long-name-narrow-draft.png');
+        await click('预览更改');
+        await until(
+          `Boolean(document.querySelector('[aria-label="确认原子应用批次"]'))`,
+          'multi field batch preview',
+        );
+        await until(
+          `[...document.querySelectorAll('[role=dialog] button')].some(node => node.textContent.trim() === '确认应用全部变化' && !node.disabled)`,
+          'multi preview ready for keyboard cancel',
+        );
+        await until(
+          `Boolean(document.activeElement?.closest('[role=dialog]'))`,
+          'multi preview receives focus',
+        );
+        await key('Escape');
+        await until(`!document.querySelector('[role=dialog]')`, 'multi preview cancel');
+        assert.equal(
+          await evaluate(`document.querySelector('[data-field-id="${period.fieldId}"]').value`),
+          '0.0100',
+        );
+        await click('预览更改');
+        await until(
+          `Boolean(document.querySelector('[aria-label="确认原子应用批次"]'))`,
+          'multi field preview again',
+        );
+        await click('确认应用全部变化', "document.querySelector('[role=dialog]')");
+        await until(`!document.querySelector('[role=dialog]')`, 'multi batch applied');
+        await until(
+          `(async () => !(await window.__TAURI_INTERNALS__.invoke('workbench_capabilities')).operation)()`,
+          'multi batch operation completed',
+        );
+        await save();
+        view = await refreshSurface(multi.manifest);
+        assert.equal(
+          view.fields.find(
+            (field) =>
+              field.definitionId === 'TIMING-EVENT#PERIOD' &&
+              field.objectId ===
+                view.objects.find((object) => object.shortName === longPeriodicName).objectId,
+          ).current.value.lexeme,
+          '0.0100',
+        );
+        await selectObject(
+          view.objects.find((object) => object.shortName === longPeriodicName).objectId,
+        );
+        await screenshot('multi-long-name-narrow-reopened.png');
+        await resize(1480, 920);
+        await unchanged(
+          original.filter(
+            (source) =>
+              !source.path.endsWith('/process.arxml') && !source.path.endsWith('/ecuc.arxml'),
+          ),
+        );
+        const mappingSource = original.find((source) => source.path.endsWith('/ecuc.arxml'));
+        assert.deepEqual(
+          await readFile(mappingSource.path),
+          Buffer.from(
+            mappingSource.bytes
+              .toString('utf8')
+              .replaceAll(
+                periodic.path,
+                `${periodic.path.slice(0, periodic.path.lastIndexOf('/') + 1)}${longPeriodicName}`,
+              ),
+          ),
+          'Event rename changes only the known OS mapping reference bytes',
+        );
+        view = await projection();
+        const connector = view.objects.find(
+          (object) => object.path === '/Application/Pipeline/IngressObserve',
+        );
+        await selectObject(connector.objectId);
+        const provider = view.fields.find(
+          (field) =>
+            field.objectId === connector.objectId &&
+            field.definitionId === 'ASSEMBLY-SW-CONNECTOR#PROVIDER-IREF/CONTEXT-COMPONENT-REF',
+        );
+        const port = view.fields.find(
+          (field) =>
+            field.objectId === connector.objectId &&
+            field.definitionId === 'ASSEMBLY-SW-CONNECTOR#PROVIDER-IREF/TARGET-P-PORT-REF',
+        );
+        const instanceTarget = view.referenceCandidates.find(
+          (candidate) =>
+            candidate.fieldId === provider.fieldId &&
+            candidate.path === '/Application/Pipeline/ProcessInstance',
+        );
+        const portTarget = view.referenceCandidates.find(
+          (candidate) =>
+            candidate.fieldId === port.fieldId && candidate.path === '/Application/Process/Result',
+        );
+        await input(
+          `[data-field-id=${json(provider.fieldId)}]`,
+          `${instanceTarget.targetId}:${instanceTarget.dest}`,
+        );
+        await input(
+          `[data-field-id=${json(port.fieldId)}]`,
+          `${portTarget.targetId}:${portTarget.dest}`,
+        );
+        await click('预览更改');
+        await until(
+          `Boolean(document.querySelector('[aria-label="确认原子应用批次"]'))`,
+          'multi paired endpoint preview',
+        );
+        await click('确认应用全部变化', "document.querySelector('[role=dialog]')");
+        await until(`!document.querySelector('[role=dialog]')`, 'multi paired endpoint applied');
+        await until(
+          `(async () => !(await window.__TAURI_INTERNALS__.invoke('workbench_capabilities')).operation)()`,
+          'multi paired endpoint operation completed',
+        );
+        await save();
+        await refreshSurface(multi.manifest);
+        const initialization = await invoke('preview_application_initialization');
+        assert.equal(initialization.slots.length, 3);
+        await menu('预览初始化用户应用…');
+        await until(
+          `Boolean(document.querySelector('[role=dialog]'))`,
+          'multi all source slots preview',
+        );
+        await click('确认创建用户应用与成员记录', "document.querySelector('[role=dialog]')");
+        await until(`!document.querySelector('[role=dialog]')`, 'multi create-only initialization');
+        await until(
+          `(async () => !(await window.__TAURI_INTERNALS__.invoke('workbench_capabilities')).operation)()`,
+          'multi initialization operation completed',
+        );
+        const users = [];
+        for (const file of initialization.files) {
+          const bytes = Buffer.from(file.contents + '\n/* User-owned multi-component source. */\n');
+          await writeFile(path.join(multi.directory, file.path), bytes);
+          users.push({ ...file, bytes });
+        }
+        await refreshSurface(multi.manifest);
+        const delivered = await exportSource('MultiComponent-source', true);
+        for (const file of users) {
+          assert.deepEqual(await readFile(path.join(multi.directory, file.path)), file.bytes);
+          assert.deepEqual(
+            await readFile(path.join(delivered.directory, 'src', path.basename(file.path))),
+            file.bytes,
+          );
+        }
+        view = await projection();
+        const component = view.objects.find((object) => object.path === '/Application/Process');
+        await refuse(
+          'prepare_configuration_change',
+          {
+            changeSet: changeSet(view, [
+              {
+                op: 'rename-instance',
+                changeId: 'unsafe-member-rename',
+                object: existing(component.objectId),
+                expectedShortName: 'Process',
+                shortName: 'Compute',
+              },
+            ]),
+          },
+          'Initialized multi-component member identity must remain stable',
+        );
+        return {
+          profile: view.profile,
+          slots: initialization.slots,
+          originalBytesRetained: true,
+          liveSourcesRetained: true,
+          generatedSnapshotRetained: true,
+        };
+      });
+    }
     const canA = await create('NorthSensor', 'can-signals-v1');
     await checked('can-original-A', async () => {
       const view = await projection();
@@ -884,7 +1109,9 @@ export async function runBuiltinScenario({
         'One invalid member rejects entire batch',
       );
       const good = changeSet(view, [valueChange(id, '866')]);
-      const preview = await invoke('prepare_configuration_change', { changeSet: good });
+      const preview = await invoke('prepare_configuration_change', {
+        changeSet: good,
+      });
       const changedDraft = changeSet(view, [valueChange(id, '867')]);
       await refuse(
         'apply_configuration_change',
@@ -943,7 +1170,12 @@ export async function runBuiltinScenario({
         'Two CAN inputs must differ in actual configuration, not only file location',
       );
       await exportSource('SouthActuator-source', false);
-      return { canId: 913, periodMs: 40, initial: '16909060', sources: reopened.sources };
+      return {
+        canId: 913,
+        periodMs: 40,
+        initial: '16909060',
+        sources: reopened.sources,
+      };
     });
     await checked('structure-and-incoming-reference-closure', async () => {
       const view = await projection();
@@ -1097,7 +1329,11 @@ export async function runBuiltinScenario({
         assert.deepEqual(await readFile(source.path), source.bytes);
       await sourceSurface(await projection());
       const result = await exportSource('GatewayReference-source', true);
-      result.expectedInputs = { periodMs: 20, receiveCanId: 1104, transmitCanId: 1105 };
+      result.expectedInputs = {
+        periodMs: 20,
+        receiveCanId: 1104,
+        transmitCanId: 1105,
+      };
       return {
         inputCount: 7,
         independentPeriod: 20,
@@ -1260,7 +1496,11 @@ export async function runBuiltinScenario({
         'payloadBytes',
       ]) {
         const variant = path.join(scratch, 'deliveries', `v2-refused-${kind}`);
-        await cp(relocated, variant, { recursive: true, errorOnExist: true, force: false });
+        await cp(relocated, variant, {
+          recursive: true,
+          errorOnExist: true,
+          force: false,
+        });
         if (kind === 'ownerElevation') {
           const ledgerPath = path.join(variant, 'workbench-ownership.json');
           const ledger = JSON.parse(await readFile(ledgerPath, 'utf8'));
@@ -1339,14 +1579,15 @@ export async function runBuiltinScenario({
       const manifestBytes = await readFile(manifestPath);
       const originalSources = await sourceBytes(before);
       const preview = await invoke('preview_application_initialization');
-      assert.equal(preview.slot.producerSlot, 'epic4-single-application-v1');
+      assert.equal(preview.slots.length, 1);
+      assert.equal(preview.slots[0].producerSlot, 'epic4-single-application-v1');
       assert.equal(preview.files.length, 1);
       assert.deepEqual(
-        preview.slot.sourcePaths,
+        preview.slots[0].sourcePaths,
         preview.files.map((file) => file.path),
       );
       assert(
-        preview.slot.generatedHeaders.some((header) => header.startsWith('include/Rte_')),
+        preview.slots[0].generatedHeaders.some((header) => header.startsWith('include/Rte_')),
         'Actual application contract supplies generated RTE headers',
       );
       const live = path.join(root, preview.files[0].path);
@@ -1390,7 +1631,10 @@ export async function runBuiltinScenario({
       assert.deepEqual(await readFile(live), Buffer.from(preview.files[0].contents));
       const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
       assert.deepEqual(manifest.applicationInputs, [
-        { path: preview.files[0].path, producerSlot: preview.slot.producerSlot },
+        {
+          path: preview.files[0].path,
+          producerSlot: preview.slots[0].producerSlot,
+        },
       ]);
       await unchanged(originalSources);
       await refuse(
@@ -1417,7 +1661,7 @@ export async function runBuiltinScenario({
       );
       const owner = ledger.files.find((entry) => entry.path === 'src/Application.c');
       assert.equal(owner.owner, 'user-application');
-      assert.equal(owner.producerId, preview.slot.producerSlot);
+      assert.equal(owner.producerId, preview.slots[0].producerSlot);
       assert.equal(owner.snapshotOf, preview.files[0].path);
       const immutable = await packageBytes(delivered.directory);
       const output = path.join(scratch, 'deliveries', 'RefusedLateApplication-source');
@@ -1431,7 +1675,11 @@ export async function runBuiltinScenario({
       await assert.rejects(
         invoke(
           'generate_ecu_project',
-          { outputDirectory: output, handoff: true, revision: prepared.revision },
+          {
+            outputDirectory: output,
+            handoff: true,
+            revision: prepared.revision,
+          },
           preparedFingerprint,
         ),
       );
@@ -1478,7 +1726,7 @@ export async function runBuiltinScenario({
         userApplication: 'uint32-low31-mask',
       };
       return {
-        slot: preview.slot,
+        slots: preview.slots,
         live,
         createOnly: true,
         actualPublicCommand: initializationCommand,
@@ -1604,7 +1852,10 @@ export async function runBuiltinScenario({
       const badReference = {
         op: 'set-reference',
         changeId: 'wrong-destination',
-        field: { kind: 'existing', fieldId: fieldBy(reopened, '/OsTaskEventRef').fieldId },
+        field: {
+          kind: 'existing',
+          fieldId: fieldBy(reopened, '/OsTaskEventRef').fieldId,
+        },
         expected: fieldBy(reopened, '/OsTaskEventRef').reference,
         value: {
           state: 'explicit',
@@ -1633,7 +1884,10 @@ export async function runBuiltinScenario({
       const view = await projection();
       const defaultField = fieldBy(view, '/CanVersionInfoApi');
       assert.deepEqual(defaultField.current, { state: 'absent' });
-      assert.deepEqual(defaultField.defaultValue, { kind: 'boolean', lexeme: 'false' });
+      assert.deepEqual(defaultField.defaultValue, {
+        kind: 'boolean',
+        lexeme: 'false',
+      });
       assert(defaultField.defaultOrigin.startsWith('builtin:'));
       const callback = fieldBy(view, '/DcmDspDataReadFnc');
       const text = fieldBy(view, '/CanIfInitCfgSet');
@@ -1665,7 +1919,9 @@ export async function runBuiltinScenario({
         explicit('boolean', 'false'),
       );
       assert.deepEqual(fieldBy(reopened, '/CanIfInitCfgSet').current, explicit('string', ''));
-      assert.deepEqual(fieldBy(reopened, '/DcmDspDataReadFnc').current, { state: 'absent' });
+      assert.deepEqual(fieldBy(reopened, '/DcmDspDataReadFnc').current, {
+        state: 'absent',
+      });
       return {
         defaultOrigin: defaultField.defaultOrigin,
         emptyIsExplicit: true,
@@ -1682,7 +1938,9 @@ export async function runBuiltinScenario({
       const current = await projection();
       const source = current.sources.find((source) => path.basename(source.path) === 'os.arxml');
       const saved = await readFile(source.path);
-      const ownedBeforeRefusal = await invoke('read_project_source', { sourceId: source.sourceId });
+      const ownedBeforeRefusal = await invoke('read_project_source', {
+        sourceId: source.sourceId,
+      });
       const changed = Buffer.concat([saved, Buffer.from('\n<!-- external change -->\n')]);
       await writeFile(source.path, changed);
       await assert.rejects(invoke('save_project', { revision: preview.revision }));
@@ -1708,7 +1966,9 @@ export async function runBuiltinScenario({
       const original = await projection();
       for (const [name, catalogPath] of Object.entries(extension.variants))
         await refuse('import_definition_catalog', { catalogPath }, `Extension ${name} rejection`);
-      const accepted = await invoke('import_definition_catalog', { catalogPath: extension.valid });
+      const accepted = await invoke('import_definition_catalog', {
+        catalogPath: extension.valid,
+      });
       assert.notEqual(accepted.definitionFingerprint, original.definitionFingerprint);
       assert.deepEqual(accepted.ruleSetIdentity, original.ruleSetIdentity);
       assert.deepEqual(accepted.acceptedExtensionDefinitions, [extension.identity]);
@@ -1727,8 +1987,17 @@ export async function runBuiltinScenario({
         'Existing immutable cache corruption',
       );
       await writeFile(cached, cacheBytes);
-      const parent = accepted.objects.find((object) => object.kind === 'AR-PACKAGE');
-      assert(parent);
+      const packages = accepted.objects.filter((object) => object.path === '/Acceptance');
+      assert(
+        packages.length > 1 && packages.every((object) => object.writable),
+        'Split package fragments support source-local child creation',
+      );
+      const parent = packages.find(
+        (object) =>
+          object.sourceId ===
+          accepted.sources.find((source) => path.basename(source.path) === 'os.arxml').sourceId,
+      );
+      assert(parent, 'Extension creation names the owned package source');
       const created = await apply(accepted, [
         {
           op: 'create-instance',
@@ -1749,7 +2018,10 @@ export async function runBuiltinScenario({
       ]);
       const counter = fieldBy(created.outcome.projection, '/AcceptanceVendor/Lab/Config/Counter');
       assert.deepEqual(counter.current, { state: 'absent' });
-      assert.deepEqual(counter.defaultValue, { kind: 'integer', lexeme: '9007199254740993' });
+      assert.deepEqual(counter.defaultValue, {
+        kind: 'integer',
+        lexeme: '9007199254740993',
+      });
       const originalBytes = await sourceBytes(created.outcome.projection);
       const directory = path.join(scratch, 'projects', 'ExtensionConsumers');
       const portable = await invoke('preview_save_as_project', {
@@ -1928,9 +2200,11 @@ export async function runBuiltinScenario({
           'Core actions must remain in usable viewport',
         );
         evidence.checks.at(-1).layouts ??= [];
-        evidence.checks
-          .at(-1)
-          .layouts.push({ ...bounds, requested: [width, height], nativeWindow });
+        evidence.checks.at(-1).layouts.push({
+          ...bounds,
+          requested: [width, height],
+          nativeWindow,
+        });
       }
       await key('4', { alt: true });
       await until(
@@ -2021,6 +2295,10 @@ export async function runBuiltinScenario({
         `(async()=> (await window.__TAURI_INTERNALS__.invoke('workbench_capabilities')).language === 'en')()`,
         'Saved English preference',
       );
+      await until(
+        `Boolean([...document.querySelectorAll('[role=dialog] button')].find(button => button.textContent.trim() === 'Save language' && !button.disabled && button.getAttribute('aria-busy') === 'false'))`,
+        'English language save completed in the actual settings consumer',
+      );
       await key('Escape');
       await until(`!document.querySelector('[role=dialog]')`, 'English settings close');
       assert.equal((await capabilities()).fingerprint, caps.fingerprint);
@@ -2040,7 +2318,12 @@ export async function runBuiltinScenario({
         `(async()=> (await window.__TAURI_INTERNALS__.invoke('workbench_capabilities')).language === 'zh-CN')()`,
         'Saved Chinese preference',
       );
+      await until(
+        `Boolean([...document.querySelectorAll('[role=dialog] button')].find(button => button.textContent.trim() === '保存语言' && !button.disabled && button.getAttribute('aria-busy') === 'false'))`,
+        'Chinese language save completed in the actual settings consumer',
+      );
       await key('Escape');
+      await until(`!document.querySelector('[role=dialog]')`, 'Chinese settings close');
       assert.equal((await capabilities()).fingerprint, caps.fingerprint);
       assert.equal(
         await evaluate(`document.querySelector(${json(draftSelector)}).value`),
@@ -2229,7 +2512,7 @@ export async function runBuiltinScenario({
       const before = new Set(await readdir(temporary));
       await menu('验证：受管长日志失败');
       await until(
-        `document.querySelector('.notice[role=alert]')?.textContent.includes('exit 23') && !(document.querySelector('.context-toolbar [role=status]'))`,
+        `document.querySelector('.notice[role=alert]')?.textContent.includes('退出码 23') && !(document.querySelector('.context-toolbar [role=status]'))`,
         'genuine retained nonzero failure',
       );
       const directories = (await readdir(temporary)).filter(
@@ -2240,7 +2523,7 @@ export async function runBuiltinScenario({
         `document.querySelector('.notice[role=alert]').textContent`,
       );
       assert(
-        actualNotice.includes(' · Exited · exit 23 · descendants reclaimed: false'),
+        actualNotice.includes(' · Exited · 退出码 23 · 后代进程已回收：false'),
         'The childless probe must retain its actual Exited/23 result without claiming descendant reclamation',
       );
       const actual = await capturedLogs(path.join(temporary, directories[0]));
@@ -2278,12 +2561,12 @@ export async function runBuiltinScenario({
     await checked('owned-cancel-and-late-reply-fence', async () => {
       const before = await projection();
       const bytes = await sourceBytes(before);
-      const completedOwnedLogs = `[...document.querySelectorAll('.tool-content details')].filter(node => node.querySelector('summary')?.textContent === 'verification_owned_failure · failed' && node.querySelector('pre')?.textContent.includes('Owned failure detail ')).length`;
+      const completedOwnedLogs = `[...document.querySelectorAll('.tool-content details')].filter(node => node.querySelector('summary')?.textContent === 'verification_owned_failure · 失败' && node.querySelector('pre')?.textContent.includes('Owned failure detail ')).length`;
       const completed = await evaluate(completedOwnedLogs);
       assert.equal(completed, 1, 'The previous genuine exit-23 result is the completion baseline');
       await menu('验证：受管取消');
       await until(
-        `(async()=> (await window.__TAURI_INTERNALS__.invoke('workbench_capabilities')).operation?.stage === 'owned verification failure')()`,
+        `(async()=> (await window.__TAURI_INTERNALS__.invoke('workbench_capabilities')).operation?.stage?.key === 'backend.operation.owned_verification_failure')()`,
         'real delayed owned operation active',
       );
       await key('4', { alt: true });
@@ -2329,23 +2612,21 @@ export async function runBuiltinScenario({
     await screenshot('builtin-native-failure.png');
     throw error;
   } finally {
-    evidence.nativeTransportUnchanged = await evaluate(
-      'window.__TAURI_INTERNALS__.invoke === window.__BUILTIN_NATIVE_TRANSPORT__',
-    );
-    await writeFile(
-      path.join(scratch, 'native-builtin-results.json'),
-      json(evidence, null, 2) + '\n',
-    );
-    const log = await open(path.join(scratch, 'native-builtin-ipc.jsonl'), 'w');
     try {
-      for (const event of ipc) await log.writeFile(json(event) + '\n');
+      evidence.nativeTransportUnchanged = await evaluate(
+        'window.__TAURI_INTERNALS__.invoke === window.__BUILTIN_NATIVE_TRANSPORT__',
+      );
+      await writeFile(
+        path.join(scratch, 'native-builtin-results.json'),
+        json(evidence, null, 2) + '\n',
+      );
+      assert.equal(
+        evidence.nativeTransportUnchanged,
+        true,
+        'Never replace the installed native IPC transport',
+      );
     } finally {
-      await log.close();
+      await ipcLog.close();
     }
-    assert.equal(
-      evidence.nativeTransportUnchanged,
-      true,
-      'Never replace the installed native IPC transport',
-    );
   }
 }

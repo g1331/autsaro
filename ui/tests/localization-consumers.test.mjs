@@ -68,7 +68,7 @@ const baseProjection = {
 };
 const applicationPreview = {
   revision: 'preview',
-  slot: {},
+  slots: [],
   files: [],
   manifestBefore: 'raw-before',
   manifestAfter: 'raw-after',
@@ -80,7 +80,12 @@ afterEach(() => {
   previewLanguage('system');
 });
 
-async function openConsumer(rejection, projection = baseProjection) {
+async function openConsumer(
+  rejection,
+  projection = baseProjection,
+  inspection = { profile: 'standard', diagnostics: [], description: null },
+  preview = applicationPreview,
+) {
   let opened = false;
   native.invoke.mockImplementation(async (command) => {
     const currentCapabilities = { ...capabilities, hasWorkspace: opened };
@@ -101,13 +106,13 @@ async function openConsumer(rejection, projection = baseProjection) {
       };
     if (command === 'inspect_integration')
       return {
-        value: { profile: 'standard', diagnostics: [], description: null },
+        value: inspection,
         capabilities: currentCapabilities,
         inputFingerprint: 'unchanged-input',
       };
     if (command === 'preview_application_initialization')
       return {
-        value: applicationPreview,
+        value: preview,
         capabilities: currentCapabilities,
         inputFingerprint: 'unchanged-input',
       };
@@ -142,6 +147,56 @@ async function openConsumer(rejection, projection = baseProjection) {
   await waitFor(() => expect(controller.integrationInspection).not.toBeNull());
   return { view, current: () => controller };
 }
+
+test.each(['zh-CN', 'en'])(
+  '%s multi-component inspection and draft restoration never read a missing single component',
+  async (language) => {
+    previewLanguage(language);
+    const components = ['Ingress', 'Process', 'Observe', 'DcmService'].map((name) => ({
+      component: `/Application/${name}`,
+      instance: `/Application/Pipeline/${name}Instance`,
+    }));
+    const inspection = {
+      profile: 'singlecore-multi-swc-v1',
+      diagnostics: [],
+      description: {
+        sources: [
+          { logicalPath: 'process.arxml', rawSha256: 'a'.repeat(64), roles: ['application'] },
+        ],
+        multi: { components },
+        signals: [{ port: '/Application/Ingress/Received', canId: 0x320, receive: true, dlc: 4 }],
+      },
+    };
+    const { view, current } = await openConsumer(undefined, baseProjection, inspection);
+    act(() => current().setLanguageDraft(language));
+    expect(current().integrationPeriod).toBe('');
+    expect(view.getByText(translate('shell.integration.multiReadOnly'))).toBeTruthy();
+    for (const component of components) {
+      expect(view.getByText(`${component.component} · ${component.instance}`)).toBeTruthy();
+    }
+    expect(view.queryByLabelText(translate('shell.integration.periodA11y'))).toBeNull();
+    expect(view.queryByRole('button', { name: translate('shell.integration.apply') })).toBeNull();
+    act(() => current().restoreIntegrationDraft());
+    expect(current().integrationInspection).toBe(inspection);
+    expect(current().integrationPeriod).toBe('');
+    act(() => {
+      current().setIntegrationIds({ '/Application/Ingress/Received': '100' });
+      current().setIntegrationPeriod('100');
+      current().setIntegrationUnapplied(true);
+    });
+    act(() => current().restoreAllDrafts());
+    expect(current().integrationIds).toEqual({ '/Application/Ingress/Received': '800' });
+    expect(current().integrationPeriod).toBe('');
+    expect(current().integrationUnapplied).toBe(false);
+    act(() => current().applyIntegration());
+    expect(native.invoke.mock.calls.some(([command]) => command === 'edit_integration')).toBe(
+      false,
+    );
+    expect(localize(current().integrationNotice)).toBe(
+      translate('shell.integration.multiReadOnly'),
+    );
+  },
+);
 
 test('application recovery message aggregates remain feedback rather than integration diagnostics', async () => {
   const raw = 'C:\\用户\\project.autosar.autosar.bak: hard-link permission denied <raw>';
@@ -285,4 +340,50 @@ test('Problems renders serialized cardinality child names, bounds and actual cou
     else delete navigator.clipboard;
   }
   expect(localize(diagnostics[1].witness.counterexample)).toBe('2');
+});
+
+test('real application controller transfers complete multi preview and revision unchanged to IPC', async () => {
+  const slots = ['Ingress', 'Process', 'Observe'].map((name) => ({
+    producerSlot: `singlecore-multi-swc-v1:/Application/Pipeline/${name}Instance`,
+    componentPath: `/Application/${name}`,
+    sourcePaths: [`application/${name}.c`],
+    generatedHeaders: [`include/Rte_${name}.h`, 'include/Rte.h', 'include/Rte_Type.h'],
+    entrySymbols: [`${name}_Periodic`],
+  }));
+  const preview = {
+    revision: 'complete-multi-source-revision',
+    slots,
+    files: slots.map((slot) => ({
+      path: slot.sourcePaths[0],
+      contents: `/* ${slot.componentPath} */\r\n`,
+    })),
+    manifestBefore: '{"applicationInputs":[]}',
+    manifestAfter: JSON.stringify({
+      applicationInputs: slots.map((slot) => ({
+        path: slot.sourcePaths[0],
+        producerSlot: slot.producerSlot,
+      })),
+    }),
+  };
+  const expected = structuredClone(preview);
+  const { current } = await openConsumer(
+    new Error('retained test workspace'),
+    baseProjection,
+    undefined,
+    preview,
+  );
+  await act(async () => {
+    await current().previewApplicationInitialization();
+  });
+  expect(current().applicationPreview).toEqual(expected);
+  await act(async () => {
+    await current().initializeApplicationPreviewed();
+  });
+  const initialization = native.invoke.mock.calls.find(
+    ([command]) => command === 'initialize_application_previewed',
+  );
+  expect(initialization).toBeTruthy();
+  expect(initialization[1].preview).toEqual(expected);
+  expect(initialization[1].preview).toBe(preview);
+  expect(preview).toEqual(expected);
 });

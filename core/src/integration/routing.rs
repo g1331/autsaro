@@ -39,14 +39,41 @@ pub(super) fn inspect(
     signals: &[SignalChannel],
     diagnostic: &DiagnosticContract,
 ) -> Result<Vec<PduRoute>, Vec<PlanDiagnostic>> {
+    inspect_optional(graph, signals, Some(diagnostic))
+}
+
+pub(super) fn inspect_optional(
+    graph: &Graph,
+    signals: &[SignalChannel],
+    diagnostic: Option<&DiagnosticContract>,
+) -> Result<Vec<PduRoute>, Vec<PlanDiagnostic>> {
+    inspect_endpoints(
+        graph,
+        signals,
+        diagnostic.map(|diagnostic| (diagnostic.rx_sdu.as_str(), diagnostic.tx_sdu.as_str())),
+    )
+}
+
+pub(super) fn inspect_transport(
+    graph: &Graph,
+    signals: &[SignalChannel],
+    transport: &super::diagnostic::DiagnosticTransportContract,
+) -> Result<Vec<PduRoute>, Vec<PlanDiagnostic>> {
+    inspect_endpoints(graph, signals, Some((&transport.rx_sdu, &transport.tx_sdu)))
+}
+
+fn inspect_endpoints(
+    graph: &Graph,
+    signals: &[SignalChannel],
+    diagnostic: Option<(&str, &str)>,
+) -> Result<Vec<PduRoute>, Vec<PlanDiagnostic>> {
     let mut selected: Vec<_> = signals
         .iter()
         .map(|signal| (signal.global_pdu.as_str(), signal.receive, false))
         .collect();
-    selected.extend([
-        (diagnostic.rx_sdu.as_str(), true, true),
-        (diagnostic.tx_sdu.as_str(), false, true),
-    ]);
+    if let Some((receive, transmit)) = diagnostic {
+        selected.extend([(receive, true, true), (transmit, false, true)]);
+    }
     let mut routes = Vec::new();
     let mut source_handles = BTreeSet::new();
     let mut destination_handles = BTreeSet::new();

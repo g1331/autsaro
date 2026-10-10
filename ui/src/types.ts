@@ -139,9 +139,10 @@ export type IntegrationInspection = {
   diagnostics: PlanDiagnostic[];
   description: null | {
     sources: { logicalPath: string; rawSha256: string; roles: string[] }[];
-    component: { component: string; instance: string; periodMs: number };
+    component?: { component: string; instance: string; periodMs: number };
+    multi?: { components: { component: string; instance: string }[] };
     signals: { port: string; canId: number; receive: boolean; dlc: number }[];
-    diagnostic: { did: number; requestCanId: number; responseCanId: number };
+    diagnostic?: { did: number; requestCanId: number; responseCanId: number };
   };
 };
 

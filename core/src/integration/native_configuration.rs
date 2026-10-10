@@ -145,7 +145,8 @@ pub(super) fn consumer_objects(graph: &Graph) -> std::collections::BTreeSet<Stri
             .text(module, "DEFINITION-REF")
             .is_some_and(|definition| {
                 [
-                    "Can", "CanIf", "CanTp", "Com", "Dcm", "EcuC", "Os", "PduR", "Rte",
+                    "Can", "CanIf", "CanTp", "Com", "ComM", "BswM", "Dcm", "EcuC", "Os", "PduR",
+                    "Rte",
                 ]
                 .iter()
                 .any(|name| definition.strip_prefix("/AUTOSAR/EcucDefs/") == Some(*name))

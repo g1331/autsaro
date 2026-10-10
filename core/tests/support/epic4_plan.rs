@@ -331,7 +331,7 @@ pub fn plan_additional_boundaries() {
     let plan =
         build_plan(&renamed, &dependencies, &runtime).unwrap_or_else(|issues| panic!("{issues:?}"));
     assert_eq!(
-        plan.description().component.component,
+        plan.description().component.as_ref().unwrap().component,
         "/Application/LocalApplication"
     );
     assert_eq!(

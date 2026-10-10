@@ -53,6 +53,9 @@ pub(crate) fn fields(
     changes: &IntegrationEdit,
 ) -> Result<Vec<FieldEdit>, Vec<PlanDiagnostic>> {
     let description = plan.description();
+    let component = description
+        .legacy_component()
+        .map_err(|message| issue(plan, "EDIT_UNSUPPORTED", "/", message))?;
     let mut edits: BTreeMap<(String, String, bool), String> = BTreeMap::new();
     for (port, id) in &changes.can_ids {
         let channel = description
@@ -101,11 +104,11 @@ pub(crate) fn fields(
             return Err(issue(
                 plan,
                 "EDIT_RANGE",
-                &description.component.timing_event,
+                &component.timing_event,
                 crate::product_message!("backend.integration.editor.application_period_invalid"),
             ));
         }
-        if period != description.component.period_ms {
+        if period != component.period_ms {
             let seconds = format!("{}.{:03}", period / 1000, period % 1000);
             let application = description
                 .schedule
@@ -196,10 +199,10 @@ pub(crate) fn fields(
                 );
             } else {
                 for parameter in ["OsAlarmAlarmTime", "OsAlarmCycleTime"] {
-                edits.insert(
-                    (autostart[0].path.clone(), parameter.into(), true),
-                    period.to_string(),
-                );
+                    edits.insert(
+                        (autostart[0].path.clone(), parameter.into(), true),
+                        period.to_string(),
+                    );
                 }
             }
         }

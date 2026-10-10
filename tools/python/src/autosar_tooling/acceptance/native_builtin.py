@@ -1,4 +1,4 @@
-"""Independent installed configuration boundary; no oracle inputs or execution tools."""
+"""Builtin native configuration boundary, with explicit installed/development receipts."""
 
 from __future__ import annotations
 
@@ -21,9 +21,22 @@ LINUX_RUNTIME_UTILITIES = (
 )
 
 
-def prepare(scratch: Path, platform: str, source_checkout: Path | None) -> None:
-    # Projects are created by the installed application's original templates, not
-    # by an executable/fixture copied from the developer checkout.
+def prepare(
+    scratch: Path, platform: str, source_checkout: Path | None, *, installed: bool = True
+) -> None:
+    performance_tools = {}
+    for field, variable in (
+        ("compiler", "AUTOSAR_CC"), ("objdump", "AUTOSAR_OBJDUMP"),
+        ("git", "AUTOSAR_GIT"), ("python", "AUTOSAR_PYTHON"),
+    ):
+        value = os.environ.get(variable)
+        if value is None or not Path(value).is_absolute() or not Path(value).is_file():
+            raise RuntimeError(
+                f"Builtin native consumer phase requires {variable} to name an existing absolute tool file"
+            )
+        performance_tools[field] = value
+    # Installed scenarios use only the application's original templates.
+    # Development scenarios may additionally open source-owned member projects.
     for name in ("app-work", "app-path", "app-home", "app-temp", "projects", "deliveries"):
         (scratch / name).mkdir()
     if platform == "linux":
@@ -59,22 +72,16 @@ def prepare(scratch: Path, platform: str, source_checkout: Path | None) -> None:
         )
     (scratch / "scenario.json").write_text(
         json.dumps({
-            "mode": "builtin-only", "installed": True,
-            "sourceCheckout": str(source_checkout), "platform": platform,
+            "mode": "builtin-only", "installed": installed,
+            "sourceCheckout": str(source_checkout) if source_checkout else None, "platform": platform,
             "execution": "not_run", "macos": "not_run",
-            "performanceTools": {
-                field: os.environ.get(variable)
-                for field, variable in (
-                    ("compiler", "AUTOSAR_CC"), ("objdump", "AUTOSAR_OBJDUMP"),
-                    ("git", "AUTOSAR_GIT"), ("python", "AUTOSAR_PYTHON"),
-                )
-            },
+            "performanceTools": performance_tools,
         }, indent=2), encoding="utf-8",
     )
     (scratch / "boundary-results.json").write_text(
         json.dumps({
             "officialResources": "not_supplied",
-            "sourceCheckoutAvailable": False,
+            "sourceCheckoutAvailable": not installed,
             "networkIsolation": "not_run",
             "independentConsumer": "not_run",
             "macos": "not_run",
@@ -83,8 +90,6 @@ def prepare(scratch: Path, platform: str, source_checkout: Path | None) -> None:
 
 
 def app_environment(scratch: Path, installed: bool) -> dict[str, str]:
-    if not installed:
-        raise RuntimeError("Builtin-only acceptance requires installed mode")
     environment = os.environ.copy()
     for name in tuple(environment):
         if name in EXECUTION_VARIABLES or name in {
@@ -120,7 +125,7 @@ def app_environment(scratch: Path, installed: bool) -> dict[str, str]:
     if any(exposed.values()):
         raise RuntimeError(f"Builtin-only application exposes developer tools: {exposed}")
     receipt = {
-        "mode": "builtin-only", "installed": True,
+        "mode": "builtin-only", "installed": installed,
         "environment": {name: environment[name] for name in (
             "AUTOSAR_CONFIG_DIR", "HOME", "USERPROFILE", "PATH",
         )},

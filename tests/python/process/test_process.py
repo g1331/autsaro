@@ -85,6 +85,39 @@ def _assert_closed(
 
 
 class BoundedProcessTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "posix", "Unix supervisor readiness")
+    def test_owner_start_waits_for_listening_authenticated_supervisor(self):
+        actual_popen = subprocess.Popen
+        source_root = ROOT / "tools" / "python" / "src"
+        delayed_supervisor = (
+            "import socket,sys,time; "
+            f"sys.path.insert(0, {str(source_root)!r}); "
+            "from ecu_tools.owner import main; "
+            "original=socket.socket.listen; "
+            "socket.socket.listen=lambda self,*args: "
+            "(time.sleep(0.3), original(self,*args))[1]; "
+            "raise SystemExit(main())"
+        )
+
+        def delay_listen(argv, **kwargs):
+            return actual_popen(
+                [*argv[:3], "-c", delayed_supervisor, *argv[4:]], **kwargs
+            )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with patch("ecu_tools.owner.subprocess.Popen", side_effect=delay_listen):
+                with Owner.start() as owner:
+                    directory = owner.directory
+                    spec = ProcessSpec.seconds(
+                        [sys.executable, "-c", "print('authenticated-ready')"],
+                        root, 10, root, "owner-ready",
+                    )
+                    result = OwnedProcess(spec, owner=owner).wait()
+                    self.assertTrue(result.success)
+                    self.assertEqual(result.stdout.read_text().strip(), "authenticated-ready")
+                self.assertFalse(directory.exists())
+
     @unittest.skipUnless(sys.platform == "linux", "Linux directory-fd socket addressing")
     def test_long_temporary_directory_runs_and_releases_the_socket_lease(self):
         with tempfile.TemporaryDirectory() as temporary:

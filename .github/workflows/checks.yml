@@ -244,7 +244,7 @@ jobs:
         run: |
           import os
           from pathlib import Path
-          expected = {'signals', 'diagnostic', 'capacity', 'standard-ecu', 'user-application'}
+          expected = {'signals', 'diagnostic', 'capacity', 'standard-ecu', 'user-application', 'multi-component'}
           if {p.name for p in Path(os.environ['AUTOSAR_C_ANALYSIS_SAMPLES']).iterdir()} != expected:
               raise RuntimeError('Generated sample inventory is incomplete')
       - uses: actions/upload-artifact@v7.0.1
@@ -275,6 +275,10 @@ jobs:
             target: linux-x64-controlled-v1
             group: user-application
             samples: user-application
+          - os: ubuntu-24.04
+            target: linux-x64-controlled-v1
+            group: multi-component
+            samples: multi-component
           - os: windows-latest
             target: windows-x64-controlled-v1
             group: host
@@ -287,6 +291,10 @@ jobs:
             target: windows-x64-controlled-v1
             group: user-application
             samples: user-application
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+            group: multi-component
+            samples: multi-component
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
@@ -383,13 +391,13 @@ jobs:
           PREPARE_RESULT: ${{ needs.c-analysis-prepare.result }}
           ANALYSIS_RESULT: ${{ needs.c-analysis-samples.result }}
         run: test "$PREPARE_RESULT" = success && test "$ANALYSIS_RESULT" = success
-      - name: Require ten complete sample results
+      - name: Require twelve complete sample results
         shell: python
         run: |
           import json
           from pathlib import Path
           targets = {'linux-x64-controlled-v1', 'windows-x64-controlled-v1'}
-          samples = {'signals', 'diagnostic', 'capacity', 'standard-ecu', 'user-application'}
+          samples = {'signals', 'diagnostic', 'capacity', 'standard-ecu', 'user-application', 'multi-component'}
           expected = {(target, sample) for target in targets for sample in samples}
           found = set()
           for path in Path('build/c-analysis-summaries').glob('*/*/summary.json'):
@@ -399,4 +407,4 @@ jobs:
                   raise RuntimeError('Duplicate or incomplete analysis result: ' + str(path))
               found.add(pair)
           if found != expected:
-              raise RuntimeError('Expected all ten platform/sample results; missing=' + str(expected - found) + '; extra=' + str(found - expected))
+              raise RuntimeError('Expected all twelve platform/sample results; missing=' + str(expected - found) + '; extra=' + str(found - expected))

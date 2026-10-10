@@ -1223,7 +1223,7 @@ fn standard_documents_accept_definition_valid_sc2_and_float_baud_without_target_
     let baseline = validate(&preview.files);
     assert_eq!(
         baseline.status,
-        ValidationStatus::Passed,
+        ValidationStatus::Unsupported,
         "{:?}",
         baseline.diagnostics
     );
@@ -1258,11 +1258,14 @@ fn standard_documents_accept_definition_valid_sc2_and_float_baud_without_target_
             .contents
             .replace_range(range, &format!("<VALUE>{lexeme}</VALUE>"));
         let changed = validate(&files);
-        assert_eq!(
-            changed.status,
-            ValidationStatus::Passed,
-            "Definition-valid {parameter}={lexeme} must not inherit target generation policy: {:?}",
+        assert!(
+            changed.diagnostics.is_empty(),
+            "{parameter}: {:?}",
             changed.diagnostics
         );
+        assert_eq!(changed.status, ValidationStatus::Unsupported);
+        assert!(changed.coverage.iter().any(|rule| rule.rule_id
+            == "native.definition.legacy-dcm-mode-dependency"
+            && !rule.supported));
     }
 }

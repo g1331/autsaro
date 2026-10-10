@@ -3,6 +3,7 @@
 
 mod builtin;
 mod extension;
+pub(crate) mod standard;
 mod validation;
 
 use crate::project_model::{
@@ -43,6 +44,7 @@ impl DefinitionCatalog {
             missing: BTreeSet::new(),
         };
         builtin::populate(&mut catalog)?;
+        standard::populate(&mut catalog)?;
         catalog.check_metadata()?;
         Ok(catalog)
     }
@@ -52,6 +54,19 @@ impl DefinitionCatalog {
     }
 
     pub fn children(&self, definition_id: &str) -> Vec<&DefinitionDescriptor> {
+        if !definition_id.starts_with('/') {
+            return self
+                .entries
+                .values()
+                .filter(|entry| {
+                    entry
+                        .definition_id
+                        .strip_prefix(definition_id)
+                        .is_some_and(|suffix| suffix.starts_with('#'))
+                        || standard::parent_kind(&entry.definition_id) == Some(definition_id)
+                })
+                .collect();
+        }
         self.entries
             .range::<str, _>((
                 std::ops::Bound::Excluded(definition_id),

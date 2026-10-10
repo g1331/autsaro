@@ -1,5 +1,7 @@
 # 架构约束与扩展接缝
 
+2026-10-09：候选R6正式化为Epic8，增量一致性契约见[多组件spine](architecture/epic-8/ARCHITECTURE-SPINE.md)与[完整规格](../specs/spec-multi-component-scheduling/SPEC.md)。新增profile的组件、local通信、同owner调度与每组件用户源槽按此契约实施；旧profile的历史行为／ABI精确保留，不借其预期证明新profile标准符合。Epic7发行收尾不作为本范围总门禁，R11仅核对类型／通道／应用映射接缝，不提前实现。
+
 Epic 4 的规范核定与路线决定见 [spine](architecture/epic-4/ARCHITECTURE-SPINE.md) 和 [R24-11 契约矩阵](architecture/epic-4/R24-11-CONTRACT.md)。维护者已确认主路线：以单核 SC1 为目标，固定 FreeRTOS 内核＋自有 AUTOSAR OS 语义实现＋有限单核策略扩展；原生 Windows 边界保持。Q2 已确认显式 S/R＋同步 C/S 应用 DID。Trampoline/ATK2 等保留参考和备选，不继续并列选型。路线采用本身不代表生产依赖、完整 SC1 或产品集成已验证；技术关口按该路线关闭，只有实际触发停止条件才重新选型。具体输入/接口/时间契约已由 [集成契约](architecture/epic-4/INTEGRATION-CONTRACT.md) 固定，Epic 4 架构已收口；`4844e1d` 已确认 W0–W5 共 22 条 stories，本轮 sprint 规划检查在此范围 PASS。4.1～4.22已完成BMad实施、验证及独立复核，固定Win64主机的全部适用SC1行为、跨story集成与新目录工程交接复验通过，实际状态以BMad sprint为准。早期首批进入判断保留在[实施就绪判断](implementation-readiness.md)，不作为另一份当前状态。
 
 配置权威是 R24-11 多文件 ARXML；内部模型是解析、编辑和生成时的表示，不形成并行持久化配置。`core/src/` 负责模型、解析、跨文件引用与跨模块校验、生成计划和确定性代码生成；`src-tauri/` 连接桌面后端；`ui/src/` 提供配置与预览；`runtime/include/`、`runtime/src/` 随生成工程交付当前 C99 主机运行时。产品方向是以符合声明范围的 AUTOSAR OS 契约承载自有 Classic BSW 栈；早期可先用外部 RTOS 在 Windows 主机上做有界集成，再对指定 MCU 建立独立适配和证据。OS 实现、主机模拟及具体芯片驱动的责任边界须明确。运行代码须分清标准 BSW 接口、生成配置与 RTE、OS 实现及主机专属代码，不能让主机桥接行为冒充实机驱动或 AUTOSAR OS。

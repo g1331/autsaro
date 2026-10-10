@@ -40,7 +40,10 @@ pub struct ScheduleContract {
     pub counter_minimum_cycle: u32,
     pub counter_tick_ms: u32,
     pub entities: Vec<ScheduledEntity>,
+    #[serde(skip_serializing_if = "String::is_empty")]
     pub synchronous_event: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub synchronous_events: Vec<String>,
 }
 
 fn reject(
@@ -151,7 +154,23 @@ pub(super) fn inspect(
     graph: &Graph,
     component: &ComponentContract,
 ) -> Result<ScheduleContract, Vec<PlanDiagnostic>> {
-    let behavior = *graph.objects.get(&component.behavior).unwrap();
+    inspect_events(
+        graph,
+        &[(component.instance.as_str(), component.behavior.as_str())],
+        &[component.timing_event.clone()],
+        &[component.service.runnable.clone()],
+        false,
+    )
+}
+
+pub(super) fn inspect_events(
+    graph: &Graph,
+    components: &[(&str, &str)],
+    periodic_events: &[String],
+    server_runnables: &[String],
+    multi: bool,
+) -> Result<ScheduleContract, Vec<PlanDiagnostic>> {
+    let behavior = *graph.objects.get(components[0].1).unwrap();
     let task = container(graph, "OsTask", behavior)?;
     let counter = container(graph, "OsCounter", behavior)?;
     let priority = value(graph, task, "OsTaskPriority", false)
@@ -179,7 +198,7 @@ pub(super) fn inspect(
     }
     let maximum = value(graph, counter, "OsCounterMaxAllowedValue", false)
         .and_then(|value| value.parse::<u32>().ok())
-        .filter(|value| *value != 0);
+        .filter(|value| *value <= 65535 && (multi || *value != 0));
     let counter_tick_ms = value(graph, counter, "OsSecondsPerTick", false).and_then(milliseconds);
     let counter_ticks_per_base = value(graph, counter, "OsCounterTicksPerBase", false)
         .and_then(|text| text.parse::<u32>().ok());
@@ -243,7 +262,7 @@ pub(super) fn inspect(
     let mut entities = Vec::new();
     let mut event_set = BTreeSet::new();
     let mut positions = BTreeSet::new();
-    let mut synchronous = None;
+    let mut synchronous = Vec::new();
     for mapping in graph.of_kind("ECUC-CONTAINER-VALUE") {
         let application = definition_is(graph, mapping, "RteEventToTaskMapping");
         if !application && !definition_is(graph, mapping, "RteBswEventToTaskMapping") {
@@ -267,8 +286,16 @@ pub(super) fn inspect(
             )
         })?;
         if application {
-            if value(graph, instance, "RteSoftwareComponentInstanceRef", true)
-                != Some(component.instance.as_str())
+            let owner = value(graph, instance, "RteSoftwareComponentInstanceRef", true);
+            if !components
+                .iter()
+                .any(|(component_instance, component_behavior)| {
+                    owner == Some(*component_instance)
+                        && graph
+                            .objects
+                            .get(*component_behavior)
+                            .is_some_and(|behavior| graph.within(event, *behavior))
+                })
             {
                 return Err(reject(
                     graph,
@@ -317,8 +344,17 @@ pub(super) fn inspect(
         }
         if graph.elements[event].tag == "OPERATION-INVOKED-EVENT" {
             if !application
-                || synchronous.is_some()
-                || !graph.within(event, behavior)
+                || (!multi && !synchronous.is_empty())
+                || !graph
+                    .target(event, "START-ON-EVENT-REF")
+                    .is_some_and(|runnable| {
+                        server_runnables.contains(&graph.elements[runnable].object)
+                    })
+                || (multi
+                    && !matches!(
+                        value(graph, mapping, "RteEventIsMappedToTask", false),
+                        Some("false" | "0")
+                    ))
                 || !values(graph, mapping, "RteMappedToTaskRef", true).is_empty()
                 || !values(graph, mapping, "RteUsedOsAlarmRef", true).is_empty()
                 || !values(graph, mapping, "RteUsedOsSchTblExpiryPointRef", true).is_empty()
@@ -334,8 +370,28 @@ pub(super) fn inspect(
                     ),
                 ));
             }
-            synchronous = Some(graph.elements[event].object.clone());
+            synchronous.push(graph.elements[event].object.clone());
             continue;
+        }
+        if multi
+            && !matches!(
+                value(
+                    graph,
+                    mapping,
+                    &format!("{prefix}EventIsMappedToTask"),
+                    false
+                ),
+                Some("true" | "1")
+            )
+        {
+            return Err(reject(
+                graph,
+                mapping,
+                "INSTANCE_MAPPING",
+                crate::product_message!(
+                    "backend.integration.schedule.scheduling_mapping_inconsistent"
+                ),
+            ));
         }
         let period = graph
             .text(event, "PERIOD")
@@ -348,6 +404,16 @@ pub(super) fn inspect(
                     crate::product_message!("backend.integration.schedule.mapped_period_must_be_positive_whole_millisecond"),
                 )
             })?;
+        if multi && period > maximum.unwrap() {
+            return Err(reject(
+                graph,
+                event,
+                "PERIOD_ALARM_CONFLICT",
+                crate::product_message!(
+                    "backend.integration.schedule.event_period_alarm_and_set_event_mismatch"
+                ),
+            ));
+        }
         let mapped_task = reference(graph, mapping, &format!("{prefix}MappedToTaskRef"))?;
         let alarm_refs = values(graph, mapping, &format!("{prefix}UsedOsAlarmRef"), true);
         let expiry_refs = values(
@@ -387,7 +453,7 @@ pub(super) fn inspect(
         let os_event = reference(graph, mapping, &format!("{prefix}UsedOsEventRef"))?;
         let position = value(graph, mapping, &format!("{prefix}PositionInTask"), false)
             .and_then(|value| value.parse::<u32>().ok())
-            .filter(|value| *value != 0)
+            .filter(|value| *value <= 65535 && (multi || *value != 0))
             .ok_or_else(|| {
                 reject(
                     graph,
@@ -583,8 +649,13 @@ pub(super) fn inspect(
                 )
             })?;
         let symbol = if application {
-            if graph.elements[event].object != component.timing_event
-                || !graph.within(entity, behavior)
+            if !periodic_events.contains(&graph.elements[event].object)
+                || !components.iter().any(|(_, owner)| {
+                    graph
+                        .objects
+                        .get(*owner)
+                        .is_some_and(|behavior| graph.within(entity, *behavior))
+                })
             {
                 return Err(reject(
                     graph,
@@ -630,7 +701,10 @@ pub(super) fn inspect(
             application,
         });
     }
-    if synchronous.is_none() || entities.iter().filter(|entity| entity.application).count() != 1 {
+    if synchronous.len() != server_runnables.len()
+        || entities.iter().filter(|entity| entity.application).count() != periodic_events.len()
+        || (!multi && synchronous.is_empty())
+    {
         return Err(reject(
             graph,
             behavior,
@@ -673,19 +747,78 @@ pub(super) fn inspect(
             ),
         ));
     }
-    let expected_order = [
-        "Can_MainFunction_Wakeup",
-        "CanTp_AdvanceTime",
-        "Com_AdvanceTime",
-        component.periodic_symbol.as_str(),
-        "Com_TriggerTransmit",
-        "Dcm_AdvanceTime",
-    ];
+    let configured_symbol = |kind: &str, prefix: &str| {
+        graph
+            .of_kind("ECUC-CONTAINER-VALUE")
+            .into_iter()
+            .find(|index| definition_is(graph, *index, kind))
+            .map(|index| format!("{prefix}_{}", graph.text(index, "SHORT-NAME").unwrap_or("")))
+            .or_else(|| {
+                entities
+                    .iter()
+                    .find(|entity| entity.symbol.starts_with(&format!("{prefix}_")))
+                    .map(|entity| entity.symbol.clone())
+            })
+            .unwrap_or_default()
+    };
+    let mut expected_order: Vec<String> = if multi {
+        vec![
+            configured_symbol("ComMChannel", "ComM_MainFunction"),
+            "Can_MainFunction_Wakeup".into(),
+            "CanTp_MainFunction".into(),
+            configured_symbol("ComMainFunctionRx", "Com_MainFunctionRx"),
+        ]
+    } else {
+        vec![
+            "Can_MainFunction_Wakeup".into(),
+            "CanTp_AdvanceTime".into(),
+            "Com_AdvanceTime".into(),
+        ]
+    };
+    expected_order.extend(
+        entities
+            .iter()
+            .filter(|entity| entity.application)
+            .map(|entity| entity.symbol.clone()),
+    );
+    if multi
+        && entities
+            .iter()
+            .filter(|entity| entity.application)
+            .map(|entity| entity.period_ms)
+            .collect::<BTreeSet<_>>()
+            .len()
+            != 1
+    {
+        return Err(reject(
+            graph,
+            behavior,
+            "PERIOD_UNSUPPORTED",
+            crate::product_message!(
+                "backend.integration.schedule.declared_task_positions_order_mismatch"
+            ),
+        ));
+    }
+    if multi {
+        expected_order.extend([
+            configured_symbol("ComMainFunctionTx", "Com_MainFunctionTx"),
+            "Dcm_MainFunction".into(),
+            "Can_MainFunction_Read".into(),
+            "Can_MainFunction_Write".into(),
+            "Can_MainFunction_Mode".into(),
+            "Can_MainFunction_BusOff".into(),
+        ]);
+    } else {
+        expected_order.extend(["Com_TriggerTransmit".into(), "Dcm_AdvanceTime".into()]);
+    }
     if entities
         .iter()
         .map(|entity| entity.symbol.as_str())
         .collect::<Vec<_>>()
         != expected_order
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>()
     {
         return Err(reject(
             graph,
@@ -705,6 +838,11 @@ pub(super) fn inspect(
         counter_minimum_cycle: counter_minimum_cycle.unwrap(),
         counter_tick_ms: counter_tick_ms.unwrap(),
         entities,
-        synchronous_event: synchronous.unwrap(),
+        synchronous_event: if multi {
+            String::new()
+        } else {
+            synchronous.first().cloned().unwrap_or_default()
+        },
+        synchronous_events: if multi { synchronous } else { Vec::new() },
     })
 }

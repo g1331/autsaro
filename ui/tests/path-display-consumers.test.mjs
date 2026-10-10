@@ -703,7 +703,7 @@ test('application preview formats source files but preserves component identitie
   };
   const preview = {
     revision: 'application-revision',
-    slot,
+    slots: [slot],
     files: [],
     manifestBefore: rawLog,
     manifestAfter: rawLog,
@@ -714,11 +714,13 @@ test('application preview formats source files but preserves component identitie
   expect(
     Array.from(view.container.querySelectorAll('dl .path-text'), (node) => node.textContent),
   ).toEqual([
+    'application',
     '/Package/Component/Port',
     String.raw`C:\工作目录\Application.arxml`,
     String.raw`\\server\share\System.arxml`,
     'application/Application.c',
     'include/Application.h',
+    'Application_Main',
   ]);
   expect(view.getByLabelText(translate('workflow.application.manifestBefore')).textContent).toBe(
     rawLog,
@@ -729,15 +731,74 @@ test('application preview formats source files but preserves component identitie
   await act(async () => {
     fireEvent.click(view.getByRole('button', { name: translate('workflow.application.copySlot') }));
   });
-  expect(JSON.parse(clipboard.mock.calls.at(-1)[0])).toEqual({
-    producerSlot: 'application',
-    componentPath: '/Package/Component/Port',
-    sourcePaths: [
-      String.raw`\\?\C:\工作目录\Application.arxml`,
-      String.raw`\\?\UNC\server\share\System.arxml`,
-      'application/Application.c',
-    ],
-    generatedHeaders: ['include/Application.h'],
-    entrySymbols: ['Application_Main'],
-  });
+  expect(JSON.parse(clipboard.mock.calls.at(-1)[0])).toEqual([
+    {
+      producerSlot: 'application',
+      componentPath: '/Package/Component/Port',
+      sourcePaths: [
+        String.raw`\\?\C:\工作目录\Application.arxml`,
+        String.raw`\\?\UNC\server\share\System.arxml`,
+        'application/Application.c',
+      ],
+      generatedHeaders: ['include/Application.h'],
+      entrySymbols: ['Application_Main'],
+    },
+  ]);
 });
+
+test.each(['zh-CN', 'en'])(
+  'application preview reviews every trusted slot and seed in %s',
+  async (language) => {
+    previewLanguage(language);
+    const clipboard = captureClipboard();
+    const names = ['Ingress', 'ProcessWithALongComponentNameForReview', 'Observe'];
+    const slots = names.map((name) => ({
+      producerSlot: `singlecore-multi-swc-v1:/Application/Pipeline/${name}Instance`,
+      componentPath: `/Application/${name}`,
+      sourcePaths: [`application/${name}.c`],
+      generatedHeaders: [`include/Rte_${name}.h`, 'include/Rte.h'],
+      entrySymbols: [`${name}_Periodic`],
+    }));
+    const preview = {
+      revision: 'complete-multi-application-revision',
+      slots,
+      files: names.map((name) => ({
+        path: `application/${name}.c`,
+        contents: `void ${name}_Periodic(void) {}\n`,
+      })),
+      manifestBefore: '{"applicationInputs":[]}',
+      manifestAfter: JSON.stringify({
+        applicationInputs: slots.map((slot) => ({
+          path: slot.sourcePaths[0],
+          producerSlot: slot.producerSlot,
+        })),
+      }),
+    };
+    const initialize = vi.fn();
+    const view = render(
+      React.createElement(PreviewDialogs, {
+        controller: { applicationPreview: preview, initializeApplicationPreviewed: initialize },
+      }),
+    );
+    for (const slot of slots) {
+      expect(view.getByText(slot.componentPath)).toBeTruthy();
+      expect(view.getByText(slot.producerSlot).classList.contains('path-text')).toBe(true);
+      expect(view.getByText(slot.entrySymbols[0]).classList.contains('path-text')).toBe(true);
+    }
+    await act(async () => {
+      fireEvent.click(
+        view.getByRole('button', { name: translate('workflow.application.copySlot') }),
+      );
+    });
+    expect(JSON.parse(clipboard.mock.calls.at(-1)[0])).toEqual(slots);
+    for (const file of preview.files) {
+      fireEvent.click(view.getByRole('button', { name: file.path }));
+      expect(view.getByLabelText(translate('workflow.application.seedSnapshot')).textContent).toBe(
+        file.contents,
+      );
+    }
+    fireEvent.click(view.getByRole('button', { name: translate('workflow.application.confirm') }));
+    expect(initialize).toHaveBeenCalledTimes(1);
+    expect(preview.revision).toBe('complete-multi-application-revision');
+  },
+);

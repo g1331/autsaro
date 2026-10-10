@@ -184,7 +184,7 @@ export function DescriptorField({
   return (
     <div className="descriptor-field">
       <label htmlFor={`field-${field.fieldId}`}>
-        {field.definitionId.split('/').pop()}{' '}
+        {field.definitionId.split('#').pop()?.split('/').pop()}{' '}
         <small>
           {field.kind ? t(editorValueKindKeys[field.kind]) : field.elementKind}
           {field.unit ? ` · ${field.unit}` : ''}

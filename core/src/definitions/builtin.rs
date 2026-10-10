@@ -197,6 +197,19 @@ impl Author<'_> {
         Ok(())
     }
 
+    fn instance(&mut self, path: &str, name: &str) -> Result<(), crate::message::LocalizedText> {
+        self.field(path, name, ValueKind::Reference, 0)?;
+        let entry = self
+            .0
+            .entries_mut()
+            .get_mut(&format!("{ROOT}{path}/{name}"))
+            .unwrap();
+        entry.element_kind = "ECUC-INSTANCE-REFERENCE-DEF".into();
+        entry.upper_multiplicity = None;
+        entry.reference_destinations = vec!["SW-COMPONENT-PROTOTYPE".into()];
+        Ok(())
+    }
+
     fn default(&mut self, path: &str, name: &str, lexeme: &str) {
         let entry = self
             .0
@@ -221,10 +234,199 @@ pub(super) fn populate(
         a.container(module, 0, if module == "Can" { None } else { Some(1) })?;
     }
     communication(&mut a)?;
+    mode_management(&mut a)?;
     diagnostic(&mut a)?;
     operating_system(&mut a)?;
     persistence(&mut a)?;
     defaults(&mut a);
+    Ok(())
+}
+
+fn mode_management(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedText> {
+    a.container("ComM", 0, Some(1))?;
+    let general = "ComM/ComMGeneral";
+    a.container(general, 1, Some(1))?;
+    let disabled = "ComMDevErrorDetect ComMDynamicPncToChannelMappingSupport ComMModeLimitationEnabled ComMPncSupport ComMResetAfterForcingNoComm ComMVersionInfoApi ComMWakeupInhibitionEnabled";
+    a.booleans(general, disabled, 1)?;
+    for name in disabled.split_whitespace() {
+        a.default(general, name, "false");
+    }
+    a.booleans(general, "ComMSynchronousWakeUp", 1)?;
+    a.default(general, "ComMSynchronousWakeUp", "true");
+    a.integers(general, "ComMEcuGroupClassification", "0", U8, 1)?;
+    a.default(general, "ComMEcuGroupClassification", "3");
+    a.floats(general, "ComMTMinFullComModeDuration", Some("65"), 1)?;
+    a.0.entries_mut()
+        .get_mut(&format!("{ROOT}{general}/ComMTMinFullComModeDuration"))
+        .unwrap()
+        .minimum = Some("0.001".into());
+    a.default(general, "ComMTMinFullComModeDuration", "5");
+    a.container("ComM/ComMConfigSet", 1, Some(1))?;
+    let channel = "ComM/ComMConfigSet/ComMChannel";
+    let user = "ComM/ComMConfigSet/ComMUser";
+    a.container(channel, 1, Some(256))?;
+    a.container(user, 0, Some(65535))?;
+    a.integers(user, "ComMUserIdentifier", "0", "65534", 1)?;
+    a.enumeration(channel, "ComMBusType", "COMM_BUS_TYPE_CAN COMM_BUS_TYPE_CDD COMM_BUS_TYPE_ETH COMM_BUS_TYPE_FR COMM_BUS_TYPE_INTERNAL COMM_BUS_TYPE_LIN", 1)?;
+    a.integers(channel, "ComMChannelId", "0", U8, 1)?;
+    a.field(channel, "ComMCDDBusPrefix", ValueKind::String, 0)?;
+    a.floats(channel, "ComMMainFunctionPeriod", None, 1)?;
+    a.default(channel, "ComMMainFunctionPeriod", "0.02");
+    let flags = "ComMFullCommRequestNotificationEnabled ComMNoCom ComMNoWakeup";
+    a.booleans(channel, flags, 1)?;
+    for name in flags.split_whitespace() {
+        a.default(channel, name, "false");
+    }
+    a.booleans(channel, "ComMNoWakeUpInhibitionNvmStorage", 1)?;
+    let management = format!("{channel}/ComMNetworkManagement");
+    a.container(&management, 1, Some(1))?;
+    a.enumeration(
+        &management,
+        "ComMNmVariant",
+        "FULL LIGHT NONE PASSIVE SLAVE_ACTIVE SLAVE_PASSIVE",
+        1,
+    )?;
+    a.default(&management, "ComMNmVariant", "FULL");
+    let users = format!("{channel}/ComMUserPerChannel");
+    a.container(&users, 0, Some(255))?;
+    a.reference(&users, "ComMUserChannel", user, 1, Some(1))?;
+    let main = "Dcm/DcmConfigSet/DcmDsl/DcmDslProtocol/DcmDslProtocolRow/DcmDslConnection/DcmDslMainConnection";
+    a.reference(main, "DcmDslProtocolComMChannelRef", channel, 1, Some(1))?;
+
+    a.container("BswM", 0, Some(1))?;
+    let general = "BswM/BswMGeneral";
+    a.container(general, 1, Some(1))?;
+    let flags = "BswMCanSMEnabled BswMComMEnabled BswMDcmEnabled BswMDevErrorDetect BswMEcuMEnabled BswMEthIfEnabled BswMEthSMEnabled BswMFrSMEnabled BswMGenericRequestEnabled BswMJ1939DcmEnabled BswMJ1939NmEnabled BswMLinSMEnabled BswMLinTPEnabled BswMNmEnabled BswMNvMEnabled BswMSdControlEnabled BswMSdEnabled BswMVersionInfoApi";
+    a.booleans(general, flags, 1)?;
+    for name in flags.split_whitespace() {
+        a.default(general, name, "false");
+    }
+    a.floats(general, "BswMMainFunctionPeriod", None, 0)?;
+    a.container("BswM/BswMGeneral/BswMUserIncludeFiles", 0, Some(1))?;
+    a.field(
+        "BswM/BswMGeneral/BswMUserIncludeFiles",
+        "BswMUserIncludeFile",
+        ValueKind::String,
+        1,
+    )?;
+    a.0.entries_mut()
+        .get_mut(&format!(
+            "{ROOT}BswM/BswMGeneral/BswMUserIncludeFiles/BswMUserIncludeFile"
+        ))
+        .unwrap()
+        .upper_multiplicity = None;
+    let config = "BswM/BswMConfig";
+    a.container(config, 1, None)?;
+    let arbitration = format!("{config}/BswMArbitration");
+    let control = format!("{config}/BswMModeControl");
+    a.container(&arbitration, 1, Some(1))?;
+    a.container(&control, 1, Some(1))?;
+    let input = format!("{arbitration}/BswMModeRequestPort");
+    a.container(&input, 0, None)?;
+    a.enumeration(
+        &input,
+        "BswMRequestProcessing",
+        "BSWM_DEFERRED BSWM_IMMEDIATE",
+        1,
+    )?;
+    let source = format!("{input}/BswMModeRequestSource");
+    a.choice(&source, 1, Some(1))?;
+    let indication = format!("{source}/BswMComMIndication");
+    a.container(&indication, 0, Some(1))?;
+    a.reference(&indication, "BswMComMChannelRef", channel, 1, Some(1))?;
+    let initial = format!("{input}/BswMModeInitValue");
+    a.container(&initial, 0, Some(1))?;
+    a.field(&initial, "BswMBswModeInitValue", ValueKind::String, 0)?;
+    let condition = format!("{arbitration}/BswMModeCondition");
+    a.container(&condition, 0, None)?;
+    a.enumeration(
+        &condition,
+        "BswMConditionType",
+        "BSWM_EQUALS BSWM_EQUALS_NOT BSWM_EVENT_IS_CLEARED BSWM_EVENT_IS_SET",
+        1,
+    )?;
+    a.reference(
+        &condition,
+        "BswMConditionMode",
+        &format!("{input} {arbitration}/BswMEventRequestPort"),
+        1,
+        Some(1),
+    )?;
+    a.0.entries_mut()
+        .get_mut(&format!("{ROOT}{condition}/BswMConditionMode"))
+        .unwrap()
+        .element_kind = "ECUC-CHOICE-REFERENCE-DEF".into();
+    let expected = format!("{condition}/BswMConditionValue");
+    a.choice(&expected, 0, Some(1))?;
+    let mode = format!("{expected}/BswMBswMode");
+    a.container(&mode, 0, Some(1))?;
+    a.field(&mode, "BswMBswRequestedMode", ValueKind::String, 1)?;
+    let expression = format!("{arbitration}/BswMLogicalExpression");
+    a.container(&expression, 0, None)?;
+    a.enumeration(
+        &expression,
+        "BswMLogicalOperator",
+        "BSWM_AND BSWM_NAND BSWM_NOT BSWM_OR BSWM_XOR",
+        0,
+    )?;
+    a.reference(
+        &expression,
+        "BswMArgumentRef",
+        &format!("{expression} {condition}"),
+        1,
+        None,
+    )?;
+    a.0.entries_mut()
+        .get_mut(&format!("{ROOT}{expression}/BswMArgumentRef"))
+        .unwrap()
+        .element_kind = "ECUC-CHOICE-REFERENCE-DEF".into();
+    let rule = format!("{arbitration}/BswMRule");
+    let action = format!("{control}/BswMAction");
+    let list = format!("{control}/BswMActionList");
+    a.container(&rule, 0, None)?;
+    a.booleans(&rule, "BswMNestedExecutionOnly", 1)?;
+    a.default(&rule, "BswMNestedExecutionOnly", "false");
+    a.enumeration(
+        &rule,
+        "BswMRuleInitState",
+        "BSWM_FALSE BSWM_TRUE BSWM_UNDEFINED",
+        1,
+    )?;
+    a.reference(&rule, "BswMRuleExpressionRef", &expression, 1, Some(1))?;
+    for name in ["BswMRuleTrueActionList", "BswMRuleFalseActionList"] {
+        a.reference(&rule, name, &list, 0, Some(1))?;
+    }
+    a.container(&action, 0, None)?;
+    let available = format!("{action}/BswMAvailableActions");
+    a.choice(&available, 1, Some(1))?;
+    let callout = format!("{available}/BswMUserCallout");
+    a.container(&callout, 0, Some(1))?;
+    a.field(&callout, "BswMUserCalloutFunction", ValueKind::String, 1)?;
+    a.container(&list, 0, None)?;
+    a.enumeration(
+        &list,
+        "BswMActionListExecution",
+        "BSWM_CONDITION BSWM_TRIGGER",
+        1,
+    )?;
+    a.integers(&list, "BswMActionListPriority", "0", U8, 0)?;
+    a.default(&list, "BswMActionListPriority", "0");
+    let item = format!("{list}/BswMActionListItem");
+    a.container(&item, 1, None)?;
+    a.integers(&item, "BswMActionListItemIndex", "0", U8, 1)?;
+    a.booleans(&item, "BswMAbortOnFail", 1)?;
+    a.default(&item, "BswMAbortOnFail", "false");
+    a.reference(
+        &item,
+        "BswMActionListItemRef",
+        &format!("{action} {list} {rule}"),
+        1,
+        Some(1),
+    )?;
+    a.0.entries_mut()
+        .get_mut(&format!("{ROOT}{item}/BswMActionListItemRef"))
+        .unwrap()
+        .element_kind = "ECUC-CHOICE-REFERENCE-DEF".into();
     Ok(())
 }
 
@@ -246,6 +448,25 @@ fn communication(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedText
         U16,
         1,
     )?;
+    a.foreign(
+        "EcuC/EcucHardware/EcucCoreDefinition",
+        "EcucCoreHwRef",
+        "HW-ELEMENT",
+        0,
+        Some(1),
+    )?;
+    a.container("EcuC/EcucPartitionCollection", 0, Some(1))?;
+    let partition = "EcuC/EcucPartitionCollection/EcucPartition";
+    a.container(partition, 0, None)?;
+    a.integers(partition, "EcucPartitionId", "0", U16, 1)?;
+    a.reference(
+        partition,
+        "EcucPartitionCoreRef",
+        "EcuC/EcucHardware/EcucCoreDefinition",
+        1,
+        Some(1),
+    )?;
+    a.instance(partition, "EcucPartitionSoftwareComponentInstanceRef")?;
     a.container("Can/CanConfigSet", 1, Some(1))?;
     let controller = "Can/CanConfigSet/CanController";
     a.container(controller, 1, None)?;
@@ -301,11 +522,24 @@ fn communication(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedText
     a.enumeration(hardware, "CanObjectType", "RECEIVE TRANSMIT", 1)?;
     a.enumeration(hardware, "CanObjectPayloadLength", "CAN_OBJECT_PL_8 CAN_OBJECT_PL_12 CAN_OBJECT_PL_16 CAN_OBJECT_PL_20 CAN_OBJECT_PL_24 CAN_OBJECT_PL_32 CAN_OBJECT_PL_48 CAN_OBJECT_PL_64", 0)?;
     a.reference(hardware, "CanControllerRef", controller, 1, Some(1))?;
+    a.booleans(hardware, "CanTriggerTransmitEnable", 0)?;
+    a.default(hardware, "CanTriggerTransmitEnable", "false");
+    a.reference(
+        hardware,
+        "CanMainFunctionRWPeriodRef",
+        "Can/CanGeneral/CanMainFunctionRWPeriods",
+        0,
+        Some(1),
+    )?;
     let general = "Can/CanGeneral";
     a.container(general, 1, Some(1))?;
     a.booleans(general, "CanDevErrorDetect CanEnableSecurityEventReporting CanGlobalTimeSupport CanMultiplexedTransmission CanVersionInfoApi", 1)?;
     a.integers(general, "CanIndex", "0", U8, 1)?;
     a.floats(general, "CanMainFunctionModePeriod", None, 1)?;
+    a.floats(general, "CanMainFunctionBusoffPeriod", None, 0)?;
+    let rw = "Can/CanGeneral/CanMainFunctionRWPeriods";
+    a.container(rw, 0, None)?;
+    a.floats(rw, "CanMainFunctionPeriod", None, 1)?;
     a.floats(general, "CanTimeoutDuration", Some("65.535"), 1)?;
     a.0.entries_mut()
         .get_mut(&format!("{ROOT}{general}/CanTimeoutDuration"))
@@ -519,10 +753,40 @@ fn communication(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedText
     a.enumeration(pdu, "ComIPduType", "NORMAL TP", 1)?;
     a.integers(pdu, "ComIPduHandleId", "0", U16, 0)?;
     a.reference(pdu, "ComIPduSignalRef", signal, 0, None)?;
+    a.field(pdu, "ComIPduCallout", ValueKind::FunctionName, 0)?;
+    let group = "Com/ComConfig/ComIPduGroup";
+    a.container(group, 0, None)?;
+    a.integers(group, "ComIPduGroupHandleId", "0", U16, 1)?;
+    a.reference(group, "ComIPduGroupGroupRef", group, 0, None)?;
+    a.reference(pdu, "ComIPduGroupRef", group, 0, None)?;
+    for (kind, timebase) in [("Rx", "ComMainRxTimeBase"), ("Tx", "ComMainTxTimeBase")] {
+        let path = format!("Com/ComConfig/ComMainFunction{kind}");
+        a.container(&path, 0, None)?;
+        a.floats(&path, timebase, None, 1)?;
+        a.reference(
+            &path,
+            &format!("ComMain{kind}PartitionRef"),
+            "EcuC/EcucPartitionCollection/EcucPartition",
+            0,
+            Some(1),
+        )?;
+    }
+    a.reference(
+        pdu,
+        "ComIPduMainFunctionRef",
+        "Com/ComConfig/ComMainFunctionRx Com/ComConfig/ComMainFunctionTx",
+        0,
+        Some(1),
+    )?;
+    a.0.entries_mut()
+        .get_mut(&format!("{ROOT}{pdu}/ComIPduMainFunctionRef"))
+        .unwrap()
+        .element_kind = "ECUC-CHOICE-REFERENCE-DEF".into();
     a.reference(pdu, "ComPduIdRef", PDU, 1, Some(1))?;
     let tx = "Com/ComConfig/ComIPdu/ComTxIPdu";
     a.container(tx, 0, Some(1))?;
     a.integers(tx, "ComTxIPduUnusedAreasDefault", "0", U8, 1)?;
+    a.floats(tx, "ComMinimumDelayTime", Some("3600"), 0)?;
     for branch in ["ComTxModeTrue", "ComTxModeFalse"] {
         let path = format!("{tx}/{branch}");
         a.container(&path, 0, Some(1))?;
@@ -896,6 +1160,8 @@ fn operating_system(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedT
             0,
             Some(1),
         )?;
+        a.booleans(&map, &format!("{prefix}EventIsMappedToTask"), 0)?;
+        a.default(&map, &format!("{prefix}EventIsMappedToTask"), "false");
         if prefix == "Rte" {
             a.foreign(
                 path,
@@ -928,6 +1194,38 @@ fn operating_system(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedT
             )?;
         }
     }
+    let user = "Rte/RteComUser";
+    a.container(user, 0, None)?;
+    a.reference(
+        user,
+        "RteComUserEcucPartitionRef",
+        "EcuC/EcucPartitionCollection/EcucPartition",
+        0,
+        None,
+    )?;
+    let config = "Rte/RteComUser/ComUserModuleCnf";
+    a.container(config, 0, Some(1))?;
+    a.field(config, "ComUserHeaderInclude", ValueKind::String, 0)?;
+    let callback = "Rte/RteComUser/ComUserModuleCnf/ComUserCallback";
+    a.container(callback, 0, None)?;
+    a.field(callback, "ComUserCallbackName", ValueKind::FunctionName, 1)?;
+    a.enumeration(
+        callback,
+        "ComUserCallbackType",
+        "COM_RX_ACK COM_RX_INV COM_RX_TOUT COM_TX_ACK COM_TX_ERR COM_TX_TOUT",
+        1,
+    )?;
+    let signal = "Rte/RteComUser/ComUserModuleCnf/ComUserSignal";
+    a.container(signal, 0, None)?;
+    a.integers(signal, "ComUserCbkHandleId", "0", U16, 0)?;
+    a.reference(signal, "ComUserCallbackRef", callback, 0, None)?;
+    a.foreign(
+        signal,
+        "ComUserSystemTemplateSystemSignalRef",
+        "I-SIGNAL-TO-I-PDU-MAPPING",
+        0,
+        Some(1),
+    )?;
     Ok(())
 }
 

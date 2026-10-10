@@ -1,0 +1,39 @@
+/** Selected Dcm service types and fixed mode declarations. */
+#ifndef RTE_DCM_TYPE_H
+#define RTE_DCM_TYPE_H
+#include "Std_Types.h"
+typedef uint8 Dcm_SecLevelType;
+typedef uint8 Dcm_SesCtrlType;
+#define DCM_SEC_LEV_LOCKED 0u
+#define DCM_DEFAULT_SESSION 1u
+#define DCM_PROGRAMMING_SESSION 2u
+#define DCM_EXTENDED_DIAGNOSTIC_SESSION 3u
+#define DCM_SAFETY_SYSTEM_DIAGNOSTIC_SESSION 4u
+typedef uint8 Rte_ModeType_DcmDiagnosticSessionControl;
+#define RTE_MODE_DcmDiagnosticSessionControl_DCM_DEFAULT_SESSION 0u
+#define RTE_MODE_DcmDiagnosticSessionControl_DCM_PROGRAMMING_SESSION 1u
+#define RTE_MODE_DcmDiagnosticSessionControl_DCM_EXTENDED_DIAGNOSTIC_SESSION 2u
+#define RTE_MODE_DcmDiagnosticSessionControl_DCM_SAFETY_SYSTEM_DIAGNOSTIC_SESSION 3u
+#define RTE_TRANSITION_DcmDiagnosticSessionControl 255u
+/* Declaration-only modes: their optional diagnostic services are not selected. */
+typedef uint8 Rte_ModeType_DcmEcuReset;
+#define RTE_MODE_DcmEcuReset_DCM_NONE 0u
+#define RTE_MODE_DcmEcuReset_DCM_HARD 1u
+#define RTE_MODE_DcmEcuReset_DCM_KEYONOFF 2u
+#define RTE_MODE_DcmEcuReset_DCM_SOFT 3u
+#define RTE_MODE_DcmEcuReset_DCM_JUMPTOBOOTLOADER 4u
+#define RTE_MODE_DcmEcuReset_DCM_JUMPTOSYSSUPPLIERBOOTLOADER 5u
+#define RTE_MODE_DcmEcuReset_DCM_EXECUTE 6u
+#define RTE_TRANSITION_DcmEcuReset 255u
+typedef uint8 Rte_ModeType_DcmModeRapidPowerShutDown;
+#define RTE_MODE_DcmModeRapidPowerShutDown_DCM_ENABLE_RAPIDPOWERSHUTDOWN 0u
+#define RTE_MODE_DcmModeRapidPowerShutDown_DCM_DISABLE_RAPIDPOWERSHUTDOWN 1u
+#define RTE_TRANSITION_DcmModeRapidPowerShutDown 255u
+typedef uint8 Rte_ModeType_DcmControlDTCSetting;
+#define RTE_MODE_DcmControlDTCSetting_DCM_ENABLEDTCSETTING 0u
+#define RTE_MODE_DcmControlDTCSetting_DCM_DISABLEDTCSETTING 1u
+#define RTE_TRANSITION_DcmControlDTCSetting 255u
+typedef uint8 Rte_ModeType_DcmSecurityAccess;
+#define RTE_MODE_DcmSecurityAccess_DCM_SEC_LEV_LOCKED 0u
+#define RTE_TRANSITION_DcmSecurityAccess 255u
+#endif

@@ -58,7 +58,7 @@ fn add(
         !profiles.is_empty()
             && profiles
                 .iter()
-                .all(|profile| matches!(*profile, "ecu" | "host"))
+                .all(|profile| matches!(*profile, "ecu" | "ecu-multi" | "host"))
     );
     assert!(hash.len() == 64 && hash.bytes().all(|byte| byte.is_ascii_hexdigit()));
     assert!(

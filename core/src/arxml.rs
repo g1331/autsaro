@@ -32,6 +32,7 @@ pub use project::{
 
 pub use persistence::{PreparedSave, SaveFailure};
 
+pub(crate) use host_profile::historical_host_mode_dependency;
 use host_profile::parse_host_routine;
 use persistence::{Patch, apply_patches, patch_child, patch_param};
 use xml::{
@@ -55,7 +56,6 @@ pub(crate) struct HandoffSource {
     pub package_roots: Vec<String>,
     pub contents: Vec<u8>,
 }
-
 
 #[derive(Clone)]
 pub struct Workspace {
@@ -132,6 +132,14 @@ fn integration_errors(
 fn load_sources(
     files: Vec<PathBuf>,
     schema_zip: Option<PathBuf>,
+) -> Result<Workspace, crate::message::LocalizedText> {
+    load_sources_with(files, schema_zip, |_| {})
+}
+
+fn load_sources_with(
+    files: Vec<PathBuf>,
+    schema_zip: Option<PathBuf>,
+    initialize: impl FnOnce(&mut Workspace),
 ) -> Result<Workspace, crate::message::LocalizedText> {
     if files.is_empty() {
         return Err(crate::product_message!(
@@ -280,6 +288,8 @@ fn load_sources(
         revision: 0,
         project: None,
     };
+    // Membership and its accepted catalogue belong to the first validated snapshot.
+    initialize(&mut workspace);
     workspace.refresh()?;
     if workspace
         .issues
@@ -498,6 +508,22 @@ impl Workspace {
     fn integration_sources(
         &self,
     ) -> Result<Vec<crate::integration::InputSource>, Vec<crate::integration::PlanDiagnostic>> {
+        self.ensure_sources_current().map_err(|error| {
+            vec![crate::integration::PlanDiagnostic {
+                category: crate::integration::DiagnosticCategory::Input,
+                code: "SOURCE_CHANGED".into(),
+                file: None,
+                object: None,
+                message: error,
+                remedy: crate::product_message!("backend.arxml.reopen_inputs_remedy"),
+            }]
+        })?;
+        self.integration_source_snapshot()
+    }
+
+    fn integration_source_snapshot(
+        &self,
+    ) -> Result<Vec<crate::integration::InputSource>, Vec<crate::integration::PlanDiagnostic>> {
         use crate::integration::{DiagnosticCategory, InputSource, PlanDiagnostic};
         let issue = |code: &str, message: crate::message::LocalizedText| {
             vec![PlanDiagnostic {
@@ -509,8 +535,6 @@ impl Workspace {
                 remedy: crate::product_message!("backend.arxml.reopen_inputs_remedy"),
             }]
         };
-        self.ensure_sources_current()
-            .map_err(|error| issue("SOURCE_CHANGED", error.into()))?;
         let mut root = self
             .integration_input_root
             .as_deref()
@@ -610,7 +634,7 @@ impl Workspace {
                     .map(|f| (f.path.as_path(), f.text.as_str()))
                     .collect::<Vec<_>>(),
             )?);
-        } else {
+        } else if !self.snapshot.integration_candidate {
             self.issues
                 .extend(self.snapshot.validation.iter().flat_map(|scope| {
                     scope.diagnostics.iter().map(|diagnostic| Issue {

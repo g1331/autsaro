@@ -1267,6 +1267,113 @@ fn builtin_duplicate_source_paths_keep_distinct_owned_identities_across_refresh(
 }
 
 #[test]
+fn builtin_split_packages_allow_owned_creation_but_refuse_ambiguous_identity_changes() {
+    let scratch = Scratch::new();
+    let first_path = scratch.0.join("first.arxml");
+    let second_path = scratch.0.join("second.arxml");
+    let xml = r#"<AUTOSAR xmlns="http://autosar.org/schema/r4.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd"><AR-PACKAGES><AR-PACKAGE><SHORT-NAME>Shared</SHORT-NAME><ELEMENTS/></AR-PACKAGE></AR-PACKAGES></AUTOSAR>"#;
+    fs::write(&first_path, xml).unwrap();
+    fs::write(&second_path, xml).unwrap();
+    let mut workspace = Workspace::open(vec![first_path.clone(), second_path.clone()]).unwrap();
+    let view = projection(&workspace);
+    let packages = view
+        .objects
+        .iter()
+        .filter(|object| object.path == "/Shared")
+        .collect::<Vec<_>>();
+    assert_eq!(packages.len(), 2);
+    assert!(
+        packages.iter().all(|object| object.writable),
+        "{packages:?}"
+    );
+    assert_ne!(packages[0].object_id, packages[1].object_id);
+    let parent = packages
+        .iter()
+        .find(|object| {
+            object.source_id
+                == view
+                    .sources
+                    .iter()
+                    .find(|source| source.path == first_path)
+                    .unwrap()
+                    .source_id
+        })
+        .unwrap();
+    for change in [
+        ConfigurationChange::RenameInstance {
+            change_id: "ambiguous-rename".into(),
+            object: ObjectRef::Existing {
+                object_id: parent.object_id.clone(),
+            },
+            expected_short_name: "Shared".into(),
+            short_name: "Renamed".into(),
+        },
+        ConfigurationChange::RemoveInstance {
+            change_id: "ambiguous-remove".into(),
+            object: ObjectRef::Existing {
+                object_id: parent.object_id.clone(),
+            },
+            expected_short_name: "Shared".into(),
+        },
+    ] {
+        assert!(
+            workspace
+                .prepare_change(&batch(&workspace, vec![change]))
+                .is_err()
+        );
+    }
+    let create = ConfigurationChange::CreateInstance {
+        change_id: "owned-component".into(),
+        parent: ObjectRef::Existing {
+            object_id: parent.object_id.clone(),
+        },
+        source_id: parent.source_id.clone(),
+        definition_id: "APPLICATION-SW-COMPONENT-TYPE".into(),
+        short_name: "LocalComponent".into(),
+    };
+    let mut mismatched = create.clone();
+    if let ConfigurationChange::CreateInstance { source_id, .. } = &mut mismatched {
+        *source_id = packages
+            .iter()
+            .find(|object| object.source_id != parent.source_id)
+            .unwrap()
+            .source_id
+            .clone();
+    }
+    assert!(
+        workspace
+            .prepare_change(&batch(&workspace, vec![mismatched]))
+            .is_err()
+    );
+    let changes = batch(&workspace, vec![create]);
+    let preview = workspace.prepare_change(&changes).unwrap();
+    workspace
+        .apply_change(&changes, &preview.change_revision)
+        .unwrap();
+    let save = workspace.preview_save().unwrap();
+    workspace.save_previewed(&save.revision).unwrap();
+    assert_eq!(fs::read_to_string(&second_path).unwrap(), xml);
+    let first_bytes = fs::read_to_string(&first_path).unwrap();
+    assert!(first_bytes.contains("<APPLICATION-SW-COMPONENT-TYPE><SHORT-NAME>LocalComponent</SHORT-NAME></APPLICATION-SW-COMPONENT-TYPE>"));
+    let reopened = Workspace::open(vec![first_path.clone(), second_path]).unwrap();
+    let reopened_view = projection(&reopened);
+    let component = reopened_view
+        .objects
+        .iter()
+        .find(|object| object.path == "/Shared/LocalComponent")
+        .unwrap();
+    assert_eq!(
+        component.source_id,
+        reopened_view
+            .sources
+            .iter()
+            .find(|source| source.path == first_path)
+            .unwrap()
+            .source_id
+    );
+}
+
+#[test]
 fn builtin_application_initialization_is_reviewed_create_only_and_owns_real_live_bytes() {
     let scratch = Scratch::new();
     let directory = scratch.0.join("ApplicationOwned");
@@ -1282,7 +1389,8 @@ fn builtin_application_initialization_is_reviewed_create_only_and_owns_real_live
         .collect();
     let old_identity = workspace.input_fingerprint().unwrap();
     let preview = workspace.preview_application_initialization().unwrap();
-    let application = directory.join(&preview.slot.source_paths[0]);
+    assert_eq!(preview.slots.len(), 1);
+    let application = directory.join(&preview.slots[0].source_paths[0]);
     let mut altered = preview.clone();
     altered.files[0].contents = "/* untrusted replacement */\n".into();
     assert!(
@@ -1305,7 +1413,7 @@ fn builtin_application_initialization_is_reviewed_create_only_and_owns_real_live
     assert_eq!(
         snapshot.manifest.application_inputs,
         vec![autosar_config_core::arxml::ApplicationInput {
-            path: preview.slot.source_paths[0].clone(),
+            path: preview.slots[0].source_paths[0].clone(),
             producer_slot: "epic4-single-application-v1".into(),
         }]
     );
@@ -1346,7 +1454,8 @@ fn builtin_application_initialization_refuses_a_late_user_path_without_touching_
     let manifest = directory.join("workbench-project.json");
     let original_manifest = fs::read(&manifest).unwrap();
     let before = workspace.input_fingerprint().unwrap();
-    let application = directory.join(&preview.slot.source_paths[0]);
+    assert_eq!(preview.slots.len(), 1);
+    let application = directory.join(&preview.slots[0].source_paths[0]);
     fs::create_dir_all(application.parent().unwrap()).unwrap();
     let user_bytes = b"/* This pre-existing source is owned by the user, not the initializer. */\n";
     fs::write(&application, user_bytes).unwrap();
@@ -1539,8 +1648,17 @@ fn builtin_live_application_reopens_generic_configuration_without_authorizing_ta
             .find(|scope| scope.scope == ValidationScope::Definition)
             .unwrap()
             .status,
-        ValidationStatus::Passed,
+        ValidationStatus::Unsupported,
     );
+    let definition = view
+        .validation
+        .iter()
+        .find(|scope| scope.scope == ValidationScope::Definition)
+        .unwrap();
+    assert!(definition.diagnostics.is_empty());
+    assert!(definition.coverage.iter().any(|rule| rule.rule_id
+        == "native.definition.legacy-dcm-mode-dependency"
+        && !rule.supported));
     let target = view
         .validation
         .iter()

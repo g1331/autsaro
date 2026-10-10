@@ -65,3 +65,7 @@
 /runtime/src/Ecu_Execution.h text eol=lf
 /runtime/src/Dcm_Internal.h text eol=lf
 /runtime/src/PduR_Internal.h text eol=lf
+
+# Separate standard multi-component implementation keeps reproducible LF bytes.
+/runtime/multi/** text eol=lf
+/core/tests/fixtures/multi-runtime/** text eol=lf

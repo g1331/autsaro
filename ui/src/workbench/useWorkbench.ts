@@ -783,7 +783,9 @@ export function useWorkbench(): Workbench {
             report.description.signals.map((signal) => [signal.port, String(signal.canId)]),
           )
         : {},
-      integrationPeriod: report.description ? String(report.description.component.periodMs) : '',
+      integrationPeriod: report.description?.component
+        ? String(report.description.component.periodMs)
+        : '',
       integrationProcessing: false,
     });
   }
@@ -810,6 +812,10 @@ export function useWorkbench(): Workbench {
   }
 
   function applyIntegration() {
+    if (state.integrationInspection?.description?.multi) {
+      setIntegrationNotice(message('shell.integration.multiReadOnly'));
+      return;
+    }
     const ids: Record<string, number> = {};
     try {
       for (const [path, value] of Object.entries(state.integrationIds)) {

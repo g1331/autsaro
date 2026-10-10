@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-27-2026 18:43
-last_updated: 10-09-2026 12:15
+last_updated: 10-10-2026 12:54
 project: Autosar
 project_key: NOKEY
 tracking_system: file-system
@@ -105,6 +105,14 @@ development_status:
   7-10-独立预览源码并保护用户代码再生成: done
   7-11-独立复核发行配置链与完整工程交接: done
   epic-7-retrospective: done
+
+  epic-8: in-progress
+  8-1-从多组件输入生成一致的应用契约: review
+  8-2-经真实-os-调度运行多组件通信: review
+  8-3-保护每个组件的用户源码再生成: review
+  8-4-在工作区安全编辑应用组合与调度: review
+  8-5-独立交接并复验多组件工程: backlog
+  epic-8-retrospective: optional
 action_items:
   - id: "epic-4-retro-item-1-watchdog-cleanup-failure"
     epic: 4

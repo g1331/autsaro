@@ -59,7 +59,7 @@ pub struct PreparedProject<'a> {
     native_guard: Option<NativeGuard>,
     native_metadata: Option<HandoffMetadata>,
     definition_fingerprint: Option<String>,
-    application_slot: Option<ApplicationSlotDescriptor>,
+    application_slots: Vec<ApplicationSlotDescriptor>,
 }
 
 impl<'a> PreparedProject<'a> {
@@ -93,7 +93,12 @@ impl<'a> PreparedProject<'a> {
     }
 
     pub fn application_slot(&self) -> Option<&ApplicationSlotDescriptor> {
-        self.application_slot.as_ref()
+        self.application_slots.first()
+    }
+
+    /// Caller-owned source producers from the actual validated component graph.
+    pub fn application_slots(&self) -> &[ApplicationSlotDescriptor] {
+        &self.application_slots
     }
 
     pub fn preview(
@@ -313,6 +318,13 @@ pub(crate) fn deliver_path(
                 return Ok(relative.into());
             }
         }
+        if let Some(relative) = path.strip_prefix("multi/") {
+            if profile == "ecu-multi"
+                && (relative.starts_with("src/") || relative.starts_with("include/"))
+            {
+                return Ok(relative.into());
+            }
+        }
         if let Some(relative) = path.strip_prefix("ecu/") {
             if relative.starts_with("src/") || relative.starts_with("include/") {
                 return Ok(relative.into());
@@ -371,21 +383,26 @@ struct NativePreparation {
     definition_fingerprint: String,
     preparation_identity: String,
     guard: NativeGuard,
-    application_slot: Option<ApplicationSlotDescriptor>,
+    application_slots: Vec<ApplicationSlotDescriptor>,
 }
 
 impl NativePreparation {
     fn new(
         files: &mut BTreeMap<String, PreparedFile<'_>>,
         mut inputs: NativeInputs,
-        slot: Option<ApplicationSlotDescriptor>,
+        slots: Vec<ApplicationSlotDescriptor>,
         profile: &str,
         target: BuildTarget,
         handoff: bool,
     ) -> Result<Self, crate::LocalizedText> {
+        if profile == crate::integration::MULTI_PROFILE && inputs.application.len() != slots.len() {
+            return Err(
+                crate::product_message!("backend.integration.multi.consumer_unsupported").into(),
+            );
+        }
         inputs.manifest.profile_hint = profile.into();
         inputs.refresh_snapshot_identity()?;
-        let snapshots = generator::delivery::populate_inputs(files, &mut inputs, slot.as_ref())?;
+        let snapshots = generator::delivery::populate_inputs(files, &mut inputs, &slots)?;
         let metadata = generator::delivery::metadata(profile, target, &inputs, snapshots);
         generator::delivery::ownership::validate_metadata(&metadata)?;
         if handoff {
@@ -401,7 +418,7 @@ impl NativePreparation {
             definition_fingerprint: inputs.definition_fingerprint,
             preparation_identity: inputs.preparation_identity,
             guard: inputs.guard,
-            application_slot: slot,
+            application_slots: slots,
         })
     }
 }
@@ -543,14 +560,14 @@ fn finish<'a>(
         digest.update(native.guard.revision_identity.as_bytes());
     }
     let fingerprint = format!("{:x}", digest.finalize());
-    let (native_guard, native_metadata, definition_fingerprint, application_slot) = match native {
+    let (native_guard, native_metadata, definition_fingerprint, application_slots) = match native {
         Some(native) => (
             Some(native.guard),
             Some(native.metadata),
             Some(native.definition_fingerprint),
-            native.application_slot,
+            native.application_slots,
         ),
-        None => (None, None, None, None),
+        None => (None, None, None, Vec::new()),
     };
     Ok(PreparedProject {
         target,
@@ -566,8 +583,89 @@ fn finish<'a>(
         native_guard,
         native_metadata,
         definition_fingerprint,
-        application_slot,
+        application_slots,
     })
+}
+
+/// One caller-owned application producer, selected by its actual component
+/// instance path. The physical source path is never a generated output path.
+#[derive(Clone, Debug)]
+pub struct ApplicationSource {
+    pub component_instance: String,
+    pub path: std::path::PathBuf,
+}
+
+/// Prepare a complete multi-component ECU with every caller application frozen
+/// into the normal immutable source project. No reference algorithms are supplied.
+pub fn prepare_ecu_project_with_applications(
+    plan: &ValidatedIntegrationPlan,
+    target: BuildTarget,
+    sources: &[ApplicationSource],
+) -> Result<PreparedProject<'static>, Vec<PlanDiagnostic>> {
+    if plan.description().multi.is_none() {
+        return Err(PlanDiagnostic::source_closure(crate::product_message!(
+            "backend.delivery.application_membership_mismatch"
+        )));
+    }
+    let slots = plan.application_slot_descriptors()?;
+    let mut inputs = NativeInputs::from_plan(plan).map_err(PlanDiagnostic::source_closure)?;
+    let mut members = Vec::new();
+    let mut applications = Vec::new();
+    let mut paths = std::collections::BTreeSet::new();
+    let mut producers = std::collections::BTreeSet::new();
+    if sources.len() != slots.len() {
+        return Err(PlanDiagnostic::source_closure(crate::product_message!(
+            "backend.delivery.application_membership_mismatch"
+        )));
+    }
+    for source in sources {
+        let producer = format!(
+            "{}:{}",
+            crate::integration::MULTI_PROFILE,
+            source.component_instance
+        );
+        let slot = slots
+            .iter()
+            .find(|slot| slot.producer_slot == producer)
+            .ok_or_else(|| {
+                PlanDiagnostic::source_closure(crate::product_message!(
+                    "backend.delivery.application_membership_mismatch"
+                ))
+            })?;
+        let bytes = generator::delivery::read_source(&source.path)
+            .map_err(PlanDiagnostic::source_closure)?;
+        std::str::from_utf8(&bytes).map_err(|_| {
+            PlanDiagnostic::source_closure(crate::product_message!(
+                "backend.delivery.application_source_not_utf8"
+            ))
+        })?;
+        let path = generator::delivery::comparison_path(&source.path)
+            .map_err(PlanDiagnostic::source_closure)?;
+        if !paths.insert(path.clone()) || !producers.insert(producer.clone()) {
+            return Err(PlanDiagnostic::source_closure(crate::product_message!(
+                "backend.delivery.application_membership_mismatch"
+            )));
+        }
+        let logical = slot.source_paths[0].clone();
+        members.push(crate::arxml::ApplicationInput {
+            path: logical.clone(),
+            producer_slot: producer,
+        });
+        applications.push((logical, bytes.clone()));
+        inputs.guard.sources.push(generator::delivery::SourceGuard {
+            path: path.clone(),
+            sha256: generator::delivery::digest(&bytes),
+        });
+        inputs.guard.roots.push(path);
+    }
+    members.sort_by(|left, right| left.path.cmp(&right.path));
+    applications.sort_by(|left, right| left.0.cmp(&right.0));
+    inputs.manifest.application_inputs = members;
+    inputs.application = applications;
+    inputs
+        .refresh_snapshot_identity()
+        .map_err(PlanDiagnostic::source_closure)?;
+    prepare_ecu_sources(plan, target, false, Some(inputs))
 }
 
 pub fn prepare_ecu_project<'a>(
@@ -643,15 +741,9 @@ fn prepare_ecu_sources(
         .and_then(|inputs| inputs.application.first())
         .map(|(_, bytes)| bytes.as_slice());
     let rendered = plan.render_ecu_sources(target, live_application)?;
-    let inventory = AssetInventory::embedded();
-    let mut source_owners = BTreeMap::new();
-    for asset in inventory.selected(target, "ecu") {
-        let path = deliver_path(asset, "ecu").map_err(PlanDiagnostic::source_closure)?;
-        source_owners.insert(path, asset);
-    }
-    if let Some(asset) = inventory.get("runtime/include/Com.h") {
-        source_owners.insert("bsw-origin/include/Com.h".into(), asset);
-    }
+    let source_owners =
+        crate::integration::ecu::source_assets(target, plan.description().multi.is_some())
+            .map_err(PlanDiagnostic::source_closure)?;
     let mut files = BTreeMap::new();
     for (path, bytes) in rendered {
         if native.is_some()
@@ -671,13 +763,17 @@ fn prepare_ecu_sources(
         insert(&mut files, path, bytes, source).map_err(PlanDiagnostic::source_closure)?;
     }
     let native = if let Some(inputs) = native {
-        let slot = plan.application_slot_descriptor()?;
+        let slots = plan.application_slot_descriptors()?;
         Some(
             NativePreparation::new(
                 &mut files,
                 inputs,
-                Some(slot),
-                crate::integration::PROFILE,
+                slots,
+                if plan.description().multi.is_some() {
+                    crate::integration::MULTI_PROFILE
+                } else {
+                    crate::integration::PROFILE
+                },
                 target,
                 handoff,
             )
@@ -780,7 +876,7 @@ pub fn prepare_host_project(
         let native = NativePreparation::new(
             &mut files,
             inputs,
-            None,
+            Vec::new(),
             generator::delivery::HOST_PROFILE,
             target,
             handoff,

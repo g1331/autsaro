@@ -72,6 +72,12 @@ def validate(
         raise ValueError("Unknown ownership producer/profile")
     if not isinstance(ledger["files"], list):
         raise TypeError("Invalid ownership payload list")
+    # This policy is compiled into the verified producer wrapper, not granted by
+    # an editable ledger or source path prefix.
+    applications = {
+        row["snapshotOf"]: {"package": path, "producer": row["producerId"]}
+        for path, row in expected_policy.items() if row["owner"] == "user-application"
+    }
     paths: list[str] = []
     for row in ledger["files"]:
         row = _keys(row, {"path", "owner", "producerId", "sha256"}, {"snapshotOf"})
@@ -85,7 +91,7 @@ def validate(
         if _digest(project / path) != row["sha256"]:
             raise ValueError(f"Ownership payload identity differs: {path}")
         if row["owner"] == "user-application":
-            if row["producerId"] != SLOT or "snapshotOf" not in row:
+            if row.get("snapshotOf") not in applications or applications[row["snapshotOf"]] != {"package": path, "producer": row["producerId"]}:
                 raise ValueError("User application is not a declared immutable producer snapshot")
             _relative(row["snapshotOf"])
         elif "snapshotOf" in row:
@@ -110,9 +116,9 @@ def validate(
     for source in manifest["applicationInputs"]:
         source = _keys(source, {"path", "producerSlot"})
         logical = _relative(source["path"])
-        if logical.lower() in mappings or source["producerSlot"] != SLOT:
+        if logical.lower() in mappings or logical not in applications or source["producerSlot"] != applications[logical]["producer"]:
             raise ValueError("Unknown or conflicting live application member")
-        mappings[logical.lower()] = {"path": logical, "kind": "application", "role": "user-application", "producerSlot": SLOT}
+        mappings[logical.lower()] = {"path": logical, "kind": "application", "role": "user-application", "producerSlot": source["producerSlot"]}
     seen: set[str] = set()
     for source in metadata["inputSnapshots"]:
         source = _keys(source, {"logicalPath", "packagePath", "kind", "sha256", "role"}, {"producerSlot"})
@@ -126,7 +132,7 @@ def validate(
             raise ValueError("Native input kind/role/producer membership differs")
         if source["kind"] == "arxml" and package != "inputs/" + logical:
             raise ValueError("Configuration snapshot escaped its owned package boundary")
-        if source["kind"] == "application" and package != "src/Application.c":
+        if source["kind"] == "application" and package != applications[logical]["package"]:
             raise ValueError("Application snapshot escaped its actual compiled producer path")
         if package not in names or _digest(project / package) != source["sha256"]:
             raise ValueError("Actual source/application snapshot identity differs")

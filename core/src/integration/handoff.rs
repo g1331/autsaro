@@ -49,22 +49,24 @@ pub(super) fn verification_files(
     plan: &ValidatedIntegrationPlan,
 ) -> Result<BTreeMap<String, Vec<u8>>, crate::message::LocalizedText> {
     let d = plan.description();
+    let component = d.legacy_component()?;
+    let diagnostic = d.legacy_diagnostic()?;
     let read =
-        d.component
+        component
             .data_ports
             .iter()
             .find(|port| port.read)
             .ok_or(crate::product_message!(
                 "backend.integration.handoff.selected_receive_port_missing"
             ))?;
-    let write = d
-        .component
-        .data_ports
-        .iter()
-        .find(|port| !port.read)
-        .ok_or(crate::product_message!(
-            "backend.integration.handoff.selected_transmit_port_missing"
-        ))?;
+    let write =
+        component
+            .data_ports
+            .iter()
+            .find(|port| !port.read)
+            .ok_or(crate::product_message!(
+                "backend.integration.handoff.selected_transmit_port_missing"
+            ))?;
     let rx = d
         .signals
         .iter()
@@ -80,11 +82,11 @@ pub(super) fn verification_files(
             "backend.integration.handoff.transmit_channel_missing"
         ))?;
     let inputs = json!({
-        "format": "autosar-ecu-test-inputs-v1", "periodMs": d.component.period_ms,
+        "format": "autosar-ecu-test-inputs-v1", "periodMs": component.period_ms,
         "receiveCanId": rx.can_id, "transmitCanId": tx.can_id,
-        "requestCanId": d.diagnostic.request_can_id, "responseCanId": d.diagnostic.response_can_id,
-        "did": d.diagnostic.did, "initialReceiveValue": read.initial_value,
-        "receiveTimeoutMs": d.diagnostic.n_cr_ms,
+        "requestCanId": diagnostic.request_can_id, "responseCanId": diagnostic.response_can_id,
+        "did": diagnostic.did, "initialReceiveValue": read.initial_value,
+        "receiveTimeoutMs": diagnostic.n_cr_ms,
         "scope": "Actual configured endpoints; independent fixed echo bytes and protocol assertions are in tools/ecu_tools/verify.py. This is test input, not a verification result."
     });
     Ok(BTreeMap::from([(

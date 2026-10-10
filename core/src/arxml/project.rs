@@ -240,7 +240,7 @@ pub(super) fn validate_manifest(
     let mut slots = BTreeSet::new();
     for input in &manifest.application_inputs {
         relative_path(&input.path)?;
-        if input.producer_slot != "epic4-single-application-v1"
+        if input.producer_slot.is_empty()
             || !slots.insert(&input.producer_slot)
             || !paths.insert(input.path.to_ascii_lowercase())
         {
@@ -979,18 +979,20 @@ impl Workspace {
             safe_path(&path, false)?;
             application_bytes.insert(input.path.clone(), read_bounded(&path)?);
         }
-        let mut workspace = Self::open(sources)?;
-        workspace.catalog = Arc::new(catalog);
-        workspace.integration_input_root = Some(root.to_owned());
-        workspace.project = Some(ProjectMembership {
+        let input_root = root.to_owned();
+        let membership = ProjectMembership {
             path,
             manifest,
             saved: saved.clone(),
             current: saved,
             application_bytes,
             extension_diagnostics: diagnostics,
-        });
-        workspace.refresh()?;
+        };
+        let workspace = super::load_sources_with(sources, None, |workspace| {
+            workspace.catalog = Arc::new(catalog);
+            workspace.integration_input_root = Some(input_root);
+            workspace.project = Some(membership);
+        })?;
         // The hint never authorizes application slots: actual source semantics determine the profile.
         if !workspace
             .project
@@ -1000,30 +1002,39 @@ impl Workspace {
             .application_inputs
             .is_empty()
         {
-            let inspection = crate::integration::inspect_inputs_native(
-                &workspace
-                    .integration_sources()
-                    .map_err(super::integration_errors)?,
-                &workspace.catalog,
-            )
-            .map_err(super::integration_errors)?;
-            // Producer ownership depends on the real single-application
-            // contract, not on unrelated target-only ECUC restrictions.
-            inspection
-                .component_contract()
+            let sources = workspace
+                .integration_sources()
                 .map_err(super::integration_errors)?;
-            if workspace
+            let members = &workspace
                 .project
                 .as_ref()
                 .unwrap()
                 .manifest
-                .application_inputs
-                .iter()
-                .any(|input| {
-                    input.producer_slot != crate::generator::delivery::APPLICATION_SLOT
-                        || input.path != crate::integration::APPLICATION_SOURCE_PATH
-                })
+                .application_inputs;
+            let matches = if let Some(slots) =
+                crate::integration::ecu::workspace_application_slots(&sources)
+                    .map_err(super::integration_errors)?
             {
+                slots.len() == members.len()
+                    && slots.iter().all(|slot| {
+                        members.iter().any(|input| {
+                            input.producer_slot == slot.producer_slot
+                                && slot.source_paths == [input.path.clone()]
+                        })
+                    })
+            } else {
+                // Unrelated target-only restrictions do not authorize or block legacy ownership.
+                crate::integration::inspect_inputs_native(&sources, &workspace.catalog)
+                    .map_err(super::integration_errors)?
+                    .component_contract()
+                    .map_err(super::integration_errors)?;
+                members.len() == 1
+                    && members.iter().all(|input| {
+                        input.producer_slot == crate::generator::delivery::APPLICATION_SLOT
+                            && input.path == crate::integration::APPLICATION_SOURCE_PATH
+                    })
+            };
+            if !matches {
                 return Err(crate::product_message!(
                     "backend.arxml.project.application_live_slot_mismatch"
                 ));

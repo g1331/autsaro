@@ -505,7 +505,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
             ]),
           )
         : {},
-      integrationPeriod: current.integrationInspection?.description
+      integrationPeriod: current.integrationInspection?.description?.component
         ? String(current.integrationInspection.description.component.periodMs)
         : '',
     });

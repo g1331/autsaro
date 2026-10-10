@@ -113,3 +113,17 @@ PRD、产品简述、根架构、Epic 7 spine、11 条 Story、交互规格与 P
 - 最终实际检查：architecture lint 为零 findings；安装的 sprint_plan.py 已迁移 7.1／7.2 标题键并验证 `valid=true, problems=[]`。按稳定 ID 比较全部 49 项状态及两项已关闭 action_items 均未改变，11 条新故事仍 backlog；原两个 Epic 4 说明性标题警告保留为历史非执行标题，不是遗漏故事。
 - 文档／状态 smoke 核对 96 个本地路径与锚点、12 项 CFG 子需求、5 项 NFR、11 条 Story 与 AD-1–AD-11、前置依赖方向、历史 Epic 1–6 原文和 25 项候选顺序；均通过，R11 仍在 R6 后、R7 前。四个核对过的现有实现源文件摘要未变，没有新增原生规则或产品运行验收。
 
+
+## 2026-10-09 R6／Epic 8 实施就绪
+
+**PASS，限定本次首批多组件配置与五条顺序故事。** [规格](../specs/spec-multi-component-scheduling/SPEC.md)、[首批配置](../specs/spec-multi-component-scheduling/application-contract.md)、[独立预期](../specs/spec-multi-component-scheduling/acceptance.md)、[标准依据](../specs/spec-multi-component-scheduling/compliance-references.md)和[spine](architecture/epic-8/ARCHITECTURE-SPINE.md)共同约束[正式故事](epics.md#epic-8-多组件应用与调度工程)。正式编号8此前未使用，候选R6来源保留，历史Epic6与其他sprint状态不改写。
+
+APP-1／APP-2、CFG-4、CAP-1–CAP-5、NFR8-1–NFR8-3及UX8-1–UX8-3全部有故事／可执行AC落点，五条故事仅依赖前序。8.1独立产出真实组件契约；8.2共同生成、构建并经真实OS完成local S/R／C/S、周期顺序和CAN／DID，关闭所消费Com callback／lifecycle／status与server ABI差距；该关口未通过不放行8.3–8.5。源码保护、工作区编辑与独立交接不得提前假设高风险机制已成立。
+
+独立rubric、reality与adversarial审查修正了local freshness、receiver初值优先及fanout、void server ABI、no-task server mapping、重复TimingEvent、槽／路径身份及精确CAN／DID观测契约，最终均返回PASS；机械architecture lint零发现。八份官方R24-11 PDF及MOD已匹配官方固定身份，本地材料不入库。检查器/目标工具可由既有正常工具链准备，缺失时必须补齐实际检查或如实阻塞相应出口，不能替换ABI／放宽身份。
+
+Epic7发行收尾由其他任务负责，当前不以其整体done为门；唯一具体依赖是本次使用的Workspace／规则／生成／源保护正常行为，实际失败才阻塞消费者。R11只核对endpoint、应用类型与network/channel mapping接缝，未创建运行实现；R10硬件／硬实时及认证另验。
+
+本结论为规划进入许可，不是实现／行为／标准符合性通过。用户授权阶段提交、推送及创建PR，未授权merge。实际实现、审查、命令、结果、剩余标准／平台缺口记录到对应BMad故事，不增加报告或台账。
+
+实施期进一步核对发现具体配置依赖：无I-PDU group的PDU虽按SWS_Com_00840启动，但Rx deadline monitoring按SWS_Com_00772禁用；网络receiver正数aliveTimeout需要真实COM→RTE timeout回调闭包（SWS_Rte_08061／08062／08103／08104）。2026-10-09用户已选择最小Rx group与标准DM／COM→RTE回调闭环，保留网络超时配置。产品选择已解除；8.1已完成审查验证并交付draft PR #12，26项远端CI通过。8.2按该范围规格化并实施，真实生成／OS／通信／超时及受影响profile c-check通过前不放行8.3–8.5；不将旧host私有计时或本次范围答复当作运行证据。

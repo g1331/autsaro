@@ -21,6 +21,10 @@ The project tree, frame and signal tables, and property inspector share one work
 
 <a href="docs/images/workbench-configuration.png"><img src="docs/images/workbench-configuration.png" width="980" alt="CAN configuration workspace: project tree on the left, frame and signal tables in the center, and property and reference inspectors on the right"></a>
 
+Multi-component applications use the same tree and inspector to edit event periods, component-instance references, and connector batches. Preview application initialization before creating each component's source; subsequent generation snapshots user source without overwriting the live files.
+
+<a href="docs/images/workbench-multi-editing-zh.png"><img src="docs/images/workbench-multi-editing-zh.png" width="980" alt="Multi-component project with a saved timing event, a long object identity, and its period in the property inspector"></a>
+
 <table>
   <tr>
     <td width="50%" valign="top">

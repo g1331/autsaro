@@ -87,12 +87,12 @@ pub(super) fn apply_patches(
 }
 
 #[cfg(not(windows))]
-fn capture_file(original: &Path, captured: &Path) -> std::io::Result<()> {
+pub(super) fn capture_file(original: &Path, captured: &Path) -> std::io::Result<()> {
     fs::rename(original, captured)
 }
 
 #[cfg(windows)]
-fn capture_file(original: &Path, captured: &Path) -> std::io::Result<()> {
+pub(super) fn capture_file(original: &Path, captured: &Path) -> std::io::Result<()> {
     capture_file_with_open(original, captured, || Ok(()))
 }
 
@@ -290,7 +290,7 @@ fn install_staged(
     install_staged_with_publish(file, stage, backup, |from, to| fs::hard_link(from, to))
 }
 
-fn install_staged_with_publish(
+pub(super) fn install_staged_with_publish(
     file: &SourceFile,
     stage: &Path,
     backup: &Path,
@@ -331,7 +331,7 @@ fn install_staged_with_publish(
                 .map_err(|e| format!("{} -> {}: {e}", stage.display(), file.path.display()).into())
         });
     if let Err(error) = result {
-        return Err(match restore_backup(&file.path, backup, None) {
+        return Err(match restore_backup(&file.path, backup, Some(&file.text)) {
             Ok(()) => error,
             Err(rollback) => crate::message::LocalizedText::messages([
                 error,
