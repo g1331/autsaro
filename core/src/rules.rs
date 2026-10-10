@@ -3,6 +3,21 @@
 
 mod grammar;
 
+pub(crate) fn child_rank(kind: &str, tag: &str) -> usize {
+    grammar::STRUCTURES
+        .iter()
+        .find(|(owner, _)| *owner == kind)
+        .and_then(|(_, order)| {
+            order.split_whitespace().position(|group| {
+                group
+                    .trim_end_matches(['?', '*', '+'])
+                    .split('|')
+                    .any(|child| child == tag)
+            })
+        })
+        .unwrap_or(usize::MAX)
+}
+
 use crate::model::Severity;
 use crate::project_model::{
     ConfigurationDiagnostic, RuleCoverage, RuleSetIdentity, ScopeValidation, ValidationScope,

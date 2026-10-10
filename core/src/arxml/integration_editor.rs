@@ -57,7 +57,19 @@ impl Workspace {
             };
             failure(code, error)
         })?;
-        self.integration_plan(runtime)
+        if self.uses_legacy_validation() {
+            return Err(failure(
+                "VALIDATION_MODE",
+                crate::product_message!("backend.arxml.legacy_resources_required"),
+            ));
+        }
+        // The saved-source check above seals this same in-memory snapshot.
+        // integration_plan would immediately read every source a second time.
+        crate::integration::build_plan_native(
+            &self.integration_source_snapshot()?,
+            &self.catalog,
+            runtime,
+        )
     }
 
     pub fn saved_integration_plan_legacy(
@@ -267,5 +279,45 @@ fn inspection(
             description: None,
             diagnostics,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn saved_native_plan_preserves_source_rejections_before_legacy_mode() {
+        let root =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-component");
+        let files = std::fs::read_dir(root)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect();
+        let mut workspace = Workspace::open(files).unwrap();
+        let runtime = RuntimeCatalog::embedded().unwrap();
+        workspace.saved_integration_plan(&runtime).unwrap();
+        // Exercise the legacy route without requiring an official archive:
+        // these saved-native gates must run before schema/legacy planning.
+        workspace.schema_zip = Some(PathBuf::from("unused-legacy-schema.zip"));
+        assert_eq!(
+            workspace.saved_integration_plan(&runtime).err().unwrap()[0].code,
+            "VALIDATION_MODE"
+        );
+        workspace.files[0].text.push_str("\n<!-- unsaved -->\n");
+        assert_eq!(
+            workspace.saved_integration_plan(&runtime).err().unwrap()[0].code,
+            "SOURCE_DIRTY"
+        );
+        workspace.files[0].text = workspace.files[0].saved.clone();
+        // Change only the expected baseline; real fixture bytes stay untouched.
+        workspace.files[0]
+            .saved
+            .push_str("\n<!-- stale baseline -->\n");
+        workspace.files[0].text = workspace.files[0].saved.clone();
+        assert_eq!(
+            workspace.saved_integration_plan(&runtime).err().unwrap()[0].code,
+            "SOURCE_CHANGED"
+        );
     }
 }

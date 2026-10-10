@@ -2040,7 +2040,26 @@ impl Workspace {
         self.signals = profile.signals;
         self.diagnostic = profile.diagnostic;
         self.issues = profile.issues;
-        self.rebuild_snapshot()
+        self.rebuild_snapshot()?;
+        if self.snapshot.integration_candidate {
+            self.frames.clear();
+            self.signals.clear();
+            self.diagnostic = None;
+            self.issues = self
+                .snapshot
+                .validation
+                .iter()
+                .flat_map(|scope| &scope.diagnostics)
+                .map(|issue| Issue {
+                    severity: issue.severity.clone(),
+                    code: issue.code.clone(),
+                    message: issue.message.clone(),
+                    file: issue.file.clone(),
+                    path: issue.path.clone(),
+                })
+                .collect();
+        }
+        Ok(())
     }
 
     pub(super) fn global_pdu_for(

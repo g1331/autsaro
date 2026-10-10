@@ -236,7 +236,7 @@ export function StructureEditor({
               return (
                 <div className="descriptor-field" key={descriptor.definitionId}>
                   <label htmlFor={`new-field-${creation.changeId}-${descriptor.definitionId}`}>
-                    {descriptor.definitionId.split('/').pop()}{' '}
+                    {descriptor.definitionId.split('#').pop()?.split('/').pop()}{' '}
                     <small>
                       {t('editor.structure.requiredField', {
                         kind: descriptor.kind

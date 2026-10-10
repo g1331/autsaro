@@ -979,18 +979,20 @@ impl Workspace {
             safe_path(&path, false)?;
             application_bytes.insert(input.path.clone(), read_bounded(&path)?);
         }
-        let mut workspace = Self::open(sources)?;
-        workspace.catalog = Arc::new(catalog);
-        workspace.integration_input_root = Some(root.to_owned());
-        workspace.project = Some(ProjectMembership {
+        let input_root = root.to_owned();
+        let membership = ProjectMembership {
             path,
             manifest,
             saved: saved.clone(),
             current: saved,
             application_bytes,
             extension_diagnostics: diagnostics,
-        });
-        workspace.refresh()?;
+        };
+        let workspace = super::load_sources_with(sources, None, |workspace| {
+            workspace.catalog = Arc::new(catalog);
+            workspace.integration_input_root = Some(input_root);
+            workspace.project = Some(membership);
+        })?;
         // The hint never authorizes application slots: actual source semantics determine the profile.
         if !workspace
             .project

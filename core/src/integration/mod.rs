@@ -713,3 +713,12 @@ fn read_archive(
     }
     Ok(bytes)
 }
+
+/// Use the same source-derived selection as the trusted plan, even when generation is unsupported.
+pub(crate) fn is_multi_source(
+    sources: &[InputSource],
+    catalog: &crate::definitions::DefinitionCatalog,
+) -> bool {
+    graph::Graph::from_catalog_target_scope(sources, catalog)
+        .is_ok_and(|graph| multi::selected(&graph))
+}

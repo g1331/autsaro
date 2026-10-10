@@ -70,7 +70,7 @@ def main() -> int:
     desktop.add_argument(
         "--builtin-only",
         action="store_true",
-        help="Independent installed configuration acceptance without archives or tools",
+        help="Independent native configuration acceptance without archives or tools",
     )
     quality = commands.add_parser(
         "quality", help="Check source hygiene and incremental formatting"
@@ -155,8 +155,6 @@ def main() -> int:
     if args.command == "desktop":
         from autosar_tooling.acceptance.desktop import run
 
-        if args.builtin_only and not args.installed:
-            parser.error("--builtin-only requires --installed")
         return run(
             args.platform,
             args.binary,

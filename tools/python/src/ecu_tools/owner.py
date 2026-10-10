@@ -387,6 +387,8 @@ class Registry:
             raise OwnershipError("invalid owner capability")
         op = request.get("op")
         with self.lock:
+            if op == "ready":
+                return {"op": "ready"}
             if op == "reserve":
                 return self._reserve(request)
             if op == "shutdown":
@@ -550,8 +552,19 @@ class Owner:
             end = time.monotonic() + 30
             while time.monotonic() < end:
                 if path.is_socket():
-                    handles.pop_all()
-                    return owner
+                    try:
+                        if owner.request("ready", request_deadline=end) != {"op": "ready"}:
+                            raise OwnershipError("supervisor_failed: invalid readiness response")
+                    except OwnershipError as error:
+                        # bind() publishes the socket before listen(). Only this
+                        # pre-registration startup race may be retried.
+                        if not isinstance(error.__cause__, ConnectionRefusedError):
+                            process.kill()
+                            process.wait()
+                            raise
+                    else:
+                        handles.pop_all()
+                        return owner
                 if process.poll() is not None:
                     raise OwnershipError(
                         f"supervisor_failed: {directory / 'supervisor.log'}"
@@ -581,17 +594,29 @@ class Owner:
         for pgid in self.groups.values():
             _signal_group(pgid, signal.SIGKILL)
 
-    def request(self, op: str, **fields: Any) -> dict[str, Any]:
+    def request(
+        self, op: str, *, request_deadline: float | None = None, **fields: Any
+    ) -> dict[str, Any]:
+        def remaining_timeout() -> float:
+            if request_deadline is None:
+                return 30
+            remaining = request_deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("supervisor request deadline expired")
+            return remaining
+
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
-                connection.settimeout(30)
+                connection.settimeout(remaining_timeout())
                 connection.connect(str(self.socket_path))
+                connection.settimeout(remaining_timeout())
                 connection.sendall(
                     json.dumps({"token": self.token, "op": op, **fields}).encode()
                     + b"\n"
                 )
                 data = bytearray()
                 while not data.endswith(b"\n"):
+                    connection.settimeout(remaining_timeout())
                     fragment = connection.recv(65536)
                     if not fragment:
                         raise OwnershipError("supervisor socket closed")

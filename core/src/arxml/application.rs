@@ -219,9 +219,16 @@ impl Workspace {
         })?;
         let runtime =
             crate::integration::RuntimeCatalog::embedded().map_err(super::integration_errors)?;
-        let plan = self
-            .saved_integration_plan(&runtime)
-            .map_err(super::integration_errors)?;
+        // This immutable preview already checked clean saved sources above.
+        // Keep that error precedence without sealing the same files again.
+        let plan = crate::integration::build_plan_native(
+            &self
+                .integration_source_snapshot()
+                .map_err(super::integration_errors)?,
+            &self.catalog,
+            &runtime,
+        )
+        .map_err(super::integration_errors)?;
         let slots = plan
             .application_slot_descriptors()
             .map_err(super::integration_errors)?;

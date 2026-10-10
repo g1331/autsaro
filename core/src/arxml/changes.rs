@@ -155,6 +155,82 @@ pub(super) fn group_insert(
     Ok(())
 }
 
+fn standard_insert(
+    text: &str,
+    owner: std::ops::Range<usize>,
+    element: &str,
+    xml: &str,
+    patches: &mut Vec<Patch>,
+) -> Result<(), crate::message::LocalizedText> {
+    let document = Document::parse(text).map_err(|error| error.to_string())?;
+    let node = document
+        .descendants()
+        .find(|node| node.is_element() && node.range() == owner)
+        .ok_or_else(|| crate::product_message!("backend.arxml.changes.insertion_owner_missing"))?;
+    if let Some((group, tag)) = element.split_once('/') {
+        if let Some(child) = node
+            .children()
+            .find(|child| child.is_element() && child.tag_name().name() == group)
+        {
+            return standard_insert(text, child.range(), tag, xml, patches);
+        }
+        let wrapped = element
+            .rsplit('/')
+            .skip(1)
+            .fold(xml.to_owned(), |value, wrapper| {
+                format!("<{wrapper}>{value}</{wrapper}>")
+            });
+        return standard_insert(text, owner, group, &wrapped, patches);
+    }
+    let original = &text[owner.clone()];
+    if original.trim_end().ends_with("/>") {
+        let name = original[1..]
+            .split(|ch: char| ch.is_whitespace() || ch == '/' || ch == '>')
+            .next()
+            .ok_or_else(|| {
+                crate::product_message!("backend.arxml.changes.group_tag_name_missing")
+            })?;
+        let prefix = if node.lookup_namespace_uri(None) == Some(NS) {
+            None
+        } else {
+            node.lookup_prefix(NS)
+        };
+        patches.push(Patch {
+            range: owner,
+            value: format!(
+                "{}>{}</{name}>",
+                &original[..original.rfind("/>").unwrap()],
+                qualify_fragment(xml, prefix)
+            ),
+        });
+        return Ok(());
+    }
+    let offset = node
+        .children()
+        .filter(|child| child.is_element())
+        .find(|child| {
+            crate::definitions::standard::rank(node.tag_name().name(), child.tag_name().name())
+                > crate::definitions::standard::rank(node.tag_name().name(), element)
+        })
+        .map(|child| child.range().start)
+        .unwrap_or(
+            owner.start
+                + text[owner.clone()].rfind("</").ok_or_else(|| {
+                    crate::product_message!("backend.arxml.changes.object_closing_tag_missing")
+                })?,
+        );
+    let prefix = if node.lookup_namespace_uri(None) == Some(NS) {
+        None
+    } else {
+        node.lookup_prefix(NS)
+    };
+    patches.push(Patch {
+        range: offset..offset,
+        value: qualify_fragment(xml, prefix).into_owned(),
+    });
+    Ok(())
+}
+
 fn qualify_fragment<'a>(xml: &'a str, prefix: Option<&str>) -> std::borrow::Cow<'a, str> {
     let Some(prefix) = prefix else {
         return std::borrow::Cow::Borrowed(xml);
@@ -735,8 +811,151 @@ impl Workspace {
                     ])
                 })?;
         }
+        candidate.workspace.check_standard_edit(self)?;
         candidate.workspace.check_configuration_transition(self)?;
         Ok(candidate)
+    }
+
+    fn check_standard_edit(&self, before: &Workspace) -> Result<(), crate::message::LocalizedText> {
+        // A connector endpoint is the pair (instance, type port), never two independent paths.
+        let endpoint_state = |workspace: &Workspace, endpoint: Node<'_, '_>, port_tag: &str| {
+            let instance = child_text(endpoint, "CONTEXT-COMPONENT-REF").unwrap_or_default();
+            let port = child_text(endpoint, port_tag).unwrap_or_default();
+            let instance_object = workspace
+                .snapshot
+                .paths
+                .get(&instance)
+                .filter(|indices| indices.len() == 1)
+                .map(|indices| &workspace.snapshot.objects[indices[0]]);
+            let type_path = instance_object
+                .and_then(|instance| {
+                    workspace.snapshot.fields.iter().find(|field| {
+                        field.view.object_id == instance.view.object_id
+                            && field.element == "TYPE-TREF"
+                    })
+                })
+                .and_then(|field| match &field.view.reference {
+                    Some(ReferenceState::Explicit {
+                        raw_path,
+                        target: Some(_),
+                        ..
+                    }) => Some(raw_path.clone()),
+                    _ => None,
+                });
+            let valid_port = workspace
+                .snapshot
+                .paths
+                .get(&port)
+                .filter(|indices| indices.len() == 1)
+                .is_some_and(|indices| {
+                    let target = &workspace.snapshot.objects[indices[0]].view;
+                    target.kind
+                        == if port_tag == "TARGET-P-PORT-REF" {
+                            "P-PORT-PROTOTYPE"
+                        } else {
+                            "R-PORT-PROTOTYPE"
+                        }
+                        && port.rsplit_once('/').map(|(owner, _)| owner) == type_path.as_deref()
+                });
+            (instance, port, type_path, valid_port)
+        };
+        for source in &self.files {
+            let document = Document::parse(&source.text).map_err(|error| error.to_string())?;
+            let prior = before
+                .files
+                .iter()
+                .find(|file| file.path == source.path)
+                .map(|file| Document::parse(&file.text))
+                .transpose()
+                .map_err(|error| error.to_string())?;
+            for connector in document.descendants().filter(|node| {
+                node.is_element() && node.tag_name().name() == "ASSEMBLY-SW-CONNECTOR"
+            }) {
+                for (iref, port_tag) in [
+                    ("PROVIDER-IREF", "TARGET-P-PORT-REF"),
+                    ("REQUESTER-IREF", "TARGET-R-PORT-REF"),
+                ] {
+                    let Some(endpoint) = connector
+                        .children()
+                        .find(|node| node.is_element() && node.tag_name().name() == iref)
+                    else {
+                        continue;
+                    };
+                    let state = endpoint_state(self, endpoint, port_tag);
+                    if state.3 {
+                        continue;
+                    }
+                    // Existing target-generation faults do not block unrelated safe edits.
+                    // An invalid endpoint may remain only when its paths and resolved type
+                    // are unchanged; new or edited invalid pairs must still be rejected.
+                    let unchanged_invalid = prior
+                        .as_ref()
+                        .and_then(|document| {
+                            document.descendants().find(|node| {
+                                node.is_element()
+                                    && node.tag_name().name() == "ASSEMBLY-SW-CONNECTOR"
+                                    && path_of(*node) == path_of(connector)
+                            })
+                        })
+                        .and_then(|connector| {
+                            connector
+                                .children()
+                                .find(|node| node.is_element() && node.tag_name().name() == iref)
+                        })
+                        .is_some_and(|endpoint| {
+                            endpoint_state(before, endpoint, port_tag) == state
+                        });
+                    if !unchanged_invalid {
+                        return Err(
+                            crate::product_message!("backend.arxml.changes.instance_port_pair_invalid", "path" => path_of(connector)),
+                        );
+                    }
+                }
+            }
+        }
+        if before
+            .project
+            .as_ref()
+            .is_some_and(|project| !project.manifest.application_inputs.is_empty())
+        {
+            let identities = |workspace: &Workspace| {
+                workspace
+                    .snapshot
+                    .objects
+                    .iter()
+                    .filter(|object| {
+                        matches!(
+                            object.view.kind.as_str(),
+                            "APPLICATION-SW-COMPONENT-TYPE"
+                                | "SW-COMPONENT-PROTOTYPE"
+                                | "RUNNABLE-ENTITY"
+                        )
+                    })
+                    .map(|object| {
+                        (
+                            object.view.path.clone(),
+                            object.view.kind.clone(),
+                            workspace
+                                .snapshot
+                                .fields
+                                .iter()
+                                .filter(|field| {
+                                    field.view.object_id == object.view.object_id
+                                        && matches!(field.element.as_str(), "TYPE-TREF" | "SYMBOL")
+                                })
+                                .map(|field| serde_json::to_string(&field.view).unwrap())
+                                .collect::<Vec<_>>(),
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            };
+            if identities(self) != identities(before) {
+                return Err(crate::product_message!(
+                    "backend.arxml.changes.initialized_identity_change"
+                ));
+            }
+        }
+        Ok(())
     }
 
     pub(super) fn check_configuration_transition(
@@ -895,8 +1114,12 @@ impl Candidate {
                 "backend.arxml.changes.instance_creation_not_permitted"
             ));
         }
+        let standard = !definition_id.starts_with('/');
         let module = descriptor.element_kind == "ECUC-MODULE-DEF";
-        let allowed = if module {
+        let allowed = if standard {
+            crate::definitions::standard::parent_kind(definition_id)
+                == Some(parent.view.kind.as_str())
+        } else if module {
             parent.view.kind == "AR-PACKAGE"
         } else {
             parent.view.definition_id.as_deref().is_some_and(|id| {
@@ -923,7 +1146,15 @@ impl Candidate {
                 "backend.arxml.changes.instance_path_or_sibling_exists"
             ));
         }
-        let (kind, group, category) = if module {
+        let (kind, group, category) = if standard {
+            (
+                definition_id,
+                crate::definitions::standard::child_group(definition_id).ok_or_else(|| {
+                    crate::product_message!("backend.arxml.changes.instance_creation_not_permitted")
+                })?,
+                "",
+            )
+        } else if module {
             (
                 "ECUC-MODULE-CONFIGURATION-VALUES",
                 "ELEMENTS",
@@ -934,20 +1165,50 @@ impl Candidate {
         } else {
             ("ECUC-CONTAINER-VALUE", "SUB-CONTAINERS", "")
         };
-        let xml = format!(
-            "<{kind}><SHORT-NAME>{}</SHORT-NAME><DEFINITION-REF DEST=\"{}\">{}</DEFINITION-REF>{category}</{kind}>",
-            escape(short_name)?,
-            descriptor.element_kind,
-            escape(definition_id)?
-        );
+        let xml = if standard {
+            format!(
+                "<{kind}><SHORT-NAME>{}</SHORT-NAME></{kind}>",
+                escape(short_name)?
+            )
+        } else {
+            format!(
+                "<{kind}><SHORT-NAME>{}</SHORT-NAME><DEFINITION-REF DEST=\"{}\">{}</DEFINITION-REF>{category}</{kind}>",
+                escape(short_name)?,
+                descriptor.element_kind,
+                escape(definition_id)?
+            )
+        };
         let mut patches = Vec::new();
-        group_insert(
-            &self.workspace.files[parent.source].text,
-            parent.range.clone(),
-            group,
-            &xml,
-            &mut patches,
-        )?;
+        if standard {
+            let text = &self.workspace.files[parent.source].text;
+            let document = Document::parse(text).map_err(|error| error.to_string())?;
+            let group_node = document
+                .descendants()
+                .find(|node| node.is_element() && node.range() == parent.range)
+                .and_then(|node| {
+                    node.children()
+                        .find(|child| child.is_element() && child.tag_name().name() == group)
+                });
+            if let Some(node) = group_node {
+                standard_insert(text, node.range(), kind, &xml, &mut patches)?;
+            } else {
+                standard_insert(
+                    text,
+                    parent.range.clone(),
+                    group,
+                    &format!("<{group}>{xml}</{group}>"),
+                    &mut patches,
+                )?;
+            }
+        } else {
+            group_insert(
+                &self.workspace.files[parent.source].text,
+                parent.range.clone(),
+                group,
+                &xml,
+                &mut patches,
+            )?;
+        }
         self.impacts.push(impact(
             change,
             &self.workspace,
@@ -1136,7 +1397,7 @@ impl Candidate {
             } => {
                 let id = object_id(reference, created)?;
                 let owner = object(&self.workspace, &id)?;
-                if !owner.view.writable {
+                if !owner.view.writable && !matches!(reference, ObjectRef::Created { .. }) {
                     return Err(crate::product_message!(
                         "backend.arxml.changes.new_field_owner_read_only"
                     ));
@@ -1180,14 +1441,18 @@ impl Candidate {
                     view: FieldDescriptor {
                         field_id: String::new(),
                         object_id: id,
-                        definition: descriptor,
+                        definition: descriptor.clone(),
                         current: ValueState::Absent,
                         reference: (kind == ValueKind::Reference).then_some(ReferenceState::Absent),
                     },
                     source: owner.source,
                     entry_range: None,
                     value_range: None,
-                    element: super::projection::field_element(kind).into(),
+                    element: if definition_id.starts_with('/') {
+                        super::projection::field_element(kind).into()
+                    } else {
+                        descriptor.element_kind.clone()
+                    },
                     ordinal,
                 })
             }
@@ -1239,21 +1504,36 @@ impl Candidate {
                 if field.entry_range.is_some() {
                     patches.push(value_patch(&self.workspace, &field, &value.lexeme)?);
                 } else {
-                    let xml = format!(
-                        "<{}><DEFINITION-REF DEST=\"{}\">{}</DEFINITION-REF><VALUE>{}</VALUE></{}>",
-                        field.element,
-                        field.view.definition.element_kind,
-                        escape(&field.view.definition.definition_id)?,
-                        escape(&value.lexeme)?,
-                        field.element
-                    );
-                    group_insert(
-                        &self.workspace.files[owner.source].text,
-                        owner.range.clone(),
-                        "PARAMETER-VALUES",
-                        &xml,
-                        &mut patches,
-                    )?;
+                    if !field.view.definition.definition_id.starts_with('/') {
+                        standard_insert(
+                            &self.workspace.files[owner.source].text,
+                            owner.range.clone(),
+                            &field.element,
+                            &format!(
+                                "<{}>{}</{}>",
+                                field.element,
+                                escape(&value.lexeme)?,
+                                field.element
+                            ),
+                            &mut patches,
+                        )?;
+                    } else {
+                        let xml = format!(
+                            "<{}><DEFINITION-REF DEST=\"{}\">{}</DEFINITION-REF><VALUE>{}</VALUE></{}>",
+                            field.element,
+                            field.view.definition.element_kind,
+                            escape(&field.view.definition.definition_id)?,
+                            escape(&value.lexeme)?,
+                            field.element
+                        );
+                        group_insert(
+                            &self.workspace.files[owner.source].text,
+                            owner.range.clone(),
+                            "PARAMETER-VALUES",
+                            &xml,
+                            &mut patches,
+                        )?;
+                    }
                 }
             }
         }
@@ -1352,12 +1632,17 @@ impl Candidate {
                         .ok_or_else(|| {
                             crate::product_message!("backend.arxml.changes.reference_entry_missing")
                         })?;
-                    let leaf = node
-                        .children()
-                        .find(|node| node.is_element() && node.tag_name().name() == "VALUE-REF")
-                        .ok_or_else(|| {
-                            crate::product_message!("backend.arxml.changes.reference_value_missing")
-                        })?;
+                    let leaf = if field.element == "ECUC-REFERENCE-VALUE" {
+                        node.children()
+                            .find(|node| node.is_element() && node.tag_name().name() == "VALUE-REF")
+                            .ok_or_else(|| {
+                                crate::product_message!(
+                                    "backend.arxml.changes.reference_value_missing"
+                                )
+                            })?
+                    } else {
+                        node
+                    };
                     let value_range = field.value_range.clone().ok_or_else(|| {
                         crate::product_message!(
                             "backend.arxml.changes.mixed_reference_content_read_only"
@@ -1393,6 +1678,19 @@ impl Candidate {
                             value: escape(dest)?,
                         });
                     }
+                } else if !field.view.definition.definition_id.starts_with('/') {
+                    let tag = field.element.rsplit('/').next().unwrap();
+                    standard_insert(
+                        &self.workspace.files[owner.source].text,
+                        owner.range.clone(),
+                        &field.element,
+                        &format!(
+                            "<{tag} DEST=\"{}\">{}</{tag}>",
+                            escape(dest)?,
+                            escape(raw_path)?
+                        ),
+                        &mut patches,
+                    )?;
                 } else {
                     group_insert(
                         &self.workspace.files[owner.source].text,

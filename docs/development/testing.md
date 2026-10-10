@@ -73,3 +73,7 @@ uv run --locked python -m autosar_tooling desktop --platform windows --binary <�
 Linux 和 macOS 使用对应 platform。`--installed --source-checkout <原构建目录>` 验证解包产物及原 checkout 不可用的接收场景。`--builtin-only` 用于安装包内置配置检查；计数器、受管错误和延迟测试使用 `native-webdriver` 验证构建，普通发行构建不会启用这些能力。Linux 驱动需要 Xvfb、WebKitWebDriver、tauri-driver、xdotool、xclip、xsettingsd 与 dump_xsettings；安装后离线验收还使用普通用户的私有 user/network namespace。平台隔离前置条件不满足时明确失败；不得在用户正在使用的桌面补测。
 
 离线 ECU 包可由 Python 3.11 或更新版本运行自带 `tools/ecu-tool.py`，不需要 uv、Rust、Node 或源 checkout。构建和验证仍检查封存内容与目标工具链。支持版本的 Windows/Linux 实际构建由受控验收验证，未运行的平台或版本不宣称通过。
+
+开发版可通过 `desktop --platform linux --binary <native-webdriver-binary> --builtin-only --output-directory <fresh-private-directory>` 运行同一隔离原生 IPC 场景，应用进程仍不接纳官方档案或开发工具环境。开发入口使用 `http://127.0.0.1:1420`，结果明确记录 `installed=false`；这不提供安装包、无 checkout 或网络 namespace 验收证据。安装模式继续使用 `--installed` 及不可用的绝对 `--source-checkout`，保留封装 URL、普通用户进程和离线隔离要求。
+
+builtin-only 的后续受管执行场景需要外层命令通过 `AUTOSAR_CC`、`AUTOSAR_OBJDUMP`、`AUTOSAR_GIT`、`AUTOSAR_PYTHON` 声明受控目标工具链、Git 与受支持 Python 的绝对路径。配置场景仍剥除这些应用环境变量，随后通过真实“执行工具”设置填写已声明路径；未声明不能算完整场景通过。

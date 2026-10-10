@@ -30,6 +30,12 @@
 
 官方入口均为 `https://www.autosar.org/fileadmin/standards/R24-11/CP/<上述文件名>`。ECUC原件 `AUTOSAR_CP_MOD_ECUConfigurationParameters.zip` 已取得；身份必须匹配仓库official.json固定df1e3bc992e49de6e14e5c1a679d7ce7ca90d2450d66186cea0b4a0f1f6555fb。RteSwComponentInstance／RteEventToTaskMapping、OsTask／OsEvent／OsAlarm和所用Com关系按实际定义核对；研发oracle缺失不改变普通用户的内置规则入口。
 
+## 8.4 跨源 package 编辑契约
+
+2026-10-10 核对 R24-11 [Modeling Show Cases Report 表 A.2](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_TR_ModelingShowCases.pdf) 及 [RTE 附录 D 的 ARPackage 元类](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_RTE.pdf)：ARPackage 是开放集合，多个文件可以分别描述同一 package 的内容。因此不能把跨源同路径 package fragment 一概当作非法重复对象并设为只读。8.4 在全部对象均为 AR-PACKAGE、每个 fragment 属于不同源且原有语义安全检查通过时，允许按明确的 source／object 身份在指定文件创建子项；不合并或改写其他源。路径有歧义的包重命名／删除继续拒绝，同源重复及重复非 package 对象继续只读，未知结构及 variation 的保护不放宽。
+
+独立验收使用两个合法同名 package 源，通过公开 API 在指定 fragment 新增真实 SWC、保存及重开，并比较另一源的原始字节；同时检查 source mismatch、歧义重命名／删除和重复非 package 的拒绝。旧原生 extension 场景同样保留跨源 package，不通过改成唯一 package 绕过回归。此补充引用原文语义；新引用的 Modeling Show Cases 文件未加入上方二十一份已匹配 SHA-256 的文件身份声明。
+
 ## 当前代码与必须闭合的差距
 
 - component.rs 将应用绑定到一个instance／两个uint32端口／一个DID，communication.rs只识别该组件；这阻止合法纯本地SWC。新增配置计划需按实际endpoint校验assembly与ECU归属，不能接受第二实例后仍生成一份状态。

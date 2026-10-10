@@ -46,7 +46,14 @@ pub(crate) async fn verification_owned_failure(
         let tools = operation.snapshot.tools.as_ref().ok_or(autosar_config_core::product_message!("backend.verification.tools_required"))?;
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|error| error.to_string())?.as_nanos();
         let directory = std::env::temp_dir().join(format!("autosar-owned-verification-{}-{stamp}", std::process::id()));
-        std::fs::create_dir(&directory).map_err(|error| error.to_string())?;
+        #[cfg(unix)]
+        let created = {
+            use std::os::unix::fs::DirBuilderExt;
+            std::fs::DirBuilder::new().mode(0o700).create(&directory)
+        };
+        #[cfg(not(unix))]
+        let created = std::fs::create_dir(&directory);
+        created.map_err(|error| error.to_string())?;
         let script = format!(
             "import sys,time\nfor i in range(20000):\n sys.stdout.write('Owned failure detail %06d: '%i+'x'*100+'\\n')\nsys.stdout.flush()\ntime.sleep({delay_ms}/1000)\nsys.stderr.write('Deliberate native acceptance failure\\n')\nsys.exit(23)\n"
         );

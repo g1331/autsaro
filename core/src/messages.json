@@ -1304,7 +1304,9 @@
     "backend.workbench.xsd_required": "请配置合法的 R24-11 XSD 档案",
     "backend.integration.multi.contract_invalid": "多组件契约不满足约束：{{code}}。",
     "backend.integration.multi.repair_contract": "修复所定位对象的类型、连接、归属或调度关系。",
-    "backend.integration.multi.consumer_unsupported": "该操作尚不支持多组件配置；可先生成组件契约。"
+    "backend.integration.multi.consumer_unsupported": "该操作尚不支持多组件配置；可先生成组件契约。",
+    "backend.arxml.changes.instance_port_pair_invalid": "实例与类型端口引用不匹配：{{path}}。请在同一批次中配对修改。",
+    "backend.arxml.changes.initialized_identity_change": "工程已初始化应用源码；此修改会改变成员或入口身份。请保留当前源码并在独立工程中显式迁移。"
   },
   "en": {
     "backend.arxml.application.application_retained_pending_recovery": "New application retained until manifest recovery: {{path}}",
@@ -2611,6 +2613,8 @@
     "backend.workbench.xsd_required": "Configure a valid R24-11 XSD archive",
     "backend.integration.multi.contract_invalid": "Multi-component contract violates constraint: {{code}}.",
     "backend.integration.multi.repair_contract": "Repair the located object's type, connection, ownership or scheduling relationship.",
-    "backend.integration.multi.consumer_unsupported": "This operation does not yet support the multi-component profile; component contracts can be generated."
+    "backend.integration.multi.consumer_unsupported": "This operation does not yet support the multi-component profile; component contracts can be generated.",
+    "backend.arxml.changes.instance_port_pair_invalid": "Instance and type-port references do not match: {{path}}. Change the pair in the same batch.",
+    "backend.arxml.changes.initialized_identity_change": "Application source is initialized. This change would alter member or entry identity. Preserve the source and migrate explicitly in a separate project."
   }
 }

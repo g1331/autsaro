@@ -187,7 +187,7 @@ test.each(['success', 'failure'])(
       view.getByRole('button', { name: translate('shell.settings.saveLanguage') }).disabled,
     ).toBe(true);
     fireEvent.click(close);
-    fireEvent.keyDown(view.getByRole('dialog'), { key: 'Escape' });
+    fireEvent.keyDown(document.body, { key: 'Escape' });
     expect(current.settingsOpen).toBe(true);
     expect(current.savedLanguage).toBe('zh-CN');
     expect(current.languageDraft).toBe('en');
@@ -211,7 +211,8 @@ test.each(['success', 'failure'])(
     expect(view.getByRole('status').textContent).not.toBe('');
     if (outcome === 'failure')
       expect(view.getByRole('status').textContent).toBe(translate('controller.error.name'));
-    fireEvent.click(view.getByRole('button', { name: translate('shell.settings.close') }));
+    // Disabled focused controls may leave native focus on the document body.
+    fireEvent.keyDown(document.body, { key: 'Escape' });
     expect(current.settingsOpen).toBe(false);
     expect(current.languageDraft).toBe(current.savedLanguage);
     expect(i18n.language).toBe(outcome === 'success' ? 'en' : 'zh-CN');

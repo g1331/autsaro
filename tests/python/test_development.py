@@ -195,3 +195,45 @@ class AssetTests(unittest.TestCase):
             self.assertEqual(
                 json.loads((kernel / "source-manifest.json").read_text()), manifest
             )
+
+
+class NativeBuiltinModeTests(unittest.TestCase):
+    def test_development_mode_keeps_application_tool_boundary_and_reports_real_mode(self):
+        from autosar_tooling.acceptance.native_profile import app_environment, prepare
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tool = root / "declared-tool"
+            tool.write_text("test tool")
+            declared = dict.fromkeys(
+                ("AUTOSAR_CC", "AUTOSAR_OBJDUMP", "AUTOSAR_GIT", "AUTOSAR_PYTHON"), str(tool)
+            )
+            with patch.dict(os.environ, {**declared, "AUTOSAR_XSD_ARCHIVE": "/private/xsd", "CARGO_HOME": "/private/cargo"}):
+                prepare(root, "linux", False, None, builtin_only=True)
+                environment = app_environment(root, False, builtin_only=True)
+            scenario = json.loads((root / "scenario.json").read_text())
+            self.assertFalse(scenario["installed"])
+            self.assertEqual(scenario["performanceTools"], dict.fromkeys(("compiler", "objdump", "git", "python"), str(tool)))
+            receipt = json.loads((root / "application-environment.json").read_text())
+            self.assertFalse(receipt["installed"])
+            self.assertTrue(all(value is None for value in receipt["tools"].values()))
+            self.assertNotIn("AUTOSAR_CC", environment)
+            self.assertNotIn("AUTOSAR_XSD_ARCHIVE", environment)
+            self.assertNotIn("CARGO_HOME", environment)
+
+    def test_builtin_consumer_tools_fail_before_preparing_scenarios(self):
+        from autosar_tooling.acceptance.native_builtin import prepare
+
+        for value in (None, "relative-tool", "/missing-native-consumer-tool"):
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                environment = {} if value is None else {"AUTOSAR_CC": value}
+                with patch.dict(os.environ, environment, clear=True), self.assertRaisesRegex(RuntimeError, "AUTOSAR_CC.*existing absolute tool file"):
+                    prepare(root, "linux", None, installed=False)
+                self.assertEqual(list(root.iterdir()), [])
+
+    def test_installed_mode_still_requires_unavailable_checkout(self):
+        from autosar_tooling.acceptance.native_profile import prepare
+
+        with tempfile.TemporaryDirectory() as directory, self.assertRaisesRegex(RuntimeError, "unavailable build checkout"):
+            prepare(Path(directory), "linux", True, None, builtin_only=True)

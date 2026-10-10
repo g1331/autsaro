@@ -111,10 +111,43 @@ fn unsafe_object(node: Node<'_, '_>) -> bool {
         })
         || node.descendants().any(|child| {
             child.is_element()
-                && (matches!(
-                    child.tag_name().name(),
-                    "VARIATION-POINT" | "ECUC-INSTANCE-REFERENCE-VALUE"
-                ) || child.tag_name().name().ends_with("-IREF"))
+                && (matches!(child.tag_name().name(), "VARIATION-POINT")
+                    || (child.tag_name().name() == "ECUC-INSTANCE-REFERENCE-VALUE"
+                        && !child
+                            .children()
+                            .find(|node| {
+                                node.is_element() && node.tag_name().name() == "VALUE-IREF"
+                            })
+                            .is_some_and(supported_iref))
+                    || (child.tag_name().name().ends_with("-IREF") && !supported_iref(child)))
+        })
+}
+
+fn supported_iref(node: Node<'_, '_>) -> bool {
+    let fields: &[&str] = match node.tag_name().name() {
+        "PROVIDER-IREF" if node.parent_element().is_some_and(|parent| parent.tag_name().name() == "ASSEMBLY-SW-CONNECTOR") => &["CONTEXT-COMPONENT-REF", "TARGET-P-PORT-REF"],
+        "REQUESTER-IREF" if node.parent_element().is_some_and(|parent| parent.tag_name().name() == "ASSEMBLY-SW-CONNECTOR") => &["CONTEXT-COMPONENT-REF", "TARGET-R-PORT-REF"],
+        "OPERATION-IREF"
+            if node
+                .parent_element()
+                .is_some_and(|parent| parent.tag_name().name() == "OPERATION-INVOKED-EVENT") =>
+        {
+            &["CONTEXT-P-PORT-REF", "TARGET-PROVIDED-OPERATION-REF"]
+        }
+        "OPERATION-IREF" if node.parent_element().is_some_and(|parent| parent.tag_name().name() == "SYNCHRONOUS-SERVER-CALL-POINT") => &["CONTEXT-R-PORT-REF", "TARGET-REQUIRED-OPERATION-REF"],
+        "AUTOSAR-VARIABLE-IREF" => &["PORT-PROTOTYPE-REF", "TARGET-DATA-PROTOTYPE-REF"],
+        "VALUE-IREF" if node.parent_element().is_some_and(|parent| definition(parent).as_deref() == Some("/AUTOSAR/EcucDefs/EcuC/EcucPartitionCollection/EcucPartition/EcucPartitionSoftwareComponentInstanceRef")) => &["CONTEXT-ELEMENT-REF", "TARGET-REF"],
+        "COMPONENT-IREF" if node.parent_element().is_some_and(|parent| parent.tag_name().name() == "COMPONENT-IREFS") => &["CONTEXT-COMPOSITION-REF", "TARGET-COMPONENT-REF"],
+        "DATA-ELEMENT-IREF" if node.parent_element().is_some_and(|parent| parent.tag_name().name() == "SENDER-RECEIVER-TO-SIGNAL-MAPPING") => &["CONTEXT-COMPONENT-REF", "CONTEXT-COMPOSITION-REF", "CONTEXT-PORT-REF", "TARGET-DATA-PROTOTYPE-REF"],
+        _ => return false,
+    };
+    let children: Vec<_> = node.children().filter(|child| child.is_element()).collect();
+    children.len() == fields.len()
+        && children.iter().zip(fields).all(|(child, tag)| {
+            child.tag_name().namespace() == Some(NS)
+                && child.tag_name().name() == *tag
+                && child.attribute("DEST").is_some()
+                && simple_text_range(*child).is_ok()
         })
 }
 
@@ -183,7 +216,9 @@ fn creation_reference_options(
                 .definitions()
                 .filter(|definition| definition.writable && definition.kind.is_none())
                 .filter_map(|definition| {
-                    let dest = if definition.element_kind == "ECUC-MODULE-DEF" {
+                    let dest = if !definition.definition_id.starts_with('/') {
+                        definition.element_kind.as_str()
+                    } else if definition.element_kind == "ECUC-MODULE-DEF" {
                         "ECUC-MODULE-CONFIGURATION-VALUES"
                     } else {
                         "ECUC-CONTAINER-VALUE"
@@ -327,7 +362,8 @@ impl Workspace {
                     .children()
                     .find(|child| child.is_element() && child.tag_name().name() == "SHORT-NAME")
                     .unwrap();
-                let definition_id = definition(node);
+                let definition_id =
+                    definition(node).or_else(|| self.catalog.get(&kind).map(|_| kind.clone()));
                 let descriptor = definition_id.as_deref().and_then(|id| self.catalog.get(id));
                 let unsupported_edition = node
                     .ancestors()
@@ -427,14 +463,19 @@ impl Workspace {
                                 )
                             )
                     });
-                let is_reference = (element.ends_with("-REF")
+                let is_reference = ((element.ends_with("-REF") || element.ends_with("-TREF"))
                     && !matches!(element, "DEFINITION-REF" | "VALUE-REF"))
                     || product_reference;
-                let is_scalar = !matches!(
-                    element,
-                    "SHORT-NAME" | "DEFINITION-REF" | "VALUE" | "VALUE-REF"
-                ) && node.text().is_some()
+                let is_scalar = !matches!(element, "SHORT-NAME" | "DEFINITION-REF" | "VALUE-REF")
+                    && node.text().is_some()
                     && !node.children().any(|child| child.is_element());
+                if element == "VALUE"
+                    && node
+                        .parent_element()
+                        .is_some_and(|parent| parent.tag_name().name().starts_with("ECUC-"))
+                {
+                    continue;
+                }
                 if !is_parameter && !is_reference && !is_scalar {
                     continue;
                 }
@@ -450,8 +491,15 @@ impl Workspace {
                     definition(node).unwrap_or_default()
                 } else {
                     format!(
-                        "{}#{element}{}",
+                        "{}#{}{element}{}",
                         object.view.kind,
+                        if object.view.kind == "ASSEMBLY-SW-CONNECTOR" {
+                            node.parent_element()
+                                .map(|parent| format!("{}/", parent.tag_name().name()))
+                                .unwrap_or_default()
+                        } else {
+                            String::new()
+                        },
                         node.attribute("GID").unwrap_or("")
                     )
                 };
@@ -559,6 +607,40 @@ impl Workspace {
                 });
             }
         }
+        // ARPackage is an open set: different sources may own fragments of one
+        // package. Explicit source/object identity makes child creation local;
+        // rename/remove still reject an ambiguous package path independently.
+        // Duplicate element identities remain unsafe for edits and references.
+        for indices in snapshot.paths.values().filter(|indices| indices.len() != 1) {
+            let split_package = indices
+                .iter()
+                .all(|index| snapshot.objects[*index].view.kind == "AR-PACKAGE")
+                && indices
+                    .iter()
+                    .map(|index| snapshot.objects[*index].source)
+                    .collect::<BTreeSet<_>>()
+                    .len()
+                    == indices.len();
+            if split_package {
+                continue;
+            }
+            for index in indices {
+                let object = &mut snapshot.objects[*index];
+                object.unsafe_semantics = true;
+                object.view.writable = false;
+                object.view.reason = Some(crate::product_message!(
+                    "backend.arxml.changes.ambiguous_instance_path_cannot_rename"
+                ));
+            }
+        }
+        for field in &mut snapshot.fields {
+            if snapshot.objects[snapshot.object_by_id[&field.view.object_id]].unsafe_semantics {
+                field.view.definition.writable = false;
+                field.view.definition.reason = Some(crate::product_message!(
+                    "backend.arxml.projection.unsafe_field_context"
+                ));
+            }
+        }
         // Descriptors for absent fields carry default provenance without materializing XML.
         let present: BTreeSet<_> = snapshot
             .fields
@@ -589,7 +671,16 @@ impl Workspace {
                     descriptor.writable = false;
                     descriptor.reason = object.view.reason.clone();
                 }
-                let element = field_element(descriptor.kind.unwrap());
+                let element = if definition_id.starts_with('/') {
+                    field_element(descriptor.kind.unwrap())
+                } else if crate::definitions::standard::direct_field(
+                    &object.view.kind,
+                    &descriptor.element_kind,
+                ) {
+                    descriptor.element_kind.as_str()
+                } else {
+                    continue;
+                };
                 let field_id = old_fields
                     .get(&(
                         object.view.object_id.clone(),
@@ -599,6 +690,7 @@ impl Workspace {
                     ))
                     .cloned()
                     .unwrap_or_else(|| allocate("field"));
+                let element = element.to_owned();
                 let reference = (descriptor.kind == Some(ValueKind::Reference))
                     .then_some(ReferenceState::Absent);
                 snapshot
@@ -695,7 +787,12 @@ impl Workspace {
                     remedy: crate::product_message!(
                         "backend.arxml.projection.repair_product_inventory"
                     ),
-                    file: None, path: None, source_id: None, object_id: None, field_id: None, witness: None,
+                    file: None,
+                    path: None,
+                    source_id: None,
+                    object_id: None,
+                    field_id: None,
+                    witness: None,
                 };
                 snapshot.validation = vec![
                     safety,
@@ -745,7 +842,12 @@ impl Workspace {
             }
         }
         snapshot.profile = if snapshot.integration_candidate {
-            crate::integration::PROFILE.into()
+            let sources = self.integration_source_snapshot().unwrap_or_default();
+            if crate::integration::is_multi_source(&sources, &self.catalog) {
+                crate::integration::MULTI_PROFILE.into()
+            } else {
+                crate::integration::PROFILE.into()
+            }
         } else if !self.frames.is_empty()
             || self.files.iter().any(|file| self.is_managed_file(file))
         {
@@ -753,27 +855,53 @@ impl Workspace {
         } else {
             "unrecognized".into()
         };
-        let target_diagnostics = self
-            .issues
-            .iter()
-            .filter(|_| snapshot.profile != crate::integration::PROFILE)
-            .map(|issue| ConfigurationDiagnostic {
-                scope: ValidationScope::TargetGeneration,
-                rule_id: issue.code.clone(),
-                severity: issue.severity.clone(),
-                code: issue.code.clone(),
-                message: issue.message.clone(),
-                remedy: crate::product_message!(
-                    "backend.arxml.projection.resolve_target_input_constraint"
-                ),
-                file: issue.file.clone(),
-                path: issue.path.clone(),
-                source_id: None,
-                object_id: None,
-                field_id: None,
-                witness: None,
-            })
-            .collect::<Vec<_>>();
+        let mut target_diagnostics = Vec::new();
+        for scope in &mut snapshot.validation {
+            let mut retained = Vec::new();
+            for diagnostic in std::mem::take(&mut scope.diagnostics) {
+                if diagnostic.scope == ValidationScope::TargetGeneration {
+                    target_diagnostics.push(diagnostic);
+                } else {
+                    retained.push(diagnostic);
+                }
+            }
+            scope.diagnostics = retained;
+            if scope.scope == ValidationScope::Definition {
+                scope.status = if scope
+                    .diagnostics
+                    .iter()
+                    .any(|issue| matches!(issue.severity, Severity::Error))
+                {
+                    ValidationStatus::Failed
+                } else if scope.coverage.iter().any(|rule| !rule.supported) {
+                    ValidationStatus::Unsupported
+                } else {
+                    ValidationStatus::Passed
+                };
+            }
+        }
+        target_diagnostics.extend(
+            self.issues
+                .iter()
+                .filter(|_| !snapshot.integration_candidate)
+                .map(|issue| ConfigurationDiagnostic {
+                    scope: ValidationScope::TargetGeneration,
+                    rule_id: issue.code.clone(),
+                    severity: issue.severity.clone(),
+                    code: issue.code.clone(),
+                    message: issue.message.clone(),
+                    remedy: crate::product_message!(
+                        "backend.arxml.projection.resolve_target_input_constraint"
+                    ),
+                    file: issue.file.clone(),
+                    path: issue.path.clone(),
+                    source_id: None,
+                    object_id: None,
+                    field_id: None,
+                    witness: None,
+                })
+                .collect::<Vec<_>>(),
+        );
         snapshot.validation.push(ScopeValidation {
             scope: ValidationScope::TargetGeneration,
             status: if snapshot.rule_fault.is_some() {
@@ -853,7 +981,11 @@ impl Workspace {
             let definitions: Vec<_> = if parent.view.kind == "AR-PACKAGE" {
                 self.catalog
                     .definitions()
-                    .filter(|definition| definition.element_kind == "ECUC-MODULE-DEF")
+                    .filter(|definition| {
+                        definition.element_kind == "ECUC-MODULE-DEF"
+                            || crate::definitions::standard::parent_kind(&definition.definition_id)
+                                == Some("AR-PACKAGE")
+                    })
                     .collect()
             } else if let Some(id) = &parent.view.definition_id {
                 self.catalog.children(id)
@@ -868,11 +1000,24 @@ impl Workspace {
                     .get(&definition.definition_id)
                     .expect("Writable instance metadata has a template");
                 let prefix = format!("{}/", definition.definition_id);
-                let recursive_definitions = templates
-                    .range(prefix.clone()..)
-                    .take_while(|(id, _)| id.starts_with(&prefix))
-                    .map(|(_, template)| template.clone())
-                    .collect();
+                let recursive_definitions = if !definition.definition_id.starts_with('/') {
+                    templates
+                        .values()
+                        .filter(|template| {
+                            crate::definitions::standard::descendant(
+                                &template.definition.definition_id,
+                                &definition.definition_id,
+                            )
+                        })
+                        .cloned()
+                        .collect()
+                } else {
+                    templates
+                        .range(prefix.clone()..)
+                        .take_while(|(id, _)| id.starts_with(&prefix))
+                        .map(|(_, template)| template.clone())
+                        .collect()
+                };
                 snapshot
                     .instance_definitions
                     .push(InstanceDefinitionOption {

@@ -21,6 +21,10 @@ Autsaro 支持从内置模板创建 ECU 工程，或导入多份 ARXML；在同�
 
 <a href="docs/images/workbench-configuration.png"><img src="docs/images/workbench-configuration.png" width="980" alt="CAN 配置工作区：左侧工程树、中间帧与信号表、右侧属性和引用检查器"></a>
 
+多组件应用沿同一工程树和检查器编辑事件周期、组件实例引用及连接批次。创建各组件的应用源码前先预览初始化；后续生成读取用户源码形成快照，保留原工程中的源文件字节。
+
+<a href="docs/images/workbench-multi-editing-zh.png"><img src="docs/images/workbench-multi-editing-zh.png" width="980" alt="多组件工程：已保存的定时事件、长对象名称和属性检查器中的周期"></a>
+
 <table>
   <tr>
     <td width="50%" valign="top">

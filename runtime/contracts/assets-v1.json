@@ -1220,7 +1220,7 @@
     },
     {
       "path": "tools/python/src/ecu_tools/owner.py",
-      "sha256": "d95b3c075f7fe124967d04b14785f8dc3160fa1f2056fc14f039a86990278767",
+      "sha256": "6a65beac7d901a9686c69f935d5f9a156c5ae7d98f13692d590e0798f77c7c62",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

@@ -1095,8 +1095,13 @@ fn legacy_constraints(
             issue.code.as_str().into(),
             counterexample.into(),
         );
+        if multi {
+            diagnostic.scope = ValidationScope::TargetGeneration;
+            diagnostic.rule_id = format!("native.target-generation.{}", diagnostic.code);
+        }
         if let Some(witness) = &mut diagnostic.witness {
             witness.subjects = subjects;
+            witness.rule_id = diagnostic.rule_id.clone();
         }
         result.diagnostics.push(diagnostic);
     }

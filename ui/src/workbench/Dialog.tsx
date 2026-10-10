@@ -48,6 +48,9 @@ export function Dialog({
       ).filter((item) => item.getClientRects().length > 0);
     (node?.querySelector<HTMLElement>('[data-initial-focus]') ?? focusable()[0] ?? node)?.focus();
     function trap(event: KeyboardEvent) {
+      // A disabled focused control can leave focus on body in the native view.
+      // The top modal still owns Escape and keeps Tab within its own controls.
+      if (Array.from(document.querySelectorAll('[role="dialog"]')).at(-1) !== node) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
@@ -62,7 +65,13 @@ export function Dialog({
       }
       const first = items[0];
       const last = items[items.length - 1];
-      if (event.shiftKey && (document.activeElement === first || document.activeElement === node)) {
+      if (!node?.contains(document.activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (
+        event.shiftKey &&
+        (document.activeElement === first || document.activeElement === node)
+      ) {
         event.preventDefault();
         last.focus();
       } else if (!event.shiftKey && document.activeElement === last) {
@@ -70,9 +79,9 @@ export function Dialog({
         first.focus();
       }
     }
-    node?.addEventListener('keydown', trap);
+    document.addEventListener('keydown', trap);
     return () => {
-      node?.removeEventListener('keydown', trap);
+      document.removeEventListener('keydown', trap);
       if (opener?.isConnected) opener.focus();
     };
   }, []);

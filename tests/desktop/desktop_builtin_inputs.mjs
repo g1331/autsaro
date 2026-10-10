@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, readdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 
@@ -106,8 +106,8 @@ export async function createBuiltinInputs(scratch) {
   // Missing required siblings intentionally create pre-existing definition
   // witnesses. Repairing independent fields must not turn target failure into a
   // global source-save gate or silently synthesize these missing values.
-  const unknown =
-    '<IMPLEMENTATION-DATA-TYPE><SHORT-NAME>PreservedType</SHORT-NAME><CATEGORY>VALUE</CATEGORY></IMPLEMENTATION-DATA-TYPE>';
+  // Valid R24-11 syntax outside the bounded editable standard vocabulary.
+  const unknown = '<SW-ADDR-METHOD><SHORT-NAME>PreservedType</SHORT-NAME></SW-ADDR-METHOD>';
   const members = {
     'os.arxml': os,
     'com.arxml': com,
@@ -159,15 +159,26 @@ export async function createExtensionInputs(scratch) {
     catalogId: 'acceptance-lab',
     release: 'R24-11',
     version: '1.0.0',
-    files: [{ path: 'lab.arxml', sha256: createHash('sha256').update(xml).digest('hex') }],
+    files: [
+      {
+        path: 'lab.arxml',
+        sha256: createHash('sha256').update(xml).digest('hex'),
+      },
+    ],
   };
   const valid = path.join(base, 'catalog.json');
   await writeFile(valid, JSON.stringify(inventory));
   const variants = {};
   for (const [name, modified] of Object.entries({
     release: { ...inventory, release: 'R23-11' },
-    digest: { ...inventory, files: [{ ...inventory.files[0], sha256: '0'.repeat(64) }] },
-    escape: { ...inventory, files: [{ ...inventory.files[0], path: '../lab.arxml' }] },
+    digest: {
+      ...inventory,
+      files: [{ ...inventory.files[0], sha256: '0'.repeat(64) }],
+    },
+    escape: {
+      ...inventory,
+      files: [{ ...inventory.files[0], path: '../lab.arxml' }],
+    },
   })) {
     const directory = path.join(scratch, `extension-reject-${name}`);
     await mkdir(directory);
@@ -187,7 +198,10 @@ export async function createExtensionInputs(scratch) {
       ...inventory,
       catalogId: 'forbidden-builtin-override',
       files: [
-        { path: 'lab.arxml', sha256: createHash('sha256').update(conflictXml).digest('hex') },
+        {
+          path: 'lab.arxml',
+          sha256: createHash('sha256').update(conflictXml).digest('hex'),
+        },
       ],
     }),
   );
@@ -202,4 +216,31 @@ export async function createExtensionInputs(scratch) {
     },
     payload: path.join(base, 'lab.arxml'),
   };
+}
+
+// Reuse the project's original source fixture, outside the application's tool boundary.
+export async function createMultiComponentInputs(scratch) {
+  const fixture = new URL('../../core/tests/fixtures/multi-component/', import.meta.url);
+  const directory = path.join(scratch, 'projects', 'MultiComponent');
+  await mkdir(directory);
+  const names = (await readdir(fixture)).filter((name) => name.endsWith('.arxml')).sort();
+  for (const name of names)
+    await writeFile(path.join(directory, name), await readFile(new URL(name, fixture)));
+  const manifest = path.join(directory, 'workbench-project.json');
+  await writeFile(
+    manifest,
+    JSON.stringify(
+      {
+        formatVersion: 1,
+        declaredRelease: 'R24-11',
+        profileHint: 'singlecore-multi-swc-v1',
+        inputs: names.map((name) => ({ path: name, roleHint: 'standard' })),
+        applicationInputs: [],
+        acceptedExtensionDefinitions: [],
+      },
+      null,
+      2,
+    ),
+  );
+  return { directory, manifest };
 }

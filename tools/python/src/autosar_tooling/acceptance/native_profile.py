@@ -51,11 +51,9 @@ def prepare(
             encoding="utf-8",
         )
     if builtin_only:
-        if not installed:
-            raise RuntimeError("Builtin-only acceptance requires installed mode")
         from autosar_tooling.acceptance.native_builtin import prepare as prepare_builtin
 
-        prepare_builtin(scratch, platform, source_checkout)
+        prepare_builtin(scratch, platform, source_checkout, installed=installed)
         return
     fixture = ROOT / "core/tests/fixtures/epic4/positive"
     shutil.copytree(fixture, scratch / "inputs")

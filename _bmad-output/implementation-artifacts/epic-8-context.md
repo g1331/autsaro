@@ -46,6 +46,8 @@
 
 8.3／8.5 须共同覆盖源码初始化、manifest 接纳、打开时真实组件契约、准备快照、live→sealed 来源、输出归属、重导入及包内离线接收边界。现有输入数组不授权新槽；全部槽、文件、owner 与 producer 由同一可信计划派生，旧单槽分派精确保留。源码准备仍不得依赖 compiler／官方档案。
 
-8.4 保留已核实的原生 IPC 问题：合法多组件 projection／计划成功时，底栏仍叠加旧 host-can 专用解析 diagnostics，历史单组件标准输入同样受影响。必须按实际 profile 与 projection 统一问题显示及可编辑状态，不能清空全部 diagnostics 或由前端按错误代码猜过滤；覆盖合法输入、真实非法关系和 host-can 回归。此问题尚未修复，不将当前标准输入 UI 宣称为完整编辑体验。
+8.5 后续还需核对接收者说明：`core/src/generator/delivery.rs::append_native_readme` 当前沿用旧单组件契约与 `src/Application.c` 的源码归属说明，不能作为多组件源码路径指南。该故事须按真实组件槽修正说明，并以新目录恢复、重新生成及包内离线构建运行验证全部来源和归属；本次 8.1–8.4 阶段合并不宣称此交接闭包已完成。
 
-复用已交付源、规则、事务和 OS 基础；Epic 7 整体状态不构成门禁，仅相关具体缺陷阻塞受影响工作。共享接口修改统一协调并保留其他任务修改。结果写回 BMad；当前分支 `feat/multi-component-scheduling`，授权覆盖本地修改、验证、阶段提交、推送及创建 PR，未授权 merge。
+8.4 已修复标准工程混入旧 host-can diagnostics 的问题：共享 source projection 决定实际 profile，保留 schema／definition 错误并单独定位目标生成约束；不通过前端过滤或清空 diagnostics 处理。标准字段、实例引用及连接批次沿现有检查器安全编辑，已初始化成员身份变更拒绝以保护用户源码。2026-10-10 完整 core 234 项及后续受影响 builtin72／workbench7 通过，完整开发原生 21 项已实际通过，三层独立审查结束，嵌套引用创建与 SYMBOL 源码身份回归已修复，受影响 workbench8、quality22 和 Clippy 通过；通过范围及历史失败以[8.4 规格](spec-8-4-multi-component-workbench-editing.md)为准，8.4 实施规格 done／sprint review，远端交付按真实 PR 状态核验。
+
+复用已交付源、规则、事务和 OS 基础；Epic 7 整体状态不构成门禁，仅相关具体缺陷阻塞受影响工作。共享接口修改统一协调并保留其他任务修改。结果写回 BMad；当前分支 `feat/multi-component-scheduling`。2026-10-10 用户撤回 8.5 延期安排，本任务继续整个 Epic 8：完成 8.1–8.4 后提交、推送、创建 PR、通过必需 CI 并合并，随后继续 8.5 的独立多组件异地交接闭包和相应审查、验证、PR 合并。全部必需验收完成前 Epic 8 保持进行中，未执行的交接不记作通过。
