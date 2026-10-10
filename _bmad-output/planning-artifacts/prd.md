@@ -188,13 +188,13 @@ FR-1–FR-15 是已确认的产品成果方向，当前文档保持 `draft`，�
 3. **AUTOSAR OS 技术闭合：**实现选择已确定为固定 FreeRTOS＋自有 AUTOSAR OS 语义＋有限单核策略扩展，目标单核 SC1，保持原生 Windows。按 R24-11 [OS 规范](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_OS.pdf)及 OSEK 完整义务建立配置、调度、接口、栈和错误证据；生产版本/补丁/端口组合固定，主机和 MCU 独立取证。Epic4已完成对应实现及逐故事验证，4.22已独立复验全部适用Win64主机SC1行为与工程交接；任意用户工程仍须复验其实际配置。交付：实际 SC1 接口和行为、固定依赖与许可、可独立构建和复验的工程。开发和验证记录按 BMad，不增加矩阵或独立验收报告；普通缺口不重新打开选型。
 4. **首个硬件目标：**用户目前没有开发板。PM 推荐以 NXP [FRDM-A-S32K344](https://www.nxp.com/design/design-center/development-boards-and-designs/FRDM-A-S32K344) 为首个评估候选：官方列出板载 CAN FD、S32 Design Studio 和可用于 AUTOSAR/非 AUTOSAR 的 RTD；[NXP 指南](https://www.nxp.com/document/guide/s32k344-evb-quick-start-guides%3AGS-S32K344-WB)列出 S32K344 的 Can RTD 示例。购买或绑定为产品目标前，须实际核对可取得的 RTD/FreeRTOS/工具链版本及许可、CAN 收发器/存储/唤醒路径和真实对端。[NXP 的公开技术答复](https://community.nxp.com/t5/S32K/S32K356-RTD%E9%80%89%E6%8B%A9/m-p/2402912/highlight/true)将可见的 RTD 6.0.0 对应 R21-11、7.0.1 对应 R23-11；尚无由此可推定的 R24-11 ECUC 或接口兼容性。退出物：固定版本、合法来源、构建和对端路径的目标档案；评估不通过则重新选板。
 
-当前声明仅限 CP/FO R24-11、Windows 虚拟 ECU、本地 GCC 和各具体功能所声明的有界配置。旧目标`Os_Advance`是主机虚拟时间调度；Epic4新目标独立交付固定FreeRTOS、汽车OS语义和真实栈适配，完整主机等级依据4.22实际复验。真实 MCU、第三方互操作、完整 MISRA、功能安全、官方一致性及公开发布不包含在本阶段的通过声明内。
+当前声明仅限 CP/FO R24-11、本地 GCC 与各功能已验证的有界主机配置；Windows／Linux 的生成、运行、原生工作台及分析证据按对应故事分别核定，不跨平台继承。旧目标`Os_Advance`是主机虚拟时间调度；Epic4新目标独立交付固定FreeRTOS、汽车OS语义和真实栈适配，完整主机等级依据4.22实际复验。真实 MCU、第三方互操作、完整 MISRA、功能安全、官方一致性及公开发布不包含在本阶段的通过声明内。
 
 ## 长期路线与规划管理
 
 长期能力范围、依赖、退出标准与待决问题见[产品简述的 R5–R29 候选目录](product-brief.md#长期候选路线)，本文不复制另一份完整路线。顺序以用户成果和真实依赖调整：安全、存储、时间或生命周期的必要子集可以提前纳入消费者，不机械等待候选编号。
 
-R5 的 CFG-1–CFG-4 已在本次选定范围收口；共同应用接缝进入增量架构，正式故事和就绪结论见对应 BMad 工件。全局 PRD 保持 draft，原因是 R6／R7 及远期目标的支持配置和验收仍待细化，不表示 R5 必须等待全部路线定案。准备实施的范围先通过 BMad 就绪检查，再进入 sprint；远期不生成占位 Story、不估算未确定范围或承诺日期。Epic 完成后据真实结果复盘并修订剩余计划；重要产品成果或契约变化须分析影响并按需使用 Correct Course。已完成历史和稳定需求 ID 不重写，规范版次、主机／实机及发布权利分别判断。
+R5 的 CFG-1–CFG-4 已在选定范围收口；2026-10-10，R6 首批多组件配置已按正式 Epic 8 完成五条故事、独立验收、必要 CI 与 PR #15／#16 合并，支持范围和证据见[现有规格](../specs/spec-multi-component-scheduling/SPEC.md)及[验收结果](../specs/spec-multi-component-scheduling/acceptance.md#2026-10-10-首批配置验收结果)。全局 PRD 保持 draft，原因是 R6 未选变体、R7 及远期目标仍需分别细化；不将首批完成扩写为所有多组件或标准配置已支持。准备实施的范围先通过 BMad 就绪检查，再进入 sprint；远期不生成占位 Story、不估算未确定范围或承诺日期。Epic 完成后据真实结果复盘并修订剩余计划；重要产品成果或契约变化须分析影响并按需使用 Correct Course。已完成历史和稳定需求 ID 不重写，规范版次、主机／实机及发布权利分别判断。
 
 学习层是[产品简述](product-brief.md)中的后期方向。本阶段及近期诊断增量的 epics、stories 和 sprint 不纳入课程、导览、教学工程或关卡实现。待产品具备多类完整且稳定的可用工程场景后，再依据[历史问题集](../../docs/project/archive/autosar-learning/map.md)和届时已验证的运行能力，用 BMad 确定具体课程需求、架构、验收与实施任务；不预先指定初、中、高级关卡必须使用当前某项尚待审的能力。
 

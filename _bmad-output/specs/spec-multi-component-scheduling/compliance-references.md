@@ -1,5 +1,7 @@
 # R24-11 契约核定与直接依赖差距
 
+当前阅读入口：下文“当前代码与必须闭合的差距”和逐阶段记录保留核定时的历史状态；选定配置的最终生成／运行、源码保护、工作台编辑与交接证据分别见 [8.2](../../implementation-artifacts/spec-8-2-multi-component-runtime.md)、[8.3](../../implementation-artifacts/spec-8-3-multi-component-source-protection.md)、[8.4](../../implementation-artifacts/spec-8-4-multi-component-workbench-editing.md)、[8.5](../../implementation-artifacts/spec-8-5-independent-multi-component-handoff.md)及[当前验收结果](acceptance.md#2026-10-10-首批配置验收结果)。历史“待实施”不作为当前派发状态，也不删除当时失败和未执行证据。实际 C 分析仍保留源码诊断与未完成的人工规范评估。
+
 2026-10-09 已实际取得二十一份官方PDF并与CP官方SHA-256清单匹配；原件仅保留本机，不入Git。以下是配置适用性与独立验收依据，不由ABI inventory或绿色测试替代。
 
 版次与文件身份以 [AUTOSAR R24-11 CP 官方 SHA-256 清单](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_TR_SpecificationHashes.sha256) 为准。新增直接依赖原文为 [LSduRouter](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_LSduRouter.pdf) 和 [CANDriver](https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_CANDriver.pdf)，下表记录实际下载文件的身份和适用条款。
