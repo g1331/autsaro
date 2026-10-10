@@ -35,3 +35,7 @@
 | AC-12 | 实际重新导入／生成 multi 52 个翻译单元、受影响 single 42 个翻译单元分析完整，固定工具身份成立、error=null；源码结果均 passed=false，分别保留 2607／1814 条诊断，221 项人工规范 assessment 未完成。此项要求如实记录分析，不等于源码全面合规。 |
 
 三层 8.5 独立审查无待处置或 deferred 发现；实施结果覆盖首批配置，未扩展同类型多实例、任意类型转换、R11 多通道或 MCU。[PR #15](https://github.com/g1331/autsaro/pull/15) 和 [PR #16](https://github.com/g1331/autsaro/pull/16) 各28项远端检查通过并已合并，master `e3b14a3c5e39386cc07ae06280d58b4f83f00943` 已包含完整实现；Epic与五条故事均done。跨平台CI分析完整性不证明Windows实际交接运行，安装／MCU／认证仍未验证。
+
+## 2026-10-10 复盘复评
+
+上述通过记录保留为当时验收结果。[Epic 8 现有规格中的复盘](../../implementation-artifacts/epic-8-context.md#epic-8-复盘2026-10-10)新增两个正常入口实际反例：服务参数 `Ecu_TargetIsOwner` 被接纳并生成不可编译C；10ms应用／Tx和1ms work共享OS event被接纳，实际生产每毫秒发送。分别违反命名安全与AC-1、调度契约与AC-3／AC-7，本次机器判定为 **rejected**，两项整改proposed／open，未自动实施。Epic／Story的done及PR合并事实不回退；复盘done也不表示验收通过。本次异地交接成功／拒绝3／3重跑通过（24.65s），不能抵消这两个新缺陷。未验证平台、源码passed=false及人工规范评估边界不变。

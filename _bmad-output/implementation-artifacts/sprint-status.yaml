@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-27-2026 18:43
-last_updated: 10-10-2026 13:52
+last_updated: 10-10-2026 14:59
 project: Autosar
 project_key: NOKEY
 tracking_system: file-system
@@ -114,7 +114,7 @@ development_status:
   8-3-保护每个组件的用户源码再生成: done
   8-4-在工作区安全编辑应用组合与调度: done
   8-5-独立交接并复验多组件工程: done
-  epic-8-retrospective: optional
+  epic-8-retrospective: done
 action_items:
   - id: "epic-4-retro-item-1-watchdog-cleanup-failure"
     epic: 4
@@ -152,3 +152,15 @@ action_items:
     owner: "桌面后端测试维护者"
     status: done
     ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-10-09.md"
+  - id: "epic-8-retro-item-1-runtime-argument-shadowing"
+    epic: 8
+    action: "闭合C/S参数与生成函数运行时名字冲突；拒绝Ecu_TargetIsOwner改名向量并保护输入及旧输出，保留合法typed／C/S编译运行回归。"
+    owner: "集成模型／RTE生成维护者"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-8-context.md"
+  - id: "epic-8-retro-item-2-shared-event-timing"
+    epic: 8
+    action: "在可信计划核定同一OS event的触发周期与相位一致性；拒绝10ms应用／Tx与1ms work共事件，覆盖合法共组、源序及真实生产周期回归。"
+    owner: "集成调度／OS生成维护者"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-8-context.md"
