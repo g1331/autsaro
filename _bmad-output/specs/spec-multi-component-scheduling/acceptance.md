@@ -43,6 +43,6 @@
 
 ## 2026-10-10 复盘整改复验
 
-F1／F2已通过可信计划模型修复、独立三层审查及正常生成／原生运行复验，当前机器判定 **accepted**；上述rejected及当时失败保持为整改前事实。名字检查覆盖跨组件实际producer、RTE依赖及生效宏，保持无冲突局部参数；共享(task,event)按有效周期分组，接纳等价alarm及混合alarm+schedule table（start10/offset0和start8/offset2）。修复前反例失败，修复后多组件74／74、额外合法参数编译1／1及同目录旧准备生成保护1／1通过，包含真实生产周期、deadline、异地交接和源字节保护；默认Cargo177／177、multi runtime9／9与旧OS timing1／1通过。现有sprint两项行动done，交付进入PR／CI／合并阶段，最终状态以PR实际结果补证。
+F1／F2已通过可信计划模型修复、独立三层审查及正常生成／原生运行复验，当前机器判定 **accepted**；上述rejected及当时失败保持为整改前事实。名字检查覆盖跨组件实际producer、RTE依赖及生效宏，保持无冲突局部参数；共享(task,event)按有效周期分组，接纳等价alarm及混合alarm+schedule table（start10/offset0和start8/offset2）。修复前反例失败，修复后多组件74／74、额外合法参数编译1／1及同目录旧准备生成保护1／1通过，包含真实生产周期、deadline、异地交接和源字节保护；默认Cargo177／177、multi runtime9／9与旧OS timing1／1通过。现有sprint两项行动done，整改交付关联[PR #18](https://github.com/g1331/autsaro/pull/18)；必要CI、合并与master包含关系以该PR的checks／merge记录及目标分支核对为准。
 
 最终实际生成六样本；本次没有C／模板修改，multi172份和single121份C/H与实际c-check输入一致。两profile分析完整、error=null，源码仍passed=false：multi2607／692 adopted、single1814／691 adopted；人工项未评估。Windows实际交接、安装包、MCU、硬实时、认证与C诊断整改的未完成状态保持。完整契约依据、失败历史与审查处置见[既有Epic规格](../../implementation-artifacts/epic-8-context.md#2026-10-10-整改复评与验证结果)。

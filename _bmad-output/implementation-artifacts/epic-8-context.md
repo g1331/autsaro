@@ -170,7 +170,9 @@ Epic7复盘的四项与Epic4两项在sprint均已done，无open／in-progress前
 - [x] `multi.rs`及既有multi测试：完整名字域拒绝、合法参数实际编译和OUT／INOUT行为。
 - [x] `schedule.rs`、`messages.json`及既有multi／single测试：错误共event拒绝、等价alarm／table接纳、phase／源序和源码保护。
 - [x] 真实生产／deadline／异地handoff回归、正常完整core／quality；生成受影响profile并执行实际c-check，保留源码诊断与人工项。
-- [ ] 独立三层审查、两项行动复评done、提交／PR／必要CI／合并与master核对，历史rejected和失败保留。
+- [x] 独立三层审查、两项行动复评done，历史rejected和失败保留。
+
+交付出口为[PR #18](https://github.com/g1331/autsaro/pull/18)的必要CI、合并与master核对；GitHub的checks、merge commit及目标分支是该出口的实际状态来源。
 
 Given合法名字与同节奏配置，when正常Workspace生成、包内构建运行，then既定CAN／DID／C/S及周期成立。Given上述非法有效引用配置，when普通校验／计划／生成准备，then准确拒绝、源与旧输出不变。Given独立接收者，when搬移恢复再生成和运行，then原源码归属、严格payload与成功／拒绝闭包保持。
 
@@ -216,4 +218,4 @@ Given合法名字与同节奏配置，when正常Workspace生成、包内构建�
 
 原生输出保护测试开发时曾错误假定非法调度必须拒绝整个Workspace reopen；实际工作台允许打开可修复配置，只有可信计划／生成准备拒绝。已保持该正常编辑行为，并检查允许打开时saved plan／prepare拒绝，以及任何旧准备结果不能覆盖交付包。失败探查日志未用通过结果替换。
 
-交付分支为`fix/multi-component-contract-validation`；本地整改和复评已就绪，接着创建PR、等待必要CI并合并。CI、远端合并及最终master核对以PR实际结果补证；Windows实际独立交接、安装包／MCU／硬实时、完整AUTOSAR认证、C源码诊断关闭和221项人工评估保持未验证／未完成。
+交付分支为`fix/multi-component-contract-validation`；复盘阶段提交`6fac020`、修复提交`17f935e`，交付关联[PR #18](https://github.com/g1331/autsaro/pull/18)，已在本会话注册。必要CI、远端合并及master包含关系以该PR的checks／merge记录与目标分支核对为准；Windows实际独立交接、安装包／MCU／硬实时、完整AUTOSAR认证、C源码诊断关闭和221项人工评估保持未验证／未完成。
