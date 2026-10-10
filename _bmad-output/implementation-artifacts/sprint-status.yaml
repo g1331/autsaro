@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-27-2026 18:43
-last_updated: 10-10-2026 14:59
+last_updated: 10-10-2026 15:27
 project: Autosar
 project_key: NOKEY
 tracking_system: file-system
@@ -156,11 +156,11 @@ action_items:
     epic: 8
     action: "闭合C/S参数与生成函数运行时名字冲突；拒绝Ecu_TargetIsOwner改名向量并保护输入及旧输出，保留合法typed／C/S编译运行回归。"
     owner: "集成模型／RTE生成维护者"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-8-context.md"
   - id: "epic-8-retro-item-2-shared-event-timing"
     epic: 8
     action: "在可信计划核定同一OS event的触发周期与相位一致性；拒绝10ms应用／Tx与1ms work共事件，覆盖合法共组、源序及真实生产周期回归。"
     owner: "集成调度／OS生成维护者"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-8-context.md"

@@ -1691,6 +1691,279 @@ fn collisions_are_rejected_with_all_references_still_valid() {
 }
 
 #[test]
+fn service_argument_names_cannot_shadow_selected_runtime_and_component_producers() {
+    let baseline = build(&inputs()).unwrap();
+    let bridge = baseline
+        .description()
+        .multi
+        .as_ref()
+        .unwrap()
+        .components
+        .iter()
+        .flat_map(|component| &component.operations)
+        .find(|operation| operation.read && operation.implementation_symbol.contains("DcmService"))
+        .unwrap()
+        .implementation_symbol
+        .clone();
+    for name in [
+        "Ecu_TargetIsOwner",
+        "Process_Transform",
+        "DcmService_ReadData",
+        &bridge,
+        "RTE_INGRESS_H",
+        "NULL_PTR",
+        "RTE_Process_CODE",
+        "RTE_MEMMAP_ACTIVE",
+        "RTE_Process_CODE_ACTIVE",
+        "RTE_MEMMAP_HEADER_CHECK",
+        "COM_H",
+        "ECU_TARGET_H",
+        "COM_SERVICE_NOT_AVAILABLE",
+        "STD_ON",
+        "COMSTACK_TYPES_H",
+        "ECU_TARGET_READY",
+        "RTE_Ingress_VAR_CLEARED_UNSPECIFIED",
+    ] {
+        for reverse in [false, true] {
+            let mut sources = inputs();
+            change(
+                &mut sources,
+                "types.arxml",
+                "<SHORT-NAME>Input</SHORT-NAME>",
+                &format!("<SHORT-NAME>{name}</SHORT-NAME>"),
+            );
+            if reverse {
+                sources.reverse();
+            }
+            rejects_in_both(&sources, "CONTRACT_NAME_COLLISION");
+            if name == "Ecu_TargetIsOwner" && !reverse {
+                assert_rejected_multi_sources_preserved(&sources);
+            }
+            assert!(
+                !normal_validation(&sources)
+                    .diagnostics
+                    .iter()
+                    .any(|issue| issue.code == "REFERENCE_UNRESOLVED")
+            );
+        }
+    }
+}
+
+#[test]
+fn service_argument_runtime_like_prefixes_without_producers_remain_legal() {
+    for name in ["Ecu_sample", "Os_sample", "xTask_sample"] {
+        let mut sources = inputs();
+        change(
+            &mut sources,
+            "types.arxml",
+            "<SHORT-NAME>Input</SHORT-NAME>",
+            &format!("<SHORT-NAME>{name}</SHORT-NAME>"),
+        );
+        assert!(normal_validation(&sources).diagnostics.is_empty());
+        build(&sources).unwrap();
+    }
+}
+
+fn conflicting_multi_schedule_sources() -> Vec<InputSource> {
+    let mut sources = inputs();
+    let original = sources
+        .iter()
+        .find(|source| source.logical_path() == "ecuc.arxml")
+        .unwrap();
+    let text = std::str::from_utf8(original.bytes()).unwrap().to_owned();
+    let (task, app) = text
+        .split_once("<SHORT-NAME>Alarm_App</SHORT-NAME>")
+        .unwrap();
+    let changed = format!(
+        "{task}<SHORT-NAME>Alarm_App</SHORT-NAME>{}",
+        app.replace(
+            "/Configuration/Os/Ev_App</VALUE-REF>",
+            "/Configuration/Os/Ev_Work</VALUE-REF>"
+        )
+    );
+    change(&mut sources, "ecuc.arxml", &text, &changed);
+    sources
+}
+
+#[test]
+fn shared_os_event_requires_one_effective_period_and_preserves_rejected_sources() {
+    let mut sources = conflicting_multi_schedule_sources();
+    for reverse in [false, true] {
+        if reverse {
+            sources.reverse();
+        }
+        rejects_in_both(&sources, "SCHEDULE_NOT_UNIQUE");
+        let issues = build(&sources)
+            .err()
+            .expect("conflicting schedule accepted");
+        assert!(
+            issues
+                .iter()
+                .any(|issue| issue.code == "SCHEDULE_NOT_UNIQUE"
+                    && issue.message
+                        == autosar_config_core::product_message!(
+                            "backend.integration.schedule.shared_event_period_mismatch"
+                        )
+                    && issue.file.as_deref() == Some("ecuc.arxml")
+                    && issue
+                        .object
+                        .as_deref()
+                        .is_some_and(|object| object.contains("/Configuration/Rte/"))),
+            "{issues:?}"
+        );
+    }
+    assert_rejected_multi_sources_preserved(&sources);
+}
+
+fn assert_rejected_multi_sources_preserved(sources: &[InputSource]) {
+    let scratch = Scratch::new();
+    let live = scratch.0.join("live");
+    let workspace = live_multi_workspace(&live, sources);
+    assert!(
+        workspace
+            .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
+            .is_err()
+    );
+    assert!(workspace.preview_application_initialization().is_err());
+    assert!(!live.join("application").exists());
+    for source in sources {
+        assert_eq!(
+            std::fs::read(live.join(source.logical_path())).unwrap(),
+            source.bytes()
+        );
+    }
+}
+
+fn equivalent_multi_schedule_triggers(tables: bool) -> Vec<InputSource> {
+    let mut sources = inputs();
+    let alarm = subtree(&sources, "ecuc.arxml", "ECUC-CONTAINER-VALUE", "Alarm_App");
+    let second_alarm = alarm.replace(
+        "<SHORT-NAME>Alarm_App</SHORT-NAME>",
+        "<SHORT-NAME>Alarm_Process</SHORT-NAME>",
+    );
+    change(
+        &mut sources,
+        "ecuc.arxml",
+        &alarm,
+        &format!("{alarm}{second_alarm}"),
+    );
+    let mapping = subtree(&sources, "ecuc.arxml", "ECUC-CONTAINER-VALUE", "Process");
+    change(
+        &mut sources,
+        "ecuc.arxml",
+        &mapping,
+        &mapping.replace(
+            "/Configuration/Os/Alarm_App</VALUE-REF>",
+            "/Configuration/Os/Alarm_Process</VALUE-REF>",
+        ),
+    );
+    if !tables {
+        return sources;
+    }
+    let table_source = InputSource::new(
+        "tables.arxml",
+        std::fs::read(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/epic4_timing/schedule_tables.arxml"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let table = subtree(
+        &[table_source],
+        "tables.arxml",
+        "ECUC-CONTAINER-VALUE",
+        "Table_App",
+    );
+    for component in ["Process", "Observe"] {
+        let name = format!("Table_{component}");
+        let cloned = table.replace(
+            "<SHORT-NAME>Table_App</SHORT-NAME>",
+            &format!("<SHORT-NAME>{name}</SHORT-NAME>"),
+        );
+        change(
+            &mut sources,
+            "ecuc.arxml",
+            &alarm,
+            &format!("{alarm}{cloned}"),
+        );
+        let mapping = subtree(&sources, "ecuc.arxml", "ECUC-CONTAINER-VALUE", component);
+        let changed = mapping
+            .replace("RteUsedOsAlarmRef", "RteUsedOsSchTblExpiryPointRef")
+            .replace(
+                if component == "Process" {
+                    "/Configuration/Os/Alarm_Process</VALUE-REF>"
+                } else {
+                    "/Configuration/Os/Alarm_App</VALUE-REF>"
+                },
+                &format!("/Configuration/Os/{name}/Point</VALUE-REF>"),
+            );
+        change(&mut sources, "ecuc.arxml", &mapping, &changed);
+    }
+    parameter(
+        &mut sources,
+        "Table_Observe",
+        "OsScheduleTableStartValue",
+        "8",
+    );
+    parameter(
+        &mut sources,
+        "Table_Observe",
+        "OsScheduleTblExpPointOffset",
+        "2",
+    );
+    sources
+}
+
+#[test]
+fn shared_os_event_accepts_distinct_equivalent_alarm_and_table_triggers() {
+    for tables in [false, true] {
+        let mut sources = equivalent_multi_schedule_triggers(tables);
+        for reverse in [false, true] {
+            if reverse {
+                sources.reverse();
+            }
+            assert!(normal_validation(&sources).diagnostics.is_empty());
+            let plan = build(&sources).unwrap();
+            let app = plan
+                .description()
+                .schedule
+                .entities
+                .iter()
+                .filter(|entity| entity.application)
+                .collect::<Vec<_>>();
+            assert!(
+                app.iter().all(|entity| entity.period_ms == 10
+                    && entity.os_event == "/Configuration/Os/Ev_App")
+            );
+            if tables {
+                let phases = app
+                    .iter()
+                    .filter_map(|entity| entity.table_start.zip(entity.expiry_offset))
+                    .collect::<std::collections::BTreeSet<_>>();
+                assert_eq!(phases, std::collections::BTreeSet::from([(10, 0), (8, 2)]));
+            } else {
+                assert_eq!(
+                    app.iter()
+                        .map(|entity| entity.trigger())
+                        .collect::<std::collections::BTreeSet<_>>()
+                        .len(),
+                    2
+                );
+            }
+        }
+    }
+    let mut sources = equivalent_multi_schedule_triggers(true);
+    parameter(
+        &mut sources,
+        "Table_Observe",
+        "OsScheduleTblExpPointOffset",
+        "1",
+    );
+    rejects_in_both(&sources, "PERIOD_SCHEDULE_TABLE_CONFLICT");
+}
+
+#[test]
 fn missing_and_duplicate_relations_are_rejected_before_emission() {
     let cases = [
         ("process.arxml", "INIT-VALUE", None, false),
@@ -4206,35 +4479,52 @@ fn actual_partition_owns_all_instances_and_all_com_producers() {
 #[test]
 fn initialized_multi_scaffolds_compile_link_and_initialize_only_out_arguments() {
     use autosar_config_core::prepared::prepare_ecu_project_for_workspace;
-    let scratch = Scratch::new();
-    let live = scratch.0.join("live");
-    let mut workspace = live_multi_workspace(&live, &inputs());
-    let preview = workspace.preview_application_initialization().unwrap();
-    workspace
-        .initialize_application_previewed(&preview)
-        .unwrap();
-    let plan = workspace
-        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
-        .unwrap();
-    let project = scratch.0.join("sealed");
-    prepare_ecu_project_for_workspace(&workspace, &plan, tooling::native_target(), true)
-        .unwrap()
-        .generate(&project)
-        .unwrap();
-    let build = scratch.0.join("build");
-    let compiled = tooling::ecu_build_command(&project, &build, "host-batch", None)
-        .output()
-        .unwrap();
-    assert!(
-        compiled.status.success(),
-        "{}\n{}",
-        String::from_utf8_lossy(&compiled.stdout),
-        String::from_utf8_lossy(&compiled.stderr)
-    );
-    let harness = scratch.0.join("scaffold_contract.c");
-    std::fs::write(
-        &harness,
-        r#"#define RTE_CORE
+    for arguments in [
+        [("Input", "value"), ("Output", "data"), ("State", "status")],
+        [
+            ("Input", "Ecu_sample"),
+            ("Output", "Os_sample"),
+            ("State", "xTask_sample"),
+        ],
+    ] {
+        let scratch = Scratch::new();
+        let live = scratch.0.join("live");
+        let mut sources = inputs();
+        for (before, after) in arguments {
+            change(
+                &mut sources,
+                "types.arxml",
+                &format!("<SHORT-NAME>{before}</SHORT-NAME>"),
+                &format!("<SHORT-NAME>{after}</SHORT-NAME>"),
+            );
+        }
+        let mut workspace = live_multi_workspace(&live, &sources);
+        let preview = workspace.preview_application_initialization().unwrap();
+        workspace
+            .initialize_application_previewed(&preview)
+            .unwrap();
+        let plan = workspace
+            .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
+            .unwrap();
+        let project = scratch.0.join("sealed");
+        prepare_ecu_project_for_workspace(&workspace, &plan, tooling::native_target(), true)
+            .unwrap()
+            .generate(&project)
+            .unwrap();
+        let build = scratch.0.join("build");
+        let compiled = tooling::ecu_build_command(&project, &build, "host-batch", None)
+            .output()
+            .unwrap();
+        assert!(
+            compiled.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&compiled.stdout),
+            String::from_utf8_lossy(&compiled.stderr)
+        );
+        let harness = scratch.0.join("scaffold_contract.c");
+        std::fs::write(
+            &harness,
+            r#"#define RTE_CORE
 #include "Rte_Process.h"
 #include "Rte_Ingress.h"
 #include <assert.h>
@@ -4252,46 +4542,125 @@ int main(void) {
     return 0;
 }
 "#,
-    )
-    .unwrap();
-    let binary = tooling::native_binary(&scratch.0, "scaffold_contract");
-    let settings = tooling::execution_settings();
-    let compiled = std::process::Command::new(settings.compiler)
-        .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic", "-I"])
-        .arg(project.join("include"))
-        .arg(project.join("src/Process.c"))
-        .arg(project.join("src/Ingress.c"))
-        .arg(project.join("src/Observe.c"))
-        .arg(&harness)
-        .arg("-o")
-        .arg(&binary)
-        .output()
+        )
         .unwrap();
-    assert!(
-        compiled.status.success(),
-        "{}",
-        String::from_utf8_lossy(&compiled.stderr)
-    );
-    assert!(
-        std::process::Command::new(binary)
-            .status()
+        let binary = tooling::native_binary(&scratch.0, "scaffold_contract");
+        let settings = tooling::execution_settings();
+        let compiled = std::process::Command::new(settings.compiler)
+            .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic", "-I"])
+            .arg(project.join("include"))
+            .arg(project.join("src/Process.c"))
+            .arg(project.join("src/Ingress.c"))
+            .arg(project.join("src/Observe.c"))
+            .arg(&harness)
+            .arg("-o")
+            .arg(&binary)
+            .output()
+            .unwrap();
+        assert!(
+            compiled.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiled.stderr)
+        );
+        assert!(
+            std::process::Command::new(binary)
+                .status()
+                .unwrap()
+                .success()
+        );
+    }
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn rejected_multi_contracts_refuse_stale_generation_and_preserve_sealed_output() {
+    use autosar_config_core::prepared::prepare_ecu_project_for_workspace;
+    for schedule in [false, true] {
+        let scratch = Scratch::new();
+        let live = scratch.0.join("live");
+        let mut workspace = live_multi_workspace(&live, &inputs());
+        let preview = workspace.preview_application_initialization().unwrap();
+        workspace
+            .initialize_application_previewed(&preview)
+            .unwrap();
+        let plan = workspace
+            .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
+            .unwrap();
+        let project = scratch.0.join("sealed");
+        prepare_ecu_project_for_workspace(&workspace, &plan, tooling::native_target(), true)
             .unwrap()
-            .success()
-    );
+            .generate(&project)
+            .unwrap();
+        let stale =
+            prepare_ecu_project_for_workspace(&workspace, &plan, tooling::native_target(), true)
+                .unwrap();
+        let original = delivery_support::payload(&project);
+        let mut changed = if schedule {
+            conflicting_multi_schedule_sources()
+        } else {
+            inputs()
+        };
+        if !schedule {
+            change(
+                &mut changed,
+                "types.arxml",
+                "<SHORT-NAME>Input</SHORT-NAME>",
+                "<SHORT-NAME>Ecu_TargetIsOwner</SHORT-NAME>",
+            );
+        }
+        for source in &changed {
+            std::fs::write(live.join(source.logical_path()), source.bytes()).unwrap();
+        }
+        if let Ok(reopened) = autosar_config_core::Workspace::open_project_manifest(
+            &live.join("workbench-project.json"),
+            &scratch.0.join("cache"),
+        ) {
+            assert!(
+                reopened
+                    .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
+                    .is_err()
+            );
+            assert!(
+                prepare_ecu_project_for_workspace(&reopened, &plan, tooling::native_target(), true)
+                    .is_err()
+            );
+        }
+        assert!(
+            workspace
+                .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
+                .is_err()
+        );
+        assert!(
+            prepare_ecu_project_for_workspace(&workspace, &plan, tooling::native_target(), true)
+                .is_err()
+        );
+        assert!(stale.generate(&project).is_err());
+        assert_eq!(delivery_support::payload(&project), original);
+        for source in &changed {
+            assert_eq!(
+                std::fs::read(live.join(source.logical_path())).unwrap(),
+                source.bytes()
+            );
+        }
+    }
 }
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[test]
 fn sealed_multi_project_builds_and_runs_production_owner() {
     use autosar_config_core::{Workspace, prepared::prepare_ecu_project_for_workspace};
-    for (renamed, swapped, p2_star) in [
-        (false, false, None),
-        (true, false, None),
-        (false, true, Some(("100", "2710"))),
-        (false, false, Some(("65.54", "199a"))),
+    for (renamed, swapped, p2_star, triggers) in [
+        (false, false, None, None),
+        (true, false, None, None),
+        (false, true, Some(("100", "2710")), None),
+        (false, false, Some(("65.54", "199a")), None),
+        (false, false, None, Some(false)),
+        (false, false, None, Some(true)),
     ] {
         let scratch = Scratch::new();
-        let mut arxml = inputs();
+        let mut arxml = triggers
+            .map(equivalent_multi_schedule_triggers)
+            .unwrap_or_else(inputs);
         if swapped {
             parameter(&mut arxml, "Receive", "CanObjectId", "1");
             parameter(&mut arxml, "Transmit", "CanObjectId", "0");

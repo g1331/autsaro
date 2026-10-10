@@ -1576,8 +1576,9 @@ fn check_names(graph: &Graph, plan: &MultiComponentContract) -> Result<(), Vec<P
         "INCLUDE/RTE_COMM_TYPE.H".to_owned(),
         "INCLUDE/STD_TYPES.H".to_owned(),
     ]);
-    let mut names: BTreeSet<String> = "RTE_H RTE_TYPE_H RTE_COM_H Rte_COMCbk Rte_COMCbkRxTOut CbkHandleIdType STD_TYPES_H uint8 uint16 uint32 uint64 sint8 sint16 sint32 sint64 EcuStatus boolean Std_ReturnType Std_VersionInfoType TRUE FALSE E_OK E_NOT_OK RTE_E_COM_STOPPED RTE_E_NEVER_RECEIVED RTE_E_MAX_AGE_EXCEEDED intptr_t uintptr_t intmax_t uintmax_t INTMAX_MIN INTMAX_MAX UINTMAX_MAX INTPTR_MIN INTPTR_MAX UINTPTR_MAX PTRDIFF_MIN PTRDIFF_MAX SIZE_MAX SIG_ATOMIC_MIN SIG_ATOMIC_MAX WCHAR_MIN WCHAR_MAX WINT_MIN WINT_MAX INTMAX_C UINTMAX_C".split_whitespace().map(str::to_owned).collect();
+    let mut names: BTreeSet<String> = "RTE_H RTE_TYPE_H RTE_COM_H Rte_COMCbk Rte_COMCbkRxTOut CbkHandleIdType STD_TYPES_H NULL_PTR uint8 uint16 uint32 uint64 sint8 sint16 sint32 sint64 EcuStatus boolean Std_ReturnType Std_VersionInfoType TRUE FALSE E_OK E_NOT_OK RTE_E_COM_STOPPED RTE_E_NEVER_RECEIVED RTE_E_MAX_AGE_EXCEEDED intptr_t uintptr_t intmax_t uintmax_t INTMAX_MIN INTMAX_MAX UINTMAX_MAX INTPTR_MIN INTPTR_MAX UINTPTR_MAX PTRDIFF_MIN PTRDIFF_MAX SIZE_MAX SIG_ATOMIC_MIN SIG_ATOMIC_MAX WCHAR_MIN WCHAR_MAX WINT_MIN WINT_MAX INTMAX_C UINTMAX_C".split_whitespace().map(str::to_owned).collect();
     names.extend("RTE_CORE RTE_MAIN_H RTE_E_OK RTE_E_LIMIT Rte_Start Rte_Stop SchM_ConfigType SchM_Init SchM_Start SchM_StartTiming SchM_Deinit RTE_CODE RTE_VAR_CLEARED Rte_MemMap_HeaderCheck rte_started rte_allocated SchM_Switch_Dcm_DcmDiagnosticSessionControl SchM_Mode_Dcm_DcmDiagnosticSessionControl Dcm_SecLevelType Dcm_SesCtrlType Rte_ModeType_DcmDiagnosticSessionControl Dcm_GetSecurityLevel Dcm_GetSesCtrlType Dcm_ResetToDefaultSession Can_HostTransmitToken Can_HostCompleteTransmit CanIf_GetControllerRxErrorCounter CanIf_GetControllerTxErrorCounter CanTp_CancelReceive Com_TriggerIPDUSend ComM_GetInhibitionStatus ComM_SetECUGroupClassification ComM_GetCurrentPNCComMode ComM_EcuM_WakeUpIndication".split_whitespace().map(str::to_owned));
+    names.extend("COM_H COMSTACK_TYPES_H COMSTACK_CFG_H ECU_TARGET_H ECU_HOST_BATCH_H ECU_STATUS_H AUTOSAR_OS_TARGET_H AUTOSAR_OS_H AUTOSAR_OS_TIME_H STD_HIGH STD_LOW STD_ACTIVE STD_IDLE STD_ON STD_OFF COM_SERVICE_NOT_AVAILABLE COM_UNINIT COM_INIT ECU_TARGET_UNPREPARED ECU_TARGET_INITIALIZING ECU_TARGET_READY ECU_TARGET_FAILED ECU_TARGET_CLOSED ECU_TARGET_OUTPUT_CAPACITY ECU_BATCH_CAPACITY ECU_BATCH_MAX_SPAN ECU_BATCH_LINE_CAPACITY ECU_BATCH_WATCHDOG_MS ECU_BATCH_BEGIN ECU_BATCH_RX ECU_BATCH_COMMIT RTE_MEMMAP_ACTIVE RTE_MEMMAP_HEADER_CHECK Ecu_TargetIsOwner Ecu_TargetCheckLifecycleContext Com_SendSignal Com_ReceiveSignal PduIdType PduLengthType PduInfoType BufReq_ReturnType TpDataStateType RetryInfoType NetworkHandleType Com_StatusType Com_SignalIdType Com_IpduGroupIdType Com_PduConfigType Com_NotificationType Com_TransmitType Com_ConfigType OS_MAX_TASKS OS_MAX_PRIORITY OS_MAX_ACTIVATIONS OS_BASIC_TASK OS_EXTENDED_TASK OS_MAX_RESOURCES OS_MAX_INTERNAL_RESOURCES OS_MAX_INTERRUPTS OS_MAX_ISR_PRIORITY OS_SCHEDULE_FULL OS_SCHEDULE_NON".split_whitespace().map(str::to_owned));
     for index in 0..plan
         .components
         .iter()
@@ -1611,6 +1612,19 @@ fn check_names(graph: &Graph, plan: &MultiComponentContract) -> Result<(), Vec<P
         names.insert(format!("INT{width}_C"));
         names.insert(format!("UINT{width}_C"));
     }
+    for component in &plan.components {
+        let type_name = component
+            .header
+            .trim_start_matches("include/Rte_")
+            .trim_end_matches(".h");
+        names.insert(format!("RTE_{type_name}_CODE"));
+        names.insert(format!("RTE_{type_name}_CODE_ACTIVE"));
+        if component.data_ports.iter().any(|port| port.read)
+            || component.diagnostic_session_port.is_some()
+        {
+            names.insert(format!("RTE_{type_name}_VAR_CLEARED_UNSPECIFIED"));
+        }
+    }
     for (path, native) in &plan.array_types {
         if super::contracts::reserved_identifier(native)
             || runtime_namespace(native)
@@ -1623,9 +1637,7 @@ fn check_names(graph: &Graph, plan: &MultiComponentContract) -> Result<(), Vec<P
             ));
         }
     }
-    let shared_names = names.clone();
     for component in &plan.components {
-        let mut local_names = shared_names.clone();
         let index = *graph.objects.get(&component.component).unwrap();
         let type_name = component
             .header
@@ -1639,7 +1651,6 @@ fn check_names(graph: &Graph, plan: &MultiComponentContract) -> Result<(), Vec<P
         {
             return Err(fail(graph, index, "CONTRACT_NAME_COLLISION"));
         }
-        local_names.insert(guard);
         let mut aliases = BTreeSet::new();
         for port in &component.data_ports {
             if !aliases.insert(port.api_symbol.clone())
@@ -1660,7 +1671,6 @@ fn check_names(graph: &Graph, plan: &MultiComponentContract) -> Result<(), Vec<P
             }
         }
         for runnable in &component.runnables {
-            local_names.insert(runnable.symbol.clone());
             if super::contracts::reserved_identifier(&runnable.symbol)
                 || runtime_namespace(&runnable.symbol)
                 || !names.insert(runnable.symbol.clone())
@@ -1672,19 +1682,27 @@ fn check_names(graph: &Graph, plan: &MultiComponentContract) -> Result<(), Vec<P
                 ));
             }
         }
-        for port in &component.data_ports {
-            local_names.insert(data_symbol(component, port));
-        }
-        for operation in component
-            .operations
+    }
+    // RTE wrappers include every component header and call other components.
+    // Check parameters only after registering the complete producer namespace.
+    for component in &plan.components {
+        let index = *graph.objects.get(&component.component).unwrap();
+        let aliases = component
+            .data_ports
             .iter()
-            .filter(|operation| operation.read)
-        {
-            local_names.insert(operation.implementation_symbol.clone());
-        }
-        if aliases.iter().any(|alias| local_names.contains(alias)) {
+            .map(|port| port.api_symbol.clone())
+            .chain(
+                component
+                    .operations
+                    .iter()
+                    .filter(|operation| operation.read)
+                    .map(|operation| operation.api_symbol.clone()),
+            )
+            .collect::<BTreeSet<_>>();
+        if aliases.iter().any(|alias| names.contains(alias)) {
             return Err(fail(graph, index, "CONTRACT_NAME_COLLISION"));
         }
+        let mut local_names = names.clone();
         local_names.extend(aliases);
         for operation in &component.operations {
             let mut arguments = BTreeSet::new();

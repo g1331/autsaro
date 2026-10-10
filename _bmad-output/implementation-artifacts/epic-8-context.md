@@ -1,9 +1,21 @@
 ---
 epic: 8
 date: '2026-10-10'
-verdict: rejected
+verdict: accepted
 criteria: declared
 headless: false
+title: '多组件生成与调度契约复盘整改'
+type: bugfix
+created: '2026-10-10'
+status: done
+route: dispatch
+review_loop_iteration: 0
+baseline_commit: '6fac020cc916916ba4972caf5c3c145bdba9d66e'
+context:
+  - '{project-root}/AGENTS.md'
+  - '{project-root}/CONTRIBUTING.md'
+  - '{project-root}/_bmad-output/specs/spec-multi-component-scheduling/application-contract.md'
+  - '{project-root}/_bmad-output/planning-artifacts/architecture/epic-8/ARCHITECTURE-SPINE.md'
 ---
 
 # Epic 8 Context: 多组件应用与调度工程
@@ -119,3 +131,89 @@ Epic7复盘的四项与Epic4两项在sprint均已done，无open／in-progress前
 ### 未决与范围边界
 
 没有需要猜测的产品决策来确认F1／F2；待用户选择是否委托整改，未收到人工覆盖rejected的决定。Windows实际独立交接、安装／namespace、MCU／硬实时、认证、全部C诊断整改及221项人工规范评估保持未完成；这次复盘没有替它们补证。本地修改只包含既有BMad结果／sprint与已确认经验规则，没有提交、push或新PR。
+
+## 授权整改（2026-10-10）
+
+用户已委托完整处理F1／F2至PR合并。上述复盘记录保留为整改前事实；本节是本次Build规格，复用既有文件，不另建报告。统一目标是让首批多组件工程在生成前拒绝不能正确编译／调度的配置。已确认原五份修改均为本次复盘，随功能修复分支保留；基于master安全快进至`1a89f849ee089924469475517b972497a22950cc`，复盘阶段提交`6fac020cc916916ba4972caf5c3c145bdba9d66e`。不存在未定产品选择；PR／合并已获本次授权，代码与整合由主代理完成，子代理只读调查／审查。
+
+<frozen-after-approval reason="human-owned intent — complete remediation explicitly authorized">
+
+### Intent
+
+关闭参数遮蔽与共享event错误周期，在正常配置校验、可信计划与生成前一致拒绝，保留合法C/S参数、同节奏不同trigger及旧profile行为。
+
+### Boundaries & Constraints
+
+固定R24-11／C99，沿同一模型与生成链修复；不重命名用户参数、不改公开ABI、不在模板新增计时器。命名检查核对实际producer、runtime函数与selected宏；只登记真实发出的符号，组件API alias保持本地作用域。已有alarm首次到期=period，table start+offset=period；event组比较有效节奏，不要求相同trigger身份或相同原始offset。不放宽已有phase／owner／mapping拒绝、源码guard或交接字节核对，不实施R11／Epic7发行工作。
+
+### I/O & Edge-Case Matrix
+
+| 场景 | 输入 | 预期 |
+| --- | --- | --- |
+| 遮蔽拒绝 | Ecu_TargetIsOwner、跨组件server／实际client实现、NULL_PTR／真实MemMap宏参数 | 正常校验与计划拒绝并定位来源；无悬空引用掩盖，输入和旧输出保持 |
+| 合法参数 | 普通value／status／data等名字 | 全槽初始化、sealed构建、真实OUT／INOUT行为保持 |
+| 错误节奏 | 10ms应用／Tx与1ms work完整有效引用共event；源序反转 | 生成前拒绝，不能先被破坏task refs的反例冒充覆盖 |
+| 同节奏 | 同trigger或不同alarm／table，同period且相同有效首次到期 | 接纳；offset0/start10与offset2/start8不能误拒 |
+| 非法phase／旧行为 | table首次到期9ms但period10；旧single、真实生产／deadline、源码与异地交接 | 原phase拒绝保留；成功、拒绝及字节保护回归保持 |
+
+</frozen-after-approval>
+
+### Code Map
+
+- `core/src/integration/multi.rs::check_names`：两遍登记实际全局producer，再检查组件alias与参数；保留producer的runtime_namespace规则，参数按实际符号／宏拒绝，补实际NULL_PTR／MemMap活动宏及头文件包含链。
+- `core/src/integration/schedule.rs::inspect_events`：实体收集后核定(task,event)的周期一致性；沿现有首周期／phase不变量拒绝，消息来源在`core/src/messages.json`。
+- `core/tests/multi_component_contracts.rs`：复用inputs、rejects_in_both、Workspace、scaffold及production／handoff消费者。旧table回归复用`core/tests/support/epic4_timing.rs`，不改single更窄producer约束。
+- R24-11 OS00403／00404／00278与RTE09024–26／09069–71说明真实event／trigger及首次到期；同event节奏约束属于本profile的bit分派能力边界，不虚构标准要求相同trigger。
+
+### Tasks & Acceptance
+
+- [x] `multi.rs`及既有multi测试：完整名字域拒绝、合法参数实际编译和OUT／INOUT行为。
+- [x] `schedule.rs`、`messages.json`及既有multi／single测试：错误共event拒绝、等价alarm／table接纳、phase／源序和源码保护。
+- [x] 真实生产／deadline／异地handoff回归、正常完整core／quality；生成受影响profile并执行实际c-check，保留源码诊断与人工项。
+- [ ] 独立三层审查、两项行动复评done、提交／PR／必要CI／合并与master核对，历史rejected和失败保留。
+
+Given合法名字与同节奏配置，when正常Workspace生成、包内构建运行，then既定CAN／DID／C/S及周期成立。Given上述非法有效引用配置，when普通校验／计划／生成准备，then准确拒绝、源与旧输出不变。Given独立接收者，when搬移恢复再生成和运行，then原源码归属、严格payload与成功／拒绝闭包保持。
+
+### Implementation Notes
+
+调查已确认修复可限Rust可信计划校验，生成C模板与标准签名保持。名称按两遍登记全部组件producer后核定，组件API alias保持局部；活动宏在producer登记前收齐，避免组件排列影响结果。先添加真实反例并确认基准失败，再修改模型；相位冲突按原table检查独立拒绝。前述完整推进授权覆盖本节范围，不重复请求阶段批准。
+
+### Review Triage Log
+
+三层审查同步派发、收齐后处置；verification-gap返回无遗漏。每项候选单独核查，未按数量补造产品缺陷。
+
+| 来源／候选 | 判定／处置 | 依据 |
+| --- | --- | --- |
+| Blind 1：COM／ECU头文件宏遗漏 | medium／patch | Rte.c实际先包含Com.h、Ecu_Target.h；空宏／数值宏会改写形参。补包含链实际名称，新增有效引用拒绝向量。 |
+| Blind 2：MemMap活动标记遗漏 | medium／patch | memory_map在包装函数代码段定义RTE_MEMMAP_ACTIVE及scope_CODE_ACTIVE；新增反例修复前被接纳，修复后两入口拒绝。 |
+| Blind 3：局部参数整族前缀误拒绝 | medium／patch | runtime_namespace是producer名字域规则，局部Ecu_sample无实际producer；改为实际名称集合，并保留Ecu_sample／Os_sample／xTask_sample正常校验与真实编译。 |
+| Blind 4：旧输出断言未接操作 | low／patch | 原sentinel目录未传入生成入口，不能证明输出保护；删除无效断言，增加真实sealed包→源变化→旧准备generate(同目录)拒绝及完整payload比较。 |
+| Blind 5：周期反例可能命中旧分支 | false／拒绝 | 修复前同一有效引用反例已在新测试被接纳，修复后仅新增组检查拒绝；仍强化到shared_event_period_mismatch的消息身份，避免未来测试含混。 |
+| Blind 6：未覆盖Alarm与Table混用 | false／拒绝 | Table样本只转换Process／Observe，Ingress仍使用Alarm_App；同Ev_App已经包含两种触发，且进入真实production向量。 |
+| Edge 1：活动宏遮蔽仍可接纳 | medium／patch | 与Blind 2同根因，补全活动宏，完整名字回归覆盖。 |
+| Edge 2：完整名字域声明与宏遗漏冲突 | medium／patch | 对实际生效宏的核查成立，与前项同根因；在实现与测试闭合，不靠缩小已确认范围规避。 |
+
+无intent_gap／bad_spec／defer项，没有另建deferred-work或报告；修补后刷新diff并重新执行受影响验证。
+
+### Verification
+
+正常Cargo native-tests覆盖multi及single/table；实际导出六种c_analysis样本并对multi／standard-ecu运行固定Cppcheck c-check；完整默认Cargo、现有quality／assets／diff检查。PR按正常checks工作流，源码passed=false与分析完整性继续分别记录，不将CI通过解释为MISRA认证。
+
+
+### 2026-10-10 整改复评与验证结果
+
+当前机器判定 **accepted／criteria: declared**，适用于本Epic既定开发、受控Linux生成／通信／调度／交接范围；历史rejected与反例保持。两项行动由既有retrospective脚本精确按id更新done，未添加新行动；sprint validate返回valid=true、problems=[]。修复关闭R11实际消费者链上的这两个具体缺陷，不代表R11实现或其全部进入条件已完成。
+
+| 验证 | 当前证据与边界 |
+| --- | --- |
+| 修复前反例 | 名称与共享event新测试分别失败；活动宏增补在修复前也失败，错误均为旧计划接纳。原生成编译失败和每毫秒生产证据保留于上文。 |
+| 多组件实际工程 | native-tests首轮73／73、宏修补后74／74通过；原生产4向量及新增等价alarm／混合alarm+table 2向量实际编译运行，CAN首帧epoch10、重复epoch无重放、DID、deadline、源码保护及异地handoff保持。 |
+| 合法参数与旧输出 | 普通value/data/status和无冲突Ecu_sample/Os_sample/xTask_sample脚手架实际编译运行，OUT清零／INOUT保持；新增旧准备结果generate(同sealed目录)拒绝1／1（含两种非法配置），完整payload及源字节不变。 |
+| 旧profile／完整默认回归 | 默认Cargo177／177、0 ignored；multi runtime9／9；旧OS sc1-timing1／1通过。Linux目标不执行Windows-only旧generated_tables oracle，等价multi table真实生产已单独覆盖。 |
+| R24-11官方契约 | 本轮复核本地官方RTE、OS PDF，SHA分别d9b95dfa8ae5c94418382835b7f5da9fd53e0c76c07b5d14f139c8a58dd39769、6ec1915808e8819c6552bcc69fe935d8664f7bf0b8f9eb55810377e79ff8ae44，与既有compliance-references一致；按OS00403/00404/00278及RTE09024–26/09069–71核定首次到期。组节奏约束来自当前event-bit分派能力，不写成标准禁止不同trigger。 |
+| 实际生成C分析 | 六样本正常生成及异地恢复；multi 52 unique TU（两program各51）2607诊断／692 adopted；standard-ecu 42 unique TU（各41）1814／691。固定Cppcheck两program均exit1、error=null、passed=false，221项assessment均not_assessed。最终模型再次生成六样本，multi 172份及single121份C/H与已分析工件逐字节一致；本次没有C或模板改动。 |
+| 工具与审查 | 三层审查全部完成，macro／局部名字与无效输出断言已处理；无遗留整改／defer。clippy correctness+suspicious、quality、assets check（0 changes）、diff检查通过。首次quality缺rustfmt PATH、旧OS首次使用系统Python缺开发包；修正每命令环境后原检查通过，没有修改宿主配置或产品规则。 |
+
+原生输出保护测试开发时曾错误假定非法调度必须拒绝整个Workspace reopen；实际工作台允许打开可修复配置，只有可信计划／生成准备拒绝。已保持该正常编辑行为，并检查允许打开时saved plan／prepare拒绝，以及任何旧准备结果不能覆盖交付包。失败探查日志未用通过结果替换。
+
+交付分支为`fix/multi-component-contract-validation`；本地整改和复评已就绪，接着创建PR、等待必要CI并合并。CI、远端合并及最终master核对以PR实际结果补证；Windows实际独立交接、安装包／MCU／硬实时、完整AUTOSAR认证、C源码诊断关闭和221项人工评估保持未验证／未完成。
