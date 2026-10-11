@@ -1,7 +1,7 @@
 ---
 version: 1
 slug: "ux-autosar-2026-10-03-mockups-index-html-d2a13ecc"
-primary_target: "_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/mockups/index.html"
+primary_target: "docs/design/ux-baseline/mockups/index.html"
 related_targets: []
 ---
 
@@ -9,7 +9,7 @@ related_targets: []
 
 - 范围：本轮交付完整设计与交互规格、可交互原型，不修改 `ui/src/`、桌面后端或运行时。原型是用于评审的演示材料，所有项目数据与操作结果均在内存中，不读写 ARXML、不编译、不执行 ECU。
 - 访客模式：Operate。主要使用者为 ECU 集成工程师与 BSW 开发者。
-- 产品事实：沿用根 PRODUCT.md 与当前 BMad 规划；基线为 `3e0870c96f5469dcf06f3b85e172eede5e3d60a2`。
+- 产品事实：沿用根 PRODUCT.md 与 docs/roadmap.md；基线为 `3e0870c96f5469dcf06f3b85e172eede5e3d60a2`。
 - 用户选择：工程树＋对象表＋属性检查器，JetBrains 统一菜单／侧栏／底部工具窗口逻辑，ChatGPT 中性配色与角色色彩。这是用户固定的传统工程工具方向，不另开随机视觉竞赛。code-first。
 - 数据与操作范围：普通 CAN 信号工程和受限标准 ECU 输入共用壳层；标准输入可编辑 CAN ID 与应用周期，诊断／类型／端口／引用依当前剖面只读。当前真实操作含新建／多文件导入／两种交接重导入、对象编辑、诊断连接与 DTC 配置、保存差异、校验问题定位、纯源码预览／确认、显式预检、独立构建、主机验证、取消及失效。
 - 品牌更新：用户偏好 A（1＞3＞2），要求与工作台更协调；绿色适配已被否决。保留 A 形体，以浅桃红／珊瑚／深莓红形成受控层次，不复制 Toolbox 的橙粉紫配色。当前 `logo-workbench.png` 为透明材质版、`logo-coral.png` 为平面原色对照，原型主行动用珊瑚实色；2026-10-03 用户确认本轮界面与图标暂时定稿，正式资产在实施时替换。
@@ -34,6 +34,6 @@ selection: user-pinned-canon
 
 ## 输出与权威
 
-- BMad 日期工作区中的 DESIGN.md 与 EXPERIENCE.md 是本次评审基线；根 DESIGN.md 和 .impeccable/design.json 在完成时导出为后续实现入口，并明确尚未迁入正式软件。
+- docs/design/ux-baseline/EXPERIENCE.md 与根 DESIGN.md 是本次评审基线；根 DESIGN.md 和 .impeccable/design.json 是后续实现入口，并明确尚未迁入正式软件。
 - DESIGN.md 管视觉；EXPERIENCE.md 管导航、操作与状态；原型佐证构图与交互。规格优先于演示的实现细节。
 - 当前能力与设计新增交互分开标注。工程树筛选、统一菜单、主题、工具窗口、键盘导航是拟新增界面行为，不声称当前软件已具有这些能力；R5 广泛 ECUC 编辑、多组件连接、批量修改、MCU、网络管理和学习层不假装可用。

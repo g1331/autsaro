@@ -163,7 +163,7 @@ components:
 - 语义色区分对象类别、选择与结果，不铺满工作区。
 - 原生系统字体服务中文任务与工程标识符。
 
-视觉取值来自 [完成原型](_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/mockups/index.html) 的主题变量与复用组件，不采纳现有生产 UI 的样式；交互、状态与任务契约见 [EXPERIENCE](_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/EXPERIENCE.md)，本文不重复功能规格。
+视觉取值来自 [完成原型](docs/design/ux-baseline/mockups/index.html) 的主题变量与复用组件，不采纳现有生产 UI 的样式；交互、状态与任务契约见 [EXPERIENCE](docs/design/ux-baseline/EXPERIENCE.md)，本文不重复功能规格。
 
 ## Colors
 
@@ -190,7 +190,7 @@ components:
 
 身份资产与 UI 语义色分离。用户偏好 A（1＞3＞2），但要求它与工作台更协调；绿色适配已被明确否决。当前保留 A 的形体，以浅桃红、珊瑚与深莓红形成受控亮暗，不采用近似 JetBrains Toolbox 的橙粉紫转色。JetBrains／VS Code 只校准层次与质感，不提供可复制的品牌配色；主行动使用同一珊瑚色系的可读实色，布局、中性壳层及对象／结果角色保持独立。当前透明珊瑚材质版已由用户暂时定稿，后续变更回到本规格；正式资产在实施时替换。
 
-当前 PNG 图形为 `logo-workbench.png`，原色 A 为 `logo-coral.png`；两者均为真实 RGBA 透明图形，图形外围、车窗及灯位留白透出实际背景，不带白色承载底。浅色用石墨灯位，深色用对应 `-dark.png` 的暖白灯位；仅灯位 RGB 改变，车身色层、轮廓与 alpha 一致。有效主题变化时同步图形，不重置未应用的输入。桌面通用母图 `logo-app.png` 使用中性灯色，ICO／ICNS 不声称随系统主题自动切换。保留生成形体，未声称已有可编辑矢量品牌母版。浅深背景与 16、32、64、128 CSS px 用于比较整体轮廓，较大尺寸看色层；颜色不代表额外产品能力。实际原型与图标评审见 [A 与界面对照](_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/mockups/logo.html)，默认展示渐变适配，`?logo=coral` 保留平面原色对照。正式图标尚未替换，不使用 AUTOSAR 官方商标。
+当前 PNG 图形为 `logo-workbench.png`，原色 A 为 `logo-coral.png`；两者均为真实 RGBA 透明图形，图形外围、车窗及灯位留白透出实际背景，不带白色承载底。浅色用石墨灯位，深色用对应 `-dark.png` 的暖白灯位；仅灯位 RGB 改变，车身色层、轮廓与 alpha 一致。有效主题变化时同步图形，不重置未应用的输入。桌面通用母图 `logo-app.png` 使用中性灯色，ICO／ICNS 不声称随系统主题自动切换。保留生成形体，未声称已有可编辑矢量品牌母版。浅深背景与 16、32、64、128 CSS px 用于比较整体轮廓，较大尺寸看色层；颜色不代表额外产品能力。实际原型与图标评审见 [A 与界面对照](docs/design/ux-baseline/mockups/logo.html)，默认展示渐变适配，`?logo=coral` 保留平面原色对照。正式图标尚未替换，不使用 AUTOSAR 官方商标。
 
 ## Typography
 

@@ -4,7 +4,7 @@
 
 <!-- impeccable:product-schema 1 -->
 
-本文件记录供设计工作使用的稳定产品事实。产品方向和需求以 [BMad 产品简述](_bmad-output/planning-artifacts/product-brief.md)与 [PRD](_bmad-output/planning-artifacts/prd.md)为准，架构、实施范围及任务状态仍由相应 BMad 工件管理；本文件不建立另一份路线、实施规格或完成台账。产品方向与平台归类已在本次初始化中由维护者确认。
+本文件记录供设计工作使用的稳定产品事实。产品方向、近期顺序与长期候选见[路线图](docs/roadmap.md)，架构约束见 [docs/architecture.md](docs/architecture.md)，任务状态用 GitHub Issues 与 Milestones 跟踪；本文件不建立另一份路线、实施规格或完成台账。产品方向与平台归类已在本次初始化中由维护者确认。
 
 ## Platform
 
@@ -50,14 +50,14 @@ Vector MICROSAR Classic＋DaVinci Configurator、EB tresos AutoCore＋Studio 是
 ### 当前基线
 
 - 当前采用 CP／FO R24-11，支持有界多文件 ARXML 导入、保留安全的未支持内容、差异预览、保存重开、校验及独立 C99 主机工程生成。任意 ARXML 输入不等于完整 ECU Extract／BSW／SWC 输入覆盖。
-- 已有 11 位 Classical CAN 信号链、有界物理 DoCAN、Dcm 及可选 Dem／主机文件 NvM 行为。容量、SID／子功能与目标差异以当前实现、[README](README.md)和相应 story/spec 为准；这些不是完整 CAN、UDS 或存储标准支持。
+- 已有 11 位 Classical CAN 信号链、有界物理 DoCAN、Dcm 及可选 Dem／主机文件 NvM 行为。容量、SID／子功能与目标差异以当前实现、[README](README.md)和[运行时说明](runtime/README.md)为准；这些不是完整 CAN、UDS 或存储标准支持。
 - 旧主机目标的 `Os_Advance` 是虚拟时间调度器。集成 ECU 目标采用固定 FreeRTOS 内核＋自有 AUTOSAR OS 语义＋有限单核策略扩展；该路线已确定，不因界面设计重新选型。
 - 固定单核 SC1 行为与独立交接已在受控 Win64 主机目标上有验证记录。结论绑定实际版次、配置、目标、工具链及证据；任意用户工程仍需复验，不继承参考工程的通过结果。
 - 生成、预检、构建与行为验证是不同状态。旧二进制、部分成功或未运行结果不能显示为当前配置已完成验证。
 
 ### 已确认方向与待决边界
 
-- 统一 Configurator 采用内置规则，范围见[选定需求](_bmad-output/planning-artifacts/prd.md#r5-选定范围与完成契约)、[架构](_bmad-output/planning-artifacts/architecture/epic-7/ARCHITECTURE-SPINE.md)与[交互规格](_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/EXPERIENCE.md)。单核多组件应用——由真实 OS 调度多个 SWC、逐组件保护用户源码、在工作区编辑并独立交接——在[已交付范围](_bmad-output/specs/spec-multi-component-scheduling/SPEC.md)内支持。推进顺序与 Story 状态见[产品简述](_bmad-output/planning-artifacts/product-brief.md#近期推进顺序与编号对照)和 BMad sprint，本文不重复。
+- 统一 Configurator 采用内置规则，范围见[架构](docs/architecture.md)与[交互规格](docs/design/ux-baseline/EXPERIENCE.md)。单核多组件应用——由真实 OS 调度多个 SWC、逐组件保护用户源码、在工作区编辑并独立交接——在[架构](docs/architecture.md)所述范围内支持。推进顺序见[路线图](docs/roadmap.md)，任务状态见 GitHub Milestones，本文不重复。
 - 第一条完整参考产品链是通用 CAN＋诊断 ECU。完整交付须包含所声明配置需要的应用接口、OS、生命周期／网络管理与故障恢复；常开 CAN 的中间增量不能替代完整参考 ECU。
 - 长期逐阶段扩大所选 Classic 版次的有效模块与目标覆盖，不要求每个 ECU 启用全部模块，不用历史 story 数量计算未经定义的完成率。
 - 首个 MCU 板卡、驱动及许可、工具链、具体诊断／网络管理剖面、输入覆盖与迁移规则仍按对应产品规划决定。当前没有真实 MCU 验证，不预先宣布硬件支持。
@@ -68,7 +68,7 @@ Vector MICROSAR Classic＋DaVinci Configurator、EB tresos AutoCore＋Studio 是
 ## Brand Commitments
 
 - 当前应用名称为“Classic CAN 配置工作台”，英文分发名称为 `Classic CAN Workbench`。长期产品方向是更完整的 Autosar Classic 工程平台；初始化不擅自重命名现有应用。
-- 当前正式图标位于 ui/public 和 src-tauri/icons，设计源保留在 BMad UX 基线。设计快照不作为当前实施或发行状态记录。不使用 AUTOSAR 官方商标。
+- 当前正式图标位于 ui/public 和 src-tauri/icons，图标评审原型保留在 [UX 基线](docs/design/ux-baseline/)。设计快照不作为当前实施或发行状态记录。不使用 AUTOSAR 官方商标。
 - 图标须能识别汽车电子，同时灵动、有当代桌面品牌的图形性。用户偏好平面 A（1＞3＞2），要求它与工程界面更协调；明确否决绿色适配，并要求有质感的渐变。JetBrains／VS Code 作为层次参考，不复制其橙粉紫配色；当前保留 A 形体，以珊瑚色系建立光色和深浅，界面主行动用克制珊瑚实色。2026-10-03 用户确认当前透明珊瑚材质图标与界面基线“暂时定稿”；设计快照不作为当前软件实施或发行状态记录。
 - 身份图形采用真实透明背景，不保留白色承载底；车身轮廓与珊瑚色层在明暗主题一致，灯位按有效主题切换为石墨／暖白色。跟随系统时同步图形，不丢弃未应用的设置。通用桌面图标兼顾明暗背景，但不声称原生 ICO／ICNS 会自动跟随主题。
 - 当前界面以简体中文表达任务，保留标准术语、模块名、标识符、命令和原始错误的准确含义。能力描述必须具体、可核对，不把研发目标包装成可用功能。
@@ -76,9 +76,9 @@ Vector MICROSAR Classic＋DaVinci Configurator、EB tresos AutoCore＋Studio 是
 
 ## Evidence on Hand
 
-- [产品简述](_bmad-output/planning-artifacts/product-brief.md)：主要用户、产品机制、长期候选路线与后期学习层边界。
-- [PRD](_bmad-output/planning-artifacts/prd.md)与[架构](_bmad-output/planning-artifacts/architecture.md)：已确认成果、输入／生成责任与后续待决契约。
-- [README](README.md)、[运行时说明](runtime/README.md)及 BMad story/spec：现有工作流、受限能力、目标依赖和已记录验证范围。旧段落涉及历史状态时，以适用的较新 story/spec 和当前源码核对，不从一句总述推定全部能力。
+- [路线图](docs/roadmap.md)：近期顺序、长期候选路线、待决问题与后期学习层边界。
+- [架构](docs/architecture.md)、[ADR](docs/adr/)与[标准基线](docs/standards.md)：输入／生成责任、已记录决定与固定规范版次。
+- [README](README.md)、[运行时说明](runtime/README.md)及已合并 PR：现有工作流、受限能力、目标依赖和已记录验证范围。旧段落涉及历史状态时，以较新的已合并 PR 和当前源码核对，不从一句总述推定全部能力。
 - `ui/src/`、`src-tauri/`、`core/src/` 与 `runtime/`：现有 React 界面、桌面后端、配置／生成核心与 C99 运行时；`core/tests/end_to_end.rs` 及 fixtures 承载集成验证输入。
 - `ui/public/logo-app.png` 与 `src-tauri/icons/`：现有产品图标资产。
 - 尚无可用于宣称真实 MCU 支持、官方认证、客户背书或性能基准的本次初始化证据，不编造相关内容。本次未重新执行历史主机验收。
@@ -89,4 +89,4 @@ Vector MICROSAR Classic＋DaVinci Configurator、EB tresos AutoCore＋Studio 是
 2. **配置独立，验证显式。**配置／生成与可选编译／运行解耦，资源限制准确落在受影响操作上。
 3. **尊重所有权。**安全往返、显式差异和确认操作保护输入、用户代码及旧产物；不静默丢失内容、迁移或覆盖。
 4. **证据决定声明。**状态对应当前配置、产物与实际目标；未运行、失败和未支持清楚呈现，不显示假成功。
-5. **扩大覆盖，不稀释契约。**复用已有模型与已定 OS 路线，逐组合扩展；BMad 保持唯一需求与实施状态来源，后期方向不抢占近期交付。
+5. **扩大覆盖，不稀释契约。**复用已有模型与已定 OS 路线，逐组合扩展；方向以路线图为准，实施状态以 GitHub Issues 为准，后期方向不抢占近期交付。

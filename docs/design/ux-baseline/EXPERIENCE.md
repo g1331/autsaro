@@ -3,9 +3,8 @@ name: Classic CAN 配置工作台
 status: final
 updated: 2026-10-03
 sources:
-  - ../../../../PRODUCT.md
-  - ../../product-brief.md
-  - ../../prd.md
+  - ../../../PRODUCT.md
+  - ../../roadmap.md
   - ../../architecture.md
 ---
 
@@ -21,9 +20,9 @@ sources:
 
 身份图形外围、车窗和灯位留白为真实透明背景；浅色石墨灯位与深色暖白灯位共享车身 RGB 和 alpha。外观“应用”及“跟随系统”的有效主题变化同步切换图形，不重建工程或丢弃设置草稿。已在无头浏览器实际验证四组图形／主题组合、外观应用与系统明暗切换；桌面通用导出采用固定中性灯色，未验证操作系统安装或原生主题联动。
 
-视觉权威为同目录 [DESIGN.md](DESIGN.md)，行为权威为本文；[交互原型](mockups/index.html)仅佐证布局和关键交互，冲突时两份规格优先。正文、选择、面板间距与文字尺寸分别引用 `{colors.text-primary}`、`{colors.selection}`、`{spacing.panel}`、`{typography.body.fontSize}`，不在行为规格复制色值。浅色、深色和跟随系统共享所有权、导航与状态逻辑。
+视觉权威为根目录 [DESIGN.md](../../../DESIGN.zh-CN.md)，行为权威为本文；[交互原型](mockups/index.html)仅佐证布局和关键交互，冲突时两份规格优先。正文、选择、面板间距与文字尺寸分别引用 `{colors.text-primary}`、`{colors.selection}`、`{spacing.panel}`、`{typography.body.fontSize}`，不在行为规格复制色值。浅色、深色和跟随系统共享所有权、导航与状态逻辑。
 
-日期工作区保留初始界面暂时定稿和冻结评审产物；本文后续规划覆盖不改写历史证据。根目录 DESIGN.md 将导出对应视觉规格，正式实现开始时以根目录当前视觉权威为入口，不另建并行状态或规格文件。原型初始为已保存、已校验的 CAN 样例，三个示意帧／六个 unsigned little-endian 信号；这些是内存场景，不代表真实校验或 scaling 能力。旧缺失规范档案、取消及失效仍只是可切换评审场景。
+本目录保留初始界面暂时定稿和冻结评审产物；本文后续规划覆盖不改写历史证据。视觉规格以根目录 DESIGN.md 为唯一入口，不另建并行状态或规格文件。原型初始为已保存、已校验的 CAN 样例，三个示意帧／六个 unsigned little-endian 信号；这些是内存场景，不代表真实校验或 scaling 能力。旧缺失规范档案、取消及失效仍只是可切换评审场景。
 
 ### 能力与设计的三种陈述
 
