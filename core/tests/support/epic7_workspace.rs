@@ -1275,6 +1275,8 @@ fn builtin_split_packages_allow_owned_creation_but_refuse_ambiguous_identity_cha
     fs::write(&first_path, xml).unwrap();
     fs::write(&second_path, xml).unwrap();
     let mut workspace = Workspace::open(vec![first_path.clone(), second_path.clone()]).unwrap();
+    // Sources report canonical (`\\?\` on Windows) paths.
+    let canonical_first = fs::canonicalize(&first_path).unwrap();
     let view = projection(&workspace);
     let packages = view
         .objects
@@ -1294,7 +1296,7 @@ fn builtin_split_packages_allow_owned_creation_but_refuse_ambiguous_identity_cha
                 == view
                     .sources
                     .iter()
-                    .find(|source| source.path == first_path)
+                    .find(|source| source.path == canonical_first)
                     .unwrap()
                     .source_id
         })
@@ -1367,7 +1369,7 @@ fn builtin_split_packages_allow_owned_creation_but_refuse_ambiguous_identity_cha
         reopened_view
             .sources
             .iter()
-            .find(|source| source.path == first_path)
+            .find(|source| source.path == canonical_first)
             .unwrap()
             .source_id
     );
