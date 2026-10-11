@@ -41,7 +41,7 @@ Vector MICROSAR Classic＋DaVinci Configurator、EB tresos AutoCore＋Studio 是
 - 本地工程工作流：新建或导入同一 ECU 的多文件 ARXML → 检查并编辑受支持对象 → 预览差异并保存 → 校验 → 预览并生成独立工程 → 可选构建与主机行为验证 → 交接与重导入。
 - 当前界面与能力以 README 和实际源码为准；候选方向不作为已实现能力。
 - ARXML、生成源码、构建产物和运行状态有不同所有权与生命周期。预览不写磁盘，确认后才保存或生成；用户输入、应用源码及既有产物不能被静默覆盖。未应用草稿与已保存配置须明确区分。
-- R5 的正常配置链使用软件独立实现、随包提供的版本化规则及自有模块定义。官方 XSD／MOD 用于研发核对和独立对照，不是普通用户设置项；第三方模块定义保留显式可选导入。内置版次／覆盖与实际校验结果分别显示，未知规则不假称通过，损坏的随包规则是安装／工具错误，不要求用户补下载官方档案。
+- 正常配置链使用软件独立实现、随包提供的版本化规则及自有模块定义。官方 XSD／MOD 用于研发核对和独立对照，不是普通用户设置项；第三方模块定义保留显式可选导入。内置版次／覆盖与实际校验结果分别显示，未知规则不假称通过，损坏的随包规则是安装／工具错误，不要求用户补下载官方档案。
 - Windows 与 Linux 有受控原生主机目标及工程交接记录；macOS 原生构建与 IPC 未验证。跨目标源码准备与当前宿主执行能力是不同结果。
 - 新界面与验证不占用用户正在使用的桌面。真实桌面窗口和 IPC 验收使用隔离会话；无法隔离时明确未验证范围。
 
@@ -51,13 +51,13 @@ Vector MICROSAR Classic＋DaVinci Configurator、EB tresos AutoCore＋Studio 是
 
 - 当前采用 CP／FO R24-11，支持有界多文件 ARXML 导入、保留安全的未支持内容、差异预览、保存重开、校验及独立 C99 主机工程生成。任意 ARXML 输入不等于完整 ECU Extract／BSW／SWC 输入覆盖。
 - 已有 11 位 Classical CAN 信号链、有界物理 DoCAN、Dcm 及可选 Dem／主机文件 NvM 行为。容量、SID／子功能与目标差异以当前实现、[README](README.md)和相应 story/spec 为准；这些不是完整 CAN、UDS 或存储标准支持。
-- 旧主机目标的 `Os_Advance` 是虚拟时间调度器。Epic 4 新目标采用固定 FreeRTOS 内核＋自有 AUTOSAR OS 语义＋有限单核策略扩展；该路线已确定，不因界面设计重新选型。
-- Epic 4 有固定 Win64 主机 SC1 行为与独立交接的完成记录。结论绑定实际版次、配置、目标、工具链及证据；任意用户工程仍需复验，不继承参考工程的通过结果。
+- 旧主机目标的 `Os_Advance` 是虚拟时间调度器。集成 ECU 目标采用固定 FreeRTOS 内核＋自有 AUTOSAR OS 语义＋有限单核策略扩展；该路线已确定，不因界面设计重新选型。
+- 固定单核 SC1 行为与独立交接已在受控 Win64 主机目标上有验证记录。结论绑定实际版次、配置、目标、工具链及证据；任意用户工程仍需复验，不继承参考工程的通过结果。
 - 生成、预检、构建与行为验证是不同状态。旧二进制、部分成功或未运行结果不能显示为当前配置已完成验证。
 
 ### 已确认方向与待决边界
 
-- 统一 Configurator 的 R5 已正式化为 Epic 7：[选定需求](_bmad-output/planning-artifacts/prd.md#r5-选定范围与完成契约)、[增量架构](_bmad-output/planning-artifacts/architecture/epic-7/ARCHITECTURE-SPINE.md)、11 条 Story 与[交互规格](_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/EXPERIENCE.md)已按用户确认的内置规则方向同步修订，最新就绪结论见[实施就绪](_bmad-output/planning-artifacts/implementation-readiness.md#2026-10-03-r5--epic-7-实施就绪)。实施结果见当前中央实施规格和 Git；本文不复制动态 story 状态。R6 只固定共同对象／引用及应用所有权接缝，其他候选仍待规划。
+- 统一 Configurator 采用内置规则，范围见[选定需求](_bmad-output/planning-artifacts/prd.md#r5-选定范围与完成契约)、[架构](_bmad-output/planning-artifacts/architecture/epic-7/ARCHITECTURE-SPINE.md)与[交互规格](_bmad-output/planning-artifacts/ux-designs/ux-Autosar-2026-10-03/EXPERIENCE.md)。单核多组件应用——由真实 OS 调度多个 SWC、逐组件保护用户源码、在工作区编辑并独立交接——在[已交付范围](_bmad-output/specs/spec-multi-component-scheduling/SPEC.md)内支持。推进顺序与 Story 状态见[产品简述](_bmad-output/planning-artifacts/product-brief.md#近期推进顺序与编号对照)和 BMad sprint，本文不重复。
 - 第一条完整参考产品链是通用 CAN＋诊断 ECU。完整交付须包含所声明配置需要的应用接口、OS、生命周期／网络管理与故障恢复；常开 CAN 的中间增量不能替代完整参考 ECU。
 - 长期逐阶段扩大所选 Classic 版次的有效模块与目标覆盖，不要求每个 ECU 启用全部模块，不用历史 story 数量计算未经定义的完成率。
 - 首个 MCU 板卡、驱动及许可、工具链、具体诊断／网络管理剖面、输入覆盖与迁移规则仍按对应产品规划决定。当前没有真实 MCU 验证，不预先宣布硬件支持。
