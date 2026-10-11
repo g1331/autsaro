@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-27-2026 18:43
-last_updated: 10-10-2026 18:44
+last_updated: 10-11-2026 00:06
 project: Autosar
 project_key: NOKEY
 tracking_system: file-system
@@ -119,8 +119,8 @@ development_status:
   8-5-独立交接并复验多组件工程: done
   epic-8-retrospective: done
 
-  epic-9: backlog
-  9-1-固定共享契约与逐模块进入依据: backlog
+  epic-9: in-progress
+  9-1-固定共享契约与逐模块进入依据: done
   9-2-分离-can-标准接口与主机适配: backlog
   9-3-明确-ecu-批次执行与收据责任: backlog
   9-4-闭合-canif-配置-路由与异步接口: backlog
