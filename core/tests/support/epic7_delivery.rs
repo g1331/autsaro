@@ -216,6 +216,18 @@ fn builtin_host_and_ecu_deliver_project_license_and_preserve_kernel_notice() {
             .generate(&ecu_output)
             .unwrap();
         for output in [&host_output, &ecu_output] {
+            delivery_support::assert_offline_build_readme(
+                output,
+                target == BuildTarget::WindowsX64ControlledV1,
+            );
+            let text = fs::read_to_string(output.join("README.md")).unwrap();
+            assert!(
+                text.contains("The live project remains separate")
+                    && text.contains("not silently upgraded")
+            );
+            if output == &ecu_output {
+                assert!(text.contains("tools/ecu-tool.py verify") && text.contains("Build modes:"));
+            }
             let names = fs::read_to_string(output.join("files.list")).unwrap();
             let hashes = fs::read_to_string(output.join("files.sha256")).unwrap();
             for (name, expected) in [
@@ -240,6 +252,63 @@ fn builtin_host_and_ecu_deliver_project_license_and_preserve_kernel_notice() {
             fs::read(ecu_output.join("kernel/LICENSE.md")).unwrap(),
             include_bytes!("../../../third_party/freertos/LICENSE.md")
         );
+    }
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn copied_host_and_single_packages_build_offline_without_changing_source_bytes() {
+    use autosar_config_core::{
+        integration::RuntimeCatalog, prepared::prepare_ecu_project_for_workspace,
+    };
+    let scratch = Scratch::new();
+    let mut host = signals(&scratch.0.join("Host"));
+    let ecu = standard_with_application(&scratch.0.join("ECU"));
+    let plan = ecu
+        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
+        .unwrap();
+    for single in [false, true] {
+        let name = if single { "single" } else { "host" };
+        let original = scratch.0.join(format!("original-{name}"));
+        if single {
+            prepare_ecu_project_for_workspace(&ecu, &plan, tooling::native_target(), true)
+                .unwrap()
+                .generate(&original)
+                .unwrap();
+        } else {
+            prepare_host_project(&mut host, tooling::native_target(), true)
+                .unwrap()
+                .generate(&original)
+                .unwrap();
+        }
+        let received = scratch.0.join(format!("recipient-{name}/package"));
+        delivery_support::copy_package(&original, &received);
+        fs::remove_dir_all(original).unwrap();
+        fs::remove_dir_all(scratch.0.join(if single { "ECU" } else { "Host" })).unwrap();
+        let before = delivery_support::package_tree(&received);
+        let output = received.parent().unwrap().join("build");
+        let result = tooling::ecu_build_command(
+            &received,
+            &output,
+            if single { "host-batch" } else { "host" },
+            None,
+        )
+        .current_dir(&received)
+        .env_remove("PYTHONPATH")
+        .env_remove("PYTHONHOME")
+        .output()
+        .unwrap();
+        assert!(
+            result.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&result.stdout),
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert!(
+            tooling::native_binary(&output, if single { "ecu_host_batch" } else { "ecu_host" })
+                .is_file()
+        );
+        assert_eq!(delivery_support::package_tree(&received), before);
     }
 }
 
