@@ -1735,12 +1735,15 @@ fn generated_rte_com_header_links_independent_handle_callbacks_and_real_dispatch
             .args([
                 "src/Rte.c",
                 "src/Com.c",
+                // COM enters the CanIf state area; link its delivered host provider.
+                "src/SchM_CanIf_Host.c",
+                "src/Can_HostLock.c",
                 "src/Ingress.c",
                 "src/Process.c",
                 "src/Observe.c",
             ])
             .arg(root.join("core/tests/fixtures/multi-runtime/rte_com_contract.c"))
-            .arg("-Wl,--wrap=Com_ReceiveSignal")
+            .args(["-pthread", "-Wl,--wrap=Com_ReceiveSignal"])
             .arg("-o")
             .arg(&executable);
         let output = tooling::run_public_command(
