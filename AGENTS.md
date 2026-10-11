@@ -14,6 +14,8 @@
 
 任务与状态用 GitHub Issues 和 Milestones 跟踪；方向与长期候选见 [docs/roadmap.md](docs/roadmap.md)，架构约束见 [docs/architecture.md](docs/architecture.md)，重要决定写成 [ADR](docs/adr/)。实现结果和验证证据写入 Issue 与 PR，不额外生成报告、矩阵或台账。普通项目启动和开发不依赖代理。
 
+按 Issue 推进时：开工前读该 Issue 的范围、依赖、进入条件与验收标准，并核对所属 Milestone 总览（`tracking` 标签）中的共同规则；进入条件未满足时先完成调查，把结论和确定的方案写回 Issue 评论再实现。PR 用 `Closes #N` 关联，完成后勾选总览清单中的对应项。超出本次范围的差距按依据、影响与退出条件新建 Issue（`known-gap`／`tech-debt`／`question`），归入承接阶段的 Milestone 或留在未排期；只为已承诺的阶段建 Milestone，长期候选只写在路线图。改变路线顺序、产品契约或支持边界时先写 ADR 并更新路线图与架构文档，被取代的 ADR 只改状态。状态查询只读。2026-10 之前的规划原文在标签 `planning-archive-2026-10` 的 `_bmad-output/` 下，只作追溯，不作当前依据。
+
 ## AUTOSAR 契约与渐进完善
 
 - 修改或扩展 BSW、RTE、OS、配置模型及 C 生成逻辑时，先按项目固定版次核对相关官方 SWS、ECUC 和通用 BSW 要求，再设计实现与测试。核对所涉及模块的公开接口、类型、配置、状态机、错误与回调义务及上下层接缝，不只检查新增函数；现有代码、ABI 清单和绿色测试不能替代官方契约。 ECUC metadata 的数值范围通过不等于配置语义合法；接纳 controller／HOH 等身份前核对连续编号及所选实例数量约束，把非等 ID 机制测试与合法 source profile 验收分开。
