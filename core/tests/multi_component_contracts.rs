@@ -106,6 +106,82 @@ fn initialized_multi_user_workspace(root: &Path) -> autosar_config_core::Workspa
 }
 
 #[test]
+fn multi_handoff_readme_supports_both_native_targets_without_build_tools() {
+    use autosar_config_core::{prepared::prepare_ecu_project_for_workspace, target::BuildTarget};
+    let scratch = Scratch::new();
+    let workspace = initialized_multi_user_workspace(&scratch.0.join("live"));
+    let before = workspace.generation_snapshot().unwrap();
+    let plan = workspace
+        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
+        .unwrap();
+    for target in [
+        BuildTarget::WindowsX64ControlledV1,
+        BuildTarget::LinuxX64ControlledV1,
+    ] {
+        let output = scratch.0.join(target.spec().id);
+        prepare_ecu_project_for_workspace(&workspace, &plan, target, true)
+            .unwrap()
+            .generate(&output)
+            .unwrap();
+        delivery_support::assert_offline_build_readme(
+            &output,
+            target == BuildTarget::WindowsX64ControlledV1,
+        );
+        let text = std::fs::read_to_string(output.join("README.md")).unwrap();
+        assert!(text.contains("--mode host-batch"));
+        assert!(!text.contains("tools/ecu-tool.py verify"));
+        for expected in [
+            "never writes the live source",
+            "not silently upgraded",
+            "No official archive, compiler, checkout or network",
+            "AUTOSAR/MISRA compliance",
+        ] {
+            assert!(text.contains(expected), "missing {expected}");
+        }
+    }
+    for source in before.applications {
+        assert_eq!(std::fs::read(source.disk_path).unwrap(), source.bytes);
+    }
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn copied_multi_package_builds_offline_without_changing_source_bytes() {
+    use autosar_config_core::prepared::prepare_ecu_project_for_workspace;
+    let scratch = Scratch::new();
+    let live = scratch.0.join("live");
+    let workspace = initialized_multi_user_workspace(&live);
+    let plan = workspace
+        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
+        .unwrap();
+    let original = scratch.0.join("original");
+    prepare_ecu_project_for_workspace(&workspace, &plan, tooling::native_target(), true)
+        .unwrap()
+        .generate(&original)
+        .unwrap();
+    let received = scratch.0.join("recipient/package");
+    delivery_support::copy_package(&original, &received);
+    std::fs::remove_dir_all(&original).unwrap();
+    std::fs::remove_dir_all(&live).unwrap();
+    let before = delivery_support::package_tree(&received);
+    let output = scratch.0.join("recipient/build");
+    let result = tooling::ecu_build_command(&received, &output, "host-batch", None)
+        .current_dir(&received)
+        .env_remove("PYTHONPATH")
+        .env_remove("PYTHONHOME")
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert!(tooling::native_binary(&output, "ecu_host_batch").is_file());
+    assert_eq!(delivery_support::package_tree(&received), before);
+}
+
+#[test]
 fn moved_multi_handoff_reconstructs_every_user_source_and_exact_producer() {
     use autosar_config_core::{generator::delivery, prepared::prepare_ecu_project_for_workspace};
     let scratch = Scratch::new();

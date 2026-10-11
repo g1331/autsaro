@@ -4,7 +4,7 @@ Target: `{{TARGET}}`. This package uses the configured C99 host profile; the Fre
 
 ## Independent native build
 
-Use Python 3.11 or newer and the compiler/binutils identities recorded in `target.json`. Set `AUTOSAR_CC`, `AUTOSAR_OBJDUMP` and `AUTOSAR_GIT` to their absolute executable paths. This build does not require a checkout, uv, Rust, npm or the workbench.
+{{BUILD_PREREQUISITES}}
 
 From this source directory, using a supported Python interpreter:
 
@@ -12,7 +12,7 @@ From this source directory, using a supported Python interpreter:
 <python> tools/ecu-tool.py build --project . --output ../build --mode host
 ```
 
-The build directory must be new or empty and outside the sealed source package. The tool checks the source manifest and hashes, rejects links, reparse points and extra files, and runs the pinned native compiler and binutils in a managed process scope. It installs `{{BINARY}}` only if the destination is unused. Failures return a nonzero exit code and preserve build diagnostics. Keep binaries, keys, state, logs and unlisted source files outside the source directory.
+The build directory must be new or empty and outside the sealed source package. The tool checks the source manifest and hashes, rejects links, reparse points and extra files, and runs the identity-checked native compiler and selected binutils in a managed process scope. It installs `{{BINARY}}` only if the destination is unused. Failures return a nonzero exit code and preserve build diagnostics. Keep binaries, keys, state, logs and unlisted source files outside the source directory.
 
 ## Run the native host
 

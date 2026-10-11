@@ -40,6 +40,7 @@ pub(crate) fn handoff_readme(
         .ok_or_else(|| {
             crate::product_message!("backend.generation.host_readme_template_missing")
         })?;
+    let prerequisites = super::delivery::native_build_prerequisites(target);
     let mut remaining = std::str::from_utf8(asset.bytes)
         .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     let mut result =
@@ -51,6 +52,7 @@ pub(crate) fn handoff_readme(
         })?;
         result.push_str(match name {
             "TARGET" => target.spec().id,
+            "BUILD_PREREQUISITES" => &prerequisites,
             "BINARY" => binary,
             "RUN_COMMAND" => &run,
             "RUN_NOTES" => notes.trim_end(),
