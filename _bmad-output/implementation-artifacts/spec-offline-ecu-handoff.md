@@ -95,3 +95,10 @@ context:
 - 两项新独立复制 native-tests 重新各执行1项通过，实际构建 multi/single/host，新增完整递归 source tree 前后保持相同。命令与前述实施记录一致。
 - 复验 `assets check` 为0 changes，`quality --base 1ed2f1d673cb767e96c5e82a019a2ae548b48059` 检查7个格式文件成功，C syntax not requested（无C变更）；git diff --check通过。
 - Build 内部实现与review完成。独立 Tester 的缺工具／错误身份／失败重试检查、Windows锁定工具链 exact-head CI、PR正式 review 和受保护merge 尚待后续，不能由本规格状态推定成功。
+
+### 双平台正常 CI 入口补证
+
+- 发布首候选后核对真实 checks.yml：新 Rust native-tests 不会在必需 Windows CI 自动执行。沿已有 `tests/python/native/test_ecu_build_modes.py` 追加接收包回归，原 `c-analysis-prepare` 双平台已运行该文件，无需改工作流或工具策略。
+- 新回归按实际 sample signals/standard-ecu/multi-component 复制包，通过包内 CLI 构建；multi 覆盖三工具缺失、错误 GCC、Linux 已锁 objdump、失败日志保留与同目录重试拒绝，并在另一个既有空外部目录成功。完整递归源/失败输出字节比较，驱动外层180秒 owner期限。Windows未锁objdump摘要，测试不捏造该拒绝义务。
+- Linux `cargo test --locked --manifest-path core/Cargo.toml --test c_analysis` 2项通过；原生 Python文件当前2项通过，包括原生产fault-isolation回归。首次失败分别揭示测试驱动logs须预建和ProcessSpec env是覆盖继承而非替换，已正确建立驱动logs并显式清空工具/开发设置，不弱化缺工具拒绝。
+- 新测试追加独立 Blind Hunter、Edge Case Hunter、Verification Gap 三镜review：Blind未发现缺陷；后两者发现Windows环境键大小写和空logs也能通过的证据漏洞，均patch。环境保留以大写键匹配SYSTEMROOT；错误GCC/objdump必须保留已执行compiler查询的真实版本stdout日志，再核对同目录重试后整个失败输出不变。依据build.py实际次序，objdump摘要拒绝在其版本查询前，不能断言未执行的objdump版本；复制GCC --version的首词可能随可执行文件名变化，断言target锁定版本正文而非猜测gcc首词。该新增检查仍是开发/CI证据，不替代同卡 Tester；最新PR head CI尚待核对。
