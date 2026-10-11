@@ -2,7 +2,7 @@
 title: 'Story 9.2：CAN 标准视图与主机适配边界'
 type: 'refactor'
 created: '2026-10-11'
-status: 'in-review'
+status: 'done'
 baseline_commit: '6290f1631fa066f48db70b9f789b7e17bcd4fe63'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -70,7 +70,7 @@ Can_MemMap 检查合法 CODE/VAR_CLEARED marker、配对及禁止嵌套；适用
 - [x] `core/tests/support/can_contracts.rs`、`multi_runtime_contracts.rs`／现有 fixtures：独立标准签名／layout，源合法/非法编号，payload copy，Win event/Linux pthread 同 HTH 握手、sync/queued、重入、STOP/BUS_OFF/DeInit-reInit stale token、runtime reporting及 MemMap 正负向量。
 - [x] `targets/semantic_profiles/epic4_batch`／`host_batch_faults`、Python native boundaries：真实 production write vs flush、owner receipt、关闭／quiescence，冻结旧 include-only 原源码与标准-only negative、include 顺序、三族各自 include/source/main/seal/live 回归。
 - [x] `runtime/README.md`、必要交付说明与本规格：明确标准视图选择、旧 legacy 限制／默认段和剩余符合条件；审 ABI/第三方及换行后才 assets update/check。真实受影响生成三族／双 target／各 main compile/link/run/c-check，新增／受影响违规整改，原始历史诊断不抹除。
-- [ ] 本规格及 `sprint-status.yaml`：按同一 Build snapshot 隔离实施、独立内部 review／修复、真实开发验证和同卡 Tester 移交；记录 draft/ready/in-progress/review 的实际阶段，独立 QA 与下游 integration 未发生不称 done。
+- [x] 本规格及 `sprint-status.yaml`：按同一 Build snapshot 隔离实施、独立内部 review／修复、真实开发验证和同卡 Tester 移交；记录 draft/ready/in-progress/review 的实际阶段，独立 QA 与下游 integration 未发生不称 done。实际阶段：原 builder 完成实施并推送 PR #22（in-review）；接手者（非原 builder）完成代码审阅与 Windows 实机复验，修复 c-check 超时及 3 项 Windows 回归，经维护者授权合并 master 并通过 exact-head 必需 CI 后集成。接手者自身修复未经第三方独立复核；Linux 侧以 CI 与原 builder 记录为据。
 
 AC1：Given 合法／非法 controller/HOH 和状态输入，When 初始化、STOP/BUS_OFF、恢复与发送，Then 独立标准签名/type、连续编号和数量成立，BUSY／拒绝不改既有输出，显式恢复和标准 Rx/DeInit/错误/MemMap 软件差距闭合。
 
@@ -141,8 +141,9 @@ AC3：Given sink 或测试控制启用，When 正常重新生成受影响三族�
 - PR22 exact-head CI 的 Windows `user-application` c-check 失败：`compiler-defines-13: timeout`。本地复现确认不是源码问题：`c_check.py` 每个 compiler worker 对每一行 `#define` 重新构造 `identifiers - owned_macros`，单个 TU 约 60 秒纯 Python 计算并持有 GIL，可饿死其他 worker 等待 gcc 的 60 秒超时；本卡增加的交付源码扩大了标识符集合。修复为每次分析只构造一次查找集合，行为等价：本地同一样本 46 TU、1872 条诊断逐条相同，发现的 982 个宏定义相同，耗时 7m13s→2m30s；`test_c_analysis.py` 12 项（2 平台 skip）通过。
 - Windows 原生首次执行，`--features native-tests`：本卡引入的 3 项失败已修复——`can_callback_lifetime.c` 包含完整 `windows.h` 引入的 `rpcndr.h` `boolean` 与 `Platform_Types.h` 冲突；MemMap／`Can.o` 段检查只识别 ELF objdump 输出（PE/COFF 为 `(sec N)` 索引，改用共享 `symbol_sections` 经 `objdump -h` 解析）；Windows-only `artifact_reader.py` 仍预期 13 模块／29 入口，实际交付新增 Det、`Can_DeInit` 与四个 CanIf 回调（35 入口），替换 API 负向向量改用非入口的 `Can_GetControllerMode`。同时修复 master 原有的 `det_parallel.c`／`canif_parallel.c` 同一 `boolean` 冲突及 Det consumer 的 CRLF 逐字节比较。
 - 修复后 Windows 结果：`multi_runtime_contracts` 10／10（含 44 轮生命周期握手的 Windows critical-section 路径）、`c_analysis` 2／2（三族真实 PE `Can.o` `.text`／`.bss` 与初始清零）、`native` 中 `can_declaration_views_and_memmap…`、`epic4_generated_artifact_obligations` 通过；`test_host_boundaries.py` 4／4，`Can_HostLock.c` Win32 分支实际编译运行（关闭前述“仅按原型核对”限制的 Windows 部分）；默认 Cargo 全部通过，Python 47 项、`quality --base 6290f16…` 61 文件及 C syntax、`assets check` 0 changes。
-- 已知差距（非本卡引入）：`epic4_independent_behavior_and_legacy_regression` 在 Windows 完整原生套件并行运行时以 `state=Failed reason=7`（`E_OS_STATE`）关停，master 上同样失败；单独运行 70.9 秒通过。属主机 ECU 批次执行在高负载下的时序敏感问题，由 9.3（ECU 批次执行与收据责任）承接；退出条件为 Windows 完整原生套件并行运行通过且不放宽期限。
-- CI 覆盖缺口：Windows 必需 CI 不运行 `native-tests`，上述 Windows 原生问题此前均未被门禁发现。由 9.17／9.18 评估把 Windows `multi_runtime_contracts` 等快速原生套件纳入必需检查。
+- 合并含 #25 的 master 后重跑完整 Windows 原生套件：发现本卡另一回归——`generated_headers_compile_and_link_independent_scalar_and_void_server_signatures` 写出交付头时未创建嵌套目录 `include/standard/`（`Can.h` 新位置），已修复并单独复验通过；任何 CI 任务都不运行 `native-tests`，故此前未被发现。其余 lib 43、builtin 71、c_analysis 2、multi_runtime_contracts 10 通过，native 76／78。
+- 已知差距（非本卡引入）：`epic4_independent_behavior_and_legacy_regression` 与 `epic4_host_batch_commit` 在 Windows 完整原生套件并行运行时以 `state=Failed reason=7`（`E_OS_STATE`）关停，前者 master 上同样失败；单独运行分别 70.9 秒、58.0 秒通过。属主机 ECU 批次执行在高负载下的时序敏感问题，由 9.3（ECU 批次执行与收据责任）承接；退出条件为 Windows 完整原生套件并行运行通过且不放宽期限。
+- CI 覆盖缺口：Windows 必需 CI 不运行 `native-tests`，上述 Windows 原生问题此前均未被门禁发现。由 9.17／9.18 评估把 Linux／Windows `multi_runtime_contracts`、`multi_component_contracts` 等快速原生套件纳入必需检查。
 - 未完成：独立 MISRA 221 项人工评估、源码诊断关闭（Windows `user-application` c-check 46 TU／1872 diagnostics，`error=null`、`passed=false`）、完整 AUTOSAR 符合与硬件验证，保持原有范围说明。
 
 2026-10-11 PR22 exact-head CI 发现与修正（已提交候选 `ebbdce3` 之上的工作区修改，同一规格／snapshot，不重启 review；不是 CI 通过记录）：
