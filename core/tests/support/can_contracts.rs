@@ -976,11 +976,10 @@ Std_ReturnType (*write_frame)(uint16_t, const Can_PduType *) = Can_Write;
         assert_eq!(output.status.success(), allowed, "section/{index}: {}", String::from_utf8_lossy(&output.stderr));
         if allowed {
             assert!(Command::new(&binary).status().unwrap().success());
-            let symbols = Command::new(&identity.objdump).args(["-t"]).arg(&binary).output().unwrap();
-            assert!(symbols.status.success());
-            let symbols = String::from_utf8(symbols.stdout).unwrap();
-            assert!(symbols.lines().any(|line| line.contains(".text") && line.ends_with(" mapped")), "{symbols}");
-            assert!(symbols.lines().any(|line| line.contains(".bss") && line.ends_with(" zero")), "{symbols}");
+            let sections = tooling::symbol_sections(&identity.objdump, &binary);
+            for (symbol, section) in [("mapped", ".text"), ("zero", ".bss")] {
+                assert!(sections.iter().any(|(name, actual)| name == symbol && actual == section), "{symbol}/{section}: {sections:?}");
+            }
         }
     }
 }

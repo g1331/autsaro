@@ -68,7 +68,12 @@ fn det_standard_consumer_executes_runtime_and_halt_contracts() {
             .current_dir(&scratch.0)
             .output()
             .unwrap();
-        assert_eq!(String::from_utf8_lossy(&output.stdout), expected, "{mode}");
+        // Windows text-mode stdout writes CRLF; the contract is the line content.
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).replace("\r\n", "\n"),
+            expected,
+            "{mode}"
+        );
         assert!(output.stderr.is_empty(), "{mode}: {:?}", output);
         if halted {
             // A failed assertion or ordinary rejection cannot satisfy halt.

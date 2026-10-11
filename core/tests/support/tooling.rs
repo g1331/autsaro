@@ -134,6 +134,50 @@ pub(super) fn native_binary(directory: &std::path::Path, stem: &str) -> PathBuf 
         stem.to_owned()
     })
 }
+
+/// Section names defining each symbol, read with the target `objdump`.
+/// ELF symbol tables name the section; PE/COFF ones give a 1-based
+/// `(sec N)` index into the `objdump -h` section headers.
+pub(super) fn symbol_sections(objdump: &Path, binary: &Path) -> Vec<(String, String)> {
+    let run = |flag: &str| {
+        let output = Command::new(objdump)
+            .arg(flag)
+            .arg(binary)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "objdump {flag} {}",
+            binary.display()
+        );
+        String::from_utf8(output.stdout).unwrap()
+    };
+    let headers: Vec<String> = run("-h")
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split_whitespace();
+            fields.next()?.parse::<usize>().ok()?;
+            fields.next().map(str::to_owned)
+        })
+        .collect();
+    run("-t")
+        .lines()
+        .filter_map(|line| {
+            let symbol = line.split_whitespace().last()?.to_owned();
+            let section = match line.split_once("(sec") {
+                Some((_, rest)) => {
+                    let index: usize = rest.split(')').next()?.trim().parse().ok()?;
+                    headers.get(index.checked_sub(1)?)?.clone()
+                }
+                None => line
+                    .split_whitespace()
+                    .find(|field| field.starts_with('.'))?
+                    .to_owned(),
+            };
+            Some((symbol, section))
+        })
+        .collect()
+}
 #[cfg(any(windows, target_os = "linux"))]
 pub(super) fn run_native_os_suite(suite: &str) {
     use std::ffi::OsString;

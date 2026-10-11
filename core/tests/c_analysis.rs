@@ -363,13 +363,7 @@ fn generated_can_object_sections_and_clear(project: &Path) {
     let object = scratch.0.join("Can.o");
     // Compile the actual generated source with the delivered profile flags and headers.
     compile(&project.join("src/Can.c"), &object, true);
-    let result = Command::new(&settings.objdump)
-        .arg("-t")
-        .arg(&object)
-        .output()
-        .unwrap();
-    assert!(result.status.success());
-    let symbols = String::from_utf8(result.stdout).unwrap();
+    let symbols = tooling::symbol_sections(&settings.objdump, &object);
     for (symbol, section) in [
         ("Can_Write", ".text"),
         ("Can_Init", ".text"),
@@ -382,9 +376,9 @@ fn generated_can_object_sections_and_clear(project: &Path) {
     ] {
         assert!(
             symbols
-                .lines()
-                .any(|line| line.contains(section) && line.ends_with(&format!(" {symbol}"))),
-            "{symbol}/{section}: {symbols}"
+                .iter()
+                .any(|(name, actual)| name == symbol && actual == section),
+            "{symbol}/{section}: {symbols:?}"
         );
     }
     let source = scratch.0.join("can-clear.c");

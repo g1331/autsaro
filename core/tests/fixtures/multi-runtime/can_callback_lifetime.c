@@ -17,6 +17,8 @@
 #include "Ecu_Config.h"
 #include <assert.h>
 #if defined(_WIN32)
+/* Threads only; skip COM/RPC headers whose boolean clashes with Platform_Types.h. */
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 static CRITICAL_SECTION handshake;
 static CONDITION_VARIABLE changed;
