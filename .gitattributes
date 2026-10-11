@@ -7,9 +7,8 @@
 /runtime/ecu/** text eol=lf
 /runtime/host/** text eol=lf
 /runtime/os/patches/** -text whitespace=-blank-at-eol
-# Original input raw-byte manifests must survive a fresh checkout unchanged.
-/core/tests/fixtures/epic4/** text eol=lf
-/core/tests/fixtures/epic4_oracles/** text eol=lf
+# Test fixtures are byte-exact inputs (raw-byte manifests, text patches); keep LF on every checkout.
+/core/tests/fixtures/** text eol=lf
 
 # Fixed checkout byte identities for packaged BSW producers.
 /LICENSE text eol=lf
@@ -68,7 +67,6 @@
 
 # Separate standard multi-component implementation keeps reproducible LF bytes.
 /runtime/multi/** text eol=lf
-/core/tests/fixtures/multi-runtime/** text eol=lf
 
 # CAN standard/host views and private adapter have fixed delivery bytes.
 /runtime/include/standard/** text eol=lf
