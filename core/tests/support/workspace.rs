@@ -13,8 +13,9 @@ impl Scratch {
         let path =
             std::env::temp_dir().join(format!("autosar-config-{}-{nonce}", std::process::id()));
         fs::create_dir(&path).unwrap();
-        // Workspaces report canonical paths (`\\?\` on Windows); compare against the same form.
-        Self(fs::canonicalize(path).unwrap())
+        // Keep the plain path: native compilers reject Windows verbatim (`\\?\`) paths.
+        // Tests comparing against reported source paths canonicalize their own side.
+        Self(path)
     }
 }
 impl Drop for Scratch {
