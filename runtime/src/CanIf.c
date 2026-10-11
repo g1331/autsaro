@@ -1,8 +1,12 @@
 #include "CanIf.h"
-#include "Can.h"
-#include "Can_HostLock.h"
+#include "Can_Host.h"
+#include "SchM_CanIf.h"
 #include "LSduR.h"
 #include "Ecu_Execution.h"
+
+#ifndef CAN_RX_HOH
+#define CAN_RX_HOH 0u
+#endif
 
 #define CANIF_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "CanIf_MemMap.h"
@@ -20,17 +24,17 @@ static Can_ControllerStateType indicated_controller_mode;
 #include "CanIf_MemMap.h"
 
 void CanIf_Init(const EcuConfig *config) {
-    Can_Lock();
+    SchM_Enter_CanIf_CANIF_STATE();
     canif_config = config;
     host_rx_time_active = 0u;
     host_rx_result = ECU_ERR_CONFIG;
     indicated_controller_mode = CAN_CS_STOPPED;
-    Can_Unlock();
+    SchM_Exit_CanIf_CANIF_STATE();
 }
 
 EcuStatus CanIf_Transmit(size_t frame_index, const uint8_t data[8]) {
     EcuStatus result = ECU_ERR_CONFIG;
-    Can_Lock();
+    SchM_Enter_CanIf_CANIF_STATE();
     if ((canif_config != NULL) && (frame_index < canif_config->frame_count)) {
         const EcuFrameConfig *frame = &canif_config->frames[frame_index];
         if (frame->direction != 1u) {
@@ -48,13 +52,13 @@ EcuStatus CanIf_Transmit(size_t frame_index, const uint8_t data[8]) {
             }
         }
     }
-    Can_Unlock();
+    SchM_Exit_CanIf_CANIF_STATE();
     return result;
 }
 
 EcuStatus CanIf_TransmitDiagnostic(uint8_t dlc, const uint8_t data[8]) {
     EcuStatus result = ECU_ERR_CONFIG;
-    Can_Lock();
+    SchM_Enter_CanIf_CANIF_STATE();
     if ((canif_config != NULL) && (canif_config->diagnostic != NULL)) {
         if (indicated_controller_mode != CAN_CS_STARTED) {
             result = ECU_ERR_CONTROLLER;
@@ -70,12 +74,12 @@ EcuStatus CanIf_TransmitDiagnostic(uint8_t dlc, const uint8_t data[8]) {
             }
         }
     }
-    Can_Unlock();
+    SchM_Exit_CanIf_CANIF_STATE();
     return result;
 }
 
 void CanIf_TxConfirmation(PduIdType can_tx_pdu_id) {
-    Can_Lock();
+    SchM_Enter_CanIf_CANIF_STATE();
     if (canif_config != NULL) {
         for (size_t index = 0u; index < Ecu_TransmitRouteCount; ++index) {
             const EcuTransmitRoute *route = &Ecu_TransmitRoutes[index];
@@ -91,26 +95,26 @@ void CanIf_TxConfirmation(PduIdType can_tx_pdu_id) {
             }
         }
     }
-    Can_Unlock();
+    SchM_Exit_CanIf_CANIF_STATE();
 }
 
 void CanIf_ControllerModeIndication(uint8_t controller_id,
                                     Can_ControllerStateType controller_mode) {
-    Can_Lock();
+    SchM_Enter_CanIf_CANIF_STATE();
     if ((canif_config != NULL) && (controller_id == 0u) &&
         ((controller_mode == CAN_CS_STARTED) || (controller_mode == CAN_CS_STOPPED) ||
          (controller_mode == CAN_CS_SLEEP))) {
         indicated_controller_mode = controller_mode;
     }
-    Can_Unlock();
+    SchM_Exit_CanIf_CANIF_STATE();
 }
 
 void CanIf_ControllerBusOff(uint8_t controller_id) {
-    Can_Lock();
+    SchM_Enter_CanIf_CANIF_STATE();
     if ((canif_config != NULL) && (controller_id == 0u)) {
         indicated_controller_mode = CAN_CS_STOPPED;
     }
-    Can_Unlock();
+    SchM_Exit_CanIf_CANIF_STATE();
 }
 
 static EcuStatus RouteRx(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
@@ -142,11 +146,11 @@ static EcuStatus RouteRx(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64
 }
 
 void CanIf_RxIndication(const Can_HwType *mailbox, const PduInfoType *pdu_info) {
-    Can_Lock();
+    SchM_Enter_CanIf_CANIF_STATE();
     host_rx_result = ECU_ERR_CONFIG;
     if ((canif_config != NULL) && (mailbox != NULL) && (pdu_info != NULL) &&
         (pdu_info->SduDataPtr != NULL)) {
-        if ((mailbox->Hoh != 0u) || (mailbox->ControllerId != 0u)) {
+        if ((mailbox->Hoh != CAN_RX_HOH) || (mailbox->ControllerId != 0u)) {
             host_rx_result = ECU_ERR_CONFIG;
         } else if (mailbox->CanId > 0x7ffu) {
             host_rx_result = ECU_ERR_FRAME_ID;
@@ -159,11 +163,11 @@ void CanIf_RxIndication(const Can_HwType *mailbox, const PduInfoType *pdu_info) 
                 RouteRx(mailbox->CanId, (uint8_t)pdu_info->SduLength, pdu_info->SduDataPtr, now_ms);
         }
     }
-    Can_Unlock();
+    SchM_Exit_CanIf_CANIF_STATE();
 }
 
 EcuStatus CanIf_HostRxIndication(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
-    Can_HwType mailbox = {id, 0u, 0u};
+    Can_HwType mailbox = {id, CAN_RX_HOH, 0u};
     uint8_t payload[8] = {0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
     PduInfoType pdu_info = {payload, NULL, dlc};
     EcuStatus result;
@@ -177,7 +181,7 @@ EcuStatus CanIf_HostRxIndication(uint32_t id, uint8_t dlc, const uint8_t data[8]
     } else {
         pdu_info.SduDataPtr = NULL;
     }
-    Can_Lock();
+    SchM_Enter_CanIf_CANIF_STATE();
     previous_time_ms = host_rx_time_ms;
     previous_time_active = host_rx_time_active;
     host_rx_time_ms = now_ms;
@@ -186,7 +190,7 @@ EcuStatus CanIf_HostRxIndication(uint32_t id, uint8_t dlc, const uint8_t data[8]
     result = host_rx_result;
     host_rx_time_ms = previous_time_ms;
     host_rx_time_active = previous_time_active;
-    Can_Unlock();
+    SchM_Exit_CanIf_CANIF_STATE();
     return result;
 }
 

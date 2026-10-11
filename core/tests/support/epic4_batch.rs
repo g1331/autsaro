@@ -1,13 +1,13 @@
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 use std::io::Write;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::Command;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 use std::process::Stdio;
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 fn live_output(binary: &Path) {
     let mut child = Command::new(binary)
         .stdin(Stdio::piped())
@@ -76,7 +76,7 @@ fn live_output(binary: &Path) {
     assert!(status.success());
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 pub(super) fn run_text(binary: &Path, directory: &Path, script: &[u8]) -> String {
     std::fs::create_dir_all(directory).unwrap();
     let mut child = Command::new(binary)
@@ -106,7 +106,7 @@ pub(super) fn run_text(binary: &Path, directory: &Path, script: &[u8]) -> String
     text
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 pub fn commit() {
     use autosar_config_core::integration::{PlanDependencies, RuntimeCatalog, build_plan};
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
@@ -253,20 +253,17 @@ pub fn commit() {
             "{text}"
         );
     }
+    // Compile the sealed production writer in the same external control TU; the
+    // fixture calls that exact function rather than simulating an I/O refusal.
+    let faults = scratch.0.join("host-batch-faults.c");
+    std::fs::write(&faults, format!("#define main production_main\n#define batch production_batch\n#define control production_control\n{}\n#undef main\n#undef batch\n#undef control\n{}",
+        std::fs::read_to_string(source.join("src/ecu_host_batch.c")).unwrap(),
+        std::fs::read_to_string(root.join("core/tests/fixtures/host_batch_faults.c")).unwrap())).unwrap();
     let fault_build = scratch.0.join("fault-build");
-    super::epic4_ecu::compile(
-        &source,
-        &fault_build,
-        Some(&root.join("core/tests/fixtures/host_batch_faults.c")),
-    );
+    super::epic4_ecu::compile(&source, &fault_build, Some(&faults));
     let overflow_build = scratch.0.join("overflow-build");
     let output = super::tooling::run_public_command(
-        &mut super::tooling::ecu_build_command(
-            &source,
-            &overflow_build,
-            "test",
-            Some(&root.join("core/tests/fixtures/host_batch_faults.c")),
-        ),
+        &mut super::tooling::ecu_build_command(&source, &overflow_build, "test", Some(&faults)),
         &scratch.0,
         "overflow-build",
         std::time::Duration::from_secs(180),
@@ -277,7 +274,7 @@ pub fn commit() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    for mode in ["fail", "block", "sequence", "overflow"] {
+    for mode in ["fail", "block", "sequence", "overflow", "write", "flush"] {
         let directory = scratch.0.join(mode);
         std::fs::create_dir_all(&directory).unwrap();
         let started = std::time::Instant::now();
@@ -301,7 +298,8 @@ pub fn commit() {
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
         let result = child.wait().unwrap();
-        let text = std::fs::read_to_string(directory.join("stdout")).unwrap();
+        let mut text = std::fs::read_to_string(directory.join("stdout")).unwrap();
+        text.push_str(&std::fs::read_to_string(directory.join("stderr")).unwrap());
         if mode == "sequence" {
             assert!(result.success(), "{text}");
             assert!(
@@ -323,6 +321,13 @@ pub fn commit() {
             assert_eq!(result.code(), Some(7), "{text}");
             assert_eq!(text.matches("fault_output ").count(), 1, "{text}");
             assert!(!text.contains("fault_commit "), "{text}");
+            if matches!(mode, "write" | "flush") {
+                assert!(
+                    text.contains(&format!("physical_{mode} failed no_receipt ticket=")),
+                    "{text}"
+                );
+                assert!(!text.contains("COMMIT_OK"), "{text}");
+            }
             if mode == "block" {
                 assert!(started.elapsed() >= std::time::Duration::from_millis(4500));
             }
@@ -330,7 +335,7 @@ pub fn commit() {
     }
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 pub fn native_boundary() {
     use autosar_config_core::integration::{PlanDependencies, RuntimeCatalog, build_plan};
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();

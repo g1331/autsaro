@@ -1,12 +1,17 @@
 #include "LSduR.h"
-#include "Can.h"
+#include "SchM_CanIf.h"
+#include "standard/Can.h"
 #include "CanIf.h"
 #include "CanTp.h"
 #include "PduR.h"
 
 static const EcuDiagnosticConfig *active_diagnostic;
 
-void LSduR_Init(const EcuDiagnosticConfig *config) { active_diagnostic = config; }
+void LSduR_Init(const EcuDiagnosticConfig *config) {
+    SchM_Enter_CanIf_CANIF_STATE();
+    active_diagnostic = config;
+    SchM_Exit_CanIf_CANIF_STATE();
+}
 
 EcuStatus LSduR_CanTpTransmit(uint8_t dlc, const uint8_t data[8]) {
     EcuStatus result = ECU_ERR_CONFIG;

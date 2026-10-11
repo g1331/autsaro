@@ -9,3 +9,5 @@ int Can_TryLock(void) {
     return 1;
 }
 void Can_Unlock(void) { Ecu_TargetAssertOwner(); }
+void Can_HostStateLock(void) { Ecu_TargetAssertOwner(); }
+void Can_HostStateUnlock(void) { Ecu_TargetAssertOwner(); }

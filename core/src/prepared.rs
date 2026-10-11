@@ -319,7 +319,16 @@ pub(crate) fn deliver_path(
             }
         }
         if let Some(relative) = path.strip_prefix("multi/") {
-            if profile == "ecu-multi"
+            if (profile == "ecu-multi"
+                || matches!(
+                    relative,
+                    "include/Det.h"
+                        | "include/Det_MemMap.h"
+                        | "src/Det.c"
+                        | "src/Det_Host.c"
+                        | "src/Det_Host.h"
+                        | "src/SchM_CanIf_Host.c"
+                ))
                 && (relative.starts_with("src/") || relative.starts_with("include/"))
             {
                 return Ok(relative.into());

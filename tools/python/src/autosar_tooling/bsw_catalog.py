@@ -52,13 +52,15 @@ def materialize(root: Path = ROOT) -> dict:
 
     for symbol, module in sorted(SELECTED.items()):
         headers = sorted((root / "runtime/include").glob(f"{module}*.h"))
+        if module == "Can":
+            headers.append(root / "runtime/include/standard/Can.h")
         scheduled = root / f"runtime/include/SchM_{module}.h"
         if scheduled.is_file():
             headers.append(scheduled)
         matches = []
         for header in headers:
             declaration = re.search(
-                r"^([A-Za-z_]\w*)\s+" + re.escape(symbol) + r"\s*\(([^;{}]*)\)\s*;",
+                r"^(?:CAN_CODE\s+)?([A-Za-z_]\w*)\s+" + re.escape(symbol) + r"\s*\(([^;{}]*)\)\s*;",
                 header.read_text(encoding="utf-8"),
                 re.MULTILINE,
             )
@@ -69,7 +71,7 @@ def materialize(root: Path = ROOT) -> dict:
         header, declaration = matches[0]
         source = root / f"runtime/src/{module}.c"
         definition = re.findall(
-            r"^[A-Za-z_]\w*\s+" + re.escape(symbol) + r"\s*\([^;{}]*\)\s*\{",
+            r"^(?:CAN_CODE\s+)?[A-Za-z_]\w*\s+" + re.escape(symbol) + r"\s*\([^;{}]*\)\s*\{",
             source.read_text(encoding="utf-8"),
             re.MULTILINE,
         )
@@ -108,9 +110,11 @@ def materialize(root: Path = ROOT) -> dict:
     while pending:
         relative = pending.pop()
         text = (root / relative).read_text(encoding="utf-8")
-        for name in re.findall(r'^\s*#include\s+"([^"/\\]+)"', text, re.MULTILINE):
-            dependency = root / "runtime/include" / name
-            if dependency.is_file():
+        for name in re.findall(r'^\s*#include\s+"([^"\\]+)"', text, re.MULTILINE):
+            candidates = [(root / relative).parent / name, root / "runtime/include" / name,
+                          root / "runtime/multi/include" / name]
+            dependency = next((path for path in candidates if path.is_file()), None)
+            if dependency is not None:
                 identity = dependency.relative_to(root).as_posix()
                 if identity not in sources:
                     record(dependency)
@@ -136,7 +140,7 @@ def probe(current: dict) -> None:
         source = directory / "current_bsw_contract.c"
         headers = sorted({entry["header"] for entry in current["entries"].values()})
         lines = ["#include <stddef.h>"]
-        lines.extend('#include "' + Path(header).name + '"' for header in headers)
+        lines.extend('#include "' + str(Path(header).relative_to("runtime/include")) + '"' for header in headers)
         # This address/type consumer initializes no ECU and has no routes.
         # Behavioral profile consumers compile the real generated producers.
         lines.extend(
@@ -170,6 +174,8 @@ def probe(current: dict) -> None:
             if path.name != "ecu_host_main.c"
         )
         inputs.extend(sorted((ROOT / "runtime/host/src").glob("*.c")))
+        inputs.extend(ROOT / name for name in ["runtime/multi/src/Det.c",
+                      "runtime/multi/src/Det_Host.c", "runtime/multi/src/SchM_CanIf_Host.c"])
         target = (
             "windows-x64-controlled-v1"
             if os.name == "nt"
@@ -185,6 +191,7 @@ def probe(current: dict) -> None:
                 "-Werror",
                 "-I" + str(ROOT / "runtime/include"),
                 "-I" + str(ROOT / "runtime/src"),
+                "-I" + str(ROOT / "runtime/multi/include"),
                 "-I" + str(ROOT / "runtime/host/include"),
                 str(source),
                 *map(str, inputs),

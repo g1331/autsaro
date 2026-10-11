@@ -1,4 +1,5 @@
 #include "PduR.h"
+#include "SchM_CanIf.h"
 #include <string.h>
 #include "CanTp.h"
 #include "Com.h"
@@ -17,12 +18,14 @@ static uint8_t rx_active;
 static uint8_t tx_active;
 
 void PduR_Init(const EcuConfig *config) {
+    SchM_Enter_CanIf_CANIF_STATE();
     pdur_config = config;
     rx_expected = 0u;
     rx_received = 0u;
     pdur_tx_length = 0u;
     rx_active = 0u;
     tx_active = 0u;
+    SchM_Exit_CanIf_CANIF_STATE();
 }
 
 EcuStatus PduR_Transmit(size_t frame_index, const uint8_t data[8]) {

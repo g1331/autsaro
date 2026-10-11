@@ -27,6 +27,12 @@ fn det_consumer(scratch: &Path, fixture: &str) -> PathBuf {
         .arg(root.join("runtime/multi/include"))
         .arg("-I")
         .arg(root.join("runtime/multi/src"))
+        .arg("-I")
+        .arg(root.join("runtime/include"))
+        .arg("-I")
+        .arg(root.join("runtime/src"))
+        .arg(root.join("runtime/multi/src/SchM_CanIf_Host.c"))
+        .arg(root.join("runtime/src/Can_HostLock.c"))
         .arg(root.join("runtime/multi/src/Det.c"))
         .arg(root.join("runtime/multi/src/Det_Host.c"))
         .arg(root.join("core/tests/fixtures/multi-runtime").join(fixture))
@@ -105,6 +111,13 @@ fn com_standard_consumer_executes_group_and_reception_monitoring() {
         .arg(root.join("runtime/multi/src"))
         .arg("-I")
         .arg(root.join("core/tests/fixtures/multi-runtime"))
+        .arg("-pthread")
+        .arg("-I")
+        .arg(root.join("runtime/include"))
+        .arg("-I")
+        .arg(root.join("runtime/src"))
+        .arg(root.join("runtime/multi/src/SchM_CanIf_Host.c"))
+        .arg(root.join("runtime/src/Can_HostLock.c"))
         .arg(root.join("runtime/multi/src/Com.c"))
         .arg(root.join("core/tests/fixtures/multi-runtime/com_contract.c"))
         .arg("-o")
@@ -125,19 +138,35 @@ fn com_standard_consumer_executes_group_and_reception_monitoring() {
     );
 }
 
-fn chain_consumer(scratch: &Path, fixture: &str) -> PathBuf {
+fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let inventory = autosar_config_core::resources::AssetInventory::from_directory(root).unwrap();
-    // Materialize normal flat delivery headers, preserving the reused CAN assets' raw bytes.
+    // Materialize each family's delivery closure; no repository header fallback.
     let include = scratch.join("include");
     std::fs::create_dir(&include).unwrap();
-    for name in ["Can.h", "Can_GeneralTypes.h"] {
+    for name in [
+        "Can.h",
+        "Can_GeneralTypes.h",
+        "Can_CfgTypes.h",
+        "Can_Host.h",
+        "Can_MemMap.h",
+        "SchM_Can.h",
+        "standard/Can.h",
+    ] {
         let asset = inventory.get(&format!("runtime/include/{name}")).unwrap();
+        std::fs::create_dir_all(include.join(name).parent().unwrap()).unwrap();
         std::fs::write(include.join(name), asset.bytes).unwrap();
         assert_eq!(
             std::fs::read(include.join(name)).unwrap(),
             std::fs::read(root.join(asset.relative_path)).unwrap()
         );
+    }
+    for name in ["Ecu_Config.h", "Ecu_Status.h", "Ecu_DcmCallbackTypes.h"] {
+        std::fs::copy(root.join("runtime/include").join(name), include.join(name)).unwrap();
+    }
+    for entry in std::fs::read_dir(root.join("runtime/host/include")).unwrap() {
+        let entry = entry.unwrap();
+        std::fs::copy(entry.path(), include.join(entry.file_name())).unwrap();
     }
     for entry in std::fs::read_dir(root.join("runtime/multi/include")).unwrap() {
         let entry = entry.unwrap();
@@ -173,6 +202,18 @@ fn chain_consumer(scratch: &Path, fixture: &str) -> PathBuf {
     ) {
         command.arg("-DCAN_HOST_QUEUED_COMPLETION=1");
     }
+    command.args(flags);
+    if fixture == "can_callback_lifetime.c" {
+        command.arg(if cfg!(windows) {
+            "-Wl,--wrap=__imp_EnterCriticalSection"
+        } else {
+            "-Wl,--wrap=pthread_mutex_lock"
+        });
+        command.args([
+            "-Wl,--wrap=Can_Unlock",
+            "-Wl,--wrap=SchM_Enter_CanIf_CANIF_STATE",
+        ]);
+    }
     if fixture == "mode_contract.c" {
         // Independent non-equal namespace oracle; final generation derives source IDs.
         command.args([
@@ -185,14 +226,21 @@ fn chain_consumer(scratch: &Path, fixture: &str) -> PathBuf {
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
         .arg("-I")
         .arg(include);
-    for directory in [
-        "runtime/multi/src",
-        "runtime/include",
-        "runtime/src",
-        "runtime/host/include",
-    ] {
-        command.arg("-I").arg(root.join(directory));
+    let sources = scratch.join("src");
+    std::fs::create_dir(&sources).unwrap();
+    for directory in ["runtime/multi/src", "runtime/src"] {
+        for entry in std::fs::read_dir(root.join(directory)).unwrap() {
+            let entry = entry.unwrap();
+            if entry
+                .path()
+                .extension()
+                .is_some_and(|extension| extension == "h")
+            {
+                std::fs::copy(entry.path(), sources.join(entry.file_name())).unwrap();
+            }
+        }
     }
+    command.arg("-I").arg(&sources);
     for source in [
         "runtime/multi/src/Com.c",
         "runtime/multi/src/PduR.c",
@@ -209,10 +257,13 @@ fn chain_consumer(scratch: &Path, fixture: &str) -> PathBuf {
         "runtime/multi/src/Det.c",
         "runtime/multi/src/Det_Host.c",
         "runtime/src/Can.c",
+        "runtime/src/Can_Host.c",
         "runtime/src/Can_HostLock.c",
         "runtime/host/src/Can_Execution.c",
     ] {
-        command.arg(root.join(source));
+        let delivered = sources.join(std::path::Path::new(source).file_name().unwrap());
+        std::fs::copy(root.join(source), &delivered).unwrap();
+        command.arg(delivered);
     }
     command.arg(root.join("core/tests/fixtures/multi-runtime").join(fixture));
     let output = command.arg("-o").arg(&executable).output().unwrap();
@@ -227,7 +278,7 @@ fn chain_consumer(scratch: &Path, fixture: &str) -> PathBuf {
 #[test]
 fn com_periodic_transmission_executes_real_lower_modules_and_can_busy() {
     let scratch = Scratch::new();
-    let executable = chain_consumer(&scratch.0, "com_chain_contract.c");
+    let executable = chain_consumer(&scratch.0, "com_chain_contract.c", &[]);
     let output = Command::new(executable).output().unwrap();
     assert!(output.status.success(), "{:?}", output);
     assert!(
@@ -240,7 +291,7 @@ fn com_periodic_transmission_executes_real_lower_modules_and_can_busy() {
 #[test]
 fn canif_different_pdus_and_actual_confirmation_stop_interleave_safely() {
     let scratch = Scratch::new();
-    let executable = chain_consumer(&scratch.0, "canif_parallel.c");
+    let executable = chain_consumer(&scratch.0, "canif_parallel.c", &[]);
     let logs = scratch.0.join("execution");
     std::fs::create_dir(&logs).unwrap();
     #[cfg(unix)]
@@ -271,7 +322,7 @@ fn canif_different_pdus_and_actual_confirmation_stop_interleave_safely() {
 #[test]
 fn comm_cdd_mode_demand_and_immediate_bswm_use_actual_lower_modes() {
     let scratch = Scratch::new();
-    let executable = chain_consumer(&scratch.0, "mode_contract.c");
+    let executable = chain_consumer(&scratch.0, "mode_contract.c", &[]);
     let output = Command::new(executable).output().unwrap();
     assert!(output.status.success(), "{:?}", output);
     assert!(
@@ -284,7 +335,7 @@ fn comm_cdd_mode_demand_and_immediate_bswm_use_actual_lower_modes() {
 #[test]
 fn diagnostic_transport_owns_buffers_and_obeys_real_mode_and_confirmation() {
     let scratch = Scratch::new();
-    let executable = chain_consumer(&scratch.0, "diagnostic_contract.c");
+    let executable = chain_consumer(&scratch.0, "diagnostic_contract.c", &[]);
     let output = Command::new(executable).output().unwrap();
     assert!(output.status.success(), "{:?}", output);
     assert!(
@@ -297,7 +348,7 @@ fn diagnostic_transport_owns_buffers_and_obeys_real_mode_and_confirmation() {
 #[test]
 fn configured_can_polling_and_zero_dlc_preserve_real_admission_and_callbacks() {
     let scratch = Scratch::new();
-    let executable = chain_consumer(&scratch.0, "can_polling_contract.c");
+    let executable = chain_consumer(&scratch.0, "can_polling_contract.c", &[]);
     let output = Command::new(executable).output().unwrap();
     assert!(output.status.success(), "{:?}", output);
     assert!(
@@ -310,7 +361,7 @@ fn configured_can_polling_and_zero_dlc_preserve_real_admission_and_callbacks() {
 #[test]
 fn queued_diagnostic_cancelled_token_cannot_release_reused_transport_buffer() {
     let scratch = Scratch::new();
-    let executable = chain_consumer(&scratch.0, "diagnostic_queued_contract.c");
+    let executable = chain_consumer(&scratch.0, "diagnostic_queued_contract.c", &[]);
     let output = Command::new(executable).output().unwrap();
     assert!(output.status.success(), "{:?}", output);
     assert!(
@@ -318,4 +369,39 @@ fn queued_diagnostic_cancelled_token_cannot_release_reused_transport_buffer() {
         "{:?}",
         output
     );
+}
+
+#[test]
+fn can_callbacks_and_direct_dependency_lifetimes_are_serialized() {
+    for polling in ["0", "1"] {
+        let scratch = Scratch::new();
+        let flags = [
+            format!("-DCAN_TX_POLLING={polling}"),
+            format!("-DCAN_RX_POLLING={polling}"),
+            format!("-DCAN_BUSOFF_POLLING={polling}"),
+        ];
+        let flags: Vec<_> = flags.iter().map(String::as_str).collect();
+        let executable = chain_consumer(&scratch.0, "can_callback_lifetime.c", &flags);
+        let logs = scratch.0.join("execution");
+        std::fs::create_dir(&logs).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&logs, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        let spec = autosar_config_core::execution::ProcessSpec::for_duration(
+            vec![executable.into_os_string()],
+            scratch.0.clone(),
+            vec![],
+            std::time::Duration::from_secs(30),
+            logs,
+        )
+        .unwrap();
+        let result = tooling::execution_owner().run(spec).unwrap();
+        assert!(
+            result.success(),
+            "{result:?}: {}",
+            std::fs::read_to_string(&result.stderr).unwrap()
+        );
+    }
 }

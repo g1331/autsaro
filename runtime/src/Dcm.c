@@ -1,4 +1,5 @@
 #include "Dcm.h"
+#include "SchM_CanIf.h"
 #include "Dem.h"
 #include "PduR.h"
 #include "Security.h"
@@ -17,10 +18,12 @@ static EcuStatus NegativeResponse(uint8_t service, uint8_t code, uint64_t now_ms
 }
 
 void Dcm_Init(const EcuDiagnosticConfig *config) {
+    SchM_Enter_CanIf_CANIF_STATE();
     dcm_config = config;
     active_session = 0x01u;
     pending_session = 0u;
     last_request_ms = 0u;
+    SchM_Exit_CanIf_CANIF_STATE();
 }
 
 void Dcm_TpTxConfirmation(EcuStatus status, uint64_t now_ms) {

@@ -1,4 +1,5 @@
 #include "Com.h"
+#include "SchM_CanIf.h"
 #include "Std_Types.h"
 #include "Dem.h"
 #include "PduR.h"
@@ -37,6 +38,7 @@ static size_t FrameForSignal(size_t signal_index) {
 }
 
 void Com_Init(const EcuConfig *config) {
+    SchM_Enter_CanIf_CANIF_STATE();
     size_t i;
     com_config = config;
     for (i = 0; i < config->signal_count; ++i) {
@@ -48,6 +50,7 @@ void Com_Init(const EcuConfig *config) {
         rx_seen[i] = 0;
         tx_confirmed[i] = 0u;
     }
+    SchM_Exit_CanIf_CANIF_STATE();
 }
 
 EcuStatus Com_SetSignal(uint16_t id, uint32_t value) {

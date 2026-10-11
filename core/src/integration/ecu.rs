@@ -249,13 +249,12 @@ impl ValidatedIntegrationPlan {
         }
         let mut source_paths = BTreeMap::new();
         for (path, expected) in &plan.runtime_sources {
-            let delivered = if path == "runtime/include/Os.h" {
-                "bsw-origin/include/Os.h"
-            } else {
-                path.trim_start_matches("runtime/")
-            };
+            let asset = AssetInventory::embedded().selected(target, "ecu")
+                .find(|asset| asset.relative_path == path)
+                .ok_or_else(|| reject(crate::product_message!("backend.integration.ecu.plan_source_not_delivered", "path" => path)))?;
+            let delivered = crate::prepared::deliver_path(asset, "ecu").map_err(reject)?;
             let bytes = files
-                .get(delivered)
+                .get(&delivered)
                 .ok_or_else(|| reject(crate::product_message!("backend.integration.ecu.plan_source_not_delivered", "path" => path)))?;
             if format!("{:x}", Sha256::digest(bytes)) != *expected {
                 return Err(reject(
@@ -375,7 +374,7 @@ impl ValidatedIntegrationPlan {
             "include/Ecu_ProfileLimits.h".into(),
             Cow::Owned(
                 format!(
-                    "/** @file Compile-time capacity of the validated integrated profile. */\n#ifndef ECU_PROFILE_LIMITS_H\n#define ECU_PROFILE_LIMITS_H\n#define ECU_MAX_PDU_PAYLOAD {}u\n#endif\n",
+                    "/** @file Compile-time capacity of the validated integrated profile. */\n#ifndef ECU_PROFILE_LIMITS_H\n#define ECU_PROFILE_LIMITS_H\n#define ECU_MAX_PDU_PAYLOAD {}u\n#define CAN_HOST_QUEUED_COMPLETION 1\n#endif\n",
                     diagnostic.buffer_bytes,
                 )
                 .into_bytes(),
@@ -554,6 +553,8 @@ pub(crate) fn source_assets(
             && !matches!(
                 asset.relative_path,
                 "runtime/src/Can.c"
+                    | "runtime/src/Can_Host.c"
+                    | "runtime/src/Can_Internal.h"
                     | "runtime/src/Can_HostLock.c"
                     | "runtime/src/Can_HostLock.h"
                     | "runtime/src/Ecu_Status.c"

@@ -198,7 +198,7 @@ pub(super) fn multi_catalog(
         "Can",
         "void",
         &[("Config", "const Can_ConfigType *", "IN")],
-        "runtime/include/Can.h",
+        "runtime/include/standard/Can.h",
         "runtime/src/Can.c",
     );
     for symbol in [
@@ -312,6 +312,7 @@ pub(super) fn multi_catalog(
 pub(super) fn module_id(module: &str) -> Option<u32> {
     match module {
         "Can" => Some(80),
+        "Det" => Some(15),
         "CanIf" => Some(60),
         "CanTp" => Some(35),
         "Com" => Some(50),
@@ -404,9 +405,15 @@ pub(super) fn multi_source_identities() -> BTreeMap<String, String> {
                 || matches!(
                     asset.relative_path,
                     "runtime/src/Can.c"
+                        | "runtime/src/Can_Host.c"
+                        | "runtime/src/Can_Internal.h"
+                        | "runtime/include/Can.h"
+                        | "runtime/include/Can_CfgTypes.h"
+                        | "runtime/include/Can_Host.h"
+                        | "runtime/include/Can_MemMap.h"
                         | "runtime/src/Can_HostLock.c"
                         | "runtime/src/Can_HostLock.h"
-                        | "runtime/include/Can.h"
+                        | "runtime/include/standard/Can.h"
                         | "runtime/include/Can_GeneralTypes.h"
                         | "runtime/include/SchM_Can.h"
                 )

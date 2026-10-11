@@ -1,7 +1,7 @@
 #ifndef ECU_EXECUTION_H
 #define ECU_EXECUTION_H
 
-#include "Can.h"
+#include "Can_Host.h"
 #include "Ecu_Config.h"
 
 /* Each validated profile links exactly one adapter. Policy remains in Ecu_Policy. */

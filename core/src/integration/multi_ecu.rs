@@ -166,8 +166,8 @@ pub(super) fn files(
         ),
     );
     let profile = format!(
-        "#define ECU_MULTI_COMPONENT 1\n#define CAN_HOST_QUEUED_COMPLETION 1\n#define CAN_ZERO_LENGTH_SUPPORTED 1\n#define CAN_RX_POLLING 1\n#define CAN_TX_POLLING 1\n#define CAN_BUSOFF_POLLING 1\n#define CAN_CONTROLLER_ID {}u\n#define CAN_CANIF_CONTROLLER_ID {}u\n#define CAN_TX_HOH {}u",
-        can.controller_id, can.can_if_controller_id, can.transmit_handle
+        "#define ECU_MULTI_COMPONENT 1\n#define CAN_HOST_QUEUED_COMPLETION 1\n#define CAN_ZERO_LENGTH_SUPPORTED 1\n#define CAN_RX_POLLING 1\n#define CAN_TX_POLLING 1\n#define CAN_BUSOFF_POLLING 1\n#define CAN_CONTROLLER_ID {}u\n#define CAN_CANIF_CONTROLLER_ID {}u\n#define CAN_TX_HOH {}u\n#define CAN_RX_HOH {}u",
+        can.controller_id, can.can_if_controller_id, can.transmit_handle, can.receive_handle
     );
     put(
         &mut files,
@@ -189,7 +189,7 @@ pub(super) fn files(
         "src/Ecu_Execution.h",
         header(
             "ECU_EXECUTION_H",
-            "#include \"Ecu_Config.h\"\n#include \"Can.h\"\nEcuStatus Ecu_ExecutionTransmit(CanTxSink sink, PduIdType handle, uint32_t id, uint8_t dlc, const uint8_t data[8]);\nuint64_t Ecu_ExecutionNow(void);",
+            "#include \"Ecu_Config.h\"\n#include \"Can_Host.h\"\nEcuStatus Ecu_ExecutionTransmit(CanTxSink sink, PduIdType handle, uint32_t id, uint8_t dlc, const uint8_t data[8]);\nuint64_t Ecu_ExecutionNow(void);",
         ),
     );
     put(&mut files, "src/Ecu_Execution.c", "#include \"Ecu_Execution.h\"\n#include \"Ecu_Target.h\"\nEcuStatus Ecu_ExecutionTransmit(CanTxSink sink, PduIdType handle, uint32_t id, uint8_t dlc, const uint8_t data[8]) {\n    (void)sink;\n    return Ecu_TargetEnqueueTransmit(handle, id, dlc, data);\n}\nuint64_t Ecu_ExecutionNow(void) { return Ecu_TargetNow(); }\n".into());
@@ -287,7 +287,7 @@ pub(super) fn files(
         ),
     );
     let mut config = String::from(
-        "/** @file Source-derived immutable communication configurations and owner dispatch. */\n#define RTE_CORE\n#include \"Ecu_TargetConfig.h\"\n#include \"Ecu_Target.h\"\n#include \"Ecu_Config.h\"\n#include \"Can.h\"\n#include \"CanIf.h\"\n#include \"CanTp.h\"\n#include \"Com.h\"\n#include \"Com_Internal.h\"\n#include \"ComM.h\"\n#include \"ComM_BswM.h\"\n#include \"ComM_Internal.h\"\n#include \"BswM.h\"\n#include \"BswM_ComM.h\"\n#include \"Ecu_HostBusSM.h\"\n#include \"Dcm.h\"\n#include \"Dcm_ComM.h\"\n#include \"PduR.h\"\n#include \"PduR_Com.h\"\n#include \"PduR_CanIf.h\"\n#include \"LSduR.h\"\n#include \"LSduR_PduR.h\"\n#include \"Rte_Main.h\"\n#include \"Rte_Com.h\"\n#include \"SchM_Can.h\"\n#include \"SchM_CanTp.h\"\n#include \"SchM_Com.h\"\n#include \"SchM_ComM.h\"\n#include \"SchM_Dcm.h\"\n",
+        "/** @file Source-derived immutable communication configurations and owner dispatch. */\n#define RTE_CORE\n#include \"Ecu_TargetConfig.h\"\n#include \"Ecu_Target.h\"\n#include \"Ecu_Config.h\"\n#include \"Can_Host.h\"\n#include \"CanIf.h\"\n#include \"Det.h\"\n#include \"CanTp.h\"\n#include \"Com.h\"\n#include \"Com_Internal.h\"\n#include \"ComM.h\"\n#include \"ComM_BswM.h\"\n#include \"ComM_Internal.h\"\n#include \"BswM.h\"\n#include \"BswM_ComM.h\"\n#include \"Ecu_HostBusSM.h\"\n#include \"Dcm.h\"\n#include \"Dcm_ComM.h\"\n#include \"PduR.h\"\n#include \"PduR_Com.h\"\n#include \"PduR_CanIf.h\"\n#include \"LSduR.h\"\n#include \"LSduR_PduR.h\"\n#include \"Rte_Main.h\"\n#include \"Rte_Com.h\"\n#include \"SchM_Can.h\"\n#include \"SchM_CanTp.h\"\n#include \"SchM_Com.h\"\n#include \"SchM_ComM.h\"\n#include \"SchM_Dcm.h\"\n",
     );
     for component in &multi.components {
         writeln!(
@@ -542,7 +542,7 @@ pub(super) fn files(
         .unwrap();
     }
     config.push_str("    default: return E_NOT_OK;\n    }\n    return E_OK;\n}\n");
-    config.push_str("Std_ReturnType Ecu_MultiBootstrap(void) {\n    Can_ControllerStateType actual;\n    if (Ecu_TargetCheckLifecycleContext(TRUE) != E_OK) { return E_NOT_OK; }\n    SchM_Init(&Ecu_SchMConfig);\n    SchM_Start();\n    if (Ecu_SchMReady() == FALSE) { return E_NOT_OK; }\n    Can_Init(&driver);\n    CanIf_Init(&can_if_config);\n    Ecu_HostBusSM_Init(&bus_config);\n    LSduR_Init(&LSduR_Config);\n    PduR_Init(&PduR_Config);\n    Com_Init(&com_config);\n    Com_IpduGroupStart(com_config.receive_group, TRUE);\n    Com_EnableReceptionDM(com_config.receive_group);\n    ComM_Init(&comm_config);\n    BswM_Init(&bswm_config);\n");
+    config.push_str("Std_ReturnType Ecu_MultiBootstrap(void) {\n    Can_ControllerStateType actual;\n    if (Ecu_TargetCheckLifecycleContext(TRUE) != E_OK) { return E_NOT_OK; }\n    SchM_Init(&Ecu_SchMConfig);\n    SchM_Start();\n    if (Ecu_SchMReady() == FALSE) { return E_NOT_OK; }\n    Det_Init(NULL);\n    Det_Start();\n    Can_Init(&driver);\n    CanIf_Init(&can_if_config);\n    Ecu_HostBusSM_Init(&bus_config);\n    LSduR_Init(&LSduR_Config);\n    PduR_Init(&PduR_Config);\n    Com_Init(&com_config);\n    Com_IpduGroupStart(com_config.receive_group, TRUE);\n    Com_EnableReceptionDM(com_config.receive_group);\n    ComM_Init(&comm_config);\n    BswM_Init(&bswm_config);\n");
     if transport.is_some() {
         config.push_str("    CanTp_Init(&tp_config);\n    Dcm_Init(&dcm_config);\n");
     }
@@ -713,7 +713,7 @@ fn lifecycle(
         ),
     );
     let modes = format!(
-        "\n#include \"SchM_Dcm.h\"\n#include \"Can_HostLock.h\"\n#define RTE_{mode_scope}_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\nstatic Rte_ModeType_DcmDiagnosticSessionControl diagnostic_session_mode RTE_VAR_CLEARED;\nstatic Rte_ModeType_{authentication_group} authentication_mode RTE_VAR_CLEARED;\n#define RTE_{mode_scope}_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n#define RTE_{mode_scope}_START_SEC_CODE\n#include \"Rte_MemMap.h\"\nRTE_CODE Std_ReturnType SchM_Switch_Dcm_{authentication_group}(Rte_ModeType_{authentication_group} mode) {{\n    if (Ecu_TargetIsOwner() == 0) {{ return SCHM_E_LIMIT; }}\n    Can_Lock();\n    authentication_mode = mode;\n    Can_Unlock();\n    return SCHM_E_OK;\n}}\nRTE_CODE Rte_ModeType_{authentication_group} SchM_Mode_Dcm_{authentication_group}(void) {{\n    Rte_ModeType_{authentication_group} mode;\n    if (Ecu_TargetIsOwner() == 0) {{ return RTE_TRANSITION_{authentication_group}; }}\n    Can_Lock();\n    mode = authentication_mode;\n    Can_Unlock();\n    return mode;\n}}\nRTE_CODE Std_ReturnType SchM_Switch_Dcm_DcmDiagnosticSessionControl(Rte_ModeType_DcmDiagnosticSessionControl mode) {{\n    if (Ecu_TargetIsOwner() == 0) {{ return SCHM_E_LIMIT; }}\n    Can_Lock();\n    diagnostic_session_mode = mode;\n    Can_Unlock();\n    return SCHM_E_OK;\n}}\nRTE_CODE Rte_ModeType_DcmDiagnosticSessionControl SchM_Mode_Dcm_DcmDiagnosticSessionControl(void) {{\n    Rte_ModeType_DcmDiagnosticSessionControl mode;\n    if (Ecu_TargetIsOwner() == 0) {{ return RTE_TRANSITION_DcmDiagnosticSessionControl; }}\n    Can_Lock();\n    mode = diagnostic_session_mode;\n    Can_Unlock();\n    return mode;\n}}\n#define RTE_{mode_scope}_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n"
+        "\n#include \"SchM_Dcm.h\"\n#include \"SchM_CanIf.h\"\n#define RTE_{mode_scope}_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\nstatic Rte_ModeType_DcmDiagnosticSessionControl diagnostic_session_mode RTE_VAR_CLEARED;\nstatic Rte_ModeType_{authentication_group} authentication_mode RTE_VAR_CLEARED;\n#define RTE_{mode_scope}_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n#define RTE_{mode_scope}_START_SEC_CODE\n#include \"Rte_MemMap.h\"\nRTE_CODE Std_ReturnType SchM_Switch_Dcm_{authentication_group}(Rte_ModeType_{authentication_group} mode) {{\n    if (Ecu_TargetIsOwner() == 0) {{ return SCHM_E_LIMIT; }}\n    SchM_Enter_CanIf_CANIF_STATE();\n    authentication_mode = mode;\n    SchM_Exit_CanIf_CANIF_STATE();\n    return SCHM_E_OK;\n}}\nRTE_CODE Rte_ModeType_{authentication_group} SchM_Mode_Dcm_{authentication_group}(void) {{\n    Rte_ModeType_{authentication_group} mode;\n    if (Ecu_TargetIsOwner() == 0) {{ return RTE_TRANSITION_{authentication_group}; }}\n    SchM_Enter_CanIf_CANIF_STATE();\n    mode = authentication_mode;\n    SchM_Exit_CanIf_CANIF_STATE();\n    return mode;\n}}\nRTE_CODE Std_ReturnType SchM_Switch_Dcm_DcmDiagnosticSessionControl(Rte_ModeType_DcmDiagnosticSessionControl mode) {{\n    if (Ecu_TargetIsOwner() == 0) {{ return SCHM_E_LIMIT; }}\n    SchM_Enter_CanIf_CANIF_STATE();\n    diagnostic_session_mode = mode;\n    SchM_Exit_CanIf_CANIF_STATE();\n    return SCHM_E_OK;\n}}\nRTE_CODE Rte_ModeType_DcmDiagnosticSessionControl SchM_Mode_Dcm_DcmDiagnosticSessionControl(void) {{\n    Rte_ModeType_DcmDiagnosticSessionControl mode;\n    if (Ecu_TargetIsOwner() == 0) {{ return RTE_TRANSITION_DcmDiagnosticSessionControl; }}\n    SchM_Enter_CanIf_CANIF_STATE();\n    mode = diagnostic_session_mode;\n    SchM_Exit_CanIf_CANIF_STATE();\n    return mode;\n}}\n#define RTE_{mode_scope}_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n"
     );
     let lifecycle = files.get_mut("src/SchM.c").unwrap();
     lifecycle.to_mut().extend_from_slice(modes.as_bytes());
