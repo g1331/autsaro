@@ -1,6 +1,12 @@
 #include "Ecu_Target.h"
-#include "Can.h"
-#include "Os_Windows.h"
+#include "Can_Host.h"
+#include "Os_Host.h"
+#ifdef _WIN32
+#include <io.h>
+#include <fcntl.h>
+#else
+#include <unistd.h>
+#endif
 #include <stdio.h>
 #include <string.h>
 
@@ -37,14 +43,26 @@ static int sink(const Ecu_OutputRecord *output, const Ecu_HostBatch *state, Stat
     (void)status;
     (void)context;
     if (output != NULL) {
-        require(printf("fault_output ticket=%llu mode=%d\n", (unsigned long long)output->ticket,
-                       mode) >= 0);
-        require(fflush(stdout) == 0);
+        require(fprintf(stderr, "fault_output ticket=%llu mode=%d\n",
+                        (unsigned long long)output->ticket, mode) >= 0);
+        require(fflush(stderr) == 0);
+        if ((mode == 5) || (mode == 6)) {
+            /* Use the exact production writer, with a real failed host stream. */
+            int written = write_output(output, state, status, context);
+            require(written == 0);
+            require(ferror(stdout) != 0);
+            require(fprintf(stderr, "physical_%s failed no_receipt ticket=%llu\n",
+                            (mode == 5) ? "write" : "flush",
+                            (unsigned long long)output->ticket) >= 0);
+            return 0;
+        }
         if (mode == 1) {
             return 0;
         }
         if (mode == 2) {
-            Sleep(INFINITE);
+            for (;;) {
+                Os_HostSleepMs(1000u);
+            }
         }
     } else {
         require(printf("fault_commit epoch=%llu sequence=%llu\n",
@@ -54,13 +72,13 @@ static int sink(const Ecu_OutputRecord *output, const Ecu_HostBatch *state, Stat
     }
     return 1;
 }
-static DWORD WINAPI control(void *argument) {
+static Os_HostThreadResult control(void *argument) {
     Ecu_BatchCommand command;
-    DWORD started = GetTickCount();
+    uint64_t started = Os_HostMonotonicMs();
     (void)argument;
     while (Ecu_TargetState() != ECU_TARGET_READY) {
-        require((GetTickCount() - started) < 5000u);
-        Sleep(1u);
+        require((Os_HostMonotonicMs() - started) < 5000u);
+        Os_HostSleepMs(1u);
     }
     Ecu_HostBatchInitialize(&batch);
     if (mode == 3) {
@@ -89,6 +107,22 @@ static DWORD WINAPI control(void *argument) {
     } else {
         require(Ecu_HostBatchParse(&batch, "BEGIN 10", 8u, &command) == E_OK);
         require(Ecu_HostBatchParse(&batch, "COMMIT", 6u, &command) == E_OK);
+        if ((mode == 5) || (mode == 6)) {
+#ifdef _WIN32
+            HANDLE reader;
+            HANDLE writer;
+            int descriptor;
+            require(CreatePipe(&reader, &writer, NULL, 0u) != 0);
+            require(CloseHandle(reader) != 0);
+            descriptor = _open_osfhandle((intptr_t)writer, _O_WRONLY | _O_BINARY);
+            require(descriptor >= 0);
+            require(_dup2(descriptor, _fileno(stdout)) == 0);
+            require(_close(descriptor) == 0);
+#else
+            require(freopen("/dev/full", "w", stdout) != NULL);
+#endif
+            require(setvbuf(stdout, NULL, (mode == 5) ? _IONBF : _IOFBF, BUFSIZ) == 0);
+        }
         (void)Ecu_HostBatchExecute(&batch, sink, NULL);
         /* A failed/blocked output must close, not report a completed batch. */
         require(0);
@@ -96,7 +130,7 @@ static DWORD WINAPI control(void *argument) {
     return 0u;
 }
 int main(int argc, char **argv) {
-    HANDLE thread;
+    Os_HostHandle thread;
     if (argc != 2) {
         return 98;
     }
@@ -104,6 +138,10 @@ int main(int argc, char **argv) {
         mode = 1;
     } else if (strcmp(argv[1], "block") == 0) {
         mode = 2;
+    } else if (strcmp(argv[1], "write") == 0) {
+        mode = 5;
+    } else if (strcmp(argv[1], "flush") == 0) {
+        mode = 6;
     } else if (strcmp(argv[1], "sequence") == 0) {
         mode = 3;
 #ifdef ECU_TARGET_TESTS
@@ -115,9 +153,9 @@ int main(int argc, char **argv) {
     }
     require(Ecu_TargetPrepare() == E_OK);
     if (mode != 4) {
-        thread = CreateThread(NULL, 262144u, control, NULL, 0u, NULL);
+        thread = Os_HostSpawnThread(control, NULL);
         require(thread != NULL);
-        require(CloseHandle(thread) != 0);
+        require(Os_HostClose(thread) != 0);
     }
     StartOS(1u);
     return 94;

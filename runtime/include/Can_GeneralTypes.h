@@ -44,5 +44,7 @@ typedef enum {
 
 /** @brief The single host transmit handle is still completing a previous request. */
 #define CAN_BUSY 0x02u
+/** @brief Already accepted reception lost to shadow overwrite/overrun (R24-11). */
+#define CAN_E_DATALOST 0x01u
 
 #endif

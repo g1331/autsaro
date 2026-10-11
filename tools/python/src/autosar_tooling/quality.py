@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import ast
 import difflib
+import os
 import re
 import shutil
 import subprocess
@@ -195,8 +196,9 @@ def c_syntax_errors() -> list[str]:
             *(ROOT / "runtime" / "host" / "src").glob("*.c"),
         ]
     )
+    compiler = os.environ.get("AUTOSAR_CC", "gcc")
     command = [
-        "gcc",
+        compiler,
         "-std=c99",
         "-Wall",
         "-Wextra",
@@ -209,15 +211,31 @@ def c_syntax_errors() -> list[str]:
         str(ROOT / "runtime" / "host" / "include"),
         "-I",
         str(ROOT / "runtime" / "src"),
+        "-I",
+        str(ROOT / "runtime" / "multi" / "include"),
         *(str(path) for path in sources),
     ]
     result = run(command)
     if result.returncode:
         return ["Host C99 syntax check failed:\n" + result.stderr.strip()]
-    for header in sorted((ROOT / "runtime" / "include").glob("*.h")):
+    for header in sorted((ROOT / "runtime" / "include").rglob("*.h")):
+        # A section protocol is a repeated-include TU, not a standalone empty header.
+        if header.name == "Can_MemMap.h":
+            source = (
+                '#define CAN_START_SEC_CODE\n#include "Can_MemMap.h"\n'
+                'CAN_CODE void quality_can_section(void) {}\n'
+                '#define CAN_STOP_SEC_CODE\n#include "Can_MemMap.h"\n'
+                '#define CAN_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include "Can_MemMap.h"\n'
+                'int quality_can_zero CAN_VAR_CLEARED;\n'
+                '#define CAN_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include "Can_MemMap.h"\n'
+            )
+            forced_header = []
+        else:
+            source = ""
+            forced_header = ["-include", str(header)]
         result = run(
             [
-                "gcc",
+                compiler,
                 "-std=c99",
                 "-Wall",
                 "-Wextra",
@@ -228,13 +246,14 @@ def c_syntax_errors() -> list[str]:
                 str(ROOT / "runtime" / "include"),
                 "-I",
                 str(ROOT / "runtime" / "host" / "include"),
-                "-include",
-                str(header),
+                "-I",
+                str(ROOT / "runtime" / "multi" / "include"),
+                *forced_header,
                 "-x",
                 "c",
                 "-",
             ],
-            input_text="",
+            input_text=source,
         )
         if result.returncode:
             return [

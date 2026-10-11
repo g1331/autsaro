@@ -1,7 +1,7 @@
 #include "Ecu_Target.h"
 #include "Ecu_TargetConfig.h"
 #include "Com.h"
-#include "Can.h"
+#include "standard/Can.h"
 #include "@APP_HEADER@"
 #include "@CLIENT_HEADER@"
 #include <string.h>

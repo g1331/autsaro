@@ -227,6 +227,13 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
     per_unit_macros = {}
     stdio_modes = {}
     mode_names = {"_IOFBF", "_IOLBF", "_IONBF"} if "setvbuf" in identifiers else set()
+    # Build the lookup sets once: per-line set arithmetic over every compiler
+    # define holds the GIL long enough to starve the other workers' timeouts.
+    external_names = identifiers - owned_macros
+    standard_constants = {f"{prefix}{width}_C" for prefix in ("INT", "UINT")
+                          for width in ("8", "16", "32", "64", "MAX")}
+    function_macro_names = standard_constants & external_names
+    candidate_names = external_names | mode_names
     def compiler_unit(item):
         index, name = item
         unit_modes = {}
@@ -238,14 +245,12 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                                     "-dM", "-E", str(root / name)], output, f"compiler-defines-{index}", 60)
         if code:
             raise ValueError(f"Compiler preprocessing failed for {name}")
-        standard_constants = {f"{prefix}{width}_C" for prefix in ("INT", "UINT")
-                              for width in ("8", "16", "32", "64", "MAX")}
         function_macros = ["-D" + line[8:].replace(" ", "=", 1)
                            for line in definitions.splitlines() if line.startswith("#define ")
-                           and line[8:].split("(", 1)[0] in standard_constants & identifiers - owned_macros]
+                           and line[8:].split("(", 1)[0] in function_macro_names]
         candidates = [line[8:].split(" ", 1)[0] for line in definitions.splitlines()
                       if line.startswith("#define ")
-                      and line[8:].split(" ", 1)[0] in (identifiers - owned_macros) | mode_names
+                      and line[8:].split(" ", 1)[0] in candidate_names
                       and "(" not in line[8:].split(" ", 1)[0]]
         probe = output / f"macro-probe-{index}.c"
         probe.write_text('#include "' + tool_argument(root / name) + '"\n' +

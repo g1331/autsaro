@@ -6,7 +6,7 @@
 #endif
 #include "Os_IntegrationHooks.h"
 #include "Os_Backend.h"
-#include "Can.h"
+#include "Can_Host.h"
 #include "CanIf.h"
 #include "CanTp.h"
 #include "Com.h"
@@ -44,9 +44,7 @@ typedef Ecu_Input Ecu_MailboxInput[(sizeof(Ecu_Input) <= OS_INPUT_PAYLOAD) ? 1 :
 typedef struct {
     volatile Os_Atomic32 state;
     Ecu_OutputRecord record;
-#if defined(ECU_MULTI_COMPONENT)
     uint64_t driver_token;
-#endif
 } Ecu_OutputSlot;
 
 typedef struct {
@@ -477,13 +475,11 @@ EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc,
         fail();
         return ECU_ERR_IO;
     }
-#if defined(ECU_MULTI_COMPONENT)
     slot->driver_token = Can_HostTransmitToken();
     if (slot->driver_token == UINT64_C(0)) {
         fail();
         return ECU_ERR_IO;
     }
-#endif
     ++next_output_ticket;
     slot->record.ticket = next_output_ticket;
     slot->record.epoch = epoch;
@@ -564,9 +560,7 @@ static void consume(const Ecu_Input *input) {
         }
     } else if (input->kind == 2u) {
         Ecu_OutputSlot *slot = &outputs[output_retire];
-#if defined(ECU_MULTI_COMPONENT)
         const uint64_t driver_token = slot->driver_token;
-#endif
         if ((load(&slot->state) != 3) || (slot->record.ticket != input->output_ticket) ||
             (slot->record.pdu != input->pdu) || (output_pending == 0u)) {
             fail();
@@ -574,15 +568,13 @@ static void consume(const Ecu_Input *input) {
         --output_pending;
         output_retire = (output_retire + 1u) % ECU_TARGET_OUTPUT_CAPACITY;
         (void)Os_HostAtomicExchange(&slot->state, 0);
-#if defined(ECU_MULTI_COMPONENT)
         /* The output ticket proof above establishes real write/flush completion.
          * A cancelled token is discarded even after the same PDU ID is reused. */
         if (Can_HostCompleteTransmit(input->pdu, driver_token) == CAN_BUSY) {
             fail();
         }
         Can_MainFunction_Write();
-#else
-        CanIf_TxConfirmation(input->pdu);
+#if !defined(ECU_MULTI_COMPONENT)
         advance_transport();
 #endif
     } else if (input->kind == 3u) {

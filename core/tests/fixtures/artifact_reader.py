@@ -40,11 +40,11 @@ def inspect(project, probe):
             assert target.tag.rsplit("}", 1)[-1] == node.attrib["DEST"], "reference kind"
     modules = root.findall(".//a:BSW-MODULE-DESCRIPTION", NS)
     assert {text(m, "a:SHORT-NAME") for m in modules} == {
-        "Can", "CanIf", "PduR", "Com", "CanTp", "Dcm", "Dem", "NvM", "LSduR",
+        "Can", "Det", "CanIf", "PduR", "Com", "CanTp", "Dcm", "Dem", "NvM", "LSduR",
         "Security", "Os", "Arti", "Rte",
     }, "actual module roles"
     implementations = root.findall(".//a:BSW-IMPLEMENTATION", NS)
-    assert len(implementations) == 13
+    assert len(implementations) == 14
     for impl in implementations:
         assert text(impl, "a:PROGRAMMING-LANGUAGE") == "C"
         assert text(impl, "a:AR-RELEASE-VERSION") == "4.10.0"
@@ -76,10 +76,12 @@ def inspect(project, probe):
     }
     rte_refs = objects["/HostArtifacts/Rte"].findall("a:IMPLEMENTED-ENTRYS/a:BSW-MODULE-ENTRY-REF-CONDITIONAL/a:BSW-MODULE-ENTRY-REF", NS)
     assert {n.text.rsplit("/", 1)[-1] for n in rte_refs} == expected_rte, "actual RTE entries"
-    assert len(entries) == 29, "selected 17 BSW and 12 RTE contracts"
+    assert len(entries) == 35, "selected 23 BSW and 12 RTE contracts"
     expected_bsw = {
-        "Can": {"Can_Init", "Can_MainFunction_Wakeup", "Can_MainFunction_Read", "Can_MainFunction_Write"},
-        "CanIf": {"CanIf_Init", "CanIf_Transmit"},
+        "Can": {"Can_Init", "Can_DeInit", "Can_MainFunction_Wakeup", "Can_MainFunction_Read", "Can_MainFunction_Write"},
+        "Det": {"Det_ReportRuntimeError"},
+        "CanIf": {"CanIf_Init", "CanIf_Transmit", "CanIf_RxIndication", "CanIf_TxConfirmation",
+                  "CanIf_ControllerModeIndication", "CanIf_ControllerBusOff"},
         "PduR": {"PduR_Init", "PduR_Transmit"},
         "Com": {"Com_Init", "Com_AdvanceTime", "Com_GetSignal", "Com_SetSignal", "Com_TriggerTransmit"},
         "CanTp": {"CanTp_Init", "CanTp_AdvanceTime"},
@@ -88,7 +90,7 @@ def inspect(project, probe):
     for module, expected in expected_bsw.items():
         refs = objects[f"/HostArtifacts/{module}"].findall("a:IMPLEMENTED-ENTRYS/a:BSW-MODULE-ENTRY-REF-CONDITIONAL/a:BSW-MODULE-ENTRY-REF", NS)
         assert {r.text.rsplit("/", 1)[-1] for r in refs} == expected, f"actual BSW entries {module}"
-    headers = ["Can.h", "CanIf.h", "PduR.h", "Com.h", "CanTp.h", "Dcm.h", "SchM_Can.h",
+    headers = ["Can.h", "Det.h", "CanIf.h", "PduR.h", "Com.h", "CanTp.h", "Dcm.h", "SchM_Can.h",
                "Rte_EchoApplication.h", "Rte_DcmService.h", "Ecu_Target.h", "Ecu_TargetConfig.h", "Rte_Os.h"]
     source = "#include <limits.h>\n" + "\n".join(f'#include "{h}"' for h in headers) + "\n"
 
@@ -114,7 +116,7 @@ def inspect(project, probe):
         source += f"    if (entry_{index} == 0) ExitProcess(7u);\n"
     source += "}\n"
     probe.write_text(source, encoding="utf-8")
-    print("artifact_reader modules=13 entries=29 rte_closure=exact refs=closed")
+    print("artifact_reader modules=14 entries=35 rte_closure=exact refs=closed")
 
 
 if __name__ == "__main__":

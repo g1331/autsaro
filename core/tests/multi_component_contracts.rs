@@ -1635,7 +1635,10 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
         )));
         for (file, bytes) in produced {
             if file.starts_with("include/") || file == "src/Rte.c" {
-                std::fs::write(directory.join(file), bytes).unwrap();
+                // Delivered headers may be nested (`include/standard/Can.h`).
+                let target = directory.join(file);
+                std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+                std::fs::write(target, bytes).unwrap();
             }
         }
         let repository = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -3977,6 +3980,36 @@ fn communication_types_and_polling_periods_are_source_derived() {
     assert_eq!(runtime.can.receive_handle, 1);
     assert_eq!(runtime.can.transmit_handle, 0);
     assert!(normal_validation(&sources).diagnostics.is_empty());
+    let files = prepared_multi_files(&renamed);
+    let text = |name: &str| {
+        std::str::from_utf8(
+            &files
+                .iter()
+                .find(|(path, _)| path == name)
+                .unwrap_or_else(|| panic!("missing {name}"))
+                .1,
+        )
+        .unwrap()
+    };
+    assert!(text("include/Ecu_ProfileConfig.h").contains("#define CAN_RX_HOH 1u"));
+    assert!(text("include/Ecu_ProfileConfig.h").contains("#define CAN_TX_HOH 0u"));
+    let description = text("descriptions/Host_Implementation.arxml");
+    assert!(description.contains("Can_VAR_CLEARED_UNSPECIFIED"));
+    assert!(
+        description
+            .contains("<DEPENDENCY-ON-ARTIFACT><SHORT-NAME>include_Can_MemMap_h</SHORT-NAME>")
+    );
+    assert!(description.contains("Det_ReportRuntimeError"));
+    for name in [
+        "include/standard/Can.h",
+        "include/Can_Host.h",
+        "src/Can_Host.c",
+        "src/Can_Internal.h",
+        "src/Det.c",
+        "src/SchM_CanIf_Host.c",
+    ] {
+        assert!(files.iter().any(|(path, _)| path == name), "missing {name}");
+    }
 }
 
 #[test]
@@ -4009,6 +4042,12 @@ fn multi_communication_rejects_truncation_and_unbound_polling_in_both_entries() 
         (
             "General",
             "CanDevErrorDetect",
+            "true",
+            "CAN_FEATURE_UNSUPPORTED",
+        ),
+        (
+            "General",
+            "CanVersionInfoApi",
             "true",
             "CAN_FEATURE_UNSUPPORTED",
         ),

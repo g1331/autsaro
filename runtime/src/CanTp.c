@@ -1,4 +1,5 @@
 #include "CanTp.h"
+#include "SchM_CanIf.h"
 #include "LSduR.h"
 #include "PduR.h"
 #include "Std_Types.h"
@@ -189,6 +190,7 @@ static EcuStatus SendConsecutiveFrames(uint64_t now_ms) {
 }
 
 void CanTp_Init(const EcuDiagnosticConfig *config) {
+    SchM_Enter_CanIf_CANIF_STATE();
     AbortRx();
     cantp_config = config;
     rx.active = 0u;
@@ -199,6 +201,7 @@ void CanTp_Init(const EcuDiagnosticConfig *config) {
     frame_confirmation_received = 0u;
     frame_confirmation_ok = 0u;
     frame_aborted = 0u;
+    SchM_Exit_CanIf_CANIF_STATE();
 }
 
 EcuStatus CanTp_AdvanceTime(uint64_t now_ms) {

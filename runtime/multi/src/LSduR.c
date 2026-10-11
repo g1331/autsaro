@@ -1,4 +1,5 @@
 #include "LSduR.h"
+#include "SchM_CanIf.h"
 #include "LSduR_PduR.h"
 #include "LSduR_CanTp.h"
 #include "LSduR_CanIf.h"
@@ -47,9 +48,11 @@ static LSDUR_CODE boolean LSduR_Valid(const LSduR_PBConfigType *config) {
     return valid;
 }
 LSDUR_CODE void LSduR_Init(const LSduR_PBConfigType *ConfigPtr) {
+    SchM_Enter_CanIf_CANIF_STATE();
     if (LSduR_Valid(ConfigPtr) == TRUE) {
         configuration = ConfigPtr;
     }
+    SchM_Exit_CanIf_CANIF_STATE();
 }
 LSDUR_CODE LSduR_PBConfigIdType LSduR_GetConfigurationId(void) {
     return (configuration == NULL_PTR) ? 0u : configuration->id;

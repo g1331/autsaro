@@ -74,7 +74,7 @@
           "direction": "IN"
         }
       ],
-      "header": "runtime/include/Can.h",
+      "header": "runtime/include/standard/Can.h",
       "source": "runtime/src/Can.c",
       "stage": "current_host_bsw"
     },
@@ -250,12 +250,13 @@
     }
   },
   "sources": {
-    "runtime/include/Can.h": "f99b9466c010d30ecb4e29048b90987667c6d99a8528042cb35b39c52b2e9d38",
     "runtime/include/CanIf.h": "1a02f6da5099d8e32bbbff5e67ab2d3284af65635c3c493fd2e2fa45c7728daf",
     "runtime/include/CanIf_MemMap.h": "271f11d7398d6fba369ff62490d3e635348e23781539daf9478b6091107ee865",
     "runtime/include/CanTp.h": "8d24d5d45133a8a1ad8c0d60f6fb0bc896a0ddc61f6d13728828cc8b9e6a7912",
-    "runtime/include/Can_GeneralTypes.h": "36132e0a3d1825703c5850a73ea9e697b5d7280457493d856f7f41d361613b50",
-    "runtime/include/Can_MemMap.h": "423bbfcb101ebfbcdd99ee990edc53d7f63524795cfad5e99ca0af268360e173",
+    "runtime/include/Can_CfgTypes.h": "3654a9feec4dfb1ae58a46e7543352d8945ba2db5cfa8e7e0af709e0862589a1",
+    "runtime/include/Can_GeneralTypes.h": "b09be301c2daf750be28623b22d443431807c3a097f630d96d88da228307e17c",
+    "runtime/include/Can_Host.h": "e2b7f594518fa933c2955d3de5d21dd1e8fdd46aed9f1812bdf8f169fca865ca",
+    "runtime/include/Can_MemMap.h": "4021da0b6a7dcb94399dcca88c20ec0b1581e291c724425f39be8ff155568178",
     "runtime/include/Com.h": "2727b112395c9ac1e4721160aef270a95cf2c09e027ecbb6a7fa0dd0ce7d51f6",
     "runtime/include/ComStack_Types.h": "e39bd4b7f61433daf8bbf7b87b4988fa0cb1a8fe23029e285c2315a4f6c55d4c",
     "runtime/include/Dcm.h": "a935b88f80e1abb785dd33fff413f31501c56c5d937180123d75f67dae199ff1",
@@ -265,14 +266,24 @@
     "runtime/include/Ecu_Status.h": "43bf6321656d71b4c6850d62b038ed638ea0d1a932f3fb35823e7f2714f8043b",
     "runtime/include/LSduR.h": "37dc3f59716c9773f7ef7604d1995740bf376f16b396fb28dace13ce2f631303",
     "runtime/include/PduR.h": "60038f9e438701a360c05119fef3b02b3ae04b25d9b671dfaedcea0518ba8106",
-    "runtime/include/SchM_Can.h": "35c73644d6ba255cce850fb445bea90151b5f3e8bc0beea0d427e7b8172b1f2b",
+    "runtime/include/SchM_Can.h": "e450073f066bd1aa23e7ec152062561246d9c60b37edf68c6bc42ef21d1015bc",
+    "runtime/include/SchM_CanIf.h": "3b8e1e003df3bafc3e697ecbb3a2c6c132a7b026a76419e529da0b0a8a5b65a9",
     "runtime/include/Security.h": "3ff40c47d38505bbe5d960babb547254a28ab0eba0a5cd6f5cbfe7fc9324f423",
     "runtime/include/Std_Types.h": "77faf0bd379413713dd4ccb8f7de401b6fd9cd40d8a60544f442b1649188b323",
-    "runtime/src/Can.c": "d2626a6b7394b335785e1a2777c5d0902a06c58a83a9f5e66d3f36559d37d5c4",
-    "runtime/src/CanIf.c": "8d7808f0ccb356ec1ef65f620798c2d380b7cb7bde371b74d2e68753e31144e4",
-    "runtime/src/CanTp.c": "c68d4c61aef71f3e97c0c263052a2235e24e566a8df657d1b34438621f9cc2a9",
-    "runtime/src/Com.c": "cfcb9a633020aa682f67c363e33d9524fc8161ee0e79e8cd497ee7ab21a1d628",
-    "runtime/src/Dcm.c": "2b82b047784e694cf41ebf85e4459b8b7e4db7c1dc626364dbaded3ab312e0b2",
-    "runtime/src/PduR.c": "e2179b97b09bd02143d817cb1535b6b5becdaf3faf7d2f01101b9468e2588f97"
+    "runtime/include/standard/Can.h": "c1a2a2d031c14c1683a977d8ef4475d9b4c2fbb9d56ede3fb99c04c3936ebf8d",
+    "runtime/multi/include/Det.h": "668227d916225528aefed6035c182f7f90a42a1cf6bf8620d44b8c7c2901085b",
+    "runtime/multi/include/Platform_Types.h": "d46afc49c9c1e3ea2bbb1de5c22216e79b105694d6d71e563a68cb8c03dce005",
+    "runtime/multi/include/Std_Types.h": "f3da9199fb37375a33f114ab9b01fd4dc2da9f91c2dc29ef2107ab649c2ef69b",
+    "runtime/src/Can.c": "0786eee92ed6c08d2a23a506fe1065dd35384003a58987bf572f2a2c1587f3cd",
+    "runtime/src/CanIf.c": "67758cab5072a9fb00d994abb3bd7c2ddf0b6cccf73516a657c37faaf52f72a3",
+    "runtime/src/CanTp.c": "a358b400820b89d020301232bdc0555e4cda6c44db21e49b4b9692635bf6a48e",
+    "runtime/src/Can_HostLock.h": "60c4a9b9ddf16257a7d35e65b4b4f4103bcb1dd2ae9525119525482d027d98fb",
+    "runtime/src/Can_Internal.h": "bb02b266e2fbf45f82dc0368ecfc6f2b98cc5e662ec0ffed358e0461371b5fad",
+    "runtime/src/Com.c": "d12afdf4d9cd2f4af99b0b0b15b618b615406960f10323bc260f196c89e509f9",
+    "runtime/src/Dcm.c": "1485b795fcda1a2ea9921a317f0e702b2fbfdb73a7e133afda5f4511f68a7a7e",
+    "runtime/src/Dcm_Internal.h": "7a7fd28d1a7dd30d5a6c2fc4dd45928acd00a4fa9258c6d15c0ceb6727a65614",
+    "runtime/src/Ecu_Execution.h": "df57b03e7847a6bc206acfbb2c3b78de5f4f3ea6ea316846791d8f58a0546766",
+    "runtime/src/PduR.c": "11b7e8845ae8138b7efcbfccb55be9d23125bcf0d87eca3322912e17b6f44c79",
+    "runtime/src/PduR_Internal.h": "1810df68a0acf158cb34afb0f7e5e7644518a2124c07c34394797b31e221d7de"
   }
 }
