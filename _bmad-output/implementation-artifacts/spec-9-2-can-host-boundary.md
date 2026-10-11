@@ -135,6 +135,17 @@ AC3：Given sink 或测试控制启用，When 正常重新生成受影响三族�
 
 ## Verification
 
+2026-10-11 PR22 exact-head CI 发现与修正（已提交候选 `ebbdce3` 之上的工作区修改，同一规格／snapshot，不重启 review；不是 CI 通过记录）：
+
+- CI 发现：Development checks 的 Python ubuntu-24.04／3.12 job 在 `ruff check` 步骤以退出码 1 失败。原始日志 can-9-2 scratch `pr22-python-linux312.log`：`FLY002 Consider f-string instead of string join`，位于 `tools/python/src/autosar_tooling/quality.py:224:22`，即本卡新增的 Can_MemMap 反复 include TU 用 `'\n'.join([...]) + '\n'` 拼接字面量；`Found 1 error`，仅有 unsafe fix。
+- 修正：不用 unsafe autofix 或规则抑制，改为隐式相邻字面量拼接，每行显式带 `\n`。用 `uv run --locked python -I triage/fly002_bytes.py` 比较新旧表达式，输出 `identical True`，生成的 TU 字节不变。
+- 开发者检查（Linux，`uv run --locked --offline`）：
+  - `ruff check tools tests/python scripts`：All checks passed。
+  - `--env-file triage/verify.env python -m autosar_tooling quality --base 6290f16…`：55 文件及 C syntax 通过，含该 Can_MemMap TU。
+  - `python -B -m unittest tests.python.test_quality tests.python.test_development`：18 项通过。
+  - `python -B -m unittest discover -s tests/python`：47 项通过。
+- 尚未完成：修正尚未提交，PR22 新 head 的 CI 尚未运行，其余 required jobs 的状态不由本条推断。
+
 2026-10-11 交接状态（冻结候选，供同卡 Tester；本条取代下方各历史记录中“缺少 Git author 身份”的当前状态描述，历史原文保留）：
 
 - 规格状态 `in-review`：冻结当前候选，等待同卡独立 Tester，不是 done。Tasks 4–7 保持未勾选，直到 Windows controlled target 执行、双平台 required CI 与 Tester 完成。

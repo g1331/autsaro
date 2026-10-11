@@ -221,14 +221,14 @@ def c_syntax_errors() -> list[str]:
     for header in sorted((ROOT / "runtime" / "include").rglob("*.h")):
         # A section protocol is a repeated-include TU, not a standalone empty header.
         if header.name == "Can_MemMap.h":
-            source = '\n'.join([
-                '#define CAN_START_SEC_CODE', '#include "Can_MemMap.h"',
-                'CAN_CODE void quality_can_section(void) {}',
-                '#define CAN_STOP_SEC_CODE', '#include "Can_MemMap.h"',
-                '#define CAN_START_SEC_VAR_CLEARED_UNSPECIFIED', '#include "Can_MemMap.h"',
-                'int quality_can_zero CAN_VAR_CLEARED;',
-                '#define CAN_STOP_SEC_VAR_CLEARED_UNSPECIFIED', '#include "Can_MemMap.h"',
-            ]) + '\n'
+            source = (
+                '#define CAN_START_SEC_CODE\n#include "Can_MemMap.h"\n'
+                'CAN_CODE void quality_can_section(void) {}\n'
+                '#define CAN_STOP_SEC_CODE\n#include "Can_MemMap.h"\n'
+                '#define CAN_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include "Can_MemMap.h"\n'
+                'int quality_can_zero CAN_VAR_CLEARED;\n'
+                '#define CAN_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include "Can_MemMap.h"\n'
+            )
             forced_header = []
         else:
             source = ""
