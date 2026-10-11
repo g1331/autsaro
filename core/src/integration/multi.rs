@@ -179,25 +179,36 @@ fn fail(graph: &Graph, index: usize, code: &str) -> Vec<PlanDiagnostic> {
     )]
 }
 
+/// The mainline owns every project except the historical single-component
+/// identity, which never configures ComM or BswM. The component count alone
+/// does not select a chain: one application SWC is the mainline with N = 1.
 pub(super) fn selected(graph: &Graph) -> bool {
-    graph
-        .of_kind("SYSTEM")
+    let mode_management = graph
+        .of_kind("ECUC-MODULE-CONFIGURATION-VALUES")
         .into_iter()
-        .filter(|system| graph.text(*system, "CATEGORY") == Some("ECU_EXTRACT"))
-        .flat_map(|system| graph.descendants(system, "ROOT-SW-COMPOSITION-PROTOTYPE"))
-        .filter_map(|root| graph.target(root, "SOFTWARE-COMPOSITION-TREF"))
-        .any(|composition| {
-            graph
-                .descendants(composition, "SW-COMPONENT-PROTOTYPE")
-                .into_iter()
-                .filter_map(|instance| graph.target(instance, "TYPE-TREF"))
-                .filter(|component| {
-                    graph.elements[*component].tag == "APPLICATION-SW-COMPONENT-TYPE"
-                })
-                .collect::<BTreeSet<_>>()
-                .len()
-                > 1
-        })
+        .any(|module| {
+            super::schedule::definition_is(graph, module, "ComM")
+                || super::schedule::definition_is(graph, module, "BswM")
+        });
+    mode_management
+        || graph
+            .of_kind("SYSTEM")
+            .into_iter()
+            .filter(|system| graph.text(*system, "CATEGORY") == Some("ECU_EXTRACT"))
+            .flat_map(|system| graph.descendants(system, "ROOT-SW-COMPOSITION-PROTOTYPE"))
+            .filter_map(|root| graph.target(root, "SOFTWARE-COMPOSITION-TREF"))
+            .any(|composition| {
+                graph
+                    .descendants(composition, "SW-COMPONENT-PROTOTYPE")
+                    .into_iter()
+                    .filter_map(|instance| graph.target(instance, "TYPE-TREF"))
+                    .filter(|component| {
+                        graph.elements[*component].tag == "APPLICATION-SW-COMPONENT-TYPE"
+                    })
+                    .collect::<BTreeSet<_>>()
+                    .len()
+                    > 1
+            })
 }
 
 fn path(graph: &Graph, index: usize) -> String {
@@ -425,6 +436,19 @@ fn inspect_with_transport(
             .is_empty()
     {
         return Err(fail(graph, composition, "NESTED_COMPOSITION_UNSUPPORTED"));
+    }
+    // N >= 1: service components alone own no periodic schedule. Unresolved
+    // types are left to the per-instance reference diagnostics below.
+    if !graph
+        .descendants(composition, "SW-COMPONENT-PROTOTYPE")
+        .into_iter()
+        .any(|instance| {
+            graph.target(instance, "TYPE-TREF").is_none_or(|component| {
+                graph.elements[component].tag == "APPLICATION-SW-COMPONENT-TYPE"
+            })
+        })
+    {
+        return Err(fail(graph, composition, "APPLICATION_COMPONENT_MISSING"));
     }
     let mut components = Vec::new();
     let mut types = BTreeSet::new();

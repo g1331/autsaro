@@ -2873,6 +2873,286 @@ fn sources_without_application_did(retain_routes: bool) -> Vec<InputSource> {
     sources
 }
 
+/// The mainline reference project reduced to its single application
+/// component `Ingress`: network endpoints and the DID server remain, every
+/// peer component, local connector and instance reference is removed.
+fn single_component_sources() -> Vec<InputSource> {
+    let mut sources: Vec<_> = inputs()
+        .into_iter()
+        .filter(|source| !matches!(source.logical_path(), "process.arxml" | "observe.arxml"))
+        .collect();
+    for instance in ["ProcessInstance", "ObserveInstance"] {
+        xml_edit(
+            &mut sources,
+            "composition.arxml",
+            |node| named(node, "SW-COMPONENT-PROTOTYPE", instance),
+            |_| String::new(),
+        );
+        let target = format!("/Application/Pipeline/{instance}");
+        xml_edit(
+            &mut sources,
+            "extract.arxml",
+            |node| {
+                node.has_tag_name("COMPONENT-IREF")
+                    && node
+                        .descendants()
+                        .any(|child| child.text() == Some(target.as_str()))
+            },
+            |_| String::new(),
+        );
+        xml_edit(
+            &mut sources,
+            "ecuc.arxml",
+            |node| {
+                node.has_tag_name("ECUC-INSTANCE-REFERENCE-VALUE")
+                    && node.descendants().any(|child| {
+                        child.has_tag_name("TARGET-REF") && child.text() == Some(target.as_str())
+                    })
+            },
+            |_| String::new(),
+        );
+    }
+    for container in ["Process", "Observe"] {
+        xml_edit(
+            &mut sources,
+            "ecuc.arxml",
+            |node| {
+                named(node, "ECUC-CONTAINER-VALUE", container)
+                    && node.children().any(|child| {
+                        child.has_tag_name("DEFINITION-REF")
+                            && child
+                                .text()
+                                .is_some_and(|text| text.ends_with("/RteSwComponentInstance"))
+                    })
+            },
+            |_| String::new(),
+        );
+    }
+    for connector in [
+        "IngressProcess",
+        "IngressObserve",
+        "ProcessObserve",
+        "Scalar",
+    ] {
+        xml_edit(
+            &mut sources,
+            "composition.arxml",
+            |node| named(node, "ASSEMBLY-SW-CONNECTOR", connector),
+            |_| String::new(),
+        );
+    }
+    xml_edit(
+        &mut sources,
+        "ingress.arxml",
+        |node| named(node, "P-PORT-PROTOTYPE", "Value"),
+        |_| String::new(),
+    );
+    xml_edit(
+        &mut sources,
+        "ingress.arxml",
+        |node| named(node, "VARIABLE-ACCESS", "PValue"),
+        |_| String::new(),
+    );
+    sources
+}
+
+#[test]
+fn single_application_component_is_planned_by_the_mainline() {
+    let sources = single_component_sources();
+    let validation = normal_validation(&sources);
+    assert!(
+        validation.diagnostics.is_empty(),
+        "{:?}",
+        validation.diagnostics
+    );
+    let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
+    assert_eq!(plan.description().profile, "singlecore-multi-swc-v1");
+    let slots = plan.application_slot_descriptors().unwrap();
+    assert_eq!(
+        slots
+            .iter()
+            .map(|slot| slot.producer_slot.as_str())
+            .collect::<Vec<_>>(),
+        ["singlecore-multi-swc-v1:/Application/Pipeline/IngressInstance"]
+    );
+}
+
+#[test]
+fn single_application_component_rejections_locate_source_objects() {
+    fn rejected(sources: &[InputSource], code: &str, file: &str, object: &str) {
+        let issues = build(sources)
+            .err()
+            .unwrap_or_else(|| panic!("{code} accepted"));
+        assert!(
+            issues.iter().any(|issue| issue.code == code
+                && issue.file.as_deref() == Some(file)
+                && issue.object.as_deref() == Some(object)),
+            "{issues:?}"
+        );
+        let validation = normal_validation(sources);
+        assert!(
+            validation.diagnostics.iter().any(|issue| issue.code == code
+                && issue.file.as_deref() == Some(file)
+                && issue.path.as_deref() == Some(object)),
+            "{code}: {:?}",
+            validation.diagnostics
+        );
+    }
+
+    let mut dangling = single_component_sources();
+    change(
+        &mut dangling,
+        "composition.arxml",
+        "/Application/Ingress/ApplicationValue</TARGET-P-PORT-REF>",
+        "/Application/Ingress/MissingValue</TARGET-P-PORT-REF>",
+    );
+    rejected(
+        &dangling,
+        "REFERENCE_UNRESOLVED",
+        "composition.arxml",
+        "/Application/Pipeline/Diagnostic",
+    );
+
+    let mut missing_port = single_component_sources();
+    change(
+        &mut missing_port,
+        "extract.arxml",
+        "/Application/Ingress/RxValue</CONTEXT-PORT-REF>",
+        "/Application/Ingress/MissingRx</CONTEXT-PORT-REF>",
+    );
+    rejected(
+        &missing_port,
+        "REFERENCE_UNRESOLVED",
+        "extract.arxml",
+        "/Extract/ReferenceExtract/Mapping",
+    );
+
+    let mut conflicting = single_component_sources();
+    change(
+        &mut conflicting,
+        "ingress.arxml",
+        "<OPERATION-INVOKED-EVENT>",
+        "<TIMING-EVENT><SHORT-NAME>Periodic20ms</SHORT-NAME>\
+         <START-ON-EVENT-REF DEST=\"RUNNABLE-ENTITY\">/Application/Ingress/Behavior/Periodic</START-ON-EVENT-REF>\
+         <PERIOD>0.02</PERIOD></TIMING-EVENT><OPERATION-INVOKED-EVENT>",
+    );
+    rejected(
+        &conflicting,
+        "SCHEDULE_NOT_UNIQUE",
+        "ingress.arxml",
+        "/Application/Ingress/Behavior/Periodic",
+    );
+
+    // Unconnected ports stay rejected until #51 settles their RTE semantics.
+    let mut unconnected = single_component_sources();
+    xml_edit(
+        &mut unconnected,
+        "extract.arxml",
+        |node| {
+            node.has_tag_name("SENDER-RECEIVER-TO-SIGNAL-MAPPING")
+                && node
+                    .descendants()
+                    .any(|child| child.text() == Some("/Application/Ingress/RxValue"))
+        },
+        |_| String::new(),
+    );
+    rejected(
+        &unconnected,
+        "ENDPOINT_BINDING",
+        "ingress.arxml",
+        "/Application/Ingress/RxValue",
+    );
+
+    // Only the Dcm service component remains: nothing owns a periodic schedule.
+    let mut services_only = single_component_sources();
+    services_only.retain(|source| source.logical_path() != "ingress.arxml");
+    for (file, tag) in [
+        ("composition.arxml", "CONNECTORS"),
+        ("extract.arxml", "DATA-MAPPINGS"),
+    ] {
+        xml_edit(
+            &mut services_only,
+            file,
+            |node| node.has_tag_name(tag),
+            |_| String::new(),
+        );
+    }
+    xml_edit(
+        &mut services_only,
+        "composition.arxml",
+        |node| named(node, "SW-COMPONENT-PROTOTYPE", "IngressInstance"),
+        |_| String::new(),
+    );
+    for file in ["extract.arxml", "ecuc.arxml"] {
+        xml_edit(
+            &mut services_only,
+            file,
+            |node| {
+                matches!(
+                    node.tag_name().name(),
+                    "COMPONENT-IREF" | "ECUC-INSTANCE-REFERENCE-VALUE"
+                ) && node
+                    .descendants()
+                    .any(|child| child.text() == Some("/Application/Pipeline/IngressInstance"))
+            },
+            |_| String::new(),
+        );
+    }
+    xml_edit(
+        &mut services_only,
+        "ecuc.arxml",
+        |node| {
+            named(node, "ECUC-CONTAINER-VALUE", "Ingress")
+                && node.children().any(|child| {
+                    child.has_tag_name("DEFINITION-REF")
+                        && child
+                            .text()
+                            .is_some_and(|text| text.ends_with("/RteSwComponentInstance"))
+                })
+        },
+        |_| String::new(),
+    );
+    rejected(
+        &services_only,
+        "APPLICATION_COMPONENT_MISSING",
+        "composition.arxml",
+        "/Application/Pipeline",
+    );
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn single_application_component_builds_and_runs_production_owner() {
+    use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
+    let scratch = Scratch::new();
+    let plan = build(&single_component_sources()).unwrap_or_else(|issues| panic!("{issues:?}"));
+    let fixture = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-application/Ingress.c"),
+    )
+    .unwrap();
+    // The single component keeps its network and DID ports but has no local peer.
+    let source = fixture.replace("        (void)Rte_Write_Value_Value(value);\n", "");
+    assert_ne!(source, fixture);
+    let application = scratch.0.join("Ingress.c");
+    std::fs::write(&application, source).unwrap();
+    let prepared = prepare_ecu_project_with_applications(
+        &plan,
+        tooling::native_target(),
+        &[ApplicationSource {
+            component_instance: "/Application/Pipeline/IngressInstance".into(),
+            path: application,
+        }],
+    )
+    .unwrap_or_else(|issues| panic!("{issues:?}"));
+    let project = scratch.0.join("project");
+    for (path, bytes) in prepared.into_files() {
+        let path = project.join(path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, bytes).unwrap();
+    }
+    verify_multi_production_owner(&project, &scratch.0, None);
+}
+
 #[test]
 fn network_routing_is_checked_without_optional_did() {
     let mut sources = sources_without_application_did(false);
