@@ -1617,6 +1617,71 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
     }
 }
 
+#[cfg(all(feature = "native-tests", target_os = "linux"))]
+#[test]
+fn generated_rte_com_header_links_independent_handle_callbacks_and_real_dispatch() {
+    for handle in [17, 43] {
+        let mut sources = inputs();
+        change(
+            &mut sources,
+            "ingress.arxml",
+            "<VALUE>0</VALUE>",
+            "<VALUE>7</VALUE>",
+        );
+        if handle != 17 {
+            change(
+                &mut sources,
+                "ecuc.arxml",
+                "<VALUE>17</VALUE>",
+                &format!("<VALUE>{handle}</VALUE>"),
+            );
+            sources.reverse();
+        }
+        let plan = build(&sources).unwrap();
+        let scratch = Scratch::new();
+        for (path, bytes) in prepared_multi_files(&plan) {
+            let path = scratch.0.join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, bytes).unwrap();
+        }
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let executable = tooling::native_binary(&scratch.0, "rte-com-consumer");
+        let mut compiler = std::process::Command::new(tooling::execution_settings().compiler);
+        compiler
+            .current_dir(&scratch.0)
+            .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
+            .arg(format!("-DTEST_RX_HANDLE={handle}u"))
+            .args(["-Iinclude", "-Ios/include", "-I"])
+            .arg(root.join("runtime/multi/src"))
+            .args([
+                "src/Rte.c",
+                "src/Com.c",
+                "src/Ingress.c",
+                "src/Process.c",
+                "src/Observe.c",
+            ])
+            .arg(root.join("core/tests/fixtures/multi-runtime/rte_com_contract.c"))
+            .arg("-Wl,--wrap=Com_ReceiveSignal")
+            .arg("-o")
+            .arg(&executable);
+        let output = tooling::run_public_command(
+            &mut compiler,
+            &scratch.0,
+            "rte-com-compile",
+            std::time::Duration::from_secs(60),
+        );
+        assert!(output.status.success(), "{output:?}");
+        let output = tooling::run_public_command(
+            &mut std::process::Command::new(executable),
+            &scratch.0,
+            "rte-com-run",
+            std::time::Duration::from_secs(30),
+        );
+        assert!(output.status.success(), "{output:?}");
+        assert!(output.stdout.is_empty() && output.stderr.is_empty());
+    }
+}
+
 fn replace_all(sources: &mut [InputSource], before: &str, after: &str) {
     for source in sources {
         let text = std::str::from_utf8(source.bytes()).unwrap();

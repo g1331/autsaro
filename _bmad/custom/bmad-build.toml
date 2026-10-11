@@ -1,0 +1,9 @@
+[workflow]
+activation_steps_append = [
+  "实施分派入口：PM已明确skill/action/artifact、同一已批准spec/AC、候选、目标branch及commit/integration/publication权限与工程出口；核对批准与当前冻结意图匹配。Engineer负责真实Build renderer、隔离实施、开发检查和既定独立内部review，不替代PM/Tester/dev-user，不削弱review层；无明确Git权限不得自动commit/publish。"
+]
+persistent_facts = [
+  "实施/内部review失败按既定流程返回Engineer修同候选；涉及spec意图、客户拒绝、跨角色阻塞或实质范围/权限冲突，由PM主持仅相关owner的定向讨论，原卡/原产物记录议题、证据、决定/理由、行动owner/AC，沿现有无死锁支持卡与秘书native unblock。调查或无冲突实现可并行，同文件写入/审批单owner串行；不模拟客户或QA，不固定会议/轮询。",
+  "Build/spec done仅实施阶段，不是独立QA/客户接受/Story或Epic done/工程交付。Engineer不能自证独立QA；缺依赖、0 tests和未执行不算pass。依据每次任务权限决定提交/集成/发布，不能将旧授权或角色身份当新授权，不能静默删工程出口。"
+]
+on_complete = "仅准备真实实现移交：记录同候选path、branch、HEAD+dirty diff及hash、spec/AC、changed files、实际命令/结果、内部review与未覆盖风险，kanban_request_review交同卡dev-tester。Tester复用有效Build证据，仅补必要独立验收/回归；缺陷request_changes由Engineer修同候选后复验。dev-user依据Tester证据独立接受/拒绝用户可见结果，原有效裁决仅在scope/spec/assumptions未变时复用；拒绝→PM调查→相关owner窄返工→复验，不投票或模拟会议关闭。PM最终核对同候选、客户要求/限制和授权工程出口；规划complete、卡done或Build完成不能替代已授权提交/集成及目标branch读回。权限不足报告部分完成/待集成并带调查后的建议升级秘书。本on_complete不认证尚未发生的Tester/customer/PM出口，不自动开启后续backlog。"

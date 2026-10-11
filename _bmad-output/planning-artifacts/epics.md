@@ -18,6 +18,22 @@ inputDocuments:
   - _bmad-output/planning-artifacts/architecture/epic-4/FREERTOS-FEASIBILITY.md
   - _bmad-output/planning-artifacts/implementation-readiness.md
 updated: 2026-10-10
+epic9WorkflowScope: formal Epic 9 / incremental story planning
+epic9WorkflowState: story-planning-complete / implementation-readiness-concerns
+epic9StepsCompleted: [step-01-validate-prerequisites, step-02-design-epics, step-03-create-stories, step-04-final-validation]
+epic9PlanningValidation: coverage-and-dependencies-passed / module-sizing-and-entry-conditions-pending
+epic9PlanningBaseline: a09955c7efdd276c9e19e50feb867949ca331eb8
+epic9Continuation: user-directed / 2026-10-10
+epic9InputDocuments:
+  - _bmad-output/specs/spec-runtime-codegen-quality/SPEC.md
+  - _bmad-output/specs/spec-runtime-codegen-quality/work-packages.md
+  - _bmad-output/specs/spec-runtime-codegen-quality/generator-practices.md
+  - _bmad-output/planning-artifacts/architecture/epic-9/ARCHITECTURE-SPINE.md
+  - _bmad-output/planning-artifacts/architecture/epic-9/BASELINE.md
+  - _bmad-output/planning-artifacts/prd.md
+  - _bmad-output/planning-artifacts/architecture.md
+  - _bmad-output/planning-artifacts/implementation-readiness.md
+  - _bmad-output/planning-artifacts/sprint-change-proposal-2026-10-10.md
 roadmapUpdate: runtime-quality-and-pre-MCU-acceptance
 qualityWorkflowScope: formal Epics 9 and 10 / course correction
 qualityWorkflowState: outcome-definitions-confirmed / implementation-design-pending
@@ -1046,7 +1062,26 @@ So that 工程交付可以脱离原作者工作区复验。
 
 **完整范围：**已交付 legacy host、单组件与多组件 profile 及 Windows／Linux 受控目标；自有 runtime、生成 C、Rust 渲染／C 模板、共享类型、配置模型及内置定义、交付 ABI／清单与离线工具、固定内核／补丁／主机适配的直接依赖链；受影响的模块／生成／进程／原生／交接测试和正常开发／CI 入口。逐角色核定义务，采用代码不自动排除。范围不能只缩成标准 ECU 演示，也不包含未选网络、全部可选变体、MCU 实现或界面重设计。
 
-**进入条件：**最新共享基线与已完成回顾整改已核对；先在对应 BMad spec 中盘点实际 profile／target／源码来源／契约、合法规范可用性、诊断处置与人工覆盖、测试依赖及真实 CI 阶段耗时，再形成结构设计和可独立验收的 Stories。当前只有成果级规划，不登记空开发故事或宣称整体 ready-for-dev。
+**进入条件：**最新共享基线与已完成回顾整改已核对；[基线与架构](architecture/epic-9/ARCHITECTURE-SPINE.md)及[实施规格](../specs/spec-runtime-codegen-quality/SPEC.md)已形成，以下 20 条 Story 按真实模块／机制分解。模块实施前仍须补齐对应合法规范、已确认缺口、独立向量、工具、兼容审阅及工作量；未知诊断不直接转成实现清单。整体实施就绪保持 CONCERNS，逐项检查后才能 ready-for-dev。
+
+### Epic 9 需求与拆分依据（2026-10-10）
+
+本轮增量沿用既有 Epic 9，输入为[实施规格](../specs/spec-runtime-codegen-quality/SPEC.md)及其全部 companions。既有 FR-3／4／6／12／14／15 和 CFG／APP 的已交付行为作为回归约束；其他 Epic 与历史步骤状态保留。使用者已要求直接继续，按已确认范围完成需求提取、故事设计及检查。
+
+| 需求 | 可验收成果 | 规格及架构约束 |
+| --- | --- | --- |
+| QLT-1 | 三族工程、双目标、实际程序及直接依赖的完整适用契约，独立正反预期 | CAP-1／3；AD-1／2／5 |
+| QLT-2 | 模块状态责任、标准／私有／host 边界、单一生成来源、完整兼容迁移 | CAP-2；AD-2–4 |
+| QLT-3 | 真实违反关闭、误报／不适用有依据，221 项必要人工及采用代码核查完成 | CAP-3；AD-5／8 |
+| QLT-4 | 正常入口分层验证，成功／拒绝／恢复及旧行为保留，三类修改快速反馈实测 | CAP-4；AD-6 |
+| QLT-5 | 同覆盖成本实测、每轮完整分析、实际必需源码门阻止错误合并 | CAP-5；AD-7 |
+| Epic 9 出口 | 非实现者在新目录完成生成、构建、行为、失败恢复及离线交接 | CAP-6；AD-8 |
+
+固定 R24-11、MISRA C:2012 Third Edition＋AMD1–AMD4＋TC1–TC2、C99，唯一配置／计划／状态 owner／backend；保留源字节、安全保存、用户源码、旧 seal、同 event 周期与 phase 及符号冲突拒绝。公开 ABI 变更须先审阅授权，生成修复同步来源、配置、调用方及清单。开发效率沿现有 npm／Cargo／uv 和测试说明改善，不新增生成框架或代理系统。
+
+本 Epic 无新增 UX 设计工作；保留根 DESIGN、已有 EXPERIENCE 及父架构的异步状态、草稿和保存行为。实际影响 UI／IPC 的任务按已有隔离原生入口验证。缺合法规范、诊断尚未裁决、人工未完成、兼容方案未定与优化未测分别限制对应实施或出口。
+
+**Epic 结构：**保持一个正式 Epic 9，交付完整的可维护运行时与生成工程基础；沿已合并成果定义覆盖 QLT-1–5，不增加技术层 Epic。R11 消费者实施等待本 Epic 出口，调查可提前；Epic 10 的参考 ECU 累计验收仍保留原范围。模块故事交付可运行的受影响工程，既有接口可作为消费基础；共享契约变更先固定并迁移直接消费者，不让早期故事依赖尚未实现的后续能力。
 
 ### 整顿工作包与依赖
 
@@ -1070,6 +1105,557 @@ So that 工程交付可以脱离原作者工作区复验。
 5. CI 优化按可比完整运行核对实际耗时、覆盖、稳定性和资源成本；不预承诺百分比、不单纯延长超时。非实现者新目录复验及正常 PR／必要 CI 完成，结果回到对应规格和 sprint。
 
 R11 需求调查、标准研究及目标可行性调查可先行；R11 依赖现有生成／运行链的消费者实施须等待本 Epic 出口。独立工作包按实际接口分离并行，同一接口的设计、实现、调用方及测试迁移顺序一致，不预设全部串行或全部并行。
+
+### Epic 9 Story 清单与共同验收
+
+以下 20 条是正式 Story 规划，状态均为 **backlog**；具体实施就绪由 Sprint Planning 按各项进入条件判断。模块故事有明确的责任范围，未知诊断不会自动变成实现清单。开发规格须先核定对应缺口及工作量；若无法由一次独立开发交付闭合，应在实施前按已确认机制继续拆小并保留覆盖，不以“部分完成”关闭原验收。
+
+共同依据为[工作范围](../specs/spec-runtime-codegen-quality/work-packages.md)、[工程实践](../specs/spec-runtime-codegen-quality/generator-practices.md)和 Epic 9 AD-1–8。下面的源码位置是调查及修改落点，具体 source/header/宏/patch/main 选集须在任务进入时固定。
+
+**9.2–9.16 的共同进入与完成要求：**
+
+1. 进入前核对对应模块合法固定原文、适用 API／配置／状态／错误／回调／描述／MemMap 与直接上下层，写清真实差距和独立成功／拒绝／恢复预期。缺资料阻塞对应标准化实施；已证明兼容的整理可单独准备，不能借此关闭标准出口。
+2. 每次迁移同时处理实际 C／头文件、Rust 模板或 emitter、配置模型／内置定义、调用方、target 选集、ABI／资产和离线工具。标准公共、模块私有及 host／测试接口分离；改公开签名、布局、句柄或 wire 前须完成兼容审阅及对应授权，旧封存包不重新盖章。
+3. 从固定规范独立定义 C consumer 与行为向量，先验证护栏再迁移；重新生成所有受影响 legacy／single／multi 配置及 Windows/Linux 支持目标，按每个实际 main 编译、链接和运行。共同生成检查使用 `cargo test --locked --manifest-path core/Cargo.toml --test c_analysis`；受影响封存工程通过 `uv run --locked python -m autosar_tooling c-check --target <target> --project <project> --output-directory <fresh-directory>`。工具先预检，缺条件记为未执行。
+4. MISRA 自动诊断与 221 项适用性／必要人工检查随模块进行，真实违反、误报、不适用及未知分开；采用代码不自动豁免。记录 source/profile/target/main 和依据，真实违反未消除或人工未完成时对应故事出口保持阻塞，无批量 suppression、规则降级或 Agent 批准偏离。
+5. 维护用户源码、配置往返、旧行为、所有权和完整性拒绝。实际影响保存／IPC 时执行既有隔离原生场景。结果回到对应 BMad Story／规格和正常测试／CI 工件；重复测试只有证明独立风险覆盖相同才删除。
+
+**依赖规则：**下列“依赖”只列必须先取得的 Story 成果；读取既有实现与现有接口不等于等待后续故事。共享契约在 9.1 固定，改变接口的故事必须同步其所有直接消费者并保持整个受影响工程可运行，不能留下等待未来故事接线的空壳。调查可按实际接缝并行；共同文件的实现按其 owner 顺序推进。
+
+### Story 9.1: 固定共享契约与逐模块进入依据
+
+As a 运行时与生成器维护者,
+I want 获得准确的支持范围、共享接口责任和模块进入依据,
+So that 后续改动能沿一致契约推进。
+
+**覆盖：**QLT-1／2／3；CAP-1／2／3；AD-1–5／8。**依赖：**现有 Epic 4／7／8 已交付基线；可先调查。
+
+**实际范围：**三族 profile、双目标及实际 main；Can↔CanIf、COM↔RTE、路由↔TP／Dcm、ECU receipt↔OS／SchM；`integration/{plan,contracts,configuration,native_configuration,multi_bsw,ecu,multi_ecu}.rs`、公开头及 ABI／target／assets。
+
+**进入条件：**基线可立即调查；规范正文不足的模块保持待核查；本故事不承担未知数量的全部模块实现。**正常验证：**现有默认 Cargo tests、`multi_component_contracts`／`multi_runtime_contracts` 的独立 consumer；合法资料读取不进入普通用户生成链；模块整改另须共同生成／c-check及旧行为回归。
+
+**Acceptance Criteria:**
+
+**Given** 当前共享版本和实际选集已取得，
+**When** 核对交付范围和固定资料，
+**Then** 模块与直接依赖、支持配置、原文来源／摘要和已确认／未核查分别可定位，历史分析失败事实保留。
+
+**Given** 共享声明、状态 owner 和生产者已定位，
+**When** 设计模块接缝与兼容处理，
+**Then** ECU batch/output/receipt归执行层、OS/backend与生成SchM归OS层、COM/RTE glue唯一生产者明确，独立consumer与碰撞反例在正常入口成立。
+
+**Given** 某项公开接口需整改，
+**When** 分析所有消费者和旧包影响，
+**Then** 必要迁移方案与授权条件明确；各模块故事收到可执行的资料／预期准备范围，缺依据的具体实现保持阻塞。
+
+### Story 9.2: 分离 CAN 标准接口与主机适配
+
+As a CAN 模块开发者,
+I want 维护责任清楚的驱动配置、状态和平台适配,
+So that 修改驱动不会污染公共接口或丢失异步行为。
+
+**覆盖：**QLT-1–4；CAP-1–4；AD-1–6。**依赖：**9.1 的 Can/CanIf与锁边界。
+
+**实际范围：**`runtime/src/Can.c`、`Can_HostLock.*`、`runtime/include/Can*.h`及MemMap、`runtime/host`；legacy／multi CanIf与ECU消费者、配置生成及资产选集。
+
+**进入条件：**Can适用契约、真实Windows/Linux锁前置及必要ABI方案具备。**正常验证：**Cargo `--test multi_runtime_contracts` driver fixtures；`--features native-tests --test native`；Python `test_host_boundaries.py`；模块整改另须共同生成／c-check及旧行为回归。
+
+**Acceptance Criteria:**
+
+**Given** 合法及非法 controller／HOH 和状态输入，
+**When** 调用初始化、STOP、BUS_OFF、恢复及发送服务，
+**Then** 标准签名与配置语义独立验证，BUSY／拒绝不改变既有输出，编号合法性不由metadata范围替代。
+
+**Given** 异步发送及可复制帧，
+**When** 注入迟到确认、锁忙／锁错和关闭，
+**Then** 缓冲及lifetime token归属唯一，确认不重复，真实平台资源正确回收。
+
+**Given** 主机sink或测试控制启用，
+**When** 重新生成受影响工程，
+**Then** 公共标准头不带测试故障控制，适配依赖经声明接入，旧profile独立编译行为成立。
+
+### Story 9.3: 明确 ECU 批次执行与收据责任
+
+As a ECU 集成维护者,
+I want 独立维护批次接纳、输出、确认和生命周期,
+So that 能够定位执行失败且避免重复处理。
+
+**覆盖：**QLT-2–4；CAP-1–4；AD-2／4／6。**依赖：**9.1 的 ECU/OS接缝；9.2 的driver接口。
+
+**实际范围：**`runtime/ecu/src/{Ecu_Target,Ecu_HostBridge,Ecu_HostBatch,Ecu_Execution,Ecu_OsHooks,Ecu_SchM}.c`、host execution；OS mailbox、LSduR及native consumers。
+
+**进入条件：**共享端口声明、SchM锁协议和独立链接向量已固定。**正常验证：**Python `test_host_boundaries.py`／`test_ecu_build_modes.py`；Cargo native-tests；封存 `ecu-tool verify`；模块整改另须共同生成／c-check及旧行为回归。
+
+**Acceptance Criteria:**
+
+**Given** 同epoch或非法顺序／容量／并发批次，
+**When** 接纳并执行输入，
+**Then** 非法批次在状态改变前拒绝，同epoch不重跑，owner和完成记录唯一。
+
+**Given** 实际输出尚未全部完成，
+**When** 发生write／flush失败、迟到确认或watchdog超时，
+**Then** 不伪造确认、不回滚成成功；COMMIT_OK仅在真实Waiting且工作排空后发布。
+
+**Given** 按职责整理执行源码，
+**When** 重新生成并运行各main，
+**Then** 消费既有OS端口并保持唯一backend，故障测试宏不进入生产，旧批次容量和资源退出回归保持。
+
+### Story 9.4: 闭合 CanIf 配置、路由与异步接口
+
+As a 通信维护者,
+I want 按标准公共接口维护CanIf并隔离私有状态,
+So that 配置或驱动改动可以通过局部检查定位。
+
+**覆盖：**QLT-1–4；CAP-1–4；AD-1–6。**依赖：**9.1；9.2；受影响执行接缝消费9.3。
+
+**实际范围：**legacy／multi CanIf源码、public/private/SchM/MemMap头；`integration/{communication,multi_bsw,multi_ecu}.rs`；Can／LSduR／mode消费者。
+
+**进入条件：**Init配置指针等全公共义务核定，旧frame-index ABI迁移经过审阅。**正常验证：**Cargo multi_runtime_contracts CanIf fixtures；独立C编译链接；生成工程build/verify；模块整改另须共同生成／c-check及旧行为回归。
+
+**Acceptance Criteria:**
+
+**Given** 支持配置和独立标准头消费者，
+**When** 编译链接并调用初始化与模式服务，
+**Then** 签名、类型、版本检查及controller／HOH连续编号和实例数量义务成立，非法配置定位到源对象。
+
+**Given** RX/TX路由和异步上下层，
+**When** 注入错误ID／长度／controller或PDU mode及迟到回调，
+**Then** 拒绝／恢复及恰一次确认成立，锁协议不因owner假设取消。
+
+**Given** 旧接口与新标准契约有差异，
+**When** 迁移源码、配置和全部直接消费者，
+**Then** 当前工程独立运行并保留旧包契约；摘要更新不能吸收破坏性变化。
+
+### Story 9.5: 整理 LSduR 与 PduR 路由和缓冲契约
+
+As a 路由模块开发者,
+I want 从同一计划生成并维护明确的路由与TP回调,
+So that 上下层句柄和缓冲错误能在模块级发现。
+
+**覆盖：**QLT-1–4；CAP-1–4；AD-2–6。**依赖：**9.1；9.4 的下层接口；使用9.3执行端口。
+
+**实际范围：**legacy／multi LSduR、PduR及头；`integration/routing.rs`、`multi_ecu.rs`；Com／CanIf／CanTp／Dcm消费者。
+
+**进入条件：**上下层callback唯一生产者和各方向handle身份明确。**正常验证：**Cargo multi_runtime_contracts路由／TP fixtures及multi_component_contracts；独立函数指针consumer；模块整改另须共同生成／c-check及旧行为回归。
+
+**Acceptance Criteria:**
+
+**Given** 上下层或Rx/Tx数值相同的合法handle，
+**When** 生成并分派路由，
+**Then** 方向及模块身份保持区分，声明和函数指针与独立消费者兼容。
+
+**Given** 空指针、超长数据或错误路由，
+**When** 请求复制／传输并继续下一合法请求，
+**Then** 无越界与部分成功，失败路径及恢复有独立预期，确认恰一次。
+
+**Given** 路由语义曾由最终文本替换表达，
+**When** 将判断归入计划并生成模块配置，
+**Then** 确定性与原行为成立，所有直接消费者同步，产物生产者不重复。
+
+### Story 9.6: 整理 COM 状态与模块生成配置
+
+As a COM 开发者,
+I want 在明确状态所有者和生成来源下修改信号机制,
+So that 小配置改动无需多处修补且保留通信行为。
+
+**覆盖：**QLT-1–4；CAP-1–4；AD-2–6。**依赖：**9.1 的COM/RTE声明；9.5路由契约。
+
+**实际范围：**legacy `runtime/src/Com.c`及include、multi Com及Com_Internal／MemMap；`integration/{multi_com,multi_rte,multi_ecu,ecu}.rs`；RTE／PduR／Dem。
+
+**进入条件：**标准初值／DM／group及下层义务核定，RTE notification唯一producer已固定。**正常验证：**Cargo multi_runtime_contracts／multi_component_contracts；真实信号工程及封存verify；模块整改另须共同生成／c-check及旧行为回归。
+
+**Acceptance Criteria:**
+
+**Given** 真实发送接收、初值和首次发布配置，
+**When** 运行信号与deadline路径，
+**Then** last/freshness、DM超时及恢复符合独立向量，local通信不受CAN停机阻断。
+
+**Given** group stop/start及下层发送失败，
+**When** 查询并继续通信，
+**Then** COM_STOPPED与下层TX错误不混用；legacy同步确认和gate保持。
+
+**Given** 修改一个COM配置规则，
+**When** 校验并重新生成受影响三族工程，
+**Then** 只由权威计划与模块emitter表达语义，独立RTE消费者、确定顺序及旧配置回归成立。
+
+### Story 9.7: 整理 CanTp 传输与可信计时
+
+As a 传输层开发者,
+I want 维护明确的传输状态、缓冲和超时来源,
+So that 协议边界错误能够独立复现并恢复。
+
+**覆盖：**QLT-1–4；CAP-1–4；AD-2–6。**依赖：**9.1；9.5路由及回调契约；9.3可信执行时基。
+
+**实际范围：**legacy／multi CanTp及SchM／MemMap；routing和配置emitter；LSduR／PduR／Dcm。
+
+**进入条件：**按profile核定DLC／WAIT／payload及完整已支持TP义务。**正常验证：**Cargo multi_runtime_contracts TP fixtures；Python protocol suites；实际ecu-tool行为；模块整改另须共同生成／c-check及旧行为回归。
+
+**Acceptance Criteria:**
+
+**Given** SF/FF/CF/FC合法序列，
+**When** 运行不同长度、block与STmin配置，
+**Then** 复制、序号和交付结果符合独立向量，计时来自唯一可信时基。
+
+**Given** 错误序号／长度、超时或迟到确认，
+**When** 触发N_As/N_Bs/N_Cr并发起下一合法请求，
+**Then** 拒绝与资源释放成立，下一请求可恢复，不发布旧传输的成功确认。
+
+**Given** 不同profile有不同策略，
+**When** 整理实现和生成配置，
+**Then** 保留已声明差异及公共签名，不能用目录合并改变DLC／WAIT／payload语义。
+
+### Story 9.8: 整理 Dcm 会话与诊断生成链
+
+As a 诊断维护者,
+I want 清楚维护会话、时限、DID和服务回调,
+So that 诊断配置改动可局部验证且保留旧服务。
+
+**覆盖：**QLT-1–4；CAP-1–4；AD-2–6。**依赖：**9.1固定mode／Security／Dem接口；9.5／9.7传输；9.3执行。
+
+**实际范围：**legacy／multi Dcm、Dcm_Internal／Rte_Dcm_Type；host Dcm_Execution；`integration/{diagnostic,multi_mode,multi_rte,multi_ecu}.rs`与ecu模板；RTE／mode／Security／Dem既有消费者。
+
+**进入条件：**适用Dcm服务与直接依赖核定，已存在消费者随接口变化同步，不等待后续重组。**正常验证：**multi diagnostic_contract／diagnostic_queued_contract fixtures；Python diagnostic／protocol suites；ecu-tool verify；模块整改另须共同生成／c-check及旧行为回归。
+
+**Acceptance Criteria:**
+
+**Given** 会话及DID配置合法，
+**When** 提交会话并运行P2/P2*/S3、DID读取，
+**Then** 回调类型、顺序、容量和权限符合独立预期，会话变更不提前发布。
+
+**Given** 传输拒绝、服务失败或超时，
+**When** 恢复并发起下一请求，
+**Then** 输出保护与恢复成立，旧write/routine/DTC和安全配置不丢失。
+
+**Given** 无应用DID／完整无诊断／network-only或半路由配置，
+**When** 校验与生成，
+**Then** F186和合法关闭配置保持，半路由明确拒绝，未知语义不输出空壳。
+
+### Story 9.9: 整理 ComM 与 BswM 模式衔接
+
+As a 模式管理开发者,
+I want 明确维护通信请求、诊断保持和模式通知,
+So that 上层模式改动不直接侵入驱动状态。
+
+**覆盖：**QLT-1–4；CAP-1–4；AD-2–6。**依赖：**9.1；9.4 CanIf接口；9.8诊断接缝。
+
+**实际范围：**runtime/multi ComM／BswM、ComM_Internal、SchM／MemMap；`multi_mode`／`multi_ecu`；host CDD BusSM／Dcm／CanIf。
+
+**进入条件：**NM NONE选定义务和BusSM适配边界核定。**正常验证：**multi mode_contract及并发fixtures；独立接口consumer和真实生成工程；模块整改另须共同生成／c-check及旧行为回归。
+
+**Acceptance Criteria:**
+
+**Given** 合法及非法user/channel与初始化状态，
+**When** 请求释放通信、诊断保持和wakeup，
+**Then** 模式转换、错误和通知符合独立向量，重复初始化／DeInit边界清楚。
+
+**Given** 通知重入或真实异步模式变动，
+**When** 运行并发路径，
+**Then** 共享状态按SchM协议保护，ECU lifetime与ComM lifetime不混淆。
+
+**Given** 生成NM NONE配置，
+**When** 独立构建并观察模式，
+**Then** 仅交付当前有界能力，不生成未选择的Nm／CanNm／CanSM空壳；公共与主机接口分离。
+
+### Story 9.10: 分离 Det 标准报告与主机控制
+
+As a BSW 维护者,
+I want 获得明确且线程安全的错误报告接缝,
+So that 错误定位可用而测试控制不进入标准接口。
+
+**覆盖：**QLT-1–4；CAP-1–4；AD-2–6。**依赖：**9.1；9.9受影响mode消费者。
+
+**实际范围：**runtime/multi Det及Det_Host、公开／私有／MemMap；multi_bsw／multi_ecu；各实际Det调用方。
+
+**进入条件：**Det选定错误报告与callback义务核定。**正常验证：**multi det_* fixtures；标准接口编译链接和真实并发回归；模块整改另须共同生成／c-check及旧行为回归。
+
+**Acceptance Criteria:**
+
+**Given** 初始化前后及合法错误报告，
+**When** 调用标准服务与回调，
+**Then** 签名、错误身份和回调义务符合独立预期，重复／非法调用有可定位结果。
+
+**Given** 并发报告或回调重入，
+**When** 查询记录并退出，
+**Then** 共享记录按真实锁保护，不丢关键状态或死锁。
+
+**Given** host观察及fault入口用于测试，
+**When** 构建生产和测试工程，
+**Then** 主机控制在专用适配面，生产标准头及宏选集不混入故障控制。
+
+### Story 9.11: 整理 NvM 与主机持久原语
+
+As a 持久层维护者,
+I want 按清楚接口维护持久数据与失败恢复,
+So that 存储失败不会被误报为成功。
+
+**覆盖：**QLT-1–4；CAP-1–4；AD-2–6。**依赖：**9.1的NvM/Dem接口；9.2平台锁边界。
+
+**实际范围：**legacy NvM及NvM_HostStorage.*、相关头；配置生成与资产；Dem／Dcm既有消费者。
+
+**进入条件：**NvM所选软件义务、主机存储责任及上下层必需依赖核定。**正常验证：**Python native及diagnostic持久回归；独立C consumer；封存工程重启验证；模块整改另须共同生成／c-check及旧行为回归。
+
+**Acceptance Criteria:**
+
+**Given** 合法配置和持久数据，
+**When** 写入双槽、关闭并重启读取，
+**Then** 真实落盘及恢复符合独立预期，配置指纹校验生效。
+
+**Given** 损坏数据、指纹不符、锁或关闭失败，
+**When** 读写并继续合法恢复，
+**Then** 错误不降级为成功或空数据，旧有效字节和恢复语义受保护。
+
+**Given** 标准公共服务与host文件原语混合，
+**When** 整理适配并重新生成，
+**Then** 独立签名／上下层接线闭合，主机存储证据限定为主机，当前Dem消费者仍可运行。
+
+### Story 9.12: 整理 Dem 状态与持久消费者
+
+As a 诊断事件开发者,
+I want 明确维护DTC状态、清除与存储失败语义,
+So that 监测和诊断修改不会破坏故障恢复。
+
+**覆盖：**QLT-1–4；CAP-1–4；AD-2–6。**依赖：**9.1；9.11持久接口；9.6监测及9.8诊断接缝。
+
+**实际范围：**legacy Dem源码／头及配置生成；Com监测／Dcm／NvM；runtime资产。
+
+**进入条件：**Dem全部支持配置与DTC服务条件核定。**正常验证：**Python diagnostic／protocol及native持久向量；独立C consumer；ecu-tool verify；模块整改另须共同生成／c-check及旧行为回归。
+
+**Acceptance Criteria:**
+
+**Given** 监测源触发故障且诊断连接存在，
+**When** 更新、暂停、恢复及读取DTC状态，
+**Then** 状态位及返回内容符合独立向量，Com监测与Dcm消费同一契约。
+
+**Given** 清除或持久操作失败，
+**When** 重启或再次查询，
+**Then** 失败可观察、不伪造清除，旧数据与恢复策略成立。
+
+**Given** 整理公开／私有面与配置来源，
+**When** 重新生成合法与非法配置，
+**Then** 无第二状态owner，必需上下层软件义务闭合，旧诊断行为保持。
+
+### Story 9.13: 整理 Security 会话与 Windows 密钥边界
+
+As a 安全服务维护者,
+I want 明确维护已支持安全配置和拒绝语义,
+So that 兼容整理不会泄露密钥或改变会话授权。
+
+**覆盖：**QLT-1–4；CAP-1–4；AD-2–6。**依赖：**9.1；9.8的既有Security接口；实际持久消费者接缝采用9.11。
+
+**实际范围：**legacy Security.c／Security.h与BCrypt依赖；generator/render安全配置与Dcm消费者、交付工具。
+
+**进入条件：**项目安全责任与所调用标准链核定；Windows适用工具前置具备。**正常验证：**Windows实际Security／diagnostic／native向量及独立C consumer；配置拒绝Cargo tests；模块整改另须共同生成／c-check及旧行为回归。
+
+**Acceptance Criteria:**
+
+**Given** 受支持seed/key/session配置，
+**When** 执行合法与非法访问及失败次数限制，
+**Then** 授权、拒绝及会话变化符合独立向量，错误输出受保护。
+
+**Given** 达到失败限制后重启或改变会话，
+**When** 继续请求安全服务，
+**Then** 计数及恢复按已声明策略成立，平台API失败不伪造成功。
+
+**Given** 生成及封存含安全功能工程，
+**When** 检查配置、源码与交付清单，
+**Then** 不打包密钥或运行状态，保留Windows范围，Linux不借Windows结果扩大支持。
+
+### Story 9.14: 整理 OS、SchM 与固定内核责任链
+
+As a OS 维护者,
+I want 在唯一backend下维护调度、锁和目标适配,
+So that 运行时变化可按明确接缝验证完整主机等级。
+
+**覆盖：**QLT-1–4；CAP-1–4；AD-1／2／4–6。**依赖：**9.1；9.3 ECU端口；9.2真实锁；已完成相关模块的SchM需求。
+
+**实际范围：**runtime/os公共／私有／host/backend、third_party/freertos固定内核／port／patch；integration/{schedule,os_service,arti,configuration,ecu,multi_ecu}.rs与SchM生成。
+
+**进入条件：**固定OS/OSEK/SC1原文与目标工具具备，采用代码诊断责任核定。**正常验证：**Cargo --features native-tests含26 OS suites及--features official-oracles；真实PE/ELF段／栈与ecu-tool；模块整改另须共同生成／c-check及旧行为回归。
+
+**Acceptance Criteria:**
+
+**Given** 完整适用SC1服务及合法配置，
+**When** 执行任务／事件／资源／Counter／ScheduleTable／ISR／Hook与错误路径，
+**Then** 独立状态及时序预期成立，真实执行栈和ARTI验证保持，不缩为参考对象。
+
+**Given** 同event映射存在不同周期／phase或非法调度关系，
+**When** 从源配置生成，
+**Then** 生成前拒绝且定位源对象，受控tick与唯一backend不变。
+
+**Given** 内核／port／补丁或头布局被整理，
+**When** 在两目标重新构建所有受影响main，
+**Then** 固定身份、生产patch和实际修改可验证，PE/ELF映射及SchM接线成立，采用代码真实问题同步处理。
+
+### Story 9.15: 整理 RTE、共享类型与模块生成阶段
+
+As a 生成器与应用开发者,
+I want 从一致计划生成接口并保留应用行为,
+So that 改共享类型或规则时无需多处解释同一语义。
+
+**覆盖：**QLT-1–4；CAP-1–4；AD-1–6。**依赖：**9.1；9.6 COM；9.8诊断；9.9模式；9.14调度；按受影响共享契约消费9.4–13。
+
+**实际范围：**integration/{contracts,multi_rte,multi_com,multi_mode,configuration,ecu,multi_ecu}.rs及runtime/ecu/templates；model／arxml／definitions／rules、应用槽消费者。
+
+**进入条件：**公共类型／callback／配置glue唯一producer和全部consumer闭合。**正常验证：**Cargo multi_component_contracts／multi_runtime_contracts；默认计划tests、独立应用C consumer、实际ecu-tool运行；模块整改另须共同生成／c-check及旧行为回归。
+
+**Acceptance Criteria:**
+
+**Given** 合法多组件S/R、同步C/S和初始化配置，
+**When** 生成并运行应用，
+**Then** 初值、首次发布、扇出、DID接口及拒绝时输出保护符合独立向量。
+
+**Given** 生成规则或共享类型改变，
+**When** 在计划和模块emitter中表达并独立编译链接，
+**Then** 业务判断不藏在最终字符串替换里，类型及符号来自唯一生产者，确定性与参数／函数体符号碰撞反例保持。
+
+**Given** 规则／输入／目标或应用快照变化，
+**When** 重新预览、生成或使用已有局部复用，
+**Then** 失效身份不发布旧结果，普通生成不需要官方档案／compiler；缓存若新增必须证明失效及冷暖等价。
+
+### Story 9.16: 验证兼容交付、旧工程与离线工具
+
+As a 工程接收者,
+I want 获得可搬移、可复验且保护用户源码的整理后工程,
+So that 能够沿普通工具独立接手。
+
+**覆盖：**QLT-2–4；CAP-2／4／6；AD-1／4／6。**依赖：**9.2–9.15全部模块闭合；9.1兼容决策。
+
+**实际范围：**core/src/{prepared,resources,target}.rs、generator/delivery与ownership/reopen；runtime/contracts及ecu_tools资产；runtime/ecu-tool.py与build/verify/reference/workbench_v2实现。
+
+**进入条件：**ABI与第三方身份经过独立审阅，迁移格式及授权已具备。**正常验证：**Cargo delivery/ownership/reopen与official-oracles；Python native/test_offline_delivery.py；包内python tools/ecu-tool.py build及verify；模块整改另须共同生成／c-check及旧行为回归。
+
+**Acceptance Criteria:**
+
+**Given** 旧v1／新v2多槽工程与用户live源码，
+**When** 保存重开、搬移、预览并再次生成，
+**Then** 原字节和用户文件保持，create-only及外部修改使确认失效，旧seal不静默升级。
+
+**Given** 篡改、额外文件、链接／reparse point或路径冲突，
+**When** 校验与生成／构建，
+**Then** 完整性拒绝可定位，失败后旧有效产物保留；摘要按固定换行字节核定。
+
+**Given** 仅接收封存包、支持CPython与固定GCC/binutils/Git，
+**When** 在checkout不可用的新目录构建运行，
+**Then** 工具不依赖Rust/Node/uv或源机器路径；每个target/main实际构建行为及错误工具拒绝成立。
+
+### Story 9.17: 让日常修改获得快速有效反馈
+
+As a 项目开发者,
+I want 按改动找到最小有效检查与清楚的失败现场,
+So that 减少重复修改和等待完整CI的时间。
+
+**覆盖：**QLT-4；CAP-4；AD-3／6。**依赖：**9.1及现有测试；调查可立即开展，模块覆盖调整跟随已完成owner故事。
+
+**实际范围：**core/tests、tests/python、tests/desktop、autosar_tooling既有quality/verify/acceptance；docs/development/testing.md及environment。
+
+**进入条件：**不需全部模块先完成调查；实际测试迁移需对应契约已稳定。**正常验证：**现有Cargo test目标／filter、npm lint/test/build、uv unittest及隔离desktop；沿正常入口实跑；模块整改另须共同生成／c-check及旧行为回归。
+
+**Acceptance Criteria:**
+
+**Given** 生成配置、runtime状态、共享类型三类真实改动，
+**When** 选择检查并测量首次／重复反馈，
+**Then** 修改落点、最快有意义命令、时间和完整验证升级条件明确，失败显示源对象／stage／producer及原始exit。
+
+**Given** 怀疑测试重复或工具准备耗时，
+**When** 比较风险覆盖、冷暖构建和前置条件，
+**Then** 仅删除已证明同风险的重复，数据／build／进程／日志隔离可复现，缺工具在耗时操作前定位。
+
+**Given** 开发者不使用代理，
+**When** 按现有测试说明完成相同操作，
+**Then** 普通终端能复验，受影响原生异步操作按隔离真实边界验证，无新编排／报告系统；后续模块迁移更新对应入口。
+
+### Story 9.18: 优化实际 CI 等待与重复工作
+
+As a 团队维护者,
+I want 按实测阶段优化CI关键路径和缓存复用,
+So that 在完整覆盖下缩短等待并保持失败可解释。
+
+**覆盖：**QLT-5；CAP-5；AD-7。**依赖：**现有CI日志及9.1身份范围；调查可并行，采用9.17反馈测法。
+
+**实际范围：**checks.yml、native-analysis-compiler action、c_check/c_addon及生成样本入口；按实际需要的现有workflow。
+
+**进入条件：**实际热点与有效失效边界明确；远端验证运行需要对应授权。**正常验证：**GitHub jobs/step/cache日志及同工具身份完整双目标运行；正常本地样本／c-check入口；模块整改另须共同生成／c-check及旧行为回归。
+
+**Acceptance Criteria:**
+
+**Given** 完整可比运行和阶段日志，
+**When** 分析prepare等待、compiler validation／macro probes及各main CTU，
+**Then** 准确识别队列、缓存命中、重复安装／构建和波动，不永久假定multi唯一瓶颈。
+
+**Given** 确有可去除重复或独立平台producer，
+**When** 在现有Actions／工具中优化，
+**Then** 保持双目标六样本8分组12摘要和所有main，真实头宏／补丁副本／seal严格；不合并不同程序CTU或缓存通过结果。
+
+**Given** 优化前后覆盖和工具身份可比，
+**When** 读取完整运行及资源／失败数据，
+**Then** 分别报告收益、成本和稳定性；严格门新增成本由9.19另测，不能仅延长超时或预承诺降幅。
+
+### Story 9.19: 让严格源码结果真正阻止错误 PR 合并
+
+As a 仓库维护者,
+I want 获得每次PR必需的完整源码门,
+So that 生成C回归不会随绿色链路检查进入共享版本。
+
+**覆盖：**QLT-3／5；CAP-3／5；AD-5／7／8。**依赖：**9.2–9.16所有适用软件整改、MISRA及人工完成；9.17／9.18结果具备。
+
+**实际范围：**checks.yml strict步骤与c-analysis聚合、autosar_tooling结果校验、真实分支必需状态。
+
+**进入条件：**维护者已授权对应远端变更和故障PR验证；真实违反未关闭继续阻塞。**正常验证：**完整双目标重新生成分析及实际正反PR／分支保护验证；模块整改另须共同生成／c-check及旧行为回归。
+
+**Acceptance Criteria:**
+
+**Given** 全部必需分析身份与上游均存在，
+**When** 自动PR执行严格聚合，
+**Then** 每摘要error=null且passed=true、全部上游success；完整选集本轮重扫，不复用旧扫描通过。
+
+**Given** 违规、漏样本、重复身份、工具／解析失败或必需任务skip/cancel，
+**When** 尝试通过PR必需检查，
+**Then** 聚合失败且实际不能合并；c-analysis加入真实保护并检查上游被跳过仍不产生绿色聚合。
+
+**Given** 恢复合法完整输入并启用严格门，
+**When** 完成可比完整PR运行，
+**Then** 正常可合并路径成立，新增门成本与9.18优化收益分别解释，自动门不替代人工。
+
+### Story 9.20: 完成非实现者独立接手与 Epic 出口
+
+As a 独立工程接收者,
+I want 从新目录验证全部整理成果,
+So that 后续功能有真实可用的开发与交付基础。
+
+**覆盖：**QLT-1–5及Epic9出口；CAP-1–6；AD-1–8。**依赖：**9.1–9.19完整结果；未关闭项返回所属故事。
+
+**实际范围：**全部三族支持配置、Windows/Linux实际交付、正常工作台及离线工具；对应规格／Story／CI证据。
+
+**进入条件：**非实现者参与，工具／规范／兼容审阅和全部必要人工就绪。**正常验证：**正常配置往返／生成、包内ecu-tool build/verify、独立模块向量、受影响隔离desktop及真实PR门；模块整改另须共同生成／c-check及旧行为回归。
+
+**Acceptance Criteria:**
+
+**Given** 仅从明确交付及支持工具开始，
+**When** 在新目录编辑保存重开、生成并独立构建每个受影响程序，
+**Then** CAN／诊断／调度成功、拒绝和恢复成立，用户源码／旧工程及完整性保护由非实现者复验。
+
+**Given** 交付包搬移且checkout不可用，
+**When** 离线复验并核查受影响真实IPC，
+**Then** 两目标证据各自成立，原生按隔离条件验证；浏览器／native／安装／硬件层结论不混用。
+
+**Given** 全部故事及严格门证据可读，
+**When** 核对Epic退出并更新正常BMad状态，
+**Then** 未核查／失败／缺人工返回owner，全部通过后才关闭Epic9和放行R11消费者；仅真实硬件剩余项带依据及判据交后续阶段。
+
+### 任务覆盖与进入顺序
+
+| 需求／成果 | Story 覆盖 |
+| --- | --- |
+| QLT-1 完整契约与独立预期 | 9.1–9.16、9.20 |
+| QLT-2 结构／生成来源与完整兼容迁移 | 9.1–9.16、9.20 |
+| QLT-3 MISRA诊断／人工／采用代码 | 各模块9.2–9.16的共同验收；9.1依据、9.19严格门、9.20出口 |
+| QLT-4 快速反馈、旧行为及正常入口 | 9.2–9.17、9.20 |
+| QLT-5 CI效率及严格必需保护 | 9.18、9.19、9.20 |
+| CAP-1／2／3／4／5／6 | 依次为9.1–15／9.2–16／9.1–16与19／9.2–17／9.18–19／9.16与20 |
+
+优先准备 9.1 的共享契约和模块进入依据；9.17、9.18 的现状调查可以同期进行。模块按真实接口依赖推进，9.16汇总兼容交付，9.19在源码与人工整改完成后启用严格门，9.20由非实现者复验出口。不能把所有模块先绑成一个大重构，也不能为并行忽略共同文件和声明owner。
+
+当前已知Q1合法原文、Q2必要ABI迁移、Q3诊断与人工、Q4性能和实际门禁效果分别由9.1及对应模块／9.16／模块共同验收与9.19／9.17–19承接。每个故事开工前补齐实际缺口、向量、工具和工作量；无法消除真实违反保持阻塞并提出具体替代方案，不交最终验收文字吸收。故事清单完成不改变现有支持声明或sprint状态。
 
 ## Epic 10: 标准与工程交付验收
 

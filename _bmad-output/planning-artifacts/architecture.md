@@ -4,6 +4,8 @@
 
 新增 [Epic 9／10](epics.md#epic-9-运行时生成-c-与开发工程体系整顿)，需求见 [PRD QLT-1–QLT-6](prd.md#实机前工程质量要求2026-10-10)。这是整改与验收约束，不是已完成的目录迁移设计；Epic 4／7／8 的历史 spine、固定内核路线与完成证据保留。当前实施顺序以[产品简述](product-brief.md#长期候选路线)为准。
 
+Epic 9 的 [增量架构契约](architecture/epic-9/ARCHITECTURE-SPINE.md)与[基线盘点及迁移依据](architecture/epic-9/BASELINE.md)核对 `a09955c` 的真实来源、双目标十二份 C 分析摘要、近期 CI job／step 与必需检查。它们供后续模块规格与 Story 拆分使用；未完成的规范全文审计、诊断分类和人工评估仍是实际依赖，架构材料完成不表示整改通过或 ready-for-dev。
+
 1. **先核定实际来源与职责。**覆盖 `runtime/src`／`include`、`runtime/os`、`runtime/ecu`、C 模板和 `core/src/generator`／`integration` 中实际渲染／资产选择路径，以及交付清单与离线工具。结合公开 ABI、当前 profile／target 选集和直接调用链判定标准 BSW、RTE、OS、应用、主机适配和采用代码责任，不仅依据目录名。现有 legacy 与 integration 有意分派的策略不当作可直接删除的重复实现。
 2. **按契约和状态所有者迁移。**先核对适用标准公开接口、配置／回调与上下层义务，保留唯一计划、唯一调度 backend 和既有状态归属。模块私有状态及头文件依赖留在职责边界内；平台原语通过适配提供，测试控制仅在测试构建。新增抽象必须解决当前耦合，不建立插件框架、第二调度器或并行配置权威。具体目录方案由盘点后的架构设计确定。
 3. **生成来源与交付同步。**修复实际渲染器／模板及所复用源码，再生成各受影响 profile，检查头文件、符号、配置、BSWMD／适用 MemMap、构建清单和运行闭包。ABI／行为兼容变更明确审阅并提供必要迁移，不用重命名、typedef 或摘要更新代替契约整改；已封存包按其真实版本与完整性验证，不静默升级其摘要。用户 live 源码与再生成所有权始终受保护。
@@ -36,7 +38,7 @@ Epic 3 已交付 R24-11 固定 Windows 主机剖面的可重建包与离线参�
 
 首个硬件候选为 FRDM-A-S32K344，尚非已验证目标。外部 RTD、候选 OS 的主机/MCU 端口和工具链按实际取得的包及许可逐项固定版本；NXP RTD 包所标的 AUTOSAR 版次若不同于项目 R24-11 输入，须显式检查 ECUC 定义、配置结构、公开接口和生成物的转换边界，不能静默混版或把供应商版本差异归为标准兼容。驱动许可证与再分发条件单独记录，产品自有 BSW 的源码交付不自动包含供应商包。
 
-当前运行时无 ComM、Nm、CanNm、CanSM 模块，也没有这些模块的 ECUC 配置闭包。`Can_SetControllerMode` 和主机 bus-off 注入只覆盖有界控制器行为，不能替代 ComM 请求仲裁、Nm/CanNm 的 NM PDU 与睡眠状态机，或 CanSM 的模式协调。未来引入网络管理时先确定常开、完整 NM、被动 NM、部分网络等哪些配置需要支持，再沿 ComM→Nm→CanNm→LSduR/CanIf 与 ComM→CanSM→CanIf/Can 的实际调用和回调链验收；未声明的变体不输出空壳配置。
+legacy／单组件运行时未提供完整网络管理；多组件 profile 已在 `runtime/multi` 交付有界 ComM、BswM 与 Det、对应配置和主机 CDD BusSM 接缝，选定 NM NONE。当前仍无完整 Nm、CanNm、CanSM 实现；有界 mode 路径不能替代 NM PDU、睡眠状态机或完整 CanSM 协调。未来引入网络管理时先确定常开、完整 NM、被动 NM、部分网络等哪些配置需要支持，再沿 ComM→Nm→CanNm→LSduR/CanIf 与 ComM→CanSM→CanIf/Can 的实际调用和回调链验收；未声明的变体不输出空壳配置。
 
 首个参考 ECU 的集成契约沿[PRD FR-1–FR-15](prd.md)建立：系统/ECU Extract、产品 BSW 模块描述与 ECUC、示例 SWC 描述分别标明来源与版次；配置校验输出一份目标明确的生成计划；生成计划把 BSW 配置、RTE/调度接口、可复用 BSW 源码、OS 实现及其配置、目标驱动与构建入口逐项关联。缺生产者或消费者的接口不以空文件“补齐”，而阻断该目标交付。Windows 与实机的工程清单和证据分开，不能由同名接口推定同等运行语义。
 
