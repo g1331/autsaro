@@ -164,7 +164,8 @@ pub fn verify() {
         ),
         (
             "substituted-valid-api",
-            xml.replace("Can_MainFunction_Wakeup", "Can_DeInit"),
+            // Can_DeInit is itself an entry; use a declared standard API that is not.
+            xml.replace("Can_MainFunction_Wakeup", "Can_GetControllerMode"),
             "actual BSW entries Can",
         ),
     ] {

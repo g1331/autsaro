@@ -1,4 +1,5 @@
 #include "Ecu_Runtime.h"
+#include "Det.h"
 #include "Dem.h"
 #include "CanIf.h"
 #include "Com.h"
@@ -160,6 +161,8 @@ EcuStatus Ecu_Init(const EcuConfig *config, CanTxSink sink, const char *nvm_path
         return result;
     }
     Com_Init(config);
+    Det_Init(NULL);
+    Det_Start();
     CanIf_Init(config);
     Can_Init(&can_config);
     if (Can_SetControllerMode(0u, CAN_CS_STARTED) != E_OK) {

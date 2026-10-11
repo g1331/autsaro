@@ -253,7 +253,8 @@ pub(super) fn source_generation_does_not_require_native_executor() {
     let resources = PlanDependencies::explicit(
         schema::schema_archive(root),
         schema::reference_archive(root, "AUTOSAR_MOD_ARCHIVE", schema::MOD_ZIP),
-    ).unwrap();
+    )
+    .unwrap();
     let interpreter = std::env::var_os("AUTOSAR_PYTHON")
         .expect("Supply an absolute pinned interpreter for this development test");
     assert!(Path::new(&interpreter).is_absolute());

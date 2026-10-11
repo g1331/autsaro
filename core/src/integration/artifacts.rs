@@ -96,6 +96,65 @@ pub(super) fn files<T>(
                 .push(symbol.clone());
         }
     }
+    for (module, name, result, args, declaration, definition) in [
+        (
+            "Can",
+            "Can_DeInit",
+            "void",
+            vec![],
+            "runtime/include/standard/Can.h",
+            "runtime/src/Can.c",
+        ),
+        (
+            "Det",
+            "Det_ReportRuntimeError",
+            "Std_ReturnType",
+            vec![
+                ("ModuleId", "uint16_t", "IN"),
+                ("InstanceId", "uint8_t", "IN"),
+                ("ApiId", "uint8_t", "IN"),
+                ("ErrorId", "uint8_t", "IN"),
+            ],
+            "runtime/multi/include/Det.h",
+            "runtime/multi/src/Det.c",
+        ),
+    ] {
+        let mut symbol = rte_symbol(name, result, &args);
+        symbol.declaration_owner = declaration.into();
+        symbol.definition_owner = definition.into();
+        entries.entry(module.into()).or_default().push(symbol);
+    }
+    if plan.multi.is_none() {
+        for (name, args) in [
+            (
+                "CanIf_RxIndication",
+                vec![
+                    ("Mailbox", "const Can_HwType *", "IN"),
+                    ("PduInfoPtr", "const PduInfoType *", "IN"),
+                ],
+            ),
+            (
+                "CanIf_TxConfirmation",
+                vec![("CanTxPduId", "PduIdType", "IN")],
+            ),
+            (
+                "CanIf_ControllerModeIndication",
+                vec![
+                    ("ControllerId", "uint8_t", "IN"),
+                    ("ControllerMode", "Can_ControllerStateType", "IN"),
+                ],
+            ),
+            (
+                "CanIf_ControllerBusOff",
+                vec![("ControllerId", "uint8_t", "IN")],
+            ),
+        ] {
+            let mut symbol = rte_symbol(name, "void", &args);
+            symbol.declaration_owner = "runtime/include/CanIf.h".into();
+            symbol.definition_owner = "runtime/src/CanIf.c".into();
+            entries.entry("CanIf".into()).or_default().push(symbol);
+        }
+    }
     if plan.multi.is_some() {
         let os = entries.entry("Os".into()).or_default();
         for (name, args) in [
@@ -144,7 +203,7 @@ pub(super) fn files<T>(
                 ("Hth", "Can_HwHandleType", "IN"),
                 ("PduInfo", "const Can_PduType *", "IN"),
             ],
-            "runtime/include/Can.h",
+            "runtime/include/standard/Can.h",
         );
         imported(
             "Can",
@@ -154,7 +213,7 @@ pub(super) fn files<T>(
                 ("Controller", "uint8", "IN"),
                 ("Transition", "Can_ControllerStateType", "IN"),
             ],
-            "runtime/include/Can.h",
+            "runtime/include/standard/Can.h",
         );
         imported(
             "Can",
@@ -164,7 +223,7 @@ pub(super) fn files<T>(
                 ("Controller", "uint8", "IN"),
                 ("Value", "Can_ControllerStateType *", "OUT"),
             ],
-            "runtime/include/Can.h",
+            "runtime/include/standard/Can.h",
         );
         imported(
             "Can",
@@ -174,21 +233,21 @@ pub(super) fn files<T>(
                 ("Controller", "uint8", "IN"),
                 ("Value", "Can_ErrorStateType *", "OUT"),
             ],
-            "runtime/include/Can.h",
+            "runtime/include/standard/Can.h",
         );
         imported(
             "Can",
             "Can_GetControllerRxErrorCounter",
             "Std_ReturnType",
             &[("Controller", "uint8", "IN"), ("Value", "uint8 *", "OUT")],
-            "runtime/include/Can.h",
+            "runtime/include/standard/Can.h",
         );
         imported(
             "Can",
             "Can_GetControllerTxErrorCounter",
             "Std_ReturnType",
             &[("Controller", "uint8", "IN"), ("Value", "uint8 *", "OUT")],
-            "runtime/include/Can.h",
+            "runtime/include/standard/Can.h",
         );
         imported(
             "CanIf",
@@ -644,13 +703,19 @@ pub(super) fn files<T>(
         {
             8
         } else if native == "PduLengthType" {
-            match plan.communication_runtime.as_ref().unwrap().pdu_length_type {
+            match plan.communication_runtime.as_ref().map_or(
+                super::multi_bsw::CommunicationIntegerType::Uint16,
+                |runtime| runtime.pdu_length_type,
+            ) {
                 super::multi_bsw::CommunicationIntegerType::Uint8 => 8,
                 super::multi_bsw::CommunicationIntegerType::Uint16 => 16,
                 super::multi_bsw::CommunicationIntegerType::Uint32 => 32,
             }
         } else if native == "PduIdType" {
-            match plan.communication_runtime.as_ref().unwrap().pdu_id_type {
+            match plan.communication_runtime.as_ref().map_or(
+                super::multi_bsw::CommunicationIntegerType::Uint8,
+                |runtime| runtime.pdu_id_type,
+            ) {
                 super::multi_bsw::CommunicationIntegerType::Uint8 => 8,
                 super::multi_bsw::CommunicationIntegerType::Uint16 => 16,
                 super::multi_bsw::CommunicationIntegerType::Uint32 => 32,
@@ -696,6 +761,7 @@ pub(super) fn files<T>(
     let modules: &[&str] = if plan.multi.is_some() {
         &[
             "Can",
+            "Det",
             "CanIf",
             "PduR",
             "Com",
@@ -711,8 +777,8 @@ pub(super) fn files<T>(
         ]
     } else {
         &[
-            "Can", "CanIf", "PduR", "Com", "CanTp", "Dcm", "Dem", "NvM", "LSduR", "Security", "Os",
-            "Arti", "Rte",
+            "Can", "Det", "CanIf", "PduR", "Com", "CanTp", "Dcm", "Dem", "NvM", "LSduR",
+            "Security", "Os", "Arti", "Rte",
         ]
     };
     let mut selected_packages = String::new();
@@ -752,7 +818,20 @@ pub(super) fn files<T>(
                                     | "include/Ecu_MemMap.h"
                             ))
                 } else {
-                    p.as_str() == format!("src/{module}.c")
+                    (module == "Can"
+                        && matches!(
+                            p.as_str(),
+                            "include/standard/Can.h"
+                                | "include/Can_CfgTypes.h"
+                                | "include/Can_Host.h"
+                                | "include/Can_GeneralTypes.h"
+                                | "include/Can_MemMap.h"
+                                | "src/Can_Host.c"
+                                | "src/Can_Internal.h"
+                                | "src/Can_HostLock.c"
+                                | "src/Can_HostLock.h"
+                        ))
+                        || p.as_str() == format!("src/{module}.c")
                         || p.as_str() == format!("src/{module}_PBcfg.c")
                         || p.as_str() == format!("include/{module}_Cfg.h")
                         || (matches!(module, "LSduR" | "PduR")
@@ -927,7 +1006,7 @@ pub(super) fn files<T>(
         }
         let mut expected = String::new();
         let mut dependencies = String::new();
-        if plan.multi.is_some() {
+        if plan.multi.is_some() || module == "Can" {
             let mut imported_entries: Vec<(&str, &str)> = match module {
                 "Rte" => vec![
                     ("Com", "Com_ReceiveSignal"),
@@ -940,6 +1019,7 @@ pub(super) fn files<T>(
                     ("CanIf", "CanIf_TxConfirmation"),
                     ("CanIf", "CanIf_ControllerModeIndication"),
                     ("CanIf", "CanIf_ControllerBusOff"),
+                    ("Det", "Det_ReportRuntimeError"),
                 ],
                 "CanIf" => vec![
                     ("Can", "Can_Write"),
@@ -1018,7 +1098,12 @@ pub(super) fn files<T>(
             let mut owners = BTreeSet::new();
             for (owner, name) in imported_entries {
                 owners.insert(owner);
-                write!(expected, "<BSW-MODULE-ENTRY-REF-CONDITIONAL><BSW-MODULE-ENTRY-REF DEST=\"BSW-MODULE-ENTRY\">/AUTOSAR_{owner}/BswModuleEntrys/{name}</BSW-MODULE-ENTRY-REF></BSW-MODULE-ENTRY-REF-CONDITIONAL>").unwrap();
+                let entry_ref = if plan.multi.is_some() {
+                    format!("/AUTOSAR_{owner}/BswModuleEntrys/{name}")
+                } else {
+                    format!("/HostArtifacts/{name}")
+                };
+                write!(expected, "<BSW-MODULE-ENTRY-REF-CONDITIONAL><BSW-MODULE-ENTRY-REF DEST=\"BSW-MODULE-ENTRY\">{entry_ref}</BSW-MODULE-ENTRY-REF></BSW-MODULE-ENTRY-REF-CONDITIONAL>").unwrap();
             }
             if module == "Dcm" && plan.diagnostic_transport.is_some() {
                 let authentication = plan
@@ -1036,7 +1121,12 @@ pub(super) fn files<T>(
             }
             for owner in owners {
                 let id = super::catalog::module_id(owner).unwrap();
-                write!(dependencies, "<BSW-MODULE-DEPENDENCY><SHORT-NAME>{owner}Dependency</SHORT-NAME><TARGET-MODULE-ID>{id}</TARGET-MODULE-ID><TARGET-MODULE-REFS><BSW-MODULE-DESCRIPTION-REF-CONDITIONAL><BSW-MODULE-DESCRIPTION-REF DEST=\"BSW-MODULE-DESCRIPTION\">/AUTOSAR_{owner}/{owner}</BSW-MODULE-DESCRIPTION-REF></BSW-MODULE-DESCRIPTION-REF-CONDITIONAL></TARGET-MODULE-REFS></BSW-MODULE-DEPENDENCY>").unwrap();
+                let owner_ref = if plan.multi.is_some() {
+                    format!("/AUTOSAR_{owner}/{owner}")
+                } else {
+                    format!("/HostArtifacts/{owner}")
+                };
+                write!(dependencies, "<BSW-MODULE-DEPENDENCY><SHORT-NAME>{owner}Dependency</SHORT-NAME><TARGET-MODULE-ID>{id}</TARGET-MODULE-ID><TARGET-MODULE-REFS><BSW-MODULE-DESCRIPTION-REF-CONDITIONAL><BSW-MODULE-DESCRIPTION-REF DEST=\"BSW-MODULE-DESCRIPTION\">{owner_ref}</BSW-MODULE-DESCRIPTION-REF></BSW-MODULE-DESCRIPTION-REF-CONDITIONAL></TARGET-MODULE-REFS></BSW-MODULE-DEPENDENCY>").unwrap();
             }
             if !dependencies.is_empty() {
                 dependencies =
@@ -1110,14 +1200,18 @@ pub(super) fn files<T>(
                 )
             })
             .collect();
-        let generated = if module == "Rte"
+        let generated = if matches!(module, "Rte" | "Can")
             || (plan.multi.is_some() && matches!(module, "LSduR" | "PduR"))
         {
             format!("<GENERATED-ARTIFACTS>{}</GENERATED-ARTIFACTS>", paths.iter().map(|p| format!("<DEPENDENCY-ON-ARTIFACT><SHORT-NAME>{}</SHORT-NAME><ARTIFACT-DESCRIPTOR>{}</ARTIFACT-DESCRIPTOR><USAGES><USAGE>COMPILE</USAGE></USAGES></DEPENDENCY-ON-ARTIFACT>", c_name(p), artifact(p))).collect::<String>())
         } else {
             String::new()
         };
-        let resource = if plan.multi.is_some() && module == "Rte" {
+        let resource = if module == "Can" {
+            format!(
+                "<RESOURCE-CONSUMPTION><SHORT-NAME>CodeMapping</SHORT-NAME><MEMORY-SECTIONS><MEMORY-SECTION><SHORT-NAME>Can_CODE</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/CanHostImplementation/CodeMapping/CAN</PREFIX-REF><SYMBOL>CODE</SYMBOL></MEMORY-SECTION><MEMORY-SECTION><SHORT-NAME>Can_VAR_CLEARED_UNSPECIFIED</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/CanHostImplementation/CodeMapping/CAN</PREFIX-REF><SYMBOL>VAR_CLEARED_UNSPECIFIED</SYMBOL></MEMORY-SECTION></MEMORY-SECTIONS><SECTION-NAME-PREFIXS><SECTION-NAME-PREFIX><SHORT-NAME>CAN</SHORT-NAME><IMPLEMENTED-IN-REF DEST=\"DEPENDENCY-ON-ARTIFACT\">/{package}/CanHostImplementation/include_Can_MemMap_h</IMPLEMENTED-IN-REF></SECTION-NAME-PREFIX></SECTION-NAME-PREFIXS></RESOURCE-CONSUMPTION>"
+            )
+        } else if plan.multi.is_some() && module == "Rte" {
             let multi = plan.multi.as_ref().unwrap();
             let mut scopes = BTreeSet::from([
                 ("Rte".to_string(), "CODE"),

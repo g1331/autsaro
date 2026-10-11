@@ -1,5 +1,5 @@
 #include "CanIf.h"
-#include "Can.h"
+#include "standard/Can.h"
 #include "Det.h"
 #include "LSduR_CanIf.h"
 #include "SchM_CanIf.h"
@@ -9,6 +9,10 @@ static const CanIf_ConfigType *configuration CANIF_VAR_CLEARED;
 static Can_ControllerStateType controller_mode CANIF_VAR_CLEARED;
 static CanIf_PduModeType pdu_mode CANIF_VAR_CLEARED;
 static uint32 outstanding[32] CANIF_VAR_CLEARED;
+typedef struct {
+    EcuStatus result;
+} CanIf_HostRxContext;
+static CanIf_HostRxContext *host_rx_context CANIF_VAR_CLEARED;
 #define CANIF_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "CanIf_MemMap.h"
 #define CANIF_START_SEC_CODE
@@ -283,23 +287,36 @@ static CANIF_CODE EcuStatus CanIf_Receive(const Can_HwType *Mailbox,
 }
 CANIF_CODE void CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType *PduInfoPtr) {
     SchM_Enter_CanIf_CANIF_STATE();
-    (void)CanIf_Receive(Mailbox, PduInfoPtr);
+    CanIf_HostRxContext *context = host_rx_context;
+    EcuStatus result;
+    host_rx_context = NULL_PTR;
+    result = CanIf_Receive(Mailbox, PduInfoPtr);
+    if (context != NULL_PTR) {
+        context->result = result;
+    }
+    host_rx_context = context;
     SchM_Exit_CanIf_CANIF_STATE();
 }
 CANIF_CODE EcuStatus CanIf_HostRxIndication(uint32 id, uint8 dlc, const uint8 data[8],
                                             uint64 now_ms) {
     uint8 bytes[8];
-    uint8 i;
     PduInfoType info = {bytes, NULL_PTR, dlc};
     EcuStatus result = ECU_ERR_FRAME_DLC;
     SchM_Enter_CanIf_CANIF_STATE();
+    CanIf_HostRxContext context = {ECU_ERR_FRAME_DLC};
+    /* Multi receivers use configured tick clocks, not host receive timestamps. */
     (void)now_ms;
+    CanIf_HostRxContext *previous = host_rx_context;
     if ((configuration != NULL_PTR) && (data != NULL_PTR) && (dlc <= 8u)) {
         const Can_HwType mailbox = {id, configuration->receive_hoh, configuration->controller};
+        uint8 i;
         for (i = 0u; i < dlc; ++i) {
             bytes[i] = data[i];
         }
-        result = CanIf_Receive(&mailbox, &info);
+        host_rx_context = &context;
+        CanIf_RxIndication(&mailbox, &info);
+        result = context.result;
+        host_rx_context = previous;
     }
     SchM_Exit_CanIf_CANIF_STATE();
     return result;

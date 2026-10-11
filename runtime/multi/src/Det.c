@@ -1,6 +1,7 @@
 /** @file R24-11 reporting behavior for the selected no-storage DET. */
 #include "Det.h"
 #include "Det_Host.h"
+#include "SchM_CanIf.h"
 #include <stddef.h>
 
 #define DET_START_SEC_VAR_CLEARED_UNSPECIFIED
@@ -12,9 +13,9 @@ static boolean initialized DET_VAR_CLEARED;
 
 #define DET_START_SEC_CODE
 #include "Det_MemMap.h"
-static DET_CODE boolean Det_ValidHooks(const Det_ErrorHookType *hooks, uint16 count) {
+static DET_CODE boolean Det_ValidHooks(const Det_ErrorHookType *hooks, uint16_t count) {
     boolean valid = TRUE;
-    uint16 index;
+    uint16_t index;
     if ((count != 0u) && (hooks == NULL)) {
         valid = FALSE;
     } else {
@@ -28,6 +29,7 @@ static DET_CODE boolean Det_ValidHooks(const Det_ErrorHookType *hooks, uint16 co
 }
 
 DET_CODE void Det_Init(const Det_ConfigType *ConfigPtr) {
+    SchM_Enter_CanIf_CANIF_STATE();
     initialized = FALSE;
     configuration = NULL;
     if (ConfigPtr != NULL) {
@@ -39,32 +41,44 @@ DET_CODE void Det_Init(const Det_ConfigType *ConfigPtr) {
     }
     configuration = ConfigPtr;
     initialized = TRUE;
+    SchM_Exit_CanIf_CANIF_STATE();
 }
 
 DET_CODE void Det_Start(void) {
     /* SWS_Det_00025 permits no action when startup storage is not selected. */
 }
 
-DET_CODE Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId, uint8 InstanceId, uint8 ApiId,
-                                               uint8 ErrorId) {
-    uint16 index;
-    if ((initialized == TRUE) && (configuration != NULL)) {
-        for (index = 0u; index < configuration->runtime_callout_count; ++index) {
-            (void)configuration->runtime_callouts[index](ModuleId, InstanceId, ApiId, ErrorId);
+DET_CODE Std_ReturnType Det_ReportRuntimeError(uint16_t ModuleId, uint8_t InstanceId, uint8_t ApiId,
+                                               uint8_t ErrorId) {
+    const Det_ConfigType *config = NULL;
+    SchM_Enter_CanIf_CANIF_STATE();
+    if (initialized == TRUE) {
+        config = configuration;
+    }
+    if (config != NULL) {
+        uint16_t index;
+        for (index = 0u; index < config->runtime_callout_count; ++index) {
+            (void)config->runtime_callouts[index](ModuleId, InstanceId, ApiId, ErrorId);
         }
     }
+    SchM_Exit_CanIf_CANIF_STATE();
     return E_OK;
 }
 
-DET_CODE Std_ReturnType Det_ReportError(uint16 ModuleId, uint8 InstanceId, uint8 ApiId,
-                                        uint8 ErrorId) {
-    uint16 index;
-    if ((initialized == TRUE) && (configuration != NULL) &&
-        (Ecu_DetEnterDevelopmentReport() == TRUE)) {
-        for (index = 0u; index < configuration->error_hook_count; ++index) {
-            (void)configuration->error_hooks[index](ModuleId, InstanceId, ApiId, ErrorId);
+DET_CODE Std_ReturnType Det_ReportError(uint16_t ModuleId, uint8_t InstanceId, uint8_t ApiId,
+                                        uint8_t ErrorId) {
+    const Det_ConfigType *config = NULL;
+    SchM_Enter_CanIf_CANIF_STATE();
+    if (initialized == TRUE) {
+        config = configuration;
+    }
+    if ((config != NULL) && (Ecu_DetEnterDevelopmentReport() == TRUE)) {
+        uint16_t index;
+        for (index = 0u; index < config->error_hook_count; ++index) {
+            (void)config->error_hooks[index](ModuleId, InstanceId, ApiId, ErrorId);
         }
     }
+    SchM_Exit_CanIf_CANIF_STATE();
     Ecu_DetHalt();
     /* The host halt never returns. Retain the standard signature without a
      * fabricated return status even if an invalid adapter were linked.

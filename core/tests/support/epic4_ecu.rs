@@ -155,7 +155,6 @@ fn check_entry_sections(binary: &Path) {
     }
 }
 
-
 #[cfg(windows)]
 pub fn verify_public_watchdog() {
     let scratch = super::Scratch::new();

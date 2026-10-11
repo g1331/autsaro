@@ -22,7 +22,7 @@ class HostBoundaryTests(unittest.TestCase):
         cls.compiler = str(Path(requested).resolve())
         cls.flags = ["-std=c99", "-O1", "-Wall", "-Wextra", "-Werror", "-pedantic", "-D_XOPEN_SOURCE=700",
                      "-I" + str(ROOT / "runtime/include"), "-I" + str(ROOT / "runtime/src"),
-                     "-I" + str(ROOT / "runtime/host/include")]
+                     "-I" + str(ROOT / "runtime/host/include"), "-I" + str(ROOT / "runtime/multi/include")]
         suffix = ".exe" if os.name == "nt" else ""
         cls.lock = cls.directory / ("lock" + suffix)
         cls.storage = cls.directory / ("storage" + suffix)
@@ -34,7 +34,7 @@ class HostBoundaryTests(unittest.TestCase):
             if not result.success:
                 raise RuntimeError(result.stderr.read_text(encoding="utf-8", errors="replace"))
             fixture = ROOT / "tests/fixtures" / ("host_" + name + "_faults.c")
-            sources = [ROOT / "runtime/src/Can.c", ROOT / "runtime/host/src/Can_Execution.c"] if name == "lock" else [ROOT / "runtime/src/NvM.c"]
+            sources = [ROOT / "runtime/src/Can.c", ROOT / "runtime/src/Can_Host.c", ROOT / "runtime/multi/src/Det.c", ROOT / "runtime/multi/src/Det_Host.c", ROOT / "runtime/multi/src/SchM_CanIf_Host.c", ROOT / "runtime/host/src/Can_Execution.c"] if name == "lock" else [ROOT / "runtime/src/NvM.c"]
             result = cls.execute([cls.compiler, *cls.flags, str(obj), str(fixture), *(str(path) for path in sources),
                                   *([] if os.name == "nt" else ["-pthread"]), "-o", str(getattr(cls, name))], "link-" + name)
             if not result.success:

@@ -1,4 +1,5 @@
 #include "PduR.h"
+#include "SchM_CanIf.h"
 #include "PduR_Com.h"
 #include "PduR_Dcm.h"
 #include "PduR_CanIf.h"
@@ -112,9 +113,11 @@ PDUR_CODE void PduR_CanTpTxConfirmation(PduIdType id, Std_ReturnType result) {
     }
 }
 PDUR_CODE void PduR_Init(const PduR_PBConfigType *ConfigPtr) {
+    SchM_Enter_CanIf_CANIF_STATE();
     if (PduR_Valid(ConfigPtr) == TRUE) {
         configuration = ConfigPtr;
     }
+    SchM_Exit_CanIf_CANIF_STATE();
 }
 PDUR_CODE PduR_PBConfigIdType PduR_GetConfigurationId(void) {
     return (configuration == NULL_PTR) ? 0u : configuration->id;

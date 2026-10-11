@@ -67,3 +67,11 @@
 
 # Separate standard multi-component implementation keeps reproducible LF bytes.
 /runtime/multi/** text eol=lf
+
+# CAN standard/host views and private adapter have fixed delivery bytes.
+/runtime/include/standard/** text eol=lf
+/runtime/include/Can_CfgTypes.h text eol=lf
+/runtime/include/Can_Host.h text eol=lf
+/runtime/include/SchM_CanIf.h text eol=lf
+/runtime/src/Can_Host.c text eol=lf
+/runtime/src/Can_Internal.h text eol=lf

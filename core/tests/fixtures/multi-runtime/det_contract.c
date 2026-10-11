@@ -14,6 +14,7 @@ static unsigned events[16];
 static unsigned event_count;
 static boolean nested;
 static boolean recurse_development;
+static boolean reinitialize_runtime;
 
 static void record(unsigned value) {
     assert(event_count < 16u);
@@ -26,6 +27,10 @@ static Std_ReturnType first(uint16 module, uint8 instance, uint8 api, uint8 erro
     assert(api == 5u);
     assert(error == 7u);
     record(1u);
+    if (reinitialize_runtime == TRUE) {
+        reinitialize_runtime = FALSE;
+        Det_Init(NULL_PTR);
+    }
     if (nested == TRUE) {
         nested = FALSE;
         assert(Det_ReportRuntimeError(60u, 2u, 5u, 7u) == E_OK);
@@ -124,6 +129,11 @@ int main(int argc, char **argv) {
     assert(runtime_report(60u, 2u, 5u, 7u) == E_OK);
     assert(event_count == 8u);
     assert(events[6] == 1u && events[7] == 2u);
+    reinitialize_runtime = TRUE;
+    assert(runtime_report(60u, 2u, 5u, 7u) == E_OK);
+    assert(event_count == 10u && events[8] == 1u && events[9] == 2u);
+    assert(runtime_report(60u, 2u, 5u, 7u) == E_OK);
+    assert(event_count == 10u);
     assert(fputs("runtime-ok\n", stdout) >= 0);
     return 0;
 }

@@ -1,12 +1,12 @@
-/** Diagnostic buffers share the existing recursive CAN resource with callbacks. */
+/** Diagnostic buffers share the recursive CanIf admission resource with callbacks. */
 #include "ComStack_Cfg.h"
 #include "SchM_Dcm.h"
 #include "SchM_CanTp.h"
-#include "Can_HostLock.h"
-void SchM_Enter_Dcm_DCM_STATE(void) { Can_Lock(); }
-void SchM_Exit_Dcm_DCM_STATE(void) { Can_Unlock(); }
-void SchM_Enter_CanTp_CANTP_STATE(void) { Can_Lock(); }
-void SchM_Exit_CanTp_CANTP_STATE(void) { Can_Unlock(); }
+#include "SchM_CanIf.h"
+void SchM_Enter_Dcm_DCM_STATE(void) { SchM_Enter_CanIf_CANIF_STATE(); }
+void SchM_Exit_Dcm_DCM_STATE(void) { SchM_Exit_CanIf_CANIF_STATE(); }
+void SchM_Enter_CanTp_CANTP_STATE(void) { SchM_Enter_CanIf_CANIF_STATE(); }
+void SchM_Exit_CanTp_CANTP_STATE(void) { SchM_Exit_CanIf_CANIF_STATE(); }
 
 #if !defined(ECU_MULTI_COMPONENT)
 /* No connected mode-switch events in this selected profile. Publication still
@@ -22,16 +22,16 @@ static Rte_ModeType_DcmDiagnosticSessionControl diagnostic_session_mode DCM_VAR_
 #include "Dcm_MemMap.h"
 DCM_CODE Std_ReturnType
 SchM_Switch_Dcm_DcmDiagnosticSessionControl(Rte_ModeType_DcmDiagnosticSessionControl mode) {
-    Can_Lock();
+    SchM_Enter_CanIf_CANIF_STATE();
     diagnostic_session_mode = mode;
-    Can_Unlock();
+    SchM_Exit_CanIf_CANIF_STATE();
     return E_OK;
 }
 DCM_CODE Rte_ModeType_DcmDiagnosticSessionControl SchM_Mode_Dcm_DcmDiagnosticSessionControl(void) {
     Rte_ModeType_DcmDiagnosticSessionControl mode;
-    Can_Lock();
+    SchM_Enter_CanIf_CANIF_STATE();
     mode = diagnostic_session_mode;
-    Can_Unlock();
+    SchM_Exit_CanIf_CANIF_STATE();
     return mode;
 }
 

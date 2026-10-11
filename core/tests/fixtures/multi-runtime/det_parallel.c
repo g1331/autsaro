@@ -3,6 +3,8 @@
 #include <assert.h>
 #include <stddef.h>
 #if defined(_WIN32)
+/* Threads only; skip COM/RPC headers whose boolean clashes with Platform_Types.h. */
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #else
 #include <pthread.h>

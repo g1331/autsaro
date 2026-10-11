@@ -263,6 +263,12 @@ pub(super) fn inspect(
     ) {
         return Err(fail(graph, general, "CAN_FEATURE_UNSUPPORTED"));
     }
+    if !matches!(
+        value(graph, general, "CanVersionInfoApi", false),
+        None | Some("false" | "0")
+    ) {
+        return Err(fail(graph, general, "CAN_FEATURE_UNSUPPORTED"));
+    }
     let rw = one(graph, "CanMainFunctionRWPeriods")?;
     let rw_path = graph.elements[rw].object.as_str();
     let hardware: Vec<_> = graph

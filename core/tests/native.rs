@@ -165,13 +165,13 @@ fn epic4_host_batch_codec() {
     epic4_batch::codec();
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 #[test]
 fn epic4_host_batch_native_boundary() {
     epic4_batch::native_boundary();
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 #[test]
 fn epic4_host_batch_commit() {
     epic4_batch::commit();
@@ -417,4 +417,10 @@ fn build_rejects_changed_generated_inputs_before_compiling() {
 #[test]
 fn build_creates_missing_parent_directories_without_replacing_owner_output() {
     generation::build_creates_missing_parent_directories_without_replacing_owner_output();
+}
+
+#[cfg(any(windows, target_os = "linux"))]
+#[test]
+fn can_declaration_views_and_memmap_enforce_the_public_boundary() {
+    can_contracts::can_declaration_views_and_memmap_enforce_the_public_boundary();
 }

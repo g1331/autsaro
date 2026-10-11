@@ -1,6 +1,7 @@
 use super::Scratch;
 #[cfg(windows)]
-use super::{create_pair, tooling};
+use super::create_pair;
+use super::tooling;
 #[cfg(windows)]
 use autosar_config_core::{Direction, generator};
 use std::fs;
@@ -44,6 +45,7 @@ static unsigned probe_rx_reentry;
 static EcuStatus nested_rx_result;
 static unsigned fail_output;
 static unsigned enqueue_on_emit;
+static unsigned cancel_on_emit;
 EcuStatus Com_AdvanceTime(uint64_t now_ms) { (void)now_ms; return ECU_OK; }
 void Dcm_AdvanceTime(uint64_t now_ms) { (void)now_ms; }
 EcuStatus CanTp_AdvanceTime(uint64_t now_ms) { (void)now_ms; return ECU_OK; }
@@ -55,6 +57,13 @@ static HANDLE sink_entered;
 static HANDLE sink_release;
 static EcuStatus flush_result;
 static Std_ReturnType blocked_write_result;
+#else
+static pthread_mutex_t sink_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t sink_condition = PTHREAD_COND_INITIALIZER;
+static int sink_waiting;
+static int sink_released;
+static int sink_block;
+static EcuStatus flush_result;
 #endif
 static EcuStatus emit(uint32_t id, uint8_t dlc, const uint8_t data[8]) {
     Can_ControllerStateType state = CAN_CS_UNINIT;
@@ -66,12 +75,31 @@ static EcuStatus emit(uint32_t id, uint8_t dlc, const uint8_t data[8]) {
         if (WaitForSingleObject(sink_release, INFINITE) != WAIT_OBJECT_0) return ECU_ERR_IO;
     }
 #endif
+#ifndef _WIN32
+    if (sink_block != 0) {
+        if (pthread_mutex_lock(&sink_mutex) != 0) return ECU_ERR_IO;
+        sink_waiting = 1;
+        if (pthread_cond_broadcast(&sink_condition) != 0) return ECU_ERR_IO;
+        while (sink_released == 0) {
+            if (pthread_cond_wait(&sink_condition, &sink_mutex) != 0) return ECU_ERR_IO;
+        }
+        if (pthread_mutex_unlock(&sink_mutex) != 0) return ECU_ERR_IO;
+    }
+#endif
     if (enqueue_on_emit != 0u) {
         Can_PduType nested = {0u, 2u, 0x321u, (uint8_t *)data};
         enqueue_on_emit = 0u;
         if (Can_Write(0u, &nested) != CAN_BUSY) return ECU_ERR_IO;
     }
     if (fail_output != 0u) return ECU_ERR_IO;
+    if (cancel_on_emit != 0u) {
+        const Can_ConfigType fresh = {emit};
+        unsigned cancel = cancel_on_emit;
+        cancel_on_emit = 0u;
+        Can_SetMode((cancel == 3u) ? CAN_BUS_OFF : CAN_STOPPED);
+        if (cancel == 2u) { Can_DeInit(); Can_Init(&fresh); }
+        Can_SetMode(CAN_STARTED);
+    }
     ++sent;
     return ECU_OK;
 }
@@ -134,6 +162,7 @@ static DWORD WINAPI blocked_write_thread(LPVOID unused) {
     return 0u;
 }
 #else
+static void *flush_thread(void *unused) { (void)unused; flush_result = Can_HostFlush(); return NULL; }
 static void *valid_thread(void *unused) { (void)unused; send_valid_frames(); return NULL; }
 static void *invalid_thread(void *unused) { (void)unused; reject_invalid_frames(); return NULL; }
 #endif
@@ -147,6 +176,9 @@ int main(void) {
     Can_ErrorStateType error_state = CAN_ERRORSTATE_PASSIVE;
     uint8_t error_counter = 0xa5u;
     Os_Init(&empty_config);
+    Can_SetMode(CAN_STARTED);
+    if (Can_GetMode() != CAN_STOPPED || Can_Inject(0x321u, 2u, bytes, 10u) != ECU_ERR_CONTROLLER ||
+        Can_HostFlush() != ECU_ERR_CONFIG || received != 0u) return 75;
     Can_Init(NULL);
     if (Can_GetControllerMode(0u, &state) != E_NOT_OK) return 1;
     if (Can_GetControllerErrorState(0u, &error_state) != E_NOT_OK) return 47;
@@ -288,15 +320,36 @@ int main(void) {
         sink_release = NULL;
     }
     if (sent != 103u) return 46;
+#else
+    {
+        pthread_t output;
+        sink_block = 1;
+        if (Can_Write(0u, &pdu) != E_OK) return 41;
+        if (pthread_create(&output, NULL, flush_thread, NULL) != 0) return 42;
+        if (pthread_mutex_lock(&sink_mutex) != 0) return 43;
+        while (sink_waiting == 0) {
+            if (pthread_cond_wait(&sink_condition, &sink_mutex) != 0) return 43;
+        }
+        /* Query must acquire the released driver lock, not merely fail try-lock. */
+        if (Can_GetControllerMode(0u, &state) != E_OK ||
+            Can_Write(0u, &pdu) != CAN_BUSY) return 44;
+        sink_released = 1;
+        if (pthread_cond_broadcast(&sink_condition) != 0 ||
+            pthread_mutex_unlock(&sink_mutex) != 0 || pthread_join(output, NULL) != 0 ||
+            flush_result != ECU_OK || sent != 103u) return 45;
+        sink_block = 0;
+        if (pthread_cond_destroy(&sink_condition) != 0 ||
+            pthread_mutex_destroy(&sink_mutex) != 0) return 46;
+    }
 #endif
     if (Can_Write(0u, &pdu) != E_OK) return 58;
     {
         unsigned before_cancel = confirmed;
         if (Can_SetControllerMode(0u, CAN_CS_STOPPED) != E_OK) return 54;
         Can_DeInit();
-        if (Can_GetControllerMode(0u, &state) != E_OK || state != CAN_CS_STOPPED) return 72;
+        if (Can_GetControllerMode(0u, &state) != E_NOT_OK) return 72;
         Can_MainFunction_Wakeup();
-        if (Can_HostFlush() != ECU_OK || confirmed != before_cancel) return 59;
+        if (Can_HostFlush() != ECU_ERR_CONFIG || confirmed != before_cancel) return 59;
     }
     Can_DeInit();
     if (Can_GetControllerMode(0u, &state) != E_NOT_OK || Can_Write(0u, &pdu) != E_NOT_OK) return 55;
@@ -309,21 +362,43 @@ int main(void) {
         Can_MainFunction_Wakeup();
         if (mode_notifications != before_override || bus_off_notifications != 2u) return 71;
     }
+    {
+        unsigned cancel;
+        Can_SetMode(CAN_STARTED);
+        for (cancel = 1u; cancel <= 3u; ++cancel) {
+            unsigned before = confirmed;
+            cancel_on_emit = cancel;
+            if (Can_Write(0u, &pdu) != E_OK) return 82;
+            if (Can_HostFlush() != ECU_OK) return 83;
+            Can_MainFunction_Write();
+            if (confirmed != before) return 84;
+            if (Can_Write(0u, &pdu) != E_OK) return 85;
+            if (Can_HostFlush() != ECU_OK || confirmed != before + 1u) return 86;
+        }
+    }
     return 0;
 }
 "#,
     )
     .unwrap();
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
-    let build = Command::new("gcc")
+    let build = Command::new(tooling::execution_settings().compiler)
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
         .arg("-pthread")
         .arg(format!("-I{}", root.join("runtime/include").display()))
         .arg(format!("-I{}", root.join("runtime/host/include").display()))
         .arg(format!("-I{}", root.join("runtime/src").display()))
+        .arg(format!(
+            "-I{}",
+            root.join("runtime/multi/include").display()
+        ))
         .arg(root.join("runtime/host/src/Can_Execution.c"))
         .arg(root.join("runtime/src/Can.c"))
+        .arg(root.join("runtime/src/Can_Host.c"))
+        .arg(root.join("runtime/multi/src/Det.c"))
+        .arg(root.join("runtime/multi/src/Det_Host.c"))
         .arg(root.join("runtime/src/Can_HostLock.c"))
+        .arg(root.join("runtime/multi/src/SchM_CanIf_Host.c"))
         .arg(root.join("runtime/src/Os.c"))
         .arg(&harness)
         .arg("-o")
@@ -444,14 +519,19 @@ int main(void) {
     )
     .unwrap();
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
-    let build = Command::new("gcc")
+    let build = Command::new(tooling::execution_settings().compiler)
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
         .arg("-pthread")
         .arg(format!("-I{}", root.join("runtime/include").display()))
         .arg(format!("-I{}", root.join("runtime/host/include").display()))
         .arg(format!("-I{}", root.join("runtime/src").display()))
+        .arg(format!(
+            "-I{}",
+            root.join("runtime/multi/include").display()
+        ))
         .arg(root.join("runtime/host/src/Ecu_Clock.c"))
         .arg(root.join("runtime/src/CanIf.c"))
+        .arg(root.join("runtime/multi/src/SchM_CanIf_Host.c"))
         .arg(root.join("runtime/src/Can_HostLock.c"))
         .arg(&harness)
         .arg("-o")
@@ -528,10 +608,14 @@ int main(void) {
     )
     .unwrap();
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
-    let build = Command::new("gcc")
+    let build = Command::new(tooling::execution_settings().compiler)
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
         .arg(format!("-I{}", root.join("runtime/include").display()))
         .arg(format!("-I{}", root.join("runtime/host/include").display()))
+        .arg(format!("-I{}", root.join("runtime/src").display()))
+        .arg("-pthread")
+        .arg(root.join("runtime/multi/src/SchM_CanIf_Host.c"))
+        .arg(root.join("runtime/src/Can_HostLock.c"))
         .arg(root.join("runtime/src/CanTp.c"))
         .arg(&harness)
         .arg("-o")
@@ -646,10 +730,14 @@ int main(void) {
     )
     .unwrap();
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
-    let build = Command::new("gcc")
+    let build = Command::new(tooling::execution_settings().compiler)
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
         .arg(format!("-I{}", root.join("runtime/include").display()))
         .arg(format!("-I{}", root.join("runtime/host/include").display()))
+        .arg(format!("-I{}", root.join("runtime/src").display()))
+        .arg("-pthread")
+        .arg(root.join("runtime/multi/src/SchM_CanIf_Host.c"))
+        .arg(root.join("runtime/src/Can_HostLock.c"))
         .arg(root.join("runtime/src/CanTp.c"))
         .arg(&harness)
         .arg("-o")
@@ -779,4 +867,119 @@ pub(super) fn host_rejects_id_matched_wrong_dlc_even_when_other_frames_exchange(
         "ID-matched DLC mismatch was ignored: {}",
         result.log
     );
+}
+
+pub(super) fn can_declaration_views_and_memmap_enforce_the_public_boundary() {
+    let temp = Scratch::new();
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let identity = tooling::execution_settings();
+    let layout = r#"
+#include <stddef.h>
+#include <stdint.h>
+typedef struct { PduIdType handle; uint8_t length; uint32_t id; uint8_t *data; } ExpectedPdu;
+typedef struct { EcuStatus (*sink)(uint32_t, uint8_t, const uint8_t[8]); } ExpectedConfig;
+typedef char Id32[(sizeof(Can_IdType) == 4u) ? 1 : -1];
+typedef char Hoh16[(sizeof(Can_HwHandleType) == 2u) ? 1 : -1];
+typedef char PduLayout[(sizeof(Can_PduType) == sizeof(ExpectedPdu) &&
+ offsetof(Can_PduType, swPduHandle) == offsetof(ExpectedPdu, handle) &&
+ offsetof(Can_PduType, length) == offsetof(ExpectedPdu, length) &&
+ offsetof(Can_PduType, id) == offsetof(ExpectedPdu, id) &&
+ offsetof(Can_PduType, sdu) == offsetof(ExpectedPdu, data)) ? 1 : -1];
+typedef char ConfigLayout[(sizeof(Can_ConfigType) == sizeof(ExpectedConfig) &&
+ offsetof(Can_ConfigType, sink) == 0u) ? 1 : -1];
+void (*initialize)(const Can_ConfigType *) = Can_Init;
+Std_ReturnType (*write_frame)(uint16_t, const Can_PduType *) = Can_Write;
+"#;
+    for (multi, standard_search) in [(false, false), (true, false), (false, true), (true, true)] {
+        for (index, (includes, allowed)) in [
+            ("#include \"Can.h\"\n", true),
+            ("#include \"Can.h\"\nCanMode leaked;\n", !standard_search),
+            ("#include \"standard/Can.h\"\n", true),
+            ("#include \"standard/Can.h\"\nCanMode leaked;\n", false),
+            (
+                "#include \"standard/Can.h\"\nvoid (*leaked)(CanMode) = Can_SetMode;\n",
+                false,
+            ),
+            (
+                "#include \"standard/Can.h\"\nvoid *leaked = (void *)&Can_HostFlush;\n",
+                false,
+            ),
+            (
+                "#include \"standard/Can.h\"\nvoid *leaked = (void *)&Can_InternalInject;\n",
+                false,
+            ),
+            (
+                "#include \"standard/Can.h\"\n#include \"Can.h\"\n#include \"Can_Host.h\"\n",
+                true,
+            ),
+            (
+                "#include \"Can.h\"\n#include \"Can_Host.h\"\n#include \"standard/Can.h\"\n",
+                true,
+            ),
+            (
+                "#include \"Can_Host.h\"\n#include \"standard/Can.h\"\n#include \"Can.h\"\n",
+                true,
+            ),
+            (
+                "#define CAN_VERSION_INFO_API 1\n#include \"standard/Can.h\"\n",
+                false,
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let source = temp
+                .0
+                .join(format!("view-{multi}-{standard_search}-{index}.c"));
+            fs::write(&source, format!("{includes}{layout}")).unwrap();
+            let mut command = Command::new(&identity.compiler);
+            command.args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic", "-c"]);
+            if standard_search {
+                command.arg("-I").arg(root.join("runtime/include/standard"));
+            }
+            if multi {
+                command.arg("-I").arg(root.join("runtime/multi/include"));
+            }
+            let output = command
+                .arg("-I")
+                .arg(root.join("runtime/include"))
+                .arg(&source)
+                .arg("-o")
+                .arg(temp.0.join("view.o"))
+                .output()
+                .unwrap();
+            assert_eq!(
+                output.status.success(),
+                allowed,
+                "{multi}/{standard_search}/{index}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+    for (index, (body, allowed)) in [
+        ("#define CAN_START_SEC_CODE\n#include \"Can_MemMap.h\"\nCAN_CODE int mapped(void) { return 0; }\n#define CAN_STOP_SEC_CODE\n#include \"Can_MemMap.h\"\n#define CAN_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Can_MemMap.h\"\nint zero CAN_VAR_CLEARED;\n#define CAN_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Can_MemMap.h\"\n#define CAN_START_SEC_CODE\n#include \"Can_MemMap.h\"\nCAN_CODE int main(void) { return mapped() + zero; }\n#define CAN_STOP_SEC_CODE\n#include \"Can_MemMap.h\"\n", true),
+        ("#include \"Can_MemMap.h\"\n", false),
+        ("#define CAN_START_SEC_UNKNOWN\n#include \"Can_MemMap.h\"\n", false),
+        ("#define CAN_STOP_SEC_CODE\n#include \"Can_MemMap.h\"\n", false),
+        ("#define CAN_START_SEC_CODE\n#include \"Can_MemMap.h\"\n#define CAN_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Can_MemMap.h\"\n", false),
+        ("#define CAN_START_SEC_CODE\n#include \"Can_MemMap.h\"\n#define CAN_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Can_MemMap.h\"\n", false),
+        ("#define CAN_START_SEC_CODE\n#define CAN_STOP_SEC_CODE\n#include \"Can_MemMap.h\"\n", false),
+    ].into_iter().enumerate() {
+        let source = temp.0.join(format!("section-{index}.c"));
+        fs::write(&source, body).unwrap();
+        let binary = tooling::native_binary(&temp.0, "section");
+        let mut command = Command::new(&identity.compiler);
+        command.args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
+            .arg("-I").arg(root.join("runtime/include")).arg(&source);
+        if !allowed { command.arg("-c"); }
+        let output = command.arg("-o").arg(&binary).output().unwrap();
+        assert_eq!(output.status.success(), allowed, "section/{index}: {}", String::from_utf8_lossy(&output.stderr));
+        if allowed {
+            assert!(Command::new(&binary).status().unwrap().success());
+            let sections = tooling::symbol_sections(&identity.objdump, &binary);
+            for (symbol, section) in [("mapped", ".text"), ("zero", ".bss")] {
+                assert!(sections.iter().any(|(name, actual)| name == symbol && actual == section), "{symbol}/{section}: {sections:?}");
+            }
+        }
+    }
 }

@@ -1,7 +1,9 @@
-#include "Can.h"
+#include "Can_Internal.h"
+#include "Det.h"
 #include "Can_HostLock.h"
 #include "CanIf.h"
 #include "SchM_Can.h"
+#include "SchM_CanIf.h"
 #include "Ecu_Execution.h"
 #include <stddef.h>
 
@@ -15,6 +17,9 @@
 #endif
 #ifndef CAN_TX_HOH
 #define CAN_TX_HOH 0u
+#endif
+#ifndef CAN_RX_HOH
+#define CAN_RX_HOH 0u
 #endif
 #ifndef CAN_RX_POLLING
 #define CAN_RX_POLLING 0
@@ -35,38 +40,40 @@
 #define CAN_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Can_MemMap.h"
 
-static CanMode controller_mode;
-static uint8_t bus_off;
-static uint8_t busoff_notification_pending;
-static CanTxSink tx_sink;
-static uint8_t initialized;
-static uint8_t tx_pending;
-static uint8_t tx_in_flight;
-static uint32_t tx_id;
-static uint8_t tx_length;
-static uint8_t tx_payload[8];
-static PduIdType tx_handle;
-static uint8_t tx_confirmation_pending;
-static PduIdType tx_confirmation_handle;
-static uint8_t tx_confirming;
+static CanMode can_controller_mode CAN_VAR_CLEARED;
+static uint8_t bus_off CAN_VAR_CLEARED;
+static uint8_t busoff_notification_pending CAN_VAR_CLEARED;
+static CanTxSink tx_sink CAN_VAR_CLEARED;
+static uint8_t can_initialized CAN_VAR_CLEARED;
+static uint64_t driver_lifetime CAN_VAR_CLEARED;
+static uint8_t tx_pending CAN_VAR_CLEARED;
+static uint8_t tx_in_flight CAN_VAR_CLEARED;
+static uint8_t tx_cancelled CAN_VAR_CLEARED;
+static uint32_t tx_id CAN_VAR_CLEARED;
+static uint8_t tx_length CAN_VAR_CLEARED;
+static uint8_t tx_payload[8] CAN_VAR_CLEARED;
+static PduIdType tx_handle CAN_VAR_CLEARED;
+static uint8_t tx_confirmation_pending CAN_VAR_CLEARED;
+static PduIdType tx_confirmation_handle CAN_VAR_CLEARED;
+static uint8_t tx_confirming CAN_VAR_CLEARED;
 #if CAN_HOST_QUEUED_COMPLETION == 1
 /* Lifetime tokens are never reset by Init: old physical outputs must not
  * complete a new same-handle request after cancellation or reinitialization. */
-static uint64_t host_tx_sequence;
-static uint64_t host_tx_cancelled_through;
-static uint64_t host_tx_completed_through;
+static uint64_t host_tx_sequence CAN_VAR_CLEARED;
+static uint64_t host_tx_cancelled_through CAN_VAR_CLEARED;
+static uint64_t host_tx_completed_through CAN_VAR_CLEARED;
 #endif
-static uint32_t interrupt_disable_count;
-static uint8_t mode_notification_pending;
-static uint8_t mode_notification_processing;
-static Can_ControllerStateType pending_controller_mode;
-static uint8_t rx_pending;
-static uint8_t rx_processing;
-static uint32_t rx_id;
-static uint8_t rx_length;
-static uint8_t rx_payload[8];
-static uint64_t rx_time_ms;
-static EcuStatus rx_result;
+static uint32_t interrupt_disable_count CAN_VAR_CLEARED;
+static uint8_t mode_notification_pending CAN_VAR_CLEARED;
+static uint8_t mode_notification_processing CAN_VAR_CLEARED;
+static Can_ControllerStateType pending_controller_mode CAN_VAR_CLEARED;
+static uint8_t rx_pending CAN_VAR_CLEARED;
+static uint8_t rx_processing CAN_VAR_CLEARED;
+static uint32_t rx_id CAN_VAR_CLEARED;
+static uint8_t rx_length CAN_VAR_CLEARED;
+static uint8_t rx_payload[8] CAN_VAR_CLEARED;
+static uint64_t rx_time_ms CAN_VAR_CLEARED;
+static uint8_t rx_overrun_pending CAN_VAR_CLEARED;
 
 #define CAN_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Can_MemMap.h"
@@ -74,60 +81,63 @@ static EcuStatus rx_result;
 #define CAN_START_SEC_CODE
 #include "Can_MemMap.h"
 
-void Can_Init(const Can_ConfigType *config) {
+static CAN_CODE EcuStatus Can_DeliverRx(void);
+
+CAN_CODE void Can_Init(const Can_ConfigType *config) {
+    SchM_Enter_CanIf_CANIF_STATE();
     Can_Lock();
-    if ((initialized == 0u) && (config != NULL) &&
-        ((Ecu_Policy.tx_confirmation == ECU_TX_QUEUED) || (config->sink != NULL))) {
+    if ((can_initialized == 0u) && (config != NULL) &&
+        ((Ecu_Policy.tx_confirmation == ECU_TX_QUEUED) || (config->sink != NULL)) &&
+        (driver_lifetime != UINT64_MAX)) {
 #if CAN_HOST_QUEUED_COMPLETION == 1
         host_tx_cancelled_through = host_tx_sequence;
 #endif
+        ++driver_lifetime;
         tx_sink = config->sink;
-        initialized = 1u;
-        controller_mode = CAN_STOPPED;
+        can_initialized = 1u;
+        can_controller_mode = CAN_STOPPED;
         bus_off = 0u;
         busoff_notification_pending = 0u;
         tx_pending = 0u;
-        tx_in_flight = 0u;
         tx_confirmation_pending = 0u;
-        tx_confirming = 0u;
         rx_pending = 0u;
-        rx_processing = 0u;
+        rx_overrun_pending = 0u;
         interrupt_disable_count = 0u;
         mode_notification_pending = 0u;
-        mode_notification_processing = 0u;
     }
     Can_Unlock();
+    SchM_Exit_CanIf_CANIF_STATE();
 }
 
-void Can_DeInit(void) {
+CAN_CODE void Can_DeInit(void) {
+    SchM_Enter_CanIf_CANIF_STATE();
     Can_Lock();
-    if ((initialized != 0u) && (controller_mode != CAN_STARTED) &&
-        (mode_notification_pending == 0u) && (busoff_notification_pending == 0u)) {
+    if ((can_initialized != 0u) && (can_controller_mode != CAN_STARTED)) {
 #if CAN_HOST_QUEUED_COMPLETION == 1
         host_tx_cancelled_through = host_tx_sequence;
 #endif
-        initialized = 0u;
+        can_initialized = 0u;
+        tx_cancelled = 1u;
         tx_sink = NULL;
-        controller_mode = CAN_STOPPED;
+        can_controller_mode = CAN_STOPPED;
         bus_off = 0u;
         busoff_notification_pending = 0u;
         tx_pending = 0u;
-        tx_in_flight = 0u;
         tx_confirmation_pending = 0u;
-        tx_confirming = 0u;
         rx_pending = 0u;
-        rx_processing = 0u;
+        rx_overrun_pending = 0u;
         interrupt_disable_count = 0u;
         mode_notification_pending = 0u;
-        mode_notification_processing = 0u;
     }
     Can_Unlock();
+    SchM_Exit_CanIf_CANIF_STATE();
 }
 
-Std_ReturnType Can_SetBaudrate(uint8_t controller, uint16_t baud_rate_config_id) {
+CAN_CODE Std_ReturnType Can_SetBaudrate(uint8_t controller, uint16_t baud_rate_config_id) {
     Std_ReturnType result = E_NOT_OK;
     Can_Lock();
-    if ((initialized != 0u) && (controller == CAN_CONTROLLER_ID) && (baud_rate_config_id == 0u)) {
+    if ((can_initialized != 0u) && (controller == CAN_CONTROLLER_ID) &&
+        (baud_rate_config_id == 0u)) {
         /* The fixed virtual target has one baud-rate configuration and no registers to change. */
         result = E_OK;
     }
@@ -135,36 +145,40 @@ Std_ReturnType Can_SetBaudrate(uint8_t controller, uint16_t baud_rate_config_id)
     return result;
 }
 
-Std_ReturnType Can_SetControllerMode(uint8_t controller, Can_ControllerStateType transition) {
+CAN_CODE Std_ReturnType Can_SetControllerMode(uint8_t controller,
+                                              Can_ControllerStateType transition) {
     Std_ReturnType result = E_NOT_OK;
+    SchM_Enter_CanIf_CANIF_STATE();
     Can_Lock();
-    if ((initialized != 0u) && (controller == CAN_CONTROLLER_ID) &&
+    if ((can_initialized != 0u) && (controller == CAN_CONTROLLER_ID) &&
         (mode_notification_pending == 0u) && (busoff_notification_pending == 0u) &&
         ((transition == CAN_CS_STARTED) || (transition == CAN_CS_STOPPED) ||
          (transition == CAN_CS_SLEEP))) {
-        if ((transition == CAN_CS_STARTED) && (controller_mode == CAN_STOPPED)) {
-            controller_mode = CAN_STARTED;
+        if ((transition == CAN_CS_STARTED) && (can_controller_mode == CAN_STOPPED)) {
+            can_controller_mode = CAN_STARTED;
             bus_off = 0u;
             pending_controller_mode = CAN_CS_STARTED;
             mode_notification_pending = 1u;
             result = E_OK;
         } else if ((transition == CAN_CS_STOPPED) &&
-                   ((controller_mode == CAN_STARTED) || (controller_mode == CAN_SLEEP))) {
+                   ((can_controller_mode == CAN_STARTED) || (can_controller_mode == CAN_SLEEP))) {
 #if CAN_HOST_QUEUED_COMPLETION == 1
             host_tx_cancelled_through = host_tx_sequence;
 #endif
-            controller_mode = CAN_STOPPED;
+            can_controller_mode = CAN_STOPPED;
 #if CAN_RX_POLLING == 1
             rx_pending = 0u;
 #endif
             tx_pending = 0u;
+            tx_cancelled = 1u;
+            tx_confirmation_pending = 0u;
             pending_controller_mode = CAN_CS_STOPPED;
             mode_notification_pending = 1u;
             result = E_OK;
         } else if ((transition == CAN_CS_SLEEP) &&
-                   ((controller_mode == CAN_STOPPED) || (controller_mode == CAN_SLEEP))) {
-            if (controller_mode != CAN_SLEEP) {
-                controller_mode = CAN_SLEEP;
+                   ((can_controller_mode == CAN_STOPPED) || (can_controller_mode == CAN_SLEEP))) {
+            if (can_controller_mode != CAN_SLEEP) {
+                can_controller_mode = CAN_SLEEP;
                 pending_controller_mode = CAN_CS_SLEEP;
                 mode_notification_pending = 1u;
             }
@@ -174,16 +188,17 @@ Std_ReturnType Can_SetControllerMode(uint8_t controller, Can_ControllerStateType
         }
     }
     Can_Unlock();
+    SchM_Exit_CanIf_CANIF_STATE();
     return result;
 }
 
-Std_ReturnType Can_GetControllerMode(uint8_t controller, Can_ControllerStateType *mode) {
+CAN_CODE Std_ReturnType Can_GetControllerMode(uint8_t controller, Can_ControllerStateType *mode) {
     Std_ReturnType result = E_NOT_OK;
     Can_Lock();
-    if ((initialized != 0u) && (controller == CAN_CONTROLLER_ID) && (mode != NULL)) {
-        if (controller_mode == CAN_STARTED) {
+    if ((can_initialized != 0u) && (controller == CAN_CONTROLLER_ID) && (mode != NULL)) {
+        if (can_controller_mode == CAN_STARTED) {
             *mode = CAN_CS_STARTED;
-        } else if (controller_mode == CAN_SLEEP) {
+        } else if (can_controller_mode == CAN_SLEEP) {
             *mode = CAN_CS_SLEEP;
         } else {
             *mode = CAN_CS_STOPPED;
@@ -194,10 +209,11 @@ Std_ReturnType Can_GetControllerMode(uint8_t controller, Can_ControllerStateType
     return result;
 }
 
-Std_ReturnType Can_GetControllerErrorState(uint8_t controller, Can_ErrorStateType *error_state) {
+CAN_CODE Std_ReturnType Can_GetControllerErrorState(uint8_t controller,
+                                                    Can_ErrorStateType *error_state) {
     Std_ReturnType result = E_NOT_OK;
     Can_Lock();
-    if ((initialized != 0u) && (controller == CAN_CONTROLLER_ID) && (error_state != NULL)) {
+    if ((can_initialized != 0u) && (controller == CAN_CONTROLLER_ID) && (error_state != NULL)) {
         *error_state = (bus_off != 0u) ? CAN_ERRORSTATE_BUSOFF : CAN_ERRORSTATE_ACTIVE;
         result = E_OK;
     }
@@ -205,42 +221,44 @@ Std_ReturnType Can_GetControllerErrorState(uint8_t controller, Can_ErrorStateTyp
     return result;
 }
 
-Std_ReturnType Can_GetControllerRxErrorCounter(uint8_t controller, uint8_t *error_counter) {
+CAN_CODE Std_ReturnType Can_GetControllerRxErrorCounter(uint8_t controller,
+                                                        uint8_t *error_counter) {
     (void)controller;
     (void)error_counter;
     return E_NOT_OK;
 }
 
-Std_ReturnType Can_GetControllerTxErrorCounter(uint8_t controller, uint8_t *error_counter) {
+CAN_CODE Std_ReturnType Can_GetControllerTxErrorCounter(uint8_t controller,
+                                                        uint8_t *error_counter) {
     (void)controller;
     (void)error_counter;
     return E_NOT_OK;
 }
 
-void Can_DisableControllerInterrupts(uint8_t controller) {
+CAN_CODE void Can_DisableControllerInterrupts(uint8_t controller) {
     Can_Lock();
-    if ((initialized != 0u) && (controller == CAN_CONTROLLER_ID) &&
+    if ((can_initialized != 0u) && (controller == CAN_CONTROLLER_ID) &&
         (interrupt_disable_count < UINT32_MAX)) {
         ++interrupt_disable_count;
     }
     Can_Unlock();
 }
 
-void Can_EnableControllerInterrupts(uint8_t controller) {
+CAN_CODE void Can_EnableControllerInterrupts(uint8_t controller) {
     Can_Lock();
-    if ((initialized != 0u) && (controller == CAN_CONTROLLER_ID) &&
+    if ((can_initialized != 0u) && (controller == CAN_CONTROLLER_ID) &&
         (interrupt_disable_count != 0u)) {
         --interrupt_disable_count;
     }
     Can_Unlock();
 }
 
-Std_ReturnType Can_CheckWakeup(uint8_t controller) {
+CAN_CODE Std_ReturnType Can_CheckWakeup(uint8_t controller) {
     (void)controller;
     return E_NOT_OK;
 }
 
-static EcuStatus Can_WriteHost(Can_HwHandleType hth, const Can_PduType *pdu) {
+static CAN_CODE EcuStatus Can_WriteHost(Can_HwHandleType hth, const Can_PduType *pdu) {
     EcuStatus result = ECU_ERR_CONFIG;
     if ((hth != CAN_TX_HOH) || (pdu == NULL) || (pdu->sdu == NULL)) {
         /* Invalid host configuration or caller input. */
@@ -259,9 +277,9 @@ static EcuStatus Can_WriteHost(Can_HwHandleType hth, const Can_PduType *pdu) {
         } else if (locked == 0) {
             result = ECU_ERR_CAN_BUSY;
         } else {
-            if (initialized == 0u) {
+            if (can_initialized == 0u) {
                 /* Can_Init has not installed a host output callback. */
-            } else if (controller_mode != CAN_STARTED) {
+            } else if (can_controller_mode != CAN_STARTED) {
                 result = ECU_ERR_CONTROLLER;
             } else if ((tx_pending != 0u) || (tx_in_flight != 0u) ||
                        (tx_confirmation_pending != 0u) || (tx_confirming != 0u)) {
@@ -290,7 +308,7 @@ static EcuStatus Can_WriteHost(Can_HwHandleType hth, const Can_PduType *pdu) {
     return result;
 }
 
-Std_ReturnType Can_Write(Can_HwHandleType hth, const Can_PduType *pdu) {
+CAN_CODE Std_ReturnType Can_Write(Can_HwHandleType hth, const Can_PduType *pdu) {
     Std_ReturnType result = E_NOT_OK;
     EcuStatus host_result = Can_WriteHost(hth, pdu);
     if (host_result == ECU_OK) {
@@ -303,12 +321,17 @@ Std_ReturnType Can_Write(Can_HwHandleType hth, const Can_PduType *pdu) {
     return result;
 }
 
-EcuStatus Can_HostFlush(void) {
+CAN_CODE EcuStatus Can_InternalHostFlush(void) {
     EcuStatus result = ECU_OK;
     Can_Lock();
-    if (tx_pending != 0u) {
-        uint32_t id = tx_id;
-        uint8_t length = tx_length;
+    if (can_initialized == 0u) {
+        result = ECU_ERR_CONFIG;
+    } else if ((tx_pending != 0u) && (tx_in_flight == 0u)) {
+        const uint32_t id = tx_id;
+        const uint8_t length = tx_length;
+        const PduIdType handle = tx_handle;
+        const CanTxSink sink = tx_sink;
+        const uint64_t lifetime = driver_lifetime;
         uint8_t payload[8] = {0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
         size_t i;
         for (i = 0u; i < (size_t)length; ++i) {
@@ -316,32 +339,47 @@ EcuStatus Can_HostFlush(void) {
         }
         tx_pending = 0u;
         tx_in_flight = 1u;
-        result = Ecu_ExecutionTransmit(tx_sink, tx_handle, id, length, payload);
+        tx_cancelled = 0u;
+        Can_Unlock();
+        result = Ecu_ExecutionTransmit(sink, handle, id, length, payload);
+        Can_Lock();
         tx_in_flight = 0u;
-        if ((result == ECU_OK) && (Ecu_Policy.tx_confirmation == ECU_TX_SYNCHRONOUS)) {
-            tx_confirmation_handle = tx_handle;
+        if ((can_initialized != 0u) && (lifetime == driver_lifetime) &&
+            (can_controller_mode == CAN_STARTED) && (tx_cancelled == 0u) && (result == ECU_OK) &&
+            (Ecu_Policy.tx_confirmation == ECU_TX_SYNCHRONOUS)) {
+            tx_confirmation_handle = handle;
             tx_confirmation_pending = 1u;
-#if CAN_TX_POLLING == 0
-            Can_MainFunction_Write();
-#endif
         }
+    } else {
+        /* No admitted output is ready. */
     }
     Can_Unlock();
+#if CAN_TX_POLLING == 0
+    Can_MainFunction_Write();
+#endif
     return result;
 }
 
-void Can_SetMode(CanMode mode) {
+CAN_CODE void Can_InternalSetMode(CanMode mode) {
+    uint8_t notify_mode = 0u;
+#if CAN_BUSOFF_POLLING == 0
+    uint8_t notify_busoff = 0u;
+#endif
+    Can_ControllerStateType indication = CAN_CS_STOPPED;
+    SchM_Enter_CanIf_CANIF_STATE();
     Can_Lock();
-    if ((mode != CAN_STARTED) && (mode != CAN_STOPPED) && (mode != CAN_SLEEP) &&
-        (mode != CAN_BUS_OFF)) {
+    if (can_initialized == 0u) {
+        /* Host mutation requires Can_Init. */
+    } else if ((mode != CAN_STARTED) && (mode != CAN_STOPPED) && (mode != CAN_SLEEP) &&
+               (mode != CAN_BUS_OFF)) {
         /* Ignore unsupported host mode values without changing a pending indication. */
-    } else if ((controller_mode == CAN_SLEEP) && (mode != CAN_STOPPED)) {
+    } else if ((can_controller_mode == CAN_SLEEP) && (mode != CAN_STOPPED)) {
         /* Logical sleep can only exit via STOPPED. */
     } else if ((busoff_notification_pending != 0u) && (mode != CAN_BUS_OFF)) {
         /* Publish the observed bus-off before an explicit host recovery. */
     } else if (mode == CAN_BUS_OFF) {
 #if CAN_BUSOFF_POLLING == 1
-        if ((initialized != 0u) && (bus_off == 0u)) {
+        if (bus_off == 0u) {
             busoff_notification_pending = 1u;
         }
 #endif
@@ -349,18 +387,20 @@ void Can_SetMode(CanMode mode) {
 #if CAN_HOST_QUEUED_COMPLETION == 1
         host_tx_cancelled_through = host_tx_sequence;
 #endif
-        controller_mode = CAN_STOPPED;
+        can_controller_mode = CAN_STOPPED;
 #if CAN_RX_POLLING == 1
         rx_pending = 0u;
 #endif
         bus_off = 1u;
         tx_pending = 0u;
+        tx_cancelled = 1u;
+        tx_confirmation_pending = 0u;
 #if CAN_BUSOFF_POLLING == 0
-        CanIf_ControllerBusOff(CAN_CANIF_CONTROLLER_ID);
+        notify_busoff = 1u;
 #endif
     } else {
         mode_notification_pending = 0u;
-        controller_mode = mode;
+        can_controller_mode = mode;
         bus_off = 0u;
         if (mode != CAN_STARTED) {
 #if CAN_RX_POLLING == 1
@@ -370,48 +410,75 @@ void Can_SetMode(CanMode mode) {
             host_tx_cancelled_through = host_tx_sequence;
 #endif
             tx_pending = 0u;
+            tx_cancelled = 1u;
+            tx_confirmation_pending = 0u;
         }
         if (mode == CAN_STARTED) {
-            CanIf_ControllerModeIndication(CAN_CANIF_CONTROLLER_ID, CAN_CS_STARTED);
+            indication = CAN_CS_STARTED;
+            notify_mode = 1u;
         } else if (mode == CAN_STOPPED) {
-            CanIf_ControllerModeIndication(CAN_CANIF_CONTROLLER_ID, CAN_CS_STOPPED);
+            indication = CAN_CS_STOPPED;
+            notify_mode = 1u;
         } else if (mode == CAN_SLEEP) {
-            CanIf_ControllerModeIndication(CAN_CANIF_CONTROLLER_ID, CAN_CS_SLEEP);
+            indication = CAN_CS_SLEEP;
+            notify_mode = 1u;
         } else {
             /* Bus-off was handled above; other values have no CanIf mode. */
         }
     }
     Can_Unlock();
-}
-
-void Can_MainFunction_BusOff(void) {
-    Can_Lock();
-    if (busoff_notification_pending != 0u) {
-        busoff_notification_pending = 0u;
+    /* The bus-off and mode branches above are exclusive; a polled bus-off is
+     * published by Can_MainFunction_BusOff instead. */
+#if CAN_BUSOFF_POLLING == 0
+    if (notify_busoff != 0u) {
         CanIf_ControllerBusOff(CAN_CANIF_CONTROLLER_ID);
     }
-    Can_Unlock();
+#endif
+    if (notify_mode != 0u) {
+        CanIf_ControllerModeIndication(CAN_CANIF_CONTROLLER_ID, indication);
+    }
+    SchM_Exit_CanIf_CANIF_STATE();
 }
 
-static void Can_PollMode(void) {
+CAN_CODE void Can_MainFunction_BusOff(void) {
+    uint8_t notify = 0u;
+    SchM_Enter_CanIf_CANIF_STATE();
     Can_Lock();
-    if ((mode_notification_pending != 0u) && (mode_notification_processing == 0u)) {
-        Can_ControllerStateType mode = pending_controller_mode;
+    if ((can_initialized != 0u) && (busoff_notification_pending != 0u)) {
+        busoff_notification_pending = 0u;
+        notify = 1u;
+    }
+    Can_Unlock();
+    if (notify != 0u) {
+        CanIf_ControllerBusOff(CAN_CANIF_CONTROLLER_ID);
+    }
+    SchM_Exit_CanIf_CANIF_STATE();
+}
+
+static CAN_CODE void Can_PollMode(void) {
+    SchM_Enter_CanIf_CANIF_STATE();
+    Can_Lock();
+    if ((can_initialized != 0u) && (mode_notification_pending != 0u) &&
+        (mode_notification_processing == 0u)) {
+        const Can_ControllerStateType mode = pending_controller_mode;
         mode_notification_pending = 0u;
         mode_notification_processing = 1u;
+        Can_Unlock();
         CanIf_ControllerModeIndication(CAN_CANIF_CONTROLLER_ID, mode);
+        Can_Lock();
         mode_notification_processing = 0u;
     }
     Can_Unlock();
+    SchM_Exit_CanIf_CANIF_STATE();
 }
 
-void Can_MainFunction_Wakeup(void) { Can_PollMode(); }
-void Can_MainFunction_Mode(void) { Can_PollMode(); }
+CAN_CODE void Can_MainFunction_Wakeup(void) { Can_PollMode(); }
+CAN_CODE void Can_MainFunction_Mode(void) { Can_PollMode(); }
 
-CanMode Can_GetMode(void) {
+CAN_CODE CanMode Can_InternalGetMode(void) {
     CanMode mode;
     Can_Lock();
-    mode = controller_mode;
+    mode = can_controller_mode;
     if (bus_off != 0u) {
         mode = CAN_BUS_OFF;
     }
@@ -419,7 +486,8 @@ CanMode Can_GetMode(void) {
     return mode;
 }
 
-EcuStatus Can_TransmitPdu(PduIdType pdu_id, uint32_t id, uint8_t dlc, const uint8_t data[8]) {
+CAN_CODE EcuStatus Can_InternalTransmitPdu(PduIdType pdu_id, uint32_t id, uint8_t dlc,
+                                           const uint8_t data[8]) {
     uint8_t payload[8] = {0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
     Can_PduType pdu;
     EcuStatus result = ECU_ERR_CONFIG;
@@ -434,17 +502,17 @@ EcuStatus Can_TransmitPdu(PduIdType pdu_id, uint32_t id, uint8_t dlc, const uint
         pdu.sdu = payload;
         result = Can_WriteHost(CAN_TX_HOH, &pdu);
         if (result == ECU_OK) {
-            result = Can_HostFlush();
+            result = Can_InternalHostFlush();
         }
     }
     return result;
 }
 
-uint64_t Can_HostTransmitToken(void) {
+CAN_CODE uint64_t Can_InternalHostTransmitToken(void) {
     uint64_t token = UINT64_C(0);
 #if CAN_HOST_QUEUED_COMPLETION == 1
     Can_Lock();
-    if ((initialized != 0u) && (tx_in_flight != 0u) &&
+    if ((can_initialized != 0u) && (tx_in_flight != 0u) &&
         (Ecu_Policy.tx_confirmation == ECU_TX_QUEUED)) {
         token = host_tx_sequence;
     }
@@ -453,11 +521,11 @@ uint64_t Can_HostTransmitToken(void) {
     return token;
 }
 
-Std_ReturnType Can_HostCompleteTransmit(PduIdType handle, uint64_t token) {
+CAN_CODE Std_ReturnType Can_InternalHostCompleteTransmit(PduIdType handle, uint64_t token) {
     Std_ReturnType result = E_NOT_OK;
 #if CAN_HOST_QUEUED_COMPLETION == 1
     Can_Lock();
-    if ((initialized != 0u) && (Ecu_Policy.tx_confirmation == ECU_TX_QUEUED) &&
+    if ((can_initialized != 0u) && (Ecu_Policy.tx_confirmation == ECU_TX_QUEUED) &&
         (token > host_tx_cancelled_through) && (token > host_tx_completed_through) &&
         (token <= host_tx_sequence)) {
         if ((tx_confirmation_pending != 0u) || (tx_confirming != 0u)) {
@@ -477,20 +545,27 @@ Std_ReturnType Can_HostCompleteTransmit(PduIdType handle, uint64_t token) {
     return result;
 }
 
-void Can_MainFunction_Write(void) {
+CAN_CODE void Can_MainFunction_Write(void) {
+    SchM_Enter_CanIf_CANIF_STATE();
     Can_Lock();
-    if ((tx_confirmation_pending != 0u) && (tx_confirming == 0u)) {
-        PduIdType handle = tx_confirmation_handle;
+    if ((can_initialized != 0u) && (tx_confirmation_pending != 0u) && (tx_confirming == 0u)) {
+        const PduIdType handle = tx_confirmation_handle;
         tx_confirmation_pending = 0u;
         tx_confirming = 1u;
+        Can_Unlock();
         CanIf_TxConfirmation(handle);
+        Can_Lock();
         tx_confirming = 0u;
     }
     Can_Unlock();
+    SchM_Exit_CanIf_CANIF_STATE();
 }
 
-EcuStatus Can_Inject(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t now_ms) {
+static CAN_CODE EcuStatus Can_ReceiveHost(uint32_t id, uint8_t dlc, const uint8_t data[8],
+                                          uint64_t now_ms, uint8_t accepted) {
     EcuStatus result = ECU_OK;
+    uint8_t lost = 0u;
+    SchM_Enter_CanIf_CANIF_STATE();
     Can_Lock();
     if (id > 0x7ffu) {
         result = ECU_ERR_FRAME_ID;
@@ -500,12 +575,16 @@ EcuStatus Can_Inject(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t n
     } else if (dlc == 0u) {
         result = ECU_ERR_FRAME_DLC;
 #endif
-    } else if (controller_mode != CAN_STARTED) {
+    } else if ((can_initialized == 0u) || (can_controller_mode != CAN_STARTED)) {
         result = ECU_ERR_CONTROLLER;
     } else if (data == NULL) {
         result = ECU_ERR_CONFIG;
     } else if ((rx_processing != 0u) || (rx_pending != 0u)) {
         result = ECU_ERR_CAN_BUSY;
+        lost = accepted;
+        if (accepted != 0u) {
+            rx_overrun_pending = 1u;
+        }
     } else {
         size_t i;
         rx_id = id;
@@ -516,31 +595,75 @@ EcuStatus Can_Inject(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t n
         }
         rx_pending = 1u;
 #if CAN_RX_POLLING == 0
-        Can_MainFunction_Read();
-        result = rx_result;
+        result = Can_DeliverRx();
 #endif
     }
     Can_Unlock();
+#if CAN_RX_POLLING == 0
+    if (lost != 0u) {
+        Can_MainFunction_Read();
+    }
+#else
+    (void)lost;
+#endif
+    SchM_Exit_CanIf_CANIF_STATE();
     return result;
 }
 
-void Can_MainFunction_Read(void) {
-    Can_Lock();
-    if ((rx_processing == 0u) && (rx_pending != 0u)) {
+CAN_CODE EcuStatus Can_InternalInject(uint32_t id, uint8_t dlc, const uint8_t data[8],
+                                      uint64_t now_ms) {
+    return Can_ReceiveHost(id, dlc, data, now_ms, 0u);
+}
+
+CAN_CODE EcuStatus Can_InternalRxIndication(uint32_t id, uint8_t dlc, const uint8_t data[8],
+                                            uint64_t now_ms) {
+    /* Already received by a platform adapter: occupied shadow storage is a real overrun.
+     * Host admission uses Can_InternalInject and remains retryable without a lost-frame report. */
+    return Can_ReceiveHost(id, dlc, data, now_ms, 1u);
+}
+
+/* Called with the driver lock held; returns with it held. The result belongs
+ * to this snapshot, including when the callback cancels/reinitializes the driver. */
+static CAN_CODE EcuStatus Can_DeliverRx(void) {
+    EcuStatus result = ECU_OK;
+    if ((can_initialized != 0u) && (rx_processing == 0u) && (rx_pending != 0u)) {
         uint32_t id = rx_id;
         uint8_t length = rx_length;
         uint8_t payload[8] = {0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
         uint64_t now_ms = rx_time_ms;
+        const uint64_t lifetime = driver_lifetime;
         size_t i;
         for (i = 0u; i < (size_t)length; ++i) {
             payload[i] = rx_payload[i];
         }
         rx_pending = 0u;
         rx_processing = 1u;
-        rx_result = CanIf_HostRxIndication(id, length, payload, now_ms);
+        Can_Unlock();
+        result = CanIf_HostRxIndication(id, length, payload, now_ms);
+        Can_Lock();
+        if ((can_initialized == 0u) || (driver_lifetime != lifetime)) {
+            result = ECU_ERR_CONTROLLER;
+        }
         rx_processing = 0u;
     }
+    return result;
+}
+
+CAN_CODE void Can_MainFunction_Read(void) {
+    uint8_t lost;
+    SchM_Enter_CanIf_CANIF_STATE();
+    Can_Lock();
+    lost = rx_overrun_pending;
+    rx_overrun_pending = 0u;
+    if (lost != 0u) {
+        Can_Unlock();
+        /* SWS_Can_00226: report before Rx can reentrantly replace consumers. */
+        (void)Det_ReportRuntimeError(CAN_MODULE_ID, 0u, 0x08u, CAN_E_DATALOST);
+        Can_Lock();
+    }
+    (void)Can_DeliverRx();
     Can_Unlock();
+    SchM_Exit_CanIf_CANIF_STATE();
 }
 
 #define CAN_STOP_SEC_CODE

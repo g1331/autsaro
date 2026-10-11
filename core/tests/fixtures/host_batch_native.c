@@ -1,5 +1,5 @@
 #include "Ecu_Target.h"
-#include "Os_Windows.h"
+#include "Os_Host.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -41,7 +41,7 @@ static void outputs(void) {
 
 static Ecu_BatchCompletion wait_batch(uint64_t ticket) {
     Ecu_BatchCompletion result;
-    DWORD started = GetTickCount();
+    uint64_t started = Os_HostMonotonicMs();
     for (;;) {
         StatusType status;
         outputs();
@@ -49,15 +49,15 @@ static Ecu_BatchCompletion wait_batch(uint64_t ticket) {
         if (status == E_OK) {
             return result;
         }
-        require((status == E_OS_NOFUNC) && ((GetTickCount() - started) < 5000u));
-        Sleep(1u);
+        require((status == E_OS_NOFUNC) && ((Os_HostMonotonicMs() - started) < 5000u));
+        Os_HostSleepMs(1u);
     }
 }
 
 static void tick(uint64_t at) {
     Os_TickCompletion complete;
     uint64_t ticket;
-    DWORD started = GetTickCount();
+    uint64_t started = Os_HostMonotonicMs();
     require(Os_TargetAdvanceOneTick(at, &ticket) == E_OK);
     for (;;) {
         StatusType status;
@@ -67,21 +67,21 @@ static void tick(uint64_t at) {
             require(complete.epoch == at);
             return;
         }
-        require((status == E_OS_NOFUNC) && ((GetTickCount() - started) < 5000u));
-        Sleep(1u);
+        require((status == E_OS_NOFUNC) && ((Os_HostMonotonicMs() - started) < 5000u));
+        Os_HostSleepMs(1u);
     }
 }
 
-static DWORD WINAPI control(void *argument) {
+static Os_HostThreadResult WINAPI control(void *argument) {
     uint64_t ticket;
     uint64_t untouched = UINT64_C(42);
     Ecu_BatchCompletion complete;
     unsigned index;
-    DWORD started = GetTickCount();
+    uint64_t started = Os_HostMonotonicMs();
     (void)argument;
     while (Ecu_TargetState() != ECU_TARGET_READY) {
-        require((GetTickCount() - started) < 5000u);
-        Sleep(1u);
+        require((Os_HostMonotonicMs() - started) < 5000u);
+        Os_HostSleepMs(1u);
     }
     for (index = 0u; index < 256u; ++index) {
         frames[index].id = 0x320u;
@@ -109,7 +109,7 @@ static DWORD WINAPI control(void *argument) {
     frames[0].data[2] = 0x34u;
     frames[0].data[3] = 0x12u;
     require(Ecu_TargetPostBatch(UINT64_C(1), frames, 1u, &ticket) == E_OK);
-    Sleep(20u);
+    Os_HostSleepMs(20u);
     require(Ecu_TargetBatchCompletion(ticket, &complete) == E_OS_NOFUNC);
     tick(UINT64_C(1));
     complete = wait_batch(ticket);
@@ -157,11 +157,11 @@ static DWORD WINAPI control(void *argument) {
 }
 
 int main(void) {
-    HANDLE thread;
+    Os_HostHandle thread;
     require(Ecu_TargetPrepare() == E_OK);
-    thread = CreateThread(NULL, 262144u, control, NULL, 0u, NULL);
+    thread = Os_HostSpawnThread(control, NULL);
     require(thread != NULL);
-    require(CloseHandle(thread) != 0);
+    require(Os_HostClose(thread) != 0);
     StartOS(1u);
     return 94;
 }

@@ -1,5 +1,7 @@
 /** Fixed controller polling/zero-DLC oracle with the shared actual driver. */
 #include "Can.h"
+#include "Can_Internal.h"
+#include "Det.h"
 #include "CanIf.h"
 #include "SchM_Can.h"
 #include "PduR.h"
@@ -75,7 +77,16 @@ static const PduR_RxRouteType pdur_rx[] = {{31u, 17u, indication}};
 static const PduR_TxRouteType pdur_tx[] = {
     {PDUR_UP_COM, 18u, 41u, LSduR_PduRTransmit, confirmation, NULL_PTR}};
 static const PduR_PBConfigType pdur = {23u, pdur_rx, 1u, pdur_tx, 1u, NULL_PTR, 0u};
+static unsigned lost;
+static Std_ReturnType report_loss(uint16_t module, uint8_t instance, uint8_t api, uint8_t error) {
+    assert(module == 80u && instance == 0u && api == 0x08u && error == 1u);
+    ++lost;
+    return E_OK;
+}
 int main(void) {
+    static const Det_ErrorHookType hooks[] = {report_loss};
+    static const Det_ConfigType det = {NULL, 0u, hooks, 1u};
+    Det_Init(&det);
     void (*poll_off)(void) = Can_MainFunction_BusOff;
     void (*poll_mode)(void) = Can_MainFunction_Mode;
     uint8 bytes[8] = {42u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
@@ -104,11 +115,13 @@ int main(void) {
     Can_MainFunction_Write();
     assert(positive == 1u);
     assert(Can_Inject(0x320u, 0u, bytes, 0u) == ECU_OK && received == 0u);
-    assert(Can_Inject(0x320u, 0u, bytes, 0u) == ECU_ERR_CAN_BUSY);
+    assert(Can_Inject(0x320u, 0u, bytes, 0u) == ECU_ERR_CAN_BUSY && lost == 0u);
+    assert(Can_InternalRxIndication(0x320u, 0u, bytes, 0u) == ECU_ERR_CAN_BUSY && lost == 0u &&
+           received == 0u);
     Can_MainFunction_Read();
-    assert(received == 1u);
+    assert(received == 1u && lost == 1u);
     Can_MainFunction_Read();
-    assert(received == 1u);
+    assert(received == 1u && lost == 1u);
     expected_length = 4u;
     assert(CanIf_Transmit(51u, &four) == E_OK);
     bytes[0] = 7u;
@@ -121,7 +134,6 @@ int main(void) {
     assert(busoffs == 0u && negative == 0u && Can_GetMode() == CAN_BUS_OFF);
     assert(CanIf_SetPduMode(0u, CANIF_ONLINE) == E_NOT_OK);
     assert(Can_SetControllerMode(0u, CAN_CS_STARTED) == E_NOT_OK);
-    Can_DeInit(); /* Pending polling event must survive lifecycle requests. */
     poll_off();
     assert(busoffs == 1u && negative == 1u);
     assert(CanIf_GetPduMode(0u, &pdu_mode) == E_OK && pdu_mode == CANIF_TX_OFFLINE);
@@ -147,7 +159,7 @@ int main(void) {
     poll_mode();
     assert(CanIf_SetPduMode(0u, CANIF_ONLINE) == E_OK);
     Can_MainFunction_Read();
-    assert(received == 1u);
+    assert(received == 1u && lost == 1u);
     assert(Can_Inject(0x320u, 4u, bytes, 0u) == ECU_OK);
     Can_MainFunction_Read();
     assert(received == 2u);
@@ -163,8 +175,15 @@ int main(void) {
     Can_MainFunction_Read();
     assert(received == 3u);
     assert(CanIf_SetControllerMode(0u, CAN_CS_STOPPED) == E_OK);
-    poll_mode();
     Can_DeInit();
+    {
+        Can_ControllerStateType mode = CAN_CS_STARTED;
+        assert(Can_GetControllerMode(0u, &mode) == E_NOT_OK);
+        assert(Can_HostFlush() == ECU_ERR_CONFIG);
+        Can_SetMode(CAN_STARTED);
+        assert(Can_Inject(0x320u, 4u, bytes, 0u) == ECU_ERR_CONTROLLER);
+    }
+    poll_mode();
     poll_off();
     assert(busoffs == 2u);
     return 0;

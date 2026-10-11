@@ -1,5 +1,6 @@
 /** @file Immediate UINT32 COM with real Rx group and PDU-level reception DM. */
 #include "Com.h"
+#include "SchM_CanIf.h"
 #include "Com_Internal.h"
 #include <stddef.h>
 #include <string.h>
@@ -60,6 +61,7 @@ static COM_CODE boolean Com_ValidConfig(const Com_ConfigType *config) {
     return valid;
 }
 COM_CODE void Com_Init(const Com_ConfigType *config) {
+    SchM_Enter_CanIf_CANIF_STATE();
     uint16 index;
     Com_DeInit();
     if (Com_ValidConfig(config) == TRUE) {
@@ -68,8 +70,10 @@ COM_CODE void Com_Init(const Com_ConfigType *config) {
             values[index] = config->pdus[index].initial_value;
         }
     }
+    SchM_Exit_CanIf_CANIF_STATE();
 }
 COM_CODE void Com_DeInit(void) {
+    SchM_Enter_CanIf_CANIF_STATE();
     uint16 index;
     configuration = NULL_PTR;
     receive_started = FALSE;
@@ -80,6 +84,7 @@ COM_CODE void Com_DeInit(void) {
         remaining[index] = 0u;
         reloaded_before_main[index] = FALSE;
     }
+    SchM_Exit_CanIf_CANIF_STATE();
 }
 COM_CODE Com_StatusType Com_GetStatus(void) {
     return (configuration == NULL_PTR) ? COM_UNINIT : COM_INIT;
