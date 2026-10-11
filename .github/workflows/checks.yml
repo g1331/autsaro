@@ -24,7 +24,7 @@ jobs:
     outputs:
       code: ${{ steps.detect.outputs.code }}
     steps:
-      # Pull requests touching only reader documentation and planning records
+      # Pull requests touching only reader documentation and design records
       # skip build and test jobs; pushes and manual runs always check everything.
       - id: detect
         shell: python
@@ -33,7 +33,7 @@ jobs:
           PULL_REQUEST: ${{ github.event.pull_request.number }}
         run: |
           import os, subprocess
-          documentation = ('docs/', '_bmad/', '_bmad-output/', '.agents/', '.claude/', '.impeccable/', '.github/ISSUE_TEMPLATE/')
+          documentation = ('docs/', '.agents/', '.claude/', '.impeccable/', '.github/ISSUE_TEMPLATE/')
           def is_documentation(path):
               if path.startswith(documentation) or path in {'LICENSE', 'NOTICE', '.github/PULL_REQUEST_TEMPLATE.md'}:
                   return True

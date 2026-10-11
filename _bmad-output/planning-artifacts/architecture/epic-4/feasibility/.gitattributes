@@ -1,3 +1,0 @@
-probe.py text eol=lf
-tasks-policy-probe.patch text eol=lf
-*.json text eol=lf

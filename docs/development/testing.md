@@ -47,7 +47,7 @@ ECU 的 HostBatch 与 legacy probe 是两个独立可执行程序，跨翻译单
 
 CI 每个平台先验证检查器、生成六类完整样本并发布本轮工具与样本工件，再把三个主机样本、标准 ECU、用户应用 ECU 和多组件 ECU 分成四个并行任务；汇总任务要求所有准备和分析任务成功，跳过或取消也不会通过（仅改文档的 PR 整体跳过，见下）。固定版本 Cppcheck、vcpkg 二进制包与 Cargo 构建使用缓存，每次仍重新生成样本并分析全部源码，缓存不包含扫描结果。PR 的新提交会取消同一 PR 的旧任务。双平台任务自动验证完整分析链路，拒绝配置／解析失败或漏扫；源码违规仍保留非零退出码及 `passed=false`，不会由链路验证改写为通过。严格源码门禁暂限手动 workflow_dispatch。现存诊断整改与必要偏离获批后，才能移除该条件，启用每次 PR 的严格源码门禁。手动扫描收集所有样本结果后返回真实失败状态，日志与样本保留 14 天。
 
-`Development checks` 中的 `CI required` 是分支规则唯一要求的检查，阻塞合并的任务清单写在该任务的 `needs` 中，增删检查只改工作流。PR 只改根目录指南、`docs/`、`_bmad/`、`_bmad-output/`、代理说明或 PR 模板时，构建与测试任务整体跳过，`quality` 照常运行；其余 PR、推送到主干及手动运行都执行完整检查。分支无须先与主干同步即可合并，合并后主干推送会再完整运行一次。
+`Development checks` 中的 `CI required` 是分支规则唯一要求的检查，阻塞合并的任务清单写在该任务的 `needs` 中，增删检查只改工作流。PR 只改根目录指南、`docs/`、代理说明或 PR 模板时，构建与测试任务整体跳过，`quality` 照常运行；其余 PR、推送到主干及手动运行都执行完整检查。分支无须先与主干同步即可合并，合并后主干推送会再完整运行一次。
 
 双平台准备任务以 `native-tests` 运行不依赖官方档案的 `multi_runtime_contracts` 与 `multi_component_contracts`，工具路径取自已安装的受控 GCC、binutils、Git 及项目 uv 环境。其余原生套件需要授权的官方档案，仍由自托管 runner 上手动触发的 `acceptance.yml` 运行；PR 检查通过不代表这些套件通过。
 
@@ -64,7 +64,7 @@ cargo test --locked --manifest-path core/Cargo.toml --features native-tests
 
 需要保留 OS 的编译产物和进程日志时，设置 `AUTOSAR_OS_OUTPUT_DIRECTORY` 为新的结果目录，Cargo 测试按 suite 保存到该目录。单独调用 `autosar_tooling os` 可传 `--output-directory`。已有目录不会被覆盖；未指定时仍只保留失败现场。
 
-BMad 的兼容入口 `uv run --locked python -m autosar_tooling verify --scope all --base <基准提交>` 组合原有完整检查，不安装依赖，不编排另一套任务或写汇总报告。失败直接保留原输出和退出状态。
+完整检查入口 `uv run --locked python -m autosar_tooling verify --scope all --base <基准提交>` 组合原有完整检查，不安装依赖，不编排另一套任务或写汇总报告。失败直接保留原输出和退出状态。
 
 ## 隔离桌面与安装包
 

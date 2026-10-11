@@ -25,7 +25,7 @@ uv run --locked python -m autosar_tooling os --target windows-x64-controlled-v1 
 uv run --locked python -m autosar_tooling os --target linux-x64-controlled-v1 --suite all
 ```
 
-目标必须与当前执行宿主一致；可把 `all` 换成 `lifecycle`、`stack`、`nested-interrupts`、`time` 等共 26 个 suite。core 集成测试注册了同样的 26 个消费者。运行 Rust 测试前，将 `AUTOSAR_PYTHON` 设置为解释器的绝对路径。编译器和原生进程由 owner 管理并设置执行期限，失败时保留独立工作区、stage/vector、stdout/stderr 和 PID 状态。Linux 单个 harness 最多 10 秒，自动 tick 和 Windows timer 不能驱动汽车时间；每次接受的 1ms epoch 只推动一次实际 FreeRTOS tick。原生 stack suite 还运行独立 ARTI C 消费者和 ELF64 符号／ucontext 断言，Windows 保留 PE/TLS 与原生栈检查。验证结果与阶段状态记录在对应 BMad spec 中。
+目标必须与当前执行宿主一致；可把 `all` 换成 `lifecycle`、`stack`、`nested-interrupts`、`time` 等共 26 个 suite。core 集成测试注册了同样的 26 个消费者。运行 Rust 测试前，将 `AUTOSAR_PYTHON` 设置为解释器的绝对路径。编译器和原生进程由 owner 管理并设置执行期限，失败时保留独立工作区、stage/vector、stdout/stderr 和 PID 状态。Linux 单个 harness 最多 10 秒，自动 tick 和 Windows timer 不能驱动汽车时间；每次接受的 1ms epoch 只推动一次实际 FreeRTOS tick。原生 stack suite 还运行独立 ARTI C 消费者和 ELF64 符号／ucontext 断言，Windows 保留 PE/TLS 与原生栈检查。
 
 真实 dispatcher 使用32槽Os_InterruptVectorTable；Windows生成工程交付该源码及第14个受控补丁，Linux OS harness 从固定 POSIX 原件应用受控补丁。两目标都链接到256字节可重定位、可写的.os_vec段，分别检查PE或ELF的实际符号与段绑定。
 

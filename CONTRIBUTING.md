@@ -37,7 +37,7 @@ After modifying delivery assets, run `uv run --locked python -m autosar_tooling 
 
 Review the entire diff before submitting, including new files and generated content. Use a title that describes the actual change. Explain the problem, changes, verification, and untested scope in the PR. Include actual screenshots for interface changes. Do not commit official downloads, personal configuration, or temporary test artifacts. Limit conclusions from host tests to host capabilities.
 
-Use an isolated environment for real GUI acceptance without occupying a developer's active desktop. BMad tracks project specifications and status; it is not a prerequisite for starting or modifying the project.
+Use an isolated environment for real GUI acceptance without occupying a developer's active desktop. Work is tracked in GitHub Issues and Milestones; see [docs/roadmap.md](docs/roadmap.md) for direction and [docs/architecture.md](docs/architecture.md) for design constraints.
 
 ## Interface text and languages
 
