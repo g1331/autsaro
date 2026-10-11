@@ -1056,13 +1056,13 @@ So that 工程交付可以脱离原作者工作区复验。
 
 ## Epic 9: 运行时、生成 C 与开发工程体系整顿
 
-**状态与位置：**backlog；Epic 8 后、R11 消费者实施前。来源为 2026-10-10 用户授权，覆盖 QLT-1–QLT-5；不复用旧编号、不重开已完成 Epic。
+**状态与位置：**in-progress；Epic 8 后、R11 消费者实施前。来源为 2026-10-10 用户授权，覆盖 QLT-1–QLT-5；不复用旧编号、不重开已完成 Epic。2026-10-11 按[变更提案](sprint-change-proposal-2026-10-11.md)收敛为单一主线并新增基线 Story 9.21–9.28。
 
-**用户成果：**BSW／生成器开发者能按清楚的模块契约和状态归属维护全部现有交付代码，按正常入口获得快速且可信的开发反馈；接收者获得已完成适用标准整改、独立行为回归和持续源码门禁保护的工程。
+**用户成果：**BSW／生成器开发者在一条按职责组织、不含开发计划编号的生成主线上，按清楚的模块契约和状态归属维护全部交付代码，按正常入口获得快速且可信的开发反馈；接收者获得已完成适用标准整改、独立行为回归和持续源码门禁保护的工程。
 
-**完整范围：**已交付 legacy host、单组件与多组件 profile 及 Windows／Linux 受控目标；自有 runtime、生成 C、Rust 渲染／C 模板、共享类型、配置模型及内置定义、交付 ABI／清单与离线工具、固定内核／补丁／主机适配的直接依赖链；受影响的模块／生成／进程／原生／交接测试和正常开发／CI 入口。逐角色核定义务，采用代码不自动排除。范围不能只缩成标准 ECU 演示，也不包含未选网络、全部可选变体、MCU 实现或界面重设计。
+**完整范围：**先收敛：新生成工程统一走主线（单组件即 SWC 数为 1），删除帧／信号 host 链路、单组件链路与外部 XSD／MOD 校验模式，去除 Epic／Story 编号和“multi”命名，测试与工具归入正常框架，建立静态检查与生成管线门槛。再在主线及 Windows／Linux 受控目标上整改：自有 runtime、生成 C、Rust emitter／C 模板、共享类型、配置模型及内置定义、交付 ABI／清单与离线工具、固定内核／补丁／主机适配的直接依赖链；受影响的模块／生成／进程／原生／交接测试和正常开发／CI 入口。逐角色核定义务，采用代码不自动排除。稳定版本发布前不保留旧 profile／旧格式工程的兼容，旧工程明确拒绝。范围不包含未选网络、全部可选变体、MCU 实现或界面重设计。
 
-**进入条件：**最新共享基线与已完成回顾整改已核对；[基线与架构](architecture/epic-9/ARCHITECTURE-SPINE.md)及[实施规格](../specs/spec-runtime-codegen-quality/SPEC.md)已形成，以下 20 条 Story 按真实模块／机制分解。模块实施前仍须补齐对应合法规范、已确认缺口、独立向量、工具、兼容审阅及工作量；未知诊断不直接转成实现清单。整体实施就绪保持 CONCERNS，逐项检查后才能 ready-for-dev。
+**进入条件：**最新共享基线与已完成回顾整改已核对；[基线与架构](architecture/epic-9/ARCHITECTURE-SPINE.md)及[实施规格](../specs/spec-runtime-codegen-quality/SPEC.md)已形成，以下 28 条 Story 按真实模块／机制分解，其中 9.21–9.28 为先行的基线收敛 Story。模块实施前仍须补齐对应合法规范、已确认缺口、独立向量、工具、兼容审阅及工作量；未知诊断不直接转成实现清单。整体实施就绪保持 CONCERNS，逐项检查后才能 ready-for-dev。
 
 ### Epic 9 需求与拆分依据（2026-10-10）
 
@@ -1070,8 +1070,8 @@ So that 工程交付可以脱离原作者工作区复验。
 
 | 需求 | 可验收成果 | 规格及架构约束 |
 | --- | --- | --- |
-| QLT-1 | 三族工程、双目标、实际程序及直接依赖的完整适用契约，独立正反预期 | CAP-1／3；AD-1／2／5 |
-| QLT-2 | 模块状态责任、标准／私有／host 边界、单一生成来源、完整兼容迁移 | CAP-2；AD-2–4 |
+| QLT-1 | 主线工程、双目标、实际程序及直接依赖的完整适用契约，独立正反预期 | CAP-1／3；AD-1／2／5 |
+| QLT-2 | 单一主线、模块状态责任、标准／私有／host 边界、单一生成来源、按职责命名的结构与旧工程明确拒绝 | CAP-2；AD-2–4 |
 | QLT-3 | 真实违反关闭、误报／不适用有依据，221 项必要人工及采用代码核查完成 | CAP-3；AD-5／8 |
 | QLT-4 | 正常入口分层验证，成功／拒绝／恢复及旧行为保留，三类修改快速反馈实测 | CAP-4；AD-6 |
 | QLT-5 | 同覆盖成本实测、每轮完整分析、实际必需源码门阻止错误合并 | CAP-5；AD-7 |
@@ -1099,7 +1099,7 @@ So that 工程交付可以脱离原作者工作区复验。
 **退出条件：**
 
 1. 已交付范围全部核对，适用 AUTOSAR 软件差距及 MISRA 真实违反关闭；必要人工评估完成。标准接口及成功／拒绝／恢复状态有独立预期和实际结果。目标为消除偏离，无法消除项保持阻塞；本次不批准任何偏离。
-2. 结构与生成来源按已审设计迁移，所有受影响 profile 重新生成并以其交付头文件编译／链接／运行，用户源码、配置往返、来源与完整性、旧工程兼容／必要显式迁移成立，ABI 不被资产摘要更新掩盖。
+2. 新基线达成（9.21–9.28 done）：只剩一条按职责命名的生成主线，产品／测试／工具中 Epic／Story 编号检查为零，旧工程明确拒绝；结构与生成来源按已审设计迁移，主线重新生成并以其交付头文件编译／链接／运行，用户源码、配置往返、来源与完整性成立，ABI 与第三方身份经审阅，不被资产摘要更新掩盖。
 3. 快速反馈与完整集成各有清楚入口；有效平台、配置、错误及恢复覆盖保持，测试能从团队正常入口复现且不依赖代理会话。原生行为如实际受影响必须隔离验证，不借单测替代。
 4. 正常 PR 严格 C 源码检查实际阻止违规、扫描不完整／工具失败和必需任务跳过／取消；所有完整样本与程序闭包保留，源码结果缓存不被复用为本轮通过。完成所需必需检查／保护接线验证，未接入必需状态时不判完成。
 5. CI 优化按可比完整运行核对实际耗时、覆盖、稳定性和资源成本；不预承诺百分比、不单纯延长超时。非实现者新目录复验及正常 PR／必要 CI 完成，结果回到对应规格和 sprint。
@@ -1108,15 +1108,17 @@ R11 需求调查、标准研究及目标可行性调查可先行；R11 依赖现
 
 ### Epic 9 Story 清单与共同验收
 
-以下 20 条是正式 Story 规划，状态均为 **backlog**；具体实施就绪由 Sprint Planning 按各项进入条件判断。模块故事有明确的责任范围，未知诊断不会自动变成实现清单。开发规格须先核定对应缺口及工作量；若无法由一次独立开发交付闭合，应在实施前按已确认机制继续拆小并保留覆盖，不以“部分完成”关闭原验收。
+以下 28 条是正式 Story 规划；9.1、9.2 已 done，其余为 **backlog**。执行顺序为 9.21–9.28（新基线）→ 9.3–9.15 → 9.16–9.20，编号不代表执行先后；具体实施就绪由 Sprint Planning 按各项进入条件判断。模块故事有明确的责任范围，未知诊断不会自动变成实现清单。开发规格须先核定对应缺口及工作量；若无法由一次独立开发交付闭合，应在实施前按已确认机制继续拆小并保留覆盖，不以“部分完成”关闭原验收。
 
 共同依据为[工作范围](../specs/spec-runtime-codegen-quality/work-packages.md)、[工程实践](../specs/spec-runtime-codegen-quality/generator-practices.md)和 Epic 9 AD-1–8。下面的源码位置是调查及修改落点，具体 source/header/宏/patch/main 选集须在任务进入时固定。
 
-**9.2–9.16 的共同进入与完成要求：**
+**9.3–9.16 的共同进入与完成要求（9.2 已按原要求完成）：**
+
+0. 9.21–9.28 定义的新基线达成后才进入；模块整改只在主线上进行，不再为已删除的帧／信号 host、单组件链路或旧 profile 保留实现、兼容或回归。下文源码路径记录的是 2026-10-10 的位置，9.22、9.23、9.26 迁移后以新位置为准。
 
 1. 进入前核对对应模块合法固定原文、适用 API／配置／状态／错误／回调／描述／MemMap 与直接上下层，写清真实差距和独立成功／拒绝／恢复预期。缺资料阻塞对应标准化实施；已证明兼容的整理可单独准备，不能借此关闭标准出口。
 2. 每次迁移同时处理实际 C／头文件、Rust 模板或 emitter、配置模型／内置定义、调用方、target 选集、ABI／资产和离线工具。标准公共、模块私有及 host／测试接口分离；改公开签名、布局、句柄或 wire 前须完成兼容审阅及对应授权，旧封存包不重新盖章。
-3. 从固定规范独立定义 C consumer 与行为向量，先验证护栏再迁移；重新生成所有受影响 legacy／single／multi 配置及 Windows/Linux 支持目标，按每个实际 main 编译、链接和运行。共同生成检查使用 `cargo test --locked --manifest-path core/Cargo.toml --test c_analysis`；受影响封存工程通过 `uv run --locked python -m autosar_tooling c-check --target <target> --project <project> --output-directory <fresh-directory>`。工具先预检，缺条件记为未执行。
+3. 从固定规范独立定义 C consumer 与行为向量，先验证护栏再迁移；重新生成主线所有受影响配置（含单 SWC 与多 SWC）及 Windows/Linux 支持目标，按每个实际 main 编译、链接和运行。共同生成检查使用 `cargo test --locked --manifest-path core/Cargo.toml --test c_analysis`；受影响封存工程通过 `uv run --locked python -m autosar_tooling c-check --target <target> --project <project> --output-directory <fresh-directory>`。工具先预检，缺条件记为未执行。
 4. MISRA 自动诊断与 221 项适用性／必要人工检查随模块进行，真实违反、误报、不适用及未知分开；采用代码不自动豁免。记录 source/profile/target/main 和依据，真实违反未消除或人工未完成时对应故事出口保持阻塞，无批量 suppression、规则降级或 Agent 批准偏离。
 5. 维护用户源码、配置往返、旧行为、所有权和完整性拒绝。实际影响保存／IPC 时执行既有隔离原生场景。结果回到对应 BMad Story／规格和正常测试／CI 工件；重复测试只有证明独立风险覆盖相同才删除。
 
@@ -1208,9 +1210,9 @@ So that 配置或驱动改动可以通过局部检查定位。
 
 **覆盖：**QLT-1–4；CAP-1–4；AD-1–6。**依赖：**9.1；9.2；受影响执行接缝消费9.3。
 
-**实际范围：**legacy／multi CanIf源码、public/private/SchM/MemMap头；`integration/{communication,multi_bsw,multi_ecu}.rs`；Can／LSduR／mode消费者。
+**实际范围：**主线 CanIf 源码、public/private/SchM/MemMap头；对应通信与 BSW 配置 emitter；Can／LSduR／mode消费者。
 
-**进入条件：**Init配置指针等全公共义务核定，旧frame-index ABI迁移经过审阅。**正常验证：**Cargo multi_runtime_contracts CanIf fixtures；独立C编译链接；生成工程build/verify；模块整改另须共同生成／c-check及旧行为回归。
+**进入条件：**Init配置指针等全公共义务核定，frame-index 等公开 ABI 变化经过审阅。**正常验证：**Cargo multi_runtime_contracts CanIf fixtures；独立C编译链接；生成工程build/verify；模块整改另须共同生成／c-check及旧行为回归。
 
 **Acceptance Criteria:**
 
@@ -1224,7 +1226,7 @@ So that 配置或驱动改动可以通过局部检查定位。
 
 **Given** 旧接口与新标准契约有差异，
 **When** 迁移源码、配置和全部直接消费者，
-**Then** 当前工程独立运行并保留旧包契约；摘要更新不能吸收破坏性变化。
+**Then** 当前工程独立运行，ABI 变化经审阅并写入 CHANGELOG；摘要更新不能吸收破坏性变化。
 
 ### Story 9.5: 整理 LSduR 与 PduR 路由和缓冲契约
 
@@ -1234,7 +1236,7 @@ So that 上下层句柄和缓冲错误能在模块级发现。
 
 **覆盖：**QLT-1–4；CAP-1–4；AD-2–6。**依赖：**9.1；9.4 的下层接口；使用9.3执行端口。
 
-**实际范围：**legacy／multi LSduR、PduR及头；`integration/routing.rs`、`multi_ecu.rs`；Com／CanIf／CanTp／Dcm消费者。
+**实际范围：**主线 LSduR、PduR及头；路由与 ECU 配置 emitter；Com／CanIf／CanTp／Dcm消费者。
 
 **进入条件：**上下层callback唯一生产者和各方向handle身份明确。**正常验证：**Cargo multi_runtime_contracts路由／TP fixtures及multi_component_contracts；独立函数指针consumer；模块整改另须共同生成／c-check及旧行为回归。
 
@@ -1260,7 +1262,7 @@ So that 小配置改动无需多处修补且保留通信行为。
 
 **覆盖：**QLT-1–4；CAP-1–4；AD-2–6。**依赖：**9.1 的COM/RTE声明；9.5路由契约。
 
-**实际范围：**legacy `runtime/src/Com.c`及include、multi Com及Com_Internal／MemMap；`integration/{multi_com,multi_rte,multi_ecu,ecu}.rs`；RTE／PduR／Dem。
+**实际范围：**主线 Com及Com_Internal／MemMap；COM、RTE 与 ECU 配置 emitter；RTE／PduR／Dem。
 
 **进入条件：**标准初值／DM／group及下层义务核定，RTE notification唯一producer已固定。**正常验证：**Cargo multi_runtime_contracts／multi_component_contracts；真实信号工程及封存verify；模块整改另须共同生成／c-check及旧行为回归。
 
@@ -1272,11 +1274,11 @@ So that 小配置改动无需多处修补且保留通信行为。
 
 **Given** group stop/start及下层发送失败，
 **When** 查询并继续通信，
-**Then** COM_STOPPED与下层TX错误不混用；legacy同步确认和gate保持。
+**Then** COM_STOPPED与下层TX错误不混用，确认与 gate 语义符合独立向量。
 
 **Given** 修改一个COM配置规则，
-**When** 校验并重新生成受影响三族工程，
-**Then** 只由权威计划与模块emitter表达语义，独立RTE消费者、确定顺序及旧配置回归成立。
+**When** 校验并重新生成受影响主线工程（单 SWC 与多 SWC），
+**Then** 只由权威计划与模块emitter表达语义，独立RTE消费者、确定顺序及既有配置回归成立。
 
 ### Story 9.7: 整理 CanTp 传输与可信计时
 
@@ -1286,9 +1288,9 @@ So that 协议边界错误能够独立复现并恢复。
 
 **覆盖：**QLT-1–4；CAP-1–4；AD-2–6。**依赖：**9.1；9.5路由及回调契约；9.3可信执行时基。
 
-**实际范围：**legacy／multi CanTp及SchM／MemMap；routing和配置emitter；LSduR／PduR／Dcm。
+**实际范围：**主线 CanTp及SchM／MemMap；routing和配置emitter；LSduR／PduR／Dcm。
 
-**进入条件：**按profile核定DLC／WAIT／payload及完整已支持TP义务。**正常验证：**Cargo multi_runtime_contracts TP fixtures；Python protocol suites；实际ecu-tool行为；模块整改另须共同生成／c-check及旧行为回归。
+**进入条件：**核定主线 DLC／WAIT／payload及完整已支持TP义务。**正常验证：**Cargo multi_runtime_contracts TP fixtures；Python protocol suites；实际ecu-tool行为；模块整改另须共同生成／c-check及旧行为回归。
 
 **Acceptance Criteria:**
 
@@ -1312,7 +1314,7 @@ So that 诊断配置改动可局部验证且保留旧服务。
 
 **覆盖：**QLT-1–4；CAP-1–4；AD-2–6。**依赖：**9.1固定mode／Security／Dem接口；9.5／9.7传输；9.3执行。
 
-**实际范围：**legacy／multi Dcm、Dcm_Internal／Rte_Dcm_Type；host Dcm_Execution；`integration/{diagnostic,multi_mode,multi_rte,multi_ecu}.rs`与ecu模板；RTE／mode／Security／Dem既有消费者。
+**实际范围：**主线 Dcm、Dcm_Internal／Rte_Dcm_Type；host Dcm_Execution；诊断、mode、RTE 与 ECU 配置 emitter 及 ecu 模板；RTE／mode／Security／Dem既有消费者。
 
 **进入条件：**适用Dcm服务与直接依赖核定，已存在消费者随接口变化同步，不等待后续重组。**正常验证：**multi diagnostic_contract／diagnostic_queued_contract fixtures；Python diagnostic／protocol suites；ecu-tool verify；模块整改另须共同生成／c-check及旧行为回归。
 
@@ -1390,7 +1392,7 @@ So that 存储失败不会被误报为成功。
 
 **覆盖：**QLT-1–4；CAP-1–4；AD-2–6。**依赖：**9.1的NvM/Dem接口；9.2平台锁边界。
 
-**实际范围：**legacy NvM及NvM_HostStorage.*、相关头；配置生成与资产；Dem／Dcm既有消费者。
+**实际范围：**主线 NvM及NvM_HostStorage.*（由 9.22 自 legacy 移入）、相关头；配置生成与资产；Dem／Dcm既有消费者。
 
 **进入条件：**NvM所选软件义务、主机存储责任及上下层必需依赖核定。**正常验证：**Python native及diagnostic持久回归；独立C consumer；封存工程重启验证；模块整改另须共同生成／c-check及旧行为回归。
 
@@ -1416,7 +1418,7 @@ So that 监测和诊断修改不会破坏故障恢复。
 
 **覆盖：**QLT-1–4；CAP-1–4；AD-2–6。**依赖：**9.1；9.11持久接口；9.6监测及9.8诊断接缝。
 
-**实际范围：**legacy Dem源码／头及配置生成；Com监测／Dcm／NvM；runtime资产。
+**实际范围：**主线 Dem源码／头（由 9.22 自 legacy 移入）及配置生成；Com监测／Dcm／NvM；runtime资产。
 
 **进入条件：**Dem全部支持配置与DTC服务条件核定。**正常验证：**Python diagnostic／protocol及native持久向量；独立C consumer；ecu-tool verify；模块整改另须共同生成／c-check及旧行为回归。
 
@@ -1442,7 +1444,7 @@ So that 兼容整理不会泄露密钥或改变会话授权。
 
 **覆盖：**QLT-1–4；CAP-1–4；AD-2–6。**依赖：**9.1；9.8的既有Security接口；实际持久消费者接缝采用9.11。
 
-**实际范围：**legacy Security.c／Security.h与BCrypt依赖；generator/render安全配置与Dcm消费者、交付工具。
+**实际范围：**主线 Security.c／Security.h（由 9.22 自 legacy 移入）与BCrypt依赖；主线安全配置 emitter（原 generator/render 的安全配置由 9.22／9.23 迁入）与Dcm消费者、交付工具。
 
 **进入条件：**项目安全责任与所调用标准链核定；Windows适用工具前置具备。**正常验证：**Windows实际Security／diagnostic／native向量及独立C consumer；配置拒绝Cargo tests；模块整改另须共同生成／c-check及旧行为回归。
 
@@ -1512,23 +1514,23 @@ So that 改共享类型或规则时无需多处解释同一语义。
 **When** 重新预览、生成或使用已有局部复用，
 **Then** 失效身份不发布旧结果，普通生成不需要官方档案／compiler；缓存若新增必须证明失效及冷暖等价。
 
-### Story 9.16: 验证兼容交付、旧工程与离线工具
+### Story 9.16: 验证主线交付与离线工具
 
 As a 工程接收者,
 I want 获得可搬移、可复验且保护用户源码的整理后工程,
 So that 能够沿普通工具独立接手。
 
-**覆盖：**QLT-2–4；CAP-2／4／6；AD-1／4／6。**依赖：**9.2–9.15全部模块闭合；9.1兼容决策。
+**覆盖：**QLT-2–4；CAP-2／4／6；AD-1／4／6／9。**依赖：**9.3–9.15全部模块闭合；9.21–9.28 新基线（交付布局与 CMake 构建描述由 9.28 建立，本 Story 验证其在全部模块整改后仍成立）。
 
-**实际范围：**core/src/{prepared,resources,target}.rs、generator/delivery与ownership/reopen；runtime/contracts及ecu_tools资产；runtime/ecu-tool.py与build/verify/reference/workbench_v2实现。
+**实际范围：**准备、资源、target 与交付（delivery／ownership／reopen）模块；runtime/contracts及ecu_tools资产；包内 ecu-tool 与 build/verify/reference 实现（9.26 后的名称）。
 
-**进入条件：**ABI与第三方身份经过独立审阅，迁移格式及授权已具备。**正常验证：**Cargo delivery/ownership/reopen与official-oracles；Python native/test_offline_delivery.py；包内python tools/ecu-tool.py build及verify；模块整改另须共同生成／c-check及旧行为回归。
+**进入条件：**ABI与第三方身份经过独立审阅，当前交付格式版本已在格式版本表中固定。**正常验证：**Cargo delivery/ownership/reopen与official-oracles；Python native/test_offline_delivery.py；包内python tools/ecu-tool.py build及verify；模块整改另须共同生成／c-check及旧行为回归。
 
 **Acceptance Criteria:**
 
-**Given** 旧v1／新v2多槽工程与用户live源码，
+**Given** 当前格式的单 SWC／多 SWC 工程与用户live源码，
 **When** 保存重开、搬移、预览并再次生成，
-**Then** 原字节和用户文件保持，create-only及外部修改使确认失效，旧seal不静默升级。
+**Then** 原字节和用户文件保持，create-only及外部修改使确认失效；旧 profile／旧格式工程和交付包被明确拒绝，不被改写。
 
 **Given** 篡改、额外文件、链接／reparse point或路径冲突，
 **When** 校验与生成／构建，
@@ -1544,7 +1546,7 @@ As a 项目开发者,
 I want 按改动找到最小有效检查与清楚的失败现场,
 So that 减少重复修改和等待完整CI的时间。
 
-**覆盖：**QLT-4；CAP-4；AD-3／6。**依赖：**9.1及现有测试；调查可立即开展，模块覆盖调整跟随已完成owner故事。
+**覆盖：**QLT-4；CAP-4；AD-3／6。**依赖：**9.1；9.24 的测试分层与工具归位；调查可立即开展，模块覆盖调整跟随已完成owner故事。
 
 **实际范围：**core/tests、tests/python、tests/desktop、autosar_tooling既有quality/verify/acceptance；docs/development/testing.md及environment。
 
@@ -1570,7 +1572,7 @@ As a 团队维护者,
 I want 按实测阶段优化CI关键路径和缓存复用,
 So that 在完整覆盖下缩短等待并保持失败可解释。
 
-**覆盖：**QLT-5；CAP-5；AD-7。**依赖：**现有CI日志及9.1身份范围；调查可并行，采用9.17反馈测法。
+**覆盖：**QLT-5；CAP-5；AD-7。**依赖：**现有CI日志及9.1身份范围；9.23 删除后由 9.24 重定的主线样本集；调查可并行，采用9.17反馈测法。
 
 **实际范围：**checks.yml、native-analysis-compiler action、c_check/c_addon及生成样本入口；按实际需要的现有workflow。
 
@@ -1584,7 +1586,7 @@ So that 在完整覆盖下缩短等待并保持失败可解释。
 
 **Given** 确有可去除重复或独立平台producer，
 **When** 在现有Actions／工具中优化，
-**Then** 保持双目标六样本8分组12摘要和所有main，真实头宏／补丁副本／seal严格；不合并不同程序CTU或缓存通过结果。
+**Then** 保持 9.24 重定的双目标完整主线样本和所有main，真实头宏／补丁副本／seal严格；不合并不同程序CTU或缓存通过结果。
 
 **Given** 优化前后覆盖和工具身份可比，
 **When** 读取完整运行及资源／失败数据，
@@ -1624,7 +1626,7 @@ So that 后续功能有真实可用的开发与交付基础。
 
 **覆盖：**QLT-1–5及Epic9出口；CAP-1–6；AD-1–8。**依赖：**9.1–9.19完整结果；未关闭项返回所属故事。
 
-**实际范围：**全部三族支持配置、Windows/Linux实际交付、正常工作台及离线工具；对应规格／Story／CI证据。
+**实际范围：**主线全部支持配置（单 SWC 与多 SWC）、Windows/Linux实际交付、正常工作台及离线工具；对应规格／Story／CI证据。
 
 **进入条件：**非实现者参与，工具／规范／兼容审阅和全部必要人工就绪。**正常验证：**正常配置往返／生成、包内ecu-tool build/verify、独立模块向量、受影响隔离desktop及真实PR门；模块整改另须共同生成／c-check及旧行为回归。
 
@@ -1632,7 +1634,7 @@ So that 后续功能有真实可用的开发与交付基础。
 
 **Given** 仅从明确交付及支持工具开始，
 **When** 在新目录编辑保存重开、生成并独立构建每个受影响程序，
-**Then** CAN／诊断／调度成功、拒绝和恢复成立，用户源码／旧工程及完整性保护由非实现者复验。
+**Then** CAN／诊断／调度成功、拒绝和恢复成立，用户源码、旧工程明确拒绝及完整性保护由非实现者复验。
 
 **Given** 交付包搬移且checkout不可用，
 **When** 离线复验并核查受影响真实IPC，
@@ -1642,18 +1644,237 @@ So that 后续功能有真实可用的开发与交付基础。
 **When** 核对Epic退出并更新正常BMad状态，
 **Then** 未核查／失败／缺人工返回owner，全部通过后才关闭Epic9和放行R11消费者；仅真实硬件剩余项带依据及判据交后续阶段。
 
+### Story 9.21: 让主线接管单组件工程
+
+As a 工作台使用者,
+I want 从任何模板新建的工程都走同一条生成主线,
+So that 单组件和多组件工程获得一致的能力与后续整改。
+
+**覆盖：**QLT-1／2／4；CAP-2／4；AD-1／3／4。**依赖：**9.1、9.2 已完成成果；可立即开始。风险最高，先于其他基线 Story。
+
+**实际范围：**`integration/multi.rs` 的主线选择条件（现为 SWC 类型数 `> 1`）及主线计划、连接、调度、RTE 和应用槽生成中对“至少两个组件”的假设；内置模板 `standard-ecu-v1`（`arxml/project.rs`）、桌面内置场景、交付 README 文案和离线工具中对单组件 profile 的引用；新的按能力命名的 profile 与交付身份。
+
+**进入条件：**列出主线中依赖多组件的分支和单组件链路现有的独立预期（输入、协议、OS 时序），确定迁到主线后的预期；按固定 R24-11 RTE SWS 核对只有一个 SWC 实例时 RTE 仍须满足的义务（端口 API、初始化、runnable 触发、无连接端口的行为），作为单 SWC 正反例的独立依据。**正常验证：**默认 Cargo tests；`--features native-tests` 的运行时与组件契约套件；最小单 SWC 正反例；内置模板端到端生成、构建与 `ecu-tool verify`；桌面内置场景隔离运行。
+
+**Acceptance Criteria:**
+
+**Given** 只含一个应用 SWC 的合法工程（含内置“标准 ECU”模板），
+**When** 校验、生成、构建并运行，
+**Then** 走主线计划与 emitter，产物使用新的 profile 与交付身份，原单组件链路已验证的行为（信号、诊断、调度）由迁移后的独立预期在主线上通过。
+
+**Given** 单 SWC 工程的非法输入（缺端口、悬空连接、冲突事件），
+**When** 校验，
+**Then** 在主线计划阶段以 `PlanDiagnostic` 拒绝并定位到源对象，不因“仅一个组件”出现 panic 或空产物。
+
+**Given** 工作台用旧 profile（`host-can-v1`、`epic4-win64-sr-cs-v1`）或旧交付格式的工程，
+**When** 打开或复验，
+**Then** 给出明确的“不再支持，请用当前版本重新创建”提示，不修改文件、不部分加载；该拒绝有正反测试。拒绝针对的是工作台工程与交付元数据，旧工程中的 R24-11 ARXML 源文件仍可作为输入导入新工程。
+
+### Story 9.22: 让主线拥有全部 BSW 来源
+
+As a BSW 维护者,
+I want 主线使用的每个模块都只有一份来源和一个 producer 身份,
+So that 后续整改只需修改一处。
+
+**覆盖：**QLT-1／2；CAP-1／2；AD-1／2／3。**依赖：**9.21。
+
+**实际范围：**主线目前借用的 `runtime/src` 模块（Can 及 Can_HostLock、Dem、NvM 及 NvM_HostStorage、Security、其余被主线选集引用者）与 `runtime/include` 头文件，迁入主线 BSW 目录；`integration` 中的 producer 身份与资产映射（含 Dcm 记录为 `runtime/src/Dcm.c`、实际用 `runtime/multi/src/Dcm.c` 的不一致）；原 `generator/render.rs` 中主线仍需要的安全／持久配置生成迁入主线 emitter；`runtime/contracts`、资产摘要与 target 选集。
+
+**进入条件：**主线选集的完整来源清单与 producer 映射已列出。**正常验证：**同 9.21，另加 `c_analysis` 生成样本与受影响 profile 的 `c-check`；ABI 与第三方身份审阅。
+
+**Acceptance Criteria:**
+
+**Given** 主线的完整程序闭包，
+**When** 核对来源与资产映射，
+**Then** 每个源文件和头文件只来自主线目录，producer 身份与实际字节一致，不再引用 legacy 目录。
+
+**Given** 来源迁移，
+**When** 重新生成并运行全部受影响 target／main，
+**Then** 行为不变（只改位置，不改语义），资源摘要变化与 ABI 审阅结论对应，9.2 的 Can 成果保持。
+
+### Story 9.23: 删除帧／信号 host 链路、单组件链路与外部档案模式
+
+As a 项目维护者,
+I want 仓库里只保留主线实现和一种校验方式,
+So that 每项能力只需维护和验证一次。
+
+**覆盖：**QLT-2／4；CAP-2／4；AD-1／4／6。**依赖：**9.21、9.22。
+
+**实际范围：**
+- 帧／信号 host 链路：模板 `can-empty-v1`、`can-signals-v1`，`prepare_host_project`、`generator/render.rs`、`arxml/host_profile.rs`、`core/src/host/`、“主机运行”页及其 IPC，`package_host_reference`、`runtime/reference-README.md` 等仅服务该链路的资产。
+- 单组件链路：`integration/ecu.rs`、`contracts.rs` 等单组件部分，`runtime/src` 剩余部分，`generate_epic4_ecu`。
+- 外部 XSD／MOD 校验模式：设置项、`schema_zip` 状态、`create_legacy`／`open_legacy`／`integration_plan_legacy` 等全部 `*_legacy` 链路与 legacy 计划入口；`schema.rs` 保留为测试与 acceptance 中的官方对照基准。
+- 受影响的 UI、帮助文本、README 与用户指南；需要空白起点时提供主线最小模板。
+
+**进入条件：**逐个列出将删除的测试，标明其中的独立预期（协议、OS 时序、输入、拒绝）已迁到主线并通过，或说明它只验证 legacy 内部行为；Windows 并行 `E_OS_STATE` 已在主线复现或证明只属 legacy。**正常验证：**全部默认测试、UI 测试、原生契约套件；桌面隔离场景覆盖新建、打开旧工程被拒绝、设置页；本地 Linux 与 Windows 运行受影响原生套件；请维护者触发 acceptance。
+
+**Acceptance Criteria:**
+
+**Given** 删除完成，
+**When** 搜索产品、测试与工具，
+**Then** 不存在帧／信号 host、单组件 profile 与 `*_legacy` 校验的实现、入口或死代码，已迁移的独立预期仍在主线上通过。
+
+**Given** 保存过 XSD／MOD 路径的旧设置，
+**When** 启动并使用工作台，
+**Then** 不会启动失败，旧设置被忽略并有明确提示，普通配置与生成仍不需要官方档案。
+
+**Given** 官方档案可用，
+**When** 运行 `official-oracles`，
+**Then** 内置规则与官方 XSD 的对照仍可执行，不经过已删除的产品模式。
+
+**已知差距（随本 Story 产生）：**删除“主机运行”页后，工作台暂时不能运行生成的 ECU。影响：这期间主线 ECU 的主机行为只能通过包内 `ecu-tool verify` 和原生测试验证，用户帮助与 README 须同步说明。承接：Epic 9 之后的工作台 Story，基于 9.3 稳定后的 host-batch 执行契约在主线上重做，不复用已删除的 host 链路。退出条件：在工作台内对主线 ECU 完成 CAN 收发与诊断请求的运行，结果与失败原因可见，并通过隔离原生场景验证。
+
+### Story 9.24: 让测试与开发工具回到正常入口
+
+As a 项目开发者,
+I want 所有测试都能用 cargo test、unittest、vitest 或 node:test 直接运行,
+So that 不需要先学习一套专用 CLI 才能复现和定位失败。
+
+**覆盖：**QLT-4／5；CAP-4／5；AD-6／9。**依赖：**9.23（避免迁移即将删除的测试）；可与 9.25 并行。
+
+**实际范围：**
+- 以 CLI 子命令或工具模块形式存在的测试与预期：`autosar_tooling` 的 `os`、arti、counter、`probe`，`acceptance/os_suites.py`、`input_oracles.py`、`protocol_oracles.py`、`bsw_catalog.py`，以及只测这些工具的 Python 测试。
+- 测试分层与组织：`core/tests` 按运行条件收成少数几个测试二进制（普通、`native-tests`、`official-oracles`），`multi_component_contracts.rs`（约 7000 行）等超大文件在二进制内部按能力拆成模块，不拆成许多顶层测试文件；`core/tests/support` 按功能命名，并按“必需 CI”和“手动 acceptance（需授权档案或真实环境）”重新划分；不依赖官方档案的主线原生行为全部进入必需 CI。
+- 主线 CI 样本集重定；`docs/development/testing.md` 同步。
+
+**进入条件：**每个迁移对象的独立预期与覆盖风险已列出。**正常验证：**迁移前后同一预期在新入口通过且能识别原错误（先注入已知错误验证）；本地 Linux 与 Windows 运行受影响原生套件；实测必需 CI 耗时。
+
+**Acceptance Criteria:**
+
+**Given** 迁移完成，
+**When** 查看开发 CLI，
+**Then** 只保留 `doctor`、`verify`、`quality`、`c-check`、`assets`；测试与预期全部位于正常测试运行器中，可按名称或 feature 直接筛选运行。
+
+**Given** 必需 CI 与手动 acceptance 重新划分，
+**When** 运行一次完整 PR，
+**Then** 主线不依赖官方档案的原生行为全部在必需检查中执行，手动层只包含确需授权档案或真实环境的测试，并有清单说明理由。
+
+**Given** 任一迁移后的测试失败，
+**When** 开发者从普通终端运行，
+**Then** 失败指出源对象、阶段或 producer 及原始退出状态，不需要代理会话或隐藏状态。
+
+### Story 9.25: 用标准驱动方式替换桌面隔离验收设施
+
+As a 维护者,
+I want 桌面端到端验收使用 Tauri 官方 WebDriver 和 runner 级隔离,
+So that 验收的真实性得到保证且设施可由普通开发者维护。
+
+**覆盖：**QLT-4；CAP-4；AD-6／9。**依赖：**9.23；可与 9.24 并行。
+
+**实际范围：**`autosar_tooling desktop` 及 `acceptance/` 下的 WindowStation、token、elevate、WFP、window、clipboard、dialog、media、memory 等 Win32 设施；`tests/desktop/*.mjs`（含约 2600 行的内置场景）；`desktop.yml`／`acceptance.yml` 中的桌面任务。
+
+**进入条件：**逐项列出现有设施保证的验收要求（不占用用户桌面、离线、无焦点抢占、剪贴板与对话框隔离、内存观察），并给出每项在替代方案中的落点；无法替代的项说明保留理由。**正常验证：**替代方案在 Linux 与 Windows 隔离 runner 上运行全部桌面场景；用一个故意失败的场景验证失败可见。
+
+**Acceptance Criteria:**
+
+**Given** 现有桌面验收要求清单，
+**When** 用 `tauri-driver`／WebDriver 与 `node:test` 在隔离会话或 runner 中运行，
+**Then** 每项要求都有对应保证或明确保留的设施，不退回用户桌面，也不修改宿主全局设置。
+
+**Given** 替换完成，
+**When** 统计桌面验收代码，
+**Then** 自写 Win32 隔离设施只保留确无替代的部分，场景按能力拆分，可用 `node --test` 直接筛选运行。
+
+### Story 9.26: 去除开发编号并按职责命名
+
+As a 接手开发者,
+I want 目录、模块、测试和工具名称直接说明职责,
+So that 不需要了解开发历史也能找到代码。
+
+**覆盖：**QLT-2／4；CAP-2／4；AD-9。**依赖：**9.23、9.24（减少改名量）。
+
+**实际范围：**
+- 去编号：产品代码、测试、fixture、工具、bin、目录名、测试名、读者文档中的 Epic／Story 编号，含交付身份、`include_str!` 引用测试目录的内置模板（移到产品资源目录并迁移对应 `.gitattributes` 规则）、`core/tests/support/epic4_*`／`epic7_*`、`fixtures/epic4*`、`.gitignore` 中的编号规则。
+- 去“multi”：`runtime/multi`、`integration/multi*.rs`、两个契约套件、fixture 目录与图片名，按职责命名（建议名见架构 AD-9 与 Structural Seed，最终名称在本 Story 规格中裁定）。
+- 根目录 Cargo workspace：虚拟 manifest，成员 `core`、`src-tauri`，只保留根目录 `Cargo.lock`，不搬到 `crates/`，不拆新 crate。
+- 版本与格式标识：只有持久化或交付格式带版本并登记在格式版本表中；模板 ID 等内部标识不带版本；本次为稳定版本前的破坏性重置，写入 CHANGELOG。
+- 同步 CI（`checks.yml` 中的必需套件名）、`docs/development/testing.md`、AGENTS.md、README、模块 README 与架构说明。
+- 在 `quality` 中加入检查：产品、测试与工具路径不得出现 Epic／Story 编号。
+
+**进入条件：**命名表经用户审阅，并按固定 R24-11 SWS BSW General（[SWS_BSW_00103]、[SWS_BSW_00006]、[SWS_BSW_00170]／[SWS_BSW_00171]）与 RTE 原文核对：标准模块的源文件、头文件、MemMap／SchM／Rte 头和内存段名称保持标准命名，改名只涉及目录、Rust 模块、测试、工具与项目私有文件。**正常验证：**全部默认与原生测试、UI 与桌面场景；本地 Linux 与 Windows 运行改名后的原生套件；`assets check`；请维护者触发 acceptance。
+
+**Acceptance Criteria:**
+
+**Given** 改名完成，
+**When** 运行 `quality` 的编号检查，
+**Then** 结果为零；故意加入一个 `epic4` 名称时检查失败。
+
+**Given** 新目录结构，
+**When** 开发者按 README 与测试说明从根目录运行 `cargo test --workspace` 等正常入口，
+**Then** 全部测试可运行，CI 必需套件名与文档一致。
+
+**Given** 交付身份与格式标识更换，
+**When** 生成并独立复验交付包，
+**Then** 新身份生效，格式版本表、资源摘要与 ABI 审阅结论一致，旧身份的包被明确拒绝。
+
+### Story 9.27: 用结构和静态检查守住生成规范
+
+As a 生成器开发者,
+I want 生成管线在结构上保证每个文件只有一个生成方，并由静态检查拦截 panic,
+So that 新代码不能再回到回读修补和随处 unwrap 的写法。
+
+**覆盖：**QLT-2／4；CAP-2／4；AD-3／9。**依赖：**9.26。
+
+**实际范围：**主线 emitter 与计划之间的组织方式：每个输出文件登记唯一生成方；跨模块需要的内容（MemMap 段、SchM 声明、类型补充）在计划阶段汇总后交给生成方；消除对已生成 C 的回读与 `replace` 修补（如原 `multi_ecu.rs:93-141`）。`Cargo.toml` `[lints]`：启用 clippy 默认集；生成与集成模块 deny `unwrap_used`、`expect_used`、`panic`；其他模块记录现有告警基线并只允许减少。`generator-practices.md` 的规范同步到实现。
+
+**进入条件：**现有回读修补点与 panic 点清单。**正常验证：**默认与原生测试；生成产物逐字节比较（结构调整前后应一致，除非另有审阅的差异）；CI clippy 门槛实际拦截一个故意加入的 `unwrap`。
+
+**Acceptance Criteria:**
+
+**Given** 任一输出文件，
+**When** 两个 emitter 试图写入它，或 emitter 读取已生成的 C 文本，
+**Then** 计划或测试在生成前拒绝，不能通过字符串替换绕过。
+
+**Given** 计划无法保证的前提（缺少映射、计数不符），
+**When** 生成，
+**Then** 返回 `PlanDiagnostic` 并定位到源对象，生成与集成模块中不存在 `unwrap`／`expect`／`panic!`，CI 对新增违例失败。
+
+**Given** 结构调整完成，
+**When** 重新生成全部主线样本，
+**Then** 产物与调整前逐字节一致，或差异已逐项审阅并写入对应 Story。
+
+### Story 9.28: 按所有权组织生成工程
+
+As a 工程接收者,
+I want 生成的工程按静态 BSW、生成物、用户代码和适配层分目录，并能用标准构建工具打开,
+So that 看目录就知道文件归谁、能不能改，并能用自己的 IDE 和 CI 构建。
+
+**覆盖：**QLT-2／4；CAP-2／4／6；AD-1／3／4／9。**依赖：**9.27（不回读修补后，每个生成文件的归属已唯一）。
+
+**实际范围：**交付路径映射（`prepared.rs` 的 `deliver_path` 等）、资产选集与 `target.json`、所有权台账、完整性清单、交付 README、包内 `ecu-tool` 与离线复验；目标布局见架构 Structural Seed 的“生成工程布局”。由当前在生成时补内容的模块头（如 `Com.h`）改为静态头加独立生成头；MemMap 头统一由生成提供。新增 SWC 骨架（不参与编译）与从 `target.json` 生成的 CMake 构建描述。
+
+**进入条件：**逐个文件核定归属（静态 BSW、OS／内核、生成物、用户快照、适配层、元数据）；按 R24-11 SWS BSW General、RTE、Memory Mapping 核对标准文件名与 MemMap 提供方式（[SWS_MemMap_00029]／[SWS_MemMap_00032]）。**正常验证：**重新生成主线样本并比较：只有路径变化、文件内容不变（有意变化逐项审阅）；`ecu-tool build/verify` 与 CMake 构建在 Linux 和 Windows 上编译同一组源文件并通过；新目录离线复验；`assets check`；ABI 与第三方身份审阅。
+
+**Acceptance Criteria:**
+
+**Given** 一个多 SWC 主线工程，
+**When** 生成交付包，
+**Then** 静态 BSW 在 `bsw/`，OS 与内核在 `os/`、`kernel/`，全部配置生成物（含 `*_MemMap.h`、`Rte*`、`SchM_*`、`*_Cfg.h`、`*_PBcfg.c`）在 `generated/`，SWC 骨架在 `generated/templates/` 且不参与编译，用户代码快照在 `app/<SWC>/`，元数据在 `meta/`；标准文件名不变。
+
+**Given** 修改配置后重新生成，
+**When** 比较前后两个交付包，
+**Then** 只有 `generated/`、`app/` 快照和 `meta/` 发生变化，其余目录逐字节不变；手改任一只读目录都会被完整性校验拒绝。
+
+**Given** 接收者只有交付包和受支持的工具链，
+**When** 用生成的 CMake 描述或 `ecu-tool` 构建，
+**Then** 两者使用 `target.json` 中同一组源文件、头文件路径与参数，构建结果一致；`ecu-tool` 仍负责固定工具链身份校验与独立复验，README 说明用户代码应在 live 工程中修改。
+
+**Given** 将来接入 MCU 目标，
+**When** 需要编译器相关的段指令，
+**Then** 规格已写明集成层可通过显式配置声明覆盖 MemMap，不手改生成文件；本 Story 只实现主机目标。
+
 ### 任务覆盖与进入顺序
 
 | 需求／成果 | Story 覆盖 |
 | --- | --- |
 | QLT-1 完整契约与独立预期 | 9.1–9.16、9.20 |
-| QLT-2 结构／生成来源与完整兼容迁移 | 9.1–9.16、9.20 |
+| QLT-2 单一主线、结构／生成来源与旧工程明确拒绝 | 9.1–9.16、9.20–9.27 |
 | QLT-3 MISRA诊断／人工／采用代码 | 各模块9.2–9.16的共同验收；9.1依据、9.19严格门、9.20出口 |
-| QLT-4 快速反馈、旧行为及正常入口 | 9.2–9.17、9.20 |
+| QLT-4 快速反馈、既有行为及正常入口 | 9.2–9.17、9.20、9.24、9.25、9.27 |
 | QLT-5 CI效率及严格必需保护 | 9.18、9.19、9.20 |
 | CAP-1／2／3／4／5／6 | 依次为9.1–15／9.2–16／9.1–16与19／9.2–17／9.18–19／9.16与20 |
 
-优先准备 9.1 的共享契约和模块进入依据；9.17、9.18 的现状调查可以同期进行。模块按真实接口依赖推进，9.16汇总兼容交付，9.19在源码与人工整改完成后启用严格门，9.20由非实现者复验出口。不能把所有模块先绑成一个大重构，也不能为并行忽略共同文件和声明owner。
+9.1、9.2 已完成。先完成 9.21–9.28 新基线：9.21 → 9.22 → 9.23 → 9.24／9.25（可并行）→ 9.26 → 9.27 → 9.28，每步合并后 master 保持绿色；9.17、9.18 的现状调查可以同期进行。模块按真实接口依赖推进，9.16汇总兼容交付，9.19在源码与人工整改完成后启用严格门，9.20由非实现者复验出口。不能把所有模块先绑成一个大重构，也不能为并行忽略共同文件和声明owner。
 
 当前已知Q1合法原文、Q2必要ABI迁移、Q3诊断与人工、Q4性能和实际门禁效果分别由9.1及对应模块／9.16／模块共同验收与9.19／9.17–19承接。每个故事开工前补齐实际缺口、向量、工具和工作量；无法消除真实违反保持阻塞并提出具体替代方案，不交最终验收文字吸收。故事清单完成不改变现有支持声明或sprint状态。
 

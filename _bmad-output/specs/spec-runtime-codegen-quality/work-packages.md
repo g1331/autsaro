@@ -16,6 +16,22 @@
 - `runtime/contracts/{bsw-v1,assets-v1}.json`、`tools/python/src/ecu_tools/workbench-v2-assets.json`、固定第三方 manifests；只有经过审阅的源码字节变更才更新摘要，ABI／第三方身份另行审阅，先核对固定换行。
 - `tools/python/src/ecu_tools/{build,verify,reference,workbench_v2}.py`、包内 `runtime/ecu-tool.py` 和生成的 wrapper；接收者独立 Python／工具路径不依赖开发 checkout。
 
+## 新基线（B1–B7，2026-10-11）：先收敛，再整改
+
+依据[变更提案](../../planning-artifacts/sprint-change-proposal-2026-10-11.md)，P0–P6 的模块整改只在收敛后的主线上进行。B1–B7 对应 Story 9.21–9.28，必须先完成；下文 P0–P6 中出现的 legacy、single、三族和旧包兼容要求，自 2026-10-11 起以本节为准。
+
+| 包 | Story | 成果 | 验收重点 |
+| --- | --- | --- | --- |
+| B1 主线接管单组件 | 9.21 | SWC 数为 1 的工程（含内置“标准 ECU”模板）走主线计划与 emitter，使用新的按能力命名的 profile；旧 profile 工程明确拒绝 | 单组件链路的独立预期迁到主线并通过；单 SWC 非法输入以 `PlanDiagnostic` 拒绝；旧工程拒绝有正反测试 |
+| B2 主线拥有全部 BSW 来源 | 9.22 | Can、Dem、NvM、Security 等主线借用的 legacy 来源迁入主线；producer 身份与实际字节一致（含 Dcm） | 只改位置不改行为；ABI 与第三方身份审阅；摘要变化对应审阅结论 |
+| B3 删除平行实现 | 9.23 | 删除帧／信号 host 链路（含“主机运行”页）、单组件链路、外部 XSD／MOD 校验模式；`schema.rs` 只作测试对照基准 | 删除前逐个说明测试去向；旧设置不导致启动失败；`official-oracles` 仍可运行；“工作台内运行 ECU”记为已知差距，Epic 9 后基于 host-batch 契约重做 |
+| B4 测试与工具归位 | 9.24、9.25 | CLI 形式的测试与预期迁入正常运行器；开发 CLI 只留 `doctor`、`verify`、`quality`、`c-check`、`assets`；测试按能力拆分并重分必需 CI 与手动 acceptance；桌面验收改用 Tauri WebDriver 与 runner 隔离 | 同一预期迁移前后都能识别已知错误；主线不依赖官方档案的原生行为全部进入必需 CI；桌面要求逐项有落点 |
+| B5 去编号与按职责命名 | 9.26 | 去除 Epic／Story 编号与 multi 命名，按 Structural Seed 调整目录；根目录 Cargo workspace；格式版本表；`quality` 编号检查 | 编号检查为零且能拦截新增；CI、文档、AGENTS.md 同步；Linux 与 Windows 原生套件及 acceptance |
+| B6 生成与静态检查门槛 | 9.27 | 输出文件唯一生成方、取消回读修补；clippy 默认集，生成与集成模块 deny panic 类调用 | 产物逐字节不变或差异已审阅；CI 拦截新增违例 |
+| B7 按所有权组织生成工程 | 9.28 | 交付包分为 `bsw/`、`os/`、`kernel/`、`generated/`（含 SWC 骨架）、`app/<SWC>/`、`integration/`、`meta/`；MemMap 头统一生成；从 `target.json` 生成 CMake 描述 | 重新生成后只有 `generated/`、`app/`、`meta/` 变化；CMake 与 `ecu-tool` 构建同一组源文件并在两个平台通过 |
+
+每个包按可独立验证的 PR 合并，合并后 master 保持绿色。涉及原生 fixture、交付布局或测试共用路径辅助的包，合并前在本地 Linux 与 Windows 运行受影响原生套件，并请维护者触发 acceptance；未运行的平台在交接中写明。
+
 ## P0：逐模块核定契约和独立预期
 
 **成果：**为下面每个实际模块确定完整适用范围、具体缺口、正反预期和需要保护的旧行为。研究可以开始，不能要求待整改能力先通过才允许调查。
