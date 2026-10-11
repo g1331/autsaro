@@ -13,10 +13,46 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
+  pull-requests: read
 env:
   PYTHONUTF8: '1'
 jobs:
+  changes:
+    name: Detect changed areas
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.detect.outputs.code }}
+    steps:
+      # Pull requests touching only reader documentation and planning records
+      # skip build and test jobs; pushes and manual runs always check everything.
+      - id: detect
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+        run: |
+          import os, subprocess
+          documentation = ('docs/', '_bmad/', '_bmad-output/', '.agents/', '.claude/', '.impeccable/', '.github/ISSUE_TEMPLATE/')
+          def is_documentation(path):
+              if path.startswith(documentation) or path in {'LICENSE', 'NOTICE', '.github/PULL_REQUEST_TEMPLATE.md'}:
+                  return True
+              # Root guides only; nested Markdown such as runtime/README.md ships with generated projects.
+              return '/' not in path and path.endswith('.md')
+          code = True
+          if os.environ['PULL_REQUEST']:
+              listing = subprocess.run(['gh', 'api', '--paginate', '--jq', '.[].filename',
+                  f"repos/{os.environ['GITHUB_REPOSITORY']}/pulls/{os.environ['PULL_REQUEST']}/files"],
+                  check=True, capture_output=True, text=True).stdout.split()
+              # The files API stops at 3000 entries; treat a truncated listing as code.
+              code = not listing or len(listing) >= 3000 or not all(map(is_documentation, listing))
+              print('\n'.join(listing))
+          print('code=' + str(code).lower())
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write('code=' + str(code).lower() + '\n')
   ui:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -35,6 +71,8 @@ jobs:
       - run: npm run test --prefix ui
       - run: npm run build --prefix ui
   python:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -63,6 +101,8 @@ jobs:
           path: build/python
           if-no-files-found: ignore
   core:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -71,6 +111,8 @@ jobs:
       - run: cargo test --locked --manifest-path core/Cargo.toml
       - run: cargo clippy --locked --manifest-path core/Cargo.toml --all-targets -- -A clippy::all -D clippy::correctness -D clippy::suspicious
   desktop:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -86,6 +128,8 @@ jobs:
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
       - run: cargo build --locked --manifest-path src-tauri/Cargo.toml
   process:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -126,6 +170,8 @@ jobs:
       - run: uv run --locked python -m autosar_tooling quality --scope all --base "${{ env.CHECK_BASE }}"
 
   c-analysis-prepare:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -235,9 +281,23 @@ jobs:
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_host_boundaries.py
       - name: Core library regressions
         run: cargo test --locked --manifest-path core/Cargo.toml --lib
-      - name: Multi-component contracts on the Windows checkout
-        if: runner.os == 'Windows'
-        run: cargo test --locked --manifest-path core/Cargo.toml --test multi_component_contracts
+      # Required checks run these archive-free native suites on both platforms;
+      # the remaining native suites need licensed archives and stay in acceptance.yml.
+      - name: Select native contract tools
+        shell: python
+        run: |
+          import os, shutil, subprocess
+          from pathlib import Path
+          tools = {'AUTOSAR_CC': 'gcc', 'AUTOSAR_OBJDUMP': 'objdump', 'AUTOSAR_NM': 'nm', 'AUTOSAR_GIT': 'git'}
+          # The project environment's interpreter, as used by the development tooling.
+          python = subprocess.run(['uv', 'run', '--locked', 'python', '-c', 'import sys; print(sys.executable)'],
+              check=True, capture_output=True, text=True).stdout.strip()
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              for variable, name in tools.items():
+                  output.write(variable + '=' + str(Path(shutil.which(name)).absolute()) + '\n')
+              output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
+      - name: Native runtime and multi-component contracts
+        run: cargo test --locked --manifest-path core/Cargo.toml --features native-tests --test multi_runtime_contracts --test multi_component_contracts
       - name: Generate complete analysis samples
         run: cargo test --locked --manifest-path core/Cargo.toml --test c_analysis
       - name: Sealed ECU build mode fault isolation
@@ -380,8 +440,8 @@ jobs:
 
   c-analysis:
     # A skipped/cancelled producer or shard must never make the gate green.
-    needs: [c-analysis-prepare, c-analysis-samples]
-    if: ${{ !cancelled() }}
+    needs: [changes, c-analysis-prepare, c-analysis-samples]
+    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
@@ -411,3 +471,26 @@ jobs:
               found.add(pair)
           if found != expected:
               raise RuntimeError('Expected all twelve platform/sample results; missing=' + str(expected - found) + '; extra=' + str(found - expected))
+
+  required:
+    # The only status check branch rules require; the list of blocking jobs lives here.
+    name: CI required
+    needs: [changes, ui, python, core, desktop, process, quality, c-analysis]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require every blocking job
+        shell: python
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          import json, os, sys
+          needs = json.loads(os.environ['RESULTS'])
+          code = needs['changes']['outputs'].get('code') == 'true'
+          # Skips are accepted only for documentation-only pull requests.
+          accepted = {'success'} if code or needs['changes']['result'] != 'success' else {'success', 'skipped'}
+          failed = {name: need['result'] for name, need in needs.items()
+                    if need['result'] not in (accepted if name != 'changes' else {'success'})}
+          print('code=' + str(code).lower(), {name: need['result'] for name, need in needs.items()})
+          sys.exit('Blocking jobs did not pass: ' + str(failed) if failed else 0)

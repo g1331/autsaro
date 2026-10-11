@@ -1,6 +1,7 @@
 use autosar_config_core::{Direction, Workspace, schema};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub(super) struct Scratch(pub(super) PathBuf);
@@ -10,8 +11,13 @@ impl Scratch {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let path =
-            std::env::temp_dir().join(format!("autosar-config-{}-{nonce}", std::process::id()));
+        // Coarse Windows clocks can repeat a nonce across parallel tests.
+        static SEQUENCE: AtomicUsize = AtomicUsize::new(0);
+        let sequence = SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "autosar-config-{}-{nonce}-{sequence}",
+            std::process::id()
+        ));
         fs::create_dir(&path).unwrap();
         // Keep the plain path: native compilers reject Windows verbatim (`\\?\`) paths.
         // Tests comparing against reported source paths canonicalize their own side.
