@@ -13,7 +13,7 @@ uv sync --locked
 
 ## 平台依赖
 
-Windows 核心和桌面开发需要 Rust MSVC、Visual Studio C++ Build Tools、Windows SDK、WebView2、libclang 和 vcpkg 的 libxml2。设置 `VCPKG_ROOT`、`VCPKGRS_TRIPLET=x64-windows-static-md`、`LIBCLANG_PATH`；vcpkg 安装 `libxml2[iconv,zlib]`。
+Windows 核心和桌面开发需要 Rust MSVC、Visual Studio C++ Build Tools、Windows SDK、WebView2、libclang 和 vcpkg 的 libxml2。设置 `VCPKG_ROOT`、`VCPKGRS_TRIPLET=x64-windows-static-md`、`LIBCLANG_PATH`；vcpkg 安装 `libxml2[iconv,zlib]`。`LIBCLANG_PATH` 指向的 `libclang.dll` 还须能加载其依赖 DLL：使用 MSYS2 提供的 libclang 时，把同一 `bin` 目录加入 `PATH`，否则构建 `libxml` 时会报 `LoadLibraryExW failed`。
 
 Ubuntu 核心开发安装 `build-essential libxml2-dev libclang-dev clang pkg-config`；桌面另安装 `libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev patchelf`。macOS 使用 Xcode Command Line Tools、libxml2 和 LLVM。
 

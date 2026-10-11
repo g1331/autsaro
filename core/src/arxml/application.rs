@@ -541,7 +541,9 @@ mod tests {
                 super::super::projection::new_epoch()
             ));
             fs::create_dir(&root).unwrap();
-            Self(root)
+            // Publication callbacks receive canonical paths (`\\?\` on Windows);
+            // compare against the same form.
+            Self(fs::canonicalize(root).unwrap())
         }
     }
     impl Drop for Scratch {
