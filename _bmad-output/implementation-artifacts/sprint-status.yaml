@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-27-2026 18:43
-last_updated: 10-11-2026 21:10
+last_updated: 10-11-2026 23:21
 project: Autosar
 project_key: NOKEY
 tracking_system: file-system
@@ -51,7 +51,7 @@ story_location: _bmad-output/implementation-artifacts
 # Development completion and the original unverified release exits are recorded separately in spec-epic-7-configurator.md.
 # Remaining roadmap candidates are not implementation-ready or registered here.
 # Formal Epics 9/10 were added by the 2026-10-10 course correction, not candidate R9/R10.
-# Epic 9 has 20 planned stories, all backlog pending scoped readiness; Epic 10 has outcome definitions only.
+# Epic 9 has 28 planned stories: 9.1-9.2 done; baseline stories 9.21-9.28 run before 9.3-9.20 (2026-10-11 change proposal). Epic 10 has outcome definitions only.
 # Scope, entry conditions and planning concerns: ../planning-artifacts/implementation-readiness.md
 development_status:
   epic-1: done
@@ -135,11 +135,19 @@ development_status:
   9-13-整理-security-会话与-windows-密钥边界: backlog
   9-14-整理-os-schm-与固定内核责任链: backlog
   9-15-整理-rte-共享类型与模块生成阶段: backlog
-  9-16-验证兼容交付-旧工程与离线工具: backlog
+  9-16-验证主线交付与离线工具: backlog
   9-17-让日常修改获得快速有效反馈: backlog
   9-18-优化实际-ci-等待与重复工作: backlog
   9-19-让严格源码结果真正阻止错误-pr-合并: backlog
   9-20-完成非实现者独立接手与-epic-出口: backlog
+  9-21-让主线接管单组件工程: backlog
+  9-22-让主线拥有全部-bsw-来源: backlog
+  9-23-删除帧-信号-host-链路-单组件链路与外部档案模式: backlog
+  9-24-让测试与开发工具回到正常入口: backlog
+  9-25-用标准驱动方式替换桌面隔离验收设施: backlog
+  9-26-去除开发编号并按职责命名: backlog
+  9-27-用结构和静态检查守住生成规范: backlog
+  9-28-按所有权组织生成工程: backlog
   epic-9-retrospective: optional
 
   epic-10: backlog
