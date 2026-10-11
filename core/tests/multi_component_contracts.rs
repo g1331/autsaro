@@ -1635,7 +1635,10 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
         )));
         for (file, bytes) in produced {
             if file.starts_with("include/") || file == "src/Rte.c" {
-                std::fs::write(directory.join(file), bytes).unwrap();
+                // Delivered headers may be nested (`include/standard/Can.h`).
+                let target = directory.join(file);
+                std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+                std::fs::write(target, bytes).unwrap();
             }
         }
         let repository = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
