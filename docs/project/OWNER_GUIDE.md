@@ -1,6 +1,6 @@
 # 可选的 Agent 与 BMad 协作
 
-开发环境、检查命令和提交方式见 [贡献指南](../../CONTRIBUTING.md)。本文介绍使用 Codex 和 BMad 协作开发的方法，可按任务需要选用。
+开发环境、检查命令和提交方式见 [贡献指南](../../CONTRIBUTING.md)。本文介绍使用 Codex、Claude Code 和 BMad 协作开发的方法，可按任务需要选用。
 
 ## 委托任务
 
@@ -25,4 +25,6 @@
 
 日常配置和内置规则无需官方 XSD/MOD。兼容测试、官方对照及原生运行需分别准备对应资源和工具。功能覆盖与支持范围见 README、模块说明和相应实现，标准符合性需按适用规范单独核查。
 
-Codex 可自动发现技能变化。手工开发按贡献指南操作即可。
+项目技能只维护在 `.agents/skills`，Codex 直接读取；Claude Code 通过 `.claude/skills` 软链接读取同一目录，两者都能自动发现技能变化。新增或更新技能只改 `.agents/skills`；BMad 安装器只需选择 Codex，再勾选 Claude Code 会生成第二份副本。手工开发按贡献指南操作即可。
+
+Windows 上使用 Claude Code 时，需要让 Git 检出真正的软链接，否则 `.claude/skills` 会成为普通文件，Claude Code 找不到技能，其他开发不受影响。每台电脑设置一次：开启“开发者模式”，执行 `git config --global core.symlinks true`（或在 Git for Windows 安装时勾选 Enable symbolic links）。之后的克隆会自动生效；已有克隆删除 `.claude/skills` 后执行 `git checkout -- .claude/skills` 重新检出。
