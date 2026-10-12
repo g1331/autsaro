@@ -19,5 +19,9 @@
 - Mainline projects with one application component, one 32-bit CAN receive and transmit signal and an application DID deliver `verification/inputs.json`, so `ecu-tool verify` checks the reference echo behaviour.
 - Mainline plans reject CanIf PDU handles above 255 with `CANIF_HANDLE_WIDTH` (the delivered `PduIdType` is `uint8_t`) instead of `CAN_ID_CONFLICT`, and report a missing selected BSW entry at the module reference that names it instead of an unrelated object.
 - Mainline planning rejects runnable symbols that shadow the generated OS counter service producers (`OsService_<Counter>_*`, `Rte_Call_OsService_*`) with `SYMBOL_PRODUCER_DUPLICATE`.
+- **Breaking:** The ECU generation mainline profile is now named `singlecore-ecu-v1` (previously `singlecore-multi-swc-v1`), and every project validated with built-in rules is planned on it, including projects with one application component.
+- **Breaking:** The built-in `standard-ecu` template (previously `standard-ecu-v1`) creates a single application component project on the mainline with ComM/BswM mode management; its create-only application seed is the reference echo application that `ecu-tool verify` checks.
+- **Breaking:** Workbench projects and native deliveries recorded for `epic4-win64-sr-cs-v1` or `singlecore-multi-swc-v1` are refused on open without changing files; the desktop no longer imports `autosar-ecu-handoff-v1`. Their ARXML sources can be imported into a new project. `host-can-v1` remains supported for now.
+- The integration panel's CAN ID and application period editor also works on mainline projects; when the Com Tx main function shares the application trigger, its timebase and the transmit PDU periods follow the application period.
 
 Early development results remain in Git history and the corresponding implementation artifacts. This changelog does not restate historical releases or acceptance results.

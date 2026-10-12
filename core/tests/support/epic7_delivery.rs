@@ -1059,3 +1059,49 @@ fn retired_delivery_profiles_are_refused_before_import() {
     assert!(!receiver.exists());
     assert_eq!(payload(&output), before);
 }
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn builtin_standard_template_generates_builds_and_passes_reference_verifier() {
+    use autosar_config_core::integration::{RuntimeCatalog, build_ecu_project, verify_ecu_project};
+    use autosar_config_core::prepared::prepare_ecu_project_for_workspace;
+    // The built-in template with its create-only seed is the reference echo
+    // application that the delivered ecu-tool verifier checks.
+    let scratch = Scratch::new();
+    let ecu = standard_with_application(&scratch.0.join("ECU"));
+    let plan = ecu
+        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
+        .unwrap();
+    assert_eq!(
+        plan.description().profile,
+        autosar_config_core::integration::MULTI_PROFILE
+    );
+    let target = tooling::native_target();
+    let project = scratch.0.join("package");
+    prepare_ecu_project_for_workspace(&ecu, &plan, target, true)
+        .unwrap()
+        .generate(&project)
+        .unwrap();
+    let files = prepare_ecu_project_for_workspace(&ecu, &plan, target, true)
+        .unwrap()
+        .into_files();
+    let settings = tooling::execution_settings();
+    let owner = tooling::execution_owner();
+    let output = scratch.0.join("build");
+    fs::create_dir(&output).unwrap();
+    let built = build_ecu_project(&files, &project, &output, &settings, &owner)
+        .unwrap_or_else(|error| panic!("{error}"));
+    assert!(Path::new(&built.binary_path).is_file(), "{}", built.log);
+    let report = verify_ecu_project(&files, &project, &settings, &owner)
+        .unwrap_or_else(|error| panic!("{error}"));
+    assert!(report.passed, "{}", report.log);
+    let log = report.log.to_string();
+    for marker in [
+        "protocol=echo PASS",
+        "protocol=ncr-recovery PASS",
+        "protocol=malformed PASS",
+        "ECU_HANDOFF_VERIFY PASS",
+    ] {
+        assert!(log.contains(marker), "{marker}: {log}");
+    }
+}
