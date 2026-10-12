@@ -185,7 +185,10 @@ static DCM_CODE void Dcm_Process(void) {
         request[1] &= 0x7fu;
     }
     if (request[0] == 0x22u) {
-        if ((request_length < 3u) || ((request_length % 2u) == 0u)) {
+        if ((request_length < 3u) || ((request_length % 2u) == 0u) ||
+            ((configuration->max_did_to_read != 0u) &&
+             (((request_length - 1u) / 2u) > configuration->max_did_to_read))) {
+            /* SWS_Dcm_01335: more DIDs than DcmDspMaxDidToRead is NRC 0x13. */
             Dcm_Negative(0x13u);
         } else {
             PduLengthType i;

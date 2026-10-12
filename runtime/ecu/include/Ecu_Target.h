@@ -57,6 +57,12 @@ typedef struct {
  * Queue overflow closes the target; records are never silently discarded.
  */
 StatusType Ecu_TargetTakeProtocolFailure(Ecu_ProtocolRecord *record);
+#if defined(ECU_MULTI_COMPONENT)
+/** Record a transport timeout at the current epoch from the owner context.
+ * A call outside the owner or with a full queue closes the target.
+ */
+void Ecu_TargetReportTransportTimeout(void);
+#endif
 
 /** Completion published at the real owner waiting/empty boundary. */
 typedef struct {

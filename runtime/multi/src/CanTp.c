@@ -369,12 +369,16 @@ CANTP_CODE void CanTp_MainFunction(void) {
                 --timer;
             }
             if (timer == 0u) {
+                /* SWS_CanTp_00229: As/Bs/Cs and Ar/Br/Cr timeouts are runtime errors. */
                 if ((state >= CANTP_TX_COPY) && (state <= CANTP_TX_FLOW)) {
+                    (void)Det_ReportRuntimeError(35u, 0u, 0x06u, 0xd0u);
                     CanTp_FinishTx(E_NOT_OK);
                 } else if ((state == CANTP_RX_OVERFLOW_SEND) ||
                            (state == CANTP_RX_OVERFLOW_CONFIRM)) {
+                    (void)Det_ReportRuntimeError(35u, 0u, 0x06u, 0xc0u);
                     state = CANTP_IDLE;
                 } else {
+                    (void)Det_ReportRuntimeError(35u, 0u, 0x06u, 0xc0u);
                     CanTp_FinishRx(E_NOT_OK);
                 }
             } else {
