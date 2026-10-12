@@ -73,6 +73,8 @@ Autsaro 支持从内置模板创建 ECU 工程，或导入多份 ARXML；在同�
 
 ## 本地开发环境
 
+本项目由维护者主导开发，不接受未经邀请的外部 Pull Request；维护者和受邀协作者通过 PR 流程提交改动。欢迎通过 Issue 报告缺陷或提出需求；安全漏洞请按[安全报告指南](SECURITY.zh-CN.md)提交。
+
 准备 Node 和 npm 后，在仓库根目录安装前端依赖并启动开发服务器。版本范围见 [贡献指南](CONTRIBUTING.zh-CN.md)。
 
 ~~~sh

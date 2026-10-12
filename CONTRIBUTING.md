@@ -2,6 +2,10 @@
 
 [简体中文](CONTRIBUTING.zh-CN.md) · **English**
 
+## Contribution policy
+
+Development is led by the maintainers. Unsolicited external pull requests are not accepted and will be closed without code review. Maintainers and invited collaborators use the PR workflow described below. Bug reports and feature requests are welcome through Issues; report security vulnerabilities as described in [SECURITY.md](SECURITY.md).
+
 The project uses Rust, React/TypeScript, Tauri, and Python. Package manifests and lockfiles define dependency versions. Development uses Node 24, npm 11, and Python 3.12 or later; rustup reads the Rust version from `rust-toolchain.toml`.
 
 ## Getting started

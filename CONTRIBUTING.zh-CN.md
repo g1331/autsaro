@@ -2,6 +2,10 @@
 
 **简体中文** · [English](CONTRIBUTING.md)
 
+## 贡献政策
+
+本项目由维护者主导开发，不接受未经邀请的外部 Pull Request，此类 PR 将直接关闭，不进行代码审查。维护者和受邀协作者按下文的 PR 流程提交改动。欢迎通过 Issue 报告缺陷或提出需求；安全漏洞请按[安全报告指南](SECURITY.zh-CN.md)提交。
+
 项目使用 Rust、React/TypeScript、Tauri 和 Python。依赖版本由各包配置和锁文件维护；开发使用 Node 24、npm 11、Python 3.12 或更新版本，Rust 由 rustup 读取 `rust-toolchain.toml`。
 
 ## 开始开发

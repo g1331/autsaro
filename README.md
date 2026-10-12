@@ -77,6 +77,8 @@ The complete [Chinese README](README.zh-CN.md) remains available. Linked technic
 
 ## Local development
 
+Development is led by the maintainers. Unsolicited external pull requests are not accepted; maintainers and invited collaborators use the PR workflow. Bug reports and feature requests are welcome through Issues. Report security vulnerabilities as described in [SECURITY.md](SECURITY.md).
+
 With Node and npm installed, install frontend dependencies and start the development server from the repository root. Version requirements are in the [contributor guide](CONTRIBUTING.md).
 
 ~~~sh
