@@ -108,6 +108,37 @@ fn owner_socket(directory: &Path) -> Result<(PathBuf, Option<File>), LocalizedTe
     Ok((socket, None))
 }
 
+/// Sends one authenticated request on `stream` and reads the supervisor's reply.
+fn converse(
+    mut stream: UnixStream,
+    token: &str,
+    mut request: Value,
+) -> Result<Value, LocalizedText> {
+    request["token"] = Value::String(token.to_owned());
+    stream
+        .set_read_timeout(Some(Duration::from_secs(30)))
+        .map_err(|error| error.to_string())?;
+    stream
+        .set_write_timeout(Some(Duration::from_secs(30)))
+        .map_err(|error| error.to_string())?;
+    let mut bytes = serde_json::to_vec(&request).map_err(|error| error.to_string())?;
+    bytes.push(b'\n');
+    stream
+        .write_all(&bytes)
+        .map_err(|error| error.to_string())?;
+    let mut response = Vec::new();
+    stream
+        .take(1_048_577)
+        .read_to_end(&mut response)
+        .map_err(|error| error.to_string())?;
+    if response.len() > 1_048_576 || response.last() != Some(&b'\n') {
+        return Err(crate::product_message!(
+            "backend.execution.response_incomplete"
+        ));
+    }
+    serde_json::from_slice(&response).map_err(|error| error.to_string().into())
+}
+
 struct UnixInput {
     directory: PathBuf,
     path: PathBuf,
@@ -292,7 +323,18 @@ impl UnixOwner {
             ]));
         }
         let started = Instant::now();
-        while !socket.exists() {
+        // bind() publishes the socket before listen(), so only the authenticated
+        // readiness reply, not the socket file, shows the supervisor is serving.
+        let ready = loop {
+            match UnixStream::connect(&socket) {
+                Ok(stream) => break converse(stream, &token, json!({"op": "ready"})),
+                Err(error)
+                    if matches!(
+                        error.kind(),
+                        std::io::ErrorKind::NotFound | std::io::ErrorKind::ConnectionRefused
+                    ) => {}
+                Err(error) => break Err(error.to_string().into()),
+            }
             if child
                 .try_wait()
                 .map_err(|error| error.to_string())?
@@ -310,6 +352,17 @@ impl UnixOwner {
                 );
             }
             std::thread::sleep(Duration::from_millis(10));
+        };
+        match ready {
+            Ok(response) if response == json!({"op": "ready"}) => {}
+            outcome => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(LocalizedText::messages([
+                    crate::product_message!("backend.execution.supervisor_failed", "log" => log_path.display()),
+                    outcome.map_or_else(|error| error, |response| response.to_string().into()),
+                ]));
+            }
         }
         Ok(Arc::new(Self {
             socket,
@@ -359,31 +412,9 @@ impl UnixOwner {
         !groups.values().any(|&pgid| group_alive(pgid))
     }
 
-    fn exchange(&self, mut request: Value) -> Result<Value, LocalizedText> {
-        request["token"] = Value::String(self.token.clone());
-        let mut stream = UnixStream::connect(&self.socket).map_err(|error| error.to_string())?;
-        stream
-            .set_read_timeout(Some(Duration::from_secs(30)))
-            .map_err(|error| error.to_string())?;
-        stream
-            .set_write_timeout(Some(Duration::from_secs(30)))
-            .map_err(|error| error.to_string())?;
-        let mut bytes = serde_json::to_vec(&request).map_err(|error| error.to_string())?;
-        bytes.push(b'\n');
-        stream
-            .write_all(&bytes)
-            .map_err(|error| error.to_string())?;
-        let mut response = Vec::new();
-        stream
-            .take(1_048_577)
-            .read_to_end(&mut response)
-            .map_err(|error| error.to_string())?;
-        if response.len() > 1_048_576 || response.last() != Some(&b'\n') {
-            return Err(crate::product_message!(
-                "backend.execution.response_incomplete"
-            ));
-        }
-        serde_json::from_slice(&response).map_err(|error| error.to_string().into())
+    fn exchange(&self, request: Value) -> Result<Value, LocalizedText> {
+        let stream = UnixStream::connect(&self.socket).map_err(|error| error.to_string())?;
+        converse(stream, &self.token, request)
     }
 
     pub(super) fn request(&self, request: Value) -> Result<Value, LocalizedText> {
@@ -702,6 +733,56 @@ mod socket_tests {
         receiver.read_exact(&mut received).unwrap();
         assert_eq!(&received, b"probe");
         assert!(directory.join("owner.sock").exists());
+    }
+
+    #[cfg(feature = "native-tests")]
+    #[test]
+    fn owner_start_waits_for_the_listening_authenticated_supervisor() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = Directory(private_directory().unwrap());
+        let python = PathBuf::from(std::env::var_os("AUTOSAR_PYTHON").expect("Python interpreter"));
+        // Runs the delivered supervisor with listen() delayed after bind().
+        let delayed = root.0.join("delayed-python");
+        fs::write(
+            &delayed,
+            format!(
+                "#!{} -IS\n\
+                 import runpy, socket, sys, time\n\
+                 listen = socket.socket.listen\n\
+                 socket.socket.listen = lambda self, *args: (time.sleep(0.3), listen(self, *args))[1]\n\
+                 owner = sys.argv[3]\n\
+                 sys.argv = [owner, *sys.argv[4:]]\n\
+                 sys.path.insert(0, owner.rsplit('/', 2)[0])\n\
+                 runpy.run_path(owner, run_name='__main__')\n",
+                python.display()
+            ),
+        )
+        .unwrap();
+        fs::set_permissions(&delayed, fs::Permissions::from_mode(0o700)).unwrap();
+        let directory = root.0.join("owner");
+        DirBuilder::new().mode(0o700).create(&directory).unwrap();
+        let owner = UnixOwner::start_in_directory(&delayed, directory).unwrap();
+        let spec = ProcessSpec::for_duration(
+            vec![
+                python.into_os_string(),
+                "-I".into(),
+                "-S".into(),
+                "-c".into(),
+                "print('authenticated-ready')".into(),
+            ],
+            root.0.clone(),
+            Vec::new(),
+            Duration::from_secs(8),
+            root.0.clone(),
+        )
+        .unwrap();
+        let result = owner.spawn(&spec, None).unwrap().wait().unwrap();
+        assert!(result.success(), "{result:?}");
+        assert_eq!(
+            fs::read_to_string(result.stdout).unwrap().trim(),
+            "authenticated-ready"
+        );
     }
 
     #[cfg(feature = "native-tests")]

@@ -32,5 +32,6 @@
 - 主线 BSW 来源只取自主线运行时目录：主机 CAN 驱动（Can、Can_Host、Can_HostLock）与 Ecu_Status 迁入该目录，字节不变，资产摘要不变，仅记录路径变化。公开签名、布局、句柄与 wire 格式无变化。主线交付不再包含任何程序都不编译的 5 个头文件（旧聚合视图 `include/Can.h`、`Dem.h`、`NvM.h`、`Security.h`、`Ecu_DcmCallbackTypes.h`）；参与编译的源文件和头文件逐字节一致。
 - 主线生产者元数据与交付字节一致：DID 读取服务的消费者为主线 Dcm，CanTp／Dcm 调度头与 OS 计数器服务记录实际声明文件，`integration.json` 的 `originalBswSources` 只列出原样交付的文件（生成器扩展过的模板属于生成输出）。
 - 删除开发命令 `probe`、`os`、`os-arti-native`、`os-counter-service` 与 `protocol-oracles`；CLI 保留 `doctor`、`verify`、`quality`、`c-check`、`assets` 与 `desktop`。原生 OS suites 改由 `unittest` 运行（`tests/python/native/test_os_suites.py`，可用 `-k` 筛选），协议对照向量由 `cargo test --test it -- protocol_oracles::` 检查，受管进程探针改为测试辅助脚本 `tests/python/process/probe.py`。core 集成测试按能力分为 `it`、`native`（`native-tests`）与 `official`（`official-oracles`）三个二进制；必需 CI 在 Windows 与 Linux 运行全部原生套件及 OS suites，C 静态分析增加不含诊断路由的多组件样本 `no-diagnostic`。交付的 `runtime/os/README.md` 改为新的 OS suite 命令。
+- Linux 与 macOS 上的受管执行以进程监督器的认证就绪响应为准，不再以 socket 文件出现作为就绪，监督器启动后立即运行的命令不会再偶发 `Connection refused` 失败。
 
 早期开发结果保留在 Git 历史和相关实施工件中；本记录不重新声明历史发行或验收结果。
