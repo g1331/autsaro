@@ -594,17 +594,11 @@ pub(crate) fn source_assets(
     let inventory = AssetInventory::embedded();
     let mut files = BTreeMap::new();
     for asset in inventory.selected(target, "ecu") {
+        // The mainline owns all of its BSW under runtime/multi; the legacy
+        // directories only serve the retired chains until they are deleted.
         if multi
-            && asset.relative_path.starts_with("runtime/src/")
-            && !matches!(
-                asset.relative_path,
-                "runtime/src/Can.c"
-                    | "runtime/src/Can_Host.c"
-                    | "runtime/src/Can_Internal.h"
-                    | "runtime/src/Can_HostLock.c"
-                    | "runtime/src/Can_HostLock.h"
-                    | "runtime/src/Ecu_Status.c"
-            )
+            && (asset.relative_path.starts_with("runtime/src/")
+                || asset.relative_path.starts_with("runtime/include/"))
         {
             continue;
         }
@@ -619,11 +613,6 @@ pub(crate) fn source_assets(
         files.insert(crate::prepared::deliver_path(asset, "ecu")?, asset);
     }
     if multi {
-        for path in ["runtime/src/Can_HostLock.c", "runtime/src/Can_HostLock.h"] {
-            if let Some(asset) = inventory.get(path) {
-                files.insert(crate::prepared::deliver_path(asset, "ecu")?, asset);
-            }
-        }
         for asset in inventory.selected(target, "ecu-multi") {
             files.insert(crate::prepared::deliver_path(asset, "ecu-multi")?, asset);
         }

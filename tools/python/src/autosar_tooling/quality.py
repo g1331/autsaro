@@ -13,7 +13,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from autosar_tooling.config import ROOT
+from autosar_tooling.config import HOST_COMSTACK_CFG, ROOT
 
 SOURCE_SUFFIXES = {".c", ".h", ".rs", ".ts", ".tsx", ".css", ".py", ".mjs"}
 FORMAT_SUFFIXES = {".c", ".h", ".rs", ".ts", ".tsx", ".css", ".mjs"}
@@ -189,11 +189,26 @@ def changed_format_errors(
     return errors
 
 
+# The host CAN driver moved to the mainline BSW directory and keeps this coverage.
+MAINLINE_CAN = ROOT / "runtime" / "multi"
+MAINLINE_CAN_SOURCES = ["Can.c", "Can_Host.c", "Can_HostLock.c", "Ecu_Status.c"]
+MAINLINE_CAN_HEADERS = ["Can_CfgTypes.h", "Can_GeneralTypes.h", "Can_Host.h", "Can_MemMap.h",
+                        "Ecu_Status.h", "SchM_Can.h", "standard/Can.h"]
+
+
 def c_syntax_errors() -> list[str]:
+    with tempfile.TemporaryDirectory(prefix="autosar-quality-c-") as temporary:
+        configuration = Path(temporary)
+        (configuration / "ComStack_Cfg.h").write_text(HOST_COMSTACK_CFG, encoding="utf-8")
+        return host_c_syntax_errors(configuration)
+
+
+def host_c_syntax_errors(configuration: Path) -> list[str]:
     sources = sorted(
         [
             *(ROOT / "runtime" / "src").glob("*.c"),
             *(ROOT / "runtime" / "host" / "src").glob("*.c"),
+            *(MAINLINE_CAN / "src" / name for name in MAINLINE_CAN_SOURCES),
         ]
     )
     compiler = os.environ.get("AUTOSAR_CC", "gcc")
@@ -212,13 +227,19 @@ def c_syntax_errors() -> list[str]:
         "-I",
         str(ROOT / "runtime" / "src"),
         "-I",
+        str(MAINLINE_CAN / "src"),
+        "-I",
         str(ROOT / "runtime" / "multi" / "include"),
+        "-I",
+        str(configuration),
         *(str(path) for path in sources),
     ]
     result = run(command)
     if result.returncode:
         return ["Host C99 syntax check failed:\n" + result.stderr.strip()]
-    for header in sorted((ROOT / "runtime" / "include").rglob("*.h")):
+    headers = [*(ROOT / "runtime" / "include").rglob("*.h"),
+               *(MAINLINE_CAN / "include" / name for name in MAINLINE_CAN_HEADERS)]
+    for header in sorted(headers):
         # A section protocol is a repeated-include TU, not a standalone empty header.
         if header.name == "Can_MemMap.h":
             source = (
@@ -248,6 +269,8 @@ def c_syntax_errors() -> list[str]:
                 str(ROOT / "runtime" / "host" / "include"),
                 "-I",
                 str(ROOT / "runtime" / "multi" / "include"),
+                "-I",
+                str(configuration),
                 *forced_header,
                 "-x",
                 "c",

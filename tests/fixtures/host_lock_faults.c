@@ -5,7 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 #ifdef _WIN32
+/* Platform_Types.h already owns boolean; keep the Win32 spelling apart. */
+#define boolean Test_Win32Boolean
 #include <windows.h>
+#undef boolean
 #else
 #include <errno.h>
 #include <pthread.h>
@@ -112,8 +115,14 @@ int main(int argc, char **argv) {
     }
     failure = argv[1];
     if (argc == 3) {
-        Can_Lock();
-        Can_Unlock();
+        /* "state" drives the CanIf state-lock instance instead of the driver lock. */
+        if (strcmp(argv[2], "state") == 0) {
+            Can_HostStateLock();
+            Can_HostStateUnlock();
+        } else {
+            Can_Lock();
+            Can_Unlock();
+        }
         return 3; /* No fatal lock path may return to its caller. */
     }
     if (strcmp(failure, "busy") == 0) {

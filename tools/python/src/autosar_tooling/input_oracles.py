@@ -207,14 +207,17 @@ def main() -> None:
         raise ValueError(f"positive semantic expectations failed: {issues}")
     for symbol, signature in expected["bsw_signatures"].items():
         module = symbol.split("_", 1)[0]
+        # The host CAN driver lives in the mainline BSW directory; the legacy
+        # aggregate Can.h stays in runtime/include until that chain is removed.
+        base = ROOT / ("runtime/multi" if module == "Can" else "runtime")
         header_paths = [ROOT / f"runtime/include/{module}.h"] + sorted(
-            (ROOT / "runtime/include").glob(f"{module}_*.h")
+            (base / "include").glob(f"{module}_*.h")
         )
-        scheduled_header = ROOT / f"runtime/include/SchM_{module}.h"
+        scheduled_header = base / f"include/SchM_{module}.h"
         if scheduled_header.is_file():
             header_paths.append(scheduled_header)
         header = "\n".join(path.read_text(encoding="utf-8") for path in header_paths)
-        source = (ROOT / f"runtime/src/{module}.c").read_text(encoding="utf-8")
+        source = (base / f"src/{module}.c").read_text(encoding="utf-8")
         declaration = re.search(
             r"^([A-Za-z_]\w*)\s+" + re.escape(symbol) + r"\s*\(([^;{}]*)\)\s*;",
             header,

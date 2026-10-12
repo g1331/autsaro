@@ -32,7 +32,7 @@ fn det_consumer(scratch: &Path, fixture: &str) -> PathBuf {
         .arg("-I")
         .arg(root.join("runtime/src"))
         .arg(root.join("runtime/multi/src/SchM_CanIf_Host.c"))
-        .arg(root.join("runtime/src/Can_HostLock.c"))
+        .arg(root.join("runtime/multi/src/Can_HostLock.c"))
         .arg(root.join("runtime/multi/src/Det.c"))
         .arg(root.join("runtime/multi/src/Det_Host.c"))
         .arg(root.join("core/tests/fixtures/multi-runtime").join(fixture))
@@ -122,7 +122,7 @@ fn com_standard_consumer_executes_group_and_reception_monitoring() {
         .arg("-I")
         .arg(root.join("runtime/src"))
         .arg(root.join("runtime/multi/src/SchM_CanIf_Host.c"))
-        .arg(root.join("runtime/src/Can_HostLock.c"))
+        .arg(root.join("runtime/multi/src/Can_HostLock.c"))
         .arg(root.join("runtime/multi/src/Com.c"))
         .arg(root.join("core/tests/fixtures/multi-runtime/com_contract.c"))
         .arg("-o")
@@ -158,7 +158,13 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
         "SchM_Can.h",
         "standard/Can.h",
     ] {
-        let asset = inventory.get(&format!("runtime/include/{name}")).unwrap();
+        // Can.h is the legacy aggregate view; the CAN driver headers are mainline-owned.
+        let directory = if name == "Can.h" {
+            "runtime/include"
+        } else {
+            "runtime/multi/include"
+        };
+        let asset = inventory.get(&format!("{directory}/{name}")).unwrap();
         std::fs::create_dir_all(include.join(name).parent().unwrap()).unwrap();
         std::fs::write(include.join(name), asset.bytes).unwrap();
         assert_eq!(
@@ -166,7 +172,7 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
             std::fs::read(root.join(asset.relative_path)).unwrap()
         );
     }
-    for name in ["Ecu_Config.h", "Ecu_Status.h", "Ecu_DcmCallbackTypes.h"] {
+    for name in ["Ecu_Config.h", "Ecu_DcmCallbackTypes.h"] {
         std::fs::copy(root.join("runtime/include").join(name), include.join(name)).unwrap();
     }
     for entry in std::fs::read_dir(root.join("runtime/host/include")).unwrap() {
@@ -175,7 +181,10 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
     }
     for entry in std::fs::read_dir(root.join("runtime/multi/include")).unwrap() {
         let entry = entry.unwrap();
-        std::fs::copy(entry.path(), include.join(entry.file_name())).unwrap();
+        // standard/Can.h was materialized above from the asset inventory.
+        if entry.file_type().unwrap().is_file() {
+            std::fs::copy(entry.path(), include.join(entry.file_name())).unwrap();
+        }
     }
     for name in [
         "ComStack_Cfg.h",
@@ -261,9 +270,9 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
         "runtime/multi/src/SchM_Diagnostic_Host.c",
         "runtime/multi/src/Det.c",
         "runtime/multi/src/Det_Host.c",
-        "runtime/src/Can.c",
-        "runtime/src/Can_Host.c",
-        "runtime/src/Can_HostLock.c",
+        "runtime/multi/src/Can.c",
+        "runtime/multi/src/Can_Host.c",
+        "runtime/multi/src/Can_HostLock.c",
         "runtime/host/src/Can_Execution.c",
     ] {
         let delivered = sources.join(std::path::Path::new(source).file_name().unwrap());

@@ -24,5 +24,7 @@
 - **不兼容：**内置模板 `standard-ecu`（原 `standard-ecu-v1`）在主线上创建含 ComM／BswM 模式管理的单应用组件工程；其仅创建一次的应用种子即 `ecu-tool verify` 检查的参考回显应用。
 - **不兼容：**以 `epic4-win64-sr-cs-v1` 或 `singlecore-multi-swc-v1` 记录的工作台工程与原生交付包在打开时拒绝，不修改文件；桌面端不再导入 `autosar-ecu-handoff-v1`。其中的 ARXML 源文件可导入新工程。`host-can-v1` 暂时保留。
 - 集成面板的 CAN ID 与应用周期编辑也适用于主线工程；Com Tx 主函数与应用共用触发器时，其时基和发送 PDU 周期随应用周期一同修改。
+- 主线 BSW 来源只取自主线运行时目录：主机 CAN 驱动（Can、Can_Host、Can_HostLock）与 Ecu_Status 迁入该目录，字节不变，资产摘要不变，仅记录路径变化。公开签名、布局、句柄与 wire 格式无变化。主线交付不再包含任何程序都不编译的 5 个头文件（旧聚合视图 `include/Can.h`、`Dem.h`、`NvM.h`、`Security.h`、`Ecu_DcmCallbackTypes.h`）；参与编译的源文件和头文件逐字节一致。
+- 主线生产者元数据与交付字节一致：DID 读取服务的消费者为主线 Dcm，CanTp／Dcm 调度头与 OS 计数器服务记录实际声明文件，`integration.json` 的 `originalBswSources` 只列出原样交付的文件（生成器扩展过的模板属于生成输出）。
 
 早期开发结果保留在 Git 历史和相关实施工件中；本记录不重新声明历史发行或验收结果。

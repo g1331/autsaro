@@ -381,6 +381,8 @@ pub fn codec() {
         .arg(root.join("runtime/os/include"))
         .arg("-I")
         .arg(root.join("runtime/include"))
+        .arg("-I")
+        .arg(root.join("runtime/multi/include"))
         .arg(root.join("runtime/ecu/src/Ecu_HostBatch.c"))
         .arg(root.join("core/tests/fixtures/host_batch_codec.c"))
         .arg("-o")

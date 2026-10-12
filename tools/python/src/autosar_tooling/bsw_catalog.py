@@ -16,7 +16,7 @@ import re
 import tempfile
 from pathlib import Path
 
-from autosar_tooling.config import ROOT
+from autosar_tooling.config import HOST_COMSTACK_CFG, ROOT
 
 MANIFEST = ROOT / "runtime/contracts/bsw-v1.json"
 SELECTED = {
@@ -51,10 +51,12 @@ def materialize(root: Path = ROOT) -> dict:
         return relative
 
     for symbol, module in sorted(SELECTED.items()):
-        headers = sorted((root / "runtime/include").glob(f"{module}*.h"))
+        # The CAN driver already lives in the mainline BSW directory.
+        base = root / ("runtime/multi" if module == "Can" else "runtime")
+        headers = sorted((base / "include").glob(f"{module}*.h"))
         if module == "Can":
-            headers.append(root / "runtime/include/standard/Can.h")
-        scheduled = root / f"runtime/include/SchM_{module}.h"
+            headers.append(base / "include/standard/Can.h")
+        scheduled = base / f"include/SchM_{module}.h"
         if scheduled.is_file():
             headers.append(scheduled)
         matches = []
@@ -69,7 +71,7 @@ def materialize(root: Path = ROOT) -> dict:
         if len(matches) != 1:
             raise ValueError(f"selected declaration is missing/duplicated: {symbol}")
         header, declaration = matches[0]
-        source = root / f"runtime/src/{module}.c"
+        source = base / f"src/{module}.c"
         definition = re.findall(
             r"^(?:CAN_CODE\s+)?[A-Za-z_]\w*\s+" + re.escape(symbol) + r"\s*\([^;{}]*\)\s*\{",
             source.read_text(encoding="utf-8"),
@@ -113,6 +115,10 @@ def materialize(root: Path = ROOT) -> dict:
         for name in re.findall(r'^\s*#include\s+"([^"\\]+)"', text, re.MULTILINE):
             candidates = [(root / relative).parent / name, root / "runtime/include" / name,
                           root / "runtime/multi/include" / name]
+            if name == "ComStack_Types.h":
+                # The legacy profiles never deliver the mainline ComStack_Types.h; the
+                # moved CAN headers resolve to the legacy one in their flat include/.
+                candidates = candidates[1:]
             dependency = next((path for path in candidates if path.is_file()), None)
             if dependency is not None:
                 identity = dependency.relative_to(root).as_posix()
@@ -128,6 +134,13 @@ def materialize(root: Path = ROOT) -> dict:
     }
 
 
+def include_name(header: str) -> str:
+    for directory in ("runtime/include", "runtime/multi/include"):
+        if header.startswith(directory + "/"):
+            return header[len(directory) + 1:]
+    raise ValueError(f"declaration header outside the include roots: {header}")
+
+
 def probe(current: dict) -> None:
     from autosar_tooling.acceptance.os_suites import (
         compiler,
@@ -140,7 +153,7 @@ def probe(current: dict) -> None:
         source = directory / "current_bsw_contract.c"
         headers = sorted({entry["header"] for entry in current["entries"].values()})
         lines = ["#include <stddef.h>"]
-        lines.extend('#include "' + str(Path(header).relative_to("runtime/include")) + '"' for header in headers)
+        lines.extend('#include "' + include_name(header) + '"' for header in headers)
         # This address/type consumer initializes no ECU and has no routes.
         # Behavioral profile consumers compile the real generated producers.
         lines.extend(
@@ -173,6 +186,8 @@ def probe(current: dict) -> None:
             for path in (ROOT / "runtime/src").glob("*.c")
             if path.name != "ecu_host_main.c"
         )
+        inputs.extend(ROOT / "runtime/multi/src" / name for name in ["Can.c", "Can_Host.c", "Can_HostLock.c", "Ecu_Status.c"])
+        (directory / "ComStack_Cfg.h").write_text(HOST_COMSTACK_CFG, encoding="utf-8")
         inputs.extend(sorted((ROOT / "runtime/host/src").glob("*.c")))
         inputs.extend(ROOT / name for name in ["runtime/multi/src/Det.c",
                       "runtime/multi/src/Det_Host.c", "runtime/multi/src/SchM_CanIf_Host.c"])
@@ -193,6 +208,8 @@ def probe(current: dict) -> None:
                 "-I" + str(ROOT / "runtime/src"),
                 "-I" + str(ROOT / "runtime/multi/include"),
                 "-I" + str(ROOT / "runtime/host/include"),
+                "-I" + str(ROOT / "runtime/multi/src"),
+                "-I" + str(directory),
                 str(source),
                 *map(str, inputs),
                 *(["-lbcrypt"] if os.name == "nt" else []),

@@ -27,7 +27,10 @@ r#"#include "Can.h"
 #include "Os.h"
 #include "SchM_Can.h"
 #ifdef _WIN32
+/* Platform_Types.h already owns boolean; keep the Win32 spelling apart. */
+#define boolean Test_Win32Boolean
 #include <windows.h>
+#undef boolean
 #else
 #include <pthread.h>
 #endif
@@ -388,16 +391,22 @@ int main(void) {
         .arg(format!("-I{}", root.join("runtime/include").display()))
         .arg(format!("-I{}", root.join("runtime/host/include").display()))
         .arg(format!("-I{}", root.join("runtime/src").display()))
+        .arg(format!("-I{}", root.join("runtime/multi/src").display()))
         .arg(format!(
             "-I{}",
             root.join("runtime/multi/include").display()
         ))
+        // The mainline CAN headers use the configured ComStack_Cfg.h widths.
+        .arg(format!(
+            "-I{}",
+            root.join("core/tests/fixtures/multi-runtime").display()
+        ))
         .arg(root.join("runtime/host/src/Can_Execution.c"))
-        .arg(root.join("runtime/src/Can.c"))
-        .arg(root.join("runtime/src/Can_Host.c"))
+        .arg(root.join("runtime/multi/src/Can.c"))
+        .arg(root.join("runtime/multi/src/Can_Host.c"))
         .arg(root.join("runtime/multi/src/Det.c"))
         .arg(root.join("runtime/multi/src/Det_Host.c"))
-        .arg(root.join("runtime/src/Can_HostLock.c"))
+        .arg(root.join("runtime/multi/src/Can_HostLock.c"))
         .arg(root.join("runtime/multi/src/SchM_CanIf_Host.c"))
         .arg(root.join("runtime/src/Os.c"))
         .arg(&harness)
@@ -525,14 +534,20 @@ int main(void) {
         .arg(format!("-I{}", root.join("runtime/include").display()))
         .arg(format!("-I{}", root.join("runtime/host/include").display()))
         .arg(format!("-I{}", root.join("runtime/src").display()))
+        .arg(format!("-I{}", root.join("runtime/multi/src").display()))
         .arg(format!(
             "-I{}",
             root.join("runtime/multi/include").display()
         ))
+        // The mainline CAN headers use the configured ComStack_Cfg.h widths.
+        .arg(format!(
+            "-I{}",
+            root.join("core/tests/fixtures/multi-runtime").display()
+        ))
         .arg(root.join("runtime/host/src/Ecu_Clock.c"))
         .arg(root.join("runtime/src/CanIf.c"))
         .arg(root.join("runtime/multi/src/SchM_CanIf_Host.c"))
-        .arg(root.join("runtime/src/Can_HostLock.c"))
+        .arg(root.join("runtime/multi/src/Can_HostLock.c"))
         .arg(&harness)
         .arg("-o")
         .arg(&binary)
@@ -613,9 +628,19 @@ int main(void) {
         .arg(format!("-I{}", root.join("runtime/include").display()))
         .arg(format!("-I{}", root.join("runtime/host/include").display()))
         .arg(format!("-I{}", root.join("runtime/src").display()))
+        .arg(format!("-I{}", root.join("runtime/multi/src").display()))
+        .arg(format!(
+            "-I{}",
+            root.join("runtime/multi/include").display()
+        ))
+        // The mainline CAN headers use the configured ComStack_Cfg.h widths.
+        .arg(format!(
+            "-I{}",
+            root.join("core/tests/fixtures/multi-runtime").display()
+        ))
         .arg("-pthread")
         .arg(root.join("runtime/multi/src/SchM_CanIf_Host.c"))
-        .arg(root.join("runtime/src/Can_HostLock.c"))
+        .arg(root.join("runtime/multi/src/Can_HostLock.c"))
         .arg(root.join("runtime/src/CanTp.c"))
         .arg(&harness)
         .arg("-o")
@@ -735,9 +760,19 @@ int main(void) {
         .arg(format!("-I{}", root.join("runtime/include").display()))
         .arg(format!("-I{}", root.join("runtime/host/include").display()))
         .arg(format!("-I{}", root.join("runtime/src").display()))
+        .arg(format!("-I{}", root.join("runtime/multi/src").display()))
+        .arg(format!(
+            "-I{}",
+            root.join("runtime/multi/include").display()
+        ))
+        // The mainline CAN headers use the configured ComStack_Cfg.h widths.
+        .arg(format!(
+            "-I{}",
+            root.join("core/tests/fixtures/multi-runtime").display()
+        ))
         .arg("-pthread")
         .arg(root.join("runtime/multi/src/SchM_CanIf_Host.c"))
-        .arg(root.join("runtime/src/Can_HostLock.c"))
+        .arg(root.join("runtime/multi/src/Can_HostLock.c"))
         .arg(root.join("runtime/src/CanTp.c"))
         .arg(&harness)
         .arg("-o")
@@ -935,14 +970,22 @@ Std_ReturnType (*write_frame)(uint16_t, const Can_PduType *) = Can_Write;
             let mut command = Command::new(&identity.compiler);
             command.args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic", "-c"]);
             if standard_search {
-                command.arg("-I").arg(root.join("runtime/include/standard"));
+                command
+                    .arg("-I")
+                    .arg(root.join("runtime/multi/include/standard"));
             }
             if multi {
                 command.arg("-I").arg(root.join("runtime/multi/include"));
             }
+            // The CAN driver headers are mainline-owned; legacy names keep precedence
+            // in the legacy view, as in that profile's flat delivered include/.
             let output = command
                 .arg("-I")
                 .arg(root.join("runtime/include"))
+                .arg("-I")
+                .arg(root.join("runtime/multi/include"))
+                .arg("-I")
+                .arg(root.join("core/tests/fixtures/multi-runtime"))
                 .arg(&source)
                 .arg("-o")
                 .arg(temp.0.join("view.o"))
@@ -970,7 +1013,8 @@ Std_ReturnType (*write_frame)(uint16_t, const Can_PduType *) = Can_Write;
         let binary = tooling::native_binary(&temp.0, "section");
         let mut command = Command::new(&identity.compiler);
         command.args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
-            .arg("-I").arg(root.join("runtime/include")).arg(&source);
+            .arg("-I").arg(root.join("runtime/multi/include"))
+            .arg("-I").arg(root.join("core/tests/fixtures/multi-runtime")).arg(&source);
         if !allowed { command.arg("-c"); }
         let output = command.arg("-o").arg(&binary).output().unwrap();
         assert_eq!(output.status.success(), allowed, "section/{index}: {}", String::from_utf8_lossy(&output.stderr));

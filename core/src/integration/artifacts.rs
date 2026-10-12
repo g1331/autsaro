@@ -102,8 +102,8 @@ pub(super) fn files<T>(
             "Can_DeInit",
             "void",
             vec![],
-            "runtime/include/standard/Can.h",
-            "runtime/src/Can.c",
+            "runtime/multi/include/standard/Can.h",
+            "runtime/multi/src/Can.c",
         ),
         (
             "Det",
@@ -175,7 +175,7 @@ pub(super) fn files<T>(
             ),
         ] {
             let mut symbol = rte_symbol(name, "StatusType", &args);
-            symbol.declaration_owner = "runtime/include/Os.h".into();
+            symbol.declaration_owner = "runtime/os/include/Os.h".into();
             symbol.definition_owner = "runtime/os/src/Os_ArtiServices.c".into();
             os.push(symbol);
         }
@@ -187,11 +187,7 @@ pub(super) fn files<T>(
                 if !module_entries.iter().any(|entry| entry.symbol == name) {
                     let mut symbol = rte_symbol(name, result, args);
                     symbol.declaration_owner = header.into();
-                    symbol.definition_owner = if module == "Can" {
-                        "runtime/src/Can.c".into()
-                    } else {
-                        format!("runtime/multi/src/{module}.c")
-                    };
+                    symbol.definition_owner = format!("runtime/multi/src/{module}.c");
                     module_entries.push(symbol);
                 }
             };
@@ -203,7 +199,7 @@ pub(super) fn files<T>(
                 ("Hth", "Can_HwHandleType", "IN"),
                 ("PduInfo", "const Can_PduType *", "IN"),
             ],
-            "runtime/include/standard/Can.h",
+            "runtime/multi/include/standard/Can.h",
         );
         imported(
             "Can",
@@ -213,7 +209,7 @@ pub(super) fn files<T>(
                 ("Controller", "uint8", "IN"),
                 ("Transition", "Can_ControllerStateType", "IN"),
             ],
-            "runtime/include/standard/Can.h",
+            "runtime/multi/include/standard/Can.h",
         );
         imported(
             "Can",
@@ -223,7 +219,7 @@ pub(super) fn files<T>(
                 ("Controller", "uint8", "IN"),
                 ("Value", "Can_ControllerStateType *", "OUT"),
             ],
-            "runtime/include/standard/Can.h",
+            "runtime/multi/include/standard/Can.h",
         );
         imported(
             "Can",
@@ -233,21 +229,21 @@ pub(super) fn files<T>(
                 ("Controller", "uint8", "IN"),
                 ("Value", "Can_ErrorStateType *", "OUT"),
             ],
-            "runtime/include/standard/Can.h",
+            "runtime/multi/include/standard/Can.h",
         );
         imported(
             "Can",
             "Can_GetControllerRxErrorCounter",
             "Std_ReturnType",
             &[("Controller", "uint8", "IN"), ("Value", "uint8 *", "OUT")],
-            "runtime/include/standard/Can.h",
+            "runtime/multi/include/standard/Can.h",
         );
         imported(
             "Can",
             "Can_GetControllerTxErrorCounter",
             "Std_ReturnType",
             &[("Controller", "uint8", "IN"), ("Value", "uint8 *", "OUT")],
-            "runtime/include/standard/Can.h",
+            "runtime/multi/include/standard/Can.h",
         );
         imported(
             "CanIf",
@@ -605,7 +601,7 @@ pub(super) fn files<T>(
             ),
         ] {
             let mut symbol = rte_symbol(name, result, &arguments);
-            symbol.declaration_owner = "runtime/multi/include/SchM_Dcm.h".into();
+            symbol.declaration_owner = "include/SchM_Dcm.h".into();
             symbol.definition_owner = "src/SchM.c".into();
             rte.push(symbol);
         }
