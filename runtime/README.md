@@ -28,7 +28,7 @@
 
 | 业务边界 | 行为 |
 | --- | --- |
-| 发送确认 | queued；native sink 实际 write/flush 成功后经 mailbox 在 owner 上确认 |
+| 发送确认 | queued；native sink 实际 write/flush 成功后经 mailbox 在 owner 上确认；所属 epoch 的周期之前到达的确认在该周期之后按序提交 |
 | 同 epoch 收帧与 deadline | 先处理该 epoch 的 RX，再检查 deadline |
 | CanTp DLC | 固定补齐到 8 字节 |
 | WFTmax=0 的 WAIT | 终止当前传输，返回 flow error；后续完整请求可恢复 |
