@@ -1522,6 +1522,10 @@ pub(super) fn data_symbol(component: &Component, port: &DataPort) -> String {
 // Source component names cannot claim a producer in those existing namespaces.
 fn runtime_namespace(name: &str) -> bool {
     [
+        // Generated OS counter service producers (os_service.rs):
+        // OsService_<Counter>_<Operation> and its Rte_Call_OsService_ port API.
+        "OsService_",
+        "Rte_Call_OsService_",
         "Os_",
         "OS_",
         "Ecu_",
