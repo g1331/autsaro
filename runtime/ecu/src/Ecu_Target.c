@@ -78,9 +78,7 @@ static unsigned output_retire;
 static unsigned output_pending;
 static Ecu_OutputSlot outputs[ECU_TARGET_OUTPUT_CAPACITY];
 static Ecu_ProtocolSlot protocol_failures[ECU_TARGET_OUTPUT_CAPACITY];
-#if !defined(ECU_MULTI_COMPONENT)
 static unsigned protocol_write;
-#endif
 static unsigned protocol_read;
 static uint8_t received;
 static uint64_t received_at;
@@ -91,18 +89,30 @@ static void fail(void) {
 }
 static Os_Atomic32 load(volatile Os_Atomic32 *value) { return Os_HostAtomicLoad(value); }
 
-#if !defined(ECU_MULTI_COMPONENT)
+/* Owner-only writer; a full queue closes the target instead of dropping a record. */
+static void record_protocol_failure(EcuStatus status) {
+    Ecu_ProtocolSlot *slot = &protocol_failures[protocol_write];
+    if (load(&slot->state) != 0) {
+        fail();
+    }
+    slot->record.epoch = epoch;
+    slot->record.status = status;
+    protocol_write = (protocol_write + 1u) % ECU_TARGET_OUTPUT_CAPACITY;
+    (void)Os_HostAtomicExchange(&slot->state, 1);
+}
+#if defined(ECU_MULTI_COMPONENT)
+void Ecu_TargetReportTransportTimeout(void) {
+    if (Ecu_TargetIsOwner() == 0) {
+        fail();
+    } else {
+        record_protocol_failure(ECU_ERR_TP_TIMEOUT);
+    }
+}
+#else
 static void advance_transport(void) {
     EcuStatus status = CanTp_AdvanceTime(epoch);
     if (status == ECU_ERR_TP_TIMEOUT) {
-        Ecu_ProtocolSlot *slot = &protocol_failures[protocol_write];
-        if (load(&slot->state) != 0) {
-            fail();
-        }
-        slot->record.epoch = epoch;
-        slot->record.status = status;
-        protocol_write = (protocol_write + 1u) % ECU_TARGET_OUTPUT_CAPACITY;
-        (void)Os_HostAtomicExchange(&slot->state, 1);
+        record_protocol_failure(status);
     } else if (status != ECU_OK) {
         fail();
     } else {

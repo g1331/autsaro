@@ -297,7 +297,7 @@ pub(super) fn files(
         )
         .unwrap();
     }
-    config.push_str("static Std_ReturnType Ecu_BswMAction(NetworkHandleType channel, ComM_ModeType requested);\nstatic void Ecu_ComModeChanged(NetworkHandleType channel, ComM_ModeType mode);\nconst EcuPolicyConfig Ecu_Policy = {ECU_TX_QUEUED};\nstatic const Can_ConfigType driver = {NULL_PTR};\n");
+    config.push_str("static Std_ReturnType Ecu_BswMAction(NetworkHandleType channel, ComM_ModeType requested);\nstatic Std_ReturnType Ecu_DetRuntimeCallout(uint16_t ModuleId, uint8_t InstanceId, uint8_t ApiId, uint8_t ErrorId);\nstatic void Ecu_ComModeChanged(NetworkHandleType channel, ComM_ModeType mode);\nconst EcuPolicyConfig Ecu_Policy = {ECU_TX_QUEUED};\nstatic const Can_ConfigType driver = {NULL_PTR};\n");
     let mut receive = String::new();
     let mut transmit = String::new();
     let routing_headers = "#include \"Com.h\"\n#include \"Dcm.h\"\n#include \"CanTp.h\"\n#include \"PduR.h\"\n#include \"PduR_Com.h\"\n#include \"PduR_CanIf.h\"\n#include \"LSduR.h\"\n#include \"LSduR_PduR.h\"\n";
@@ -443,7 +443,7 @@ pub(super) fn files(
             "static void Ecu_DcmAuthenticationMode(uint8 state);\n"
         )
         .unwrap();
-        writeln!(config, "static const Dcm_ConfigType dcm_config = {{{}u, {}u, {}u, {did}u, {read}, {}u, {}u, {}u, {}u, {}u, {}u, Ecu_DcmAuthenticationMode}};", tp.dcm_receive, tp.dcm_transmit, mode.channel_handle, tp.p2_ms / period, tp.p2_ms, tp.p2_star_ms, tp.s3_ms / period, tp.buffer_bytes, tx_route.source_handle).unwrap();
+        writeln!(config, "static const Dcm_ConfigType dcm_config = {{{}u, {}u, {}u, {did}u, {read}, {}u, {}u, {}u, {}u, {}u, {}u, Ecu_DcmAuthenticationMode, {}u}};", tp.dcm_receive, tp.dcm_transmit, mode.channel_handle, tp.p2_ms / period, tp.p2_ms, tp.p2_star_ms, tp.s3_ms / period, tp.buffer_bytes, tx_route.source_handle, tp.max_did_to_read.unwrap_or(0)).unwrap();
     }
     for (name, ty, entries) in [
         ("can_rx", "CanIf_RxPduConfigType", &receive),
@@ -519,6 +519,9 @@ pub(super) fn files(
     ] {
         writeln!(config, "#define RTE_{scope}_START_SEC_CODE\n#include \"Ecu_MemMap.h\"\nRTE_{scope}_CODE void {symbol}(void) {{ {body} }}\n#define RTE_{scope}_STOP_SEC_CODE\n#include \"Ecu_MemMap.h\"").unwrap();
     }
+    // SWS_CanTp_00229 timeouts reach the HostBatch receipt through the
+    // standard runtime callout (DetReportRuntimeErrorCallout), not a CanTp hook.
+    config.push_str("static const Det_ErrorHookType det_runtime_callouts[1] = {Ecu_DetRuntimeCallout};\nstatic const Det_ConfigType det_config = {NULL_PTR, 0u, det_runtime_callouts, 1u};\n");
     config.push_str("#define RTE_Ecu_START_SEC_CODE\n#include \"Ecu_MemMap.h\"\n");
     config.push_str("static void Ecu_ComModeChanged(NetworkHandleType channel, ComM_ModeType current) {\n    BswM_ComM_CurrentMode(channel, current);\n");
     if transport.is_some() {
@@ -542,7 +545,8 @@ pub(super) fn files(
         .unwrap();
     }
     config.push_str("    default: return E_NOT_OK;\n    }\n    return E_OK;\n}\n");
-    config.push_str("Std_ReturnType Ecu_MultiBootstrap(void) {\n    Can_ControllerStateType actual;\n    if (Ecu_TargetCheckLifecycleContext(TRUE) != E_OK) { return E_NOT_OK; }\n    SchM_Init(&Ecu_SchMConfig);\n    SchM_Start();\n    if (Ecu_SchMReady() == FALSE) { return E_NOT_OK; }\n    Det_Init(NULL);\n    Det_Start();\n    Can_Init(&driver);\n    CanIf_Init(&can_if_config);\n    Ecu_HostBusSM_Init(&bus_config);\n    LSduR_Init(&LSduR_Config);\n    PduR_Init(&PduR_Config);\n    Com_Init(&com_config);\n    Com_IpduGroupStart(com_config.receive_group, TRUE);\n    Com_EnableReceptionDM(com_config.receive_group);\n    ComM_Init(&comm_config);\n    BswM_Init(&bswm_config);\n");
+    config.push_str("static RTE_Ecu_CODE Std_ReturnType Ecu_DetRuntimeCallout(uint16_t ModuleId, uint8_t InstanceId, uint8_t ApiId, uint8_t ErrorId) {\n    (void)InstanceId;\n    if ((ModuleId == 35u) && (ApiId == 0x06u) && ((ErrorId == 0xc0u) || (ErrorId == 0xd0u))) {\n        Ecu_TargetReportTransportTimeout();\n    }\n    return E_OK;\n}\n");
+    config.push_str("Std_ReturnType Ecu_MultiBootstrap(void) {\n    Can_ControllerStateType actual;\n    if (Ecu_TargetCheckLifecycleContext(TRUE) != E_OK) { return E_NOT_OK; }\n    SchM_Init(&Ecu_SchMConfig);\n    SchM_Start();\n    if (Ecu_SchMReady() == FALSE) { return E_NOT_OK; }\n    Det_Init(&det_config);\n    Det_Start();\n    Can_Init(&driver);\n    CanIf_Init(&can_if_config);\n    Ecu_HostBusSM_Init(&bus_config);\n    LSduR_Init(&LSduR_Config);\n    PduR_Init(&PduR_Config);\n    Com_Init(&com_config);\n    Com_IpduGroupStart(com_config.receive_group, TRUE);\n    Com_EnableReceptionDM(com_config.receive_group);\n    ComM_Init(&comm_config);\n    BswM_Init(&bswm_config);\n");
     if transport.is_some() {
         config.push_str("    CanTp_Init(&tp_config);\n    Dcm_Init(&dcm_config);\n");
     }
@@ -644,6 +648,7 @@ pub(super) fn files(
         "LSduR",
         "ComM",
         "BswM",
+        "Det",
         "Ecu_HostBusSM",
         "Ecu",
     ]
@@ -679,15 +684,24 @@ pub(super) fn files(
         );
     }
     put(&mut files, "integration.json", format!("{}\n", serde_json::to_string_pretty(&serde_json::json!({"format": "autosar-ecu-integration-v1", "plan": description, "target": target.spec().id, "owner": "single source-derived AUTOSTART extended task", "originalBswSources": super::ecu::source_assets(target, true).map_err(|_| failure())?.iter().map(|(path, asset)| (asset.relative_path, path)).collect::<BTreeMap<_, _>>() })).unwrap()));
+    let verification = super::handoff::verification_files(plan).map_err(|_| failure())?;
     put(
         &mut files,
         "README.md",
         format!(
-            "# ECU integration source project\n\nTarget: `{}`. Caller application sources are sealed under `src/`; the source-derived component, communication and OS contracts are in `integration.json`.\n\n## Independent native build\n\n{}\nFrom this directory run `python tools/ecu-tool.py build --project . --output <new-empty-external-directory> --mode host-batch`. The production BEGIN/RX/COMMIT protocol uses the single OS owner and controlled logical ticks. Physical output flush precedes driver polling confirmation. No compiler, AUTOSAR archive or application algorithm is generated or redistributed.\n",
+            "# ECU integration source project\n\nTarget: `{}`. Caller application sources are sealed under `src/`; the source-derived component, communication and OS contracts are in `integration.json`.\n\n## Independent native build\n\n{}\nFrom this directory run `python tools/ecu-tool.py build --project . --output <new-empty-external-directory> --mode host-batch`. The production BEGIN/RX/COMMIT protocol uses the single OS owner and controlled logical ticks. Physical output flush precedes driver polling confirmation. No compiler, AUTOSAR archive or application algorithm is generated or redistributed.\n{}",
             target.spec().id,
-            crate::generator::delivery::native_build_prerequisites(target)
+            crate::generator::delivery::native_build_prerequisites(target),
+            if verification.is_empty() {
+                ""
+            } else {
+                "\n## Reference behaviour verification\n\nThis configuration has one 32-bit CAN receive signal, one 32-bit CAN transmit signal and an application DID, so `verification/inputs.json` records their configured endpoints. `python tools/ecu-tool.py verify --project . --build-directory <another-new-empty-external-directory>` builds HostBatch and checks the reference echo application: the transmit signal repeats the last received value, the DID returns it big-endian, one/two-DID reads, DID capacity refusal, N_Cr timeout/recovery and malformed admission. Other application behaviour fails this check by design; it does not establish full SC1, MCU, hard-real-time, ASIL or official certification.\n"
+            }
         ),
     );
+    for (path, bytes) in verification {
+        files.insert(path, Cow::Owned(bytes));
+    }
     files.extend(
         super::artifacts::files(description, &files)
             .map_err(|_| failure())?

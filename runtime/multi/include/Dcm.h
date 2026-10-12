@@ -24,6 +24,8 @@ typedef struct {
     /** Router transmit request ID, distinct from Dcm's own confirmation ID. */
     PduIdType router_transmit;
     Ecu_DcmAuthenticationModeType authentication_mode;
+    /** DcmDspMaxDidToRead; 0 when not configured applies no limit (SWS_Dcm_01335). */
+    uint16 max_did_to_read;
 } Dcm_ConfigType;
 void Dcm_Init(const Dcm_ConfigType *ConfigPtr);
 /** Selected DevErrorDetect=false: all three APIs always return E_OK.

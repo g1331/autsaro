@@ -109,7 +109,6 @@ pub(super) fn ecu_build_command(
     command
 }
 
-#[cfg(windows)]
 pub(super) fn ecu_verify_command(project: &std::path::Path, output: &std::path::Path) -> Command {
     let settings = execution_settings();
     let mut command = Command::new(&settings.python);

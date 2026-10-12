@@ -14,5 +14,9 @@
 - 拆分基础、官方对照、原生运行测试，增加前端行为回归。
 - 增加贡献指南、基础 CI、专用验收入口和资产维护说明。
 - 补齐运行时字节身份所需的 Git 行尾规则。
+- 只含一个应用组件的工程改由多组件主线规划；只有服务组件的组合以 `APPLICATION_COMPONENT_MISSING` 拒绝。
+- 主线 Dcm 对 DID 数超过所配置 `DcmDspMaxDidToRead` 的 ReadDataByIdentifier 请求回 NRC 0x13（SWS_Dcm_01335）。`Dcm_ConfigType` 新增 `max_did_to_read`（未配置为 0），计划描述记录 `maxDidToRead`。
+- 主线 CanTp 超时时报告 `CANTP_E_RX_COM`／`CANTP_E_TX_COM` 运行时错误（SWS_CanTp_00229）；生成的主机目标经 Det runtime callout 接收，并作为 HostBatch 传输失败报告。
+- 含一个应用组件、一个 32 位 CAN 接收与发送信号及应用 DID 的主线工程交付 `verification/inputs.json`，`ecu-tool verify` 据此检查参考回显行为。
 
 早期开发结果保留在 Git 历史和相关实施工件中；本记录不重新声明历史发行或验收结果。

@@ -62,6 +62,8 @@ pub struct DiagnosticTransportContract {
     pub transmit_npdu: u16,
     pub dcm_receive: u16,
     pub dcm_transmit: u16,
+    /// Configured DcmDspMaxDidToRead; `None` applies no request limit (SWS_Dcm_01335).
+    pub max_did_to_read: Option<u16>,
 }
 
 fn reject(
@@ -802,6 +804,24 @@ pub(super) fn inspect_transport(
         transmit_npdu,
         dcm_receive: identifier(graph, rx, "DcmDslProtocolRxPduId")?,
         dcm_transmit: identifier(graph, tx, "DcmDslTxConfirmationPduId")?,
+        max_did_to_read: graph
+            .of_kind("ECUC-CONTAINER-VALUE")
+            .into_iter()
+            .filter(|index| definition_is(graph, *index, "DcmDsp"))
+            .find_map(|dsp| value(graph, dsp, "DcmDspMaxDidToRead", false))
+            .map(|limit| {
+                limit.parse::<u16>().ok().filter(|limit| *limit > 0).ok_or_else(|| {
+                    reject(
+                        graph,
+                        context,
+                        "TARGET_PARAMETER_UNSUPPORTED",
+                        crate::product_message!(
+                            "backend.integration.configuration.fixed_target_policy_value_mismatch"
+                        ),
+                    )
+                })
+            })
+            .transpose()?,
     })
 }
 fn identifier(graph: &Graph, context: usize, parameter: &str) -> Result<u16, Vec<PlanDiagnostic>> {

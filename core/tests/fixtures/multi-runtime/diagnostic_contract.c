@@ -53,8 +53,19 @@ static Std_ReturnType read_did(uint8 *data) {
     ++reads;
     return E_OK;
 }
+static unsigned rx_timeouts;
+static unsigned tx_timeouts;
 static Std_ReturnType error(uint16 module, uint8 instance, uint8 api, uint8 code) {
     assert(instance == 0u);
+    /* SWS_CanTp_00229: MainFunction timeouts report CANTP_E_RX_COM/CANTP_E_TX_COM. */
+    if ((module == 35u) && (api == 0x06u) && ((code == 0xc0u) || (code == 0xd0u))) {
+        if (code == 0xc0u) {
+            ++rx_timeouts;
+        } else {
+            ++tx_timeouts;
+        }
+        return E_OK;
+    }
     assert(((module == 60u) && (api == 0x49u) && (code == 70u)) ||
            ((module == 35u) && (api == 0x42u) && ((code == 0xb0u) || (code == 0x70u))) ||
            ((module == 35u) && (api == 0x4cu) && (code == 0xa0u)));
@@ -102,8 +113,8 @@ static const Ecu_HostBusSM_ConfigType cdd = {7u, 0u};
 static const BswM_ConfigType bswm = {7u, COMM_NO_COMMUNICATION, Ecu_HostBusSM_ApplyMode};
 static uint8 authentication_mode = 255u;
 static void publish_authentication(uint8 state) { authentication_mode = state; }
-static const Dcm_ConfigType dcm = {17u, 18u,   7u,  0x1234u, read_did, 50u,
-                                   50u, 5000u, 20u, 256u,    81u,      publish_authentication};
+static const Dcm_ConfigType dcm = {
+    17u, 18u, 7u, 0x1234u, read_did, 50u, 50u, 5000u, 20u, 256u, 81u, publish_authentication, 0u};
 static const CanTp_ConfigType tp = {11u, 12u, 31u, 41u, 256u, 5u,  5u, 5u,
                                     5u,  5u,  1u,  2u,  0u,   71u, 72u};
 static void receive(const uint8 bytes[8]) {
@@ -377,11 +388,13 @@ int main(void) {
         request_read();
         Dcm_MainFunction();
         flush();
+        const unsigned rx_before = rx_timeouts;
         receive(ff);
         flush();
         for (i = 0u; i < 5u; ++i) {
             CanTp_MainFunction();
         }
+        assert(rx_timeouts == rx_before + 1u);
         request_read();
         Dcm_MainFunction();
         flush();
@@ -454,12 +467,14 @@ int main(void) {
         const uint8 ff[8] = {0x10u, 9u, 0x22u, 0x12u, 0x34u, 0x12u, 0x34u, 0x12u};
         uint8 short_cf[4] = {0x21u, 0x34u, 0x12u, 0x34u};
         const PduInfoType short_info = {short_cf, NULL_PTR, 4u};
+        const unsigned tx_before = tx_timeouts;
         receive(bytes);
         Dcm_MainFunction();
         flush();
         for (i = 0u; i < 5u; ++i) {
             CanTp_MainFunction();
         }
+        assert(tx_timeouts == tx_before + 1u);
         request_read();
         Dcm_MainFunction();
         flush();
@@ -550,6 +565,27 @@ int main(void) {
         Dcm_Init(&dcm);
         assert(authentication_mode ==
                0u); /* Retire the caller-owned configuration before its lifetime ends. */
+    }
+    /* SWS_Dcm_01335: a configured DcmDspMaxDidToRead refuses longer requests with 0x13. */
+    {
+        const uint8 three[8] = {7u, 0x22u, 0xf1u, 0x86u, 0xf1u, 0x86u, 0xf1u, 0x86u};
+        const uint8 two[8] = {5u, 0x22u, 0xf1u, 0x86u, 0xf1u, 0x86u, 0u, 0u};
+        Dcm_ConfigType limited = dcm;
+        limited.max_did_to_read = 2u;
+        Dcm_Init(&limited);
+        Dcm_ComM_FullComModeEntered(7u);
+        receive(three);
+        Dcm_MainFunction();
+        flush();
+        assert(output[count - 1u][0] == 3u && output[count - 1u][1] == 0x7fu &&
+               output[count - 1u][2] == 0x22u && output[count - 1u][3] == 0x13u);
+        receive(two);
+        Dcm_MainFunction();
+        flush();
+        assert(output[count - 1u][0] == 7u && output[count - 1u][1] == 0x62u &&
+               output[count - 1u][2] == 0xf1u && output[count - 1u][5] == 0xf1u);
+        Dcm_Init(&dcm);
+        assert(authentication_mode == 0u);
     }
     /* Public reset, suppressed session completion and internal F186 use actual state. */
     Dcm_ComM_FullComModeEntered(7u);
