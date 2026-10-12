@@ -3122,10 +3122,11 @@ fn single_application_component_rejections_locate_source_objects() {
 
 /// Seals the single-component project with the reference echo application:
 /// the multi fixture's `Ingress` without its removed local `Value` port.
+/// Returns the project directory and its sealed closure.
 fn single_component_project(
     root: &Path,
     target: autosar_config_core::target::BuildTarget,
-) -> std::path::PathBuf {
+) -> (std::path::PathBuf, Vec<(String, Vec<u8>)>) {
     use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
     let plan = build(&single_component_sources()).unwrap_or_else(|issues| panic!("{issues:?}"));
     let fixture = std::fs::read_to_string(
@@ -3146,18 +3147,23 @@ fn single_component_project(
     )
     .unwrap_or_else(|issues| panic!("{issues:?}"));
     let project = root.join("project");
-    for (path, bytes) in prepared.into_files() {
+    let files = prepared.into_files();
+    write_files(&project, &files);
+    (project, files)
+}
+
+fn write_files(project: &Path, files: &[(String, Vec<u8>)]) {
+    for (path, bytes) in files {
         let path = project.join(path);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, bytes).unwrap();
     }
-    project
 }
 
 #[test]
 fn reference_shape_records_independent_verification_inputs() {
     let scratch = Scratch::new();
-    let project = single_component_project(
+    let (project, _) = single_component_project(
         &scratch.0,
         autosar_config_core::target::BuildTarget::LinuxX64ControlledV1,
     );
@@ -3250,26 +3256,72 @@ fn mainline_enforces_fixed_os_class_and_did_read_limit() {
 #[test]
 fn single_application_component_builds_and_runs_production_owner() {
     let scratch = Scratch::new();
-    let project = single_component_project(&scratch.0, tooling::native_target());
+    let (project, _) = single_component_project(&scratch.0, tooling::native_target());
     verify_multi_production_owner(&project, &scratch.0, None);
 }
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[test]
 fn single_application_component_passes_independent_reference_verifier() {
+    use autosar_config_core::integration::{build_ecu_project, verify_ecu_project};
+    use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
+    // The workbench Build/Verify entry points compare the project with the
+    // closure from the same preparation, then run the delivered ecu-tool.
     let scratch = Scratch::new();
-    let project = single_component_project(&scratch.0, tooling::native_target());
-    let result = tooling::ecu_verify_command(&project, &scratch.0.join("verify-build"))
-        .current_dir(&scratch.0)
-        .env_remove("PYTHONPATH")
-        .env_remove("PYTHONHOME")
-        .output()
-        .unwrap();
-    let stdout = String::from_utf8_lossy(&result.stdout);
+    let (project, files) = single_component_project(&scratch.0, tooling::native_target());
+    let settings = tooling::execution_settings();
+    let owner = tooling::execution_owner();
+    let output = scratch.0.join("build");
+    std::fs::create_dir(&output).unwrap();
+    let built = build_ecu_project(&files, &project, &output, &settings, &owner)
+        .unwrap_or_else(|error| panic!("{error}"));
+    assert!(Path::new(&built.binary_path).is_file(), "{}", built.log);
+    let report = verify_ecu_project(&files, &project, &settings, &owner)
+        .unwrap_or_else(|error| panic!("{error}"));
+    assert!(report.passed, "{}", report.log);
+    assert!(report.log.to_string().contains("ECU_HANDOFF_VERIFY PASS:"));
+
+    // A project edited after generation is not the selected delivery.
+    let readme = project.join("README.md");
+    let original = std::fs::read(&readme).unwrap();
+    std::fs::write(&readme, b"edited\n").unwrap();
+    let stale = verify_ecu_project(&files, &project, &settings, &owner).unwrap_err();
     assert!(
-        result.status.success() && stdout.contains("ECU_HANDOFF_VERIFY PASS:"),
-        "{stdout}\n{}",
-        String::from_utf8_lossy(&result.stderr)
+        serde_json::to_string(&stale)
+            .unwrap()
+            .contains("backend.generation.output_modified"),
+        "{stale}"
+    );
+    std::fs::write(&readme, original).unwrap();
+
+    // Shapes without reference inputs are refused before any tool runs.
+    let plan = build(&sources_without_application_did(true)).unwrap();
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-application");
+    let applications: Vec<_> = plan
+        .application_slot_descriptors()
+        .unwrap()
+        .iter()
+        .map(|slot| ApplicationSource {
+            component_instance: slot
+                .producer_slot
+                .strip_prefix("singlecore-multi-swc-v1:")
+                .unwrap()
+                .into(),
+            path: fixtures.join(slot.source_paths[0].rsplit('/').next().unwrap()),
+        })
+        .collect();
+    let files =
+        prepare_ecu_project_with_applications(&plan, tooling::native_target(), &applications)
+            .unwrap()
+            .into_files();
+    let three = scratch.0.join("three");
+    write_files(&three, &files);
+    let refused = verify_ecu_project(&files, &three, &settings, &owner).unwrap_err();
+    assert!(
+        serde_json::to_string(&refused)
+            .unwrap()
+            .contains("reference_verification_inputs_missing"),
+        "{refused}"
     );
 }
 

@@ -288,16 +288,28 @@ fn compare_files(
     Ok(())
 }
 
+/// The caller supplies the expected closure from the same preparation entry
+/// point that generated the project (plan-only or workspace-aware), so the
+/// built bytes are always the bytes the workbench would deliver now.
 fn checked_project(
-    plan: &ValidatedIntegrationPlan,
+    expected: &[(String, Vec<u8>)],
     project: &Path,
 ) -> Result<BuildTarget, crate::message::LocalizedText> {
     let names = generator::output::verify_build_input(project)?;
-    let data: Value = serde_json::from_slice(
+    let integration = |bytes: &[u8]| -> Result<Value, crate::message::LocalizedText> {
+        Ok(serde_json::from_slice(bytes).map_err(|error| error.to_string())?)
+    };
+    let data = integration(
         &fs::read(project.join("integration.json")).map_err(|error| error.to_string())?,
-    )
-    .map_err(|error| error.to_string())?;
-    if data["format"] != "autosar-ecu-integration-v1" || data["plan"]["profile"] != super::PROFILE {
+    )?;
+    let selected = expected
+        .iter()
+        .find(|(path, _)| path == "integration.json")
+        .map(|(_, bytes)| integration(bytes))
+        .transpose()?;
+    if data["format"] != "autosar-ecu-integration-v1"
+        || selected.is_none_or(|selected| data["plan"]["profile"] != selected["plan"]["profile"])
+    {
         return Err(crate::product_message!(
             "backend.integration.handoff.source_directory_integration_profile_mismatch"
         )
@@ -305,19 +317,7 @@ fn checked_project(
     }
     let target: BuildTarget =
         serde_json::from_value(data["target"].clone()).map_err(|error| error.to_string())?;
-    let expected = if project.join("handoff.json").exists() {
-        plan.ecu_handoff_files(target)
-    } else {
-        plan.ecu_integration_files(target)
-    }
-    .map_err(|diagnostics| crate::message::LocalizedText::messages(diagnostics.into_iter().map(|diagnostic| {
-        crate::message::LocalizedText::messages([
-            crate::product_message!("backend.integration.handoff.diagnostic_location", "code" => diagnostic.code, "file" => diagnostic.file.as_deref().unwrap_or(""), "object" => diagnostic.object.as_deref().unwrap_or("")),
-            diagnostic.message,
-            diagnostic.remedy,
-        ])
-    })))?;
-    compare_files(project, &names, expected.files())?;
+    compare_files(project, &names, expected)?;
     Ok(target)
 }
 
@@ -366,13 +366,13 @@ pub(crate) fn run_tool(
 }
 
 pub fn build_ecu_project(
-    plan: &ValidatedIntegrationPlan,
+    expected: &[(String, Vec<u8>)],
     project: &Path,
     output: &Path,
     settings: &ExecutionSettings,
     owner: &ProcessOwner,
 ) -> Result<BuildReport, crate::message::LocalizedText> {
-    let target = checked_project(plan, project)?;
+    let target = checked_project(expected, project)?;
     let capture = generator::output::reserve_directory(
         &std::env::temp_dir(),
         "ecu-build",
@@ -396,7 +396,7 @@ pub fn build_ecu_project(
     .map_err(|error| {
         crate::message::LocalizedText::messages([error, crate::product_message!("backend.integration.handoff.source_build_diagnostics_retained", "path" => capture.display())])
     })?;
-    checked_project(plan, project)?;
+    checked_project(expected, project)?;
     let binary = output.join(target.spec().binary_name);
     if !binary.is_file() {
         return Err(crate::product_message!(
@@ -412,12 +412,21 @@ pub fn build_ecu_project(
 }
 
 pub fn verify_ecu_project(
-    plan: &ValidatedIntegrationPlan,
+    expected: &[(String, Vec<u8>)],
     project: &Path,
     settings: &ExecutionSettings,
     owner: &ProcessOwner,
 ) -> Result<RunReport, crate::message::LocalizedText> {
-    checked_project(plan, project)?;
+    checked_project(expected, project)?;
+    if !expected
+        .iter()
+        .any(|(path, _)| path == "verification/inputs.json")
+    {
+        return Err(crate::product_message!(
+            "backend.integration.handoff.reference_verification_inputs_missing"
+        )
+        .into());
+    }
     let scratch = generator::output::reserve_directory(
         &std::env::temp_dir(),
         "ecu-verify",
@@ -440,7 +449,7 @@ pub fn verify_ecu_project(
     .map_err(|error| {
         crate::message::LocalizedText::messages([error, crate::product_message!("backend.integration.handoff.verification_diagnostics_retained", "path" => scratch.display())])
     })?;
-    checked_project(plan, project)?;
+    checked_project(expected, project)?;
     if !log
         .lines()
         .any(|line| line.starts_with("ECU_HANDOFF_VERIFY PASS:"))

@@ -183,7 +183,7 @@ pub fn verify() {
     );
     reseal(&project);
     let executable_rejected = verify_ecu_project(
-        &plan,
+        files.files(),
         &project,
         &super::tooling::execution_settings(),
         &super::tooling::execution_owner(),
@@ -312,7 +312,7 @@ pub fn verify_rapid() {
         .generate_previewed(&project, &preview.revision)
         .unwrap();
     let report = verify_ecu_project(
-        &plan,
+        files.files(),
         &project,
         &super::tooling::execution_settings(),
         &super::tooling::execution_owner(),
