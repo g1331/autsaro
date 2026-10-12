@@ -73,8 +73,14 @@ check('seven-source-standard-variant', async () => {
     assert.deepEqual(await readFile(source.path), source.bytes);
   await sourceSurface(await projection());
   // Mainline deliveries compile the project's own user application.
-  const seed = await invoke('preview_application_initialization');
-  await invoke('initialize_application_previewed', { preview: seed });
+  await menu('预览初始化用户应用…');
+  await until(
+    `Boolean(document.querySelector('[role=dialog]'))`,
+    'application initialization preview',
+  );
+  await click('确认创建用户应用与成员记录', "document.querySelector('[role=dialog]')");
+  await until(`!document.querySelector('[role=dialog]')`, 'application initialization confirmed');
+  await awaitProjectSurfaceReady();
   gatewayDelivery = await exportSource('GatewayReference-source');
 });
 check('v2-relocation-snapshot-import-and-refusals', async () => {
@@ -92,7 +98,10 @@ check('v2-relocation-snapshot-import-and-refusals', async () => {
   await choose(
     'directory',
     relocated,
-    () => menu('导入 ECU 交接包…'),
+    async () => {
+      await menu('导入 ECU 交接包…');
+      await click('选择交付包', "document.querySelector('[role=dialog]')");
+    },
     async () => {
       await until(
         `document.querySelector('[role=dialog][aria-label="导入封存交付包"] [aria-label="交付包目录"]')?.value === ${json(relocated)}`,
