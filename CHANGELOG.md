@@ -17,5 +17,6 @@
 - Mainline Dcm refuses ReadDataByIdentifier requests with more DIDs than the configured `DcmDspMaxDidToRead` with NRC 0x13 (SWS_Dcm_01335). `Dcm_ConfigType` gains `max_did_to_read` (0 when not configured) and plan descriptions record `maxDidToRead`.
 - Mainline CanTp reports `CANTP_E_RX_COM`/`CANTP_E_TX_COM` runtime errors on timeouts (SWS_CanTp_00229). The generated host target receives them through a Det runtime callout and reports them as HostBatch transport failures.
 - Mainline projects with one application component, one 32-bit CAN receive and transmit signal and an application DID deliver `verification/inputs.json`, so `ecu-tool verify` checks the reference echo behaviour.
+- Mainline plans reject CanIf PDU handles above 255 with `CANIF_HANDLE_WIDTH` (the delivered `PduIdType` is `uint8_t`) instead of `CAN_ID_CONFLICT`, and report a missing selected BSW entry at the module reference that names it instead of an unrelated object.
 
 Early development results remain in Git history and the corresponding implementation artifacts. This changelog does not restate historical releases or acceptance results.
