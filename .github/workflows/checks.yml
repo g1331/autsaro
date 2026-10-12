@@ -327,6 +327,20 @@ jobs:
           key: c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'core/Cargo.lock') }}-v1
       - name: Analyzer behavior tests
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
+      # The sealed build and receiver checks resolve the same absolute tools.
+      - name: Select native contract tools
+        shell: python
+        run: |
+          import os, shutil, subprocess
+          from pathlib import Path
+          tools = {'AUTOSAR_CC': 'gcc', 'AUTOSAR_OBJDUMP': 'objdump', 'AUTOSAR_NM': 'nm', 'AUTOSAR_GIT': 'git'}
+          # The project environment's interpreter, as used by the development tooling.
+          python = subprocess.run(['uv', 'run', '--locked', 'python', '-c', 'import sys; print(sys.executable)'],
+              check=True, capture_output=True, text=True).stdout.strip()
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              for variable, name in tools.items():
+                  output.write(variable + '=' + str(Path(shutil.which(name)).absolute()) + '\n')
+              output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
       - name: Generate complete analysis samples
         run: cargo test --locked --manifest-path core/Cargo.toml --test it -- 'c_analysis::'
       - name: Sealed ECU build mode fault isolation
