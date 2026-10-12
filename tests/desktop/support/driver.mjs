@@ -401,7 +401,6 @@ export async function launch(name) {
     'app-path',
     'config',
     'data',
-    'webview-profile',
     'projects',
     'deliveries',
   ])
@@ -423,7 +422,6 @@ export async function launch(name) {
     AUTOSAR_CONFIG_DIR: path.join(scratch, 'app-config'),
     APPDATA: path.join(scratch, 'app-config'),
     LOCALAPPDATA: path.join(scratch, 'app-local'),
-    WEBVIEW2_USER_DATA_FOLDER: path.join(scratch, 'webview-profile'),
     XDG_CONFIG_HOME: path.join(scratch, 'config'),
     XDG_DATA_HOME: path.join(scratch, 'data'),
     HOME: path.join(scratch, 'app-home'),
