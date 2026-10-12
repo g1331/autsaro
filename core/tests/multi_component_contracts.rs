@@ -14,6 +14,8 @@ mod workspace;
 use workspace::Scratch;
 #[path = "support/delivery.rs"]
 mod delivery_support;
+#[path = "support/mainline_inputs.rs"]
+mod mainline_inputs;
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[path = "support/mainline_protocol.rs"]
 mod mainline_protocol;
@@ -7557,4 +7559,53 @@ fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
 #[test]
 fn single_component_native_batch_boundary_and_confirmations() {
     mainline_protocol::host_batch_native_boundary();
+}
+
+// Historical single-chain input, contract and delivery expectations on the
+// mainline single-component project.
+#[test]
+fn single_component_network_rejections_locate_extract_objects() {
+    mainline_inputs::network_rejections_locate_extract_objects();
+}
+
+#[test]
+fn single_component_rejections_locate_application_objects() {
+    mainline_inputs::component_rejections_locate_application_objects();
+}
+
+#[test]
+fn single_component_configuration_rejections_keep_identifier_width_and_order() {
+    mainline_inputs::configuration_rejections_keep_identifier_width_and_order();
+}
+
+#[test]
+fn single_component_omitted_event_masks_and_unrelated_sources_are_planned() {
+    mainline_inputs::omitted_event_masks_and_unrelated_sources_are_planned();
+}
+
+#[test]
+fn single_component_input_sources_reject_unportable_aliases_and_missing_archives() {
+    mainline_inputs::input_sources_reject_unportable_aliases_and_missing_archives();
+}
+
+#[test]
+fn single_component_contract_names_reject_c_keywords_and_reserved_identifiers() {
+    mainline_inputs::contract_names_reject_c_keywords_and_reserved_identifiers();
+}
+
+#[test]
+fn single_component_source_preparation_is_target_complete_without_native_tools() {
+    mainline_inputs::source_preparation_is_target_complete_without_native_tools();
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn single_component_contract_headers_refuse_mismatched_consumers() {
+    mainline_inputs::generated_contract_headers_refuse_mismatched_consumers();
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn single_component_production_preflight_and_binary_exclude_private_test_code() {
+    mainline_inputs::production_preflight_and_binary_exclude_private_test_code();
 }
