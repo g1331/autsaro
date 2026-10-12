@@ -271,10 +271,6 @@ pub(super) fn inspect_native(
     inspect_with_catalog(graph, Some(catalog))
 }
 
-pub(super) fn inspect(graph: &Graph) -> Result<Configuration, Vec<PlanDiagnostic>> {
-    inspect_with_catalog(graph, None)
-}
-
 fn inspect_with_catalog(
     graph: &Graph,
     catalog: Option<&crate::definitions::DefinitionCatalog>,

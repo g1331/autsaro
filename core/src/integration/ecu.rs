@@ -3,13 +3,10 @@ use super::{DiagnosticCategory, PlanDiagnostic, ValidatedIntegrationPlan};
 use crate::resources::AssetInventory;
 use crate::target::BuildTarget;
 use crate::{GenerationPreview, GenerationReport, generator};
-use sha2::{Digest, Sha256};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::path::Path;
-
-pub(crate) const APPLICATION_SOURCE_PATH: &str = "application/Application.c";
 
 /// A complete deterministic source project from the same validated plan.
 /// No unchecked constructor or caller-supplied source replacements exist.
@@ -50,52 +47,22 @@ fn reject(message: crate::message::LocalizedText) -> Vec<PlanDiagnostic> {
 }
 
 impl ValidatedIntegrationPlan {
-    /// The sole current native application producer. Paths are relative to the
-    /// authoritative project root, not the generated immutable source package.
-    pub fn application_slot_descriptor(
-        &self,
-    ) -> Result<generator::delivery::ApplicationSlotDescriptor, Vec<PlanDiagnostic>> {
-        let component = self.description().legacy_component().map_err(reject)?;
-        let contract = self.component_contract_files()?;
-        let generated_headers = contract
-            .files()
-            .iter()
-            .filter(|(path, _)| path.starts_with("include/") && path.ends_with(".h"))
-            .map(|(path, _)| path.clone())
-            .collect();
-        Ok(generator::delivery::ApplicationSlotDescriptor {
-            producer_slot: generator::delivery::APPLICATION_SLOT.into(),
-            component_path: component.component.clone(),
-            source_paths: vec![APPLICATION_SOURCE_PATH.into()],
-            generated_headers,
-            entry_symbols: vec![
-                "Ecu_ApplicationInitialize".into(),
-                component.periodic_symbol.clone(),
-                "Ecu_ApplicationInspect".into(),
-                component.service.runnable_symbol.clone(),
-            ],
-        })
-    }
-
     /// Every caller-owned producer is derived from the actual trusted symbol owner.
     /// The generated no-event Dcm service bridge is not a caller source slot.
     pub fn application_slot_descriptors(
         &self,
     ) -> Result<Vec<generator::delivery::ApplicationSlotDescriptor>, Vec<PlanDiagnostic>> {
-        let Some(multi) = &self.description().multi else {
-            return self.application_slot_descriptor().map(|slot| vec![slot]);
-        };
+        let multi = self.description().multi.as_ref().ok_or_else(|| {
+            reject(crate::product_message!("backend.integration.multi.consumer_unsupported").into())
+        })?;
         Ok(application_slots(multi, &self.description().symbols))
     }
 
     /// Trusted create-only seed; never merges with or overwrites a user source.
     pub fn application_seed_files(&self) -> Result<Vec<(String, Vec<u8>)>, Vec<PlanDiagnostic>> {
-        let Some(multi) = &self.description().multi else {
-            return Ok(vec![(
-                APPLICATION_SOURCE_PATH.into(),
-                self.render_reference_application()?,
-            )]);
-        };
+        let multi = self.description().multi.as_ref().ok_or_else(|| {
+            reject(crate::product_message!("backend.integration.multi.consumer_unsupported").into())
+        })?;
         // The reference shape gets the echo application the independent
         // verifier checks; any other shape gets neutral entry points.
         let reference = super::handoff::reference_shape(self);
@@ -202,48 +169,6 @@ impl ValidatedIntegrationPlan {
         Ok(files)
     }
 
-    fn render_reference_application(&self) -> Result<Vec<u8>, Vec<PlanDiagnostic>> {
-        let component = self.description().legacy_component().map_err(reject)?;
-        let read = component
-            .data_ports
-            .iter()
-            .find(|port| port.read)
-            .ok_or_else(|| {
-                reject(crate::product_message!(
-                    "backend.integration.ecu.validated_application_read_port_missing"
-                ))
-            })?;
-        let write = component
-            .data_ports
-            .iter()
-            .find(|port| !port.read)
-            .ok_or_else(|| {
-                reject(crate::product_message!(
-                    "backend.integration.ecu.validated_application_write_port_missing"
-                ))
-            })?;
-        let substitutions = [
-            (
-                "APP_HEADER",
-                format!(
-                    "Rte_{}.h",
-                    c_name(component.component.rsplit('/').next().unwrap())
-                ),
-            ),
-            ("RX_INITIAL", read.initial_value.to_string()),
-            ("TX_INITIAL", write.initial_value.to_string()),
-            ("READ_API", read.api_symbol.clone()),
-            ("WRITE_API", write.api_symbol.clone()),
-            ("SERVER_API", component.service.runnable_symbol.clone()),
-            ("PERIODIC_API", component.periodic_symbol.clone()),
-            (
-                "DATATYPE",
-                c_name(component.service.array_type.rsplit('/').next().unwrap()),
-            ),
-        ];
-        render_template("runtime/ecu/templates/Application.c.in", &substitutions)
-    }
-
     pub fn ecu_handoff_files(
         &self,
         target: BuildTarget,
@@ -269,355 +194,27 @@ impl ValidatedIntegrationPlan {
         target: BuildTarget,
         application: Option<&'a [u8]>,
     ) -> Result<BTreeMap<String, Cow<'a, [u8]>>, Vec<PlanDiagnostic>> {
-        let plan = self.description();
-        if plan.multi.is_some() {
-            if application.is_none() {
-                return Err(reject(crate::product_message!(
-                    "backend.integration.multi.consumer_unsupported"
-                )));
-            }
-            return super::multi_ecu::files(self, target);
-        }
-        let component = plan.legacy_component().map_err(reject)?;
-        let diagnostic = plan.legacy_diagnostic().map_err(reject)?;
-        let contract = self.component_contract_files()?;
-        let mut files = BTreeMap::new();
-        for asset in AssetInventory::embedded().selected(target, "ecu") {
-            let delivered = crate::prepared::deliver_path(asset, "ecu").map_err(reject)?;
-            if files
-                .insert(delivered.clone(), Cow::Borrowed(asset.bytes))
-                .is_some()
-            {
-                return Err(reject(
-                    crate::product_message!("backend.integration.ecu.trusted_asset_owner_collision", "delivered" => delivered),
-                ));
-            }
-        }
-        let mut source_paths = BTreeMap::new();
-        for (path, expected) in &plan.runtime_sources {
-            let asset = AssetInventory::embedded().selected(target, "ecu")
-                .find(|asset| asset.relative_path == path)
-                .ok_or_else(|| reject(crate::product_message!("backend.integration.ecu.plan_source_not_delivered", "path" => path)))?;
-            let delivered = crate::prepared::deliver_path(asset, "ecu").map_err(reject)?;
-            let bytes = files
-                .get(&delivered)
-                .ok_or_else(|| reject(crate::product_message!("backend.integration.ecu.plan_source_not_delivered", "path" => path)))?;
-            if format!("{:x}", Sha256::digest(bytes)) != *expected {
-                return Err(reject(
-                    crate::product_message!("backend.integration.ecu.plan_source_identity_mismatch", "path" => path),
-                ));
-            }
-            source_paths.insert(path, delivered.to_owned());
-        }
-        let OsGeneration {
-            counter_symbol,
-            task_symbol,
-            use_res_scheduler,
-            extended_status,
-        } = configure_os(plan, &mut files)?;
-        for (name, bytes) in contract.into_files() {
-            if name.starts_with("include/") || name == "contract.json" {
-                if let Some(previous) = files.get(&name) {
-                    if previous.as_ref() != bytes {
-                        return Err(reject(
-                            crate::product_message!("backend.integration.ecu.contract_runtime_header_mismatch", "name" => name),
-                        ));
-                    }
-                } else {
-                    files.insert(name, Cow::Owned(bytes));
-                }
-            }
-        }
-
-        let app_header = format!(
-            "Rte_{}.h",
-            c_name(component.component.rsplit('/').next().unwrap())
-        );
-        let client_header = format!(
-            "Rte_{}.h",
-            c_name(
-                component
-                    .service
-                    .client_instance
-                    .rsplit('/')
-                    .next()
-                    .unwrap()
-            )
-        );
-        if app_header == super::os_service::HEADER || client_header == super::os_service::HEADER {
+        if application.is_none() {
             return Err(reject(crate::product_message!(
-                "backend.integration.ecu.generated_component_os_header_collision"
+                "backend.integration.multi.consumer_unsupported"
             )));
         }
-        let rx = plan.signals.iter().find(|signal| signal.receive).unwrap();
-        let tx = plan.signals.iter().find(|signal| !signal.receive).unwrap();
-        let signal_id = |path: &str| {
-            plan.handles
-                .iter()
-                .find(|handle| handle.domain == "com_signal" && handle.path == path)
-                .unwrap()
-                .handle
-        };
-        let rx_id = signal_id(&rx.com_signal);
-        let tx_id = signal_id(&tx.com_signal);
-        let app = plan
-            .schedule
-            .entities
-            .iter()
-            .find(|entity| entity.application)
-            .unwrap();
-        let work = plan
-            .schedule
-            .entities
-            .iter()
-            .find(|entity| entity.period_ms == 1 && entity.os_event != app.os_event)
-            .ok_or_else(|| {
-                reject(crate::product_message!(
-                    "backend.integration.ecu.distinct_fixed_owner_work_event_missing"
-                ))
-            })?;
-        let mask = |path: &str| {
-            plan.events
-                .iter()
-                .find(|event| event.path == path)
-                .unwrap()
-                .mask
-        };
-        let io = plan
-            .events
-            .iter()
-            .find(|event| event.path != app.os_event && event.path != work.os_event)
-            .ok_or_else(|| {
-                reject(crate::product_message!(
-                    "backend.integration.ecu.distinct_owner_io_event_missing"
-                ))
-            })?;
-        let header = format!(
-            "/** @file Generated checked target constants and OS configuration. */\n#ifndef ECU_TARGET_CONFIG_H\n#define ECU_TARGET_CONFIG_H\n#include \"Os_Target.h\"\n#include \"{app_header}\"\n#define ECU_TARGET_TASK 0u\n#define ECU_TARGET_EVENT_WORK {}u\n#define ECU_TARGET_EVENT_APP {}u\n#define ECU_TARGET_EVENT_IO {}u\n#define ECU_TARGET_RX_CAN_ID {}u\n#define ECU_TARGET_RX_DEADLINE_MS {}u\n#define ECU_TARGET_RUN_APPLICATION() {}()\n#define ECU_TARGET_TRANSMIT() Com_TriggerTransmit(1u)\nextern const Os_TargetConfig Ecu_OsConfig;\nvoid Ecu_ApplicationInitialize(void);\nStd_ReturnType Ecu_TargetReadDid(uint8_t *data);\n#ifdef ECU_TARGET_TESTS\nint Ecu_TargetTestFailStage(unsigned stage);\nvoid Ecu_TargetTestShutdown(StatusType reason);\n#endif\n#endif\n",
-            mask(&work.os_event),
-            mask(&app.os_event),
-            io.mask,
-            rx.can_id,
-            rx.deadline_ms.unwrap(),
-            component.periodic_symbol,
-        );
-        if plan
-            .schedule
-            .entities
-            .iter()
-            .filter(|entity| entity.period_ms == 1 && entity.os_event != app.os_event)
-            .any(|entity| entity.trigger() != work.trigger() || entity.os_event != work.os_event)
-        {
-            return Err(reject(crate::product_message!(
-                "backend.integration.ecu.fixed_owner_work_cycle_alarm_event_invalid"
-            )));
-        }
-        files.insert(
-            "include/Ecu_TargetConfig.h".into(),
-            Cow::Owned(header.into_bytes()),
-        );
-        files.insert(
-            "include/Ecu_ProfileLimits.h".into(),
-            Cow::Owned(
-                format!(
-                    "/** @file Compile-time capacity of the validated integrated profile. */\n#ifndef ECU_PROFILE_LIMITS_H\n#define ECU_PROFILE_LIMITS_H\n#define ECU_MAX_PDU_PAYLOAD {}u\n#define CAN_HOST_QUEUED_COMPLETION 1\n#endif\n",
-                    diagnostic.buffer_bytes,
-                )
-                .into_bytes(),
-            ),
-        );
-        let read = component.data_ports.iter().find(|port| port.read).unwrap();
-        let write = component.data_ports.iter().find(|port| !port.read).unwrap();
-        let mut config = os_configuration(
-            plan,
-            &mut files,
-            &counter_symbol,
-            &task_symbol,
-            use_res_scheduler,
-        )?;
-        for (key, value) in [
-            ("RX_CAN_ID", rx.can_id.to_string()),
-            ("TX_CAN_ID", tx.can_id.to_string()),
-            ("RX_DEADLINE", rx.deadline_ms.unwrap().to_string()),
-            ("APP_PERIOD", component.period_ms.to_string()),
-            ("RX_ID", rx_id.to_string()),
-            ("TX_ID", tx_id.to_string()),
-            ("RX_INITIAL", read.initial_value.to_string()),
-            ("TX_INITIAL", write.initial_value.to_string()),
-            ("DIAG_RX_CAN_ID", diagnostic.request_can_id.to_string()),
-            ("DIAG_TX_CAN_ID", diagnostic.response_can_id.to_string()),
-            ("P2", diagnostic.p2_ms.to_string()),
-            ("P2_STAR", diagnostic.p2_star_ms.to_string()),
-            (
-                "READ_DID_SESSIONS",
-                diagnostic
-                    .sessions
-                    .iter()
-                    .fold(0u8, |mask, session| mask | (1u8 << session))
-                    .to_string(),
-            ),
-            ("RX_CANIF_PDU", rx.can_if_handle.to_string()),
-            ("TX_CANIF_PDU", tx.can_if_handle.to_string()),
-            (
-                "DIAG_RX_HANDLE",
-                diagnostic.request_can_if_handle.to_string(),
-            ),
-            ("S3", diagnostic.s3_ms.to_string()),
-            ("NAS", diagnostic.n_as_ms.to_string()),
-            ("NBS", diagnostic.n_bs_ms.to_string()),
-            ("NCR", diagnostic.n_cr_ms.to_string()),
-            ("DID", diagnostic.did.to_string()),
-            (
-                "DIAG_TX_HANDLE",
-                diagnostic.response_can_if_handle.to_string(),
-            ),
-            (
-                "ECU_NAME",
-                serde_json::to_string(component.ecu.rsplit('/').next().unwrap()).unwrap(),
-            ),
-        ] {
-            config = config.replace(&format!("@{key}@"), &value);
-        }
-        if config.contains('@') {
-            return Err(reject(crate::product_message!(
-                "backend.integration.ecu.generated_config_placeholder_unresolved"
-            )));
-        }
-        files.insert("src/Ecu_Config.c".into(), Cow::Owned(config.into_bytes()));
-        let com = files.get_mut("include/Com.h").unwrap();
-        let mut text = std::str::from_utf8(com)
-            .map_err(|error| reject(error.to_string().into()))?
-            .to_owned();
-        let original_com = std::mem::replace(com, Cow::Owned(Vec::new()));
-        let end = text.rfind("#endif").unwrap();
-        text.insert_str(end, "typedef uint16_t Com_SignalIdType;\n#define COM_SERVICE_NOT_AVAILABLE 0x80u\nStd_ReturnType Com_SendSignal(Com_SignalIdType SignalId, const void *SignalDataPtr);\nStd_ReturnType Com_ReceiveSignal(Com_SignalIdType SignalId, void *SignalDataPtr);\n");
-        *com = Cow::Owned(text.into_bytes());
-        files.insert("bsw-origin/include/Com.h".into(), original_com);
-        if let Some((_, delivered)) = source_paths
-            .iter_mut()
-            .find(|(path, _)| path.as_str() == "runtime/include/Com.h")
-        {
-            *delivered = "bsw-origin/include/Com.h".into();
-        }
-        let datatype = c_name(component.service.array_type.rsplit('/').next().unwrap());
-        let call = format!(
-            "Rte_Call_{}_{}",
-            c_name(component.service.client_port.rsplit('/').next().unwrap()),
-            c_name(&component.service.operation_name)
-        );
-        let substitutions = [
-            ("APP_HEADER", app_header),
-            ("CLIENT_HEADER", client_header),
-            ("RX_ID", rx_id.to_string()),
-            ("TX_ID", tx_id.to_string()),
-            ("RX_INITIAL", read.initial_value.to_string()),
-            ("TX_INITIAL", write.initial_value.to_string()),
-            ("READ_API", read.api_symbol.clone()),
-            ("WRITE_API", write.api_symbol.clone()),
-            ("CALL_API", call),
-            ("SERVER_API", component.service.runnable_symbol.clone()),
-            ("CLIENT_API", component.service.client_symbol.clone()),
-            ("PERIODIC_API", component.periodic_symbol.clone()),
-            ("DATATYPE", datatype),
-        ];
-        files.insert(
-            "src/Rte.c".into(),
-            Cow::Owned(render_template(
-                "runtime/ecu/templates/Rte.c.in",
-                &substitutions,
-            )?),
-        );
-        files.insert(
-            "src/Application.c".into(),
-            match application {
-                Some(bytes) => Cow::Borrowed(bytes),
-                None => Cow::Owned(self.render_reference_application()?),
-            },
-        );
-        for source in self.sources() {
-            files.insert(
-                format!("inputs/{}", source.logical_path()),
-                Cow::Borrowed(source.bytes()),
-            );
-        }
-        let mut metadata = serde_json::to_vec_pretty(&serde_json::json!({
-            "format": "autosar-ecu-integration-v1", "plan": plan,
-            "originalBswSources": source_paths,
-            "privateBswMappings": {
-                "task": { "path": plan.schedule.task, "id": 0 },
-                "counter": { "path": plan.schedule.counter, "id": 0 },
-                "receiveFrame": { "comSignal": rx.com_signal, "index": 0, "canIfHandle": rx.can_if_handle },
-                "transmitFrame": { "comSignal": tx.com_signal, "index": 1, "canIfHandle": tx.can_if_handle },
-                "diagnosticTransmit": { "canIfHandle": diagnostic.response_can_if_handle },
-            },
-            "target": target.spec().id,
-            "owner": "one generated AUTOSTART extended Task_Ecu; StartupHook owns initialization",
-            "time": "uint64 epoch, independent software Counter, uint32 FreeRTOS tick",
-            "schm": "single BSW owner checks; native input/output and OS retain atomic protocols",
-        })).map_err(|error| reject(error.to_string().into()))?;
-        metadata.push(b'\n');
-        files.insert("integration.json".into(), Cow::Owned(metadata));
-        let readme = format!(
-            "# ECU integration source project\n\nTarget: `{}`. This package contains the validated single-owner ECU, generated RTE/application, real BSW/OS, fixed FreeRTOS V11.3.1 original source and the target's selected controlled patches. Original MIT notices remain in `kernel/LICENSE.md`; Autsaro runtime, tool and template code is licensed under Apache-2.0 (see LICENSE and NOTICE). User-provided configurations and application code retain their own licensing. AUTOSAR XSD/MOD/PDF archives and compiler binaries are not redistributed.\n\n## Independent native build\n\n{}\nFrom this source directory run:\n\n```sh\n<python> tools/ecu-tool.py build --project . --output <new-empty-external-directory> --mode host-batch\n<python> tools/ecu-tool.py verify --project . --build-directory <another-new-empty-external-directory>\n```\n\nBuild modes: `host-batch` selects the actual production stdin/stdout entry; `probe` drives startup and 20 individual controlled ticks; `test` enables private test hooks. `--control-source <external-consumer.c>` is accepted only with `probe` or `test`, outside this sealed project. HostBatch cannot link TestMode or an external control source. The compiler runs against a private patched kernel copy; immutable source closure, actual PE/ELF sections, native TLS and original tool identity are checked. Source preparation and handoff reimport never run a compiler; explicit native preflight/build are separate operations.\n\n## Production protocol\n\nStage `BEGIN <epoch>`, at most256 `RX <CAN id> <DLC> <exact hex bytes>` records, then `COMMIT`. Epochs never decrease and a batch spans at most1000ms. Every intermediate tick completes individually; input precedes target-epoch processing. Equal epochs do not repeat periodic work. Real output write/flush precedes confirmation. `COMMIT_OK` requires actual Waiting with copied input, tick, output and confirmation drained; `COMMIT_ERROR` records executed work/BSW refusal; `REJECT` is admission failure. The5000ms host watchdog never advances automotive time; failed/blocked output or the257th pending output closes the ECU without claiming rollback.\n\nThe validated OsStatus is `{}`. Standard Status retains mandatory activation-limit/alarm warnings and host protection. `os-generation-timing.json` records Counter resolution, controlled tick and host deadlines; use the generated single-evaluation OS_TICKS2NS/US/MS/SEC macros. The independent verifier checks real CAN, one/two-DID reads, DID capacity refusal, N_Cr timeout/recovery and malformed admission; it does not establish full SC1, MCU, hard-real-time, ASIL or official certification.\n",
-            target.spec().id,
-            generator::delivery::native_build_prerequisites(target),
-            if extended_status {
-                "EXTENDED"
-            } else {
-                "STANDARD"
-            },
-        );
-        files.insert("README.md".into(), Cow::Owned(readme.into_bytes()));
-        files.extend(
-            super::artifacts::files(plan, &files)
-                .map_err(reject)?
-                .into_iter()
-                .map(|(path, bytes)| (path, Cow::Owned(bytes))),
-        );
-        files.extend(
-            super::handoff::verification_files(self)
-                .map_err(reject)?
-                .into_iter()
-                .map(|(path, bytes)| (path, Cow::Owned(bytes))),
-        );
-        Ok(files)
+        super::multi_ecu::files(self, target)
     }
 }
 
-/// The same delivery selection drives rendering, provenance and ledger checks.
-/// Multi reuses the actual shared driver/OS/kernel and replaces only its BSW
-/// implementations; the build target remains the normal ECU target.
+/// The same delivery selection drives rendering, provenance and ledger checks:
+/// the shared ECU driver/OS/kernel plus the mainline BSW.
 pub(crate) fn source_assets(
     target: BuildTarget,
-    multi: bool,
 ) -> Result<BTreeMap<String, &'static crate::resources::AssetEntry>, crate::LocalizedText> {
     let inventory = AssetInventory::embedded();
     let mut files = BTreeMap::new();
-    for asset in inventory.selected(target, "ecu") {
-        // The mainline owns all of its BSW under runtime/multi; the legacy
-        // directories only serve the retired chains until they are deleted.
-        if multi
-            && (asset.relative_path.starts_with("runtime/src/")
-                || asset.relative_path.starts_with("runtime/include/"))
-        {
-            continue;
-        }
-        if multi
-            && matches!(
-                asset.relative_path,
-                "runtime/ecu/src/Ecu_Execution.c" | "runtime/ecu/src/Ecu_SchM.c"
-            )
-        {
-            continue;
-        }
-        files.insert(crate::prepared::deliver_path(asset, "ecu")?, asset);
-    }
-    if multi {
-        for asset in inventory.selected(target, "ecu-multi") {
-            files.insert(crate::prepared::deliver_path(asset, "ecu-multi")?, asset);
-        }
-    } else if let Some(asset) = inventory.get("runtime/include/Com.h") {
-        files.insert("bsw-origin/include/Com.h".into(), asset);
+    for asset in inventory
+        .selected(target, "ecu")
+        .chain(inventory.selected(target, "ecu-multi"))
+    {
+        files.insert(crate::prepared::deliver_path(asset)?, asset);
     }
     Ok(files)
 }
@@ -728,7 +325,6 @@ pub(super) struct OsGeneration {
     pub counter_symbol: String,
     pub task_symbol: String,
     pub use_res_scheduler: bool,
-    pub extended_status: bool,
 }
 
 pub(super) fn configure_os(
@@ -833,7 +429,6 @@ pub(super) fn configure_os(
         counter_symbol,
         task_symbol,
         use_res_scheduler,
-        extended_status,
     })
 }
 
@@ -975,36 +570,6 @@ pub(super) fn os_configuration(
         config = config.replace(&format!("@{key}@"), &value);
     }
     Ok(config)
-}
-
-fn render_template(
-    path: &str,
-    substitutions: &[(&str, String)],
-) -> Result<Vec<u8>, Vec<PlanDiagnostic>> {
-    let asset = AssetInventory::embedded()
-        .get(path)
-        .ok_or_else(|| reject(crate::product_message!("backend.integration.ecu.trusted_c_template_missing", "path" => path)))?;
-    let mut tail =
-        std::str::from_utf8(asset.bytes).map_err(|error| reject(error.to_string().into()))?;
-    let mut result = String::with_capacity(tail.len());
-    while let Some((before, token)) = tail.split_once('@') {
-        result.push_str(before);
-        let (name, rest) = token.split_once('@').ok_or_else(|| {
-            reject(crate::product_message!(
-                "backend.integration.ecu.c_template_placeholder_unterminated"
-            ))
-        })?;
-        let value = substitutions
-            .iter()
-            .find(|(key, _)| *key == name)
-            .ok_or_else(|| {
-                reject(crate::product_message!("backend.integration.ecu.c_template_placeholder_unknown", "name" => name))
-            })?;
-        result.push_str(&value.1);
-        tail = rest;
-    }
-    result.push_str(tail);
-    Ok(result.into_bytes())
 }
 
 #[cfg(test)]

@@ -28,9 +28,7 @@ fn det_consumer(scratch: &Path, fixture: &str) -> PathBuf {
         .arg("-I")
         .arg(root.join("runtime/multi/src"))
         .arg("-I")
-        .arg(root.join("runtime/include"))
-        .arg("-I")
-        .arg(root.join("runtime/src"))
+        .arg(root.join("core/tests/fixtures/multi-runtime"))
         .arg(root.join("runtime/multi/src/SchM_CanIf_Host.c"))
         .arg(root.join("runtime/multi/src/Can_HostLock.c"))
         .arg(root.join("runtime/multi/src/Det.c"))
@@ -117,10 +115,6 @@ fn com_standard_consumer_executes_group_and_reception_monitoring() {
         .arg("-I")
         .arg(root.join("core/tests/fixtures/multi-runtime"))
         .arg("-pthread")
-        .arg("-I")
-        .arg(root.join("runtime/include"))
-        .arg("-I")
-        .arg(root.join("runtime/src"))
         .arg(root.join("runtime/multi/src/SchM_CanIf_Host.c"))
         .arg(root.join("runtime/multi/src/Can_HostLock.c"))
         .arg(root.join("runtime/multi/src/Com.c"))
@@ -143,41 +137,57 @@ fn com_standard_consumer_executes_group_and_reception_monitoring() {
     );
 }
 
+/// Headers a delivered mainline ECU generates for its BSW (`Ecu_Config.h`,
+/// `Ecu_Execution.h`), taken from the built-in template's actual preparation.
+fn mainline_generated_headers(scratch: &Path) -> Vec<(String, Vec<u8>)> {
+    use autosar_config_core::Workspace;
+    let live = scratch.join("mainline");
+    let creation = Workspace::preview_project_creation(&live, "Headers", "standard-ecu").unwrap();
+    let mut workspace = Workspace::create_project_previewed(&creation).unwrap();
+    let initialization = workspace.preview_application_initialization().unwrap();
+    workspace
+        .initialize_application_previewed(&initialization)
+        .unwrap();
+    let plan = workspace.saved_integration_plan().unwrap();
+    let prepared = autosar_config_core::prepared::prepare_ecu_project_for_workspace(
+        &workspace,
+        &plan,
+        tooling::native_target(),
+        false,
+    )
+    .unwrap();
+    ["include/Ecu_Config.h", "src/Ecu_Execution.h"]
+        .into_iter()
+        .map(|path| {
+            let file = prepared
+                .files()
+                .iter()
+                .find(|file| file.path == path)
+                .unwrap_or_else(|| panic!("{path} is not generated"));
+            (path.to_owned(), file.bytes.to_vec())
+        })
+        .collect()
+}
+
 fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let inventory = autosar_config_core::resources::AssetInventory::from_directory(root).unwrap();
     // Materialize each family's delivery closure; no repository header fallback.
     let include = scratch.join("include");
+    let sources = scratch.join("src");
     std::fs::create_dir(&include).unwrap();
-    for name in [
-        "Can.h",
-        "Can_GeneralTypes.h",
-        "Can_CfgTypes.h",
-        "Can_Host.h",
-        "Can_MemMap.h",
-        "SchM_Can.h",
-        "standard/Can.h",
-    ] {
-        // Can.h is the legacy aggregate view; the CAN driver headers are mainline-owned.
-        let directory = if name == "Can.h" {
-            "runtime/include"
-        } else {
-            "runtime/multi/include"
-        };
-        let asset = inventory.get(&format!("{directory}/{name}")).unwrap();
-        std::fs::create_dir_all(include.join(name).parent().unwrap()).unwrap();
-        std::fs::write(include.join(name), asset.bytes).unwrap();
-        assert_eq!(
-            std::fs::read(include.join(name)).unwrap(),
-            std::fs::read(root.join(asset.relative_path)).unwrap()
-        );
-    }
-    for name in ["Ecu_Config.h", "Ecu_DcmCallbackTypes.h"] {
-        std::fs::copy(root.join("runtime/include").join(name), include.join(name)).unwrap();
-    }
-    for entry in std::fs::read_dir(root.join("runtime/host/include")).unwrap() {
-        let entry = entry.unwrap();
-        std::fs::copy(entry.path(), include.join(entry.file_name())).unwrap();
+    std::fs::create_dir(&sources).unwrap();
+    let asset = inventory
+        .get("runtime/multi/include/standard/Can.h")
+        .unwrap();
+    std::fs::create_dir(include.join("standard")).unwrap();
+    std::fs::write(include.join("standard/Can.h"), asset.bytes).unwrap();
+    assert_eq!(
+        std::fs::read(include.join("standard/Can.h")).unwrap(),
+        std::fs::read(root.join(asset.relative_path)).unwrap()
+    );
+    for (path, bytes) in mainline_generated_headers(scratch) {
+        std::fs::write(scratch.join(path), bytes).unwrap();
     }
     for entry in std::fs::read_dir(root.join("runtime/multi/include")).unwrap() {
         let entry = entry.unwrap();
@@ -198,13 +208,6 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
         )
         .unwrap();
     }
-    if fixture == "can_polling_contract.c" {
-        std::fs::copy(
-            root.join("core/tests/fixtures/multi-runtime/Ecu_ProfileLimits_Polling.h"),
-            include.join("Ecu_ProfileLimits.h"),
-        )
-        .unwrap();
-    }
     let executable = tooling::native_binary(scratch, "com-chain-consumer");
     let mut command = Command::new(tooling::execution_settings().compiler);
     if cfg!(target_os = "linux") {
@@ -217,6 +220,16 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
         command.arg("-DCAN_HOST_QUEUED_COMPLETION=1");
     }
     command.args(flags);
+    if fixture == "can_polling_contract.c" {
+        // Independent selected controller configuration; final generation derives ARXML values.
+        command.args([
+            "-DCAN_TX_HOH=1u",
+            "-DCAN_RX_POLLING=1",
+            "-DCAN_TX_POLLING=1",
+            "-DCAN_BUSOFF_POLLING=1",
+            "-DCAN_ZERO_LENGTH_SUPPORTED=1",
+        ]);
+    }
     if fixture == "can_callback_lifetime.c" {
         command.arg(if cfg!(windows) {
             "-Wl,--wrap=__imp_EnterCriticalSection"
@@ -240,18 +253,14 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
         .arg("-I")
         .arg(include);
-    let sources = scratch.join("src");
-    std::fs::create_dir(&sources).unwrap();
-    for directory in ["runtime/multi/src", "runtime/src"] {
-        for entry in std::fs::read_dir(root.join(directory)).unwrap() {
-            let entry = entry.unwrap();
-            if entry
-                .path()
-                .extension()
-                .is_some_and(|extension| extension == "h")
-            {
-                std::fs::copy(entry.path(), sources.join(entry.file_name())).unwrap();
-            }
+    for entry in std::fs::read_dir(root.join("runtime/multi/src")).unwrap() {
+        let entry = entry.unwrap();
+        if entry
+            .path()
+            .extension()
+            .is_some_and(|extension| extension == "h")
+        {
+            std::fs::copy(entry.path(), sources.join(entry.file_name())).unwrap();
         }
     }
     command.arg("-I").arg(&sources);
@@ -273,7 +282,8 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
         "runtime/multi/src/Can.c",
         "runtime/multi/src/Can_Host.c",
         "runtime/multi/src/Can_HostLock.c",
-        "runtime/host/src/Can_Execution.c",
+        "core/tests/fixtures/multi-runtime/execution_sink.c",
+        "core/tests/fixtures/multi-runtime/schm_dcm_mode.c",
     ] {
         let delivered = sources.join(std::path::Path::new(source).file_name().unwrap());
         std::fs::copy(root.join(source), &delivered).unwrap();

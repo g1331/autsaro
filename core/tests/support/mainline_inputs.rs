@@ -548,22 +548,6 @@ pub(super) fn input_sources_reject_unportable_aliases_and_missing_archives() {
         let issues = build(&aliases).err().unwrap();
         assert_eq!(issues[0].code, "SOURCE_DUPLICATE", "{issues:?}");
     }
-    // The official entrance refuses unreadable pinned archives before any
-    // profile selection; no input byte is consumed or changed.
-    let scratch = Scratch::new();
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let missing = autosar_config_core::integration::PlanDependencies {
-        xsd_archive: scratch.0.join("missing-xsd.zip"),
-        mod_archive: scratch.0.join("missing-mod.zip"),
-    };
-    let issues = autosar_config_core::integration::build_plan(
-        &sources,
-        &missing,
-        &RuntimeCatalog::from_repository(root).unwrap(),
-    )
-    .err()
-    .unwrap();
-    assert_eq!(issues[0].code, "DEPENDENCY_MISSING", "{issues:?}");
     assert_eq!(text(&sources, "ingress.arxml").as_bytes(), bytes.as_slice());
 }
 
@@ -656,13 +640,6 @@ pub(super) fn source_preparation_is_target_complete_without_native_tools() {
         ] {
             assert!(selected.contains(&asset), "{asset}: {selected:?}");
         }
-        let legacy: Vec<_> = first
-            .files()
-            .iter()
-            .filter_map(|file| file.source.map(|asset| asset.relative_path))
-            .filter(|path| path.starts_with("runtime/src/") || path.starts_with("runtime/include/"))
-            .collect();
-        assert!(legacy.is_empty(), "{legacy:?}");
         let delivered = |path: &str| {
             first
                 .files()

@@ -411,282 +411,6 @@ impl Workspace {
         PreparedSave::validated(self, revision)
     }
 
-    pub(super) fn commit_patches(
-        &mut self,
-        mut patches: Vec<Vec<Patch>>,
-        matches: impl FnOnce(&Workspace) -> bool,
-    ) -> Result<(), crate::message::LocalizedText> {
-        let mut previous = Vec::new();
-        for (index, edits) in patches.iter_mut().enumerate() {
-            if edits.is_empty() {
-                continue;
-            }
-            previous.push((index, self.files[index].text.clone()));
-            if let Err(error) = apply_patches(&mut self.files[index].text, edits) {
-                for (i, text) in previous {
-                    self.files[i].text = text;
-                }
-                return Err(error);
-            }
-        }
-        let checked = self.refresh().and_then(|_| {
-            if let Some(issue) = self
-                .issues
-                .iter()
-                .find(|i| matches!(i.severity, Severity::Error))
-            {
-                Err(crate::message::LocalizedText::messages([
-                    crate::product_message!(
-                        "backend.arxml.persistence.blocking_diagnostic",
-                        "code" => issue.code
-                    ),
-                    issue.message.clone(),
-                ]))
-            } else if matches(self) {
-                Ok(())
-            } else {
-                Err(crate::product_message!(
-                    "backend.arxml.persistence.edited_model_mismatch"
-                ))
-            }
-        });
-        if let Err(error) = checked {
-            for (i, text) in previous {
-                self.files[i].text = text;
-            }
-            let _ = self.refresh();
-            return Err(error);
-        }
-        Ok(())
-    }
-
-    pub(super) fn patch_imported_frame(
-        &mut self,
-        old: &FrameView,
-        new: &FrameView,
-    ) -> Result<(), crate::message::LocalizedText> {
-        let global_pdu = self.global_pdu_for(&old.path)?;
-        let mut patches: Vec<Vec<Patch>> = (0..self.files.len()).map(|_| Vec::new()).collect();
-        let mut found_id = false;
-        let mut found_dlc = false;
-        let mut found_global_length = false;
-        let mut found_period = false;
-        let mut found_timeout = 0usize;
-        let receive_signals: BTreeSet<_> = self
-            .signals
-            .iter()
-            .filter(|s| s.frame_path == old.path)
-            .map(|s| s.path.as_str())
-            .collect();
-        for (index, file) in self.files.iter().enumerate() {
-            let doc = Document::parse(&file.text).map_err(|e| e.to_string())?;
-            for node in doc.descendants().filter(|n| n.is_element()) {
-                if old.dlc != new.dlc
-                    && node.tag_name().name() == "I-SIGNAL-I-PDU"
-                    && path_of(node) == old.path
-                {
-                    patch_child(node, "LENGTH", new.dlc.to_string(), &mut patches[index])?;
-                    found_dlc = true;
-                }
-                if old.dlc != new.dlc
-                    && node.tag_name().name() == "ECUC-CONTAINER-VALUE"
-                    && path_of(node) == global_pdu
-                {
-                    patch_param(node, "PduLength", new.dlc.to_string(), &mut patches[index])?;
-                    found_global_length = true;
-                }
-                if node.tag_name().name() == "ECUC-CONTAINER-VALUE" {
-                    let def = definition(node).unwrap_or_default();
-                    if def.ends_with("/CanIfTxPduCfg")
-                        && ref_value(node, "CanIfTxPduRef").as_deref() == Some(&global_pdu)
-                        && old.id != new.id
-                    {
-                        patch_param(
-                            node,
-                            "CanIfTxPduCanId",
-                            new.id.to_string(),
-                            &mut patches[index],
-                        )?;
-                        found_id = true;
-                    }
-                    if def.ends_with("/CanIfRxPduCfg")
-                        && ref_value(node, "CanIfRxPduRef").as_deref() == Some(&global_pdu)
-                    {
-                        if old.id != new.id {
-                            patch_param(
-                                node,
-                                "CanIfRxPduCanId",
-                                new.id.to_string(),
-                                &mut patches[index],
-                            )?;
-                            found_id = true;
-                        }
-                        if old.dlc != new.dlc {
-                            patch_param(
-                                node,
-                                "CanIfRxPduDataLength",
-                                new.dlc.to_string(),
-                                &mut patches[index],
-                            )?;
-                        }
-                    }
-                    if old.period_ms != new.period_ms
-                        && def.ends_with("/ComIPdu")
-                        && ref_value(node, "ComPduIdRef").as_deref() == Some(&global_pdu)
-                    {
-                        patch_param(
-                            node,
-                            "ComTxModeTimePeriod",
-                            seconds(new.period_ms.ok_or_else(|| {
-                                crate::product_message!(
-                                    "backend.arxml.persistence.transmit_period_required"
-                                )
-                            })?),
-                            &mut patches[index],
-                        )?;
-                        found_period = true;
-                    }
-                    if old.timeout_ms != new.timeout_ms
-                        && receive_signals.contains(path_of(node).as_str())
-                    {
-                        patch_param(
-                            node,
-                            "ComTimeout",
-                            seconds(new.timeout_ms.ok_or_else(|| {
-                                crate::product_message!(
-                                    "backend.arxml.persistence.receive_timeout_required"
-                                )
-                            })?),
-                            &mut patches[index],
-                        )?;
-                        found_timeout += 1;
-                    }
-                }
-                if old.id != new.id && node.tag_name().name() == "CAN-FRAME-TRIGGERING" {
-                    return Err(crate::product_message!(
-                        "backend.arxml.persistence.identifier_requires_network_sync"
-                    ));
-                }
-                if old.dlc != new.dlc && node.tag_name().name() == "CAN-FRAME" {
-                    return Err(crate::product_message!(
-                        "backend.arxml.persistence.dlc_requires_network_sync"
-                    ));
-                }
-            }
-        }
-        if (old.id != new.id && !found_id)
-            || (old.dlc != new.dlc && (!found_dlc || !found_global_length))
-            || (old.period_ms != new.period_ms && !found_period)
-            || (old.timeout_ms != new.timeout_ms && found_timeout != receive_signals.len())
-        {
-            return Err(crate::product_message!(
-                "backend.arxml.persistence.standard_parameters_not_locatable"
-            ));
-        }
-        self.commit_patches(patches, |w| {
-            w.frames.iter().any(|f| {
-                f.path == old.path
-                    && f.id == new.id
-                    && f.dlc == new.dlc
-                    && f.period_ms == new.period_ms
-                    && f.timeout_ms == new.timeout_ms
-            })
-        })?;
-        Ok(())
-    }
-
-    pub(super) fn patch_imported_signal(
-        &mut self,
-        old: &SignalView,
-        new: &SignalView,
-    ) -> Result<(), crate::message::LocalizedText> {
-        let mut patches: Vec<Vec<Patch>> = (0..self.files.len()).map(|_| Vec::new()).collect();
-        let mut found_com = false;
-        let mut found_mapping = false;
-        let mut found_system_signal = false;
-        let layout_changed = old.start_bit != new.start_bit || old.length != new.length;
-        let system_path = format!("/{}/ISignal_{}", self.name, old.name);
-        for (index, file) in self.files.iter().enumerate() {
-            let doc = Document::parse(&file.text).map_err(|e| e.to_string())?;
-            for node in doc.descendants().filter(|n| n.is_element()) {
-                if node.tag_name().name() == "ECUC-CONTAINER-VALUE" && path_of(node) == old.path {
-                    if old.start_bit != new.start_bit {
-                        patch_param(
-                            node,
-                            "ComBitPosition",
-                            new.start_bit.to_string(),
-                            &mut patches[index],
-                        )?;
-                    }
-                    if old.length != new.length {
-                        patch_param(
-                            node,
-                            "ComBitSize",
-                            new.length.to_string(),
-                            &mut patches[index],
-                        )?;
-                        patch_param(
-                            node,
-                            "ComSignalType",
-                            signal_type(new.length).into(),
-                            &mut patches[index],
-                        )?;
-                    }
-                    if old.initial_value != new.initial_value {
-                        patch_param(
-                            node,
-                            "ComSignalInitValue",
-                            new.initial_value.to_string(),
-                            &mut patches[index],
-                        )?;
-                    }
-                    found_com = true;
-                }
-                if layout_changed
-                    && node.tag_name().name() == "I-SIGNAL-TO-I-PDU-MAPPING"
-                    && child_text(node, "I-SIGNAL-REF").as_deref() == Some(&system_path)
-                    && node.ancestors().any(|a| {
-                        a.tag_name().name() == "I-SIGNAL-I-PDU" && path_of(a) == old.frame_path
-                    })
-                {
-                    if old.start_bit != new.start_bit {
-                        patch_child(
-                            node,
-                            "START-POSITION",
-                            new.start_bit.to_string(),
-                            &mut patches[index],
-                        )?;
-                    }
-                    found_mapping = true;
-                }
-                if old.length != new.length
-                    && node.tag_name().name() == "I-SIGNAL"
-                    && path_of(node) == system_path
-                {
-                    patch_child(node, "LENGTH", new.length.to_string(), &mut patches[index])?;
-                    found_system_signal = true;
-                }
-            }
-        }
-        if !found_com
-            || (layout_changed && !found_mapping)
-            || (old.length != new.length && !found_system_signal)
-        {
-            return Err(crate::product_message!(
-                "backend.arxml.persistence.incomplete_signal_system_mapping"
-            ));
-        }
-        self.commit_patches(patches, |w| {
-            w.signals.iter().any(|s| {
-                s.path == old.path
-                    && s.start_bit == new.start_bit
-                    && s.length == new.length
-                    && s.initial_value == new.initial_value
-            })
-        })?;
-        Ok(())
-    }
-
     pub(super) fn ensure_sources_current(&self) -> Result<(), crate::message::LocalizedText> {
         for file in &self.files {
             super::project::safe_path(&file.path, false)?;
@@ -799,41 +523,25 @@ impl Workspace {
     pub(super) fn ensure_save_allowed(&mut self) -> Result<(), crate::message::LocalizedText> {
         self.validate()?;
         self.ensure_no_recovery_backups()?;
-        if self.uses_legacy_validation() {
-            if let Some(issue) = self
-                .issues
-                .iter()
-                .find(|issue| matches!(issue.severity, Severity::Error))
-            {
-                return Err(crate::message::LocalizedText::messages([
-                    crate::product_message!(
-                        "backend.arxml.persistence.blocking_diagnostic",
-                        "code" => issue.code
-                    ),
-                    issue.message.clone(),
-                ]));
-            }
-        } else {
-            // Target-generation failures do not close safe configuration persistence.
-            for scope in &self.snapshot.validation {
-                if matches!(
-                    scope.scope,
-                    crate::project_model::ValidationScope::SourceSafety
-                        | crate::project_model::ValidationScope::Schema
-                ) {
-                    if let Some(issue) = scope
-                        .diagnostics
-                        .iter()
-                        .find(|issue| matches!(issue.severity, Severity::Error))
-                    {
-                        return Err(crate::message::LocalizedText::messages([
-                            crate::product_message!(
-                                "backend.arxml.persistence.blocking_diagnostic",
-                                "code" => issue.code
-                            ),
-                            issue.message.clone(),
-                        ]));
-                    }
+        // Target-generation failures do not close safe configuration persistence.
+        for scope in &self.snapshot.validation {
+            if matches!(
+                scope.scope,
+                crate::project_model::ValidationScope::SourceSafety
+                    | crate::project_model::ValidationScope::Schema
+            ) {
+                if let Some(issue) = scope
+                    .diagnostics
+                    .iter()
+                    .find(|issue| matches!(issue.severity, Severity::Error))
+                {
+                    return Err(crate::message::LocalizedText::messages([
+                        crate::product_message!(
+                            "backend.arxml.persistence.blocking_diagnostic",
+                            "code" => issue.code
+                        ),
+                        issue.message.clone(),
+                    ]));
                 }
             }
         }
@@ -937,7 +645,6 @@ impl Workspace {
                     path: project.path.clone(),
                     text: project.current.clone(),
                     saved: project.saved.clone(),
-                    original_name: None,
                 });
             }
         }
@@ -1096,7 +803,7 @@ mod tests {
         let root = Scratch::new();
         let directory = root.0.join("Project");
         let preview =
-            crate::Workspace::preview_project_creation(&directory, "Project", "can-signals-v1")
+            crate::Workspace::preview_project_creation(&directory, "Project", "standard-ecu")
                 .unwrap();
         let mut workspace = crate::Workspace::create_project_previewed(&preview).unwrap();
         let source = workspace.files[0].path.clone();
@@ -1203,7 +910,6 @@ mod tests {
             path: original.clone(),
             saved: "original".into(),
             text: "ours".into(),
-            original_name: None,
         };
         fs::write(&original, &file.saved).unwrap();
         fs::write(&stage, &file.text).unwrap();
@@ -1235,7 +941,7 @@ mod tests {
         let preview = crate::Workspace::preview_project_creation(
             &root.0.join("Project"),
             "Project",
-            "can-signals-v1",
+            "standard-ecu",
         )
         .unwrap();
         let mut workspace = crate::Workspace::create_project_previewed(&preview).unwrap();
@@ -1327,7 +1033,6 @@ mod tests {
             path: original.clone(),
             saved: "original".into(),
             text: "ours".into(),
-            original_name: None,
         };
         assert!(install_staged(&file, &stage, &backup).is_err());
         assert!(original.is_dir());
@@ -1400,7 +1105,6 @@ mod tests {
             path: original.clone(),
             saved: "original".into(),
             text: "ours".into(),
-            original_name: None,
         };
         fs::write(&original, &file.saved).unwrap();
         fs::write(&stage, &file.text).unwrap();
@@ -1435,7 +1139,6 @@ mod tests {
             path: original.clone(),
             saved: "original".into(),
             text: "ours".into(),
-            original_name: None,
         };
         fs::write(&original, &file.saved).unwrap();
         fs::write(&stage, &file.text).unwrap();

@@ -34,14 +34,6 @@ fn reject(
     )]
 }
 
-pub(super) fn inspect(
-    graph: &Graph,
-    signals: &[SignalChannel],
-    diagnostic: &DiagnosticContract,
-) -> Result<Vec<PduRoute>, Vec<PlanDiagnostic>> {
-    inspect_optional(graph, signals, Some(diagnostic))
-}
-
 pub(super) fn inspect_optional(
     graph: &Graph,
     signals: &[SignalChannel],

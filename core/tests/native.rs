@@ -1,88 +1,18 @@
 // Shared support modules serve different test layers; only registered tests run.
 #![allow(dead_code)]
 
-use workspace::{Scratch, archive, create_pair};
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+#[cfg(windows)]
+use std::time::Duration;
+use workspace::Scratch;
 
 #[path = "support/workspace.rs"]
 mod workspace;
 
-#[path = "support/can_contracts.rs"]
-mod can_contracts;
-
-#[path = "support/generation.rs"]
-mod generation;
-
-#[path = "support/arxml_package.rs"]
-mod arxml_package;
-
-#[cfg(windows)]
-#[path = "support/diagnostic_host.rs"]
-mod diagnostic_host;
-
-#[path = "support/targets.rs"]
-mod targets;
-
-#[path = "support/epic4_reference.rs"]
-mod epic4_reference;
-
-#[path = "support/epic4_plan.rs"]
-mod epic4_plan;
-
-#[path = "support/epic4_contract.rs"]
-mod epic4_contract;
-
-#[path = "support/epic4_roundtrip.rs"]
-mod epic4_roundtrip;
-
-#[path = "support/epic4_ecu.rs"]
-mod epic4_ecu;
-
-#[path = "support/epic4_batch.rs"]
-mod epic4_batch;
-
-#[cfg(windows)]
-#[path = "support/epic4_application.rs"]
-mod epic4_application;
-
-#[cfg(windows)]
-#[path = "support/epic4_protocol.rs"]
-mod epic4_protocol;
-
-#[cfg(windows)]
-#[path = "support/epic4_timing.rs"]
-mod epic4_timing;
-
-#[path = "support/os/counter_timing.rs"]
-mod os_counter_timing;
-
-#[cfg(windows)]
-#[path = "support/os/services.rs"]
-mod os_services;
-
-#[cfg(windows)]
-#[path = "support/os/configuration.rs"]
-mod os_configuration;
-
-#[path = "support/os/arti.rs"]
-mod os_arti;
-
 #[path = "support/tooling.rs"]
 mod tooling;
-
-#[cfg(any(windows, target_os = "linux"))]
-#[path = "support/semantic_profiles.rs"]
-mod semantic_profiles;
-
-#[cfg(windows)]
-#[path = "support/epic4_artifacts.rs"]
-mod epic4_artifacts;
-
-#[path = "support/epic4_handoff.rs"]
-mod epic4_handoff;
-
-#[cfg(windows)]
-#[path = "support/epic4_status.rs"]
-mod epic4_status;
 
 macro_rules! os_native_suite {
     ($name:ident, $suite:literal) => {
@@ -96,273 +26,10 @@ macro_rules! os_native_suite {
 
 #[cfg(any(windows, target_os = "linux"))]
 #[test]
-fn windows_and_linux_ecu_targets_execute_production_protocol() {
-    targets::windows_and_linux_ecu_targets_execute_production_protocol();
-}
-
-#[cfg(any(windows, target_os = "linux"))]
-#[test]
-fn semantic_profiles_preserve_host_and_integrated_protocol() {
-    semantic_profiles::verify();
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_independent_handoff() {
-    epic4_handoff::verify();
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_one_ms_delivery() {
-    epic4_handoff::verify_rapid();
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_generated_artifact_obligations() {
-    epic4_artifacts::verify();
-}
-
-#[cfg(any(windows, target_os = "linux"))]
-#[test]
-fn epic4_arti_description_and_hooks() {
-    os_arti::verify();
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_generated_scheduler_configuration() {
-    os_configuration::verify();
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_generated_counter_service() {
-    os_services::verify();
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_generated_standard_status() {
-    epic4_status::verify_generated_standard();
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_independent_behavior_and_legacy_regression() {
-    epic4_protocol::independent_behavior();
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_application_sr_cs_loop() {
-    epic4_application::application_loop();
-}
-
-#[test]
-fn epic4_host_batch_codec() {
-    epic4_batch::codec();
-}
-
-#[cfg(any(windows, target_os = "linux"))]
-#[test]
-fn epic4_host_batch_native_boundary() {
-    epic4_batch::native_boundary();
-}
-
-#[cfg(any(windows, target_os = "linux"))]
-#[test]
-fn epic4_host_batch_commit() {
-    epic4_batch::commit();
-}
-
-#[cfg(windows)]
-#[test]
-fn epic4_public_consumer_watchdog() {
-    epic4_ecu::verify_public_watchdog();
-}
-
-#[cfg(any(windows, target_os = "linux"))]
-#[test]
 fn epic4_sc1_timing_capacity() {
     tooling::run_native_os_suite("sc1-timing");
-    #[cfg(windows)]
-    epic4_timing::generated_tables();
 }
 
-#[test]
-fn standard_can_host_entry_points_reject_invalid_requests_and_send_valid_frame() {
-    can_contracts::standard_can_host_entry_points_reject_invalid_requests_and_send_valid_frame();
-}
-
-#[test]
-fn standard_canif_rx_callback_keeps_nested_host_status_and_time_separate() {
-    can_contracts::standard_canif_rx_callback_keeps_nested_host_status_and_time_separate();
-}
-
-#[test]
-fn cantp_failed_frame_confirmation_ends_host_session() {
-    can_contracts::cantp_failed_frame_confirmation_ends_host_session();
-}
-
-#[test]
-fn cantp_async_confirmation_respects_n_as_and_late_release() {
-    can_contracts::cantp_async_confirmation_respects_n_as_and_late_release();
-}
-
-#[cfg(windows)]
-#[test]
-fn source_junction_cannot_be_imported_for_handoff() {
-    generation::source_junction_cannot_be_imported_for_handoff();
-}
-
-#[cfg(windows)]
-#[test]
-fn moved_reference_bundle_verifies_offline_and_rejects_wrong_vector() {
-    generation::moved_reference_bundle_verifies_offline_and_rejects_wrong_vector();
-}
-
-#[cfg(windows)]
-#[test]
-fn generated_handoff_builds_and_runs_after_moving_without_the_workbench() {
-    generation::generated_handoff_builds_and_runs_after_moving_without_the_workbench();
-}
-
-#[cfg(windows)]
-#[test]
-fn generation_rejects_junction_output_without_touching_its_target() {
-    generation::generation_rejects_junction_output_without_touching_its_target();
-}
-
-#[cfg(windows)]
-#[test]
-fn regeneration_preserves_built_binary_until_owner_moves_it() {
-    generation::regeneration_preserves_built_binary_until_owner_moves_it();
-}
-
-#[cfg(windows)]
-#[test]
-fn rebuild_rejects_existing_binary_without_overwriting_owner_bytes() {
-    generation::rebuild_rejects_existing_binary_without_overwriting_owner_bytes();
-}
-
-#[cfg(windows)]
-#[test]
-fn build_rejects_source_changed_during_compilation_before_installing_binary() {
-    generation::build_rejects_source_changed_during_compilation_before_installing_binary();
-}
-
-#[cfg(windows)]
-#[test]
-fn untouched_output_regenerates_changed_config_and_runs_the_new_schedule() {
-    generation::untouched_output_regenerates_changed_config_and_runs_the_new_schedule();
-}
-
-#[cfg(windows)]
-#[test]
-fn generated_c99_ecus_exchange_golden_vectors_and_recover_from_faults() {
-    can_contracts::generated_c99_ecus_exchange_golden_vectors_and_recover_from_faults();
-}
-
-#[cfg(windows)]
-#[test]
-fn global_ecuc_pdu_binding_roundtrips_and_rejects_wrong_com_reference_type() {
-    arxml_package::global_ecuc_pdu_binding_roundtrips_and_rejects_wrong_com_reference_type();
-}
-
-#[cfg(windows)]
-#[test]
-fn host_rejects_id_matched_wrong_dlc_even_when_other_frames_exchange() {
-    can_contracts::host_rejects_id_matched_wrong_dlc_even_when_other_frames_exchange();
-}
-
-#[cfg(windows)]
-#[test]
-fn configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_multiframe_did() {
-    diagnostic_host::configured_diagnostic_ecu_roundtrips_arxml_and_exchanges_live_multiframe_did();
-}
-
-#[cfg(windows)]
-#[test]
-fn active_session_did_reports_session_transitions_and_rejects_invalid_reads() {
-    diagnostic_host::active_session_did_reports_session_transitions_and_rejects_invalid_reads();
-}
-
-#[cfg(windows)]
-#[test]
-fn multiple_dids_keep_request_order_and_skip_unavailable_values() {
-    diagnostic_host::multiple_dids_keep_request_order_and_skip_unavailable_values();
-}
-
-#[cfg(windows)]
-#[test]
-fn diagnostic_transport_discards_bad_or_timed_out_multiframe_requests_and_recovers() {
-    diagnostic_host::diagnostic_transport_discards_bad_or_timed_out_multiframe_requests_and_recovers();
-}
-
-#[cfg(windows)]
-#[test]
-fn diagnostic_tester_present_keeps_session_and_fc_block_size_paces_response() {
-    diagnostic_host::diagnostic_tester_present_keeps_session_and_fc_block_size_paces_response();
-}
-
-#[cfg(windows)]
-#[test]
-fn unsupported_imported_transport_padding_blocks_diagnostic_generation() {
-    diagnostic_host::unsupported_imported_transport_padding_blocks_diagnostic_generation();
-}
-
-#[cfg(windows)]
-#[test]
-fn supported_dtcs_include_zero_status_and_follow_configured_lifecycle() {
-    diagnostic_host::supported_dtcs_include_zero_status_and_follow_configured_lifecycle();
-}
-
-#[cfg(windows)]
-#[test]
-fn rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restarts() {
-    diagnostic_host::rx_timeout_dtc_is_reported_cleared_and_persists_across_ecu_restarts();
-}
-
-#[cfg(windows)]
-#[test]
-fn extended_session_write_did_changes_live_can_but_not_restart_state() {
-    diagnostic_host::extended_session_write_did_changes_live_can_but_not_restart_state();
-}
-
-#[cfg(windows)]
-#[test]
-fn security_access_roundtrips_and_gates_host_writes() {
-    diagnostic_host::security_access_roundtrips_and_gates_host_writes();
-}
-
-#[cfg(windows)]
-#[test]
-fn security_access_gates_dtc_mutations_without_a_writable_did() {
-    diagnostic_host::security_access_gates_dtc_mutations_without_a_writable_did();
-}
-
-#[cfg(windows)]
-#[test]
-fn start_routine_restores_written_did_signals_and_respects_session() {
-    diagnostic_host::start_routine_restores_written_did_signals_and_respects_session();
-}
-
-#[cfg(windows)]
-#[test]
-fn generated_dcm_callbacks_link_for_independent_consumer_and_update_live_signals() {
-    diagnostic_host::generated_dcm_callbacks_link_for_independent_consumer_and_update_live_signals(
-    );
-}
-
-#[cfg(any(windows, target_os = "linux"))]
-#[test]
-fn requested_native_preflight_failure_never_installs_source() {
-    generation::requested_native_preflight_failure_never_installs_source();
-}
-
-#[cfg(any(windows, target_os = "linux"))]
 os_native_suite!(epic4_sc1_status_modes, "status-modes");
 os_native_suite!(epic4_interrupt_source_repetition, "source-repetition");
 os_native_suite!(epic4_nonstatus_service_errors, "nonstatus-errors");
@@ -390,37 +57,204 @@ os_native_suite!(epic4_native_stack_fault_shutdown, "stack");
 os_native_suite!(epic4_backend_lifecycle, "lifecycle");
 
 #[test]
-fn epic4_generated_counter_timing_contracts() {
-    os_counter_timing::verify();
+fn epic4_host_batch_codec() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let scratch = Scratch::new();
+    let binary = scratch.0.join("host-batch-codec.exe");
+    let compiler = std::env::var_os("AUTOSAR_CC").unwrap_or_else(|| "gcc".into());
+    let output = Command::new(compiler)
+        .args(["-std=c99", "-O1", "-Wall", "-Wextra", "-Werror"])
+        .arg("-I")
+        .arg(root.join("runtime/ecu/include"))
+        .arg("-I")
+        .arg(root.join("runtime/os/include"))
+        .arg("-I")
+        .arg(root.join("runtime/multi/include"))
+        .arg(root.join("runtime/ecu/src/Ecu_HostBatch.c"))
+        .arg(root.join("core/tests/fixtures/host_batch_codec.c"))
+        .arg("-o")
+        .arg(&binary)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result = Command::new(binary).output().unwrap();
+    assert!(
+        result.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert!(
+        String::from_utf8(result.stdout).unwrap().contains(
+            "host_batch_codec boundaries=256/257,1000/1001 numeric/sequence/recovery=pass"
+        )
+    );
 }
 
+#[cfg(windows)]
 #[test]
-fn epic4_ecu_integration_generation() {
-    epic4_ecu::verify();
-}
-
-#[test]
-fn epic4_component_contract_generation() {
-    epic4_contract::verify();
-}
-
-#[test]
-fn epic4_validated_integration_plan() {
-    epic4_plan::validated_integration_plan();
-}
-
-#[test]
-fn build_rejects_changed_generated_inputs_before_compiling() {
-    generation::build_rejects_changed_generated_inputs_before_compiling();
-}
-
-#[test]
-fn build_creates_missing_parent_directories_without_replacing_owner_output() {
-    generation::build_creates_missing_parent_directories_without_replacing_owner_output();
+fn epic4_public_consumer_watchdog() {
+    let scratch = Scratch::new();
+    let pid_file = scratch.0.join("watchdog.pids");
+    let mut command = tooling::python_command();
+    command
+        .args([
+            "-m",
+            "autosar_tooling",
+            "probe",
+            "descendant",
+            "--kind",
+            "hang",
+            "--pid-file",
+        ])
+        .arg(&pid_file);
+    let started = std::time::Instant::now();
+    let failure = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        tooling::run_public_command(
+            &mut command,
+            &scratch.0,
+            "watchdog-probe",
+            Duration::from_secs(2),
+        )
+    }));
+    assert!(
+        failure.is_err(),
+        "the deliberately stalled process must time out"
+    );
+    assert!(started.elapsed() < Duration::from_secs(8));
+    let pids: Vec<u32> = fs::read_to_string(pid_file)
+        .unwrap()
+        .lines()
+        .map(|line| line.split_whitespace().nth(1).unwrap().parse().unwrap())
+        .collect();
+    assert_eq!(
+        pids.len(),
+        3,
+        "parent, child and grandchild must actually start"
+    );
+    for pid in pids {
+        let mut query = Command::new("powershell.exe");
+        query.args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            &format!("if (Get-Process -Id {pid} -ErrorAction SilentlyContinue) {{ exit 1 }}"),
+        ]);
+        let gone = tooling::run_public_command(
+            &mut query,
+            &scratch.0,
+            "watchdog-descendant-query",
+            Duration::from_secs(5),
+        );
+        assert!(gone.status.success(), "watchdog must close PID {pid}");
+    }
 }
 
 #[cfg(any(windows, target_os = "linux"))]
 #[test]
 fn can_declaration_views_and_memmap_enforce_the_public_boundary() {
-    can_contracts::can_declaration_views_and_memmap_enforce_the_public_boundary();
+    let temp = Scratch::new();
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let identity = tooling::execution_settings();
+    let layout = r#"
+#include <stddef.h>
+#include <stdint.h>
+typedef struct { PduIdType handle; uint8_t length; uint32_t id; uint8_t *data; } ExpectedPdu;
+typedef struct { EcuStatus (*sink)(uint32_t, uint8_t, const uint8_t[8]); } ExpectedConfig;
+typedef char Id32[(sizeof(Can_IdType) == 4u) ? 1 : -1];
+typedef char Hoh16[(sizeof(Can_HwHandleType) == 2u) ? 1 : -1];
+typedef char PduLayout[(sizeof(Can_PduType) == sizeof(ExpectedPdu) &&
+ offsetof(Can_PduType, swPduHandle) == offsetof(ExpectedPdu, handle) &&
+ offsetof(Can_PduType, length) == offsetof(ExpectedPdu, length) &&
+ offsetof(Can_PduType, id) == offsetof(ExpectedPdu, id) &&
+ offsetof(Can_PduType, sdu) == offsetof(ExpectedPdu, data)) ? 1 : -1];
+typedef char ConfigLayout[(sizeof(Can_ConfigType) == sizeof(ExpectedConfig) &&
+ offsetof(Can_ConfigType, sink) == 0u) ? 1 : -1];
+void (*initialize)(const Can_ConfigType *) = Can_Init;
+Std_ReturnType (*write_frame)(uint16_t, const Can_PduType *) = Can_Write;
+"#;
+    // Mainline consumers reach the standard view only as "standard/Can.h".
+    for (index, (includes, allowed)) in [
+        ("#include \"standard/Can.h\"\n", true),
+        ("#include \"standard/Can.h\"\nCanMode leaked;\n", false),
+        (
+            "#include \"standard/Can.h\"\nvoid (*leaked)(CanMode) = Can_SetMode;\n",
+            false,
+        ),
+        (
+            "#include \"standard/Can.h\"\nvoid *leaked = (void *)&Can_HostFlush;\n",
+            false,
+        ),
+        (
+            "#include \"standard/Can.h\"\nvoid *leaked = (void *)&Can_InternalInject;\n",
+            false,
+        ),
+        (
+            "#include \"standard/Can.h\"\n#include \"Can_Host.h\"\n",
+            true,
+        ),
+        (
+            "#include \"Can_Host.h\"\n#include \"standard/Can.h\"\n",
+            true,
+        ),
+        (
+            "#define CAN_VERSION_INFO_API 1\n#include \"standard/Can.h\"\n",
+            false,
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let source = temp.0.join(format!("view-{index}.c"));
+        fs::write(&source, format!("{includes}{layout}")).unwrap();
+        let output = Command::new(&identity.compiler)
+            .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic", "-c"])
+            .arg("-I")
+            .arg(root.join("runtime/multi/include"))
+            .arg("-I")
+            .arg(root.join("core/tests/fixtures/multi-runtime"))
+            .arg(&source)
+            .arg("-o")
+            .arg(temp.0.join("view.o"))
+            .output()
+            .unwrap();
+        assert_eq!(
+            output.status.success(),
+            allowed,
+            "{index}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    for (index, (body, allowed)) in [
+        ("#define CAN_START_SEC_CODE\n#include \"Can_MemMap.h\"\nCAN_CODE int mapped(void) { return 0; }\n#define CAN_STOP_SEC_CODE\n#include \"Can_MemMap.h\"\n#define CAN_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Can_MemMap.h\"\nint zero CAN_VAR_CLEARED;\n#define CAN_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Can_MemMap.h\"\n#define CAN_START_SEC_CODE\n#include \"Can_MemMap.h\"\nCAN_CODE int main(void) { return mapped() + zero; }\n#define CAN_STOP_SEC_CODE\n#include \"Can_MemMap.h\"\n", true),
+        ("#include \"Can_MemMap.h\"\n", false),
+        ("#define CAN_START_SEC_UNKNOWN\n#include \"Can_MemMap.h\"\n", false),
+        ("#define CAN_STOP_SEC_CODE\n#include \"Can_MemMap.h\"\n", false),
+        ("#define CAN_START_SEC_CODE\n#include \"Can_MemMap.h\"\n#define CAN_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Can_MemMap.h\"\n", false),
+        ("#define CAN_START_SEC_CODE\n#include \"Can_MemMap.h\"\n#define CAN_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Can_MemMap.h\"\n", false),
+        ("#define CAN_START_SEC_CODE\n#define CAN_STOP_SEC_CODE\n#include \"Can_MemMap.h\"\n", false),
+    ].into_iter().enumerate() {
+        let source = temp.0.join(format!("section-{index}.c"));
+        fs::write(&source, body).unwrap();
+        let binary = tooling::native_binary(&temp.0, "section");
+        let mut command = Command::new(&identity.compiler);
+        command.args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
+            .arg("-I").arg(root.join("runtime/multi/include"))
+            .arg("-I").arg(root.join("core/tests/fixtures/multi-runtime")).arg(&source);
+        if !allowed { command.arg("-c"); }
+        let output = command.arg("-o").arg(&binary).output().unwrap();
+        assert_eq!(output.status.success(), allowed, "section/{index}: {}", String::from_utf8_lossy(&output.stderr));
+        if allowed {
+            assert!(Command::new(&binary).status().unwrap().success());
+            let sections = tooling::symbol_sections(&identity.objdump, &binary);
+            for (symbol, section) in [("mapped", ".text"), ("zero", ".bss")] {
+                assert!(sections.iter().any(|(name, actual)| name == symbol && actual == section), "{symbol}/{section}: {sections:?}");
+            }
+        }
+    }
 }

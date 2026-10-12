@@ -51,7 +51,6 @@ pub struct PreparedFile<'a> {
 #[derive(Debug)]
 pub struct PreparedProject<'a> {
     target: BuildTarget,
-    profile: &'static str,
     handoff: bool,
     files: Vec<PreparedFile<'a>>,
     fingerprint: String,
@@ -65,9 +64,6 @@ pub struct PreparedProject<'a> {
 impl<'a> PreparedProject<'a> {
     pub fn target(&self) -> BuildTarget {
         self.target
-    }
-    pub fn profile(&self) -> &'static str {
-        self.profile
     }
     pub fn handoff(&self) -> bool {
         self.handoff
@@ -208,12 +204,7 @@ impl<'a> PreparedProject<'a> {
                 .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
             std::fs::write(source.join("files.sha256"), hashes)
                 .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
-            let modes: &[&str] = if self.profile == "ecu" {
-                &["probe", "host-batch"]
-            } else {
-                &["host"]
-            };
-            for mode in modes {
+            for mode in ["probe", "host-batch"] {
                 let argv: Vec<OsString> = vec![
                     settings.python.as_os_str().into(),
                     "-I".into(),
@@ -225,7 +216,7 @@ impl<'a> PreparedProject<'a> {
                     "--output".into(),
                     stage.join(mode).into_os_string(),
                     "--mode".into(),
-                    (*mode).into(),
+                    mode.into(),
                 ];
                 let spec = ProcessSpec::for_duration(
                     argv,
@@ -301,10 +292,7 @@ fn insert<'a>(
     Ok(())
 }
 
-pub(crate) fn deliver_path(
-    asset: &AssetEntry,
-    profile: &str,
-) -> Result<String, crate::LocalizedText> {
+pub(crate) fn deliver_path(asset: &AssetEntry) -> Result<String, crate::LocalizedText> {
     let path = asset.relative_path;
     if matches!(path, "LICENSE" | "NOTICE") {
         return Ok(path.into());
@@ -313,33 +301,14 @@ pub(crate) fn deliver_path(
         if path == "ecu-tool.py" {
             return Ok("tools/ecu-tool.py".into());
         }
-        if let Some(relative) = path.strip_prefix("host/") {
-            if relative.starts_with("src/") || relative.starts_with("include/") {
-                return Ok(relative.into());
+        for family in ["multi/", "ecu/"] {
+            if let Some(relative) = path.strip_prefix(family) {
+                if relative.starts_with("src/") || relative.starts_with("include/") {
+                    return Ok(relative.into());
+                }
             }
         }
-        if let Some(relative) = path.strip_prefix("multi/") {
-            // Legacy profiles share the mainline Det/Can/SchM producers but keep
-            // their own Std/Platform type headers under tools/.
-            if (profile == "ecu-multi"
-                || !matches!(relative, "include/Std_Types.h" | "include/Platform_Types.h"))
-                && (relative.starts_with("src/") || relative.starts_with("include/"))
-            {
-                return Ok(relative.into());
-            }
-        }
-        if let Some(relative) = path.strip_prefix("ecu/") {
-            if relative.starts_with("src/") || relative.starts_with("include/") {
-                return Ok(relative.into());
-            }
-        }
-        if profile == "ecu" && path == "include/Os.h" {
-            return Ok("bsw-origin/include/Os.h".into());
-        }
-        if profile == "ecu" && path.starts_with("os/") {
-            return Ok(path.into());
-        }
-        if path.starts_with("src/") || path.starts_with("include/") {
+        if path.starts_with("os/") {
             return Ok(path.into());
         }
         if path.starts_with("contracts/") {
@@ -348,11 +317,6 @@ pub(crate) fn deliver_path(
         return Ok(format!("tools/{path}"));
     }
     if let Some(path) = path.strip_prefix("third_party/freertos/") {
-        if profile != "ecu" {
-            return Err(crate::product_message!(
-                "backend.prepared.legacy_kernel_forbidden"
-            ));
-        }
         if path == "include/StackMacros.h" {
             return Ok("kernel-compat/include/StackMacros.h".into());
         }
@@ -362,23 +326,6 @@ pub(crate) fn deliver_path(
         return Ok(format!("tools/ecu_tools/{path}"));
     }
     Err(crate::product_message!("backend.prepared.asset_source_root_invalid", "path" => path))
-}
-
-fn start<'a>(
-    target: BuildTarget,
-    profile: &'static str,
-) -> Result<BTreeMap<String, PreparedFile<'a>>, crate::LocalizedText> {
-    let inventory = AssetInventory::embedded();
-    let mut files = BTreeMap::new();
-    for asset in inventory.selected(target, profile) {
-        insert(
-            &mut files,
-            deliver_path(asset, profile)?,
-            Cow::Borrowed(asset.bytes),
-            Some(asset),
-        )?;
-    }
-    Ok(files)
 }
 
 struct NativePreparation {
@@ -394,11 +341,11 @@ impl NativePreparation {
         files: &mut BTreeMap<String, PreparedFile<'_>>,
         mut inputs: NativeInputs,
         slots: Vec<ApplicationSlotDescriptor>,
-        profile: &str,
         target: BuildTarget,
         handoff: bool,
     ) -> Result<Self, crate::LocalizedText> {
-        if profile == crate::integration::MULTI_PROFILE && inputs.application.len() != slots.len() {
+        let profile = crate::integration::MULTI_PROFILE;
+        if inputs.application.len() != slots.len() {
             return Err(
                 crate::product_message!("backend.integration.multi.consumer_unsupported").into(),
             );
@@ -428,11 +375,9 @@ impl NativePreparation {
 
 fn finish<'a>(
     target: BuildTarget,
-    profile: &'static str,
     handoff: bool,
     mut files: BTreeMap<String, PreparedFile<'a>>,
-    input_identity: Option<&str>,
-    native: Option<NativePreparation>,
+    native: NativePreparation,
 ) -> Result<PreparedProject<'a>, crate::LocalizedText> {
     let spec = target.spec();
     let toolchain_asset = AssetInventory::embedded()
@@ -442,22 +387,19 @@ fn finish<'a>(
         })?;
     let toolchain: serde_json::Value = serde_json::from_slice(toolchain_asset.bytes)
         .map_err(|error| crate::product_message!("backend.prepared.toolchain_invalid", "error" => error.to_string()))?;
-    let patches: Vec<_> = if profile == "ecu" {
-        spec.kernel_patches
-            .iter()
-            .map(|path| {
-                let includes = spec
-                    .kernel_patch_includes
-                    .iter()
-                    .find(|(candidate, _)| candidate == path)
-                    .map(|(_, includes)| *includes)
-                    .unwrap_or(&[]);
-                serde_json::json!({ "path": path, "includes": includes })
-            })
-            .collect()
-    } else {
-        Vec::new()
-    };
+    let patches: Vec<_> = spec
+        .kernel_patches
+        .iter()
+        .map(|path| {
+            let includes = spec
+                .kernel_patch_includes
+                .iter()
+                .find(|(candidate, _)| candidate == path)
+                .map(|(_, includes)| *includes)
+                .unwrap_or(&[]);
+            serde_json::json!({ "path": path, "includes": includes })
+        })
+        .collect();
     let linux = target == BuildTarget::LinuxX64ControlledV1;
     let sources: Vec<_> = files
         .keys()
@@ -469,85 +411,53 @@ fn finish<'a>(
                 && !matches!(name.as_str(), "src/ecu_probe.c" | "src/ecu_host_batch.c")
         })
         .collect();
-    let mut include_paths = vec![".", "include"];
+    let mut include_paths = vec![
+        ".",
+        "include",
+        "os",
+        "os/include",
+        "os/src",
+        "kernel/include",
+    ];
     let mut compiler_flags = vec!["-std=c99", "-O1", "-g", "-Wall", "-Wextra", "-Werror"];
     let mut kernel_sources = Vec::new();
-    if profile == "ecu" {
-        include_paths.extend(["os", "os/include", "os/src", "kernel/include"]);
-        if linux {
-            compiler_flags.extend(["-D_GNU_SOURCE", "-pthread"]);
-            include_paths.extend(["os/src/host/linux", "kernel/portable/ThirdParty/GCC/Posix"]);
-            kernel_sources.push("portable/ThirdParty/GCC/Posix/port.c");
-        } else {
-            include_paths.push("kernel/portable/MSVC-MingW");
-            kernel_sources.push("portable/MSVC-MingW/port.c");
-        }
-        kernel_sources.extend(["tasks.c", "list.c", "queue.c"]);
+    if linux {
+        compiler_flags.extend(["-D_GNU_SOURCE", "-pthread"]);
+        include_paths.extend(["os/src/host/linux", "kernel/portable/ThirdParty/GCC/Posix"]);
+        kernel_sources.push("portable/ThirdParty/GCC/Posix/port.c");
     } else {
-        compiler_flags.push("-pedantic");
+        include_paths.push("kernel/portable/MSVC-MingW");
+        kernel_sources.push("portable/MSVC-MingW/port.c");
     }
-    let link_libraries: &[&str] = if profile == "ecu" {
-        spec.link_libraries
-    } else if linux {
-        &[]
-    } else {
-        &["bcrypt"]
-    };
-    let binary_name = if profile == "ecu" {
-        spec.binary_name
-    } else if linux {
-        "ecu_host"
-    } else {
-        "ecu_host.exe"
-    };
-    let required_sections: &[&str] = if profile == "ecu" {
-        spec.required_sections
-    } else {
-        &[".text", ".data"]
-    };
+    kernel_sources.extend(["tasks.c", "list.c", "queue.c"]);
     let mut metadata = serde_json::to_vec_pretty(&serde_json::json!({
         "format": "autosar-build-target-v1",
         "target": spec.id,
         "abi": spec.abi,
         "toolchain": toolchain,
-        "nativePort": if profile == "ecu" { spec.native_port } else { "C99 legacy host execution" },
+        "nativePort": spec.native_port,
         "kernelPatches": patches,
-        "linkLibraries": link_libraries,
-        "binaryName": binary_name,
+        "linkLibraries": spec.link_libraries,
+        "binaryName": spec.binary_name,
         "objectFormat": spec.object_format,
-        "requiredSections": required_sections,
-        "logicalClock": if profile == "ecu" { spec.logical_clock } else { "explicit legacy host clock" },
+        "requiredSections": spec.required_sections,
+        "logicalClock": spec.logical_clock,
         "sources": sources,
         "includePaths": include_paths,
         "compilerFlags": compiler_flags,
         "kernelSources": kernel_sources,
-        "profile": profile,
+        "profile": "ecu",
         "handoff": handoff,
-        "inputSha256": input_identity,
+        "inputSha256": native.preparation_identity,
         "scope": "source-only preparation; native preflight not run",
-        "nativeDelivery": native.as_ref().map(|native| &native.metadata),
-        "definitionFingerprint": native.as_ref().map(|native| &native.definition_fingerprint),
+        "nativeDelivery": native.metadata,
+        "definitionFingerprint": native.definition_fingerprint,
     }))
     .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     metadata.push(b'\n');
-    if native.is_none() {
-        // Legacy target bytes must not gain native-null fields or a new identity.
-        let mut value: serde_json::Value = serde_json::from_slice(&metadata)
-            .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
-        value.as_object_mut().unwrap().remove("nativeDelivery");
-        value
-            .as_object_mut()
-            .unwrap()
-            .remove("definitionFingerprint");
-        metadata = serde_json::to_vec_pretty(&value)
-            .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
-        metadata.push(b'\n');
-    }
     insert(&mut files, "target.json".into(), Cow::Owned(metadata), None)?;
-    if let Some(native) = &native {
-        generator::delivery::tools::add(&mut files, &native.metadata)?;
-        generator::delivery::ownership::add_ledger(&mut files, &native.metadata)?;
-    }
+    generator::delivery::tools::add(&mut files, &native.metadata)?;
+    generator::delivery::ownership::add_ledger(&mut files, &native.metadata)?;
     let mut digest = Sha256::new();
     for file in files.values() {
         digest.update((file.path.len() as u64).to_le_bytes());
@@ -559,22 +469,10 @@ fn finish<'a>(
             digest.update(asset.sha256.as_bytes());
         }
     }
-    if let Some(native) = &native {
-        digest.update(native.guard.revision_identity.as_bytes());
-    }
+    digest.update(native.guard.revision_identity.as_bytes());
     let fingerprint = format!("{:x}", digest.finalize());
-    let (native_guard, native_metadata, definition_fingerprint, application_slots) = match native {
-        Some(native) => (
-            Some(native.guard),
-            Some(native.metadata),
-            Some(native.definition_fingerprint),
-            native.application_slots,
-        ),
-        None => (None, None, None, Vec::new()),
-    };
     Ok(PreparedProject {
         target,
-        profile,
         handoff,
         files: files.into_values().collect(),
         preflight: PreflightReport {
@@ -583,10 +481,10 @@ fn finish<'a>(
             logs: Vec::new(),
         },
         fingerprint,
-        native_guard,
-        native_metadata,
-        definition_fingerprint,
-        application_slots,
+        native_guard: Some(native.guard),
+        native_metadata: Some(native.metadata),
+        definition_fingerprint: Some(native.definition_fingerprint),
+        application_slots: native.application_slots,
     })
 }
 
@@ -605,11 +503,6 @@ pub fn prepare_ecu_project_with_applications(
     target: BuildTarget,
     sources: &[ApplicationSource],
 ) -> Result<PreparedProject<'static>, Vec<PlanDiagnostic>> {
-    if plan.description().multi.is_none() {
-        return Err(PlanDiagnostic::source_closure(crate::product_message!(
-            "backend.delivery.application_membership_mismatch"
-        )));
-    }
     let slots = plan.application_slot_descriptors()?;
     let mut inputs = NativeInputs::from_plan(plan).map_err(PlanDiagnostic::source_closure)?;
     let mut members = Vec::new();
@@ -668,7 +561,7 @@ pub fn prepare_ecu_project_with_applications(
     inputs
         .refresh_snapshot_identity()
         .map_err(PlanDiagnostic::source_closure)?;
-    prepare_ecu_sources(plan, target, false, Some(inputs))
+    prepare_ecu_sources(plan, target, false, inputs)
 }
 
 pub fn prepare_ecu_project<'a>(
@@ -676,11 +569,7 @@ pub fn prepare_ecu_project<'a>(
     target: BuildTarget,
     handoff: bool,
 ) -> Result<PreparedProject<'a>, Vec<PlanDiagnostic>> {
-    let native = if plan.description().rule_set_identity.is_some() {
-        Some(NativeInputs::from_plan(plan).map_err(PlanDiagnostic::source_closure)?)
-    } else {
-        None
-    };
+    let native = NativeInputs::from_plan(plan).map_err(PlanDiagnostic::source_closure)?;
     prepare_ecu_sources(plan, target, handoff, native)
 }
 
@@ -692,11 +581,6 @@ pub fn prepare_ecu_project_for_workspace(
     target: BuildTarget,
     handoff: bool,
 ) -> Result<PreparedProject<'static>, Vec<PlanDiagnostic>> {
-    if workspace.uses_legacy_validation() || plan.description().rule_set_identity.is_none() {
-        return Err(PlanDiagnostic::source_closure(crate::product_message!(
-            "backend.prepared.legacy_preparation_required"
-        )));
-    }
     let native = NativeInputs::from_workspace(
         workspace,
         plan.description().required_extension_definitions.clone(),
@@ -721,15 +605,13 @@ pub fn prepare_ecu_project_for_workspace(
         .get("definitions.sha256")
         != Some(&native.definition_fingerprint)
     {
-        let runtime = crate::integration::RuntimeCatalog::embedded()?;
         let scoped = crate::integration::build_plan_native(
             &native.sources().map_err(PlanDiagnostic::source_closure)?,
             &native.guard.catalog,
-            &runtime,
         )?;
-        prepare_ecu_sources(&scoped, target, handoff, Some(native))
+        prepare_ecu_sources(&scoped, target, handoff, native)
     } else {
-        prepare_ecu_sources(plan, target, handoff, Some(native))
+        prepare_ecu_sources(plan, target, handoff, native)
     }
 }
 
@@ -737,22 +619,18 @@ fn prepare_ecu_sources(
     plan: &ValidatedIntegrationPlan,
     target: BuildTarget,
     handoff: bool,
-    native: Option<NativeInputs>,
+    native: NativeInputs,
 ) -> Result<PreparedProject<'static>, Vec<PlanDiagnostic>> {
     let live_application = native
-        .as_ref()
-        .and_then(|inputs| inputs.application.first())
+        .application
+        .first()
         .map(|(_, bytes)| bytes.as_slice());
     let rendered = plan.render_ecu_sources(target, live_application)?;
     let source_owners =
-        crate::integration::ecu::source_assets(target, plan.description().multi.is_some())
-            .map_err(PlanDiagnostic::source_closure)?;
+        crate::integration::ecu::source_assets(target).map_err(PlanDiagnostic::source_closure)?;
     let mut files = BTreeMap::new();
     for (path, bytes) in rendered {
-        if native.is_some()
-            && (path.starts_with("inputs/")
-                || (live_application.is_some() && path == generator::delivery::APPLICATION_OUTPUT))
-        {
+        if path.starts_with("inputs/") {
             continue;
         }
         let source = source_owners
@@ -765,135 +643,10 @@ fn prepare_ecu_sources(
         };
         insert(&mut files, path, bytes, source).map_err(PlanDiagnostic::source_closure)?;
     }
-    let native = if let Some(inputs) = native {
-        let slots = plan.application_slot_descriptors()?;
-        Some(
-            NativePreparation::new(
-                &mut files,
-                inputs,
-                slots,
-                if plan.description().multi.is_some() {
-                    crate::integration::MULTI_PROFILE
-                } else {
-                    crate::integration::PROFILE
-                },
-                target,
-                handoff,
-            )
-            .map_err(PlanDiagnostic::source_closure)?,
-        )
-    } else {
-        if handoff {
-            let mut metadata =
-                serde_json::to_vec_pretty(&crate::integration::handoff::metadata(plan, target))
-                    .map_err(|error| PlanDiagnostic::source_closure(error.to_string()))?;
-            metadata.push(b'\n');
-            insert(
-                &mut files,
-                "handoff.json".into(),
-                Cow::Owned(metadata),
-                None,
-            )
-            .map_err(PlanDiagnostic::source_closure)?;
-        }
-        None
-    };
-    let input_identity = native
-        .as_ref()
-        .map(|native| native.preparation_identity.clone());
-    finish(
-        target,
-        "ecu",
-        handoff,
-        files,
-        input_identity.as_deref(),
-        native,
-    )
-    .map_err(PlanDiagnostic::source_closure)
-}
-
-pub fn prepare_host_project(
-    workspace: &mut Workspace,
-    target: BuildTarget,
-    handoff: bool,
-) -> Result<PreparedProject<'static>, crate::LocalizedText> {
-    let legacy = workspace.uses_legacy_validation();
-    if !legacy {
-        workspace.verify_saved_sources()?;
-    }
-    let saved = if legacy && handoff {
-        Some(workspace.handoff_sources()?)
-    } else {
-        None
-    };
-    let generated = generator::render::render_host_profile(workspace, target)?;
-    let input_identity = workspace.preparation_input_identity();
-    let mut files = start(target, "host")?;
-    for (path, bytes) in generated {
-        insert(&mut files, path, Cow::Owned(bytes), None)?;
-    }
-    let readme = generator::render::handoff_readme(
-        workspace.diagnostic_profile(),
-        target,
-        handoff,
-        !legacy,
-    )?;
-    insert(
-        &mut files,
-        "README.md".into(),
-        Cow::Owned(readme.into_bytes()),
-        None,
-    )?;
-    if let Some(sources) = saved {
-        let mut identities = Vec::with_capacity(sources.len());
-        for (index, source) in sources.into_iter().enumerate() {
-            let path = format!("inputs/{index:03}.arxml");
-            identities.push(serde_json::json!({
-                "path": path,
-                "originalName": source.original_name,
-                "packageRoots": source.package_roots,
-                "sha256": format!("{:x}", Sha256::digest(&source.contents)),
-            }));
-            insert(&mut files, path, Cow::Owned(source.contents), None)?;
-        }
-        let mut metadata = serde_json::to_vec_pretty(&serde_json::json!({
-            "format": "autosar-host-handoff-v1",
-            "release": "CP/FO R24-11",
-            "toolVersion": env!("CARGO_PKG_VERSION"),
-            "target": target,
-            "sources": identities,
-        }))
-        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
-        metadata.push(b'\n');
-        insert(
-            &mut files,
-            "handoff.json".into(),
-            Cow::Owned(metadata),
-            None,
-        )?;
-    }
-    if legacy {
-        finish(target, "host", handoff, files, Some(&input_identity), None)
-    } else {
-        let inputs = NativeInputs::from_workspace(workspace, Vec::new())?;
-        let native = NativePreparation::new(
-            &mut files,
-            inputs,
-            Vec::new(),
-            generator::delivery::HOST_PROFILE,
-            target,
-            handoff,
-        )?;
-        let input_identity = native.preparation_identity.clone();
-        finish(
-            target,
-            "host",
-            handoff,
-            files,
-            Some(&input_identity),
-            Some(native),
-        )
-    }
+    let slots = plan.application_slot_descriptors()?;
+    let native = NativePreparation::new(&mut files, native, slots, target, handoff)
+        .map_err(PlanDiagnostic::source_closure)?;
+    finish(target, handoff, files, native).map_err(PlanDiagnostic::source_closure)
 }
 
 #[cfg(test)]

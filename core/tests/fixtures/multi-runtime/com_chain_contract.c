@@ -11,7 +11,8 @@
 #include "LSduR_CanTp.h"
 #include "LSduR_CanIf.h"
 #include "CanIf.h"
-#include "Can.h"
+#include "standard/Can.h"
+#include "Can_Host.h"
 #include "SchM_Can.h"
 #include "Det.h"
 #include "Ecu_Config.h"
@@ -33,9 +34,7 @@ static unsigned bus_offs;
 /* Actual queued profile policy: flushing does not synthesize confirmation.
  * This verifies PERIODIC COM continues while driver acceptance is possible.
  */
-const EcuPolicyConfig Ecu_Policy = {
-    ECU_TX_QUEUED, ECU_RX_BEFORE_DEADLINE, 0u, 0u, ECU_WAIT_ABORT, 0u, 0u, NULL_PTR, 0u, 50u,
-    5000u};
+const EcuPolicyConfig Ecu_Policy = {.tx_confirmation = ECU_TX_QUEUED};
 static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8]) {
     assert(id == 0x456u && length == 4u && frames < 8u);
     emitted_tokens[frames] = Can_HostTransmitToken();

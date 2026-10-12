@@ -1,5 +1,6 @@
 /** Deterministic admission-window oracle; real driver, CanIf, routing and SchM. */
-#include "Can.h"
+#include "standard/Can.h"
+#include "Can_Host.h"
 #include "CanIf.h"
 #include "Can_HostLock.h"
 #include "SchM_Can.h"

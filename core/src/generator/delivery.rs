@@ -25,11 +25,9 @@ use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
 pub const FORMAT: &str = "autosar-workbench-handoff-v2";
-pub const HOST_PROFILE: &str = "host-can-v1";
 pub const APPLICATION_SLOT: &str = "epic4-single-application-v1";
 pub(crate) const PROJECT_PATH: &str = "inputs/workbench-project.json";
 pub(crate) const OWNERSHIP_PATH: &str = "workbench-ownership.json";
-pub(crate) const APPLICATION_OUTPUT: &str = "src/Application.c";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -353,11 +351,6 @@ impl NativeInputs {
         workspace: &Workspace,
         required: Vec<ExtensionDefinitionIdentity>,
     ) -> Result<Self, crate::LocalizedText> {
-        if workspace.uses_legacy_validation() {
-            return Err(crate::product_message!(
-                "backend.delivery.legacy_workspace_forbidden"
-            ));
-        }
         let snapshot = workspace.generation_snapshot()?;
         let rule_set_identity = crate::rules::rule_set_identity()?;
         let catalog = consumer_catalog(workspace.definition_catalog(), &required)?;
@@ -610,16 +603,12 @@ pub(crate) fn populate_inputs<'a>(
             .map_err(|_| crate::product_message!("backend.delivery.application_source_not_utf8"))?;
         let sha256 = digest(bytes);
         let contents = Cow::Owned(std::mem::take(bytes));
-        let output = if slot.producer_slot == APPLICATION_SLOT {
-            APPLICATION_OUTPUT.to_owned()
-        } else {
-            let relative = slot.source_paths[0]
-                .strip_prefix("application/")
-                .ok_or_else(|| {
-                    crate::product_message!("backend.delivery.application_membership_mismatch")
-                })?;
-            format!("src/{relative}")
-        };
+        let relative = slot.source_paths[0]
+            .strip_prefix("application/")
+            .ok_or_else(|| {
+                crate::product_message!("backend.delivery.application_membership_mismatch")
+            })?;
+        let output = format!("src/{relative}");
         if let Some(reference) = files.get_mut(&output) {
             reference.bytes = contents;
             reference.source = None;

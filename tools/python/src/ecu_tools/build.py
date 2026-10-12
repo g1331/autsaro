@@ -150,8 +150,6 @@ def check_object(binary: Path, objdump: Path, target: dict, project: Path, logs:
     sections = query([str(objdump), "-h", tool_argument(binary)], logs, "object-sections", timeout=30)
     if not linux and "__emutls" in symbols:
         raise ValueError("Physical stack faults require native PE TLS")
-    if target["profile"] != "ecu":
-        return
     section_map = {}
     for match in re.finditer(r"^\s*(\d+)\s+(\.[\w]+)\s+([0-9a-fA-F]+)[^\n]*\n([^\n]+)", sections, re.MULTILINE):
         section_map[match[2]] = (int(match[1]) + 1, int(match[3], 16), match[4])
@@ -205,11 +203,10 @@ def build(project: Path, output: Path, mode: str, control_source: Path | None = 
     linux = target["target"] == "linux-x64-controlled-v1"
     if platform.system() != TARGETS[target["target"]] or platform.machine().lower() not in ("x86_64", "amd64"):
         raise ValueError("Native execution requires the selected target's original host")
-    profile = target.get("profile")
-    if profile not in ("ecu", "host") or (profile == "host") != (mode == "host"):
-        raise ValueError("Build mode and sealed source profile differ")
-    if mode not in ("host", "probe", "test", "host-batch") or (control_source is not None and mode not in ("probe", "test")):
-        raise ValueError("Production HostBatch/legacy mode refuses test or external control sources")
+    if target.get("profile") != "ecu":
+        raise ValueError("Unsupported sealed source profile")
+    if mode not in ("probe", "test", "host-batch") or (control_source is not None and mode not in ("probe", "test")):
+        raise ValueError("Production HostBatch mode refuses test or external control sources")
     output = output.absolute()
     refuse_links(output)
     output = output.resolve()
@@ -228,32 +225,30 @@ def build(project: Path, output: Path, mode: str, control_source: Path | None = 
     logs.mkdir(mode=0o700)
     cc, objdump, git = pinned_tools(target, logs)
     kernel = output / "kernel"
-    if profile == "ecu":
-        shutil.copytree(project / "kernel", kernel)
-        for patch in target["kernelPatches"]:
-            relative = patch["path"].removeprefix("runtime/")
-            if relative not in names:
-                raise ValueError(f"Pinned patch is missing: {relative}")
-            patch_flags = ["--include=" + name for name in patch["includes"]]
-            for checked in (True, False):
-                argv = [str(git), "apply", "--ignore-space-change", *patch_flags,
-                        *(["--check"] if checked else []), tool_argument(project / relative)]
-                result = OwnedProcess(ProcessSpec.seconds(argv, kernel, 30, logs, "kernel-patch",
-                                      env=kernel_patch_environment(kernel))).wait()
-                if not result.success:
-                    raise RuntimeError(f"Kernel patch failed: {relative}; logs={logs}")
+    shutil.copytree(project / "kernel", kernel)
+    for patch in target["kernelPatches"]:
+        relative = patch["path"].removeprefix("runtime/")
+        if relative not in names:
+            raise ValueError(f"Pinned patch is missing: {relative}")
+        patch_flags = ["--include=" + name for name in patch["includes"]]
+        for checked in (True, False):
+            argv = [str(git), "apply", "--ignore-space-change", *patch_flags,
+                    *(["--check"] if checked else []), tool_argument(project / relative)]
+            result = OwnedProcess(ProcessSpec.seconds(argv, kernel, 30, logs, "kernel-patch",
+                                  env=kernel_patch_environment(kernel))).wait()
+            if not result.success:
+                raise RuntimeError(f"Kernel patch failed: {relative}; logs={logs}")
     sources = [tool_argument(project / name) for name in source_map]
-    if profile == "ecu":
-        kernel_sources = target.get("kernelSources")
-        if not kernel_sources or any(not safe_relative(name) or not (kernel / name).is_file() for name in kernel_sources):
-            raise ValueError("Pinned kernel translation units are missing")
-        sources += [tool_argument(kernel / name) for name in kernel_sources]
-        entry = control_source if control_source else project / ("src/ecu_host_batch.c" if mode == "host-batch" else "src/ecu_probe.c")
-        if entry != control_source and entry.relative_to(project).as_posix() not in names:
-            raise ValueError("Selected native main entry is not sealed")
-        sources.append(tool_argument(entry))
+    kernel_sources = target.get("kernelSources")
+    if not kernel_sources or any(not safe_relative(name) or not (kernel / name).is_file() for name in kernel_sources):
+        raise ValueError("Pinned kernel translation units are missing")
+    sources += [tool_argument(kernel / name) for name in kernel_sources]
+    entry = control_source if control_source else project / ("src/ecu_host_batch.c" if mode == "host-batch" else "src/ecu_probe.c")
+    if entry != control_source and entry.relative_to(project).as_posix() not in names:
+        raise ValueError("Selected native main entry is not sealed")
+    sources.append(tool_argument(entry))
     suffix = "" if linux else ".exe"
-    filename = ("ecu_host" if profile == "host" else "ecu_host_batch" if mode == "host-batch" else "ecu_probe") + suffix
+    filename = ("ecu_host_batch" if mode == "host-batch" else "ecu_probe") + suffix
     private = Path(tempfile.mkdtemp(prefix="compile-", dir=output))
     staged = private / filename
     argv = [str(cc), *flags, f"-ffile-prefix-map={tool_argument(project)}=.", f"-ffile-prefix-map={tool_argument(output)}=build"]

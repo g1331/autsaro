@@ -4,7 +4,7 @@ use super::{
 use crate::Workspace;
 use crate::arxml::ProjectManifest;
 use crate::definitions::DefinitionCatalog;
-use crate::integration::{InputSource, RuntimeCatalog};
+use crate::integration::InputSource;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -136,7 +136,7 @@ fn prepare_package(
             .ok_or_else(|| crate::product_message!("backend.delivery.owned_snapshot_missing"))?;
         fs::write(path, bytes).map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     }
-    let mut workspace = Workspace::open_project_with_catalog(
+    let workspace = Workspace::open_project_with_catalog(
         &directory.0.join("workbench-project.json"),
         &selected,
     )?;
@@ -150,9 +150,7 @@ fn prepare_package(
             "backend.delivery.handoff_mode_mismatch"
         ));
     }
-    let prepared = if metadata.profile_id == super::HOST_PROFILE {
-        crate::prepared::prepare_host_project(&mut workspace, metadata.target_id, handoff)?
-    } else {
+    let prepared = {
         let sources = metadata
             .input_snapshots
             .iter()
@@ -162,9 +160,8 @@ fn prepare_package(
                     .map_err(|issue| issue.message)
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let runtime = RuntimeCatalog::embedded().map_err(diagnostics)?;
-        let plan = crate::integration::build_plan_native(&sources, &selected, &runtime)
-            .map_err(diagnostics)?;
+        let plan =
+            crate::integration::build_plan_native(&sources, &selected).map_err(diagnostics)?;
         if plan.description().required_extension_definitions
             != metadata.resource_identities.required_extension_definitions
         {

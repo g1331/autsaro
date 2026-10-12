@@ -137,8 +137,7 @@ pub(crate) fn fields(
                 );
             }
             // Transmit PDU periods follow the trigger that sends them. The
-            // historical chain sends from the application; the mainline sends
-            // from the Com Tx main function, so it only moves with the
+            // mainline sends from the Com Tx main function, so it only moves with the
             // application when both share this trigger. Any other BSW main
             // function on the trigger keeps its own timing and refuses.
             let transmit_main = description
@@ -146,7 +145,7 @@ pub(crate) fn fields(
                 .as_ref()
                 .map(|com| &com.transmit_main)
                 .filter(|main| shared.iter().any(|entity| entity.symbol == main.symbol));
-            let transmit_follows = description.multi.is_none() || transmit_main.is_some();
+            let transmit_follows = transmit_main.is_some();
             let modes: Vec<_> = if transmit_follows {
                 description
                     .signals
@@ -181,11 +180,9 @@ pub(crate) fn fields(
                         })
                 })
                 .collect();
-            let foreign = description.multi.is_some()
-                && shared.iter().any(|entity| {
-                    !entity.application
-                        && transmit_main.is_none_or(|main| entity.symbol != main.symbol)
-                });
+            let foreign = shared.iter().any(|entity| {
+                !entity.application && transmit_main.is_none_or(|main| entity.symbol != main.symbol)
+            });
             let transmitters = description
                 .signals
                 .iter()

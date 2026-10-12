@@ -295,109 +295,73 @@ fn template_files(
             "backend.arxml.project.project_name_constraints"
         ));
     }
+    if template != "standard-ecu" {
+        return Err(crate::product_message!(
+            "backend.arxml.project.unknown_template_id"
+        ));
+    }
     let mut files = Vec::new();
-    let profile;
-    match template {
-        "can-empty-v1" | "can-signals-v1" => {
-            profile = "host-can-v1".to_owned();
-            let (frames, signals) = if template == "can-signals-v1" {
-                let frame_path = format!("/{name}/Pdu_Command");
-                (
-                    vec![FrameView {
-                        path: frame_path.clone(),
-                        name: "Command".into(),
-                        id: 0x321,
-                        dlc: 4,
-                        direction: Direction::Tx,
-                        period_ms: Some(10),
-                        timeout_ms: None,
-                    }],
-                    vec![SignalView {
-                        path: format!("/{name}/ComCfg/ComConfig/Value"),
-                        name: "Value".into(),
-                        frame_path,
-                        start_bit: 0,
-                        length: 32,
-                        initial_value: 0,
-                    }],
-                )
-            } else {
-                (Vec::new(), Vec::new())
-            };
-            files.push(ProjectFilePreview {
-                path: format!("{name}.arxml"),
-                contents: render_profile(name, &frames, &signals, None),
-            });
-        }
-        "standard-ecu" => {
-            profile = crate::integration::MULTI_PROFILE.into();
-            // Product-original single application component project on the
-            // generation mainline; not official archive payloads.
-            let originals = [
-                (
-                    "extract.arxml",
-                    include_str!("../../resources/templates/standard-ecu/extract.arxml"),
-                ),
-                (
-                    "types.arxml",
-                    include_str!("../../resources/templates/standard-ecu/types.arxml"),
-                ),
-                (
-                    "application.arxml",
-                    include_str!("../../resources/templates/standard-ecu/application.arxml"),
-                ),
-                (
-                    "composition.arxml",
-                    include_str!("../../resources/templates/standard-ecu/composition.arxml"),
-                ),
-                (
-                    "bsw.arxml",
-                    include_str!("../../resources/templates/standard-ecu/bsw.arxml"),
-                ),
-                (
-                    "ecuc.arxml",
-                    include_str!("../../resources/templates/standard-ecu/ecuc.arxml"),
-                ),
-                (
-                    "services.arxml",
-                    include_str!("../../resources/templates/standard-ecu/services.arxml"),
-                ),
-            ];
-            for (path, original) in originals {
-                let document = Document::parse(original).map_err(|error| error.to_string())?;
-                let mut patches = Vec::new();
-                for node in document.descendants().filter(|node| node.is_element()) {
-                    if node.tag_name().name() == "ECU-INSTANCE"
-                        && child_text(node, "SHORT-NAME").as_deref() == Some("ReferenceEcu")
-                    {
-                        patch_child(node, "SHORT-NAME", name.into(), &mut patches)?;
-                    } else if node.tag_name().name().ends_with("-REF") {
-                        if let Some(path) = node
-                            .text()
-                            .and_then(|value| value.strip_prefix("/Extract/ReferenceEcu"))
-                        {
-                            if path.is_empty() || path.starts_with('/') {
-                                patches.push(Patch {
-                                    range: super::projection::simple_text_range(node)?,
-                                    value: format!("/Extract/{name}{path}"),
-                                });
-                            }
-                        }
+    let profile: String = crate::integration::MULTI_PROFILE.into();
+    // Product-original single application component project on the
+    // generation mainline; not official archive payloads.
+    let originals = [
+        (
+            "extract.arxml",
+            include_str!("../../resources/templates/standard-ecu/extract.arxml"),
+        ),
+        (
+            "types.arxml",
+            include_str!("../../resources/templates/standard-ecu/types.arxml"),
+        ),
+        (
+            "application.arxml",
+            include_str!("../../resources/templates/standard-ecu/application.arxml"),
+        ),
+        (
+            "composition.arxml",
+            include_str!("../../resources/templates/standard-ecu/composition.arxml"),
+        ),
+        (
+            "bsw.arxml",
+            include_str!("../../resources/templates/standard-ecu/bsw.arxml"),
+        ),
+        (
+            "ecuc.arxml",
+            include_str!("../../resources/templates/standard-ecu/ecuc.arxml"),
+        ),
+        (
+            "services.arxml",
+            include_str!("../../resources/templates/standard-ecu/services.arxml"),
+        ),
+    ];
+    for (path, original) in originals {
+        let document = Document::parse(original).map_err(|error| error.to_string())?;
+        let mut patches = Vec::new();
+        for node in document.descendants().filter(|node| node.is_element()) {
+            if node.tag_name().name() == "ECU-INSTANCE"
+                && child_text(node, "SHORT-NAME").as_deref() == Some("ReferenceEcu")
+            {
+                patch_child(node, "SHORT-NAME", name.into(), &mut patches)?;
+            } else if node.tag_name().name().ends_with("-REF") {
+                if let Some(path) = node
+                    .text()
+                    .and_then(|value| value.strip_prefix("/Extract/ReferenceEcu"))
+                {
+                    if path.is_empty() || path.starts_with('/') {
+                        patches.push(Patch {
+                            range: super::projection::simple_text_range(node)?,
+                            value: format!("/Extract/{name}{path}"),
+                        });
                     }
                 }
-                let mut contents = original.to_owned();
-                apply_patches(&mut contents, &mut patches)?;
-                files.push(ProjectFilePreview {
-                    path: path.into(),
-                    contents,
-                });
             }
         }
-        _ => {
-            return Err(crate::product_message!(
-                "backend.arxml.project.unknown_template_id"
-            ));
-        }
+        let mut contents = original.to_owned();
+        apply_patches(&mut contents, &mut patches)?;
+        files.push(ProjectFilePreview {
+            path: path.into(),
+            contents,
+        });
     }
     let inputs = files
         .iter()
@@ -468,7 +432,6 @@ fn from_preview(
             path: root.join(&input.path),
             text: file.contents.clone(),
             saved: file.contents.clone(),
-            original_name: None,
         });
     }
     files.sort_by(|left, right| left.path.cmp(&right.path));
@@ -501,11 +464,7 @@ fn from_preview(
     let mut workspace = Workspace {
         name,
         files,
-        frames: Vec::new(),
-        signals: Vec::new(),
-        diagnostic: None,
         issues: Vec::new(),
-        schema_zip: None,
         integration_input_root: Some(root.clone()),
         catalog,
         snapshot: Arc::default(),
@@ -600,11 +559,6 @@ fn publish(
 impl Workspace {
     /// Captures only saved, owned members after checking the live source boundary.
     pub fn generation_snapshot(&self) -> Result<GenerationSnapshot, crate::message::LocalizedText> {
-        if self.uses_legacy_validation() {
-            return Err(crate::product_message!(
-                "backend.arxml.project.generation_requires_builtin_validation"
-            ));
-        }
         crate::rules::rule_set_identity()?;
         if self.is_dirty() {
             return Err(crate::product_message!(
@@ -1003,7 +957,7 @@ impl Workspace {
             application_bytes,
             extension_diagnostics: diagnostics,
         };
-        let workspace = super::load_sources_with(sources, None, |workspace| {
+        let workspace = super::load_sources_with(sources, |workspace| {
             workspace.catalog = Arc::new(catalog);
             workspace.integration_input_root = Some(input_root);
             workspace.project = Some(membership);
@@ -1038,16 +992,7 @@ impl Workspace {
                         })
                     })
             } else {
-                // Unrelated target-only restrictions do not authorize or block legacy ownership.
-                crate::integration::inspect_inputs_native(&sources, &workspace.catalog)
-                    .map_err(super::integration_errors)?
-                    .component_contract()
-                    .map_err(super::integration_errors)?;
-                members.len() == 1
-                    && members.iter().all(|input| {
-                        input.producer_slot == crate::generator::delivery::APPLICATION_SLOT
-                            && input.path == crate::integration::APPLICATION_SOURCE_PATH
-                    })
+                false
             };
             if !matches {
                 return Err(crate::product_message!(

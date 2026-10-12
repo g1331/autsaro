@@ -997,22 +997,6 @@ impl Workspace {
                 }
             }
         }
-        if let Some(archive) = &self.schema_zip {
-            let files: Vec<_> = self
-                .files
-                .iter()
-                .map(|file| (file.path.as_path(), file.text.as_str()))
-                .collect();
-            if let Some(issue) = schema::validate_files(archive, &files)?.first() {
-                return Err(crate::message::LocalizedText::messages([
-                    crate::product_message!(
-                        "backend.arxml.changes.schema_diagnostic_context",
-                        "code" => &issue.code
-                    ),
-                    issue.message.clone(),
-                ]));
-            }
-        }
         Ok(())
     }
 }

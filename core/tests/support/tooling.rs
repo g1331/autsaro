@@ -34,55 +34,6 @@ pub(super) fn execution_settings() -> autosar_config_core::target::ExecutionSett
     autosar_config_core::target::ExecutionSettings::from_environment().unwrap()
 }
 
-pub(super) fn host_build_directory(project: &std::path::Path) -> PathBuf {
-    project.with_extension("native-build")
-}
-
-#[cfg(windows)]
-pub(super) fn host_binary(project: &std::path::Path) -> PathBuf {
-    host_build_directory(project).join(if cfg!(windows) {
-        "ecu_host.exe"
-    } else {
-        "ecu_host"
-    })
-}
-
-pub(super) fn build_host(
-    project: &std::path::Path,
-) -> Result<autosar_config_core::BuildReport, autosar_config_core::LocalizedText> {
-    autosar_config_core::generator::build(
-        project,
-        &host_build_directory(project),
-        &execution_settings(),
-        &super::tooling::execution_owner(),
-    )
-}
-
-#[cfg(windows)]
-pub(super) fn run_hosts(
-    first: &std::path::Path,
-    second: &std::path::Path,
-) -> Result<autosar_config_core::RunReport, autosar_config_core::LocalizedText> {
-    autosar_config_core::host::run(
-        first,
-        &host_binary(first),
-        second,
-        &host_binary(second),
-        &super::tooling::execution_owner(),
-    )
-}
-
-#[cfg(windows)]
-pub(super) fn run_diagnostic(
-    project: &std::path::Path,
-) -> Result<autosar_config_core::RunReport, autosar_config_core::LocalizedText> {
-    autosar_config_core::host::run_diagnostic(
-        project,
-        &host_binary(project),
-        &super::tooling::execution_owner(),
-    )
-}
-
 pub(super) fn ecu_build_command(
     project: &std::path::Path,
     output: &std::path::Path,

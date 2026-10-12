@@ -8,7 +8,8 @@
 #include "LSduR.h"
 #include "LSduR_PduR.h"
 #include "CanIf.h"
-#include "Can.h"
+#include "standard/Can.h"
+#include "Can_Host.h"
 #include "SchM_Can.h"
 #include "Det.h"
 #include "Ecu_Config.h"
@@ -82,17 +83,7 @@ static unsigned failures[2];
 static unsigned frames[2];
 static unsigned offline_errors;
 static unsigned mode_indications;
-const EcuPolicyConfig Ecu_Policy = {ECU_TX_SYNCHRONOUS,
-                                    ECU_RX_BEFORE_DEADLINE,
-                                    0u,
-                                    0u,
-                                    ECU_WAIT_ABORT,
-                                    0u,
-                                    0u,
-                                    NULL_PTR,
-                                    0u,
-                                    50u,
-                                    5000u};
+const EcuPolicyConfig Ecu_Policy = {.tx_confirmation = ECU_TX_SYNCHRONOUS};
 static unsigned index_for(PduIdType id) {
     assert(id == 1u || id == 2u);
     return (id == 1u) ? 0u : 1u;

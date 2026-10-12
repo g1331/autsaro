@@ -5,59 +5,19 @@
 # A unified patch uses a single space as the empty context-line marker.
 /runtime/os/** text eol=lf
 /runtime/ecu/** text eol=lf
-/runtime/host/** text eol=lf
 /runtime/os/patches/** -text whitespace=-blank-at-eol
 # Test fixtures are byte-exact inputs (raw-byte manifests, text patches); keep LF on every checkout.
 /core/tests/fixtures/** text eol=lf
 # Built-in project templates are embedded and must not depend on checkout line endings.
 /core/resources/** text eol=lf
 
-# Fixed checkout byte identities for packaged BSW producers.
+# Delivered license texts keep fixed checkout bytes.
 /LICENSE text eol=lf
 /NOTICE text eol=lf
-/runtime/include/Ecu_Runtime.h text eol=crlf
-/runtime/include/Rte.h text eol=crlf
-/runtime/include/Os.h text eol=crlf
-/runtime/src/Ecu_Runtime.c text eol=crlf
-/runtime/src/Os.c text eol=crlf
-/runtime/src/Rte.c text eol=crlf
-/runtime/src/ecu_host_main.c text eol=crlf
-/runtime/include/Can.h text eol=crlf
-/runtime/include/CanIf.h text eol=crlf
-/runtime/include/CanIf_MemMap.h text eol=lf
-/runtime/include/CanTp.h text eol=crlf
-/runtime/include/Com.h text eol=crlf
-/runtime/include/ComStack_Types.h text eol=crlf
-/runtime/include/Dcm.h text eol=crlf
-/runtime/include/Dem.h text eol=crlf
-/runtime/include/Ecu_Config.h text eol=crlf
-/runtime/include/Ecu_DcmCallbackTypes.h text eol=crlf
-/runtime/include/LSduR.h text eol=crlf
-/runtime/include/NvM.h text eol=crlf
-/runtime/include/PduR.h text eol=crlf
-/runtime/include/Security.h text eol=crlf
-/runtime/include/Std_Types.h text eol=crlf
-/runtime/src/CanIf.c text eol=crlf
-/runtime/src/CanTp.c text eol=crlf
-/runtime/src/Com.c text eol=crlf
-/runtime/src/Dcm.c text eol=crlf
-/runtime/src/Dem.c text eol=crlf
-/runtime/src/LSduR.c text eol=crlf
-/runtime/src/NvM.c text eol=crlf
-/runtime/src/NvM_HostStorage.c text eol=crlf
-/runtime/src/NvM_HostStorage.h text eol=crlf
-/runtime/src/PduR.c text eol=crlf
-/runtime/src/Security.c text eol=crlf
 
 # Packaged stdlib tools and embedded delivery text have fixed raw-byte digests.
 /tools/python/src/ecu_tools/** text eol=lf
 /runtime/ecu-tool.py text eol=lf
-/runtime/generated-README.md text eol=lf
-/runtime/reference-README.md text eol=lf
-/runtime/reference-vectors.json text eol=lf
-/runtime/src/Ecu_Execution.h text eol=lf
-/runtime/src/Dcm_Internal.h text eol=lf
-/runtime/src/PduR_Internal.h text eol=lf
 
 # Separate standard multi-component implementation keeps reproducible LF bytes.
 /runtime/multi/** text eol=lf
@@ -70,5 +30,3 @@
 /runtime/multi/src/Can_HostLock.h text eol=crlf
 /runtime/multi/src/Ecu_Status.c text eol=crlf
 
-# CAN standard/host views and private adapter have fixed delivery bytes.
-/runtime/include/SchM_CanIf.h text eol=lf

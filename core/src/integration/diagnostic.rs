@@ -1,5 +1,5 @@
 use super::communication::check_trigger;
-use super::component::{ComponentContract, milliseconds};
+use super::component::milliseconds;
 use super::graph::Graph;
 use super::schedule::{definition_is, value, values};
 use super::{DiagnosticCategory, PlanDiagnostic};
@@ -277,18 +277,6 @@ fn can_link(graph: &Graph, pdu: usize, receive: bool) -> Result<(u32, u16), Vec<
         ));
     }
     Ok((id, handle))
-}
-
-pub(super) fn inspect(
-    graph: &Graph,
-    component: &ComponentContract,
-) -> Result<DiagnosticContract, Vec<PlanDiagnostic>> {
-    inspect_service(
-        graph,
-        &component.component,
-        &component.service.name,
-        &component.service.client_port,
-    )
 }
 
 pub(super) fn inspect_service(

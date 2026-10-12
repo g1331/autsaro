@@ -337,7 +337,7 @@ impl Workspace {
                     attribute.value().contains('/')
                         && (node.tag_name().namespace() != Some(NS)
                             || attribute.namespace().is_some_and(|namespace| {
-                                namespace != XSI
+                                namespace != "http://www.w3.org/2001/XMLSchema-instance"
                                     && namespace != "http://www.w3.org/XML/1998/namespace"
                             }))
                 }) {
@@ -844,10 +844,6 @@ impl Workspace {
         // Every built-in integration candidate plans on the mainline.
         snapshot.profile = if snapshot.integration_candidate {
             crate::integration::MULTI_PROFILE.into()
-        } else if !self.frames.is_empty()
-            || self.files.iter().any(|file| self.is_managed_file(file))
-        {
-            "host-can-v1".into()
         } else {
             "unrecognized".into()
         };
@@ -876,28 +872,6 @@ impl Workspace {
                 };
             }
         }
-        target_diagnostics.extend(
-            self.issues
-                .iter()
-                .filter(|_| !snapshot.integration_candidate)
-                .map(|issue| ConfigurationDiagnostic {
-                    scope: ValidationScope::TargetGeneration,
-                    rule_id: issue.code.clone(),
-                    severity: issue.severity.clone(),
-                    code: issue.code.clone(),
-                    message: issue.message.clone(),
-                    remedy: crate::product_message!(
-                        "backend.arxml.projection.resolve_target_input_constraint"
-                    ),
-                    file: issue.file.clone(),
-                    path: issue.path.clone(),
-                    source_id: None,
-                    object_id: None,
-                    field_id: None,
-                    witness: None,
-                })
-                .collect::<Vec<_>>(),
-        );
         snapshot.validation.push(ScopeValidation {
             scope: ValidationScope::TargetGeneration,
             status: if snapshot.rule_fault.is_some() {

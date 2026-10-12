@@ -1,4 +1,4 @@
-use super::component::{ComponentContract, milliseconds};
+use super::component::milliseconds;
 use super::graph::Graph;
 use super::schedule::{definition_is, value, values};
 use super::{DiagnosticCategory, PlanDiagnostic};
@@ -207,18 +207,6 @@ pub(super) fn check_trigger(
         ));
     }
     Ok(())
-}
-
-pub(super) fn inspect(
-    graph: &Graph,
-    component: &ComponentContract,
-) -> Result<Vec<SignalChannel>, Vec<PlanDiagnostic>> {
-    inspect_ports(
-        graph,
-        &component.data_ports,
-        &component.instance,
-        component.period_ms,
-    )
 }
 
 pub(super) fn inspect_ports(

@@ -35,33 +35,32 @@ mod plan;
 mod routing;
 mod schedule;
 
-pub use catalog::{ContractArgument, RuntimeCatalog, SymbolContract};
+pub use catalog::{ContractArgument, SymbolContract};
 pub use communication::SignalChannel;
 pub use component::{ComponentContract, DataPort, ServicePort};
 pub use configuration::{ConfigurationRecord, EventAssignment};
 pub use contracts::ComponentContractFiles;
 pub use diagnostic::DiagnosticContract;
-pub(crate) use ecu::APPLICATION_SOURCE_PATH;
 pub use ecu::EcuIntegrationFiles;
 pub use editor::{IntegrationEdit, IntegrationInspection};
-pub use handoff::{EcuHandoff, build_ecu_project, open_ecu_handoff, verify_ecu_project};
-pub use plan::{
-    HandleAssignment, PlanDescription, ValidatedIntegrationPlan, build_plan, build_plan_native,
-};
+pub use handoff::{build_ecu_project, verify_ecu_project};
+pub use plan::{HandleAssignment, PlanDescription, ValidatedIntegrationPlan, build_plan_native};
 pub use routing::PduRoute;
 pub use schedule::{ScheduleContract, ScheduledEntity};
 
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
-use std::io::Read;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Component, Path};
 
 pub const PROFILE: &str = "epic4-win64-sr-cs-v1";
+/// The removed frame/signal host chain.
+pub const HOST_PROFILE: &str = "host-can-v1";
 /// Product profiles whose projects and deliveries are refused on open rather
-/// than reinterpreted: the historical single-component chain and the earlier
-/// name of the current mainline. ARXML sources remain importable.
-pub(crate) const RETIRED_PROFILES: [&str; 2] = [PROFILE, "singlecore-multi-swc-v1"];
+/// than reinterpreted: the frame/signal host chain, the historical
+/// single-component chain and the earlier name of the current mainline. ARXML
+/// sources remain importable.
+pub(crate) const RETIRED_PROFILES: [&str; 3] = [HOST_PROFILE, PROFILE, "singlecore-multi-swc-v1"];
 
 /// Application slots of a retired profile, recorded in project manifests.
 pub(crate) fn retired_profile_of_slot(slot: &str) -> Option<&'static str> {
@@ -74,9 +73,6 @@ pub(crate) fn retired_profile_of_slot(slot: &str) -> Option<&'static str> {
     })
 }
 pub const FORMAT_VERSION: u32 = 1;
-const MOD_PATH: &str = crate::schema::MOD_ZIP;
-const MOD_SHA256: &str = "df1e3bc992e49de6e14e5c1a679d7ce7ca90d2450d66186cea0b4a0f1f6555fb";
-const XSD_SHA256: &str = crate::schema::XSD_SHA256;
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -233,53 +229,6 @@ fn portable_component(part: &str) -> bool {
     true
 }
 
-/// Legally supplied, external validation references. These files are checked
-/// by identity and are never copied into a generated project.
-#[derive(Clone)]
-pub struct PlanDependencies {
-    pub xsd_archive: PathBuf,
-    pub mod_archive: PathBuf,
-}
-
-/// External standards are never part of the embedded source inventory.
-pub type ValidationResources = PlanDependencies;
-
-impl PlanDependencies {
-    pub fn from_repository(root: &Path) -> Self {
-        Self {
-            xsd_archive: crate::schema::schema_archive(root),
-            mod_archive: crate::schema::reference_archive(root, "AUTOSAR_MOD_ARCHIVE", MOD_PATH),
-        }
-    }
-
-    pub fn explicit(
-        xsd_archive: PathBuf,
-        mod_archive: PathBuf,
-    ) -> Result<Self, crate::message::LocalizedText> {
-        for (kind, path) in [("XSD", &xsd_archive), ("MOD", &mod_archive)] {
-            if !path.is_absolute()
-                || path
-                    .components()
-                    .any(|part| matches!(part, Component::ParentDir))
-            {
-                return Err(
-                    crate::product_message!("backend.integration.mod.archive_normalized_absolute_path_required", "kind" => kind, "value0" => path.display()),
-                );
-            }
-        }
-        Ok(Self {
-            xsd_archive,
-            mod_archive,
-        })
-    }
-
-    pub fn validate(&self) -> Result<(), Vec<PlanDiagnostic>> {
-        read_archive(&self.xsd_archive, XSD_SHA256, false)?;
-        read_archive(&self.mod_archive, MOD_SHA256, false)?;
-        Ok(())
-    }
-}
-
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceIdentity {
@@ -310,33 +259,6 @@ pub struct InputInspection {
 }
 
 impl InputInspection {
-    pub fn component_contract(&self) -> Result<ComponentContract, Vec<PlanDiagnostic>> {
-        component::inspect(&self.graph)
-    }
-    pub fn schedule_contract(&self) -> Result<ScheduleContract, Vec<PlanDiagnostic>> {
-        let component = self.component_contract()?;
-        schedule::inspect(&self.graph, &component)
-    }
-    pub fn signal_channels(&self) -> Result<Vec<SignalChannel>, Vec<PlanDiagnostic>> {
-        let component = self.component_contract()?;
-        communication::inspect(&self.graph, &component)
-    }
-    pub fn current_bsw_contracts(
-        &self,
-        catalog: &RuntimeCatalog,
-    ) -> Result<Vec<SymbolContract>, Vec<PlanDiagnostic>> {
-        catalog::inspect(&self.graph, catalog)
-    }
-    pub fn diagnostic_contract(&self) -> Result<DiagnosticContract, Vec<PlanDiagnostic>> {
-        let component = self.component_contract()?;
-        diagnostic::inspect(&self.graph, &component)
-    }
-    pub fn pdu_routes(&self) -> Result<Vec<PduRoute>, Vec<PlanDiagnostic>> {
-        let component = self.component_contract()?;
-        let signals = communication::inspect(&self.graph, &component)?;
-        let diagnostic = diagnostic::inspect(&self.graph, &component)?;
-        routing::inspect(&self.graph, &signals, &diagnostic)
-    }
     pub fn sources(&self) -> &[InputSource] {
         &self.sources
     }
@@ -357,147 +279,6 @@ impl InputInspection {
             })
             .collect()
     }
-}
-
-/// Validate identities, the pinned R24-11 schema and all typed references.
-/// No inputs or generated outputs are written. Semantic plan construction
-/// consumes this same graph rather than reparsing a second source of truth.
-pub fn inspect_inputs(
-    sources: &[InputSource],
-    dependencies: &PlanDependencies,
-) -> Result<InputInspection, Vec<PlanDiagnostic>> {
-    if sources.is_empty() {
-        return Err(vec![PlanDiagnostic::dependency(
-            "INPUT_MISSING",
-            crate::product_message!("backend.integration.mod.integration_arxml_inputs_missing"),
-            crate::product_message!("backend.integration.mod.supply_integration_arxml_inputs"),
-        )]);
-    }
-    let mut names = BTreeSet::new();
-    for source in sources {
-        // Conservatively fold Unicode case aliases as well as ASCII on the
-        // supported case-insensitive Windows input filesystem.
-        if !names.insert(source.logical_path.to_uppercase()) {
-            return Err(vec![PlanDiagnostic::at_source(
-                source,
-                "SOURCE_DUPLICATE",
-                crate::product_message!(
-                    "backend.integration.mod.portable_source_identity_duplicate"
-                ),
-                crate::product_message!(
-                    "backend.integration.mod.select_distinct_sources_without_case_aliases"
-                ),
-            )]);
-        }
-    }
-    let mut sorted = sources.to_vec();
-    sorted.sort_by(|left, right| left.logical_path.cmp(&right.logical_path));
-    let archive = checked_archive(&dependencies.mod_archive, MOD_SHA256)?;
-    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(archive)).map_err(|error| {
-        vec![PlanDiagnostic::dependency(
-            "MOD_ARCHIVE",
-            crate::product_message!("backend.integration.mod.mod_archive_invalid", "error" => error),
-            crate::product_message!("backend.integration.mod.supply_pinned_unmodified_mod_archive"),
-        )]
-    })?;
-    let mut definitions = String::new();
-    archive
-        .by_name("AUTOSAR_CP_MOD_ECUConfigurationParameters.arxml")
-        .and_then(|mut member| {
-            member
-                .read_to_string(&mut definitions)
-                .map_err(zip::result::ZipError::Io)
-        })
-        .map_err(|error| {
-            vec![PlanDiagnostic::dependency(
-                "MOD_CONTENT",
-                crate::product_message!("backend.integration.mod.ecuc_definitions_read_failed", "error" => error),
-                crate::product_message!("backend.integration.mod.restore_complete_external_mod_archive"),
-            )]
-        })?;
-    checked_archive(&dependencies.xsd_archive, XSD_SHA256)?;
-    let files: Vec<_> = sorted
-        .iter()
-        .map(|source| Ok((Path::new(&source.logical_path), source.text()?)))
-        .collect::<Result<_, PlanDiagnostic>>()
-        .map_err(|diagnostic| vec![diagnostic])?;
-    let issues =
-        crate::schema::validate_files(&dependencies.xsd_archive, &files).map_err(|error| {
-            vec![PlanDiagnostic {
-                category: DiagnosticCategory::Tool,
-                code: "XSD_TOOL".into(),
-                file: None,
-                object: None,
-                message: error,
-                remedy: crate::product_message!(
-                    "backend.integration.mod.check_schema_archive_and_validator"
-                )
-                .into(),
-            }]
-        })?;
-    if !issues.is_empty() {
-        return Err(issues
-            .into_iter()
-            .map(|issue| PlanDiagnostic {
-                category: DiagnosticCategory::Input,
-                code: issue.code,
-                file: issue.file,
-                object: issue.path.or_else(|| Some("/".into())),
-                message: issue.message,
-                remedy: crate::product_message!(
-                    "backend.integration.mod.repair_input_against_autosar_schema"
-                )
-                .into(),
-            })
-            .collect());
-    }
-    let graph = graph::Graph::new(&sorted, &definitions)?;
-    let identities = sorted
-        .iter()
-        .map(|source| {
-            let kinds: BTreeSet<_> = graph
-                .objects
-                .values()
-                .map(|index| &graph.elements[*index])
-                .filter(|element| element.file == source.logical_path)
-                .map(|element| element.tag.as_str())
-                .collect();
-            let mut roles = Vec::new();
-            for (kind, role) in [
-                ("SYSTEM", "ecu_extract"),
-                ("APPLICATION-SW-COMPONENT-TYPE", "application"),
-                ("SERVICE-SW-COMPONENT-TYPE", "service_client"),
-                ("IMPLEMENTATION-DATA-TYPE", "types"),
-                ("BSW-MODULE-DESCRIPTION", "bsw_description"),
-                ("BSW-IMPLEMENTATION", "bsw_implementation"),
-                ("ECUC-MODULE-CONFIGURATION-VALUES", "ecuc_values"),
-            ] {
-                if kinds.contains(kind) {
-                    roles.push(role.into());
-                }
-            }
-            if roles.is_empty() {
-                roles.push("retained".into());
-            }
-            SourceIdentity {
-                logical_path: source.logical_path.clone(),
-                raw_sha256: source.sha256(),
-                roles,
-            }
-        })
-        .collect();
-    Ok(InputInspection {
-        sources: sorted,
-        identities,
-        graph,
-        validation_dependencies: std::collections::BTreeMap::from([
-            ("R24-11 XSD".into(), XSD_SHA256.into()),
-            ("R24-11 MOD".into(), MOD_SHA256.into()),
-        ]),
-        rule_set_identity: None,
-        required_extension_definitions: Vec::new(),
-        definition_catalog: None,
-    })
 }
 
 fn check_native_scope(
@@ -672,59 +453,4 @@ pub fn inspect_inputs_native(
         required_extension_definitions,
         definition_catalog: Some(catalog.clone()),
     })
-}
-
-fn checked_archive(path: &Path, expected: &str) -> Result<Vec<u8>, Vec<PlanDiagnostic>> {
-    read_archive(path, expected, true)
-}
-
-fn read_archive(
-    path: &Path,
-    expected: &str,
-    collect: bool,
-) -> Result<Vec<u8>, Vec<PlanDiagnostic>> {
-    let unreadable = |error: std::io::Error| {
-        vec![PlanDiagnostic::dependency(
-            "DEPENDENCY_MISSING",
-            crate::product_message!("backend.integration.mod.external_reference_read_failed", "value0" => path.display(), "error" => error),
-            crate::product_message!(
-                "backend.integration.mod.supply_legal_pinned_validation_archive"
-            ),
-        )]
-    };
-    let mut file = std::fs::File::open(path).map_err(&unreadable)?;
-    let mut bytes = Vec::new();
-    if collect {
-        let size = file.metadata().map_err(&unreadable)?.len();
-        let capacity = usize::try_from(size).map_err(|error| {
-            vec![PlanDiagnostic::dependency(
-                "DEPENDENCY_IDENTITY",
-                crate::product_message!("backend.integration.mod.archive_size_unrepresentable", "error" => error),
-                crate::product_message!("backend.integration.mod.supply_exact_pinned_archive"),
-            )]
-        })?;
-        bytes.reserve_exact(capacity);
-    }
-    let mut digest = Sha256::new();
-    let mut buffer = [0u8; 8192];
-    loop {
-        let count = file.read(&mut buffer).map_err(&unreadable)?;
-        if count == 0 {
-            break;
-        }
-        digest.update(&buffer[..count]);
-        if collect {
-            bytes.extend_from_slice(&buffer[..count]);
-        }
-    }
-    if format!("{:x}", digest.finalize()) != expected {
-        return Err(vec![PlanDiagnostic::dependency(
-            "DEPENDENCY_IDENTITY",
-            crate::product_message!("backend.integration.mod.external_archive_identity_mismatch", "value0" => path.display()),
-            crate::product_message!(
-                "backend.integration.mod.restore_target_pinned_archive_baseline"
-            ),
-        )]);
-    }
-    Ok(bytes)
 }

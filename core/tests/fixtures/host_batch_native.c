@@ -130,7 +130,6 @@ static Os_HostThreadResult WINAPI control(void *argument) {
     complete = wait_batch(ticket);
     require((complete.input_status == ECU_OK) && (complete.input_count == 2u));
     require((signal_outputs == 1u) && (did_outputs == 1u));
-#if defined(ECU_MULTI_COMPONENT)
     /* The mainline Dcm serves requests only in its main function: a batch at
      * an epoch that already ticked completes without one, and the request is
      * answered at the next tick. */
@@ -144,28 +143,6 @@ static Os_HostThreadResult WINAPI control(void *argument) {
     complete = wait_batch(ticket);
     require(complete.input_status == ECU_OK);
     require((signal_outputs == 1u) && (did_outputs == 2u));
-#else
-    /* The copied complete request still owns the physical connection until
-     * dispatch/confirmation; a later FF cannot steal its receive buffer. */
-    frames[0] = frames[1];
-    frames[1].data[0] = 0x10u;
-    frames[1].data[1] = 9u;
-    frames[1].data[2] = 0x22u;
-    frames[1].data[3] = 0x12u;
-    frames[1].data[4] = 0x34u;
-    frames[1].data[5] = 0x12u;
-    frames[1].data[6] = 0x34u;
-    frames[1].data[7] = 0x12u;
-    require(Ecu_TargetPostBatch(UINT64_C(10), frames, 2u, &ticket) == E_OK);
-    complete = wait_batch(ticket);
-    require(complete.input_status == ECU_ERR_TP_BUSY);
-    require((signal_outputs == 1u) && (did_outputs == 2u));
-    require(Ecu_TargetPostBatch(UINT64_C(11), frames, 1u, &ticket) == E_OK);
-    tick(UINT64_C(11));
-    complete = wait_batch(ticket);
-    require(complete.input_status == ECU_OK);
-    require((signal_outputs == 1u) && (did_outputs == 3u));
-#endif
     require(printf("native_batch capacity=256 refusal=257 same_epoch=0 future_requires_tick=pass "
                    "confirmations=pass\n") >= 0);
     ShutdownOS(E_OK);

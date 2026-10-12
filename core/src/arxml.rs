@@ -1,13 +1,5 @@
-mod legacy_editor;
-use crate::arxml_render::render_profile;
-use crate::model::{
-    DiagnosticSettings, DiagnosticView, Direction, DtcView, FileView, FrameView, Issue,
-    SavePreview, SavePreviewFile, Severity, SignalView, WorkspaceView, validate_diagnostic,
-    validate_profile,
-};
-use crate::schema;
+use crate::model::{FileView, Issue, SavePreview, SavePreviewFile, Severity, WorkspaceView};
 use roxmltree::{Document, Node};
-use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -15,7 +7,6 @@ use std::path::{Path, PathBuf};
 
 mod application;
 mod changes;
-mod host_profile;
 mod integration_editor;
 mod persistence;
 mod project;
@@ -31,40 +22,23 @@ pub use project::{
 
 pub use persistence::{PreparedSave, SaveFailure};
 
-pub(crate) use host_profile::historical_host_mode_dependency;
-use host_profile::parse_host_routine;
 use persistence::{Patch, apply_patches, patch_child, patch_param};
-use xml::{
-    child_containers, child_text, definition, param, parse_milliseconds, parse_u32, path_of,
-    ref_dest, ref_value, seconds, signal_type, structural_node, valid_name,
-};
+use xml::{child_text, definition, path_of, valid_name};
 
 const NS: &str = "http://autosar.org/schema/r4.0";
-const XSI: &str = "http://www.w3.org/2001/XMLSchema-instance";
 
 #[derive(Clone)]
 struct SourceFile {
     path: PathBuf,
     text: String,
     saved: String,
-    original_name: Option<String>,
-}
-
-pub(crate) struct HandoffSource {
-    pub original_name: String,
-    pub package_roots: Vec<String>,
-    pub contents: Vec<u8>,
 }
 
 #[derive(Clone)]
 pub struct Workspace {
     name: String,
     files: Vec<SourceFile>,
-    frames: Vec<FrameView>,
-    signals: Vec<SignalView>,
-    diagnostic: Option<DiagnosticView>,
     issues: Vec<Issue>,
-    schema_zip: Option<PathBuf>,
     integration_input_root: Option<PathBuf>,
     catalog: std::sync::Arc<crate::definitions::DefinitionCatalog>,
     snapshot: std::sync::Arc<projection::SourceSnapshot>,
@@ -75,23 +49,6 @@ pub struct Workspace {
 }
 
 impl Workspace {
-    pub fn set_legacy_validation_schema(
-        &mut self,
-        archive: PathBuf,
-    ) -> Result<(), crate::message::LocalizedText> {
-        if self.schema_zip.is_none() {
-            return Err(crate::product_message!(
-                "backend.arxml.builtin_validation_locked"
-            ));
-        }
-        self.schema_zip = Some(archive);
-        Ok(())
-    }
-
-    pub fn uses_legacy_validation(&self) -> bool {
-        self.schema_zip.is_some()
-    }
-
     pub fn definition_fingerprint(&self) -> Result<String, crate::message::LocalizedText> {
         crate::rules::rule_set_identity()?;
         Ok(self.snapshot.definition_fingerprint.clone())
@@ -128,16 +85,12 @@ fn integration_errors(
     }))
 }
 
-fn load_sources(
-    files: Vec<PathBuf>,
-    schema_zip: Option<PathBuf>,
-) -> Result<Workspace, crate::message::LocalizedText> {
-    load_sources_with(files, schema_zip, |_| {})
+fn load_sources(files: Vec<PathBuf>) -> Result<Workspace, crate::message::LocalizedText> {
+    load_sources_with(files, |_| {})
 }
 
 fn load_sources_with(
     files: Vec<PathBuf>,
-    schema_zip: Option<PathBuf>,
     initialize: impl FnOnce(&mut Workspace),
 ) -> Result<Workspace, crate::message::LocalizedText> {
     if files.is_empty() {
@@ -222,43 +175,13 @@ fn load_sources_with(
                 "path" => path.display()
             ));
         }
-        if schema_zip.is_some()
-            && !doc
-                .root_element()
-                .attribute((XSI, "schemaLocation"))
-                .is_some_and(|s| s.contains("AUTOSAR_00053.xsd"))
-        {
-            return Err(crate::product_message!(
-                "backend.arxml.schema_release_required",
-                "path" => path.display()
-            ));
-        }
         sources.push(SourceFile {
             path,
             saved: text.clone(),
             text,
-            original_name: None,
         });
     }
     sources.sort_by(|a, b| a.path.cmp(&b.path));
-    if let Some(archive) = &schema_zip {
-        let schema_issues = schema::validate_files(
-            archive,
-            &sources
-                .iter()
-                .map(|s| (s.path.as_path(), s.text.as_str()))
-                .collect::<Vec<_>>(),
-        )?;
-        if let Some(first) = schema_issues.first() {
-            return Err(crate::message::LocalizedText::messages([
-                crate::product_message!(
-                    "backend.arxml.import_xsd_failed",
-                    "file" => first.file.as_deref().unwrap_or("")
-                ),
-                first.message.clone(),
-            ]));
-        }
-    }
     let name = sources
         .iter()
         .filter_map(|s| Document::parse(&s.text).ok())
@@ -274,11 +197,7 @@ fn load_sources_with(
     let mut workspace = Workspace {
         name,
         files: sources,
-        frames: Vec::new(),
-        signals: Vec::new(),
-        diagnostic: None,
         issues: Vec::new(),
-        schema_zip,
         integration_input_root: None,
         catalog: std::sync::Arc::new(crate::definitions::DefinitionCatalog::builtin()?),
         snapshot: std::sync::Arc::new(projection::SourceSnapshot::default()),
@@ -290,154 +209,17 @@ fn load_sources_with(
     // Membership and its accepted catalogue belong to the first validated snapshot.
     initialize(&mut workspace);
     workspace.refresh()?;
-    if workspace
-        .issues
-        .iter()
-        .any(|issue| issue.code == "DIAG_UNSUPPORTED")
-    {
-        for file in &workspace.files {
-            if !file.text.contains("AutosarWorkbenchHostRestoreDid") {
-                continue;
-            }
-            let doc = Document::parse(&file.text).map_err(|error| error.to_string())?;
-            let nodes: Vec<_> = doc.descendants().filter(|node| node.is_element()).collect();
-            for group in nodes.iter().copied().filter(|node| {
-                node.tag_name().name() == "SDG"
-                    && node
-                        .attribute("GID")
-                        .is_some_and(|gid| gid.starts_with("AutosarWorkbenchHostRestoreDid"))
-            }) {
-                let did = group
-                    .ancestors()
-                    .find(|node| {
-                        node.is_element()
-                            && node.tag_name().name() == "ECUC-CONTAINER-VALUE"
-                            && definition(*node).as_deref()
-                                == Some("/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsp/DcmDspDid")
-                    })
-                    .ok_or_else(|| {
-                        crate::product_message!(
-                            "backend.arxml.host_restore_did_container_required",
-                            "path" => file.path.display()
-                        )
-                    })?;
-                parse_host_routine(did, &workspace.name, &nodes).map_err(|error| {
-                    crate::message::LocalizedText::messages([
-                        crate::product_message!(
-                            "backend.arxml.source_file_context",
-                            "path" => file.path.display()
-                        ),
-                        error.into(),
-                    ])
-                })?;
-            }
-        }
-    }
     Ok(workspace)
 }
 
 impl Workspace {
     pub fn create(directory: &Path, name: &str) -> Result<Self, crate::message::LocalizedText> {
-        let preview = Self::preview_project_creation(directory, name, "can-empty-v1")?;
+        let preview = Self::preview_project_creation(directory, name, "standard-ecu")?;
         Self::create_project_previewed(&preview)
     }
 
-    pub fn create_legacy(
-        directory: &Path,
-        name: &str,
-        schema_zip: PathBuf,
-    ) -> Result<Self, crate::message::LocalizedText> {
-        if !valid_name(name) {
-            return Err(crate::product_message!(
-                "backend.arxml.project_name_invalid"
-            ));
-        }
-        fs::create_dir_all(directory).map_err(|e| e.to_string())?;
-        let path = directory.join(format!("{name}.arxml"));
-        let text = render_profile(name, &[], &[], None);
-        let issues = schema::validate_files(&schema_zip, &[(path.as_path(), text.as_str())])?;
-        if let Some(first) = issues.first() {
-            return Err(crate::message::LocalizedText::messages([
-                crate::product_message!("backend.arxml.empty_project_xsd_failed"),
-                first.message.clone(),
-            ]));
-        }
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&path)
-            .map_err(|e| {
-                crate::message::LocalizedText::messages([
-                    crate::product_message!(
-                        "backend.arxml.arxml_create_failed_no_overwrite",
-                        "path" => path.display()
-                    ),
-                    e.to_string().into(),
-                ])
-            })?;
-        std::io::Write::write_all(&mut file, text.as_bytes()).map_err(|e| e.to_string())?;
-        load_sources(vec![path], Some(schema_zip))
-    }
-
     pub fn open(paths: Vec<PathBuf>) -> Result<Self, crate::message::LocalizedText> {
-        load_sources(paths, None)
-    }
-
-    pub fn open_legacy(
-        paths: Vec<PathBuf>,
-        schema_zip: PathBuf,
-    ) -> Result<Self, crate::message::LocalizedText> {
-        load_sources(paths, Some(schema_zip))
-    }
-
-    pub(crate) fn preparation_input_identity(&self) -> String {
-        let mut inputs: Vec<_> = self
-            .files
-            .iter()
-            .map(|file| {
-                (
-                    file.original_name
-                        .as_deref()
-                        .map(std::borrow::Cow::Borrowed)
-                        .unwrap_or_else(|| {
-                            file.path
-                                .file_name()
-                                .unwrap_or_else(|| file.path.as_os_str())
-                                .to_string_lossy()
-                        }),
-                    file.text.as_bytes(),
-                )
-            })
-            .collect();
-        inputs.sort_by(|left, right| left.0.cmp(&right.0).then_with(|| left.1.cmp(right.1)));
-        let mut digest = Sha256::new();
-        for (name, contents) in inputs {
-            digest.update((name.len() as u64).to_le_bytes());
-            digest.update(name.as_bytes());
-            digest.update((contents.len() as u64).to_le_bytes());
-            digest.update(contents);
-        }
-        format!("{:x}", digest.finalize())
-    }
-
-    pub(crate) fn restore_handoff_source_names(
-        &mut self,
-        names: BTreeMap<PathBuf, String>,
-    ) -> Result<(), crate::message::LocalizedText> {
-        if names.len() != self.files.len()
-            || self
-                .files
-                .iter()
-                .any(|file| !names.contains_key(&file.path))
-        {
-            return Err(crate::product_message!(
-                "backend.arxml.handoff_names_mismatch"
-            ));
-        }
-        for file in &mut self.files {
-            file.original_name = names.get(&file.path).cloned();
-        }
-        Ok(())
+        load_sources(paths)
     }
 
     pub fn view(&self) -> WorkspaceView {
@@ -447,58 +229,27 @@ impl Workspace {
             files: self
                 .files
                 .iter()
-                .map(|file| {
-                    let managed = self.is_managed_file(file);
-                    let doc = Document::parse(&file.text).ok();
-                    let supported = doc.as_ref().is_some_and(|d| {
-                        d.descendants().any(|n| {
-                            n.is_element()
-                                && ((n.tag_name().name() == "I-SIGNAL-I-PDU"
-                                    && self.frames.iter().any(|f| f.path == path_of(n)))
-                                    || (n.tag_name().name() == "ECUC-CONTAINER-VALUE"
-                                        && self.signals.iter().any(|s| s.path == path_of(n))))
+                .map(|file| FileView {
+                    path: file.path.display().to_string(),
+                    // Sources change only through validated structured edits.
+                    readonly: true,
+                    retained_count: Document::parse(&file.text)
+                        .map(|d| {
+                            d.descendants()
+                                .filter(|n| {
+                                    n.is_element()
+                                        && n.parent_element()
+                                            .is_some_and(|p| p.tag_name().name() == "ELEMENTS")
+                                        && !matches!(
+                                            n.tag_name().name(),
+                                            "I-SIGNAL-I-PDU" | "ECUC-MODULE-CONFIGURATION-VALUES"
+                                        )
+                                })
+                                .count()
                         })
-                    });
-                    let retained_count = if managed {
-                        0
-                    } else {
-                        doc.as_ref()
-                            .map(|d| {
-                                d.descendants()
-                                    .filter(|n| {
-                                        n.is_element()
-                                            && n.parent_element()
-                                                .is_some_and(|p| p.tag_name().name() == "ELEMENTS")
-                                            && !matches!(
-                                                n.tag_name().name(),
-                                                "I-SIGNAL-I-PDU"
-                                                    | "ECUC-MODULE-CONFIGURATION-VALUES"
-                                            )
-                                            && !(n.tag_name().name() == "I-SIGNAL"
-                                                && self.signals.iter().any(|s| {
-                                                    path_of(*n)
-                                                        == format!(
-                                                            "/{}/ISignal_{}",
-                                                            self.name, s.name
-                                                        )
-                                                }))
-                                    })
-                                    .count()
-                            })
-                            .unwrap_or(0)
-                    };
-                    FileView {
-                        path: file.path.display().to_string(),
-                        readonly: self.issues.iter().any(|issue| {
-                            issue.code == "DIAG_UNSUPPORTED" || issue.code.starts_with("PDU_")
-                        }) || !managed && !supported,
-                        retained_count,
-                    }
+                        .unwrap_or(0),
                 })
                 .collect(),
-            frames: self.frames.clone(),
-            signals: self.signals.clone(),
-            diagnostic: self.diagnostic.clone(),
             issues: self.issues.clone(),
             dirty: self.is_dirty(),
         }
@@ -588,63 +339,13 @@ impl Workspace {
 
     pub fn integration_plan(
         &self,
-        runtime: &crate::integration::RuntimeCatalog,
     ) -> Result<crate::integration::ValidatedIntegrationPlan, Vec<crate::integration::PlanDiagnostic>>
     {
-        if self.uses_legacy_validation() {
-            return Err(integration_editor::failure(
-                "VALIDATION_MODE",
-                crate::product_message!("backend.arxml.legacy_resources_required"),
-            ));
-        }
-        crate::integration::build_plan_native(&self.integration_sources()?, &self.catalog, runtime)
-    }
-
-    pub fn integration_plan_legacy(
-        &self,
-        runtime: &crate::integration::RuntimeCatalog,
-        mod_archive: PathBuf,
-    ) -> Result<crate::integration::ValidatedIntegrationPlan, Vec<crate::integration::PlanDiagnostic>>
-    {
-        let archive = self.schema_zip.clone().ok_or_else(|| {
-            integration_editor::failure(
-                "VALIDATION_MODE",
-                crate::product_message!("backend.arxml.legacy_integration_resources_required"),
-            )
-        })?;
-        crate::integration::build_plan(
-            &self.integration_sources()?,
-            &crate::integration::PlanDependencies {
-                xsd_archive: archive,
-                mod_archive,
-            },
-            runtime,
-        )
+        crate::integration::build_plan_native(&self.integration_sources()?, &self.catalog)
     }
 
     pub fn validate(&mut self) -> Result<WorkspaceView, crate::message::LocalizedText> {
         self.refresh()?;
-        if let Some(archive) = &self.schema_zip {
-            self.issues.extend(schema::validate_files(
-                archive,
-                &self
-                    .files
-                    .iter()
-                    .map(|f| (f.path.as_path(), f.text.as_str()))
-                    .collect::<Vec<_>>(),
-            )?);
-        } else if !self.snapshot.integration_candidate {
-            self.issues
-                .extend(self.snapshot.validation.iter().flat_map(|scope| {
-                    scope.diagnostics.iter().map(|diagnostic| Issue {
-                        severity: diagnostic.severity.clone(),
-                        code: diagnostic.code.clone(),
-                        message: diagnostic.message.clone(),
-                        file: diagnostic.file.clone(),
-                        path: diagnostic.path.clone(),
-                    })
-                }));
-        }
         let paths = self.all_paths()?;
         for file in &self.files {
             let doc = Document::parse(&file.text).map_err(|e| e.to_string())?;
@@ -675,31 +376,12 @@ impl Workspace {
                 .descendants()
                 .filter(|n| n.is_element() && n.tag_name().name() == "VARIATION-POINT")
             {
-                let active_package = node
-                    .parent_element()
-                    .filter(|parent| parent.tag_name().name() == "AR-PACKAGE")
-                    .is_some_and(|package| {
-                        let prefix = path_of(package);
-                        self.frames.iter().any(|frame| {
-                            frame
-                                .path
-                                .strip_prefix(&prefix)
-                                .is_some_and(|suffix| suffix.starts_with('/'))
-                        })
-                    });
-                let active_root = node
-                    .parent_element()
-                    .is_some_and(|parent| parent.tag_name().name() == "AUTOSAR")
-                    && !self.frames.is_empty();
-                if active_package
-                    || active_root
-                    || node.ancestors().any(|ancestor| {
-                        matches!(
-                            ancestor.tag_name().name(),
-                            "I-SIGNAL-I-PDU" | "ECUC-MODULE-CONFIGURATION-VALUES"
-                        )
-                    })
-                {
+                if node.ancestors().any(|ancestor| {
+                    matches!(
+                        ancestor.tag_name().name(),
+                        "I-SIGNAL-I-PDU" | "ECUC-MODULE-CONFIGURATION-VALUES"
+                    )
+                }) {
                     self.issues.push(Issue {
                         severity: Severity::Warning,
                         code: "VARIANT_DEPENDENCY".into(),
@@ -728,50 +410,22 @@ impl Workspace {
         Ok(paths)
     }
 
-    pub fn checked_profile(
-        &mut self,
-    ) -> Result<(Vec<FrameView>, Vec<SignalView>), crate::message::LocalizedText> {
-        self.validate()?;
-        if let Some(issue) = self
-            .issues
+    pub(super) fn refresh(&mut self) -> Result<(), crate::message::LocalizedText> {
+        self.rebuild_snapshot()?;
+        self.issues = self
+            .snapshot
+            .validation
             .iter()
-            .find(|i| matches!(i.severity, Severity::Error))
-        {
-            return Err(crate::message::LocalizedText::messages([
-                crate::product_message!(
-                    "backend.arxml.diagnostic_code_context",
-                    "code" => issue.code.as_str()
-                ),
-                issue.message.clone(),
-            ]));
-        }
-        if let Some(issue) = self.issues.iter().find(|i| i.code == "VARIANT_DEPENDENCY") {
-            return Err(crate::message::LocalizedText::messages([
-                crate::product_message!(
-                    "backend.arxml.diagnostic_code_context",
-                    "code" => issue.code.as_str()
-                ),
-                issue.message.clone(),
-            ]));
-        }
-        if self.frames.is_empty() || self.signals.is_empty() {
-            return Err(crate::product_message!("backend.arxml.signals_required"));
-        }
-        if let Some(frame) = self
-            .frames
-            .iter()
-            .find(|f| !self.signals.iter().any(|s| s.frame_path == f.path))
-        {
-            return Err(crate::product_message!(
-                "backend.arxml.empty_frame_generation_blocked",
-                "path" => frame.path.as_str()
-            ));
-        }
-        Ok((self.frames.clone(), self.signals.clone()))
-    }
-
-    pub(crate) fn diagnostic_profile(&self) -> Option<&DiagnosticView> {
-        self.diagnostic.as_ref()
+            .flat_map(|scope| &scope.diagnostics)
+            .map(|issue| Issue {
+                severity: issue.severity.clone(),
+                code: issue.code.clone(),
+                message: issue.message.clone(),
+                file: issue.file.clone(),
+                path: issue.path.clone(),
+            })
+            .collect();
+        Ok(())
     }
 
     pub fn name(&self) -> &str {

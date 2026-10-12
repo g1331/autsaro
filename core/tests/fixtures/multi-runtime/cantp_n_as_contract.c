@@ -36,18 +36,24 @@ void PduR_CanTpTxConfirmation(PduIdType id, Std_ReturnType result) {
 }
 BufReq_ReturnType PduR_CanTpStartOfReception(PduIdType id, const PduInfoType *info,
                                              PduLengthType length, PduLengthType *available) {
-    (void)id; (void)info; (void)length; (void)available;
+    (void)id;
+    (void)info;
+    (void)length;
+    (void)available;
     assert(0);
     return BUFREQ_E_NOT_OK;
 }
 BufReq_ReturnType PduR_CanTpCopyRxData(PduIdType id, const PduInfoType *info,
                                        PduLengthType *available) {
-    (void)id; (void)info; (void)available;
+    (void)id;
+    (void)info;
+    (void)available;
     assert(0);
     return BUFREQ_E_NOT_OK;
 }
 void PduR_CanTpRxIndication(PduIdType id, Std_ReturnType result) {
-    (void)id; (void)result;
+    (void)id;
+    (void)result;
     assert(0);
 }
 void SchM_Enter_CanTp_CANTP_STATE(void) {}
@@ -74,11 +80,21 @@ static void main_functions(unsigned count) {
 }
 
 int main(void) {
-    static const CanTp_ConfigType config = {
-        .receive = 0u, .transmit = 0u, .lower_receive = 2u, .lower_transmit = LOWER,
-        .maximum_length = 256u, .n_as = N_AS, .n_ar = N_AS, .n_bs = 10u, .n_cr = 10u,
-        .n_cs = 10u, .main_period_ms = 1u, .wait_frame_max = 0u, .padding = 0xccu,
-        .upper_receive = 1u, .upper_transmit = UPPER};
+    static const CanTp_ConfigType config = {.receive = 0u,
+                                            .transmit = 0u,
+                                            .lower_receive = 2u,
+                                            .lower_transmit = LOWER,
+                                            .maximum_length = 256u,
+                                            .n_as = N_AS,
+                                            .n_ar = N_AS,
+                                            .n_bs = 10u,
+                                            .n_cr = 10u,
+                                            .n_cs = 10u,
+                                            .main_period_ms = 1u,
+                                            .wait_frame_max = 0u,
+                                            .padding = 0xccu,
+                                            .upper_receive = 1u,
+                                            .upper_transmit = UPPER};
     CanTp_Init(&config);
 
     /* A confirmation inside N_As completes normally. */
