@@ -4039,10 +4039,9 @@ fn unsupported_edit_and_handoff_preserve_live_inputs_and_existing_output() {
     let before = serde_json::to_value(&workspace.project_projection("same").unwrap()).unwrap();
     let errors = workspace
         .edit_integration(IntegrationEdit {
-                can_ids: [("/Application/NotASignalPort".to_owned(), 1)].into(),
-                ..IntegrationEdit::default()
-            },
-        )
+            can_ids: [("/Application/NotASignalPort".to_owned(), 1)].into(),
+            ..IntegrationEdit::default()
+        })
         .err()
         .unwrap();
     assert!(errors.iter().any(|issue| issue.code == "EDIT_UNSUPPORTED"));
@@ -7589,6 +7588,12 @@ fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[test]
+fn single_component_confirmation_timers_ignore_host_confirmation_order() {
+    mainline_protocol::confirmation_timers_ignore_host_confirmation_order();
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
 fn single_component_native_batch_boundary_and_confirmations() {
     mainline_protocol::host_batch_native_boundary();
 }
@@ -7745,10 +7750,9 @@ fn template_quick_edit_changes_can_ids_and_application_period_on_the_mainline() 
         .collect();
     let report = workspace
         .edit_integration(IntegrationEdit {
-                can_ids,
-                application_period_ms: Some(20),
-            },
-        )
+            can_ids,
+            application_period_ms: Some(20),
+        })
         .unwrap_or_else(|issues| panic!("{issues:?}"));
     let after = report.description.unwrap();
     assert_eq!(
@@ -7785,10 +7789,9 @@ fn template_quick_edit_changes_can_ids_and_application_period_on_the_mainline() 
     );
     let errors = workspace
         .edit_integration(IntegrationEdit {
-                application_period_ms: Some(0),
-                ..IntegrationEdit::default()
-            },
-        )
+            application_period_ms: Some(0),
+            ..IntegrationEdit::default()
+        })
         .err()
         .unwrap();
     assert!(errors.iter().any(|issue| issue.code == "EDIT_RANGE"));
