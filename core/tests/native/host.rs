@@ -81,21 +81,33 @@ fn public_command_watchdog_closes_the_whole_process_tree() {
         "parent, child and grandchild must actually start"
     );
     for pid in pids {
-        let mut query = Command::new("powershell.exe");
-        query.args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            &format!("if (Get-Process -Id {pid} -ErrorAction SilentlyContinue) {{ exit 1 }}"),
-        ]);
-        let gone = tooling::run_public_command(
-            &mut query,
-            &scratch.0,
-            "watchdog-descendant-query",
-            Duration::from_secs(5),
-        );
-        assert!(gone.status.success(), "watchdog must close PID {pid}");
+        assert!(!alive(pid), "watchdog must close PID {pid}");
     }
+}
+
+/// Queried in process: a PowerShell query can outlast its own deadline on a loaded runner.
+#[cfg(windows)]
+fn alive(pid: u32) -> bool {
+    use std::ffi::c_void;
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn OpenProcess(access: u32, inherit: i32, pid: u32) -> *mut c_void;
+        fn WaitForSingleObject(handle: *mut c_void, millis: u32) -> u32;
+        fn CloseHandle(handle: *mut c_void) -> i32;
+    }
+    // SAFETY: only a probe PID is opened with SYNCHRONIZE; the handle is closed.
+    let handle = unsafe { OpenProcess(0x0010_0000, 0, pid) };
+    if handle.is_null() {
+        let error = std::io::Error::last_os_error();
+        if error.raw_os_error() == Some(87) {
+            return false;
+        }
+        panic!("Cannot inspect probe PID {pid}: {error}");
+    }
+    let outcome = unsafe { WaitForSingleObject(handle, 0) };
+    unsafe { CloseHandle(handle) };
+    assert_ne!(outcome, 0xFFFF_FFFF, "Cannot wait for probe PID {pid}");
+    outcome == 0x102
 }
 
 #[cfg(any(windows, target_os = "linux"))]
