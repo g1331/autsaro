@@ -1,6 +1,7 @@
 import type { Workbench } from './workbench/useWorkbench';
 import { useLocale } from './i18n';
 import { displayPath } from './pathDisplay';
+import { applicationPeriodMs } from './workbench/forms';
 
 const roleNames: Record<string, string> = {
   ecu_extract: 'shell.role.ecu_extract',
@@ -43,6 +44,8 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
   const locked = busy;
   const plan = inspection?.description;
   const component = plan?.component;
+  // The historical chain and the mainline both plan one shared application period.
+  const planned = applicationPeriodMs(plan);
   const selected = preview?.files.find((file) => file.path === selectedFile);
   return (
     <div className="workflow-page integration-view" aria-label={t('shell.integration.workspace')}>
@@ -126,10 +129,10 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
               ))}
             </div>
           )}
-          {component && (
+          {planned !== null && (
             <div className="inspector-block">
               <h3>{t('shell.integration.parameters')}</h3>
-              <p className="mono path-text">{component.instance}</p>
+              {component && <p className="mono path-text">{component.instance}</p>}
               <div className="integration-fields">
                 {plan.signals.map((signal) => (
                   <label className="field" key={signal.port}>
@@ -150,7 +153,7 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
                         const next = { ...ids, [signal.port]: event.target.value };
                         setIds(next);
                         onDraftChange(
-                          period !== String(component.periodMs) ||
+                          period !== String(planned) ||
                             plan.signals.some((item) => next[item.port] !== String(item.canId)),
                         );
                         setPreview(null);
@@ -168,7 +171,7 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
                     onChange={(event) => {
                       setPeriod(event.target.value);
                       onDraftChange(
-                        event.target.value !== String(component.periodMs) ||
+                        event.target.value !== String(planned) ||
                           plan.signals.some((item) => ids[item.port] !== String(item.canId)),
                       );
                       setPreview(null);

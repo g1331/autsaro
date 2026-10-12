@@ -3950,7 +3950,7 @@ fn unsupported_edit_and_handoff_preserve_live_inputs_and_existing_output() {
         .edit_integration(
             &runtime,
             IntegrationEdit {
-                application_period_ms: Some(20),
+                can_ids: [("/Application/NotASignalPort".to_owned(), 1)].into(),
                 ..IntegrationEdit::default()
             },
         )
@@ -7589,4 +7589,84 @@ fn mainline_os_official_descriptions() {
 #[test]
 fn mainline_os_counter_service_native() {
     mainline_os::counter_service_native();
+}
+
+#[test]
+fn template_quick_edit_changes_can_ids_and_application_period_on_the_mainline() {
+    use autosar_config_core::{Workspace, integration::IntegrationEdit};
+    let scratch = Scratch::new();
+    let preview =
+        Workspace::preview_project_creation(&scratch.0.join("quick"), "Quick", "standard-ecu")
+            .unwrap();
+    let mut workspace = Workspace::create_project_previewed(&preview).unwrap();
+    let runtime = RuntimeCatalog::embedded().unwrap();
+    let before = workspace.inspect_integration(&runtime);
+    let description = before.description.unwrap();
+    assert_eq!(
+        description.profile,
+        autosar_config_core::integration::MULTI_PROFILE
+    );
+    let can_ids = description
+        .signals
+        .iter()
+        .map(|signal| {
+            (
+                signal.port.clone(),
+                if signal.receive { 1104 } else { 1105 },
+            )
+        })
+        .collect();
+    let report = workspace
+        .edit_integration(
+            &runtime,
+            IntegrationEdit {
+                can_ids,
+                application_period_ms: Some(20),
+            },
+        )
+        .unwrap_or_else(|issues| panic!("{issues:?}"));
+    let after = report.description.unwrap();
+    assert_eq!(
+        after.profile,
+        autosar_config_core::integration::MULTI_PROFILE
+    );
+    let mut ids: Vec<_> = after.signals.iter().map(|signal| signal.can_id).collect();
+    ids.sort();
+    assert_eq!(ids, [1104, 1105]);
+    let application: Vec<_> = after
+        .schedule
+        .entities
+        .iter()
+        .filter(|entity| entity.application)
+        .collect();
+    assert!(!application.is_empty());
+    assert!(application.iter().all(|entity| entity.period_ms == 20));
+    for component in &after.multi.as_ref().unwrap().components {
+        for runnable in &component.runnables {
+            assert!(runnable.period_ms.is_none_or(|period| period == 20));
+        }
+    }
+    // The template transmits from the Com Tx main function on the
+    // application trigger, so the PDU period moves with it.
+    let com = after.com_runtime.as_ref().unwrap();
+    assert_eq!(com.transmit_main.period_ms, 20);
+    assert_eq!(com.receive_main.period_ms, 1);
+    assert!(
+        after
+            .signals
+            .iter()
+            .filter(|signal| !signal.receive)
+            .all(|signal| signal.transmit_period_ms == Some(20))
+    );
+    let errors = workspace
+        .edit_integration(
+            &runtime,
+            IntegrationEdit {
+                application_period_ms: Some(0),
+                ..IntegrationEdit::default()
+            },
+        )
+        .err()
+        .unwrap();
+    assert!(errors.iter().any(|issue| issue.code == "EDIT_RANGE"));
 }

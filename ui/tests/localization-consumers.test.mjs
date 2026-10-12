@@ -193,8 +193,62 @@ test.each(['zh-CN', 'en'])(
       false,
     );
     expect(localize(current().integrationNotice)).toBe(
-      translate('shell.integration.multiReadOnly'),
+      translate('shell.integration.parametersUnavailable'),
     );
+  },
+);
+
+test.each(['zh-CN', 'en'])(
+  '%s mainline inspection offers CAN IDs and the shared application period',
+  async (language) => {
+    previewLanguage(language);
+    const inspection = {
+      profile: 'singlecore-ecu-v1',
+      diagnostics: [],
+      description: {
+        sources: [
+          { logicalPath: 'application.arxml', rawSha256: 'a'.repeat(64), roles: ['application'] },
+        ],
+        multi: {
+          components: [
+            {
+              component: '/Application/EchoApplication',
+              instance: '/Application/ReferenceComposition/EchoApplicationInstance',
+            },
+          ],
+        },
+        schedule: {
+          entities: [
+            { application: false, periodMs: 1 },
+            { application: true, periodMs: 10 },
+          ],
+        },
+        signals: [
+          { port: '/Application/EchoApplication/Received', canId: 0x320, receive: true, dlc: 4 },
+          { port: '/Application/EchoApplication/Sent', canId: 0x321, receive: false, dlc: 4 },
+        ],
+      },
+    };
+    const { view, current } = await openConsumer(undefined, baseProjection, inspection);
+    expect(current().integrationPeriod).toBe('10');
+    const period = view.getByLabelText(translate('shell.integration.periodA11y'));
+    expect(period.value).toBe('10');
+    fireEvent.change(period, { target: { value: '20' } });
+    expect(current().integrationUnapplied).toBe(true);
+    await act(async () => current().applyIntegration());
+    await waitFor(() =>
+      expect(native.invoke.mock.calls.some(([command]) => command === 'edit_integration')).toBe(
+        true,
+      ),
+    );
+    const [, args] = native.invoke.mock.calls.find(([command]) => command === 'edit_integration');
+    expect(args.changes).toEqual({
+      canIds: {
+        '/Application/EchoApplication/Received': 0x320,
+        '/Application/EchoApplication/Sent': 0x321,
+      },
+      applicationPeriodMs: 20,
+    });
   },
 );
 

@@ -31,6 +31,8 @@ import { createDeliveryActions } from './deliveryActions';
 import { rememberDialogOpener } from './Dialog';
 import type { PreviewDelta, Selection, Stage, StageState } from './forms';
 import {
+  applicationPeriodDraft,
+  applicationPeriodMs,
   diagnosticFields,
   draftFor,
   dtcFields,
@@ -783,9 +785,7 @@ export function useWorkbench(): Workbench {
             report.description.signals.map((signal) => [signal.port, String(signal.canId)]),
           )
         : {},
-      integrationPeriod: report.description?.component
-        ? String(report.description.component.periodMs)
-        : '',
+      integrationPeriod: applicationPeriodDraft(report.description),
       integrationProcessing: false,
     });
   }
@@ -812,8 +812,8 @@ export function useWorkbench(): Workbench {
   }
 
   function applyIntegration() {
-    if (state.integrationInspection?.description?.multi) {
-      setIntegrationNotice(message('shell.integration.multiReadOnly'));
+    if (applicationPeriodMs(state.integrationInspection?.description) === null) {
+      setIntegrationNotice(message('shell.integration.parametersUnavailable'));
       return;
     }
     const ids: Record<string, number> = {};
