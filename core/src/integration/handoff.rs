@@ -45,7 +45,54 @@ pub(crate) fn metadata(plan: &ValidatedIntegrationPlan, target: BuildTarget) -> 
     })
 }
 
+/// Endpoints for the independent reference-behaviour verifier, which checks
+/// the single reference echo application. The historical chain always has this
+/// shape; the mainline emits it only for one application component with exactly
+/// one 32-bit COM Rx/Tx pair and an application DID, and no file otherwise.
 pub(super) fn verification_files(
+    plan: &ValidatedIntegrationPlan,
+) -> Result<BTreeMap<String, Vec<u8>>, crate::message::LocalizedText> {
+    let d = plan.description();
+    let Some(multi) = &d.multi else {
+        return legacy_verification_files(plan);
+    };
+    if plan
+        .application_slot_descriptors()
+        .map_or(true, |slots| slots.len() != 1)
+    {
+        return Ok(BTreeMap::new());
+    }
+    let (receive, transmit): (Vec<_>, Vec<_>) = d.signals.iter().partition(|signal| signal.receive);
+    let (Some(diagnostic), [rx], [tx]) = (&d.diagnostic, receive.as_slice(), transmit.as_slice())
+    else {
+        return Ok(BTreeMap::new());
+    };
+    let ports: Vec<_> = multi
+        .components
+        .iter()
+        .flat_map(|component| &component.data_ports)
+        .collect();
+    let (Some(read), Some(period)) = (
+        ports.iter().find(|port| port.read && port.path == rx.port),
+        multi
+            .components
+            .iter()
+            .flat_map(|component| &component.runnables)
+            .find_map(|runnable| runnable.period_ms),
+    ) else {
+        return Ok(BTreeMap::new());
+    };
+    if [rx, tx]
+        .iter()
+        .any(|signal| signal.dlc != 4 || signal.bit_length != 32)
+        || !ports.iter().any(|port| !port.read && port.path == tx.port)
+    {
+        return Ok(BTreeMap::new());
+    }
+    inputs_file(period, rx.can_id, tx.can_id, diagnostic, read.initial_value)
+}
+
+fn legacy_verification_files(
     plan: &ValidatedIntegrationPlan,
 ) -> Result<BTreeMap<String, Vec<u8>>, crate::message::LocalizedText> {
     let d = plan.description();
@@ -81,11 +128,27 @@ pub(super) fn verification_files(
         .ok_or(crate::product_message!(
             "backend.integration.handoff.transmit_channel_missing"
         ))?;
+    inputs_file(
+        component.period_ms,
+        rx.can_id,
+        tx.can_id,
+        diagnostic,
+        read.initial_value,
+    )
+}
+
+fn inputs_file(
+    period_ms: u32,
+    receive_can_id: u32,
+    transmit_can_id: u32,
+    diagnostic: &super::DiagnosticContract,
+    initial_receive_value: u32,
+) -> Result<BTreeMap<String, Vec<u8>>, crate::message::LocalizedText> {
     let inputs = json!({
-        "format": "autosar-ecu-test-inputs-v1", "periodMs": component.period_ms,
-        "receiveCanId": rx.can_id, "transmitCanId": tx.can_id,
+        "format": "autosar-ecu-test-inputs-v1", "periodMs": period_ms,
+        "receiveCanId": receive_can_id, "transmitCanId": transmit_can_id,
         "requestCanId": diagnostic.request_can_id, "responseCanId": diagnostic.response_can_id,
-        "did": diagnostic.did, "initialReceiveValue": read.initial_value,
+        "did": diagnostic.did, "initialReceiveValue": initial_receive_value,
         "receiveTimeoutMs": diagnostic.n_cr_ms,
         "scope": "Actual configured endpoints; independent fixed echo bytes and protocol assertions are in tools/ecu_tools/verify.py. This is test input, not a verification result."
     });

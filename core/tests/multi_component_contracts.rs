@@ -3120,37 +3120,157 @@ fn single_application_component_rejections_locate_source_objects() {
     );
 }
 
-#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
-#[test]
-fn single_application_component_builds_and_runs_production_owner() {
+/// Seals the single-component project with the reference echo application:
+/// the multi fixture's `Ingress` without its removed local `Value` port.
+fn single_component_project(
+    root: &Path,
+    target: autosar_config_core::target::BuildTarget,
+) -> std::path::PathBuf {
     use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
-    let scratch = Scratch::new();
     let plan = build(&single_component_sources()).unwrap_or_else(|issues| panic!("{issues:?}"));
     let fixture = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-application/Ingress.c"),
     )
     .unwrap();
-    // The single component keeps its network and DID ports but has no local peer.
     let source = fixture.replace("        (void)Rte_Write_Value_Value(value);\n", "");
     assert_ne!(source, fixture);
-    let application = scratch.0.join("Ingress.c");
+    let application = root.join("Ingress.c");
     std::fs::write(&application, source).unwrap();
     let prepared = prepare_ecu_project_with_applications(
         &plan,
-        tooling::native_target(),
+        target,
         &[ApplicationSource {
             component_instance: "/Application/Pipeline/IngressInstance".into(),
             path: application,
         }],
     )
     .unwrap_or_else(|issues| panic!("{issues:?}"));
-    let project = scratch.0.join("project");
+    let project = root.join("project");
     for (path, bytes) in prepared.into_files() {
         let path = project.join(path);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, bytes).unwrap();
     }
+    project
+}
+
+#[test]
+fn reference_shape_records_independent_verification_inputs() {
+    let scratch = Scratch::new();
+    let project = single_component_project(
+        &scratch.0,
+        autosar_config_core::target::BuildTarget::LinuxX64ControlledV1,
+    );
+    let inputs: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(project.join("verification/inputs.json")).unwrap())
+            .unwrap();
+    // Configured endpoints of the fixture, not values read back from the plan.
+    for (name, value) in [
+        ("periodMs", 10),
+        ("receiveCanId", 0x320),
+        ("transmitCanId", 0x321),
+        ("requestCanId", 0x700),
+        ("responseCanId", 0x708),
+        ("did", 0x1234),
+        ("initialReceiveValue", 0),
+        ("receiveTimeoutMs", 200),
+    ] {
+        assert_eq!(inputs[name], value, "{name}");
+    }
+    assert_eq!(inputs["format"], "autosar-ecu-test-inputs-v1");
+    let readme = std::fs::read_to_string(project.join("README.md")).unwrap();
+    assert!(readme.contains("tools/ecu-tool.py verify"), "{readme}");
+    let config = std::fs::read_to_string(project.join("src/Ecu_RuntimeConfig.c")).unwrap();
+    assert!(
+        config.contains("Ecu_DcmAuthenticationMode, 2u};"),
+        "DcmDspMaxDidToRead"
+    );
+    assert!(config.contains("Det_Init(&det_config);"));
+
+    // The verifier checks one reference echo application with an application
+    // DID; other shapes get no inputs (3-SWC with DID: see the README test).
+    use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
+    let plan = build(&sources_without_application_did(true)).unwrap();
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-application");
+    let applications: Vec<_> = plan
+        .application_slot_descriptors()
+        .unwrap()
+        .iter()
+        .map(|slot| ApplicationSource {
+            component_instance: slot
+                .producer_slot
+                .strip_prefix("singlecore-multi-swc-v1:")
+                .unwrap()
+                .into(),
+            path: fixtures.join(slot.source_paths[0].rsplit('/').next().unwrap()),
+        })
+        .collect();
+    let files = prepare_ecu_project_with_applications(
+        &plan,
+        autosar_config_core::target::BuildTarget::LinuxX64ControlledV1,
+        &applications,
+    )
+    .unwrap()
+    .into_files();
+    assert!(
+        !files
+            .iter()
+            .any(|(path, _)| path.starts_with("verification/"))
+    );
+    let readme = &files
+        .iter()
+        .find(|(path, _)| path == "README.md")
+        .unwrap()
+        .1;
+    assert!(!String::from_utf8_lossy(readme).contains("ecu-tool.py verify"));
+}
+
+#[test]
+fn mainline_enforces_fixed_os_class_and_did_read_limit() {
+    for (owner, definition, value) in [
+        ("Dsp", "DcmDspMaxDidToRead", "3"),
+        ("OperatingSystem", "OsScalabilityClass", "SC2"),
+    ] {
+        let mut sources = single_component_sources();
+        parameter(&mut sources, owner, definition, value);
+        rejects_in_both(&sources, "TARGET_PARAMETER_UNSUPPORTED");
+    }
+    let plan = build(&single_component_sources()).unwrap();
+    assert_eq!(
+        plan.description()
+            .diagnostic_transport
+            .as_ref()
+            .unwrap()
+            .max_did_to_read,
+        Some(2)
+    );
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn single_application_component_builds_and_runs_production_owner() {
+    let scratch = Scratch::new();
+    let project = single_component_project(&scratch.0, tooling::native_target());
     verify_multi_production_owner(&project, &scratch.0, None);
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn single_application_component_passes_independent_reference_verifier() {
+    let scratch = Scratch::new();
+    let project = single_component_project(&scratch.0, tooling::native_target());
+    let result = tooling::ecu_verify_command(&project, &scratch.0.join("verify-build"))
+        .current_dir(&scratch.0)
+        .env_remove("PYTHONPATH")
+        .env_remove("PYTHONHOME")
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&result.stdout);
+    assert!(
+        result.status.success() && stdout.contains("ECU_HANDOFF_VERIFY PASS:"),
+        "{stdout}\n{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
 }
 
 #[test]

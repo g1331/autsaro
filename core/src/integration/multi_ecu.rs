@@ -684,15 +684,24 @@ pub(super) fn files(
         );
     }
     put(&mut files, "integration.json", format!("{}\n", serde_json::to_string_pretty(&serde_json::json!({"format": "autosar-ecu-integration-v1", "plan": description, "target": target.spec().id, "owner": "single source-derived AUTOSTART extended task", "originalBswSources": super::ecu::source_assets(target, true).map_err(|_| failure())?.iter().map(|(path, asset)| (asset.relative_path, path)).collect::<BTreeMap<_, _>>() })).unwrap()));
+    let verification = super::handoff::verification_files(plan).map_err(|_| failure())?;
     put(
         &mut files,
         "README.md",
         format!(
-            "# ECU integration source project\n\nTarget: `{}`. Caller application sources are sealed under `src/`; the source-derived component, communication and OS contracts are in `integration.json`.\n\n## Independent native build\n\n{}\nFrom this directory run `python tools/ecu-tool.py build --project . --output <new-empty-external-directory> --mode host-batch`. The production BEGIN/RX/COMMIT protocol uses the single OS owner and controlled logical ticks. Physical output flush precedes driver polling confirmation. No compiler, AUTOSAR archive or application algorithm is generated or redistributed.\n",
+            "# ECU integration source project\n\nTarget: `{}`. Caller application sources are sealed under `src/`; the source-derived component, communication and OS contracts are in `integration.json`.\n\n## Independent native build\n\n{}\nFrom this directory run `python tools/ecu-tool.py build --project . --output <new-empty-external-directory> --mode host-batch`. The production BEGIN/RX/COMMIT protocol uses the single OS owner and controlled logical ticks. Physical output flush precedes driver polling confirmation. No compiler, AUTOSAR archive or application algorithm is generated or redistributed.\n{}",
             target.spec().id,
-            crate::generator::delivery::native_build_prerequisites(target)
+            crate::generator::delivery::native_build_prerequisites(target),
+            if verification.is_empty() {
+                ""
+            } else {
+                "\n## Reference behaviour verification\n\nThis configuration has one 32-bit CAN receive signal, one 32-bit CAN transmit signal and an application DID, so `verification/inputs.json` records their configured endpoints. `python tools/ecu-tool.py verify --project . --build-directory <another-new-empty-external-directory>` builds HostBatch and checks the reference echo application: the transmit signal repeats the last received value, the DID returns it big-endian, one/two-DID reads, DID capacity refusal, N_Cr timeout/recovery and malformed admission. Other application behaviour fails this check by design; it does not establish full SC1, MCU, hard-real-time, ASIL or official certification.\n"
+            }
         ),
     );
+    for (path, bytes) in verification {
+        files.insert(path, Cow::Owned(bytes));
+    }
     files.extend(
         super::artifacts::files(description, &files)
             .map_err(|_| failure())?
