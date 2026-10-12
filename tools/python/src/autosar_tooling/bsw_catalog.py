@@ -16,7 +16,7 @@ import re
 import tempfile
 from pathlib import Path
 
-from autosar_tooling.config import ROOT
+from autosar_tooling.config import HOST_COMSTACK_CFG, ROOT
 
 MANIFEST = ROOT / "runtime/contracts/bsw-v1.json"
 SELECTED = {
@@ -187,13 +187,7 @@ def probe(current: dict) -> None:
             if path.name != "ecu_host_main.c"
         )
         inputs.extend(ROOT / "runtime/multi/src" / name for name in ["Can.c", "Can_Host.c", "Can_HostLock.c", "Ecu_Status.c"])
-        # The moved CAN headers resolve the sibling mainline ComStack_Types.h, whose
-        # widths come from configuration; use the legacy profile's fixed widths.
-        (directory / "ComStack_Cfg.h").write_text(
-            '#ifndef COMSTACK_CFG_H\n#define COMSTACK_CFG_H\n#include "Platform_Types.h"\n'
-            "typedef uint8 PduIdType;\ntypedef uint16 PduLengthType;\n#endif\n",
-            encoding="utf-8",
-        )
+        (directory / "ComStack_Cfg.h").write_text(HOST_COMSTACK_CFG, encoding="utf-8")
         inputs.extend(sorted((ROOT / "runtime/host/src").glob("*.c")))
         inputs.extend(ROOT / name for name in ["runtime/multi/src/Det.c",
                       "runtime/multi/src/Det_Host.c", "runtime/multi/src/SchM_CanIf_Host.c"])

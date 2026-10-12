@@ -34,6 +34,13 @@ ALLOWED_VARIABLES = {
     "RUST_TEST_THREADS",
 }
 PATH_VARIABLES = ALLOWED_VARIABLES - {"VCPKGRS_TRIPLET", "RUST_TEST_THREADS"}
+# The mainline CAN driver headers include the sibling mainline ComStack_Types.h,
+# whose widths come from configuration. Repository-tree host checks use the
+# fixed widths of the legacy host profile (uint8 PDU handles, uint16 lengths).
+HOST_COMSTACK_CFG = (
+    '#ifndef COMSTACK_CFG_H\n#define COMSTACK_CFG_H\n#include "Platform_Types.h"\n'
+    "typedef uint8 PduIdType;\ntypedef uint16 PduLengthType;\n#endif\n"
+)
 
 
 def environment(root: Path = ROOT) -> dict[str, str]:
