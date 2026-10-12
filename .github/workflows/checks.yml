@@ -107,13 +107,18 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7.0.1
-      - run: sudo apt-get update && sudo apt-get install -y libxml2-dev libclang-dev clang pkg-config
+      - uses: ./.github/actions/core-build-dependencies
       - run: cargo test --locked --manifest-path core/Cargo.toml
-      - run: cargo clippy --locked --manifest-path core/Cargo.toml --all-targets -- -A clippy::all -D clippy::correctness -D clippy::suspicious
+      # The features add the native and official test binaries, which only manual acceptance runs.
+      - run: cargo clippy --locked --manifest-path core/Cargo.toml --all-targets --features native-tests,official-oracles -- -A clippy::all -D clippy::correctness -D clippy::suspicious
   desktop:
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7.0.1
@@ -122,7 +127,9 @@ jobs:
           node-version-file: .node-version
           cache: npm
           cache-dependency-path: ui/package-lock.json
-      - run: sudo apt-get update && sudo apt-get install -y libxml2-dev libclang-dev clang pkg-config libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev patchelf
+      - uses: ./.github/actions/core-build-dependencies
+        with:
+          linux-packages: libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev patchelf
       - run: npm ci --prefix ui
       - run: npm run build --prefix ui
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
@@ -141,6 +148,68 @@ jobs:
       - uses: astral-sh/setup-uv@v10.2.0
       - run: uv sync --locked
       - run: uv run --locked python -B -m unittest discover -s tests/python/process
+  native:
+    # Native suites that need GCC but no licensed archive; the rest stay in acceptance.yml.
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: uv sync --locked
+      - uses: ./.github/actions/core-build-dependencies
+      - uses: ./.github/actions/native-analysis-compiler
+      - name: Identify native build cache inputs
+        shell: python
+        run: |
+          import os
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              output.write('CACHE_IMAGE=' + os.environ['ImageOS'] + '-' + os.environ['ImageVersion'] + '\n')
+      - uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            core/target
+          key: native-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'core/Cargo.lock') }}-v1
+      - name: Select native contract tools
+        shell: python
+        run: |
+          import os, shutil, subprocess
+          from pathlib import Path
+          tools = {'AUTOSAR_CC': 'gcc', 'AUTOSAR_OBJDUMP': 'objdump', 'AUTOSAR_NM': 'nm', 'AUTOSAR_GIT': 'git'}
+          # The project environment's interpreter, as used by the development tooling.
+          python = subprocess.run(['uv', 'run', '--locked', 'python', '-c', 'import sys; print(sys.executable)'],
+              check=True, capture_output=True, text=True).stdout.strip()
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              for variable, name in tools.items():
+                  output.write(variable + '=' + str(Path(shutil.which(name)).absolute()) + '\n')
+              output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
+      - name: Native library and contract suites
+        run: cargo test --locked --manifest-path core/Cargo.toml --features native-tests --lib --test native --no-fail-fast
+  native-os:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: uv sync --locked
+      - uses: ./.github/actions/native-analysis-compiler
+      - name: Native OS conformance suites
+        run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_os_suites.py
+      - name: Host I/O and lock failure boundaries
+        run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_host_boundaries.py
   quality:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -194,29 +263,10 @@ jobs:
               output.write('CACHE_IMAGE=' + os.environ['ImageOS'] + '-' + os.environ['ImageVersion'] + '\n')
       - uses: astral-sh/setup-uv@v10.2.0
       - run: uv sync --locked
-      - name: Linux analysis dependencies
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y build-essential cmake libxml2-dev libclang-dev clang pkg-config
-      - uses: ./.github/actions/native-analysis-compiler
-      - name: Create vcpkg binary cache
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: New-Item -ItemType Directory -Force -Path build/vcpkg-cache | Out-Null
-      - uses: actions/cache@v6.1.0
-        if: runner.os == 'Windows'
+      - uses: ./.github/actions/core-build-dependencies
         with:
-          path: build/vcpkg-cache
-          key: vcpkg-${{ runner.os }}-${{ env.CACHE_IMAGE }}-static-md-v1
-          restore-keys: vcpkg-${{ runner.os }}-
-      - name: Windows core dependencies
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $env:VCPKG_DEFAULT_BINARY_CACHE = (Resolve-Path build/vcpkg-cache).Path
-          vcpkg install 'libxml2[iconv,zlib]:x64-windows-static-md'
-          "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
-          'VCPKGRS_TRIPLET=x64-windows-static-md' >> $env:GITHUB_ENV
-          'LIBCLANG_PATH=C:/Program Files/LLVM/bin' >> $env:GITHUB_ENV
+          linux-packages: build-essential cmake
+      - uses: ./.github/actions/native-analysis-compiler
       - uses: actions/checkout@v7.0.1
         with:
           repository: cppcheck-opensource/cppcheck
@@ -277,31 +327,12 @@ jobs:
           key: c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'core/Cargo.lock') }}-v1
       - name: Analyzer behavior tests
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
-      - name: Host I/O and lock failure boundaries
-        run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_host_boundaries.py
-      - name: Core library regressions
-        run: cargo test --locked --manifest-path core/Cargo.toml --lib
-      # Required checks run these archive-free native suites on both platforms;
-      # the remaining native suites need licensed archives and stay in acceptance.yml.
-      - name: Select native contract tools
-        shell: python
-        run: |
-          import os, shutil, subprocess
-          from pathlib import Path
-          tools = {'AUTOSAR_CC': 'gcc', 'AUTOSAR_OBJDUMP': 'objdump', 'AUTOSAR_NM': 'nm', 'AUTOSAR_GIT': 'git'}
-          # The project environment's interpreter, as used by the development tooling.
-          python = subprocess.run(['uv', 'run', '--locked', 'python', '-c', 'import sys; print(sys.executable)'],
-              check=True, capture_output=True, text=True).stdout.strip()
-          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
-              for variable, name in tools.items():
-                  output.write(variable + '=' + str(Path(shutil.which(name)).absolute()) + '\n')
-              output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
-      - name: Native runtime and multi-component contracts
-        run: cargo test --locked --manifest-path core/Cargo.toml --features native-tests --test native
       - name: Generate complete analysis samples
         run: cargo test --locked --manifest-path core/Cargo.toml --test it -- 'c_analysis::'
       - name: Sealed ECU build mode fault isolation
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_ecu_build_modes.py
+      - name: Moved package verifies with the receiver Python
+        run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_offline_delivery.py
       - name: Validate generated sample inventory
         shell: python
         run: |
@@ -475,7 +506,7 @@ jobs:
   required:
     # The only status check branch rules require; the list of blocking jobs lives here.
     name: CI required
-    needs: [changes, ui, python, core, desktop, process, quality, c-analysis]
+    needs: [changes, ui, python, core, desktop, process, native, native-os, quality, c-analysis]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
