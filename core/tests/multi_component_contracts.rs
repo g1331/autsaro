@@ -14,6 +14,9 @@ mod workspace;
 use workspace::Scratch;
 #[path = "support/delivery.rs"]
 mod delivery_support;
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[path = "support/mainline_protocol.rs"]
+mod mainline_protocol;
 
 fn inputs() -> Vec<InputSource> {
     let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-component");
@@ -7536,4 +7539,22 @@ fn multi_workbench_existing_invalid_connector_allows_unrelated_safe_edits() {
             .integration_plan(&RuntimeCatalog::embedded().unwrap())
             .is_err()
     );
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn single_component_meets_independent_protocol_and_timing_vectors() {
+    mainline_protocol::independent_protocol_and_timing();
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
+    mainline_protocol::host_batch_commit();
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn single_component_native_batch_boundary_and_confirmations() {
+    mainline_protocol::host_batch_native_boundary();
 }
