@@ -689,7 +689,7 @@ pub(super) fn files(
         &mut files,
         "README.md",
         format!(
-            "# ECU integration source project\n\nTarget: `{}`. Caller application sources are sealed under `src/`; the source-derived component, communication and OS contracts are in `integration.json`.\n\n## Independent native build\n\n{}\nFrom this directory run `python tools/ecu-tool.py build --project . --output <new-empty-external-directory> --mode host-batch`. The production BEGIN/RX/COMMIT protocol uses the single OS owner and controlled logical ticks. Physical output flush precedes driver polling confirmation. No compiler, AUTOSAR archive or application algorithm is generated or redistributed.\n{}",
+            "# ECU integration source project\n\nTarget: `{}`. Caller application sources are sealed under `src/`; the source-derived component, communication and OS contracts are in `integration.json`. Original MIT notices of the fixed FreeRTOS kernel remain in `kernel/LICENSE.md`; Autsaro runtime, tool and template code is licensed under Apache-2.0 (see LICENSE and NOTICE). User-provided configurations and application code retain their own licensing.\n\n## Independent native build\n\n{}\nFrom this directory run `python tools/ecu-tool.py build --project . --output <new-empty-external-directory> --mode host-batch`. The production BEGIN/RX/COMMIT protocol uses the single OS owner and controlled logical ticks. Physical output flush precedes driver polling confirmation. No compiler, AUTOSAR archive or application algorithm is generated or redistributed.\n{}",
             target.spec().id,
             crate::generator::delivery::native_build_prerequisites(target),
             if verification.is_empty() {

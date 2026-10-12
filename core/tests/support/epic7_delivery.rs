@@ -179,8 +179,12 @@ fn builtin_can_late_source_edit_refuses_staged_commit_and_preserves_output() {
 }
 
 fn standard_with_application(root: &Path) -> Workspace {
-    let creation =
-        Workspace::preview_project_creation(root, "Application", "standard-ecu-v1").unwrap();
+    standard_named(root, "Application")
+}
+
+/// A standard ECU project with its create-only reference application.
+fn standard_named(root: &Path, name: &str) -> Workspace {
+    let creation = Workspace::preview_project_creation(root, name, "standard-ecu").unwrap();
     let mut workspace = Workspace::create_project_previewed(&creation).unwrap();
     let initialization = workspace.preview_application_initialization().unwrap();
     workspace
@@ -226,7 +230,9 @@ fn builtin_host_and_ecu_deliver_project_license_and_preserve_kernel_notice() {
                     && text.contains("not silently upgraded")
             );
             if output == &ecu_output {
-                assert!(text.contains("tools/ecu-tool.py verify") && text.contains("Build modes:"));
+                assert!(
+                    text.contains("tools/ecu-tool.py verify") && text.contains("--mode host-batch")
+                );
             }
             let names = fs::read_to_string(output.join("files.list")).unwrap();
             let hashes = fs::read_to_string(output.join("files.sha256")).unwrap();
@@ -323,8 +329,8 @@ fn builtin_ecu_handoff_preserves_user_algorithm_in_independent_reconstructed_pro
     let original = String::from_utf8(application.bytes.clone()).unwrap();
     let changed = original
         .replace(
-            "Data[i] = (uint8)(application.value >> ((3u - i) * 8u));",
-            "Data[i] = (uint8)((application.value + UINT32_C(1)) >> ((3u - i) * 8u));",
+            "Data[3] = (uint8)committed;",
+            "Data[3] = (uint8)(committed + 1u);",
         )
         .into_bytes();
     assert_ne!(changed, application.bytes);
@@ -341,7 +347,10 @@ fn builtin_ecu_handoff_preserves_user_algorithm_in_independent_reconstructed_pro
         .unwrap()
         .generate(&output)
         .unwrap();
-    assert_eq!(fs::read(output.join("src/Application.c")).unwrap(), changed);
+    assert_eq!(
+        fs::read(output.join("src/EchoApplication.c")).unwrap(),
+        changed
+    );
     assert_eq!(fs::read(&application.disk_path).unwrap(), changed);
     let receiver = scratch.0.join("Receiver");
     let imported =
@@ -401,7 +410,7 @@ fn builtin_ecu_late_live_edit_and_resealed_snapshot_never_overwrite_user_bytes_o
     assert_eq!(payload(&output), original);
     assert_eq!(fs::read(&application.disk_path).unwrap(), changed);
     fs::write(
-        output.join("src/Application.c"),
+        output.join("src/EchoApplication.c"),
         b"#error Altered_sealed_application_snapshot\n",
     )
     .unwrap();
@@ -491,9 +500,7 @@ fn builtin_handoff_rejects_forged_declared_extension_identity_without_publishing
 }
 
 fn edit_standard_configuration(root: &Path, edit: impl FnOnce(&str) -> String) -> Workspace {
-    let creation =
-        Workspace::preview_project_creation(root, "Qualified", "standard-ecu-v1").unwrap();
-    let workspace = Workspace::create_project_previewed(&creation).unwrap();
+    let workspace = standard_named(root, "Qualified");
     let runtime = autosar_config_core::integration::RuntimeCatalog::embedded().unwrap();
     workspace.saved_integration_plan(&runtime).unwrap();
     let path = root.join("ecuc.arxml");
@@ -711,9 +718,7 @@ fn builtin_ecu_generation_preserves_unrelated_retained_module_without_blocking_t
 fn reject_core_change_with_prior_output(edit: impl FnOnce(&str) -> String) {
     let scratch = Scratch::new();
     let root = scratch.0.join("Live");
-    let creation =
-        Workspace::preview_project_creation(&root, "CorePolicy", "standard-ecu-v1").unwrap();
-    let workspace = Workspace::create_project_previewed(&creation).unwrap();
+    let workspace = standard_named(&root, "CorePolicy");
     let runtime = autosar_config_core::integration::RuntimeCatalog::embedded().unwrap();
     let plan = workspace.saved_integration_plan(&runtime).unwrap();
     let output = scratch.0.join("output");

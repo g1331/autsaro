@@ -676,7 +676,7 @@ fn builtin_templates_are_previewed_portable_and_confirmation_rejects_tampering()
     for (template, name) in [
         ("can-empty-v1", "Empty"),
         ("can-signals-v1", "Signals"),
-        ("standard-ecu-v1", "Standard"),
+        ("standard-ecu", "Standard"),
     ] {
         let directory = scratch.0.join(name);
         let preview = Workspace::preview_project_creation(&directory, name, template).unwrap();
@@ -1097,8 +1097,7 @@ fn builtin_save_as_preserves_original_sources_and_rejects_name_collisions() {
 fn builtin_cross_file_batch_keeps_members_and_untouched_original_bytes() {
     let scratch = Scratch::new();
     let directory = scratch.0.join("Split");
-    let preview =
-        Workspace::preview_project_creation(&directory, "Split", "standard-ecu-v1").unwrap();
+    let preview = Workspace::preview_project_creation(&directory, "Split", "standard-ecu").unwrap();
     Workspace::create_project_previewed(&preview).unwrap();
     let ecuc = directory.join("ecuc.arxml");
     let original = fs::read_to_string(&ecuc).unwrap();
@@ -1380,7 +1379,7 @@ fn builtin_application_initialization_is_reviewed_create_only_and_owns_real_live
     let scratch = Scratch::new();
     let directory = scratch.0.join("ApplicationOwned");
     let creation =
-        Workspace::preview_project_creation(&directory, "ApplicationOwned", "standard-ecu-v1")
+        Workspace::preview_project_creation(&directory, "ApplicationOwned", "standard-ecu")
             .unwrap();
     let mut workspace = Workspace::create_project_previewed(&creation).unwrap();
     let before = projection(&workspace);
@@ -1416,7 +1415,8 @@ fn builtin_application_initialization_is_reviewed_create_only_and_owns_real_live
         snapshot.manifest.application_inputs,
         vec![autosar_config_core::arxml::ApplicationInput {
             path: preview.slots[0].source_paths[0].clone(),
-            producer_slot: "epic4-single-application-v1".into(),
+            producer_slot:
+                "singlecore-ecu-v1:/Application/ReferenceComposition/EchoApplicationInstance".into(),
         }]
     );
     assert_eq!(
@@ -1449,7 +1449,7 @@ fn builtin_application_initialization_refuses_a_late_user_path_without_touching_
     let scratch = Scratch::new();
     let directory = scratch.0.join("ApplicationCollision");
     let creation =
-        Workspace::preview_project_creation(&directory, "ApplicationCollision", "standard-ecu-v1")
+        Workspace::preview_project_creation(&directory, "ApplicationCollision", "standard-ecu")
             .unwrap();
     let mut workspace = Workspace::create_project_previewed(&creation).unwrap();
     let preview = workspace.preview_application_initialization().unwrap();
@@ -1588,7 +1588,7 @@ fn builtin_live_application_reopens_generic_configuration_without_authorizing_ta
     let scratch = Scratch::new();
     let directory = scratch.0.join("GenericLive");
     let creation =
-        Workspace::preview_project_creation(&directory, "GenericLive", "standard-ecu-v1").unwrap();
+        Workspace::preview_project_creation(&directory, "GenericLive", "standard-ecu").unwrap();
     let mut workspace = Workspace::create_project_previewed(&creation).unwrap();
     let initialization = workspace.preview_application_initialization().unwrap();
     workspace
@@ -1650,7 +1650,7 @@ fn builtin_live_application_reopens_generic_configuration_without_authorizing_ta
             .find(|scope| scope.scope == ValidationScope::Definition)
             .unwrap()
             .status,
-        ValidationStatus::Unsupported,
+        ValidationStatus::Passed,
     );
     let definition = view
         .validation
@@ -1658,9 +1658,6 @@ fn builtin_live_application_reopens_generic_configuration_without_authorizing_ta
         .find(|scope| scope.scope == ValidationScope::Definition)
         .unwrap();
     assert!(definition.diagnostics.is_empty());
-    assert!(definition.coverage.iter().any(|rule| rule.rule_id
-        == "native.definition.legacy-dcm-mode-dependency"
-        && !rule.supported));
     let target = view
         .validation
         .iter()
@@ -1677,8 +1674,7 @@ fn builtin_live_application_reopen_refuses_membership_and_producer_drift() {
     let scratch = Scratch::new();
     let directory = scratch.0.join("LiveOwnership");
     let creation =
-        Workspace::preview_project_creation(&directory, "LiveOwnership", "standard-ecu-v1")
-            .unwrap();
+        Workspace::preview_project_creation(&directory, "LiveOwnership", "standard-ecu").unwrap();
     let mut workspace = Workspace::create_project_previewed(&creation).unwrap();
     let initialization = workspace.preview_application_initialization().unwrap();
     workspace

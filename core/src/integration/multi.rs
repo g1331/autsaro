@@ -179,10 +179,14 @@ fn fail(graph: &Graph, index: usize, code: &str) -> Vec<PlanDiagnostic> {
     )]
 }
 
-/// The mainline owns every project except the historical single-component
-/// identity, which never configures ComM or BswM. The component count alone
-/// does not select a chain: one application SWC is the mainline with N = 1.
+/// Built-in validation always plans on the mainline: one application SWC is
+/// the mainline with N = 1. Only the external-archive validation mode, which
+/// still opens historical single-component inputs, keeps the old identity
+/// (no ComM/BswM and one application SWC type) on that chain.
 pub(super) fn selected(graph: &Graph) -> bool {
+    if graph.builtin {
+        return true;
+    }
     let mode_management = graph
         .of_kind("ECUC-MODULE-CONFIGURATION-VALUES")
         .into_iter()

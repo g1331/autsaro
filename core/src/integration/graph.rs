@@ -27,6 +27,8 @@ pub(super) struct Graph {
     pub elements: Vec<Element>,
     pub objects: BTreeMap<String, usize>,
     pub external: BTreeMap<String, String>,
+    /// Built from the product's built-in rules rather than external archives.
+    pub builtin: bool,
 }
 
 impl Graph {
@@ -119,6 +121,7 @@ impl Graph {
             elements: Vec::new(),
             objects: BTreeMap::new(),
             external,
+            builtin: reference_policy == ReferencePolicy::ConsumerScoped,
         };
         let mut diagnostics = Vec::new();
         for (file, document) in sources {
@@ -460,64 +463,12 @@ impl Graph {
 // Kept beside the private integration graph so native definition validation can
 // reuse existing cross-module rules without exposing graph implementation types.
 impl crate::definitions::DefinitionCatalog {
-    /// Only the completely recognized historical integration profile retains
-    /// its missing mode dependency. Merely being non-multi is insufficient.
-    pub(crate) fn legacy_mode_dependency_compatibility<'a, 'input>(
+    /// Mainline cross-module constraints for native definition validation;
+    /// the flag reports whether the integration graph itself resolved.
+    pub(crate) fn mainline_definition_constraints<'a, 'input>(
         &self,
         files: impl Iterator<Item = (&'a str, &'a Document<'input>)>,
-    ) -> bool
-    where
-        'input: 'a,
-    {
-        let files: Vec<_> = files.collect();
-        let documents: Vec<_> = files.iter().map(|(_, document)| *document).collect();
-        if crate::arxml::historical_host_mode_dependency(&documents) {
-            return true;
-        }
-        let modules: std::collections::BTreeSet<_> = files
-            .iter()
-            .flat_map(|(_, document)| {
-                document
-                    .descendants()
-                    .filter(|node| node.tag_name().name() == "ECUC-MODULE-CONFIGURATION-VALUES")
-                    .filter_map(|node| {
-                        node.children()
-                            .find(|child| child.tag_name().name() == "DEFINITION-REF")
-                            .and_then(|child| child.text())
-                    })
-            })
-            .collect();
-        if ["ComM", "BswM"]
-            .iter()
-            .any(|module| modules.contains(format!("/AUTOSAR/EcucDefs/{module}").as_str()))
-            || ![
-                "Can", "CanIf", "CanTp", "Com", "Dcm", "EcuC", "Os", "PduR", "Rte",
-            ]
-            .iter()
-            .all(|module| modules.contains(format!("/AUTOSAR/EcucDefs/{module}").as_str()))
-        {
-            return false;
-        }
-        let Ok(graph) = Graph::build_documents(
-            files.into_iter(),
-            Graph::catalog_external(self),
-            ReferencePolicy::ConsumerScoped,
-        ) else {
-            return false;
-        };
-        if !super::component::historical_source_identity(&graph) {
-            return false;
-        }
-        // No capability inspection participates in historical source identity.
-        // Keep all retained objects and references available for normal validation.
-        let consumers = graph.integration_consumers(self);
-        graph.reference_diagnostics_for(&consumers).is_empty()
-    }
-
-    pub(crate) fn legacy_definition_constraints<'a, 'input>(
-        &self,
-        files: impl Iterator<Item = (&'a str, &'a Document<'input>)>,
-    ) -> Option<(bool, bool, Vec<PlanDiagnostic>)>
+    ) -> (bool, Vec<PlanDiagnostic>)
     where
         'input: 'a,
     {
@@ -527,54 +478,14 @@ impl crate::definitions::DefinitionCatalog {
                 let consumers = graph.integration_consumers(self);
                 let references = graph.reference_diagnostics_for(&consumers);
                 if !references.is_empty() {
-                    return Some((false, super::multi::selected(&graph), references));
+                    return (false, references);
                 }
-                if super::multi::selected(&graph) {
-                    let result = super::RuntimeCatalog::embedded().and_then(|runtime| {
-                        super::plan::inspect_multi(&graph, Some(self), &runtime)
-                    });
-                    return Some((true, true, result.err().unwrap_or_default()));
-                }
-                match super::component::inspect(&graph) {
-                    Ok(component) => {
-                        let mut diagnostics = super::configuration::inspect_native(&graph, self)
-                            .err()
-                            .unwrap_or_default();
-                        if let Err(issues) = super::schedule::inspect(&graph, &component) {
-                            diagnostics.extend(issues);
-                        }
-                        let signals = super::communication::inspect(&graph, &component);
-                        let diagnostic = super::diagnostic::inspect(&graph, &component);
-                        if let (Ok(signals), Ok(diagnostic)) = (&signals, &diagnostic) {
-                            if let Err(issues) =
-                                super::routing::inspect(&graph, signals, diagnostic)
-                            {
-                                diagnostics.extend(issues);
-                            }
-                        }
-                        if let Err(issues) = signals {
-                            diagnostics.extend(issues);
-                        }
-                        if let Err(issues) = diagnostic {
-                            diagnostics.extend(issues);
-                        }
-                        Some((true, false, diagnostics))
-                    }
-                    Err(issues) => {
-                        let diagnostics: Vec<_> = issues
-                            .into_iter()
-                            .filter(|issue| {
-                                matches!(
-                                    issue.code.as_str(),
-                                    "OFFSET_UNSUPPORTED" | "MINIMUM_START_INTERVAL_UNSUPPORTED"
-                                )
-                            })
-                            .collect();
-                        (!diagnostics.is_empty()).then_some((true, false, diagnostics))
-                    }
-                }
+                // Built-in validation always plans on the mainline.
+                let result = super::RuntimeCatalog::embedded()
+                    .and_then(|runtime| super::plan::inspect_multi(&graph, Some(self), &runtime));
+                (true, result.err().unwrap_or_default())
             }
-            Err(diagnostics) => Some((false, false, diagnostics)),
+            Err(diagnostics) => (false, diagnostics),
         }
     }
 }

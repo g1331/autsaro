@@ -80,7 +80,7 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
                   >
                     <option value="can-empty-v1">{t('editor.source.emptyCan')}</option>
                     <option value="can-signals-v1">{t('editor.source.signalsCan')}</option>
-                    <option value="standard-ecu-v1">{t('editor.source.standardEcu')}</option>
+                    <option value="standard-ecu">{t('editor.source.standardEcu')}</option>
                   </select>
                 </label>
               ) : (

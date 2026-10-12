@@ -1287,7 +1287,7 @@ export async function runBuiltinScenario({
       };
     });
     await refreshSurface(canB.manifest);
-    const standard = await create('GatewayReference', 'standard-ecu-v1');
+    const standard = await create('GatewayReference', 'standard-ecu');
     await checked('seven-source-standard-variant', async () => {
       const view = await projection();
       assert.equal(view.sources.length, 7);

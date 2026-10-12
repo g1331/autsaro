@@ -120,7 +120,7 @@ export type WorkbenchState = {
   languageSaving: boolean;
   preflight: PreflightReport | null;
   operationLog: { command: string; outcome: 'done' | 'failed'; detail: Text }[];
-  templateId: 'can-empty-v1' | 'can-signals-v1' | 'standard-ecu-v1';
+  templateId: 'can-empty-v1' | 'can-signals-v1' | 'standard-ecu';
   projectPreview: ProjectCreationPreview | null;
   projectPreviewKind: 'create' | 'save-as';
   applicationPreview: ApplicationInitializationPreview | null;

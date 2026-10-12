@@ -137,7 +137,7 @@ fn generated_c_analysis_samples() {
         };
         let live = scratch.0.join(case);
         let preview =
-            Workspace::preview_project_creation(&live, "Application", "standard-ecu-v1").unwrap();
+            Workspace::preview_project_creation(&live, "Application", "standard-ecu").unwrap();
         let mut workspace = Workspace::create_project_previewed(&preview).unwrap();
         let initialization = workspace.preview_application_initialization().unwrap();
         workspace
@@ -147,8 +147,8 @@ fn generated_c_analysis_samples() {
             let application = workspace.generation_snapshot().unwrap().applications[0].clone();
             let original = String::from_utf8(application.bytes).unwrap();
             let changed = original.replace(
-                "Data[i] = (uint8)(application.value >> ((3u - i) * 8u));",
-                "Data[i] = (uint8)((application.value + UINT32_C(1)) >> ((3u - i) * 8u));",
+                "Data[3] = (uint8)committed;",
+                "Data[3] = (uint8)(committed + 1u);",
             );
             assert_ne!(original, changed);
             fs::write(application.disk_path, changed).unwrap();

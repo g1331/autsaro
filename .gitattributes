@@ -9,6 +9,8 @@
 /runtime/os/patches/** -text whitespace=-blank-at-eol
 # Test fixtures are byte-exact inputs (raw-byte manifests, text patches); keep LF on every checkout.
 /core/tests/fixtures/** text eol=lf
+# Built-in project templates are embedded and must not depend on checkout line endings.
+/core/resources/** text eol=lf
 
 # Fixed checkout byte identities for packaged BSW producers.
 /LICENSE text eol=lf

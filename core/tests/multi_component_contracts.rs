@@ -4083,12 +4083,12 @@ fn multi_network_zero_timeout_matches_without_changing_runtime_scope() {
     rejects_in_both(&sources, "TIMEOUT_CONFLICT");
 }
 
-fn legacy_inputs() -> Vec<InputSource> {
+fn template_inputs() -> Vec<InputSource> {
     let scratch = Scratch::new();
     let preview = autosar_config_core::Workspace::preview_project_creation(
-        &scratch.0.join("legacy"),
-        "Legacy",
-        "standard-ecu-v1",
+        &scratch.0.join("template"),
+        "Template",
+        "standard-ecu",
     )
     .unwrap();
     let mut sources: Vec<_> = preview
@@ -4101,9 +4101,9 @@ fn legacy_inputs() -> Vec<InputSource> {
     sources
 }
 
-fn legacy_execution_variants() -> Vec<Vec<InputSource>> {
+fn template_execution_variants() -> Vec<Vec<InputSource>> {
     let mut result = Vec::new();
-    let mut sources = legacy_inputs();
+    let mut sources = template_inputs();
     change(
         &mut sources,
         "application.arxml",
@@ -4112,7 +4112,7 @@ fn legacy_execution_variants() -> Vec<Vec<InputSource>> {
     );
     result.push(sources);
     for file in ["application.arxml", "services.arxml"] {
-        let source = legacy_inputs();
+        let source = template_inputs();
         let text = std::str::from_utf8(
             source
                 .iter()
@@ -4135,7 +4135,7 @@ fn legacy_execution_variants() -> Vec<Vec<InputSource>> {
             })
             .collect();
         for name in names {
-            let mut sources = legacy_inputs();
+            let mut sources = template_inputs();
             xml_edit(
                 &mut sources,
                 file,
@@ -4151,16 +4151,17 @@ fn legacy_execution_variants() -> Vec<Vec<InputSource>> {
 }
 
 #[test]
-fn legacy_native_rejects_nonzero_execution_constraints_and_keeps_exact_zero() {
-    for (index, sources) in legacy_execution_variants().into_iter().enumerate() {
+fn template_rejects_nonzero_execution_constraints_and_keeps_exact_zero() {
+    for (index, sources) in template_execution_variants().into_iter().enumerate() {
+        // The mainline schedules every timing event on one zero-phase period.
         let expected = if index == 0 {
-            "OFFSET_UNSUPPORTED"
+            "PERIOD_UNSUPPORTED"
         } else {
             "MINIMUM_START_INTERVAL_UNSUPPORTED"
         };
         let issues = build(&sources)
             .err()
-            .expect("legacy execution constraint accepted");
+            .expect("template execution constraint accepted");
         assert!(
             issues.iter().any(|issue| issue.code == expected),
             "{issues:?}"
@@ -4179,20 +4180,20 @@ fn legacy_native_rejects_nonzero_execution_constraints_and_keeps_exact_zero() {
 
 #[cfg(feature = "official-oracles")]
 #[test]
-fn legacy_official_legal_inputs_reject_nonzero_execution_constraints() {
+fn template_official_legal_inputs_reject_nonzero_execution_constraints() {
     use autosar_config_core::integration::{PlanDependencies, build_plan};
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let dependencies = PlanDependencies::from_repository(root);
     let runtime = RuntimeCatalog::from_repository(root).unwrap();
-    for (index, sources) in legacy_execution_variants().into_iter().enumerate() {
+    for (index, sources) in template_execution_variants().into_iter().enumerate() {
         let expected = if index == 0 {
-            "OFFSET_UNSUPPORTED"
+            "PERIOD_UNSUPPORTED"
         } else {
             "MINIMUM_START_INTERVAL_UNSUPPORTED"
         };
         let issues = build_plan(&sources, &dependencies, &runtime)
             .err()
-            .expect("legacy constraint accepted");
+            .expect("template constraint accepted");
         assert!(
             issues.iter().any(|issue| issue.code == expected),
             "{issues:?}"
@@ -4323,23 +4324,23 @@ fn serialized_symbol_consumers_include_all_runnable_accesses_and_client_callers(
 }
 
 #[test]
-fn normal_legacy_definition_validation_rejects_only_new_nonzero_execution_constraints() {
-    assert!(normal_validation(&legacy_inputs()).diagnostics.is_empty());
+fn template_definition_validation_locates_nonzero_execution_constraints() {
+    assert!(normal_validation(&template_inputs()).diagnostics.is_empty());
     let expected = [
         (
-            "OFFSET_UNSUPPORTED",
+            "PERIOD_UNSUPPORTED",
             "application.arxml",
             "/Application/EchoApplication/Behavior/Periodic10ms",
         ),
         (
             "MINIMUM_START_INTERVAL_UNSUPPORTED",
             "application.arxml",
-            "/Application/EchoApplication/Behavior/PeriodicRunnable",
+            "/Application/EchoApplication/Behavior/Periodic",
         ),
         (
             "MINIMUM_START_INTERVAL_UNSUPPORTED",
             "application.arxml",
-            "/Application/EchoApplication/Behavior/ReadDataRunnable",
+            "/Application/EchoApplication/Behavior/ServerReadData",
         ),
         (
             "MINIMUM_START_INTERVAL_UNSUPPORTED",
@@ -4347,7 +4348,7 @@ fn normal_legacy_definition_validation_rejects_only_new_nonzero_execution_constr
             "/Services/DcmService/Behavior/DcmReadData",
         ),
     ];
-    let cases = legacy_execution_variants();
+    let cases = template_execution_variants();
     assert_eq!(cases.len(), expected.len());
     for (mut sources, (code, file, path)) in cases.into_iter().zip(expected) {
         let validation = normal_validation(&sources);
@@ -4368,31 +4369,6 @@ fn normal_legacy_definition_validation_rejects_only_new_nonzero_execution_constr
         assert!(normal_validation(&sources).diagnostics.is_empty());
         assert!(build(&sources).is_ok());
     }
-    // A capability flag does not change the actual historical graph.
-    // Definition editing stays valid; native generation keeps its own refusal.
-    let mut unrelated = legacy_inputs();
-    change(
-        &mut unrelated,
-        "application.arxml",
-        "<SUPPORTS-MULTIPLE-INSTANTIATION>false",
-        "<SUPPORTS-MULTIPLE-INSTANTIATION>true",
-    );
-    let validation = normal_validation(&unrelated);
-    assert!(validation.diagnostics.is_empty());
-    assert_eq!(
-        validation.status,
-        autosar_config_core::project_model::ValidationStatus::Unsupported
-    );
-    assert!(validation.coverage.iter().any(|rule| rule.rule_id
-        == "native.definition.legacy-dcm-mode-dependency"
-        && !rule.supported));
-    assert!(
-        build(&unrelated)
-            .err()
-            .unwrap()
-            .iter()
-            .any(|issue| issue.code == "MULTIPLE_INSTANCES")
-    );
 }
 
 #[test]
@@ -4676,25 +4652,54 @@ fn selected_mode_configuration_rejects_unbound_features_and_dynamic_callouts() {
 }
 
 #[test]
-fn required_dcm_channel_reference_has_only_verified_historical_compatibility() {
+fn required_dcm_channel_reference_is_strict_for_every_builtin_project() {
     use autosar_config_core::project_model::ValidationStatus;
-    let legacy = legacy_inputs();
-    let validation = normal_validation(&legacy);
+    let template = template_inputs();
+    let validation = normal_validation(&template);
     assert!(validation.diagnostics.is_empty());
-    assert_eq!(validation.status, ValidationStatus::Unsupported);
-    assert!(validation.coverage.iter().any(|rule| rule.rule_id
-        == "native.definition.legacy-dcm-mode-dependency"
-        && !rule.supported));
-    let plan = build(&legacy).unwrap();
+    assert_eq!(validation.status, ValidationStatus::Passed);
+    let plan = build(&template).unwrap();
     assert_eq!(
         plan.description().profile,
-        autosar_config_core::integration::PROFILE
+        autosar_config_core::integration::MULTI_PROFILE
     );
-    assert!(plan.description().mode_runtime.is_none());
+    assert!(plan.description().mode_runtime.is_some());
+    assert!(plan.component_contract_files().is_ok());
+    // Historical single-component sources configure neither ComM nor BswM.
+    // Built-in validation no longer relaxes their Dcm channel dependency.
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/epic4/positive");
+    let historical: Vec<_> = [
+        "application.arxml",
+        "bsw.arxml",
+        "ecuc.arxml",
+        "extract.arxml",
+        "services.arxml",
+        "types.arxml",
+    ]
+    .into_iter()
+    .map(|file| InputSource::new(file, std::fs::read(fixtures.join(file)).unwrap()).unwrap())
+    .collect();
+    let validation = normal_validation(&historical);
     assert!(
-        plan.ecu_integration_files(autosar_config_core::target::BuildTarget::LinuxX64ControlledV1)
-            .is_ok()
+        validation
+            .diagnostics
+            .iter()
+            .any(|issue| issue.code == "MULTIPLICITY"
+                && issue.witness.as_ref().is_some_and(|witness| format!(
+                    "{:?}",
+                    witness.constraint
+                )
+                .contains("DcmDslProtocolComMChannelRef"))),
+        "{:?}",
+        validation.diagnostics
     );
+    assert!(
+        !validation
+            .coverage
+            .iter()
+            .any(|rule| rule.rule_id == "native.definition.legacy-dcm-mode-dependency")
+    );
+    assert!(build(&historical).is_err());
     let mut multi = inputs();
     xml_edit(
         &mut multi,
@@ -4717,31 +4722,7 @@ fn required_dcm_channel_reference_has_only_verified_historical_compatibility() {
             .any(|issue| issue.code == "MULTIPLICITY")
     );
     assert!(build(&multi).is_err());
-    // An explicit new mode module is a new configuration, even when the
-    // remaining files retain the historical single-component shape.
-    for module in ["ComM", "BswM"] {
-        let mut sources = legacy.clone();
-        change(
-            &mut sources,
-            "ecuc.arxml",
-            "</ELEMENTS>",
-            &format!(
-                "<ECUC-MODULE-CONFIGURATION-VALUES><SHORT-NAME>{module}</SHORT-NAME><DEFINITION-REF DEST=\"ECUC-MODULE-DEF\">/AUTOSAR/EcucDefs/{module}</DEFINITION-REF></ECUC-MODULE-CONFIGURATION-VALUES></ELEMENTS>"
-            ),
-        );
-        assert!(
-            normal_validation(&sources)
-                .diagnostics
-                .iter()
-                .any(|issue| issue.code == "MULTIPLICITY"
-                    && issue.witness.as_ref().is_some_and(|witness| format!(
-                        "{:?}",
-                        witness.constraint
-                    )
-                    .contains("DcmDslProtocolComMChannelRef")))
-        );
-    }
-    let source = legacy
+    let source = historical
         .iter()
         .find(|source| source.logical_path() == "ecuc.arxml")
         .unwrap();
@@ -4770,85 +4751,6 @@ fn required_dcm_channel_reference_has_only_verified_historical_compatibility() {
         "{:?}",
         validation.diagnostics
     );
-}
-
-#[test]
-fn historical_profile_identity_uses_bindings_instead_of_runnable_capabilities() {
-    let mut concurrent = legacy_inputs();
-    change(
-        &mut concurrent,
-        "application.arxml",
-        "<CAN-BE-INVOKED-CONCURRENTLY>false",
-        "<CAN-BE-INVOKED-CONCURRENTLY>true",
-    );
-    let validation = normal_validation(&concurrent);
-    assert!(validation.diagnostics.is_empty());
-    assert_eq!(
-        validation.status,
-        autosar_config_core::project_model::ValidationStatus::Unsupported
-    );
-    let issues = build(&concurrent).err().unwrap();
-    assert!(
-        issues
-            .iter()
-            .any(|issue| issue.code == "REENTRANCY_UNSUPPORTED"),
-        "{issues:?}"
-    );
-    assert!(!issues.iter().any(|issue| issue.code == "MULTIPLICITY"));
-    let mut wrong_rte = legacy_inputs();
-    xml_edit(
-        &mut wrong_rte,
-        "ecuc.arxml",
-        |node| {
-            node.tag_name().name() == "VALUE-REF"
-                && node.parent().is_some_and(|parent| {
-                    parent.children().any(|child| {
-                        child.tag_name().name() == "DEFINITION-REF"
-                            && child.text().is_some_and(|text| {
-                                text.ends_with("/RteSoftwareComponentInstanceRef")
-                            })
-                    })
-                })
-        },
-        |_| {
-            "<VALUE-REF DEST=\"SW-COMPONENT-PROTOTYPE\">/Application/ReferenceComposition/DcmService</VALUE-REF>".into()
-        },
-    );
-    let mut unmapped = legacy_inputs();
-    xml_edit(
-        &mut unmapped,
-        "extract.arxml",
-        |node| {
-            node.tag_name().name() == "COMPONENT-IREF"
-                && node.children().any(|child| {
-                    child.tag_name().name() == "TARGET-COMPONENT-REF"
-                        && child.text() == Some("/Application/ReferenceComposition/EchoApplication")
-                })
-        },
-        |_| String::new(),
-    );
-    for sources in [wrong_rte, unmapped] {
-        let validation = normal_validation(&sources);
-        assert!(
-            validation
-                .diagnostics
-                .iter()
-                .any(|issue| issue.code == "MULTIPLICITY"
-                    && issue.witness.as_ref().is_some_and(|witness| format!(
-                        "{:?}",
-                        witness.constraint
-                    )
-                    .contains("DcmDslProtocolComMChannelRef"))),
-            "{:?}",
-            validation.diagnostics
-        );
-        assert!(
-            !validation
-                .coverage
-                .iter()
-                .any(|rule| rule.rule_id == "native.definition.legacy-dcm-mode-dependency")
-        );
-    }
 }
 
 #[test]

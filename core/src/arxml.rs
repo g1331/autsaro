@@ -20,7 +20,6 @@ mod integration_editor;
 mod persistence;
 mod project;
 mod projection;
-mod standard_template;
 mod xml;
 
 pub use application::{ApplicationInitializationOutcome, ApplicationInitializationPreview};
