@@ -299,7 +299,7 @@ jobs:
       - name: Native runtime and multi-component contracts
         run: cargo test --locked --manifest-path core/Cargo.toml --features native-tests --test native
       - name: Generate complete analysis samples
-        run: cargo test --locked --manifest-path core/Cargo.toml --test it -- c_analysis::
+        run: cargo test --locked --manifest-path core/Cargo.toml --test it -- 'c_analysis::'
       - name: Sealed ECU build mode fault isolation
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_ecu_build_modes.py
       - name: Validate generated sample inventory
@@ -307,7 +307,7 @@ jobs:
         run: |
           import os
           from pathlib import Path
-          expected = {'standard-ecu', 'user-application', 'multi-component'}
+          expected = {'standard-ecu', 'user-application', 'multi-component', 'no-diagnostic'}
           if {p.name for p in Path(os.environ['AUTOSAR_C_ANALYSIS_SAMPLES']).iterdir()} != expected:
               raise RuntimeError('Generated sample inventory is incomplete')
       - uses: actions/upload-artifact@v7.0.1
@@ -338,6 +338,10 @@ jobs:
             target: linux-x64-controlled-v1
             group: multi-component
             samples: multi-component
+          - os: ubuntu-24.04
+            target: linux-x64-controlled-v1
+            group: no-diagnostic
+            samples: no-diagnostic
           - os: windows-latest
             target: windows-x64-controlled-v1
             group: standard-ecu
@@ -350,6 +354,10 @@ jobs:
             target: windows-x64-controlled-v1
             group: multi-component
             samples: multi-component
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+            group: no-diagnostic
+            samples: no-diagnostic
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
@@ -446,13 +454,13 @@ jobs:
           PREPARE_RESULT: ${{ needs.c-analysis-prepare.result }}
           ANALYSIS_RESULT: ${{ needs.c-analysis-samples.result }}
         run: test "$PREPARE_RESULT" = success && test "$ANALYSIS_RESULT" = success
-      - name: Require six complete sample results
+      - name: Require eight complete sample results
         shell: python
         run: |
           import json
           from pathlib import Path
           targets = {'linux-x64-controlled-v1', 'windows-x64-controlled-v1'}
-          samples = {'standard-ecu', 'user-application', 'multi-component'}
+          samples = {'standard-ecu', 'user-application', 'multi-component', 'no-diagnostic'}
           expected = {(target, sample) for target in targets for sample in samples}
           found = set()
           for path in Path('build/c-analysis-summaries').glob('*/*/summary.json'):
@@ -462,7 +470,7 @@ jobs:
                   raise RuntimeError('Duplicate or incomplete analysis result: ' + str(path))
               found.add(pair)
           if found != expected:
-              raise RuntimeError('Expected all six platform/sample results; missing=' + str(expected - found) + '; extra=' + str(found - expected))
+              raise RuntimeError('Expected all eight platform/sample results; missing=' + str(expected - found) + '; extra=' + str(found - expected))
 
   required:
     # The only status check branch rules require; the list of blocking jobs lives here.

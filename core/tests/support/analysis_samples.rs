@@ -51,39 +51,9 @@ pub(crate) fn generate(output: &Path, scratch: &super::workspace::Scratch) {
             .generate(&output.join(case))
             .unwrap();
     }
-    let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-component");
-    let mut sources: Vec<_> = fs::read_dir(directory)
-        .unwrap()
-        .map(|entry| {
-            let entry = entry.unwrap();
-            autosar_config_core::integration::InputSource::new(
-                entry.file_name().to_str().unwrap(),
-                fs::read(entry.path()).unwrap(),
-            )
-            .unwrap()
-        })
-        .collect();
-    sources.sort_by(|left, right| left.logical_path().cmp(right.logical_path()));
-    let plan = autosar_config_core::integration::build_plan_native(
-        &sources,
-        &autosar_config_core::definitions::DefinitionCatalog::builtin().unwrap(),
-    )
-    .unwrap();
-    let applications: Vec<_> = plan
-        .application_slot_descriptors()
-        .unwrap()
-        .iter()
-        .map(|slot| autosar_config_core::ApplicationSource {
-            component_instance: slot
-                .producer_slot
-                .strip_prefix("singlecore-ecu-v1:")
-                .unwrap()
-                .into(),
-            path: Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("tests/fixtures/multi-application")
-                .join(slot.source_paths[0].rsplit('/').next().unwrap()),
-        })
-        .collect();
+    let sources = super::mainline::inputs();
+    let plan = super::mainline::build(&sources).unwrap();
+    let applications = multi_applications(&plan);
     let live = scratch.0.join("multi-author");
     fs::create_dir(&live).unwrap();
     for source in &sources {
@@ -148,5 +118,38 @@ pub(crate) fn generate(output: &Path, scratch: &super::workspace::Scratch) {
         .generate(&regenerated)
         .unwrap();
     assert_eq!(packages::payload(&package), packages::payload(&regenerated));
-    assert_eq!(fs::read_dir(output).unwrap().count(), 3);
+    // Without application DIDs or diagnostic routes the PduR, RTE and SchM
+    // configuration takes its no-diagnostic branches, which no other sample reaches.
+    let plan =
+        super::mainline::build(&super::mainline::sources_without_application_did(false)).unwrap();
+    assert!(plan.description().diagnostic_transport.is_none());
+    autosar_config_core::prepare_ecu_project_with_applications(
+        &plan,
+        target,
+        &multi_applications(&plan),
+    )
+    .unwrap()
+    .generate(&output.join("no-diagnostic"))
+    .unwrap();
+    assert_eq!(fs::read_dir(output).unwrap().count(), 4);
+}
+
+/// The fixture application sources for each component slot of `plan`.
+fn multi_applications(
+    plan: &autosar_config_core::integration::ValidatedIntegrationPlan,
+) -> Vec<autosar_config_core::ApplicationSource> {
+    plan.application_slot_descriptors()
+        .unwrap()
+        .iter()
+        .map(|slot| autosar_config_core::ApplicationSource {
+            component_instance: slot
+                .producer_slot
+                .strip_prefix("singlecore-ecu-v1:")
+                .unwrap()
+                .into(),
+            path: Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/multi-application")
+                .join(slot.source_paths[0].rsplit('/').next().unwrap()),
+        })
+        .collect()
 }
