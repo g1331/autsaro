@@ -48,13 +48,13 @@ The screenshots show the Chinese interface.
 | --- | --- |
 | Projects and ARXML | Multi-file import, cross-file references, built-in templates, project-member management, and safe saving |
 | Configuration editing | Object tree, field and reference inspection, batch changes, and instance-structure editing |
-| CAN signals | 11-bit Classical CAN, DLC 1–8; up to 32 frames and 64 signals per ECU; 1–32-bit unsigned LSB0 little-endian signals |
-| Host diagnostics | Bounded DoCAN, sessions, and DID services; selected targets support configurable writes, routines, DTCs, and host-file persistence |
+| CAN communication | Classical CAN signal and PDU routing through Com, PduR, CanIf, and Can, planned from the ECU extract |
+| Host diagnostics | Bounded DoCAN with session control (0x10), TesterPresent (0x3E), and ReadDataByIdentifier (0x22, at most two DIDs per request) |
 | Source delivery | BSW, OS, RTE/application interfaces, configuration, target dependencies, and offline build tools |
 
-Diagnostic services and capacities differ by generated target. See the [runtime support scope](runtime/README.md). Unsupported configuration is retained as read-only or limits the corresponding operations. Saving and generation have separate checks.
+See the [runtime support scope](runtime/README.md) for diagnostic behavior and limits. Unsupported configuration is retained as read-only or limits the corresponding operations. Saving and generation have separate checks.
 
-Current execution targets are controlled Windows/Linux host environments. Real MCU operation, hard real-time guarantees, functional safety, and official conformance certification are not provided. Native macOS builds and IPC have not been verified; a native virtual ECU is not provided on macOS.
+Current execution targets are controlled Windows/Linux host environments. Real MCU operation, hard real-time guarantees, functional safety, and official conformance certification are not provided. Native macOS builds and IPC have not been verified; a native virtual ECU is not provided on macOS. The workbench verifies a built ECU with fixed host checks but cannot yet run it interactively ([#65](https://github.com/g1331/autsaro/issues/65)).
 
 ## Workflow
 
@@ -139,7 +139,6 @@ The installed application does not require Rust, Node, npm, or uv. Windows requi
 | [Testing guide](docs/development/testing.md) | Local checks, test layers, and CI |
 | [Host runtime](runtime/README.md) | Runtime interfaces, communication, and diagnostic scope |
 | [Controlled OS target](runtime/os/README.md) | Kernel, patches, toolchains, and platform scope |
-| [Standalone handoff project](runtime/reference-README.md) | Offline reference package and independent verification |
 | [Specification resources](docs/official/README.md) | Local archive locations and distribution restrictions |
 | [Architecture](docs/architecture.md) and [ADRs](docs/adr/) | Current architecture, ownership invariants, and key decisions (Chinese) |
 | [Standards baseline](docs/standards.md) | Fixed releases and module obligation index (Chinese) |

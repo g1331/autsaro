@@ -137,14 +137,13 @@ flowchart LR
 
 ### 4.4 当前支持剖面与边界
 
-当前已交付两族生成链路：
+当前只有一条生成链路：
 
 | 链路 | 选择条件 | 说明 |
 | --- | --- | --- |
-| 帧／信号 host（`host-can-v1`） | 模板 `can-empty-v1`、`can-signals-v1` | 轮询 `Os_Advance`、固定 `Rte_Read/WriteSignal`；“主机运行”页只服务此链路 |
 | ECU 主线（`singlecore-ecu-v1`） | 内置规则校验的全部 ECU 工程，含默认模板 `standard-ecu`；一个应用 SWC 是 N＝1 的特例 | 本地 S/R、同步 C/S、同 owner 调度、每组件 live／sealed 源、标准 COM／CanIf／LSduR／PduR／CanTp／Dcm 与有界 ComM／BswM／Det |
 
-旧单组件链路（`epic4-win64-sr-cs-v1`）只在外部 XSD／MOD 校验模式下仍可打开历史输入，随该模式删除（见第 7.3 节）；以它或主线旧名 `singlecore-multi-swc-v1` 记录的工作台工程与交付包在打开时拒绝。
+以已删除的帧／信号 host（`host-can-v1`）、单组件（`epic4-win64-sr-cs-v1`）或主线旧名 `singlecore-multi-swc-v1` 记录的工作台工程与交付包在打开时拒绝（见第 7.2、7.3 节）。
 
 主线剖面的首批支持范围（平坦组合、每类型一个实例、共同周期且 offset=0、`IMMEDIATE` 信号处理、唯一 EcucPartition ID0／CoreId0、11 位 Classical CAN 单通道、诊断路由全选或全不选）与拒绝边界见 [standards.md](standards.md#6-多组件剖面的已核定义务)。未支持的生成语义在生成前拒绝，无关有效内容原样保留。
 
@@ -170,7 +169,7 @@ flowchart LR
 
 封存工程包含生成源码、受信 runtime 资产、固定内核与补丁、应用快照、所有权台账、`target.json` 构建清单、`files.list`／`files.sha256` 和 stdlib-only 离线工具。接收者只需受支持的 CPython、匹配的 GCC／binutils 与 Git，不依赖 checkout、Rust、Node 或 uv；包内工具以 `-I -S` 运行，只从自身 `tools/` 导入。入口 `tools/ecu-tool.py build|verify` 的用法见 [runtime/README.md](../runtime/README.md)。
 
-当前交接格式为 `autosar-workbench-handoff-v2`（内置规则、多应用输入），另有旧 `autosar-host-handoff-v1` 精确重导入路径（依赖使用者提供的 XSD／MOD）。工作台不再导入 `autosar-ecu-handoff-v1`；其余旧格式在主线收敛中删除，见第 7 节。
+当前交接格式为 `autosar-workbench-handoff-v2`（内置规则、多应用输入）。旧 `autosar-host-handoff-v1` 与 `autosar-ecu-handoff-v1` 在导入时拒绝，其 ARXML 源文件可导入新工程。
 
 ## 7. 主线收敛与新基线（目标，实施中）
 
@@ -184,11 +183,11 @@ flowchart LR
 
 旧 profile（`host-can-v1`、单组件 profile）与旧格式工程、交付包按真实结构身份识别后**明确拒绝**，不静默误解析、不迁移、不改写摘要（[ADR 0011](adr/0011-no-backward-compatibility-before-stable.md)）。用户的 R24-11 ARXML 源文件仍是合法输入，可导入新工程。契约变化仍须 ABI／第三方身份审阅并写入 CHANGELOG；新增标准必填依赖时官方定义保持严格。稳定版本后的兼容策略另定。
 
-### 7.3 删除的平行实现
+### 7.3 删除的平行实现（已完成，#33）
 
 - 外部 XSD／MOD 校验模式：设置项、`schema_zip` 状态与全部 `*_legacy` 链路删除；`schema.rs` 的 XSD 校验只作为测试与 acceptance 中检验内置规则的官方对照（[ADR 0012](adr/0012-remove-external-xsd-mod-mode.md)）。
 - 帧／信号 host 链路：两个模板、“主机运行”页、`core/src/host/`、`generator/render.rs`、`arxml/host_profile.rs`、`package_host_reference` 删除（[ADR 0013](adr/0013-remove-frame-signal-host-chain.md)）。
-- **已知差距：**“在工作台内运行生成的 ECU”保留为产品目标，之后基于稳定的 host-batch 契约在主线上重做；在此之前用 `ecu-tool verify` 与原生测试验证。
+- **已知差距：**“在工作台内运行生成的 ECU”保留为产品目标，之后基于稳定的 host-batch 契约在主线上重做（#65）；在此之前用 `ecu-tool verify`、工作台的固定主机验证与原生测试验证。
 
 删除前，旧链路中有价值的独立预期（协议、OS 时序、输入预期）先迁到主线并通过；只验证旧链路内部行为的测试才删除。
 
@@ -274,8 +273,8 @@ tools/python/src/  tests/python/  tests/desktop/
 | [0009](adr/0009-standard-private-and-host-interface-separation.md) | 标准公共面、模块私有状态与主机适配分离 | 已接受 |
 | [0010](adr/0010-single-generation-mainline.md) | 单一生成主线 | 已接受，实施中 |
 | [0011](adr/0011-no-backward-compatibility-before-stable.md) | 稳定版本前不保留向后兼容 | 已接受，实施中 |
-| [0012](adr/0012-remove-external-xsd-mod-mode.md) | 删除外部 XSD／MOD 校验模式，XSD 只作测试对照 | 已接受，实施中 |
-| [0013](adr/0013-remove-frame-signal-host-chain.md) | 删除帧／信号 host 链路与“主机运行”页 | 已接受，实施中 |
+| [0012](adr/0012-remove-external-xsd-mod-mode.md) | 删除外部 XSD／MOD 校验模式，XSD 只作测试对照 | 已接受，已实施 |
+| [0013](adr/0013-remove-frame-signal-host-chain.md) | 删除帧／信号 host 链路与“主机运行”页 | 已接受，已实施 |
 | [0014](adr/0014-emitter-rules.md) | Emitter 规则 | 已接受，实施中 |
 | [0015](adr/0015-repository-code-organization.md) | 仓库代码组织 | 已接受，实施中 |
 | [0016](adr/0016-generated-project-layout-by-ownership.md) | 生成工程按所有权布局并提供 CMake | 已接受，实施中 |

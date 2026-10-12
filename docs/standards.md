@@ -26,7 +26,7 @@ R24-11 中标记为 DRAFT 的条款（例如 LSduR 全文，`SWS_Com_91019／910
 
 ## 3. 预期从标准独立定义
 
-1. 测试预期从固定版次的官方原文与独立向量定义；不从现有源码、ABI 清单（`runtime/contracts/bsw-v1.json` 只记录历史主机 BSW 签名与来源，不是标准认证）或生成器输出自动生成唯一预期。
+1. 测试预期从固定版次的官方原文与独立向量定义；不从现有源码、ABI 或资产清单或生成器输出自动生成唯一预期。
 2. 对标准的核对与对实现内部一致性的检查分开记录；后者不能证明前者。
 3. 公开接口用独立 C consumer 编译、链接并调用固定函数指针，覆盖成功、拒绝、关键状态变化与失败后输出保护；不以函数桩、源码文本断言或纯编译代替行为。
 4. 对外使用标准名称的接口须满足标准签名与语义；改名、typedef 或空壳接口不算对齐。
@@ -142,8 +142,7 @@ ECUC metadata 的数值范围通过不等于配置语义合法；非等值 ID（
 - **逐条全文审计未完成。** 上表是已定位条款，不是完整适用矩阵；各模块全部必需 API、状态、错误、回调、BSWMD、配置语义与可选条件须在模块整改时闭合。
 - **`SWS_BSW_00036` 跨模块头文件版本检查**：已读 CanIf 头与多组件模块无对应版本宏或预处理检查，是明确的审计候选。
 - **Can published information**：项目尚无已分配的 AUTOSAR vendor ID，也无经核对的 R24-11 数字发布宏映射；`CAN_VERSION_INFO_API` 默认关闭，启用即拒绝。取得正式身份后才能实现 GetVersionInfo 与外部版本交叉检查（见 [runtime/README.md](../runtime/README.md)）。
-- **旧链路接口**：帧／信号 host 与单组件链路的 CanIf、Com、PduR、CanTp 公开接口不是标准签名（例如 legacy `CanIf.h` 仍用 `EcuConfig`、`Com_RxIndication(size_t, data[8], now_ms)`）；这些链路按 [ADR 0013](adr/0013-remove-frame-signal-host-chain.md) 删除，不作整改对象，其绿色回归不能用作标准证据。
-- **Dem／NvM／Security**：标准公共面与主机存储链、Security 的项目责任尚未逐项核定；迁入主线时须核定。
+- **Dem／NvM／Security**：不在主线程序中，已随旧链路删除（[ADR 0013](adr/0013-remove-frame-signal-host-chain.md)）；以后加入主线时须先核定标准公共面、存储链与 Security 的项目责任。
 - **MemMap 与段放置**：主机 PE／ELF 段映射已有实际证据，MCU 段与权限只由目标工具链与布局关闭。
 - **OS**：完整 SC1 条款逐项证据、ARTI 适用性与 OSEK 引用版本（ISO 17356-3）全文未核对；Windows 实际交接运行未在每次变更后执行。
 - **MISRA**：221 项 assessment 当前均为 `not_assessed`，生成工程源码分析 `passed=false`；固定 addon 的已知限制（R21.8 仍报告 `getenv`，终止函数清单缺 `_Exit`／`quick_exit`，errno／mmap 模型差异）只作核查线索。

@@ -46,13 +46,13 @@ Autsaro 支持从内置模板创建 ECU 工程，或导入多份 ARXML；在同�
 | --- | --- |
 | 工程与 ARXML | 多文件导入、跨文件引用、内置模板、项目成员管理与安全保存 |
 | 配置编辑 | 对象树、字段与引用检查、批量修改、实例结构编辑 |
-| CAN 信号 | 11 位 Classical CAN，DLC 1 至 8；每 ECU 最多 32 帧、64 信号；1 至 32 位无符号 LSB0 小端信号 |
-| 主机诊断 | 有限 DoCAN、会话与 DID 服务；部分目标可配置写入、例程、DTC 与主机文件持久化 |
+| CAN 通信 | 依据 ECU extract 规划的 Classical CAN 信号与 PDU 路由，经 Com、PduR、CanIf 和 Can |
+| 主机诊断 | 有限 DoCAN：会话控制（0x10）、TesterPresent（0x3E）和 ReadDataByIdentifier（0x22，每次请求最多两个 DID） |
 | 源码交付 | BSW、OS、RTE／应用接口、配置、目标依赖与离线构建工具 |
 
-各生成目标支持的诊断服务和容量不同，详见[运行时支持范围](runtime/README.md)。未支持的配置会保留为只读，或限制相关操作。保存和生成各有独立的检查条件。
+诊断行为与限制详见[运行时支持范围](runtime/README.md)。未支持的配置会保留为只读，或限制相关操作。保存和生成各有独立的检查条件。
 
-当前运行目标为受控 Windows／Linux 主机环境，不提供真实 MCU、硬实时、功能安全或官方符合性认证。macOS 原生构建与 IPC 尚未验证，不提供本机虚拟 ECU。
+当前运行目标为受控 Windows／Linux 主机环境，不提供真实 MCU、硬实时、功能安全或官方符合性认证。macOS 原生构建与 IPC 尚未验证，不提供本机虚拟 ECU。工作台可对已构建的 ECU 执行固定的主机验证，但暂不能交互式运行（[#65](https://github.com/g1331/autsaro/issues/65)）。
 
 ## 使用顺序
 
@@ -135,7 +135,6 @@ npm run tauri --prefix ui -- build
 | [测试指南](docs/development/testing.md) | 本地检查、测试分层及 CI |
 | [主机运行时](runtime/README.md) | 运行接口、通信与诊断范围 |
 | [受控 OS 目标](runtime/os/README.md) | 内核、补丁、工具链与平台范围 |
-| [独立交接工程](runtime/reference-README.md) | 离线参考包与独立复验 |
 | [规范资料入口](docs/official/README.md) | 本地规范档案的位置与分发限制 |
 | [架构](docs/architecture.md)与 [ADR](docs/adr/) | 当前架构、所有权不变量与重要决定 |
 | [标准基线](docs/standards.md) | 固定版次与模块义务索引 |
