@@ -15,18 +15,7 @@ import type {
   WorkbenchCapabilities,
   WorkspaceView,
 } from '../types';
-import type {
-  DiagnosticFields,
-  Draft,
-  DtcFields,
-  FrameFields,
-  Notice,
-  Selection,
-  SignalFields,
-  Stage,
-  StageRecord,
-} from './forms';
-import { diagnosticFields, dtcFields, newFrame, newSignal } from './forms';
+import type { Notice, Stage, StageRecord } from './forms';
 import type {
   Appearance,
   ApplicationInitializationPreview,
@@ -44,42 +33,27 @@ export type WorkbenchState = {
   workspace: WorkspaceView | null;
   integrationUnapplied: boolean;
   integrationProcessing: boolean;
-  selection: Selection | null;
-  draft: Draft;
-  diagnosticDraft: DiagnosticFields;
-  diagnosticSignal: string;
-  diagnosticError: Text;
-  dtcDraft: DtcFields;
-  dtcError: Text;
   source: 'empty' | 'import' | 'save-as';
   projectName: string;
   projectDirectory: string;
   importPaths: string[];
   importPathText: string;
-  creating: 'frame' | 'signal' | null;
-  frameInput: FrameFields;
-  signalInput: SignalFields;
   stages: Record<Stage, StageRecord>;
   generated: GenerateResult | null;
   generationPreview: GenerationPreview | null;
   generationPreviewPath: string;
   generationKind: 'project' | 'handoff';
-  handoffGenerated: boolean;
-  legacyTarget: BuildTarget;
+  buildTarget: BuildTarget;
   buildDirectory: string;
   built: BuildResult | null;
   virtualResult: VirtualResult | null;
-  virtualKind: 'signal' | 'diagnostic' | null;
   operationIssues: Issue[];
   notice: Notice;
   busy: Text | null;
-  peerDirectory: string;
-  peerBinaryPath: string;
   savePreview: SavePreview | null;
   previewPath: string;
   capabilities: WorkbenchCapabilities | null;
   settingsOpen: boolean;
-  resourceDraft: { xsdArchive: string; modArchive: string };
   toolDraft: ExecutionTools;
   settingsNotice: Text;
   operationGeneration: number;
@@ -94,7 +68,6 @@ export type WorkbenchState = {
   ecuImportDirectory: string;
   handoffImportOpen: boolean;
   handoffImportDestination: string;
-  handoffImportMode: 'v2' | 'legacy';
   projection: ProjectProjection | null;
   objectSelection: string[];
   activeObjectId: string | null;
@@ -120,7 +93,6 @@ export type WorkbenchState = {
   languageSaving: boolean;
   preflight: PreflightReport | null;
   operationLog: { command: string; outcome: 'done' | 'failed'; detail: Text }[];
-  templateId: 'can-empty-v1' | 'can-signals-v1' | 'standard-ecu';
   projectPreview: ProjectCreationPreview | null;
   projectPreviewKind: 'create' | 'save-as';
   applicationPreview: ApplicationInitializationPreview | null;
@@ -143,42 +115,27 @@ export function initialState(): WorkbenchState {
     workspace: null,
     integrationUnapplied: false,
     integrationProcessing: false,
-    selection: null,
-    draft: null,
-    diagnosticDraft: diagnosticFields(null),
-    diagnosticSignal: '',
-    diagnosticError: '',
-    dtcDraft: dtcFields(null),
-    dtcError: '',
     source: 'empty',
     projectName: '',
     projectDirectory: '',
     importPaths: [],
     importPathText: '',
-    creating: null,
-    frameInput: newFrame,
-    signalInput: newSignal,
     stages: stageDefaults,
     generated: null,
     generationPreview: null,
     generationPreviewPath: '',
     generationKind: 'project',
-    handoffGenerated: false,
-    legacyTarget: 'windows-x64-controlled-v1',
+    buildTarget: 'windows-x64-controlled-v1',
     buildDirectory: '',
     built: null,
     virtualResult: null,
-    virtualKind: null,
     operationIssues: [],
     notice: null,
     busy: null,
-    peerDirectory: '',
-    peerBinaryPath: '',
     savePreview: null,
     previewPath: '',
     capabilities: null,
     settingsOpen: false,
-    resourceDraft: { xsdArchive: '', modArchive: '' },
     toolDraft: { compiler: '', objdump: '', git: '', python: '' },
     settingsNotice: '',
     operationGeneration: 0,
@@ -193,7 +150,6 @@ export function initialState(): WorkbenchState {
     ecuImportDirectory: '',
     handoffImportOpen: false,
     handoffImportDestination: '',
-    handoffImportMode: 'v2',
     projection: null,
     objectSelection: [],
     activeObjectId: null,
@@ -219,7 +175,6 @@ export function initialState(): WorkbenchState {
     languageSaving: false,
     preflight: null,
     operationLog: [],
-    templateId: 'can-empty-v1',
     projectPreview: null,
     projectPreviewKind: 'create',
     applicationPreview: null,

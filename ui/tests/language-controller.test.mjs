@@ -21,9 +21,8 @@ const capabilities = {
   targets: ['windows-x64-controlled-v1'],
   nativeExecution: false,
   hasWorkspace: false,
-  xsdArchive: null,
-  modArchive: null,
-  resourceError: null,
+  settingsError: null,
+  settingsNotice: null,
   executionTools: null,
   configuredExecutionTools: null,
   toolError: null,
@@ -49,7 +48,7 @@ async function controller(language = 'zh-CN', rejectSave = false) {
   mocks.invoke.mockImplementation(async (command) => {
     if (command === 'workbench_capabilities') return { ...capabilities, language };
     if (command === 'configure_language') {
-      if (rejectSave) throw message('controller.error.name');
+      if (rejectSave) throw message('controller.error.capabilitiesNotReady');
       return {
         value: null,
         capabilities: { ...capabilities, language: 'en' },
@@ -82,22 +81,10 @@ test('desktop save uses configure_language and preserves drafts, previews and ow
   const { result } = await controller();
   act(() => {
     result.current.setProjectName('Raw 用户名');
-    result.current.setFrameInput({ ...result.current.frameInput, name: 'Draft', id: '321' });
     result.current.setGenerationPreview({
       revision: 'owned',
       files: [],
       outputDirectory: 'C:\\output',
-    });
-    result.current.setVirtualResult({
-      passed: true,
-      log: [
-        message('controller.integration.validated'),
-        ['外部证据', [message('controller.error.staleDelivery')]],
-      ],
-      events: [
-        message('controller.integration.validated'),
-        ['machine-event', message('controller.error.staleDelivery')],
-      ],
     });
     result.current.setLanguageDraft('en');
   });
@@ -110,9 +97,7 @@ test('desktop save uses configure_language and preserves drafts, previews and ow
     language: 'en',
   });
   expect(result.current.savedLanguage).toBe('en');
-  expect(result.current.frameInput).toBe(before.frameInput);
   expect(result.current.generationPreview).toBe(before.generationPreview);
-  expect(result.current.virtualResult).toBe(before.virtualResult);
   expect(result.current.stages).toBe(before.stages);
   expect(result.current.operationGeneration).toBe(before.operationGeneration);
   expect(result.current.projectName).toBe('Raw 用户名');
@@ -138,7 +123,7 @@ test('rejected desktop language persistence retains saved preference and preview
   expect(result.current.languageDraft).toBe('en');
   expect(result.current.generationPreview).toBe(before.generationPreview);
   expect(result.current.operationGeneration).toBe(before.operationGeneration);
-  expect(result.current.settingsNotice).toEqual(message('controller.error.name'));
+  expect(result.current.settingsNotice).toEqual(message('controller.error.capabilitiesNotReady'));
   act(() => result.current.setLanguageDraft(result.current.savedLanguage));
   expect(result.current.languageDraft).toBe('zh-CN');
 });
@@ -166,11 +151,8 @@ test.each(['success', 'failure'])(
     await waitFor(() => expect(current.capabilities).not.toBeNull());
     act(() => {
       current.setSettingsOpen(true);
-      current.setFrameInput({ ...current.frameInput, name: 'RetainedDraft', id: '321' });
-      current.setVirtualResult({ passed: true, log: 'external tool evidence', events: [] });
+      current.setProjectName('RetainedDraft');
     });
-    const frameDraft = current.frameInput;
-    const ownedResult = current.virtualResult;
     const stages = current.stages;
     const generation = current.operationGeneration;
     fireEvent.change(view.getByRole('combobox', { name: translate('shell.settings.language') }), {
@@ -199,18 +181,19 @@ test.each(['success', 'failure'])(
           capabilities: { ...capabilities, language: 'en' },
           inputFingerprint: capabilities.fingerprint,
         });
-      else reject(message('controller.error.name'));
+      else reject(message('controller.error.capabilitiesNotReady'));
     });
     expect(current.languageSaving).toBe(false);
     expect(current.savedLanguage).toBe(outcome === 'success' ? 'en' : 'zh-CN');
     expect(current.languageDraft).toBe('en');
-    expect(current.frameInput).toBe(frameDraft);
-    expect(current.virtualResult).toBe(ownedResult);
+    expect(current.projectName).toBe('RetainedDraft');
     expect(current.stages).toBe(stages);
     expect(current.operationGeneration).toBe(generation);
     expect(view.getByRole('status').textContent).not.toBe('');
     if (outcome === 'failure')
-      expect(view.getByRole('status').textContent).toBe(translate('controller.error.name'));
+      expect(view.getByRole('status').textContent).toBe(
+        translate('controller.error.capabilitiesNotReady'),
+      );
     // Disabled focused controls may leave native focus on the document body.
     fireEvent.keyDown(document.body, { key: 'Escape' });
     expect(current.settingsOpen).toBe(false);

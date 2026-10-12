@@ -6,13 +6,13 @@ mod settings;
 mod verification;
 mod workbench;
 
+use autosar_config_core::WorkspaceView;
 use autosar_config_core::integration::{DiagnosticCategory, PlanDiagnostic};
-use autosar_config_core::{Workspace, WorkspaceView};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{Manager, State};
-use workbench::{AppState, OperationKind, Reply, Session};
+use workbench::{AppState, Session};
 
 fn integration_failure(
     message: impl Into<autosar_config_core::LocalizedText>,
@@ -45,21 +45,6 @@ async fn integration_background<T: Send + 'static>(
     tauri::async_runtime::spawn_blocking(move || action(state))
         .await
         .map_err(|error| integration_failure(error.to_string()))?
-}
-
-fn edit<T>(
-    state: &Arc<AppState>,
-    fingerprint: &str,
-    action: impl FnOnce(&mut Workspace) -> Result<T, autosar_config_core::LocalizedText>,
-) -> Result<Reply<T>, autosar_config_core::LocalizedText> {
-    let operation = state.begin(
-        fingerprint,
-        autosar_config_core::product_message!("backend.operation.edit"),
-        OperationKind::Edit,
-    )?;
-    let mut workspace = operation.snapshot.workspace()?.clone();
-    let value = action(&mut workspace)?;
-    operation.publish(workspace, true, value)
 }
 
 #[derive(Serialize)]
@@ -135,7 +120,6 @@ pub fn run() {
             configuration::verification_metrics,
             verification::verification_owned_failure,
             settings::workbench_capabilities,
-            settings::configure_validation_resources,
             settings::configure_execution_tools,
             settings::select_build_target,
             settings::cancel_operation,
@@ -153,24 +137,9 @@ pub fn run() {
             delivery::build_ecu,
             delivery::verify_ecu,
             delivery::preflight_ecu,
-            editing::add_frame,
-            editing::add_signal,
-            editing::update_frame,
-            editing::update_signal,
-            editing::configure_diagnostic,
-            editing::clear_diagnostic,
-            editing::configure_dtc,
-            editing::clear_dtc,
             project::preview_save_project,
             project::save_project,
-            editing::validate_project,
-            delivery::preview_generate_project,
-            delivery::generate_project,
-            delivery::preview_handoff_project,
-            delivery::generate_handoff_project,
-            delivery::build_project,
-            delivery::run_virtual,
-            delivery::run_diagnostic
+            editing::validate_project
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|error| panic!("{error}"));

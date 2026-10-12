@@ -36,9 +36,8 @@ export interface WorkbenchCapabilities {
   targets: BuildTarget[];
   nativeExecution: boolean;
   hasWorkspace: boolean;
-  xsdArchive: string | null;
-  modArchive: string | null;
-  resourceError: LocalizedText | null;
+  settingsError: LocalizedText | null;
+  settingsNotice: LocalizedText | null;
   executionTools: ExecutionTools | null;
   configuredExecutionTools: ExecutionTools | null;
   toolError: LocalizedText | null;
@@ -73,54 +72,10 @@ export type Issue = {
   file?: string;
 };
 
-export type Frame = {
-  path: string;
-  name: string;
-  id: number;
-  dlc: number;
-  direction: 'tx' | 'rx';
-  periodMs: number | null;
-  timeoutMs: number | null;
-};
-
-export type Signal = {
-  path: string;
-  name: string;
-  framePath: string;
-  startBit: number;
-  length: number;
-  initialValue: number;
-};
-
-export type DtcView = {
-  path: string;
-  code: number;
-  monitorFramePath: string;
-};
-
-export type DiagnosticView = {
-  path: string;
-  requestId: number;
-  responseId: number;
-  s3Ms: number;
-  nAsMs: number;
-  nBsMs: number;
-  nCrMs: number;
-  did: number;
-  signalPaths: string[];
-  writeEnabled: boolean;
-  resetRoutineId: number | null;
-  securityEnabled: boolean;
-  dtc: DtcView | null;
-};
-
 export type WorkspaceView = {
   integrationCandidate?: boolean;
   name: string;
   files: { path: string; readonly: boolean; retainedCount: number }[];
-  frames: Frame[];
-  signals: Signal[];
-  diagnostic: DiagnosticView | null;
   issues: Issue[];
   dirty: boolean;
 };

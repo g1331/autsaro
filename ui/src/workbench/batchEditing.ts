@@ -1,13 +1,6 @@
 import { composedMessage, message, ProductError } from '../i18n';
 import type { IntegrationInspection, WorkspaceView } from '../types';
-import {
-  diagnosticFields,
-  draftFor,
-  dtcFields,
-  errorText,
-  findSelection,
-  hasUnapplied,
-} from './forms';
+import { errorText } from './forms';
 import type { ChangeOutcome, ChangePreview, ChangeSet, ConfigurationChange } from './projectTypes';
 import type { WorkbenchSession } from './session';
 
@@ -143,25 +136,9 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
         return true;
       }
       if (generation !== epoch.current) return false;
-      const current = stateRef.current;
-      const selection = findSelection(view, current.selection);
       patchState({
         projection: result.projection,
         workspace: view,
-        selection,
-        draft: hasUnapplied(before.workspace, current.draft)
-          ? current.draft
-          : draftFor(view, selection),
-        diagnosticDraft:
-          JSON.stringify(current.diagnosticDraft) ===
-          JSON.stringify(diagnosticFields(before.workspace?.diagnostic ?? null))
-            ? diagnosticFields(view.diagnostic)
-            : current.diagnosticDraft,
-        dtcDraft:
-          JSON.stringify(current.dtcDraft) ===
-          JSON.stringify(dtcFields(before.workspace?.diagnostic?.dtc ?? null))
-            ? dtcFields(view.diagnostic?.dtc ?? null)
-            : current.dtcDraft,
         changes: [],
         changePreview: null,
         preparedChangeSet: null,

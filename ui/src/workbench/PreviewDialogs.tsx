@@ -44,7 +44,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
                 ? 'workflow.common.yes'
                 : 'workflow.common.no',
             ),
-            unapplied: t(c.unapplied || c.creating ? 'workflow.common.yes' : 'workflow.common.no'),
+            unapplied: t(c.unapplied ? 'workflow.common.yes' : 'workflow.common.no'),
           })}
         </p>
       </Dialog>
@@ -442,7 +442,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
             <span>
               {t('workflow.generation.fileCount', {
                 count: preview.files.length,
-                target: c.legacyTarget,
+                target: c.buildTarget,
               })}
             </span>
             <button type="button" disabled={Boolean(c.busy)} onClick={close}>
@@ -452,9 +452,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
               type="button"
               className="primary-button"
               disabled={Boolean(c.busy)}
-              onClick={() =>
-                c.workspace?.integrationCandidate ? void c.generateEcu() : c.confirmGenerate()
-              }
+              onClick={() => void c.generateEcu()}
             >
               {c.generationKind === 'handoff'
                 ? t('workflow.generation.confirmExport')
@@ -546,7 +544,6 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
     const close = () => {
       if (!c.busy) c.setHandoffImportOpen(false);
     };
-    const v2 = c.handoffImportMode === 'v2';
     return (
       <Dialog
         title={t('workflow.handoff.title')}
@@ -559,9 +556,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
             <button
               type="button"
               className="primary-button"
-              disabled={
-                Boolean(c.busy) || !c.ecuImportDirectory || (v2 && !c.handoffImportDestination)
-              }
+              disabled={Boolean(c.busy) || !c.ecuImportDirectory || !c.handoffImportDestination}
               onClick={() => void c.confirmHandoffImport()}
             >
               {t('workflow.handoff.confirm')}
@@ -589,36 +584,22 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
             </div>
           </label>
           <label>
-            {t('workflow.handoff.sourceMode')}
-            <select
-              aria-label={t('workflow.handoff.sourceModeLabel')}
-              value={c.handoffImportMode}
-              disabled={Boolean(c.busy)}
-              onChange={(event) => c.setHandoffImportMode(event.target.value as 'v2' | 'legacy')}
-            >
-              <option value="v2">{t('workflow.handoff.v2')}</option>
-              <option value="legacy">{t('workflow.handoff.legacy')}</option>
-            </select>
+            {t('workflow.handoff.destination')}
+            <div className="path-picker">
+              <input
+                aria-label={t('workflow.handoff.destination')}
+                value={c.handoffImportDestination}
+                readOnly
+              />
+              <button
+                type="button"
+                disabled={Boolean(c.busy)}
+                onClick={() => void c.chooseDirectory(c.setHandoffImportDestination)}
+              >
+                {t('workflow.handoff.chooseDestination')}
+              </button>
+            </div>
           </label>
-          {v2 ? (
-            <label>
-              {t('workflow.handoff.destination')}
-              <div className="path-picker">
-                <input
-                  aria-label={t('workflow.handoff.destination')}
-                  value={c.handoffImportDestination}
-                  readOnly
-                />
-                <button
-                  type="button"
-                  disabled={Boolean(c.busy)}
-                  onClick={() => void c.chooseDirectory(c.setHandoffImportDestination)}
-                >
-                  {t('workflow.handoff.chooseDestination')}
-                </button>
-              </div>
-            </label>
-          ) : null}
         </div>
         <p className="field-help">{t('workflow.handoff.sourceHelp')}</p>
         {c.notice?.tone === 'error' ? (

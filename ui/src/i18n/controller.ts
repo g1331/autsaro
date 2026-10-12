@@ -2,38 +2,12 @@ export const controllerResources: Record<'zh-CN' | 'en', Record<string, string>>
   'zh-CN': {
     'controller.app.title': 'Classic CAN 配置工作台',
     'controller.error.windowTitle': '更新窗口标题失败：{{error}}',
-    'controller.field.dtcCode': 'DTC 代码',
-    'controller.field.requestId': '请求 CAN ID',
-    'controller.field.responseId': '响应 CAN ID',
-    'controller.field.rid': '复位例程 RID',
-    'controller.field.period': '发送周期 (ms)',
-    'controller.field.timeout': '接收超时 (ms)',
-    'controller.field.canId': '标准 CAN ID',
-    'controller.field.signalLength': '信号长度',
-    'controller.field.startBit': '起始位',
-    'controller.field.initialValue': '初始值',
     'controller.field.applicationPeriod': '应用周期',
-    'controller.error.dtcRange': 'DTC 代码须为 0x000100–0xFFFFFE 的 24-bit 整数',
-    'controller.error.monitorFrame':
-      '监测帧须为当前项目中含至少一个信号、接收超时大于 0 的 Rx CAN 帧',
-    'controller.error.numberFormat': '{{label}}须为十进制或 0x 开头的十六进制整数',
     'controller.error.integerRange': '{{label}}须为 {{min}}–{{max}} 的整数',
-    'controller.error.canIdConflict': '请求与响应 CAN ID 须不同，且不可与现有 Com 帧 CAN ID 冲突',
-    'controller.error.reservedDid': 'DID 0xF186 保留给当前会话标识，请选择其他 DID',
-    'controller.error.signalCount': '按顺序选择 1–8 个不同的 32-bit Tx 信号',
-    'controller.error.txSignals': '所选信号须为当前项目中的 32-bit Tx 信号',
-    'controller.error.routineWrite': '启用 0x31/0x01 复位例程前，须先允许 0x2E 写入此 DID',
-    'controller.error.securityRequiresWrite': '启用 0x27 前，须先启用 DID 写入或配置故障记忆',
-    'controller.error.name': '名称须以英文字母开头，仅包含字母、数字和下划线',
-    'controller.error.signalDlc': '信号位范围超出所属帧 DLC',
     'controller.error.diagnostic': '{{code}}: {{detail}}\n{{remedy}}',
     'controller.error.capabilitiesNotReady': '工作台能力尚未就绪',
     'controller.error.staleDelivery': 'STALE_DELIVERY: 当前操作结果已过期',
     'controller.error.desktopRequired': '需要桌面运行环境',
-    'controller.error.creatorDraft': '创建表单尚未应用，请先应用或还原',
-    'controller.error.inspectorDraft': '检查器中有未应用的更改，请先应用或还原',
-    'controller.error.diagnosticDraft': 'DoCAN 配置有未应用的更改，请先应用或还原',
-    'controller.error.dtcDraft': '故障记忆有未应用的更改，请先应用或还原',
     'controller.error.batchDraft': '批次草稿尚未应用，请预览应用或还原',
     'controller.operation.cancelledResult': '操作已取消；旧结果未提交',
     'controller.operation.cancelled': '操作已取消，受管进程已关闭；旧结果未提交。',
@@ -64,8 +38,6 @@ export const controllerResources: Record<'zh-CN' | 'en', Record<string, string>>
     'controller.verification.result':
       '{{scope}} · {{status}} · 退出码 {{exitCode}} · 后代进程已回收：{{reclaimed}}',
     'controller.verification.noExitCode': '无退出码',
-    'controller.settings.resourcesChanged': '规范档案已变化，须重新校验',
-    'controller.settings.resourcesSaved': '规范档案已核对固定摘要并保存；须重新校验。',
     'controller.settings.saveTools': '保存执行工具',
     'controller.settings.toolsSaved': '执行工具已保存；原生预检尚未执行。',
     'controller.settings.saveAppearance': '保存外观',
@@ -75,47 +47,12 @@ export const controllerResources: Record<'zh-CN' | 'en', Record<string, string>>
   en: {
     'controller.app.title': 'Classic CAN Configuration Workbench',
     'controller.error.windowTitle': 'Could not update the window title: {{error}}',
-    'controller.field.dtcCode': 'DTC code',
-    'controller.field.requestId': 'Request CAN ID',
-    'controller.field.responseId': 'Response CAN ID',
-    'controller.field.rid': 'Reset routine RID',
-    'controller.field.period': 'Transmit period (ms)',
-    'controller.field.timeout': 'Receive timeout (ms)',
-    'controller.field.canId': 'Standard CAN ID',
-    'controller.field.signalLength': 'Signal length',
-    'controller.field.startBit': 'Start bit',
-    'controller.field.initialValue': 'Initial value',
     'controller.field.applicationPeriod': 'Application period',
-    'controller.error.dtcRange': 'DTC code must be a 24-bit integer from 0x000100 to 0xFFFFFE',
-    'controller.error.monitorFrame':
-      'The monitored frame must be an Rx CAN frame in this project with at least one signal and a receive timeout greater than 0',
-    'controller.error.numberFormat':
-      '{{label}} must be a decimal integer or a hexadecimal integer beginning with 0x',
     'controller.error.integerRange': '{{label}} must be an integer from {{min}} to {{max}}',
-    'controller.error.canIdConflict':
-      'Request and response CAN IDs must differ and must not conflict with existing Com frame CAN IDs',
-    'controller.error.reservedDid':
-      'DID 0xF186 is reserved for the current session identifier; choose another DID',
-    'controller.error.signalCount': 'Select 1–8 distinct 32-bit Tx signals in order',
-    'controller.error.txSignals': 'Selected signals must be 32-bit Tx signals in this project',
-    'controller.error.routineWrite':
-      'Allow 0x2E writes to this DID before enabling the 0x31/0x01 reset routine',
-    'controller.error.securityRequiresWrite':
-      'Enable DID writes or configure fault memory before enabling 0x27',
-    'controller.error.name':
-      'Names must start with an English letter and contain only letters, digits, and underscores',
-    'controller.error.signalDlc': 'The signal bit range exceeds its frame DLC',
     'controller.error.diagnostic': '{{code}}: {{detail}}\n{{remedy}}',
     'controller.error.capabilitiesNotReady': 'Workbench capabilities are not ready',
     'controller.error.staleDelivery': 'STALE_DELIVERY: This operation result is stale',
     'controller.error.desktopRequired': 'The desktop application is required',
-    'controller.error.creatorDraft':
-      'The creation form has unapplied changes; apply or restore them first',
-    'controller.error.inspectorDraft':
-      'The inspector has unapplied changes; apply or restore them first',
-    'controller.error.diagnosticDraft':
-      'The DoCAN configuration has unapplied changes; apply or restore them first',
-    'controller.error.dtcDraft': 'Fault memory has unapplied changes; apply or restore them first',
     'controller.error.batchDraft':
       'The batch draft has unapplied changes; preview and apply or restore them first',
     'controller.operation.cancelledResult': 'Operation cancelled; the old result was not committed',
@@ -150,9 +87,6 @@ export const controllerResources: Record<'zh-CN' | 'en', Record<string, string>>
     'controller.verification.result':
       '{{scope}} · {{status}} · exit code {{exitCode}} · descendants reclaimed: {{reclaimed}}',
     'controller.verification.noExitCode': 'no exit code',
-    'controller.settings.resourcesChanged': 'Specification archives changed; validate again',
-    'controller.settings.resourcesSaved':
-      'Specification archives verified against fixed digests and saved; validate again.',
     'controller.settings.saveTools': 'Save execution tools',
     'controller.settings.toolsSaved': 'Execution tools saved; native preflight has not run.',
     'controller.settings.saveAppearance': 'Save appearance',

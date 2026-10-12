@@ -11,9 +11,8 @@ import type {
   VirtualResult,
   WorkspaceView,
 } from '../types';
-import type { Selection, Stage, StageState } from './forms';
+import type { Stage, StageState } from './forms';
 import type { WorkbenchOperation } from './operation';
-import type { DocumentTab } from './projectTypes';
 import type { WorkbenchSession } from './session';
 import { stageDefaults } from './useDelivery';
 
@@ -23,13 +22,10 @@ interface Dependencies {
     job: () => Promise<T>,
     onSuccess: (result: T) => void,
     stage?: Stage,
-    allowed?: 'frame' | 'diagnostic' | 'dtc',
   ) => Promise<void>;
-  acceptView: (view: WorkspaceView, requested?: Selection | null) => void;
+  acceptView: (view: WorkspaceView) => void;
   markStage: (key: Stage, state: StageState, detail: Text) => void;
   continueReplacement: (saved: WorkspaceView, error: Text | null) => Promise<void>;
-  chooseDirectory: (onChoose: (path: string) => void) => Promise<void>;
-  openDocument: (tab: DocumentTab) => void;
   unapplied: boolean;
   acceptIntegration: (report: IntegrationInspection) => void;
   confirmAction: (message: Text) => Promise<boolean>;
@@ -41,8 +37,6 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
     acceptView,
     markStage,
     continueReplacement,
-    chooseDirectory,
-    openDocument,
     unapplied,
     acceptIntegration,
     confirmAction,
@@ -57,8 +51,6 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
     generated,
     buildDirectory,
     built,
-    peerDirectory,
-    peerBinaryPath,
   } = session.state;
   const setSavePreview = session.field('savePreview');
   const setPreviewPath = session.field('previewPath');
@@ -68,11 +60,8 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
   const setBuilt = session.field('built');
   const setVirtualResult = session.field('virtualResult');
   const setOperationIssues = session.field('operationIssues');
-  const setGenerationKind = session.field('generationKind');
   const setGenerationPreview = session.field('generationPreview');
   const setGenerationPreviewPath = session.field('generationPreviewPath');
-  const setHandoffGenerated = session.field('handoffGenerated');
-  const setVirtualKind = session.field('virtualKind');
 
   function saveProject() {
     void run(
@@ -142,183 +131,6 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
         field('toolWindow')('problems');
       },
       'validate',
-    );
-  }
-
-  function generateProject(handoff = false) {
-    if (workspace?.dirty || state.projection?.dirty) {
-      setNotice({ tone: 'error', text: message('workflow.error.saveBeforeGenerate') });
-      return;
-    }
-    if (stages.validate.state !== 'done') {
-      setNotice({ tone: 'error', text: message('workflow.error.validateBeforeGenerate') });
-      return;
-    }
-    void chooseDirectory((directory) => {
-      void run(
-        {
-          kind: 'action',
-          label: handoff
-            ? message('workflow.action.previewHandoff')
-            : message('workflow.action.previewGenerate'),
-        },
-        () =>
-          call<GenerationPreview>(
-            handoff ? 'preview_handoff_project' : 'preview_generate_project',
-            { outputDirectory: directory },
-          ),
-        (preview) => {
-          setGenerationKind(handoff ? 'handoff' : 'project');
-          setGenerationPreview(preview);
-          setGenerationPreviewPath(
-            preview.files.find((file) => file.status === 'changed')?.path ??
-              preview.files.find((file) => file.status === 'new')?.path ??
-              preview.files[0]?.path ??
-              '',
-          );
-        },
-      );
-    });
-  }
-
-  function confirmGenerate() {
-    if (!generationPreview) return;
-    const preview = generationPreview;
-    setGenerated(null);
-    setBuilt(null);
-    setVirtualResult(null);
-    markStage('build', 'stale', message('workflow.stage.waitingGeneration'));
-    markStage('virtual', 'stale', message('workflow.stage.waitingGeneration'));
-    void run(
-      { kind: 'action', label: message('workflow.action.generate') },
-      () =>
-        call<GenerateResult>(
-          generationKind === 'handoff' ? 'generate_handoff_project' : 'generate_project',
-          { outputDirectory: preview.outputDirectory, revision: preview.revision },
-        ).catch((error) => {
-          setGenerationPreview(null);
-          throw error;
-        }),
-      (result) => {
-        setGenerationPreview(null);
-        setOperationIssues(result.issues);
-        openDocument({ kind: 'delivery' });
-        if (
-          result.issues.some((issue) => issue.severity === 'error') ||
-          !result.outputDirectory ||
-          !result.files.length
-        ) {
-          markStage('generate', 'failed', message('workflow.stage.generationIncomplete'));
-          setNotice({ tone: 'error', text: message('workflow.error.generationFailed') });
-        } else {
-          setGenerated(result);
-          setHandoffGenerated(generationKind === 'handoff');
-          setBuilt(null);
-          setVirtualResult(null);
-          markStage('generate', 'done', result.outputDirectory);
-          markStage('build', 'pending', message('workflow.stage.generatedNotBuilt'));
-          markStage('virtual', 'pending', message('workflow.stage.twoEcusNotRun'));
-        }
-      },
-      'generate',
-    );
-  }
-
-  function buildProject() {
-    if (!generated || !buildDirectory.trim() || stages.generate.state !== 'done') return;
-    setBuilt(null);
-    setVirtualResult(null);
-    markStage('virtual', 'stale', message('workflow.stage.waitingBuild'));
-    void run(
-      { kind: 'action', label: message('workflow.action.build') },
-      () =>
-        call<BuildResult>('build_project', {
-          outputDirectory: generated.outputDirectory,
-          buildDirectory,
-        }),
-      (result) => {
-        field('toolWindow')('build');
-        if (!result.binaryPath) {
-          markStage('build', 'failed', message('workflow.stage.binaryMissing'));
-          setNotice({ tone: 'error', text: message('workflow.error.binaryMissing') });
-        } else {
-          setBuilt(result);
-          setVirtualResult(null);
-          markStage('build', 'done', result.binaryPath);
-          markStage('virtual', 'pending', message('workflow.stage.twoEcusNotRun'));
-        }
-      },
-      'build',
-    );
-  }
-
-  function runVirtual() {
-    if (
-      !generated ||
-      !built ||
-      stages.generate.state !== 'done' ||
-      stages.build.state !== 'done' ||
-      !peerDirectory ||
-      !peerBinaryPath
-    )
-      return;
-    setVirtualResult(null);
-    void run(
-      { kind: 'action', label: message('workflow.action.runVirtual') },
-      () =>
-        call<VirtualResult>('run_virtual', {
-          firstOutputDirectory: generated.outputDirectory,
-          secondOutputDirectory: peerDirectory,
-          firstBinaryPath: built.binaryPath,
-          secondBinaryPath: peerBinaryPath,
-        }),
-      (result) => {
-        setVirtualKind('signal');
-        setVirtualResult(result);
-        field('toolWindow')('host');
-        markStage(
-          'virtual',
-          result.passed ? 'done' : 'failed',
-          result.passed
-            ? message('workflow.stage.virtualPassed')
-            : message('workflow.stage.virtualFailed'),
-        );
-      },
-      'virtual',
-    );
-  }
-
-  function runDiagnostic() {
-    if (
-      !workspace?.diagnostic ||
-      !generated ||
-      !built ||
-      stages.generate.state !== 'done' ||
-      stages.build.state !== 'done' ||
-      unapplied
-    )
-      return;
-    setVirtualResult(null);
-    void run(
-      { kind: 'action', label: message('workflow.action.runDiagnostic') },
-      () =>
-        call<VirtualResult>('run_diagnostic', {
-          outputDirectory: generated.outputDirectory,
-          binaryPath: built.binaryPath,
-        }),
-      (result) => {
-        setVirtualKind('diagnostic');
-        setVirtualResult(result);
-        field('toolWindow')('host');
-        markStage(
-          'virtual',
-          result.passed ? 'done' : 'failed',
-          result.passed
-            ? message('workflow.stage.diagnosticPassed')
-            : message('workflow.stage.diagnosticFailed'),
-        );
-      },
-      'virtual',
     );
   }
 
@@ -527,7 +339,6 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
       },
       (value) => {
         setVirtualResult(value);
-        setVirtualKind('signal');
         markStage(
           'virtual',
           value.passed ? 'done' : 'failed',
@@ -543,11 +354,6 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
     saveProject,
     confirmSave,
     validateProject,
-    generateProject,
-    confirmGenerate,
-    buildProject,
-    runVirtual,
-    runDiagnostic,
     previewIntegrationSave,
     saveIntegration,
     previewEcu,

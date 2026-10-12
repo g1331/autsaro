@@ -18,7 +18,7 @@ export function IntegrationDelivery({
     ecuOutputDirectory: output,
     buildDirectory,
     ecuImportDirectory: importDirectory,
-    legacyTarget: target,
+    buildTarget: target,
     generationPreview: preview,
     generationPreviewPath: selected,
     generated,

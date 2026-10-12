@@ -54,8 +54,8 @@ test('both offline catalogs contain every key and identical interpolation contra
 });
 
 test('count-bearing product messages select plural forms in the current language', () => {
-  const item = message('shell.build.files', { count: 1 });
-  const items = message('shell.build.files', { count: 2 });
+  const item = message('shell.integration.changedFiles', { count: 1 });
+  const items = message('shell.integration.changedFiles', { count: 2 });
   previewLanguage('en');
   expect(localize(item)).toContain('1');
   expect(localize(items)).toContain('2');
@@ -68,7 +68,7 @@ test('count-bearing product messages select plural forms in the current language
 test('product failures remain descriptors and retranslate; raw evidence never changes', () => {
   let failure;
   try {
-    intInRange('9', message('controller.field.signalLength'), 1, 8);
+    intInRange('9', message('controller.field.applicationPeriod'), 1, 8);
   } catch (error) {
     failure = errorText(error);
   }
@@ -95,7 +95,7 @@ test('recursive wire aggregates render and retranslate in a log consumer and rec
     message('controller.integration.validated'),
     [raw, [message('controller.error.staleDelivery')]],
   ];
-  const recoverable = { error: [message('controller.error.name'), [raw, log]] };
+  const recoverable = { error: [message('controller.error.capabilitiesNotReady'), [raw, log]] };
   expect(errorText(recoverable.error)).toEqual(recoverable.error);
   previewLanguage('zh-CN');
   const view = render(
@@ -130,9 +130,7 @@ test('browser language settings preview, cancel and save preserve controller dra
   act(() => {
     result.current.setSettingsOpen(true);
     result.current.setProjectName('用户对象_Example');
-    result.current.setFrameInput({ ...result.current.frameInput, name: 'DraftFrame', id: '321' });
   });
-  const frameDraft = result.current.frameInput;
   const settings = render(React.createElement(SettingsPage, { controller: result.current }));
   const select = settings.container.querySelector('select[name="language"]');
   expect(select).not.toBeNull();
@@ -140,7 +138,6 @@ test('browser language settings preview, cancel and save preserve controller dra
   settings.rerender(React.createElement(SettingsPage, { controller: result.current }));
   expect(i18n.language).toBe('en');
   expect(result.current.projectName).toBe('用户对象_Example');
-  expect(result.current.frameInput).toBe(frameDraft);
   expect(result.current.savedLanguage).toBe('system');
   const close = settings.getByRole('button', { name: /^(关闭|Close)$/ });
   act(() => fireEvent.click(close));
@@ -152,7 +149,6 @@ test('browser language settings preview, cancel and save preserve controller dra
   await act(async () => result.current.configureLanguage());
   expect(result.current.savedLanguage).toBe('zh-CN');
   expect(readLanguagePreference()).toBe('zh-CN');
-  expect(result.current.frameInput).toBe(frameDraft);
 });
 
 function sessionWithResults() {
@@ -217,4 +213,23 @@ test('failed browser persistence retains saved preference and all project/result
   }
   expect(current.epoch.current).toBe(4);
   expect(current.call).not.toHaveBeenCalled();
+});
+
+test('settings page reports unreadable settings as an alert and retired archive paths as a notice', () => {
+  previewLanguage('en');
+  const controller = {
+    ...initialState(),
+    settingsOpen: true,
+    native: true,
+    capabilities: {
+      settingsError: message('controller.error.capabilitiesNotReady'),
+      settingsNotice: message('controller.integration.validated'),
+      environmentOverrides: [],
+    },
+  };
+  const view = render(React.createElement(SettingsPage, { controller }));
+  expect(view.getByRole('alert').textContent).toBe(
+    localize(message('controller.error.capabilitiesNotReady')),
+  );
+  expect(view.getByText(localize(message('controller.integration.validated')))).toBeTruthy();
 });

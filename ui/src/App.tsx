@@ -19,10 +19,8 @@ import {
   X,
 } from 'lucide-react';
 import { useWorkbench } from './workbench/useWorkbench';
-import { EditorPage, EditorInspector } from './pages/EditorPage';
 import { IntegrationPanel } from './IntegrationPanel';
 import { IntegrationDelivery } from './IntegrationDelivery';
-import { BuildPage } from './pages/BuildPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ProjectTree } from './workbench/ProjectTree';
 import { ObjectEditor, ObjectInspector } from './workbench/ObjectEditor';
@@ -37,8 +35,6 @@ import type { DocumentTab } from './workbench/projectTypes';
 
 const documentLabels = {
   configuration: 'shell.document.configuration',
-  communication: 'shell.document.communication',
-  diagnostic: 'shell.document.diagnostic',
   integration: 'shell.document.integration',
   delivery: 'shell.document.delivery',
   source: 'shell.document.source',
@@ -125,8 +121,6 @@ export default function App() {
     workspaceReason ||
     (c.workspace?.dirty || c.projection?.dirty ? t('shell.reason.save') : '') ||
     (c.unapplied ? t('shell.reason.draft') : '');
-  const legacyReason =
-    workspaceReason || (c.workspace?.integrationCandidate ? t('shell.reason.standardCreator') : '');
   const commands: Command[] = [
     {
       id: 'new',
@@ -151,18 +145,11 @@ export default function App() {
       run: c.openMemberProject,
     },
     {
-      id: 'host-package',
-      label: t('shell.command.hostPackage'),
-      menu: 'file',
-      reason: c.busy || !c.native ? t('shell.reason.desktopBusy') : '',
-      run: c.importHandoff,
-    },
-    {
       id: 'ecu-package',
       label: t('shell.command.ecuPackage'),
       menu: 'file',
       reason: c.busy || !c.native ? t('shell.reason.desktopBusy') : '',
-      run: () => c.chooseDirectory((directory) => c.importHandoffDirectory(directory)),
+      run: c.importHandoff,
     },
     {
       id: 'save',
@@ -204,22 +191,8 @@ export default function App() {
       id: 'restore',
       label: t('shell.command.restore'),
       menu: 'edit',
-      reason: workspaceReason || (!c.unapplied && !c.creating ? t('shell.reason.noDrafts') : ''),
+      reason: workspaceReason || (!c.unapplied ? t('shell.reason.noDrafts') : ''),
       run: c.restoreAllDrafts,
-    },
-    {
-      id: 'frame',
-      label: t('shell.command.frame'),
-      menu: 'edit',
-      reason: legacyReason,
-      run: () => c.openCreator('frame'),
-    },
-    {
-      id: 'signal',
-      label: t('shell.command.signal'),
-      menu: 'edit',
-      reason: legacyReason || (!c.focusedFrame ? t('shell.reason.frame') : ''),
-      run: () => c.openCreator('signal'),
     },
     {
       id: 'tree',
@@ -242,20 +215,6 @@ export default function App() {
       menu: 'view',
       reason: workspaceReason,
       run: () => c.openDocument({ kind: 'configuration' }),
-    },
-    {
-      id: 'communication',
-      label: t('shell.document.communication'),
-      menu: 'view',
-      reason: legacyReason,
-      run: () => c.openDocument({ kind: 'communication' }),
-    },
-    {
-      id: 'diagnostic',
-      label: t('shell.document.diagnostic'),
-      menu: 'view',
-      reason: legacyReason,
-      run: () => c.openDocument({ kind: 'diagnostic' }),
     },
     {
       id: 'standard',
@@ -287,13 +246,12 @@ export default function App() {
       id: 'preview',
       label: t('shell.command.preview'),
       menu: 'tools',
-      reason: sourceReason,
+      reason:
+        sourceReason || (!c.workspace?.integrationCandidate ? t('shell.reason.standard') : ''),
       run: () => {
         c.openDocument({ kind: 'delivery' });
-        if (c.workspace?.integrationCandidate) {
-          if (!c.ecuOutputDirectory) void c.chooseDirectory(c.changeEcuOutput);
-          else c.previewEcu();
-        } else c.generateProject();
+        if (!c.ecuOutputDirectory) void c.chooseDirectory(c.changeEcuOutput);
+        else c.previewEcu();
       },
     },
     {
@@ -565,9 +523,7 @@ export default function App() {
           <>
             <span>
               {c.projection?.profile ??
-                (c.workspace.integrationCandidate
-                  ? t('shell.app.standardEcu')
-                  : t('shell.app.canSignals'))}
+                (c.workspace.integrationCandidate ? t('shell.app.standardEcu') : null)}
             </span>
             <button
               type="button"
@@ -712,16 +668,9 @@ export default function App() {
                   <SourceEntry controller={c} logo={logo} />
                 ) : null}
                 {activeDocument.kind === 'configuration' ? <ObjectEditor controller={c} /> : null}
-                {activeDocument.kind === 'communication' || activeDocument.kind === 'diagnostic' ? (
-                  <EditorPage controller={c} section={activeDocument.kind} />
-                ) : null}
                 {activeDocument.kind === 'integration' ? <IntegrationPanel controller={c} /> : null}
                 {activeDocument.kind === 'delivery' ? (
-                  c.workspace.integrationCandidate ? (
-                    <IntegrationDelivery controller={c} active />
-                  ) : (
-                    <BuildPage controller={c} />
-                  )
+                  <IntegrationDelivery controller={c} active />
                 ) : null}
                 {activeDocument.kind === 'source' ? (
                   <div className="source-document">
@@ -803,11 +752,7 @@ export default function App() {
               </button>
             </div>
             <div className="inspector-scroll">
-              {activeDocument.kind === 'communication' && c.inspectorTab === 'properties' ? (
-                <EditorInspector controller={c} />
-              ) : (
-                <ObjectInspector controller={c} />
-              )}
+              <ObjectInspector controller={c} />
             </div>
           </aside>
         ) : null}
@@ -819,7 +764,7 @@ export default function App() {
             t('shell.app.rulesNotReady')}
         </span>
         <span>
-          {c.unapplied || c.creating
+          {c.unapplied
             ? t('shell.app.unapplied')
             : c.workspace?.dirty || c.projection?.dirty
               ? t('shell.app.unsaved')
@@ -832,7 +777,7 @@ export default function App() {
           {c.busy ? t('shell.busy', { operation: text(c.busy) }) : text(c.stages.validate.detail)}
         </button>
         <span>
-          {c.legacyTarget} ·{' '}
+          {c.buildTarget} ·{' '}
           {c.capabilities?.nativeExecution
             ? t('shell.app.nativeExecution')
             : t('shell.app.noNativeExecution')}
