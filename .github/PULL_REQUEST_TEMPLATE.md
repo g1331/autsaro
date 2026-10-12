@@ -1,3 +1,7 @@
+> 本项目不接受未经邀请的外部 Pull Request，此类 PR 将直接关闭，不进行代码审查。欢迎通过 Issue 报告缺陷或提出需求；安全漏洞请按[安全报告指南](https://github.com/g1331/autsaro/security/policy)提交。以下模板供维护者和受邀协作者使用。
+>
+> Unsolicited external pull requests are not accepted and will be closed without code review. Bug reports and feature requests are welcome through Issues; report security vulnerabilities as described in the [security policy](https://github.com/g1331/autsaro/security/policy). This template is for maintainers and invited collaborators.
+
 ## 问题与改动
 
 说明触发问题、改动后的行为和范围。关联 Issue（如有，用 `Closes #N`）：
