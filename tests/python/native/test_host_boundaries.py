@@ -65,9 +65,10 @@ class HostBoundaryTests(unittest.TestCase):
 
     def test_void_lock_failures_select_fatal_policy_and_never_return(self):
         cases = ["once", "mutex-init"] if os.name == "nt" else ["once", "attr-init", "attr-type", "mutex-init", "attr-close", "lock", "unlock"]
-        for case in cases:
-            with self.subTest(case=case):
-                result = self.execute([str(self.lock), case, "fatal"], case)
+        # The driver lock and the CanIf state lock are separate instances of the helper.
+        for case, instance in ((case, instance) for case in cases for instance in ("fatal", "state")):
+            with self.subTest(case=case, instance=instance):
+                result = self.execute([str(self.lock), case, instance], case + "-" + instance)
                 output = result.stdout.read_text()
                 self.assertEqual(result.exit_code, 91, output)
                 self.assertIn("LOCK_FATAL", output)
