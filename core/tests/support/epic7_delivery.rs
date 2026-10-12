@@ -963,3 +963,99 @@ fn preflight_logs_keep_structured_envelopes_and_verbatim_external_evidence() {
     );
     assert_eq!(serialized["logs"][1], evidence);
 }
+
+fn message_key(error: &autosar_config_core::LocalizedText) -> &str {
+    match error {
+        autosar_config_core::LocalizedText::Message(message) => &message.key,
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn retired_project_identities_are_refused_without_loading_or_rewriting() {
+    let scratch = Scratch::new();
+    let live = scratch.0.join("Live");
+    drop(standard_named(&live, "Retired"));
+    let manifest_path = live.join("workbench-project.json");
+    let current = fs::read(&manifest_path).unwrap();
+    let current_value: serde_json::Value = serde_json::from_slice(&current).unwrap();
+    assert_eq!(
+        current_value["profileHint"],
+        autosar_config_core::integration::MULTI_PROFILE
+    );
+    let slot = current_value["applicationInputs"][0]["producerSlot"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let instance = slot.split_once(':').unwrap().1.to_owned();
+    let mut cases = Vec::new();
+    for profile in ["epic4-win64-sr-cs-v1", "singlecore-multi-swc-v1"] {
+        let mut value = current_value.clone();
+        value["profileHint"] = profile.into();
+        cases.push((profile, value));
+    }
+    for (profile, retired_slot) in [
+        (
+            "epic4-win64-sr-cs-v1",
+            "epic4-single-application-v1".to_owned(),
+        ),
+        (
+            "singlecore-multi-swc-v1",
+            format!("singlecore-multi-swc-v1:{instance}"),
+        ),
+    ] {
+        let mut value = current_value.clone();
+        value["applicationInputs"][0]["producerSlot"] = retired_slot.into();
+        cases.push((profile, value));
+    }
+    for (profile, value) in cases {
+        let bytes = serde_json::to_vec_pretty(&value).unwrap();
+        fs::write(&manifest_path, &bytes).unwrap();
+        let error = Workspace::open_project_manifest(&manifest_path, &scratch.0.join("cache"))
+            .err()
+            .unwrap();
+        assert_eq!(message_key(&error), "backend.arxml.project.retired_profile");
+        let autosar_config_core::LocalizedText::Message(message) = &error else {
+            unreachable!()
+        };
+        assert_eq!(message.params["profile"], profile);
+        assert_eq!(fs::read(&manifest_path).unwrap(), bytes);
+    }
+    fs::write(&manifest_path, &current).unwrap();
+    Workspace::open_project_manifest(&manifest_path, &scratch.0.join("cache")).unwrap();
+}
+
+#[test]
+fn retired_delivery_profiles_are_refused_before_import() {
+    let scratch = Scratch::new();
+    let mut workspace = signals(&scratch.0.join("Live"));
+    let output = scratch.0.join("package");
+    prepare_host_project(&mut workspace, tooling::native_target(), true)
+        .unwrap()
+        .generate(&output)
+        .unwrap();
+    for path in ["handoff.json", "target.json", "workbench-ownership.json"] {
+        let mut value: serde_json::Value =
+            serde_json::from_slice(&fs::read(output.join(path)).unwrap()).unwrap();
+        let metadata = if path == "target.json" {
+            &mut value["nativeDelivery"]
+        } else {
+            &mut value
+        };
+        metadata["profileId"] = "singlecore-multi-swc-v1".into();
+        fs::write(
+            output.join(path),
+            serde_json::to_vec_pretty(&value).unwrap(),
+        )
+        .unwrap();
+    }
+    reseal(&output);
+    let before = payload(&output);
+    let receiver = scratch.0.join("Receiver");
+    let error = delivery::open_handoff(&output, &receiver, &DefinitionCatalog::builtin().unwrap())
+        .err()
+        .unwrap();
+    assert_eq!(message_key(&error), "backend.delivery.retired_profile");
+    assert!(!receiver.exists());
+    assert_eq!(payload(&output), before);
+}

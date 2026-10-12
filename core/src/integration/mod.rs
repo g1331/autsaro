@@ -58,6 +58,21 @@ use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
 pub const PROFILE: &str = "epic4-win64-sr-cs-v1";
+/// Product profiles whose projects and deliveries are refused on open rather
+/// than reinterpreted: the historical single-component chain and the earlier
+/// name of the current mainline. ARXML sources remain importable.
+pub(crate) const RETIRED_PROFILES: [&str; 2] = [PROFILE, "singlecore-multi-swc-v1"];
+
+/// Application slots of a retired profile, recorded in project manifests.
+pub(crate) fn retired_profile_of_slot(slot: &str) -> Option<&'static str> {
+    if slot == crate::generator::delivery::APPLICATION_SLOT {
+        return Some(PROFILE);
+    }
+    RETIRED_PROFILES.into_iter().find(|profile| {
+        slot.strip_prefix(profile)
+            .is_some_and(|rest| rest.starts_with(':'))
+    })
+}
 pub const FORMAT_VERSION: u32 = 1;
 const MOD_PATH: &str = crate::schema::MOD_ZIP;
 const MOD_SHA256: &str = "df1e3bc992e49de6e14e5c1a679d7ce7ca90d2450d66186cea0b4a0f1f6555fb";

@@ -216,6 +216,23 @@ pub(super) fn render_manifest(
 pub(super) fn validate_manifest(
     manifest: &ProjectManifest,
 ) -> Result<(), crate::message::LocalizedText> {
+    // Refuse retired identities before any other check so the reason is the
+    // retirement itself; nothing is loaded or rewritten.
+    let retired = crate::integration::RETIRED_PROFILES
+        .into_iter()
+        .find(|profile| manifest.profile_hint == *profile)
+        .or_else(|| {
+            manifest
+                .application_inputs
+                .iter()
+                .find_map(|input| crate::integration::retired_profile_of_slot(&input.producer_slot))
+        });
+    if let Some(profile) = retired {
+        return Err(crate::product_message!(
+            "backend.arxml.project.retired_profile",
+            "profile" => profile
+        ));
+    }
     if manifest.format_version != 1
         || manifest.declared_release != "R24-11"
         || manifest.inputs.is_empty()
