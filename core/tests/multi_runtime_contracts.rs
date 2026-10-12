@@ -419,3 +419,31 @@ fn can_callbacks_and_direct_dependency_lifetimes_are_serialized() {
         );
     }
 }
+
+#[test]
+fn cantp_n_as_timeout_aborts_once_and_ignores_late_confirmation() {
+    let scratch = Scratch::new();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let executable = tooling::native_binary(&scratch.0, "cantp-consumer");
+    let output = Command::new(tooling::execution_settings().compiler)
+        .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
+        .arg("-I")
+        .arg(root.join("runtime/multi/include"))
+        .arg("-I")
+        .arg(root.join("runtime/multi/src"))
+        .arg("-I")
+        .arg(root.join("core/tests/fixtures/multi-runtime"))
+        .arg(root.join("runtime/multi/src/CanTp.c"))
+        .arg(root.join("core/tests/fixtures/multi-runtime/cantp_n_as_contract.c"))
+        .arg("-o")
+        .arg(&executable)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let output = Command::new(executable).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+}
