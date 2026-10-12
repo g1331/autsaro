@@ -10,7 +10,7 @@ official-oracles = []
 native-tests = []
 
 [[test]]
-name = "end_to_end"
+name = "official"
 required-features = ["official-oracles"]
 
 [[test]]

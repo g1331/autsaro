@@ -1,29 +1,12 @@
-use super::Scratch;
-#[cfg(feature = "official-oracles")]
-use super::archive;
+//! Built-in schema and rule checks of authored ARXML inputs.
+use super::*;
+use crate::support::rule_inputs::*;
 use autosar_config_core::model::Severity;
 use autosar_config_core::project_model::ValidationStatus;
-#[cfg(feature = "official-oracles")]
-use autosar_config_core::schema;
 use autosar_config_core::{Workspace, rules};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
-
-fn document(elements: &str) -> String {
-    format!(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
-         <AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" \
-         xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" \
-         xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd\">\
-         <AR-PACKAGES><AR-PACKAGE><SHORT-NAME>Original</SHORT-NAME>\
-         <ELEMENTS>{elements}</ELEMENTS></AR-PACKAGE></AR-PACKAGES></AUTOSAR>"
-    )
-}
-
-fn check(text: &str) -> autosar_config_core::project_model::ScopeValidation {
-    rules::validate_native(&[(Path::new("native-input.arxml"), text)]).unwrap()
-}
 
 #[test]
 fn native_schema_uses_complete_literals_split_by_xml_comments() {
@@ -399,43 +382,4 @@ fn native_inventory_rejects_tampering_even_with_self_recomputed_metadata_hash() 
         rules::verify_inventory_bytes(&serde_json::to_vec(&changed_coverage).unwrap()).is_err()
     );
     assert!(rules::verify_inventory_bytes(&[]).is_err());
-}
-
-#[cfg(feature = "official-oracles")]
-#[test]
-fn native_schema_oracle_agrees_on_independent_positive_and_negative_examples() {
-    let legal = document("<I-SIGNAL><SHORT-NAME>Signal</SHORT-NAME><LENGTH>8</LENGTH></I-SIGNAL>");
-    let file = Path::new("oracle-comparison.arxml");
-    assert!(
-        schema::validate_files(&archive(), &[(file, &legal)])
-            .unwrap()
-            .is_empty()
-    );
-    assert_eq!(check(&legal).status, ValidationStatus::Passed);
-    let negatives = [
-        legal.replace("<SHORT-NAME>Signal</SHORT-NAME>", ""),
-        legal.replace(
-            "<SHORT-NAME>Signal</SHORT-NAME><LENGTH>8</LENGTH>",
-            "<LENGTH>8</LENGTH><SHORT-NAME>Signal</SHORT-NAME>",
-        ),
-        legal.replace("<LENGTH>8</LENGTH>", "<LENGTH>8</LENGTH><LENGTH>9</LENGTH>"),
-        legal.replace("<LENGTH>8</LENGTH>", "<LENGTH>invalid</LENGTH>"),
-    ];
-    for text in negatives {
-        assert!(
-            !schema::validate_files(&archive(), &[(file, &text)])
-                .unwrap()
-                .is_empty()
-        );
-        assert_eq!(check(&text).status, ValidationStatus::Failed);
-    }
-    let legal_unknown = document(
-        "<COMPU-METHOD><SHORT-NAME>OriginalScale</SHORT-NAME><CATEGORY>LINEAR</CATEGORY></COMPU-METHOD>",
-    );
-    assert!(
-        schema::validate_files(&archive(), &[(file, &legal_unknown)])
-            .unwrap()
-            .is_empty()
-    );
-    assert_eq!(check(&legal_unknown).status, ValidationStatus::Unsupported);
 }

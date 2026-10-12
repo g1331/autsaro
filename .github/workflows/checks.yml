@@ -297,9 +297,9 @@ jobs:
                   output.write(variable + '=' + str(Path(shutil.which(name)).absolute()) + '\n')
               output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
       - name: Native runtime and multi-component contracts
-        run: cargo test --locked --manifest-path core/Cargo.toml --features native-tests --test multi_runtime_contracts --test multi_component_contracts
+        run: cargo test --locked --manifest-path core/Cargo.toml --features native-tests --test native
       - name: Generate complete analysis samples
-        run: cargo test --locked --manifest-path core/Cargo.toml --test c_analysis
+        run: cargo test --locked --manifest-path core/Cargo.toml --test it -- c_analysis::
       - name: Sealed ECU build mode fault isolation
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_ecu_build_modes.py
       - name: Validate generated sample inventory

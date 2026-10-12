@@ -1,21 +1,13 @@
-// Shared support modules serve different test layers; only registered tests run.
-#![allow(dead_code)]
-
+//! Host batch codec, process watchdog and CAN declaration views compiled natively.
+use super::*;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 #[cfg(windows)]
 use std::time::Duration;
-use workspace::Scratch;
-
-#[path = "support/workspace.rs"]
-mod workspace;
-
-#[path = "support/tooling.rs"]
-mod tooling;
 
 #[test]
-fn epic4_host_batch_codec() {
+fn host_batch_codec_keeps_boundaries_numeric_sequence_and_recovery() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let scratch = Scratch::new();
     let binary = scratch.0.join("host-batch-codec.exe");
@@ -56,7 +48,7 @@ fn epic4_host_batch_codec() {
 
 #[cfg(windows)]
 #[test]
-fn epic4_public_consumer_watchdog() {
+fn public_command_watchdog_closes_the_whole_process_tree() {
     let scratch = Scratch::new();
     let pid_file = scratch.0.join("watchdog.pids");
     let mut command = tooling::python_command();

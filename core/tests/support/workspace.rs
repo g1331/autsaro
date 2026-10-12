@@ -4,9 +4,9 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub(super) struct Scratch(pub(super) PathBuf);
+pub(crate) struct Scratch(pub(crate) PathBuf);
 impl Scratch {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -29,6 +29,6 @@ impl Drop for Scratch {
         let _ = fs::remove_dir_all(&self.0);
     }
 }
-pub(super) fn archive() -> PathBuf {
+pub(crate) fn archive() -> PathBuf {
     schema::schema_archive(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."))
 }

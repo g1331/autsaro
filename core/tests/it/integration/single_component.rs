@@ -1,10 +1,263 @@
-//! Input-layer, semantic and source-delivery expectations of the historical
-//! single-application chain, re-expressed as mutations of the mainline
-//! single-component project (`single_component_sources`). Each expected
-//! file/object is the mainline object equivalent to the historical negative
-//! case; where the mainline reports a different code for the same defect the
-//! reason is stated at the vector.
+//! A mainline project with a single application component.
 use super::*;
+use autosar_config_core::integration::InputSource;
+use std::path::Path;
+
+#[test]
+fn single_application_component_is_planned_by_the_mainline() {
+    let sources = single_component_sources();
+    let validation = normal_validation(&sources);
+    assert!(
+        validation.diagnostics.is_empty(),
+        "{:?}",
+        validation.diagnostics
+    );
+    let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
+    assert_eq!(plan.description().profile, "singlecore-ecu-v1");
+    let slots = plan.application_slot_descriptors().unwrap();
+    assert_eq!(
+        slots
+            .iter()
+            .map(|slot| slot.producer_slot.as_str())
+            .collect::<Vec<_>>(),
+        ["singlecore-ecu-v1:/Application/Pipeline/IngressInstance"]
+    );
+}
+
+#[test]
+fn single_application_component_rejections_locate_source_objects() {
+    fn rejected(sources: &[InputSource], code: &str, file: &str, object: &str) {
+        let issues = build(sources)
+            .err()
+            .unwrap_or_else(|| panic!("{code} accepted"));
+        assert!(
+            issues.iter().any(|issue| issue.code == code
+                && issue.file.as_deref() == Some(file)
+                && issue.object.as_deref() == Some(object)),
+            "{issues:?}"
+        );
+        let validation = normal_validation(sources);
+        assert!(
+            validation.diagnostics.iter().any(|issue| issue.code == code
+                && issue.file.as_deref() == Some(file)
+                && issue.path.as_deref() == Some(object)),
+            "{code}: {:?}",
+            validation.diagnostics
+        );
+    }
+
+    let mut dangling = single_component_sources();
+    change(
+        &mut dangling,
+        "composition.arxml",
+        "/Application/Ingress/ApplicationValue</TARGET-P-PORT-REF>",
+        "/Application/Ingress/MissingValue</TARGET-P-PORT-REF>",
+    );
+    rejected(
+        &dangling,
+        "REFERENCE_UNRESOLVED",
+        "composition.arxml",
+        "/Application/Pipeline/Diagnostic",
+    );
+
+    let mut missing_port = single_component_sources();
+    change(
+        &mut missing_port,
+        "extract.arxml",
+        "/Application/Ingress/RxValue</CONTEXT-PORT-REF>",
+        "/Application/Ingress/MissingRx</CONTEXT-PORT-REF>",
+    );
+    rejected(
+        &missing_port,
+        "REFERENCE_UNRESOLVED",
+        "extract.arxml",
+        "/Extract/ReferenceExtract/Mapping",
+    );
+
+    let mut conflicting = single_component_sources();
+    change(
+        &mut conflicting,
+        "ingress.arxml",
+        "<OPERATION-INVOKED-EVENT>",
+        "<TIMING-EVENT><SHORT-NAME>Periodic20ms</SHORT-NAME>\
+         <START-ON-EVENT-REF DEST=\"RUNNABLE-ENTITY\">/Application/Ingress/Behavior/Periodic</START-ON-EVENT-REF>\
+         <PERIOD>0.02</PERIOD></TIMING-EVENT><OPERATION-INVOKED-EVENT>",
+    );
+    rejected(
+        &conflicting,
+        "SCHEDULE_NOT_UNIQUE",
+        "ingress.arxml",
+        "/Application/Ingress/Behavior/Periodic",
+    );
+
+    // Unconnected ports stay rejected until #51 settles their RTE semantics.
+    let mut unconnected = single_component_sources();
+    xml_edit(
+        &mut unconnected,
+        "extract.arxml",
+        |node| {
+            node.has_tag_name("SENDER-RECEIVER-TO-SIGNAL-MAPPING")
+                && node
+                    .descendants()
+                    .any(|child| child.text() == Some("/Application/Ingress/RxValue"))
+        },
+        |_| String::new(),
+    );
+    rejected(
+        &unconnected,
+        "ENDPOINT_BINDING",
+        "ingress.arxml",
+        "/Application/Ingress/RxValue",
+    );
+
+    // Only the Dcm service component remains: nothing owns a periodic schedule.
+    let mut services_only = single_component_sources();
+    services_only.retain(|source| source.logical_path() != "ingress.arxml");
+    for (file, tag) in [
+        ("composition.arxml", "CONNECTORS"),
+        ("extract.arxml", "DATA-MAPPINGS"),
+    ] {
+        xml_edit(
+            &mut services_only,
+            file,
+            |node| node.has_tag_name(tag),
+            |_| String::new(),
+        );
+    }
+    xml_edit(
+        &mut services_only,
+        "composition.arxml",
+        |node| named(node, "SW-COMPONENT-PROTOTYPE", "IngressInstance"),
+        |_| String::new(),
+    );
+    for file in ["extract.arxml", "ecuc.arxml"] {
+        xml_edit(
+            &mut services_only,
+            file,
+            |node| {
+                matches!(
+                    node.tag_name().name(),
+                    "COMPONENT-IREF" | "ECUC-INSTANCE-REFERENCE-VALUE"
+                ) && node
+                    .descendants()
+                    .any(|child| child.text() == Some("/Application/Pipeline/IngressInstance"))
+            },
+            |_| String::new(),
+        );
+    }
+    xml_edit(
+        &mut services_only,
+        "ecuc.arxml",
+        |node| {
+            named(node, "ECUC-CONTAINER-VALUE", "Ingress")
+                && node.children().any(|child| {
+                    child.has_tag_name("DEFINITION-REF")
+                        && child
+                            .text()
+                            .is_some_and(|text| text.ends_with("/RteSwComponentInstance"))
+                })
+        },
+        |_| String::new(),
+    );
+    rejected(
+        &services_only,
+        "APPLICATION_COMPONENT_MISSING",
+        "composition.arxml",
+        "/Application/Pipeline",
+    );
+}
+
+#[test]
+fn reference_shape_records_independent_verification_inputs() {
+    let scratch = Scratch::new();
+    let (project, _) = single_component_project(
+        &scratch.0,
+        autosar_config_core::target::BuildTarget::LinuxX64ControlledV1,
+    );
+    let inputs: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(project.join("verification/inputs.json")).unwrap())
+            .unwrap();
+    // Configured endpoints of the fixture, not values read back from the plan.
+    for (name, value) in [
+        ("periodMs", 10),
+        ("receiveCanId", 0x320),
+        ("transmitCanId", 0x321),
+        ("requestCanId", 0x700),
+        ("responseCanId", 0x708),
+        ("did", 0x1234),
+        ("initialReceiveValue", 0),
+        ("receiveTimeoutMs", 200),
+    ] {
+        assert_eq!(inputs[name], value, "{name}");
+    }
+    assert_eq!(inputs["format"], "autosar-ecu-test-inputs-v1");
+    let readme = std::fs::read_to_string(project.join("README.md")).unwrap();
+    assert!(readme.contains("tools/ecu-tool.py verify"), "{readme}");
+    let config = std::fs::read_to_string(project.join("src/Ecu_RuntimeConfig.c")).unwrap();
+    assert!(
+        config.contains("Ecu_DcmAuthenticationMode, 2u};"),
+        "DcmDspMaxDidToRead"
+    );
+    assert!(config.contains("Det_Init(&det_config);"));
+
+    // The verifier checks one reference echo application with an application
+    // DID; other shapes get no inputs (3-SWC with DID: see the README test).
+    use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
+    let plan = build(&sources_without_application_did(true)).unwrap();
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-application");
+    let applications: Vec<_> = plan
+        .application_slot_descriptors()
+        .unwrap()
+        .iter()
+        .map(|slot| ApplicationSource {
+            component_instance: slot
+                .producer_slot
+                .strip_prefix("singlecore-ecu-v1:")
+                .unwrap()
+                .into(),
+            path: fixtures.join(slot.source_paths[0].rsplit('/').next().unwrap()),
+        })
+        .collect();
+    let files = prepare_ecu_project_with_applications(
+        &plan,
+        autosar_config_core::target::BuildTarget::LinuxX64ControlledV1,
+        &applications,
+    )
+    .unwrap()
+    .into_files();
+    assert!(
+        !files
+            .iter()
+            .any(|(path, _)| path.starts_with("verification/"))
+    );
+    let readme = &files
+        .iter()
+        .find(|(path, _)| path == "README.md")
+        .unwrap()
+        .1;
+    assert!(!String::from_utf8_lossy(readme).contains("ecu-tool.py verify"));
+}
+
+#[test]
+fn mainline_enforces_fixed_os_class_and_did_read_limit() {
+    for (owner, definition, value) in [
+        ("Dsp", "DcmDspMaxDidToRead", "3"),
+        ("OperatingSystem", "OsScalabilityClass", "SC2"),
+    ] {
+        let mut sources = single_component_sources();
+        parameter(&mut sources, owner, definition, value);
+        rejects_in_both(&sources, "TARGET_PARAMETER_UNSUPPORTED");
+    }
+    let plan = build(&single_component_sources()).unwrap();
+    assert_eq!(
+        plan.description()
+            .diagnostic_transport
+            .as_ref()
+            .unwrap()
+            .max_did_to_read,
+        Some(2)
+    );
+}
 
 /// The defect is rejected by plan construction and by normal definition
 /// validation at the same source file and object.
@@ -56,7 +309,8 @@ fn is_parameter(node: roxmltree::Node<'_, '_>, definition: &str) -> bool {
     })
 }
 
-pub(super) fn network_rejections_locate_extract_objects() {
+#[test]
+fn network_rejections_locate_extract_objects() {
     // A second ECU instance in the ECU extract. The ECU_EXTRACT system is the
     // object that must describe exactly one ECU, so the mainline locates the
     // defect there rather than at the first ECU instance.
@@ -141,7 +395,8 @@ pub(super) fn network_rejections_locate_extract_objects() {
     );
 }
 
-pub(super) fn component_rejections_locate_application_objects() {
+#[test]
+fn rejections_locate_application_objects() {
     // Unsupported component features: plan construction reports them as
     // outside the product rule scope, normal validation as an unsupported
     // component feature, both at the declaring object.
@@ -311,7 +566,8 @@ pub(super) fn component_rejections_locate_application_objects() {
     );
 }
 
-pub(super) fn configuration_rejections_keep_identifier_width_and_order() {
+#[test]
+fn configuration_rejections_keep_identifier_width_and_order() {
     // SWS_CanTp_00067: BS is not supported (only BS 0 is selected).
     let mut block_size = single_component_sources();
     parameter(&mut block_size, "DiagRequest", "CanTpBs", "1");
@@ -395,7 +651,8 @@ pub(super) fn configuration_rejections_keep_identifier_width_and_order() {
     );
 }
 
-pub(super) fn omitted_event_masks_and_unrelated_sources_are_planned() {
+#[test]
+fn omitted_event_masks_and_unrelated_sources_are_planned() {
     // R24-11 ECUC_Os_00034: an omitted OsEventMask is AUTO. The plan assigns
     // distinct single bits in event path order. The product rules require a
     // non-empty PARAMETER-VALUES wrapper, so the wrapper goes with the mask.
@@ -516,7 +773,8 @@ pub(super) fn omitted_event_masks_and_unrelated_sources_are_planned() {
     );
 }
 
-pub(super) fn input_sources_reject_unportable_aliases_and_missing_archives() {
+#[test]
+fn input_sources_reject_unportable_aliases_and_missing_archives() {
     let sources = single_component_sources();
     let bytes = text(&sources, "ingress.arxml").as_bytes().to_vec();
     for name in [
@@ -551,7 +809,8 @@ pub(super) fn input_sources_reject_unportable_aliases_and_missing_archives() {
     assert_eq!(text(&sources, "ingress.arxml").as_bytes(), bytes.as_slice());
 }
 
-pub(super) fn contract_names_reject_c_keywords_and_reserved_identifiers() {
+#[test]
+fn contract_names_reject_c_keywords_and_reserved_identifiers() {
     // Runnable symbols are external C producers: a keyword or reserved
     // identifier fails the producer identity check at the runnable itself.
     let runnable = Some((
@@ -599,7 +858,8 @@ pub(super) fn contract_names_reject_c_keywords_and_reserved_identifiers() {
     }
 }
 
-pub(super) fn source_preparation_is_target_complete_without_native_tools() {
+#[test]
+fn source_preparation_is_target_complete_without_native_tools() {
     use autosar_config_core::prepared::PreflightStatus;
     use autosar_config_core::resources::AssetInventory;
     use autosar_config_core::target::BuildTarget;
@@ -750,194 +1010,4 @@ pub(super) fn source_preparation_is_target_complete_without_native_tools() {
     assert_eq!(targets[0].0, targets[1].0);
     assert_ne!(targets[0].1, targets[1].1);
     assert!(serde_json::from_str::<BuildTarget>("\"windows-x64\"").is_err());
-}
-
-#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
-pub(super) fn generated_contract_headers_refuse_mismatched_consumers() {
-    let plan = build(&single_component_sources()).unwrap();
-    let scratch = Scratch::new();
-    let directory = scratch.0.join("consumer");
-    std::fs::create_dir_all(directory.join("include")).unwrap();
-    for (file, bytes) in plan.component_contract_files().unwrap().files() {
-        if file.ends_with(".h") {
-            std::fs::write(directory.join(file), bytes).unwrap();
-        }
-    }
-    let compiler = tooling::execution_settings().compiler;
-    let compile = |name: &str| {
-        let mut command = std::process::Command::new(&compiler);
-        command.current_dir(&directory).args([
-            "-std=c99",
-            "-Wall",
-            "-Wextra",
-            "-Werror",
-            "-pedantic",
-            "-Iinclude",
-            "-c",
-            name,
-            "-o",
-            "consumer.o",
-        ]);
-        tooling::run_public_command(
-            &mut command,
-            &directory,
-            "contract-consumer",
-            std::time::Duration::from_secs(60),
-        )
-    };
-    // The matching consumer compiles, so each refusal below is the mismatch.
-    std::fs::write(
-        directory.join("matching.c"),
-        "#include \"Rte_Ingress.h\"\n#include \"Rte_DcmService.h\"\nint test(void);\nint test(void) { uint32 data=0U; uint8 bytes[4]={0U,0U,0U,0U}; return (Rte_Read_RxValue_Value(&data)==E_OK && Rte_Write_TxValue_Value(data)==E_OK && Rte_Call_DataServices_ApplicationValue_ReadData(bytes)==E_OK) ? 0 : 1; }\n",
-    )
-    .unwrap();
-    let output = compile("matching.c");
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    for (name, source, expected) in [
-        (
-            "private-valid.c",
-            "#include \"Rte_Ingress.h\"\nvoid test(void);\nvoid test(void) { uint32 data=0U; uint8 valid=0U; (void)Rte_Read_RxValue_Value(&data, &valid); }\n",
-            "too many arguments",
-        ),
-        (
-            "invalidate.c",
-            "#include \"Rte_Ingress.h\"\nvoid test(void);\nvoid test(void) { (void)Rte_Invalidate_TxValue_Value(); }\n",
-            "implicit declaration",
-        ),
-        (
-            "private-service.c",
-            "#include \"Rte_DcmService.h\"\nvoid test(void);\nvoid test(void) { uint8 data[4]={0U}; uint8 nrc=0U; (void)Rte_Call_DataServices_ApplicationValue_ReadData(0U, data, &nrc); }\n",
-            "too many arguments",
-        ),
-        (
-            "wrong-write.c",
-            "#include \"Rte_Ingress.h\"\nvoid test(void);\nvoid test(void) { uint32 data=0U; (void)Rte_Write_TxValue_Value(&data); }\n",
-            "pointer",
-        ),
-        (
-            "wrong-operation.c",
-            "#include \"Rte_DcmService.h\"\nvoid test(void);\nvoid test(void) { uint8 data[4]={0U}; (void)Rte_Call_DataServices_ApplicationValue_WriteData(data); }\n",
-            "implicit declaration",
-        ),
-        (
-            "wrong-callback.c",
-            "#include \"Rte_Ingress.h\"\nStd_ReturnType (*callback)(uint32 *) = &Ingress_ReadData;\n",
-            "incompatible pointer",
-        ),
-    ] {
-        std::fs::write(directory.join(name), source).unwrap();
-        let output = compile(name);
-        assert!(!output.status.success(), "{name} unexpectedly compiled");
-        let diagnostic = String::from_utf8_lossy(&output.stderr);
-        assert!(diagnostic.contains(expected), "{name}: {diagnostic}");
-    }
-}
-
-#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
-pub(super) fn production_preflight_and_binary_exclude_private_test_code() {
-    use autosar_config_core::prepared::PreflightStatus;
-    use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
-
-    let scratch = Scratch::new();
-    let (project, files) = single_component_project(&scratch.0, tooling::native_target());
-    let settings = tooling::execution_settings();
-    let owner = tooling::execution_owner();
-
-    // Preflight is bound to the prepared fingerprint; a missing compiler
-    // fails it and the caller has nothing installed or changed.
-    let plan = build(&single_component_sources()).unwrap();
-    let prepared = prepare_ecu_project_with_applications(
-        &plan,
-        tooling::native_target(),
-        &[ApplicationSource {
-            component_instance: "/Application/Pipeline/IngressInstance".into(),
-            path: scratch.0.join("Ingress.c"),
-        }],
-    )
-    .unwrap();
-    let application = std::fs::read(scratch.0.join("Ingress.c")).unwrap();
-    let passed = prepared.native_preflight(&settings, &owner);
-    assert_eq!(passed.status, PreflightStatus::Passed, "{passed:?}");
-    assert_eq!(passed.fingerprint, prepared.fingerprint());
-    let missing = autosar_config_core::target::ExecutionSettings::new(
-        scratch.0.join(if cfg!(windows) {
-            "missing-gcc.exe"
-        } else {
-            "missing-gcc"
-        }),
-        settings.objdump.clone(),
-        settings.git.clone(),
-        settings.python.clone(),
-    )
-    .unwrap();
-    let failed = prepared.native_preflight(&missing, &owner);
-    assert_eq!(failed.status, PreflightStatus::Failed, "{failed:?}");
-    assert_eq!(failed.fingerprint, prepared.fingerprint());
-    assert_eq!(
-        std::fs::read(scratch.0.join("Ingress.c")).unwrap(),
-        application
-    );
-
-    let output = scratch.0.join("production");
-    let result = tooling::ecu_build_command(&project, &output, "host-batch", None)
-        .current_dir(&scratch.0)
-        .env_remove("PYTHONPATH")
-        .env_remove("PYTHONHOME")
-        .output()
-        .unwrap();
-    assert!(
-        result.status.success(),
-        "{}\n{}",
-        String::from_utf8_lossy(&result.stdout),
-        String::from_utf8_lossy(&result.stderr)
-    );
-    let binary = tooling::native_binary(&output, "ecu_host_batch");
-    let symbols = tooling::symbol_sections(&settings.objdump, &binary);
-    assert!(
-        symbols
-            .iter()
-            .any(|(symbol, _)| symbol == "Ingress_Periodic")
-    );
-    for (symbol, _) in &symbols {
-        assert!(
-            ![
-                "Os_Test",
-                "Os_StackTest",
-                "Os_TimeTest",
-                "Os_TargetTest",
-                "Os_ArtiTest",
-                "Ecu_TargetTest",
-                "vTaskOsTest",
-            ]
-            .iter()
-            .any(|prefix| symbol.starts_with(prefix)),
-            "Private test symbol linked into production: {symbol}"
-        );
-    }
-    // A production build never accepts a caller control source.
-    let mixed = scratch.0.join("refused-production-control");
-    let result = tooling::ecu_build_command(
-        &project,
-        &mixed,
-        "host-batch",
-        Some(&scratch.0.join("Ingress.c")),
-    )
-    .current_dir(&scratch.0)
-    .env_remove("PYTHONPATH")
-    .env_remove("PYTHONHOME")
-    .output()
-    .unwrap();
-    assert!(!result.status.success());
-    assert!(!mixed.exists(), "Rejected mixed build installed an output");
-    for (name, bytes) in files {
-        assert_eq!(
-            std::fs::read(project.join(&name)).unwrap(),
-            bytes,
-            "{name}: offline builds must not mutate the sealed package"
-        );
-    }
 }

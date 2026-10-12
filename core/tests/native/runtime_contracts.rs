@@ -1,16 +1,7 @@
-//! Independently authored consumers of the separate standard multi runtime.
-#![cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
-
-#[allow(dead_code)]
-#[path = "support/tooling.rs"]
-mod tooling;
-#[allow(dead_code)]
-#[path = "support/workspace.rs"]
-mod workspace;
-
+//! Independently authored consumers of the standard runtime modules.
+use super::*;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use workspace::Scratch;
 
 fn det_consumer(scratch: &Path, fixture: &str) -> PathBuf {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();

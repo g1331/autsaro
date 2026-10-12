@@ -1,4 +1,5 @@
-use super::workspace::Scratch;
+//! Workspace editing, saving and reopening with owned source bytes.
+use super::*;
 use autosar_config_core::Workspace;
 use autosar_config_core::project_model::*;
 use std::fs;

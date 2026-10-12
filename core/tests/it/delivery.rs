@@ -1,9 +1,11 @@
-use super::tooling;
-use super::workspace::Scratch;
+//! Generated deliveries and handoff packages: refusals, ownership and preserved user bytes.
+use super::*;
+use crate::support::generated_packages::*;
+use crate::support::packages::{payload, reseal};
+use autosar_config_core::Workspace;
 use autosar_config_core::definitions::DefinitionCatalog;
 use autosar_config_core::generator::delivery;
 use autosar_config_core::prepared::prepare_ecu_project_for_workspace;
-use autosar_config_core::{PreparedProject, Workspace};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs;
@@ -12,15 +14,6 @@ use std::path::Path;
 fn signals(root: &Path) -> Workspace {
     standard_named(root, "Delivery")
 }
-
-fn prepare(workspace: &Workspace, handoff: bool) -> PreparedProject<'static> {
-    let plan = workspace.saved_integration_plan().unwrap();
-    prepare_ecu_project_for_workspace(workspace, &plan, tooling::native_target(), handoff).unwrap()
-}
-
-#[path = "delivery.rs"]
-mod delivery_support;
-use delivery_support::{payload, reseal};
 
 #[test]
 fn builtin_handoff_reconstructs_independent_authoritative_members() {
@@ -151,21 +144,6 @@ fn builtin_late_source_edit_refuses_staged_commit_and_preserves_output() {
     assert_eq!(fs::read(&input.disk_path).unwrap(), changed);
 }
 
-fn standard_with_application(root: &Path) -> Workspace {
-    standard_named(root, "Application")
-}
-
-/// A standard ECU project with its create-only reference application.
-fn standard_named(root: &Path, name: &str) -> Workspace {
-    let creation = Workspace::preview_project_creation(root, name, "standard-ecu").unwrap();
-    let mut workspace = Workspace::create_project_previewed(&creation).unwrap();
-    let initialization = workspace.preview_application_initialization().unwrap();
-    workspace
-        .initialize_application_previewed(&initialization)
-        .unwrap();
-    workspace
-}
-
 #[test]
 fn builtin_ecu_delivers_project_license_and_preserves_kernel_notice() {
     use autosar_config_core::target::BuildTarget;
@@ -182,7 +160,7 @@ fn builtin_ecu_delivers_project_license_and_preserves_kernel_notice() {
             .unwrap()
             .generate(&output)
             .unwrap();
-        delivery_support::assert_offline_build_readme(
+        packages::assert_offline_build_readme(
             &output,
             target == BuildTarget::WindowsX64ControlledV1,
         );
@@ -213,36 +191,6 @@ fn builtin_ecu_delivers_project_license_and_preserves_kernel_notice() {
             include_bytes!("../../../third_party/freertos/LICENSE.md")
         );
     }
-}
-
-#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
-#[test]
-fn copied_single_component_package_builds_offline_without_changing_source_bytes() {
-    let scratch = Scratch::new();
-    let ecu = standard_with_application(&scratch.0.join("ECU"));
-    let original = scratch.0.join("original");
-    prepare(&ecu, true).generate(&original).unwrap();
-    let received = scratch.0.join("recipient/package");
-    delivery_support::copy_package(&original, &received);
-    fs::remove_dir_all(original).unwrap();
-    drop(ecu);
-    fs::remove_dir_all(scratch.0.join("ECU")).unwrap();
-    let before = delivery_support::package_tree(&received);
-    let output = received.parent().unwrap().join("build");
-    let result = tooling::ecu_build_command(&received, &output, "host-batch", None)
-        .current_dir(&received)
-        .env_remove("PYTHONPATH")
-        .env_remove("PYTHONHOME")
-        .output()
-        .unwrap();
-    assert!(
-        result.status.success(),
-        "{}\n{}",
-        String::from_utf8_lossy(&result.stdout),
-        String::from_utf8_lossy(&result.stderr)
-    );
-    assert!(tooling::native_binary(&output, "ecu_host_batch").is_file());
-    assert_eq!(delivery_support::package_tree(&received), before);
 }
 
 #[test]
@@ -982,47 +930,4 @@ fn assert_retired_package(output: &Path, receiver: &Path, profile: &str) {
     assert_eq!(message.params["profile"], profile);
     assert!(!receiver.exists());
     assert_eq!(payload(output), before);
-}
-
-#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
-#[test]
-fn builtin_standard_template_generates_builds_and_passes_reference_verifier() {
-    use autosar_config_core::integration::{build_ecu_project, verify_ecu_project};
-    // The built-in template with its create-only seed is the reference echo
-    // application that the delivered ecu-tool verifier checks.
-    let scratch = Scratch::new();
-    let ecu = standard_with_application(&scratch.0.join("ECU"));
-    let plan = ecu.saved_integration_plan().unwrap();
-    assert_eq!(
-        plan.description().profile,
-        autosar_config_core::integration::MULTI_PROFILE
-    );
-    let target = tooling::native_target();
-    let project = scratch.0.join("package");
-    prepare_ecu_project_for_workspace(&ecu, &plan, target, true)
-        .unwrap()
-        .generate(&project)
-        .unwrap();
-    let files = prepare_ecu_project_for_workspace(&ecu, &plan, target, true)
-        .unwrap()
-        .into_files();
-    let settings = tooling::execution_settings();
-    let owner = tooling::execution_owner();
-    let output = scratch.0.join("build");
-    fs::create_dir(&output).unwrap();
-    let built = build_ecu_project(&files, &project, &output, &settings, &owner)
-        .unwrap_or_else(|error| panic!("{error}"));
-    assert!(Path::new(&built.binary_path).is_file(), "{}", built.log);
-    let report = verify_ecu_project(&files, &project, &settings, &owner)
-        .unwrap_or_else(|error| panic!("{error}"));
-    assert!(report.passed, "{}", report.log);
-    let log = report.log.to_string();
-    for marker in [
-        "protocol=echo PASS",
-        "protocol=ncr-recovery PASS",
-        "protocol=malformed PASS",
-        "ECU_HANDOFF_VERIFY PASS",
-    ] {
-        assert!(log.contains(marker), "{marker}: {log}");
-    }
 }

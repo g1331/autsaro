@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::Duration;
 
-pub(super) fn python_command() -> Command {
+pub(crate) fn python_command() -> Command {
     let executable = PathBuf::from(
         std::env::var_os("AUTOSAR_PYTHON")
             .expect("Set AUTOSAR_PYTHON to the absolute Python interpreter"),
@@ -15,13 +15,13 @@ pub(super) fn python_command() -> Command {
     Command::new(executable)
 }
 
-pub(super) fn execution_owner() -> autosar_config_core::execution::ProcessOwner {
+pub(crate) fn execution_owner() -> autosar_config_core::execution::ProcessOwner {
     let command = python_command();
     autosar_config_core::execution::ProcessOwner::with_python(Path::new(command.get_program()))
         .expect("configured owner interpreter")
 }
 
-pub(super) fn native_target() -> autosar_config_core::target::BuildTarget {
+pub(crate) fn native_target() -> autosar_config_core::target::BuildTarget {
     use autosar_config_core::target::BuildTarget;
     if cfg!(target_os = "linux") {
         BuildTarget::LinuxX64ControlledV1
@@ -30,11 +30,11 @@ pub(super) fn native_target() -> autosar_config_core::target::BuildTarget {
     }
 }
 
-pub(super) fn execution_settings() -> autosar_config_core::target::ExecutionSettings {
+pub(crate) fn execution_settings() -> autosar_config_core::target::ExecutionSettings {
     autosar_config_core::target::ExecutionSettings::from_environment().unwrap()
 }
 
-pub(super) fn ecu_build_command(
+pub(crate) fn ecu_build_command(
     project: &std::path::Path,
     output: &std::path::Path,
     mode: &str,
@@ -60,7 +60,7 @@ pub(super) fn ecu_build_command(
     command
 }
 
-pub(super) fn ecu_verify_command(project: &std::path::Path, output: &std::path::Path) -> Command {
+pub(crate) fn ecu_verify_command(project: &std::path::Path, output: &std::path::Path) -> Command {
     let settings = execution_settings();
     let mut command = Command::new(&settings.python);
     command
@@ -77,7 +77,7 @@ pub(super) fn ecu_verify_command(project: &std::path::Path, output: &std::path::
     command
 }
 
-pub(super) fn native_binary(directory: &std::path::Path, stem: &str) -> PathBuf {
+pub(crate) fn native_binary(directory: &std::path::Path, stem: &str) -> PathBuf {
     directory.join(if cfg!(windows) {
         format!("{stem}.exe")
     } else {
@@ -88,7 +88,7 @@ pub(super) fn native_binary(directory: &std::path::Path, stem: &str) -> PathBuf 
 /// Section names defining each symbol, read with the target `objdump`.
 /// ELF symbol tables name the section; PE/COFF ones give a 1-based
 /// `(sec N)` index into the `objdump -h` section headers.
-pub(super) fn symbol_sections(objdump: &Path, binary: &Path) -> Vec<(String, String)> {
+pub(crate) fn symbol_sections(objdump: &Path, binary: &Path) -> Vec<(String, String)> {
     let run = |flag: &str| {
         let output = Command::new(objdump)
             .arg(flag)
@@ -128,7 +128,7 @@ pub(super) fn symbol_sections(objdump: &Path, binary: &Path) -> Vec<(String, Str
         })
         .collect()
 }
-pub(super) fn run_public_command(
+pub(crate) fn run_public_command(
     command: &mut Command,
     directory: &Path,
     name: &str,
@@ -226,9 +226,9 @@ pub(super) fn run_public_command(
     }
 }
 
-pub(super) fn verify_protocol_oracles() {
+pub(crate) fn verify_protocol_oracles() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let scratch = super::Scratch::new();
+    let scratch = super::workspace::Scratch::new();
     let output = run_public_command(
         python_command()
             .args(["-m", "autosar_tooling", "protocol-oracles"])

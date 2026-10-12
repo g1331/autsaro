@@ -1,3 +1,5 @@
+//! Host batch protocol and timing of a generated single-component project.
+//!
 //! Independent CAN/UDS protocol, timing and HostBatch expectations replayed
 //! on the mainline single-SWC project (`Ingress.c` reference application).
 //!
@@ -23,9 +25,13 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 const REQUEST: u64 = 1792;
+
 const RESPONSE: u64 = 1800;
+
 const RECEIVE: u64 = 800;
+
 const TRANSMIT: u64 = 801;
+
 const READ: &str = "0322123400000000";
 
 struct Built {
@@ -183,7 +189,9 @@ fn bind_oracle_settings(scratch: &Path) {
     require_success(&checked);
 }
 
-pub fn independent_protocol_and_timing() {
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn single_component_meets_independent_protocol_and_timing_vectors() {
     let oracle: Value = serde_json::from_slice(
         &fs::read(root().join("core/tests/fixtures/epic4_oracles/protocol.json")).unwrap(),
     )
@@ -629,7 +637,9 @@ fn live_output(binary: &Path) {
     assert!(status.success());
 }
 
-pub fn host_batch_commit() {
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
     let built = host_batch_project();
     let binary = &built.binary;
     let directory = |name: &str| built.scratch.0.join("commit").join(name);
@@ -823,7 +833,9 @@ pub fn host_batch_commit() {
     }
 }
 
-pub fn host_batch_native_boundary() {
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn single_component_native_batch_boundary_and_confirmations() {
     let scratch = super::Scratch::new();
     let (project, _) = super::single_component_project(&scratch.0, super::tooling::native_target());
     let output = build(
