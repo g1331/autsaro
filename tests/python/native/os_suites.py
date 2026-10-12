@@ -1,4 +1,9 @@
-"""Independent native C99 consumers of the controlled automotive OS."""
+"""Independent native C99 consumers of the controlled automotive OS.
+
+`test_os_suites.py` runs each suite. The mainline counter-service test in
+`core/tests` calls this file with a generated project:
+``python os_suites.py counter-service <directory> <project> <counter>``.
+"""
 
 from __future__ import annotations
 
@@ -16,11 +21,10 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 
+from autosar_tooling.config import ROOT
 from ecu_tools.build import kernel_patch_environment
 from ecu_tools.owner import Owner, OwnershipError
 from ecu_tools.process import OwnedProcess, ProcessSpec
-
-from autosar_tooling.config import ROOT
 
 KERNEL = ROOT / "third_party/freertos"
 TARGET = ROOT / "runtime/os"
@@ -1753,20 +1757,6 @@ def check_counter_service(directory: Path, project: Path, counter: str) -> None:
             raise AssertionError(f"{name} Counter client linked successfully")
 
 
-def arti_native(directory: Path) -> None:
-    if os.name != "nt" or not directory.is_absolute():
-        raise ValueError("Generated ARTI helper requires a Windows absolute output directory")
-    with native_session(directory.parent, "arti-native"):
-        check_arti_native(directory)
-
-
-def counter_service(directory: Path, project: Path, counter: str) -> None:
-    if os.name != "nt" or not directory.is_absolute() or not project.is_absolute():
-        raise ValueError("Generated OS counter helper requires Windows absolute paths")
-    with native_session(directory, "counter-service"):
-        check_counter_service(directory, project, counter)
-
-
 def check_memory_mapping(directory: Path) -> None:
     cc = compiler()
     linux = _TARGET_ID.get() == "linux-x64-controlled-v1"
@@ -1822,24 +1812,24 @@ def run_suite(suite: str, output_directory: Path | None = None) -> None:
     with retained_workspace(output_directory) as temporary, native_session(temporary, suite):
         if suite == "memory-mapping":
             check_memory_mapping(Path(temporary))
-            print("epic4_os_memory_mapping PASS: 10 linked entries; 6 rejected compile/link cases")
+            print("memory-mapping PASS: 10 linked entries; 6 rejected compile/link cases")
             return
         if suite == "vector-section":
             check_vector_mutations(Path(temporary))
             target_label = "ELF64" if _TARGET_ID.get() == "linux-x64-controlled-v1" else "Win64"
-            print(f"epic4_interrupt_vector_section PASS: actual {target_label} vector table; 2 rejected compiled mutations")
+            print(f"vector-section PASS: actual {target_label} vector table; 2 rejected compiled mutations")
             return
         if suite == "status-modes":
             observations = check_status_modes(Path(temporary))
-            print("epic4_sc1_status_modes PASS: 2 native status configurations; 18 Standard capacity vectors")
+            print("status-modes PASS: 2 native status configurations; 18 Standard capacity vectors")
             return
         if suite == "public-types":
             check_public_types(Path(temporary))
-            print("epic4_os_public_type_contracts PASS: independent C99 consumer")
+            print("public-types PASS: independent C99 consumer")
             return
         if suite == "public-compatibility":
             check_public_compatibility(Path(temporary))
-            print("epic4_os_public_compatibility PASS: 6 independent C99 consumers")
+            print("public-compatibility PASS: 6 independent C99 consumers")
             return
         harnesses = {
             "lifecycle": "lifecycle.c",
@@ -1929,51 +1919,42 @@ def run_suite(suite: str, output_directory: Path | None = None) -> None:
                 require(actual == expected, result)
                 result["independent_expected_host_timer"] = expected
                 observations.append(result)
-        names = {
-            "lifecycle": "epic4_backend_lifecycle",
-            "stack": "epic4_native_stack_fault_shutdown",
-            "activation": "epic4_activation_fifo",
-            "finish": "epic4_finish_chain_atomicity",
-            "resources": "epic4_resource_and_preemption",
-            "events": "epic4_event_wakeup_races",
-            "time": "epic4_controlled_tick_and_alarm",
-            "sc1-timing": "epic4_sc1_timing_capacity",
-            "capacity": "epic4_sc1_class_capacity",
-            "error-hooks": "epic4_standard_error_hook_parameters",
-            "task-hooks": "epic4_real_task_hook_transitions",
-            "returned-task": "epic4_returned_task_resource_cleanup",
-            "interrupt-pairing": "epic4_standard_interrupt_pairing",
-            "isr-cleanup": "epic4_category2_exit_cleanup",
-            "nested-interrupts": "epic4_nested_interrupts",
-            "counter-types": "epic4_public_counter_types",
-            "nonstatus-errors": "epic4_nonstatus_service_errors",
-            "source-repetition": "epic4_interrupt_source_repetition",
-            "entry-bodies": "epic4_osek_entry_bodies",
-            "calling-context": "epic4_standard_calling_context",
-            "idle-state": "epic4_standard_idle_and_started_state",
-        }
-        name = names[suite]
         suffix = "; 6 header orders" if suite == "counter-types" else ""
-        print(f"{name} PASS: {len(observations)} native vectors{suffix}")
+        print(f"{suite} PASS: {len(observations)} native vectors{suffix}")
 
 
-def run(target: str, suite: str, output_directory: Path | None = None) -> int:
-    if os.name == "nt":
-        host = "windows-x64-controlled-v1"
-    elif sys.platform == "linux":
-        host = "linux-x64-controlled-v1"
-    else:
+HOST_TARGET = {
+    "win32": "windows-x64-controlled-v1",
+    "linux": "linux-x64-controlled-v1",
+}.get(sys.platform)
+
+
+@contextmanager
+def host_target() -> Iterator[None]:
+    """Select the controlled target of this host; other hosts cannot run suites."""
+    if HOST_TARGET is None:
         raise ValueError("Native OS suites require Windows or Ubuntu Linux")
-    if target != host:
-        raise ValueError(f"Native OS suite target {target} cannot execute on {host}")
-    if suite != "all" and suite not in SUITES:
-        raise ValueError(f"Unknown native OS suite: {suite}")
-    if output_directory is not None:
-        output_directory.mkdir(mode=0o700, parents=True, exist_ok=False)
-    token = _TARGET_ID.set(target)
+    token = _TARGET_ID.set(HOST_TARGET)
     try:
-        for name in SUITES if suite == "all" else (suite,):
-            run_suite(name, output_directory / name if output_directory is not None else None)
+        yield
     finally:
         _TARGET_ID.reset(token)
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) != 4 or argv[0] != "counter-service":
+        print("usage: os_suites.py counter-service <directory> <project> <counter>", file=sys.stderr)
+        return 2
+    directory, project = Path(argv[1]), Path(argv[2])
+    if not directory.is_absolute() or not project.is_absolute():
+        raise ValueError("Generated OS counter helper requires absolute paths")
+    # Process logs must live in a private directory; the caller's may not be.
+    work = directory / "counter-service"
+    work.mkdir(mode=0o700)
+    with host_target(), native_session(work, "counter-service"):
+        check_counter_service(work, project, argv[3])
     return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

@@ -1,7 +1,14 @@
-"""Dependency and oracle rejection checks for the controlled OS verifier."""
+"""Native OS C99 suites and rejection checks for their verifier.
+
+Run one suite with ``-k``, for example
+``python -m unittest discover -s tests/python/native -p test_os_suites.py -k activation``.
+Set ``AUTOSAR_OS_OUTPUT_DIRECTORY`` to a new directory to keep every suite's
+binaries and command logs; failed suites always keep theirs.
+"""
 
 import copy
 import json
+import os
 import re
 import shutil
 import tempfile
@@ -9,7 +16,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from autosar_tooling.acceptance import os_suites
+import os_suites
 
 
 def native_fixture(name):
@@ -30,7 +37,7 @@ class DependencyTests(unittest.TestCase):
 
     def test_activation_gate_rejects_swapped_fifo_and_missing_observer(self):
         original = native_fixture("native-activation.json")
-        with patch("autosar_tooling.acceptance.os_suites.execute", side_effect=copy.deepcopy(original)):
+        with patch("os_suites.execute", side_effect=copy.deepcopy(original)):
             self.assertEqual(
                 len(os_suites.check_activation(Path("unused.exe"))), len(original)
             )
@@ -47,14 +54,14 @@ class DependencyTests(unittest.TestCase):
                         r"observer=\d+", "observer=0", result["stdout"]
                     )
                 with (
-                    patch("autosar_tooling.acceptance.os_suites.execute", side_effect=records),
+                    patch("os_suites.execute", side_effect=records),
                     self.assertRaises(AssertionError),
                 ):
                     os_suites.check_activation(Path("unused.exe"))
 
     def test_finish_gate_rejects_entry_order_return_and_missing_observer(self):
         original = native_fixture("native-finish.json")
-        with patch("autosar_tooling.acceptance.os_suites.execute", side_effect=copy.deepcopy(original)):
+        with patch("os_suites.execute", side_effect=copy.deepcopy(original)):
             self.assertEqual(
                 len(os_suites.check_finish(Path("unused.exe"))), len(original)
             )
@@ -72,7 +79,7 @@ class DependencyTests(unittest.TestCase):
                     )
                 self.assertNotEqual(records[0]["stdout"], original[0]["stdout"])
                 with (
-                    patch("autosar_tooling.acceptance.os_suites.execute", side_effect=records),
+                    patch("os_suites.execute", side_effect=records),
                     self.assertRaises(AssertionError),
                 ):
                     os_suites.check_finish(Path("unused.exe"))
@@ -84,7 +91,7 @@ class DependencyTests(unittest.TestCase):
         returned["exit"] = 7
         returned["stdout"] = returned["stdout"].replace("trace=ISRLAMZ", "trace=ISRLAZ")
         with (
-            patch("autosar_tooling.acceptance.os_suites.execute", side_effect=records),
+            patch("os_suites.execute", side_effect=records),
             self.assertRaises(AssertionError),
         ):
             os_suites.check_finish(Path("unused.exe"))
@@ -104,7 +111,7 @@ class DependencyTests(unittest.TestCase):
 
     def test_resource_gate_rejects_preemption_wait_and_mask_order(self):
         original = native_fixture("native-resources.json")
-        with patch("autosar_tooling.acceptance.os_suites.execute", side_effect=copy.deepcopy(original)):
+        with patch("os_suites.execute", side_effect=copy.deepcopy(original)):
             self.assertEqual(
                 len(os_suites.check_resources(Path("unused.exe"))), len(original)
             )
@@ -121,14 +128,14 @@ class DependencyTests(unittest.TestCase):
                 )
                 self.assertNotEqual(records[index]["stdout"], original[index]["stdout"])
                 with (
-                    patch("autosar_tooling.acceptance.os_suites.execute", side_effect=records),
+                    patch("os_suites.execute", side_effect=records),
                     self.assertRaises(AssertionError),
                 ):
                     os_suites.check_resources(Path("unused.exe"))
 
     def test_event_gate_rejects_lost_record_ticket_and_missing_restart(self):
         original = native_fixture("native-events.json")
-        with patch("autosar_tooling.acceptance.os_suites.execute", side_effect=copy.deepcopy(original)):
+        with patch("os_suites.execute", side_effect=copy.deepcopy(original)):
             self.assertEqual(
                 len(os_suites.check_events(Path("unused.exe"))), len(original)
             )
@@ -146,14 +153,14 @@ class DependencyTests(unittest.TestCase):
                 next(row["stdout"] for row in original if row["scenario"] == scenario),
             )
             with (
-                patch("autosar_tooling.acceptance.os_suites.execute", side_effect=records),
+                patch("os_suites.execute", side_effect=records),
                 self.assertRaises(AssertionError),
             ):
                 os_suites.check_events(Path("unused.exe"))
 
     def test_time_gate_rejects_lost_tick_wrap_and_action_error(self):
         original = native_fixture("native-time.json")
-        with patch("autosar_tooling.acceptance.os_suites.execute", side_effect=copy.deepcopy(original)):
+        with patch("os_suites.execute", side_effect=copy.deepcopy(original)):
             self.assertEqual(
                 len(os_suites.check_time(Path("unused.exe"))), len(original)
             )
@@ -175,7 +182,7 @@ class DependencyTests(unittest.TestCase):
                 next(row["stdout"] for row in original if row["scenario"] == scenario),
             )
             with (
-                patch("autosar_tooling.acceptance.os_suites.execute", side_effect=records),
+                patch("os_suites.execute", side_effect=records),
                 self.assertRaises(AssertionError),
             ):
                 os_suites.check_time(Path("unused.exe"))
@@ -183,3 +190,21 @@ class DependencyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(os_suites.HOST_TARGET, "native OS suites run on Windows or Linux")
+class NativeSuiteTests(unittest.TestCase):
+    """One test per suite in ``os_suites.SUITES``, named ``test_<suite>``."""
+
+    def run_suite(self, suite):
+        retained = os.environ.get("AUTOSAR_OS_OUTPUT_DIRECTORY")
+        with os_suites.host_target():
+            os_suites.run_suite(suite, Path(retained) / suite if retained else None)
+
+
+for _suite in os_suites.SUITES:
+    setattr(
+        NativeSuiteTests,
+        "test_" + _suite.replace("-", "_"),
+        lambda self, suite=_suite: self.run_suite(suite),
+    )

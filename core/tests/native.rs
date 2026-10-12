@@ -14,48 +14,6 @@ mod workspace;
 #[path = "support/tooling.rs"]
 mod tooling;
 
-macro_rules! os_native_suite {
-    ($name:ident, $suite:literal) => {
-        #[cfg(any(windows, target_os = "linux"))]
-        #[test]
-        fn $name() {
-            tooling::run_native_os_suite($suite);
-        }
-    };
-}
-
-#[cfg(any(windows, target_os = "linux"))]
-#[test]
-fn epic4_sc1_timing_capacity() {
-    tooling::run_native_os_suite("sc1-timing");
-}
-
-os_native_suite!(epic4_sc1_status_modes, "status-modes");
-os_native_suite!(epic4_interrupt_source_repetition, "source-repetition");
-os_native_suite!(epic4_nonstatus_service_errors, "nonstatus-errors");
-os_native_suite!(epic4_os_public_type_contracts, "public-types");
-os_native_suite!(epic4_os_public_compatibility, "public-compatibility");
-os_native_suite!(epic4_os_memory_mapping, "memory-mapping");
-os_native_suite!(epic4_interrupt_vector_section, "vector-section");
-os_native_suite!(epic4_osek_entry_bodies, "entry-bodies");
-os_native_suite!(epic4_sc1_class_capacity, "capacity");
-os_native_suite!(epic4_returned_task_resource_cleanup, "returned-task");
-os_native_suite!(epic4_real_task_hook_transitions, "task-hooks");
-os_native_suite!(epic4_standard_error_hook_parameters, "error-hooks");
-os_native_suite!(epic4_standard_interrupt_pairing, "interrupt-pairing");
-os_native_suite!(epic4_public_counter_types, "counter-types");
-os_native_suite!(epic4_nested_interrupts, "nested-interrupts");
-os_native_suite!(epic4_standard_calling_context, "calling-context");
-os_native_suite!(epic4_standard_idle_and_started_state, "idle-state");
-os_native_suite!(epic4_category2_exit_cleanup, "isr-cleanup");
-os_native_suite!(epic4_controlled_tick_and_alarm, "time");
-os_native_suite!(epic4_event_wakeup_races, "events");
-os_native_suite!(epic4_resource_and_preemption, "resources");
-os_native_suite!(epic4_finish_chain_atomicity, "finish");
-os_native_suite!(epic4_activation_fifo, "activation");
-os_native_suite!(epic4_native_stack_fault_shutdown, "stack");
-os_native_suite!(epic4_backend_lifecycle, "lifecycle");
-
 #[test]
 fn epic4_host_batch_codec() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();

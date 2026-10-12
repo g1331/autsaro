@@ -1222,9 +1222,10 @@ pub(super) fn official_os_descriptions() {
     }
 }
 
-/// The delivered OS counter service links into the Windows counter-service
-/// harness and rejects wrong bindings, units and signatures.
-#[cfg(all(feature = "native-tests", windows))]
+/// The delivered OS counter service links into the counter-service harness
+/// (`tests/python/native/os_suites.py`) and rejects wrong bindings, units and
+/// signatures.
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 pub(super) fn counter_service_native() {
     let scratch = Scratch::new();
     for counter in ["SystemCounter", "AuxClock"] {
@@ -1245,11 +1246,10 @@ pub(super) fn counter_service_native() {
         std::fs::create_dir(&stage).unwrap();
         let mut command = super::tooling::python_command();
         command
-            .args(["-m", "autosar_tooling", "os-counter-service", "--directory"])
+            .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/python/native/os_suites.py"))
+            .arg("counter-service")
             .arg(&stage)
-            .arg("--project")
             .arg(&project)
-            .arg("--counter")
             .arg(counter);
         checked(&mut command, &stage, "counter-service");
     }

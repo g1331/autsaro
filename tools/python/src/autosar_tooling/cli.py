@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 
 from autosar_tooling import doctor
-from autosar_tooling.acceptance import os_suites
 
 
 def main() -> int:
@@ -24,24 +23,6 @@ def main() -> int:
         choices=("windows-x64-controlled-v1", "linux-x64-controlled-v1"),
         help="Required for --role native; identifies the output target, not the workbench",
     )
-    native_os = commands.add_parser("os", help="Run independent native OS C99 suites")
-    native_os.add_argument(
-        "--target",
-        choices=("windows-x64-controlled-v1", "linux-x64-controlled-v1"),
-        required=True,
-    )
-    native_os.add_argument("--suite", choices=(*os_suites.SUITES, "all"), required=True)
-    native_os.add_argument("--output-directory", type=Path, help="New directory for native binaries and command logs")
-    native_arti = commands.add_parser(
-        "os-arti-native", help="Verify generated ARTI bindings"
-    )
-    native_arti.add_argument("--directory", type=Path, required=True)
-    native_counter = commands.add_parser(
-        "os-counter-service", help="Verify generated OS counter service"
-    )
-    native_counter.add_argument("--directory", type=Path, required=True)
-    native_counter.add_argument("--project", type=Path, required=True)
-    native_counter.add_argument("--counter", required=True)
     aggregate = commands.add_parser("verify", help="Run project checks sequentially")
     aggregate.add_argument(
         "--scope", choices=("core", "ui", "desktop", "all"), required=True
@@ -104,14 +85,6 @@ def main() -> int:
         if args.target:
             parser.error("--role workbench does not take --target")
         return doctor.report(args.component)
-    if args.command == "os":
-        return os_suites.run(args.target, args.suite, args.output_directory)
-    if args.command == "os-arti-native":
-        os_suites.arti_native(args.directory)
-        return 0
-    if args.command == "os-counter-service":
-        os_suites.counter_service(args.directory, args.project, args.counter)
-        return 0
     if args.command == "verify":
         from autosar_tooling.verify import verify
 

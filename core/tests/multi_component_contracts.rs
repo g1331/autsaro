@@ -4039,10 +4039,9 @@ fn unsupported_edit_and_handoff_preserve_live_inputs_and_existing_output() {
     let before = serde_json::to_value(&workspace.project_projection("same").unwrap()).unwrap();
     let errors = workspace
         .edit_integration(IntegrationEdit {
-                can_ids: [("/Application/NotASignalPort".to_owned(), 1)].into(),
-                ..IntegrationEdit::default()
-            },
-        )
+            can_ids: [("/Application/NotASignalPort".to_owned(), 1)].into(),
+            ..IntegrationEdit::default()
+        })
         .err()
         .unwrap();
     assert!(errors.iter().any(|issue| issue.code == "EDIT_UNSUPPORTED"));
@@ -7713,7 +7712,7 @@ fn mainline_os_official_descriptions() {
     mainline_os::official_os_descriptions();
 }
 
-#[cfg(all(feature = "native-tests", windows))]
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[test]
 fn mainline_os_counter_service_native() {
     mainline_os::counter_service_native();
@@ -7745,10 +7744,9 @@ fn template_quick_edit_changes_can_ids_and_application_period_on_the_mainline() 
         .collect();
     let report = workspace
         .edit_integration(IntegrationEdit {
-                can_ids,
-                application_period_ms: Some(20),
-            },
-        )
+            can_ids,
+            application_period_ms: Some(20),
+        })
         .unwrap_or_else(|issues| panic!("{issues:?}"));
     let after = report.description.unwrap();
     assert_eq!(
@@ -7785,10 +7783,9 @@ fn template_quick_edit_changes_can_ids_and_application_period_on_the_mainline() 
     );
     let errors = workspace
         .edit_integration(IntegrationEdit {
-                application_period_ms: Some(0),
-                ..IntegrationEdit::default()
-            },
-        )
+            application_period_ms: Some(0),
+            ..IntegrationEdit::default()
+        })
         .err()
         .unwrap();
     assert!(errors.iter().any(|issue| issue.code == "EDIT_RANGE"));
