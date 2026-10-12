@@ -27,7 +27,10 @@ r#"#include "Can.h"
 #include "Os.h"
 #include "SchM_Can.h"
 #ifdef _WIN32
+/* Platform_Types.h already owns boolean; keep the Win32 spelling apart. */
+#define boolean Test_Win32Boolean
 #include <windows.h>
+#undef boolean
 #else
 #include <pthread.h>
 #endif

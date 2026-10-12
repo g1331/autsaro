@@ -5,7 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 #ifdef _WIN32
+/* Platform_Types.h already owns boolean; keep the Win32 spelling apart. */
+#define boolean Test_Win32Boolean
 #include <windows.h>
+#undef boolean
 #else
 #include <errno.h>
 #include <pthread.h>
