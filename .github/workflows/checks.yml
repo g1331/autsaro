@@ -207,7 +207,16 @@ jobs:
       - run: uv sync --locked
       - uses: ./.github/actions/native-analysis-compiler
       - name: Native OS conformance suites
+        env:
+          AUTOSAR_OS_OUTPUT_DIRECTORY: ${{ runner.temp }}/os-suites
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_os_suites.py
+      - uses: actions/upload-artifact@v7.0.1
+        if: failure()
+        with:
+          name: os-suites-${{ matrix.os }}
+          path: ${{ runner.temp }}/os-suites
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Host I/O and lock failure boundaries
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_host_boundaries.py
   quality:
