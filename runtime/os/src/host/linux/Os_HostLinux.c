@@ -370,42 +370,57 @@ DWORD WaitForSingleObjectEx(HANDLE handle, DWORD milliseconds, BOOL alertable) {
     return WaitForSingleObject(handle, milliseconds);
 }
 
-DWORD WaitForMultipleObjects(DWORD count, const HANDLE *observed, BOOL all, DWORD milliseconds) {
+/* Same 1 ms poll as WaitForSingleObject; the first signalled handle wins. */
+static DWORD wait_any(DWORD count, const HANDLE *observed, DWORD milliseconds, uint64_t end) {
+    DWORD result = WAIT_TIMEOUT;
+    int waiting = 1;
+    while (waiting != 0) {
+        DWORD index;
+        for (index = 0u; (index < count) && (waiting != 0); ++index) {
+            const DWORD waited = WaitForSingleObject(observed[index], 0u);
+            if (waited != WAIT_TIMEOUT) {
+                result = (waited == WAIT_OBJECT_0) ? (WAIT_OBJECT_0 + index) : WAIT_FAILED;
+                waiting = 0;
+            }
+        }
+        if ((waiting != 0) && (milliseconds != INFINITE) && (monotonic_ms() >= end)) {
+            waiting = 0;
+        } else if (waiting != 0) {
+            const struct timespec interval = {.tv_sec = 0, .tv_nsec = 1000000L};
+            (void)nanosleep(&interval, NULL);
+        } else {
+            /* A handle was signalled or failed. */
+        }
+    }
+    return result;
+}
+
+static DWORD wait_all(DWORD count, const HANDLE *observed, DWORD milliseconds, uint64_t end) {
+    DWORD result = WAIT_OBJECT_0;
     DWORD index;
-    uint64_t end = monotonic_ms();
-    if (observed == NULL || count == 0u || count > OS_HOST_HANDLES) {
-        return WAIT_FAILED;
-    }
-    if (milliseconds != INFINITE) {
-        end += milliseconds;
-    }
-    if (all == 0) {
-        /* Same 1 ms poll as WaitForSingleObject; the first signalled handle wins. */
-        for (;;) {
-            for (index = 0u; index < count; ++index) {
-                const DWORD waited = WaitForSingleObject(observed[index], 0u);
-                if (waited != WAIT_TIMEOUT) {
-                    return waited == WAIT_OBJECT_0 ? WAIT_OBJECT_0 + index : WAIT_FAILED;
-                }
-            }
-            if (milliseconds != INFINITE && monotonic_ms() >= end) {
-                return WAIT_TIMEOUT;
-            }
-            {
-                const struct timespec interval = {.tv_sec = 0, .tv_nsec = 1000000L};
-                (void)nanosleep(&interval, NULL);
-            }
-        }
-    }
-    for (index = 0u; index < count; ++index) {
-        DWORD remaining = milliseconds == INFINITE
-                              ? INFINITE
-                              : (end > monotonic_ms() ? (DWORD)(end - monotonic_ms()) : 0u);
+    for (index = 0u; (index < count) && (result == WAIT_OBJECT_0); ++index) {
+        const uint64_t now = monotonic_ms();
+        const DWORD remaining = (milliseconds == INFINITE)
+                                    ? INFINITE
+                                    : ((end > now) ? (DWORD)(end - now) : 0u);
         if (WaitForSingleObject(observed[index], remaining) != WAIT_OBJECT_0) {
-            return WAIT_FAILED;
+            result = WAIT_FAILED;
         }
     }
-    return WAIT_OBJECT_0;
+    return result;
+}
+
+DWORD WaitForMultipleObjects(DWORD count, const HANDLE *observed, BOOL all, DWORD milliseconds) {
+    DWORD result = WAIT_FAILED;
+    uint64_t end = monotonic_ms();
+    if ((observed != NULL) && (count != 0u) && (count <= OS_HOST_HANDLES)) {
+        if (milliseconds != INFINITE) {
+            end += milliseconds;
+        }
+        result = (all == 0) ? wait_any(count, observed, milliseconds, end)
+                            : wait_all(count, observed, milliseconds, end);
+    }
+    return result;
 }
 
 BOOL ReleaseMutex(HANDLE mutex) {

@@ -661,15 +661,14 @@ StatusType Os_TargetCurrentTick(uint64_t *ticket, uint64_t *epoch) {
 }
 StatusType Os_TargetNotifyNative(void) {
     StatusType status = time_owner();
-    if (status != E_OK) {
-        return status;
+    if (status == E_OK) {
+        if (Os_HostSetEvent(attention_event) == 0) {
+            (void)InterlockedExchange(&signal_failed, 1);
+            Os_BackendRequestShutdown(E_OS_STATE);
+            status = E_OS_STATE;
+        }
+        Os_BackendGuardService();
     }
-    if (Os_HostSetEvent(attention_event) == 0) {
-        (void)InterlockedExchange(&signal_failed, 1);
-        Os_BackendRequestShutdown(E_OS_STATE);
-        status = E_OS_STATE;
-    }
-    Os_BackendGuardService();
     return status;
 }
 StatusType Os_TargetCompleteTick(uint64_t ticket) {
