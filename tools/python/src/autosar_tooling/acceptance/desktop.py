@@ -18,7 +18,14 @@ from pathlib import Path
 
 from ecu_tools.process import OwnedProcess, ProcessSpec, run_bounded
 
-from autosar_tooling.acceptance.native_profile import app_environment, prepare
+from autosar_tooling.acceptance.native_builtin import (
+    EXECUTION_VARIABLES,
+    app_environment,
+    prepare,
+)
+from autosar_tooling.acceptance.native_clipboard import sample as read_clipboard
+from autosar_tooling.acceptance.native_media import PrivateMedia
+from autosar_tooling.acceptance.native_memory import sample
 from autosar_tooling.config import ROOT
 
 
@@ -115,7 +122,6 @@ def run(
     binary: Path,
     installed: bool = False,
     source_checkout: Path | None = None,
-    builtin_only: bool = False,
     *,
     caller_process: dict | None = None,
     output_directory: Path | None = None,
@@ -129,7 +135,6 @@ def run(
             binary,
             installed,
             source_checkout,
-            builtin_only,
             caller_process=caller_process,
             output_directory=output_directory,
         )
@@ -164,14 +169,13 @@ def run(
             ):
                 raise RuntimeError(f"Native scratch must be a private owned directory: {directory}")
     print(f"Isolated native test directory: {scratch}", flush=True)
-    prepare(scratch, platform, installed, source_checkout, builtin_only)
-    environment = app_environment(scratch, installed, builtin_only)
+    prepare(scratch, platform, source_checkout, installed=installed)
+    environment = app_environment(scratch, installed)
     app_cwd = scratch / "app-work" if installed else ROOT
     (scratch / "application-launch.json").write_text(
         json.dumps(
             {
                 "binary": str(binary), "cwd": str(app_cwd), "installed": installed,
-                "mode": "builtin-only" if builtin_only else "oracle",
                 "scratch": {
                     "path": str(scratch),
                     "uid": scratch_identity.st_uid,
@@ -285,11 +289,8 @@ def run(
                         f"Private Xvfb failed to become reachable; logs={scratch}"
                     )
                 time.sleep(0.05)
-            if builtin_only:
-                from autosar_tooling.acceptance.native_media import PrivateMedia
-
-                media = PrivateMedia(scratch, environment)
-                children.append(media.process)
+            media = PrivateMedia(scratch, environment)
+            children.append(media.process)
         node = executable("node")
         if not installed:
             vite = OwnedProcess(
@@ -317,20 +318,9 @@ def run(
             ready("http://127.0.0.1:1420")
         endpoint_port = port()
         # Owner environments are overrides, not replacements; unset at exec time.
-        native_command = [
-            executable("env"),
-            "-u",
-            "AUTOSAR_XSD_ARCHIVE",
-            "-u",
-            "AUTOSAR_MOD_ARCHIVE",
-        ]
-        if builtin_only:
-            from autosar_tooling.acceptance.native_builtin import EXECUTION_VARIABLES
-            native_command.extend(("-u", "GTK_THEME"))
-
-            for name in EXECUTION_VARIABLES:
-                if name not in ("AUTOSAR_XSD_ARCHIVE", "AUTOSAR_MOD_ARCHIVE"):
-                    native_command.extend(("-u", name))
+        native_command = [executable("env"), "-u", "GTK_THEME"]
+        for name in EXECUTION_VARIABLES:
+            native_command.extend(("-u", name))
         if installed:
             for name in (
                 "PYTHONPATH",
@@ -407,17 +397,10 @@ def run(
                 state = driver.owner.request("closed", scope=driver.scope)
                 if state["op"] == "closed":
                     break
-                if builtin_only:
-                    assert media is not None
-                    media.sample()
-                    from autosar_tooling.acceptance.native_memory import sample
-
-                    sample(scratch, server.registration["pid"], "native-server-subtree")
-                    from autosar_tooling.acceptance.native_clipboard import (
-                        sample as read_clipboard,
-                    )
-
-                    read_clipboard(scratch, environment)
+                assert media is not None
+                media.sample()
+                sample(scratch, server.registration["pid"], "native-server-subtree")
+                read_clipboard(scratch, environment)
                 from autosar_tooling.acceptance.native_dialog import pending
 
                 authorization = pending(scratch)

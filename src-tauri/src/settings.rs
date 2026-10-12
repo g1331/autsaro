@@ -11,18 +11,6 @@ pub(super) fn workbench_capabilities(
     state.capabilities()
 }
 #[tauri::command]
-pub(super) async fn configure_validation_resources(
-    state: State<'_, Arc<AppState>>,
-    fingerprint: String,
-    xsd_archive: String,
-    mod_archive: String,
-) -> Result<Reply<()>, autosar_config_core::LocalizedText> {
-    background(state, move |state| {
-        state.configure_resources(&fingerprint, xsd_archive.into(), mod_archive.into())
-    })
-    .await
-}
-#[tauri::command]
 pub(super) async fn configure_execution_tools(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,

@@ -20,27 +20,38 @@ class HostBoundaryTests(unittest.TestCase):
         if not requested or not Path(requested).is_file():
             raise RuntimeError("Host boundary tests require the native GCC")
         cls.compiler = str(Path(requested).resolve())
+        # Delivered projects generate these two headers; the lock fixture needs only the policy type.
+        generated = cls.directory / "generated"
+        generated.mkdir()
+        (generated / "Ecu_Config.h").write_text(
+            '#ifndef ECU_CONFIG_H\n#define ECU_CONFIG_H\n#include "Std_Types.h"\n'
+            "typedef enum { ECU_TX_SYNCHRONOUS = 0, ECU_TX_QUEUED = 1 } EcuTxConfirmation;\n"
+            "typedef struct { EcuTxConfirmation tx_confirmation; } EcuPolicyConfig;\n"
+            "extern const EcuPolicyConfig Ecu_Policy;\n#endif\n", encoding="utf-8")
+        (generated / "Ecu_Execution.h").write_text(
+            '#ifndef ECU_EXECUTION_H\n#define ECU_EXECUTION_H\n#include "Ecu_Config.h"\n#include "Can_Host.h"\n'
+            "EcuStatus Ecu_ExecutionTransmit(CanTxSink sink, PduIdType handle, uint32_t id, uint8_t dlc, const uint8_t data[8]);\n"
+            "uint64_t Ecu_ExecutionNow(void);\n#endif\n", encoding="utf-8")
         cls.flags = ["-std=c99", "-O1", "-Wall", "-Wextra", "-Werror", "-pedantic", "-D_XOPEN_SOURCE=700",
-                     "-I" + str(ROOT / "runtime/include"), "-I" + str(ROOT / "runtime/src"), "-I" + str(ROOT / "runtime/multi/src"),
-                     "-I" + str(ROOT / "runtime/host/include"), "-I" + str(ROOT / "runtime/multi/include"),
+                     "-I" + str(ROOT / "runtime/multi/src"), "-I" + str(ROOT / "runtime/multi/include"),
                      # The mainline CAN headers use the generated ComStack_Cfg.h widths.
-                     "-I" + str(ROOT / "core/tests/fixtures/multi-runtime")]
+                     "-I" + str(ROOT / "core/tests/fixtures/multi-runtime"), "-I" + str(generated)]
         suffix = ".exe" if os.name == "nt" else ""
         cls.lock = cls.directory / ("lock" + suffix)
-        cls.storage = cls.directory / ("storage" + suffix)
-        for name, module in [("lock", "multi/src/Can_HostLock.c"), ("storage", "src/NvM_HostStorage.c")]:
-            header = ROOT / "tests/fixtures" / ("host_" + ("lock" if name == "lock" else "storage") + "_faults.h")
-            obj = cls.directory / (name + ".o")
-            result = cls.execute([cls.compiler, *cls.flags, "-include", str(header), "-c",
-                                  str(ROOT / "runtime" / module), "-o", str(obj)], "compile-" + name)
-            if not result.success:
-                raise RuntimeError(result.stderr.read_text(encoding="utf-8", errors="replace"))
-            fixture = ROOT / "tests/fixtures" / ("host_" + name + "_faults.c")
-            sources = [ROOT / "runtime/multi/src/Can.c", ROOT / "runtime/multi/src/Can_Host.c", ROOT / "runtime/multi/src/Det.c", ROOT / "runtime/multi/src/Det_Host.c", ROOT / "runtime/multi/src/SchM_CanIf_Host.c", ROOT / "runtime/host/src/Can_Execution.c"] if name == "lock" else [ROOT / "runtime/src/NvM.c"]
-            result = cls.execute([cls.compiler, *cls.flags, str(obj), str(fixture), *(str(path) for path in sources),
-                                  *([] if os.name == "nt" else ["-pthread"]), "-o", str(getattr(cls, name))], "link-" + name)
-            if not result.success:
-                raise RuntimeError(result.stderr.read_text(encoding="utf-8", errors="replace"))
+        header = ROOT / "tests/fixtures/host_lock_faults.h"
+        obj = cls.directory / "lock.o"
+        result = cls.execute([cls.compiler, *cls.flags, "-include", str(header), "-c",
+                              str(ROOT / "runtime/multi/src/Can_HostLock.c"), "-o", str(obj)], "compile-lock")
+        if not result.success:
+            raise RuntimeError(result.stderr.read_text(encoding="utf-8", errors="replace"))
+        sources = [ROOT / "runtime/multi/src" / name for name in
+                   ("Can.c", "Can_Host.c", "Det.c", "Det_Host.c", "SchM_CanIf_Host.c")]
+        sources.append(ROOT / "core/tests/fixtures/multi-runtime/execution_sink.c")
+        result = cls.execute([cls.compiler, *cls.flags, str(obj), str(ROOT / "tests/fixtures/host_lock_faults.c"),
+                              *(str(path) for path in sources),
+                              *([] if os.name == "nt" else ["-pthread"]), "-o", str(cls.lock)], "link-lock")
+        if not result.success:
+            raise RuntimeError(result.stderr.read_text(encoding="utf-8", errors="replace"))
 
     @classmethod
     def tearDownClass(cls):
@@ -76,10 +87,3 @@ class HostBoundaryTests(unittest.TestCase):
                     self.assertIn("attrs=1", output)
                 if case == "attr-close":
                     self.assertIn("attrs=1 mutexes=1", output)
-
-    def test_close_failure_invalidates_stream_and_prevents_false_reopen_success(self):
-        for case in ("close", "reopen", "init"):
-            with self.subTest(case=case):
-                path = self.directory / (case + ".bin")
-                result = self.execute([str(self.storage), case, str(path)], case)
-                self.assertTrue(result.success, result.stdout.read_text())

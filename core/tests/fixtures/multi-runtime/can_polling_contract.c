@@ -1,5 +1,6 @@
 /** Fixed controller polling/zero-DLC oracle with the shared actual driver. */
-#include "Can.h"
+#include "standard/Can.h"
+#include "Can_Host.h"
 #include "Can_Internal.h"
 #include "Det.h"
 #include "CanIf.h"
@@ -11,6 +12,7 @@
 #include "LSduR_PduR.h"
 #include "Ecu_Config.h"
 #include <assert.h>
+#include <stddef.h>
 static unsigned emitted;
 static unsigned received;
 static unsigned positive;
@@ -18,17 +20,7 @@ static unsigned negative;
 static unsigned modes;
 static unsigned busoffs;
 static uint8 expected_length;
-const EcuPolicyConfig Ecu_Policy = {ECU_TX_SYNCHRONOUS,
-                                    ECU_RX_BEFORE_DEADLINE,
-                                    0u,
-                                    0u,
-                                    ECU_WAIT_ABORT,
-                                    0u,
-                                    0u,
-                                    NULL_PTR,
-                                    0u,
-                                    50u,
-                                    5000u};
+const EcuPolicyConfig Ecu_Policy = {.tx_confirmation = ECU_TX_SYNCHRONOUS};
 static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8]) {
     assert(id == 0x321u && length == expected_length);
     if (length == 0u) {

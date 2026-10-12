@@ -1,7 +1,6 @@
 {
   "format": "autosar-asset-inventory-v1",
   "externalIdentitySources": [
-    "runtime/contracts/bsw-v1.json",
     "third_party/freertos/source-manifest.json",
     "third_party/freertos/posix-source-manifest.json"
   ],
@@ -15,8 +14,7 @@
         "linux-x64-controlled-v1"
       ],
       "profiles": [
-        "ecu",
-        "host"
+        "ecu"
       ],
       "role": "delivery",
       "responsibility": "workbench"
@@ -37,7 +35,7 @@
     },
     {
       "path": "runtime/ecu/include/Ecu_Target.h",
-      "sha256": "8d5fd51b5baafa72f71a97c581f370b13268a4cf01e6956e1ccf5e7dc02c656f",
+      "sha256": "34b4418c907e1f600c4b151177759fda053c44454ef6a8ce777a3c6d59d8c72e",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -79,7 +77,7 @@
     },
     {
       "path": "runtime/ecu/src/Ecu_HostBridge.c",
-      "sha256": "36bb1892cd6456b559e624e864454f394b735636406b21cfcd40dae68010e43e",
+      "sha256": "7f7808692f9ca69d7fea2ea59ee37009728681217e77a5209fda085d53747585",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -106,22 +104,8 @@
       ]
     },
     {
-      "path": "runtime/ecu/src/Ecu_SchM.c",
-      "sha256": "0c6c0b4db28544ba6ab1d3f38cbdba2bcc773a3e5e971e4e77ab6e2d15abb1ce",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "role": "delivery",
-      "responsibility": "workbench",
-      "profiles": [
-        "ecu"
-      ]
-    },
-    {
       "path": "runtime/ecu/src/Ecu_Target.c",
-      "sha256": "b8617e4b35d6916b95997098f14d8f947fb9c16c95540692f4aac20d3d83d450",
+      "sha256": "de47293aedc909f6ebca9c97d45fb250c7394eb39c2df111929920350267709e",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -162,22 +146,8 @@
       ]
     },
     {
-      "path": "runtime/ecu/templates/Application.c.in",
-      "sha256": "b40367938e5e9e4748032fbc7978f3f3b0460377d6d3cda43151949c934a9471",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "profiles": [
-        "ecu"
-      ],
-      "role": "delivery",
-      "responsibility": "workbench"
-    },
-    {
       "path": "runtime/ecu/templates/Ecu_Config.c.in",
-      "sha256": "22d6a788b12c53c05b501b8c676c774328ec1a22f3a6ed52c2a4c0e0b63cef3c",
+      "sha256": "d46e77bcc5fbabfe5a01ebfdd8ceb52ca856a6ca39cf395cef7f6fde74c49c9e",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -188,77 +158,6 @@
       ],
       "role": "delivery",
       "responsibility": "workbench"
-    },
-    {
-      "path": "runtime/ecu/templates/Rte.c.in",
-      "sha256": "4ed714f2cca08f6ab97497fe51b215746d4a4cc8036ccabff9e05e9435ed9bd1",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "profiles": [
-        "ecu"
-      ],
-      "role": "delivery",
-      "responsibility": "workbench"
-    },
-    {
-      "path": "runtime/generated-README.md",
-      "sha256": "d2ac78782966272960f4c3e2c65920c5c99279cf76aaa76cf0bea91016db9180",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "profiles": [
-        "host"
-      ],
-      "role": "delivery",
-      "responsibility": "workbench"
-    },
-    {
-      "path": "runtime/include/Ecu_Runtime.h",
-      "sha256": "2a95b9519e500c6b4daf3190b634e205ddce9031120789640c2c146fd93e7114",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "role": "bsw",
-      "responsibility": "workbench",
-      "profiles": [
-        "host"
-      ]
-    },
-    {
-      "path": "runtime/include/NvM.h",
-      "sha256": "cd37736a221da03787519d871731696d69a843525122bf43c022a9c96b862a0a",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "role": "bsw",
-      "responsibility": "workbench",
-      "profiles": [
-        "ecu",
-        "host"
-      ]
-    },
-    {
-      "path": "runtime/include/Rte.h",
-      "sha256": "aff8c64f0d4406e37bbbe0d635859f1459674f1f8516d159ac7f4718e75e3480",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "role": "bsw",
-      "responsibility": "workbench",
-      "profiles": [
-        "host"
-      ]
     },
     {
       "path": "runtime/os/FreeRTOSConfig.h",
@@ -979,37 +878,7 @@
       "role": "bsw",
       "responsibility": "workbench",
       "profiles": [
-        "host",
         "ecu-multi"
-      ]
-    },
-    {
-      "path": "runtime/src/Dem.c",
-      "sha256": "e49f3d59b91cccb111490afc80ba437186669957e1ae97667b0b32fc48c7ea4a",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "role": "bsw",
-      "responsibility": "workbench",
-      "profiles": [
-        "ecu",
-        "host"
-      ]
-    },
-    {
-      "path": "runtime/src/Ecu_Runtime.c",
-      "sha256": "c870d6114f918ae4ecf091059f31813ff098b628ee230870f0dfbf283496d45d",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "role": "bsw",
-      "responsibility": "workbench",
-      "profiles": [
-        "host"
       ]
     },
     {
@@ -1023,125 +892,7 @@
       "role": "bsw",
       "responsibility": "workbench",
       "profiles": [
-        "ecu",
-        "host"
-      ]
-    },
-    {
-      "path": "runtime/src/LSduR.c",
-      "sha256": "1e8b91e25c06d1d7ca8a2045c9b9413888d62315b3b6ff276a883b1be11e485d",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "role": "bsw",
-      "responsibility": "workbench",
-      "profiles": [
-        "ecu",
-        "host"
-      ]
-    },
-    {
-      "path": "runtime/src/NvM.c",
-      "sha256": "6bacdd6af95f9b7640c38a7369b71be4ce145c0b23d3b8e33a0d1fb051c2a061",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "role": "bsw",
-      "responsibility": "workbench",
-      "profiles": [
-        "ecu",
-        "host"
-      ]
-    },
-    {
-      "path": "runtime/src/NvM_HostStorage.c",
-      "sha256": "24f9aa01d018d73f22cde5f23f28a345ac1e5e76940e26d2f33426138e97efa7",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "role": "bsw",
-      "responsibility": "workbench",
-      "profiles": [
-        "ecu",
-        "host"
-      ]
-    },
-    {
-      "path": "runtime/src/NvM_HostStorage.h",
-      "sha256": "12849e163315f37e3c8803260e97aa3d1225c38337dca5fb42ea4b9d80b7fe47",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "role": "bsw",
-      "responsibility": "workbench",
-      "profiles": [
-        "ecu",
-        "host"
-      ]
-    },
-    {
-      "path": "runtime/src/Os.c",
-      "sha256": "d59082eab417547ea4a9d762fbff86d4cda727edf560deb32c1a1dec64e89e07",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "role": "bsw",
-      "responsibility": "workbench",
-      "profiles": [
-        "host"
-      ]
-    },
-    {
-      "path": "runtime/src/Rte.c",
-      "sha256": "2fa1be887f66930027e1ef33fb12ac7c50be148c4be34802877ae451c42cf737",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "role": "bsw",
-      "responsibility": "workbench",
-      "profiles": [
-        "host"
-      ]
-    },
-    {
-      "path": "runtime/src/Security.c",
-      "sha256": "79db422fc7df13b0ebd3dd7b99aca837f1fc058e98223ab34e937a1697084c27",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "role": "bsw",
-      "responsibility": "workbench",
-      "profiles": [
-        "ecu",
-        "host"
-      ]
-    },
-    {
-      "path": "runtime/src/ecu_host_main.c",
-      "sha256": "c03f5e18ff0dbe8c723f1903c2930d271b1841b8f5773d7db0a142619d08dae9",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "role": "bsw",
-      "responsibility": "workbench",
-      "profiles": [
-        "host"
+        "ecu-multi"
       ]
     },
     {
@@ -1153,38 +904,35 @@
         "linux-x64-controlled-v1"
       ],
       "profiles": [
-        "ecu",
-        "host"
+        "ecu"
       ],
       "role": "delivery",
       "responsibility": "workbench"
     },
     {
       "path": "tools/python/src/ecu_tools/build.py",
-      "sha256": "53fb711609db7ddb9da90ec62e9422daf0d4799998646411ac539b1e754f6df0",
+      "sha256": "8af77aa8c614fb2e6d59535d20e8792c7d2a2a95e053afb8d8f00ed982bd16bc",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
       ],
       "profiles": [
-        "ecu",
-        "host"
+        "ecu"
       ],
       "role": "delivery",
       "responsibility": "workbench"
     },
     {
       "path": "tools/python/src/ecu_tools/cli.py",
-      "sha256": "7ca90f0553b6b56065659b367dd230ba16d2473560947361d84d9ff14a815b69",
+      "sha256": "0aa86d56a4d85340634e24586d7e4237bcb24a6307f145ac0feb23dc26802e5b",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
       ],
       "profiles": [
-        "ecu",
-        "host"
+        "ecu"
       ],
       "role": "delivery",
       "responsibility": "workbench"
@@ -1198,8 +946,7 @@
         "linux-x64-controlled-v1"
       ],
       "profiles": [
-        "ecu",
-        "host"
+        "ecu"
       ],
       "role": "delivery",
       "responsibility": "workbench"
@@ -1213,8 +960,7 @@
         "linux-x64-controlled-v1"
       ],
       "profiles": [
-        "ecu",
-        "host"
+        "ecu"
       ],
       "role": "delivery",
       "responsibility": "workbench"
@@ -1228,8 +974,7 @@
         "linux-x64-controlled-v1"
       ],
       "profiles": [
-        "ecu",
-        "host"
+        "ecu"
       ],
       "role": "delivery",
       "responsibility": "workbench"
@@ -1243,22 +988,7 @@
         "linux-x64-controlled-v1"
       ],
       "profiles": [
-        "ecu",
-        "host"
-      ],
-      "role": "delivery",
-      "responsibility": "workbench"
-    },
-    {
-      "path": "tools/python/src/ecu_tools/reference.py",
-      "sha256": "9e2e436e40c29a30d4c5e526cb41777ad81863429f19b43b82b96baa2c6bb245",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "profiles": [
-        "host"
+        "ecu"
       ],
       "role": "delivery",
       "responsibility": "workbench"
@@ -1272,95 +1002,10 @@
         "linux-x64-controlled-v1"
       ],
       "profiles": [
-        "ecu",
-        "host"
+        "ecu"
       ],
       "role": "delivery",
       "responsibility": "workbench"
-    },
-    {
-      "path": "runtime/host/include/Ecu_ProfileLimits.h",
-      "sha256": "a7efa7726c919abd73cd87b47b7a88da3fd1b92c7180f81b8c69df216625dd66",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "profiles": [
-        "host"
-      ],
-      "role": "delivery",
-      "responsibility": "execution adapter"
-    },
-    {
-      "path": "runtime/host/src/Can_Execution.c",
-      "sha256": "bfb5b946e8222e7d2ed3693e7474efdb201fe9a02fe26af9ac89d2d2b6f45c88",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "profiles": [
-        "host"
-      ],
-      "role": "delivery",
-      "responsibility": "execution adapter"
-    },
-    {
-      "path": "runtime/host/src/Ecu_Clock.c",
-      "sha256": "3aff4534a1a0abf25c514c99d307a19472fdb74061b04e4e295887c84d4b7297",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "profiles": [
-        "host"
-      ],
-      "role": "delivery",
-      "responsibility": "execution adapter"
-    },
-    {
-      "path": "runtime/host/src/Dcm_Execution.c",
-      "sha256": "bd9361fd509e5c5cfb04d8b081ceb4fbf796b83817b8aaa68bfa661379033397",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "profiles": [
-        "host"
-      ],
-      "role": "delivery",
-      "responsibility": "execution adapter"
-    },
-    {
-      "path": "runtime/ecu/src/Ecu_Execution.c",
-      "sha256": "6fb641896c31253ef4901440fa4276932f0ce7fea0b86b6bac38776ada95b39b",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "profiles": [
-        "ecu"
-      ],
-      "role": "delivery",
-      "responsibility": "execution adapter"
-    },
-    {
-      "path": "runtime/ecu/src/Ecu_Diagnostic.h",
-      "sha256": "38ceae136ef297b94fd89d7dfbc31db64d188f1c0ce204c102274dbd2bedab5a",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "profiles": [
-        "ecu"
-      ],
-      "role": "delivery",
-      "responsibility": "execution adapter"
     },
     {
       "path": "runtime/os/include/Os_IntegrationHooks.h",
@@ -1377,20 +1022,6 @@
       "responsibility": "AUTOSAR OS"
     },
     {
-      "path": "runtime/include/Os.h",
-      "sha256": "46bd20117624b757a533648578466e1cd2e2e7aa374445a638e5bf692bdf1fda",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "profiles": [
-        "host"
-      ],
-      "role": "delivery",
-      "responsibility": "legacy clock"
-    },
-    {
       "path": "LICENSE",
       "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
       "license": "Apache-2.0",
@@ -1399,8 +1030,7 @@
         "linux-x64-controlled-v1"
       ],
       "profiles": [
-        "ecu",
-        "host"
+        "ecu"
       ],
       "role": "delivery",
       "responsibility": "workbench"
@@ -1414,8 +1044,7 @@
         "linux-x64-controlled-v1"
       ],
       "profiles": [
-        "ecu",
-        "host"
+        "ecu"
       ],
       "role": "delivery",
       "responsibility": "workbench"
@@ -1429,9 +1058,7 @@
         "linux-x64-controlled-v1"
       ],
       "profiles": [
-        "ecu-multi",
-        "host",
-        "ecu"
+        "ecu-multi"
       ],
       "role": "bsw",
       "responsibility": "workbench"
@@ -1445,9 +1072,7 @@
         "linux-x64-controlled-v1"
       ],
       "profiles": [
-        "ecu-multi",
-        "host",
-        "ecu"
+        "ecu-multi"
       ],
       "role": "bsw",
       "responsibility": "workbench"
@@ -1461,9 +1086,7 @@
         "linux-x64-controlled-v1"
       ],
       "profiles": [
-        "ecu-multi",
-        "host",
-        "ecu"
+        "ecu-multi"
       ],
       "role": "bsw",
       "responsibility": "workbench"
@@ -1477,9 +1100,7 @@
         "linux-x64-controlled-v1"
       ],
       "profiles": [
-        "ecu-multi",
-        "host",
-        "ecu"
+        "ecu-multi"
       ],
       "role": "bsw",
       "responsibility": "workbench"
@@ -2137,16 +1758,14 @@
         "linux-x64-controlled-v1"
       ],
       "profiles": [
-        "ecu-multi",
-        "host",
-        "ecu"
+        "ecu-multi"
       ],
       "role": "bsw",
       "responsibility": "workbench"
     },
     {
       "path": "runtime/multi/src/SchM_Diagnostic_Host.c",
-      "sha256": "be5c7435349ce26e2ce770abe69c13c4e52b94d7f5684d7fa33ca8c2eb4e7605",
+      "sha256": "9554677820b6f3dabe0c6689ff0f9be0ccd0e3b889c71010badc334af9c06f63",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -2173,21 +1792,6 @@
       "responsibility": "workbench"
     },
     {
-      "path": "runtime/include/Can.h",
-      "sha256": "6f1a7e98a342084a3d68b599e551af353979c91f831b36616fd0942996f205ef",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "profiles": [
-        "ecu",
-        "host"
-      ],
-      "role": "bsw",
-      "responsibility": "workbench"
-    },
-    {
       "path": "runtime/multi/src/Can_Host.c",
       "sha256": "7ff6ec9c86eeaee4e30b46e2ef6063f6e29baaaf52aaeeabcd509862a2913dfb",
       "license": "Apache-2.0",
@@ -2196,8 +1800,189 @@
         "linux-x64-controlled-v1"
       ],
       "profiles": [
-        "ecu",
-        "host"
+        "ecu-multi"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/multi/include/Can_CfgTypes.h",
+      "sha256": "3654a9feec4dfb1ae58a46e7543352d8945ba2db5cfa8e7e0af709e0862589a1",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu-multi"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/multi/include/Can_GeneralTypes.h",
+      "sha256": "b09be301c2daf750be28623b22d443431807c3a097f630d96d88da228307e17c",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu-multi"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/multi/include/Can_Host.h",
+      "sha256": "e2b7f594518fa933c2955d3de5d21dd1e8fdd46aed9f1812bdf8f169fca865ca",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu-multi"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/multi/include/Can_MemMap.h",
+      "sha256": "4021da0b6a7dcb94399dcca88c20ec0b1581e291c724425f39be8ff155568178",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu-multi"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/multi/include/Det.h",
+      "sha256": "668227d916225528aefed6035c182f7f90a42a1cf6bf8620d44b8c7c2901085b",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu-multi"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/multi/include/Ecu_Status.h",
+      "sha256": "43bf6321656d71b4c6850d62b038ed638ea0d1a932f3fb35823e7f2714f8043b",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu-multi"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/multi/include/Platform_Types.h",
+      "sha256": "d46afc49c9c1e3ea2bbb1de5c22216e79b105694d6d71e563a68cb8c03dce005",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu-multi"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/multi/include/SchM_Can.h",
+      "sha256": "e450073f066bd1aa23e7ec152062561246d9c60b37edf68c6bc42ef21d1015bc",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu-multi"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/multi/include/Std_Types.h",
+      "sha256": "f3da9199fb37375a33f114ab9b01fd4dc2da9f91c2dc29ef2107ab649c2ef69b",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu-multi"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/multi/include/standard/Can.h",
+      "sha256": "c1a2a2d031c14c1683a977d8ef4475d9b4c2fbb9d56ede3fb99c04c3936ebf8d",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu-multi"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/multi/src/Can.c",
+      "sha256": "0786eee92ed6c08d2a23a506fe1065dd35384003a58987bf572f2a2c1587f3cd",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu-multi"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/multi/src/Can_HostLock.h",
+      "sha256": "60c4a9b9ddf16257a7d35e65b4b4f4103bcb1dd2ae9525119525482d027d98fb",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu-multi"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/multi/src/Can_Internal.h",
+      "sha256": "bb02b266e2fbf45f82dc0368ecfc6f2b98cc5e662ec0ffed358e0461371b5fad",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu-multi"
       ],
       "role": "bsw",
       "responsibility": "workbench"

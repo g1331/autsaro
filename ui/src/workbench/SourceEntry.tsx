@@ -48,14 +48,7 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
             {t('editor.source.open')}
           </button>
           <button type="button" onClick={c.importHandoff} disabled={Boolean(openReason)}>
-            {t('editor.source.importHost')}
-          </button>
-          <button
-            type="button"
-            onClick={() => void c.chooseDirectory(c.importHandoffDirectory)}
-            disabled={Boolean(openReason)}
-          >
-            {t('editor.source.importEcu')}
+            {t('editor.source.importHandoff')}
           </button>
         </nav>
         <section>
@@ -70,22 +63,7 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
                   autoComplete="off"
                 />
               </label>
-              {!saveAs ? (
-                <label>
-                  {t('editor.source.template')}
-                  <select
-                    aria-label={t('editor.source.template')}
-                    value={c.templateId}
-                    onChange={(event) => c.setTemplateId(event.target.value as typeof c.templateId)}
-                  >
-                    <option value="can-empty-v1">{t('editor.source.emptyCan')}</option>
-                    <option value="can-signals-v1">{t('editor.source.signalsCan')}</option>
-                    <option value="standard-ecu">{t('editor.source.standardEcu')}</option>
-                  </select>
-                </label>
-              ) : (
-                <p>{t('editor.source.saveAsHelp')}</p>
-              )}
+              {saveAs ? <p>{t('editor.source.saveAsHelp')}</p> : null}
               <label>
                 {t('editor.source.emptyDirectory')}
                 <div className="path-picker">

@@ -1,11 +1,8 @@
 use super::graph::Graph;
-use super::{DiagnosticCategory, PROFILE, PlanDiagnostic};
+use super::{DiagnosticCategory, PlanDiagnostic};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Component, Path};
-
-const DESCRIPTION: &str = include_str!("../../../runtime/contracts/bsw-v1.json");
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -15,147 +12,20 @@ pub struct ContractArgument {
     pub direction: String,
 }
 
-#[derive(Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[derive(Clone)]
 struct Entry {
     module: String,
     return_type: String,
     arguments: Vec<ContractArgument>,
     header: String,
     source: String,
-    stage: String,
-    #[serde(default)]
     reentrant: bool,
-    #[serde(default = "synchronous_default")]
     synchronous: bool,
 }
 
-fn synchronous_default() -> bool {
-    true
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct Description {
-    format_version: u32,
-    profile: String,
-    scope: String,
+/// Source-derived producer inventory selected for one mainline plan.
+pub(super) struct RuntimeCatalog {
     entries: BTreeMap<String, Entry>,
-    sources: BTreeMap<String, String>,
-}
-
-/// Source-backed inventory compiled into this workbench version. An edited
-/// on-disk manifest cannot replace its trusted contracts at runtime.
-pub struct RuntimeCatalog {
-    description: Description,
-}
-
-fn tool(code: &str, message: crate::message::LocalizedText) -> Vec<PlanDiagnostic> {
-    vec![PlanDiagnostic {
-        category: DiagnosticCategory::Tool,
-        code: code.into(),
-        file: None,
-        object: None,
-        message: message.into(),
-        remedy: crate::product_message!(
-            "backend.integration.catalog.runtime_source_inventory_restore"
-        )
-        .into(),
-    }]
-}
-
-impl RuntimeCatalog {
-    pub fn embedded() -> Result<Self, Vec<PlanDiagnostic>> {
-        let description: Description = serde_json::from_str(DESCRIPTION).map_err(|error| {
-            tool(
-                "CATALOG_TOOL",
-                crate::product_message!("backend.integration.catalog.compiled_bsw_inventory_invalid", "error" => error),
-            )
-        })?;
-        if description.format_version != 1
-            || description.profile != PROFILE
-            || description.scope.is_empty()
-            || description.entries.iter().any(|(symbol, entry)| {
-                entry.stage != "current_host_bsw"
-                    || !description.sources.contains_key(&entry.header)
-                    || !description.sources.contains_key(&entry.source)
-                    || entry.module.is_empty()
-                    || !c_identifier(symbol)
-            })
-        {
-            return Err(tool(
-                "CATALOG_TOOL",
-                crate::product_message!(
-                    "backend.integration.catalog.compiled_bsw_inventory_identity_unsupported"
-                ),
-            ));
-        }
-        Ok(Self { description })
-    }
-
-    pub fn from_repository(root: &Path) -> Result<Self, Vec<PlanDiagnostic>> {
-        let Self { description } = Self::embedded()?;
-        let manifest =
-            std::fs::read(root.join("runtime/contracts/bsw-v1.json")).map_err(|error| {
-                tool(
-                    "CATALOG_MISSING",
-                    crate::product_message!("backend.integration.catalog.bsw_inventory_missing", "error" => error),
-                )
-            })?;
-        if manifest != DESCRIPTION.as_bytes() {
-            return Err(tool(
-                "CATALOG_IDENTITY",
-                crate::product_message!("backend.integration.catalog.disk_bsw_inventory_mismatch"),
-            ));
-        }
-        for (relative, expected) in &description.sources {
-            let path = Path::new(relative);
-            if !relative.starts_with("runtime/")
-                || relative.contains('\\')
-                || relative.contains(':')
-                || !path
-                    .components()
-                    .all(|part| matches!(part, Component::Normal(_)))
-            {
-                return Err(tool(
-                    "CATALOG_TOOL",
-                    crate::product_message!(
-                        "backend.integration.catalog.compiled_inventory_source_identity_invalid"
-                    ),
-                ));
-            }
-            let bytes = std::fs::read(root.join(path)).map_err(|error| {
-                tool(
-                    "CATALOG_SOURCE",
-                    crate::product_message!("backend.integration.catalog.bsw_source_read_failed", "relative" => relative, "error" => error),
-                )
-            })?;
-            if format!("{:x}", Sha256::digest(bytes)) != *expected {
-                return Err(tool(
-                    "CATALOG_SOURCE",
-                    crate::product_message!("backend.integration.catalog.bsw_source_identity_mismatch", "relative" => relative),
-                ));
-            }
-        }
-        for (symbol, entry) in &description.entries {
-            if entry.stage != "current_host_bsw"
-                || !description.sources.contains_key(&entry.header)
-                || !description.sources.contains_key(&entry.source)
-                || entry.module.is_empty()
-                || !c_identifier(symbol)
-            {
-                return Err(tool(
-                    "CATALOG_TOOL",
-                    crate::product_message!("backend.integration.catalog.bsw_producer_contract_invalid", "symbol" => symbol),
-                ));
-            }
-        }
-        Ok(Self { description })
-    }
-
-    pub fn source_identities(&self) -> &BTreeMap<String, String> {
-        &self.description.sources
-    }
 }
 
 /// The multi producer selects its actual R24-11 interfaces independently of
@@ -187,7 +57,6 @@ pub(super) fn multi_catalog(
                     .collect(),
                 header: header.into(),
                 source: source.into(),
-                stage: "selected_multi_bsw".into(),
                 reentrant: selected_behavior(symbol).0,
                 synchronous: selected_behavior(symbol).1,
             },
@@ -296,15 +165,7 @@ pub(super) fn multi_catalog(
             "src/Ecu_RuntimeConfig.c",
         );
     }
-    RuntimeCatalog {
-        description: Description {
-            format_version: 1,
-            profile: super::multi::PROFILE.into(),
-            scope: "Selected source-derived multi BSW producers".into(),
-            entries,
-            sources: multi_source_identities(),
-        },
-    }
+    RuntimeCatalog { entries }
 }
 
 // Reentrancy is qualified by different PduIds/signals in the standard API
@@ -475,7 +336,7 @@ pub(super) fn inspect(
     let mut used_owners = BTreeSet::new();
     let context = *graph.objects.values().next().unwrap();
     let all_entries = graph.of_kind("BSW-MODULE-ENTRY");
-    for (symbol, current) in &catalog.description.entries {
+    for (symbol, current) in &catalog.entries {
         let found: Vec<_> = all_entries
             .iter()
             .copied()
@@ -507,33 +368,31 @@ pub(super) fn inspect(
                 crate::product_message!("backend.integration.catalog.bsw_entry_description_supply"))]);
         }
         let entry = found[0];
-        if current.stage == "selected_multi_bsw"
-            && graph.elements[entry].object
-                != format!("/AUTOSAR_{}/BswModuleEntrys/{symbol}", current.module)
+        if graph.elements[entry].object
+            != format!("/AUTOSAR_{}/BswModuleEntrys/{symbol}", current.module)
         {
             return Err(vec![graph.diagnostic(entry, DiagnosticCategory::Input, "BSW_ENTRY_IDENTITY", crate::product_message!("backend.integration.catalog.bsw_entry_description_and_producer_required", "symbol" => symbol), crate::product_message!("backend.integration.catalog.bsw_entry_description_supply"))]);
         }
         // TPS_BSWMDT constr_10260..10264 require explicit interface properties.
         // The selected producers are ordinary concrete functions, not macros or inline APIs.
-        if current.stage == "selected_multi_bsw"
-            && ([
-                "IS-REENTRANT",
-                "IS-SYNCHRONOUS",
-                "CALL-TYPE",
-                "EXECUTION-CONTEXT",
-            ]
-            .iter()
-            .any(|field| graph.text(entry, field).is_none())
-                || graph.text(entry, "CALL-TYPE")
-                    != Some(if symbol.contains("_MainFunction") {
-                        "SCHEDULED"
-                    } else {
-                        "REGULAR"
-                    })
-                || graph.text(entry, "SW-SERVICE-IMPL-POLICY") != Some("STANDARD")
-                || graph
-                    .text(entry, "BSW-ENTRY-KIND")
-                    .is_some_and(|kind| kind != "CONCRETE"))
+        if [
+            "IS-REENTRANT",
+            "IS-SYNCHRONOUS",
+            "CALL-TYPE",
+            "EXECUTION-CONTEXT",
+        ]
+        .iter()
+        .any(|field| graph.text(entry, field).is_none())
+            || graph.text(entry, "CALL-TYPE")
+                != Some(if symbol.contains("_MainFunction") {
+                    "SCHEDULED"
+                } else {
+                    "REGULAR"
+                })
+            || graph.text(entry, "SW-SERVICE-IMPL-POLICY") != Some("STANDARD")
+            || graph
+                .text(entry, "BSW-ENTRY-KIND")
+                .is_some_and(|kind| kind != "CONCRETE")
         {
             return Err(vec![graph.diagnostic(entry, DiagnosticCategory::Input, "BSW_SIGNATURE_CONFLICT",
                 crate::product_message!("backend.integration.catalog.bsw_description_source_contract_mismatch", "symbol" => symbol),
@@ -610,12 +469,11 @@ pub(super) fn inspect(
             )]);
         }
         let owner = owners[0];
-        if catalog.description.profile == super::multi::PROFILE
-            && (graph.text(owner, "CATEGORY") != Some("BSW_MODULE")
-                || graph
-                    .text(owner, "MODULE-ID")
-                    .and_then(|value| value.parse::<u32>().ok())
-                    != module_id(&current.module))
+        if graph.text(owner, "CATEGORY") != Some("BSW_MODULE")
+            || graph
+                .text(owner, "MODULE-ID")
+                .and_then(|value| value.parse::<u32>().ok())
+                != module_id(&current.module)
         {
             return Err(vec![graph.diagnostic(owner, DiagnosticCategory::Input, "BSW_ENTRY_IDENTITY", crate::product_message!("backend.integration.catalog.bsw_entry_description_and_producer_required", "symbol" => symbol), crate::product_message!("backend.integration.catalog.bsw_entry_description_supply"))]);
         }
@@ -657,7 +515,7 @@ pub(super) fn inspect(
         for reference in graph.descendants(owner, "BSW-MODULE-ENTRY-REF") {
             let entry = *graph.objects.get(&graph.elements[reference].text).unwrap();
             let symbol = graph.text(entry, "SHORT-NAME").unwrap_or("");
-            if !catalog.description.entries.contains_key(symbol) {
+            if !catalog.entries.contains_key(symbol) {
                 return Err(vec![graph.diagnostic(
                     entry,
                     DiagnosticCategory::Input,

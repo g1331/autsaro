@@ -5,7 +5,7 @@ use autosar_config_core::model::Severity;
 use autosar_config_core::project_model::ValidationStatus;
 #[cfg(feature = "official-oracles")]
 use autosar_config_core::schema;
-use autosar_config_core::{DiagnosticSettings, Direction, Workspace, rules};
+use autosar_config_core::{Workspace, rules};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -92,53 +92,33 @@ fn native_rules_support_original_can_and_standard_inputs_without_oracle() {
 }
 
 #[test]
-fn native_rules_cover_rendered_diagnostic_and_dtc_closure() {
+fn native_rules_cover_the_standard_template_with_diagnostic_and_dtc_closure() {
     let scratch = Scratch::new();
     let directory = scratch.0.join("Diagnostic");
-    let mut workspace = Workspace::create(&directory, "Diagnostic").unwrap();
-    let tx = workspace
-        .add_frame("Live".into(), 0x321, 4, Direction::Tx, Some(10), None)
+    let preview =
+        Workspace::preview_project_creation(&directory, "Diagnostic", "standard-ecu").unwrap();
+    let workspace = Workspace::create_project_previewed(&preview).unwrap();
+    let files: Vec<_> = workspace
+        .project_manifest()
         .unwrap()
-        .frames[0]
-        .path
-        .clone();
-    let signal = workspace
-        .add_signal(tx, "LiveValue".into(), 0, 32, 7)
-        .unwrap()
-        .signals[0]
-        .path
-        .clone();
-    let rx = workspace
-        .add_frame("Monitor".into(), 0x456, 1, Direction::Rx, None, Some(30))
-        .unwrap()
-        .frames
-        .into_iter()
-        .find(|frame| frame.name == "Monitor")
-        .unwrap()
-        .path;
-    workspace
-        .add_signal(rx.clone(), "Status".into(), 0, 8, 0)
-        .unwrap();
-    workspace
-        .configure_diagnostic(DiagnosticSettings {
-            request_id: 0x700,
-            response_id: 0x708,
-            s3_ms: 5000,
-            n_as_ms: Some(100),
-            n_bs_ms: 200,
-            n_cr_ms: 200,
-            did: 0x1234,
-            signal_paths: vec![signal],
-            write_enabled: true,
-            reset_routine_id: Some(0x1234),
-            security_enabled: false,
+        .inputs
+        .iter()
+        .map(|input| {
+            let path = directory.join(&input.path);
+            let text = fs::read_to_string(&path).unwrap();
+            (path, text)
         })
-        .unwrap();
-    workspace.configure_dtc(0x123456, rx).unwrap();
-    workspace.save().unwrap();
-    let path = directory.join("Diagnostic.arxml");
-    let text = fs::read_to_string(&path).unwrap();
-    let result = rules::validate_native(&[(path.as_path(), &text)]).unwrap();
+        .collect();
+    assert!(
+        files
+            .iter()
+            .any(|(_, text)| text.contains("<SHORT-NAME>Dem</SHORT-NAME>"))
+    );
+    let borrowed: Vec<_> = files
+        .iter()
+        .map(|(path, text)| (path.as_path(), text.as_str()))
+        .collect();
+    let result = rules::validate_native(&borrowed).unwrap();
     assert_eq!(
         result.status,
         ValidationStatus::Passed,

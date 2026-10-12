@@ -14,7 +14,8 @@
 #include "BswM.h"
 #include "Ecu_HostBusSM.h"
 #include "Ecu_Config.h"
-#include "Can.h"
+#include "standard/Can.h"
+#include "Can_Host.h"
 #include "SchM_Can.h"
 #include "SchM_CanTp.h"
 #include "SchM_Dcm.h"
@@ -30,11 +31,11 @@ static unsigned reads;
 static unsigned reports;
 const EcuPolicyConfig Ecu_Policy = {
 #if defined(CAN_DIAGNOSTIC_QUEUED)
-    ECU_TX_QUEUED,
+    .tx_confirmation = ECU_TX_QUEUED,
 #else
-    ECU_TX_SYNCHRONOUS,
+    .tx_confirmation = ECU_TX_SYNCHRONOUS,
 #endif
-    ECU_RX_BEFORE_DEADLINE, 0u, 0u, ECU_WAIT_ABORT, 0u, 0u, NULL_PTR, 0u, 50u, 5000u};
+};
 static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8]) {
     assert(id == 0x708u && length == 8u && count < 128u);
 #if defined(CAN_DIAGNOSTIC_QUEUED)

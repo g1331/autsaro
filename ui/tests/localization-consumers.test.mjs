@@ -23,9 +23,8 @@ const capabilities = {
   targets: [],
   nativeExecution: false,
   hasWorkspace: false,
-  xsdArchive: null,
-  modArchive: null,
-  resourceError: null,
+  settingsError: null,
+  settingsNotice: null,
   executionTools: null,
   configuredExecutionTools: null,
   toolError: null,
@@ -45,9 +44,6 @@ const workspace = {
   name: 'RawProject',
   dirty: false,
   files: [],
-  frames: [],
-  signals: [],
-  diagnostic: null,
   issues: [],
 };
 const baseProjection = {
@@ -138,8 +134,8 @@ async function openConsumer(
   const view = render(React.createElement(Consumer));
   await waitFor(() => expect(controller.capabilities).not.toBeNull());
   act(() => {
-    controller.setHandoffImportMode('legacy');
     controller.setEcuImportDirectory('C:\\handoff');
+    controller.setHandoffImportDestination('C:\\live');
   });
   await act(async () => {
     await controller.confirmHandoffImport();

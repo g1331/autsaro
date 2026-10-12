@@ -8,33 +8,3 @@ void SchM_Exit_Dcm_DCM_STATE(void) { SchM_Exit_CanIf_CANIF_STATE(); }
 void SchM_Enter_CanTp_CANTP_STATE(void) { SchM_Enter_CanIf_CANIF_STATE(); }
 void SchM_Exit_CanTp_CANTP_STATE(void) { SchM_Exit_CanIf_CANIF_STATE(); }
 
-#if !defined(ECU_MULTI_COMPONENT)
-/* No connected mode-switch events in this selected profile. Publication still
- * stores the actual provided mode synchronously under the existing resource.
- * Full generation supplies matching BSW mode-group relations and ownership.
- */
-#define DCM_START_SEC_VAR_CLEARED_UNSPECIFIED
-#include "Dcm_MemMap.h"
-static Rte_ModeType_DcmDiagnosticSessionControl diagnostic_session_mode DCM_VAR_CLEARED;
-#define DCM_STOP_SEC_VAR_CLEARED_UNSPECIFIED
-#include "Dcm_MemMap.h"
-#define DCM_START_SEC_CODE
-#include "Dcm_MemMap.h"
-DCM_CODE Std_ReturnType
-SchM_Switch_Dcm_DcmDiagnosticSessionControl(Rte_ModeType_DcmDiagnosticSessionControl mode) {
-    SchM_Enter_CanIf_CANIF_STATE();
-    diagnostic_session_mode = mode;
-    SchM_Exit_CanIf_CANIF_STATE();
-    return E_OK;
-}
-DCM_CODE Rte_ModeType_DcmDiagnosticSessionControl SchM_Mode_Dcm_DcmDiagnosticSessionControl(void) {
-    Rte_ModeType_DcmDiagnosticSessionControl mode;
-    SchM_Enter_CanIf_CANIF_STATE();
-    mode = diagnostic_session_mode;
-    SchM_Exit_CanIf_CANIF_STATE();
-    return mode;
-}
-
-#define DCM_STOP_SEC_CODE
-#include "Dcm_MemMap.h"
-#endif

@@ -36,7 +36,7 @@ fn value_change(field: &FieldDescriptor, id: &str, lexeme: &str) -> Configuratio
 }
 
 fn signals(directory: &Path, name: &str) -> Workspace {
-    let preview = Workspace::preview_project_creation(directory, name, "can-signals-v1").unwrap();
+    let preview = Workspace::preview_project_creation(directory, name, "standard-ecu").unwrap();
     Workspace::create_project_previewed(&preview).unwrap()
 }
 
@@ -53,7 +53,12 @@ fn builtin_batch_preserves_existing_definition_violations_but_rejects_changed_wi
             object.definition_id.as_deref() == Some("/AUTOSAR/EcucDefs/Com/ComConfig/ComSignal")
         })
         .unwrap();
-    let path = &original.sources[0].path;
+    let path = &original
+        .sources
+        .iter()
+        .find(|source| source.path.ends_with("ecuc.arxml"))
+        .unwrap()
+        .path;
     let mut text = fs::read_to_string(path).unwrap();
     let document = roxmltree::Document::parse(&text).unwrap();
     let node = document
@@ -64,6 +69,10 @@ fn builtin_batch_preserves_existing_definition_violations_but_rejects_changed_wi
                 && node.children().any(|child| {
                     child.tag_name().name() == "SHORT-NAME"
                         && child.text() == Some(signal.short_name.as_str())
+                })
+                && node.children().any(|child| {
+                    child.tag_name().name() == "DEFINITION-REF"
+                        && child.text() == signal.definition_id.as_deref()
                 })
         })
         .unwrap();
@@ -234,13 +243,6 @@ fn builtin_source_projection_owns_bytes_and_changes_epoch_on_reopen() {
         fs::read(&source.path).unwrap()
     );
     assert!(workspace.source_text(&source.path).is_err());
-    let mut workspace = workspace;
-    assert!(
-        workspace
-            .set_legacy_validation_schema(scratch.0.join("not-an-oracle.zip"))
-            .is_err()
-    );
-    assert!(!workspace.uses_legacy_validation());
     let reopened = Workspace::open_project_manifest(
         &scratch.0.join("First/workbench-project.json"),
         &scratch.0.join("cache"),
@@ -565,6 +567,7 @@ fn builtin_remove_rejects_incoming_references_and_batch_reference_can_target_cre
         .find(|object| {
             object.definition_id.as_deref()
                 == Some("/AUTOSAR/EcucDefs/EcuC/EcucConfigSet/EcucPduCollection/Pdu")
+                && object.short_name == "TxValuePdu"
         })
         .unwrap();
     let parent = view
@@ -657,7 +660,13 @@ fn builtin_remove_rejects_incoming_references_and_batch_reference_can_target_cre
         let field = view
             .fields
             .iter()
-            .find(|field| field.definition.definition_id.ends_with(suffix))
+            .find(|field| {
+                field.definition.definition_id.ends_with(suffix)
+                    && view.references.iter().any(|edge| {
+                        edge.field_id == field.field_id
+                            && edge.target_id.as_deref() == Some(&pdu.object_id)
+                    })
+            })
             .unwrap();
         let edge = result
             .projection
@@ -673,11 +682,7 @@ fn builtin_remove_rejects_incoming_references_and_batch_reference_can_target_cre
 #[test]
 fn builtin_templates_are_previewed_portable_and_confirmation_rejects_tampering() {
     let scratch = Scratch::new();
-    for (template, name) in [
-        ("can-empty-v1", "Empty"),
-        ("can-signals-v1", "Signals"),
-        ("standard-ecu", "Standard"),
-    ] {
+    for (template, name) in [("standard-ecu", "Standard")] {
         let directory = scratch.0.join(name);
         let preview = Workspace::preview_project_creation(&directory, name, template).unwrap();
         assert!(!directory.exists());
@@ -716,6 +721,18 @@ fn builtin_templates_are_previewed_portable_and_confirmation_rejects_tampering()
         assert_eq!(reopened.project_manifest().unwrap().inputs, manifest.inputs);
         assert!(Workspace::preview_project_creation(&moved, name, template).is_err());
     }
+    // Retired frame/signal templates are not offered under any name.
+    for template in ["can-empty-v1", "can-signals-v1"] {
+        let directory = scratch.0.join(template);
+        let error = Workspace::preview_project_creation(&directory, "Retired", template)
+            .err()
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(&error).unwrap()["key"],
+            "backend.arxml.project.unknown_template_id"
+        );
+        assert!(!directory.exists());
+    }
 }
 
 #[test]
@@ -747,7 +764,7 @@ fn builtin_schema_failure_blocks_save_but_unknown_generation_does_not() {
     let scratch = Scratch::new();
     let directory = scratch.0.join("SavedUnknown");
     let workspace = signals(&directory, "SavedUnknown");
-    let source = directory.join("SavedUnknown.arxml");
+    let source = directory.join("ecuc.arxml");
     let contents = fs::read_to_string(&source).unwrap();
     drop(workspace);
     let modified = contents.replacen("</ELEMENTS>", "<IMPLEMENTATION-DATA-TYPE><SHORT-NAME>Retained</SHORT-NAME><CATEGORY>VALUE</CATEGORY></IMPLEMENTATION-DATA-TYPE></ELEMENTS>", 1);
@@ -787,7 +804,7 @@ fn builtin_schema_failure_blocks_save_but_unknown_generation_does_not() {
         .range();
     assert_eq!(&before[retained_before], &after.as_bytes()[retained_after]);
     let invalid = contents.replacen(
-        "<SHORT-NAME>SavedUnknown</SHORT-NAME>",
+        "<SHORT-NAME>Configuration</SHORT-NAME>",
         "<SHORT-NAME>bad-name</SHORT-NAME>",
         1,
     );
@@ -1031,13 +1048,13 @@ fn builtin_workspace_types_defaults_and_exact_catalog_acceptance_roundtrip() {
             .definition
             .writable
     );
-    let source_before_remove = fs::read(directory.join("Typed.arxml")).unwrap();
+    let source_before_remove = fs::read(directory.join("ecuc.arxml")).unwrap();
     workspace
         .remove_definition_catalog(&identity.catalog_id)
         .unwrap();
     assert!(projection(&workspace).dirty);
     assert_eq!(
-        fs::read(directory.join("Typed.arxml")).unwrap(),
+        fs::read(directory.join("ecuc.arxml")).unwrap(),
         source_before_remove
     );
     let save = workspace.preview_save().unwrap();
@@ -1060,7 +1077,7 @@ fn builtin_workspace_types_defaults_and_exact_catalog_acceptance_roundtrip() {
 fn builtin_save_as_preserves_original_sources_and_rejects_name_collisions() {
     let scratch = Scratch::new();
     let original = signals(&scratch.0.join("Original"), "Original");
-    let source = scratch.0.join("Original/Original.arxml");
+    let source = scratch.0.join("Original/ecuc.arxml");
     let before = fs::read(&source).unwrap();
     let direct = Workspace::open(vec![source.clone()]).unwrap();
     let preview = direct
@@ -1081,7 +1098,7 @@ fn builtin_save_as_preserves_original_sources_and_rejects_name_collisions() {
         projection(&original).workspace_epoch
     );
     fs::create_dir(scratch.0.join("Other")).unwrap();
-    let other = scratch.0.join("Other/Original.arxml");
+    let other = scratch.0.join("Other/ecuc.arxml");
     fs::write(&other, r#"<?xml version="1.0"?><AUTOSAR xmlns="http://autosar.org/schema/r4.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd"><AR-PACKAGES><AR-PACKAGE><SHORT-NAME>Other</SHORT-NAME><ELEMENTS/></AR-PACKAGE></AR-PACKAGES></AUTOSAR>"#).unwrap();
     let collision = Workspace::open(vec![source.clone(), other]).unwrap();
     assert!(
@@ -1500,7 +1517,7 @@ fn builtin_unsupported_ecuc_edition_keeps_owned_bytes_and_only_that_module_reado
         })
         .unwrap();
     let module_name = editable.short_name.clone();
-    let source = directory.join("WrongEdition.arxml");
+    let source = directory.join("ecuc.arxml");
     let original = fs::read_to_string(&source).unwrap();
     let document = roxmltree::Document::parse(&original).unwrap();
     let module = document
@@ -1664,9 +1681,8 @@ fn builtin_live_application_reopens_generic_configuration_without_authorizing_ta
         .find(|scope| scope.scope == ValidationScope::TargetGeneration)
         .unwrap();
     assert_ne!(target.status, ValidationStatus::Passed);
-    let runtime = autosar_config_core::integration::RuntimeCatalog::embedded().unwrap();
-    assert!(reopened.integration_plan(&runtime).is_err());
-    assert!(reopened.saved_integration_plan(&runtime).is_err());
+    assert!(reopened.integration_plan().is_err());
+    assert!(reopened.saved_integration_plan().is_err());
 }
 
 #[test]
@@ -1748,7 +1764,11 @@ fn builtin_remove_preserves_unsupported_subtrees_and_attributes_but_allows_known
         let directory = scratch.0.join(case);
         let workspace = signals(&directory, case);
         let view = projection(&workspace);
-        let source = &view.sources[0];
+        let source = view
+            .sources
+            .iter()
+            .find(|source| source.path.ends_with("ecuc.arxml"))
+            .unwrap();
         let original = workspace.source_text(&source.source_id).unwrap();
         let document = roxmltree::Document::parse(&original).unwrap();
         let node = document
@@ -1787,6 +1807,13 @@ fn builtin_remove_preserves_unsupported_subtrees_and_attributes_but_allows_known
         )
         .unwrap();
         let view = projection(&workspace);
+        let ecuc = view
+            .sources
+            .iter()
+            .find(|source| source.path.ends_with("ecuc.arxml"))
+            .unwrap()
+            .source_id
+            .clone();
         let owner = view
             .objects
             .iter()
@@ -1814,10 +1841,7 @@ fn builtin_remove_preserves_unsupported_subtrees_and_attributes_but_allows_known
                     .iter()
                     .any(|object| object.object_id == owner.object_id)
             );
-            assert_eq!(
-                workspace.source_text(&view.sources[0].source_id).unwrap(),
-                original
-            );
+            assert_eq!(workspace.source_text(&ecuc).unwrap(), original);
         } else {
             assert!(view.diagnostics.iter().any(|diagnostic| {
                 diagnostic.code == "NATIVE_UNSUPPORTED"
@@ -1829,10 +1853,7 @@ fn builtin_remove_preserves_unsupported_subtrees_and_attributes_but_allows_known
                 workspace.input_fingerprint().unwrap(),
                 remove.input_fingerprint
             );
-            assert_eq!(
-                workspace.source_text(&view.sources[0].source_id).unwrap(),
-                raw
-            );
+            assert_eq!(workspace.source_text(&ecuc).unwrap(), raw);
             let field = view
                 .fields
                 .iter()
@@ -1858,7 +1879,7 @@ fn builtin_remove_preserves_unsupported_subtrees_and_attributes_but_allows_known
             workspace
                 .apply_change(&changes, &preview.change_revision)
                 .unwrap();
-            let edited = workspace.source_text(&view.sources[0].source_id).unwrap();
+            let edited = workspace.source_text(&ecuc).unwrap();
             assert!(edited.contains(&expected_spare));
         }
         assert_eq!(fs::read(&source.path).unwrap(), raw.as_bytes());

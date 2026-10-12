@@ -24,6 +24,36 @@ LINUX_RUNTIME_UTILITIES = (
 def prepare(
     scratch: Path, platform: str, source_checkout: Path | None, *, installed: bool = True
 ) -> None:
+    if installed:
+        if source_checkout is None or not source_checkout.is_absolute():
+            raise RuntimeError(
+                "Installed verification requires an absolute unavailable build checkout"
+            )
+        availability_reason = "not_found"
+        stat_errno = None
+        try:
+            source_available = source_checkout.exists()
+        except PermissionError as error:
+            source_available = False
+            availability_reason = "caller_inaccessible"
+            stat_errno = error.errno
+        if source_available:
+            raise RuntimeError(f"Build checkout must be unavailable: {source_checkout}")
+        (scratch / "source-checkout-boundary.json").write_text(
+            json.dumps(
+                {
+                    "sourceCheckout": str(source_checkout),
+                    "sourceCheckoutAvailable": False,
+                    "availabilityReason": availability_reason,
+                    "statErrno": stat_errno,
+                    "callerUid": os.getuid() if hasattr(os, "getuid") else None,
+                    "callerPid": os.getpid(),
+                    "platform": platform,
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
     performance_tools = {}
     for field, variable in (
         ("compiler", "AUTOSAR_CC"), ("objdump", "AUTOSAR_OBJDUMP"),
@@ -62,6 +92,13 @@ def prepare(
             json.dumps({"platform": platform, "utilities": utilities}, indent=2),
             encoding="utf-8",
         )
+    # Settings written by the retired XSD/MOD validation mode must still load and
+    # be reported as ignored; the scenario checks that before its first save.
+    (scratch / "app-config").mkdir()
+    (scratch / "app-config" / "settings.json").write_text(
+        json.dumps({"xsdArchive": "retired-xsd.zip", "modArchive": "retired-mod.zip"}),
+        encoding="utf-8",
+    )
     offline = os.environ.get("AUTOSAR_NATIVE_OFFLINE_RECEIPT")
     if offline is not None:
         receipt = json.loads(Path(offline).read_text(encoding="utf-8"))
@@ -72,7 +109,7 @@ def prepare(
         )
     (scratch / "scenario.json").write_text(
         json.dumps({
-            "mode": "builtin-only", "installed": installed,
+            "installed": installed,
             "sourceCheckout": str(source_checkout) if source_checkout else None, "platform": platform,
             "execution": "not_run", "macos": "not_run",
             "performanceTools": performance_tools,
@@ -125,7 +162,7 @@ def app_environment(scratch: Path, installed: bool) -> dict[str, str]:
     if any(exposed.values()):
         raise RuntimeError(f"Builtin-only application exposes developer tools: {exposed}")
     receipt = {
-        "mode": "builtin-only", "installed": installed,
+        "installed": installed,
         "environment": {name: environment[name] for name in (
             "AUTOSAR_CONFIG_DIR", "HOME", "USERPROFILE", "PATH",
         )},

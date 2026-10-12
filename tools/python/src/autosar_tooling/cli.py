@@ -67,11 +67,6 @@ def main() -> int:
         type=Path,
         help="Original build checkout, required to be absent for installed verification",
     )
-    desktop.add_argument(
-        "--builtin-only",
-        action="store_true",
-        help="Independent native configuration acceptance without archives or tools",
-    )
     quality = commands.add_parser(
         "quality", help="Check source hygiene and incremental formatting"
     )
@@ -92,14 +87,6 @@ def main() -> int:
     oracles.add_argument(
         "--ecuc", type=Path, help="ECUC file the oracle settings must match"
     )
-    commands.add_parser(
-        "input-oracles", help="Audit original fixture semantics independently"
-    )
-    catalog = commands.add_parser(
-        "bsw-catalog", help="Check reviewed BSW producers and signatures"
-    )
-    catalog.add_argument("--write", action="store_true")
-    catalog.add_argument("--probe", action="store_true")
     probe = commands.add_parser("probe", help="Run a named real-process probe")
     probe_kind = probe.add_subparsers(dest="probe", required=True)
     descendant = probe_kind.add_parser("descendant")
@@ -163,7 +150,6 @@ def main() -> int:
             args.binary,
             args.installed,
             args.source_checkout,
-            args.builtin_only,
             output_directory=args.output_directory,
         )
     if args.command == "quality":
@@ -177,19 +163,6 @@ def main() -> int:
         from autosar_tooling.protocol_oracles import main as check_protocol
 
         check_protocol(args.ecuc)
-        return 0
-    if args.command == "input-oracles":
-        from autosar_tooling.input_oracles import main as check_input
-
-        check_input()
-        return 0
-    if args.command == "bsw-catalog":
-        from autosar_tooling.bsw_catalog import main as check_catalog
-
-        options = (["--write"] if args.write else []) + (
-            ["--probe"] if args.probe else []
-        )
-        check_catalog(options)
         return 0
     if args.command == "probe":
         from autosar_tooling.acceptance import probe as process_probe

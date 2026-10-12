@@ -1,26 +1,11 @@
-import { composedMessage, message, ProductError, translate } from '../i18n';
+import { composedMessage, message, translate } from '../i18n';
 import type { Text } from '../i18n';
 import { open } from '@tauri-apps/plugin-dialog';
 import { requestConfirmation } from '../confirmation';
 import type { IntegrationInspection, WorkspaceView } from '../types';
 import { rememberDialogOpener } from './Dialog';
-import type { Selection, Stage, StageState } from './forms';
-import {
-  applicationPeriodDraft,
-  diagnosticChanges,
-  diagnosticFields,
-  draftFor,
-  dtcChanges,
-  dtcFields,
-  errorText,
-  frameChanges,
-  hasUnapplied,
-  initialSelection,
-  intInRange,
-  newFrame,
-  newSignal,
-  signalChanges,
-} from './forms';
+import type { Stage, StageState } from './forms';
+import { applicationPeriodDraft, errorText, intInRange } from './forms';
 import type { WorkbenchOperation } from './operation';
 import type {
   ApplicationInitializationOutcome,
@@ -35,14 +20,13 @@ import { importedSaveStage, native, stageDefaults } from './useDelivery';
 
 interface Dependencies {
   invalidateOperation: () => void;
-  acceptView: (view: WorkspaceView, requested?: Selection | null) => void;
+  acceptView: (view: WorkspaceView) => void;
   refreshProjection: () => Promise<void>;
   run: <T>(
     operation: WorkbenchOperation,
     job: () => Promise<T>,
     onSuccess: (result: T) => void,
     stage?: Stage,
-    allowed?: 'frame' | 'diagnostic' | 'dtc',
   ) => Promise<void>;
   invalidateAfterEdit: () => void;
   markStage: (key: Stage, state: StageState, detail: Text) => void;
@@ -76,16 +60,11 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     changeConfirmation,
     pendingReplacement,
   } = session;
-  const { busy, integrationProcessing, workspace, importPaths } = session.state;
+  const { busy, integrationProcessing, importPaths } = session.state;
   const setNotice = session.field('notice');
   const setImportPaths = session.field('importPaths');
   const setImportPathText = session.field('importPathText');
   const setBusy = session.field('busy');
-  const setSelection = session.field('selection');
-  const setDraft = session.field('draft');
-  const setCreating = session.field('creating');
-  const setFrameInput = session.field('frameInput');
-  const setSignalInput = session.field('signalInput');
   const setIntegrationUnapplied = session.field('integrationUnapplied');
   const setIntegrationProcessing = session.field('integrationProcessing');
   const setStages = session.field('stages');
@@ -93,15 +72,8 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
   const setBuilt = session.field('built');
   const setVirtualResult = session.field('virtualResult');
   const setOperationIssues = session.field('operationIssues');
-  const setPeerDirectory = session.field('peerDirectory');
-  const setPeerBinaryPath = session.field('peerBinaryPath');
   const setBuildDirectory = session.field('buildDirectory');
-  const setDiagnosticError = session.field('diagnosticError');
   const setSource = session.field('source');
-  const setDiagnosticDraft = session.field('diagnosticDraft');
-  const setDiagnosticSignal = session.field('diagnosticSignal');
-  const setDtcDraft = session.field('dtcDraft');
-  const setDtcError = session.field('dtcError');
   const setProjectName = session.field('projectName');
   const setProjectDirectory = session.field('projectDirectory');
   const setSettingsNotice = session.field('settingsNotice');
@@ -176,35 +148,6 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     }
   }
 
-  async function choose(selectionNext: Selection) {
-    await guardContext(message('workflow.action.chooseObject'), () => {
-      setSelection(selectionNext);
-      if (stateRef.current.workspace) setDraft(draftFor(stateRef.current.workspace, selectionNext));
-      setCreating(null);
-      openDocument({ kind: 'communication' });
-      const object = stateRef.current.projection?.objects.find(
-        (item) => item.path === selectionNext.path,
-      );
-      field('activeObjectId')(object?.objectId ?? null);
-      field('objectSelection')(object ? [object.objectId] : []);
-      field('treeRevealId')(object?.objectId ?? null);
-      field('treeMode')('objects');
-    });
-  }
-
-  async function openCreator(kind: 'frame' | 'signal') {
-    if (!native || busy || !workspace || workspace.integrationCandidate) return;
-    await guardContext(message('workflow.action.createObject'), () => {
-      setDraft(draftFor(stateRef.current.workspace!, stateRef.current.selection));
-      setCreating(kind);
-      field('inspectorVisible')(true);
-      openDocument({ kind: 'communication' });
-      setNotice(null);
-      if (kind === 'frame') setFrameInput(newFrame);
-      else setSignalInput(newSignal);
-    });
-  }
-
   function applyProject(view: WorkspaceView) {
     setIntegrationUnapplied(false);
     invalidateOperation();
@@ -231,11 +174,10 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       changes: [],
       changePreview: null,
       preparedChangeSet: null,
-      tabs: [
-        { kind: view.integrationCandidate ? 'integration' : 'communication' },
-        { kind: 'configuration' },
-      ],
-      activeDocument: { kind: view.integrationCandidate ? 'integration' : 'communication' },
+      tabs: view.integrationCandidate
+        ? [{ kind: 'integration' }, { kind: 'configuration' }]
+        : [{ kind: 'configuration' }],
+      activeDocument: { kind: view.integrationCandidate ? 'integration' : 'configuration' },
       preflight: null,
       memberProjectPath: null,
     });
@@ -244,12 +186,8 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     setBuilt(null);
     setVirtualResult(null);
     setOperationIssues([]);
-    setPeerDirectory('');
-    setPeerBinaryPath('');
     setBuildDirectory('');
-    setCreating(null);
-    acceptView(view, initialSelection(view));
-    setDiagnosticError('');
+    acceptView(view);
     void refreshProjection();
   }
 
@@ -277,7 +215,6 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
         generated: null,
         built: null,
         virtualResult: null,
-        virtualKind: null,
         stages: { ...stageDefaults },
         operationIssues: [],
         integrationInspection: null,
@@ -289,10 +226,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
         integrationNotice: message('workflow.integration.unchecked'),
         ecuOutputDirectory: '',
         ecuImportDirectory: '',
-        peerDirectory: '',
-        peerBinaryPath: '',
         buildDirectory: '',
-        handoffGenerated: false,
         projection: null,
         applicationPreview: null,
         applicationWarnings: [],
@@ -304,13 +238,6 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
         activeSourceId: null,
       });
       setIntegrationUnapplied(false);
-      setSelection(null);
-      setDiagnosticDraft(diagnosticFields(null));
-      setDiagnosticSignal('');
-      setDiagnosticError('');
-      setDtcDraft(dtcFields(null));
-      setDtcError('');
-      setDraft(null);
       setSource(nextSource);
       setProjectName('');
       setProjectDirectory('');
@@ -333,7 +260,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
           call<ProjectCreationPreview>('preview_project_creation', {
             directory: current.projectDirectory,
             name: current.projectName.trim(),
-            templateId: current.templateId,
+            templateId: 'standard-ecu',
           }),
         (projectPreview) => patchState({ projectPreview, projectPreviewKind: 'create' }),
       );
@@ -362,7 +289,6 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       handoffImportOpen: true,
       ecuImportDirectory: '',
       handoffImportDestination: '',
-      handoffImportMode: 'v2',
     });
   }
 
@@ -374,16 +300,14 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       handoffImportOpen: true,
       ecuImportDirectory: directory,
       handoffImportDestination: '',
-      handoffImportMode: 'v2',
     });
   }
 
   async function confirmHandoffImport() {
     const current = stateRef.current;
     const directory = current.ecuImportDirectory;
-    const newWorkspaceDirectory =
-      current.handoffImportMode === 'v2' ? current.handoffImportDestination : null;
-    if (!directory || (current.handoffImportMode === 'v2' && !newWorkspaceDirectory)) return;
+    const newWorkspaceDirectory = current.handoffImportDestination;
+    if (!directory || !newWorkspaceDirectory) return;
     await replaceProject(message('workflow.action.replaceWithHandoff'), async () => {
       field('handoffImportOpen')(false);
       await run(
@@ -465,38 +389,16 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
   }
 
   function hasDrafts(current = stateRef.current) {
-    return (
-      hasUnapplied(current.workspace, current.draft) ||
-      Boolean(
-        current.workspace &&
-        JSON.stringify(current.diagnosticDraft) !==
-          JSON.stringify(diagnosticFields(current.workspace.diagnostic)),
-      ) ||
-      Boolean(
-        current.workspace?.diagnostic &&
-        JSON.stringify(current.dtcDraft) !==
-          JSON.stringify(dtcFields(current.workspace.diagnostic.dtc)),
-      ) ||
-      current.integrationUnapplied ||
-      current.changes.length > 0 ||
-      Boolean(current.creating)
-    );
+    return current.integrationUnapplied || current.changes.length > 0;
   }
 
   function discardDrafts() {
     const current = stateRef.current;
     patchState({
-      draft: current.workspace ? draftFor(current.workspace, current.selection) : null,
-      diagnosticDraft: diagnosticFields(current.workspace?.diagnostic ?? null),
-      dtcDraft: dtcFields(current.workspace?.diagnostic?.dtc ?? null),
-      diagnosticSignal: '',
-      diagnosticError: '',
-      dtcError: '',
       changes: [],
       changePreview: null,
       preparedChangeSet: null,
       applicationPreview: null,
-      creating: null,
       integrationUnapplied: false,
       integrationIds: current.integrationInspection?.description
         ? Object.fromEntries(
@@ -541,79 +443,6 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     let view = current.workspace;
     let applied = false;
     try {
-      if (current.creating === 'frame') {
-        const values = frameChanges(current.frameInput);
-        view = await call<WorkspaceView>('add_frame', values);
-        applied = true;
-        const frame = view.frames.find((item) => item.name === values.name);
-        const next = frame ? { kind: 'frame' as const, path: frame.path } : current.selection;
-        patchState({
-          workspace: view,
-          creating: null,
-          selection: next,
-          draft: draftFor(view, next),
-        });
-      } else if (current.creating === 'signal') {
-        const framePath =
-          current.selection?.kind === 'frame'
-            ? current.selection.path
-            : view.signals.find((item) => item.path === current.selection?.path)?.framePath;
-        const owner = view.frames.find((item) => item.path === framePath);
-        if (!owner) throw new ProductError(message('workflow.error.selectSignalFrame'));
-        const values = signalChanges(current.signalInput, owner);
-        view = await call<WorkspaceView>('add_signal', { framePath: owner.path, ...values });
-        applied = true;
-        const signal = view.signals.find(
-          (item) => item.framePath === owner.path && item.name === values.name,
-        );
-        const next = signal ? { kind: 'signal' as const, path: signal.path } : current.selection;
-        patchState({
-          workspace: view,
-          creating: null,
-          selection: next,
-          draft: draftFor(view, next),
-        });
-      }
-      if (hasUnapplied(view, current.draft) && current.draft) {
-        if (current.draft.kind === 'frame') {
-          view = await call<WorkspaceView>('update_frame', {
-            path: current.draft.path,
-            changes: frameChanges(current.draft.fields),
-          });
-        } else {
-          const owner = view.frames.find(
-            (frame) =>
-              frame.path ===
-              view.signals.find((signal) => signal.path === current.draft?.path)?.framePath,
-          );
-          if (!owner) throw new ProductError(message('workflow.error.signalFrameMissing'));
-          view = await call<WorkspaceView>('update_signal', {
-            path: current.draft.path,
-            changes: signalChanges(current.draft.fields, owner),
-          });
-        }
-        patchState({ workspace: view, draft: draftFor(view, current.selection) });
-        applied = true;
-      }
-      if (
-        JSON.stringify(current.diagnosticDraft) !==
-        JSON.stringify(diagnosticFields(current.workspace.diagnostic))
-      ) {
-        view = await call<WorkspaceView>('configure_diagnostic', {
-          settings: diagnosticChanges(current.diagnosticDraft, view),
-        });
-        patchState({ workspace: view, diagnosticDraft: diagnosticFields(view.diagnostic) });
-        applied = true;
-      }
-      if (
-        current.workspace.diagnostic &&
-        JSON.stringify(current.dtcDraft) !==
-          JSON.stringify(dtcFields(current.workspace.diagnostic.dtc))
-      ) {
-        view = await call<WorkspaceView>('configure_dtc', dtcChanges(current.dtcDraft, view));
-        patchState({ workspace: view, dtcDraft: dtcFields(view.diagnostic?.dtc ?? null) });
-        applied = true;
-      }
       if (current.integrationUnapplied) {
         const canIds = Object.fromEntries(
           Object.entries(current.integrationIds).map(([path, value]) => [
@@ -889,8 +718,6 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     chooseBinary,
     chooseFiles,
     confirmAction,
-    choose,
-    openCreator,
     applyProject,
     openProjectEntry,
     startProject,

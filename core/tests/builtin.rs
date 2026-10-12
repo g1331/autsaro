@@ -52,24 +52,48 @@ fn workspace_localized_path_parameters_preserve_user_bytes() {
 }
 
 #[test]
-fn model_diagnostics_keep_machine_codes_and_paths_outside_product_prose() {
-    let frame = autosar_config_core::FrameView {
-        path: "/用户/Frame".into(),
-        name: "Frame".into(),
-        id: 0x800,
-        dlc: 8,
-        direction: autosar_config_core::Direction::Tx,
-        period_ms: Some(10),
-        timeout_ms: None,
-    };
-    let issues = autosar_config_core::model::validate_profile(&[frame], &[]);
-    let issue = issues
-        .iter()
-        .find(|issue| issue.code == "CAN_FRAME_RANGE")
-        .unwrap();
-    let value = serde_json::to_value(issue).unwrap();
-    assert_eq!(value["code"], "CAN_FRAME_RANGE");
-    assert_eq!(value["path"], "/用户/Frame");
-    assert_eq!(value["message"]["key"], "backend.model.can_frame_range");
-    assert!(value["message"]["params"].as_object().unwrap().is_empty());
+fn integration_diagnostics_keep_message_identity_and_source_evidence() {
+    use autosar_config_core::integration::InputSource;
+    let source = InputSource::new("用户/input.arxml", vec![0xff]).unwrap_err();
+    let wire = serde_json::to_value(&source).unwrap();
+    assert_eq!(wire["code"], "XML_ENCODING");
+    assert_eq!(wire["file"], "用户/input.arxml");
+    assert_eq!(wire["object"], "/");
+    assert_eq!(
+        wire["message"]["key"],
+        "backend.integration.mod.input_not_utf8_xml"
+    );
+    assert!(
+        wire["message"]["params"]["error"]
+            .as_str()
+            .unwrap()
+            .contains("utf-8")
+    );
+    assert_eq!(
+        wire["remedy"]["key"],
+        "backend.integration.mod.convert_source_to_utf8_arxml"
+    );
+    assert!(wire["message"].get("english").is_none());
+
+    let bytes = b"<AUTOSAR><!-- retained evidence --></AUTOSAR>".to_vec();
+    let source = InputSource::new("用户/input.arxml", bytes.clone()).unwrap();
+    let identity = source.sha256();
+    let diagnostic = InputSource::new("../input.arxml", bytes.clone()).unwrap_err();
+    let messages = autosar_config_core::message::LocalizedText::messages([
+        diagnostic.message.clone(),
+        diagnostic.remedy.clone(),
+        autosar_config_core::message::LocalizedText::evidence("用户/<tool output>"),
+    ]);
+    let wire = serde_json::to_value(messages).unwrap();
+    assert_eq!(
+        wire[0]["key"],
+        "backend.integration.mod.input_identity_relative_arxml_required"
+    );
+    assert_eq!(
+        wire[1]["key"],
+        "backend.integration.mod.use_unique_portable_relative_path"
+    );
+    assert_eq!(wire[2], "用户/<tool output>");
+    assert_eq!(source.bytes(), bytes);
+    assert_eq!(source.sha256(), identity);
 }

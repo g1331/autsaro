@@ -257,10 +257,6 @@ pub(super) fn documents(
         coverage: Vec::new(),
         diagnostics: Vec::new(),
     };
-    // Only the recognized host-can profile retains its missing mode dependency
-    // until that profile is removed; every built-in project stays strict.
-    let legacy_mode_dependency =
-        crate::arxml::historical_host_mode_dependency(&documents.iter().collect::<Vec<_>>());
     let mut objects = BTreeMap::new();
     for (document, (file, _)) in documents.iter().zip(files) {
         for node in document
@@ -770,24 +766,6 @@ pub(super) fn documents(
                         .get(child.definition_id.as_str())
                         .copied()
                         .unwrap_or(0);
-                    if count == 0
-                        && legacy_mode_dependency
-                        && child.definition_id
-                            == "/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsl/DcmDslProtocol/DcmDslProtocolRow/DcmDslConnection/DcmDslMainConnection/DcmDslProtocolComMChannelRef"
-                    {
-                        // Preserve the identified old ABI/configuration profile;
-                        // official metadata and every new profile remain strict.
-                        result.coverage.push(RuleCoverage {
-                            rule_id: "native.definition.legacy-dcm-mode-dependency".into(),
-                            scope: ValidationScope::Definition,
-                            subjects: vec![child.definition_id.clone()],
-                            supported: false,
-                            reason: Some(crate::product_message!(
-                                "backend.definitions.validation.uncertifiable_entry_multiplicity"
-                            )),
-                        });
-                        continue;
-                    }
                     if opaque_entries.contains(child.definition_id.as_str())
                         || (!child.writable && (count > 0 || child.lower_multiplicity > 0))
                     {

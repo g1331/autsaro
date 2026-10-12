@@ -189,11 +189,6 @@ impl Workspace {
     pub fn preview_application_initialization(
         &self,
     ) -> Result<ApplicationInitializationPreview, crate::message::LocalizedText> {
-        if self.uses_legacy_validation() {
-            return Err(crate::product_message!(
-                "backend.arxml.application.builtin_validation_required"
-            ));
-        }
         crate::rules::rule_set_identity()?;
         if self.is_dirty() {
             return Err(crate::product_message!(
@@ -217,8 +212,6 @@ impl Workspace {
         let root = project.path.parent().ok_or_else(|| {
             crate::product_message!("backend.arxml.application.project_root_missing")
         })?;
-        let runtime =
-            crate::integration::RuntimeCatalog::embedded().map_err(super::integration_errors)?;
         // This immutable preview already checked clean saved sources above.
         // Keep that error precedence without sealing the same files again.
         let plan = crate::integration::build_plan_native(
@@ -226,7 +219,6 @@ impl Workspace {
                 .integration_source_snapshot()
                 .map_err(super::integration_errors)?,
             &self.catalog,
-            &runtime,
         )
         .map_err(super::integration_errors)?;
         let slots = plan
@@ -395,7 +387,6 @@ impl Workspace {
                 path: manifest_path.clone(),
                 saved: expected.manifest_before.clone(),
                 text: expected.manifest_after.clone(),
-                original_name: None,
             };
             let verify_members = || -> Result<(), crate::message::LocalizedText> {
                 for file in &self.files {

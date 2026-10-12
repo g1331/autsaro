@@ -57,12 +57,10 @@ typedef struct {
  * Queue overflow closes the target; records are never silently discarded.
  */
 StatusType Ecu_TargetTakeProtocolFailure(Ecu_ProtocolRecord *record);
-#if defined(ECU_MULTI_COMPONENT)
 /** Record a transport timeout at the current epoch from the owner context.
  * A call outside the owner or with a full queue closes the target.
  */
 void Ecu_TargetReportTransportTimeout(void);
-#endif
 
 /** Completion published at the real owner waiting/empty boundary. */
 typedef struct {
@@ -173,10 +171,6 @@ StatusType Ecu_TargetConfirmOutput(uint64_t ticket, PduIdType pdu);
 EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc, const uint8_t data[8]);
 /** Generated sole extended Task entry. */
 void Ecu_TargetTask(void);
-/** Generated RTE/application initialization; executed only by StartupHook.
- * @return E_OK after explicit initialization, otherwise E_NOT_OK.
- */
-uint8_t Ecu_TargetInitializeRte(void);
 /** Record a valid signal receive for standard RTE status mapping.
  * @param at Explicit receive epoch, supplied by the owner.
  */

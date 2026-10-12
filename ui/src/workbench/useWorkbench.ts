@@ -14,14 +14,12 @@ import type { Dispatch, SetStateAction } from 'react';
 import { useEffect, useEffectEvent, useReducer, useRef } from 'react';
 import type {
   BuildTarget,
-  Frame,
   GenerationPreview,
   IntegrationInspection,
   Issue,
   OwnedVerificationFailure,
   PlanDiagnostic,
   SavePreview,
-  Signal,
   WorkbenchCapabilities,
   WorkbenchReply,
   WorkspaceView,
@@ -29,20 +27,14 @@ import type {
 import { createBatchEditing } from './batchEditing';
 import { createDeliveryActions } from './deliveryActions';
 import { rememberDialogOpener } from './Dialog';
-import type { PreviewDelta, Selection, Stage, StageState } from './forms';
+import type { PreviewDelta, Stage, StageState } from './forms';
 import {
   applicationPeriodDraft,
   applicationPeriodMs,
-  diagnosticFields,
-  draftFor,
-  dtcFields,
   errorText,
-  findSelection,
-  hasUnapplied,
   intInRange,
   previewDelta,
 } from './forms';
-import { createLegacyEditing } from './legacyEditing';
 import type { WorkbenchOperation } from './operation';
 import { createProjectActions } from './projectActions';
 import type { ConfigurationChange, DocumentTab, ProjectProjection } from './projectTypes';
@@ -67,8 +59,6 @@ export interface Workbench
         | 'applicationPreview'
         | 'handoffImportOpen'
         | 'handoffImportDestination'
-        | 'handoffImportMode'
-        | 'templateId'
         | 'projectPreview'
         | 'toolWindow'
         | 'treeVisible'
@@ -81,29 +71,16 @@ export interface Workbench
         | 'appearanceDraft'
         | 'languageDraft'
         | 'integrationUnapplied'
-        | 'draft'
-        | 'diagnosticDraft'
-        | 'diagnosticSignal'
-        | 'diagnosticError'
-        | 'dtcDraft'
-        | 'dtcError'
         | 'projectName'
         | 'projectDirectory'
         | 'importPaths'
         | 'importPathText'
-        | 'creating'
-        | 'frameInput'
-        | 'signalInput'
         | 'generationPreview'
         | 'generationPreviewPath'
         | 'generationKind'
-        | 'virtualResult'
         | 'notice'
-        | 'peerDirectory'
-        | 'peerBinaryPath'
         | 'previewPath'
         | 'settingsOpen'
-        | 'resourceDraft'
         | 'toolDraft'
         | 'settingsNotice'
         | 'integrationIds'
@@ -116,20 +93,9 @@ export interface Workbench
   native: boolean;
   executionDisabled: boolean;
   executionReason: Text;
-  currentFrame: Frame | undefined;
-  currentSignal: Signal | undefined;
-  signalFrame: Frame | undefined;
-  currentFile: WorkspaceView['files'][number] | undefined;
-  focusedFrame: Frame | undefined;
-  frameUnapplied: boolean;
-  diagnosticUnapplied: boolean;
-  dtcUnapplied: boolean;
   unapplied: boolean;
-  eligibleSignals: Signal[];
-  eligibleMonitorFrames: Frame[];
   issues: Issue[];
   errorCount: number;
-  unsupportedIssue: Issue | undefined;
   previewFile: SavePreview['files'][number] | undefined;
   delta: PreviewDelta | null;
   generationPreviewFile: GenerationPreview['files'][number] | undefined;
@@ -139,29 +105,14 @@ export interface Workbench
   chooseBinary(onChoose: (path: string) => void): Promise<void>;
   chooseFiles(): Promise<void>;
   confirmAction(message: Text): Promise<boolean>;
-  choose(selection: Selection): Promise<void>;
-  openCreator(kind: 'frame' | 'signal'): Promise<void>;
   startProject(source?: 'empty' | 'import'): Promise<void>;
   openProjectEntry(source: WorkbenchState['source']): void;
   createProject(): void;
   importProject(): void;
   importHandoff(): void;
-  addFrame(): void;
-  addSignal(): void;
-  updateSelected(): void;
-  configureDiagnostic(): void;
-  configureDtc(): void;
-  clearDtc(): Promise<void>;
-  clearDiagnostic(): Promise<void>;
   saveProject(): void;
   confirmSave(): void;
   validateProject(): void;
-  generateProject(handoff?: boolean): void;
-  confirmGenerate(): void;
-  buildProject(): void;
-  runVirtual(): void;
-  runDiagnostic(): void;
-  configureResources(): Promise<void>;
   configureTools(): Promise<void>;
   changeTarget(target: BuildTarget): Promise<void>;
   cancelOperation(): Promise<void>;
@@ -252,14 +203,10 @@ export function useWorkbench(): Workbench {
         capabilitiesRef.current = capabilities;
         patchState({
           capabilities,
-          legacyTarget: capabilities.target,
+          buildTarget: capabilities.target,
           appearanceDraft: capabilities.appearance,
           languageDraft: capabilities.language ?? 'system',
           savedLanguage: capabilities.language ?? 'system',
-          resourceDraft: {
-            xsdArchive: capabilities.xsdArchive ?? '',
-            modArchive: capabilities.modArchive ?? '',
-          },
           toolDraft: capabilities.configuredExecutionTools ?? {
             compiler: '',
             objdump: '',
@@ -291,7 +238,7 @@ export function useWorkbench(): Workbench {
       capabilitiesRef.current = reply.capabilities;
       patchState({
         capabilities: reply.capabilities,
-        legacyTarget: reply.capabilities.target,
+        buildTarget: reply.capabilities.target,
         changePreview:
           previous?.fingerprint !== reply.capabilities.fingerprint ||
           previous?.definitionFingerprint !== reply.capabilities.definitionFingerprint
@@ -340,7 +287,7 @@ export function useWorkbench(): Workbench {
             command === 'configure_language' || command === 'configure_appearance';
           patchState({
             capabilities: current,
-            legacyTarget: current.target,
+            buildTarget: current.target,
             ...(presentationOnly
               ? {}
               : { changePreview: null, preparedChangeSet: null, applicationPreview: null }),
@@ -402,14 +349,7 @@ export function useWorkbench(): Workbench {
           : value;
       const patch = {
         [key]: resolved,
-        ...([
-          'draft',
-          'diagnosticDraft',
-          'dtcDraft',
-          'integrationIds',
-          'integrationPeriod',
-          'changes',
-        ].includes(key as string)
+        ...(['integrationIds', 'integrationPeriod', 'changes'].includes(key as string)
           ? { changePreview: null, preparedChangeSet: null, applicationPreview: null }
           : {}),
       } as Partial<WorkbenchState>;
@@ -419,8 +359,6 @@ export function useWorkbench(): Workbench {
   }
 
   const setSettingsOpen = field('settingsOpen');
-
-  const setResourceDraft = field('resourceDraft');
 
   const setToolDraft = field('toolDraft');
 
@@ -444,37 +382,22 @@ export function useWorkbench(): Workbench {
     workspace,
     integrationUnapplied,
     integrationProcessing,
-    selection,
-    draft,
-    diagnosticDraft,
-    diagnosticSignal,
-    diagnosticError,
-    dtcDraft,
-    dtcError,
     source,
     projectName,
     projectDirectory,
     importPaths,
     importPathText,
-    creating,
-    frameInput,
-    signalInput,
     stages,
     generated,
     generationPreview,
     generationPreviewPath,
     generationKind,
-    handoffGenerated,
-    legacyTarget,
+    buildTarget,
     buildDirectory,
     built,
-    virtualResult,
-    virtualKind,
     operationIssues,
     notice,
     busy,
-    peerDirectory,
-    peerBinaryPath,
     savePreview,
     previewPath,
   } = state;
@@ -485,20 +408,6 @@ export function useWorkbench(): Workbench {
 
   const setIntegrationProcessing = field('integrationProcessing');
 
-  const setSelection = field('selection');
-
-  const setDraft = field('draft');
-
-  const setDiagnosticDraft = field('diagnosticDraft');
-
-  const setDiagnosticSignal = field('diagnosticSignal');
-
-  const setDiagnosticError = field('diagnosticError');
-
-  const setDtcDraft = field('dtcDraft');
-
-  const setDtcError = field('dtcError');
-
   const setProjectName = field('projectName');
 
   const setProjectDirectory = field('projectDirectory');
@@ -506,12 +415,6 @@ export function useWorkbench(): Workbench {
   const setImportPaths = field('importPaths');
 
   const setImportPathText = field('importPathText');
-
-  const setCreating = field('creating');
-
-  const setFrameInput = field('frameInput');
-
-  const setSignalInput = field('signalInput');
 
   const setStages = field('stages');
 
@@ -525,99 +428,26 @@ export function useWorkbench(): Workbench {
 
   const setBuilt = field('built');
 
-  const setVirtualResult = field('virtualResult');
-
   const setOperationIssues = field('operationIssues');
 
   const setNotice = field('notice');
 
   const setBusy = field('busy');
 
-  const setPeerDirectory = field('peerDirectory');
-
-  const setPeerBinaryPath = field('peerBinaryPath');
-
   const setSavePreview = field('savePreview');
 
   const setPreviewPath = field('previewPath');
 
-  const currentFrame =
-    selection?.kind === 'frame'
-      ? workspace?.frames.find((item) => item.path === selection.path)
-      : undefined;
-
-  const currentSignal =
-    selection?.kind === 'signal'
-      ? workspace?.signals.find((item) => item.path === selection.path)
-      : undefined;
-
-  const signalFrame = currentSignal
-    ? workspace?.frames.find((item) => item.path === currentSignal.framePath)
-    : undefined;
-
-  const currentFile =
-    selection?.kind === 'file'
-      ? workspace?.files.find((item) => item.path === selection.path)
-      : undefined;
-
-  const focusedFrame = currentFrame ?? signalFrame;
-
-  const frameUnapplied = hasUnapplied(workspace, draft);
-
-  const diagnosticUnapplied = Boolean(
-    workspace &&
-    JSON.stringify(diagnosticDraft) !== JSON.stringify(diagnosticFields(workspace.diagnostic)),
-  );
-
-  const dtcUnapplied = Boolean(
-    workspace?.diagnostic &&
-    JSON.stringify(dtcDraft) !== JSON.stringify(dtcFields(workspace.diagnostic.dtc)),
-  );
-
-  const unapplied =
-    frameUnapplied ||
-    diagnosticUnapplied ||
-    dtcUnapplied ||
-    integrationUnapplied ||
-    state.changes.length > 0 ||
-    Boolean(creating);
-
-  const eligibleSignals =
-    workspace?.signals.filter(
-      (signal) =>
-        signal.length === 32 &&
-        workspace.frames.some(
-          (frame) => frame.path === signal.framePath && frame.direction === 'tx',
-        ),
-    ) ?? [];
-
-  const eligibleMonitorFrames =
-    workspace?.frames.filter(
-      (frame) =>
-        frame.direction === 'rx' &&
-        (frame.timeoutMs ?? 0) > 0 &&
-        workspace.signals.some((signal) => signal.framePath === frame.path),
-    ) ?? [];
+  const unapplied = integrationUnapplied || state.changes.length > 0;
 
   const issues = [...(workspace?.issues ?? []), ...operationIssues];
 
   const errorCount = issues.filter((issue) => issue.severity === 'error').length;
 
-  function acceptView(view: WorkspaceView, requested?: Selection | null) {
+  function acceptView(view: WorkspaceView) {
     setSavePreview(null);
     setGenerationPreview(null);
-    const next = findSelection(
-      view,
-      requested === undefined ? stateRef.current.selection : requested,
-    );
     setWorkspace(view);
-    setSelection(next);
-    setDraft(draftFor(view, next));
-    setDiagnosticDraft(diagnosticFields(view.diagnostic));
-    setDiagnosticSignal('');
-    setDiagnosticError('');
-    setDtcDraft(dtcFields(view.diagnostic?.dtc ?? null));
-    setDtcError('');
   }
 
   function invalidateAfterEdit() {
@@ -631,7 +461,7 @@ export function useWorkbench(): Workbench {
     setGenerationPreview(null);
     setGenerated(null);
     setBuilt(null);
-    setVirtualResult(null);
+    field('virtualResult')(null);
     setOperationIssues([]);
     field('preflight')(null);
     setNotice(null);
@@ -641,28 +471,10 @@ export function useWorkbench(): Workbench {
     setStages((previous) => ({ ...previous, [key]: { state, detail } }));
   }
 
-  function requireReady(allowed?: 'frame' | 'diagnostic' | 'dtc') {
+  function requireReady() {
     if (!native) throw new ProductError(message('controller.error.desktopRequired'));
-    const current = stateRef.current;
-    if (current.creating && allowed !== 'frame')
-      throw new ProductError(message('controller.error.creatorDraft'));
-    if (hasUnapplied(current.workspace, current.draft) && allowed !== 'frame')
-      throw new ProductError(message('controller.error.inspectorDraft'));
-    if (
-      current.workspace &&
-      JSON.stringify(current.diagnosticDraft) !==
-        JSON.stringify(diagnosticFields(current.workspace.diagnostic)) &&
-      allowed !== 'diagnostic'
-    )
-      throw new ProductError(message('controller.error.diagnosticDraft'));
-    if (
-      current.workspace?.diagnostic &&
-      JSON.stringify(current.dtcDraft) !==
-        JSON.stringify(dtcFields(current.workspace.diagnostic.dtc)) &&
-      allowed !== 'dtc'
-    )
-      throw new ProductError(message('controller.error.dtcDraft'));
-    if (current.changes.length) throw new ProductError(message('controller.error.batchDraft'));
+    if (stateRef.current.changes.length)
+      throw new ProductError(message('controller.error.batchDraft'));
   }
 
   async function run<T>(
@@ -670,14 +482,13 @@ export function useWorkbench(): Workbench {
     job: () => Promise<T>,
     onSuccess: (result: T) => void,
     stage?: Stage,
-    allowed?: 'frame' | 'diagnostic' | 'dtc',
   ) {
     const label = operation.label;
     if (running.current) return;
     rememberDialogOpener();
     const generation = epoch.current;
     try {
-      requireReady(allowed);
+      requireReady();
       running.current = true;
       setBusy(label);
       setNotice(null);
@@ -740,10 +551,6 @@ export function useWorkbench(): Workbench {
       }
     }
   }
-
-  const unsupportedIssue = workspace?.issues.find(
-    (issue) => issue.code.startsWith('PDU_') || issue.code === 'DIAG_UNSUPPORTED',
-  );
 
   const previewFile = savePreview?.files.find((file) => file.path === previewPath);
 
@@ -947,8 +754,6 @@ export function useWorkbench(): Workbench {
     chooseBinary,
     chooseFiles,
     confirmAction,
-    choose,
-    openCreator,
     applyProject,
     openProjectEntry,
     startProject,
@@ -988,43 +793,14 @@ export function useWorkbench(): Workbench {
     previewIntegrationSave: (...args) => previewIntegrationSave(...args),
     saveProject: (...args) => saveProject(...args),
   });
-  const {
-    addFrame,
-    addSignal,
-    updateSelected,
-    configureDiagnostic,
-    configureDtc,
-    clearDtc,
-    clearDiagnostic,
-  } = createLegacyEditing(session, {
-    run,
-    invalidateAfterEdit,
-    acceptView,
-    focusedFrame,
-    diagnosticUnapplied,
-    frameUnapplied,
-    unapplied,
-    confirmAction: (...args) => confirmAction(...args),
-    dtcUnapplied,
-  });
   const { stageChange, prepareChanges, applyChanges, discardChanges, cancelChangePreview } =
     createBatchEditing(session, { invalidateAfterEdit, acceptIntegration });
-  const {
-    changeTarget,
-    configureResources,
-    configureTools,
-    configureAppearance,
-    configureLanguage,
-  } = createSettingsActions(session, { invalidateOperation });
+  const { changeTarget, configureTools, configureAppearance, configureLanguage } =
+    createSettingsActions(session, { invalidateOperation });
   const {
     saveProject,
     confirmSave,
     validateProject,
-    generateProject,
-    confirmGenerate,
-    buildProject,
-    runVirtual,
-    runDiagnostic,
     previewIntegrationSave,
     saveIntegration,
     previewEcu,
@@ -1039,8 +815,6 @@ export function useWorkbench(): Workbench {
     acceptView,
     markStage,
     continueReplacement,
-    chooseDirectory,
-    openDocument,
     unapplied,
     acceptIntegration,
     confirmAction,
@@ -1084,9 +858,7 @@ export function useWorkbench(): Workbench {
     initializeApplicationPreviewed,
     setHandoffImportOpen: field('handoffImportOpen'),
     setHandoffImportDestination: field('handoffImportDestination'),
-    setHandoffImportMode: field('handoffImportMode'),
     confirmHandoffImport,
-    setTemplateId: field('templateId'),
     setProjectPreview: field('projectPreview'),
     cancelSavePreview,
     previewSaveAs,
@@ -1129,19 +901,6 @@ export function useWorkbench(): Workbench {
     integrationUnapplied,
     setIntegrationUnapplied,
     integrationProcessing,
-    selection,
-    draft,
-    setDraft,
-    diagnosticDraft,
-    setDiagnosticDraft,
-    diagnosticSignal,
-    setDiagnosticSignal,
-    diagnosticError,
-    setDiagnosticError,
-    dtcDraft,
-    setDtcDraft,
-    dtcError,
-    setDtcError,
     source,
     projectName,
     setProjectName,
@@ -1151,12 +910,6 @@ export function useWorkbench(): Workbench {
     setImportPaths,
     importPathText,
     setImportPathText,
-    creating,
-    setCreating,
-    frameInput,
-    setFrameInput,
-    signalInput,
-    setSignalInput,
     stages,
     generated,
     generationPreview,
@@ -1165,74 +918,39 @@ export function useWorkbench(): Workbench {
     setGenerationPreviewPath,
     generationKind,
     setGenerationKind,
-    handoffGenerated,
-    legacyTarget,
+    buildTarget,
     buildDirectory,
     built,
-    virtualResult,
-    setVirtualResult,
-    virtualKind,
     operationIssues,
     notice,
     setNotice,
     busy,
-    peerDirectory,
-    setPeerDirectory,
-    peerBinaryPath,
-    setPeerBinaryPath,
     savePreview,
     previewPath,
     setPreviewPath,
-    currentFrame,
-    currentSignal,
-    signalFrame,
-    currentFile,
-    focusedFrame,
-    frameUnapplied,
-    diagnosticUnapplied,
-    dtcUnapplied,
     unapplied,
-    eligibleSignals,
-    eligibleMonitorFrames,
     issues,
     errorCount,
     chooseDirectory,
     chooseBinary,
     chooseFiles,
     confirmAction,
-    choose,
-    openCreator,
     startProject,
     openProjectEntry,
     createProject,
     importProject,
     importHandoff,
-    addFrame,
-    addSignal,
-    updateSelected,
-    configureDiagnostic,
-    configureDtc,
-    clearDtc,
-    clearDiagnostic,
     saveProject,
     confirmSave,
     validateProject,
-    generateProject,
-    confirmGenerate,
-    buildProject,
-    runVirtual,
-    runDiagnostic,
-    unsupportedIssue,
     previewFile,
     delta,
     generationPreviewFile,
     generationDelta,
     disabled,
     setSettingsOpen,
-    setResourceDraft,
     setToolDraft,
     setSettingsNotice,
-    configureResources,
     configureTools,
     changeTarget,
     cancelOperation,

@@ -19,6 +19,6 @@
 
 ## 状态
 
-已接受（2026-10-11），实施中。
+已接受（2026-10-11），已实施（#33）。
 
 来源：`planning-archive-2026-10:_bmad-output/planning-artifacts/sprint-change-proposal-2026-10-11.md`（第 1 节、决定 3）、`planning-archive-2026-10:_bmad-output/specs/spec-runtime-codegen-quality/work-packages.md`（B3）。

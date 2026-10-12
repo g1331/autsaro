@@ -1,9 +1,8 @@
 use super::{
-    APPLICATION_OUTPUT, APPLICATION_SLOT, FORMAT, HOST_PROFILE, HandoffMetadata, InputKind,
-    OWNERSHIP_PATH, PROJECT_PATH, digest, json_bytes, safe_relative,
+    FORMAT, HandoffMetadata, InputKind, OWNERSHIP_PATH, PROJECT_PATH, digest, json_bytes,
+    safe_relative,
 };
 use crate::prepared::PreparedFile;
-use crate::resources::AssetInventory;
 use crate::target::BuildTarget;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
@@ -79,24 +78,16 @@ fn classification(
         .iter()
         .find(|input| input.kind == InputKind::Application && input.package_path == path)
     {
-        let producer = if metadata.profile_id == crate::integration::MULTI_PROFILE {
-            slots
-                .iter()
-                .find(|slot| {
-                    input.producer_slot.as_deref() == Some(slot.producer_slot.as_str())
-                        && slot.source_paths == [input.logical_path.clone()]
-                        && slot.source_paths[0]
-                            .strip_prefix("application/")
-                            .is_some_and(|relative| path == format!("src/{relative}"))
-                })
-                .map(|slot| slot.producer_slot.as_str())
-        } else if path == APPLICATION_OUTPUT
-            && input.producer_slot.as_deref() == Some(APPLICATION_SLOT)
-        {
-            Some(APPLICATION_SLOT)
-        } else {
-            None
-        };
+        let producer = slots
+            .iter()
+            .find(|slot| {
+                input.producer_slot.as_deref() == Some(slot.producer_slot.as_str())
+                    && slot.source_paths == [input.logical_path.clone()]
+                    && slot.source_paths[0]
+                        .strip_prefix("application/")
+                        .is_some_and(|relative| path == format!("src/{relative}"))
+            })
+            .map(|slot| slot.producer_slot.as_str());
         let Some(producer) = producer else {
             return Err(crate::product_message!(
                 "backend.delivery.application_snapshot_unknown"
@@ -258,6 +249,13 @@ pub(crate) fn metadata_from_target(
 ) -> Result<Option<HandoffMetadata>, crate::LocalizedText> {
     let target: serde_json::Value = serde_json::from_slice(bytes)
         .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
+    // Frame/signal host packages are refused by identity, never reinterpreted.
+    if target["profile"] == "host" {
+        return Err(crate::product_message!(
+            "backend.delivery.retired_profile",
+            "profile" => crate::integration::HOST_PROFILE
+        ));
+    }
     let Some(native) = target.get("nativeDelivery") else {
         return Ok(None);
     };
@@ -268,12 +266,7 @@ pub(crate) fn metadata_from_target(
         .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     if recorded_target != metadata.target_id
         || target["format"] != "autosar-build-target-v1"
-        || target["profile"]
-            != if metadata.profile_id == HOST_PROFILE {
-                "host"
-            } else {
-                "ecu"
-            }
+        || target["profile"] != "ecu"
         || target["definitionFingerprint"]
             .as_str()
             .is_none_or(|value| value.len() != 64)
@@ -294,10 +287,7 @@ pub(crate) fn validate_metadata(metadata: &HandoffMetadata) -> Result<(), crate:
     }
     if metadata.format != FORMAT
         || metadata.producer_version != env!("CARGO_PKG_VERSION")
-        || !matches!(
-            metadata.profile_id.as_str(),
-            HOST_PROFILE | crate::integration::MULTI_PROFILE
-        )
+        || metadata.profile_id != crate::integration::MULTI_PROFILE
         || metadata.project_path != PROJECT_PATH
         || metadata.ownership_path != OWNERSHIP_PATH
         || metadata.resource_identities.rule_set_identity != crate::rules::rule_set_identity()?
@@ -336,7 +326,7 @@ pub(crate) fn validate_metadata(metadata: &HandoffMetadata) -> Result<(), crate:
                 }
             }
             InputKind::Application => {
-                let mapping = if metadata.profile_id == crate::integration::MULTI_PROFILE {
+                let mapping =
                     input
                         .logical_path
                         .strip_prefix("application/")
@@ -345,12 +335,7 @@ pub(crate) fn validate_metadata(metadata: &HandoffMetadata) -> Result<(), crate:
                                 && relative.ends_with(".c")
                                 && !relative.contains('/')
                         })
-                        && input.producer_slot.is_some()
-                } else {
-                    metadata.profile_id == crate::integration::PROFILE
-                        && input.package_path == APPLICATION_OUTPUT
-                        && input.producer_slot.as_deref() == Some(APPLICATION_SLOT)
-                };
+                        && input.producer_slot.is_some();
                 if !mapping || input.role != "user-application" {
                     return Err(crate::product_message!(
                         "backend.delivery.application_boundary_unsupported"
@@ -401,22 +386,7 @@ pub(crate) fn verify_ledger_bytes(
             "backend.delivery.ownership_identity_invalid"
         ));
     }
-    let profile = if metadata.profile_id == HOST_PROFILE {
-        "host"
-    } else {
-        "ecu"
-    };
-    let trusted_assets = if profile == "ecu" {
-        crate::integration::ecu::source_assets(
-            metadata.target_id,
-            metadata.profile_id == crate::integration::MULTI_PROFILE,
-        )?
-    } else {
-        AssetInventory::embedded()
-            .selected(metadata.target_id, profile)
-            .map(|asset| crate::prepared::deliver_path(asset, profile).map(|path| (path, asset)))
-            .collect::<Result<BTreeMap<_, _>, _>>()?
-    };
+    let trusted_assets = crate::integration::ecu::source_assets(metadata.target_id)?;
     let mut owned = BTreeSet::new();
     let mut portable = BTreeSet::new();
     for entry in &ledger.files {

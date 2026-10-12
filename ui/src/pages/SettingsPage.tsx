@@ -33,10 +33,6 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
     if (c.busy || c.languageSaving) return;
     c.setAppearanceDraft(c.capabilities?.appearance ?? 'system');
     c.setLanguageDraft(c.savedLanguage);
-    c.setResourceDraft({
-      xsdArchive: c.capabilities?.xsdArchive ?? '',
-      modArchive: c.capabilities?.modArchive ?? '',
-    });
     c.setToolDraft(
       c.capabilities?.configuredExecutionTools ?? {
         compiler: '',
@@ -113,6 +109,14 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
           ))}
         </nav>
         <div className="settings-content">
+          {c.capabilities?.settingsError ? (
+            <p className="error-text" role="alert">
+              {text(c.capabilities.settingsError)}
+            </p>
+          ) : null}
+          {c.capabilities?.settingsNotice ? (
+            <p className="warning-text">{text(c.capabilities.settingsNotice)}</p>
+          ) : null}
           <section hidden={category !== 'appearance'}>
             <h3>{t('shell.settings.appearance')}</h3>
             <p>{t('shell.settings.previewHelp')}</p>
@@ -270,44 +274,6 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
             {c.projection?.dirty ? (
               <p className="warning-text">{t('shell.settings.unsaved')}</p>
             ) : null}
-            <details className="legacy-settings">
-              <summary>{t('shell.settings.legacy')}</summary>
-              <p>{t('shell.settings.legacyHelp')}</p>
-              {c.capabilities?.resourceError ? (
-                <p className="error-text">{text(c.capabilities.resourceError)}</p>
-              ) : null}
-              <div className="form-fields">
-                <label>
-                  {t('shell.settings.xsd')}
-                  <input
-                    aria-label={t('shell.settings.xsdPath')}
-                    value={displayPath(c.resourceDraft.xsdArchive)}
-                    disabled={locked}
-                    onChange={(event) =>
-                      c.setResourceDraft({ ...c.resourceDraft, xsdArchive: event.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  {t('shell.settings.mod')}
-                  <input
-                    aria-label={t('shell.settings.modPath')}
-                    value={displayPath(c.resourceDraft.modArchive)}
-                    disabled={locked}
-                    onChange={(event) =>
-                      c.setResourceDraft({ ...c.resourceDraft, modArchive: event.target.value })
-                    }
-                  />
-                </label>
-              </div>
-              <button
-                type="button"
-                disabled={locked || !c.resourceDraft.xsdArchive || !c.resourceDraft.modArchive}
-                onClick={() => void c.configureResources()}
-              >
-                {t('shell.settings.saveResources')}
-              </button>
-            </details>
           </section>
           <section hidden={category !== 'tools'}>
             <h3>{t('shell.settings.savedTools')}</h3>

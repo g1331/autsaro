@@ -1,14 +1,13 @@
 use super::catalog::{SymbolContract, c_identifier};
-use super::component::{ComponentContract, c_name};
+use super::component::c_name;
 use super::configuration::{ConfigurationRecord, EventAssignment};
 use super::diagnostic::DiagnosticContract;
 use super::routing::PduRoute;
 use super::schedule::ScheduleContract;
 use super::{
     ContractArgument, DiagnosticCategory, FORMAT_VERSION, InputInspection, InputSource,
-    ObjectIdentity, PROFILE, PlanDependencies, PlanDiagnostic, RuntimeCatalog, SignalChannel,
-    SourceIdentity, catalog, communication, component, configuration, diagnostic, inspect_inputs,
-    routing, schedule,
+    ObjectIdentity, PlanDiagnostic, SignalChannel, SourceIdentity, catalog, configuration,
+    diagnostic, routing, schedule,
 };
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
@@ -31,8 +30,6 @@ pub struct PlanDescription {
     pub profile: String,
     pub sources: Vec<SourceIdentity>,
     pub objects: Vec<ObjectIdentity>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub component: Option<ComponentContract>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub multi: Option<super::multi::MultiComponentContract>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -60,19 +57,6 @@ pub struct PlanDescription {
     pub required_extension_definitions: Vec<crate::project_model::ExtensionDefinitionIdentity>,
 }
 
-impl PlanDescription {
-    pub fn legacy_component(&self) -> Result<&ComponentContract, crate::message::LocalizedText> {
-        self.component.as_ref().ok_or_else(|| {
-            crate::product_message!("backend.integration.multi.consumer_unsupported").into()
-        })
-    }
-    pub fn legacy_diagnostic(&self) -> Result<&DiagnosticContract, crate::message::LocalizedText> {
-        self.diagnostic.as_ref().ok_or_else(|| {
-            crate::product_message!("backend.integration.multi.consumer_unsupported").into()
-        })
-    }
-}
-
 /// All fields are private and construction only follows the checked path.
 /// Consumers borrow its description and original source bytes; there is no
 /// mutable accessor, unchecked constructor or Deserialize implementation.
@@ -88,315 +72,6 @@ impl ValidatedIntegrationPlan {
     pub fn sources(&self) -> &[InputSource] {
         &self.inputs
     }
-}
-
-fn staged(
-    symbol: &str,
-    return_type: &str,
-    arguments: Vec<ContractArgument>,
-    declaration: &str,
-    definition: &str,
-    consumer: &str,
-) -> SymbolContract {
-    SymbolContract {
-        symbol: symbol.into(),
-        return_type: return_type.into(),
-        arguments,
-        declaration_owner: declaration.into(),
-        definition_owner: definition.into(),
-        consumers: vec![consumer.into()],
-    }
-}
-
-fn argument(name: &str, native_type: &str, direction: &str) -> ContractArgument {
-    ContractArgument {
-        name: name.into(),
-        native_type: native_type.into(),
-        direction: direction.into(),
-    }
-}
-
-fn assemble(
-    inspection: InputInspection,
-    runtime: &RuntimeCatalog,
-) -> Result<ValidatedIntegrationPlan, Vec<PlanDiagnostic>> {
-    let graph = &inspection.graph;
-    if super::multi::selected(graph) {
-        return assemble_multi(inspection, runtime);
-    }
-    let component = component::inspect(graph)?;
-    let schedule = schedule::inspect(graph, &component)?;
-    let signals = communication::inspect(graph, &component)?;
-    let diagnostic = diagnostic::inspect(graph, &component)?;
-    let routes = routing::inspect(graph, &signals, &diagnostic)?;
-    let configuration = match &inspection.definition_catalog {
-        Some(catalog) => configuration::inspect_native(graph, catalog)?,
-        None => configuration::inspect(graph)?,
-    };
-    let mut symbols = catalog::inspect(graph, runtime)?;
-    let context = *graph.objects.get(&component.component).unwrap();
-    let datatype = component.service.array_type.rsplit('/').next().unwrap();
-    if [
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
-        "sint8",
-        "sint16",
-        "sint32",
-        "sint64",
-        "uint8_t",
-        "uint16_t",
-        "uint32_t",
-        "uint64_t",
-        "Std_ReturnType",
-        "EcuStatus",
-        "void",
-        "char",
-        "short",
-        "int",
-        "long",
-        "float",
-        "double",
-        "struct",
-        "union",
-        "enum",
-    ]
-    .contains(&c_name(datatype).as_str())
-    {
-        let index = *graph.objects.get(&component.service.array_type).unwrap();
-        return Err(vec![graph.diagnostic(
-            index,
-            DiagnosticCategory::Input,
-            "SYMBOL_NORMALIZATION_COLLISION",
-            crate::product_message!("backend.integration.plan.service_array_type_c_name_collision"),
-            crate::product_message!(
-                "backend.integration.plan.rename_service_type_preserving_out_shape"
-            ),
-        )]);
-    }
-    for port in &component.data_ports {
-        let argument_type = if port.read { "uint32 *" } else { "uint32" };
-        symbols.push(staged(
-            &port.api_symbol,
-            "Std_ReturnType",
-            vec![argument(
-                "data",
-                argument_type,
-                if port.read { "OUT" } else { "IN" },
-            )],
-            "story-4.11:component contract header",
-            "story-4.13:generated Rte.c",
-            &port.path,
-        ));
-    }
-    symbols.push(staged(
-        &component.periodic_symbol,
-        "void",
-        Vec::new(),
-        "story-4.11:component contract header",
-        "story-4.15:application implementation",
-        &component.periodic_runnable,
-    ));
-    symbols.push(staged(
-        &component.service.runnable_symbol,
-        "Std_ReturnType",
-        vec![argument("Data", datatype, "OUT")],
-        "story-4.11:component contract header",
-        "story-4.15:application implementation",
-        &component.service.runnable,
-    ));
-    symbols.push(staged(
-        &component.service.client_symbol,
-        "Std_ReturnType",
-        vec![argument("Data", datatype, "OUT")],
-        "story-4.11:service contract header",
-        "story-4.13:generated Dcm service binding",
-        &component.service.client_runnable,
-    ));
-    let client_port = component.service.client_port.rsplit('/').next().unwrap();
-    let call = format!(
-        "Rte_Call_{}_{}",
-        c_name(client_port),
-        c_name(&component.service.operation_name)
-    );
-    symbols.push(staged(
-        &call,
-        "Std_ReturnType",
-        vec![argument("Data", datatype, "OUT")],
-        "story-4.11:service contract header",
-        "story-4.13:generated Rte.c",
-        &component.service.client_port,
-    ));
-    for (name, direction, native_type) in [
-        ("Com_SendSignal", "IN", "const void *"),
-        ("Com_ReceiveSignal", "OUT", "void *"),
-    ] {
-        symbols.push(staged(
-            name,
-            "Std_ReturnType",
-            vec![
-                argument("SignalId", "Com_SignalIdType", "IN"),
-                argument("SignalDataPtr", native_type, direction),
-            ],
-            "story-4.13:Com.h",
-            "story-4.13:BSW signature adapter",
-            &component.component,
-        ));
-    }
-    let counter_name = c_name(schedule.counter.rsplit('/').next().unwrap());
-    let mut names = BTreeSet::new();
-    for operation in ["GetCounterValue", "GetElapsedValue"] {
-        names.insert(format!("OsService_{counter_name}_{operation}"));
-        names.insert(format!("Rte_Call_OsService_{operation}"));
-    }
-    for symbol in &symbols {
-        if !c_identifier(&symbol.symbol) || !names.insert(symbol.symbol.clone()) {
-            return Err(vec![graph.diagnostic(context, DiagnosticCategory::Input, "SYMBOL_PRODUCER_DUPLICATE",
-                crate::product_message!("backend.integration.plan.external_c_symbol_invalid_or_multiple_producers", "value0" => symbol.symbol),
-                crate::product_message!("backend.integration.plan.resolve_c_symbol_and_producer_conflicts"))]);
-        }
-    }
-    let mut handles = Vec::new();
-    for (domain, paths) in [
-        ("os_task", vec![schedule.task.clone()]),
-        ("os_counter", vec![schedule.counter.clone()]),
-        (
-            "os_alarm",
-            schedule
-                .entities
-                .iter()
-                .filter(|entity| entity.expiry_point.is_none())
-                .map(|entity| entity.alarm.clone())
-                .collect(),
-        ),
-        (
-            "os_schedule_table",
-            schedule
-                .entities
-                .iter()
-                .filter_map(|entity| entity.schedule_table.clone())
-                .collect(),
-        ),
-        (
-            "os_expiry_point",
-            schedule
-                .entities
-                .iter()
-                .filter_map(|entity| entity.expiry_point.clone())
-                .collect(),
-        ),
-        (
-            "com_signal",
-            signals
-                .iter()
-                .map(|signal| signal.com_signal.clone())
-                .collect(),
-        ),
-    ] {
-        let ordered: BTreeSet<String> = paths.into_iter().collect();
-        for (handle, path) in ordered.into_iter().enumerate() {
-            handles.push(HandleAssignment {
-                domain: domain.into(),
-                c_name: format!("{}_{}", domain, c_name(path.trim_start_matches('/'))),
-                path,
-                handle: handle as u32,
-            });
-        }
-    }
-    let mut handle_names = BTreeMap::new();
-    for handle in &handles {
-        if let Some(previous) = handle_names.insert(&handle.c_name, &handle.path) {
-            if previous != &handle.path {
-                let index = *graph.objects.get(&handle.path).unwrap();
-                return Err(vec![graph.diagnostic(
-                    index,
-                    DiagnosticCategory::Input,
-                    "SYMBOL_NORMALIZATION_COLLISION",
-                    crate::product_message!(
-                        "backend.integration.plan.normalized_object_c_identifier_collision"
-                    ),
-                    crate::product_message!(
-                        "backend.integration.plan.rename_object_to_avoid_c_normalization_collision"
-                    ),
-                )]);
-            }
-        }
-    }
-    let rx = signals.iter().find(|signal| signal.receive).unwrap();
-    let tx = signals.iter().find(|signal| !signal.receive).unwrap();
-    if [
-        rx.can_if_handle,
-        tx.can_if_handle,
-        diagnostic.request_can_if_handle,
-        diagnostic.response_can_if_handle,
-    ]
-    .into_iter()
-    .any(|handle| handle > u16::from(u8::MAX))
-    {
-        return Err(vec![graph.diagnostic(
-            context,
-            DiagnosticCategory::Unsupported,
-            "CANIF_HANDLE_WIDTH",
-            crate::product_message!("backend.integration.plan.canif_pdu_handle_out_of_range"),
-            crate::product_message!("backend.integration.plan.use_uint8_canif_handles"),
-        )]);
-    }
-    if rx.can_if_handle == diagnostic.request_can_if_handle
-        || tx.can_if_handle == diagnostic.response_can_if_handle
-        || [
-            rx.can_id,
-            tx.can_id,
-            diagnostic.request_can_id,
-            diagnostic.response_can_id,
-        ]
-        .into_iter()
-        .collect::<BTreeSet<_>>()
-        .len()
-            != 4
-    {
-        return Err(vec![graph.diagnostic(
-            context,
-            DiagnosticCategory::Input,
-            "CAN_ID_CONFLICT",
-            crate::product_message!(
-                "backend.integration.plan.selected_channel_identifier_or_handle_collision"
-            ),
-            crate::product_message!(
-                "backend.integration.plan.assign_distinct_can_identifiers_and_pdu_handles"
-            ),
-        )]);
-    }
-    symbols.sort_by(|left, right| left.symbol.cmp(&right.symbol));
-    let objects = inspection.objects();
-    let description = PlanDescription {
-        format_version: FORMAT_VERSION,
-        profile: PROFILE.into(),
-        sources: inspection.identities,
-        objects,
-        component: Some(component),
-        multi: None,
-        com_runtime: None,
-        communication_runtime: None,
-        mode_runtime: None,
-        schedule,
-        signals,
-        diagnostic: Some(diagnostic),
-        diagnostic_transport: None,
-        routes,
-        configuration: configuration.records,
-        events: configuration.events,
-        handles,
-        symbols,
-        runtime_sources: runtime.source_identities().clone(),
-        validation_dependencies: inspection.validation_dependencies,
-        rule_set_identity: inspection.rule_set_identity,
-        required_extension_definitions: inspection.required_extension_definitions,
-    };
-    Ok(ValidatedIntegrationPlan {
-        description,
-        inputs: inspection.sources,
-    })
 }
 
 // Both normal definition validation and plan construction consume this closure.
@@ -418,7 +93,6 @@ pub(super) struct MultiPlanInputs {
 pub(super) fn inspect_multi(
     graph: &super::graph::Graph,
     definition_catalog: Option<&crate::definitions::DefinitionCatalog>,
-    _runtime: &RuntimeCatalog,
 ) -> Result<MultiPlanInputs, Vec<PlanDiagnostic>> {
     let multi = super::multi::inspect(graph)?;
     let bindings: Vec<_> = multi
@@ -808,7 +482,6 @@ pub(super) fn inspect_multi(
 
 fn assemble_multi(
     inspection: InputInspection,
-    runtime: &RuntimeCatalog,
 ) -> Result<ValidatedIntegrationPlan, Vec<PlanDiagnostic>> {
     let MultiPlanInputs {
         com_runtime,
@@ -823,11 +496,7 @@ fn assemble_multi(
         configuration,
         handles,
         symbols,
-    } = inspect_multi(
-        &inspection.graph,
-        inspection.definition_catalog.as_ref(),
-        runtime,
-    )?;
+    } = inspect_multi(&inspection.graph, inspection.definition_catalog.as_ref())?;
     let objects = inspection.objects();
     Ok(ValidatedIntegrationPlan {
         description: PlanDescription {
@@ -835,7 +504,6 @@ fn assemble_multi(
             profile: super::multi::PROFILE.into(),
             sources: inspection.identities,
             objects,
-            component: None,
             multi: Some(multi),
             com_runtime,
             communication_runtime: Some(communication_runtime),
@@ -858,19 +526,10 @@ fn assemble_multi(
     })
 }
 
-pub fn build_plan(
-    sources: &[InputSource],
-    dependencies: &PlanDependencies,
-    runtime: &RuntimeCatalog,
-) -> Result<ValidatedIntegrationPlan, Vec<PlanDiagnostic>> {
-    assemble(inspect_inputs(sources, dependencies)?, runtime)
-}
-
 /// Construct the same finite target plan using product-native validation.
 pub fn build_plan_native(
     sources: &[InputSource],
     catalog: &crate::definitions::DefinitionCatalog,
-    runtime: &RuntimeCatalog,
 ) -> Result<ValidatedIntegrationPlan, Vec<PlanDiagnostic>> {
-    assemble(super::inspect_inputs_native(sources, catalog)?, runtime)
+    assemble_multi(super::inspect_inputs_native(sources, catalog)?)
 }

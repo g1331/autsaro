@@ -1,6 +1,6 @@
 use autosar_config_core::{
     definitions::DefinitionCatalog,
-    integration::{InputSource, RuntimeCatalog, ValidatedIntegrationPlan, build_plan_native},
+    integration::{InputSource, ValidatedIntegrationPlan, build_plan_native},
 };
 use std::path::Path;
 
@@ -41,12 +41,7 @@ fn inputs() -> Vec<InputSource> {
 fn build(
     sources: &[InputSource],
 ) -> Result<ValidatedIntegrationPlan, Vec<autosar_config_core::integration::PlanDiagnostic>> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    build_plan_native(
-        sources,
-        &DefinitionCatalog::builtin().unwrap(),
-        &RuntimeCatalog::from_repository(root).unwrap(),
-    )
+    build_plan_native(sources, &DefinitionCatalog::builtin().unwrap())
 }
 fn change(sources: &mut [InputSource], file: &str, before: &str, after: &str) {
     let source = sources
@@ -118,9 +113,7 @@ fn multi_handoff_readme_supports_both_native_targets_without_build_tools() {
     let scratch = Scratch::new();
     let workspace = initialized_multi_user_workspace(&scratch.0.join("live"));
     let before = workspace.generation_snapshot().unwrap();
-    let plan = workspace
-        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
-        .unwrap();
+    let plan = workspace.saved_integration_plan().unwrap();
     for target in [
         BuildTarget::WindowsX64ControlledV1,
         BuildTarget::LinuxX64ControlledV1,
@@ -158,9 +151,7 @@ fn copied_multi_package_builds_offline_without_changing_source_bytes() {
     let scratch = Scratch::new();
     let live = scratch.0.join("live");
     let workspace = initialized_multi_user_workspace(&live);
-    let plan = workspace
-        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
-        .unwrap();
+    let plan = workspace.saved_integration_plan().unwrap();
     let original = scratch.0.join("original");
     prepare_ecu_project_for_workspace(&workspace, &plan, tooling::native_target(), true)
         .unwrap()
@@ -195,9 +186,7 @@ fn moved_multi_handoff_reconstructs_every_user_source_and_exact_producer() {
     let live = scratch.0.join("author");
     let workspace = initialized_multi_user_workspace(&live);
     let expected = workspace.generation_snapshot().unwrap();
-    let plan = workspace
-        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
-        .unwrap();
+    let plan = workspace.saved_integration_plan().unwrap();
     let prepared =
         prepare_ecu_project_for_workspace(&workspace, &plan, native_delivery_target(), true)
             .unwrap();
@@ -265,10 +254,7 @@ fn moved_multi_handoff_reconstructs_every_user_source_and_exact_producer() {
             ),
         ])
     );
-    let plan = imported
-        .workspace
-        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
-        .unwrap();
+    let plan = imported.workspace.saved_integration_plan().unwrap();
     let regenerated = scratch.0.join("consumer/regenerated");
     let prepared = prepare_ecu_project_for_workspace(
         &imported.workspace,
@@ -346,9 +332,7 @@ fn multi_handoff_rejects_resealed_authority_and_snapshot_forgery() {
     use autosar_config_core::{generator::delivery, prepared::prepare_ecu_project_for_workspace};
     let scratch = Scratch::new();
     let workspace = initialized_multi_user_workspace(&scratch.0.join("live"));
-    let plan = workspace
-        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
-        .unwrap();
+    let plan = workspace.saved_integration_plan().unwrap();
     let source = workspace.generation_snapshot().unwrap();
     let sentinel = scratch.0.join("outside.c");
     std::fs::write(&sentinel, b"outside owner bytes").unwrap();
@@ -558,8 +542,7 @@ fn multi_workspace_initialization_reopen_and_regeneration_preserve_every_user_so
             &root.join("cache"),
         )
         .unwrap();
-        let runtime = RuntimeCatalog::embedded().unwrap();
-        let plan = workspace.saved_integration_plan(&runtime).unwrap();
+        let plan = workspace.saved_integration_plan().unwrap();
         let output = scratch.0.join("sealed");
         let prepared = || {
             prepare_ecu_project_for_workspace(
@@ -684,11 +667,7 @@ fn multi_workspace_reopen_rejects_incomplete_unknown_and_wrong_slot_membership()
     let reopened =
         Workspace::open_project_manifest(&root.join("workbench-project.json"), &root.join("cache"))
             .unwrap();
-    assert!(
-        reopened
-            .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
-            .is_err()
-    );
+    assert!(reopened.saved_integration_plan().is_err());
 }
 
 #[cfg(unix)]
@@ -723,9 +702,7 @@ fn multi_workspace_initialization_and_reopen_refuse_symlink_members() {
     workspace
         .initialize_application_previewed(&preview)
         .unwrap();
-    let plan = workspace
-        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
-        .unwrap();
+    let plan = workspace.saved_integration_plan().unwrap();
     let prepared = prepare_ecu_project_for_workspace(
         &workspace,
         &plan,
@@ -745,6 +722,106 @@ fn multi_workspace_initialization_and_reopen_refuse_symlink_members() {
     assert_eq!(std::fs::read(&external).unwrap(), bytes);
 }
 
+fn link_directory(link: &Path, target: &Path) {
+    #[cfg(windows)]
+    {
+        let linked = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(link)
+            .arg(target)
+            .output()
+            .unwrap();
+        assert!(
+            linked.status.success(),
+            "{}",
+            String::from_utf8_lossy(&linked.stderr)
+        );
+    }
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(target, link).unwrap();
+}
+
+#[test]
+fn tampered_trusted_runtime_asset_is_refused_by_identity() {
+    use autosar_config_core::resources::AssetInventory;
+    let scratch = Scratch::new();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let tampered = "runtime/multi/src/Can.c";
+    let destination = scratch.0.join(tampered);
+    std::fs::create_dir_all(destination.parent().unwrap()).unwrap();
+    let mut bytes = std::fs::read(root.join(tampered)).unwrap();
+    std::fs::write(&destination, &bytes).unwrap();
+    AssetInventory::verify_directory_asset(&scratch.0, tampered).unwrap();
+    bytes[0] ^= 1;
+    std::fs::write(&destination, &bytes).unwrap();
+    let error = AssetInventory::verify_directory_asset(&scratch.0, tampered).unwrap_err();
+    assert_eq!(
+        serde_json::to_value(&error).unwrap()["key"],
+        "backend.resources.identity_differs"
+    );
+}
+
+#[test]
+fn mainline_sources_through_a_directory_link_or_junction_are_refused() {
+    use autosar_config_core::Workspace;
+    let scratch = Scratch::new();
+    let root = scratch.0.join("live");
+    live_multi_workspace(&root, &inputs());
+    let alias = scratch.0.join("alias");
+    link_directory(&alias, &root);
+    assert!(
+        Workspace::open_project_manifest(
+            &alias.join("workbench-project.json"),
+            &scratch.0.join("cache")
+        )
+        .is_err()
+    );
+    assert!(Workspace::open(vec![alias.join("ingress.arxml")]).is_err());
+    for source in inputs() {
+        assert_eq!(
+            std::fs::read(root.join(source.logical_path())).unwrap(),
+            source.bytes()
+        );
+    }
+}
+
+#[test]
+fn mainline_generation_rejects_trailing_dot_and_linked_output_without_touching_owner() {
+    use autosar_config_core::prepared::prepare_ecu_project_for_workspace;
+    let scratch = Scratch::new();
+    let workspace = initialized_multi_user_workspace(&scratch.0.join("live"));
+    let plan = workspace.saved_integration_plan().unwrap();
+    let prepare = || {
+        prepare_ecu_project_for_workspace(
+            &workspace,
+            &plan,
+            autosar_config_core::target::BuildTarget::LinuxX64ControlledV1,
+            false,
+        )
+        .unwrap()
+    };
+    let owner = scratch.0.join("OwnerData");
+    std::fs::create_dir(&owner).unwrap();
+    std::fs::write(owner.join("sentinel.txt"), b"owner content").unwrap();
+    let untouched = |owner: &Path| {
+        let names: Vec<_> = std::fs::read_dir(owner)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(names, ["sentinel.txt"]);
+        assert_eq!(
+            std::fs::read(owner.join("sentinel.txt")).unwrap(),
+            b"owner content"
+        );
+    };
+    assert!(prepare().generate(&owner.join(".")).is_err());
+    untouched(&owner);
+    let output = scratch.0.join("Generated");
+    link_directory(&output, &owner);
+    assert!(prepare().generate(&output).is_err());
+    untouched(&owner);
+}
+
 #[test]
 fn multi_workspace_missing_or_directory_source_refuses_reopen_and_prepared_generation() {
     use autosar_config_core::{
@@ -757,9 +834,7 @@ fn multi_workspace_missing_or_directory_source_refuses_reopen_and_prepared_gener
     workspace
         .initialize_application_previewed(&initialization)
         .unwrap();
-    let plan = workspace
-        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
-        .unwrap();
+    let plan = workspace.saved_integration_plan().unwrap();
     let prepare = || {
         prepare_ecu_project_for_workspace(
             &workspace,
@@ -946,7 +1021,6 @@ fn source_derived_multi_contract_is_deterministic_and_keeps_local_identity() {
     let description = plan.description();
     let multi = description.multi.as_ref().unwrap();
     assert_eq!(description.profile, "singlecore-ecu-v1");
-    assert!(description.component.is_none());
     assert_eq!(multi.components.len(), 4);
     assert_eq!(multi.connections.len(), 5);
     assert_eq!(multi.network_endpoints.len(), 2);
@@ -1005,7 +1079,6 @@ fn source_derived_multi_contract_is_deterministic_and_keeps_local_identity() {
             .unwrap()
             .files()
     );
-    assert!(description.legacy_component().is_err());
     assert!(
         plan.ecu_integration_files(autosar_config_core::target::BuildTarget::LinuxX64ControlledV1)
             .is_err()
@@ -1664,7 +1737,7 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
         for include in [
             "runtime/ecu/include",
             "runtime/os/include",
-            "runtime/include",
+            "runtime/multi/include",
         ] {
             compiler.arg("-I").arg(repository.join(include));
         }
@@ -1973,11 +2046,7 @@ fn assert_rejected_multi_sources_preserved(sources: &[InputSource]) {
     let scratch = Scratch::new();
     let live = scratch.0.join("live");
     let workspace = live_multi_workspace(&live, sources);
-    assert!(
-        workspace
-            .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
-            .is_err()
-    );
+    assert!(workspace.saved_integration_plan().is_err());
     assert!(workspace.preview_application_initialization().is_err());
     assert!(!live.join("application").exists());
     for source in sources {
@@ -2249,32 +2318,33 @@ fn renamed_component_and_port_contracts_follow_full_source_identity() {
     );
 }
 
+/// The independent R24-11 schema oracle accepts inputs before the native plan judges them.
+#[cfg(feature = "official-oracles")]
+fn assert_official_schema_accepts(sources: &[InputSource]) {
+    let files: Vec<_> = sources
+        .iter()
+        .map(|source| {
+            (
+                std::path::PathBuf::from(source.logical_path()),
+                String::from_utf8(source.bytes().to_vec()).unwrap(),
+            )
+        })
+        .collect();
+    let borrowed: Vec<_> = files
+        .iter()
+        .map(|(path, text)| (path.as_path(), text.as_str()))
+        .collect();
+    let issues =
+        autosar_config_core::schema::validate_files(&workspace::archive(), &borrowed).unwrap();
+    assert!(issues.is_empty(), "official R24-11 XSD: {issues:?}");
+}
+
 #[cfg(feature = "official-oracles")]
 #[test]
-fn official_and_native_entry_points_produce_the_same_multi_headers() {
-    use autosar_config_core::integration::{PlanDependencies, build_plan};
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let plan = build_plan(
-        &inputs(),
-        &PlanDependencies::from_repository(root),
-        &RuntimeCatalog::from_repository(root).unwrap(),
-    )
-    .unwrap_or_else(|issues| panic!("{issues:?}"));
-    let native = build(&inputs()).unwrap();
-    let official = plan.component_contract_files().unwrap();
-    let native = native.component_contract_files().unwrap();
-    assert_eq!(
-        official
-            .files()
-            .iter()
-            .filter(|(file, _)| file.ends_with(".h"))
-            .collect::<Vec<_>>(),
-        native
-            .files()
-            .iter()
-            .filter(|(file, _)| file.ends_with(".h"))
-            .collect::<Vec<_>>()
-    );
+fn native_multi_inputs_also_pass_the_official_schema() {
+    let sources = inputs();
+    assert_official_schema_accepts(&sources);
+    build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
 }
 
 fn subtree(sources: &[InputSource], file: &str, tag: &str, short_name: &str) -> String {
@@ -3134,8 +3204,16 @@ fn single_component_project(
     root: &Path,
     target: autosar_config_core::target::BuildTarget,
 ) -> (std::path::PathBuf, Vec<(String, Vec<u8>)>) {
-    use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
     let plan = build(&single_component_sources()).unwrap_or_else(|issues| panic!("{issues:?}"));
+    single_component_project_from(root, target, &plan)
+}
+
+fn single_component_project_from(
+    root: &Path,
+    target: autosar_config_core::target::BuildTarget,
+    plan: &ValidatedIntegrationPlan,
+) -> (std::path::PathBuf, Vec<(String, Vec<u8>)>) {
+    use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
     let fixture = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-application/Ingress.c"),
     )
@@ -3145,7 +3223,7 @@ fn single_component_project(
     let application = root.join("Ingress.c");
     std::fs::write(&application, source).unwrap();
     let prepared = prepare_ecu_project_with_applications(
-        &plan,
+        plan,
         target,
         &[ApplicationSource {
             component_instance: "/Application/Pipeline/IngressInstance".into(),
@@ -3165,6 +3243,47 @@ fn write_files(project: &Path, files: &[(String, Vec<u8>)]) {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, bytes).unwrap();
     }
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn short_application_period_saves_builds_and_passes_reference_verifier() {
+    // 1 ms and 3 ms let a CanTp frame take the single Tx HOH before the
+    // periodic PDU in the same tick; the verifier does not model that (#82).
+    use autosar_config_core::integration::{IntegrationEdit, verify_ecu_project};
+    let scratch = Scratch::new();
+    let mut workspace = live_multi_workspace(&scratch.0.join("live"), &single_component_sources());
+    workspace
+        .edit_integration(IntegrationEdit {
+            application_period_ms: Some(2),
+            ..IntegrationEdit::default()
+        })
+        .unwrap_or_else(|issues| panic!("{issues:?}"));
+    let save = workspace.preview_integration_save().unwrap();
+    workspace
+        .save_integration_previewed(&save.revision)
+        .unwrap();
+    let plan = workspace
+        .saved_integration_plan()
+        .unwrap_or_else(|issues| panic!("{issues:?}"));
+    assert!(
+        plan.description()
+            .schedule
+            .entities
+            .iter()
+            .filter(|entity| entity.application)
+            .all(|entity| entity.period_ms == 2)
+    );
+    let (project, files) =
+        single_component_project_from(&scratch.0, tooling::native_target(), &plan);
+    let report = verify_ecu_project(
+        &files,
+        &project,
+        &tooling::execution_settings(),
+        &tooling::execution_owner(),
+    )
+    .unwrap_or_else(|error| panic!("{error}"));
+    assert!(report.passed, "{}", report.log);
 }
 
 #[test]
@@ -3874,9 +3993,7 @@ fn contract_provenance_preserves_complete_rule_and_extension_identities() {
 
 #[cfg(feature = "official-oracles")]
 #[test]
-fn zero_offset_and_multiple_operations_are_accepted_by_official_and_native_inputs() {
-    use autosar_config_core::integration::{PlanDependencies, build_plan};
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+fn zero_offset_and_multiple_operations_are_accepted_by_official_schema_and_native_inputs() {
     let mut sources = multi_operation_inputs();
     change(
         &mut sources,
@@ -3884,41 +4001,17 @@ fn zero_offset_and_multiple_operations_are_accepted_by_official_and_native_input
         "<PERIOD>0.01</PERIOD>",
         "<OFFSET>0</OFFSET><PERIOD>0.01</PERIOD>",
     );
-    let official = build_plan(
-        &sources,
-        &PlanDependencies::from_repository(root),
-        &RuntimeCatalog::from_repository(root).unwrap(),
-    )
-    .unwrap_or_else(|issues| panic!("{issues:?}"));
+    assert_official_schema_accepts(&sources);
     assert!(normal_validation(&sources).diagnostics.is_empty());
-    let native = build(&sources).unwrap();
-    let official_files = official.component_contract_files().unwrap();
-    let native_files = native.component_contract_files().unwrap();
-    assert_eq!(
-        official_files
-            .files()
-            .iter()
-            .filter(|(path, _)| path.ends_with(".h"))
-            .collect::<Vec<_>>(),
-        native_files
-            .files()
-            .iter()
-            .filter(|(path, _)| path.ends_with(".h"))
-            .collect::<Vec<_>>()
-    );
+    build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
     change(
         &mut sources,
         "process.arxml",
         "<OFFSET>0</OFFSET>",
         "<OFFSET>0.001</OFFSET>",
     );
-    let errors = build_plan(
-        &sources,
-        &PlanDependencies::from_repository(root),
-        &RuntimeCatalog::from_repository(root).unwrap(),
-    )
-    .err()
-    .unwrap();
+    assert_official_schema_accepts(&sources);
+    let errors = build(&sources).err().unwrap();
     assert!(
         errors
             .iter()
@@ -3942,14 +4035,10 @@ fn unsupported_edit_and_handoff_preserve_live_inputs_and_existing_output() {
             path
         })
         .collect();
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let runtime = RuntimeCatalog::from_repository(root).unwrap();
     let mut workspace = Workspace::open(paths.clone()).unwrap();
     let before = serde_json::to_value(&workspace.project_projection("same").unwrap()).unwrap();
     let errors = workspace
-        .edit_integration(
-            &runtime,
-            IntegrationEdit {
+        .edit_integration(IntegrationEdit {
                 can_ids: [("/Application/NotASignalPort".to_owned(), 1)].into(),
                 ..IntegrationEdit::default()
             },
@@ -4181,19 +4270,14 @@ fn template_rejects_nonzero_execution_constraints_and_keeps_exact_zero() {
 #[cfg(feature = "official-oracles")]
 #[test]
 fn template_official_legal_inputs_reject_nonzero_execution_constraints() {
-    use autosar_config_core::integration::{PlanDependencies, build_plan};
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let dependencies = PlanDependencies::from_repository(root);
-    let runtime = RuntimeCatalog::from_repository(root).unwrap();
     for (index, sources) in template_execution_variants().into_iter().enumerate() {
         let expected = if index == 0 {
             "PERIOD_UNSUPPORTED"
         } else {
             "MINIMUM_START_INTERVAL_UNSUPPORTED"
         };
-        let issues = build_plan(&sources, &dependencies, &runtime)
-            .err()
-            .expect("template constraint accepted");
+        assert_official_schema_accepts(&sources);
+        let issues = build(&sources).err().expect("template constraint accepted");
         assert!(
             issues.iter().any(|issue| issue.code == expected),
             "{issues:?}"
@@ -5047,9 +5131,7 @@ fn initialized_multi_scaffolds_compile_link_and_initialize_only_out_arguments() 
         workspace
             .initialize_application_previewed(&preview)
             .unwrap();
-        let plan = workspace
-            .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
-            .unwrap();
+        let plan = workspace.saved_integration_plan().unwrap();
         let project = scratch.0.join("sealed");
         prepare_ecu_project_for_workspace(&workspace, &plan, tooling::native_target(), true)
             .unwrap()
@@ -5127,9 +5209,7 @@ fn rejected_multi_contracts_refuse_stale_generation_and_preserve_sealed_output()
         workspace
             .initialize_application_previewed(&preview)
             .unwrap();
-        let plan = workspace
-            .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
-            .unwrap();
+        let plan = workspace.saved_integration_plan().unwrap();
         let project = scratch.0.join("sealed");
         prepare_ecu_project_for_workspace(&workspace, &plan, tooling::native_target(), true)
             .unwrap()
@@ -5159,21 +5239,13 @@ fn rejected_multi_contracts_refuse_stale_generation_and_preserve_sealed_output()
             &live.join("workbench-project.json"),
             &scratch.0.join("cache"),
         ) {
-            assert!(
-                reopened
-                    .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
-                    .is_err()
-            );
+            assert!(reopened.saved_integration_plan().is_err());
             assert!(
                 prepare_ecu_project_for_workspace(&reopened, &plan, tooling::native_target(), true)
                     .is_err()
             );
         }
-        assert!(
-            workspace
-                .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
-                .is_err()
-        );
+        assert!(workspace.saved_integration_plan().is_err());
         assert!(
             prepare_ecu_project_for_workspace(&workspace, &plan, tooling::native_target(), true)
                 .is_err()
@@ -5261,9 +5333,7 @@ fn sealed_multi_project_builds_and_runs_production_owner() {
             &scratch.0.join("cache"),
         )
         .unwrap();
-        let plan = workspace
-            .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
-            .unwrap();
+        let plan = workspace.saved_integration_plan().unwrap();
         let prepared =
             prepare_ecu_project_for_workspace(&workspace, &plan, tooling::native_target(), true)
                 .unwrap_or_else(|issues| panic!("{issues:?}"));
@@ -5485,11 +5555,6 @@ fn multi_selected_catalog_binds_standard_signatures_and_actual_periodic_producer
             (11, "Can_MainFunction_Mode"),
             (12, "Can_MainFunction_BusOff"),
         ]
-    );
-    assert!(
-        !description
-            .runtime_sources
-            .contains_key("runtime/src/Com.c")
     );
     assert!(
         description
@@ -6551,21 +6616,13 @@ fn multi_workbench_edits_standard_fields_and_paired_instance_references() {
     workspace
         .apply_change(&paired, &preview.change_revision)
         .unwrap();
-    assert!(
-        workspace
-            .integration_plan(&RuntimeCatalog::embedded().unwrap())
-            .is_ok()
-    );
+    assert!(workspace.integration_plan().is_ok());
     let save = workspace.preview_save().unwrap();
     workspace.save_previewed(&save.revision).unwrap();
     let reopened =
         Workspace::open_project_manifest(&root.join("workbench-project.json"), &root.join("cache"))
             .unwrap();
-    assert!(
-        reopened
-            .integration_plan(&RuntimeCatalog::embedded().unwrap())
-            .is_ok()
-    );
+    assert!(reopened.integration_plan().is_ok());
     for source in inputs()
         .iter()
         .filter(|source| source.logical_path() != "composition.arxml")
@@ -6575,16 +6632,115 @@ fn multi_workbench_edits_standard_fields_and_paired_instance_references() {
             source.bytes()
         );
     }
-    let runtime = RuntimeCatalog::embedded().unwrap();
     let path = root.join("composition.arxml");
     let saved = std::fs::read(&path).unwrap();
     let mut changed = saved.clone();
     changed.extend_from_slice(b"\n<!-- independent external edit -->\n");
     std::fs::write(&path, &changed).unwrap();
-    let rejected = reopened.saved_integration_plan(&runtime).err().unwrap();
+    let rejected = reopened.saved_integration_plan().err().unwrap();
     assert_eq!(rejected[0].code, "SOURCE_CHANGED");
     assert_eq!(std::fs::read(&path).unwrap(), changed);
     std::fs::write(&path, &saved).unwrap();
+}
+
+#[test]
+fn mainline_integration_save_refuses_stale_preview_prior_backup_and_unsafe_edit() {
+    use autosar_config_core::{Workspace, integration::IntegrationEdit};
+    let scratch = Scratch::new();
+    let root = scratch.0.join("live");
+    let sources = inputs();
+    let mut workspace = live_multi_workspace(&root, &sources);
+    let unchanged = workspace.preview_integration_save().unwrap();
+    workspace
+        .edit_integration(IntegrationEdit {
+            application_period_ms: Some(20),
+            ..IntegrationEdit::default()
+        })
+        .unwrap_or_else(|issues| panic!("{issues:?}"));
+    let stale = workspace
+        .clone()
+        .prepare_integration_save_previewed(&unchanged.revision)
+        .err()
+        .unwrap();
+    assert_eq!(stale[0].code, "SAVE_PREVIEW_STALE");
+    let stale = workspace
+        .save_integration_previewed(&unchanged.revision)
+        .err()
+        .unwrap();
+    assert_eq!(stale[0].code, "SAVE_FAILED");
+
+    // A prior interrupted save's backup is recovery data: refuse, keep it and
+    // every source byte.
+    let preview = workspace.preview_integration_save().unwrap();
+    let changed =
+        Path::new(&preview.files.iter().find(|file| file.changed).unwrap().path).to_path_buf();
+    let backup =
+        changed.with_extension(format!("arxml.autosar-config-{}-0.bak", std::process::id()));
+    std::fs::write(&backup, b"prior interrupted save").unwrap();
+    let refused = workspace
+        .save_integration_previewed(&preview.revision)
+        .err()
+        .unwrap();
+    assert_eq!(refused[0].code, "SAVE_FAILED");
+    assert_eq!(std::fs::read(&backup).unwrap(), b"prior interrupted save");
+    for source in &sources {
+        assert_eq!(
+            std::fs::read(root.join(source.logical_path())).unwrap(),
+            source.bytes()
+        );
+    }
+    std::fs::remove_file(&backup).unwrap();
+    let saved = workspace
+        .save_integration_previewed(&preview.revision)
+        .unwrap();
+    assert!(!workspace.view().dirty);
+    let reopened =
+        Workspace::open_project_manifest(&root.join("workbench-project.json"), &root.join("cache"))
+            .unwrap();
+    assert_eq!(
+        serde_json::to_vec(&saved).unwrap(),
+        serde_json::to_vec(&reopened.inspect_integration()).unwrap()
+    );
+
+    // A value that cannot be patched as one text node refuses the edit and
+    // leaves the save preview unchanged.
+    let mut commented = inputs();
+    change(
+        &mut commented,
+        "extract.arxml",
+        "<IDENTIFIER>800</IDENTIFIER>",
+        "<IDENTIFIER>800<!-- retained numeric comment --></IDENTIFIER>",
+    );
+    let mut mixed = live_multi_workspace(&scratch.0.join("mixed"), &commented);
+    let before = mixed.preview_integration_save().unwrap();
+    let port = mixed
+        .inspect_integration()
+        .description
+        .unwrap()
+        .signals
+        .iter()
+        .find(|signal| signal.can_id == 800)
+        .unwrap()
+        .port
+        .clone();
+    let issues = mixed
+        .edit_integration(IntegrationEdit {
+            can_ids: [(port, 1100)].into(),
+            application_period_ms: None,
+        })
+        .err()
+        .unwrap();
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.code == "EDIT_UNSAFE"
+                && issue.file.as_deref() == Some("extract.arxml")),
+        "{issues:?}"
+    );
+    assert_eq!(
+        serde_json::to_vec(&before).unwrap(),
+        serde_json::to_vec(&mixed.preview_integration_save().unwrap()).unwrap()
+    );
 }
 
 #[test]
@@ -6756,11 +6912,7 @@ fn multi_workbench_standard_child_creation_uses_xml_syntax_and_save_is_not_a_gen
     workspace
         .apply_change(&changes, &preview.change_revision)
         .unwrap();
-    assert!(
-        workspace
-            .integration_plan(&RuntimeCatalog::embedded().unwrap())
-            .is_err()
-    );
+    assert!(workspace.integration_plan().is_err());
     let save = workspace.preview_save().unwrap();
     workspace.save_previewed(&save.revision).unwrap();
     let text = std::fs::read_to_string(root.join("process.arxml")).unwrap();
@@ -6768,11 +6920,7 @@ fn multi_workbench_standard_child_creation_uses_xml_syntax_and_save_is_not_a_gen
     let reopened =
         Workspace::open_project_manifest(&root.join("workbench-project.json"), &root.join("cache"))
             .unwrap();
-    assert!(
-        reopened
-            .integration_plan(&RuntimeCatalog::embedded().unwrap())
-            .is_err()
-    );
+    assert!(reopened.integration_plan().is_err());
 }
 
 #[test]
@@ -6993,11 +7141,7 @@ fn multi_workbench_instance_rename_rebinds_known_source_irefs_and_preserves_unkn
     workspace
         .apply_change(&set, &preview.change_revision)
         .unwrap();
-    assert!(
-        workspace
-            .integration_plan(&RuntimeCatalog::embedded().unwrap())
-            .is_ok()
-    );
+    assert!(workspace.integration_plan().is_ok());
     let view = workspace
         .project_projection(&workspace.input_fingerprint().unwrap())
         .unwrap();
@@ -7208,11 +7352,7 @@ fn multi_workbench_connector_creation_builds_paired_standard_irefs_atomically() 
         .apply_change(&set, &preview.change_revision)
         .unwrap();
     assert_eq!(
-        workspace
-            .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
-            .err()
-            .unwrap()[0]
-            .code,
+        workspace.saved_integration_plan().err().unwrap()[0].code,
         "SOURCE_DIRTY"
     );
     let save = workspace.preview_save().unwrap();
@@ -7312,11 +7452,7 @@ fn multi_workbench_restores_missing_type_category_in_declared_xml_order() {
         &root.join("cache"),
     )
     .unwrap();
-    assert!(
-        reopened
-            .integration_plan(&RuntimeCatalog::embedded().unwrap())
-            .is_ok()
-    );
+    assert!(reopened.integration_plan().is_ok());
 }
 
 #[test]
@@ -7421,11 +7557,7 @@ fn multi_workbench_existing_invalid_connector_allows_unrelated_safe_edits() {
     workspace
         .apply_change(&set, &preview.change_revision)
         .unwrap();
-    assert!(
-        workspace
-            .integration_plan(&RuntimeCatalog::embedded().unwrap())
-            .is_err()
-    );
+    assert!(workspace.integration_plan().is_err());
     let save = workspace.preview_save().unwrap();
     workspace.save_previewed(&save.revision).unwrap();
     assert_eq!(
@@ -7440,11 +7572,7 @@ fn multi_workbench_existing_invalid_connector_allows_unrelated_safe_edits() {
     let reopened =
         Workspace::open_project_manifest(&root.join("workbench-project.json"), &root.join("cache"))
             .unwrap();
-    assert!(
-        reopened
-            .integration_plan(&RuntimeCatalog::embedded().unwrap())
-            .is_err()
-    );
+    assert!(reopened.integration_plan().is_err());
 }
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
@@ -7599,8 +7727,7 @@ fn template_quick_edit_changes_can_ids_and_application_period_on_the_mainline() 
         Workspace::preview_project_creation(&scratch.0.join("quick"), "Quick", "standard-ecu")
             .unwrap();
     let mut workspace = Workspace::create_project_previewed(&preview).unwrap();
-    let runtime = RuntimeCatalog::embedded().unwrap();
-    let before = workspace.inspect_integration(&runtime);
+    let before = workspace.inspect_integration();
     let description = before.description.unwrap();
     assert_eq!(
         description.profile,
@@ -7617,9 +7744,7 @@ fn template_quick_edit_changes_can_ids_and_application_period_on_the_mainline() 
         })
         .collect();
     let report = workspace
-        .edit_integration(
-            &runtime,
-            IntegrationEdit {
+        .edit_integration(IntegrationEdit {
                 can_ids,
                 application_period_ms: Some(20),
             },
@@ -7659,9 +7784,7 @@ fn template_quick_edit_changes_can_ids_and_application_period_on_the_mainline() 
             .all(|signal| signal.transmit_period_ms == Some(20))
     );
     let errors = workspace
-        .edit_integration(
-            &runtime,
-            IntegrationEdit {
+        .edit_integration(IntegrationEdit {
                 application_period_ms: Some(0),
                 ..IntegrationEdit::default()
             },

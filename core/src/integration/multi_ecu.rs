@@ -80,7 +80,7 @@ pub(super) fn files(
     let can = &communication.can;
     let mode = description.mode_runtime.as_ref().unwrap();
     let mut files = BTreeMap::new();
-    for (path, asset) in super::ecu::source_assets(target, true).map_err(|_| failure())? {
+    for (path, asset) in super::ecu::source_assets(target).map_err(|_| failure())? {
         files.insert(path, Cow::Borrowed(asset.bytes));
     }
     for (path, bytes) in plan.rte_runtime_files()?.into_files() {
@@ -148,15 +148,7 @@ pub(super) fn files(
         &os.task_symbol,
         os.use_res_scheduler,
     )?;
-    put(
-        &mut files,
-        "src/Ecu_Config.c",
-        os_config
-            .split("static const EcuFrameConfig frames[]")
-            .next()
-            .unwrap()
-            .to_string(),
-    );
+    put(&mut files, "src/Ecu_Config.c", os_config);
     put(
         &mut files,
         "include/Ecu_Config.h",
@@ -685,7 +677,7 @@ pub(super) fn files(
     }
     // Only files still delivered byte-for-byte are original sources; templates the
     // generator extended are generated outputs. The packaging tool is wrapped at delivery.
-    let original_sources: BTreeMap<_, _> = super::ecu::source_assets(target, true)
+    let original_sources: BTreeMap<_, _> = super::ecu::source_assets(target)
         .map_err(|_| failure())?
         .into_iter()
         .filter(|(path, asset)| {

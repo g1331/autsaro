@@ -1,6 +1,5 @@
 use autosar_config_core::Workspace;
 use autosar_config_core::execution::ProcessOwner;
-use autosar_config_core::integration::{PlanDependencies, PlanDiagnostic, RuntimeCatalog};
 use autosar_config_core::project_model::{ActionCapability, RuleCoverage, RuleSetIdentity};
 use autosar_config_core::target::{BuildTarget, ExecutionSettings};
 use serde::{Deserialize, Serialize};
@@ -32,8 +31,12 @@ pub(super) enum Language {
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Settings {
-    xsd_archive: Option<PathBuf>,
-    mod_archive: Option<PathBuf>,
+    // ADR 0012 retired the XSD/MOD validation mode; old values load, are
+    // reported once, and are dropped by the next settings save.
+    #[serde(default, skip_serializing)]
+    xsd_archive: Option<serde::de::IgnoredAny>,
+    #[serde(default, skip_serializing)]
+    mod_archive: Option<serde::de::IgnoredAny>,
     execution_tools: Option<ExecutionSettings>,
     build_target: Option<BuildTarget>,
     #[serde(default)]
@@ -57,9 +60,8 @@ pub(super) struct Capabilities {
     pub targets: [BuildTarget; 2],
     pub native_execution: bool,
     pub has_workspace: bool,
-    pub xsd_archive: Option<PathBuf>,
-    pub mod_archive: Option<PathBuf>,
-    pub resource_error: Option<autosar_config_core::LocalizedText>,
+    pub settings_error: Option<autosar_config_core::LocalizedText>,
+    pub settings_notice: Option<autosar_config_core::LocalizedText>,
     pub execution_tools: Option<ExecutionSettings>,
     pub configured_execution_tools: Option<ExecutionSettings>,
     pub tool_error: Option<autosar_config_core::LocalizedText>,
@@ -90,13 +92,11 @@ struct ActiveOperation {
 
 pub(super) struct Session {
     pub workspace: Option<Arc<Workspace>>,
-    pub resources: Option<Arc<PlanDependencies>>,
     pub tools: Option<Arc<ExecutionSettings>>,
     pub target: BuildTarget,
     settings: Settings,
     settings_bytes: Option<Vec<u8>>,
     settings_error: Option<autosar_config_core::LocalizedText>,
-    resource_error: Option<autosar_config_core::LocalizedText>,
     tool_error: Option<autosar_config_core::LocalizedText>,
     revision: u64,
     next_operation: u64,
@@ -121,7 +121,6 @@ pub(super) struct AppState {
     operation: Mutex<()>,
     settings_file: PathBuf,
     instance: u64,
-    pub runtime: Arc<RuntimeCatalog>,
     rule_set_identity: Option<RuleSetIdentity>,
     rule_coverage: Vec<RuleCoverage>,
     rule_error: Option<autosar_config_core::LocalizedText>,
@@ -129,7 +128,6 @@ pub(super) struct AppState {
 
 pub(super) struct Snapshot {
     pub workspace: Option<Arc<Workspace>>,
-    pub resources: Option<Arc<PlanDependencies>>,
     pub tools: Option<Arc<ExecutionSettings>>,
     pub target: BuildTarget,
     fingerprint: String,
@@ -139,15 +137,6 @@ impl Snapshot {
     pub fn workspace(&self) -> Result<&Workspace, autosar_config_core::LocalizedText> {
         self.workspace.as_deref().ok_or_else(|| {
             autosar_config_core::product_message!("backend.workbench.workspace_required").into()
-        })
-    }
-
-    pub fn legacy_resources(
-        &self,
-    ) -> Result<&PlanDependencies, autosar_config_core::LocalizedText> {
-        self.resources.as_deref().ok_or_else(|| {
-            autosar_config_core::product_message!("backend.workbench.legacy_resources_required")
-                .into()
         })
     }
 }
@@ -165,34 +154,6 @@ pub(super) struct Operation {
     input_fingerprint: String,
     pub snapshot: Snapshot,
     pub owner: Option<Arc<ProcessOwner>>,
-}
-
-pub(super) fn diagnostics(issues: Vec<PlanDiagnostic>) -> autosar_config_core::LocalizedText {
-    autosar_config_core::LocalizedText::messages(issues.into_iter().flat_map(|issue| {
-        [
-            autosar_config_core::LocalizedText::evidence(issue.code),
-            issue.message,
-            issue.remedy,
-        ]
-    }))
-}
-
-fn resources(settings: &Settings) -> Result<PlanDependencies, autosar_config_core::LocalizedText> {
-    let xsd = std::env::var_os("AUTOSAR_XSD_ARCHIVE")
-        .map(PathBuf::from)
-        .or_else(|| settings.xsd_archive.clone())
-        .ok_or(autosar_config_core::product_message!(
-            "backend.workbench.xsd_required"
-        ))?;
-    let mod_archive = std::env::var_os("AUTOSAR_MOD_ARCHIVE")
-        .map(PathBuf::from)
-        .or_else(|| settings.mod_archive.clone())
-        .ok_or(autosar_config_core::product_message!(
-            "backend.workbench.mod_required"
-        ))?;
-    let result = PlanDependencies::explicit(xsd, mod_archive)?;
-    result.validate().map_err(diagnostics)?;
-    Ok(result)
 }
 
 fn tools(settings: &Settings) -> Result<ExecutionSettings, autosar_config_core::LocalizedText> {
@@ -244,7 +205,6 @@ impl AppState {
                 ),
             ),
         };
-        let resolved_resources = resources(&settings);
         let resolved_tools = tools(&settings);
         let target = settings
             .build_target
@@ -253,7 +213,6 @@ impl AppState {
             } else {
                 BuildTarget::WindowsX64ControlledV1
             });
-        let resource_error = resolved_resources.as_ref().err().cloned();
         let rules = autosar_config_core::rules::rule_set_identity().and_then(|identity| {
             autosar_config_core::rules::coverage().map(|coverage| (identity, coverage))
         });
@@ -264,13 +223,11 @@ impl AppState {
         Ok(Arc::new(Self {
             session: Mutex::new(Session {
                 workspace: None,
-                resources: resolved_resources.ok().map(Arc::new),
                 tools: resolved_tools.as_ref().ok().cloned().map(Arc::new),
                 target,
                 settings,
                 settings_bytes: bytes,
                 settings_error,
-                resource_error,
                 tool_error: resolved_tools.err(),
                 revision: 0,
                 next_operation: 0,
@@ -279,7 +236,6 @@ impl AppState {
             operation: Mutex::new(()),
             settings_file,
             instance: autosar_config_core::execution::monotonic_ns()?,
-            runtime: Arc::new(RuntimeCatalog::embedded().map_err(diagnostics)?),
             rule_set_identity,
             rule_coverage,
             rule_error,
@@ -327,25 +283,20 @@ impl AppState {
             targets: BuildTarget::ALL,
             native_execution: session.target.is_native(),
             has_workspace: session.workspace.is_some(),
-            xsd_archive: session
-                .resources
-                .as_ref()
-                .map(|value| value.xsd_archive.clone()),
-            mod_archive: session
-                .resources
-                .as_ref()
-                .map(|value| value.mod_archive.clone()),
-            resource_error: session
-                .settings_error
-                .clone()
-                .or_else(|| session.resource_error.clone()),
+            settings_error: session.settings_error.clone(),
+            settings_notice: (session.settings.xsd_archive.is_some()
+                || session.settings.mod_archive.is_some())
+            .then(|| {
+                autosar_config_core::product_message!(
+                    "backend.workbench.retired_validation_archives_ignored"
+                )
+                .into()
+            }),
             execution_tools: session.tools.as_deref().cloned(),
             configured_execution_tools: session.settings.execution_tools.clone(),
             tool_error: session.tool_error.clone(),
             environment_overrides: [
                 "AUTOSAR_CONFIG_DIR",
-                "AUTOSAR_XSD_ARCHIVE",
-                "AUTOSAR_MOD_ARCHIVE",
                 "AUTOSAR_CC",
                 "AUTOSAR_OBJDUMP",
                 "AUTOSAR_GIT",
@@ -438,15 +389,6 @@ impl AppState {
                 has_workspace && rules_available && execution_available && !executing,
                 || autosar_config_core::product_message!("backend.workbench.native_unavailable"),
             ),
-            available(
-                "legacy-import",
-                session.resources.is_some() && !executing,
-                || {
-                    autosar_config_core::product_message!(
-                        "backend.workbench.legacy_import_unavailable"
-                    )
-                },
-            ),
         ]
     }
 
@@ -507,7 +449,7 @@ impl AppState {
         let mut settings = session.settings.clone();
         settings.appearance = appearance;
         let bytes = self.persist(
-            &settings,
+            &mut settings,
             session.settings_bytes.as_deref(),
             session.revision,
         )?;
@@ -539,7 +481,7 @@ impl AppState {
         let mut settings = session.settings.clone();
         settings.language = language;
         let bytes = self.persist(
-            &settings,
+            &mut settings,
             session.settings_bytes.as_deref(),
             session.revision,
         )?;
@@ -647,7 +589,6 @@ impl AppState {
         }
         let snapshot = Snapshot {
             workspace: session.workspace.clone(),
-            resources: session.resources.clone(),
             tools: session.tools.clone(),
             target: session.target,
             fingerprint: self.fingerprint(&session),
@@ -774,7 +715,7 @@ impl AppState {
 
     fn persist(
         &self,
-        settings: &Settings,
+        settings: &mut Settings,
         previous: Option<&[u8]>,
         revision: u64,
     ) -> Result<Vec<u8>, autosar_config_core::LocalizedText> {
@@ -798,6 +739,9 @@ impl AppState {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
         let stage = parent.join(format!(".settings-{}-{revision}.tmp", std::process::id()));
         let bytes = serde_json::to_vec_pretty(settings).map_err(|error| error.to_string())?;
+        // The saved bytes no longer carry the retired fields.
+        settings.xsd_archive = None;
+        settings.mod_archive = None;
         let mut file = fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -816,25 +760,6 @@ impl AppState {
         Ok(bytes)
     }
 
-    pub fn configure_resources(
-        &self,
-        fingerprint: &str,
-        xsd: PathBuf,
-        mod_archive: PathBuf,
-    ) -> Result<Reply<()>, autosar_config_core::LocalizedText> {
-        PlanDependencies::explicit(xsd.clone(), mod_archive.clone())?
-            .validate()
-            .map_err(diagnostics)?;
-        self.configure(
-            fingerprint,
-            move |settings| {
-                settings.xsd_archive = Some(xsd);
-                settings.mod_archive = Some(mod_archive);
-            },
-            true,
-        )
-    }
-
     pub fn configure_tools(
         &self,
         fingerprint: &str,
@@ -847,18 +772,15 @@ impl AppState {
                 );
             }
         }
-        self.configure(
-            fingerprint,
-            move |settings| settings.execution_tools = Some(value),
-            false,
-        )
+        self.configure(fingerprint, move |settings| {
+            settings.execution_tools = Some(value)
+        })
     }
 
     fn configure(
         &self,
         fingerprint: &str,
         update: impl FnOnce(&mut Settings),
-        validation: bool,
     ) -> Result<Reply<()>, autosar_config_core::LocalizedText> {
         let mut settings = {
             let session = self.session.lock().map_err(|_| {
@@ -868,16 +790,7 @@ impl AppState {
             session.settings.clone()
         };
         update(&mut settings);
-        let resolved_resources = if validation {
-            Some(Arc::new(resources(&settings)?))
-        } else {
-            None
-        };
-        let resolved_tools = if !validation {
-            Some(Arc::new(tools(&settings)?))
-        } else {
-            None
-        };
+        let resolved_tools = Arc::new(tools(&settings)?);
         let _gate = self.operation.lock().map_err(|_| {
             autosar_config_core::product_message!("backend.workbench.commit_lock_poisoned")
         })?;
@@ -897,24 +810,12 @@ impl AppState {
         settings.language = session.settings.language;
         settings.appearance = session.settings.appearance;
         let bytes = self.persist(
-            &settings,
+            &mut settings,
             session.settings_bytes.as_deref(),
             session.revision,
         )?;
-        if let Some(resources) = resolved_resources {
-            if let Some(workspace) = &mut session.workspace {
-                let workspace = Arc::make_mut(workspace);
-                if workspace.uses_legacy_validation() {
-                    workspace.set_legacy_validation_schema(resources.xsd_archive.clone())?;
-                }
-            }
-            session.resources = Some(resources);
-            session.resource_error = None;
-        }
-        if let Some(tools) = resolved_tools {
-            session.tools = Some(tools);
-            session.tool_error = None;
-        }
+        session.tools = Some(resolved_tools);
+        session.tool_error = None;
         session.settings = settings;
         session.settings_bytes = Some(bytes);
         session.settings_error = None;
@@ -958,7 +859,7 @@ impl AppState {
         let mut settings = session.settings.clone();
         settings.build_target = Some(target);
         let bytes = self.persist(
-            &settings,
+            &mut settings,
             session.settings_bytes.as_deref(),
             session.revision,
         )?;
@@ -1389,17 +1290,20 @@ mod language_tests {
     #[test]
     fn configuration_commit_retains_concurrent_presentation_saves() {
         let fixture = Fixture::new();
-        let initial = Settings {
-            xsd_archive: Some(fixture.0.join("configured-xsd.zip")),
-            mod_archive: Some(fixture.0.join("configured-mod.zip")),
-            execution_tools: None,
-            build_target: Some(BuildTarget::WindowsX64ControlledV1),
-            appearance: Appearance::Dark,
-            language: Language::Chinese,
-        };
-        fs::write(fixture.settings(), serde_json::to_vec(&initial).unwrap()).unwrap();
+        // Settings from the retired XSD/MOD validation mode still load.
+        fs::write(
+            fixture.settings(),
+            br#"{"xsdArchive":"configured-xsd.zip","modArchive":"configured-mod.zip","buildTarget":"windows-x64-controlled-v1","appearance":"dark","language":"zh-CN"}"#,
+        )
+        .unwrap();
         let state = AppState::new(fixture.settings()).unwrap();
-        let fingerprint = state.capabilities().unwrap().fingerprint;
+        let capabilities = state.capabilities().unwrap();
+        assert!(capabilities.settings_error.is_none());
+        assert_eq!(
+            serde_json::to_value(capabilities.settings_notice).unwrap()["key"],
+            "backend.workbench.retired_validation_archives_ignored"
+        );
+        let fingerprint = capabilities.fingerprint;
         let executable = std::env::current_exe().unwrap();
         let configured_tools = ExecutionSettings::new(
             executable.clone(),
@@ -1414,16 +1318,12 @@ mod language_tests {
         let configuring_fingerprint = fingerprint.clone();
         let new_tools = configured_tools.clone();
         let configuration = std::thread::spawn(move || {
-            configuring_state.configure(
-                &configuring_fingerprint,
-                move |settings| {
-                    settings.execution_tools = Some(new_tools);
-                    // Hold preparation after its snapshot, without holding either commit lock.
-                    snapshot_ready.send(()).unwrap();
-                    continue_preparation.recv().unwrap();
-                },
-                false,
-            )
+            configuring_state.configure(&configuring_fingerprint, move |settings| {
+                settings.execution_tools = Some(new_tools);
+                // Hold preparation after its snapshot, without holding either commit lock.
+                snapshot_ready.send(()).unwrap();
+                continue_preparation.recv().unwrap();
+            })
         });
         snapshot_taken
             .recv_timeout(std::time::Duration::from_secs(5))
@@ -1451,9 +1351,13 @@ mod language_tests {
         assert_eq!(persisted.language, Language::English);
         assert_eq!(serde_json::to_value(persisted.appearance).unwrap(), "light");
         assert_eq!(persisted.execution_tools, Some(configured_tools.clone()));
-        assert_eq!(persisted.xsd_archive, initial.xsd_archive);
-        assert_eq!(persisted.mod_archive, initial.mod_archive);
-        assert_eq!(persisted.build_target, initial.build_target);
+        assert_eq!(
+            persisted.build_target,
+            Some(BuildTarget::WindowsX64ControlledV1)
+        );
+        let saved = fs::read_to_string(fixture.settings()).unwrap();
+        assert!(!saved.contains("xsdArchive") && !saved.contains("modArchive"));
+        assert!(reply.capabilities.settings_notice.is_none());
         let restarted = AppState::new(fixture.settings())
             .unwrap()
             .capabilities()
@@ -1462,6 +1366,7 @@ mod language_tests {
         assert_eq!(serde_json::to_value(restarted.appearance).unwrap(), "light");
         assert_eq!(restarted.configured_execution_tools, Some(configured_tools));
         assert_eq!(restarted.target, BuildTarget::WindowsX64ControlledV1);
+        assert!(restarted.settings_notice.is_none());
     }
 
     #[test]

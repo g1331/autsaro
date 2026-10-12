@@ -10,7 +10,8 @@
 #include "BswM_ComM.h"
 #include "SchM_BswM.h"
 #include "Ecu_HostBusSM.h"
-#include "Can.h"
+#include "standard/Can.h"
+#include "Can_Host.h"
 #include "SchM_Can.h"
 #include "Com.h"
 #include "Com_Internal.h"
@@ -31,17 +32,7 @@ static unsigned receptions;
 static unsigned action_depth;
 static boolean postpone;
 static Std_ReturnType action_result;
-const EcuPolicyConfig Ecu_Policy = {ECU_TX_SYNCHRONOUS,
-                                    ECU_RX_BEFORE_DEADLINE,
-                                    0u,
-                                    0u,
-                                    ECU_WAIT_ABORT,
-                                    0u,
-                                    0u,
-                                    NULL_PTR,
-                                    0u,
-                                    50u,
-                                    5000u};
+const EcuPolicyConfig Ecu_Policy = {.tx_confirmation = ECU_TX_SYNCHRONOUS};
 static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8]) {
     assert(id == 0x456u && length == 4u && data[0] == 42u && data[1] == 0u);
     ++frames;

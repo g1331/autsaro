@@ -9,6 +9,7 @@ import {
   cp,
   readdir,
   readlink,
+  stat,
   unlink,
   open,
 } from 'node:fs/promises';
@@ -46,7 +47,6 @@ export async function runBuiltinScenario({
   const evidence = {
     format: 'autosar-builtin-native-acceptance-v1',
     platform,
-    mode: 'builtin-only',
     installed: scenario.installed,
     status: 'failed',
     checks: [],
@@ -594,19 +594,14 @@ export async function runBuiltinScenario({
     await click('对象', "document.querySelector('[aria-label=" + json('工程树视图') + "]')");
     await click('打开配置对象文档');
   }
-  async function exportSource(name, standard) {
+  async function exportSource(name) {
     const output = path.join(scratch, 'deliveries', name);
-    const previewCommand = standard ? 'preview_ecu_project' : 'preview_handoff_project';
-    const generateCommand = standard ? 'generate_ecu_project' : 'generate_handoff_project';
-    const payload = {
-      outputDirectory: output,
-      ...(standard ? { handoff: true } : {}),
-    };
+    const payload = { outputDirectory: output, handoff: true };
     const before = await projection();
-    const preview = await invoke(previewCommand, payload);
+    const preview = await invoke('preview_ecu_project', payload);
     await assert.rejects(access(output), { code: 'ENOENT' });
     assert.deepEqual(await projection(), before);
-    await invoke(generateCommand, { ...payload, revision: preview.revision });
+    await invoke('generate_ecu_project', { ...payload, revision: preview.revision });
     for (const file of preview.files) {
       if (file.after !== null)
         assert.deepEqual(
@@ -680,11 +675,18 @@ export async function runBuiltinScenario({
   }
   try {
     assert.equal(typeof scenario.installed, 'boolean');
-    assert.equal(scenario.mode, 'builtin-only');
     await until(
       `Boolean(window.__TAURI_INTERNALS__ && document.querySelector('button'))`,
       'native startup',
     );
+    // The harness seeded settings.json with the retired xsdArchive/modArchive fields.
+    const seeded = await capabilities();
+    assert.equal(seeded.settingsError, null, 'Retired archive settings must still load');
+    assert.equal(
+      seeded.settingsNotice?.key,
+      'backend.workbench.retired_validation_archives_ignored',
+    );
+    evidence.checks.push({ name: 'retired-validation-archive-settings-ignored', status: 'passed' });
     // Keep the existing Chinese scenario deterministic on every host locale.
     const startupBoot = await evaluate('performance.timeOrigin');
     await invoke('configure_language', { language: 'zh-CN' });
@@ -701,7 +703,6 @@ export async function runBuiltinScenario({
     const boundary = JSON.parse(
       await readFile(path.join(scratch, 'application-environment.json'), 'utf8'),
     );
-    assert.equal(boundary.mode, 'builtin-only');
     assert.equal(boundary.installed, scenario.installed);
     let network = null;
     if (scenario.installed) {
@@ -758,7 +759,10 @@ export async function runBuiltinScenario({
       const caps = await capabilities();
       assert.equal(caps.ruleError, null);
       assert(caps.ruleSetIdentity?.sha256 && caps.ruleCoverage.length > 0);
-      assert(!caps.xsdArchive && !caps.modArchive, 'Official resource settings must be empty');
+      assert(
+        !caps.settingsNotice,
+        'Retired archive settings are dropped by the first settings save',
+      );
       assert(caps.toolError, 'Execution tools must not leak into configuration process');
       assert(
         !(await evaluate(`Boolean(document.querySelector('[aria-label="设置"][role=dialog]'))`)),
@@ -928,7 +932,7 @@ export async function runBuiltinScenario({
           users.push({ ...file, bytes });
         }
         await refreshSurface(multi.manifest);
-        const delivered = await exportSource('MultiComponent-source', true);
+        const delivered = await exportSource('MultiComponent-source');
         for (const file of users) {
           assert.deepEqual(await readFile(path.join(multi.directory, file.path)), file.bytes);
           assert.deepEqual(
@@ -962,146 +966,8 @@ export async function runBuiltinScenario({
         };
       });
     }
-    const canA = await create('NorthSensor', 'can-signals-v1');
-    await checked('can-original-A', async () => {
-      const view = await projection();
-      await sourceSurface(view);
-      const id = fieldBy(view, '/CanIfTxPduCanId');
-      const initial = fieldBy(view, '/ComSignalInitValue');
-      const applied = await apply(view, [
-        valueChange(id, '865'),
-        valueChange(initial, '305419896'),
-      ]);
-      assert.equal(
-        fieldBy(applied.outcome.projection, '/CanIfTxPduCanId').current.value.lexeme,
-        '865',
-      );
-      assert.equal(
-        fieldBy(applied.outcome.projection, '/ComSignalInitValue').current.value.lexeme,
-        '305419896',
-      );
-      await save();
-      const reopened = await refreshSurface(canA.manifest);
-      assert.notEqual(reopened.workspaceEpoch, view.workspaceEpoch);
-      assert.equal(fieldBy(reopened, '/CanIfTxPduCanId').current.value.lexeme, '865');
-      await exportSource('NorthSensor-source', false);
-      return { canId: 865, initial: '305419896', sources: reopened.sources };
-    });
-    await checked('changed-ui-drafts-save-and-entry-preservation', async () => {
-      await refreshSurface(canA.manifest);
-      async function genericInitial(value, multiple = false) {
-        const field = fieldBy(await projection(), '/ComSignalInitValue');
-        await selectObject(field.objectId, multiple);
-        await input(`[data-field-id=${json(field.fieldId)}]`, value);
-        await click('预览更改');
-        await until(
-          `Boolean(document.querySelector('[aria-label="确认原子应用批次"]'))`,
-          'actual generic batch preview',
-        );
-        await click('确认应用全部变化', "document.querySelector('[role=dialog]')");
-        await until(
-          `!document.querySelector('[role=dialog]') && !document.querySelector(${json(`[data-field-id=${json(field.fieldId)}]`)})?.disabled`,
-          'actual generic batch applied',
-        );
-        assert.equal(
-          fieldBy(await projection(), '/ComSignalInitValue').current.value.lexeme,
-          value,
-        );
-      }
-      async function surfaceSave() {
-        await click('预览保存');
-        await until(
-          `Boolean(document.querySelector('[aria-label="确认保存源配置"]')) && [...document.querySelectorAll('[role=dialog] button')].some(node => node.textContent.trim() === '确认保存' && !node.disabled)`,
-          'actual save preview ready for confirmation after generic batch',
-        );
-        await click('确认保存', "document.querySelector('[role=dialog]')");
-        await until(`!document.querySelector('[role=dialog]')`, 'actual confirmed save');
-      }
-      await menu('CAN 通信');
-      await click('Command');
-      await click('Value');
-      await genericInitial('305419897');
-      await surfaceSave();
-      assert.equal(
-        fieldBy(await refreshSurface(canA.manifest), '/ComSignalInitValue').current.value.lexeme,
-        '305419897',
-      );
-      await menu('CAN 通信');
-      await click('Command');
-      await click('Value');
-      const legacyInitial = `(() => [...document.querySelectorAll('label')].find(node => node.childNodes[0]?.textContent.trim() === '初始值')?.querySelector('input'))()`;
-      await evaluate(
-        `(() => { const node = ${legacyInitial}; if (!node || node.disabled) throw new Error('Actual legacy signal initial editor unavailable'); node.focus(); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(node, '305419899'); node.dispatchEvent(new Event('input', {bubbles:true})); })()`,
-      );
-      await genericInitial('305419898', true);
-      await menu('CAN 通信');
-      assert.equal(
-        await evaluate(`${legacyInitial}?.value`),
-        '305419899',
-        'Confirmed generic batch preserves genuinely dirty legacy draft',
-      );
-      await click('还原');
-      assert.equal(
-        await evaluate(`${legacyInitial}?.value`),
-        '305419898',
-        'Explicit legacy restore uses confirmed backend value',
-      );
-      await surfaceSave();
-      assert.equal(
-        fieldBy(await refreshSurface(canA.manifest), '/ComSignalInitValue').current.value.lexeme,
-        '305419898',
-      );
-      await genericInitial('305419896');
-      await surfaceSave();
-      const beforeEntry = await refreshSurface(canA.manifest);
-      await menu('新建工程…');
-      const unfinishedDirectory = path.join(scratch, 'projects', 'UnfinishedEntry');
-      await input(label('工程名称'), 'UnfinishedEntry');
-      await mkdir(unfinishedDirectory);
-      await choose(
-        'directory',
-        unfinishedDirectory,
-        () => click('选择', "document.querySelector('.start-page')"),
-        async () => {
-          await until(
-            `document.querySelector(${json(label('新工程目录'))})?.value === ${json(unfinishedDirectory)}`,
-            'native unfinished entry directory result',
-          );
-          return evaluate(`document.querySelector(${json(label('新工程目录'))}).value`);
-        },
-      );
-      for (const action of [
-        () => click('保存为成员工程', "document.querySelector('.start-page')"),
-        () => menu('保存为成员工程…'),
-      ]) {
-        await action();
-        assert.equal(
-          await evaluate(`document.querySelector(${json(label('工程名称'))}).value`),
-          'UnfinishedEntry',
-        );
-        assert.equal(
-          await evaluate(`document.querySelector(${json(label('新工程目录'))}).value`),
-          unfinishedDirectory,
-        );
-        assert.deepEqual(
-          await projection(),
-          beforeEntry,
-          'Save-as navigation must not implicitly create or replace a project',
-        );
-        assert.deepEqual(
-          await readdir(unfinishedDirectory),
-          [],
-          'Save-as navigation must not create project files',
-        );
-      }
-      await refreshSurface(canA.manifest);
-      return {
-        cleanGenericSave: '305419897',
-        dirtyLegacyPreserved: '305419899',
-        restoredOracleInitial: '305419896',
-        saveAsDraftPreserved: true,
-      };
-    });
+    // Generic editor safety on a built-in standard ECU project, independent of the multi-component flow above.
+    const editing = await create('EditingProbe', 'standard-ecu');
     await checked('batch-rejection-and-byte-preservation', async () => {
       const view = await projection();
       const id = fieldBy(view, '/CanIfTxPduCanId');
@@ -1145,40 +1011,12 @@ export async function runBuiltinScenario({
         view.inputFingerprint,
       );
       await save();
-      await refreshSurface(canA.manifest);
+      await refreshSurface(editing.manifest);
       return {
         changedDraft: 'rejected',
         conflict: 'rejected',
         stale: 'rejected',
         partialPublish: false,
-      };
-    });
-    const canB = await create('SouthActuator', 'can-signals-v1');
-    await checked('can-original-B', async () => {
-      const view = await projection();
-      const fields = [fieldBy(view, '/CanIfTxPduCanId'), fieldBy(view, '/ComSignalInitValue')];
-      const period = fieldBy(view, '/ComTxModeTimePeriod');
-      await apply(view, [
-        valueChange(fields[0], '913'),
-        valueChange(fields[1], '16909060'),
-        valueChange(period, '0.040'),
-      ]);
-      await save();
-      const reopened = await refreshSurface(canB.manifest);
-      assert.equal(fieldBy(reopened, '/CanIfTxPduCanId').current.value.lexeme, '913');
-      assert.equal(fieldBy(reopened, '/ComSignalInitValue').current.value.lexeme, '16909060');
-      assert.equal(fieldBy(reopened, '/ComTxModeTimePeriod').current.value.lexeme, '0.040');
-      assert.notEqual(
-        sha256(await readFile(canA.view.sources[0].path)),
-        sha256(await readFile(reopened.sources[0].path)),
-        'Two CAN inputs must differ in actual configuration, not only file location',
-      );
-      await exportSource('SouthActuator-source', false);
-      return {
-        canId: 913,
-        periodMs: 40,
-        initial: '16909060',
-        sources: reopened.sources,
       };
     });
     await checked('structure-and-incoming-reference-closure', async () => {
@@ -1290,7 +1128,7 @@ export async function runBuiltinScenario({
         deletedIdNotReused: true,
       };
     });
-    await refreshSurface(canB.manifest);
+    await refreshSurface(editing.manifest);
     const standard = await create('GatewayReference', 'standard-ecu');
     await checked('seven-source-standard-variant', async () => {
       const view = await projection();
@@ -1332,7 +1170,7 @@ export async function runBuiltinScenario({
       ))
         assert.deepEqual(await readFile(source.path), source.bytes);
       await sourceSurface(await projection());
-      const result = await exportSource('GatewayReference-source', true);
+      const result = await exportSource('GatewayReference-source');
       result.expectedInputs = {
         periodMs: 20,
         receiveCanId: 1104,
@@ -1374,7 +1212,7 @@ export async function runBuiltinScenario({
       await refreshSurface(copied.projectPath);
       await refuse(
         'preview_project_creation',
-        { directory: moved, name: 'Occupied', templateId: 'can-empty-v1' },
+        { directory: moved, name: 'Occupied', templateId: 'standard-ecu' },
         'Occupied destination cannot be overwritten',
       );
       const manifestPath = copied.projectPath;
@@ -1415,6 +1253,61 @@ export async function runBuiltinScenario({
         originalBytesRetained: true,
       };
     });
+    await checked('retired-identities-refused-unchanged', async () => {
+      const before = await projection();
+      async function snapshot(directory) {
+        const files = new Map();
+        for (const name of await readdir(directory, { recursive: true })) {
+          const file = path.join(directory, name);
+          if (!(await stat(file)).isDirectory()) files.set(name, await readFile(file));
+        }
+        return files;
+      }
+      async function refusalKey(command, payload) {
+        let refused = null;
+        try {
+          await invoke(command, payload);
+        } catch (error) {
+          refused = JSON.parse(error.message);
+        }
+        assert(refused, `${command}: a retired identity must be refused`);
+        return refused.key;
+      }
+      // A project whose manifest names the removed frame/signal host profile.
+      const retiredProject = path.join(scratch, 'projects', 'RetiredHostProject');
+      await cp(path.dirname(before.projectPath), retiredProject, { recursive: true });
+      const retiredManifest = path.join(retiredProject, 'workbench-project.json');
+      const manifest = JSON.parse(await readFile(retiredManifest, 'utf8'));
+      manifest.profileHint = 'host-can-v1';
+      await writeFile(retiredManifest, json(manifest));
+      const projectBytes = await snapshot(retiredProject);
+      assert.equal(
+        await refusalKey('open_member_project', { path: retiredManifest }),
+        'backend.arxml.project.retired_profile',
+      );
+      assert.deepEqual(await snapshot(retiredProject), projectBytes, 'Retired project unchanged');
+      // Handoff directories of the retired host and single-component chains.
+      const handoffs = {};
+      for (const format of ['autosar-host-handoff-v1', 'autosar-ecu-handoff-v1']) {
+        const directory = path.join(scratch, 'deliveries', `retired-${format}`);
+        await mkdir(directory);
+        await writeFile(path.join(directory, 'handoff.json'), json({ format }));
+        const bytes = await snapshot(directory);
+        const destination = path.join(scratch, 'projects', `Retired-${format}`);
+        assert.equal(
+          await refusalKey('open_handoff_project', {
+            directory,
+            newWorkspaceDirectory: destination,
+          }),
+          'backend.project.retired_handoff_format',
+        );
+        assert.deepEqual(await snapshot(directory), bytes, `Retired ${format} unchanged`);
+        await assert.rejects(access(destination), { code: 'ENOENT' });
+        handoffs[format] = 'refused';
+      }
+      assert.deepEqual(await projection(), before, 'Refusals must keep the open workspace');
+      return { profile: 'host-can-v1', handoffs, bytesRetained: true };
+    });
     await checked('v2-relocation-snapshot-import-and-refusals', async () => {
       const delivery = evidence.packages.find((entry) => entry.name === 'GatewayReference-source');
       assert(delivery);
@@ -1431,7 +1324,7 @@ export async function runBuiltinScenario({
       await choose(
         'directory',
         relocated,
-        () => menu('重导入 ECU 交接包…'),
+        () => menu('导入 ECU 交接包…'),
         async () => {
           await until(
             `document.querySelector('[role=dialog][aria-label="导入封存交付包"] [aria-label="交付包目录"]')?.value === ${json(relocated)}`,
@@ -1654,7 +1547,7 @@ export async function runBuiltinScenario({
       const userCode = seed.replace(writeLine, '        value &= 0x7FFFFFFFu;\n$&');
       await writeFile(live, userCode);
       await refreshSurface(manifestPath);
-      const delivered = await exportSource('GatewayUserApplication-source', true);
+      const delivered = await exportSource('GatewayUserApplication-source');
       assert.deepEqual(
         await readFile(path.join(delivered.directory, 'src/EchoApplication.c')),
         Buffer.from(userCode),

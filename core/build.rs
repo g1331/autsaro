@@ -58,7 +58,7 @@ fn add(
         !profiles.is_empty()
             && profiles
                 .iter()
-                .all(|profile| matches!(*profile, "ecu" | "ecu-multi" | "host"))
+                .all(|profile| matches!(*profile, "ecu" | "ecu-multi"))
     );
     assert!(hash.len() == 64 && hash.bytes().all(|byte| byte.is_ascii_hexdigit()));
     assert!(
@@ -170,7 +170,6 @@ fn main() {
         );
     }
     let provenance = [
-        ("runtime/contracts/bsw-v1.json", "Apache-2.0", common),
         ("third_party/freertos/source-manifest.json", "MIT", common),
         (
             "third_party/freertos/posix-source-manifest.json",
@@ -211,22 +210,8 @@ fn main() {
         "provenance",
         "workbench",
         common,
-        &["ecu", "host"],
+        &["ecu"],
     );
-    let bsw = read_manifest(root, "runtime/contracts/bsw-v1.json");
-    assert_eq!(bsw["formatVersion"], 1);
-    for (path, hash) in bsw["sources"].as_object().expect("BSW source map") {
-        add(
-            &mut rows,
-            path.clone(),
-            hash.as_str().expect("BSW SHA-256").into(),
-            "Apache-2.0",
-            "bsw",
-            "workbench",
-            common,
-            &["ecu", "host"],
-        );
-    }
     for (manifest_path, targets) in [
         ("third_party/freertos/source-manifest.json", windows),
         ("third_party/freertos/posix-source-manifest.json", linux),

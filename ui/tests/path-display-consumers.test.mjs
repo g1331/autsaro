@@ -3,7 +3,6 @@ import React from 'react';
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { composedMessage, localize, message, previewLanguage, translate } from '../src/i18n';
-import { BuildPage } from '../src/pages/BuildPage';
 import { IntegrationDelivery } from '../src/IntegrationDelivery';
 import { CopyText, OwnedLog } from '../src/workbench/Dialog';
 import { PreviewDialogs } from '../src/workbench/PreviewDialogs';
@@ -38,9 +37,8 @@ const capabilities = {
   targets: ['windows-x64-controlled-v1'],
   nativeExecution: true,
   hasWorkspace: false,
-  xsdArchive: null,
-  modArchive: null,
-  resourceError: null,
+  settingsError: null,
+  settingsNotice: null,
   executionTools: null,
   configuredExecutionTools: null,
   toolError: null,
@@ -102,9 +100,6 @@ async function renderWorkbench(integrationCandidate = false) {
     name: 'PathProject',
     dirty: false,
     files: [],
-    frames: [],
-    signals: [],
-    diagnostic: null,
     issues: [],
   };
   const projection = {
@@ -148,11 +143,8 @@ async function renderWorkbench(integrationCandidate = false) {
         diagnostics: [],
         description: { component: { periodMs: 10 }, signals: [] },
       });
-    if (command === 'preview_generate_project' || command === 'preview_ecu_project')
-      return reply(generationPreview);
-    if (command === 'generate_project' || command === 'generate_ecu_project')
-      return reply(generated);
-    if (command === 'build_project') return reply({ binaryPath: rawBinary, log: rawLog });
+    if (command === 'preview_ecu_project') return reply(generationPreview);
+    if (command === 'generate_ecu_project') return reply(generated);
     throw new Error(`Unexpected command: ${command}`);
   });
   let controller;
@@ -163,9 +155,7 @@ async function renderWorkbench(integrationCandidate = false) {
       null,
       !controller.workspace
         ? React.createElement(SourceEntry, { controller, logo: '' })
-        : integrationCandidate
-          ? React.createElement(IntegrationDelivery, { controller, active: true })
-          : React.createElement(BuildPage, { controller }),
+        : React.createElement(IntegrationDelivery, { controller, active: true }),
       React.createElement(PreviewDialogs, { controller }),
     );
   }
@@ -203,7 +193,7 @@ function buildController() {
     integrationIssues: [],
     native: false,
     disabled: false,
-    legacyTarget: 'windows-x64-controlled-v1',
+    buildTarget: 'windows-x64-controlled-v1',
     executionDisabled: true,
     executionReason: '',
     buildDirectory: rawBuild,
@@ -220,12 +210,9 @@ function buildController() {
       files: ['src/Application.c'],
     },
     built: { binaryPath: rawBinary, log: rawLog },
-    handoffGenerated: false,
     changeEcuBuildDirectory: vi.fn(),
     changeTarget: vi.fn(),
     chooseDirectory: vi.fn(),
-    generateProject: vi.fn(),
-    buildProject: vi.fn(),
   };
 }
 beforeEach(() => {
@@ -246,28 +233,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
   localStorage.clear();
   previewLanguage('system');
-});
-
-test('BuildPage displays ordinary Windows paths in text, stage titles, and the directory input', () => {
-  previewLanguage('en');
-  const controller = buildController();
-  const view = render(React.createElement(BuildPage, { controller }));
-
-  expect(view.getByLabelText(translate('shell.build.directory')).value).toBe(
-    String.raw`C:\工作目录\build`,
-  );
-  expect(
-    Array.from(view.container.querySelectorAll('.path-text'), (node) => node.textContent),
-  ).toEqual([
-    String.raw`C:\工作目录\output`,
-    String.raw`\\server\share\backup`,
-    String.raw`C:\工作目录\build\ecu.exe`,
-  ]);
-  const details = view.container.querySelectorAll('.stage-copy small');
-  expect(details[2].textContent).toBe(String.raw`C:\工作目录\output`);
-  expect(details[2].title).toBe(String.raw`C:\工作目录\output`);
-  expect(details[3].textContent).toBe(String.raw`C:\工作目录\build\ecu.exe`);
-  expect(details[3].title).toBe(String.raw`C:\工作目录\build\ecu.exe`);
 });
 
 test('ToolWindows copies displayed output and binary paths but preserves the complete compiler log', async () => {
@@ -509,86 +474,6 @@ test('real ECU preview and confirmation retain raw directories and revision acro
   expect(current().buildDirectory).toBe(String.raw`D:\用户选择\build`);
 });
 
-test('BuildPage keeps picked build paths raw for real generation and build IPC, then accepts user edits', async () => {
-  const consumer = await renderWorkbench();
-  await importSources(consumer);
-  const { view, current } = consumer;
-  await act(async () => current().validateProject());
-  await waitFor(() => {
-    expect(current().stages.validate.state).toBe('done');
-    expect(current().busy).toBeNull();
-  });
-  native.open.mockResolvedValueOnce(rawOutput);
-  await act(async () => {
-    fireEvent.click(view.getByRole('button', { name: translate('shell.build.preview') }));
-  });
-  await waitFor(() => {
-    expect(current().generationPreview).toBe(generationPreview);
-    expect(current().busy).toBeNull();
-  });
-  expect(native.invoke).toHaveBeenCalledWith('preview_generate_project', {
-    outputDirectory: String.raw`\\?\C:\工作目录\output`,
-    fingerprint: 'unchanged-input',
-  });
-  await act(async () => {
-    fireEvent.click(
-      within(view.getByRole('dialog')).getByRole('button', {
-        name: translate('workflow.generation.confirm'),
-      }),
-    );
-  });
-  await waitFor(() => {
-    expect(current().generated).toBe(generated);
-    expect(current().busy).toBeNull();
-  });
-  expect(native.invoke).toHaveBeenCalledWith('generate_project', {
-    outputDirectory: String.raw`\\?\C:\工作目录\output`,
-    revision: 'sealed-output-revision',
-    fingerprint: 'unchanged-input',
-  });
-  native.open.mockResolvedValueOnce(rawBuild);
-  await act(async () => {
-    fireEvent.click(view.getByRole('button', { name: translate('shell.build.chooseDirectory') }));
-  });
-  expect(view.getByLabelText(translate('shell.build.directory')).value).toBe(
-    String.raw`C:\工作目录\build`,
-  );
-  expect(current().buildDirectory).toBe(String.raw`\\?\C:\工作目录\build`);
-  await act(async () => {
-    fireEvent.click(view.getByRole('button', { name: translate('shell.build.build') }));
-  });
-  await waitFor(() => {
-    expect(current().stages.build.state).toBe('done');
-    expect(current().busy).toBeNull();
-  });
-  expect(native.invoke).toHaveBeenCalledWith('build_project', {
-    outputDirectory: String.raw`\\?\C:\工作目录\output`,
-    buildDirectory: String.raw`\\?\C:\工作目录\build`,
-    fingerprint: 'unchanged-input',
-  });
-  expect(view.container.querySelectorAll('.result-section > p.path-text')[1].textContent).toBe(
-    String.raw`C:\工作目录\build\ecu.exe`,
-  );
-  expect(view.container.querySelector('.owned-log pre').textContent).toBe(rawLog);
-  fireEvent.change(view.getByLabelText(translate('shell.build.directory')), {
-    target: { value: String.raw`D:\用户选择\build` },
-  });
-  expect(current().buildDirectory).toBe(String.raw`D:\用户选择\build`);
-  expect(current().built).toBeNull();
-  await act(async () => {
-    fireEvent.click(view.getByRole('button', { name: translate('shell.build.build') }));
-  });
-  await waitFor(() => {
-    expect(current().stages.build.state).toBe('done');
-    expect(current().busy).toBeNull();
-  });
-  expect(native.invoke).toHaveBeenCalledWith('build_project', {
-    outputDirectory: String.raw`\\?\C:\工作目录\output`,
-    buildDirectory: String.raw`D:\用户选择\build`,
-    fingerprint: 'unchanged-input',
-  });
-});
-
 test.each([
   [
     'zh-CN',
@@ -658,9 +543,14 @@ test.each(['zh-CN', 'en'])(
   '%s file and backup parameters format without changing arbitrary evidence',
   (language) => {
     previewLanguage(language);
-    const fileParams = Object.freeze({ file: rawUncSource });
+    const fileParams = Object.freeze({
+      code: 'DIAG',
+      category: 'input',
+      file: rawUncSource,
+      object: logicalPath,
+    });
     const backupParams = Object.freeze({ path: rawOutput, backup: rawBackup, error: rawLog });
-    const fileMessage = message('backend.arxml.import_xsd_failed', fileParams);
+    const fileMessage = message('backend.arxml.integration_diagnostic_context', fileParams);
     const backupMessage = message('backend.generation.previous_output_backup_failed', backupParams);
     expect(localize(fileMessage)).toContain(String.raw`\\server\share\System.arxml`);
     expect(localize(fileMessage)).not.toContain('\\\\?\\');

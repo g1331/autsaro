@@ -17,7 +17,6 @@ pub(super) struct Element {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ReferencePolicy {
-    Strict,
     ConsumerScoped,
 }
 
@@ -32,26 +31,6 @@ pub(super) struct Graph {
 }
 
 impl Graph {
-    pub fn new(sources: &[InputSource], definitions: &str) -> Result<Self, Vec<PlanDiagnostic>> {
-        let mut definition_kinds = BTreeMap::new();
-        let external = Document::parse(definitions).map_err(|error| {
-            vec![PlanDiagnostic::dependency(
-                "MOD_PARSE",
-                crate::product_message!("backend.integration.graph.ecuc_definition_xml_parse_failed", "error" => error),
-                crate::product_message!("backend.integration.graph.pinned_unmodified_mod_archive_required"),
-            )]
-        })?;
-        for node in external
-            .descendants()
-            .filter(|node| node.is_element() && node.tag_name().namespace() == Some(NS))
-        {
-            if short_name(node).is_some() {
-                definition_kinds.insert(path(node), node.tag_name().name().into());
-            }
-        }
-        Self::build(sources, definition_kinds, ReferencePolicy::Strict)
-    }
-
     /// Index original source elements without qualifying unrelated references.
     /// Before invoking target consumers, the caller must qualify their complete
     /// object closure with `reference_diagnostics_for`; no unknown kind is inferred.
@@ -481,8 +460,7 @@ impl crate::definitions::DefinitionCatalog {
                     return (false, references);
                 }
                 // Built-in validation always plans on the mainline.
-                let result = super::RuntimeCatalog::embedded()
-                    .and_then(|runtime| super::plan::inspect_multi(&graph, Some(self), &runtime));
+                let result = super::plan::inspect_multi(&graph, Some(self));
                 (true, result.err().unwrap_or_default())
             }
             Err(diagnostics) => (false, diagnostics),

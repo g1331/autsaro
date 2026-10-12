@@ -161,82 +161,9 @@ test('canceling the draft guard does not execute the pending context change', as
   expect(current.pendingGuard.current).toBeNull();
 });
 
-test('a later rejected draft keeps the earlier creation and reports partial application', async () => {
-  const workspace = { frames: [], signals: [], diagnostic: null };
-  const current = session({ workspace, creating: 'frame' });
-  current.stateRef.current.frameInput = {
-    ...current.stateRef.current.frameInput,
-    name: 'Send',
-    id: '100',
-  };
-  const diagnosticDraft = {
-    ...current.stateRef.current.diagnosticDraft,
-    requestId: '1800',
-    responseId: '1801',
-    s3Ms: '5000',
-    nAsMs: '1',
-    nBsMs: '1',
-    nCrMs: '1',
-    did: '1',
-    signalPaths: ['/Send/Value'],
-  };
-  current.stateRef.current.diagnosticDraft = diagnosticDraft;
-  const created = {
-    ...workspace,
-    dirty: true,
-    signals: [
-      {
-        name: 'Value',
-        path: '/Send/Value',
-        framePath: '/Send',
-        startBit: 0,
-        length: 32,
-        initialValue: 0,
-      },
-    ],
-    frames: [
-      {
-        name: 'Send',
-        path: '/Send',
-        id: 100,
-        dlc: 8,
-        direction: 'tx',
-        periodMs: 100,
-        timeoutMs: null,
-      },
-    ],
-  };
-  const evidence = 'diagnostic transport failure 原始证据';
-  current.call.mockResolvedValueOnce(created).mockRejectedValueOnce(new Error(evidence));
-  const invalidateAfterEdit = vi.fn();
-  const project = createProjectActions(current, {
-    invalidateAfterEdit,
-    refreshProjection: vi.fn(),
-  });
-  expect(await project.applyDrafts()).toBe(false);
-  expect(current.stateRef.current.workspace).toBe(created);
-  expect(current.stateRef.current.creating).toBeNull();
-  expect(current.stateRef.current.diagnosticDraft).toBe(diagnosticDraft);
-  expect(invalidateAfterEdit).toHaveBeenCalledOnce();
-  expect(current.call).toHaveBeenCalledTimes(2);
-  const rejected = session({
-    workspace,
-    creating: 'frame',
-    frameInput: current.stateRef.current.frameInput,
-  });
-  rejected.call.mockRejectedValue(new Error(evidence));
-  const rejectedActions = createProjectActions(rejected, { refreshProjection: vi.fn() });
-  expect(await rejectedActions.applyDrafts()).toBe(false);
-  expectDistinctFeedback(
-    current.stateRef.current.notice.text,
-    rejected.stateRef.current.notice.text,
-    evidence,
-  );
-});
-
 test('an acknowledged integration edit is cleared before a failed workspace refresh', async () => {
   const current = session({
-    workspace: { frames: [], signals: [], diagnostic: null },
+    workspace: {},
     integrationUnapplied: true,
     integrationIds: { port: '100' },
     integrationPeriod: '20',
@@ -255,7 +182,7 @@ test('an acknowledged integration edit is cleared before a failed workspace refr
   expect(acceptIntegration).toHaveBeenCalledWith(report);
   expect(invalidateAfterEdit).toHaveBeenCalledOnce();
   const rejected = session({
-    workspace: { frames: [], signals: [], diagnostic: null },
+    workspace: {},
     integrationUnapplied: true,
     integrationIds: { port: '100' },
     integrationPeriod: '20',

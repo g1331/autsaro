@@ -11,7 +11,7 @@ interface Dependencies {
 
 export function createSettingsActions(session: WorkbenchSession, dependencies: Dependencies) {
   const { invalidateOperation } = dependencies;
-  const { call, patchState, running, state, epoch, stateRef } = session;
+  const { call, patchState, running, epoch, stateRef } = session;
   const { stages } = session.state;
   const setNotice = session.field('notice');
   const setSettingsNotice = session.field('settingsNotice');
@@ -41,31 +41,6 @@ export function createSettingsActions(session: WorkbenchSession, dependencies: D
       });
     } catch (error) {
       setNotice({ tone: 'error', text: errorText(error) });
-    }
-  }
-
-  async function configureResources() {
-    if (running.current) return;
-    setSettingsNotice('');
-    try {
-      await call<void>('configure_validation_resources', state.resourceDraft);
-      patchState({
-        generationPreview: null,
-        generated: null,
-        built: null,
-        virtualResult: null,
-        notice: null,
-        stages: {
-          ...stages,
-          validate: { state: 'stale', detail: message('controller.settings.resourcesChanged') },
-          generate: stageDefaults.generate,
-          build: stageDefaults.build,
-          virtual: stageDefaults.virtual,
-        },
-      });
-      setSettingsNotice(message('controller.settings.resourcesSaved'));
-    } catch (error) {
-      setSettingsNotice(errorText(error));
     }
   }
 
@@ -134,7 +109,6 @@ export function createSettingsActions(session: WorkbenchSession, dependencies: D
   }
   return {
     changeTarget,
-    configureResources,
     configureTools,
     configureAppearance,
     configureLanguage,

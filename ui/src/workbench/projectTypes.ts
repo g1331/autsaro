@@ -215,13 +215,7 @@ export type ChangeOutcome = {
   createdFields: { entryKey: string; fieldId: string }[];
 };
 export type DocumentKind =
-  | 'configuration'
-  | 'communication'
-  | 'diagnostic'
-  | 'integration'
-  | 'delivery'
-  | 'source'
-  | 'project-entry';
+  'configuration' | 'integration' | 'delivery' | 'source' | 'project-entry';
 export type DocumentTab = { kind: DocumentKind; sourceId?: string };
 export type ToolWindow = 'problems' | 'generation' | 'build' | 'host' | 'log';
 export type DraftGuard = { kind: 'context' | 'project'; title: Text };

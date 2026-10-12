@@ -50,33 +50,7 @@ pub(super) async fn open_project(
             autosar_config_core::product_message!("backend.operation.open"),
             OperationKind::Open,
         )?;
-        let paths: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
-        let reload_legacy = operation
-            .snapshot
-            .workspace
-            .as_deref()
-            .is_some_and(|current| {
-                let mut existing: Vec<_> = current
-                    .view()
-                    .files
-                    .into_iter()
-                    .map(|file| PathBuf::from(file.path))
-                    .collect();
-                let mut requested = paths.clone();
-                existing.sort();
-                requested.sort();
-                current.uses_legacy_validation() && existing == requested
-            });
-        // Reopening the same sources retains the explicit v1 validation mode.
-        // A different source set follows ordinary native ARXML import.
-        let workspace = if reload_legacy {
-            Workspace::open_legacy(
-                paths,
-                operation.snapshot.legacy_resources()?.xsd_archive.clone(),
-            )?
-        } else {
-            Workspace::open(paths)?
-        };
+        let workspace = Workspace::open(paths.into_iter().map(PathBuf::from).collect())?;
         let view = workspace.view();
         operation.publish(workspace, true, view)
     })
@@ -108,7 +82,7 @@ pub(super) async fn open_handoff_project(
             &std::fs::read(&metadata_path).map_err(|error| error.to_string())?,
         )
         .map_err(|error| error.to_string())?;
-        let workspace = match metadata["format"].as_str() {
+        match metadata["format"].as_str() {
             Some("autosar-workbench-handoff-v2") => {
                 let destination = new_workspace_directory.as_deref().ok_or(
                     autosar_config_core::product_message!(
@@ -121,7 +95,7 @@ pub(super) async fn open_handoff_project(
                     .workspace
                     .as_deref()
                     .map_or(&builtin, Workspace::definition_catalog);
-                return operation.commit(|session| {
+                operation.commit(|session| {
                     let imported = autosar_config_core::generator::delivery::open_handoff(
                         root,
                         Path::new(destination),
@@ -131,28 +105,20 @@ pub(super) async fn open_handoff_project(
                     session.invalidate()?;
                     session.workspace = Some(Arc::new(imported.workspace));
                     Ok(view)
-                });
+                })
             }
-            // The historical single-component ECU handoff is retired; its
-            // inputs/ ARXML sources can still be imported into a new project.
-            Some(format @ "autosar-ecu-handoff-v1") => {
-                return Err(autosar_config_core::product_message!(
+            // Historical single-component and host-chain handoffs are retired;
+            // their inputs/ ARXML sources can still be imported into a new project.
+            Some(format @ ("autosar-ecu-handoff-v1" | "autosar-host-handoff-v1")) => {
+                Err(autosar_config_core::product_message!(
                     "backend.project.retired_handoff_format",
                     "format" => format
-                ));
+                ))
             }
-            Some("autosar-host-handoff-v1") => autosar_config_core::generator::open_handoff(
-                root,
-                operation.snapshot.legacy_resources()?.xsd_archive.clone(),
-            )?,
-            _ => {
-                return Err(autosar_config_core::product_message!(
-                    "backend.project.handoff_format_unsupported"
-                ));
-            }
-        };
-        let view = workspace.view();
-        operation.publish(workspace, true, view)
+            _ => Err(autosar_config_core::product_message!(
+                "backend.project.handoff_format_unsupported"
+            )),
+        }
     })
     .await
 }

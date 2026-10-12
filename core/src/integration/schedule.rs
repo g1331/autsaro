@@ -1,4 +1,4 @@
-use super::component::{ComponentContract, milliseconds};
+use super::component::milliseconds;
 use super::graph::Graph;
 use super::{DiagnosticCategory, PlanDiagnostic};
 use serde::Serialize;
@@ -148,19 +148,6 @@ fn reference(graph: &Graph, mapping: usize, name: &str) -> Result<usize, Vec<Pla
                 ),
             )
         })
-}
-
-pub(super) fn inspect(
-    graph: &Graph,
-    component: &ComponentContract,
-) -> Result<ScheduleContract, Vec<PlanDiagnostic>> {
-    inspect_events(
-        graph,
-        &[(component.instance.as_str(), component.behavior.as_str())],
-        &[component.timing_event.clone()],
-        &[component.service.runnable.clone()],
-        false,
-    )
 }
 
 pub(super) fn inspect_events(

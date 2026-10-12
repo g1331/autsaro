@@ -18,7 +18,7 @@ test('native cancellation is awaited and never falls through to browser confirma
     throw new Error('browser confirmation was used');
   });
   vi.stubGlobal('window', { confirm: browserConfirm });
-  const prompt = message('workflow.confirm.removeDtc');
+  const prompt = message('workflow.confirm.removeCatalog', { catalogId: 'extension' });
   expect(await requestConfirmation(prompt)).toBe(false);
   expect(platform.confirm).toHaveBeenCalledWith(localize(prompt), {
     title: translate('workflow.action.confirm'),

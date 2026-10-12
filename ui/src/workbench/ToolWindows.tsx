@@ -12,8 +12,6 @@ import { useMemo } from 'react';
 import type { Workbench } from './useWorkbench';
 import type { ConfigurationDiagnostic, ToolWindow } from './projectTypes';
 import { CopyText, OwnedLog } from './Dialog';
-import { VirtualPage } from '../pages/VirtualPage';
-import { issueTarget } from './forms';
 import { PanelResizeHandle } from './PanelResizeHandle';
 
 export const toolLabels: Record<ToolWindow, Message> = {
@@ -135,29 +133,21 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                     </li>
                   );
                 })}
-                {c.issues.map((issue, index) => {
-                  const target = c.workspace ? issueTarget(issue, c.workspace) : null;
-                  return (
-                    <li key={`legacy-${issue.code}-${index}`} className={issue.severity}>
-                      <strong>
-                        {t(editorSeverityKeys[issue.severity])} · {issue.code}
-                      </strong>
-                      <p>{text(issue.message)}</p>
-                      <span className="mono path-text">
-                        {displayPath(issue.path ?? issue.file ?? '')}
-                      </span>
-                      {target ? (
-                        <button type="button" onClick={() => void c.choose(target)}>
-                          {t('editor.common.locateObject')}
-                        </button>
-                      ) : null}
-                      <CopyText
-                        text={JSON.stringify(issue, null, 2)}
-                        label={t('editor.common.copyDetails')}
-                      />
-                    </li>
-                  );
-                })}
+                {c.issues.map((issue, index) => (
+                  <li key={`workspace-${issue.code}-${index}`} className={issue.severity}>
+                    <strong>
+                      {t(editorSeverityKeys[issue.severity])} · {issue.code}
+                    </strong>
+                    <p>{text(issue.message)}</p>
+                    <span className="mono path-text">
+                      {displayPath(issue.path ?? issue.file ?? '')}
+                    </span>
+                    <CopyText
+                      text={JSON.stringify(issue, null, 2)}
+                      label={t('editor.common.copyDetails')}
+                    />
+                  </li>
+                ))}
                 {c.integrationIssues.map((issue, index) => {
                   const object = issue.object ? targets.objectsByPath.get(issue.object) : undefined;
                   const source = issue.file ? targets.sourcesByPath.get(issue.file) : undefined;
@@ -236,7 +226,7 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
               <button
                 type="button"
                 disabled={c.executionDisabled || !c.generated || !c.buildDirectory.trim()}
-                onClick={c.workspace?.integrationCandidate ? c.buildEcu : c.buildProject}
+                onClick={c.buildEcu}
               >
                 {t('editor.tools.build')}
               </button>
@@ -263,30 +253,24 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
           ) : null}
           {c.toolWindow === 'host' ? (
             <div>
-              {c.workspace?.integrationCandidate ? (
-                <>
-                  <button
-                    type="button"
-                    disabled={c.executionDisabled || !c.built}
-                    onClick={c.verifyEcu}
-                  >
-                    {t('editor.tools.verify')}
-                  </button>
-                  <p>{text(c.executionReason)}</p>
-                  {c.virtualResult ? (
-                    <OwnedLog
-                      text={c.virtualResult.log}
-                      label={
-                        c.virtualResult.passed
-                          ? t('editor.tools.hostPassed')
-                          : t('editor.tools.hostFailed')
-                      }
-                    />
-                  ) : null}
-                </>
-              ) : (
-                <VirtualPage controller={c} />
-              )}
+              <button
+                type="button"
+                disabled={c.executionDisabled || !c.built}
+                onClick={c.verifyEcu}
+              >
+                {t('editor.tools.verify')}
+              </button>
+              <p>{text(c.executionReason)}</p>
+              {c.virtualResult ? (
+                <OwnedLog
+                  text={c.virtualResult.log}
+                  label={
+                    c.virtualResult.passed
+                      ? t('editor.tools.hostPassed')
+                      : t('editor.tools.hostFailed')
+                  }
+                />
+              ) : null}
             </div>
           ) : null}
           {c.toolWindow === 'log' ? (

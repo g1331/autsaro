@@ -2,15 +2,20 @@ use super::tooling;
 use super::workspace::Scratch;
 use autosar_config_core::definitions::DefinitionCatalog;
 use autosar_config_core::generator::delivery;
-use autosar_config_core::{Workspace, prepare_host_project};
+use autosar_config_core::prepared::prepare_ecu_project_for_workspace;
+use autosar_config_core::{PreparedProject, Workspace};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
 fn signals(root: &Path) -> Workspace {
-    let preview = Workspace::preview_project_creation(root, "Delivery", "can-signals-v1").unwrap();
-    Workspace::create_project_previewed(&preview).unwrap()
+    standard_named(root, "Delivery")
+}
+
+fn prepare(workspace: &Workspace, handoff: bool) -> PreparedProject<'static> {
+    let plan = workspace.saved_integration_plan().unwrap();
+    prepare_ecu_project_for_workspace(workspace, &plan, tooling::native_target(), handoff).unwrap()
 }
 
 #[path = "delivery.rs"]
@@ -18,23 +23,19 @@ mod delivery_support;
 use delivery_support::{payload, reseal};
 
 #[test]
-fn builtin_can_handoff_reconstructs_independent_authoritative_members() {
+fn builtin_handoff_reconstructs_independent_authoritative_members() {
     let scratch = Scratch::new();
     let live = scratch.0.join("Live");
-    let mut workspace = signals(&live);
+    let workspace = signals(&live);
     let before = workspace.generation_snapshot().unwrap();
     let output = scratch.0.join("package");
-    prepare_host_project(&mut workspace, tooling::native_target(), true)
-        .unwrap()
-        .generate(&output)
-        .unwrap();
-    let mut imported = delivery::open_handoff(
+    prepare(&workspace, true).generate(&output).unwrap();
+    let imported = delivery::open_handoff(
         &output,
         &scratch.0.join("Receiver"),
         &DefinitionCatalog::builtin().unwrap(),
     )
     .unwrap();
-    assert!(!imported.workspace.uses_legacy_validation());
     let actual = imported.workspace.generation_snapshot().unwrap();
     let expected: BTreeMap<_, _> = before
         .inputs
@@ -56,50 +57,38 @@ fn builtin_can_handoff_reconstructs_independent_authoritative_members() {
         );
     }
     let reproduced = scratch.0.join("reproduced");
-    prepare_host_project(&mut imported.workspace, tooling::native_target(), true)
-        .unwrap()
+    prepare(&imported.workspace, true)
         .generate(&reproduced)
         .unwrap();
     assert_eq!(payload(&output), payload(&reproduced));
 }
 
 #[test]
-fn builtin_can_resealed_generated_bytes_cannot_self_authorize_import_or_replacement() {
+fn builtin_resealed_generated_bytes_cannot_self_authorize_import_or_replacement() {
     let scratch = Scratch::new();
-    let mut workspace = signals(&scratch.0.join("Live"));
+    let workspace = signals(&scratch.0.join("Live"));
     let output = scratch.0.join("package");
-    prepare_host_project(&mut workspace, tooling::native_target(), true)
-        .unwrap()
-        .generate(&output)
-        .unwrap();
-    let original = fs::read(output.join("Ecu_Config.c")).unwrap();
+    prepare(&workspace, true).generate(&output).unwrap();
+    let original = fs::read(output.join("src/Ecu_Config.c")).unwrap();
     let mut changed = original.clone();
     changed.extend_from_slice(b"\n#error Unauthorized_generated_change\n");
-    fs::write(output.join("Ecu_Config.c"), &changed).unwrap();
+    fs::write(output.join("src/Ecu_Config.c"), &changed).unwrap();
     reseal(&output);
     let receiver = scratch.0.join("Receiver");
     assert!(
         delivery::open_handoff(&output, &receiver, &DefinitionCatalog::builtin().unwrap()).is_err()
     );
     assert!(!receiver.exists());
-    assert!(
-        prepare_host_project(&mut workspace, tooling::native_target(), true)
-            .unwrap()
-            .preview(&output)
-            .is_err()
-    );
-    assert_eq!(fs::read(output.join("Ecu_Config.c")).unwrap(), changed);
+    assert!(prepare(&workspace, true).preview(&output).is_err());
+    assert_eq!(fs::read(output.join("src/Ecu_Config.c")).unwrap(), changed);
 }
 
 #[test]
-fn builtin_can_resealed_rule_identity_is_not_a_trusted_native_resource() {
+fn builtin_resealed_rule_identity_is_not_a_trusted_native_resource() {
     let scratch = Scratch::new();
-    let mut workspace = signals(&scratch.0.join("Live"));
+    let workspace = signals(&scratch.0.join("Live"));
     let output = scratch.0.join("package");
-    prepare_host_project(&mut workspace, tooling::native_target(), true)
-        .unwrap()
-        .generate(&output)
-        .unwrap();
+    prepare(&workspace, true).generate(&output).unwrap();
     for path in ["handoff.json", "target.json"] {
         let mut value: serde_json::Value =
             serde_json::from_slice(&fs::read(output.join(path)).unwrap()).unwrap();
@@ -126,24 +115,14 @@ fn builtin_can_resealed_rule_identity_is_not_a_trusted_native_resource() {
 }
 
 #[test]
-fn builtin_can_generation_never_installs_inside_authoritative_source_tree() {
+fn builtin_generation_never_installs_inside_authoritative_source_tree() {
     let scratch = Scratch::new();
     let live = scratch.0.join("Live");
-    let mut workspace = signals(&live);
+    let workspace = signals(&live);
     let before = workspace.generation_snapshot().unwrap();
     let output = live.join("generated");
-    assert!(
-        prepare_host_project(&mut workspace, tooling::native_target(), false)
-            .unwrap()
-            .preview(&output)
-            .is_err()
-    );
-    assert!(
-        prepare_host_project(&mut workspace, tooling::native_target(), false)
-            .unwrap()
-            .generate(&output)
-            .is_err()
-    );
+    assert!(prepare(&workspace, false).preview(&output).is_err());
+    assert!(prepare(&workspace, false).generate(&output).is_err());
     assert!(!output.exists());
     for input in before.inputs {
         assert_eq!(fs::read(input.disk_path).unwrap(), input.bytes);
@@ -151,20 +130,14 @@ fn builtin_can_generation_never_installs_inside_authoritative_source_tree() {
 }
 
 #[test]
-fn builtin_can_late_source_edit_refuses_staged_commit_and_preserves_output() {
+fn builtin_late_source_edit_refuses_staged_commit_and_preserves_output() {
     let scratch = Scratch::new();
-    let mut workspace = signals(&scratch.0.join("Live"));
+    let workspace = signals(&scratch.0.join("Live"));
     let output = scratch.0.join("package");
-    prepare_host_project(&mut workspace, tooling::native_target(), true)
-        .unwrap()
-        .generate(&output)
-        .unwrap();
+    prepare(&workspace, true).generate(&output).unwrap();
     let original = payload(&output);
-    let prepared = prepare_host_project(&mut workspace, tooling::native_target(), true).unwrap();
-    let preview = prepare_host_project(&mut workspace, tooling::native_target(), true)
-        .unwrap()
-        .preview(&output)
-        .unwrap();
+    let prepared = prepare(&workspace, true);
+    let preview = prepare(&workspace, true).preview(&output).unwrap();
     let staged = prepared
         .stage_previewed(&output, &preview.revision)
         .unwrap();
@@ -194,68 +167,49 @@ fn standard_named(root: &Path, name: &str) -> Workspace {
 }
 
 #[test]
-fn builtin_host_and_ecu_deliver_project_license_and_preserve_kernel_notice() {
-    use autosar_config_core::integration::RuntimeCatalog;
-    use autosar_config_core::prepared::prepare_ecu_project_for_workspace;
+fn builtin_ecu_delivers_project_license_and_preserves_kernel_notice() {
     use autosar_config_core::target::BuildTarget;
 
     let scratch = Scratch::new();
-    let mut host = signals(&scratch.0.join("Host"));
     let ecu = standard_with_application(&scratch.0.join("ECU"));
-    let plan = ecu
-        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
-        .unwrap();
+    let plan = ecu.saved_integration_plan().unwrap();
     for target in [
         BuildTarget::WindowsX64ControlledV1,
         BuildTarget::LinuxX64ControlledV1,
     ] {
-        let host_output = scratch.0.join(format!("host-{}", target.spec().id));
-        let ecu_output = scratch.0.join(format!("ecu-{}", target.spec().id));
-        prepare_host_project(&mut host, target, true)
-            .unwrap()
-            .generate(&host_output)
-            .unwrap();
+        let output = scratch.0.join(format!("ecu-{}", target.spec().id));
         prepare_ecu_project_for_workspace(&ecu, &plan, target, true)
             .unwrap()
-            .generate(&ecu_output)
+            .generate(&output)
             .unwrap();
-        for output in [&host_output, &ecu_output] {
-            delivery_support::assert_offline_build_readme(
-                output,
-                target == BuildTarget::WindowsX64ControlledV1,
-            );
-            let text = fs::read_to_string(output.join("README.md")).unwrap();
+        delivery_support::assert_offline_build_readme(
+            &output,
+            target == BuildTarget::WindowsX64ControlledV1,
+        );
+        let text = fs::read_to_string(output.join("README.md")).unwrap();
+        assert!(
+            text.contains("The live project remains separate")
+                && text.contains("not silently upgraded")
+                && text.contains("tools/ecu-tool.py verify")
+                && text.contains("--mode host-batch")
+                && text.contains("Apache-2.0")
+        );
+        let names = fs::read_to_string(output.join("files.list")).unwrap();
+        let hashes = fs::read_to_string(output.join("files.sha256")).unwrap();
+        for (name, expected) in [
+            ("LICENSE", include_bytes!("../../../LICENSE").as_slice()),
+            ("NOTICE", include_bytes!("../../../NOTICE").as_slice()),
+        ] {
+            assert_eq!(fs::read(output.join(name)).unwrap(), expected);
+            assert!(names.lines().any(|path| path == name));
             assert!(
-                text.contains("The live project remains separate")
-                    && text.contains("not silently upgraded")
-            );
-            if output == &ecu_output {
-                assert!(
-                    text.contains("tools/ecu-tool.py verify") && text.contains("--mode host-batch")
-                );
-            }
-            let names = fs::read_to_string(output.join("files.list")).unwrap();
-            let hashes = fs::read_to_string(output.join("files.sha256")).unwrap();
-            for (name, expected) in [
-                ("LICENSE", include_bytes!("../../../LICENSE").as_slice()),
-                ("NOTICE", include_bytes!("../../../NOTICE").as_slice()),
-            ] {
-                assert_eq!(fs::read(output.join(name)).unwrap(), expected);
-                assert!(names.lines().any(|path| path == name));
-                assert!(
-                    hashes
-                        .lines()
-                        .any(|line| { line == format!("{:x}  {name}", Sha256::digest(expected)) })
-                );
-            }
-            assert!(
-                fs::read_to_string(output.join("README.md"))
-                    .unwrap()
-                    .contains("Apache-2.0")
+                hashes
+                    .lines()
+                    .any(|line| { line == format!("{:x}  {name}", Sha256::digest(expected)) })
             );
         }
         assert_eq!(
-            fs::read(ecu_output.join("kernel/LICENSE.md")).unwrap(),
+            fs::read(output.join("kernel/LICENSE.md")).unwrap(),
             include_bytes!("../../../third_party/freertos/LICENSE.md")
         );
     }
@@ -263,65 +217,36 @@ fn builtin_host_and_ecu_deliver_project_license_and_preserve_kernel_notice() {
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[test]
-fn copied_host_and_single_packages_build_offline_without_changing_source_bytes() {
-    use autosar_config_core::{
-        integration::RuntimeCatalog, prepared::prepare_ecu_project_for_workspace,
-    };
+fn copied_single_component_package_builds_offline_without_changing_source_bytes() {
     let scratch = Scratch::new();
-    let mut host = signals(&scratch.0.join("Host"));
     let ecu = standard_with_application(&scratch.0.join("ECU"));
-    let plan = ecu
-        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
-        .unwrap();
-    for single in [false, true] {
-        let name = if single { "single" } else { "host" };
-        let original = scratch.0.join(format!("original-{name}"));
-        if single {
-            prepare_ecu_project_for_workspace(&ecu, &plan, tooling::native_target(), true)
-                .unwrap()
-                .generate(&original)
-                .unwrap();
-        } else {
-            prepare_host_project(&mut host, tooling::native_target(), true)
-                .unwrap()
-                .generate(&original)
-                .unwrap();
-        }
-        let received = scratch.0.join(format!("recipient-{name}/package"));
-        delivery_support::copy_package(&original, &received);
-        fs::remove_dir_all(original).unwrap();
-        fs::remove_dir_all(scratch.0.join(if single { "ECU" } else { "Host" })).unwrap();
-        let before = delivery_support::package_tree(&received);
-        let output = received.parent().unwrap().join("build");
-        let result = tooling::ecu_build_command(
-            &received,
-            &output,
-            if single { "host-batch" } else { "host" },
-            None,
-        )
+    let original = scratch.0.join("original");
+    prepare(&ecu, true).generate(&original).unwrap();
+    let received = scratch.0.join("recipient/package");
+    delivery_support::copy_package(&original, &received);
+    fs::remove_dir_all(original).unwrap();
+    drop(ecu);
+    fs::remove_dir_all(scratch.0.join("ECU")).unwrap();
+    let before = delivery_support::package_tree(&received);
+    let output = received.parent().unwrap().join("build");
+    let result = tooling::ecu_build_command(&received, &output, "host-batch", None)
         .current_dir(&received)
         .env_remove("PYTHONPATH")
         .env_remove("PYTHONHOME")
         .output()
         .unwrap();
-        assert!(
-            result.status.success(),
-            "{}\n{}",
-            String::from_utf8_lossy(&result.stdout),
-            String::from_utf8_lossy(&result.stderr)
-        );
-        assert!(
-            tooling::native_binary(&output, if single { "ecu_host_batch" } else { "ecu_host" })
-                .is_file()
-        );
-        assert_eq!(delivery_support::package_tree(&received), before);
-    }
+    assert!(
+        result.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert!(tooling::native_binary(&output, "ecu_host_batch").is_file());
+    assert_eq!(delivery_support::package_tree(&received), before);
 }
 
 #[test]
 fn builtin_ecu_handoff_preserves_user_algorithm_in_independent_reconstructed_project() {
-    use autosar_config_core::integration::RuntimeCatalog;
-    use autosar_config_core::prepared::prepare_ecu_project_for_workspace;
     let scratch = Scratch::new();
     let live = scratch.0.join("Live");
     let workspace = standard_with_application(&live);
@@ -340,8 +265,7 @@ fn builtin_ecu_handoff_preserves_user_algorithm_in_independent_reconstructed_pro
         &scratch.0.join("cache"),
     )
     .unwrap();
-    let runtime = RuntimeCatalog::embedded().unwrap();
-    let plan = workspace.saved_integration_plan(&runtime).unwrap();
+    let plan = workspace.saved_integration_plan().unwrap();
     let output = scratch.0.join("package");
     prepare_ecu_project_for_workspace(&workspace, &plan, tooling::native_target(), true)
         .unwrap()
@@ -362,7 +286,7 @@ fn builtin_ecu_handoff_preserves_user_algorithm_in_independent_reconstructed_pro
             .unwrap()
             .starts_with(fs::canonicalize(&receiver).unwrap())
     );
-    let receiver_plan = imported.workspace.saved_integration_plan(&runtime).unwrap();
+    let receiver_plan = imported.workspace.saved_integration_plan().unwrap();
     let reproduced = scratch.0.join("reproduced");
     prepare_ecu_project_for_workspace(
         &imported.workspace,
@@ -378,12 +302,9 @@ fn builtin_ecu_handoff_preserves_user_algorithm_in_independent_reconstructed_pro
 
 #[test]
 fn builtin_ecu_late_live_edit_and_resealed_snapshot_never_overwrite_user_bytes_or_prior_output() {
-    use autosar_config_core::integration::RuntimeCatalog;
-    use autosar_config_core::prepared::prepare_ecu_project_for_workspace;
     let scratch = Scratch::new();
     let workspace = standard_with_application(&scratch.0.join("Live"));
-    let runtime = RuntimeCatalog::embedded().unwrap();
-    let plan = workspace.saved_integration_plan(&runtime).unwrap();
+    let plan = workspace.saved_integration_plan().unwrap();
     let output = scratch.0.join("package");
     prepare_ecu_project_for_workspace(&workspace, &plan, tooling::native_target(), true)
         .unwrap()
@@ -426,13 +347,10 @@ fn builtin_ecu_late_live_edit_and_resealed_snapshot_never_overwrite_user_bytes_o
 #[test]
 fn builtin_handoff_rejects_unknown_owner_and_ownership_version_without_publishing() {
     let scratch = Scratch::new();
-    let mut workspace = signals(&scratch.0.join("Live"));
+    let workspace = signals(&scratch.0.join("Live"));
     for version in [false, true] {
         let output = scratch.0.join(if version { "version" } else { "owner" });
-        prepare_host_project(&mut workspace, tooling::native_target(), true)
-            .unwrap()
-            .generate(&output)
-            .unwrap();
+        prepare(&workspace, true).generate(&output).unwrap();
         let ledger_path = output.join("workbench-ownership.json");
         let mut ledger: serde_json::Value =
             serde_json::from_slice(&fs::read(&ledger_path).unwrap()).unwrap();
@@ -461,12 +379,9 @@ fn builtin_handoff_rejects_unknown_owner_and_ownership_version_without_publishin
 #[test]
 fn builtin_handoff_rejects_forged_declared_extension_identity_without_publishing() {
     let scratch = Scratch::new();
-    let mut workspace = signals(&scratch.0.join("Live"));
+    let workspace = signals(&scratch.0.join("Live"));
     let output = scratch.0.join("package");
-    prepare_host_project(&mut workspace, tooling::native_target(), true)
-        .unwrap()
-        .generate(&output)
-        .unwrap();
+    prepare(&workspace, true).generate(&output).unwrap();
     let identity = serde_json::json!({
         "catalogId": "not-explicitly-accepted", "release": "R24-11",
         "version": "1.0.0", "sha256": "a".repeat(64),
@@ -501,8 +416,7 @@ fn builtin_handoff_rejects_forged_declared_extension_identity_without_publishing
 
 fn edit_standard_configuration(root: &Path, edit: impl FnOnce(&str) -> String) -> Workspace {
     let workspace = standard_named(root, "Qualified");
-    let runtime = autosar_config_core::integration::RuntimeCatalog::embedded().unwrap();
-    workspace.saved_integration_plan(&runtime).unwrap();
+    workspace.saved_integration_plan().unwrap();
     let path = root.join("ecuc.arxml");
     let original = fs::read_to_string(&path).unwrap();
     let changed = edit(&original);
@@ -516,8 +430,7 @@ fn edit_standard_configuration(root: &Path, edit: impl FnOnce(&str) -> String) -
 fn assert_native_generation_rejected(workspace: &Workspace, output: &Path) {
     let before = workspace.generation_snapshot().unwrap();
     let prior_output = output.exists().then(|| payload(output));
-    let runtime = autosar_config_core::integration::RuntimeCatalog::embedded().unwrap();
-    let rejected = match workspace.saved_integration_plan(&runtime) {
+    let rejected = match workspace.saved_integration_plan() {
         Err(_) => true,
         Ok(plan) => match autosar_config_core::prepared::prepare_ecu_project_for_workspace(
             workspace,
@@ -680,8 +593,7 @@ fn builtin_ecu_generation_preserves_unrelated_retained_module_without_blocking_t
         changed
     });
     let before = workspace.generation_snapshot().unwrap();
-    let runtime = autosar_config_core::integration::RuntimeCatalog::embedded().unwrap();
-    let plan = workspace.saved_integration_plan(&runtime).unwrap();
+    let plan = workspace.saved_integration_plan().unwrap();
     let output = scratch.0.join("output");
     autosar_config_core::prepared::prepare_ecu_project_for_workspace(
         &workspace,
@@ -719,8 +631,7 @@ fn reject_core_change_with_prior_output(edit: impl FnOnce(&str) -> String) {
     let scratch = Scratch::new();
     let root = scratch.0.join("Live");
     let workspace = standard_named(&root, "CorePolicy");
-    let runtime = autosar_config_core::integration::RuntimeCatalog::embedded().unwrap();
-    let plan = workspace.saved_integration_plan(&runtime).unwrap();
+    let plan = workspace.saved_integration_plan().unwrap();
     let output = scratch.0.join("output");
     autosar_config_core::prepared::prepare_ecu_project_for_workspace(
         &workspace,
@@ -824,19 +735,13 @@ fn builtin_ecu_generation_rejects_second_core_zero_without_replacing_output() {
 #[test]
 fn generation_refusal_serializes_stable_key_and_verbatim_owner_path() {
     let scratch = Scratch::new();
-    let mut workspace = signals(&scratch.0.join("Live"));
+    let workspace = signals(&scratch.0.join("Live"));
     let output = scratch.0.join("package");
-    prepare_host_project(&mut workspace, tooling::native_target(), true)
-        .unwrap()
-        .generate(&output)
-        .unwrap();
+    prepare(&workspace, true).generate(&output).unwrap();
     let original = payload(&output);
     let owner_name = "用户 {{name}}.txt";
     fs::write(output.join(owner_name), b"owner bytes").unwrap();
-    let error = prepare_host_project(&mut workspace, tooling::native_target(), true)
-        .unwrap()
-        .preview(&output)
-        .unwrap_err();
+    let error = prepare(&workspace, true).preview(&output).unwrap_err();
     assert_eq!(
         serde_json::to_value(error).unwrap(),
         serde_json::json!({
@@ -851,17 +756,14 @@ fn generation_refusal_serializes_stable_key_and_verbatim_owner_path() {
 #[test]
 fn prepared_source_change_keeps_localized_identity_and_existing_payload() {
     let scratch = Scratch::new();
-    let mut workspace = signals(&scratch.0.join("Live"));
+    let workspace = signals(&scratch.0.join("Live"));
     let output = scratch.0.join("package");
-    prepare_host_project(&mut workspace, tooling::native_target(), true)
-        .unwrap()
-        .generate(&output)
-        .unwrap();
+    prepare(&workspace, true).generate(&output).unwrap();
     let original = payload(&output);
     let source = workspace.generation_snapshot().unwrap().inputs[0]
         .disk_path
         .clone();
-    let prepared = prepare_host_project(&mut workspace, tooling::native_target(), true).unwrap();
+    let prepared = prepare(&workspace, true);
     let mut changed = fs::read(&source).unwrap();
     changed.extend_from_slice(b"\n<!-- external source evidence -->\n");
     fs::write(&source, &changed).unwrap();
@@ -880,12 +782,9 @@ fn prepared_source_change_keeps_localized_identity_and_existing_payload() {
 #[test]
 fn source_only_import_refusal_keeps_localized_contract_and_package_bytes() {
     let scratch = Scratch::new();
-    let mut workspace = signals(&scratch.0.join("Live"));
+    let workspace = signals(&scratch.0.join("Live"));
     let output = scratch.0.join("package");
-    prepare_host_project(&mut workspace, tooling::native_target(), false)
-        .unwrap()
-        .generate(&output)
-        .unwrap();
+    prepare(&workspace, false).generate(&output).unwrap();
     let original = payload(&output);
     let receiver = scratch.0.join("Receiver");
     let error =
@@ -907,8 +806,8 @@ fn source_only_import_refusal_keeps_localized_contract_and_package_bytes() {
 #[test]
 fn product_message_consumption_does_not_change_preparation_or_fixed_readme_bytes() {
     let scratch = Scratch::new();
-    let mut workspace = signals(&scratch.0.join("Live"));
-    let before = prepare_host_project(&mut workspace, tooling::native_target(), true).unwrap();
+    let workspace = signals(&scratch.0.join("Live"));
+    let before = prepare(&workspace, true);
     let fingerprint = before.fingerprint().to_owned();
     let bytes = before.into_files();
     let readme = &bytes
@@ -922,8 +821,7 @@ fn product_message_consumption_does_not_change_preparation_or_fixed_readme_bytes
     let refused_output = scratch.0.join("owned-output");
     fs::create_dir(&refused_output).unwrap();
     fs::write(refused_output.join("用户.txt"), b"owner bytes").unwrap();
-    let error = prepare_host_project(&mut workspace, tooling::native_target(), true)
-        .unwrap()
+    let error = prepare(&workspace, true)
         .preview(&refused_output)
         .unwrap_err();
     let descriptor = serde_json::to_value(error).unwrap();
@@ -931,7 +829,7 @@ fn product_message_consumption_does_not_change_preparation_or_fixed_readme_bytes
         descriptor["key"],
         "backend.generation.output_inventory_missing"
     );
-    let after = prepare_host_project(&mut workspace, tooling::native_target(), true).unwrap();
+    let after = prepare(&workspace, true);
     assert_eq!(after.fingerprint(), fingerprint);
     assert_eq!(after.into_files(), bytes);
 }
@@ -989,7 +887,11 @@ fn retired_project_identities_are_refused_without_loading_or_rewriting() {
         .to_owned();
     let instance = slot.split_once(':').unwrap().1.to_owned();
     let mut cases = Vec::new();
-    for profile in ["epic4-win64-sr-cs-v1", "singlecore-multi-swc-v1"] {
+    for profile in [
+        "host-can-v1",
+        "epic4-win64-sr-cs-v1",
+        "singlecore-multi-swc-v1",
+    ] {
         let mut value = current_value.clone();
         value["profileHint"] = profile.into();
         cases.push((profile, value));
@@ -1028,12 +930,9 @@ fn retired_project_identities_are_refused_without_loading_or_rewriting() {
 #[test]
 fn retired_delivery_profiles_are_refused_before_import() {
     let scratch = Scratch::new();
-    let mut workspace = signals(&scratch.0.join("Live"));
+    let workspace = signals(&scratch.0.join("Live"));
     let output = scratch.0.join("package");
-    prepare_host_project(&mut workspace, tooling::native_target(), true)
-        .unwrap()
-        .generate(&output)
-        .unwrap();
+    prepare(&workspace, true).generate(&output).unwrap();
     for path in ["handoff.json", "target.json", "workbench-ownership.json"] {
         let mut value: serde_json::Value =
             serde_json::from_slice(&fs::read(output.join(path)).unwrap()).unwrap();
@@ -1050,28 +949,50 @@ fn retired_delivery_profiles_are_refused_before_import() {
         .unwrap();
     }
     reseal(&output);
-    let before = payload(&output);
-    let receiver = scratch.0.join("Receiver");
-    let error = delivery::open_handoff(&output, &receiver, &DefinitionCatalog::builtin().unwrap())
+    assert_retired_package(
+        &output,
+        &scratch.0.join("Receiver"),
+        "singlecore-multi-swc-v1",
+    );
+
+    // A frame/signal host package is recognized by its target identity.
+    let output = scratch.0.join("host-package");
+    prepare(&workspace, true).generate(&output).unwrap();
+    let mut target: serde_json::Value =
+        serde_json::from_slice(&fs::read(output.join("target.json")).unwrap()).unwrap();
+    target["profile"] = "host".into();
+    fs::write(
+        output.join("target.json"),
+        serde_json::to_vec_pretty(&target).unwrap(),
+    )
+    .unwrap();
+    reseal(&output);
+    assert_retired_package(&output, &scratch.0.join("HostReceiver"), "host-can-v1");
+}
+
+fn assert_retired_package(output: &Path, receiver: &Path, profile: &str) {
+    let before = payload(output);
+    let error = delivery::open_handoff(output, receiver, &DefinitionCatalog::builtin().unwrap())
         .err()
         .unwrap();
     assert_eq!(message_key(&error), "backend.delivery.retired_profile");
+    let autosar_config_core::LocalizedText::Message(message) = &error else {
+        unreachable!()
+    };
+    assert_eq!(message.params["profile"], profile);
     assert!(!receiver.exists());
-    assert_eq!(payload(&output), before);
+    assert_eq!(payload(output), before);
 }
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[test]
 fn builtin_standard_template_generates_builds_and_passes_reference_verifier() {
-    use autosar_config_core::integration::{RuntimeCatalog, build_ecu_project, verify_ecu_project};
-    use autosar_config_core::prepared::prepare_ecu_project_for_workspace;
+    use autosar_config_core::integration::{build_ecu_project, verify_ecu_project};
     // The built-in template with its create-only seed is the reference echo
     // application that the delivered ecu-tool verifier checks.
     let scratch = Scratch::new();
     let ecu = standard_with_application(&scratch.0.join("ECU"));
-    let plan = ecu
-        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
-        .unwrap();
+    let plan = ecu.saved_integration_plan().unwrap();
     assert_eq!(
         plan.description().profile,
         autosar_config_core::integration::MULTI_PROFILE
