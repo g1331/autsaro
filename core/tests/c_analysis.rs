@@ -192,7 +192,7 @@ fn generated_c_analysis_samples() {
         .map(|slot| autosar_config_core::ApplicationSource {
             component_instance: slot
                 .producer_slot
-                .strip_prefix("singlecore-multi-swc-v1:")
+                .strip_prefix("singlecore-ecu-v1:")
                 .unwrap()
                 .into(),
             path: Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -208,7 +208,7 @@ fn generated_c_analysis_samples() {
     let manifest = autosar_config_core::arxml::ProjectManifest {
         format_version: 1,
         declared_release: "R24-11".into(),
-        profile_hint: "singlecore-multi-swc-v1".into(),
+        profile_hint: "singlecore-ecu-v1".into(),
         inputs: sources
             .iter()
             .map(|source| autosar_config_core::arxml::ProjectInput {

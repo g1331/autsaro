@@ -66,7 +66,7 @@ fn live_multi_workspace(root: &Path, sources: &[InputSource]) -> autosar_config_
     let manifest = autosar_config_core::arxml::ProjectManifest {
         format_version: 1,
         declared_release: "R24-11".into(),
-        profile_hint: "singlecore-multi-swc-v1".into(),
+        profile_hint: "singlecore-ecu-v1".into(),
         inputs: sources
             .iter()
             .map(|source| autosar_config_core::arxml::ProjectInput {
@@ -249,17 +249,17 @@ fn moved_multi_handoff_reconstructs_every_user_source_and_exact_producer() {
         applications,
         std::collections::BTreeSet::from([
             (
-                "singlecore-multi-swc-v1:/Application/Pipeline/IngressInstance",
+                "singlecore-ecu-v1:/Application/Pipeline/IngressInstance",
                 "application/Ingress.c",
                 "src/Ingress.c"
             ),
             (
-                "singlecore-multi-swc-v1:/Application/Pipeline/ProcessInstance",
+                "singlecore-ecu-v1:/Application/Pipeline/ProcessInstance",
                 "application/Process.c",
                 "src/Process.c"
             ),
             (
-                "singlecore-multi-swc-v1:/Application/Pipeline/ObserveInstance",
+                "singlecore-ecu-v1:/Application/Pipeline/ObserveInstance",
                 "application/Observe.c",
                 "src/Observe.c"
             ),
@@ -923,7 +923,7 @@ fn prepared_multi_files(plan: &ValidatedIntegrationPlan) -> Vec<(String, Vec<u8>
             autosar_config_core::ApplicationSource {
                 component_instance: slot
                     .producer_slot
-                    .strip_prefix("singlecore-multi-swc-v1:")
+                    .strip_prefix("singlecore-ecu-v1:")
                     .unwrap()
                     .into(),
                 path,
@@ -945,7 +945,7 @@ fn source_derived_multi_contract_is_deterministic_and_keeps_local_identity() {
     let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
     let description = plan.description();
     let multi = description.multi.as_ref().unwrap();
-    assert_eq!(description.profile, "singlecore-multi-swc-v1");
+    assert_eq!(description.profile, "singlecore-ecu-v1");
     assert!(description.component.is_none());
     assert_eq!(multi.components.len(), 4);
     assert_eq!(multi.connections.len(), 5);
@@ -2973,14 +2973,14 @@ fn single_application_component_is_planned_by_the_mainline() {
         validation.diagnostics
     );
     let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
-    assert_eq!(plan.description().profile, "singlecore-multi-swc-v1");
+    assert_eq!(plan.description().profile, "singlecore-ecu-v1");
     let slots = plan.application_slot_descriptors().unwrap();
     assert_eq!(
         slots
             .iter()
             .map(|slot| slot.producer_slot.as_str())
             .collect::<Vec<_>>(),
-        ["singlecore-multi-swc-v1:/Application/Pipeline/IngressInstance"]
+        ["singlecore-ecu-v1:/Application/Pipeline/IngressInstance"]
     );
 }
 
@@ -3212,7 +3212,7 @@ fn reference_shape_records_independent_verification_inputs() {
         .map(|slot| ApplicationSource {
             component_instance: slot
                 .producer_slot
-                .strip_prefix("singlecore-multi-swc-v1:")
+                .strip_prefix("singlecore-ecu-v1:")
                 .unwrap()
                 .into(),
             path: fixtures.join(slot.source_paths[0].rsplit('/').next().unwrap()),
@@ -3311,7 +3311,7 @@ fn single_application_component_passes_independent_reference_verifier() {
         .map(|slot| ApplicationSource {
             component_instance: slot
                 .producer_slot
-                .strip_prefix("singlecore-multi-swc-v1:")
+                .strip_prefix("singlecore-ecu-v1:")
                 .unwrap()
                 .into(),
             path: fixtures.join(slot.source_paths[0].rsplit('/').next().unwrap()),
@@ -4949,7 +4949,7 @@ fn actual_runtime_source_owners_derive_all_application_slots_and_keep_service_ge
     for slot in &slots {
         assert!(
             slot.producer_slot
-                .starts_with("singlecore-multi-swc-v1:/Application/Pipeline/")
+                .starts_with("singlecore-ecu-v1:/Application/Pipeline/")
         );
         assert!(!slot.entry_symbols.is_empty());
         assert!(
@@ -5859,7 +5859,7 @@ fn plural_application_preparation_freezes_every_real_producer_and_refuses_bad_me
             ApplicationSource {
                 component_instance: slot
                     .producer_slot
-                    .strip_prefix("singlecore-multi-swc-v1:")
+                    .strip_prefix("singlecore-ecu-v1:")
                     .unwrap()
                     .into(),
                 path,
@@ -5954,7 +5954,7 @@ fn sealed_multi_owner_preserves_network_init_and_deadline_phase() {
         .map(|slot| ApplicationSource {
             component_instance: slot
                 .producer_slot
-                .strip_prefix("singlecore-multi-swc-v1:")
+                .strip_prefix("singlecore-ecu-v1:")
                 .unwrap()
                 .into(),
             path: fixture.join(slot.source_paths[0].rsplit('/').next().unwrap()),
@@ -6144,7 +6144,7 @@ fn sealed_multi_optional_did_and_network_only_routes_use_real_producers() {
             .map(|slot| ApplicationSource {
                 component_instance: slot
                     .producer_slot
-                    .strip_prefix("singlecore-multi-swc-v1:")
+                    .strip_prefix("singlecore-ecu-v1:")
                     .unwrap()
                     .into(),
                 path: fixtures.join(slot.source_paths[0].rsplit('/').next().unwrap()),
@@ -6581,7 +6581,7 @@ fn multi_workbench_edits_standard_fields_and_paired_instance_references() {
     let projection = workspace
         .project_projection(&workspace.input_fingerprint().unwrap())
         .unwrap();
-    assert_eq!(projection.profile, "singlecore-multi-swc-v1");
+    assert_eq!(projection.profile, "singlecore-ecu-v1");
     assert!(
         workspace.view().issues.is_empty(),
         "{:?}",

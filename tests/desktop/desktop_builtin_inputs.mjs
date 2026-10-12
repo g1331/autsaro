@@ -233,7 +233,7 @@ export async function createMultiComponentInputs(scratch) {
       {
         formatVersion: 1,
         declaredRelease: 'R24-11',
-        profileHint: 'singlecore-multi-swc-v1',
+        profileHint: 'singlecore-ecu-v1',
         inputs: names.map((name) => ({ path: name, roleHint: 'standard' })),
         applicationInputs: [],
         acceptedExtensionDefinitions: [],

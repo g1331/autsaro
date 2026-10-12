@@ -776,7 +776,7 @@ export async function runBuiltinScenario({
       await openMember(multi.manifest);
       await checked('multi-component-shared-editing-and-source-protection', async () => {
         let view = await projection();
-        assert.equal(view.profile, 'singlecore-multi-swc-v1');
+        assert.equal(view.profile, 'singlecore-ecu-v1');
         assert.equal(view.diagnostics.filter((issue) => issue.severity === 'error').length, 0);
         const original = await sourceBytes(view);
         const periodic = view.objects.find(

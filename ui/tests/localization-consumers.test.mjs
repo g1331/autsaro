@@ -157,7 +157,7 @@ test.each(['zh-CN', 'en'])(
       instance: `/Application/Pipeline/${name}Instance`,
     }));
     const inspection = {
-      profile: 'singlecore-multi-swc-v1',
+      profile: 'singlecore-ecu-v1',
       diagnostics: [],
       description: {
         sources: [
@@ -344,7 +344,7 @@ test('Problems renders serialized cardinality child names, bounds and actual cou
 
 test('real application controller transfers complete multi preview and revision unchanged to IPC', async () => {
   const slots = ['Ingress', 'Process', 'Observe'].map((name) => ({
-    producerSlot: `singlecore-multi-swc-v1:/Application/Pipeline/${name}Instance`,
+    producerSlot: `singlecore-ecu-v1:/Application/Pipeline/${name}Instance`,
     componentPath: `/Application/${name}`,
     sourcePaths: [`application/${name}.c`],
     generatedHeaders: [`include/Rte_${name}.h`, 'include/Rte.h', 'include/Rte_Type.h'],

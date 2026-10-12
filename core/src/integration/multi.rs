@@ -6,7 +6,7 @@ use serde::Serialize;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 
-pub const PROFILE: &str = "singlecore-multi-swc-v1";
+pub const PROFILE: &str = "singlecore-ecu-v1";
 
 // Fixed R24-11 Dcm declarations. Dormant groups do not enable their services.
 #[derive(Clone, Debug, Serialize)]
