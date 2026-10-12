@@ -2,7 +2,7 @@
 // official tauri-driver WebDriver intermediary. Linux isolates itself on a
 // private Xvfb display and D-Bus; Windows relies on a dedicated runner or VM.
 import assert from 'node:assert/strict';
-import { execFile, spawn } from 'node:child_process';
+import { execFile, spawn, spawnSync } from 'node:child_process';
 import { access, mkdir, mkdtemp, readFile, readdir, readlink, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import os from 'node:os';
@@ -12,6 +12,12 @@ import { promisify } from 'node:util';
 const run = promisify(execFile);
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const platform = { linux: 'linux', win32: 'windows' }[process.platform];
+// Let Ctrl-C and CI cancellation run the 'exit' cleanup registered by launch().
+for (const [signal, code] of [
+  ['SIGINT', 130],
+  ['SIGTERM', 143],
+])
+  process.once(signal, () => process.exit(code));
 
 // Execution tools are declared to the application only through its settings UI.
 export const EXECUTION_VARIABLES = [
@@ -69,7 +75,10 @@ async function until(probe, description, timeout = 30000) {
 
 // Start a child and resolve with the first stdout line it prints.
 function started(command, args, options, description) {
-  const child = spawn(command, args, { ...options, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(command, args, {
+    ...options,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
   let stderr = '';
   child.stderr.on('data', (chunk) => (stderr += chunk));
   const line = new Promise((resolve, reject) => {
@@ -408,7 +417,10 @@ export async function launch(name) {
   // Settings written by the retired XSD/MOD validation mode must still load.
   await writeFile(
     path.join(scratch, 'app-config', 'settings.json'),
-    JSON.stringify({ xsdArchive: 'retired-xsd.zip', modArchive: 'retired-mod.zip' }),
+    JSON.stringify({
+      xsdArchive: 'retired-xsd.zip',
+      modArchive: 'retired-mod.zip',
+    }),
   );
   const environment = { ...process.env };
   for (const variable of Object.keys(environment))
@@ -446,6 +458,7 @@ export async function launch(name) {
   const children = [];
   let display;
   let driverProcess;
+  let abandon;
   let session;
   let client;
   try {
@@ -477,6 +490,18 @@ export async function launch(name) {
         windowsHide: true,
       },
     );
+    // An interrupted run never reaches close(); end the whole session with it.
+    abandon = () => {
+      if (platform === 'linux') {
+        try {
+          process.kill(-driverProcess.pid, 'SIGKILL');
+        } catch {
+          // Already gone.
+        }
+      } else spawnSync('taskkill', ['/PID', String(driverProcess.pid), '/T', '/F']);
+      for (const child of children) child.kill('SIGKILL');
+    };
+    process.once('exit', abandon);
     let driverLog = '';
     driverProcess.stderr.on('data', (chunk) => (driverLog += chunk));
     client = new WebDriver(`http://127.0.0.1:${port}`);
@@ -498,6 +523,10 @@ export async function launch(name) {
       pageLoad: 300000,
     });
   } catch (error) {
+    if (abandon) {
+      process.off('exit', abandon);
+      abandon();
+    }
     await Promise.all([driverProcess, ...children].filter(Boolean).map(stopped));
     throw error;
   }
@@ -598,7 +627,10 @@ export async function launch(name) {
         params: {
           features: [
             { name: 'prefers-color-scheme', value: scheme },
-            { name: 'prefers-reduced-motion', value: reduceMotion ? 'reduce' : 'no-preference' },
+            {
+              name: 'prefers-reduced-motion',
+              value: reduceMotion ? 'reduce' : 'no-preference',
+            },
           ],
         },
       });
@@ -631,7 +663,10 @@ export async function launch(name) {
       const text =
         platform === 'linux'
           ? (
-              await run(await tool('xclip'), ['-selection', 'clipboard', '-out'], { env: environment, maxBuffer: 64 * 1024 * 1024 })
+              await run(await tool('xclip'), ['-selection', 'clipboard', '-out'], {
+                env: environment,
+                maxBuffer: 64 * 1024 * 1024,
+              })
             ).stdout
           : await powershell(
               '[Console]::OutputEncoding=[Text.Encoding]::UTF8; [Console]::Out.Write((Get-Clipboard -Raw))',
@@ -677,6 +712,7 @@ export async function launch(name) {
           `Desktop session left processes running: ${JSON.stringify(survivors, null, 2)}`,
         );
       });
+      process.off('exit', abandon);
       await writeFile(path.join(scratch, 'process-tree.json'), JSON.stringify(tree, null, 2));
     },
   };
