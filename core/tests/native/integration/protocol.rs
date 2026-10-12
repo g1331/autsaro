@@ -17,6 +17,7 @@
 //!   first reception (`RTE_E_NEVER_RECEIVED`, SWS_Rte_07643) nothing is
 //!   committed and Com sends the init value 0. The DID returns the committed
 //!   value big-endian. Unlike EchoApplication nothing expires after 30 ms.
+use super::*;
 use serde_json::Value;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
@@ -169,24 +170,18 @@ fn script(batches: &[(u64, &[(u64, &str)])]) -> String {
     text
 }
 
-fn bind_oracle_settings(scratch: &Path) {
+fn bind_oracle_settings() {
     // The oracle settings must equal the ECUC actually built here.
-    let ecuc = super::single_component_sources()
+    let ecuc = single_component_sources()
         .into_iter()
         .find(|source| source.logical_path() == "ecuc.arxml")
         .unwrap();
-    let path = scratch.join("mainline-ecuc.arxml");
-    fs::write(&path, ecuc.bytes()).unwrap();
-    let checked = super::tooling::run_public_command(
-        super::tooling::python_command()
-            .args(["-m", "autosar_tooling", "protocol-oracles", "--ecuc"])
-            .arg(&path)
-            .current_dir(root()),
-        scratch,
-        "protocol-oracles",
-        Duration::from_secs(30),
-    );
-    require_success(&checked);
+    protocol_oracles::validate(
+        &protocol_oracles::load("protocol.json"),
+        &protocol_oracles::load("os.json"),
+        ecuc.bytes(),
+    )
+    .unwrap_or_else(|error| panic!("mainline ECUC: {error}"));
 }
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
@@ -197,7 +192,7 @@ fn single_component_meets_independent_protocol_and_timing_vectors() {
     )
     .unwrap();
     let built = host_batch_project();
-    bind_oracle_settings(&built.scratch.0);
+    bind_oracle_settings();
     let binary = &built.binary;
     let directory = |name: &str| built.scratch.0.join("cases").join(name);
 

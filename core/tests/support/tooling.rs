@@ -225,22 +225,3 @@ pub(crate) fn run_public_command(
         stderr,
     }
 }
-
-pub(crate) fn verify_protocol_oracles() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let scratch = super::workspace::Scratch::new();
-    let output = run_public_command(
-        python_command()
-            .args(["-m", "autosar_tooling", "protocol-oracles"])
-            .current_dir(root),
-        &scratch.0,
-        "protocol-oracles",
-        Duration::from_secs(30),
-    );
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-}

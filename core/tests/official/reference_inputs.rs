@@ -14,11 +14,6 @@ fn reference_input_inventory_and_schema_expectations() {
 }
 
 #[test]
-fn independent_oracle_contracts_bind_the_reference_configuration() {
-    tooling::verify_protocol_oracles();
-}
-
-#[test]
 fn official_r24_sample_imports_as_one_split_package_without_rewriting_sources() {
     let temp = Scratch::new();
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();

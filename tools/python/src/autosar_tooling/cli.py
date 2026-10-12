@@ -62,12 +62,6 @@ def main() -> int:
     c_check.add_argument("--target", choices=("windows-x64-controlled-v1", "linux-x64-controlled-v1"), required=True)
     c_check.add_argument("--project", type=Path, required=True)
     c_check.add_argument("--output-directory", type=Path, required=True)
-    oracles = commands.add_parser(
-        "protocol-oracles", help="Check independent protocol/OS reference vectors"
-    )
-    oracles.add_argument(
-        "--ecuc", type=Path, help="ECUC file the oracle settings must match"
-    )
     asset = commands.add_parser("assets", help="Check or update project-owned resource digests")
     asset.add_argument("action", choices=("check", "update"))
     args = parser.parse_args()
@@ -106,9 +100,4 @@ def main() -> int:
             ["--all-format"] if args.all_format else []
         )
         return check_quality([*options, "--scope", args.scope])
-    if args.command == "protocol-oracles":
-        from autosar_tooling.protocol_oracles import main as check_protocol
-
-        check_protocol(args.ecuc)
-        return 0
     return 1

@@ -13,5 +13,6 @@ mod definitions;
 mod delivery;
 mod integration;
 mod messages;
+mod protocol_oracles;
 mod rules;
 mod workspace;
