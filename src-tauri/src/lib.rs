@@ -75,10 +75,8 @@ fn commit_save(
 }
 
 pub fn run() {
-    let builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
-    #[cfg(all(feature = "native-webdriver", target_os = "macos"))]
-    let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
-    builder
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let config_dir = match std::env::var_os("AUTOSAR_CONFIG_DIR") {
                 Some(value) => {
