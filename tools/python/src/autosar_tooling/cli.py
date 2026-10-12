@@ -86,8 +86,11 @@ def main() -> int:
     c_check.add_argument("--target", choices=("windows-x64-controlled-v1", "linux-x64-controlled-v1"), required=True)
     c_check.add_argument("--project", type=Path, required=True)
     c_check.add_argument("--output-directory", type=Path, required=True)
-    commands.add_parser(
+    oracles = commands.add_parser(
         "protocol-oracles", help="Check independent protocol/OS reference vectors"
+    )
+    oracles.add_argument(
+        "--ecuc", type=Path, help="ECUC file the oracle settings must match"
     )
     commands.add_parser(
         "input-oracles", help="Audit original fixture semantics independently"
@@ -173,7 +176,7 @@ def main() -> int:
     if args.command == "protocol-oracles":
         from autosar_tooling.protocol_oracles import main as check_protocol
 
-        check_protocol()
+        check_protocol(args.ecuc)
         return 0
     if args.command == "input-oracles":
         from autosar_tooling.input_oracles import main as check_input

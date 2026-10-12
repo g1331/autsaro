@@ -764,10 +764,18 @@ pub(super) fn inspect_multi(
             ]
         }))
     {
-        if !can_ids.insert(id)
-            || !can_handles.insert((receive, handle))
-            || handle > u16::from(u8::MAX)
-        {
+        // The delivered ComStack_Types.h defines PduIdType as uint8_t: a wider
+        // handle is a target width limit, not an identifier collision.
+        if handle > u16::from(u8::MAX) {
+            return Err(vec![graph.diagnostic(
+                *graph.objects.get(object).unwrap(),
+                DiagnosticCategory::Unsupported,
+                "CANIF_HANDLE_WIDTH",
+                crate::product_message!("backend.integration.plan.canif_pdu_handle_out_of_range"),
+                crate::product_message!("backend.integration.plan.use_uint8_canif_handles"),
+            )]);
+        }
+        if !can_ids.insert(id) || !can_handles.insert((receive, handle)) {
             return Err(vec![graph.diagnostic(
                 *graph.objects.get(object).unwrap(),
                 DiagnosticCategory::Input,

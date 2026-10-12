@@ -28,6 +28,9 @@ def check(project, root, os_name, header):
     objects = {}
     for file in [project / "os/Os_Arti.arxml", *sorted((project / "inputs").glob("*.arxml"))]:
         for path, node in named(etree.parse(str(file)).getroot()).items():
+            # One AR-PACKAGE may be split across input files; its elements may not.
+            if path in objects and etree.QName(node).localname == "AR-PACKAGE" == etree.QName(objects[path]).localname:
+                continue
             assert path not in objects, ("duplicate", path)
             objects[path] = node
     for node in description.iter():

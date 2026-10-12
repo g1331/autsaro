@@ -497,9 +497,28 @@ pub(super) fn inspect(
             .copied()
             .filter(|index| graph.text(*index, "SHORT-NAME") == Some(symbol))
             .collect();
+        if found.is_empty() {
+            // Locate the module description reference that names the missing
+            // entry, as the reference audit does, rather than an unrelated object.
+            let reference = graph.elements.iter().position(|element| {
+                element.tag == "BSW-MODULE-ENTRY-REF"
+                    && element.text.rsplit('/').next() == Some(symbol.as_str())
+            });
+            let mut issue = graph.diagnostic(
+                reference.unwrap_or(context),
+                DiagnosticCategory::Input,
+                "BSW_ENTRY_MISSING",
+                crate::product_message!("backend.integration.catalog.bsw_entry_description_and_producer_required", "symbol" => symbol),
+                crate::product_message!("backend.integration.catalog.bsw_entry_description_supply"),
+            );
+            if let Some(reference) = reference {
+                issue.object = Some(graph.elements[reference].text.clone());
+            }
+            return Err(vec![issue]);
+        }
         if found.len() != 1 {
-            return Err(vec![graph.diagnostic(found.first().copied().unwrap_or(context),
-                DiagnosticCategory::Input, if found.is_empty() { "BSW_ENTRY_MISSING" } else { "SYMBOL_PRODUCER_DUPLICATE" },
+            return Err(vec![graph.diagnostic(found[0],
+                DiagnosticCategory::Input, "SYMBOL_PRODUCER_DUPLICATE",
                 crate::product_message!("backend.integration.catalog.bsw_entry_description_and_producer_required", "symbol" => symbol),
                 crate::product_message!("backend.integration.catalog.bsw_entry_description_supply"))]);
         }

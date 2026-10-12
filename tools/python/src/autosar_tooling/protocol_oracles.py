@@ -2,6 +2,7 @@
 
 import json
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 from autosar_tooling.config import ROOT
 
@@ -170,11 +171,12 @@ def validate_protocol(protocol: dict, os_oracles: dict, xml: bytes) -> None:
             "independent oracle changed: activation-limit")
 
 
-def main() -> None:
+def main(ecuc: Path | None = None) -> None:
+    """Bind the oracle settings to `ecuc` (default: the epic4 reference input)."""
     validate_protocol(
         load(ORACLES / "protocol.json"),
         load(ORACLES / "os.json"),
-        (ROOT / "core/tests/fixtures/epic4/positive/ecuc.arxml").read_bytes(),
+        (ecuc or ROOT / "core/tests/fixtures/epic4/positive/ecuc.arxml").read_bytes(),
     )
     print("epic4_independent_oracle_contracts PASS")
 

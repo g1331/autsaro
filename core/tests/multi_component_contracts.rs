@@ -14,6 +14,13 @@ mod workspace;
 use workspace::Scratch;
 #[path = "support/delivery.rs"]
 mod delivery_support;
+#[path = "support/mainline_inputs.rs"]
+mod mainline_inputs;
+#[path = "support/mainline_os.rs"]
+mod mainline_os;
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[path = "support/mainline_protocol.rs"]
+mod mainline_protocol;
 
 fn inputs() -> Vec<InputSource> {
     let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-component");
@@ -3122,10 +3129,11 @@ fn single_application_component_rejections_locate_source_objects() {
 
 /// Seals the single-component project with the reference echo application:
 /// the multi fixture's `Ingress` without its removed local `Value` port.
+/// Returns the project directory and its sealed closure.
 fn single_component_project(
     root: &Path,
     target: autosar_config_core::target::BuildTarget,
-) -> std::path::PathBuf {
+) -> (std::path::PathBuf, Vec<(String, Vec<u8>)>) {
     use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
     let plan = build(&single_component_sources()).unwrap_or_else(|issues| panic!("{issues:?}"));
     let fixture = std::fs::read_to_string(
@@ -3146,18 +3154,23 @@ fn single_component_project(
     )
     .unwrap_or_else(|issues| panic!("{issues:?}"));
     let project = root.join("project");
-    for (path, bytes) in prepared.into_files() {
+    let files = prepared.into_files();
+    write_files(&project, &files);
+    (project, files)
+}
+
+fn write_files(project: &Path, files: &[(String, Vec<u8>)]) {
+    for (path, bytes) in files {
         let path = project.join(path);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, bytes).unwrap();
     }
-    project
 }
 
 #[test]
 fn reference_shape_records_independent_verification_inputs() {
     let scratch = Scratch::new();
-    let project = single_component_project(
+    let (project, _) = single_component_project(
         &scratch.0,
         autosar_config_core::target::BuildTarget::LinuxX64ControlledV1,
     );
@@ -3250,26 +3263,72 @@ fn mainline_enforces_fixed_os_class_and_did_read_limit() {
 #[test]
 fn single_application_component_builds_and_runs_production_owner() {
     let scratch = Scratch::new();
-    let project = single_component_project(&scratch.0, tooling::native_target());
+    let (project, _) = single_component_project(&scratch.0, tooling::native_target());
     verify_multi_production_owner(&project, &scratch.0, None);
 }
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[test]
 fn single_application_component_passes_independent_reference_verifier() {
+    use autosar_config_core::integration::{build_ecu_project, verify_ecu_project};
+    use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
+    // The workbench Build/Verify entry points compare the project with the
+    // closure from the same preparation, then run the delivered ecu-tool.
     let scratch = Scratch::new();
-    let project = single_component_project(&scratch.0, tooling::native_target());
-    let result = tooling::ecu_verify_command(&project, &scratch.0.join("verify-build"))
-        .current_dir(&scratch.0)
-        .env_remove("PYTHONPATH")
-        .env_remove("PYTHONHOME")
-        .output()
-        .unwrap();
-    let stdout = String::from_utf8_lossy(&result.stdout);
+    let (project, files) = single_component_project(&scratch.0, tooling::native_target());
+    let settings = tooling::execution_settings();
+    let owner = tooling::execution_owner();
+    let output = scratch.0.join("build");
+    std::fs::create_dir(&output).unwrap();
+    let built = build_ecu_project(&files, &project, &output, &settings, &owner)
+        .unwrap_or_else(|error| panic!("{error}"));
+    assert!(Path::new(&built.binary_path).is_file(), "{}", built.log);
+    let report = verify_ecu_project(&files, &project, &settings, &owner)
+        .unwrap_or_else(|error| panic!("{error}"));
+    assert!(report.passed, "{}", report.log);
+    assert!(report.log.to_string().contains("ECU_HANDOFF_VERIFY PASS:"));
+
+    // A project edited after generation is not the selected delivery.
+    let readme = project.join("README.md");
+    let original = std::fs::read(&readme).unwrap();
+    std::fs::write(&readme, b"edited\n").unwrap();
+    let stale = verify_ecu_project(&files, &project, &settings, &owner).unwrap_err();
     assert!(
-        result.status.success() && stdout.contains("ECU_HANDOFF_VERIFY PASS:"),
-        "{stdout}\n{}",
-        String::from_utf8_lossy(&result.stderr)
+        serde_json::to_string(&stale)
+            .unwrap()
+            .contains("backend.generation.output_modified"),
+        "{stale}"
+    );
+    std::fs::write(&readme, original).unwrap();
+
+    // Shapes without reference inputs are refused before any tool runs.
+    let plan = build(&sources_without_application_did(true)).unwrap();
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-application");
+    let applications: Vec<_> = plan
+        .application_slot_descriptors()
+        .unwrap()
+        .iter()
+        .map(|slot| ApplicationSource {
+            component_instance: slot
+                .producer_slot
+                .strip_prefix("singlecore-multi-swc-v1:")
+                .unwrap()
+                .into(),
+            path: fixtures.join(slot.source_paths[0].rsplit('/').next().unwrap()),
+        })
+        .collect();
+    let files =
+        prepare_ecu_project_with_applications(&plan, tooling::native_target(), &applications)
+            .unwrap()
+            .into_files();
+    let three = scratch.0.join("three");
+    write_files(&three, &files);
+    let refused = verify_ecu_project(&files, &three, &settings, &owner).unwrap_err();
+    assert!(
+        serde_json::to_string(&refused)
+            .unwrap()
+            .contains("reference_verification_inputs_missing"),
+        "{refused}"
     );
 }
 
@@ -7484,4 +7543,148 @@ fn multi_workbench_existing_invalid_connector_allows_unrelated_safe_edits() {
             .integration_plan(&RuntimeCatalog::embedded().unwrap())
             .is_err()
     );
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn single_component_meets_independent_protocol_and_timing_vectors() {
+    mainline_protocol::independent_protocol_and_timing();
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
+    mainline_protocol::host_batch_commit();
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn single_component_native_batch_boundary_and_confirmations() {
+    mainline_protocol::host_batch_native_boundary();
+}
+
+// Historical single-chain input, contract and delivery expectations on the
+// mainline single-component project.
+#[test]
+fn single_component_network_rejections_locate_extract_objects() {
+    mainline_inputs::network_rejections_locate_extract_objects();
+}
+
+#[test]
+fn single_component_rejections_locate_application_objects() {
+    mainline_inputs::component_rejections_locate_application_objects();
+}
+
+#[test]
+fn single_component_configuration_rejections_keep_identifier_width_and_order() {
+    mainline_inputs::configuration_rejections_keep_identifier_width_and_order();
+}
+
+#[test]
+fn single_component_omitted_event_masks_and_unrelated_sources_are_planned() {
+    mainline_inputs::omitted_event_masks_and_unrelated_sources_are_planned();
+}
+
+#[test]
+fn single_component_input_sources_reject_unportable_aliases_and_missing_archives() {
+    mainline_inputs::input_sources_reject_unportable_aliases_and_missing_archives();
+}
+
+#[test]
+fn single_component_contract_names_reject_c_keywords_and_reserved_identifiers() {
+    mainline_inputs::contract_names_reject_c_keywords_and_reserved_identifiers();
+}
+
+#[test]
+fn single_component_source_preparation_is_target_complete_without_native_tools() {
+    mainline_inputs::source_preparation_is_target_complete_without_native_tools();
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn single_component_contract_headers_refuse_mismatched_consumers() {
+    mainline_inputs::generated_contract_headers_refuse_mismatched_consumers();
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn single_component_production_preflight_and_binary_exclude_private_test_code() {
+    mainline_inputs::production_preflight_and_binary_exclude_private_test_code();
+}
+
+#[test]
+fn mainline_os_counter_timing_report_and_profile() {
+    mainline_os::counter_timing_report_and_profile();
+}
+
+#[test]
+fn mainline_os_status_guard_and_rejections() {
+    mainline_os::status_guard_and_rejections();
+}
+
+#[test]
+fn mainline_os_scheduler_configuration_rejections() {
+    mainline_os::scheduler_configuration_rejections();
+}
+
+#[test]
+fn mainline_os_counter_service_description() {
+    mainline_os::counter_service_description();
+}
+
+#[test]
+fn mainline_os_schedule_table_rejections() {
+    mainline_os::schedule_table_rejections();
+}
+
+#[test]
+fn mainline_os_handle_width_and_schedule_order() {
+    mainline_os::handle_width_and_schedule_order();
+}
+
+#[test]
+fn mainline_os_public_headers_are_delivered_unchanged() {
+    mainline_os::public_os_headers_are_delivered_unchanged();
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn mainline_os_counter_header_oracles() {
+    mainline_os::counter_header_oracles();
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn mainline_os_standard_status_build() {
+    mainline_os::standard_status_build();
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn mainline_os_scheduler_resource_runs() {
+    mainline_os::scheduler_resource_runs();
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn mainline_os_arti_consumer() {
+    mainline_os::arti_consumer();
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn mainline_os_delivery_and_independent_control() {
+    mainline_os::delivery_and_independent_control();
+}
+
+#[cfg(feature = "official-oracles")]
+#[test]
+fn mainline_os_official_descriptions() {
+    mainline_os::official_os_descriptions();
+}
+
+#[cfg(all(feature = "native-tests", windows))]
+#[test]
+fn mainline_os_counter_service_native() {
+    mainline_os::counter_service_native();
 }

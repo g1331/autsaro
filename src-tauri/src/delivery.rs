@@ -195,6 +195,19 @@ pub(super) fn current_ecu(
     Ok(plan)
 }
 
+/// Rebuilds the delivered closure through the same preparation entry point as
+/// generation, so native workspace members and plan-only projects both compare.
+fn expected_ecu_files(
+    operation: &Operation,
+    plan: &ValidatedIntegrationPlan,
+    source: &Path,
+) -> Result<Vec<(String, Vec<u8>)>, Vec<PlanDiagnostic>> {
+    Ok(
+        prepare_ecu_for_operation(operation, plan, source.join("handoff.json").exists())?
+            .into_files(),
+    )
+}
+
 #[tauri::command]
 pub(super) async fn build_ecu(
     state: State<'_, Arc<AppState>>,
@@ -212,10 +225,11 @@ pub(super) async fn build_ecu(
             .map_err(integration_failure)?;
         let source = Path::new(&output_directory);
         let plan = current_ecu(&operation, &state.runtime, source)?;
+        let expected = expected_ecu_files(&operation, &plan, source)?;
         let staged =
             StagedBuild::new(source, Path::new(&build_directory)).map_err(integration_failure)?;
         let result = build_ecu_project(
-            &plan,
+            &expected,
             source,
             staged.directory(),
             operation.snapshot.tools.as_deref().ok_or_else(|| {
@@ -259,8 +273,9 @@ pub(super) async fn verify_ecu(
             .map_err(integration_failure)?;
         let source = Path::new(&output_directory);
         let plan = current_ecu(&operation, &state.runtime, source)?;
+        let expected = expected_ecu_files(&operation, &plan, source)?;
         let value = verify_ecu_project(
-            &plan,
+            &expected,
             source,
             operation.snapshot.tools.as_deref().ok_or_else(|| {
                 integration_failure(autosar_config_core::product_message!(

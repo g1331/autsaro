@@ -9,7 +9,10 @@ static const char *expected_os;
 static unsigned observations;
 static uintptr_t alarm_base_address;
 int Ecu_TargetTestFailStage(unsigned stage) {
-    if (stage == 9u) {
+    /* Stage 9 precedes the periodic owner cycle: once per 10 ms application
+     * run in the single chain, every tick on the mainline. Observe only the
+     * configured 10 ms application points. */
+    if ((stage == 9u) && ((Ecu_TargetNow() % 10u) == 0u)) {
         TickType counter = UINT64_MAX;
         Os_ActivationInfo actual;
         const CONTEXT *context = Os_ArtiTaskContexts[0];
