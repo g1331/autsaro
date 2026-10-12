@@ -3,7 +3,6 @@
 #include "Ecu_TargetConfig.h"
 #include "Rte_Os_Type.h"
 #include "Os_Host.h"
-#include "Rte_EchoApplication.h"
 #include <stdio.h>
 #include <string.h>
 

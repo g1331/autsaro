@@ -16,6 +16,8 @@ use workspace::Scratch;
 mod delivery_support;
 #[path = "support/mainline_inputs.rs"]
 mod mainline_inputs;
+#[path = "support/mainline_os.rs"]
+mod mainline_os;
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[path = "support/mainline_protocol.rs"]
 mod mainline_protocol;
@@ -7608,4 +7610,81 @@ fn single_component_contract_headers_refuse_mismatched_consumers() {
 #[test]
 fn single_component_production_preflight_and_binary_exclude_private_test_code() {
     mainline_inputs::production_preflight_and_binary_exclude_private_test_code();
+}
+
+#[test]
+fn mainline_os_counter_timing_report_and_profile() {
+    mainline_os::counter_timing_report_and_profile();
+}
+
+#[test]
+fn mainline_os_status_guard_and_rejections() {
+    mainline_os::status_guard_and_rejections();
+}
+
+#[test]
+fn mainline_os_scheduler_configuration_rejections() {
+    mainline_os::scheduler_configuration_rejections();
+}
+
+#[test]
+fn mainline_os_counter_service_description() {
+    mainline_os::counter_service_description();
+}
+
+#[test]
+fn mainline_os_schedule_table_rejections() {
+    mainline_os::schedule_table_rejections();
+}
+
+#[test]
+fn mainline_os_handle_width_and_schedule_order() {
+    mainline_os::handle_width_and_schedule_order();
+}
+
+#[test]
+fn mainline_os_public_headers_are_delivered_unchanged() {
+    mainline_os::public_os_headers_are_delivered_unchanged();
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn mainline_os_counter_header_oracles() {
+    mainline_os::counter_header_oracles();
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn mainline_os_standard_status_build() {
+    mainline_os::standard_status_build();
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn mainline_os_scheduler_resource_runs() {
+    mainline_os::scheduler_resource_runs();
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn mainline_os_arti_consumer() {
+    mainline_os::arti_consumer();
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn mainline_os_delivery_and_independent_control() {
+    mainline_os::delivery_and_independent_control();
+}
+
+#[cfg(feature = "official-oracles")]
+#[test]
+fn mainline_os_official_descriptions() {
+    mainline_os::official_os_descriptions();
+}
+
+#[cfg(all(feature = "native-tests", windows))]
+#[test]
+fn mainline_os_counter_service_native() {
+    mainline_os::counter_service_native();
 }

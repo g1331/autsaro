@@ -6,7 +6,9 @@
 static unsigned expected_enabled, scheduler_calls;
 
 int Ecu_TargetTestFailStage(unsigned stage) {
-    if (stage == 9u) {
+    /* Stage 9 precedes the periodic owner cycle: once per 10 ms application
+     * run in the single chain, every tick on the mainline. */
+    if ((stage == 9u) && ((Ecu_TargetNow() % 10u) == 0u)) {
         Os_ActivationInfo info;
         StatusType status = GetResource(RES_SCHEDULER);
         require(status == ((expected_enabled != 0u) ? E_OK : E_OS_ID));
