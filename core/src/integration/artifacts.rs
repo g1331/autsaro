@@ -175,7 +175,7 @@ pub(super) fn files<T>(
             ),
         ] {
             let mut symbol = rte_symbol(name, "StatusType", &args);
-            symbol.declaration_owner = "runtime/include/Os.h".into();
+            symbol.declaration_owner = "runtime/os/include/Os.h".into();
             symbol.definition_owner = "runtime/os/src/Os_ArtiServices.c".into();
             os.push(symbol);
         }
@@ -601,7 +601,7 @@ pub(super) fn files<T>(
             ),
         ] {
             let mut symbol = rte_symbol(name, result, &arguments);
-            symbol.declaration_owner = "runtime/multi/include/SchM_Dcm.h".into();
+            symbol.declaration_owner = "include/SchM_Dcm.h".into();
             symbol.definition_owner = "src/SchM.c".into();
             rte.push(symbol);
         }

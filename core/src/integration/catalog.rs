@@ -271,13 +271,14 @@ pub(super) fn multi_catalog(
         "runtime/multi/include/Com.h",
         "runtime/multi/src/Com.c",
     );
+    // Both scheduler headers are delivered as generated files.
     for module in ["CanTp", "Dcm"] {
         add(
             &format!("{module}_MainFunction"),
             module,
             "void",
             &[],
-            &format!("runtime/multi/include/SchM_{module}.h"),
+            &format!("include/SchM_{module}.h"),
             &format!("runtime/multi/src/{module}.c"),
         );
     }

@@ -683,7 +683,20 @@ pub(super) fn files(
             Cow::Owned(source.bytes().to_vec()),
         );
     }
-    put(&mut files, "integration.json", format!("{}\n", serde_json::to_string_pretty(&serde_json::json!({"format": "autosar-ecu-integration-v1", "plan": description, "target": target.spec().id, "owner": "single source-derived AUTOSTART extended task", "originalBswSources": super::ecu::source_assets(target, true).map_err(|_| failure())?.iter().map(|(path, asset)| (asset.relative_path, path)).collect::<BTreeMap<_, _>>() })).unwrap()));
+    // Only files still delivered byte-for-byte are original sources; templates the
+    // generator extended are generated outputs. The packaging tool is wrapped at delivery.
+    let original_sources: BTreeMap<_, _> = super::ecu::source_assets(target, true)
+        .map_err(|_| failure())?
+        .into_iter()
+        .filter(|(path, asset)| {
+            asset.relative_path != "runtime/ecu-tool.py"
+                && files
+                    .get(path)
+                    .is_some_and(|bytes| bytes.as_ref() == asset.bytes)
+        })
+        .map(|(path, asset)| (asset.relative_path, path))
+        .collect();
+    put(&mut files, "integration.json", format!("{}\n", serde_json::to_string_pretty(&serde_json::json!({"format": "autosar-ecu-integration-v1", "plan": description, "target": target.spec().id, "owner": "single source-derived AUTOSTART extended task", "originalBswSources": original_sources })).unwrap()));
     let verification = super::handoff::verification_files(plan).map_err(|_| failure())?;
     put(
         &mut files,

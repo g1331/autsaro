@@ -663,6 +663,65 @@ pub(super) fn source_preparation_is_target_complete_without_native_tools() {
             .filter(|path| path.starts_with("runtime/src/") || path.starts_with("runtime/include/"))
             .collect();
         assert!(legacy.is_empty(), "{legacy:?}");
+        let delivered = |path: &str| {
+            first
+                .files()
+                .iter()
+                .find(|file| file.path == path)
+                .unwrap_or_else(|| panic!("{path} is not delivered"))
+        };
+        // Recorded original sources are exactly the delivered bytes.
+        let integration: serde_json::Value =
+            serde_json::from_slice(&delivered("integration.json").bytes).unwrap();
+        let originals = integration["originalBswSources"].as_object().unwrap();
+        for (original, path) in originals {
+            assert_eq!(
+                delivered(path.as_str().unwrap()).bytes.as_ref(),
+                std::fs::read(root.join(original)).unwrap(),
+                "{original}"
+            );
+        }
+        // Every runtime producer/consumer named by the contract is a selected source.
+        let contract: serde_json::Value =
+            serde_json::from_slice(&delivered("contract.json").bytes).unwrap();
+        let selected_sources: Vec<_> = first
+            .files()
+            .iter()
+            .filter_map(|file| file.source.map(|asset| asset.relative_path))
+            .collect();
+        for symbol in contract["symbols"].as_array().unwrap() {
+            let owners = ["declarationOwner", "definitionOwner"]
+                .into_iter()
+                .filter_map(|key| symbol[key].as_str())
+                .chain(
+                    symbol["consumers"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|value| value.as_str()),
+                );
+            for owner in owners.filter(|owner| owner.starts_with("runtime/")) {
+                assert!(
+                    selected_sources.contains(&owner),
+                    "{}: {owner}",
+                    symbol["symbol"]
+                );
+            }
+        }
+        let service = contract["symbols"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|symbol| symbol["symbol"] == "DcmService_ReadData")
+            .expect("the selection has a DID service without an event");
+        assert_eq!(
+            service["consumers"],
+            serde_json::json!(["runtime/multi/src/Dcm.c"])
+        );
+        assert_eq!(
+            originals["runtime/multi/src/Dcm.c"], "src/Dcm.c",
+            "the consumer must be the delivered Dcm implementation"
+        );
         assert!(has("os/src/Os.c") && has("kernel/tasks.c") && has("src/Rte.c"));
         let (native_host, native_kernel) = match target {
             BuildTarget::WindowsX64ControlledV1 => (
