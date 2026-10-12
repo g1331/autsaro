@@ -45,51 +45,88 @@ pub(crate) fn metadata(plan: &ValidatedIntegrationPlan, target: BuildTarget) -> 
     })
 }
 
-/// Endpoints for the independent reference-behaviour verifier, which checks
-/// the single reference echo application. The historical chain always has this
-/// shape; the mainline emits it only for one application component with exactly
-/// one 32-bit COM Rx/Tx pair and an application DID, and no file otherwise.
-pub(super) fn verification_files(
-    plan: &ValidatedIntegrationPlan,
-) -> Result<BTreeMap<String, Vec<u8>>, crate::message::LocalizedText> {
+/// The single reference echo application shape checked by the independent
+/// verifier: one application component with one periodic runnable, exactly one
+/// 32-bit COM Rx/Tx pair on its ports, and an application DID.
+pub(super) struct ReferenceShape<'a> {
+    pub period_ms: u32,
+    pub periodic_symbol: &'a str,
+    pub receive_can_id: u32,
+    pub transmit_can_id: u32,
+    pub diagnostic: &'a super::DiagnosticContract,
+    pub read: &'a super::component::DataPort,
+    pub write: &'a super::component::DataPort,
+}
+
+pub(super) fn reference_shape(plan: &ValidatedIntegrationPlan) -> Option<ReferenceShape<'_>> {
     let d = plan.description();
-    let Some(multi) = &d.multi else {
-        return legacy_verification_files(plan);
+    let slots = plan.application_slot_descriptors().ok()?;
+    let [slot] = slots.as_slice() else {
+        return None;
     };
-    if plan
-        .application_slot_descriptors()
-        .map_or(true, |slots| slots.len() != 1)
-    {
-        return Ok(BTreeMap::new());
-    }
+    let component = d
+        .multi
+        .as_ref()?
+        .components
+        .iter()
+        .find(|component| component.component == slot.component_path)?;
     let (receive, transmit): (Vec<_>, Vec<_>) = d.signals.iter().partition(|signal| signal.receive);
     let (Some(diagnostic), [rx], [tx]) = (&d.diagnostic, receive.as_slice(), transmit.as_slice())
     else {
-        return Ok(BTreeMap::new());
+        return None;
     };
-    let ports: Vec<_> = multi
-        .components
+    let periodic: Vec<_> = component
+        .runnables
         .iter()
-        .flat_map(|component| &component.data_ports)
+        .filter_map(|runnable| Some((runnable.period_ms?, runnable.symbol.as_str())))
         .collect();
-    let (Some(read), Some(period)) = (
-        ports.iter().find(|port| port.read && port.path == rx.port),
-        multi
-            .components
-            .iter()
-            .flat_map(|component| &component.runnables)
-            .find_map(|runnable| runnable.period_ms),
-    ) else {
-        return Ok(BTreeMap::new());
+    let [(period_ms, periodic_symbol)] = periodic.as_slice() else {
+        return None;
     };
+    let read = component
+        .data_ports
+        .iter()
+        .find(|port| port.read && port.path == rx.port)?;
+    let write = component
+        .data_ports
+        .iter()
+        .find(|port| !port.read && port.path == tx.port)?;
     if [rx, tx]
         .iter()
         .any(|signal| signal.dlc != 4 || signal.bit_length != 32)
-        || !ports.iter().any(|port| !port.read && port.path == tx.port)
     {
-        return Ok(BTreeMap::new());
+        return None;
     }
-    inputs_file(period, rx.can_id, tx.can_id, diagnostic, read.initial_value)
+    Some(ReferenceShape {
+        period_ms: *period_ms,
+        periodic_symbol,
+        receive_can_id: rx.can_id,
+        transmit_can_id: tx.can_id,
+        diagnostic,
+        read,
+        write,
+    })
+}
+
+/// Endpoints for the independent reference-behaviour verifier. The historical
+/// chain always has the reference shape; the mainline emits inputs only for
+/// it and no file otherwise.
+pub(super) fn verification_files(
+    plan: &ValidatedIntegrationPlan,
+) -> Result<BTreeMap<String, Vec<u8>>, crate::message::LocalizedText> {
+    if plan.description().multi.is_none() {
+        return legacy_verification_files(plan);
+    }
+    let Some(shape) = reference_shape(plan) else {
+        return Ok(BTreeMap::new());
+    };
+    inputs_file(
+        shape.period_ms,
+        shape.receive_can_id,
+        shape.transmit_can_id,
+        shape.diagnostic,
+        shape.read.initial_value,
+    )
 }
 
 fn legacy_verification_files(

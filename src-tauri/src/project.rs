@@ -133,12 +133,14 @@ pub(super) async fn open_handoff_project(
                     Ok(view)
                 });
             }
-            Some("autosar-ecu-handoff-v1") => Workspace::open_ecu_handoff(
-                root,
-                operation.snapshot.legacy_resources()?,
-                &state.runtime,
-            )
-            .map_err(crate::workbench::diagnostics)?,
+            // The historical single-component ECU handoff is retired; its
+            // inputs/ ARXML sources can still be imported into a new project.
+            Some(format @ "autosar-ecu-handoff-v1") => {
+                return Err(autosar_config_core::product_message!(
+                    "backend.project.retired_handoff_format",
+                    "format" => format
+                ));
+            }
             Some("autosar-host-handoff-v1") => autosar_config_core::generator::open_handoff(
                 root,
                 operation.snapshot.legacy_resources()?.xsd_archive.clone(),

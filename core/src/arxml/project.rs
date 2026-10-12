@@ -216,6 +216,23 @@ pub(super) fn render_manifest(
 pub(super) fn validate_manifest(
     manifest: &ProjectManifest,
 ) -> Result<(), crate::message::LocalizedText> {
+    // Refuse retired identities before any other check so the reason is the
+    // retirement itself; nothing is loaded or rewritten.
+    let retired = crate::integration::RETIRED_PROFILES
+        .into_iter()
+        .find(|profile| manifest.profile_hint == *profile)
+        .or_else(|| {
+            manifest
+                .application_inputs
+                .iter()
+                .find_map(|input| crate::integration::retired_profile_of_slot(&input.producer_slot))
+        });
+    if let Some(profile) = retired {
+        return Err(crate::product_message!(
+            "backend.arxml.project.retired_profile",
+            "profile" => profile
+        ));
+    }
     if manifest.format_version != 1
         || manifest.declared_release != "R24-11"
         || manifest.inputs.is_empty()
@@ -312,37 +329,38 @@ fn template_files(
                 contents: render_profile(name, &frames, &signals, None),
             });
         }
-        "standard-ecu-v1" => {
-            profile = crate::integration::PROFILE.into();
-            // These seven fixtures are product-original source, not official archive payloads.
+        "standard-ecu" => {
+            profile = crate::integration::MULTI_PROFILE.into();
+            // Product-original single application component project on the
+            // generation mainline; not official archive payloads.
             let originals = [
                 (
                     "extract.arxml",
-                    include_str!("../../tests/fixtures/epic4/positive/extract.arxml"),
+                    include_str!("../../resources/templates/standard-ecu/extract.arxml"),
                 ),
                 (
                     "types.arxml",
-                    include_str!("../../tests/fixtures/epic4/positive/types.arxml"),
+                    include_str!("../../resources/templates/standard-ecu/types.arxml"),
                 ),
                 (
                     "application.arxml",
-                    include_str!("../../tests/fixtures/epic4/positive/application.arxml"),
+                    include_str!("../../resources/templates/standard-ecu/application.arxml"),
+                ),
+                (
+                    "composition.arxml",
+                    include_str!("../../resources/templates/standard-ecu/composition.arxml"),
                 ),
                 (
                     "bsw.arxml",
-                    include_str!("../../tests/fixtures/epic4/positive/bsw.arxml"),
+                    include_str!("../../resources/templates/standard-ecu/bsw.arxml"),
                 ),
                 (
                     "ecuc.arxml",
-                    include_str!("../../tests/fixtures/epic4/positive/ecuc.arxml"),
+                    include_str!("../../resources/templates/standard-ecu/ecuc.arxml"),
                 ),
                 (
                     "services.arxml",
-                    include_str!("../../tests/fixtures/epic4/positive/services.arxml"),
-                ),
-                (
-                    "unrelated.arxml",
-                    include_str!("../../tests/fixtures/epic4/positive/unrelated.arxml"),
+                    include_str!("../../resources/templates/standard-ecu/services.arxml"),
                 ),
             ];
             for (path, original) in originals {
@@ -369,9 +387,6 @@ fn template_files(
                 }
                 let mut contents = original.to_owned();
                 apply_patches(&mut contents, &mut patches)?;
-                if path == "ecuc.arxml" {
-                    super::standard_template::complete(&mut contents)?;
-                }
                 files.push(ProjectFilePreview {
                     path: path.into(),
                     contents,

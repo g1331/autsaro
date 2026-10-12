@@ -141,6 +141,7 @@ export type IntegrationInspection = {
     sources: { logicalPath: string; rawSha256: string; roles: string[] }[];
     component?: { component: string; instance: string; periodMs: number };
     multi?: { components: { component: string; instance: string }[] };
+    schedule?: { entities: { application: boolean; periodMs: number }[] };
     signals: { port: string; canId: number; receive: boolean; dlc: number }[];
     diagnostic?: { did: number; requestCanId: number; responseCanId: number };
   };

@@ -232,7 +232,6 @@ pub(super) fn selected_channel(graph: &Graph, ecu: usize) -> Result<usize, Vec<P
 pub(super) struct SourceIdentity {
     system: usize,
     ecu: usize,
-    root_composition: usize,
     composition: usize,
     instance: usize,
     component: usize,
@@ -240,7 +239,7 @@ pub(super) struct SourceIdentity {
 }
 
 // Structural source ownership is independent of the capabilities and parameter
-// values supported by the native runtime. Both consumers use this same graph.
+// values supported by the native runtime.
 fn source_identity(graph: &Graph) -> Result<SourceIdentity, Vec<PlanDiagnostic>> {
     let roots = graph
         .of_kind("SYSTEM")
@@ -308,94 +307,11 @@ fn source_identity(graph: &Graph) -> Result<SourceIdentity, Vec<PlanDiagnostic>>
     Ok(SourceIdentity {
         system,
         ecu,
-        root_composition,
         composition,
         instance,
         component,
         behavior,
     })
-}
-
-pub(super) fn historical_source_identity(graph: &Graph) -> bool {
-    let Ok(identity) = source_identity(graph) else {
-        return false;
-    };
-    let SourceIdentity {
-        system,
-        ecu,
-        root_composition,
-        composition,
-        instance,
-        component,
-        behavior,
-    } = identity;
-    if graph.elements[composition].tag != "COMPOSITION-SW-COMPONENT-TYPE"
-        || graph.of_kind("APPLICATION-SW-COMPONENT-TYPE") != [component]
-    {
-        return false;
-    }
-    let instances = graph.descendants(composition, "SW-COMPONENT-PROTOTYPE");
-    if instances.len() != 2
-        || !instances.contains(&instance)
-        || instances
-            .iter()
-            .filter(|index| {
-                graph
-                    .target(**index, "TYPE-TREF")
-                    .is_some_and(|target| graph.elements[target].tag == "SERVICE-SW-COMPONENT-TYPE")
-            })
-            .count()
-            != 1
-    {
-        return false;
-    }
-    for bound in instances {
-        let bindings: Vec<_> = graph
-            .descendants(system, "SWC-TO-ECU-MAPPING")
-            .into_iter()
-            .filter(|mapping| {
-                graph
-                    .descendants(*mapping, "COMPONENT-IREF")
-                    .into_iter()
-                    .any(|iref| {
-                        graph.target(iref, "TARGET-COMPONENT-REF") == Some(bound)
-                            && graph.target(iref, "CONTEXT-COMPOSITION-REF")
-                                == Some(root_composition)
-                    })
-            })
-            .collect();
-        if bindings.len() != 1 || graph.target(bindings[0], "ECU-INSTANCE-REF") != Some(ecu) {
-            return false;
-        }
-    }
-    let rte: Vec<_> = graph
-        .of_kind("ECUC-CONTAINER-VALUE")
-        .into_iter()
-        .filter(|index| super::schedule::definition_is(graph, *index, "RteSwComponentInstance"))
-        .collect();
-    if rte.len() != 1
-        || super::schedule::value(graph, rte[0], "RteSoftwareComponentInstanceRef", true)
-            != Some(graph.elements[instance].object.as_str())
-    {
-        return false;
-    }
-    let mappings = graph
-        .descendants(rte[0], "ECUC-CONTAINER-VALUE")
-        .into_iter()
-        .filter(|index| super::schedule::definition_is(graph, *index, "RteEventToTaskMapping"));
-    let mut count = 0;
-    for mapping in mappings {
-        let Some(event) = super::schedule::value(graph, mapping, "RteEventRef", true)
-            .and_then(|path| graph.objects.get(path).copied())
-        else {
-            return false;
-        };
-        if !graph.within(event, behavior) {
-            return false;
-        }
-        count += 1;
-    }
-    count != 0
 }
 
 pub(super) fn inspect(graph: &Graph) -> Result<ComponentContract, Vec<PlanDiagnostic>> {

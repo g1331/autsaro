@@ -63,6 +63,8 @@ Current execution targets are controlled Windows/Linux host environments. Real M
 3. Review and confirm file differences before saving. Previewing does not write to disk. Reimport source files if they have been modified externally.
 4. Choose a directory outside the project for source delivery. Configure the target toolchain when you need a build or host verification. Keep build and source directories separate.
 
+Projects and deliveries created by earlier development versions with a retired profile are refused when opened and left unchanged; create the project again and import its ARXML files.
+
 Unmodified source files retain their original bytes. Regeneration checks file integrity, retains the previous project as a backup, and does not overwrite user changes. Application and source changes invalidate existing preflight, generation confirmation, and downstream results.
 
 ## Interface language

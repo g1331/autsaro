@@ -179,8 +179,12 @@ fn builtin_can_late_source_edit_refuses_staged_commit_and_preserves_output() {
 }
 
 fn standard_with_application(root: &Path) -> Workspace {
-    let creation =
-        Workspace::preview_project_creation(root, "Application", "standard-ecu-v1").unwrap();
+    standard_named(root, "Application")
+}
+
+/// A standard ECU project with its create-only reference application.
+fn standard_named(root: &Path, name: &str) -> Workspace {
+    let creation = Workspace::preview_project_creation(root, name, "standard-ecu").unwrap();
     let mut workspace = Workspace::create_project_previewed(&creation).unwrap();
     let initialization = workspace.preview_application_initialization().unwrap();
     workspace
@@ -226,7 +230,9 @@ fn builtin_host_and_ecu_deliver_project_license_and_preserve_kernel_notice() {
                     && text.contains("not silently upgraded")
             );
             if output == &ecu_output {
-                assert!(text.contains("tools/ecu-tool.py verify") && text.contains("Build modes:"));
+                assert!(
+                    text.contains("tools/ecu-tool.py verify") && text.contains("--mode host-batch")
+                );
             }
             let names = fs::read_to_string(output.join("files.list")).unwrap();
             let hashes = fs::read_to_string(output.join("files.sha256")).unwrap();
@@ -323,8 +329,8 @@ fn builtin_ecu_handoff_preserves_user_algorithm_in_independent_reconstructed_pro
     let original = String::from_utf8(application.bytes.clone()).unwrap();
     let changed = original
         .replace(
-            "Data[i] = (uint8)(application.value >> ((3u - i) * 8u));",
-            "Data[i] = (uint8)((application.value + UINT32_C(1)) >> ((3u - i) * 8u));",
+            "Data[3] = (uint8)committed;",
+            "Data[3] = (uint8)(committed + 1u);",
         )
         .into_bytes();
     assert_ne!(changed, application.bytes);
@@ -341,7 +347,10 @@ fn builtin_ecu_handoff_preserves_user_algorithm_in_independent_reconstructed_pro
         .unwrap()
         .generate(&output)
         .unwrap();
-    assert_eq!(fs::read(output.join("src/Application.c")).unwrap(), changed);
+    assert_eq!(
+        fs::read(output.join("src/EchoApplication.c")).unwrap(),
+        changed
+    );
     assert_eq!(fs::read(&application.disk_path).unwrap(), changed);
     let receiver = scratch.0.join("Receiver");
     let imported =
@@ -401,7 +410,7 @@ fn builtin_ecu_late_live_edit_and_resealed_snapshot_never_overwrite_user_bytes_o
     assert_eq!(payload(&output), original);
     assert_eq!(fs::read(&application.disk_path).unwrap(), changed);
     fs::write(
-        output.join("src/Application.c"),
+        output.join("src/EchoApplication.c"),
         b"#error Altered_sealed_application_snapshot\n",
     )
     .unwrap();
@@ -491,9 +500,7 @@ fn builtin_handoff_rejects_forged_declared_extension_identity_without_publishing
 }
 
 fn edit_standard_configuration(root: &Path, edit: impl FnOnce(&str) -> String) -> Workspace {
-    let creation =
-        Workspace::preview_project_creation(root, "Qualified", "standard-ecu-v1").unwrap();
-    let workspace = Workspace::create_project_previewed(&creation).unwrap();
+    let workspace = standard_named(root, "Qualified");
     let runtime = autosar_config_core::integration::RuntimeCatalog::embedded().unwrap();
     workspace.saved_integration_plan(&runtime).unwrap();
     let path = root.join("ecuc.arxml");
@@ -711,9 +718,7 @@ fn builtin_ecu_generation_preserves_unrelated_retained_module_without_blocking_t
 fn reject_core_change_with_prior_output(edit: impl FnOnce(&str) -> String) {
     let scratch = Scratch::new();
     let root = scratch.0.join("Live");
-    let creation =
-        Workspace::preview_project_creation(&root, "CorePolicy", "standard-ecu-v1").unwrap();
-    let workspace = Workspace::create_project_previewed(&creation).unwrap();
+    let workspace = standard_named(&root, "CorePolicy");
     let runtime = autosar_config_core::integration::RuntimeCatalog::embedded().unwrap();
     let plan = workspace.saved_integration_plan(&runtime).unwrap();
     let output = scratch.0.join("output");
@@ -957,4 +962,146 @@ fn preflight_logs_keep_structured_envelopes_and_verbatim_external_evidence() {
         })
     );
     assert_eq!(serialized["logs"][1], evidence);
+}
+
+fn message_key(error: &autosar_config_core::LocalizedText) -> &str {
+    match error {
+        autosar_config_core::LocalizedText::Message(message) => &message.key,
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn retired_project_identities_are_refused_without_loading_or_rewriting() {
+    let scratch = Scratch::new();
+    let live = scratch.0.join("Live");
+    drop(standard_named(&live, "Retired"));
+    let manifest_path = live.join("workbench-project.json");
+    let current = fs::read(&manifest_path).unwrap();
+    let current_value: serde_json::Value = serde_json::from_slice(&current).unwrap();
+    assert_eq!(
+        current_value["profileHint"],
+        autosar_config_core::integration::MULTI_PROFILE
+    );
+    let slot = current_value["applicationInputs"][0]["producerSlot"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let instance = slot.split_once(':').unwrap().1.to_owned();
+    let mut cases = Vec::new();
+    for profile in ["epic4-win64-sr-cs-v1", "singlecore-multi-swc-v1"] {
+        let mut value = current_value.clone();
+        value["profileHint"] = profile.into();
+        cases.push((profile, value));
+    }
+    for (profile, retired_slot) in [
+        (
+            "epic4-win64-sr-cs-v1",
+            "epic4-single-application-v1".to_owned(),
+        ),
+        (
+            "singlecore-multi-swc-v1",
+            format!("singlecore-multi-swc-v1:{instance}"),
+        ),
+    ] {
+        let mut value = current_value.clone();
+        value["applicationInputs"][0]["producerSlot"] = retired_slot.into();
+        cases.push((profile, value));
+    }
+    for (profile, value) in cases {
+        let bytes = serde_json::to_vec_pretty(&value).unwrap();
+        fs::write(&manifest_path, &bytes).unwrap();
+        let error = Workspace::open_project_manifest(&manifest_path, &scratch.0.join("cache"))
+            .err()
+            .unwrap();
+        assert_eq!(message_key(&error), "backend.arxml.project.retired_profile");
+        let autosar_config_core::LocalizedText::Message(message) = &error else {
+            unreachable!()
+        };
+        assert_eq!(message.params["profile"], profile);
+        assert_eq!(fs::read(&manifest_path).unwrap(), bytes);
+    }
+    fs::write(&manifest_path, &current).unwrap();
+    Workspace::open_project_manifest(&manifest_path, &scratch.0.join("cache")).unwrap();
+}
+
+#[test]
+fn retired_delivery_profiles_are_refused_before_import() {
+    let scratch = Scratch::new();
+    let mut workspace = signals(&scratch.0.join("Live"));
+    let output = scratch.0.join("package");
+    prepare_host_project(&mut workspace, tooling::native_target(), true)
+        .unwrap()
+        .generate(&output)
+        .unwrap();
+    for path in ["handoff.json", "target.json", "workbench-ownership.json"] {
+        let mut value: serde_json::Value =
+            serde_json::from_slice(&fs::read(output.join(path)).unwrap()).unwrap();
+        let metadata = if path == "target.json" {
+            &mut value["nativeDelivery"]
+        } else {
+            &mut value
+        };
+        metadata["profileId"] = "singlecore-multi-swc-v1".into();
+        fs::write(
+            output.join(path),
+            serde_json::to_vec_pretty(&value).unwrap(),
+        )
+        .unwrap();
+    }
+    reseal(&output);
+    let before = payload(&output);
+    let receiver = scratch.0.join("Receiver");
+    let error = delivery::open_handoff(&output, &receiver, &DefinitionCatalog::builtin().unwrap())
+        .err()
+        .unwrap();
+    assert_eq!(message_key(&error), "backend.delivery.retired_profile");
+    assert!(!receiver.exists());
+    assert_eq!(payload(&output), before);
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn builtin_standard_template_generates_builds_and_passes_reference_verifier() {
+    use autosar_config_core::integration::{RuntimeCatalog, build_ecu_project, verify_ecu_project};
+    use autosar_config_core::prepared::prepare_ecu_project_for_workspace;
+    // The built-in template with its create-only seed is the reference echo
+    // application that the delivered ecu-tool verifier checks.
+    let scratch = Scratch::new();
+    let ecu = standard_with_application(&scratch.0.join("ECU"));
+    let plan = ecu
+        .saved_integration_plan(&RuntimeCatalog::embedded().unwrap())
+        .unwrap();
+    assert_eq!(
+        plan.description().profile,
+        autosar_config_core::integration::MULTI_PROFILE
+    );
+    let target = tooling::native_target();
+    let project = scratch.0.join("package");
+    prepare_ecu_project_for_workspace(&ecu, &plan, target, true)
+        .unwrap()
+        .generate(&project)
+        .unwrap();
+    let files = prepare_ecu_project_for_workspace(&ecu, &plan, target, true)
+        .unwrap()
+        .into_files();
+    let settings = tooling::execution_settings();
+    let owner = tooling::execution_owner();
+    let output = scratch.0.join("build");
+    fs::create_dir(&output).unwrap();
+    let built = build_ecu_project(&files, &project, &output, &settings, &owner)
+        .unwrap_or_else(|error| panic!("{error}"));
+    assert!(Path::new(&built.binary_path).is_file(), "{}", built.log);
+    let report = verify_ecu_project(&files, &project, &settings, &owner)
+        .unwrap_or_else(|error| panic!("{error}"));
+    assert!(report.passed, "{}", report.log);
+    let log = report.log.to_string();
+    for marker in [
+        "protocol=echo PASS",
+        "protocol=ncr-recovery PASS",
+        "protocol=malformed PASS",
+        "ECU_HANDOFF_VERIFY PASS",
+    ] {
+        assert!(log.contains(marker), "{marker}: {log}");
+    }
 }

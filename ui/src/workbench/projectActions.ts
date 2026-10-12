@@ -6,6 +6,7 @@ import type { IntegrationInspection, WorkspaceView } from '../types';
 import { rememberDialogOpener } from './Dialog';
 import type { Selection, Stage, StageState } from './forms';
 import {
+  applicationPeriodDraft,
   diagnosticChanges,
   diagnosticFields,
   draftFor,
@@ -505,9 +506,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
             ]),
           )
         : {},
-      integrationPeriod: current.integrationInspection?.description?.component
-        ? String(current.integrationInspection.description.component.periodMs)
-        : '',
+      integrationPeriod: applicationPeriodDraft(current.integrationInspection?.description),
     });
   }
 

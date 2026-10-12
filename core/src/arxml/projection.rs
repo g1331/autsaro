@@ -841,13 +841,9 @@ impl Workspace {
                 }
             }
         }
+        // Every built-in integration candidate plans on the mainline.
         snapshot.profile = if snapshot.integration_candidate {
-            let sources = self.integration_source_snapshot().unwrap_or_default();
-            if crate::integration::is_multi_source(&sources, &self.catalog) {
-                crate::integration::MULTI_PROFILE.into()
-            } else {
-                crate::integration::PROFILE.into()
-            }
+            crate::integration::MULTI_PROFILE.into()
         } else if !self.frames.is_empty()
             || self.files.iter().any(|file| self.is_managed_file(file))
         {

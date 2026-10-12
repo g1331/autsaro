@@ -75,7 +75,9 @@ export const shellResources: { 'zh-CN': Record<string, string>; en: Record<strin
     'shell.integration.sha': '原字节 SHA-256',
     'shell.integration.parameters': '受支持参数',
     'shell.integration.multiReadOnly':
-      '此组合包含多个组件。请在工程树和属性检查器编辑对象与引用，通过批次预览应用连接和调度修改；此处展示生成检查结果。',
+      '组合中的组件、连接和调度请在工程树与属性检查器中编辑，并通过批次预览应用；此处展示生成检查结果。',
+    'shell.integration.parametersUnavailable':
+      '当前计划没有可在此修改的应用周期；请在工程树与属性检查器中编辑。',
     'shell.integration.period': '应用 / Com 发送 / 对应 Alarm 周期（ms）',
     'shell.integration.apply': '应用并校验修改',
     'shell.integration.restore': '还原草稿',
@@ -416,7 +418,9 @@ export const shellResources: { 'zh-CN': Record<string, string>; en: Record<strin
     'shell.integration.sha': 'Original-byte SHA-256',
     'shell.integration.parameters': 'Supported parameters',
     'shell.integration.multiReadOnly':
-      'This composition contains multiple components. Edit objects and references in the project tree and inspector, and preview connection and schedule changes as a batch. This view shows generation inspection results.',
+      'Edit the components, connections and schedule of the composition in the project tree and inspector, and preview them as a batch. This view shows generation inspection results.',
+    'shell.integration.parametersUnavailable':
+      'The current plan has no application period that can be changed here; edit it in the project tree and inspector.',
     'shell.integration.period': 'Application / Com transmission / corresponding Alarm period (ms)',
     'shell.integration.apply': 'Apply and validate changes',
     'shell.integration.restore': 'Restore draft',

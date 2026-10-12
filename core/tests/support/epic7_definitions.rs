@@ -1,6 +1,6 @@
 use autosar_config_core::definitions::DefinitionCatalog;
 use autosar_config_core::project_model::{
-    RuleSetIdentity, TypedValue, ValidationStatus, ValueKind,
+    RuleSetIdentity, TypedValue, ValidationScope, ValidationStatus, ValueKind,
 };
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -1208,7 +1208,7 @@ fn standard_documents_accept_definition_valid_sc2_and_float_baud_without_target_
     let preview = autosar_config_core::Workspace::preview_project_creation(
         &temp.0.join("project"),
         "DefinitionPolicy",
-        "standard-ecu-v1",
+        "standard-ecu",
     )
     .unwrap();
     let catalog = DefinitionCatalog::builtin().unwrap();
@@ -1223,7 +1223,7 @@ fn standard_documents_accept_definition_valid_sc2_and_float_baud_without_target_
     let baseline = validate(&preview.files);
     assert_eq!(
         baseline.status,
-        ValidationStatus::Unsupported,
+        ValidationStatus::Passed,
         "{:?}",
         baseline.diagnostics
     );
@@ -1258,14 +1258,21 @@ fn standard_documents_accept_definition_valid_sc2_and_float_baud_without_target_
             .contents
             .replace_range(range, &format!("<VALUE>{lexeme}</VALUE>"));
         let changed = validate(&files);
-        assert!(
-            changed.diagnostics.is_empty(),
-            "{parameter}: {:?}",
-            changed.diagnostics
-        );
-        assert_eq!(changed.status, ValidationStatus::Unsupported);
-        assert!(changed.coverage.iter().any(|rule| rule.rule_id
-            == "native.definition.legacy-dcm-mode-dependency"
-            && !rule.supported));
+        // Definition-valid values raise no definition diagnostic; only the
+        // fixed target policy (SC1) reports, in its own scope.
+        let codes: Vec<_> = changed
+            .diagnostics
+            .iter()
+            .map(|diagnostic| (diagnostic.scope.clone(), diagnostic.code.as_str()))
+            .collect();
+        let expected: &[_] = if parameter == "OsScalabilityClass" {
+            &[(
+                ValidationScope::TargetGeneration,
+                "TARGET_PARAMETER_UNSUPPORTED",
+            )]
+        } else {
+            &[]
+        };
+        assert_eq!(codes, expected, "{parameter}: {:?}", changed.diagnostics);
     }
 }

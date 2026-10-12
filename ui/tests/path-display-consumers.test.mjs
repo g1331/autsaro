@@ -753,7 +753,7 @@ test.each(['zh-CN', 'en'])(
     const clipboard = captureClipboard();
     const names = ['Ingress', 'ProcessWithALongComponentNameForReview', 'Observe'];
     const slots = names.map((name) => ({
-      producerSlot: `singlecore-multi-swc-v1:/Application/Pipeline/${name}Instance`,
+      producerSlot: `singlecore-ecu-v1:/Application/Pipeline/${name}Instance`,
       componentPath: `/Application/${name}`,
       sourcePaths: [`application/${name}.c`],
       generatedHeaders: [`include/Rte_${name}.h`, 'include/Rte.h'],

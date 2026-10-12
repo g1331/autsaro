@@ -1,6 +1,14 @@
 import type { Text } from '../i18n';
 import { composedMessage, isMessage, message, ProductError } from '../i18n';
-import type { DiagnosticView, DtcView, Frame, Issue, Signal, WorkspaceView } from '../types';
+import type {
+  DiagnosticView,
+  DtcView,
+  Frame,
+  IntegrationInspection,
+  Issue,
+  Signal,
+  WorkspaceView,
+} from '../types';
 
 export type Stage = 'save' | 'validate' | 'generate' | 'build' | 'virtual';
 
@@ -65,7 +73,6 @@ export type DiagnosticChanges = Pick<
 export type DtcFields = { code: string; monitorFramePath: string };
 
 export type Notice = { tone: 'error' | 'info'; text: Text } | null;
-
 
 export const frameFields = (frame: Frame): FrameFields => ({
   name: frame.name,
@@ -225,6 +232,21 @@ export function diagnosticChanges(
     resetRoutineId,
     securityEnabled: fields.securityEnabled,
   };
+}
+
+/** Period shared by the application timing events; null when no event is planned. */
+export function applicationPeriodMs(
+  description: IntegrationInspection['description'] | undefined,
+): number | null {
+  return description?.schedule?.entities.find((entity) => entity.application)?.periodMs ?? null;
+}
+
+/** Draft text of the quick-edit period field. */
+export function applicationPeriodDraft(
+  description: IntegrationInspection['description'] | undefined,
+): string {
+  const period = applicationPeriodMs(description);
+  return period === null ? '' : String(period);
 }
 
 export function labelFromPath(path: string): string {

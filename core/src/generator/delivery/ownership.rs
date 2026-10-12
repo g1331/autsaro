@@ -286,11 +286,17 @@ pub(crate) fn metadata_from_target(
 }
 
 pub(crate) fn validate_metadata(metadata: &HandoffMetadata) -> Result<(), crate::LocalizedText> {
+    if crate::integration::RETIRED_PROFILES.contains(&metadata.profile_id.as_str()) {
+        return Err(crate::product_message!(
+            "backend.delivery.retired_profile",
+            "profile" => metadata.profile_id.as_str()
+        ));
+    }
     if metadata.format != FORMAT
         || metadata.producer_version != env!("CARGO_PKG_VERSION")
         || !matches!(
             metadata.profile_id.as_str(),
-            HOST_PROFILE | crate::integration::PROFILE | crate::integration::MULTI_PROFILE
+            HOST_PROFILE | crate::integration::MULTI_PROFILE
         )
         || metadata.project_path != PROJECT_PATH
         || metadata.ownership_path != OWNERSHIP_PATH

@@ -157,7 +157,7 @@ test.each(['zh-CN', 'en'])(
       instance: `/Application/Pipeline/${name}Instance`,
     }));
     const inspection = {
-      profile: 'singlecore-multi-swc-v1',
+      profile: 'singlecore-ecu-v1',
       diagnostics: [],
       description: {
         sources: [
@@ -193,8 +193,62 @@ test.each(['zh-CN', 'en'])(
       false,
     );
     expect(localize(current().integrationNotice)).toBe(
-      translate('shell.integration.multiReadOnly'),
+      translate('shell.integration.parametersUnavailable'),
     );
+  },
+);
+
+test.each(['zh-CN', 'en'])(
+  '%s mainline inspection offers CAN IDs and the shared application period',
+  async (language) => {
+    previewLanguage(language);
+    const inspection = {
+      profile: 'singlecore-ecu-v1',
+      diagnostics: [],
+      description: {
+        sources: [
+          { logicalPath: 'application.arxml', rawSha256: 'a'.repeat(64), roles: ['application'] },
+        ],
+        multi: {
+          components: [
+            {
+              component: '/Application/EchoApplication',
+              instance: '/Application/ReferenceComposition/EchoApplicationInstance',
+            },
+          ],
+        },
+        schedule: {
+          entities: [
+            { application: false, periodMs: 1 },
+            { application: true, periodMs: 10 },
+          ],
+        },
+        signals: [
+          { port: '/Application/EchoApplication/Received', canId: 0x320, receive: true, dlc: 4 },
+          { port: '/Application/EchoApplication/Sent', canId: 0x321, receive: false, dlc: 4 },
+        ],
+      },
+    };
+    const { view, current } = await openConsumer(undefined, baseProjection, inspection);
+    expect(current().integrationPeriod).toBe('10');
+    const period = view.getByLabelText(translate('shell.integration.periodA11y'));
+    expect(period.value).toBe('10');
+    fireEvent.change(period, { target: { value: '20' } });
+    expect(current().integrationUnapplied).toBe(true);
+    await act(async () => current().applyIntegration());
+    await waitFor(() =>
+      expect(native.invoke.mock.calls.some(([command]) => command === 'edit_integration')).toBe(
+        true,
+      ),
+    );
+    const [, args] = native.invoke.mock.calls.find(([command]) => command === 'edit_integration');
+    expect(args.changes).toEqual({
+      canIds: {
+        '/Application/EchoApplication/Received': 0x320,
+        '/Application/EchoApplication/Sent': 0x321,
+      },
+      applicationPeriodMs: 20,
+    });
   },
 );
 
@@ -344,7 +398,7 @@ test('Problems renders serialized cardinality child names, bounds and actual cou
 
 test('real application controller transfers complete multi preview and revision unchanged to IPC', async () => {
   const slots = ['Ingress', 'Process', 'Observe'].map((name) => ({
-    producerSlot: `singlecore-multi-swc-v1:/Application/Pipeline/${name}Instance`,
+    producerSlot: `singlecore-ecu-v1:/Application/Pipeline/${name}Instance`,
     componentPath: `/Application/${name}`,
     sourcePaths: [`application/${name}.c`],
     generatedHeaders: [`include/Rte_${name}.h`, 'include/Rte.h', 'include/Rte_Type.h'],

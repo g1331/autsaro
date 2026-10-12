@@ -114,7 +114,10 @@ impl Workspace {
     }
 
     pub fn inspect_integration(&self, runtime: &RuntimeCatalog) -> IntegrationInspection {
-        inspection(self.integration_plan(runtime))
+        inspection(
+            self.integration_plan(runtime),
+            crate::integration::MULTI_PROFILE,
+        )
     }
 
     pub fn inspect_integration_legacy(
@@ -122,7 +125,10 @@ impl Workspace {
         runtime: &RuntimeCatalog,
         mod_archive: PathBuf,
     ) -> IntegrationInspection {
-        inspection(self.integration_plan_legacy(runtime, mod_archive))
+        inspection(
+            self.integration_plan_legacy(runtime, mod_archive),
+            crate::integration::PROFILE,
+        )
     }
 
     pub fn edit_integration(
@@ -207,7 +213,8 @@ impl Workspace {
             }
         };
         candidate.revision += 1;
-        let result = inspection(Ok(checked));
+        let profile = checked.description().profile.clone();
+        let result = inspection(Ok(checked), &profile);
         *self = candidate;
         Ok(result)
     }
@@ -265,8 +272,10 @@ impl Workspace {
     }
 }
 
+/// `failed_profile` names the chain that refused when no plan exists.
 fn inspection(
     result: Result<ValidatedIntegrationPlan, Vec<PlanDiagnostic>>,
+    failed_profile: &str,
 ) -> IntegrationInspection {
     match result {
         Ok(plan) => IntegrationInspection {
@@ -275,7 +284,7 @@ fn inspection(
             diagnostics: Vec::new(),
         },
         Err(diagnostics) => IntegrationInspection {
-            profile: crate::integration::PROFILE.into(),
+            profile: failed_profile.into(),
             description: None,
             diagnostics,
         },

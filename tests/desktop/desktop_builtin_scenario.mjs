@@ -27,6 +27,10 @@ const explicit = (kind, lexeme) => ({
 });
 const existing = (objectId) => ({ kind: 'existing', objectId });
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
+// Independent identities of the built-in standard ECU template on the mainline.
+const SLOT = 'singlecore-ecu-v1:/Application/ReferenceComposition/EchoApplicationInstance';
+const applicationPeriod = (description) =>
+  description.schedule.entities.find((entity) => entity.application).periodMs;
 
 export async function runBuiltinScenario({
   evaluate,
@@ -776,7 +780,7 @@ export async function runBuiltinScenario({
       await openMember(multi.manifest);
       await checked('multi-component-shared-editing-and-source-protection', async () => {
         let view = await projection();
-        assert.equal(view.profile, 'singlecore-multi-swc-v1');
+        assert.equal(view.profile, 'singlecore-ecu-v1');
         assert.equal(view.diagnostics.filter((issue) => issue.severity === 'error').length, 0);
         const original = await sourceBytes(view);
         const periodic = view.objects.find(
@@ -1287,7 +1291,7 @@ export async function runBuiltinScenario({
       };
     });
     await refreshSurface(canB.manifest);
-    const standard = await create('GatewayReference', 'standard-ecu-v1');
+    const standard = await create('GatewayReference', 'standard-ecu');
     await checked('seven-source-standard-variant', async () => {
       const view = await projection();
       assert.equal(view.sources.length, 7);
@@ -1318,13 +1322,13 @@ export async function runBuiltinScenario({
         'standard reopen operation completed',
       );
       const actual = await invoke('inspect_integration');
-      assert.equal(actual.description.component.periodMs, 20);
+      assert.equal(applicationPeriod(actual.description), 20);
       assert.deepEqual(
         actual.description.signals.map((signal) => signal.canId),
         [1104, 1105],
       );
       for (const source of savedBytes.filter((source) =>
-        ['types.arxml', 'services.arxml', 'unrelated.arxml'].includes(path.basename(source.path)),
+        ['types.arxml', 'services.arxml', 'composition.arxml'].includes(path.basename(source.path)),
       ))
         assert.deepEqual(await readFile(source.path), source.bytes);
       await sourceSurface(await projection());
@@ -1338,7 +1342,7 @@ export async function runBuiltinScenario({
         inputCount: 7,
         independentPeriod: 20,
         independentCanIds: [1104, 1105],
-        unchanged: ['types.arxml', 'services.arxml', 'unrelated.arxml'],
+        unchanged: ['types.arxml', 'services.arxml', 'composition.arxml'],
         sourceFallback:
           'two distinct sources, closed active B restores A header, rendered bytes, and full native clipboard',
       };
@@ -1477,7 +1481,7 @@ export async function runBuiltinScenario({
         'V2 import rejects identities from the previous live project',
       );
       const plan = await invoke('inspect_integration');
-      assert.equal(plan.description.component.periodMs, 20);
+      assert.equal(applicationPeriod(plan.description), 20);
       assert.deepEqual(
         plan.description.signals.map((signal) => signal.canId),
         [1104, 1105],
@@ -1580,7 +1584,7 @@ export async function runBuiltinScenario({
       const originalSources = await sourceBytes(before);
       const preview = await invoke('preview_application_initialization');
       assert.equal(preview.slots.length, 1);
-      assert.equal(preview.slots[0].producerSlot, 'epic4-single-application-v1');
+      assert.equal(preview.slots[0].producerSlot, SLOT);
       assert.equal(preview.files.length, 1);
       assert.deepEqual(
         preview.slots[0].sourcePaths,
@@ -1618,7 +1622,7 @@ export async function runBuiltinScenario({
       const initializationCommand = '预览初始化用户应用…';
       await menu(initializationCommand);
       await until(
-        `Boolean([...document.querySelectorAll('[role=dialog]')].find(node=>node.textContent.includes('epic4-single-application-v1')))`,
+        `Boolean([...document.querySelectorAll('[role=dialog]')].find(node=>node.textContent.includes(${json(SLOT)})))`,
         'real reviewed application initialization',
       );
       assert.deepEqual(await readFile(manifestPath), manifestBytes);
@@ -1645,21 +1649,21 @@ export async function runBuiltinScenario({
       // Real user behavior: bound the committed/transmitted uint32 value to its
       // lower 31 bits, retaining all declared entry symbols and generated ABI.
       const seed = preview.files[0].contents;
-      const writeLine = /^    application\.write_status = [A-Za-z_]\w*\(value\);$/m;
+      const writeLine = /^        committed = value;$/m;
       assert.equal([...seed.matchAll(new RegExp(writeLine.source, 'gm'))].length, 1);
-      const userCode = seed.replace(writeLine, '    value &= UINT32_C(2147483647);\n$&');
+      const userCode = seed.replace(writeLine, '        value &= 0x7FFFFFFFu;\n$&');
       await writeFile(live, userCode);
       await refreshSurface(manifestPath);
       const delivered = await exportSource('GatewayUserApplication-source', true);
       assert.deepEqual(
-        await readFile(path.join(delivered.directory, 'src/Application.c')),
+        await readFile(path.join(delivered.directory, 'src/EchoApplication.c')),
         Buffer.from(userCode),
         'Compiled user snapshot must contain the actual live bytes',
       );
       const ledger = JSON.parse(
         await readFile(path.join(delivered.directory, 'workbench-ownership.json'), 'utf8'),
       );
-      const owner = ledger.files.find((entry) => entry.path === 'src/Application.c');
+      const owner = ledger.files.find((entry) => entry.path === 'src/EchoApplication.c');
       assert.equal(owner.owner, 'user-application');
       assert.equal(owner.producerId, preview.slots[0].producerSlot);
       assert.equal(owner.snapshotOf, preview.files[0].path);

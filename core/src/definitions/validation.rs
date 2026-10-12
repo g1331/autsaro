@@ -257,12 +257,10 @@ pub(super) fn documents(
         coverage: Vec::new(),
         diagnostics: Vec::new(),
     };
-    let legacy_mode_dependency = catalog.legacy_mode_dependency_compatibility(
-        documents
-            .iter()
-            .zip(files)
-            .map(|(document, (file, _))| (file.to_str().unwrap_or("<non-UTF8-source>"), document)),
-    );
+    // Only the recognized host-can profile retains its missing mode dependency
+    // until that profile is removed; every built-in project stays strict.
+    let legacy_mode_dependency =
+        crate::arxml::historical_host_mode_dependency(&documents.iter().collect::<Vec<_>>());
     let mut objects = BTreeMap::new();
     for (document, (file, _)) in documents.iter().zip(files) {
         for node in document
@@ -842,7 +840,7 @@ pub(super) fn documents(
         }
     }
     cross_constraints(&documents, files, &objects, &mut result);
-    legacy_constraints(catalog, &documents, files, &objects, &mut result)?;
+    mainline_constraints(catalog, &documents, files, &objects, &mut result)?;
     result
         .coverage
         .sort_by(|a, b| (&a.rule_id, &a.subjects).cmp(&(&b.rule_id, &b.subjects)));
@@ -976,19 +974,13 @@ fn cross_constraints<'a, 'input>(
     }
 }
 
-fn legacy_constraints(
+fn mainline_constraints(
     catalog: &DefinitionCatalog,
     documents: &[Document<'_>],
     files: &[(&Path, &str)],
     objects: &BTreeMap<String, Node<'_, '_>>,
     result: &mut ScopeValidation,
 ) -> Result<(), crate::message::LocalizedText> {
-    let modules: BTreeSet<_> = documents
-        .iter()
-        .flat_map(|document| document.descendants())
-        .filter(|node| node.tag_name().name() == "ECUC-MODULE-CONFIGURATION-VALUES")
-        .filter_map(|node| text(node, "DEFINITION-REF"))
-        .collect();
     let standard = documents.iter().any(|document| {
         document.descendants().any(|node| {
             node.tag_name().name() == "SYSTEM"
@@ -1004,35 +996,12 @@ fn legacy_constraints(
     if !standard {
         return Ok(());
     }
-    let Some((graph_valid, multi, issues)) = catalog.legacy_definition_constraints(
+    let (supported, issues) = catalog.mainline_definition_constraints(
         documents
             .iter()
             .zip(files)
             .map(|(document, (file, _))| (file.to_str().unwrap_or("<non-UTF8-source>"), document)),
-    ) else {
-        return Ok(());
-    };
-    if !multi && !required.iter().all(|id| modules.contains(id.as_str())) {
-        return Ok(());
-    }
-    let registered = |code: &str| {
-        matches!(
-            code,
-            "CONTROLLER_MAPPING"
-                | "BAUDRATE_CONFLICT"
-                | "PERIOD_ALARM_CONFLICT"
-                | "PERIOD_SCHEDULE_TABLE_CONFLICT"
-                | "PARAMETER_NOT_UNIQUE"
-                | "INSTANCE_MAPPING"
-                | "DIRECTION_CONFLICT"
-                | "TIMEOUT_CONFLICT"
-                | "DIAGNOSTIC_TIMING"
-                | "DIAGNOSTIC_REFERENCE"
-                | "OFFSET_UNSUPPORTED"
-                | "MINIMUM_START_INTERVAL_UNSUPPORTED"
-        )
-    };
-    let supported = graph_valid;
+    );
     result.coverage.push(RuleCoverage {
         rule_id: "native.definition.legacy-cross-module".into(),
         scope: ValidationScope::Definition,
@@ -1054,10 +1023,7 @@ fn legacy_constraints(
     } else {
         Vec::new()
     };
-    for issue in issues
-        .into_iter()
-        .filter(|issue| multi || registered(&issue.code))
-    {
+    for issue in issues {
         let values: Vec<_> = issue
             .object
             .as_ref()
@@ -1095,10 +1061,8 @@ fn legacy_constraints(
             issue.code.as_str().into(),
             counterexample.into(),
         );
-        if multi {
-            diagnostic.scope = ValidationScope::TargetGeneration;
-            diagnostic.rule_id = format!("native.target-generation.{}", diagnostic.code);
-        }
+        diagnostic.scope = ValidationScope::TargetGeneration;
+        diagnostic.rule_id = format!("native.target-generation.{}", diagnostic.code);
         if let Some(witness) = &mut diagnostic.witness {
             witness.subjects = subjects;
             witness.rule_id = diagnostic.rule_id.clone();

@@ -53,9 +53,6 @@ pub(crate) fn fields(
     changes: &IntegrationEdit,
 ) -> Result<Vec<FieldEdit>, Vec<PlanDiagnostic>> {
     let description = plan.description();
-    let component = description
-        .legacy_component()
-        .map_err(|message| issue(plan, "EDIT_UNSUPPORTED", "/", message))?;
     let mut edits: BTreeMap<(String, String, bool), String> = BTreeMap::new();
     for (port, id) in &changes.can_ids {
         let channel = description
@@ -100,46 +97,71 @@ pub(crate) fn fields(
         );
     }
     if let Some(period) = changes.application_period_ms {
+        // Every application timing event shares one OS trigger and period on
+        // both the mainline and the historical chain.
+        let application = description
+            .schedule
+            .entities
+            .iter()
+            .find(|entity| entity.application)
+            .ok_or_else(|| {
+                issue(
+                    plan,
+                    "EDIT_UNSUPPORTED",
+                    "/",
+                    crate::product_message!(
+                        "backend.integration.editor.application_period_invalid"
+                    ),
+                )
+            })?;
         if period == 0 || period > description.schedule.counter_maximum {
             return Err(issue(
                 plan,
                 "EDIT_RANGE",
-                &component.timing_event,
+                &application.event,
                 crate::product_message!("backend.integration.editor.application_period_invalid"),
             ));
         }
-        if period != component.period_ms {
+        if period != application.period_ms {
             let seconds = format!("{}.{:03}", period / 1000, period % 1000);
-            let application = description
-                .schedule
-                .entities
-                .iter()
-                .find(|entity| entity.application)
-                .unwrap();
-            for entity in description
+            let shared: Vec<_> = description
                 .schedule
                 .entities
                 .iter()
                 .filter(|entity| entity.trigger() == application.trigger())
-            {
+                .collect();
+            for entity in &shared {
                 edits.insert(
                     (entity.event.clone(), "PERIOD".into(), false),
                     seconds.clone(),
                 );
             }
-            let tx = description
-                .signals
-                .iter()
-                .find(|channel| !channel.receive)
-                .unwrap();
-            let modes: Vec<_> = description
-                .configuration
-                .iter()
-                .filter(|record| {
-                    record.path.starts_with(&format!("{}/", tx.com_pdu))
-                        && record.definition.ends_with("/ComTxMode")
-                })
-                .collect();
+            // Transmit PDU periods follow the trigger that sends them. The
+            // historical chain sends from the application; the mainline sends
+            // from the Com Tx main function, so it only moves with the
+            // application when both share this trigger. Any other BSW main
+            // function on the trigger keeps its own timing and refuses.
+            let transmit_main = description
+                .com_runtime
+                .as_ref()
+                .map(|com| &com.transmit_main)
+                .filter(|main| shared.iter().any(|entity| entity.symbol == main.symbol));
+            let transmit_follows = description.multi.is_none() || transmit_main.is_some();
+            let modes: Vec<_> = if transmit_follows {
+                description
+                    .signals
+                    .iter()
+                    .filter(|channel| !channel.receive)
+                    .flat_map(|tx| {
+                        description.configuration.iter().filter(move |record| {
+                            record.path.starts_with(&format!("{}/", tx.com_pdu))
+                                && record.definition.ends_with("/ComTxMode")
+                        })
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
             let autostart: Vec<_> = description
                 .configuration
                 .iter()
@@ -159,7 +181,20 @@ pub(crate) fn fields(
                         })
                 })
                 .collect();
-            if modes.len() != 1 || autostart.len() != 1 {
+            let foreign = description.multi.is_some()
+                && shared.iter().any(|entity| {
+                    !entity.application
+                        && transmit_main.is_none_or(|main| entity.symbol != main.symbol)
+                });
+            let transmitters = description
+                .signals
+                .iter()
+                .filter(|channel| !channel.receive)
+                .count();
+            if foreign
+                || (transmit_follows && (transmitters == 0 || modes.len() != transmitters))
+                || autostart.len() != 1
+            {
                 return Err(issue(
                     plan,
                     "EDIT_UNSAFE",
@@ -169,10 +204,18 @@ pub(crate) fn fields(
                     ),
                 ));
             }
-            edits.insert(
-                (modes[0].path.clone(), "ComTxModeTimePeriod".into(), true),
-                seconds,
-            );
+            for mode in modes {
+                edits.insert(
+                    (mode.path.clone(), "ComTxModeTimePeriod".into(), true),
+                    seconds.clone(),
+                );
+            }
+            if let Some(main) = transmit_main {
+                edits.insert(
+                    (main.path.clone(), "ComMainTxTimeBase".into(), true),
+                    seconds.clone(),
+                );
+            }
             if let Some(table) = &application.schedule_table {
                 let offset = application.expiry_offset.unwrap();
                 if period <= offset {

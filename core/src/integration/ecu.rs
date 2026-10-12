@@ -96,6 +96,9 @@ impl ValidatedIntegrationPlan {
                 self.render_reference_application()?,
             )]);
         };
+        // The reference shape gets the echo application the independent
+        // verifier checks; any other shape gets neutral entry points.
+        let reference = super::handoff::reference_shape(self);
         let mut files = Vec::new();
         for slot in self.application_slot_descriptors()? {
             let component = multi
@@ -105,9 +108,21 @@ impl ValidatedIntegrationPlan {
                 .unwrap();
             let scope = c_name(component.component.rsplit('/').next().unwrap());
             let mut source = format!(
-                "/** @file User-owned application entry points. */\n#include \"{}\"\n#define RTE_{scope}_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n",
+                "/** @file User-owned application entry points. */\n#include \"{}\"\n",
                 component.header.trim_start_matches("include/")
             );
+            if reference.is_some() {
+                writeln!(
+                    source,
+                    "#define RTE_{scope}_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n/* Last value committed from the receive port; the DID reports it. */\nstatic uint32 committed RTE_{scope}_VAR_CLEARED_UNSPECIFIED;\n#define RTE_{scope}_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\""
+                )
+                .unwrap();
+            }
+            writeln!(
+                source,
+                "#define RTE_{scope}_START_SEC_CODE\n#include \"Rte_MemMap.h\""
+            )
+            .unwrap();
             for symbol in self
                 .description()
                 .symbols
@@ -132,6 +147,37 @@ impl ValidatedIntegrationPlan {
                     }
                 )
                 .unwrap();
+                if let Some(shape) = reference
+                    .as_ref()
+                    .filter(|shape| shape.periodic_symbol == symbol.symbol)
+                {
+                    // RTE_E_MAX_AGE_EXCEEDED still delivers the last received
+                    // value (SWS_Rte_02703); RTE_E_NEVER_RECEIVED does not.
+                    writeln!(
+                        source,
+                        "    uint32 value = committed;\n    const Std_ReturnType status = {}(&value);\n    if ((status == RTE_E_OK) || (status == RTE_E_MAX_AGE_EXCEEDED)) {{\n        committed = value;\n        (void){}(value);\n    }}\n}}",
+                        shape.read.api_symbol, shape.write.api_symbol
+                    )
+                    .unwrap();
+                    continue;
+                }
+                if let (Some(_), [argument]) = (&reference, symbol.arguments.as_slice())
+                    && argument.direction == "OUT"
+                    && argument.native_type != "uint32 *"
+                {
+                    // The application DID reports the committed value big-endian.
+                    for (index, shift) in ["24u", "16u", "8u", ""].iter().enumerate() {
+                        let value = if shift.is_empty() {
+                            "committed".to_owned()
+                        } else {
+                            format!("(committed >> {shift})")
+                        };
+                        writeln!(source, "    {}[{index}] = (uint8){value};", argument.name)
+                            .unwrap();
+                    }
+                    source.push_str("}\n");
+                    continue;
+                }
                 for argument in &symbol.arguments {
                     if argument.direction != "OUT" {
                         writeln!(source, "    (void){};", argument.name).unwrap();

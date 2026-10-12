@@ -137,15 +137,16 @@ flowchart LR
 
 ### 4.4 当前支持剖面与边界
 
-当前已交付三族生成链路：
+当前已交付两族生成链路：
 
 | 链路 | 选择条件 | 说明 |
 | --- | --- | --- |
 | 帧／信号 host（`host-can-v1`） | 模板 `can-empty-v1`、`can-signals-v1` | 轮询 `Os_Advance`、固定 `Rte_Read/WriteSignal`；“主机运行”页只服务此链路 |
-| 单组件 ECU（`epic4-win64-sr-cs-v1`） | 工程只有一种 `APPLICATION-SW-COMPONENT-TYPE`（含默认模板 `standard-ecu-v1`） | 单实例显式 S/R＋同步 C/S DID |
-| 多组件 ECU（`singlecore-multi-swc-v1`） | 多于一种应用 SWC 类型 | 本地 S/R、同步 C/S、同 owner 调度、每组件 live／sealed 源、标准 COM／CanIf／LSduR／PduR／CanTp／Dcm 与有界 ComM／BswM／Det |
+| ECU 主线（`singlecore-ecu-v1`） | 内置规则校验的全部 ECU 工程，含默认模板 `standard-ecu`；一个应用 SWC 是 N＝1 的特例 | 本地 S/R、同步 C/S、同 owner 调度、每组件 live／sealed 源、标准 COM／CanIf／LSduR／PduR／CanTp／Dcm 与有界 ComM／BswM／Det |
 
-多组件剖面的首批支持范围（平坦组合、每类型一个实例、共同周期且 offset=0、`IMMEDIATE` 信号处理、唯一 EcucPartition ID0／CoreId0、11 位 Classical CAN 单通道、诊断路由全选或全不选）与拒绝边界见 [standards.md](standards.md#6-多组件剖面的已核定义务)。未支持的生成语义在生成前拒绝，无关有效内容原样保留。
+旧单组件链路（`epic4-win64-sr-cs-v1`）只在外部 XSD／MOD 校验模式下仍可打开历史输入，随该模式删除（见第 7.3 节）；以它或主线旧名 `singlecore-multi-swc-v1` 记录的工作台工程与交付包在打开时拒绝。
+
+主线剖面的首批支持范围（平坦组合、每类型一个实例、共同周期且 offset=0、`IMMEDIATE` 信号处理、唯一 EcucPartition ID0／CoreId0、11 位 Classical CAN 单通道、诊断路由全选或全不选）与拒绝边界见 [standards.md](standards.md#6-多组件剖面的已核定义务)。未支持的生成语义在生成前拒绝，无关有效内容原样保留。
 
 **网络管理边界：**多组件剖面选定 NM NONE，经 host CDD BusSM（`COMM_BUS_TYPE_CDD`／`Ecu_HostBusSM`）连接真实 Can／CanIf 模式；当前没有完整 Nm、CanNm、CanSM，有界 mode 路径不能替代 NM PDU、睡眠状态机或 CanSM 协调。未来选择 `COMM_BUS_TYPE_CAN` 时须实现真正 CanSM。
 
@@ -169,7 +170,7 @@ flowchart LR
 
 封存工程包含生成源码、受信 runtime 资产、固定内核与补丁、应用快照、所有权台账、`target.json` 构建清单、`files.list`／`files.sha256` 和 stdlib-only 离线工具。接收者只需受支持的 CPython、匹配的 GCC／binutils 与 Git，不依赖 checkout、Rust、Node 或 uv；包内工具以 `-I -S` 运行，只从自身 `tools/` 导入。入口 `tools/ecu-tool.py build|verify` 的用法见 [runtime/README.md](../runtime/README.md)。
 
-当前交接格式为 `autosar-workbench-handoff-v2`（内置规则、多应用输入），另有旧 `autosar-host-handoff-v1`／`autosar-ecu-handoff-v1` 精确重导入路径（依赖使用者提供的 XSD／MOD）。旧格式在主线收敛中删除，见第 7 节。
+当前交接格式为 `autosar-workbench-handoff-v2`（内置规则、多应用输入），另有旧 `autosar-host-handoff-v1` 精确重导入路径（依赖使用者提供的 XSD／MOD）。工作台不再导入 `autosar-ecu-handoff-v1`；其余旧格式在主线收敛中删除，见第 7 节。
 
 ## 7. 主线收敛与新基线（目标，实施中）
 
