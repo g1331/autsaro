@@ -18,6 +18,8 @@ from autosar_tooling.config import ROOT
 from ecu_tools.owner import Owner, OwnershipError
 from ecu_tools.process import CompletionPolicy, OwnedProcess, ProcessSpec, run_bounded
 
+PROBE = str(Path(__file__).with_name("probe.py"))
+
 
 def _records(path: Path, count: int) -> list[tuple[str, int, int]]:
     end = time.monotonic() + 5
@@ -161,9 +163,7 @@ class BoundedProcessTests(unittest.TestCase):
         spec = ProcessSpec.seconds(
             [
                 sys.executable,
-                "-m",
-                "autosar_tooling",
-                "probe",
+                PROBE,
                 "descendant",
                 "--pid-file",
                 str(pid_file),
@@ -560,9 +560,7 @@ class BoundedProcessTests(unittest.TestCase):
             guardian = subprocess.Popen(
                 [
                     sys.executable,
-                    "-m",
-                    "autosar_tooling",
-                    "probe",
+                    PROBE,
                     "descendant",
                     "--pid-file",
                     str(pid_file),

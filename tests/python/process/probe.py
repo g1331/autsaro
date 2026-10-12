@@ -1,7 +1,12 @@
-"""Named real-process probes used by owner tests and consumer diagnostics."""
+"""Named real-process probes used by owner tests and consumer diagnostics.
+
+Run as ``python tests/python/process/probe.py descendant --pid-file P --kind K``
+or ``... probe.py stdin --kind K``; ``ecu_tools`` must be importable.
+"""
 
 from __future__ import annotations
 
+import argparse
 import os
 import subprocess
 import sys
@@ -9,6 +14,8 @@ import time
 from pathlib import Path
 
 from ecu_tools.process import ProcessSpec, run_bounded
+
+PROBE = str(Path(__file__).resolve())
 
 
 def _record(path: Path, role: str) -> None:
@@ -31,11 +38,7 @@ def _spawn(path: Path, kind: str, *, detached: bool = False) -> subprocess.Popen
         options["start_new_session"] = True
     return subprocess.Popen(
         [
-            sys.executable,
-            "-m",
-            "autosar_tooling",
-            "probe",
-            "descendant",
+            sys.executable, PROBE, "descendant",
             "--pid-file",
             str(path),
             "--kind",
@@ -82,11 +85,7 @@ def descendant(pid_file: Path, kind: str) -> int:
 
         spec = ProcessSpec.seconds(
             [
-                sys.executable,
-                "-m",
-                "autosar_tooling",
-                "probe",
-                "descendant",
+                sys.executable, PROBE, "descendant",
                 "--pid-file",
                 str(pid_file),
                 "--kind",
@@ -112,7 +111,7 @@ def descendant(pid_file: Path, kind: str) -> int:
 
         spec = ProcessSpec.seconds(
             [
-                sys.executable, "-m", "autosar_tooling", "probe", "descendant",
+                sys.executable, PROBE, "descendant",
                 "--pid-file", str(pid_file), "--kind", "hang",
             ],
             Path.cwd(), 10, pid_file.parent, "unfinished-nested-probe",
@@ -123,11 +122,7 @@ def descendant(pid_file: Path, kind: str) -> int:
     if kind == "nested":
         spec = ProcessSpec.seconds(
             [
-                sys.executable,
-                "-m",
-                "autosar_tooling",
-                "probe",
-                "descendant",
+                sys.executable, PROBE, "descendant",
                 "--pid-file",
                 str(pid_file),
                 "--kind",
@@ -175,3 +170,21 @@ def stdin(kind: str) -> int:
         print(digest.hexdigest(), flush=True)
         return 0
     raise ValueError(f"Unknown stdin probe kind: {kind}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    kinds = parser.add_subparsers(dest="probe", required=True)
+    child = kinds.add_parser("descendant")
+    child.add_argument("--pid-file", type=Path, required=True)
+    child.add_argument("--kind", required=True)
+    interactive = kinds.add_parser("stdin")
+    interactive.add_argument("--kind", choices=("hash", "hang"), required=True)
+    args = parser.parse_args()
+    if args.probe == "stdin":
+        return stdin(args.kind)
+    return descendant(args.pid_file, args.kind)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -87,32 +87,6 @@ def main() -> int:
     oracles.add_argument(
         "--ecuc", type=Path, help="ECUC file the oracle settings must match"
     )
-    probe = commands.add_parser("probe", help="Run a named real-process probe")
-    probe_kind = probe.add_subparsers(dest="probe", required=True)
-    descendant = probe_kind.add_parser("descendant")
-    descendant.add_argument("--pid-file", type=Path, required=True)
-    descendant.add_argument(
-        "--kind",
-        choices=(
-            "normal",
-            "hang",
-            "parent-first",
-            "parent-first-fail",
-            "fail",
-            "escape",
-            "nested",
-            "nested-parent-first",
-            "child",
-            "normal-child",
-            "leaf",
-            "normal-leaf",
-            "escape-child",
-            "guardian",
-        ),
-        required=True,
-    )
-    interactive = probe_kind.add_parser("stdin")
-    interactive.add_argument("--kind", choices=("hash", "hang"), required=True)
     asset = commands.add_parser("assets", help="Check or update project-owned resource digests")
     asset.add_argument("action", choices=("check", "update"))
     args = parser.parse_args()
@@ -164,10 +138,4 @@ def main() -> int:
 
         check_protocol(args.ecuc)
         return 0
-    if args.command == "probe":
-        from autosar_tooling.acceptance import probe as process_probe
-
-        if args.probe == "stdin":
-            return process_probe.stdin(args.kind)
-        return process_probe.descendant(args.pid_file, args.kind)
     return 1

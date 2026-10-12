@@ -103,15 +103,8 @@ fn epic4_public_consumer_watchdog() {
     let pid_file = scratch.0.join("watchdog.pids");
     let mut command = tooling::python_command();
     command
-        .args([
-            "-m",
-            "autosar_tooling",
-            "probe",
-            "descendant",
-            "--kind",
-            "hang",
-            "--pid-file",
-        ])
+        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/python/process/probe.py"))
+        .args(["descendant", "--kind", "hang", "--pid-file"])
         .arg(&pid_file);
     let started = std::time::Instant::now();
     let failure = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {

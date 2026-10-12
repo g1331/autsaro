@@ -6,6 +6,14 @@ use std::time::Duration;
 
 static FIXTURE_NONCE: AtomicU64 = AtomicU64::new(0);
 
+/// Real child process used by the owner tests (`tests/python/process/probe.py`).
+fn probe() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("workspace root")
+        .join("tests/python/process/probe.py")
+}
+
 struct Fixture(PathBuf);
 
 impl Fixture {
@@ -31,9 +39,7 @@ impl Fixture {
             .expect("AUTOSAR_PYTHON must name an absolute Python interpreter");
         let argv: Vec<OsString> = [
             python,
-            "-m".into(),
-            "autosar_tooling".into(),
-            "probe".into(),
+            probe().into_os_string(),
             "descendant".into(),
             "--pid-file".into(),
             self.0.join("pids.txt").into_os_string(),
@@ -64,9 +70,7 @@ impl Fixture {
         let mut spec = ProcessSpec::for_duration(
             vec![
                 python,
-                "-m".into(),
-                "autosar_tooling".into(),
-                "probe".into(),
+                probe().into_os_string(),
                 "stdin".into(),
                 "--kind".into(),
                 kind.into(),
