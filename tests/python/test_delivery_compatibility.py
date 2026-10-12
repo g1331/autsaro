@@ -8,7 +8,7 @@ from ecu_tools import build, cli
 
 class DeliveryCompatibilityTests(unittest.TestCase):
     def invoke(self, version):
-        arguments = ["ecu-tool.py", "build", "--project", "source", "--output", "output", "--mode", "host"]
+        arguments = ["ecu-tool.py", "build", "--project", "source", "--output", "output", "--mode", "host-batch"]
         with patch.object(sys, "version_info", version), patch.object(sys, "argv", arguments), patch.object(build, "build") as run:
             result = cli.main()
             return result, run.call_count

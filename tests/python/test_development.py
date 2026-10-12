@@ -108,25 +108,6 @@ class VerificationTests(unittest.TestCase):
 
 
 class AssetTests(unittest.TestCase):
-    def test_source_digest_update_cannot_accept_an_abi_change(self):
-        from autosar_tooling import bsw_catalog
-
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / 'third_party/freertos').mkdir(parents=True)
-            (root / 'runtime/contracts').mkdir(parents=True)
-            for name in ('source-manifest.json', 'posix-source-manifest.json'):
-                (root / 'third_party/freertos' / name).write_text('{"files": {}}')
-            contract = root / 'runtime/contracts/bsw-v1.json'
-            original = '{"types": {"Value": "uint8_t"}, "sources": {}}'
-            contract.write_text(original)
-            with (
-                patch.object(bsw_catalog, 'materialize', return_value={'types': {'Value': 'uint16_t'}, 'sources': {}}),
-                self.assertRaisesRegex(ValueError, 'BSW ABI changed'),
-            ):
-                assets.maintain(update=True, root=root)
-            self.assertEqual(contract.read_text(), original)
-
     def test_missing_and_traversal_assets_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -136,8 +117,6 @@ class AssetTests(unittest.TestCase):
 
     def test_no_change_update_is_idempotent_and_does_not_write(self):
         import hashlib
-
-        from autosar_tooling import bsw_catalog
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -149,7 +128,6 @@ class AssetTests(unittest.TestCase):
                 (root / folder).mkdir(parents=True)
             for name in ("source-manifest.json", "posix-source-manifest.json"):
                 (root / "third_party/freertos" / name).write_text('{"files": {}}')
-            (root / "runtime/contracts/bsw-v1.json").write_text('{"sources": {}}')
             (root / "tools/python/src/ecu_tools/workbench-v2-assets.json").write_text(
                 '{"files": []}'
             )
@@ -170,10 +148,7 @@ class AssetTests(unittest.TestCase):
                 )
             )
             before = manifest.read_bytes()
-            with (
-                patch.object(bsw_catalog, "materialize", return_value={"sources": {}}),
-                redirect_stdout(io.StringIO()),
-            ):
+            with redirect_stdout(io.StringIO()):
                 self.assertEqual(assets.maintain(update=True, root=root), 0)
                 self.assertEqual(manifest.read_bytes(), before)
                 source.write_bytes(b"reviewed change")
@@ -199,7 +174,7 @@ class AssetTests(unittest.TestCase):
 
 class NativeBuiltinModeTests(unittest.TestCase):
     def test_development_mode_keeps_application_tool_boundary_and_reports_real_mode(self):
-        from autosar_tooling.acceptance.native_profile import app_environment, prepare
+        from autosar_tooling.acceptance.native_builtin import app_environment, prepare
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -209,8 +184,10 @@ class NativeBuiltinModeTests(unittest.TestCase):
                 ("AUTOSAR_CC", "AUTOSAR_OBJDUMP", "AUTOSAR_GIT", "AUTOSAR_PYTHON"), str(tool)
             )
             with patch.dict(os.environ, {**declared, "AUTOSAR_XSD_ARCHIVE": "/private/xsd", "CARGO_HOME": "/private/cargo"}):
-                prepare(root, "windows" if os.name == "nt" else "macos" if sys.platform == "darwin" else "linux", False, None, builtin_only=True)
-                environment = app_environment(root, False, builtin_only=True)
+                prepare(root, "windows" if os.name == "nt" else "macos" if sys.platform == "darwin" else "linux", None, installed=False)
+                environment = app_environment(root, False)
+            settings = json.loads((root / "app-config/settings.json").read_text())
+            self.assertEqual(set(settings), {"xsdArchive", "modArchive"})
             scenario = json.loads((root / "scenario.json").read_text())
             self.assertFalse(scenario["installed"])
             self.assertEqual(scenario["performanceTools"], dict.fromkeys(("compiler", "objdump", "git", "python"), str(tool)))
@@ -233,7 +210,7 @@ class NativeBuiltinModeTests(unittest.TestCase):
                 self.assertEqual(list(root.iterdir()), [])
 
     def test_installed_mode_still_requires_unavailable_checkout(self):
-        from autosar_tooling.acceptance.native_profile import prepare
+        from autosar_tooling.acceptance.native_builtin import prepare
 
         with tempfile.TemporaryDirectory() as directory, self.assertRaisesRegex(RuntimeError, "unavailable build checkout"):
-            prepare(Path(directory), "linux", True, None, builtin_only=True)
+            prepare(Path(directory), "linux", None, installed=True)

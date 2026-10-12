@@ -1,4 +1,5 @@
-#include "Can.h"
+#include "Can_Host.h"
+#include "Ecu_Config.h"
 #include "CanIf.h"
 #include "Can_HostLock.h"
 #include <stdio.h>

@@ -31,8 +31,6 @@ def digest(root: Path, relative: str) -> str:
 
 
 def maintain(*, update: bool = False, root: Path = ROOT) -> int:
-    from autosar_tooling import bsw_catalog
-
     # Validate every immutable upstream source before calculating any writes.
     for name in ("source-manifest.json", "posix-source-manifest.json"):
         upstream = json.loads((root / "third_party/freertos" / name).read_text())
@@ -43,14 +41,6 @@ def maintain(*, update: bool = False, root: Path = ROOT) -> int:
                 )
     documents = {}
     changes = []
-    bsw_path = root / "runtime/contracts/bsw-v1.json"
-    current = bsw_catalog.materialize(root)
-    recorded = json.loads(bsw_path.read_text())
-    if {key: value for key, value in recorded.items() if key != "sources"} != {key: value for key, value in current.items() if key != "sources"}:
-        raise ValueError("BSW ABI changed; review and explicitly update the contract before updating source digests")
-    if recorded != current:
-        documents[bsw_path] = current
-        changes.append("runtime/contracts/bsw-v1.json")
     inventory_path = root / "runtime/contracts/assets-v1.json"
     inventory = json.loads(inventory_path.read_text())
     updated = copy.deepcopy(inventory)

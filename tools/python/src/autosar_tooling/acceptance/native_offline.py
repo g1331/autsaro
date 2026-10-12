@@ -88,7 +88,6 @@ def entered(args) -> int:
 
         return run(
             "linux", args.binary, True, args.source_checkout,
-            args.profile == "builtin-only",
             output_directory=args.evidence / "desktop",
         )
 
@@ -98,7 +97,6 @@ def main() -> int:
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--source-checkout", type=Path, required=True)
     parser.add_argument("--evidence", type=Path)
-    parser.add_argument("--profile", choices=("builtin-only", "licensed-oracle"), default="builtin-only")
     parser.add_argument("--entered-netns", action="store_true")
     parser.add_argument("--outer-netns")
     parser.add_argument("--outer-uid", type=int)
@@ -143,7 +141,7 @@ def main() -> int:
         )
         if args.entered_netns:
             return entered(args)
-        command = [executable("unshare"), "--user", "--map-root-user", "--net", "--fork", "--kill-child=TERM", str(Path(sys.executable).resolve()), "-m", "autosar_tooling.acceptance.native_offline", "--entered-netns", "--outer-netns", os.readlink("/proc/self/ns/net"), "--outer-uid", str(os.geteuid()), "--binary", str(args.binary), "--source-checkout", str(args.source_checkout), "--evidence", str(args.evidence), "--profile", args.profile]
+        command = [executable("unshare"), "--user", "--map-root-user", "--net", "--fork", "--kill-child=TERM", str(Path(sys.executable).resolve()), "-m", "autosar_tooling.acceptance.native_offline", "--entered-netns", "--outer-netns", os.readlink("/proc/self/ns/net"), "--outer-uid", str(os.geteuid()), "--binary", str(args.binary), "--source-checkout", str(args.source_checkout), "--evidence", str(args.evidence)]
         result = run_bounded(ProcessSpec.seconds(command, Path.cwd(), 1800, args.evidence, "offline-native-namespace"))
         print(result.stdout.read_text(encoding="utf-8"), end="")
         print(f"OFFLINE_NATIVE namespace closure={result.status} exit={result.exit_code}; evidence={args.evidence}")

@@ -104,14 +104,12 @@ def run(
     binary: Path,
     installed: bool = False,
     source_checkout: Path | None = None,
-    builtin_only: bool = False,
     *,
     caller_process: dict | None = None,
     output_directory: Path | None = None,
 ) -> int:
     if os.name != "nt":
         raise RuntimeError("Native desktop verification requires Windows")
-    ordinary_product = installed or builtin_only
     binary = binary.resolve(strict=True)
     source_checkout = source_checkout.resolve() if source_checkout is not None else None
     if installed and (
@@ -121,39 +119,36 @@ def run(
         raise RuntimeError(
             "Installed verification requires a binary outside the checkout"
         )
-    from autosar_tooling.acceptance import native_profile
+    from autosar_tooling.acceptance import native_builtin
 
     if output_directory:
         output_directory.mkdir(parents=True, exist_ok=True)
         if any(output_directory.iterdir()):
             raise RuntimeError("Desktop output directory must be empty")
     scratch = output_directory.resolve() if output_directory else Path(tempfile.mkdtemp(prefix="autosar-native-windows-"))
-    mode = "builtin-only" if builtin_only else "installed" if installed else "dev"
+    mode = "installed" if installed else "dev"
     print(f"Isolated native test directory ({mode}): {scratch}", flush=True)
-    if ordinary_product:
-        # Elevated verifier-created inputs must remain writable by the ordinary
-        # medium-token product. Apply inheritance only to our new private root.
-        argv = [str(Path(os.environ["SystemRoot"]) / "System32/icacls.exe"),
-                str(scratch), "/setintegritylevel", "(OI)(CI)M"]
-        label = subprocess.run(
-            argv, check=False, capture_output=True, timeout=15,
-            creationflags=subprocess.CREATE_NO_WINDOW,
-        )
-        (scratch / "scratch-integrity.stdout.log").write_bytes(label.stdout)
-        (scratch / "scratch-integrity.stderr.log").write_bytes(label.stderr)
-        (scratch / "scratch-integrity.json").write_text(
-            json.dumps({"argv": argv, "exitCode": label.returncode, "scope": "new-private-scratch-only"}),
-            encoding="utf-8",
-        )
-        if label.returncode != 0:
-            raise RuntimeError(f"Private medium-token scratch label failed; exit={label.returncode}; evidence={scratch}")
-    native_profile.prepare(scratch, "windows", installed, source_checkout, builtin_only)
+    # Elevated verifier-created inputs must remain writable by the ordinary
+    # medium-token product. Apply inheritance only to our new private root.
+    argv = [str(Path(os.environ["SystemRoot"]) / "System32/icacls.exe"),
+            str(scratch), "/setintegritylevel", "(OI)(CI)M"]
+    label = subprocess.run(
+        argv, check=False, capture_output=True, timeout=15,
+        creationflags=subprocess.CREATE_NO_WINDOW,
+    )
+    (scratch / "scratch-integrity.stdout.log").write_bytes(label.stdout)
+    (scratch / "scratch-integrity.stderr.log").write_bytes(label.stderr)
+    (scratch / "scratch-integrity.json").write_text(
+        json.dumps({"argv": argv, "exitCode": label.returncode, "scope": "new-private-scratch-only"}),
+        encoding="utf-8",
+    )
+    if label.returncode != 0:
+        raise RuntimeError(f"Private medium-token scratch label failed; exit={label.returncode}; evidence={scratch}")
+    native_builtin.prepare(scratch, "windows", source_checkout, installed=installed)
     app_cwd = scratch / "app-work" if installed else ROOT
     if installed:
         app_cwd.mkdir(exist_ok=True)
-    environment = native_profile.app_environment(scratch, installed, builtin_only)
-    environment.pop("AUTOSAR_XSD_ARCHIVE", None)
-    environment.pop("AUTOSAR_MOD_ARCHIVE", None)
+    environment = native_builtin.app_environment(scratch, installed)
     environment["WEBVIEW2_USER_DATA_FOLDER"] = str(scratch / "webview-profile")
     user = ctypes.WinDLL("user32", use_last_error=True)
     kernel = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -287,16 +282,15 @@ def run(
     medium_token = None
     try:
         security = None
-        if ordinary_product:
-            from autosar_tooling.acceptance.native_station import PrivateStation
+        from autosar_tooling.acceptance.native_station import PrivateStation
 
-            private_station = PrivateStation(user)
-            if name(private_station.handle) == name(private_station.original):
-                raise RuntimeError("Clipboard isolation reused the user's window station")
-            security = ctypes.byref(private_station.security)
-            from autosar_tooling.acceptance.native_token import MediumToken
+        private_station = PrivateStation(user)
+        if name(private_station.handle) == name(private_station.original):
+            raise RuntimeError("Clipboard isolation reused the user's window station")
+        security = ctypes.byref(private_station.security)
+        from autosar_tooling.acceptance.native_token import MediumToken
 
-            medium_token = MediumToken(caller_process=caller_process)
+        medium_token = MediumToken(caller_process=caller_process)
         desktop = checked(user.CreateDesktopW(desktop_name, None, None, 0, 0x1FF, security))
         job = checked(kernel.CreateJobObjectW(None, None))
         limits = ExtendedLimits()
@@ -435,7 +429,7 @@ def run(
             debug_port = socket_handle.getsockname()[1]
         environment["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = (
             f"--remote-debugging-port={debug_port}"
-            + (" --disable-background-networking --disable-component-update" if builtin_only else "")
+            + " --disable-background-networking --disable-component-update"
         )
         if not installed:
             deadline = time.monotonic() + 40
@@ -449,7 +443,7 @@ def run(
                             "Isolated Vite process failed to become ready"
                         )
                     time.sleep(0.2)
-        app = launch([str(binary)], environment, cwd=app_cwd, ordinary=ordinary_product)
+        app = launch([str(binary)], environment, cwd=app_cwd, ordinary=True)
         launch_receipt = {
             "installed": installed,
             "mode": mode,
@@ -513,7 +507,6 @@ def run(
                 raise RuntimeError("The input desktop changed during the isolated test")
         finally:
             user.CloseDesktop(current)
-        canceled = 0
         observed = {}
 
         def window_text(window, class_name=False):
@@ -557,20 +550,19 @@ def run(
                     raise RuntimeError(
                         "Native UI driver exceeded its bounded verification time"
                     )
-                if builtin_only:
-                    from autosar_tooling.acceptance.native_window import (
-                        sample as resize_window,
-                    )
+                from autosar_tooling.acceptance.native_window import (
+                    sample as resize_window,
+                )
 
-                    resize_window(scratch, app.pid, windows(desktop, app.pid), user, private_station is not None)
-                    from autosar_tooling.acceptance.native_memory import sample
+                resize_window(scratch, app.pid, windows(desktop, app.pid), user, private_station is not None)
+                from autosar_tooling.acceptance.native_memory import sample
 
-                    sample(scratch, app.pid, "native-application")
-                    from autosar_tooling.acceptance.native_clipboard import (
-                        sample as read_clipboard,
-                    )
+                sample(scratch, app.pid, "native-application")
+                from autosar_tooling.acceptance.native_clipboard import (
+                    sample as read_clipboard,
+                )
 
-                    read_clipboard(scratch, environment, private_station is not None)
+                read_clipboard(scratch, environment, private_station is not None)
                 for item in windows(desktop, app.pid):
                     window = item["window"]
                     if window_text(window, True) != "#32770":
@@ -629,7 +621,6 @@ def run(
                         # Only an enumerated native dialog on our separate
                         # desktop, owned by this test's Tauri PID, is addressed.
                         user.SendMessageW(cancel_buttons[0], 0x00F5, 0, 0)
-                        canceled += 1
                         observed[window] = time.monotonic() + 900
                 time.sleep(0.05)
             if driver_result:
@@ -639,10 +630,6 @@ def run(
                     flush=True,
                 )
                 return driver_result
-            if not builtin_only and canceled < 1:
-                raise RuntimeError(
-                    "The native discard confirmation was not actually canceled"
-                )
         finally:
             driver_log.close()
         current = (

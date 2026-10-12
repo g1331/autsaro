@@ -186,7 +186,7 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                 raise ValueError(f"Kernel patch {index} failed; raw logs retained")
         sources.extend("kernel/" + name for name in kernel_sources)
         sources.extend(["src/ecu_host_batch.c", "src/ecu_probe.c"])
-    elif target.get("profile") != "host":
+    elif target.get("profile") != "host":  # plain sealed C project, used by analyzer fixtures; deliveries are always "ecu"
         raise ValueError("Unknown sealed C profile")
     if len(sources) != len(set(sources)) or any(not (root / name).is_file() for name in sources):
         raise ValueError("C translation-unit inventory is duplicated or incomplete")

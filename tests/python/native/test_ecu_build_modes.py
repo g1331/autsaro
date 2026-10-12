@@ -47,7 +47,7 @@ class EcuBuildModeTests(unittest.TestCase):
                     output.write(b"\nchanged identity for rejection test\n")
                 wrong_tools[variable] = str(wrong)
 
-            for sample, mode in [("signals", "host"), ("standard-ecu", "host-batch"),
+            for sample, mode in [("standard-ecu", "host-batch"), ("user-application", "host-batch"),
                                  ("multi-component", "host-batch")]:
                 with self.subTest(sample=sample):
                     received = directory / sample / "package"
@@ -104,8 +104,7 @@ class EcuBuildModeTests(unittest.TestCase):
                     output.mkdir()
                     built = build(output, env, "success")
                     self.assertTrue(built.success, built.stdout.read_text() + built.stderr.read_text())
-                    binary = "ecu_host" if mode == "host" else "ecu_host_batch"
-                    self.assertTrue((output / (binary + (".exe" if os.name == "nt" else ""))).is_file())
+                    self.assertTrue((output / ("ecu_host_batch" + (".exe" if os.name == "nt" else ""))).is_file())
                     self.assertEqual(tree(received), before)
 
     def test_production_ignores_fault_environment_and_test_mode_enables_it(self):
