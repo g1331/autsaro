@@ -95,12 +95,19 @@ StatusType Os_TargetAdvanceOneTick(uint64_t epoch, uint64_t *ticket);
 StatusType Os_TargetTickCompletion(uint64_t ticket, Os_TickCompletion *record);
 /** Wait for the matching complete record without polling or advancing time.
  * @param ticket Accepted ticket.
- * @param timeout_ms Host watchdog duration, 1 through5000 milliseconds.
+ * @param timeout_ms Host watchdog duration, 1 through 5000 milliseconds.
  * @param record Complete output, unchanged on timeout or rejection.
- * @return Completion statuses, E_OS_VALUE for timeout bounds, E_OS_NOFUNC on timeout,
- * or E_OS_STATE for a native wait failure. Watchdog time never changes automotive time.
+ * @return Completion statuses, E_OS_VALUE for timeout bounds, E_OS_NOFUNC on timeout or
+ * after Os_TargetNotifyNative, or E_OS_STATE for a native wait failure. Watchdog time
+ * never changes automotive time.
  */
 StatusType Os_TargetWaitTick(uint64_t ticket, uint32_t timeout_ms, Os_TickCompletion *record);
+/** Wake the native producer's Os_TargetWaitTick for work it must do before this tick
+ * can complete, such as confirming a published output. A wake without such work only
+ * returns one early E_OS_NOFUNC; it never completes a tick or changes automotive time.
+ * @return E_OK, E_OS_STATE (not ready, closed or signal failure), E_OS_ACCESS or E_OS_CALLEVEL.
+ */
+StatusType Os_TargetNotifyNative(void);
 /** Confirm after the configured automotive owner has completed this tick's work.
  * @param ticket Current delivered ticket.
  * @return E_OK, E_OS_STATE, E_OS_ID, E_OS_ACCESS or E_OS_CALLEVEL.
