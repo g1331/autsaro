@@ -648,14 +648,21 @@ pub(super) fn source_preparation_is_target_complete_without_native_tools() {
                     .map(|asset| asset.relative_path)
             })
             .collect();
-        // The shared host CAN driver below the mainline communication stack.
+        // The mainline owns every BSW producer, including the host CAN driver.
         for asset in [
-            "runtime/src/Can.c",
+            "runtime/multi/src/Can.c",
             "runtime/multi/src/Com.c",
             "runtime/multi/src/Dcm.c",
         ] {
             assert!(selected.contains(&asset), "{asset}: {selected:?}");
         }
+        let legacy: Vec<_> = first
+            .files()
+            .iter()
+            .filter_map(|file| file.source.map(|asset| asset.relative_path))
+            .filter(|path| path.starts_with("runtime/src/") || path.starts_with("runtime/include/"))
+            .collect();
+        assert!(legacy.is_empty(), "{legacy:?}");
         assert!(has("os/src/Os.c") && has("kernel/tasks.c") && has("src/Rte.c"));
         let (native_host, native_kernel) = match target {
             BuildTarget::WindowsX64ControlledV1 => (

@@ -319,16 +319,10 @@ pub(crate) fn deliver_path(
             }
         }
         if let Some(relative) = path.strip_prefix("multi/") {
+            // Legacy profiles share the mainline Det/Can/SchM producers but keep
+            // their own Std/Platform type headers under tools/.
             if (profile == "ecu-multi"
-                || matches!(
-                    relative,
-                    "include/Det.h"
-                        | "include/Det_MemMap.h"
-                        | "src/Det.c"
-                        | "src/Det_Host.c"
-                        | "src/Det_Host.h"
-                        | "src/SchM_CanIf_Host.c"
-                ))
+                || !matches!(relative, "include/Std_Types.h" | "include/Platform_Types.h"))
                 && (relative.starts_with("src/") || relative.starts_with("include/"))
             {
                 return Ok(relative.into());

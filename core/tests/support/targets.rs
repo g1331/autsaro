@@ -292,7 +292,7 @@ pub(super) fn source_generation_does_not_require_native_executor() {
                     .map(|asset| asset.relative_path)
             })
             .collect();
-        assert!(selected.contains(&"runtime/src/Can.c"));
+        assert!(selected.contains(&"runtime/multi/src/Can.c"));
         assert!(first.files().iter().any(|file| file.path == "os/src/Os.c"));
         assert!(
             first
@@ -458,7 +458,7 @@ pub(super) fn source_generation_rejects_modified_validation_and_asset_bytes() {
     )
     .unwrap();
     assert!(build_plan(&inputs, &wrong_xsd, &runtime).is_err());
-    let tampered = "runtime/src/Can.c";
+    let tampered = "runtime/multi/src/Can.c";
     let destination = scratch.0.join(tampered);
     fs::create_dir_all(destination.parent().unwrap()).unwrap();
     let mut original_bytes = fs::read(root.join(tampered)).unwrap();

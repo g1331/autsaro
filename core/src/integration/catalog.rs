@@ -198,8 +198,8 @@ pub(super) fn multi_catalog(
         "Can",
         "void",
         &[("Config", "const Can_ConfigType *", "IN")],
-        "runtime/include/standard/Can.h",
-        "runtime/src/Can.c",
+        "runtime/multi/include/standard/Can.h",
+        "runtime/multi/src/Can.c",
     );
     for symbol in [
         "Can_MainFunction_Wakeup",
@@ -213,8 +213,8 @@ pub(super) fn multi_catalog(
             "Can",
             "void",
             &[],
-            "runtime/include/SchM_Can.h",
-            "runtime/src/Can.c",
+            "runtime/multi/include/SchM_Can.h",
+            "runtime/multi/src/Can.c",
         );
     }
     for (module, config) in [
@@ -400,24 +400,7 @@ pub(super) fn multi_source_identities() -> BTreeMap<String, String> {
     let mut identities: BTreeMap<String, String> = crate::resources::AssetInventory::embedded()
         .entries()
         .iter()
-        .filter(|asset| {
-            asset.relative_path.starts_with("runtime/multi/")
-                || matches!(
-                    asset.relative_path,
-                    "runtime/src/Can.c"
-                        | "runtime/src/Can_Host.c"
-                        | "runtime/src/Can_Internal.h"
-                        | "runtime/include/Can.h"
-                        | "runtime/include/Can_CfgTypes.h"
-                        | "runtime/include/Can_Host.h"
-                        | "runtime/include/Can_MemMap.h"
-                        | "runtime/src/Can_HostLock.c"
-                        | "runtime/src/Can_HostLock.h"
-                        | "runtime/include/standard/Can.h"
-                        | "runtime/include/Can_GeneralTypes.h"
-                        | "runtime/include/SchM_Can.h"
-                )
-        })
+        .filter(|asset| asset.relative_path.starts_with("runtime/multi/"))
         .map(|asset| (asset.relative_path.into(), asset.sha256.into()))
         .collect();
     for (path, bytes) in [
