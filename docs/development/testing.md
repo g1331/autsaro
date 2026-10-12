@@ -16,6 +16,16 @@ uv run --locked ruff check tools tests/python scripts
 
 前端使用 Vitest；`npm run test:watch --prefix ui` 用于开发。Python 普通测试位于 `tests/python`，进程和平台测试独立选择。默认 Rust 测试不需要外部 Python 或官方档案。
 
+core 的集成测试分为三个二进制，按能力模块组织，共用 `core/tests/support/`：
+
+| 二进制 | 运行方式 | 前置条件 |
+| --- | --- | --- |
+| `it` | `cargo test --test it` | 无 |
+| `native` | `cargo test --features native-tests --test native` | 目标 GCC／binutils、Git 与 `AUTOSAR_PYTHON` |
+| `official` | `cargo test --features official-oracles --test official` | 授权的官方档案 |
+
+测试名带模块路径，可按名称筛选，例如 `cargo test --test it -- integration::diagnostics::`、`cargo test --features native-tests --test native -- integration::os::`。协议与 OS 独立对照向量（`core/tests/fixtures/epic4_oracles/`）由 `it` 的 `protocol_oracles::` 测试绑定到参考 ECUC 配置，设置或固定字面值漂移时失败。
+
 Tauri 后端单测覆盖 Session、设置与请求归属，需先准备[桌面平台依赖](environment.md)并运行 `npm run build --prefix ui`。本地 `verify --scope desktop`／`all` 及 PR 的 desktop job 均执行锁定 Cargo 单测；本地聚合入口继续执行 build／Clippy，PR job 保留 build。这些检查不启动原生窗口，不能替代 GUI／IPC 行为验收。
 
 ## 生成 C 的静态检查
@@ -24,7 +34,7 @@ Tauri 后端单测覆盖 Session、设置与请求归属，需先准备[桌面�
 
 ```powershell
 $env:AUTOSAR_C_ANALYSIS_SAMPLES = "$PWD/build/c-analysis-samples"
-cargo test --locked --manifest-path core/Cargo.toml --test c_analysis
+cargo test --locked --manifest-path core/Cargo.toml --test it -- c_analysis::
 uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
 uv run --locked python -m autosar_tooling c-check --target windows-x64-controlled-v1 --project build/c-analysis-samples/standard-ecu --output-directory build/c-analysis-results/standard-ecu
 ```
@@ -45,24 +55,25 @@ ECU 的 HostBatch 与 legacy probe 是两个独立可执行程序，跨翻译单
 
 真实诊断、工具缺失、版本错误、超时、编译／解析失败和扫描不完整均返回非零。无诊断只说明这些自动检查通过；221 项规则／指令中的人工评估仍需根据需求、设计、授权规范和偏离审批完成，不会声明“完整符合 MISRA”。
 
-CI 每个平台先验证检查器、生成三类完整样本并发布本轮工具与样本工件，再把标准 ECU、用户应用 ECU 和多组件 ECU 分成三个并行任务；汇总任务要求所有准备和分析任务成功，跳过或取消也不会通过（仅改文档的 PR 整体跳过，见下）。固定版本 Cppcheck、vcpkg 二进制包与 Cargo 构建使用缓存，每次仍重新生成样本并分析全部源码，缓存不包含扫描结果。PR 的新提交会取消同一 PR 的旧任务。双平台任务自动验证完整分析链路，拒绝配置／解析失败或漏扫；源码违规仍保留非零退出码及 `passed=false`，不会由链路验证改写为通过。严格源码门禁暂限手动 workflow_dispatch。现存诊断整改与必要偏离获批后，才能移除该条件，启用每次 PR 的严格源码门禁。手动扫描收集所有样本结果后返回真实失败状态，日志与样本保留 14 天。
+CI 每个平台先验证检查器、生成四类完整样本并发布本轮工具与样本工件，再把标准 ECU、用户应用 ECU、多组件 ECU 及不含应用 DID 与诊断路由的多组件 ECU（`no-diagnostic`）分成四个并行任务；汇总任务要求所有准备和分析任务成功，跳过或取消也不会通过（仅改文档的 PR 整体跳过，见下）。固定版本 Cppcheck、vcpkg 二进制包与 Cargo 构建使用缓存，每次仍重新生成样本并分析全部源码，缓存不包含扫描结果。PR 的新提交会取消同一 PR 的旧任务。双平台任务自动验证完整分析链路，拒绝配置／解析失败或漏扫；源码违规仍保留非零退出码及 `passed=false`，不会由链路验证改写为通过。严格源码门禁暂限手动 workflow_dispatch。现存诊断整改与必要偏离获批后，才能移除该条件，启用每次 PR 的严格源码门禁。手动扫描收集所有样本结果后返回真实失败状态，日志与样本保留 14 天。
 
 `Development checks` 中的 `CI required` 是分支规则唯一要求的检查，阻塞合并的任务清单写在该任务的 `needs` 中，增删检查只改工作流。PR 只改根目录指南、`docs/`、代理说明或 PR 模板时，构建与测试任务整体跳过，`quality` 照常运行；其余 PR、推送到主干及手动运行都执行完整检查。分支无须先与主干同步即可合并，合并后主干推送会再完整运行一次。
 
-双平台准备任务以 `native-tests` 运行不依赖官方档案的 `multi_runtime_contracts` 与 `multi_component_contracts`，工具路径取自已安装的受控 GCC、binutils、Git 及项目 uv 环境。其余原生套件需要授权的官方档案，仍由自托管 runner 上手动触发的 `acceptance.yml` 运行；PR 检查通过不代表这些套件通过。
+`native` 任务在 Windows 与 Linux 上以 `--features native-tests --lib --test native --no-fail-fast` 运行全部原生 Rust 套件，工具路径取自已安装的受控 GCC、binutils、Git 及项目 uv 环境；`native-os` 任务在两个平台运行 26 个 OS suites 和主机锁错误边界测试。准备任务在生成样本后运行封存工程构建模式及接收方 Python 检查。需要授权官方档案的 `official` 二进制、Windows WFP 检查和隔离桌面场景仍由自托管 runner 上手动触发的 `acceptance.yml`／`offline.yml` 运行；PR 检查通过不代表这些检查通过。
 
 ## 进程、资源和原生行为
 
 ```powershell
 uv run --locked python -B -m unittest discover -s tests/python/process
 cargo test --locked --manifest-path core/Cargo.toml --lib --features native-tests execution::
-cargo test --locked --manifest-path core/Cargo.toml --features official-oracles
-cargo test --locked --manifest-path core/Cargo.toml --features native-tests
+cargo test --locked --manifest-path core/Cargo.toml --features native-tests --lib --test native --no-fail-fast
+uv run --locked python -B -m unittest discover -s tests/python/native -p test_os_suites.py
+cargo test --locked --manifest-path core/Cargo.toml --features official-oracles --test official --no-fail-fast
 ```
 
-进程测试需 `AUTOSAR_PYTHON` 指向支持的绝对解释器路径。官方对照需正式资源清单声明的合法档案；完整 native 测试需对应平台的受控 GCC/binutils，26 个 OS suites 通过 Cargo 注册运行，不重复执行。
+进程测试需 `AUTOSAR_PYTHON` 指向支持的绝对解释器路径；受管进程的探针是测试辅助脚本 `tests/python/process/probe.py`。官方对照需正式资源清单声明的合法档案；native 测试需对应平台的受控 GCC/binutils。OS suites 由 unittest 按 suite 生成测试，可用 `-k stack` 等筛选，只在与当前宿主一致的目标上运行；测试名对应 suite，进程失败信息包含阶段、命令和原始退出状态。
 
-需要保留 OS 的编译产物和进程日志时，设置 `AUTOSAR_OS_OUTPUT_DIRECTORY` 为新的结果目录，Cargo 测试按 suite 保存到该目录。单独调用 `autosar_tooling os` 可传 `--output-directory`。已有目录不会被覆盖；未指定时仍只保留失败现场。
+需要保留 OS 的编译产物和进程日志时，设置 `AUTOSAR_OS_OUTPUT_DIRECTORY` 为新的结果目录，unittest 按 suite 保存到该目录。已有目录不会被覆盖；未指定时仍只保留失败现场。
 
 完整检查入口 `uv run --locked python -m autosar_tooling verify --scope all --base <基准提交>` 组合原有完整检查，不安装依赖，不编排另一套任务或写汇总报告。失败直接保留原输出和退出状态。
 

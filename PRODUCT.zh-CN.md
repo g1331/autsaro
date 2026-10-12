@@ -79,7 +79,7 @@ Vector MICROSAR Classic＋DaVinci Configurator、EB tresos AutoCore＋Studio 是
 - [路线图](docs/roadmap.md)：近期顺序、长期候选路线、待决问题与后期学习层边界。
 - [架构](docs/architecture.md)、[ADR](docs/adr/)与[标准基线](docs/standards.md)：输入／生成责任、已记录决定与固定规范版次。
 - [README](README.md)、[运行时说明](runtime/README.md)及已合并 PR：现有工作流、受限能力、目标依赖和已记录验证范围。旧段落涉及历史状态时，以较新的已合并 PR 和当前源码核对，不从一句总述推定全部能力。
-- `ui/src/`、`src-tauri/`、`core/src/` 与 `runtime/`：现有 React 界面、桌面后端、配置／生成核心与 C99 运行时；`core/tests/end_to_end.rs` 及 fixtures 承载集成验证输入。
+- `ui/src/`、`src-tauri/`、`core/src/` 与 `runtime/`：现有 React 界面、桌面后端、配置／生成核心与 C99 运行时；`core/tests/` 承载集成测试及其 fixtures。
 - `ui/public/logo-app.png` 与 `src-tauri/icons/`：现有产品图标资产。
 - 尚无可用于宣称真实 MCU 支持、官方认证、客户背书或性能基准的本次初始化证据，不编造相关内容。本次未重新执行历史主机验收。
 

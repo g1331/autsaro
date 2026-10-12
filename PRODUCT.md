@@ -79,7 +79,7 @@ Vector MICROSAR Classic + DaVinci Configurator and EB tresos AutoCore + Studio a
 - [Roadmap](docs/roadmap.md): near-term order, long-term candidate directions, open decisions, and boundaries for the later learning layer.
 - [Architecture](docs/architecture.md), [ADRs](docs/adr/), and [standards baseline](docs/standards.md): input/generation responsibilities, recorded decisions, and the fixed standard versions.
 - [README](README.md), [runtime documentation](runtime/README.md), and merged pull requests: existing workflows, bounded capabilities, target dependencies, and recorded verification scope. Where older passages describe historical status, cross-check against newer merged pull requests and current source code; do not infer all capabilities from a single overview statement.
-- `ui/src/`, `src-tauri/`, `core/src/`, and `runtime/`: the existing React interface, desktop backend, configuration/generation core, and C99 runtime. `core/tests/end_to_end.rs` and fixtures hold integration-verification inputs.
+- `ui/src/`, `src-tauri/`, `core/src/`, and `runtime/`: the existing React interface, desktop backend, configuration/generation core, and C99 runtime. `core/tests/` holds the integration tests and their fixtures.
 - `ui/public/logo-app.png` and `src-tauri/icons/`: existing product icon assets.
 - This initialization has no evidence supporting claims of real MCU support, official certification, customer endorsement, or performance benchmarks; do not fabricate such content. Historical host acceptance checks were not rerun during this initialization.
 
