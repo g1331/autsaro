@@ -105,7 +105,7 @@
     },
     {
       "path": "runtime/ecu/src/Ecu_Target.c",
-      "sha256": "de47293aedc909f6ebca9c97d45fb250c7394eb39c2df111929920350267709e",
+      "sha256": "0641e94cd4590522c98a288a7a5965fb31d17794c1e7f7bc9d6f07fa0db59d38",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -315,7 +315,7 @@
     },
     {
       "path": "runtime/os/include/Os_Time.h",
-      "sha256": "f049c2f76ba50e55760de15a92b7a46030a0d8b6ddc74436098599dd72b03c14",
+      "sha256": "2341a51555227377fa31b9e0d41c06ca19d7721e0405c548d36c0f0a02b8bdef",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -736,7 +736,7 @@
     },
     {
       "path": "runtime/os/src/Os_Time.c",
-      "sha256": "203637a5ea76b5869ed11fe67e9eeb5fe19d3b80e73c46f882aacf995a877b84",
+      "sha256": "0de3c49425f8994439cdc9416c57c83be3b84c18ad06c37bfd6a968f142038bb",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -791,7 +791,7 @@
     },
     {
       "path": "runtime/os/src/host/linux/Os_HostLinux.c",
-      "sha256": "fae8b091566d12dc5865983d3d3ec3a183c988ccf36608b5600ca26c4f1acc50",
+      "sha256": "77d3dd6467d34c4834fc9f4fcae926b6ed1dd0745d029e0896e2a25ca208a477",
       "license": "Apache-2.0",
       "targets": [
         "linux-x64-controlled-v1"

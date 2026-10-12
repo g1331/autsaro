@@ -335,6 +335,22 @@ static DWORD WINAPI requester(void *argument) {
                 (void)InterlockedExchange(&release_owner, 1);
             }
         }
+        if (strcmp(scenario, "attention") == 0) {
+            DWORD waited_from;
+            native_refuse(Os_TargetNotifyNative(), E_OS_CALLEVEL);
+            started_at = GetTickCount();
+            while (InterlockedCompareExchange(&owner_held, 0, 0) == 0) {
+                native_check((GetTickCount() - started_at) < 4000u);
+                Sleep(1u);
+            }
+            /* The owner's wake ends this long wait at once without completing the tick. */
+            record.ticket = UINT64_C(777);
+            waited_from = GetTickCount();
+            native_refuse(Os_TargetWaitTick(ticket, 4000u, &record), E_OS_NOFUNC);
+            native_check((GetTickCount() - waited_from) < 1000u);
+            native_check(record.ticket == UINT64_C(777));
+            (void)InterlockedExchange(&release_owner, 1);
+        }
         native_check(Os_TargetWaitTick(ticket, 4000u, &record) == E_OK);
         native_check((record.epoch == epoch) && (record.ticket == epoch));
         native_check(record.kernel_tick == (initial_kernel + (uint32_t)i));
@@ -431,7 +447,10 @@ static void owner(void) {
         if ((events & 2u) != 0u) {
             ++app_count;
         }
-        if (strcmp(scenario, "inflight") == 0) {
+        if (strcmp(scenario, "attention") == 0) {
+            check(Os_TargetNotifyNative() == E_OK);
+        }
+        if ((strcmp(scenario, "inflight") == 0) || (strcmp(scenario, "attention") == 0)) {
             DWORD started_at = GetTickCount();
             (void)InterlockedExchange(&owner_held, 1);
             while (InterlockedCompareExchange(&release_owner, 0, 0) == 0) {

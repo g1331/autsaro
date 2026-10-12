@@ -396,6 +396,9 @@ EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc,
     ++output_pending;
     output_write = (output_write + 1u) % ECU_TARGET_OUTPUT_CAPACITY;
     (void)Os_HostAtomicExchange(&slot->state, 1);
+    /* The tick cannot complete before this confirmation; a failed wake only delays it
+     * to the host's timed wait, and a signal failure already closes the target. */
+    (void)Os_TargetNotifyNative();
     return ECU_OK;
 }
 StatusType Ecu_TargetTakeOutput(Ecu_OutputRecord *record) {

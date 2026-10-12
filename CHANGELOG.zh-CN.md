@@ -31,5 +31,6 @@
 - 集成面板的 CAN ID 与应用周期编辑也适用于主线工程；Com Tx 主函数与应用共用触发器时，其时基和发送 PDU 周期随应用周期一同修改。
 - 主线 BSW 来源只取自主线运行时目录：主机 CAN 驱动（Can、Can_Host、Can_HostLock）与 Ecu_Status 迁入该目录，字节不变，资产摘要不变，仅记录路径变化。公开签名、布局、句柄与 wire 格式无变化。主线交付不再包含任何程序都不编译的 5 个头文件（旧聚合视图 `include/Can.h`、`Dem.h`、`NvM.h`、`Security.h`、`Ecu_DcmCallbackTypes.h`）；参与编译的源文件和头文件逐字节一致。
 - 主线生产者元数据与交付字节一致：DID 读取服务的消费者为主线 Dcm，CanTp／Dcm 调度头与 OS 计数器服务记录实际声明文件，`integration.json` 的 `originalBswSources` 只列出原样交付的文件（生成器扩展过的模板属于生成输出）。
+- HostBatch 确认每条输出帧前不再等满一个主机定时器周期：目标通过新增的 `Os_TargetNotifyNative` 唤醒等待中的控制线程，`Os_TargetWaitTick` 收到该唤醒时提前返回 `E_OS_NOFUNC`。Windows 上 1 ms 定时等待实际约 15.6 ms，带周期输出的 1000 ms 批次在负载下可能超过 5000 ms 的 HostBatch watchdog（#61）。期限和汽车时间不变。
 
 早期开发结果保留在 Git 历史和相关实施工件中；本记录不重新声明历史发行或验收结果。

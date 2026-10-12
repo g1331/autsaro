@@ -373,11 +373,29 @@ DWORD WaitForSingleObjectEx(HANDLE handle, DWORD milliseconds, BOOL alertable) {
 DWORD WaitForMultipleObjects(DWORD count, const HANDLE *observed, BOOL all, DWORD milliseconds) {
     DWORD index;
     uint64_t end = monotonic_ms();
-    if (all == 0 || observed == NULL || count == 0u || count > OS_HOST_HANDLES) {
+    if (observed == NULL || count == 0u || count > OS_HOST_HANDLES) {
         return WAIT_FAILED;
     }
     if (milliseconds != INFINITE) {
         end += milliseconds;
+    }
+    if (all == 0) {
+        /* Same 1 ms poll as WaitForSingleObject; the first signalled handle wins. */
+        for (;;) {
+            for (index = 0u; index < count; ++index) {
+                const DWORD waited = WaitForSingleObject(observed[index], 0u);
+                if (waited != WAIT_TIMEOUT) {
+                    return waited == WAIT_OBJECT_0 ? WAIT_OBJECT_0 + index : WAIT_FAILED;
+                }
+            }
+            if (milliseconds != INFINITE && monotonic_ms() >= end) {
+                return WAIT_TIMEOUT;
+            }
+            {
+                const struct timespec interval = {.tv_sec = 0, .tv_nsec = 1000000L};
+                (void)nanosleep(&interval, NULL);
+            }
+        }
     }
     for (index = 0u; index < count; ++index) {
         DWORD remaining = milliseconds == INFINITE
