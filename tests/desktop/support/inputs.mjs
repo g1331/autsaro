@@ -220,7 +220,10 @@ export async function createExtensionInputs(scratch) {
 
 // Reuse the project's original source fixture, outside the application's tool boundary.
 export async function createPipelineInputs(scratch) {
-  const fixture = new URL('../../../core/tests/fixtures/component-pipeline/arxml/', import.meta.url);
+  const fixture = new URL(
+    '../../../core/tests/fixtures/component-pipeline/arxml/',
+    import.meta.url,
+  );
   const directory = path.join(scratch, 'projects', 'Pipeline');
   await mkdir(directory);
   const names = (await readdir(fixture)).filter((name) => name.endsWith('.arxml')).sort();

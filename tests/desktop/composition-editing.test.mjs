@@ -158,7 +158,10 @@ check('composition-shared-editing-and-source-protection', async () => {
   const initialization = await invoke('preview_application_initialization');
   assert.equal(initialization.slots.length, 3);
   await menu('预览初始化用户应用…');
-  await until(`Boolean(document.querySelector('[role=dialog]'))`, 'composition all source slots preview');
+  await until(
+    `Boolean(document.querySelector('[role=dialog]'))`,
+    'composition all source slots preview',
+  );
   await click('确认创建用户应用与成员记录', "document.querySelector('[role=dialog]')");
   await until(`!document.querySelector('[role=dialog]')`, 'composition create-only initialization');
   await until(
