@@ -156,7 +156,7 @@ fn checked_project(
         .find(|(path, _)| path == "integration.json")
         .map(|(_, bytes)| integration(bytes))
         .transpose()?;
-    if data["format"] != "autosar-ecu-integration-v1"
+    if data["format"] != "autosar-ecu-integration-v2"
         || selected.is_none_or(|selected| data["plan"]["profile"] != selected["plan"]["profile"])
     {
         return Err(crate::product_message!(

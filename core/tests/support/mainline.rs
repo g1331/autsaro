@@ -842,7 +842,7 @@ pub(crate) fn native_delivery_target() -> autosar_config_core::target::BuildTarg
 
 /// Handoff forgeries with the refusal reasons of the workbench importer and
 /// of the delivered `ecu-tool.py`.
-pub(crate) const HANDOFF_FORGERIES: [(&str, &str, &str); 6] = [
+pub(crate) const HANDOFF_FORGERIES: [(&str, &str, &str); 7] = [
     (
         "application",
         "mapped_snapshot_changed",
@@ -866,10 +866,16 @@ pub(crate) const HANDOFF_FORGERIES: [(&str, &str, &str); 6] = [
     (
         "payload-path",
         "portable_path_unsafe",
-        "Unsafe v2 portable path",
+        "Unsafe native portable path",
     ),
     (
         "identity",
+        "native_identity_unsupported",
+        "Native input/resource identity differs",
+    ),
+    // A package sealed in the retired workbench handoff format.
+    (
+        "format",
         "native_identity_unsupported",
         "Native input/resource identity differs",
     ),
@@ -907,12 +913,16 @@ pub(crate) fn forged_handoff(
         "producer" => row["producerId"] = "unrecognized-producer".into(),
         "snapshot-path" => row["snapshotOf"] = "../outside.c".into(),
         "payload-path" => row["path"] = "../outside.c".into(),
-        "identity" => {
+        "identity" | "format" => {
             let mut target: serde_json::Value =
                 serde_json::from_slice(&std::fs::read(package.join("target.json")).unwrap())
                     .unwrap();
-            target["nativeDelivery"]["resourceIdentities"]["ruleSetIdentity"]["rulesVersion"] =
-                "unrecognized-rule-version".into();
+            if case == "format" {
+                target["nativeDelivery"]["format"] = "autosar-workbench-handoff-v2".into();
+            } else {
+                target["nativeDelivery"]["resourceIdentities"]["ruleSetIdentity"]["rulesVersion"] =
+                    "unrecognized-rule-version".into();
+            }
             std::fs::write(
                 package.join("handoff.json"),
                 serde_json::to_vec_pretty(&target["nativeDelivery"]).unwrap(),

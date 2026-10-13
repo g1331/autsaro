@@ -273,7 +273,7 @@ impl ValidatedIntegrationPlan {
                 header(&format!("RTE_{}_H", name.to_uppercase()), &body),
             ));
         }
-        let provenance = serde_json::json!({ "format": "autosar-component-contract-v1", "profile": description.profile,
+        let provenance = serde_json::json!({ "format": "autosar-component-contract-v2", "profile": description.profile,
             "sources": description.sources, "validationDependencies": description.validation_dependencies,
             "ruleSetIdentity": description.rule_set_identity, "requiredExtensionDefinitions": description.required_extension_definitions,
             "composition": composition, "schedule": description.schedule,

@@ -403,7 +403,7 @@ def check(project: Path, target_id: str, output: Path) -> int:
         summary["sourceSealSha256"] = digest(project / "files.sha256")
         root, sources, database, scope = prepare(project, target_id, output)
         summary["scope"] = scope
-        entries = {"host-batch": "src/ecu_host_batch.c", "legacy-probe": "src/ecu_probe.c"}
+        entries = {"host-batch": "src/ecu_host_batch.c", "probe": "src/ecu_probe.c"}
         # build.py selects exactly one ECU main for each native executable.
         # Keep cross-TU checking inside that same link boundary.
         programs = entries if scope.get("profile") == "ecu" and all(name in sources for name in entries.values()) else {"target": None}

@@ -28,7 +28,7 @@ Physical CAN identifiers must remain unique in the selected network.
 
 The producer symbol inventory (`catalog.rs`) is derived for each plan from the
 selected Com and mode contracts; immutable BSW bytes and their identities come
-from the trusted asset inventory (`runtime/contracts/assets-v1.json`). Product
+from the trusted asset inventory (`runtime/contracts/assets.json`). Product
 parsing does not read fixture expectations or call the inventory materializer.
 
 BSW declarations and definitions are mapped to their source files. Plan

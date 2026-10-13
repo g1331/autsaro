@@ -10,10 +10,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 
-const CONFIG_PRODUCER: &str = "autosar-workbench-config-v1";
+const CONFIG_PRODUCER: &str = "autosar-workbench-config";
 const PRODUCT_PRODUCER: &str = "autosar-product";
 const GENERATED_PRODUCER: &str = "autosar-generator";
-const BUILD_PRODUCER: &str = "autosar-workbench-build-v2";
+const BUILD_PRODUCER: &str = "autosar-workbench-build";
+const LEDGER_FORMAT_VERSION: u32 = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -225,7 +226,7 @@ pub(crate) fn ledger<'a>(
         });
     }
     Ok(OwnershipLedger {
-        format_version: 1,
+        format_version: LEDGER_FORMAT_VERSION,
         producer_version: env!("CARGO_PKG_VERSION").into(),
         profile_id: metadata.profile_id.clone(),
         files: entries,
@@ -374,7 +375,7 @@ pub(crate) fn verify_ledger_bytes(
             .ok_or_else(|| crate::product_message!("backend.delivery.ownership_ledger_missing"))?,
     )
     .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
-    if ledger.format_version != 1
+    if ledger.format_version != LEDGER_FORMAT_VERSION
         || ledger.producer_version != env!("CARGO_PKG_VERSION")
         || ledger.profile_id != metadata.profile_id
         || ledger

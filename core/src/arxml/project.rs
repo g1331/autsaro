@@ -835,7 +835,7 @@ impl Workspace {
         });
         let mut preview = ProjectCreationPreview {
             revision: String::new(),
-            template_id: "save-as-project-v1".into(),
+            template_id: "save-as-project".into(),
             directory: directory.display().to_string(),
             name: name.into(),
             files,

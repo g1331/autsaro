@@ -563,13 +563,13 @@ export async function openWorkbench(name) {
         );
     }
     const handoff = JSON.parse(await readFile(path.join(output, 'handoff.json'), 'utf8'));
-    assert.equal(handoff.format, 'autosar-workbench-handoff-v2');
+    assert.equal(handoff.format, 'autosar-workbench-handoff-v3');
     assert.deepEqual(handoff.resourceIdentities.ruleSetIdentity, before.ruleSetIdentity);
     assert.deepEqual(handoff.resourceIdentities.requiredExtensionDefinitions, []);
     const ledger = JSON.parse(
       await readFile(path.join(output, 'workbench-ownership.json'), 'utf8'),
     );
-    assert.equal(ledger.formatVersion, 1);
+    assert.equal(ledger.formatVersion, 2);
     const sealed = (await readFile(path.join(output, 'files.list'), 'utf8')).trim().split(/\r?\n/);
     for (const forbidden of [
       'AUTOSAR_00053.xsd',

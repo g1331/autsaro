@@ -1,30 +1,29 @@
-"""Strict ownership guard for native v2 packages, preceding unchanged v1 tools."""
+"""Strict seal and ownership guard for native workbench packages, run before the standalone tool."""
 from __future__ import annotations
 
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
 
-FORMAT = "autosar-workbench-handoff-v2"
-SLOT = "epic4-single-application-v1"
+FORMAT = "autosar-workbench-handoff-v3"
 OWNERS = {"configuration", "user-application", "product", "generated", "target", "build"}
 
 
 def _keys(value: object, required: set[str], optional: set[str] | None = None) -> dict:
     if not isinstance(value, dict) or set(value) - required - (optional or set()) or required - set(value):
-        raise ValueError("Invalid or unknown v2 object fields")
+        raise ValueError("Invalid or unknown native object fields")
     return value
 
 
 def _relative(value: object) -> str:
     if not isinstance(value, str) or not value or "\\" in value or ":" in value:
-        raise ValueError("Invalid v2 portable path")
+        raise ValueError("Invalid native portable path")
     if PurePosixPath(value).is_absolute() or any(
         part in ("", ".", "..") or part.endswith((".", " "))
         or any(ord(char) < 32 or char in '<>"|?*' for char in part)
         for part in value.split("/")
     ):
-        raise ValueError("Unsafe v2 portable path")
+        raise ValueError("Unsafe native portable path")
     return value
 
 
@@ -66,7 +65,7 @@ def validate(
     ledger = _keys(json.loads((project / metadata["ownershipPath"]).read_text(encoding="utf-8")), {
         "formatVersion", "producerVersion", "profileId", "files",
     })
-    if type(ledger["formatVersion"]) is not int or ledger["formatVersion"] != 1:
+    if type(ledger["formatVersion"]) is not int or ledger["formatVersion"] != 2:
         raise ValueError("Unknown ownership format version")
     if ledger["producerVersion"] != metadata["producerVersion"] or ledger["profileId"] != metadata["profileId"]:
         raise ValueError("Unknown ownership producer/profile")

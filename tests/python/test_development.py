@@ -128,12 +128,12 @@ class AssetTests(unittest.TestCase):
                 (root / folder).mkdir(parents=True)
             for name in ("source-manifest.json", "posix-source-manifest.json"):
                 (root / "third_party/freertos" / name).write_text('{"files": {}}')
-            (root / "tools/python/src/ecu_tools/workbench-v2-assets.json").write_text(
+            (root / "tools/python/src/ecu_tools/build-tool-inventory.json").write_text(
                 '{"files": []}'
             )
             source = root / "owned"
             source.write_bytes(b"original")
-            manifest = root / "runtime/contracts/assets-v1.json"
+            manifest = root / "runtime/contracts/assets.json"
             manifest.write_text(
                 json.dumps(
                     {

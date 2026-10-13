@@ -138,7 +138,7 @@ class CAnalysisTests(unittest.TestCase):
 
             def analyze(executable, addons, root, sources, database, scope, target, output):
                 calls.append(sources)
-                failed = output.name == "legacy-probe"
+                failed = output.name == "probe"
                 return (1 if failed else 0), not failed, [], []
 
             with patch.object(c_check, "tool_identity", return_value=(directory / "cppcheck", directory, {})), patch.object(c_check, "coverage", return_value={}), patch.object(c_check, "prepare", return_value=(root, units, database, {"profile": "ecu"})), patch.object(c_check, "analyze_program", side_effect=analyze), patch.object(c_check, "sealed_sources"):
@@ -166,7 +166,7 @@ class CAnalysisTests(unittest.TestCase):
                 receipts = directory / "addon-receipts"
                 receipts.mkdir()
                 for index, row in enumerate(commands):
-                    data = [] if directory.name == "legacy-probe" else {"units": [row["file"]], "configurations": 1}
+                    data = [] if directory.name == "probe" else {"units": [row["file"]], "configurations": 1}
                     (receipts / f"{index}.json").write_text(json.dumps(data))
                 return 0, "", "<results><errors/></results>"
 

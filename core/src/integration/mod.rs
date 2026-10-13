@@ -54,6 +54,8 @@ use std::path::{Component, Path};
 
 /// The removed single-component chain.
 const SINGLE_COMPONENT_PROFILE: &str = "epic4-win64-sr-cs-v1";
+/// The single application slot recorded by retired single-component projects.
+const SINGLE_COMPONENT_SLOT: &str = "epic4-single-application-v1";
 /// The removed frame/signal host chain.
 pub const HOST_PROFILE: &str = "host-can-v1";
 /// Product profiles whose projects and deliveries are refused on open rather
@@ -68,7 +70,7 @@ pub(crate) const RETIRED_PROFILES: [&str; 3] = [
 
 /// Application slots of a retired profile, recorded in project manifests.
 pub(crate) fn retired_profile_of_slot(slot: &str) -> Option<&'static str> {
-    if slot == crate::generator::delivery::APPLICATION_SLOT {
+    if slot == SINGLE_COMPONENT_SLOT {
         return Some(SINGLE_COMPONENT_PROFILE);
     }
     RETIRED_PROFILES.into_iter().find(|profile| {
@@ -76,7 +78,7 @@ pub(crate) fn retired_profile_of_slot(slot: &str) -> Option<&'static str> {
             .is_some_and(|rest| rest.starts_with(':'))
     })
 }
-pub const FORMAT_VERSION: u32 = 1;
+pub const FORMAT_VERSION: u32 = 2;
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]

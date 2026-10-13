@@ -216,10 +216,7 @@ pub(crate) fn source_assets(
 ) -> Result<BTreeMap<String, &'static crate::resources::AssetEntry>, crate::LocalizedText> {
     let inventory = AssetInventory::embedded();
     let mut files = BTreeMap::new();
-    for asset in inventory
-        .selected(target, "ecu")
-        .chain(inventory.selected(target, "ecu-multi"))
-    {
+    for asset in inventory.selected(target, "ecu") {
         files.insert(crate::prepared::deliver_path(asset)?, asset);
     }
     Ok(files)

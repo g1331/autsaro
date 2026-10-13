@@ -688,7 +688,7 @@ pub(super) fn files(
         })
         .map(|(path, asset)| (asset.relative_path, path))
         .collect();
-    put(&mut files, "integration.json", format!("{}\n", serde_json::to_string_pretty(&serde_json::json!({"format": "autosar-ecu-integration-v1", "plan": description, "target": target.spec().id, "owner": "single source-derived AUTOSTART extended task", "originalBswSources": original_sources })).unwrap()));
+    put(&mut files, "integration.json", format!("{}\n", serde_json::to_string_pretty(&serde_json::json!({"format": "autosar-ecu-integration-v2", "plan": description, "target": target.spec().id, "owner": "single source-derived AUTOSTART extended task", "originalBswSources": original_sources })).unwrap()));
     let verification = super::handoff::verification_files(plan).map_err(|_| failure())?;
     put(
         &mut files,
