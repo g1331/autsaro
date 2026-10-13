@@ -7,7 +7,6 @@ use std::path::Path;
 /// schema, and the independent ARTI reader resolves every ARTI reference
 /// against the official ECUC MOD definitions and the delivered inputs.
 #[cfg(feature = "official-oracles")]
-#[cfg(feature = "official-oracles")]
 #[test]
 fn official_descriptions() {
     use autosar_config_core::schema;
@@ -34,8 +33,8 @@ fn official_descriptions() {
         let directory = scratch.0.join(label);
         std::fs::create_dir(&directory).unwrap();
         let (project, _) = project(&sources, &directory, BuildTarget::LinuxX64ControlledV1);
-        for name in ["os/Os_Arti.arxml", "os/Os_Service.arxml"] {
-            let path = project.join(name);
+        for name in ["Os_Arti.arxml", "Os_Service.arxml"] {
+            let path = delivered(&project, name);
             let xml = std::fs::read_to_string(&path).unwrap();
             let issues = schema::validate_files(&archive, &[(&path, &xml)]).unwrap();
             assert!(issues.is_empty(), "{label} {name}: {issues:?}");
@@ -52,7 +51,7 @@ fn official_descriptions() {
         if label != "alarms" {
             continue;
         }
-        let path = project.join("os/Os_Arti.arxml");
+        let path = delivered(&project, "Os_Arti.arxml");
         let xml = std::fs::read_to_string(&path).unwrap();
         for (fault, changed) in [
             (
@@ -74,7 +73,7 @@ fn official_descriptions() {
             );
         }
         std::fs::write(&path, &xml).unwrap();
-        let binding_path = project.join("os/src/Os_Arti.c");
+        let binding_path = delivered(&project, "Os_Arti.c");
         let binding = std::fs::read_to_string(&binding_path).unwrap();
         let changed = binding.replace("0u, OsTask_Start,", "0u, OsTask_Absent,");
         assert_ne!(binding, changed);
@@ -87,4 +86,17 @@ fn official_descriptions() {
             String::from_utf8_lossy(&output.stderr)
         );
     }
+}
+
+/// The single file named `name` in the delivered project's file list, so the
+/// test follows the delivery layout instead of hardcoding its directories.
+#[cfg(feature = "official-oracles")]
+fn delivered(project: &Path, name: &str) -> std::path::PathBuf {
+    let list = std::fs::read_to_string(project.join("meta/files.list")).unwrap();
+    let matches: Vec<_> = list
+        .lines()
+        .filter(|line| line.rsplit('/').next() == Some(name))
+        .collect();
+    assert_eq!(matches.len(), 1, "{name} in meta/files.list: {matches:?}");
+    project.join(matches[0])
 }
