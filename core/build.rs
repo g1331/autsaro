@@ -54,12 +54,7 @@ fn add(
                 matches!(*id, "windows-x64-controlled-v1" | "linux-x64-controlled-v1")
             })
     );
-    assert!(
-        !profiles.is_empty()
-            && profiles
-                .iter()
-                .all(|profile| matches!(*profile, "ecu" | "ecu-multi"))
-    );
+    assert!(!profiles.is_empty() && profiles.iter().all(|profile| *profile == "ecu"));
     assert!(hash.len() == 64 && hash.bytes().all(|byte| byte.is_ascii_hexdigit()));
     assert!(
         rows.insert(
@@ -113,18 +108,18 @@ fn main() {
     )
     .expect("official constants");
     println!("cargo:rerun-if-changed={}", official_path.display());
-    let helper = root.join("tools/python/src/ecu_tools/workbench_v2.py");
+    let helper = root.join("tools/python/src/ecu_tools/sealed_package.py");
     let helper_digest = format!(
         "{:x}",
-        Sha256::digest(fs::read(&helper).expect("v2 helper"))
+        Sha256::digest(fs::read(&helper).expect("sealed package helper"))
     );
     let helper_manifest =
-        read_manifest(root, "tools/python/src/ecu_tools/workbench-v2-assets.json");
-    assert_eq!(helper_manifest["files"][0]["path"], "workbench_v2.py");
+        read_manifest(root, "tools/python/src/ecu_tools/build-tool-inventory.json");
+    assert_eq!(helper_manifest["files"][0]["path"], "sealed_package.py");
     assert_eq!(
         helper_manifest["files"][0]["sha256"].as_str(),
         Some(helper_digest.as_str()),
-        "v2 helper digest differs; review the source and update the asset inventory"
+        "sealed package helper digest differs; review the source and update the asset inventory"
     );
     let helper_index = format!("const TRUSTED_HELPER_SHA256: &str = {helper_digest:?};\n");
     fs::write(
@@ -135,14 +130,14 @@ fn main() {
     println!("cargo:rerun-if-changed={}", helper.display());
     println!(
         "cargo:rerun-if-changed={}",
-        root.join("tools/python/src/ecu_tools/workbench-v2-assets.json")
+        root.join("tools/python/src/ecu_tools/build-tool-inventory.json")
             .display()
     );
     let common: &[&str] = &["windows-x64-controlled-v1", "linux-x64-controlled-v1"];
     let windows: &[&str] = &["windows-x64-controlled-v1"];
     let linux: &[&str] = &["linux-x64-controlled-v1"];
-    let manifest = read_manifest(root, "runtime/contracts/assets-v1.json");
-    assert_eq!(manifest["format"], "autosar-asset-inventory-v1");
+    let manifest = read_manifest(root, "runtime/contracts/assets.json");
+    assert_eq!(manifest["format"], "autosar-asset-inventory-v2");
     let mut rows = BTreeMap::new();
     for entry in manifest["assets"].as_array().expect("assets array") {
         let path = entry["path"].as_str().expect("asset path").to_owned();
@@ -200,7 +195,7 @@ fn main() {
             &["ecu"],
         );
     }
-    let own_manifest = "runtime/contracts/assets-v1.json";
+    let own_manifest = "runtime/contracts/assets.json";
     let own_bytes = fs::read(root.join(own_manifest)).expect("asset inventory");
     add(
         &mut rows,
@@ -282,7 +277,7 @@ fn main() {
     build_native_inventory(&core);
     println!(
         "cargo:rerun-if-changed={}",
-        root.join("runtime/contracts/assets-v1.json").display()
+        root.join("runtime/contracts/assets.json").display()
     );
 }
 
@@ -423,8 +418,8 @@ fn build_native_inventory(core: &Path) {
         .map(|path| (format!("core/{path}"), core.join(path)))
         .collect();
     for relative in [
-        "tools/python/src/ecu_tools/workbench_v2.py",
-        "tools/python/src/ecu_tools/workbench-v2-assets.json",
+        "tools/python/src/ecu_tools/sealed_package.py",
+        "tools/python/src/ecu_tools/build-tool-inventory.json",
     ] {
         let absolute = root.join(relative);
         let metadata = fs::symlink_metadata(&absolute).expect("native delivery source metadata");

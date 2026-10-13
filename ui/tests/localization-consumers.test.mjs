@@ -145,7 +145,7 @@ async function openConsumer(
 }
 
 test.each(['zh-CN', 'en'])(
-  '%s multi-component inspection and draft restoration never read a missing single component',
+  '%s component composition inspection and draft restoration never read a missing single component',
   async (language) => {
     previewLanguage(language);
     const components = ['Ingress', 'Process', 'Observe', 'DcmService'].map((name) => ({
@@ -159,14 +159,14 @@ test.each(['zh-CN', 'en'])(
         sources: [
           { logicalPath: 'process.arxml', rawSha256: 'a'.repeat(64), roles: ['application'] },
         ],
-        multi: { components },
+        composition: { components },
         signals: [{ port: '/Application/Ingress/Received', canId: 0x320, receive: true, dlc: 4 }],
       },
     };
     const { view, current } = await openConsumer(undefined, baseProjection, inspection);
     act(() => current().setLanguageDraft(language));
     expect(current().integrationPeriod).toBe('');
-    expect(view.getByText(translate('shell.integration.multiReadOnly'))).toBeTruthy();
+    expect(view.getByText(translate('shell.integration.compositionReadOnly'))).toBeTruthy();
     for (const component of components) {
       expect(view.getByText(`${component.component} · ${component.instance}`)).toBeTruthy();
     }
@@ -205,7 +205,7 @@ test.each(['zh-CN', 'en'])(
         sources: [
           { logicalPath: 'application.arxml', rawSha256: 'a'.repeat(64), roles: ['application'] },
         ],
-        multi: {
+        composition: {
           components: [
             {
               component: '/Application/EchoApplication',
@@ -392,7 +392,7 @@ test('Problems renders serialized cardinality child names, bounds and actual cou
   expect(localize(diagnostics[1].witness.counterexample)).toBe('2');
 });
 
-test('real application controller transfers complete multi preview and revision unchanged to IPC', async () => {
+test('real application controller transfers complete composition preview and revision unchanged to IPC', async () => {
   const slots = ['Ingress', 'Process', 'Observe'].map((name) => ({
     producerSlot: `singlecore-ecu-v1:/Application/Pipeline/${name}Instance`,
     componentPath: `/Application/${name}`,
@@ -401,7 +401,7 @@ test('real application controller transfers complete multi preview and revision 
     entrySymbols: [`${name}_Periodic`],
   }));
   const preview = {
-    revision: 'complete-multi-source-revision',
+    revision: 'complete-composition-source-revision',
     slots,
     files: slots.map((slot) => ({
       path: slot.sourcePaths[0],

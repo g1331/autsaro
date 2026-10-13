@@ -49,8 +49,8 @@ fn fail(graph: &Graph, index: usize, code: &str) -> Vec<PlanDiagnostic> {
         index,
         DiagnosticCategory::Input,
         code,
-        crate::product_message!("backend.integration.multi.contract_invalid", "code" => code),
-        crate::product_message!("backend.integration.multi.repair_contract"),
+        crate::product_message!("backend.integration.composition.contract_invalid", "code" => code),
+        crate::product_message!("backend.integration.composition.repair_contract"),
     )]
 }
 fn containers(graph: &Graph, kind: &str) -> Vec<usize> {
@@ -74,7 +74,7 @@ fn unique(
 }
 fn time(value: Option<&str>) -> Option<u32> {
     value.and_then(|text| {
-        if super::multi::zero_seconds(text) {
+        if super::composition::zero_seconds(text) {
             Some(0)
         } else {
             milliseconds(text)

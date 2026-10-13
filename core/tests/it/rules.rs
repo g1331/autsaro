@@ -44,7 +44,8 @@ fn native_rules_support_original_can_and_standard_inputs_without_oracle() {
             result.diagnostics
         );
     }
-    let directory = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/epic4/positive");
+    let directory =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/echo-application/positive");
     let files: Vec<_> = [
         "application.arxml",
         "bsw.arxml",

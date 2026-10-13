@@ -1,6 +1,6 @@
 # 主机 ECU C99 运行时
 
-本目录提供随主线 ECU 工程（`singlecore-ecu-v1`）交付的 C99 运行时：`multi/` 为 Can、CanIf、CanTp、Com、ComM、BswM、Dcm、Det、LSduR、PduR 等 BSW 及其公共头文件，`ecu/` 为主机执行 adapter、HostBatch 入口与配置模板，`os/` 为受控 OS 目标（见 [os/README.md](os/README.md)），`contracts/` 为交付资产清单。生成器按 `target.json` 中的源码和头文件清单交付核心 BSW、所选执行 adapter 和生成配置。验证范围限于主机行为，尚未完成完整 AUTOSAR/ISO 一致性或真实芯片验证。
+本目录提供随主线 ECU 工程（`singlecore-ecu-v1`）交付的 C99 运行时：`bsw/` 为 Can、CanIf、CanTp、Com、ComM、BswM、Dcm、Det、LSduR、PduR 等 BSW 及其公共头文件，`ecu/` 为主机执行 adapter、HostBatch 入口与配置模板，`os/` 为受控 OS 目标（见 [os/README.md](os/README.md)），`contracts/` 为交付资产清单。生成器按 `target.json` 中的源码和头文件清单交付核心 BSW、所选执行 adapter 和生成配置。验证范围限于主机行为，尚未完成完整 AUTOSAR/ISO 一致性或真实芯片验证。
 
 ## 构建
 

@@ -4,14 +4,14 @@ use serde::Deserialize;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 
-const HELPER: &[u8] = include_bytes!("../../../../tools/python/src/ecu_tools/workbench_v2.py");
+const HELPER: &[u8] = include_bytes!("../../../../tools/python/src/ecu_tools/sealed_package.py");
 const INVENTORY: &[u8] =
-    include_bytes!("../../../../tools/python/src/ecu_tools/workbench-v2-assets.json");
+    include_bytes!("../../../../tools/python/src/ecu_tools/build-tool-inventory.json");
 include!(concat!(env!("OUT_DIR"), "/delivery_helper.rs"));
 const WRAPPER: &str = "tools/ecu-tool.py";
-const LEGACY_ENTRY: &str = "tools/legacy-ecu-tool.py";
-const HELPER_PATH: &str = "tools/workbench_v2.py";
-const INVENTORY_PATH: &str = "tools/workbench-v2-assets.json";
+const STANDALONE_ENTRY: &str = "tools/standalone-ecu-tool.py";
+const HELPER_PATH: &str = "tools/sealed_package.py";
+const INVENTORY_PATH: &str = "tools/build-tool-inventory.json";
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -34,10 +34,10 @@ pub(crate) fn add<'a>(
 ) -> Result<(), crate::LocalizedText> {
     let inventory: ToolInventory = serde_json::from_slice(INVENTORY)
         .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
-    if inventory.format != "autosar-workbench-build-tool-inventory-v1"
+    if inventory.format != "autosar-workbench-build-tool-inventory-v2"
         || inventory.version != "1.0.0"
         || inventory.files.len() != 1
-        || inventory.files[0].path != "workbench_v2.py"
+        || inventory.files[0].path != "sealed_package.py"
         || inventory.files[0].sha256 != TRUSTED_HELPER_SHA256
         || digest(HELPER) != TRUSTED_HELPER_SHA256
     {
@@ -57,7 +57,7 @@ pub(crate) fn add<'a>(
         ));
     }
     let original_bytes = original.bytes.clone();
-    insert_file(files, LEGACY_ENTRY.into(), original_bytes)?;
+    insert_file(files, STANDALONE_ENTRY.into(), original_bytes)?;
     insert_file(files, HELPER_PATH.into(), Cow::Borrowed(HELPER))?;
     insert_file(files, INVENTORY_PATH.into(), Cow::Borrowed(INVENTORY))?;
     let policy = super::ownership::ledger(files, metadata)?
@@ -96,7 +96,7 @@ pub(crate) fn add<'a>(
     let tool_json = serde_json::to_string(&tool_bytes)
         .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     let wrapper = format!(
-        r#""""Native v2 guard before the unchanged sealed standalone engineering tool."""
+        r#""""Native seal guard before the unchanged sealed standalone engineering tool."""
 import argparse
 import hashlib
 import json
@@ -128,7 +128,7 @@ def run():
             actual = hashlib.sha256(source.read(identity['size'] + 1)).hexdigest()
         if actual != identity['sha256']:
             raise ValueError('Native tool bytes differ from compiled producer: ' + name)
-    original = runpy.run_path(str(ROOT / 'tools/legacy-ecu-tool.py'))['main']
+    original = runpy.run_path(str(ROOT / 'tools/standalone-ecu-tool.py'))['main']
     if '-h' in sys.argv or '--help' in sys.argv:
         return original()
     parser = argparse.ArgumentParser(add_help=False)
@@ -138,7 +138,7 @@ def run():
         raise ValueError('Exactly one explicit native --project is required')
     if args.project[0].resolve(strict=True) != ROOT:
         raise ValueError('Use the engineering tool belonging to the selected immutable source package')
-    from workbench_v2 import validate
+    from sealed_package import validate
     validate(args.project[0], EXPECTED_METADATA, EXPECTED_POLICY, EXPECTED_PAYLOAD)
     result = original()
     validate(args.project[0], EXPECTED_METADATA, EXPECTED_POLICY, EXPECTED_PAYLOAD)

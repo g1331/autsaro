@@ -108,9 +108,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: ./.github/actions/core-build-dependencies
-      - run: cargo test --locked --manifest-path core/Cargo.toml
+      - run: cargo test --locked -p autosar-config-core
       # The features add the native and official test binaries, which only manual acceptance runs.
-      - run: cargo clippy --locked --manifest-path core/Cargo.toml --all-targets --features native-tests,official-oracles -- -A clippy::all -D clippy::correctness -D clippy::suspicious
+      - run: cargo clippy --locked -p autosar-config-core --all-targets --features native-tests,official-oracles -- -A clippy::all -D clippy::correctness -D clippy::suspicious
   desktop:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -132,8 +132,8 @@ jobs:
           linux-packages: libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev patchelf
       - run: npm ci --prefix ui
       - run: npm run build --prefix ui
-      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
-      - run: cargo build --locked --manifest-path src-tauri/Cargo.toml
+      - run: cargo test --locked -p autosar-config-desktop
+      - run: cargo build --locked -p autosar-config-desktop
   process:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -175,8 +175,8 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            core/target
-          key: native-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'core/Cargo.lock') }}-v1
+            target
+          key: native-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-v1
       - name: Select native contract tools
         shell: python
         run: |
@@ -191,7 +191,7 @@ jobs:
                   output.write(variable + '=' + str(Path(shutil.which(name)).absolute()) + '\n')
               output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
       - name: Native library and contract suites
-        run: cargo test --locked --manifest-path core/Cargo.toml --features native-tests --lib --test native --no-fail-fast
+        run: cargo test --locked -p autosar-config-core --features native-tests --lib --test native --no-fail-fast
   native-os:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -332,8 +332,8 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            core/target
-          key: c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'core/Cargo.lock') }}-v1
+            target
+          key: c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-v1
       - name: Analyzer behavior tests
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
       # The sealed build and receiver checks resolve the same absolute tools.
@@ -351,7 +351,7 @@ jobs:
                   output.write(variable + '=' + str(Path(shutil.which(name)).absolute()) + '\n')
               output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
       - name: Generate complete analysis samples
-        run: cargo test --locked --manifest-path core/Cargo.toml --test it -- 'c_analysis::'
+        run: cargo test --locked -p autosar-config-core --test it -- 'c_analysis::'
       - name: Sealed ECU build mode fault isolation
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_ecu_build_modes.py
       - name: Moved package verifies with the receiver Python
@@ -361,7 +361,7 @@ jobs:
         run: |
           import os
           from pathlib import Path
-          expected = {'standard-ecu', 'user-application', 'multi-component', 'no-diagnostic'}
+          expected = {'standard-ecu', 'user-application', 'component-pipeline', 'no-diagnostic'}
           if {p.name for p in Path(os.environ['AUTOSAR_C_ANALYSIS_SAMPLES']).iterdir()} != expected:
               raise RuntimeError('Generated sample inventory is incomplete')
       - uses: actions/upload-artifact@v7.0.1
@@ -390,8 +390,8 @@ jobs:
             samples: user-application
           - os: ubuntu-24.04
             target: linux-x64-controlled-v1
-            group: multi-component
-            samples: multi-component
+            group: component-pipeline
+            samples: component-pipeline
           - os: ubuntu-24.04
             target: linux-x64-controlled-v1
             group: no-diagnostic
@@ -406,8 +406,8 @@ jobs:
             samples: user-application
           - os: windows-latest
             target: windows-x64-controlled-v1
-            group: multi-component
-            samples: multi-component
+            group: component-pipeline
+            samples: component-pipeline
           - os: windows-latest
             target: windows-x64-controlled-v1
             group: no-diagnostic
@@ -514,7 +514,7 @@ jobs:
           import json
           from pathlib import Path
           targets = {'linux-x64-controlled-v1', 'windows-x64-controlled-v1'}
-          samples = {'standard-ecu', 'user-application', 'multi-component', 'no-diagnostic'}
+          samples = {'standard-ecu', 'user-application', 'component-pipeline', 'no-diagnostic'}
           expected = {(target, sample) for target in targets for sample in samples}
           found = set()
           for path in Path('build/c-analysis-summaries').glob('*/*/summary.json'):

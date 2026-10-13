@@ -545,7 +545,7 @@ fn extension_fingerprint_is_sorted_and_independent_of_source_and_cache_paths() {
 #[test]
 fn builtin_standard_ecu_consumers_have_real_types_and_boundaries() {
     let catalog = DefinitionCatalog::builtin().unwrap();
-    let xml = include_str!("../fixtures/epic4/positive/ecuc.arxml");
+    let xml = include_str!("../fixtures/echo-application/positive/ecuc.arxml");
     let baseline = catalog
         .validate_documents(&[(Path::new("ecuc.arxml"), xml)])
         .unwrap();

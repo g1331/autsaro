@@ -220,7 +220,7 @@ impl Author<'_> {
             kind: entry.kind.unwrap(),
             lexeme: lexeme.into(),
         });
-        entry.default_origin = Some("builtin:product-ecuc-r24-11-v1".into());
+        entry.default_origin = Some("builtin:product-ecuc-r24-11".into());
     }
 }
 

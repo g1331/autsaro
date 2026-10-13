@@ -3,7 +3,7 @@ use super::*;
 use std::path::Path;
 
 #[test]
-fn multi_workspace_initialization_reopen_and_regeneration_preserve_every_user_source() {
+fn pipeline_workspace_initialization_reopen_and_regeneration_preserve_every_user_source() {
     use autosar_config_core::{
         Workspace, prepared::prepare_ecu_project_for_workspace, target::BuildTarget,
     };
@@ -23,7 +23,7 @@ fn multi_workspace_initialization_reopen_and_regeneration_preserve_every_user_so
                 replace_all(&mut arxml, before, after);
             }
         }
-        let mut workspace = live_multi_workspace(&root, &arxml);
+        let mut workspace = live_pipeline_workspace(&root, &arxml);
         let preview = workspace.preview_application_initialization().unwrap();
         assert_eq!(preview.slots.len(), 3);
         assert_eq!(preview.files.len(), 3);
@@ -147,11 +147,11 @@ fn multi_workspace_initialization_reopen_and_regeneration_preserve_every_user_so
 }
 
 #[test]
-fn multi_workspace_reopen_rejects_incomplete_unknown_and_wrong_slot_membership() {
+fn pipeline_workspace_reopen_rejects_incomplete_unknown_and_wrong_slot_membership() {
     use autosar_config_core::Workspace;
     let scratch = Scratch::new();
     let root = scratch.0.join("live");
-    let mut workspace = live_multi_workspace(&root, &inputs());
+    let mut workspace = live_pipeline_workspace(&root, &inputs());
     let preview = workspace.preview_application_initialization().unwrap();
     workspace
         .initialize_application_previewed(&preview)
@@ -208,12 +208,12 @@ fn multi_workspace_reopen_rejects_incomplete_unknown_and_wrong_slot_membership()
 
 #[cfg(unix)]
 #[test]
-fn multi_workspace_initialization_and_reopen_refuse_symlink_members() {
+fn pipeline_workspace_initialization_and_reopen_refuse_symlink_members() {
     use autosar_config_core::{Workspace, prepared::prepare_ecu_project_for_workspace};
     use std::os::unix::fs::symlink;
     let scratch = Scratch::new();
     let root = scratch.0.join("live");
-    let mut workspace = live_multi_workspace(&root, &inputs());
+    let mut workspace = live_pipeline_workspace(&root, &inputs());
     let preview = workspace.preview_application_initialization().unwrap();
     let source = root.join(&preview.files[1].path);
     std::fs::create_dir_all(source.parent().unwrap()).unwrap();
@@ -282,7 +282,7 @@ fn tampered_trusted_runtime_asset_is_refused_by_identity() {
     use autosar_config_core::resources::AssetInventory;
     let scratch = Scratch::new();
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let tampered = "runtime/multi/src/Can.c";
+    let tampered = "runtime/bsw/src/Can.c";
     let destination = scratch.0.join(tampered);
     std::fs::create_dir_all(destination.parent().unwrap()).unwrap();
     let mut bytes = std::fs::read(root.join(tampered)).unwrap();
@@ -302,7 +302,7 @@ fn mainline_sources_through_a_directory_link_or_junction_are_refused() {
     use autosar_config_core::Workspace;
     let scratch = Scratch::new();
     let root = scratch.0.join("live");
-    live_multi_workspace(&root, &inputs());
+    live_pipeline_workspace(&root, &inputs());
     let alias = scratch.0.join("alias");
     link_directory(&alias, &root);
     assert!(
@@ -325,7 +325,7 @@ fn mainline_sources_through_a_directory_link_or_junction_are_refused() {
 fn mainline_generation_rejects_trailing_dot_and_linked_output_without_touching_owner() {
     use autosar_config_core::prepared::prepare_ecu_project_for_workspace;
     let scratch = Scratch::new();
-    let workspace = initialized_multi_user_workspace(&scratch.0.join("live"));
+    let workspace = initialized_pipeline_workspace(&scratch.0.join("live"));
     let plan = workspace.saved_integration_plan().unwrap();
     let prepare = || {
         prepare_ecu_project_for_workspace(
@@ -359,13 +359,13 @@ fn mainline_generation_rejects_trailing_dot_and_linked_output_without_touching_o
 }
 
 #[test]
-fn multi_workspace_missing_or_directory_source_refuses_reopen_and_prepared_generation() {
+fn pipeline_workspace_missing_or_directory_source_refuses_reopen_and_prepared_generation() {
     use autosar_config_core::{
         Workspace, prepared::prepare_ecu_project_for_workspace, target::BuildTarget,
     };
     let scratch = Scratch::new();
     let root = scratch.0.join("live");
-    let mut workspace = live_multi_workspace(&root, &inputs());
+    let mut workspace = live_pipeline_workspace(&root, &inputs());
     let initialization = workspace.preview_application_initialization().unwrap();
     workspace
         .initialize_application_previewed(&initialization)
@@ -434,7 +434,7 @@ fn multi_workspace_missing_or_directory_source_refuses_reopen_and_prepared_gener
 }
 
 #[test]
-fn multi_workspace_ownership_rejects_existing_foreign_signal_mapping_member() {
+fn pipeline_workspace_ownership_rejects_existing_foreign_signal_mapping_member() {
     use autosar_config_core::Workspace;
     let scratch = Scratch::new();
     let root = scratch.0.join("live");
@@ -455,7 +455,7 @@ fn multi_workspace_ownership_rejects_existing_foreign_signal_mapping_member() {
           </DATA-ELEMENTS>
         </SENDER-RECEIVER-INTERFACE>"#,
     );
-    let mut workspace = live_multi_workspace(&root, &arxml);
+    let mut workspace = live_pipeline_workspace(&root, &arxml);
     let initialization = workspace.preview_application_initialization().unwrap();
     workspace
         .initialize_application_previewed(&initialization)

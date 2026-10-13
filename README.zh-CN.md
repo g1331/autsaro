@@ -23,7 +23,7 @@ Autsaro 支持从内置模板创建 ECU 工程，或导入多份 ARXML；在同�
 
 多组件应用沿同一工程树和检查器编辑事件周期、组件实例引用及连接批次。创建各组件的应用源码前先预览初始化；后续生成读取用户源码形成快照，保留原工程中的源文件字节。
 
-<a href="docs/images/workbench-multi-editing-zh.png"><img src="docs/images/workbench-multi-editing-zh.png" width="980" alt="多组件工程：已保存的定时事件、长对象名称和属性检查器中的周期"></a>
+<a href="docs/images/workbench-component-editing-zh.png"><img src="docs/images/workbench-component-editing-zh.png" width="980" alt="多组件工程：已保存的定时事件、长对象名称和属性检查器中的周期"></a>
 
 <table>
   <tr>
@@ -94,10 +94,10 @@ npm run dev --prefix ui
 npm run test --prefix ui
 npm run build --prefix ui
 uv run --locked python -B -m unittest discover -s tests/python
-cargo test --locked --manifest-path core/Cargo.toml
+cargo test --locked -p autosar-config-core
 ~~~
 
-这些命令直接运行对应工具，失败会保留其诊断与退出状态。Python 工具先执行 `uv sync --locked`。增量格式检查使用 `autosar_tooling quality --base <基准提交>`，本地未指定基准时检查相对 HEAD 的待提交改动。
+这些命令直接运行对应工具，失败会保留其诊断与退出状态。Python 工具先执行 `uv sync --locked`。增量格式检查使用 `autosar_tooling quality --base <基准提交>`，本地未指定基准时检查相对 HEAD 的待提交改动。`quality` 同时拒绝仓库路径和文本中的开发计划编号，决定记录、路线图和上游原样内容除外。
 
 基础测试、官方对照、原生运行及 GUI/安装包验收分别执行，见 [测试指南](docs/development/testing.md)。完整资源与原生检查使用 `uv run --locked python -m autosar_tooling verify --scope all --base <基准提交>`；缺失或未运行的层不显示为通过。
 
@@ -109,7 +109,7 @@ cargo test --locked --manifest-path core/Cargo.toml
 npm run tauri --prefix ui -- build
 ```
 
-产物位于 `src-tauri/target/release/bundle/`。Windows 配置 MSI，Linux 配置 deb／AppImage；macOS 配置 app／dmg，但尚未完成原生验证。签名、公证与公开发行尚未验证。
+产物位于 `target/release/bundle/`。Windows 配置 MSI，Linux 配置 deb／AppImage；macOS 配置 app／dmg，但尚未完成原生验证。签名、公证与公开发行尚未验证。
 
 安装后的应用不需要 Rust、Node、npm 或 uv。Windows 需要 WebView2，Linux 需要 WebKitGTK 4.1、Ayatana AppIndicator 和 libxml2。安装包不包含官方规范档案或编译器；ECU 构建与主机验证另需对应工具链。
 

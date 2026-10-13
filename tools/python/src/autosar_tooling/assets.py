@@ -41,7 +41,7 @@ def maintain(*, update: bool = False, root: Path = ROOT) -> int:
                 )
     documents = {}
     changes = []
-    inventory_path = root / "runtime/contracts/assets-v1.json"
+    inventory_path = root / "runtime/contracts/assets.json"
     inventory = json.loads(inventory_path.read_text())
     updated = copy.deepcopy(inventory)
     seen = set()
@@ -63,7 +63,7 @@ def maintain(*, update: bool = False, root: Path = ROOT) -> int:
             item["sha256"] = actual
     if updated != inventory:
         documents[inventory_path] = updated
-    tool_path = root / "tools/python/src/ecu_tools/workbench-v2-assets.json"
+    tool_path = root / "tools/python/src/ecu_tools/build-tool-inventory.json"
     tools = json.loads(tool_path.read_text())
     updated_tools = copy.deepcopy(tools)
     for item in updated_tools["files"]:

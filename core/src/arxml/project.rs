@@ -301,7 +301,7 @@ fn template_files(
         ));
     }
     let mut files = Vec::new();
-    let profile: String = crate::integration::MULTI_PROFILE.into();
+    let profile: String = crate::integration::PROFILE.into();
     // Product-original single application component project on the
     // generation mainline; not official archive payloads.
     let originals = [
@@ -835,7 +835,7 @@ impl Workspace {
         });
         let mut preview = ProjectCreationPreview {
             revision: String::new(),
-            template_id: "save-as-project-v1".into(),
+            template_id: "save-as-project".into(),
             directory: directory.display().to_string(),
             name: name.into(),
             files,

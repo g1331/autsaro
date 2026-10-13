@@ -48,7 +48,7 @@ class EcuBuildModeTests(unittest.TestCase):
                 wrong_tools[variable] = str(wrong)
 
             for sample, mode in [("standard-ecu", "host-batch"), ("user-application", "host-batch"),
-                                 ("multi-component", "host-batch")]:
+                                 ("component-pipeline", "host-batch")]:
                 with self.subTest(sample=sample):
                     received = directory / sample / "package"
                     shutil.copytree(Path(samples) / sample, received)
@@ -68,8 +68,8 @@ class EcuBuildModeTests(unittest.TestCase):
                             argv, received, 180, directory / "driver-logs", sample + "-" + stage,
                             env=run_env)).wait()
 
-                    # Probe every required tool on the same real multi package.
-                    if sample == "multi-component":
+                    # Probe every required tool on the same real pipeline package.
+                    if sample == "component-pipeline":
                         failures = [("missing-" + key, {**env, key: ""}, "Missing") for key in tools]
                         failures.append(("wrong-gcc", {**env, "AUTOSAR_CC": wrong_tools["AUTOSAR_CC"]},
                                          "Compiler identity differs"))

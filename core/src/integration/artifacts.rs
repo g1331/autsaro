@@ -74,7 +74,7 @@ pub(super) fn files<T>(
                 .entry(module.into())
                 .or_default()
                 .push(symbol.clone());
-        } else if let Some(path) = symbol.definition_owner.strip_prefix("runtime/multi/src/") {
+        } else if let Some(path) = symbol.definition_owner.strip_prefix("runtime/bsw/src/") {
             entries
                 .entry(path.trim_end_matches(".c").into())
                 .or_default()
@@ -97,8 +97,8 @@ pub(super) fn files<T>(
             "Can_DeInit",
             "void",
             vec![],
-            "runtime/multi/include/standard/Can.h",
-            "runtime/multi/src/Can.c",
+            "runtime/bsw/include/standard/Can.h",
+            "runtime/bsw/src/Can.c",
         ),
         (
             "Det",
@@ -110,8 +110,8 @@ pub(super) fn files<T>(
                 ("ApiId", "uint8_t", "IN"),
                 ("ErrorId", "uint8_t", "IN"),
             ],
-            "runtime/multi/include/Det.h",
-            "runtime/multi/src/Det.c",
+            "runtime/bsw/include/Det.h",
+            "runtime/bsw/src/Det.c",
         ),
     ] {
         let mut symbol = rte_symbol(name, result, &args);
@@ -150,7 +150,7 @@ pub(super) fn files<T>(
             if !module_entries.iter().any(|entry| entry.symbol == name) {
                 let mut symbol = rte_symbol(name, result, args);
                 symbol.declaration_owner = header.into();
-                symbol.definition_owner = format!("runtime/multi/src/{module}.c");
+                symbol.definition_owner = format!("runtime/bsw/src/{module}.c");
                 module_entries.push(symbol);
             }
         };
@@ -162,7 +162,7 @@ pub(super) fn files<T>(
             ("Hth", "Can_HwHandleType", "IN"),
             ("PduInfo", "const Can_PduType *", "IN"),
         ],
-        "runtime/multi/include/standard/Can.h",
+        "runtime/bsw/include/standard/Can.h",
     );
     imported(
         "Can",
@@ -172,7 +172,7 @@ pub(super) fn files<T>(
             ("Controller", "uint8", "IN"),
             ("Transition", "Can_ControllerStateType", "IN"),
         ],
-        "runtime/multi/include/standard/Can.h",
+        "runtime/bsw/include/standard/Can.h",
     );
     imported(
         "Can",
@@ -182,7 +182,7 @@ pub(super) fn files<T>(
             ("Controller", "uint8", "IN"),
             ("Value", "Can_ControllerStateType *", "OUT"),
         ],
-        "runtime/multi/include/standard/Can.h",
+        "runtime/bsw/include/standard/Can.h",
     );
     imported(
         "Can",
@@ -192,21 +192,21 @@ pub(super) fn files<T>(
             ("Controller", "uint8", "IN"),
             ("Value", "Can_ErrorStateType *", "OUT"),
         ],
-        "runtime/multi/include/standard/Can.h",
+        "runtime/bsw/include/standard/Can.h",
     );
     imported(
         "Can",
         "Can_GetControllerRxErrorCounter",
         "Std_ReturnType",
         &[("Controller", "uint8", "IN"), ("Value", "uint8 *", "OUT")],
-        "runtime/multi/include/standard/Can.h",
+        "runtime/bsw/include/standard/Can.h",
     );
     imported(
         "Can",
         "Can_GetControllerTxErrorCounter",
         "Std_ReturnType",
         &[("Controller", "uint8", "IN"), ("Value", "uint8 *", "OUT")],
-        "runtime/multi/include/standard/Can.h",
+        "runtime/bsw/include/standard/Can.h",
     );
     imported(
         "CanIf",
@@ -216,14 +216,14 @@ pub(super) fn files<T>(
             ("Mailbox", "const Can_HwType *", "IN"),
             ("PduInfoPtr", "const PduInfoType *", "IN"),
         ],
-        "runtime/multi/include/CanIf.h",
+        "runtime/bsw/include/CanIf.h",
     );
     imported(
         "CanIf",
         "CanIf_TxConfirmation",
         "void",
         &[("CanTxPduId", "PduIdType", "IN")],
-        "runtime/multi/include/CanIf.h",
+        "runtime/bsw/include/CanIf.h",
     );
     imported(
         "CanIf",
@@ -233,28 +233,28 @@ pub(super) fn files<T>(
             ("ControllerId", "uint8", "IN"),
             ("ControllerMode", "Can_ControllerStateType", "IN"),
         ],
-        "runtime/multi/include/CanIf.h",
+        "runtime/bsw/include/CanIf.h",
     );
     imported(
         "CanIf",
         "CanIf_ControllerBusOff",
         "void",
         &[("ControllerId", "uint8", "IN")],
-        "runtime/multi/include/CanIf.h",
+        "runtime/bsw/include/CanIf.h",
     );
     imported(
         "ComM",
         "ComM_DCM_ActiveDiagnostic",
         "void",
         &[("Channel", "NetworkHandleType", "IN")],
-        "runtime/multi/include/ComM_Dcm.h",
+        "runtime/bsw/include/ComM_Dcm.h",
     );
     imported(
         "ComM",
         "ComM_DCM_InactiveDiagnostic",
         "void",
         &[("Channel", "NetworkHandleType", "IN")],
-        "runtime/multi/include/ComM_Dcm.h",
+        "runtime/bsw/include/ComM_Dcm.h",
     );
     imported(
         "Com",
@@ -264,7 +264,7 @@ pub(super) fn files<T>(
             ("PduId", "PduIdType", "IN"),
             ("PduInfoPtr", "const PduInfoType *", "IN"),
         ],
-        "runtime/multi/include/Com.h",
+        "runtime/bsw/include/Com.h",
     );
     imported(
         "Com",
@@ -274,7 +274,7 @@ pub(super) fn files<T>(
             ("PduId", "PduIdType", "IN"),
             ("Result", "Std_ReturnType", "IN"),
         ],
-        "runtime/multi/include/Com.h",
+        "runtime/bsw/include/Com.h",
     );
     imported(
         "Com",
@@ -284,7 +284,7 @@ pub(super) fn files<T>(
             ("PduId", "PduIdType", "IN"),
             ("PduInfoPtr", "PduInfoType *", "INOUT"),
         ],
-        "runtime/multi/include/Com.h",
+        "runtime/bsw/include/Com.h",
     );
     imported(
         "ComM",
@@ -294,7 +294,7 @@ pub(super) fn files<T>(
             ("Channel", "NetworkHandleType", "IN"),
             ("ComMode", "ComM_ModeType", "IN"),
         ],
-        "runtime/multi/include/ComM.h",
+        "runtime/bsw/include/ComM.h",
     );
     imported(
         "BswM",
@@ -304,7 +304,7 @@ pub(super) fn files<T>(
             ("Network", "NetworkHandleType", "IN"),
             ("RequestedMode", "ComM_ModeType", "IN"),
         ],
-        "runtime/multi/include/BswM_ComM.h",
+        "runtime/bsw/include/BswM_ComM.h",
     );
     if plan.diagnostic_transport.is_some() {
         imported(
@@ -315,7 +315,7 @@ pub(super) fn files<T>(
                 ("TxPduId", "PduIdType", "IN"),
                 ("PduInfoPtr", "const PduInfoType *", "IN"),
             ],
-            "runtime/multi/include/CanTp.h",
+            "runtime/bsw/include/CanTp.h",
         );
         imported(
             "CanTp",
@@ -325,7 +325,7 @@ pub(super) fn files<T>(
                 ("RxPduId", "PduIdType", "IN"),
                 ("PduInfoPtr", "const PduInfoType *", "IN"),
             ],
-            "runtime/multi/include/CanTp.h",
+            "runtime/bsw/include/CanTp.h",
         );
         imported(
             "CanTp",
@@ -335,7 +335,7 @@ pub(super) fn files<T>(
                 ("TxPduId", "PduIdType", "IN"),
                 ("Result", "Std_ReturnType", "IN"),
             ],
-            "runtime/multi/include/CanTp.h",
+            "runtime/bsw/include/CanTp.h",
         );
         imported(
             "PduR",
@@ -345,13 +345,13 @@ pub(super) fn files<T>(
                 ("TxPduId", "PduIdType", "IN"),
                 ("PduInfoPtr", "const PduInfoType *", "IN"),
             ],
-            "runtime/multi/include/PduR_Dcm.h",
+            "runtime/bsw/include/PduR_Dcm.h",
         );
     }
     if plan.diagnostic_transport.is_some() {
         for (owner, prefix, header) in [
-            ("PduR", "PduR_CanTp", "runtime/multi/include/PduR_CanTp.h"),
-            ("Dcm", "Dcm_", "runtime/multi/include/Dcm.h"),
+            ("PduR", "PduR_CanTp", "runtime/bsw/include/PduR_CanTp.h"),
+            ("Dcm", "Dcm_", "runtime/bsw/include/Dcm.h"),
         ] {
             for (suffix, result, args) in [
                 (
@@ -407,11 +407,11 @@ pub(super) fn files<T>(
                 ("Id", "PduIdType", "IN"),
                 ("Result", "Std_ReturnType", "IN"),
             ],
-            "runtime/multi/include/PduR_CanTp.h",
+            "runtime/bsw/include/PduR_CanTp.h",
         );
     }
     for (owner, prefix) in [("LSduR", "LSduR_CanIf"), ("PduR", "PduR_CanIf")] {
-        let header = format!("runtime/multi/include/{owner}_CanIf.h");
+        let header = format!("runtime/bsw/include/{owner}_CanIf.h");
         for (suffix, result, args) in [
             (
                 "RxIndication",
@@ -453,7 +453,7 @@ pub(super) fn files<T>(
                 ("TxPduId", "PduIdType", "IN"),
                 ("PduInfoPtr", "const PduInfoType *", "IN"),
             ],
-            &format!("runtime/multi/include/LSduR_{upper}.h"),
+            &format!("runtime/bsw/include/LSduR_{upper}.h"),
         );
     }
     for (name, args) in [
@@ -498,7 +498,7 @@ pub(super) fn files<T>(
             name,
             "Std_ReturnType",
             &args,
-            "runtime/multi/include/CanIf.h",
+            "runtime/bsw/include/CanIf.h",
         );
     }
     let dcm = entries.entry("Dcm".into()).or_default();
@@ -530,12 +530,12 @@ pub(super) fn files<T>(
     ] {
         let mut symbol = rte_symbol(name, result, &args);
         symbol.declaration_owner = if name.starts_with("Dcm_ComM_") {
-            "runtime/multi/include/Dcm_ComM.h"
+            "runtime/bsw/include/Dcm_ComM.h"
         } else {
-            "runtime/multi/include/Dcm.h"
+            "runtime/bsw/include/Dcm.h"
         }
         .into();
-        symbol.definition_owner = "runtime/multi/src/Dcm.c".into();
+        symbol.definition_owner = "runtime/bsw/src/Dcm.c".into();
         dcm.push(symbol);
     }
 
@@ -568,7 +568,7 @@ pub(super) fn files<T>(
         rte.push(symbol);
     }
     let authentication = plan
-        .multi
+        .composition
         .as_ref()
         .unwrap()
         .dcm_modes
@@ -655,21 +655,21 @@ pub(super) fn files<T>(
             8
         } else if native == "PduLengthType" {
             match plan.communication_runtime.as_ref().map_or(
-                super::multi_bsw::CommunicationIntegerType::Uint16,
+                super::can_runtime::CommunicationIntegerType::Uint16,
                 |runtime| runtime.pdu_length_type,
             ) {
-                super::multi_bsw::CommunicationIntegerType::Uint8 => 8,
-                super::multi_bsw::CommunicationIntegerType::Uint16 => 16,
-                super::multi_bsw::CommunicationIntegerType::Uint32 => 32,
+                super::can_runtime::CommunicationIntegerType::Uint8 => 8,
+                super::can_runtime::CommunicationIntegerType::Uint16 => 16,
+                super::can_runtime::CommunicationIntegerType::Uint32 => 32,
             }
         } else if native == "PduIdType" {
             match plan.communication_runtime.as_ref().map_or(
-                super::multi_bsw::CommunicationIntegerType::Uint8,
+                super::can_runtime::CommunicationIntegerType::Uint8,
                 |runtime| runtime.pdu_id_type,
             ) {
-                super::multi_bsw::CommunicationIntegerType::Uint8 => 8,
-                super::multi_bsw::CommunicationIntegerType::Uint16 => 16,
-                super::multi_bsw::CommunicationIntegerType::Uint32 => 32,
+                super::can_runtime::CommunicationIntegerType::Uint8 => 8,
+                super::can_runtime::CommunicationIntegerType::Uint16 => 16,
+                super::can_runtime::CommunicationIntegerType::Uint32 => 32,
             }
         } else if matches!(
             native.as_str(),
@@ -689,9 +689,9 @@ pub(super) fn files<T>(
         ) {
             32
         } else if plan
-            .multi
+            .composition
             .as_ref()
-            .is_some_and(|multi| multi.array_types.values().any(|name| name == native))
+            .is_some_and(|composition| composition.array_types.values().any(|name| name == native))
         {
             // native_type validates a fixed four-byte UINT8 array in this profile.
             32
@@ -887,7 +887,7 @@ pub(super) fn files<T>(
             };
             let managed = if name == "Dcm_Init" {
                 let authentication = plan
-                    .multi
+                    .composition
                     .as_ref()
                     .unwrap()
                     .dcm_modes
@@ -1013,7 +1013,7 @@ pub(super) fn files<T>(
         }
         if module == "Dcm" && plan.diagnostic_transport.is_some() {
             let authentication = plan
-                .multi
+                .composition
                 .as_ref()
                 .unwrap()
                 .dcm_modes
@@ -1048,7 +1048,7 @@ pub(super) fn files<T>(
             .unwrap_or_default();
         let provided = if module == "Dcm" {
             let mut xml = String::from("<PROVIDED-MODE-GROUPS>");
-            for definition in &plan.multi.as_ref().unwrap().dcm_modes {
+            for definition in &plan.composition.as_ref().unwrap().dcm_modes {
                 let group = &definition.group;
                 write!(xml, "<MODE-DECLARATION-GROUP-PROTOTYPE><SHORT-NAME>{group}</SHORT-NAME><TYPE-TREF DEST=\"MODE-DECLARATION-GROUP\">/AUTOSAR_Dcm/{group}</TYPE-TREF></MODE-DECLARATION-GROUP-PROTOTYPE>").unwrap();
             }
@@ -1073,7 +1073,7 @@ pub(super) fn files<T>(
         if module == "Dcm" {
             let mode_native = types["Rte_ModeType_DcmDiagnosticSessionControl"];
             let mut maps = String::new();
-            for definition in &plan.multi.as_ref().unwrap().dcm_modes {
+            for definition in &plan.composition.as_ref().unwrap().dcm_modes {
                 let group = &definition.group;
                 let initial = definition.modes[0];
                 write!(elements, "<IMPLEMENTATION-DATA-TYPE><SHORT-NAME>Rte_ModeType_{group}</SHORT-NAME><CATEGORY>VALUE</CATEGORY><SW-DATA-DEF-PROPS><SW-DATA-DEF-PROPS-VARIANTS><SW-DATA-DEF-PROPS-CONDITIONAL><BASE-TYPE-REF DEST=\"SW-BASE-TYPE\">/HostArtifacts/Native{mode_native}</BASE-TYPE-REF></SW-DATA-DEF-PROPS-CONDITIONAL></SW-DATA-DEF-PROPS-VARIANTS></SW-DATA-DEF-PROPS></IMPLEMENTATION-DATA-TYPE><MODE-DECLARATION-GROUP><SHORT-NAME>{group}</SHORT-NAME><CATEGORY>EXPLICIT_ORDER</CATEGORY><INITIAL-MODE-REF DEST=\"MODE-DECLARATION\">/AUTOSAR_Dcm/{group}/{initial}</INITIAL-MODE-REF><MODE-DECLARATIONS>").unwrap();
@@ -1104,7 +1104,7 @@ pub(super) fn files<T>(
                 "<RESOURCE-CONSUMPTION><SHORT-NAME>CodeMapping</SHORT-NAME><MEMORY-SECTIONS><MEMORY-SECTION><SHORT-NAME>Can_CODE</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/CanHostImplementation/CodeMapping/CAN</PREFIX-REF><SYMBOL>CODE</SYMBOL></MEMORY-SECTION><MEMORY-SECTION><SHORT-NAME>Can_VAR_CLEARED_UNSPECIFIED</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/CanHostImplementation/CodeMapping/CAN</PREFIX-REF><SYMBOL>VAR_CLEARED_UNSPECIFIED</SYMBOL></MEMORY-SECTION></MEMORY-SECTIONS><SECTION-NAME-PREFIXS><SECTION-NAME-PREFIX><SHORT-NAME>CAN</SHORT-NAME><IMPLEMENTED-IN-REF DEST=\"DEPENDENCY-ON-ARTIFACT\">/{package}/CanHostImplementation/include_Can_MemMap_h</IMPLEMENTED-IN-REF></SECTION-NAME-PREFIX></SECTION-NAME-PREFIXS></RESOURCE-CONSUMPTION>"
             )
         } else if module == "Rte" {
-            let multi = plan.multi.as_ref().unwrap();
+            let composition = plan.composition.as_ref().unwrap();
             let mut scopes = BTreeSet::from([
                 ("Rte".to_string(), "CODE"),
                 ("Rte".to_string(), "VAR_CLEARED_UNSPECIFIED"),
@@ -1114,7 +1114,7 @@ pub(super) fn files<T>(
                 ("Com".to_string(), "CODE"),
                 ("ComM".to_string(), "CODE"),
             ]);
-            for component in &multi.components {
+            for component in &composition.components {
                 let scope = component.component.rsplit('/').next().unwrap().to_string();
                 scopes.insert((scope.clone(), "CODE"));
                 if component.data_ports.iter().any(|port| port.read)
@@ -1123,7 +1123,7 @@ pub(super) fn files<T>(
                     scopes.insert((scope, "VAR_CLEARED_UNSPECIFIED"));
                 }
             }
-            if !multi
+            if !composition
                 .components
                 .iter()
                 .any(|component| component.diagnostic_session_port.is_some())
@@ -1222,8 +1222,8 @@ pub(super) fn files<T>(
         )
         .unwrap();
     }
-    if let Some(multi) = &plan.multi {
-        for component in &multi.components {
+    if let Some(composition) = &plan.composition {
+        for component in &composition.components {
             for mode in &component.diagnostic_mode_ports {
                 let group = mode.mode_group.rsplit('/').next().unwrap();
                 write!(elements, "<SWC-BSW-MAPPING><SHORT-NAME>ModeMapping{}{group}</SHORT-NAME><BSW-BEHAVIOR-REF DEST=\"BSW-INTERNAL-BEHAVIOR\">/AUTOSAR_Dcm/Dcm/HostBehavior</BSW-BEHAVIOR-REF><SWC-BEHAVIOR-REF DEST=\"SWC-INTERNAL-BEHAVIOR\">{}</SWC-BEHAVIOR-REF><SYNCHRONIZED-MODE-GROUPS><SWC-BSW-SYNCHRONIZED-MODE-GROUP-PROTOTYPE><BSW-MODE-GROUP-REF DEST=\"MODE-DECLARATION-GROUP-PROTOTYPE\">/AUTOSAR_Dcm/Dcm/{group}</BSW-MODE-GROUP-REF><SWC-MODE-GROUP-IREF><CONTEXT-P-PORT-REF DEST=\"P-PORT-PROTOTYPE\">{}</CONTEXT-P-PORT-REF><TARGET-MODE-GROUP-REF DEST=\"MODE-DECLARATION-GROUP-PROTOTYPE\">{}</TARGET-MODE-GROUP-REF></SWC-MODE-GROUP-IREF></SWC-BSW-SYNCHRONIZED-MODE-GROUP-PROTOTYPE></SYNCHRONIZED-MODE-GROUPS></SWC-BSW-MAPPING>", c_name(&component.component), component.behavior, mode.port, mode.prototype).unwrap();

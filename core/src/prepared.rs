@@ -301,7 +301,7 @@ pub(crate) fn deliver_path(asset: &AssetEntry) -> Result<String, crate::Localize
         if path == "ecu-tool.py" {
             return Ok("tools/ecu-tool.py".into());
         }
-        for family in ["multi/", "ecu/"] {
+        for family in ["bsw/", "ecu/"] {
             if let Some(relative) = path.strip_prefix(family) {
                 if relative.starts_with("src/") || relative.starts_with("include/") {
                     return Ok(relative.into());
@@ -344,11 +344,12 @@ impl NativePreparation {
         target: BuildTarget,
         handoff: bool,
     ) -> Result<Self, crate::LocalizedText> {
-        let profile = crate::integration::MULTI_PROFILE;
+        let profile = crate::integration::PROFILE;
         if inputs.application.len() != slots.len() {
-            return Err(
-                crate::product_message!("backend.integration.multi.consumer_unsupported").into(),
-            );
+            return Err(crate::product_message!(
+                "backend.integration.composition.consumer_unsupported"
+            )
+            .into());
         }
         inputs.manifest.profile_hint = profile.into();
         inputs.refresh_snapshot_identity()?;
@@ -496,7 +497,7 @@ pub struct ApplicationSource {
     pub path: std::path::PathBuf,
 }
 
-/// Prepare a complete multi-component ECU with every caller application frozen
+/// Prepare a complete ECU with every caller application frozen
 /// into the normal immutable source project. No reference algorithms are supplied.
 pub fn prepare_ecu_project_with_applications(
     plan: &ValidatedIntegrationPlan,
@@ -517,7 +518,7 @@ pub fn prepare_ecu_project_with_applications(
     for source in sources {
         let producer = format!(
             "{}:{}",
-            crate::integration::MULTI_PROFILE,
+            crate::integration::PROFILE,
             source.component_instance
         );
         let slot = slots
@@ -677,5 +678,23 @@ mod localization_tests {
             serde_json::to_value(&diagnostics[0].message).unwrap(),
             evidence
         );
+    }
+}
+
+#[cfg(test)]
+mod delivery_path_tests {
+    // An unmapped runtime family would fall through to tools/ without an error.
+    #[test]
+    fn bsw_sources_deliver_to_the_flat_project_directories() {
+        let bsw: Vec<_> = crate::resources::AssetInventory::embedded()
+            .entries()
+            .iter()
+            .filter_map(|asset| Some((asset, asset.relative_path.strip_prefix("runtime/bsw/")?)))
+            .collect();
+        assert_eq!(bsw.len(), 69);
+        for (asset, relative) in bsw {
+            assert!(relative.starts_with("src/") || relative.starts_with("include/"));
+            assert_eq!(super::deliver_path(asset).unwrap(), relative);
+        }
     }
 }

@@ -3,11 +3,11 @@ use super::*;
 use std::path::Path;
 
 #[test]
-fn multi_workbench_edits_standard_fields_and_paired_instance_references() {
+fn workbench_edits_standard_fields_and_paired_instance_references() {
     use autosar_config_core::{Workspace, project_model::*};
     let scratch = Scratch::new();
     let root = scratch.0.join("live");
-    let mut workspace = live_multi_workspace(&root, &inputs());
+    let mut workspace = live_pipeline_workspace(&root, &inputs());
     let projection = workspace
         .project_projection(&workspace.input_fingerprint().unwrap())
         .unwrap();
@@ -112,7 +112,7 @@ fn mainline_integration_save_refuses_stale_preview_prior_backup_and_unsafe_edit(
     let scratch = Scratch::new();
     let root = scratch.0.join("live");
     let sources = inputs();
-    let mut workspace = live_multi_workspace(&root, &sources);
+    let mut workspace = live_pipeline_workspace(&root, &sources);
     let unchanged = workspace.preview_integration_save().unwrap();
     workspace
         .edit_integration(IntegrationEdit {
@@ -174,7 +174,7 @@ fn mainline_integration_save_refuses_stale_preview_prior_backup_and_unsafe_edit(
         "<IDENTIFIER>800</IDENTIFIER>",
         "<IDENTIFIER>800<!-- retained numeric comment --></IDENTIFIER>",
     );
-    let mut mixed = live_multi_workspace(&scratch.0.join("mixed"), &commented);
+    let mut mixed = live_pipeline_workspace(&scratch.0.join("mixed"), &commented);
     let before = mixed.preview_integration_save().unwrap();
     let port = mixed
         .inspect_integration()
@@ -207,11 +207,11 @@ fn mainline_integration_save_refuses_stale_preview_prior_backup_and_unsafe_edit(
 }
 
 #[test]
-fn initialized_multi_workbench_rejects_component_and_entry_identity_changes() {
+fn initialized_workbench_rejects_component_and_entry_identity_changes() {
     use autosar_config_core::project_model::*;
     let scratch = Scratch::new();
     let root = scratch.0.join("live");
-    let mut workspace = live_multi_workspace(&root, &inputs());
+    let mut workspace = live_pipeline_workspace(&root, &inputs());
     let initialization = workspace.preview_application_initialization().unwrap();
     workspace
         .initialize_application_previewed(&initialization)
@@ -302,11 +302,11 @@ fn initialized_multi_workbench_rejects_component_and_entry_identity_changes() {
 }
 
 #[test]
-fn multi_workbench_standard_child_creation_uses_xml_syntax_and_save_is_not_a_generation_gate() {
+fn workbench_standard_child_creation_uses_xml_syntax_and_save_is_not_a_generation_gate() {
     use autosar_config_core::{Workspace, project_model::*};
     let scratch = Scratch::new();
     let root = scratch.0.join("live");
-    let mut workspace = live_multi_workspace(&root, &inputs());
+    let mut workspace = live_pipeline_workspace(&root, &inputs());
     let projection = workspace
         .project_projection(&workspace.input_fingerprint().unwrap())
         .unwrap();
@@ -387,11 +387,11 @@ fn multi_workbench_standard_child_creation_uses_xml_syntax_and_save_is_not_a_gen
 }
 
 #[test]
-fn multi_workbench_nested_reference_creation_preserves_standard_wrappers() {
+fn workbench_nested_reference_creation_preserves_standard_wrappers() {
     use autosar_config_core::project_model::*;
     let scratch = Scratch::new();
     let root = scratch.0.join("live");
-    let mut workspace = live_multi_workspace(&root, &inputs());
+    let mut workspace = live_pipeline_workspace(&root, &inputs());
     for (parent_path, kind, name, references) in [
         (
             "/Application/Process/Behavior",
@@ -573,11 +573,11 @@ fn multi_workbench_nested_reference_creation_preserves_standard_wrappers() {
 }
 
 #[test]
-fn multi_workbench_instance_rename_rebinds_known_source_irefs_and_preserves_unknown_irefs() {
+fn workbench_instance_rename_rebinds_known_source_irefs_and_preserves_unknown_irefs() {
     use autosar_config_core::project_model::*;
     let scratch = Scratch::new();
     let root = scratch.0.join("live");
-    let mut workspace = live_multi_workspace(&root, &inputs());
+    let mut workspace = live_pipeline_workspace(&root, &inputs());
     let view = workspace
         .project_projection(&workspace.input_fingerprint().unwrap())
         .unwrap();
@@ -633,7 +633,7 @@ fn multi_workbench_instance_rename_rebinds_known_source_irefs_and_preserves_unkn
         "</UNKNOWN-IREF>",
     );
     let opaque_root = scratch.0.join("opaque");
-    let mut workspace = live_multi_workspace(&opaque_root, &opaque);
+    let mut workspace = live_pipeline_workspace(&opaque_root, &opaque);
     let view = workspace
         .project_projection(&workspace.input_fingerprint().unwrap())
         .unwrap();
@@ -693,7 +693,7 @@ fn multi_workbench_instance_rename_rebinds_known_source_irefs_and_preserves_unkn
         "<SHORT-NAME>ProcessInstance</SHORT-NAME><VARIATION-POINT><SHORT-LABEL>UnresolvedInstance</SHORT-LABEL></VARIATION-POINT>",
     );
     let variant_root = scratch.0.join("variant");
-    let mut workspace = live_multi_workspace(&variant_root, &variant);
+    let mut workspace = live_pipeline_workspace(&variant_root, &variant);
     let fingerprint = workspace.input_fingerprint().unwrap();
     let view = workspace.project_projection(&fingerprint).unwrap();
     let instance = view
@@ -737,11 +737,11 @@ fn multi_workbench_instance_rename_rebinds_known_source_irefs_and_preserves_unkn
 }
 
 #[test]
-fn multi_workbench_connector_creation_builds_paired_standard_irefs_atomically() {
+fn workbench_connector_creation_builds_paired_standard_irefs_atomically() {
     use autosar_config_core::project_model::*;
     let scratch = Scratch::new();
     let root = scratch.0.join("live");
-    let mut workspace = live_multi_workspace(&root, &inputs());
+    let mut workspace = live_pipeline_workspace(&root, &inputs());
     let view = workspace
         .project_projection(&workspace.input_fingerprint().unwrap())
         .unwrap();
@@ -825,7 +825,7 @@ fn multi_workbench_connector_creation_builds_paired_standard_irefs_atomically() 
 }
 
 #[test]
-fn multi_workbench_restores_missing_type_category_in_declared_xml_order() {
+fn workbench_restores_missing_type_category_in_declared_xml_order() {
     use autosar_config_core::project_model::*;
     let scratch = Scratch::new();
     let root = scratch.0.join("live");
@@ -842,7 +842,7 @@ fn multi_workbench_restores_missing_type_category_in_declared_xml_order() {
         .unwrap()
         .bytes()
         .to_vec();
-    let mut workspace = live_multi_workspace(&root, &sources);
+    let mut workspace = live_pipeline_workspace(&root, &sources);
     let view = workspace
         .project_projection(&workspace.input_fingerprint().unwrap())
         .unwrap();
@@ -919,7 +919,7 @@ fn multi_workbench_restores_missing_type_category_in_declared_xml_order() {
 }
 
 #[test]
-fn multi_workbench_existing_invalid_connector_allows_unrelated_safe_edits() {
+fn workbench_existing_invalid_connector_allows_unrelated_safe_edits() {
     use autosar_config_core::{Workspace, project_model::*};
     let scratch = Scratch::new();
     let root = scratch.0.join("live");
@@ -936,7 +936,7 @@ fn multi_workbench_existing_invalid_connector_allows_unrelated_safe_edits() {
         .unwrap()
         .bytes()
         .to_vec();
-    let mut workspace = live_multi_workspace(&root, &sources);
+    let mut workspace = live_pipeline_workspace(&root, &sources);
     let view = workspace
         .project_projection(&workspace.input_fingerprint().unwrap())
         .unwrap();
@@ -1050,7 +1050,7 @@ fn template_quick_edit_changes_can_ids_and_application_period_on_the_mainline() 
     let description = before.description.unwrap();
     assert_eq!(
         description.profile,
-        autosar_config_core::integration::MULTI_PROFILE
+        autosar_config_core::integration::PROFILE
     );
     let can_ids = description
         .signals
@@ -1069,10 +1069,7 @@ fn template_quick_edit_changes_can_ids_and_application_period_on_the_mainline() 
         })
         .unwrap_or_else(|issues| panic!("{issues:?}"));
     let after = report.description.unwrap();
-    assert_eq!(
-        after.profile,
-        autosar_config_core::integration::MULTI_PROFILE
-    );
+    assert_eq!(after.profile, autosar_config_core::integration::PROFILE);
     let mut ids: Vec<_> = after.signals.iter().map(|signal| signal.can_id).collect();
     ids.sort();
     assert_eq!(ids, [1104, 1105]);
@@ -1084,7 +1081,7 @@ fn template_quick_edit_changes_can_ids_and_application_period_on_the_mainline() 
         .collect();
     assert!(!application.is_empty());
     assert!(application.iter().all(|entity| entity.period_ms == 20));
-    for component in &after.multi.as_ref().unwrap().components {
+    for component in &after.composition.as_ref().unwrap().components {
         for runnable in &component.runnables {
             assert!(runnable.period_ms.is_none_or(|period| period == 20));
         }

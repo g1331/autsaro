@@ -3,7 +3,7 @@
 //! Independent CAN/UDS protocol, timing and HostBatch expectations replayed
 //! on the mainline single-SWC project (`Ingress.c` reference application).
 //!
-//! The byte vectors come from `fixtures/epic4_oracles/protocol.json`, whose
+//! The byte vectors come from `fixtures/oracles/protocol.json`, whose
 //! settings are bound to the mainline ECUC before use. Two mainline facts
 //! shape the replay and are not taken from generated output:
 //! - CanTp and Dcm handle received frames in their 1 ms main functions. A
@@ -188,7 +188,7 @@ fn bind_oracle_settings() {
 #[test]
 fn single_component_meets_independent_protocol_and_timing_vectors() {
     let oracle: Value = serde_json::from_slice(
-        &fs::read(root().join("core/tests/fixtures/epic4_oracles/protocol.json")).unwrap(),
+        &fs::read(root().join("core/tests/fixtures/oracles/protocol.json")).unwrap(),
     )
     .unwrap();
     let built = host_batch_project();

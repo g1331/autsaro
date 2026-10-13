@@ -8,7 +8,7 @@ fn generated_can_objects_use_mapped_sections_and_clear_state() {
     let scratch = Scratch::new();
     let output = scratch.0.join("samples");
     analysis_samples::generate(&output, &scratch);
-    for case in ["standard-ecu", "multi-component"] {
+    for case in ["standard-ecu", "component-pipeline"] {
         generated_can_object_sections_and_clear(&output.join(case));
     }
 }

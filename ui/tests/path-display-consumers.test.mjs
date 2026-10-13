@@ -650,7 +650,7 @@ test.each(['zh-CN', 'en'])(
       entrySymbols: [`${name}_Periodic`],
     }));
     const preview = {
-      revision: 'complete-multi-application-revision',
+      revision: 'complete-application-revision',
       slots,
       files: names.map((name) => ({
         path: `application/${name}.c`,
@@ -689,6 +689,6 @@ test.each(['zh-CN', 'en'])(
     }
     fireEvent.click(view.getByRole('button', { name: translate('workflow.application.confirm') }));
     expect(initialize).toHaveBeenCalledTimes(1);
-    expect(preview.revision).toBe('complete-multi-application-revision');
+    expect(preview.revision).toBe('complete-application-revision');
   },
 );

@@ -843,7 +843,7 @@ impl Workspace {
         }
         // Every built-in integration candidate plans on the mainline.
         snapshot.profile = if snapshot.integration_candidate {
-            crate::integration::MULTI_PROFILE.into()
+            crate::integration::PROFILE.into()
         } else {
             "unrecognized".into()
         };

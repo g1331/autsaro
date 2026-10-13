@@ -83,7 +83,7 @@ pub(super) async fn open_handoff_project(
         )
         .map_err(|error| error.to_string())?;
         match metadata["format"].as_str() {
-            Some("autosar-workbench-handoff-v2") => {
+            Some(autosar_config_core::generator::delivery::FORMAT) => {
                 let destination = new_workspace_directory.as_deref().ok_or(
                     autosar_config_core::product_message!(
                         "backend.project.handoff_destination_required"
@@ -107,14 +107,16 @@ pub(super) async fn open_handoff_project(
                     Ok(view)
                 })
             }
-            // Historical single-component and host-chain handoffs are retired;
-            // their inputs/ ARXML sources can still be imported into a new project.
-            Some(format @ ("autosar-ecu-handoff-v1" | "autosar-host-handoff-v1")) => {
-                Err(autosar_config_core::product_message!(
-                    "backend.project.retired_handoff_format",
-                    "format" => format
-                ))
-            }
+            // Historical single-component, host-chain and earlier workbench handoffs are
+            // retired; their inputs/ ARXML sources can still be imported into a new project.
+            Some(
+                format @ ("autosar-ecu-handoff-v1"
+                | "autosar-host-handoff-v1"
+                | "autosar-workbench-handoff-v2"),
+            ) => Err(autosar_config_core::product_message!(
+                "backend.project.retired_handoff_format",
+                "format" => format
+            )),
             _ => Err(autosar_config_core::product_message!(
                 "backend.project.handoff_format_unsupported"
             )),

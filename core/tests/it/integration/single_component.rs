@@ -204,7 +204,8 @@ fn reference_shape_records_independent_verification_inputs() {
     // DID; other shapes get no inputs (3-SWC with DID: see the README test).
     use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
     let plan = build(&sources_without_application_did(true)).unwrap();
-    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-application");
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/component-pipeline/applications");
     let applications: Vec<_> = plan
         .application_slot_descriptors()
         .unwrap()
@@ -872,7 +873,7 @@ fn source_preparation_is_target_complete_without_native_tools() {
     let applications = [ApplicationSource {
         component_instance: "/Application/Pipeline/IngressInstance".into(),
         path: Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/fixtures/multi-application/Ingress.c"),
+            .join("tests/fixtures/component-pipeline/applications/Ingress.c"),
     }];
     let mut targets = Vec::new();
     for target in BuildTarget::ALL {
@@ -894,9 +895,9 @@ fn source_preparation_is_target_complete_without_native_tools() {
             .collect();
         // The mainline owns every BSW producer, including the host CAN driver.
         for asset in [
-            "runtime/multi/src/Can.c",
-            "runtime/multi/src/Com.c",
-            "runtime/multi/src/Dcm.c",
+            "runtime/bsw/src/Can.c",
+            "runtime/bsw/src/Com.c",
+            "runtime/bsw/src/Dcm.c",
         ] {
             assert!(selected.contains(&asset), "{asset}: {selected:?}");
         }
@@ -953,10 +954,10 @@ fn source_preparation_is_target_complete_without_native_tools() {
             .expect("the selection has a DID service without an event");
         assert_eq!(
             service["consumers"],
-            serde_json::json!(["runtime/multi/src/Dcm.c"])
+            serde_json::json!(["runtime/bsw/src/Dcm.c"])
         );
         assert_eq!(
-            originals["runtime/multi/src/Dcm.c"], "src/Dcm.c",
+            originals["runtime/bsw/src/Dcm.c"], "src/Dcm.c",
             "the consumer must be the delivered Dcm implementation"
         );
         assert!(has("os/src/Os.c") && has("kernel/tasks.c") && has("src/Rte.c"));

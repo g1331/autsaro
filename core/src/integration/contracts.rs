@@ -64,9 +64,9 @@ fn reject(
 ) -> Vec<PlanDiagnostic> {
     let description = plan.description();
     let object = description
-        .multi
+        .composition
         .as_ref()
-        .map(|multi| multi.composition.as_str())
+        .map(|composition| composition.composition.as_str())
         .unwrap_or("/");
     vec![PlanDiagnostic {
         category: DiagnosticCategory::Input,
@@ -90,18 +90,19 @@ impl ValidatedIntegrationPlan {
     /// Generate the standalone contract from this same checked plan. No XML
     /// is reparsed and no destination is touched until an explicit preview install.
     pub fn component_contract_files(&self) -> Result<ComponentContractFiles, Vec<PlanDiagnostic>> {
-        let multi = self.description().multi.as_ref().ok_or_else(|| {
+        let composition = self.description().composition.as_ref().ok_or_else(|| {
             reject(
                 self,
-                crate::product_message!("backend.integration.multi.consumer_unsupported").into(),
+                crate::product_message!("backend.integration.composition.consumer_unsupported")
+                    .into(),
             )
         })?;
-        self.multi_contract_files(multi)
+        self.composition_contract_files(composition)
     }
 }
 
 impl ValidatedIntegrationPlan {
-    /// Generate actual bounded multi RTE producers and their component headers.
+    /// Generate actual bounded composition RTE producers and their component headers.
     /// This source fragment requires configured COM and caller-owned application
     /// producers; it does not replace complete sealed ECU/OS preparation.
     pub(super) fn rte_runtime_files(&self) -> Result<ComponentContractFiles, Vec<PlanDiagnostic>> {
@@ -110,7 +111,7 @@ impl ValidatedIntegrationPlan {
             .into_files()
             .into_iter()
             .collect();
-        files.extend(super::multi_rte::files(self));
+        files.extend(super::rte::files(self));
         let integer = |kind: super::CommunicationIntegerType| match kind {
             super::CommunicationIntegerType::Uint8 => "uint8",
             super::CommunicationIntegerType::Uint16 => "uint16",
@@ -120,11 +121,11 @@ impl ValidatedIntegrationPlan {
         files.insert("include/ComStack_Cfg.h".into(), format!("/** @file EcuC-selected communication widths. */\n#ifndef COMSTACK_CFG_H\n#define COMSTACK_CFG_H\n#include \"Platform_Types.h\"\ntypedef {} PduIdType;\ntypedef {} PduLengthType;\n#endif\n", integer(communication.pdu_id_type), integer(communication.pdu_length_type)).into_bytes());
         files.insert(
             "include/ComStack_Types.h".into(),
-            include_bytes!("../../../runtime/multi/include/ComStack_Types.h").to_vec(),
+            include_bytes!("../../../runtime/bsw/include/ComStack_Types.h").to_vec(),
         );
         files.insert(
             "include/Com.h".into(),
-            include_bytes!("../../../runtime/multi/include/Com.h").to_vec(),
+            include_bytes!("../../../runtime/bsw/include/Com.h").to_vec(),
         );
         let rte = files.get_mut("include/Rte.h").unwrap();
         *rte = String::from_utf8(std::mem::take(rte))
@@ -134,30 +135,30 @@ impl ValidatedIntegrationPlan {
                 "#include \"Rte_Type.h\"\n#include \"Rte_Main.h\"\n#define RTE_E_OK 0U\n#define RTE_E_LIMIT 130U",
             )
             .into_bytes();
-        files.insert("README.md".into(), b"# Multi-component RTE sources\n\nThese sources implement the validated local communication graph, synchronous calls, generated Dcm service bridge and handle-bearing COM freshness notifications. Rte_Start initializes each receiver's own explicit initial value; Rte_Stop retires access. Invoke lifecycle only from the trusted ECU context, after required BSW/SchM initialization and before BSW shutdown. User application algorithms are separate caller-owned producers. The configured COM implementation, complete SchM/BSW configuration, OS owner and immutable ECU package are provided by complete ECU preparation; this source fragment alone is not a runnable ECU.\n".to_vec());
+        files.insert("README.md".into(), b"# Component RTE sources\n\nThese sources implement the validated local communication graph, synchronous calls, generated Dcm service bridge and handle-bearing COM freshness notifications. Rte_Start initializes each receiver's own explicit initial value; Rte_Stop retires access. Invoke lifecycle only from the trusted ECU context, after required BSW/SchM initialization and before BSW shutdown. User application algorithms are separate caller-owned producers. The configured COM implementation, complete SchM/BSW configuration, OS owner and immutable ECU package are provided by complete ECU preparation; this source fragment alone is not a runnable ECU.\n".to_vec());
         Ok(ComponentContractFiles {
             files: files.into_iter().collect(),
         })
     }
 
-    fn multi_contract_files(
+    fn composition_contract_files(
         &self,
-        multi: &super::multi::MultiComponentContract,
+        composition: &super::composition::CompositionContract,
     ) -> Result<ComponentContractFiles, Vec<PlanDiagnostic>> {
         let description = self.description();
         let mut types = String::from("#include \"Std_Types.h\"\n");
-        for datatype in multi.array_types.values() {
+        for datatype in composition.array_types.values() {
             writeln!(types, "typedef uint8 {datatype}[4];").unwrap();
         }
         let mut files = vec![
             // The same platform and standard types the delivered ECU compiles with.
             (
                 "include/Platform_Types.h".into(),
-                include_bytes!("../../../runtime/multi/include/Platform_Types.h").to_vec(),
+                include_bytes!("../../../runtime/bsw/include/Platform_Types.h").to_vec(),
             ),
             (
                 "include/Std_Types.h".into(),
-                include_bytes!("../../../runtime/multi/include/Std_Types.h").to_vec(),
+                include_bytes!("../../../runtime/bsw/include/Std_Types.h").to_vec(),
             ),
             ("include/Rte_Type.h".into(), header("RTE_TYPE_H", &types)),
             (
@@ -168,7 +169,7 @@ impl ValidatedIntegrationPlan {
                 ),
             ),
         ];
-        for component in &multi.components {
+        for component in &composition.components {
             let mut body = String::from("#include \"Rte.h\"\n\n");
             for symbol in description
                 .symbols
@@ -193,7 +194,7 @@ impl ValidatedIntegrationPlan {
                         argument.direction.to_lowercase(),
                         argument.name,
                         if argument.native_type.contains('*')
-                            || multi
+                            || composition
                                 .array_types
                                 .values()
                                 .any(|native| native == &argument.native_type)
@@ -206,12 +207,11 @@ impl ValidatedIntegrationPlan {
                     .unwrap();
                 }
                 if symbol.return_type != "void" {
-                    let port = component
-                        .data_ports
-                        .iter()
-                        .find(|port| super::multi::data_symbol(component, port) == symbol.symbol);
+                    let port = component.data_ports.iter().find(|port| {
+                        super::composition::data_symbol(component, port) == symbol.symbol
+                    });
                     let status = if let Some(port) = port {
-                        let network = multi.network_endpoints.iter().any(|endpoint| {
+                        let network = composition.network_endpoints.iter().any(|endpoint| {
                             endpoint.endpoint.instance == component.instance
                                 && endpoint.endpoint.port == port.path
                         });
@@ -247,7 +247,7 @@ impl ValidatedIntegrationPlan {
                     body,
                     "#define {} {}",
                     port.api_symbol,
-                    super::multi::data_symbol(component, port)
+                    super::composition::data_symbol(component, port)
                 )
                 .unwrap();
             }
@@ -273,10 +273,10 @@ impl ValidatedIntegrationPlan {
                 header(&format!("RTE_{}_H", name.to_uppercase()), &body),
             ));
         }
-        let provenance = serde_json::json!({ "format": "autosar-component-contract-v1", "profile": description.profile,
+        let provenance = serde_json::json!({ "format": "autosar-component-contract-v2", "profile": description.profile,
             "sources": description.sources, "validationDependencies": description.validation_dependencies,
             "ruleSetIdentity": description.rule_set_identity, "requiredExtensionDefinitions": description.required_extension_definitions,
-            "multi": multi, "schedule": description.schedule,
+            "composition": composition, "schedule": description.schedule,
             "symbols": description.symbols,
             "declarationOwners": description.symbols.iter().filter(|symbol| symbol.declaration_owner.starts_with("include/Rte_")).map(|symbol| (&symbol.symbol, &symbol.declaration_owner)).collect::<BTreeMap<_, _>>() });
         let mut bytes = serde_json::to_vec_pretty(&provenance)

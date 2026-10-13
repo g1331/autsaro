@@ -1,4 +1,4 @@
-//! Complete selected multi-component ECU producer; applications remain caller owned.
+//! ECU configuration and integration sources from the selected plan; applications remain caller owned.
 use super::{PlanDiagnostic, ValidatedIntegrationPlan};
 use crate::target::BuildTarget;
 use std::borrow::Cow;
@@ -16,8 +16,8 @@ fn header(name: &str, body: &str) -> String {
 fn failure() -> Vec<PlanDiagnostic> {
     vec![PlanDiagnostic::dependency(
         "ECU_SOURCE_CLOSURE",
-        crate::product_message!("backend.integration.multi.consumer_unsupported"),
-        crate::product_message!("backend.integration.multi.repair_contract"),
+        crate::product_message!("backend.integration.composition.consumer_unsupported"),
+        crate::product_message!("backend.integration.composition.repair_contract"),
     )]
 }
 
@@ -68,9 +68,9 @@ pub(super) fn files(
     target: BuildTarget,
 ) -> Result<BTreeMap<String, Cow<'static, [u8]>>, Vec<PlanDiagnostic>> {
     let description = plan.description();
-    let multi = description.multi.as_ref().ok_or_else(failure)?;
+    let composition = description.composition.as_ref().ok_or_else(failure)?;
     let com = description.com_runtime.as_ref().ok_or_else(failure)?;
-    let authentication = multi
+    let authentication = composition
         .dcm_modes
         .iter()
         .find(|definition| definition.group.starts_with("DcmAuthenticationState_"))
@@ -93,14 +93,14 @@ pub(super) fn files(
     let mapping = files.get_mut("include/Rte_MemMap.h").unwrap();
     let mut text = String::from_utf8(mapping.to_vec()).unwrap();
     for scope in std::iter::once("Rte").chain(
-        multi
+        composition
             .components
             .iter()
             .map(|component| component.component.rsplit('/').next().unwrap()),
     ) {
         text = text.replace(&format!(".text.rte.{scope}.CODE"), ".rte_code");
     }
-    if !multi
+    if !composition
         .components
         .iter()
         .any(|component| component.diagnostic_session_port.is_some())
@@ -158,7 +158,7 @@ pub(super) fn files(
         ),
     );
     let profile = format!(
-        "#define ECU_MULTI_COMPONENT 1\n#define CAN_HOST_QUEUED_COMPLETION 1\n#define CAN_ZERO_LENGTH_SUPPORTED 1\n#define CAN_RX_POLLING 1\n#define CAN_TX_POLLING 1\n#define CAN_BUSOFF_POLLING 1\n#define CAN_CONTROLLER_ID {}u\n#define CAN_CANIF_CONTROLLER_ID {}u\n#define CAN_TX_HOH {}u\n#define CAN_RX_HOH {}u",
+        "#define CAN_HOST_QUEUED_COMPLETION 1\n#define CAN_ZERO_LENGTH_SUPPORTED 1\n#define CAN_RX_POLLING 1\n#define CAN_TX_POLLING 1\n#define CAN_BUSOFF_POLLING 1\n#define CAN_CONTROLLER_ID {}u\n#define CAN_CANIF_CONTROLLER_ID {}u\n#define CAN_TX_HOH {}u\n#define CAN_RX_HOH {}u",
         can.controller_id, can.can_if_controller_id, can.transmit_handle, can.receive_handle
     );
     put(
@@ -261,7 +261,7 @@ pub(super) fn files(
         header(
             "ECU_TARGET_CONFIG_H",
             &format!(
-                "#include \"Ecu_ProfileConfig.h\"\n#include \"Os_Target.h\"\n#define ECU_TARGET_TASK 0u\n#define ECU_MAX_PDU_PAYLOAD {}u\n#define ECU_TARGET_DIAGNOSTIC_RX_CAN_ID {}u\n#define ECU_TARGET_EVENT_WORK {}u\n#define ECU_TARGET_EVENT_APP {}u\n#define ECU_TARGET_EVENT_IO {}u\n#define ECU_TARGET_RX_CAN_ID {}u\n#define ECU_TARGET_RX_DEADLINE_MS {}u\nextern const Os_TargetConfig Ecu_OsConfig;\nStd_ReturnType Ecu_MultiBootstrap(void);\nStd_ReturnType Ecu_MultiRunCycle(EventMaskType events);\nvoid Ecu_MultiRetire(void);\nint Ecu_MultiFrameShape(uint32 id, uint8 dlc);\n#ifdef ECU_TARGET_TESTS\nint Ecu_TargetTestFailStage(unsigned stage);\nvoid Ecu_TargetTestShutdown(StatusType reason);\n#endif",
+                "#include \"Ecu_ProfileConfig.h\"\n#include \"Os_Target.h\"\n#define ECU_TARGET_TASK 0u\n#define ECU_MAX_PDU_PAYLOAD {}u\n#define ECU_TARGET_DIAGNOSTIC_RX_CAN_ID {}u\n#define ECU_TARGET_EVENT_WORK {}u\n#define ECU_TARGET_EVENT_APP {}u\n#define ECU_TARGET_EVENT_IO {}u\n#define ECU_TARGET_RX_CAN_ID {}u\n#define ECU_TARGET_RX_DEADLINE_MS {}u\nextern const Os_TargetConfig Ecu_OsConfig;\nStd_ReturnType Ecu_StackBootstrap(void);\nStd_ReturnType Ecu_StackRunCycle(EventMaskType events);\nvoid Ecu_StackRetire(void);\nint Ecu_StackFrameShape(uint32 id, uint8 dlc);\n#ifdef ECU_TARGET_TESTS\nint Ecu_TargetTestFailStage(unsigned stage);\nvoid Ecu_TargetTestShutdown(StatusType reason);\n#endif",
                 description
                     .diagnostic_transport
                     .as_ref()
@@ -281,7 +281,7 @@ pub(super) fn files(
     let mut config = String::from(
         "/** @file Source-derived immutable communication configurations and owner dispatch. */\n#define RTE_CORE\n#include \"Ecu_TargetConfig.h\"\n#include \"Ecu_Target.h\"\n#include \"Ecu_Config.h\"\n#include \"Can_Host.h\"\n#include \"CanIf.h\"\n#include \"Det.h\"\n#include \"CanTp.h\"\n#include \"Com.h\"\n#include \"Com_Internal.h\"\n#include \"ComM.h\"\n#include \"ComM_BswM.h\"\n#include \"ComM_Internal.h\"\n#include \"BswM.h\"\n#include \"BswM_ComM.h\"\n#include \"Ecu_HostBusSM.h\"\n#include \"Dcm.h\"\n#include \"Dcm_ComM.h\"\n#include \"PduR.h\"\n#include \"PduR_Com.h\"\n#include \"PduR_CanIf.h\"\n#include \"LSduR.h\"\n#include \"LSduR_PduR.h\"\n#include \"Rte_Main.h\"\n#include \"Rte_Com.h\"\n#include \"SchM_Can.h\"\n#include \"SchM_CanTp.h\"\n#include \"SchM_Com.h\"\n#include \"SchM_ComM.h\"\n#include \"SchM_Dcm.h\"\n",
     );
-    for component in &multi.components {
+    for component in &composition.components {
         writeln!(
             config,
             "#include \"{}\"",
@@ -323,7 +323,7 @@ pub(super) fn files(
             .find(|handle| handle.domain == "com_signal" && handle.path == signal.com_signal)
             .unwrap()
             .handle;
-        // communication::inspect requires source ComSignalInitValue=0.
+        // signals::inspect requires source ComSignalInitValue=0.
         // Receiver ComSpec init is independent RTE state; it must not replace
         // the actual COM initialization or group Start(TRUE) value.
         let initial = 0;
@@ -422,7 +422,7 @@ pub(super) fn files(
                 .diagnostic
                 .as_ref()
                 .map_or((0, "NULL_PTR".to_string()), |did| {
-                    let bridge = multi
+                    let bridge = composition
                         .components
                         .iter()
                         .flat_map(|component| &component.runnables)
@@ -538,12 +538,12 @@ pub(super) fn files(
     }
     config.push_str("    default: return E_NOT_OK;\n    }\n    return E_OK;\n}\n");
     config.push_str("static RTE_Ecu_CODE Std_ReturnType Ecu_DetRuntimeCallout(uint16_t ModuleId, uint8_t InstanceId, uint8_t ApiId, uint8_t ErrorId) {\n    (void)InstanceId;\n    if ((ModuleId == 35u) && (ApiId == 0x06u) && ((ErrorId == 0xc0u) || (ErrorId == 0xd0u))) {\n        Ecu_TargetReportTransportTimeout();\n    }\n    return E_OK;\n}\n");
-    config.push_str("Std_ReturnType Ecu_MultiBootstrap(void) {\n    Can_ControllerStateType actual;\n    if (Ecu_TargetCheckLifecycleContext(TRUE) != E_OK) { return E_NOT_OK; }\n    SchM_Init(&Ecu_SchMConfig);\n    SchM_Start();\n    if (Ecu_SchMReady() == FALSE) { return E_NOT_OK; }\n    Det_Init(&det_config);\n    Det_Start();\n    Can_Init(&driver);\n    CanIf_Init(&can_if_config);\n    Ecu_HostBusSM_Init(&bus_config);\n    LSduR_Init(&LSduR_Config);\n    PduR_Init(&PduR_Config);\n    Com_Init(&com_config);\n    Com_IpduGroupStart(com_config.receive_group, TRUE);\n    Com_EnableReceptionDM(com_config.receive_group);\n    ComM_Init(&comm_config);\n    BswM_Init(&bswm_config);\n");
+    config.push_str("Std_ReturnType Ecu_StackBootstrap(void) {\n    Can_ControllerStateType actual;\n    if (Ecu_TargetCheckLifecycleContext(TRUE) != E_OK) { return E_NOT_OK; }\n    SchM_Init(&Ecu_SchMConfig);\n    SchM_Start();\n    if (Ecu_SchMReady() == FALSE) { return E_NOT_OK; }\n    Det_Init(&det_config);\n    Det_Start();\n    Can_Init(&driver);\n    CanIf_Init(&can_if_config);\n    Ecu_HostBusSM_Init(&bus_config);\n    LSduR_Init(&LSduR_Config);\n    PduR_Init(&PduR_Config);\n    Com_Init(&com_config);\n    Com_IpduGroupStart(com_config.receive_group, TRUE);\n    Com_EnableReceptionDM(com_config.receive_group);\n    ComM_Init(&comm_config);\n    BswM_Init(&bswm_config);\n");
     if transport.is_some() {
         config.push_str("    CanTp_Init(&tp_config);\n    Dcm_Init(&dcm_config);\n");
     }
     writeln!(config, "    if (Rte_Start() != E_OK) {{ return E_NOT_OK; }}\n    ComM_CommunicationAllowed({}u, TRUE);\n    if (ComM_RequestComMode({}u, COMM_FULL_COMMUNICATION) != E_OK) {{ return E_NOT_OK; }}\n    {}();\n    Can_MainFunction_Mode();\n    if ((CanIf_GetControllerMode({}u, &actual) != E_OK) || (actual != CAN_CS_STARTED)) {{ return E_NOT_OK; }}\n    SchM_StartTiming();\n    return Ecu_SchMTimingActive() ? E_OK : E_NOT_OK;\n}}", mode.channel_handle, mode.users[0].handle, mode.main_symbol, can.can_if_controller_id).unwrap();
-    config.push_str("Std_ReturnType Ecu_MultiRunCycle(EventMaskType events) {\n    if ((Ecu_TargetIsOwner() == 0) || (Ecu_SchMTimingActive() == FALSE)) { return E_NOT_OK; }\n");
+    config.push_str("Std_ReturnType Ecu_StackRunCycle(EventMaskType events) {\n    if ((Ecu_TargetIsOwner() == 0) || (Ecu_SchMTimingActive() == FALSE)) { return E_NOT_OK; }\n");
     for entity in &description.schedule.entities {
         if entity.application {
             writeln!(
@@ -566,7 +566,7 @@ pub(super) fn files(
             }
         }
     }
-    config.push_str("    return (Can_HostFlush() == ECU_OK) ? E_OK : E_NOT_OK;\n}\nvoid Ecu_MultiRetire(void) {\n    (void)Rte_Stop();\n");
+    config.push_str("    return (Can_HostFlush() == ECU_OK) ? E_OK : E_NOT_OK;\n}\nvoid Ecu_StackRetire(void) {\n    (void)Rte_Stop();\n");
     if transport.is_some() {
         config.push_str("    CanTp_Shutdown();\n");
     }
@@ -574,7 +574,7 @@ pub(super) fn files(
         "    Com_DeInit();\n    BswM_Deinit();\n    Ecu_HostBusSM_DeInit();\n    CanIf_DeInit();\n",
     );
     writeln!(config, "    (void)Can_SetControllerMode({}u, CAN_CS_STOPPED);\n    Can_MainFunction_Mode();\n    Can_MainFunction_BusOff();\n    Can_DeInit();\n    SchM_Deinit();\n}}", can.controller_id).unwrap();
-    config.push_str("int Ecu_MultiFrameShape(uint32 id, uint8 dlc) {\n    if ((id > 0x7ffu) || (dlc > 8u)) { return 0; }\n");
+    config.push_str("int Ecu_StackFrameShape(uint32 id, uint8 dlc) {\n    if ((id > 0x7ffu) || (dlc > 8u)) { return 0; }\n");
     for signal in &description.signals {
         writeln!(
             config,
@@ -604,20 +604,20 @@ pub(super) fn files(
             "static RTE_Ecu_CODE Std_ReturnType Ecu_BswMAction(NetworkHandleType channel, ComM_ModeType requested) {",
         ),
         (
-            "Std_ReturnType Ecu_MultiBootstrap(void) {",
-            "RTE_Ecu_CODE Std_ReturnType Ecu_MultiBootstrap(void) {",
+            "Std_ReturnType Ecu_StackBootstrap(void) {",
+            "RTE_Ecu_CODE Std_ReturnType Ecu_StackBootstrap(void) {",
         ),
         (
-            "Std_ReturnType Ecu_MultiRunCycle(EventMaskType events) {",
-            "RTE_Ecu_CODE Std_ReturnType Ecu_MultiRunCycle(EventMaskType events) {",
+            "Std_ReturnType Ecu_StackRunCycle(EventMaskType events) {",
+            "RTE_Ecu_CODE Std_ReturnType Ecu_StackRunCycle(EventMaskType events) {",
         ),
         (
-            "void Ecu_MultiRetire(void) {",
-            "RTE_Ecu_CODE void Ecu_MultiRetire(void) {",
+            "void Ecu_StackRetire(void) {",
+            "RTE_Ecu_CODE void Ecu_StackRetire(void) {",
         ),
         (
-            "int Ecu_MultiFrameShape(uint32 id, uint8 dlc) {",
-            "RTE_Ecu_CODE int Ecu_MultiFrameShape(uint32 id, uint8 dlc) {",
+            "int Ecu_StackFrameShape(uint32 id, uint8 dlc) {",
+            "RTE_Ecu_CODE int Ecu_StackFrameShape(uint32 id, uint8 dlc) {",
         ),
     ] {
         config = config.replace(signature, mapped);
@@ -655,9 +655,9 @@ pub(super) fn files(
     put(
         &mut files,
         "include/Ecu_MemMap.h",
-        super::multi_rte::memory_map(&config_scopes),
+        super::rte::memory_map(&config_scopes),
     );
-    let mode_scope = multi
+    let mode_scope = composition
         .components
         .iter()
         .find(|component| component.diagnostic_session_port.is_some())
@@ -688,7 +688,7 @@ pub(super) fn files(
         })
         .map(|(path, asset)| (asset.relative_path, path))
         .collect();
-    put(&mut files, "integration.json", format!("{}\n", serde_json::to_string_pretty(&serde_json::json!({"format": "autosar-ecu-integration-v1", "plan": description, "target": target.spec().id, "owner": "single source-derived AUTOSTART extended task", "originalBswSources": original_sources })).unwrap()));
+    put(&mut files, "integration.json", format!("{}\n", serde_json::to_string_pretty(&serde_json::json!({"format": "autosar-ecu-integration-v2", "plan": description, "target": target.spec().id, "owner": "single source-derived AUTOSTART extended task", "originalBswSources": original_sources })).unwrap()));
     let verification = super::handoff::verification_files(plan).map_err(|_| failure())?;
     put(
         &mut files,

@@ -33,20 +33,20 @@ class HostBoundaryTests(unittest.TestCase):
             "EcuStatus Ecu_ExecutionTransmit(CanTxSink sink, PduIdType handle, uint32_t id, uint8_t dlc, const uint8_t data[8]);\n"
             "uint64_t Ecu_ExecutionNow(void);\n#endif\n", encoding="utf-8")
         cls.flags = ["-std=c99", "-O1", "-Wall", "-Wextra", "-Werror", "-pedantic", "-D_XOPEN_SOURCE=700",
-                     "-I" + str(ROOT / "runtime/multi/src"), "-I" + str(ROOT / "runtime/multi/include"),
+                     "-I" + str(ROOT / "runtime/bsw/src"), "-I" + str(ROOT / "runtime/bsw/include"),
                      # The mainline CAN headers use the generated ComStack_Cfg.h widths.
-                     "-I" + str(ROOT / "core/tests/fixtures/multi-runtime"), "-I" + str(generated)]
+                     "-I" + str(ROOT / "core/tests/fixtures/bsw-contracts"), "-I" + str(generated)]
         suffix = ".exe" if os.name == "nt" else ""
         cls.lock = cls.directory / ("lock" + suffix)
         header = ROOT / "tests/fixtures/host_lock_faults.h"
         obj = cls.directory / "lock.o"
         result = cls.execute([cls.compiler, *cls.flags, "-include", str(header), "-c",
-                              str(ROOT / "runtime/multi/src/Can_HostLock.c"), "-o", str(obj)], "compile-lock")
+                              str(ROOT / "runtime/bsw/src/Can_HostLock.c"), "-o", str(obj)], "compile-lock")
         if not result.success:
             raise RuntimeError(result.stderr.read_text(encoding="utf-8", errors="replace"))
-        sources = [ROOT / "runtime/multi/src" / name for name in
+        sources = [ROOT / "runtime/bsw/src" / name for name in
                    ("Can.c", "Can_Host.c", "Det.c", "Det_Host.c", "SchM_CanIf_Host.c")]
-        sources.append(ROOT / "core/tests/fixtures/multi-runtime/execution_sink.c")
+        sources.append(ROOT / "core/tests/fixtures/bsw-contracts/execution_sink.c")
         result = cls.execute([cls.compiler, *cls.flags, str(obj), str(ROOT / "tests/fixtures/host_lock_faults.c"),
                               *(str(path) for path in sources),
                               *([] if os.name == "nt" else ["-pthread"]), "-o", str(cls.lock)], "link-lock")

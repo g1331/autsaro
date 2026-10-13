@@ -1,5 +1,5 @@
 {
-  "profile": "epic4-win64-sr-cs-v1",
+  "profile": "echo-application",
   "ownership": "Product-original XML and literal expectations, created for this repository; no official XML copied",
   "external_xsd": {
     "path": "docs/official/R24-11/FO/MethodologyAndTemplates/AUTOSAR_FO_MMOD_XMLSchema.zip",
@@ -13,7 +13,7 @@
     {
       "path": "expectations.json",
       "role": "negative fixture or expectation catalog",
-      "sha256": "8de589dd6e8c0e795b7e53878168ab2269a7b6ba3a692e25268b65d4bb4af6b8"
+      "sha256": "33174f6335a3568650c28bf80d3a915502fb6c226bb2f54aa16a9672a4c7ea4e"
     },
     {
       "path": "negative/broken-reference/application.arxml",
@@ -23,7 +23,7 @@
     {
       "path": "negative/cases.json",
       "role": "negative fixture or expectation catalog",
-      "sha256": "d9d6e0d02da70180f023c928ce66abe5f79d6e5c8a310dcdc9329a2184792cfc"
+      "sha256": "b43b94ada20891a56d419012f20c0f2696c5cfb917c0669a4e04542c01f0760b"
     },
     {
       "path": "negative/direction-conflict/extract.arxml",

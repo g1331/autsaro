@@ -1,5 +1,5 @@
 {
-  "profile": "epic4-win64-sr-cs-v1",
+  "profile": "echo-application",
   "source": "Independent literal expectations from INTEGRATION-CONTRACT \u00a71/2/3/6; original reference configuration",
   "checks": [
     {
@@ -901,22 +901,6 @@
     "Dcm_Init",
     "Dcm_AdvanceTime"
   ],
-  "future_producers": {
-    "story-4.11": [
-      "Rte_Type.h",
-      "Rte_EchoApplication.h"
-    ],
-    "story-4.13": [
-      "DcmService_ReadData",
-      "Com_SendSignal",
-      "Com_ReceiveSignal",
-      "generated RTE/SchM/Task_Ecu integration"
-    ],
-    "story-4.15": [
-      "EchoApplication_Periodic",
-      "EchoApplication_ReadData"
-    ]
-  },
   "bsw_signatures": {
     "Can_Init": {
       "return": "void",

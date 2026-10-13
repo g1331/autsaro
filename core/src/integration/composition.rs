@@ -1,4 +1,4 @@
-//! Source-derived contracts for the bounded flat, single-owner multi-SWC profile.
+//! Source-derived component composition contract for the bounded flat, single-owner profile.
 use super::component::{DataPort, c_name, implementation, milliseconds, name, one, referenced};
 use super::graph::Graph;
 use super::{ContractArgument, DiagnosticCategory, PlanDiagnostic, SymbolContract};
@@ -158,7 +158,7 @@ pub struct NetworkEndpoint {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MultiComponentContract {
+pub struct CompositionContract {
     pub system: String,
     pub composition: String,
     pub ecu: String,
@@ -174,8 +174,8 @@ fn fail(graph: &Graph, index: usize, code: &str) -> Vec<PlanDiagnostic> {
         index,
         DiagnosticCategory::Input,
         code,
-        crate::product_message!("backend.integration.multi.contract_invalid", "code" => code),
-        crate::product_message!("backend.integration.multi.repair_contract"),
+        crate::product_message!("backend.integration.composition.contract_invalid", "code" => code),
+        crate::product_message!("backend.integration.composition.repair_contract"),
     )]
 }
 
@@ -391,20 +391,18 @@ fn inspect_dcm_declarations(
     Ok(())
 }
 
-pub(super) fn inspect(graph: &Graph) -> Result<MultiComponentContract, Vec<PlanDiagnostic>> {
+pub(super) fn inspect(graph: &Graph) -> Result<CompositionContract, Vec<PlanDiagnostic>> {
     inspect_with_transport(graph, true)
 }
 
-pub(super) fn inspect_ownership(
-    graph: &Graph,
-) -> Result<MultiComponentContract, Vec<PlanDiagnostic>> {
+pub(super) fn inspect_ownership(graph: &Graph) -> Result<CompositionContract, Vec<PlanDiagnostic>> {
     inspect_with_transport(graph, false)
 }
 
 fn inspect_with_transport(
     graph: &Graph,
     include_transport: bool,
-) -> Result<MultiComponentContract, Vec<PlanDiagnostic>> {
+) -> Result<CompositionContract, Vec<PlanDiagnostic>> {
     let context = *graph
         .objects
         .values()
@@ -1352,7 +1350,7 @@ fn inspect_with_transport(
         }
         // Live-source ownership needs application identities, not target transport eligibility.
         if include_transport {
-            let signals = super::communication::inspect_ports(
+            let signals = super::signals::inspect_ports(
                 graph,
                 &network_ports,
                 &component.instance,
@@ -1500,7 +1498,7 @@ fn inspect_with_transport(
             }
         }
     }
-    let plan = MultiComponentContract {
+    let plan = CompositionContract {
         system: path(graph, system),
         composition: path(graph, composition),
         ecu: path(graph, ecu),
@@ -1597,7 +1595,7 @@ pub(super) fn reserved_memory_scope(name: &str) -> bool {
     )
 }
 
-fn check_names(graph: &Graph, plan: &MultiComponentContract) -> Result<(), Vec<PlanDiagnostic>> {
+fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<PlanDiagnostic>> {
     let mut filenames = BTreeSet::from([
         "INCLUDE/RTE.H".to_owned(),
         "INCLUDE/RTE_TYPE.H".to_owned(),
@@ -1754,7 +1752,7 @@ fn check_names(graph: &Graph, plan: &MultiComponentContract) -> Result<(), Vec<P
     Ok(())
 }
 
-pub(super) fn symbols(plan: &MultiComponentContract) -> Vec<SymbolContract> {
+pub(super) fn symbols(plan: &CompositionContract) -> Vec<SymbolContract> {
     let mut symbols = Vec::new();
     for component in &plan.components {
         for port in &component.data_ports {
@@ -1815,7 +1813,7 @@ pub(super) fn symbols(plan: &MultiComponentContract) -> Vec<SymbolContract> {
                     )
                 },
                 consumers: if runnable.event.is_none() {
-                    vec!["runtime/multi/src/Dcm.c".into()]
+                    vec!["runtime/bsw/src/Dcm.c".into()]
                 } else if let Some(operation) = operation {
                     plan.connections
                         .iter()

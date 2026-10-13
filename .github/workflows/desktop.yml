@@ -8,6 +8,8 @@ on:
     paths:
       - core/**
       - src-tauri/**
+      - Cargo.toml
+      - Cargo.lock
       - ui/**
       - tests/desktop/**
       - .github/actions/**
@@ -59,8 +61,8 @@ jobs:
           path: |
             ~/.cargo/bin/tauri-driver*
             ~/.cargo/registry
-            src-tauri/target
-          key: desktop-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'src-tauri/Cargo.lock') }}
+            target
+          key: desktop-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
           restore-keys: desktop-${{ runner.os }}-${{ env.CACHE_IMAGE }}-
       - name: Install tauri-driver
         shell: bash
@@ -73,7 +75,7 @@ jobs:
         run: |
           import os, shutil, subprocess
           from pathlib import Path
-          application = Path('src-tauri/target/debug/autosar-config-desktop' + ('.exe' if os.name == 'nt' else ''))
+          application = Path('target/debug/autosar-config-desktop' + ('.exe' if os.name == 'nt' else ''))
           tools = {'AUTOSAR_CC': 'gcc', 'AUTOSAR_OBJDUMP': 'objdump', 'AUTOSAR_GIT': 'git'}
           python = subprocess.run(['uv', 'run', '--locked', 'python', '-c', 'import sys; print(sys.executable)'],
               check=True, capture_output=True, text=True).stdout.strip()

@@ -146,7 +146,7 @@ fn ordinary_application_client_sharing_did_server_is_not_the_dcm_bridge() {
     );
     assert_eq!(
         plan.description()
-            .multi
+            .composition
             .as_ref()
             .unwrap()
             .connections
@@ -236,13 +236,14 @@ fn required_dcm_channel_reference_is_strict_for_every_builtin_project() {
     let plan = build(&template).unwrap();
     assert_eq!(
         plan.description().profile,
-        autosar_config_core::integration::MULTI_PROFILE
+        autosar_config_core::integration::PROFILE
     );
     assert!(plan.description().mode_runtime.is_some());
     assert!(plan.component_contract_files().is_ok());
     // Historical single-component sources configure neither ComM nor BswM.
     // Built-in validation no longer relaxes their Dcm channel dependency.
-    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/epic4/positive");
+    let fixtures =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/echo-application/positive");
     let historical: Vec<_> = [
         "application.arxml",
         "bsw.arxml",
@@ -275,9 +276,9 @@ fn required_dcm_channel_reference_is_strict_for_every_builtin_project() {
             .any(|rule| rule.rule_id == "native.definition.legacy-dcm-mode-dependency")
     );
     assert!(build(&historical).is_err());
-    let mut multi = inputs();
+    let mut composition = inputs();
     xml_edit(
-        &mut multi,
+        &mut composition,
         "ecuc.arxml",
         |node| {
             node.tag_name().name() == "ECUC-REFERENCE-VALUE"
@@ -291,12 +292,12 @@ fn required_dcm_channel_reference_is_strict_for_every_builtin_project() {
         |_| String::new(),
     );
     assert!(
-        normal_validation(&multi)
+        normal_validation(&composition)
             .diagnostics
             .iter()
             .any(|issue| issue.code == "MULTIPLICITY")
     );
-    assert!(build(&multi).is_err());
+    assert!(build(&composition).is_err());
     let source = historical
         .iter()
         .find(|source| source.logical_path() == "ecuc.arxml")
@@ -329,7 +330,7 @@ fn required_dcm_channel_reference_is_strict_for_every_builtin_project() {
 }
 
 #[test]
-fn multi_internal_active_session_did_cannot_be_replaced_by_application_source() {
+fn internal_active_session_did_cannot_be_replaced_by_application_source() {
     let mut sources = inputs();
     parameter(
         &mut sources,
@@ -446,7 +447,7 @@ fn dcm_service_mode_source_requires_the_fixed_standard_contract() {
     let plan = build(&inputs()).unwrap();
     let service = plan
         .description()
-        .multi
+        .composition
         .as_ref()
         .unwrap()
         .components
@@ -576,14 +577,15 @@ fn authentication_mode_source_follows_actual_connection_and_rejects_invalid_stan
     let plan = build(&source).unwrap();
     assert!(
         plan.description()
-            .multi
+            .composition
             .as_ref()
             .unwrap()
             .dcm_modes
             .iter()
             .any(|mode| mode.group == "DcmAuthenticationState_Link")
     );
-    let files: std::collections::BTreeMap<_, _> = prepared_multi_files(&plan).into_iter().collect();
+    let files: std::collections::BTreeMap<_, _> =
+        prepared_pipeline_files(&plan).into_iter().collect();
     for (path, symbol) in [
         (
             "src/Ecu_RuntimeConfig.c",

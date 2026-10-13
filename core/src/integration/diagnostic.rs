@@ -1,7 +1,7 @@
-use super::communication::check_trigger;
 use super::component::milliseconds;
 use super::graph::Graph;
 use super::schedule::{definition_is, value, values};
+use super::signals::check_trigger;
 use super::{DiagnosticCategory, PlanDiagnostic};
 use serde::Serialize;
 use std::collections::BTreeSet;
@@ -333,7 +333,7 @@ pub(super) fn inspect_service(
                 crate::product_message!("backend.integration.diagnostic.did_identifier_invalid"),
             )
         })?;
-    if super::multi::selected(graph) && did_id == 0xf186 {
+    if super::composition::selected(graph) && did_id == 0xf186 {
         return Err(reject(
             graph,
             did,
@@ -413,7 +413,7 @@ pub(super) fn inspect_service(
             ),
         ));
     }
-    let transport = inspect_transport(graph, context, super::multi::selected(graph))?;
+    let transport = inspect_transport(graph, context, super::composition::selected(graph))?;
     if timing != Some((transport.p2_ms, transport.p2_star_ms)) {
         return Err(reject(
             graph,

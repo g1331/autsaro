@@ -25,7 +25,7 @@ npm run dev --prefix ui
 npm run lint --prefix ui
 npm run test --prefix ui
 npm run build --prefix ui
-cargo test --locked --manifest-path core/Cargo.toml
+cargo test --locked -p autosar-config-core
 uv run --locked python -B -m unittest discover -s tests/python
 uv run --locked ruff check tools tests/python scripts
 uv run --locked python -m autosar_tooling quality --base <基准提交>

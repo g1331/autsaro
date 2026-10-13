@@ -460,7 +460,7 @@ impl crate::definitions::DefinitionCatalog {
                     return (false, references);
                 }
                 // Built-in validation always plans on the mainline.
-                let result = super::plan::inspect_multi(&graph, Some(self));
+                let result = super::plan::inspect_composition(&graph, Some(self));
                 (true, result.err().unwrap_or_default())
             }
             Err(diagnostics) => (false, diagnostics),

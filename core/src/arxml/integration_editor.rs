@@ -144,7 +144,7 @@ fn inspection(
             diagnostics: Vec::new(),
         },
         Err(diagnostics) => IntegrationInspection {
-            profile: crate::integration::MULTI_PROFILE.into(),
+            profile: crate::integration::PROFILE.into(),
             description: None,
             diagnostics,
         },
@@ -157,8 +157,8 @@ mod tests {
 
     #[test]
     fn saved_native_plan_refuses_dirty_or_changed_sources() {
-        let root =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-component");
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/component-pipeline/arxml");
         let files = std::fs::read_dir(root)
             .unwrap()
             .map(|entry| entry.unwrap().path())

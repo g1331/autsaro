@@ -25,6 +25,21 @@ class QualityTests(unittest.TestCase):
             with patch.object(quality, 'ROOT', root):
                 self.assertEqual(quality.changed_lines(path, baseline, set()), {1, 2})
 
+    def test_renamed_file_counts_only_its_edited_lines(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            git = ['git', '-c', 'user.name=t', '-c', 'user.email=t@t']
+            subprocess.run(['git', 'init', '--quiet', str(root)], check=True)
+            (root / 'old.py').write_text('first = 1\nsecond = 2\nthird = 3\n', encoding='utf-8')
+            subprocess.run(['git', 'add', '.'], cwd=root, check=True)
+            subprocess.run([*git, 'commit', '--quiet', '-m', 'base'], cwd=root, check=True)
+            subprocess.run(['git', 'mv', 'old.py', 'new.py'], cwd=root, check=True)
+            (root / 'new.py').write_text('first = 1\nsecond = 20\nthird = 3\n', encoding='utf-8')
+            with patch.object(quality, 'ROOT', root):
+                renamed = quality.renamed_sources('HEAD')
+                self.assertEqual(renamed, {Path('new.py'): Path('old.py')})
+                self.assertEqual(quality.changed_lines(Path('new.py'), 'HEAD', set(), renamed), {2})
+
     def test_changed_line_formatting_fails_without_rejecting_legacy_lines(self):
         path = Path("core/src/example.rs")
         source = "fn old( ){ }\nfn new( ){ }\n"
@@ -47,6 +62,35 @@ class QualityTests(unittest.TestCase):
                 errors = quality.hygiene_errors(path)
         self.assertTrue(any("trailing whitespace" in error for error in errors))
         self.assertTrue(any("Python syntax error" in error for error in errors))
+
+    def test_plan_numbers_in_names_and_text_fail_outside_exempt_records(self):
+        # Assembled so this test file does not contain the numbers it rejects.
+        epic, story = "ep" + "ic", "st" + "ory"
+        files = {
+            f"core/tests/fixtures/{epic}4/input.arxml": "<A/>\n",
+            "core/src/clean.rs": f"// {epic.title()} 9 milestone\nfn main() {{}}\n",
+            "tests/python/notes.py": f"KEY = '{story}-4.11'\n",
+            "core/src/retired.rs": f'const P: &str = "{epic}4-win64-sr-cs-v1";\n',
+            "docs/adr/0001-record.md": f"Source: architecture/{epic}-4/SPINE.md\n",
+            "docs/images/picture.png": f"\0{epic}4".encode(),
+            "core/src/composition.rs": "// epicycle and storyline are words\n",
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name, content in files.items():
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                data = content if isinstance(content, bytes) else content.encode()
+                (root / name).write_bytes(data)
+            with patch.object(quality, "ROOT", root):
+                errors = quality.plan_number_errors([Path(name) for name in files])
+        self.assertEqual(
+            errors,
+            [
+                f"core/tests/fixtures/{epic}4/input.arxml: development plan number '{epic}4' in path",
+                f"core/src/clean.rs:1: development plan number '{epic.title()} 9'",
+                f"tests/python/notes.py:1: development plan number '{story}-4'",
+            ],
+        )
 
     def test_diff_hunk_counts_added_lines(self):
         diff = "@@ -2,0 +3,2 @@\n+a\n+b\n@@ -8 +10,0 @@\n-old\n"

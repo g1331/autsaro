@@ -83,7 +83,7 @@ fn prepare_package(
     let names = super::super::output::verify_build_input(package)?;
     let target = read_source(&package.join("target.json"))?;
     let metadata = super::ownership::metadata_from_target(&target)?
-        .ok_or_else(|| crate::product_message!("backend.delivery.native_v2_required"))?;
+        .ok_or_else(|| crate::product_message!("backend.delivery.native_identity_required"))?;
     let selected = consumer_catalog(
         catalog,
         &metadata.resource_identities.required_extension_definitions,

@@ -3,7 +3,7 @@ use super::*;
 
 #[test]
 fn shared_os_event_requires_one_effective_period_and_preserves_rejected_sources() {
-    let mut sources = conflicting_multi_schedule_sources();
+    let mut sources = conflicting_schedule_sources();
     for reverse in [false, true] {
         if reverse {
             sources.reverse();
@@ -28,13 +28,13 @@ fn shared_os_event_requires_one_effective_period_and_preserves_rejected_sources(
             "{issues:?}"
         );
     }
-    assert_rejected_multi_sources_preserved(&sources);
+    assert_rejected_sources_preserved(&sources);
 }
 
 #[test]
 fn shared_os_event_accepts_distinct_equivalent_alarm_and_table_triggers() {
     for tables in [false, true] {
-        let mut sources = equivalent_multi_schedule_triggers(tables);
+        let mut sources = equivalent_schedule_triggers(tables);
         for reverse in [false, true] {
             if reverse {
                 sources.reverse();
@@ -69,7 +69,7 @@ fn shared_os_event_accepts_distinct_equivalent_alarm_and_table_triggers() {
             }
         }
     }
-    let mut sources = equivalent_multi_schedule_triggers(true);
+    let mut sources = equivalent_schedule_triggers(true);
     parameter(
         &mut sources,
         "Table_Observe",

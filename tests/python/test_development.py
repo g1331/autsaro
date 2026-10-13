@@ -78,13 +78,13 @@ class DiagnosticTests(unittest.TestCase):
 
 class QualityScopeTests(unittest.TestCase):
     def test_scoped_formatting_does_not_request_unrelated_tools(self):
-        with patch.object(quality, "scoped_paths", return_value=[]), patch.object(quality, "source_paths", return_value=[]), patch.object(quality, "c_syntax_errors", side_effect=AssertionError("UI requested C")), redirect_stdout(io.StringIO()):
+        with patch.object(quality, "scoped_paths", return_value=[]), patch.object(quality, "source_paths", return_value=[]), patch.object(quality, "c_syntax_errors", side_effect=AssertionError("UI requested C")), patch.object(quality, "plan_number_errors", return_value=[]), redirect_stdout(io.StringIO()):
             self.assertEqual(quality.check("HEAD", scope="ui"), [])
 
 
 class VerificationTests(unittest.TestCase):
     def test_desktop_and_all_scopes_stop_on_backend_test_failure(self):
-        expected = ["cargo", "test", "--locked", "--manifest-path", "src-tauri/Cargo.toml"]
+        expected = ["cargo", "test", "--locked", "-p", "autosar-config-desktop"]
         for scope in ("desktop", "all"):
             with self.subTest(scope=scope):
                 calls = []
@@ -104,7 +104,7 @@ class VerificationTests(unittest.TestCase):
                     self.assertEqual(verify.verify(scope), 7)
                 self.assertEqual(calls[-1], expected)
                 self.assertEqual(calls.count(expected), 1)
-                self.assertNotIn(["cargo", "build", "--locked", "--manifest-path", "src-tauri/Cargo.toml"], calls)
+                self.assertNotIn(["cargo", "build", "--locked", "-p", "autosar-config-desktop"], calls)
 
 
 class AssetTests(unittest.TestCase):
@@ -128,12 +128,12 @@ class AssetTests(unittest.TestCase):
                 (root / folder).mkdir(parents=True)
             for name in ("source-manifest.json", "posix-source-manifest.json"):
                 (root / "third_party/freertos" / name).write_text('{"files": {}}')
-            (root / "tools/python/src/ecu_tools/workbench-v2-assets.json").write_text(
+            (root / "tools/python/src/ecu_tools/build-tool-inventory.json").write_text(
                 '{"files": []}'
             )
             source = root / "owned"
             source.write_bytes(b"original")
-            manifest = root / "runtime/contracts/assets-v1.json"
+            manifest = root / "runtime/contracts/assets.json"
             manifest.write_text(
                 json.dumps(
                     {

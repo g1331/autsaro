@@ -34,13 +34,13 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          uv run --locked cargo test --locked --manifest-path core/Cargo.toml --features official-oracles --no-fail-fast 2>&1 | tee acceptance-results/integration.log
+          uv run --locked cargo test --locked -p autosar-config-core --features official-oracles --no-fail-fast 2>&1 | tee acceptance-results/integration.log
       - name: Native process and ECU consumers
         if: inputs.suite == 'native' || inputs.suite == 'all'
         shell: bash
         run: |
           set -o pipefail
-          uv run --locked cargo test --locked --manifest-path core/Cargo.toml --features native-tests --no-fail-fast 2>&1 | tee acceptance-results/native.log
+          uv run --locked cargo test --locked -p autosar-config-core --features native-tests --no-fail-fast 2>&1 | tee acceptance-results/native.log
       - name: Python native platform checks
         if: inputs.suite == 'native' || inputs.suite == 'all'
         shell: bash
@@ -49,7 +49,7 @@ jobs:
         run: |
           set -o pipefail
           # The sealed build and receiver checks consume the generated samples.
-          cargo test --locked --manifest-path core/Cargo.toml --test it -- 'c_analysis::'
+          cargo test --locked -p autosar-config-core --test it -- 'c_analysis::'
           uv run --locked python -B -m unittest discover -s tests/python/native 2>&1 | tee acceptance-results/python-native.log
       - name: UI installation
         if: inputs.suite == 'all'

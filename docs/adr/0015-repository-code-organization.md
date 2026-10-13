@@ -24,6 +24,6 @@
 
 ## 状态
 
-已接受（2026-10-11），实施中。
+已接受（2026-10-11），实施中：决策 1、5、7 及 `runtime/bsw` 已实施（#36），`runtime/host` 拆分随 #38。
 
 来源：`planning-archive-2026-10:_bmad-output/planning-artifacts/sprint-change-proposal-2026-10-11.md`（第 1 节、决定 5、7、8）、`planning-archive-2026-10:_bmad-output/planning-artifacts/architecture/epic-9/ARCHITECTURE-SPINE.md`（AD-6、AD-9、Structural Seed 与组织依据）、`planning-archive-2026-10:_bmad-output/specs/spec-runtime-codegen-quality/work-packages.md`（B4、B5）。

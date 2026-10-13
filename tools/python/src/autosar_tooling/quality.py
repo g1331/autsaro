@@ -1,4 +1,4 @@
-"""Check source hygiene, changed-line formatting, and host C99 syntax."""
+"""Check source hygiene, changed-line formatting, host C99 syntax, and plan numbers."""
 
 from __future__ import annotations
 
@@ -19,6 +19,13 @@ SOURCE_SUFFIXES = {".c", ".h", ".rs", ".ts", ".tsx", ".css", ".py", ".mjs"}
 FORMAT_SUFFIXES = {".c", ".h", ".rs", ".ts", ".tsx", ".css", ".mjs"}
 SOURCE_ROOTS = ("core/", "src-tauri/", "runtime/", "ui/src/", "ui/tests/", "tools/", "tests/", "scripts/")
 HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
+# An epic or story word followed by its number is a development plan number, not a responsibility.
+PLAN_NUMBER = re.compile(r"(?<![a-z0-9])(?:epic|story)[ _.-]?\d", re.IGNORECASE)
+# Retired profile identities stay literal so their projects and deliveries are refused on open.
+RETIRED_IDENTITIES = ("epic4-win64-sr-cs-v1", "epic4-single-application-v1")
+# Decision records cite archived planning paths, the roadmap names planning phases like their
+# Milestones, and vendored upstream content keeps its original bytes.
+PLAN_NUMBER_EXEMPT = ("docs/adr/", "docs/roadmap.md", "third_party/", ".agents/skills/impeccable/")
 
 
 def _capture(
@@ -43,7 +50,7 @@ def run(
     )
 
 
-def source_paths(*, untracked_only: bool = False) -> list[Path]:
+def repository_paths(*, untracked_only: bool = False) -> list[Path]:
     command = ["git", "ls-files", "-z"]
     if untracked_only:
         command.extend(["--others", "--exclude-standard"])
@@ -52,9 +59,11 @@ def source_paths(*, untracked_only: bool = False) -> list[Path]:
     result = _capture(command)
     if result.returncode:
         raise RuntimeError(result.stderr.decode("utf-8", errors="replace"))
-    paths = (
-        Path(value.decode("utf-8")) for value in result.stdout.split(b"\0") if value
-    )
+    return [Path(value.decode("utf-8")) for value in result.stdout.split(b"\0") if value]
+
+
+def source_paths(*, untracked_only: bool = False) -> list[Path]:
+    paths = repository_paths(untracked_only=untracked_only)
     return sorted(
         (
             path
@@ -96,21 +105,68 @@ def hygiene_errors(path: Path) -> list[str]:
     return errors
 
 
-def changed_lines(path: Path, base: str, untracked: set[Path]) -> set[int]:
+def plan_number_errors(paths: list[Path] | None = None) -> list[str]:
+    errors = []
+    for path in repository_paths() if paths is None else paths:
+        name = path.as_posix()
+        if name.startswith(PLAN_NUMBER_EXEMPT) or not (ROOT / path).is_file():
+            continue
+        if match := PLAN_NUMBER.search(name):
+            errors.append(f"{name}: development plan number {match.group(0)!r} in path")
+        data = (ROOT / path).read_bytes()
+        if b"\0" in data:
+            continue
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError:
+            continue
+        for number, line in enumerate(text.splitlines(), 1):
+            for identity in RETIRED_IDENTITIES:
+                line = line.replace(identity, "")
+            if match := PLAN_NUMBER.search(line):
+                errors.append(f"{name}:{number}: development plan number {match.group(0)!r}")
+    return errors
+
+
+def renamed_sources(base: str) -> dict[Path, Path]:
+    """Map each path renamed since base to its old path."""
+    result = run(["git", "diff", "--no-ext-diff", "-M", "--name-status", "-z", base])
+    if result.returncode:
+        raise RuntimeError(result.stderr.strip())
+    fields = result.stdout.split("\0")
+    renamed = {}
+    index = 0
+    while index < len(fields) - 1:
+        status = fields[index]
+        if status.startswith(("R", "C")):
+            renamed[Path(fields[index + 2])] = Path(fields[index + 1])
+            index += 3
+        else:
+            index += 2
+    return renamed
+
+
+def changed_lines(
+    path: Path, base: str, untracked: set[Path], renamed: dict[Path, Path] | None = None
+) -> set[int]:
     if path in untracked:
         return set(
             range(1, len((ROOT / path).read_text(encoding="utf-8").splitlines()) + 1)
         )
+    # Naming the old path lets git pair a renamed file, so only its edited lines count.
+    old = [renamed[path].as_posix()] if renamed and path in renamed else []
     result = run(
         [
             "git",
             "diff",
             "--no-ext-diff",
             "--no-color",
+            "-M",
             "--unified=0",
             base,
             "--",
             path.as_posix(),
+            *old,
         ]
     )
     if result.returncode:
@@ -190,10 +246,10 @@ def changed_format_errors(
 
 
 # The CAN headers include ComStack_Cfg.h, which a generated project provides; the
-# independent multi-runtime fixture stands in. The CAN sources also need the generated
+# independent bsw-contracts fixture stands in. The CAN sources also need the generated
 # Ecu_Config.h/Ecu_Execution.h, so they are compiled with generated projects (c-check, native).
-CONFIGURATION = ROOT / "core" / "tests" / "fixtures" / "multi-runtime"
-MAINLINE_CAN = ROOT / "runtime" / "multi"
+CONFIGURATION = ROOT / "core" / "tests" / "fixtures" / "bsw-contracts"
+MAINLINE_CAN = ROOT / "runtime" / "bsw"
 MAINLINE_CAN_HEADERS = ["Can_CfgTypes.h", "Can_GeneralTypes.h", "Can_Host.h", "Can_MemMap.h",
                         "Ecu_Status.h", "SchM_Can.h", "standard/Can.h"]
 
@@ -226,7 +282,7 @@ def c_syntax_errors() -> list[str]:
                 "-pedantic",
                 "-fsyntax-only",
                 "-I",
-                str(ROOT / "runtime" / "multi" / "include"),
+                str(ROOT / "runtime" / "bsw" / "include"),
                 "-I",
                 str(CONFIGURATION),
                 *forced_header,
@@ -258,6 +314,7 @@ def scoped_paths(scope: str) -> list[Path]:
 def check(base: str, *, all_format: bool = False, scope: str = "all") -> list[str]:
     errors = []
     untracked = set(source_paths(untracked_only=True))
+    renamed = {} if all_format else renamed_sources(base)
     changed_c = False
     checked = 0
     for path in scoped_paths(scope):
@@ -272,7 +329,7 @@ def check(base: str, *, all_format: bool = False, scope: str = "all") -> list[st
                 )
             )
             if all_format
-            else changed_lines(path, base, untracked)
+            else changed_lines(path, base, untracked, renamed)
         )
         if path.suffix in {".c", ".h"} and changed:
             changed_c = True
@@ -288,8 +345,10 @@ def check(base: str, *, all_format: bool = False, scope: str = "all") -> list[st
         errors.extend(changed_format_errors(path, source, formatted, changed))
     if changed_c or scope == "runtime" or all_format:
         errors.extend(c_syntax_errors())
+    numbers = plan_number_errors()
+    errors.extend(numbers)
     print(
-        f"Quality scope={scope} baseline={base}; formatted files checked={checked}; C syntax={'checked' if changed_c or scope == 'runtime' or all_format else 'not requested'}"
+        f"Quality scope={scope} baseline={base}; formatted files checked={checked}; C syntax={'checked' if changed_c or scope == 'runtime' or all_format else 'not requested'}; plan numbers={len(numbers)}"
     )
     return errors
 

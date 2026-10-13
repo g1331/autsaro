@@ -46,7 +46,7 @@ fn builtin_standard_template_generates_builds_and_passes_reference_verifier() {
     let plan = ecu.saved_integration_plan().unwrap();
     assert_eq!(
         plan.description().profile,
-        autosar_config_core::integration::MULTI_PROFILE
+        autosar_config_core::integration::PROFILE
     );
     let target = tooling::native_target();
     let project = scratch.0.join("package");

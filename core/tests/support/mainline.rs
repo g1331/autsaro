@@ -10,7 +10,8 @@ use autosar_config_core::{
 use std::path::Path;
 
 pub(crate) fn inputs() -> Vec<InputSource> {
-    let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-component");
+    let directory =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/component-pipeline/arxml");
     let mut sources = std::fs::read_dir(directory)
         .unwrap()
         .map(|entry| {
@@ -42,7 +43,7 @@ pub(crate) fn change(sources: &mut [InputSource], file: &str, before: &str, afte
     *source = InputSource::new(file, text.replacen(before, after, 1).into_bytes()).unwrap();
 }
 
-pub(crate) fn live_multi_workspace(
+pub(crate) fn live_pipeline_workspace(
     root: &Path,
     sources: &[InputSource],
 ) -> autosar_config_core::Workspace {
@@ -69,7 +70,7 @@ pub(crate) fn live_multi_workspace(
     autosar_config_core::Workspace::open_project_manifest(&path, &root.join("cache")).unwrap()
 }
 
-pub(crate) fn initialized_multi_user_workspace(root: &Path) -> autosar_config_core::Workspace {
+pub(crate) fn initialized_pipeline_workspace(root: &Path) -> autosar_config_core::Workspace {
     let mut arxml = inputs();
     change(
         &mut arxml,
@@ -77,7 +78,7 @@ pub(crate) fn initialized_multi_user_workspace(root: &Path) -> autosar_config_co
         "<VALUE>0</VALUE>",
         "<VALUE>7</VALUE>",
     );
-    let mut workspace = live_multi_workspace(root, &arxml);
+    let mut workspace = live_pipeline_workspace(root, &arxml);
     let initialization = workspace.preview_application_initialization().unwrap();
     workspace
         .initialize_application_previewed(&initialization)
@@ -86,7 +87,7 @@ pub(crate) fn initialized_multi_user_workspace(root: &Path) -> autosar_config_co
         let name = Path::new(&file.path).file_name().unwrap();
         std::fs::copy(
             Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("tests/fixtures/multi-application")
+                .join("tests/fixtures/component-pipeline/applications")
                 .join(name),
             root.join(&file.path),
         )
@@ -100,8 +101,9 @@ pub(crate) fn initialized_multi_user_workspace(root: &Path) -> autosar_config_co
 }
 
 // Consume the normal complete producer rather than a public source-fragment API.
-pub(crate) fn prepared_multi_files(plan: &ValidatedIntegrationPlan) -> Vec<(String, Vec<u8>)> {
-    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-application");
+pub(crate) fn prepared_pipeline_files(plan: &ValidatedIntegrationPlan) -> Vec<(String, Vec<u8>)> {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/component-pipeline/applications");
     let scratch = Scratch::new();
     let renamed = plan
         .application_slot_descriptors()
@@ -164,7 +166,7 @@ pub(crate) fn replace_all(sources: &mut [InputSource], before: &str, after: &str
     }
 }
 
-pub(crate) fn conflicting_multi_schedule_sources() -> Vec<InputSource> {
+pub(crate) fn conflicting_schedule_sources() -> Vec<InputSource> {
     let mut sources = inputs();
     let original = sources
         .iter()
@@ -185,10 +187,10 @@ pub(crate) fn conflicting_multi_schedule_sources() -> Vec<InputSource> {
     sources
 }
 
-pub(crate) fn assert_rejected_multi_sources_preserved(sources: &[InputSource]) {
+pub(crate) fn assert_rejected_sources_preserved(sources: &[InputSource]) {
     let scratch = Scratch::new();
     let live = scratch.0.join("live");
-    let workspace = live_multi_workspace(&live, sources);
+    let workspace = live_pipeline_workspace(&live, sources);
     assert!(workspace.saved_integration_plan().is_err());
     assert!(workspace.preview_application_initialization().is_err());
     assert!(!live.join("application").exists());
@@ -200,7 +202,7 @@ pub(crate) fn assert_rejected_multi_sources_preserved(sources: &[InputSource]) {
     }
 }
 
-pub(crate) fn equivalent_multi_schedule_triggers(tables: bool) -> Vec<InputSource> {
+pub(crate) fn equivalent_schedule_triggers(tables: bool) -> Vec<InputSource> {
     let mut sources = inputs();
     let alarm = subtree(&sources, "ecuc.arxml", "ECUC-CONTAINER-VALUE", "Alarm_App");
     let second_alarm = alarm.replace(
@@ -230,7 +232,7 @@ pub(crate) fn equivalent_multi_schedule_triggers(tables: bool) -> Vec<InputSourc
         "tables.arxml",
         std::fs::read(
             Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("tests/fixtures/epic4_timing/schedule_tables.arxml"),
+                .join("tests/fixtures/os-timing/schedule_tables.arxml"),
         )
         .unwrap(),
     )
@@ -546,7 +548,7 @@ pub(crate) fn single_component_sources() -> Vec<InputSource> {
 }
 
 /// Seals the single-component project with the reference echo application:
-/// the multi fixture's `Ingress` without its removed local `Value` port.
+/// the composition fixture's `Ingress` without its removed local `Value` port.
 /// Returns the project directory and its sealed closure.
 pub(crate) fn single_component_project(
     root: &Path,
@@ -563,7 +565,8 @@ pub(crate) fn single_component_project_from(
 ) -> (std::path::PathBuf, Vec<(String, Vec<u8>)>) {
     use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
     let fixture = std::fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-application/Ingress.c"),
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/component-pipeline/applications/Ingress.c"),
     )
     .unwrap();
     let source = fixture.replace("        (void)Rte_Write_Value_Value(value);\n", "");
@@ -593,7 +596,7 @@ pub(crate) fn write_files(project: &Path, files: &[(String, Vec<u8>)]) {
     }
 }
 
-pub(crate) fn multi_operation_inputs() -> Vec<InputSource> {
+pub(crate) fn pipeline_operation_inputs() -> Vec<InputSource> {
     let mut sources = inputs();
     xml_edit(
         &mut sources,
@@ -725,12 +728,12 @@ pub(crate) fn template_execution_variants() -> Vec<Vec<InputSource>> {
 }
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
-pub(crate) fn verify_multi_production_owner(
+pub(crate) fn verify_production_owner(
     project: &Path,
     consumer: &Path,
     p2_star: Option<(&str, &str)>,
 ) {
-    let output = consumer.join("multi-build");
+    let output = consumer.join("pipeline-build");
     let result = tooling::ecu_build_command(&project, &output, "host-batch", None)
         .current_dir(consumer)
         .env_remove("PYTHONPATH")
@@ -839,7 +842,7 @@ pub(crate) fn native_delivery_target() -> autosar_config_core::target::BuildTarg
 
 /// Handoff forgeries with the refusal reasons of the workbench importer and
 /// of the delivered `ecu-tool.py`.
-pub(crate) const HANDOFF_FORGERIES: [(&str, &str, &str); 6] = [
+pub(crate) const HANDOFF_FORGERIES: [(&str, &str, &str); 7] = [
     (
         "application",
         "mapped_snapshot_changed",
@@ -863,10 +866,16 @@ pub(crate) const HANDOFF_FORGERIES: [(&str, &str, &str); 6] = [
     (
         "payload-path",
         "portable_path_unsafe",
-        "Unsafe v2 portable path",
+        "Unsafe native portable path",
     ),
     (
         "identity",
+        "native_identity_unsupported",
+        "Native input/resource identity differs",
+    ),
+    // A package sealed in the retired workbench handoff format.
+    (
+        "format",
         "native_identity_unsupported",
         "Native input/resource identity differs",
     ),
@@ -904,12 +913,16 @@ pub(crate) fn forged_handoff(
         "producer" => row["producerId"] = "unrecognized-producer".into(),
         "snapshot-path" => row["snapshotOf"] = "../outside.c".into(),
         "payload-path" => row["path"] = "../outside.c".into(),
-        "identity" => {
+        "identity" | "format" => {
             let mut target: serde_json::Value =
                 serde_json::from_slice(&std::fs::read(package.join("target.json")).unwrap())
                     .unwrap();
-            target["nativeDelivery"]["resourceIdentities"]["ruleSetIdentity"]["rulesVersion"] =
-                "unrecognized-rule-version".into();
+            if case == "format" {
+                target["nativeDelivery"]["format"] = "autosar-workbench-handoff-v2".into();
+            } else {
+                target["nativeDelivery"]["resourceIdentities"]["ruleSetIdentity"]["rulesVersion"] =
+                    "unrecognized-rule-version".into();
+            }
             std::fs::write(
                 package.join("handoff.json"),
                 serde_json::to_vec_pretty(&target["nativeDelivery"]).unwrap(),

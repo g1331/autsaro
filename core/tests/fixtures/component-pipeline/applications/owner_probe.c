@@ -15,7 +15,7 @@
 #include <stdio.h>
 #include <string.h>
 
-void MultiTest_Copy(uint32 result[10]);
+void PipelineTest_Copy(uint32 result[10]);
 static Os_Atomic32 snapshot_lock;
 static unsigned after_main;
 static unsigned canonical;
@@ -157,7 +157,7 @@ int Ecu_TargetTestFailStage(unsigned stage) {
     if ((stage == 10u) || (stage == 11u)) {
         uint32 counts[10];
         const uint32 periods = (uint32)(Ecu_TargetNow() / 10u);
-        MultiTest_Copy(counts);
+        PipelineTest_Copy(counts);
         require((counts[0] == periods) && (counts[1] == periods) && (counts[2] == periods) &&
                 (counts[3] == periods));
         require((counts[4] == 0u) && (counts[5] == 0u));

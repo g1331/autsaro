@@ -4,15 +4,15 @@ use autosar_config_core::integration::InputSource;
 use std::path::Path;
 
 #[test]
-fn source_derived_multi_contract_is_deterministic_and_keeps_local_identity() {
+fn source_derived_composition_contract_is_deterministic_and_keeps_local_identity() {
     let sources = inputs();
     let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
     let description = plan.description();
-    let multi = description.multi.as_ref().unwrap();
+    let composition = description.composition.as_ref().unwrap();
     assert_eq!(description.profile, "singlecore-ecu-v1");
-    assert_eq!(multi.components.len(), 4);
-    assert_eq!(multi.connections.len(), 5);
-    assert_eq!(multi.network_endpoints.len(), 2);
+    assert_eq!(composition.components.len(), 4);
+    assert_eq!(composition.connections.len(), 5);
+    assert_eq!(composition.network_endpoints.len(), 2);
     assert_eq!(
         description
             .schedule
@@ -23,19 +23,19 @@ fn source_derived_multi_contract_is_deterministic_and_keeps_local_identity() {
             .collect::<Vec<_>>(),
         ["Ingress_Periodic", "Process_Periodic", "Observe_Periodic"]
     );
-    for component in &multi.components {
+    for component in &composition.components {
         assert_ne!(component.component, component.instance);
         assert!(component.rte_instance.starts_with("/Configuration/Rte/"));
         if component.component.ends_with("Process") || component.component.ends_with("Observe") {
             assert!(
-                !multi
+                !composition
                     .network_endpoints
                     .iter()
                     .any(|endpoint| endpoint.endpoint.instance == component.instance)
             );
         }
     }
-    let read_values = multi
+    let read_values = composition
         .components
         .iter()
         .flat_map(|component| &component.data_ports)
@@ -72,7 +72,7 @@ fn source_derived_multi_contract_is_deterministic_and_keeps_local_identity() {
         plan.ecu_integration_files(autosar_config_core::target::BuildTarget::LinuxX64ControlledV1)
             .is_err()
     );
-    if let Ok(directory) = std::env::var("AUTOSAR_MULTI_CONTRACT_OUTPUT") {
+    if let Ok(directory) = std::env::var("AUTOSAR_CONTRACT_OUTPUT") {
         let output = Path::new(&directory);
         let preview = files.preview(output).unwrap();
         files.generate_previewed(output, &preview.revision).unwrap();
@@ -80,7 +80,7 @@ fn source_derived_multi_contract_is_deterministic_and_keeps_local_identity() {
 }
 
 #[test]
-fn malformed_multi_contracts_are_rejected_at_real_source_objects() {
+fn malformed_composition_contracts_are_rejected_at_real_source_objects() {
     let vectors = [
         (
             "composition.arxml",
@@ -266,7 +266,7 @@ fn service_argument_names_cannot_shadow_selected_runtime_and_component_producers
     let baseline = build(&inputs()).unwrap();
     let bridge = baseline
         .description()
-        .multi
+        .composition
         .as_ref()
         .unwrap()
         .components
@@ -308,7 +308,7 @@ fn service_argument_names_cannot_shadow_selected_runtime_and_component_producers
             }
             rejects_in_both(&sources, "CONTRACT_NAME_COLLISION");
             if name == "Ecu_TargetIsOwner" && !reverse {
-                assert_rejected_multi_sources_preserved(&sources);
+                assert_rejected_sources_preserved(&sources);
             }
             assert!(
                 !normal_validation(&sources)
@@ -430,15 +430,15 @@ fn renamed_component_and_port_contracts_follow_full_source_identity() {
         "<SHORT-NAME>InputValue</SHORT-NAME>",
     );
     let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
-    let multi = plan.description().multi.as_ref().unwrap();
-    let gateway = multi
+    let composition = plan.description().composition.as_ref().unwrap();
+    let gateway = composition
         .components
         .iter()
         .find(|component| component.component == "/Application/Gateway")
         .unwrap();
     assert_eq!(gateway.instance, "/Application/Pipeline/GatewayInstance");
     assert_eq!(gateway.header, "include/Rte_Gateway.h");
-    let process = multi
+    let process = composition
         .components
         .iter()
         .find(|component| component.component == "/Application/Process")
@@ -453,7 +453,7 @@ fn renamed_component_and_port_contracts_follow_full_source_identity() {
         "Rte_Read_InputValue_Value"
     );
     assert!(
-        multi
+        composition
             .connections
             .iter()
             .any(|connection| connection.requester.port == "/Application/Process/InputValue")
@@ -771,7 +771,7 @@ fn client_server_sets_close_in_both_directions_and_empty_interfaces_are_rejected
 
 #[test]
 fn every_operation_has_its_own_spec_call_and_event_and_void_is_valid() {
-    let sources = multi_operation_inputs();
+    let sources = pipeline_operation_inputs();
     assert!(normal_validation(&sources).diagnostics.is_empty());
     let plan = build(&sources).unwrap();
     let files = plan.component_contract_files().unwrap();
@@ -1124,7 +1124,7 @@ fn actual_runtime_source_owners_derive_all_application_slots_and_keep_service_ge
             .any(|symbol| symbol.symbol == "DcmService_ReadData"
                 && symbol.definition_owner == "src/Rte.c")
     );
-    let files = prepared_multi_files(&plan);
+    let files = prepared_pipeline_files(&plan);
     assert!(files.iter().any(|(path, _)| path == "src/Rte.c"));
 }
 
@@ -1197,7 +1197,7 @@ fn shared_rte_lifecycle_os_target_kernel_and_c_runtime_producers_cannot_be_shado
 }
 
 #[test]
-fn multi_selected_catalog_binds_standard_signatures_and_actual_periodic_producers() {
+fn selected_catalog_binds_standard_signatures_and_actual_periodic_producers() {
     let plan = build(&inputs()).unwrap();
     let description = plan.description();
     assert_eq!(
@@ -1226,12 +1226,12 @@ fn multi_selected_catalog_binds_standard_signatures_and_actual_periodic_producer
     assert!(
         description
             .runtime_sources
-            .contains_key("runtime/multi/src/Com.c")
+            .contains_key("runtime/bsw/src/Com.c")
     );
     assert!(
         description
             .runtime_sources
-            .contains_key("core/src/integration/multi_ecu.rs")
+            .contains_key("core/src/integration/ecu_config.rs")
     );
     for name in [
         "Com_MainFunctionRx_Rx",
@@ -1330,7 +1330,7 @@ fn multi_selected_catalog_binds_standard_signatures_and_actual_periodic_producer
         .unwrap();
     assert_eq!(
         pdu_router.declaration_owner,
-        "runtime/multi/include/PduR_Com.h"
+        "runtime/bsw/include/PduR_Com.h"
     );
     for path in [
         "core/src/integration/ecu.rs",
@@ -1353,7 +1353,8 @@ fn plural_application_preparation_freezes_every_real_producer_and_refuses_bad_me
     use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
     let scratch = Scratch::new();
     let plan = build(&inputs()).unwrap();
-    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-application");
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/component-pipeline/applications");
     let sources: Vec<_> = plan
         .application_slot_descriptors()
         .unwrap()
@@ -1440,9 +1441,9 @@ fn plural_application_preparation_freezes_every_real_producer_and_refuses_bad_me
 }
 
 #[test]
-fn prepared_multi_bsw_entries_describe_actual_call_mechanisms_and_implementation_policy() {
+fn prepared_bsw_entries_describe_actual_call_mechanisms_and_implementation_policy() {
     let plan = build(&inputs()).unwrap();
-    let files = prepared_multi_files(&plan);
+    let files = prepared_pipeline_files(&plan);
     let bytes = &files
         .iter()
         .find(|(path, _)| path == "descriptions/Host_Implementation.arxml")

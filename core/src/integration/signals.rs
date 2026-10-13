@@ -549,15 +549,17 @@ pub(super) fn inspect_ports(
                     Some("true" | "1")
                 )
                 || !value(graph, com_signal, "ComFirstTimeout", false).is_some_and(|value| {
-                    if super::multi::selected(graph) {
-                        super::multi::zero_seconds(value)
+                    if super::composition::selected(graph) {
+                        super::composition::zero_seconds(value)
                     } else {
                         value == "0"
                     }
                 })
                 || value(graph, com_signal, "ComRxDataTimeoutAction", false) != Some("NONE")
                 || value(graph, com_signal, "ComTimeout", false).and_then(|value| {
-                    if super::multi::selected(graph) && super::multi::zero_seconds(value) {
+                    if super::composition::selected(graph)
+                        && super::composition::zero_seconds(value)
+                    {
                         Some(0)
                     } else {
                         milliseconds(value)

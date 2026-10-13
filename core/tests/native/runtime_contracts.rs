@@ -15,16 +15,16 @@ fn det_consumer(scratch: &Path, fixture: &str) -> PathBuf {
     let output = command
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
         .arg("-I")
-        .arg(root.join("runtime/multi/include"))
+        .arg(root.join("runtime/bsw/include"))
         .arg("-I")
-        .arg(root.join("runtime/multi/src"))
+        .arg(root.join("runtime/bsw/src"))
         .arg("-I")
-        .arg(root.join("core/tests/fixtures/multi-runtime"))
-        .arg(root.join("runtime/multi/src/SchM_CanIf_Host.c"))
-        .arg(root.join("runtime/multi/src/Can_HostLock.c"))
-        .arg(root.join("runtime/multi/src/Det.c"))
-        .arg(root.join("runtime/multi/src/Det_Host.c"))
-        .arg(root.join("core/tests/fixtures/multi-runtime").join(fixture))
+        .arg(root.join("core/tests/fixtures/bsw-contracts"))
+        .arg(root.join("runtime/bsw/src/SchM_CanIf_Host.c"))
+        .arg(root.join("runtime/bsw/src/Can_HostLock.c"))
+        .arg(root.join("runtime/bsw/src/Det.c"))
+        .arg(root.join("runtime/bsw/src/Det_Host.c"))
+        .arg(root.join("core/tests/fixtures/bsw-contracts").join(fixture))
         .arg("-o")
         .arg(&executable)
         .output()
@@ -100,16 +100,16 @@ fn com_standard_consumer_executes_group_and_reception_monitoring() {
     let output = Command::new(tooling::execution_settings().compiler)
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
         .arg("-I")
-        .arg(root.join("runtime/multi/include"))
+        .arg(root.join("runtime/bsw/include"))
         .arg("-I")
-        .arg(root.join("runtime/multi/src"))
+        .arg(root.join("runtime/bsw/src"))
         .arg("-I")
-        .arg(root.join("core/tests/fixtures/multi-runtime"))
+        .arg(root.join("core/tests/fixtures/bsw-contracts"))
         .arg("-pthread")
-        .arg(root.join("runtime/multi/src/SchM_CanIf_Host.c"))
-        .arg(root.join("runtime/multi/src/Can_HostLock.c"))
-        .arg(root.join("runtime/multi/src/Com.c"))
-        .arg(root.join("core/tests/fixtures/multi-runtime/com_contract.c"))
+        .arg(root.join("runtime/bsw/src/SchM_CanIf_Host.c"))
+        .arg(root.join("runtime/bsw/src/Can_HostLock.c"))
+        .arg(root.join("runtime/bsw/src/Com.c"))
+        .arg(root.join("core/tests/fixtures/bsw-contracts/com_contract.c"))
         .arg("-o")
         .arg(&executable)
         .output()
@@ -168,9 +168,7 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
     let sources = scratch.join("src");
     std::fs::create_dir(&include).unwrap();
     std::fs::create_dir(&sources).unwrap();
-    let asset = inventory
-        .get("runtime/multi/include/standard/Can.h")
-        .unwrap();
+    let asset = inventory.get("runtime/bsw/include/standard/Can.h").unwrap();
     std::fs::create_dir(include.join("standard")).unwrap();
     std::fs::write(include.join("standard/Can.h"), asset.bytes).unwrap();
     assert_eq!(
@@ -180,7 +178,7 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
     for (path, bytes) in mainline_generated_headers(scratch) {
         std::fs::write(scratch.join(path), bytes).unwrap();
     }
-    for entry in std::fs::read_dir(root.join("runtime/multi/include")).unwrap() {
+    for entry in std::fs::read_dir(root.join("runtime/bsw/include")).unwrap() {
         let entry = entry.unwrap();
         // standard/Can.h was materialized above from the asset inventory.
         if entry.file_type().unwrap().is_file() {
@@ -194,7 +192,7 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
         "SchM_CanTp.h",
     ] {
         std::fs::copy(
-            root.join("core/tests/fixtures/multi-runtime").join(name),
+            root.join("core/tests/fixtures/bsw-contracts").join(name),
             include.join(name),
         )
         .unwrap();
@@ -244,7 +242,7 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
         .arg("-I")
         .arg(include);
-    for entry in std::fs::read_dir(root.join("runtime/multi/src")).unwrap() {
+    for entry in std::fs::read_dir(root.join("runtime/bsw/src")).unwrap() {
         let entry = entry.unwrap();
         if entry
             .path()
@@ -256,31 +254,31 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
     }
     command.arg("-I").arg(&sources);
     for source in [
-        "runtime/multi/src/Com.c",
-        "runtime/multi/src/PduR.c",
-        "runtime/multi/src/LSduR.c",
-        "runtime/multi/src/CanIf.c",
-        "runtime/multi/src/SchM_CanIf_Host.c",
-        "runtime/multi/src/ComM.c",
-        "runtime/multi/src/BswM.c",
-        "runtime/multi/src/Ecu_HostBusSM.c",
-        "runtime/multi/src/SchM_Mode_Host.c",
-        "runtime/multi/src/Dcm.c",
-        "runtime/multi/src/CanTp.c",
-        "runtime/multi/src/SchM_Diagnostic_Host.c",
-        "runtime/multi/src/Det.c",
-        "runtime/multi/src/Det_Host.c",
-        "runtime/multi/src/Can.c",
-        "runtime/multi/src/Can_Host.c",
-        "runtime/multi/src/Can_HostLock.c",
-        "core/tests/fixtures/multi-runtime/execution_sink.c",
-        "core/tests/fixtures/multi-runtime/schm_dcm_mode.c",
+        "runtime/bsw/src/Com.c",
+        "runtime/bsw/src/PduR.c",
+        "runtime/bsw/src/LSduR.c",
+        "runtime/bsw/src/CanIf.c",
+        "runtime/bsw/src/SchM_CanIf_Host.c",
+        "runtime/bsw/src/ComM.c",
+        "runtime/bsw/src/BswM.c",
+        "runtime/bsw/src/Ecu_HostBusSM.c",
+        "runtime/bsw/src/SchM_Mode_Host.c",
+        "runtime/bsw/src/Dcm.c",
+        "runtime/bsw/src/CanTp.c",
+        "runtime/bsw/src/SchM_Diagnostic_Host.c",
+        "runtime/bsw/src/Det.c",
+        "runtime/bsw/src/Det_Host.c",
+        "runtime/bsw/src/Can.c",
+        "runtime/bsw/src/Can_Host.c",
+        "runtime/bsw/src/Can_HostLock.c",
+        "core/tests/fixtures/bsw-contracts/execution_sink.c",
+        "core/tests/fixtures/bsw-contracts/schm_dcm_mode.c",
     ] {
         let delivered = sources.join(std::path::Path::new(source).file_name().unwrap());
         std::fs::copy(root.join(source), &delivered).unwrap();
         command.arg(delivered);
     }
-    command.arg(root.join("core/tests/fixtures/multi-runtime").join(fixture));
+    command.arg(root.join("core/tests/fixtures/bsw-contracts").join(fixture));
     let output = command.arg("-o").arg(&executable).output().unwrap();
     assert!(
         output.status.success(),
@@ -429,13 +427,13 @@ fn cantp_n_as_timeout_aborts_once_and_ignores_late_confirmation() {
     let output = Command::new(tooling::execution_settings().compiler)
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
         .arg("-I")
-        .arg(root.join("runtime/multi/include"))
+        .arg(root.join("runtime/bsw/include"))
         .arg("-I")
-        .arg(root.join("runtime/multi/src"))
+        .arg(root.join("runtime/bsw/src"))
         .arg("-I")
-        .arg(root.join("core/tests/fixtures/multi-runtime"))
-        .arg(root.join("runtime/multi/src/CanTp.c"))
-        .arg(root.join("core/tests/fixtures/multi-runtime/cantp_n_as_contract.c"))
+        .arg(root.join("core/tests/fixtures/bsw-contracts"))
+        .arg(root.join("runtime/bsw/src/CanTp.c"))
+        .arg(root.join("core/tests/fixtures/bsw-contracts/cantp_n_as_contract.c"))
         .arg("-o")
         .arg(&executable)
         .output()
