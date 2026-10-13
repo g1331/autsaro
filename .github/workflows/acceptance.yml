@@ -16,6 +16,7 @@ on:
       - core/src/rules.rs
       - core/src/rules/**
       - core/resources/official.json
+      - core/resources/requirements/**
       - core/tests/official/**
       - tools/python/src/autosar_tooling/official.py
       - tools/python/src/autosar_tooling/requirements.py
@@ -92,8 +93,9 @@ jobs:
         if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
         shell: bash
         env:
-          # A module rework moves its document from STALE_ONLY to COMPLETE once every item is disposed of.
-          COMPLETE: ''
+          # A completed module rework commits its catalog to core/resources/requirements and leaves
+          # STALE_ONLY. Each catalog is checked completely and compared with the archive here; the
+          # required checks account the same catalogs without the archive.
           # SWS_DefaultErrorTracer is added after #46 corrects its stale citation in docs/standards.md.
           STALE_ONLY: >-
             TR_Methodology TPS_SystemTemplate TPS_SoftwareComponentTemplate TPS_BSWModuleDescriptionTemplate
@@ -103,13 +105,14 @@ jobs:
             SWS_BSWModeManager
         run: |
           status=0
-          for document in $COMPLETE; do
-            uv run --locked python -m autosar_tooling requirements "$document" || status=1
+          for catalog in core/resources/requirements/*.json; do
+            [ -e "$catalog" ] || continue
+            uv run --locked python -m autosar_tooling requirements "$(basename "$catalog" .json)" || status=1
           done
           for document in $STALE_ONLY; do
             uv run --locked python -m autosar_tooling requirements --stale-only "$document" || status=1
           done
           if [ "$status" -ne 0 ]; then
-            echo "::error title=Requirement dispositions failed::See the undisposed items and stale citations above."
+            echo "::error title=Requirement dispositions failed::See the undisposed items, stale citations and outdated catalogs above."
           fi
           exit "$status"

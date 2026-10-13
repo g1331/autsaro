@@ -4,7 +4,7 @@
 
 ## Unreleased
 
-- 新增 `python -m autosar_tooling requirements <文档>`：按类别统计某份规范的 R24-11 官方条款处置情况，列出尚无测试 `Verifies:` 注释或 `docs/standards.md` 处置标记的条款编号，以及 R24-11 未定义的失效编号引用（ADR 0017）。条目来源 `AUTOSAR_CP_MOD_SpecificationsARXML.zip` 已登记到 `core/resources/official.json`，由 `fetch-official` 下载。`acceptance` 工作流运行该检查，它不属于必需检查。
+- 新增 `python -m autosar_tooling requirements <文档>`：按类别统计某份规范的 R24-11 官方条款处置情况，列出尚无测试 `Verifies:` 注释或 `docs/standards.md` 处置标记的条款编号，以及 R24-11 未定义的失效编号引用（ADR 0017）。条目来源 `AUTOSAR_CP_MOD_SpecificationsARXML.zip` 已登记到 `core/resources/official.json`，由 `fetch-official` 下载。`requirements --update <文档>` 把该文档的清单（条款编号、生命周期状态和档案 SHA-256，不含规范原文）提交到 `core/resources/requirements/`；必需检查随后不需要档案即可按每份已提交清单完整核算（不带文档参数的 `requirements`），`acceptance` 工作流核对清单与档案一致。
 - 未初始化用户应用的工程预览、生成 ECU 交付时，现在在组合对象上报告 `APPLICATION_UNINITIALIZED`，并提示先“预览初始化用户应用…”，不再给出“尚不支持多组件配置”的误导诊断。集成规划删除了不可达的单组件分支，生成产物不变。
 - 必需检查在 Linux 与 Windows 上分别用 Python 3.11、3.12、3.13、3.14 接收者解释器验证移动后的 `standard-ecu` 交付包，取代需要未注册自托管 runner 的 `offline.yml`。`bundles` 工作流改在 GitHub 托管 runner 上构建 Linux 与 Windows 安装包并按提交 SHA 上传，不再提供 macOS 选项。
 - 新增 `python -m autosar_tooling fetch-official`：把官方 R24-11 XSD、ECUC MOD 和建模示例档案下载到 `core/resources/official.json` 登记的位置，并按固定 SHA-256 校验；建模示例档案也已固定哈希。`official` 对照套件改在 GitHub 托管的 Linux 与 Windows runner 上运行（手动、每日定时，以及修改定义、规则或官方测试的 PR），不再依赖未注册的自托管 runner；它不属于必需检查。

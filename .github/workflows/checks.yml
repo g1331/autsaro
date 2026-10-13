@@ -249,6 +249,9 @@ jobs:
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
               output.write('CHECK_BASE=' + base + '\n')
       - run: uv run --locked python -m autosar_tooling quality --scope all --base "${{ env.CHECK_BASE }}"
+      # Accounts each committed catalog in core/resources/requirements (ADR 0017) without the archive.
+      - name: Requirement dispositions
+        run: uv run --locked python -m autosar_tooling requirements
 
   c-analysis-prepare:
     needs: changes

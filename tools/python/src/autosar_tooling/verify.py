@@ -121,6 +121,7 @@ def commands(scope: str, base: str | None) -> list[tuple[str, list[str], int]]:
                 ],
                 600,
             ),
+            ("source:requirements", [sys.executable, "-B", "-m", "autosar_tooling", "requirements"], 120),
             ("python:lint", ["ruff", "check", "tools", "tests/python", "scripts"], 120),
             *ui,
             *core,
