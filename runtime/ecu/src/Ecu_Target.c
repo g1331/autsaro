@@ -61,6 +61,8 @@ static unsigned output_read;
 static unsigned output_confirm;
 static unsigned output_retire;
 static unsigned output_pending;
+/* Confirmations taken before their epoch's cycle, retired after it in order. */
+static unsigned output_deferred;
 static Ecu_OutputSlot outputs[ECU_TARGET_OUTPUT_CAPACITY];
 static Ecu_ProtocolSlot protocol_failures[ECU_TARGET_OUTPUT_CAPACITY];
 static unsigned protocol_write;
@@ -396,6 +398,9 @@ EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc,
     ++output_pending;
     output_write = (output_write + 1u) % ECU_TARGET_OUTPUT_CAPACITY;
     (void)Os_HostAtomicExchange(&slot->state, 1);
+    /* The tick cannot complete before this confirmation; a failed wake only delays it
+     * to the host's timed wait, and a signal failure already closes the target. */
+    (void)Os_TargetNotifyNative();
     return ECU_OK;
 }
 StatusType Ecu_TargetTakeOutput(Ecu_OutputRecord *record) {
@@ -442,6 +447,21 @@ StatusType Ecu_TargetConfirmOutput(uint64_t ticket, PduIdType pdu) {
     }
     return status;
 }
+/* Completes the oldest confirmed output; its ticket and PDU are already proven. */
+static void retire_output(void) {
+    Ecu_OutputSlot *slot = &outputs[output_retire];
+    const uint64_t driver_token = slot->driver_token;
+    const PduIdType pdu = slot->record.pdu;
+    --output_pending;
+    output_retire = (output_retire + 1u) % ECU_TARGET_OUTPUT_CAPACITY;
+    (void)Os_HostAtomicExchange(&slot->state, 0);
+    /* The output ticket proof establishes real write/flush completion.
+     * A cancelled token is discarded even after the same PDU ID is reused. */
+    if (Can_HostCompleteTransmit(pdu, driver_token) == CAN_BUSY) {
+        fail();
+    }
+    Can_MainFunction_Write();
+}
 static void consume(const Ecu_Input *input) {
     if (input->kind == 1u) {
         EcuStatus status;
@@ -462,21 +482,19 @@ static void consume(const Ecu_Input *input) {
             Ecu_TargetRecordReceive(epoch);
         }
     } else if (input->kind == 2u) {
-        Ecu_OutputSlot *slot = &outputs[output_retire];
-        const uint64_t driver_token = slot->driver_token;
+        Ecu_OutputSlot *slot =
+            &outputs[(output_retire + output_deferred) % ECU_TARGET_OUTPUT_CAPACITY];
         if ((load(&slot->state) != 3) || (slot->record.ticket != input->output_ticket) ||
-            (slot->record.pdu != input->pdu) || (output_pending == 0u)) {
+            (slot->record.pdu != input->pdu) || (output_deferred >= output_pending)) {
             fail();
         }
-        --output_pending;
-        output_retire = (output_retire + 1u) % ECU_TARGET_OUTPUT_CAPACITY;
-        (void)Os_HostAtomicExchange(&slot->state, 0);
-        /* The output ticket proof above establishes real write/flush completion.
-         * A cancelled token is discarded even after the same PDU ID is reused. */
-        if (Can_HostCompleteTransmit(input->pdu, driver_token) == CAN_BUSY) {
-            fail();
+        if (epoch > processed_epoch) {
+            /* A frame sent before this epoch's cycle completes on the bus after
+             * it, whenever the host thread happens to confirm it. */
+            ++output_deferred;
+        } else {
+            retire_output();
         }
-        Can_MainFunction_Write();
     } else if (input->kind == 3u) {
         uint16_t index;
         if ((load(&batch_state) != 2) || (input->output_ticket != batch_completion.ticket) ||
@@ -504,6 +522,9 @@ static void consume(const Ecu_Input *input) {
                 batch_completion.input_status = status;
             }
         }
+#ifdef ECU_TARGET_TESTS
+        stage(12u);
+#endif
         (void)Os_HostAtomicExchange(&batch_state, 4);
     } else {
         fail();
@@ -562,6 +583,10 @@ void Ecu_TargetTask(void) {
 #endif
             processed_tick = ticket;
             processed_epoch = delivered;
+            while (output_deferred > 0u) {
+                --output_deferred;
+                retire_output();
+            }
         } else if ((status != E_OK) && (status != E_OS_NOFUNC)) {
             fail();
         } else {
