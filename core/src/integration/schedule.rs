@@ -40,8 +40,6 @@ pub struct ScheduleContract {
     pub counter_minimum_cycle: u32,
     pub counter_tick_ms: u32,
     pub entities: Vec<ScheduledEntity>,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub synchronous_event: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub synchronous_events: Vec<String>,
 }
@@ -166,7 +164,6 @@ pub(super) fn inspect_events(
     components: &[(&str, &str)],
     periodic_events: &[String],
     server_runnables: &[String],
-    composition: bool,
 ) -> Result<ScheduleContract, Vec<PlanDiagnostic>> {
     let behavior = graph.index(components[0].1)?;
     let task = container(graph, "OsTask", behavior)?;
@@ -201,7 +198,7 @@ pub(super) fn inspect_events(
     }
     let maximum = value(graph, counter, "OsCounterMaxAllowedValue", false)
         .and_then(|value| value.parse::<u32>().ok())
-        .filter(|value| *value <= 65535 && (composition || *value != 0));
+        .filter(|value| *value <= 65535);
     let counter_tick_ms = value(graph, counter, "OsSecondsPerTick", false).and_then(milliseconds);
     let counter_ticks_per_base = value(graph, counter, "OsCounterTicksPerBase", false)
         .and_then(|text| text.parse::<u32>().ok());
@@ -350,17 +347,15 @@ pub(super) fn inspect_events(
         }
         if graph.elements[event].tag == "OPERATION-INVOKED-EVENT" {
             if !application
-                || (!composition && !synchronous.is_empty())
                 || !graph
                     .target(event, "START-ON-EVENT-REF")
                     .is_some_and(|runnable| {
                         server_runnables.contains(&graph.elements[runnable].object)
                     })
-                || (composition
-                    && !matches!(
-                        value(graph, mapping, "RteEventIsMappedToTask", false),
-                        Some("false" | "0")
-                    ))
+                || !matches!(
+                    value(graph, mapping, "RteEventIsMappedToTask", false),
+                    Some("false" | "0")
+                )
                 || !values(graph, mapping, "RteMappedToTaskRef", true).is_empty()
                 || !values(graph, mapping, "RteUsedOsAlarmRef", true).is_empty()
                 || !values(graph, mapping, "RteUsedOsSchTblExpiryPointRef", true).is_empty()
@@ -379,17 +374,15 @@ pub(super) fn inspect_events(
             synchronous.push(graph.elements[event].object.clone());
             continue;
         }
-        if composition
-            && !matches!(
-                value(
-                    graph,
-                    mapping,
-                    &format!("{prefix}EventIsMappedToTask"),
-                    false
-                ),
-                Some("true" | "1")
-            )
-        {
+        if !matches!(
+            value(
+                graph,
+                mapping,
+                &format!("{prefix}EventIsMappedToTask"),
+                false
+            ),
+            Some("true" | "1")
+        ) {
             return Err(reject(
                 graph,
                 mapping,
@@ -410,7 +403,7 @@ pub(super) fn inspect_events(
                     crate::product_message!("backend.integration.schedule.mapped_period_must_be_positive_whole_millisecond"),
                 )
             })?;
-        if composition && period > maximum {
+        if period > maximum {
             return Err(reject(
                 graph,
                 event,
@@ -459,7 +452,7 @@ pub(super) fn inspect_events(
         let os_event = reference(graph, mapping, &format!("{prefix}UsedOsEventRef"))?;
         let position = value(graph, mapping, &format!("{prefix}PositionInTask"), false)
             .and_then(|value| value.parse::<u32>().ok())
-            .filter(|value| *value <= 65535 && (composition || *value != 0))
+            .filter(|value| *value <= 65535)
             .ok_or_else(|| {
                 reject(
                     graph,
@@ -709,7 +702,6 @@ pub(super) fn inspect_events(
     }
     if synchronous.len() != server_runnables.len()
         || entities.iter().filter(|entity| entity.application).count() != periodic_events.len()
-        || (!composition && synchronous.is_empty())
     {
         return Err(reject(
             graph,
@@ -785,34 +777,25 @@ pub(super) fn inspect_events(
             })
             .unwrap_or_default()
     };
-    let mut expected_order: Vec<String> = if composition {
-        vec![
-            configured_symbol("ComMChannel", "ComM_MainFunction"),
-            "Can_MainFunction_Wakeup".into(),
-            "CanTp_MainFunction".into(),
-            configured_symbol("ComMainFunctionRx", "Com_MainFunctionRx"),
-        ]
-    } else {
-        vec![
-            "Can_MainFunction_Wakeup".into(),
-            "CanTp_AdvanceTime".into(),
-            "Com_AdvanceTime".into(),
-        ]
-    };
+    let mut expected_order: Vec<String> = vec![
+        configured_symbol("ComMChannel", "ComM_MainFunction"),
+        "Can_MainFunction_Wakeup".into(),
+        "CanTp_MainFunction".into(),
+        configured_symbol("ComMainFunctionRx", "Com_MainFunctionRx"),
+    ];
     expected_order.extend(
         entities
             .iter()
             .filter(|entity| entity.application)
             .map(|entity| entity.symbol.clone()),
     );
-    if composition
-        && entities
-            .iter()
-            .filter(|entity| entity.application)
-            .map(|entity| entity.period_ms)
-            .collect::<BTreeSet<_>>()
-            .len()
-            != 1
+    if entities
+        .iter()
+        .filter(|entity| entity.application)
+        .map(|entity| entity.period_ms)
+        .collect::<BTreeSet<_>>()
+        .len()
+        != 1
     {
         return Err(reject(
             graph,
@@ -823,18 +806,14 @@ pub(super) fn inspect_events(
             ),
         ));
     }
-    if composition {
-        expected_order.extend([
-            configured_symbol("ComMainFunctionTx", "Com_MainFunctionTx"),
-            "Dcm_MainFunction".into(),
-            "Can_MainFunction_Read".into(),
-            "Can_MainFunction_Write".into(),
-            "Can_MainFunction_Mode".into(),
-            "Can_MainFunction_BusOff".into(),
-        ]);
-    } else {
-        expected_order.extend(["Com_TriggerTransmit".into(), "Dcm_AdvanceTime".into()]);
-    }
+    expected_order.extend([
+        configured_symbol("ComMainFunctionTx", "Com_MainFunctionTx"),
+        "Dcm_MainFunction".into(),
+        "Can_MainFunction_Read".into(),
+        "Can_MainFunction_Write".into(),
+        "Can_MainFunction_Mode".into(),
+        "Can_MainFunction_BusOff".into(),
+    ]);
     if entities
         .iter()
         .map(|entity| entity.symbol.as_str())
@@ -862,11 +841,6 @@ pub(super) fn inspect_events(
         counter_minimum_cycle,
         counter_tick_ms,
         entities,
-        synchronous_event: if composition {
-            String::new()
-        } else {
-            synchronous.first().cloned().unwrap_or_default()
-        },
-        synchronous_events: if composition { synchronous } else { Vec::new() },
+        synchronous_events: synchronous,
     })
 }

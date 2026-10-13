@@ -157,7 +157,7 @@ pub(super) fn inspect_composition(
         .filter(|runnable| runnable.period_ms.is_none() && runnable.event.is_some())
         .map(|runnable| runnable.path.clone())
         .collect();
-    let mut schedule = schedule::inspect_events(graph, &bindings, &periodic, &servers, true)?;
+    let mut schedule = schedule::inspect_events(graph, &bindings, &periodic, &servers)?;
     let signals: Vec<_> = composition
         .network_endpoints
         .iter()
@@ -294,7 +294,7 @@ pub(super) fn inspect_composition(
         )]);
     };
     let diagnostic_transport =
-        diagnostic::inspect_transport(graph, graph.index(&composition.composition)?, true)?;
+        diagnostic::inspect_transport(graph, graph.index(&composition.composition)?)?;
     let routed_transport = graph
         .of_kind("ECUC-CONTAINER-VALUE")
         .into_iter()

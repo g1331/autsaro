@@ -185,13 +185,7 @@ impl ValidatedIntegrationPlan {
     pub(crate) fn render_ecu_sources(
         &self,
         target: BuildTarget,
-        application: Option<&[u8]>,
     ) -> Result<(super::outputs::EcuFiles, String), Vec<PlanDiagnostic>> {
-        if application.is_none() {
-            return Err(reject(crate::product_message!(
-                "backend.integration.composition.consumer_unsupported"
-            )));
-        }
         super::ecu_config::files(self, target)
     }
 }
@@ -250,21 +244,8 @@ pub(super) fn application_slots(
 pub(crate) fn application_slots_from_sources(
     sources: &[super::InputSource],
 ) -> Result<Vec<generator::delivery::ApplicationSlotDescriptor>, Vec<PlanDiagnostic>> {
-    workspace_application_slots(sources)?.ok_or_else(|| {
-        reject(crate::product_message!(
-            "backend.arxml.project.application_live_slot_mismatch"
-        ))
-    })
-}
-
-pub(crate) fn workspace_application_slots(
-    sources: &[super::InputSource],
-) -> Result<Option<Vec<generator::delivery::ApplicationSlotDescriptor>>, Vec<PlanDiagnostic>> {
     let catalog = crate::definitions::DefinitionCatalog::builtin().map_err(reject)?;
     let graph = super::graph::Graph::from_catalog_target_scope(sources, &catalog)?;
-    if !super::composition::selected(&graph) {
-        return Ok(None);
-    }
     // Only the structural application/instance consumers participate here.
     // Unrelated ECUC modules and their extension definitions are not authorized
     // by an ownership proof; native preparation checks them separately.
@@ -307,10 +288,10 @@ pub(crate) fn workspace_application_slots(
         return Err(references);
     }
     let composition = super::composition::inspect_ownership(&graph)?;
-    Ok(Some(application_slots(
+    Ok(application_slots(
         &composition,
         &super::composition::symbols(&composition),
-    )))
+    ))
 }
 
 /// Shared OS producer for both validated application profiles. Its inputs are
