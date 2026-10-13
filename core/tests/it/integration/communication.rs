@@ -445,22 +445,21 @@ fn communication_types_and_polling_periods_are_source_derived() {
         )
         .unwrap()
     };
-    assert!(text("include/Ecu_ProfileConfig.h").contains("#define CAN_RX_HOH 1u"));
-    assert!(text("include/Ecu_ProfileConfig.h").contains("#define CAN_TX_HOH 0u"));
-    let description = text("descriptions/Host_Implementation.arxml");
+    assert!(text("generated/include/Ecu_ProfileConfig.h").contains("#define CAN_RX_HOH 1u"));
+    assert!(text("generated/include/Ecu_ProfileConfig.h").contains("#define CAN_TX_HOH 0u"));
+    let description = text("generated/descriptions/Host_Implementation.arxml");
     assert!(description.contains("Can_VAR_CLEARED_UNSPECIFIED"));
-    assert!(
-        description
-            .contains("<DEPENDENCY-ON-ARTIFACT><SHORT-NAME>include_Can_MemMap_h</SHORT-NAME>")
-    );
+    assert!(description.contains(
+        "<DEPENDENCY-ON-ARTIFACT><SHORT-NAME>generated_include_Can_MemMap_h</SHORT-NAME>"
+    ));
     assert!(description.contains("Det_ReportRuntimeError"));
     for name in [
-        "include/standard/Can.h",
-        "include/Can_Host.h",
-        "src/Can_Host.c",
-        "src/Can_Internal.h",
-        "src/Det.c",
-        "src/SchM_CanIf_Host.c",
+        "bsw/include/standard/Can.h",
+        "integration/include/Can_Host.h",
+        "integration/src/Can_Host.c",
+        "bsw/src/Can_Internal.h",
+        "bsw/src/Det.c",
+        "integration/src/SchM_CanIf_Host.c",
     ] {
         assert!(files.iter().any(|(path, _)| path == name), "missing {name}");
     }
@@ -602,7 +601,7 @@ fn actual_partition_owns_all_instances_and_all_com_producers() {
     let source = String::from_utf8(
         files
             .iter()
-            .find(|(name, _)| name == "src/Rte.c")
+            .find(|(name, _)| name == "generated/src/Rte.c")
             .unwrap()
             .1
             .clone(),

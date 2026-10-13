@@ -100,17 +100,17 @@ fn moved_handoff_reconstructs_every_user_source_and_exact_producer() {
             (
                 "singlecore-ecu-v1:/Application/Pipeline/IngressInstance",
                 "application/Ingress.c",
-                "src/Ingress.c"
+                "app/Ingress/Ingress.c"
             ),
             (
                 "singlecore-ecu-v1:/Application/Pipeline/ProcessInstance",
                 "application/Process.c",
-                "src/Process.c"
+                "app/Process/Process.c"
             ),
             (
                 "singlecore-ecu-v1:/Application/Pipeline/ObserveInstance",
                 "application/Observe.c",
-                "src/Observe.c"
+                "app/Observe/Observe.c"
             ),
         ])
     );
@@ -145,7 +145,7 @@ fn moved_handoff_reconstructs_every_user_source_and_exact_producer() {
     }
     for (producer, logical, compiled) in applications {
         let ledger: serde_json::Value = serde_json::from_slice(
-            &std::fs::read(regenerated.join("workbench-ownership.json")).unwrap(),
+            &std::fs::read(regenerated.join("meta/workbench-ownership.json")).unwrap(),
         )
         .unwrap();
         let row = ledger["files"]

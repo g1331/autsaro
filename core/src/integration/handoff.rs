@@ -106,7 +106,7 @@ fn inputs_file(
         "scope": "Actual configured endpoints; independent fixed echo bytes and protocol assertions are in tools/ecu_tools/verify.py. This is test input, not a verification result."
     });
     Ok(BTreeMap::from([(
-        "verification/inputs.json".into(),
+        super::outputs::VERIFICATION_INPUTS_PATH.into(),
         serde_json::to_vec_pretty(&inputs).map_err(|error| error.to_string())?,
     )]))
 }
@@ -119,7 +119,9 @@ fn compare_files(
     let expected_names: BTreeSet<_> = expected
         .iter()
         .map(|(path, _)| path.as_str())
-        .filter(|path| *path != "files.list" && *path != "files.sha256")
+        .filter(|path| {
+            ![generator::output::FILE_LIST, generator::output::FILE_HASHES].contains(path)
+        })
         .collect();
     if names.iter().map(String::as_str).collect::<BTreeSet<_>>() != expected_names {
         return Err(crate::product_message!(
@@ -148,11 +150,12 @@ fn checked_project(
         Ok(serde_json::from_slice(bytes).map_err(|error| error.to_string())?)
     };
     let data = integration(
-        &fs::read(project.join("integration.json")).map_err(|error| error.to_string())?,
+        &fs::read(project.join(super::outputs::INTEGRATION_PATH))
+            .map_err(|error| error.to_string())?,
     )?;
     let selected = expected
         .iter()
-        .find(|(path, _)| path == "integration.json")
+        .find(|(path, _)| path == super::outputs::INTEGRATION_PATH)
         .map(|(_, bytes)| integration(bytes))
         .transpose()?;
     if data["format"] != "autosar-ecu-integration-v2"
@@ -266,7 +269,7 @@ pub fn verify_ecu_project(
     checked_project(expected, project)?;
     if !expected
         .iter()
-        .any(|(path, _)| path == "verification/inputs.json")
+        .any(|(path, _)| path == super::outputs::VERIFICATION_INPUTS_PATH)
     {
         return Err(crate::product_message!(
             "backend.integration.handoff.reference_verification_inputs_missing"

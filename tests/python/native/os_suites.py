@@ -1719,10 +1719,10 @@ def check_counter_service(directory: Path, project: Path, counter: str) -> None:
     target = directory / "target"
     shutil.copytree(TARGET, target)
     shutil.copytree(project / "os/include", target / "include", dirs_exist_ok=True)
-    shutil.copyfile(project / "include/Rte_Os.h", target / "include/Rte_Os.h")
-    shutil.copyfile(project / "include/Rte_MemMap.h", target / "include/Rte_MemMap.h")
+    for name in ("Os_Cfg.h", "Os_Counter.h", "Os_MemMap.h", "Rte_Os_Type.h", "Rte_Os.h", "Rte_MemMap.h"):
+        shutil.copyfile(project / "generated/include" / name, target / "include" / name)
     source = directory / "Rte_OsService.c"
-    original = (project / "src/Rte_OsService.c").read_text(encoding="utf-8")
+    original = (project / "generated/src/Rte_OsService.c").read_text(encoding="utf-8")
     source.write_text(original, encoding="utf-8")
     defines = (f"SERVICE_GET=OsService_{counter}_GetCounterValue",
                f"SERVICE_ELAPSED=OsService_{counter}_GetElapsedValue")

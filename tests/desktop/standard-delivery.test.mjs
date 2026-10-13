@@ -136,7 +136,7 @@ check('v2-relocation-snapshot-import-and-refusals', async () => {
   const imported = await projection();
   assert.notEqual(imported.workspaceEpoch, previous.workspaceEpoch);
   assert.equal(imported.sources.length, 7);
-  const metadata = JSON.parse(await readFile(path.join(relocated, 'handoff.json'), 'utf8'));
+  const metadata = JSON.parse(await readFile(path.join(relocated, 'meta/handoff.json'), 'utf8'));
   for (const input of metadata.inputSnapshots) {
     assert.deepEqual(
       await readFile(path.join(destination, input.logicalPath)),
@@ -177,7 +177,7 @@ check('v2-relocation-snapshot-import-and-refusals', async () => {
       force: false,
     });
     if (kind === 'ownerElevation') {
-      const ledgerPath = path.join(variant, 'workbench-ownership.json');
+      const ledgerPath = path.join(variant, 'meta/workbench-ownership.json');
       const ledger = JSON.parse(await readFile(ledgerPath, 'utf8'));
       ledger.files.find((entry) => entry.path === metadata.inputSnapshots[0].packagePath).owner =
         'user-application';
@@ -196,7 +196,7 @@ check('v2-relocation-snapshot-import-and-refusals', async () => {
         altered.resourceIdentities.ruleSetIdentity.sha256 = '0'.repeat(64);
       if (kind === 'duplicateSnapshots')
         altered.inputSnapshots.push({ ...altered.inputSnapshots[0] });
-      await writeFile(path.join(variant, 'handoff.json'), json(altered));
+      await writeFile(path.join(variant, 'meta/handoff.json'), json(altered));
       const targetPath = path.join(variant, 'target.json');
       const target = JSON.parse(await readFile(targetPath, 'utf8'));
       target.nativeDelivery = altered;
@@ -214,7 +214,7 @@ check('v2-relocation-snapshot-import-and-refusals', async () => {
     await unchanged(variantBytes);
     await unchanged(retained);
   }
-  const generatedMetadata = path.join(relocated, 'handoff.json');
+  const generatedMetadata = path.join(relocated, 'meta/handoff.json');
   const originalMetadata = await readFile(generatedMetadata);
   const modifiedMetadata = Buffer.concat([originalMetadata, Buffer.from(' ')]);
   await writeFile(generatedMetadata, modifiedMetadata);

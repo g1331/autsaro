@@ -70,6 +70,7 @@ pub(super) fn bsw_catalog(
         "runtime/bsw/include/standard/Can.h",
         "runtime/bsw/src/Can.c",
     );
+    // SchM_Can.h is RTE-generated (SWS_Rte_07501), delivered under generated/.
     for symbol in [
         "Can_MainFunction_Wakeup",
         "Can_MainFunction_Read",
@@ -82,7 +83,7 @@ pub(super) fn bsw_catalog(
             "Can",
             "void",
             &[],
-            "runtime/bsw/include/SchM_Can.h",
+            "include/SchM_Can.h",
             "runtime/bsw/src/Can.c",
         );
     }

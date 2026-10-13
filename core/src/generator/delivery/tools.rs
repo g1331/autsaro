@@ -22,6 +22,9 @@ const WRAPPER: &str = "tools/ecu-tool.py";
 const STANDALONE_ENTRY: &str = "tools/standalone-ecu-tool.py";
 const HELPER_PATH: &str = "tools/sealed_package.py";
 const INVENTORY_PATH: &str = "tools/build-tool-inventory.json";
+/// Configuration-dependent seal expectations; the wrapper itself stays constant
+/// so `tools/` is byte-identical across regenerations.
+const POLICY_PATH: &str = "meta/seal-policy.json";
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -86,6 +89,10 @@ pub(crate) fn add<'a>(
         .cloned()
         .ok_or_else(|| crate::product_message!("backend.delivery.standalone_tool_missing"))?;
     policy.insert(WRAPPER.into(), wrapper_policy);
+    policy.insert(
+        POLICY_PATH.into(),
+        serde_json::json!({"owner": super::FileOwner::Generated, "producerId": super::ownership::GENERATED_PRODUCER}),
+    );
     let payload: BTreeMap<_, _> = files
         .iter()
         .filter(|(path, _)| path.as_str() != WRAPPER)
@@ -101,12 +108,9 @@ pub(crate) fn add<'a>(
             )
         })
         .collect();
-    let metadata_json = serde_json::to_string(metadata)
-        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
-    let policy_json = serde_json::to_string(&policy)
-        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
-    let payload_json = serde_json::to_string(&payload)
-        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
+    let expectations = super::json_bytes(
+        &serde_json::json!({"metadata": metadata, "policy": policy, "payload": payload}),
+    )?;
     let tool_json = serde_json::to_string(&tool_bytes)
         .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     let wrapper = format!(
@@ -124,9 +128,6 @@ sys.dont_write_bytecode = True
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'tools'))
-EXPECTED_METADATA = json.loads({metadata_json:?})
-EXPECTED_POLICY = json.loads({policy_json:?})
-EXPECTED_PAYLOAD = json.loads({payload_json:?})
 TRUSTED_TOOLS = json.loads({tool_json:?})
 
 def run():
@@ -153,9 +154,11 @@ def run():
     if args.project[0].resolve(strict=True) != ROOT:
         raise ValueError('Use the engineering tool belonging to the selected immutable source package')
     from sealed_package import validate
-    validate(args.project[0], EXPECTED_METADATA, EXPECTED_POLICY, EXPECTED_PAYLOAD)
+    # The seal (meta/files.sha256) covers this file; validate re-derives its closure.
+    expected = json.loads((ROOT / {POLICY_PATH:?}).read_text(encoding='utf-8'))
+    validate(args.project[0], expected['metadata'], expected['policy'], expected['payload'])
     result = original()
-    validate(args.project[0], EXPECTED_METADATA, EXPECTED_POLICY, EXPECTED_PAYLOAD)
+    validate(args.project[0], expected['metadata'], expected['policy'], expected['payload'])
     return result
 
 if __name__ == '__main__':
@@ -167,5 +170,6 @@ if __name__ == '__main__':
     raise SystemExit(result)
 "#
     );
+    insert_file(files, POLICY_PATH.into(), Cow::Owned(expectations))?;
     insert_file(files, WRAPPER.into(), Cow::Owned(wrapper.into_bytes()))
 }

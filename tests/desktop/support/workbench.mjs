@@ -553,7 +553,10 @@ export async function openWorkbench(name) {
     const preview = await invoke('preview_ecu_project', payload);
     await assert.rejects(access(output), { code: 'ENOENT' });
     assert.deepEqual(await projection(), before);
-    await invoke('generate_ecu_project', { ...payload, revision: preview.revision });
+    await invoke('generate_ecu_project', {
+      ...payload,
+      revision: preview.revision,
+    });
     for (const file of preview.files) {
       if (file.after !== null)
         assert.deepEqual(
@@ -562,15 +565,17 @@ export async function openWorkbench(name) {
           `Installed exact prepared source: ${file.path}`,
         );
     }
-    const handoff = JSON.parse(await readFile(path.join(output, 'handoff.json'), 'utf8'));
-    assert.equal(handoff.format, 'autosar-workbench-handoff-v3');
+    const handoff = JSON.parse(await readFile(path.join(output, 'meta/handoff.json'), 'utf8'));
+    assert.equal(handoff.format, 'autosar-workbench-handoff-v4');
     assert.deepEqual(handoff.resourceIdentities.ruleSetIdentity, before.ruleSetIdentity);
     assert.deepEqual(handoff.resourceIdentities.requiredExtensionDefinitions, []);
     const ledger = JSON.parse(
-      await readFile(path.join(output, 'workbench-ownership.json'), 'utf8'),
+      await readFile(path.join(output, 'meta/workbench-ownership.json'), 'utf8'),
     );
-    assert.equal(ledger.formatVersion, 2);
-    const sealed = (await readFile(path.join(output, 'files.list'), 'utf8')).trim().split(/\r?\n/);
+    assert.equal(ledger.formatVersion, 3);
+    const sealed = (await readFile(path.join(output, 'meta/files.list'), 'utf8'))
+      .trim()
+      .split(/\r?\n/);
     for (const forbidden of [
       'AUTOSAR_00053.xsd',
       'catalog.json',
@@ -598,31 +603,31 @@ export async function openWorkbench(name) {
     return packageEvidence;
   }
   async function packageBytes(directory) {
-    const names = (await readFile(path.join(directory, 'files.list'), 'utf8'))
+    const names = (await readFile(path.join(directory, 'meta/files.list'), 'utf8'))
       .trim()
       .split(/\r?\n/);
     return Promise.all(
-      [...names, 'files.list', 'files.sha256'].map(async (name) => ({
+      [...names, 'meta/files.list', 'meta/files.sha256'].map(async (name) => ({
         path: path.join(directory, name),
         bytes: await readFile(path.join(directory, name)),
       })),
     );
   }
   async function resealPrivateVariant(directory) {
-    const ledgerPath = path.join(directory, 'workbench-ownership.json');
+    const ledgerPath = path.join(directory, 'meta/workbench-ownership.json');
     const ledger = JSON.parse(await readFile(ledgerPath, 'utf8'));
     for (const entry of ledger.files)
       entry.sha256 = sha256(await readFile(path.join(directory, entry.path)));
     await writeFile(ledgerPath, json(ledger, null, 2) + '\n');
-    const names = (await readFile(path.join(directory, 'files.list'), 'utf8'))
+    const names = (await readFile(path.join(directory, 'meta/files.list'), 'utf8'))
       .trim()
       .split(/\r?\n/);
     const hashes = await Promise.all(
-      [...names, 'files.list'].map(
+      [...names, 'meta/files.list'].map(
         async (name) => `${sha256(await readFile(path.join(directory, name)))}  ${name}`,
       ),
     );
-    await writeFile(path.join(directory, 'files.sha256'), hashes.join('\n') + '\n');
+    await writeFile(path.join(directory, 'meta/files.sha256'), hashes.join('\n') + '\n');
   }
   // Hand-authored multi-module ARXML imported through the public import dialog.
   async function importAuthoredInputs() {

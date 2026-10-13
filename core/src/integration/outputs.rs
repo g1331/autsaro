@@ -11,17 +11,79 @@ use crate::target::BuildTarget;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 
+/// Delivered metadata of an ECU source project.
+pub const INTEGRATION_PATH: &str = "meta/integration.json";
+pub(crate) const VERIFICATION_INPUTS_PATH: &str = "meta/verification-inputs.json";
+
 pub(super) const ARTI: &str = "arti";
 pub(super) const DCM_MODES: &str = "dcm-modes";
 pub(super) const OS: &str = "os";
 
-/// Selected assets an emitter renders from instead of delivering verbatim.
-const TEMPLATES: [(&str, &str); 4] = [
-    ("runtime/os/include/Os_Cfg.h", OS),
-    ("runtime/os/src/Os_Arti.c", ARTI),
-    ("runtime/bsw/include/Rte_Dcm_Type.h", DCM_MODES),
-    ("runtime/bsw/include/SchM_Dcm.h", DCM_MODES),
+pub(super) const MEMMAP: &str = "memmap";
+pub(super) const RTE: &str = "rte";
+
+/// Selected assets an emitter renders from instead of delivering verbatim,
+/// with the logical path of the rendering.
+const TEMPLATES: [(&str, &str, &str); 9] = [
+    ("runtime/os/include/Os_Cfg.h", OS, "include/Os_Cfg.h"),
+    (
+        "runtime/ecu/templates/Ecu_Config.c.in",
+        OS,
+        "src/Ecu_Config.c",
+    ),
+    ("runtime/os/src/Os_Arti.c", ARTI, "src/Os_Arti.c"),
+    (
+        "runtime/bsw/include/Rte_Dcm_Type.h",
+        DCM_MODES,
+        "include/Rte_Dcm_Type.h",
+    ),
+    (
+        "runtime/bsw/include/SchM_Dcm.h",
+        DCM_MODES,
+        "include/SchM_Dcm.h",
+    ),
+    // RTE-generated headers (SWS_Rte_07501, SWS_Rte_07120) fixed for the host target.
+    (
+        "runtime/bsw/include/SchM_BswM.h",
+        RTE,
+        "include/SchM_BswM.h",
+    ),
+    ("runtime/bsw/include/SchM_Can.h", RTE, "include/SchM_Can.h"),
+    (
+        "runtime/bsw/include/Rte_ComM_Type.h",
+        RTE,
+        "include/Rte_ComM_Type.h",
+    ),
+    (
+        "runtime/os/include/Rte_Os_Type.h",
+        RTE,
+        "include/Rte_Os_Type.h",
+    ),
 ];
+
+/// The emitter and logical path of a template asset. Memory Mapping provides
+/// every module's `{Mip}_MemMap.h` (SWS_MemMap_00032), not the module itself.
+pub(crate) fn template_of(asset: &AssetEntry) -> Option<(&'static str, String)> {
+    if let Some((_, producer, path)) = TEMPLATES
+        .iter()
+        .find(|(template, ..)| *template == asset.relative_path)
+    {
+        return Some((producer, (*path).into()));
+    }
+    let name = asset.relative_path.rsplit('/').next()?;
+    (asset.relative_path.starts_with("runtime/") && name.ends_with("_MemMap.h"))
+        .then(|| (MEMMAP, format!("include/{name}")))
+}
+
+/// Emitters name C outputs by the logical `include/` or `src/` path the plan's
+/// symbol owners use; both are relative to the package's `generated/`.
+fn delivered(path: String) -> String {
+    if path.starts_with("include/") || path.starts_with("src/") {
+        format!("generated/{path}")
+    } else {
+        path
+    }
+}
 
 #[derive(Clone, Copy)]
 enum Producer {
@@ -54,19 +116,18 @@ impl EcuOutputs {
             files: BTreeMap::new(),
             templates: BTreeMap::new(),
         };
+        for asset in crate::resources::AssetInventory::embedded().selected(target, "ecu") {
+            if let Some((producer, path)) = template_of(asset) {
+                let path = delivered(path);
+                if outputs.templates.contains_key(&path) {
+                    return Err(PlanDiagnostic::output_conflict(&path, producer, producer));
+                }
+                outputs.templates.insert(path, (asset, producer));
+            }
+        }
         let assets = super::ecu::source_assets(target).map_err(super::ecu::reject)?;
         for (path, asset) in assets {
-            match TEMPLATES
-                .iter()
-                .find(|(template, _)| *template == asset.relative_path)
-            {
-                Some((_, producer)) => {
-                    outputs.templates.insert(path, (asset, producer));
-                }
-                None => {
-                    outputs.register(path, Producer::Asset(asset), Cow::Borrowed(asset.bytes))?
-                }
-            }
+            outputs.register(path, Producer::Asset(asset), Cow::Borrowed(asset.bytes))?;
         }
         Ok(outputs)
     }
@@ -100,7 +161,7 @@ impl EcuOutputs {
         bytes: impl Into<Vec<u8>>,
     ) -> Result<(), Vec<PlanDiagnostic>> {
         self.register(
-            path.into(),
+            delivered(path.into()),
             Producer::Emitter(producer),
             Cow::Owned(bytes.into()),
         )
@@ -124,38 +185,48 @@ impl EcuOutputs {
     ) -> Result<&'static str, Vec<PlanDiagnostic>> {
         let (asset, _) = self
             .templates
-            .get(path)
+            .get(&delivered(path.into()))
             .filter(|(_, owner)| *owner == producer)
             .ok_or_else(|| PlanDiagnostic::output_missing(path))?;
         std::str::from_utf8(asset.bytes).map_err(|_| PlanDiagnostic::output_missing(path))
     }
 
-    /// Registers the single rendering of a reserved template. Bytes equal to
-    /// the template remain the delivered asset.
+    /// Registers the single rendering of a reserved template as its emitter's
+    /// output, also when the text equals the template.
     pub(super) fn emit_rendered(
         &mut self,
         producer: &'static str,
         path: &str,
         text: String,
     ) -> Result<(), Vec<PlanDiagnostic>> {
-        let (asset, _) = self
-            .templates
-            .remove(path)
+        let path = delivered(path.into());
+        self.templates
+            .remove(&path)
             .filter(|(_, owner)| *owner == producer)
-            .ok_or_else(|| PlanDiagnostic::output_missing(path))?;
-        if text.as_bytes() == asset.bytes {
-            self.register(
-                path.into(),
-                Producer::Asset(asset),
-                Cow::Borrowed(asset.bytes),
-            )
-        } else {
-            self.register(
-                path.into(),
-                Producer::Emitter(producer),
-                Cow::Owned(text.into_bytes()),
-            )
+            .ok_or_else(|| PlanDiagnostic::output_missing(&path))?;
+        self.register(
+            path,
+            Producer::Emitter(producer),
+            Cow::Owned(text.into_bytes()),
+        )
+    }
+
+    /// Delivers every template reserved for `producer` unchanged.
+    pub(super) fn emit_verbatim(
+        &mut self,
+        producer: &'static str,
+    ) -> Result<(), Vec<PlanDiagnostic>> {
+        let paths: Vec<_> = self
+            .templates
+            .iter()
+            .filter(|(_, (_, owner))| *owner == producer)
+            .map(|(path, _)| path.clone())
+            .collect();
+        for path in paths {
+            let text = self.template(producer, &path)?.to_owned();
+            self.emit_rendered(producer, &path, text)?;
         }
+        Ok(())
     }
 
     pub(super) fn paths(&self) -> impl Iterator<Item = &str> {
@@ -256,12 +327,15 @@ mod tests {
             .emit("second", "src/Generated.c", b"a".to_vec())
             .unwrap_err();
         assert_eq!(conflict[0].code, "OUTPUT_PRODUCER_CONFLICT");
-        assert_eq!(conflict[0].object.as_deref(), Some("src/Generated.c"));
+        assert_eq!(
+            conflict[0].object.as_deref(),
+            Some("generated/src/Generated.c")
+        );
         // A verbatim asset path and a reserved template path are owned too.
-        let asset = outputs.emit("second", "src/Dcm.c", Vec::new()).unwrap_err();
+        let asset = outputs.emit("second", "NOTICE", Vec::new()).unwrap_err();
         assert_eq!(asset[0].code, "OUTPUT_PRODUCER_CONFLICT");
         let template = outputs
-            .emit("second", "os/include/Os_Cfg.h", Vec::new())
+            .emit("second", "include/Os_Cfg.h", Vec::new())
             .unwrap_err();
         assert_eq!(template[0].code, "OUTPUT_PRODUCER_CONFLICT");
     }
@@ -270,30 +344,41 @@ mod tests {
     fn templates_are_rendered_once_by_their_emitter() {
         let mut outputs = outputs();
         assert_eq!(
-            outputs.template("rte", "os/include/Os_Cfg.h").unwrap_err()[0].code,
+            outputs.template("rte", "include/Os_Cfg.h").unwrap_err()[0].code,
             "OUTPUT_MISSING"
         );
-        let template = outputs.template(OS, "os/include/Os_Cfg.h").unwrap();
+        let template = outputs.template(OS, "include/Os_Cfg.h").unwrap();
         outputs
-            .emit_rendered(OS, "os/include/Os_Cfg.h", format!("{template}/**/\n"))
+            .emit_rendered(OS, "include/Os_Cfg.h", format!("{template}/**/\n"))
             .unwrap();
-        assert!(
-            !outputs
-                .original_assets()
-                .contains_key("runtime/os/include/Os_Cfg.h")
-        );
         let again = outputs
-            .emit_rendered(OS, "os/include/Os_Cfg.h", template.into())
+            .emit_rendered(OS, "include/Os_Cfg.h", template.into())
             .unwrap_err();
         assert_eq!(again[0].code, "OUTPUT_MISSING");
-        // Unchanged bytes stay the delivered asset.
-        let arti = outputs.template(ARTI, "os/src/Os_Arti.c").unwrap();
+        // Unchanged bytes are still the emitter's output, never the asset.
+        let arti = outputs.template(ARTI, "src/Os_Arti.c").unwrap();
         outputs
-            .emit_rendered(ARTI, "os/src/Os_Arti.c", arti.into())
+            .emit_rendered(ARTI, "src/Os_Arti.c", arti.into())
             .unwrap();
-        assert_eq!(
-            outputs.original_assets()["runtime/os/src/Os_Arti.c"],
-            "os/src/Os_Arti.c"
+        outputs.emit_verbatim(MEMMAP).unwrap();
+        let original = outputs.original_assets();
+        for asset in [
+            "runtime/os/include/Os_Cfg.h",
+            "runtime/os/src/Os_Arti.c",
+            "runtime/os/include/Os_MemMap.h",
+            "runtime/bsw/include/Can_MemMap.h",
+        ] {
+            assert!(!original.contains_key(asset), "{asset}");
+        }
+        assert!(
+            outputs
+                .paths()
+                .any(|path| path == "generated/include/Can_MemMap.h")
+        );
+        assert!(
+            !outputs
+                .paths()
+                .any(|path| path.starts_with("bsw/include/") && path.ends_with("_MemMap.h"))
         );
         // The Dcm mode templates were never rendered.
         assert_eq!(outputs.finish().unwrap_err()[0].code, "OUTPUT_MISSING");

@@ -155,17 +155,20 @@ fn mainline_generated_headers(scratch: &Path) -> Vec<(String, Vec<u8>)> {
         false,
     )
     .unwrap();
-    ["include/Ecu_Config.h", "src/Ecu_Execution.h"]
-        .into_iter()
-        .map(|path| {
-            let file = prepared
-                .files()
-                .iter()
-                .find(|file| file.path == path)
-                .unwrap_or_else(|| panic!("{path} is not generated"));
-            (path.to_owned(), file.bytes.to_vec())
-        })
-        .collect()
+    [
+        "generated/include/Ecu_Config.h",
+        "generated/src/Ecu_Execution.h",
+    ]
+    .into_iter()
+    .map(|path| {
+        let file = prepared
+            .files()
+            .iter()
+            .find(|file| file.path == path)
+            .unwrap_or_else(|| panic!("{path} is not generated"));
+        (path.to_owned(), file.bytes.to_vec())
+    })
+    .collect()
 }
 
 fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
@@ -184,7 +187,7 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
         std::fs::read(root.join(asset.relative_path)).unwrap()
     );
     for (path, bytes) in mainline_generated_headers(scratch) {
-        std::fs::write(scratch.join(path), bytes).unwrap();
+        std::fs::write(scratch.join(path.trim_start_matches("generated/")), bytes).unwrap();
     }
     for family in ["runtime/bsw/include", "runtime/host/include"] {
         for entry in std::fs::read_dir(root.join(family)).unwrap() {

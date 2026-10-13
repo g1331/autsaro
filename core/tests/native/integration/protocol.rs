@@ -769,7 +769,7 @@ fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
         &faults,
         format!(
             "#define main production_main\n#define batch production_batch\n#define control production_control\n{}\n#undef main\n#undef batch\n#undef control\n{}",
-            fs::read_to_string(built.project.join("src/ecu_host_batch.c")).unwrap(),
+            fs::read_to_string(built.project.join("integration/src/ecu_host_batch.c")).unwrap(),
             fs::read_to_string(root().join("core/tests/fixtures/host_batch_faults.c")).unwrap()
         ),
     )
@@ -841,7 +841,7 @@ fn single_component_confirmation_timers_ignore_host_confirmation_order() {
         &control,
         format!(
             "{}\n{}",
-            fs::read_to_string(project.join("src/ecu_host_batch.c")).unwrap(),
+            fs::read_to_string(project.join("integration/src/ecu_host_batch.c")).unwrap(),
             fs::read_to_string(root().join("core/tests/fixtures/host_batch_confirmation_order.c"))
                 .unwrap()
         ),

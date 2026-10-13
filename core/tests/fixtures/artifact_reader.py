@@ -19,7 +19,7 @@ def artifact_path(descriptor):
 
 
 def inspect(project, probe):
-    root = ET.parse(project / "descriptions/Host_Implementation.arxml").getroot()
+    root = ET.parse(project / "generated/descriptions/Host_Implementation.arxml").getroot()
     objects = {}
 
     def visit(node, parent):
@@ -59,8 +59,10 @@ def inspect(project, probe):
     rte = objects["/HostArtifacts/RteHostImplementation"]
     generated = rte.findall("a:GENERATED-ARTIFACTS/a:DEPENDENCY-ON-ARTIFACT", NS)
     actual = {artifact_path(d.find("a:ARTIFACT-DESCRIPTOR", NS)) for d in generated}
-    expected = {"src/Rte.c", "src/Rte_OsService.c"}
-    expected |= {p.relative_to(project).as_posix() for p in (project / "include").glob("Rte*.h")}
+    expected = {"generated/src/Rte.c", "generated/src/Rte_OsService.c"}
+    # Rte_Os_Type.h is generated for the OS module's mode types.
+    expected |= {p.relative_to(project).as_posix() for p in (project / "generated/include").glob("Rte*.h")
+                 if p.name != "Rte_Os_Type.h"}
     assert actual == expected, "RTE generated file closure"
     assert all(text(d, "a:USAGES/a:USAGE") == "COMPILE" for d in generated)
     for module in ("Os", "Rte"):

@@ -5,7 +5,8 @@ import hashlib
 import json
 from pathlib import Path, PurePosixPath
 
-FORMAT = "autosar-workbench-handoff-v3"
+FORMAT = "autosar-workbench-handoff-v4"
+HANDOFF_PATH = "meta/handoff.json"
 OWNERS = {"configuration", "user-application", "product", "generated", "target", "build"}
 
 
@@ -50,7 +51,7 @@ def validate(
     })
     if metadata != expected_metadata or metadata["format"] != FORMAT:
         raise ValueError("Native input/resource identity differs from this producer's snapshot")
-    if metadata["targetId"] != target["target"] or metadata["ownershipPath"] != "workbench-ownership.json":
+    if metadata["targetId"] != target["target"] or metadata["ownershipPath"] != "meta/workbench-ownership.json":
         raise ValueError("Native target/ownership boundary differs")
     resources = _keys(metadata["resourceIdentities"], {"ruleSetIdentity", "requiredExtensionDefinitions"})
     rule = _keys(resources["ruleSetIdentity"], {"release", "rulesVersion", "sha256"})
@@ -65,7 +66,7 @@ def validate(
     ledger = _keys(json.loads((project / metadata["ownershipPath"]).read_text(encoding="utf-8")), {
         "formatVersion", "producerVersion", "profileId", "files",
     })
-    if type(ledger["formatVersion"]) is not int or ledger["formatVersion"] != 2:
+    if type(ledger["formatVersion"]) is not int or ledger["formatVersion"] != 3:
         raise ValueError("Unknown ownership format version")
     if ledger["producerVersion"] != metadata["producerVersion"] or ledger["profileId"] != metadata["profileId"]:
         raise ValueError("Unknown ownership producer/profile")
@@ -138,8 +139,8 @@ def validate(
     if seen != set(mappings):
         raise ValueError("Native member and snapshot closures differ")
     if bool(target.get("handoff")):
-        declared = json.loads((project / "handoff.json").read_text(encoding="utf-8"))
+        declared = json.loads((project / HANDOFF_PATH).read_text(encoding="utf-8"))
         if declared != metadata:
             raise ValueError("Handoff source/resource identity differs from native build metadata")
-    elif "handoff.json" in names:
+    elif HANDOFF_PATH in names:
         raise ValueError("Source-only delivery cannot silently become a handoff")

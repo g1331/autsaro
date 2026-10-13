@@ -1,7 +1,8 @@
 use super::{
-    FORMAT, HandoffMetadata, InputKind, OWNERSHIP_PATH, PROJECT_PATH, digest, json_bytes,
-    safe_relative,
+    FORMAT, HANDOFF_PATH, HandoffMetadata, InputKind, OWNERSHIP_PATH, PROJECT_PATH,
+    application_package_path, digest, json_bytes, safe_relative,
 };
+use crate::generator::output::{FILE_HASHES, FILE_LIST};
 use crate::prepared::PreparedFile;
 use crate::target::BuildTarget;
 use serde::{Deserialize, Serialize};
@@ -12,9 +13,9 @@ use std::path::Path;
 
 const CONFIG_PRODUCER: &str = "autosar-workbench-config";
 const PRODUCT_PRODUCER: &str = "autosar-product";
-const GENERATED_PRODUCER: &str = "autosar-generator";
+pub(super) const GENERATED_PRODUCER: &str = "autosar-generator";
 const BUILD_PRODUCER: &str = "autosar-workbench-build";
-const LEDGER_FORMAT_VERSION: u32 = 2;
+const LEDGER_FORMAT_VERSION: u32 = 3;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -84,9 +85,7 @@ fn classification(
             .find(|slot| {
                 input.producer_slot.as_deref() == Some(slot.producer_slot.as_str())
                     && slot.source_paths == [input.logical_path.clone()]
-                    && slot.source_paths[0]
-                        .strip_prefix("application/")
-                        .is_some_and(|relative| path == format!("src/{relative}"))
+                    && application_package_path(&slot.source_paths[0]).as_deref() == Some(path)
             })
             .map(|slot| slot.producer_slot.as_str());
         let Some(producer) = producer else {
@@ -211,10 +210,7 @@ pub(crate) fn ledger<'a>(
     let slots = application_slots(&payload, metadata)?;
     let mut entries = Vec::with_capacity(files.len());
     for (path, file) in files {
-        if matches!(
-            path.as_str(),
-            OWNERSHIP_PATH | "files.list" | "files.sha256"
-        ) {
+        if matches!(path.as_str(), OWNERSHIP_PATH | FILE_LIST | FILE_HASHES) {
             return Err(crate::product_message!(
                 "backend.delivery.ownership_self_reference"
             ));
@@ -271,7 +267,7 @@ pub(crate) fn metadata_from_target(
     let recorded_target: BuildTarget = serde_json::from_value(target["target"].clone())
         .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     if recorded_target != metadata.target_id
-        || target["format"] != "autosar-build-target-v1"
+        || target["format"] != crate::prepared::TARGET_FORMAT
         || target["profile"] != "ecu"
         || target["definitionFingerprint"]
             .as_str()
@@ -332,16 +328,9 @@ pub(crate) fn validate_metadata(metadata: &HandoffMetadata) -> Result<(), crate:
                 }
             }
             InputKind::Application => {
-                let mapping =
-                    input
-                        .logical_path
-                        .strip_prefix("application/")
-                        .is_some_and(|relative| {
-                            input.package_path == format!("src/{relative}")
-                                && relative.ends_with(".c")
-                                && !relative.contains('/')
-                        })
-                        && input.producer_slot.is_some();
+                let mapping = application_package_path(&input.logical_path).as_deref()
+                    == Some(input.package_path.as_str())
+                    && input.producer_slot.is_some();
                 if !mapping || input.role != "user-application" {
                     return Err(crate::product_message!(
                         "backend.delivery.application_boundary_unsupported"
@@ -399,7 +388,7 @@ pub(crate) fn verify_ledger_bytes(
         safe_relative(&entry.path)?;
         if matches!(
             entry.path.as_str(),
-            OWNERSHIP_PATH | "files.list" | "files.sha256"
+            OWNERSHIP_PATH | FILE_LIST | FILE_HASHES
         ) || !owned.insert(entry.path.as_str())
             || !portable.insert(entry.path.to_ascii_lowercase())
         {
@@ -433,7 +422,7 @@ pub(crate) fn verify_ledger_bytes(
     let payload: BTreeSet<_> = files
         .keys()
         .map(String::as_str)
-        .filter(|path| !matches!(*path, OWNERSHIP_PATH | "files.list" | "files.sha256"))
+        .filter(|path| !matches!(*path, OWNERSHIP_PATH | FILE_LIST | FILE_HASHES))
         .collect();
     if owned != payload {
         return Err(crate::product_message!(
@@ -450,7 +439,7 @@ pub(crate) fn verify_ledger_bytes(
             );
         }
     }
-    if let Some(handoff) = files.get("handoff.json") {
+    if let Some(handoff) = files.get(HANDOFF_PATH) {
         let declared: HandoffMetadata = serde_json::from_slice(handoff)
             .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
         if declared != *metadata {

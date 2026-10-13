@@ -1125,7 +1125,7 @@ fn actual_runtime_source_owners_derive_all_application_slots_and_keep_service_ge
                 && symbol.definition_owner == "src/Rte.c")
     );
     let files = prepared_pipeline_files(&plan);
-    assert!(files.iter().any(|(path, _)| path == "src/Rte.c"));
+    assert!(files.iter().any(|(path, _)| path == "generated/src/Rte.c"));
 }
 
 #[test]
@@ -1411,7 +1411,7 @@ fn plural_application_preparation_freezes_every_real_producer_and_refuses_bad_me
     for source in &sources {
         let file = source.path.file_name().unwrap().to_str().unwrap();
         assert_eq!(
-            first[&format!("src/{file}")],
+            first[&format!("app/{}/{file}", file.trim_end_matches(".c"))],
             std::fs::read(&source.path).unwrap()
         );
         assert!(!first.contains_key(&format!("application/{file}")));
@@ -1446,7 +1446,7 @@ fn prepared_bsw_entries_describe_actual_call_mechanisms_and_implementation_polic
     let files = prepared_pipeline_files(&plan);
     let bytes = &files
         .iter()
-        .find(|(path, _)| path == "descriptions/Host_Implementation.arxml")
+        .find(|(path, _)| path == "generated/descriptions/Host_Implementation.arxml")
         .unwrap()
         .1;
     let document = roxmltree::Document::parse(std::str::from_utf8(bytes).unwrap()).unwrap();

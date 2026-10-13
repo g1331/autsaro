@@ -588,12 +588,15 @@ fn authentication_mode_source_follows_actual_connection_and_rejects_invalid_stan
         prepared_pipeline_files(&plan).into_iter().collect();
     for (path, symbol) in [
         (
-            "src/Ecu_RuntimeConfig.c",
+            "generated/src/Ecu_RuntimeConfig.c",
             "SchM_Switch_Dcm_DcmAuthenticationState_Link",
         ),
-        ("src/SchM.c", "SchM_Mode_Dcm_DcmAuthenticationState_Link"),
         (
-            "include/SchM_Dcm.h",
+            "generated/src/SchM.c",
+            "SchM_Mode_Dcm_DcmAuthenticationState_Link",
+        ),
+        (
+            "generated/include/SchM_Dcm.h",
             "SchM_Switch_Dcm_DcmAuthenticationState_Link",
         ),
     ] {

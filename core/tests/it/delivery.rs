@@ -56,16 +56,77 @@ fn builtin_handoff_reconstructs_independent_authoritative_members() {
     assert_eq!(payload(&output), payload(&reproduced));
 }
 
+/// A configuration change rewrites only its `inputs/` snapshot, `generated/`,
+/// `app/`, `meta/` and the root build/README files; a hand edit to any other
+/// directory is refused.
+#[test]
+fn regeneration_changes_only_generated_directories() {
+    use crate::support::os_variants::{counter_variant, prepared};
+    use autosar_config_core::target::BuildTarget;
+    let scratch = Scratch::new();
+    let target = BuildTarget::LinuxX64ControlledV1;
+    let files = |maximum| -> BTreeMap<String, Vec<u8>> {
+        prepared(&counter_variant(false, maximum), &scratch.0, target)
+            .into_files()
+            .into_iter()
+            .collect()
+    };
+    let (before, after) = (files(65535), files(4095));
+    let changed: Vec<_> = before
+        .keys()
+        .chain(after.keys())
+        .filter(|path| before.get(*path) != after.get(*path))
+        .collect();
+    assert!(changed.iter().any(|path| path.starts_with("generated/")));
+    for path in changed {
+        assert!(
+            ["inputs/", "generated/", "app/", "meta/"]
+                .iter()
+                .any(|directory| path.starts_with(directory))
+                || matches!(path.as_str(), "README.md" | "target.json"),
+            "{path}"
+        );
+    }
+    let output = scratch.0.join("package");
+    let sources = counter_variant(false, 65535);
+    prepared(&sources, &scratch.0, target)
+        .generate(&output)
+        .unwrap();
+    for path in [
+        "bsw/src/Com.c",
+        "integration/src/Ecu_Target.c",
+        "os/src/Os.c",
+        "kernel/tasks.c",
+        "tools/ecu-tool.py",
+    ] {
+        let file = output.join(path);
+        let original = fs::read(&file).unwrap();
+        fs::write(&file, [original.as_slice(), b"\n"].concat()).unwrap();
+        assert!(
+            prepared(&sources, &scratch.0, target)
+                .preview(&output)
+                .is_err(),
+            "{path}"
+        );
+        fs::write(&file, original).unwrap();
+    }
+    assert!(
+        prepared(&sources, &scratch.0, target)
+            .preview(&output)
+            .is_ok()
+    );
+}
+
 #[test]
 fn builtin_resealed_generated_bytes_cannot_self_authorize_import_or_replacement() {
     let scratch = Scratch::new();
     let workspace = signals(&scratch.0.join("Live"));
     let output = scratch.0.join("package");
     prepare(&workspace, true).generate(&output).unwrap();
-    let original = fs::read(output.join("src/Ecu_Config.c")).unwrap();
+    let original = fs::read(output.join("generated/src/Ecu_Config.c")).unwrap();
     let mut changed = original.clone();
     changed.extend_from_slice(b"\n#error Unauthorized_generated_change\n");
-    fs::write(output.join("src/Ecu_Config.c"), &changed).unwrap();
+    fs::write(output.join("generated/src/Ecu_Config.c"), &changed).unwrap();
     reseal(&output);
     let receiver = scratch.0.join("Receiver");
     assert!(
@@ -73,7 +134,10 @@ fn builtin_resealed_generated_bytes_cannot_self_authorize_import_or_replacement(
     );
     assert!(!receiver.exists());
     assert!(prepare(&workspace, true).preview(&output).is_err());
-    assert_eq!(fs::read(output.join("src/Ecu_Config.c")).unwrap(), changed);
+    assert_eq!(
+        fs::read(output.join("generated/src/Ecu_Config.c")).unwrap(),
+        changed
+    );
 }
 
 #[test]
@@ -82,7 +146,7 @@ fn builtin_resealed_rule_identity_is_not_a_trusted_native_resource() {
     let workspace = signals(&scratch.0.join("Live"));
     let output = scratch.0.join("package");
     prepare(&workspace, true).generate(&output).unwrap();
-    for path in ["handoff.json", "target.json"] {
+    for path in ["meta/handoff.json", "target.json"] {
         let mut value: serde_json::Value =
             serde_json::from_slice(&fs::read(output.join(path)).unwrap()).unwrap();
         let metadata = if path == "target.json" {
@@ -172,8 +236,8 @@ fn builtin_ecu_delivers_project_license_and_preserves_kernel_notice() {
                 && text.contains("--mode host-batch")
                 && text.contains("Apache-2.0")
         );
-        let names = fs::read_to_string(output.join("files.list")).unwrap();
-        let hashes = fs::read_to_string(output.join("files.sha256")).unwrap();
+        let names = fs::read_to_string(output.join("meta/files.list")).unwrap();
+        let hashes = fs::read_to_string(output.join("meta/files.sha256")).unwrap();
         for (name, expected) in [
             ("LICENSE", include_bytes!("../../../LICENSE").as_slice()),
             ("NOTICE", include_bytes!("../../../NOTICE").as_slice()),
@@ -220,7 +284,7 @@ fn builtin_ecu_handoff_preserves_user_algorithm_in_independent_reconstructed_pro
         .generate(&output)
         .unwrap();
     assert_eq!(
-        fs::read(output.join("src/EchoApplication.c")).unwrap(),
+        fs::read(output.join("app/EchoApplication/EchoApplication.c")).unwrap(),
         changed
     );
     assert_eq!(fs::read(&application.disk_path).unwrap(), changed);
@@ -279,7 +343,7 @@ fn builtin_ecu_late_live_edit_and_resealed_snapshot_never_overwrite_user_bytes_o
     assert_eq!(payload(&output), original);
     assert_eq!(fs::read(&application.disk_path).unwrap(), changed);
     fs::write(
-        output.join("src/EchoApplication.c"),
+        output.join("app/EchoApplication/EchoApplication.c"),
         b"#error Altered_sealed_application_snapshot\n",
     )
     .unwrap();
@@ -299,7 +363,7 @@ fn builtin_handoff_rejects_unknown_owner_and_ownership_version_without_publishin
     for version in [false, true] {
         let output = scratch.0.join(if version { "version" } else { "owner" });
         prepare(&workspace, true).generate(&output).unwrap();
-        let ledger_path = output.join("workbench-ownership.json");
+        let ledger_path = output.join("meta/workbench-ownership.json");
         let mut ledger: serde_json::Value =
             serde_json::from_slice(&fs::read(&ledger_path).unwrap()).unwrap();
         if version {
@@ -334,7 +398,7 @@ fn builtin_handoff_rejects_forged_declared_extension_identity_without_publishing
         "catalogId": "not-explicitly-accepted", "release": "R24-11",
         "version": "1.0.0", "sha256": "a".repeat(64),
     });
-    for path in ["handoff.json", "target.json"] {
+    for path in ["meta/handoff.json", "target.json"] {
         let mut value: serde_json::Value =
             serde_json::from_slice(&fs::read(output.join(path)).unwrap()).unwrap();
         let metadata = if path == "target.json" {
@@ -881,7 +945,11 @@ fn retired_delivery_profiles_are_refused_before_import() {
     let workspace = signals(&scratch.0.join("Live"));
     let output = scratch.0.join("package");
     prepare(&workspace, true).generate(&output).unwrap();
-    for path in ["handoff.json", "target.json", "workbench-ownership.json"] {
+    for path in [
+        "meta/handoff.json",
+        "target.json",
+        "meta/workbench-ownership.json",
+    ] {
         let mut value: serde_json::Value =
             serde_json::from_slice(&fs::read(output.join(path)).unwrap()).unwrap();
         let metadata = if path == "target.json" {

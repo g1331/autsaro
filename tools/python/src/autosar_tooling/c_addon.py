@@ -27,8 +27,7 @@ def findings(configuration, root: Path):
         if token.str in ALLOCATORS:
             yield token, "dynamicAllocation", "Direct dynamic allocation call; review MISRA Dir 4.12."
         if token.str in THREAD_CREATORS and (
-            relative.startswith("src/") and not relative.startswith("src/host/")
-            and relative != "src/Application.c"
+            relative.startswith(("bsw/", "generated/"))
         ):
             yield token, "hostThreadInBsw", "Host thread creation belongs in the OS/host adapter."
 

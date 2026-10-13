@@ -21,7 +21,7 @@ def verify(project: Path, build_directory: Path) -> None:
     project = project.resolve(strict=True)
     if target.get("profile") != "ecu":
         raise ValueError("Integrated HostBatch verification requires the ECU profile")
-    inputs = json.loads((project / "verification/inputs.json").read_text(encoding="utf-8"))
+    inputs = json.loads((project / "meta/verification-inputs.json").read_text(encoding="utf-8"))
     if inputs.get("format") != "autosar-ecu-test-inputs-v1":
         raise ValueError("Unsupported independent verification input format")
     required = ("periodMs", "receiveCanId", "transmitCanId", "requestCanId", "responseCanId", "did", "initialReceiveValue", "receiveTimeoutMs")

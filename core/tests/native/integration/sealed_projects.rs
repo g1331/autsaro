@@ -482,10 +482,12 @@ fn sealed_optional_did_and_network_only_routes_use_real_producers() {
             "{text}"
         );
         assert!(std::fs::read(&result.stderr).unwrap().is_empty());
-        let config = std::fs::read_to_string(project.join("src/Ecu_RuntimeConfig.c")).unwrap();
-        let metadata =
-            std::fs::read_to_string(project.join("descriptions/Host_Implementation.arxml"))
-                .unwrap();
+        let config =
+            std::fs::read_to_string(project.join("generated/src/Ecu_RuntimeConfig.c")).unwrap();
+        let metadata = std::fs::read_to_string(
+            project.join("generated/descriptions/Host_Implementation.arxml"),
+        )
+        .unwrap();
         if !diagnostic {
             assert!(!config.contains("CanTp_MainFunction();"));
             assert!(!config.contains("Dcm_MainFunction();"));

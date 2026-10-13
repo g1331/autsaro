@@ -215,12 +215,13 @@ impl<'a> PreparedProject<'a> {
                 ));
             }
             hashes.push_str(&format!(
-                "{:x}  files.list\n",
-                Sha256::digest(list.as_bytes())
+                "{:x}  {}\n",
+                Sha256::digest(list.as_bytes()),
+                generator::output::FILE_LIST
             ));
-            std::fs::write(source.join("files.list"), list)
+            std::fs::write(source.join(generator::output::FILE_LIST), list)
                 .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
-            std::fs::write(source.join("files.sha256"), hashes)
+            std::fs::write(source.join(generator::output::FILE_HASHES), hashes)
                 .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
             for mode in ["probe", "host-batch"] {
                 let argv: Vec<OsString> = vec![
@@ -310,6 +311,8 @@ fn insert<'a>(
     Ok(())
 }
 
+/// Delivered path of a verbatim asset, decided by its source directory. Template
+/// assets are rendered by their emitter into `generated/` instead.
 pub(crate) fn deliver_path(asset: &AssetEntry) -> Result<String, crate::LocalizedText> {
     let path = asset.relative_path;
     if matches!(path, "LICENSE" | "NOTICE") {
@@ -320,24 +323,29 @@ pub(crate) fn deliver_path(asset: &AssetEntry) -> Result<String, crate::Localize
             // tools/ecu-tool.py is the seal guard that wraps this entry.
             return Ok("tools/standalone-ecu-tool.py".into());
         }
-        for family in ["bsw/", "host/", "ecu/"] {
+        if path == "contracts/assets.json" {
+            return Ok("meta/assets.json".into());
+        }
+        for (family, delivered) in [
+            ("bsw/", "bsw"),
+            ("host/", "integration"),
+            ("ecu/", "integration"),
+        ] {
             if let Some(relative) = path.strip_prefix(family)
                 && (relative.starts_with("src/") || relative.starts_with("include/"))
             {
-                return Ok(relative.into());
+                return Ok(format!("{delivered}/{relative}"));
             }
         }
         if path.starts_with("os/") {
             return Ok(path.into());
         }
-        if path.starts_with("contracts/") {
-            return Ok(format!("inventory/{path}"));
-        }
         return Ok(format!("tools/{path}"));
     }
     if let Some(path) = path.strip_prefix("third_party/freertos/") {
         if path == "include/StackMacros.h" {
-            return Ok("kernel-compat/include/StackMacros.h".into());
+            // Upstream's legacy alias; the kernel includes only stack_macros.h.
+            return Ok("kernel/compat/include/StackMacros.h".into());
         }
         return Ok(format!("kernel/{path}"));
     }
@@ -378,7 +386,7 @@ impl NativePreparation {
         if handoff {
             generator::delivery::insert_file(
                 files,
-                "handoff.json".into(),
+                generator::delivery::HANDOFF_PATH.into(),
                 Cow::Owned(generator::delivery::json_bytes(&metadata)?),
             )?;
         }
@@ -391,6 +399,49 @@ impl NativePreparation {
             application_slots: slots,
         })
     }
+}
+
+pub(crate) const TARGET_FORMAT: &str = "autosar-build-target-v2";
+/// Directories whose C files are the package's translation units.
+const SOURCE_ROOTS: [&str; 5] = [
+    "bsw/src/",
+    "integration/src/",
+    "generated/src/",
+    "os/src/",
+    "app/",
+];
+/// The native main of each build mode; neither is part of `sources`.
+const ENTRIES: [(&str, &str); 2] = [
+    ("host-batch", "integration/src/ecu_host_batch.c"),
+    ("probe", "integration/src/ecu_probe.c"),
+];
+
+/// A quoted include resolves by the first include path holding the name, so a
+/// name (compared case-folded, SWS_BSW_00171) may occur under only one of them.
+fn unique_include_names<'p>(
+    files: impl Iterator<Item = &'p String>,
+    include_paths: &[&str],
+) -> Result<(), crate::LocalizedText> {
+    let mut names = BTreeMap::new();
+    for path in files.filter(|path| {
+        std::path::Path::new(path.as_str())
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("h"))
+    }) {
+        for directory in include_paths {
+            let Some(name) = path.strip_prefix(&format!("{directory}/")) else {
+                continue;
+            };
+            if let Some(first) = names.insert(name.to_ascii_lowercase(), path.as_str())
+                && first != path
+            {
+                return Err(crate::product_message!(
+                    "backend.prepared.include_name_conflict", "path" => path, "other" => first
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn finish<'a>(
@@ -425,15 +476,17 @@ fn finish<'a>(
         .keys()
         .filter(|name| {
             name.ends_with(".c")
-                && (name.starts_with("src/")
-                    || name.starts_with("os/src/")
-                    || name.as_str() == "Ecu_Config.c")
-                && !matches!(name.as_str(), "src/ecu_probe.c" | "src/ecu_host_batch.c")
+                && SOURCE_ROOTS.iter().any(|root| name.starts_with(root))
+                && !ENTRIES.iter().any(|(_, entry)| entry == name)
         })
         .collect();
     let mut include_paths = vec![
-        ".",
-        "include",
+        "bsw/include",
+        "bsw/src",
+        "integration/include",
+        "integration/src",
+        "generated/include",
+        "generated/src",
         "os",
         "os/include",
         "os/src",
@@ -450,8 +503,9 @@ fn finish<'a>(
         kernel_sources.push("portable/MSVC-MingW/port.c");
     }
     kernel_sources.extend(["tasks.c", "list.c", "queue.c"]);
+    unique_include_names(files.keys(), &include_paths)?;
     let mut metadata = serde_json::to_vec_pretty(&serde_json::json!({
-        "format": "autosar-build-target-v1",
+        "format": TARGET_FORMAT,
         "target": spec.id,
         "abi": spec.abi,
         "toolchain": toolchain,
@@ -463,6 +517,7 @@ fn finish<'a>(
         "requiredSections": spec.required_sections,
         "logicalClock": spec.logical_clock,
         "sources": sources,
+        "entries": BTreeMap::from(ENTRIES),
         "includePaths": include_paths,
         "compilerFlags": compiler_flags,
         "kernelSources": kernel_sources,
@@ -699,25 +754,61 @@ mod localization_tests {
 }
 
 #[cfg(test)]
+mod include_name_tests {
+    #[test]
+    fn a_header_name_may_occur_under_one_include_path_only() {
+        let paths = ["bsw/include", "bsw/src", "generated/include"];
+        let files = |names: &[&str]| {
+            names
+                .iter()
+                .map(|name| (*name).to_owned())
+                .collect::<Vec<_>>()
+        };
+        let unique = files(&[
+            "bsw/include/Com.h",
+            "bsw/src/Com_Internal.h",
+            "bsw/include/standard/Can.h",
+            "kernel/include/list.h",
+        ]);
+        assert!(super::unique_include_names(unique.iter(), &paths).is_ok());
+        for clash in [
+            ["bsw/include/Com.h", "generated/include/Com.h"],
+            // Quoted includes on case-insensitive file systems (SWS_BSW_00171).
+            ["bsw/include/Com.h", "bsw/src/com.H"],
+        ] {
+            let error = super::unique_include_names(files(&clash).iter(), &paths).unwrap_err();
+            assert_eq!(
+                serde_json::to_value(&error).unwrap()["key"],
+                "backend.prepared.include_name_conflict"
+            );
+        }
+    }
+}
+
+#[cfg(test)]
 mod delivery_path_tests {
     // An unmapped runtime family would fall through to tools/ without an error.
     #[test]
-    fn bsw_sources_deliver_to_the_flat_project_directories() {
-        let bsw: Vec<_> = crate::resources::AssetInventory::embedded()
-            .entries()
+    fn runtime_sources_deliver_to_their_owner_directories() {
+        let mut checked = 0;
+        for asset in crate::resources::AssetInventory::embedded().entries() {
+            let path = asset.relative_path;
+            let expected = [
+                ("runtime/bsw/", "bsw/"),
+                ("runtime/host/", "integration/"),
+                ("runtime/ecu/src/", "integration/src/"),
+                ("runtime/ecu/include/", "integration/include/"),
+            ]
             .iter()
-            .filter_map(|asset| {
-                let path = asset.relative_path;
-                let relative = path
-                    .strip_prefix("runtime/bsw/")
-                    .or_else(|| path.strip_prefix("runtime/host/"))?;
-                Some((asset, relative))
-            })
-            .collect();
-        assert_eq!(bsw.len(), 69);
-        for (asset, relative) in bsw {
-            assert!(relative.starts_with("src/") || relative.starts_with("include/"));
-            assert_eq!(super::deliver_path(asset).unwrap(), relative);
+            .find_map(|(source, delivered)| {
+                path.strip_prefix(source)
+                    .map(|relative| format!("{delivered}{relative}"))
+            });
+            if let Some(expected) = expected {
+                assert_eq!(super::deliver_path(asset).unwrap(), expected);
+                checked += 1;
+            }
         }
+        assert_eq!(checked, 77);
     }
 }

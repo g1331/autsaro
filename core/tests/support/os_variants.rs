@@ -35,6 +35,18 @@ pub(crate) fn project(
     root: &Path,
     target: BuildTarget,
 ) -> (PathBuf, Vec<(String, Vec<u8>)>) {
+    let directory = root.join("project");
+    let files = prepared(sources, root, target).into_files();
+    write_files(&directory, &files);
+    (directory, files)
+}
+
+/// The preparation `project` writes; its application source is `root/Ingress.c`.
+pub(crate) fn prepared(
+    sources: &[InputSource],
+    root: &Path,
+    target: BuildTarget,
+) -> autosar_config_core::prepared::PreparedProject<'static> {
     use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
     let plan = build(sources).unwrap_or_else(|issues| panic!("{issues:?}"));
     let fixture_text =
@@ -45,7 +57,7 @@ pub(crate) fn project(
         fixture_text.replace("        (void)Rte_Write_Value_Value(value);\n", ""),
     )
     .unwrap();
-    let prepared = prepare_ecu_project_with_applications(
+    prepare_ecu_project_with_applications(
         &plan,
         target,
         &[ApplicationSource {
@@ -53,11 +65,7 @@ pub(crate) fn project(
             path: application,
         }],
     )
-    .unwrap_or_else(|issues| panic!("{issues:?}"));
-    let directory = root.join("project");
-    let files = prepared.into_files();
-    write_files(&directory, &files);
-    (directory, files)
+    .unwrap_or_else(|issues| panic!("{issues:?}"))
 }
 
 pub(crate) fn file<'a>(files: &'a [(String, Vec<u8>)], name: &str) -> &'a str {

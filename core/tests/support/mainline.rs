@@ -893,20 +893,20 @@ pub(crate) fn forged_handoff(
     let prepared =
         prepare_ecu_project_for_workspace(workspace, plan, native_delivery_target(), true).unwrap();
     prepared.generate(&package).unwrap();
-    let ledger_path = package.join("workbench-ownership.json");
+    let ledger_path = package.join("meta/workbench-ownership.json");
     let mut ledger: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&ledger_path).unwrap()).unwrap();
     let row = ledger["files"]
         .as_array_mut()
         .unwrap()
         .iter_mut()
-        .find(|row| row["path"] == "src/Process.c")
+        .find(|row| row["path"] == "app/Process/Process.c")
         .unwrap();
     match case {
         "application" => {
-            let mut bytes = std::fs::read(package.join("src/Process.c")).unwrap();
+            let mut bytes = std::fs::read(package.join("app/Process/Process.c")).unwrap();
             bytes.extend_from_slice(b"\n/* forged snapshot */\n");
-            std::fs::write(package.join("src/Process.c"), bytes).unwrap();
+            std::fs::write(package.join("app/Process/Process.c"), bytes).unwrap();
         }
         "owner" => row["owner"] = "unrecognized-authority".into(),
         "producer" => row["producerId"] = "unrecognized-producer".into(),
@@ -923,7 +923,7 @@ pub(crate) fn forged_handoff(
                     "unrecognized-rule-version".into();
             }
             std::fs::write(
-                package.join("handoff.json"),
+                package.join("meta/handoff.json"),
                 serde_json::to_vec_pretty(&target["nativeDelivery"]).unwrap(),
             )
             .unwrap();

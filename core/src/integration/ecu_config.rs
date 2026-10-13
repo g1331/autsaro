@@ -43,8 +43,19 @@ pub(super) fn files(
     let can = &communication.can;
     let mode = description.ecu_mode()?;
     let mut outputs = super::outputs::EcuOutputs::new(target)?;
-    outputs.emit_all("contracts", plan.contract_headers(composition, true)?)?;
-    outputs.emit_all("rte", super::rte::files(plan)?)?;
+    // The contract provenance is package metadata; its headers are generated C.
+    outputs.emit_all(
+        "contracts",
+        plan.contract_headers(composition, true)?
+            .into_iter()
+            .map(|(path, bytes)| match path.as_str() {
+                "contract.json" => ("meta/contract.json".into(), bytes),
+                _ => (path, bytes),
+            }),
+    )?;
+    outputs.emit_all(super::outputs::RTE, super::rte::files(plan)?)?;
+    outputs.emit_verbatim(super::outputs::RTE)?;
+    outputs.emit_verbatim(super::outputs::MEMMAP)?;
     // The selected authentication group's mode type and SchM declarations
     // complete the trusted Dcm headers.
     for (path, addition) in [
@@ -76,7 +87,7 @@ pub(super) fn files(
         &os.task_symbol,
         os.use_res_scheduler,
     )?;
-    outputs.emit(super::outputs::OS, "src/Ecu_Config.c", os_config)?;
+    outputs.emit_rendered(super::outputs::OS, super::ecu::ECU_CONFIG, os_config)?;
     outputs.emit(
         ECU,
         "include/Ecu_Config.h",
@@ -658,22 +669,32 @@ pub(super) fn files(
     // emitter extended are generated outputs. The packaging tool is wrapped at delivery.
     let mut original_sources = outputs.original_assets();
     original_sources.remove("runtime/ecu-tool.py");
-    outputs.emit(ECU, "integration.json", format!("{:#}\n", serde_json::json!({"format": "autosar-ecu-integration-v2", "plan": description, "target": target.spec().id, "owner": "single source-derived AUTOSTART extended task", "originalBswSources": original_sources })))?;
+    outputs.emit(ECU, super::outputs::INTEGRATION_PATH, format!("{:#}\n", serde_json::json!({"format": "autosar-ecu-integration-v2", "plan": description, "target": target.spec().id, "owner": "single source-derived AUTOSTART extended task", "originalBswSources": original_sources })))?;
     let verification = super::handoff::verification_files(plan).map_err(|_| failure())?;
     let readme = format!(
-        "# ECU integration source project\n\nTarget: `{}`. Caller application sources are sealed under `src/`; the source-derived component, communication and OS contracts are in `integration.json`. Original MIT notices of the fixed FreeRTOS kernel remain in `kernel/LICENSE.md`; Autsaro runtime, tool and template code is licensed under Apache-2.0 (see LICENSE and NOTICE). User-provided configurations and application code retain their own licensing.\n\n## Independent native build\n\n{}\nFrom this directory run `python tools/ecu-tool.py build --project . --output <new-empty-external-directory> --mode host-batch`. The production BEGIN/RX/COMMIT protocol uses the single OS owner and controlled logical ticks. Physical output flush precedes driver polling confirmation. No compiler, AUTOSAR archive or application algorithm is generated or redistributed.\n{}",
+        "# ECU integration source project\n\nTarget: `{}`. Caller application sources are sealed under `app/`; the source-derived component, communication and OS contracts are in `meta/integration.json`. Original MIT notices of the fixed FreeRTOS kernel remain in `kernel/LICENSE.md`; Autsaro runtime, tool and template code is licensed under Apache-2.0 (see LICENSE and NOTICE). User-provided configurations and application code retain their own licensing.\n\n## Independent native build\n\n{}\nFrom this directory run `python tools/ecu-tool.py build --project . --output <new-empty-external-directory> --mode host-batch`. The production BEGIN/RX/COMMIT protocol uses the single OS owner and controlled logical ticks. Physical output flush precedes driver polling confirmation. No compiler, AUTOSAR archive or application algorithm is generated or redistributed.\n\n## Layout\n\n`bsw/` holds the static BSW, `integration/` the host adapters and both mains, `os/` and `kernel/` the OS adaptation, kernel patches and fixed kernel. `generated/` holds every configuration-derived file and is rewritten on each generation; `generated/templates/` holds component entry-point skeletons that are not compiled. `app/<component>/` is the sealed snapshot of each live application source, `inputs/` the configuration snapshot and `meta/` the package metadata and seal. Edit applications and configuration in the live project, never in this package.\n{}",
         target.spec().id,
         crate::generator::delivery::native_build_prerequisites(target),
         if verification.is_empty() {
             ""
         } else {
-            "\n## Reference behaviour verification\n\nThis configuration has one 32-bit CAN receive signal, one 32-bit CAN transmit signal and an application DID, so `verification/inputs.json` records their configured endpoints. `python tools/ecu-tool.py verify --project . --build-directory <another-new-empty-external-directory>` builds HostBatch and checks the reference echo application: the transmit signal repeats the last received value, the DID returns it big-endian, one/two-DID reads, DID capacity refusal, N_Cr timeout/recovery and malformed admission. Other application behaviour fails this check by design; it does not establish full SC1, MCU, hard-real-time, ASIL or official certification.\n"
+            "\n## Reference behaviour verification\n\nThis configuration has one 32-bit CAN receive signal, one 32-bit CAN transmit signal and an application DID, so `meta/verification-inputs.json` records their configured endpoints. `python tools/ecu-tool.py verify --project . --build-directory <another-new-empty-external-directory>` builds HostBatch and checks the reference echo application: the transmit signal repeats the last received value, the DID returns it big-endian, one/two-DID reads, DID capacity refusal, N_Cr timeout/recovery and malformed admission. Other application behaviour fails this check by design; it does not establish full SC1, MCU, hard-real-time, ASIL or official certification.\n"
         }
     );
     outputs.emit_all("handoff-verification", verification)?;
     let paths = outputs.paths().map(str::to_owned).collect();
     let artifacts = super::artifacts::files(description, &paths)?;
     outputs.emit_all("artifacts", artifacts)?;
+    // Not compiled: the create-only live seed, to compare entry points after a configuration change.
+    outputs.emit_all(
+        "templates",
+        plan.application_seed_files()?
+            .into_iter()
+            .map(|(path, bytes)| {
+                let name = path.trim_start_matches("application/");
+                (format!("generated/templates/{name}"), bytes)
+            }),
+    )?;
     Ok((outputs.finish()?, readme))
 }
 

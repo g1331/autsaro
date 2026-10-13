@@ -739,47 +739,47 @@ pub(super) fn files(
         let paths: Vec<_> = sources
             .iter()
             .filter(|p| {
+                // Header names are unique across the package's include paths.
+                let name = p.rsplit('/').next().unwrap_or(p);
+                let os = p.starts_with("os/src/") || p.starts_with("os/include/");
+                let generated =
+                    p.starts_with("generated/include/") || p.starts_with("generated/src/");
                 if module == "Os" {
-                    (p.starts_with("os/src/") && !p.ends_with("/Arti.c"))
-                        || (p.starts_with("os/include/") && !p.ends_with("/Arti.h"))
-                        || matches!(p.as_str(), "os/Os.h" | "include/Os.h" | "bsw-origin/Os.h")
+                    (os && !matches!(name, "Arti.c" | "Arti.h"))
+                        || (generated && (name.starts_with("Os_") || name == "Rte_Os_Type.h"))
                 } else if module == "Arti" {
-                    p.as_str() == "os/src/Arti.c" || p.as_str() == "os/include/Arti.h"
+                    os && matches!(name, "Arti.c" | "Arti.h")
                 } else if module == "Rte" {
-                    p.starts_with("include/Rte")
-                        || p.as_str() == "src/Rte.c"
-                        || p.as_str() == "src/Rte_OsService.c"
-                        || (matches!(
-                            p.as_str(),
-                            "src/SchM.c"
-                                | "src/SchM_Diagnostic_Host.c"
-                                | "src/SchM_Host.c"
-                                | "src/Ecu_RuntimeConfig.c"
-                                | "include/Ecu_MemMap.h"
-                        ))
+                    (generated && name.starts_with("Rte") && name != "Rte_Os_Type.h")
+                        || matches!(
+                            name,
+                            "SchM.c"
+                                | "SchM_Diagnostic_Host.c"
+                                | "SchM_Host.c"
+                                | "Ecu_RuntimeConfig.c"
+                                | "Ecu_MemMap.h"
+                        )
                 } else {
                     (module == "Can"
                         && matches!(
                             p.as_str(),
-                            "include/standard/Can.h"
-                                | "include/Can_CfgTypes.h"
-                                | "include/Can_Host.h"
-                                | "include/Can_GeneralTypes.h"
-                                | "include/Can_MemMap.h"
-                                | "src/Can_Host.c"
-                                | "src/Can_Internal.h"
-                                | "src/Can_HostLock.c"
-                                | "src/Can_HostLock.h"
+                            "bsw/include/standard/Can.h"
+                                | "bsw/include/Can_CfgTypes.h"
+                                | "integration/include/Can_Host.h"
+                                | "bsw/include/Can_GeneralTypes.h"
+                                | "generated/include/Can_MemMap.h"
+                                | "integration/src/Can_Host.c"
+                                | "bsw/src/Can_Internal.h"
+                                | "integration/src/Can_HostLock.c"
+                                | "integration/src/Can_HostLock.h"
                         ))
-                        || p.as_str() == format!("src/{module}.c")
-                        || p.as_str() == format!("src/{module}_PBcfg.c")
-                        || p.as_str() == format!("include/{module}_Cfg.h")
-                        || (matches!(module, "LSduR" | "PduR")
-                            && p.as_str() == "include/Ecu_MemMap.h")
-                        || p.as_str() == format!("include/{module}.h")
-                        || p.as_str() == format!("include/SchM_{module}.h")
-                        || (matches!(module, "Com" | "ComM")
-                            && p.as_str() == "src/Ecu_RuntimeConfig.c")
+                        || *name == format!("{module}.c")
+                        || *name == format!("{module}_PBcfg.c")
+                        || *name == format!("{module}_Cfg.h")
+                        || (matches!(module, "LSduR" | "PduR") && name == "Ecu_MemMap.h")
+                        || *name == format!("{module}.h")
+                        || *name == format!("SchM_{module}.h")
+                        || (matches!(module, "Com" | "ComM") && name == "Ecu_RuntimeConfig.c")
                 }
             })
             .cloned()
@@ -1095,7 +1095,7 @@ pub(super) fn files(
         };
         let resource = if module == "Can" {
             format!(
-                "<RESOURCE-CONSUMPTION><SHORT-NAME>CodeMapping</SHORT-NAME><MEMORY-SECTIONS><MEMORY-SECTION><SHORT-NAME>Can_CODE</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/CanHostImplementation/CodeMapping/CAN</PREFIX-REF><SYMBOL>CODE</SYMBOL></MEMORY-SECTION><MEMORY-SECTION><SHORT-NAME>Can_VAR_CLEARED_UNSPECIFIED</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/CanHostImplementation/CodeMapping/CAN</PREFIX-REF><SYMBOL>VAR_CLEARED_UNSPECIFIED</SYMBOL></MEMORY-SECTION></MEMORY-SECTIONS><SECTION-NAME-PREFIXS><SECTION-NAME-PREFIX><SHORT-NAME>CAN</SHORT-NAME><IMPLEMENTED-IN-REF DEST=\"DEPENDENCY-ON-ARTIFACT\">/{package}/CanHostImplementation/include_Can_MemMap_h</IMPLEMENTED-IN-REF></SECTION-NAME-PREFIX></SECTION-NAME-PREFIXS></RESOURCE-CONSUMPTION>"
+                "<RESOURCE-CONSUMPTION><SHORT-NAME>CodeMapping</SHORT-NAME><MEMORY-SECTIONS><MEMORY-SECTION><SHORT-NAME>Can_CODE</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/CanHostImplementation/CodeMapping/CAN</PREFIX-REF><SYMBOL>CODE</SYMBOL></MEMORY-SECTION><MEMORY-SECTION><SHORT-NAME>Can_VAR_CLEARED_UNSPECIFIED</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/CanHostImplementation/CodeMapping/CAN</PREFIX-REF><SYMBOL>VAR_CLEARED_UNSPECIFIED</SYMBOL></MEMORY-SECTION></MEMORY-SECTIONS><SECTION-NAME-PREFIXS><SECTION-NAME-PREFIX><SHORT-NAME>CAN</SHORT-NAME><IMPLEMENTED-IN-REF DEST=\"DEPENDENCY-ON-ARTIFACT\">/{package}/CanHostImplementation/generated_include_Can_MemMap_h</IMPLEMENTED-IN-REF></SECTION-NAME-PREFIX></SECTION-NAME-PREFIXS></RESOURCE-CONSUMPTION>"
             )
         } else if module == "Rte" {
             let composition = plan.ecu_composition()?;
@@ -1158,9 +1158,9 @@ pub(super) fn files(
                         | "BswM"
                         | "Ecu_HostBusSM"
                 ) {
-                    "include/Ecu_MemMap.h"
+                    "generated/include/Ecu_MemMap.h"
                 } else {
-                    "include/Rte_MemMap.h"
+                    "generated/include/Rte_MemMap.h"
                 };
                 prefixes.push_str(&format!("<SECTION-NAME-PREFIX><SHORT-NAME>RTE_{scope}</SHORT-NAME><IMPLEMENTED-IN-REF DEST=\"DEPENDENCY-ON-ARTIFACT\">/{package}/RteHostImplementation/{}</IMPLEMENTED-IN-REF></SECTION-NAME-PREFIX>", c_name(header)));
             }
@@ -1172,7 +1172,7 @@ pub(super) fn files(
             )
         } else if matches!(module, "LSduR" | "PduR") {
             format!(
-                "<RESOURCE-CONSUMPTION><SHORT-NAME>CodeMapping</SHORT-NAME><MEMORY-SECTIONS><MEMORY-SECTION><SHORT-NAME>{module}_CONFIG_DATA_PREBUILD_UNSPECIFIED</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/{module}HostImplementation/CodeMapping/RTE_{module}</PREFIX-REF><SYMBOL>CONFIG_DATA_PREBUILD_UNSPECIFIED</SYMBOL></MEMORY-SECTION></MEMORY-SECTIONS><SECTION-NAME-PREFIXS><SECTION-NAME-PREFIX><SHORT-NAME>RTE_{module}</SHORT-NAME><IMPLEMENTED-IN-REF DEST=\"DEPENDENCY-ON-ARTIFACT\">/{package}/{module}HostImplementation/include_Ecu_MemMap_h</IMPLEMENTED-IN-REF></SECTION-NAME-PREFIX></SECTION-NAME-PREFIXS></RESOURCE-CONSUMPTION>"
+                "<RESOURCE-CONSUMPTION><SHORT-NAME>CodeMapping</SHORT-NAME><MEMORY-SECTIONS><MEMORY-SECTION><SHORT-NAME>{module}_CONFIG_DATA_PREBUILD_UNSPECIFIED</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/{module}HostImplementation/CodeMapping/RTE_{module}</PREFIX-REF><SYMBOL>CONFIG_DATA_PREBUILD_UNSPECIFIED</SYMBOL></MEMORY-SECTION></MEMORY-SECTIONS><SECTION-NAME-PREFIXS><SECTION-NAME-PREFIX><SHORT-NAME>RTE_{module}</SHORT-NAME><IMPLEMENTED-IN-REF DEST=\"DEPENDENCY-ON-ARTIFACT\">/{package}/{module}HostImplementation/generated_include_Ecu_MemMap_h</IMPLEMENTED-IN-REF></SECTION-NAME-PREFIX></SECTION-NAME-PREFIXS></RESOURCE-CONSUMPTION>"
             )
         } else if module == "Os" || module == "Rte" {
             "<RESOURCE-CONSUMPTION><SHORT-NAME>CodeMapping</SHORT-NAME><MEMORY-SECTIONS><MEMORY-SECTION><SHORT-NAME>CODE</SHORT-NAME><SYMBOL>CODE</SYMBOL></MEMORY-SECTION></MEMORY-SECTIONS></RESOURCE-CONSUMPTION>".to_string()
@@ -1224,9 +1224,12 @@ pub(super) fn files(
     );
     Ok(BTreeMap::from([
         (
-            "descriptions/Host_Implementation.arxml".into(),
+            "generated/descriptions/Host_Implementation.arxml".into(),
             description.into_bytes(),
         ),
-        ("MODULES.md".into(), docs.into_bytes()),
+        (
+            "generated/descriptions/MODULES.md".into(),
+            docs.into_bytes(),
+        ),
     ]))
 }

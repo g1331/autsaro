@@ -38,7 +38,7 @@ flowchart LR
   ASSETS[受信 runtime 资产与固定内核] --> PREP
   EMIT --> PREP[prepared 工程：预览、staging、所有权台账]
   SNAP --> PREP
-  PREP --> SEAL[封存工程：files.list / files.sha256]
+  PREP --> SEAL[封存工程：meta/files.list / meta/files.sha256]
   SEAL --> BUILD[离线 ecu-tool build]
   BUILD --> VERIFY[独立 verify：协议、调度、拒绝与恢复]
 ```
@@ -77,7 +77,7 @@ flowchart LR
 11. **live 与 sealed 分离**（[ADR 0007](adr/0007-live-and-sealed-application-source.md)）。用户 live 应用源属于用户，永远不在生成器可写集内；封存工程中的应用文件是不可变快照，`snapshotOf` 指向已声明源成员。再生成从 live 源重新快照；被改动的封存快照一律拒绝。
 12. **create-only 初始化。** 初始化只创建尚不存在的 live 成员，并与 manifest 接纳同一事务；目标已存在不覆盖，失败不留下部分成员。
 13. **预览确认失效。** 预览绑定全部 ARXML、manifest、live C、规则与定义身份；任一变化使旧确认失效，必须重读、重预览。生成改变使已有 build／run 结果失效，旧结果不冒充新配置的验证。
-14. **完整性拒绝。** 封存 payload、所有权台账和应用快照全部进入 `files.list`／`files.sha256` 闭包；台账不记录自身和 seal 元数据，避免自摘要循环。构建与离线验证消费同一不可变 seal；版本、owner、producer 或路径未知、篡改、额外文件、链接或 reparse point 一律拒绝。交接元数据不写源机器绝对路径，不打包密钥、运行状态或官方规范。
+14. **完整性拒绝。** 封存 payload、所有权台账和应用快照全部进入 `meta/files.list`／`meta/files.sha256` 闭包；台账不记录自身和 seal 元数据，避免自摘要循环。构建与离线验证消费同一不可变 seal；版本、owner、producer 或路径未知、篡改、额外文件、链接或 reparse point 一律拒绝。交接元数据不写源机器绝对路径，不打包密钥、运行状态或官方规范。
 15. **ABI 与第三方身份单独审阅。** 资产摘要（`python -m autosar_tooling assets check|update`）只证明字节来源；公开签名、布局、句柄语义、wire 或交付格式变化须审阅并写入 CHANGELOG，不能用摘要更新吸收契约变化。更新摘要前核对 `.gitattributes` 规定的固定换行。
 
 ### 3.4 工作台状态
@@ -167,21 +167,22 @@ flowchart LR
 
 ## 6. 交付与离线接收
 
-封存工程包含生成源码、受信 runtime 资产、固定内核与补丁、应用快照、所有权台账、`target.json` 构建清单、`files.list`／`files.sha256` 和 stdlib-only 离线工具。接收者只需受支持的 CPython、匹配的 GCC／binutils 与 Git，不依赖 checkout、Rust、Node 或 uv；包内工具以 `-I -S` 运行，只从自身 `tools/` 导入。入口 `tools/ecu-tool.py build|verify` 的用法见 [runtime/README.md](../runtime/README.md)。
+封存工程按 7.6 的所有权目录包含生成源码、受信 runtime 资产、固定内核与补丁、应用快照、所有权台账、`target.json` 构建清单、`meta/files.list`／`meta/files.sha256` 和 stdlib-only 离线工具。接收者只需受支持的 CPython、匹配的 GCC／binutils 与 Git，不依赖 checkout、Rust、Node 或 uv；包内工具以 `-I -S` 运行，只从自身 `tools/` 导入。入口 `tools/ecu-tool.py build|verify` 的用法见 [runtime/README.md](../runtime/README.md)。
 
-当前交接格式为 `autosar-workbench-handoff-v3`（内置规则、多应用输入）。旧 `autosar-workbench-handoff-v2`、`autosar-host-handoff-v1` 与 `autosar-ecu-handoff-v1` 在导入时拒绝，其 ARXML 源文件可导入新工程。
+当前交接格式为 `autosar-workbench-handoff-v4`（内置规则、多应用输入、按所有权分目录）。旧 `autosar-workbench-handoff-v3`、`autosar-workbench-handoff-v2`、`autosar-host-handoff-v1` 与 `autosar-ecu-handoff-v1` 在导入时拒绝，其 ARXML 源文件可导入新工程。
 
 只有持久化、交付或协议格式带版本。格式的结构或取值域变化时版本加一，版本号不回收；旧版本按身份明确拒绝，不迁移。模板 ID、生成方 ID 和消息键等内部标识不带版本。
 
 | 格式 | 载体 | 版本 |
 | --- | --- | --- |
-| `autosar-workbench-handoff` | 包内 `handoff.json`、`target.json` 的 `nativeDelivery` | v3 |
-| 所有权台账 `formatVersion` | 包内 `workbench-ownership.json` | 2 |
-| `autosar-ecu-integration`；计划描述 `formatVersion` | 包内 `integration.json` | v2；2 |
-| `autosar-component-contract` | 组件契约包 `contract.json` | v2 |
-| `autosar-asset-inventory` | `runtime/contracts/assets.json` 及包内 `inventory/contracts/assets.json` | v2 |
+| `autosar-workbench-handoff` | 包内 `meta/handoff.json`、`target.json` 的 `nativeDelivery` | v4 |
+| 所有权台账 `formatVersion` | 包内 `meta/workbench-ownership.json` | 3 |
+| `autosar-ecu-integration`；计划描述 `formatVersion` | 包内 `meta/integration.json` | v2；2 |
+| `autosar-component-contract` | 组件契约包 `contract.json`、ECU 包 `meta/contract.json` | v2 |
+| `autosar-asset-inventory` | `runtime/contracts/assets.json` 及包内 `meta/assets.json` | v2 |
 | `autosar-workbench-build-tool-inventory` | 包内 `tools/build-tool-inventory.json` | v2 |
-| `autosar-build-target`、`autosar-ecu-test-inputs`、`autosar-os-generation-timing` | 包内 `target.json`、`verification/inputs.json`、`os-generation-timing.json` | v1 |
+| `autosar-build-target` | 包内 `target.json` | v2 |
+| `autosar-ecu-test-inputs`、`autosar-os-generation-timing` | 包内 `meta/verification-inputs.json`、`meta/os-generation-timing.json` | v1 |
 | 工程清单 `formatVersion` | 用户工程 `workbench-project.json` | 1 |
 | 扩展目录 `formatVersion` | 外部 `catalog.json` | 1 |
 | profile `singlecore-ecu-v1`；target `windows-x64-controlled-v1`、`linux-x64-controlled-v1`；协议 `HostBatchV1` | 工程、设置、交付包、主机批处理协议 | v1 |
@@ -243,23 +244,26 @@ tools/python/src/  tests/python/  tests/desktop/
 - 只有持久化或交付格式带版本并登记在格式版本表中；模板 ID 等内部标识不带版本。
 - 不为未稳定的边界拆 crate，不建只有一两个模块的分层空目录，不让 `build.rs` 写源码树。
 
-### 7.6 生成工程布局（目标）
+### 7.6 生成工程布局（已实施，#38）
 
 （[ADR 0016](adr/0016-generated-project-layout-by-ownership.md)）
 
 ```
 <工程>/
-  bsw/{include,src}/        静态 BSW，只读，受资源摘要约束
-  os/  kernel/              静态 OS 适配与固定第三方内核
-  generated/{include,src}/  全部配置生成物：*_Cfg.h、*_PBcfg.c、Rte*、SchM_*、*_MemMap.h、Ecu 配置；每次生成整体重写
-  generated/templates/      SWC 骨架，不参与编译
+  bsw/{include,src}/        静态 BSW 公共头、实现与私有头，只读，受资源摘要约束
+  integration/{include,src}/ 主机适配与 ECU 执行 adapter、两个 main
+  os/  kernel/              静态 OS 适配、补丁与固定第三方内核（kernel/compat/ 为上游别名头，不在 include 路径中）
+  generated/{include,src}/  全部配置生成物：*_Cfg.h、*_PBcfg.c、Rte*、SchM_*、*_MemMap.h、Os_Cfg.h、Ecu 配置；每次生成整体重写
+  generated/descriptions/   Host_Implementation.arxml、Os_Arti.arxml、Os_Service.arxml、MODULES.md
+  generated/templates/      SWC 骨架（与 live 初始化种子同源），不参与编译
   app/<SWC>/                用户代码快照（用户在 live 工程中修改）
-  integration/              主机／目标适配
-  CMakeLists.txt  target.json   从同一清单生成的标准构建描述与 ecu-tool 构建清单
-  tools/  inputs/  meta/    离线复验工具、原始输入、台账与完整性清单
+  inputs/                   原始 ARXML 与工程清单快照
+  meta/                     交接与集成元数据、台账、seal 期望、资产清单、files.list／files.sha256
+  tools/                    离线 ecu-tool 与封存检查（不随配置变化）
+  target.json                   ecu-tool 构建清单
 ```
 
-重新生成后只有 `generated/`、`app/`、`meta/` 变化；CMake 与 `ecu-tool` 构建同一组源文件并在两个平台通过。主机目标的 MemMap 头归入 `generated/`；接入 MCU 时由集成层显式配置覆盖，不手改生成文件。
+文件归属在产生处确定：资产按来源目录映射（`runtime/bsw`→`bsw/`，`runtime/host`／`runtime/ecu`→`integration/`，`runtime/os`→`os/`），emitter 的 `include/`、`src/` 逻辑名相对 `generated/`。`{Mip}_MemMap.h`（`[SWS_MemMap_00032]`）和 RTE 生成头（`[SWS_Rte_07501]`、`[SWS_Rte_07120]`）由生成方交付，台账 owner 为 `generated`。所有 include 目录中的头文件名不区分大小写唯一（`[SWS_BSW_00171]`），生成 `target.json` 时检查。修改配置后重新生成，只有 `inputs/`、`generated/`、`app/`、`meta/` 与根目录的 `README.md`、`target.json` 变化。主机目标的 MemMap 头归入 `generated/`；接入 MCU 时由集成层显式配置覆盖，不手改生成文件。SWC 的 `{componentTypeName}_MemMap.h`（`[SWS_MemMap_00029]`）随 RTE 段约定一起由 [#51](https://github.com/g1331/autsaro/issues/51) 承接。
 
 ### 7.7 CI 与源码门禁（目标）
 

@@ -2,6 +2,12 @@
 use super::*;
 use std::path::Path;
 
+/// The sealed package path of a live `application/<SWC>.c`.
+fn app(logical: &str) -> String {
+    let name = logical.trim_start_matches("application/");
+    format!("app/{}/{name}", name.trim_end_matches(".c"))
+}
+
 #[test]
 fn pipeline_workspace_initialization_reopen_and_regeneration_preserve_every_user_source() {
     use autosar_config_core::{
@@ -95,10 +101,7 @@ fn pipeline_workspace_initialization_reopen_and_regeneration_preserve_every_user
             .unwrap();
         for (path, bytes) in &user_sources {
             assert_eq!(&std::fs::read(root.join(path)).unwrap(), bytes);
-            assert_eq!(
-                &std::fs::read(output.join(path.replace("application/", "src/"))).unwrap(),
-                bytes
-            );
+            assert_eq!(&std::fs::read(output.join(app(path))).unwrap(), bytes);
         }
         for source in &arxml {
             assert_eq!(
@@ -106,7 +109,7 @@ fn pipeline_workspace_initialization_reopen_and_regeneration_preserve_every_user
                 source.bytes()
             );
         }
-        let original_output = std::fs::read(output.join("files.sha256")).unwrap();
+        let original_output = std::fs::read(output.join("meta/files.sha256")).unwrap();
         let old_preview = prepared().preview(&output).unwrap();
         let mut guarded = user_sources
             .iter()
@@ -132,14 +135,11 @@ fn pipeline_workspace_initialization_reopen_and_regeneration_preserve_every_user
             );
             assert_eq!(std::fs::read(&path).unwrap(), changed);
             assert_eq!(
-                std::fs::read(output.join("files.sha256")).unwrap(),
+                std::fs::read(output.join("meta/files.sha256")).unwrap(),
                 original_output
             );
             for (source, bytes) in &user_sources {
-                assert_eq!(
-                    &std::fs::read(output.join(source.replace("application/", "src/"))).unwrap(),
-                    bytes
-                );
+                assert_eq!(&std::fs::read(output.join(app(source))).unwrap(), bytes);
             }
             std::fs::write(&path, bytes).unwrap();
         }

@@ -102,14 +102,16 @@ check('live-application-initialization-and-immutable-snapshot', async () => {
   await refreshSurface(manifestPath);
   const delivered = await exportSource('GatewayUserApplication-source');
   assert.deepEqual(
-    await readFile(path.join(delivered.directory, 'src/EchoApplication.c')),
+    await readFile(path.join(delivered.directory, 'app/EchoApplication/EchoApplication.c')),
     Buffer.from(userCode),
     'Compiled user snapshot must contain the actual live bytes',
   );
   const ledger = JSON.parse(
-    await readFile(path.join(delivered.directory, 'workbench-ownership.json'), 'utf8'),
+    await readFile(path.join(delivered.directory, 'meta/workbench-ownership.json'), 'utf8'),
   );
-  const owner = ledger.files.find((entry) => entry.path === 'src/EchoApplication.c');
+  const owner = ledger.files.find(
+    (entry) => entry.path === 'app/EchoApplication/EchoApplication.c',
+  );
   assert.equal(owner.owner, 'user-application');
   assert.equal(owner.producerId, preview.slots[0].producerSlot);
   assert.equal(owner.snapshotOf, preview.files[0].path);
