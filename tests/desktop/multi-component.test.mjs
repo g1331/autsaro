@@ -97,10 +97,10 @@ check('multi-component-shared-editing-and-source-protection', async () => {
   await resize(1480, 920);
   await unchanged(
     original.filter(
-      (source) => !source.path.endsWith('/process.arxml') && !source.path.endsWith('/ecuc.arxml'),
+      (source) => !['process.arxml', 'ecuc.arxml'].includes(path.basename(source.path)),
     ),
   );
-  const mappingSource = original.find((source) => source.path.endsWith('/ecuc.arxml'));
+  const mappingSource = original.find((source) => path.basename(source.path) === 'ecuc.arxml');
   assert.deepEqual(
     await readFile(mappingSource.path),
     Buffer.from(
