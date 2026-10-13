@@ -385,6 +385,63 @@ fn selected_dcm_subfunction_availability_matches_actual_service_dispatch() {
 }
 
 #[test]
+fn dcm_service_table_offers_exactly_session_read_and_tester_present() {
+    let services = "/Configuration/Dcm/Config/Dsd/Services";
+    let tester = subtree(
+        &inputs(),
+        "ecuc.arxml",
+        "ECUC-CONTAINER-VALUE",
+        "TesterPresent",
+    );
+    // SecurityAccess (0x27) and RoutineControl (0x31) have no mainline handler,
+    // so an added service is refused at its own container instead of generated.
+    for (name, id) in [("SecurityAccess", "39"), ("RoutineControl", "49")] {
+        let added = tester
+            .replacen(
+                "<SHORT-NAME>TesterPresent</SHORT-NAME>",
+                &format!("<SHORT-NAME>{name}</SHORT-NAME>"),
+                1,
+            )
+            .replacen("<VALUE>62</VALUE>", &format!("<VALUE>{id}</VALUE>"), 1);
+        let mut sources = inputs();
+        change(
+            &mut sources,
+            "ecuc.arxml",
+            &tester,
+            &format!("{tester}{added}"),
+        );
+        service_refused_at(&sources, &format!("{services}/{name}"));
+    }
+    let mut sources = inputs();
+    change(&mut sources, "ecuc.arxml", &tester, "");
+    service_refused_at(&sources, services);
+}
+
+fn service_refused_at(sources: &[InputSource], object: &str) {
+    let issues = build(sources)
+        .err()
+        .unwrap_or_else(|| panic!("{object} accepted"));
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.code == "SERVICE_UNSUPPORTED"
+                && issue.object.as_deref() == Some(object)),
+        "{issues:?}"
+    );
+    let validation = normal_validation(sources);
+    assert!(
+        validation
+            .diagnostics
+            .iter()
+            .any(|issue| issue.code == "SERVICE_UNSUPPORTED"
+                && issue.file.as_deref() == Some("ecuc.arxml")
+                && issue.path.as_deref() == Some(object)),
+        "{:?}",
+        validation.diagnostics
+    );
+}
+
+#[test]
 fn dcm_service_mode_source_requires_the_fixed_standard_contract() {
     let plan = build(&inputs()).unwrap();
     let service = plan
