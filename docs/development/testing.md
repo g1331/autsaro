@@ -22,7 +22,7 @@ core 的集成测试分为三个二进制，按能力模块组织，共用 `core
 | --- | --- | --- |
 | `it` | `cargo test -p autosar-config-core --test it` | 无 |
 | `native` | `cargo test -p autosar-config-core --features native-tests --test native` | 目标 GCC／binutils、Git 与 `AUTOSAR_PYTHON` |
-| `official` | `cargo test -p autosar-config-core --features official-oracles --test official` | 授权的官方档案 |
+| `official` | `cargo test -p autosar-config-core --features official-oracles --test official` | 官方档案（见[官方对照](#官方对照)）与 `AUTOSAR_PYTHON` |
 
 测试名带模块路径，可按名称筛选，例如 `cargo test -p autosar-config-core --test it -- integration::diagnostics::`、`cargo test -p autosar-config-core --features native-tests --test native -- integration::os::`。协议与 OS 独立对照向量（`core/tests/fixtures/oracles/`）由 `it` 的 `protocol_oracles::` 测试绑定到参考 ECUC 配置，设置或固定字面值漂移时失败。
 
@@ -68,7 +68,7 @@ CI 每个平台先验证检查器、生成四类完整样本并发布本轮工�
 
 `Development checks` 中的 `CI required` 是分支规则唯一要求的检查，阻塞合并的任务清单写在该任务的 `needs` 中，增删检查只改工作流。PR 只改根目录指南、`docs/`、代理说明或 PR 模板时，构建与测试任务整体跳过，`quality` 照常运行；其余 PR、推送到主干及手动运行都执行完整检查。分支无须先与主干同步即可合并，合并后主干推送会再完整运行一次。
 
-`native` 任务在 Windows 与 Linux 上以 `--features native-tests --lib --test native --no-fail-fast` 运行全部原生 Rust 套件，工具路径取自已安装的受控 GCC、binutils、Git 及项目 uv 环境；`native-os` 任务在两个平台运行 26 个 OS suites 和主机锁错误边界测试。准备任务在生成样本后运行封存工程构建模式及接收方 Python 检查。需要授权官方档案的 `official` 二进制仍由自托管 runner 上手动触发的 `acceptance.yml`／`offline.yml` 运行，桌面场景由不属于必需检查的 `desktop.yml` 运行（见[桌面场景](#桌面场景)）；PR 检查通过不代表这些检查通过。
+`native` 任务在 Windows 与 Linux 上以 `--features native-tests --lib --test native --no-fail-fast` 运行全部原生 Rust 套件，工具路径取自已安装的受控 GCC、binutils、Git 及项目 uv 环境；`native-os` 任务在两个平台运行 26 个 OS suites 和主机锁错误边界测试。准备任务在生成样本后运行封存工程构建模式及接收方 Python 检查。`official` 二进制由不属于必需检查的 `acceptance.yml` 运行（见[官方对照](#官方对照)），离线接收者多版本矩阵仍由自托管 runner 上手动触发的 `offline.yml` 运行，桌面场景由不属于必需检查的 `desktop.yml` 运行（见[桌面场景](#桌面场景)）；PR 检查通过不代表这些检查通过。
 
 ## 进程、资源和原生行为
 
@@ -80,9 +80,27 @@ uv run --locked python -B -m unittest discover -s tests/python/native -p test_os
 cargo test --locked -p autosar-config-core --features official-oracles --test official --no-fail-fast
 ```
 
-进程测试需 `AUTOSAR_PYTHON` 指向支持的绝对解释器路径；受管进程的探针是测试辅助脚本 `tests/python/process/probe.py`。官方对照需正式资源清单声明的合法档案；native 测试需对应平台的受控 GCC/binutils。OS suites 由 unittest 按 suite 生成测试，可用 `-k stack` 等筛选，只在与当前宿主一致的目标上运行；测试名对应 suite，进程失败信息包含阶段、命令和原始退出状态。
+进程测试需 `AUTOSAR_PYTHON` 指向支持的绝对解释器路径；受管进程的探针是测试辅助脚本 `tests/python/process/probe.py`。官方对照的档案准备见下节；native 测试需对应平台的受控 GCC/binutils。OS suites 由 unittest 按 suite 生成测试，可用 `-k stack` 等筛选，只在与当前宿主一致的目标上运行；测试名对应 suite，进程失败信息包含阶段、命令和原始退出状态。
 
 需要保留 OS 的编译产物和进程日志时，设置 `AUTOSAR_OS_OUTPUT_DIRECTORY` 为新的结果目录，unittest 按 suite 保存到该目录。已有目录不会被覆盖；未指定时仍只保留失败现场。
+
+### 官方对照
+
+`official` 二进制把内置规则、模块定义和生成的 OS 描述与 R24-11 官方 XSD、ECUC MOD 及建模示例档案比较。档案受 AUTOSAR 条款限制，不入库、不随产品分发；三份档案的地址、默认位置、环境变量和 SHA-256 登记在 `core/resources/official.json`。本机用下面的命令下载到登记位置（已设置 `AUTOSAR_XSD_ARCHIVE`／`AUTOSAR_MOD_ARCHIVE`／`AUTOSAR_SAMPLE_ARCHIVE` 时下载到它们指向的位置）：
+
+```powershell
+uv run --locked python -m autosar_tooling fetch-official
+```
+
+已存在的文件只校验、不覆盖，哈希不一致即失败；新下载的文件哈希不一致时丢弃。`www.autosar.org` 在 TLS 握手中不发送中间证书，命令从证书 AIA 地址取得 Starfield Secure Certificate Authority - G2，校验固定指纹后与系统信任库一起使用，不关闭证书校验。站点更换证书后指纹校验会失败，需审阅新证书链后再更新 `autosar_tooling/official.py` 中的固定值。
+
+CI 中的 `Official archive comparison`（`acceptance.yml`）在 GitHub 托管的 `ubuntu-24.04` 与 `windows-latest` runner 上运行 `fetch-official` 和 `cargo test --locked -p autosar-config-core --features official-oracles --test official --no-fail-fast`。档案按 `official.json` 的哈希存入本仓库的 Actions 缓存，不作为 artifact 上传，日志只记录路径和哈希。触发方式：
+
+- 手动运行（workflow_dispatch）；
+- 每天对 master 定时运行一次，该提交已有成功运行时跳过；
+- 修改 `core/src/definitions*`、`core/src/schema.rs`、`core/src/rules*`、`core/resources/official.json`、`core/tests/official/`、下载入口或该工作流的 PR。
+
+它不属于 `CI required`：外部站点不可用不阻塞合并，PR 上的失败需要自行查看。下载、证书或哈希失败时，`Download and verify official archives` 步骤失败并标注 `Official archives unavailable`，测试不会运行；测试失败标注 `Official comparison failed`。
 
 完整检查入口 `uv run --locked python -m autosar_tooling verify --scope all --base <基准提交>` 组合原有完整检查，不安装依赖，不编排另一套任务或写汇总报告。失败直接保留原输出和退出状态。
 

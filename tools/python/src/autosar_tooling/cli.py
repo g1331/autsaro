@@ -46,6 +46,9 @@ def main() -> int:
     c_check.add_argument("--output-directory", type=Path, required=True)
     asset = commands.add_parser("assets", help="Check or update project-owned resource digests")
     asset.add_argument("action", choices=("check", "update"))
+    commands.add_parser(
+        "fetch-official", help="Download and verify the pinned official development archives"
+    )
     args = parser.parse_args()
     if args.command == "c-check":
         from autosar_tooling.c_check import check
@@ -53,6 +56,9 @@ def main() -> int:
     if args.command == "assets":
         from autosar_tooling.assets import maintain
         return maintain(update=args.action == "update")
+    if args.command == "fetch-official":
+        from autosar_tooling.official import fetch
+        return fetch()
     if args.command == "doctor":
         if args.role == "native":
             if not args.target:
