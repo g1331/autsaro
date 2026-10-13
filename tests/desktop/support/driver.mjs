@@ -356,13 +356,20 @@ if (-not $dialog) {
 # File pickers name their field 1148; the folder picker uses 1152.
 $ids = if ($Kind -eq 'directory') { @('1152', '1148') } else { @('1148') }
 $edit = $null
-foreach ($id in $ids) {
-  $edit = $dialog.FindFirst($scope::Descendants, (New-Object Windows.Automation.AndCondition(
-    (New-Object Windows.Automation.PropertyCondition($A::AutomationIdProperty, $id)),
-    (New-Object Windows.Automation.PropertyCondition($A::ControlTypeProperty, [Windows.Automation.ControlType]::Edit)))))
-  if ($edit) { break }
+$deadline = (Get-Date).AddSeconds(10)
+while (-not $edit -and (Get-Date) -lt $deadline) {
+  foreach ($id in $ids) {
+    $edit = $dialog.FindFirst($scope::Descendants, (New-Object Windows.Automation.AndCondition(
+      (New-Object Windows.Automation.PropertyCondition($A::AutomationIdProperty, $id)),
+      (New-Object Windows.Automation.PropertyCondition($A::ControlTypeProperty, [Windows.Automation.ControlType]::Edit)))))
+    if ($edit) { break }
+  }
+  if (-not $edit) { Start-Sleep -Milliseconds 100 }
 }
-if (-not $edit) { throw 'Native chooser has no file name field' }
+if (-not $edit) {
+  $fields = $dialog.FindAll($scope::Descendants, (New-Object Windows.Automation.PropertyCondition($A::ControlTypeProperty, [Windows.Automation.ControlType]::Edit))) | ForEach-Object { "$($_.Current.AutomationId) '$($_.Current.Name)'" }
+  throw "Native chooser '$($dialog.Current.Name)' has no file name field; its fields: $($fields -join ', ')"
+}
 $edit.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($Selected)
 $accept = $dialog.FindFirst($scope::Children, (New-Object Windows.Automation.PropertyCondition($A::AutomationIdProperty, '1')))
 $accept.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()

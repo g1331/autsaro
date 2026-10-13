@@ -27,7 +27,7 @@ export const applicationPeriod = (description) =>
  */
 // Windows replies carry verbatim `\\?\D:\…` paths; compare them in the form
 // the workbench displays (ui/src/pathDisplay.ts).
-function displayPaths(value) {
+export function displayPaths(value) {
   if (typeof value === 'string') return value.replace(/^\\\\\?\\(?=[A-Za-z]:\\)/, '');
   if (Array.isArray(value)) return value.map(displayPaths);
   if (value && typeof value === 'object')
@@ -125,7 +125,7 @@ export async function openWorkbench(name) {
       current,
       `${command}: request echo must stay distinct from current capabilities`,
     );
-    return displayPaths(result.reply.value);
+    return result.reply.value;
   }
   async function metrics() {
     const value = await invoke('verification_metrics');
@@ -147,7 +147,7 @@ export async function openWorkbench(name) {
     return value;
   }
   async function projection() {
-    const view = await invoke('project_projection');
+    const view = displayPaths(await invoke('project_projection'));
     assert.equal(typeof view.workspaceEpoch, 'string');
     assert.equal(typeof view.definitionFingerprint, 'string');
     return view;

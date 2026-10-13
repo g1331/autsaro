@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { openWorkbench, explicit, json } from './support/workbench.mjs';
+import { openWorkbench, displayPaths, explicit, json } from './support/workbench.mjs';
 
 const {
   check,
@@ -259,7 +259,7 @@ check('problem-focus', async () => {
     if (reply.inputFingerprint !== ${json(fingerprint)}) throw new Error('Diagnostic projection request echo changed');
     return JSON.stringify(reply.value.diagnostics[${issueIndex}], null, 2);
   })()`);
-  assert.deepEqual(JSON.parse(details), issue);
+  assert.deepEqual(displayPaths(JSON.parse(details)), issue);
   const copiedDiagnostic = await clipboard(
     details,
     `[...document.querySelectorAll('.problem-list li')].filter(${visible})[${issueIndex}]`,
