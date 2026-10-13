@@ -181,16 +181,26 @@ async function processes() {
 }
 
 // Processes below the driver: native WebDriver, application and WebView.
-async function processTree(root) {
-  const listed = await processes();
-  const owned = new Set([root]);
+export async function processTree(root) {
+  return descendants(await processes(), root);
+}
+
+// Windows keeps a child's ParentProcessId after the parent exits, so a later
+// process reusing that PID is not its parent: a child must not predate it.
+export function descendants(listed, root) {
+  const created = (item) => (/^\d+$/.test(item.identity) ? BigInt(item.identity) : undefined);
+  const owned = new Map();
+  const start = created(listed.find((item) => item.pid === root) ?? {});
+  if (start !== undefined) owned.set(root, start);
   for (let grew = true; grew;) {
     grew = false;
-    for (const item of listed)
-      if (owned.has(item.parent) && !owned.has(item.pid)) {
-        owned.add(item.pid);
+    for (const item of listed) {
+      const time = created(item);
+      if (owned.has(item.parent) && !owned.has(item.pid) && time >= owned.get(item.parent)) {
+        owned.set(item.pid, time);
         grew = true;
       }
+    }
   }
   return listed.filter((item) => owned.has(item.pid));
 }
