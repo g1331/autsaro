@@ -10,6 +10,8 @@ npm run test --prefix ui
 npm run build --prefix ui
 cargo test --locked -p autosar-config-core
 cargo test --locked -p autosar-config-desktop
+cargo clippy --locked -p autosar-config-core --all-targets --all-features -- -D warnings
+cargo clippy --locked -p autosar-config-desktop --all-targets -- -D warnings
 uv run --locked python -B -m unittest discover -s tests/python
 uv run --locked ruff check tools tests/python scripts
 ```
@@ -26,7 +28,9 @@ core 的集成测试分为三个二进制，按能力模块组织，共用 `core
 
 测试名带模块路径，可按名称筛选，例如 `cargo test -p autosar-config-core --test it -- integration::diagnostics::`、`cargo test -p autosar-config-core --features native-tests --test native -- integration::os::`。协议与 OS 独立对照向量（`core/tests/fixtures/oracles/`）由 `it` 的 `protocol_oracles::` 测试绑定到参考 ECUC 配置，设置或固定字面值漂移时失败。
 
-Tauri 后端单测覆盖 Session、设置与请求归属，需先准备[桌面平台依赖](environment.md)并运行 `npm run build --prefix ui`。本地 `verify --scope desktop`／`all` 及 PR 的 desktop job 均执行锁定 Cargo 单测；本地聚合入口继续执行 build／Clippy，PR job 保留 build。这些检查不启动原生窗口，不能替代 GUI／IPC 行为验收。
+Tauri 后端单测覆盖 Session、设置与请求归属，需先准备[桌面平台依赖](environment.md)并运行 `npm run build --prefix ui`。本地 `verify --scope desktop`／`all` 及 PR 的 desktop job 均执行锁定 Cargo 单测、build 与 Clippy；PR 只在 Linux 运行 Clippy。这些检查不启动原生窗口，不能替代 GUI／IPC 行为验收。
+
+Clippy 以默认规则集加 `-D warnings` 检查两个 crate，本地 `verify` 与 PR 使用相同参数。生成与集成模块（`core/src/generator.rs`、`core/src/integration/mod.rs`、`core/src/prepared.rs` 及其子模块）在模块属性中另外拒绝 `unwrap`、`expect`、`panic!` 以及 `core/clippy.toml` 列出的文本修补与文件嵌入：计划无法保证的前提返回 `PlanDiagnostic`，每个输出只渲染一次，受信模板经 `outputs::render` 编辑。确有理由的例外使用带 `reason` 的局部 `#[allow]`。启用门禁时其余模块遗留的告警以 `#[expect(.., reason = "clippy baseline #37: ...")]` 标记，`git grep -n "clippy baseline"` 列出剩余基线；修好告警后该 `#[expect]` 本身会报 `unfulfilled_lint_expectations`，须一并删除标记。CI 只在 Linux 运行 Clippy，Windows 专属的 `cfg` 代码不在门禁内。
 
 ## 生成 C 的静态检查
 

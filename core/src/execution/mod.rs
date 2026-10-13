@@ -146,9 +146,9 @@ impl ProcessOwner {
     pub fn new() -> Result<Self, LocalizedText> {
         #[cfg(unix)]
         {
-            return Ok(Self {
+            Ok(Self {
                 owner: unix::UnixOwner::start()?,
-            });
+            })
         }
         #[cfg(windows)]
         {

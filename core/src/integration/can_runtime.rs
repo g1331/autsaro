@@ -189,7 +189,10 @@ fn partition(
     }
     Ok(PartitionRuntimeContract {
         path: graph.elements[index].object.clone(),
-        name: graph.text(index, "SHORT-NAME").unwrap().into(),
+        name: graph
+            .text(index, "SHORT-NAME")
+            .ok_or_else(|| fail(graph, index, "RTE_PARTITION_CONFIGURATION"))?
+            .into(),
         id: 0,
         core: graph.elements[core].object.clone(),
         root_composition: root_path.into(),

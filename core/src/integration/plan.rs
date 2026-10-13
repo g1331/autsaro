@@ -57,6 +57,49 @@ pub struct PlanDescription {
     pub required_extension_definitions: Vec<crate::project_model::ExtensionDefinitionIdentity>,
 }
 
+/// ECU generation needs the component composition and its runtime contracts;
+/// a plan without them only supports component contracts.
+impl PlanDescription {
+    pub(super) fn ecu_composition(
+        &self,
+    ) -> Result<&super::composition::CompositionContract, Vec<PlanDiagnostic>> {
+        ecu_part(self.composition.as_ref())
+    }
+
+    pub(super) fn ecu_com(&self) -> Result<&super::com::ComRuntimeContract, Vec<PlanDiagnostic>> {
+        ecu_part(self.com_runtime.as_ref())
+    }
+
+    pub(super) fn ecu_communication(
+        &self,
+    ) -> Result<&super::can_runtime::CommunicationRuntimeContract, Vec<PlanDiagnostic>> {
+        ecu_part(self.communication_runtime.as_ref())
+    }
+
+    pub(super) fn ecu_mode(
+        &self,
+    ) -> Result<&super::mode::ModeRuntimeContract, Vec<PlanDiagnostic>> {
+        ecu_part(self.mode_runtime.as_ref())
+    }
+
+    /// The OS event mask assigned to a scheduled entity's event.
+    pub(super) fn event_mask(&self, path: &str) -> Result<u32, Vec<PlanDiagnostic>> {
+        self.events
+            .iter()
+            .find(|event| event.path == path)
+            .map(|event| event.mask)
+            .ok_or_else(|| PlanDiagnostic::plan_premise(path))
+    }
+}
+
+fn ecu_part<T>(part: Option<&T>) -> Result<&T, Vec<PlanDiagnostic>> {
+    part.ok_or_else(|| {
+        super::ecu::reject(crate::product_message!(
+            "backend.integration.composition.consumer_unsupported"
+        ))
+    })
+}
+
 /// All fields are private and construction only follows the checked path.
 /// Consumers borrow its description and original source bytes; there is no
 /// mutable accessor, unchecked constructor or Deserialize implementation.
@@ -76,7 +119,7 @@ impl ValidatedIntegrationPlan {
 
 // Both normal definition validation and plan construction consume this closure.
 pub(super) struct CompositionInputs {
-    com_runtime: Option<super::com::ComRuntimeContract>,
+    com_runtime: super::com::ComRuntimeContract,
     communication_runtime: super::can_runtime::CommunicationRuntimeContract,
     mode_runtime: super::mode::ModeRuntimeContract,
     composition: super::composition::CompositionContract,
@@ -120,53 +163,47 @@ pub(super) fn inspect_composition(
         .iter()
         .map(|endpoint| endpoint.transport.clone())
         .collect();
-    let diagnostic = if graph
+    let data = graph
         .of_kind("ECUC-CONTAINER-VALUE")
-        .iter()
-        .any(|index| schedule::definition_is(graph, *index, "DcmDspData"))
-    {
-        let data = graph
-            .of_kind("ECUC-CONTAINER-VALUE")
-            .into_iter()
-            .find(|index| schedule::definition_is(graph, *index, "DcmDspData"))
-            .unwrap();
+        .into_iter()
+        .find(|index| schedule::definition_is(graph, *index, "DcmDspData"));
+    let diagnostic = if let Some(data) = data {
         let service_name = graph.text(data, "SHORT-NAME").unwrap_or("");
-        let clients: Vec<_> = composition
+        let mut clients = Vec::new();
+        for connection in composition
             .connections
             .iter()
-            .filter(|connection| {
-                if !connection.service {
-                    return false;
-                }
-                let requester = composition
-                    .components
-                    .iter()
-                    .find(|component| component.instance == connection.requester.instance)
-                    .unwrap();
-                let operation = requester
-                    .operations
-                    .iter()
-                    .find(|operation| {
-                        operation.port == connection.requester.port
-                            && operation.operation == connection.requester.member
-                    })
-                    .unwrap();
-                let interface = *graph.objects.get(&operation.interface).unwrap();
-                graph.elements[*graph.objects.get(&requester.component).unwrap()].tag
-                    == "SERVICE-SW-COMPONENT-TYPE"
-                    && matches!(graph.text(interface, "IS-SERVICE"), Some("true" | "1"))
-                    && graph.text(interface, "SERVICE-KIND")
-                        == Some("DIAGNOSTIC-COMMUNICATION-MANAGER")
-                    && requester.runnables.iter().any(|runnable| {
-                        runnable.event.is_none() && operation.callers.contains(&runnable.path)
-                    })
-                    && connection.requester.port.rsplit('/').next()
-                        == Some(format!("DataServices_{service_name}").as_str())
-                    && operation.interface.rsplit('/').next()
-                        == Some(format!("DataServices_{service_name}").as_str())
-                    && operation.operation.rsplit('/').next() == Some("ReadData")
-            })
-            .collect();
+            .filter(|connection| connection.service)
+        {
+            let requester = composition
+                .components
+                .iter()
+                .find(|component| component.instance == connection.requester.instance)
+                .ok_or_else(|| PlanDiagnostic::plan_premise(&connection.requester.instance))?;
+            let operation = requester
+                .operations
+                .iter()
+                .find(|operation| {
+                    operation.port == connection.requester.port
+                        && operation.operation == connection.requester.member
+                })
+                .ok_or_else(|| PlanDiagnostic::plan_premise(&connection.requester.member))?;
+            let interface = graph.index(&operation.interface)?;
+            if graph.elements[graph.index(&requester.component)?].tag == "SERVICE-SW-COMPONENT-TYPE"
+                && matches!(graph.text(interface, "IS-SERVICE"), Some("true" | "1"))
+                && graph.text(interface, "SERVICE-KIND") == Some("DIAGNOSTIC-COMMUNICATION-MANAGER")
+                && requester.runnables.iter().any(|runnable| {
+                    runnable.event.is_none() && operation.callers.contains(&runnable.path)
+                })
+                && connection.requester.port.rsplit('/').next()
+                    == Some(format!("DataServices_{service_name}").as_str())
+                && operation.interface.rsplit('/').next()
+                    == Some(format!("DataServices_{service_name}").as_str())
+                && operation.operation.rsplit('/').next() == Some("ReadData")
+            {
+                clients.push(connection);
+            }
+        }
         if clients.len() != 1 {
             return Err(vec![graph.diagnostic(data, DiagnosticCategory::Input, "SERVICE_CLIENT_MISSING", crate::product_message!("backend.integration.composition.contract_invalid", "code" => "SERVICE_CLIENT_MISSING"), crate::product_message!("backend.integration.composition.repair_contract"))]);
         }
@@ -175,7 +212,7 @@ pub(super) fn inspect_composition(
             .components
             .iter()
             .find(|component| component.instance == client.provider.instance)
-            .unwrap();
+            .ok_or_else(|| PlanDiagnostic::plan_premise(&client.provider.instance))?;
         let operation = component
             .operations
             .iter()
@@ -183,7 +220,7 @@ pub(super) fn inspect_composition(
                 operation.port == client.provider.port
                     && operation.operation == client.provider.member
             })
-            .unwrap();
+            .ok_or_else(|| PlanDiagnostic::plan_premise(&client.provider.member))?;
         if operation.arguments.len() != 1
             || operation.arguments[0].direction != "OUT"
             || !composition
@@ -216,7 +253,7 @@ pub(super) fn inspect_composition(
                         && operation.callers == [runnable.path.clone()]
                 })
             }) {
-                return Err(vec![graph.diagnostic(*graph.objects.get(&runnable.path).unwrap(), DiagnosticCategory::Input, "SERVICE_CLIENT_MISSING", crate::product_message!("backend.integration.composition.contract_invalid", "code" => "SERVICE_CLIENT_MISSING"), crate::product_message!("backend.integration.composition.repair_contract"))]);
+                return Err(vec![graph.diagnostic(graph.index(&runnable.path)?, DiagnosticCategory::Input, "SERVICE_CLIENT_MISSING", crate::product_message!("backend.integration.composition.contract_invalid", "code" => "SERVICE_CLIENT_MISSING"), crate::product_message!("backend.integration.composition.repair_contract"))]);
             }
         }
     }
@@ -230,7 +267,7 @@ pub(super) fn inspect_composition(
                     .iter()
                     .any(|operation| operation.read && operation.port == diagnostic.client_port)
             })
-            .unwrap();
+            .ok_or_else(|| PlanDiagnostic::plan_premise(&diagnostic.client_port))?;
         if service.diagnostic_session_port.is_none()
             || service.diagnostic_mode_ports.len() != composition.dcm_modes.len()
             || composition.components.iter().any(|component| {
@@ -238,30 +275,26 @@ pub(super) fn inspect_composition(
                     && component.diagnostic_session_port.is_some()
             })
         {
-            return Err(vec![graph.diagnostic(*graph.objects.get(&service.component).unwrap(), DiagnosticCategory::Input, "SERVICE_TYPE_CONFLICT", crate::product_message!("backend.integration.composition.contract_invalid", "code" => "SERVICE_TYPE_CONFLICT"), crate::product_message!("backend.integration.composition.repair_contract"))]);
+            return Err(vec![graph.diagnostic(graph.index(&service.component)?, DiagnosticCategory::Input, "SERVICE_TYPE_CONFLICT", crate::product_message!("backend.integration.composition.contract_invalid", "code" => "SERVICE_TYPE_CONFLICT"), crate::product_message!("backend.integration.composition.repair_contract"))]);
         }
     } else if composition
         .components
         .iter()
         .any(|component| component.diagnostic_session_port.is_some())
     {
-        return Err(vec![graph.diagnostic(*graph.objects.get(&composition.composition).unwrap(), DiagnosticCategory::Input, "SERVICE_TYPE_CONFLICT", crate::product_message!("backend.integration.composition.contract_invalid", "code" => "SERVICE_TYPE_CONFLICT"), crate::product_message!("backend.integration.composition.repair_contract"))]);
+        return Err(vec![graph.diagnostic(graph.index(&composition.composition)?, DiagnosticCategory::Input, "SERVICE_TYPE_CONFLICT", crate::product_message!("backend.integration.composition.contract_invalid", "code" => "SERVICE_TYPE_CONFLICT"), crate::product_message!("backend.integration.composition.repair_contract"))]);
     }
-    let com_runtime = super::com::inspect(graph, &signals, &schedule)?;
-    if com_runtime.is_none() {
+    let Some(com_runtime) = super::com::inspect(graph, &signals, &schedule)? else {
         return Err(vec![graph.diagnostic(
-            *graph.objects.get(&composition.composition).unwrap(),
+            graph.index(&composition.composition)?,
             DiagnosticCategory::Input,
             "COM_CONFIGURATION",
             crate::product_message!("backend.integration.composition.contract_invalid", "code" => "COM_CONFIGURATION"),
             crate::product_message!("backend.integration.composition.repair_contract"),
         )]);
-    }
-    let diagnostic_transport = diagnostic::inspect_transport(
-        graph,
-        *graph.objects.get(&composition.composition).unwrap(),
-        true,
-    )?;
+    };
+    let diagnostic_transport =
+        diagnostic::inspect_transport(graph, graph.index(&composition.composition)?, true)?;
     let routed_transport = graph
         .of_kind("ECUC-CONTAINER-VALUE")
         .into_iter()
@@ -301,7 +334,7 @@ pub(super) fn inspect_composition(
             })?,
         )?,
     };
-    let selected_runtime = catalog::bsw_catalog(com_runtime.as_ref().unwrap(), &mode_runtime);
+    let selected_runtime = catalog::bsw_catalog(&com_runtime, &mode_runtime);
     let mut symbols = catalog::inspect(graph, &selected_runtime)?;
     symbols.extend(super::composition::symbols(&composition));
     for symbol in ["Rte_COMCbk", "Rte_COMCbkRxTOut"] {
@@ -316,8 +349,6 @@ pub(super) fn inspect_composition(
             declaration_owner: "include/Rte_Com.h".into(),
             definition_owner: "src/Rte.c".into(),
             consumers: com_runtime
-                .as_ref()
-                .unwrap()
                 .receptions
                 .iter()
                 .map(|reception| reception.user_signal.clone())
@@ -337,7 +368,7 @@ pub(super) fn inspect_composition(
     let mut names = BTreeSet::new();
     for symbol in &symbols {
         if !c_identifier(&symbol.symbol) || !names.insert(symbol.symbol.clone()) {
-            return Err(vec![graph.diagnostic(*graph.objects.get(&composition.composition).unwrap(), DiagnosticCategory::Input, "SYMBOL_PRODUCER_DUPLICATE", crate::product_message!("backend.integration.plan.external_c_symbol_invalid_or_multiple_producers", "value0" => symbol.symbol), crate::product_message!("backend.integration.plan.resolve_c_symbol_and_producer_conflicts"))]);
+            return Err(vec![graph.diagnostic(graph.index(&composition.composition)?, DiagnosticCategory::Input, "SYMBOL_PRODUCER_DUPLICATE", crate::product_message!("backend.integration.plan.external_c_symbol_invalid_or_multiple_producers", "value0" => symbol.symbol), crate::product_message!("backend.integration.plan.resolve_c_symbol_and_producer_conflicts"))]);
         }
     }
     let mut handles = Vec::new();
@@ -390,7 +421,7 @@ pub(super) fn inspect_composition(
             let native = format!("{}_{}", domain, c_name(path.trim_start_matches('/')));
             if !names.insert(native.clone()) {
                 return Err(vec![graph.diagnostic(
-                    *graph.objects.get(&path).unwrap(),
+                    graph.index(&path)?,
                     DiagnosticCategory::Input,
                     "SYMBOL_NORMALIZATION_COLLISION",
                     crate::product_message!(
@@ -442,7 +473,7 @@ pub(super) fn inspect_composition(
         // handle is a target width limit, not an identifier collision.
         if handle > u16::from(u8::MAX) {
             return Err(vec![graph.diagnostic(
-                *graph.objects.get(object).unwrap(),
+                graph.index(object)?,
                 DiagnosticCategory::Unsupported,
                 "CANIF_HANDLE_WIDTH",
                 crate::product_message!("backend.integration.plan.canif_pdu_handle_out_of_range"),
@@ -451,7 +482,7 @@ pub(super) fn inspect_composition(
         }
         if !can_ids.insert(id) || !can_handles.insert((receive, handle)) {
             return Err(vec![graph.diagnostic(
-                *graph.objects.get(object).unwrap(),
+                graph.index(object)?,
                 DiagnosticCategory::Input,
                 "CAN_ID_CONFLICT",
                 crate::product_message!(
@@ -505,7 +536,7 @@ fn assemble_composition(
             sources: inspection.identities,
             objects,
             composition: Some(composition),
-            com_runtime,
+            com_runtime: Some(com_runtime),
             communication_runtime: Some(communication_runtime),
             mode_runtime: Some(mode_runtime),
             schedule,

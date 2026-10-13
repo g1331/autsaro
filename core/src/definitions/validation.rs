@@ -191,6 +191,10 @@ fn object(node: Node<'_, '_>) -> String {
     format!("/{}", names.join("/"))
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "clippy baseline #37: the fields of one definition diagnostic"
+)]
 pub(super) fn diagnostic(
     file: Option<String>,
     path: Option<String>,

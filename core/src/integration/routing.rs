@@ -70,7 +70,7 @@ fn inspect_endpoints(
     let mut source_handles = BTreeSet::new();
     let mut destination_handles = BTreeSet::new();
     for (pdu_path, receive, transport) in selected {
-        let context = *graph.objects.get(pdu_path).unwrap();
+        let context = graph.index(pdu_path)?;
         let sources: Vec<_> = graph
             .of_kind("ECUC-CONTAINER-VALUE")
             .into_iter()

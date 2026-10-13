@@ -258,6 +258,10 @@ pub(super) fn selected_behavior(symbol: &str) -> (bool, bool) {
     )
 }
 
+#[allow(
+    clippy::disallowed_macros,
+    reason = "identifies the generator's own sources, which are not delivered"
+)]
 pub(super) fn runtime_source_identities() -> BTreeMap<String, String> {
     let mut identities: BTreeMap<String, String> = crate::resources::AssetInventory::embedded()
         .entries()
@@ -293,6 +297,14 @@ pub(super) fn runtime_source_identities() -> BTreeMap<String, String> {
         (
             "core/src/integration/contracts.rs",
             include_bytes!("contracts.rs").as_slice(),
+        ),
+        (
+            "core/src/integration/arti.rs",
+            include_bytes!("arti.rs").as_slice(),
+        ),
+        (
+            "core/src/integration/outputs.rs",
+            include_bytes!("outputs.rs").as_slice(),
         ),
     ] {
         identities.insert(path.into(), format!("{:x}", Sha256::digest(bytes)));
@@ -334,7 +346,7 @@ pub(super) fn inspect(
 ) -> Result<Vec<SymbolContract>, Vec<PlanDiagnostic>> {
     let mut symbols = Vec::new();
     let mut used_owners = BTreeSet::new();
-    let context = *graph.objects.values().next().unwrap();
+    let context = graph.context()?;
     let all_entries = graph.of_kind("BSW-MODULE-ENTRY");
     for (symbol, current) in &catalog.entries {
         let found: Vec<_> = all_entries
@@ -513,7 +525,7 @@ pub(super) fn inspect(
     }
     for owner in used_owners {
         for reference in graph.descendants(owner, "BSW-MODULE-ENTRY-REF") {
-            let entry = *graph.objects.get(&graph.elements[reference].text).unwrap();
+            let entry = graph.index(&graph.elements[reference].text)?;
             let symbol = graph.text(entry, "SHORT-NAME").unwrap_or("");
             if !catalog.entries.contains_key(symbol) {
                 return Err(vec![graph.diagnostic(

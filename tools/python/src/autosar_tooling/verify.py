@@ -9,7 +9,7 @@ from pathlib import Path
 
 from autosar_tooling.config import ROOT, environment
 
-CLIPPY = ["-A", "clippy::all", "-D", "clippy::correctness", "-D", "clippy::suspicious"]
+CLIPPY = ["-D", "warnings"]
 
 def executable(name: str) -> str:
     found = shutil.which(name)
@@ -50,6 +50,7 @@ def commands(scope: str, base: str | None) -> list[tuple[str, list[str], int]]:
                 "-p",
                 "autosar-config-core",
                 "--all-targets",
+                "--all-features",
                 "--",
                 *CLIPPY,
             ],

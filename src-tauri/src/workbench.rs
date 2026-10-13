@@ -136,7 +136,7 @@ pub(super) struct Snapshot {
 impl Snapshot {
     pub fn workspace(&self) -> Result<&Workspace, autosar_config_core::LocalizedText> {
         self.workspace.as_deref().ok_or_else(|| {
-            autosar_config_core::product_message!("backend.workbench.workspace_required").into()
+            autosar_config_core::product_message!("backend.workbench.workspace_required")
         })
     }
 }
@@ -269,9 +269,9 @@ impl AppState {
         fingerprint: &str,
     ) -> Result<(), autosar_config_core::LocalizedText> {
         if self.fingerprint(session) != fingerprint {
-            return Err(
-                autosar_config_core::product_message!("backend.workbench.stale_delivery").into(),
-            );
+            return Err(autosar_config_core::product_message!(
+                "backend.workbench.stale_delivery"
+            ));
         }
         Ok(())
     }
@@ -290,7 +290,6 @@ impl AppState {
                 autosar_config_core::product_message!(
                     "backend.workbench.retired_validation_archives_ignored"
                 )
-                .into()
             }),
             execution_tools: session.tools.as_deref().cloned(),
             configured_execution_tools: session.settings.execution_tools.clone(),
@@ -398,7 +397,6 @@ impl AppState {
             .map(|path| path.join("definition-catalogs"))
             .ok_or_else(|| {
                 autosar_config_core::product_message!("backend.workbench.settings_parent_missing")
-                    .into()
             })
     }
 
@@ -555,8 +553,7 @@ impl AppState {
         if session.active.is_some() && !matches!(kind, OperationKind::Edit | OperationKind::Open) {
             return Err(autosar_config_core::product_message!(
                 "backend.workbench.operation_active"
-            )
-            .into());
+            ));
         }
         let previous = if session.active.is_some() {
             session.invalidate()?;
@@ -574,8 +571,7 @@ impl AppState {
         if !matches!(kind, OperationKind::Open) && session.workspace.is_none() {
             return Err(autosar_config_core::product_message!(
                 "backend.workbench.workspace_required"
-            )
-            .into());
+            ));
         }
         if matches!(kind, OperationKind::Edit | OperationKind::Native)
             && let Some(error) = &self.rule_error
@@ -596,8 +592,7 @@ impl AppState {
         if matches!(kind, OperationKind::Native) && !snapshot.target.is_native() {
             return Err(autosar_config_core::product_message!(
                 "backend.workbench.target_not_native"
-            )
-            .into());
+            ));
         }
         session.next_operation =
             session
@@ -625,10 +620,7 @@ impl AppState {
                 autosar_config_core::product_message!("backend.workbench.session_lock_poisoned")
             })?
             .active = Some(ActiveOperation {
-            view: OperationView {
-                id,
-                stage: stage.into(),
-            },
+            view: OperationView { id, stage },
             owner: owner.clone(),
         });
         Ok(Operation {
@@ -641,14 +633,13 @@ impl AppState {
     }
 
     fn finish(&self, id: u64) {
-        if let Ok(mut session) = self.session.lock() {
-            if session
+        if let Ok(mut session) = self.session.lock()
+            && session
                 .active
                 .as_ref()
                 .is_some_and(|active| active.view.id == id)
-            {
-                session.active = None;
-            }
+        {
+            session.active = None;
         }
     }
 
@@ -727,8 +718,7 @@ impl AppState {
         if actual.as_deref() != previous {
             return Err(autosar_config_core::product_message!(
                 "backend.workbench.settings_changed"
-            )
-            .into());
+            ));
         }
         let parent = self
             .settings_file
@@ -877,7 +867,7 @@ impl AppState {
 impl Operation {
     pub fn native_owner(&self) -> Result<&ProcessOwner, autosar_config_core::LocalizedText> {
         self.owner.as_deref().ok_or_else(|| {
-            autosar_config_core::product_message!("backend.workbench.native_owner_missing").into()
+            autosar_config_core::product_message!("backend.workbench.native_owner_missing")
         })
     }
 
@@ -899,8 +889,7 @@ impl Operation {
         {
             return Err(autosar_config_core::product_message!(
                 "backend.workbench.operation_cancelled"
-            )
-            .into());
+            ));
         }
         let value = action(&mut session)?;
         session.active = None;

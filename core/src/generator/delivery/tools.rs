@@ -4,7 +4,17 @@ use serde::Deserialize;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 
+// The seal guard is pinned by its build-time digest rather than the runtime
+// asset inventory, so the package cannot be sealed by the files it checks.
+#[allow(
+    clippy::disallowed_macros,
+    reason = "the seal guard is checked against TRUSTED_HELPER_SHA256"
+)]
 const HELPER: &[u8] = include_bytes!("../../../../tools/python/src/ecu_tools/sealed_package.py");
+#[allow(
+    clippy::disallowed_macros,
+    reason = "the seal guard inventory is checked with the helper"
+)]
 const INVENTORY: &[u8] =
     include_bytes!("../../../../tools/python/src/ecu_tools/build-tool-inventory.json");
 include!(concat!(env!("OUT_DIR"), "/delivery_helper.rs"));
@@ -46,7 +56,7 @@ pub(crate) fn add<'a>(
         ));
     }
     let original = files
-        .get(WRAPPER)
+        .get(STANDALONE_ENTRY)
         .ok_or_else(|| crate::product_message!("backend.delivery.standalone_tool_missing"))?;
     let source = original
         .source
@@ -56,11 +66,9 @@ pub(crate) fn add<'a>(
             "backend.delivery.standalone_tool_modified"
         ));
     }
-    let original_bytes = original.bytes.clone();
-    insert_file(files, STANDALONE_ENTRY.into(), original_bytes)?;
     insert_file(files, HELPER_PATH.into(), Cow::Borrowed(HELPER))?;
     insert_file(files, INVENTORY_PATH.into(), Cow::Borrowed(INVENTORY))?;
-    let policy = super::ownership::ledger(files, metadata)?
+    let mut policy = super::ownership::ledger(files, metadata)?
         .files
         .into_iter()
         .map(|entry| {
@@ -72,6 +80,12 @@ pub(crate) fn add<'a>(
             (entry.path, value)
         })
         .collect::<BTreeMap<_, _>>();
+    // The wrapper written below is owned like every other path under tools/.
+    let wrapper_policy = policy
+        .get(STANDALONE_ENTRY)
+        .cloned()
+        .ok_or_else(|| crate::product_message!("backend.delivery.standalone_tool_missing"))?;
+    policy.insert(WRAPPER.into(), wrapper_policy);
     let payload: BTreeMap<_, _> = files
         .iter()
         .filter(|(path, _)| path.as_str() != WRAPPER)
@@ -153,8 +167,5 @@ if __name__ == '__main__':
     raise SystemExit(result)
 "#
     );
-    let entry = files.get_mut(WRAPPER).unwrap();
-    entry.bytes = Cow::Owned(wrapper.into_bytes());
-    entry.source = None;
-    Ok(())
+    insert_file(files, WRAPPER.into(), Cow::Owned(wrapper.into_bytes()))
 }

@@ -109,8 +109,9 @@ jobs:
       - uses: actions/checkout@v7.0.1
       - uses: ./.github/actions/core-build-dependencies
       - run: cargo test --locked -p autosar-config-core
-      # The features add the native and official test binaries, which only manual acceptance runs.
-      - run: cargo clippy --locked -p autosar-config-core --all-targets --features native-tests,official-oracles -- -A clippy::all -D clippy::correctness -D clippy::suspicious
+      # Lint every feature, including the native and official test binaries that only manual
+      # acceptance runs. core/clippy.toml and module attributes add the generation rules.
+      - run: cargo clippy --locked -p autosar-config-core --all-targets --all-features -- -D warnings
   desktop:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -134,6 +135,8 @@ jobs:
       - run: npm run build --prefix ui
       - run: cargo test --locked -p autosar-config-desktop
       - run: cargo build --locked -p autosar-config-desktop
+      - if: runner.os == 'Linux'
+        run: cargo clippy --locked -p autosar-config-desktop --all-targets -- -D warnings
   process:
     needs: changes
     if: needs.changes.outputs.code == 'true'

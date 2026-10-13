@@ -152,9 +152,9 @@ pub(super) fn check_target(
     )
     .map_err(|error| error.to_string())?;
     if value["target"] != serde_json::to_value(target).map_err(|error| error.to_string())? {
-        return Err(
-            autosar_config_core::product_message!("backend.delivery.target_mismatch").into(),
-        );
+        return Err(autosar_config_core::product_message!(
+            "backend.delivery.target_mismatch"
+        ));
     }
     Ok(())
 }

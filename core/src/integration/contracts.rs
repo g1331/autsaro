@@ -1,7 +1,6 @@
 use super::{DiagnosticCategory, PlanDiagnostic, ValidatedIntegrationPlan};
 use crate::{GenerationPreview, GenerationReport, generator};
 use std::collections::BTreeMap;
-use std::fmt::Write;
 use std::path::Path;
 
 pub(super) fn reserved_identifier(name: &str) -> bool {
@@ -19,10 +18,6 @@ pub struct ComponentContractFiles {
 impl ComponentContractFiles {
     pub fn files(&self) -> &[(String, Vec<u8>)] {
         &self.files
-    }
-
-    pub(crate) fn into_files(self) -> Vec<(String, Vec<u8>)> {
-        self.files
     }
 
     /// Inspect all proposed files and existing-output integrity without writing.
@@ -52,10 +47,10 @@ fn header(guard: &str, body: &str) -> Vec<u8> {
 }
 
 fn declaration(output: &mut String, brief: &str, prototype: &str, parameters: &str) {
-    writeln!(output, "/** @brief {brief}").unwrap();
+    output.push_str(&format!("/** @brief {brief}\n"));
     output.push_str(parameters);
     output.push_str(" */\n");
-    writeln!(output, "{prototype}\n").unwrap();
+    output.push_str(&format!("{prototype}\n\n"));
 }
 
 fn reject(
@@ -78,11 +73,10 @@ fn reject(
             .find(|identity| identity.path == object)
             .map(|object| object.file.clone()),
         object: Some(object.into()),
-        message: message.into(),
+        message,
         remedy: crate::product_message!(
             "backend.integration.contracts.distinct_nonreserved_names_required"
-        )
-        .into(),
+        ),
     }]
 }
 
@@ -93,8 +87,7 @@ impl ValidatedIntegrationPlan {
         let composition = self.description().composition.as_ref().ok_or_else(|| {
             reject(
                 self,
-                crate::product_message!("backend.integration.composition.consumer_unsupported")
-                    .into(),
+                crate::product_message!("backend.integration.composition.consumer_unsupported"),
             )
         })?;
         self.composition_contract_files(composition)
@@ -102,70 +95,49 @@ impl ValidatedIntegrationPlan {
 }
 
 impl ValidatedIntegrationPlan {
-    /// Generate actual bounded composition RTE producers and their component headers.
-    /// This source fragment requires configured COM and caller-owned application
-    /// producers; it does not replace complete sealed ECU/OS preparation.
-    pub(super) fn rte_runtime_files(&self) -> Result<ComponentContractFiles, Vec<PlanDiagnostic>> {
-        let mut files: BTreeMap<_, _> = self
-            .component_contract_files()?
-            .into_files()
-            .into_iter()
-            .collect();
-        files.extend(super::rte::files(self));
-        let integer = |kind: super::CommunicationIntegerType| match kind {
-            super::CommunicationIntegerType::Uint8 => "uint8",
-            super::CommunicationIntegerType::Uint16 => "uint16",
-            super::CommunicationIntegerType::Uint32 => "uint32",
-        };
-        let communication = self.description().communication_runtime.as_ref().unwrap();
-        files.insert("include/ComStack_Cfg.h".into(), format!("/** @file EcuC-selected communication widths. */\n#ifndef COMSTACK_CFG_H\n#define COMSTACK_CFG_H\n#include \"Platform_Types.h\"\ntypedef {} PduIdType;\ntypedef {} PduLengthType;\n#endif\n", integer(communication.pdu_id_type), integer(communication.pdu_length_type)).into_bytes());
-        files.insert(
-            "include/ComStack_Types.h".into(),
-            include_bytes!("../../../runtime/bsw/include/ComStack_Types.h").to_vec(),
-        );
-        files.insert(
-            "include/Com.h".into(),
-            include_bytes!("../../../runtime/bsw/include/Com.h").to_vec(),
-        );
-        let rte = files.get_mut("include/Rte.h").unwrap();
-        *rte = String::from_utf8(std::mem::take(rte))
-            .unwrap()
-            .replace(
-                "#include \"Rte_Type.h\"",
-                "#include \"Rte_Type.h\"\n#include \"Rte_Main.h\"\n#define RTE_E_OK 0U\n#define RTE_E_LIMIT 130U",
-            )
-            .into_bytes();
-        files.insert("README.md".into(), b"# Component RTE sources\n\nThese sources implement the validated local communication graph, synchronous calls, generated Dcm service bridge and handle-bearing COM freshness notifications. Rte_Start initializes each receiver's own explicit initial value; Rte_Stop retires access. Invoke lifecycle only from the trusted ECU context, after required BSW/SchM initialization and before BSW shutdown. User application algorithms are separate caller-owned producers. The configured COM implementation, complete SchM/BSW configuration, OS owner and immutable ECU package are provided by complete ECU preparation; this source fragment alone is not a runnable ECU.\n".to_vec());
-        Ok(ComponentContractFiles {
-            files: files.into_iter().collect(),
-        })
-    }
-
     fn composition_contract_files(
         &self,
         composition: &super::composition::CompositionContract,
     ) -> Result<ComponentContractFiles, Vec<PlanDiagnostic>> {
+        let mut files = Vec::new();
+        // The same platform and standard types the delivered ECU compiles with.
+        for name in ["Platform_Types.h", "Std_Types.h"] {
+            let asset = super::outputs::trusted_asset(&format!("runtime/bsw/include/{name}"))?;
+            files.push((format!("include/{name}"), asset.bytes.to_vec()));
+        }
+        files.extend(self.contract_headers(composition, false)?);
+        files.push(("README.md".into(), b"# Component contracts\n\nInclude the generated header for your component in each application translation unit. Standard component API macros select unique implementation symbols. Shared application types are declared in Rte_Type.h. Synchronous servers with no application errors return void; their RTE clients return Std_ReturnType. OUT and INOUT arguments require non-NULL writable caller-owned storage, and fixed byte arrays require four bytes.\n\nThis delivery contains component-level declarations and selected relationships from the validated source-derived plan, not the complete ECU plan. contract.json records component, endpoint, type, selected mapping/schedule, symbol ownership and validation-source identities. Runtime implementation and OS execution are separate stages. Planned local Read returns each receiver's explicit initial value until publication and E_OK; local Write returns E_OK. Planned network Read retains initial/last values and reports E_OK, RTE_E_NEVER_RECEIVED or RTE_E_MAX_AGE_EXCEEDED; network Read/Write map COM_SERVICE_NOT_AVAILABLE to RTE_E_COM_STOPPED. Planned synchronous Call returns E_OK or an RTE infrastructure error. No runtime behavior is implemented here, and the network timeout/COM deadline-monitoring runtime scope remains pending. Keep user sources outside this generated directory.\n".to_vec()));
+        Ok(ComponentContractFiles {
+            files: generator::output::seal_files(files),
+        })
+    }
+
+    /// Component headers, shared RTE types and provenance. The ECU variant of
+    /// `Rte.h` also declares the RTE lifecycle and infrastructure statuses.
+    pub(super) fn contract_headers(
+        &self,
+        composition: &super::composition::CompositionContract,
+        ecu: bool,
+    ) -> Result<Vec<(String, Vec<u8>)>, Vec<PlanDiagnostic>> {
         let description = self.description();
         let mut types = String::from("#include \"Std_Types.h\"\n");
         for datatype in composition.array_types.values() {
-            writeln!(types, "typedef uint8 {datatype}[4];").unwrap();
+            types.push_str(&format!("typedef uint8 {datatype}[4];\n"));
         }
+        let lifecycle = if ecu {
+            "#include \"Rte_Main.h\"\n#define RTE_E_OK 0U\n#define RTE_E_LIMIT 130U\n"
+        } else {
+            ""
+        };
         let mut files = vec![
-            // The same platform and standard types the delivered ECU compiles with.
-            (
-                "include/Platform_Types.h".into(),
-                include_bytes!("../../../runtime/bsw/include/Platform_Types.h").to_vec(),
-            ),
-            (
-                "include/Std_Types.h".into(),
-                include_bytes!("../../../runtime/bsw/include/Std_Types.h").to_vec(),
-            ),
             ("include/Rte_Type.h".into(), header("RTE_TYPE_H", &types)),
             (
                 "include/Rte.h".into(),
                 header(
                     "RTE_H",
-                    "#include \"Rte_Type.h\"\n\n#define RTE_E_COM_STOPPED 128U\n#define RTE_E_NEVER_RECEIVED 133U\n#define RTE_E_MAX_AGE_EXCEEDED 64U\n",
+                    &format!(
+                        "#include \"Rte_Type.h\"\n{lifecycle}\n#define RTE_E_COM_STOPPED 128U\n#define RTE_E_NEVER_RECEIVED 133U\n#define RTE_E_MAX_AGE_EXCEEDED 64U\n"
+                    ),
                 ),
             ),
         ];
@@ -188,9 +160,8 @@ impl ValidatedIntegrationPlan {
                 };
                 let mut docs = String::new();
                 for argument in &symbol.arguments {
-                    writeln!(
-                        docs,
-                        " * @param[{}] {} {}",
+                    docs.push_str(&format!(
+                        " * @param[{}] {} {}\n",
                         argument.direction.to_lowercase(),
                         argument.name,
                         if argument.native_type.contains('*')
@@ -203,8 +174,7 @@ impl ValidatedIntegrationPlan {
                         } else {
                             "Input value."
                         }
-                    )
-                    .unwrap();
+                    ));
                 }
                 if symbol.return_type != "void" {
                     let port = component.data_ports.iter().find(|port| {
@@ -232,7 +202,7 @@ impl ValidatedIntegrationPlan {
                         "Planned E_OK or an RTE infrastructure error for the synchronous client."
                             .to_owned()
                     };
-                    writeln!(docs, " * @return {status} Declaration only; runtime behavior is not implemented here.").unwrap();
+                    docs.push_str(&format!(" * @return {status} Declaration only; runtime behavior is not implemented here.\n"));
                 }
                 declaration(
                     &mut body,
@@ -243,25 +213,21 @@ impl ValidatedIntegrationPlan {
             }
             body.push_str("#if !defined(RTE_CORE)\n");
             for port in &component.data_ports {
-                writeln!(
-                    body,
-                    "#define {} {}",
+                body.push_str(&format!(
+                    "#define {} {}\n",
                     port.api_symbol,
                     super::composition::data_symbol(component, port)
-                )
-                .unwrap();
+                ));
             }
             for operation in component
                 .operations
                 .iter()
                 .filter(|operation| operation.read)
             {
-                writeln!(
-                    body,
-                    "#define {} {}",
+                body.push_str(&format!(
+                    "#define {} {}\n",
                     operation.api_symbol, operation.implementation_symbol
-                )
-                .unwrap();
+                ));
             }
             body.push_str("#endif\n");
             let name = component
@@ -283,9 +249,6 @@ impl ValidatedIntegrationPlan {
             .map_err(|error| reject(self, error.to_string().into()))?;
         bytes.push(b'\n');
         files.push(("contract.json".into(), bytes));
-        files.push(("README.md".into(), b"# Component contracts\n\nInclude the generated header for your component in each application translation unit. Standard component API macros select unique implementation symbols. Shared application types are declared in Rte_Type.h. Synchronous servers with no application errors return void; their RTE clients return Std_ReturnType. OUT and INOUT arguments require non-NULL writable caller-owned storage, and fixed byte arrays require four bytes.\n\nThis delivery contains component-level declarations and selected relationships from the validated source-derived plan, not the complete ECU plan. contract.json records component, endpoint, type, selected mapping/schedule, symbol ownership and validation-source identities. Runtime implementation and OS execution are separate stages. Planned local Read returns each receiver's explicit initial value until publication and E_OK; local Write returns E_OK. Planned network Read retains initial/last values and reports E_OK, RTE_E_NEVER_RECEIVED or RTE_E_MAX_AGE_EXCEEDED; network Read/Write map COM_SERVICE_NOT_AVAILABLE to RTE_E_COM_STOPPED. Planned synchronous Call returns E_OK or an RTE infrastructure error. No runtime behavior is implemented here, and the network timeout/COM deadline-monitoring runtime scope remains pending. Keep user sources outside this generated directory.\n".to_vec()));
-        Ok(ComponentContractFiles {
-            files: generator::output::seal_files(files),
-        })
+        Ok(files)
     }
 }

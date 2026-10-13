@@ -169,6 +169,16 @@ pub struct CompositionContract {
     pub dcm_modes: Vec<DcmModeDefinition>,
 }
 
+impl CompositionContract {
+    /// The Dcm authentication state mode group every planned composition declares.
+    pub(super) fn authentication_modes(&self) -> Result<&DcmModeDefinition, Vec<PlanDiagnostic>> {
+        self.dcm_modes
+            .iter()
+            .find(|definition| definition.group.starts_with("DcmAuthenticationState_"))
+            .ok_or_else(|| PlanDiagnostic::plan_premise(&self.composition))
+    }
+}
+
 fn fail(graph: &Graph, index: usize, code: &str) -> Vec<PlanDiagnostic> {
     vec![graph.diagnostic(
         index,
@@ -407,7 +417,7 @@ fn inspect_with_transport(
         .objects
         .values()
         .next()
-        .ok_or_else(|| Vec::<PlanDiagnostic>::new())?;
+        .ok_or_else(Vec::<PlanDiagnostic>::new)?;
     let dcm_modes = dcm_mode_definitions(graph, context)?;
     inspect_dcm_declarations(graph, context, &dcm_modes)?;
     let system = one(graph, context, graph.of_kind("SYSTEM"), "TARGET_NOT_UNIQUE")?;
@@ -732,6 +742,10 @@ fn inspect_with_transport(
                     });
                     owners.insert(path(graph, owner));
                 }
+                // Every port access above recorded its owning runnable.
+                let Some(runnable) = owners.into_iter().next() else {
+                    return Err(fail(graph, port, "PORT_ACCESS_OWNERSHIP"));
+                };
                 data_ports.push(DataPort {
                     path: path(graph, port),
                     name: name(graph, port),
@@ -747,7 +761,7 @@ fn inspect_with_transport(
                         c_name(&name(graph, port)),
                         c_name(&name(graph, element))
                     ),
-                    runnable: owners.into_iter().next().unwrap(),
+                    runnable,
                     initial_value,
                     alive_timeout_ms: if read {
                         let value = graph
@@ -1082,7 +1096,7 @@ fn inspect_with_transport(
             {
                 return Err(fail(
                     graph,
-                    *graph.objects.get(&runnable.path).unwrap(),
+                    graph.index(&runnable.path)?,
                     "SERVICE_CLIENT_MISSING",
                 ));
             }
@@ -1185,8 +1199,8 @@ fn inspect_with_transport(
             .iter()
             .find(|component| component.instance == path(graph, r_instance))
             .ok_or_else(|| fail(graph, requester, "CONNECTOR_OWNERSHIP"))?;
-        if !graph.within(p_port, *graph.objects.get(&p_component.component).unwrap())
-            || !graph.within(r_port, *graph.objects.get(&r_component.component).unwrap())
+        if !graph.within(p_port, graph.index(&p_component.component)?)
+            || !graph.within(r_port, graph.index(&r_component.component)?)
             || graph.elements[p_port].tag != "P-PORT-PROTOTYPE"
             || graph.elements[r_port].tag != "R-PORT-PROTOTYPE"
             || graph.target(p_port, "PROVIDED-INTERFACE-TREF")
@@ -1304,14 +1318,10 @@ fn inspect_with_transport(
                 || (!mappings.is_empty() && local)
                 || (mappings.is_empty() && !local)
             {
-                return Err(fail(
-                    graph,
-                    *graph.objects.get(&port.path).unwrap(),
-                    "ENDPOINT_BINDING",
-                ));
+                return Err(fail(graph, graph.index(&port.path)?, "ENDPOINT_BINDING"));
             }
             if mappings.is_empty() {
-                let context = *graph.objects.get(&port.path).unwrap();
+                let context = graph.index(&port.path)?;
                 if port.read {
                     let spec = one(
                         graph,
@@ -1330,7 +1340,7 @@ fn inspect_with_transport(
                 }
             } else {
                 if port.read {
-                    let context = *graph.objects.get(&port.path).unwrap();
+                    let context = graph.index(&port.path)?;
                     let spec = one(
                         graph,
                         context,
@@ -1358,10 +1368,7 @@ fn inspect_with_transport(
             )?;
             for transport in signals {
                 let channel = graph
-                    .ancestor(
-                        *graph.objects.get(&transport.trigger).unwrap(),
-                        "CAN-PHYSICAL-CHANNEL",
-                    )
+                    .ancestor(graph.index(&transport.trigger)?, "CAN-PHYSICAL-CHANNEL")
                     .ok_or_else(|| fail(graph, composition, "SIGNAL_MAPPING"))?;
                 let network = graph
                     .ancestor(channel, "CAN-CLUSTER")
@@ -1370,7 +1377,7 @@ fn inspect_with_transport(
                     .data_ports
                     .iter()
                     .find(|port| port.path == transport.port)
-                    .unwrap();
+                    .ok_or_else(|| PlanDiagnostic::plan_premise(&transport.port))?;
                 network_endpoints.push(NetworkEndpoint {
                     endpoint: Endpoint {
                         instance: component.instance.clone(),
@@ -1398,7 +1405,7 @@ fn inspect_with_transport(
             }) {
                 return Err(fail(
                     graph,
-                    *graph.objects.get(&operation.port).unwrap(),
+                    graph.index(&operation.port)?,
                     "SERVICE_CLIENT_MISSING",
                 ));
             }
@@ -1451,11 +1458,11 @@ fn inspect_with_transport(
         let provider = components
             .iter()
             .find(|component| component.instance == connection.provider.instance)
-            .unwrap();
+            .ok_or_else(|| PlanDiagnostic::plan_premise(&connection.provider.instance))?;
         let requester = components
             .iter()
             .find(|component| component.instance == connection.requester.instance)
-            .unwrap();
+            .ok_or_else(|| PlanDiagnostic::plan_premise(&connection.requester.instance))?;
         let server = provider
             .operations
             .iter()
@@ -1463,7 +1470,7 @@ fn inspect_with_transport(
                 operation.port == connection.provider.port
                     && operation.operation == connection.provider.member
             })
-            .unwrap();
+            .ok_or_else(|| PlanDiagnostic::plan_premise(&connection.provider.member))?;
         let client = requester
             .operations
             .iter()
@@ -1471,7 +1478,7 @@ fn inspect_with_transport(
                 operation.port == connection.requester.port
                     && operation.operation == connection.requester.member
             })
-            .unwrap();
+            .ok_or_else(|| PlanDiagnostic::plan_premise(&connection.requester.member))?;
         for caller in &client.callers {
             calls
                 .entry(caller.clone())
@@ -1488,11 +1495,7 @@ fn inspect_with_transport(
             }
             for target in calls.get(runnable).into_iter().flatten() {
                 if target == origin {
-                    return Err(fail(
-                        graph,
-                        *graph.objects.get(origin).unwrap(),
-                        "SERVICE_RECURSION",
-                    ));
+                    return Err(fail(graph, graph.index(origin)?, "SERVICE_RECURSION"));
                 }
                 pending.push(target);
             }
@@ -1660,15 +1663,11 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
             || runtime_namespace(native)
             || !names.insert(native.clone())
         {
-            return Err(fail(
-                graph,
-                *graph.objects.get(path).unwrap(),
-                "CONTRACT_NAME_COLLISION",
-            ));
+            return Err(fail(graph, graph.index(path)?, "CONTRACT_NAME_COLLISION"));
         }
     }
     for component in &plan.components {
-        let index = *graph.objects.get(&component.component).unwrap();
+        let index = graph.index(&component.component)?;
         let type_name = component
             .header
             .trim_start_matches("include/Rte_")
@@ -1707,7 +1706,7 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
             {
                 return Err(fail(
                     graph,
-                    *graph.objects.get(&runnable.path).unwrap(),
+                    graph.index(&runnable.path)?,
                     "SYMBOL_PRODUCER_DUPLICATE",
                 ));
             }
@@ -1716,7 +1715,7 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
     // RTE wrappers include every component header and call other components.
     // Check parameters only after registering the complete producer namespace.
     for component in &plan.components {
-        let index = *graph.objects.get(&component.component).unwrap();
+        let index = graph.index(&component.component)?;
         let aliases = component
             .data_ports
             .iter()
@@ -1743,7 +1742,7 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
             }) {
                 return Err(fail(
                     graph,
-                    *graph.objects.get(&operation.operation).unwrap(),
+                    graph.index(&operation.operation)?,
                     "CONTRACT_NAME_COLLISION",
                 ));
             }
@@ -1809,7 +1808,7 @@ pub(super) fn symbols(plan: &CompositionContract) -> Vec<SymbolContract> {
                 } else {
                     format!(
                         "application/{}.c",
-                        c_name(component.component.rsplit('/').next().unwrap())
+                        c_name(super::short_name(&component.component))
                     )
                 },
                 consumers: if runnable.event.is_none() {

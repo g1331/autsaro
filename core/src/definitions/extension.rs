@@ -332,12 +332,12 @@ fn install(
     catalog: &mut DefinitionCatalog,
     loaded: &Loaded,
 ) -> Result<(), crate::message::LocalizedText> {
-    if let Some(old) = catalog.extensions.get(&loaded.identity.catalog_id) {
-        if old != &loaded.identity {
-            return Err(crate::product_message!(
-                "backend.definitions.extension.accepted_catalog_identity_replacement_forbidden"
-            ));
-        }
+    if let Some(old) = catalog.extensions.get(&loaded.identity.catalog_id)
+        && old != &loaded.identity
+    {
+        return Err(crate::product_message!(
+            "backend.definitions.extension.accepted_catalog_identity_replacement_forbidden"
+        ));
     }
     let builtin = DefinitionCatalog::builtin()?;
     for id in loaded.metadata.entries.keys() {
@@ -443,17 +443,16 @@ pub(super) fn accept(
             ));
         }
         // No overwrite: a competing publisher must produce the same verified cache.
-        if let Err(error) = fs::rename(&stage, &destination) {
-            if !destination.exists()
-                || load(&destination.join("catalog.json"))?.identity != loaded.identity
-            {
-                return Err(crate::message::LocalizedText::messages([
-                    crate::product_message!(
-                        "backend.definitions.extension.immutable_cache_publish_failed"
-                    ),
-                    error.to_string().into(),
-                ]));
-            }
+        if let Err(error) = fs::rename(&stage, &destination)
+            && (!destination.exists()
+                || load(&destination.join("catalog.json"))?.identity != loaded.identity)
+        {
+            return Err(crate::message::LocalizedText::messages([
+                crate::product_message!(
+                    "backend.definitions.extension.immutable_cache_publish_failed"
+                ),
+                error.to_string().into(),
+            ]));
         }
         drop(guard);
     }

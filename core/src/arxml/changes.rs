@@ -518,12 +518,12 @@ impl Workspace {
             let target = match change {
                 ConfigurationChange::SetValue { field, .. }
                 | ConfigurationChange::SetReference { field, .. } => {
-                    if let FieldRef::New { entry_key, .. } = field {
-                        if entry_key.is_empty() || !entry_keys.insert(entry_key) {
-                            return Err(crate::product_message!(
-                                "backend.arxml.changes.new_entry_key_required_unique"
-                            ));
-                        }
+                    if let FieldRef::New { entry_key, .. } = field
+                        && (entry_key.is_empty() || !entry_keys.insert(entry_key))
+                    {
+                        return Err(crate::product_message!(
+                            "backend.arxml.changes.new_entry_key_required_unique"
+                        ));
                     }
                     format!(
                         "field:{}",
@@ -963,14 +963,13 @@ impl Workspace {
         before: &Workspace,
     ) -> Result<(), crate::message::LocalizedText> {
         for scope in &self.snapshot.validation {
-            if scope.scope == ValidationScope::Schema {
-                if let Some(issue) = scope
+            if scope.scope == ValidationScope::Schema
+                && let Some(issue) = scope
                     .diagnostics
                     .iter()
                     .find(|issue| matches!(issue.severity, Severity::Error))
-                {
-                    return Err(configuration_error(issue, before, &self.snapshot));
-                }
+            {
+                return Err(configuration_error(issue, before, &self.snapshot));
             }
             if scope.scope != ValidationScope::Definition {
                 continue;
@@ -1881,12 +1880,12 @@ impl Candidate {
             if field.view.definition.kind.is_some() || field.view.reference.is_some() {
                 continue;
             }
-            if let ValueState::Explicit { value } = &field.view.current {
-                if value.lexeme.contains(path) {
-                    return Err(crate::product_message!(
-                        "backend.arxml.changes.opaque_field_reference_impact_unknown"
-                    ));
-                }
+            if let ValueState::Explicit { value } = &field.view.current
+                && value.lexeme.contains(path)
+            {
+                return Err(crate::product_message!(
+                    "backend.arxml.changes.opaque_field_reference_impact_unknown"
+                ));
             }
         }
         Ok(())

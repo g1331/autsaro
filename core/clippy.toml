@@ -1,0 +1,15 @@
+# Tests may unwrap; generation and integration code reports PlanDiagnostic instead.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+# Denied only in the generation and integration modules (see their module attributes):
+# emitters render each output once instead of patching text or reading files.
+disallowed-methods = [
+    { path = "str::replace", reason = "patching rendered text; render once, or use outputs::render for trusted templates" },
+    { path = "str::replacen", reason = "patching rendered text; render once, or use outputs::render for trusted templates" },
+    { path = "alloc::string::String::insert_str", reason = "patching rendered text; emit the content where it belongs" },
+]
+disallowed-macros = [
+    { path = "std::include_bytes", reason = "delivered files come from the trusted asset inventory" },
+    { path = "std::include_str", reason = "delivered files come from the trusted asset inventory" },
+]

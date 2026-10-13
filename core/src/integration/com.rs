@@ -90,7 +90,7 @@ pub(super) fn inspect(
     if signals.is_empty() {
         return Ok(None);
     }
-    let context = *graph.objects.get(&signals[0].com_pdu).unwrap();
+    let context = graph.index(&signals[0].com_pdu)?;
     let config = unique(
         graph,
         context,
@@ -164,11 +164,7 @@ pub(super) fn inspect(
     // A different PDU period needs counters and is not silently approximated.
     for signal in signals.iter().filter(|signal| !signal.receive) {
         if signal.transmit_period_ms != Some(transmit_main.period_ms) {
-            return Err(fail(
-                graph,
-                *graph.objects.get(&signal.com_pdu).unwrap(),
-                "COM_TIMEBASE",
-            ));
+            return Err(fail(graph, graph.index(&signal.com_pdu)?, "COM_TIMEBASE"));
         }
     }
     let rx_paths: BTreeSet<_> = signals
@@ -256,7 +252,7 @@ pub(super) fn inspect(
     let mut receptions = Vec::new();
     let mut accepted = BTreeSet::new();
     for signal in signals.iter().filter(|signal| signal.receive) {
-        let index = *graph.objects.get(&signal.com_signal).unwrap();
+        let index = graph.index(&signal.com_signal)?;
         let user_signal = unique(
             graph,
             index,
@@ -319,7 +315,7 @@ pub(super) fn inspect(
     receptions.sort_by(|left, right| left.signal.cmp(&right.signal));
     Ok(Some(ComRuntimeContract {
         callback_header: value(graph, user, "ComUserHeaderInclude", false)
-            .unwrap()
+            .ok_or_else(|| fail(graph, user, "COM_CALLBACK"))?
             .into(),
         receive_main,
         transmit_main,

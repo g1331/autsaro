@@ -231,7 +231,7 @@ fn unsupported_edit_and_handoff_preserve_live_inputs_and_existing_output() {
         })
         .collect();
     let mut workspace = Workspace::open(paths.clone()).unwrap();
-    let before = serde_json::to_value(&workspace.project_projection("same").unwrap()).unwrap();
+    let before = serde_json::to_value(workspace.project_projection("same").unwrap()).unwrap();
     let errors = workspace
         .edit_integration(IntegrationEdit {
             can_ids: [("/Application/NotASignalPort".to_owned(), 1)].into(),
@@ -242,7 +242,7 @@ fn unsupported_edit_and_handoff_preserve_live_inputs_and_existing_output() {
     assert!(errors.iter().any(|issue| issue.code == "EDIT_UNSUPPORTED"));
     assert_eq!(
         before,
-        serde_json::to_value(&workspace.project_projection("same").unwrap()).unwrap()
+        serde_json::to_value(workspace.project_projection("same").unwrap()).unwrap()
     );
     let plan = build(&inputs).unwrap();
     let contract = plan.component_contract_files().unwrap();

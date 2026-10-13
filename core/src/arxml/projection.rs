@@ -328,10 +328,9 @@ impl Workspace {
             for node in document.descendants().filter(|node| node.is_element()) {
                 if node.tag_name().namespace() != Some(NS)
                     && !node.children().any(|child| child.is_element())
+                    && let Some(value) = node.text().filter(|value| value.contains('/'))
                 {
-                    if let Some(value) = node.text().filter(|value| value.contains('/')) {
-                        snapshot.opaque_values.push(value.into());
-                    }
+                    snapshot.opaque_values.push(value.into());
                 }
                 for attribute in node.attributes().filter(|attribute| {
                     attribute.value().contains('/')
@@ -707,7 +706,7 @@ impl Workspace {
                     source: object.source,
                     entry_range: None,
                     value_range: None,
-                    element: element.into(),
+                    element,
                     ordinal: 0,
                 });
             }
@@ -721,14 +720,13 @@ impl Workspace {
             else {
                 continue;
             };
-            if dest == "product-reference" {
-                if let Some(indices) = snapshot
+            if dest == "product-reference"
+                && let Some(indices) = snapshot
                     .paths
                     .get(raw_path)
                     .filter(|indices| indices.len() == 1)
-                {
-                    *dest = snapshot.objects[indices[0]].view.kind.clone();
-                }
+            {
+                *dest = snapshot.objects[indices[0]].view.kind.clone();
             }
             let matches = snapshot
                 .paths
@@ -823,22 +821,21 @@ impl Workspace {
                 }
             }
         }
-        if let Some(project) = &self.project {
-            if let Some(scope) = snapshot
+        if let Some(project) = &self.project
+            && let Some(scope) = snapshot
                 .validation
                 .iter_mut()
                 .find(|scope| scope.scope == ValidationScope::Definition)
+        {
+            scope
+                .diagnostics
+                .extend(project.extension_diagnostics.clone());
+            if scope
+                .diagnostics
+                .iter()
+                .any(|issue| matches!(issue.severity, Severity::Error))
             {
-                scope
-                    .diagnostics
-                    .extend(project.extension_diagnostics.clone());
-                if scope
-                    .diagnostics
-                    .iter()
-                    .any(|issue| matches!(issue.severity, Severity::Error))
-                {
-                    scope.status = ValidationStatus::Failed;
-                }
+                scope.status = ValidationStatus::Failed;
             }
         }
         // Every built-in integration candidate plans on the mainline.
@@ -1009,7 +1006,7 @@ impl Workspace {
                     (
                         definition.definition_id.as_str(),
                         self.catalog
-                            .required_extensions(&[definition.definition_id.clone()]),
+                            .required_extensions(std::slice::from_ref(&definition.definition_id)),
                     )
                 })
                 .collect();
@@ -1275,24 +1272,24 @@ fn bind_diagnostic(
                 }
                 _ => None,
             };
-            if diagnostic.field_id.is_none() {
-                if let Some(definition) = definition {
-                    let matching: Vec<_> = fields
-                        .iter()
-                        .filter(|field| {
-                            field.view.object_id == *object
-                                && field.view.definition.definition_id == definition.definition_id
-                        })
-                        .collect();
-                    if matching.len() == 1 {
-                        diagnostic.field_id = Some(matching[0].view.field_id.clone());
-                        witness.subjects.push(matching[0].view.field_id.clone());
-                    } else {
-                        // Ambiguous provenance must not let an identical old error move
-                        // to another entry. Exact range markers above avoid this branch.
-                        for field in matching {
-                            witness.subjects.push(field.view.field_id.clone());
-                        }
+            if diagnostic.field_id.is_none()
+                && let Some(definition) = definition
+            {
+                let matching: Vec<_> = fields
+                    .iter()
+                    .filter(|field| {
+                        field.view.object_id == *object
+                            && field.view.definition.definition_id == definition.definition_id
+                    })
+                    .collect();
+                if matching.len() == 1 {
+                    diagnostic.field_id = Some(matching[0].view.field_id.clone());
+                    witness.subjects.push(matching[0].view.field_id.clone());
+                } else {
+                    // Ambiguous provenance must not let an identical old error move
+                    // to another entry. Exact range markers above avoid this branch.
+                    for field in matching {
+                        witness.subjects.push(field.view.field_id.clone());
                     }
                 }
             }

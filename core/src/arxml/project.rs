@@ -342,18 +342,16 @@ fn template_files(
                 && child_text(node, "SHORT-NAME").as_deref() == Some("ReferenceEcu")
             {
                 patch_child(node, "SHORT-NAME", name.into(), &mut patches)?;
-            } else if node.tag_name().name().ends_with("-REF") {
-                if let Some(path) = node
+            } else if node.tag_name().name().ends_with("-REF")
+                && let Some(path) = node
                     .text()
                     .and_then(|value| value.strip_prefix("/Extract/ReferenceEcu"))
-                {
-                    if path.is_empty() || path.starts_with('/') {
-                        patches.push(Patch {
-                            range: super::projection::simple_text_range(node)?,
-                            value: format!("/Extract/{name}{path}"),
-                        });
-                    }
-                }
+                && (path.is_empty() || path.starts_with('/'))
+            {
+                patches.push(Patch {
+                    range: super::projection::simple_text_range(node)?,
+                    value: format!("/Extract/{name}{path}"),
+                });
             }
         }
         let mut contents = original.to_owned();
@@ -482,22 +480,20 @@ fn from_preview(
     };
     workspace.refresh()?;
     for scope in &workspace.snapshot.validation {
-        if scope.scope == ValidationScope::Schema
-            || (require_definition && scope.scope == ValidationScope::Definition)
-        {
-            if let Some(issue) = scope
+        if (scope.scope == ValidationScope::Schema
+            || (require_definition && scope.scope == ValidationScope::Definition))
+            && let Some(issue) = scope
                 .diagnostics
                 .iter()
                 .find(|issue| matches!(issue.severity, Severity::Error))
-            {
-                return Err(crate::message::LocalizedText::messages([
-                    crate::product_message!(
-                        "backend.arxml.project.preview_validation_failed",
-                        "code" => &issue.code
-                    ),
-                    issue.message.clone(),
-                ]));
-            }
+        {
+            return Err(crate::message::LocalizedText::messages([
+                crate::product_message!(
+                    "backend.arxml.project.preview_validation_failed",
+                    "code" => &issue.code
+                ),
+                issue.message.clone(),
+            ]));
         }
     }
     Ok(workspace)

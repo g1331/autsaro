@@ -115,6 +115,17 @@ fn enclosing(graph: &Graph, mut index: usize, kind: &str) -> Option<usize> {
     None
 }
 
+fn counter_profile(graph: &Graph, counter: usize) -> Vec<PlanDiagnostic> {
+    reject(
+        graph,
+        counter,
+        "COUNTER_PROFILE",
+        crate::product_message!(
+            "backend.integration.schedule.system_counter_configuration_required"
+        ),
+    )
+}
+
 fn container(graph: &Graph, kind: &str, context: usize) -> Result<usize, Vec<PlanDiagnostic>> {
     let found: Vec<_> = graph
         .of_kind("ECUC-CONTAINER-VALUE")
@@ -157,14 +168,26 @@ pub(super) fn inspect_events(
     server_runnables: &[String],
     composition: bool,
 ) -> Result<ScheduleContract, Vec<PlanDiagnostic>> {
-    let behavior = *graph.objects.get(components[0].1).unwrap();
+    let behavior = graph.index(components[0].1)?;
     let task = container(graph, "OsTask", behavior)?;
     let counter = container(graph, "OsCounter", behavior)?;
     let priority = value(graph, task, "OsTaskPriority", false)
         .and_then(|value| value.parse::<u8>().ok())
         .filter(|value| (1..=30).contains(value));
-    if priority.is_none()
-        || value(graph, task, "OsTaskActivation", false) != Some("1")
+    let task_profile = || {
+        reject(
+            graph,
+            task,
+            "TASK_PROFILE",
+            crate::product_message!(
+                "backend.integration.schedule.ecu_owner_task_configuration_required"
+            ),
+        )
+    };
+    let Some(priority) = priority else {
+        return Err(task_profile());
+    };
+    if value(graph, task, "OsTaskActivation", false) != Some("1")
         || value(graph, task, "OsTaskSchedule", false) != Some("FULL")
         || values(graph, task, "OsTaskEventRef", true).len() != 3
         || graph
@@ -174,14 +197,7 @@ pub(super) fn inspect_events(
             .count()
             != 1
     {
-        return Err(reject(
-            graph,
-            task,
-            "TASK_PROFILE",
-            crate::product_message!(
-                "backend.integration.schedule.ecu_owner_task_configuration_required"
-            ),
-        ));
+        return Err(task_profile());
     }
     let maximum = value(graph, counter, "OsCounterMaxAllowedValue", false)
         .and_then(|value| value.parse::<u32>().ok())
@@ -191,22 +207,25 @@ pub(super) fn inspect_events(
         .and_then(|text| text.parse::<u32>().ok());
     let counter_minimum_cycle =
         value(graph, counter, "OsCounterMinCycle", false).and_then(|text| text.parse::<u32>().ok());
-    if maximum.is_none()
-        || value(graph, counter, "OsCounterType", false) != Some("SOFTWARE")
-        || counter_ticks_per_base != Some(1)
-        || counter_minimum_cycle != Some(1)
+    let (
+        Some(maximum),
+        Some(counter_ticks_per_base @ 1),
+        Some(counter_minimum_cycle @ 1),
+        Some(counter_tick_ms @ 1),
+    ) = (
+        maximum,
+        counter_ticks_per_base,
+        counter_minimum_cycle,
+        counter_tick_ms,
+    )
+    else {
+        return Err(counter_profile(graph, counter));
+    };
+    if value(graph, counter, "OsCounterType", false) != Some("SOFTWARE")
         || value(graph, counter, "OsCounterTicksPerBase", false) != Some("1")
         || value(graph, counter, "OsCounterMinCycle", false) != Some("1")
-        || counter_tick_ms != Some(1)
     {
-        return Err(reject(
-            graph,
-            counter,
-            "COUNTER_PROFILE",
-            crate::product_message!(
-                "backend.integration.schedule.system_counter_configuration_required"
-            ),
-        ));
+        return Err(counter_profile(graph, counter));
     }
     let task_events: BTreeSet<_> = values(graph, task, "OsTaskEventRef", true)
         .into_iter()
@@ -215,7 +234,7 @@ pub(super) fn inspect_events(
         .descendants(task, "ECUC-CONTAINER-VALUE")
         .into_iter()
         .find(|index| definition_is(graph, *index, "OsTaskAutostart"))
-        .unwrap();
+        .ok_or_else(task_profile)?;
     let modes: BTreeSet<_> = values(graph, task_autostart, "OsTaskAppModeRef", true)
         .into_iter()
         .collect();
@@ -391,7 +410,7 @@ pub(super) fn inspect_events(
                     crate::product_message!("backend.integration.schedule.mapped_period_must_be_positive_whole_millisecond"),
                 )
             })?;
-        if composition && period > maximum.unwrap() {
+        if composition && period > maximum {
             return Err(reject(
                 graph,
                 event,
@@ -550,8 +569,8 @@ pub(super) fn inspect_events(
                     .and_then(|text| text.parse::<u32>().ok())
             })
             .flatten();
-        if using_table {
-            let table = table.unwrap();
+        // A table-driven mapping without its table was rejected above.
+        if let Some(table) = table {
             let sync: Vec<_> = graph
                 .descendants(table, "ECUC-CONTAINER-VALUE")
                 .into_iter()
@@ -836,12 +855,12 @@ pub(super) fn inspect_events(
     }
     Ok(ScheduleContract {
         task: graph.elements[task].object.clone(),
-        task_priority: priority.unwrap(),
+        task_priority: priority,
         counter: graph.elements[counter].object.clone(),
-        counter_maximum: maximum.unwrap(),
-        counter_ticks_per_base: counter_ticks_per_base.unwrap(),
-        counter_minimum_cycle: counter_minimum_cycle.unwrap(),
-        counter_tick_ms: counter_tick_ms.unwrap(),
+        counter_maximum: maximum,
+        counter_ticks_per_base,
+        counter_minimum_cycle,
+        counter_tick_ms,
         entities,
         synchronous_event: if composition {
             String::new()

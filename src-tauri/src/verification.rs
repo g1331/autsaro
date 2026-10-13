@@ -37,9 +37,9 @@ pub(crate) async fn verification_owned_failure(
     delay_ms: u64,
 ) -> Result<Reply<OwnedFailure>, autosar_config_core::LocalizedText> {
     if delay_ms > 5_000 {
-        return Err(
-            autosar_config_core::product_message!("backend.verification.delay_limit").into(),
-        );
+        return Err(autosar_config_core::product_message!(
+            "backend.verification.delay_limit"
+        ));
     }
     background(state, move |state| {
         let operation = state.begin(&fingerprint, autosar_config_core::product_message!("backend.operation.owned_verification_failure"), OperationKind::Native)?;
@@ -86,7 +86,9 @@ pub(crate) async fn verification_owned_failure(
 #[tauri::command]
 pub(crate) async fn verification_owned_failure()
 -> Result<Reply<()>, autosar_config_core::LocalizedText> {
-    Err(autosar_config_core::product_message!("backend.verification.build_required").into())
+    Err(autosar_config_core::product_message!(
+        "backend.verification.build_required"
+    ))
 }
 
 /// WebView2 150+ ignores `WEBVIEW2_*` variables in elevated hosts such as the

@@ -20,10 +20,10 @@ impl Author<'_> {
         upper: Option<u32>,
     ) -> Result<(), crate::message::LocalizedText> {
         let id = format!("{ROOT}{path}");
-        if let Some((parent, _)) = path.rsplit_once('/') {
-            if self.0.get(&format!("{ROOT}{parent}")).is_none() {
-                self.container(parent, 0, None)?;
-            }
+        if let Some((parent, _)) = path.rsplit_once('/')
+            && self.0.get(&format!("{ROOT}{parent}")).is_none()
+        {
+            self.container(parent, 0, None)?;
         }
         let element = if path.contains('/') {
             "ECUC-PARAM-CONF-CONTAINER-DEF"

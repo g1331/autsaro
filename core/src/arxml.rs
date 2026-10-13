@@ -331,7 +331,7 @@ impl Workspace {
                     })?
                     .replace('\\', "/");
                 InputSource::new(logical, file.text.as_bytes().to_vec())
-                    .map_err(|issue| vec![issue])
+                    .map_err(|issue| vec![*issue])
             })
             .collect::<Result<_, _>>()?;
         Ok(sources)

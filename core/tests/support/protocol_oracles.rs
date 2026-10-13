@@ -176,7 +176,7 @@ fn require(condition: bool, message: &str) -> Result<(), String> {
     }
 }
 
-fn by_id<'a>(cases: &'a Value) -> BTreeMap<&'a str, &'a Value> {
+fn by_id(cases: &Value) -> BTreeMap<&str, &Value> {
     cases
         .as_array()
         .unwrap()

@@ -42,9 +42,8 @@ pub(crate) fn issue(
             .iter()
             .find(|item| item.path == object)
             .map(|item| item.file.clone()),
-        message: message.into(),
-        remedy: crate::product_message!("backend.integration.editor.plan_repair_preview_required")
-            .into(),
+        message,
+        remedy: crate::product_message!("backend.integration.editor.plan_repair_preview_required"),
     }]
 }
 
@@ -214,7 +213,9 @@ pub(crate) fn fields(
                 );
             }
             if let Some(table) = &application.schedule_table {
-                let offset = application.expiry_offset.unwrap();
+                let offset = application
+                    .expiry_offset
+                    .ok_or_else(|| PlanDiagnostic::plan_premise(table))?;
                 if period <= offset {
                     return Err(issue(
                         plan,

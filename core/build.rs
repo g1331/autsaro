@@ -21,6 +21,10 @@ fn read_manifest(root: &Path, name: &str) -> serde_json::Value {
     serde_json::from_slice(&fs::read(root.join(name)).expect(name)).expect(name)
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "clippy baseline #37: the fields of one asset inventory row"
+)]
 fn add(
     rows: &mut BTreeMap<String, Source>,
     path: String,

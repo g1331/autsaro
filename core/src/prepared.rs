@@ -1,3 +1,13 @@
+// Generation and integration report PlanDiagnostic instead of panicking and
+// render each output once; core/clippy.toml lists the disallowed text patching.
+#![deny(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::disallowed_methods,
+    clippy::disallowed_macros
+)]
+
 use crate::Workspace;
 use crate::generator;
 use crate::generator::delivery::{
@@ -157,17 +167,16 @@ impl<'a> PreparedProject<'a> {
             report.logs.push(crate::product_message!("backend.prepared.preflight_not_applicable", "target" => self.target.spec().id));
             return report;
         }
-        if let Some(guard) = &self.native_guard {
-            if let Err(error) = guard.verify(None) {
-                report.status = PreflightStatus::Failed;
-                report.logs.push(error);
-                return report;
-            }
+        if let Some(guard) = &self.native_guard
+            && let Err(error) = guard.verify(None)
+        {
+            report.status = PreflightStatus::Failed;
+            report.logs.push(error);
+            return report;
         }
         let result = (|| -> Result<(), crate::LocalizedText> {
             use crate::execution::ProcessSpec;
             use std::ffi::OsString;
-            use std::fmt::Write;
             use std::time::Duration;
 
             let stage = generator::output::reserve_directory(
@@ -192,14 +201,23 @@ impl<'a> PreparedProject<'a> {
             let mut hashes = String::new();
             for file in &self.files {
                 let path = source.join(&file.path);
-                std::fs::create_dir_all(path.parent().unwrap())
-                    .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
+                if let Some(parent) = path.parent() {
+                    std::fs::create_dir_all(parent)
+                        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
+                }
                 std::fs::write(path, &file.bytes)
                     .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
-                writeln!(list, "{}", file.path).unwrap();
-                writeln!(hashes, "{:x}  {}", Sha256::digest(&file.bytes), file.path).unwrap();
+                list.push_str(&format!("{}\n", file.path));
+                hashes.push_str(&format!(
+                    "{:x}  {}\n",
+                    Sha256::digest(&file.bytes),
+                    file.path
+                ));
             }
-            writeln!(hashes, "{:x}  files.list", Sha256::digest(list.as_bytes())).unwrap();
+            hashes.push_str(&format!(
+                "{:x}  files.list\n",
+                Sha256::digest(list.as_bytes())
+            ));
             std::fs::write(source.join("files.list"), list)
                 .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
             std::fs::write(source.join("files.sha256"), hashes)
@@ -299,13 +317,14 @@ pub(crate) fn deliver_path(asset: &AssetEntry) -> Result<String, crate::Localize
     }
     if let Some(path) = path.strip_prefix("runtime/") {
         if path == "ecu-tool.py" {
-            return Ok("tools/ecu-tool.py".into());
+            // tools/ecu-tool.py is the seal guard that wraps this entry.
+            return Ok("tools/standalone-ecu-tool.py".into());
         }
         for family in ["bsw/", "ecu/"] {
-            if let Some(relative) = path.strip_prefix(family) {
-                if relative.starts_with("src/") || relative.starts_with("include/") {
-                    return Ok(relative.into());
-                }
+            if let Some(relative) = path.strip_prefix(family)
+                && (relative.starts_with("src/") || relative.starts_with("include/"))
+            {
+                return Ok(relative.into());
             }
         }
         if path.starts_with("os/") {
@@ -343,13 +362,13 @@ impl NativePreparation {
         slots: Vec<ApplicationSlotDescriptor>,
         target: BuildTarget,
         handoff: bool,
+        readme: String,
     ) -> Result<Self, crate::LocalizedText> {
         let profile = crate::integration::PROFILE;
         if inputs.application.len() != slots.len() {
             return Err(crate::product_message!(
                 "backend.integration.composition.consumer_unsupported"
-            )
-            .into());
+            ));
         }
         inputs.manifest.profile_hint = profile.into();
         inputs.refresh_snapshot_identity()?;
@@ -363,7 +382,7 @@ impl NativePreparation {
                 Cow::Owned(generator::delivery::json_bytes(&metadata)?),
             )?;
         }
-        generator::delivery::append_native_readme(files, &metadata, &slots)?;
+        generator::delivery::add_native_readme(files, readme, &metadata, &slots)?;
         Ok(Self {
             metadata,
             definition_fingerprint: inputs.definition_fingerprint,
@@ -543,7 +562,12 @@ pub fn prepare_ecu_project_with_applications(
                 "backend.delivery.application_membership_mismatch"
             )));
         }
-        let logical = slot.source_paths[0].clone();
+        let [logical] = slot.source_paths.as_slice() else {
+            return Err(PlanDiagnostic::source_closure(crate::product_message!(
+                "backend.delivery.application_membership_mismatch"
+            )));
+        };
+        let logical = logical.clone();
         members.push(crate::arxml::ApplicationInput {
             path: logical.clone(),
             producer_slot: producer,
@@ -626,26 +650,19 @@ fn prepare_ecu_sources(
         .application
         .first()
         .map(|(_, bytes)| bytes.as_slice());
-    let rendered = plan.render_ecu_sources(target, live_application)?;
+    let (rendered, readme) = plan.render_ecu_sources(target, live_application)?;
     let source_owners =
         crate::integration::ecu::source_assets(target).map_err(PlanDiagnostic::source_closure)?;
     let mut files = BTreeMap::new();
     for (path, bytes) in rendered {
-        if path.starts_with("inputs/") {
-            continue;
-        }
         let source = source_owners
             .get(&path)
             .copied()
             .filter(|asset| asset.bytes == bytes.as_ref());
-        let bytes = match source {
-            Some(asset) => Cow::Borrowed(asset.bytes),
-            None => Cow::Owned(bytes.into_owned()),
-        };
         insert(&mut files, path, bytes, source).map_err(PlanDiagnostic::source_closure)?;
     }
     let slots = plan.application_slot_descriptors()?;
-    let native = NativePreparation::new(&mut files, native, slots, target, handoff)
+    let native = NativePreparation::new(&mut files, native, slots, target, handoff, readme)
         .map_err(PlanDiagnostic::source_closure)?;
     finish(target, handoff, files, native).map_err(PlanDiagnostic::source_closure)
 }

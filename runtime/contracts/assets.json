@@ -48,20 +48,6 @@
       ]
     },
     {
-      "path": "runtime/ecu/include/Rte_MemMap.h",
-      "sha256": "a0028a9d3cdc2f8db07dd1375218ae477d5c7bbd3feb4d78ee275286ab198a1b",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "role": "delivery",
-      "responsibility": "workbench",
-      "profiles": [
-        "ecu"
-      ]
-    },
-    {
       "path": "runtime/ecu/src/Ecu_HostBatch.c",
       "sha256": "43dfad75d7010e46594befc8a01b93858a910edd265f0e80ff2693289def5f52",
       "license": "Apache-2.0",

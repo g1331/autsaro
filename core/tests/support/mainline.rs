@@ -734,7 +734,7 @@ pub(crate) fn verify_production_owner(
     p2_star: Option<(&str, &str)>,
 ) {
     let output = consumer.join("pipeline-build");
-    let result = tooling::ecu_build_command(&project, &output, "host-batch", None)
+    let result = tooling::ecu_build_command(project, &output, "host-batch", None)
         .current_dir(consumer)
         .env_remove("PYTHONPATH")
         .env_remove("PYTHONHOME")
@@ -891,8 +891,7 @@ pub(crate) fn forged_handoff(
     use autosar_config_core::prepared::prepare_ecu_project_for_workspace;
     let package = scratch.join(case);
     let prepared =
-        prepare_ecu_project_for_workspace(&workspace, &plan, native_delivery_target(), true)
-            .unwrap();
+        prepare_ecu_project_for_workspace(workspace, plan, native_delivery_target(), true).unwrap();
     prepared.generate(&package).unwrap();
     let ledger_path = package.join("workbench-ownership.json");
     let mut ledger: serde_json::Value =

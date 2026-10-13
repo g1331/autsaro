@@ -99,7 +99,7 @@ pub(super) fn check_trigger(
         graph.descendants(trigger, "PDU-TRIGGERING-REF"),
         "SIGNAL_MAPPING",
     )?;
-    let pdu_trigger = *graph.objects.get(&graph.elements[reference].text).unwrap();
+    let pdu_trigger = graph.index(&graph.elements[reference].text)?;
     if graph.target(pdu_trigger, "I-PDU-REF") != Some(pdu)
         || graph.ancestor(pdu_trigger, "CAN-PHYSICAL-CHANNEL") != Some(channel)
     {
@@ -119,7 +119,7 @@ pub(super) fn check_trigger(
             graph.descendants(owner, tag),
             "DIRECTION_CONFLICT",
         )?;
-        let port = *graph.objects.get(&graph.elements[reference].text).unwrap();
+        let port = graph.index(&graph.elements[reference].text)?;
         if graph.text(port, "COMMUNICATION-DIRECTION") != Some(direction) {
             return Err(reject(
                 graph,
@@ -163,7 +163,7 @@ pub(super) fn check_trigger(
             graph.descendants(pdu_trigger, "I-SIGNAL-TRIGGERING-REF"),
             "SIGNAL_MAPPING",
         )?;
-        let signal_trigger = *graph.objects.get(&graph.elements[reference].text).unwrap();
+        let signal_trigger = graph.index(&graph.elements[reference].text)?;
         if graph.target(signal_trigger, "I-SIGNAL-REF") != Some(signal)
             || graph.ancestor(signal_trigger, "CAN-PHYSICAL-CHANNEL") != Some(channel)
         {
@@ -182,7 +182,7 @@ pub(super) fn check_trigger(
             graph.descendants(signal_trigger, "I-SIGNAL-PORT-REF"),
             "DIRECTION_CONFLICT",
         )?;
-        let port = *graph.objects.get(&graph.elements[reference].text).unwrap();
+        let port = graph.index(&graph.elements[reference].text)?;
         if graph.text(port, "COMMUNICATION-DIRECTION") != Some(direction) {
             return Err(reject(
                 graph,
@@ -215,14 +215,23 @@ pub(super) fn inspect_ports(
     instance: &str,
     period_ms: u32,
 ) -> Result<Vec<SignalChannel>, Vec<PlanDiagnostic>> {
-    let system = graph
+    let Some(system) = graph
         .of_kind("SYSTEM")
         .into_iter()
         .find(|index| graph.text(*index, "CATEGORY") == Some("ECU_EXTRACT"))
-        .unwrap();
+    else {
+        return Err(reject(
+            graph,
+            graph.context()?,
+            "SIGNAL_MAPPING",
+            crate::product_message!(
+                "backend.integration.communication.communication_relationship_missing_or_ambiguous"
+            ),
+        ));
+    };
     let mut channels = Vec::new();
     for port in ports {
-        let context = *graph.objects.get(&port.path).unwrap();
+        let context = graph.index(&port.path)?;
         let mapping = one(
             graph,
             context,
@@ -407,10 +416,7 @@ pub(super) fn inspect_ports(
             graph.descendants(trigger, "FRAME-PORT-REF"),
             "DIRECTION_CONFLICT",
         )?;
-        let frame_port = *graph
-            .objects
-            .get(&graph.elements[frame_port_ref].text)
-            .unwrap();
+        let frame_port = graph.index(&graph.elements[frame_port_ref].text)?;
         if graph.text(frame_port, "COMMUNICATION-DIRECTION")
             != Some(if port.read { "IN" } else { "OUT" })
         {

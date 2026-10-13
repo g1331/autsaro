@@ -124,8 +124,7 @@ fn compare_files(
     if names.iter().map(String::as_str).collect::<BTreeSet<_>>() != expected_names {
         return Err(crate::product_message!(
             "backend.integration.handoff.rebuilt_ecu_product_closure_mismatch"
-        )
-        .into());
+        ));
     }
     for (path, bytes) in expected {
         if fs::read(project.join(path)).map_err(|error| error.to_string())? != *bytes {
@@ -161,8 +160,7 @@ fn checked_project(
     {
         return Err(crate::product_message!(
             "backend.integration.handoff.source_directory_integration_profile_mismatch"
-        )
-        .into());
+        ));
     }
     let target: BuildTarget =
         serde_json::from_value(data["target"].clone()).map_err(|error| error.to_string())?;
@@ -250,8 +248,7 @@ pub fn build_ecu_project(
     if !binary.is_file() {
         return Err(crate::product_message!(
             "backend.integration.handoff.declared_native_binary_missing"
-        )
-        .into());
+        ));
     }
     fs::remove_dir_all(capture).map_err(|error| error.to_string())?;
     Ok(BuildReport {
@@ -273,8 +270,7 @@ pub fn verify_ecu_project(
     {
         return Err(crate::product_message!(
             "backend.integration.handoff.reference_verification_inputs_missing"
-        )
-        .into());
+        ));
     }
     let scratch = generator::output::reserve_directory(
         &std::env::temp_dir(),
@@ -311,9 +307,8 @@ pub fn verify_ecu_project(
     Ok(RunReport {
         passed: true,
         log: log.into(),
-        events: vec![
-            crate::product_message!("backend.integration.handoff.host_behavior_checks_passed")
-                .into(),
-        ],
+        events: vec![crate::product_message!(
+            "backend.integration.handoff.host_behavior_checks_passed"
+        )],
     })
 }

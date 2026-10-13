@@ -67,7 +67,7 @@ impl Graph {
         let documents = sources
             .iter()
             .map(|source| {
-                let text = source.text().map_err(|diagnostic| vec![diagnostic])?;
+                let text = source.text().map_err(|diagnostic| vec![*diagnostic])?;
                 Document::parse(text).map_err(|error| {
                     vec![PlanDiagnostic::at_source(
                         source,
@@ -286,9 +286,45 @@ impl Graph {
             code: code.into(),
             file: Some(node.file.clone()),
             object: Some(node.object.clone()),
-            message: message.into(),
-            remedy: remedy.into(),
+            message,
+            remedy,
         }
+    }
+
+    /// Some object to locate diagnostics about the inputs as a whole.
+    pub fn context(&self) -> Result<usize, Vec<PlanDiagnostic>> {
+        self.objects.values().next().copied().ok_or_else(|| {
+            vec![PlanDiagnostic {
+                category: DiagnosticCategory::Input,
+                code: "INPUT_OBJECTS_MISSING".into(),
+                file: None,
+                object: None,
+                message: crate::product_message!("backend.integration.graph.objects_missing"),
+                remedy: crate::product_message!(
+                    "backend.integration.graph.supply_object_and_correct_typed_reference"
+                ),
+            }]
+        })
+    }
+
+    /// The element of a complete AUTOSAR path; a missing object is an
+    /// unresolved reference located at that path.
+    pub fn index(&self, path: &str) -> Result<usize, Vec<PlanDiagnostic>> {
+        self.objects.get(path).copied().ok_or_else(|| {
+            vec![PlanDiagnostic {
+                category: DiagnosticCategory::Input,
+                code: "REFERENCE_UNRESOLVED".into(),
+                file: None,
+                object: Some(path.into()),
+                message: crate::message::LocalizedText::messages([
+                    crate::product_message!("backend.integration.graph.referenced_autosar_object_missing"),
+                    crate::product_message!("backend.integration.graph.reference_target", "target" => path),
+                ]),
+                remedy: crate::product_message!(
+                    "backend.integration.graph.supply_object_and_correct_typed_reference"
+                ),
+            }]
+        })
     }
 
     pub fn reference_diagnostics_for(
@@ -343,19 +379,19 @@ impl Graph {
                     }
                     Some(_) => continue,
                 };
-                if kind.is_none() && destination == "R-PORT-PROTOTYPE" {
-                    if let Some((parent, parent_index)) =
+                if kind.is_none()
+                    && destination == "R-PORT-PROTOTYPE"
+                    && let Some((parent, parent_index)) =
                         graph.objects.iter().rev().find(|(path, index)| {
                             element.text.starts_with(&format!("{path}/"))
                                 && graph.elements[**index].tag == "SERVICE-SW-COMPONENT-TYPE"
                         })
-                    {
-                        let mut issue = graph.diagnostic(*parent_index, DiagnosticCategory::Input,
+                {
+                    let mut issue = graph.diagnostic(*parent_index, DiagnosticCategory::Input,
                             "SERVICE_CLIENT_MISSING", crate::product_message!("backend.integration.graph.declared_service_client_port_missing", "parent" => parent),
                             crate::product_message!("backend.integration.graph.service_client_local_provider_binding_required"));
-                        issue.object = Some(element.text.clone());
-                        diagnostics.push(issue);
-                    }
+                    issue.object = Some(element.text.clone());
+                    diagnostics.push(issue);
                 }
                 if kind.is_none() && destination == "BSW-MODULE-ENTRY" {
                     let mut issue = graph.diagnostic(
@@ -429,10 +465,10 @@ impl Graph {
             }
             consumers.insert(element.object.clone());
             pending.extend(element.children.iter().copied());
-            if element.attributes.contains_key("DEST") {
-                if let Some(target) = self.objects.get(&element.text) {
-                    pending.push(*target);
-                }
+            if element.attributes.contains_key("DEST")
+                && let Some(target) = self.objects.get(&element.text)
+            {
+                pending.push(*target);
             }
         }
         consumers
@@ -482,4 +518,26 @@ fn path(node: roxmltree::Node<'_, '_>) -> String {
     let mut names: Vec<_> = node.ancestors().filter_map(short_name).collect();
     names.reverse();
     format!("/{}", names.join("/"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Graph;
+
+    #[test]
+    fn missing_objects_are_located_input_diagnostics() {
+        let graph = Graph {
+            elements: Vec::new(),
+            objects: Default::default(),
+            external: Default::default(),
+            builtin: true,
+        };
+        let missing = graph.index("/Pkg/Missing").unwrap_err();
+        assert_eq!(missing[0].code, "REFERENCE_UNRESOLVED");
+        assert_eq!(missing[0].object.as_deref(), Some("/Pkg/Missing"));
+        assert_eq!(
+            graph.context().unwrap_err()[0].code,
+            "INPUT_OBJECTS_MISSING"
+        );
+    }
 }

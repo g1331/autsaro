@@ -187,7 +187,14 @@ fn physical(graph: &Graph, context: usize, native: bool) -> Result<(), Vec<PlanD
         ));
     }
     let channel = super::component::selected_channel(graph, ecus[0])?;
-    let cluster = graph.ancestor(channel, "CAN-CLUSTER").unwrap();
+    let cluster = graph.ancestor(channel, "CAN-CLUSTER").ok_or_else(|| {
+        reject(
+            graph,
+            channel,
+            "CONTROLLER_MAPPING",
+            crate::product_message!("backend.integration.composition.contract_invalid", "code" => "CONTROLLER_MAPPING"),
+        )
+    })?;
     let rates = graph.descendants(cluster, "BAUDRATE");
     if rates.len() != 1 || graph.elements[rates[0]].text.parse::<u32>().ok() != rate {
         return Err(reject(
@@ -285,23 +292,22 @@ fn inspect_with_catalog(
         allowed_references.extend(RUNTIME_REFERENCES.split_ascii_whitespace());
     }
     let modules = graph.of_kind("ECUC-MODULE-CONFIGURATION-VALUES");
-    if composition {
-        if let Some(module) = modules
+    if composition
+        && let Some(module) = modules
             .iter()
             .copied()
             .find(|module| graph.text(*module, "DEFINITION-REF") == Some("/AUTOSAR/EcucDefs/LSduR"))
-        {
-            return Err(reject(
-                graph,
-                module,
-                "MODULE_UNSUPPORTED",
-                crate::product_message!(
-                    "backend.integration.configuration.fixed_target_implementation_contract_required"
-                ),
-            ));
-        }
+    {
+        return Err(reject(
+            graph,
+            module,
+            "MODULE_UNSUPPORTED",
+            crate::product_message!(
+                "backend.integration.configuration.fixed_target_implementation_contract_required"
+            ),
+        ));
     }
-    let context = *graph.objects.values().next().unwrap();
+    let context = graph.context()?;
     physical(graph, context, catalog.is_some())?;
     let mut selected = Vec::new();
     for module in MODULES {
@@ -344,7 +350,11 @@ fn inspect_with_catalog(
     }
     let os = one(graph, context, "OsOS")?;
     let hooks = one(graph, os, "OsHooks")?;
-    let os_module = selected[MODULES.iter().position(|module| *module == "Os").unwrap()];
+    let os_module = MODULES
+        .iter()
+        .zip(&selected)
+        .find_map(|(module, index)| (*module == "Os").then_some(*index))
+        .ok_or_else(|| PlanDiagnostic::plan_premise("/AUTOSAR/EcucDefs/Os"))?;
     let owner = |index: usize| {
         graph.elements[index]
             .parent
@@ -547,14 +557,16 @@ fn inspect_with_catalog(
         ("OsUseParameterAccess", true),
     ];
     for record in &records {
-        let index = *graph.objects.get(&record.path).unwrap();
+        let index = graph.index(&record.path)?;
         for definition in record.parameters.keys().filter(|definition| {
             definition.starts_with("/AUTOSAR/EcucDefs/Os/OsOS/")
                 || os_policies
                     .iter()
                     .any(|(_, names)| names.contains(&definition.rsplit('/').next().unwrap_or("")))
         }) {
-            let expected = definition.rsplit_once('/').unwrap().0;
+            let expected = definition
+                .rsplit_once('/')
+                .map_or(definition.as_str(), |(container, _)| container);
             if record.definition != expected {
                 return Err(reject(
                     graph,
@@ -566,30 +578,30 @@ fn inspect_with_catalog(
                 ));
             }
         }
-        if let Some(status) = value(graph, index, "OsStatus", false) {
-            if !matches!(status, "STANDARD" | "EXTENDED") {
+        if let Some(status) = value(graph, index, "OsStatus", false)
+            && !matches!(status, "STANDARD" | "EXTENDED")
+        {
+            return Err(reject(
+                graph,
+                index,
+                "TARGET_PARAMETER_UNSUPPORTED",
+                crate::product_message!(
+                    "backend.integration.configuration.sc1_os_status_unsupported"
+                ),
+            ));
+        }
+        for (parameter, expected) in fixed {
+            if let Some(actual) = value(graph, index, parameter, false)
+                && actual != expected
+            {
                 return Err(reject(
                     graph,
                     index,
                     "TARGET_PARAMETER_UNSUPPORTED",
                     crate::product_message!(
-                        "backend.integration.configuration.sc1_os_status_unsupported"
+                        "backend.integration.configuration.fixed_target_policy_value_mismatch"
                     ),
                 ));
-            }
-        }
-        for (parameter, expected) in fixed {
-            if let Some(actual) = value(graph, index, parameter, false) {
-                if actual != expected {
-                    return Err(reject(
-                        graph,
-                        index,
-                        "TARGET_PARAMETER_UNSUPPORTED",
-                        crate::product_message!(
-                            "backend.integration.configuration.fixed_target_policy_value_mismatch"
-                        ),
-                    ));
-                }
             }
         }
         for (parameter, expected) in booleans {

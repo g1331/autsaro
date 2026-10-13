@@ -391,6 +391,10 @@ impl PreparedSave {
         Ok(Self { workspace })
     }
 
+    #[expect(
+        clippy::result_large_err,
+        reason = "clippy baseline #37: a failed save returns the unchanged workspace"
+    )]
     pub fn commit(mut self) -> Result<Workspace, SaveFailure> {
         match self.workspace.save_sources() {
             Ok(()) => Ok(self.workspace),
@@ -529,20 +533,18 @@ impl Workspace {
                 scope.scope,
                 crate::project_model::ValidationScope::SourceSafety
                     | crate::project_model::ValidationScope::Schema
-            ) {
-                if let Some(issue) = scope
-                    .diagnostics
-                    .iter()
-                    .find(|issue| matches!(issue.severity, Severity::Error))
-                {
-                    return Err(crate::message::LocalizedText::messages([
-                        crate::product_message!(
-                            "backend.arxml.persistence.blocking_diagnostic",
-                            "code" => issue.code
-                        ),
-                        issue.message.clone(),
-                    ]));
-                }
+            ) && let Some(issue) = scope
+                .diagnostics
+                .iter()
+                .find(|issue| matches!(issue.severity, Severity::Error))
+            {
+                return Err(crate::message::LocalizedText::messages([
+                    crate::product_message!(
+                        "backend.arxml.persistence.blocking_diagnostic",
+                        "code" => issue.code
+                    ),
+                    issue.message.clone(),
+                ]));
             }
         }
         Ok(())
@@ -639,14 +641,14 @@ impl Workspace {
             .filter(|file| file.text != file.saved)
             .cloned()
             .collect::<Vec<_>>();
-        if let Some(project) = &self.project {
-            if project.current != project.saved {
-                dirty.push(SourceFile {
-                    path: project.path.clone(),
-                    text: project.current.clone(),
-                    saved: project.saved.clone(),
-                });
-            }
+        if let Some(project) = &self.project
+            && project.current != project.saved
+        {
+            dirty.push(SourceFile {
+                path: project.path.clone(),
+                text: project.current.clone(),
+                saved: project.saved.clone(),
+            });
         }
         let mut staged = Vec::new();
         for (index, file) in dirty.iter().enumerate() {

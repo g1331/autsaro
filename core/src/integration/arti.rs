@@ -1,15 +1,7 @@
 use super::{PlanDescription, configuration::ConfigurationRecord};
-use std::fmt::Write;
 
 const DEF: &str = "/AUTOSAR/EcucDefs/Arti";
 const ROOT: &str = "/ArtiDescriptions/Arti";
-fn escape(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-}
 fn parameter(definition: &str, value: &str, kind: &str) -> String {
     let tag = if matches!(kind, "ECUC-INTEGER-PARAM-DEF" | "ECUC-BOOLEAN-PARAM-DEF") {
         "ECUC-NUMERICAL-PARAM-VALUE"
@@ -18,13 +10,16 @@ fn parameter(definition: &str, value: &str, kind: &str) -> String {
     };
     format!(
         "<{tag}><DEFINITION-REF DEST=\"{kind}\">{definition}</DEFINITION-REF><VALUE>{}</VALUE></{tag}>",
-        escape(value)
+        super::xml_text(value)
     )
 }
 fn reference(definition: &str, target: &str) -> String {
+    reference_of("ECUC-REFERENCE-DEF", definition, target)
+}
+fn reference_of(kind: &str, definition: &str, target: &str) -> String {
     format!(
-        "<ECUC-REFERENCE-VALUE><DEFINITION-REF DEST=\"ECUC-REFERENCE-DEF\">{definition}</DEFINITION-REF><VALUE-REF DEST=\"ECUC-CONTAINER-VALUE\">{}</VALUE-REF></ECUC-REFERENCE-VALUE>",
-        escape(target)
+        "<ECUC-REFERENCE-VALUE><DEFINITION-REF DEST=\"{kind}\">{definition}</DEFINITION-REF><VALUE-REF DEST=\"ECUC-CONTAINER-VALUE\">{}</VALUE-REF></ECUC-REFERENCE-VALUE>",
+        super::xml_text(target)
     )
 }
 fn container(
@@ -36,7 +31,7 @@ fn container(
 ) -> String {
     let mut xml = format!(
         "<ECUC-CONTAINER-VALUE><SHORT-NAME>{}</SHORT-NAME><DEFINITION-REF DEST=\"ECUC-PARAM-CONF-CONTAINER-DEF\">{definition}</DEFINITION-REF>",
-        escape(name)
+        super::xml_text(name)
     );
     for (tag, contents) in [
         ("PARAMETER-VALUES", parameters),
@@ -44,7 +39,7 @@ fn container(
         ("SUB-CONTAINERS", children),
     ] {
         if !contents.is_empty() {
-            write!(xml, "<{tag}>{contents}</{tag}>").unwrap();
+            xml.push_str(&format!("<{tag}>{contents}</{tag}>"));
         }
     }
     xml.push_str("</ECUC-CONTAINER-VALUE>");
@@ -113,6 +108,21 @@ impl Description {
         fields: &[(&str, String)],
         parameters: &[(&str, String, &str)],
     ) {
+        let (definition, params, refs) =
+            self.instance_values(kind, name, ecuc, id, fields, parameters);
+        self.objects
+            .push_str(&container(name, &definition, &params, &refs, ""));
+    }
+    /// The definition, parameter values and reference values of one OS object instance.
+    fn instance_values(
+        &mut self,
+        kind: &str,
+        name: &str,
+        ecuc: Option<&str>,
+        id: Option<usize>,
+        fields: &[(&str, String)],
+        parameters: &[(&str, String, &str)],
+    ) -> (String, String, String) {
         let definition = format!("{DEF}/ArtiOs/ArtiOs{kind}Instance");
         let mut refs = String::new();
         if let Some(path) = ecuc {
@@ -149,8 +159,7 @@ impl Description {
                 ty,
             ));
         }
-        self.objects
-            .push_str(&container(name, &definition, &params, &refs, ""));
+        (definition, params, refs)
     }
     fn pointer_map(&mut self, name: &str, expression: &str, target: &str) {
         let property = format!("{name}Address");
@@ -159,11 +168,11 @@ impl Description {
         let refs = reference(
             &format!("{def}/ArtiParameterTypeMapPairInputExpressionRef"),
             &format!("{ROOT}/Values/{property}Expression"),
-        ) + &reference(&format!("{def}/ArtiParameterTypeMapPairOutputRef"), target)
-            .replace(
-                "DEST=\"ECUC-REFERENCE-DEF\"",
-                "DEST=\"ECUC-CHOICE-REFERENCE-DEF\"",
-            );
+        ) + &reference_of(
+            "ECUC-CHOICE-REFERENCE-DEF",
+            &format!("{def}/ArtiParameterTypeMapPairOutputRef"),
+            target,
+        );
         self.values.push_str(&container(
             name,
             &format!("{DEF}/ArtiValues/ArtiParameterTypeMap"),
@@ -181,11 +190,11 @@ impl Description {
                 &input.to_string(),
                 "ECUC-INTEGER-PARAM-DEF",
             );
-            let refs = reference(&format!("{def}/ArtiParameterTypeMapPairOutputRef"), target)
-                .replace(
-                    "DEST=\"ECUC-REFERENCE-DEF\"",
-                    "DEST=\"ECUC-CHOICE-REFERENCE-DEF\"",
-                );
+            let refs = reference_of(
+                "ECUC-CHOICE-REFERENCE-DEF",
+                &format!("{def}/ArtiParameterTypeMapPairOutputRef"),
+                target,
+            );
             pairs.push_str(&container(
                 &format!("Value{input}"),
                 &def,
@@ -203,17 +212,93 @@ impl Description {
         ));
     }
 }
+/// ARTI hook values and the OS instance references to them, one per distinct
+/// trace call in the rendered binding.
+fn hooks(name: &str, binding: &str) -> Result<(String, String), crate::message::LocalizedText> {
+    let mut values = String::new();
+    let mut hook_refs = String::new();
+    let mut hooks = std::collections::BTreeSet::new();
+    for call in binding.split("ARTI_TRACE(").skip(1) {
+        let (arguments, _) = call.split_once(';').ok_or(crate::product_message!(
+            "backend.integration.arti.arti_trace_invocation_malformed"
+        ))?;
+        let arguments = arguments.split(',').collect::<Vec<_>>();
+        if arguments.len() != 6 {
+            return Err(crate::product_message!(
+                "backend.integration.arti.arti_single_parameter_trace_invocation_malformed"
+            ));
+        }
+        let context = arguments[0].trim();
+        let class = arguments[1].trim();
+        let event = arguments[4].trim();
+        if !hooks.insert((context, class, event)) {
+            continue;
+        }
+        let def = format!("{DEF}/ArtiValues/ArtiHook");
+        let mut params = String::new();
+        for (field, value) in [
+            ("Context", context),
+            ("Class", class),
+            ("EventName", event),
+            ("Instance", name),
+            ("FileName", "Os_Arti.c"),
+        ] {
+            params.push_str(&parameter(
+                &format!("{def}/ArtiHook{field}"),
+                value,
+                "ECUC-STRING-PARAM-DEF",
+            ));
+        }
+        let mut refs = reference(
+            &format!("{def}/ArtiHookInstanceParameterTypeRef"),
+            &format!("{ROOT}/Values/CoreIds"),
+        );
+        if let Some(map) = match class {
+            "AR_CP_OS_TASK" => Some("TaskIds"),
+            "AR_CP_OS_CAT2ISR" => Some("IsrIds"),
+            _ => None,
+        } {
+            refs.push_str(&reference(
+                &format!("{def}/ArtiHookEventParameterTypeRef"),
+                &format!("{ROOT}/Values/{map}"),
+            ));
+        }
+        values.push_str(&container(event, &def, &params, &refs, ""));
+        hook_refs.push_str(&reference(
+            &format!("{DEF}/ArtiOs/ArtiOsInstance/ArtiOsInstanceHookRef"),
+            &format!("{ROOT}/Values/{event}"),
+        ));
+    }
+    Ok((values, hook_refs))
+}
 fn selected<'a>(records: &'a [ConfigurationRecord], name: &str) -> Option<&'a ConfigurationRecord> {
     records
         .iter()
         .find(|record| record.definition == format!("/AUTOSAR/EcucDefs/Os/{name}"))
 }
+/// The ARTI description and the hook binding rendered once from its trusted
+/// template for the selected OS instance name.
 pub(super) fn files(
     plan: &PlanDescription,
     scheduler: bool,
     alarms: &[String],
     tables: &[String],
-) -> Result<Vec<(String, Vec<u8>)>, crate::message::LocalizedText> {
+    binding_template: &str,
+) -> Result<(Vec<u8>, String), Vec<super::PlanDiagnostic>> {
+    let (os, name) = selected_os(plan).map_err(super::ecu::reject)?;
+    let binding = super::outputs::render(
+        binding_template,
+        "os/src/Os_Arti.c",
+        &[super::outputs::Edit::Every(", Os,", &format!(", {name},"))],
+    )?;
+    let xml = description(plan, scheduler, alarms, tables, os, name, &binding)
+        .map_err(super::ecu::reject)?;
+    Ok((xml, binding))
+}
+
+fn selected_os(
+    plan: &PlanDescription,
+) -> Result<(&ConfigurationRecord, &str), crate::message::LocalizedText> {
     let os = selected(&plan.configuration, "OsOS").ok_or(crate::product_message!(
         "backend.integration.arti.arti_selected_os_configuration_required"
     ))?;
@@ -224,13 +309,24 @@ pub(super) fn files(
             "backend.integration.arti.arti_os_module_path_required"
         ))?
         .0;
-    let name = module.rsplit('/').next().unwrap();
+    let name = super::short_name(module);
     if super::component::c_name(name) != name {
         return Err(crate::product_message!(
             "backend.integration.arti.arti_os_short_name_not_representable"
-        )
-        .into());
+        ));
     }
+    Ok((os, name))
+}
+
+fn description(
+    plan: &PlanDescription,
+    scheduler: bool,
+    alarms: &[String],
+    tables: &[String],
+    os: &ConfigurationRecord,
+    name: &str,
+    binding: &str,
+) -> Result<Vec<u8>, crate::message::LocalizedText> {
     let mut d = Description::default();
     let mut states = String::new();
     for (kind, labels) in [
@@ -281,7 +377,9 @@ pub(super) fn files(
     ))?;
     d.type_map("AppModes", &[(1, mode.path.clone())]);
     d.class("", &[("AppMode", Some("AppModes"))]);
-    d.instance(
+    // Hooks attach to the OS instance rather than to a parallel manifest.
+    let (hook_values, hook_refs) = hooks(name, binding)?;
+    let (definition, params, refs) = d.instance_values(
         "",
         "OperatingSystem",
         Some(&os.path),
@@ -292,6 +390,13 @@ pub(super) fn files(
         ],
         &[],
     );
+    d.objects.push_str(&container(
+        "OperatingSystem",
+        &definition,
+        &params,
+        &(refs + &hook_refs),
+        "",
+    ));
     d.pointer_map(
         "TaskStacks",
         "Os_ArtiTaskStacks[0]",
@@ -328,7 +433,7 @@ pub(super) fn files(
             "Function",
             format!(
                 "Os_TaskEntry_OS_TASK_ID_{}",
-                plan.schedule.task.rsplit('/').next().unwrap()
+                super::short_name(&plan.schedule.task)
             ),
             "ECUC-FUNCTION-NAME-DEF",
         )],
@@ -559,84 +664,13 @@ pub(super) fn files(
         &generic_instance,
         &parameter(
             &format!("{generic_instance}/ArtiGenericComponentInstanceName"),
-            plan.schedule.counter.rsplit('/').next().unwrap(),
+            super::short_name(&plan.schedule.counter),
             "ECUC-STRING-PARAM-DEF",
         ),
         &generic_refs,
         &container("Value", &instance_parameter, "", &value_refs, ""),
     ));
-    let mut hook_refs = String::new();
-    let binding =
-        include_str!("../../../runtime/os/src/Os_Arti.c").replace(", Os,", &format!(", {name},"));
-    let mut hooks = std::collections::BTreeSet::new();
-    for call in binding.split("ARTI_TRACE(").skip(1) {
-        let (arguments, _) = call.split_once(';').ok_or(crate::product_message!(
-            "backend.integration.arti.arti_trace_invocation_malformed"
-        ))?;
-        let arguments = arguments.split(',').collect::<Vec<_>>();
-        if arguments.len() != 6 {
-            return Err(crate::product_message!(
-                "backend.integration.arti.arti_single_parameter_trace_invocation_malformed"
-            )
-            .into());
-        }
-        let context = arguments[0].trim();
-        let class = arguments[1].trim();
-        let event = arguments[4].trim();
-        if !hooks.insert((context, class, event)) {
-            continue;
-        }
-        let def = format!("{DEF}/ArtiValues/ArtiHook");
-        let mut params = String::new();
-        for (field, value) in [
-            ("Context", context),
-            ("Class", class),
-            ("EventName", event),
-            ("Instance", name),
-            ("FileName", "Os_Arti.c"),
-        ] {
-            params.push_str(&parameter(
-                &format!("{def}/ArtiHook{field}"),
-                value,
-                "ECUC-STRING-PARAM-DEF",
-            ));
-        }
-        let mut refs = reference(
-            &format!("{def}/ArtiHookInstanceParameterTypeRef"),
-            &format!("{ROOT}/Values/CoreIds"),
-        );
-        if let Some(map) = match class {
-            "AR_CP_OS_TASK" => Some("TaskIds"),
-            "AR_CP_OS_CAT2ISR" => Some("IsrIds"),
-            _ => None,
-        } {
-            refs.push_str(&reference(
-                &format!("{def}/ArtiHookEventParameterTypeRef"),
-                &format!("{ROOT}/Values/{map}"),
-            ));
-        }
-        d.values
-            .push_str(&container(event, &def, &params, &refs, ""));
-        hook_refs.push_str(&reference(
-            &format!("{DEF}/ArtiOs/ArtiOsInstance/ArtiOsInstanceHookRef"),
-            &format!("{ROOT}/Values/{event}"),
-        ));
-    }
-    // Attach hooks to the OS instance rather than introducing a parallel manifest.
-    let instance_end = "</REFERENCE-VALUES></ECUC-CONTAINER-VALUE>";
-    let start = d
-        .objects
-        .find("<SHORT-NAME>OperatingSystem</SHORT-NAME>")
-        .ok_or(crate::product_message!(
-            "backend.integration.arti.arti_generated_os_instance_missing"
-        ))?;
-    let at = start
-        + d.objects[start..]
-            .find(instance_end)
-            .ok_or(crate::product_message!(
-                "backend.integration.arti.arti_generated_os_instance_references_missing"
-            ))?;
-    d.objects.insert_str(at, &hook_refs);
+    d.values.push_str(&hook_values);
     let children = container("Values", &format!("{DEF}/ArtiValues"), "", "", &d.values)
         + &container("Os", &format!("{DEF}/ArtiOs"), "", "", &d.objects)
         + &container("Generic", &format!("{DEF}/ArtiGeneric"), "", "", &d.generic)
@@ -672,8 +706,5 @@ pub(super) fn files(
     let xml = format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\"><AR-PACKAGES><AR-PACKAGE><SHORT-NAME>ArtiDescriptions</SHORT-NAME><ELEMENTS><ECUC-MODULE-CONFIGURATION-VALUES><SHORT-NAME>Arti</SHORT-NAME><DEFINITION-REF DEST=\"ECUC-MODULE-DEF\">{DEF}</DEFINITION-REF><ECUC-DEF-EDITION>4.10.0</ECUC-DEF-EDITION><IMPLEMENTATION-CONFIG-VARIANT>VARIANT-PRE-COMPILE</IMPLEMENTATION-CONFIG-VARIANT><POST-BUILD-VARIANT-USED>false</POST-BUILD-VARIANT-USED><CONTAINERS>{children}</CONTAINERS></ECUC-MODULE-CONFIGURATION-VALUES>{host_ecuc}</ELEMENTS></AR-PACKAGE></AR-PACKAGES></AUTOSAR>\n"
     );
-    Ok(vec![
-        ("os/Os_Arti.arxml".into(), xml.into_bytes()),
-        ("os/src/Os_Arti.c".into(), binding.into_bytes()),
-    ])
+    Ok(xml.into_bytes())
 }

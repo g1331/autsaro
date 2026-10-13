@@ -3,9 +3,7 @@ use super::{DiagnosticCategory, PlanDiagnostic, ValidatedIntegrationPlan};
 use crate::resources::AssetInventory;
 use crate::target::BuildTarget;
 use crate::{GenerationPreview, GenerationReport, generator};
-use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::fmt::Write;
 use std::path::Path;
 
 /// A complete deterministic source project from the same validated plan.
@@ -32,17 +30,16 @@ impl EcuIntegrationFiles {
     }
 }
 
-fn reject(message: crate::message::LocalizedText) -> Vec<PlanDiagnostic> {
+pub(super) fn reject(message: crate::message::LocalizedText) -> Vec<PlanDiagnostic> {
     vec![PlanDiagnostic {
         category: DiagnosticCategory::Tool,
         code: "ECU_SOURCE_CLOSURE".into(),
         file: None,
         object: None,
-        message: message.into(),
+        message,
         remedy: crate::product_message!(
             "backend.integration.ecu.generation_identity_contract_repair_required"
-        )
-        .into(),
+        ),
     }]
 }
 
@@ -53,10 +50,9 @@ impl ValidatedIntegrationPlan {
         &self,
     ) -> Result<Vec<generator::delivery::ApplicationSlotDescriptor>, Vec<PlanDiagnostic>> {
         let composition = self.description().composition.as_ref().ok_or_else(|| {
-            reject(
-                crate::product_message!("backend.integration.composition.consumer_unsupported")
-                    .into(),
-            )
+            reject(crate::product_message!(
+                "backend.integration.composition.consumer_unsupported"
+            ))
         })?;
         Ok(application_slots(composition, &self.description().symbols))
     }
@@ -64,10 +60,9 @@ impl ValidatedIntegrationPlan {
     /// Trusted create-only seed; never merges with or overwrites a user source.
     pub fn application_seed_files(&self) -> Result<Vec<(String, Vec<u8>)>, Vec<PlanDiagnostic>> {
         let composition = self.description().composition.as_ref().ok_or_else(|| {
-            reject(
-                crate::product_message!("backend.integration.composition.consumer_unsupported")
-                    .into(),
-            )
+            reject(crate::product_message!(
+                "backend.integration.composition.consumer_unsupported"
+            ))
         })?;
         // The reference shape gets the echo application the independent
         // verifier checks; any other shape gets neutral entry points.
@@ -78,29 +73,27 @@ impl ValidatedIntegrationPlan {
                 .components
                 .iter()
                 .find(|component| component.component == slot.component_path)
-                .unwrap();
-            let scope = c_name(component.component.rsplit('/').next().unwrap());
+                .ok_or_else(|| PlanDiagnostic::plan_premise(&slot.component_path))?;
+            let source_path = slot
+                .source_paths
+                .first()
+                .ok_or_else(|| PlanDiagnostic::plan_premise(&slot.component_path))?;
+            let scope = c_name(super::short_name(&component.component));
             let mut source = format!(
                 "/** @file User-owned application entry points. */\n#include \"{}\"\n",
                 component.header.trim_start_matches("include/")
             );
             if reference.is_some() {
-                writeln!(
-                    source,
-                    "#define RTE_{scope}_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n/* Last value committed from the receive port; the DID reports it. */\nstatic uint32 committed RTE_{scope}_VAR_CLEARED_UNSPECIFIED;\n#define RTE_{scope}_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\""
-                )
-                .unwrap();
+                source.push_str(&format!("#define RTE_{scope}_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n/* Last value committed from the receive port; the DID reports it. */\nstatic uint32 committed RTE_{scope}_VAR_CLEARED_UNSPECIFIED;\n#define RTE_{scope}_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n"));
             }
-            writeln!(
-                source,
-                "#define RTE_{scope}_START_SEC_CODE\n#include \"Rte_MemMap.h\""
-            )
-            .unwrap();
+            source.push_str(&format!(
+                "#define RTE_{scope}_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n"
+            ));
             for symbol in self
                 .description()
                 .symbols
                 .iter()
-                .filter(|symbol| symbol.definition_owner == slot.source_paths[0])
+                .filter(|symbol| symbol.definition_owner == *source_path)
             {
                 let parameters = symbol
                     .arguments
@@ -108,9 +101,8 @@ impl ValidatedIntegrationPlan {
                     .map(|argument| format!("{} {}", argument.native_type, argument.name))
                     .collect::<Vec<_>>()
                     .join(", ");
-                writeln!(
-                    source,
-                    "RTE_{scope}_CODE {} {}({}) {{",
+                source.push_str(&format!(
+                    "RTE_{scope}_CODE {} {}({}) {{\n",
                     symbol.return_type,
                     symbol.symbol,
                     if parameters.is_empty() {
@@ -118,20 +110,15 @@ impl ValidatedIntegrationPlan {
                     } else {
                         &parameters
                     }
-                )
-                .unwrap();
+                ));
                 if let Some(shape) = reference
                     .as_ref()
                     .filter(|shape| shape.periodic_symbol == symbol.symbol)
                 {
                     // RTE_E_MAX_AGE_EXCEEDED still delivers the last received
                     // value (SWS_Rte_02703); RTE_E_NEVER_RECEIVED does not.
-                    writeln!(
-                        source,
-                        "    uint32 value = committed;\n    const Std_ReturnType status = {}(&value);\n    if ((status == RTE_E_OK) || (status == RTE_E_MAX_AGE_EXCEEDED)) {{\n        committed = value;\n        (void){}(value);\n    }}\n}}",
-                        shape.read.api_symbol, shape.write.api_symbol
-                    )
-                    .unwrap();
+                    source.push_str(&format!("    uint32 value = committed;\n    const Std_ReturnType status = {}(&value);\n    if ((status == RTE_E_OK) || (status == RTE_E_MAX_AGE_EXCEEDED)) {{\n        committed = value;\n        (void){}(value);\n    }}\n}}\n",
+                        shape.read.api_symbol, shape.write.api_symbol));
                     continue;
                 }
                 if let (Some(_), [argument]) = (&reference, symbol.arguments.as_slice())
@@ -145,32 +132,32 @@ impl ValidatedIntegrationPlan {
                         } else {
                             format!("(committed >> {shift})")
                         };
-                        writeln!(source, "    {}[{index}] = (uint8){value};", argument.name)
-                            .unwrap();
+                        source.push_str(&format!(
+                            "    {}[{index}] = (uint8){value};\n",
+                            argument.name
+                        ));
                     }
                     source.push_str("}\n");
                     continue;
                 }
                 for argument in &symbol.arguments {
                     if argument.direction != "OUT" {
-                        writeln!(source, "    (void){};", argument.name).unwrap();
+                        source.push_str(&format!("    (void){};\n", argument.name));
                     } else if argument.native_type == "uint32 *" {
-                        writeln!(source, "    *{} = 0u;", argument.name).unwrap();
+                        source.push_str(&format!("    *{} = 0u;\n", argument.name));
                     } else {
                         // The checked contract supports only fixed uint8[4] OUT arrays.
                         for index in 0..4 {
-                            writeln!(source, "    {}[{index}] = 0u;", argument.name).unwrap();
+                            source.push_str(&format!("    {}[{index}] = 0u;\n", argument.name));
                         }
                     }
                 }
                 source.push_str("}\n");
             }
-            writeln!(
-                source,
-                "#define RTE_{scope}_STOP_SEC_CODE\n#include \"Rte_MemMap.h\""
-            )
-            .unwrap();
-            files.push((slot.source_paths[0].clone(), source.into_bytes()));
+            source.push_str(&format!(
+                "#define RTE_{scope}_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n"
+            ));
+            files.push((source_path.clone(), source.into_bytes()));
         }
         Ok(files)
     }
@@ -195,11 +182,11 @@ impl ValidatedIntegrationPlan {
         })
     }
 
-    pub(crate) fn render_ecu_sources<'a>(
-        &'a self,
+    pub(crate) fn render_ecu_sources(
+        &self,
         target: BuildTarget,
-        application: Option<&'a [u8]>,
-    ) -> Result<BTreeMap<String, Cow<'a, [u8]>>, Vec<PlanDiagnostic>> {
+        application: Option<&[u8]>,
+    ) -> Result<(super::outputs::EcuFiles, String), Vec<PlanDiagnostic>> {
         if application.is_none() {
             return Err(reject(crate::product_message!(
                 "backend.integration.composition.consumer_unsupported"
@@ -230,7 +217,7 @@ pub(super) fn application_slots(
     for component in &composition.components {
         let source = format!(
             "application/{}.c",
-            c_name(component.component.rsplit('/').next().unwrap())
+            c_name(super::short_name(&component.component))
         );
         let entries: Vec<_> = symbols
             .iter()
@@ -332,21 +319,11 @@ pub(super) struct OsGeneration {
 
 pub(super) fn configure_os(
     plan: &super::PlanDescription,
-    files: &mut BTreeMap<String, Cow<'_, [u8]>>,
+    outputs: &mut super::outputs::EcuOutputs,
 ) -> Result<OsGeneration, Vec<PlanDiagnostic>> {
-    let counter_name = c_name(plan.schedule.counter.rsplit('/').next().unwrap());
+    let counter_name = c_name(super::short_name(&plan.schedule.counter));
     let tick_ms = u64::from(plan.schedule.counter_tick_ms);
-    let counter_header = format!(
-        "/** @file Generated Counter time conversions (SWS_Os_00393).\n * Argument: a TickType value in0..UINT32_MAX; evaluated once.\n * Result: PhysicalTimeType. Integer seconds truncate toward zero.\n * The validated Counter resolution is {tick_ms} logical millisecond(s).\n * The largest nanosecond result fits uint64_t without overflow.\n */\n#ifndef AUTOSAR_GENERATED_OS_COUNTER_H\n#define AUTOSAR_GENERATED_OS_COUNTER_H\n#include \"Os_Types.h\"\nstatic inline PhysicalTimeType Os_TicksToNs_{counter_name}(TickType ticks) {{\n    return (PhysicalTimeType)ticks * UINT64_C({ns});\n}}\nstatic inline PhysicalTimeType Os_TicksToUs_{counter_name}(TickType ticks) {{\n    return (PhysicalTimeType)ticks * UINT64_C({us});\n}}\nstatic inline PhysicalTimeType Os_TicksToMs_{counter_name}(TickType ticks) {{\n    return (PhysicalTimeType)ticks * UINT64_C({tick_ms});\n}}\nstatic inline PhysicalTimeType Os_TicksToSec_{counter_name}(TickType ticks) {{\n    return ((PhysicalTimeType)ticks * UINT64_C({tick_ms})) / UINT64_C(1000);\n}}\n#define OS_TICKS2NS_{counter_name}(ticks) (Os_TicksToNs_{counter_name}((ticks)))\n#define OS_TICKS2US_{counter_name}(ticks) (Os_TicksToUs_{counter_name}((ticks)))\n#define OS_TICKS2MS_{counter_name}(ticks) (Os_TicksToMs_{counter_name}((ticks)))\n#define OS_TICKS2SEC_{counter_name}(ticks) (Os_TicksToSec_{counter_name}((ticks)))\n#endif\n",
-        ns = tick_ms * 1_000_000,
-        us = tick_ms * 1_000,
-    );
     let counter_symbol = format!("OS_COUNTER_ID_{counter_name}");
-    files.extend(
-        super::os_service::files(&counter_name, &counter_symbol)
-            .into_iter()
-            .map(|(path, bytes)| (path, Cow::Owned(bytes))),
-    );
     let legacy_constants = format!(
         "#define {counter_symbol} 0u\n#define OSMAXALLOWEDVALUE_{counter_name} UINT64_C({maximum})\n#define OSTICKSPERBASE_{counter_name} UINT64_C({base})\n#define OSMINCYCLE_{counter_name} UINT64_C({minimum})\n#define OSMAXALLOWEDVALUE_{counter_symbol} OSMAXALLOWEDVALUE_{counter_name}\n#define OSTICKSPERBASE_{counter_symbol} OSTICKSPERBASE_{counter_name}\n#define OSMINCYCLE_{counter_symbol} OSMINCYCLE_{counter_name}\n#define OSMAXALLOWEDVALUE OSMAXALLOWEDVALUE_{counter_name}\n#define OSTICKSPERBASE OSTICKSPERBASE_{counter_name}\n#define OSMINCYCLE OSMINCYCLE_{counter_name}\n#define OSTICKDURATION UINT64_C({nanoseconds})\n",
         maximum = plan.schedule.counter_maximum,
@@ -354,39 +331,38 @@ pub(super) fn configure_os(
         minimum = plan.schedule.counter_minimum_cycle,
         nanoseconds = tick_ms * 1_000_000,
     );
-    let mut counter_header = counter_header;
-    let end = counter_header.rfind("#endif").unwrap();
-    counter_header.insert_str(end, &legacy_constants);
-    files.insert(
-        "os/include/Os_Counter.h".into(),
-        Cow::Owned(counter_header.into_bytes()),
+    let counter_header = format!(
+        "/** @file Generated Counter time conversions (SWS_Os_00393).\n * Argument: a TickType value in0..UINT32_MAX; evaluated once.\n * Result: PhysicalTimeType. Integer seconds truncate toward zero.\n * The validated Counter resolution is {tick_ms} logical millisecond(s).\n * The largest nanosecond result fits uint64_t without overflow.\n */\n#ifndef AUTOSAR_GENERATED_OS_COUNTER_H\n#define AUTOSAR_GENERATED_OS_COUNTER_H\n#include \"Os_Types.h\"\nstatic inline PhysicalTimeType Os_TicksToNs_{counter_name}(TickType ticks) {{\n    return (PhysicalTimeType)ticks * UINT64_C({ns});\n}}\nstatic inline PhysicalTimeType Os_TicksToUs_{counter_name}(TickType ticks) {{\n    return (PhysicalTimeType)ticks * UINT64_C({us});\n}}\nstatic inline PhysicalTimeType Os_TicksToMs_{counter_name}(TickType ticks) {{\n    return (PhysicalTimeType)ticks * UINT64_C({tick_ms});\n}}\nstatic inline PhysicalTimeType Os_TicksToSec_{counter_name}(TickType ticks) {{\n    return ((PhysicalTimeType)ticks * UINT64_C({tick_ms})) / UINT64_C(1000);\n}}\n#define OS_TICKS2NS_{counter_name}(ticks) (Os_TicksToNs_{counter_name}((ticks)))\n#define OS_TICKS2US_{counter_name}(ticks) (Os_TicksToUs_{counter_name}((ticks)))\n#define OS_TICKS2MS_{counter_name}(ticks) (Os_TicksToMs_{counter_name}((ticks)))\n#define OS_TICKS2SEC_{counter_name}(ticks) (Os_TicksToSec_{counter_name}((ticks)))\n{legacy_constants}#endif\n",
+        ns = tick_ms * 1_000_000,
+        us = tick_ms * 1_000,
     );
-    let configuration = files.get_mut("os/include/Os_Cfg.h").unwrap();
-    let mut configuration_text = std::str::from_utf8(configuration)
-        .map_err(|error| reject(error.to_string().into()))?
-        .to_owned();
-    let extended_status =
-        plan.configuration
-            .iter()
-            .find_map(|record| {
-                record.parameters.iter().find_map(|(name, values)| {
-                    name.ends_with("/OsStatus").then(|| values[0].as_str())
-                })
+    outputs.emit_all(
+        "os-service",
+        super::os_service::files(&counter_name, &counter_symbol),
+    )?;
+    outputs.emit(
+        super::outputs::OS,
+        "os/include/Os_Counter.h",
+        counter_header,
+    )?;
+    let extended_status = plan
+        .configuration
+        .iter()
+        .find_map(|record| {
+            record.parameters.iter().find_map(|(name, values)| {
+                name.ends_with("/OsStatus")
+                    .then(|| values.first().map(String::as_str))
+                    .flatten()
             })
-            .unwrap_or("EXTENDED")
-            == "EXTENDED";
-    configuration_text = configuration_text.replace(
-        "#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED 1\n#endif",
-        if extended_status {
-            "#if defined(OS_STATUS_EXTENDED) && (OS_STATUS_EXTENDED != 1)\n#error OsStatus differs from the validated plan\n#endif\n#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED 1\n#endif"
-        } else {
-            "#if defined(OS_STATUS_EXTENDED) && (OS_STATUS_EXTENDED != 0)\n#error OsStatus differs from the validated plan\n#endif\n#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED 0\n#endif"
-        },
-    );
-    let task_symbol = format!(
-        "OS_TASK_ID_{}",
-        plan.schedule.task.rsplit('/').next().unwrap()
-    );
+        })
+        .unwrap_or("EXTENDED")
+        == "EXTENDED";
+    let status = if extended_status {
+        "#if defined(OS_STATUS_EXTENDED) && (OS_STATUS_EXTENDED != 1)\n#error OsStatus differs from the validated plan\n#endif\n#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED 1\n#endif"
+    } else {
+        "#if defined(OS_STATUS_EXTENDED) && (OS_STATUS_EXTENDED != 0)\n#error OsStatus differs from the validated plan\n#endif\n#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED 0\n#endif"
+    };
+    let task_symbol = format!("OS_TASK_ID_{}", super::short_name(&plan.schedule.task));
     let use_res_scheduler = plan
         .configuration
         .iter()
@@ -395,19 +371,29 @@ pub(super) fn configure_os(
             record
                 .parameters
                 .get("/AUTOSAR/EcucDefs/Os/OsOS/OsUseResScheduler")
+                .and_then(|values| values.first())
         })
-        .map(|values| matches!(values[0].as_str(), "true" | "1"))
+        .map(|value| matches!(value.as_str(), "true" | "1"))
         .ok_or_else(|| {
             reject(crate::product_message!(
                 "backend.integration.ecu.validated_os_scheduler_resource_config_missing"
             ))
         })?;
-    let end = configuration_text.rfind("#endif").unwrap();
-    configuration_text.insert_str(
-        end,
-        &format!("#include \"Os_Counter.h\"\n#define {task_symbol} 0u\n"),
-    );
-    *configuration = Cow::Owned(configuration_text.into_bytes());
+    let path = "os/include/Os_Cfg.h";
+    let configuration = super::outputs::render(
+        outputs.template(super::outputs::OS, path)?,
+        path,
+        &[
+            super::outputs::Edit::Once(
+                "#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED 1\n#endif",
+                status,
+            ),
+            super::outputs::Edit::BeforeGuardEnd(&format!(
+                "#include \"Os_Counter.h\"\n#define {task_symbol} 0u\n"
+            )),
+        ],
+    )?;
+    outputs.emit_rendered(super::outputs::OS, path, configuration)?;
     let mut timer_report = serde_json::to_vec_pretty(&serde_json::json!({
         "format": "autosar-os-generation-timing-v1",
         "requirement": "SWS_Os_00370",
@@ -427,7 +413,11 @@ pub(super) fn configure_os(
     }))
     .map_err(|error| reject(error.to_string().into()))?;
     timer_report.push(b'\n');
-    files.insert("os-generation-timing.json".into(), Cow::Owned(timer_report));
+    outputs.emit(
+        super::outputs::OS,
+        "os-generation-timing.json",
+        timer_report,
+    )?;
     Ok(OsGeneration {
         counter_symbol,
         task_symbol,
@@ -439,18 +429,11 @@ pub(super) fn configure_os(
 /// application profile. The remaining BSW portion is supplied by its producer.
 pub(super) fn os_configuration(
     plan: &super::PlanDescription,
-    files: &mut BTreeMap<String, Cow<'_, [u8]>>,
+    outputs: &mut super::outputs::EcuOutputs,
     counter_symbol: &str,
     task_symbol: &str,
     use_res_scheduler: bool,
 ) -> Result<String, Vec<PlanDiagnostic>> {
-    let mask = |path: &str| {
-        plan.events
-            .iter()
-            .find(|event| event.path == path)
-            .unwrap()
-            .mask
-    };
     let mut groups = BTreeMap::new();
     let mut table_groups = BTreeMap::new();
     for entity in &plan.schedule.entities {
@@ -459,45 +442,46 @@ pub(super) fn os_configuration(
                 table.clone(),
                 (
                     entity.period_ms,
-                    mask(&entity.os_event),
-                    entity.expiry_offset.unwrap(),
-                    entity.table_start.unwrap(),
+                    plan.event_mask(&entity.os_event)?,
+                    entity
+                        .expiry_offset
+                        .ok_or_else(|| PlanDiagnostic::plan_premise(table))?,
+                    entity
+                        .table_start
+                        .ok_or_else(|| PlanDiagnostic::plan_premise(table))?,
                 ),
             );
         } else {
             groups.insert(
                 entity.alarm.clone(),
-                (entity.period_ms, mask(&entity.os_event)),
+                (entity.period_ms, plan.event_mask(&entity.os_event)?),
             );
         }
     }
     let mut alarms = String::new();
-    files.extend(
-        super::arti::files(
-            plan,
-            use_res_scheduler,
-            &groups.keys().cloned().collect::<Vec<_>>(),
-            &table_groups.keys().cloned().collect::<Vec<_>>(),
-        )
-        .map_err(reject)?
-        .into_iter()
-        .map(|(path, bytes)| (path, Cow::Owned(bytes))),
-    );
+    let binding = "os/src/Os_Arti.c";
+    let (description, binding_text) = super::arti::files(
+        plan,
+        use_res_scheduler,
+        &groups.keys().cloned().collect::<Vec<_>>(),
+        &table_groups.keys().cloned().collect::<Vec<_>>(),
+        outputs.template(super::outputs::ARTI, binding)?,
+    )?;
+    outputs.emit(super::outputs::ARTI, "os/Os_Arti.arxml", description)?;
+    outputs.emit_rendered(super::outputs::ARTI, binding, binding_text)?;
     for (id, (_, (period, event))) in groups.iter().enumerate() {
-        writeln!(alarms, "    {{{id}u, 0u, OS_ALARM_EVENT, 0u, {event}u, NULL, 1u, 0u, {period}u, {period}u, 0u}},").unwrap();
+        alarms.push_str(&format!("    {{{id}u, 0u, OS_ALARM_EVENT, 0u, {event}u, NULL, 1u, 0u, {period}u, {period}u, 0u}},\n"));
     }
     let mut tables = String::new();
     let mut table_entries = String::new();
     for (id, (_, (period, event, offset, start))) in table_groups.iter().enumerate() {
-        writeln!(tables, "static const Os_ExpiryAction table_actions_{id}[] = {{{{OS_ALARM_EVENT, 0u, {event}u}}}};\nstatic const Os_ExpiryPoint table_points_{id}[] = {{{{{offset}u, table_actions_{id}, 1u}}}};").unwrap();
-        writeln!(table_entries, "    {{{id}u, 0u, {period}u, table_points_{id}, 1u, 1u, OS_SCHEDULE_SYNC_NONE, 1u, 0u, {start}u}},").unwrap();
+        tables.push_str(&format!("static const Os_ExpiryAction table_actions_{id}[] = {{{{OS_ALARM_EVENT, 0u, {event}u}}}};\nstatic const Os_ExpiryPoint table_points_{id}[] = {{{{{offset}u, table_actions_{id}, 1u}}}};\n"));
+        table_entries.push_str(&format!("    {{{id}u, 0u, {period}u, table_points_{id}, 1u, 1u, OS_SCHEDULE_SYNC_NONE, 1u, 0u, {start}u}},\n"));
     }
     if !table_groups.is_empty() {
-        writeln!(
-            tables,
-            "static const Os_ScheduleTableConfig schedule_tables[] = {{\n{table_entries}}};"
-        )
-        .unwrap();
+        tables.push_str(&format!(
+            "static const Os_ScheduleTableConfig schedule_tables[] = {{\n{table_entries}}};\n"
+        ));
     }
     let alarm_declaration = if groups.is_empty() {
         String::new()
@@ -511,14 +495,13 @@ pub(super) fn os_configuration(
                 "backend.integration.ecu.trusted_ecu_config_template_missing"
             ))
         })?;
-    let mut config = std::str::from_utf8(template.bytes)
-        .map_err(|error| reject(error.to_string().into()))?
-        .to_owned();
-    for (key, value) in [
+    let template =
+        std::str::from_utf8(template.bytes).map_err(|error| reject(error.to_string().into()))?;
+    let values = [
         ("TASK_SYMBOL", task_symbol.to_owned()),
         (
             "TASK_NAME",
-            serde_json::to_string(plan.schedule.task.rsplit('/').next().unwrap()).unwrap(),
+            serde_json::Value::from(super::short_name(&plan.schedule.task)).to_string(),
         ),
         ("TASK_PRIORITY", plan.schedule.task_priority.to_string()),
         (
@@ -569,13 +552,20 @@ pub(super) fn os_configuration(
             .to_owned(),
         ),
         ("SCHEDULE_COUNT", table_groups.len().to_string()),
-    ] {
-        config = config.replace(&format!("@{key}@"), &value);
-    }
-    Ok(config)
+    ]
+    .map(|(key, value)| (format!("@{key}@"), value));
+    let edits: Vec<_> = values
+        .iter()
+        .map(|(key, value)| super::outputs::Edit::Every(key, value))
+        .collect();
+    super::outputs::render(template, "src/Ecu_Config.c", &edits)
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "tests derive variant inputs from fixture ARXML"
+)]
 mod ownership_tests {
     use super::application_slots_from_sources;
     use crate::integration::InputSource;
