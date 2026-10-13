@@ -1,9 +1,10 @@
 """Account one specification's official requirement IDs against their dispositions.
 
 The official items are the TRACE and TRACEABLE-TABLE elements of the document in
-AUTOSAR_CP_MOD_SpecificationsARXML.zip. A disposition is any citation of an ID in
-docs/standards.md or in the test trees (ADR 0017). The result is computed on each
-run and never written to the repository.
+AUTOSAR_CP_MOD_SpecificationsARXML.zip. An item is disposed of only by IDs that follow
+a disposition marker in docs/standards.md or the test trees (ADR 0017); every mention,
+marked or not, is checked for stale IDs. The result is computed on each run and never
+written to the repository.
 """
 
 from __future__ import annotations
@@ -25,6 +26,15 @@ NAMESPACE = "{http://autosar.org/schema/r4.0}"
 # "SWS_CANIF_00001／00003", "SWS_CANIF_00001, 00005" (also across a comment
 # line break) or the range "SWS_CANIF_00907–00910".
 CONTINUATION = re.compile(r"(?:\s*[,，、／/]\s*(?:(?://|\*|#)\s*)?|\s*([–-])\s*)(\d+)(?!\d)")
+# Only the IDs right after a marker are disposed of. The group names are the categories.
+MARKER = re.compile(
+    r"(?:(?P<verified>Verifies:)|(?P<inspected>已核对（[^）\n]+）[：:])"
+    r"|(?P<not_applicable>不适用（[^）\n]+）[：:])|(?P<gap>差距\s*#\d+[：:]))[ \t]*`?"
+)
+# Between the full IDs after one marker: spaces or backticks on the same line, or a list
+# separator that may continue on the next comment line.
+SEPARATOR = re.compile(r"`?(?:[ \t]*[,，、／/][ \t]*(?:\n[ \t]*(?://|\*|#)?[ \t]*)?|[ \t]+)`?|`")
+CATEGORIES = ("verified", "inspected", "not_applicable", "gap")
 
 
 class RequirementError(Exception):
@@ -38,6 +48,8 @@ class Citation:
     line: int
     # Numbers inside a range dispose of the items that exist; official numbering has gaps.
     interior: bool = False
+    # One of CATEGORIES when the citation follows a disposition marker.
+    category: str | None = None
 
 
 @dataclass(frozen=True)
@@ -91,10 +103,9 @@ def citations(text: str, path: str, prefixes: set[str]) -> list[Citation]:
     alternatives = "|".join(re.escape(item) for item in sorted(prefixes, key=len, reverse=True))
     # The ID must start a word: "CONSTR_" (a TPS prefix) must not match inside "SWS_CANIF_CONSTR_00001".
     head = re.compile(rf"(?<![A-Za-z0-9_])({alternatives})(\d+)(?!\d)", re.IGNORECASE)
-    found = []
+    groups = {}
     for match in head.finditer(text):
         stem, width = match.group(1).upper(), len(match.group(2))
-        line = text.count("\n", 0, match.start()) + 1
         numbers = [(int(match.group(2)), False)]
         position = match.end()
         while (more := CONTINUATION.match(text, position)) and len(more.group(2)) == width:
@@ -102,8 +113,21 @@ def citations(text: str, path: str, prefixes: set[str]) -> list[Citation]:
                 numbers.extend((number, True) for number in range(numbers[-1][0] + 1, int(more.group(2))))
             numbers.append((int(more.group(2)), False))
             position = more.end()
-        found.extend(Citation(f"{stem}{number:0{width}d}", path, line, interior) for number, interior in numbers)
-    return found
+        groups[match.start()] = (position, [f"{stem}{number:0{width}d}" for number, _ in numbers], [interior for _, interior in numbers])
+    categories = {}
+    for marker in MARKER.finditer(text):
+        position = marker.end()
+        while position in groups:
+            categories[position] = marker.lastgroup
+            position = groups[position][0]
+            if not (separator := SEPARATOR.match(text, position)):
+                break
+            position = separator.end()
+    return [
+        Citation(identifier, path, text.count("\n", 0, start) + 1, interior, categories.get(start))
+        for start, (_, identifiers, interiors) in groups.items()
+        for identifier, interior in zip(identifiers, interiors, strict=True)
+    ]
 
 
 def collect(root: Path, prefixes: set[str]) -> list[Citation]:
@@ -117,9 +141,13 @@ def collect(root: Path, prefixes: set[str]) -> list[Citation]:
     return found
 
 
-def account(specification: Specification, cited: list[Citation]) -> tuple[list[str], list[Citation]]:
-    """Return the undisposed items in ID order and the citations of IDs that exist nowhere."""
-    disposed = {citation.identifier for citation in cited}
+def account(specification: Specification, cited: list[Citation]) -> tuple[dict[str, int], list[str], list[Citation]]:
+    """Return the items per category, the undisposed items in ID order and the citations of IDs that exist nowhere."""
+    counts = {
+        category: len({item.identifier for item in cited if item.category == category} & specification.items.keys())
+        for category in CATEGORIES
+    }
+    disposed = {citation.identifier for citation in cited if citation.category}
     undisposed = [specification.items[key][0] for key in sorted(specification.items.keys() - disposed)]
     stale = [
         citation
@@ -128,7 +156,7 @@ def account(specification: Specification, cited: list[Citation]) -> tuple[list[s
         and citation.identifier not in specification.items
         and citation.identifier not in specification.elsewhere
     ]
-    return undisposed, stale
+    return counts, undisposed, stale
 
 
 def check(document: str, root: Path = ROOT, stale_only: bool = False) -> int:
@@ -142,8 +170,12 @@ def check(document: str, root: Path = ROOT, stale_only: bool = False) -> int:
     except (RequirementError, zipfile.BadZipFile, ElementTree.ParseError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
-    undisposed, stale = account(specification, collect(root, {prefix(key) for key in specification.items}))
-    print(f"{document}: {len(specification.items)} official items, {len(specification.items) - len(undisposed)} disposed, {len(undisposed)} undisposed, {len(stale)} stale citations")
+    counts, undisposed, stale = account(specification, collect(root, {prefix(key) for key in specification.items}))
+    print(
+        f"{document}: {len(specification.items)} official items; "
+        + ", ".join(f"{category.replace('_', ' ')} {count}" for category, count in counts.items())
+        + f", undisposed {len(undisposed)}; {len(stale)} stale citations"
+    )
     if undisposed and not stale_only:
         print("\nUndisposed items:")
         for identifier in undisposed:

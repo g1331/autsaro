@@ -169,19 +169,44 @@ class RequirementTests(unittest.TestCase):
             ],
         )
 
+    def test_only_ids_after_a_marker_are_disposed(self):
+        cited = requirements.citations(
+            "/* Verifies: SWS_DEMO_00001／00002, SWS_DEMO_00003,\n * SWS_DEMO_00004\n * SWS_DEMO_00005 differs */\n"
+            "| 不适用（未启用）：`SWS_DEMO_00007`、`ECUC_Demo_00010` | 差距 #12：SWS_DEMO_00009；SWS_DEMO_00011 |\n"
+            "| 已核对（头文件比对）：SWS_DEMO_CONSTR_00001 | 不适用：SWS_DEMO_00013 | unlike SWS_DEMO_00014 |",
+            "f",
+            {"SWS_DEMO_", "SWS_DEMO_CONSTR_", "ECUC_DEMO_"},
+        )
+        self.assertEqual(
+            [(item.identifier, item.category) for item in cited],
+            [
+                ("SWS_DEMO_00001", "verified"), ("SWS_DEMO_00002", "verified"), ("SWS_DEMO_00003", "verified"),
+                ("SWS_DEMO_00004", "verified"), ("SWS_DEMO_00005", None),
+                ("SWS_DEMO_00007", "not_applicable"), ("ECUC_DEMO_00010", "not_applicable"),
+                ("SWS_DEMO_00009", "gap"), ("SWS_DEMO_00011", None),
+                ("SWS_DEMO_CONSTR_00001", "inspected"), ("SWS_DEMO_00013", None), ("SWS_DEMO_00014", None),
+            ],
+        )
+
     def test_reports_undisposed_items_and_stale_citations(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.repository(
                 root,
-                "| Demo | `SWS_DEMO_00001／00002`；`SWS_DEMO_00004` 已删除；`ECUC_Demo_00020` |\n",
-                "/* SWS_DEMO_00005–00007 */\n",
+                # An unmarked mention, such as a legacy "located" row, disposes of nothing.
+                "| Demo | `SWS_DEMO_00001／00002` 已定位；不适用（未启用）：`SWS_DEMO_00004`；`ECUC_Demo_00020` |\n",
+                "/* Verifies: SWS_DEMO_00005–00007 */\n",
             )
             status, output = self.run_check(root)
             self.assertEqual(status, 1)
-            self.assertIn("8 official items, 4 disposed, 4 undisposed, 1 stale citations", output)
+            self.assertIn(
+                "8 official items; verified 2, inspected 0, not applicable 0, gap 0, undisposed 6; 1 stale citations", output
+            )
             undisposed = output.split("Undisposed items:")[1].split("Stale")[0].split()
-            self.assertEqual(undisposed, ["ECUC_Demo_00010", "SWS_DEMO_00003", "SWS_DEMO_00009", "(draft)", "SWS_DEMO_CONSTR_00001"])
+            self.assertEqual(
+                undisposed,
+                ["ECUC_Demo_00010", "SWS_DEMO_00001", "SWS_DEMO_00002", "SWS_DEMO_00003", "SWS_DEMO_00009", "(draft)", "SWS_DEMO_CONSTR_00001"],
+            )
             self.assertIn("docs/standards.md:1: SWS_DEMO_00004", output)
             (root / "docs/standards.md").write_text("`SWS_DEMO_00001`\n", encoding="utf-8")
             status, output = self.run_check(root, stale_only=True)
@@ -193,10 +218,13 @@ class RequirementTests(unittest.TestCase):
             root = Path(directory)
             self.repository(
                 root,
-                "`SWS_DEMO_00001–00003`、`SWS_DEMO_00009` 不适用；`ECUC_Demo_00010`；`SWS_DEMO_CONSTR_00001`\n",
-                "// SWS_DEMO_00005, 00007\n",
+                "不适用（未启用）：`SWS_DEMO_00001–00003`、`SWS_DEMO_00009`；差距 #7：`ECUC_Demo_00010`；"
+                "已核对（头文件比对）：`SWS_DEMO_CONSTR_00001`\n",
+                "// Verifies: SWS_DEMO_00005, 00007\n",
             )
-            self.assertEqual(self.run_check(root)[0], 0)
+            status, output = self.run_check(root)
+            self.assertEqual(status, 0)
+            self.assertIn("verified 2, inspected 1, not applicable 4, gap 1, undisposed 0;", output)
 
     def test_unknown_document_and_missing_archive_fail(self):
         with tempfile.TemporaryDirectory() as directory:
