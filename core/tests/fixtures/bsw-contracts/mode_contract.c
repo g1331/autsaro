@@ -246,7 +246,7 @@ int main(void) {
         CanIf_RxIndication(&wrong_hoh, &info);
         assert(receptions == 0u);
     }
-    assert(CanIf_HostRxIndication(0x123u, 4u, bytes, 0u) == ECU_OK && receptions == 1u);
+    assert(Can_Inject(0x123u, 4u, bytes, 0u) == ECU_OK && receptions == 1u);
     buffer();
     Ecu_ComMainFunctionTx();
     assert(Can_HostFlush() == ECU_OK && frames == 1u);
@@ -301,7 +301,9 @@ int main(void) {
         assert(indications[2] == saved);
         buffer(); /* lower loss never stops COM groups or buffered access */
     }
-    assert(CanIf_Transmit(51u, &info) == E_NOT_OK && errors == 1u);
+    /* BusOff leaves TX_OFFLINE: refused without CANIF_E_STOPPED
+     * (Verifies: SWS_CANIF_00866, 00382). */
+    assert(CanIf_Transmit(51u, &info) == E_NOT_OK && errors == 0u);
     Can_SetMode(CAN_STARTED); /* Explicit existing controlled-host recovery. */
     assert(rx_counter(9u, &counter) == E_NOT_OK && counter == 0xa5u);
     assert(tx_counter(9u, &counter) == E_NOT_OK && counter == 0xa5u);
@@ -328,8 +330,9 @@ int main(void) {
     assert(bus_request(7u, COMM_SILENT_COMMUNICATION) == E_OK);
     Can_MainFunction_Wakeup();
     current(COMM_SILENT_COMMUNICATION);
-    assert(CanIf_HostRxIndication(0x123u, 4u, bytes, 0u) == ECU_OK && receptions == 2u);
-    assert(CanIf_Transmit(51u, &info) == E_NOT_OK && errors == 2u);
+    assert(Can_Inject(0x123u, 4u, bytes, 0u) == ECU_OK && receptions == 2u);
+    /* SILENT keeps the channel TX_OFFLINE: no CANIF_E_STOPPED (Verifies: SWS_CANIF_00382). */
+    assert(CanIf_Transmit(51u, &info) == E_NOT_OK && errors == 0u);
     assert(request(17u, COMM_FULL_COMMUNICATION) == E_OK);
     current(COMM_FULL_COMMUNICATION);
     saved = actions;
@@ -340,7 +343,8 @@ int main(void) {
     assert(actions == saved);
     bswm_mode(7u, COMM_NO_COMMUNICATION); /* Real IMMEDIATE rule changes lower directions. */
     current(COMM_NO_COMMUNICATION);
-    assert(CanIf_HostRxIndication(0x123u, 4u, bytes, 0u) != ECU_OK && receptions == 2u);
+    (void)Can_Inject(0x123u, 4u, bytes, 0u); /* Dropped by the driver or the OFFLINE channel. */
+    assert(receptions == 2u);
     buffer();
     bswm_mode(7u, COMM_FULL_COMMUNICATION);
     current(COMM_FULL_COMMUNICATION);
@@ -369,7 +373,11 @@ int main(void) {
     Can_MainFunction_Wakeup();
     assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED);
     current(COMM_NO_COMMUNICATION);
-    assert(CanIf_HostRxIndication(0x123u, 4u, bytes, 0u) != ECU_OK);
+    {
+        const unsigned before = receptions;
+        (void)Can_Inject(0x123u, 4u, bytes, 0u); /* Not delivered before PDU ONLINE. */
+        assert(receptions == before);
+    }
     Can_MainFunction_Wakeup();
     current(COMM_FULL_COMMUNICATION);
     assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED);

@@ -219,6 +219,7 @@ pub(super) fn files(
     let mut ls_configuration = format!(
         "/** @file Source-derived selected LSduR configuration. */\n#include \"LSduR_Cfg.h\"\n{routing_headers}"
     );
+    let mut can_if_configuration = "/** @file Source-derived selected CanIf configuration. */\n#include \"CanIf_Cfg.h\"\n#include \"Ecu_HostBusSM.h\"\n".to_owned();
     let mut ls_rx = String::new();
     let mut ls_tx = String::new();
     let mut pd_rx = String::new();
@@ -413,7 +414,7 @@ pub(super) fn files(
         let owner = match scope {
             "LSduR" => &mut ls_configuration,
             "PduR" => &mut pd_configuration,
-            _ => &mut config,
+            _ => &mut can_if_configuration,
         };
         config_data(
             owner,
@@ -435,9 +436,9 @@ pub(super) fn files(
         .count()
         + usize::from(transport.is_some());
     config_data(
-        &mut config,
+        &mut can_if_configuration,
         "CanIf",
-        "static const CanIf_ConfigType can_if_config",
+        "const CanIf_ConfigType CanIf_Config",
         &format!(
             "{{can_rx, {rx_count}u, can_tx, {tx_count}u, Ecu_HostBusSM_ControllerModeIndication, Ecu_HostBusSM_ControllerBusOff, {}u, {}u, {}u, {}u}}",
             can.can_if_controller_id, can.controller_id, can.receive_handle, can.transmit_handle
@@ -464,15 +465,18 @@ pub(super) fn files(
             usize::from(transport.is_some())
         ),
     );
-    for (module, source) in [("PduR", &pd_configuration), ("LSduR", &ls_configuration)] {
+    // Post-build sets live in <Mip>_PBcfg.c (SWS_BSW_00015).
+    for (module, ty, source) in [
+        ("CanIf", "CanIf_ConfigType", &can_if_configuration),
+        ("PduR", "PduR_PBConfigType", &pd_configuration),
+        ("LSduR", "LSduR_PBConfigType", &ls_configuration),
+    ] {
         outputs.emit(
             ECU,
             format!("include/{module}_Cfg.h"),
             header(
                 &format!("{}_CFG_H", module.to_uppercase()),
-                &format!(
-                    "#include \"{module}.h\"\nextern const {module}_PBConfigType {module}_Config;"
-                ),
+                &format!("#include \"{module}.h\"\nextern const {ty} {module}_Config;"),
             ),
         )?;
         outputs.emit(ECU, format!("src/{module}_PBcfg.c"), source.as_str())?;
@@ -578,7 +582,7 @@ pub(super) fn files(
     config.push_str(&stage(3));
     config.push_str("    Can_Init(&driver);\n");
     config.push_str(&stage(4));
-    config.push_str("    CanIf_Init(&can_if_config);\n    Ecu_HostBusSM_Init(&bus_config);\n");
+    config.push_str("    CanIf_Init(&CanIf_Config);\n    Ecu_HostBusSM_Init(&bus_config);\n");
     config.push_str(&stage(5));
     config.push_str("    LSduR_Init(&LSduR_Config);\n    PduR_Init(&PduR_Config);\n");
     config.push_str(&stage(6));

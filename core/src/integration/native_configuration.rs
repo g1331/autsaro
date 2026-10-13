@@ -8,8 +8,6 @@ const DESCRIPTOR_PARAMETERS: &str = "
 CanControllerBaseAddress CanControllerBaudRateConfigID CanControllerPropSeg
 CanControllerSeg1 CanControllerSeg2 CanControllerSyncJumpWidth CanIndex
 CanMainFunctionModePeriod CanTimeoutDuration CanIfInitCfgSet
-CanIfDispatchUserCtrlBusOffUL CanIfDispatchUserCtrlModeIndicationUL
-CanIfPrivateSoftwareFilterType CanIfPublicHandleTypeEnum
 PduIdTypeEnum PduLengthTypeEnum DcmDspDataDefaultEndianness";
 
 const DISABLED_FEATURES: &str = "
@@ -100,6 +98,10 @@ pub(super) fn descriptor_only(
             cores.next().is_some() && cores.next().is_none()
         }
         "CanIfPrivateDataLengthCheck" => matches!(lexeme.trim(), "true" | "1"),
+        // The runtime implements the linear filter and a uint16 Can_HwHandleType
+        // (ECUC_CanIf_00619／00742).
+        "CanIfPrivateSoftwareFilterType" => lexeme == "LINEAR",
+        "CanIfPublicHandleTypeEnum" => lexeme == "UINT16",
         "ComIPduSignalProcessing" => lexeme == "DEFERRED",
         "ComIPduType" => lexeme == "NORMAL",
         "ComTxIPduUnusedAreasDefault" | "ComSupportedIPduGroups" => lexeme.parse::<u32>() == Ok(0),

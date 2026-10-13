@@ -9,10 +9,6 @@ static const CanIf_ConfigType *configuration CANIF_VAR_CLEARED;
 static Can_ControllerStateType controller_mode CANIF_VAR_CLEARED;
 static CanIf_PduModeType pdu_mode CANIF_VAR_CLEARED;
 static uint32 outstanding[32] CANIF_VAR_CLEARED;
-typedef struct {
-    EcuStatus result;
-} CanIf_HostRxContext;
-static CanIf_HostRxContext *host_rx_context CANIF_VAR_CLEARED;
 #define CANIF_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "CanIf_MemMap.h"
 #define CANIF_START_SEC_CODE
@@ -54,16 +50,20 @@ static CANIF_CODE boolean CanIf_Valid(const CanIf_ConfigType *config) {
     }
     return valid;
 }
+/* An invalid set leaves CanIf uninitialized, never on a previous set (SWS_CANIF_00661). */
 CANIF_CODE void CanIf_Init(const CanIf_ConfigType *ConfigPtr) {
+    uint16 i;
     SchM_Enter_CanIf_CANIF_STATE();
     if (CanIf_Valid(ConfigPtr) == TRUE) {
-        uint16 i;
         configuration = ConfigPtr;
         controller_mode = CAN_CS_STOPPED;
-        pdu_mode = CANIF_OFFLINE;
-        for (i = 0u; i < 32u; ++i) {
-            outstanding[i] = 0u;
-        }
+    } else {
+        configuration = NULL_PTR;
+        controller_mode = CAN_CS_UNINIT;
+    }
+    pdu_mode = CANIF_OFFLINE;
+    for (i = 0u; i < 32u; ++i) {
+        outstanding[i] = 0u;
     }
     SchM_Exit_CanIf_CANIF_STATE();
 }
@@ -176,8 +176,10 @@ CANIF_CODE Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *P
         for (i = 0u; i < configuration->transmit_count; ++i) {
             const CanIf_TxPduConfigType *route = &configuration->transmit[i];
             if (route->pdu == TxPduId) {
-                if (pdu_mode != CANIF_ONLINE) {
+                if (pdu_mode == CANIF_OFFLINE) {
                     (void)Det_ReportRuntimeError(60u, 0u, 0x49u, 70u);
+                } else if (pdu_mode != CANIF_ONLINE) {
+                    /* TX_OFFLINE rejects without CANIF_E_STOPPED (SWS_CANIF_00382, 00489). */
                 } else if (PduInfoPtr->SduLength > 8u) {
                     (void)Det_ReportRuntimeError(60u, 0u, 0x49u, 62u);
                     (void)Det_ReportRuntimeError(60u, 0u, 0x49u, 90u);
@@ -204,8 +206,11 @@ CANIF_CODE void CanIf_TxConfirmation(PduIdType CanTxPduId) {
         uint16 i;
         for (i = 0u; i < configuration->transmit_count; ++i) {
             if ((configuration->transmit[i].pdu == CanTxPduId) && (outstanding[i] != 0u)) {
+                /* The frame left the controller: a disabled Tx path suppresses its
+                 * confirmation (SWS_CANIF_00073, 00489), and STOPPED must not later
+                 * report it as failed (SWS_CANIF_00739). */
+                --outstanding[i];
                 if (pdu_mode == CANIF_ONLINE) {
-                    --outstanding[i];
                     LSduR_CanIfTxConfirmation(CanTxPduId, E_OK);
                 }
                 break;
@@ -258,12 +263,12 @@ CANIF_CODE void CanIf_ControllerBusOff(uint8 ControllerId) {
     }
     SchM_Exit_CanIf_CANIF_STATE();
 }
-static CANIF_CODE EcuStatus CanIf_Receive(const Can_HwType *Mailbox,
-                                          const PduInfoType *PduInfoPtr) {
-    EcuStatus result = ECU_ERR_FRAME_ID;
+CANIF_CODE void CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType *PduInfoPtr) {
+    SchM_Enter_CanIf_CANIF_STATE();
     if ((configuration != NULL_PTR) && (Mailbox != NULL_PTR) && (PduInfoPtr != NULL_PTR) &&
         (PduInfoPtr->SduDataPtr != NULL_PTR) &&
         (Mailbox->ControllerId == configuration->controller) &&
+        /* Standard identifier without FD flag: STANDARD_NO_FD_CAN (SWS_CANIF_00877). */
         (Mailbox->Hoh == configuration->receive_hoh) && (Mailbox->CanId <= 0x7ffu) &&
         (controller_mode == CAN_CS_STARTED) &&
         ((pdu_mode == CANIF_ONLINE) || (pdu_mode == CANIF_TX_OFFLINE))) {
@@ -274,52 +279,14 @@ static CANIF_CODE EcuStatus CanIf_Receive(const Can_HwType *Mailbox,
                 if ((PduInfoPtr->SduLength < route->minimum_length) ||
                     (PduInfoPtr->SduLength > 8u)) {
                     (void)Det_ReportRuntimeError(60u, 0u, 20u, 61u);
-                    result = ECU_ERR_FRAME_DLC;
                 } else {
                     LSduR_CanIfRxIndication(route->pdu, PduInfoPtr);
-                    result = ECU_OK;
                 }
                 break;
             }
         }
     }
-    return result;
-}
-CANIF_CODE void CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType *PduInfoPtr) {
-    SchM_Enter_CanIf_CANIF_STATE();
-    CanIf_HostRxContext *context = host_rx_context;
-    EcuStatus result;
-    host_rx_context = NULL_PTR;
-    result = CanIf_Receive(Mailbox, PduInfoPtr);
-    if (context != NULL_PTR) {
-        context->result = result;
-    }
-    host_rx_context = context;
     SchM_Exit_CanIf_CANIF_STATE();
-}
-CANIF_CODE EcuStatus CanIf_HostRxIndication(uint32 id, uint8 dlc, const uint8 data[8],
-                                            uint64 now_ms) {
-    uint8 bytes[8];
-    PduInfoType info = {bytes, NULL_PTR, dlc};
-    EcuStatus result = ECU_ERR_FRAME_DLC;
-    SchM_Enter_CanIf_CANIF_STATE();
-    CanIf_HostRxContext context = {ECU_ERR_FRAME_DLC};
-    /* Multi receivers use configured tick clocks, not host receive timestamps. */
-    (void)now_ms;
-    CanIf_HostRxContext *previous = host_rx_context;
-    if ((configuration != NULL_PTR) && (data != NULL_PTR) && (dlc <= 8u)) {
-        const Can_HwType mailbox = {id, configuration->receive_hoh, configuration->controller};
-        uint8 i;
-        for (i = 0u; i < dlc; ++i) {
-            bytes[i] = data[i];
-        }
-        host_rx_context = &context;
-        CanIf_RxIndication(&mailbox, &info);
-        result = context.result;
-        host_rx_context = previous;
-    }
-    SchM_Exit_CanIf_CANIF_STATE();
-    return result;
 }
 #define CANIF_STOP_SEC_CODE
 #include "CanIf_MemMap.h"

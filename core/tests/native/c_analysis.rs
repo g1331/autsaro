@@ -72,9 +72,7 @@ void SchM_Exit_CanIf_CANIF_STATE(void) {{}}
 void CanIf_TxConfirmation(PduIdType id) {{ (void)id; }}
 void CanIf_ControllerModeIndication(uint8_t id, Can_ControllerStateType mode) {{ (void)id; (void)mode; }}
 void CanIf_ControllerBusOff(uint8_t id) {{ (void)id; }}
-EcuStatus CanIf_HostRxIndication(uint32_t id, uint8_t length, const uint8_t data[8], uint64_t time) {{
-    (void)id; (void)length; (void)data; (void)time; return ECU_OK;
-}}
+void CanIf_RxIndication(const Can_HwType *mailbox, const PduInfoType *info) {{ (void)mailbox; (void)info; }}
 Std_ReturnType Det_ReportRuntimeError(uint16_t module, uint8_t instance, uint8_t api, uint8_t error) {{
     (void)module; (void)instance; (void)api; (void)error; return E_OK;
 }}
@@ -89,7 +87,7 @@ int main(void) {{
     assert(tx_confirmation_pending == 0u && tx_confirmation_handle == 0u && tx_confirming == 0u);
     assert(interrupt_disable_count == 0u && mode_notification_pending == 0u && mode_notification_processing == 0u);
     assert(pending_controller_mode == 0 && busoff_notification_pending == 0u);
-    assert(rx_pending == 0u && rx_processing == 0u && rx_id == 0u && rx_length == 0u && rx_time_ms == 0u);
+    assert(rx_pending == 0u && rx_processing == 0u && rx_id == 0u && rx_length == 0u);
     assert(rx_overrun_pending == 0u);
 #if CAN_HOST_QUEUED_COMPLETION == 1
     assert(host_tx_sequence == 0u && host_tx_cancelled_through == 0u && host_tx_completed_through == 0u);

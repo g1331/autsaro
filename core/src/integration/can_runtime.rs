@@ -310,12 +310,13 @@ pub(super) fn inspect(
         receive.ok_or_else(|| fail(graph, controller, "CAN_HARDWARE_HANDLES"))?;
     let (transmit_hardware, transmit_handle) =
         transmit.ok_or_else(|| fail(graph, controller, "CAN_HARDWARE_HANDLES"))?;
-    // The selected two-object common HRH/HTH range is contiguous from zero (ECUC_Can_00326).
+    // The selected two-object common HRH/HTH range is contiguous from zero
+    // (ECUC_Can_00326, SWS_CANIF_00115).
     if (receive_handle == transmit_handle) || (receive_handle > 1) || (transmit_handle > 1) {
         return Err(fail(graph, controller, "CAN_HARDWARE_HANDLES"));
     }
     // Both selected namespaces contain one controller, numbered from zero
-    // (ECUC_Can_00316 and SWS_CANIF_00653), despite the wider metadata range.
+    // (ECUC_Can_00316, SWS_CANIF_00653 and 00433), despite the wider metadata range.
     let controller_id = value(graph, controller, "CanControllerId", false)
         .and_then(|text| text.parse::<u8>().ok())
         .filter(|id| *id == 0)

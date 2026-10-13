@@ -77,12 +77,9 @@ void CanIf_ControllerModeIndication(uint8_t id, Can_ControllerStateType mode) {
     (void)mode;
 }
 void CanIf_ControllerBusOff(uint8_t id) { (void)id; }
-EcuStatus CanIf_HostRxIndication(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t now) {
-    (void)id;
-    (void)dlc;
-    (void)data;
-    (void)now;
-    return ECU_OK;
+void CanIf_RxIndication(const Can_HwType *mailbox, const PduInfoType *info) {
+    (void)mailbox;
+    (void)info;
 }
 static EcuStatus emit(uint32_t id, uint8_t dlc, const uint8_t data[8]) {
     (void)id;

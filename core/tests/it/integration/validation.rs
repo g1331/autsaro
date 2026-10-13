@@ -17,7 +17,7 @@ fn normal_definition_validation_closes_schedule_routes_types_and_handles() {
             "true",
             "SERVICE_ASYNC_MAPPING",
         ),
-        ("RxValue", "CanIfRxPduId", "2", "CAN_ID_CONFLICT"),
+        ("RxValue", "CanIfRxPduId", "1", "CAN_ID_CONFLICT"),
         (
             "RxValueSource",
             "PduRSrcPduUpTxConf",
@@ -45,13 +45,16 @@ fn normal_definition_validation_closes_schedule_routes_types_and_handles() {
         "<BASE-TYPE-ENCODING>2C</BASE-TYPE-ENCODING>",
     );
     rejects_in_both(&sources, "TYPE_CONFLICT");
+    // SWS_Comtype_00007: handles are consecutive from 0 per direction, in any
+    // order, and the same value is legal in both directions (Verifies: ECUC_CanIf_00597／00591).
     let mut sources = inputs();
-    parameter(&mut sources, "TxValue", "CanIfTxPduId", "0");
-    assert!(
-        build(&sources).is_ok(),
-        "same handle in different directions must be allowed"
-    );
+    parameter(&mut sources, "TxValue", "CanIfTxPduId", "1");
+    parameter(&mut sources, "DiagResponse", "CanIfTxPduId", "0");
+    assert!(build(&sources).is_ok(), "permuted handles must be allowed");
     assert!(normal_validation(&sources).diagnostics.is_empty());
+    let mut sources = inputs();
+    parameter(&mut sources, "TxValue", "CanIfTxPduId", "2");
+    rejects_in_both(&sources, "CANIF_HANDLE_SEQUENCE");
 }
 
 #[test]

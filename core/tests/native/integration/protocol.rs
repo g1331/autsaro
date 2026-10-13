@@ -650,8 +650,8 @@ fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
     assert_eq!(text.matches("OUT epoch=").count(), 2, "{text}");
     for expected in [
         "COMMIT_OK batch=1 epoch=0 sequence=2 input_first=1 inputs=1",
-        "OUT epoch=10 sequence=13 ticket=1 pdu=1 id=801 dlc=4 data=78563412",
-        "OUT epoch=10 sequence=14 ticket=2 pdu=3 id=1800 dlc=8 data=0762123412345678",
+        "OUT epoch=10 sequence=13 ticket=1 pdu=0 id=801 dlc=4 data=78563412",
+        "OUT epoch=10 sequence=14 ticket=2 pdu=1 id=1800 dlc=8 data=0762123412345678",
         "COMMIT_OK batch=2 epoch=10 sequence=16 input_first=12 inputs=1",
         "COMMIT_OK batch=3 epoch=10 sequence=17 input_first=0 inputs=0",
         "REJECT status=8 epoch=10 sequence=17",

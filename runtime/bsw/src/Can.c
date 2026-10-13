@@ -72,7 +72,6 @@ static uint8_t rx_processing CAN_VAR_CLEARED;
 static uint32_t rx_id CAN_VAR_CLEARED;
 static uint8_t rx_length CAN_VAR_CLEARED;
 static uint8_t rx_payload[8] CAN_VAR_CLEARED;
-static uint64_t rx_time_ms CAN_VAR_CLEARED;
 static uint8_t rx_overrun_pending CAN_VAR_CLEARED;
 
 #define CAN_STOP_SEC_VAR_CLEARED_UNSPECIFIED
@@ -562,7 +561,7 @@ CAN_CODE void Can_MainFunction_Write(void) {
 }
 
 static CAN_CODE EcuStatus Can_ReceiveHost(uint32_t id, uint8_t dlc, const uint8_t data[8],
-                                          uint64_t now_ms, uint8_t accepted) {
+                                          uint8_t accepted) {
     EcuStatus result = ECU_OK;
     uint8_t lost = 0u;
     SchM_Enter_CanIf_CANIF_STATE();
@@ -589,7 +588,6 @@ static CAN_CODE EcuStatus Can_ReceiveHost(uint32_t id, uint8_t dlc, const uint8_
         size_t i;
         rx_id = id;
         rx_length = dlc;
-        rx_time_ms = now_ms;
         for (i = 0u; i < (size_t)dlc; ++i) {
             rx_payload[i] = data[i];
         }
@@ -612,14 +610,16 @@ static CAN_CODE EcuStatus Can_ReceiveHost(uint32_t id, uint8_t dlc, const uint8_
 
 CAN_CODE EcuStatus Can_InternalInject(uint32_t id, uint8_t dlc, const uint8_t data[8],
                                       uint64_t now_ms) {
-    return Can_ReceiveHost(id, dlc, data, now_ms, 0u);
+    (void)now_ms; /* CanIf_RxIndication carries no reception time. */
+    return Can_ReceiveHost(id, dlc, data, 0u);
 }
 
 CAN_CODE EcuStatus Can_InternalRxIndication(uint32_t id, uint8_t dlc, const uint8_t data[8],
                                             uint64_t now_ms) {
     /* Already received by a platform adapter: occupied shadow storage is a real overrun.
      * Host admission uses Can_InternalInject and remains retryable without a lost-frame report. */
-    return Can_ReceiveHost(id, dlc, data, now_ms, 1u);
+    (void)now_ms;
+    return Can_ReceiveHost(id, dlc, data, 1u);
 }
 
 /* Called with the driver lock held; returns with it held. The result belongs
@@ -630,8 +630,9 @@ static CAN_CODE EcuStatus Can_DeliverRx(void) {
         uint32_t id = rx_id;
         uint8_t length = rx_length;
         uint8_t payload[8] = {0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
-        uint64_t now_ms = rx_time_ms;
         const uint64_t lifetime = driver_lifetime;
+        const Can_HwType mailbox = {id, CAN_RX_HOH, CAN_CANIF_CONTROLLER_ID};
+        PduInfoType info = {payload, NULL_PTR, length};
         size_t i;
         for (i = 0u; i < (size_t)length; ++i) {
             payload[i] = rx_payload[i];
@@ -639,7 +640,7 @@ static CAN_CODE EcuStatus Can_DeliverRx(void) {
         rx_pending = 0u;
         rx_processing = 1u;
         Can_Unlock();
-        result = CanIf_HostRxIndication(id, length, payload, now_ms);
+        CanIf_RxIndication(&mailbox, &info);
         Can_Lock();
         if ((can_initialized == 0u) || (driver_lifetime != lifetime)) {
             result = ECU_ERR_CONTROLLER;

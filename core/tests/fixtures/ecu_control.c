@@ -60,13 +60,13 @@ static Os_HostThreadResult control(void *argument) {
                 printf("independent_output epoch=%llu id=%u pdu=%u dlc=%u\n",
                        (unsigned long long)output.epoch, output.can_id, output.pdu, output.dlc);
                 if (output.can_id == 0x321u) {
-                    require((output.dlc == 4u) && (output.pdu == 1u) &&
+                    require((output.dlc == 4u) && (output.pdu == 0u) &&
                             ((output.epoch == UINT64_C(10)) || (output.epoch == UINT64_C(20))) &&
                             (memcmp(output.data, signal, 4u) == 0));
                     ++signal_outputs;
                 } else {
                     const uint8_t *expected = (diagnostic_outputs == 0u) ? initial : committed;
-                    require((output.can_id == 0x708u) && (output.dlc == 8u) && (output.pdu == 3u) &&
+                    require((output.can_id == 0x708u) && (output.dlc == 8u) && (output.pdu == 1u) &&
                             (memcmp(output.data, expected, 8u) == 0));
                     ++diagnostic_outputs;
                 }

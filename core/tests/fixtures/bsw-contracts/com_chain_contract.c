@@ -141,9 +141,12 @@ int main(void) {
     assert(CanIf_SetPduMode(0u, CANIF_ONLINE) == E_OK);
     assert(CanIf_GetPduMode(1u, &channel) == E_NOT_OK && channel == CANIF_OFFLINE);
     Com_IpduGroupStart(0u, TRUE);
-    assert(Can_Inject(0x123u, 3u, bytes, 0u) == ECU_ERR_FRAME_DLC);
+    /* The driver accepts both frames; CanIf rejects the short one with Det 61 and
+     * filters the unconfigured one without an indication or error. */
+    assert(Can_Inject(0x123u, 3u, bytes, 0u) == ECU_OK);
     assert(errors == 2u && last_api == 20u && last_error == 61u && acknowledgments == 0u);
-    assert(Can_Inject(0x777u, 4u, bytes, 0u) == ECU_ERR_FRAME_ID);
+    assert(Can_Inject(0x777u, 4u, bytes, 0u) == ECU_OK);
+    assert(errors == 2u && acknowledgments == 0u);
     assert(Can_Inject(0x123u, 4u, bytes, 0u) == ECU_OK);
     assert(acknowledgments == 1u);
     assert(Com_ReceiveSignal(10u, &value) == E_OK && value == 42u);
@@ -199,7 +202,10 @@ int main(void) {
     Ecu_ComMainFunctionTx();
     assert(Can_HostFlush() == ECU_OK && frames == 4u);
     assert(CanIf_SetPduMode(0u, CANIF_TX_OFFLINE) == E_OK);
-    CanIf_TxConfirmation(51u); /* Actual queued driver confirmation arrives offline. */
+    /* Actual queued driver confirmation arrives offline: suppressed, and its request
+     * is no longer outstanding when STOPPED fails the other one
+     * (Verifies: SWS_CANIF_00489, 00739). */
+    CanIf_TxConfirmation(51u);
     assert(successes == 2u && failures == 0u);
     assert(CanIf_SetControllerMode(0u, CAN_CS_STOPPED) == E_OK);
     assert(CanIf_GetPduMode(0u, &channel) == E_OK && channel == CANIF_TX_OFFLINE);
@@ -208,7 +214,7 @@ int main(void) {
     assert(PduR_ComTransmit(2u, &info) == E_NOT_OK);
     assert(successes == 2u && failures == 0u && modes == 1u);
     Can_MainFunction_Wakeup();
-    assert(modes == 2u && successes == 2u && failures == 2u);
+    assert(modes == 2u && successes == 2u && failures == 1u);
     assert(CanIf_GetPduMode(0u, &channel) == E_OK && channel == CANIF_TX_OFFLINE);
     assert(Can_HostFlush() == ECU_OK && frames == 4u);
     CanIf_TxConfirmation(51u);
@@ -218,13 +224,13 @@ int main(void) {
     Ecu_ComMainFunctionTx();
     assert(Can_HostFlush() == ECU_OK && frames == 5u && emitted[4] == 43u);
     Can_SetMode(CAN_BUS_OFF);
-    assert(bus_offs == 1u && failures == 3u);
+    assert(bus_offs == 1u && failures == 2u);
     assert(CanIf_GetControllerMode(0u, &state) == E_OK && state == CAN_CS_STOPPED);
     assert(CanIf_SetControllerMode(0u, CAN_CS_STOPPED) == E_NOT_OK);
-    assert(failures == 3u);
+    assert(failures == 2u);
     Can_SetMode(CAN_BUS_OFF);
     CanIf_TxConfirmation(51u);
-    assert(bus_offs == 2u && failures == 3u && successes == 2u);
+    assert(bus_offs == 2u && failures == 2u && successes == 2u);
     assert(CanIf_GetPduMode(0u, &channel) == E_OK && channel == CANIF_TX_OFFLINE);
     assert(CanIf_SetControllerMode(0u, CAN_CS_SLEEP) == E_OK);
     assert(CanIf_GetPduMode(0u, &channel) == E_OK && channel == CANIF_OFFLINE);
@@ -248,10 +254,10 @@ int main(void) {
     assert(Can_HostCompleteTransmit(51u, emitted_tokens[3]) == E_NOT_OK);
     assert(Can_HostCompleteTransmit(51u, emitted_tokens[4]) == E_NOT_OK);
     Can_MainFunction_Write();
-    assert(successes == 2u && failures == 3u);
+    assert(successes == 2u && failures == 2u);
     assert(Can_HostCompleteTransmit(51u, emitted_tokens[5]) == E_OK);
     Can_MainFunction_Write();
-    assert(successes == 3u && failures == 3u);
+    assert(successes == 3u && failures == 2u);
     assert(Can_HostFlush() == ECU_OK && frames == 6u);
     assert(Com_TriggerIPDUSend(2u) == E_OK);
     assert(Can_HostFlush() == ECU_OK && frames == 7u && emitted[6] == 44u);
@@ -283,6 +289,6 @@ int main(void) {
     assert(successes == 4u);
     assert(Can_HostCompleteTransmit(51u, emitted_tokens[7]) == E_OK);
     Can_MainFunction_Write();
-    assert(successes == 5u && failures == 3u);
+    assert(successes == 5u && failures == 2u);
     return 0;
 }

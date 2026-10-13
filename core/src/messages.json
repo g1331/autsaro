@@ -523,7 +523,8 @@
     "backend.integration.communication.frame_trigger_physical_can_channel_missing": "帧触发配置没有物理 CAN 通道。",
     "backend.integration.communication.pdu_mapping_owning_can_frame_missing": "PDU 映射没有所属的 CAN 帧。",
     "backend.integration.communication.pdu_trigger_signal_or_channel_mismatch": "PDU 触发配置引用了不同的信号或通道。",
-    "backend.integration.communication.rx_timing_or_action_contract_mismatch": "接收端的 DLC、截止时间、首次超时或动作与声明的接收契约不一致。",
+    "backend.integration.communication.rx_timing_or_action_contract_mismatch": "接收端的截止时间、首次超时或动作与声明的接收契约不一致。",
+    "backend.integration.communication.signal_rx_dlc_required": "信号接收必须强制使用声明的四字节 DLC。",
     "backend.integration.communication.signal_mapping_owning_ipdu_missing": "信号映射没有所属的 I-PDU。",
     "backend.integration.communication.signal_port_channel_direction_mismatch": "信号端口与所选通道的方向不一致。",
     "backend.integration.communication.sr_channels_physical_can_identifier_conflict": "不同的 S/R 通道不能共用同一个物理 CAN 标识符。",
@@ -554,6 +555,7 @@
     "backend.integration.configuration.owner_event_mask_bit_duplicate": "两个主控事件使用了相同的掩码位。",
     "backend.integration.configuration.pdu_hardware_handle_mismatch": "PDU 引用了不同的物理 CanIf 硬件句柄。",
     "backend.integration.configuration.physical_configuration_object_missing_or_duplicate": "必需的物理或配置对象缺失或重复。",
+    "backend.integration.configuration.pre_compile_variant_required": "所选目标在编译前生成全部模块配置，模块只能声明 VARIANT-PRE-COMPILE 实现配置变体。",
     "backend.integration.configuration.physical_configuration_reference_missing_or_duplicate": "必需的物理或配置引用缺失或重复。",
     "backend.integration.configuration.public_identifier_out_of_range": "配置的公共标识符超出受支持的 uint16 取值范围。",
     "backend.integration.configuration.sc1_os_status_unsupported": "SC1 目标仅支持将 OsStatus 设为 STANDARD 或 EXTENDED。",
@@ -831,7 +833,12 @@
     "backend.integration.composition.repair_contract": "修复所定位对象的类型、连接、归属或调度关系。",
     "backend.integration.composition.consumer_unsupported": "该操作需要已验证的组件组合；可先生成组件契约。",
     "backend.arxml.changes.instance_port_pair_invalid": "实例与类型端口引用不匹配：{{path}}。请在同一批次中配对修改。",
-    "backend.arxml.changes.initialized_identity_change": "工程已初始化应用源码；此修改会改变成员或入口身份。请保留当前源码并在独立工程中显式迁移。"
+    "backend.arxml.changes.initialized_identity_change": "工程已初始化应用源码；此修改会改变成员或入口身份。请保留当前源码并在独立工程中显式迁移。",
+    "backend.integration.plan.canif_pdu_capacity_exceeded": "该方向的 CanIf PDU 数量超过运行时上限 32。",
+    "backend.integration.plan.canif_pdu_handles_not_consecutive": "该方向的 CanIf PDU 句柄不是从 0 开始的连续编号。",
+    "backend.integration.plan.number_canif_handles_consecutively": "请将每个 CanIf 方向（Rx、Tx）的句柄编号为 0 到 N−1。",
+    "backend.integration.plan.reduce_canif_pdus": "请将每个 CanIf 方向的 PDU 减少到 32 个以内。",
+    "backend.integration.configuration.canif_dispatch_host_cdd_required": "CanIf 的 BusOff 与控制器模式通知必须以 CDD 方式分派给 Ecu_HostBusSM_ControllerBusOff 和 Ecu_HostBusSM_ControllerModeIndication；此目标没有 CanSM。"
   },
   "en": {
     "backend.arxml.application.application_retained_pending_recovery": "New application retained until manifest recovery: {{path}}",
@@ -1357,7 +1364,8 @@
     "backend.integration.communication.frame_trigger_physical_can_channel_missing": "The frame trigger has no physical CAN channel.",
     "backend.integration.communication.pdu_mapping_owning_can_frame_missing": "The PDU mapping has no owning CAN frame.",
     "backend.integration.communication.pdu_trigger_signal_or_channel_mismatch": "The PDU trigger refers to a different signal or channel.",
-    "backend.integration.communication.rx_timing_or_action_contract_mismatch": "The Rx DLC/deadline/first-timeout/action differs from the declared receive contract.",
+    "backend.integration.communication.rx_timing_or_action_contract_mismatch": "The Rx deadline/first-timeout/action differs from the declared receive contract.",
+    "backend.integration.communication.signal_rx_dlc_required": "Signal Rx must enforce the declared four-byte DLC.",
     "backend.integration.communication.signal_mapping_owning_ipdu_missing": "The signal mapping has no owning I-PDU.",
     "backend.integration.communication.signal_port_channel_direction_mismatch": "The signal port and selected channel direction disagree.",
     "backend.integration.communication.sr_channels_physical_can_identifier_conflict": "Distinct S/R channels cannot share the same physical CAN identifier.",
@@ -1388,6 +1396,7 @@
     "backend.integration.configuration.owner_event_mask_bit_duplicate": "Two owner events use the same mask bit.",
     "backend.integration.configuration.pdu_hardware_handle_mismatch": "The PDU references a different physical CanIf hardware handle.",
     "backend.integration.configuration.physical_configuration_object_missing_or_duplicate": "A required physical/configuration object is missing or duplicated.",
+    "backend.integration.configuration.pre_compile_variant_required": "The selected target generates every module configuration before compilation; a module may only declare the VARIANT-PRE-COMPILE implementation configuration variant.",
     "backend.integration.configuration.physical_configuration_reference_missing_or_duplicate": "A required physical/configuration reference is missing or duplicated.",
     "backend.integration.configuration.public_identifier_out_of_range": "A configured public identifier is outside the supported uint16 domain.",
     "backend.integration.configuration.sc1_os_status_unsupported": "The SC1 target supports only STANDARD or EXTENDED OsStatus.",
@@ -1665,6 +1674,11 @@
     "backend.integration.composition.repair_contract": "Repair the located object's type, connection, ownership or scheduling relationship.",
     "backend.integration.composition.consumer_unsupported": "This operation requires a validated component composition; component contracts can be generated.",
     "backend.arxml.changes.instance_port_pair_invalid": "Instance and type-port references do not match: {{path}}. Change the pair in the same batch.",
-    "backend.arxml.changes.initialized_identity_change": "Application source is initialized. This change would alter member or entry identity. Preserve the source and migrate explicitly in a separate project."
+    "backend.arxml.changes.initialized_identity_change": "Application source is initialized. This change would alter member or entry identity. Preserve the source and migrate explicitly in a separate project.",
+    "backend.integration.plan.canif_pdu_capacity_exceeded": "This CanIf direction has more PDUs than the runtime limit of 32.",
+    "backend.integration.plan.canif_pdu_handles_not_consecutive": "The CanIf PDU handles of this direction are not numbered consecutively from 0.",
+    "backend.integration.plan.number_canif_handles_consecutively": "Number the handles of each CanIf direction (Rx, Tx) from 0 to N−1.",
+    "backend.integration.plan.reduce_canif_pdus": "Use at most 32 PDUs in each CanIf direction.",
+    "backend.integration.configuration.canif_dispatch_host_cdd_required": "CanIf bus-off and controller mode notifications must be dispatched as CDD to Ecu_HostBusSM_ControllerBusOff and Ecu_HostBusSM_ControllerModeIndication; this target has no CanSM."
   }
 }

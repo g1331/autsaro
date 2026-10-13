@@ -581,6 +581,12 @@ fn communication(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedText
         "CAN_SM CDD",
         1,
     )?;
+    for name in [
+        "CanIfDispatchUserCtrlBusOffName",
+        "CanIfDispatchUserCtrlModeIndicationName",
+    ] {
+        a.field("CanIf/CanIfDispatchCfg", name, ValueKind::FunctionName, 0)?;
+    }
     let init = "CanIf/CanIfInitCfg";
     a.container(init, 1, Some(1))?;
     a.field(init, "CanIfInitCfgSet", ValueKind::String, 1)?;

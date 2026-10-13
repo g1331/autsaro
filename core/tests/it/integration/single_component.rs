@@ -601,9 +601,84 @@ fn configuration_rejections_keep_identifier_width_and_order() {
         "ecuc.arxml",
         "/Configuration/CanIf/Config/TxValue",
     );
-    let mut widest = single_component_sources();
-    parameter(&mut widest, "TxValue", "CanIfTxPduId", "255");
-    build(&widest).unwrap_or_else(|issues| panic!("{issues:?}"));
+    // SWS_Comtype_00007: a handle inside uint8 but past the PDU count leaves a gap
+    // (Verifies: ECUC_CanIf_00591).
+    let mut gap = single_component_sources();
+    parameter(&mut gap, "TxValue", "CanIfTxPduId", "255");
+    rejected_at(
+        &gap,
+        "CANIF_HANDLE_SEQUENCE",
+        "ecuc.arxml",
+        "/Configuration/CanIf/Config/TxValue",
+    );
+
+    // Without CanSM both controller notifications go to the configured host CDD
+    // BusSM by UL and name (Verifies: SWS_CANIF_00014, 00450, 00524, 00558, 00560,
+    // 00687, 00689, 00690, 00692, ECUC_CanIf_00250／00525／00547／00683／00684).
+    // Rejects: ECUC_CanIf_00547, ECUC_CanIf_00684
+    for (definition, value) in [
+        ("CanIfDispatchUserCtrlBusOffUL", "CAN_SM"),
+        ("CanIfDispatchUserCtrlModeIndicationUL", "CAN_SM"),
+        (
+            "CanIfDispatchUserCtrlModeIndicationName",
+            "Other_ModeIndication",
+        ),
+    ] {
+        let mut dispatch = single_component_sources();
+        parameter(&mut dispatch, "Dispatch", definition, value);
+        rejected_at(
+            &dispatch,
+            "CANIF_DISPATCH",
+            "ecuc.arxml",
+            "/Configuration/CanIf/Dispatch",
+        );
+    }
+
+    // Each HOH names its own-direction Can hardware object (Verifies: SWS_CANIF_00467／00468),
+    // and each Rx L-PDU its HRH (Tx L-PDUs reach the HTH through their buffer,
+    // Verifies: SWS_CANIF_00466). Verifies: ECUC_CanIf_00257／00258／00259／00634／00602
+    let mut hrh = single_component_sources();
+    xml_edit(
+        &mut hrh,
+        "ecuc.arxml",
+        |node| {
+            node.has_tag_name("ECUC-REFERENCE-VALUE")
+                && node.children().any(|child| {
+                    child.has_tag_name("DEFINITION-REF")
+                        && child
+                            .text()
+                            .is_some_and(|text| text.ends_with("/CanIfHrhIdSymRef"))
+                })
+        },
+        |text| text.replace("/Can/Config/Receive<", "/Can/Config/Transmit<"),
+    );
+    rejected_at(
+        &hrh,
+        "CONTROLLER_MAPPING",
+        "ecuc.arxml",
+        "/Configuration/CanIf/Config/Handles/Receive",
+    );
+    let mut rx_pdu = single_component_sources();
+    xml_edit(
+        &mut rx_pdu,
+        "ecuc.arxml",
+        |node| {
+            named(node, "ECUC-CONTAINER-VALUE", "RxValue")
+                && node.children().any(|child| {
+                    child.has_tag_name("DEFINITION-REF")
+                        && child
+                            .text()
+                            .is_some_and(|text| text.ends_with("/CanIfRxPduCfg"))
+                })
+        },
+        |text| text.replace("/Handles/Receive<", "/Handles/Transmit<"),
+    );
+    rejected_at(
+        &rx_pdu,
+        "CONTROLLER_MAPPING",
+        "ecuc.arxml",
+        "/Configuration/CanIf/Config/RxValue",
+    );
 
     // Can_MainFunction_Write moved before Can_MainFunction_Read.
     let mut reordered = single_component_sources();
@@ -1019,4 +1094,615 @@ fn source_preparation_is_target_complete_without_native_tools() {
     assert_eq!(targets[0].0, targets[1].0);
     assert_ne!(targets[0].1, targets[1].1);
     assert!(serde_json::from_str::<BuildTarget>("\"windows-x64\"").is_err());
+}
+
+/// Every CanIf parameter outside its selected value, and every CanIf reference
+/// to the wrong object, is refused at the CanIf container that holds it.
+/// Containers (Verifies: ECUC_CanIf_00244／00245／00246／00247／00248／00249／00253／00546／00832)
+#[test]
+fn canif_parameters_outside_the_selection_are_refused_at_their_source() {
+    let public = "/Configuration/CanIf/Public";
+    let private = "/Configuration/CanIf/Private";
+    let rx = "/Configuration/CanIf/Config/RxValue";
+    let tx = "/Configuration/CanIf/Config/TxValue";
+    for (owner, definition, value, code, object) in [
+        // Unselected optional features (Verifies: ECUC_CanIf_00847／00614／00848／00854／00866／
+        // 00612／00772／00607／00608／00609／00610／00865／00618／00733／00611／00844／
+        // 00837／00613／00843).
+        // Rejects: ECUC_CanIf_00847
+        (
+            "Public",
+            "CanIfBusMirroringSupport",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            public,
+        ),
+        // Rejects: ECUC_CanIf_00614
+        (
+            "Public",
+            "CanIfDevErrorDetect",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            public,
+        ),
+        // Rejects: ECUC_CanIf_00848
+        (
+            "Public",
+            "CanIfEnableSecurityEventReporting",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            public,
+        ),
+        // Rejects: ECUC_CanIf_00854
+        (
+            "Public",
+            "CanIfGlobalTimeSupport",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            public,
+        ),
+        // Rejects: ECUC_CanIf_00866
+        (
+            "Public",
+            "CanIfPublicCtrlPnEnable",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            public,
+        ),
+        // Rejects: ECUC_CanIf_00612
+        (
+            "Public",
+            "CanIfPublicMultipleDrvSupport",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            public,
+        ),
+        // Rejects: ECUC_CanIf_00772
+        (
+            "Public",
+            "CanIfPublicPnSupport",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            public,
+        ),
+        // Rejects: ECUC_CanIf_00607
+        (
+            "Public",
+            "CanIfPublicReadRxPduDataApi",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            public,
+        ),
+        // Rejects: ECUC_CanIf_00608
+        (
+            "Public",
+            "CanIfPublicReadRxPduNotifyStatusApi",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            public,
+        ),
+        // Rejects: ECUC_CanIf_00609
+        (
+            "Public",
+            "CanIfPublicReadTxPduNotifyStatusApi",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            public,
+        ),
+        // Rejects: ECUC_CanIf_00610
+        (
+            "Public",
+            "CanIfPublicSetDynamicTxIdApi",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            public,
+        ),
+        // Rejects: ECUC_CanIf_00865
+        (
+            "Public",
+            "CanIfPublicTrcvPnEnable",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            public,
+        ),
+        // Rejects: ECUC_CanIf_00618
+        (
+            "Public",
+            "CanIfPublicTxBuffering",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            public,
+        ),
+        // Rejects: ECUC_CanIf_00733
+        (
+            "Public",
+            "CanIfPublicTxConfirmPollingSupport",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            public,
+        ),
+        // Rejects: ECUC_CanIf_00611
+        (
+            "Public",
+            "CanIfPublicWakeupCheckValidSupport",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            public,
+        ),
+        // Rejects: ECUC_CanIf_00844
+        (
+            "Public",
+            "CanIfTriggerTransmitSupport",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            public,
+        ),
+        // Rejects: ECUC_CanIf_00837
+        (
+            "Public",
+            "CanIfTxOfflineActiveSupport",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            public,
+        ),
+        // Rejects: ECUC_CanIf_00613
+        (
+            "Public",
+            "CanIfVersionInfoApi",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            public,
+        ),
+        // Rejects: ECUC_CanIf_00843
+        (
+            "Public",
+            "CanIfWakeupSupport",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            public,
+        ),
+        // No fixed buffer or TTCAN, and the data length check stays on
+        // (Verifies: ECUC_CanIf_00827／00675／00617); the filter and handle type are
+        // the implemented ones (Verifies: ECUC_CanIf_00619／00742).
+        // Rejects: ECUC_CanIf_00827
+        (
+            "Private",
+            "CanIfFixedBuffer",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            private,
+        ),
+        // Rejects: ECUC_CanIf_00675
+        (
+            "Private",
+            "CanIfSupportTTCAN",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            private,
+        ),
+        // Rejects: ECUC_CanIf_00617
+        (
+            "Private",
+            "CanIfPrivateDataLengthCheck",
+            "false",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            private,
+        ),
+        // Rejects: ECUC_CanIf_00619
+        (
+            "Private",
+            "CanIfPrivateSoftwareFilterType",
+            "BINARY",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            private,
+        ),
+        // Rejects: ECUC_CanIf_00742
+        (
+            "Public",
+            "CanIfPublicHandleTypeEnum",
+            "UINT8",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            public,
+        ),
+        // Verifies: ECUC_CanIf_00637
+        // Rejects: ECUC_CanIf_00637
+        (
+            "Controller",
+            "CanIfCtrlWakeupSupport",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            "/Configuration/CanIf/Controller/Controller",
+        ),
+        // No CanIf Tx buffer (Verifies: ECUC_CanIf_00834).
+        // Rejects: ECUC_CanIf_00834
+        (
+            "TransmitBuffer",
+            "CanIfBufferSize",
+            "1",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            "/Configuration/CanIf/Config/TransmitBuffer",
+        ),
+        // Static Classical CAN L-PDUs without read access or truncation
+        // (Verifies: ECUC_CanIf_00596／00590／00593／00600／00595／00589／00845).
+        (
+            "RxValue",
+            "CanIfRxPduCanIdType",
+            "STANDARD_CAN",
+            "CAN_ID_CONFLICT",
+            rx,
+        ),
+        (
+            "TxValue",
+            "CanIfTxPduCanIdType",
+            "STANDARD_FD_CAN",
+            "CAN_ID_CONFLICT",
+            tx,
+        ),
+        // Rejects: ECUC_CanIf_00593
+        (
+            "TxValue",
+            "CanIfTxPduType",
+            "DYNAMIC",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            tx,
+        ),
+        // Rejects: ECUC_CanIf_00600
+        (
+            "RxValue",
+            "CanIfRxPduReadData",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            rx,
+        ),
+        // Rejects: ECUC_CanIf_00595
+        (
+            "RxValue",
+            "CanIfRxPduReadNotifyStatus",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            rx,
+        ),
+        // Rejects: ECUC_CanIf_00589
+        (
+            "TxValue",
+            "CanIfTxPduReadNotifyStatus",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            tx,
+        ),
+        // Rejects: ECUC_CanIf_00845
+        (
+            "TxValue",
+            "CanIfTxPduTruncation",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            tx,
+        ),
+        // The L-PDU CAN IDs and data length match the selected frame
+        // (Verifies: ECUC_CanIf_00598／00592／00599).
+        ("RxValue", "CanIfRxPduCanId", "801", "CAN_ID_CONFLICT", rx),
+        ("TxValue", "CanIfTxPduCanId", "800", "CAN_ID_CONFLICT", tx),
+        (
+            "RxValue",
+            "CanIfRxPduDataLength",
+            "3",
+            "LENGTH_CONFLICT",
+            rx,
+        ),
+    ] {
+        let mut sources = single_component_sources();
+        parameter(&mut sources, owner, definition, value);
+        rejected_at(&sources, code, "ecuc.arxml", object);
+    }
+    // Verifies: ECUC_CanIf_00601／00603／00627／00831／00833／00631／00625／00636／00638／00642
+    for (definition, from, to, code, object) in [
+        (
+            "/CanIfTxPduBufferRef",
+            "/Config/TransmitBuffer<",
+            "/Config/Handles<",
+            "REFERENCE_TARGET",
+            "/Configuration/CanIf/Config/TxValue",
+        ),
+        (
+            "/CanIfRxPduRef",
+            "/Pdus/RxValuePdu<",
+            "/Pdus/TxValuePdu<",
+            "SIGNAL_MAPPING",
+            "/Configuration/EcuC/Config/Pdus/RxValuePdu",
+        ),
+        (
+            "/CanIfTxPduRef",
+            "/Pdus/TxValuePdu<",
+            "/Pdus/RxValuePdu<",
+            "SIGNAL_MAPPING",
+            "/Configuration/EcuC/Config/Pdus/TxValuePdu",
+        ),
+        (
+            "/CanIfHthIdSymRef",
+            "/Can/Config/Transmit<",
+            "/Can/Config/Receive<",
+            "CONTROLLER_MAPPING",
+            "/Configuration/CanIf/Config/Handles/Transmit",
+        ),
+        (
+            "/CanIfBufferHthRef",
+            "/Handles/Transmit<",
+            "/Handles/Receive<",
+            "REFERENCE_TARGET",
+            "/Configuration/CanIf/Config/TransmitBuffer",
+        ),
+        (
+            "/CanIfHrhCanCtrlIdRef",
+            "/Controller/Controller<",
+            "/Controller<",
+            "REFERENCE_TARGET",
+            "/Configuration/CanIf/Config/Handles/Receive",
+        ),
+        (
+            "/CanIfHthCanCtrlIdRef",
+            "/Controller/Controller<",
+            "/Controller<",
+            "REFERENCE_TARGET",
+            "/Configuration/CanIf/Config/Handles/Transmit",
+        ),
+        (
+            "/CanIfCtrlCanCtrlRef",
+            "/Can/Config/Controller<",
+            "/Can/Config/Receive<",
+            "REFERENCE_TARGET",
+            "/Configuration/CanIf/Controller/Controller",
+        ),
+        (
+            "/CanIfCtrlDrvNameRef",
+            "/Can/General<",
+            "/Can/Config<",
+            "REFERENCE_TARGET",
+            "/Configuration/CanIf/Controller",
+        ),
+        (
+            "/CanIfCtrlDrvInitHohConfigRef",
+            "/CanIf/Config/Handles<",
+            "/CanIf/Config<",
+            "REFERENCE_TARGET",
+            "/Configuration/CanIf/Controller",
+        ),
+    ] {
+        let mut sources = single_component_sources();
+        xml_edit(
+            &mut sources,
+            "ecuc.arxml",
+            |node| {
+                node.has_tag_name("ECUC-REFERENCE-VALUE")
+                    && node.children().any(|child| {
+                        child.has_tag_name("DEFINITION-REF")
+                            && child.text().is_some_and(|text| text.ends_with(definition))
+                    })
+            },
+            |text| text.replacen(from, to, 1),
+        );
+        rejected_at(&sources, code, "ecuc.arxml", object);
+    }
+}
+
+/// Containers and parameters of unselected CanIf features have no definition in
+/// the selected catalog, so their source is refused before generation.
+#[test]
+fn canif_definitions_outside_the_selection_are_refused_at_their_source() {
+    let owners = [
+        ("CanIf", "", "/Configuration/CanIf"),
+        ("Config", "/CanIfInitCfg", "/Configuration/CanIf/Config"),
+        (
+            "Receive",
+            "/CanIfInitCfg/CanIfInitHohCfg/CanIfHrhCfg",
+            "/Configuration/CanIf/Config/Handles/Receive",
+        ),
+        (
+            "RxValue",
+            "/CanIfInitCfg/CanIfRxPduCfg",
+            "/Configuration/CanIf/Config/RxValue",
+        ),
+        (
+            "TxValue",
+            "/CanIfInitCfg/CanIfTxPduCfg",
+            "/Configuration/CanIf/Config/TxValue",
+        ),
+        ("Public", "/CanIfPublicCfg", "/Configuration/CanIf/Public"),
+        (
+            "Dispatch",
+            "/CanIfDispatchCfg",
+            "/Configuration/CanIf/Dispatch",
+        ),
+    ];
+    // (owner, definition, "" for a container or "KIND:value" for a parameter)
+    for (owner, name, value) in [
+        // Rejects: ECUC_CanIf_00273
+        ("CanIf", "CanIfTrcvDrvCfg", ""),
+        // Rejects: ECUC_CanIf_00849
+        ("CanIf", "CanIfSecurityEventRefs", ""),
+        // Rejects: ECUC_CanIf_00628
+        ("Receive", "CanIfHrhRangeCfg", ""),
+        // Rejects: ECUC_CanIf_00743
+        ("RxValue", "CanIfRxPduCanIdRange", ""),
+        // Rejects: ECUC_CanIf_00860
+        ("RxValue", "CanIfRxPduXLParams", ""),
+        // Rejects: ECUC_CanIf_00855
+        ("TxValue", "CanIfTxPduXLParams", ""),
+        // Rejects: ECUC_CanIf_00822
+        ("RxValue", "CanIfRxPduCanIdMask", "INTEGER:2047"),
+        // Rejects: ECUC_CanIf_00823
+        ("TxValue", "CanIfTxPduCanIdMask", "INTEGER:2047"),
+        // Rejects: ECUC_CanIf_00840
+        ("TxValue", "CanIfTxPduTriggerTransmit", "BOOLEAN:false"),
+        // Rejects: ECUC_CanIf_00773
+        ("TxValue", "CanIfTxPduPnFilterPdu", "BOOLEAN:false"),
+        // Rejects: ECUC_CanIf_00838
+        ("Public", "CanIfSetBaudrateApi", "BOOLEAN:false"),
+        // Rejects: ECUC_CanIf_00824
+        ("Public", "CanIfMetaDataSupport", "BOOLEAN:false"),
+        // Rejects: ECUC_CanIf_00741
+        ("Public", "CanIfPublicWakeupCheckValidByNM", "BOOLEAN:false"),
+        // Rejects: ECUC_CanIf_00671
+        ("Public", "CanIfPublicCddHeaderFile", "STRING:Cdd.h"),
+        // Rejects: ECUC_CanIf_00828
+        ("Config", "CanIfMaxBufferSize", "INTEGER:0"),
+        // Rejects: ECUC_CanIf_00829
+        ("Config", "CanIfMaxTxPduCfg", "INTEGER:2"),
+        // Rejects: ECUC_CanIf_00830
+        ("Config", "CanIfMaxRxPduCfg", "INTEGER:2"),
+        // Rejects: ECUC_CanIf_00686
+        (
+            "Dispatch",
+            "CanIfDispatchUserTrcvModeIndicationUL",
+            "ENUMERATION:CDD",
+        ),
+        // Rejects: ECUC_CanIf_00790
+        (
+            "Dispatch",
+            "CanIfDispatchUserClearTrcvWufFlagIndicationUL",
+            "ENUMERATION:CDD",
+        ),
+        // Rejects: ECUC_CanIf_00792
+        (
+            "Dispatch",
+            "CanIfDispatchUserCheckTrcvWakeFlagIndicationUL",
+            "ENUMERATION:CDD",
+        ),
+        // Rejects: ECUC_CanIf_00549
+        (
+            "Dispatch",
+            "CanIfDispatchUserValidateWakeupEventUL",
+            "ENUMERATION:ECUM",
+        ),
+        // Rejects: ECUC_CanIf_00820
+        (
+            "Dispatch",
+            "CanIfDispatchUserConfirmPnAvailabilityUL",
+            "ENUMERATION:CAN_SM",
+        ),
+        // Rejects: ECUC_CanIf_00868
+        (
+            "Dispatch",
+            "CanIfDispatchUserConfirmCtrlPnAvailabilityUL",
+            "ENUMERATION:CAN_SM",
+        ),
+    ] {
+        let (_, path, object) = owners.iter().find(|row| row.0 == owner).unwrap();
+        let definition = format!("/AUTOSAR/EcucDefs/CanIf{path}/{name}");
+        let mut sources = single_component_sources();
+        xml_edit(
+            &mut sources,
+            "ecuc.arxml",
+            |node| {
+                matches!(
+                    node.tag_name().name(),
+                    "ECUC-CONTAINER-VALUE" | "ECUC-MODULE-CONFIGURATION-VALUES"
+                ) && node.children().any(|child| {
+                    child.has_tag_name("DEFINITION-REF")
+                        && child
+                            .text()
+                            .is_some_and(|text| text == format!("/AUTOSAR/EcucDefs/CanIf{path}"))
+                })
+            },
+            |text| match value.split_once(':') {
+                Some((kind, value)) => {
+                    let element = match kind {
+                        "INTEGER" | "BOOLEAN" => "NUMERICAL",
+                        _ => "TEXTUAL",
+                    };
+                    let parameter = format!(
+                        "<ECUC-{element}-PARAM-VALUE><DEFINITION-REF DEST=\"ECUC-{kind}-PARAM-DEF\">{definition}</DEFINITION-REF><VALUE>{value}</VALUE></ECUC-{element}-PARAM-VALUE>"
+                    );
+                    text.replacen(
+                        "<PARAMETER-VALUES>",
+                        &format!("<PARAMETER-VALUES>{parameter}"),
+                        1,
+                    )
+                }
+                None => {
+                    let container = format!(
+                        "<ECUC-CONTAINER-VALUE><SHORT-NAME>{name}</SHORT-NAME><DEFINITION-REF DEST=\"ECUC-PARAM-CONF-CONTAINER-DEF\">{definition}</DEFINITION-REF></ECUC-CONTAINER-VALUE>"
+                    );
+                    if owner == "CanIf" {
+                        text.replacen("<CONTAINERS>", &format!("<CONTAINERS>{container}"), 1)
+                    } else {
+                        // After the owner's references, before its closing tag.
+                        let at = text.rfind("</REFERENCE-VALUES>").unwrap()
+                            + "</REFERENCE-VALUES>".len();
+                        format!(
+                            "{}<SUB-CONTAINERS>{container}</SUB-CONTAINERS>{}",
+                            &text[..at],
+                            &text[at..]
+                        )
+                    }
+                }
+            },
+        );
+        let object = if value.is_empty() {
+            format!("{object}/{name}")
+        } else {
+            (*object).to_owned()
+        };
+        rejected_with(
+            &sources,
+            ("REFERENCE_UNRESOLVED", "DEFINITION_UNKNOWN"),
+            "ecuc.arxml",
+            &object,
+        );
+    }
+}
+
+/// The selected controller has one HRH and one HTH; a second one is refused.
+#[test]
+fn second_canif_hardware_object_is_refused() {
+    // Rejects: ECUC_CanIf_00259, ECUC_CanIf_00258
+    for (name, definition) in [("Receive", "/CanIfHrhCfg"), ("Transmit", "/CanIfHthCfg")] {
+        let mut sources = single_component_sources();
+        xml_edit(
+            &mut sources,
+            "ecuc.arxml",
+            |node| {
+                named(node, "ECUC-CONTAINER-VALUE", name)
+                    && node.children().any(|child| {
+                        child.has_tag_name("DEFINITION-REF")
+                            && child.text().is_some_and(|text| text.ends_with(definition))
+                    })
+            },
+            |text| {
+                let copy = text.replacen(
+                    &format!("<SHORT-NAME>{name}</SHORT-NAME>"),
+                    &format!("<SHORT-NAME>{name}Second</SHORT-NAME>"),
+                    1,
+                );
+                format!("{text}{copy}")
+            },
+        );
+        rejected_at(
+            &sources,
+            "CONFIGURATION_NOT_UNIQUE",
+            "ecuc.arxml",
+            "/Configuration/Can/Config/Controller",
+        );
+    }
+}
+
+/// Configuration is generated before compilation, so a module declaring the
+/// link-time or post-build variant is refused (link-time CanIf: SWS_CANIF_00378).
+#[test]
+fn link_time_and_post_build_variants_are_refused_at_the_module() {
+    // Rejects: ECUC_CanIf_00244
+    for variant in ["VARIANT-LINK-TIME", "VARIANT-POST-BUILD"] {
+        let mut sources = single_component_sources();
+        xml_edit(
+            &mut sources,
+            "ecuc.arxml",
+            |node| named(node, "ECUC-MODULE-CONFIGURATION-VALUES", "CanIf"),
+            |text| text.replacen("VARIANT-PRE-COMPILE", variant, 1),
+        );
+        rejected_at(
+            &sources,
+            "TARGET_PARAMETER_UNSUPPORTED",
+            "ecuc.arxml",
+            "/Configuration/CanIf",
+        );
+    }
 }
