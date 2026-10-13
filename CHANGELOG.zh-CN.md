@@ -41,5 +41,6 @@
 - 仓库根目录成为 Cargo workspace，只有一个 `Cargo.lock` 和一个 `target/`；用 `-p autosar-config-core` 或 `-p autosar-config-desktop` 选择 crate。主线 BSW 运行时从 `runtime/multi` 移到 `runtime/bsw`，交付路径和字节不变。integration 模块、测试 fixture、C 分析样本 `component-pipeline` 和桌面场景 `composition-editing` 按职责命名，`quality` 拒绝仓库路径和文本中的开发计划编号。
 - 生成 ECU 的每个文件只有一个生成方。同一路径出现第二个生成方（`OUTPUT_PRODUCER_CONFLICT`）、运行时模板未渲染（`OUTPUT_MISSING`）或模板不再含编辑锚点（`TEMPLATE_ANCHOR`）时拒绝生成，不再覆盖或修补已生成文本。生成源码与 README 逐字节不变。始终被生成的 `include/Rte_MemMap.h` 取代、从未交付的资产 `runtime/ecu/include/Rte_MemMap.h` 移出资产清单，因此交付的 `inventory/contracts/assets.json` 与规则集身份随之改变。
 - 已核定计划不能保证的生成前提（缺少所有者、映射、被引用对象或 ECU 计划部分，或周期为零）报告为定位到源对象的诊断（`PLAN_PREMISE`、`REFERENCE_UNRESOLVED`、`INPUT_OBJECTS_MISSING`、`ECU_SOURCE_CLOSURE`），不再 panic。Clippy 以默认规则集加告警即错误检查两个 crate；生成与集成模块另外拒绝 `unwrap`、`expect`、`panic!` 和修补已渲染文本。
+- 内置 SWC 模板词汇不再在 `P-PORT-PROTOTYPE` 下提供 `ALIVE-TIMEOUT`、`HANDLE-NEVER-RECEIVED` 和 `HANDLE-TIMEOUT-TYPE`；R24-11 只允许它们出现在接收端 com spec 中。`official` 套件把内置 ECUC 定义与 ECUC MOD 比较，把模板词汇与 R24-11 XSD 比较（#72）。
 
 早期开发结果保留在 Git 历史和相关实施工件中；本记录不重新声明历史发行或验收结果。
