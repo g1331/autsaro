@@ -101,7 +101,7 @@ uv run --locked python -B -m unittest discover -s tests/python
 cargo test --locked -p autosar-config-core
 ~~~
 
-These commands run the underlying tools directly and preserve their diagnostics and exit statuses on failure. Run `uv sync --locked` before using the Python tooling. Incremental formatting checks use `autosar_tooling quality --base <baseline-commit>`; without an explicit baseline, local checks inspect pending changes relative to HEAD.
+These commands run the underlying tools directly and preserve their diagnostics and exit statuses on failure. Run `uv sync --locked` before using the Python tooling. Incremental formatting checks use `autosar_tooling quality --base <baseline-commit>`; without an explicit baseline, local checks inspect pending changes relative to HEAD. `quality` also rejects development plan numbers in repository paths and text; decision records, the roadmap and vendored upstream content are exempt.
 
 Basic tests, official comparisons, native execution, and GUI/package acceptance are separate layers; see the [testing guide](docs/development/testing.md). Complete resource and native checks use `uv run --locked python -m autosar_tooling verify --scope all --base <baseline-commit>`. Missing or unexecuted layers are not reported as passed.
 

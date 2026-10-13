@@ -169,7 +169,22 @@ flowchart LR
 
 封存工程包含生成源码、受信 runtime 资产、固定内核与补丁、应用快照、所有权台账、`target.json` 构建清单、`files.list`／`files.sha256` 和 stdlib-only 离线工具。接收者只需受支持的 CPython、匹配的 GCC／binutils 与 Git，不依赖 checkout、Rust、Node 或 uv；包内工具以 `-I -S` 运行，只从自身 `tools/` 导入。入口 `tools/ecu-tool.py build|verify` 的用法见 [runtime/README.md](../runtime/README.md)。
 
-当前交接格式为 `autosar-workbench-handoff-v2`（内置规则、多应用输入）。旧 `autosar-host-handoff-v1` 与 `autosar-ecu-handoff-v1` 在导入时拒绝，其 ARXML 源文件可导入新工程。
+当前交接格式为 `autosar-workbench-handoff-v3`（内置规则、多应用输入）。旧 `autosar-workbench-handoff-v2`、`autosar-host-handoff-v1` 与 `autosar-ecu-handoff-v1` 在导入时拒绝，其 ARXML 源文件可导入新工程。
+
+只有持久化、交付或协议格式带版本。格式的结构或取值域变化时版本加一，版本号不回收；旧版本按身份明确拒绝，不迁移。模板 ID、生成方 ID 和消息键等内部标识不带版本。
+
+| 格式 | 载体 | 版本 |
+| --- | --- | --- |
+| `autosar-workbench-handoff` | 包内 `handoff.json`、`target.json` 的 `nativeDelivery` | v3 |
+| 所有权台账 `formatVersion` | 包内 `workbench-ownership.json` | 2 |
+| `autosar-ecu-integration`；计划描述 `formatVersion` | 包内 `integration.json` | v2；2 |
+| `autosar-component-contract` | 组件契约包 `contract.json` | v2 |
+| `autosar-asset-inventory` | `runtime/contracts/assets.json` 及包内 `inventory/contracts/assets.json` | v2 |
+| `autosar-workbench-build-tool-inventory` | 包内 `tools/build-tool-inventory.json` | v2 |
+| `autosar-build-target`、`autosar-ecu-test-inputs`、`autosar-os-generation-timing` | 包内 `target.json`、`verification/inputs.json`、`os-generation-timing.json` | v1 |
+| 工程清单 `formatVersion` | 用户工程 `workbench-project.json` | 1 |
+| 扩展目录 `formatVersion` | 外部 `catalog.json` | 1 |
+| profile `singlecore-ecu-v1`；target `windows-x64-controlled-v1`、`linux-x64-controlled-v1`；协议 `HostBatchV1` | 工程、设置、交付包、主机批处理协议 | v1 |
 
 ## 7. 主线收敛与新基线（目标，实施中）
 
@@ -177,7 +192,7 @@ flowchart LR
 
 ### 7.1 单一生成主线
 
-新生成的工程全部走当前多组件主线，单组件是 SWC 数为 1 的特例，不按组件数分派链路（[ADR 0010](adr/0010-single-generation-mainline.md)）。主线按职责命名，不再称 multi。主线已拥有全部 BSW 来源：程序闭包只取自主线运行时目录（目前为 `runtime/bsw`），producer 身份与实际字节一致；Dem、NvM、Security 不在主线程序中，随旧链路删除。不同 target 独立选择，不同时链接互斥的 OS／RTE／BSW producer；`host-batch`、`probe`、`test` 的实际程序闭包分别核验。
+新生成的工程全部走同一条 ECU 主线，单组件是 SWC 数为 1 的特例，不按组件数分派链路（[ADR 0010](adr/0010-single-generation-mainline.md)）。主线按职责命名，不再称 multi。主线已拥有全部 BSW 来源：程序闭包只取自主线运行时目录（目前为 `runtime/bsw`），producer 身份与实际字节一致；Dem、NvM、Security 不在主线程序中，随旧链路删除。不同 target 独立选择，不同时链接互斥的 OS／RTE／BSW producer；`host-batch`、`probe`、`test` 的实际程序闭包分别核验。
 
 ### 7.2 稳定版本前不保留兼容
 
@@ -202,7 +217,7 @@ flowchart LR
 
 ### 7.5 仓库组织（目标）
 
-（[ADR 0015](adr/0015-repository-code-organization.md)）
+（[ADR 0015](adr/0015-repository-code-organization.md)）根 workspace、`runtime/bsw`、按职责命名、编号检查与格式版本表已实施（#36）；`runtime/host` 的拆分随交付布局按所有权分类一起完成（#38）。
 
 ```
 Cargo.toml            # 虚拟 manifest：members = ["core", "src-tauri"]，resolver = "3"，唯一 Cargo.lock 与 target

@@ -36,6 +36,25 @@ validation checks the input relationships; linking the ECU, SC1 and ARTI
 behavior, C quality and independent engineering handoff require separate
 checks.
 
+## Modules
+
+Each module owns one AUTOSAR module or one kind of output; names in the same
+layer are not near-synonyms.
+
+| Module | Responsibility |
+| --- | --- |
+| `plan.rs` | `build_plan_native`, the validated plan and its `PlanDescription` |
+| `graph.rs`, `configuration.rs`, `native_configuration.rs` | Path graph of the inputs, ECUC values and descriptor-only physical parameters |
+| `component.rs`, `composition.rs` | Component contracts and the flat component composition (`CompositionContract`) |
+| `signals.rs`, `com.rs`, `routing.rs`, `can_runtime.rs` | Port-to-signal mapping, COM groups and timebases, PduR/CanTp routes, CAN types and polling |
+| `diagnostic.rs`, `mode.rs`, `schedule.rs` | Dcm/CanTp contracts, ComM/BswM mode users, OS events and scheduled entities |
+| `catalog.rs` | Selected BSW symbol catalog and runtime source identities |
+| `rte.rs`, `os_service.rs` | RTE producers and the OS counter service binding |
+| `ecu_config.rs`, `artifacts.rs`, `arti.rs` | Generated ECU configuration sources, `integration.json`, implementation and ARTI descriptions |
+| `ecu.rs`, `handoff.rs` | Delivered ECU project assembly, native build and verification of the sealed project |
+| `contracts.rs` | Component contract kit for application compilation |
+| `editor.rs` | Integration panel inspection and edits |
+
 `PlanDiagnostic` distinguishes input errors, unsupported target choices, missing
 external dependencies and tool/source-inventory errors. It carries the logical
 file, complete object path, cause and remedy when applicable. Rejection produces
