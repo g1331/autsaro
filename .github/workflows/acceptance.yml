@@ -1,65 +1,86 @@
-name: Controlled resource and native acceptance
+name: Official archive comparison
+# Runs the official test binary against the licensed R24-11 archives, downloaded
+# from autosar.org at run time and verified against core/resources/official.json.
+# The archives stay in a private cache: never upload them or print their content.
+# Not part of the required checks, so an unavailable site cannot block merging.
 on:
   workflow_dispatch:
-    inputs:
-      suite:
-        type: choice
-        options: [integration, native, all]
-        default: integration
-      platform:
-        type: choice
-        options: [Linux, Windows]
-        default: Linux
+  schedule:
+    - cron: '23 3 * * *'
+  pull_request:
+    paths:
+      - core/src/definitions.rs
+      - core/src/definitions/**
+      - core/src/schema.rs
+      - core/src/rules.rs
+      - core/src/rules/**
+      - core/resources/official.json
+      - core/tests/official/**
+      - tools/python/src/autosar_tooling/official.py
+      - .github/workflows/acceptance.yml
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
 env:
   PYTHONUTF8: '1'
 jobs:
-  acceptance:
-    runs-on: [self-hosted, autosar-controlled, "${{ inputs.platform }}"]
-    timeout-minutes: 180
-    env:
-      AUTOSAR_OS_OUTPUT_DIRECTORY: ${{ github.workspace }}/acceptance-results/os
+  revision:
+    name: Detect an untested master revision
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    outputs:
+      tested: ${{ steps.detect.outputs.tested }}
+    steps:
+      # The daily run skips a master commit that this workflow already passed.
+      - id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          passed=$(gh run list -R "$GITHUB_REPOSITORY" --workflow acceptance.yml --commit "$GITHUB_SHA" --status success --json databaseId --jq length)
+          echo "Successful runs for $GITHUB_SHA: $passed"
+          echo "tested=$([ "$passed" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+  official:
+    needs: revision
+    if: ${{ !cancelled() && needs.revision.outputs.tested != 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: astral-sh/setup-uv@v10.2.0
       - run: uv sync --locked
-      - name: Prepare result directory
+      - uses: actions/cache/restore@v6.1.0
+        id: archives
+        with:
+          path: docs/official/**/*.zip
+          key: official-archives-${{ runner.os }}-${{ hashFiles('core/resources/official.json') }}
+      - name: Download and verify official archives
         shell: bash
-        run: mkdir -p acceptance-results
+        run: |
+          uv run --locked python -m autosar_tooling fetch-official || {
+            echo "::error title=Official archives unavailable::Download, certificate or SHA-256 verification failed; the official tests did not run."
+            exit 1
+          }
+      - uses: actions/cache/save@v6.1.0
+        if: steps.archives.outputs.cache-hit != 'true'
+        with:
+          path: docs/official/**/*.zip
+          key: official-archives-${{ runner.os }}-${{ hashFiles('core/resources/official.json') }}
+      - uses: ./.github/actions/core-build-dependencies
       - name: Select development interpreter
         run: uv run --locked python -c "import os, sys; open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8').write('AUTOSAR_PYTHON=' + sys.executable + chr(10))"
-      - name: Official integration
-        if: inputs.suite == 'integration' || inputs.suite == 'all'
+      - name: Official comparison tests
         shell: bash
         run: |
-          set -o pipefail
-          uv run --locked cargo test --locked -p autosar-config-core --features official-oracles --no-fail-fast 2>&1 | tee acceptance-results/integration.log
-      - name: Native process and ECU consumers
-        if: inputs.suite == 'native' || inputs.suite == 'all'
-        shell: bash
-        run: |
-          set -o pipefail
-          uv run --locked cargo test --locked -p autosar-config-core --features native-tests --no-fail-fast 2>&1 | tee acceptance-results/native.log
-      - name: Python native platform checks
-        if: inputs.suite == 'native' || inputs.suite == 'all'
-        shell: bash
-        env:
-          AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/acceptance-results/samples
-        run: |
-          set -o pipefail
-          # The sealed build and receiver checks consume the generated samples.
-          cargo test --locked -p autosar-config-core --test it -- 'c_analysis::'
-          uv run --locked python -B -m unittest discover -s tests/python/native 2>&1 | tee acceptance-results/python-native.log
-      - name: UI installation
-        if: inputs.suite == 'all'
-        run: npm ci --prefix ui
-      - name: UI build
-        if: inputs.suite == 'all'
-        run: npm run build --prefix ui
-      - uses: actions/upload-artifact@v7.0.1
-        if: always()
-        with:
-          name: acceptance-${{ inputs.platform }}-${{ github.sha }}
-          path: acceptance-results
-          if-no-files-found: ignore
+          cargo test --locked -p autosar-config-core --features official-oracles --test official --no-fail-fast || {
+            echo "::error title=Official comparison failed::The archives were verified; the official tests reported failures."
+            exit 1
+          }

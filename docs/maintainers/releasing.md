@@ -10,11 +10,13 @@
 
 基础 checks 工作流可在普通 GitHub hosted runner 执行。
 
-专用 acceptance 工作流只由 workflow_dispatch 触发，在带 autosar-controlled 和所选操作系统标签的 self-hosted runner 执行。runner 使用支持 Node 24 Actions 的当前 GitHub Actions runner。维护者需准备对应宿主的 Rust/桌面开发依赖、合法资源、受控工具链，以及指向这些资源和可执行文件的环境变量（Cargo/Tauri 直接读取）；Windows 原生生成器回归另需 Cppcheck 2.21.0。runner 不应处理不受信任的 fork PR 或在用户日常桌面执行 GUI 自动验收。
+官方对照工作流 acceptance 也在 GitHub 托管 runner 上运行，运行时从 autosar.org 下载官方档案并按 `core/resources/official.json` 的哈希校验，不需要专用 runner，也不属于必需检查；触发方式与失败的查看方法见[测试说明](../development/testing.md#官方对照)。维护者需关注定时运行的失败通知。站点更换 TLS 证书链时，下载入口固定的中间证书指纹会失效：审阅新证书链后更新指纹，不能关闭证书校验。官方档案不能提交进仓库、作为 artifact 上传或输出到日志。
 
-`AUTOSAR_CC`、`AUTOSAR_OBJDUMP` 和 `AUTOSAR_GIT` 必须为绝对路径；资源路径通过 `AUTOSAR_XSD_ARCHIVE`、`AUTOSAR_MOD_ARCHIVE`、`AUTOSAR_SAMPLE_ARCHIVE` 指定。工作流设置开发解释器；offline 工作流另外选择接收者解释器，直接运行生成包，不向该解释器安装开发工具。
+专用 offline 与 bundles 工作流只由 workflow_dispatch 触发，在带 autosar-controlled 和所选操作系统标签的 self-hosted runner 执行。runner 使用支持 Node 24 Actions 的当前 GitHub Actions runner。维护者需准备对应宿主的 Rust/桌面开发依赖、受控工具链，以及指向这些可执行文件的环境变量（Cargo/Tauri 直接读取）。runner 不应处理不受信任的 fork PR 或在用户日常桌面执行 GUI 自动验收。
 
-调用前检查所选 commit，确认 runner 原生平台与目标一致。原生 GUI 场景由 desktop 工作流在 GitHub 托管 runner 上自行构建验证版并运行，不使用专用 runner；它不覆盖安装包的安装与离线验收，这部分目前没有自动入口。acceptance 上传测试日志，desktop 上传场景结果目录，bundles 上传按提交 SHA 命名的安装包；runner 未配置时专用验收没有执行，不可标记为通过。
+`AUTOSAR_CC`、`AUTOSAR_OBJDUMP` 和 `AUTOSAR_GIT` 必须为绝对路径。工作流设置开发解释器；offline 工作流另外选择接收者解释器，直接运行生成包，不向该解释器安装开发工具。
+
+调用前检查所选 commit，确认 runner 原生平台与目标一致。原生 GUI 场景由 desktop 工作流在 GitHub 托管 runner 上自行构建验证版并运行，不使用专用 runner；它不覆盖安装包的安装与离线验收，这部分目前没有自动入口。desktop 上传场景结果目录，bundles 上传按提交 SHA 命名的安装包；runner 未配置时专用验收没有执行，不可标记为通过。
 
 ## 发行版本
 
