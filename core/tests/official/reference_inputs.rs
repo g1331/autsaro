@@ -78,7 +78,8 @@ fn verify_reference_inputs() {
     let fixture = root.join("core/tests/fixtures/echo-application");
     let manifest: Value =
         serde_json::from_slice(&fs::read(fixture.join("manifest.json")).unwrap()).unwrap();
-    let schema_path = root.join(manifest["external_xsd"]["path"].as_str().unwrap());
+    // Locate the archive like every official test; the manifest pins its identity.
+    let schema_path = schema::schema_archive(root);
     assert_eq!(
         format!(
             "{:x}",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
@@ -13,7 +14,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-from autosar_tooling import assets, config, diagnostics, quality, verify
+from autosar_tooling import assets, config, diagnostics, official, quality, verify
 
 
 class ConfigurationTests(unittest.TestCase):
@@ -57,6 +58,44 @@ class ConfigurationTests(unittest.TestCase):
                 config.archive_path("AUTOSAR_MOD_ARCHIVE", "unused"),
                 config.ROOT / "custom/mod.zip",
             )
+
+
+class OfficialArchiveTests(unittest.TestCase):
+    def fetch(self, root: Path, content: bytes) -> tuple[int, str]:
+        errors = io.StringIO()
+        with patch.object(official, "tls_context", return_value=None), patch.object(official.urllib.request, "urlopen", return_value=io.BytesIO(content)), redirect_stdout(io.StringIO()), patch.object(official.sys, "stderr", errors):
+            return official.fetch(root), errors.getvalue()
+
+    def catalog(self, root: Path, content: bytes) -> Path:
+        (root / "core/resources").mkdir(parents=True)
+        entry = {"name": "archive", "environment": "UNSET_TEST_ARCHIVE", "path": "official/a.zip", "url": "https://example.invalid/a.zip", "sha256": hashlib.sha256(content).hexdigest()}
+        (root / "core/resources/official.json").write_text(json.dumps([entry]))
+        return root / "official/a.zip"
+
+    def test_download_is_installed_only_with_the_pinned_digest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = self.catalog(Path(directory), b"archive")
+            status, errors = self.fetch(Path(directory), b"tampered")
+            self.assertEqual(status, 1)
+            self.assertIn("SHA-256 mismatch", errors)
+            self.assertEqual(list(target.parent.iterdir()), [])
+            self.assertEqual(self.fetch(Path(directory), b"archive")[0], 0)
+            self.assertEqual(target.read_bytes(), b"archive")
+
+    def test_existing_archive_is_verified_and_never_replaced(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = self.catalog(Path(directory), b"archive")
+            target.parent.mkdir()
+            target.write_bytes(b"own copy")
+            with patch.object(official, "tls_context", side_effect=AssertionError("downloaded an existing archive")):
+                status, errors = self.fetch(Path(directory), b"archive")
+            self.assertEqual(status, 1)
+            self.assertIn("existing", errors)
+            self.assertEqual(target.read_bytes(), b"own copy")
+
+    def test_intermediate_certificate_requires_the_pinned_fingerprint(self):
+        with patch.object(official.urllib.request, "urlopen", return_value=io.BytesIO(b"other certificate")), self.assertRaisesRegex(official.FetchError, "fingerprint"):
+            official.tls_context()
 
 
 class DiagnosticTests(unittest.TestCase):
