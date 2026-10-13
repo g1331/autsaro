@@ -75,7 +75,7 @@ fn official_r24_sample_imports_as_one_split_package_without_rewriting_sources() 
 
 fn verify_reference_inputs() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let fixture = root.join("core/tests/fixtures/epic4");
+    let fixture = root.join("core/tests/fixtures/echo-application");
     let manifest: Value =
         serde_json::from_slice(&fs::read(fixture.join("manifest.json")).unwrap()).unwrap();
     let schema_path = root.join(manifest["external_xsd"]["path"].as_str().unwrap());
@@ -155,7 +155,7 @@ fn verify_reference_inputs() {
         rows.push(json!({"id": case["id"], "xsd": expected, "diagnostics": issues}));
     }
     println!(
-        "EPIC4_INPUT_EVIDENCE {}",
+        "REFERENCE_INPUT_EVIDENCE {}",
         json!({"profile": manifest["profile"], "status": "pass", "positive_xsd_files": 7,
             "negative": rows, "input_manifest": manifest,
             "scope": "original fixture baseline; product plan/SC1/integration not established"})

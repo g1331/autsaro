@@ -584,8 +584,8 @@ mod ownership_tests {
     use crate::integration::InputSource;
 
     fn sources() -> Vec<InputSource> {
-        let root =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-component");
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/component-pipeline/arxml");
         let mut sources = std::fs::read_dir(root)
             .unwrap()
             .map(|entry| {

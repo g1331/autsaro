@@ -2,7 +2,7 @@
 use super::*;
 
 #[test]
-fn normal_definition_validation_closes_multi_schedule_routes_types_and_handles() {
+fn normal_definition_validation_closes_schedule_routes_types_and_handles() {
     let validation = normal_validation(&inputs());
     assert!(
         validation.diagnostics.is_empty(),

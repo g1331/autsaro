@@ -37,7 +37,8 @@ pub(crate) fn project(
 ) -> (PathBuf, Vec<(String, Vec<u8>)>) {
     use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
     let plan = build(sources).unwrap_or_else(|issues| panic!("{issues:?}"));
-    let fixture_text = std::fs::read_to_string(fixture("multi-application/Ingress.c")).unwrap();
+    let fixture_text =
+        std::fs::read_to_string(fixture("component-pipeline/applications/Ingress.c")).unwrap();
     let application = root.join("Ingress.c");
     std::fs::write(
         &application,
@@ -118,11 +119,11 @@ pub(crate) fn scheduler_variant(value: &str, resource: bool) -> Vec<InputSource>
 
 /// Every OS trigger of the single-application project moved from alarms to
 /// repeating schedule tables (expiry point offset 0, sync strategy NONE), as
-/// in `epic4_timing/schedule_tables.arxml`.
+/// in `os-timing/schedule_tables.arxml`.
 pub(crate) fn schedule_table_variant() -> Vec<InputSource> {
     let tables = [InputSource::new(
         "tables.arxml",
-        std::fs::read(fixture("epic4_timing/schedule_tables.arxml")).unwrap(),
+        std::fs::read(fixture("os-timing/schedule_tables.arxml")).unwrap(),
     )
     .unwrap()];
     let mut sources = single_component_sources();

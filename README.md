@@ -23,7 +23,7 @@ The project tree, frame and signal tables, and property inspector share one work
 
 Multi-component applications use the same tree and inspector to edit event periods, component-instance references, and connector batches. Preview application initialization before creating each component's source; subsequent generation snapshots user source without overwriting the live files.
 
-<a href="docs/images/workbench-multi-editing-zh.png"><img src="docs/images/workbench-multi-editing-zh.png" width="980" alt="Multi-component project with a saved timing event, a long object identity, and its period in the property inspector"></a>
+<a href="docs/images/workbench-component-editing-zh.png"><img src="docs/images/workbench-component-editing-zh.png" width="980" alt="Multi-component project with a saved timing event, a long object identity, and its period in the property inspector"></a>
 
 <table>
   <tr>

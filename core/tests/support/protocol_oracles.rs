@@ -1,6 +1,6 @@
 //! Independent protocol and OS oracle vectors bound to an ECUC configuration.
 //!
-//! The vectors in `fixtures/epic4_oracles/` are written from the standards,
+//! The vectors in `fixtures/oracles/` are written from the standards,
 //! not from generated output. [`validate`] refuses them when their settings
 //! differ from the ECUC being tested or when a fixed literal has drifted.
 use serde_json::Value;
@@ -93,10 +93,10 @@ const BINDINGS: [(&str, &str, i128); 18] = [
     ),
 ];
 
-/// Reads one oracle document from `fixtures/epic4_oracles`.
+/// Reads one oracle document from `fixtures/oracles`.
 pub(crate) fn load(name: &str) -> Value {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/epic4_oracles")
+        .join("tests/fixtures/oracles")
         .join(name);
     serde_json::from_slice(&std::fs::read(&path).unwrap())
         .unwrap_or_else(|error| panic!("{}: {error}", path.display()))
@@ -105,7 +105,8 @@ pub(crate) fn load(name: &str) -> Value {
 /// The ECUC configuration the reference vectors were written for.
 pub(crate) fn reference_ecuc() -> Vec<u8> {
     std::fs::read(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/epic4/positive/ecuc.arxml"),
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/echo-application/positive/ecuc.arxml"),
     )
     .unwrap()
 }

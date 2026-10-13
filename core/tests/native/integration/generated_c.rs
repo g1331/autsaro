@@ -6,7 +6,7 @@ use std::path::Path;
 #[test]
 fn generated_headers_compile_and_link_independent_scalar_and_void_server_signatures() {
     for renamed in [false, true] {
-        let mut inputs = multi_operation_inputs();
+        let mut inputs = pipeline_operation_inputs();
         if renamed {
             for (before, after) in [
                 ("/Application/Process", "/Application/Compute"),
@@ -41,7 +41,7 @@ fn generated_headers_compile_and_link_independent_scalar_and_void_server_signatu
         }
         let plan = build(&inputs).unwrap_or_else(|issues| panic!("{issues:?}"));
         let scratch = Scratch::new();
-        let directory = scratch.0.join("multi-typed");
+        let directory = scratch.0.join("typed");
         std::fs::create_dir_all(directory.join("include")).unwrap();
         for (file, bytes) in plan.component_contract_files().unwrap().files() {
             std::fs::write(directory.join(file), bytes).unwrap();
@@ -197,7 +197,7 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
         // Compile the actual generated producer too: the consumer definitions
         // above validate independent signatures, not this implementation's bodies.
         std::fs::create_dir_all(directory.join("src")).unwrap();
-        let produced = prepared_multi_files(&plan);
+        let produced = prepared_pipeline_files(&plan);
         let metadata = std::str::from_utf8(
             &produced
                 .iter()
@@ -309,7 +309,7 @@ fn generated_rte_com_header_links_independent_handle_callbacks_and_real_dispatch
         }
         let plan = build(&sources).unwrap();
         let scratch = Scratch::new();
-        for (path, bytes) in prepared_multi_files(&plan) {
+        for (path, bytes) in prepared_pipeline_files(&plan) {
             let path = scratch.0.join(path);
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             std::fs::write(path, bytes).unwrap();
@@ -333,7 +333,7 @@ fn generated_rte_com_header_links_independent_handle_callbacks_and_real_dispatch
                 "src/Process.c",
                 "src/Observe.c",
             ])
-            .arg(root.join("core/tests/fixtures/multi-runtime/rte_com_contract.c"))
+            .arg(root.join("core/tests/fixtures/bsw-contracts/rte_com_contract.c"))
             .args(["-pthread", "-Wl,--wrap=Com_ReceiveSignal"])
             .arg("-o")
             .arg(&executable);
@@ -357,7 +357,7 @@ fn generated_rte_com_header_links_independent_handle_callbacks_and_real_dispatch
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[test]
-fn initialized_multi_scaffolds_compile_link_and_initialize_only_out_arguments() {
+fn initialized_scaffolds_compile_link_and_initialize_only_out_arguments() {
     use autosar_config_core::prepared::prepare_ecu_project_for_workspace;
     for arguments in [
         [("Input", "value"), ("Output", "data"), ("State", "status")],
@@ -378,7 +378,7 @@ fn initialized_multi_scaffolds_compile_link_and_initialize_only_out_arguments() 
                 &format!("<SHORT-NAME>{after}</SHORT-NAME>"),
             );
         }
-        let mut workspace = live_multi_workspace(&live, &sources);
+        let mut workspace = live_pipeline_workspace(&live, &sources);
         let preview = workspace.preview_application_initialization().unwrap();
         workspace
             .initialize_application_previewed(&preview)

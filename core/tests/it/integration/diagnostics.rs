@@ -242,7 +242,8 @@ fn required_dcm_channel_reference_is_strict_for_every_builtin_project() {
     assert!(plan.component_contract_files().is_ok());
     // Historical single-component sources configure neither ComM nor BswM.
     // Built-in validation no longer relaxes their Dcm channel dependency.
-    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/epic4/positive");
+    let fixtures =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/echo-application/positive");
     let historical: Vec<_> = [
         "application.arxml",
         "bsw.arxml",
@@ -329,7 +330,7 @@ fn required_dcm_channel_reference_is_strict_for_every_builtin_project() {
 }
 
 #[test]
-fn multi_internal_active_session_did_cannot_be_replaced_by_application_source() {
+fn internal_active_session_did_cannot_be_replaced_by_application_source() {
     let mut sources = inputs();
     parameter(
         &mut sources,
@@ -583,7 +584,8 @@ fn authentication_mode_source_follows_actual_connection_and_rejects_invalid_stan
             .iter()
             .any(|mode| mode.group == "DcmAuthenticationState_Link")
     );
-    let files: std::collections::BTreeMap<_, _> = prepared_multi_files(&plan).into_iter().collect();
+    let files: std::collections::BTreeMap<_, _> =
+        prepared_pipeline_files(&plan).into_iter().collect();
     for (path, symbol) in [
         (
             "src/Ecu_RuntimeConfig.c",

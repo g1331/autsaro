@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { createMultiComponentInputs } from './support/inputs.mjs';
+import { createPipelineInputs } from './support/inputs.mjs';
 import { openWorkbench, existing, json } from './support/workbench.mjs';
 
 const {
@@ -28,12 +28,12 @@ const {
   openMember,
   selectObject,
   exportSource,
-} = await openWorkbench('multi-component');
+} = await openWorkbench('composition-editing');
 
-let multi;
-check('multi-component-shared-editing-and-source-protection', async () => {
-  multi = await createMultiComponentInputs(scratch);
-  await openMember(multi.manifest);
+let pipeline;
+check('composition-shared-editing-and-source-protection', async () => {
+  pipeline = await createPipelineInputs(scratch);
+  await openMember(pipeline.manifest);
   let view = await projection();
   assert.equal(view.profile, 'singlecore-ecu-v1');
   assert.equal(view.diagnostics.filter((issue) => issue.severity === 'error').length, 0);
@@ -50,22 +50,22 @@ check('multi-component-shared-editing-and-source-protection', async () => {
   await input(label('实例名称'), longPeriodicName);
   await input(`[data-field-id=${json(period.fieldId)}]`, '0.0100');
   await resize(1080, 720);
-  await screenshot('multi-long-name-narrow-draft.png');
+  await screenshot('composition-long-name-narrow-draft.png');
   await click('预览更改');
   await until(
     `Boolean(document.querySelector('[aria-label="确认原子应用批次"]'))`,
-    'multi field batch preview',
+    'composition field batch preview',
   );
   await until(
     `[...document.querySelectorAll('[role=dialog] button')].some(node => node.textContent.trim() === '确认应用全部变化' && !node.disabled)`,
-    'multi preview ready for keyboard cancel',
+    'composition preview ready for keyboard cancel',
   );
   await until(
     `Boolean(document.activeElement?.closest('[role=dialog]'))`,
-    'multi preview receives focus',
+    'composition preview receives focus',
   );
   await key('Escape');
-  await until(`!document.querySelector('[role=dialog]')`, 'multi preview cancel');
+  await until(`!document.querySelector('[role=dialog]')`, 'composition preview cancel');
   assert.equal(
     await evaluate(`document.querySelector('[data-field-id="${period.fieldId}"]').value`),
     '0.0100',
@@ -73,16 +73,16 @@ check('multi-component-shared-editing-and-source-protection', async () => {
   await click('预览更改');
   await until(
     `Boolean(document.querySelector('[aria-label="确认原子应用批次"]'))`,
-    'multi field preview again',
+    'composition field preview again',
   );
   await click('确认应用全部变化', "document.querySelector('[role=dialog]')");
-  await until(`!document.querySelector('[role=dialog]')`, 'multi batch applied');
+  await until(`!document.querySelector('[role=dialog]')`, 'composition batch applied');
   await until(
     `(async () => !(await window.__TAURI_INTERNALS__.invoke('workbench_capabilities')).operation)()`,
-    'multi batch operation completed',
+    'composition batch operation completed',
   );
   await save();
-  view = await refreshSurface(multi.manifest);
+  view = await refreshSurface(pipeline.manifest);
   assert.equal(
     view.fields.find(
       (field) =>
@@ -93,7 +93,7 @@ check('multi-component-shared-editing-and-source-protection', async () => {
     '0.0100',
   );
   await selectObject(view.objects.find((object) => object.shortName === longPeriodicName).objectId);
-  await screenshot('multi-long-name-narrow-reopened.png');
+  await screenshot('composition-long-name-narrow-reopened.png');
   await resize(1480, 920);
   await unchanged(
     original.filter(
@@ -145,36 +145,36 @@ check('multi-component-shared-editing-and-source-protection', async () => {
   await click('预览更改');
   await until(
     `Boolean(document.querySelector('[aria-label="确认原子应用批次"]'))`,
-    'multi paired endpoint preview',
+    'composition paired endpoint preview',
   );
   await click('确认应用全部变化', "document.querySelector('[role=dialog]')");
-  await until(`!document.querySelector('[role=dialog]')`, 'multi paired endpoint applied');
+  await until(`!document.querySelector('[role=dialog]')`, 'composition paired endpoint applied');
   await until(
     `(async () => !(await window.__TAURI_INTERNALS__.invoke('workbench_capabilities')).operation)()`,
-    'multi paired endpoint operation completed',
+    'composition paired endpoint operation completed',
   );
   await save();
-  await refreshSurface(multi.manifest);
+  await refreshSurface(pipeline.manifest);
   const initialization = await invoke('preview_application_initialization');
   assert.equal(initialization.slots.length, 3);
   await menu('预览初始化用户应用…');
-  await until(`Boolean(document.querySelector('[role=dialog]'))`, 'multi all source slots preview');
+  await until(`Boolean(document.querySelector('[role=dialog]'))`, 'composition all source slots preview');
   await click('确认创建用户应用与成员记录', "document.querySelector('[role=dialog]')");
-  await until(`!document.querySelector('[role=dialog]')`, 'multi create-only initialization');
+  await until(`!document.querySelector('[role=dialog]')`, 'composition create-only initialization');
   await until(
     `(async () => !(await window.__TAURI_INTERNALS__.invoke('workbench_capabilities')).operation)()`,
-    'multi initialization operation completed',
+    'composition initialization operation completed',
   );
   const users = [];
   for (const file of initialization.files) {
-    const bytes = Buffer.from(file.contents + '\n/* User-owned multi-component source. */\n');
-    await writeFile(path.join(multi.directory, file.path), bytes);
+    const bytes = Buffer.from(file.contents + '\n/* User-owned composition source. */\n');
+    await writeFile(path.join(pipeline.directory, file.path), bytes);
     users.push({ ...file, bytes });
   }
-  await refreshSurface(multi.manifest);
-  const delivered = await exportSource('MultiComponent-source');
+  await refreshSurface(pipeline.manifest);
+  const delivered = await exportSource('Pipeline-source');
   for (const file of users) {
-    assert.deepEqual(await readFile(path.join(multi.directory, file.path)), file.bytes);
+    assert.deepEqual(await readFile(path.join(pipeline.directory, file.path)), file.bytes);
     assert.deepEqual(
       await readFile(path.join(delivered.directory, 'src', path.basename(file.path))),
       file.bytes,
@@ -195,6 +195,6 @@ check('multi-component-shared-editing-and-source-protection', async () => {
         },
       ]),
     },
-    'Initialized multi-component member identity must remain stable',
+    'Initialized composition member identity must remain stable',
   );
 });

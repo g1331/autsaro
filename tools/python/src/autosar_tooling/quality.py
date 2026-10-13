@@ -190,9 +190,9 @@ def changed_format_errors(
 
 
 # The CAN headers include ComStack_Cfg.h, which a generated project provides; the
-# independent multi-runtime fixture stands in. The CAN sources also need the generated
+# independent bsw-contracts fixture stands in. The CAN sources also need the generated
 # Ecu_Config.h/Ecu_Execution.h, so they are compiled with generated projects (c-check, native).
-CONFIGURATION = ROOT / "core" / "tests" / "fixtures" / "multi-runtime"
+CONFIGURATION = ROOT / "core" / "tests" / "fixtures" / "bsw-contracts"
 MAINLINE_CAN = ROOT / "runtime" / "bsw"
 MAINLINE_CAN_HEADERS = ["Can_CfgTypes.h", "Can_GeneralTypes.h", "Can_Host.h", "Can_MemMap.h",
                         "Ecu_Status.h", "SchM_Can.h", "standard/Can.h"]

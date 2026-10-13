@@ -1,11 +1,11 @@
 #include "Rte_Process.h"
 #ifdef ECU_TARGET_TESTS
-void MultiTest_Record(uint8 actor);
+void PipelineTest_Record(uint8 actor);
 #endif
 static uint32 committed;
 void Process_Periodic(void) {
 #ifdef ECU_TARGET_TESTS
-    MultiTest_Record(1u);
+    PipelineTest_Record(1u);
 #endif
     uint32 value = 0u;
     if (Rte_Read_Value_Value(&value) == E_OK) {
@@ -15,7 +15,7 @@ void Process_Periodic(void) {
 }
 void Process_Transform(uint32 Input, uint32 *Output, uint32 *State) {
 #ifdef ECU_TARGET_TESTS
-    MultiTest_Record(3u);
+    PipelineTest_Record(3u);
 #endif
     (void)Input;
     *Output = committed;

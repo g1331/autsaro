@@ -4,11 +4,11 @@ use std::path::Path;
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[test]
-fn copied_multi_package_builds_offline_without_changing_source_bytes() {
+fn copied_package_builds_offline_without_changing_source_bytes() {
     use autosar_config_core::prepared::prepare_ecu_project_for_workspace;
     let scratch = Scratch::new();
     let live = scratch.0.join("live");
-    let workspace = initialized_multi_user_workspace(&live);
+    let workspace = initialized_pipeline_workspace(&live);
     let plan = workspace.saved_integration_plan().unwrap();
     let original = scratch.0.join("original");
     prepare_ecu_project_for_workspace(&workspace, &plan, tooling::native_target(), true)
@@ -39,12 +39,12 @@ fn copied_multi_package_builds_offline_without_changing_source_bytes() {
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[test]
-fn rejected_multi_contracts_refuse_stale_generation_and_preserve_sealed_output() {
+fn rejected_composition_contracts_refuse_stale_generation_and_preserve_sealed_output() {
     use autosar_config_core::prepared::prepare_ecu_project_for_workspace;
     for schedule in [false, true] {
         let scratch = Scratch::new();
         let live = scratch.0.join("live");
-        let mut workspace = live_multi_workspace(&live, &inputs());
+        let mut workspace = live_pipeline_workspace(&live, &inputs());
         let preview = workspace.preview_application_initialization().unwrap();
         workspace
             .initialize_application_previewed(&preview)
@@ -60,7 +60,7 @@ fn rejected_multi_contracts_refuse_stale_generation_and_preserve_sealed_output()
                 .unwrap();
         let original = packages::payload(&project);
         let mut changed = if schedule {
-            conflicting_multi_schedule_sources()
+            conflicting_schedule_sources()
         } else {
             inputs()
         };
@@ -103,7 +103,7 @@ fn rejected_multi_contracts_refuse_stale_generation_and_preserve_sealed_output()
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[test]
-fn sealed_multi_project_builds_and_runs_production_owner() {
+fn sealed_project_builds_and_runs_production_owner() {
     use autosar_config_core::{Workspace, prepared::prepare_ecu_project_for_workspace};
     for (renamed, swapped, p2_star, triggers) in [
         (false, false, None, None),
@@ -115,7 +115,7 @@ fn sealed_multi_project_builds_and_runs_production_owner() {
     ] {
         let scratch = Scratch::new();
         let mut arxml = triggers
-            .map(equivalent_multi_schedule_triggers)
+            .map(equivalent_schedule_triggers)
             .unwrap_or_else(inputs);
         if swapped {
             parameter(&mut arxml, "Receive", "CanObjectId", "1");
@@ -141,7 +141,7 @@ fn sealed_multi_project_builds_and_runs_production_owner() {
             arxml.reverse();
         }
         let live = scratch.0.join("live");
-        let mut workspace = live_multi_workspace(&live, &arxml);
+        let mut workspace = live_pipeline_workspace(&live, &arxml);
         let initialization = workspace.preview_application_initialization().unwrap();
         workspace
             .initialize_application_previewed(&initialization)
@@ -153,7 +153,7 @@ fn sealed_multi_project_builds_and_runs_production_owner() {
                 .replace("Gateway", "Ingress")
                 .replace("Compute", "Process");
             let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("tests/fixtures/multi-application")
+                .join("tests/fixtures/component-pipeline/applications")
                 .join(original);
             let mut text = std::fs::read_to_string(fixture).unwrap();
             if renamed {
@@ -178,15 +178,15 @@ fn sealed_multi_project_builds_and_runs_production_owner() {
             prepare_ecu_project_for_workspace(&workspace, &plan, tooling::native_target(), true)
                 .unwrap_or_else(|issues| panic!("{issues:?}"));
         assert_eq!(prepared.application_slots().len(), 3);
-        let project = scratch.0.join("multi-project");
+        let project = scratch.0.join("project");
         prepared.generate(&project).unwrap();
-        verify_multi_production_owner(&project, &scratch.0, p2_star);
+        verify_production_owner(&project, &scratch.0, p2_star);
     }
 }
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[test]
-fn sealed_multi_owner_preserves_network_init_and_deadline_phase() {
+fn sealed_owner_preserves_network_init_and_deadline_phase() {
     use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
     let scratch = Scratch::new();
     let mut source = inputs();
@@ -197,7 +197,8 @@ fn sealed_multi_owner_preserves_network_init_and_deadline_phase() {
         "<VALUE>7</VALUE>",
     );
     let plan = build(&source).unwrap();
-    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-application");
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/component-pipeline/applications");
     let applications: Vec<_> = plan
         .application_slot_descriptors()
         .unwrap()
@@ -376,7 +377,7 @@ fn sealed_multi_owner_preserves_network_init_and_deadline_phase() {
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[test]
-fn sealed_multi_optional_did_and_network_only_routes_use_real_producers() {
+fn sealed_optional_did_and_network_only_routes_use_real_producers() {
     use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
     for diagnostic in [true, false] {
         let scratch = Scratch::new();
@@ -386,8 +387,8 @@ fn sealed_multi_optional_did_and_network_only_routes_use_real_producers() {
             plan.description().diagnostic_transport.is_some(),
             diagnostic
         );
-        let fixtures =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-application");
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/component-pipeline/applications");
         let applications: Vec<_> = plan
             .application_slot_descriptors()
             .unwrap()
@@ -505,7 +506,7 @@ fn sealed_multi_optional_did_and_network_only_routes_use_real_producers() {
 #[test]
 fn resealed_handoff_forgeries_are_refused_by_the_delivered_tool() {
     let scratch = Scratch::new();
-    let workspace = initialized_multi_user_workspace(&scratch.0.join("live"));
+    let workspace = initialized_pipeline_workspace(&scratch.0.join("live"));
     let plan = workspace.saved_integration_plan().unwrap();
     for (case, _, python_reason) in HANDOFF_FORGERIES {
         let package = forged_handoff(case, &workspace, &plan, &scratch.0);
@@ -528,11 +529,11 @@ fn resealed_handoff_forgeries_are_refused_by_the_delivered_tool() {
 }
 
 #[test]
-fn received_multi_handoff_builds_and_runs_production_owner() {
+fn received_handoff_builds_and_runs_production_owner() {
     use autosar_config_core::{generator::delivery, prepared::prepare_ecu_project_for_workspace};
     let scratch = Scratch::new();
     let live = scratch.0.join("author");
-    let workspace = initialized_multi_user_workspace(&live);
+    let workspace = initialized_pipeline_workspace(&live);
     let plan = workspace.saved_integration_plan().unwrap();
     let moved = scratch.0.join("consumer/package");
     std::fs::create_dir(moved.parent().unwrap()).unwrap();
@@ -554,15 +555,15 @@ fn received_multi_handoff_builds_and_runs_production_owner() {
         .generate(&regenerated)
         .unwrap();
     assert_eq!(packages::payload(&moved), packages::payload(&regenerated));
-    verify_received_multi_owner(&regenerated, moved.parent().unwrap());
+    verify_received_owner(&regenerated, moved.parent().unwrap());
 }
 
-fn verify_received_multi_owner(project: &Path, consumer: &Path) {
-    verify_multi_production_owner(project, consumer, None);
+fn verify_received_owner(project: &Path, consumer: &Path) {
+    verify_production_owner(project, consumer, None);
     let control = consumer.join("owner_probe.c");
     std::fs::copy(
         Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/fixtures/multi-application/owner_probe.c"),
+            .join("tests/fixtures/component-pipeline/applications/owner_probe.c"),
         &control,
     )
     .unwrap();

@@ -35,7 +35,7 @@ class HostBoundaryTests(unittest.TestCase):
         cls.flags = ["-std=c99", "-O1", "-Wall", "-Wextra", "-Werror", "-pedantic", "-D_XOPEN_SOURCE=700",
                      "-I" + str(ROOT / "runtime/bsw/src"), "-I" + str(ROOT / "runtime/bsw/include"),
                      # The mainline CAN headers use the generated ComStack_Cfg.h widths.
-                     "-I" + str(ROOT / "core/tests/fixtures/multi-runtime"), "-I" + str(generated)]
+                     "-I" + str(ROOT / "core/tests/fixtures/bsw-contracts"), "-I" + str(generated)]
         suffix = ".exe" if os.name == "nt" else ""
         cls.lock = cls.directory / ("lock" + suffix)
         header = ROOT / "tests/fixtures/host_lock_faults.h"
@@ -46,7 +46,7 @@ class HostBoundaryTests(unittest.TestCase):
             raise RuntimeError(result.stderr.read_text(encoding="utf-8", errors="replace"))
         sources = [ROOT / "runtime/bsw/src" / name for name in
                    ("Can.c", "Can_Host.c", "Det.c", "Det_Host.c", "SchM_CanIf_Host.c")]
-        sources.append(ROOT / "core/tests/fixtures/multi-runtime/execution_sink.c")
+        sources.append(ROOT / "core/tests/fixtures/bsw-contracts/execution_sink.c")
         result = cls.execute([cls.compiler, *cls.flags, str(obj), str(ROOT / "tests/fixtures/host_lock_faults.c"),
                               *(str(path) for path in sources),
                               *([] if os.name == "nt" else ["-pthread"]), "-o", str(cls.lock)], "link-lock")

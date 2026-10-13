@@ -172,7 +172,7 @@ Std_ReturnType (*write_frame)(uint16_t, const Can_PduType *) = Can_Write;
             .arg("-I")
             .arg(root.join("runtime/bsw/include"))
             .arg("-I")
-            .arg(root.join("core/tests/fixtures/multi-runtime"))
+            .arg(root.join("core/tests/fixtures/bsw-contracts"))
             .arg(&source)
             .arg("-o")
             .arg(temp.0.join("view.o"))
@@ -200,7 +200,7 @@ Std_ReturnType (*write_frame)(uint16_t, const Can_PduType *) = Can_Write;
         let mut command = Command::new(&identity.compiler);
         command.args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
             .arg("-I").arg(root.join("runtime/bsw/include"))
-            .arg("-I").arg(root.join("core/tests/fixtures/multi-runtime")).arg(&source);
+            .arg("-I").arg(root.join("core/tests/fixtures/bsw-contracts")).arg(&source);
         if !allowed { command.arg("-c"); }
         let output = command.arg("-o").arg(&binary).output().unwrap();
         assert_eq!(output.status.success(), allowed, "section/{index}: {}", String::from_utf8_lossy(&output.stderr));

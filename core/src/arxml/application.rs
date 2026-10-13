@@ -543,8 +543,9 @@ mod tests {
         }
     }
 
-    fn multi_workspace(root: &Path) -> Workspace {
-        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-component");
+    fn pipeline_workspace(root: &Path) -> Workspace {
+        let fixtures =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/component-pipeline/arxml");
         let mut inputs = Vec::new();
         for entry in fs::read_dir(fixtures).unwrap() {
             let entry = entry.unwrap();
@@ -576,7 +577,7 @@ mod tests {
     #[test]
     fn later_application_collision_rolls_back_earlier_members() {
         let scratch = Scratch::new();
-        let mut workspace = multi_workspace(&scratch.0);
+        let mut workspace = pipeline_workspace(&scratch.0);
         let preview = workspace.preview_application_initialization().unwrap();
         assert_eq!(preview.slots.len(), 3);
         let before = workspace.input_fingerprint().unwrap();
@@ -614,7 +615,7 @@ mod tests {
     fn manifest_replacements_preserve_external_bytes_and_original_recovery() {
         for before_capture in [true, false] {
             let scratch = Scratch::new();
-            let mut workspace = multi_workspace(&scratch.0);
+            let mut workspace = pipeline_workspace(&scratch.0);
             let preview = workspace.preview_application_initialization().unwrap();
             let before = workspace.input_fingerprint().unwrap();
             let manifest = scratch.0.join(MANIFEST);
@@ -664,7 +665,7 @@ mod tests {
             [(false, false), (true, false), (false, true), (true, true)]
         {
             let scratch = Scratch::new();
-            let mut workspace = multi_workspace(&scratch.0);
+            let mut workspace = pipeline_workspace(&scratch.0);
             let preview = workspace.preview_application_initialization().unwrap();
             let baseline = workspace.input_fingerprint().unwrap();
             let source = scratch.0.join(&preview.files[1].path);
@@ -716,7 +717,7 @@ mod tests {
     #[test]
     fn failed_manifest_restoration_retains_every_referenced_source_and_original_baseline() {
         let scratch = Scratch::new();
-        let mut workspace = multi_workspace(&scratch.0);
+        let mut workspace = pipeline_workspace(&scratch.0);
         let preview = workspace.preview_application_initialization().unwrap();
         let baseline = workspace.input_fingerprint().unwrap();
         let manifest = scratch.0.join(MANIFEST);
@@ -786,7 +787,7 @@ mod tests {
     fn successful_publication_reports_actual_captured_backup_recovery_path() {
         use std::cell::Cell;
         let scratch = Scratch::new();
-        let mut workspace = multi_workspace(&scratch.0);
+        let mut workspace = pipeline_workspace(&scratch.0);
         let preview = workspace.preview_application_initialization().unwrap();
         let manifest = scratch.0.join(MANIFEST);
         let backup = PathBuf::from(format!("{}.autosar.bak", manifest.display()));

@@ -4,7 +4,7 @@ use autosar_config_core::integration::InputSource;
 use std::path::Path;
 
 #[test]
-fn source_derived_multi_contract_is_deterministic_and_keeps_local_identity() {
+fn source_derived_composition_contract_is_deterministic_and_keeps_local_identity() {
     let sources = inputs();
     let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
     let description = plan.description();
@@ -72,7 +72,7 @@ fn source_derived_multi_contract_is_deterministic_and_keeps_local_identity() {
         plan.ecu_integration_files(autosar_config_core::target::BuildTarget::LinuxX64ControlledV1)
             .is_err()
     );
-    if let Ok(directory) = std::env::var("AUTOSAR_MULTI_CONTRACT_OUTPUT") {
+    if let Ok(directory) = std::env::var("AUTOSAR_CONTRACT_OUTPUT") {
         let output = Path::new(&directory);
         let preview = files.preview(output).unwrap();
         files.generate_previewed(output, &preview.revision).unwrap();
@@ -80,7 +80,7 @@ fn source_derived_multi_contract_is_deterministic_and_keeps_local_identity() {
 }
 
 #[test]
-fn malformed_multi_contracts_are_rejected_at_real_source_objects() {
+fn malformed_composition_contracts_are_rejected_at_real_source_objects() {
     let vectors = [
         (
             "composition.arxml",
@@ -308,7 +308,7 @@ fn service_argument_names_cannot_shadow_selected_runtime_and_component_producers
             }
             rejects_in_both(&sources, "CONTRACT_NAME_COLLISION");
             if name == "Ecu_TargetIsOwner" && !reverse {
-                assert_rejected_multi_sources_preserved(&sources);
+                assert_rejected_sources_preserved(&sources);
             }
             assert!(
                 !normal_validation(&sources)
@@ -771,7 +771,7 @@ fn client_server_sets_close_in_both_directions_and_empty_interfaces_are_rejected
 
 #[test]
 fn every_operation_has_its_own_spec_call_and_event_and_void_is_valid() {
-    let sources = multi_operation_inputs();
+    let sources = pipeline_operation_inputs();
     assert!(normal_validation(&sources).diagnostics.is_empty());
     let plan = build(&sources).unwrap();
     let files = plan.component_contract_files().unwrap();
@@ -1124,7 +1124,7 @@ fn actual_runtime_source_owners_derive_all_application_slots_and_keep_service_ge
             .any(|symbol| symbol.symbol == "DcmService_ReadData"
                 && symbol.definition_owner == "src/Rte.c")
     );
-    let files = prepared_multi_files(&plan);
+    let files = prepared_pipeline_files(&plan);
     assert!(files.iter().any(|(path, _)| path == "src/Rte.c"));
 }
 
@@ -1197,7 +1197,7 @@ fn shared_rte_lifecycle_os_target_kernel_and_c_runtime_producers_cannot_be_shado
 }
 
 #[test]
-fn multi_selected_catalog_binds_standard_signatures_and_actual_periodic_producers() {
+fn selected_catalog_binds_standard_signatures_and_actual_periodic_producers() {
     let plan = build(&inputs()).unwrap();
     let description = plan.description();
     assert_eq!(
@@ -1353,7 +1353,8 @@ fn plural_application_preparation_freezes_every_real_producer_and_refuses_bad_me
     use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
     let scratch = Scratch::new();
     let plan = build(&inputs()).unwrap();
-    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-application");
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/component-pipeline/applications");
     let sources: Vec<_> = plan
         .application_slot_descriptors()
         .unwrap()
@@ -1440,9 +1441,9 @@ fn plural_application_preparation_freezes_every_real_producer_and_refuses_bad_me
 }
 
 #[test]
-fn prepared_multi_bsw_entries_describe_actual_call_mechanisms_and_implementation_policy() {
+fn prepared_bsw_entries_describe_actual_call_mechanisms_and_implementation_policy() {
     let plan = build(&inputs()).unwrap();
-    let files = prepared_multi_files(&plan);
+    let files = prepared_pipeline_files(&plan);
     let bytes = &files
         .iter()
         .find(|(path, _)| path == "descriptions/Host_Implementation.arxml")

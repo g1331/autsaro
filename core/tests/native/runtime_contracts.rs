@@ -19,12 +19,12 @@ fn det_consumer(scratch: &Path, fixture: &str) -> PathBuf {
         .arg("-I")
         .arg(root.join("runtime/bsw/src"))
         .arg("-I")
-        .arg(root.join("core/tests/fixtures/multi-runtime"))
+        .arg(root.join("core/tests/fixtures/bsw-contracts"))
         .arg(root.join("runtime/bsw/src/SchM_CanIf_Host.c"))
         .arg(root.join("runtime/bsw/src/Can_HostLock.c"))
         .arg(root.join("runtime/bsw/src/Det.c"))
         .arg(root.join("runtime/bsw/src/Det_Host.c"))
-        .arg(root.join("core/tests/fixtures/multi-runtime").join(fixture))
+        .arg(root.join("core/tests/fixtures/bsw-contracts").join(fixture))
         .arg("-o")
         .arg(&executable)
         .output()
@@ -104,12 +104,12 @@ fn com_standard_consumer_executes_group_and_reception_monitoring() {
         .arg("-I")
         .arg(root.join("runtime/bsw/src"))
         .arg("-I")
-        .arg(root.join("core/tests/fixtures/multi-runtime"))
+        .arg(root.join("core/tests/fixtures/bsw-contracts"))
         .arg("-pthread")
         .arg(root.join("runtime/bsw/src/SchM_CanIf_Host.c"))
         .arg(root.join("runtime/bsw/src/Can_HostLock.c"))
         .arg(root.join("runtime/bsw/src/Com.c"))
-        .arg(root.join("core/tests/fixtures/multi-runtime/com_contract.c"))
+        .arg(root.join("core/tests/fixtures/bsw-contracts/com_contract.c"))
         .arg("-o")
         .arg(&executable)
         .output()
@@ -192,7 +192,7 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
         "SchM_CanTp.h",
     ] {
         std::fs::copy(
-            root.join("core/tests/fixtures/multi-runtime").join(name),
+            root.join("core/tests/fixtures/bsw-contracts").join(name),
             include.join(name),
         )
         .unwrap();
@@ -271,14 +271,14 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
         "runtime/bsw/src/Can.c",
         "runtime/bsw/src/Can_Host.c",
         "runtime/bsw/src/Can_HostLock.c",
-        "core/tests/fixtures/multi-runtime/execution_sink.c",
-        "core/tests/fixtures/multi-runtime/schm_dcm_mode.c",
+        "core/tests/fixtures/bsw-contracts/execution_sink.c",
+        "core/tests/fixtures/bsw-contracts/schm_dcm_mode.c",
     ] {
         let delivered = sources.join(std::path::Path::new(source).file_name().unwrap());
         std::fs::copy(root.join(source), &delivered).unwrap();
         command.arg(delivered);
     }
-    command.arg(root.join("core/tests/fixtures/multi-runtime").join(fixture));
+    command.arg(root.join("core/tests/fixtures/bsw-contracts").join(fixture));
     let output = command.arg("-o").arg(&executable).output().unwrap();
     assert!(
         output.status.success(),
@@ -431,9 +431,9 @@ fn cantp_n_as_timeout_aborts_once_and_ignores_late_confirmation() {
         .arg("-I")
         .arg(root.join("runtime/bsw/src"))
         .arg("-I")
-        .arg(root.join("core/tests/fixtures/multi-runtime"))
+        .arg(root.join("core/tests/fixtures/bsw-contracts"))
         .arg(root.join("runtime/bsw/src/CanTp.c"))
-        .arg(root.join("core/tests/fixtures/multi-runtime/cantp_n_as_contract.c"))
+        .arg(root.join("core/tests/fixtures/bsw-contracts/cantp_n_as_contract.c"))
         .arg("-o")
         .arg(&executable)
         .output()

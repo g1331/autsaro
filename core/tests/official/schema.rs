@@ -26,7 +26,7 @@ fn assert_official_schema_accepts(sources: &[InputSource]) {
 
 #[cfg(feature = "official-oracles")]
 #[test]
-fn native_multi_inputs_also_pass_the_official_schema() {
+fn native_pipeline_inputs_also_pass_the_official_schema() {
     let sources = inputs();
     assert_official_schema_accepts(&sources);
     build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
@@ -82,7 +82,7 @@ fn execution_constraint_rejections_use_officially_valid_arxml() {
 #[cfg(feature = "official-oracles")]
 #[test]
 fn zero_offset_and_multiple_operations_are_accepted_by_official_schema_and_native_inputs() {
-    let mut sources = multi_operation_inputs();
+    let mut sources = pipeline_operation_inputs();
     change(
         &mut sources,
         "process.arxml",

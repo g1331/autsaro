@@ -204,7 +204,8 @@ fn reference_shape_records_independent_verification_inputs() {
     // DID; other shapes get no inputs (3-SWC with DID: see the README test).
     use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
     let plan = build(&sources_without_application_did(true)).unwrap();
-    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-application");
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/component-pipeline/applications");
     let applications: Vec<_> = plan
         .application_slot_descriptors()
         .unwrap()
@@ -872,7 +873,7 @@ fn source_preparation_is_target_complete_without_native_tools() {
     let applications = [ApplicationSource {
         component_instance: "/Application/Pipeline/IngressInstance".into(),
         path: Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/fixtures/multi-application/Ingress.c"),
+            .join("tests/fixtures/component-pipeline/applications/Ingress.c"),
     }];
     let mut targets = Vec::new();
     for target in BuildTarget::ALL {

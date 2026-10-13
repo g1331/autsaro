@@ -2,7 +2,7 @@
 use super::*;
 
 #[test]
-fn multi_com_plan_keeps_real_group_timebase_and_notification_identity() {
+fn com_plan_keeps_real_group_timebase_and_notification_identity() {
     let plan = build(&inputs()).unwrap();
     let com = plan.description().com_runtime.as_ref().unwrap();
     assert_eq!(com.callback_header, "Rte_Com.h");
@@ -83,7 +83,7 @@ fn multi_com_plan_keeps_real_group_timebase_and_notification_identity() {
 }
 
 #[test]
-fn multi_com_rejects_tx_main_period_different_from_periodic_pdu() {
+fn com_rejects_tx_main_period_different_from_periodic_pdu() {
     let mut sources = inputs();
     xml_edit(
         &mut sources,
@@ -117,7 +117,7 @@ fn multi_com_rejects_tx_main_period_different_from_periodic_pdu() {
 }
 
 #[test]
-fn multi_com_control_configuration_rejects_inconsistent_group_timebase_and_callbacks() {
+fn com_control_configuration_rejects_inconsistent_group_timebase_and_callbacks() {
     for (field, original, replacement, code) in [
         ("ComSupportedIPduGroups", "1", "0", "COM_RX_GROUP"),
         ("ComIPduGroupHandleId", "0", "1", "COM_RX_GROUP"),
@@ -363,7 +363,7 @@ fn flat_signal_context_and_ecu_members_are_unique_and_nonempty() {
 }
 
 #[test]
-fn multi_network_zero_timeout_matches_without_changing_runtime_scope() {
+fn network_zero_timeout_matches_without_changing_runtime_scope() {
     let mut sources = inputs();
     change(
         &mut sources,
@@ -434,7 +434,7 @@ fn communication_types_and_polling_periods_are_source_derived() {
     assert_eq!(runtime.can.receive_handle, 1);
     assert_eq!(runtime.can.transmit_handle, 0);
     assert!(normal_validation(&sources).diagnostics.is_empty());
-    let files = prepared_multi_files(&renamed);
+    let files = prepared_pipeline_files(&renamed);
     let text = |name: &str| {
         std::str::from_utf8(
             &files
@@ -467,7 +467,7 @@ fn communication_types_and_polling_periods_are_source_derived() {
 }
 
 #[test]
-fn multi_communication_rejects_truncation_and_unbound_polling_in_both_entries() {
+fn communication_rejects_truncation_and_unbound_polling_in_both_entries() {
     for (owner, field, new_value, code) in [
         (
             "Polling",
@@ -572,7 +572,7 @@ fn selected_com_manual_trigger_requires_zero_minimum_delay_and_no_callout() {
 }
 
 #[test]
-fn multi_signal_processing_matches_actual_immediate_notification_contract() {
+fn signal_processing_matches_actual_immediate_notification_contract() {
     for pdu in ["RxValuePdu", "TxValuePdu"] {
         let mut sources = inputs();
         parameter(&mut sources, pdu, "ComIPduSignalProcessing", "DEFERRED");
@@ -598,7 +598,7 @@ fn actual_partition_owns_all_instances_and_all_com_producers() {
             .iter()
             .any(|instance| instance.ends_with("/DcmService"))
     );
-    let files = prepared_multi_files(&plan);
+    let files = prepared_pipeline_files(&plan);
     let source = String::from_utf8(
         files
             .iter()

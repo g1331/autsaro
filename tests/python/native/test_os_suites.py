@@ -20,7 +20,7 @@ import os_suites
 
 
 def native_fixture(name):
-    path = os_suites.ROOT / "core/tests/fixtures/epic4_oracles" / name
+    path = os_suites.ROOT / "core/tests/fixtures/oracles" / name
     return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -97,7 +97,7 @@ class DependencyTests(unittest.TestCase):
             os_suites.check_finish(Path("unused.exe"))
 
     def test_missing_and_modified_kernel_rejected(self):
-        with tempfile.TemporaryDirectory(prefix="epic4-dependency-") as directory:
+        with tempfile.TemporaryDirectory(prefix="os-dependency-") as directory:
             kernel = Path(directory) / "kernel"
             shutil.copytree(os_suites.KERNEL, kernel)
             self.assertEqual(os_suites.verify_sources(kernel)["license"], "MIT")

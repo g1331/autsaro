@@ -1,5 +1,5 @@
 {
-  "source": "INTEGRATION-CONTRACT \u00a71/2; epics Story 4.1; independent static fixture mutations",
+  "source": "INTEGRATION-CONTRACT \u00a71/2; independent static fixture mutations",
   "cases": [
     {
       "id": "target-not-unique",

@@ -1,5 +1,5 @@
 {
-  "profile": "epic4-win64-sr-cs-v1",
+  "profile": "echo-application",
   "status": "independent expected values; future execution not_run",
   "settings": {
     "clock": "controlled_logical_ms",

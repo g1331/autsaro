@@ -3,10 +3,10 @@ use super::*;
 use autosar_config_core::definitions::DefinitionCatalog;
 
 #[test]
-fn multi_handoff_readme_supports_both_native_targets_without_build_tools() {
+fn handoff_readme_supports_both_native_targets_without_build_tools() {
     use autosar_config_core::{prepared::prepare_ecu_project_for_workspace, target::BuildTarget};
     let scratch = Scratch::new();
-    let workspace = initialized_multi_user_workspace(&scratch.0.join("live"));
+    let workspace = initialized_pipeline_workspace(&scratch.0.join("live"));
     let before = workspace.generation_snapshot().unwrap();
     let plan = workspace.saved_integration_plan().unwrap();
     for target in [
@@ -40,11 +40,11 @@ fn multi_handoff_readme_supports_both_native_targets_without_build_tools() {
 }
 
 #[test]
-fn moved_multi_handoff_reconstructs_every_user_source_and_exact_producer() {
+fn moved_handoff_reconstructs_every_user_source_and_exact_producer() {
     use autosar_config_core::{generator::delivery, prepared::prepare_ecu_project_for_workspace};
     let scratch = Scratch::new();
     let live = scratch.0.join("author");
-    let workspace = initialized_multi_user_workspace(&live);
+    let workspace = initialized_pipeline_workspace(&live);
     let expected = workspace.generation_snapshot().unwrap();
     let plan = workspace.saved_integration_plan().unwrap();
     let prepared =
@@ -175,10 +175,10 @@ fn moved_multi_handoff_reconstructs_every_user_source_and_exact_producer() {
 }
 
 #[test]
-fn multi_handoff_rejects_resealed_authority_and_snapshot_forgery() {
+fn handoff_rejects_resealed_authority_and_snapshot_forgery() {
     use autosar_config_core::generator::delivery;
     let scratch = Scratch::new();
-    let workspace = initialized_multi_user_workspace(&scratch.0.join("live"));
+    let workspace = initialized_pipeline_workspace(&scratch.0.join("live"));
     let plan = workspace.saved_integration_plan().unwrap();
     let source = workspace.generation_snapshot().unwrap();
     let sentinel = scratch.0.join("outside.c");

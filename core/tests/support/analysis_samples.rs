@@ -53,8 +53,8 @@ pub(crate) fn generate(output: &Path, scratch: &super::workspace::Scratch) {
     }
     let sources = super::mainline::inputs();
     let plan = super::mainline::build(&sources).unwrap();
-    let applications = multi_applications(&plan);
-    let live = scratch.0.join("multi-author");
+    let applications = pipeline_applications(&plan);
+    let live = scratch.0.join("author");
     fs::create_dir(&live).unwrap();
     for source in &sources {
         fs::write(live.join(source.logical_path()), source.bytes()).unwrap();
@@ -96,23 +96,23 @@ pub(crate) fn generate(output: &Path, scratch: &super::workspace::Scratch) {
     let workspace =
         Workspace::open_project_manifest(&manifest_path, &scratch.0.join("cache")).unwrap();
     let plan = workspace.saved_integration_plan().unwrap();
-    let original = scratch.0.join("multi-author-package");
+    let original = scratch.0.join("author-package");
     prepare_ecu_project_for_workspace(&workspace, &plan, target, true)
         .unwrap()
         .generate(&original)
         .unwrap();
-    let package = scratch.0.join("moved-multi-package");
+    let package = scratch.0.join("moved-package");
     fs::rename(&original, &package).unwrap();
     fs::remove_dir_all(&live).unwrap();
     assert!(!original.exists() && !live.exists());
     let imported = autosar_config_core::generator::delivery::open_handoff(
         &package,
-        &scratch.0.join("received-multi"),
+        &scratch.0.join("received"),
         &autosar_config_core::definitions::DefinitionCatalog::builtin().unwrap(),
     )
     .unwrap();
     let plan = imported.workspace.saved_integration_plan().unwrap();
-    let regenerated = output.join("multi-component");
+    let regenerated = output.join("component-pipeline");
     prepare_ecu_project_for_workspace(&imported.workspace, &plan, target, true)
         .unwrap()
         .generate(&regenerated)
@@ -126,7 +126,7 @@ pub(crate) fn generate(output: &Path, scratch: &super::workspace::Scratch) {
     autosar_config_core::prepare_ecu_project_with_applications(
         &plan,
         target,
-        &multi_applications(&plan),
+        &pipeline_applications(&plan),
     )
     .unwrap()
     .generate(&output.join("no-diagnostic"))
@@ -135,7 +135,7 @@ pub(crate) fn generate(output: &Path, scratch: &super::workspace::Scratch) {
 }
 
 /// The fixture application sources for each component slot of `plan`.
-fn multi_applications(
+fn pipeline_applications(
     plan: &autosar_config_core::integration::ValidatedIntegrationPlan,
 ) -> Vec<autosar_config_core::ApplicationSource> {
     plan.application_slot_descriptors()
@@ -148,7 +148,7 @@ fn multi_applications(
                 .unwrap()
                 .into(),
             path: Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("tests/fixtures/multi-application")
+                .join("tests/fixtures/component-pipeline/applications")
                 .join(slot.source_paths[0].rsplit('/').next().unwrap()),
         })
         .collect()

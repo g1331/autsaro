@@ -9,7 +9,8 @@ fn short_application_period_saves_builds_and_passes_reference_verifier() {
     // periodic PDU in the same tick; the verifier does not model that (#82).
     use autosar_config_core::integration::{IntegrationEdit, verify_ecu_project};
     let scratch = Scratch::new();
-    let mut workspace = live_multi_workspace(&scratch.0.join("live"), &single_component_sources());
+    let mut workspace =
+        live_pipeline_workspace(&scratch.0.join("live"), &single_component_sources());
     workspace
         .edit_integration(IntegrationEdit {
             application_period_ms: Some(2),
@@ -48,7 +49,7 @@ fn short_application_period_saves_builds_and_passes_reference_verifier() {
 fn single_application_component_builds_and_runs_production_owner() {
     let scratch = Scratch::new();
     let (project, _) = single_component_project(&scratch.0, tooling::native_target());
-    verify_multi_production_owner(&project, &scratch.0, None);
+    verify_production_owner(&project, &scratch.0, None);
 }
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
@@ -87,7 +88,8 @@ fn single_application_component_passes_independent_reference_verifier() {
 
     // Shapes without reference inputs are refused before any tool runs.
     let plan = build(&sources_without_application_did(true)).unwrap();
-    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-application");
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/component-pipeline/applications");
     let applications: Vec<_> = plan
         .application_slot_descriptors()
         .unwrap()

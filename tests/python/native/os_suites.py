@@ -626,7 +626,7 @@ def check_activation(binary: Path) -> list[dict]:
     import re
 
     literal_oracles = json.loads(
-        (ROOT / "core/tests/fixtures/epic4_oracles/os.json").read_text(encoding="utf-8")
+        (ROOT / "core/tests/fixtures/oracles/os.json").read_text(encoding="utf-8")
     )
     fifo = {case["id"]: case for case in literal_oracles["cases"]}
     cases = [
