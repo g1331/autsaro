@@ -1601,6 +1601,9 @@ def check_public_compatibility(directory: Path) -> None:
     binary = directory / ("public_compatibility" if linux else "public_compatibility.exe")
     cc = compiler()
     nm = Path(shutil.which(cc) or cc).with_name("nm" if linux else "nm.exe")
+    # An explicit BFD target keeps nm from loading the host's LTO plugins (Ubuntu's
+    # LLVMgold pulls in libLLVM), whose cold first load can outlast the 5 s deadline.
+    nm_target = "--target=" + ("elf64-x86-64" if linux else "pe-x86-64")
     command = [cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic",
                *(["-D_GNU_SOURCE", "-pthread"] if linux else []),
                "-I" + str(TARGET / "include"), "-I" + str(TARGET / "src"),
@@ -1630,7 +1633,7 @@ def check_public_compatibility(directory: Path) -> None:
             if baseline:
                 object_command.append("-DOS_PUBLIC_COMPAT_BASELINE")
             run_native(object_command, capture_output=True, text=True, check=True, timeout=30)
-            symbols = run_native([str(nm), "--defined-only", "--format=posix", str(object_file)],
+            symbols = run_native([str(nm), nm_target, "--defined-only", "--format=posix", str(object_file)],
                                      capture_output=True, text=True, check=True, timeout=5)
             signatures.append(sorted(tuple(line.split()[:2]) for line in symbols.stdout.splitlines()))
         require(signatures[0] == signatures[1], {"actual_symbols": signatures[0],
