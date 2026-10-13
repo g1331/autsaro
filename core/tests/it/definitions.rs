@@ -442,7 +442,7 @@ fn extension_acceptance_is_explicit_and_restore_requires_exact_complete_cache() 
     assert!(fresh.get(id).is_none());
     assert!(
         fresh
-            .restore_extensions(&[accepted.clone()], &cache)
+            .restore_extensions(std::slice::from_ref(&accepted), &cache)
             .unwrap()
             .is_empty()
     );
@@ -468,7 +468,7 @@ fn extension_acceptance_is_explicit_and_restore_requires_exact_complete_cache() 
     assert!(catalog.accept_extension(&path, &cache).is_err());
     assert_eq!(catalog.fingerprint(&identity()), old);
     let issues = fresh
-        .restore_extensions(&[accepted.clone()], &cache)
+        .restore_extensions(std::slice::from_ref(&accepted), &cache)
         .unwrap();
     assert!(issues.iter().any(|issue| issue.code == "EXTENSION_MISSING"));
     assert_eq!(fresh.accepted_extensions(), vec![accepted]);
@@ -1117,7 +1117,7 @@ fn standard_documents_accept_definition_valid_sc2_and_float_baud_without_target_
         let codes: Vec<_> = changed
             .diagnostics
             .iter()
-            .map(|diagnostic| (diagnostic.scope.clone(), diagnostic.code.as_str()))
+            .map(|diagnostic| (diagnostic.scope, diagnostic.code.as_str()))
             .collect();
         let expected: &[_] = if parameter == "OsScalabilityClass" {
             &[(

@@ -3,7 +3,6 @@ use super::{DiagnosticCategory, PlanDiagnostic, ValidatedIntegrationPlan};
 use crate::resources::AssetInventory;
 use crate::target::BuildTarget;
 use crate::{GenerationPreview, GenerationReport, generator};
-use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -37,11 +36,10 @@ pub(super) fn reject(message: crate::message::LocalizedText) -> Vec<PlanDiagnost
         code: "ECU_SOURCE_CLOSURE".into(),
         file: None,
         object: None,
-        message: message.into(),
+        message,
         remedy: crate::product_message!(
             "backend.integration.ecu.generation_identity_contract_repair_required"
-        )
-        .into(),
+        ),
     }]
 }
 
@@ -52,10 +50,9 @@ impl ValidatedIntegrationPlan {
         &self,
     ) -> Result<Vec<generator::delivery::ApplicationSlotDescriptor>, Vec<PlanDiagnostic>> {
         let composition = self.description().composition.as_ref().ok_or_else(|| {
-            reject(
-                crate::product_message!("backend.integration.composition.consumer_unsupported")
-                    .into(),
-            )
+            reject(crate::product_message!(
+                "backend.integration.composition.consumer_unsupported"
+            ))
         })?;
         Ok(application_slots(composition, &self.description().symbols))
     }
@@ -63,10 +60,9 @@ impl ValidatedIntegrationPlan {
     /// Trusted create-only seed; never merges with or overwrites a user source.
     pub fn application_seed_files(&self) -> Result<Vec<(String, Vec<u8>)>, Vec<PlanDiagnostic>> {
         let composition = self.description().composition.as_ref().ok_or_else(|| {
-            reject(
-                crate::product_message!("backend.integration.composition.consumer_unsupported")
-                    .into(),
-            )
+            reject(crate::product_message!(
+                "backend.integration.composition.consumer_unsupported"
+            ))
         })?;
         // The reference shape gets the echo application the independent
         // verifier checks; any other shape gets neutral entry points.
@@ -186,11 +182,11 @@ impl ValidatedIntegrationPlan {
         })
     }
 
-    pub(crate) fn render_ecu_sources<'a>(
-        &'a self,
+    pub(crate) fn render_ecu_sources(
+        &self,
         target: BuildTarget,
-        application: Option<&'a [u8]>,
-    ) -> Result<(BTreeMap<String, Cow<'static, [u8]>>, String), Vec<PlanDiagnostic>> {
+        application: Option<&[u8]>,
+    ) -> Result<(super::outputs::EcuFiles, String), Vec<PlanDiagnostic>> {
         if application.is_none() {
             return Err(reject(crate::product_message!(
                 "backend.integration.composition.consumer_unsupported"
@@ -566,6 +562,10 @@ pub(super) fn os_configuration(
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "tests derive variant inputs from fixture ARXML"
+)]
 mod ownership_tests {
     use super::application_slots_from_sources;
     use crate::integration::InputSource;

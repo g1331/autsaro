@@ -1,3 +1,13 @@
+// Generation and integration report PlanDiagnostic instead of panicking and
+// render each output once; core/clippy.toml lists the disallowed text patching.
+#![deny(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::disallowed_methods,
+    clippy::disallowed_macros
+)]
+
 use crate::Workspace;
 use crate::generator;
 use crate::generator::delivery::{
@@ -157,12 +167,12 @@ impl<'a> PreparedProject<'a> {
             report.logs.push(crate::product_message!("backend.prepared.preflight_not_applicable", "target" => self.target.spec().id));
             return report;
         }
-        if let Some(guard) = &self.native_guard {
-            if let Err(error) = guard.verify(None) {
-                report.status = PreflightStatus::Failed;
-                report.logs.push(error);
-                return report;
-            }
+        if let Some(guard) = &self.native_guard
+            && let Err(error) = guard.verify(None)
+        {
+            report.status = PreflightStatus::Failed;
+            report.logs.push(error);
+            return report;
         }
         let result = (|| -> Result<(), crate::LocalizedText> {
             use crate::execution::ProcessSpec;
@@ -311,10 +321,10 @@ pub(crate) fn deliver_path(asset: &AssetEntry) -> Result<String, crate::Localize
             return Ok("tools/standalone-ecu-tool.py".into());
         }
         for family in ["bsw/", "ecu/"] {
-            if let Some(relative) = path.strip_prefix(family) {
-                if relative.starts_with("src/") || relative.starts_with("include/") {
-                    return Ok(relative.into());
-                }
+            if let Some(relative) = path.strip_prefix(family)
+                && (relative.starts_with("src/") || relative.starts_with("include/"))
+            {
+                return Ok(relative.into());
             }
         }
         if path.starts_with("os/") {
@@ -358,8 +368,7 @@ impl NativePreparation {
         if inputs.application.len() != slots.len() {
             return Err(crate::product_message!(
                 "backend.integration.composition.consumer_unsupported"
-            )
-            .into());
+            ));
         }
         inputs.manifest.profile_hint = profile.into();
         inputs.refresh_snapshot_identity()?;

@@ -67,7 +67,7 @@ impl Graph {
         let documents = sources
             .iter()
             .map(|source| {
-                let text = source.text().map_err(|diagnostic| vec![diagnostic])?;
+                let text = source.text().map_err(|diagnostic| vec![*diagnostic])?;
                 Document::parse(text).map_err(|error| {
                     vec![PlanDiagnostic::at_source(
                         source,
@@ -286,8 +286,8 @@ impl Graph {
             code: code.into(),
             file: Some(node.file.clone()),
             object: Some(node.object.clone()),
-            message: message.into(),
-            remedy: remedy.into(),
+            message,
+            remedy,
         }
     }
 
@@ -379,19 +379,19 @@ impl Graph {
                     }
                     Some(_) => continue,
                 };
-                if kind.is_none() && destination == "R-PORT-PROTOTYPE" {
-                    if let Some((parent, parent_index)) =
+                if kind.is_none()
+                    && destination == "R-PORT-PROTOTYPE"
+                    && let Some((parent, parent_index)) =
                         graph.objects.iter().rev().find(|(path, index)| {
                             element.text.starts_with(&format!("{path}/"))
                                 && graph.elements[**index].tag == "SERVICE-SW-COMPONENT-TYPE"
                         })
-                    {
-                        let mut issue = graph.diagnostic(*parent_index, DiagnosticCategory::Input,
+                {
+                    let mut issue = graph.diagnostic(*parent_index, DiagnosticCategory::Input,
                             "SERVICE_CLIENT_MISSING", crate::product_message!("backend.integration.graph.declared_service_client_port_missing", "parent" => parent),
                             crate::product_message!("backend.integration.graph.service_client_local_provider_binding_required"));
-                        issue.object = Some(element.text.clone());
-                        diagnostics.push(issue);
-                    }
+                    issue.object = Some(element.text.clone());
+                    diagnostics.push(issue);
                 }
                 if kind.is_none() && destination == "BSW-MODULE-ENTRY" {
                     let mut issue = graph.diagnostic(
@@ -465,10 +465,10 @@ impl Graph {
             }
             consumers.insert(element.object.clone());
             pending.extend(element.children.iter().copied());
-            if element.attributes.contains_key("DEST") {
-                if let Some(target) = self.objects.get(&element.text) {
-                    pending.push(*target);
-                }
+            if element.attributes.contains_key("DEST")
+                && let Some(target) = self.objects.get(&element.text)
+            {
+                pending.push(*target);
             }
         }
         consumers

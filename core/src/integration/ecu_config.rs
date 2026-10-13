@@ -1,8 +1,6 @@
 //! ECU configuration and integration sources from the selected plan; applications remain caller owned.
 use super::{PlanDiagnostic, ValidatedIntegrationPlan};
 use crate::target::BuildTarget;
-use std::borrow::Cow;
-use std::collections::BTreeMap;
 
 fn header(name: &str, body: &str) -> String {
     format!(
@@ -36,7 +34,7 @@ fn periods(value_ms: u32, period_ms: u32, object: &str) -> Result<u32, Vec<PlanD
 pub(super) fn files(
     plan: &ValidatedIntegrationPlan,
     target: BuildTarget,
-) -> Result<(BTreeMap<String, Cow<'static, [u8]>>, String), Vec<PlanDiagnostic>> {
+) -> Result<(super::outputs::EcuFiles, String), Vec<PlanDiagnostic>> {
     let description = plan.description();
     let composition = description.ecu_composition()?;
     let com = description.ecu_com()?;
@@ -466,7 +464,7 @@ pub(super) fn files(
     for (module, source) in [("PduR", &pd_configuration), ("LSduR", &ls_configuration)] {
         outputs.emit(
             ECU,
-            &format!("include/{module}_Cfg.h"),
+            format!("include/{module}_Cfg.h"),
             header(
                 &format!("{}_CFG_H", module.to_uppercase()),
                 &format!(
@@ -474,7 +472,7 @@ pub(super) fn files(
                 ),
             ),
         )?;
-        outputs.emit(ECU, &format!("src/{module}_PBcfg.c"), source.as_str())?;
+        outputs.emit(ECU, format!("src/{module}_PBcfg.c"), source.as_str())?;
         config.push_str(&format!("#include \"{module}_Cfg.h\"\n"));
     }
 

@@ -75,8 +75,7 @@ pub(super) async fn open_handoff_project(
         if !file.is_file() || file.file_type().is_symlink() || file.len() > 50 * 1024 * 1024 {
             return Err(autosar_config_core::product_message!(
                 "backend.project.handoff_metadata_invalid"
-            )
-            .into());
+            ));
         }
         let metadata: serde_json::Value = serde_json::from_slice(
             &std::fs::read(&metadata_path).map_err(|error| error.to_string())?,

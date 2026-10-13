@@ -4,7 +4,17 @@ use serde::Deserialize;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 
+// The seal guard is pinned by its build-time digest rather than the runtime
+// asset inventory, so the package cannot be sealed by the files it checks.
+#[allow(
+    clippy::disallowed_macros,
+    reason = "the seal guard is checked against TRUSTED_HELPER_SHA256"
+)]
 const HELPER: &[u8] = include_bytes!("../../../../tools/python/src/ecu_tools/sealed_package.py");
+#[allow(
+    clippy::disallowed_macros,
+    reason = "the seal guard inventory is checked with the helper"
+)]
 const INVENTORY: &[u8] =
     include_bytes!("../../../../tools/python/src/ecu_tools/build-tool-inventory.json");
 include!(concat!(env!("OUT_DIR"), "/delivery_helper.rs"));

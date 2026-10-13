@@ -292,21 +292,20 @@ fn inspect_with_catalog(
         allowed_references.extend(RUNTIME_REFERENCES.split_ascii_whitespace());
     }
     let modules = graph.of_kind("ECUC-MODULE-CONFIGURATION-VALUES");
-    if composition {
-        if let Some(module) = modules
+    if composition
+        && let Some(module) = modules
             .iter()
             .copied()
             .find(|module| graph.text(*module, "DEFINITION-REF") == Some("/AUTOSAR/EcucDefs/LSduR"))
-        {
-            return Err(reject(
-                graph,
-                module,
-                "MODULE_UNSUPPORTED",
-                crate::product_message!(
-                    "backend.integration.configuration.fixed_target_implementation_contract_required"
-                ),
-            ));
-        }
+    {
+        return Err(reject(
+            graph,
+            module,
+            "MODULE_UNSUPPORTED",
+            crate::product_message!(
+                "backend.integration.configuration.fixed_target_implementation_contract_required"
+            ),
+        ));
     }
     let context = graph.context()?;
     physical(graph, context, catalog.is_some())?;
@@ -579,30 +578,30 @@ fn inspect_with_catalog(
                 ));
             }
         }
-        if let Some(status) = value(graph, index, "OsStatus", false) {
-            if !matches!(status, "STANDARD" | "EXTENDED") {
+        if let Some(status) = value(graph, index, "OsStatus", false)
+            && !matches!(status, "STANDARD" | "EXTENDED")
+        {
+            return Err(reject(
+                graph,
+                index,
+                "TARGET_PARAMETER_UNSUPPORTED",
+                crate::product_message!(
+                    "backend.integration.configuration.sc1_os_status_unsupported"
+                ),
+            ));
+        }
+        for (parameter, expected) in fixed {
+            if let Some(actual) = value(graph, index, parameter, false)
+                && actual != expected
+            {
                 return Err(reject(
                     graph,
                     index,
                     "TARGET_PARAMETER_UNSUPPORTED",
                     crate::product_message!(
-                        "backend.integration.configuration.sc1_os_status_unsupported"
+                        "backend.integration.configuration.fixed_target_policy_value_mismatch"
                     ),
                 ));
-            }
-        }
-        for (parameter, expected) in fixed {
-            if let Some(actual) = value(graph, index, parameter, false) {
-                if actual != expected {
-                    return Err(reject(
-                        graph,
-                        index,
-                        "TARGET_PARAMETER_UNSUPPORTED",
-                        crate::product_message!(
-                            "backend.integration.configuration.fixed_target_policy_value_mismatch"
-                        ),
-                    ));
-                }
             }
         }
         for (parameter, expected) in booleans {

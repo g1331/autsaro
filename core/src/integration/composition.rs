@@ -417,7 +417,7 @@ fn inspect_with_transport(
         .objects
         .values()
         .next()
-        .ok_or_else(|| Vec::<PlanDiagnostic>::new())?;
+        .ok_or_else(Vec::<PlanDiagnostic>::new)?;
     let dcm_modes = dcm_mode_definitions(graph, context)?;
     inspect_dcm_declarations(graph, context, &dcm_modes)?;
     let system = one(graph, context, graph.of_kind("SYSTEM"), "TARGET_NOT_UNIQUE")?;

@@ -16,8 +16,7 @@ fn check_batch_token(
     if changes.input_fingerprint != fingerprint {
         return Err(autosar_config_core::product_message!(
             "backend.configuration.change_identity_mismatch"
-        )
-        .into());
+        ));
     }
     Ok(())
 }

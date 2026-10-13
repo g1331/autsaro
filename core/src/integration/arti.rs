@@ -2,13 +2,6 @@ use super::{PlanDescription, configuration::ConfigurationRecord};
 
 const DEF: &str = "/AUTOSAR/EcucDefs/Arti";
 const ROOT: &str = "/ArtiDescriptions/Arti";
-fn escape(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-}
 fn parameter(definition: &str, value: &str, kind: &str) -> String {
     let tag = if matches!(kind, "ECUC-INTEGER-PARAM-DEF" | "ECUC-BOOLEAN-PARAM-DEF") {
         "ECUC-NUMERICAL-PARAM-VALUE"
@@ -17,13 +10,16 @@ fn parameter(definition: &str, value: &str, kind: &str) -> String {
     };
     format!(
         "<{tag}><DEFINITION-REF DEST=\"{kind}\">{definition}</DEFINITION-REF><VALUE>{}</VALUE></{tag}>",
-        escape(value)
+        super::xml_text(value)
     )
 }
 fn reference(definition: &str, target: &str) -> String {
+    reference_of("ECUC-REFERENCE-DEF", definition, target)
+}
+fn reference_of(kind: &str, definition: &str, target: &str) -> String {
     format!(
-        "<ECUC-REFERENCE-VALUE><DEFINITION-REF DEST=\"ECUC-REFERENCE-DEF\">{definition}</DEFINITION-REF><VALUE-REF DEST=\"ECUC-CONTAINER-VALUE\">{}</VALUE-REF></ECUC-REFERENCE-VALUE>",
-        escape(target)
+        "<ECUC-REFERENCE-VALUE><DEFINITION-REF DEST=\"{kind}\">{definition}</DEFINITION-REF><VALUE-REF DEST=\"ECUC-CONTAINER-VALUE\">{}</VALUE-REF></ECUC-REFERENCE-VALUE>",
+        super::xml_text(target)
     )
 }
 fn container(
@@ -35,7 +31,7 @@ fn container(
 ) -> String {
     let mut xml = format!(
         "<ECUC-CONTAINER-VALUE><SHORT-NAME>{}</SHORT-NAME><DEFINITION-REF DEST=\"ECUC-PARAM-CONF-CONTAINER-DEF\">{definition}</DEFINITION-REF>",
-        escape(name)
+        super::xml_text(name)
     );
     for (tag, contents) in [
         ("PARAMETER-VALUES", parameters),
@@ -112,13 +108,13 @@ impl Description {
         fields: &[(&str, String)],
         parameters: &[(&str, String, &str)],
     ) {
-        self.instance_with_refs(kind, name, ecuc, id, fields, parameters, "");
+        let (definition, params, refs) =
+            self.instance_values(kind, name, ecuc, id, fields, parameters);
+        self.objects
+            .push_str(&container(name, &definition, &params, &refs, ""));
     }
-    #[allow(
-        clippy::too_many_arguments,
-        reason = "the instance fields plus the OS instance's hook references"
-    )]
-    fn instance_with_refs(
+    /// The definition, parameter values and reference values of one OS object instance.
+    fn instance_values(
         &mut self,
         kind: &str,
         name: &str,
@@ -126,8 +122,7 @@ impl Description {
         id: Option<usize>,
         fields: &[(&str, String)],
         parameters: &[(&str, String, &str)],
-        extra_refs: &str,
-    ) {
+    ) -> (String, String, String) {
         let definition = format!("{DEF}/ArtiOs/ArtiOs{kind}Instance");
         let mut refs = String::new();
         if let Some(path) = ecuc {
@@ -164,9 +159,7 @@ impl Description {
                 ty,
             ));
         }
-        refs.push_str(extra_refs);
-        self.objects
-            .push_str(&container(name, &definition, &params, &refs, ""));
+        (definition, params, refs)
     }
     fn pointer_map(&mut self, name: &str, expression: &str, target: &str) {
         let property = format!("{name}Address");
@@ -175,11 +168,11 @@ impl Description {
         let refs = reference(
             &format!("{def}/ArtiParameterTypeMapPairInputExpressionRef"),
             &format!("{ROOT}/Values/{property}Expression"),
-        ) + &reference(&format!("{def}/ArtiParameterTypeMapPairOutputRef"), target)
-            .replace(
-                "DEST=\"ECUC-REFERENCE-DEF\"",
-                "DEST=\"ECUC-CHOICE-REFERENCE-DEF\"",
-            );
+        ) + &reference_of(
+            "ECUC-CHOICE-REFERENCE-DEF",
+            &format!("{def}/ArtiParameterTypeMapPairOutputRef"),
+            target,
+        );
         self.values.push_str(&container(
             name,
             &format!("{DEF}/ArtiValues/ArtiParameterTypeMap"),
@@ -197,11 +190,11 @@ impl Description {
                 &input.to_string(),
                 "ECUC-INTEGER-PARAM-DEF",
             );
-            let refs = reference(&format!("{def}/ArtiParameterTypeMapPairOutputRef"), target)
-                .replace(
-                    "DEST=\"ECUC-REFERENCE-DEF\"",
-                    "DEST=\"ECUC-CHOICE-REFERENCE-DEF\"",
-                );
+            let refs = reference_of(
+                "ECUC-CHOICE-REFERENCE-DEF",
+                &format!("{def}/ArtiParameterTypeMapPairOutputRef"),
+                target,
+            );
             pairs.push_str(&container(
                 &format!("Value{input}"),
                 &def,
@@ -233,8 +226,7 @@ fn hooks(name: &str, binding: &str) -> Result<(String, String), crate::message::
         if arguments.len() != 6 {
             return Err(crate::product_message!(
                 "backend.integration.arti.arti_single_parameter_trace_invocation_malformed"
-            )
-            .into());
+            ));
         }
         let context = arguments[0].trim();
         let class = arguments[1].trim();
@@ -317,12 +309,11 @@ fn selected_os(
             "backend.integration.arti.arti_os_module_path_required"
         ))?
         .0;
-    let name = super::short_name(&module);
+    let name = super::short_name(module);
     if super::component::c_name(name) != name {
         return Err(crate::product_message!(
             "backend.integration.arti.arti_os_short_name_not_representable"
-        )
-        .into());
+        ));
     }
     Ok((os, name))
 }
@@ -388,7 +379,7 @@ fn description(
     d.class("", &[("AppMode", Some("AppModes"))]);
     // Hooks attach to the OS instance rather than to a parallel manifest.
     let (hook_values, hook_refs) = hooks(name, binding)?;
-    d.instance_with_refs(
+    let (definition, params, refs) = d.instance_values(
         "",
         "OperatingSystem",
         Some(&os.path),
@@ -398,8 +389,14 @@ fn description(
             ("Valid", "*Os_ArtiOsReady != 0".into()),
         ],
         &[],
-        &hook_refs,
     );
+    d.objects.push_str(&container(
+        "OperatingSystem",
+        &definition,
+        &params,
+        &(refs + &hook_refs),
+        "",
+    ));
     d.pointer_map(
         "TaskStacks",
         "Os_ArtiTaskStacks[0]",

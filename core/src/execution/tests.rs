@@ -104,12 +104,12 @@ impl Drop for Fixture {
 #[cfg(unix)]
 fn alive(pid: u32) -> bool {
     #[cfg(target_os = "linux")]
-    if let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat")) {
-        if stat.rsplit_once(") ").is_some_and(|(_, fields)| {
+    if let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat"))
+        && stat.rsplit_once(") ").is_some_and(|(_, fields)| {
             matches!(fields.split_ascii_whitespace().next(), Some("Z" | "X"))
-        }) {
-            return false;
-        }
+        })
+    {
+        return false;
     }
     // SAFETY: signal zero reads existence of a fixture-owned process.
     unsafe { libc::kill(pid as i32, 0) == 0 }

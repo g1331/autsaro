@@ -164,10 +164,10 @@ pub(super) fn consumer_objects(graph: &Graph) -> std::collections::BTreeSet<Stri
         selected[index] = true;
         let element = &graph.elements[index];
         pending.extend(element.children.iter().copied());
-        if element.attributes.contains_key("DEST") {
-            if let Some(target) = graph.objects.get(&element.text) {
-                pending.push(*target);
-            }
+        if element.attributes.contains_key("DEST")
+            && let Some(target) = graph.objects.get(&element.text)
+        {
+            pending.push(*target);
         }
     }
     // A referenced container also depends on its enclosing module's edition
@@ -188,6 +188,7 @@ pub(super) fn consumer_objects(graph: &Graph) -> std::collections::BTreeSet<Stri
     graph
         .objects
         .iter()
-        .filter_map(|(path, index)| selected[*index].then(|| path.clone()))
+        .filter(|(_, index)| selected[**index])
+        .map(|(path, _)| path.clone())
         .collect()
 }

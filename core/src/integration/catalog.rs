@@ -258,6 +258,10 @@ pub(super) fn selected_behavior(symbol: &str) -> (bool, bool) {
     )
 }
 
+#[allow(
+    clippy::disallowed_macros,
+    reason = "identifies the generator's own sources, which are not delivered"
+)]
 pub(super) fn runtime_source_identities() -> BTreeMap<String, String> {
     let mut identities: BTreeMap<String, String> = crate::resources::AssetInventory::embedded()
         .entries()

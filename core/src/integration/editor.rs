@@ -42,9 +42,8 @@ pub(crate) fn issue(
             .iter()
             .find(|item| item.path == object)
             .map(|item| item.file.clone()),
-        message: message.into(),
-        remedy: crate::product_message!("backend.integration.editor.plan_repair_preview_required")
-            .into(),
+        message,
+        remedy: crate::product_message!("backend.integration.editor.plan_repair_preview_required"),
     }]
 }
 

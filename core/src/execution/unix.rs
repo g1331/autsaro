@@ -53,7 +53,7 @@ fn group_alive(pgid: i32) -> bool {
                 }
             }
         }
-        return !observed;
+        !observed
     }
     #[cfg(not(target_os = "linux"))]
     true
@@ -190,13 +190,13 @@ impl Drop for UnixInput {
     fn drop(&mut self) {
         drop(self.file.take());
         for result in [fs::remove_file(&self.path), fs::remove_dir(&self.directory)] {
-            if let Err(error) = result {
-                if error.kind() != std::io::ErrorKind::NotFound {
-                    eprintln!(
-                        "{}",
-                        crate::product_message!("backend.execution.stdin_cleanup_failed", "error" => error)
-                    );
-                }
+            if let Err(error) = result
+                && error.kind() != std::io::ErrorKind::NotFound
+            {
+                eprintln!(
+                    "{}",
+                    crate::product_message!("backend.execution.stdin_cleanup_failed", "error" => error)
+                );
             }
         }
     }
@@ -231,22 +231,22 @@ impl UnixOwner {
         inherit: bool,
         executable: Option<&Path>,
     ) -> Result<Arc<Self>, LocalizedText> {
-        if inherit {
-            if let (Some(socket), Some(token)) = (
+        if inherit
+            && let (Some(socket), Some(token)) = (
                 std::env::var_os("ECU_OWNER_SOCKET"),
                 std::env::var_os("ECU_OWNER_TOKEN"),
-            ) {
-                return Ok(Arc::new(Self {
-                    socket: PathBuf::from(socket),
-                    _socket_directory: None,
-                    token: token.to_string_lossy().into_owned(),
-                    supervisor: Mutex::new(None),
-                    directory: None,
-                    groups: Mutex::new(HashMap::new()),
-                    cancelled: AtomicBool::new(false),
-                    registration: Mutex::new(()),
-                }));
-            }
+            )
+        {
+            return Ok(Arc::new(Self {
+                socket: PathBuf::from(socket),
+                _socket_directory: None,
+                token: token.to_string_lossy().into_owned(),
+                supervisor: Mutex::new(None),
+                directory: None,
+                groups: Mutex::new(HashMap::new()),
+                cancelled: AtomicBool::new(false),
+                registration: Mutex::new(()),
+            }));
         }
         let python = match executable {
             Some(path) => std::borrow::Cow::Borrowed(path),
@@ -432,10 +432,11 @@ impl UnixOwner {
                 None => crate::product_message!("backend.execution.supervisor_unknown_error"),
             });
         }
-        if response["op"] == "closed" && response["status"] != "cleanup_unconfirmed" {
-            if let Some(scope) = response["scope"].as_str() {
-                self.groups.lock().remove(scope);
-            }
+        if response["op"] == "closed"
+            && response["status"] != "cleanup_unconfirmed"
+            && let Some(scope) = response["scope"].as_str()
+        {
+            self.groups.lock().remove(scope);
         }
         Ok(response)
     }
@@ -582,10 +583,8 @@ impl Drop for UnixOwner {
                 let _ = child.kill();
                 let _ = child.wait();
             }
-            if closed {
-                if let Some(directory) = &self.directory {
-                    let _ = fs::remove_dir_all(directory);
-                }
+            if closed && let Some(directory) = &self.directory {
+                let _ = fs::remove_dir_all(directory);
             }
         }
     }

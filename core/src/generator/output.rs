@@ -88,6 +88,10 @@ fn check_entries(dir: &Path, root: &Path, names: &[String]) -> Result<(), crate:
     for entry in fs::read_dir(dir).map_err(|e| crate::LocalizedText::from(e.to_string()))? {
         let entry = entry.map_err(|e| crate::LocalizedText::from(e.to_string()))?;
         let path = entry.path();
+        #[allow(
+            clippy::disallowed_methods,
+            reason = "normalizes Windows path separators of an existing file name"
+        )]
         let name = path
             .strip_prefix(root)
             .map_err(|e| crate::LocalizedText::from(e.to_string()))?
@@ -263,10 +267,11 @@ fn inspect_prepared(
     } else {
         std::collections::BTreeMap::new()
     };
-    if let Some(guard) = guard {
-        if output.exists() && output.join(super::delivery::OWNERSHIP_PATH).exists() {
-            super::delivery::reopen::verify_package(&output, &guard.catalog)?;
-        }
+    if let Some(guard) = guard
+        && output.exists()
+        && output.join(super::delivery::OWNERSHIP_PATH).exists()
+    {
+        super::delivery::reopen::verify_package(&output, &guard.catalog)?;
     }
     let mut digest = Sha256::new();
     digest.update(output.to_string_lossy().as_bytes());
@@ -446,7 +451,7 @@ impl StagedGeneration {
         let output_name = output
             .file_name()
             .ok_or_else(|| crate::product_message!("backend.generation.output_name_required"))?;
-        let existing = match fs::symlink_metadata(&output) {
+        let existing = match fs::symlink_metadata(output) {
             Ok(metadata) if is_reparse_point(&metadata) || !metadata.file_type().is_dir() => {
                 return Err(
                     crate::product_message!("backend.generation.output_changed_type", "path" => output.display()),
@@ -465,7 +470,7 @@ impl StagedGeneration {
         let backup = if existing {
             let backup_root = reserve_directory(parent, "backup", output_name)?;
             let preserved = backup_root.join(output_name);
-            fs::rename(&output, &preserved).map_err(|e| {
+            fs::rename(output, &preserved).map_err(|e| {
                 crate::product_message!("backend.generation.previous_output_backup_failed", "path" => output.display(), "backup" => preserved.display(), "error" => e.to_string())
             })?;
             Some(preserved)

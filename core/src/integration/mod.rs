@@ -3,6 +3,16 @@
 //! Construction is all-or-nothing. Input bytes and identities are retained;
 //! component contracts and ECU integration consume the same checked plan.
 
+// Generation and integration report PlanDiagnostic instead of panicking and
+// render each output once; core/clippy.toml lists the disallowed text patching.
+#![deny(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::disallowed_methods,
+    clippy::disallowed_macros
+)]
+
 mod arti;
 mod artifacts;
 mod can_runtime;
@@ -101,6 +111,21 @@ pub struct PlanDiagnostic {
     pub remedy: crate::message::LocalizedText,
 }
 
+/// XML character data and attribute text.
+fn xml_text(value: &str) -> String {
+    let mut text = String::with_capacity(value.len());
+    for character in value.chars() {
+        match character {
+            '&' => text.push_str("&amp;"),
+            '<' => text.push_str("&lt;"),
+            '>' => text.push_str("&gt;"),
+            '"' => text.push_str("&quot;"),
+            other => text.push(other),
+        }
+    }
+    text
+}
+
 /// The last segment of a complete AUTOSAR path.
 fn short_name(path: &str) -> &str {
     path.rsplit_once('/').map_or(path, |(_, name)| name)
@@ -117,8 +142,8 @@ impl PlanDiagnostic {
             code: code.into(),
             file: None,
             object: None,
-            message: message.into(),
-            remedy: remedy.into(),
+            message,
+            remedy,
         }
     }
 
@@ -180,8 +205,8 @@ impl PlanDiagnostic {
             code: code.into(),
             file: Some(source.logical_path.clone()),
             object: Some("/".into()),
-            message: message.into(),
-            remedy: remedy.into(),
+            message,
+            remedy,
         }
     }
 }
@@ -195,7 +220,10 @@ pub struct InputSource {
 }
 
 impl InputSource {
-    pub fn new(logical_path: impl Into<String>, bytes: Vec<u8>) -> Result<Self, PlanDiagnostic> {
+    pub fn new(
+        logical_path: impl Into<String>,
+        bytes: Vec<u8>,
+    ) -> Result<Self, Box<PlanDiagnostic>> {
         let logical_path = logical_path.into();
         let source = Self {
             logical_path,
@@ -217,7 +245,7 @@ impl InputSource {
                 .extension()
                 .is_some_and(|extension| extension.eq_ignore_ascii_case("arxml"))
         {
-            return Err(PlanDiagnostic::at_source(
+            return Err(Box::new(PlanDiagnostic::at_source(
                 &source,
                 "SOURCE_IDENTITY",
                 crate::product_message!(
@@ -226,11 +254,11 @@ impl InputSource {
                 crate::product_message!(
                     "backend.integration.mod.use_unique_portable_relative_path"
                 ),
-            ));
+            )));
         }
         let text = source.text()?;
         if text.contains("<!DOCTYPE") || text.contains("<!ENTITY") {
-            return Err(PlanDiagnostic::at_source(
+            return Err(Box::new(PlanDiagnostic::at_source(
                 &source,
                 "XML_DTD",
                 crate::product_message!(
@@ -239,7 +267,7 @@ impl InputSource {
                 crate::product_message!(
                     "backend.integration.mod.supply_self_contained_autosar_xml"
                 ),
-            ));
+            )));
         }
         Ok(source)
     }
@@ -254,10 +282,10 @@ impl InputSource {
         format!("{:x}", Sha256::digest(&self.bytes))
     }
 
-    fn text(&self) -> Result<&str, PlanDiagnostic> {
-        std::str::from_utf8(&self.bytes).map_err(|error| PlanDiagnostic::at_source(self,
+    fn text(&self) -> Result<&str, Box<PlanDiagnostic>> {
+        std::str::from_utf8(&self.bytes).map_err(|error| Box::new(PlanDiagnostic::at_source(self,
             "XML_ENCODING", crate::product_message!("backend.integration.mod.input_not_utf8_xml", "error" => error),
-            crate::product_message!("backend.integration.mod.convert_source_to_utf8_arxml")))
+            crate::product_message!("backend.integration.mod.convert_source_to_utf8_arxml"))))
     }
 }
 
@@ -280,10 +308,9 @@ fn portable_component(part: &str) -> bool {
     if let Some(number) = stem
         .strip_prefix("COM")
         .or_else(|| stem.strip_prefix("LPT"))
+        && matches!(number, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9")
     {
-        if matches!(number, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9") {
-            return false;
-        }
+        return false;
     }
     true
 }
@@ -395,8 +422,7 @@ pub fn inspect_inputs_native(
             message,
             remedy: crate::product_message!(
                 "backend.integration.mod.repair_installed_product_rule_inventory"
-            )
-            .into(),
+            ),
         }]
     };
     let identity = crate::rules::rule_set_identity().map_err(&tool_error)?;
@@ -437,8 +463,8 @@ pub fn inspect_inputs_native(
     let files: Vec<_> = sorted
         .iter()
         .map(|source| Ok((Path::new(&source.logical_path), source.text()?)))
-        .collect::<Result<_, PlanDiagnostic>>()
-        .map_err(|diagnostic| vec![diagnostic])?;
+        .collect::<Result<_, Box<PlanDiagnostic>>>()
+        .map_err(|diagnostic| vec![*diagnostic])?;
     let native_schema = crate::rules::validate_native(&files).map_err(&tool_error)?;
     let graph = graph::Graph::from_catalog_target_scope(&sorted, catalog)?;
     let consumers = native_configuration::consumer_objects(&graph);

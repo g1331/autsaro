@@ -73,11 +73,10 @@ fn reject(
             .find(|identity| identity.path == object)
             .map(|object| object.file.clone()),
         object: Some(object.into()),
-        message: message.into(),
+        message,
         remedy: crate::product_message!(
             "backend.integration.contracts.distinct_nonreserved_names_required"
-        )
-        .into(),
+        ),
     }]
 }
 
@@ -88,8 +87,7 @@ impl ValidatedIntegrationPlan {
         let composition = self.description().composition.as_ref().ok_or_else(|| {
             reject(
                 self,
-                crate::product_message!("backend.integration.composition.consumer_unsupported")
-                    .into(),
+                crate::product_message!("backend.integration.composition.consumer_unsupported"),
             )
         })?;
         self.composition_contract_files(composition)

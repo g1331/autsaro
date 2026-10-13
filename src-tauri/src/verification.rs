@@ -37,9 +37,9 @@ pub(crate) async fn verification_owned_failure(
     delay_ms: u64,
 ) -> Result<Reply<OwnedFailure>, autosar_config_core::LocalizedText> {
     if delay_ms > 5_000 {
-        return Err(
-            autosar_config_core::product_message!("backend.verification.delay_limit").into(),
-        );
+        return Err(autosar_config_core::product_message!(
+            "backend.verification.delay_limit"
+        ));
     }
     background(state, move |state| {
         let operation = state.begin(&fingerprint, autosar_config_core::product_message!("backend.operation.owned_verification_failure"), OperationKind::Native)?;

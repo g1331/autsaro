@@ -3,26 +3,25 @@ use super::component::c_name;
 use super::{ContractArgument, PlanDescription, PlanDiagnostic};
 use std::collections::{BTreeMap, BTreeSet};
 
-fn xml(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-}
+#[allow(
+    clippy::disallowed_methods,
+    reason = "DOMAIN writes path separators as dots; no rendered text is patched"
+)]
 fn artifact(path: &str) -> String {
     format!(
         "<SHORT-LABEL>{}</SHORT-LABEL><CATEGORY>{}</CATEGORY><DOMAIN>{}</DOMAIN>",
-        xml(super::short_name(path)),
+        super::xml_text(super::short_name(path)),
         if path.ends_with(".c") {
             "SWSRC"
         } else {
             "SWHDR"
         },
-        xml(&path
-            .rsplit_once('/')
-            .map_or("", |(directory, _)| directory)
-            .replace('/', "."))
+        super::xml_text(
+            &path
+                .rsplit_once('/')
+                .map_or("", |(directory, _)| directory)
+                .replace('/', ".")
+        )
     )
 }
 fn argument(name: &str, native: &str, direction: &str, types: &BTreeMap<String, usize>) -> String {
@@ -39,7 +38,7 @@ fn argument_fields(
 ) -> String {
     format!(
         r#"<SHORT-NAME>{}</SHORT-NAME><CATEGORY>VALUE</CATEGORY><DIRECTION>{direction}</DIRECTION><SW-DATA-DEF-PROPS><SW-DATA-DEF-PROPS-VARIANTS><SW-DATA-DEF-PROPS-CONDITIONAL><BASE-TYPE-REF DEST="SW-BASE-TYPE">/HostArtifacts/Native{}</BASE-TYPE-REF></SW-DATA-DEF-PROPS-CONDITIONAL></SW-DATA-DEF-PROPS-VARIANTS></SW-DATA-DEF-PROPS>"#,
-        xml(name),
+        super::xml_text(name),
         types[native]
     )
 }
@@ -706,7 +705,7 @@ pub(super) fn files(
                 crate::product_message!("backend.integration.artifacts.native_object_size_missing", "native" => native),
             ));
         };
-        elements.push_str(&format!("<SW-BASE-TYPE><SHORT-NAME>Native{i}</SHORT-NAME><CATEGORY>FIXED_LENGTH</CATEGORY><BASE-TYPE-SIZE>{bits}</BASE-TYPE-SIZE><BASE-TYPE-ENCODING>NONE</BASE-TYPE-ENCODING><NATIVE-DECLARATION>{}</NATIVE-DECLARATION></SW-BASE-TYPE>", xml(native)));
+        elements.push_str(&format!("<SW-BASE-TYPE><SHORT-NAME>Native{i}</SHORT-NAME><CATEGORY>FIXED_LENGTH</CATEGORY><BASE-TYPE-SIZE>{bits}</BASE-TYPE-SIZE><BASE-TYPE-ENCODING>NONE</BASE-TYPE-ENCODING><NATIVE-DECLARATION>{}</NATIVE-DECLARATION></SW-BASE-TYPE>", super::xml_text(native)));
     }
     let mut docs = String::from(
         "# Generated host module implementation\n\nThis is the selected single-core C99 host profile. The native target is recorded in target.json. The R24-11 BSW/RTE description locates delivered code and selected actual contracts; it does not certify a complete standard module API or MISRA compliance. Unassigned vendor identity is 0. Host implementation version follows this workbench; Arti uses its actual 1.0.0 version API. Source paths are relative to this project. Engineering-object SHORT-LABEL is the filename; DOMAIN maps directory components with dots (os.src means os/src).\n\n| Module | Delivered code and headers |\n| --- | --- |\n",
@@ -1176,9 +1175,7 @@ pub(super) fn files(
                 "<RESOURCE-CONSUMPTION><SHORT-NAME>CodeMapping</SHORT-NAME><MEMORY-SECTIONS><MEMORY-SECTION><SHORT-NAME>{module}_CONFIG_DATA_PREBUILD_UNSPECIFIED</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/{module}HostImplementation/CodeMapping/RTE_{module}</PREFIX-REF><SYMBOL>CONFIG_DATA_PREBUILD_UNSPECIFIED</SYMBOL></MEMORY-SECTION></MEMORY-SECTIONS><SECTION-NAME-PREFIXS><SECTION-NAME-PREFIX><SHORT-NAME>RTE_{module}</SHORT-NAME><IMPLEMENTED-IN-REF DEST=\"DEPENDENCY-ON-ARTIFACT\">/{package}/{module}HostImplementation/include_Ecu_MemMap_h</IMPLEMENTED-IN-REF></SECTION-NAME-PREFIX></SECTION-NAME-PREFIXS></RESOURCE-CONSUMPTION>"
             )
         } else if module == "Os" || module == "Rte" {
-            format!(
-                "<RESOURCE-CONSUMPTION><SHORT-NAME>CodeMapping</SHORT-NAME><MEMORY-SECTIONS><MEMORY-SECTION><SHORT-NAME>CODE</SHORT-NAME><SYMBOL>CODE</SYMBOL></MEMORY-SECTION></MEMORY-SECTIONS></RESOURCE-CONSUMPTION>"
-            )
+            "<RESOURCE-CONSUMPTION><SHORT-NAME>CodeMapping</SHORT-NAME><MEMORY-SECTIONS><MEMORY-SECTION><SHORT-NAME>CODE</SHORT-NAME><SYMBOL>CODE</SYMBOL></MEMORY-SECTION></MEMORY-SECTIONS></RESOURCE-CONSUMPTION>".to_string()
         } else {
             String::new()
         };

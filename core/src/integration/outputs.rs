@@ -38,6 +38,9 @@ impl Producer {
     }
 }
 
+/// Delivered path to bytes of one ECU generation.
+pub(crate) type EcuFiles = BTreeMap<String, Cow<'static, [u8]>>;
+
 pub(crate) struct EcuOutputs {
     files: BTreeMap<String, (Producer, Cow<'static, [u8]>)>,
     templates: BTreeMap<String, (&'static AssetEntry, &'static str)>,
@@ -171,9 +174,7 @@ impl EcuOutputs {
     }
 
     /// The complete output; a reserved template nobody rendered is an omission.
-    pub(super) fn finish(
-        self,
-    ) -> Result<BTreeMap<String, Cow<'static, [u8]>>, Vec<PlanDiagnostic>> {
+    pub(super) fn finish(self) -> Result<EcuFiles, Vec<PlanDiagnostic>> {
         if let Some(path) = self.templates.keys().next() {
             return Err(PlanDiagnostic::output_missing(path));
         }
