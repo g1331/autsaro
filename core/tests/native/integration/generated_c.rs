@@ -249,6 +249,7 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
             "runtime/ecu/include",
             "runtime/os/include",
             "runtime/bsw/include",
+            "runtime/host/include",
         ] {
             compiler.arg("-I").arg(repository.join(include));
         }

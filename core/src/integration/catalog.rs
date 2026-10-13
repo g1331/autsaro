@@ -266,7 +266,10 @@ pub(super) fn runtime_source_identities() -> BTreeMap<String, String> {
     let mut identities: BTreeMap<String, String> = crate::resources::AssetInventory::embedded()
         .entries()
         .iter()
-        .filter(|asset| asset.relative_path.starts_with("runtime/bsw/"))
+        .filter(|asset| {
+            asset.relative_path.starts_with("runtime/bsw/")
+                || asset.relative_path.starts_with("runtime/host/")
+        })
         .map(|asset| (asset.relative_path.into(), asset.sha256.into()))
         .collect();
     for (path, bytes) in [

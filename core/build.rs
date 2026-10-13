@@ -49,7 +49,7 @@ fn add(
     assert!(matches!(license, "MIT" | "Apache-2.0"));
     assert!(matches!(
         role,
-        "bsw" | "os" | "kernel" | "patch" | "target" | "delivery" | "provenance"
+        "bsw" | "host" | "os" | "kernel" | "patch" | "target" | "delivery" | "provenance"
     ));
     assert!(!responsibility.is_empty());
     assert!(

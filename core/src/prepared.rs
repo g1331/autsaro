@@ -320,7 +320,7 @@ pub(crate) fn deliver_path(asset: &AssetEntry) -> Result<String, crate::Localize
             // tools/ecu-tool.py is the seal guard that wraps this entry.
             return Ok("tools/standalone-ecu-tool.py".into());
         }
-        for family in ["bsw/", "ecu/"] {
+        for family in ["bsw/", "host/", "ecu/"] {
             if let Some(relative) = path.strip_prefix(family)
                 && (relative.starts_with("src/") || relative.starts_with("include/"))
             {
@@ -706,7 +706,13 @@ mod delivery_path_tests {
         let bsw: Vec<_> = crate::resources::AssetInventory::embedded()
             .entries()
             .iter()
-            .filter_map(|asset| Some((asset, asset.relative_path.strip_prefix("runtime/bsw/")?)))
+            .filter_map(|asset| {
+                let path = asset.relative_path;
+                let relative = path
+                    .strip_prefix("runtime/bsw/")
+                    .or_else(|| path.strip_prefix("runtime/host/"))?;
+                Some((asset, relative))
+            })
             .collect();
         assert_eq!(bsw.len(), 69);
         for (asset, relative) in bsw {

@@ -249,15 +249,16 @@ def changed_format_errors(
 # independent bsw-contracts fixture stands in. The CAN sources also need the generated
 # Ecu_Config.h/Ecu_Execution.h, so they are compiled with generated projects (c-check, native).
 CONFIGURATION = ROOT / "core" / "tests" / "fixtures" / "bsw-contracts"
-MAINLINE_CAN = ROOT / "runtime" / "bsw"
-MAINLINE_CAN_HEADERS = ["Can_CfgTypes.h", "Can_GeneralTypes.h", "Can_Host.h", "Can_MemMap.h",
-                        "Ecu_Status.h", "SchM_Can.h", "standard/Can.h"]
+MAINLINE_CAN = ROOT / "runtime" / "bsw" / "include"
+HOST_ADAPTERS = ROOT / "runtime" / "host" / "include"
+MAINLINE_CAN_HEADERS = [MAINLINE_CAN / name for name in ("Can_CfgTypes.h", "Can_GeneralTypes.h",
+                                                         "Can_MemMap.h", "SchM_Can.h", "standard/Can.h")]
+MAINLINE_CAN_HEADERS += [HOST_ADAPTERS / name for name in ("Can_Host.h", "Ecu_Status.h")]
 
 
 def c_syntax_errors() -> list[str]:
     compiler = os.environ.get("AUTOSAR_CC", "gcc")
-    headers = [MAINLINE_CAN / "include" / name for name in MAINLINE_CAN_HEADERS]
-    for header in sorted(headers):
+    for header in sorted(MAINLINE_CAN_HEADERS):
         # A section protocol is a repeated-include TU, not a standalone empty header.
         if header.name == "Can_MemMap.h":
             source = (
@@ -282,7 +283,9 @@ def c_syntax_errors() -> list[str]:
                 "-pedantic",
                 "-fsyntax-only",
                 "-I",
-                str(ROOT / "runtime" / "bsw" / "include"),
+                str(MAINLINE_CAN),
+                "-I",
+                str(HOST_ADAPTERS),
                 "-I",
                 str(CONFIGURATION),
                 *forced_header,

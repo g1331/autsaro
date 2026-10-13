@@ -34,6 +34,7 @@ class HostBoundaryTests(unittest.TestCase):
             "uint64_t Ecu_ExecutionNow(void);\n#endif\n", encoding="utf-8")
         cls.flags = ["-std=c99", "-O1", "-Wall", "-Wextra", "-Werror", "-pedantic", "-D_XOPEN_SOURCE=700",
                      "-I" + str(ROOT / "runtime/bsw/src"), "-I" + str(ROOT / "runtime/bsw/include"),
+                     "-I" + str(ROOT / "runtime/host/src"), "-I" + str(ROOT / "runtime/host/include"),
                      # The mainline CAN headers use the generated ComStack_Cfg.h widths.
                      "-I" + str(ROOT / "core/tests/fixtures/bsw-contracts"), "-I" + str(generated)]
         suffix = ".exe" if os.name == "nt" else ""
@@ -41,11 +42,11 @@ class HostBoundaryTests(unittest.TestCase):
         header = ROOT / "tests/fixtures/host_lock_faults.h"
         obj = cls.directory / "lock.o"
         result = cls.execute([cls.compiler, *cls.flags, "-include", str(header), "-c",
-                              str(ROOT / "runtime/bsw/src/Can_HostLock.c"), "-o", str(obj)], "compile-lock")
+                              str(ROOT / "runtime/host/src/Can_HostLock.c"), "-o", str(obj)], "compile-lock")
         if not result.success:
             raise RuntimeError(result.stderr.read_text(encoding="utf-8", errors="replace"))
-        sources = [ROOT / "runtime/bsw/src" / name for name in
-                   ("Can.c", "Can_Host.c", "Det.c", "Det_Host.c", "SchM_CanIf_Host.c")]
+        sources = [ROOT / "runtime/bsw/src/Can.c", ROOT / "runtime/bsw/src/Det.c"]
+        sources += [ROOT / "runtime/host/src" / name for name in ("Can_Host.c", "Det_Host.c", "SchM_CanIf_Host.c")]
         sources.append(ROOT / "core/tests/fixtures/bsw-contracts/execution_sink.c")
         result = cls.execute([cls.compiler, *cls.flags, str(obj), str(ROOT / "tests/fixtures/host_lock_faults.c"),
                               *(str(path) for path in sources),
