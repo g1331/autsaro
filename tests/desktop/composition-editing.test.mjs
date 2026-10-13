@@ -179,7 +179,14 @@ check('composition-shared-editing-and-source-protection', async () => {
   for (const file of users) {
     assert.deepEqual(await readFile(path.join(pipeline.directory, file.path)), file.bytes);
     assert.deepEqual(
-      await readFile(path.join(delivered.directory, 'src', path.basename(file.path))),
+      await readFile(
+        path.join(
+          delivered.directory,
+          'app',
+          path.basename(file.path, '.c'),
+          path.basename(file.path),
+        ),
+      ),
       file.bytes,
     );
   }
