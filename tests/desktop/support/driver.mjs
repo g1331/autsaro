@@ -352,14 +352,14 @@ public static class Chooser {
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SendMessage(IntPtr window, uint message, IntPtr wParam, string lParam);
   [DllImport("user32.dll")] static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
   static string ClassOf(IntPtr window) { var name = new StringBuilder(256); GetClassName(window, name, name.Capacity); return name.ToString(); }
-  public static IntPtr Find(uint process) {
-    IntPtr found = IntPtr.Zero;
+  public static List<IntPtr> Dialogs(uint process) {
+    var dialogs = new List<IntPtr>();
     EnumWindows((window, data) => {
       uint owner; GetWindowThreadProcessId(window, out owner);
-      if (owner == process && IsWindowVisible(window) && ClassOf(window) == "#32770") { found = window; return false; }
+      if (owner == process && IsWindowVisible(window) && ClassOf(window) == "#32770") dialogs.Add(window);
       return true;
     }, IntPtr.Zero);
-    return found;
+    return dialogs;
   }
   public static bool Accept(IntPtr dialog, int[] identifiers, string path) {
     var edits = new List<IntPtr>();
@@ -380,44 +380,39 @@ public static class Chooser {
         }
     return false;
   }
-  // Failure evidence: the process's top-level windows and every chooser control.
-  public static string Describe(uint process) {
-    var lines = new List<string>();
-    EnumWindows((window, data) => {
-      uint owner; GetWindowThreadProcessId(window, out owner);
-      if (owner != process) return true;
-      string name = ClassOf(window);
-      lines.Add(name + (IsWindowVisible(window) ? " visible" : " hidden"));
-      if (name == "#32770")
-        EnumChildWindows(window, (child, ignored) => {
-          lines.Add("  " + ClassOf(child) + ":" + GetDlgCtrlID(child) + (IsWindowVisible(child) ? "" : " hidden") + (IsWindowEnabled(child) ? "" : " disabled"));
-          return true;
-        }, IntPtr.Zero);
-      return true;
-    }, IntPtr.Zero);
-    return string.Join("\\n", lines);
-  }
 }
 '@
 # File pickers name their field 1148; the folder picker uses 1152.
 $identifiers = if ($Kind -eq 'directory') { [int[]](1152, 1148) } else { [int[]](1148) }
+function Shown {
+  Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+  $texts = foreach ($candidate in [Chooser]::Dialogs($ProcessId)) {
+    $names = [Windows.Automation.AutomationElement]::FromHandle($candidate).FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition) | ForEach-Object { $_.Current.Name } | Where-Object { $_ }
+    "[$($names -join ' | ')]"
+  }
+  $texts -join ' '
+}
 $dialog = [IntPtr]::Zero
 $deadline = (Get-Date).AddSeconds(30)
-while ((Get-Date) -lt $deadline) {
-  $dialog = [Chooser]::Find($ProcessId)
-  if ($dialog -ne [IntPtr]::Zero -and [Chooser]::Accept($dialog, $identifiers, $Selected)) { break }
-  $dialog = [IntPtr]::Zero
-  Start-Sleep -Milliseconds 100
+while ($dialog -eq [IntPtr]::Zero -and (Get-Date) -lt $deadline) {
+  foreach ($candidate in [Chooser]::Dialogs($ProcessId)) {
+    if ([Chooser]::Accept($candidate, $identifiers, $Selected)) { $dialog = $candidate; break }
+  }
+  if ($dialog -eq [IntPtr]::Zero) { Start-Sleep -Milliseconds 100 }
 }
 if ($dialog -eq [IntPtr]::Zero) {
-  throw "No native chooser with a name field belongs to the application under test:\n$([Chooser]::Describe($ProcessId))"
+  throw "No native chooser with a name field belongs to the application under test: $(Shown)"
 }
 $deadline = (Get-Date).AddSeconds(10)
 while ((Get-Date) -lt $deadline) {
-  if (-not [Chooser]::IsWindow($dialog)) { exit 0 }
+  if (-not [Chooser]::IsWindow($dialog)) {
+    # Any other dialog would be an unexpected modal the scenario never answered.
+    if ([Chooser]::Dialogs($ProcessId).Count) { throw "Native dialog left open after the chooser: $(Shown)" }
+    exit 0
+  }
   Start-Sleep -Milliseconds 100
 }
-throw 'Native chooser stayed open after accepting the selection'
+throw "Native chooser stayed open after accepting the selection: $(Shown)"
 `;
 
 class WebDriver {
