@@ -8,23 +8,23 @@
 npm run lint --prefix ui
 npm run test --prefix ui
 npm run build --prefix ui
-cargo test --locked --manifest-path core/Cargo.toml
-cargo test --locked --manifest-path src-tauri/Cargo.toml
+cargo test --locked -p autosar-config-core
+cargo test --locked -p autosar-config-desktop
 uv run --locked python -B -m unittest discover -s tests/python
 uv run --locked ruff check tools tests/python scripts
 ```
 
-前端使用 Vitest；`npm run test:watch --prefix ui` 用于开发。Python 普通测试位于 `tests/python`，进程和平台测试独立选择。默认 Rust 测试不需要外部 Python 或官方档案。
+仓库根目录是 Cargo workspace（成员 `core` 与 `src-tauri`），共用根目录的 `Cargo.lock` 与 `target/`；`cargo test --locked --workspace` 一次运行两个 crate 的默认测试，需先准备桌面平台依赖。前端使用 Vitest；`npm run test:watch --prefix ui` 用于开发。Python 普通测试位于 `tests/python`，进程和平台测试独立选择。默认 Rust 测试不需要外部 Python 或官方档案。
 
 core 的集成测试分为三个二进制，按能力模块组织，共用 `core/tests/support/`：
 
 | 二进制 | 运行方式 | 前置条件 |
 | --- | --- | --- |
-| `it` | `cargo test --test it` | 无 |
-| `native` | `cargo test --features native-tests --test native` | 目标 GCC／binutils、Git 与 `AUTOSAR_PYTHON` |
-| `official` | `cargo test --features official-oracles --test official` | 授权的官方档案 |
+| `it` | `cargo test -p autosar-config-core --test it` | 无 |
+| `native` | `cargo test -p autosar-config-core --features native-tests --test native` | 目标 GCC／binutils、Git 与 `AUTOSAR_PYTHON` |
+| `official` | `cargo test -p autosar-config-core --features official-oracles --test official` | 授权的官方档案 |
 
-测试名带模块路径，可按名称筛选，例如 `cargo test --test it -- integration::diagnostics::`、`cargo test --features native-tests --test native -- integration::os::`。协议与 OS 独立对照向量（`core/tests/fixtures/epic4_oracles/`）由 `it` 的 `protocol_oracles::` 测试绑定到参考 ECUC 配置，设置或固定字面值漂移时失败。
+测试名带模块路径，可按名称筛选，例如 `cargo test -p autosar-config-core --test it -- integration::diagnostics::`、`cargo test -p autosar-config-core --features native-tests --test native -- integration::os::`。协议与 OS 独立对照向量（`core/tests/fixtures/epic4_oracles/`）由 `it` 的 `protocol_oracles::` 测试绑定到参考 ECUC 配置，设置或固定字面值漂移时失败。
 
 Tauri 后端单测覆盖 Session、设置与请求归属，需先准备[桌面平台依赖](environment.md)并运行 `npm run build --prefix ui`。本地 `verify --scope desktop`／`all` 及 PR 的 desktop job 均执行锁定 Cargo 单测；本地聚合入口继续执行 build／Clippy，PR job 保留 build。这些检查不启动原生窗口，不能替代 GUI／IPC 行为验收。
 
@@ -43,7 +43,7 @@ $env:CPPCHECK = "$PWD/build/cppcheck-build/bin/cppcheck"
 
 ```powershell
 $env:AUTOSAR_C_ANALYSIS_SAMPLES = "$PWD/build/c-analysis-samples"
-cargo test --locked --manifest-path core/Cargo.toml --test it -- c_analysis::
+cargo test --locked -p autosar-config-core --test it -- c_analysis::
 uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
 uv run --locked python -m autosar_tooling c-check --target windows-x64-controlled-v1 --project build/c-analysis-samples/standard-ecu --output-directory build/c-analysis-results/standard-ecu
 ```
@@ -74,10 +74,10 @@ CI 每个平台先验证检查器、生成四类完整样本并发布本轮工�
 
 ```powershell
 uv run --locked python -B -m unittest discover -s tests/python/process
-cargo test --locked --manifest-path core/Cargo.toml --lib --features native-tests execution::
-cargo test --locked --manifest-path core/Cargo.toml --features native-tests --lib --test native --no-fail-fast
+cargo test --locked -p autosar-config-core --lib --features native-tests execution::
+cargo test --locked -p autosar-config-core --features native-tests --lib --test native --no-fail-fast
 uv run --locked python -B -m unittest discover -s tests/python/native -p test_os_suites.py
-cargo test --locked --manifest-path core/Cargo.toml --features official-oracles --test official --no-fail-fast
+cargo test --locked -p autosar-config-core --features official-oracles --test official --no-fail-fast
 ```
 
 进程测试需 `AUTOSAR_PYTHON` 指向支持的绝对解释器路径；受管进程的探针是测试辅助脚本 `tests/python/process/probe.py`。官方对照需正式资源清单声明的合法档案；native 测试需对应平台的受控 GCC/binutils。OS suites 由 unittest 按 suite 生成测试，可用 `-k stack` 等筛选，只在与当前宿主一致的目标上运行；测试名对应 suite，进程失败信息包含阶段、命令和原始退出状态。
@@ -98,7 +98,7 @@ cargo install tauri-driver --version 2.1.0 --locked
 node --test --test-concurrency=1 "tests/desktop/*.test.mjs"
 ```
 
-运行前把 `AUTOSAR_DESKTOP_APP` 设为构建出的 `src-tauri/target/debug/autosar-config-desktop`（Windows 带 `.exe`）的绝对路径。Node 24 的 `--test` 不接受目录，glob 加引号后由 Node 展开；也可只传单个文件，或用 `--test-name-pattern` 选择检查。`native-webdriver` 只用于验证构建：提供计数器、受管失败和延迟注入，并在 Windows 上通过 WebView2 API 转交 msedgedriver 的启动参数（WebView2 在提权进程中忽略 `WEBVIEW2_*` 环境变量，GitHub 托管 runner 以管理员身份运行）。发行构建不包含这些能力。
+运行前把 `AUTOSAR_DESKTOP_APP` 设为构建出的 `target/debug/autosar-config-desktop`（Windows 带 `.exe`）的绝对路径。Node 24 的 `--test` 不接受目录，glob 加引号后由 Node 展开；也可只传单个文件，或用 `--test-name-pattern` 选择检查。`native-webdriver` 只用于验证构建：提供计数器、受管失败和延迟注入，并在 Windows 上通过 WebView2 API 转交 msedgedriver 的启动参数（WebView2 在提权进程中忽略 `WEBVIEW2_*` 环境变量，GitHub 托管 runner 以管理员身份运行）。发行构建不包含这些能力。
 
 `AUTOSAR_DESKTOP_RESULTS` 指定结果目录，默认使用系统临时目录。每个文件在其中新建私有目录，保存各项检查的截图、`ipc.jsonl` 和会话关闭后的 `process-tree.json`；失败时另存 `failure.png` 与页面文本 `failure.txt`。`owned-execution.test.mjs` 还需要用 `AUTOSAR_CC`、`AUTOSAR_OBJDUMP`、`AUTOSAR_GIT`、`AUTOSAR_PYTHON` 声明受控 GCC、binutils、Git 与受支持 Python 的绝对路径；应用环境仍剥除这些变量，由场景通过真实的“执行工具”设置填写，未声明时该文件失败。
 

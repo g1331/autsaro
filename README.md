@@ -98,7 +98,7 @@ The browser supports interface and frontend-logic development; complete file ope
 npm run test --prefix ui
 npm run build --prefix ui
 uv run --locked python -B -m unittest discover -s tests/python
-cargo test --locked --manifest-path core/Cargo.toml
+cargo test --locked -p autosar-config-core
 ~~~
 
 These commands run the underlying tools directly and preserve their diagnostics and exit statuses on failure. Run `uv sync --locked` before using the Python tooling. Incremental formatting checks use `autosar_tooling quality --base <baseline-commit>`; without an explicit baseline, local checks inspect pending changes relative to HEAD.
@@ -113,7 +113,7 @@ On a native host with the platform dependencies installed, run:
 npm run tauri --prefix ui -- build
 ```
 
-Artifacts are written under `src-tauri/target/release/bundle/`. Windows is configured for MSI, Linux for deb/AppImage, and macOS for app/dmg; native macOS verification is not complete. Signing, notarization, and public release have not been verified.
+Artifacts are written under `target/release/bundle/`. Windows is configured for MSI, Linux for deb/AppImage, and macOS for app/dmg; native macOS verification is not complete. Signing, notarization, and public release have not been verified.
 
 The installed application does not require Rust, Node, npm, or uv. Windows requires WebView2; Linux requires WebKitGTK 4.1, Ayatana AppIndicator, and libxml2. Packages do not include official specification archives or compilers. ECU builds and host verification require the corresponding toolchain separately.
 

@@ -15,8 +15,8 @@ class VersionTests(unittest.TestCase):
         for relative in ("ui/package.json", "src-tauri/tauri.conf.json"):
             versions.append(json.loads((ROOT / relative).read_text(encoding="utf-8"))["version"])
         for relative, name in (
-            ('core/Cargo.lock', 'autosar-config-core'),
-            ('src-tauri/Cargo.lock', 'autosar-config-desktop'),
+            ('Cargo.lock', 'autosar-config-core'),
+            ('Cargo.lock', 'autosar-config-desktop'),
             ('uv.lock', 'autosar-tooling'),
         ):
             lock = tomllib.loads((ROOT / relative).read_text(encoding='utf-8'))

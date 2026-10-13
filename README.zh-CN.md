@@ -94,7 +94,7 @@ npm run dev --prefix ui
 npm run test --prefix ui
 npm run build --prefix ui
 uv run --locked python -B -m unittest discover -s tests/python
-cargo test --locked --manifest-path core/Cargo.toml
+cargo test --locked -p autosar-config-core
 ~~~
 
 这些命令直接运行对应工具，失败会保留其诊断与退出状态。Python 工具先执行 `uv sync --locked`。增量格式检查使用 `autosar_tooling quality --base <基准提交>`，本地未指定基准时检查相对 HEAD 的待提交改动。
@@ -109,7 +109,7 @@ cargo test --locked --manifest-path core/Cargo.toml
 npm run tauri --prefix ui -- build
 ```
 
-产物位于 `src-tauri/target/release/bundle/`。Windows 配置 MSI，Linux 配置 deb／AppImage；macOS 配置 app／dmg，但尚未完成原生验证。签名、公证与公开发行尚未验证。
+产物位于 `target/release/bundle/`。Windows 配置 MSI，Linux 配置 deb／AppImage；macOS 配置 app／dmg，但尚未完成原生验证。签名、公证与公开发行尚未验证。
 
 安装后的应用不需要 Rust、Node、npm 或 uv。Windows 需要 WebView2，Linux 需要 WebKitGTK 4.1、Ayatana AppIndicator 和 libxml2。安装包不包含官方规范档案或编译器；ECU 构建与主机验证另需对应工具链。
 

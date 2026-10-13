@@ -35,5 +35,5 @@ jobs:
         shell: bash
         run: echo "AUTOSAR_C_ANALYSIS_SAMPLES=$RUNNER_TEMP/c-analysis-samples-${{ matrix.python }}" >> "$GITHUB_ENV"
       - name: Generate delivery samples
-        run: cargo test --locked --manifest-path core/Cargo.toml --test it -- 'c_analysis::'
+        run: cargo test --locked -p autosar-config-core --test it -- 'c_analysis::'
       - run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_offline_delivery.py
