@@ -380,6 +380,23 @@ public static class Chooser {
         }
     return false;
   }
+  // Failure evidence: the process's top-level windows and every chooser control.
+  public static string Describe(uint process) {
+    var lines = new List<string>();
+    EnumWindows((window, data) => {
+      uint owner; GetWindowThreadProcessId(window, out owner);
+      if (owner != process) return true;
+      string name = ClassOf(window);
+      lines.Add(name + (IsWindowVisible(window) ? " visible" : " hidden"));
+      if (name == "#32770")
+        EnumChildWindows(window, (child, ignored) => {
+          lines.Add("  " + ClassOf(child) + ":" + GetDlgCtrlID(child) + (IsWindowVisible(child) ? "" : " hidden") + (IsWindowEnabled(child) ? "" : " disabled"));
+          return true;
+        }, IntPtr.Zero);
+      return true;
+    }, IntPtr.Zero);
+    return string.Join("\\n", lines);
+  }
 }
 '@
 # File pickers name their field 1148; the folder picker uses 1152.
@@ -392,7 +409,9 @@ while ((Get-Date) -lt $deadline) {
   $dialog = [IntPtr]::Zero
   Start-Sleep -Milliseconds 100
 }
-if ($dialog -eq [IntPtr]::Zero) { throw 'No native chooser with a name field belongs to the application under test' }
+if ($dialog -eq [IntPtr]::Zero) {
+  throw "No native chooser with a name field belongs to the application under test:\n$([Chooser]::Describe($ProcessId))"
+}
 $deadline = (Get-Date).AddSeconds(10)
 while ((Get-Date) -lt $deadline) {
   if (-not [Chooser]::IsWindow($dialog)) { exit 0 }
