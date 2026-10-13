@@ -74,7 +74,7 @@ export const shellResources: { 'zh-CN': Record<string, string>; en: Record<strin
     'shell.integration.actualRoles': '实际角色',
     'shell.integration.sha': '原字节 SHA-256',
     'shell.integration.parameters': '受支持参数',
-    'shell.integration.multiReadOnly':
+    'shell.integration.compositionReadOnly':
       '组合中的组件、连接和调度请在工程树与属性检查器中编辑，并通过批次预览应用；此处展示生成检查结果。',
     'shell.integration.parametersUnavailable':
       '当前计划没有可在此修改的应用周期；请在工程树与属性检查器中编辑。',
@@ -341,7 +341,7 @@ export const shellResources: { 'zh-CN': Record<string, string>; en: Record<strin
     'shell.integration.actualRoles': 'Actual roles',
     'shell.integration.sha': 'Original-byte SHA-256',
     'shell.integration.parameters': 'Supported parameters',
-    'shell.integration.multiReadOnly':
+    'shell.integration.compositionReadOnly':
       'Edit the components, connections and schedule of the composition in the project tree and inspector, and preview them as a batch. This view shows generation inspection results.',
     'shell.integration.parametersUnavailable':
       'The current plan has no application period that can be changed here; edit it in the project tree and inspector.',

@@ -1050,7 +1050,7 @@ fn template_quick_edit_changes_can_ids_and_application_period_on_the_mainline() 
     let description = before.description.unwrap();
     assert_eq!(
         description.profile,
-        autosar_config_core::integration::MULTI_PROFILE
+        autosar_config_core::integration::PROFILE
     );
     let can_ids = description
         .signals
@@ -1069,10 +1069,7 @@ fn template_quick_edit_changes_can_ids_and_application_period_on_the_mainline() 
         })
         .unwrap_or_else(|issues| panic!("{issues:?}"));
     let after = report.description.unwrap();
-    assert_eq!(
-        after.profile,
-        autosar_config_core::integration::MULTI_PROFILE
-    );
+    assert_eq!(after.profile, autosar_config_core::integration::PROFILE);
     let mut ids: Vec<_> = after.signals.iter().map(|signal| signal.can_id).collect();
     ids.sort();
     assert_eq!(ids, [1104, 1105]);
@@ -1084,7 +1081,7 @@ fn template_quick_edit_changes_can_ids_and_application_period_on_the_mainline() 
         .collect();
     assert!(!application.is_empty());
     assert!(application.iter().all(|entity| entity.period_ms == 20));
-    for component in &after.multi.as_ref().unwrap().components {
+    for component in &after.composition.as_ref().unwrap().components {
         for runnable in &component.runnables {
             assert!(runnable.period_ms.is_none_or(|period| period == 20));
         }

@@ -28,12 +28,12 @@ pub(super) struct RuntimeCatalog {
     entries: BTreeMap<String, Entry>,
 }
 
-/// The multi producer selects its actual R24-11 interfaces independently of
+/// The composition producer selects its actual R24-11 interfaces independently of
 /// the historical host ABI. Generated instance wrappers retain their real
 /// declaration/definition owners; immutable BSW bytes come from AssetInventory.
-pub(super) fn multi_catalog(
-    com: &super::multi_com::ComRuntimeContract,
-    mode: &super::multi_mode::ModeRuntimeContract,
+pub(super) fn bsw_catalog(
+    com: &super::com::ComRuntimeContract,
+    mode: &super::mode::ModeRuntimeContract,
 ) -> RuntimeCatalog {
     let mut entries = BTreeMap::new();
     let mut add = |symbol: &str,
@@ -258,7 +258,7 @@ pub(super) fn selected_behavior(symbol: &str) -> (bool, bool) {
     )
 }
 
-pub(super) fn multi_source_identities() -> BTreeMap<String, String> {
+pub(super) fn runtime_source_identities() -> BTreeMap<String, String> {
     let mut identities: BTreeMap<String, String> = crate::resources::AssetInventory::embedded()
         .entries()
         .iter()
@@ -267,12 +267,12 @@ pub(super) fn multi_source_identities() -> BTreeMap<String, String> {
         .collect();
     for (path, bytes) in [
         (
-            "core/src/integration/multi_ecu.rs",
-            include_bytes!("multi_ecu.rs").as_slice(),
+            "core/src/integration/ecu_config.rs",
+            include_bytes!("ecu_config.rs").as_slice(),
         ),
         (
-            "core/src/integration/multi_rte.rs",
-            include_bytes!("multi_rte.rs").as_slice(),
+            "core/src/integration/rte.rs",
+            include_bytes!("rte.rs").as_slice(),
         ),
         (
             "core/src/integration/artifacts.rs",
@@ -287,8 +287,8 @@ pub(super) fn multi_source_identities() -> BTreeMap<String, String> {
             include_bytes!("os_service.rs").as_slice(),
         ),
         (
-            "core/src/integration/multi.rs",
-            include_bytes!("multi.rs").as_slice(),
+            "core/src/integration/composition.rs",
+            include_bytes!("composition.rs").as_slice(),
         ),
         (
             "core/src/integration/contracts.rs",

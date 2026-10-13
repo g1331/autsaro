@@ -119,10 +119,10 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
               </tbody>
             </table>
           </div>
-          {plan.multi && (
+          {plan.composition && (
             <div className="inspector-block">
-              <p>{t('shell.integration.multiReadOnly')}</p>
-              {plan.multi.components.map((item) => (
+              <p>{t('shell.integration.compositionReadOnly')}</p>
+              {plan.composition.components.map((item) => (
                 <p className="mono path-text" key={item.instance}>
                   {item.component} · {item.instance}
                 </p>

@@ -116,7 +116,7 @@ fn application_slots(
     files: &BTreeMap<String, &[u8]>,
     metadata: &HandoffMetadata,
 ) -> Result<Vec<super::ApplicationSlotDescriptor>, crate::LocalizedText> {
-    if metadata.profile_id != crate::integration::MULTI_PROFILE {
+    if metadata.profile_id != crate::integration::PROFILE {
         return Ok(Vec::new());
     }
     let manifest: crate::arxml::ProjectManifest = serde_json::from_slice(
@@ -287,7 +287,7 @@ pub(crate) fn validate_metadata(metadata: &HandoffMetadata) -> Result<(), crate:
     }
     if metadata.format != FORMAT
         || metadata.producer_version != env!("CARGO_PKG_VERSION")
-        || metadata.profile_id != crate::integration::MULTI_PROFILE
+        || metadata.profile_id != crate::integration::PROFILE
         || metadata.project_path != PROJECT_PATH
         || metadata.ownership_path != OWNERSHIP_PATH
         || metadata.resource_identities.rule_set_identity != crate::rules::rule_set_identity()?

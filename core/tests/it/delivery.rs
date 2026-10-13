@@ -827,7 +827,7 @@ fn retired_project_identities_are_refused_without_loading_or_rewriting() {
     let current_value: serde_json::Value = serde_json::from_slice(&current).unwrap();
     assert_eq!(
         current_value["profileHint"],
-        autosar_config_core::integration::MULTI_PROFILE
+        autosar_config_core::integration::PROFILE
     );
     let slot = current_value["applicationInputs"][0]["producerSlot"]
         .as_str()

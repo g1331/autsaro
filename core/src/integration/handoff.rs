@@ -30,7 +30,7 @@ pub(super) fn reference_shape(plan: &ValidatedIntegrationPlan) -> Option<Referen
         return None;
     };
     let component = d
-        .multi
+        .composition
         .as_ref()?
         .components
         .iter()

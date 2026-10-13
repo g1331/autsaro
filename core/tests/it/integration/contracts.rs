@@ -8,11 +8,11 @@ fn source_derived_multi_contract_is_deterministic_and_keeps_local_identity() {
     let sources = inputs();
     let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
     let description = plan.description();
-    let multi = description.multi.as_ref().unwrap();
+    let composition = description.composition.as_ref().unwrap();
     assert_eq!(description.profile, "singlecore-ecu-v1");
-    assert_eq!(multi.components.len(), 4);
-    assert_eq!(multi.connections.len(), 5);
-    assert_eq!(multi.network_endpoints.len(), 2);
+    assert_eq!(composition.components.len(), 4);
+    assert_eq!(composition.connections.len(), 5);
+    assert_eq!(composition.network_endpoints.len(), 2);
     assert_eq!(
         description
             .schedule
@@ -23,19 +23,19 @@ fn source_derived_multi_contract_is_deterministic_and_keeps_local_identity() {
             .collect::<Vec<_>>(),
         ["Ingress_Periodic", "Process_Periodic", "Observe_Periodic"]
     );
-    for component in &multi.components {
+    for component in &composition.components {
         assert_ne!(component.component, component.instance);
         assert!(component.rte_instance.starts_with("/Configuration/Rte/"));
         if component.component.ends_with("Process") || component.component.ends_with("Observe") {
             assert!(
-                !multi
+                !composition
                     .network_endpoints
                     .iter()
                     .any(|endpoint| endpoint.endpoint.instance == component.instance)
             );
         }
     }
-    let read_values = multi
+    let read_values = composition
         .components
         .iter()
         .flat_map(|component| &component.data_ports)
@@ -266,7 +266,7 @@ fn service_argument_names_cannot_shadow_selected_runtime_and_component_producers
     let baseline = build(&inputs()).unwrap();
     let bridge = baseline
         .description()
-        .multi
+        .composition
         .as_ref()
         .unwrap()
         .components
@@ -430,15 +430,15 @@ fn renamed_component_and_port_contracts_follow_full_source_identity() {
         "<SHORT-NAME>InputValue</SHORT-NAME>",
     );
     let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
-    let multi = plan.description().multi.as_ref().unwrap();
-    let gateway = multi
+    let composition = plan.description().composition.as_ref().unwrap();
+    let gateway = composition
         .components
         .iter()
         .find(|component| component.component == "/Application/Gateway")
         .unwrap();
     assert_eq!(gateway.instance, "/Application/Pipeline/GatewayInstance");
     assert_eq!(gateway.header, "include/Rte_Gateway.h");
-    let process = multi
+    let process = composition
         .components
         .iter()
         .find(|component| component.component == "/Application/Process")
@@ -453,7 +453,7 @@ fn renamed_component_and_port_contracts_follow_full_source_identity() {
         "Rte_Read_InputValue_Value"
     );
     assert!(
-        multi
+        composition
             .connections
             .iter()
             .any(|connection| connection.requester.port == "/Application/Process/InputValue")
@@ -1231,7 +1231,7 @@ fn multi_selected_catalog_binds_standard_signatures_and_actual_periodic_producer
     assert!(
         description
             .runtime_sources
-            .contains_key("core/src/integration/multi_ecu.rs")
+            .contains_key("core/src/integration/ecu_config.rs")
     );
     for name in [
         "Com_MainFunctionRx_Rx",

@@ -301,7 +301,7 @@ fn template_files(
         ));
     }
     let mut files = Vec::new();
-    let profile: String = crate::integration::MULTI_PROFILE.into();
+    let profile: String = crate::integration::PROFILE.into();
     // Product-original single application component project on the
     // generation mainline; not official archive payloads.
     let originals = [

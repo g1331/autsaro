@@ -68,8 +68,8 @@ fn fail(graph: &Graph, index: usize, code: &str) -> Vec<PlanDiagnostic> {
         index,
         DiagnosticCategory::Input,
         code,
-        crate::product_message!("backend.integration.multi.contract_invalid", "code" => code),
-        crate::product_message!("backend.integration.multi.repair_contract"),
+        crate::product_message!("backend.integration.composition.contract_invalid", "code" => code),
+        crate::product_message!("backend.integration.composition.repair_contract"),
     )]
 }
 fn one(graph: &Graph, kind: &str) -> Result<usize, Vec<PlanDiagnostic>> {
@@ -114,10 +114,10 @@ fn period(
 
 fn partition(
     graph: &Graph,
-    multi: &super::multi::MultiComponentContract,
+    composition: &super::composition::CompositionContract,
 ) -> Result<PartitionRuntimeContract, Vec<PlanDiagnostic>> {
     let index = one(graph, "EcucPartition")?;
-    if super::multi::reserved_memory_scope(graph.text(index, "SHORT-NAME").unwrap_or("")) {
+    if super::composition::reserved_memory_scope(graph.text(index, "SHORT-NAME").unwrap_or("")) {
         return Err(fail(graph, index, "CONTRACT_NAME_COLLISION"));
     }
 
@@ -135,10 +135,10 @@ fn partition(
         .iter()
         .copied()
         .filter(|root| {
-            graph.text(*root, "SOFTWARE-COMPOSITION-TREF") == Some(multi.composition.as_str())
+            graph.text(*root, "SOFTWARE-COMPOSITION-TREF") == Some(composition.composition.as_str())
                 && graph
                     .objects
-                    .get(&multi.system)
+                    .get(&composition.system)
                     .is_some_and(|system| graph.within(*root, *system))
         })
         .collect::<Vec<_>>();
@@ -168,7 +168,7 @@ fn partition(
         }
     }
     instances.sort();
-    let mut expected = multi
+    let mut expected = composition
         .components
         .iter()
         .map(|component| component.instance.clone())
@@ -200,9 +200,9 @@ fn partition(
 pub(super) fn inspect(
     graph: &Graph,
     schedule: &ScheduleContract,
-    multi: &super::multi::MultiComponentContract,
+    composition: &super::composition::CompositionContract,
 ) -> Result<CommunicationRuntimeContract, Vec<PlanDiagnostic>> {
-    let partition = partition(graph, multi)?;
+    let partition = partition(graph, composition)?;
     let collection = one(graph, "EcucPduCollection")?;
     let pdu_id_type = integer_type(graph, collection, "PduIdTypeEnum")?;
     let pdu_length_type = integer_type(graph, collection, "PduLengthTypeEnum")?;

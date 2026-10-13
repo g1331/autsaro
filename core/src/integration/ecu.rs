@@ -52,23 +52,29 @@ impl ValidatedIntegrationPlan {
     pub fn application_slot_descriptors(
         &self,
     ) -> Result<Vec<generator::delivery::ApplicationSlotDescriptor>, Vec<PlanDiagnostic>> {
-        let multi = self.description().multi.as_ref().ok_or_else(|| {
-            reject(crate::product_message!("backend.integration.multi.consumer_unsupported").into())
+        let composition = self.description().composition.as_ref().ok_or_else(|| {
+            reject(
+                crate::product_message!("backend.integration.composition.consumer_unsupported")
+                    .into(),
+            )
         })?;
-        Ok(application_slots(multi, &self.description().symbols))
+        Ok(application_slots(composition, &self.description().symbols))
     }
 
     /// Trusted create-only seed; never merges with or overwrites a user source.
     pub fn application_seed_files(&self) -> Result<Vec<(String, Vec<u8>)>, Vec<PlanDiagnostic>> {
-        let multi = self.description().multi.as_ref().ok_or_else(|| {
-            reject(crate::product_message!("backend.integration.multi.consumer_unsupported").into())
+        let composition = self.description().composition.as_ref().ok_or_else(|| {
+            reject(
+                crate::product_message!("backend.integration.composition.consumer_unsupported")
+                    .into(),
+            )
         })?;
         // The reference shape gets the echo application the independent
         // verifier checks; any other shape gets neutral entry points.
         let reference = super::handoff::reference_shape(self);
         let mut files = Vec::new();
         for slot in self.application_slot_descriptors()? {
-            let component = multi
+            let component = composition
                 .components
                 .iter()
                 .find(|component| component.component == slot.component_path)
@@ -196,10 +202,10 @@ impl ValidatedIntegrationPlan {
     ) -> Result<BTreeMap<String, Cow<'a, [u8]>>, Vec<PlanDiagnostic>> {
         if application.is_none() {
             return Err(reject(crate::product_message!(
-                "backend.integration.multi.consumer_unsupported"
+                "backend.integration.composition.consumer_unsupported"
             )));
         }
-        super::multi_ecu::files(self, target)
+        super::ecu_config::files(self, target)
     }
 }
 
@@ -220,11 +226,11 @@ pub(crate) fn source_assets(
 }
 
 pub(super) fn application_slots(
-    multi: &super::multi::MultiComponentContract,
+    composition: &super::composition::CompositionContract,
     symbols: &[super::catalog::SymbolContract],
 ) -> Vec<generator::delivery::ApplicationSlotDescriptor> {
     let mut slots = Vec::new();
-    for component in &multi.components {
+    for component in &composition.components {
         let source = format!(
             "application/{}.c",
             c_name(component.component.rsplit('/').next().unwrap())
@@ -236,7 +242,7 @@ pub(super) fn application_slots(
             .collect();
         if !entries.is_empty() {
             slots.push(generator::delivery::ApplicationSlotDescriptor {
-                producer_slot: format!("{}:{}", super::MULTI_PROFILE, component.instance),
+                producer_slot: format!("{}:{}", super::PROFILE, component.instance),
                 component_path: component.component.clone(),
                 source_paths: vec![source],
                 generated_headers: vec![
@@ -268,7 +274,7 @@ pub(crate) fn workspace_application_slots(
 ) -> Result<Option<Vec<generator::delivery::ApplicationSlotDescriptor>>, Vec<PlanDiagnostic>> {
     let catalog = crate::definitions::DefinitionCatalog::builtin().map_err(reject)?;
     let graph = super::graph::Graph::from_catalog_target_scope(sources, &catalog)?;
-    if !super::multi::selected(&graph) {
+    if !super::composition::selected(&graph) {
         return Ok(None);
     }
     // Only the structural application/instance consumers participate here.
@@ -312,10 +318,10 @@ pub(crate) fn workspace_application_slots(
     if !references.is_empty() {
         return Err(references);
     }
-    let multi = super::multi::inspect_ownership(&graph)?;
+    let composition = super::composition::inspect_ownership(&graph)?;
     Ok(Some(application_slots(
-        &multi,
-        &super::multi::symbols(&multi),
+        &composition,
+        &super::composition::symbols(&composition),
     )))
 }
 

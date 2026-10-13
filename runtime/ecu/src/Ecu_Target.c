@@ -180,7 +180,7 @@ static void stage(unsigned number) {
 #include "Os_MemMap.h"
 void StartupHook(void) {
     initialization_thread = Os_HostThreadIdentity();
-    if (Ecu_MultiBootstrap() != E_OK) {
+    if (Ecu_StackBootstrap() != E_OK) {
         fail();
         return;
     }
@@ -193,7 +193,7 @@ void StartupHook(void) {
 void ShutdownHook(StatusType Error) {
     Os_Atomic32 state =
         (Error == E_OK) ? (Os_Atomic32)ECU_TARGET_CLOSED : (Os_Atomic32)ECU_TARGET_FAILED;
-    Ecu_MultiRetire();
+    Ecu_StackRetire();
     (void)Os_HostAtomicExchange(&lifecycle, state);
 #ifdef ECU_TARGET_TESTS
     Ecu_TargetTestShutdown(Error);
@@ -264,7 +264,7 @@ static StatusType batch_time(uint64_t at, Os_TickCompletion *completed) {
     return (status == E_OS_ID) ? E_OS_VALUE : ((status == E_OS_NOFUNC) ? E_OS_STATE : status);
 }
 static int frame_shape(const Ecu_BatchFrame *frame) {
-    return Ecu_MultiFrameShape(frame->id, frame->dlc);
+    return Ecu_StackFrameShape(frame->id, frame->dlc);
 }
 StatusType Ecu_TargetValidateFrames(const Ecu_BatchFrame *frames, uint16_t count) {
     uint16_t index;
@@ -575,7 +575,7 @@ void Ecu_TargetTask(void) {
 #ifdef ECU_TARGET_TESTS
             stage(9u);
 #endif
-            if (Ecu_MultiRunCycle(events) != E_OK) {
+            if (Ecu_StackRunCycle(events) != E_OK) {
                 fail();
             }
 #ifdef ECU_TARGET_TESTS

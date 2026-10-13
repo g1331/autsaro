@@ -146,7 +146,7 @@ fn ordinary_application_client_sharing_did_server_is_not_the_dcm_bridge() {
     );
     assert_eq!(
         plan.description()
-            .multi
+            .composition
             .as_ref()
             .unwrap()
             .connections
@@ -236,7 +236,7 @@ fn required_dcm_channel_reference_is_strict_for_every_builtin_project() {
     let plan = build(&template).unwrap();
     assert_eq!(
         plan.description().profile,
-        autosar_config_core::integration::MULTI_PROFILE
+        autosar_config_core::integration::PROFILE
     );
     assert!(plan.description().mode_runtime.is_some());
     assert!(plan.component_contract_files().is_ok());
@@ -275,9 +275,9 @@ fn required_dcm_channel_reference_is_strict_for_every_builtin_project() {
             .any(|rule| rule.rule_id == "native.definition.legacy-dcm-mode-dependency")
     );
     assert!(build(&historical).is_err());
-    let mut multi = inputs();
+    let mut composition = inputs();
     xml_edit(
-        &mut multi,
+        &mut composition,
         "ecuc.arxml",
         |node| {
             node.tag_name().name() == "ECUC-REFERENCE-VALUE"
@@ -291,12 +291,12 @@ fn required_dcm_channel_reference_is_strict_for_every_builtin_project() {
         |_| String::new(),
     );
     assert!(
-        normal_validation(&multi)
+        normal_validation(&composition)
             .diagnostics
             .iter()
             .any(|issue| issue.code == "MULTIPLICITY")
     );
-    assert!(build(&multi).is_err());
+    assert!(build(&composition).is_err());
     let source = historical
         .iter()
         .find(|source| source.logical_path() == "ecuc.arxml")
@@ -446,7 +446,7 @@ fn dcm_service_mode_source_requires_the_fixed_standard_contract() {
     let plan = build(&inputs()).unwrap();
     let service = plan
         .description()
-        .multi
+        .composition
         .as_ref()
         .unwrap()
         .components
@@ -576,7 +576,7 @@ fn authentication_mode_source_follows_actual_connection_and_rejects_invalid_stan
     let plan = build(&source).unwrap();
     assert!(
         plan.description()
-            .multi
+            .composition
             .as_ref()
             .unwrap()
             .dcm_modes

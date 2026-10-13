@@ -559,7 +559,7 @@ mod tests {
         let manifest = ProjectManifest {
             format_version: 1,
             declared_release: "R24-11".into(),
-            profile_hint: crate::integration::MULTI_PROFILE.into(),
+            profile_hint: crate::integration::PROFILE.into(),
             inputs,
             application_inputs: Vec::new(),
             accepted_extension_definitions: Vec::new(),

@@ -344,11 +344,12 @@ impl NativePreparation {
         target: BuildTarget,
         handoff: bool,
     ) -> Result<Self, crate::LocalizedText> {
-        let profile = crate::integration::MULTI_PROFILE;
+        let profile = crate::integration::PROFILE;
         if inputs.application.len() != slots.len() {
-            return Err(
-                crate::product_message!("backend.integration.multi.consumer_unsupported").into(),
-            );
+            return Err(crate::product_message!(
+                "backend.integration.composition.consumer_unsupported"
+            )
+            .into());
         }
         inputs.manifest.profile_hint = profile.into();
         inputs.refresh_snapshot_identity()?;
@@ -496,7 +497,7 @@ pub struct ApplicationSource {
     pub path: std::path::PathBuf,
 }
 
-/// Prepare a complete multi-component ECU with every caller application frozen
+/// Prepare a complete ECU with every caller application frozen
 /// into the normal immutable source project. No reference algorithms are supplied.
 pub fn prepare_ecu_project_with_applications(
     plan: &ValidatedIntegrationPlan,
@@ -517,7 +518,7 @@ pub fn prepare_ecu_project_with_applications(
     for source in sources {
         let producer = format!(
             "{}:{}",
-            crate::integration::MULTI_PROFILE,
+            crate::integration::PROFILE,
             source.component_instance
         );
         let slot = slots

@@ -682,7 +682,7 @@ pub(crate) fn append_native_readme(
     let mut text = std::str::from_utf8(&readme.bytes)
         .map_err(|error| crate::LocalizedText::from(error.to_string()))?
         .to_owned();
-    let ownership = if metadata.profile_id == crate::integration::MULTI_PROFILE {
+    let ownership = if metadata.profile_id == crate::integration::PROFILE {
         let mut description = String::from(
             "The live project remains separate. Explicit application initialization creates only previously absent sources for every recorded component. Subsequent generation snapshots each current live source into its immutable compiled C file and never writes the live source. The complete producer identity includes the component instance path; the component type, generated headers and runnable entries below come from the same validated plan.\n\n| Component type | Instance producer | Live source | Sealed C | Generated headers | Runnable entries |\n| --- | --- | --- | --- | --- | --- |\n",
         );
@@ -742,7 +742,7 @@ mod snapshot_identity_tests {
             manifest: ProjectManifest {
                 format_version: 1,
                 declared_release: "R24-11".into(),
-                profile_hint: crate::integration::MULTI_PROFILE.into(),
+                profile_hint: crate::integration::PROFILE.into(),
                 inputs: Vec::new(),
                 application_inputs: Vec::new(),
                 accepted_extension_definitions: Vec::new(),

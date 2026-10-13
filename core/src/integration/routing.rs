@@ -1,7 +1,7 @@
-use super::communication::SignalChannel;
 use super::diagnostic::DiagnosticContract;
 use super::graph::Graph;
 use super::schedule::{definition_is, value, values};
+use super::signals::SignalChannel;
 use super::{DiagnosticCategory, PlanDiagnostic};
 use serde::Serialize;
 use std::collections::BTreeSet;

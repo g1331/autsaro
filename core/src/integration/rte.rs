@@ -1,5 +1,5 @@
-//! Actual bounded RTE producers from the immutable multi-component contract.
-use super::multi::{Endpoint, data_symbol};
+//! Actual bounded RTE producers from the immutable component composition contract.
+use super::composition::{Endpoint, data_symbol};
 use super::{PlanDescription, ValidatedIntegrationPlan};
 use std::collections::BTreeMap;
 use std::fmt::Write;
@@ -47,11 +47,11 @@ pub(super) fn memory_map(scopes: &[(String, &str)]) -> String {
 
 pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>> {
     let description = plan.description();
-    let multi = description.multi.as_ref().unwrap();
+    let composition = description.composition.as_ref().unwrap();
     let mut source = String::from(
         "/** @file Generated RTE for the checked single-owner component graph. */\n#define RTE_CORE\n#include \"Rte_Main.h\"\n#include \"Rte_Com.h\"\n#include \"Com.h\"\n#include \"Ecu_Target.h\"\n",
     );
-    for component in &multi.components {
+    for component in &composition.components {
         writeln!(
             source,
             "#include \"{}\"",
@@ -67,7 +67,7 @@ pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>
         ("Rte".to_string(), "CODE"),
         ("Rte".to_string(), "CONFIG_DATA_PREBUILD_UNSPECIFIED"),
     ];
-    if !multi
+    if !composition
         .components
         .iter()
         .any(|component| component.diagnostic_session_port.is_some())
@@ -78,7 +78,7 @@ pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>
         ]);
     }
     section(&mut source, "Rte", "VAR_CLEARED_UNSPECIFIED", false);
-    for component in &multi.components {
+    for component in &composition.components {
         let scope = component.component.rsplit('/').next().unwrap();
         if component.data_ports.iter().any(|port| port.read)
             || component.diagnostic_session_port.is_some()
@@ -94,7 +94,7 @@ pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>
                 member: port.element.clone(),
             };
             let name = format!("rte_value_{}", states.len());
-            let network = multi
+            let network = composition
                 .network_endpoints
                 .iter()
                 .find(|network| network.endpoint == endpoint);
@@ -124,7 +124,7 @@ pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>
     source.push_str(&initialization);
     source.push_str("    rte_allocated = TRUE;\n    rte_started = TRUE;\n    return E_OK;\n}\nRTE_Rte_CODE Std_ReturnType Rte_Stop(void) {\n    if (Ecu_TargetCheckLifecycleContext(FALSE) != E_OK) { return RTE_E_LIMIT; }\n    rte_started = FALSE;\n    return E_OK;\n}\n");
     section(&mut source, "Rte", "CODE", false);
-    for component in &multi.components {
+    for component in &composition.components {
         let scope = component.component.rsplit('/').next().unwrap();
         section(&mut source, scope, "CODE", true);
         for port in &component.data_ports {
@@ -133,7 +133,7 @@ pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>
                 port: port.path.clone(),
                 member: port.element.clone(),
             };
-            let network = multi
+            let network = composition
                 .network_endpoints
                 .iter()
                 .find(|network| network.endpoint == endpoint);
@@ -153,7 +153,7 @@ pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>
                     let id = signal(description, &network.transport.com_signal);
                     writeln!(source, "    const uint8 status = Com_SendSignal({id}u, &data);\n    return (status == COM_SERVICE_NOT_AVAILABLE) ? RTE_E_COM_STOPPED : status;").unwrap();
                 } else {
-                    for connection in multi
+                    for connection in composition
                         .connections
                         .iter()
                         .filter(|connection| !connection.service && connection.provider == endpoint)
@@ -170,7 +170,7 @@ pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>
             .iter()
             .filter(|operation| operation.read)
         {
-            let connection = multi
+            let connection = composition
                 .connections
                 .iter()
                 .find(|connection| {
@@ -180,7 +180,7 @@ pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>
                         && connection.requester.member == operation.operation
                 })
                 .unwrap();
-            let provider = multi
+            let provider = composition
                 .components
                 .iter()
                 .find(|component| component.instance == connection.provider.instance)
@@ -208,7 +208,7 @@ pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>
             writeln!(source, "RTE_{scope}_CODE Std_ReturnType {}({}) {{\n    if (rte_started == FALSE) {{ return RTE_E_COM_STOPPED; }}\n    if (Ecu_TargetIsOwner() == 0) {{ return E_NOT_OK; }}", operation.implementation_symbol, if parameters.is_empty() { "void" } else { &parameters }).unwrap();
             for argument in &operation.arguments {
                 if argument.native_type.contains('*')
-                    || multi
+                    || composition
                         .array_types
                         .values()
                         .any(|name| name == &argument.native_type)
@@ -283,7 +283,7 @@ pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>
     for (callback, timeout) in [("Rte_COMCbk", false), ("Rte_COMCbkRxTOut", true)] {
         writeln!(source, "RTE_{partition}_CALLOUT_CODE void {callback}(CbkHandleIdType handle) {{\n    if (rte_started == FALSE) {{ return; }}\n    if (Ecu_TargetIsOwner() == 0) {{ return; }}").unwrap();
         for reception in &com.receptions {
-            for network in multi.network_endpoints.iter().filter(|network| {
+            for network in composition.network_endpoints.iter().filter(|network| {
                 network.transport.receive && network.transport.com_signal == reception.signal
             }) {
                 let name = &states[&network.endpoint];

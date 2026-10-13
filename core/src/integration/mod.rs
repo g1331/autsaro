@@ -1,71 +1,75 @@
-//! The validated, immutable source of truth for the Epic 4 target.
+//! The validated, immutable source of truth for ECU integration planning.
 //!
 //! Construction is all-or-nothing. Input bytes and identities are retained;
 //! component contracts and ECU integration consume the same checked plan.
 
 mod arti;
 mod artifacts;
+mod can_runtime;
 mod catalog;
-mod communication;
+mod com;
 mod component;
+mod composition;
 mod configuration;
 mod contracts;
 mod diagnostic;
 pub(crate) mod ecu;
+mod ecu_config;
 pub(crate) mod editor;
 mod graph;
 pub(crate) mod handoff;
-mod multi;
-mod multi_bsw;
-mod multi_com;
-mod multi_ecu;
-mod multi_mode;
-mod multi_rte;
-pub use multi_bsw::{CanRuntimeContract, CommunicationIntegerType, CommunicationRuntimeContract};
-pub use multi_com::{ComMainFunction, ComReception, ComRuntimeContract, ComRxGroup};
-pub use multi_mode::{ModeRule, ModeRuntimeContract, ModeUser};
+mod mode;
 mod native_configuration;
-pub use multi::{
-    Component as MultiComponent, Connection as ComponentConnection, Endpoint as ComponentEndpoint,
-    MultiComponentContract, Operation as ComponentOperation,
-};
-pub const MULTI_PROFILE: &str = multi::PROFILE;
 mod os_service;
 mod plan;
 mod routing;
+mod rte;
 mod schedule;
+mod signals;
 
+pub use can_runtime::{CanRuntimeContract, CommunicationIntegerType, CommunicationRuntimeContract};
 pub use catalog::{ContractArgument, SymbolContract};
-pub use communication::SignalChannel;
+pub use com::{ComMainFunction, ComReception, ComRuntimeContract, ComRxGroup};
 pub use component::{ComponentContract, DataPort, ServicePort};
+pub use composition::{
+    CompositionContract, Connection as ComponentConnection, Endpoint as ComponentEndpoint,
+    Operation as ComponentOperation, PROFILE,
+};
 pub use configuration::{ConfigurationRecord, EventAssignment};
 pub use contracts::ComponentContractFiles;
 pub use diagnostic::DiagnosticContract;
 pub use ecu::EcuIntegrationFiles;
 pub use editor::{IntegrationEdit, IntegrationInspection};
 pub use handoff::{build_ecu_project, verify_ecu_project};
+pub use mode::{ModeRule, ModeRuntimeContract, ModeUser};
 pub use plan::{HandleAssignment, PlanDescription, ValidatedIntegrationPlan, build_plan_native};
 pub use routing::PduRoute;
 pub use schedule::{ScheduleContract, ScheduledEntity};
+pub use signals::SignalChannel;
 
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::path::{Component, Path};
 
-pub const PROFILE: &str = "epic4-win64-sr-cs-v1";
+/// The removed single-component chain.
+const SINGLE_COMPONENT_PROFILE: &str = "epic4-win64-sr-cs-v1";
 /// The removed frame/signal host chain.
 pub const HOST_PROFILE: &str = "host-can-v1";
 /// Product profiles whose projects and deliveries are refused on open rather
 /// than reinterpreted: the frame/signal host chain, the historical
 /// single-component chain and the earlier name of the current mainline. ARXML
 /// sources remain importable.
-pub(crate) const RETIRED_PROFILES: [&str; 3] = [HOST_PROFILE, PROFILE, "singlecore-multi-swc-v1"];
+pub(crate) const RETIRED_PROFILES: [&str; 3] = [
+    HOST_PROFILE,
+    SINGLE_COMPONENT_PROFILE,
+    "singlecore-multi-swc-v1",
+];
 
 /// Application slots of a retired profile, recorded in project manifests.
 pub(crate) fn retired_profile_of_slot(slot: &str) -> Option<&'static str> {
     if slot == crate::generator::delivery::APPLICATION_SLOT {
-        return Some(PROFILE);
+        return Some(SINGLE_COMPONENT_PROFILE);
     }
     RETIRED_PROFILES.into_iter().find(|profile| {
         slot.strip_prefix(profile)

@@ -155,7 +155,7 @@ pub(super) fn inspect_events(
     components: &[(&str, &str)],
     periodic_events: &[String],
     server_runnables: &[String],
-    multi: bool,
+    composition: bool,
 ) -> Result<ScheduleContract, Vec<PlanDiagnostic>> {
     let behavior = *graph.objects.get(components[0].1).unwrap();
     let task = container(graph, "OsTask", behavior)?;
@@ -185,7 +185,7 @@ pub(super) fn inspect_events(
     }
     let maximum = value(graph, counter, "OsCounterMaxAllowedValue", false)
         .and_then(|value| value.parse::<u32>().ok())
-        .filter(|value| *value <= 65535 && (multi || *value != 0));
+        .filter(|value| *value <= 65535 && (composition || *value != 0));
     let counter_tick_ms = value(graph, counter, "OsSecondsPerTick", false).and_then(milliseconds);
     let counter_ticks_per_base = value(graph, counter, "OsCounterTicksPerBase", false)
         .and_then(|text| text.parse::<u32>().ok());
@@ -331,13 +331,13 @@ pub(super) fn inspect_events(
         }
         if graph.elements[event].tag == "OPERATION-INVOKED-EVENT" {
             if !application
-                || (!multi && !synchronous.is_empty())
+                || (!composition && !synchronous.is_empty())
                 || !graph
                     .target(event, "START-ON-EVENT-REF")
                     .is_some_and(|runnable| {
                         server_runnables.contains(&graph.elements[runnable].object)
                     })
-                || (multi
+                || (composition
                     && !matches!(
                         value(graph, mapping, "RteEventIsMappedToTask", false),
                         Some("false" | "0")
@@ -360,7 +360,7 @@ pub(super) fn inspect_events(
             synchronous.push(graph.elements[event].object.clone());
             continue;
         }
-        if multi
+        if composition
             && !matches!(
                 value(
                     graph,
@@ -391,7 +391,7 @@ pub(super) fn inspect_events(
                     crate::product_message!("backend.integration.schedule.mapped_period_must_be_positive_whole_millisecond"),
                 )
             })?;
-        if multi && period > maximum.unwrap() {
+        if composition && period > maximum.unwrap() {
             return Err(reject(
                 graph,
                 event,
@@ -440,7 +440,7 @@ pub(super) fn inspect_events(
         let os_event = reference(graph, mapping, &format!("{prefix}UsedOsEventRef"))?;
         let position = value(graph, mapping, &format!("{prefix}PositionInTask"), false)
             .and_then(|value| value.parse::<u32>().ok())
-            .filter(|value| *value <= 65535 && (multi || *value != 0))
+            .filter(|value| *value <= 65535 && (composition || *value != 0))
             .ok_or_else(|| {
                 reject(
                     graph,
@@ -690,7 +690,7 @@ pub(super) fn inspect_events(
     }
     if synchronous.len() != server_runnables.len()
         || entities.iter().filter(|entity| entity.application).count() != periodic_events.len()
-        || (!multi && synchronous.is_empty())
+        || (!composition && synchronous.is_empty())
     {
         return Err(reject(
             graph,
@@ -766,7 +766,7 @@ pub(super) fn inspect_events(
             })
             .unwrap_or_default()
     };
-    let mut expected_order: Vec<String> = if multi {
+    let mut expected_order: Vec<String> = if composition {
         vec![
             configured_symbol("ComMChannel", "ComM_MainFunction"),
             "Can_MainFunction_Wakeup".into(),
@@ -786,7 +786,7 @@ pub(super) fn inspect_events(
             .filter(|entity| entity.application)
             .map(|entity| entity.symbol.clone()),
     );
-    if multi
+    if composition
         && entities
             .iter()
             .filter(|entity| entity.application)
@@ -804,7 +804,7 @@ pub(super) fn inspect_events(
             ),
         ));
     }
-    if multi {
+    if composition {
         expected_order.extend([
             configured_symbol("ComMainFunctionTx", "Com_MainFunctionTx"),
             "Dcm_MainFunction".into(),
@@ -843,11 +843,11 @@ pub(super) fn inspect_events(
         counter_minimum_cycle: counter_minimum_cycle.unwrap(),
         counter_tick_ms: counter_tick_ms.unwrap(),
         entities,
-        synchronous_event: if multi {
+        synchronous_event: if composition {
             String::new()
         } else {
             synchronous.first().cloned().unwrap_or_default()
         },
-        synchronous_events: if multi { synchronous } else { Vec::new() },
+        synchronous_events: if composition { synchronous } else { Vec::new() },
     })
 }

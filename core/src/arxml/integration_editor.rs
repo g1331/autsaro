@@ -144,7 +144,7 @@ fn inspection(
             diagnostics: Vec::new(),
         },
         Err(diagnostics) => IntegrationInspection {
-            profile: crate::integration::MULTI_PROFILE.into(),
+            profile: crate::integration::PROFILE.into(),
             description: None,
             diagnostics,
         },

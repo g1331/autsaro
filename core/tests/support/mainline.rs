@@ -546,7 +546,7 @@ pub(crate) fn single_component_sources() -> Vec<InputSource> {
 }
 
 /// Seals the single-component project with the reference echo application:
-/// the multi fixture's `Ingress` without its removed local `Value` port.
+/// the composition fixture's `Ingress` without its removed local `Value` port.
 /// Returns the project directory and its sealed closure.
 pub(crate) fn single_component_project(
     root: &Path,
