@@ -18,7 +18,7 @@
 
 版本目前为 0.1.0，需同步 core/Cargo.toml、src-tauri/Cargo.toml、ui/package.json、pyproject.toml 和 Tauri 配置，并更新相关锁文件及 CHANGELOG。版本更新必须审阅生成工程的兼容性和输入格式变化。
 
-bundles 工作流由 workflow_dispatch 触发并接受明确的 revision，在 `ubuntu-24.04` 与 `windows-latest` 上用 Tauri CLI 构建，安装包上传为 `bundles-<Linux|Windows>-<提交 SHA>` artifact，不执行公开发布。本地在已准备的平台执行 `npm run tauri --prefix ui -- build`，产物位于 target/release/bundle/。Windows MSI／NSIS、Linux deb／rpm／AppImage 的安装、升级、签名和公开发布仍需分别验证；macOS 原生构建不在支持范围内。
+bundles 工作流由 workflow_dispatch 触发并接受明确的 revision，在 `ubuntu-24.04` 与 `windows-latest` 上用 Tauri CLI 构建，安装包上传为 `bundles-<Linux|Windows>-<提交 SHA>` artifact，不执行公开发布。本地在已准备的平台执行 `npm run tauri --prefix ui -- build`，产物位于 target/release/bundle/。当前产物为 Windows MSI（en-US、zh-CN）和 Linux deb、AppImage；它们的安装、升级、签名和公开发布仍需分别验证；macOS 原生构建不在支持范围内。
 
 ## 许可与分发
 
