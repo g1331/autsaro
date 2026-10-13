@@ -11,7 +11,8 @@ const SUPPORTED_PARAMETERS: &str = "
 CanBusoffProcessing CanControllerActivation CanControllerBaudRate CanControllerId
 CanHwPnSupport CanRxProcessing CanTxProcessing CanWakeupProcessing CanWakeupSupport
 CanHandleType CanHwObjectCount CanIdType CanObjectId CanObjectType
-CanIfCtrlId CanIfBufferSize CanIfHrhSoftwareFilter CanIfRxPduCanId CanIfRxPduCanIdType
+CanIfCtrlId CanIfBufferSize CanIfDispatchUserCtrlBusOffName CanIfDispatchUserCtrlBusOffUL
+CanIfDispatchUserCtrlModeIndicationName CanIfDispatchUserCtrlModeIndicationUL CanIfHrhSoftwareFilter CanIfRxPduCanId CanIfRxPduCanIdType
 CanIfRxPduDataLength CanIfRxPduDataLengthCheck CanIfRxPduId CanIfRxPduReadData
 CanIfRxPduReadNotifyStatus CanIfTxPduCanId CanIfTxPduCanIdType CanIfTxPduId
 CanIfTxPduReadNotifyStatus CanIfTxPduTruncation CanIfTxPduType
@@ -152,6 +153,34 @@ fn physical(graph: &Graph, context: usize, native: bool) -> Result<(), Vec<PlanD
             ),
         ));
     }
+    // No CanSM: both controller notifications go to the host CDD BusSM by name
+    // (SWS_CANIF_00560, SWS_CANIF_00692).
+    let dispatch = one(graph, can_if_controller, "CanIfDispatchCfg")?;
+    for (user, name, function) in [
+        (
+            "CanIfDispatchUserCtrlBusOffUL",
+            "CanIfDispatchUserCtrlBusOffName",
+            "Ecu_HostBusSM_ControllerBusOff",
+        ),
+        (
+            "CanIfDispatchUserCtrlModeIndicationUL",
+            "CanIfDispatchUserCtrlModeIndicationName",
+            "Ecu_HostBusSM_ControllerModeIndication",
+        ),
+    ] {
+        if value(graph, dispatch, user, false) != Some("CDD")
+            || value(graph, dispatch, name, false) != Some(function)
+        {
+            return Err(reject(
+                graph,
+                dispatch,
+                "CANIF_DISPATCH",
+                crate::product_message!(
+                    "backend.integration.configuration.canif_dispatch_host_cdd_required"
+                ),
+            ));
+        }
+    }
     let baudrate = reference(graph, controller, "CanControllerDefaultBaudrate")?;
     if !definition_is(graph, baudrate, "CanControllerBaudrateConfig")
         || !graph.within(baudrate, controller)
@@ -206,6 +235,8 @@ fn physical(graph: &Graph, context: usize, native: bool) -> Result<(), Vec<PlanD
             ),
         ));
     }
+    // Each HOH names its Can hardware object and controller (SWS_CANIF_00467,
+    // 00468); Tx L-PDUs reach the HTH through their CanIfBufferCfg (SWS_CANIF_00466).
     for (kind, symbol_ref, controller_ref, direction) in [
         (
             "CanIfHrhCfg",
@@ -520,7 +551,8 @@ fn inspect_with_catalog(
         ("CanIdType", "STANDARD"),
         ("CanHwObjectCount", "1"),
         ("CanIfBufferSize", "0"),
-        ("CanIfRxPduCanIdType", "STANDARD_CAN"),
+        // The classic-only controller never reports CAN FD frames (SWS_CANIF_00877).
+        ("CanIfRxPduCanIdType", "STANDARD_NO_FD_CAN"),
         ("CanIfTxPduCanIdType", "STANDARD_CAN"),
         ("CanIfTxPduType", "STATIC"),
         ("ComTransferProperty", "PENDING"),
@@ -534,6 +566,7 @@ fn inspect_with_catalog(
         ("CanControllerActivation", true),
         ("CanHwPnSupport", false),
         ("CanWakeupSupport", false),
+        // The BasicCAN HRH filters in software (SWS_CANIF_00663, 00469).
         ("CanIfHrhSoftwareFilter", true),
         ("CanIfRxPduReadData", false),
         ("CanIfRxPduReadNotifyStatus", false),

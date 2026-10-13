@@ -180,7 +180,12 @@ fn can_link(graph: &Graph, pdu: usize, receive: bool) -> Result<(u32, u16), Vec<
                 ),
             )
         })?;
-    if value(graph, can_if, &format!("{prefix}CanIdType"), false) != Some("STANDARD_CAN")
+    let id_type = if receive {
+        "STANDARD_NO_FD_CAN"
+    } else {
+        "STANDARD_CAN"
+    };
+    if value(graph, can_if, &format!("{prefix}CanIdType"), false) != Some(id_type)
         || value(graph, pdu, "PduLength", false) != Some("8")
     {
         return Err(reject(

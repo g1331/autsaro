@@ -453,6 +453,12 @@ fn communication_types_and_polling_periods_are_source_derived() {
         "<DEPENDENCY-ON-ARTIFACT><SHORT-NAME>generated_include_Can_MemMap_h</SHORT-NAME>"
     ));
     assert!(description.contains("Det_ReportRuntimeError"));
+    // The CanIf post-build set (Verifies: SWS_CANIF_00144) lives in CanIf_PBcfg.c (SWS_BSW_00015).
+    assert!(text("generated/src/CanIf_PBcfg.c").contains("const CanIf_ConfigType CanIf_Config"));
+    assert!(
+        text("generated/include/CanIf_Cfg.h")
+            .contains("extern const CanIf_ConfigType CanIf_Config;")
+    );
     for name in [
         "bsw/include/standard/Can.h",
         "integration/include/Can_Host.h",
@@ -504,11 +510,29 @@ fn communication_rejects_truncation_and_unbound_polling_in_both_entries() {
             "true",
             "CAN_FEATURE_UNSUPPORTED",
         ),
+        // One HOH numbering area from zero (Verifies: SWS_CANIF_00115, ECUC_Can_00326) and
+        // controller IDs from zero (Verifies: SWS_CANIF_00653／00433, ECUC_CanIf_00647).
         ("Transmit", "CanObjectId", "0", "CAN_HARDWARE_HANDLES"),
         ("Transmit", "CanObjectId", "17", "CAN_HARDWARE_HANDLES"),
         ("Receive", "CanObjectId", "17", "CAN_HARDWARE_HANDLES"),
         ("Controller", "CanControllerId", "7", "CAN_CONTROLLER_ID"),
         ("Controller", "CanIfCtrlId", "9", "CAN_CONTROLLER_ID"),
+        // The BasicCAN HRH filters in software (Verifies: SWS_CANIF_00663／00469,
+        // ECUC_CanIf_00632), and the Rx data length check stays enabled per PDU
+        // (Verifies: SWS_CANIF_00902, ECUC_CanIf_00846).
+        (
+            "Receive",
+            "CanIfHrhSoftwareFilter",
+            "false",
+            "TARGET_PARAMETER_UNSUPPORTED",
+        ),
+        // Rejects: ECUC_CanIf_00846
+        (
+            "RxValue",
+            "CanIfRxPduDataLengthCheck",
+            "false",
+            "LENGTH_CONFLICT",
+        ),
     ] {
         let mut sources = inputs();
         parameter(&mut sources, owner, field, new_value);

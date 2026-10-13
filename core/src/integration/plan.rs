@@ -494,6 +494,7 @@ pub(super) fn inspect_composition(
             )]);
         }
     }
+    can_if_handle_sequence(graph, &signals, diagnostic_transport.as_ref())?;
     symbols.sort_by(|left, right| left.symbol.cmp(&right.symbol));
     Ok(CompositionInputs {
         com_runtime,
@@ -509,6 +510,62 @@ pub(super) fn inspect_composition(
         handles,
         symbols,
     })
+}
+
+/// CanIf Rx and Tx handles each number 0..N-1 (SWS_Comtype_00007) within
+/// the runtime's 32 PDUs per direction. Runs after the uniqueness check.
+fn can_if_handle_sequence(
+    graph: &super::graph::Graph,
+    signals: &[SignalChannel],
+    transport: Option<&super::diagnostic::DiagnosticTransportContract>,
+) -> Result<(), Vec<PlanDiagnostic>> {
+    const CAPACITY: u16 = 32;
+    for receive in [true, false] {
+        let mut handles: Vec<(u16, &str)> = signals
+            .iter()
+            .filter(|signal| signal.receive == receive)
+            .map(|signal| (signal.can_if_handle, signal.can_if_pdu.as_str()))
+            .collect();
+        if let Some(tp) = transport {
+            handles.push(if receive {
+                (tp.request_can_if_handle, tp.rx_sdu.as_str())
+            } else {
+                (tp.response_can_if_handle, tp.tx_sdu.as_str())
+            });
+        }
+        let count = handles.len();
+        for (handle, object) in handles {
+            let (category, code, message, repair) = if usize::from(handle) >= count {
+                (
+                    DiagnosticCategory::Input,
+                    "CANIF_HANDLE_SEQUENCE",
+                    crate::product_message!(
+                        "backend.integration.plan.canif_pdu_handles_not_consecutive"
+                    ),
+                    crate::product_message!(
+                        "backend.integration.plan.number_canif_handles_consecutively"
+                    ),
+                )
+            } else if handle >= CAPACITY {
+                (
+                    DiagnosticCategory::Unsupported,
+                    "CANIF_PDU_CAPACITY",
+                    crate::product_message!("backend.integration.plan.canif_pdu_capacity_exceeded"),
+                    crate::product_message!("backend.integration.plan.reduce_canif_pdus"),
+                )
+            } else {
+                continue;
+            };
+            return Err(vec![graph.diagnostic(
+                graph.index(object)?,
+                category,
+                code,
+                message,
+                repair,
+            )]);
+        }
+    }
+    Ok(())
 }
 
 fn assemble_composition(

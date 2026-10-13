@@ -525,7 +525,11 @@ pub(super) fn inspect_ports(
             .and_then(|value| value.parse::<u32>().ok())
             != Some(can_id)
             || value(graph, can_if, &format!("{can_prefix}CanIdType"), false)
-                != Some("STANDARD_CAN")
+                != Some(if port.read {
+                    "STANDARD_NO_FD_CAN"
+                } else {
+                    "STANDARD_CAN"
+                })
         {
             return Err(reject(
                 graph,
@@ -548,14 +552,24 @@ pub(super) fn inspect_ports(
                     ),
                 )
             })?;
-        let deadline = if port.read {
-            if value(graph, can_if, "CanIfRxPduDataLength", false) != Some("4")
+        // The Rx data length check is enabled per PDU (SWS_CANIF_00026, 00902).
+        if port.read
+            && (value(graph, can_if, "CanIfRxPduDataLength", false) != Some("4")
                 || !matches!(
                     value(graph, can_if, "CanIfRxPduDataLengthCheck", false),
                     Some("true" | "1")
-                )
-                || !value(graph, com_signal, "ComFirstTimeout", false)
-                    .is_some_and(super::composition::zero_seconds)
+                ))
+        {
+            return Err(reject(
+                graph,
+                can_if,
+                "LENGTH_CONFLICT",
+                crate::product_message!("backend.integration.communication.signal_rx_dlc_required"),
+            ));
+        }
+        let deadline = if port.read {
+            if !value(graph, com_signal, "ComFirstTimeout", false)
+                .is_some_and(super::composition::zero_seconds)
                 || value(graph, com_signal, "ComRxDataTimeoutAction", false) != Some("NONE")
                 || value(graph, com_signal, "ComTimeout", false).and_then(|value| {
                     if super::composition::zero_seconds(value) {
