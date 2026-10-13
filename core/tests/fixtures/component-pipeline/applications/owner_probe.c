@@ -183,6 +183,7 @@ int Ecu_TargetTestFailStage(unsigned stage) {
     }
     return 0;
 }
+void Ecu_TargetTestRetire(unsigned stage) { (void)stage; }
 void Ecu_TargetTestShutdown(StatusType reason) { require(reason == E_OK); }
 static void drain(void) {
     Ecu_OutputRecord output;

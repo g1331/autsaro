@@ -1,4 +1,4 @@
-#include "Ecu_Target.h"
+#include "Ecu_HostBridge.h"
 #include "Os_Host.h"
 #include <stdio.h>
 
@@ -92,15 +92,8 @@ static Os_HostThreadResult control(void *argument) {
         Ecu_BatchCommand command;
         StatusType status = Ecu_HostBatchParse(&batch, line, length, &command);
         if ((status == E_OK) && (command == ECU_BATCH_COMMIT)) {
+            /* E_OK: the receipt is written. Otherwise nothing ran. */
             status = Ecu_HostBatchExecute(&batch, write_output, NULL);
-            if ((status != E_OK) && (batch.executing != 0u)) {
-                /* Execute returned only an admission refusal; no automotive
-                 * work began. Runtime faults close instead of returning here. */
-                batch.executing = 0u;
-                batch.count = 0u;
-            } else {
-                continue;
-            }
         }
         if (status != E_OK) {
             if ((printf("REJECT status=%u epoch=%llu sequence=%llu\n", (unsigned)status,

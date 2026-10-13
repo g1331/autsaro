@@ -12,7 +12,6 @@
 #include "LSduR.h"
 #include "Os_Mailbox.h"
 #include "PduR.h"
-#include "Rte.h"
 #include "SchM_Can.h"
 #include "Rte_Main.h"
 #include <string.h>
@@ -67,8 +66,8 @@ static Ecu_OutputSlot outputs[ECU_TARGET_OUTPUT_CAPACITY];
 static Ecu_ProtocolSlot protocol_failures[ECU_TARGET_OUTPUT_CAPACITY];
 static unsigned protocol_write;
 static unsigned protocol_read;
-static uint8_t received;
-static uint64_t received_at;
+/* Highest generated bootstrap stage that began; retirement undoes only those. */
+static uint8 bootstrap_reached;
 
 static void fail(void) {
     (void)Os_HostAtomicExchange(&lifecycle, (Os_Atomic32)ECU_TARGET_FAILED);
@@ -180,11 +179,11 @@ static void stage(unsigned number) {
 #include "Os_MemMap.h"
 void StartupHook(void) {
     initialization_thread = Os_HostThreadIdentity();
-    if (Ecu_StackBootstrap() != E_OK) {
+    if (Ecu_StackBootstrap(&bootstrap_reached) != E_OK) {
         fail();
         return;
     }
-    (void)Os_HostAtomicExchange(&lifecycle, (LONG)ECU_TARGET_READY);
+    (void)Os_HostAtomicExchange(&lifecycle, (Os_Atomic32)ECU_TARGET_READY);
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
@@ -193,7 +192,7 @@ void StartupHook(void) {
 void ShutdownHook(StatusType Error) {
     Os_Atomic32 state =
         (Error == E_OK) ? (Os_Atomic32)ECU_TARGET_CLOSED : (Os_Atomic32)ECU_TARGET_FAILED;
-    Ecu_StackRetire();
+    Ecu_StackRetire(bootstrap_reached);
     (void)Os_HostAtomicExchange(&lifecycle, state);
 #ifdef ECU_TARGET_TESTS
     Ecu_TargetTestShutdown(Error);
@@ -201,21 +200,6 @@ void ShutdownHook(StatusType Error) {
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
-void Ecu_TargetRecordReceive(uint64_t at) {
-    Ecu_TargetAssertOwner();
-    received = 1u;
-    received_at = at;
-}
-uint8_t Ecu_TargetReceiveStatus(void) {
-    uint8_t result = RTE_E_NEVER_RECEIVED;
-    Ecu_TargetAssertOwner();
-    if (received != 0u) {
-        result = ((epoch >= received_at) && ((epoch - received_at) >= ECU_TARGET_RX_DEADLINE_MS))
-                     ? RTE_E_MAX_AGE_EXCEEDED
-                     : E_OK;
-    }
-    return result;
-}
 StatusType Ecu_TargetPostFrame(uint64_t at, uint32_t id, uint8_t dlc, const uint8_t data[8],
                                uint64_t *ticket) {
     Ecu_Input input = {0};
@@ -464,12 +448,12 @@ static void retire_output(void) {
 }
 static void consume(const Ecu_Input *input) {
     if (input->kind == 1u) {
-        EcuStatus status;
         if ((input->epoch < epoch) || ((input->epoch - epoch) > UINT64_C(1))) {
             fail();
         }
         epoch = input->epoch;
-        status = Can_Inject(input->can_id, input->dlc, input->data, epoch);
+        /* Single-frame control has no receipt; only batches report input status. */
+        (void)Can_Inject(input->can_id, input->dlc, input->data, epoch);
         Ecu_ComReceptionBeforeMain(input->epoch > processed_epoch);
         Can_MainFunction_Read();
 #ifdef ECU_TARGET_TESTS
@@ -477,9 +461,6 @@ static void consume(const Ecu_Input *input) {
 #endif
         if (Can_HostFlush() != ECU_OK) {
             fail();
-        }
-        if ((status == ECU_OK) && (input->can_id == ECU_TARGET_RX_CAN_ID)) {
-            Ecu_TargetRecordReceive(epoch);
         }
     } else if (input->kind == 2u) {
         Ecu_OutputSlot *slot =
@@ -514,9 +495,6 @@ static void consume(const Ecu_Input *input) {
 #endif
             if (Can_HostFlush() != ECU_OK) {
                 fail();
-            }
-            if ((status == ECU_OK) && (batch_frames[index].id == ECU_TARGET_RX_CAN_ID)) {
-                Ecu_TargetRecordReceive(epoch);
             }
             if ((status != ECU_OK) && (batch_completion.input_status == ECU_OK)) {
                 batch_completion.input_status = status;

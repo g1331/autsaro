@@ -606,3 +606,61 @@ fn counter_service_native() {
         checked(&mut command, &stage, "counter-service");
     }
 }
+
+/// A BSW initialization stage that fails closes the ECU through
+/// `ShutdownOS(E_OS_STATE)` before any output, and retirement undoes only the
+/// stages that began, newest first (#76). Det (2) and the routing tables (5)
+/// have no deinitialization service; stage 7 is the diagnostic transport.
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn bootstrap_stage_failure_closes_without_output_and_retires_started_stages() {
+    let scratch = Scratch::new();
+    let (project, _) = project(
+        &single_component_sources(),
+        &scratch.0,
+        super::tooling::native_target(),
+    );
+    let probe = build_ecu(&project, &scratch.0.join("build"), "test", None);
+    let retired = |below: u32| {
+        [8, 7, 6, 4, 3, 1]
+            .into_iter()
+            .filter(|stage| *stage < below)
+            .map(|stage| format!("ecu_retire stage={stage}"))
+            .collect::<Vec<_>>()
+    };
+    for stage in 0..=8u32 {
+        let name = format!("stage-{stage}");
+        let output = super::tooling::run_public_command(
+            std::process::Command::new(&probe).arg(stage.to_string()),
+            &scratch.0,
+            &name,
+            std::time::Duration::from_secs(30),
+        );
+        let stdout = String::from_utf8(output.stdout)
+            .unwrap()
+            .replace("\r\n", "\n");
+        let lines = stdout
+            .lines()
+            .filter(|line| line.starts_with("ecu_retire "))
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        if stage == 0 {
+            assert!(output.status.success(), "{name}: {stdout}");
+            assert!(stdout.contains("ecu_probe completed=20"), "{stdout}");
+            assert!(
+                stdout.contains("ecu_shutdown reason=0 state=4 fail_stage=0"),
+                "{stdout}"
+            );
+            assert_eq!(lines, retired(9), "{stdout}");
+        } else {
+            assert_eq!(output.status.code(), Some(7), "{name}: {stdout}");
+            assert!(
+                stdout.contains(&format!("ecu_shutdown reason=7 state=3 fail_stage={stage}")),
+                "{stdout}"
+            );
+            assert!(!stdout.contains("ecu_output"), "{stdout}");
+            assert!(!stdout.contains("ecu_probe completed"), "{stdout}");
+            assert_eq!(lines, retired(stage), "{name}: {stdout}");
+        }
+    }
+}

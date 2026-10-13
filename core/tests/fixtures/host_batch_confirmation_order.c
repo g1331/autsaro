@@ -7,4 +7,5 @@ int Ecu_TargetTestFailStage(unsigned stage) {
     }
     return 0;
 }
+void Ecu_TargetTestRetire(unsigned stage) { (void)stage; }
 void Ecu_TargetTestShutdown(StatusType reason) { (void)reason; }

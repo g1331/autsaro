@@ -81,6 +81,7 @@ static void arti_require_at(int accepted, unsigned line) {
     }
 }
 #define arti_require(accepted) arti_require_at((accepted), __LINE__)
+void Ecu_TargetTestRetire(unsigned stage) { (void)stage; }
 void Ecu_TargetTestShutdown(StatusType reason) {
     unsigned start = 0u, waits = 0u, releases = 0u, errors = 0u;
     unsigned getters = 0u, rejected = 0u, alarm_addresses = 0u, isr_start = 0u, isr_stop = 0u;
