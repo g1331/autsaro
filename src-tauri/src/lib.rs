@@ -75,6 +75,10 @@ fn commit_save(
 }
 
 pub fn run() {
+    #[allow(unused_mut)]
+    let mut context = tauri::generate_context!();
+    #[cfg(all(windows, feature = "native-webdriver"))]
+    verification::hand_webview2_to_driver(context.config_mut());
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
@@ -139,6 +143,6 @@ pub fn run() {
             project::save_project,
             editing::validate_project
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .unwrap_or_else(|error| panic!("{error}"));
 }

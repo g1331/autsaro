@@ -88,3 +88,57 @@ pub(crate) async fn verification_owned_failure()
 -> Result<Reply<()>, autosar_config_core::LocalizedText> {
     Err(autosar_config_core::product_message!("backend.verification.build_required").into())
 }
+
+/// WebView2 150+ ignores `WEBVIEW2_*` variables in elevated hosts such as the
+/// GitHub Windows runners, so msedgedriver's debugging port and profile reach
+/// the verification build only through the WebView2 environment API.
+#[cfg(all(windows, feature = "native-webdriver"))]
+pub(crate) fn hand_webview2_to_driver(config: &mut tauri::Config) {
+    let arguments = std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| driver_browser_arguments(&value));
+    let profile = std::env::var_os("WEBVIEW2_USER_DATA_FOLDER").map(std::path::PathBuf::from);
+    for window in &mut config.app.windows {
+        if arguments.is_some() {
+            window.additional_browser_args = arguments.clone();
+        }
+        if profile.is_some() {
+            window.data_directory = profile.clone();
+        }
+    }
+}
+
+/// Explicit arguments replace wry's defaults (wry 0.55 `src/webview2/mod.rs`),
+/// and Chromium keeps only the last `--disable-features`, so both are merged.
+// shortcut: splits on whitespace; msedgedriver passes no quoted values, revisit if it does.
+#[cfg(all(any(windows, test), feature = "native-webdriver"))]
+fn driver_browser_arguments(driver: &str) -> String {
+    let mut disabled = vec!["msWebOOUI", "msPdfOOUI", "msSmartScreenProtection"];
+    let mut others = vec!["--autoplay-policy=no-user-gesture-required"];
+    for argument in driver.split_whitespace() {
+        match argument.strip_prefix("--disable-features=") {
+            Some(features) => disabled.extend(features.split(',')),
+            None => others.push(argument),
+        }
+    }
+    format!(
+        "--disable-features={} {}",
+        disabled.join(","),
+        others.join(" ")
+    )
+}
+
+#[cfg(all(test, feature = "native-webdriver"))]
+mod tests {
+    #[test]
+    fn driver_arguments_keep_wry_defaults_in_one_feature_switch() {
+        assert_eq!(
+            super::driver_browser_arguments(
+                "--disable-features=IgnoreDuplicateNavs,Prewarm --remote-debugging-port=0"
+            ),
+            "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,IgnoreDuplicateNavs,Prewarm \
+             --autoplay-policy=no-user-gesture-required --remote-debugging-port=0"
+        );
+    }
+}
