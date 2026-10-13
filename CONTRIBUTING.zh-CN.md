@@ -26,6 +26,7 @@ npm run lint --prefix ui
 npm run test --prefix ui
 npm run build --prefix ui
 cargo test --locked -p autosar-config-core
+cargo clippy --locked -p autosar-config-core --all-targets --all-features -- -D warnings
 uv run --locked python -B -m unittest discover -s tests/python
 uv run --locked ruff check tools tests/python scripts
 uv run --locked python -m autosar_tooling quality --base <基准提交>
@@ -33,7 +34,7 @@ uv run --locked python -m autosar_tooling quality --base <基准提交>
 
 默认 Cargo 测试不要求官方资源或受控原生工具。真实进程、官方对照和桌面验收见[测试说明](docs/development/testing.md)。格式检查针对修改行，不整体重排历史代码。
 
-解析、生成和运行行为的修改应有独立预期及关键拒绝路径。修改 C 或生成 C 模板时按仓库 MISRA 指导执行；公开 C 接口说明输入、输出和错误契约。
+解析、生成和运行行为的修改应有独立预期及关键拒绝路径。生成代码每个输出只渲染一次，计划不能保证的前提报告为诊断；Clippy 在这些模块拒绝 panic 和文本修补，见测试说明。修改 C 或生成 C 模板时按仓库 MISRA 指导执行；公开 C 接口说明输入、输出和错误契约。
 
 ## 资源与提交
 

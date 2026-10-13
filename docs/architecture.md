@@ -208,11 +208,11 @@ flowchart LR
 
 ### 7.4 Emitter 规则
 
-（[ADR 0014](adr/0014-emitter-rules.md)）
+（[ADR 0014](adr/0014-emitter-rules.md)）以下规则已实施（#37）；emitter 按模块组织随各模块整理推进。
 
-- 每个输出文件只有一个登记的生成方；两个 emitter 写同一路径在生成前拒绝。MemMap 段、SchM 声明、类型补充等跨模块内容在计划阶段汇总后交给该文件的生成方。
-- emitter 只消费计划，不回读、查找替换或追加其他 emitter 已生成的 C 文本；决定配置／接口的最终文本替换移入结构化计划字段。纯占位模板渲染可保留。
-- emitter 不 panic；计划无法保证的前提返回 `PlanDiagnostic` 并定位源对象。生成与集成模块由 clippy `unwrap_used`、`expect_used`、`panic` deny 拦截，其余模块按记录基线只减不增。
+- 每个输出文件只有一个登记的生成方：ECU 工程的生成文件与运行时资产登记到 `integration/outputs.rs` 的输出表，两个生成方写同一路径、或留给 emitter 的模板未被渲染，都在写出文件前拒绝。MemMap 段、SchM 声明、类型补充等跨模块内容在计划阶段汇总后交给该文件的生成方。
+- emitter 只消费计划，不回读、查找替换或追加其他 emitter 已生成的 C 文本；决定配置／接口的最终文本替换移入结构化计划字段。纯占位模板渲染可保留；受信模板（如 `Os_Cfg.h`）只经 `outputs::render` 按锚点渲染一次，锚点缺失时报告诊断。
+- emitter 不 panic；计划无法保证的前提返回 `PlanDiagnostic` 并定位源对象。生成与集成模块的模块属性 deny clippy `unwrap_used`、`expect_used`、`panic` 及 `core/clippy.toml` 列出的文本修补与文件嵌入；其余模块启用默认规则集，遗留告警以 `#[expect]` 基线标记，只减不增。
 - 重组 emitter 时用重新生成主线样本逐字节比较证明不变，有意差异逐项审阅。
 
 ### 7.5 仓库组织（目标）
