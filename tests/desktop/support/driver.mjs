@@ -336,15 +336,23 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 $A = [Windows.Automation.AutomationElement]
 $scope = [Windows.Automation.TreeScope]
+$owned = New-Object Windows.Automation.PropertyCondition($A::ProcessIdProperty, $ProcessId)
+$chooser = New-Object Windows.Automation.PropertyCondition($A::ClassNameProperty, '#32770')
 $dialog = $null
 $deadline = (Get-Date).AddSeconds(30)
 while (-not $dialog -and (Get-Date) -lt $deadline) {
-  $dialog = $A::RootElement.FindFirst($scope::Children, (New-Object Windows.Automation.AndCondition(
-    (New-Object Windows.Automation.PropertyCondition($A::ProcessIdProperty, $ProcessId)),
-    (New-Object Windows.Automation.PropertyCondition($A::ClassNameProperty, '#32770')))))
+  # UIA lists an owned modal chooser below its owner window, not the desktop.
+  foreach ($window in $A::RootElement.FindAll($scope::Children, $owned)) {
+    if ($window.Current.ClassName -eq '#32770') { $dialog = $window; break }
+    $dialog = $window.FindFirst($scope::Children, $chooser)
+    if ($dialog) { break }
+  }
   if (-not $dialog) { Start-Sleep -Milliseconds 100 }
 }
-if (-not $dialog) { throw 'No native chooser belongs to the application under test' }
+if (-not $dialog) {
+  $windows = $A::RootElement.FindAll($scope::Children, $owned) | ForEach-Object { "$($_.Current.ClassName) '$($_.Current.Name)'" }
+  throw "No native chooser belongs to the application under test; its windows: $($windows -join ', ')"
+}
 # File pickers name their field 1148; the folder picker uses 1152.
 $ids = if ($Kind -eq 'directory') { @('1152', '1148') } else { @('1148') }
 $edit = $null

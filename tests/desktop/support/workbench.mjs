@@ -25,6 +25,18 @@ export const applicationPeriod = (description) =>
  * by the assertions and return the workbench operations. The session closes
  * after the file's tests.
  */
+// Windows replies carry verbatim `\\?\D:\…` paths; compare them in the form
+// the workbench displays (ui/src/pathDisplay.ts).
+function displayPaths(value) {
+  if (typeof value === 'string') return value.replace(/^\\\\\?\\(?=[A-Za-z]:\\)/, '');
+  if (Array.isArray(value)) return value.map(displayPaths);
+  if (value && typeof value === 'object')
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, displayPaths(item)]),
+    );
+  return value;
+}
+
 export async function openWorkbench(name) {
   const session = await launch(name);
   const { evaluate, screenshot, resize, key, pointer, media, scratch, platform } = session;
@@ -113,7 +125,7 @@ export async function openWorkbench(name) {
       current,
       `${command}: request echo must stay distinct from current capabilities`,
     );
-    return result.reply.value;
+    return displayPaths(result.reply.value);
   }
   async function metrics() {
     const value = await invoke('verification_metrics');
