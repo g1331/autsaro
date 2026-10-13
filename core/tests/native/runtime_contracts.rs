@@ -17,13 +17,17 @@ fn det_consumer(scratch: &Path, fixture: &str) -> PathBuf {
         .arg("-I")
         .arg(root.join("runtime/bsw/include"))
         .arg("-I")
+        .arg(root.join("runtime/host/include"))
+        .arg("-I")
         .arg(root.join("runtime/bsw/src"))
         .arg("-I")
+        .arg(root.join("runtime/host/src"))
+        .arg("-I")
         .arg(root.join("core/tests/fixtures/bsw-contracts"))
-        .arg(root.join("runtime/bsw/src/SchM_CanIf_Host.c"))
-        .arg(root.join("runtime/bsw/src/Can_HostLock.c"))
+        .arg(root.join("runtime/host/src/SchM_CanIf_Host.c"))
+        .arg(root.join("runtime/host/src/Can_HostLock.c"))
         .arg(root.join("runtime/bsw/src/Det.c"))
-        .arg(root.join("runtime/bsw/src/Det_Host.c"))
+        .arg(root.join("runtime/host/src/Det_Host.c"))
         .arg(root.join("core/tests/fixtures/bsw-contracts").join(fixture))
         .arg("-o")
         .arg(&executable)
@@ -102,12 +106,16 @@ fn com_standard_consumer_executes_group_and_reception_monitoring() {
         .arg("-I")
         .arg(root.join("runtime/bsw/include"))
         .arg("-I")
+        .arg(root.join("runtime/host/include"))
+        .arg("-I")
         .arg(root.join("runtime/bsw/src"))
+        .arg("-I")
+        .arg(root.join("runtime/host/src"))
         .arg("-I")
         .arg(root.join("core/tests/fixtures/bsw-contracts"))
         .arg("-pthread")
-        .arg(root.join("runtime/bsw/src/SchM_CanIf_Host.c"))
-        .arg(root.join("runtime/bsw/src/Can_HostLock.c"))
+        .arg(root.join("runtime/host/src/SchM_CanIf_Host.c"))
+        .arg(root.join("runtime/host/src/Can_HostLock.c"))
         .arg(root.join("runtime/bsw/src/Com.c"))
         .arg(root.join("core/tests/fixtures/bsw-contracts/com_contract.c"))
         .arg("-o")
@@ -147,17 +155,20 @@ fn mainline_generated_headers(scratch: &Path) -> Vec<(String, Vec<u8>)> {
         false,
     )
     .unwrap();
-    ["include/Ecu_Config.h", "src/Ecu_Execution.h"]
-        .into_iter()
-        .map(|path| {
-            let file = prepared
-                .files()
-                .iter()
-                .find(|file| file.path == path)
-                .unwrap_or_else(|| panic!("{path} is not generated"));
-            (path.to_owned(), file.bytes.to_vec())
-        })
-        .collect()
+    [
+        "generated/include/Ecu_Config.h",
+        "generated/src/Ecu_Execution.h",
+    ]
+    .into_iter()
+    .map(|path| {
+        let file = prepared
+            .files()
+            .iter()
+            .find(|file| file.path == path)
+            .unwrap_or_else(|| panic!("{path} is not generated"));
+        (path.to_owned(), file.bytes.to_vec())
+    })
+    .collect()
 }
 
 fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
@@ -176,13 +187,15 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
         std::fs::read(root.join(asset.relative_path)).unwrap()
     );
     for (path, bytes) in mainline_generated_headers(scratch) {
-        std::fs::write(scratch.join(path), bytes).unwrap();
+        std::fs::write(scratch.join(path.trim_start_matches("generated/")), bytes).unwrap();
     }
-    for entry in std::fs::read_dir(root.join("runtime/bsw/include")).unwrap() {
-        let entry = entry.unwrap();
-        // standard/Can.h was materialized above from the asset inventory.
-        if entry.file_type().unwrap().is_file() {
-            std::fs::copy(entry.path(), include.join(entry.file_name())).unwrap();
+    for family in ["runtime/bsw/include", "runtime/host/include"] {
+        for entry in std::fs::read_dir(root.join(family)).unwrap() {
+            let entry = entry.unwrap();
+            // standard/Can.h was materialized above from the asset inventory.
+            if entry.file_type().unwrap().is_file() {
+                std::fs::copy(entry.path(), include.join(entry.file_name())).unwrap();
+            }
         }
     }
     for name in [
@@ -242,14 +255,16 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
         .arg("-I")
         .arg(include);
-    for entry in std::fs::read_dir(root.join("runtime/bsw/src")).unwrap() {
-        let entry = entry.unwrap();
-        if entry
-            .path()
-            .extension()
-            .is_some_and(|extension| extension == "h")
-        {
-            std::fs::copy(entry.path(), sources.join(entry.file_name())).unwrap();
+    for family in ["runtime/bsw/src", "runtime/host/src"] {
+        for entry in std::fs::read_dir(root.join(family)).unwrap() {
+            let entry = entry.unwrap();
+            if entry
+                .path()
+                .extension()
+                .is_some_and(|extension| extension == "h")
+            {
+                std::fs::copy(entry.path(), sources.join(entry.file_name())).unwrap();
+            }
         }
     }
     command.arg("-I").arg(&sources);
@@ -258,19 +273,19 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
         "runtime/bsw/src/PduR.c",
         "runtime/bsw/src/LSduR.c",
         "runtime/bsw/src/CanIf.c",
-        "runtime/bsw/src/SchM_CanIf_Host.c",
+        "runtime/host/src/SchM_CanIf_Host.c",
         "runtime/bsw/src/ComM.c",
         "runtime/bsw/src/BswM.c",
-        "runtime/bsw/src/Ecu_HostBusSM.c",
-        "runtime/bsw/src/SchM_Mode_Host.c",
+        "runtime/host/src/Ecu_HostBusSM.c",
+        "runtime/host/src/SchM_Mode_Host.c",
         "runtime/bsw/src/Dcm.c",
         "runtime/bsw/src/CanTp.c",
-        "runtime/bsw/src/SchM_Diagnostic_Host.c",
+        "runtime/host/src/SchM_Diagnostic_Host.c",
         "runtime/bsw/src/Det.c",
-        "runtime/bsw/src/Det_Host.c",
+        "runtime/host/src/Det_Host.c",
         "runtime/bsw/src/Can.c",
-        "runtime/bsw/src/Can_Host.c",
-        "runtime/bsw/src/Can_HostLock.c",
+        "runtime/host/src/Can_Host.c",
+        "runtime/host/src/Can_HostLock.c",
         "core/tests/fixtures/bsw-contracts/execution_sink.c",
         "core/tests/fixtures/bsw-contracts/schm_dcm_mode.c",
     ] {
@@ -429,7 +444,11 @@ fn cantp_n_as_timeout_aborts_once_and_ignores_late_confirmation() {
         .arg("-I")
         .arg(root.join("runtime/bsw/include"))
         .arg("-I")
+        .arg(root.join("runtime/host/include"))
+        .arg("-I")
         .arg(root.join("runtime/bsw/src"))
+        .arg("-I")
+        .arg(root.join("runtime/host/src"))
         .arg("-I")
         .arg(root.join("core/tests/fixtures/bsw-contracts"))
         .arg(root.join("runtime/bsw/src/CanTp.c"))

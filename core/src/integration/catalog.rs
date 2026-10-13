@@ -70,6 +70,7 @@ pub(super) fn bsw_catalog(
         "runtime/bsw/include/standard/Can.h",
         "runtime/bsw/src/Can.c",
     );
+    // SchM_Can.h is RTE-generated (SWS_Rte_07501), delivered under generated/.
     for symbol in [
         "Can_MainFunction_Wakeup",
         "Can_MainFunction_Read",
@@ -82,7 +83,7 @@ pub(super) fn bsw_catalog(
             "Can",
             "void",
             &[],
-            "runtime/bsw/include/SchM_Can.h",
+            "include/SchM_Can.h",
             "runtime/bsw/src/Can.c",
         );
     }
@@ -266,7 +267,10 @@ pub(super) fn runtime_source_identities() -> BTreeMap<String, String> {
     let mut identities: BTreeMap<String, String> = crate::resources::AssetInventory::embedded()
         .entries()
         .iter()
-        .filter(|asset| asset.relative_path.starts_with("runtime/bsw/"))
+        .filter(|asset| {
+            asset.relative_path.starts_with("runtime/bsw/")
+                || asset.relative_path.starts_with("runtime/host/")
+        })
         .map(|asset| (asset.relative_path.into(), asset.sha256.into()))
         .collect();
     for (path, bytes) in [

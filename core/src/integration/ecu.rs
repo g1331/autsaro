@@ -197,13 +197,17 @@ impl ValidatedIntegrationPlan {
 }
 
 /// The same delivery selection drives rendering, provenance and ledger checks:
-/// the shared ECU driver/OS/kernel plus the mainline BSW.
+/// the shared ECU driver/OS/kernel plus the mainline BSW, each delivered
+/// verbatim. Template assets reach the package only through their emitter.
 pub(crate) fn source_assets(
     target: BuildTarget,
 ) -> Result<BTreeMap<String, &'static crate::resources::AssetEntry>, crate::LocalizedText> {
     let inventory = AssetInventory::embedded();
     let mut files = BTreeMap::new();
-    for asset in inventory.selected(target, "ecu") {
+    for asset in inventory
+        .selected(target, "ecu")
+        .filter(|asset| super::outputs::template_of(asset).is_none())
+    {
         files.insert(crate::prepared::deliver_path(asset)?, asset);
     }
     Ok(files)
@@ -340,11 +344,7 @@ pub(super) fn configure_os(
         "os-service",
         super::os_service::files(&counter_name, &counter_symbol),
     )?;
-    outputs.emit(
-        super::outputs::OS,
-        "os/include/Os_Counter.h",
-        counter_header,
-    )?;
+    outputs.emit(super::outputs::OS, "include/Os_Counter.h", counter_header)?;
     let extended_status = plan
         .configuration
         .iter()
@@ -379,7 +379,7 @@ pub(super) fn configure_os(
                 "backend.integration.ecu.validated_os_scheduler_resource_config_missing"
             ))
         })?;
-    let path = "os/include/Os_Cfg.h";
+    let path = "include/Os_Cfg.h";
     let configuration = super::outputs::render(
         outputs.template(super::outputs::OS, path)?,
         path,
@@ -415,7 +415,7 @@ pub(super) fn configure_os(
     timer_report.push(b'\n');
     outputs.emit(
         super::outputs::OS,
-        "os-generation-timing.json",
+        "meta/os-generation-timing.json",
         timer_report,
     )?;
     Ok(OsGeneration {
@@ -424,6 +424,8 @@ pub(super) fn configure_os(
         use_res_scheduler,
     })
 }
+
+pub(super) const ECU_CONFIG: &str = "src/Ecu_Config.c";
 
 /// Emit the real OS task/counter/alarm/table configuration once for either
 /// application profile. The remaining BSW portion is supplied by its producer.
@@ -459,7 +461,7 @@ pub(super) fn os_configuration(
         }
     }
     let mut alarms = String::new();
-    let binding = "os/src/Os_Arti.c";
+    let binding = "src/Os_Arti.c";
     let (description, binding_text) = super::arti::files(
         plan,
         use_res_scheduler,
@@ -467,7 +469,11 @@ pub(super) fn os_configuration(
         &table_groups.keys().cloned().collect::<Vec<_>>(),
         outputs.template(super::outputs::ARTI, binding)?,
     )?;
-    outputs.emit(super::outputs::ARTI, "os/Os_Arti.arxml", description)?;
+    outputs.emit(
+        super::outputs::ARTI,
+        "generated/descriptions/Os_Arti.arxml",
+        description,
+    )?;
     outputs.emit_rendered(super::outputs::ARTI, binding, binding_text)?;
     for (id, (_, (period, event))) in groups.iter().enumerate() {
         alarms.push_str(&format!("    {{{id}u, 0u, OS_ALARM_EVENT, 0u, {event}u, NULL, 1u, 0u, {period}u, {period}u, 0u}},\n"));
@@ -488,15 +494,7 @@ pub(super) fn os_configuration(
     } else {
         format!("static const Os_AlarmConfig alarms[] = {{\n{alarms}}};")
     };
-    let template = AssetInventory::embedded()
-        .get("runtime/ecu/templates/Ecu_Config.c.in")
-        .ok_or_else(|| {
-            reject(crate::product_message!(
-                "backend.integration.ecu.trusted_ecu_config_template_missing"
-            ))
-        })?;
-    let template =
-        std::str::from_utf8(template.bytes).map_err(|error| reject(error.to_string().into()))?;
+    let template = outputs.template(super::outputs::OS, ECU_CONFIG)?;
     let values = [
         ("TASK_SYMBOL", task_symbol.to_owned()),
         (

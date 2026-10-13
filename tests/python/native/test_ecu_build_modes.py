@@ -120,7 +120,7 @@ class EcuBuildModeTests(unittest.TestCase):
             env[variable] = str(Path(requested).resolve(strict=True))
         env.pop("AUTOSAR_OS_FAIL_RESOURCE", None)
         env.pop("AUTOSAR_OS_BAD_GUARANTEE", None)
-        seal = (project / "files.sha256").read_bytes()
+        seal = (project / "meta/files.sha256").read_bytes()
         with tempfile.TemporaryDirectory(prefix="autosar-build-modes-") as temporary:
             directory = Path(temporary)
             stdin = directory / "batch.stdin"
@@ -159,4 +159,4 @@ class EcuBuildModeTests(unittest.TestCase):
                                 self.assertTrue(result.success, observed)
                                 self.assertIn("READY HostBatchV1" if mode == "host-batch"
                                               else "ecu_probe completed=20", observed)
-            self.assertEqual((project / "files.sha256").read_bytes(), seal)
+            self.assertEqual((project / "meta/files.sha256").read_bytes(), seal)

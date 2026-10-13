@@ -70,7 +70,15 @@ pub(super) async fn open_handoff_project(
             OperationKind::Open,
         )?;
         let root = Path::new(&directory);
-        let metadata_path = root.join("handoff.json");
+        // Retired layouts kept handoff.json at the package root; their formats are refused below.
+        let metadata_path = [
+            autosar_config_core::generator::delivery::HANDOFF_PATH,
+            "handoff.json",
+        ]
+        .map(|path| root.join(path))
+        .into_iter()
+        .find(|path| path.exists())
+        .unwrap_or_else(|| root.join(autosar_config_core::generator::delivery::HANDOFF_PATH));
         let file = std::fs::symlink_metadata(&metadata_path).map_err(|error| error.to_string())?;
         if !file.is_file() || file.file_type().is_symlink() || file.len() > 50 * 1024 * 1024 {
             return Err(autosar_config_core::product_message!(
@@ -111,7 +119,8 @@ pub(super) async fn open_handoff_project(
             Some(
                 format @ ("autosar-ecu-handoff-v1"
                 | "autosar-host-handoff-v1"
-                | "autosar-workbench-handoff-v2"),
+                | "autosar-workbench-handoff-v2"
+                | "autosar-workbench-handoff-v3"),
             ) => Err(autosar_config_core::product_message!(
                 "backend.project.retired_handoff_format",
                 "format" => format

@@ -79,7 +79,10 @@ pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec
     );
     header.push_str("#endif\n");
     BTreeMap::from([
-        ("os/Os_Service.arxml".into(), xml.into_bytes()),
+        (
+            "generated/descriptions/Os_Service.arxml".into(),
+            xml.into_bytes(),
+        ),
         (format!("include/{HEADER}"), header.into_bytes()),
         ("src/Rte_OsService.c".into(), source.into_bytes()),
     ])

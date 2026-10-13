@@ -44,7 +44,9 @@ fn generated_headers_compile_and_link_independent_scalar_and_void_server_signatu
         let directory = scratch.0.join("typed");
         std::fs::create_dir_all(directory.join("include")).unwrap();
         for (file, bytes) in plan.component_contract_files().unwrap().files() {
-            std::fs::write(directory.join(file), bytes).unwrap();
+            let path = directory.join(file);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, bytes).unwrap();
         }
         // These definitions and function pointer types are independent of generated metadata.
         let sources = [
@@ -201,7 +203,7 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
         let metadata = std::str::from_utf8(
             &produced
                 .iter()
-                .find(|(file, _)| file == "descriptions/Host_Implementation.arxml")
+                .find(|(file, _)| file == "generated/descriptions/Host_Implementation.arxml")
                 .unwrap()
                 .1,
         )
@@ -225,8 +227,11 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
             "<SHORT-NAME>{partition}_CALLOUT_CODE</SHORT-NAME>"
         )));
         for (file, bytes) in produced {
-            if file.starts_with("include/") || file == "src/Rte.c" {
-                // Delivered headers may be nested (`include/standard/Can.h`).
+            // Static BSW and host headers come from the repository runtime below.
+            if let Some(file) = file
+                .strip_prefix("generated/")
+                .filter(|file| file.starts_with("include/") || *file == "src/Rte.c")
+            {
                 let target = directory.join(file);
                 std::fs::create_dir_all(target.parent().unwrap()).unwrap();
                 std::fs::write(target, bytes).unwrap();
@@ -249,6 +254,7 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
             "runtime/ecu/include",
             "runtime/os/include",
             "runtime/bsw/include",
+            "runtime/host/include",
         ] {
             compiler.arg("-I").arg(repository.join(include));
         }
@@ -321,17 +327,23 @@ fn generated_rte_com_header_links_independent_handle_callbacks_and_real_dispatch
             .current_dir(&scratch.0)
             .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
             .arg(format!("-DTEST_RX_HANDLE={handle}u"))
-            .args(["-Iinclude", "-Ios/include", "-I"])
-            .arg(root.join("runtime/bsw/src"))
             .args([
-                "src/Rte.c",
-                "src/Com.c",
+                "-Igenerated/include",
+                "-Ibsw/include",
+                "-Ibsw/src",
+                "-Iintegration/include",
+                "-Iintegration/src",
+                "-Ios/include",
+            ])
+            .args([
+                "generated/src/Rte.c",
+                "bsw/src/Com.c",
                 // COM enters the CanIf state area; link its delivered host provider.
-                "src/SchM_CanIf_Host.c",
-                "src/Can_HostLock.c",
-                "src/Ingress.c",
-                "src/Process.c",
-                "src/Observe.c",
+                "integration/src/SchM_CanIf_Host.c",
+                "integration/src/Can_HostLock.c",
+                "app/Ingress/Ingress.c",
+                "app/Process/Process.c",
+                "app/Observe/Observe.c",
             ])
             .arg(root.join("core/tests/fixtures/bsw-contracts/rte_com_contract.c"))
             .args(["-pthread", "-Wl,--wrap=Com_ReceiveSignal"])
@@ -425,11 +437,14 @@ int main(void) {
         let binary = tooling::native_binary(&scratch.0, "scaffold_contract");
         let settings = tooling::execution_settings();
         let compiled = std::process::Command::new(settings.compiler)
-            .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic", "-I"])
-            .arg(project.join("include"))
-            .arg(project.join("src/Process.c"))
-            .arg(project.join("src/Ingress.c"))
-            .arg(project.join("src/Observe.c"))
+            .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
+            .args(
+                ["generated/include", "bsw/include"]
+                    .map(|include| format!("-I{}", project.join(include).display())),
+            )
+            .arg(project.join("app/Process/Process.c"))
+            .arg(project.join("app/Ingress/Ingress.c"))
+            .arg(project.join("app/Observe/Observe.c"))
             .arg(&harness)
             .arg("-o")
             .arg(&binary)

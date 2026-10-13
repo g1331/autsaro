@@ -31,11 +31,11 @@ uv run --locked python -B -m unittest discover -s tests/python/native -p test_os
 
 标准入口通过OS_START_SEC_CODE／OS_STOP_SEC_CODE与重复包含Os_MemMap.h声明，固定GCC目标的OS_CODE属性将Task、ISR、AlarmCallback及Hook放入只读可执行.os_code段；嵌套、错配、冲突和未支持标记明确拒绝。先包含Os.h，再开始映射，结束后再次包含Os_MemMap.h。参考配置没有SwAddrMethod位置引用，使用默认CODE。
 
-生成工程的include/Rte_Os.h与src/Rte_OsService.c提供同步Counter服务。Rte_Call_OsService_GetCounterValue与Rte_Call_OsService_GetElapsedValue绑定配置的Counter句柄，直接调用原生OS接口；输出为tick及tick差（SWS_Os_00560），不按TimeInMicrosecondsType名称额外换算。服务器OsService_{Counter}_GetCounterValue／GetElapsedValue接受CounterType端口定义参数。os/Os_Service.arxml描述OsService提供端口、服务接口、共享类型、错误及Runnable；受支持的单Counter配置句柄为0。调用方拥有输出存储，拒绝调用保留原生错误、ErrorHook参数快照与输出契约。
+生成工程的generated/include/Rte_Os.h与generated/src/Rte_OsService.c提供同步Counter服务。Rte_Call_OsService_GetCounterValue与Rte_Call_OsService_GetElapsedValue绑定配置的Counter句柄，直接调用原生OS接口；输出为tick及tick差（SWS_Os_00560），不按TimeInMicrosecondsType名称额外换算。服务器OsService_{Counter}_GetCounterValue／GetElapsedValue接受CounterType端口定义参数。generated/descriptions/Os_Service.arxml描述OsService提供端口、服务接口、共享类型、错误及Runnable；受支持的单Counter配置句柄为0。调用方拥有输出存储，拒绝调用保留原生错误、ErrorHook参数快照与输出契约。
 
 ## ARTI observation
 
-The generated ECU includes `os/Os_Arti.arxml`, R24-11 ECUC descriptions of its actual OS, logical core, Task, input Cat2 ISR, native stacks/context, Counter, configured Alarm/ScheduleTable and optional scheduler resource. Expressions use global data and constants; Task observations are refreshed from the native kernel under its mutex, while timer/resource pointers refer to original storage. These values never select runnable work. The delivered build retains debug type information for those expressions.
+The generated ECU includes `generated/descriptions/Os_Arti.arxml`, R24-11 ECUC descriptions of its actual OS, logical core, Task, input Cat2 ISR, native stacks/context, Counter, configured Alarm/ScheduleTable and optional scheduler resource. Expressions use global data and constants; Task observations are refreshed from the native kernel under its mutex, while timer/resource pointers refer to original storage. These values never select runnable work. The delivered build retains debug type information for those expressions.
 
 `Os_Arti.h` includes the tool-provided `Arti.h` first. The binding calls standard `ARTI_TRACE` with literal context, class, configured OS SHORT-NAME and event tokens. It covers basic Task transitions, paired Cat2 events, the five configured OS Hooks, and application service entry/return. Internal timer/table/mailbox actions are excluded from application service events. Successful Terminate/Chain, StartOS and ShutdownOS do not return, so no Return event is recorded.
 

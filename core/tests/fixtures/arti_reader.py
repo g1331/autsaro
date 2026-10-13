@@ -24,9 +24,9 @@ def check(project, root, os_name, header):
     mod = Path(os.environ.get("AUTOSAR_MOD_ARCHIVE", "docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_MOD_ECUConfigurationParameters.zip"))
     with ZipFile(mod if mod.is_absolute() else root / mod) as archive:
         definitions = named(etree.fromstring(archive.read("AUTOSAR_CP_MOD_ECUConfigurationParameters.arxml")))
-    description = etree.parse(str(project / "os/Os_Arti.arxml")).getroot()
+    description = etree.parse(str(project / "generated/descriptions/Os_Arti.arxml")).getroot()
     objects = {}
-    for file in [project / "os/Os_Arti.arxml", *sorted((project / "inputs").glob("*.arxml"))]:
+    for file in [project / "generated/descriptions/Os_Arti.arxml", *sorted((project / "inputs").glob("*.arxml"))]:
         for path, node in named(etree.parse(str(file)).getroot()).items():
             # One AR-PACKAGE may be split across input files; its elements may not.
             if path in objects and etree.QName(node).localname == "AR-PACKAGE" == etree.QName(objects[path]).localname:
@@ -95,7 +95,7 @@ def check(project, root, os_name, header):
     services = ("GetISRID ControlIdle isOsStarted GetTaskID GetTaskState ActivateTask TerminateTask ChainTask GetResource ReleaseResource Schedule WaitEvent ClearEvent SetEvent GetEvent ShutdownOS StartOS GetActiveApplicationMode IncrementCounter GetCounterValue GetElapsedValue GetAlarmBase GetAlarm SetRelAlarm SetAbsAlarm CancelAlarm StartScheduleTableRel StartScheduleTableAbs StopScheduleTable NextScheduleTable GetScheduleTableStatus DisableInterruptSource EnableInterruptSource ClearPendingInterrupt EnableAllInterrupts DisableAllInterrupts ResumeAllInterrupts SuspendAllInterrupts ResumeOSInterrupts SuspendOSInterrupts").split()
     mandatory += [f"OsServiceCall_{service}_{edge}" for service in services for edge in ("Start", "Return") if not (service in ("StartOS", "ShutdownOS") and edge == "Return")]
     assert set(events) == set(mandatory), ("missing/extra hook", set(mandatory) - set(events), set(events) - set(mandatory))
-    binding = (project / "os/src/Os_Arti.c").read_text()
+    binding = (project / "generated/src/Os_Arti.c").read_text()
     for event in events:
         assert re.search(r"ARTI_TRACE\(\s*(?:NOSUSP|SPRVSR|USER),\s*AR_CP_OS_\w+,\s*" + re.escape(os_name) + r",\s*0u,\s*" + re.escape(event) + r",", binding), ("missing literal hook", event)
     expressions = [node.findtext(Q + "PARAMETER-VALUES/" + Q + "ECUC-TEXTUAL-PARAM-VALUE/" + Q + "VALUE") for node in nodes if definition_suffix(node) == "ArtiExpression"]

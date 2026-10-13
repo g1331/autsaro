@@ -165,7 +165,7 @@ pub(super) fn current_ecu(
     check_target(output, operation.snapshot.target).map_err(integration_failure)?;
     let plan = ecu_plan(operation)?;
     let data: serde_json::Value = serde_json::from_slice(
-        &std::fs::read(output.join("integration.json"))
+        &std::fs::read(output.join(autosar_config_core::integration::INTEGRATION_PATH))
             .map_err(|error| integration_failure(error.to_string()))?,
     )
     .map_err(|error| integration_failure(error.to_string()))?;
@@ -187,10 +187,14 @@ fn expected_ecu_files(
     plan: &ValidatedIntegrationPlan,
     source: &Path,
 ) -> Result<Vec<(String, Vec<u8>)>, Vec<PlanDiagnostic>> {
-    Ok(
-        prepare_ecu_for_operation(operation, plan, source.join("handoff.json").exists())?
-            .into_files(),
-    )
+    Ok(prepare_ecu_for_operation(
+        operation,
+        plan,
+        source
+            .join(autosar_config_core::generator::delivery::HANDOFF_PATH)
+            .exists(),
+    )?
+    .into_files())
 }
 
 #[tauri::command]

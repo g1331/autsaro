@@ -161,7 +161,7 @@
     },
     {
       "path": "runtime/os/README.md",
-      "sha256": "fecffc51b8fbf8c7d73f24659883f3a4098ca16e955b2b607b746bc6826eeb07",
+      "sha256": "edcaeaad2e7cd6c7806c02f6fe4a4d367c013b37ec3cf4396deb6678902db1d9",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -854,28 +854,28 @@
       ]
     },
     {
-      "path": "runtime/bsw/src/Can_HostLock.c",
+      "path": "runtime/host/src/Can_HostLock.c",
       "sha256": "b958aefbc0e05288549dbea26cbe66f16d124d95d6da131eec16f4180b5f992c",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
       ],
-      "role": "bsw",
+      "role": "host",
       "responsibility": "workbench",
       "profiles": [
         "ecu"
       ]
     },
     {
-      "path": "runtime/bsw/src/Ecu_Status.c",
+      "path": "runtime/host/src/Ecu_Status.c",
       "sha256": "d406944730b6834f29983aad9ee8fa64c77753d2dfcee5798102d0fb5b7a9dc6",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
       ],
-      "role": "bsw",
+      "role": "host",
       "responsibility": "workbench",
       "profiles": [
         "ecu"
@@ -897,7 +897,7 @@
     },
     {
       "path": "tools/python/src/ecu_tools/build.py",
-      "sha256": "8af77aa8c614fb2e6d59535d20e8792c7d2a2a95e053afb8d8f00ed982bd16bc",
+      "sha256": "51acfa321c801f37b8c06b1346997c450262efa9f9b64c7e8f95ddc5e722059d",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -967,7 +967,7 @@
     },
     {
       "path": "tools/python/src/ecu_tools/verify.py",
-      "sha256": "e8e557f224e25a2111e489a437e039f60af3d2aa81a250166586e8aac4f2aa0f",
+      "sha256": "0fc7532ec52f381357d4f34779b2908284a9368309b9841812750eba5cf3a297",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1064,7 +1064,7 @@
       "responsibility": "workbench"
     },
     {
-      "path": "runtime/bsw/src/Det_Host.c",
+      "path": "runtime/host/src/Det_Host.c",
       "sha256": "c541e69c539777b00b150c28c2f911327b2f1097a9c65262759f88f120f9e92c",
       "license": "Apache-2.0",
       "targets": [
@@ -1074,11 +1074,11 @@
       "profiles": [
         "ecu"
       ],
-      "role": "bsw",
+      "role": "host",
       "responsibility": "workbench"
     },
     {
-      "path": "runtime/bsw/src/Det_Host.h",
+      "path": "runtime/host/src/Det_Host.h",
       "sha256": "fa76983f269e49b3d277cbdf006e5011c9c60d253275cc21c3a681ce243a5b53",
       "license": "Apache-2.0",
       "targets": [
@@ -1088,7 +1088,7 @@
       "profiles": [
         "ecu"
       ],
-      "role": "bsw",
+      "role": "host",
       "responsibility": "workbench"
     },
     {
@@ -1344,7 +1344,7 @@
       "responsibility": "workbench"
     },
     {
-      "path": "runtime/bsw/include/Ecu_HostBusSM.h",
+      "path": "runtime/host/include/Ecu_HostBusSM.h",
       "sha256": "ec57b360c102e5458f5b29b1c64c02aed5aef2a12babd0c0a9166df2be7fc2d3",
       "license": "Apache-2.0",
       "targets": [
@@ -1354,11 +1354,11 @@
       "profiles": [
         "ecu"
       ],
-      "role": "bsw",
+      "role": "host",
       "responsibility": "workbench"
     },
     {
-      "path": "runtime/bsw/include/Ecu_HostBusSM_MemMap.h",
+      "path": "runtime/host/include/Ecu_HostBusSM_MemMap.h",
       "sha256": "2df85de0a5d7889e6baf7c7382add9238ae3c157dc4df3e227e84b032edb5788",
       "license": "Apache-2.0",
       "targets": [
@@ -1368,7 +1368,7 @@
       "profiles": [
         "ecu"
       ],
-      "role": "bsw",
+      "role": "host",
       "responsibility": "workbench"
     },
     {
@@ -1694,7 +1694,7 @@
       "responsibility": "workbench"
     },
     {
-      "path": "runtime/bsw/src/Ecu_HostBusSM.c",
+      "path": "runtime/host/src/Ecu_HostBusSM.c",
       "sha256": "467b146e4597c6a1c1c901c41dbf01c97924270b71b23482ed2f66b3a382b681",
       "license": "Apache-2.0",
       "targets": [
@@ -1704,7 +1704,7 @@
       "profiles": [
         "ecu"
       ],
-      "role": "bsw",
+      "role": "host",
       "responsibility": "workbench"
     },
     {
@@ -1736,7 +1736,7 @@
       "responsibility": "workbench"
     },
     {
-      "path": "runtime/bsw/src/SchM_CanIf_Host.c",
+      "path": "runtime/host/src/SchM_CanIf_Host.c",
       "sha256": "0351d40f6ab1e5fe9bc3fc64164bc140a70ae644b1379c55190d08db2a5126a0",
       "license": "Apache-2.0",
       "targets": [
@@ -1746,11 +1746,11 @@
       "profiles": [
         "ecu"
       ],
-      "role": "bsw",
+      "role": "host",
       "responsibility": "workbench"
     },
     {
-      "path": "runtime/bsw/src/SchM_Diagnostic_Host.c",
+      "path": "runtime/host/src/SchM_Diagnostic_Host.c",
       "sha256": "9554677820b6f3dabe0c6689ff0f9be0ccd0e3b889c71010badc334af9c06f63",
       "license": "Apache-2.0",
       "targets": [
@@ -1760,11 +1760,11 @@
       "profiles": [
         "ecu"
       ],
-      "role": "bsw",
+      "role": "host",
       "responsibility": "workbench"
     },
     {
-      "path": "runtime/bsw/src/SchM_Mode_Host.c",
+      "path": "runtime/host/src/SchM_Mode_Host.c",
       "sha256": "8af1e2dc6e5d640160adc4cc71a8dda0e5a27c6b6d7c2177f849b539bca21ae0",
       "license": "Apache-2.0",
       "targets": [
@@ -1774,11 +1774,11 @@
       "profiles": [
         "ecu"
       ],
-      "role": "bsw",
+      "role": "host",
       "responsibility": "workbench"
     },
     {
-      "path": "runtime/bsw/src/Can_Host.c",
+      "path": "runtime/host/src/Can_Host.c",
       "sha256": "7ff6ec9c86eeaee4e30b46e2ef6063f6e29baaaf52aaeeabcd509862a2913dfb",
       "license": "Apache-2.0",
       "targets": [
@@ -1788,7 +1788,7 @@
       "profiles": [
         "ecu"
       ],
-      "role": "bsw",
+      "role": "host",
       "responsibility": "workbench"
     },
     {
@@ -1820,7 +1820,7 @@
       "responsibility": "workbench"
     },
     {
-      "path": "runtime/bsw/include/Can_Host.h",
+      "path": "runtime/host/include/Can_Host.h",
       "sha256": "e2b7f594518fa933c2955d3de5d21dd1e8fdd46aed9f1812bdf8f169fca865ca",
       "license": "Apache-2.0",
       "targets": [
@@ -1830,7 +1830,7 @@
       "profiles": [
         "ecu"
       ],
-      "role": "bsw",
+      "role": "host",
       "responsibility": "workbench"
     },
     {
@@ -1862,7 +1862,7 @@
       "responsibility": "workbench"
     },
     {
-      "path": "runtime/bsw/include/Ecu_Status.h",
+      "path": "runtime/host/include/Ecu_Status.h",
       "sha256": "43bf6321656d71b4c6850d62b038ed638ea0d1a932f3fb35823e7f2714f8043b",
       "license": "Apache-2.0",
       "targets": [
@@ -1872,7 +1872,7 @@
       "profiles": [
         "ecu"
       ],
-      "role": "bsw",
+      "role": "host",
       "responsibility": "workbench"
     },
     {
@@ -1946,7 +1946,7 @@
       "responsibility": "workbench"
     },
     {
-      "path": "runtime/bsw/src/Can_HostLock.h",
+      "path": "runtime/host/src/Can_HostLock.h",
       "sha256": "60c4a9b9ddf16257a7d35e65b4b4f4103bcb1dd2ae9525119525482d027d98fb",
       "license": "Apache-2.0",
       "targets": [
@@ -1956,7 +1956,7 @@
       "profiles": [
         "ecu"
       ],
-      "role": "bsw",
+      "role": "host",
       "responsibility": "workbench"
     },
     {

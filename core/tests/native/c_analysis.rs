@@ -41,7 +41,7 @@ fn generated_can_object_sections_and_clear(project: &Path) {
     };
     let object = scratch.0.join("Can.o");
     // Compile the actual generated source with the delivered profile flags and headers.
-    compile(&project.join("src/Can.c"), &object, true);
+    compile(&project.join("bsw/src/Can.c"), &object, true);
     let symbols = tooling::symbol_sections(&settings.objdump, &object);
     for (symbol, section) in [
         ("Can_Write", ".text"),
@@ -97,7 +97,7 @@ int main(void) {{
     for (i = 0u; i < 8u; ++i) {{ assert(tx_payload[i] == 0u && rx_payload[i] == 0u); }}
     return 0;
 }}
-"#, project.join("src/Can.c").display().to_string().replace('\\', "/"))).unwrap();
+"#, project.join("bsw/src/Can.c").display().to_string().replace('\\', "/"))).unwrap();
     let executable = tooling::native_binary(&scratch.0, "can-clear");
     // Stubs only close linking: this oracle examines real generated static storage before Init.
     compile(&source, &executable, false);

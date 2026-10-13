@@ -35,31 +35,37 @@ def refuse_links(path: Path) -> None:
             raise ValueError(f"Links/reparse points are refused: {entry}")
 
 
+FILE_LIST = "meta/files.list"
+FILE_HASHES = "meta/files.sha256"
+
+
 def sealed_sources(project: Path) -> tuple[list[str], dict]:
     refuse_links(project)
     project = project.resolve(strict=True)
-    names = (project / "files.list").read_text(encoding="utf-8").splitlines()
+    if (project / "files.list").is_file():
+        raise ValueError("Package uses a retired layout (top-level files.list); regenerate it, it is not migrated")
+    names = (project / FILE_LIST).read_text(encoding="utf-8").splitlines()
     if not names or names != sorted(set(names)) or any(not safe_relative(name) for name in names):
         raise ValueError("Invalid sealed source file list")
-    if any(name in ("files.list", "files.sha256") for name in names):
+    if any(name in (FILE_LIST, FILE_HASHES) for name in names):
         raise ValueError("Source file list cannot enumerate its own seal")
-    records = (project / "files.sha256").read_text(encoding="utf-8").splitlines()
+    records = (project / FILE_HASHES).read_text(encoding="utf-8").splitlines()
     expected = {}
     for record in records:
         match = re.fullmatch(r"([0-9a-f]{64})  (.+)", record)
         if not match or match[2] in expected:
             raise ValueError("Invalid or duplicate sealed source hash record")
         expected[match[2]] = match[1]
-    if set(expected) != set(names) | {"files.list"}:
+    if set(expected) != set(names) | {FILE_LIST}:
         raise ValueError("Sealed source hash closure differs")
-    allowed = set(names) | {"files.list", "files.sha256"}
+    allowed = set(names) | {FILE_LIST, FILE_HASHES}
     for entry in project.rglob("*"):
         metadata = entry.lstat()
         relative = entry.relative_to(project).as_posix()
         if entry.is_symlink() or getattr(metadata, "st_file_attributes", 0) & 0x400:
             raise ValueError(f"Source links/reparse points are refused: {relative}")
         if stat.S_ISDIR(metadata.st_mode):
-            if not any(name.startswith(relative + "/") for name in names):
+            if not any(name.startswith(relative + "/") for name in allowed):
                 raise ValueError(f"Unlisted source directory: {relative}")
         elif not stat.S_ISREG(metadata.st_mode) or relative not in allowed:
             raise ValueError(f"Unlisted source file: {relative}")
@@ -67,7 +73,7 @@ def sealed_sources(project: Path) -> tuple[list[str], dict]:
         if digest(project / name) != identity:
             raise ValueError(f"Source identity mismatch: {name}")
     target = json.loads((project / "target.json").read_text(encoding="utf-8"))
-    if target.get("format") != "autosar-build-target-v1" or target.get("target") not in TARGETS:
+    if target.get("format") != "autosar-build-target-v2" or target.get("target") not in TARGETS:
         raise ValueError("Unsupported build target format or identity")
     return names, target
 
@@ -81,6 +87,17 @@ def tool_argument(path: Path) -> str:
         if value.startswith("//?/"):
             return value[4:]
     return value
+
+
+def target_entry(names: list[str], target: dict, mode: str) -> str:
+    """The sealed native main of a build mode; test mode builds the probe main."""
+    entries = target.get("entries")
+    entry = entries.get("probe" if mode == "test" else mode) if isinstance(entries, dict) else None
+    if (not isinstance(entries, dict) or set(entries) != {"host-batch", "probe"}
+            or not isinstance(entry, str) or entry not in names or not entry.endswith(".c")
+            or any(value in target.get("sources", []) for value in entries.values())):
+        raise ValueError("Target's native main entry inventory is absent or invalid")
+    return entry
 
 
 def target_configuration(names: list[str], target: dict) -> tuple[list[str], list[str], list[str]]:
@@ -180,7 +197,7 @@ def check_object(binary: Path, objdump: Path, target: dict, project: Path, logs:
     task_names = set(re.findall(r"\b(Os_TaskEntry_[A-Za-z0-9_]+)$", symbols, re.MULTILINE))
     if len(task_names) != 1 or not all(owns(symbol, ".os_code") for symbol in task_names):
         raise ValueError("Generated task is outside its code section")
-    tree = ET.parse(project / "descriptions/Host_Implementation.arxml")
+    tree = ET.parse(project / "generated/descriptions/Host_Implementation.arxml")
     ns = {"ar": "http://autosar.org/schema/r4.0"}
     owners = [node for node in tree.findall(".//ar:BSW-MODULE-DESCRIPTION", ns)
               if node.findtext("ar:SHORT-NAME", namespaces=ns) == "Rte"]
@@ -243,9 +260,7 @@ def build(project: Path, output: Path, mode: str, control_source: Path | None = 
     if not kernel_sources or any(not safe_relative(name) or not (kernel / name).is_file() for name in kernel_sources):
         raise ValueError("Pinned kernel translation units are missing")
     sources += [tool_argument(kernel / name) for name in kernel_sources]
-    entry = control_source if control_source else project / ("src/ecu_host_batch.c" if mode == "host-batch" else "src/ecu_probe.c")
-    if entry != control_source and entry.relative_to(project).as_posix() not in names:
-        raise ValueError("Selected native main entry is not sealed")
+    entry = control_source if control_source else project / target_entry(names, target, mode)
     sources.append(tool_argument(entry))
     suffix = "" if linux else ".exe"
     filename = ("ecu_host_batch" if mode == "host-batch" else "ecu_probe") + suffix

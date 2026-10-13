@@ -68,7 +68,11 @@ fn counter_header_oracles() {
             .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-I"])
             .arg(project.join("os/include"))
             .arg("-I")
-            .arg(project.join("include"))
+            .arg(project.join("generated/include"))
+            .arg("-I")
+            .arg(project.join("bsw/include"))
+            .arg("-I")
+            .arg(project.join("integration/include"))
             .arg(format!("-DEXPECTED_COUNTER_MAX={maximum}u"));
         if renamed {
             command.arg("-DCOUNTER_TIME_RENAMED=1");
@@ -103,7 +107,7 @@ fn counter_header_oracles() {
             stdout.trim(),
             "counter_time PASS: 24 literal unit values; 4 single evaluations; 4 expressions"
         );
-        let header_path = project.join("os/include/Os_Counter.h");
+        let header_path = project.join("generated/include/Os_Counter.h");
         let header = std::fs::read_to_string(&header_path).unwrap();
         for (name, mutant, expected_exit) in [
             (
@@ -196,7 +200,11 @@ fn standard_status_build() {
         .args(["-std=c99", "-E", "-x", "c", "-DOS_STATUS_EXTENDED=1", "-I"])
         .arg(moved.join("os/include"))
         .arg("-I")
-        .arg(moved.join("include"))
+        .arg(moved.join("generated/include"))
+        .arg("-I")
+        .arg(moved.join("bsw/include"))
+        .arg("-I")
+        .arg(moved.join("integration/include"))
         .arg(fixture("ecu_standard_control.c"));
     let result = super::tooling::run_public_command(
         &mut conflict,
@@ -266,7 +274,8 @@ fn scheduler_resource_runs() {
 /// (`arti_reader.py` writes the same probe after its official checks).
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 fn arti_expression_probe(project: &Path, header: &Path) {
-    let xml = std::fs::read_to_string(project.join("os/Os_Arti.arxml")).unwrap();
+    let xml =
+        std::fs::read_to_string(project.join("generated/descriptions/Os_Arti.arxml")).unwrap();
     let doc = roxmltree::Document::parse(&xml).unwrap();
     let expressions = doc
         .descendants()
@@ -464,7 +473,11 @@ fn delivery_and_independent_control() {
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic", "-I"])
         .arg(moved.join("os/include"))
         .arg("-I")
-        .arg(moved.join("include"))
+        .arg(moved.join("generated/include"))
+        .arg("-I")
+        .arg(moved.join("bsw/include"))
+        .arg("-I")
+        .arg(moved.join("integration/include"))
         .arg(
             Path::new(env!("CARGO_MANIFEST_DIR"))
                 .parent()
@@ -541,7 +554,7 @@ fn delivery_and_independent_control() {
             .all(|entity| entity.period_ms == 20)
     );
     let (project, files) = project(&sources, &root, super::tooling::native_target());
-    let config = file(&files, "src/Ecu_Config.c");
+    let config = file(&files, "generated/src/Ecu_Config.c");
     assert!(config.contains("\"OwnerTask\""), "{config}");
     let binary = build_ecu(&project, &root.join("build"), "test", None);
     let stdout = run(&binary, &[]);

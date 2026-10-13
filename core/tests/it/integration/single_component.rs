@@ -174,9 +174,10 @@ fn reference_shape_records_independent_verification_inputs() {
         &scratch.0,
         autosar_config_core::target::BuildTarget::LinuxX64ControlledV1,
     );
-    let inputs: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(project.join("verification/inputs.json")).unwrap())
-            .unwrap();
+    let inputs: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(project.join("meta/verification-inputs.json")).unwrap(),
+    )
+    .unwrap();
     // Configured endpoints of the fixture, not values read back from the plan.
     for (name, value) in [
         ("periodMs", 10),
@@ -193,7 +194,8 @@ fn reference_shape_records_independent_verification_inputs() {
     assert_eq!(inputs["format"], "autosar-ecu-test-inputs-v1");
     let readme = std::fs::read_to_string(project.join("README.md")).unwrap();
     assert!(readme.contains("tools/ecu-tool.py verify"), "{readme}");
-    let config = std::fs::read_to_string(project.join("src/Ecu_RuntimeConfig.c")).unwrap();
+    let config =
+        std::fs::read_to_string(project.join("generated/src/Ecu_RuntimeConfig.c")).unwrap();
     assert!(
         config.contains("Ecu_DcmAuthenticationMode, 2u};"),
         "DcmDspMaxDidToRead"
@@ -229,7 +231,7 @@ fn reference_shape_records_independent_verification_inputs() {
     assert!(
         !files
             .iter()
-            .any(|(path, _)| path.starts_with("verification/"))
+            .any(|(path, _)| path.starts_with("meta/verification"))
     );
     let readme = &files
         .iter()
@@ -910,7 +912,7 @@ fn source_preparation_is_target_complete_without_native_tools() {
         };
         // Recorded original sources are exactly the delivered bytes.
         let integration: serde_json::Value =
-            serde_json::from_slice(&delivered("integration.json").bytes).unwrap();
+            serde_json::from_slice(&delivered("meta/integration.json").bytes).unwrap();
         let originals = integration["originalBswSources"].as_object().unwrap();
         for (original, path) in originals {
             assert_eq!(
@@ -921,7 +923,7 @@ fn source_preparation_is_target_complete_without_native_tools() {
         }
         // Every runtime producer/consumer named by the contract is a selected source.
         let contract: serde_json::Value =
-            serde_json::from_slice(&delivered("contract.json").bytes).unwrap();
+            serde_json::from_slice(&delivered("meta/contract.json").bytes).unwrap();
         let selected_sources: Vec<_> = first
             .files()
             .iter()
@@ -957,10 +959,10 @@ fn source_preparation_is_target_complete_without_native_tools() {
             serde_json::json!(["runtime/bsw/src/Dcm.c"])
         );
         assert_eq!(
-            originals["runtime/bsw/src/Dcm.c"], "src/Dcm.c",
+            originals["runtime/bsw/src/Dcm.c"], "bsw/src/Dcm.c",
             "the consumer must be the delivered Dcm implementation"
         );
-        assert!(has("os/src/Os.c") && has("kernel/tasks.c") && has("src/Rte.c"));
+        assert!(has("os/src/Os.c") && has("kernel/tasks.c") && has("generated/src/Rte.c"));
         let (native_host, native_kernel) = match target {
             BuildTarget::WindowsX64ControlledV1 => (
                 "os/src/host/windows/Os_HostWindows.c",
@@ -998,7 +1000,13 @@ fn source_preparation_is_target_complete_without_native_tools() {
                 .bytes,
         )
         .unwrap();
-        assert_eq!(metadata["format"], "autosar-build-target-v1");
+        assert_eq!(metadata["format"], "autosar-build-target-v2");
+        // Each mode's main is sealed, recorded once and never a shared translation unit.
+        for (mode, entry) in metadata["entries"].as_object().unwrap() {
+            assert!(has(entry.as_str().unwrap()), "{mode}");
+            assert!(!metadata["sources"].as_array().unwrap().contains(entry));
+        }
+        assert_eq!(metadata["entries"].as_object().unwrap().len(), 2);
         assert_eq!(metadata["target"], target.spec().id);
         assert_eq!(metadata["logicalClock"], target.spec().logical_clock);
         assert_eq!(metadata["objectFormat"], target.spec().object_format);

@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from ecu_tools.build import (
+    FILE_HASHES,
     TARGETS,
     digest,
     kernel_patch_environment,
@@ -20,6 +21,7 @@ from ecu_tools.build import (
     safe_relative,
     sealed_sources,
     target_configuration,
+    target_entry,
     tool_argument,
 )
 from ecu_tools.process import OwnedProcess, ProcessSpec
@@ -185,14 +187,16 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
             if not result.success:
                 raise ValueError(f"Kernel patch {index} failed; raw logs retained")
         sources.extend("kernel/" + name for name in kernel_sources)
-        sources.extend(["src/ecu_host_batch.c", "src/ecu_probe.c"])
+        sources.extend(target_entry(names, target, mode) for mode in ("host-batch", "probe"))
     elif target.get("profile") != "host":  # plain sealed C project, used by analyzer fixtures; deliveries are always "ecu"
         raise ValueError("Unknown sealed C profile")
     if len(sources) != len(set(sources)) or any(not (root / name).is_file() for name in sources):
         raise ValueError("C translation-unit inventory is duplicated or incomplete")
     # Declared C files outside the link closure are still checked; distinguish them
-    # in the report, rather than silently dropping optional/test adapters.
-    supplemental = [name for name in names if name.endswith(".c") and not name.startswith("kernel/") and name not in sources]
+    # in the report, rather than silently dropping optional/test adapters. Component
+    # skeletons repeat the application definitions and belong to no program.
+    supplemental = [name for name in names if name.endswith(".c") and name not in sources
+                    and not name.startswith(("kernel/", "generated/templates/"))]
     sources.extend(supplemental)
     if any(not (root / name).is_dir() for name in includes):
         raise ValueError("Declared project include directory is missing")
@@ -304,7 +308,7 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
     database = [{"directory": tool_argument(root), "file": tool_argument(root / name),
                  "arguments": ["gcc", *flags, *builtins, *per_unit_macros[name], *("-I" + path for path in includes),
                                "-c", tool_argument(root / name)]} for name in sources]
-    return root, sources, database, {"target": target_id, "profile": target["profile"],
+    return root, sources, database, {"target": target_id, "profile": target["profile"], "entries": target.get("entries"),
                                    "compilerFlags": flags, "compilerWorkers": compiler_workers, "includePaths": target["includePaths"],
                                    "systemIncludePaths": system_includes, "diagnosticCompiler": {"path": compiler, "version": compiler_version, "sha256": digest(Path(compiler))},
                                    "compilerDiscoveredDefines": per_unit_macros,
@@ -400,13 +404,13 @@ def check(project: Path, target_id: str, output: Path) -> int:
         executable, addons, identity = tool_identity(output)
         summary["tool"] = identity
         summary["coverage"] = coverage(addons)
-        summary["sourceSealSha256"] = digest(project / "files.sha256")
+        summary["sourceSealSha256"] = digest(project / FILE_HASHES)
         root, sources, database, scope = prepare(project, target_id, output)
         summary["scope"] = scope
-        entries = {"host-batch": "src/ecu_host_batch.c", "probe": "src/ecu_probe.c"}
+        entries = scope.get("entries") or {}
         # build.py selects exactly one ECU main for each native executable.
         # Keep cross-TU checking inside that same link boundary.
-        programs = entries if scope.get("profile") == "ecu" and all(name in sources for name in entries.values()) else {"target": None}
+        programs = entries if scope.get("profile") == "ecu" and entries and all(name in sources for name in entries.values()) else {"target": None}
         summary["programs"] = []
         summary["diagnostics"] = []
         seen = {}
@@ -429,7 +433,7 @@ def check(project: Path, target_id: str, output: Path) -> int:
                 seen[key]["programs"].append(program)
         diagnostics = summary["diagnostics"]
         sealed_sources(project)
-        if digest(project / "files.sha256") != summary["sourceSealSha256"]:
+        if digest(project / FILE_HASHES) != summary["sourceSealSha256"]:
             raise ValueError("Source seal changed during analysis")
         summary["passed"] = all_passed
         print(f"C analysis {target_id}: {len(sources)} units, {len(diagnostics)} diagnostics; passed={summary['passed']}")

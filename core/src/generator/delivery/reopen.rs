@@ -1,9 +1,11 @@
 use super::{
-    HandoffMetadata, InputKind, PROJECT_PATH, consumer_catalog, digest, read_source, refuse_links,
+    HANDOFF_PATH, HandoffMetadata, InputKind, PROJECT_PATH, consumer_catalog, digest, read_source,
+    refuse_links,
 };
 use crate::Workspace;
 use crate::arxml::ProjectManifest;
 use crate::definitions::DefinitionCatalog;
+use crate::generator::output::{FILE_HASHES, FILE_LIST};
 use crate::integration::InputSource;
 use std::collections::BTreeMap;
 use std::fs;
@@ -93,7 +95,7 @@ fn prepare_package(
     for path in names
         .iter()
         .map(String::as_str)
-        .chain(["files.list", "files.sha256"])
+        .chain([FILE_LIST, FILE_HASHES])
     {
         let bytes = read_source(&package.join(path))?;
         total = total
@@ -145,7 +147,7 @@ fn prepare_package(
         .get("handoff")
         .and_then(serde_json::Value::as_bool)
         .ok_or_else(|| crate::product_message!("backend.delivery.handoff_mode_required"))?;
-    if handoff != payload.contains_key("handoff.json") {
+    if handoff != payload.contains_key(HANDOFF_PATH) {
         return Err(crate::product_message!(
             "backend.delivery.handoff_mode_mismatch"
         ));
@@ -214,7 +216,7 @@ pub fn open_handoff(
     catalog: &DefinitionCatalog,
 ) -> Result<NativeHandoff, crate::LocalizedText> {
     let verified = prepare_package(package, catalog)?;
-    if !verified.files.contains_key("handoff.json") {
+    if !verified.files.contains_key(HANDOFF_PATH) {
         return Err(crate::product_message!(
             "backend.delivery.explicit_handoff_required"
         ));

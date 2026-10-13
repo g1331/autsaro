@@ -10,6 +10,8 @@ from unittest.mock import patch
 from autosar_tooling import c_check
 from ecu_tools.build import target_configuration
 
+ENTRIES = {"host-batch": "integration/src/ecu_host_batch.c", "probe": "integration/src/ecu_probe.c"}
+
 
 class CAnalysisTests(unittest.TestCase):
     def test_compiler_header_paths_use_the_compiler_working_directory(self):
@@ -110,7 +112,8 @@ class CAnalysisTests(unittest.TestCase):
             directory = Path(temporary).resolve(strict=True)
             source = directory / "source"
             source.mkdir()
-            (source / "files.sha256").write_text("test seal")
+            (source / "meta").mkdir()
+            (source / "meta/files.sha256").write_text("test seal")
             output = directory / "analysis"
             root = output / "project"
 
@@ -129,10 +132,11 @@ class CAnalysisTests(unittest.TestCase):
             directory = Path(temporary).resolve(strict=True)
             source = directory / "source"
             source.mkdir()
-            (source / "files.sha256").write_text("seal")
+            (source / "meta").mkdir()
+            (source / "meta/files.sha256").write_text("seal")
             output = directory / "analysis"
             root = output / "project"
-            units = ["src/common.c", "src/ecu_host_batch.c", "src/ecu_probe.c"]
+            units = ["src/common.c", "integration/src/ecu_host_batch.c", "integration/src/ecu_probe.c"]
             database = [{"file": str(root / name)} for name in units]
             calls = []
 
@@ -141,9 +145,9 @@ class CAnalysisTests(unittest.TestCase):
                 failed = output.name == "probe"
                 return (1 if failed else 0), not failed, [], []
 
-            with patch.object(c_check, "tool_identity", return_value=(directory / "cppcheck", directory, {})), patch.object(c_check, "coverage", return_value={}), patch.object(c_check, "prepare", return_value=(root, units, database, {"profile": "ecu"})), patch.object(c_check, "analyze_program", side_effect=analyze), patch.object(c_check, "sealed_sources"):
+            with patch.object(c_check, "tool_identity", return_value=(directory / "cppcheck", directory, {})), patch.object(c_check, "coverage", return_value={}), patch.object(c_check, "prepare", return_value=(root, units, database, {"profile": "ecu", "entries": ENTRIES})), patch.object(c_check, "analyze_program", side_effect=analyze), patch.object(c_check, "sealed_sources"):
                 self.assertEqual(c_check.check(source, "linux-x64-controlled-v1", output), 1)
-            self.assertEqual(calls, [["src/common.c", "src/ecu_host_batch.c"], ["src/common.c", "src/ecu_probe.c"]])
+            self.assertEqual(calls, [["src/common.c", "integration/src/ecu_host_batch.c"], ["src/common.c", "integration/src/ecu_probe.c"]])
             summary = json.loads((output / "summary.json").read_text())
             self.assertIsNone(summary["error"])
             self.assertFalse(summary["passed"])
@@ -154,10 +158,11 @@ class CAnalysisTests(unittest.TestCase):
             directory = Path(temporary).resolve(strict=True)
             source = directory / "source"
             source.mkdir()
-            (source / "files.sha256").write_text("seal")
+            (source / "meta").mkdir()
+            (source / "meta/files.sha256").write_text("seal")
             output = directory / "analysis"
             root = output / "project"
-            units = ["src/common.c", "src/ecu_host_batch.c", "src/ecu_probe.c"]
+            units = ["src/common.c", "integration/src/ecu_host_batch.c", "integration/src/ecu_probe.c"]
             database = [{"file": str(root / name)} for name in units]
 
             def run(argv, directory, stage):
@@ -170,7 +175,7 @@ class CAnalysisTests(unittest.TestCase):
                     (receipts / f"{index}.json").write_text(json.dumps(data))
                 return 0, "", "<results><errors/></results>"
 
-            with patch.object(c_check, "tool_identity", return_value=(directory / "cppcheck", directory, {})), patch.object(c_check, "coverage", return_value={}), patch.object(c_check, "prepare", return_value=(root, units, database, {"profile": "ecu"})), patch.object(c_check, "run", side_effect=run):
+            with patch.object(c_check, "tool_identity", return_value=(directory / "cppcheck", directory, {})), patch.object(c_check, "coverage", return_value={}), patch.object(c_check, "prepare", return_value=(root, units, database, {"profile": "ecu", "entries": ENTRIES})), patch.object(c_check, "run", side_effect=run):
                 self.assertEqual(c_check.check(source, "linux-x64-controlled-v1", output), 1)
             summary = json.loads((output / "summary.json").read_text())
             self.assertFalse(summary["passed"])

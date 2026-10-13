@@ -357,6 +357,9 @@ jobs:
         run: cargo test --locked -p autosar-config-core --test it -- 'c_analysis::'
       - name: Sealed ECU build mode fault isolation
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_ecu_build_modes.py
+      # The generated CMake build (uv-locked CMake and Ninja) compiles the target.json closure.
+      - name: CMake build matches the sealed ECU build
+        run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_cmake_build.py
       # Every supported receiver interpreter runs the moved package; a failing version does not hide the others.
       - name: Moved package verifies with receiver Python 3.11–3.14
         shell: python

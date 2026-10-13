@@ -28,7 +28,7 @@ fn counter_timing_report_and_profile() {
         let scratch = Scratch::new();
         let (_, files) = project(&sources, &scratch.0, BuildTarget::LinuxX64ControlledV1);
         let report: serde_json::Value =
-            serde_json::from_str(file(&files, "os-generation-timing.json")).unwrap();
+            serde_json::from_str(file(&files, "meta/os-generation-timing.json")).unwrap();
         let counter = if renamed {
             "RenamedCounter"
         } else {
@@ -49,7 +49,7 @@ fn counter_timing_report_and_profile() {
         assert_eq!(report["hostTimeouts"][0]["advancesAutomotiveTime"], false);
         assert_eq!(report["hostTimeouts"][1]["limitMilliseconds"], 5000);
         assert_eq!(report["hostTimeouts"][1]["advancesAutomotiveTime"], false);
-        let header = file(&files, "os/include/Os_Counter.h");
+        let header = file(&files, "generated/include/Os_Counter.h");
         assert!(header.contains(&format!("OS_TICKS2NS_{counter}(ticks)")));
         if renamed {
             assert!(!header.contains("SystemCounter"), "{header}");
@@ -83,7 +83,7 @@ fn status_guard_and_rejections() {
         let scratch = Scratch::new();
         let (_, files) = project(&sources, &scratch.0, BuildTarget::LinuxX64ControlledV1);
         assert!(
-            file(&files, "os/include/Os_Cfg.h").contains(define),
+            file(&files, "generated/include/Os_Cfg.h").contains(define),
             "{status}"
         );
     }
@@ -245,7 +245,7 @@ fn counter_service_description() {
         }
         let scratch = Scratch::new();
         let (_, files) = project(&sources, &scratch.0, BuildTarget::LinuxX64ControlledV1);
-        let xml = file(&files, "os/Os_Service.arxml");
+        let xml = file(&files, "generated/descriptions/Os_Service.arxml");
         let doc = roxmltree::Document::parse(xml).unwrap();
         let text = |tag: &str| {
             doc.descendants()
@@ -418,9 +418,14 @@ fn public_headers_are_delivered_unchanged() {
         .parent()
         .unwrap()
         .join("runtime/os/include");
-    for header in ["Os.h", "Os_Types.h", "Rte_Os_Type.h"] {
+    // Rte_Os_Type.h is an RTE-generated header (SWS_Rte_07120), delivered by the RTE emitter.
+    for (header, directory) in [
+        ("Os.h", "os/include"),
+        ("Os_Types.h", "os/include"),
+        ("Rte_Os_Type.h", "generated/include"),
+    ] {
         assert_eq!(
-            file(&files, &format!("os/include/{header}")).as_bytes(),
+            file(&files, &format!("{directory}/{header}")).as_bytes(),
             std::fs::read(runtime.join(header)).unwrap(),
             "{header}"
         );

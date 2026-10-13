@@ -111,11 +111,13 @@ check('retired-identities-refused-unchanged', async () => {
     'backend.arxml.project.retired_profile',
   );
   assert.deepEqual(await snapshot(retiredProject), projectBytes, 'Retired project unchanged');
-  // Handoff directories of the retired host, single-component and earlier workbench formats.
+  // Handoff directories of the retired host, single-component and earlier workbench formats,
+  // which kept handoff.json at the package root.
   for (const format of [
     'autosar-host-handoff-v1',
     'autosar-ecu-handoff-v1',
     'autosar-workbench-handoff-v2',
+    'autosar-workbench-handoff-v3',
   ]) {
     const directory = path.join(scratch, 'deliveries', `retired-${format}`);
     await mkdir(directory);

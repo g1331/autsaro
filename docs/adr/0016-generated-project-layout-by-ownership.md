@@ -19,13 +19,13 @@
 
 ## 后果
 
-- 重新生成后只有 `generated/`、`app/`、`meta/` 变化，审阅范围清楚。
+- 重新生成后只有 `generated/`、`app/`、`meta/`、配置快照 `inputs/` 与根目录的 `README.md`、`target.json`、`CMakeLists.txt` 变化，审阅范围清楚；因此包内 `tools/ecu-tool.py` 不嵌入随配置变化的期望值，改由 `meta/seal-policy.json` 提供。
 - 改变交付位置须同时核对交付路径、target sources／includes、headers、ownership／reopen 与封存工具，不只更新仓库路径；这是交付格式变化，按 ADR 0011 审阅并写入 CHANGELOG。
 - CMake 与 `ecu-tool` 两个构建入口须在两个平台都通过，作为一致性证据。
 
 ## 状态
 
-已接受（2026-10-11），实施中。
+已接受（2026-10-11），已实施（2026-10-13，[#38](https://github.com/g1331/autsaro/issues/38)）。SWC MemMap 头（`[SWS_MemMap_00029]`）由 [#51](https://github.com/g1331/autsaro/issues/51) 承接。
 
 来源：`planning-archive-2026-10:_bmad-output/planning-artifacts/architecture/epic-9/ARCHITECTURE-SPINE.md`（Structural Seed：生成工程布局）、`planning-archive-2026-10:_bmad-output/planning-artifacts/sprint-change-proposal-2026-10-11.md`（执行顺序第 7 步）、`planning-archive-2026-10:_bmad-output/specs/spec-runtime-codegen-quality/work-packages.md`（B7）。
 

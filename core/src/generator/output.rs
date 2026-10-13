@@ -5,6 +5,12 @@ use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+/// The integrity seal of a generated output directory.
+pub(crate) const FILE_LIST: &str = "meta/files.list";
+pub(crate) const FILE_HASHES: &str = "meta/files.sha256";
+/// The seal location of the retired flat layout, refused rather than rewritten.
+const RETIRED_FILE_LIST: &str = "files.list";
+
 pub(super) fn file_digest(path: &Path) -> Result<String, crate::LocalizedText> {
     let mut file = fs::File::open(path)
         .map_err(|e| crate::product_message!("backend.generation.generated_file_missing", "path" => path.display(), "error" => e.to_string()))?;
@@ -27,7 +33,7 @@ fn integrity_record(dir: &Path, names: &[String]) -> Result<String, crate::Local
     for name in names
         .iter()
         .map(String::as_str)
-        .chain(std::iter::once("files.list"))
+        .chain(std::iter::once(FILE_LIST))
     {
         record.push_str(&format!("{}  {name}\n", file_digest(&dir.join(name))?));
     }
@@ -111,16 +117,19 @@ fn check_entries(dir: &Path, root: &Path, names: &[String]) -> Result<(), crate:
             // declared file. This also covers nested kernel/OS/input trees;
             // arbitrary owner directories, even empty ones, still refuse.
             let prefix = format!("{name}/");
-            if !names.iter().any(|item| item.starts_with(&prefix)) {
+            if !names
+                .iter()
+                .map(String::as_str)
+                .chain([FILE_LIST])
+                .any(|item| item.starts_with(&prefix))
+            {
                 return Err(
                     crate::product_message!("backend.generation.output_user_directory_refused", "path" => name),
                 );
             }
             check_entries(&path, root, names)?;
         } else if !kind.is_file()
-            || (name != "files.list"
-                && name != "files.sha256"
-                && names.binary_search(&name).is_err())
+            || (name != FILE_LIST && name != FILE_HASHES && names.binary_search(&name).is_err())
         {
             return Err(
                 crate::product_message!("backend.generation.output_user_file_refused", "path" => name),
@@ -148,7 +157,12 @@ fn verify_generated_output(dir: &Path, names: &[String]) -> Result<(), crate::Lo
     {
         return Ok(());
     }
-    let previous = fs::read_to_string(dir.join("files.list"))
+    if dir.join(RETIRED_FILE_LIST).is_file() {
+        return Err(
+            crate::product_message!("backend.generation.output_layout_retired", "path" => dir.display()),
+        );
+    }
+    let previous = fs::read_to_string(dir.join(FILE_LIST))
         .map_err(|_| crate::product_message!("backend.generation.output_inventory_missing", "path" => dir.display()))?;
     if previous != format!("{}\n", names.join("\n")) {
         return Err(crate::product_message!(
@@ -156,7 +170,7 @@ fn verify_generated_output(dir: &Path, names: &[String]) -> Result<(), crate::Lo
         ));
     }
     check_entries(dir, dir, names)?;
-    let recorded = fs::read_to_string(dir.join("files.sha256")).map_err(|_| {
+    let recorded = fs::read_to_string(dir.join(FILE_HASHES)).map_err(|_| {
         crate::product_message!("backend.generation.output_integrity_missing", "path" => dir.display())
     })?;
     if recorded != integrity_record(dir, names)? {
@@ -168,7 +182,12 @@ fn verify_generated_output(dir: &Path, names: &[String]) -> Result<(), crate::Lo
 }
 
 pub(crate) fn verify_build_input(output: &Path) -> Result<Vec<String>, crate::LocalizedText> {
-    let list = fs::read_to_string(output.join("files.list"))
+    if output.join(RETIRED_FILE_LIST).is_file() {
+        return Err(
+            crate::product_message!("backend.generation.output_layout_retired", "path" => output.display()),
+        );
+    }
+    let list = fs::read_to_string(output.join(FILE_LIST))
         .map_err(|e| crate::product_message!("backend.generation.build_inventory_missing", "error" => e.to_string()))?;
     let names: Vec<String> = list.lines().map(str::to_owned).collect();
     if names.is_empty()
@@ -204,11 +223,11 @@ pub(crate) fn seal_files(mut files: Vec<(String, Vec<u8>)>) -> Vec<(String, Vec<
         record.push_str(&format!("{:x}  {name}\n", Sha256::digest(bytes)));
     }
     record.push_str(&format!(
-        "{:x}  files.list\n",
+        "{:x}  {FILE_LIST}\n",
         Sha256::digest(list.as_bytes())
     ));
-    files.push(("files.list".into(), list.into_bytes()));
-    files.push(("files.sha256".into(), record.into_bytes()));
+    files.push((FILE_LIST.into(), list.into_bytes()));
+    files.push((FILE_HASHES.into(), record.into_bytes()));
     files
 }
 pub(super) fn output_path(output: &Path) -> Result<PathBuf, crate::LocalizedText> {
@@ -319,7 +338,7 @@ fn inspect_prepared(
                     (!owners.is_empty()
                         && matches!(
                             name.as_str(),
-                            super::delivery::OWNERSHIP_PATH | "files.list" | "files.sha256"
+                            super::delivery::OWNERSHIP_PATH | FILE_LIST | FILE_HASHES
                         ))
                     .then(|| "generated".into())
                 }),
@@ -330,7 +349,7 @@ fn inspect_prepared(
                     (!owners.is_empty()
                         && matches!(
                             name.as_str(),
-                            super::delivery::OWNERSHIP_PATH | "files.list" | "files.sha256"
+                            super::delivery::OWNERSHIP_PATH | FILE_LIST | FILE_HASHES
                         ))
                     .then(|| "autosar-generator".into())
                 }),

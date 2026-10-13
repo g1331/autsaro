@@ -1,6 +1,6 @@
 # 主机 ECU C99 运行时
 
-本目录提供随主线 ECU 工程（`singlecore-ecu-v1`）交付的 C99 运行时：`bsw/` 为 Can、CanIf、CanTp、Com、ComM、BswM、Dcm、Det、LSduR、PduR 等 BSW 及其公共头文件，`ecu/` 为主机执行 adapter、HostBatch 入口与配置模板，`os/` 为受控 OS 目标（见 [os/README.md](os/README.md)），`contracts/` 为交付资产清单。生成器按 `target.json` 中的源码和头文件清单交付核心 BSW、所选执行 adapter 和生成配置。验证范围限于主机行为，尚未完成完整 AUTOSAR/ISO 一致性或真实芯片验证。
+本目录提供随主线 ECU 工程（`singlecore-ecu-v1`）交付的 C99 运行时：`bsw/` 为 Can、CanIf、CanTp、Com、ComM、BswM、Dcm、Det、LSduR、PduR 等 BSW 及其公共头文件，`host/` 为这些模块的主机适配（`Can_Host*`、`Can_HostLock*`、`Det_Host*`、`SchM_*_Host.c`、`Ecu_HostBusSM*`、`Ecu_Status*`），`ecu/` 为主机执行 adapter、HostBatch 入口与配置模板，`os/` 为受控 OS 目标（见 [os/README.md](os/README.md)），`contracts/` 为交付资产清单。交付时 `bsw/` 原样进入工程的 `bsw/`，`host/` 与 `ecu/` 进入 `integration/`，`os/` 进入 `os/`；各模块的 `*_MemMap.h`、`SchM_*.h`、`Rte_*_Type.h` 与配置模板只作为生成方的模板，渲染结果进入 `generated/`。工程布局见 [docs/architecture.md](../docs/architecture.md) §7.6。验证范围限于主机行为，尚未完成完整 AUTOSAR/ISO 一致性或真实芯片验证。
 
 ## 构建
 
@@ -10,21 +10,30 @@
 <python> tools/ecu-tool.py build --project <sealed-source-directory> --output <new-empty-outside-directory> --mode host-batch
 ```
 
-`host-batch` 产出实际生产批入口，`probe` 产出独立启动消费者，`test` 启用私有 OS/ECU 探针。`--control-source <external.c>` 只用于 `probe|test`，生产 HostBatch 拒绝它。编译器版本、目标与摘要必须匹配包内工具链，错误宿主或缺依赖明确失败，不降级到其他编译器。
+各模式的 main 记录在 `target.json` 的 `entries` 中。`host-batch` 产出实际生产批入口，`probe` 产出独立启动消费者，`test` 启用私有 OS/ECU 探针。`--control-source <external.c>` 只用于 `probe|test`，生产 HostBatch 拒绝它。编译器版本、目标与摘要必须匹配包内工具链，错误宿主或缺依赖明确失败，不降级到其他编译器。
 
 构建目录必须位于源码之外，且为新目录或空目录。构建前后会核对文件清单和 SHA-256，缺失文件、额外文件、链接或 reparse point 均会导致失败。补丁只应用于私有内核副本；Windows 检查 PE/TLS 和段信息，Linux 检查 ELF 和相应段信息。失败日志保留在构建目录中。外部命令使用参数数组启动，子孙进程由受管进程范围按单调截止时间回收，无需 PowerShell 命令拼接或 taskkill 回退。
 
+工程根目录的 `CMakeLists.txt` 由同一份 `target.json` 生成，供 IDE 和 CI 使用：源文件、include 路径、编译参数、内核补丁和链接库与 `ecu-tool build` 相同，配置阶段在构建目录复制并修补内核，两个 main 分别生成 `ecu_host_batch` 与 `ecu_probe`。构建目录必须在工程之外：
+
+```text
+cmake -S <sealed-source-directory> -B <outside-build-directory> -G Ninja -DCMAKE_C_COMPILER=<gcc>
+cmake --build <outside-build-directory>
+```
+
+CMake 不核对固定工具链身份和目标段，也不运行 `verify`；这两项仍由 `ecu-tool` 负责。调用方设置的 `CMAKE_C_FLAGS`／`CFLAGS` 会叠加在清单参数之上。
+
 集成工程的独立行为入口为 `tools/ecu-tool.py verify --project <sealed-source-directory> --build-directory <new-empty-outside-directory>`：重建实际生产binary，检查 CAN/DID、至多两个DID、N_Cr超时恢复和非法批次，预期不由生成配置回显提供。离线接收者不需要 checkout、uv、Rust 或 Node。工作台暂不提供交互式运行生成 ECU 的页面（[#65](https://github.com/g1331/autsaro/issues/65)），主机行为以此入口和原生测试验证。
 
-发行工作台从内嵌可信资源生成同一封存工程；源码及其全部 stdlib 工具随工程交付，后续离线 build/verify 不回读工作台安装目录或原构建 checkout。配置交接（`autosar-workbench-handoff-v2`）不依赖官方 XSD/MOD；旧 host／单组件交付包在打开时被拒绝。CPython/GCC/binutils/Git 不随工作台或 ECU 包分发。工作台启动依赖与原生发行包后台复验入口见docs/development/testing.md 与 docs/maintainers/releasing.md。
+发行工作台从内嵌可信资源生成同一封存工程；源码及其全部 stdlib 工具随工程交付，后续离线 build/verify 不回读工作台安装目录或原构建 checkout。配置交接（`autosar-workbench-handoff-v4`）不依赖官方 XSD/MOD；旧 host／单组件交付包在打开时被拒绝。CPython/GCC/binutils/Git 不随工作台或 ECU 包分发。工作台启动依赖与原生发行包后台复验入口见docs/development/testing.md 与 docs/maintainers/releasing.md。
 
 工作台的预检和封存工具调用使用 CPython `-I -S`，忽略外部 Python home/path、用户及环境 site-packages；工具入口只从自身封存 `tools/` 导入 helper，禁用字节码，不向源码增加 `__pycache__`。这也适用于 AppImage 启动器设置 Python 相关变量的场景；开发虚拟环境的可编辑安装不是离线包依赖。
 
-输入配置结构和容量上限见生成的 `include/Ecu_Config.h`。验证结果限于已执行的主机用例，其他工程需单独复验；MCU、硬实时、ASIL 和完整标准符合性尚未验证。
+输入配置结构和容量上限见生成的 `generated/include/Ecu_Config.h`。验证结果限于已执行的主机用例，其他工程需单独复验；MCU、硬实时、ASIL 和完整标准符合性尚未验证。
 
 ## 显式 profile 策略与执行边界
 
-`Ecu_Config.h` 定义业务策略，生成的 `src/Ecu_Config.c` 提供 const 值；核心 BSW 不按操作系统或 Epic 宏选择语义。`Ecu_ProfileLimits.h` 显式提供 `ECU_MAX_PDU_PAYLOAD`，当前为 64 字节。
+`Ecu_Config.h` 定义业务策略，生成的 `generated/src/Ecu_Config.c` 提供 const 值；核心 BSW 不按操作系统或 Epic 宏选择语义。`Ecu_ProfileLimits.h` 显式提供 `ECU_MAX_PDU_PAYLOAD`，当前为 64 字节。
 
 | 业务边界 | 行为 |
 | --- | --- |

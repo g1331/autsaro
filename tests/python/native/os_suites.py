@@ -287,6 +287,7 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
             if linux else []
         ),
         "-I", str(ROOT / "runtime/bsw/include"),
+        "-I", str(ROOT / "runtime/host/include"),
         "-I", str(copied / "include"),
         "-I", str(copied / ("portable/ThirdParty/GCC/Posix" if linux else "portable/MSVC-MingW")),
         str(target / "src/Os.c"),
@@ -1575,7 +1576,7 @@ def check_public_types(directory: Path) -> None:
         compiler(), "-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic",
         *(["-D_GNU_SOURCE", "-pthread"] if linux else []),
         "-I" + str(TARGET / "include"), str(TARGET / "tests/public_types.c"),
-        "-I" + str(ROOT / "runtime/bsw/include"),
+        "-I" + str(ROOT / "runtime/bsw/include"), "-I" + str(ROOT / "runtime/host/include"),
         "-o", str(binary),
     ]
     expected = "public_types range_and_pointer_contracts=pass access_truth_table=16\n"
@@ -1608,7 +1609,7 @@ def check_public_compatibility(directory: Path) -> None:
                *(["-D_GNU_SOURCE", "-pthread"] if linux else []),
                "-I" + str(TARGET / "include"), "-I" + str(TARGET / "src"),
                *(["-I" + str(TARGET / "src/host/linux")] if linux else []),
-               "-I" + str(ROOT / "runtime/bsw/include"),
+               "-I" + str(ROOT / "runtime/bsw/include"), "-I" + str(ROOT / "runtime/host/include"),
                str(TARGET / "tests/public_compatibility.c"), "-o", str(binary)]
     expected = "public_compatibility declarations=16 evaluations=0 error_codes=23 unique=pass\n"
     for name, extra in [
@@ -1718,10 +1719,10 @@ def check_counter_service(directory: Path, project: Path, counter: str) -> None:
     target = directory / "target"
     shutil.copytree(TARGET, target)
     shutil.copytree(project / "os/include", target / "include", dirs_exist_ok=True)
-    shutil.copyfile(project / "include/Rte_Os.h", target / "include/Rte_Os.h")
-    shutil.copyfile(project / "include/Rte_MemMap.h", target / "include/Rte_MemMap.h")
+    for name in ("Os_Cfg.h", "Os_Counter.h", "Os_MemMap.h", "Rte_Os_Type.h", "Rte_Os.h", "Rte_MemMap.h"):
+        shutil.copyfile(project / "generated/include" / name, target / "include" / name)
     source = directory / "Rte_OsService.c"
-    original = (project / "src/Rte_OsService.c").read_text(encoding="utf-8")
+    original = (project / "generated/src/Rte_OsService.c").read_text(encoding="utf-8")
     source.write_text(original, encoding="utf-8")
     defines = (f"SERVICE_GET=OsService_{counter}_GetCounterValue",
                f"SERVICE_ELAPSED=OsService_{counter}_GetElapsedValue")
@@ -1768,7 +1769,7 @@ def check_memory_mapping(directory: Path) -> None:
     headers = directory / "include"
     shutil.copytree(TARGET / "include", headers)
     flags = [cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-I", str(headers),
-             "-I", str(ROOT / "runtime/bsw/include")]
+             "-I", str(ROOT / "runtime/bsw/include"), "-I", str(ROOT / "runtime/host/include")]
     source = TARGET / "tests/memory_mapping.c"
     binary = directory / ("memory_mapping" if linux else "memory_mapping.exe")
     run_native([*flags, str(source), "-o", str(binary)], check=True, timeout=60)

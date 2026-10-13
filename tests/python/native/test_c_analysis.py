@@ -15,25 +15,28 @@ from autosar_tooling import c_check
 
 
 class ActualCAnalysisTests(unittest.TestCase):
-    def project(self, root: Path, source: str, source_name: str = "src/main.c", extra_files: dict[str, str] | None = None) -> Path:
+    def project(self, root: Path, source: str, source_name: str = "bsw/src/main.c", extra_files: dict[str, str] | None = None,
+                unbuilt: tuple[str, ...] = ()) -> Path:
         project = root / "sources"
         project.mkdir()
         target = "windows-x64-controlled-v1" if platform.system() == "Windows" else "linux-x64-controlled-v1"
         abi = "x86_64-w64-mingw32" if platform.system() == "Windows" else "x86_64-linux-gnu"
         extra_files = extra_files or {}
         files = {**extra_files, source_name: source, "target.json": json.dumps({
-            "format": "autosar-build-target-v1", "target": target, "abi": abi, "profile": "host",
+            "format": "autosar-build-target-v2", "target": target, "abi": abi, "profile": "host",
             "compilerFlags": ["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"],
-            "sources": [source_name, *(name for name in extra_files if name.endswith(".c"))], "includePaths": ["."]})}
+            "sources": [source_name, *(name for name in extra_files if name.endswith(".c") and name not in unbuilt)],
+            "includePaths": ["."]})}
         for name, text in files.items():
             path = project / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text, encoding="utf-8")
-        (project / "files.list").write_text("\n".join(sorted(files)) + "\n", encoding="utf-8")
-        (project / "files.sha256").write_text("".join(f"{hashlib.sha256((project / name).read_bytes()).hexdigest()}  {name}\n" for name in [*sorted(files), "files.list"]), encoding="utf-8")
+        (project / "meta").mkdir()
+        (project / "meta/files.list").write_text("\n".join(sorted(files)) + "\n", encoding="utf-8")
+        (project / "meta/files.sha256").write_text("".join(f"{hashlib.sha256((project / name).read_bytes()).hexdigest()}  {name}\n" for name in [*sorted(files), "meta/files.list"]), encoding="utf-8")
         return project
 
-    def analyze(self, source: str, name: str = "src/main.c", *, cli: bool = False) -> dict:
+    def analyze(self, source: str, name: str = "bsw/src/main.c", *, cli: bool = False) -> dict:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             project = self.project(root, source, name)
@@ -84,10 +87,25 @@ class ActualCAnalysisTests(unittest.TestCase):
                 self.assertIn("Compiler validation failed", summary["error"])
 
     def test_host_adapter_and_application_are_not_classified_as_bsw(self):
-        for name in ("src/host/adapter.c", "src/Application.c"):
+        for name in ("integration/src/adapter.c", "app/Application/Application.c"):
             with self.subTest(name=name):
                 summary = self.analyze("extern int pthread_create(void);\nint main(void) { return pthread_create(); }\n", name)
                 self.assertFalse(any(row["id"] == "autsaro-hostThreadInBsw" for row in summary["diagnostics"]))
+
+    def test_component_skeletons_are_not_analyzed_as_program_units(self):
+        # A skeleton repeats the application's definitions; analyzing it with the program reports false 8.6 duplicates.
+        source = "int Component_Run(void);\nint Component_Run(void) { return 0; }\nint main(void) { return Component_Run(); }\n"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = self.project(root, source, extra_files={"generated/templates/Component.c": source, "integration/src/extra.c": "int Extra(void);\nint Extra(void) { return 1; }\n"},
+                                   unbuilt=("generated/templates/Component.c", "integration/src/extra.c"))
+            target = json.loads((project / "target.json").read_text())["target"]
+            c_check.check(project, target, root / "analysis")
+            summary = json.loads((root / "analysis/summary.json").read_text())
+        self.assertIsNone(summary["error"], summary)
+        self.assertEqual(summary["scope"]["supplemental"], ["integration/src/extra.c"])
+        self.assertFalse(any(location["file"] == "generated/templates/Component.c" or row["id"] == "misra-c2012-8.6"
+                             for row in summary["diagnostics"] for location in row["locations"]), summary["diagnostics"])
 
     def test_thread_macro_and_typedef_still_report_direct_call(self):
         summary = self.analyze("typedef int ThreadResult;\nextern ThreadResult pthread_create(void);\n#define SPAWN pthread_create\nint main(void) { return SPAWN(); }\n")
@@ -97,7 +115,7 @@ class ActualCAnalysisTests(unittest.TestCase):
     def test_linux_dynamic_values_keep_their_actual_function_types(self):
         summary = self.analyze("#define _GNU_SOURCE 1\n#include <pthread.h>\n#include <signal.h>\nint main(void) { return PTHREAD_MUTEX_RECURSIVE + (SIGRTMIN > 0) + (PTHREAD_STACK_MIN > 0); }\n")
         self.assertIsNotNone(summary["scope"]["platformModel"])
-        definitions = summary["scope"]["compilerDiscoveredDefines"]["src/main.c"]
+        definitions = summary["scope"]["compilerDiscoveredDefines"]["bsw/src/main.c"]
         self.assertTrue(any(value.startswith("-DSIGRTMIN=") and "__libc_current_sigrtmin" in value for value in definitions))
         self.assertTrue(any(value.startswith("-DPTHREAD_STACK_MIN=") and "__sysconf" in value for value in definitions))
 
@@ -125,7 +143,7 @@ class ActualCAnalysisTests(unittest.TestCase):
     def test_standard_integer_constant_macros_use_real_compiler_suffixes(self):
         summary = self.analyze("#include <stdint.h>\nint main(void) { uint32_t value = UINT32_C(0xffffffff); return (value > 0u) ? 0 : 1; }\n")
         self.assertFalse(any(row["id"] == "misra-c2012-7.2" for row in summary["diagnostics"]), summary.get("diagnostics"))
-        self.assertTrue(any(value.startswith("-DUINT32_C(") for value in summary["scope"]["compilerDiscoveredDefines"]["src/main.c"]))
+        self.assertTrue(any(value.startswith("-DUINT32_C(") for value in summary["scope"]["compilerDiscoveredDefines"]["bsw/src/main.c"]))
 
     def test_stdio_model_accepts_actual_modes_and_rejects_invalid_mode(self):
         summary = self.analyze("#include <stdio.h>\nint main(void) { return setvbuf(stdout, NULL, _IONBF, 0u); }\n")
@@ -139,9 +157,9 @@ class ActualCAnalysisTests(unittest.TestCase):
                 root = Path(temporary)
                 project = self.project(root, '#include "helper.h"\nint main(void) { return helper() == UINT32_C(1) ? 0 : 1; }\n', extra_files={
                     "helper.h": '#include <stdint.h>\nuint32_t helper(void);\nuint32_t second(void);\nuint32_t third(void);\n',
-                    "src/second.c": '#include "helper.h"\nuint32_t second(void) { return UINT32_C(2); }\n',
-                    "src/third.c": '#include "helper.h"\nuint32_t third(void) { return UINT32_C(3); }\n',
-                    "src/helper.c": 'int broken( { }\n' if invalid else '#include "helper.h"\nuint32_t helper(void) { return UINT32_C(1); }\n'})
+                    "bsw/src/second.c": '#include "helper.h"\nuint32_t second(void) { return UINT32_C(2); }\n',
+                    "bsw/src/third.c": '#include "helper.h"\nuint32_t third(void) { return UINT32_C(3); }\n',
+                    "bsw/src/helper.c": 'int broken( { }\n' if invalid else '#include "helper.h"\nuint32_t helper(void) { return UINT32_C(1); }\n'})
                 target = json.loads((project / "target.json").read_text())["target"]
                 with patch("autosar_tooling.c_check.os.cpu_count", return_value=64):
                     code = c_check.check(project, target, root / "analysis")
@@ -149,10 +167,10 @@ class ActualCAnalysisTests(unittest.TestCase):
                 self.assertEqual(code, 0 if summary["passed"] else 1)
                 if invalid:
                     self.assertFalse(summary["passed"])
-                    self.assertIn("Compiler validation failed for src/helper.c", summary["error"])
+                    self.assertIn("Compiler validation failed for bsw/src/helper.c", summary["error"])
                 else:
                     self.assertIsNone(summary["error"])
                     self.assertEqual(summary["scope"]["compilerWorkers"], 4)
-                    self.assertEqual(set(summary["scope"]["compilerDiscoveredDefines"]), {"src/main.c", "src/helper.c", "src/second.c", "src/third.c"})
+                    self.assertEqual(set(summary["scope"]["compilerDiscoveredDefines"]), {"bsw/src/main.c", "bsw/src/helper.c", "bsw/src/second.c", "bsw/src/third.c"})
                     for definitions in summary["scope"]["compilerDiscoveredDefines"].values():
                         self.assertTrue(any(value.startswith("-DUINT32_C(") for value in definitions))
