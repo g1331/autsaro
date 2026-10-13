@@ -189,42 +189,6 @@ fn fail(graph: &Graph, index: usize, code: &str) -> Vec<PlanDiagnostic> {
     )]
 }
 
-/// Built-in validation always plans on the mainline: one application SWC is
-/// the mainline with N = 1. Only the external-archive validation mode, which
-/// still opens historical single-component inputs, keeps the old identity
-/// (no ComM/BswM and one application SWC type) on that chain.
-pub(super) fn selected(graph: &Graph) -> bool {
-    if graph.builtin {
-        return true;
-    }
-    let mode_management = graph
-        .of_kind("ECUC-MODULE-CONFIGURATION-VALUES")
-        .into_iter()
-        .any(|module| {
-            super::schedule::definition_is(graph, module, "ComM")
-                || super::schedule::definition_is(graph, module, "BswM")
-        });
-    mode_management
-        || graph
-            .of_kind("SYSTEM")
-            .into_iter()
-            .filter(|system| graph.text(*system, "CATEGORY") == Some("ECU_EXTRACT"))
-            .flat_map(|system| graph.descendants(system, "ROOT-SW-COMPOSITION-PROTOTYPE"))
-            .filter_map(|root| graph.target(root, "SOFTWARE-COMPOSITION-TREF"))
-            .any(|composition| {
-                graph
-                    .descendants(composition, "SW-COMPONENT-PROTOTYPE")
-                    .into_iter()
-                    .filter_map(|instance| graph.target(instance, "TYPE-TREF"))
-                    .filter(|component| {
-                        graph.elements[*component].tag == "APPLICATION-SW-COMPONENT-TYPE"
-                    })
-                    .collect::<BTreeSet<_>>()
-                    .len()
-                    > 1
-            })
-}
-
 fn path(graph: &Graph, index: usize) -> String {
     graph.elements[index].object.clone()
 }

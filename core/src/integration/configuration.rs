@@ -282,21 +282,15 @@ fn inspect_with_catalog(
     graph: &Graph,
     catalog: Option<&crate::definitions::DefinitionCatalog>,
 ) -> Result<Configuration, Vec<PlanDiagnostic>> {
-    let composition = super::composition::selected(graph);
     let mut allowed: BTreeSet<_> = SUPPORTED_PARAMETERS.split_whitespace().collect();
-    if composition {
-        allowed.extend(RUNTIME_PARAMETERS.split_ascii_whitespace());
-    }
+    allowed.extend(RUNTIME_PARAMETERS.split_ascii_whitespace());
     let mut allowed_references: BTreeSet<_> = SUPPORTED_REFERENCES.split_whitespace().collect();
-    if composition {
-        allowed_references.extend(RUNTIME_REFERENCES.split_ascii_whitespace());
-    }
+    allowed_references.extend(RUNTIME_REFERENCES.split_ascii_whitespace());
     let modules = graph.of_kind("ECUC-MODULE-CONFIGURATION-VALUES");
-    if composition
-        && let Some(module) = modules
-            .iter()
-            .copied()
-            .find(|module| graph.text(*module, "DEFINITION-REF") == Some("/AUTOSAR/EcucDefs/LSduR"))
+    if let Some(module) = modules
+        .iter()
+        .copied()
+        .find(|module| graph.text(*module, "DEFINITION-REF") == Some("/AUTOSAR/EcucDefs/LSduR"))
     {
         return Err(reject(
             graph,
@@ -329,24 +323,22 @@ fn inspect_with_catalog(
         }
         selected.push(found[0]);
     }
-    if composition {
-        for name in ["ComM", "BswM"] {
-            let definition = format!("/AUTOSAR/EcucDefs/{name}");
-            let found: Vec<_> = modules
-                .iter()
-                .copied()
-                .filter(|index| graph.text(*index, "DEFINITION-REF") == Some(definition.as_str()))
-                .collect();
-            if found.len() != 1 {
-                return Err(reject(
-                    graph,
-                    context,
-                    "MODE_CONFIGURATION",
-                    crate::product_message!("backend.integration.composition.contract_invalid", "code" => "MODE_CONFIGURATION"),
-                ));
-            }
-            selected.push(found[0]);
+    for name in ["ComM", "BswM"] {
+        let definition = format!("/AUTOSAR/EcucDefs/{name}");
+        let found: Vec<_> = modules
+            .iter()
+            .copied()
+            .filter(|index| graph.text(*index, "DEFINITION-REF") == Some(definition.as_str()))
+            .collect();
+        if found.len() != 1 {
+            return Err(reject(
+                graph,
+                context,
+                "MODE_CONFIGURATION",
+                crate::product_message!("backend.integration.composition.contract_invalid", "code" => "MODE_CONFIGURATION"),
+            ));
         }
+        selected.push(found[0]);
     }
     let os = one(graph, context, "OsOS")?;
     let hooks = one(graph, os, "OsHooks")?;

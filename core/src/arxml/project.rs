@@ -976,20 +976,15 @@ impl Workspace {
                 .unwrap()
                 .manifest
                 .application_inputs;
-            let matches = if let Some(slots) =
-                crate::integration::ecu::workspace_application_slots(&sources)
-                    .map_err(super::integration_errors)?
-            {
-                slots.len() == members.len()
-                    && slots.iter().all(|slot| {
-                        members.iter().any(|input| {
-                            input.producer_slot == slot.producer_slot
-                                && slot.source_paths == [input.path.clone()]
-                        })
+            let slots = crate::integration::ecu::application_slots_from_sources(&sources)
+                .map_err(super::integration_errors)?;
+            let matches = slots.len() == members.len()
+                && slots.iter().all(|slot| {
+                    members.iter().any(|input| {
+                        input.producer_slot == slot.producer_slot
+                            && slot.source_paths == [input.path.clone()]
                     })
-            } else {
-                false
-            };
+                });
             if !matches {
                 return Err(crate::product_message!(
                     "backend.arxml.project.application_live_slot_mismatch"

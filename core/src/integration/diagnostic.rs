@@ -351,7 +351,7 @@ pub(super) fn inspect_service(
                 crate::product_message!("backend.integration.diagnostic.did_identifier_invalid"),
             )
         })?;
-    if super::composition::selected(graph) && did_id == 0xf186 {
+    if did_id == 0xf186 {
         return Err(reject(
             graph,
             did,
@@ -431,7 +431,7 @@ pub(super) fn inspect_service(
             ),
         ));
     }
-    let transport = inspect_transport(graph, context, super::composition::selected(graph))?;
+    let transport = inspect_transport(graph, context)?;
     if timing != Some((transport.p2_ms, transport.p2_star_ms)) {
         return Err(reject(
             graph,
@@ -473,7 +473,6 @@ pub(super) fn inspect_service(
 pub(super) fn inspect_transport(
     graph: &Graph,
     context: usize,
-    standard_session_names: bool,
 ) -> Result<DiagnosticTransportContract, Vec<PlanDiagnostic>> {
     let mut sessions = BTreeSet::new();
     let mut timing = None;
@@ -487,8 +486,7 @@ pub(super) fn inspect_transport(
             timer(graph, session, "DcmDspSessionP2ServerMax")?,
             timer(graph, session, "DcmDspSessionP2StarServerMax")?,
         );
-        if standard_session_names
-            && matches!(level, 1 | 3)
+        if matches!(level, 1 | 3)
             && graph.text(session, "SHORT-NAME")
                 != Some(if level == 1 {
                     "DCM_DEFAULT_SESSION"

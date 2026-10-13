@@ -15,19 +15,12 @@ pub(super) struct Element {
     pub object: String,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum ReferencePolicy {
-    ConsumerScoped,
-}
-
 /// A lossless-input semantic index. Original bytes remain in InputSource;
 /// this derived graph never becomes the authority for saving XML.
 pub(super) struct Graph {
     pub elements: Vec<Element>,
     pub objects: BTreeMap<String, usize>,
     pub external: BTreeMap<String, String>,
-    /// Built from the product's built-in rules rather than external archives.
-    pub builtin: bool,
 }
 
 impl Graph {
@@ -38,11 +31,7 @@ impl Graph {
         sources: &[InputSource],
         catalog: &crate::definitions::DefinitionCatalog,
     ) -> Result<Self, Vec<PlanDiagnostic>> {
-        Self::build(
-            sources,
-            Self::catalog_external(catalog),
-            ReferencePolicy::ConsumerScoped,
-        )
+        Self::build(sources, Self::catalog_external(catalog))
     }
 
     fn catalog_external(
@@ -62,7 +51,6 @@ impl Graph {
     fn build(
         sources: &[InputSource],
         external: BTreeMap<String, String>,
-        reference_policy: ReferencePolicy,
     ) -> Result<Self, Vec<PlanDiagnostic>> {
         let documents = sources
             .iter()
@@ -84,14 +72,12 @@ impl Graph {
                 .zip(&documents)
                 .map(|(source, document)| (source.logical_path.as_str(), document)),
             external,
-            reference_policy,
         )
     }
 
     fn build_documents<'a, 'input>(
         sources: impl Iterator<Item = (&'a str, &'a Document<'input>)>,
         external: BTreeMap<String, String>,
-        reference_policy: ReferencePolicy,
     ) -> Result<Self, Vec<PlanDiagnostic>>
     where
         'input: 'a,
@@ -100,7 +86,6 @@ impl Graph {
             elements: Vec::new(),
             objects: BTreeMap::new(),
             external,
-            builtin: reference_policy == ReferencePolicy::ConsumerScoped,
         };
         let mut diagnostics = Vec::new();
         for (file, document) in sources {
@@ -160,48 +145,6 @@ impl Graph {
                 }
             }
         }
-        if reference_policy == ReferencePolicy::ConsumerScoped {
-            return if diagnostics.is_empty() {
-                Ok(graph)
-            } else {
-                Err(diagnostics)
-            };
-        }
-        let mut selected: Vec<_> = graph
-            .of_kind("SYSTEM")
-            .into_iter()
-            .filter(|index| graph.text(*index, "CATEGORY") == Some("ECU_EXTRACT"))
-            .collect();
-        for system in selected.clone() {
-            for root in graph.descendants(system, "ROOT-SW-COMPOSITION-PROTOTYPE") {
-                if let Some(composition) = graph.target(root, "SOFTWARE-COMPOSITION-TREF") {
-                    for instance in graph.descendants(composition, "SW-COMPONENT-PROTOTYPE") {
-                        if let Some(component) = graph.target(instance, "TYPE-TREF") {
-                            selected.push(component);
-                        }
-                    }
-                }
-            }
-        }
-        for root in selected {
-            for (tag, code) in [
-                ("QUEUED-RECEIVER-COM-SPEC", "QUEUED_UNSUPPORTED"),
-                ("QUEUED-SENDER-COM-SPEC", "QUEUED_UNSUPPORTED"),
-                ("DATA-READ-ACCESSS", "IMPLICIT_UNSUPPORTED"),
-                ("DATA-WRITE-ACCESSS", "IMPLICIT_UNSUPPORTED"),
-                ("MODE-ACCESS-POINTS", "MODE_UNSUPPORTED"),
-                ("ASYNCHRONOUS-SERVER-CALL-POINT", "ASYNC_UNSUPPORTED"),
-                ("VARIATION-POINT", "VARIANT_UNSELECTED"),
-                ("DATA-TRANSFORMATIONS", "TRANSFORMER_UNSUPPORTED"),
-            ] {
-                for index in graph.descendants(root, tag) {
-                    diagnostics.push(graph.diagnostic(index, DiagnosticCategory::Unsupported,
-                        code, crate::product_message!("backend.integration.graph.target_profile_tag_unsupported", "tag" => tag),
-                        crate::product_message!("backend.integration.graph.explicit_sr_synchronous_service_profile_required")));
-                }
-            }
-        }
-        diagnostics.extend(graph.audit_references(|_, _| true));
         if diagnostics.is_empty() {
             Ok(graph)
         } else {
@@ -488,7 +431,7 @@ impl crate::definitions::DefinitionCatalog {
         'input: 'a,
     {
         let external = Graph::catalog_external(self);
-        match Graph::build_documents(files, external, ReferencePolicy::ConsumerScoped) {
+        match Graph::build_documents(files, external) {
             Ok(graph) => {
                 let consumers = graph.integration_consumers(self);
                 let references = graph.reference_diagnostics_for(&consumers);
@@ -530,7 +473,6 @@ mod tests {
             elements: Vec::new(),
             objects: Default::default(),
             external: Default::default(),
-            builtin: true,
         };
         let missing = graph.index("/Pkg/Missing").unwrap_err();
         assert_eq!(missing[0].code, "REFERENCE_UNRESOLVED");
