@@ -1,0 +1,35 @@
+name: Core build dependencies
+description: Install the libxml2 and libclang toolchain that builds autosar-config-core
+inputs:
+  linux-packages:
+    description: Additional apt packages the calling job needs
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - name: Linux core dependencies
+      if: runner.os == 'Linux'
+      shell: bash
+      run: sudo apt-get update && sudo apt-get install -y libxml2-dev libclang-dev clang pkg-config ${{ inputs.linux-packages }}
+    - name: Identify vcpkg cache image
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        "VCPKG_CACHE_IMAGE=$env:ImageOS-$env:ImageVersion" >> $env:GITHUB_ENV
+        New-Item -ItemType Directory -Force -Path build/vcpkg-cache | Out-Null
+    - uses: actions/cache@v6.1.0
+      if: runner.os == 'Windows'
+      with:
+        path: build/vcpkg-cache
+        key: vcpkg-${{ runner.os }}-${{ env.VCPKG_CACHE_IMAGE }}-static-md-v1
+        restore-keys: vcpkg-${{ runner.os }}-
+    - name: Windows core dependencies
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $env:VCPKG_DEFAULT_BINARY_CACHE = (Resolve-Path build/vcpkg-cache).Path
+        vcpkg install 'libxml2[iconv,zlib]:x64-windows-static-md'
+        "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+        'VCPKGRS_TRIPLET=x64-windows-static-md' >> $env:GITHUB_ENV
+        'LIBCLANG_PATH=C:/Program Files/LLVM/bin' >> $env:GITHUB_ENV

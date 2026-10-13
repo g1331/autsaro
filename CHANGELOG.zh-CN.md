@@ -33,5 +33,7 @@
 - 主线生产者元数据与交付字节一致：DID 读取服务的消费者为主线 Dcm，CanTp／Dcm 调度头与 OS 计数器服务记录实际声明文件，`integration.json` 的 `originalBswSources` 只列出原样交付的文件（生成器扩展过的模板属于生成输出）。
 - HostBatch 确认每条输出帧前不再等满一个主机定时器周期：目标通过新增的 `Os_TargetNotifyNative` 唤醒等待中的控制线程，`Os_TargetWaitTick` 收到该唤醒时提前返回 `E_OS_NOFUNC`。Windows 上 1 ms 定时等待实际约 15.6 ms，带周期输出的 1000 ms 批次在负载下可能超过 5000 ms 的 HostBatch watchdog（#61）。期限和汽车时间不变。
 - 生成的主机 ECU 对在某 epoch 周期之前发出的帧，无论宿主线程何时报告，都在该周期之后提交其发送确认。由发送确认启动的 CanTp 定时器（如流控之后的 N_Cr）因此不会再随宿主调度提前一个周期到期，包内 `ecu-tool verify` 的 N_Cr 检查也不再偶发失败（#86）。
+- 删除开发命令 `probe`、`os`、`os-arti-native`、`os-counter-service` 与 `protocol-oracles`；CLI 保留 `doctor`、`verify`、`quality`、`c-check`、`assets` 与 `desktop`。原生 OS suites 改由 `unittest` 运行（`tests/python/native/test_os_suites.py`，可用 `-k` 筛选），协议对照向量由 `cargo test --test it -- protocol_oracles::` 检查，受管进程探针改为测试辅助脚本 `tests/python/process/probe.py`。core 集成测试按能力分为 `it`、`native`（`native-tests`）与 `official`（`official-oracles`）三个二进制；必需 CI 在 Windows 与 Linux 运行全部原生套件及 OS suites，C 静态分析增加不含诊断路由的多组件样本 `no-diagnostic`。交付的 `runtime/os/README.md` 改为新的 OS suite 命令。
+- Linux 与 macOS 上的受管执行以进程监督器的认证就绪响应为准，不再以 socket 文件出现作为就绪，监督器启动后立即运行的命令不会再偶发 `Connection refused` 失败。
 
 早期开发结果保留在 Git 历史和相关实施工件中；本记录不重新声明历史发行或验收结果。
