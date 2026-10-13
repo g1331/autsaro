@@ -10,6 +10,7 @@ on:
       - src-tauri/**
       - ui/**
       - tests/desktop/**
+      - .github/actions/**
       - .github/workflows/desktop.yml
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -41,31 +42,14 @@ jobs:
           cache-dependency-path: ui/package-lock.json
       - uses: astral-sh/setup-uv@v10.2.0
       - run: uv sync --locked
-      - name: Linux desktop and WebDriver dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libxml2-dev libclang-dev clang pkg-config libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev patchelf webkit2gtk-driver xvfb xdotool xclip xsettingsd
-      - uses: ./.github/actions/native-analysis-compiler
-      - name: Create vcpkg binary cache
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: New-Item -ItemType Directory -Force -Path build/vcpkg-cache | Out-Null
-      - uses: actions/cache@v6.1.0
-        if: runner.os == 'Windows'
+      - uses: ./.github/actions/core-build-dependencies
         with:
-          path: build/vcpkg-cache
-          key: vcpkg-${{ runner.os }}-${{ env.CACHE_IMAGE }}-static-md-v1
-          restore-keys: vcpkg-${{ runner.os }}-
-      - name: Windows core dependencies and Edge WebDriver
+          linux-packages: libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev patchelf webkit2gtk-driver xvfb xdotool xclip xsettingsd
+      - uses: ./.github/actions/native-analysis-compiler
+      - name: Edge WebDriver
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $env:VCPKG_DEFAULT_BINARY_CACHE = (Resolve-Path build/vcpkg-cache).Path
-          vcpkg install 'libxml2[iconv,zlib]:x64-windows-static-md'
-          "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
-          'VCPKGRS_TRIPLET=x64-windows-static-md' >> $env:GITHUB_ENV
-          'LIBCLANG_PATH=C:/Program Files/LLVM/bin' >> $env:GITHUB_ENV
           # The image's Edge WebDriver matches its Edge; WebView2 must match too.
           $env:EDGEWEBDRIVER >> $env:GITHUB_PATH
           & (Join-Path $env:EDGEWEBDRIVER msedgedriver.exe) --version
