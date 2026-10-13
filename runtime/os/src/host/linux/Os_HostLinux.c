@@ -400,9 +400,8 @@ static DWORD wait_all(DWORD count, const HANDLE *observed, DWORD milliseconds, u
     DWORD index;
     for (index = 0u; (index < count) && (result == WAIT_OBJECT_0); ++index) {
         const uint64_t now = monotonic_ms();
-        const DWORD remaining = (milliseconds == INFINITE)
-                                    ? INFINITE
-                                    : ((end > now) ? (DWORD)(end - now) : 0u);
+        const DWORD remaining =
+            (milliseconds == INFINITE) ? INFINITE : ((end > now) ? (DWORD)(end - now) : 0u);
         if (WaitForSingleObject(observed[index], remaining) != WAIT_OBJECT_0) {
             result = WAIT_FAILED;
         }
