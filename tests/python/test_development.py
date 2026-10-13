@@ -10,13 +10,20 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-import zipfile
-
-from autosar_tooling import assets, config, diagnostics, official, quality, requirements, verify
+from autosar_tooling import (
+    assets,
+    config,
+    diagnostics,
+    official,
+    quality,
+    requirements,
+    verify,
+)
 
 
 class ConfigurationTests(unittest.TestCase):
@@ -196,12 +203,11 @@ class RequirementTests(unittest.TestCase):
             root = Path(directory)
             self.repository(root, "", "")
             errors = io.StringIO()
-            with patch.object(requirements.sys, "stderr", errors):
-                with patch.dict(os.environ), redirect_stdout(io.StringIO()):
-                    os.environ.pop(requirements.ARCHIVE_VARIABLE, None)
-                    self.assertEqual(requirements.check("SWS_Unknown", root), 1)
-                    (root / "official/spec.zip").unlink()
-                    self.assertEqual(requirements.check("SWS_Demo", root), 1)
+            with patch.object(requirements.sys, "stderr", errors), patch.dict(os.environ), redirect_stdout(io.StringIO()):
+                os.environ.pop(requirements.ARCHIVE_VARIABLE, None)
+                self.assertEqual(requirements.check("SWS_Unknown", root), 1)
+                (root / "official/spec.zip").unlink()
+                self.assertEqual(requirements.check("SWS_Demo", root), 1)
             self.assertIn("no single AUTOSAR_CP_SWS_Unknown.arxml", errors.getvalue())
             self.assertIn("fetch-official", errors.getvalue())
 
