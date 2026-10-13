@@ -110,9 +110,43 @@ uv run --locked python -m autosar_tooling requirements SWS_CANInterface
 | COM：`AUTOSAR_CP_SWS_COM.pdf`（`8addd33ad1e625b4e9d01afc938131d424f7161f18075f44d2a5fcfa925c5190`） | §7.3／8.3／8.4；`SWS_Com_00432`（Init）、`00130`（DeInit）、`00194`（GetStatus）、`00197`（SendSignal）、`00198`（ReceiveSignal）、`00123`（RxIndication）、`00001`（TriggerTransmit）；`SWS_Com_00840`；`SWS_Com_00772`；`00300／00301`；`00348／00861／00388`；`SWS_Com_91019／91020`（DRAFT）；ECUC `00181`（MDT）、`00387`（ComIPduCallout） | 标准 callback 形状为 `void Com_RxIndication(PduIdType,const PduInfoType*)` 与 `Std_ReturnType Com_TriggerTransmit(PduIdType,PduInfoType*)`（pull-copy）；未分组 Tx PDU 在 Com_Init 隐式启动且不可停止；只有属于启用 Rx DM 的 group 的 PDU 才启用 monitoring；IMMEDIATE 与 DEFERRED 语义不同；TriggerIPDUSend 手动请求与零 minimum delay |
 | PduR：`AUTOSAR_CP_SWS_PDURouter.pdf`（`3f97e95f6b36c876daeddc1bd90db7d0b24ebd0aa652078349d323ad6664ad6f`） | `SWS_PduR_00334`（Init／PBConfigType）；`00406`（upper transmit）；`00507／00518／00375`；`ECUC_PduR_00311／00322`；`00241` | `PduR_<User:Up>Transmit` 为 `Std_ReturnType(PduIdType,const PduInfoType*)`；lower Rx 为 `void(PduIdType,const PduInfoType*)`；TP StartOfReception／CopyRxData／CopyTxData 的 BufReq 与 buffer-size 闭包；PBConfigType 由模块所属 `PduR_PBcfg.c` 生产 |
 | LSduR：`AUTOSAR_CP_SWS_LSduRouter.pdf`（`2cd776bc9d54dd8d7f12fa300f24bbf4b790560f9fe7cc9702d20c76b24fdd3a`，R24-11 DRAFT） | `91006`（Init）、`91009`（upper transmit）、`91011`（Rx）、`91013`（confirmation）、`91014`（pull）；`00008／00012／00015–19`；`00024／00025`（zero cost）；`00035` | 一对一、同 partition、无 metadata 的 IF 路由翻译真实 PDU ID 并原样传播 lower 返回值；LSduR 无 Rx／Tx 长度检查或 Tx buffering；未选 ZeroCostOperation |
-| CanIf：`AUTOSAR_CP_SWS_CANInterface.pdf`（`84bf624c9e497d765653c8df4d62a6e3835efb64f76c742d727b177a64c10f53`） | `SWS_CANIF_00001／00003／00229／00005／00008／00009／00864／00865／00866／00874／00318`；`91002`（DeInit，draft）；`00382`、`00168`；`00073／00489`、`00739`；`00893`、`00900`；`SWS_CANIF_91001／00898／00899`（GetControllerErrorState，0x4b）；`91003／91004`（0x4d／0x4e）、`00907–00910`；`SWS_CANIF_00653`；`00218`；`00006` | Init 取 `CanIf_ConfigType*`；Transmit 服务 ID 0x49（RxIndication 0x14），不同 PduId 可重入、同 PduId 不可重入；Init 后 PDU mode 为 OFFLINE，STOPPED／BusOff→TX_OFFLINE，SLEEP→OFFLINE，SetPduMode 须在 STARTED；OFFLINE Tx、长度拒绝等须报告 runtime error；controller ID 从 0 起 |
+| CanIf：`AUTOSAR_CP_SWS_CANInterface.pdf`（`84bf624c9e497d765653c8df4d62a6e3835efb64f76c742d727b177a64c10f53`） | `SWS_CANInterface` 全部 493 条（374 条 `SWS_CANIF`，含 CONSTR 与 NA；119 条 `ECUC_CanIf`）逐条处置：适用条目由测试以 `Verifies:` 标注，其余条目的已核对、不适用与差距见下表；`SWS_Comtype_00007`（句柄连续） | Init 取 `CanIf_ConfigType*`，无效配置保持未初始化，未初始化时服务返回 `E_NOT_OK`、回调不处理；`CanIf.h` 只含标准声明；Transmit 服务 ID 0x49（RxIndication 0x14），不同 PduId 可重入、同 PduId 不可重入；Init 后 PDU mode 为 OFFLINE，STOPPED／BusOff→TX_OFFLINE，SLEEP→OFFLINE，SetPduMode 须在 STARTED；只有 OFFLINE 的 Tx 报告 `CANIF_E_STOPPED`，长度拒绝报告 62／90，短 DLC 报告 61；Rx 按 controller、HRH 与 CAN ID（`STANDARD_NO_FD_CAN`）路由；每个被接受的发送至多一次上层确认，PDU 模式抑制的确认结束请求；Rx／Tx 句柄按方向从 0 连续；controller ID 从 0 起；BusOff／模式通知按 dispatch 送往 host CDD |
 | Can：`AUTOSAR_CP_SWS_CANDriver.pdf`（`d04d35b80d8f445b66f960fd9b5be4f02f324e73cc4be239887e8c1235b172aa`） | `00233`（typed Can_Write）；`00212–214／00275`；`00282`；`00370／00373`；`00218`；`SWS_Can_00227`、`00109`、`ECUC_Can_00314`、`00183`；`SWS_Can_00368`、`00369`；`SWS_Can_00234`、`SWS_Can_00279`、`SWS_CAN_00496`；`ECUC_Can_00316`、`ECUC_Can_00326`；`ECUC_Can_00437／00438／00484`、`00355`、`00486`；`SWS_Can_00441／00442` | 实际 BUSY 与已复制帧；STOP 取消；polling mode indication；BusOff polling 由 `Can_MainFunction_BusOff`；driver 发出的 Mode／BusOff 使用 abstract CanIf ID；driver controller ID 从 0 无间隔，HRH／HTH 从 0 无间隔 |
 | CanTp：`AUTOSAR_CP_SWS_CANTransportLayer.pdf`（`7334d633b02c443aacbe0ca25e20c319e977104eeb4bf8e67ac0358cfea34a22`） | `SWS_CanTp_00208／00211／00212／00213／00214／00215`；`00027／00168／00170／00238／00273／00202／00200`；`SWS_CanTp_00315`；`00223`／`ECUC_CanTp_00251`；`SWS_CanTp_00343`；`00205`；`00184／00280`；`00204／00298／00299`、`00075／00355`、`00057`、`00344–00349`；`00352／00229`；`00257／00260–00263`；`ECUC_CanTp_00301／00268` | Init 取 `const CanTp_ConfigType*`；OFF→ON／idle，reinit 丢连接，Shutdown 无 PduR 通知；已接纳 Tx／Rx 必有最终通知，拒绝 admission 无最终通知；收到 FC(WAIT) 重启 N_Bs，WFTmax 限制本端发出的 WAIT；lower E_NOT_OK 终止发送，与 upper CopyTxData BUSY 的 N_Cs 内重试区分；CanTp 自身 NSdu ID 与 PduR callback ID 属于不同命名空间 |
+
+<!-- canif-not-applicable -->
+**CanIf 未由测试覆盖的条目。** 下表处置 `SWS_CANInterface` 中没有测试 `Verifies:` 的条目。“配置”类写明控制该义务的 ECUC 参数及主线不提供的取值（未写取值的参数整项不提供），这些配置在生成前被拒绝，每个参数都有带 `Rejects:` 标记的测试。同一通道混用标准与扩展 ID 是差距，由 #117 承接。
+
+| 分组 | 处置与条目 |
+| --- | --- |
+| 开发错误检测 | 不适用（配置：ECUC_CanIf_00614=true）：SWS_CANIF_91006、00311、00774、00313、00656、00898、00899、00319、00320、00341、00860、00346、00657、00907、00908、00909、00910、00410、00416、00417、00419、00429、00700 |
+| 发送缓冲 | 不适用（配置：ECUC_CanIf_00618=true、ECUC_CanIf_00834>0）：SWS_CANIF_00063、00849、00381、00895、00881、00835、00836、00068、00837、00386、00668、00070、00183、00387、00033、00485 |
+| 动态 L-PDU 与 metadata | 不适用（配置：ECUC_CanIf_00593=DYNAMIC、ECUC_CanIf_00610=true、ECUC_CanIf_00824）：SWS_CANIF_00844、00188、00673、00855、00856、00854、00857、00847、00848、00189、00944、00352、00353、00355、00357、00851、ECUC_CanIf_00824 |
+| CAN 收发器 | 不适用（配置：ECUC_CanIf_00273、ECUC_CanIf_00686、ECUC_CanIf_00790、ECUC_CanIf_00792）：SWS_CANIF_00655、00712、00287、00358、00538、00648、00362、00288、00363、00364、00650、00367、00289、00368、00537、00649、00371、00290、00372、00535、00536、00373、00760、00766、00769、00771、00761、00765、00770、00813、00762、00757、00805、00806、00808、00763、00759、00809、00810、00812、00764、00706、00708、00710、00788、00794、00795、00796、00797、00798、00814、00800、00801、00802、00803、00804、00693、00694、00695、00696、00697、00698、ECUC_CanIf_00273、00587、00654、00606、00605、00685、00686、00789、00790、00791、00792 |
+| 唤醒 | 不适用（配置：ECUC_CanIf_00843=true、ECUC_CanIf_00637=true、ECUC_CanIf_00611=true、ECUC_CanIf_00741、ECUC_CanIf_00549）：SWS_CANIF_00395、00720、00678、00286、00179、00756、00219、00398、00178、00404、00408、00532、00659、00456、00563、00564、ECUC_CanIf_00531、00549、00741 |
+| Partial Networking | 不适用（配置：ECUC_CanIf_00772=true、ECUC_CanIf_00866=true、ECUC_CanIf_00865=true、ECUC_CanIf_00773、ECUC_CanIf_00820、ECUC_CanIf_00868）：SWS_CANIF_00747、00748、00863、00749、00750、00751、00896、00752、00878、00815、00753、00816、00817、00754、91016、00963、00964、00965、00966、00821、00823、00824、00825、00826、00827、91017、00958、00959、00960、00961、00962、ECUC_CanIf_00773、00819、00820、00867、00868 |
+| CAN XL | 不适用（配置：ECUC_CanIf_00855、ECUC_CanIf_00860）：SWS_CANIF_00937、00938、00939、00957、00940、00941、00942、00943、91015、00945、00946、00947、00948、00949、00950、00951、00952、00953、00954、00955、00956、SWS_CANIF_CONSTR_00001–00014、ECUC_CanIf_00855、00860、00856、00857、00858、00859 |
+| 安全事件 | 不适用（配置：ECUC_CanIf_00848=true、ECUC_CanIf_00849）：SWS_CANIF_91010、00913、00915、92000、00916、92001、00917、92002、00918、92003、91008、00919、91009、00920、00921、ECUC_CanIf_00849、00850、00851、00852、00853 |
+| Bus Mirroring | 不适用（配置：ECUC_CanIf_00847=true）：SWS_CANIF_00903、00904、00905、00906、91005、00911、00912 |
+| 时间同步与时间戳 | 不适用（配置：ECUC_CanIf_00854=true）：SWS_CANIF_91014、00922、00923、00924、00925、91011、00926、00927、00928、91012、00929、00930、00931、00932、91013、00933、00934、00935、00936、00967 |
+| 读取接收数据与通知状态 | 不适用（配置：ECUC_CanIf_00607=true、ECUC_CanIf_00608=true、ECUC_CanIf_00609=true、ECUC_CanIf_00600=true、ECUC_CanIf_00595=true、ECUC_CanIf_00589=true）：SWS_CANIF_00198、00199、00472、00473、00201、00194、00324、00325、00326、00329、00330、00202、00393、00331、00335、00230、00394、00336、00340、00297、00391、00392 |
+| 版本信息 | 不适用（配置：ECUC_CanIf_00613=true）：SWS_CANIF_00158 |
+| 改变波特率 | 不适用（配置：ECUC_CanIf_00838）：SWS_CANIF_00867、00868、00869、00871、ECUC_CanIf_00838 |
+| Tx 确认轮询 | 不适用（配置：ECUC_CanIf_00733=true）：SWS_CANIF_00734、00736、00738、00740 |
+| TriggerTransmit | 不适用（配置：ECUC_CanIf_00844=true、ECUC_CanIf_00840）：SWS_CANIF_00883、00885、00882、ECUC_CanIf_00840 |
+| TX_OFFLINE_ACTIVE | 不适用（配置：ECUC_CanIf_00837=true）：SWS_CANIF_00072 |
+| Tx 截断 | 不适用（配置：ECUC_CanIf_00845=true）：SWS_CANIF_00894 |
+| 关闭接收长度检查 | 不适用（配置：ECUC_CanIf_00617=false、ECUC_CanIf_00846=false）：SWS_CANIF_00830 |
+| 多个 Can 驱动 | 不适用（配置：ECUC_CanIf_00612=true）：SWS_CANIF_00378 |
+| 多个 HRH／HTH | 不适用（配置：ECUC_CanIf_00259、ECUC_CanIf_00258 各多于一个）：SWS_CANIF_00664、00667 |
+| 范围接收与 ID 掩码 | 不适用（配置：ECUC_CanIf_00628、ECUC_CanIf_00743、ECUC_CanIf_00822、ECUC_CanIf_00823）：SWS_CANIF_00645、00646、00852、ECUC_CanIf_00628、00825、00826、00629、00644、00630、00743、00744、00745、00822、00823 |
+| post-build loadable 容量与 CDD 头文件 | 不适用（配置：ECUC_CanIf_00828、ECUC_CanIf_00829、ECUC_CanIf_00830、ECUC_CanIf_00671）：ECUC_CanIf_00828、00829、00830、00671 |
+| CanSM | 不适用（配置：ECUC_CanIf_00547=CAN_SM、ECUC_CanIf_00684=CAN_SM）：SWS_CANIF_00559、00691 |
+| 可选下层接口表 | 不适用（配置：ECUC_CanIf_00843=true、ECUC_CanIf_00838、ECUC_CanIf_00772=true、ECUC_CanIf_00273、ECUC_CanIf_00855、ECUC_CanIf_00614=true、ECUC_CanIf_00844=true、ECUC_CanIf_00847=true、ECUC_CanIf_00848=true、ECUC_CanIf_00547=CAN_SM）：SWS_CANIF_00294 |
+| 配置集名 | 已核对（主线只生成一个配置集：`CanIf_PBcfg.c` 中的 `CanIf_Config` 传给 `CanIf_Init`，集名只作标识）：ECUC_CanIf_00623 |
+| 规范附录 | 已核对（条目只声明所列上游需求不适用于 CanIf，没有实现义务）：SWS_CANIF_NA_00999 |
+| 同一通道混用标准与扩展 ID | 差距 #117：SWS_CANIF_00281 |
+<!-- /canif-not-applicable -->
 
 ### 5.5 诊断与模式管理
 
@@ -138,7 +172,7 @@ uv run --locked python -m autosar_tooling requirements SWS_CANInterface
 | 调度 | 每个周期 runnable 恰有一个 TimingEvent，全部共用正整数毫秒周期、offset=0，映射到唯一 Extended `Task_Ecu` 的合法 OsEvent 与 Alarm／ExpiryPoint；周期 mapping 显式 `isMappedToTask=true` 并带 task ref；OperationInvokedEvent 的 mapping 为 false 且无 task 引用（`CONSTR08936`／`08938`） | 同 runnable 多 TimingEvent、不同周期或非零 offset、重复位置、task 不属 owner、周期与 alarm 不符 |
 | 分区 | 显式唯一 EcucPartition ID0，关联唯一 CoreId0，包含全部 APPLICATION／SERVICE root-context 实例；不启用 OsApplication | 多分区 |
 | 诊断路由 | 完整 physical Dcm→PduR→CanTp 路由，可无应用 DID（仍提供内部 F186、0x10／0x3E，未知 DID 返回 NRC 0x31，Dcm `00085`）；两条诊断路由均不选为 network-only | 半条路由或单个端点 |
-| CAN | 11 位 Classical CAN、单控制器单通道、static normal addressing、单 physical DoCAN 连接、`CanIfPublicTxBuffering=false`；controller 与 HOH 编号从 0 连续（`ECUC_Can_00316`、`SWS_CANIF_00653`、`ECUC_Can_00326`） | 29 位、CAN FD、多通道、metadata、动态 ID；非连续 controller／HOH 编号 |
+| CAN | 11 位 Classical CAN（Rx `STANDARD_NO_FD_CAN`）、单控制器单通道、static normal addressing、单 physical DoCAN 连接、`CanIfPublicTxBuffering=false`；controller 与 HOH 编号从 0 连续（`ECUC_Can_00316`、`SWS_CANIF_00653`、`ECUC_Can_00326`）；CanIf Rx／Tx 句柄按方向从 0 连续、各不超过 32（`SWS_Comtype_00007`）；BusOff／模式通知 dispatch 为 `CDD` 的 `Ecu_HostBusSM` | 29 位（同一通道混用标准与扩展 ID 是 CanIf 差距，见 #117）、CAN FD、多通道、metadata、动态 ID；非连续 controller／HOH 编号或 CanIf 句柄；dispatch 选 `CAN_SM` 或其他名称 |
 | 名字 | 组件类型与 EcucPartition 短名不得占用已交付 runtime 的内存 scope（Rte、Ecu、Can、CanIf、CanTp、Com、Dcm、PduR、LSduR、ComM、BswM、Ecu_HostBusSM）；C 标识符、文件名、include guard 碰撞拒绝 | `CONTRACT_NAME_COLLISION` 等生成前诊断 |
 
 ECUC metadata 的数值范围通过不等于配置语义合法；非等值 ID（如 controller 7／9）的模块向量只检验命名空间机制，不是合法 source profile 的验收证据。
@@ -147,8 +181,8 @@ ECUC metadata 的数值范围通过不等于配置语义合法；非等值 ID（
 
 以下不能由现有记录推定为已完成，也不能以“主机专属”为由延期；各项退出条件是取得合法正文、完成对应模块的全文核对与独立验收。
 
-- **逐条全文审计未完成。** 上表是已定位条款，不是完整适用矩阵；各模块全部必需 API、状态、错误、回调、BSWMD、配置语义与可选条件须在模块整改时闭合，未处置条目以 §5 的核算命令为准。
-- **`SWS_BSW_00036` 跨模块头文件版本检查**：已读 CanIf 头与多组件模块无对应版本宏或预处理检查，是明确的审计候选。
+- **逐条全文审计未完成。** 除 CanIf 已逐条处置外，上表是已定位条款，不是完整适用矩阵；各模块全部必需 API、状态、错误、回调、BSWMD、配置语义与可选条件须在模块整改时闭合，未处置条目以 §5 的核算命令为准。
+- **`SWS_BSW_00036` 跨模块头文件版本检查**：已读 CanIf 头与多组件模块无对应版本宏或预处理检查，归 #59。
 - **Can published information**：项目尚无已分配的 AUTOSAR vendor ID，也无经核对的 R24-11 数字发布宏映射；`CAN_VERSION_INFO_API` 默认关闭，启用即拒绝。取得正式身份后才能实现 GetVersionInfo 与外部版本交叉检查（见 [runtime/README.md](../runtime/README.md)）。
 - **Dem／NvM／Security**：不在主线程序中，已随旧链路删除（[ADR 0013](adr/0013-remove-frame-signal-host-chain.md)）；以后加入主线时须先核定标准公共面、存储链与 Security 的项目责任。
 - **MemMap 与段放置**：主机 PE／ELF 段映射已有实际证据，MCU 段与权限只由目标工具链与布局关闭。
