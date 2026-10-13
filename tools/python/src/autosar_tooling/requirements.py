@@ -50,8 +50,8 @@ DOCUMENT_MARKER = re.compile(
 REJECTS = re.compile(r"Rejects:[ \t]*`?")
 PARAMETER = re.compile(r"(?<![A-Za-z0-9_])ECUC_[A-Za-z0-9]+_\d+(?!\d)", re.IGNORECASE)
 # Between the full IDs after one marker: spaces or backticks on the same line, or a list
-# separator that may continue on the next comment line.
-SEPARATOR = re.compile(r"`?(?:[ \t]*[,，、／/][ \t]*(?:\n[ \t]*(?://|\*|#)?[ \t]*)?|[ \t]+)`?|`")
+# separator that may continue on the next comment line (CRLF in a Windows checkout).
+SEPARATOR = re.compile(r"`?(?:[ \t]*[,，、／/][ \t]*(?:\r?\n[ \t]*(?://|\*|#)?[ \t]*)?|[ \t]+)`?|`")
 CATEGORIES = {
     "verified": "verified",
     "inspected": "inspected",

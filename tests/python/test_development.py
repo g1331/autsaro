@@ -176,17 +176,17 @@ class RequirementTests(unittest.TestCase):
         )
 
     def test_only_ids_after_a_marker_of_their_source_are_disposed(self):
-        self.assertEqual(
-            self.cited(
-                "/* Verifies: SWS_DEMO_00001／00002, SWS_DEMO_00003,\n * SWS_DEMO_00004\n * SWS_DEMO_00005 differs */\n"
-                "// 不适用（归属：Can）：SWS_DEMO_00007\n",
-                "core/tests/fixtures/demo.c",
-            ),
-            [
-                ("SWS_DEMO_00001", "verified"), ("SWS_DEMO_00002", "verified"), ("SWS_DEMO_00003", "verified"),
-                ("SWS_DEMO_00004", "verified"), ("SWS_DEMO_00005", None), ("SWS_DEMO_00007", None),
-            ],
+        test = (
+            "/* Verifies: SWS_DEMO_00001／00002, SWS_DEMO_00003,\n * SWS_DEMO_00004\n * SWS_DEMO_00005 differs */\n"
+            "// 不适用（归属：Can）：SWS_DEMO_00007\n"
         )
+        expected = [
+            ("SWS_DEMO_00001", "verified"), ("SWS_DEMO_00002", "verified"), ("SWS_DEMO_00003", "verified"),
+            ("SWS_DEMO_00004", "verified"), ("SWS_DEMO_00005", None), ("SWS_DEMO_00007", None),
+        ]
+        self.assertEqual(self.cited(test, "core/tests/fixtures/demo.c"), expected)
+        # A Windows checkout of a text file has CRLF line ends.
+        self.assertEqual(self.cited(test.replace("\n", "\r\n"), "core/tests/fixtures/demo.c"), expected)
         standards = (
             "| 不适用（配置：ECUC_Demo_00010=false）：`SWS_DEMO_00007`、`SWS_DEMO_00011` | 差距 #12：SWS_DEMO_00009；SWS_DEMO_00013 |\n"
             "| 已核对（头文件比对）：SWS_DEMO_CONSTR_00001 | 不适用：SWS_DEMO_00014 | 不适用（未启用）：SWS_DEMO_00015 |"
