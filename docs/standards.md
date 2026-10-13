@@ -137,7 +137,7 @@ uv run --locked python -m autosar_tooling requirements SWS_CANInterface
 | TX_OFFLINE_ACTIVE | 不适用（配置：ECUC_CanIf_00837=true）：SWS_CANIF_00072 |
 | Tx 截断 | 不适用（配置：ECUC_CanIf_00845=true）：SWS_CANIF_00894 |
 | 关闭接收长度检查 | 不适用（配置：ECUC_CanIf_00617=false、ECUC_CanIf_00846=false）：SWS_CANIF_00830 |
-| 多个 Can 驱动 | 不适用（配置：ECUC_CanIf_00612=true）：SWS_CANIF_00378 |
+| link-time 配置 | 不适用（配置：ECUC_CanIf_00244 声明 VARIANT-LINK-TIME）：SWS_CANIF_00378 |
 | 多个 HRH／HTH | 不适用（配置：ECUC_CanIf_00259、ECUC_CanIf_00258 各多于一个）：SWS_CANIF_00664、00667 |
 | 范围接收与 ID 掩码 | 不适用（配置：ECUC_CanIf_00628、ECUC_CanIf_00743、ECUC_CanIf_00822、ECUC_CanIf_00823）：SWS_CANIF_00645、00646、00852、ECUC_CanIf_00628、00825、00826、00629、00644、00630、00743、00744、00745、00822、00823 |
 | post-build loadable 容量与 CDD 头文件 | 不适用（配置：ECUC_CanIf_00828、ECUC_CanIf_00829、ECUC_CanIf_00830、ECUC_CanIf_00671）：ECUC_CanIf_00828、00829、00830、00671 |

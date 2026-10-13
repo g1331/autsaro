@@ -371,6 +371,22 @@ fn inspect_with_catalog(
         }
         selected.push(found[0]);
     }
+    // All configuration is generated before compilation; link-time and post-build
+    // variants are not offered (e.g. SWS_CANIF_00378 applies to link time).
+    if let Some(module) = selected.iter().copied().find(|module| {
+        graph
+            .text(*module, "IMPLEMENTATION-CONFIG-VARIANT")
+            .is_some_and(|variant| variant != "VARIANT-PRE-COMPILE")
+    }) {
+        return Err(reject(
+            graph,
+            module,
+            "TARGET_PARAMETER_UNSUPPORTED",
+            crate::product_message!(
+                "backend.integration.configuration.pre_compile_variant_required"
+            ),
+        ));
+    }
     let os = one(graph, context, "OsOS")?;
     let hooks = one(graph, os, "OsHooks")?;
     let os_module = MODULES

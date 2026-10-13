@@ -1684,3 +1684,25 @@ fn second_canif_hardware_object_is_refused() {
         );
     }
 }
+
+/// Configuration is generated before compilation, so a module declaring the
+/// link-time or post-build variant is refused (link-time CanIf: SWS_CANIF_00378).
+#[test]
+fn link_time_and_post_build_variants_are_refused_at_the_module() {
+    // Rejects: ECUC_CanIf_00244
+    for variant in ["VARIANT-LINK-TIME", "VARIANT-POST-BUILD"] {
+        let mut sources = single_component_sources();
+        xml_edit(
+            &mut sources,
+            "ecuc.arxml",
+            |node| named(node, "ECUC-MODULE-CONFIGURATION-VALUES", "CanIf"),
+            |text| text.replacen("VARIANT-PRE-COMPILE", variant, 1),
+        );
+        rejected_at(
+            &sources,
+            "TARGET_PARAMETER_UNSUPPORTED",
+            "ecuc.arxml",
+            "/Configuration/CanIf",
+        );
+    }
+}
