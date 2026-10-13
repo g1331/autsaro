@@ -50,9 +50,9 @@ fn rte_symbol(name: &str, return_type: &str, args: &[(&str, &str, &str)]) -> Sym
 
 /// Product implementation descriptions reference only the sealed project's actual files.
 /// They describe this host profile, not an ICC3 or complete standard API certification.
-pub(super) fn files<T>(
+pub(super) fn files(
     plan: &PlanDescription,
-    sources: &BTreeMap<String, T>,
+    sources: &std::collections::BTreeSet<String>,
 ) -> Result<BTreeMap<String, Vec<u8>>, crate::message::LocalizedText> {
     let mut entries: BTreeMap<String, Vec<SymbolContract>> = BTreeMap::new();
     for symbol in &plan.symbols {
@@ -732,7 +732,7 @@ pub(super) fn files<T>(
         let mut module_entries = String::new();
         let module_start = elements.len();
         let paths: Vec<_> = sources
-            .keys()
+            .iter()
             .filter(|p| {
                 if module == "Os" {
                     (p.starts_with("os/src/") && !p.ends_with("/Arti.c"))

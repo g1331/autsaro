@@ -21,7 +21,9 @@ fn section(source: &mut String, scope: &str, segment: &str, start: bool) {
     .unwrap();
 }
 
-pub(super) fn memory_map(scopes: &[(String, &str)]) -> String {
+/// `code_section` places every code segment in one executable section while
+/// keeping the source-scoped AUTOSAR keywords; `None` keeps per-scope sections.
+pub(super) fn memory_map(scopes: &[(String, &str)], code_section: Option<&str>) -> String {
     let mut mapping =
         String::from("/** @file Source-derived RTE scopes; controlled x64 section placement. */\n");
     for (index, (scope, segment)) in scopes.iter().enumerate() {
@@ -39,7 +41,11 @@ pub(super) fn memory_map(scopes: &[(String, &str)]) -> String {
         } else {
             "text"
         };
-        writeln!(mapping, "#{} defined(RTE_{scope}_START_SEC_{segment})\n#undef RTE_{scope}_START_SEC_{segment}\n#ifdef RTE_MEMMAP_ACTIVE\n#error \"Nested RTE memory section\"\n#endif\n#define RTE_MEMMAP_ACTIVE\n#define RTE_{scope}_{segment}_ACTIVE\n#define RTE_{scope}_{segment} __attribute__((section(\".{section_name}.rte.{scope}.{segment}\")))\n#define RTE_{class} RTE_{scope}_{segment}\n#elif defined(RTE_{scope}_STOP_SEC_{segment})\n#undef RTE_{scope}_STOP_SEC_{segment}\n#ifndef RTE_{scope}_{segment}_ACTIVE\n#error \"Unmatched RTE memory section\"\n#endif\n#undef RTE_{scope}_{segment}_ACTIVE\n#undef RTE_MEMMAP_ACTIVE\n#undef RTE_{scope}_{segment}\n#undef RTE_{class}", if index == 0 { "if" } else { "elif" }).unwrap();
+        let placement = match code_section {
+            Some(section) if class == "CODE" => section.to_owned(),
+            _ => format!(".{section_name}.rte.{scope}.{segment}"),
+        };
+        writeln!(mapping, "#{} defined(RTE_{scope}_START_SEC_{segment})\n#undef RTE_{scope}_START_SEC_{segment}\n#ifdef RTE_MEMMAP_ACTIVE\n#error \"Nested RTE memory section\"\n#endif\n#define RTE_MEMMAP_ACTIVE\n#define RTE_{scope}_{segment}_ACTIVE\n#define RTE_{scope}_{segment} __attribute__((section(\"{placement}\")))\n#define RTE_{class} RTE_{scope}_{segment}\n#elif defined(RTE_{scope}_STOP_SEC_{segment})\n#undef RTE_{scope}_STOP_SEC_{segment}\n#ifndef RTE_{scope}_{segment}_ACTIVE\n#error \"Unmatched RTE memory section\"\n#endif\n#undef RTE_{scope}_{segment}_ACTIVE\n#undef RTE_MEMMAP_ACTIVE\n#undef RTE_{scope}_{segment}\n#undef RTE_{class}", if index == 0 { "if" } else { "elif" }).unwrap();
     }
     mapping.push_str("#else\n#ifndef RTE_MEMMAP_HEADER_CHECK\n#define RTE_MEMMAP_HEADER_CHECK\ntypedef unsigned char Rte_MemMap_HeaderCheck;\n#endif\n#endif\n");
     mapping
@@ -310,9 +316,10 @@ pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>
     }
     section(&mut source, partition, "CALLOUT_CODE", false);
     BTreeMap::from([
-        ("include/Rte_MemMap.h".into(), memory_map(&scopes).into_bytes()),
+        // The delivered targets place all RTE code in their executable RTE section.
+        ("include/Rte_MemMap.h".into(), memory_map(&scopes, Some(".rte_code")).into_bytes()),
         ("src/Rte.c".into(), source.into_bytes()),
-        ("include/Rte_Main.h".into(), b"/** @file RTE trusted-context lifecycle; Start follows BSW/SchM Init. */\n#ifndef RTE_MAIN_H\n#define RTE_MAIN_H\n#include \"Std_Types.h\"\nStd_ReturnType Rte_Start(void);\nStd_ReturnType Rte_Stop(void);\n#endif\n".to_vec()),
+        ("include/Rte_Main.h".into(), b"/** @file RTE trusted-context lifecycle; Start follows BSW/SchM Init. */\n#ifndef RTE_MAIN_H\n#define RTE_MAIN_H\n#include \"Std_Types.h\"\nStd_ReturnType Rte_Start(void);\nStd_ReturnType Rte_Stop(void);\ntypedef struct { uint16 partition; } SchM_ConfigType;\nvoid SchM_Init(const SchM_ConfigType *config);\nvoid SchM_Start(void);\nvoid SchM_StartTiming(void);\nvoid SchM_Deinit(void);\nextern const SchM_ConfigType Ecu_SchMConfig;\nboolean Ecu_SchMReady(void);\nboolean Ecu_SchMTimingActive(void);\n#endif\n".to_vec()),
         ("include/Rte_Com.h".into(), b"/** @file Handle-bearing COM reception and timeout notifications. */\n#ifndef RTE_COM_H\n#define RTE_COM_H\n#include \"ComStack_Types.h\"\nvoid Rte_COMCbk(CbkHandleIdType handle);\nvoid Rte_COMCbkRxTOut(CbkHandleIdType handle);\n#endif\n".to_vec()),
     ])
 }

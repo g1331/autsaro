@@ -113,6 +113,22 @@ impl Description {
         fields: &[(&str, String)],
         parameters: &[(&str, String, &str)],
     ) {
+        self.instance_with_refs(kind, name, ecuc, id, fields, parameters, "");
+    }
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the instance fields plus the OS instance's hook references"
+    )]
+    fn instance_with_refs(
+        &mut self,
+        kind: &str,
+        name: &str,
+        ecuc: Option<&str>,
+        id: Option<usize>,
+        fields: &[(&str, String)],
+        parameters: &[(&str, String, &str)],
+        extra_refs: &str,
+    ) {
         let definition = format!("{DEF}/ArtiOs/ArtiOs{kind}Instance");
         let mut refs = String::new();
         if let Some(path) = ecuc {
@@ -149,6 +165,7 @@ impl Description {
                 ty,
             ));
         }
+        refs.push_str(extra_refs);
         self.objects
             .push_str(&container(name, &definition, &params, &refs, ""));
     }
@@ -203,17 +220,94 @@ impl Description {
         ));
     }
 }
+/// ARTI hook values and the OS instance references to them, one per distinct
+/// trace call in the rendered binding.
+fn hooks(name: &str, binding: &str) -> Result<(String, String), crate::message::LocalizedText> {
+    let mut values = String::new();
+    let mut hook_refs = String::new();
+    let mut hooks = std::collections::BTreeSet::new();
+    for call in binding.split("ARTI_TRACE(").skip(1) {
+        let (arguments, _) = call.split_once(';').ok_or(crate::product_message!(
+            "backend.integration.arti.arti_trace_invocation_malformed"
+        ))?;
+        let arguments = arguments.split(',').collect::<Vec<_>>();
+        if arguments.len() != 6 {
+            return Err(crate::product_message!(
+                "backend.integration.arti.arti_single_parameter_trace_invocation_malformed"
+            )
+            .into());
+        }
+        let context = arguments[0].trim();
+        let class = arguments[1].trim();
+        let event = arguments[4].trim();
+        if !hooks.insert((context, class, event)) {
+            continue;
+        }
+        let def = format!("{DEF}/ArtiValues/ArtiHook");
+        let mut params = String::new();
+        for (field, value) in [
+            ("Context", context),
+            ("Class", class),
+            ("EventName", event),
+            ("Instance", name),
+            ("FileName", "Os_Arti.c"),
+        ] {
+            params.push_str(&parameter(
+                &format!("{def}/ArtiHook{field}"),
+                value,
+                "ECUC-STRING-PARAM-DEF",
+            ));
+        }
+        let mut refs = reference(
+            &format!("{def}/ArtiHookInstanceParameterTypeRef"),
+            &format!("{ROOT}/Values/CoreIds"),
+        );
+        if let Some(map) = match class {
+            "AR_CP_OS_TASK" => Some("TaskIds"),
+            "AR_CP_OS_CAT2ISR" => Some("IsrIds"),
+            _ => None,
+        } {
+            refs.push_str(&reference(
+                &format!("{def}/ArtiHookEventParameterTypeRef"),
+                &format!("{ROOT}/Values/{map}"),
+            ));
+        }
+        values.push_str(&container(event, &def, &params, &refs, ""));
+        hook_refs.push_str(&reference(
+            &format!("{DEF}/ArtiOs/ArtiOsInstance/ArtiOsInstanceHookRef"),
+            &format!("{ROOT}/Values/{event}"),
+        ));
+    }
+    Ok((values, hook_refs))
+}
 fn selected<'a>(records: &'a [ConfigurationRecord], name: &str) -> Option<&'a ConfigurationRecord> {
     records
         .iter()
         .find(|record| record.definition == format!("/AUTOSAR/EcucDefs/Os/{name}"))
 }
+/// The ARTI description and the hook binding rendered once from its trusted
+/// template for the selected OS instance name.
 pub(super) fn files(
     plan: &PlanDescription,
     scheduler: bool,
     alarms: &[String],
     tables: &[String],
-) -> Result<Vec<(String, Vec<u8>)>, crate::message::LocalizedText> {
+    binding_template: &str,
+) -> Result<(Vec<u8>, String), Vec<super::PlanDiagnostic>> {
+    let (os, name) = selected_os(plan).map_err(super::ecu::reject)?;
+    let binding = super::outputs::render(
+        binding_template,
+        "os/src/Os_Arti.c",
+        &[super::outputs::Edit::Every(", Os,", &format!(", {name},"))],
+    )?;
+    let xml = description(plan, scheduler, alarms, tables, os, name, &binding)
+        .map_err(super::ecu::reject)?;
+    Ok((xml, binding))
+}
+
+fn selected_os(
+    plan: &PlanDescription,
+) -> Result<(&ConfigurationRecord, &str), crate::message::LocalizedText> {
     let os = selected(&plan.configuration, "OsOS").ok_or(crate::product_message!(
         "backend.integration.arti.arti_selected_os_configuration_required"
     ))?;
@@ -231,6 +325,18 @@ pub(super) fn files(
         )
         .into());
     }
+    Ok((os, name))
+}
+
+fn description(
+    plan: &PlanDescription,
+    scheduler: bool,
+    alarms: &[String],
+    tables: &[String],
+    os: &ConfigurationRecord,
+    name: &str,
+    binding: &str,
+) -> Result<Vec<u8>, crate::message::LocalizedText> {
     let mut d = Description::default();
     let mut states = String::new();
     for (kind, labels) in [
@@ -281,7 +387,9 @@ pub(super) fn files(
     ))?;
     d.type_map("AppModes", &[(1, mode.path.clone())]);
     d.class("", &[("AppMode", Some("AppModes"))]);
-    d.instance(
+    // Hooks attach to the OS instance rather than to a parallel manifest.
+    let (hook_values, hook_refs) = hooks(name, binding)?;
+    d.instance_with_refs(
         "",
         "OperatingSystem",
         Some(&os.path),
@@ -291,6 +399,7 @@ pub(super) fn files(
             ("Valid", "*Os_ArtiOsReady != 0".into()),
         ],
         &[],
+        &hook_refs,
     );
     d.pointer_map(
         "TaskStacks",
@@ -565,78 +674,7 @@ pub(super) fn files(
         &generic_refs,
         &container("Value", &instance_parameter, "", &value_refs, ""),
     ));
-    let mut hook_refs = String::new();
-    let binding =
-        include_str!("../../../runtime/os/src/Os_Arti.c").replace(", Os,", &format!(", {name},"));
-    let mut hooks = std::collections::BTreeSet::new();
-    for call in binding.split("ARTI_TRACE(").skip(1) {
-        let (arguments, _) = call.split_once(';').ok_or(crate::product_message!(
-            "backend.integration.arti.arti_trace_invocation_malformed"
-        ))?;
-        let arguments = arguments.split(',').collect::<Vec<_>>();
-        if arguments.len() != 6 {
-            return Err(crate::product_message!(
-                "backend.integration.arti.arti_single_parameter_trace_invocation_malformed"
-            )
-            .into());
-        }
-        let context = arguments[0].trim();
-        let class = arguments[1].trim();
-        let event = arguments[4].trim();
-        if !hooks.insert((context, class, event)) {
-            continue;
-        }
-        let def = format!("{DEF}/ArtiValues/ArtiHook");
-        let mut params = String::new();
-        for (field, value) in [
-            ("Context", context),
-            ("Class", class),
-            ("EventName", event),
-            ("Instance", name),
-            ("FileName", "Os_Arti.c"),
-        ] {
-            params.push_str(&parameter(
-                &format!("{def}/ArtiHook{field}"),
-                value,
-                "ECUC-STRING-PARAM-DEF",
-            ));
-        }
-        let mut refs = reference(
-            &format!("{def}/ArtiHookInstanceParameterTypeRef"),
-            &format!("{ROOT}/Values/CoreIds"),
-        );
-        if let Some(map) = match class {
-            "AR_CP_OS_TASK" => Some("TaskIds"),
-            "AR_CP_OS_CAT2ISR" => Some("IsrIds"),
-            _ => None,
-        } {
-            refs.push_str(&reference(
-                &format!("{def}/ArtiHookEventParameterTypeRef"),
-                &format!("{ROOT}/Values/{map}"),
-            ));
-        }
-        d.values
-            .push_str(&container(event, &def, &params, &refs, ""));
-        hook_refs.push_str(&reference(
-            &format!("{DEF}/ArtiOs/ArtiOsInstance/ArtiOsInstanceHookRef"),
-            &format!("{ROOT}/Values/{event}"),
-        ));
-    }
-    // Attach hooks to the OS instance rather than introducing a parallel manifest.
-    let instance_end = "</REFERENCE-VALUES></ECUC-CONTAINER-VALUE>";
-    let start = d
-        .objects
-        .find("<SHORT-NAME>OperatingSystem</SHORT-NAME>")
-        .ok_or(crate::product_message!(
-            "backend.integration.arti.arti_generated_os_instance_missing"
-        ))?;
-    let at = start
-        + d.objects[start..]
-            .find(instance_end)
-            .ok_or(crate::product_message!(
-                "backend.integration.arti.arti_generated_os_instance_references_missing"
-            ))?;
-    d.objects.insert_str(at, &hook_refs);
+    d.values.push_str(&hook_values);
     let children = container("Values", &format!("{DEF}/ArtiValues"), "", "", &d.values)
         + &container("Os", &format!("{DEF}/ArtiOs"), "", "", &d.objects)
         + &container("Generic", &format!("{DEF}/ArtiGeneric"), "", "", &d.generic)
@@ -672,8 +710,5 @@ pub(super) fn files(
     let xml = format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\"><AR-PACKAGES><AR-PACKAGE><SHORT-NAME>ArtiDescriptions</SHORT-NAME><ELEMENTS><ECUC-MODULE-CONFIGURATION-VALUES><SHORT-NAME>Arti</SHORT-NAME><DEFINITION-REF DEST=\"ECUC-MODULE-DEF\">{DEF}</DEFINITION-REF><ECUC-DEF-EDITION>4.10.0</ECUC-DEF-EDITION><IMPLEMENTATION-CONFIG-VARIANT>VARIANT-PRE-COMPILE</IMPLEMENTATION-CONFIG-VARIANT><POST-BUILD-VARIANT-USED>false</POST-BUILD-VARIANT-USED><CONTAINERS>{children}</CONTAINERS></ECUC-MODULE-CONFIGURATION-VALUES>{host_ecuc}</ELEMENTS></AR-PACKAGE></AR-PACKAGES></AUTOSAR>\n"
     );
-    Ok(vec![
-        ("os/Os_Arti.arxml".into(), xml.into_bytes()),
-        ("os/src/Os_Arti.c".into(), binding.into_bytes()),
-    ])
+    Ok(xml.into_bytes())
 }

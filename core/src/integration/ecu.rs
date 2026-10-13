@@ -32,7 +32,7 @@ impl EcuIntegrationFiles {
     }
 }
 
-fn reject(message: crate::message::LocalizedText) -> Vec<PlanDiagnostic> {
+pub(super) fn reject(message: crate::message::LocalizedText) -> Vec<PlanDiagnostic> {
     vec![PlanDiagnostic {
         category: DiagnosticCategory::Tool,
         code: "ECU_SOURCE_CLOSURE".into(),
@@ -199,7 +199,7 @@ impl ValidatedIntegrationPlan {
         &'a self,
         target: BuildTarget,
         application: Option<&'a [u8]>,
-    ) -> Result<BTreeMap<String, Cow<'a, [u8]>>, Vec<PlanDiagnostic>> {
+    ) -> Result<(BTreeMap<String, Cow<'static, [u8]>>, String), Vec<PlanDiagnostic>> {
         if application.is_none() {
             return Err(reject(crate::product_message!(
                 "backend.integration.composition.consumer_unsupported"
@@ -332,21 +332,11 @@ pub(super) struct OsGeneration {
 
 pub(super) fn configure_os(
     plan: &super::PlanDescription,
-    files: &mut BTreeMap<String, Cow<'_, [u8]>>,
+    outputs: &mut super::outputs::EcuOutputs,
 ) -> Result<OsGeneration, Vec<PlanDiagnostic>> {
     let counter_name = c_name(plan.schedule.counter.rsplit('/').next().unwrap());
     let tick_ms = u64::from(plan.schedule.counter_tick_ms);
-    let counter_header = format!(
-        "/** @file Generated Counter time conversions (SWS_Os_00393).\n * Argument: a TickType value in0..UINT32_MAX; evaluated once.\n * Result: PhysicalTimeType. Integer seconds truncate toward zero.\n * The validated Counter resolution is {tick_ms} logical millisecond(s).\n * The largest nanosecond result fits uint64_t without overflow.\n */\n#ifndef AUTOSAR_GENERATED_OS_COUNTER_H\n#define AUTOSAR_GENERATED_OS_COUNTER_H\n#include \"Os_Types.h\"\nstatic inline PhysicalTimeType Os_TicksToNs_{counter_name}(TickType ticks) {{\n    return (PhysicalTimeType)ticks * UINT64_C({ns});\n}}\nstatic inline PhysicalTimeType Os_TicksToUs_{counter_name}(TickType ticks) {{\n    return (PhysicalTimeType)ticks * UINT64_C({us});\n}}\nstatic inline PhysicalTimeType Os_TicksToMs_{counter_name}(TickType ticks) {{\n    return (PhysicalTimeType)ticks * UINT64_C({tick_ms});\n}}\nstatic inline PhysicalTimeType Os_TicksToSec_{counter_name}(TickType ticks) {{\n    return ((PhysicalTimeType)ticks * UINT64_C({tick_ms})) / UINT64_C(1000);\n}}\n#define OS_TICKS2NS_{counter_name}(ticks) (Os_TicksToNs_{counter_name}((ticks)))\n#define OS_TICKS2US_{counter_name}(ticks) (Os_TicksToUs_{counter_name}((ticks)))\n#define OS_TICKS2MS_{counter_name}(ticks) (Os_TicksToMs_{counter_name}((ticks)))\n#define OS_TICKS2SEC_{counter_name}(ticks) (Os_TicksToSec_{counter_name}((ticks)))\n#endif\n",
-        ns = tick_ms * 1_000_000,
-        us = tick_ms * 1_000,
-    );
     let counter_symbol = format!("OS_COUNTER_ID_{counter_name}");
-    files.extend(
-        super::os_service::files(&counter_name, &counter_symbol)
-            .into_iter()
-            .map(|(path, bytes)| (path, Cow::Owned(bytes))),
-    );
     let legacy_constants = format!(
         "#define {counter_symbol} 0u\n#define OSMAXALLOWEDVALUE_{counter_name} UINT64_C({maximum})\n#define OSTICKSPERBASE_{counter_name} UINT64_C({base})\n#define OSMINCYCLE_{counter_name} UINT64_C({minimum})\n#define OSMAXALLOWEDVALUE_{counter_symbol} OSMAXALLOWEDVALUE_{counter_name}\n#define OSTICKSPERBASE_{counter_symbol} OSTICKSPERBASE_{counter_name}\n#define OSMINCYCLE_{counter_symbol} OSMINCYCLE_{counter_name}\n#define OSMAXALLOWEDVALUE OSMAXALLOWEDVALUE_{counter_name}\n#define OSTICKSPERBASE OSTICKSPERBASE_{counter_name}\n#define OSMINCYCLE OSMINCYCLE_{counter_name}\n#define OSTICKDURATION UINT64_C({nanoseconds})\n",
         maximum = plan.schedule.counter_maximum,
@@ -354,17 +344,20 @@ pub(super) fn configure_os(
         minimum = plan.schedule.counter_minimum_cycle,
         nanoseconds = tick_ms * 1_000_000,
     );
-    let mut counter_header = counter_header;
-    let end = counter_header.rfind("#endif").unwrap();
-    counter_header.insert_str(end, &legacy_constants);
-    files.insert(
-        "os/include/Os_Counter.h".into(),
-        Cow::Owned(counter_header.into_bytes()),
+    let counter_header = format!(
+        "/** @file Generated Counter time conversions (SWS_Os_00393).\n * Argument: a TickType value in0..UINT32_MAX; evaluated once.\n * Result: PhysicalTimeType. Integer seconds truncate toward zero.\n * The validated Counter resolution is {tick_ms} logical millisecond(s).\n * The largest nanosecond result fits uint64_t without overflow.\n */\n#ifndef AUTOSAR_GENERATED_OS_COUNTER_H\n#define AUTOSAR_GENERATED_OS_COUNTER_H\n#include \"Os_Types.h\"\nstatic inline PhysicalTimeType Os_TicksToNs_{counter_name}(TickType ticks) {{\n    return (PhysicalTimeType)ticks * UINT64_C({ns});\n}}\nstatic inline PhysicalTimeType Os_TicksToUs_{counter_name}(TickType ticks) {{\n    return (PhysicalTimeType)ticks * UINT64_C({us});\n}}\nstatic inline PhysicalTimeType Os_TicksToMs_{counter_name}(TickType ticks) {{\n    return (PhysicalTimeType)ticks * UINT64_C({tick_ms});\n}}\nstatic inline PhysicalTimeType Os_TicksToSec_{counter_name}(TickType ticks) {{\n    return ((PhysicalTimeType)ticks * UINT64_C({tick_ms})) / UINT64_C(1000);\n}}\n#define OS_TICKS2NS_{counter_name}(ticks) (Os_TicksToNs_{counter_name}((ticks)))\n#define OS_TICKS2US_{counter_name}(ticks) (Os_TicksToUs_{counter_name}((ticks)))\n#define OS_TICKS2MS_{counter_name}(ticks) (Os_TicksToMs_{counter_name}((ticks)))\n#define OS_TICKS2SEC_{counter_name}(ticks) (Os_TicksToSec_{counter_name}((ticks)))\n{legacy_constants}#endif\n",
+        ns = tick_ms * 1_000_000,
+        us = tick_ms * 1_000,
     );
-    let configuration = files.get_mut("os/include/Os_Cfg.h").unwrap();
-    let mut configuration_text = std::str::from_utf8(configuration)
-        .map_err(|error| reject(error.to_string().into()))?
-        .to_owned();
+    outputs.emit_all(
+        "os-service",
+        super::os_service::files(&counter_name, &counter_symbol),
+    )?;
+    outputs.emit(
+        super::outputs::OS,
+        "os/include/Os_Counter.h",
+        counter_header,
+    )?;
     let extended_status =
         plan.configuration
             .iter()
@@ -375,14 +368,11 @@ pub(super) fn configure_os(
             })
             .unwrap_or("EXTENDED")
             == "EXTENDED";
-    configuration_text = configuration_text.replace(
-        "#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED 1\n#endif",
-        if extended_status {
-            "#if defined(OS_STATUS_EXTENDED) && (OS_STATUS_EXTENDED != 1)\n#error OsStatus differs from the validated plan\n#endif\n#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED 1\n#endif"
-        } else {
-            "#if defined(OS_STATUS_EXTENDED) && (OS_STATUS_EXTENDED != 0)\n#error OsStatus differs from the validated plan\n#endif\n#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED 0\n#endif"
-        },
-    );
+    let status = if extended_status {
+        "#if defined(OS_STATUS_EXTENDED) && (OS_STATUS_EXTENDED != 1)\n#error OsStatus differs from the validated plan\n#endif\n#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED 1\n#endif"
+    } else {
+        "#if defined(OS_STATUS_EXTENDED) && (OS_STATUS_EXTENDED != 0)\n#error OsStatus differs from the validated plan\n#endif\n#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED 0\n#endif"
+    };
     let task_symbol = format!(
         "OS_TASK_ID_{}",
         plan.schedule.task.rsplit('/').next().unwrap()
@@ -402,12 +392,21 @@ pub(super) fn configure_os(
                 "backend.integration.ecu.validated_os_scheduler_resource_config_missing"
             ))
         })?;
-    let end = configuration_text.rfind("#endif").unwrap();
-    configuration_text.insert_str(
-        end,
-        &format!("#include \"Os_Counter.h\"\n#define {task_symbol} 0u\n"),
-    );
-    *configuration = Cow::Owned(configuration_text.into_bytes());
+    let path = "os/include/Os_Cfg.h";
+    let configuration = super::outputs::render(
+        outputs.template(super::outputs::OS, path)?,
+        path,
+        &[
+            super::outputs::Edit::Once(
+                "#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED 1\n#endif",
+                status,
+            ),
+            super::outputs::Edit::BeforeGuardEnd(&format!(
+                "#include \"Os_Counter.h\"\n#define {task_symbol} 0u\n"
+            )),
+        ],
+    )?;
+    outputs.emit_rendered(super::outputs::OS, path, configuration)?;
     let mut timer_report = serde_json::to_vec_pretty(&serde_json::json!({
         "format": "autosar-os-generation-timing-v1",
         "requirement": "SWS_Os_00370",
@@ -427,7 +426,11 @@ pub(super) fn configure_os(
     }))
     .map_err(|error| reject(error.to_string().into()))?;
     timer_report.push(b'\n');
-    files.insert("os-generation-timing.json".into(), Cow::Owned(timer_report));
+    outputs.emit(
+        super::outputs::OS,
+        "os-generation-timing.json",
+        timer_report,
+    )?;
     Ok(OsGeneration {
         counter_symbol,
         task_symbol,
@@ -439,7 +442,7 @@ pub(super) fn configure_os(
 /// application profile. The remaining BSW portion is supplied by its producer.
 pub(super) fn os_configuration(
     plan: &super::PlanDescription,
-    files: &mut BTreeMap<String, Cow<'_, [u8]>>,
+    outputs: &mut super::outputs::EcuOutputs,
     counter_symbol: &str,
     task_symbol: &str,
     use_res_scheduler: bool,
@@ -472,17 +475,16 @@ pub(super) fn os_configuration(
         }
     }
     let mut alarms = String::new();
-    files.extend(
-        super::arti::files(
-            plan,
-            use_res_scheduler,
-            &groups.keys().cloned().collect::<Vec<_>>(),
-            &table_groups.keys().cloned().collect::<Vec<_>>(),
-        )
-        .map_err(reject)?
-        .into_iter()
-        .map(|(path, bytes)| (path, Cow::Owned(bytes))),
-    );
+    let binding = "os/src/Os_Arti.c";
+    let (description, binding_text) = super::arti::files(
+        plan,
+        use_res_scheduler,
+        &groups.keys().cloned().collect::<Vec<_>>(),
+        &table_groups.keys().cloned().collect::<Vec<_>>(),
+        outputs.template(super::outputs::ARTI, binding)?,
+    )?;
+    outputs.emit(super::outputs::ARTI, "os/Os_Arti.arxml", description)?;
+    outputs.emit_rendered(super::outputs::ARTI, binding, binding_text)?;
     for (id, (_, (period, event))) in groups.iter().enumerate() {
         writeln!(alarms, "    {{{id}u, 0u, OS_ALARM_EVENT, 0u, {event}u, NULL, 1u, 0u, {period}u, {period}u, 0u}},").unwrap();
     }
@@ -511,10 +513,9 @@ pub(super) fn os_configuration(
                 "backend.integration.ecu.trusted_ecu_config_template_missing"
             ))
         })?;
-    let mut config = std::str::from_utf8(template.bytes)
-        .map_err(|error| reject(error.to_string().into()))?
-        .to_owned();
-    for (key, value) in [
+    let template =
+        std::str::from_utf8(template.bytes).map_err(|error| reject(error.to_string().into()))?;
+    let values = [
         ("TASK_SYMBOL", task_symbol.to_owned()),
         (
             "TASK_NAME",
@@ -569,10 +570,13 @@ pub(super) fn os_configuration(
             .to_owned(),
         ),
         ("SCHEDULE_COUNT", table_groups.len().to_string()),
-    ] {
-        config = config.replace(&format!("@{key}@"), &value);
-    }
-    Ok(config)
+    ]
+    .map(|(key, value)| (format!("@{key}@"), value));
+    let edits: Vec<_> = values
+        .iter()
+        .map(|(key, value)| super::outputs::Edit::Every(key, value))
+        .collect();
+    super::outputs::render(template, "src/Ecu_Config.c", &edits)
 }
 
 #[cfg(test)]

@@ -21,6 +21,7 @@ pub(crate) mod handoff;
 mod mode;
 mod native_configuration;
 mod os_service;
+mod outputs;
 mod plan;
 mod routing;
 mod rte;
@@ -114,6 +115,43 @@ impl PlanDiagnostic {
             message: message.into(),
             remedy: remedy.into(),
         }
+    }
+
+    fn output(code: &str, path: &str, message: crate::message::LocalizedText) -> Vec<Self> {
+        vec![Self {
+            category: DiagnosticCategory::Tool,
+            code: code.into(),
+            file: None,
+            object: Some(path.into()),
+            message,
+            remedy: crate::product_message!(
+                "backend.integration.ecu.generation_identity_contract_repair_required"
+            ),
+        }]
+    }
+
+    fn output_conflict(path: &str, first: &str, second: &str) -> Vec<Self> {
+        Self::output(
+            "OUTPUT_PRODUCER_CONFLICT",
+            path,
+            crate::product_message!("backend.integration.outputs.producer_conflict", "path" => path, "first" => first, "second" => second),
+        )
+    }
+
+    fn output_missing(path: &str) -> Vec<Self> {
+        Self::output(
+            "OUTPUT_MISSING",
+            path,
+            crate::product_message!("backend.integration.outputs.output_missing", "path" => path),
+        )
+    }
+
+    fn template_anchor(path: &str, anchor: &str) -> Vec<Self> {
+        Self::output(
+            "TEMPLATE_ANCHOR",
+            path,
+            crate::product_message!("backend.integration.outputs.template_anchor_missing", "path" => path, "anchor" => anchor),
+        )
     }
 
     fn at_source(

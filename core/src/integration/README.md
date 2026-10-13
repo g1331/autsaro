@@ -51,6 +51,7 @@ layer are not near-synonyms.
 | `catalog.rs` | Selected BSW symbol catalog and runtime source identities |
 | `rte.rs`, `os_service.rs` | RTE producers and the OS counter service binding |
 | `ecu_config.rs`, `artifacts.rs`, `arti.rs` | Generated ECU configuration sources, `integration.json`, implementation and ARTI descriptions |
+| `outputs.rs` | ECU output registry: one producer per path, single rendering of reserved runtime templates |
 | `ecu.rs`, `handoff.rs` | Delivered ECU project assembly, native build and verification of the sealed project |
 | `contracts.rs` | Component contract kit for application compilation |
 | `editor.rs` | Integration panel inspection and edits |

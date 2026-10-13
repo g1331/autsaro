@@ -294,6 +294,14 @@ pub(super) fn runtime_source_identities() -> BTreeMap<String, String> {
             "core/src/integration/contracts.rs",
             include_bytes!("contracts.rs").as_slice(),
         ),
+        (
+            "core/src/integration/arti.rs",
+            include_bytes!("arti.rs").as_slice(),
+        ),
+        (
+            "core/src/integration/outputs.rs",
+            include_bytes!("outputs.rs").as_slice(),
+        ),
     ] {
         identities.insert(path.into(), format!("{:x}", Sha256::digest(bytes)));
     }
