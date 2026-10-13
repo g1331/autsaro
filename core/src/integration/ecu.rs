@@ -185,13 +185,7 @@ impl ValidatedIntegrationPlan {
     pub(crate) fn render_ecu_sources(
         &self,
         target: BuildTarget,
-        application: Option<&[u8]>,
     ) -> Result<(super::outputs::EcuFiles, String), Vec<PlanDiagnostic>> {
-        if application.is_none() {
-            return Err(reject(crate::product_message!(
-                "backend.integration.composition.consumer_unsupported"
-            )));
-        }
         super::ecu_config::files(self, target)
     }
 }

@@ -16,6 +16,36 @@ fn signals(root: &Path) -> Workspace {
 }
 
 #[test]
+fn delivery_without_an_initialized_application_names_the_missing_initialization() {
+    let scratch = Scratch::new();
+    let creation =
+        Workspace::preview_project_creation(&scratch.0.join("Live"), "Delivery", "standard-ecu")
+            .unwrap();
+    let workspace = Workspace::create_project_previewed(&creation).unwrap();
+    let plan = workspace.saved_integration_plan().unwrap();
+    let Err(issues) =
+        prepare_ecu_project_for_workspace(&workspace, &plan, tooling::native_target(), false)
+    else {
+        panic!("delivery without application sources was accepted");
+    };
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    let issue = &issues[0];
+    assert_eq!(issue.code, "APPLICATION_UNINITIALIZED");
+    assert_eq!(
+        issue.object.as_deref(),
+        Some("/Application/ReferenceComposition")
+    );
+    assert_eq!(
+        serde_json::to_value(&issue.message).unwrap()["key"],
+        "backend.prepared.application_uninitialized"
+    );
+    assert_eq!(
+        serde_json::to_value(&issue.remedy).unwrap()["key"],
+        "backend.prepared.application_initialization_required"
+    );
+}
+
+#[test]
 fn builtin_handoff_reconstructs_independent_authoritative_members() {
     let scratch = Scratch::new();
     let live = scratch.0.join("Live");

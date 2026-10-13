@@ -33,6 +33,24 @@ impl PlanDiagnostic {
     }
 }
 
+impl PlanDiagnostic {
+    /// Delivery is built from compiled user application sources; the project has none yet.
+    fn application_uninitialized(plan: &ValidatedIntegrationPlan) -> Vec<Self> {
+        vec![Self {
+            category: DiagnosticCategory::Dependency,
+            code: "APPLICATION_UNINITIALIZED".into(),
+            file: None,
+            object: plan
+                .description()
+                .composition
+                .as_ref()
+                .map(|composition| composition.composition.clone()),
+            message: crate::product_message!("backend.prepared.application_uninitialized"),
+            remedy: crate::product_message!("backend.prepared.application_initialization_required"),
+        }]
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PreflightStatus {
@@ -375,7 +393,7 @@ impl NativePreparation {
         let profile = crate::integration::PROFILE;
         if inputs.application.len() != slots.len() {
             return Err(crate::product_message!(
-                "backend.integration.composition.consumer_unsupported"
+                "backend.arxml.project.application_live_slot_mismatch"
             ));
         }
         inputs.manifest.profile_hint = profile.into();
@@ -818,11 +836,10 @@ fn prepare_ecu_sources(
     handoff: bool,
     native: NativeInputs,
 ) -> Result<PreparedProject<'static>, Vec<PlanDiagnostic>> {
-    let live_application = native
-        .application
-        .first()
-        .map(|(_, bytes)| bytes.as_slice());
-    let (rendered, readme) = plan.render_ecu_sources(target, live_application)?;
+    if native.application.is_empty() {
+        return Err(PlanDiagnostic::application_uninitialized(plan));
+    }
+    let (rendered, readme) = plan.render_ecu_sources(target)?;
     let source_owners =
         crate::integration::ecu::source_assets(target).map_err(PlanDiagnostic::source_closure)?;
     let mut files = BTreeMap::new();
