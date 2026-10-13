@@ -268,6 +268,15 @@ pub(crate) fn populate(
             ("HANDLE-TIMEOUT-TYPE", ValueKind::Enumeration, ""),
             ("QUEUE-LENGTH", ValueKind::Integer, ""),
         ] {
+            // R24-11 holds these only in NONQUEUED-RECEIVER-COM-SPEC, never under a P-port.
+            if owner == "P-PORT-PROTOTYPE"
+                && matches!(
+                    tag,
+                    "ALIVE-TIMEOUT" | "HANDLE-NEVER-RECEIVED" | "HANDLE-TIMEOUT-TYPE"
+                )
+            {
+                continue;
+            }
             let mut entry = descriptor(format!("{owner}#{tag}"), tag, Some(kind));
             entry.reference_destinations =
                 destinations.split_whitespace().map(str::to_owned).collect();
