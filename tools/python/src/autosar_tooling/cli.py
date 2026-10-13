@@ -53,9 +53,17 @@ def main() -> int:
         "requirements",
         help="List a specification's undisposed official requirement IDs and stale ID citations",
     )
-    requirement.add_argument("document", help="Specification document name, such as SWS_CANInterface")
     requirement.add_argument(
+        "document",
+        nargs="?",
+        help="Specification document name, such as SWS_CANInterface; without it, check every committed catalog offline",
+    )
+    mode = requirement.add_mutually_exclusive_group()
+    mode.add_argument(
         "--stale-only", action="store_true", help="Fail only on stale citations, for a module whose rework is still open"
+    )
+    mode.add_argument(
+        "--update", action="store_true", help="Write the document's catalog from the archive, registering it for the required check"
     )
     args = parser.parse_args()
     if args.command == "c-check":
@@ -68,8 +76,13 @@ def main() -> int:
         from autosar_tooling.official import fetch
         return fetch()
     if args.command == "requirements":
-        from autosar_tooling.requirements import check as check_requirements
-        return check_requirements(args.document, stale_only=args.stale_only)
+        from autosar_tooling import requirements
+
+        if args.document:
+            return requirements.check(args.document, stale_only=args.stale_only, update=args.update)
+        if args.stale_only or args.update:
+            parser.error("--stale-only and --update require a document")
+        return requirements.check_catalogs()
     if args.command == "doctor":
         if args.role == "native":
             if not args.target:

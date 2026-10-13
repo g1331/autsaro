@@ -7,10 +7,17 @@ docs/standards.md. A configuration-conditional 不适用 holds only while a Reje
 proves that the product refuses each named ECUC parameter. Every mention, marked or not,
 is checked for stale IDs. The result is computed on each run and never written to the
 repository.
+
+A completed module commits its document's catalog to core/resources/requirements: the
+item IDs and life-cycle states, the IDs other documents define with the same prefixes,
+and the archive's SHA-256, never specification text. The required checks account every
+committed catalog without the archive; the acceptance run confirms each catalog still
+matches the archive.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sys
@@ -24,6 +31,7 @@ from autosar_tooling.config import ROOT, archive_path
 
 ARCHIVE_VARIABLE = "AUTOSAR_SPECIFICATIONS_ARCHIVE"
 STANDARDS = "docs/standards.md"
+CATALOGS = "core/resources/requirements"
 SOURCES = (STANDARDS, "core/tests", "tests")
 NAMESPACE = "{http://autosar.org/schema/r4.0}"
 # A cited ID may continue with further numbers of the same width, e.g.
@@ -96,8 +104,12 @@ def prefix(identifier: str) -> str:
     return identifier.rstrip("0123456789")
 
 
+def document_name(document: str) -> str:
+    return document.removeprefix("AUTOSAR_CP_").removesuffix(".pdf").removesuffix(".arxml")
+
+
 def load(archive: Path, document: str) -> Specification:
-    name = document.removeprefix("AUTOSAR_CP_").removesuffix(".pdf").removesuffix(".arxml")
+    name = document_name(document)
     with zipfile.ZipFile(archive) as bundle:
         members = [item for item in bundle.namelist() if item.endswith(f"/AUTOSAR_CP_{name}.arxml")]
         if len(members) != 1:
@@ -220,17 +232,31 @@ def account(specification: Specification, found: Scan) -> tuple[dict[str, int], 
     return counts, undisposed, stale, unproven
 
 
-def check(document: str, root: Path = ROOT, stale_only: bool = False) -> int:
+def serialize(specification: Specification, digest: str) -> str:
+    """The committed catalog: IDs and life-cycle states only, never specification text."""
+    return json.dumps(
+        {
+            "archive": digest,
+            "items": dict(item for _, item in sorted(specification.items.items())),
+            "elsewhere": sorted(specification.elsewhere),
+        },
+        indent=2,
+    ) + "\n"
+
+
+def parse(text: str) -> tuple[Specification, str]:
+    """The specification and archive SHA-256 recorded in a committed catalog."""
+    data = json.loads(text)
+    items = {identifier.upper(): (identifier, state) for identifier, state in data["items"].items()}
+    return Specification(items, frozenset(item.upper() for item in data["elsewhere"])), data["archive"]
+
+
+def pinned(root: Path) -> dict:
     records = json.loads((root / "core/resources/official.json").read_text(encoding="utf-8"))
-    entry = next(item for item in records if item["environment"] == ARCHIVE_VARIABLE)
-    archive = archive_path(ARCHIVE_VARIABLE, entry["path"], root)
-    try:
-        if not archive.is_file():
-            raise RequirementError(f"{archive} is missing; run `python -m autosar_tooling fetch-official` or set {ARCHIVE_VARIABLE}")
-        specification = load(archive, document)
-    except (RequirementError, zipfile.BadZipFile, ElementTree.ParseError) as error:
-        print(f"error: {error}", file=sys.stderr)
-        return 1
+    return next(item for item in records if item["environment"] == ARCHIVE_VARIABLE)
+
+
+def report(document: str, specification: Specification, root: Path, stale_only: bool) -> int:
     counts, undisposed, stale, unproven = account(specification, collect(root, {prefix(key) for key in specification.items}))
     print(
         f"{document}: {len(specification.items)} official items; "
@@ -251,3 +277,50 @@ def check(document: str, root: Path = ROOT, stale_only: bool = False) -> int:
         for condition, parameter in unproven:
             print(f"  {condition.path}:{condition.line}: {parameter}")
     return 1 if stale or ((undisposed or unproven) and not stale_only) else 0
+
+
+def check(document: str, root: Path = ROOT, stale_only: bool = False, update: bool = False) -> int:
+    """Account a document from the archive. With update, write its catalog; otherwise an
+    existing catalog must match the archive."""
+    archive = archive_path(ARCHIVE_VARIABLE, pinned(root)["path"], root)
+    try:
+        if not archive.is_file():
+            raise RequirementError(f"{archive} is missing; run `python -m autosar_tooling fetch-official` or set {ARCHIVE_VARIABLE}")
+        specification = load(archive, document)
+    except (RequirementError, zipfile.BadZipFile, ElementTree.ParseError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    catalog = root / CATALOGS / f"{document_name(document)}.json"
+    status = 0
+    if update or catalog.is_file():
+        with archive.open("rb") as source:
+            expected = serialize(specification, hashlib.file_digest(source, "sha256").hexdigest())
+        if update:
+            catalog.parent.mkdir(parents=True, exist_ok=True)
+            catalog.write_text(expected, encoding="utf-8", newline="\n")
+            print(f"Wrote {CATALOGS}/{catalog.name}")
+        elif catalog.read_text(encoding="utf-8") != expected:
+            print(f"error: {CATALOGS}/{catalog.name} differs from {archive.name}; run `python -m autosar_tooling requirements --update {document_name(document)}`", file=sys.stderr)
+            status = 1
+    return report(document, specification, root, stale_only) | status
+
+
+def check_catalogs(root: Path = ROOT) -> int:
+    """Account every committed catalog completely, without the archive."""
+    digest = pinned(root)["sha256"]
+    catalogs = sorted((root / CATALOGS).glob("*.json"))
+    if not catalogs:
+        print(f"No requirement catalogs in {CATALOGS}.")
+    status = 0
+    for path in catalogs:
+        try:
+            specification, source = parse(path.read_text(encoding="utf-8"))
+        except (ValueError, KeyError, TypeError, AttributeError) as error:
+            print(f"error: {CATALOGS}/{path.name} is not a requirement catalog: {error!r}", file=sys.stderr)
+            status = 1
+            continue
+        if source != digest:
+            print(f"error: {CATALOGS}/{path.name} comes from archive {source}, but official.json pins {digest}; run `python -m autosar_tooling requirements --update {path.stem}`", file=sys.stderr)
+            status = 1
+        status |= report(path.stem, specification, root, stale_only=False)
+    return status

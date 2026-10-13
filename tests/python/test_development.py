@@ -124,10 +124,6 @@ class RequirementTests(unittest.TestCase):
     """Uses the invented prefixes DEMO/Demo so that these sources never cite a real module's ID."""
 
     def repository(self, root: Path, standards: str, test: str) -> None:
-        (root / "core/resources").mkdir(parents=True)
-        (root / "core/resources/official.json").write_text(
-            json.dumps([{"environment": requirements.ARCHIVE_VARIABLE, "path": "official/spec.zip"}])
-        )
         (root / "official").mkdir()
         with zipfile.ZipFile(root / "official/spec.zip", "w") as archive:
             archive.writestr(
@@ -140,6 +136,11 @@ class RequirementTests(unittest.TestCase):
                 ),
             )
             archive.writestr("CP_SWS_DemoTT_2/AUTOSAR_CP_SWS_DemoTT.arxml", specification("TRACE:ECUC_Demo_00020"))
+        (root / "core/resources").mkdir(parents=True)
+        digest = hashlib.sha256((root / "official/spec.zip").read_bytes()).hexdigest()
+        (root / "core/resources/official.json").write_text(
+            json.dumps([{"environment": requirements.ARCHIVE_VARIABLE, "path": "official/spec.zip", "sha256": digest}])
+        )
         (root / "docs").mkdir()
         (root / "docs/standards.md").write_text(standards, encoding="utf-8")
         (root / "core/tests").mkdir()
@@ -255,6 +256,39 @@ class RequirementTests(unittest.TestCase):
             status, output = self.run_check(root)
             self.assertEqual(status, 1)
             self.assertIn("docs/standards.md:1: names no ECUC parameter", output)
+
+    def test_committed_catalog_is_checked_offline_and_against_the_archive(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            standards = "不适用（归属：Can）：`SWS_DEMO_00001–00003`、`SWS_DEMO_00009`、`SWS_DEMO_CONSTR_00001`；差距 #7：`ECUC_Demo_00010`\n"
+            self.repository(root, standards, "// Verifies: SWS_DEMO_00005, 00007\n")
+            output, errors = io.StringIO(), io.StringIO()
+            with patch.object(requirements.sys, "stderr", errors), patch.dict(os.environ), redirect_stdout(output):
+                os.environ.pop(requirements.ARCHIVE_VARIABLE, None)
+                self.assertEqual(requirements.check("SWS_Demo", root, update=True), 0)
+                catalog = root / requirements.CATALOGS / "SWS_Demo.json"
+                written = catalog.read_text(encoding="utf-8")
+                self.assertEqual(json.loads(written)["items"]["SWS_DEMO_00009"], "draft")
+                self.assertEqual(json.loads(written)["elsewhere"], ["ECUC_DEMO_00020"])
+                self.assertEqual(requirements.check("SWS_Demo", root), 0)
+                catalog.write_text(written.replace('"SWS_DEMO_00009": "draft"', '"SWS_DEMO_00009": "valid"'), encoding="utf-8")
+                self.assertEqual(requirements.check("SWS_Demo", root), 1)
+                self.assertIn("SWS_Demo.json differs from spec.zip", errors.getvalue())
+                catalog.write_text(written, encoding="utf-8")
+                # The required check reads only the catalog.
+                (root / "official/spec.zip").unlink()
+                output.seek(0)
+                output.truncate()
+                self.assertEqual(requirements.check_catalogs(root), 0, output.getvalue())
+                self.assertIn("SWS_Demo: 8 official items; verified 2,", output.getvalue())
+                (root / "core/tests/demo.c").write_text("// Verifies: SWS_DEMO_00005\n", encoding="utf-8")
+                self.assertEqual(requirements.check_catalogs(root), 1)
+                self.assertIn("  SWS_DEMO_00007\n", output.getvalue())
+                (root / "core/tests/demo.c").write_text("// Verifies: SWS_DEMO_00005, 00007\n", encoding="utf-8")
+                official_json = root / "core/resources/official.json"
+                official_json.write_text(official_json.read_text().replace('"sha256": "', '"sha256": "0'))
+                self.assertEqual(requirements.check_catalogs(root), 1)
+                self.assertIn("comes from archive", errors.getvalue())
 
     def test_unknown_document_and_missing_archive_fail(self):
         with tempfile.TemporaryDirectory() as directory:
