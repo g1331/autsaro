@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- 新增 `python -m autosar_tooling fetch-official`：把官方 R24-11 XSD、ECUC MOD 和建模示例档案下载到 `core/resources/official.json` 登记的位置，并按固定 SHA-256 校验；建模示例档案也已固定哈希。`official` 对照套件改在 GitHub 托管的 Linux 与 Windows runner 上运行（手动、每日定时，以及修改定义、规则或官方测试的 PR），不再依赖未注册的自托管 runner；它不属于必需检查。
 - 根目录面向读者的文档默认使用英文，完整中文版以 `.zh-CN.md` 后缀保留；更新双向语言入口。
 
 - 项目原创代码与文档采用 Apache-2.0，补齐包元数据及交付工程的 LICENSE/NOTICE；第三方保留原许可。
