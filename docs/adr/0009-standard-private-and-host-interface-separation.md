@@ -11,7 +11,7 @@
 3. 标准公共头、模块私有声明（`<Mip>_Internal.h` 与 `.c` 同处）、主机注入／时钟／输出适配分别组织；标准上下层回调通过模块专用声明连接。
 4. 平台原语只经声明的适配边界提供；通用 BSW 不直接使用平台线程或 FreeRTOS API。
 5. 故障注入与测试控制只编译进测试构建；生产入口拒绝测试控制源。
-6. 共享状态的保护沿既有 SchM exclusive area 协议，不能以“单 owner”假设删除锁；拆分驱动与上层状态锁时核对双向调用与锁序。
+6. 共享状态的保护沿既有 SchM exclusive area 协议，不能以“单 owner”假设删除锁；拆分驱动与上层状态锁时核对双向调用与锁序。独占区的划分与持区调用规则见 [ADR 0018](0018-per-module-exclusive-areas-without-cross-module-locking.md)。
 
 ## 后果
 
