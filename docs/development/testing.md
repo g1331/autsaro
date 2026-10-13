@@ -30,7 +30,16 @@ Tauri 后端单测覆盖 Session、设置与请求归属，需先准备[桌面�
 
 ## 生成 C 的静态检查
 
-安装 Cppcheck **2.21.0** 和同一版本的 addons。检查入口校验三个 MISRA addon 文件的 SHA-256；CI 从固定提交 `e73bf44c3e49686b7495fab352d03a6c6075516b` 构建开放版。使用 `CPPCHECK`、`CPPCHECK_ADDON_DIR` 指定程序与 addon 目录，通过 `AUTOSAR_CC` 指定目标 GCC，不需要商业许可证。
+安装 Cppcheck **2.21.0** 和同一版本的 addons。检查入口校验程序版本及三个 MISRA addon 文件的 SHA-256；CI 从官方 `2.21.0` 标签（提交 `e73bf44c3e49686b7495fab352d03a6c6075516b`）构建开放版，不需要商业许可证。本地按同样的官方 CMake 方式构建即可，构建出的程序旁带有 `cfg` 与 `addons`，只需让 `CPPCHECK` 指向它：
+
+```powershell
+git clone -c core.autocrlf=false -c core.eol=lf --depth 1 --branch 2.21.0 https://github.com/cppcheck-opensource/cppcheck.git build/cppcheck-source
+cmake -S build/cppcheck-source -B build/cppcheck-build -DCMAKE_BUILD_TYPE=Release -DUSE_MATCHCOMPILER=OFF -DBUILD_GUI=OFF -DBUILD_TESTING=OFF
+cmake --build build/cppcheck-build --config Release --target cppcheck --parallel
+$env:CPPCHECK = "$PWD/build/cppcheck-build/bin/cppcheck"
+```
+
+克隆时保留 LF：该仓库按 `text=auto` 检出，Windows 默认会把 addon 转成 CRLF，摘要校验随之失败。Visual Studio 等多配置生成器把程序放在 `bin/Release/`。未安装 CMake 时可用 `uvx --from cmake cmake` 运行 Kitware 发布的 CMake。`CPPCHECK_ADDON_DIR` 可单独指定 addon 目录；`AUTOSAR_CC` 指定目标 GCC。
 
 ```powershell
 $env:AUTOSAR_C_ANALYSIS_SAMPLES = "$PWD/build/c-analysis-samples"
