@@ -463,6 +463,9 @@ export async function launch(name) {
     'deliveries',
   ])
     await mkdir(path.join(scratch, directory));
+  // The Windows shell roots every chooser at %USERPROFILE%\Desktop and reports
+  // a missing one in an extra "location is unavailable" dialog.
+  if (platform === 'windows') await mkdir(path.join(scratch, 'app-home', 'Desktop'));
   // Settings written by the retired XSD/MOD validation mode must still load.
   await writeFile(
     path.join(scratch, 'app-config', 'settings.json'),
