@@ -354,8 +354,23 @@ jobs:
         run: cargo test --locked -p autosar-config-core --test it -- 'c_analysis::'
       - name: Sealed ECU build mode fault isolation
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_ecu_build_modes.py
-      - name: Moved package verifies with the receiver Python
-        run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_offline_delivery.py
+      # Every supported receiver interpreter runs the moved package; a failing version does not hide the others.
+      - name: Moved package verifies with receiver Python 3.11–3.14
+        shell: python
+        run: |
+          import os, subprocess, sys
+          failed = []
+          for version in ('3.11', '3.12', '3.13', '3.14'):
+              subprocess.run(['uv', 'python', 'install', '--no-bin', version], check=True)
+              receiver = subprocess.check_output(['uv', 'python', 'find', '--no-project', '--managed-python', version], text=True).strip()
+              print(f'::group::Receiver Python {version}: {receiver}', flush=True)
+              result = subprocess.run(['uv', 'run', '--locked', 'python', '-B', '-m', 'unittest', 'discover', '-s', 'tests/python/native', '-p', 'test_offline_delivery.py'],
+                  env={**os.environ, 'AUTOSAR_RECEIVER_PYTHON': receiver})
+              print('::endgroup::', flush=True)
+              if result.returncode:
+                  print(f'::error title=Receiver Python {version}::The moved package did not verify with {receiver}', flush=True)
+                  failed.append(version)
+          sys.exit('Receiver Python failed: ' + ', '.join(failed) if failed else 0)
       - name: Validate generated sample inventory
         shell: python
         run: |

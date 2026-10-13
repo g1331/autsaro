@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- Required checks verify the moved `standard-ecu` package with receiver Python 3.11, 3.12, 3.13 and 3.14 on Linux and Windows, replacing the `offline.yml` workflow that needed an unregistered self-hosted runner. The `bundles` workflow builds Linux and Windows installers on GitHub-hosted runners and uploads them per commit SHA; it no longer offers macOS.
 - Add `python -m autosar_tooling fetch-official`, which downloads the official R24-11 XSD, ECUC MOD and modeling showcase archives to the locations in `core/resources/official.json` and verifies their pinned SHA-256; the showcase archive now has a pinned digest. The `official` comparison suite runs on GitHub-hosted Linux and Windows runners (manually, daily, and for pull requests that touch definitions, rules or the official tests) instead of an unregistered self-hosted runner; it is not a required check.
 - Make reader-facing root documents English by default, retaining complete Chinese versions with the `.zh-CN.md` suffix and updating reciprocal language links.
 - License original project code and documentation under Apache-2.0; add package metadata and LICENSE/NOTICE files to delivered projects. Third-party content retains its original licenses.
