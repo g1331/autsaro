@@ -30,24 +30,6 @@ def main() -> int:
     aggregate.add_argument(
         "--base", help="Incremental quality baseline for the all gate"
     )
-    desktop = commands.add_parser(
-        "desktop", help="Verify actual IPC in an isolated native desktop"
-    )
-    desktop.add_argument(
-        "--platform", choices=("windows", "linux", "macos"), required=True
-    )
-    desktop.add_argument("--binary", type=Path, required=True)
-    desktop.add_argument("--output-directory", type=Path)
-    desktop.add_argument(
-        "--installed",
-        action="store_true",
-        help="Verify extracted release app without Vite",
-    )
-    desktop.add_argument(
-        "--source-checkout",
-        type=Path,
-        help="Original build checkout, required to be absent for installed verification",
-    )
     quality = commands.add_parser(
         "quality", help="Check source hygiene and incremental formatting"
     )
@@ -83,16 +65,6 @@ def main() -> int:
         from autosar_tooling.verify import verify
 
         return verify(args.scope, args.base)
-    if args.command == "desktop":
-        from autosar_tooling.acceptance.desktop import run
-
-        return run(
-            args.platform,
-            args.binary,
-            args.installed,
-            args.source_checkout,
-            output_directory=args.output_directory,
-        )
     if args.command == "quality":
         from autosar_tooling.quality import main as check_quality
 
