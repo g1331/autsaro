@@ -138,19 +138,20 @@ class RequirementTests(unittest.TestCase):
         (root / "core/tests").mkdir()
         (root / "core/tests/demo.c").write_text(test, encoding="utf-8")
 
-    def run_check(self, root: Path) -> tuple[int, str]:
+    def run_check(self, root: Path, stale_only: bool = False) -> tuple[int, str]:
         output = io.StringIO()
-        with patch.dict(os.environ, {}, clear=False), redirect_stdout(output):
+        with patch.dict(os.environ), redirect_stdout(output):
             os.environ.pop(requirements.ARCHIVE_VARIABLE, None)
-            return requirements.check("SWS_Demo", root), output.getvalue()
+            return requirements.check("SWS_Demo", root, stale_only), output.getvalue()
 
     def test_citations_expand_continuations_and_ranges(self):
         cited = requirements.citations(
             "`SWS_DEMO_00001／00002` and ecuc_demo_00010; (SWS_DEMO_00003,\n * 00005) "
-            "SWS_DEMO_00005–00007; SWS_DEMO_CONSTR_00001; SWS_DEMO_00002, 2024; xSWS_DEMO_00009",
+            "SWS_DEMO_00005–00007; SWS_DEMO_CONSTR_00001; SWS_DEMO_00002, 2024; x_SWS_DEMO_00009",
             "f",
             {"SWS_DEMO_", "SWS_DEMO_CONSTR_", "ECUC_DEMO_"},
         )
+        self.assertEqual(requirements.citations("SWS_DEMO_CONSTR_00001 rejects_constr_00002", "f", {"CONSTR_"}), [])
         self.assertEqual(
             [(item.identifier, item.line, item.interior) for item in cited],
             [
@@ -175,6 +176,10 @@ class RequirementTests(unittest.TestCase):
             undisposed = output.split("Undisposed items:")[1].split("Stale")[0].split()
             self.assertEqual(undisposed, ["ECUC_Demo_00010", "SWS_DEMO_00003", "SWS_DEMO_00009", "(draft)", "SWS_DEMO_CONSTR_00001"])
             self.assertIn("docs/standards.md:1: SWS_DEMO_00004", output)
+            (root / "docs/standards.md").write_text("`SWS_DEMO_00001`\n", encoding="utf-8")
+            status, output = self.run_check(root, stale_only=True)
+            self.assertEqual(status, 0)
+            self.assertNotIn("Undisposed items", output)
 
     def test_complete_disposition_passes(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -191,10 +196,12 @@ class RequirementTests(unittest.TestCase):
             root = Path(directory)
             self.repository(root, "", "")
             errors = io.StringIO()
-            with patch.object(requirements.sys, "stderr", errors), redirect_stdout(io.StringIO()):
-                self.assertEqual(requirements.check("SWS_Unknown", root), 1)
-                (root / "official/spec.zip").unlink()
-                self.assertEqual(requirements.check("SWS_Demo", root), 1)
+            with patch.object(requirements.sys, "stderr", errors):
+                with patch.dict(os.environ), redirect_stdout(io.StringIO()):
+                    os.environ.pop(requirements.ARCHIVE_VARIABLE, None)
+                    self.assertEqual(requirements.check("SWS_Unknown", root), 1)
+                    (root / "official/spec.zip").unlink()
+                    self.assertEqual(requirements.check("SWS_Demo", root), 1)
             self.assertIn("no single AUTOSAR_CP_SWS_Unknown.arxml", errors.getvalue())
             self.assertIn("fetch-official", errors.getvalue())
 

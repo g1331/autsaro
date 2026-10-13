@@ -299,3 +299,4 @@ tools/python/src/  tests/python/  tests/desktop/
 | [0014](adr/0014-emitter-rules.md) | Emitter 规则 | 已接受，实施中 |
 | [0015](adr/0015-repository-code-organization.md) | 仓库代码组织 | 已接受，实施中 |
 | [0016](adr/0016-generated-project-layout-by-ownership.md) | 生成工程按所有权布局并提供 CMake | 已接受，已实施 |
+| [0017](adr/0017-requirement-disposition-in-tests-and-standards.md) | 条款处置写在测试与 standards.md，核算结果现算 | 已接受，已实施 |

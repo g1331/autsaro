@@ -1,6 +1,7 @@
 name: Official archive comparison
-# Runs the official test binary against the licensed R24-11 archives, downloaded
-# from autosar.org at run time and verified against core/resources/official.json.
+# Runs the official test binary and the requirement disposition check (ADR 0017)
+# against the licensed R24-11 archives, downloaded from autosar.org at run time and
+# verified against core/resources/official.json.
 # The archives stay in a private cache: never upload them or print their content.
 # Not part of the required checks, so an unavailable site cannot block merging.
 on:
@@ -17,6 +18,8 @@ on:
       - core/resources/official.json
       - core/tests/official/**
       - tools/python/src/autosar_tooling/official.py
+      - tools/python/src/autosar_tooling/requirements.py
+      - docs/standards.md
       - .github/workflows/acceptance.yml
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -63,6 +66,7 @@ jobs:
           path: docs/official/**/*.zip
           key: official-archives-${{ runner.os }}-${{ hashFiles('core/resources/official.json') }}
       - name: Download and verify official archives
+        id: fetch
         shell: bash
         run: |
           uv run --locked python -m autosar_tooling fetch-official || {
@@ -84,3 +88,28 @@ jobs:
             echo "::error title=Official comparison failed::The archives were verified; the official tests reported failures."
             exit 1
           }
+      - name: Requirement dispositions
+        if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
+        shell: bash
+        env:
+          # A module rework moves its document from STALE_ONLY to COMPLETE once every item is disposed of.
+          COMPLETE: ''
+          # SWS_DefaultErrorTracer is added after #46 corrects its stale citation in docs/standards.md.
+          STALE_ONLY: >-
+            TR_Methodology TPS_SystemTemplate TPS_SoftwareComponentTemplate TPS_BSWModuleDescriptionTemplate
+            TPS_ECUConfiguration SWS_BSWGeneral SWS_StandardTypes SWS_PlatformTypes SWS_CommunicationStackTypes
+            SWS_MemoryMapping SWS_RTE SWS_OS SWS_COM SWS_PDURouter SWS_LSduRouter SWS_CANInterface SWS_CANDriver
+            SWS_CANTransportLayer SWS_DiagnosticCommunicationManager SWS_COMManager SWS_CANStateManager
+            SWS_BSWModeManager
+        run: |
+          status=0
+          for document in $COMPLETE; do
+            uv run --locked python -m autosar_tooling requirements "$document" || status=1
+          done
+          for document in $STALE_ONLY; do
+            uv run --locked python -m autosar_tooling requirements --stale-only "$document" || status=1
+          done
+          if [ "$status" -ne 0 ]; then
+            echo "::error title=Requirement dispositions failed::See the undisposed items and stale citations above."
+          fi
+          exit "$status"

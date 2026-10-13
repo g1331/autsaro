@@ -19,7 +19,7 @@ R24-11 中标记为 DRAFT 的条款（例如 LSduR 全文，`SWS_Com_91019／910
 
 - 官方 PDF、ZIP 与哈希清单只在本地查阅，由 `.gitignore` 排除，不随仓库或产品再分发。目录与核验结果见 [docs/official/README.md](official/README.md) 与 [docs/official/R24-11/README.md](official/R24-11/README.md)。
 - 下载与核验：`python scripts/collect_official_specs.py R24-11`，按两份官方清单逐项校验，结果写入 `download-status.json`。校验失败或官网缺项不算已收集。
-- 开发对照档案（XSD／MOD）的路径与环境变量登记在 `core/resources/official.json`（`AUTOSAR_XSD_ARCHIVE`、`AUTOSAR_MOD_ARCHIVE`）；`official-oracles` 测试用它们检验内置规则。普通配置与源码生成不需要这些档案。
+- 开发对照档案的路径与环境变量登记在 `core/resources/official.json`：XSD／MOD（`AUTOSAR_XSD_ARCHIVE`、`AUTOSAR_MOD_ARCHIVE`）供 `official-oracles` 测试检验内置规则；`AUTOSAR_CP_MOD_SpecificationsARXML.zip`（`AUTOSAR_SPECIFICATIONS_ARCHIVE`）是 §5 条款核算的条目来源。普通配置与源码生成不需要这些档案。
 - 官方单份文件的统一入口为 `https://www.autosar.org/fileadmin/standards/R24-11/CP/<文件名>`。
 - MISRA 正文需授权取得，不在仓库中。编码指导与 221 项编号目录见项目技能 `.agents/skills/misra-c2012/`（`references/baseline-index.json`）；它是编码辅助，不替代正文或人工评估。
 - 合法正文缺失时，只阻塞依赖该正文的标准裁决；记录缺口与解除条件，不凭记忆、旧版本或现有实现补齐。
@@ -40,7 +40,15 @@ R24-11 中标记为 DRAFT 的条款（例如 LSduR 全文，`SWS_Com_91019／910
 
 ## 5. 模块义务索引
 
-条款编号按原核定记录书写。原记录在模块上下文中使用简写（如“Dcm 00806”“RTE 05088”）的，下表放在对应模块行内按原号列出，均指该模块 SWS 的同号条款；`ECUC_*`、`CONSTR`／`constr_*`、`TPS_*` 等前缀保持原样。SHA-256 为 2026-10-09 实际取得、与 CP 官方清单匹配的文件身份。
+本节是条款处置在文档一侧的记录（[ADR 0017](adr/0017-requirement-disposition-in-tests-and-standards.md)）。模块整改时，该模块文档在 `AUTOSAR_CP_MOD_SpecificationsARXML.zip` 中的全部条目（含 `ECUC_`、`CONSTR`、`NA` 前缀）都须处置：适用且已验证的由验证它的测试引用编号；不适用的写明理由，差距写明承接 Issue，二者与按组处置的条款写在本节对应模块行。核算用下面的命令现算，结果不入库：
+
+```powershell
+uv run --locked python -m autosar_tooling requirements SWS_CANInterface
+```
+
+参数为文档名（`AUTOSAR_CP_<文档名>.pdf`）。命令列出未处置条目（标注 draft／obsolete）与失效引用（使用该文档的前缀，但 R24-11 中没有该条目），任一非空即失败；`--stale-only` 只检查失效引用。计入处置的写法是独立书写的完整编号，同前缀的后续编号可用 `／`、`,` 续写或用 `–` 表示范围，如 `SWS_<Mod>_00001／00003`、`SWS_<Mod>_00907–00910`（示例中的 `<Mod>` 不构成引用）。
+
+尚未按此整改的行沿用原核定记录：模块上下文中的简写（如“Dcm 00806”“RTE 05088”）指该模块 SWS 的同号条款，但不计入处置，整改时改写为完整编号；`ECUC_*`、`CONSTR`／`constr_*`、`TPS_*` 等前缀保持原样。SHA-256 为 2026-10-09 实际取得、与 CP 官方清单匹配的文件身份。
 
 ### 5.1 方法论、输入角色与模板
 
@@ -139,7 +147,7 @@ ECUC metadata 的数值范围通过不等于配置语义合法；非等值 ID（
 
 以下不能由现有记录推定为已完成，也不能以“主机专属”为由延期；各项退出条件是取得合法正文、完成对应模块的全文核对与独立验收。
 
-- **逐条全文审计未完成。** 上表是已定位条款，不是完整适用矩阵；各模块全部必需 API、状态、错误、回调、BSWMD、配置语义与可选条件须在模块整改时闭合。
+- **逐条全文审计未完成。** 上表是已定位条款，不是完整适用矩阵；各模块全部必需 API、状态、错误、回调、BSWMD、配置语义与可选条件须在模块整改时闭合，未处置条目以 §5 的核算命令为准。
 - **`SWS_BSW_00036` 跨模块头文件版本检查**：已读 CanIf 头与多组件模块无对应版本宏或预处理检查，是明确的审计候选。
 - **Can published information**：项目尚无已分配的 AUTOSAR vendor ID，也无经核对的 R24-11 数字发布宏映射；`CAN_VERSION_INFO_API` 默认关闭，启用即拒绝。取得正式身份后才能实现 GetVersionInfo 与外部版本交叉检查（见 [runtime/README.md](../runtime/README.md)）。
 - **Dem／NvM／Security**：不在主线程序中，已随旧链路删除（[ADR 0013](adr/0013-remove-frame-signal-host-chain.md)）；以后加入主线时须先核定标准公共面、存储链与 Security 的项目责任。

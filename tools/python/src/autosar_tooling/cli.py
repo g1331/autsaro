@@ -54,6 +54,9 @@ def main() -> int:
         help="List a specification's undisposed official requirement IDs and stale ID citations",
     )
     requirement.add_argument("document", help="Specification document name, such as SWS_CANInterface")
+    requirement.add_argument(
+        "--stale-only", action="store_true", help="Fail only on stale citations, for a module whose rework is still open"
+    )
     args = parser.parse_args()
     if args.command == "c-check":
         from autosar_tooling.c_check import check
@@ -66,7 +69,7 @@ def main() -> int:
         return fetch()
     if args.command == "requirements":
         from autosar_tooling.requirements import check as check_requirements
-        return check_requirements(args.document)
+        return check_requirements(args.document, stale_only=args.stale_only)
     if args.command == "doctor":
         if args.role == "native":
             if not args.target:

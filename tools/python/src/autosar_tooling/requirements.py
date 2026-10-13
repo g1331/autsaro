@@ -89,7 +89,8 @@ def load(archive: Path, document: str) -> Specification:
 def citations(text: str, path: str, prefixes: set[str]) -> list[Citation]:
     """IDs with one of the prefixes; a range yields its endpoints and the numbers between."""
     alternatives = "|".join(re.escape(item) for item in sorted(prefixes, key=len, reverse=True))
-    head = re.compile(rf"(?<![A-Za-z0-9])({alternatives})(\d+)(?!\d)", re.IGNORECASE)
+    # The ID must start a word: "CONSTR_" (a TPS prefix) must not match inside "SWS_CANIF_CONSTR_00001".
+    head = re.compile(rf"(?<![A-Za-z0-9_])({alternatives})(\d+)(?!\d)", re.IGNORECASE)
     found = []
     for match in head.finditer(text):
         stem, width = match.group(1).upper(), len(match.group(2))
@@ -130,7 +131,7 @@ def account(specification: Specification, cited: list[Citation]) -> tuple[list[s
     return undisposed, stale
 
 
-def check(document: str, root: Path = ROOT) -> int:
+def check(document: str, root: Path = ROOT, stale_only: bool = False) -> int:
     records = json.loads((root / "core/resources/official.json").read_text(encoding="utf-8"))
     entry = next(item for item in records if item["environment"] == ARCHIVE_VARIABLE)
     archive = archive_path(ARCHIVE_VARIABLE, entry["path"], root)
@@ -143,7 +144,7 @@ def check(document: str, root: Path = ROOT) -> int:
         return 1
     undisposed, stale = account(specification, collect(root, {prefix(key) for key in specification.items}))
     print(f"{document}: {len(specification.items)} official items, {len(specification.items) - len(undisposed)} disposed, {len(undisposed)} undisposed, {len(stale)} stale citations")
-    if undisposed:
+    if undisposed and not stale_only:
         print("\nUndisposed items:")
         for identifier in undisposed:
             state = specification.items[identifier.upper()][1]
@@ -152,4 +153,4 @@ def check(document: str, root: Path = ROOT) -> int:
         print("\nStale citations (not an official item of R24-11):")
         for citation in stale:
             print(f"  {citation.path}:{citation.line}: {citation.identifier}")
-    return 1 if undisposed or stale else 0
+    return 1 if stale or (undisposed and not stale_only) else 0
