@@ -3,7 +3,6 @@
 #define CANIF_H
 #include "ComStack_Types.h"
 #include "Can_GeneralTypes.h"
-#include "Ecu_Status.h"
 typedef enum {
     CANIF_OFFLINE = 0,
     CANIF_TX_OFFLINE = 1,
@@ -53,6 +52,4 @@ void CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType *PduInfoPtr
 void CanIf_TxConfirmation(PduIdType CanTxPduId);
 void CanIf_ControllerModeIndication(uint8 ControllerId, Can_ControllerStateType ControllerMode);
 void CanIf_ControllerBusOff(uint8 ControllerId);
-/** Host adapter: timestamp is not a COM deadline clock. */
-EcuStatus CanIf_HostRxIndication(uint32 id, uint8 dlc, const uint8 data[8], uint64 now_ms);
 #endif

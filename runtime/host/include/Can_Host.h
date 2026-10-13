@@ -52,8 +52,10 @@ CAN_CODE EcuStatus Can_TransmitPdu(PduIdType pdu_id, uint32_t id, uint8_t dlc,
  * @param[in] id Standard CAN identifier.
  * @param[in] dlc Number of valid payload bytes.
  * @param[in] data Eight-byte frame buffer.
- * @param[in] now_ms Current host clock in milliseconds.
- * @return Host receive status.
+ * @param[in] now_ms Current host clock in milliseconds; not forwarded, since
+ * CanIf_RxIndication carries no reception time.
+ * @return Driver admission status; CanIf filtering and length checks are
+ * observed through Det and the upper-layer indication, not this result.
  */
 CAN_CODE EcuStatus Can_Inject(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t now_ms);
 

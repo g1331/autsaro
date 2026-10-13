@@ -248,6 +248,7 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
         command.args([
             "-DCAN_CONTROLLER_ID=7u",
             "-DCAN_CANIF_CONTROLLER_ID=9u",
+            "-DCAN_RX_HOH=11u",
             "-DCAN_TX_HOH=17u",
         ]);
     }
@@ -316,6 +317,15 @@ fn com_periodic_transmission_executes_real_lower_modules_and_can_busy() {
     );
 }
 
+#[test]
+fn canif_init_routing_pdu_modes_and_confirmations_follow_sws() {
+    let scratch = Scratch::new();
+    let executable = chain_consumer(&scratch.0, "canif_contract.c", &[]);
+    let output = Command::new(executable).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+}
+
+/// Shared CanIf state stays consistent under preemption (Verifies: SWS_CANIF_00064).
 #[test]
 fn canif_different_pdus_and_actual_confirmation_stop_interleave_safely() {
     let scratch = Scratch::new();

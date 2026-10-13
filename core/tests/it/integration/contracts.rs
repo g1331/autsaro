@@ -1508,6 +1508,44 @@ fn prepared_bsw_entries_describe_actual_call_mechanisms_and_implementation_polic
             reference.text().unwrap()
         );
     }
+    // Verifies: SWS_CANIF_00040: CanIf expects every mandatory lower interface, and reaches
+    // the controller only through Can services (Verifies: SWS_CANIF_00023).
+    let can_if = document
+        .descendants()
+        .find(|node| {
+            node.has_tag_name("BSW-MODULE-DESCRIPTION")
+                && node
+                    .children()
+                    .any(|child| child.has_tag_name("SHORT-NAME") && child.text() == Some("CanIf"))
+        })
+        .unwrap();
+    let expected: Vec<_> = can_if
+        .descendants()
+        .filter(|node| node.has_tag_name("EXPECTED-ENTRYS"))
+        .flat_map(|node| {
+            node.descendants()
+                .filter(|child| child.has_tag_name("BSW-MODULE-ENTRY-REF"))
+        })
+        .filter_map(|node| node.text()?.rsplit('/').next())
+        .collect();
+    for mandatory in [
+        "Can_GetControllerErrorState",
+        "Can_GetControllerRxErrorCounter",
+        "Can_GetControllerTxErrorCounter",
+        "Can_SetControllerMode",
+        "Can_Write",
+        "Det_ReportRuntimeError",
+    ] {
+        assert!(expected.contains(&mandatory), "{mandatory}: {expected:?}");
+    }
+    assert!(
+        expected
+            .iter()
+            .all(|entry| ["Can_", "Det_", "LSduR_", "SchM_"]
+                .iter()
+                .any(|prefix| entry.starts_with(prefix))),
+        "{expected:?}"
+    );
     for (module, name, reentrant, synchronous, call_type) in [
         ("Can", "Can_Write", "true", "true", "REGULAR"),
         ("Can", "Can_SetControllerMode", "false", "false", "REGULAR"),
@@ -1669,4 +1707,54 @@ fn prepared_bsw_entries_describe_actual_call_mechanisms_and_implementation_polic
             assert_eq!(field("CALL-TYPE"), "SCHEDULED");
         }
     }
+}
+
+/// CanIf.h declares only the CanIf services and callbacks of the selected
+/// configuration over standard types; host adaptation stays outside
+/// (Verifies: SWS_CANIF_00672). Disabled services are absent, such as
+/// CanIf_TrcvModeIndication without CanIfTrcvDrvCfg and CanIf_TriggerTransmit
+/// without its support (Verifies: SWS_CANIF_00730, 00884).
+#[test]
+fn canif_header_declares_only_standard_services() {
+    let header = include_str!("../../../../runtime/bsw/include/CanIf.h");
+    let declared: std::collections::BTreeSet<_> = header
+        .lines()
+        // Declarations start at column 0; continuation lines are indented.
+        .filter(|line| {
+            line.starts_with(|c: char| c.is_ascii_alphabetic())
+                && !line.starts_with("typedef")
+                && line.contains('(')
+        })
+        .filter_map(|line| line.split_once('(')?.0.split_whitespace().last())
+        .collect();
+    let standard: std::collections::BTreeSet<_> = [
+        "CanIf_Init",
+        "CanIf_DeInit",
+        "CanIf_Transmit",
+        "CanIf_SetControllerMode",
+        "CanIf_GetControllerMode",
+        "CanIf_GetControllerErrorState",
+        "CanIf_GetControllerRxErrorCounter",
+        "CanIf_GetControllerTxErrorCounter",
+        "CanIf_SetPduMode",
+        "CanIf_GetPduMode",
+        "CanIf_RxIndication",
+        "CanIf_TxConfirmation",
+        "CanIf_ControllerModeIndication",
+        "CanIf_ControllerBusOff",
+    ]
+    .into_iter()
+    .collect();
+    assert_eq!(declared, standard);
+    let includes: Vec<_> = header
+        .lines()
+        .filter(|line| line.starts_with("#include"))
+        .collect();
+    assert_eq!(
+        includes,
+        [
+            "#include \"ComStack_Types.h\"",
+            "#include \"Can_GeneralTypes.h\""
+        ]
+    );
 }

@@ -776,7 +776,7 @@ pub(super) fn files(
                         || *name == format!("{module}.c")
                         || *name == format!("{module}_PBcfg.c")
                         || *name == format!("{module}_Cfg.h")
-                        || (matches!(module, "LSduR" | "PduR") && name == "Ecu_MemMap.h")
+                        || (matches!(module, "CanIf" | "LSduR" | "PduR") && name == "Ecu_MemMap.h")
                         || *name == format!("{module}.h")
                         || *name == format!("SchM_{module}.h")
                         || (matches!(module, "Com" | "ComM") && name == "Ecu_RuntimeConfig.c")
@@ -939,6 +939,7 @@ pub(super) fn files(
                 ("Can", "Can_GetControllerTxErrorCounter"),
                 ("LSduR", "LSduR_CanIfRxIndication"),
                 ("LSduR", "LSduR_CanIfTxConfirmation"),
+                ("Det", "Det_ReportRuntimeError"),
             ],
             "LSduR" => vec![
                 ("CanIf", "CanIf_Transmit"),
