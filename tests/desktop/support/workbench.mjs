@@ -119,7 +119,7 @@ export async function openWorkbench(name) {
         ...result,
       }) + '\n',
     );
-    if (!result.ok) throw new Error(json(result.error));
+    if (!result.ok) throw Object.assign(new Error(json(result.error)), { ipc: result.error });
     assert.equal(
       result.reply.inputFingerprint,
       current,
@@ -455,7 +455,7 @@ export async function openWorkbench(name) {
           } catch (error) {
             // Opening the selected member may publish between this read's
             // capability snapshot and request. Retry only this read-only poll.
-            if (!String(error).includes('STALE_DELIVERY')) throw error;
+            if (error.ipc?.key !== 'backend.workbench.stale_delivery') throw error;
           }
           if (view?.projectPath === manifest) break;
           await new Promise((resolve) => setTimeout(resolve, 75));
