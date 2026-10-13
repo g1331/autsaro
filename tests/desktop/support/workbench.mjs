@@ -412,14 +412,16 @@ export async function openWorkbench(name) {
     assert.equal(view.projectPath, manifest);
     return { directory, manifest, view };
   }
-  async function awaitProjectSurfaceReady() {
+  async function awaitProjectSurfaceReady(timeout) {
     await until(
       `!document.querySelector('[role=status]')?.textContent.startsWith('正在') && (!document.querySelector('[aria-label="标准输入工作区"]') || !document.querySelector('[aria-label="标准输入工作区"] input[aria-label="接收 CAN ID"]') || Boolean(document.querySelector('[aria-label="标准输入工作区"] input[aria-label="接收 CAN ID"]:not(:disabled)')))`,
       'actual opened project and automatic inspection operation completed',
+      timeout,
     );
     await until(
       `(async () => !(await window.__TAURI_INTERNALS__.invoke('workbench_capabilities')).operation)()`,
       'actual project automatic inspection backend operation completed',
+      timeout,
     );
   }
   async function openMember(manifest) {
