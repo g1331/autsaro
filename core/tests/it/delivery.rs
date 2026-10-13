@@ -83,7 +83,10 @@ fn regeneration_changes_only_generated_directories() {
             ["inputs/", "generated/", "app/", "meta/"]
                 .iter()
                 .any(|directory| path.starts_with(directory))
-                || matches!(path.as_str(), "README.md" | "target.json"),
+                || matches!(
+                    path.as_str(),
+                    "README.md" | "target.json" | "CMakeLists.txt"
+                ),
             "{path}"
         );
     }

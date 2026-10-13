@@ -39,6 +39,7 @@ flowchart LR
   EMIT --> PREP[prepared 工程：预览、staging、所有权台账]
   SNAP --> PREP
   PREP --> SEAL[封存工程：meta/files.list / meta/files.sha256]
+  SEAL --> CMAKE[同一清单的 CMake 构建]
   SEAL --> BUILD[离线 ecu-tool build]
   BUILD --> VERIFY[独立 verify：协议、调度、拒绝与恢复]
 ```
@@ -167,7 +168,7 @@ flowchart LR
 
 ## 6. 交付与离线接收
 
-封存工程按 7.6 的所有权目录包含生成源码、受信 runtime 资产、固定内核与补丁、应用快照、所有权台账、`target.json` 构建清单、`meta/files.list`／`meta/files.sha256` 和 stdlib-only 离线工具。接收者只需受支持的 CPython、匹配的 GCC／binutils 与 Git，不依赖 checkout、Rust、Node 或 uv；包内工具以 `-I -S` 运行，只从自身 `tools/` 导入。入口 `tools/ecu-tool.py build|verify` 的用法见 [runtime/README.md](../runtime/README.md)。
+封存工程按 7.6 的所有权目录包含生成源码、受信 runtime 资产、固定内核与补丁、应用快照、所有权台账、`target.json` 构建清单与同源的 `CMakeLists.txt`、`meta/files.list`／`meta/files.sha256` 和 stdlib-only 离线工具。CMake 是供 IDE／CI 使用的标准构建入口，与 `ecu-tool build` 编译同一组源文件；固定工具链身份、目标段检查和 `verify` 只由 `ecu-tool` 承担。接收者只需受支持的 CPython、匹配的 GCC／binutils 与 Git，不依赖 checkout、Rust、Node 或 uv；包内工具以 `-I -S` 运行，只从自身 `tools/` 导入。入口 `tools/ecu-tool.py build|verify` 的用法见 [runtime/README.md](../runtime/README.md)。
 
 当前交接格式为 `autosar-workbench-handoff-v4`（内置规则、多应用输入、按所有权分目录）。旧 `autosar-workbench-handoff-v3`、`autosar-workbench-handoff-v2`、`autosar-host-handoff-v1` 与 `autosar-ecu-handoff-v1` 在导入时拒绝，其 ARXML 源文件可导入新工程。
 
@@ -260,10 +261,10 @@ tools/python/src/  tests/python/  tests/desktop/
   inputs/                   原始 ARXML 与工程清单快照
   meta/                     交接与集成元数据、台账、seal 期望、资产清单、files.list／files.sha256
   tools/                    离线 ecu-tool 与封存检查（不随配置变化）
-  target.json                   ecu-tool 构建清单
+  CMakeLists.txt  target.json   从同一清单生成的标准构建描述与 ecu-tool 构建清单
 ```
 
-文件归属在产生处确定：资产按来源目录映射（`runtime/bsw`→`bsw/`，`runtime/host`／`runtime/ecu`→`integration/`，`runtime/os`→`os/`），emitter 的 `include/`、`src/` 逻辑名相对 `generated/`。`{Mip}_MemMap.h`（`[SWS_MemMap_00032]`）和 RTE 生成头（`[SWS_Rte_07501]`、`[SWS_Rte_07120]`）由生成方交付，台账 owner 为 `generated`。所有 include 目录中的头文件名不区分大小写唯一（`[SWS_BSW_00171]`），生成 `target.json` 时检查。修改配置后重新生成，只有 `inputs/`、`generated/`、`app/`、`meta/` 与根目录的 `README.md`、`target.json` 变化。主机目标的 MemMap 头归入 `generated/`；接入 MCU 时由集成层显式配置覆盖，不手改生成文件。SWC 的 `{componentTypeName}_MemMap.h`（`[SWS_MemMap_00029]`）随 RTE 段约定一起由 [#51](https://github.com/g1331/autsaro/issues/51) 承接。
+文件归属在产生处确定：资产按来源目录映射（`runtime/bsw`→`bsw/`，`runtime/host`／`runtime/ecu`→`integration/`，`runtime/os`→`os/`），emitter 的 `include/`、`src/` 逻辑名相对 `generated/`。`{Mip}_MemMap.h`（`[SWS_MemMap_00032]`）和 RTE 生成头（`[SWS_Rte_07501]`、`[SWS_Rte_07120]`）由生成方交付，台账 owner 为 `generated`。所有 include 目录中的头文件名不区分大小写唯一（`[SWS_BSW_00171]`），生成 `target.json` 时检查。修改配置后重新生成，只有 `inputs/`、`generated/`、`app/`、`meta/` 与根目录的 `README.md`、`target.json`、`CMakeLists.txt` 变化。CMake 与 `ecu-tool` 构建同一组源文件，由 CI 在两个平台核对。主机目标的 MemMap 头归入 `generated/`；接入 MCU 时由集成层显式配置覆盖，不手改生成文件。SWC 的 `{componentTypeName}_MemMap.h`（`[SWS_MemMap_00029]`）随 RTE 段约定一起由 [#51](https://github.com/g1331/autsaro/issues/51) 承接。
 
 ### 7.7 CI 与源码门禁（目标）
 
@@ -296,4 +297,4 @@ tools/python/src/  tests/python/  tests/desktop/
 | [0013](adr/0013-remove-frame-signal-host-chain.md) | 删除帧／信号 host 链路与“主机运行”页 | 已接受，已实施 |
 | [0014](adr/0014-emitter-rules.md) | Emitter 规则 | 已接受，实施中 |
 | [0015](adr/0015-repository-code-organization.md) | 仓库代码组织 | 已接受，实施中 |
-| [0016](adr/0016-generated-project-layout-by-ownership.md) | 生成工程按所有权布局并提供 CMake | 已接受，实施中 |
+| [0016](adr/0016-generated-project-layout-by-ownership.md) | 生成工程按所有权布局并提供 CMake | 已接受，已实施 |

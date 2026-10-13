@@ -444,6 +444,110 @@ fn unique_include_names<'p>(
     Ok(())
 }
 
+/// The standard CMake build of the `target.json` closure: the same translation
+/// units, include paths, flags, kernel patches and libraries `ecu-tool build`
+/// uses. Toolchain identity, section checks and verification stay with `ecu-tool`.
+fn cmake_lists(
+    sources: &[&String],
+    include_paths: &[&str],
+    compiler_flags: &[&str],
+    kernel_sources: &[&str],
+    spec: &crate::target::TargetSpec,
+) -> String {
+    let quoted = |items: &mut dyn Iterator<Item = String>| {
+        items
+            .map(|item| format!("\n  \"{item}\""))
+            .collect::<String>()
+    };
+    let patches: String = spec
+        .kernel_patches
+        .iter()
+        .map(|path| {
+            let includes = spec
+                .kernel_patch_includes
+                .iter()
+                .find(|(candidate, _)| candidate == path)
+                .map(|(_, includes)| *includes)
+                .unwrap_or(&[]);
+            format!(
+                "autsaro_patch(\"{}\"{})\n",
+                path.trim_start_matches("runtime/"),
+                includes
+                    .iter()
+                    .map(|include| format!(" --include={include}"))
+                    .collect::<String>()
+            )
+        })
+        .collect();
+    let includes = quoted(&mut include_paths.iter().map(
+        |path| match path.strip_prefix("kernel/") {
+            Some(path) => format!("${{AUTSARO_KERNEL}}/{path}"),
+            None => format!("${{CMAKE_SOURCE_DIR}}/{path}"),
+        },
+    ));
+    let units = quoted(
+        &mut sources
+            .iter()
+            .map(|path| format!("${{CMAKE_SOURCE_DIR}}/{path}"))
+            .chain(
+                kernel_sources
+                    .iter()
+                    .map(|path| format!("${{AUTSARO_KERNEL}}/{path}")),
+            ),
+    );
+    let flags = compiler_flags.join(" ");
+    let libraries = spec.link_libraries.join(" ");
+    let executables: String = ENTRIES
+        .iter()
+        .map(|(_, entry)| {
+            let name = entry.rsplit('/').next().unwrap_or(entry).trim_end_matches(".c");
+            format!("add_executable({name} \"${{CMAKE_SOURCE_DIR}}/{entry}\" $<TARGET_OBJECTS:autsaro_ecu>)\ntarget_link_libraries({name} PRIVATE {libraries})\n")
+        })
+        .collect();
+    format!(
+        r#"# Generated from target.json; regenerate the package instead of editing it.
+# Builds the same translation units with the same flags as `tools/ecu-tool.py
+# build`. Only ecu-tool checks the pinned toolchain identity and the target
+# sections, and runs `verify`. CMAKE_C_FLAGS or CFLAGS set by the caller are
+# added by CMake on top of these flags.
+cmake_minimum_required(VERSION 3.20)
+project(autsaro_ecu LANGUAGES C)
+
+cmake_path(IS_PREFIX CMAKE_SOURCE_DIR "${{CMAKE_BINARY_DIR}}" NORMALIZE inside)
+if(inside)
+  message(FATAL_ERROR "Use a build directory outside this sealed source package")
+endif()
+
+# The fixed kernel is patched in a build-tree copy; the sealed sources stay unchanged.
+find_package(Git REQUIRED)
+set(AUTSARO_KERNEL "${{CMAKE_BINARY_DIR}}/kernel")
+file(REMOVE_RECURSE "${{AUTSARO_KERNEL}}")
+file(COPY "${{CMAKE_SOURCE_DIR}}/kernel/" DESTINATION "${{AUTSARO_KERNEL}}")
+function(autsaro_patch patch)
+  foreach(check IN ITEMS --check "")
+    # A ceiling keeps git from resolving patch paths against an enclosing checkout.
+    execute_process(
+      COMMAND "${{CMAKE_COMMAND}}" -E env "GIT_CEILING_DIRECTORIES=${{CMAKE_BINARY_DIR}}"
+              "${{GIT_EXECUTABLE}}" apply --ignore-space-change ${{ARGN}} ${{check}} "${{CMAKE_SOURCE_DIR}}/${{patch}}"
+      WORKING_DIRECTORY "${{AUTSARO_KERNEL}}"
+      RESULT_VARIABLE result)
+    if(NOT result EQUAL 0)
+      message(FATAL_ERROR "Kernel patch failed: ${{patch}}")
+    endif()
+  endforeach()
+endfunction()
+{patches}
+set(AUTSARO_FLAGS {flags})
+add_compile_options(${{AUTSARO_FLAGS}})
+add_link_options(${{AUTSARO_FLAGS}})
+include_directories({includes}
+)
+add_library(autsaro_ecu OBJECT{units}
+)
+{executables}"#
+    )
+}
+
 fn finish<'a>(
     target: BuildTarget,
     handoff: bool,
@@ -530,7 +634,20 @@ fn finish<'a>(
     }))
     .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     metadata.push(b'\n');
+    let cmake = cmake_lists(
+        &sources,
+        &include_paths,
+        &compiler_flags,
+        &kernel_sources,
+        &spec,
+    );
     insert(&mut files, "target.json".into(), Cow::Owned(metadata), None)?;
+    insert(
+        &mut files,
+        "CMakeLists.txt".into(),
+        Cow::Owned(cmake.into_bytes()),
+        None,
+    )?;
     generator::delivery::tools::add(&mut files, &native.metadata)?;
     generator::delivery::ownership::add_ledger(&mut files, &native.metadata)?;
     let mut digest = Sha256::new();
