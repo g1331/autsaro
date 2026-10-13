@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- 必需检查在 Linux 与 Windows 上分别用 Python 3.11、3.12、3.13、3.14 接收者解释器验证移动后的 `standard-ecu` 交付包，取代需要未注册自托管 runner 的 `offline.yml`。`bundles` 工作流改在 GitHub 托管 runner 上构建 Linux 与 Windows 安装包并按提交 SHA 上传，不再提供 macOS 选项。
 - 新增 `python -m autosar_tooling fetch-official`：把官方 R24-11 XSD、ECUC MOD 和建模示例档案下载到 `core/resources/official.json` 登记的位置，并按固定 SHA-256 校验；建模示例档案也已固定哈希。`official` 对照套件改在 GitHub 托管的 Linux 与 Windows runner 上运行（手动、每日定时，以及修改定义、规则或官方测试的 PR），不再依赖未注册的自托管 runner；它不属于必需检查。
 - 根目录面向读者的文档默认使用英文，完整中文版以 `.zh-CN.md` 后缀保留；更新双向语言入口。
 

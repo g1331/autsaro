@@ -6,23 +6,19 @@
 
 每次升级运行相关构建、lint 和测试、基础行为测试及受影响的专用验收。不要将不相关的包更新混入功能修改。
 
-## 专用 CI runner
+## CI 工作流
 
-基础 checks 工作流可在普通 GitHub hosted runner 执行。
+所有工作流都在 GitHub 托管 runner 上运行，仓库不使用自托管 runner。基础 checks 工作流包含离线接收兼容性：c-analysis 准备任务在 Linux 与 Windows 上分别用 Python 3.11–3.14 接收者解释器运行移动后的生成包（见[测试说明](../development/testing.md)）。网络隔离下的安装与离线验收目前没有自动入口。
 
-官方对照工作流 acceptance 也在 GitHub 托管 runner 上运行，运行时从 autosar.org 下载官方档案并按 `core/resources/official.json` 的哈希校验，不需要专用 runner，也不属于必需检查；触发方式与失败的查看方法见[测试说明](../development/testing.md#官方对照)。维护者需关注定时运行的失败通知。站点更换 TLS 证书链时，下载入口固定的中间证书指纹会失效：审阅新证书链后更新指纹，不能关闭证书校验。官方档案不能提交进仓库、作为 artifact 上传或输出到日志。
+官方对照工作流 acceptance 运行时从 autosar.org 下载官方档案并按 `core/resources/official.json` 的哈希校验，不属于必需检查；触发方式与失败的查看方法见[测试说明](../development/testing.md#官方对照)。维护者需关注定时运行的失败通知。站点更换 TLS 证书链时，下载入口固定的中间证书指纹会失效：审阅新证书链后更新指纹，不能关闭证书校验。官方档案不能提交进仓库、作为 artifact 上传或输出到日志。
 
-专用 offline 与 bundles 工作流只由 workflow_dispatch 触发，在带 autosar-controlled 和所选操作系统标签的 self-hosted runner 执行。runner 使用支持 Node 24 Actions 的当前 GitHub Actions runner。维护者需准备对应宿主的 Rust/桌面开发依赖、受控工具链，以及指向这些可执行文件的环境变量（Cargo/Tauri 直接读取）。runner 不应处理不受信任的 fork PR 或在用户日常桌面执行 GUI 自动验收。
-
-`AUTOSAR_CC`、`AUTOSAR_OBJDUMP` 和 `AUTOSAR_GIT` 必须为绝对路径。工作流设置开发解释器；offline 工作流另外选择接收者解释器，直接运行生成包，不向该解释器安装开发工具。
-
-调用前检查所选 commit，确认 runner 原生平台与目标一致。原生 GUI 场景由 desktop 工作流在 GitHub 托管 runner 上自行构建验证版并运行，不使用专用 runner；它不覆盖安装包的安装与离线验收，这部分目前没有自动入口。desktop 上传场景结果目录，bundles 上传按提交 SHA 命名的安装包；runner 未配置时专用验收没有执行，不可标记为通过。
+原生 GUI 场景由 desktop 工作流自行构建验证版并运行，上传场景结果目录；它不覆盖安装包的安装与离线验收。bundles 工作流见下节。
 
 ## 发行版本
 
 版本目前为 0.1.0，需同步 core/Cargo.toml、src-tauri/Cargo.toml、ui/package.json、pyproject.toml 和 Tauri 配置，并更新相关锁文件及 CHANGELOG。版本更新必须审阅生成工程的兼容性和输入格式变化。
 
-bundles 工作流接受明确的 revision，在原生 runner 用 Tauri CLI 构建并按提交 SHA 保存安装包，不执行公开发布。在已准备的平台执行 `npm run tauri --prefix ui -- build`，产物位于 target/release/bundle/。Windows MSI、Linux deb/AppImage 使用各自原生构建与隔离复验；macOS app/dmg、签名、公证、安装/升级和公开发布仍需分别验证。
+bundles 工作流由 workflow_dispatch 触发并接受明确的 revision，在 `ubuntu-24.04` 与 `windows-latest` 上用 Tauri CLI 构建，安装包上传为 `bundles-<Linux|Windows>-<提交 SHA>` artifact，不执行公开发布。本地在已准备的平台执行 `npm run tauri --prefix ui -- build`，产物位于 target/release/bundle/。当前产物为 Windows MSI（en-US、zh-CN）和 Linux deb、AppImage；它们的安装、升级、签名和公开发布仍需分别验证；macOS 原生构建不在支持范围内。
 
 ## 许可与分发
 

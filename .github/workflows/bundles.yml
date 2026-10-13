@@ -2,10 +2,6 @@ name: Build application bundles
 on:
   workflow_dispatch:
     inputs:
-      platform:
-        type: choice
-        options: [Windows, Linux, macOS]
-        required: true
       revision:
         description: Commit or branch to build
         default: master
@@ -14,7 +10,11 @@ permissions:
   contents: read
 jobs:
   bundle:
-    runs-on: [self-hosted, autosar-controlled, "${{ inputs.platform }}"]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7.0.1
@@ -25,6 +25,9 @@ jobs:
           node-version-file: .node-version
           cache: npm
           cache-dependency-path: ui/package-lock.json
+      - uses: ./.github/actions/core-build-dependencies
+        with:
+          linux-packages: libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev patchelf
       - run: npm ci --prefix ui
       - name: Record build revision
         id: revision
@@ -36,8 +39,7 @@ jobs:
               output.write('sha=' + sha + '\n')
       - run: npm run tauri --prefix ui -- build
       - uses: actions/upload-artifact@v7.0.1
-        if: always()
         with:
-          name: bundles-${{ inputs.platform }}-${{ steps.revision.outputs.sha }}
+          name: bundles-${{ runner.os }}-${{ steps.revision.outputs.sha }}
           path: target/release/bundle
-          if-no-files-found: warn
+          if-no-files-found: error
