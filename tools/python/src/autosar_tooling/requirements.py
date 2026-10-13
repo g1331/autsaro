@@ -2,9 +2,11 @@
 
 The official items are the TRACE and TRACEABLE-TABLE elements of the document in
 AUTOSAR_CP_MOD_SpecificationsARXML.zip. An item is disposed of only by IDs that follow
-a disposition marker in docs/standards.md or the test trees (ADR 0017); every mention,
-marked or not, is checked for stale IDs. The result is computed on each run and never
-written to the repository.
+a disposition marker (ADR 0017): Verifies: in the test trees; 已核对, 不适用 or 差距 in
+docs/standards.md. A configuration-conditional 不适用 holds only while a Rejects: test
+proves that the product refuses each named ECUC parameter. Every mention, marked or not,
+is checked for stale IDs. The result is computed on each run and never written to the
+repository.
 """
 
 from __future__ import annotations
@@ -13,6 +15,7 @@ import json
 import re
 import sys
 import zipfile
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from xml.etree import ElementTree
@@ -20,21 +23,34 @@ from xml.etree import ElementTree
 from autosar_tooling.config import ROOT, archive_path
 
 ARCHIVE_VARIABLE = "AUTOSAR_SPECIFICATIONS_ARCHIVE"
-SOURCES = ("docs/standards.md", "core/tests", "tests")
+STANDARDS = "docs/standards.md"
+SOURCES = (STANDARDS, "core/tests", "tests")
 NAMESPACE = "{http://autosar.org/schema/r4.0}"
 # A cited ID may continue with further numbers of the same width, e.g.
 # "SWS_CANIF_00001／00003", "SWS_CANIF_00001, 00005" (also across a comment
 # line break) or the range "SWS_CANIF_00907–00910".
 CONTINUATION = re.compile(r"(?:\s*[,，、／/]\s*(?:(?://|\*|#)\s*)?|\s*([–-])\s*)(\d+)(?!\d)")
-# Only the IDs right after a marker are disposed of. The group names are the categories.
-MARKER = re.compile(
-    r"(?:(?P<verified>Verifies:)|(?P<inspected>已核对（[^）\n]+）[：:])"
-    r"|(?P<not_applicable>不适用（[^）\n]+）[：:])|(?P<gap>差距\s*#\d+[：:]))[ \t]*`?"
+# Only the IDs right after a marker are disposed of; the group names are the categories.
+# Tests prove behaviour and the standards document records review, inapplicability and
+# gaps, so each marker counts only in its own kind of source.
+TEST_MARKER = re.compile(r"(?P<verified>Verifies:)[ \t]*`?")
+DOCUMENT_MARKER = re.compile(
+    r"(?:(?P<inspected>已核对（[^）\n]+）)|(?P<configuration>不适用（配置[：:][ \t]*(?P<governing>[^）\n]+)）)"
+    r"|(?P<owner>不适用（归属[：:][ \t]*[^）\n]+）)|(?P<gap>差距[ \t]*#\d+))[：:][ \t]*`?"
 )
+# A Rejects: test proves that the product refuses a configuration before generation.
+REJECTS = re.compile(r"Rejects:[ \t]*`?")
+PARAMETER = re.compile(r"(?<![A-Za-z0-9_])ECUC_[A-Za-z0-9]+_\d+(?!\d)", re.IGNORECASE)
 # Between the full IDs after one marker: spaces or backticks on the same line, or a list
 # separator that may continue on the next comment line.
 SEPARATOR = re.compile(r"`?(?:[ \t]*[,，、／/][ \t]*(?:\n[ \t]*(?://|\*|#)?[ \t]*)?|[ \t]+)`?|`")
-CATEGORIES = ("verified", "inspected", "not_applicable", "gap")
+CATEGORIES = {
+    "verified": "verified",
+    "inspected": "inspected",
+    "configuration": "not applicable (configuration)",
+    "owner": "not applicable (owner)",
+    "gap": "gap",
+}
 
 
 class RequirementError(Exception):
@@ -50,6 +66,22 @@ class Citation:
     interior: bool = False
     # One of CATEGORIES when the citation follows a disposition marker.
     category: str | None = None
+
+
+@dataclass(frozen=True)
+class Condition:
+    """A configuration-conditional 不适用 and the ECUC parameters its reason names."""
+
+    path: str
+    line: int
+    parameters: tuple[str, ...]
+
+
+@dataclass
+class Scan:
+    citations: list[Citation]
+    conditions: list[Condition]
+    rejected: set[str]
 
 
 @dataclass(frozen=True)
@@ -98,14 +130,15 @@ def load(archive: Path, document: str) -> Specification:
     return Specification(items, elsewhere)
 
 
-def citations(text: str, path: str, prefixes: set[str]) -> list[Citation]:
-    """IDs with one of the prefixes; a range yields its endpoints and the numbers between."""
+def scan(text: str, path: str, prefixes: Iterable[str]) -> Scan:
+    """IDs with one of the prefixes, their disposition markers, and the Rejects: parameters."""
     alternatives = "|".join(re.escape(item) for item in sorted(prefixes, key=len, reverse=True))
     # The ID must start a word: "CONSTR_" (a TPS prefix) must not match inside "SWS_CANIF_CONSTR_00001".
     head = re.compile(rf"(?<![A-Za-z0-9_])({alternatives})(\d+)(?!\d)", re.IGNORECASE)
     groups = {}
     for match in head.finditer(text):
         stem, width = match.group(1).upper(), len(match.group(2))
+        # A range yields its endpoints and the numbers between.
         numbers = [(int(match.group(2)), False)]
         position = match.end()
         while (more := CONTINUATION.match(text, position)) and len(more.group(2)) == width:
@@ -114,35 +147,57 @@ def citations(text: str, path: str, prefixes: set[str]) -> list[Citation]:
             numbers.append((int(more.group(2)), False))
             position = more.end()
         groups[match.start()] = (position, [f"{stem}{number:0{width}d}" for number, _ in numbers], [interior for _, interior in numbers])
-    categories = {}
-    for marker in MARKER.finditer(text):
-        position = marker.end()
+
+    def line(position: int) -> int:
+        return text.count("\n", 0, position) + 1
+
+    categories, conditions, rejected = {}, [], set()
+    for marker in (DOCUMENT_MARKER if path == STANDARDS else TEST_MARKER).finditer(text):
+        category = next(name for name in CATEGORIES if marker.groupdict().get(name))
+        position, listed = marker.end(), []
         while position in groups:
-            categories[position] = marker.lastgroup
-            position = groups[position][0]
-            if not (separator := SEPARATOR.match(text, position)):
+            listed.append(position)
+            if not (separator := SEPARATOR.match(text, groups[position][0])):
                 break
             position = separator.end()
-    return [
-        Citation(identifier, path, text.count("\n", 0, start) + 1, interior, categories.get(start))
+        categories.update(dict.fromkeys(listed, category))
+        if category == "configuration" and listed:
+            parameters = tuple(item.upper() for item in PARAMETER.findall(marker.group("governing")))
+            conditions.append(Condition(path, line(marker.start()), parameters))
+    if path != STANDARDS:
+        for marker in REJECTS.finditer(text):
+            position = marker.end()
+            while parameter := PARAMETER.match(text, position):
+                rejected.add(parameter.group().upper())
+                if not (separator := SEPARATOR.match(text, parameter.end())):
+                    break
+                position = separator.end()
+    citations = [
+        Citation(identifier, path, line(start), interior, categories.get(start))
         for start, (_, identifiers, interiors) in groups.items()
         for identifier, interior in zip(identifiers, interiors, strict=True)
     ]
+    return Scan(citations, conditions, rejected)
 
 
-def collect(root: Path, prefixes: set[str]) -> list[Citation]:
-    found = []
+def collect(root: Path, prefixes: set[str]) -> Scan:
+    found = Scan([], [], set())
     for source in SOURCES:
         location = root / source
         for path in sorted([location] if location.is_file() else location.rglob("*")):
             if path.is_file():
                 text = path.read_bytes().decode("utf-8", errors="replace")
-                found.extend(citations(text, path.relative_to(root).as_posix(), prefixes))
+                part = scan(text, path.relative_to(root).as_posix(), prefixes)
+                found.citations += part.citations
+                found.conditions += part.conditions
+                found.rejected |= part.rejected
     return found
 
 
-def account(specification: Specification, cited: list[Citation]) -> tuple[dict[str, int], list[str], list[Citation]]:
-    """Return the items per category, the undisposed items in ID order and the citations of IDs that exist nowhere."""
+def account(specification: Specification, found: Scan) -> tuple[dict[str, int], list[str], list[Citation], list[tuple[Condition, str]]]:
+    """Return the items per category, the undisposed items in ID order, the citations of IDs
+    that exist nowhere, and each configuration condition without a rejection test."""
+    cited = found.citations
     counts = {
         category: len({item.identifier for item in cited if item.category == category} & specification.items.keys())
         for category in CATEGORIES
@@ -156,7 +211,13 @@ def account(specification: Specification, cited: list[Citation]) -> tuple[dict[s
         and citation.identifier not in specification.items
         and citation.identifier not in specification.elsewhere
     ]
-    return counts, undisposed, stale
+    unproven = [
+        (condition, parameter)
+        for condition in found.conditions
+        for parameter in condition.parameters or ("names no ECUC parameter",)
+        if parameter not in found.rejected
+    ]
+    return counts, undisposed, stale, unproven
 
 
 def check(document: str, root: Path = ROOT, stale_only: bool = False) -> int:
@@ -170,10 +231,10 @@ def check(document: str, root: Path = ROOT, stale_only: bool = False) -> int:
     except (RequirementError, zipfile.BadZipFile, ElementTree.ParseError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
-    counts, undisposed, stale = account(specification, collect(root, {prefix(key) for key in specification.items}))
+    counts, undisposed, stale, unproven = account(specification, collect(root, {prefix(key) for key in specification.items}))
     print(
         f"{document}: {len(specification.items)} official items; "
-        + ", ".join(f"{category.replace('_', ' ')} {count}" for category, count in counts.items())
+        + ", ".join(f"{CATEGORIES[category]} {count}" for category, count in counts.items())
         + f", undisposed {len(undisposed)}; {len(stale)} stale citations"
     )
     if undisposed and not stale_only:
@@ -185,4 +246,8 @@ def check(document: str, root: Path = ROOT, stale_only: bool = False) -> int:
         print("\nStale citations (not an official item of R24-11):")
         for citation in stale:
             print(f"  {citation.path}:{citation.line}: {citation.identifier}")
-    return 1 if stale or (undisposed and not stale_only) else 0
+    if unproven and not stale_only:
+        print("\nConfiguration conditions without a Rejects: test:")
+        for condition, parameter in unproven:
+            print(f"  {condition.path}:{condition.line}: {parameter}")
+    return 1 if stale or ((undisposed or unproven) and not stale_only) else 0
