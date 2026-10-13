@@ -12,7 +12,6 @@
 #define ECU_BATCH_CAPACITY 256u
 #define ECU_BATCH_MAX_SPAN UINT64_C(1000)
 #define ECU_BATCH_LINE_CAPACITY 128u
-#define ECU_BATCH_WATCHDOG_MS 5000u
 
 typedef struct {
     uint32_t id;
@@ -23,7 +22,8 @@ typedef struct {
 typedef enum { ECU_BATCH_BEGIN, ECU_BATCH_RX, ECU_BATCH_COMMIT } Ecu_BatchCommand;
 
 /** One native producer owns this staging state. Initialize before use.
- * Completed epoch changes only through Ecu_HostBatchComplete after execution.
+ * Completed epoch changes only through Ecu_HostBatchComplete after execution;
+ * Ecu_HostBatchExecute (Ecu_HostBridge.h) owns execution and the receipt.
  */
 typedef struct {
     uint64_t completed_epoch;

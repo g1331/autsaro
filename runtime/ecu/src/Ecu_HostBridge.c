@@ -1,4 +1,4 @@
-#include "Ecu_Target.h"
+#include "Ecu_HostBridge.h"
 #include "Ecu_TargetConfig.h"
 #include "Ecu_Config.h"
 #include "Os_Host.h"
@@ -79,6 +79,44 @@ static void tick(Ecu_HostBatch *batch, uint64_t at, Ecu_HostSink sink, void *con
     }
 }
 
+/* Every check that must pass before any automotive state changes. */
+static StatusType admit_batch(const Ecu_HostBatch *batch) {
+    StatusType status;
+    if ((batch->epoch < batch->completed_epoch) ||
+        ((batch->epoch - batch->completed_epoch) > ECU_BATCH_MAX_SPAN) ||
+        (batch->batch_id == UINT64_MAX)) {
+        status = E_OS_STATE;
+    } else {
+        status = Ecu_TargetValidateFrames(batch->frames, batch->count);
+    }
+    if (status == E_OK) {
+        const uint64_t span = batch->epoch - batch->completed_epoch;
+        const uint64_t transport_frames =
+            ((uint64_t)ECU_MAX_PDU_PAYLOAD + UINT64_C(6)) / UINT64_C(7) + UINT64_C(2);
+        unsigned diagnostic_inputs = 0u;
+        uint16_t index;
+        uint64_t required;
+        for (index = 0u; index < batch->count; ++index) {
+            if (batch->frames[index].id == ECU_TARGET_DIAGNOSTIC_RX_CAN_ID) {
+                ++diagnostic_inputs;
+            }
+        }
+        /* Reserve enough identities before changing automotive state: every input,
+         * tick completion, one Com output per tick, maximum configured transport
+         * output per diagnostic input and any older transport tail, plus receipt.
+         * Individual Win32/output tickets remain separate correlation identities. */
+        required = (uint64_t)batch->count + (UINT64_C(3) * span) +
+                   ((uint64_t)diagnostic_inputs * transport_frames) + UINT64_C(1);
+        if (span != UINT64_C(0)) {
+            required += transport_frames;
+        }
+        if (required > (UINT64_MAX - batch->sequence)) {
+            status = E_OS_LIMIT;
+        }
+    }
+    return status;
+}
+
 StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *context) {
     Ecu_HostWatch control;
     Os_HostHandle monitor;
@@ -86,47 +124,21 @@ StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *c
     Ecu_BatchCompletion completed;
     uint64_t at;
     uint64_t ticket;
-    uint64_t span;
-    uint64_t required;
-    uint64_t transport_frames =
-        ((uint64_t)ECU_MAX_PDU_PAYLOAD + UINT64_C(6)) / UINT64_C(7) + UINT64_C(2);
-    unsigned diagnostic_inputs = 0u;
-    uint16_t index;
     StatusType status;
     if ((batch == NULL) || (sink == NULL)) {
         return E_OS_ILLEGAL_ADDRESS;
     }
-    if ((batch->executing == 0u) || (batch->epoch < batch->completed_epoch) ||
-        ((batch->epoch - batch->completed_epoch) > ECU_BATCH_MAX_SPAN) ||
-        (batch->batch_id == UINT64_MAX)) {
+    if (batch->executing == 0u) {
         return E_OS_STATE;
     }
-    status = Ecu_TargetValidateFrames(batch->frames, batch->count);
+    status = admit_batch(batch);
+    if (status == E_OK) {
+        status = Os_TargetTickCompletion(batch->completed_epoch, &previous);
+    }
     if (status != E_OK) {
-        return status;
-    }
-    span = batch->epoch - batch->completed_epoch;
-    for (index = 0u; index < batch->count; ++index) {
-        if (batch->frames[index].id ==
-            ECU_TARGET_DIAGNOSTIC_RX_CAN_ID
-        ) {
-            ++diagnostic_inputs;
-        }
-    }
-    /* Reserve enough identities before changing automotive state: every input,
-     * tick completion, one Com output per tick, maximum configured transport
-     * output per diagnostic input and any older transport tail, plus receipt.
-     * Individual Win32/output tickets remain separate correlation identities. */
-    required = (uint64_t)batch->count + (UINT64_C(3) * span) +
-               ((uint64_t)diagnostic_inputs * transport_frames) + UINT64_C(1);
-    if (span != UINT64_C(0)) {
-        required += transport_frames;
-    }
-    if (required > (UINT64_MAX - batch->sequence)) {
-        return E_OS_LIMIT;
-    }
-    status = Os_TargetTickCompletion(batch->completed_epoch, &previous);
-    if (status != E_OK) {
+        /* Nothing ran: the bridge, not its caller, discards the staged commit. */
+        batch->executing = 0u;
+        batch->count = 0u;
         return status;
     }
     batch->transport_status = ECU_OK;
@@ -176,5 +188,5 @@ StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *c
     require(Os_HostWait(monitor, ECU_BATCH_WATCHDOG_MS) != 0);
     require(Os_HostClose(monitor) != 0);
     require(Os_HostClose(control.cancel) != 0);
-    return status;
+    return E_OK;
 }

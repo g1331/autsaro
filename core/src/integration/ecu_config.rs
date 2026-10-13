@@ -167,18 +167,13 @@ pub(super) fn files(
         .iter()
         .find(|event| event.path != app.os_event && event.path != work.os_event)
         .ok_or_else(failure)?;
-    let rx = description
-        .signals
-        .iter()
-        .find(|signal| signal.receive)
-        .ok_or_else(failure)?;
     outputs.emit(
         ECU,
         "include/Ecu_TargetConfig.h",
         header(
             "ECU_TARGET_CONFIG_H",
             &format!(
-                "#include \"Ecu_ProfileConfig.h\"\n#include \"Os_Target.h\"\n#define ECU_TARGET_TASK 0u\n#define ECU_MAX_PDU_PAYLOAD {}u\n#define ECU_TARGET_DIAGNOSTIC_RX_CAN_ID {}u\n#define ECU_TARGET_EVENT_WORK {}u\n#define ECU_TARGET_EVENT_APP {}u\n#define ECU_TARGET_EVENT_IO {}u\n#define ECU_TARGET_RX_CAN_ID {}u\n#define ECU_TARGET_RX_DEADLINE_MS {}u\nextern const Os_TargetConfig Ecu_OsConfig;\nStd_ReturnType Ecu_StackBootstrap(void);\nStd_ReturnType Ecu_StackRunCycle(EventMaskType events);\nvoid Ecu_StackRetire(void);\nint Ecu_StackFrameShape(uint32 id, uint8 dlc);\n#ifdef ECU_TARGET_TESTS\nint Ecu_TargetTestFailStage(unsigned stage);\nvoid Ecu_TargetTestShutdown(StatusType reason);\n#endif",
+                "#include \"Ecu_ProfileConfig.h\"\n#include \"Os_Target.h\"\n#define ECU_TARGET_TASK 0u\n#define ECU_MAX_PDU_PAYLOAD {}u\n#define ECU_TARGET_DIAGNOSTIC_RX_CAN_ID {}u\n#define ECU_TARGET_EVENT_WORK {}u\n#define ECU_TARGET_EVENT_APP {}u\n#define ECU_TARGET_EVENT_IO {}u\nextern const Os_TargetConfig Ecu_OsConfig;\n/* Records in *reached each initialization stage (1 through 8) as it begins. */\nStd_ReturnType Ecu_StackBootstrap(uint8 *reached);\nStd_ReturnType Ecu_StackRunCycle(EventMaskType events);\n/* Retires the stages that began, newest first. */\nvoid Ecu_StackRetire(uint8 reached);\nint Ecu_StackFrameShape(uint32 id, uint8 dlc);\n#ifdef ECU_TARGET_TESTS\nint Ecu_TargetTestFailStage(unsigned stage);\nvoid Ecu_TargetTestRetire(unsigned stage);\nvoid Ecu_TargetTestShutdown(StatusType reason);\n#endif",
                 description
                     .diagnostic_transport
                     .as_ref()
@@ -190,9 +185,6 @@ pub(super) fn files(
                 description.event_mask(&work.os_event)?,
                 description.event_mask(&app.os_event)?,
                 io.mask,
-                rx.can_id,
-                rx.deadline_ms
-                    .ok_or_else(|| PlanDiagnostic::plan_premise(&rx.com_signal))?
             ),
         ),
     )?;
@@ -571,14 +563,36 @@ pub(super) fn files(
     }
     config.push_str("    default: return E_NOT_OK;\n    }\n    return E_OK;\n}\n");
     config.push_str("static RTE_Ecu_CODE Std_ReturnType Ecu_DetRuntimeCallout(uint16_t ModuleId, uint8_t InstanceId, uint8_t ApiId, uint8_t ErrorId) {\n    (void)InstanceId;\n    if ((ModuleId == 35u) && (ApiId == 0x06u) && ((ErrorId == 0xc0u) || (ErrorId == 0xd0u))) {\n        Ecu_TargetReportTransportTimeout();\n    }\n    return E_OK;\n}\n");
-    config.push_str("RTE_Ecu_CODE Std_ReturnType Ecu_StackBootstrap(void) {\n    Can_ControllerStateType actual;\n    if (Ecu_TargetCheckLifecycleContext(TRUE) != E_OK) { return E_NOT_OK; }\n    SchM_Init(&Ecu_SchMConfig);\n    SchM_Start();\n    if (Ecu_SchMReady() == FALSE) { return E_NOT_OK; }\n    Det_Init(&det_config);\n    Det_Start();\n    Can_Init(&driver);\n    CanIf_Init(&can_if_config);\n    Ecu_HostBusSM_Init(&bus_config);\n    LSduR_Init(&LSduR_Config);\n    PduR_Init(&PduR_Config);\n    Com_Init(&com_config);\n    Com_IpduGroupStart(com_config.receive_group, TRUE);\n    Com_EnableReceptionDM(com_config.receive_group);\n    ComM_Init(&comm_config);\n    BswM_Init(&bswm_config);\n");
+    // Eight initialization stages; a test build can fail before each one, and
+    // retirement undoes only the stages that began, newest first.
+    let stage = |number: u8| {
+        format!(
+            "#ifdef ECU_TARGET_TESTS\n    if (Ecu_TargetTestFailStage({number}u) != 0) {{ return E_NOT_OK; }}\n#endif\n    *reached = {number}u;\n"
+        )
+    };
+    config.push_str("RTE_Ecu_CODE Std_ReturnType Ecu_StackBootstrap(uint8 *reached) {\n    Can_ControllerStateType actual;\n    if ((reached == NULL_PTR) || (Ecu_TargetCheckLifecycleContext(TRUE) != E_OK)) { return E_NOT_OK; }\n    *reached = 0u;\n");
+    config.push_str(&stage(1));
+    config.push_str("    SchM_Init(&Ecu_SchMConfig);\n    SchM_Start();\n    if (Ecu_SchMReady() == FALSE) { return E_NOT_OK; }\n");
+    config.push_str(&stage(2));
+    config.push_str("    Det_Init(&det_config);\n    Det_Start();\n");
+    config.push_str(&stage(3));
+    config.push_str("    Can_Init(&driver);\n");
+    config.push_str(&stage(4));
+    config.push_str("    CanIf_Init(&can_if_config);\n    Ecu_HostBusSM_Init(&bus_config);\n");
+    config.push_str(&stage(5));
+    config.push_str("    LSduR_Init(&LSduR_Config);\n    PduR_Init(&PduR_Config);\n");
+    config.push_str(&stage(6));
+    config.push_str("    Com_Init(&com_config);\n    Com_IpduGroupStart(com_config.receive_group, TRUE);\n    Com_EnableReceptionDM(com_config.receive_group);\n    ComM_Init(&comm_config);\n    BswM_Init(&bswm_config);\n");
+    // Stage 7 exists only with a diagnostic transport; the numbering stays fixed.
     if transport.is_some() {
+        config.push_str(&stage(7));
         config.push_str("    CanTp_Init(&tp_config);\n    Dcm_Init(&dcm_config);\n");
     }
     let first_user = mode
         .users
         .first()
         .ok_or_else(|| PlanDiagnostic::plan_premise(&mode.channel))?;
+    config.push_str(&stage(8));
     config.push_str(&format!("    if (Rte_Start() != E_OK) {{ return E_NOT_OK; }}\n    ComM_CommunicationAllowed({}u, TRUE);\n    if (ComM_RequestComMode({}u, COMM_FULL_COMMUNICATION) != E_OK) {{ return E_NOT_OK; }}\n    {}();\n    Can_MainFunction_Mode();\n    if ((CanIf_GetControllerMode({}u, &actual) != E_OK) || (actual != CAN_CS_STARTED)) {{ return E_NOT_OK; }}\n    SchM_StartTiming();\n    return Ecu_SchMTimingActive() ? E_OK : E_NOT_OK;\n}}\n", mode.channel_handle, first_user.handle, mode.main_symbol, can.can_if_controller_id));
     config.push_str("RTE_Ecu_CODE Std_ReturnType Ecu_StackRunCycle(EventMaskType events) {\n    if ((Ecu_TargetIsOwner() == 0) || (Ecu_SchMTimingActive() == FALSE)) { return E_NOT_OK; }\n");
     for entity in &description.schedule.entities {
@@ -599,14 +613,23 @@ pub(super) fn files(
             }
         }
     }
-    config.push_str("    return (Can_HostFlush() == ECU_OK) ? E_OK : E_NOT_OK;\n}\nRTE_Ecu_CODE void Ecu_StackRetire(void) {\n    (void)Rte_Stop();\n");
+    config.push_str("    return (Can_HostFlush() == ECU_OK) ? E_OK : E_NOT_OK;\n}\nRTE_Ecu_CODE void Ecu_StackRetire(uint8 reached) {\n");
+    // Det (2) and the routing tables (5) have no deinitialization service.
+    let mut retired = vec![(8, "(void)Rte_Stop();\n".to_owned())];
     if transport.is_some() {
-        config.push_str("    CanTp_Shutdown();\n");
+        retired.push((7, "CanTp_Shutdown();\n".to_owned()));
     }
-    config.push_str(
-        "    Com_DeInit();\n    BswM_Deinit();\n    Ecu_HostBusSM_DeInit();\n    CanIf_DeInit();\n",
-    );
-    config.push_str(&format!("    (void)Can_SetControllerMode({}u, CAN_CS_STOPPED);\n    Can_MainFunction_Mode();\n    Can_MainFunction_BusOff();\n    Can_DeInit();\n    SchM_Deinit();\n}}\n", can.controller_id));
+    retired.push((6, "BswM_Deinit();\n        Com_DeInit();\n".to_owned()));
+    retired.push((
+        4,
+        "Ecu_HostBusSM_DeInit();\n        CanIf_DeInit();\n".to_owned(),
+    ));
+    retired.push((3, format!("(void)Can_SetControllerMode({}u, CAN_CS_STOPPED);\n        Can_MainFunction_Mode();\n        Can_MainFunction_BusOff();\n        Can_DeInit();\n", can.controller_id)));
+    retired.push((1, "SchM_Deinit();\n".to_owned()));
+    for (number, body) in retired {
+        config.push_str(&format!("    if (reached >= {number}u) {{\n#ifdef ECU_TARGET_TESTS\n        Ecu_TargetTestRetire({number}u);\n#endif\n        {body}    }}\n"));
+    }
+    config.push_str("}\n");
     config.push_str("RTE_Ecu_CODE int Ecu_StackFrameShape(uint32 id, uint8 dlc) {\n    if ((id > 0x7ffu) || (dlc > 8u)) { return 0; }\n");
     for signal in &description.signals {
         config.push_str(&format!(

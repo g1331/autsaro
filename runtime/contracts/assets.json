@@ -21,7 +21,21 @@
     },
     {
       "path": "runtime/ecu/include/Ecu_HostBatch.h",
-      "sha256": "e22fa0d9876a55b81e3bcf1b2ea2dc60d00eceb30ba359f2294081c078643072",
+      "sha256": "03cf3d2b2d654d6c0c359ef7e4cb47bd6088ee25fae43f40af6685dc58c3d5ae",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/ecu/include/Ecu_HostBridge.h",
+      "sha256": "dbafc4e47c73065462ac639a80850c957555911363e363935edee152eb99c6fa",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -35,7 +49,7 @@
     },
     {
       "path": "runtime/ecu/include/Ecu_Target.h",
-      "sha256": "34b4418c907e1f600c4b151177759fda053c44454ef6a8ce777a3c6d59d8c72e",
+      "sha256": "bd08e31ad70d2072f09000e65560f112d000224d90ddf7907474d5709153b829",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -63,7 +77,7 @@
     },
     {
       "path": "runtime/ecu/src/Ecu_HostBridge.c",
-      "sha256": "7f7808692f9ca69d7fea2ea59ee37009728681217e77a5209fda085d53747585",
+      "sha256": "64f32b4c8d526ce907baae49b80b1806a706753be8a340c596172949b46a23ea",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -91,7 +105,7 @@
     },
     {
       "path": "runtime/ecu/src/Ecu_Target.c",
-      "sha256": "88d8603cafb0105d08dafc3f41ed0ed6912fd8f5e2d9d2975b72d24385575756",
+      "sha256": "0923b3b60dfda64f3a149bcde5e3ce594c726d2ab746c7cc8fa0f0553cfc553c",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -105,7 +119,7 @@
     },
     {
       "path": "runtime/ecu/src/ecu_host_batch.c",
-      "sha256": "e4ef8c5f90494c458a2714823987f4f9eabbea828b821cdeebfe95c8454908ca",
+      "sha256": "5ca5c34e5bcd6c9b173cf2ec7af4d43eb547544240c26e287388605ad3ff7682",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -119,7 +133,7 @@
     },
     {
       "path": "runtime/ecu/src/ecu_probe.c",
-      "sha256": "c17de5076d751293b4df3c0c3e283b6b0292dc61a15309c3fe5124beae2e8d6b",
+      "sha256": "a4dd73dbb764f22037b97536333686abf5a699e1cda5af1acedcb7b47d56186c",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

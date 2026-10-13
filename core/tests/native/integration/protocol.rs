@@ -893,7 +893,7 @@ fn single_component_native_batch_boundary_and_confirmations() {
     require_success(&result);
     assert!(
         String::from_utf8(result.stdout).unwrap().contains(
-            "native_batch capacity=256 refusal=257 same_epoch=0 future_requires_tick=pass confirmations=pass"
+            "native_batch capacity=256 refusal=257 same_epoch=0 future_requires_tick=pass confirmations=pass second_producer=refused"
         )
     );
 }

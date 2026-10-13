@@ -1,5 +1,5 @@
 /** @file
- * @brief Controlled single-owner Windows ECU target boundary.
+ * @brief Controlled single-owner ECU target boundary (Windows and Linux hosts).
  */
 #ifndef ECU_TARGET_H
 #define ECU_TARGET_H
@@ -11,22 +11,6 @@
 #include "Os_Target.h"
 #include <stddef.h>
 #include <stdint.h>
-
-/** The sole application's committed snapshot and most recent standard status.
- * Read/write statuses describe the last periodic attempt; failed writes retain
- * the previously committed value and epoch. Only the owner may inspect it.
- */
-typedef struct {
-    uint32_t value;
-    uint64_t epoch;
-    Std_ReturnType read_status;
-    Std_ReturnType write_status;
-} Ecu_ApplicationState;
-/** Inspect one coherent application state on the automotive owner.
- * @param result Nonnull caller storage, unchanged on refusal.
- * @return E_OK on the owner, E_NOT_OK for other contexts or a null output.
- */
-Std_ReturnType Ecu_ApplicationInspect(Ecu_ApplicationState *result);
 
 #define ECU_TARGET_UNPREPARED 0u
 #define ECU_TARGET_INITIALIZING 1u
@@ -70,29 +54,9 @@ typedef struct {
     EcuStatus input_status;
 } Ecu_BatchCompletion;
 
-/** Native output operation: nonzero means the actual write/flush succeeded.
- * A NULL output is the final completed/error batch receipt.
- * @param output Immutable copied frame, or NULL for final receipt.
- * @param batch Native staging/sequence and actual completed epoch.
- * @param status Actual execution status.
- * @param context Caller-owned sink context, retained only during execution.
- * @return Nonzero for successful physical host output, zero for failure.
- */
-typedef int (*Ecu_HostSink)(const Ecu_OutputRecord *output, const Ecu_HostBatch *batch,
-                            StatusType status, void *context);
-
-/** Execute one previously decoded complete batch on its sole native producer.
- * @param batch Valid initialized staging in executing state.
- * @param sink Actual output/receipt writer; called outside automotive tasks.
- * @param context Caller-owned callback context.
- * @return Standard admission/execution status. Output/watchdog faults close
- * the process through the existing target fault control and never roll back.
- */
-StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *context);
-
 /** Validate every immutable frame before any automotive time/state change.
  * @param frames Caller-owned array; NULL only for count zero.
- * @param count Zero through256.
+ * @param count Zero through 256.
  * @return E_OK or standard pointer/value/capacity refusal.
  */
 StatusType Ecu_TargetValidateFrames(const Ecu_BatchFrame *frames, uint16_t count);
@@ -138,7 +102,7 @@ StatusType Ecu_TargetPostFrame(uint64_t at, uint32_t id, uint8_t dlc, const uint
 /** Copy one complete batch before notifying the automotive owner.
  * @param at Last completed logical epoch or its successor.
  * @param frames Caller-owned frames; NULL allowed only for count zero.
- * @param count Zero through256; whole validation precedes notification.
+ * @param count Zero through 256; whole validation precedes notification.
  * @param ticket Accepted batch ticket, unchanged on refusal.
  * @return Standard value/state/capacity/context status. One batch in flight.
  */
@@ -171,13 +135,5 @@ StatusType Ecu_TargetConfirmOutput(uint64_t ticket, PduIdType pdu);
 EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc, const uint8_t data[8]);
 /** Generated sole extended Task entry. */
 void Ecu_TargetTask(void);
-/** Record a valid signal receive for standard RTE status mapping.
- * @param at Explicit receive epoch, supplied by the owner.
- */
-void Ecu_TargetRecordReceive(uint64_t at);
-/** Query initial/valid/expired receive state on the owner.
- * @return Standard RTE status defined by generated Rte.h.
- */
-uint8_t Ecu_TargetReceiveStatus(void);
 
 #endif

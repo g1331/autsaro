@@ -926,6 +926,6 @@ mod delivery_path_tests {
                 checked += 1;
             }
         }
-        assert_eq!(checked, 77);
+        assert_eq!(checked, 78);
     }
 }

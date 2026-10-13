@@ -12,6 +12,11 @@ static void require(int condition) {
 #ifdef ECU_TARGET_TESTS
 static unsigned failure_stage;
 int Ecu_TargetTestFailStage(unsigned stage) { return stage == failure_stage; }
+void Ecu_TargetTestRetire(unsigned stage) {
+    if (printf("ecu_retire stage=%u\n", stage) < 0) {
+        Os_HostExit(93u);
+    }
+}
 void Ecu_TargetTestShutdown(StatusType reason) {
     if (printf("ecu_shutdown reason=%u state=%u fail_stage=%u\n", reason, Ecu_TargetState(),
                failure_stage) < 0) {

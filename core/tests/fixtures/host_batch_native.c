@@ -72,6 +72,18 @@ static void tick(uint64_t at) {
     }
 }
 
+/* A second native thread is refused once the control producer owns the target. */
+static StatusType intruder_status[3];
+static Os_HostThreadResult WINAPI intruder(void *argument) {
+    Ecu_OutputRecord output;
+    Ecu_BatchCompletion completion;
+    uint64_t *untouched = (uint64_t *)argument;
+    intruder_status[0] = Ecu_TargetPostBatch(UINT64_C(0), NULL, 0u, untouched);
+    intruder_status[1] = Ecu_TargetTakeOutput(&output);
+    intruder_status[2] = Ecu_TargetBatchCompletion(UINT64_C(1), &completion);
+    return 0u;
+}
+
 static Os_HostThreadResult WINAPI control(void *argument) {
     uint64_t ticket;
     uint64_t untouched = UINT64_C(42);
@@ -95,6 +107,14 @@ static Os_HostThreadResult WINAPI control(void *argument) {
     require(untouched == UINT64_C(42));
     require(Ecu_TargetPostBatch(UINT64_C(0), frames, 256u, &ticket) == E_OK);
     require(ticket == UINT64_C(1));
+    {
+        Os_HostHandle other = Os_HostSpawnObserverThread(intruder, &untouched);
+        require(other != NULL);
+        require(Os_HostWait(other, 5000u) != 0);
+        require(Os_HostClose(other) != 0);
+        require((intruder_status[0] == E_OS_ACCESS) && (intruder_status[1] == E_OS_ACCESS) &&
+                (intruder_status[2] == E_OS_ACCESS) && (untouched == UINT64_C(42)));
+    }
     require(Ecu_TargetPostBatch(UINT64_C(0), NULL, 0u, &untouched) == E_OS_STATE);
     require(untouched == UINT64_C(42));
     complete = wait_batch(ticket);
@@ -144,7 +164,7 @@ static Os_HostThreadResult WINAPI control(void *argument) {
     require(complete.input_status == ECU_OK);
     require((signal_outputs == 1u) && (did_outputs == 2u));
     require(printf("native_batch capacity=256 refusal=257 same_epoch=0 future_requires_tick=pass "
-                   "confirmations=pass\n") >= 0);
+                   "confirmations=pass second_producer=refused\n") >= 0);
     ShutdownOS(E_OK);
     return 0u;
 }

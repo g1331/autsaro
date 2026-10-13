@@ -28,6 +28,7 @@ int Ecu_TargetTestFailStage(unsigned stage) {
     }
     return 0;
 }
+void Ecu_TargetTestRetire(unsigned stage) { (void)stage; }
 void Ecu_TargetTestShutdown(StatusType reason) {
     require(printf("output_close queued=%u reason=%u\n", queued, reason) >= 0);
 }
