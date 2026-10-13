@@ -894,9 +894,9 @@ fn source_preparation_is_target_complete_without_native_tools() {
             .collect();
         // The mainline owns every BSW producer, including the host CAN driver.
         for asset in [
-            "runtime/multi/src/Can.c",
-            "runtime/multi/src/Com.c",
-            "runtime/multi/src/Dcm.c",
+            "runtime/bsw/src/Can.c",
+            "runtime/bsw/src/Com.c",
+            "runtime/bsw/src/Dcm.c",
         ] {
             assert!(selected.contains(&asset), "{asset}: {selected:?}");
         }
@@ -953,10 +953,10 @@ fn source_preparation_is_target_complete_without_native_tools() {
             .expect("the selection has a DID service without an event");
         assert_eq!(
             service["consumers"],
-            serde_json::json!(["runtime/multi/src/Dcm.c"])
+            serde_json::json!(["runtime/bsw/src/Dcm.c"])
         );
         assert_eq!(
-            originals["runtime/multi/src/Dcm.c"], "src/Dcm.c",
+            originals["runtime/bsw/src/Dcm.c"], "src/Dcm.c",
             "the consumer must be the delivered Dcm implementation"
         );
         assert!(has("os/src/Os.c") && has("kernel/tasks.c") && has("src/Rte.c"));

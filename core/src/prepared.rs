@@ -301,7 +301,7 @@ pub(crate) fn deliver_path(asset: &AssetEntry) -> Result<String, crate::Localize
         if path == "ecu-tool.py" {
             return Ok("tools/ecu-tool.py".into());
         }
-        for family in ["multi/", "ecu/"] {
+        for family in ["bsw/", "ecu/"] {
             if let Some(relative) = path.strip_prefix(family) {
                 if relative.starts_with("src/") || relative.starts_with("include/") {
                     return Ok(relative.into());
@@ -677,5 +677,23 @@ mod localization_tests {
             serde_json::to_value(&diagnostics[0].message).unwrap(),
             evidence
         );
+    }
+}
+
+#[cfg(test)]
+mod delivery_path_tests {
+    // An unmapped runtime family would fall through to tools/ without an error.
+    #[test]
+    fn bsw_sources_deliver_to_the_flat_project_directories() {
+        let bsw: Vec<_> = crate::resources::AssetInventory::embedded()
+            .entries()
+            .iter()
+            .filter_map(|asset| Some((asset, asset.relative_path.strip_prefix("runtime/bsw/")?)))
+            .collect();
+        assert_eq!(bsw.len(), 69);
+        for (asset, relative) in bsw {
+            assert!(relative.starts_with("src/") || relative.starts_with("include/"));
+            assert_eq!(super::deliver_path(asset).unwrap(), relative);
+        }
     }
 }

@@ -120,11 +120,11 @@ impl ValidatedIntegrationPlan {
         files.insert("include/ComStack_Cfg.h".into(), format!("/** @file EcuC-selected communication widths. */\n#ifndef COMSTACK_CFG_H\n#define COMSTACK_CFG_H\n#include \"Platform_Types.h\"\ntypedef {} PduIdType;\ntypedef {} PduLengthType;\n#endif\n", integer(communication.pdu_id_type), integer(communication.pdu_length_type)).into_bytes());
         files.insert(
             "include/ComStack_Types.h".into(),
-            include_bytes!("../../../runtime/multi/include/ComStack_Types.h").to_vec(),
+            include_bytes!("../../../runtime/bsw/include/ComStack_Types.h").to_vec(),
         );
         files.insert(
             "include/Com.h".into(),
-            include_bytes!("../../../runtime/multi/include/Com.h").to_vec(),
+            include_bytes!("../../../runtime/bsw/include/Com.h").to_vec(),
         );
         let rte = files.get_mut("include/Rte.h").unwrap();
         *rte = String::from_utf8(std::mem::take(rte))
@@ -153,11 +153,11 @@ impl ValidatedIntegrationPlan {
             // The same platform and standard types the delivered ECU compiles with.
             (
                 "include/Platform_Types.h".into(),
-                include_bytes!("../../../runtime/multi/include/Platform_Types.h").to_vec(),
+                include_bytes!("../../../runtime/bsw/include/Platform_Types.h").to_vec(),
             ),
             (
                 "include/Std_Types.h".into(),
-                include_bytes!("../../../runtime/multi/include/Std_Types.h").to_vec(),
+                include_bytes!("../../../runtime/bsw/include/Std_Types.h").to_vec(),
             ),
             ("include/Rte_Type.h".into(), header("RTE_TYPE_H", &types)),
             (

@@ -1226,7 +1226,7 @@ fn multi_selected_catalog_binds_standard_signatures_and_actual_periodic_producer
     assert!(
         description
             .runtime_sources
-            .contains_key("runtime/multi/src/Com.c")
+            .contains_key("runtime/bsw/src/Com.c")
     );
     assert!(
         description
@@ -1330,7 +1330,7 @@ fn multi_selected_catalog_binds_standard_signatures_and_actual_periodic_producer
         .unwrap();
     assert_eq!(
         pdu_router.declaration_owner,
-        "runtime/multi/include/PduR_Com.h"
+        "runtime/bsw/include/PduR_Com.h"
     );
     for path in [
         "core/src/integration/ecu.rs",

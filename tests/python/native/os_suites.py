@@ -286,7 +286,7 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
             ["-I", str(target / "src/host/linux")]
             if linux else []
         ),
-        "-I", str(ROOT / "runtime/multi/include"),
+        "-I", str(ROOT / "runtime/bsw/include"),
         "-I", str(copied / "include"),
         "-I", str(copied / ("portable/ThirdParty/GCC/Posix" if linux else "portable/MSVC-MingW")),
         str(target / "src/Os.c"),
@@ -1575,7 +1575,7 @@ def check_public_types(directory: Path) -> None:
         compiler(), "-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic",
         *(["-D_GNU_SOURCE", "-pthread"] if linux else []),
         "-I" + str(TARGET / "include"), str(TARGET / "tests/public_types.c"),
-        "-I" + str(ROOT / "runtime/multi/include"),
+        "-I" + str(ROOT / "runtime/bsw/include"),
         "-o", str(binary),
     ]
     expected = "public_types range_and_pointer_contracts=pass access_truth_table=16\n"
@@ -1608,7 +1608,7 @@ def check_public_compatibility(directory: Path) -> None:
                *(["-D_GNU_SOURCE", "-pthread"] if linux else []),
                "-I" + str(TARGET / "include"), "-I" + str(TARGET / "src"),
                *(["-I" + str(TARGET / "src/host/linux")] if linux else []),
-               "-I" + str(ROOT / "runtime/multi/include"),
+               "-I" + str(ROOT / "runtime/bsw/include"),
                str(TARGET / "tests/public_compatibility.c"), "-o", str(binary)]
     expected = "public_compatibility declarations=16 evaluations=0 error_codes=23 unique=pass\n"
     for name, extra in [
@@ -1768,7 +1768,7 @@ def check_memory_mapping(directory: Path) -> None:
     headers = directory / "include"
     shutil.copytree(TARGET / "include", headers)
     flags = [cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-I", str(headers),
-             "-I", str(ROOT / "runtime/multi/include")]
+             "-I", str(ROOT / "runtime/bsw/include")]
     source = TARGET / "tests/memory_mapping.c"
     binary = directory / ("memory_mapping" if linux else "memory_mapping.exe")
     run_native([*flags, str(source), "-o", str(binary)], check=True, timeout=60)

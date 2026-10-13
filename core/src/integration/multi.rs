@@ -1815,7 +1815,7 @@ pub(super) fn symbols(plan: &MultiComponentContract) -> Vec<SymbolContract> {
                     )
                 },
                 consumers: if runnable.event.is_none() {
-                    vec!["runtime/multi/src/Dcm.c".into()]
+                    vec!["runtime/bsw/src/Dcm.c".into()]
                 } else if let Some(operation) = operation {
                     plan.connections
                         .iter()

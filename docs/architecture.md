@@ -177,7 +177,7 @@ flowchart LR
 
 ### 7.1 单一生成主线
 
-新生成的工程全部走当前多组件主线，单组件是 SWC 数为 1 的特例，不按组件数分派链路（[ADR 0010](adr/0010-single-generation-mainline.md)）。主线按职责命名，不再称 multi。主线已拥有全部 BSW 来源：程序闭包只取自主线运行时目录（目前为 `runtime/multi`），producer 身份与实际字节一致；Dem、NvM、Security 不在主线程序中，随旧链路删除。不同 target 独立选择，不同时链接互斥的 OS／RTE／BSW producer；`host-batch`、`probe`、`test` 的实际程序闭包分别核验。
+新生成的工程全部走当前多组件主线，单组件是 SWC 数为 1 的特例，不按组件数分派链路（[ADR 0010](adr/0010-single-generation-mainline.md)）。主线按职责命名，不再称 multi。主线已拥有全部 BSW 来源：程序闭包只取自主线运行时目录（目前为 `runtime/bsw`），producer 身份与实际字节一致；Dem、NvM、Security 不在主线程序中，随旧链路删除。不同 target 独立选择，不同时链接互斥的 OS／RTE／BSW producer；`host-batch`、`probe`、`test` 的实际程序闭包分别核验。
 
 ### 7.2 稳定版本前不保留兼容
 

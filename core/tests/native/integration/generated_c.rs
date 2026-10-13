@@ -248,7 +248,7 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
         for include in [
             "runtime/ecu/include",
             "runtime/os/include",
-            "runtime/multi/include",
+            "runtime/bsw/include",
         ] {
             compiler.arg("-I").arg(repository.join(include));
         }
@@ -322,7 +322,7 @@ fn generated_rte_com_header_links_independent_handle_callbacks_and_real_dispatch
             .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
             .arg(format!("-DTEST_RX_HANDLE={handle}u"))
             .args(["-Iinclude", "-Ios/include", "-I"])
-            .arg(root.join("runtime/multi/src"))
+            .arg(root.join("runtime/bsw/src"))
             .args([
                 "src/Rte.c",
                 "src/Com.c",

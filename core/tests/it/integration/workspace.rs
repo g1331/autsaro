@@ -282,7 +282,7 @@ fn tampered_trusted_runtime_asset_is_refused_by_identity() {
     use autosar_config_core::resources::AssetInventory;
     let scratch = Scratch::new();
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let tampered = "runtime/multi/src/Can.c";
+    let tampered = "runtime/bsw/src/Can.c";
     let destination = scratch.0.join(tampered);
     std::fs::create_dir_all(destination.parent().unwrap()).unwrap();
     let mut bytes = std::fs::read(root.join(tampered)).unwrap();

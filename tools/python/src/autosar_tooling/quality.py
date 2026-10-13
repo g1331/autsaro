@@ -193,7 +193,7 @@ def changed_format_errors(
 # independent multi-runtime fixture stands in. The CAN sources also need the generated
 # Ecu_Config.h/Ecu_Execution.h, so they are compiled with generated projects (c-check, native).
 CONFIGURATION = ROOT / "core" / "tests" / "fixtures" / "multi-runtime"
-MAINLINE_CAN = ROOT / "runtime" / "multi"
+MAINLINE_CAN = ROOT / "runtime" / "bsw"
 MAINLINE_CAN_HEADERS = ["Can_CfgTypes.h", "Can_GeneralTypes.h", "Can_Host.h", "Can_MemMap.h",
                         "Ecu_Status.h", "SchM_Can.h", "standard/Can.h"]
 
@@ -226,7 +226,7 @@ def c_syntax_errors() -> list[str]:
                 "-pedantic",
                 "-fsyntax-only",
                 "-I",
-                str(ROOT / "runtime" / "multi" / "include"),
+                str(ROOT / "runtime" / "bsw" / "include"),
                 "-I",
                 str(CONFIGURATION),
                 *forced_header,

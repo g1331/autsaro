@@ -67,8 +67,8 @@ pub(super) fn multi_catalog(
         "Can",
         "void",
         &[("Config", "const Can_ConfigType *", "IN")],
-        "runtime/multi/include/standard/Can.h",
-        "runtime/multi/src/Can.c",
+        "runtime/bsw/include/standard/Can.h",
+        "runtime/bsw/src/Can.c",
     );
     for symbol in [
         "Can_MainFunction_Wakeup",
@@ -82,8 +82,8 @@ pub(super) fn multi_catalog(
             "Can",
             "void",
             &[],
-            "runtime/multi/include/SchM_Can.h",
-            "runtime/multi/src/Can.c",
+            "runtime/bsw/include/SchM_Can.h",
+            "runtime/bsw/src/Can.c",
         );
     }
     for (module, config) in [
@@ -98,8 +98,8 @@ pub(super) fn multi_catalog(
             module,
             "void",
             &[("Config", config, "IN")],
-            &format!("runtime/multi/include/{module}.h"),
-            &format!("runtime/multi/src/{module}.c"),
+            &format!("runtime/bsw/include/{module}.h"),
+            &format!("runtime/bsw/src/{module}.c"),
         );
     }
     for (symbol, module, header) in [
@@ -114,8 +114,8 @@ pub(super) fn multi_catalog(
                 ("PduId", "PduIdType", "IN"),
                 ("PduInfo", "const PduInfoType *", "IN"),
             ],
-            &format!("runtime/multi/include/{header}"),
-            &format!("runtime/multi/src/{module}.c"),
+            &format!("runtime/bsw/include/{header}"),
+            &format!("runtime/bsw/src/{module}.c"),
         );
     }
     add(
@@ -126,8 +126,8 @@ pub(super) fn multi_catalog(
             ("SignalId", "Com_SignalIdType", "IN"),
             ("SignalData", "void *", "OUT"),
         ],
-        "runtime/multi/include/Com.h",
-        "runtime/multi/src/Com.c",
+        "runtime/bsw/include/Com.h",
+        "runtime/bsw/src/Com.c",
     );
     add(
         "Com_SendSignal",
@@ -137,8 +137,8 @@ pub(super) fn multi_catalog(
             ("SignalId", "Com_SignalIdType", "IN"),
             ("SignalData", "const void *", "IN"),
         ],
-        "runtime/multi/include/Com.h",
-        "runtime/multi/src/Com.c",
+        "runtime/bsw/include/Com.h",
+        "runtime/bsw/src/Com.c",
     );
     // Both scheduler headers are delivered as generated files.
     for module in ["CanTp", "Dcm"] {
@@ -148,7 +148,7 @@ pub(super) fn multi_catalog(
             "void",
             &[],
             &format!("include/SchM_{module}.h"),
-            &format!("runtime/multi/src/{module}.c"),
+            &format!("runtime/bsw/src/{module}.c"),
         );
     }
     for (symbol, module) in [
@@ -262,7 +262,7 @@ pub(super) fn multi_source_identities() -> BTreeMap<String, String> {
     let mut identities: BTreeMap<String, String> = crate::resources::AssetInventory::embedded()
         .entries()
         .iter()
-        .filter(|asset| asset.relative_path.starts_with("runtime/multi/"))
+        .filter(|asset| asset.relative_path.starts_with("runtime/bsw/"))
         .map(|asset| (asset.relative_path.into(), asset.sha256.into()))
         .collect();
     for (path, bytes) in [
