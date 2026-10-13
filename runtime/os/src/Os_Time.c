@@ -13,6 +13,8 @@ static uint64_t action_count;
 static uint64_t error_count;
 static Os_TickCompletion completion;
 static HANDLE completion_event;
+/* Auto-reset: one early native wake per notification, never a completion. */
+static HANDLE attention_event;
 static volatile Os_Atomic32 signal_failed;
 #define TIME_CLOSED 256L
 #define TIME_RESERVED 1L
@@ -182,6 +184,7 @@ void Os_TimeInit(AppModeType mode) {
             Os_BackendShutdown(E_OS_VALUE);
         }
         completion_event = Os_PortEvent(NULL, TRUE, FALSE, NULL);
+        attention_event = Os_PortEvent(NULL, FALSE, FALSE, NULL);
     }
 }
 void Os_TimeAutostart(AppModeType mode) {
@@ -596,6 +599,7 @@ StatusType Os_TargetWaitTick(uint64_t ticket, uint32_t timeout_ms, Os_TickComple
     }
     started_at = GetTickCount();
     for (;;) {
+        const HANDLE observed[2] = {completion_event, attention_event};
         DWORD elapsed;
         DWORD waited;
         StatusType status = Os_TargetTickCompletion(ticket, record);
@@ -606,9 +610,11 @@ StatusType Os_TargetWaitTick(uint64_t ticket, uint32_t timeout_ms, Os_TickComple
         if (elapsed >= timeout_ms) {
             return E_OS_NOFUNC;
         }
-        waited = WaitForSingleObject(completion_event, timeout_ms - elapsed);
-        if (waited == WAIT_TIMEOUT) {
-            /* A simultaneous close wins over a timeout report. */
+        /* Native timed waits may round up to the host timer period (about 15.6 ms on
+         * Windows), so pending native work must wake this producer explicitly. */
+        waited = WaitForMultipleObjects(2u, observed, FALSE, timeout_ms - elapsed);
+        if ((waited == WAIT_TIMEOUT) || (waited == (WAIT_OBJECT_0 + 1u))) {
+            /* A simultaneous close wins over a timeout or attention report. */
             status = Os_TargetTickCompletion(ticket, record);
             return ((status == E_OS_NOFUNC) && (Os_TargetReady() == 0)) ? E_OS_STATE : status;
         }
@@ -651,6 +657,18 @@ StatusType Os_TargetCurrentTick(uint64_t *ticket, uint64_t *epoch) {
     }
     taskEXIT_CRITICAL();
     Os_BackendGuardService();
+    return status;
+}
+StatusType Os_TargetNotifyNative(void) {
+    StatusType status = time_owner();
+    if (status == E_OK) {
+        if (Os_HostSetEvent(attention_event) == 0) {
+            (void)InterlockedExchange(&signal_failed, 1);
+            Os_BackendRequestShutdown(E_OS_STATE);
+            status = E_OS_STATE;
+        }
+        Os_BackendGuardService();
+    }
     return status;
 }
 StatusType Os_TargetCompleteTick(uint64_t ticket) {

@@ -823,6 +823,49 @@ pub fn host_batch_commit() {
     }
 }
 
+/// The host thread may confirm a frame sent from a batch input before or after
+/// that epoch's cycle; the test build forces the early order. N_Cr runs from
+/// the FC confirmation either way (200 ms after epoch 10).
+pub fn confirmation_timers_ignore_host_confirmation_order() {
+    let built = super::Scratch::new();
+    let (project, _) = super::single_component_project(&built.0, super::tooling::native_target());
+    let control = built.0.join("confirmation-order.c");
+    fs::write(
+        &control,
+        format!(
+            "{}\n{}",
+            fs::read_to_string(project.join("src/ecu_host_batch.c")).unwrap(),
+            fs::read_to_string(root().join("core/tests/fixtures/host_batch_confirmation_order.c"))
+                .unwrap()
+        ),
+    )
+    .unwrap();
+    let output = build("test", Some(&control), &built, &project);
+    let binary = super::tooling::native_binary(&output, "ecu_probe");
+    let directory = |name: &str| built.0.join("confirmation-order").join(name);
+    let text = run(
+        &binary,
+        &directory("on-deadline"),
+        b"BEGIN 10\nRX 1792 8 1008221234000000\nCOMMIT\nBEGIN 210\nRX 1792 8 2100000000000000\nCOMMIT\n",
+    );
+    assert!(!text.contains("COMMIT_ERROR "), "{text}");
+    assert_eq!(
+        frames(&text, RESPONSE),
+        owned(&[(10, "3000000000000000"), (210, "037F221300000000")]),
+        "{text}"
+    );
+    let text = run(
+        &binary,
+        &directory("late"),
+        b"BEGIN 10\nRX 1792 8 1008221234000000\nCOMMIT\nBEGIN 211\nRX 1792 8 2100000000000000\nCOMMIT\n",
+    );
+    assert!(
+        text.contains("COMMIT_ERROR batch=2 epoch=211 ")
+            && text.contains(" transport_status=10 transport_epoch=210 transport_count=1"),
+        "{text}"
+    );
+}
+
 pub fn host_batch_native_boundary() {
     let scratch = super::Scratch::new();
     let (project, _) = super::single_component_project(&scratch.0, super::tooling::native_target());
