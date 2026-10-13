@@ -333,49 +333,69 @@ async function linuxChoose(environment, application, kind, selected) {
 const WINDOWS_CHOOSER = `
 param([int]$ProcessId, [string]$Kind, [string]$Selected)
 $ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
-$A = [Windows.Automation.AutomationElement]
-$scope = [Windows.Automation.TreeScope]
-$owned = New-Object Windows.Automation.PropertyCondition($A::ProcessIdProperty, $ProcessId)
-$chooser = New-Object Windows.Automation.PropertyCondition($A::ClassNameProperty, '#32770')
-$dialog = $null
+# UIA does not expose the chooser's Win32 name field, so drive it by control ID.
+Add-Type @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class Chooser {
+  delegate bool Visit(IntPtr window, IntPtr data);
+  [DllImport("user32.dll")] static extern bool EnumWindows(Visit visit, IntPtr data);
+  [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr parent, Visit visit, IntPtr data);
+  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr window, StringBuilder name, int size);
+  [DllImport("user32.dll")] static extern int GetDlgCtrlID(IntPtr window);
+  [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr window);
+  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr window);
+  [DllImport("user32.dll")] static extern bool IsWindowEnabled(IntPtr window);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SendMessage(IntPtr window, uint message, IntPtr wParam, string lParam);
+  [DllImport("user32.dll")] static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+  static string ClassOf(IntPtr window) { var name = new StringBuilder(256); GetClassName(window, name, name.Capacity); return name.ToString(); }
+  public static IntPtr Find(uint process) {
+    IntPtr found = IntPtr.Zero;
+    EnumWindows((window, data) => {
+      uint owner; GetWindowThreadProcessId(window, out owner);
+      if (owner == process && IsWindowVisible(window) && ClassOf(window) == "#32770") { found = window; return false; }
+      return true;
+    }, IntPtr.Zero);
+    return found;
+  }
+  public static bool Accept(IntPtr dialog, int[] identifiers, string path) {
+    var edits = new List<IntPtr>();
+    IntPtr accept = IntPtr.Zero;
+    EnumChildWindows(dialog, (window, data) => {
+      string name = ClassOf(window);
+      if (name == "Edit" && IsWindowVisible(window) && IsWindowEnabled(window)) edits.Add(window);
+      if (name == "Button" && GetDlgCtrlID(window) == 1) accept = window;
+      return true;
+    }, IntPtr.Zero);
+    if (accept == IntPtr.Zero) return false;
+    foreach (int identifier in identifiers)
+      foreach (IntPtr edit in edits)
+        if (GetDlgCtrlID(edit) == identifier) {
+          SendMessage(edit, 0x000C, IntPtr.Zero, path); // WM_SETTEXT
+          PostMessage(accept, 0x00F5, IntPtr.Zero, IntPtr.Zero); // BM_CLICK
+          return true;
+        }
+    return false;
+  }
+}
+'@
+# File pickers name their field 1148; the folder picker uses 1152.
+$identifiers = if ($Kind -eq 'directory') { [int[]](1152, 1148) } else { [int[]](1148) }
+$dialog = [IntPtr]::Zero
 $deadline = (Get-Date).AddSeconds(30)
-while (-not $dialog -and (Get-Date) -lt $deadline) {
-  # UIA lists an owned modal chooser below its owner window, not the desktop.
-  foreach ($window in $A::RootElement.FindAll($scope::Children, $owned)) {
-    if ($window.Current.ClassName -eq '#32770') { $dialog = $window; break }
-    $dialog = $window.FindFirst($scope::Children, $chooser)
-    if ($dialog) { break }
-  }
-  if (-not $dialog) { Start-Sleep -Milliseconds 100 }
+while ((Get-Date) -lt $deadline) {
+  $dialog = [Chooser]::Find($ProcessId)
+  if ($dialog -ne [IntPtr]::Zero -and [Chooser]::Accept($dialog, $identifiers, $Selected)) { break }
+  $dialog = [IntPtr]::Zero
+  Start-Sleep -Milliseconds 100
 }
-if (-not $dialog) {
-  $windows = $A::RootElement.FindAll($scope::Children, $owned) | ForEach-Object { "$($_.Current.ClassName) '$($_.Current.Name)'" }
-  throw "No native chooser belongs to the application under test; its windows: $($windows -join ', ')"
-}
-# File pickers name their field 1148; the folder picker uses 1152. Depending on
-# the dialog style the field is an Edit or an editable ComboBox.
-$ids = if ($Kind -eq 'directory') { @('1152', '1148') } else { @('1148') }
-$edit = $null
-$deadline = (Get-Date).AddSeconds(10)
-while (-not $edit -and (Get-Date) -lt $deadline) {
-  foreach ($id in $ids) {
-    $field = $dialog.FindAll($scope::Descendants, (New-Object Windows.Automation.PropertyCondition($A::AutomationIdProperty, $id)))
-    $edit = $field | Where-Object { $_.GetSupportedPatterns() -contains [Windows.Automation.ValuePattern]::Pattern } | Select-Object -First 1
-    if ($edit) { break }
-  }
-  if (-not $edit) { Start-Sleep -Milliseconds 100 }
-}
-if (-not $edit) {
-  $fields = $dialog.FindAll($scope::Descendants, [Windows.Automation.Condition]::TrueCondition) | Where-Object { $_.Current.AutomationId } | ForEach-Object { "$($_.Current.ControlType.ProgrammaticName):$($_.Current.AutomationId)" } | Select-Object -Unique
-  throw "Native chooser has no file name field; its controls: $($fields -join ', ')"
-}
-$edit.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($Selected)
-$accept = $dialog.FindFirst($scope::Children, (New-Object Windows.Automation.PropertyCondition($A::AutomationIdProperty, '1')))
-$accept.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+if ($dialog -eq [IntPtr]::Zero) { throw 'No native chooser with a name field belongs to the application under test' }
 $deadline = (Get-Date).AddSeconds(10)
 while ((Get-Date) -lt $deadline) {
-  try { if ($dialog.Current.ProcessId -ne $ProcessId) { exit 0 } } catch { exit 0 }
+  if (-not [Chooser]::IsWindow($dialog)) { exit 0 }
   Start-Sleep -Milliseconds 100
 }
 throw 'Native chooser stayed open after accepting the selection'
