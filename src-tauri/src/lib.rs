@@ -75,10 +75,12 @@ fn commit_save(
 }
 
 pub fn run() {
-    let builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
-    #[cfg(all(feature = "native-webdriver", target_os = "macos"))]
-    let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
-    builder
+    #[allow(unused_mut)]
+    let mut context = tauri::generate_context!();
+    #[cfg(all(windows, feature = "native-webdriver"))]
+    verification::hand_webview2_to_driver(context.config_mut());
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let config_dir = match std::env::var_os("AUTOSAR_CONFIG_DIR") {
                 Some(value) => {
@@ -141,6 +143,6 @@ pub fn run() {
             project::save_project,
             editing::validate_project
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .unwrap_or_else(|error| panic!("{error}"));
 }

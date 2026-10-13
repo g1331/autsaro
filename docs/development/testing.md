@@ -68,7 +68,7 @@ CI 每个平台先验证检查器、生成四类完整样本并发布本轮工�
 
 `Development checks` 中的 `CI required` 是分支规则唯一要求的检查，阻塞合并的任务清单写在该任务的 `needs` 中，增删检查只改工作流。PR 只改根目录指南、`docs/`、代理说明或 PR 模板时，构建与测试任务整体跳过，`quality` 照常运行；其余 PR、推送到主干及手动运行都执行完整检查。分支无须先与主干同步即可合并，合并后主干推送会再完整运行一次。
 
-`native` 任务在 Windows 与 Linux 上以 `--features native-tests --lib --test native --no-fail-fast` 运行全部原生 Rust 套件，工具路径取自已安装的受控 GCC、binutils、Git 及项目 uv 环境；`native-os` 任务在两个平台运行 26 个 OS suites 和主机锁错误边界测试。准备任务在生成样本后运行封存工程构建模式及接收方 Python 检查。需要授权官方档案的 `official` 二进制、Windows WFP 检查和隔离桌面场景仍由自托管 runner 上手动触发的 `acceptance.yml`／`offline.yml` 运行；PR 检查通过不代表这些检查通过。
+`native` 任务在 Windows 与 Linux 上以 `--features native-tests --lib --test native --no-fail-fast` 运行全部原生 Rust 套件，工具路径取自已安装的受控 GCC、binutils、Git 及项目 uv 环境；`native-os` 任务在两个平台运行 26 个 OS suites 和主机锁错误边界测试。准备任务在生成样本后运行封存工程构建模式及接收方 Python 检查。需要授权官方档案的 `official` 二进制仍由自托管 runner 上手动触发的 `acceptance.yml`／`offline.yml` 运行，桌面场景由不属于必需检查的 `desktop.yml` 运行（见[桌面场景](#桌面场景)）；PR 检查通过不代表这些检查通过。
 
 ## 进程、资源和原生行为
 
@@ -86,18 +86,30 @@ cargo test --locked --manifest-path core/Cargo.toml --features official-oracles 
 
 完整检查入口 `uv run --locked python -m autosar_tooling verify --scope all --base <基准提交>` 组合原有完整检查，不安装依赖，不编排另一套任务或写汇总报告。失败直接保留原输出和退出状态。
 
-## 隔离桌面与安装包
+## 桌面场景
+
+`tests/desktop/*.test.mjs` 通过 Tauri 官方 `tauri-driver` 与平台 WebDriver 驱动真实应用和 IPC，由 Node 内置的 `node:test` 运行。每个文件启动独立的应用会话，使用私有的配置、主目录和临时目录，文件之间没有顺序依赖；场景只使用内置规则，共用辅助位于 `tests/desktop/support/`。
+
+先构建验证版应用（前端打包进程序，不需要开发服务器）并安装 `tauri-driver`：
 
 ```powershell
-uv run --locked python -m autosar_tooling desktop --platform windows --binary <应用绝对路径> --output-directory <新的空结果目录>
+npm run tauri --prefix ui -- build --debug --no-bundle --features native-webdriver
+cargo install tauri-driver --version 2.1.0 --locked
+node --test --test-concurrency=1 "tests/desktop/*.test.mjs"
 ```
 
-桌面驱动位于 `tests/desktop/`，平台控制和输入准备位于 `autosar_tooling.acceptance`。场景只使用内置规则，覆盖新建、旧 profile 工程被拒绝、含旧 XSD/MOD 路径的设置被忽略并提示，以及后续受管执行。
+运行前把 `AUTOSAR_DESKTOP_APP` 设为构建出的 `src-tauri/target/debug/autosar-config-desktop`（Windows 带 `.exe`）的绝对路径。Node 24 的 `--test` 不接受目录，glob 加引号后由 Node 展开；也可只传单个文件，或用 `--test-name-pattern` 选择检查。`native-webdriver` 只用于验证构建：提供计数器、受管失败和延迟注入，并在 Windows 上通过 WebView2 API 转交 msedgedriver 的启动参数（WebView2 在提权进程中忽略 `WEBVIEW2_*` 环境变量，GitHub 托管 runner 以管理员身份运行）。发行构建不包含这些能力。
 
-Linux 和 macOS 使用对应 platform。`--installed --source-checkout <原构建目录>` 验证解包产物及原 checkout 不可用的接收场景。计数器、受管错误和延迟测试使用 `native-webdriver` 验证构建，普通发行构建不会启用这些能力。Linux 驱动需要 Xvfb、WebKitWebDriver、tauri-driver、xdotool、xclip、xsettingsd 与 dump_xsettings；安装后离线验收还使用普通用户的私有 user/network namespace。平台隔离前置条件不满足时明确失败；不得在用户正在使用的桌面补测。
+`AUTOSAR_DESKTOP_RESULTS` 指定结果目录，默认使用系统临时目录。每个文件在其中新建私有目录，保存各项检查的截图、`ipc.jsonl` 和会话关闭后的 `process-tree.json`；失败时另存 `failure.png` 与页面文本 `failure.txt`。`owned-execution.test.mjs` 还需要用 `AUTOSAR_CC`、`AUTOSAR_OBJDUMP`、`AUTOSAR_GIT`、`AUTOSAR_PYTHON` 声明受控 GCC、binutils、Git 与受支持 Python 的绝对路径；应用环境仍剥除这些变量，由场景通过真实的“执行工具”设置填写，未声明时该文件失败。
+
+- Linux：需要 `WebKitWebDriver`（Debian／Ubuntu 软件包 `webkit2gtk-driver`）、`Xvfb`、`dbus-daemon`、`xsettingsd`、`xdotool` 与 `xclip`。每个会话使用私有 Xvfb display 和不激活服务的私有 D-Bus，原生文件选择框也在该 display 中操作，不触及正在使用的桌面，可在开发机直接运行。
+- Windows：需要与 Edge／WebView2 版本一致的 `msedgedriver` 位于 PATH 中。会话显示真实窗口、读取会话剪贴板并操作原生文件选择框，因此只在 GitHub Actions、Windows Sandbox 或设置了 `AUTOSAR_DESKTOP_DEDICATED_SESSION=1` 的专用会话中启动，否则直接拒绝；不得在日常桌面运行。各会话共用桌面与剪贴板，必须串行运行。
+- macOS：`tauri-driver` 不支持 WKWebView，不运行桌面场景。
+
+关闭会话后，测试断言应用进程树已全部退出，残留时列出 pid、名称和命令行；按 Ctrl-C 或取消 CI 也会结束私有 display 与 driver 进程组。
+
+`desktop.yml` 在 GitHub 托管的 `ubuntu-24.04` 与 `windows-latest` 上构建验证版并运行全部场景；改动应用、界面或场景的 PR 及手动触发都会运行，结果目录作为工件保留 14 天。它目前不在必需检查中。这些场景验证开发构建的界面与 IPC，不提供安装包、无源码 checkout 或断网环境的验收证据。
+
+## 离线 ECU 包
 
 离线 ECU 包可由 Python 3.11 或更新版本运行自带 `tools/ecu-tool.py`，不需要 uv、Rust、Node 或源 checkout。构建和验证仍检查封存内容与目标工具链。支持版本的 Windows/Linux 实际构建由受控验收验证，未运行的平台或版本不宣称通过。
-
-开发版可通过 `desktop --platform linux --binary <native-webdriver-binary> --output-directory <fresh-private-directory>` 运行同一隔离原生 IPC 场景，应用进程仍不接纳官方档案或开发工具环境。开发入口使用 `http://127.0.0.1:1420`，结果明确记录 `installed=false`；这不提供安装包、无 checkout 或网络 namespace 验收证据。安装模式继续使用 `--installed` 及不可用的绝对 `--source-checkout`，保留封装 URL、普通用户进程和离线隔离要求。
-
-后续受管执行场景需要外层命令通过 `AUTOSAR_CC`、`AUTOSAR_OBJDUMP`、`AUTOSAR_GIT`、`AUTOSAR_PYTHON` 声明受控目标工具链、Git 与受支持 Python 的绝对路径。配置场景仍剥除这些应用环境变量，随后通过真实“执行工具”设置填写已声明路径；未声明不能算完整场景通过。

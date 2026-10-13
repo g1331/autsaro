@@ -1,48 +1,93 @@
-name: Isolated desktop acceptance
+name: Desktop acceptance
+# Real GUI/IPC scenarios through tauri-driver on disposable GitHub-hosted
+# runners: Linux runs on a private Xvfb display, Windows in the runner's own
+# session. Not part of the required checks.
 on:
   workflow_dispatch:
-    inputs:
-      platform:
-        type: choice
-        options: [linux, windows, macos]
-        required: true
-      binary:
-        description: Absolute path to the current built or extracted application
-        required: true
-      installed:
-        type: boolean
-        default: false
-      source_checkout:
-        description: Original build checkout for installed verification
-        required: false
+  pull_request:
+    paths:
+      - core/**
+      - src-tauri/**
+      - ui/**
+      - tests/desktop/**
+      - .github/actions/**
+      - .github/workflows/desktop.yml
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
 jobs:
   desktop:
-    runs-on: [self-hosted, autosar-controlled, "${{ inputs.platform == 'linux' && 'Linux' || inputs.platform == 'windows' && 'Windows' || 'macOS' }}"]
-    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    env:
+      AUTOSAR_DESKTOP_RESULTS: ${{ github.workspace }}/build/desktop-results
     steps:
       - uses: actions/checkout@v7.0.1
+      - name: Identify native build cache inputs
+        shell: python
+        run: |
+          import os
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              output.write('CACHE_IMAGE=' + os.environ['ImageOS'] + '-' + os.environ['ImageVersion'] + '\n')
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
       - uses: astral-sh/setup-uv@v10.2.0
       - run: uv sync --locked
-      - name: Run isolated acceptance
-        shell: python
-        env:
-          PLATFORM: ${{ inputs.platform }}
-          BINARY: ${{ inputs.binary }}
-          INSTALLED: ${{ inputs.installed }}
-          SOURCE: ${{ inputs.source_checkout }}
+      - uses: ./.github/actions/core-build-dependencies
+        with:
+          linux-packages: libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev patchelf webkit2gtk-driver xvfb xdotool xclip xsettingsd
+      - uses: ./.github/actions/native-analysis-compiler
+      - name: Edge WebDriver
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          import os, subprocess
-          command = ['uv', 'run', '--locked', 'python', '-m', 'autosar_tooling', 'desktop', '--platform', os.environ['PLATFORM'], '--binary', os.environ['BINARY'], '--output-directory', 'desktop-results']
-          if os.environ['INSTALLED'] == 'true':
-              command += ['--installed', '--source-checkout', os.environ['SOURCE']]
-          subprocess.run(command, check=True)
+          # The image's Edge WebDriver matches its Edge; WebView2 must match too.
+          $env:EDGEWEBDRIVER >> $env:GITHUB_PATH
+          & (Join-Path $env:EDGEWEBDRIVER msedgedriver.exe) --version
+          (Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}').pv | ForEach-Object { "WebView2 runtime $_" }
+      - uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/bin/tauri-driver*
+            ~/.cargo/registry
+            src-tauri/target
+          key: desktop-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'src-tauri/Cargo.lock') }}
+          restore-keys: desktop-${{ runner.os }}-${{ env.CACHE_IMAGE }}-
+      - name: Install tauri-driver
+        shell: bash
+        run: tauri-driver --help > /dev/null 2>&1 || cargo install tauri-driver --version 2.1.0 --locked
+      - run: npm ci --prefix ui
+      - name: Build the WebDriver verification application
+        run: npm run tauri --prefix ui -- build --debug --no-bundle --features native-webdriver
+      - name: Select application and declared execution tools
+        shell: python
+        run: |
+          import os, shutil, subprocess
+          from pathlib import Path
+          application = Path('src-tauri/target/debug/autosar-config-desktop' + ('.exe' if os.name == 'nt' else ''))
+          tools = {'AUTOSAR_CC': 'gcc', 'AUTOSAR_OBJDUMP': 'objdump', 'AUTOSAR_GIT': 'git'}
+          python = subprocess.run(['uv', 'run', '--locked', 'python', '-c', 'import sys; print(sys.executable)'],
+              check=True, capture_output=True, text=True).stdout.strip()
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              output.write('AUTOSAR_DESKTOP_APP=' + str(application.resolve(strict=True)) + '\n')
+              for variable, name in tools.items():
+                  output.write(variable + '=' + str(Path(shutil.which(name)).absolute()) + '\n')
+              output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
+      - name: Desktop scenarios
+        run: node --test --test-concurrency=1 "tests/desktop/*.test.mjs"
       - uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
-          name: desktop-${{ inputs.platform }}
-          path: |
-            desktop-results
-            !desktop-results/**/dependencies/**
+          name: desktop-${{ matrix.os }}
+          path: build/desktop-results
           if-no-files-found: ignore
+          retention-days: 14
