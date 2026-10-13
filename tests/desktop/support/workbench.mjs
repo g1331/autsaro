@@ -125,7 +125,8 @@ export async function openWorkbench(name) {
       current,
       `${command}: request echo must stay distinct from current capabilities`,
     );
-    return result.reply.value;
+    // Previews go back to the backend as issued; everything else is compared.
+    return command.startsWith('preview_') ? result.reply.value : displayPaths(result.reply.value);
   }
   async function metrics() {
     const value = await invoke('verification_metrics');
@@ -147,7 +148,7 @@ export async function openWorkbench(name) {
     return value;
   }
   async function projection() {
-    const view = displayPaths(await invoke('project_projection'));
+    const view = await invoke('project_projection');
     assert.equal(typeof view.workspaceEpoch, 'string');
     assert.equal(typeof view.definitionFingerprint, 'string');
     return view;

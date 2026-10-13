@@ -353,22 +353,22 @@ if (-not $dialog) {
   $windows = $A::RootElement.FindAll($scope::Children, $owned) | ForEach-Object { "$($_.Current.ClassName) '$($_.Current.Name)'" }
   throw "No native chooser belongs to the application under test; its windows: $($windows -join ', ')"
 }
-# File pickers name their field 1148; the folder picker uses 1152.
+# File pickers name their field 1148; the folder picker uses 1152. Depending on
+# the dialog style the field is an Edit or an editable ComboBox.
 $ids = if ($Kind -eq 'directory') { @('1152', '1148') } else { @('1148') }
 $edit = $null
 $deadline = (Get-Date).AddSeconds(10)
 while (-not $edit -and (Get-Date) -lt $deadline) {
   foreach ($id in $ids) {
-    $edit = $dialog.FindFirst($scope::Descendants, (New-Object Windows.Automation.AndCondition(
-      (New-Object Windows.Automation.PropertyCondition($A::AutomationIdProperty, $id)),
-      (New-Object Windows.Automation.PropertyCondition($A::ControlTypeProperty, [Windows.Automation.ControlType]::Edit)))))
+    $field = $dialog.FindAll($scope::Descendants, (New-Object Windows.Automation.PropertyCondition($A::AutomationIdProperty, $id)))
+    $edit = $field | Where-Object { $_.GetSupportedPatterns() -contains [Windows.Automation.ValuePattern]::Pattern } | Select-Object -First 1
     if ($edit) { break }
   }
   if (-not $edit) { Start-Sleep -Milliseconds 100 }
 }
 if (-not $edit) {
-  $fields = $dialog.FindAll($scope::Descendants, (New-Object Windows.Automation.PropertyCondition($A::ControlTypeProperty, [Windows.Automation.ControlType]::Edit))) | ForEach-Object { "$($_.Current.AutomationId) '$($_.Current.Name)'" }
-  throw "Native chooser '$($dialog.Current.Name)' has no file name field; its fields: $($fields -join ', ')"
+  $fields = $dialog.FindAll($scope::Descendants, [Windows.Automation.Condition]::TrueCondition) | Where-Object { $_.Current.AutomationId } | ForEach-Object { "$($_.Current.ControlType.ProgrammaticName):$($_.Current.AutomationId)" } | Select-Object -Unique
+  throw "Native chooser has no file name field; its controls: $($fields -join ', ')"
 }
 $edit.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($Selected)
 $accept = $dialog.FindFirst($scope::Children, (New-Object Windows.Automation.PropertyCondition($A::AutomationIdProperty, '1')))
