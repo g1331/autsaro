@@ -49,6 +49,11 @@ def main() -> int:
     commands.add_parser(
         "fetch-official", help="Download and verify the pinned official development archives"
     )
+    requirement = commands.add_parser(
+        "requirements",
+        help="List a specification's undisposed official requirement IDs and stale ID citations",
+    )
+    requirement.add_argument("document", help="Specification document name, such as SWS_CANInterface")
     args = parser.parse_args()
     if args.command == "c-check":
         from autosar_tooling.c_check import check
@@ -59,6 +64,9 @@ def main() -> int:
     if args.command == "fetch-official":
         from autosar_tooling.official import fetch
         return fetch()
+    if args.command == "requirements":
+        from autosar_tooling.requirements import check as check_requirements
+        return check_requirements(args.document)
     if args.command == "doctor":
         if args.role == "native":
             if not args.target:

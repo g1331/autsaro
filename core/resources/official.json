@@ -19,5 +19,12 @@
     "path": "docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_EXP_ModelingShowCases.zip",
     "url": "https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_EXP_ModelingShowCases.zip",
     "sha256": "dd55faad0bdc22181dd8fddf3927ad59b36c88ff9a7848f05f445c9b141fd701"
+  },
+  {
+    "name": "R24-11 specifications ARXML",
+    "environment": "AUTOSAR_SPECIFICATIONS_ARCHIVE",
+    "path": "docs/official/R24-11/CP/ReleaseDocumentation/AUTOSAR_CP_MOD_SpecificationsARXML.zip",
+    "url": "https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_MOD_SpecificationsARXML.zip",
+    "sha256": "d598e866ee481c6f16605ce6241a30674201c57ebaf231b2746d5ff6d21dd04e"
   }
 ]

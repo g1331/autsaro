@@ -4,6 +4,7 @@
 # AUTOSAR_XSD_ARCHIVE = "docs/official/R24-11/FO/MethodologyAndTemplates/AUTOSAR_FO_MMOD_XMLSchema.zip"
 # AUTOSAR_MOD_ARCHIVE = "docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_MOD_ECUConfigurationParameters.zip"
 # AUTOSAR_SAMPLE_ARCHIVE = "docs/official/R24-11/CP/MethodologyAndTemplates/AUTOSAR_CP_EXP_ModelingShowCases.zip"
+# AUTOSAR_SPECIFICATIONS_ARCHIVE = "docs/official/R24-11/CP/ReleaseDocumentation/AUTOSAR_CP_MOD_SpecificationsARXML.zip"
 # Native consumers require explicit absolute tool paths matching the target lock.
 # AUTOSAR_CC = "/usr/bin/gcc-13"
 # AUTOSAR_OBJDUMP = "/usr/bin/objdump"
