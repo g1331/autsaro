@@ -14,7 +14,7 @@
 
 `AUTOSAR_CC`、`AUTOSAR_OBJDUMP` 和 `AUTOSAR_GIT` 必须为绝对路径；资源路径通过 `AUTOSAR_XSD_ARCHIVE`、`AUTOSAR_MOD_ARCHIVE`、`AUTOSAR_SAMPLE_ARCHIVE` 指定。工作流设置开发解释器；offline 工作流另外选择接收者解释器，直接运行生成包，不向该解释器安装开发工具。
 
-调用前检查所选 commit，确认 runner 原生平台与目标一致。原生 GUI/安装包验收另使用 desktop 工作流，并提供本次构建/解包应用的绝对路径。acceptance 上传测试日志，desktop 上传指定结果目录，bundles 上传按提交 SHA 命名的安装包；runner 未配置时专用验收没有执行，不可标记为通过。
+调用前检查所选 commit，确认 runner 原生平台与目标一致。原生 GUI 场景由 desktop 工作流在 GitHub 托管 runner 上自行构建验证版并运行，不使用专用 runner；它不覆盖安装包的安装与离线验收，这部分目前没有自动入口。acceptance 上传测试日志，desktop 上传场景结果目录，bundles 上传按提交 SHA 命名的安装包；runner 未配置时专用验收没有执行，不可标记为通过。
 
 ## 发行版本
 
