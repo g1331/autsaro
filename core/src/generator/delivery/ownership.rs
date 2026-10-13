@@ -178,8 +178,13 @@ fn application_slots(
         }
         crate::integration::InputSource::new(&input.logical_path, bytes.to_vec()).map_err(|issue| issue.message)
     }).collect::<Result<Vec<_>, crate::LocalizedText>>()?;
-    let slots = crate::integration::ecu::application_slots_from_sources(&sources)
-        .map_err(|issues| issues.into_iter().next().unwrap().message)?;
+    let slots =
+        crate::integration::ecu::application_slots_from_sources(&sources).map_err(|issues| {
+            issues.into_iter().next().map_or_else(
+                || crate::product_message!("backend.delivery.application_membership_mismatch"),
+                |issue| issue.message,
+            )
+        })?;
     if slots.len() != manifest.application_inputs.len()
         || !slots.iter().all(|slot| {
             manifest.application_inputs.iter().any(|member| {

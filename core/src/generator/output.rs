@@ -1,7 +1,6 @@
 use crate::model::{GenerationPreview, GenerationPreviewFile, GenerationReport, Issue};
 use sha2::{Digest, Sha256};
 use std::ffi::OsStr;
-use std::fmt::Write;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -30,7 +29,7 @@ fn integrity_record(dir: &Path, names: &[String]) -> Result<String, crate::Local
         .map(String::as_str)
         .chain(std::iter::once("files.list"))
     {
-        writeln!(record, "{}  {name}", file_digest(&dir.join(name))?).unwrap();
+        record.push_str(&format!("{}  {name}\n", file_digest(&dir.join(name))?));
     }
     Ok(record)
 }
@@ -198,9 +197,12 @@ pub(crate) fn seal_files(mut files: Vec<(String, Vec<u8>)>) -> Vec<(String, Vec<
     let list = names.join("\n") + "\n";
     let mut record = String::new();
     for (name, bytes) in &files {
-        writeln!(record, "{:x}  {name}", Sha256::digest(bytes)).unwrap();
+        record.push_str(&format!("{:x}  {name}\n", Sha256::digest(bytes)));
     }
-    writeln!(record, "{:x}  files.list", Sha256::digest(list.as_bytes())).unwrap();
+    record.push_str(&format!(
+        "{:x}  files.list\n",
+        Sha256::digest(list.as_bytes())
+    ));
     files.push(("files.list".into(), list.into_bytes()));
     files.push(("files.sha256".into(), record.into_bytes()));
     files
@@ -330,13 +332,12 @@ fn inspect_prepared(
             snapshot_of: owners.get(name).and_then(|entry| entry.snapshot_of.clone()),
             path: name.clone(),
             status: status.into(),
-            before: if status == "changed" {
-                Some(
-                    String::from_utf8(before.unwrap())
+            before: match before {
+                Some(bytes) if status == "changed" => Some(
+                    String::from_utf8(bytes)
                         .map_err(|_| crate::product_message!("backend.generation.previous_file_not_utf8", "path" => name))?,
-                )
-            } else {
-                None
+                ),
+                _ => None,
             },
             after: if status != "unchanged" {
                 Some(
@@ -413,14 +414,16 @@ impl StagedGeneration {
             files,
             names,
             output,
-            stage: Some(stage),
+            stage: Some(stage.clone()),
             revision,
             guard,
         };
         for (name, contents) in &staged.files {
-            let target = staged.stage.as_ref().unwrap().join(name);
-            fs::create_dir_all(target.parent().unwrap())
-                .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
+            let target = stage.join(name);
+            if let Some(parent) = target.parent() {
+                fs::create_dir_all(parent)
+                    .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
+            }
             fs::write(target, contents)
                 .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
         }
@@ -469,7 +472,12 @@ impl StagedGeneration {
         } else {
             None
         };
-        if let Err(error) = fs::rename(self.stage.as_ref().unwrap(), output) {
+        // Only a committed generation has released its stage.
+        let stage = self
+            .stage
+            .as_ref()
+            .ok_or_else(|| crate::product_message!("backend.generation.confirmation_stale"))?;
+        if let Err(error) = fs::rename(stage, output) {
             return Err(if let Some(path) = &backup {
                 crate::product_message!("backend.generation.output_install_failed_backup", "error" => error.to_string(), "path" => path.display())
             } else {
@@ -559,7 +567,10 @@ impl StagedBuild {
         check_empty_build_output(&output)?;
         fs::create_dir_all(&parent)
             .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
-        let root = reserve_directory(&parent, "build-stage", output.file_name().unwrap())?;
+        let name = output
+            .file_name()
+            .ok_or_else(|| crate::product_message!("backend.generation.build_name_required"))?;
+        let root = reserve_directory(&parent, "build-stage", name)?;
         let directory = root.join("build");
         Ok(Self {
             root,

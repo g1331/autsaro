@@ -101,6 +101,11 @@ pub struct PlanDiagnostic {
     pub remedy: crate::message::LocalizedText,
 }
 
+/// The last segment of a complete AUTOSAR path.
+fn short_name(path: &str) -> &str {
+    path.rsplit_once('/').map_or(path, |(_, name)| name)
+}
+
 impl PlanDiagnostic {
     fn dependency(
         code: &str,
@@ -143,6 +148,16 @@ impl PlanDiagnostic {
             "OUTPUT_MISSING",
             path,
             crate::product_message!("backend.integration.outputs.output_missing", "path" => path),
+        )
+    }
+
+    /// A premise the validated plan should guarantee, such as a route or
+    /// handle for a planned object, is missing when an emitter needs it.
+    fn plan_premise(object: &str) -> Vec<Self> {
+        Self::output(
+            "PLAN_PREMISE",
+            object,
+            crate::product_message!("backend.integration.outputs.plan_premise_missing", "object" => object),
         )
     }
 

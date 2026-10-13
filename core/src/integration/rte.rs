@@ -1,24 +1,21 @@
 //! Actual bounded RTE producers from the immutable component composition contract.
 use super::composition::{Endpoint, data_symbol};
-use super::{PlanDescription, ValidatedIntegrationPlan};
+use super::{PlanDescription, PlanDiagnostic, ValidatedIntegrationPlan};
 use std::collections::BTreeMap;
-use std::fmt::Write;
 
-fn signal(plan: &PlanDescription, path: &str) -> u32 {
+fn signal(plan: &PlanDescription, path: &str) -> Result<u32, Vec<PlanDiagnostic>> {
     plan.handles
         .iter()
         .find(|handle| handle.domain == "com_signal" && handle.path == path)
-        .unwrap()
-        .handle
+        .map(|handle| handle.handle)
+        .ok_or_else(|| PlanDiagnostic::plan_premise(path))
 }
 
 fn section(source: &mut String, scope: &str, segment: &str, start: bool) {
-    writeln!(
-        source,
-        "#define RTE_{scope}_{}_SEC_{segment}\n#include \"Rte_MemMap.h\"",
+    source.push_str(&format!(
+        "#define RTE_{scope}_{}_SEC_{segment}\n#include \"Rte_MemMap.h\"\n",
         if start { "START" } else { "STOP" }
-    )
-    .unwrap();
+    ));
 }
 
 /// `code_section` places every code segment in one executable section while
@@ -45,25 +42,25 @@ pub(super) fn memory_map(scopes: &[(String, &str)], code_section: Option<&str>) 
             Some(section) if class == "CODE" => section.to_owned(),
             _ => format!(".{section_name}.rte.{scope}.{segment}"),
         };
-        writeln!(mapping, "#{} defined(RTE_{scope}_START_SEC_{segment})\n#undef RTE_{scope}_START_SEC_{segment}\n#ifdef RTE_MEMMAP_ACTIVE\n#error \"Nested RTE memory section\"\n#endif\n#define RTE_MEMMAP_ACTIVE\n#define RTE_{scope}_{segment}_ACTIVE\n#define RTE_{scope}_{segment} __attribute__((section(\"{placement}\")))\n#define RTE_{class} RTE_{scope}_{segment}\n#elif defined(RTE_{scope}_STOP_SEC_{segment})\n#undef RTE_{scope}_STOP_SEC_{segment}\n#ifndef RTE_{scope}_{segment}_ACTIVE\n#error \"Unmatched RTE memory section\"\n#endif\n#undef RTE_{scope}_{segment}_ACTIVE\n#undef RTE_MEMMAP_ACTIVE\n#undef RTE_{scope}_{segment}\n#undef RTE_{class}", if index == 0 { "if" } else { "elif" }).unwrap();
+        mapping.push_str(&format!("#{} defined(RTE_{scope}_START_SEC_{segment})\n#undef RTE_{scope}_START_SEC_{segment}\n#ifdef RTE_MEMMAP_ACTIVE\n#error \"Nested RTE memory section\"\n#endif\n#define RTE_MEMMAP_ACTIVE\n#define RTE_{scope}_{segment}_ACTIVE\n#define RTE_{scope}_{segment} __attribute__((section(\"{placement}\")))\n#define RTE_{class} RTE_{scope}_{segment}\n#elif defined(RTE_{scope}_STOP_SEC_{segment})\n#undef RTE_{scope}_STOP_SEC_{segment}\n#ifndef RTE_{scope}_{segment}_ACTIVE\n#error \"Unmatched RTE memory section\"\n#endif\n#undef RTE_{scope}_{segment}_ACTIVE\n#undef RTE_MEMMAP_ACTIVE\n#undef RTE_{scope}_{segment}\n#undef RTE_{class}\n", if index == 0 { "if" } else { "elif" }));
     }
     mapping.push_str("#else\n#ifndef RTE_MEMMAP_HEADER_CHECK\n#define RTE_MEMMAP_HEADER_CHECK\ntypedef unsigned char Rte_MemMap_HeaderCheck;\n#endif\n#endif\n");
     mapping
 }
 
-pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>> {
+pub(super) fn files(
+    plan: &ValidatedIntegrationPlan,
+) -> Result<BTreeMap<String, Vec<u8>>, Vec<PlanDiagnostic>> {
     let description = plan.description();
-    let composition = description.composition.as_ref().unwrap();
+    let composition = description.ecu_composition()?;
     let mut source = String::from(
         "/** @file Generated RTE for the checked single-owner component graph. */\n#define RTE_CORE\n#include \"Rte_Main.h\"\n#include \"Rte_Com.h\"\n#include \"Com.h\"\n#include \"Ecu_Target.h\"\n",
     );
     for component in &composition.components {
-        writeln!(
-            source,
-            "#include \"{}\"",
+        source.push_str(&format!(
+            "#include \"{}\"\n",
             component.header.trim_start_matches("include/")
-        )
-        .unwrap();
+        ));
     }
     source.push_str("#define RTE_Rte_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\nstatic boolean rte_started RTE_Rte_VAR_CLEARED_UNSPECIFIED;\nstatic boolean rte_allocated RTE_Rte_VAR_CLEARED_UNSPECIFIED;\n");
     let mut states = BTreeMap::new();
@@ -85,7 +82,7 @@ pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>
     }
     section(&mut source, "Rte", "VAR_CLEARED_UNSPECIFIED", false);
     for component in &composition.components {
-        let scope = component.component.rsplit('/').next().unwrap();
+        let scope = super::short_name(&component.component);
         if component.data_ports.iter().any(|port| port.read)
             || component.diagnostic_session_port.is_some()
         {
@@ -104,23 +101,15 @@ pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>
                 .network_endpoints
                 .iter()
                 .find(|network| network.endpoint == endpoint);
-            writeln!(
-                source,
-                "static uint32 {name} RTE_{scope}_VAR_CLEARED_UNSPECIFIED;"
-            )
-            .unwrap();
-            writeln!(initialization, "    {name} = {}u;", port.initial_value).unwrap();
+            source.push_str(&format!(
+                "static uint32 {name} RTE_{scope}_VAR_CLEARED_UNSPECIFIED;\n"
+            ));
+            initialization.push_str(&format!("    {name} = {}u;\n", port.initial_value));
             if network.is_some() {
-                writeln!(
-                    source,
-                    "static boolean {name}_received RTE_{scope}_VAR_CLEARED_UNSPECIFIED;\nstatic boolean {name}_expired RTE_{scope}_VAR_CLEARED_UNSPECIFIED;"
-                )
-                .unwrap();
-                writeln!(
-                    initialization,
-                    "    {name}_received = FALSE;\n    {name}_expired = FALSE;"
-                )
-                .unwrap();
+                source.push_str(&format!("static boolean {name}_received RTE_{scope}_VAR_CLEARED_UNSPECIFIED;\nstatic boolean {name}_expired RTE_{scope}_VAR_CLEARED_UNSPECIFIED;\n"));
+                initialization.push_str(&format!(
+                    "    {name}_received = FALSE;\n    {name}_expired = FALSE;\n"
+                ));
             }
             states.insert(endpoint, name);
         }
@@ -131,7 +120,7 @@ pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>
     source.push_str("    rte_allocated = TRUE;\n    rte_started = TRUE;\n    return E_OK;\n}\nRTE_Rte_CODE Std_ReturnType Rte_Stop(void) {\n    if (Ecu_TargetCheckLifecycleContext(FALSE) != E_OK) { return RTE_E_LIMIT; }\n    rte_started = FALSE;\n    return E_OK;\n}\n");
     section(&mut source, "Rte", "CODE", false);
     for component in &composition.components {
-        let scope = component.component.rsplit('/').next().unwrap();
+        let scope = super::short_name(&component.component);
         section(&mut source, scope, "CODE", true);
         for port in &component.data_ports {
             let endpoint = Endpoint {
@@ -146,25 +135,26 @@ pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>
             let symbol = data_symbol(component, port);
             if port.read {
                 let name = &states[&endpoint];
-                writeln!(source, "RTE_{scope}_CODE Std_ReturnType {symbol}(uint32 *data) {{\n    if (data == NULL_PTR) {{ return E_NOT_OK; }}\n    if (rte_started == FALSE) {{ return RTE_E_COM_STOPPED; }}\n    if (Ecu_TargetIsOwner() == 0) {{ return E_NOT_OK; }}").unwrap();
+                source.push_str(&format!("RTE_{scope}_CODE Std_ReturnType {symbol}(uint32 *data) {{\n    if (data == NULL_PTR) {{ return E_NOT_OK; }}\n    if (rte_started == FALSE) {{ return RTE_E_COM_STOPPED; }}\n    if (Ecu_TargetIsOwner() == 0) {{ return E_NOT_OK; }}\n"));
                 if let Some(network) = network {
-                    let id = signal(description, &network.transport.com_signal);
-                    writeln!(source, "    {{\n        uint32 value = {name};\n        const uint8 status = Com_ReceiveSignal({id}u, &value);\n        if (status == COM_SERVICE_NOT_AVAILABLE) {{\n            *data = {name};\n            return RTE_E_COM_STOPPED;\n        }}\n        if (status != E_OK) {{ return E_NOT_OK; }}\n        if ({name}_received == FALSE) {{\n            *data = {name};\n            return RTE_E_NEVER_RECEIVED;\n        }}\n        {name} = value;\n        *data = value;\n        return ({name}_expired == TRUE) ? RTE_E_MAX_AGE_EXCEEDED : E_OK;\n    }}").unwrap();
+                    let id = signal(description, &network.transport.com_signal)?;
+                    source.push_str(&format!("    {{\n        uint32 value = {name};\n        const uint8 status = Com_ReceiveSignal({id}u, &value);\n        if (status == COM_SERVICE_NOT_AVAILABLE) {{\n            *data = {name};\n            return RTE_E_COM_STOPPED;\n        }}\n        if (status != E_OK) {{ return E_NOT_OK; }}\n        if ({name}_received == FALSE) {{\n            *data = {name};\n            return RTE_E_NEVER_RECEIVED;\n        }}\n        {name} = value;\n        *data = value;\n        return ({name}_expired == TRUE) ? RTE_E_MAX_AGE_EXCEEDED : E_OK;\n    }}\n"));
                 } else {
-                    writeln!(source, "    *data = {name};\n    return E_OK;").unwrap();
+                    source.push_str(&format!("    *data = {name};\n    return E_OK;\n"));
                 }
             } else {
-                writeln!(source, "RTE_{scope}_CODE Std_ReturnType {symbol}(uint32 data) {{\n    if (rte_started == FALSE) {{ return RTE_E_COM_STOPPED; }}\n    if (Ecu_TargetIsOwner() == 0) {{ return E_NOT_OK; }}").unwrap();
+                source.push_str(&format!("RTE_{scope}_CODE Std_ReturnType {symbol}(uint32 data) {{\n    if (rte_started == FALSE) {{ return RTE_E_COM_STOPPED; }}\n    if (Ecu_TargetIsOwner() == 0) {{ return E_NOT_OK; }}\n"));
                 if let Some(network) = network {
-                    let id = signal(description, &network.transport.com_signal);
-                    writeln!(source, "    const uint8 status = Com_SendSignal({id}u, &data);\n    return (status == COM_SERVICE_NOT_AVAILABLE) ? RTE_E_COM_STOPPED : status;").unwrap();
+                    let id = signal(description, &network.transport.com_signal)?;
+                    source.push_str(&format!("    const uint8 status = Com_SendSignal({id}u, &data);\n    return (status == COM_SERVICE_NOT_AVAILABLE) ? RTE_E_COM_STOPPED : status;\n"));
                 } else {
                     for connection in composition
                         .connections
                         .iter()
                         .filter(|connection| !connection.service && connection.provider == endpoint)
                     {
-                        writeln!(source, "    {} = data;", states[&connection.requester]).unwrap();
+                        source
+                            .push_str(&format!("    {} = data;\n", states[&connection.requester]));
                     }
                     source.push_str("    return E_OK;\n");
                 }
@@ -185,12 +175,12 @@ pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>
                         && connection.requester.port == operation.port
                         && connection.requester.member == operation.operation
                 })
-                .unwrap();
+                .ok_or_else(|| PlanDiagnostic::plan_premise(&operation.operation))?;
             let provider = composition
                 .components
                 .iter()
                 .find(|component| component.instance == connection.provider.instance)
-                .unwrap();
+                .ok_or_else(|| PlanDiagnostic::plan_premise(&connection.provider.instance))?;
             let server = provider
                 .operations
                 .iter()
@@ -199,19 +189,19 @@ pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>
                         && operation.port == connection.provider.port
                         && operation.operation == connection.provider.member
                 })
-                .unwrap();
+                .ok_or_else(|| PlanDiagnostic::plan_premise(&connection.provider.member))?;
             let runnable = provider
                 .runnables
                 .iter()
                 .find(|runnable| runnable.path == server.runnable)
-                .unwrap();
+                .ok_or_else(|| PlanDiagnostic::plan_premise(&server.runnable))?;
             let parameters = operation
                 .arguments
                 .iter()
                 .map(|arg| format!("{} {}", arg.native_type, arg.name))
                 .collect::<Vec<_>>()
                 .join(", ");
-            writeln!(source, "RTE_{scope}_CODE Std_ReturnType {}({}) {{\n    if (rte_started == FALSE) {{ return RTE_E_COM_STOPPED; }}\n    if (Ecu_TargetIsOwner() == 0) {{ return E_NOT_OK; }}", operation.implementation_symbol, if parameters.is_empty() { "void" } else { &parameters }).unwrap();
+            source.push_str(&format!("RTE_{scope}_CODE Std_ReturnType {}({}) {{\n    if (rte_started == FALSE) {{ return RTE_E_COM_STOPPED; }}\n    if (Ecu_TargetIsOwner() == 0) {{ return E_NOT_OK; }}\n", operation.implementation_symbol, if parameters.is_empty() { "void" } else { &parameters }));
             for argument in &operation.arguments {
                 if argument.native_type.contains('*')
                     || composition
@@ -219,12 +209,10 @@ pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>
                         .values()
                         .any(|name| name == &argument.native_type)
                 {
-                    writeln!(
-                        source,
-                        "    if ({} == NULL_PTR) {{ return E_NOT_OK; }}",
+                    source.push_str(&format!(
+                        "    if ({} == NULL_PTR) {{ return E_NOT_OK; }}\n",
                         argument.name
-                    )
-                    .unwrap();
+                    ));
                 }
             }
             let names = operation
@@ -233,12 +221,10 @@ pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>
                 .map(|arg| arg.name.as_str())
                 .collect::<Vec<_>>()
                 .join(", ");
-            writeln!(
-                source,
-                "    {}({names});\n    return E_OK;\n}}",
+            source.push_str(&format!(
+                "    {}({names});\n    return E_OK;\n}}\n",
                 runnable.symbol
-            )
-            .unwrap();
+            ));
         }
         for runnable in component
             .runnables
@@ -249,7 +235,7 @@ pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>
                 .operations
                 .iter()
                 .find(|operation| operation.runnable == runnable.path)
-                .unwrap();
+                .ok_or_else(|| PlanDiagnostic::plan_premise(&runnable.path))?;
             let parameters = operation
                 .arguments
                 .iter()
@@ -262,9 +248,8 @@ pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>
                 .map(|arg| arg.name.as_str())
                 .collect::<Vec<_>>()
                 .join(", ");
-            writeln!(
-                source,
-                "RTE_{scope}_CODE Std_ReturnType {}({}) {{\n    return {}({names});\n}}",
+            source.push_str(&format!(
+                "RTE_{scope}_CODE Std_ReturnType {}({}) {{\n    return {}({names});\n}}\n",
                 runnable.symbol,
                 if parameters.is_empty() {
                     "void"
@@ -272,42 +257,32 @@ pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>
                     &parameters
                 },
                 operation.implementation_symbol
-            )
-            .unwrap();
+            ));
         }
         section(&mut source, scope, "CODE", false);
     }
-    let partition = &description
-        .communication_runtime
-        .as_ref()
-        .unwrap()
-        .partition
-        .name;
+    let partition = &description.ecu_communication()?.partition.name;
     scopes.push((partition.clone(), "CALLOUT_CODE"));
     section(&mut source, partition, "CALLOUT_CODE", true);
-    let com = description.com_runtime.as_ref().unwrap();
+    let com = description.ecu_com()?;
     for (callback, timeout) in [("Rte_COMCbk", false), ("Rte_COMCbkRxTOut", true)] {
-        writeln!(source, "RTE_{partition}_CALLOUT_CODE void {callback}(CbkHandleIdType handle) {{\n    if (rte_started == FALSE) {{ return; }}\n    if (Ecu_TargetIsOwner() == 0) {{ return; }}").unwrap();
+        source.push_str(&format!("RTE_{partition}_CALLOUT_CODE void {callback}(CbkHandleIdType handle) {{\n    if (rte_started == FALSE) {{ return; }}\n    if (Ecu_TargetIsOwner() == 0) {{ return; }}\n"));
         for reception in &com.receptions {
             for network in composition.network_endpoints.iter().filter(|network| {
                 network.transport.receive && network.transport.com_signal == reception.signal
             }) {
                 let name = &states[&network.endpoint];
-                writeln!(
-                    source,
-                    "    if (handle == {}u) {{",
+                source.push_str(&format!(
+                    "    if (handle == {}u) {{\n",
                     reception.callback_handle
-                )
-                .unwrap();
+                ));
                 if timeout {
-                    writeln!(
-                        source,
-                        "        if ({name}_received == TRUE) {{ {name}_expired = TRUE; }}"
-                    )
-                    .unwrap();
+                    source.push_str(&format!(
+                        "        if ({name}_received == TRUE) {{ {name}_expired = TRUE; }}\n"
+                    ));
                 } else {
-                    let id = signal(description, &reception.signal);
-                    writeln!(source, "        if (Com_ReceiveSignal({id}u, &{name}) == E_OK) {{\n            {name}_received = TRUE;\n            {name}_expired = FALSE;\n        }}").unwrap();
+                    let id = signal(description, &reception.signal)?;
+                    source.push_str(&format!("        if (Com_ReceiveSignal({id}u, &{name}) == E_OK) {{\n            {name}_received = TRUE;\n            {name}_expired = FALSE;\n        }}\n"));
                 }
                 source.push_str("    }\n");
             }
@@ -315,11 +290,11 @@ pub(super) fn files(plan: &ValidatedIntegrationPlan) -> BTreeMap<String, Vec<u8>
         source.push_str("}\n");
     }
     section(&mut source, partition, "CALLOUT_CODE", false);
-    BTreeMap::from([
+    Ok(BTreeMap::from([
         // The delivered targets place all RTE code in their executable RTE section.
         ("include/Rte_MemMap.h".into(), memory_map(&scopes, Some(".rte_code")).into_bytes()),
         ("src/Rte.c".into(), source.into_bytes()),
         ("include/Rte_Main.h".into(), b"/** @file RTE trusted-context lifecycle; Start follows BSW/SchM Init. */\n#ifndef RTE_MAIN_H\n#define RTE_MAIN_H\n#include \"Std_Types.h\"\nStd_ReturnType Rte_Start(void);\nStd_ReturnType Rte_Stop(void);\ntypedef struct { uint16 partition; } SchM_ConfigType;\nvoid SchM_Init(const SchM_ConfigType *config);\nvoid SchM_Start(void);\nvoid SchM_StartTiming(void);\nvoid SchM_Deinit(void);\nextern const SchM_ConfigType Ecu_SchMConfig;\nboolean Ecu_SchMReady(void);\nboolean Ecu_SchMTimingActive(void);\n#endif\n".to_vec()),
         ("include/Rte_Com.h".into(), b"/** @file Handle-bearing COM reception and timeout notifications. */\n#ifndef RTE_COM_H\n#define RTE_COM_H\n#include \"ComStack_Types.h\"\nvoid Rte_COMCbk(CbkHandleIdType handle);\nvoid Rte_COMCbkRxTOut(CbkHandleIdType handle);\n#endif\n".to_vec()),
-    ])
+    ]))
 }

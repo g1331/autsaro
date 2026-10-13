@@ -167,7 +167,6 @@ impl<'a> PreparedProject<'a> {
         let result = (|| -> Result<(), crate::LocalizedText> {
             use crate::execution::ProcessSpec;
             use std::ffi::OsString;
-            use std::fmt::Write;
             use std::time::Duration;
 
             let stage = generator::output::reserve_directory(
@@ -192,14 +191,23 @@ impl<'a> PreparedProject<'a> {
             let mut hashes = String::new();
             for file in &self.files {
                 let path = source.join(&file.path);
-                std::fs::create_dir_all(path.parent().unwrap())
-                    .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
+                if let Some(parent) = path.parent() {
+                    std::fs::create_dir_all(parent)
+                        .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
+                }
                 std::fs::write(path, &file.bytes)
                     .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
-                writeln!(list, "{}", file.path).unwrap();
-                writeln!(hashes, "{:x}  {}", Sha256::digest(&file.bytes), file.path).unwrap();
+                list.push_str(&format!("{}\n", file.path));
+                hashes.push_str(&format!(
+                    "{:x}  {}\n",
+                    Sha256::digest(&file.bytes),
+                    file.path
+                ));
             }
-            writeln!(hashes, "{:x}  files.list", Sha256::digest(list.as_bytes())).unwrap();
+            hashes.push_str(&format!(
+                "{:x}  files.list\n",
+                Sha256::digest(list.as_bytes())
+            ));
             std::fs::write(source.join("files.list"), list)
                 .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
             std::fs::write(source.join("files.sha256"), hashes)
@@ -545,7 +553,12 @@ pub fn prepare_ecu_project_with_applications(
                 "backend.delivery.application_membership_mismatch"
             )));
         }
-        let logical = slot.source_paths[0].clone();
+        let [logical] = slot.source_paths.as_slice() else {
+            return Err(PlanDiagnostic::source_closure(crate::product_message!(
+                "backend.delivery.application_membership_mismatch"
+            )));
+        };
+        let logical = logical.clone();
         members.push(crate::arxml::ApplicationInput {
             path: logical.clone(),
             producer_slot: producer,

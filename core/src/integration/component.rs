@@ -189,7 +189,7 @@ pub(super) fn implementation(
         graph.descendants(implementation, "BASE-TYPE-REF"),
         "TYPE_CONFLICT",
     )?;
-    let base = *graph.objects.get(&graph.elements[base].text).unwrap();
+    let base = graph.index(&graph.elements[base].text)?;
     if graph.text(base, "BASE-TYPE-SIZE") != Some("32")
         || graph.text(base, "NATIVE-DECLARATION") != Some("uint32")
         || graph.text(implementation, "CATEGORY") != Some("VALUE")

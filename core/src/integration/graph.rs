@@ -291,6 +291,42 @@ impl Graph {
         }
     }
 
+    /// Some object to locate diagnostics about the inputs as a whole.
+    pub fn context(&self) -> Result<usize, Vec<PlanDiagnostic>> {
+        self.objects.values().next().copied().ok_or_else(|| {
+            vec![PlanDiagnostic {
+                category: DiagnosticCategory::Input,
+                code: "INPUT_OBJECTS_MISSING".into(),
+                file: None,
+                object: None,
+                message: crate::product_message!("backend.integration.graph.objects_missing"),
+                remedy: crate::product_message!(
+                    "backend.integration.graph.supply_object_and_correct_typed_reference"
+                ),
+            }]
+        })
+    }
+
+    /// The element of a complete AUTOSAR path; a missing object is an
+    /// unresolved reference located at that path.
+    pub fn index(&self, path: &str) -> Result<usize, Vec<PlanDiagnostic>> {
+        self.objects.get(path).copied().ok_or_else(|| {
+            vec![PlanDiagnostic {
+                category: DiagnosticCategory::Input,
+                code: "REFERENCE_UNRESOLVED".into(),
+                file: None,
+                object: Some(path.into()),
+                message: crate::message::LocalizedText::messages([
+                    crate::product_message!("backend.integration.graph.referenced_autosar_object_missing"),
+                    crate::product_message!("backend.integration.graph.reference_target", "target" => path),
+                ]),
+                remedy: crate::product_message!(
+                    "backend.integration.graph.supply_object_and_correct_typed_reference"
+                ),
+            }]
+        })
+    }
+
     pub fn reference_diagnostics_for(
         &self,
         consumers: &std::collections::BTreeSet<String>,
@@ -482,4 +518,26 @@ fn path(node: roxmltree::Node<'_, '_>) -> String {
     let mut names: Vec<_> = node.ancestors().filter_map(short_name).collect();
     names.reverse();
     format!("/{}", names.join("/"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Graph;
+
+    #[test]
+    fn missing_objects_are_located_input_diagnostics() {
+        let graph = Graph {
+            elements: Vec::new(),
+            objects: Default::default(),
+            external: Default::default(),
+            builtin: true,
+        };
+        let missing = graph.index("/Pkg/Missing").unwrap_err();
+        assert_eq!(missing[0].code, "REFERENCE_UNRESOLVED");
+        assert_eq!(missing[0].object.as_deref(), Some("/Pkg/Missing"));
+        assert_eq!(
+            graph.context().unwrap_err()[0].code,
+            "INPUT_OBJECTS_MISSING"
+        );
+    }
 }

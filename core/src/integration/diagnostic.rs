@@ -213,7 +213,16 @@ fn can_link(graph: &Graph, pdu: usize, receive: bool) -> Result<(u32, u16), Vec<
         ));
     }
     let trigger = triggers[0];
-    let frame = graph.target(trigger, "FRAME-REF").unwrap();
+    let frame = graph.target(trigger, "FRAME-REF").ok_or_else(|| {
+        reject(
+            graph,
+            trigger,
+            "LENGTH_CONFLICT",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_npdu_mapping_required"
+            ),
+        )
+    })?;
     let mappings = graph.descendants(frame, "PDU-TO-FRAME-MAPPING");
     if mappings.len() != 1 || graph.text(mappings[0], "START-POSITION") != Some("0") {
         return Err(reject(
@@ -225,7 +234,16 @@ fn can_link(graph: &Graph, pdu: usize, receive: bool) -> Result<(u32, u16), Vec<
             ),
         ));
     }
-    let system_pdu = graph.target(mappings[0], "PDU-REF").unwrap();
+    let system_pdu = graph.target(mappings[0], "PDU-REF").ok_or_else(|| {
+        reject(
+            graph,
+            mappings[0],
+            "LENGTH_CONFLICT",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_npdu_mapping_required"
+            ),
+        )
+    })?;
     if graph.elements[system_pdu].tag != "N-PDU" || graph.text(system_pdu, "LENGTH") != Some("8") {
         return Err(reject(
             graph,
@@ -251,7 +269,7 @@ fn can_link(graph: &Graph, pdu: usize, receive: bool) -> Result<(u32, u16), Vec<
             ),
         ));
     }
-    let port = *graph.objects.get(&graph.elements[ports[0]].text).unwrap();
+    let port = graph.index(&graph.elements[ports[0]].text)?;
     if graph.text(port, "COMMUNICATION-DIRECTION") != Some(if receive { "IN" } else { "OUT" }) {
         return Err(reject(
             graph,
@@ -285,7 +303,7 @@ pub(super) fn inspect_service(
     port_name: &str,
     client_port: &str,
 ) -> Result<DiagnosticContract, Vec<PlanDiagnostic>> {
-    let context = *graph.objects.get(component_path).unwrap();
+    let context = graph.index(component_path)?;
     let data = one(graph, context, "DcmDspData")?;
     let did = one(graph, data, "DcmDspDid")?;
     if value(graph, data, "DcmDspDataUsePort", false) != Some("USE_DATA_SYNCH_CLIENT_SERVER")
@@ -364,7 +382,7 @@ pub(super) fn inspect_service(
     let mut sessions = BTreeSet::new();
     let mut timing = None;
     for path in values(graph, read, "DcmDspDidReadSessionRef", true) {
-        let session = *graph.objects.get(path).unwrap();
+        let session = graph.index(path)?;
         let level = value(graph, session, "DcmDspSessionLevel", false)
             .and_then(|value| value.parse::<u8>().ok())
             .ok_or_else(|| {
@@ -512,7 +530,17 @@ pub(super) fn inspect_transport(
             ),
         ));
     }
-    let (p2_ms, p2_star_ms) = timing.unwrap();
+    // The session pair above guarantees the loop recorded the timing.
+    let Some((p2_ms, p2_star_ms)) = timing else {
+        return Err(reject(
+            graph,
+            context,
+            "DIAGNOSTIC_SESSION",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_session_pair_required"
+            ),
+        ));
+    };
     let protocol = one(graph, context, "DcmDslProtocolRow")?;
     let table = reference(graph, protocol, "DcmDslProtocolSIDTable")?;
     let services: Vec<_> = graph

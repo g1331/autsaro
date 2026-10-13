@@ -214,7 +214,9 @@ pub(crate) fn fields(
                 );
             }
             if let Some(table) = &application.schedule_table {
-                let offset = application.expiry_offset.unwrap();
+                let offset = application
+                    .expiry_offset
+                    .ok_or_else(|| PlanDiagnostic::plan_premise(table))?;
                 if period <= offset {
                     return Err(issue(
                         plan,

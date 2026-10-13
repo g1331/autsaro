@@ -342,7 +342,7 @@ pub(super) fn inspect(
 ) -> Result<Vec<SymbolContract>, Vec<PlanDiagnostic>> {
     let mut symbols = Vec::new();
     let mut used_owners = BTreeSet::new();
-    let context = *graph.objects.values().next().unwrap();
+    let context = graph.context()?;
     let all_entries = graph.of_kind("BSW-MODULE-ENTRY");
     for (symbol, current) in &catalog.entries {
         let found: Vec<_> = all_entries
@@ -521,7 +521,7 @@ pub(super) fn inspect(
     }
     for owner in used_owners {
         for reference in graph.descendants(owner, "BSW-MODULE-ENTRY-REF") {
-            let entry = *graph.objects.get(&graph.elements[reference].text).unwrap();
+            let entry = graph.index(&graph.elements[reference].text)?;
             let symbol = graph.text(entry, "SHORT-NAME").unwrap_or("");
             if !catalog.entries.contains_key(symbol) {
                 return Err(vec![graph.diagnostic(

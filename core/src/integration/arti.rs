@@ -1,5 +1,4 @@
 use super::{PlanDescription, configuration::ConfigurationRecord};
-use std::fmt::Write;
 
 const DEF: &str = "/AUTOSAR/EcucDefs/Arti";
 const ROOT: &str = "/ArtiDescriptions/Arti";
@@ -44,7 +43,7 @@ fn container(
         ("SUB-CONTAINERS", children),
     ] {
         if !contents.is_empty() {
-            write!(xml, "<{tag}>{contents}</{tag}>").unwrap();
+            xml.push_str(&format!("<{tag}>{contents}</{tag}>"));
         }
     }
     xml.push_str("</ECUC-CONTAINER-VALUE>");
@@ -318,7 +317,7 @@ fn selected_os(
             "backend.integration.arti.arti_os_module_path_required"
         ))?
         .0;
-    let name = module.rsplit('/').next().unwrap();
+    let name = super::short_name(&module);
     if super::component::c_name(name) != name {
         return Err(crate::product_message!(
             "backend.integration.arti.arti_os_short_name_not_representable"
@@ -437,7 +436,7 @@ fn description(
             "Function",
             format!(
                 "Os_TaskEntry_OS_TASK_ID_{}",
-                plan.schedule.task.rsplit('/').next().unwrap()
+                super::short_name(&plan.schedule.task)
             ),
             "ECUC-FUNCTION-NAME-DEF",
         )],
@@ -668,7 +667,7 @@ fn description(
         &generic_instance,
         &parameter(
             &format!("{generic_instance}/ArtiGenericComponentInstanceName"),
-            plan.schedule.counter.rsplit('/').next().unwrap(),
+            super::short_name(&plan.schedule.counter),
             "ECUC-STRING-PARAM-DEF",
         ),
         &generic_refs,

@@ -1,7 +1,6 @@
 use super::{DiagnosticCategory, PlanDiagnostic, ValidatedIntegrationPlan};
 use crate::{GenerationPreview, GenerationReport, generator};
 use std::collections::BTreeMap;
-use std::fmt::Write;
 use std::path::Path;
 
 pub(super) fn reserved_identifier(name: &str) -> bool {
@@ -48,10 +47,10 @@ fn header(guard: &str, body: &str) -> Vec<u8> {
 }
 
 fn declaration(output: &mut String, brief: &str, prototype: &str, parameters: &str) {
-    writeln!(output, "/** @brief {brief}").unwrap();
+    output.push_str(&format!("/** @brief {brief}\n"));
     output.push_str(parameters);
     output.push_str(" */\n");
-    writeln!(output, "{prototype}\n").unwrap();
+    output.push_str(&format!("{prototype}\n\n"));
 }
 
 fn reject(
@@ -125,7 +124,7 @@ impl ValidatedIntegrationPlan {
         let description = self.description();
         let mut types = String::from("#include \"Std_Types.h\"\n");
         for datatype in composition.array_types.values() {
-            writeln!(types, "typedef uint8 {datatype}[4];").unwrap();
+            types.push_str(&format!("typedef uint8 {datatype}[4];\n"));
         }
         let lifecycle = if ecu {
             "#include \"Rte_Main.h\"\n#define RTE_E_OK 0U\n#define RTE_E_LIMIT 130U\n"
@@ -163,9 +162,8 @@ impl ValidatedIntegrationPlan {
                 };
                 let mut docs = String::new();
                 for argument in &symbol.arguments {
-                    writeln!(
-                        docs,
-                        " * @param[{}] {} {}",
+                    docs.push_str(&format!(
+                        " * @param[{}] {} {}\n",
                         argument.direction.to_lowercase(),
                         argument.name,
                         if argument.native_type.contains('*')
@@ -178,8 +176,7 @@ impl ValidatedIntegrationPlan {
                         } else {
                             "Input value."
                         }
-                    )
-                    .unwrap();
+                    ));
                 }
                 if symbol.return_type != "void" {
                     let port = component.data_ports.iter().find(|port| {
@@ -207,7 +204,7 @@ impl ValidatedIntegrationPlan {
                         "Planned E_OK or an RTE infrastructure error for the synchronous client."
                             .to_owned()
                     };
-                    writeln!(docs, " * @return {status} Declaration only; runtime behavior is not implemented here.").unwrap();
+                    docs.push_str(&format!(" * @return {status} Declaration only; runtime behavior is not implemented here.\n"));
                 }
                 declaration(
                     &mut body,
@@ -218,25 +215,21 @@ impl ValidatedIntegrationPlan {
             }
             body.push_str("#if !defined(RTE_CORE)\n");
             for port in &component.data_ports {
-                writeln!(
-                    body,
-                    "#define {} {}",
+                body.push_str(&format!(
+                    "#define {} {}\n",
                     port.api_symbol,
                     super::composition::data_symbol(component, port)
-                )
-                .unwrap();
+                ));
             }
             for operation in component
                 .operations
                 .iter()
                 .filter(|operation| operation.read)
             {
-                writeln!(
-                    body,
-                    "#define {} {}",
+                body.push_str(&format!(
+                    "#define {} {}\n",
                     operation.api_symbol, operation.implementation_symbol
-                )
-                .unwrap();
+                ));
             }
             body.push_str("#endif\n");
             let name = component

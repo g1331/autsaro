@@ -3,7 +3,6 @@ use super::{PlanDiagnostic, ValidatedIntegrationPlan};
 use crate::target::BuildTarget;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::fmt::Write;
 
 fn header(name: &str, body: &str) -> String {
     format!(
@@ -26,25 +25,28 @@ fn config_data(output: &mut String, scope: &str, declaration: &str, initializer:
     output.push_str(&format!("#define RTE_{scope}_START_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED\n#include \"Ecu_MemMap.h\"\n{declaration} RTE_{scope}_CONFIG_DATA_PREBUILD_UNSPECIFIED = {initializer};\n#define RTE_{scope}_STOP_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED\n#include \"Ecu_MemMap.h\"\n"));
 }
 
+/// Whole periods of `period_ms` in `value_ms`; a zero period cannot be
+/// scheduled and is reported at the object that defines it.
+fn periods(value_ms: u32, period_ms: u32, object: &str) -> Result<u32, Vec<PlanDiagnostic>> {
+    value_ms
+        .checked_div(period_ms)
+        .ok_or_else(|| PlanDiagnostic::plan_premise(object))
+}
+
 pub(super) fn files(
     plan: &ValidatedIntegrationPlan,
     target: BuildTarget,
 ) -> Result<(BTreeMap<String, Cow<'static, [u8]>>, String), Vec<PlanDiagnostic>> {
     let description = plan.description();
-    let composition = description.composition.as_ref().ok_or_else(failure)?;
-    let com = description.com_runtime.as_ref().ok_or_else(failure)?;
-    let authentication = composition
-        .dcm_modes
-        .iter()
-        .find(|definition| definition.group.starts_with("DcmAuthenticationState_"))
-        .unwrap();
-    let authentication_group = authentication.group.as_ref();
-    let communication = description.communication_runtime.as_ref().unwrap();
+    let composition = description.ecu_composition()?;
+    let com = description.ecu_com()?;
+    let authentication_group = composition.authentication_modes()?.group.as_ref();
+    let communication = description.ecu_communication()?;
     let can = &communication.can;
-    let mode = description.mode_runtime.as_ref().unwrap();
+    let mode = description.ecu_mode()?;
     let mut outputs = super::outputs::EcuOutputs::new(target)?;
     outputs.emit_all("contracts", plan.contract_headers(composition, true)?)?;
-    outputs.emit_all("rte", super::rte::files(plan))?;
+    outputs.emit_all("rte", super::rte::files(plan)?)?;
     // The selected authentication group's mode type and SchM declarations
     // complete the trusted Dcm headers.
     for (path, addition) in [
@@ -151,14 +153,6 @@ pub(super) fn files(
             !entity.application && entity.period_ms == description.schedule.counter_tick_ms
         })
         .ok_or_else(failure)?;
-    let mask = |path: &str| {
-        description
-            .events
-            .iter()
-            .find(|event| event.path == path)
-            .unwrap()
-            .mask
-    };
     let io = description
         .events
         .iter()
@@ -184,11 +178,12 @@ pub(super) fn files(
                     .diagnostic_transport
                     .as_ref()
                     .map_or(u32::MAX, |transport| transport.request_can_id),
-                mask(&work.os_event),
-                mask(&app.os_event),
+                description.event_mask(&work.os_event)?,
+                description.event_mask(&app.os_event)?,
                 io.mask,
                 rx.can_id,
-                rx.deadline_ms.unwrap()
+                rx.deadline_ms
+                    .ok_or_else(|| PlanDiagnostic::plan_premise(&rx.com_signal))?
             ),
         ),
     )?;
@@ -196,12 +191,10 @@ pub(super) fn files(
         "/** @file Source-derived immutable communication configurations and owner dispatch. */\n#define RTE_CORE\n#include \"Ecu_TargetConfig.h\"\n#include \"Ecu_Target.h\"\n#include \"Ecu_Config.h\"\n#include \"Can_Host.h\"\n#include \"CanIf.h\"\n#include \"Det.h\"\n#include \"CanTp.h\"\n#include \"Com.h\"\n#include \"Com_Internal.h\"\n#include \"ComM.h\"\n#include \"ComM_BswM.h\"\n#include \"ComM_Internal.h\"\n#include \"BswM.h\"\n#include \"BswM_ComM.h\"\n#include \"Ecu_HostBusSM.h\"\n#include \"Dcm.h\"\n#include \"Dcm_ComM.h\"\n#include \"PduR.h\"\n#include \"PduR_Com.h\"\n#include \"PduR_CanIf.h\"\n#include \"LSduR.h\"\n#include \"LSduR_PduR.h\"\n#include \"Rte_Main.h\"\n#include \"Rte_Com.h\"\n#include \"SchM_Can.h\"\n#include \"SchM_CanTp.h\"\n#include \"SchM_Com.h\"\n#include \"SchM_ComM.h\"\n#include \"SchM_Dcm.h\"\n",
     );
     for component in &composition.components {
-        writeln!(
-            config,
-            "#include \"{}\"",
+        config.push_str(&format!(
+            "#include \"{}\"\n",
             component.header.trim_start_matches("include/")
-        )
-        .unwrap();
+        ));
     }
     config.push_str("static Std_ReturnType Ecu_BswMAction(NetworkHandleType channel, ComM_ModeType requested);\nstatic Std_ReturnType Ecu_DetRuntimeCallout(uint16_t ModuleId, uint8_t InstanceId, uint8_t ApiId, uint8_t ErrorId);\nstatic void Ecu_ComModeChanged(NetworkHandleType channel, ComM_ModeType mode);\n");
     config_data(
@@ -235,7 +228,7 @@ pub(super) fn files(
             .routes
             .iter()
             .find(|route| route.pdu == signal.global_pdu)
-            .unwrap();
+            .ok_or_else(|| PlanDiagnostic::plan_premise(&signal.global_pdu))?;
         // No explicit ComIPduHandleId is selected. Assign its generated ID from
         // the corresponding unique route; public router IDs remain separate.
         let pdu = if signal.receive {
@@ -247,7 +240,7 @@ pub(super) fn files(
             .handles
             .iter()
             .find(|handle| handle.domain == "com_signal" && handle.path == signal.com_signal)
-            .unwrap()
+            .ok_or_else(|| PlanDiagnostic::plan_premise(&signal.com_signal))?
             .handle;
         // signals::inspect requires source ComSignalInitValue=0.
         // Receiver ComSpec init is independent RTE state; it must not replace
@@ -257,42 +250,40 @@ pub(super) fn files(
             .receptions
             .iter()
             .find(|reception| reception.signal == signal.com_signal);
-        writeln!(
-            pdus,
-            "    {{{pdu}u, {signal_id}u, {}, {initial}u, {}u, {}u}},",
+        let reception_timeout = match reception {
+            Some(rx) => periods(
+                rx.timeout_ms,
+                com.receive_main.period_ms,
+                &com.receive_main.path,
+            )?,
+            None => 0,
+        };
+        pdus.push_str(&format!(
+            "    {{{pdu}u, {signal_id}u, {}, {initial}u, {}u, {}u}},\n",
             if signal.receive { "TRUE" } else { "FALSE" },
-            reception.map_or(0, |rx| rx.timeout_ms / com.receive_main.period_ms),
+            reception_timeout,
             reception.map_or(0, |rx| u32::from(rx.callback_handle))
-        )
-        .unwrap();
+        ));
         if signal.receive {
-            writeln!(
-                receive,
-                "    {{{}u, {}u, 4u}},",
+            receive.push_str(&format!(
+                "    {{{}u, {}u, 4u}},\n",
                 signal.can_id, signal.can_if_handle
-            )
-            .unwrap();
-            writeln!(
-                ls_rx,
-                "    {{{}u, {}u, PduR_CanIfRxIndication}},",
+            ));
+            ls_rx.push_str(&format!(
+                "    {{{}u, {}u, PduR_CanIfRxIndication}},\n",
                 signal.can_if_handle, route.source_handle
-            )
-            .unwrap();
-            writeln!(
-                pd_rx,
-                "    {{{}u, {pdu}u, Com_RxIndication}},",
+            ));
+            pd_rx.push_str(&format!(
+                "    {{{}u, {pdu}u, Com_RxIndication}},\n",
                 route.source_handle
-            )
-            .unwrap();
+            ));
         } else {
-            writeln!(
-                transmit,
-                "    {{{}u, {}u, 4u}},",
+            transmit.push_str(&format!(
+                "    {{{}u, {}u, 4u}},\n",
                 signal.can_id, signal.can_if_handle
-            )
-            .unwrap();
-            writeln!(ls_tx, "    {{LSDUR_UP_PDUR, {}u, {}u, PduR_CanIfTxConfirmation, PduR_CanIfTriggerTransmit}},", route.destination_handle, signal.can_if_handle).unwrap();
-            writeln!(pd_tx, "    {{PDUR_UP_COM, {}u, {}u, LSduR_PduRTransmit, Com_TxConfirmation, Com_TriggerTransmit}},", route.source_handle, route.destination_handle).unwrap();
+            ));
+            ls_tx.push_str(&format!("    {{LSDUR_UP_PDUR, {}u, {}u, PduR_CanIfTxConfirmation, PduR_CanIfTriggerTransmit}},\n", route.destination_handle, signal.can_if_handle));
+            pd_tx.push_str(&format!("    {{PDUR_UP_COM, {}u, {}u, LSduR_PduRTransmit, Com_TxConfirmation, Com_TriggerTransmit}},\n", route.source_handle, route.destination_handle));
         }
     }
     config_data(
@@ -317,43 +308,33 @@ pub(super) fn files(
             .routes
             .iter()
             .find(|route| route.pdu == tp.rx_sdu)
-            .unwrap();
+            .ok_or_else(|| PlanDiagnostic::plan_premise(&tp.rx_sdu))?;
         let tx_route = description
             .routes
             .iter()
             .find(|route| route.pdu == tp.tx_sdu)
-            .unwrap();
+            .ok_or_else(|| PlanDiagnostic::plan_premise(&tp.tx_sdu))?;
         config.push_str("#include \"PduR_CanTp.h\"\n#include \"LSduR_CanTp.h\"\n");
-        writeln!(
-            receive,
-            "    {{{}u, {}u, 8u}},",
+        receive.push_str(&format!(
+            "    {{{}u, {}u, 8u}},\n",
             tp.request_can_id, tp.request_can_if_handle
-        )
-        .unwrap();
-        writeln!(
-            transmit,
-            "    {{{}u, {}u, 8u}},",
+        ));
+        transmit.push_str(&format!(
+            "    {{{}u, {}u, 8u}},\n",
             tp.response_can_id, tp.response_can_if_handle
-        )
-        .unwrap();
-        writeln!(
-            ls_rx,
-            "    {{{}u, {}u, CanTp_RxIndication}},",
+        ));
+        ls_rx.push_str(&format!(
+            "    {{{}u, {}u, CanTp_RxIndication}},\n",
             tp.request_can_if_handle, tp.receive_npdu
-        )
-        .unwrap();
-        writeln!(
-            ls_tx,
-            "    {{LSDUR_UP_CANTP, {}u, {}u, CanTp_TxConfirmation, NULL_PTR}},",
+        ));
+        ls_tx.push_str(&format!(
+            "    {{LSDUR_UP_CANTP, {}u, {}u, CanTp_TxConfirmation, NULL_PTR}},\n",
             tp.transmit_npdu, tp.response_can_if_handle
-        )
-        .unwrap();
-        writeln!(
-            pd_tx,
-            "    {{PDUR_UP_DCM, {}u, {}u, CanTp_Transmit, Dcm_TpTxConfirmation, NULL_PTR}},",
+        ));
+        pd_tx.push_str(&format!(
+            "    {{PDUR_UP_DCM, {}u, {}u, CanTp_Transmit, Dcm_TpTxConfirmation, NULL_PTR}},\n",
             tx_route.source_handle, tp.transmit_nsdu
-        )
-        .unwrap();
+        ));
         config_data(
             &mut pd_configuration,
             "PduR",
@@ -367,6 +348,7 @@ pub(super) fn files(
             ),
         );
         let period = description.schedule.counter_tick_ms;
+        let ticks = |value| periods(value, period, &description.schedule.counter);
         config_data(
             &mut config,
             "CanTp",
@@ -378,33 +360,28 @@ pub(super) fn files(
                 tp.receive_npdu,
                 tp.transmit_npdu,
                 tp.buffer_bytes,
-                tp.n_as_ms / period,
-                tp.n_ar_ms / period,
-                tp.n_bs_ms / period,
-                tp.n_cr_ms / period,
-                tp.n_cs_ms / period,
+                ticks(tp.n_as_ms)?,
+                ticks(tp.n_ar_ms)?,
+                ticks(tp.n_bs_ms)?,
+                ticks(tp.n_cr_ms)?,
+                ticks(tp.n_cs_ms)?,
                 rx_route.source_handle,
                 tx_route.destination_handle
             ),
         );
-        let (did, read) =
-            description
-                .diagnostic
-                .as_ref()
-                .map_or((0, "NULL_PTR".to_string()), |did| {
-                    let bridge = composition
-                        .components
-                        .iter()
-                        .flat_map(|component| &component.runnables)
-                        .find(|runnable| runnable.event.is_none())
-                        .unwrap();
-                    (did.did, bridge.symbol.clone())
-                });
-        writeln!(
-            config,
-            "static void Ecu_DcmAuthenticationMode(uint8 state);\n"
-        )
-        .unwrap();
+        let (did, read) = match &description.diagnostic {
+            Some(did) => {
+                let bridge = composition
+                    .components
+                    .iter()
+                    .flat_map(|component| &component.runnables)
+                    .find(|runnable| runnable.event.is_none())
+                    .ok_or_else(|| PlanDiagnostic::plan_premise(&did.client_port))?;
+                (did.did, bridge.symbol.clone())
+            }
+            None => (0, "NULL_PTR".to_string()),
+        };
+        config.push_str("static void Ecu_DcmAuthenticationMode(uint8 state);\n\n");
         config_data(
             &mut config,
             "Dcm",
@@ -414,10 +391,10 @@ pub(super) fn files(
                 tp.dcm_receive,
                 tp.dcm_transmit,
                 mode.channel_handle,
-                tp.p2_ms / period,
+                ticks(tp.p2_ms)?,
                 tp.p2_ms,
                 tp.p2_star_ms,
-                tp.s3_ms / period,
+                ticks(tp.s3_ms)?,
                 tp.buffer_bytes,
                 tx_route.source_handle,
                 tp.max_did_to_read.unwrap_or(0)
@@ -444,12 +421,12 @@ pub(super) fn files(
             &format!("{{\n{entries}}}"),
         );
     }
-    let rx_count = description
+    let rx_signals = description
         .signals
         .iter()
         .filter(|signal| signal.receive)
-        .count()
-        + usize::from(transport.is_some());
+        .count();
+    let rx_count = rx_signals + usize::from(transport.is_some());
     let tx_count = description
         .signals
         .iter()
@@ -477,7 +454,7 @@ pub(super) fn files(
         "const PduR_PBConfigType PduR_Config",
         &format!(
             "{{0u, pd_rx, {}u, pd_tx, {tx_count}u, {}, {}u}}",
-            rx_count - usize::from(transport.is_some()),
+            rx_signals,
             if transport.is_some() {
                 "tp_routes"
             } else {
@@ -498,7 +475,7 @@ pub(super) fn files(
             ),
         )?;
         outputs.emit(ECU, &format!("src/{module}_PBcfg.c"), source.as_str())?;
-        writeln!(config, "#include \"{module}_Cfg.h\"").unwrap();
+        config.push_str(&format!("#include \"{module}_Cfg.h\"\n"));
     }
 
     config_data(
@@ -531,7 +508,7 @@ pub(super) fn files(
             "{{{}u, users, {}u, {}u, Ecu_HostBusSM_RequestComMode, Ecu_HostBusSM_GetCurrentComMode, Ecu_ComModeChanged, {}u}}",
             mode.channel_handle,
             mode.users.len(),
-            mode.minimum_full_ms / mode.period_ms,
+            periods(mode.minimum_full_ms, mode.period_ms, &mode.main_symbol)?,
             mode.ecu_group_classification
         ),
     );
@@ -549,7 +526,7 @@ pub(super) fn files(
         (&com.transmit_main.symbol, "Com", "Ecu_ComMainFunctionTx();"),
         (&mode.main_symbol, "ComM", "(void)ComM_RunChannel();"),
     ] {
-        writeln!(config, "#define RTE_{scope}_START_SEC_CODE\n#include \"Ecu_MemMap.h\"\nRTE_{scope}_CODE void {symbol}(void) {{ {body} }}\n#define RTE_{scope}_STOP_SEC_CODE\n#include \"Ecu_MemMap.h\"").unwrap();
+        config.push_str(&format!("#define RTE_{scope}_START_SEC_CODE\n#include \"Ecu_MemMap.h\"\nRTE_{scope}_CODE void {symbol}(void) {{ {body} }}\n#define RTE_{scope}_STOP_SEC_CODE\n#include \"Ecu_MemMap.h\"\n"));
     }
     // SWS_CanTp_00229 timeouts reach the HostBatch receipt through the
     // standard runtime callout (DetReportRuntimeErrorCallout), not a CanTp hook.
@@ -573,19 +550,15 @@ pub(super) fn files(
     config.push_str("}\n");
     // ECUC_BswM_00843: parameters are fixed by the configured complete call.
     config.push_str("static RTE_Ecu_CODE Std_ReturnType Ecu_BswMAction(NetworkHandleType channel, ComM_ModeType requested) {\n");
-    writeln!(
-        config,
-        "    if (channel != {}u) {{ return E_NOT_OK; }}\n    switch (requested) {{",
+    config.push_str(&format!(
+        "    if (channel != {}u) {{ return E_NOT_OK; }}\n    switch (requested) {{\n",
         mode.channel_handle
-    )
-    .unwrap();
+    ));
     for rule in &mode.rules {
-        writeln!(
-            config,
-            "    case {}u: (void){}; break;",
+        config.push_str(&format!(
+            "    case {}u: (void){}; break;\n",
             rule.mode, rule.callout
-        )
-        .unwrap();
+        ));
     }
     config.push_str("    default: return E_NOT_OK;\n    }\n    return E_OK;\n}\n");
     config.push_str("static RTE_Ecu_CODE Std_ReturnType Ecu_DetRuntimeCallout(uint16_t ModuleId, uint8_t InstanceId, uint8_t ApiId, uint8_t ErrorId) {\n    (void)InstanceId;\n    if ((ModuleId == 35u) && (ApiId == 0x06u) && ((ErrorId == 0xc0u) || (ErrorId == 0xd0u))) {\n        Ecu_TargetReportTransportTimeout();\n    }\n    return E_OK;\n}\n");
@@ -593,25 +566,25 @@ pub(super) fn files(
     if transport.is_some() {
         config.push_str("    CanTp_Init(&tp_config);\n    Dcm_Init(&dcm_config);\n");
     }
-    writeln!(config, "    if (Rte_Start() != E_OK) {{ return E_NOT_OK; }}\n    ComM_CommunicationAllowed({}u, TRUE);\n    if (ComM_RequestComMode({}u, COMM_FULL_COMMUNICATION) != E_OK) {{ return E_NOT_OK; }}\n    {}();\n    Can_MainFunction_Mode();\n    if ((CanIf_GetControllerMode({}u, &actual) != E_OK) || (actual != CAN_CS_STARTED)) {{ return E_NOT_OK; }}\n    SchM_StartTiming();\n    return Ecu_SchMTimingActive() ? E_OK : E_NOT_OK;\n}}", mode.channel_handle, mode.users[0].handle, mode.main_symbol, can.can_if_controller_id).unwrap();
+    let first_user = mode
+        .users
+        .first()
+        .ok_or_else(|| PlanDiagnostic::plan_premise(&mode.channel))?;
+    config.push_str(&format!("    if (Rte_Start() != E_OK) {{ return E_NOT_OK; }}\n    ComM_CommunicationAllowed({}u, TRUE);\n    if (ComM_RequestComMode({}u, COMM_FULL_COMMUNICATION) != E_OK) {{ return E_NOT_OK; }}\n    {}();\n    Can_MainFunction_Mode();\n    if ((CanIf_GetControllerMode({}u, &actual) != E_OK) || (actual != CAN_CS_STARTED)) {{ return E_NOT_OK; }}\n    SchM_StartTiming();\n    return Ecu_SchMTimingActive() ? E_OK : E_NOT_OK;\n}}\n", mode.channel_handle, first_user.handle, mode.main_symbol, can.can_if_controller_id));
     config.push_str("RTE_Ecu_CODE Std_ReturnType Ecu_StackRunCycle(EventMaskType events) {\n    if ((Ecu_TargetIsOwner() == 0) || (Ecu_SchMTimingActive() == FALSE)) { return E_NOT_OK; }\n");
     for entity in &description.schedule.entities {
         if entity.application {
-            writeln!(
-                config,
-                "    if ((events & {}u) != 0u) {{ {}(); }}",
-                mask(&entity.os_event),
+            config.push_str(&format!(
+                "    if ((events & {}u) != 0u) {{ {}(); }}\n",
+                description.event_mask(&entity.os_event)?,
                 entity.symbol
-            )
-            .unwrap();
+            ));
         } else {
             let symbol = &entity.symbol;
-            writeln!(
-                config,
-                "    if ((events & {}u) != 0u) {{ {symbol}(); }}",
-                mask(&entity.os_event)
-            )
-            .unwrap();
+            config.push_str(&format!(
+                "    if ((events & {}u) != 0u) {{ {symbol}(); }}\n",
+                description.event_mask(&entity.os_event)?
+            ));
             if entity.symbol == com.transmit_main.symbol {
                 config.push_str("    if (Can_HostFlush() != ECU_OK) { return E_NOT_OK; }\n");
             }
@@ -624,29 +597,25 @@ pub(super) fn files(
     config.push_str(
         "    Com_DeInit();\n    BswM_Deinit();\n    Ecu_HostBusSM_DeInit();\n    CanIf_DeInit();\n",
     );
-    writeln!(config, "    (void)Can_SetControllerMode({}u, CAN_CS_STOPPED);\n    Can_MainFunction_Mode();\n    Can_MainFunction_BusOff();\n    Can_DeInit();\n    SchM_Deinit();\n}}", can.controller_id).unwrap();
+    config.push_str(&format!("    (void)Can_SetControllerMode({}u, CAN_CS_STOPPED);\n    Can_MainFunction_Mode();\n    Can_MainFunction_BusOff();\n    Can_DeInit();\n    SchM_Deinit();\n}}\n", can.controller_id));
     config.push_str("RTE_Ecu_CODE int Ecu_StackFrameShape(uint32 id, uint8 dlc) {\n    if ((id > 0x7ffu) || (dlc > 8u)) { return 0; }\n");
     for signal in &description.signals {
-        writeln!(
-            config,
-            "    if (id == {}u) {{ return {}; }}",
+        config.push_str(&format!(
+            "    if (id == {}u) {{ return {}; }}\n",
             signal.can_id,
             if signal.receive { "dlc == 4u" } else { "0" }
-        )
-        .unwrap();
+        ));
     }
     if let Some(tp) = transport {
-        writeln!(
-            config,
-            "    if (id == {}u) {{ return dlc == 8u; }}\n    if (id == {}u) {{ return 0; }}",
+        config.push_str(&format!(
+            "    if (id == {}u) {{ return dlc == 8u; }}\n    if (id == {}u) {{ return 0; }}\n",
             tp.request_can_id, tp.response_can_id
-        )
-        .unwrap();
+        ));
     }
     config.push_str("    return 1;\n}\n");
     config.push_str("#define RTE_Ecu_STOP_SEC_CODE\n#include \"Ecu_MemMap.h\"\n");
     if description.diagnostic_transport.is_some() {
-        writeln!(config, "#define RTE_Dcm_START_SEC_CODE\n#include \"Ecu_MemMap.h\"\nstatic RTE_Dcm_CODE void Ecu_DcmAuthenticationMode(uint8 state) {{ (void)SchM_Switch_Dcm_{authentication_group}(state); }}\n#define RTE_Dcm_STOP_SEC_CODE\n#include \"Ecu_MemMap.h\"").unwrap();
+        config.push_str(&format!("#define RTE_Dcm_START_SEC_CODE\n#include \"Ecu_MemMap.h\"\nstatic RTE_Dcm_CODE void Ecu_DcmAuthenticationMode(uint8 state) {{ (void)SchM_Switch_Dcm_{authentication_group}(state); }}\n#define RTE_Dcm_STOP_SEC_CODE\n#include \"Ecu_MemMap.h\"\n"));
     }
     outputs.emit(ECU, "src/Ecu_RuntimeConfig.c", config)?;
     let config_scopes: Vec<_> = [
@@ -680,7 +649,7 @@ pub(super) fn files(
         .components
         .iter()
         .find(|component| component.diagnostic_session_port.is_some())
-        .map(|component| component.component.rsplit('/').next().unwrap())
+        .map(|component| super::short_name(&component.component))
         .unwrap_or("Dcm");
     outputs.emit(
         ECU,
@@ -691,7 +660,7 @@ pub(super) fn files(
     // emitter extended are generated outputs. The packaging tool is wrapped at delivery.
     let mut original_sources = outputs.original_assets();
     original_sources.remove("runtime/ecu-tool.py");
-    outputs.emit(ECU, "integration.json", format!("{}\n", serde_json::to_string_pretty(&serde_json::json!({"format": "autosar-ecu-integration-v2", "plan": description, "target": target.spec().id, "owner": "single source-derived AUTOSTART extended task", "originalBswSources": original_sources })).unwrap()))?;
+    outputs.emit(ECU, "integration.json", format!("{:#}\n", serde_json::json!({"format": "autosar-ecu-integration-v2", "plan": description, "target": target.spec().id, "owner": "single source-derived AUTOSTART extended task", "originalBswSources": original_sources })))?;
     let verification = super::handoff::verification_files(plan).map_err(|_| failure())?;
     let readme = format!(
         "# ECU integration source project\n\nTarget: `{}`. Caller application sources are sealed under `src/`; the source-derived component, communication and OS contracts are in `integration.json`. Original MIT notices of the fixed FreeRTOS kernel remain in `kernel/LICENSE.md`; Autsaro runtime, tool and template code is licensed under Apache-2.0 (see LICENSE and NOTICE). User-provided configurations and application code retain their own licensing.\n\n## Independent native build\n\n{}\nFrom this directory run `python tools/ecu-tool.py build --project . --output <new-empty-external-directory> --mode host-batch`. The production BEGIN/RX/COMMIT protocol uses the single OS owner and controlled logical ticks. Physical output flush precedes driver polling confirmation. No compiler, AUTOSAR archive or application algorithm is generated or redistributed.\n{}",
@@ -705,7 +674,7 @@ pub(super) fn files(
     );
     outputs.emit_all("handoff-verification", verification)?;
     let paths = outputs.paths().map(str::to_owned).collect();
-    let artifacts = super::artifacts::files(description, &paths).map_err(|_| failure())?;
+    let artifacts = super::artifacts::files(description, &paths)?;
     outputs.emit_all("artifacts", artifacts)?;
     Ok((outputs.finish()?, readme))
 }
@@ -719,4 +688,15 @@ fn lifecycle(partition: u16, mode_scope: &str, authentication_group: &str) -> St
         "\n#include \"SchM_Dcm.h\"\n#include \"SchM_CanIf.h\"\n#define RTE_{mode_scope}_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\nstatic Rte_ModeType_DcmDiagnosticSessionControl diagnostic_session_mode RTE_VAR_CLEARED;\nstatic Rte_ModeType_{authentication_group} authentication_mode RTE_VAR_CLEARED;\n#define RTE_{mode_scope}_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n#define RTE_{mode_scope}_START_SEC_CODE\n#include \"Rte_MemMap.h\"\nRTE_CODE Std_ReturnType SchM_Switch_Dcm_{authentication_group}(Rte_ModeType_{authentication_group} mode) {{\n    if (Ecu_TargetIsOwner() == 0) {{ return SCHM_E_LIMIT; }}\n    SchM_Enter_CanIf_CANIF_STATE();\n    authentication_mode = mode;\n    SchM_Exit_CanIf_CANIF_STATE();\n    return SCHM_E_OK;\n}}\nRTE_CODE Rte_ModeType_{authentication_group} SchM_Mode_Dcm_{authentication_group}(void) {{\n    Rte_ModeType_{authentication_group} mode;\n    if (Ecu_TargetIsOwner() == 0) {{ return RTE_TRANSITION_{authentication_group}; }}\n    SchM_Enter_CanIf_CANIF_STATE();\n    mode = authentication_mode;\n    SchM_Exit_CanIf_CANIF_STATE();\n    return mode;\n}}\nRTE_CODE Std_ReturnType SchM_Switch_Dcm_DcmDiagnosticSessionControl(Rte_ModeType_DcmDiagnosticSessionControl mode) {{\n    if (Ecu_TargetIsOwner() == 0) {{ return SCHM_E_LIMIT; }}\n    SchM_Enter_CanIf_CANIF_STATE();\n    diagnostic_session_mode = mode;\n    SchM_Exit_CanIf_CANIF_STATE();\n    return SCHM_E_OK;\n}}\nRTE_CODE Rte_ModeType_DcmDiagnosticSessionControl SchM_Mode_Dcm_DcmDiagnosticSessionControl(void) {{\n    Rte_ModeType_DcmDiagnosticSessionControl mode;\n    if (Ecu_TargetIsOwner() == 0) {{ return RTE_TRANSITION_DcmDiagnosticSessionControl; }}\n    SchM_Enter_CanIf_CANIF_STATE();\n    mode = diagnostic_session_mode;\n    SchM_Exit_CanIf_CANIF_STATE();\n    return mode;\n}}\n#define RTE_{mode_scope}_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n"
     );
     lifecycle + &modes
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_zero_period_is_a_located_plan_premise() {
+        assert_eq!(super::periods(1500, 10, "/Os/Counter").unwrap(), 150);
+        let zero = super::periods(1500, 0, "/Os/Counter").unwrap_err();
+        assert_eq!(zero[0].code, "PLAN_PREMISE");
+        assert_eq!(zero[0].object.as_deref(), Some("/Os/Counter"));
+    }
 }
