@@ -86,7 +86,9 @@ pub(crate) async fn verification_owned_failure(
 #[tauri::command]
 pub(crate) async fn verification_owned_failure()
 -> Result<Reply<()>, autosar_config_core::LocalizedText> {
-    Err(autosar_config_core::product_message!("backend.verification.build_required").into())
+    Err(autosar_config_core::product_message!(
+        "backend.verification.build_required"
+    ))
 }
 
 /// WebView2 150+ ignores `WEBVIEW2_*` variables in elevated hosts such as the
