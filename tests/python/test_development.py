@@ -10,11 +10,20 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-from autosar_tooling import assets, config, diagnostics, official, quality, verify
+from autosar_tooling import (
+    assets,
+    config,
+    diagnostics,
+    official,
+    quality,
+    requirements,
+    verify,
+)
 
 
 class ConfigurationTests(unittest.TestCase):
@@ -52,7 +61,7 @@ class ConfigurationTests(unittest.TestCase):
             (config.ROOT / "core/resources/official.json").read_text()
         )
         self.assertEqual(entries["R24-11 MOD"][2], next(item["sha256"] for item in fixture if item["environment"] == "AUTOSAR_MOD_ARCHIVE"))
-        self.assertEqual(len(entries), 3)
+        self.assertEqual(len(entries), 4)
         with patch.dict(os.environ, {"AUTOSAR_MOD_ARCHIVE": "custom/mod.zip"}):
             self.assertEqual(
                 config.archive_path("AUTOSAR_MOD_ARCHIVE", "unused"),
@@ -96,6 +105,169 @@ class OfficialArchiveTests(unittest.TestCase):
     def test_intermediate_certificate_requires_the_pinned_fingerprint(self):
         with patch.object(official.urllib.request, "urlopen", return_value=io.BytesIO(b"other certificate")), self.assertRaisesRegex(official.FetchError, "fingerprint"):
             official.tls_context()
+
+
+def specification(*items: str, states: dict[str, str] | None = None) -> bytes:
+    traces = "".join(
+        f"<{tag}><SHORT-NAME>{name}</SHORT-NAME><CATEGORY>SPECIFICATION_ITEM</CATEGORY></{tag}>"
+        for tag, name in (item.split(":") for item in items)
+    )
+    infos = "".join(
+        f"<LIFE-CYCLE-INFO><LC-OBJECT-REF BASE=\"ArTrace\" DEST=\"TRACEABLE\">{name}</LC-OBJECT-REF>"
+        f"<LC-STATE-REF DEST=\"LIFE-CYCLE-STATE\">/AUTOSAR/GenDef/LifeCycleStateDefinitionGroups/AutosarLifeCycleStates/{state}</LC-STATE-REF></LIFE-CYCLE-INFO>"
+        for name, state in (states or {}).items()
+    )
+    return f'<AUTOSAR xmlns="http://autosar.org/schema/r4.0"><LIFE-CYCLE-INFOS>{infos}</LIFE-CYCLE-INFOS>{traces}</AUTOSAR>'.encode()
+
+
+class RequirementTests(unittest.TestCase):
+    """Uses the invented prefixes DEMO/Demo so that these sources never cite a real module's ID."""
+
+    def repository(self, root: Path, standards: str, test: str) -> None:
+        (root / "core/resources").mkdir(parents=True)
+        (root / "core/resources/official.json").write_text(
+            json.dumps([{"environment": requirements.ARCHIVE_VARIABLE, "path": "official/spec.zip"}])
+        )
+        (root / "official").mkdir()
+        with zipfile.ZipFile(root / "official/spec.zip", "w") as archive:
+            archive.writestr(
+                "CP_SWS_Demo_1/AUTOSAR_CP_SWS_Demo.arxml",
+                specification(
+                    "TRACEABLE-TABLE:SWS_DEMO_00001", "TRACE:SWS_DEMO_00002", "TRACE:SWS_DEMO_00003",
+                    "TRACE:SWS_DEMO_00005", "TRACE:SWS_DEMO_00007", "TRACE:ECUC_Demo_00010",
+                    "TRACE:SWS_DEMO_CONSTR_00001", "TRACE:SWS_DEMO_00009",
+                    states={"SWS_DEMO_00009": "draft"},
+                ),
+            )
+            archive.writestr("CP_SWS_DemoTT_2/AUTOSAR_CP_SWS_DemoTT.arxml", specification("TRACE:ECUC_Demo_00020"))
+        (root / "docs").mkdir()
+        (root / "docs/standards.md").write_text(standards, encoding="utf-8")
+        (root / "core/tests").mkdir()
+        (root / "core/tests/demo.c").write_text(test, encoding="utf-8")
+
+    def run_check(self, root: Path, stale_only: bool = False) -> tuple[int, str]:
+        output = io.StringIO()
+        with patch.dict(os.environ), redirect_stdout(output):
+            os.environ.pop(requirements.ARCHIVE_VARIABLE, None)
+            return requirements.check("SWS_Demo", root, stale_only), output.getvalue()
+
+    PREFIXES = frozenset({"SWS_DEMO_", "SWS_DEMO_CONSTR_", "ECUC_DEMO_"})
+
+    def cited(self, text: str, path: str) -> list[tuple[str, str | None]]:
+        return [(item.identifier, item.category) for item in requirements.scan(text, path, self.PREFIXES).citations]
+
+    def test_citations_expand_continuations_and_ranges(self):
+        cited = requirements.scan(
+            "`SWS_DEMO_00001／00002` and ecuc_demo_00010; (SWS_DEMO_00003,\n * 00005) "
+            "SWS_DEMO_00005–00007; SWS_DEMO_CONSTR_00001; SWS_DEMO_00002, 2024; x_SWS_DEMO_00009",
+            "f",
+            self.PREFIXES,
+        ).citations
+        self.assertEqual(requirements.scan("SWS_DEMO_CONSTR_00001 rejects_constr_00002", "f", {"CONSTR_"}).citations, [])
+        self.assertEqual(
+            [(item.identifier, item.line, item.interior) for item in cited],
+            [
+                ("SWS_DEMO_00001", 1, False), ("SWS_DEMO_00002", 1, False), ("ECUC_DEMO_00010", 1, False),
+                ("SWS_DEMO_00003", 1, False), ("SWS_DEMO_00005", 1, False),
+                ("SWS_DEMO_00005", 2, False), ("SWS_DEMO_00006", 2, True), ("SWS_DEMO_00007", 2, False),
+                ("SWS_DEMO_CONSTR_00001", 2, False), ("SWS_DEMO_00002", 2, False),
+            ],
+        )
+
+    def test_only_ids_after_a_marker_of_their_source_are_disposed(self):
+        self.assertEqual(
+            self.cited(
+                "/* Verifies: SWS_DEMO_00001／00002, SWS_DEMO_00003,\n * SWS_DEMO_00004\n * SWS_DEMO_00005 differs */\n"
+                "// 不适用（归属：Can）：SWS_DEMO_00007\n",
+                "core/tests/fixtures/demo.c",
+            ),
+            [
+                ("SWS_DEMO_00001", "verified"), ("SWS_DEMO_00002", "verified"), ("SWS_DEMO_00003", "verified"),
+                ("SWS_DEMO_00004", "verified"), ("SWS_DEMO_00005", None), ("SWS_DEMO_00007", None),
+            ],
+        )
+        standards = (
+            "| 不适用（配置：ECUC_Demo_00010=false）：`SWS_DEMO_00007`、`SWS_DEMO_00011` | 差距 #12：SWS_DEMO_00009；SWS_DEMO_00013 |\n"
+            "| 已核对（头文件比对）：SWS_DEMO_CONSTR_00001 | 不适用：SWS_DEMO_00014 | 不适用（未启用）：SWS_DEMO_00015 |"
+            " 不适用（归属：集成方）：SWS_DEMO_00016 | Verifies: SWS_DEMO_00017 |"
+        )
+        self.assertEqual(
+            self.cited(standards, requirements.STANDARDS),
+            [
+                ("ECUC_DEMO_00010", None), ("SWS_DEMO_00007", "configuration"), ("SWS_DEMO_00011", "configuration"),
+                ("SWS_DEMO_00009", "gap"), ("SWS_DEMO_00013", None), ("SWS_DEMO_CONSTR_00001", "inspected"),
+                ("SWS_DEMO_00014", None), ("SWS_DEMO_00015", None), ("SWS_DEMO_00016", "owner"), ("SWS_DEMO_00017", None),
+            ],
+        )
+        self.assertEqual(
+            requirements.scan(standards, requirements.STANDARDS, self.PREFIXES).conditions,
+            [requirements.Condition(requirements.STANDARDS, 1, ("ECUC_DEMO_00010",))],
+        )
+
+    def test_rejects_counts_only_in_tests(self):
+        text = "// Rejects: ECUC_Can_00316, `ECUC_Demo_00010`\n// ECUC_Can_00326 is accepted\n"
+        self.assertEqual(requirements.scan(text, "core/tests/x.rs", self.PREFIXES).rejected, {"ECUC_CAN_00316", "ECUC_DEMO_00010"})
+        self.assertEqual(requirements.scan(text, requirements.STANDARDS, self.PREFIXES).rejected, set())
+
+    def test_reports_undisposed_items_and_stale_citations(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.repository(
+                root,
+                # An unmarked mention, such as a legacy "located" row, disposes of nothing.
+                "| Demo | `SWS_DEMO_00001／00002` 已定位；不适用（归属：Can）：`SWS_DEMO_00004`；`ECUC_Demo_00020` |\n",
+                "/* Verifies: SWS_DEMO_00005–00007 */\n",
+            )
+            status, output = self.run_check(root)
+            self.assertEqual(status, 1)
+            self.assertIn(
+                "8 official items; verified 2, inspected 0, not applicable (configuration) 0, not applicable (owner) 0, gap 0,"
+                " undisposed 6; 1 stale citations",
+                output,
+            )
+            undisposed = output.split("Undisposed items:")[1].split("Stale")[0].split()
+            self.assertEqual(
+                undisposed,
+                ["ECUC_Demo_00010", "SWS_DEMO_00001", "SWS_DEMO_00002", "SWS_DEMO_00003", "SWS_DEMO_00009", "(draft)", "SWS_DEMO_CONSTR_00001"],
+            )
+            self.assertIn("docs/standards.md:1: SWS_DEMO_00004", output)
+            (root / "docs/standards.md").write_text("`SWS_DEMO_00001`\n", encoding="utf-8")
+            status, output = self.run_check(root, stale_only=True)
+            self.assertEqual(status, 0)
+            self.assertNotIn("Undisposed items", output)
+
+    def test_configuration_inapplicability_needs_a_rejection_test(self):
+        standards = (
+            "不适用（配置：ECUC_Demo_00010=false）：`SWS_DEMO_00001–00003`、`SWS_DEMO_00009`；差距 #7：`ECUC_Demo_00010`；"
+            "已核对（头文件比对）：`SWS_DEMO_CONSTR_00001`\n"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.repository(root, standards, "// Verifies: SWS_DEMO_00005, 00007\n// Rejects: ECUC_Demo_00010\n")
+            status, output = self.run_check(root)
+            self.assertEqual(status, 0, output)
+            self.assertIn("verified 2, inspected 1, not applicable (configuration) 4, not applicable (owner) 0, gap 1, undisposed 0;", output)
+            (root / "core/tests/demo.c").write_text("// Verifies: SWS_DEMO_00005, 00007\n", encoding="utf-8")
+            status, output = self.run_check(root)
+            self.assertEqual(status, 1)
+            self.assertIn("docs/standards.md:1: ECUC_DEMO_00010", output.split("without a Rejects: test:")[1])
+            (root / "docs/standards.md").write_text(standards.replace("ECUC_Demo_00010=false", "未启用"), encoding="utf-8")
+            status, output = self.run_check(root)
+            self.assertEqual(status, 1)
+            self.assertIn("docs/standards.md:1: names no ECUC parameter", output)
+
+    def test_unknown_document_and_missing_archive_fail(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.repository(root, "", "")
+            errors = io.StringIO()
+            with patch.object(requirements.sys, "stderr", errors), patch.dict(os.environ), redirect_stdout(io.StringIO()):
+                os.environ.pop(requirements.ARCHIVE_VARIABLE, None)
+                self.assertEqual(requirements.check("SWS_Unknown", root), 1)
+                (root / "official/spec.zip").unlink()
+                self.assertEqual(requirements.check("SWS_Demo", root), 1)
+            self.assertIn("no single AUTOSAR_CP_SWS_Unknown.arxml", errors.getvalue())
+            self.assertIn("fetch-official", errors.getvalue())
 
 
 class DiagnosticTests(unittest.TestCase):
