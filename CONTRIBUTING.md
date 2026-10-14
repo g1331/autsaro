@@ -54,6 +54,10 @@ Windows MSI installers are built separately with `zh-CN` and `en-US` interfaces.
 
 Reader-facing root documents use English as the default, with Chinese versions named using the `.zh-CN.md` suffix. When editing bilingual documents, keep features, commands, limitations, and links aligned in both versions. Internal specifications and technical documents in subdirectories retain their existing language.
 
+## Documentation layout
+
+Each document covers one topic. When a document grows beyond about 20 KB, or contains several topics that can be read independently, split it into a directory of the same name with a `README.md` index that gives each sub-document a one-line purpose; keep a link to the index at the original location. Version-appended changelogs, single-decision ADRs, and archives kept only for traceability are exempt. Put new content into the existing document or directory that fits instead of starting a parallel file.
+
 ## Licensing and security reports
 
 Original contributions are provided under [Apache-2.0](LICENSE); third-party content retains its original license. Confirm redistribution rights before adding dependencies or code. See the [licensing guide](docs/maintainers/licensing.md) for distribution requirements. Report security issues as described in [SECURITY.md](SECURITY.md). For ordinary issues, include reproduction steps and expected results.
