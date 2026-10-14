@@ -35,11 +35,7 @@ DOCUMENT_SIZE_EXEMPT = (
     "third_party/", ".agents/skills/impeccable/",
 )
 # shortcut: documents that #130 has not split yet; remove each one when it is split or archived.
-DOCUMENT_SIZE_PENDING = (
-    "docs/architecture.md", "docs/roadmap.md", "docs/design/ux-baseline/EXPERIENCE.md",
-    "docs/research/autosar-platform/cp-r25-11-inventory.md",
-    "docs/research/autosar-platform/r24-11-runtime-coverage-inventory.md",
-)
+DOCUMENT_SIZE_PENDING = ("docs/architecture.md",)
 
 
 def _capture(
