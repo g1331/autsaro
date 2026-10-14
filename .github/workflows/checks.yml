@@ -219,7 +219,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest]
+        # Windows splits the serial suites over two runners; each suite still runs alone.
+        include:
+          - os: ubuntu-24.04
+            shard: 0/1
+          - os: windows-latest
+            shard: 0/2
+          - os: windows-latest
+            shard: 1/2
+    name: native-os (${{ matrix.os }}, ${{ matrix.shard }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
@@ -230,11 +238,12 @@ jobs:
       - name: Native OS conformance suites
         env:
           AUTOSAR_OS_OUTPUT_DIRECTORY: ${{ runner.temp }}/os-suites
-        run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_os_suites.py
+          AUTOSAR_OS_SHARD: ${{ matrix.shard }}
+        run: uv run --locked python -B -m unittest discover -v -s tests/python/native -p test_os_suites.py
       - uses: actions/upload-artifact@v7.0.1
         if: failure()
         with:
-          name: os-suites-${{ matrix.os }}
+          name: os-suites-${{ matrix.os }}-${{ strategy.job-index }}
           path: ${{ runner.temp }}/os-suites
           if-no-files-found: ignore
           retention-days: 14
