@@ -227,6 +227,12 @@ COM_CODE uint8 Com_ReceiveSignal(Com_SignalIdType SignalId, void *SignalDataPtr)
     SchM_Exit_Com_COM_STATE();
     return result;
 }
+/* No ComSignalDataInvalidValue is configurable: no signal can be invalidated (SWS_Com_00643). */
+COM_CODE uint8 Com_InvalidateSignal(Com_SignalIdType SignalId)
+{
+    (void)SignalId;
+    return COM_SERVICE_NOT_AVAILABLE;
+}
 COM_CODE void Com_IpduGroupStart(Com_IpduGroupIdType IpduGroupId, boolean Initialize)
 {
     SchM_Enter_Com_COM_STATE();

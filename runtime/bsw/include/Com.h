@@ -40,6 +40,7 @@ void Com_DeInit(void);
 Com_StatusType Com_GetStatus(void);
 uint8 Com_SendSignal(Com_SignalIdType SignalId, const void *SignalDataPtr);
 uint8 Com_ReceiveSignal(Com_SignalIdType SignalId, void *SignalDataPtr);
+uint8 Com_InvalidateSignal(Com_SignalIdType SignalId);
 void Com_IpduGroupStart(Com_IpduGroupIdType IpduGroupId, boolean Initialize);
 void Com_IpduGroupStop(Com_IpduGroupIdType IpduGroupId);
 void Com_EnableReceptionDM(Com_IpduGroupIdType IpduGroupId);

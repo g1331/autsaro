@@ -317,8 +317,10 @@ int main(void) {
         switch_mode(2u, FALSE);
         Com_DeInit();
         Com_Init(&com_config);
+        assert(Com_InvalidateSignal(11u) == COM_SERVICE_NOT_AVAILABLE);
         Ecu_ComMainFunctionTx();
         assert(Can_HostFlush() == ECU_OK && frames == 11u && successes == 7u);
+        assert(emitted[10] == 9u);
     }
     return 0;
 }

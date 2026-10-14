@@ -117,6 +117,7 @@ int main(void) {
     periods(1u);
     assert(timeouts[0] == 4u && timeouts[1] == 1u);
     disable(0u);
+    disable(0u); /* Already disabled: ignored. */
     periods(100u);
     assert(timeouts[0] == 4u && timeouts[1] == 1u);
     payload[0] = 42u;
