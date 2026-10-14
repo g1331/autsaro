@@ -1,6 +1,6 @@
 # 主机 ECU C99 运行时
 
-本目录提供随主线 ECU 工程（`singlecore-ecu-v1`）交付的 C99 运行时：`bsw/` 为 Can、CanIf、CanTp、Com、ComM、BswM、Dcm、Det、LSduR、PduR 等 BSW 及其公共头文件，`host/` 为这些模块的主机适配（`Can_Host*`、`Can_HostLock*`、`Det_Host*`、`SchM_*_Host.c`、`Ecu_HostBusSM*`、`Ecu_Status*`），`ecu/` 为主机执行 adapter、HostBatch 入口与配置模板，`os/` 为受控 OS 目标（见 [os/README.md](os/README.md)），`contracts/` 为交付资产清单。交付时 `bsw/` 原样进入工程的 `bsw/`，`host/` 与 `ecu/` 进入 `integration/`，`os/` 进入 `os/`；各模块的 `*_MemMap.h`、`SchM_*.h`、`Rte_*_Type.h` 与配置模板只作为生成方的模板，渲染结果进入 `generated/`。工程布局见 [docs/architecture.md](../docs/architecture.md) §7.6。验证范围限于主机行为，尚未完成完整 AUTOSAR/ISO 一致性或真实芯片验证。
+本目录提供随主线 ECU 工程（`singlecore-ecu-v1`）交付的 C99 运行时：`bsw/` 为 Can、CanIf、CanTp、Com、ComM、BswM、Dcm、Det、LSduR、PduR 等 BSW 及其公共头文件，`host/` 为这些模块的主机适配（`Can_Host*`、`Can_HostLock*`、`Det_Host*`、`SchM_*_Host.c`、`Ecu_HostBusSM*`、`Ecu_Status*`），`ecu/` 为主机执行 adapter、HostBatch 入口与配置模板，`os/` 为受控 OS 目标（见 [os/README.md](os/README.md)），`contracts/` 为交付资产清单。交付时 `bsw/` 原样进入工程的 `bsw/`，`host/` 与 `ecu/` 进入 `integration/`，`os/` 进入 `os/`；各模块的 `*_MemMap.h`、`SchM_*.h`、`Rte_*_Type.h` 与配置模板只作为生成方的模板，渲染结果进入 `generated/`。工程布局见[生成工程布局](../docs/architecture/mainline.md#生成工程布局已实施38)。验证范围限于主机行为，尚未完成完整 AUTOSAR/ISO 一致性或真实芯片验证。
 
 ## 构建
 

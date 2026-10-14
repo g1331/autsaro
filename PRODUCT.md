@@ -4,7 +4,7 @@
 
 <!-- impeccable:product-schema 1 -->
 
-This document records stable product facts for design work. Product direction, near-term order, and long-term candidates are in the [roadmap](docs/roadmap/README.md); architecture constraints are in [docs/architecture.md](docs/architecture.md); task status is tracked in GitHub Issues and Milestones. This document does not establish a separate roadmap, implementation specification, or completion ledger. The maintainer confirmed the product direction and platform classification during this initialization.
+This document records stable product facts for design work. Product direction, near-term order, and long-term candidates are in the [roadmap](docs/roadmap/README.md); architecture constraints are in [docs/architecture/](docs/architecture/README.md); task status is tracked in GitHub Issues and Milestones. This document does not establish a separate roadmap, implementation specification, or completion ledger. The maintainer confirmed the product direction and platform classification during this initialization.
 
 ## Platform
 
@@ -57,7 +57,7 @@ Vector MICROSAR Classic + DaVinci Configurator and EB tresos AutoCore + Studio a
 
 ### Confirmed Directions and Unresolved Boundaries
 
-- The unified Configurator's scope with built-in rules is defined by the [architecture](docs/architecture.md) and the [interaction specification](docs/design/ux-baseline/EXPERIENCE/README.md). Single-core multi-component applications — several SWCs scheduled by the real OS, per-component source protection, workspace editing, and independent handover — are supported within the scope described in the [architecture](docs/architecture.md). Planning order lives in the [roadmap](docs/roadmap/README.md) and task status in GitHub Milestones; this document does not duplicate them.
+- The unified Configurator's scope with built-in rules is defined by the [architecture](docs/architecture/README.md) and the [interaction specification](docs/design/ux-baseline/EXPERIENCE/README.md). Single-core multi-component applications — several SWCs scheduled by the real OS, per-component source protection, workspace editing, and independent handover — are supported within the scope described in the [architecture](docs/architecture/README.md). Planning order lives in the [roadmap](docs/roadmap/README.md) and task status in GitHub Milestones; this document does not duplicate them.
 - The first complete reference product chain is a generic CAN + diagnostic ECU. Complete delivery must include the application interfaces, OS, lifecycle/network management, and failure recovery required by the declared configuration. An intermediate increment with always-on CAN cannot substitute for the complete reference ECU.
 - Over the long term, expand effective module and target coverage for the selected Classic edition in stages. This does not require every ECU to enable every module, and historical story counts must not be used to calculate an undefined completion percentage.
 - The first MCU board, drivers and licensing, toolchain, specific diagnostic/network-management profiles, input coverage, and migration rules remain subject to their respective product plans. There is currently no real MCU verification, and hardware support must not be announced in advance.
@@ -77,7 +77,7 @@ Vector MICROSAR Classic + DaVinci Configurator and EB tresos AutoCore + Studio a
 ## Evidence on Hand
 
 - [Roadmap](docs/roadmap/README.md): near-term order, long-term candidate directions, open decisions, and boundaries for the later learning layer.
-- [Architecture](docs/architecture.md), [ADRs](docs/adr/), and [standards baseline](docs/standards/README.md): input/generation responsibilities, recorded decisions, and the fixed standard versions.
+- [Architecture](docs/architecture/README.md), [ADRs](docs/adr/), and [standards baseline](docs/standards/README.md): input/generation responsibilities, recorded decisions, and the fixed standard versions.
 - [README](README.md), [runtime documentation](runtime/README.md), and merged pull requests: existing workflows, bounded capabilities, target dependencies, and recorded verification scope. Where older passages describe historical status, cross-check against newer merged pull requests and current source code; do not infer all capabilities from a single overview statement.
 - `ui/src/`, `src-tauri/`, `core/src/`, and `runtime/`: the existing React interface, desktop backend, configuration/generation core, and C99 runtime. `core/tests/` holds the integration tests and their fixtures.
 - `ui/public/logo-app.png` and `src-tauri/icons/`: existing product icon assets.

@@ -34,8 +34,6 @@ DOCUMENT_SIZE_EXEMPT = (
     "CHANGELOG.md", "CHANGELOG.zh-CN.md", "AGENTS.md", "docs/adr/", "docs/project/archive/",
     "third_party/", ".agents/skills/impeccable/",
 )
-# shortcut: documents that #130 has not split yet; remove each one when it is split or archived.
-DOCUMENT_SIZE_PENDING = ("docs/architecture.md",)
 
 
 def _capture(
@@ -145,7 +143,6 @@ def document_size_errors(paths: list[Path] | None = None) -> list[str]:
         if (
             path.suffix != ".md"
             or name.startswith(DOCUMENT_SIZE_EXEMPT)
-            or name in DOCUMENT_SIZE_PENDING
             or not (ROOT / path).is_file()
         ):
             continue
