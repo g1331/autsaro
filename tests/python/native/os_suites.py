@@ -1435,7 +1435,7 @@ def check_arti_native(directory: Path) -> None:
             require(f"arti_nested scenario={result['scenario']} balanced=" in result["stdout"], result)
     for name, source, old, new, compile_failure in [
         ("missing-start", "Os_Arti.c", "0u, OsTask_Start,", "0u, OsTask_Activate,", False),
-        ("wrong-signature", "Arti.c", "uint32_t event_parameter) {", "uint16_t event_parameter) {", True),
+        ("wrong-signature", "Arti.c", "uint32_t event_parameter)\n", "uint16_t event_parameter)\n", True),
     ]:
         faulty = directory / name
         faulty.mkdir()
