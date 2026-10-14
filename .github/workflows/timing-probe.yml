@@ -13,9 +13,10 @@ jobs:
       fail-fast: false
       matrix:
         variant: [baseline, fix]
-    name: probe (${{ matrix.variant }})
+        load: [ci-slow, disk, cpu]
+    name: probe (${{ matrix.variant }}, ${{ matrix.load }})
     runs-on: windows-latest
-    timeout-minutes: 120
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: astral-sh/setup-uv@v10.2.0
@@ -63,54 +64,73 @@ jobs:
         run: cargo test --locked -p autosar-config-core --features native-tests --test native --no-run
       - name: Stress
         shell: python
+        env:
+          LOAD: ${{ matrix.load }}
         run: |
-          import os, subprocess, sys, time
+          import os, subprocess, sys, tempfile, time
           from pathlib import Path
           binary = max(Path('target/debug/deps').glob('native-*.exe'), key=lambda p: p.stat().st_mtime)
           out = Path('probe-logs'); out.mkdir()
           test = 'integration::protocol::single_component_meets_independent_protocol_and_timing_vectors'
-          print('CPUs', os.cpu_count(), 'binary', binary, flush=True)
-          def summarize(label, pattern, runs, failed):
-              spans, aborts = [], []
-              for f in out.glob(pattern):
-                  for line in f.read_text(errors='replace').splitlines():
-                      v = dict(kv.split('=', 1) for kv in line.split() if '=' in kv)
-                      if line.startswith('abort'):
-                          aborts.append(line)
-                      elif int(v.get('span', 0)) >= 100:
-                          spans.append((int(v['elapsed']) / int(v['span']), int(v['elapsed']), int(v['max_tick'])))
-              spans.sort()
-              q = lambda p: spans[min(len(spans) - 1, int(p * len(spans)))][0]
-              print(f'== {label}: runs={runs} failed={failed} batches(span>=100)={len(spans)}')
-              if spans:
-                  print('   ms/tick p50=%.2f p90=%.2f p99=%.2f max=%.2f; batch ms max=%d; max single tick ms=%d' % (
-                      q(.5), q(.9), q(.99), spans[-1][0], max(s[1] for s in spans), max(s[2] for s in spans)))
-              for a in aborts:
-                  print('   ', a)
-              sys.stdout.flush()
-          # A: one test alone, for the unloaded per-tick cost.
-          env = dict(os.environ, AUTOSAR_TIMING_PROBE=str((out / 'alone.log').absolute()))
-          code = subprocess.run([str(binary), test, '--exact'], env=env).returncode
-          summarize('alone', 'alone.log', 1, int(code != 0))
-          # B: 8 concurrent copies (more than the 4 CPUs), 3 rounds.
+          load = os.environ['LOAD']
+          print('CPUs', os.cpu_count(), 'load', load, 'temp', tempfile.gettempdir(), flush=True)
+          hogs = []
+          if load == 'cpu':
+              hogs = [subprocess.Popen([sys.executable, '-c', 'while True: pass']) for _ in range(8)]
+          elif load == 'disk':
+              writer = ('import os, tempfile\n'
+                        'path = os.path.join(tempfile.gettempdir(), "probe-disk-%d" % os.getpid())\n'
+                        'block = os.urandom(1 << 20)\n'
+                        'while True:\n'
+                        '    with open(path, "wb") as f:\n'
+                        '        for _ in range(256):\n'
+                        '            f.write(block); f.flush(); os.fsync(f.fileno())\n'
+                        '    os.remove(path)\n')
+              hogs = [subprocess.Popen([sys.executable, '-c', writer]) for _ in range(4)]
           failed = 0
-          for r in range(3):
-              procs = []
-              for c in range(8):
-                  env = dict(os.environ, AUTOSAR_TIMING_PROBE=str((out / f'copies-r{r}-c{c}.log').absolute()))
-                  log = open(out / f'copies-r{r}-c{c}.out', 'w')
-                  procs.append((subprocess.Popen([str(binary), test, '--exact'], stdout=log, stderr=subprocess.STDOUT, env=env), log))
-              for p, log in procs:
-                  p.wait(); log.close(); failed += p.returncode != 0
-          summarize('8 copies x 3', 'copies-*.log', 24, failed)
-          # C: the whole native binary in its default parallelism, as in the required job.
-          failed = 0
-          for r in range(2):
-              env = dict(os.environ, AUTOSAR_TIMING_PROBE=str((out / f'full-r{r}.log').absolute()))
-              with open(out / f'full-r{r}.out', 'w') as log:
-                  failed += subprocess.run([str(binary)], stdout=log, stderr=subprocess.STDOUT, env=env).returncode != 0
-              print(subprocess.run(['powershell', '-Command', f"Select-String -Path probe-logs/full-r{r}.out -Pattern 'FAILED|test result'"], capture_output=True, text=True).stdout)
-          summarize('full native x 2', 'full-*.log', 2, failed)
+          failed_runs = []
+          runs = 0
+          started = time.monotonic()
+          while time.monotonic() - started < 40 * 60:
+              env = dict(os.environ, AUTOSAR_TIMING_PROBE=str((out / f'run{runs}.log').absolute()))
+              if load == 'ci-slow':
+                  command = [str(binary), 'integration::sealed_projects', 'integration::single_component', 'integration::protocol']
+              else:
+                  command = [str(binary), test, '--exact']
+              with open(out / f'run{runs}.out', 'w') as log:
+                  code = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, env=env).returncode
+              failed += code != 0
+              if code != 0:
+                  failed_runs.append(f'run{runs}')
+              print(f'run {runs}: exit {code} at {time.monotonic() - started:.0f}s', flush=True)
+              runs += 1
+          for hog in hogs:
+              hog.kill()
+          spans, aborts = [], []
+          for f in out.glob('run*.log'):
+              for line in f.read_text(errors='replace').splitlines():
+                  v = dict(kv.split('=', 1) for kv in line.split() if '=' in kv)
+                  if line.startswith('abort'):
+                      if f.stem in failed_runs:
+                          aborts.append(f.name + ': ' + line)
+                  elif int(v.get('span', 0)) >= 100:
+                      spans.append((int(v['elapsed']) / int(v['span']), line))
+          spans.sort()
+          q = lambda p: spans[min(len(spans) - 1, int(p * len(spans)))][0]
+          print(f'== {load}: runs={runs} failed={failed} batches(span>=100)={len(spans)}')
+          if spans:
+              print('   ms/tick p50=%.2f p90=%.2f p99=%.2f max=%.2f' % (q(.5), q(.9), q(.99), spans[-1][0]))
+              print('   slowest batches:')
+              for _, line in spans[-5:]:
+                  print('    ', line)
+          print('   aborts in failed runs (fault tests abort deliberately):')
+          for a in aborts:
+              print('    ', a)
+          for f in sorted(out.glob('run*.out')):
+              text = f.read_text(errors='replace')
+              if 'FAILED' in text:
+                  print('----', f.name)
+                  print('\n'.join(l for l in text.splitlines() if 'FAILED' in l or 'panicked' in l or 'state=Failed' in l or 'cases' in l))
       - uses: actions/upload-artifact@v7.0.1
         if: always()
         with:

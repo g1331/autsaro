@@ -12,24 +12,59 @@ typedef struct {
 } Ecu_HostWatch;
 
 /* Timing probe for #61 (temporary, enabled by AUTOSAR_TIMING_PROBE). */
+enum { PROBE_NONE, PROBE_ADVANCE, PROBE_SINK, PROBE_CONFIRM, PROBE_WAIT, PROBE_POST, PROBE_DONE, PROBE_COUNT };
+static const char *const probe_names[PROBE_COUNT] = {"none", "advance", "sink", "confirm", "wait", "post", "done"};
 static uint64_t probe_started;
 static uint64_t probe_at;
 static uint64_t probe_tick_started;
 static uint64_t probe_max_tick;
 static uint64_t probe_span;
+static volatile int probe_phase;
+static volatile uint64_t probe_phase_started;
+static uint64_t probe_total[PROBE_COUNT];
+static uint64_t probe_max[PROBE_COUNT];
+static void phase_begin(int phase)
+{
+    probe_phase_started = Os_HostMonotonicMs();
+    probe_phase = phase;
+}
+static void phase_end(void)
+{
+    const int phase = probe_phase;
+    const uint64_t spent = Os_HostMonotonicMs() - probe_phase_started;
+    probe_total[phase] += spent;
+    if (spent > probe_max[phase]) {
+        probe_max[phase] = spent;
+    }
+    probe_phase = PROBE_NONE;
+}
 static void probe(const char *event, uint64_t value)
 {
     const char *path = getenv("AUTOSAR_TIMING_PROBE");
     if (path != NULL) {
         FILE *file = fopen(path, "a");
         if (file != NULL) {
+            const int phase = probe_phase;
+            int index;
             (void)fprintf(file,
-                          "%s=%llu elapsed=%llu at=%llu max_tick=%llu\n",
+                          "%s=%llu elapsed=%llu at=%llu max_tick=%llu current=%s current_ms=%llu",
                           event,
                           (unsigned long long)value,
                           (unsigned long long)(Os_HostMonotonicMs() - probe_started),
                           (unsigned long long)probe_at,
-                          (unsigned long long)probe_max_tick);
+                          (unsigned long long)probe_max_tick,
+                          probe_names[phase],
+                          (unsigned long long)((phase == PROBE_NONE)
+                                                   ? 0u
+                                                   : (Os_HostMonotonicMs() - probe_phase_started)));
+            for (index = 1; index < PROBE_COUNT; ++index) {
+                (void)fprintf(file,
+                              " %s=%llu/%llu",
+                              probe_names[index],
+                              (unsigned long long)probe_total[index],
+                              (unsigned long long)probe_max[index]);
+            }
+            (void)fprintf(file, "\n");
             (void)fclose(file);
         }
     }
@@ -89,9 +124,16 @@ static void pump(Ecu_HostBatch *batch,
     require(status == E_OS_NOFUNC);
     status = Ecu_TargetTakeOutput(&output);
     if (status == E_OK) {
+        int written;
         sequence(batch);
-        require(sink(&output, batch, E_OK, context) != 0);
-        require(Ecu_TargetConfirmOutput(output.ticket, output.pdu) == E_OK);
+        phase_begin(PROBE_SINK);
+        written = sink(&output, batch, E_OK, context);
+        phase_end();
+        require(written != 0);
+        phase_begin(PROBE_CONFIRM);
+        status = Ecu_TargetConfirmOutput(output.ticket, output.pdu);
+        phase_end();
+        require(status == E_OK);
     } else {
         require(status == E_OS_NOFUNC);
     }
@@ -107,11 +149,18 @@ static void tick(Ecu_HostBatch *batch,
     Os_TickCompletion result;
     probe_at = at;
     probe_tick_started = Os_HostMonotonicMs();
-    require(Os_TargetAdvanceOneTick(at, &ticket) == E_OK);
+    phase_begin(PROBE_ADVANCE);
+    {
+        const StatusType advanced = Os_TargetAdvanceOneTick(at, &ticket);
+        phase_end();
+        require(advanced == E_OK);
+    }
     for (;;) {
         StatusType status;
         pump(batch, sink, context, control);
+        phase_begin(PROBE_WAIT);
         status = Os_TargetWaitTick(ticket, 1u, &result);
+        phase_end();
         if (status == E_OK) {
             require(result.epoch == at);
             pump(batch, sink, context, control);
@@ -201,6 +250,13 @@ StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *c
     probe_max_tick = 0u;
     probe_at = batch->completed_epoch;
     probe_span = batch->epoch - batch->completed_epoch;
+    {
+        int index;
+        for (index = 0; index < PROBE_COUNT; ++index) {
+            probe_total[index] = 0u;
+            probe_max[index] = 0u;
+        }
+    }
     monitor = Os_HostSpawnObserverThread(watch, &control);
     if (monitor == NULL) {
         Ecu_TargetAbortNative(E_OS_STATE);
@@ -214,7 +270,10 @@ StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *c
         (batch->count == 0u) ? UINT64_C(0) : batch->sequence + UINT64_C(1);
     batch->sequence += (uint64_t)batch->count;
     batch->input_sequences_reserved = 1u;
-    require(Ecu_TargetPostBatch(batch->epoch, batch->frames, batch->count, &ticket) == E_OK);
+    phase_begin(PROBE_POST);
+    status = Ecu_TargetPostBatch(batch->epoch, batch->frames, batch->count, &ticket);
+    phase_end();
+    require(status == E_OK);
     if (batch->epoch != batch->completed_epoch) {
         tick(batch, batch->epoch, sink, context, &control);
     }
@@ -225,7 +284,9 @@ StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *c
             break;
         }
         require(status == E_OS_NOFUNC);
+        phase_begin(PROBE_DONE);
         Os_HostSleepMs(1u);
+        phase_end();
     }
     require((completed.epoch == batch->epoch) && (completed.input_count == batch->count));
     pump(batch, sink, context, &control);
