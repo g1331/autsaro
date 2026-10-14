@@ -293,78 +293,62 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
     }
 }
 
-#[cfg(all(feature = "native-tests", target_os = "linux"))]
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[test]
 fn generated_rte_com_header_links_independent_handle_callbacks_and_real_dispatch() {
-    for handle in [17, 43] {
-        let mut sources = inputs();
-        change(
-            &mut sources,
-            "ingress.arxml",
-            "<VALUE>0</VALUE>",
-            "<VALUE>7</VALUE>",
-        );
-        if handle != 17 {
-            change(
-                &mut sources,
-                "ecuc.arxml",
-                "<VALUE>17</VALUE>",
-                &format!("<VALUE>{handle}</VALUE>"),
-            );
-            sources.reverse();
-        }
-        let plan = build(&sources).unwrap();
-        let scratch = Scratch::new();
-        for (path, bytes) in prepared_pipeline_files(&plan) {
-            let path = scratch.0.join(path);
-            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-            std::fs::write(path, bytes).unwrap();
-        }
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-        let executable = tooling::native_binary(&scratch.0, "rte-com-consumer");
-        let mut compiler = tooling::c_compiler();
-        compiler
-            .current_dir(&scratch.0)
-            .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
-            .arg(format!("-DTEST_RX_HANDLE={handle}u"))
-            .args([
-                "-Igenerated/include",
-                "-Ibsw/include",
-                "-Ibsw/src",
-                "-Iintegration/include",
-                "-Iintegration/src",
-                "-Ios/include",
-            ])
-            .args([
-                "generated/src/Rte.c",
-                "bsw/src/Com.c",
-                // COM enters the CanIf state area; link its delivered host provider.
-                "integration/src/SchM_CanIf_Host.c",
-                "integration/src/Can_HostLock.c",
-                "app/Ingress/Ingress.c",
-                "app/Process/Process.c",
-                "app/Observe/Observe.c",
-            ])
-            .arg(root.join("core/tests/fixtures/bsw-contracts/rte_com_contract.c"))
-            .args(["-pthread", "-Wl,--wrap=Com_ReceiveSignal"])
-            .arg("-o")
-            .arg(&executable);
-        let output = tooling::run_public_command(
-            &mut compiler,
-            &scratch.0,
-            "rte-com-compile",
-            std::time::Duration::from_secs(60),
-        );
-        assert!(output.status.success(), "{output:?}");
-        let output = tooling::run_public_command(
-            &mut std::process::Command::new(executable),
-            &scratch.0,
-            "rte-com-run",
-            std::time::Duration::from_secs(30),
-        );
-        assert!(output.status.success(), "{output:?}");
-        assert!(output.stdout.is_empty() && output.stderr.is_empty());
+    // Two Rx receivers at once (handles 43 and 61, neither the template's 17).
+    let plan = build(&two_receiver_inputs()).unwrap();
+    let scratch = Scratch::new();
+    for (path, bytes) in prepared_pipeline_files(&plan) {
+        let path = scratch.0.join(path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, bytes).unwrap();
     }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let executable = tooling::native_binary(&scratch.0, "rte-com-consumer");
+    let mut compiler = tooling::c_compiler();
+    compiler
+        .current_dir(&scratch.0)
+        .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
+        .args([
+            "-Igenerated/include",
+            "-Ibsw/include",
+            "-Ibsw/src",
+            "-Iintegration/include",
+            "-Iintegration/src",
+            "-Ios/include",
+        ])
+        .args([
+            "generated/src/Rte.c",
+            "bsw/src/Com.c",
+            // COM enters its own state area; link the delivered host provider.
+            "integration/src/SchM_CanIf_Host.c",
+            "integration/src/Can_HostLock.c",
+            "app/Ingress/Ingress.c",
+            "app/Process/Process.c",
+            "app/Observe/Observe.c",
+        ])
+        .arg(root.join("core/tests/fixtures/bsw-contracts/rte_com_contract.c"))
+        .arg("-Wl,--wrap=Com_ReceiveSignal");
+    if cfg!(target_os = "linux") {
+        compiler.arg("-pthread");
+    }
+    compiler.arg("-o").arg(&executable);
+    let output = tooling::run_public_command(
+        &mut compiler,
+        &scratch.0,
+        "rte-com-compile",
+        std::time::Duration::from_secs(60),
+    );
+    assert!(output.status.success(), "{output:?}");
+    let output = tooling::run_public_command(
+        &mut std::process::Command::new(executable),
+        &scratch.0,
+        "rte-com-run",
+        std::time::Duration::from_secs(30),
+    );
+    assert!(output.status.success(), "{output:?}");
+    assert!(output.stdout.is_empty() && output.stderr.is_empty());
 }
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]

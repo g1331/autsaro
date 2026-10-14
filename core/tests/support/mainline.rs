@@ -43,6 +43,166 @@ pub(crate) fn change(sources: &mut [InputSource], file: &str, before: &str, afte
     *source = InputSource::new(file, text.replacen(before, after, 1).into_bytes()).unwrap();
 }
 
+/// Fixture inputs with two simultaneous network receivers: the existing `RxValue` path
+/// (Com user handle 43) and a clone named `RxSecond` (handle 61, 50 ms timeout, CAN id 802).
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+pub(crate) fn two_receiver_inputs() -> Vec<InputSource> {
+    // (file, element, anchor, definition the anchor's DEFINITION-REF must end with, edits)
+    // Each edit sets the first <element> after `anchor` (empty anchor: block start) to `value`.
+    type Edit = (&'static str, &'static str, &'static str);
+    type Clone = (&'static str, &'static str, String, &'static str, Vec<Edit>);
+    fn named(
+        file: &'static str,
+        tag: &'static str,
+        short: &str,
+        definition: &'static str,
+        edits: &[Edit],
+    ) -> Clone {
+        let anchor = format!("<SHORT-NAME>{short}</SHORT-NAME>");
+        (file, tag, anchor, definition, edits.to_vec())
+    }
+    let ecuc = |tag, short: &str, definition, edits: &[Edit]| {
+        named("ecuc.arxml", tag, short, definition, edits)
+    };
+    let extract = |tag, short: &str, edits: &[Edit]| named("extract.arxml", tag, short, "", edits);
+    let clones: Vec<Clone> = vec![
+        extract("FRAME-PORT", "RxValueFramePort", &[]),
+        extract("I-PDU-PORT", "RxValuePduPort", &[]),
+        extract(
+            "I-SIGNAL-PORT",
+            "RxValueSignalPort",
+            &[("", "TIMEOUT", "0.05")],
+        ),
+        extract(
+            "CAN-FRAME-TRIGGERING",
+            "RxValueTrigger",
+            &[("", "IDENTIFIER", "802")],
+        ),
+        extract("I-SIGNAL-TRIGGERING", "RxValueSignalTrigger", &[]),
+        extract("PDU-TRIGGERING", "RxValuePduTrigger", &[]),
+        extract("CAN-FRAME", "RxValueFrame", &[]),
+        extract("I-SIGNAL-I-PDU", "RxValuePdu", &[]),
+        extract("I-SIGNAL", "RxValueSignal", &[]),
+        extract("SYSTEM-SIGNAL", "RxValueSystemSignal", &[]),
+        (
+            "extract.arxml",
+            "SENDER-RECEIVER-TO-SIGNAL-MAPPING",
+            "/Application/Ingress/RxValue</CONTEXT-PORT-REF>".to_string(),
+            "",
+            vec![],
+        ),
+        ecuc(
+            "ECUC-CONTAINER-VALUE",
+            "RxValue",
+            "/ComUserModuleCnf/ComUserSignal",
+            &[("ComUserCbkHandleId", "VALUE", "61")],
+        ),
+        ecuc(
+            "ECUC-CONTAINER-VALUE",
+            "RxValuePdu",
+            "/EcucPduCollection/Pdu",
+            &[],
+        ),
+        ecuc(
+            "ECUC-CONTAINER-VALUE",
+            "RxValue",
+            "/ComConfig/ComSignal",
+            &[("ComTimeout", "VALUE", "0.05")],
+        ),
+        ecuc(
+            "ECUC-CONTAINER-VALUE",
+            "RxValuePdu",
+            "/ComConfig/ComIPdu",
+            &[],
+        ),
+        ecuc(
+            "ECUC-CONTAINER-VALUE",
+            "RxValue",
+            "/CanIfInitCfg/CanIfRxPduCfg",
+            &[
+                ("CanIfRxPduCanId", "VALUE", "802"),
+                ("CanIfRxPduId", "VALUE", "2"),
+            ],
+        ),
+        ecuc(
+            "ECUC-CONTAINER-VALUE",
+            "RxValueSource",
+            "/PduRRoutingPaths/PduRSrcPdu",
+            &[("PduRSourcePduHandleId", "VALUE", "4")],
+        ),
+        ecuc(
+            "ECUC-CONTAINER-VALUE",
+            "RxValueDestination",
+            "/PduRRoutingPaths/PduRDestPdu",
+            &[("PduRDestPduHandleId", "VALUE", "4")],
+        ),
+        ecuc(
+            "ECUC-CONTAINER-VALUE",
+            "RxValue",
+            "/PduRRoutingPaths/PduRRoutingPath",
+            &[],
+        ),
+        (
+            "ingress.arxml",
+            "R-PORT-PROTOTYPE",
+            "<SHORT-NAME>RxValue</SHORT-NAME>".to_string(),
+            "",
+            vec![("", "ALIVE-TIMEOUT", "0.05"), ("", "VALUE", "9")],
+        ),
+        (
+            "ingress.arxml",
+            "VARIABLE-ACCESS",
+            "<SHORT-NAME>RRxValue</SHORT-NAME>".to_string(),
+            "",
+            vec![],
+        ),
+    ];
+    let mut sources = inputs();
+    for (file, tag, anchor, definition, edits) in clones {
+        let source = sources
+            .iter_mut()
+            .find(|source| source.logical_path() == file)
+            .unwrap();
+        let mut text = std::str::from_utf8(source.bytes()).unwrap().to_owned();
+        let start = text
+            .match_indices(&anchor)
+            .find(|(at, _)| {
+                let rest = &text[*at..];
+                definition.is_empty()
+                    || rest[..rest.find("</DEFINITION-REF>").unwrap()].ends_with(definition)
+            })
+            .map(|(at, _)| text[..at].rfind(&format!("<{tag}>")).unwrap())
+            .unwrap_or_else(|| panic!("{file}: no <{tag}> with {anchor} {definition}"));
+        let end = start + text[start..].find(&format!("</{tag}>")).unwrap() + tag.len() + 3;
+        let mut block = text[start..end].replace("RxValue", "RxSecond");
+        for (anchor, element, value) in edits {
+            let from = block.find(anchor).unwrap();
+            let open = format!("<{element}>");
+            let value_start = from + block[from..].find(&open).unwrap() + open.len();
+            let value_end = value_start + block[value_start..].find('<').unwrap();
+            block.replace_range(value_start..value_end, value);
+        }
+        // Keep the original's indentation for the copy that follows it.
+        let line = text[..start].rfind('\n').map_or(0, |at| at + 1);
+        let indent = text[line..start].to_owned();
+        text.insert_str(end, &format!("\n{indent}{block}"));
+        *source = InputSource::new(file, text.into_bytes()).unwrap();
+    }
+    change(
+        &mut sources,
+        "ecuc.arxml",
+        "<VALUE>17</VALUE>",
+        "<VALUE>43</VALUE>",
+    );
+    change(
+        &mut sources,
+        "ingress.arxml",
+        "<VALUE>0</VALUE>",
+        "<VALUE>7</VALUE>",
+    );
+    sources
+}
+
 pub(crate) fn live_pipeline_workspace(
     root: &Path,
     sources: &[InputSource],
