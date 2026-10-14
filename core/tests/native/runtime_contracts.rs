@@ -250,6 +250,15 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
             "-Wl,--wrap=CanIf_RxIndication",
         ]);
     }
+    if fixture.starts_with("routing_") {
+        command.arg("-Wl,--wrap=CanIf_Transmit");
+    }
+    if fixture == "routing_parallel.c" {
+        command.args([
+            "-Wl,--wrap=SchM_Exit_PduR_PDUR_STATE",
+            "-Wl,--wrap=SchM_Exit_LSduR_LSDUR_STATE",
+        ]);
+    }
     if fixture == "mode_contract.c" {
         // Independent non-equal namespace oracle; final generation derives source IDs.
         command.args([
@@ -374,6 +383,35 @@ fn canif_different_pdus_and_actual_confirmation_stop_interleave_safely() {
         std::fs::read(&result.stderr).unwrap().is_empty(),
         "{result:?}"
     );
+}
+
+#[test]
+fn routing_keeps_direction_and_module_identity_for_equal_handles() {
+    let scratch = Scratch::new();
+    let executable = chain_consumer(&scratch.0, "routing_contract.c", &[]);
+    let output = Command::new(executable).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    assert!(
+        output.stdout.is_empty() && output.stderr.is_empty(),
+        "{:?}",
+        output
+    );
+}
+
+/// The routers leave their areas before calling another module (ADR 0018).
+#[test]
+fn routing_requests_complete_once_while_another_waits_outside_the_area() {
+    let scratch = Scratch::new();
+    let executable = chain_consumer(&scratch.0, "routing_parallel.c", &[]);
+    let logs = scratch.0.join("execution");
+    std::fs::create_dir(&logs).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&logs, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let result = run_owned(executable, &scratch.0, logs);
+    assert!(result.success(), "{result:?}");
 }
 
 #[test]

@@ -1,6 +1,7 @@
 /** @file R24-11 LSduR: immutable one-to-one, no-metadata intra-partition routes. */
 #ifndef LSDUR_H
 #define LSDUR_H
+#include "Std_Types.h"
 #include "ComStack_Types.h"
 typedef uint16 LSduR_PBConfigIdType;
 typedef enum { LSDUR_UNINIT = 0, LSDUR_ONLINE = 1 } LSduR_StateType;

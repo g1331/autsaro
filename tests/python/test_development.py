@@ -166,6 +166,14 @@ class RequirementTests(unittest.TestCase):
             self.PREFIXES,
         ).citations
         self.assertEqual(requirements.scan("SWS_DEMO_CONSTR_00001 rejects_constr_00002", "f", {"CONSTR_"}).citations, [])
+        # An item without a number is the whole ID and is cited as a word.
+        whole = requirements.scan(
+            "已核对（原文）：SWS_DEMO_NA、SWS_DEMO_00001; SWS_DEMO_NAX", self.STANDARDS, self.PREFIXES | {"SWS_DEMO_NA"}
+        ).citations
+        self.assertEqual(
+            [(item.identifier, item.category) for item in whole],
+            [("SWS_DEMO_NA", "inspected"), ("SWS_DEMO_00001", "inspected")],
+        )
         self.assertEqual(
             [(item.identifier, item.line, item.interior) for item in cited],
             [

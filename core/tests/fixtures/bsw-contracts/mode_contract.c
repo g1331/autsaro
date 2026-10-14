@@ -72,8 +72,13 @@ static const Com_PduConfigType pdus[] = {{1u, 10u, TRUE, 7u, 30u, 17u},
                                          {2u, 11u, FALSE, 9u, 0u, 0u}};
 static const Com_ConfigType com = {pdus, 2u, 0u, receive, timeout, PduR_ComTransmit};
 static const PduR_RxRouteType pdur_rx[] = {{31u, 1u, Com_RxIndication}};
-static const PduR_TxRouteType pdur_tx[] = {
-    {PDUR_UP_COM, 2u, 41u, LSduR_PduRTransmit, Com_TxConfirmation, Com_TriggerTransmit}};
+static const PduR_TxRouteType pdur_tx[] = {{PDUR_UP_COM,
+                                            2u,
+                                            PDUR_LO_LSDUR,
+                                            41u,
+                                            LSduR_PduRTransmit,
+                                            Com_TxConfirmation,
+                                            Com_TriggerTransmit}};
 static const PduR_PBConfigType pdur = {23u, pdur_rx, 1u, pdur_tx, 1u, NULL_PTR, 0u};
 static const LSduR_RxRouteType ls_rx[] = {{21u, 31u, PduR_CanIfRxIndication}};
 static const LSduR_TxRouteType ls_tx[] = {

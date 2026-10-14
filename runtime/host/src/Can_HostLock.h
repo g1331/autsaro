@@ -10,6 +10,8 @@ typedef enum {
     CAN_HOST_AREA_DET = 0,
     CAN_HOST_AREA_CANIF,
     CAN_HOST_AREA_SCHM_MODE,
+    CAN_HOST_AREA_PDUR,
+    CAN_HOST_AREA_LSDUR,
     CAN_HOST_AREA_COUNT
 } Can_HostAreaType;
 void Can_HostAreaEnter(Can_HostAreaType area);

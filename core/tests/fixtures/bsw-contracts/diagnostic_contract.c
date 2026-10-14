@@ -88,7 +88,7 @@ static const PduR_TpRouteType tp_routes[] = {{71u, 17u, 72u, 18u, Dcm_StartOfRec
                                               Dcm_CopyRxData, Dcm_TpRxIndication, Dcm_CopyTxData,
                                               Dcm_TpTxConfirmation}};
 static const PduR_TxRouteType pdur_tx[] = {
-    {PDUR_UP_DCM, 81u, 12u, CanTp_Transmit, Dcm_TpTxConfirmation, NULL_PTR}};
+    {PDUR_UP_DCM, 81u, PDUR_LO_CANTP, 12u, CanTp_Transmit, NULL_PTR, NULL_PTR}};
 static const PduR_PBConfigType pdur = {23u, NULL_PTR, 0u, pdur_tx, 1u, tp_routes, 1u};
 static const LSduR_RxRouteType ls_rx[] = {{21u, 31u, CanTp_RxIndication}};
 static const LSduR_TxRouteType ls_tx[] = {

@@ -1689,20 +1689,321 @@ fn second_canif_hardware_object_is_refused() {
 /// link-time or post-build variant is refused (link-time CanIf: SWS_CANIF_00378).
 #[test]
 fn link_time_and_post_build_variants_are_refused_at_the_module() {
-    // Rejects: ECUC_CanIf_00244
-    for variant in ["VARIANT-LINK-TIME", "VARIANT-POST-BUILD"] {
+    // Rejects: ECUC_CanIf_00244, ECUC_PduR_00293
+    for (module, variant) in [
+        ("CanIf", "VARIANT-LINK-TIME"),
+        ("CanIf", "VARIANT-POST-BUILD"),
+        ("PduR", "VARIANT-POST-BUILD"),
+    ] {
         let mut sources = single_component_sources();
         xml_edit(
             &mut sources,
             "ecuc.arxml",
-            |node| named(node, "ECUC-MODULE-CONFIGURATION-VALUES", "CanIf"),
+            |node| named(node, "ECUC-MODULE-CONFIGURATION-VALUES", module),
             |text| text.replacen("VARIANT-PRE-COMPILE", variant, 1),
         );
         rejected_at(
             &sources,
             "TARGET_PARAMETER_UNSUPPORTED",
             "ecuc.arxml",
-            "/Configuration/CanIf",
+            &format!("/Configuration/{module}"),
         );
     }
+}
+
+/// LSduR routes are derived from the PduR, CanIf and CanTp configuration; an LSduR
+/// module is refused where it is declared.
+#[test]
+fn lsdur_module_configuration_is_refused_at_the_module() {
+    // Rejects: ECUC_LSduR_00001
+    let mut sources = single_component_sources();
+    change(
+        &mut sources,
+        "ecuc.arxml",
+        "<ECUC-MODULE-CONFIGURATION-VALUES>",
+        "<ECUC-MODULE-CONFIGURATION-VALUES><SHORT-NAME>LSduR</SHORT-NAME><DEFINITION-REF DEST=\"ECUC-MODULE-DEF\">/AUTOSAR/EcucDefs/LSduR</DEFINITION-REF></ECUC-MODULE-CONFIGURATION-VALUES><ECUC-MODULE-CONFIGURATION-VALUES>",
+    );
+    rejected_at(
+        &sources,
+        "MODULE_UNSUPPORTED",
+        "ecuc.arxml",
+        "/Configuration/LSduR",
+    );
+}
+
+/// PduR features outside one-to-one IF and TP routing between the selected modules
+/// are refused where they are configured.
+#[test]
+fn pdur_features_outside_the_selection_are_refused_at_their_source() {
+    // Unselected switches (Verifies: ECUC_PduR_00302／00347／00316／00317).
+    for definition in [
+        // Rejects: ECUC_PduR_00302
+        "PduRDevErrorDetect",
+        // Rejects: ECUC_PduR_00347
+        "PduRMetaDataSupport",
+        // Rejects: ECUC_PduR_00316
+        "PduRVersionInfoApi",
+        // Rejects: ECUC_PduR_00317
+        "PduRZeroCostOperation",
+    ] {
+        let mut sources = single_component_sources();
+        parameter(&mut sources, "General", definition, "true");
+        rejected_at(
+            &sources,
+            "TARGET_PARAMETER_UNSUPPORTED",
+            "ecuc.arxml",
+            "/Configuration/PduR/General",
+        );
+    }
+    // (owner, definition below the owner's, "" for a container or "KIND:value")
+    for (owner, name, value) in [
+        // Rejects: ECUC_PduR_00295
+        ("PduR", "PduRBswModules", ""),
+        // Rejects: ECUC_PduR_00365
+        ("PduR", "PduRDemEventParameterRefs", ""),
+        // Rejects: ECUC_PduR_00308
+        ("Routes", "PduRRoutingPathGroup", ""),
+        // Rejects: ECUC_PduR_00336
+        ("Routes", "PduRBuffer", ""),
+        // Rejects: ECUC_PduR_00350
+        ("Routes", "PduRMaxRoutingPathCnt", "INTEGER:4"),
+        // Rejects: ECUC_PduR_00348
+        ("Routes", "PduRMaxRoutingPathGroupCnt", "INTEGER:1"),
+        // Rejects: ECUC_PduR_00355
+        ("TxValueSource", "PduRSourcePduBlockSize", "INTEGER:8"),
+        // Rejects: ECUC_PduR_00289
+        (
+            "TxValueDestination",
+            "PduRDestPduDataProvision",
+            "ENUMERATION:PDUR_TRIGGERTRANSMIT",
+        ),
+        // Rejects: ECUC_PduR_00299
+        ("TxValue", "PduRDefaultValue", ""),
+        // Rejects: ECUC_PduR_00356
+        ("TxValue", "PduRQueueDepth", "INTEGER:1"),
+        // Rejects: ECUC_PduR_00367
+        ("TxValue", "PduRQueueingStrategy", "ENUMERATION:FIFO"),
+        // Rejects: ECUC_PduR_00320
+        ("TxValue", "PduRTpThreshold", "INTEGER:8"),
+    ] {
+        let (path, object) = match owner {
+            "PduR" => ("", "/Configuration/PduR".to_owned()),
+            "Routes" => ("/PduRRoutingPaths", "/Configuration/PduR/Routes".to_owned()),
+            "TxValueSource" => (
+                "/PduRRoutingPaths/PduRSrcPdu",
+                format!("/Configuration/PduR/Routes/{owner}"),
+            ),
+            "TxValueDestination" => (
+                "/PduRRoutingPaths/PduRDestPdu",
+                format!("/Configuration/PduR/Routes/{owner}"),
+            ),
+            _ => (
+                "/PduRRoutingPaths/PduRRoutingPath",
+                format!("/Configuration/PduR/Routes/{owner}"),
+            ),
+        };
+        let definition = format!("/AUTOSAR/EcucDefs/PduR{path}/{name}");
+        let mut sources = single_component_sources();
+        xml_edit(
+            &mut sources,
+            "ecuc.arxml",
+            // Short names such as TxValue recur in Com and CanIf; match the definition too.
+            |node| {
+                named(node, node.tag_name().name(), owner)
+                    && node.children().any(|child| {
+                        child.has_tag_name("DEFINITION-REF")
+                            && child.text() == Some(&*format!("/AUTOSAR/EcucDefs/PduR{path}"))
+                    })
+            },
+            |text| match value.split_once(':') {
+                Some((kind, value)) => {
+                    let element = if kind == "INTEGER" {
+                        "NUMERICAL"
+                    } else {
+                        "TEXTUAL"
+                    };
+                    let parameter = format!(
+                        "<ECUC-{element}-PARAM-VALUE><DEFINITION-REF DEST=\"ECUC-{kind}-PARAM-DEF\">{definition}</DEFINITION-REF><VALUE>{value}</VALUE></ECUC-{element}-PARAM-VALUE>"
+                    );
+                    if text.contains("<PARAMETER-VALUES>") {
+                        text.replacen(
+                            "<PARAMETER-VALUES>",
+                            &format!("<PARAMETER-VALUES>{parameter}"),
+                            1,
+                        )
+                    } else {
+                        text.replacen(
+                            "<REFERENCE-VALUES>",
+                            &format!(
+                                "<PARAMETER-VALUES>{parameter}</PARAMETER-VALUES><REFERENCE-VALUES>"
+                            ),
+                            1,
+                        )
+                    }
+                }
+                None => {
+                    let container = format!(
+                        "<ECUC-CONTAINER-VALUE><SHORT-NAME>{name}</SHORT-NAME><DEFINITION-REF DEST=\"ECUC-PARAM-CONF-CONTAINER-DEF\">{definition}</DEFINITION-REF></ECUC-CONTAINER-VALUE>"
+                    );
+                    match owner {
+                        "PduR" => {
+                            text.replacen("<CONTAINERS>", &format!("<CONTAINERS>{container}"), 1)
+                        }
+                        "Routes" => text.replacen(
+                            "<SUB-CONTAINERS>",
+                            &format!("<SUB-CONTAINERS>{container}"),
+                            1,
+                        ),
+                        // After the routing path's references, before its closing tag.
+                        _ => {
+                            let at = text.rfind("</REFERENCE-VALUES>").unwrap()
+                                + "</REFERENCE-VALUES>".len();
+                            format!(
+                                "{}<SUB-CONTAINERS>{container}</SUB-CONTAINERS>{}",
+                                &text[..at],
+                                &text[at..]
+                            )
+                        }
+                    }
+                }
+            },
+        );
+        let object = if value.is_empty() {
+            format!("{object}/{name}")
+        } else {
+            object
+        };
+        rejected_with(
+            &sources,
+            ("REFERENCE_UNRESOLVED", "DEFINITION_UNKNOWN"),
+            "ecuc.arxml",
+            &object,
+        );
+    }
+}
+
+#[test]
+fn pdur_mandatory_general_and_configuration_id_are_required_and_generated() {
+    // Verifies: ECUC_PduR_00305, ECUC_PduR_00327
+    let mut sources = single_component_sources();
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| {
+            named(node, "ECUC-CONTAINER-VALUE", "General")
+                && node.children().any(|child| {
+                    child.has_tag_name("DEFINITION-REF")
+                        && child.text() == Some("/AUTOSAR/EcucDefs/PduR/PduRGeneral")
+                })
+        },
+        |_| String::new(),
+    );
+    rejected_at(
+        &sources,
+        "MULTIPLICITY",
+        "ecuc.arxml",
+        "/Configuration/PduR",
+    );
+    let mut sources = single_component_sources();
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| {
+            node.has_tag_name("ECUC-NUMERICAL-PARAM-VALUE")
+                && node.children().any(|child| {
+                    child.text()
+                        == Some("/AUTOSAR/EcucDefs/PduR/PduRRoutingPaths/PduRConfigurationId")
+                })
+        },
+        |_| String::new(),
+    );
+    rejected_with(
+        &sources,
+        ("NATIVE_SCHEMA", "MULTIPLICITY"),
+        "ecuc.arxml",
+        "/Configuration/PduR/Routes",
+    );
+    // The configuration is identified by PduRConfigurationId and lives in PduR_PBcfg.c
+    // (Verifies: SWS_PduR_00281, 00241).
+    let mut sources = single_component_sources();
+    parameter(&mut sources, "Routes", "PduRConfigurationId", "7");
+    let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
+    let files = prepared_pipeline_files(&plan);
+    let config = files
+        .iter()
+        .find(|(name, _)| name == "generated/src/PduR_PBcfg.c")
+        .map(|(_, bytes)| std::str::from_utf8(bytes).unwrap())
+        .unwrap();
+    assert!(
+        config.contains("PduR_Config RTE_PduR_CONFIG_DATA_PREBUILD_UNSPECIFIED = {\n    7u,\n"),
+        "{config}"
+    );
+}
+
+#[test]
+fn pdur_fan_out_fan_in_and_gateway_routes_are_refused_at_their_source() {
+    // Rejects: ECUC_PduR_00354
+    let mut sources = single_component_sources();
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| {
+            named(node, "ECUC-CONTAINER-VALUE", "TxValue")
+                && node.children().any(|child| {
+                    child.text() == Some("/AUTOSAR/EcucDefs/PduR/PduRRoutingPaths/PduRRoutingPath")
+                })
+        },
+        |text| {
+            text.replacen(
+                "</REFERENCE-VALUES>",
+                "<ECUC-REFERENCE-VALUE><DEFINITION-REF DEST=\"ECUC-REFERENCE-DEF\">/AUTOSAR/EcucDefs/PduR/PduRRoutingPaths/PduRRoutingPath/PduRDestPduRRef</DEFINITION-REF><VALUE-REF DEST=\"ECUC-CONTAINER-VALUE\">/Configuration/PduR/Routes/RxValueDestination</VALUE-REF></ECUC-REFERENCE-VALUE></REFERENCE-VALUES>",
+                1,
+            )
+        },
+    );
+    rejected_at(
+        &sources,
+        "PDU_ROUTE_NOT_UNIQUE",
+        "ecuc.arxml",
+        "/Configuration/PduR/Routes/TxValueSource",
+    );
+    // Two routing paths into one destination (n:1).
+    let mut sources = single_component_sources();
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| {
+            named(node, "ECUC-CONTAINER-VALUE", "RxValue")
+                && node.children().any(|child| {
+                    child.text() == Some("/AUTOSAR/EcucDefs/PduR/PduRRoutingPaths/PduRRoutingPath")
+                })
+        },
+        |text| {
+            text.replacen(
+                "/Routes/RxValueDestination<",
+                "/Routes/TxValueDestination<",
+                1,
+            )
+        },
+    );
+    rejected_at(
+        &sources,
+        "PDU_ROUTE_NOT_UNIQUE",
+        "ecuc.arxml",
+        "/Configuration/PduR/Routes/RxValueSource",
+    );
+    // Rejects: ECUC_PduR_00291
+    let mut sources = single_component_sources();
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| named(node, "ECUC-CONTAINER-VALUE", "TxValueDestination"),
+        |text| text.replacen("/Pdus/TxValuePdu<", "/Pdus/RxValuePdu<", 1),
+    );
+    rejected_at(
+        &sources,
+        "PDU_ROUTE_NOT_UNIQUE",
+        "ecuc.arxml",
+        "/Configuration/EcuC/Config/Pdus/RxValuePdu",
+    );
 }

@@ -158,10 +158,17 @@ def load(archive: Path, document: str) -> Specification:
 
 def scan(text: str, path: str, prefixes: Iterable[str]) -> Scan:
     """IDs with one of the prefixes, their disposition markers, and the Rejects: parameters."""
-    alternatives = "|".join(re.escape(item) for item in sorted(prefixes, key=len, reverse=True))
+    # A few items have no number (SWS_LSduR_NA): their "prefix" is the whole ID, cited as a word.
+    numbered = sorted((item for item in prefixes if item.endswith("_")), key=len, reverse=True)
+    whole = sorted((item for item in prefixes if not item.endswith("_")), key=len, reverse=True)
+    alternatives = "|".join(re.escape(item) for item in numbered) or "(?!)"
     # The ID must start a word: "CONSTR_" (a TPS prefix) must not match inside "SWS_CANIF_CONSTR_00001".
     head = re.compile(rf"(?<![A-Za-z0-9_])({alternatives})(\d+)(?!\d)", re.IGNORECASE)
     groups = {}
+    if whole:
+        bare = re.compile(rf"(?<![A-Za-z0-9_])({'|'.join(map(re.escape, whole))})(?![A-Za-z0-9_])", re.IGNORECASE)
+        for match in bare.finditer(text):
+            groups[match.start()] = (match.end(), [match.group(1).upper()], [False])
     for match in head.finditer(text):
         stem, width = match.group(1).upper(), len(match.group(2))
         # A range yields its endpoints and the numbers between.
@@ -173,6 +180,7 @@ def scan(text: str, path: str, prefixes: Iterable[str]) -> Scan:
             numbers.append((int(more.group(2)), False))
             position = more.end()
         groups[match.start()] = (position, [f"{stem}{number:0{width}d}" for number, _ in numbers], [interior for _, interior in numbers])
+    groups = dict(sorted(groups.items()))
 
     def line(position: int) -> int:
         return text.count("\n", 0, position) + 1

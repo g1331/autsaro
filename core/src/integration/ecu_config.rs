@@ -368,7 +368,7 @@ pub(super) fn files(
                 "LSDUR_UP_PDUR, {}u, {}u, PduR_CanIfTxConfirmation, PduR_CanIfTriggerTransmit",
                 route.destination_handle, signal.can_if_handle
             )));
-            pd_tx.push(row(&format!("PDUR_UP_COM, {}u, {}u, LSduR_PduRTransmit, Com_TxConfirmation, Com_TriggerTransmit", route.source_handle, route.destination_handle)));
+            pd_tx.push(row(&format!("PDUR_UP_COM, {}u, PDUR_LO_LSDUR, {}u, LSduR_PduRTransmit, Com_TxConfirmation, Com_TriggerTransmit", route.source_handle, route.destination_handle)));
         }
     }
     config_data(
@@ -417,7 +417,8 @@ pub(super) fn files(
             tp.transmit_npdu, tp.response_can_if_handle
         )));
         pd_tx.push(row(&format!(
-            "PDUR_UP_DCM, {}u, {}u, CanTp_Transmit, Dcm_TpTxConfirmation, NULL_PTR",
+            // CanTp confirms through tp_routes, under its own N-SDU namespace.
+            "PDUR_UP_DCM, {}u, PDUR_LO_CANTP, {}u, CanTp_Transmit, NULL_PTR, NULL_PTR",
             tx_route.source_handle, tp.transmit_nsdu
         )));
         config_data(
@@ -533,12 +534,19 @@ pub(super) fn files(
         "const LSduR_PBConfigType LSduR_Config",
         &values(&format!("0u, ls_rx, {rx_count}u, ls_tx, {tx_count}u")),
     );
+    let configuration_id = "/AUTOSAR/EcucDefs/PduR/PduRRoutingPaths/PduRConfigurationId";
+    let configuration_id = description
+        .configuration
+        .iter()
+        .find_map(|record| record.parameters.get(configuration_id))
+        .and_then(|values| values.first())
+        .ok_or_else(|| PlanDiagnostic::plan_premise(configuration_id))?;
     config_data(
         &mut pd_configuration,
         "PduR",
         "const PduR_PBConfigType PduR_Config",
         &values(&format!(
-            "0u, pd_rx, {}u, pd_tx, {tx_count}u, {}, {}u",
+            "{configuration_id}u, pd_rx, {}u, pd_tx, {tx_count}u, {}, {}u",
             rx_signals,
             if transport.is_some() {
                 "tp_routes"

@@ -176,8 +176,11 @@ COM_CODE void Com_DisableReceptionDM(Com_IpduGroupIdType IpduGroupId)
     }
 }
 COM_CODE void Ecu_ComReceptionBeforeMain(boolean pending) { reception_before_main = pending; }
+/* Transitional (ADR 0018): the routers below no longer hold an area across this callback.
+ * COM_STATE still maps to the shared legacy area and covers the notification until #42. */
 COM_CODE void Com_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr)
 {
+    SchM_Enter_Com_COM_STATE();
     if ((configuration != NULL_PTR) && (receive_started == TRUE) && (PduInfoPtr != NULL_PTR) &&
         (PduInfoPtr->SduDataPtr != NULL_PTR) && (PduInfoPtr->SduLength >= 4u)) {
         const uint16 index = Com_FindPdu(RxPduId);
@@ -192,6 +195,7 @@ COM_CODE void Com_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr)
             configuration->receive_notification(configuration->pdus[index].callback_handle);
         }
     }
+    SchM_Exit_Com_COM_STATE();
 }
 COM_CODE Std_ReturnType Com_TriggerTransmit(PduIdType TxPduId, PduInfoType *PduInfoPtr)
 {
