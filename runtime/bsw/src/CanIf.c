@@ -26,7 +26,8 @@ static uint32 mode_writes CANIF_VAR_CLEARED;
 #include "CanIf_MemMap.h"
 #define CANIF_START_SEC_CODE
 #include "CanIf_MemMap.h"
-static CANIF_CODE boolean CanIf_Valid(const CanIf_ConfigType *config) {
+static CANIF_CODE boolean CanIf_Valid(const CanIf_ConfigType *config)
+{
     boolean valid = FALSE;
     uint16 i;
     if ((config != NULL_PTR) && (config->receive_count <= 32u) && (config->transmit_count <= 32u) &&
@@ -64,7 +65,8 @@ static CANIF_CODE boolean CanIf_Valid(const CanIf_ConfigType *config) {
     return valid;
 }
 /* Called inside the area: start a new lifetime with no request outstanding. */
-static CANIF_CODE void CanIf_Reset(void) {
+static CANIF_CODE void CanIf_Reset(void)
+{
     uint16 i;
     ++generation;
     ++mode_writes;
@@ -78,7 +80,8 @@ static CANIF_CODE void CanIf_Reset(void) {
 }
 /* Called inside the area: the controller stopped, so every accepted request fails once
  * (SWS_CANIF_00739); requests still in Can_Write settle against the stop count. */
-static CANIF_CODE void CanIf_CancelAccepted(void) {
+static CANIF_CODE void CanIf_CancelAccepted(void)
+{
     uint16 i;
     ++stops;
     for (i = 0u; i < configuration->transmit_count; ++i) {
@@ -87,7 +90,8 @@ static CANIF_CODE void CanIf_CancelAccepted(void) {
     }
 }
 /* Deliver owed E_NOT_OK results one claim at a time, outside the area. */
-static CANIF_CODE void CanIf_DeliverOwed(void) {
+static CANIF_CODE void CanIf_DeliverOwed(void)
+{
     uint8 more = 1u;
     while (more != 0u) {
         PduIdType id = 0u;
@@ -110,7 +114,8 @@ static CANIF_CODE void CanIf_DeliverOwed(void) {
     }
 }
 /* An invalid set leaves CanIf uninitialized, never on a previous set (SWS_CANIF_00661). */
-CANIF_CODE void CanIf_Init(const CanIf_ConfigType *ConfigPtr) {
+CANIF_CODE void CanIf_Init(const CanIf_ConfigType *ConfigPtr)
+{
     SchM_Enter_CanIf_CANIF_STATE();
     if (CanIf_Valid(ConfigPtr) == TRUE) {
         configuration = ConfigPtr;
@@ -122,7 +127,8 @@ CANIF_CODE void CanIf_Init(const CanIf_ConfigType *ConfigPtr) {
     CanIf_Reset();
     SchM_Exit_CanIf_CANIF_STATE();
 }
-CANIF_CODE void CanIf_DeInit(void) {
+CANIF_CODE void CanIf_DeInit(void)
+{
     SchM_Enter_CanIf_CANIF_STATE();
     configuration = NULL_PTR;
     controller_mode = CAN_CS_UNINIT;
@@ -130,7 +136,8 @@ CANIF_CODE void CanIf_DeInit(void) {
     SchM_Exit_CanIf_CANIF_STATE();
 }
 /* Called inside the area: the driver controller of a configured CanIf controller. */
-static CANIF_CODE uint8 CanIf_Driver(uint8 ControllerId, uint8 *driver) {
+static CANIF_CODE uint8 CanIf_Driver(uint8 ControllerId, uint8 *driver)
+{
     uint8 valid = 0u;
     if ((configuration != NULL_PTR) && (ControllerId == configuration->controller)) {
         *driver = configuration->driver_controller;
@@ -139,7 +146,8 @@ static CANIF_CODE uint8 CanIf_Driver(uint8 ControllerId, uint8 *driver) {
     return valid;
 }
 CANIF_CODE Std_ReturnType CanIf_SetControllerMode(uint8 ControllerId,
-                                                  Can_ControllerStateType ControllerMode) {
+                                                  Can_ControllerStateType ControllerMode)
+{
     Std_ReturnType result = E_NOT_OK;
     uint8 driver = 0u;
     uint8 valid;
@@ -170,7 +178,8 @@ CANIF_CODE Std_ReturnType CanIf_SetControllerMode(uint8 ControllerId,
     return result;
 }
 CANIF_CODE Std_ReturnType CanIf_GetControllerMode(uint8 ControllerId,
-                                                  Can_ControllerStateType *ControllerModePtr) {
+                                                  Can_ControllerStateType *ControllerModePtr)
+{
     Std_ReturnType result = E_NOT_OK;
     uint8 driver = 0u;
     uint8 valid;
@@ -183,7 +192,8 @@ CANIF_CODE Std_ReturnType CanIf_GetControllerMode(uint8 ControllerId,
     return result;
 }
 CANIF_CODE Std_ReturnType CanIf_GetControllerErrorState(uint8 ControllerId,
-                                                        Can_ErrorStateType *ErrorStatePtr) {
+                                                        Can_ErrorStateType *ErrorStatePtr)
+{
     Std_ReturnType result = E_NOT_OK;
     uint8 driver = 0u;
     uint8 valid;
@@ -196,7 +206,8 @@ CANIF_CODE Std_ReturnType CanIf_GetControllerErrorState(uint8 ControllerId,
     return result;
 }
 CANIF_CODE Std_ReturnType CanIf_GetControllerRxErrorCounter(uint8 ControllerId,
-                                                            uint8 *RxErrorCounterPtr) {
+                                                            uint8 *RxErrorCounterPtr)
+{
     Std_ReturnType result = E_NOT_OK;
     uint8 driver = 0u;
     uint8 valid;
@@ -209,7 +220,8 @@ CANIF_CODE Std_ReturnType CanIf_GetControllerRxErrorCounter(uint8 ControllerId,
     return result;
 }
 CANIF_CODE Std_ReturnType CanIf_GetControllerTxErrorCounter(uint8 ControllerId,
-                                                            uint8 *TxErrorCounterPtr) {
+                                                            uint8 *TxErrorCounterPtr)
+{
     Std_ReturnType result = E_NOT_OK;
     uint8 driver = 0u;
     uint8 valid;
@@ -221,7 +233,8 @@ CANIF_CODE Std_ReturnType CanIf_GetControllerTxErrorCounter(uint8 ControllerId,
     }
     return result;
 }
-CANIF_CODE Std_ReturnType CanIf_SetPduMode(uint8 ControllerId, CanIf_PduModeType PduModeRequest) {
+CANIF_CODE Std_ReturnType CanIf_SetPduMode(uint8 ControllerId, CanIf_PduModeType PduModeRequest)
+{
     Std_ReturnType result = E_NOT_OK;
     uint8 retry = 1u;
     while (retry != 0u) {
@@ -256,7 +269,8 @@ CANIF_CODE Std_ReturnType CanIf_SetPduMode(uint8 ControllerId, CanIf_PduModeType
     }
     return result;
 }
-CANIF_CODE Std_ReturnType CanIf_GetPduMode(uint8 ControllerId, CanIf_PduModeType *PduModePtr) {
+CANIF_CODE Std_ReturnType CanIf_GetPduMode(uint8 ControllerId, CanIf_PduModeType *PduModePtr)
+{
     Std_ReturnType result = E_NOT_OK;
     SchM_Enter_CanIf_CANIF_STATE();
     if ((configuration != NULL_PTR) && (ControllerId == configuration->controller) &&
@@ -267,7 +281,8 @@ CANIF_CODE Std_ReturnType CanIf_GetPduMode(uint8 ControllerId, CanIf_PduModeType
     SchM_Exit_CanIf_CANIF_STATE();
     return result;
 }
-CANIF_CODE Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr) {
+CANIF_CODE Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr)
+{
     Std_ReturnType result = E_NOT_OK;
     uint8 errors[2] = {0u, 0u};
     uint8 reserved = 0u;
@@ -342,7 +357,8 @@ CANIF_CODE Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *P
     }
     return result;
 }
-CANIF_CODE void CanIf_TxConfirmation(PduIdType CanTxPduId) {
+CANIF_CODE void CanIf_TxConfirmation(PduIdType CanTxPduId)
+{
     uint8 deliver = 0u;
     SchM_Enter_CanIf_CANIF_STATE();
     if (configuration != NULL_PTR) {
@@ -371,7 +387,8 @@ CANIF_CODE void CanIf_TxConfirmation(PduIdType CanTxPduId) {
     }
 }
 CANIF_CODE void CanIf_ControllerModeIndication(uint8 ControllerId,
-                                               Can_ControllerStateType ControllerMode) {
+                                               Can_ControllerStateType ControllerMode)
+{
     CanIf_ModeNotificationType notify = NULL_PTR;
     SchM_Enter_CanIf_CANIF_STATE();
     if ((configuration != NULL_PTR) && (ControllerId == configuration->controller) &&
@@ -396,7 +413,8 @@ CANIF_CODE void CanIf_ControllerModeIndication(uint8 ControllerId,
         notify(ControllerId, ControllerMode);
     }
 }
-CANIF_CODE void CanIf_ControllerBusOff(uint8 ControllerId) {
+CANIF_CODE void CanIf_ControllerBusOff(uint8 ControllerId)
+{
     CanIf_BusOffNotificationType notify = NULL_PTR;
     Can_ControllerStateType actual_mode = CAN_CS_UNINIT;
     uint8 driver = 0u;
@@ -431,7 +449,8 @@ CANIF_CODE void CanIf_ControllerBusOff(uint8 ControllerId) {
         notify(ControllerId);
     }
 }
-CANIF_CODE void CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType *PduInfoPtr) {
+CANIF_CODE void CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType *PduInfoPtr)
+{
     uint8 deliver = 0u;
     uint8 invalid_length = 0u;
     PduIdType id = 0u;

@@ -31,29 +31,45 @@ static Os_TaskConfig tasks[16];
 static Os_ResourceConfig resources[8];
 static const char *scenario;
 
-static void check(bool condition) {
+static void check(bool condition)
+{
     if (!condition) {
         ShutdownOS(E_OS_STATE);
     }
 }
-void StartupHook(void) {
+void StartupHook(void)
+{
     check(GetActiveApplicationMode() == selected_mode);
     ++modes;
 }
-void ShutdownHook(StatusType Error) {
+void ShutdownHook(StatusType Error)
+{
     printf("capacity case=%s tasks=%zu active=%u priorities=%u resources=%u internal=2 alarms=1 "
            "modes=%u queued=%u reason=%u\n",
-           scenario, task_count, initial_active, highest_priority, acquired_resources, modes,
-           queued, Error);
+           scenario,
+           task_count,
+           initial_active,
+           highest_priority,
+           acquired_resources,
+           modes,
+           queued,
+           Error);
     for (unsigned i = 0u; i < observation_count; ++i) {
         const Observation *o = &observations[i];
         printf("task id=%u entry=%u state=%u priority=%u internal=%u events_seen=%u "
                "events_final=%u counter=%llu\n",
-               o->task, o->entry, o->state, o->priority, o->internal, o->events, o->final_events,
+               o->task,
+               o->entry,
+               o->state,
+               o->priority,
+               o->internal,
+               o->events,
+               o->final_events,
                (unsigned long long)o->counter);
     }
 }
-static void entry(void) {
+static void entry(void)
+{
     TaskType id = INVALID_TASK;
     Os_ActivationInfo info;
     EventMaskType events = 0u;
@@ -141,13 +157,14 @@ static void entry(void) {
     }
     ShutdownOS(E_OK);
 }
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     Os_InternalResourceConfig internal[2] = {{1u, 1u}, {2u, 2u}};
     Os_CounterConfig counters[2] = {{0u, 31u, 1u, 1u, 1u}, {1u, 31u, 1u, 1u, 0u}};
     Os_AlarmConfig alarm = {0u, 0u, OS_ALARM_ACTIVATE, 1u, 0u, NULL, 0u, 0u, 0u, 0u, 0u};
     Os_TimeConfig time = {counters, 1u, &alarm, 1u, 0u, INVALID_TASK, 0u, NULL, NULL, 0u};
-    Os_TargetConfig target = {tasks, 0u, 262144u, resources, 0u,   internal, 2u,
-                              0u,    0u, 0u,      &time,     NULL, NULL};
+    Os_TargetConfig target = {
+        tasks, 0u, 262144u, resources, 0u, internal, 2u, 0u, 0u, 0u, &time, NULL, NULL};
     StatusType expected = E_OK;
     scenario = (argc == 2) ? argv[1] : "bcc1";
     extended = strncmp(scenario, "ecc", 3u) == 0;
@@ -181,9 +198,11 @@ int main(int argc, char **argv) {
     }
     for (size_t i = 0u; i < resource_count; ++i) {
         const bool scheduler = i == resource_count - 1u;
-        resources[i] = (Os_ResourceConfig){
-            scheduler ? RES_SCHEDULER : (ResourceType)i, scheduler ? highest_priority : 1u,
-            scheduler ? (uint16_t)((UINT32_C(1) << task_count) - 1u) : 1u, 0u};
+        resources[i] =
+            (Os_ResourceConfig){scheduler ? RES_SCHEDULER : (ResourceType)i,
+                                scheduler ? highest_priority : 1u,
+                                scheduler ? (uint16_t)((UINT32_C(1) << task_count) - 1u) : 1u,
+                                0u};
     }
     if (strcmp(scenario, "bad-manual-owner") == 0) {
         time.owner = 0u;

@@ -15,17 +15,20 @@ static DWORD isr_thread;
 static uintptr_t stack_marks[32];
 static TaskStateType parent_state = 77u;
 static bool is(const char *name) { return strcmp(scenario, name) == 0; }
-static void check(bool condition) {
+static void check(bool condition)
+{
     if (!condition) {
         Os_BackendShutdown(E_OS_STATE);
     }
 }
-static void record(char marker) {
+static void record(char marker)
+{
     check(length + 1u < sizeof(trace));
     trace[length++] = marker;
     trace[length] = '\0';
 }
-static void enter(unsigned expected, const volatile char *marker) {
+static void enter(unsigned expected, const volatile char *marker)
+{
     const Os_NativeStack *stack = Os_StackCurrent();
     const uintptr_t address = (uintptr_t)marker;
     check(stack != NULL && stack->role == 'S');
@@ -41,18 +44,21 @@ static void enter(unsigned expected, const volatile char *marker) {
         maximum = depth;
     }
 }
-static void leave(unsigned expected) {
+static void leave(unsigned expected)
+{
     check(depth != 0u && Os_BackendCurrentInterrupt() == expected && helpers == 0u);
     --depth;
 }
-static void pend(unsigned interrupt) {
+static void pend(unsigned interrupt)
+{
     if (is("native-call")) {
         vPortGenerateSimulatedInterrupt(interrupt);
     } else {
         Os_PortPostInterrupt(interrupt);
     }
 }
-void ErrorHook(StatusType error) {
+void ErrorHook(StatusType error)
+{
     const OSServiceIdType service = OSErrorGetServiceId();
     const unsigned interrupt = Os_BackendCurrentInterrupt();
     check(errors < 8u);
@@ -74,7 +80,8 @@ void ErrorHook(StatusType error) {
         record('e');
     }
 }
-static uint32_t grandchild(void) {
+static uint32_t grandchild(void)
+{
     volatile char marker = 0;
     enter(4u, &marker);
     ++grandchildren;
@@ -102,7 +109,8 @@ static uint32_t grandchild(void) {
     leave(4u);
     return 0u;
 }
-static uint32_t child(void) {
+static uint32_t child(void)
+{
     volatile char marker = 0;
     enter(6u, &marker);
     ++children;
@@ -135,7 +143,8 @@ static uint32_t child(void) {
     leave(6u);
     return 0u;
 }
-static uint32_t parent(void) {
+static uint32_t parent(void)
+{
     volatile char marker = 0;
     enter(20u, &marker);
     record('P');
@@ -199,7 +208,8 @@ static uint32_t parent(void) {
     leave(20u);
     return 0u;
 }
-static uint32_t deep(void) {
+static uint32_t deep(void)
+{
     volatile char marker = 0;
     const unsigned interrupt = Os_BackendCurrentInterrupt();
     enter(interrupt, &marker);
@@ -215,7 +225,8 @@ static uint32_t deep(void) {
     leave(interrupt);
     return 0u;
 }
-void StartupHook(void) {
+void StartupHook(void)
+{
     if (is("maximum")) {
         for (unsigned interrupt = 2u; interrupt < 32u; ++interrupt) {
             vPortSetInterruptHandler(interrupt, &deep);
@@ -226,23 +237,36 @@ void StartupHook(void) {
         vPortSetInterruptHandler(4u, &grandchild);
     }
 }
-void ShutdownHook(StatusType error) {
+void ShutdownHook(StatusType error)
+{
     printf("nested scenario=%s children=%u grandchildren=%u helpers=%u errors=%u depth=%u "
            "maximum=%u trace=%s reason=%u\n",
-           scenario, children, grandchildren, helpers, errors, depth, maximum, trace, error);
+           scenario,
+           children,
+           grandchildren,
+           helpers,
+           errors,
+           depth,
+           maximum,
+           trace,
+           error);
     for (unsigned i = 0u; i < errors; ++i) {
-        printf("nested_error isr=%u status=%u service=%u\n", error_isrs[i], error_codes[i],
+        printf("nested_error isr=%u status=%u service=%u\n",
+               error_isrs[i],
+               error_codes[i],
                error_services[i]);
     }
 }
-static void helper(void) {
+static void helper(void)
+{
     check(depth == 0u && GetISRID() == INVALID_ISR);
     ++helpers;
     record('H');
     (void)TerminateTask();
     Os_BackendShutdown(E_OS_STATE);
 }
-static void owner(void) {
+static void owner(void)
+{
     record('A');
     if (is("priority-order")) {
         SuspendAllInterrupts();
@@ -271,7 +295,8 @@ static void owner(void) {
     record('B');
     ShutdownOS(E_OK);
 }
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     check(argc == 2);
     scenario = argv[1];
     Os_TaskConfig tasks[2] = {
@@ -285,8 +310,8 @@ int main(int argc, char **argv) {
         {2u, 15u, 0u, UINT32_C(1) << 4u},
     };
     const Os_HookConfig hooks = {&ErrorHook, NULL, NULL};
-    Os_TargetConfig target = {tasks, 2u, 262144u, resources, 3u,     NULL,       0u,
-                              0u,    0u, 0u,      NULL,      &hooks, &interrupts};
+    Os_TargetConfig target = {
+        tasks, 2u, 262144u, resources, 3u, NULL, 0u, 0u, 0u, 0u, NULL, &hooks, &interrupts};
     if (is("equal") || is("lower")) {
         interrupts.priorities[6u] = is("equal") ? 3u : 2u;
     } else if (is("priority-order")) {
@@ -329,7 +354,9 @@ int main(int argc, char **argv) {
             return 98;
         }
         const StatusType status = Os_TargetPrepare(&target);
-        printf("nested_rejection scenario=%s status=%u configured=%u\n", scenario, status,
+        printf("nested_rejection scenario=%s status=%u configured=%u\n",
+               scenario,
+               status,
                Os_Config != NULL ? 1u : 0u);
         return status == E_OS_VALUE && Os_Config == NULL ? 0 : 98;
     }

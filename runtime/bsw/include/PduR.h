@@ -9,12 +9,17 @@ typedef Std_ReturnType (*PduR_TransmitType)(PduIdType id, const PduInfoType *inf
 typedef void (*PduR_ReceiveType)(PduIdType id, const PduInfoType *info);
 typedef void (*PduR_ConfirmationType)(PduIdType id, Std_ReturnType result);
 typedef Std_ReturnType (*PduR_TriggerType)(PduIdType id, PduInfoType *info);
-typedef BufReq_ReturnType (*PduR_StartType)(PduIdType id, const PduInfoType *info,
-                                            PduLengthType length, PduLengthType *available);
-typedef BufReq_ReturnType (*PduR_CopyRxType)(PduIdType id, const PduInfoType *info,
+typedef BufReq_ReturnType (*PduR_StartType)(PduIdType id,
+                                            const PduInfoType *info,
+                                            PduLengthType length,
+                                            PduLengthType *available);
+typedef BufReq_ReturnType (*PduR_CopyRxType)(PduIdType id,
+                                             const PduInfoType *info,
                                              PduLengthType *available);
-typedef BufReq_ReturnType (*PduR_CopyTxType)(PduIdType id, const PduInfoType *info,
-                                             const RetryInfoType *retry, PduLengthType *available);
+typedef BufReq_ReturnType (*PduR_CopyTxType)(PduIdType id,
+                                             const PduInfoType *info,
+                                             const RetryInfoType *retry,
+                                             PduLengthType *available);
 typedef struct {
     PduIdType lower_rx;
     PduIdType upper_rx;

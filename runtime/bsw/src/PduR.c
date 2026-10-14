@@ -11,7 +11,8 @@ static const PduR_PBConfigType *configuration PDUR_VAR_CLEARED;
 #include "PduR_MemMap.h"
 #define PDUR_START_SEC_CODE
 #include "PduR_MemMap.h"
-static PDUR_CODE boolean PduR_Valid(const PduR_PBConfigType *config) {
+static PDUR_CODE boolean PduR_Valid(const PduR_PBConfigType *config)
+{
     boolean valid = FALSE;
     uint16 i;
     if ((config != NULL_PTR) && (config->receive_count <= 32u) && (config->transmit_count <= 32u) &&
@@ -66,7 +67,8 @@ static PDUR_CODE boolean PduR_Valid(const PduR_PBConfigType *config) {
     }
     return valid;
 }
-static PDUR_CODE const PduR_TpRouteType *PduR_Transport(PduIdType id, boolean receive) {
+static PDUR_CODE const PduR_TpRouteType *PduR_Transport(PduIdType id, boolean receive)
+{
     const PduR_TpRouteType *result = NULL_PTR;
     if (configuration != NULL_PTR) {
         uint16 i;
@@ -81,49 +83,61 @@ static PDUR_CODE const PduR_TpRouteType *PduR_Transport(PduIdType id, boolean re
     }
     return result;
 }
-PDUR_CODE BufReq_ReturnType PduR_CanTpStartOfReception(PduIdType id, const PduInfoType *info,
+PDUR_CODE BufReq_ReturnType PduR_CanTpStartOfReception(PduIdType id,
+                                                       const PduInfoType *info,
                                                        PduLengthType length,
-                                                       PduLengthType *available) {
+                                                       PduLengthType *available)
+{
     const PduR_TpRouteType *route = PduR_Transport(id, TRUE);
     return (route == NULL_PTR) ? BUFREQ_E_NOT_OK
                                : route->start(route->upper_rx, info, length, available);
 }
-PDUR_CODE BufReq_ReturnType PduR_CanTpCopyRxData(PduIdType id, const PduInfoType *info,
-                                                 PduLengthType *available) {
+PDUR_CODE BufReq_ReturnType PduR_CanTpCopyRxData(PduIdType id,
+                                                 const PduInfoType *info,
+                                                 PduLengthType *available)
+{
     const PduR_TpRouteType *route = PduR_Transport(id, TRUE);
     return (route == NULL_PTR) ? BUFREQ_E_NOT_OK : route->copy_rx(route->upper_rx, info, available);
 }
-PDUR_CODE void PduR_CanTpRxIndication(PduIdType id, Std_ReturnType result) {
+PDUR_CODE void PduR_CanTpRxIndication(PduIdType id, Std_ReturnType result)
+{
     const PduR_TpRouteType *route = PduR_Transport(id, TRUE);
     if (route != NULL_PTR) {
         route->receive(route->upper_rx, result);
     }
 }
-PDUR_CODE BufReq_ReturnType PduR_CanTpCopyTxData(PduIdType id, const PduInfoType *info,
+PDUR_CODE BufReq_ReturnType PduR_CanTpCopyTxData(PduIdType id,
+                                                 const PduInfoType *info,
                                                  const RetryInfoType *retry,
-                                                 PduLengthType *available) {
+                                                 PduLengthType *available)
+{
     const PduR_TpRouteType *route = PduR_Transport(id, FALSE);
     return (route == NULL_PTR) ? BUFREQ_E_NOT_OK
                                : route->copy_tx(route->upper_tx, info, retry, available);
 }
-PDUR_CODE void PduR_CanTpTxConfirmation(PduIdType id, Std_ReturnType result) {
+PDUR_CODE void PduR_CanTpTxConfirmation(PduIdType id, Std_ReturnType result)
+{
     const PduR_TpRouteType *route = PduR_Transport(id, FALSE);
     if (route != NULL_PTR) {
         route->confirmation(route->upper_tx, result);
     }
 }
-PDUR_CODE void PduR_Init(const PduR_PBConfigType *ConfigPtr) {
+PDUR_CODE void PduR_Init(const PduR_PBConfigType *ConfigPtr)
+{
     SchM_Enter_PduR_PDUR_STATE();
     if (PduR_Valid(ConfigPtr) == TRUE) {
         configuration = ConfigPtr;
     }
     SchM_Exit_PduR_PDUR_STATE();
 }
-PDUR_CODE PduR_PBConfigIdType PduR_GetConfigurationId(void) {
+PDUR_CODE PduR_PBConfigIdType PduR_GetConfigurationId(void)
+{
     return (configuration == NULL_PTR) ? 0u : configuration->id;
 }
-static PDUR_CODE Std_ReturnType PduR_Transmit(PduR_UpperType module, PduIdType id,
-                                              const PduInfoType *info) {
+static PDUR_CODE Std_ReturnType PduR_Transmit(PduR_UpperType module,
+                                              PduIdType id,
+                                              const PduInfoType *info)
+{
     Std_ReturnType result = E_NOT_OK;
     if ((configuration != NULL_PTR) && (info != NULL_PTR)) {
         uint16 i;
@@ -137,13 +151,16 @@ static PDUR_CODE Std_ReturnType PduR_Transmit(PduR_UpperType module, PduIdType i
     }
     return result;
 }
-PDUR_CODE Std_ReturnType PduR_ComTransmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr) {
+PDUR_CODE Std_ReturnType PduR_ComTransmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr)
+{
     return PduR_Transmit(PDUR_UP_COM, TxPduId, PduInfoPtr);
 }
-PDUR_CODE Std_ReturnType PduR_DcmTransmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr) {
+PDUR_CODE Std_ReturnType PduR_DcmTransmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr)
+{
     return PduR_Transmit(PDUR_UP_DCM, TxPduId, PduInfoPtr);
 }
-PDUR_CODE void PduR_CanIfRxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr) {
+PDUR_CODE void PduR_CanIfRxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr)
+{
     if ((configuration != NULL_PTR) && (PduInfoPtr != NULL_PTR)) {
         uint16 i;
         for (i = 0u; i < configuration->receive_count; ++i) {
@@ -155,7 +172,8 @@ PDUR_CODE void PduR_CanIfRxIndication(PduIdType RxPduId, const PduInfoType *PduI
         }
     }
 }
-PDUR_CODE void PduR_CanIfTxConfirmation(PduIdType TxPduId, Std_ReturnType result) {
+PDUR_CODE void PduR_CanIfTxConfirmation(PduIdType TxPduId, Std_ReturnType result)
+{
     if (configuration != NULL_PTR) {
         uint16 i;
         for (i = 0u; i < configuration->transmit_count; ++i) {
@@ -167,7 +185,8 @@ PDUR_CODE void PduR_CanIfTxConfirmation(PduIdType TxPduId, Std_ReturnType result
         }
     }
 }
-PDUR_CODE Std_ReturnType PduR_CanIfTriggerTransmit(PduIdType TxPduId, PduInfoType *PduInfoPtr) {
+PDUR_CODE Std_ReturnType PduR_CanIfTriggerTransmit(PduIdType TxPduId, PduInfoType *PduInfoPtr)
+{
     Std_ReturnType result = E_NOT_OK;
     if ((configuration != NULL_PTR) && (PduInfoPtr != NULL_PTR)) {
         uint16 i;

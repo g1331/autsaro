@@ -11,7 +11,8 @@ static unsigned entries[7];
 static unsigned observations;
 static unsigned rejected;
 static bool chain_committed;
-static bool same_info(const Os_ActivationInfo *a, const Os_ActivationInfo *b) {
+static bool same_info(const Os_ActivationInfo *a, const Os_ActivationInfo *b)
+{
     unsigned i;
     bool same = (a->state == b->state) && (a->count == b->count) &&
                 (a->kernel_sequence == b->kernel_sequence) && (a->events == b->events) &&
@@ -25,13 +26,15 @@ static bool same_info(const Os_ActivationInfo *a, const Os_ActivationInfo *b) {
     }
     return same;
 }
-static void check(bool condition) {
+static void check(bool condition)
+{
     if (!condition) {
         Os_TargetTrace('!');
         ShutdownOS(E_OS_STATE);
     }
 }
-void Os_TestObserve(void) {
+void Os_TestObserve(void)
+{
     unsigned i;
     ++observations;
     for (i = 0u; i < 7u; ++i) {
@@ -51,7 +54,8 @@ void Os_TestObserve(void) {
         check(info.effective_priority == uxTaskPriorityGet(observed[i]));
     }
 }
-static void reject_finish(TaskType target, bool terminate, StatusType expected) {
+static void reject_finish(TaskType target, bool terminate, StatusType expected)
+{
     Os_ActivationInfo before[7];
     Os_ActivationInfo after;
     unsigned i;
@@ -65,17 +69,20 @@ static void reject_finish(TaskType target, bool terminate, StatusType expected) 
     }
     ++rejected;
 }
-static void finish(void) {
+static void finish(void)
+{
     (void)TerminateTask();
     Os_TargetTrace('X');
     ShutdownOS(E_OS_STATE);
 }
-static void chain(TaskType id) {
+static void chain(TaskType id)
+{
     (void)ChainTask(id);
     Os_TargetTrace('X');
     ShutdownOS(E_OS_STATE);
 }
-static uint32_t interrupt(void) {
+static uint32_t interrupt(void)
+{
     Os_TargetTrace('J');
     reject_finish(2u, false, E_OS_CALLEVEL);
     reject_finish(0u, true, E_OS_CALLEVEL);
@@ -85,7 +92,8 @@ static uint32_t interrupt(void) {
     }
     return 0u;
 }
-void Os_TestFinishBoundary(unsigned point) {
+void Os_TestFinishBoundary(unsigned point)
+{
     static bool injected;
     if (point == 0u) {
         Os_TestObserve();
@@ -97,7 +105,8 @@ void Os_TestFinishBoundary(unsigned point) {
         vPortGenerateSimulatedInterrupt(31u);
     }
 }
-void StartupHook(void) {
+void StartupHook(void)
+{
     unsigned i;
     static const char *const names[] = {"L", "A", "B", "H", "D", "E", "M"};
     Os_TargetTrace('S');
@@ -109,14 +118,23 @@ void StartupHook(void) {
     }
     vPortSetInterruptHandler(31u, interrupt);
 }
-void ShutdownHook(StatusType Error) {
+void ShutdownHook(StatusType Error)
+{
     Os_TargetTrace('Z');
-    if (printf("finish a=%u b=%u h=%u d=%u e=%u observer=%u rejected=%u error=%u\n", entries[1],
-               entries[2], entries[3], entries[4], entries[5], observations, rejected, Error) < 0) {
+    if (printf("finish a=%u b=%u h=%u d=%u e=%u observer=%u rejected=%u error=%u\n",
+               entries[1],
+               entries[2],
+               entries[3],
+               entries[4],
+               entries[5],
+               observations,
+               rejected,
+               Error) < 0) {
         ExitProcess(E_OS_STATE);
     }
 }
-static void launcher(void) {
+static void launcher(void)
+{
     ++entries[0];
     Os_TargetTrace('L');
     if (strcmp(scenario, "extended-self") == 0) {
@@ -146,7 +164,8 @@ static void launcher(void) {
     }
     finish();
 }
-static void task_a(void) {
+static void task_a(void)
+{
     volatile unsigned local = 0x12345678u;
     Os_ActivationInfo info;
     char marker;
@@ -213,7 +232,8 @@ static void task_a(void) {
     }
     finish();
 }
-static void check_source_ended(void) {
+static void check_source_ended(void)
+{
     Os_ActivationInfo info;
     check(Os_TargetInspectActivation(1u, &info) == E_OK);
     if (strncmp(scenario, "boundary-", 9u) == 0) {
@@ -223,7 +243,8 @@ static void check_source_ended(void) {
         check((info.count == 0u) && (info.state == SUSPENDED));
     }
 }
-static void task_b(void) {
+static void task_b(void)
+{
     ++entries[2];
     if (chain_committed) {
         check_source_ended();
@@ -231,7 +252,8 @@ static void task_b(void) {
     Os_TargetTrace((entries[2] == 1u) ? 'B' : 'b');
     finish();
 }
-static void task_h(void) {
+static void task_h(void)
+{
     ++entries[3];
     if (chain_committed) {
         check_source_ended();
@@ -239,13 +261,15 @@ static void task_h(void) {
     Os_TargetTrace('H');
     finish();
 }
-static void task_d(void) {
+static void task_d(void)
+{
     ++entries[4];
     check_source_ended();
     Os_TargetTrace('D');
     finish();
 }
-static void task_e(void) {
+static void task_e(void)
+{
     volatile unsigned local = 7u;
     EventMaskType events;
     ++entries[5];
@@ -259,7 +283,8 @@ static void task_e(void) {
     }
     finish();
 }
-static void monitor(void) {
+static void monitor(void)
+{
     unsigned i;
     for (i = 0u; i < 6u; ++i) {
         Os_ActivationInfo info;
@@ -269,7 +294,8 @@ static void monitor(void) {
     Os_TargetTrace('M');
     ShutdownOS(E_OK);
 }
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     Os_TaskConfig tasks[] = {{0u, "L", launcher, 6u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
                              {1u, "A", task_a, 3u, 0u, OS_BASIC_TASK, 2u, OS_SCHEDULE_FULL, 0u},
                              {2u, "B", task_b, 3u, 0u, OS_BASIC_TASK, 2u, OS_SCHEDULE_FULL, 0u},
@@ -278,8 +304,8 @@ int main(int argc, char **argv) {
                              {5u, "E", task_e, 3u, 0u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
                              {6u, "M", monitor, 1u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
     Os_ResourceConfig resources[] = {{0u, 5u, 10u, 0u}, {1u, 5u, 10u, 0u}};
-    Os_TargetConfig config = {tasks, 7u, 262144u, resources, 1u,   NULL, 0u,
-                              0u,    0u, 0u,      NULL,      NULL, NULL};
+    Os_TargetConfig config = {
+        tasks, 7u, 262144u, resources, 1u, NULL, 0u, 0u, 0u, 0u, NULL, NULL, NULL};
     StatusType prepared;
     scenario = (argc == 2) ? argv[1] : "terminate-pending";
     if (strcmp(scenario, "self") == 0) {

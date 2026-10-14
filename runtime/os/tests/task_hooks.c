@@ -11,17 +11,20 @@ static unsigned helper_entries;
 static const char *scenario;
 static bool configured = true;
 static bool internal;
-static void check(bool condition) {
+static void check(bool condition)
+{
     if (!condition) {
         ShutdownOS(E_OS_STATE);
     }
 }
-static void record(char code) {
+static void record(char code)
+{
     check(length + 1u < sizeof(trace));
     trace[length++] = code;
     trace[length] = '\0';
 }
-static void task_hook(char code) {
+static void task_hook(char code)
+{
     TaskType id = INVALID_TASK;
     TaskStateType state = 99u;
     TickType value = UINT64_MAX;
@@ -41,11 +44,16 @@ static void task_hook(char code) {
 void PreTaskHook(void) { task_hook('p'); }
 void PostTaskHook(void) { task_hook('q'); }
 void StartupHook(void) { check(GetActiveApplicationMode() == 1u); }
-void ShutdownHook(StatusType error) {
-    printf("task_hooks scenario=%s configured=%u trace=%s reason=%u\n", scenario,
-           configured ? 1u : 0u, trace, error);
+void ShutdownHook(StatusType error)
+{
+    printf("task_hooks scenario=%s configured=%u trace=%s reason=%u\n",
+           scenario,
+           configured ? 1u : 0u,
+           trace,
+           error);
 }
-static void owner(void) {
+static void owner(void)
+{
     ++owner_entries;
     if (strcmp(scenario, "self-chain") == 0 || strcmp(scenario, "queued") == 0) {
         record(owner_entries == 1u ? 'X' : 'Y');
@@ -85,13 +93,15 @@ static void owner(void) {
     (void)ChainTask(1u);
     ShutdownOS(E_OS_STATE);
 }
-static void helper(void) {
+static void helper(void)
+{
     ++helper_entries;
     record(helper_entries == 1u ? 'H' : 'J');
     (void)TerminateTask();
     ShutdownOS(E_OS_STATE);
 }
-static void low(void) {
+static void low(void)
+{
     TaskStateType state = 99u;
     if (strcmp(scenario, "self-chain") == 0 || strcmp(scenario, "queued") == 0) {
         check(owner_entries == 2u && GetTaskState(0u, &state) == E_OK && state == SUSPENDED);
@@ -106,7 +116,8 @@ static void low(void) {
     check(ActivateTask(0u) == E_OK);
     ShutdownOS(E_OS_STATE);
 }
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     check(argc == 2);
     scenario = argv[1];
     configured = strcmp(scenario, "unconfigured") != 0;

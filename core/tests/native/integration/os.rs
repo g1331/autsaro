@@ -109,6 +109,19 @@ fn counter_header_oracles() {
         );
         let header_path = project.join("generated/include/Os_Counter.h");
         let header = std::fs::read_to_string(&header_path).unwrap();
+        // Macro values are aligned, so a mutant replaces the whole definition.
+        let redefine = |macro_name: &str, value: &str| {
+            let mut text = String::new();
+            for line in header.lines() {
+                let mut words = line.split_whitespace();
+                if words.next() == Some("#define") && words.next() == Some(macro_name) {
+                    text.push_str(&format!("#define {macro_name} {value}\n"));
+                } else {
+                    text.push_str(&format!("{line}\n"));
+                }
+            }
+            text
+        };
         for (name, mutant, expected_exit) in [
             (
                 "wrong-nanosecond-scale",
@@ -125,43 +138,32 @@ fn counter_header_oracles() {
             ),
             (
                 "wrong-counter-maximum",
-                header.replace(
-                    &format!("OSMAXALLOWEDVALUE_{counter} UINT64_C({maximum})"),
-                    &format!("OSMAXALLOWEDVALUE_{counter} UINT64_C({})", maximum - 1),
+                redefine(
+                    &format!("OSMAXALLOWEDVALUE_{counter}"),
+                    &format!("UINT64_C({})", maximum - 1),
                 ),
                 3,
             ),
             (
                 "wrong-counter-base",
-                header.replace(
-                    &format!("OSTICKSPERBASE_{counter} UINT64_C(1)"),
-                    &format!("OSTICKSPERBASE_{counter} UINT64_C(2)"),
-                ),
+                redefine(&format!("OSTICKSPERBASE_{counter}"), "UINT64_C(2)"),
                 3,
             ),
             (
                 "wrong-counter-minimum-cycle",
-                header.replace(
-                    &format!("OSMINCYCLE_{counter} UINT64_C(1)"),
-                    &format!("OSMINCYCLE_{counter} UINT64_C(2)"),
-                ),
+                redefine(&format!("OSMINCYCLE_{counter}"), "UINT64_C(2)"),
                 3,
             ),
             (
                 "wrong-system-tick-duration",
-                header.replace(
-                    "OSTICKDURATION UINT64_C(1000000)",
-                    "OSTICKDURATION UINT64_C(2000000)",
-                ),
+                redefine("OSTICKDURATION", "UINT64_C(2000000)"),
                 3,
             ),
             (
                 "wrong-counter-id-maximum-alias",
-                header.replace(
-                    &format!(
-                        "OSMAXALLOWEDVALUE_OS_COUNTER_ID_{counter} OSMAXALLOWEDVALUE_{counter}"
-                    ),
-                    &format!("OSMAXALLOWEDVALUE_OS_COUNTER_ID_{counter} OSTICKSPERBASE_{counter}"),
+                redefine(
+                    &format!("OSMAXALLOWEDVALUE_OS_COUNTER_ID_{counter}"),
+                    &format!("OSTICKSPERBASE_{counter}"),
                 ),
                 3,
             ),

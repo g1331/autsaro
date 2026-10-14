@@ -1,3 +1,4 @@
+use super::c_layout;
 use super::{DiagnosticCategory, PlanDiagnostic, ValidatedIntegrationPlan};
 use crate::{GenerationPreview, GenerationReport, generator};
 use std::collections::BTreeMap;
@@ -125,19 +126,25 @@ impl ValidatedIntegrationPlan {
             types.push_str(&format!("typedef uint8 {datatype}[4];\n"));
         }
         let lifecycle = if ecu {
-            "#include \"Rte_Main.h\"\n#define RTE_E_OK 0U\n#define RTE_E_LIMIT 130U\n"
+            format!(
+                "#include \"Rte_Main.h\"\n{}",
+                c_layout::defines(&[("RTE_E_OK", "0U"), ("RTE_E_LIMIT", "130U")])
+            )
         } else {
-            ""
+            String::new()
         };
+        let statuses = c_layout::defines(&[
+            ("RTE_E_COM_STOPPED", "128U"),
+            ("RTE_E_NEVER_RECEIVED", "133U"),
+            ("RTE_E_MAX_AGE_EXCEEDED", "64U"),
+        ]);
         let mut files = vec![
             ("include/Rte_Type.h".into(), header("RTE_TYPE_H", &types)),
             (
                 "include/Rte.h".into(),
                 header(
                     "RTE_H",
-                    &format!(
-                        "#include \"Rte_Type.h\"\n{lifecycle}\n#define RTE_E_COM_STOPPED 128U\n#define RTE_E_NEVER_RECEIVED 133U\n#define RTE_E_MAX_AGE_EXCEEDED 64U\n"
-                    ),
+                    &format!("#include \"Rte_Type.h\"\n{lifecycle}\n{statuses}"),
                 ),
             ),
         ];
@@ -149,14 +156,13 @@ impl ValidatedIntegrationPlan {
                 .filter(|symbol| symbol.declaration_owner == component.header)
             {
                 let parameters = if symbol.arguments.is_empty() {
-                    "void".into()
+                    vec!["void".into()]
                 } else {
                     symbol
                         .arguments
                         .iter()
-                        .map(|argument| format!("{} {}", argument.native_type, argument.name))
-                        .collect::<Vec<_>>()
-                        .join(", ")
+                        .map(|argument| c_layout::parameter(&argument.native_type, &argument.name))
+                        .collect()
                 };
                 let mut docs = String::new();
                 for argument in &symbol.arguments {
@@ -202,34 +208,50 @@ impl ValidatedIntegrationPlan {
                         "Planned E_OK or an RTE infrastructure error for the synchronous client."
                             .to_owned()
                     };
-                    docs.push_str(&format!(" * @return {status} Declaration only; runtime behavior is not implemented here.\n"));
+                    docs.push_str(&c_layout::comment(
+                        " * ",
+                        &format!("@return {status} Declaration only; runtime behavior is not implemented here."),
+                    ));
                 }
                 declaration(
                     &mut body,
                     "Component contract in the configured single-owner task.",
-                    &format!("{} {}({parameters});", symbol.return_type, symbol.symbol),
+                    &c_layout::signature(
+                        &symbol.return_type,
+                        &symbol.symbol,
+                        &parameters,
+                        ";",
+                        false,
+                    ),
                     &docs,
                 );
             }
-            body.push_str("#if !defined(RTE_CORE)\n");
-            for port in &component.data_ports {
-                body.push_str(&format!(
-                    "#define {} {}\n",
-                    port.api_symbol,
-                    super::composition::data_symbol(component, port)
-                ));
-            }
-            for operation in component
-                .operations
+            let mut macros: Vec<(String, String)> = component
+                .data_ports
                 .iter()
-                .filter(|operation| operation.read)
-            {
-                body.push_str(&format!(
-                    "#define {} {}\n",
-                    operation.api_symbol, operation.implementation_symbol
-                ));
-            }
-            body.push_str("#endif\n");
+                .map(|port| {
+                    (
+                        port.api_symbol.clone(),
+                        super::composition::data_symbol(component, port),
+                    )
+                })
+                .collect();
+            macros.extend(
+                component
+                    .operations
+                    .iter()
+                    .filter(|operation| operation.read)
+                    .map(|operation| {
+                        (
+                            operation.api_symbol.clone(),
+                            operation.implementation_symbol.clone(),
+                        )
+                    }),
+            );
+            body.push_str(&format!(
+                "#if !defined(RTE_CORE)\n{}#endif\n",
+                c_layout::defines(&macros)
+            ));
             let name = component
                 .header
                 .trim_start_matches("include/Rte_")

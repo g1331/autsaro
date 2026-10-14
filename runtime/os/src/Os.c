@@ -2,7 +2,8 @@
 #include "Os_Backend.h"
 const Os_TargetConfig *Os_Config;
 static volatile Os_Atomic32 start_called;
-StatusType Os_TargetPrepare(const Os_TargetConfig *config) {
+StatusType Os_TargetPrepare(const Os_TargetConfig *config)
+{
     size_t i, j;
     uint8_t highest_task = 0u;
     if (Os_Config != NULL) {
@@ -192,7 +193,8 @@ StatusType Os_TargetPrepare(const Os_TargetConfig *config) {
     Arti_Init();
     return E_OK;
 }
-void Os_Implementation_StartOS(AppModeType Mode) {
+void Os_Implementation_StartOS(AppModeType Mode)
+{
     InterlockedExchange(&start_called, 1);
     Os_StackCheck();
     if (Os_InterruptDisabled() != 0) {
@@ -208,7 +210,8 @@ void Os_Implementation_StartOS(AppModeType Mode) {
     }
     Os_BackendStart(Mode);
 }
-boolean Os_Implementation_isOsStarted(void) {
+boolean Os_Implementation_isOsStarted(void)
+{
     const StatusType status = Os_ServiceAccessStatus(OSServiceId_isOsStarted);
     Os_StackCheck();
     Os_BackendGuardService();
@@ -217,7 +220,8 @@ boolean Os_Implementation_isOsStarted(void) {
     }
     return InterlockedCompareExchange(&start_called, 0, 0) != 0 ? TRUE : FALSE;
 }
-StatusType Os_Implementation_ControlIdle(CoreIdType CoreID, IdleModeType IdleMode) {
+StatusType Os_Implementation_ControlIdle(CoreIdType CoreID, IdleModeType IdleMode)
+{
     const Os_ErrorParameters arguments = {.service_ControlIdle = {CoreID, IdleMode}};
     StatusType status = Os_ServiceAccessStatus(OSServiceId_ControlIdle);
     Os_StackCheck();
@@ -237,7 +241,8 @@ StatusType Os_Implementation_ControlIdle(CoreIdType CoreID, IdleModeType IdleMod
                ? status
                : Os_ErrorResult(OSServiceId_ControlIdle, status, &arguments);
 }
-void Os_Implementation_ShutdownOS(StatusType Error) {
+void Os_Implementation_ShutdownOS(StatusType Error)
+{
     const StatusType status = Os_ServiceAccessStatus(OSServiceId_ShutdownOS);
     Os_StackCheck();
     if (status != E_OK) {
@@ -245,7 +250,8 @@ void Os_Implementation_ShutdownOS(StatusType Error) {
     }
     Os_BackendShutdown(Error);
 }
-static StatusType implementation_GetTaskID(TaskRefType TaskID) {
+static StatusType implementation_GetTaskID(TaskRefType TaskID)
+{
     Os_StackCheck();
     Os_BackendGuardService();
     if (TaskID == NULL) {
@@ -253,7 +259,8 @@ static StatusType implementation_GetTaskID(TaskRefType TaskID) {
     }
     return Os_BackendTaskId(TaskID);
 }
-AppModeType Os_Implementation_GetActiveApplicationMode(void) {
+AppModeType Os_Implementation_GetActiveApplicationMode(void)
+{
     const StatusType status = Os_ServiceAccessStatus(OSServiceId_GetActiveApplicationMode);
     Os_StackCheck();
     Os_BackendGuardService();
@@ -262,7 +269,8 @@ AppModeType Os_Implementation_GetActiveApplicationMode(void) {
     }
     return Os_BackendApplicationMode();
 }
-ISRType Os_Implementation_GetISRID(void) {
+ISRType Os_Implementation_GetISRID(void)
+{
     const StatusType status = Os_ServiceAccessStatus(OSServiceId_GetISRID);
     const Os_NativeStack *stack = Os_StackCurrent();
     const unsigned interrupt = Os_BackendCurrentInterrupt();
@@ -277,7 +285,8 @@ ISRType Os_Implementation_GetISRID(void) {
                ? (ISRType)interrupt
                : INVALID_ISR;
 }
-static StatusType implementation_GetTaskState(TaskType TaskID, TaskStateRefType State) {
+static StatusType implementation_GetTaskState(TaskType TaskID, TaskStateRefType State)
+{
     Os_StackCheck();
     Os_BackendGuardService();
     if (State == NULL) {
@@ -285,52 +294,62 @@ static StatusType implementation_GetTaskState(TaskType TaskID, TaskStateRefType 
     }
     return Os_BackendState(TaskID, State);
 }
-static StatusType implementation_ActivateTask(TaskType TaskID) {
+static StatusType implementation_ActivateTask(TaskType TaskID)
+{
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendActivate(TaskID);
 }
-static StatusType implementation_TerminateTask(void) {
+static StatusType implementation_TerminateTask(void)
+{
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendFinish();
 }
-static StatusType implementation_ChainTask(TaskType TaskID) {
+static StatusType implementation_ChainTask(TaskType TaskID)
+{
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendChain(TaskID);
 }
-static StatusType implementation_GetResource(ResourceType ResID) {
+static StatusType implementation_GetResource(ResourceType ResID)
+{
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendResource(ResID, 1);
 }
-static StatusType implementation_ReleaseResource(ResourceType ResID) {
+static StatusType implementation_ReleaseResource(ResourceType ResID)
+{
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendResource(ResID, 0);
 }
-static StatusType implementation_Schedule(void) {
+static StatusType implementation_Schedule(void)
+{
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendSchedule();
 }
-static StatusType implementation_WaitEvent(EventMaskType Mask) {
+static StatusType implementation_WaitEvent(EventMaskType Mask)
+{
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendWait(Mask);
 }
-static StatusType implementation_ClearEvent(EventMaskType Mask) {
+static StatusType implementation_ClearEvent(EventMaskType Mask)
+{
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendClear(Mask);
 }
-static StatusType implementation_SetEvent(TaskType TaskID, EventMaskType Mask) {
+static StatusType implementation_SetEvent(TaskType TaskID, EventMaskType Mask)
+{
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendEvent(TaskID, Mask, NULL);
 }
-static StatusType implementation_GetEvent(TaskType TaskID, EventMaskRefType Event) {
+static StatusType implementation_GetEvent(TaskType TaskID, EventMaskRefType Event)
+{
     Os_StackCheck();
     Os_BackendGuardService();
     if (Event == NULL) {
@@ -338,7 +357,8 @@ static StatusType implementation_GetEvent(TaskType TaskID, EventMaskRefType Even
     }
     return Os_BackendEvent(TaskID, 0u, Event);
 }
-StatusType Os_TargetInspectActivation(TaskType id, Os_ActivationInfo *info) {
+StatusType Os_TargetInspectActivation(TaskType id, Os_ActivationInfo *info)
+{
     Os_StackCheck();
     Os_BackendGuardService();
     if (info == NULL) {
@@ -347,7 +367,8 @@ StatusType Os_TargetInspectActivation(TaskType id, Os_ActivationInfo *info) {
     return Os_BackendInspect(id, info);
 }
 
-StatusType Os_Implementation_GetTaskID(TaskRefType TaskID) {
+StatusType Os_Implementation_GetTaskID(TaskRefType TaskID)
+{
     const Os_ErrorParameters arguments = {.service_GetTaskID = {TaskID}};
     StatusType status;
     Os_StackCheck();
@@ -362,7 +383,8 @@ StatusType Os_Implementation_GetTaskID(TaskRefType TaskID) {
     return Os_ErrorResult(OSServiceId_GetTaskID, status, &arguments);
 }
 
-StatusType Os_Implementation_GetTaskState(TaskType TaskID, TaskStateRefType State) {
+StatusType Os_Implementation_GetTaskState(TaskType TaskID, TaskStateRefType State)
+{
     const Os_ErrorParameters arguments = {.service_GetTaskState = {TaskID, State}};
     StatusType status;
     Os_StackCheck();
@@ -377,7 +399,8 @@ StatusType Os_Implementation_GetTaskState(TaskType TaskID, TaskStateRefType Stat
     return Os_ErrorResult(OSServiceId_GetTaskState, status, &arguments);
 }
 
-StatusType Os_Implementation_ActivateTask(TaskType TaskID) {
+StatusType Os_Implementation_ActivateTask(TaskType TaskID)
+{
     const Os_ErrorParameters arguments = {.service_ActivateTask = {TaskID}};
     StatusType status;
     Os_StackCheck();
@@ -392,7 +415,8 @@ StatusType Os_Implementation_ActivateTask(TaskType TaskID) {
     return Os_ErrorResult(OSServiceId_ActivateTask, status, &arguments);
 }
 
-StatusType Os_Implementation_TerminateTask(void) {
+StatusType Os_Implementation_TerminateTask(void)
+{
     const Os_ErrorParameters arguments = {.service_TerminateTask = {0u}};
     StatusType status;
     Os_StackCheck();
@@ -407,7 +431,8 @@ StatusType Os_Implementation_TerminateTask(void) {
     return Os_ErrorResult(OSServiceId_TerminateTask, status, &arguments);
 }
 
-StatusType Os_Implementation_ChainTask(TaskType TaskID) {
+StatusType Os_Implementation_ChainTask(TaskType TaskID)
+{
     const Os_ErrorParameters arguments = {.service_ChainTask = {TaskID}};
     StatusType status;
     Os_StackCheck();
@@ -422,7 +447,8 @@ StatusType Os_Implementation_ChainTask(TaskType TaskID) {
     return Os_ErrorResult(OSServiceId_ChainTask, status, &arguments);
 }
 
-StatusType Os_Implementation_GetResource(ResourceType ResID) {
+StatusType Os_Implementation_GetResource(ResourceType ResID)
+{
     const Os_ErrorParameters arguments = {.service_GetResource = {ResID}};
     StatusType status;
     Os_StackCheck();
@@ -437,7 +463,8 @@ StatusType Os_Implementation_GetResource(ResourceType ResID) {
     return Os_ErrorResult(OSServiceId_GetResource, status, &arguments);
 }
 
-StatusType Os_Implementation_ReleaseResource(ResourceType ResID) {
+StatusType Os_Implementation_ReleaseResource(ResourceType ResID)
+{
     const Os_ErrorParameters arguments = {.service_ReleaseResource = {ResID}};
     StatusType status;
     Os_StackCheck();
@@ -452,7 +479,8 @@ StatusType Os_Implementation_ReleaseResource(ResourceType ResID) {
     return Os_ErrorResult(OSServiceId_ReleaseResource, status, &arguments);
 }
 
-StatusType Os_Implementation_Schedule(void) {
+StatusType Os_Implementation_Schedule(void)
+{
     const Os_ErrorParameters arguments = {.service_Schedule = {0u}};
     StatusType status;
     Os_StackCheck();
@@ -467,7 +495,8 @@ StatusType Os_Implementation_Schedule(void) {
     return Os_ErrorResult(OSServiceId_Schedule, status, &arguments);
 }
 
-StatusType Os_Implementation_WaitEvent(EventMaskType Mask) {
+StatusType Os_Implementation_WaitEvent(EventMaskType Mask)
+{
     const Os_ErrorParameters arguments = {.service_WaitEvent = {Mask}};
     StatusType status;
     Os_StackCheck();
@@ -482,7 +511,8 @@ StatusType Os_Implementation_WaitEvent(EventMaskType Mask) {
     return Os_ErrorResult(OSServiceId_WaitEvent, status, &arguments);
 }
 
-StatusType Os_Implementation_ClearEvent(EventMaskType Mask) {
+StatusType Os_Implementation_ClearEvent(EventMaskType Mask)
+{
     const Os_ErrorParameters arguments = {.service_ClearEvent = {Mask}};
     StatusType status;
     Os_StackCheck();
@@ -497,7 +527,8 @@ StatusType Os_Implementation_ClearEvent(EventMaskType Mask) {
     return Os_ErrorResult(OSServiceId_ClearEvent, status, &arguments);
 }
 
-StatusType Os_Implementation_SetEvent(TaskType TaskID, EventMaskType Mask) {
+StatusType Os_Implementation_SetEvent(TaskType TaskID, EventMaskType Mask)
+{
     const Os_ErrorParameters arguments = {.service_SetEvent = {TaskID, Mask}};
     StatusType status;
     Os_StackCheck();
@@ -512,7 +543,8 @@ StatusType Os_Implementation_SetEvent(TaskType TaskID, EventMaskType Mask) {
     return Os_ErrorResult(OSServiceId_SetEvent, status, &arguments);
 }
 
-StatusType Os_Implementation_GetEvent(TaskType TaskID, EventMaskRefType Event) {
+StatusType Os_Implementation_GetEvent(TaskType TaskID, EventMaskRefType Event)
+{
     const Os_ErrorParameters arguments = {.service_GetEvent = {TaskID, Event}};
     StatusType status;
     Os_StackCheck();

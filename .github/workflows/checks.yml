@@ -389,6 +389,9 @@ jobs:
             build/c-analysis-samples
           if-no-files-found: error
           retention-days: 14
+      # After publishing, so a format failure still leaves the samples for diagnosis.
+      - name: Generated C follows .clang-format
+        run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_generated_format.py
 
   native-delivery:
     # Builds and receives the prepared samples; runs beside their analysis rather than before it.

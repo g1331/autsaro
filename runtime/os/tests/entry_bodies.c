@@ -4,10 +4,10 @@
 #include <stdio.h>
 #include <string.h>
 
-#define OwnerTask 0u
+#define OwnerTask  0u
 #define WorkerTask 1u
-#define ParentISR 5u
-#define ChildISR 6u
+#define ParentISR  5u
+#define ChildISR   6u
 TASK(OwnerTask);
 TASK(WorkerTask);
 ISR(ParentISR);
@@ -23,17 +23,20 @@ static unsigned errors;
 static char trace[32];
 static unsigned length;
 static bool is(const char *name) { return strcmp(scenario, name) == 0; }
-static void check(bool condition) {
+static void check(bool condition)
+{
     if (!condition) {
         Os_BackendShutdown(E_OS_STATE);
     }
 }
-static void record(char marker) {
+static void record(char marker)
+{
     check(length + 1u < sizeof(trace));
     trace[length++] = marker;
     trace[length] = '\0';
 }
-void ErrorHook(StatusType error) {
+void ErrorHook(StatusType error)
+{
     check(errors == 0u);
     if (is("alarm")) {
         check(error == 2u && GetISRID() == INVALID_ISR && OSErrorGetServiceId() == 130u &&
@@ -46,13 +49,22 @@ void ErrorHook(StatusType error) {
     ++errors;
     record('E');
 }
-void ShutdownHook(StatusType error) {
+void ShutdownHook(StatusType error)
+{
     printf("entry_bodies scenario=%s parents=%u children=%u workers=%u alarms=%u errors=%u "
            "trace=%s reason=%u\n",
-           scenario, parents, children, workers, alarms, errors, trace, error);
+           scenario,
+           parents,
+           children,
+           workers,
+           alarms,
+           errors,
+           trace,
+           error);
 }
 static uint32_t replacement(void) { return 0u; }
-void StartupHook(void) {
+void StartupHook(void)
+{
     check(Os_InterruptVectorTable[0u] != NULL && Os_InterruptVectorTable[1u] != NULL);
     check(Os_InterruptVectorTable[5u] != NULL && Os_InterruptVectorTable[6u] != NULL);
     check(Os_InterruptVectorTable[2u] == NULL);
@@ -60,7 +72,8 @@ void StartupHook(void) {
         vPortSetInterruptHandler(5u, replacement);
     }
 }
-ISR(ChildISR) {
+ISR(ChildISR)
+{
     check(GetISRID() == 6u);
     ++children;
     record('C');
@@ -68,7 +81,8 @@ ISR(ChildISR) {
     check(workers == 0u);
     record('c');
 }
-ISR(ParentISR) {
+ISR(ParentISR)
+{
     check(GetISRID() == 5u);
     ++parents;
     record('I');
@@ -85,7 +99,8 @@ ISR(ParentISR) {
     }
     record('i');
 }
-ALARMCALLBACK(AlarmBody) {
+ALARMCALLBACK(AlarmBody)
+{
     check(Os_HookContext() == OS_HOOK_ALARM);
     ++alarms;
     record('A');
@@ -93,7 +108,8 @@ ALARMCALLBACK(AlarmBody) {
     check(workers == 0u);
     record('a');
 }
-TASK(WorkerTask) {
+TASK(WorkerTask)
+{
     TaskType task = INVALID_TASK;
     check(GetTaskID(&task) == E_OK && task == 1u && GetISRID() == INVALID_ISR);
     ++workers;
@@ -104,7 +120,8 @@ TASK(WorkerTask) {
     check(TerminateTask() == E_OK);
     check(false);
 }
-TASK(OwnerTask) {
+TASK(OwnerTask)
+{
     TaskType task = INVALID_TASK;
     check(GetTaskID(&task) == E_OK && task == 0u);
     record('O');
@@ -120,14 +137,29 @@ TASK(OwnerTask) {
     record('o');
     ShutdownOS(E_OK);
 }
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     check(argc == 2);
     scenario = argv[1];
     Os_TaskConfig tasks[] = {
-        {OwnerTask, "OwnerTask", OS_TASK_ENTRY(OwnerTask), 10u, 1u, OS_BASIC_TASK, 1u,
-         OS_SCHEDULE_FULL, 0u},
-        {WorkerTask, "WorkerTask", OS_TASK_ENTRY(WorkerTask), 15u, 0u, OS_BASIC_TASK, 1u,
-         OS_SCHEDULE_FULL, 0u},
+        {OwnerTask,
+         "OwnerTask",
+         OS_TASK_ENTRY(OwnerTask),
+         10u,
+         1u,
+         OS_BASIC_TASK,
+         1u,
+         OS_SCHEDULE_FULL,
+         0u},
+        {WorkerTask,
+         "WorkerTask",
+         OS_TASK_ENTRY(WorkerTask),
+         15u,
+         0u,
+         OS_BASIC_TASK,
+         1u,
+         OS_SCHEDULE_FULL,
+         0u},
     };
     const Os_ResourceConfig resource = {0u, 2u, 3u, UINT32_C(1) << 5u};
     const Os_CounterConfig counter = {0u, 15u, 1u, 1u, 1u};
@@ -137,8 +169,8 @@ int main(int argc, char **argv) {
     Os_IsrEntry entries[OS_MAX_INTERRUPTS] = {[5u] = OS_ISR_ENTRY(ParentISR),
                                               [6u] = OS_ISR_ENTRY(ChildISR)};
     Os_IsrConfig interrupts = {.priorities = {[5u] = 1u, [6u] = 2u}, .entries = entries};
-    Os_TargetConfig target = {tasks, 2u, 262144u, &resource, 1u,     NULL,       0u,
-                              0u,    0u, 0u,      &time,     &hooks, &interrupts};
+    Os_TargetConfig target = {
+        tasks, 2u, 262144u, &resource, 1u, NULL, 0u, 0u, 0u, 0u, &time, &hooks, &interrupts};
     if (is("invalid-priority")) {
         interrupts.priorities[5u] = 0u;
     } else if (is("invalid-kernel")) {
@@ -160,8 +192,8 @@ int main(int argc, char **argv) {
     }
     const StatusType prepared = Os_TargetPrepare(&target);
     if (strncmp(scenario, "invalid-", 8u) == 0) {
-        printf("entry_bodies rejection=%s status=%u started=%u\n", scenario, prepared,
-               isOsStarted());
+        printf(
+            "entry_bodies rejection=%s status=%u started=%u\n", scenario, prepared, isOsStarted());
         return prepared == E_OS_VALUE && isOsStarted() == FALSE ? 0 : 1;
     }
     check(prepared == E_OK);

@@ -6,15 +6,18 @@ volatile ArtiAtomic32 Arti_EventCount;
 volatile ArtiAtomic32 Arti_EventsDropped;
 volatile ArtiAtomic32 Arti_DevelopmentError;
 static __thread Arti_AddressCapture captured_address;
-void Arti_CaptureAddress(uintptr_t address) {
+void Arti_CaptureAddress(uintptr_t address)
+{
     captured_address.address = address;
     captured_address.valid = 1u;
 }
-void Arti_CaptureServiceStatus(uint32_t status) {
+void Arti_CaptureServiceStatus(uint32_t status)
+{
     captured_address.service_status = status;
     captured_address.status_valid = 1u;
 }
-Arti_AddressCapture Arti_SaveAddressCapture(void) {
+Arti_AddressCapture Arti_SaveAddressCapture(void)
+{
     const Arti_AddressCapture saved = captured_address;
     captured_address.valid = 0u;
     captured_address.status_valid = 0u;
@@ -22,7 +25,8 @@ Arti_AddressCapture Arti_SaveAddressCapture(void) {
 }
 void Arti_RestoreAddressCapture(Arti_AddressCapture capture) { captured_address = capture; }
 
-void Arti_Init(void) {
+void Arti_Init(void)
+{
     /* Called before automotive actors exist. Payload bytes outside published
      * slots are inaccessible; only publication flags need clearing. */
     Arti_EventCount = 0;
@@ -34,7 +38,8 @@ void Arti_Init(void) {
         Arti_Events[i].published = 0L;
     }
 }
-void Arti_GetVersionInfo(Std_VersionInfoType *versioninfo) {
+void Arti_GetVersionInfo(Std_VersionInfoType *versioninfo)
+{
     if (versioninfo != NULL) {
         versioninfo->vendorID = 0u;
         /* This original tool binding has no assigned vendor/module identity;
@@ -47,8 +52,13 @@ void Arti_GetVersionInfo(Std_VersionInfoType *versioninfo) {
         InterlockedExchange(&Arti_DevelopmentError, (LONG)ARTI_E_PARAM_POINTER);
     }
 }
-void Arti_Record(const char *context, const char *class_name, const char *instance,
-                 const char *event, uint32_t instance_parameter, uint32_t event_parameter) {
+void Arti_Record(const char *context,
+                 const char *class_name,
+                 const char *instance,
+                 const char *event,
+                 uint32_t instance_parameter,
+                 uint32_t event_parameter)
+{
     /* Slot reservation never waits for an actor that may be preempted or have
      * a damaged native stack. Read the buffer only after OS shutdown/quiescence;
      * the reservation count is not a concurrent publication protocol. */

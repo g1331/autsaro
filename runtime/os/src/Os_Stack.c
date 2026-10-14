@@ -7,7 +7,8 @@ static Os_NativeStack stacks[OS_NATIVE_STACKS];
 const Os_NativeStack *const Os_ArtiStacks = stacks;
 static CONTEXT saved_contexts[OS_NATIVE_STACKS];
 const size_t Os_ArtiNativeContextSize = sizeof(CONTEXT);
-const void *Os_StackSavedContext(const Os_NativeStack *stack) {
+const void *Os_StackSavedContext(const Os_NativeStack *stack)
+{
     /* The caller supplies a record obtained from this module's own array. */
     return &saved_contexts[stack - stacks];
 }
@@ -26,7 +27,8 @@ static Os_StackFault fault_records[OS_NATIVE_STACKS];
 int Os_StackHasFault(void) { return InterlockedCompareExchange(&fault_count, 0, 0) > 0; }
 LONG Os_StackFaultCount(void) { return InterlockedCompareExchange(&fault_count, 0, 0); }
 const Os_NativeStack *Os_StackCurrent(void) { return current_stack; }
-void Os_StackRecordBuffer(const StackType_t *top) {
+void Os_StackRecordBuffer(const StackType_t *top)
+{
     current_stack->kernel_buffer_high = (uintptr_t)(top + 1);
     current_stack->kernel_buffer_low = current_stack->kernel_buffer_high - 512u * sizeof(*top);
     if (current_stack->reserve_low < current_stack->kernel_buffer_high &&
@@ -35,8 +37,9 @@ void Os_StackRecordBuffer(const StackType_t *top) {
     }
 }
 
-static void publish_fault(Os_NativeStack *record, DWORD code, uintptr_t sp, uintptr_t address,
-                          char origin) {
+static void publish_fault(
+    Os_NativeStack *record, DWORD code, uintptr_t sp, uintptr_t address, char origin)
+{
     Os_StackFault *local = &fault_records[record - stacks];
     local->thread_id = record->thread_id;
     local->role = record->role;
@@ -57,7 +60,8 @@ static void publish_fault(Os_NativeStack *record, DWORD code, uintptr_t sp, uint
     InterlockedIncrement(&fault_count);
     Os_BackendStackFault(current_stack != NULL ? current_stack->role : record->role);
 }
-static LONG CALLBACK stack_exception(EXCEPTION_POINTERS *exception) {
+static LONG CALLBACK stack_exception(EXCEPTION_POINTERS *exception)
+{
     DWORD code = exception->ExceptionRecord->ExceptionCode;
     uintptr_t address = 0u;
     if (current_stack == NULL) {
@@ -76,7 +80,8 @@ static LONG CALLBACK stack_exception(EXCEPTION_POINTERS *exception) {
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
-void Os_StackInit(void) {
+void Os_StackInit(void)
+{
 
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
     fault_output = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -95,7 +100,8 @@ void Os_StackInit(void) {
     }
 }
 
-int Os_StackRegister(char role) {
+int Os_StackRegister(char role)
+{
     ULONG_PTR low, high;
     MEMORY_BASIC_INFORMATION region;
     uintptr_t cursor;
@@ -151,7 +157,8 @@ int Os_StackRegister(char role) {
     return 1;
 }
 
-void Os_StackCheck(void) {
+void Os_StackCheck(void)
+{
     uintptr_t sp;
     ULONG_PTR low, high;
     MEMORY_BASIC_INFORMATION region;
@@ -169,7 +176,8 @@ void Os_StackCheck(void) {
     ++current_stack->observations;
 }
 
-void Os_StackObserve(HANDLE thread, const CONTEXT *context) {
+void Os_StackObserve(HANDLE thread, const CONTEXT *context)
+{
     DWORD id = GetThreadId(thread);
     LONG i;
     for (i = 0; i < stack_count && i < (LONG)OS_NATIVE_STACKS; ++i) {
@@ -192,7 +200,8 @@ void Os_StackObserve(HANDLE thread, const CONTEXT *context) {
     }
     Os_BackendShutdown(E_OS_STATE);
 }
-void Os_StackFatalExit(void) {
+void Os_StackFatalExit(void)
+{
     static const char prefix[] =
         "FATAL state=Failed reason=13 controllers_exhausted=1\nFAULT role=";
     static const char middle[] = " exception=";
@@ -233,7 +242,8 @@ void Os_StackFatalExit(void) {
     ExitProcess(E_OS_STACKFAULT);
 }
 
-int Os_StackReport(void) {
+int Os_StackReport(void)
+{
     int result = 0;
     LONG i;
     for (i = 0; i < stack_count && i < (LONG)OS_NATIVE_STACKS; ++i) {
@@ -244,11 +254,16 @@ int Os_StackReport(void) {
         if (printf("STACK role=%c tid=%lu low=%llu high=%llu reserve=%llu commit=%llu "
                    "guard=%llu guarantee=%lu sp=%llu observations=%u buffer_low=%llu "
                    "buffer_high=%llu\n",
-                   record->role, (unsigned long)record->thread_id,
-                   (unsigned long long)record->reserve_low, (unsigned long long)record->high,
-                   (unsigned long long)record->reserve, (unsigned long long)record->committed,
-                   (unsigned long long)record->guard, (unsigned long)record->guarantee,
-                   (unsigned long long)record->sp, record->observations,
+                   record->role,
+                   (unsigned long)record->thread_id,
+                   (unsigned long long)record->reserve_low,
+                   (unsigned long long)record->high,
+                   (unsigned long long)record->reserve,
+                   (unsigned long long)record->committed,
+                   (unsigned long long)record->guard,
+                   (unsigned long)record->guarantee,
+                   (unsigned long long)record->sp,
+                   record->observations,
                    (unsigned long long)record->kernel_buffer_low,
                    (unsigned long long)record->kernel_buffer_high) < 0) {
             result = -1;
@@ -261,8 +276,11 @@ int Os_StackReport(void) {
         }
         if (printf(
                 "FAULT role=%c tid=%lu exception=%08lX sp=%llu address=%llu captured=1 origin=%c\n",
-                fault->role, (unsigned long)fault->thread_id, (unsigned long)fault->exception,
-                (unsigned long long)fault->sp, (unsigned long long)fault->address,
+                fault->role,
+                (unsigned long)fault->thread_id,
+                (unsigned long)fault->exception,
+                (unsigned long long)fault->sp,
+                (unsigned long long)fault->address,
                 fault->origin) < 0) {
             result = -1;
         }

@@ -19,8 +19,10 @@
  * @param context Caller-owned sink context, retained only during execution.
  * @return Nonzero for successful physical host output, zero for failure.
  */
-typedef int (*Ecu_HostSink)(const Ecu_OutputRecord *output, const Ecu_HostBatch *batch,
-                            StatusType status, void *context);
+typedef int (*Ecu_HostSink)(const Ecu_OutputRecord *output,
+                            const Ecu_HostBatch *batch,
+                            StatusType status,
+                            void *context);
 
 /** Execute one previously decoded complete batch on its sole native producer.
  * @param batch Valid initialized staging in executing state.

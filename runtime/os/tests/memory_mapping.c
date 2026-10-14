@@ -14,14 +14,16 @@ ALARMCALLBACK(AlarmBody) { ++calls; }
 
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-void ErrorHook(StatusType Error) {
+void ErrorHook(StatusType Error)
+{
     (void)Error;
     ++calls;
 }
 void PreTaskHook(void) { ++calls; }
 void PostTaskHook(void) { ++calls; }
 void StartupHook(void) { ++calls; }
-void ShutdownHook(StatusType Error) {
+void ShutdownHook(StatusType Error)
+{
     (void)Error;
     ++calls;
 }
@@ -31,7 +33,8 @@ void ShutdownHook(StatusType Error) {
 #error Memory mapping state leaked from a closed section
 #endif
 
-int main(void) {
+int main(void)
+{
     OS_TASK_ENTRY(FirstTask)();
     OS_TASK_ENTRY(SecondTask)();
     OS_ISR_ENTRY(FirstISR)();

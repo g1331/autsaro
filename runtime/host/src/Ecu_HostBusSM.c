@@ -9,13 +9,15 @@ static boolean transition_pending ECU_HOSTBUSSM_VAR_CLEARED;
 #include "Ecu_HostBusSM_MemMap.h"
 #define ECU_HOSTBUSSM_START_SEC_CODE
 #include "Ecu_HostBusSM_MemMap.h"
-static ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Publish(ComM_ModeType mode) {
+static ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Publish(ComM_ModeType mode)
+{
     /* ComM filters unchanged indications. Repeated factual publication also
      * permits a restarted ComM instance to obtain the actual completed mode.
      */
     ComM_BusSM_ModeIndication(configuration->channel, mode);
 }
-ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Init(const Ecu_HostBusSM_ConfigType *ConfigPtr) {
+ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Init(const Ecu_HostBusSM_ConfigType *ConfigPtr)
+{
     CanIf_PduModeType mode = CANIF_OFFLINE;
     Can_HostStateLock();
     if ((ConfigPtr != NULL_PTR) && (CanIf_GetPduMode(ConfigPtr->controller, &mode) == E_OK)) {
@@ -25,14 +27,16 @@ ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Init(const Ecu_HostBusSM_ConfigType *Confi
     }
     Can_HostStateUnlock();
 }
-ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_DeInit(void) {
+ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_DeInit(void)
+{
     Can_HostStateLock();
     configuration = NULL_PTR;
     transition_pending = FALSE;
     Can_HostStateUnlock();
 }
 ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_GetCurrentComMode(NetworkHandleType Channel,
-                                                                  ComM_ModeType *ComMode) {
+                                                                  ComM_ModeType *ComMode)
+{
     Std_ReturnType result = E_NOT_OK;
     Can_ControllerStateType controller = CAN_CS_UNINIT;
     CanIf_PduModeType pdu = CANIF_OFFLINE;
@@ -58,7 +62,8 @@ ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_GetCurrentComMode(NetworkHandleT
     return result;
 }
 ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ApplyMode(NetworkHandleType Channel,
-                                                          ComM_ModeType ComMode) {
+                                                          ComM_ModeType ComMode)
+{
     Std_ReturnType result = E_NOT_OK;
     Can_ControllerStateType controller = CAN_CS_UNINIT;
     Can_HostStateLock();
@@ -86,7 +91,8 @@ ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ApplyMode(NetworkHandleType Chan
     return result;
 }
 ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_RequestComMode(NetworkHandleType Channel,
-                                                               ComM_ModeType ComMode) {
+                                                               ComM_ModeType ComMode)
+{
     Std_ReturnType result = E_NOT_OK;
     Can_ControllerStateType controller = CAN_CS_UNINIT;
     Can_ErrorStateType error = CAN_ERRORSTATE_BUSOFF;
@@ -123,8 +129,9 @@ ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_RequestComMode(NetworkHandleType
     Can_HostStateUnlock();
     return result;
 }
-ECU_HOSTBUSSM_CODE void
-Ecu_HostBusSM_ControllerModeIndication(uint8 ControllerId, Can_ControllerStateType ControllerMode) {
+ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_ControllerModeIndication(
+    uint8 ControllerId, Can_ControllerStateType ControllerMode)
+{
     Can_HostStateLock();
     if ((configuration != NULL_PTR) && (ControllerId == configuration->controller)) {
         transition_pending = FALSE;
@@ -142,7 +149,8 @@ Ecu_HostBusSM_ControllerModeIndication(uint8 ControllerId, Can_ControllerStateTy
     }
     Can_HostStateUnlock();
 }
-ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_ControllerBusOff(uint8 ControllerId) {
+ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_ControllerBusOff(uint8 ControllerId)
+{
     Can_HostStateLock();
     if ((configuration != NULL_PTR) && (ControllerId == configuration->controller)) {
         Can_ControllerStateType actual = CAN_CS_UNINIT;

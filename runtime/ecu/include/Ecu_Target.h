@@ -12,11 +12,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define ECU_TARGET_UNPREPARED 0u
-#define ECU_TARGET_INITIALIZING 1u
-#define ECU_TARGET_READY 2u
-#define ECU_TARGET_FAILED 3u
-#define ECU_TARGET_CLOSED 4u
+#define ECU_TARGET_UNPREPARED      0u
+#define ECU_TARGET_INITIALIZING    1u
+#define ECU_TARGET_READY           2u
+#define ECU_TARGET_FAILED          3u
+#define ECU_TARGET_CLOSED          4u
 #define ECU_TARGET_OUTPUT_CAPACITY 256u
 
 /** One immutable copied output; acknowledgment includes both identity fields. */
@@ -97,8 +97,8 @@ uint64_t Ecu_TargetNow(void);
  * @param ticket Accepted mailbox ticket; unchanged on refusal.
  * @return Standard mailbox/input status; never discards older input.
  */
-StatusType Ecu_TargetPostFrame(uint64_t at, uint32_t id, uint8_t dlc, const uint8_t data[8],
-                               uint64_t *ticket);
+StatusType Ecu_TargetPostFrame(
+    uint64_t at, uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t *ticket);
 /** Copy one complete batch before notifying the automotive owner.
  * @param at Last completed logical epoch or its successor.
  * @param frames Caller-owned frames; NULL allowed only for count zero.
@@ -106,7 +106,9 @@ StatusType Ecu_TargetPostFrame(uint64_t at, uint32_t id, uint8_t dlc, const uint
  * @param ticket Accepted batch ticket, unchanged on refusal.
  * @return Standard value/state/capacity/context status. One batch in flight.
  */
-StatusType Ecu_TargetPostBatch(uint64_t at, const Ecu_BatchFrame *frames, uint16_t count,
+StatusType Ecu_TargetPostBatch(uint64_t at,
+                               const Ecu_BatchFrame *frames,
+                               uint16_t count,
                                uint64_t *ticket);
 /** Read a completed batch after the owner is waiting with no pending IO.
  * @param ticket Accepted batch identity.

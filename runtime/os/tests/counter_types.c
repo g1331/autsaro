@@ -10,12 +10,14 @@ static unsigned checks, errors;
 static uint32_t expected_id;
 static TickRefType expected_value, expected_elapsed;
 static TickType final_value, other_value;
-static void check(bool condition) {
+static void check(bool condition)
+{
     if (!condition) {
         Os_BackendShutdown(E_OS_STATE);
     }
 }
-void ErrorHook(StatusType error) {
+void ErrorHook(StatusType error)
+{
     const OSServiceIdType service = OSErrorGetServiceId();
     check(error == 3u);
     if (service == 15u) {
@@ -31,12 +33,18 @@ void ErrorHook(StatusType error) {
     ++errors;
 }
 void StartupHook(void) {}
-void ShutdownHook(StatusType reason) {
+void ShutdownHook(StatusType reason)
+{
     printf("counter_types scenario=%s checks=%u errors=%u value=%llu other=%llu reason=%u\n",
-           scenario, checks, errors, (unsigned long long)final_value,
-           (unsigned long long)other_value, reason);
+           scenario,
+           checks,
+           errors,
+           (unsigned long long)final_value,
+           (unsigned long long)other_value,
+           reason);
 }
-static void owner(void) {
+static void owner(void)
+{
     const uint32_t identifiers[3] = {UINT32_C(256), UINT32_C(65536), UINT32_MAX};
     for (unsigned i = 0u; i < 7u; ++i) {
         check(IncrementCounter(0u) == E_OK);
@@ -64,11 +72,12 @@ static void owner(void) {
     check(errors == (strcmp(scenario, "configured") == 0 ? 9u : 0u));
     ShutdownOS(E_OK);
 }
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     check(argc == 2);
     scenario = argv[1];
-    const Os_TaskConfig task = {0u, "owner",          owner, 10u, 1u, OS_BASIC_TASK,
-                                1u, OS_SCHEDULE_FULL, 0u};
+    const Os_TaskConfig task = {
+        0u, "owner", owner, 10u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u};
     Os_CounterConfig counters[2] = {{0u, 31u, 1u, 1u, 1u}, {1u, 31u, 1u, 1u, 1u}};
     Os_AlarmConfig alarm = {.id = 0u, .counter = 0u, .action = OS_ALARM_ACTIVATE, .task = 0u};
     const Os_ExpiryAction action = {OS_ALARM_ACTIVATE, 0u, 0u};
@@ -78,10 +87,19 @@ int main(int argc, char **argv) {
     Os_TimeConfig time = {
         .counters = counters, .counter_count = 2u, .system_counter = 0u, .owner = INVALID_TASK};
     const Os_HookConfig hooks = {&ErrorHook, NULL, NULL};
-    const Os_TargetConfig target = {
-        &task, 1u, 262144u, NULL, 0u,    NULL,
-        0u,    0u, 0u,      0u,   &time, strcmp(scenario, "configured") == 0 ? &hooks : NULL,
-        NULL};
+    const Os_TargetConfig target = {&task,
+                                    1u,
+                                    262144u,
+                                    NULL,
+                                    0u,
+                                    NULL,
+                                    0u,
+                                    0u,
+                                    0u,
+                                    0u,
+                                    &time,
+                                    strcmp(scenario, "configured") == 0 ? &hooks : NULL,
+                                    NULL};
     const char *suffix = strchr(scenario, '-');
     if (suffix != NULL) {
         uint32_t identifier;
@@ -118,7 +136,9 @@ int main(int argc, char **argv) {
             return 98;
         }
         const StatusType status = Os_TargetPrepare(&target);
-        printf("counter_rejection scenario=%s status=%u configured=%u\n", scenario, status,
+        printf("counter_rejection scenario=%s status=%u configured=%u\n",
+               scenario,
+               status,
                Os_Config != NULL ? 1u : 0u);
         return status == expected && Os_Config == NULL ? 0 : 98;
     }

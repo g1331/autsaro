@@ -4,17 +4,17 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define CPU_TYPE_8 8u
-#define CPU_TYPE_16 16u
-#define CPU_TYPE_32 32u
-#define CPU_TYPE_64 64u
-#define CPU_TYPE CPU_TYPE_64
-#define MSB_FIRST 0u
-#define LSB_FIRST 1u
-#define CPU_BIT_ORDER LSB_FIRST
+#define CPU_TYPE_8      8u
+#define CPU_TYPE_16     16u
+#define CPU_TYPE_32     32u
+#define CPU_TYPE_64     64u
+#define CPU_TYPE        CPU_TYPE_64
+#define MSB_FIRST       0u
+#define LSB_FIRST       1u
+#define CPU_BIT_ORDER   LSB_FIRST
 #define HIGH_BYTE_FIRST 0u
-#define LOW_BYTE_FIRST 1u
-#define CPU_BYTE_ORDER LOW_BYTE_FIRST
+#define LOW_BYTE_FIRST  1u
+#define CPU_BYTE_ORDER  LOW_BYTE_FIRST
 #ifndef TRUE
 #define TRUE true
 #endif

@@ -43,7 +43,8 @@ static jmp_buf restart_frames[OS_MAX_TASKS];
 static volatile Os_Atomic32 isr_reschedule;
 int Os_BackendTakeIsrReschedule(void) { return InterlockedExchange(&isr_reschedule, 0) != 0; }
 void Os_BackendRequestIsrReschedule(void) { InterlockedExchange(&isr_reschedule, 1); }
-unsigned Os_BackendInterruptPriority(unsigned interrupt) {
+unsigned Os_BackendInterruptPriority(unsigned interrupt)
+{
     unsigned priority = 0u;
     if ((interrupt > OS_CONTROLLED_TICK_INTERRUPT) && (interrupt < OS_MAX_INTERRUPTS) &&
         (Os_Config != NULL)) {
@@ -56,7 +57,8 @@ unsigned Os_BackendInterruptPriority(unsigned interrupt) {
     }
     return priority;
 }
-int Os_BackendInterruptMaySchedule(unsigned interrupt) {
+int Os_BackendInterruptMaySchedule(unsigned interrupt)
+{
     return (interrupt < OS_MAX_INTERRUPTS) &&
            ((Os_Config->category1_isrs & ((uint32_t)1u << interrupt)) == 0u);
 }
@@ -69,7 +71,8 @@ HANDLE Os_StackTestBackupThread(void) { return backup_thread; }
 static HANDLE backup_event;
 #if defined(__linux__) && defined(OS_STACK_TESTS)
 static volatile Os_Atomic32 backup_fault_requested;
-void Os_StackTestTriggerBackupFault(void) {
+void Os_StackTestTriggerBackupFault(void)
+{
     if (backup_thread == NULL || InterlockedExchange(&backup_fault_requested, 1) != 0 ||
         Os_HostSetEvent(backup_event) == 0) {
         Os_BackendShutdown(E_OS_STATE);
@@ -122,7 +125,8 @@ static uint8_t internal_ceiling(size_t index);
 static void observe_transition(void);
 static size_t current_task_index(void);
 static void leave_running(size_t index);
-static uint32_t configured_interrupt(void) {
+static uint32_t configured_interrupt(void)
+{
     const unsigned interrupt = current_interrupt;
     configASSERT(Os_Config != NULL && Os_Config->interrupts != NULL &&
                  Os_Config->interrupts->entries != NULL && interrupt < OS_MAX_INTERRUPTS);
@@ -133,7 +137,8 @@ static uint32_t configured_interrupt(void) {
      * backend ISR state. Its normal outer exit handles Task selection. */
     return 0u;
 }
-int Os_BackendHandlerAllowed(uint32_t interrupt, uint32_t (*handler)(void)) {
+int Os_BackendHandlerAllowed(uint32_t interrupt, uint32_t (*handler)(void))
+{
     if ((Os_Config != NULL) && (Os_Config->interrupts != NULL) &&
         (Os_Config->interrupts->entries != NULL) && (interrupt < OS_MAX_INTERRUPTS) &&
         (Os_Config->interrupts->entries[interrupt] != NULL)) {
@@ -143,7 +148,8 @@ int Os_BackendHandlerAllowed(uint32_t interrupt, uint32_t (*handler)(void)) {
 }
 unsigned Os_BackendCurrentInterrupt(void) { return current_interrupt; }
 int Os_BackendStarted(void) { return InterlockedCompareExchange(&started, 0, 0) != 0; }
-void Os_BackendInterruptEnter(unsigned interrupt) {
+void Os_BackendInterruptEnter(unsigned interrupt)
+{
     configASSERT(interrupt < OS_MAX_INTERRUPTS);
     configASSERT(interrupt_depth < OS_MAX_INTERRUPTS);
     interrupt_frames[interrupt_depth].interrupt = current_interrupt;
@@ -155,7 +161,8 @@ void Os_BackendInterruptEnter(unsigned interrupt) {
         Os_ArtiIsr((ISRType)interrupt, 0);
     }
 }
-void Os_BackendInterruptLeave(void) {
+void Os_BackendInterruptLeave(void)
+{
     const Os_ErrorParameters arguments = {.service_TerminateTask = {0u}};
     const size_t actor = OS_MAX_TASKS + current_interrupt;
     configASSERT(interrupt_depth != 0u && current_interrupt < OS_MAX_INTERRUPTS);
@@ -187,7 +194,8 @@ void Os_BackendInterruptLeave(void) {
     Os_ErrorContextRestore(&interrupt_frames[interrupt_depth].error);
     current_interrupt = interrupt_frames[interrupt_depth].interrupt;
 }
-int Os_BackendInterruptEnabled(unsigned interrupt) {
+int Os_BackendInterruptEnabled(unsigned interrupt)
+{
     int allowed;
     /* The private kernel yield is not an application ISR; it must remain
      * available to complete native port critical-section handshakes. */
@@ -208,7 +216,8 @@ int Os_BackendInterruptEnabled(unsigned interrupt) {
 #endif
     return allowed;
 }
-static size_t task_index(TaskType id) {
+static size_t task_index(TaskType id)
+{
     size_t i;
     for (i = 0u; i < Os_Config->task_count; ++i) {
         if (Os_Config->tasks[i].id == id) {
@@ -217,7 +226,8 @@ static size_t task_index(TaskType id) {
     }
     return OS_MAX_TASKS;
 }
-int Os_BackendServiceContext(void) {
+int Os_BackendServiceContext(void)
+{
     const Os_NativeStack *stack = Os_StackCurrent();
     Os_BackendGuardService();
     if (stack == NULL) {
@@ -232,7 +242,8 @@ int Os_BackendServiceContext(void) {
              ((current_interrupt >= 32u) ||
               ((Os_Config->category1_isrs & ((uint32_t)1u << current_interrupt)) == 0u))));
 }
-int Os_BackendTaskOwner(TaskType id) {
+int Os_BackendTaskOwner(TaskType id)
+{
     size_t index = current_task_index();
     if (index == OS_MAX_TASKS) {
         return 0;
@@ -240,7 +251,8 @@ int Os_BackendTaskOwner(TaskType id) {
     return (Os_Config->tasks[index].id == id) ? 1 : -1;
 }
 int Os_BackendInputOwner(void) { return Os_BackendTaskOwner(Os_Config->input_task); }
-StatusType Os_BackendTaskId(TaskRefType id) {
+StatusType Os_BackendTaskId(TaskRefType id)
+{
     if (!Os_BackendServiceContext()) {
         return E_OS_CALLEVEL;
     }
@@ -259,7 +271,8 @@ StatusType Os_BackendTaskId(TaskRefType id) {
     return E_OK;
 }
 AppModeType Os_BackendApplicationMode(void) { return startup_mode; }
-void Os_BackendGuardService(void) {
+void Os_BackendGuardService(void)
+{
     const Os_NativeStack *stack = Os_StackCurrent();
     if ((InterlockedCompareExchange(&Os_Closing, 0, 0) != 0) && (stack != NULL) &&
         ((stack->role == 'T') || (stack->role == 'S'))) {
@@ -268,7 +281,8 @@ void Os_BackendGuardService(void) {
 }
 /* Normalize only live metadata order stamps. This never chooses a runnable task;
  * the existing kernel ready-list policy remains the only selector. */
-static void rebase_orders(void) {
+static void rebase_orders(void)
+{
     static OrderReference rebase_entries[OS_MAX_TASKS * (OS_MAX_ACTIVATIONS + 1u)];
     size_t i;
     unsigned j;
@@ -314,7 +328,8 @@ static void rebase_orders(void) {
     }
     request_sequence = rank;
 }
-static void append_activation(size_t index) {
+static void append_activation(size_t index)
+{
     ActivationQueue *queue = &activations[index];
     unsigned tail = (queue->head + queue->count) % OS_MAX_ACTIVATIONS;
     if (queue->count == 0u) {
@@ -327,7 +342,8 @@ static void append_activation(size_t index) {
     queue->requests[tail] = request_sequence;
     ++queue->count;
 }
-static void leave_running(size_t index) {
+static void leave_running(size_t index)
+{
     if ((running_hook_task == index) && (index < OS_MAX_TASKS)) {
         if ((InterlockedCompareExchange(&Os_Closing, 0, 0) == 0) && (Os_Config->hooks != NULL)) {
             Os_HookInvoke(Os_Config->hooks->post_task, OS_HOOK_POST);
@@ -335,7 +351,8 @@ static void leave_running(size_t index) {
         running_hook_task = OS_MAX_TASKS;
     }
 }
-void Os_BackendBeforeSelect(void *current, void *next) {
+void Os_BackendBeforeSelect(void *current, void *next)
+{
     if ((current != next) && (Os_TargetReady() != 0) &&
         (InterlockedCompareExchange(&Os_Closing, 0, 0) == 0)) {
         for (size_t i = 0u; i < Os_Config->task_count; ++i) {
@@ -346,7 +363,8 @@ void Os_BackendBeforeSelect(void *current, void *next) {
         }
     }
 }
-void Os_BackendOnSwitch(void) {
+void Os_BackendOnSwitch(void)
+{
     if (Os_TargetReady() != 0) {
         arti_observe_tasks();
         size_t i;
@@ -367,28 +385,30 @@ void Os_BackendOnSwitch(void) {
     }
     observe_transition();
 }
-static TaskStateType native_task_state(size_t index) {
+static TaskStateType native_task_state(size_t index)
+{
     /* A self-suspend inside the critical section defers the native switch.
      * Its waiting predicate is already committed even while it is current. */
     if (task_waiting[index] != 0u) {
         return WAITING;
     }
     switch (eTaskGetState(handles[index])) {
-    case eRunning:
-        return RUNNING;
-    case eReady:
-        return READY;
-    case eBlocked:
-        return WAITING;
-    case eSuspended:
-        return (task_waiting[index] != 0u) ? WAITING : SUSPENDED;
-    default:
-        /* Automotive Task objects are never deleted. */
-        configASSERT(0);
-        return SUSPENDED;
+        case eRunning:
+            return RUNNING;
+        case eReady:
+            return READY;
+        case eBlocked:
+            return WAITING;
+        case eSuspended:
+            return (task_waiting[index] != 0u) ? WAITING : SUSPENDED;
+        default:
+            /* Automotive Task objects are never deleted. */
+            configASSERT(0);
+            return SUSPENDED;
     }
 }
-static void arti_observe_tasks(void) {
+static void arti_observe_tasks(void)
+{
     TaskStateType previous[OS_MAX_TASKS];
     uint8_t completed[OS_MAX_TASKS];
     Os_ArtiRunningTask = INVALID_TASK;
@@ -431,7 +451,8 @@ static void arti_observe_tasks(void) {
         }
     }
 }
-static void observe_transition(void) {
+static void observe_transition(void)
+{
 #if defined(OS_ACTIVATION_TESTS) || defined(OS_FINISH_TESTS) || defined(OS_RESOURCE_TESTS) ||      \
     defined(OS_EVENT_TESTS)
     const Os_NativeStack *stack = Os_StackCurrent();
@@ -441,7 +462,8 @@ static void observe_transition(void) {
     }
 #endif
 }
-static uint8_t internal_ceiling(size_t index) {
+static uint8_t internal_ceiling(size_t index)
+{
     size_t i;
     uint8_t ceiling = 0u;
     const Os_TaskConfig *task = &Os_Config->tasks[index];
@@ -463,7 +485,8 @@ static uint8_t internal_ceiling(size_t index) {
     }
     return ceiling;
 }
-static void acquire_internal(size_t index) {
+static void acquire_internal(size_t index)
+{
     uint8_t ceiling = internal_ceiling(index);
     if ((ceiling != 0u) && (internal_held[index] == 0u)) {
         configASSERT(resource_depth[index] == 0u);
@@ -473,7 +496,8 @@ static void acquire_internal(size_t index) {
         }
     }
 }
-static void release_internal(size_t index) {
+static void release_internal(size_t index)
+{
     if (internal_held[index] != 0u) {
         configASSERT(resource_depth[index] == 0u);
         internal_held[index] = 0u;
@@ -481,13 +505,15 @@ static void release_internal(size_t index) {
     }
 }
 #ifdef OS_ACTIVATION_TESTS
-void Os_TargetTestSequence(uint64_t sequence) {
+void Os_TargetTestSequence(uint64_t sequence)
+{
     taskENTER_CRITICAL();
     configASSERT(sequence >= request_sequence);
     request_sequence = sequence;
     taskEXIT_CRITICAL();
 }
-unsigned Os_TargetTestPending(TaskType id) {
+unsigned Os_TargetTestPending(TaskType id)
+{
     size_t index = task_index(id);
     configASSERT(InterlockedCompareExchange(&Os_Closing, 0, 0) != 0);
     configASSERT(index < Os_Config->task_count);
@@ -506,7 +532,8 @@ static NativeTaskStart native_starts[OS_MAX_TASKS + 2u];
 static unsigned failed_operation;
 void Os_StackTestFailOperation(unsigned operation) { failed_operation = operation; }
 #endif
-static int operation_fails(unsigned operation) {
+static int operation_fails(unsigned operation)
+{
 #ifdef OS_STACK_TESTS
     if (failed_operation == operation) {
         failed_operation = 0u;
@@ -518,21 +545,25 @@ static int operation_fails(unsigned operation) {
 #endif
     return 0;
 }
-DWORD Os_PortSuspendThread(HANDLE thread) {
+DWORD Os_PortSuspendThread(HANDLE thread)
+{
     return operation_fails(1u) ? (DWORD)-1 : SuspendThread(thread);
 }
-BOOL Os_PortGetThreadContext(HANDLE thread, CONTEXT *context) {
+BOOL Os_PortGetThreadContext(HANDLE thread, CONTEXT *context)
+{
     return operation_fails(2u) ? FALSE : GetThreadContext(thread, context);
 }
 
-void Os_PortPostInterrupt(uint32_t interrupt) {
+void Os_PortPostInterrupt(uint32_t interrupt)
+{
 #ifdef _WIN32
     vPortGenerateSimulatedInterruptFromWindowsThread(interrupt);
 #else
     Os_PosixPostInterrupt(interrupt);
 #endif
 }
-void Os_TargetTrace(char marker) {
+void Os_TargetTrace(char marker)
+{
     if (marker == '\0') {
         if (InterlockedCompareExchange(&Os_Closing, 0, 0) != 0) {
             return;
@@ -550,11 +581,13 @@ void Os_TargetTrace(char marker) {
     }
     trace[trace_length++] = marker;
 }
-int Os_TargetReady(void) {
+int Os_TargetReady(void)
+{
     return InterlockedCompareExchange(&ready, 0, 0) != 0 &&
            InterlockedCompareExchange(&Os_Closing, 0, 0) == 0;
 }
-static void report_and_exit(void) {
+static void report_and_exit(void)
+{
     int output_failed = 0;
     Os_StackCheck();
     if (Os_StackHasFault() != 0) {
@@ -574,8 +607,14 @@ static void report_and_exit(void) {
                "resource_calls=%u hidden=2 controllers=2 heap=windows static=freertos "
 #endif
                "input_closed=1 tick_closed=1 time_signal_failed=%d trace_dropped=%llu\n",
-               shutdown_reason == E_OK ? "Ready" : "Failed", shutdown_reason, trace, threads,
-               events, mutexes, resource_calls, Os_TimeSignalFailed(),
+               shutdown_reason == E_OK ? "Ready" : "Failed",
+               shutdown_reason,
+               trace,
+               threads,
+               events,
+               mutexes,
+               resource_calls,
+               Os_TimeSignalFailed(),
                (unsigned long long)trace_dropped) < 0) {
         output_failed = 1;
     }
@@ -584,7 +623,8 @@ static void report_and_exit(void) {
     }
     ExitProcess((output_failed != 0 && shutdown_reason == E_OK) ? E_OS_STATE : shutdown_reason);
 }
-static void stop_thread(HANDLE thread) {
+static void stop_thread(HANDLE thread)
+{
     CONTEXT context;
 #ifdef __linux__
     if (Os_StackHasFault() != 0 && Os_StackThreadHasFault(GetThreadId(thread)) != 0) {
@@ -603,7 +643,8 @@ static void stop_thread(HANDLE thread) {
         ExitProcess(E_OS_STATE);
     }
 }
-static DWORD WINAPI control(void *argument) {
+static DWORD WINAPI control(void *argument)
+{
     HANDLE event = argument == NULL ? close_event : backup_event;
     unsigned i;
     DWORD current = GetCurrentThreadId();
@@ -667,7 +708,8 @@ static DWORD WINAPI control(void *argument) {
     report_and_exit();
     return 0u;
 }
-void Os_BackendStackFault(char failed_role) {
+void Os_BackendStackFault(char failed_role)
+{
     Os_TimeClose();
     Os_MailboxClose();
     InterlockedOr(&activation_admission, 2);
@@ -689,7 +731,8 @@ void Os_BackendStackFault(char failed_role) {
     ExitProcess(E_OS_STACKFAULT);
 }
 #ifdef __linux__
-void Os_BackendSignalStackFault(char failed_role) {
+void Os_BackendSignalStackFault(char failed_role)
+{
     (void)InterlockedOr(&activation_admission, 2);
     (void)InterlockedExchange(&Os_Closing, 1);
     (void)InterlockedExchange(&ready, 0);
@@ -707,7 +750,8 @@ void Os_BackendSignalStackFault(char failed_role) {
     }
 }
 #endif
-void Os_BackendShutdown(StatusType error) {
+void Os_BackendShutdown(StatusType error)
+{
     const Os_NativeStack *current = Os_StackCurrent();
     if (error == E_OS_STACKFAULT && Os_StackHasFault() && current != NULL &&
         (current->role == 'C' || current->role == 'D') &&
@@ -718,7 +762,8 @@ void Os_BackendShutdown(StatusType error) {
     Sleep(INFINITE);
     ExitProcess(E_OS_STATE);
 }
-void Os_BackendRequestShutdown(StatusType error) {
+void Os_BackendRequestShutdown(StatusType error)
+{
     Os_TimeClose();
     Os_MailboxClose();
     if ((InterlockedOr(&activation_admission, 2) & 2) == 0) {
@@ -733,12 +778,14 @@ void Os_BackendRequestShutdown(StatusType error) {
         }
     }
 }
-void Os_BackendAssert(const char *file, int line) {
+void Os_BackendAssert(const char *file, int line)
+{
     (void)file;
     (void)line;
     Os_BackendShutdown(E_OS_STATE);
 }
-static int fail_next(void) {
+static int fail_next(void)
+{
     ++resource_calls;
 #ifdef OS_HOST_FAILURE_TESTS
     return fail_resource != 0u && resource_calls == fail_resource;
@@ -746,7 +793,8 @@ static int fail_next(void) {
     return 0;
 #endif
 }
-HANDLE Os_PortEvent(LPSECURITY_ATTRIBUTES attributes, BOOL manual, BOOL initial, LPCSTR name) {
+HANDLE Os_PortEvent(LPSECURITY_ATTRIBUTES attributes, BOOL manual, BOOL initial, LPCSTR name)
+{
     HANDLE result = fail_next() ? NULL : CreateEventA(attributes, manual, initial, name);
     if (result == NULL) {
         Os_BackendShutdown(E_OS_STATE);
@@ -754,7 +802,8 @@ HANDLE Os_PortEvent(LPSECURITY_ATTRIBUTES attributes, BOOL manual, BOOL initial,
     ++events;
     return result;
 }
-HANDLE Os_PortMutex(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name) {
+HANDLE Os_PortMutex(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name)
+{
     HANDLE result = fail_next() ? NULL : CreateMutexA(attributes, owner, name);
     if (result == NULL) {
         Os_BackendShutdown(E_OS_STATE);
@@ -762,8 +811,13 @@ HANDLE Os_PortMutex(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name) {
     ++mutexes;
     return result;
 }
-HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes, SIZE_T stack, LPTHREAD_START_ROUTINE start,
-                     LPVOID argument, DWORD flags, LPDWORD id) {
+HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
+                     SIZE_T stack,
+                     LPTHREAD_START_ROUTINE start,
+                     LPVOID argument,
+                     DWORD flags,
+                     LPDWORD id)
+{
 #ifdef __linux__
     HANDLE result = (attributes != NULL || fail_next())
                         ? NULL
@@ -778,7 +832,8 @@ HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes, SIZE_T stack, LPTHREAD_ST
     ++threads;
     return result;
 }
-static DWORD WINAPI native_task_start(void *argument) {
+static DWORD WINAPI native_task_start(void *argument)
+{
     NativeTaskStart *start = argument;
     if (!Os_StackRegister(start->role)) {
         Os_BackendShutdown(E_OS_STATE);
@@ -799,7 +854,8 @@ static DWORD WINAPI native_task_start(void *argument) {
     Os_BackendShutdown(E_OS_STATE);
     return 0u;
 }
-HANDLE Os_PortTaskThread(TaskFunction_t code, void *argument, const StackType_t *buffer_top) {
+HANDLE Os_PortTaskThread(TaskFunction_t code, void *argument, const StackType_t *buffer_top)
+{
     NativeTaskStart *start;
     HANDLE thread;
     CONTEXT context;
@@ -813,8 +869,12 @@ HANDLE Os_PortTaskThread(TaskFunction_t code, void *argument, const StackType_t 
     start->role = code == task_entry ? 'T' : (code == bootstrap ? 'B' : 'I');
     start->registered = Os_PortEvent(NULL, FALSE, FALSE, NULL);
     start->gate = Os_PortEvent(NULL, FALSE, FALSE, NULL);
-    thread = Os_PortThread(NULL, Os_Config->host_stack_reserve, native_task_start, start,
-                           STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
+    thread = Os_PortThread(NULL,
+                           Os_Config->host_stack_reserve,
+                           native_task_start,
+                           start,
+                           STACK_SIZE_PARAM_IS_A_RESERVATION,
+                           NULL);
     task_threads[task_thread_count++] = thread;
     if (WaitForSingleObject(start->registered, 5000u) != WAIT_OBJECT_0 ||
         SuspendThread(thread) == (DWORD)-1) {
@@ -830,7 +890,8 @@ HANDLE Os_PortTaskThread(TaskFunction_t code, void *argument, const StackType_t 
     }
     return thread;
 }
-void Os_PortResumeThread(HANDLE thread) {
+void Os_PortResumeThread(HANDLE thread)
+{
     CONTEXT context;
     context.ContextFlags = CONTEXT_CONTROL;
     if (!GetThreadContext(thread, &context)) {
@@ -841,13 +902,16 @@ void Os_PortResumeThread(HANDLE thread) {
         Os_BackendShutdown(E_OS_STATE);
     }
 }
-void vApplicationGetIdleTaskMemory(StaticTask_t **task, StackType_t **stack,
-                                   configSTACK_DEPTH_TYPE *depth) {
+void vApplicationGetIdleTaskMemory(StaticTask_t **task,
+                                   StackType_t **stack,
+                                   configSTACK_DEPTH_TYPE *depth)
+{
     *task = &task_memory[OS_MAX_TASKS + 1u];
     *stack = task_buffers[OS_MAX_TASKS + 1u];
     *depth = 512;
 }
-void vApplicationIdleHook(void) {
+void vApplicationIdleHook(void)
+{
     Os_StackCheck();
 #ifdef OS_IDLE_TESTS
     Os_TestIdleObserved();
@@ -857,7 +921,8 @@ void vApplicationIdleHook(void) {
     Os_StackTestIdle();
 #endif
 }
-static void task_entry(void *argument) {
+static void task_entry(void *argument)
+{
     const Os_TaskConfig *task = argument;
     const size_t index = task_index(task->id);
     configASSERT(index < Os_Config->task_count);
@@ -870,7 +935,8 @@ static void task_entry(void *argument) {
     /* A returned entry is an erroneous activation, not a whole-OS shutdown. */
     Os_BackendMissingEnd();
 }
-static void bootstrap(void *argument) {
+static void bootstrap(void *argument)
+{
     size_t i;
     (void)argument;
     if ((Os_Config->interrupts != NULL) && (Os_Config->interrupts->entries != NULL)) {
@@ -901,7 +967,8 @@ static void bootstrap(void *argument) {
     vTaskSuspend(NULL);
     Os_BackendShutdown(E_OS_STATE);
 }
-void Os_BackendStart(AppModeType mode) {
+void Os_BackendStart(AppModeType mode)
+{
     size_t i;
     Os_TargetTrace('I');
 #ifdef OS_HOST_FAILURE_TESTS
@@ -937,8 +1004,13 @@ void Os_BackendStart(AppModeType mode) {
 #endif
     Os_MailboxInstall();
 #ifndef __linux__
-    if (!DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &main_thread,
-                         0u, FALSE, DUPLICATE_SAME_ACCESS)) {
+    if (!DuplicateHandle(GetCurrentProcess(),
+                         GetCurrentThread(),
+                         GetCurrentProcess(),
+                         &main_thread,
+                         0u,
+                         FALSE,
+                         DUPLICATE_SAME_ACCESS)) {
         Os_BackendShutdown(E_OS_STATE);
     }
 #endif
@@ -959,31 +1031,47 @@ void Os_BackendStart(AppModeType mode) {
         if ((Os_Config->tasks[i].autostart_modes & mode) != 0u) {
             append_activation(i);
         }
-        handles[i] = xTaskCreateStatic(task_entry, Os_Config->tasks[i].name, 512,
-                                       (void *)&Os_Config->tasks[i], Os_Config->tasks[i].priority,
-                                       task_buffers[i], &task_memory[i]);
+        handles[i] = xTaskCreateStatic(task_entry,
+                                       Os_Config->tasks[i].name,
+                                       512,
+                                       (void *)&Os_Config->tasks[i],
+                                       Os_Config->tasks[i].priority,
+                                       task_buffers[i],
+                                       &task_memory[i]);
         configASSERT(handles[i] != NULL);
-        vTaskOsSetReadySequence(handles[i], (activations[i].count == 0u)
-                                                ? 0u
-                                                : activations[i].requests[activations[i].head]);
+        vTaskOsSetReadySequence(
+            handles[i],
+            (activations[i].count == 0u) ? 0u : activations[i].requests[activations[i].head]);
         vTaskSuspend(handles[i]);
     }
-    configASSERT(xTaskCreateStatic(bootstrap, "Os_Bootstrap", 512, NULL, 31,
-                                   task_buffers[OS_MAX_TASKS], &task_memory[OS_MAX_TASKS]) != NULL);
+    configASSERT(xTaskCreateStatic(bootstrap,
+                                   "Os_Bootstrap",
+                                   512,
+                                   NULL,
+                                   31,
+                                   task_buffers[OS_MAX_TASKS],
+                                   &task_memory[OS_MAX_TASKS]) != NULL);
     vTaskStartScheduler();
     Os_BackendShutdown(E_OS_STATE);
 }
 #ifdef __linux__
-void Os_BackendSetDispatcher(void) {
-    if (!DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &main_thread,
-                         0u, FALSE, DUPLICATE_SAME_ACCESS)) {
+void Os_BackendSetDispatcher(void)
+{
+    if (!DuplicateHandle(GetCurrentProcess(),
+                         GetCurrentThread(),
+                         GetCurrentProcess(),
+                         &main_thread,
+                         0u,
+                         FALSE,
+                         DUPLICATE_SAME_ACCESS)) {
         Os_BackendShutdown(E_OS_STATE);
     }
     Os_HostSetDispatcher(main_thread);
     Os_StackInit();
 }
 #endif
-StatusType Os_BackendState(TaskType id, TaskStateRefType state) {
+StatusType Os_BackendState(TaskType id, TaskStateRefType state)
+{
     size_t i;
     Os_StackCheck();
     if (!Os_BackendServiceContext()) {
@@ -995,21 +1083,21 @@ StatusType Os_BackendState(TaskType id, TaskStateRefType state) {
             Os_BackendGuardService();
             eTaskState actual = eTaskGetState(handles[i]);
             switch (actual) {
-            case eRunning:
-                *state = RUNNING;
-                break;
-            case eReady:
-                *state = READY;
-                break;
-            case eBlocked:
-                *state = WAITING;
-                break;
-            case eSuspended:
-                *state = (task_waiting[i] != 0u) ? WAITING : SUSPENDED;
-                break;
-            default:
-                taskEXIT_CRITICAL();
-                return E_OS_STATE;
+                case eRunning:
+                    *state = RUNNING;
+                    break;
+                case eReady:
+                    *state = READY;
+                    break;
+                case eBlocked:
+                    *state = WAITING;
+                    break;
+                case eSuspended:
+                    *state = (task_waiting[i] != 0u) ? WAITING : SUSPENDED;
+                    break;
+                default:
+                    taskEXIT_CRITICAL();
+                    return E_OS_STATE;
             }
             taskEXIT_CRITICAL();
             Os_BackendGuardService();
@@ -1018,7 +1106,8 @@ StatusType Os_BackendState(TaskType id, TaskStateRefType state) {
     }
     return E_OS_ID;
 }
-StatusType Os_BackendActivate(TaskType id) {
+StatusType Os_BackendActivate(TaskType id)
+{
     size_t index;
     const ActivationQueue *queue;
     const Os_NativeStack *stack;
@@ -1077,7 +1166,8 @@ StatusType Os_BackendActivate(TaskType id) {
     Os_BackendGuardService();
     return E_OK;
 }
-static size_t current_task_index(void) {
+static size_t current_task_index(void)
+{
     const Os_NativeStack *stack = Os_StackCurrent();
     size_t index;
     if ((stack == NULL) || (stack->role != 'T') || (Os_TargetReady() == 0)) {
@@ -1090,7 +1180,8 @@ static size_t current_task_index(void) {
     }
     return OS_MAX_TASKS;
 }
-static StatusType complete_activation(TaskType id, int chain, int returned) {
+static StatusType complete_activation(TaskType id, int chain, int returned)
+{
     const Os_NativeStack *stack = Os_StackCurrent();
     size_t index;
     TaskHandle_t current;
@@ -1191,7 +1282,8 @@ static StatusType complete_activation(TaskType id, int chain, int returned) {
 }
 StatusType Os_BackendFinish(void) { return complete_activation(0u, 0, 0); }
 StatusType Os_BackendChain(TaskType id) { return complete_activation(id, 1, 0); }
-void Os_BackendMissingEnd(void) {
+void Os_BackendMissingEnd(void)
+{
     const Os_ErrorParameters arguments = {.service_TerminateTask = {0u}};
     Os_StackCheck();
     /* Report before leaving RUNNING, while the application's leaked resource
@@ -1200,7 +1292,8 @@ void Os_BackendMissingEnd(void) {
     (void)complete_activation(0u, 0, 1);
     Os_BackendShutdown(E_OS_STATE);
 }
-StatusType Os_BackendResource(ResourceType id, int acquire) {
+StatusType Os_BackendResource(ResourceType id, int acquire)
+{
     static UBaseType_t saved_priorities[OS_RESOURCE_ACTORS][OS_MAX_RESOURCES];
     static LONG saved_interrupt_ceilings[OS_RESOURCE_ACTORS][OS_MAX_RESOURCES];
     const Os_NativeStack *stack = Os_StackCurrent();
@@ -1278,7 +1371,8 @@ StatusType Os_BackendResource(ResourceType id, int acquire) {
     Os_BackendGuardService();
     return status;
 }
-StatusType Os_BackendSchedule(void) {
+StatusType Os_BackendSchedule(void)
+{
     size_t index = current_task_index();
     if (index == OS_MAX_TASKS) {
         return E_OS_CALLEVEL;
@@ -1298,7 +1392,8 @@ StatusType Os_BackendSchedule(void) {
     acquire_internal(index);
     return E_OK;
 }
-StatusType Os_BackendWait(EventMaskType mask) {
+StatusType Os_BackendWait(EventMaskType mask)
+{
     size_t index = current_task_index();
     if (index == OS_MAX_TASKS) {
         return E_OS_CALLEVEL;
@@ -1334,7 +1429,8 @@ StatusType Os_BackendWait(EventMaskType mask) {
     configASSERT(task_waiting[index] == 0u);
     return E_OK;
 }
-StatusType Os_BackendClear(EventMaskType mask) {
+StatusType Os_BackendClear(EventMaskType mask)
+{
     size_t index = current_task_index();
     if (index == OS_MAX_TASKS) {
         return E_OS_CALLEVEL;
@@ -1350,7 +1446,8 @@ StatusType Os_BackendClear(EventMaskType mask) {
     Os_BackendGuardService();
     return E_OK;
 }
-StatusType Os_BackendEvent(TaskType id, EventMaskType mask, EventMaskRefType output) {
+StatusType Os_BackendEvent(TaskType id, EventMaskType mask, EventMaskRefType output)
+{
     size_t index;
     StatusType status = E_OK;
     if (!Os_BackendServiceContext()) {
@@ -1394,7 +1491,8 @@ StatusType Os_BackendEvent(TaskType id, EventMaskType mask, EventMaskRefType out
     Os_BackendGuardService();
     return status;
 }
-StatusType Os_BackendInspect(TaskType id, Os_ActivationInfo *info) {
+StatusType Os_BackendInspect(TaskType id, Os_ActivationInfo *info)
+{
     size_t index;
     unsigned j;
     Os_ActivationInfo snapshot;

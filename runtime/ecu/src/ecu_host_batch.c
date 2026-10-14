@@ -4,27 +4,37 @@
 
 static Ecu_HostBatch batch;
 
-static int write_output(const Ecu_OutputRecord *output, const Ecu_HostBatch *state,
-                        StatusType status, void *context) {
+static int write_output(const Ecu_OutputRecord *output,
+                        const Ecu_HostBatch *state,
+                        StatusType status,
+                        void *context)
+{
     (void)context;
     if (output == NULL) {
         if (printf("%s batch=%llu epoch=%llu sequence=%llu input_first=%llu inputs=%u status=%u "
                    "input_status=%u transport_status=%u transport_epoch=%llu transport_count=%u\n",
                    (status == E_OK) ? "COMMIT_OK" : "COMMIT_ERROR",
-                   (unsigned long long)state->batch_id, (unsigned long long)state->completed_epoch,
+                   (unsigned long long)state->batch_id,
+                   (unsigned long long)state->completed_epoch,
                    (unsigned long long)state->sequence,
-                   (unsigned long long)state->first_input_sequence, (unsigned)state->count,
-                   (unsigned)status, (unsigned)state->input_status,
-                   (unsigned)state->transport_status, (unsigned long long)state->transport_epoch,
+                   (unsigned long long)state->first_input_sequence,
+                   (unsigned)state->count,
+                   (unsigned)status,
+                   (unsigned)state->input_status,
+                   (unsigned)state->transport_status,
+                   (unsigned long long)state->transport_epoch,
                    (unsigned)state->transport_count) < 0) {
             return 0;
         }
     } else {
         unsigned index;
         if (printf("OUT epoch=%llu sequence=%llu ticket=%llu pdu=%u id=%u dlc=%u data=",
-                   (unsigned long long)output->epoch, (unsigned long long)state->sequence,
-                   (unsigned long long)output->ticket, (unsigned)output->pdu,
-                   (unsigned)output->can_id, (unsigned)output->dlc) < 0) {
+                   (unsigned long long)output->epoch,
+                   (unsigned long long)state->sequence,
+                   (unsigned long long)output->ticket,
+                   (unsigned)output->pdu,
+                   (unsigned)output->can_id,
+                   (unsigned)output->dlc) < 0) {
             return 0;
         }
         for (index = 0u; index < output->dlc; ++index) {
@@ -41,7 +51,8 @@ static int write_output(const Ecu_OutputRecord *output, const Ecu_HostBatch *sta
 
 /* Retain the exact byte count, including embedded NULs, and drain an oversized
  * line before refusing it. fgets/strlen would hide an invalid trailing suffix. */
-static int read_line(char line[ECU_BATCH_LINE_CAPACITY], size_t *length) {
+static int read_line(char line[ECU_BATCH_LINE_CAPACITY], size_t *length)
+{
     int byte;
     size_t count = 0u;
     int overflow = 0;
@@ -70,7 +81,8 @@ static int read_line(char line[ECU_BATCH_LINE_CAPACITY], size_t *length) {
     return 1;
 }
 
-static Os_HostThreadResult control(void *argument) {
+static Os_HostThreadResult control(void *argument)
+{
     uint64_t started = Os_HostMonotonicMs();
     char line[ECU_BATCH_LINE_CAPACITY];
     size_t length;
@@ -96,7 +108,8 @@ static Os_HostThreadResult control(void *argument) {
             status = Ecu_HostBatchExecute(&batch, write_output, NULL);
         }
         if (status != E_OK) {
-            if ((printf("REJECT status=%u epoch=%llu sequence=%llu\n", (unsigned)status,
+            if ((printf("REJECT status=%u epoch=%llu sequence=%llu\n",
+                        (unsigned)status,
                         (unsigned long long)batch.completed_epoch,
                         (unsigned long long)batch.sequence) < 0) ||
                 (fflush(stdout) != 0)) {
@@ -108,7 +121,8 @@ static Os_HostThreadResult control(void *argument) {
     return 0u;
 }
 
-int main(void) {
+int main(void)
+{
     Os_HostHandle thread;
     if (Ecu_TargetPrepare() != E_OK) {
         return 97;

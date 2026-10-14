@@ -28,7 +28,8 @@ static uint8 authentication_state DCM_VAR_CLEARED;
 #include "Dcm_MemMap.h"
 #define DCM_START_SEC_CODE
 #include "Dcm_MemMap.h"
-static DCM_CODE void Dcm_Release(void) {
+static DCM_CODE void Dcm_Release(void)
+{
     state = DCM_IDLE;
     copied = 0u;
     confirmed = 0u;
@@ -39,7 +40,8 @@ static DCM_CODE void Dcm_Release(void) {
         ComM_DCM_InactiveDiagnostic(configuration->channel);
     }
 }
-static DCM_CODE void Dcm_SetSession(Dcm_SesCtrlType next) {
+static DCM_CODE void Dcm_SetSession(Dcm_SesCtrlType next)
+{
     const Rte_ModeType_DcmDiagnosticSessionControl mode =
         (next == DCM_DEFAULT_SESSION)
             ? RTE_MODE_DcmDiagnosticSessionControl_DCM_DEFAULT_SESSION
@@ -47,7 +49,8 @@ static DCM_CODE void Dcm_SetSession(Dcm_SesCtrlType next) {
     session = next;
     (void)SchM_Switch_Dcm_DcmDiagnosticSessionControl(mode);
 }
-DCM_CODE void Dcm_Init(const Dcm_ConfigType *ConfigPtr) {
+DCM_CODE void Dcm_Init(const Dcm_ConfigType *ConfigPtr)
+{
     SchM_Enter_Dcm_DCM_STATE();
     if ((ConfigPtr != NULL_PTR) && (ConfigPtr->p2_ticks > 0u) && (ConfigPtr->s3_ticks > 0u) &&
         (ConfigPtr->buffer_length >= 7u) && (ConfigPtr->buffer_length <= 256u) &&
@@ -71,7 +74,8 @@ DCM_CODE void Dcm_Init(const Dcm_ConfigType *ConfigPtr) {
     }
     SchM_Exit_Dcm_DCM_STATE();
 }
-DCM_CODE Std_ReturnType Dcm_GetSecurityLevel(Dcm_SecLevelType *SecLevel) {
+DCM_CODE Std_ReturnType Dcm_GetSecurityLevel(Dcm_SecLevelType *SecLevel)
+{
     SchM_Enter_Dcm_DCM_STATE();
     if ((configuration != NULL_PTR) && (SecLevel != NULL_PTR)) {
         /* No SecurityAccess service is selected; no transition can unlock it. */
@@ -80,7 +84,8 @@ DCM_CODE Std_ReturnType Dcm_GetSecurityLevel(Dcm_SecLevelType *SecLevel) {
     SchM_Exit_Dcm_DCM_STATE();
     return E_OK;
 }
-DCM_CODE Std_ReturnType Dcm_GetSesCtrlType(Dcm_SesCtrlType *SesCtrlType) {
+DCM_CODE Std_ReturnType Dcm_GetSesCtrlType(Dcm_SesCtrlType *SesCtrlType)
+{
     SchM_Enter_Dcm_DCM_STATE();
     if ((configuration != NULL_PTR) && (SesCtrlType != NULL_PTR)) {
         *SesCtrlType = session;
@@ -88,7 +93,8 @@ DCM_CODE Std_ReturnType Dcm_GetSesCtrlType(Dcm_SesCtrlType *SesCtrlType) {
     SchM_Exit_Dcm_DCM_STATE();
     return E_OK;
 }
-DCM_CODE Std_ReturnType Dcm_ResetToDefaultSession(void) {
+DCM_CODE Std_ReturnType Dcm_ResetToDefaultSession(void)
+{
     SchM_Enter_Dcm_DCM_STATE();
     if (configuration != NULL_PTR) {
         Dcm_SetSession(DCM_DEFAULT_SESSION);
@@ -102,7 +108,8 @@ DCM_CODE Std_ReturnType Dcm_ResetToDefaultSession(void) {
     SchM_Exit_Dcm_DCM_STATE();
     return E_OK;
 }
-DCM_CODE Std_ReturnType Dcm_SetActiveDiagnostic(boolean active) {
+DCM_CODE Std_ReturnType Dcm_SetActiveDiagnostic(boolean active)
+{
     SchM_Enter_Dcm_DCM_STATE();
     if (configuration != NULL_PTR) {
         active_enabled = active;
@@ -110,9 +117,11 @@ DCM_CODE Std_ReturnType Dcm_SetActiveDiagnostic(boolean active) {
     SchM_Exit_Dcm_DCM_STATE();
     return E_OK;
 }
-DCM_CODE BufReq_ReturnType Dcm_StartOfReception(PduIdType id, const PduInfoType *info,
+DCM_CODE BufReq_ReturnType Dcm_StartOfReception(PduIdType id,
+                                                const PduInfoType *info,
                                                 PduLengthType TpSduLength,
-                                                PduLengthType *bufferSizePtr) {
+                                                PduLengthType *bufferSizePtr)
+{
     BufReq_ReturnType result = BUFREQ_E_NOT_OK;
     SchM_Enter_Dcm_DCM_STATE();
     if ((configuration != NULL_PTR) && (id == configuration->receive) && (communication != 0u) &&
@@ -135,8 +144,10 @@ DCM_CODE BufReq_ReturnType Dcm_StartOfReception(PduIdType id, const PduInfoType 
     SchM_Exit_Dcm_DCM_STATE();
     return result;
 }
-DCM_CODE BufReq_ReturnType Dcm_CopyRxData(PduIdType id, const PduInfoType *info,
-                                          PduLengthType *bufferSizePtr) {
+DCM_CODE BufReq_ReturnType Dcm_CopyRxData(PduIdType id,
+                                          const PduInfoType *info,
+                                          PduLengthType *bufferSizePtr)
+{
     BufReq_ReturnType result = BUFREQ_E_NOT_OK;
     SchM_Enter_Dcm_DCM_STATE();
     if ((configuration != NULL_PTR) && (id == configuration->receive) && (communication != 0u) &&
@@ -154,7 +165,8 @@ DCM_CODE BufReq_ReturnType Dcm_CopyRxData(PduIdType id, const PduInfoType *info,
     SchM_Exit_Dcm_DCM_STATE();
     return result;
 }
-DCM_CODE void Dcm_TpRxIndication(PduIdType id, Std_ReturnType result) {
+DCM_CODE void Dcm_TpRxIndication(PduIdType id, Std_ReturnType result)
+{
     SchM_Enter_Dcm_DCM_STATE();
     if ((configuration != NULL_PTR) && (id == configuration->receive) && (state == DCM_RECEIVING)) {
         if ((result == E_OK) && (received == request_length) && (communication != 0u)) {
@@ -171,13 +183,15 @@ DCM_CODE void Dcm_TpRxIndication(PduIdType id, Std_ReturnType result) {
     }
     SchM_Exit_Dcm_DCM_STATE();
 }
-static DCM_CODE void Dcm_Negative(uint8 code) {
+static DCM_CODE void Dcm_Negative(uint8 code)
+{
     response[0] = 0x7fu;
     response[1] = request[0];
     response[2] = code;
     response_length = 3u;
 }
-static DCM_CODE void Dcm_Process(void) {
+static DCM_CODE void Dcm_Process(void)
+{
     boolean suppress = FALSE;
     response_length = 0u;
     if (((request[0] == 0x10u) || (request[0] == 0x3eu)) && (request_length >= 2u)) {
@@ -267,7 +281,8 @@ static DCM_CODE void Dcm_Process(void) {
         confirmed = 0u;
     }
 }
-DCM_CODE void Dcm_MainFunction(void) {
+DCM_CODE void Dcm_MainFunction(void)
+{
     SchM_Enter_Dcm_DCM_STATE();
     if (configuration != NULL_PTR) {
         if ((session != 1u) && (state == DCM_IDLE) && (s3_remaining > 0u)) {
@@ -299,9 +314,11 @@ DCM_CODE void Dcm_MainFunction(void) {
     }
     SchM_Exit_Dcm_DCM_STATE();
 }
-DCM_CODE BufReq_ReturnType Dcm_CopyTxData(PduIdType id, const PduInfoType *info,
+DCM_CODE BufReq_ReturnType Dcm_CopyTxData(PduIdType id,
+                                          const PduInfoType *info,
                                           const RetryInfoType *retry,
-                                          PduLengthType *availableDataPtr) {
+                                          PduLengthType *availableDataPtr)
+{
     BufReq_ReturnType result = BUFREQ_E_NOT_OK;
     SchM_Enter_Dcm_DCM_STATE();
     if ((configuration != NULL_PTR) && (id == configuration->transmit) &&
@@ -345,7 +362,8 @@ DCM_CODE BufReq_ReturnType Dcm_CopyTxData(PduIdType id, const PduInfoType *info,
     SchM_Exit_Dcm_DCM_STATE();
     return result;
 }
-DCM_CODE void Dcm_TpTxConfirmation(PduIdType id, Std_ReturnType result) {
+DCM_CODE void Dcm_TpTxConfirmation(PduIdType id, Std_ReturnType result)
+{
     SchM_Enter_Dcm_DCM_STATE();
     if ((configuration != NULL_PTR) && (id == configuration->transmit) &&
         (state == DCM_TRANSMITTING)) {
@@ -356,7 +374,8 @@ DCM_CODE void Dcm_TpTxConfirmation(PduIdType id, Std_ReturnType result) {
     }
     SchM_Exit_Dcm_DCM_STATE();
 }
-static DCM_CODE void Dcm_Mode(uint8 NetworkId, uint8 mode) {
+static DCM_CODE void Dcm_Mode(uint8 NetworkId, uint8 mode)
+{
     SchM_Enter_Dcm_DCM_STATE();
     if ((configuration != NULL_PTR) && (NetworkId == configuration->channel)) {
         communication = mode;

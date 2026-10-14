@@ -8,12 +8,14 @@ static const char *scenario;
 static unsigned errors;
 static unsigned probes;
 static bool configured;
-static void check(bool condition) {
+static void check(bool condition)
+{
     if (!condition) {
         Os_BackendShutdown(E_OS_STATE);
     }
 }
-static void scalar_probe(void) {
+static void scalar_probe(void)
+{
     const unsigned before = errors;
     const bool alarm = strcmp(scenario, "alarm") == 0;
     ++probes;
@@ -35,7 +37,8 @@ static void scalar_probe(void) {
     }
     check(errors == before);
 }
-void ErrorHook(StatusType error) {
+void ErrorHook(StatusType error)
+{
     const OSServiceIdType service = OSErrorGetServiceId();
     check(error == E_OS_ID && service == 130u && OSError_ActivateTask_TaskID() == 99u);
     ++errors;
@@ -47,43 +50,55 @@ void ErrorHook(StatusType error) {
     }
     check(OSErrorGetServiceId() == service && OSError_ActivateTask_TaskID() == 99u);
 }
-static uint32_t interrupt(void) {
+static uint32_t interrupt(void)
+{
     scalar_probe();
     return 0u;
 }
-static void pre(void) {
+static void pre(void)
+{
     if (probes == 0u && strcmp(scenario, "pre") == 0) {
         scalar_probe();
     }
 }
-static void post(void) {
+static void post(void)
+{
     if (probes == 0u && strcmp(scenario, "post") == 0) {
         scalar_probe();
     }
 }
-void StartupHook(void) {
+void StartupHook(void)
+{
     vPortSetInterruptHandler(5u, &interrupt);
     vPortSetInterruptHandler(4u, &interrupt);
     if (strcmp(scenario, "startup") == 0) {
         scalar_probe();
     }
 }
-void ShutdownHook(StatusType reason) {
+void ShutdownHook(StatusType reason)
+{
     if (reason != E_OK) {
         /* Preserve the first assertion failure and let native shutdown exit;
          * requesting shutdown again from this hook would wait forever. */
-        printf("nonstatus_failed scenario=%s probes=%u errors=%u reason=%u\n", scenario, probes,
-               errors, reason);
+        printf("nonstatus_failed scenario=%s probes=%u errors=%u reason=%u\n",
+               scenario,
+               probes,
+               errors,
+               reason);
         return;
     }
     if (strcmp(scenario, "shutdown") == 0) {
         scalar_probe();
     }
     check(probes == 1u && errors == (configured ? 1u : 0u));
-    printf("nonstatus scenario=%s probes=%u errors=%u snapshot=pass reason=%u\n", scenario, probes,
-           errors, reason);
+    printf("nonstatus scenario=%s probes=%u errors=%u snapshot=pass reason=%u\n",
+           scenario,
+           probes,
+           errors,
+           reason);
 }
-static void owner(void) {
+static void owner(void)
+{
     if (strcmp(scenario, "task") == 0 || strcmp(scenario, "unconfigured") == 0) {
         scalar_probe();
     } else if (strcmp(scenario, "isr") == 0 || strcmp(scenario, "cat1") == 0) {
@@ -99,7 +114,8 @@ static void owner(void) {
     ShutdownOS(E_OK);
 }
 static void monitor(void) { ShutdownOS(E_OK); }
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     check(argc == 2);
     scenario = argv[1];
     configured = strcmp(scenario, "unconfigured") != 0;
@@ -109,8 +125,8 @@ int main(int argc, char **argv) {
     };
     const Os_HookConfig hooks = {configured ? &ErrorHook : NULL, &pre, &post};
     const Os_CounterConfig counter = {0u, 1000u, 1u, 1u, 1u};
-    const Os_AlarmConfig alarm = {0u, 0u, OS_ALARM_CALLBACK, 0u, 0u, &scalar_probe, 1u, 0u, 1u,
-                                  0u, 0u};
+    const Os_AlarmConfig alarm = {
+        0u, 0u, OS_ALARM_CALLBACK, 0u, 0u, &scalar_probe, 1u, 0u, 1u, 0u, 0u};
     const Os_TimeConfig time = {&counter, 1u, &alarm, 1u, 0u, INVALID_TASK, 0u, NULL, NULL, 0u};
     const Os_TargetConfig target = {tasks,
                                     2u,

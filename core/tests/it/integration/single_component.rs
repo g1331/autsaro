@@ -197,7 +197,7 @@ fn reference_shape_records_independent_verification_inputs() {
     let config =
         std::fs::read_to_string(project.join("generated/src/Ecu_RuntimeConfig.c")).unwrap();
     assert!(
-        config.contains("Ecu_DcmAuthenticationMode, 2u};"),
+        config.contains("Ecu_DcmAuthenticationMode,\n    2u,\n};"),
         "DcmDspMaxDidToRead"
     );
     assert!(config.contains("Det_Init(&det_config);"));

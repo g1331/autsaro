@@ -3,17 +3,17 @@
 #include "Os.h"
 #include "Os_Time.h"
 #include <stddef.h>
-#define OS_MAX_TASKS 16u
-#define OS_MAX_PRIORITY 30u
-#define OS_MAX_ACTIVATIONS 32u
-#define OS_BASIC_TASK 0u
-#define OS_EXTENDED_TASK 1u
-#define OS_MAX_RESOURCES 8u
+#define OS_MAX_TASKS              16u
+#define OS_MAX_PRIORITY           30u
+#define OS_MAX_ACTIVATIONS        32u
+#define OS_BASIC_TASK             0u
+#define OS_EXTENDED_TASK          1u
+#define OS_MAX_RESOURCES          8u
 #define OS_MAX_INTERNAL_RESOURCES 2u
-#define OS_MAX_INTERRUPTS 32u
-#define OS_MAX_ISR_PRIORITY 31u
-#define OS_SCHEDULE_FULL 0u
-#define OS_SCHEDULE_NON 1u
+#define OS_MAX_INTERRUPTS         32u
+#define OS_MAX_ISR_PRIORITY       31u
+#define OS_SCHEDULE_FULL          0u
+#define OS_SCHEDULE_NON           1u
 typedef void (*Os_IsrEntry)(void);
 typedef struct {
     /* Higher values preempt lower values. Zero leaves an application source

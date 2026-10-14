@@ -35,15 +35,18 @@ static PduIdType pending_lower_id CANTP_VAR_CLEARED;
 #include "CanTp_MemMap.h"
 #define CANTP_START_SEC_CODE
 #include "CanTp_MemMap.h"
-static CANTP_CODE void CanTp_FinishTx(Std_ReturnType result) {
+static CANTP_CODE void CanTp_FinishTx(Std_ReturnType result)
+{
     state = CANTP_IDLE;
     PduR_CanTpTxConfirmation(configuration->upper_transmit, result);
 }
-static CANTP_CODE void CanTp_FinishRx(Std_ReturnType result) {
+static CANTP_CODE void CanTp_FinishRx(Std_ReturnType result)
+{
     state = CANTP_IDLE;
     PduR_CanTpRxIndication(configuration->upper_receive, result);
 }
-CANTP_CODE void CanTp_Init(const CanTp_ConfigType *CfgPtr) {
+CANTP_CODE void CanTp_Init(const CanTp_ConfigType *CfgPtr)
+{
     SchM_Enter_CanTp_CANTP_STATE();
     if ((CfgPtr != NULL_PTR) && (CfgPtr->maximum_length > 7u) && (CfgPtr->maximum_length <= 256u) &&
         (CfgPtr->n_as > 0u) && (CfgPtr->n_ar > 0u) && (CfgPtr->n_bs > 0u) && (CfgPtr->n_cr > 0u) &&
@@ -53,20 +56,23 @@ CANTP_CODE void CanTp_Init(const CanTp_ConfigType *CfgPtr) {
     }
     SchM_Exit_CanTp_CANTP_STATE();
 }
-CANTP_CODE void CanTp_Shutdown(void) {
+CANTP_CODE void CanTp_Shutdown(void)
+{
     SchM_Enter_CanTp_CANTP_STATE();
     configuration = NULL_PTR;
     state = CANTP_IDLE;
     /* A copied lower frame retains its identity until its actual confirmation. */
     SchM_Exit_CanTp_CANTP_STATE();
 }
-static CANTP_CODE void CanTp_Pad(void) {
+static CANTP_CODE void CanTp_Pad(void)
+{
     uint8 i;
     for (i = 0u; i < 8u; ++i) {
         frame[i] = configuration->padding;
     }
 }
-static CANTP_CODE void CanTp_Copy(void) {
+static CANTP_CODE void CanTp_Copy(void)
+{
     uint8 header;
     PduLengthType capacity;
     PduLengthType available = 0u;
@@ -104,7 +110,8 @@ static CANTP_CODE void CanTp_Copy(void) {
         /* N_Cs limits upper-buffer retries; no whole-message TP copy exists. */
     }
 }
-static CANTP_CODE void CanTp_Send(void) {
+static CANTP_CODE void CanTp_Send(void)
+{
     const PduInfoType info = {frame, NULL_PTR, 8u};
     const CanTp_StateType previous = state;
     if (lower_pending == TRUE) {
@@ -131,7 +138,8 @@ static CANTP_CODE void CanTp_Send(void) {
         }
     }
 }
-CANTP_CODE Std_ReturnType CanTp_Transmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr) {
+CANTP_CODE Std_ReturnType CanTp_Transmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr)
+{
     Std_ReturnType result = E_NOT_OK;
     SchM_Enter_CanTp_CANTP_STATE();
     if ((configuration != NULL_PTR) && (TxPduId == configuration->transmit) &&
@@ -156,7 +164,8 @@ CANTP_CODE Std_ReturnType CanTp_Transmit(PduIdType TxPduId, const PduInfoType *P
     SchM_Exit_CanTp_CANTP_STATE();
     return result;
 }
-CANTP_CODE Std_ReturnType CanTp_CancelReceive(PduIdType RxPduId) {
+CANTP_CODE Std_ReturnType CanTp_CancelReceive(PduIdType RxPduId)
+{
     Std_ReturnType result = E_NOT_OK;
     SchM_Enter_CanTp_CANTP_STATE();
     if ((configuration != NULL_PTR) && (RxPduId == configuration->receive)) {
@@ -176,7 +185,8 @@ CANTP_CODE Std_ReturnType CanTp_CancelReceive(PduIdType RxPduId) {
     SchM_Exit_CanTp_CANTP_STATE();
     return result;
 }
-static CANTP_CODE void CanTp_Flow(boolean overflow) {
+static CANTP_CODE void CanTp_Flow(boolean overflow)
+{
     CanTp_Pad();
     frame[0] = (overflow == TRUE) ? 0x32u : 0x30u;
     frame[1] = 0u; /* Entire buffer reserved: unlimited block size, no WAIT. */
@@ -185,7 +195,8 @@ static CANTP_CODE void CanTp_Flow(boolean overflow) {
     timer = configuration->n_ar;
     CanTp_Send();
 }
-static CANTP_CODE void CanTp_StartRx(const PduInfoType *info, boolean first) {
+static CANTP_CODE void CanTp_StartRx(const PduInfoType *info, boolean first)
+{
     const uint8 header = (first == TRUE) ? 2u : 1u;
     const PduLengthType length =
         (first == TRUE)
@@ -226,7 +237,8 @@ static CANTP_CODE void CanTp_StartRx(const PduInfoType *info, boolean first) {
         /* Admission rejection is not an accepted reception: no final callback. */
     }
 }
-static CANTP_CODE void CanTp_ReceiveFlow(const uint8 *data) {
+static CANTP_CODE void CanTp_ReceiveFlow(const uint8 *data)
+{
     const uint8 flow = data[0] & 0x0fu;
     if (flow == 0u) {
         const uint8 stmin = data[2];
@@ -252,7 +264,8 @@ static CANTP_CODE void CanTp_ReceiveFlow(const uint8 *data) {
         CanTp_FinishTx(E_NOT_OK);
     }
 }
-CANTP_CODE void CanTp_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr) {
+CANTP_CODE void CanTp_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr)
+{
     SchM_Enter_CanTp_CANTP_STATE();
     if ((configuration != NULL_PTR) && (RxPduId == configuration->lower_receive) &&
         (PduInfoPtr != NULL_PTR) && (PduInfoPtr->SduDataPtr != NULL_PTR) &&
@@ -309,7 +322,8 @@ CANTP_CODE void CanTp_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfo
     }
     SchM_Exit_CanTp_CANTP_STATE();
 }
-CANTP_CODE void CanTp_TxConfirmation(PduIdType TxPduId, Std_ReturnType result) {
+CANTP_CODE void CanTp_TxConfirmation(PduIdType TxPduId, Std_ReturnType result)
+{
     SchM_Enter_CanTp_CANTP_STATE();
     if ((lower_pending == TRUE) && (TxPduId == pending_lower_id)) {
         lower_pending = FALSE;
@@ -353,7 +367,8 @@ CANTP_CODE void CanTp_TxConfirmation(PduIdType TxPduId, Std_ReturnType result) {
     }
     SchM_Exit_CanTp_CANTP_STATE();
 }
-CANTP_CODE void CanTp_MainFunction(void) {
+CANTP_CODE void CanTp_MainFunction(void)
+{
     SchM_Enter_CanTp_CANTP_STATE();
     if ((configuration != NULL_PTR) && (state != CANTP_IDLE)) {
         if ((state == CANTP_TX_COPY) && (delay > 0u)) {

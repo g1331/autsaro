@@ -20,21 +20,24 @@ static boolean reception_before_main COM_VAR_CLEARED;
 
 #define COM_START_SEC_CODE
 #include "Com_MemMap.h"
-static COM_CODE uint16 Com_FindPdu(PduIdType id) {
+static COM_CODE uint16 Com_FindPdu(PduIdType id)
+{
     uint16 index = 0u;
     while ((index < configuration->pdu_count) && (configuration->pdus[index].pdu != id)) {
         ++index;
     }
     return index;
 }
-static COM_CODE uint16 Com_FindSignal(Com_SignalIdType id) {
+static COM_CODE uint16 Com_FindSignal(Com_SignalIdType id)
+{
     uint16 index = 0u;
     while ((index < configuration->pdu_count) && (configuration->pdus[index].signal != id)) {
         ++index;
     }
     return index;
 }
-static COM_CODE boolean Com_ValidConfig(const Com_ConfigType *config) {
+static COM_CODE boolean Com_ValidConfig(const Com_ConfigType *config)
+{
     boolean valid = FALSE;
     uint16 index;
     if ((config != NULL_PTR) && (config->pdus != NULL_PTR) && (config->pdu_count > 0u) &&
@@ -60,7 +63,8 @@ static COM_CODE boolean Com_ValidConfig(const Com_ConfigType *config) {
     }
     return valid;
 }
-COM_CODE void Com_Init(const Com_ConfigType *config) {
+COM_CODE void Com_Init(const Com_ConfigType *config)
+{
     SchM_Enter_Com_COM_STATE();
     uint16 index;
     Com_DeInit();
@@ -72,7 +76,8 @@ COM_CODE void Com_Init(const Com_ConfigType *config) {
     }
     SchM_Exit_Com_COM_STATE();
 }
-COM_CODE void Com_DeInit(void) {
+COM_CODE void Com_DeInit(void)
+{
     SchM_Enter_Com_COM_STATE();
     uint16 index;
     configuration = NULL_PTR;
@@ -86,10 +91,12 @@ COM_CODE void Com_DeInit(void) {
     }
     SchM_Exit_Com_COM_STATE();
 }
-COM_CODE Com_StatusType Com_GetStatus(void) {
+COM_CODE Com_StatusType Com_GetStatus(void)
+{
     return (configuration == NULL_PTR) ? COM_UNINIT : COM_INIT;
 }
-COM_CODE uint8 Com_SendSignal(Com_SignalIdType SignalId, const void *SignalDataPtr) {
+COM_CODE uint8 Com_SendSignal(Com_SignalIdType SignalId, const void *SignalDataPtr)
+{
     uint8 result = COM_SERVICE_NOT_AVAILABLE;
     if (configuration != NULL_PTR) {
         const uint16 index = Com_FindSignal(SignalId);
@@ -102,7 +109,8 @@ COM_CODE uint8 Com_SendSignal(Com_SignalIdType SignalId, const void *SignalDataP
     }
     return result;
 }
-COM_CODE uint8 Com_ReceiveSignal(Com_SignalIdType SignalId, void *SignalDataPtr) {
+COM_CODE uint8 Com_ReceiveSignal(Com_SignalIdType SignalId, void *SignalDataPtr)
+{
     uint8 result = COM_SERVICE_NOT_AVAILABLE;
     if (configuration != NULL_PTR) {
         const uint16 index = Com_FindSignal(SignalId);
@@ -115,7 +123,8 @@ COM_CODE uint8 Com_ReceiveSignal(Com_SignalIdType SignalId, void *SignalDataPtr)
     }
     return result;
 }
-COM_CODE void Com_IpduGroupStart(Com_IpduGroupIdType IpduGroupId, boolean Initialize) {
+COM_CODE void Com_IpduGroupStart(Com_IpduGroupIdType IpduGroupId, boolean Initialize)
+{
     if ((configuration != NULL_PTR) && (IpduGroupId == configuration->receive_group) &&
         (receive_started == FALSE)) {
         uint16 index;
@@ -132,7 +141,8 @@ COM_CODE void Com_IpduGroupStart(Com_IpduGroupIdType IpduGroupId, boolean Initia
         }
     }
 }
-COM_CODE void Com_IpduGroupStop(Com_IpduGroupIdType IpduGroupId) {
+COM_CODE void Com_IpduGroupStop(Com_IpduGroupIdType IpduGroupId)
+{
     if ((configuration != NULL_PTR) && (IpduGroupId == configuration->receive_group)) {
         uint16 index;
         receive_started = FALSE;
@@ -145,7 +155,8 @@ COM_CODE void Com_IpduGroupStop(Com_IpduGroupIdType IpduGroupId) {
         }
     }
 }
-COM_CODE void Com_EnableReceptionDM(Com_IpduGroupIdType IpduGroupId) {
+COM_CODE void Com_EnableReceptionDM(Com_IpduGroupIdType IpduGroupId)
+{
     if ((configuration != NULL_PTR) && (IpduGroupId == configuration->receive_group) &&
         (monitoring == FALSE)) {
         uint16 index;
@@ -158,13 +169,15 @@ COM_CODE void Com_EnableReceptionDM(Com_IpduGroupIdType IpduGroupId) {
         }
     }
 }
-COM_CODE void Com_DisableReceptionDM(Com_IpduGroupIdType IpduGroupId) {
+COM_CODE void Com_DisableReceptionDM(Com_IpduGroupIdType IpduGroupId)
+{
     if ((configuration != NULL_PTR) && (IpduGroupId == configuration->receive_group)) {
         monitoring = FALSE;
     }
 }
 COM_CODE void Ecu_ComReceptionBeforeMain(boolean pending) { reception_before_main = pending; }
-COM_CODE void Com_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr) {
+COM_CODE void Com_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr)
+{
     if ((configuration != NULL_PTR) && (receive_started == TRUE) && (PduInfoPtr != NULL_PTR) &&
         (PduInfoPtr->SduDataPtr != NULL_PTR) && (PduInfoPtr->SduLength >= 4u)) {
         const uint16 index = Com_FindPdu(RxPduId);
@@ -180,7 +193,8 @@ COM_CODE void Com_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr)
         }
     }
 }
-COM_CODE Std_ReturnType Com_TriggerTransmit(PduIdType TxPduId, PduInfoType *PduInfoPtr) {
+COM_CODE Std_ReturnType Com_TriggerTransmit(PduIdType TxPduId, PduInfoType *PduInfoPtr)
+{
     Std_ReturnType result = E_NOT_OK;
     if ((configuration != NULL_PTR) && (PduInfoPtr != NULL_PTR) &&
         (PduInfoPtr->SduDataPtr != NULL_PTR) && (PduInfoPtr->SduLength >= 4u)) {
@@ -197,7 +211,8 @@ COM_CODE Std_ReturnType Com_TriggerTransmit(PduIdType TxPduId, PduInfoType *PduI
     }
     return result;
 }
-static COM_CODE Std_ReturnType Com_TransmitPdu(uint16 index) {
+static COM_CODE Std_ReturnType Com_TransmitPdu(uint16 index)
+{
     uint8 bytes[4];
     PduInfoType info = {bytes, NULL_PTR, 4u};
     const PduIdType id = configuration->pdus[index].pdu;
@@ -207,7 +222,8 @@ static COM_CODE Std_ReturnType Com_TransmitPdu(uint16 index) {
     }
     return result;
 }
-COM_CODE Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId) {
+COM_CODE Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId)
+{
     Std_ReturnType result = E_NOT_OK;
     if (configuration != NULL_PTR) {
         const uint16 index = Com_FindPdu(PduId);
@@ -217,14 +233,16 @@ COM_CODE Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId) {
     }
     return result;
 }
-COM_CODE void Com_TxConfirmation(PduIdType TxPduId, Std_ReturnType result) {
+COM_CODE void Com_TxConfirmation(PduIdType TxPduId, Std_ReturnType result)
+{
     /* The selected periodic PDUs have no Tx ACK/NACK callback or Tx DM.
      * Lower acceptance/confirmation does not suppress the next periodic request.
      */
     (void)TxPduId;
     (void)result;
 }
-COM_CODE void Ecu_ComMainFunctionRx(void) {
+COM_CODE void Ecu_ComMainFunctionRx(void)
+{
     if ((configuration != NULL_PTR) && (receive_started == TRUE) && (monitoring == TRUE)) {
         uint16 index;
         for (index = 0u; index < configuration->pdu_count; ++index) {
@@ -243,7 +261,8 @@ COM_CODE void Ecu_ComMainFunctionRx(void) {
     }
     reception_before_main = FALSE;
 }
-COM_CODE void Ecu_ComMainFunctionTx(void) {
+COM_CODE void Ecu_ComMainFunctionTx(void)
+{
     if (configuration != NULL_PTR) {
         uint16 index;
         for (index = 0u; index < configuration->pdu_count; ++index) {

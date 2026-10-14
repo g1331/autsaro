@@ -17,17 +17,20 @@ static StatusType last_error;
 static const char *scenario;
 static CounterType observed_counter;
 static volatile LONG interrupt_done;
-static void check(bool condition) {
+static void check(bool condition)
+{
     ++checks;
     if (!condition) {
         ShutdownOS(E_OS_STATE);
     }
 }
-static void refuse(StatusType status, StatusType expected) {
+static void refuse(StatusType status, StatusType expected)
+{
     check(status == expected);
     ++rejected;
 }
-static void record(char kind, CounterType counter) {
+static void record(char kind, CounterType counter)
+{
     TickType value;
     check(GetCounterValue(counter, &value) == E_OK);
     taskENTER_CRITICAL();
@@ -38,15 +41,18 @@ static void record(char kind, CounterType counter) {
     ++observation_count;
     taskEXIT_CRITICAL();
 }
-static void task_a(void) {
+static void task_a(void)
+{
     record('A', observed_counter);
     (void)TerminateTask();
 }
-static void task_b(void) {
+static void task_b(void)
+{
     record('B', 1u);
     (void)TerminateTask();
 }
-static void task_e(void) {
+static void task_e(void)
+{
     EventMaskType events;
     if (strcmp(scenario, "same-point") == 0) {
         check(GetEvent(2u, &events) == E_OK);
@@ -60,26 +66,31 @@ static void task_e(void) {
         record('E', 0u);
     }
 }
-static void action_error(StatusType status) {
+static void action_error(StatusType status)
+{
     ++errors;
     last_error = status;
 }
-static void inc(CounterType id, unsigned count) {
+static void inc(CounterType id, unsigned count)
+{
     for (unsigned i = 0u; i < count; ++i) {
         check(IncrementCounter(id) == E_OK);
     }
 }
-static void state(ScheduleTableType id, ScheduleTableStatusType expected) {
+static void state(ScheduleTableType id, ScheduleTableStatusType expected)
+{
     ScheduleTableStatusType value = 99u;
     check(GetScheduleTableStatus(id, &value) == E_OK);
     check(value == expected);
 }
-static void counter(CounterType id, TickType expected) {
+static void counter(CounterType id, TickType expected)
+{
     TickType value = UINT64_C(999);
     check(GetCounterValue(id, &value) == E_OK);
     check(value == expected);
 }
-static uint32_t service_interrupt(void) {
+static uint32_t service_interrupt(void)
+{
     ScheduleTableStatusType value = 99u;
     if (strcmp(scenario, "category1") == 0) {
         refuse(StartScheduleTableRel(0u, 1u), E_OS_CALLEVEL);
@@ -100,7 +111,8 @@ static uint32_t service_interrupt(void) {
     (void)InterlockedExchange(&interrupt_done, 1);
     return 0u;
 }
-static void owner(void) {
+static void owner(void)
+{
     if (strcmp(scenario, "capacity") == 0) {
         check(StartScheduleTableRel(0u, 2u) == E_OK);
         check(StartScheduleTableRel(1u, 1u) == E_OK);
@@ -282,16 +294,25 @@ static void owner(void) {
     ShutdownOS(E_OK);
 }
 void StartupHook(void) { Os_TargetTrace('S'); }
-void ShutdownHook(StatusType error) {
+void ShutdownHook(StatusType error)
+{
     for (unsigned i = 0u; i < observation_count; ++i) {
-        printf("timing_action %c counter=%u value=%llu\n", observations[i].kind,
-               (unsigned)observations[i].counter, (unsigned long long)observations[i].value);
+        printf("timing_action %c counter=%u value=%llu\n",
+               observations[i].kind,
+               (unsigned)observations[i].counter,
+               (unsigned long long)observations[i].value);
     }
     printf("sc1_timing case=%s checks=%u rejects=%u actions=%u errors=%u last_error=%u status=%u\n",
-           scenario, checks, rejected, observation_count, errors, (unsigned)last_error,
+           scenario,
+           checks,
+           rejected,
+           observation_count,
+           errors,
+           (unsigned)last_error,
            (unsigned)error);
 }
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     Os_TaskConfig tasks[] = {
         {0u, "Owner", owner, 10u, 1u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
         {1u, "A", task_a, 20u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
@@ -314,8 +335,8 @@ int main(int argc, char **argv) {
         {2u, 0u, 5u, points, 2u, 0u, OS_SCHEDULE_SYNC_NONE, 0u, 0u, 1u},
         {3u, 0u, 5u, points, 2u, 0u, OS_SCHEDULE_SYNC_NONE, 0u, 0u, 1u}};
     Os_TimeConfig time = {counters, 8u, alarms, 2u, 0u, 0u, 4u, action_error, tables, 4u};
-    Os_TargetConfig config = {tasks, 4u, 262144u, NULL,  0u,   NULL, 0u,
-                              0u,    0u, 0u,      &time, NULL, NULL};
+    Os_TargetConfig config = {
+        tasks, 4u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, &time, NULL, NULL};
     StatusType status;
     scenario = (argc == 2) ? argv[1] : "capacity";
     for (unsigned i = 0u; i < 9u; ++i) {
@@ -438,7 +459,9 @@ int main(int argc, char **argv) {
     }
     status = Os_TargetPrepare(&config);
     if (strncmp(scenario, "bad-", 4u) == 0) {
-        printf("timing_prepare case=%s status=%u ready=%d\n", scenario, (unsigned)status,
+        printf("timing_prepare case=%s status=%u ready=%d\n",
+               scenario,
+               (unsigned)status,
                Os_TargetReady());
         return (status == E_OK) ? 99 : 0;
     }

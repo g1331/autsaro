@@ -9,7 +9,8 @@
 #endif
 static unsigned startup_failure;
 static unsigned both_ready;
-void StartupHook(void) {
+void StartupHook(void)
+{
     Os_TargetTrace('S');
     if (startup_failure != 0u) {
         if (startup_failure == 2u) {
@@ -24,14 +25,16 @@ void StartupHook(void) {
         ShutdownOS(E_OS_STATE);
     }
 }
-void ShutdownHook(StatusType Error) {
+void ShutdownHook(StatusType Error)
+{
     (void)Error;
     if (Os_TargetReady()) {
         Os_TargetTrace('X');
     }
     Os_TargetTrace('D');
 }
-static void check_task(TaskType id, TaskType other, char marker) {
+static void check_task(TaskType id, TaskType other, char marker)
+{
     TaskStateType state = 99u;
     if (!Os_TargetReady() || GetTaskState(id, &state) != E_OK || state != RUNNING ||
         GetTaskState(other, &state) != E_OK || state != (both_ready ? READY : SUSPENDED) ||
@@ -45,7 +48,8 @@ static void check_task(TaskType id, TaskType other, char marker) {
 }
 static void task_a(void) { check_task(0u, 1u, 'A'); }
 static void task_b(void) { check_task(1u, 0u, 'B'); }
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     Os_TaskConfig tasks[2] = {{0u, "A", task_a, 2u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
                               {1u, "B", task_b, 2u, 2u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
     Os_TargetConfig config = {tasks, 2u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, NULL, NULL, NULL};

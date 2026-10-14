@@ -34,7 +34,8 @@ static char invalid_alt_role;
 #endif
 Os_StackFault Os_Fault;
 
-const void *Os_StackSavedContext(const Os_NativeStack *stack) {
+const void *Os_StackSavedContext(const Os_NativeStack *stack)
+{
     if (stack < stacks || stack >= stacks + OS_NATIVE_STACKS) {
         return NULL;
     }
@@ -46,7 +47,8 @@ const Os_NativeStack *Os_StackCurrent(void) { return current_stack; }
 int Os_StackHasFault(void) { return InterlockedCompareExchange(&fault_count, 0, 0) > 0; }
 
 LONG Os_StackFaultCount(void) { return InterlockedCompareExchange(&fault_count, 0, 0); }
-int Os_StackThreadHasFault(DWORD thread_id) {
+int Os_StackThreadHasFault(DWORD thread_id)
+{
     size_t index;
     for (index = 0u; index < OS_NATIVE_STACKS; ++index) {
         const Os_StackFault *fault = &fault_records[index];
@@ -58,15 +60,17 @@ int Os_StackThreadHasFault(DWORD thread_id) {
     return 0;
 }
 
-static void fault_park_forever(void) {
+static void fault_park_forever(void)
+{
     const struct timespec interval = {.tv_sec = 0, .tv_nsec = 10000000L};
     for (;;) {
         (void)syscall(SYS_futex, &fault_park, FUTEX_WAIT_PRIVATE, 0, &interval, NULL, 0);
     }
 }
 
-static void publish_fault(Os_NativeStack *record, DWORD signum, uintptr_t sp, uintptr_t address,
-                          char origin) {
+static void publish_fault(
+    Os_NativeStack *record, DWORD signum, uintptr_t sp, uintptr_t address, char origin)
+{
     Os_StackFault *local;
     if (record == NULL || record < stacks || record >= stacks + OS_NATIVE_STACKS) {
         _exit(E_OS_STATE);
@@ -93,7 +97,8 @@ static void publish_fault(Os_NativeStack *record, DWORD signum, uintptr_t sp, ui
     fault_park_forever();
 }
 
-static void guard_signal(int signum, siginfo_t *details, void *native_context) {
+static void guard_signal(int signum, siginfo_t *details, void *native_context)
+{
     Os_NativeStack *record = current_stack;
     uintptr_t address = (uintptr_t)details->si_addr;
     const ucontext_t *context = native_context;
@@ -101,11 +106,12 @@ static void guard_signal(int signum, siginfo_t *details, void *native_context) {
         address < record->reserve_low || address >= record->committed_low) {
         _exit(E_OS_STATE);
     }
-    publish_fault(record, (DWORD)signum, (uintptr_t)context->uc_mcontext.gregs[REG_RSP], address,
-                  'E');
+    publish_fault(
+        record, (DWORD)signum, (uintptr_t)context->uc_mcontext.gregs[REG_RSP], address, 'E');
 }
 
-void Os_StackPrepare(void) {
+void Os_StackPrepare(void)
+{
     struct sigaction handler = {0};
 #ifdef OS_HOST_FAILURE_TESTS
     const char *invalid = getenv("AUTOSAR_OS_BAD_GUARANTEE");
@@ -124,13 +130,15 @@ void Os_StackPrepare(void) {
     }
 }
 
-void Os_StackInit(void) {
+void Os_StackInit(void)
+{
     if (Os_StackRegister('S') == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
 }
 
-int Os_StackRegister(char role) {
+int Os_StackRegister(char role)
+{
     LONG index = InterlockedIncrement(&stack_count) - 1;
     Os_NativeStack *record;
     stack_t alternate;
@@ -168,7 +176,8 @@ int Os_StackRegister(char role) {
     return 1;
 }
 
-void Os_StackCheck(void) {
+void Os_StackCheck(void)
+{
     uintptr_t sp;
     __asm__ volatile("movq %%rsp, %0" : "=r"(sp));
     if (current_stack == NULL) {
@@ -181,7 +190,8 @@ void Os_StackCheck(void) {
     ++current_stack->observations;
 }
 
-void Os_StackRecordBuffer(const StackType_t *top) {
+void Os_StackRecordBuffer(const StackType_t *top)
+{
     if (current_stack == NULL) {
         Os_BackendShutdown(E_OS_STATE);
     }
@@ -193,7 +203,8 @@ void Os_StackRecordBuffer(const StackType_t *top) {
     }
 }
 
-void Os_StackObserve(HANDLE thread, const CONTEXT *context) {
+void Os_StackObserve(HANDLE thread, const CONTEXT *context)
+{
     LONG index;
     const DWORD id = GetThreadId(thread);
     if (context == NULL || context->ContextFlags != CONTEXT_CONTROL) {
@@ -218,7 +229,8 @@ void Os_StackObserve(HANDLE thread, const CONTEXT *context) {
     Os_BackendShutdown(E_OS_STATE);
 }
 
-static size_t append_hex(char *output, size_t offset, DWORD value) {
+static size_t append_hex(char *output, size_t offset, DWORD value)
+{
     unsigned index;
     for (index = 0u; index < 8u; ++index) {
         output[offset++] = "0123456789ABCDEF"[(value >> (28u - index * 4u)) & 15u];
@@ -226,7 +238,8 @@ static size_t append_hex(char *output, size_t offset, DWORD value) {
     return offset;
 }
 
-void Os_StackFatalExit(void) {
+void Os_StackFatalExit(void)
+{
     static const char prefix[] =
         "FATAL state=Failed reason=13 controllers_exhausted=1\nFAULT role=";
     static const char middle[] = " signal=";
@@ -264,7 +277,8 @@ void Os_StackFatalExit(void) {
     _exit(E_OS_STACKFAULT);
 }
 
-int Os_StackReport(void) {
+int Os_StackReport(void)
+{
     int result = 0;
     LONG index;
     for (index = 0; index < stack_count && index < (LONG)OS_NATIVE_STACKS; ++index) {
@@ -276,12 +290,19 @@ int Os_StackReport(void) {
                 "STACK role=%c tid=%u low=%llu high=%llu reserve=%llu commit=%llu "
                 "guard=%llu altstack=%llu sp=%llu observations=%u buffer_low=%llu buffer_high=%llu "
                 "context=linux-x86_64-ucontext valid=%u\n",
-                record->role, record->thread_id, (unsigned long long)record->reserve_low,
-                (unsigned long long)record->high, (unsigned long long)record->reserve,
-                (unsigned long long)record->committed, (unsigned long long)record->guard,
-                (unsigned long long)record->altstack_size, (unsigned long long)record->sp,
-                record->observations, (unsigned long long)record->kernel_buffer_low,
-                (unsigned long long)record->kernel_buffer_high, record->context_valid) < 0) {
+                record->role,
+                record->thread_id,
+                (unsigned long long)record->reserve_low,
+                (unsigned long long)record->high,
+                (unsigned long long)record->reserve,
+                (unsigned long long)record->committed,
+                (unsigned long long)record->guard,
+                (unsigned long long)record->altstack_size,
+                (unsigned long long)record->sp,
+                record->observations,
+                (unsigned long long)record->kernel_buffer_low,
+                (unsigned long long)record->kernel_buffer_high,
+                record->context_valid) < 0) {
             result = -1;
         }
     }
@@ -290,8 +311,11 @@ int Os_StackReport(void) {
         if (__atomic_load_n(&fault->published, __ATOMIC_ACQUIRE) != 0) {
             if (printf(
                     "FAULT role=%c tid=%u signal=%08X sp=%llu address=%llu captured=1 origin=%c\n",
-                    fault->role, fault->thread_id, fault->signal_number,
-                    (unsigned long long)fault->sp, (unsigned long long)fault->address,
+                    fault->role,
+                    fault->thread_id,
+                    fault->signal_number,
+                    (unsigned long long)fault->sp,
+                    (unsigned long long)fault->address,
                     fault->origin) < 0) {
                 result = -1;
             }

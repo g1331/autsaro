@@ -1,0 +1,3 @@
+# Format-only commits; enable with: git config blame.ignoreRevsFile .git-blame-ignore-revs
+# Reformat runtime C under the agreed clang-format rules (#129)
+21ed7f48001b0b22504ac08b619351067ad91c82

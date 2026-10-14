@@ -3,5 +3,12 @@ IndentWidth: 4
 ContinuationIndentWidth: 4
 UseTab: Never
 ColumnLimit: 100
-BreakBeforeBraces: Attach
+BreakBeforeBraces: Linux
+BinPackArguments: false
+BinPackLongBracedList: false
+BinPackParameters: OnePerLine
+IndentCaseLabels: true
+AlignConsecutiveMacros: Consecutive
+InsertBraces: true
+PenaltyReturnTypeOnItsOwnLine: 10000
 SortIncludes: Never

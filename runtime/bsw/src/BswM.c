@@ -12,7 +12,8 @@ static boolean pending BSWM_VAR_CLEARED;
 #include "BswM_MemMap.h"
 #define BSWM_START_SEC_CODE
 #include "BswM_MemMap.h"
-BSWM_CODE void BswM_Init(const BswM_ConfigType *ConfigPtr) {
+BSWM_CODE void BswM_Init(const BswM_ConfigType *ConfigPtr)
+{
     SchM_Enter_BswM_BSWM_STATE();
     if ((ConfigPtr != NULL_PTR) && (ConfigPtr->initial_mode <= COMM_FULL_COMMUNICATION) &&
         (ConfigPtr->action != NULL_PTR)) {
@@ -24,20 +25,23 @@ BSWM_CODE void BswM_Init(const BswM_ConfigType *ConfigPtr) {
     }
     SchM_Exit_BswM_BSWM_STATE();
 }
-BSWM_CODE void BswM_Deinit(void) {
+BSWM_CODE void BswM_Deinit(void)
+{
     SchM_Enter_BswM_BSWM_STATE();
     configuration = NULL_PTR;
     processing = FALSE;
     pending = FALSE;
     SchM_Exit_BswM_BSWM_STATE();
 }
-BSWM_CODE void BswM_MainFunction(void) {
+BSWM_CODE void BswM_MainFunction(void)
+{
     /* SWS_BswM_00075 evaluates rules with DEFERRED inputs here. The selected
      * configuration contains only IMMEDIATE inputs, evaluated in their actual
      * callbacks. There is no deferred work and no added periodic arbitration.
      */
 }
-BSWM_CODE void BswM_ComM_CurrentMode(NetworkHandleType Network, ComM_ModeType RequestedMode) {
+BSWM_CODE void BswM_ComM_CurrentMode(NetworkHandleType Network, ComM_ModeType RequestedMode)
+{
     SchM_Enter_BswM_BSWM_STATE();
     if ((configuration != NULL_PTR) && (Network == configuration->channel) &&
         (RequestedMode <= COMM_FULL_COMMUNICATION)) {

@@ -14,7 +14,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#define OS_HOST_HANDLES 96u
+#define OS_HOST_HANDLES       96u
 #define OS_HOST_DEFAULT_STACK 262144u
 #define OS_HOST_WAIT_SLICE_NS 10000000L
 
@@ -56,16 +56,19 @@ static __thread HANDLE current_thread;
 static __thread sigset_t held_masks[32];
 static __thread unsigned held_depth;
 
-static int futex_wait(volatile int32_t *cell, int32_t expected) {
+static int futex_wait(volatile int32_t *cell, int32_t expected)
+{
     const struct timespec interval = {.tv_sec = 0, .tv_nsec = OS_HOST_WAIT_SLICE_NS};
     return (int)syscall(SYS_futex, cell, FUTEX_WAIT_PRIVATE, expected, &interval, NULL, 0);
 }
 
-static void futex_wake(volatile int32_t *cell) {
+static void futex_wake(volatile int32_t *cell)
+{
     (void)syscall(SYS_futex, cell, FUTEX_WAKE_PRIVATE, INT32_MAX, NULL, NULL, 0);
 }
 
-static uint64_t monotonic_ms(void) {
+static uint64_t monotonic_ms(void)
+{
     struct timespec now;
     if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
         return UINT64_MAX;
@@ -73,12 +76,13 @@ static uint64_t monotonic_ms(void) {
     return ((uint64_t)now.tv_sec * UINT64_C(1000)) + ((uint64_t)now.tv_nsec / UINT64_C(1000000));
 }
 
-static HANDLE reserve_handle(Os_HostKind kind) {
+static HANDLE reserve_handle(Os_HostKind kind)
+{
     size_t index;
     for (index = 0u; index < OS_HOST_HANDLES; ++index) {
         int32_t expected = 0;
-        if (__atomic_compare_exchange_n(&handles[index].reserved, &expected, 1, 0, __ATOMIC_SEQ_CST,
-                                        __ATOMIC_SEQ_CST)) {
+        if (__atomic_compare_exchange_n(
+                &handles[index].reserved, &expected, 1, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {
             handles[index].kind = kind;
             handles[index].fd = -1;
             return &handles[index];
@@ -87,7 +91,8 @@ static HANDLE reserve_handle(Os_HostKind kind) {
     return NULL;
 }
 
-static void capture_context(HANDLE thread, const ucontext_t *source) {
+static void capture_context(HANDLE thread, const ucontext_t *source)
+{
     thread->captured.native = *source;
     if (source->uc_mcontext.fpregs != NULL) {
         thread->captured.native.__fpregs_mem = *source->uc_mcontext.fpregs;
@@ -97,7 +102,8 @@ static void capture_context(HANDLE thread, const ucontext_t *source) {
     thread->captured.ContextFlags = CONTEXT_CONTROL;
 }
 
-static void park_signal(int signal_number, siginfo_t *info, void *native_context) {
+static void park_signal(int signal_number, siginfo_t *info, void *native_context)
+{
     HANDLE thread = current_thread;
     int32_t generation;
     (void)signal_number;
@@ -117,7 +123,8 @@ static void park_signal(int signal_number, siginfo_t *info, void *native_context
     }
 }
 
-static void fault_stop_signal(int signal_number, siginfo_t *info, void *native_context) {
+static void fault_stop_signal(int signal_number, siginfo_t *info, void *native_context)
+{
     HANDLE thread = current_thread;
     (void)signal_number;
     (void)info;
@@ -133,7 +140,8 @@ static void fault_stop_signal(int signal_number, siginfo_t *info, void *native_c
     }
 }
 
-int Os_HostInstallSignals(void) {
+int Os_HostInstallSignals(void)
+{
     struct sigaction handler = {0};
     handler.sa_flags = SA_SIGINFO | SA_ONSTACK;
     sigemptyset(&handler.sa_mask);
@@ -147,7 +155,8 @@ int Os_HostInstallSignals(void) {
     return sigaction(SIGRTMIN + 1, &handler, NULL) == 0;
 }
 
-static void *actor_start(void *argument) {
+static void *actor_start(void *argument)
+{
     HANDLE thread = argument;
     current_thread = thread;
     __atomic_store_n(&thread->thread_id, GetCurrentThreadId(), __ATOMIC_RELEASE);
@@ -161,8 +170,13 @@ static void *actor_start(void *argument) {
     return NULL;
 }
 
-HANDLE Os_HostCreateActor(SIZE_T stack, LPTHREAD_START_ROUTINE start, LPVOID argument, DWORD flags,
-                          LPDWORD id, int register_host) {
+HANDLE Os_HostCreateActor(SIZE_T stack,
+                          LPTHREAD_START_ROUTINE start,
+                          LPVOID argument,
+                          DWORD flags,
+                          LPDWORD id,
+                          int register_host)
+{
     HANDLE thread;
     pthread_attr_t attributes;
     long page;
@@ -212,8 +226,8 @@ HANDLE Os_HostCreateActor(SIZE_T stack, LPTHREAD_START_ROUTINE start, LPVOID arg
     thread->exit_code = 0u;
     status = pthread_attr_init(&attributes);
     if (status == 0) {
-        status = pthread_attr_setstack(&attributes, (char *)thread->mapping + page,
-                                       reserve - (size_t)page);
+        status = pthread_attr_setstack(
+            &attributes, (char *)thread->mapping + page, reserve - (size_t)page);
         if (status == 0) {
             status = pthread_create(&thread->thread, &attributes, actor_start, thread);
         }
@@ -239,15 +253,21 @@ HANDLE Os_HostCreateActor(SIZE_T stack, LPTHREAD_START_ROUTINE start, LPVOID arg
     return thread;
 }
 
-HANDLE CreateThread(LPSECURITY_ATTRIBUTES attributes, SIZE_T stack, LPTHREAD_START_ROUTINE start,
-                    LPVOID argument, DWORD flags, LPDWORD id) {
+HANDLE CreateThread(LPSECURITY_ATTRIBUTES attributes,
+                    SIZE_T stack,
+                    LPTHREAD_START_ROUTINE start,
+                    LPVOID argument,
+                    DWORD flags,
+                    LPDWORD id)
+{
     if (attributes != NULL) {
         return NULL;
     }
     return Os_HostCreateActor(stack, start, argument, flags, id, 1);
 }
 
-HANDLE CreateEventA(LPSECURITY_ATTRIBUTES attributes, BOOL manual, BOOL initial, LPCSTR name) {
+HANDLE CreateEventA(LPSECURITY_ATTRIBUTES attributes, BOOL manual, BOOL initial, LPCSTR name)
+{
     HANDLE event;
     if (attributes != NULL || name != NULL) {
         return NULL;
@@ -265,7 +285,8 @@ HANDLE CreateEventA(LPSECURITY_ATTRIBUTES attributes, BOOL manual, BOOL initial,
     return event;
 }
 
-BOOL Os_HostSetEvent(HANDLE event) {
+BOOL Os_HostSetEvent(HANDLE event)
+{
     const uint64_t signal_value = 1u;
     if (event == NULL || event->kind != OS_HOST_EVENT || event->fd < 0) {
         return FALSE;
@@ -273,7 +294,8 @@ BOOL Os_HostSetEvent(HANDLE event) {
     return write(event->fd, &signal_value, sizeof(signal_value)) == (ssize_t)sizeof(signal_value);
 }
 
-BOOL ResetEvent(HANDLE event) {
+BOOL ResetEvent(HANDLE event)
+{
     uint64_t value;
     if (event == NULL || event->kind != OS_HOST_EVENT || event->fd < 0) {
         return FALSE;
@@ -283,7 +305,8 @@ BOOL ResetEvent(HANDLE event) {
     return errno == EAGAIN;
 }
 
-HANDLE CreateMutexA(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name) {
+HANDLE CreateMutexA(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name)
+{
     HANDLE mutex;
     pthread_mutexattr_t type;
     if (attributes != NULL || name != NULL) {
@@ -312,7 +335,8 @@ HANDLE CreateMutexA(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name) {
     return mutex;
 }
 
-DWORD WaitForSingleObject(HANDLE handle, DWORD milliseconds) {
+DWORD WaitForSingleObject(HANDLE handle, DWORD milliseconds)
+{
     uint64_t end = monotonic_ms();
     if (handle == NULL || end == UINT64_MAX) {
         return WAIT_FAILED;
@@ -365,13 +389,15 @@ DWORD WaitForSingleObject(HANDLE handle, DWORD milliseconds) {
     }
 }
 
-DWORD WaitForSingleObjectEx(HANDLE handle, DWORD milliseconds, BOOL alertable) {
+DWORD WaitForSingleObjectEx(HANDLE handle, DWORD milliseconds, BOOL alertable)
+{
     (void)alertable;
     return WaitForSingleObject(handle, milliseconds);
 }
 
 /* Same 1 ms poll as WaitForSingleObject; the first signalled handle wins. */
-static DWORD wait_any(DWORD count, const HANDLE *observed, DWORD milliseconds, uint64_t end) {
+static DWORD wait_any(DWORD count, const HANDLE *observed, DWORD milliseconds, uint64_t end)
+{
     DWORD result = WAIT_TIMEOUT;
     int waiting = 1;
     while (waiting != 0) {
@@ -395,7 +421,8 @@ static DWORD wait_any(DWORD count, const HANDLE *observed, DWORD milliseconds, u
     return result;
 }
 
-static DWORD wait_all(DWORD count, const HANDLE *observed, DWORD milliseconds, uint64_t end) {
+static DWORD wait_all(DWORD count, const HANDLE *observed, DWORD milliseconds, uint64_t end)
+{
     DWORD result = WAIT_OBJECT_0;
     DWORD index;
     for (index = 0u; (index < count) && (result == WAIT_OBJECT_0); ++index) {
@@ -409,7 +436,8 @@ static DWORD wait_all(DWORD count, const HANDLE *observed, DWORD milliseconds, u
     return result;
 }
 
-DWORD WaitForMultipleObjects(DWORD count, const HANDLE *observed, BOOL all, DWORD milliseconds) {
+DWORD WaitForMultipleObjects(DWORD count, const HANDLE *observed, BOOL all, DWORD milliseconds)
+{
     DWORD result = WAIT_FAILED;
     uint64_t end = monotonic_ms();
     if ((observed != NULL) && (count != 0u) && (count <= OS_HOST_HANDLES)) {
@@ -422,7 +450,8 @@ DWORD WaitForMultipleObjects(DWORD count, const HANDLE *observed, BOOL all, DWOR
     return result;
 }
 
-BOOL ReleaseMutex(HANDLE mutex) {
+BOOL ReleaseMutex(HANDLE mutex)
+{
     int released;
     if (mutex == NULL || mutex->kind != OS_HOST_MUTEX || held_depth == 0u) {
         return FALSE;
@@ -435,7 +464,8 @@ BOOL ReleaseMutex(HANDLE mutex) {
     return released == 0;
 }
 
-BOOL CloseHandle(HANDLE handle) {
+BOOL CloseHandle(HANDLE handle)
+{
     if (handle == NULL || handle == &process_handle) {
         return FALSE;
     }
@@ -467,7 +497,8 @@ BOOL CloseHandle(HANDLE handle) {
     return FALSE;
 }
 
-DWORD SuspendThread(HANDLE thread) {
+DWORD SuspendThread(HANDLE thread)
+{
     int32_t generation;
     uint64_t end;
     if (thread == NULL || thread->kind != OS_HOST_THREAD ||
@@ -492,7 +523,8 @@ DWORD SuspendThread(HANDLE thread) {
     return 0u;
 }
 
-DWORD ResumeThread(HANDLE thread) {
+DWORD ResumeThread(HANDLE thread)
+{
     int32_t generation;
     if (thread == NULL || thread->kind != OS_HOST_THREAD) {
         return UINT32_MAX;
@@ -506,7 +538,8 @@ DWORD ResumeThread(HANDLE thread) {
     return 1u;
 }
 
-BOOL GetThreadContext(HANDLE thread, CONTEXT *context) {
+BOOL GetThreadContext(HANDLE thread, CONTEXT *context)
+{
     int32_t generation;
     if (thread == NULL || context == NULL || thread->kind != OS_HOST_THREAD) {
         return FALSE;
@@ -522,12 +555,14 @@ BOOL GetThreadContext(HANDLE thread, CONTEXT *context) {
     return TRUE;
 }
 
-DWORD GetCurrentThreadId(void) {
+DWORD GetCurrentThreadId(void)
+{
     long id = syscall(SYS_gettid);
     return id > 0 && (uint64_t)id <= UINT32_MAX ? (DWORD)id : 0u;
 }
 
-DWORD GetThreadId(HANDLE thread) {
+DWORD GetThreadId(HANDLE thread)
+{
     return thread != NULL ? __atomic_load_n(&thread->thread_id, __ATOMIC_ACQUIRE) : 0u;
 }
 
@@ -535,7 +570,8 @@ uint64_t GetTickCount64(void) { return monotonic_ms(); }
 
 DWORD GetTickCount(void) { return (DWORD)monotonic_ms(); }
 
-void Sleep(DWORD milliseconds) {
+void Sleep(DWORD milliseconds)
+{
     struct timespec pause_time;
     if (milliseconds == INFINITE) {
         for (;;) {
@@ -550,7 +586,8 @@ void Sleep(DWORD milliseconds) {
 
 void ExitProcess(DWORD status) { _exit((int)status); }
 
-HANDLE Os_HostCurrentThread(void) {
+HANDLE Os_HostCurrentThread(void)
+{
     HANDLE thread;
     if (current_thread != NULL) {
         return current_thread;
@@ -568,8 +605,14 @@ HANDLE GetCurrentProcess(void) { return &process_handle; }
 
 HANDLE GetCurrentThread(void) { return Os_HostCurrentThread(); }
 
-BOOL DuplicateHandle(HANDLE source_process, HANDLE source_thread, HANDLE target_process,
-                     HANDLE *copy, DWORD access, BOOL inherit, DWORD options) {
+BOOL DuplicateHandle(HANDLE source_process,
+                     HANDLE source_thread,
+                     HANDLE target_process,
+                     HANDLE *copy,
+                     DWORD access,
+                     BOOL inherit,
+                     DWORD options)
+{
     (void)access;
     (void)inherit;
     (void)options;
@@ -581,7 +624,8 @@ BOOL DuplicateHandle(HANDLE source_process, HANDLE source_thread, HANDLE target_
     return TRUE;
 }
 
-BOOL GetExitCodeThread(HANDLE thread, DWORD *code) {
+BOOL GetExitCodeThread(HANDLE thread, DWORD *code)
+{
     if (thread == NULL || code == NULL || thread->kind != OS_HOST_THREAD) {
         return FALSE;
     }
@@ -592,11 +636,13 @@ BOOL GetExitCodeThread(HANDLE thread, DWORD *code) {
 
 HANDLE Os_HostDispatcherThread(void) { return __atomic_load_n(&dispatcher, __ATOMIC_ACQUIRE); }
 
-void Os_HostSetDispatcher(HANDLE thread) {
+void Os_HostSetDispatcher(HANDLE thread)
+{
     __atomic_store_n(&dispatcher, thread, __ATOMIC_RELEASE);
 }
 
-int Os_HostStackRange(HANDLE thread, uintptr_t *low, uintptr_t *high, size_t *guard) {
+int Os_HostStackRange(HANDLE thread, uintptr_t *low, uintptr_t *high, size_t *guard)
+{
     if (thread == NULL || thread->mapping == NULL || low == NULL || high == NULL || guard == NULL) {
         return 0;
     }
@@ -606,7 +652,8 @@ int Os_HostStackRange(HANDLE thread, uintptr_t *low, uintptr_t *high, size_t *gu
     return 1;
 }
 
-int Os_HostCurrentStackRange(uintptr_t *low, uintptr_t *high, size_t *guard) {
+int Os_HostCurrentStackRange(uintptr_t *low, uintptr_t *high, size_t *guard)
+{
     pthread_attr_t attributes;
     void *base = NULL;
     size_t length = 0u;
@@ -630,7 +677,8 @@ int Os_HostCurrentStackRange(uintptr_t *low, uintptr_t *high, size_t *guard) {
     return 1;
 }
 
-int Os_HostStopActor(HANDLE thread, DWORD timeout_ms) {
+int Os_HostStopActor(HANDLE thread, DWORD timeout_ms)
+{
     const uint64_t end = monotonic_ms() + timeout_ms;
     if (thread == NULL || thread->kind != OS_HOST_THREAD ||
         pthread_kill(thread->thread, SIGRTMIN + 1) != 0) {

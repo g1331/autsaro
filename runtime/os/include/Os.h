@@ -5,10 +5,10 @@
  * deliberately consumes a legacy file-scope semicolon in strict C99. It has
  * no object, function, configuration or argument-evaluation effect. R2.4
  * Advisory: this incomplete tag exists solely for the required interface. */
-#define DeclareTask(identifier) struct Os_DeclarationCompatibility
+#define DeclareTask(identifier)     struct Os_DeclarationCompatibility
 #define DeclareResource(identifier) struct Os_DeclarationCompatibility
-#define DeclareEvent(identifier) struct Os_DeclarationCompatibility
-#define DeclareAlarm(identifier) struct Os_DeclarationCompatibility
+#define DeclareEvent(identifier)    struct Os_DeclarationCompatibility
+#define DeclareAlarm(identifier)    struct Os_DeclarationCompatibility
 /* Standard OSEK entry bodies. Token pasting keeps the object spelling even
  * when its generated identifier is a numeric macro (R20.10 Advisory: source
  * compatibility requires the same identifier for the body and its binding).

@@ -16,16 +16,17 @@ static HANDLE completion_event;
 /* Auto-reset: one early native wake per notification, never a completion. */
 static HANDLE attention_event;
 static volatile Os_Atomic32 signal_failed;
-#define TIME_CLOSED 256L
-#define TIME_RESERVED 1L
-#define TIME_PENDING 2L
+#define TIME_CLOSED     256L
+#define TIME_RESERVED   1L
+#define TIME_PENDING    2L
 #define TIME_PROCESSING 3L
-#define TIME_DELIVERED 4L
-#define TIME_MARKED 5L
-#define TIME_COMPLETE 6L
+#define TIME_DELIVERED  4L
+#define TIME_MARKED     5L
+#define TIME_COMPLETE   6L
 #define TIME_PUBLISHING 7L
 
-static size_t counter_index(CounterType id) {
+static size_t counter_index(CounterType id)
+{
     const Os_TimeConfig *config = Os_Config->time;
     if (config != NULL) {
         for (size_t i = 0u; i < config->counter_count; ++i) {
@@ -36,7 +37,8 @@ static size_t counter_index(CounterType id) {
     }
     return OS_MAX_COUNTERS;
 }
-static size_t alarm_index(AlarmType id) {
+static size_t alarm_index(AlarmType id)
+{
     const Os_TimeConfig *config = Os_Config->time;
     if (config != NULL) {
         for (size_t i = 0u; i < config->alarm_count; ++i) {
@@ -47,7 +49,8 @@ static size_t alarm_index(AlarmType id) {
     }
     return OS_MAX_ALARMS;
 }
-static const Os_TaskConfig *configured_task(const Os_TargetConfig *config, TaskType id) {
+static const Os_TaskConfig *configured_task(const Os_TargetConfig *config, TaskType id)
+{
     size_t i;
     const Os_TaskConfig *result = NULL;
     for (i = 0u; i < config->task_count; ++i) {
@@ -58,10 +61,12 @@ static const Os_TaskConfig *configured_task(const Os_TargetConfig *config, TaskT
     }
     return result;
 }
-static int valid_cycle(const Os_CounterConfig *counter, TickType cycle) {
+static int valid_cycle(const Os_CounterConfig *counter, TickType cycle)
+{
     return (cycle == 0u) || ((cycle >= counter->minimum_cycle) && (cycle <= counter->maximum));
 }
-StatusType Os_TimeValidate(const Os_TargetConfig *target) {
+StatusType Os_TimeValidate(const Os_TargetConfig *target)
+{
     const Os_TimeConfig *config = target->time;
     const Os_TaskConfig *owner;
     size_t i;
@@ -171,12 +176,14 @@ StatusType Os_TimeValidate(const Os_TargetConfig *target) {
     }
     return Os_ScheduleValidate(target);
 }
-static TickType absolute_distance(size_t counter, TickType start) {
+static TickType absolute_distance(size_t counter, TickType start)
+{
     TickType current = values[counter];
     TickType modulus = Os_Config->time->counters[counter].maximum + UINT64_C(1);
     return (start > current) ? (start - current) : (modulus - (current - start));
 }
-void Os_TimeInit(AppModeType mode) {
+void Os_TimeInit(AppModeType mode)
+{
     const Os_TimeConfig *config = Os_Config->time;
     if ((config != NULL) && (config->wake_event != 0u)) {
         const Os_TaskConfig *owner = configured_task(Os_Config, config->owner);
@@ -187,7 +194,8 @@ void Os_TimeInit(AppModeType mode) {
         attention_event = Os_PortEvent(NULL, FALSE, FALSE, NULL);
     }
 }
-void Os_TimeAutostart(AppModeType mode) {
+void Os_TimeAutostart(AppModeType mode)
+{
     const Os_TimeConfig *config = Os_Config->time;
     if (config != NULL) {
         for (size_t i = 0u; i < config->alarm_count; ++i) {
@@ -203,14 +211,16 @@ void Os_TimeAutostart(AppModeType mode) {
         }
     }
 }
-void Os_TimeClose(void) {
+void Os_TimeClose(void)
+{
     (void)InterlockedOr(&tick_state, TIME_CLOSED);
     if ((completion_event != NULL) && (Os_HostSetEvent(completion_event) == 0)) {
         (void)InterlockedExchange(&signal_failed, 1);
     }
 }
 int Os_TimeSignalFailed(void) { return InterlockedCompareExchange(&signal_failed, 0, 0) != 0; }
-void Os_TimeReportAction(StatusType status) {
+void Os_TimeReportAction(StatusType status)
+{
     if (action_count == UINT64_MAX) {
         Os_BackendShutdown(E_OS_STATE);
     }
@@ -225,33 +235,35 @@ void Os_TimeReportAction(StatusType status) {
         }
     }
 }
-static void action(size_t index) {
+static void action(size_t index)
+{
     const Os_AlarmConfig *alarm = &Os_Config->time->alarms[index];
     StatusType status = E_OK;
     Os_ArtiInternalEnter();
     switch (alarm->action) {
-    case OS_ALARM_ACTIVATE:
-        status = ActivateTask(alarm->task);
-        break;
-    case OS_ALARM_EVENT:
-        status = SetEvent(alarm->task, alarm->event);
-        break;
-    case OS_ALARM_CALLBACK:
-        Os_HookInvoke(alarm->callback, OS_HOOK_ALARM);
-        break;
-    case OS_ALARM_INCREMENT_COUNTER:
-        /* Counter actions are handled by the bounded iterative work stack. */
-        Os_BackendShutdown(E_OS_STATE);
-        break;
-    default:
-        Os_BackendShutdown(E_OS_STATE);
-        break;
+        case OS_ALARM_ACTIVATE:
+            status = ActivateTask(alarm->task);
+            break;
+        case OS_ALARM_EVENT:
+            status = SetEvent(alarm->task, alarm->event);
+            break;
+        case OS_ALARM_CALLBACK:
+            Os_HookInvoke(alarm->callback, OS_HOOK_ALARM);
+            break;
+        case OS_ALARM_INCREMENT_COUNTER:
+            /* Counter actions are handled by the bounded iterative work stack. */
+            Os_BackendShutdown(E_OS_STATE);
+            break;
+        default:
+            Os_BackendShutdown(E_OS_STATE);
+            break;
     }
     Os_ArtiInternalLeave();
     Os_TimeReportAction(status);
 }
 TickType Os_TimeCounterValue(CounterType counter) { return values[counter_index(counter)]; }
-static void increment(size_t counter) {
+static void increment(size_t counter)
+{
     typedef struct {
         size_t counter;
         size_t alarm;
@@ -299,7 +311,8 @@ static void increment(size_t counter) {
         }
     }
 }
-static StatusType implementation_IncrementCounter(CounterType CounterID) {
+static StatusType implementation_IncrementCounter(CounterType CounterID)
+{
     size_t index;
     Os_StackCheck();
     Os_BackendGuardService();
@@ -317,7 +330,8 @@ static StatusType implementation_IncrementCounter(CounterType CounterID) {
     Os_BackendGuardService();
     return E_OK;
 }
-static StatusType implementation_GetCounterValue(CounterType CounterID, TickRefType Value) {
+static StatusType implementation_GetCounterValue(CounterType CounterID, TickRefType Value)
+{
     size_t index;
     Os_StackCheck();
     Os_BackendGuardService();
@@ -338,8 +352,10 @@ static StatusType implementation_GetCounterValue(CounterType CounterID, TickRefT
     Os_BackendGuardService();
     return E_OK;
 }
-static StatusType implementation_GetElapsedValue(CounterType CounterID, TickRefType Value,
-                                                 TickRefType ElapsedValue) {
+static StatusType implementation_GetElapsedValue(CounterType CounterID,
+                                                 TickRefType Value,
+                                                 TickRefType ElapsedValue)
+{
     size_t index;
     StatusType status = E_OK;
     Os_StackCheck();
@@ -369,7 +385,8 @@ static StatusType implementation_GetElapsedValue(CounterType CounterID, TickRefT
     Os_BackendGuardService();
     return status;
 }
-static StatusType implementation_GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info) {
+static StatusType implementation_GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info)
+{
     size_t index;
     const Os_CounterConfig *counter;
     Os_StackCheck();
@@ -391,7 +408,8 @@ static StatusType implementation_GetAlarmBase(AlarmType AlarmID, AlarmBaseRefTyp
     Os_BackendGuardService();
     return E_OK;
 }
-static StatusType implementation_GetAlarm(AlarmType AlarmID, TickRefType Tick) {
+static StatusType implementation_GetAlarm(AlarmType AlarmID, TickRefType Tick)
+{
     size_t index;
     StatusType status = E_OK;
     Os_StackCheck();
@@ -417,7 +435,8 @@ static StatusType implementation_GetAlarm(AlarmType AlarmID, TickRefType Tick) {
     Os_BackendGuardService();
     return status;
 }
-static StatusType set_alarm(AlarmType id, TickType start, TickType cycle, int absolute) {
+static StatusType set_alarm(AlarmType id, TickType start, TickType cycle, int absolute)
+{
     size_t index;
     size_t counter;
     StatusType status = E_OK;
@@ -449,14 +468,16 @@ static StatusType set_alarm(AlarmType id, TickType start, TickType cycle, int ab
     Os_BackendGuardService();
     return status;
 }
-static StatusType implementation_SetRelAlarm(AlarmType AlarmID, TickType Increment,
-                                             TickType Cycle) {
+static StatusType implementation_SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle)
+{
     return set_alarm(AlarmID, Increment, Cycle, 0);
 }
-static StatusType implementation_SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle) {
+static StatusType implementation_SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle)
+{
     return set_alarm(AlarmID, Start, Cycle, 1);
 }
-static StatusType implementation_CancelAlarm(AlarmType AlarmID) {
+static StatusType implementation_CancelAlarm(AlarmType AlarmID)
+{
     size_t index;
     StatusType status = E_OK;
     Os_StackCheck();
@@ -481,7 +502,8 @@ static StatusType implementation_CancelAlarm(AlarmType AlarmID) {
     Os_BackendGuardService();
     return status;
 }
-int Os_TimeBeginTick(void) {
+int Os_TimeBeginTick(void)
+{
     if (Os_Config->time == NULL) {
         return Os_TargetReady();
     }
@@ -490,7 +512,8 @@ int Os_TimeBeginTick(void) {
     }
     return InterlockedCompareExchange(&tick_state, TIME_PROCESSING, TIME_PENDING) == TIME_PENDING;
 }
-void Os_TimeTick(void) {
+void Os_TimeTick(void)
+{
     const Os_TimeConfig *config = Os_Config->time;
     if ((config != NULL) && (config->wake_event != 0u)) {
         if (InterlockedCompareExchange(&tick_state, 0, 0) != TIME_PROCESSING) {
@@ -516,7 +539,8 @@ void Os_TimeTick(void) {
     }
 }
 void vApplicationTickHook(void) { Os_TimeTick(); }
-static StatusType native_time_context(void) {
+static StatusType native_time_context(void)
+{
     if (Os_BridgeActorAllowed() == 0) {
         return E_OS_CALLEVEL;
     }
@@ -526,7 +550,8 @@ static StatusType native_time_context(void) {
     }
     return Os_BridgeContext();
 }
-StatusType Os_TargetAdvanceOneTick(uint64_t epoch, uint64_t *ticket) {
+StatusType Os_TargetAdvanceOneTick(uint64_t epoch, uint64_t *ticket)
+{
     StatusType status;
     LONG state;
     if (ticket == NULL) {
@@ -569,7 +594,8 @@ StatusType Os_TargetAdvanceOneTick(uint64_t epoch, uint64_t *ticket) {
     Os_PortPostInterrupt(1u);
     return E_OK;
 }
-StatusType Os_TargetTickCompletion(uint64_t ticket, Os_TickCompletion *record) {
+StatusType Os_TargetTickCompletion(uint64_t ticket, Os_TickCompletion *record)
+{
     StatusType status;
     LONG state;
     if (record == NULL) {
@@ -592,7 +618,8 @@ StatusType Os_TargetTickCompletion(uint64_t ticket, Os_TickCompletion *record) {
     *record = completion;
     return E_OK;
 }
-StatusType Os_TargetWaitTick(uint64_t ticket, uint32_t timeout_ms, Os_TickCompletion *record) {
+StatusType Os_TargetWaitTick(uint64_t ticket, uint32_t timeout_ms, Os_TickCompletion *record)
+{
     DWORD started_at;
     if ((timeout_ms == 0u) || (timeout_ms > 5000u)) {
         return E_OS_VALUE;
@@ -625,7 +652,8 @@ StatusType Os_TargetWaitTick(uint64_t ticket, uint32_t timeout_ms, Os_TickComple
         }
     }
 }
-static StatusType time_owner(void) {
+static StatusType time_owner(void)
+{
     int owner;
     Os_StackCheck();
     Os_BackendGuardService();
@@ -636,7 +664,8 @@ static StatusType time_owner(void) {
     owner = Os_BackendTaskOwner(Os_Config->time->owner);
     return (owner == 0) ? E_OS_CALLEVEL : ((owner < 0) ? E_OS_ACCESS : E_OK);
 }
-StatusType Os_TargetCurrentTick(uint64_t *ticket, uint64_t *epoch) {
+StatusType Os_TargetCurrentTick(uint64_t *ticket, uint64_t *epoch)
+{
     StatusType status;
     LONG state;
     if ((ticket == NULL) || (epoch == NULL)) {
@@ -659,7 +688,8 @@ StatusType Os_TargetCurrentTick(uint64_t *ticket, uint64_t *epoch) {
     Os_BackendGuardService();
     return status;
 }
-StatusType Os_TargetNotifyNative(void) {
+StatusType Os_TargetNotifyNative(void)
+{
     StatusType status = time_owner();
     if (status == E_OK) {
         if (Os_HostSetEvent(attention_event) == 0) {
@@ -671,7 +701,8 @@ StatusType Os_TargetNotifyNative(void) {
     }
     return status;
 }
-StatusType Os_TargetCompleteTick(uint64_t ticket) {
+StatusType Os_TargetCompleteTick(uint64_t ticket)
+{
     StatusType status = time_owner();
     LONG state;
     if (status != E_OK) {
@@ -696,7 +727,8 @@ StatusType Os_TargetCompleteTick(uint64_t ticket) {
     Os_BackendGuardService();
     return status;
 }
-void Os_TimeOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate) {
+void Os_TimeOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate)
+{
     const Os_TimeConfig *config = Os_Config->time;
 #ifdef OS_TIME_TESTS
     Os_TimeTestOnWaiting();
@@ -724,11 +756,13 @@ void Os_TimeOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicat
     }
 }
 #ifdef OS_TIME_TESTS
-void Os_TimeTestCloseEvent(void) {
+void Os_TimeTestCloseEvent(void)
+{
     configASSERT(completion_event != NULL);
     configASSERT(CloseHandle(completion_event) != 0);
 }
-void Os_TimeTestSeed(uint64_t epoch, uint32_t kernel_tick, TickType value) {
+void Os_TimeTestSeed(uint64_t epoch, uint32_t kernel_tick, TickType value)
+{
     void vTaskOsTestTick(TickType_t tick);
     configASSERT(Os_Config->time != NULL);
     configASSERT(value <=
@@ -744,7 +778,8 @@ void Os_TimeTestSeed(uint64_t epoch, uint32_t kernel_tick, TickType value) {
 }
 #endif
 
-StatusType Os_Implementation_IncrementCounter(CounterType CounterID) {
+StatusType Os_Implementation_IncrementCounter(CounterType CounterID)
+{
     const Os_ErrorParameters arguments = {.service_IncrementCounter = {CounterID}};
     StatusType status;
     Os_StackCheck();
@@ -759,7 +794,8 @@ StatusType Os_Implementation_IncrementCounter(CounterType CounterID) {
     return Os_ErrorResult(OSServiceId_IncrementCounter, status, &arguments);
 }
 
-StatusType Os_Implementation_GetCounterValue(CounterType CounterID, TickRefType Value) {
+StatusType Os_Implementation_GetCounterValue(CounterType CounterID, TickRefType Value)
+{
     const Os_ErrorParameters arguments = {.service_GetCounterValue = {CounterID, Value}};
     StatusType status;
     Os_StackCheck();
@@ -774,8 +810,10 @@ StatusType Os_Implementation_GetCounterValue(CounterType CounterID, TickRefType 
     return Os_ErrorResult(OSServiceId_GetCounterValue, status, &arguments);
 }
 
-StatusType Os_Implementation_GetElapsedValue(CounterType CounterID, TickRefType Value,
-                                             TickRefType ElapsedValue) {
+StatusType Os_Implementation_GetElapsedValue(CounterType CounterID,
+                                             TickRefType Value,
+                                             TickRefType ElapsedValue)
+{
     const Os_ErrorParameters arguments = {
         .service_GetElapsedValue = {CounterID, Value, ElapsedValue}};
     StatusType status;
@@ -791,7 +829,8 @@ StatusType Os_Implementation_GetElapsedValue(CounterType CounterID, TickRefType 
     return Os_ErrorResult(OSServiceId_GetElapsedValue, status, &arguments);
 }
 
-StatusType Os_Implementation_GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info) {
+StatusType Os_Implementation_GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info)
+{
     const Os_ErrorParameters arguments = {.service_GetAlarmBase = {AlarmID, Info}};
     StatusType status;
     Os_StackCheck();
@@ -806,7 +845,8 @@ StatusType Os_Implementation_GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType In
     return Os_ErrorResult(OSServiceId_GetAlarmBase, status, &arguments);
 }
 
-StatusType Os_Implementation_GetAlarm(AlarmType AlarmID, TickRefType Tick) {
+StatusType Os_Implementation_GetAlarm(AlarmType AlarmID, TickRefType Tick)
+{
     const Os_ErrorParameters arguments = {.service_GetAlarm = {AlarmID, Tick}};
     StatusType status;
     Os_StackCheck();
@@ -821,7 +861,8 @@ StatusType Os_Implementation_GetAlarm(AlarmType AlarmID, TickRefType Tick) {
     return Os_ErrorResult(OSServiceId_GetAlarm, status, &arguments);
 }
 
-StatusType Os_Implementation_SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle) {
+StatusType Os_Implementation_SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle)
+{
     const Os_ErrorParameters arguments = {.service_SetRelAlarm = {AlarmID, Increment, Cycle}};
     StatusType status;
     Os_StackCheck();
@@ -836,7 +877,8 @@ StatusType Os_Implementation_SetRelAlarm(AlarmType AlarmID, TickType Increment, 
     return Os_ErrorResult(OSServiceId_SetRelAlarm, status, &arguments);
 }
 
-StatusType Os_Implementation_SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle) {
+StatusType Os_Implementation_SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle)
+{
     const Os_ErrorParameters arguments = {.service_SetAbsAlarm = {AlarmID, Start, Cycle}};
     StatusType status;
     Os_StackCheck();
@@ -851,7 +893,8 @@ StatusType Os_Implementation_SetAbsAlarm(AlarmType AlarmID, TickType Start, Tick
     return Os_ErrorResult(OSServiceId_SetAbsAlarm, status, &arguments);
 }
 
-StatusType Os_Implementation_CancelAlarm(AlarmType AlarmID) {
+StatusType Os_Implementation_CancelAlarm(AlarmType AlarmID)
+{
     const Os_ErrorParameters arguments = {.service_CancelAlarm = {AlarmID}};
     StatusType status;
     Os_StackCheck();

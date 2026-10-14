@@ -1,4 +1,5 @@
 //! ECU configuration and integration sources from the selected plan; applications remain caller owned.
+use super::c_layout::{self, Item};
 use super::{PlanDiagnostic, ValidatedIntegrationPlan};
 use crate::target::BuildTarget;
 
@@ -17,10 +18,26 @@ fn failure() -> Vec<PlanDiagnostic> {
 
 const ECU: &str = "ecu-config";
 
-/// Writes one constant in its module's pre-build configuration data section;
-/// a multi-line `initializer` ends with a newline.
-fn config_data(output: &mut String, scope: &str, declaration: &str, initializer: &str) {
-    output.push_str(&format!("#define RTE_{scope}_START_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED\n#include \"Ecu_MemMap.h\"\n{declaration} RTE_{scope}_CONFIG_DATA_PREBUILD_UNSPECIFIED = {initializer};\n#define RTE_{scope}_STOP_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED\n#include \"Ecu_MemMap.h\"\n"));
+/// Writes one constant in its module's pre-build configuration data section.
+fn config_data(output: &mut String, scope: &str, declaration: &str, items: &[Item]) {
+    let definition = c_layout::initializer(
+        declaration,
+        &format!("RTE_{scope}_CONFIG_DATA_PREBUILD_UNSPECIFIED"),
+        items,
+    );
+    output.push_str(&format!("#define RTE_{scope}_START_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED\n#include \"Ecu_MemMap.h\"\n{definition}\n#define RTE_{scope}_STOP_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED\n#include \"Ecu_MemMap.h\"\n"));
+}
+
+/// The items of a comma-separated list of plain values.
+fn values(list: &str) -> Vec<Item> {
+    list.split(", ")
+        .map(|value| Item::Value(value.into()))
+        .collect()
+}
+
+/// A table row of plain values.
+fn row(list: &str) -> Item {
+    Item::Row(list.split(", ").map(str::to_owned).collect())
 }
 
 /// Whole periods of `period_ms` in `value_ms`; a zero period cannot be
@@ -62,13 +79,38 @@ pub(super) fn files(
         (
             "include/Rte_Dcm_Type.h",
             format!(
-                "typedef uint8 Rte_ModeType_{authentication_group};\n#define RTE_MODE_{authentication_group}_DCM_DEAUTHENTICATED 0u\n#define RTE_MODE_{authentication_group}_DCM_AUTHENTICATED 1u\n#define RTE_TRANSITION_{authentication_group} 255u\n"
+                "typedef uint8 Rte_ModeType_{authentication_group};\n{}",
+                c_layout::defines(&[
+                    (
+                        format!("RTE_MODE_{authentication_group}_DCM_DEAUTHENTICATED"),
+                        "0u"
+                    ),
+                    (
+                        format!("RTE_MODE_{authentication_group}_DCM_AUTHENTICATED"),
+                        "1u"
+                    ),
+                    (format!("RTE_TRANSITION_{authentication_group}"), "255u"),
+                ])
             ),
         ),
         (
             "include/SchM_Dcm.h",
             format!(
-                "Std_ReturnType SchM_Switch_Dcm_{authentication_group}(Rte_ModeType_{authentication_group} mode);\nRte_ModeType_{authentication_group} SchM_Mode_Dcm_{authentication_group}(void);\n"
+                "{}\n{}\n",
+                c_layout::signature(
+                    "Std_ReturnType",
+                    &format!("SchM_Switch_Dcm_{authentication_group}"),
+                    &[format!("Rte_ModeType_{authentication_group} mode")],
+                    ";",
+                    false,
+                ),
+                c_layout::signature(
+                    &format!("Rte_ModeType_{authentication_group}"),
+                    &format!("SchM_Mode_Dcm_{authentication_group}"),
+                    &["void".to_owned()],
+                    ";",
+                    false,
+                )
             ),
         ),
     ] {
@@ -93,17 +135,27 @@ pub(super) fn files(
         "include/Ecu_Config.h",
         header(
             "ECU_CONFIG_H",
-            "#include \"Std_Types.h\"\ntypedef enum { ECU_TX_SYNCHRONOUS = 0, ECU_TX_QUEUED = 1 } EcuTxConfirmation;\ntypedef struct { EcuTxConfirmation tx_confirmation; } EcuPolicyConfig;\nextern const EcuPolicyConfig Ecu_Policy;",
+            "#include \"Std_Types.h\"\ntypedef enum { ECU_TX_SYNCHRONOUS = 0, ECU_TX_QUEUED = 1 } EcuTxConfirmation;\ntypedef struct {\n    EcuTxConfirmation tx_confirmation;\n} EcuPolicyConfig;\nextern const EcuPolicyConfig Ecu_Policy;",
         ),
     )?;
-    let profile = format!(
-        "#define CAN_HOST_QUEUED_COMPLETION 1\n#define CAN_ZERO_LENGTH_SUPPORTED 1\n#define CAN_RX_POLLING 1\n#define CAN_TX_POLLING 1\n#define CAN_BUSOFF_POLLING 1\n#define CAN_CONTROLLER_ID {}u\n#define CAN_CANIF_CONTROLLER_ID {}u\n#define CAN_TX_HOH {}u\n#define CAN_RX_HOH {}u",
-        can.controller_id, can.can_if_controller_id, can.transmit_handle, can.receive_handle
-    );
+    let profile = c_layout::defines(&[
+        ("CAN_HOST_QUEUED_COMPLETION", "1".to_owned()),
+        ("CAN_ZERO_LENGTH_SUPPORTED", "1".to_owned()),
+        ("CAN_RX_POLLING", "1".to_owned()),
+        ("CAN_TX_POLLING", "1".to_owned()),
+        ("CAN_BUSOFF_POLLING", "1".to_owned()),
+        ("CAN_CONTROLLER_ID", format!("{}u", can.controller_id)),
+        (
+            "CAN_CANIF_CONTROLLER_ID",
+            format!("{}u", can.can_if_controller_id),
+        ),
+        ("CAN_TX_HOH", format!("{}u", can.transmit_handle)),
+        ("CAN_RX_HOH", format!("{}u", can.receive_handle)),
+    ]);
     outputs.emit(
         ECU,
         "include/Ecu_ProfileConfig.h",
-        header("ECU_PROFILE_CONFIG_H", &profile),
+        header("ECU_PROFILE_CONFIG_H", profile.trim_end()),
     )?;
     let integer = |kind: super::CommunicationIntegerType| match kind {
         super::CommunicationIntegerType::Uint8 => "uint8",
@@ -116,10 +168,10 @@ pub(super) fn files(
         "src/Ecu_Execution.h",
         header(
             "ECU_EXECUTION_H",
-            "#include \"Ecu_Config.h\"\n#include \"Can_Host.h\"\nEcuStatus Ecu_ExecutionTransmit(CanTxSink sink, PduIdType handle, uint32_t id, uint8_t dlc, const uint8_t data[8]);\nuint64_t Ecu_ExecutionNow(void);",
+            "#include \"Ecu_Config.h\"\n#include \"Can_Host.h\"\nEcuStatus Ecu_ExecutionTransmit(\n    CanTxSink sink, PduIdType handle, uint32_t id, uint8_t dlc, const uint8_t data[8]);\nuint64_t Ecu_ExecutionNow(void);",
         ),
     )?;
-    outputs.emit(ECU, "src/Ecu_Execution.c", "#include \"Ecu_Execution.h\"\n#include \"Ecu_Target.h\"\nEcuStatus Ecu_ExecutionTransmit(CanTxSink sink, PduIdType handle, uint32_t id, uint8_t dlc, const uint8_t data[8]) {\n    (void)sink;\n    return Ecu_TargetEnqueueTransmit(handle, id, dlc, data);\n}\nuint64_t Ecu_ExecutionNow(void) { return Ecu_TargetNow(); }\n")?;
+    outputs.emit(ECU, "src/Ecu_Execution.c", "#include \"Ecu_Execution.h\"\n#include \"Ecu_Target.h\"\nEcuStatus Ecu_ExecutionTransmit(\n    CanTxSink sink, PduIdType handle, uint32_t id, uint8_t dlc, const uint8_t data[8])\n{\n    (void)sink;\n    return Ecu_TargetEnqueueTransmit(handle, id, dlc, data);\n}\nuint64_t Ecu_ExecutionNow(void) { return Ecu_TargetNow(); }\n")?;
     for (module, area) in [
         ("CanIf", "CANIF"),
         ("ComM", "COMM"),
@@ -180,18 +232,39 @@ pub(super) fn files(
         header(
             "ECU_TARGET_CONFIG_H",
             &format!(
-                "#include \"Ecu_ProfileConfig.h\"\n#include \"Os_Target.h\"\n#define ECU_TARGET_TASK 0u\n#define ECU_MAX_PDU_PAYLOAD {}u\n#define ECU_TARGET_DIAGNOSTIC_RX_CAN_ID {}u\n#define ECU_TARGET_EVENT_WORK {}u\n#define ECU_TARGET_EVENT_APP {}u\n#define ECU_TARGET_EVENT_IO {}u\nextern const Os_TargetConfig Ecu_OsConfig;\n/* Records in *reached each initialization stage (1 through 8) as it begins. */\nStd_ReturnType Ecu_StackBootstrap(uint8 *reached);\nStd_ReturnType Ecu_StackRunCycle(EventMaskType events);\n/* Retires the stages that began, newest first. */\nvoid Ecu_StackRetire(uint8 reached);\nint Ecu_StackFrameShape(uint32 id, uint8 dlc);\n#ifdef ECU_TARGET_TESTS\nint Ecu_TargetTestFailStage(unsigned stage);\nvoid Ecu_TargetTestRetire(unsigned stage);\nvoid Ecu_TargetTestShutdown(StatusType reason);\n#endif",
-                description
-                    .diagnostic_transport
-                    .as_ref()
-                    .map_or(4, |transport| transport.buffer_bytes),
-                description
-                    .diagnostic_transport
-                    .as_ref()
-                    .map_or(u32::MAX, |transport| transport.request_can_id),
-                description.event_mask(&work.os_event)?,
-                description.event_mask(&app.os_event)?,
-                io.mask,
+                "#include \"Ecu_ProfileConfig.h\"\n#include \"Os_Target.h\"\n{}extern const Os_TargetConfig Ecu_OsConfig;\n/* Records in *reached each initialization stage (1 through 8) as it begins. */\nStd_ReturnType Ecu_StackBootstrap(uint8 *reached);\nStd_ReturnType Ecu_StackRunCycle(EventMaskType events);\n/* Retires the stages that began, newest first. */\nvoid Ecu_StackRetire(uint8 reached);\nint Ecu_StackFrameShape(uint32 id, uint8 dlc);\n#ifdef ECU_TARGET_TESTS\nint Ecu_TargetTestFailStage(unsigned stage);\nvoid Ecu_TargetTestRetire(unsigned stage);\nvoid Ecu_TargetTestShutdown(StatusType reason);\n#endif",
+                c_layout::defines(&[
+                    ("ECU_TARGET_TASK", "0u".to_owned()),
+                    (
+                        "ECU_MAX_PDU_PAYLOAD",
+                        format!(
+                            "{}u",
+                            description
+                                .diagnostic_transport
+                                .as_ref()
+                                .map_or(4, |transport| transport.buffer_bytes)
+                        ),
+                    ),
+                    (
+                        "ECU_TARGET_DIAGNOSTIC_RX_CAN_ID",
+                        format!(
+                            "{}u",
+                            description
+                                .diagnostic_transport
+                                .as_ref()
+                                .map_or(u32::MAX, |transport| transport.request_can_id)
+                        ),
+                    ),
+                    (
+                        "ECU_TARGET_EVENT_WORK",
+                        format!("{}u", description.event_mask(&work.os_event)?),
+                    ),
+                    (
+                        "ECU_TARGET_EVENT_APP",
+                        format!("{}u", description.event_mask(&app.os_event)?),
+                    ),
+                    ("ECU_TARGET_EVENT_IO", format!("{}u", io.mask)),
+                ]),
             ),
         ),
     )?;
@@ -204,21 +277,19 @@ pub(super) fn files(
             component.header.trim_start_matches("include/")
         ));
     }
-    config.push_str("static Std_ReturnType Ecu_BswMAction(NetworkHandleType channel, ComM_ModeType requested);\nstatic Std_ReturnType Ecu_DetRuntimeCallout(uint16_t ModuleId, uint8_t InstanceId, uint8_t ApiId, uint8_t ErrorId);\nstatic void Ecu_ComModeChanged(NetworkHandleType channel, ComM_ModeType mode);\n");
+    config.push_str("static Std_ReturnType Ecu_BswMAction(NetworkHandleType channel, ComM_ModeType requested);\nstatic Std_ReturnType Ecu_DetRuntimeCallout(uint16_t ModuleId,\n                                            uint8_t InstanceId,\n                                            uint8_t ApiId,\n                                            uint8_t ErrorId);\nstatic void Ecu_ComModeChanged(NetworkHandleType channel, ComM_ModeType mode);\n");
     config_data(
         &mut config,
         "Ecu",
         "const EcuPolicyConfig Ecu_Policy",
-        "{ECU_TX_QUEUED}",
+        &values("ECU_TX_QUEUED"),
     );
     config_data(
         &mut config,
         "Can",
         "static const Can_ConfigType driver",
-        "{NULL_PTR}",
+        &values("NULL_PTR"),
     );
-    let mut receive = String::new();
-    let mut transmit = String::new();
     let routing_headers = "#include \"Com.h\"\n#include \"Dcm.h\"\n#include \"CanTp.h\"\n#include \"PduR.h\"\n#include \"PduR_Com.h\"\n#include \"PduR_CanIf.h\"\n#include \"LSduR.h\"\n#include \"LSduR_PduR.h\"\n";
     let mut pd_configuration = format!(
         "/** @file Source-derived selected PduR configuration. */\n#include \"PduR_Cfg.h\"\n{routing_headers}"
@@ -227,11 +298,13 @@ pub(super) fn files(
         "/** @file Source-derived selected LSduR configuration. */\n#include \"LSduR_Cfg.h\"\n{routing_headers}"
     );
     let mut can_if_configuration = "/** @file Source-derived selected CanIf configuration. */\n#include \"CanIf_Cfg.h\"\n#include \"Ecu_HostBusSM.h\"\n".to_owned();
-    let mut ls_rx = String::new();
-    let mut ls_tx = String::new();
-    let mut pd_rx = String::new();
-    let mut pd_tx = String::new();
-    let mut pdus = String::new();
+    let mut receive = Vec::new();
+    let mut transmit = Vec::new();
+    let mut ls_rx = Vec::new();
+    let mut ls_tx = Vec::new();
+    let mut pd_rx = Vec::new();
+    let mut pd_tx = Vec::new();
+    let mut pdus = Vec::new();
     for signal in &description.signals {
         let route = description
             .routes
@@ -267,49 +340,52 @@ pub(super) fn files(
             )?,
             None => 0,
         };
-        pdus.push_str(&format!(
-            "    {{{pdu}u, {signal_id}u, {}, {initial}u, {}u, {}u}},\n",
+        pdus.push(row(&format!(
+            "{pdu}u, {signal_id}u, {}, {initial}u, {}u, {}u",
             if signal.receive { "TRUE" } else { "FALSE" },
             reception_timeout,
             reception.map_or(0, |rx| u32::from(rx.callback_handle))
-        ));
+        )));
         if signal.receive {
-            receive.push_str(&format!(
-                "    {{{}u, {}u, 4u}},\n",
+            receive.push(row(&format!(
+                "{}u, {}u, 4u",
                 signal.can_id, signal.can_if_handle
-            ));
-            ls_rx.push_str(&format!(
-                "    {{{}u, {}u, PduR_CanIfRxIndication}},\n",
+            )));
+            ls_rx.push(row(&format!(
+                "{}u, {}u, PduR_CanIfRxIndication",
                 signal.can_if_handle, route.source_handle
-            ));
-            pd_rx.push_str(&format!(
-                "    {{{}u, {pdu}u, Com_RxIndication}},\n",
+            )));
+            pd_rx.push(row(&format!(
+                "{}u, {pdu}u, Com_RxIndication",
                 route.source_handle
-            ));
+            )));
         } else {
-            transmit.push_str(&format!(
-                "    {{{}u, {}u, 4u}},\n",
+            transmit.push(row(&format!(
+                "{}u, {}u, 4u",
                 signal.can_id, signal.can_if_handle
-            ));
-            ls_tx.push_str(&format!("    {{LSDUR_UP_PDUR, {}u, {}u, PduR_CanIfTxConfirmation, PduR_CanIfTriggerTransmit}},\n", route.destination_handle, signal.can_if_handle));
-            pd_tx.push_str(&format!("    {{PDUR_UP_COM, {}u, {}u, LSduR_PduRTransmit, Com_TxConfirmation, Com_TriggerTransmit}},\n", route.source_handle, route.destination_handle));
+            )));
+            ls_tx.push(row(&format!(
+                "LSDUR_UP_PDUR, {}u, {}u, PduR_CanIfTxConfirmation, PduR_CanIfTriggerTransmit",
+                route.destination_handle, signal.can_if_handle
+            )));
+            pd_tx.push(row(&format!("PDUR_UP_COM, {}u, {}u, LSduR_PduRTransmit, Com_TxConfirmation, Com_TriggerTransmit", route.source_handle, route.destination_handle)));
         }
     }
     config_data(
         &mut config,
         "Com",
         "static const Com_PduConfigType com_pdus[]",
-        &format!("{{\n{pdus}}}"),
+        &pdus,
     );
     config_data(
         &mut config,
         "Com",
         "static const Com_ConfigType com_config",
-        &format!(
-            "{{com_pdus, {}u, {}u, Rte_COMCbk, Rte_COMCbkRxTOut, PduR_ComTransmit}}",
+        &values(&format!(
+            "com_pdus, {}u, {}u, Rte_COMCbk, Rte_COMCbkRxTOut, PduR_ComTransmit",
             description.signals.len(),
             com.receive_group.handle
-        ),
+        )),
     );
     let transport = &description.diagnostic_transport;
     if let Some(tp) = transport {
@@ -324,37 +400,37 @@ pub(super) fn files(
             .find(|route| route.pdu == tp.tx_sdu)
             .ok_or_else(|| PlanDiagnostic::plan_premise(&tp.tx_sdu))?;
         config.push_str("#include \"PduR_CanTp.h\"\n#include \"LSduR_CanTp.h\"\n");
-        receive.push_str(&format!(
-            "    {{{}u, {}u, 8u}},\n",
+        receive.push(row(&format!(
+            "{}u, {}u, 8u",
             tp.request_can_id, tp.request_can_if_handle
-        ));
-        transmit.push_str(&format!(
-            "    {{{}u, {}u, 8u}},\n",
+        )));
+        transmit.push(row(&format!(
+            "{}u, {}u, 8u",
             tp.response_can_id, tp.response_can_if_handle
-        ));
-        ls_rx.push_str(&format!(
-            "    {{{}u, {}u, CanTp_RxIndication}},\n",
+        )));
+        ls_rx.push(row(&format!(
+            "{}u, {}u, CanTp_RxIndication",
             tp.request_can_if_handle, tp.receive_npdu
-        ));
-        ls_tx.push_str(&format!(
-            "    {{LSDUR_UP_CANTP, {}u, {}u, CanTp_TxConfirmation, NULL_PTR}},\n",
+        )));
+        ls_tx.push(row(&format!(
+            "LSDUR_UP_CANTP, {}u, {}u, CanTp_TxConfirmation, NULL_PTR",
             tp.transmit_npdu, tp.response_can_if_handle
-        ));
-        pd_tx.push_str(&format!(
-            "    {{PDUR_UP_DCM, {}u, {}u, CanTp_Transmit, Dcm_TpTxConfirmation, NULL_PTR}},\n",
+        )));
+        pd_tx.push(row(&format!(
+            "PDUR_UP_DCM, {}u, {}u, CanTp_Transmit, Dcm_TpTxConfirmation, NULL_PTR",
             tx_route.source_handle, tp.transmit_nsdu
-        ));
+        )));
         config_data(
             &mut pd_configuration,
             "PduR",
             "static const PduR_TpRouteType tp_routes[]",
-            &format!(
-                "{{\n    {{{}u, {}u, {}u, {}u, Dcm_StartOfReception, Dcm_CopyRxData, Dcm_TpRxIndication, Dcm_CopyTxData, Dcm_TpTxConfirmation}}\n}}",
+            &[row(&format!(
+                "{}u, {}u, {}u, {}u, Dcm_StartOfReception, Dcm_CopyRxData, Dcm_TpRxIndication, Dcm_CopyTxData, Dcm_TpTxConfirmation",
                 rx_route.source_handle,
                 tp.dcm_receive,
                 tx_route.destination_handle,
                 tp.dcm_transmit
-            ),
+            ))],
         );
         let period = description.schedule.counter_tick_ms;
         let ticks = |value| periods(value, period, &description.schedule.counter);
@@ -362,8 +438,8 @@ pub(super) fn files(
             &mut config,
             "CanTp",
             "static const CanTp_ConfigType tp_config",
-            &format!(
-                "{{{}u, {}u, {}u, {}u, {}u, {}u, {}u, {}u, {}u, {}u, {period}u, 0u, 0u, {}u, {}u}}",
+            &values(&format!(
+                "{}u, {}u, {}u, {}u, {}u, {}u, {}u, {}u, {}u, {}u, {period}u, 0u, 0u, {}u, {}u",
                 tp.receive_nsdu,
                 tp.transmit_nsdu,
                 tp.receive_npdu,
@@ -376,7 +452,7 @@ pub(super) fn files(
                 ticks(tp.n_cs_ms)?,
                 rx_route.source_handle,
                 tx_route.destination_handle
-            ),
+            )),
         );
         let (did, read) = match &description.diagnostic {
             Some(did) => {
@@ -395,8 +471,8 @@ pub(super) fn files(
             &mut config,
             "Dcm",
             "static const Dcm_ConfigType dcm_config",
-            &format!(
-                "{{{}u, {}u, {}u, {did}u, {read}, {}u, {}u, {}u, {}u, {}u, {}u, Ecu_DcmAuthenticationMode, {}u}}",
+            &values(&format!(
+                "{}u, {}u, {}u, {did}u, {read}, {}u, {}u, {}u, {}u, {}u, {}u, Ecu_DcmAuthenticationMode, {}u",
                 tp.dcm_receive,
                 tp.dcm_transmit,
                 mode.channel_handle,
@@ -407,7 +483,7 @@ pub(super) fn files(
                 tp.buffer_bytes,
                 tx_route.source_handle,
                 tp.max_did_to_read.unwrap_or(0)
-            ),
+            )),
         );
     }
     for (scope, name, ty, entries) in [
@@ -427,7 +503,7 @@ pub(super) fn files(
             owner,
             scope,
             &format!("static const {ty} {name}[]"),
-            &format!("{{\n{entries}}}"),
+            entries,
         );
     }
     let rx_signals = description
@@ -446,23 +522,23 @@ pub(super) fn files(
         &mut can_if_configuration,
         "CanIf",
         "const CanIf_ConfigType CanIf_Config",
-        &format!(
-            "{{can_rx, {rx_count}u, can_tx, {tx_count}u, Ecu_HostBusSM_ControllerModeIndication, Ecu_HostBusSM_ControllerBusOff, {}u, {}u, {}u, {}u}}",
+        &values(&format!(
+            "can_rx, {rx_count}u, can_tx, {tx_count}u, Ecu_HostBusSM_ControllerModeIndication, Ecu_HostBusSM_ControllerBusOff, {}u, {}u, {}u, {}u",
             can.can_if_controller_id, can.controller_id, can.receive_handle, can.transmit_handle
-        ),
+        )),
     );
     config_data(
         &mut ls_configuration,
         "LSduR",
         "const LSduR_PBConfigType LSduR_Config",
-        &format!("{{0u, ls_rx, {rx_count}u, ls_tx, {tx_count}u}}"),
+        &values(&format!("0u, ls_rx, {rx_count}u, ls_tx, {tx_count}u")),
     );
     config_data(
         &mut pd_configuration,
         "PduR",
         "const PduR_PBConfigType PduR_Config",
-        &format!(
-            "{{0u, pd_rx, {}u, pd_tx, {tx_count}u, {}, {}u}}",
+        &values(&format!(
+            "0u, pd_rx, {}u, pd_tx, {tx_count}u, {}, {}u",
             rx_signals,
             if transport.is_some() {
                 "tp_routes"
@@ -470,7 +546,7 @@ pub(super) fn files(
                 "NULL_PTR"
             },
             usize::from(transport.is_some())
-        ),
+        )),
     );
     // Post-build sets live in <Mip>_PBcfg.c (SWS_BSW_00015).
     for (module, ty, source) in [
@@ -494,51 +570,50 @@ pub(super) fn files(
         &mut config,
         "Ecu_HostBusSM",
         "static const Ecu_HostBusSM_ConfigType bus_config",
-        &format!(
-            "{{{}u, {}u}}",
+        &values(&format!(
+            "{}u, {}u",
             mode.channel_handle, can.can_if_controller_id
-        ),
+        )),
     );
     config_data(
         &mut config,
         "ComM",
         "static const ComM_UserHandleType users[]",
-        &format!(
-            "{{{}}}",
-            mode.users
-                .iter()
-                .map(|user| format!("{}u", user.handle))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
+        &mode
+            .users
+            .iter()
+            .map(|user| Item::Value(format!("{}u", user.handle)))
+            .collect::<Vec<_>>(),
     );
     config_data(
         &mut config,
         "ComM",
         "static const ComM_ConfigType comm_config",
-        &format!(
-            "{{{}u, users, {}u, {}u, Ecu_HostBusSM_RequestComMode, Ecu_HostBusSM_GetCurrentComMode, Ecu_ComModeChanged, {}u}}",
+        &values(&format!(
+            "{}u, users, {}u, {}u, Ecu_HostBusSM_RequestComMode, Ecu_HostBusSM_GetCurrentComMode, Ecu_ComModeChanged, {}u",
             mode.channel_handle,
             mode.users.len(),
             periods(mode.minimum_full_ms, mode.period_ms, &mode.main_symbol)?,
             mode.ecu_group_classification
-        ),
+        )),
     );
     config_data(
         &mut config,
         "BswM",
         "static const BswM_ConfigType bswm_config",
-        &format!(
-            "{{{}u, {}u, Ecu_BswMAction}}",
+        &values(&format!(
+            "{}u, {}u, Ecu_BswMAction",
             mode.channel_handle, mode.initial_mode
-        ),
+        )),
     );
     for (symbol, scope, body) in [
         (&com.receive_main.symbol, "Com", "Ecu_ComMainFunctionRx();"),
         (&com.transmit_main.symbol, "Com", "Ecu_ComMainFunctionTx();"),
         (&mode.main_symbol, "ComM", "(void)ComM_RunChannel();"),
     ] {
-        config.push_str(&format!("#define RTE_{scope}_START_SEC_CODE\n#include \"Ecu_MemMap.h\"\nRTE_{scope}_CODE void {symbol}(void) {{ {body} }}\n#define RTE_{scope}_STOP_SEC_CODE\n#include \"Ecu_MemMap.h\"\n"));
+        let function =
+            c_layout::short_function(&format!("RTE_{scope}_CODE void {symbol}(void)"), body);
+        config.push_str(&format!("#define RTE_{scope}_START_SEC_CODE\n#include \"Ecu_MemMap.h\"\n{function}\n#define RTE_{scope}_STOP_SEC_CODE\n#include \"Ecu_MemMap.h\"\n"));
     }
     // SWS_CanTp_00229 timeouts reach the HostBatch receipt through the
     // standard runtime callout (DetReportRuntimeErrorCallout), not a CanTp hook.
@@ -546,44 +621,44 @@ pub(super) fn files(
         &mut config,
         "Det",
         "static const Det_ErrorHookType det_runtime_callouts[1]",
-        "{Ecu_DetRuntimeCallout}",
+        &values("Ecu_DetRuntimeCallout"),
     );
     config_data(
         &mut config,
         "Det",
         "static const Det_ConfigType det_config",
-        "{NULL_PTR, 0u, det_runtime_callouts, 1u}",
+        &values("NULL_PTR, 0u, det_runtime_callouts, 1u"),
     );
     config.push_str("#define RTE_Ecu_START_SEC_CODE\n#include \"Ecu_MemMap.h\"\n");
-    config.push_str("static RTE_Ecu_CODE void Ecu_ComModeChanged(NetworkHandleType channel, ComM_ModeType current) {\n    BswM_ComM_CurrentMode(channel, current);\n");
+    config.push_str("static RTE_Ecu_CODE void Ecu_ComModeChanged(NetworkHandleType channel, ComM_ModeType current)\n{\n    BswM_ComM_CurrentMode(channel, current);\n");
     if transport.is_some() {
-        config.push_str("    if (current == COMM_FULL_COMMUNICATION) { Dcm_ComM_FullComModeEntered(channel); }\n    else if (current == COMM_SILENT_COMMUNICATION) { Dcm_ComM_SilentComModeEntered(channel); }\n    else { Dcm_ComM_NoComModeEntered(channel); }\n");
+        config.push_str("    if (current == COMM_FULL_COMMUNICATION) {\n        Dcm_ComM_FullComModeEntered(channel);\n    } else if (current == COMM_SILENT_COMMUNICATION) {\n        Dcm_ComM_SilentComModeEntered(channel);\n    } else {\n        Dcm_ComM_NoComModeEntered(channel);\n    }\n");
     }
     config.push_str("}\n");
     // ECUC_BswM_00843: parameters are fixed by the configured complete call.
-    config.push_str("static RTE_Ecu_CODE Std_ReturnType Ecu_BswMAction(NetworkHandleType channel, ComM_ModeType requested) {\n");
+    config.push_str("static RTE_Ecu_CODE Std_ReturnType Ecu_BswMAction(NetworkHandleType channel,\n                                                  ComM_ModeType requested)\n{\n");
     config.push_str(&format!(
-        "    if (channel != {}u) {{ return E_NOT_OK; }}\n    switch (requested) {{\n",
+        "    if (channel != {}u) {{\n        return E_NOT_OK;\n    }}\n    switch (requested) {{\n",
         mode.channel_handle
     ));
     for rule in &mode.rules {
         config.push_str(&format!(
-            "    case {}u: (void){}; break;\n",
+            "        case {}u:\n            (void){};\n            break;\n",
             rule.mode, rule.callout
         ));
     }
-    config.push_str("    default: return E_NOT_OK;\n    }\n    return E_OK;\n}\n");
-    config.push_str("static RTE_Ecu_CODE Std_ReturnType Ecu_DetRuntimeCallout(uint16_t ModuleId, uint8_t InstanceId, uint8_t ApiId, uint8_t ErrorId) {\n    (void)InstanceId;\n    if ((ModuleId == 35u) && (ApiId == 0x06u) && ((ErrorId == 0xc0u) || (ErrorId == 0xd0u))) {\n        Ecu_TargetReportTransportTimeout();\n    }\n    return E_OK;\n}\n");
+    config.push_str("        default:\n            return E_NOT_OK;\n    }\n    return E_OK;\n}\n");
+    config.push_str("static RTE_Ecu_CODE Std_ReturnType Ecu_DetRuntimeCallout(uint16_t ModuleId,\n                                                         uint8_t InstanceId,\n                                                         uint8_t ApiId,\n                                                         uint8_t ErrorId)\n{\n    (void)InstanceId;\n    if ((ModuleId == 35u) && (ApiId == 0x06u) && ((ErrorId == 0xc0u) || (ErrorId == 0xd0u))) {\n        Ecu_TargetReportTransportTimeout();\n    }\n    return E_OK;\n}\n");
     // Eight initialization stages; a test build can fail before each one, and
     // retirement undoes only the stages that began, newest first.
     let stage = |number: u8| {
         format!(
-            "#ifdef ECU_TARGET_TESTS\n    if (Ecu_TargetTestFailStage({number}u) != 0) {{ return E_NOT_OK; }}\n#endif\n    *reached = {number}u;\n"
+            "#ifdef ECU_TARGET_TESTS\n    if (Ecu_TargetTestFailStage({number}u) != 0) {{\n        return E_NOT_OK;\n    }}\n#endif\n    *reached = {number}u;\n"
         )
     };
-    config.push_str("RTE_Ecu_CODE Std_ReturnType Ecu_StackBootstrap(uint8 *reached) {\n    Can_ControllerStateType actual;\n    if ((reached == NULL_PTR) || (Ecu_TargetCheckLifecycleContext(TRUE) != E_OK)) { return E_NOT_OK; }\n    *reached = 0u;\n");
+    config.push_str("RTE_Ecu_CODE Std_ReturnType Ecu_StackBootstrap(uint8 *reached)\n{\n    Can_ControllerStateType actual;\n    if ((reached == NULL_PTR) || (Ecu_TargetCheckLifecycleContext(TRUE) != E_OK)) {\n        return E_NOT_OK;\n    }\n    *reached = 0u;\n");
     config.push_str(&stage(1));
-    config.push_str("    SchM_Init(&Ecu_SchMConfig);\n    SchM_Start();\n    if (Ecu_SchMReady() == FALSE) { return E_NOT_OK; }\n");
+    config.push_str("    SchM_Init(&Ecu_SchMConfig);\n    SchM_Start();\n    if (Ecu_SchMReady() == FALSE) {\n        return E_NOT_OK;\n    }\n");
     config.push_str(&stage(2));
     config.push_str("    Det_Init(&det_config);\n    Det_Start();\n");
     config.push_str(&stage(3));
@@ -604,27 +679,29 @@ pub(super) fn files(
         .first()
         .ok_or_else(|| PlanDiagnostic::plan_premise(&mode.channel))?;
     config.push_str(&stage(8));
-    config.push_str(&format!("    if (Rte_Start() != E_OK) {{ return E_NOT_OK; }}\n    ComM_CommunicationAllowed({}u, TRUE);\n    if (ComM_RequestComMode({}u, COMM_FULL_COMMUNICATION) != E_OK) {{ return E_NOT_OK; }}\n    {}();\n    Can_MainFunction_Mode();\n    if ((CanIf_GetControllerMode({}u, &actual) != E_OK) || (actual != CAN_CS_STARTED)) {{ return E_NOT_OK; }}\n    SchM_StartTiming();\n    return Ecu_SchMTimingActive() ? E_OK : E_NOT_OK;\n}}\n", mode.channel_handle, first_user.handle, mode.main_symbol, can.can_if_controller_id));
-    config.push_str("RTE_Ecu_CODE Std_ReturnType Ecu_StackRunCycle(EventMaskType events) {\n    if ((Ecu_TargetIsOwner() == 0) || (Ecu_SchMTimingActive() == FALSE)) { return E_NOT_OK; }\n");
+    config.push_str(&format!("    if (Rte_Start() != E_OK) {{\n        return E_NOT_OK;\n    }}\n    ComM_CommunicationAllowed({}u, TRUE);\n    if (ComM_RequestComMode({}u, COMM_FULL_COMMUNICATION) != E_OK) {{\n        return E_NOT_OK;\n    }}\n    {}();\n    Can_MainFunction_Mode();\n    if ((CanIf_GetControllerMode({}u, &actual) != E_OK) || (actual != CAN_CS_STARTED)) {{\n        return E_NOT_OK;\n    }}\n    SchM_StartTiming();\n    return Ecu_SchMTimingActive() ? E_OK : E_NOT_OK;\n}}\n", mode.channel_handle, first_user.handle, mode.main_symbol, can.can_if_controller_id));
+    config.push_str("RTE_Ecu_CODE Std_ReturnType Ecu_StackRunCycle(EventMaskType events)\n{\n    if ((Ecu_TargetIsOwner() == 0) || (Ecu_SchMTimingActive() == FALSE)) {\n        return E_NOT_OK;\n    }\n");
     for entity in &description.schedule.entities {
         if entity.application {
             config.push_str(&format!(
-                "    if ((events & {}u) != 0u) {{ {}(); }}\n",
+                "    if ((events & {}u) != 0u) {{\n        {}();\n    }}\n",
                 description.event_mask(&entity.os_event)?,
                 entity.symbol
             ));
         } else {
             let symbol = &entity.symbol;
             config.push_str(&format!(
-                "    if ((events & {}u) != 0u) {{ {symbol}(); }}\n",
+                "    if ((events & {}u) != 0u) {{\n        {symbol}();\n    }}\n",
                 description.event_mask(&entity.os_event)?
             ));
             if entity.symbol == com.transmit_main.symbol {
-                config.push_str("    if (Can_HostFlush() != ECU_OK) { return E_NOT_OK; }\n");
+                config.push_str(
+                    "    if (Can_HostFlush() != ECU_OK) {\n        return E_NOT_OK;\n    }\n",
+                );
             }
         }
     }
-    config.push_str("    return (Can_HostFlush() == ECU_OK) ? E_OK : E_NOT_OK;\n}\nRTE_Ecu_CODE void Ecu_StackRetire(uint8 reached) {\n");
+    config.push_str("    return (Can_HostFlush() == ECU_OK) ? E_OK : E_NOT_OK;\n}\nRTE_Ecu_CODE void Ecu_StackRetire(uint8 reached)\n{\n");
     // Det (2) and the routing tables (5) have no deinitialization service.
     let mut retired = vec![(8, "(void)Rte_Stop();\n".to_owned())];
     if transport.is_some() {
@@ -641,24 +718,28 @@ pub(super) fn files(
         config.push_str(&format!("    if (reached >= {number}u) {{\n#ifdef ECU_TARGET_TESTS\n        Ecu_TargetTestRetire({number}u);\n#endif\n        {body}    }}\n"));
     }
     config.push_str("}\n");
-    config.push_str("RTE_Ecu_CODE int Ecu_StackFrameShape(uint32 id, uint8 dlc) {\n    if ((id > 0x7ffu) || (dlc > 8u)) { return 0; }\n");
+    config.push_str("RTE_Ecu_CODE int Ecu_StackFrameShape(uint32 id, uint8 dlc)\n{\n    if ((id > 0x7ffu) || (dlc > 8u)) {\n        return 0;\n    }\n");
     for signal in &description.signals {
         config.push_str(&format!(
-            "    if (id == {}u) {{ return {}; }}\n",
+            "    if (id == {}u) {{\n        return {};\n    }}\n",
             signal.can_id,
             if signal.receive { "dlc == 4u" } else { "0" }
         ));
     }
     if let Some(tp) = transport {
         config.push_str(&format!(
-            "    if (id == {}u) {{ return dlc == 8u; }}\n    if (id == {}u) {{ return 0; }}\n",
+            "    if (id == {}u) {{\n        return dlc == 8u;\n    }}\n    if (id == {}u) {{\n        return 0;\n    }}\n",
             tp.request_can_id, tp.response_can_id
         ));
     }
     config.push_str("    return 1;\n}\n");
     config.push_str("#define RTE_Ecu_STOP_SEC_CODE\n#include \"Ecu_MemMap.h\"\n");
     if description.diagnostic_transport.is_some() {
-        config.push_str(&format!("#define RTE_Dcm_START_SEC_CODE\n#include \"Ecu_MemMap.h\"\nstatic RTE_Dcm_CODE void Ecu_DcmAuthenticationMode(uint8 state) {{ (void)SchM_Switch_Dcm_{authentication_group}(state); }}\n#define RTE_Dcm_STOP_SEC_CODE\n#include \"Ecu_MemMap.h\"\n"));
+        let function = c_layout::short_function(
+            "static RTE_Dcm_CODE void Ecu_DcmAuthenticationMode(uint8 state)",
+            &format!("(void)SchM_Switch_Dcm_{authentication_group}(state);"),
+        );
+        config.push_str(&format!("#define RTE_Dcm_START_SEC_CODE\n#include \"Ecu_MemMap.h\"\n{function}\n#define RTE_Dcm_STOP_SEC_CODE\n#include \"Ecu_MemMap.h\"\n"));
     }
     outputs.emit(ECU, "src/Ecu_RuntimeConfig.c", config)?;
     let config_scopes: Vec<_> = [
@@ -735,11 +816,34 @@ pub(super) fn files(
 /// SchM lifecycle and the Dcm mode switches over the selected mode scope.
 fn lifecycle(partition: u16, mode_scope: &str, authentication_group: &str) -> String {
     let lifecycle = format!(
-        "#include \"Rte_Main.h\"\n#include \"Ecu_Target.h\"\n#define RTE_Rte_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\nstatic boolean initialized RTE_VAR_CLEARED;\nstatic boolean started RTE_VAR_CLEARED;\nstatic boolean timing RTE_VAR_CLEARED;\nstatic boolean allocated RTE_VAR_CLEARED;\n#define RTE_Rte_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n#define RTE_Rte_START_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED\n#include \"Rte_MemMap.h\"\nconst SchM_ConfigType Ecu_SchMConfig RTE_CONFIG_DATA_PREBUILD = {{{partition}u}};\n#define RTE_Rte_STOP_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n#define RTE_Rte_START_SEC_CODE\n#include \"Rte_MemMap.h\"\nRTE_CODE void SchM_Init(const SchM_ConfigType *config) {{\n    if ((Ecu_TargetCheckLifecycleContext(TRUE) != E_OK) || (allocated == TRUE) || (config == NULL_PTR) || (config->partition != {partition}u)) {{ return; }}\n    allocated = TRUE;\n    initialized = TRUE;\n}}\nRTE_CODE void SchM_Start(void) {{\n    if ((Ecu_TargetCheckLifecycleContext(TRUE) == E_OK) && (initialized == TRUE)) {{ started = TRUE; }}\n}}\nRTE_CODE void SchM_StartTiming(void) {{\n    if ((Ecu_TargetCheckLifecycleContext(TRUE) == E_OK) && (started == TRUE)) {{ timing = TRUE; }}\n}}\nRTE_CODE void SchM_Deinit(void) {{\n    if (Ecu_TargetCheckLifecycleContext(FALSE) == E_OK) {{ timing = FALSE; started = FALSE; initialized = FALSE; }}\n}}\nRTE_CODE boolean Ecu_SchMReady(void) {{ return started; }}\nRTE_CODE boolean Ecu_SchMTimingActive(void) {{ return timing; }}\n#define RTE_Rte_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n"
+        "#include \"Rte_Main.h\"\n#include \"Ecu_Target.h\"\n#define RTE_Rte_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\nstatic boolean initialized RTE_VAR_CLEARED;\nstatic boolean started RTE_VAR_CLEARED;\nstatic boolean timing RTE_VAR_CLEARED;\nstatic boolean allocated RTE_VAR_CLEARED;\n#define RTE_Rte_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n#define RTE_Rte_START_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED\n#include \"Rte_MemMap.h\"\nconst SchM_ConfigType Ecu_SchMConfig RTE_CONFIG_DATA_PREBUILD = {{{partition}u}};\n#define RTE_Rte_STOP_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n#define RTE_Rte_START_SEC_CODE\n#include \"Rte_MemMap.h\"\nRTE_CODE void SchM_Init(const SchM_ConfigType *config)\n{{\n    if ((Ecu_TargetCheckLifecycleContext(TRUE) != E_OK) || (allocated == TRUE) ||\n        (config == NULL_PTR) || (config->partition != {partition}u)) {{\n        return;\n    }}\n    allocated = TRUE;\n    initialized = TRUE;\n}}\nRTE_CODE void SchM_Start(void)\n{{\n    if ((Ecu_TargetCheckLifecycleContext(TRUE) == E_OK) && (initialized == TRUE)) {{\n        started = TRUE;\n    }}\n}}\nRTE_CODE void SchM_StartTiming(void)\n{{\n    if ((Ecu_TargetCheckLifecycleContext(TRUE) == E_OK) && (started == TRUE)) {{\n        timing = TRUE;\n    }}\n}}\nRTE_CODE void SchM_Deinit(void)\n{{\n    if (Ecu_TargetCheckLifecycleContext(FALSE) == E_OK) {{\n        timing = FALSE;\n        started = FALSE;\n        initialized = FALSE;\n    }}\n}}\nRTE_CODE boolean Ecu_SchMReady(void) {{ return started; }}\nRTE_CODE boolean Ecu_SchMTimingActive(void) {{ return timing; }}\n#define RTE_Rte_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n"
     );
-    let modes = format!(
-        "\n#include \"SchM_Dcm.h\"\n#include \"Can_HostLock.h\"\n#define RTE_{mode_scope}_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\nstatic Rte_ModeType_DcmDiagnosticSessionControl diagnostic_session_mode RTE_VAR_CLEARED;\nstatic Rte_ModeType_{authentication_group} authentication_mode RTE_VAR_CLEARED;\n#define RTE_{mode_scope}_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n#define RTE_{mode_scope}_START_SEC_CODE\n#include \"Rte_MemMap.h\"\nRTE_CODE Std_ReturnType SchM_Switch_Dcm_{authentication_group}(Rte_ModeType_{authentication_group} mode) {{\n    if (Ecu_TargetIsOwner() == 0) {{ return SCHM_E_LIMIT; }}\n    Can_HostAreaEnter(CAN_HOST_AREA_SCHM_MODE);\n    authentication_mode = mode;\n    Can_HostAreaExit(CAN_HOST_AREA_SCHM_MODE);\n    return SCHM_E_OK;\n}}\nRTE_CODE Rte_ModeType_{authentication_group} SchM_Mode_Dcm_{authentication_group}(void) {{\n    Rte_ModeType_{authentication_group} mode;\n    if (Ecu_TargetIsOwner() == 0) {{ return RTE_TRANSITION_{authentication_group}; }}\n    Can_HostAreaEnter(CAN_HOST_AREA_SCHM_MODE);\n    mode = authentication_mode;\n    Can_HostAreaExit(CAN_HOST_AREA_SCHM_MODE);\n    return mode;\n}}\nRTE_CODE Std_ReturnType SchM_Switch_Dcm_DcmDiagnosticSessionControl(Rte_ModeType_DcmDiagnosticSessionControl mode) {{\n    if (Ecu_TargetIsOwner() == 0) {{ return SCHM_E_LIMIT; }}\n    Can_HostAreaEnter(CAN_HOST_AREA_SCHM_MODE);\n    diagnostic_session_mode = mode;\n    Can_HostAreaExit(CAN_HOST_AREA_SCHM_MODE);\n    return SCHM_E_OK;\n}}\nRTE_CODE Rte_ModeType_DcmDiagnosticSessionControl SchM_Mode_Dcm_DcmDiagnosticSessionControl(void) {{\n    Rte_ModeType_DcmDiagnosticSessionControl mode;\n    if (Ecu_TargetIsOwner() == 0) {{ return RTE_TRANSITION_DcmDiagnosticSessionControl; }}\n    Can_HostAreaEnter(CAN_HOST_AREA_SCHM_MODE);\n    mode = diagnostic_session_mode;\n    Can_HostAreaExit(CAN_HOST_AREA_SCHM_MODE);\n    return mode;\n}}\n#define RTE_{mode_scope}_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n"
+    let mut modes = format!(
+        "\n#include \"SchM_Dcm.h\"\n#include \"Can_HostLock.h\"\n#define RTE_{mode_scope}_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\nstatic Rte_ModeType_DcmDiagnosticSessionControl diagnostic_session_mode RTE_VAR_CLEARED;\nstatic Rte_ModeType_{authentication_group} authentication_mode RTE_VAR_CLEARED;\n#define RTE_{mode_scope}_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n#define RTE_{mode_scope}_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n"
     );
+    for (group, variable) in [
+        (authentication_group, "authentication_mode"),
+        ("DcmDiagnosticSessionControl", "diagnostic_session_mode"),
+    ] {
+        let switch = c_layout::signature(
+            "RTE_CODE Std_ReturnType",
+            &format!("SchM_Switch_Dcm_{group}"),
+            &[format!("Rte_ModeType_{group} mode")],
+            "",
+            true,
+        );
+        let mode = c_layout::signature(
+            &format!("RTE_CODE Rte_ModeType_{group}"),
+            &format!("SchM_Mode_Dcm_{group}"),
+            &["void".to_owned()],
+            "",
+            true,
+        );
+        modes.push_str(&format!("{switch}\n{{\n    if (Ecu_TargetIsOwner() == 0) {{\n        return SCHM_E_LIMIT;\n    }}\n    Can_HostAreaEnter(CAN_HOST_AREA_SCHM_MODE);\n    {variable} = mode;\n    Can_HostAreaExit(CAN_HOST_AREA_SCHM_MODE);\n    return SCHM_E_OK;\n}}\n{mode}\n{{\n    Rte_ModeType_{group} mode;\n    if (Ecu_TargetIsOwner() == 0) {{\n        return RTE_TRANSITION_{group};\n    }}\n    Can_HostAreaEnter(CAN_HOST_AREA_SCHM_MODE);\n    mode = {variable};\n    Can_HostAreaExit(CAN_HOST_AREA_SCHM_MODE);\n    return mode;\n}}\n"));
+    }
+    modes.push_str(&format!(
+        "#define RTE_{mode_scope}_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n"
+    ));
     lifecycle + &modes
 }
 

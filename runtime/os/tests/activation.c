@@ -20,7 +20,8 @@ static unsigned observations;
 static TaskHandle_t observer_handles[6];
 static unsigned rejected;
 static bool preempt;
-void Os_TestBeforeActivationLock(void) {
+void Os_TestBeforeActivationLock(void)
+{
     static bool closing_injected;
     if ((strcmp(scenario, "close-admission") == 0) && !closing_injected) {
         closing_injected = true;
@@ -28,14 +29,16 @@ void Os_TestBeforeActivationLock(void) {
         Os_BackendRequestShutdown(E_OK);
     }
 }
-void Os_TestAtActivationAdmission(unsigned point) {
+void Os_TestAtActivationAdmission(unsigned point)
+{
     if (((strcmp(scenario, "close-ready") == 0) && (point == 0u)) ||
         ((strcmp(scenario, "close-accepted") == 0) && (point == 1u))) {
         Os_TargetTrace('Q');
         Os_BackendRequestShutdown(E_OK);
     }
 }
-void Os_TestBeforeClose(void) {
+void Os_TestBeforeClose(void)
+{
     if ((strcmp(scenario, "close-admission") == 0) || (strcmp(scenario, "close-ready") == 0) ||
         (strcmp(scenario, "close-accepted") == 0)) {
         /* A bounded, normal-close race injection; never enabled in production
@@ -44,13 +47,15 @@ void Os_TestBeforeClose(void) {
     }
 }
 
-static void check(bool condition) {
+static void check(bool condition)
+{
     if (!condition) {
         Os_TargetTrace('!');
         ShutdownOS(E_OS_STATE);
     }
 }
-static bool same_info(const Os_ActivationInfo *left, const Os_ActivationInfo *right) {
+static bool same_info(const Os_ActivationInfo *left, const Os_ActivationInfo *right)
+{
     unsigned i;
     bool same = (left->state == right->state) && (left->count == right->count) &&
                 (left->kernel_sequence == right->kernel_sequence) &&
@@ -71,7 +76,8 @@ static bool same_info(const Os_ActivationInfo *left, const Os_ActivationInfo *ri
 }
 
 /* This observer reads actual TCB state/keys independently of automotive APIs. */
-void Os_TestObserve(void) {
+void Os_TestObserve(void)
+{
     unsigned i;
     ++observations;
     for (i = 0u; i < 6u; ++i) {
@@ -80,18 +86,18 @@ void Os_TestObserve(void) {
         TaskHandle_t handle = observer_handles[i];
         eTaskState actual = eTaskGetState(handle);
         switch (actual) {
-        case eRunning:
-            expected = RUNNING;
-            break;
-        case eReady:
-            expected = READY;
-            break;
-        case eSuspended:
-            expected = SUSPENDED;
-            break;
-        default:
-            ShutdownOS(E_OS_STATE);
-            return;
+            case eRunning:
+                expected = RUNNING;
+                break;
+            case eReady:
+                expected = READY;
+                break;
+            case eSuspended:
+                expected = SUSPENDED;
+                break;
+            default:
+                ShutdownOS(E_OS_STATE);
+                return;
         }
         check(Os_TargetInspectActivation(configuration[i].id, &info) == E_OK);
         check((info.state == expected) && (info.count <= configuration[i].activation_limit));
@@ -110,7 +116,8 @@ void Os_TestObserve(void) {
     }
 }
 
-static void expect_rejection(TaskType id, StatusType expected) {
+static void expect_rejection(TaskType id, StatusType expected)
+{
     Os_ActivationInfo before[6];
     Os_ActivationInfo after;
     unsigned i;
@@ -125,13 +132,15 @@ static void expect_rejection(TaskType id, StatusType expected) {
     ++rejected;
 }
 
-static void finish(void) {
+static void finish(void)
+{
     (void)TerminateTask();
     Os_TargetTrace('X');
     ShutdownOS(E_OS_STATE);
 }
 
-static uint32_t test_isr(void) {
+static uint32_t test_isr(void)
+{
     Os_ActivationInfo before;
     Os_ActivationInfo after;
     Os_TargetTrace('J');
@@ -150,7 +159,8 @@ static uint32_t test_isr(void) {
     return 0u;
 }
 
-void StartupHook(void) {
+void StartupHook(void)
+{
     unsigned i;
     TaskStateType state = 99u;
     for (i = 0u; i < 6u; ++i) {
@@ -167,7 +177,8 @@ void StartupHook(void) {
     }
 }
 
-void ShutdownHook(StatusType Error) {
+void ShutdownHook(StatusType Error)
+{
     TaskStateType state = 99u;
     if ((ActivateTask(1u) != E_OS_CALLEVEL) || (TerminateTask() != E_OS_CALLEVEL) ||
         (GetTaskState(1u, &state) != E_OS_CALLEVEL) || (state != 99u)) {
@@ -180,13 +191,20 @@ void ShutdownHook(StatusType Error) {
             ExitProcess(E_OS_STATE);
         }
     }
-    if (printf("activation a=%u b=%u e=%u h=%u observer=%u rejected=%u error=%u\n", a_entries,
-               b_entries, e_entries, h_entries, observations, rejected, Error) < 0) {
+    if (printf("activation a=%u b=%u e=%u h=%u observer=%u rejected=%u error=%u\n",
+               a_entries,
+               b_entries,
+               e_entries,
+               h_entries,
+               observations,
+               rejected,
+               Error) < 0) {
         ExitProcess(E_OS_STATE);
     }
 }
 
-static void inspect_requests(TaskType id, unsigned count, uint64_t first, uint64_t second) {
+static void inspect_requests(TaskType id, unsigned count, uint64_t first, uint64_t second)
+{
     Os_ActivationInfo info;
     check(Os_TargetInspectActivation(id, &info) == E_OK);
     check(info.count == count);
@@ -198,7 +216,8 @@ static void inspect_requests(TaskType id, unsigned count, uint64_t first, uint64
     }
 }
 
-static void launcher(void) {
+static void launcher(void)
+{
     TaskStateType state = 99u;
     Os_TargetTrace('L');
     check(GetTaskState(1u, NULL) == E_OS_ILLEGAL_ADDRESS);
@@ -269,7 +288,8 @@ static void launcher(void) {
     finish();
 }
 
-static void task_a(void) {
+static void task_a(void)
+{
     volatile unsigned local = 0x12345678u;
     const volatile unsigned *const address = &local;
     ++a_entries;
@@ -303,12 +323,14 @@ static void task_a(void) {
     }
     finish();
 }
-static void task_b(void) {
+static void task_b(void)
+{
     ++b_entries;
     Os_TargetTrace((b_entries == 1u) ? 'B' : 'D');
     finish();
 }
-static void task_h(void) {
+static void task_h(void)
+{
     Os_ActivationInfo info;
     ++h_entries;
     check(Os_TargetInspectActivation(3u, &info) == E_OK);
@@ -316,13 +338,15 @@ static void task_h(void) {
     Os_TargetTrace('H');
     finish();
 }
-static void task_e(void) {
+static void task_e(void)
+{
     ++e_entries;
     expect_rejection(4u, E_OS_LIMIT);
     Os_TargetTrace('E');
     finish();
 }
-static void monitor(void) {
+static void monitor(void)
+{
     unsigned i;
     check((a_entries == expected_a) && (b_entries == expected_b) && (e_entries == expected_e));
     check(h_entries == (preempt ? 1u : 0u));
@@ -336,15 +360,16 @@ static void monitor(void) {
     ShutdownOS(E_OK);
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     Os_TaskConfig tasks[] = {{0u, "L", launcher, 4u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
                              {1u, "A", task_a, 2u, 0u, OS_BASIC_TASK, 2u, OS_SCHEDULE_FULL, 0u},
                              {2u, "B", task_b, 2u, 0u, OS_BASIC_TASK, 2u, OS_SCHEDULE_FULL, 0u},
                              {3u, "H", task_h, 3u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
                              {4u, "E", task_e, 2u, 0u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
                              {5u, "M", monitor, 1u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
-    const Os_TargetConfig config = {tasks, 6u, 262144u, NULL, 0u,   NULL, 0u,
-                                    0u,    0u, 0u,      NULL, NULL, NULL};
+    const Os_TargetConfig config = {
+        tasks, 6u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, NULL, NULL, NULL};
     StatusType prepared;
     scenario = (argc == 2) ? argv[1] : "aab";
     configuration = tasks;

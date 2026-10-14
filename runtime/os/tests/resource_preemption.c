@@ -15,18 +15,21 @@ static volatile LONG irq_entries;
 static volatile LONG task_progress;
 static volatile LONG task_started;
 static volatile LONG irq_finished;
-static void check(bool condition) {
+static void check(bool condition)
+{
     if (!condition) {
         Os_TargetTrace('!');
         ShutdownOS(E_OS_STATE);
     }
 }
-static Os_ActivationInfo info(TaskType id) {
+static Os_ActivationInfo info(TaskType id)
+{
     Os_ActivationInfo value;
     check(Os_TargetInspectActivation(id, &value) == E_OK);
     return value;
 }
-static bool same_info(const Os_ActivationInfo *a, const Os_ActivationInfo *b) {
+static bool same_info(const Os_ActivationInfo *a, const Os_ActivationInfo *b)
+{
     unsigned i;
     bool same = (a->state == b->state) && (a->count == b->count) &&
                 (a->kernel_sequence == b->kernel_sequence) && (a->events == b->events) &&
@@ -43,7 +46,8 @@ static bool same_info(const Os_ActivationInfo *a, const Os_ActivationInfo *b) {
     }
     return same;
 }
-static void refused(unsigned operation, StatusType expected) {
+static void refused(unsigned operation, StatusType expected)
+{
     Os_ActivationInfo before[6];
     Os_ActivationInfo after;
     StatusType result;
@@ -52,27 +56,27 @@ static void refused(unsigned operation, StatusType expected) {
         before[i] = info((TaskType)i);
     }
     switch (operation) {
-    case 0u:
-        result = ReleaseResource(0u);
-        break;
-    case 1u:
-        result = GetResource(0u);
-        break;
-    case 2u:
-        result = Schedule();
-        break;
-    case 3u:
-        result = WaitEvent(1u);
-        break;
-    case 4u:
-        result = TerminateTask();
-        break;
-    case 5u:
-        result = ChainTask(1u);
-        break;
-    default:
-        ShutdownOS(E_OS_STATE);
-        return;
+        case 0u:
+            result = ReleaseResource(0u);
+            break;
+        case 1u:
+            result = GetResource(0u);
+            break;
+        case 2u:
+            result = Schedule();
+            break;
+        case 3u:
+            result = WaitEvent(1u);
+            break;
+        case 4u:
+            result = TerminateTask();
+            break;
+        case 5u:
+            result = ChainTask(1u);
+            break;
+        default:
+            ShutdownOS(E_OS_STATE);
+            return;
     }
     check(result == expected);
     for (i = 0u; i < 6u; ++i) {
@@ -81,7 +85,8 @@ static void refused(unsigned operation, StatusType expected) {
     }
     ++rejected;
 }
-void Os_TestObserve(void) {
+void Os_TestObserve(void)
+{
     unsigned i;
     ++observations;
     for (i = 0u; i < 6u; ++i) {
@@ -104,17 +109,20 @@ void Os_TestObserve(void) {
         }
     }
 }
-static void finish(void) {
+static void finish(void)
+{
     (void)TerminateTask();
     Os_TargetTrace('X');
     ShutdownOS(E_OS_STATE);
 }
-static void check_priority(uint8_t priority, unsigned depth, uint8_t held) {
+static void check_priority(uint8_t priority, unsigned depth, uint8_t held)
+{
     Os_ActivationInfo value = info(0u);
     check((value.effective_priority == priority) && (value.resource_count == depth) &&
           (value.internal_held == held));
 }
-static uint32_t interrupt(void) {
+static uint32_t interrupt(void)
+{
     InterlockedIncrement(&irq_entries);
     Os_TargetTrace('J');
     check(GetResource(5u) == E_OK);
@@ -141,7 +149,8 @@ static uint32_t interrupt(void) {
     InterlockedExchange(&irq_finished, 1);
     return 0u;
 }
-static DWORD WINAPI injector(void *argument) {
+static DWORD WINAPI injector(void *argument)
+{
     (void)argument;
     while (InterlockedCompareExchange(&task_started, 0, 0) == 0) {
         Sleep(1u);
@@ -149,7 +158,8 @@ static DWORD WINAPI injector(void *argument) {
     Os_PortPostInterrupt(31u);
     return 0u;
 }
-void StartupHook(void) {
+void StartupHook(void)
+{
     unsigned i;
     static const char *const names[] = {"A", "B", "H", "D", "E", "M"};
     Os_TargetTrace('S');
@@ -160,15 +170,21 @@ void StartupHook(void) {
     }
     vPortSetInterruptHandler(31u, interrupt);
 }
-void ShutdownHook(StatusType Error) {
+void ShutdownHook(StatusType Error)
+{
     Os_TargetTrace('Z');
-    if (printf("resources h=%u b=%u irq=%d observer=%u rejected=%u error=%u\n", h_entries,
-               b_entries, (int)InterlockedCompareExchange(&irq_entries, 0, 0), observations,
-               rejected, Error) < 0) {
+    if (printf("resources h=%u b=%u irq=%d observer=%u rejected=%u error=%u\n",
+               h_entries,
+               b_entries,
+               (int)InterlockedCompareExchange(&irq_entries, 0, 0),
+               observations,
+               rejected,
+               Error) < 0) {
         ExitProcess(E_OS_STATE);
     }
 }
-static void task_a(void) {
+static void task_a(void)
+{
     volatile unsigned local = 0x12345678u;
     Os_TargetTrace('A');
     if (strcmp(scenario, "full") == 0) {
@@ -301,7 +317,8 @@ static void task_a(void) {
     Os_TargetTrace('a');
     finish();
 }
-static void task_b(void) {
+static void task_b(void)
+{
     ++b_entries;
     Os_TargetTrace('B');
     if (strcmp(scenario, "wait") == 0) {
@@ -317,7 +334,8 @@ static void task_b(void) {
     }
     finish();
 }
-static void task_h(void) {
+static void task_h(void)
+{
     ++h_entries;
     Os_TargetTrace('H');
     if (strcmp(scenario, "oracle-resource") == 0) {
@@ -327,7 +345,8 @@ static void task_h(void) {
     }
     finish();
 }
-static void task_d(void) {
+static void task_d(void)
+{
     Os_ActivationInfo value = info(0u);
     Os_TargetTrace('D');
     if (strcmp(scenario, "nonowner") == 0) {
@@ -343,13 +362,15 @@ static void task_d(void) {
     finish();
 }
 static void task_e(void) { ShutdownOS(E_OS_STATE); }
-static void monitor(void) {
+static void monitor(void)
+{
     Os_ActivationInfo value = info(0u);
     check((value.count == 0u) && (value.resource_count == 0u) && (value.internal_held == 0u));
     Os_TargetTrace('M');
     ShutdownOS(E_OK);
 }
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     Os_TaskConfig tasks[] = {{0u, "A", task_a, 2u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
                              {1u, "B", task_b, 2u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
                              {2u, "H", task_h, 3u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
@@ -364,8 +385,8 @@ int main(int argc, char **argv) {
                                      {5u, 31u, 0u, 0x80000000u},
                                      {RES_SCHEDULER, 5u, 63u, 0u}};
     Os_InternalResourceConfig internal[] = {{1u, 3u}, {2u, 5u}};
-    Os_TargetConfig config = {tasks, 6u, 262144u, resources, 7u,   internal, 2u,
-                              0u,    0u, 0u,      NULL,      NULL, NULL};
+    Os_TargetConfig config = {
+        tasks, 6u, 262144u, resources, 7u, internal, 2u, 0u, 0u, 0u, NULL, NULL, NULL};
     StatusType prepared;
     scenario = (argc == 2) ? argv[1] : "non";
     if ((strcmp(scenario, "non") == 0) || (strcmp(scenario, "oracle-non") == 0)) {

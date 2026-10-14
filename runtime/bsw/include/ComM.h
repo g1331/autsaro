@@ -6,16 +6,16 @@
 #define COMM_H
 #include "ComStack_Types.h"
 #include "Rte_ComM_Type.h"
-#define COMM_E_MODE_LIMITATION 2u
+#define COMM_E_MODE_LIMITATION       2u
 #define COMM_E_MULTIPLE_PNC_ASSIGNED 3u
-#define COMM_E_NO_PNC_ASSIGNED 4u
+#define COMM_E_NO_PNC_ASSIGNED       4u
 typedef enum { COMM_UNINIT = 0, COMM_INIT = 1 } ComM_InitStatusType;
 typedef uint8 ComM_StateType;
-#define COMM_NO_COM_NO_PENDING_REQUEST 0u
-#define COMM_NO_COM_REQUEST_PENDING 1u
+#define COMM_NO_COM_NO_PENDING_REQUEST  0u
+#define COMM_NO_COM_REQUEST_PENDING     1u
 #define COMM_FULL_COM_NETWORK_REQUESTED 2u
-#define COMM_FULL_COM_READY_SLEEP 3u
-#define COMM_SILENT_COM 4u
+#define COMM_FULL_COM_READY_SLEEP       3u
+#define COMM_SILENT_COM                 4u
 typedef Std_ReturnType (*ComM_BusRequestType)(NetworkHandleType Channel, ComM_ModeType ComMode);
 typedef Std_ReturnType (*ComM_BusGetType)(NetworkHandleType Channel, ComM_ModeType *ComMode);
 typedef void (*ComM_ModeNotificationType)(NetworkHandleType Channel, ComM_ModeType ComMode);

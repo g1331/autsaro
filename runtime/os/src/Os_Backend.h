@@ -8,7 +8,7 @@
 #include "Os_Vector.h"
 #include "Os_Mailbox.h"
 #include "Os_Arti.h"
-#define OS_KERNEL_YIELD_INTERRUPT 0u
+#define OS_KERNEL_YIELD_INTERRUPT    0u
 #define OS_CONTROLLED_TICK_INTERRUPT 1u
 typedef struct {
     Os_HookPhase phase;
@@ -86,7 +86,8 @@ int Os_InterruptDisabled(void);
 void Os_InterruptRestoreOwner(void);
 int Os_HookQueryContext(void);
 int Os_ErrorHookConfigured(void);
-StatusType Os_ErrorResult(OSServiceIdType service, StatusType status,
+StatusType Os_ErrorResult(OSServiceIdType service,
+                          StatusType status,
                           const Os_ErrorParameters *arguments);
 void Os_HookInvoke(void (*hook)(void), Os_HookPhase selected);
 void Os_ShutdownHookInvoke(StatusType error);
@@ -118,8 +119,12 @@ int Os_BackendTakeIsrReschedule(void);
 void Os_BackendAssert(const char *file, int line);
 HANDLE Os_PortEvent(LPSECURITY_ATTRIBUTES attributes, BOOL manual, BOOL initial, LPCSTR name);
 HANDLE Os_PortMutex(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name);
-HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes, SIZE_T stack, LPTHREAD_START_ROUTINE start,
-                     LPVOID argument, DWORD flags, LPDWORD id);
+HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
+                     SIZE_T stack,
+                     LPTHREAD_START_ROUTINE start,
+                     LPVOID argument,
+                     DWORD flags,
+                     LPDWORD id);
 HANDLE Os_PortTaskThread(TaskFunction_t code, void *argument, const StackType_t *buffer_top);
 void Os_PortResumeThread(HANDLE thread);
 DWORD Os_PortSuspendThread(HANDLE thread);
@@ -149,7 +154,8 @@ void Os_Implementation_StartOS(AppModeType Mode);
 AppModeType Os_Implementation_GetActiveApplicationMode(void);
 StatusType Os_Implementation_IncrementCounter(CounterType CounterID);
 StatusType Os_Implementation_GetCounterValue(CounterType CounterID, TickRefType Value);
-StatusType Os_Implementation_GetElapsedValue(CounterType CounterID, TickRefType Value,
+StatusType Os_Implementation_GetElapsedValue(CounterType CounterID,
+                                             TickRefType Value,
                                              TickRefType ElapsedValue);
 StatusType Os_Implementation_GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info);
 StatusType Os_Implementation_GetAlarm(AlarmType AlarmID, TickRefType Tick);

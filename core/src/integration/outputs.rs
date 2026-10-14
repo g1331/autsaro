@@ -273,6 +273,9 @@ pub(super) enum Edit<'a> {
     Once(&'a str, &'a str),
     /// The anchor occurs at least once; every occurrence is replaced.
     Every(&'a str, &'a str),
+    /// The C identifier occurs at least once; every occurrence as a whole token is
+    /// replaced, wherever line layout puts it.
+    Token(&'a str, &'a str),
     /// Inserted before the closing include guard the template ends with.
     BeforeGuardEnd(&'a str),
 }
@@ -297,6 +300,10 @@ pub(super) fn render(
             Edit::Every(anchor, replacement) if text.contains(anchor) => {
                 text.replace(anchor, replacement)
             }
+            Edit::Token(name, replacement) => match tokens(&text, name, replacement) {
+                Some(text) => text,
+                None => return Err(PlanDiagnostic::template_anchor(path, name)),
+            },
             Edit::BeforeGuardEnd(addition) => match text.strip_suffix("#endif\n") {
                 Some(body) => format!("{body}{addition}#endif\n"),
                 None => return Err(PlanDiagnostic::template_anchor(path, "#endif")),
@@ -307,6 +314,28 @@ pub(super) fn render(
         };
     }
     Ok(text)
+}
+
+/// `text` with every identifier token `name` replaced, or `None` without one.
+fn tokens(text: &str, name: &str, replacement: &str) -> Option<String> {
+    let identifier = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    let mut output = String::with_capacity(text.len());
+    let mut rest = text;
+    let mut found = false;
+    while let Some(at) = rest.find(name) {
+        output.push_str(&rest[..at]);
+        let before = output.chars().next_back();
+        let after = rest[at + name.len()..].chars().next();
+        if before.is_some_and(identifier) || after.is_some_and(identifier) {
+            output.push_str(name);
+        } else {
+            output.push_str(replacement);
+            found = true;
+        }
+        rest = &rest[at + name.len()..];
+    }
+    output.push_str(rest);
+    found.then_some(output)
 }
 
 #[cfg(test)]
@@ -399,7 +428,17 @@ mod tests {
             .unwrap(),
             "#ifndef A\n#define A\n#define X 0\n#define Y\n#endif\n"
         );
+        assert_eq!(
+            render(
+                "f(a, Os, 0u);\ng(Os_X,\n  Os,\n  OsAlt);\n",
+                "a.c",
+                &[Edit::Token("Os", "Rt")]
+            )
+            .unwrap(),
+            "f(a, Rt, 0u);\ng(Os_X,\n  Rt,\n  OsAlt);\n"
+        );
         for edit in [
+            Edit::Token("Os", ""),
             Edit::Once("Z", ""),
             Edit::Every("Z", ""),
             Edit::Once("#define", ""),

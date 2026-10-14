@@ -10,12 +10,14 @@ static OSServiceIdType expected_service;
 static CounterType expected_counter;
 static TickRefType expected_value, expected_elapsed;
 
-static void check(bool condition) {
+static void check(bool condition)
+{
     if (!condition) {
         Os_BackendShutdown(E_OS_STATE);
     }
 }
-void ErrorHook(StatusType error) {
+void ErrorHook(StatusType error)
+{
     check(error == expected_error && OSErrorGetServiceId() == expected_service);
     if (expected_service == 16u) {
         check(OSError_GetCounterValue_CounterID() == expected_counter);
@@ -29,10 +31,12 @@ void ErrorHook(StatusType error) {
     ++errors;
 }
 void StartupHook(void) {}
-void ShutdownHook(StatusType reason) {
+void ShutdownHook(StatusType reason)
+{
     printf("counter_service ticks=0 wrap=2 errors=%u reason=%u\n", errors, reason);
 }
-static void owner(void) {
+static void owner(void)
+{
     TimeInMicrosecondsType value = UINT64_MAX, elapsed = UINT64_MAX;
     check(Rte_Call_OsService_GetCounterValue(&value) == E_OK && value == 0u);
     for (unsigned i = 0u; i < 14u; ++i) {
@@ -79,15 +83,16 @@ static void owner(void) {
     check(Rte_Call_OsService_GetCounterValue(&value) == E_OK && value == 0u);
     ShutdownOS(E_OK);
 }
-int main(void) {
-    const Os_TaskConfig task = {0u, "owner",          owner, 10u, 1u, OS_BASIC_TASK,
-                                1u, OS_SCHEDULE_FULL, 0u};
+int main(void)
+{
+    const Os_TaskConfig task = {
+        0u, "owner", owner, 10u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u};
     const Os_CounterConfig counter = {0u, OSMAXALLOWEDVALUE, 1u, 1u, 1u};
     const Os_TimeConfig time = {
         .counters = &counter, .counter_count = 1u, .system_counter = 0u, .owner = INVALID_TASK};
     const Os_HookConfig hooks = {&ErrorHook, NULL, NULL};
-    const Os_TargetConfig target = {&task, 1u, 262144u, NULL,  0u,     NULL, 0u,
-                                    0u,    0u, 0u,      &time, &hooks, NULL};
+    const Os_TargetConfig target = {
+        &task, 1u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, &time, &hooks, NULL};
     check(OSMAXALLOWEDVALUE == 15u);
     check(Os_TargetPrepare(&target) == E_OK);
     StartOS(1u);

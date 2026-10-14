@@ -39,7 +39,8 @@ Os_Atomic32 Os_HostAtomicLoad(volatile Os_Atomic32 *cell);
 /** Replace a publication cell and return its prior value. */
 Os_Atomic32 Os_HostAtomicExchange(volatile Os_Atomic32 *cell, Os_Atomic32 value);
 /** Compare with expected, publish desired on equality, and return prior value. */
-Os_Atomic32 Os_HostAtomicCompareExchange(volatile Os_Atomic32 *cell, Os_Atomic32 desired,
+Os_Atomic32 Os_HostAtomicCompareExchange(volatile Os_Atomic32 *cell,
+                                         Os_Atomic32 desired,
                                          Os_Atomic32 expected);
 /** Read the calling native actor identity, independent of the automotive clock. */
 Os_HostThreadId Os_HostThreadIdentity(void);

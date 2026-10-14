@@ -1,14 +1,15 @@
 #include <limits.h>
 #include "Os_Arti.h"
-#define PreTaskHook OriginalPreTaskHook
+#define PreTaskHook  OriginalPreTaskHook
 #define PostTaskHook OriginalPostTaskHook
-#define main transition_main
+#define main         transition_main
 #include "task_hooks.c"
 #undef main
 #undef PostTaskHook
 #undef PreTaskHook
 
-static void observed_hook(void) {
+static void observed_hook(void)
+{
     TaskType id = INVALID_TASK;
     Os_ActivationInfo actual;
     check(GetTaskID(&id) == E_OK && id < 3u);
@@ -35,22 +36,26 @@ static void observed_hook(void) {
     }
 #endif
 }
-void PreTaskHook(void) {
+void PreTaskHook(void)
+{
     observed_hook();
     OriginalPreTaskHook();
 }
-void PostTaskHook(void) {
+void PostTaskHook(void)
+{
     observed_hook();
     OriginalPostTaskHook();
 }
 
-static void arti_check(int accepted) {
+static void arti_check(int accepted)
+{
     if (accepted == 0) {
         fprintf(stderr, "ARTI consumer assertion failed after actor shutdown\n");
         ExitProcess(7u);
     }
 }
-void Os_ArtiTestShutdownObserved(void) {
+void Os_ArtiTestShutdownObserved(void)
+{
     char observed[128] = {0};
     size_t used = 0u;
     unsigned pre_start = 0u, pre_return = 0u, post_start = 0u, post_return = 0u;
@@ -141,10 +146,14 @@ void Os_ArtiTestShutdownObserved(void) {
     } else {
         arti_check(pre_start == 0u && post_start == 0u && rejected_getters == 0u);
     }
-    printf("arti scenario=%s transitions=%s hooks=%u rejected_getters=%u dropped=0\n", scenario,
-           observed, pre_start + post_start + 2u, rejected_getters);
+    printf("arti scenario=%s transitions=%s hooks=%u rejected_getters=%u dropped=0\n",
+           scenario,
+           observed,
+           pre_start + post_start + 2u,
+           rejected_getters);
 }
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     if (argc == 2 && strcmp(argv[1], "buffer") == 0) {
         Std_VersionInfoType version = {99u, 99u, 99u, 99u, 99u};
         uint32_t core = 0u, value = 7u;

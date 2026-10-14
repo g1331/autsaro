@@ -46,7 +46,9 @@ CAN_CODE CanMode Can_GetMode(void);
  * @param[in] data Eight-byte frame buffer.
  * @return Host transmission status.
  */
-CAN_CODE EcuStatus Can_TransmitPdu(PduIdType pdu_id, uint32_t id, uint8_t dlc,
+CAN_CODE EcuStatus Can_TransmitPdu(PduIdType pdu_id,
+                                   uint32_t id,
+                                   uint8_t dlc,
                                    const uint8_t data[8]);
 /** @brief Inject one received frame into the host CAN stack.
  * @param[in] id Standard CAN identifier.
