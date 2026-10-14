@@ -38,13 +38,21 @@ typedef struct {
 static HardwareRecord hardware[20];
 static unsigned hardware_count;
 static TickType hardware_previous;
-static void check(bool condition)
+static void check_line(bool condition, unsigned line)
 {
     if (!condition) {
+        char location[8];
+        int i;
+        /* The source line after the marker names an intermittent failure (#162). */
         Os_TargetTrace('!');
+        (void)snprintf(location, sizeof(location), "%u", line);
+        for (i = 0; location[i] != '\0'; ++i) {
+            Os_TargetTrace(location[i]);
+        }
         ShutdownOS(E_OS_STATE);
     }
 }
+#define check(condition) check_line((condition), __LINE__)
 static void native_check(bool condition)
 {
     if (!condition) {
