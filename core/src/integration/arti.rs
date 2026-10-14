@@ -289,7 +289,7 @@ pub(super) fn files(
     let binding = super::outputs::render(
         binding_template,
         "os/src/Os_Arti.c",
-        &[super::outputs::Edit::Every(", Os,", &format!(", {name},"))],
+        &[super::outputs::Edit::Token("Os", name)],
     )?;
     let xml = description(plan, scheduler, alarms, tables, os, name, &binding)
         .map_err(super::ecu::reject)?;
