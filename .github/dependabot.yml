@@ -1,11 +1,16 @@
 version: 2
 # Monthly version updates, one grouped pull request per ecosystem; security updates are separate.
 # A release must be a week old before it is proposed, so a hijacked release has time to be pulled.
+# Every push to an update branch re-runs the full required CI, so Dependabot does not rebase on
+# its own; comment "@dependabot rebase" just before merging.
 updates:
   - package-ecosystem: github-actions
     directories: ["/", "/.github/actions/*"]
     schedule:
       interval: monthly
+      time: "03:00"
+      timezone: Asia/Shanghai
+    rebase-strategy: disabled
     cooldown:
       default-days: 7
     groups:
@@ -15,6 +20,9 @@ updates:
     directory: /
     schedule:
       interval: monthly
+      time: "03:00"
+      timezone: Asia/Shanghai
+    rebase-strategy: disabled
     cooldown:
       default-days: 7
     groups:
@@ -24,6 +32,9 @@ updates:
     directory: /ui
     schedule:
       interval: monthly
+      time: "03:00"
+      timezone: Asia/Shanghai
+    rebase-strategy: disabled
     cooldown:
       default-days: 7
     groups:
@@ -33,6 +44,9 @@ updates:
     directory: /
     schedule:
       interval: monthly
+      time: "03:00"
+      timezone: Asia/Shanghai
+    rebase-strategy: disabled
     cooldown:
       default-days: 7
     groups:
