@@ -15,6 +15,7 @@
 
 mod arti;
 mod artifacts;
+mod c_layout;
 mod can_runtime;
 mod catalog;
 mod com;

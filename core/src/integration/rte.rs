@@ -1,6 +1,7 @@
 //! Actual bounded RTE producers from the immutable component composition contract.
+use super::c_layout;
 use super::composition::{Endpoint, data_symbol};
-use super::{PlanDescription, PlanDiagnostic, ValidatedIntegrationPlan};
+use super::{ContractArgument, PlanDescription, PlanDiagnostic, ValidatedIntegrationPlan};
 use std::collections::BTreeMap;
 
 fn signal(plan: &PlanDescription, path: &str) -> Result<u32, Vec<PlanDiagnostic>> {
@@ -42,10 +43,43 @@ pub(super) fn memory_map(scopes: &[(String, &str)], code_section: Option<&str>) 
             Some(section) if class == "CODE" => section.to_owned(),
             _ => format!(".{section_name}.rte.{scope}.{segment}"),
         };
-        mapping.push_str(&format!("#{} defined(RTE_{scope}_START_SEC_{segment})\n#undef RTE_{scope}_START_SEC_{segment}\n#ifdef RTE_MEMMAP_ACTIVE\n#error \"Nested RTE memory section\"\n#endif\n#define RTE_MEMMAP_ACTIVE\n#define RTE_{scope}_{segment}_ACTIVE\n#define RTE_{scope}_{segment} __attribute__((section(\"{placement}\")))\n#define RTE_{class} RTE_{scope}_{segment}\n#elif defined(RTE_{scope}_STOP_SEC_{segment})\n#undef RTE_{scope}_STOP_SEC_{segment}\n#ifndef RTE_{scope}_{segment}_ACTIVE\n#error \"Unmatched RTE memory section\"\n#endif\n#undef RTE_{scope}_{segment}_ACTIVE\n#undef RTE_MEMMAP_ACTIVE\n#undef RTE_{scope}_{segment}\n#undef RTE_{class}\n", if index == 0 { "if" } else { "elif" }));
+        let macros = c_layout::defines(&[
+            (
+                format!("RTE_{scope}_{segment}"),
+                format!("__attribute__((section(\"{placement}\")))"),
+            ),
+            (format!("RTE_{class}"), format!("RTE_{scope}_{segment}")),
+        ]);
+        mapping.push_str(&format!("#{} defined(RTE_{scope}_START_SEC_{segment})\n#undef RTE_{scope}_START_SEC_{segment}\n#ifdef RTE_MEMMAP_ACTIVE\n#error \"Nested RTE memory section\"\n#endif\n#define RTE_MEMMAP_ACTIVE\n#define RTE_{scope}_{segment}_ACTIVE\n{macros}#elif defined(RTE_{scope}_STOP_SEC_{segment})\n#undef RTE_{scope}_STOP_SEC_{segment}\n#ifndef RTE_{scope}_{segment}_ACTIVE\n#error \"Unmatched RTE memory section\"\n#endif\n#undef RTE_{scope}_{segment}_ACTIVE\n#undef RTE_MEMMAP_ACTIVE\n#undef RTE_{scope}_{segment}\n#undef RTE_{class}\n", if index == 0 { "if" } else { "elif" }));
     }
     mapping.push_str("#else\n#ifndef RTE_MEMMAP_HEADER_CHECK\n#define RTE_MEMMAP_HEADER_CHECK\ntypedef unsigned char Rte_MemMap_HeaderCheck;\n#endif\n#endif\n");
     mapping
+}
+
+/// The head of an RTE function definition in the component's code section.
+fn function(scope: &str, symbol: &str, parameters: &[String]) -> String {
+    c_layout::signature(
+        &format!("RTE_{scope}_CODE Std_ReturnType"),
+        symbol,
+        parameters,
+        "",
+        true,
+    )
+}
+
+/// Operation parameters, or `void` for none.
+fn parameters(arguments: &[ContractArgument]) -> Vec<String> {
+    if arguments.is_empty() {
+        return vec!["void".into()];
+    }
+    arguments
+        .iter()
+        .map(|arg| c_layout::parameter(&arg.native_type, &arg.name))
+        .collect()
+}
+
+fn names(arguments: &[ContractArgument]) -> Vec<String> {
+    arguments.iter().map(|arg| arg.name.clone()).collect()
 }
 
 pub(super) fn files(
@@ -115,9 +149,9 @@ pub(super) fn files(
         }
         section(&mut source, scope, "VAR_CLEARED_UNSPECIFIED", false);
     }
-    source.push_str("#define RTE_Rte_START_SEC_CODE\n#include \"Rte_MemMap.h\"\nRTE_Rte_CODE Std_ReturnType Rte_Start(void) {\n    if (Ecu_TargetCheckLifecycleContext(TRUE) != E_OK) { return RTE_E_LIMIT; }\n    if (rte_allocated == TRUE) { return RTE_E_LIMIT; }\n");
+    source.push_str("#define RTE_Rte_START_SEC_CODE\n#include \"Rte_MemMap.h\"\nRTE_Rte_CODE Std_ReturnType Rte_Start(void)\n{\n    if (Ecu_TargetCheckLifecycleContext(TRUE) != E_OK) {\n        return RTE_E_LIMIT;\n    }\n    if (rte_allocated == TRUE) {\n        return RTE_E_LIMIT;\n    }\n");
     source.push_str(&initialization);
-    source.push_str("    rte_allocated = TRUE;\n    rte_started = TRUE;\n    return E_OK;\n}\nRTE_Rte_CODE Std_ReturnType Rte_Stop(void) {\n    if (Ecu_TargetCheckLifecycleContext(FALSE) != E_OK) { return RTE_E_LIMIT; }\n    rte_started = FALSE;\n    return E_OK;\n}\n");
+    source.push_str("    rte_allocated = TRUE;\n    rte_started = TRUE;\n    return E_OK;\n}\nRTE_Rte_CODE Std_ReturnType Rte_Stop(void)\n{\n    if (Ecu_TargetCheckLifecycleContext(FALSE) != E_OK) {\n        return RTE_E_LIMIT;\n    }\n    rte_started = FALSE;\n    return E_OK;\n}\n");
     section(&mut source, "Rte", "CODE", false);
     for component in &composition.components {
         let scope = super::short_name(&component.component);
@@ -135,15 +169,17 @@ pub(super) fn files(
             let symbol = data_symbol(component, port);
             if port.read {
                 let name = &states[&endpoint];
-                source.push_str(&format!("RTE_{scope}_CODE Std_ReturnType {symbol}(uint32 *data) {{\n    if (data == NULL_PTR) {{ return E_NOT_OK; }}\n    if (rte_started == FALSE) {{ return RTE_E_COM_STOPPED; }}\n    if (Ecu_TargetIsOwner() == 0) {{ return E_NOT_OK; }}\n"));
+                let head = function(scope, &symbol, &["uint32 *data".to_owned()]);
+                source.push_str(&format!("{head}\n{{\n    if (data == NULL_PTR) {{\n        return E_NOT_OK;\n    }}\n    if (rte_started == FALSE) {{\n        return RTE_E_COM_STOPPED;\n    }}\n    if (Ecu_TargetIsOwner() == 0) {{\n        return E_NOT_OK;\n    }}\n"));
                 if let Some(network) = network {
                     let id = signal(description, &network.transport.com_signal)?;
-                    source.push_str(&format!("    {{\n        uint32 value = {name};\n        const uint8 status = Com_ReceiveSignal({id}u, &value);\n        if (status == COM_SERVICE_NOT_AVAILABLE) {{\n            *data = {name};\n            return RTE_E_COM_STOPPED;\n        }}\n        if (status != E_OK) {{ return E_NOT_OK; }}\n        if ({name}_received == FALSE) {{\n            *data = {name};\n            return RTE_E_NEVER_RECEIVED;\n        }}\n        {name} = value;\n        *data = value;\n        return ({name}_expired == TRUE) ? RTE_E_MAX_AGE_EXCEEDED : E_OK;\n    }}\n"));
+                    source.push_str(&format!("    {{\n        uint32 value = {name};\n        const uint8 status = Com_ReceiveSignal({id}u, &value);\n        if (status == COM_SERVICE_NOT_AVAILABLE) {{\n            *data = {name};\n            return RTE_E_COM_STOPPED;\n        }}\n        if (status != E_OK) {{\n            return E_NOT_OK;\n        }}\n        if ({name}_received == FALSE) {{\n            *data = {name};\n            return RTE_E_NEVER_RECEIVED;\n        }}\n        {name} = value;\n        *data = value;\n        return ({name}_expired == TRUE) ? RTE_E_MAX_AGE_EXCEEDED : E_OK;\n    }}\n"));
                 } else {
                     source.push_str(&format!("    *data = {name};\n    return E_OK;\n"));
                 }
             } else {
-                source.push_str(&format!("RTE_{scope}_CODE Std_ReturnType {symbol}(uint32 data) {{\n    if (rte_started == FALSE) {{ return RTE_E_COM_STOPPED; }}\n    if (Ecu_TargetIsOwner() == 0) {{ return E_NOT_OK; }}\n"));
+                let head = function(scope, &symbol, &["uint32 data".to_owned()]);
+                source.push_str(&format!("{head}\n{{\n    if (rte_started == FALSE) {{\n        return RTE_E_COM_STOPPED;\n    }}\n    if (Ecu_TargetIsOwner() == 0) {{\n        return E_NOT_OK;\n    }}\n"));
                 if let Some(network) = network {
                     let id = signal(description, &network.transport.com_signal)?;
                     source.push_str(&format!("    const uint8 status = Com_SendSignal({id}u, &data);\n    return (status == COM_SERVICE_NOT_AVAILABLE) ? RTE_E_COM_STOPPED : status;\n"));
@@ -195,13 +231,12 @@ pub(super) fn files(
                 .iter()
                 .find(|runnable| runnable.path == server.runnable)
                 .ok_or_else(|| PlanDiagnostic::plan_premise(&server.runnable))?;
-            let parameters = operation
-                .arguments
-                .iter()
-                .map(|arg| format!("{} {}", arg.native_type, arg.name))
-                .collect::<Vec<_>>()
-                .join(", ");
-            source.push_str(&format!("RTE_{scope}_CODE Std_ReturnType {}({}) {{\n    if (rte_started == FALSE) {{ return RTE_E_COM_STOPPED; }}\n    if (Ecu_TargetIsOwner() == 0) {{ return E_NOT_OK; }}\n", operation.implementation_symbol, if parameters.is_empty() { "void" } else { &parameters }));
+            let head = function(
+                scope,
+                &operation.implementation_symbol,
+                &parameters(&operation.arguments),
+            );
+            source.push_str(&format!("{head}\n{{\n    if (rte_started == FALSE) {{\n        return RTE_E_COM_STOPPED;\n    }}\n    if (Ecu_TargetIsOwner() == 0) {{\n        return E_NOT_OK;\n    }}\n"));
             for argument in &operation.arguments {
                 if argument.native_type.contains('*')
                     || composition
@@ -210,21 +245,13 @@ pub(super) fn files(
                         .any(|name| name == &argument.native_type)
                 {
                     source.push_str(&format!(
-                        "    if ({} == NULL_PTR) {{ return E_NOT_OK; }}\n",
+                        "    if ({} == NULL_PTR) {{\n        return E_NOT_OK;\n    }}\n",
                         argument.name
                     ));
                 }
             }
-            let names = operation
-                .arguments
-                .iter()
-                .map(|arg| arg.name.as_str())
-                .collect::<Vec<_>>()
-                .join(", ");
-            source.push_str(&format!(
-                "    {}({names});\n    return E_OK;\n}}\n",
-                runnable.symbol
-            ));
+            let call = c_layout::call("    ", &runnable.symbol, &names(&operation.arguments), ";");
+            source.push_str(&format!("{call}\n    return E_OK;\n}}\n"));
         }
         for runnable in component
             .runnables
@@ -236,28 +263,14 @@ pub(super) fn files(
                 .iter()
                 .find(|operation| operation.runnable == runnable.path)
                 .ok_or_else(|| PlanDiagnostic::plan_premise(&runnable.path))?;
-            let parameters = operation
-                .arguments
-                .iter()
-                .map(|arg| format!("{} {}", arg.native_type, arg.name))
-                .collect::<Vec<_>>()
-                .join(", ");
-            let names = operation
-                .arguments
-                .iter()
-                .map(|arg| arg.name.as_str())
-                .collect::<Vec<_>>()
-                .join(", ");
-            source.push_str(&format!(
-                "RTE_{scope}_CODE Std_ReturnType {}({}) {{\n    return {}({names});\n}}\n",
-                runnable.symbol,
-                if parameters.is_empty() {
-                    "void"
-                } else {
-                    &parameters
-                },
-                operation.implementation_symbol
-            ));
+            let head = function(scope, &runnable.symbol, &parameters(&operation.arguments));
+            let call = c_layout::call(
+                "    ",
+                &format!("return {}", operation.implementation_symbol),
+                &names(&operation.arguments),
+                ";",
+            );
+            source.push_str(&format!("{head}\n{{\n{call}\n}}\n"));
         }
         section(&mut source, scope, "CODE", false);
     }
@@ -266,7 +279,7 @@ pub(super) fn files(
     section(&mut source, partition, "CALLOUT_CODE", true);
     let com = description.ecu_com()?;
     for (callback, timeout) in [("Rte_COMCbk", false), ("Rte_COMCbkRxTOut", true)] {
-        source.push_str(&format!("RTE_{partition}_CALLOUT_CODE void {callback}(CbkHandleIdType handle) {{\n    if (rte_started == FALSE) {{ return; }}\n    if (Ecu_TargetIsOwner() == 0) {{ return; }}\n"));
+        source.push_str(&format!("RTE_{partition}_CALLOUT_CODE void {callback}(CbkHandleIdType handle)\n{{\n    if (rte_started == FALSE) {{\n        return;\n    }}\n    if (Ecu_TargetIsOwner() == 0) {{\n        return;\n    }}\n"));
         for reception in &com.receptions {
             for network in composition.network_endpoints.iter().filter(|network| {
                 network.transport.receive && network.transport.com_signal == reception.signal
@@ -278,7 +291,7 @@ pub(super) fn files(
                 ));
                 if timeout {
                     source.push_str(&format!(
-                        "        if ({name}_received == TRUE) {{ {name}_expired = TRUE; }}\n"
+                        "        if ({name}_received == TRUE) {{\n            {name}_expired = TRUE;\n        }}\n"
                     ));
                 } else {
                     let id = signal(description, &reception.signal)?;
@@ -294,7 +307,7 @@ pub(super) fn files(
         // The delivered targets place all RTE code in their executable RTE section.
         ("include/Rte_MemMap.h".into(), memory_map(&scopes, Some(".rte_code")).into_bytes()),
         ("src/Rte.c".into(), source.into_bytes()),
-        ("include/Rte_Main.h".into(), b"/** @file RTE trusted-context lifecycle; Start follows BSW/SchM Init. */\n#ifndef RTE_MAIN_H\n#define RTE_MAIN_H\n#include \"Std_Types.h\"\nStd_ReturnType Rte_Start(void);\nStd_ReturnType Rte_Stop(void);\ntypedef struct { uint16 partition; } SchM_ConfigType;\nvoid SchM_Init(const SchM_ConfigType *config);\nvoid SchM_Start(void);\nvoid SchM_StartTiming(void);\nvoid SchM_Deinit(void);\nextern const SchM_ConfigType Ecu_SchMConfig;\nboolean Ecu_SchMReady(void);\nboolean Ecu_SchMTimingActive(void);\n#endif\n".to_vec()),
+        ("include/Rte_Main.h".into(), b"/** @file RTE trusted-context lifecycle; Start follows BSW/SchM Init. */\n#ifndef RTE_MAIN_H\n#define RTE_MAIN_H\n#include \"Std_Types.h\"\nStd_ReturnType Rte_Start(void);\nStd_ReturnType Rte_Stop(void);\ntypedef struct {\n    uint16 partition;\n} SchM_ConfigType;\nvoid SchM_Init(const SchM_ConfigType *config);\nvoid SchM_Start(void);\nvoid SchM_StartTiming(void);\nvoid SchM_Deinit(void);\nextern const SchM_ConfigType Ecu_SchMConfig;\nboolean Ecu_SchMReady(void);\nboolean Ecu_SchMTimingActive(void);\n#endif\n".to_vec()),
         ("include/Rte_Com.h".into(), b"/** @file Handle-bearing COM reception and timeout notifications. */\n#ifndef RTE_COM_H\n#define RTE_COM_H\n#include \"ComStack_Types.h\"\nvoid Rte_COMCbk(CbkHandleIdType handle);\nvoid Rte_COMCbkRxTOut(CbkHandleIdType handle);\n#endif\n".to_vec()),
     ]))
 }

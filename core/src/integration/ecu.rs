@@ -1,3 +1,4 @@
+use super::c_layout::{self, Item};
 use super::component::c_name;
 use super::{DiagnosticCategory, PlanDiagnostic, ValidatedIntegrationPlan};
 use crate::resources::AssetInventory;
@@ -95,22 +96,30 @@ impl ValidatedIntegrationPlan {
                 .iter()
                 .filter(|symbol| symbol.definition_owner == *source_path)
             {
-                let parameters = symbol
+                let mut parameters: Vec<String> = symbol
                     .arguments
                     .iter()
-                    .map(|argument| format!("{} {}", argument.native_type, argument.name))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                source.push_str(&format!(
-                    "RTE_{scope}_CODE {} {}({}) {{\n",
-                    symbol.return_type,
-                    symbol.symbol,
-                    if parameters.is_empty() {
-                        "void"
-                    } else {
-                        &parameters
-                    }
-                ));
+                    .map(|argument| c_layout::parameter(&argument.native_type, &argument.name))
+                    .collect();
+                if parameters.is_empty() {
+                    parameters.push("void".into());
+                }
+                let head = c_layout::signature(
+                    &format!("RTE_{scope}_CODE {}", symbol.return_type),
+                    &symbol.symbol,
+                    &parameters,
+                    "",
+                    true,
+                );
+                if symbol.arguments.is_empty()
+                    && reference
+                        .as_ref()
+                        .is_none_or(|shape| shape.periodic_symbol != symbol.symbol)
+                {
+                    source.push_str(&format!("{}\n", c_layout::short_function(&head, "")));
+                    continue;
+                }
+                source.push_str(&format!("{head}\n{{\n"));
                 if let Some(shape) = reference
                     .as_ref()
                     .filter(|shape| shape.periodic_symbol == symbol.symbol)
@@ -309,17 +318,78 @@ pub(super) fn configure_os(
     let counter_name = c_name(super::short_name(&plan.schedule.counter));
     let tick_ms = u64::from(plan.schedule.counter_tick_ms);
     let counter_symbol = format!("OS_COUNTER_ID_{counter_name}");
-    let legacy_constants = format!(
-        "#define {counter_symbol} 0u\n#define OSMAXALLOWEDVALUE_{counter_name} UINT64_C({maximum})\n#define OSTICKSPERBASE_{counter_name} UINT64_C({base})\n#define OSMINCYCLE_{counter_name} UINT64_C({minimum})\n#define OSMAXALLOWEDVALUE_{counter_symbol} OSMAXALLOWEDVALUE_{counter_name}\n#define OSTICKSPERBASE_{counter_symbol} OSTICKSPERBASE_{counter_name}\n#define OSMINCYCLE_{counter_symbol} OSMINCYCLE_{counter_name}\n#define OSMAXALLOWEDVALUE OSMAXALLOWEDVALUE_{counter_name}\n#define OSTICKSPERBASE OSTICKSPERBASE_{counter_name}\n#define OSMINCYCLE OSMINCYCLE_{counter_name}\n#define OSTICKDURATION UINT64_C({nanoseconds})\n",
-        maximum = plan.schedule.counter_maximum,
-        base = plan.schedule.counter_ticks_per_base,
-        minimum = plan.schedule.counter_minimum_cycle,
-        nanoseconds = tick_ms * 1_000_000,
-    );
+    let mut conversions = String::new();
+    let mut macros = Vec::new();
+    for (unit, function, result) in [
+        (
+            "NS",
+            "Ns",
+            format!(
+                "(PhysicalTimeType)ticks * UINT64_C({})",
+                tick_ms * 1_000_000
+            ),
+        ),
+        (
+            "US",
+            "Us",
+            format!("(PhysicalTimeType)ticks * UINT64_C({})", tick_ms * 1_000),
+        ),
+        (
+            "MS",
+            "Ms",
+            format!("(PhysicalTimeType)ticks * UINT64_C({tick_ms})"),
+        ),
+        (
+            "SEC",
+            "Sec",
+            format!("((PhysicalTimeType)ticks * UINT64_C({tick_ms})) / UINT64_C(1000)"),
+        ),
+    ] {
+        let function = format!("Os_TicksTo{function}_{counter_name}");
+        let head = c_layout::signature(
+            "static inline PhysicalTimeType",
+            &function,
+            &["TickType ticks".to_owned()],
+            "",
+            false,
+        );
+        conversions.push_str(&format!("{head}\n{{\n    return {result};\n}}\n"));
+        macros.push((
+            format!("OS_TICKS2{unit}_{counter_name}(ticks)"),
+            format!("({function}((ticks)))"),
+        ));
+    }
+    macros.extend([
+        (counter_symbol.clone(), "0u".to_owned()),
+        (
+            format!("OSMAXALLOWEDVALUE_{counter_name}"),
+            format!("UINT64_C({})", plan.schedule.counter_maximum),
+        ),
+        (
+            format!("OSTICKSPERBASE_{counter_name}"),
+            format!("UINT64_C({})", plan.schedule.counter_ticks_per_base),
+        ),
+        (
+            format!("OSMINCYCLE_{counter_name}"),
+            format!("UINT64_C({})", plan.schedule.counter_minimum_cycle),
+        ),
+    ]);
+    for constant in ["OSMAXALLOWEDVALUE", "OSTICKSPERBASE", "OSMINCYCLE"] {
+        macros.push((
+            format!("{constant}_{counter_symbol}"),
+            format!("{constant}_{counter_name}"),
+        ));
+    }
+    for constant in ["OSMAXALLOWEDVALUE", "OSTICKSPERBASE", "OSMINCYCLE"] {
+        macros.push((constant.to_owned(), format!("{constant}_{counter_name}")));
+    }
+    macros.push((
+        "OSTICKDURATION".to_owned(),
+        format!("UINT64_C({})", tick_ms * 1_000_000),
+    ));
+    let macros = c_layout::defines(&macros);
     let counter_header = format!(
-        "/** @file Generated Counter time conversions (SWS_Os_00393).\n * Argument: a TickType value in0..UINT32_MAX; evaluated once.\n * Result: PhysicalTimeType. Integer seconds truncate toward zero.\n * The validated Counter resolution is {tick_ms} logical millisecond(s).\n * The largest nanosecond result fits uint64_t without overflow.\n */\n#ifndef AUTOSAR_GENERATED_OS_COUNTER_H\n#define AUTOSAR_GENERATED_OS_COUNTER_H\n#include \"Os_Types.h\"\nstatic inline PhysicalTimeType Os_TicksToNs_{counter_name}(TickType ticks) {{\n    return (PhysicalTimeType)ticks * UINT64_C({ns});\n}}\nstatic inline PhysicalTimeType Os_TicksToUs_{counter_name}(TickType ticks) {{\n    return (PhysicalTimeType)ticks * UINT64_C({us});\n}}\nstatic inline PhysicalTimeType Os_TicksToMs_{counter_name}(TickType ticks) {{\n    return (PhysicalTimeType)ticks * UINT64_C({tick_ms});\n}}\nstatic inline PhysicalTimeType Os_TicksToSec_{counter_name}(TickType ticks) {{\n    return ((PhysicalTimeType)ticks * UINT64_C({tick_ms})) / UINT64_C(1000);\n}}\n#define OS_TICKS2NS_{counter_name}(ticks) (Os_TicksToNs_{counter_name}((ticks)))\n#define OS_TICKS2US_{counter_name}(ticks) (Os_TicksToUs_{counter_name}((ticks)))\n#define OS_TICKS2MS_{counter_name}(ticks) (Os_TicksToMs_{counter_name}((ticks)))\n#define OS_TICKS2SEC_{counter_name}(ticks) (Os_TicksToSec_{counter_name}((ticks)))\n{legacy_constants}#endif\n",
-        ns = tick_ms * 1_000_000,
-        us = tick_ms * 1_000,
+        "/** @file Generated Counter time conversions (SWS_Os_00393).\n * Argument: a TickType value in0..UINT32_MAX; evaluated once.\n * Result: PhysicalTimeType. Integer seconds truncate toward zero.\n * The validated Counter resolution is {tick_ms} logical millisecond(s).\n * The largest nanosecond result fits uint64_t without overflow.\n */\n#ifndef AUTOSAR_GENERATED_OS_COUNTER_H\n#define AUTOSAR_GENERATED_OS_COUNTER_H\n#include \"Os_Types.h\"\n{conversions}{macros}#endif\n",
     );
     outputs.emit_all(
         "os-service",
@@ -441,7 +511,7 @@ pub(super) fn os_configuration(
             );
         }
     }
-    let mut alarms = String::new();
+    let mut alarms = Vec::new();
     let binding = "src/Os_Arti.c";
     let (description, binding_text) = super::arti::files(
         plan,
@@ -456,44 +526,66 @@ pub(super) fn os_configuration(
         description,
     )?;
     outputs.emit_rendered(super::outputs::ARTI, binding, binding_text)?;
+    let row = |fields: String| Item::Row(fields.split(", ").map(str::to_owned).collect());
     for (id, (_, (period, event))) in groups.iter().enumerate() {
-        alarms.push_str(&format!("    {{{id}u, 0u, OS_ALARM_EVENT, 0u, {event}u, NULL, 1u, 0u, {period}u, {period}u, 0u}},\n"));
+        alarms.push(row(format!(
+            "{id}u, 0u, OS_ALARM_EVENT, 0u, {event}u, NULL, 1u, 0u, {period}u, {period}u, 0u"
+        )));
     }
-    let mut tables = String::new();
-    let mut table_entries = String::new();
-    for (id, (_, (period, event, offset, start))) in table_groups.iter().enumerate() {
-        tables.push_str(&format!("static const Os_ExpiryAction table_actions_{id}[] = {{{{OS_ALARM_EVENT, 0u, {event}u}}}};\nstatic const Os_ExpiryPoint table_points_{id}[] = {{{{{offset}u, table_actions_{id}, 1u}}}};\n"));
-        table_entries.push_str(&format!("    {{{id}u, 0u, {period}u, table_points_{id}, 1u, 1u, OS_SCHEDULE_SYNC_NONE, 1u, 0u, {start}u}},\n"));
-    }
-    if !table_groups.is_empty() {
-        tables.push_str(&format!(
-            "static const Os_ScheduleTableConfig schedule_tables[] = {{\n{table_entries}}};\n"
+    // Alarms, schedule tables and RES_SCHEDULER share one template line.
+    let mut objects = Vec::new();
+    if !groups.is_empty() {
+        objects.push(c_layout::initializer(
+            "static const Os_AlarmConfig alarms[]",
+            "",
+            &alarms,
         ));
     }
-    let alarm_declaration = if groups.is_empty() {
-        String::new()
-    } else {
-        format!("static const Os_AlarmConfig alarms[] = {{\n{alarms}}};")
-    };
+    let mut table_entries = Vec::new();
+    for (id, (_, (period, event, offset, start))) in table_groups.iter().enumerate() {
+        objects.push(c_layout::initializer(
+            &format!("static const Os_ExpiryAction table_actions_{id}[]"),
+            "",
+            &[row(format!("OS_ALARM_EVENT, 0u, {event}u"))],
+        ));
+        objects.push(c_layout::initializer(
+            &format!("static const Os_ExpiryPoint table_points_{id}[]"),
+            "",
+            &[row(format!("{offset}u, table_actions_{id}, 1u"))],
+        ));
+        table_entries.push(row(format!("{id}u, 0u, {period}u, table_points_{id}, 1u, 1u, OS_SCHEDULE_SYNC_NONE, 1u, 0u, {start}u")));
+    }
+    if !table_groups.is_empty() {
+        objects.push(c_layout::initializer(
+            "static const Os_ScheduleTableConfig schedule_tables[]",
+            "",
+            &table_entries,
+        ));
+    }
+    if use_res_scheduler {
+        objects.push(c_layout::initializer(
+            "static const Os_ResourceConfig scheduler_resource",
+            "",
+            &[
+                Item::Value("RES_SCHEDULER".into()),
+                Item::Value(format!("{}u", plan.schedule.task_priority)),
+                Item::Value("UINT16_C(1)".into()),
+                Item::Value("UINT32_C(0)".into()),
+            ],
+        ));
+    }
     let template = outputs.template(super::outputs::OS, ECU_CONFIG)?;
     let values = [
         ("TASK_SYMBOL", task_symbol.to_owned()),
+        (
+            "TASK",
+            c_layout::short_function(&format!("TASK({task_symbol})"), "Ecu_TargetTask();"),
+        ),
         (
             "TASK_NAME",
             serde_json::Value::from(super::short_name(&plan.schedule.task)).to_string(),
         ),
         ("TASK_PRIORITY", plan.schedule.task_priority.to_string()),
-        (
-            "SCHEDULER_RESOURCE",
-            if use_res_scheduler {
-                format!(
-                    "static const Os_ResourceConfig scheduler_resource = {{RES_SCHEDULER, {}u, UINT16_C(1), UINT32_C(0)}};",
-                    plan.schedule.task_priority
-                )
-            } else {
-                String::new()
-            },
-        ),
         (
             "RESOURCE_PTR",
             if use_res_scheduler {
@@ -514,13 +606,12 @@ pub(super) fn os_configuration(
             "COUNTER_MIN_CYCLE",
             plan.schedule.counter_minimum_cycle.to_string(),
         ),
-        ("ALARMS", alarm_declaration),
+        ("OS_OBJECTS", objects.join("\n")),
         (
             "ALARM_PTR",
             if groups.is_empty() { "NULL" } else { "alarms" }.to_owned(),
         ),
         ("ALARM_COUNT", groups.len().to_string()),
-        ("SCHEDULE_TABLES", tables),
         (
             "SCHEDULE_PTR",
             if table_groups.is_empty() {

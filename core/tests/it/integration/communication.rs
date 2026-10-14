@@ -445,8 +445,13 @@ fn communication_types_and_polling_periods_are_source_derived() {
         )
         .unwrap()
     };
-    assert!(text("generated/include/Ecu_ProfileConfig.h").contains("#define CAN_RX_HOH 1u"));
-    assert!(text("generated/include/Ecu_ProfileConfig.h").contains("#define CAN_TX_HOH 0u"));
+    let defines = |name: &str, value: &str| {
+        text("generated/include/Ecu_ProfileConfig.h")
+            .lines()
+            .any(|line| line.split_whitespace().eq(["#define", name, value]))
+    };
+    assert!(defines("CAN_RX_HOH", "1u"));
+    assert!(defines("CAN_TX_HOH", "0u"));
     let description = text("generated/descriptions/Host_Implementation.arxml");
     assert!(description.contains("Can_VAR_CLEARED_UNSPECIFIED"));
     assert!(description.contains(

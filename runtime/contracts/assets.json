@@ -147,7 +147,7 @@
     },
     {
       "path": "runtime/ecu/templates/Ecu_Config.c.in",
-      "sha256": "d46e77bcc5fbabfe5a01ebfdd8ceb52ca856a6ca39cf395cef7f6fde74c49c9e",
+      "sha256": "56367635d91f235970a1f6ae108f2b502ee4fe75865bab611ba097bea55e97ec",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

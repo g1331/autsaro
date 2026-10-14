@@ -1,3 +1,4 @@
+use super::c_layout;
 use std::collections::BTreeMap;
 
 pub(super) const HEADER: &str = "Rte_Os.h";
@@ -59,9 +60,27 @@ pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec
         } else {
             ""
         };
-        header.push_str(&format!("/** @brief Synchronous {operation}; preserves native errors and output semantics.\n * @param CounterID Port-defined Counter handle for the server.\n * @param Value Counter ticks; OUT for GetCounterValue, INOUT for GetElapsedValue.\n{elapsed_doc} * @return Native OS service result.\n */\nStatusType {symbol}(CounterType CounterID, {parameters});\n"));
-        header.push_str(&format!("/** @brief Call the selected OsService port; values are ticks.\n * @param Value Caller-owned tick value; not retained.\n{elapsed_doc} * @return Native OS service result.\n */\nStatusType Rte_Call_OsService_{operation}({parameters});\n"));
-        source.push_str(&format!("RTE_CODE StatusType {symbol}(CounterType CounterID, {parameters}) {{\n    return {operation}(CounterID, {forwarded});\n}}\nRTE_CODE StatusType Rte_Call_OsService_{operation}({parameters}) {{\n    return {symbol}({counter_symbol}, {forwarded});\n}}\n"));
+        let port = format!("Rte_Call_OsService_{operation}");
+        let parameters: Vec<String> = parameters.split(", ").map(str::to_owned).collect();
+        let served: Vec<String> = std::iter::once("CounterType CounterID".to_owned())
+            .chain(parameters.iter().cloned())
+            .collect();
+        let forwarded: Vec<String> = forwarded.split(", ").map(str::to_owned).collect();
+        let declaration = c_layout::signature("StatusType", &symbol, &served, ";", false);
+        header.push_str(&format!("/** @brief Synchronous {operation}; preserves native errors and output semantics.\n * @param CounterID Port-defined Counter handle for the server.\n * @param Value Counter ticks; OUT for GetCounterValue, INOUT for GetElapsedValue.\n{elapsed_doc} * @return Native OS service result.\n */\n{declaration}\n"));
+        let declaration = c_layout::signature("StatusType", &port, &parameters, ";", false);
+        header.push_str(&format!("/** @brief Call the selected OsService port; values are ticks.\n * @param Value Caller-owned tick value; not retained.\n{elapsed_doc} * @return Native OS service result.\n */\n{declaration}\n"));
+        for (name, parameters, callee, first) in [
+            (&symbol, &served, operation, "CounterID"),
+            (&port, &parameters, symbol.as_str(), counter_symbol),
+        ] {
+            let head = c_layout::signature("RTE_CODE StatusType", name, parameters, "", true);
+            let arguments: Vec<String> = std::iter::once(first.to_owned())
+                .chain(forwarded.iter().cloned())
+                .collect();
+            let call = c_layout::call("    ", &format!("return {callee}"), &arguments, ";");
+            source.push_str(&format!("{head}\n{{\n{call}\n}}\n"));
+        }
     }
     source.push_str("#define RTE_Rte_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n");
     let mut errors = String::new();

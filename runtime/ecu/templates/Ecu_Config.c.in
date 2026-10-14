@@ -5,9 +5,7 @@
 
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-TASK(@TASK_SYMBOL@) {
-    Ecu_TargetTask();
-}
+@TASK@
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
 static const Os_TaskConfig tasks[] = {
@@ -32,9 +30,7 @@ static const Os_CounterConfig counters[] = {
         .software = 1u,
     },
 };
-@ALARMS@
-@SCHEDULE_TABLES@
-@SCHEDULER_RESOURCE@
+@OS_OBJECTS@
 static const Os_HookConfig hooks = {
     .error = &ErrorHook,
     .pre_task = &PreTaskHook,
