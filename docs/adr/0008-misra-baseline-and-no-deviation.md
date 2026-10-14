@@ -11,7 +11,7 @@
 3. 诊断逐项分为真实违反、误报、不适用与未核查；工具限制只是核查线索，不授权 suppression 或批量判误报。
 4. **当前没有任何已批准的偏离。** Mandatory 规则不允许偏离；无法消除的真实违反保持阻塞，并提交具体替代或改造方案。不做规则降级、批量 suppression 或缩小既有支持范围。
 5. 申请偏离前须核对适用的 amendment／TC 与实际调用路径，不能把旧 checker 的规则编号直接当作当前规范依据；偏离只能由维护者批准，代理或工具不能批准。
-6. 修改 C、头文件或生成 C 的模板时，对实际生成的受影响 profile 运行 `c-check`（命令见 `docs/development/testing.md`）。
+6. 修改 C、头文件或生成 C 的模板时，对实际生成的受影响 profile 运行 `c-check`（命令见 `docs/development/testing/generated-c.md`）。
 
 ## 后果
 

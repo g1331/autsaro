@@ -35,7 +35,7 @@
 ## 共同入口
 
 - [开发环境](../development/environment.md)：依赖、版本、本地配置及资源路径。
-- [测试指南](../development/testing.md)：基础、官方对照、进程、原生桌面及发行检查。
+- [测试指南](../development/testing/README.md)：基础、官方对照、进程、原生桌面及发行检查。
 - [资产维护](../maintainers/assets.md)：显式清单更新与行尾规则。
 - [Agent 规则](../../AGENTS.md)：后台验收和 C 编码技能等额外约束。
 
