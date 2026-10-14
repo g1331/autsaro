@@ -1,0 +1,51 @@
+version: 2
+# Monthly version updates, one grouped pull request per ecosystem; security updates are separate.
+# A release must be a week old before it is proposed, so a hijacked release has time to be pulled.
+updates:
+  - package-ecosystem: github-actions
+    directories: ["/", "/.github/actions/*"]
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      cargo:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /ui
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      npm:
+        patterns: ["*"]
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      # Both come from the same LLVM release; review them together, since PyPI can publish
+      # one before the other.
+      clang-tools:
+        patterns: ["clang-format", "clang-tidy"]
+      uv:
+        patterns: ["*"]
+    # A new LLVM major can change the layout the emitter reproduces (ADR 0014) and needs both
+    # tools released; it is upgraded by hand.
+    ignore:
+      - dependency-name: clang-format
+        update-types: ["version-update:semver-major"]
+      - dependency-name: clang-tidy
+        update-types: ["version-update:semver-major"]

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- 第三方 GitHub Actions 按提交 SHA 引用，Dependabot 每月为 Actions、Cargo、npm、uv 提分组更新 PR。必需的 `quality` 任务另外运行 actionlint、zizmor、`cargo-deny`（`deny.toml`：RustSec 公告、许可证白名单、来源及重复版本报告）以及对 npm 与 uv 锁文件的 osv-scanner；`verify --scope all` 运行同样的检查，需要本机安装 `cargo-deny` 0.20.2 与 osv-scanner 2.7.0。
 - 必需的 PR 检查中，Python 只在 Linux 3.12／3.14 与 Windows 3.14 运行，UI 只在 Linux 与 Windows 运行。新的 `Extended checks` 工作流按改动路径运行其余 Python 与 UI 组合（含 macOS）、Desktop acceptance 和官方档案对照：master 每次推送后运行，PR 改动桌面或官方对照相关路径、或加 `full-ci` 标签时运行；它不是必需检查，官方对照的每日定时运行已删除。手动运行 `Desktop acceptance` 可用 `scenarios` 输入只运行指定的场景文件。
 - 新增 C 编码规范（`docs/development/c-coding-standard.md`）：引用 MISRA、SWS BSWGeneral 命名与文件规则及 ADR 0018，写明命名、文件头、公开 API 契约注释、魔数、函数长度、错误处理和 MISRA 偏离注释（`/* MR12 RULE XX VIOLATION: <理由> */`）的约定。`quality --c-samples <样本目录>` 用 uv 固定的 clang-tidy 22.1.8 分析生成样本（clang-format 同时由 23.1.1 改为 22.1.8，两者版本一致；运行时源码与生成样本的排版不变），按“检查＋文件＋源码行”与提交的基线比较；`quality` 还要求运行时 C 文件以 `/** @file` 开头，并单独编译全部公开头以检查自包含。交付的运行时源码补齐了文件说明注释，代码不变。
 - **契约变化：**`Can_Write` 只在发送槽确实被占用时返回 `CAN_BUSY`（SWS_Can_00213／00214）。此前它以 try-lock 进入驱动区，任何其他上下文短暂持有该区都会让它返回 `CAN_BUSY`；CanIf 不再串行化并发发送后（ADR 0018），不同 L-PDU 的并发发送可能全部因此被拒。驱动区按 ADR 0018 只保护数据，进入是有界的，`Can_Write` 仍为非阻塞（SWS_Can_00275）。主机锁接口删除不再使用的 `Can_TryLock`。ABI 审阅结论：标准 API 签名不变，组件契约头与第三方身份不变，应用无需重新编译。

@@ -1,4 +1,4 @@
-"""Check source hygiene, changed-line formatting, C headers and clang-tidy, plan numbers, and document sizes."""
+"""Check source hygiene, changed-line formatting, C headers and clang-tidy, plan numbers, document sizes and paired tool versions."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -37,6 +38,8 @@ DOCUMENT_SIZE_EXEMPT = (
     "CHANGELOG.md", "CHANGELOG.zh-CN.md", "AGENTS.md", "docs/adr/", "docs/project/archive/",
     "third_party/", ".agents/skills/impeccable/",
 )
+# One LLVM release provides both; PyPI publishes them as separate projects, sometimes days apart.
+PAIRED_TOOLS = ("clang-format", "clang-tidy")
 
 
 def _capture(
@@ -157,6 +160,15 @@ def document_size_errors(paths: list[Path] | None = None) -> list[str]:
                 "split it into a same-name directory with a README.md index"
             )
     return errors
+
+
+def paired_tool_errors(lock: Path | None = None) -> list[str]:
+    packages = tomllib.loads((lock or ROOT / "uv.lock").read_text(encoding="utf-8"))["package"]
+    versions = {package["name"]: package["version"] for package in packages if package["name"] in PAIRED_TOOLS}
+    if len(versions) == len(PAIRED_TOOLS) and len(set(versions.values())) == 1:
+        return []
+    found = ", ".join(f"{name} {versions.get(name, 'missing')}" for name in PAIRED_TOOLS)
+    return [f"uv.lock: {found}; upgrade clang-format and clang-tidy together to the same LLVM release"]
 
 
 def renamed_sources(base: str) -> dict[Path, Path]:
@@ -531,8 +543,10 @@ def check(
     errors.extend(numbers)
     oversized = document_size_errors()
     errors.extend(oversized)
+    paired = paired_tool_errors()
+    errors.extend(paired)
     print(
-        f"Quality scope={scope} baseline={base}; formatted files checked={checked}; C syntax={'checked' if changed_c or scope == 'runtime' or all_format else 'not requested'}; clang-tidy={f'{len(tidy)} new or fixed' if c_samples is not None else 'not requested'}; plan numbers={len(numbers)}; oversized documents={len(oversized)}"
+        f"Quality scope={scope} baseline={base}; formatted files checked={checked}; C syntax={'checked' if changed_c or scope == 'runtime' or all_format else 'not requested'}; clang-tidy={f'{len(tidy)} new or fixed' if c_samples is not None else 'not requested'}; plan numbers={len(numbers)}; oversized documents={len(oversized)}; paired tool versions={'mismatched' if paired else 'equal'}"
     )
     return errors
 

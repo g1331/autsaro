@@ -1,0 +1,44 @@
+# cargo-deny: RustSec advisories, the license allow list, duplicate crates and sources.
+# Run with `cargo deny --locked check`; see docs/development/testing/README.md.
+
+[advisories]
+# Vulnerabilities and yanked crates fail everywhere. Unmaintained notices fail only for direct
+# dependencies: the transitive ones arrive through Tauri's GTK 3 and URL pattern stacks and
+# have no maintained release to move to.
+unmaintained = "workspace"
+yanked = "deny"
+ignore = []
+
+[licenses]
+# Permissive licenses and file-level MPL-2.0 can ship with this Apache-2.0 project. A crate
+# offering several licenses passes through any allowed one; GPL/LGPL alone is rejected.
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-3-Clause",
+    "CC0-1.0",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+confidence-threshold = 0.9
+
+[licenses.private]
+ignore = false
+
+[bans]
+# Duplicates come from Tauri's and the Windows crates' own version spread; report them, but
+# they cannot be removed from this workspace.
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

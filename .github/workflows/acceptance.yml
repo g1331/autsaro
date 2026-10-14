@@ -21,10 +21,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - run: uv sync --locked
-      - uses: actions/cache/restore@v6.1.0
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: archives
         with:
           path: docs/official/**/*.zip
@@ -37,7 +39,7 @@ jobs:
             echo "::error title=Official archives unavailable::Download, certificate or SHA-256 verification failed; the official tests did not run."
             exit 1
           }
-      - uses: actions/cache/save@v6.1.0
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         if: steps.archives.outputs.cache-hit != 'true'
         with:
           path: docs/official/**/*.zip

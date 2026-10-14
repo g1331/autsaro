@@ -61,8 +61,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-node@v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
           cache: npm
@@ -91,10 +93,11 @@ jobs:
     env:
       UV_PYTHON: ${{ matrix.python }}
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           python-version: ${{ matrix.python }}
           enable-cache: true
@@ -102,7 +105,7 @@ jobs:
       - run: uv run --locked ruff check tools tests/python scripts
       - run: uv run --locked python -B -m unittest discover -s tests/python
       - run: uv build --out-dir build/python
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: python-${{ matrix.os }}-${{ matrix.python }}
@@ -114,7 +117,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/core-build-dependencies
       - run: cargo test --locked -p autosar-config-core
       # Lint every feature, including the native and official test binaries that only manual
@@ -130,8 +135,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-node@v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
           cache: npm
@@ -155,8 +162,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - run: uv sync --locked
       - run: uv run --locked python -B -m unittest discover -s tests/python/process
   native:
@@ -178,8 +187,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - run: uv sync --locked
       - uses: ./.github/actions/core-build-dependencies
       - uses: ./.github/actions/native-analysis-compiler
@@ -189,7 +200,7 @@ jobs:
           import os
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
               output.write('CACHE_IMAGE=' + os.environ['ImageOS'] + '-' + os.environ['ImageVersion'] + '\n')
-      - uses: actions/cache@v6.1.0
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
@@ -239,8 +250,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - run: uv sync --locked
       - uses: ./.github/actions/native-analysis-compiler
       - name: Native OS conformance suites
@@ -248,7 +261,7 @@ jobs:
           AUTOSAR_OS_OUTPUT_DIRECTORY: ${{ runner.temp }}/os-suites
           AUTOSAR_OS_SHARD: ${{ matrix.shard }}
         run: uv run --locked python -B -m unittest discover -v -s tests/python/native -p test_os_suites.py
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
           name: os-suites-${{ matrix.os }}-${{ strategy.job-index }}
@@ -274,8 +287,10 @@ jobs:
       # The OS host owns its alternate signal stack and switches stacks with ucontext.
       ASAN_OPTIONS: use_sigaltstack=0:detect_stack_use_after_return=0
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - run: uv sync --locked
       - uses: ./.github/actions/core-build-dependencies
       - uses: ./.github/actions/native-analysis-compiler
@@ -285,7 +300,7 @@ jobs:
           import os
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
               output.write('CACHE_IMAGE=' + os.environ['ImageOS'] + '-' + os.environ['ImageVersion'] + '\n')
-      - uses: actions/cache@v6.1.0
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
@@ -319,7 +334,7 @@ jobs:
         env:
           AUTOSAR_OS_OUTPUT_DIRECTORY: ${{ runner.temp }}/os-suites
         run: setarch x86_64 -R uv run --locked python -B -m unittest discover -v -s tests/python/native -p test_os_suites.py
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
           name: os-suites-sanitizer-${{ strategy.job-index }}
@@ -330,11 +345,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v10.2.0
-      - uses: actions/setup-node@v7.0.0
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
       - run: uv sync --locked
@@ -352,10 +368,24 @@ jobs:
               subprocess.run(['git', 'rev-parse', '--verify', base + '^{commit}'], check=True)
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
               output.write('CHECK_BASE=' + base + '\n')
-      - run: uv run --locked python -m autosar_tooling quality --scope all --base "${{ env.CHECK_BASE }}"
+      - run: uv run --locked python -m autosar_tooling quality --scope all --base "$CHECK_BASE"
       # Accounts each committed catalog in core/resources/requirements (ADR 0017) without the archive.
       - name: Requirement dispositions
         run: uv run --locked python -m autosar_tooling requirements
+      - name: Workflow syntax (actionlint)
+        run: uv run --locked --group workflows actionlint
+      - name: Workflow security (zizmor)
+        env:
+          # Online audits check that pinned commits belong to the referenced action.
+          GH_TOKEN: ${{ github.token }}
+        run: uv run --locked --group workflows zizmor .github
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
+        with:
+          tool: cargo-deny@0.20.2,osv-scanner@2.7.0
+      - name: Rust advisories, licenses and sources (cargo-deny)
+        run: cargo deny --locked check
+      - name: npm and Python lockfile advisories (osv-scanner)
+        run: osv-scanner scan source --lockfile uv.lock --lockfile ui/package-lock.json
 
   c-analysis-prepare:
     needs: changes
@@ -373,21 +403,24 @@ jobs:
     env:
       AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Identify native build cache inputs
         shell: python
         run: |
           import os
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
               output.write('CACHE_IMAGE=' + os.environ['ImageOS'] + '-' + os.environ['ImageVersion'] + '\n')
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - run: uv sync --locked
       - uses: ./.github/actions/core-build-dependencies
         with:
           linux-packages: build-essential cmake
       - uses: ./.github/actions/native-analysis-compiler
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: cppcheck-opensource/cppcheck
           ref: e73bf44c3e49686b7495fab352d03a6c6075516b
           path: build/cppcheck-source
@@ -400,7 +433,7 @@ jobs:
           for name in ['misra.py', 'cppcheckdata.py', 'misra_9.py']:
               data = subprocess.check_output(['git', '-C', str(source), 'show', 'HEAD:addons/' + name])
               (source / 'addons' / name).write_bytes(data)
-      - uses: actions/cache@v6.1.0
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: cppcheck-cache
         with:
           path: build/c-analysis-tools
@@ -437,7 +470,7 @@ jobs:
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
               output.write('CPPCHECK=' + str(executable) + '\n')
               output.write('CPPCHECK_ADDON_DIR=' + str(bundle / 'addons') + '\n')
-      - uses: actions/cache@v6.1.0
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
@@ -456,7 +489,7 @@ jobs:
           expected = {'standard-ecu', 'user-application', 'component-pipeline', 'no-diagnostic'}
           if {p.name for p in Path(os.environ['AUTOSAR_C_ANALYSIS_SAMPLES']).iterdir()} != expected:
               raise RuntimeError('Generated sample inventory is incomplete')
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: c-analysis-inputs-${{ matrix.target }}
           overwrite: true
@@ -473,7 +506,7 @@ jobs:
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_clang_build.py
       - name: Generated C adds no clang-tidy findings to the baseline
         if: runner.os == 'Linux'
-        run: uv run --locked python -m autosar_tooling quality --scope runtime --c-samples "${{ env.AUTOSAR_C_ANALYSIS_SAMPLES }}"
+        run: uv run --locked python -m autosar_tooling quality --scope runtime --c-samples "$AUTOSAR_C_ANALYSIS_SAMPLES"
 
   native-delivery:
     # Builds and receives the prepared samples; runs beside their analysis rather than before it.
@@ -491,11 +524,13 @@ jobs:
     env:
       AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - run: uv sync --locked
       - uses: ./.github/actions/native-analysis-compiler
-      - uses: actions/download-artifact@v8.0.2
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: c-analysis-inputs-${{ matrix.target }}
           path: build
@@ -579,11 +614,13 @@ jobs:
     env:
       AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - run: uv sync --locked
       - uses: ./.github/actions/native-analysis-compiler
-      - uses: actions/download-artifact@v8.0.2
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: c-analysis-inputs-${{ matrix.target }}
           path: build
@@ -637,7 +674,7 @@ jobs:
           summaries = list(Path('build/c-analysis-results').glob('*/summary.json'))
           passed = len(summaries) == len(os.environ['ANALYSIS_SAMPLES'].split(',')) and all(json.loads(p.read_text(encoding='utf-8'))['passed'] for p in summaries)
           sys.exit(0 if passed else 1)
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: c-analysis-summaries-${{ matrix.target }}-${{ matrix.group }}
@@ -645,7 +682,7 @@ jobs:
           path: build/c-analysis-results/*/summary.json
           if-no-files-found: error
           retention-days: 14
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: c-analysis-${{ matrix.target }}-${{ matrix.group }}
@@ -661,7 +698,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
-      - uses: actions/download-artifact@v8.0.2
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: c-analysis-summaries-*
           path: build/c-analysis-summaries
