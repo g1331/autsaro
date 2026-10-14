@@ -48,7 +48,7 @@ uv run --locked --group workflows actionlint
 uv run --locked --group workflows zizmor .github
 ```
 
-`cargo-deny` 按 `deny.toml` 检查 RustSec 漏洞与撤回版本、许可证白名单和依赖来源。未维护公告只对直接依赖失败：传递依赖中的这类 crate 来自 Tauri 的 GTK 3 与 URL pattern 依赖链，没有可迁移的版本。重复版本只告警，它们来自 Tauri 与 Windows crate 自身的版本分布。`osv-scanner` 按 OSV 数据库检查 npm 与 Python 锁文件。这两个工具需单独安装固定版本：`cargo install cargo-deny --version 0.20.2 --locked`，osv-scanner 2.7.0 从[官方发行页](https://github.com/google/osv-scanner/releases/tag/v2.7.0)下载；CI 用 `taiki-e/install-action` 按校验和安装同一版本。actionlint 与 zizmor 的版本固定在 uv 的 `workflows` 依赖组中；设置 `GH_TOKEN` 后，zizmor 还会在线核对固定的提交确实属于所引用的 action。
+`cargo-deny` 按 `deny.toml` 检查 RustSec 漏洞与撤回版本、许可证白名单和依赖来源。未维护公告只对直接依赖失败：传递依赖中的这类 crate 来自 Tauri 的 GTK 3 与 URL pattern 依赖链，没有可迁移的版本。重复版本只告警，它们来自 Tauri 与 Windows crate 自身的版本分布。`osv-scanner` 按 OSV 数据库检查 npm 与 Python 锁文件。这两个工具需单独安装固定版本：`cargo install cargo-deny --version 0.20.2 --locked`，osv-scanner 2.7.0 从[官方发行页](https://github.com/google/osv-scanner/releases/tag/v2.7.0)下载；CI 用 `taiki-e/install-action` 按校验和安装同一版本。actionlint 与 zizmor 的版本固定在 uv 的 `workflows` 依赖组中。PATH 中有 shellcheck 时 actionlint 还会检查 `run` 脚本：GitHub 托管 runner 自带 shellcheck，本地缺少它就会漏掉 CI 报告的脚本问题。设置 `GH_TOKEN` 后，zizmor 还会在线核对固定的提交确实属于所引用的 action。
 
 加入新许可证前先确认它与 Apache-2.0 兼容。确实无法修复的发现在出现处写明依据后再忽略（如 `# zizmor: ignore[github-env]`）。第三方 Actions 按提交 SHA 引用，行尾注释写对应版本。Dependabot（`.github/dependabot.yml`）每月为 Actions、Cargo、npm、uv 各提一个分组更新 PR，只提议发布满 7 天的版本。clang-format 与 clang-tidy 在同一分组中，大版本由人工升级；`quality` 要求 `uv.lock` 中两者版本相同，只升级其中一个的 PR 会失败。`verify --scope all` 与必需 CI 的 `quality` 任务都运行这四项检查。
 

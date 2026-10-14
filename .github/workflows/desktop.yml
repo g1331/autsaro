@@ -89,8 +89,10 @@ jobs:
         shell: bash
         env:
           SCENARIOS: ${{ inputs.scenarios }}
-        # node expands the globs itself.
-        run: set -f; node --test --test-concurrency=1 $SCENARIOS
+        # Split on spaces only; node expands the globs itself.
+        run: |
+          read -ra scenarios <<< "$SCENARIOS"
+          node --test --test-concurrency=1 "${scenarios[@]}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
