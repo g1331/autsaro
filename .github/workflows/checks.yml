@@ -248,6 +248,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
       - name: Host I/O and lock failure boundaries
+        if: startsWith(matrix.shard, '0/')
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_host_boundaries.py
   quality:
     runs-on: ubuntu-24.04
