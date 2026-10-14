@@ -250,6 +250,74 @@ jobs:
       - name: Host I/O and lock failure boundaries
         if: startsWith(matrix.shard, '0/')
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_host_boundaries.py
+  native-sanitizers:
+    # GCC sanitizers over the directly compiled native programs and the OS suites (#129).
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitize: [thread, 'address,undefined']
+    name: native-sanitizers (${{ matrix.sanitize }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      AUTOSAR_SANITIZE: ${{ matrix.sanitize }}
+      # The OS host owns its alternate signal stack and switches stacks with ucontext.
+      ASAN_OPTIONS: use_sigaltstack=0:detect_stack_use_after_return=0
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: uv sync --locked
+      - uses: ./.github/actions/core-build-dependencies
+      - uses: ./.github/actions/native-analysis-compiler
+      - name: Identify native build cache inputs
+        shell: python
+        run: |
+          import os
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              output.write('CACHE_IMAGE=' + os.environ['ImageOS'] + '-' + os.environ['ImageVersion'] + '\n')
+      - uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: native-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-v1
+      - name: Select native contract tools
+        shell: python
+        run: |
+          import os, shutil, subprocess
+          from pathlib import Path
+          tools = {'AUTOSAR_CC': 'gcc', 'AUTOSAR_OBJDUMP': 'objdump', 'AUTOSAR_NM': 'nm', 'AUTOSAR_GIT': 'git'}
+          python = subprocess.run(['uv', 'run', '--locked', 'python', '-c', 'import sys; print(sys.executable)'],
+              check=True, capture_output=True, text=True).stdout.strip()
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              for variable, name in tools.items():
+                  output.write(variable + '=' + str(Path(shutil.which(name)).absolute()) + '\n')
+              output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
+      # ECU builds go through the pinned delivery tool and stay uninstrumented, so only
+      # modules that compile their programs directly run here. setarch -R disables ASLR,
+      # which GCC 13's ThreadSanitizer needs under the runner's vm.mmap_rnd_bits.
+      - name: Instrumented native programs
+        run: >-
+          setarch x86_64 -R cargo test --locked -p autosar-config-core --features native-tests --test native
+          --no-fail-fast -- 'runtime_contracts::' 'host::' 'integration::generated_c::'
+          'integration::os::counter_header_oracles' 'sanitizers::'
+      # ThreadSanitizer defers asynchronous signal handlers to its own safe points, so the
+      # FreeRTOS POSIX port cannot suspend actors with SIGRTMIN; the OS suites run under ASan.
+      - name: Instrumented OS suites
+        if: matrix.sanitize != 'thread'
+        env:
+          AUTOSAR_OS_OUTPUT_DIRECTORY: ${{ runner.temp }}/os-suites
+        run: setarch x86_64 -R uv run --locked python -B -m unittest discover -v -s tests/python/native -p test_os_suites.py
+      - uses: actions/upload-artifact@v7.0.1
+        if: failure()
+        with:
+          name: os-suites-sanitizer-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/os-suites
+          if-no-files-found: ignore
+          retention-days: 14
   quality:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -609,7 +677,7 @@ jobs:
   required:
     # The only status check branch rules require; the list of blocking jobs lives here.
     name: CI required
-    needs: [changes, ui, python, core, desktop, process, native, native-os, native-delivery, quality, c-analysis]
+    needs: [changes, ui, python, core, desktop, process, native, native-os, native-sanitizers, native-delivery, quality, c-analysis]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2

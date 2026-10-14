@@ -34,6 +34,21 @@ pub(crate) fn execution_settings() -> autosar_config_core::target::ExecutionSett
     autosar_config_core::target::ExecutionSettings::from_environment().unwrap()
 }
 
+/// The configured C compiler for a test executable. `AUTOSAR_SANITIZE` names
+/// the GCC sanitizers of the Linux sanitizer lane (`thread`, or
+/// `address,undefined`); each report then ends the program with an error.
+pub(crate) fn c_compiler() -> Command {
+    let mut command = Command::new(execution_settings().compiler);
+    if let Some(kinds) = std::env::var_os("AUTOSAR_SANITIZE").filter(|kinds| !kinds.is_empty()) {
+        let mut sanitize = std::ffi::OsString::from("-fsanitize=");
+        sanitize.push(kinds);
+        command
+            .arg(sanitize)
+            .args(["-fno-sanitize-recover=all", "-fno-omit-frame-pointer", "-g"]);
+    }
+    command
+}
+
 pub(crate) fn ecu_build_command(
     project: &std::path::Path,
     output: &std::path::Path,

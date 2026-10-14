@@ -7,8 +7,7 @@ fn det_consumer(scratch: &Path, fixture: &str) -> PathBuf {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     autosar_config_core::resources::AssetInventory::from_directory(root).unwrap();
     let executable = tooling::native_binary(scratch, "det-consumer");
-    let settings = tooling::execution_settings();
-    let mut command = Command::new(settings.compiler);
+    let mut command = tooling::c_compiler();
     if cfg!(target_os = "linux") {
         command.arg("-pthread");
     }
@@ -101,7 +100,7 @@ fn com_standard_consumer_executes_group_and_reception_monitoring() {
     let scratch = Scratch::new();
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let executable = tooling::native_binary(&scratch.0, "com-consumer");
-    let output = Command::new(tooling::execution_settings().compiler)
+    let output = tooling::c_compiler()
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
         .arg("-I")
         .arg(root.join("runtime/bsw/include"))
@@ -215,7 +214,7 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
         .unwrap();
     }
     let executable = tooling::native_binary(scratch, "com-chain-consumer");
-    let mut command = Command::new(tooling::execution_settings().compiler);
+    let mut command = tooling::c_compiler();
     if cfg!(target_os = "linux") {
         command.arg("-pthread");
     }
@@ -457,7 +456,7 @@ fn cantp_n_as_timeout_aborts_once_and_ignores_late_confirmation() {
     let scratch = Scratch::new();
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let executable = tooling::native_binary(&scratch.0, "cantp-consumer");
-    let output = Command::new(tooling::execution_settings().compiler)
+    let output = tooling::c_compiler()
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
         .arg("-I")
         .arg(root.join("runtime/bsw/include"))

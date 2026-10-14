@@ -156,7 +156,7 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
             std::fs::write(directory.join(file), bytes).unwrap();
         }
         let executable = tooling::native_binary(&directory, "typed");
-        let mut compiler = std::process::Command::new("gcc");
+        let mut compiler = tooling::c_compiler();
         compiler
             .current_dir(&directory)
             .args([
@@ -322,7 +322,7 @@ fn generated_rte_com_header_links_independent_handle_callbacks_and_real_dispatch
         }
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
         let executable = tooling::native_binary(&scratch.0, "rte-com-consumer");
-        let mut compiler = std::process::Command::new(tooling::execution_settings().compiler);
+        let mut compiler = tooling::c_compiler();
         compiler
             .current_dir(&scratch.0)
             .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
@@ -435,8 +435,7 @@ int main(void) {
         )
         .unwrap();
         let binary = tooling::native_binary(&scratch.0, "scaffold_contract");
-        let settings = tooling::execution_settings();
-        let compiled = std::process::Command::new(settings.compiler)
+        let compiled = tooling::c_compiler()
             .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
             .args(
                 ["generated/include", "bsw/include"]

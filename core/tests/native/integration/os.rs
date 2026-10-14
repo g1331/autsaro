@@ -63,7 +63,7 @@ fn run(binary: &Path, arguments: &[&str]) -> String {
 fn counter_header_oracles() {
     let scratch = Scratch::new();
     let compile = |project: &Path, binary: &Path, renamed: bool, maximum: u32| {
-        let mut command = std::process::Command::new("gcc");
+        let mut command = super::tooling::c_compiler();
         command
             .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-I"])
             .arg(project.join("os/include"))
@@ -470,7 +470,7 @@ fn delivery_and_independent_control() {
     std::fs::rename(&original, &moved).unwrap();
     // No repository header path and no OS object: only the moved delivery.
     let public = super::tooling::native_binary(&scratch.0, "public_compatibility");
-    let mut compile = std::process::Command::new("gcc");
+    let mut compile = super::tooling::c_compiler();
     compile
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic", "-I"])
         .arg(moved.join("os/include"))
