@@ -51,7 +51,7 @@
 - `SchM_*` 符号是集成接口：新增 Com、Can、PduR、LSduR、Det 的 Enter／Exit，各模块不再使用 CanIf 的区，交付头文件、BSWMD 与资产摘要随之变化，按 ABI 审阅并写入 CHANGELOG，不用摘要更新吸收契约变化。
 - 区外的窗口（如 CanIf 预留之后、`Can_Write` 返回之前）由第 4 条的协议兜住，这是主要实现风险；用真实线程握手测试覆盖，暂停点取各模块的 `SchM_Exit_*`，并保留重入取消的用例。
 - 同一模块内“区内读下层、再改自身状态”的判断（如 `CanIf_SetPduMode` 读取驱动实际模式）在迁移时改为依据模块自身状态或占用结算，不能简单把下层调用移出区。
-- 区划分与持锁调用不再构成 `SWS_BSW_00134`／`00038` 的差距后，处置写在对应测试的 `Verifies:` 或 `standards.md` 的差距记录中，与 [#116](https://github.com/g1331/autsaro/issues/116) 协调；本 ADR 本身不构成处置。
+- 区划分与持锁调用不再构成 `SWS_BSW_00134`／`00038` 的差距后，处置写在对应测试的 `Verifies:` 或标准基线对应模块篇（`docs/standards/`）的差距记录中，与 [#116](https://github.com/g1331/autsaro/issues/116) 协调；本 ADR 本身不构成处置。
 
 ## 状态
 

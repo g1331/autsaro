@@ -8,7 +8,7 @@
 
 1. 当前架构与不变量写在 `docs/architecture.md`，一份随代码维护的文档，只描述当前状态和明确标注的实施中方向。
 2. 重大决定按 Nygard 格式写入 `docs/adr/NNNN-*.md`，一个决定一个文件；被取代时新增 ADR 并更新旧 ADR 的状态，不改写历史正文。
-3. AUTOSAR／MISRA 基线、官方资料位置与模块义务索引写在 `docs/standards.md`。
+3. AUTOSAR／MISRA 基线、官方资料位置与模块义务索引写在 `docs/standards/`。
 4. 待办、缺陷、实施计划与验收讨论使用 GitHub Issues 和 PR；修复证据放在 PR，不另建报告或台账。
 5. `_bmad-output/` 下的原工件以 Git 标签 `planning-archive-2026-10` 保存后从主线移除；新文档以 `planning-archive-2026-10:_bmad-output/<path>` 引用原文，不复制实施流水。
 6. BMad 工具本身（`_bmad/` 与 `.agents/skills/bmad-*`）一并移除；`AGENTS.md` 与 `docs/project/OWNER_GUIDE.md` 改为以 Issues、Milestones 和上述文档为准。长期方向与候选写在 `docs/roadmap.md`，只为已承诺的阶段建立 Milestone。
