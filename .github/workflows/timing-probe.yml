@@ -70,27 +70,23 @@ jobs:
           binary = max(Path('target/debug/deps').glob('native-*.exe'), key=lambda p: p.stat().st_mtime)
           out = Path('probe-logs'); out.mkdir()
           test = 'integration::protocol::single_component_meets_independent_protocol_and_timing_vectors'
-          # Two slow shards at once: the required job's load, doubled.
-          command = [str(binary), 'integration::sealed_projects', 'integration::single_component', 'integration::protocol']
+          # The whole native binary in its default parallelism, as the unsharded required job ran it.
+          command = [str(binary)]
           print('CPUs', os.cpu_count(), flush=True)
           failed = 0
           failed_runs = []
           runs = 0
           started = time.monotonic()
-          while time.monotonic() - started < 35 * 60:
-              procs = []
-              for _ in range(2):
-                  env = dict(os.environ, AUTOSAR_TIMING_PROBE=str((out / f'run{runs}.log').absolute()))
-                  log = open(out / f'run{runs}.out', 'w')
-                  procs.append((f'run{runs}', subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, env=env), log))
-                  runs += 1
-              for name, proc, log in procs:
-                  code = proc.wait(); log.close()
-                  if code != 0:
-                      failed += 1
-                      failed_runs.append(name)
-                  print(f'{name}: exit {code} at {time.monotonic() - started:.0f}s', flush=True)
-          load = 'two slow shards'
+          while time.monotonic() - started < 40 * 60:
+              env = dict(os.environ, AUTOSAR_TIMING_PROBE=str((out / f'run{runs}.log').absolute()))
+              with open(out / f'run{runs}.out', 'w') as log:
+                  code = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, env=env).returncode
+              if code != 0:
+                  failed += 1
+                  failed_runs.append(f'run{runs}')
+              print(f'run{runs}: exit {code} at {time.monotonic() - started:.0f}s', flush=True)
+              runs += 1
+          load = 'full native'
           spans, aborts = [], []
           for f in out.glob('run*.log'):
               for line in f.read_text(errors='replace').splitlines():
