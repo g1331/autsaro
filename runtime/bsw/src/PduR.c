@@ -144,12 +144,13 @@ PDUR_CODE void PduR_CanTpTxConfirmation(PduIdType id, Std_ReturnType result)
  * transition (SWS_PduR_00100), so routes in flight never see another configuration. */
 PDUR_CODE void PduR_Init(const PduR_PBConfigType *ConfigPtr)
 {
-    const boolean valid = PduR_Valid(ConfigPtr);
-    SchM_Enter_PduR_PDUR_STATE();
-    if ((valid == TRUE) && (configuration == NULL_PTR)) {
-        configuration = ConfigPtr;
+    if (PduR_Valid(ConfigPtr) == TRUE) {
+        SchM_Enter_PduR_PDUR_STATE();
+        if (configuration == NULL_PTR) {
+            configuration = ConfigPtr;
+        }
+        SchM_Exit_PduR_PDUR_STATE();
     }
-    SchM_Exit_PduR_PDUR_STATE();
 }
 PDUR_CODE PduR_PBConfigIdType PduR_GetConfigurationId(void)
 {
@@ -158,7 +159,11 @@ PDUR_CODE PduR_PBConfigIdType PduR_GetConfigurationId(void)
 }
 /* The selected configuration has no PduRRoutingPathGroup: every id is unknown and the
  * call returns with no action (SWS_PduR_00647). */
+/* MR12 RULE 8.7 VIOLATION: standard API with external linkage (SWS_PduR_00615) that no
+ * module of the selected program calls; see the PduR deviation record. */
 PDUR_CODE void PduR_EnableRouting(PduR_RoutingPathGroupIdType id) { (void)id; }
+/* MR12 RULE 8.7 VIOLATION: standard API with external linkage (SWS_PduR_00617) that no
+ * module of the selected program calls; see the PduR deviation record. */
 PDUR_CODE void PduR_DisableRouting(PduR_RoutingPathGroupIdType id, boolean initialize)
 {
     (void)id;

@@ -59,6 +59,12 @@ PduR 只在自己的 `PDUR_STATE` 区内读取已发布的配置指针，离开�
 | 数据提供方式 | 不适用（配置：ECUC_PduR_00289）：ECUC_PduR_00289 |
 | 默认值 | 不适用（配置：ECUC_PduR_00299）：ECUC_PduR_00299、00300、00290、00292 |
 
+## MISRA 偏离
+
+| 规则 | 范围 | 依据与风险控制 | 批准 |
+| --- | --- | --- | --- |
+| MISRA C:2012 Rule 8.7（advisory） | `runtime/bsw/src/PduR.c` 中 `PduR_EnableRouting` 与 `PduR_DisableRouting` 的定义 | `SWS_PduR_00615／00617` 无条件规定这两个 API 经 `PduR.h` 以外部链接提供；所选程序没有路由组，也没有模块调用它们，Cppcheck 因此报告只在一个翻译单元中引用。偏离只影响符号可见性：两个函数不读写模块数据，任何 id 都直接返回（`SWS_PduR_00647／00716`），由 `routing_contract.c` 验证；原始诊断保留，不加 suppression | 维护者 Umaru，2026-10-14（#41） |
+
 ## 已知差距
 
 - 头文件不含软件与规范版本号（#59）。

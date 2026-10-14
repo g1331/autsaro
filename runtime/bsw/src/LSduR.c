@@ -64,12 +64,13 @@ static LSDUR_CODE const LSduR_PBConfigType *LSduR_Configuration(void)
  * LSDUR_ONLINE transition, so routes in flight never see another configuration. */
 LSDUR_CODE void LSduR_Init(const LSduR_PBConfigType *ConfigPtr)
 {
-    const boolean valid = LSduR_Valid(ConfigPtr);
-    SchM_Enter_LSduR_LSDUR_STATE();
-    if ((valid == TRUE) && (configuration == NULL_PTR)) {
-        configuration = ConfigPtr;
+    if (LSduR_Valid(ConfigPtr) == TRUE) {
+        SchM_Enter_LSduR_LSDUR_STATE();
+        if (configuration == NULL_PTR) {
+            configuration = ConfigPtr;
+        }
+        SchM_Exit_LSduR_LSDUR_STATE();
     }
-    SchM_Exit_LSduR_LSDUR_STATE();
 }
 LSDUR_CODE LSduR_PBConfigIdType LSduR_GetConfigurationId(void)
 {

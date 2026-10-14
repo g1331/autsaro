@@ -1723,7 +1723,7 @@
     },
     {
       "path": "runtime/bsw/src/LSduR.c",
-      "sha256": "1fd209cedfd392cd3071b3acf395089018de50a03630716a9461b53d1f62bf0e",
+      "sha256": "9e82dd4225ee59a24797e009f6bc61c5419317831eef98ea6b8e1315c8fceed8",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1737,7 +1737,7 @@
     },
     {
       "path": "runtime/bsw/src/PduR.c",
-      "sha256": "e3e6900d076216dd7dc7bf4e50e45800e7bcca4205953e54b2a6690bf57dfc31",
+      "sha256": "877f5fcd53050473ef038890cd1086fd2ef9ce013512833cf8ac58d90d907737",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
