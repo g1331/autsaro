@@ -291,6 +291,9 @@ void Os_BackendGuardService(void)
 }
 int Os_BackendReady(void)
 {
+#ifdef OS_TIME_TESTS
+    Os_TimeTestBeforeReady();
+#endif
     if (Os_TargetReady() != 0) {
         return 1;
     }

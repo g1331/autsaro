@@ -611,7 +611,7 @@
     },
     {
       "path": "runtime/os/src/Os_Backend.c",
-      "sha256": "0e0255b915e63a1831e9fd0203491690beb5284b93ac98ef49fb6041a2b85b47",
+      "sha256": "995867f13e10dd0fec983af96957d1ed0a4216aa3b87ee59867a98cb3a5fe293",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -625,7 +625,7 @@
     },
     {
       "path": "runtime/os/src/Os_Backend.h",
-      "sha256": "f1d6ae2163f8495a0016b5ca1f135c9a7c7bb6a43b5986dc04138dbdd554ec85",
+      "sha256": "dc647d671cd8634e528f872d3fd3fd4d96193c17f83efd19245df9e5d864e990",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

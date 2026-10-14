@@ -55,6 +55,7 @@ void Os_TimeTestSeed(uint64_t epoch, uint32_t kernel_tick, TickType value);
 void Os_TimeTestCloseEvent(void);
 void Os_TimeTestBeforePending(void);
 void Os_TimeTestMasked(void);
+void Os_TimeTestBeforeReady(void);
 #endif
 void Os_TimeOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate);
 void Os_MailboxInstall(void);

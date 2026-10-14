@@ -552,6 +552,11 @@ def check_time(binary: Path) -> list[dict]:
     require("time ticks=0 work=0 app=0 rejects=1 error=7" in result["stdout"], result)
     require("time_signal_failed=0" in result["stdout"], result)
     records.append(result)
+    # The owner's WaitEvent passed its entry guard; the OS stops it, not an error.
+    result = execute(binary, "close-in-service")
+    require(result["exit"] == 7 and "trace=ISREZ " in result["stdout"], result)
+    require("time ticks=0 work=0 app=0 rejects=0 error=7" in result["stdout"], result)
+    records.append(result)
     result = execute(binary, "thousand", failure=1)
     require(result["exit"] == 7 and "trace=IZ " in result["stdout"], result)
     require(
