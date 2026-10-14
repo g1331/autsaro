@@ -204,6 +204,9 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
         "SchM_ComM.h",
         "SchM_CanTp.h",
         "SchM_Det.h",
+        "SchM_Com.h",
+        "SchM_PduR.h",
+        "SchM_LSduR.h",
     ] {
         std::fs::copy(
             root.join("core/tests/fixtures/bsw-contracts").join(name),
@@ -241,7 +244,7 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
         });
         command.args([
             "-Wl,--wrap=SchM_Exit_Can_CAN_STATE",
-            "-Wl,--wrap=SchM_Enter_CanIf_CANIF_STATE",
+            "-Wl,--wrap=Can_Write",
             "-Wl,--wrap=CanIf_ControllerModeIndication",
             "-Wl,--wrap=CanIf_ControllerBusOff",
             "-Wl,--wrap=CanIf_TxConfirmation",

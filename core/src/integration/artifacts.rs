@@ -10,9 +10,12 @@ fn exclusive_area(module: &str) -> Option<&'static str> {
         "Can" => Some("CAN_STATE"),
         "CanIf" => Some("CANIF_STATE"),
         "CanTp" => Some("CANTP_STATE"),
+        "Com" => Some("COM_STATE"),
         "ComM" => Some("COMM_STATE"),
         "Dcm" => Some("DCM_STATE"),
         "Det" => Some("DET_STATE"),
+        "LSduR" => Some("LSDUR_STATE"),
+        "PduR" => Some("PDUR_STATE"),
         _ => None,
     }
 }
