@@ -3,54 +3,17 @@ name: Official archive comparison
 # against the licensed R24-11 archives, downloaded from autosar.org at run time and
 # verified against core/resources/official.json.
 # The archives stay in a private cache: never upload them or print their content.
-# Not part of the required checks, so an unavailable site cannot block merging.
+# Not part of the required checks, so an unavailable site cannot block merging;
+# extended.yml calls it when the archive-dependent paths it lists change.
 on:
+  workflow_call:
   workflow_dispatch:
-  schedule:
-    - cron: '23 3 * * *'
-  pull_request:
-    paths:
-      - core/src/definitions.rs
-      - core/src/definitions/**
-      - core/src/schema.rs
-      - core/src/rules.rs
-      - core/src/rules/**
-      - core/resources/official.json
-      - core/resources/requirements/**
-      - core/tests/official/**
-      - tools/python/src/autosar_tooling/official.py
-      - tools/python/src/autosar_tooling/requirements.py
-      - docs/standards/**
-      - .github/workflows/acceptance.yml
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
 env:
   PYTHONUTF8: '1'
 jobs:
-  revision:
-    name: Detect an untested master revision
-    if: github.event_name == 'schedule'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      actions: read
-    outputs:
-      tested: ${{ steps.detect.outputs.tested }}
-    steps:
-      # The daily run skips a master commit that this workflow already passed.
-      - id: detect
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          passed=$(gh run list -R "$GITHUB_REPOSITORY" --workflow acceptance.yml --commit "$GITHUB_SHA" --status success --json databaseId --jq length)
-          echo "Successful runs for $GITHUB_SHA: $passed"
-          echo "tested=$([ "$passed" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
   official:
-    needs: revision
-    if: ${{ !cancelled() && needs.revision.outputs.tested != 'true' }}
     strategy:
       fail-fast: false
       matrix:

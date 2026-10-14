@@ -56,7 +56,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest, macos-latest]
+        # macOS runs in extended.yml after merging.
+        os: [ubuntu-24.04, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
@@ -76,8 +77,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest, macos-latest]
-        python: ['3.12', '3.13', '3.14']
+        # Oldest and newest on Linux, newest on Windows; extended.yml runs the rest of the
+        # matrix after merging. native-delivery runs the shipped ecu-tool on 3.11–3.14.
+        include:
+          - os: ubuntu-24.04
+            python: '3.12'
+          - os: ubuntu-24.04
+            python: '3.14'
+          - os: windows-latest
+            python: '3.14'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:

@@ -1,0 +1,147 @@
+name: Extended checks
+# Checks outside the required pull request layer (checks.yml), selected by the
+# changed paths: the rest of the Python and UI matrices, Desktop acceptance and
+# the official archive comparison. Runs after every push to master; a pull
+# request runs Desktop acceptance and the official comparison for their paths,
+# and everything once it carries the full-ci label. Not part of the required checks.
+on:
+  push:
+    branches: [master]
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+concurrency:
+  # Adding an unrelated label must not cancel a run in progress.
+  group: ${{ github.workflow }}-${{ github.event.action == 'labeled' && github.event.label.name != 'full-ci' && github.run_id || github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+permissions:
+  contents: read
+env:
+  PYTHONUTF8: '1'
+jobs:
+  changes:
+    name: Select extended checks
+    if: github.event.action != 'labeled' || github.event.label.name == 'full-ci'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      python: ${{ steps.select.outputs.python }}
+      ui: ${{ steps.select.outputs.ui }}
+      desktop: ${{ steps.select.outputs.desktop }}
+      official: ${{ steps.select.outputs.official }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - id: select
+        shell: python
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          FULL: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+        run: |
+          import os, subprocess
+          event = os.environ['GITHUB_EVENT_NAME']
+          base = os.environ['BASE']
+          files = None
+          if os.environ['FULL'] != 'true' and base and set(base) != {'0'}:
+              diff = subprocess.run(['git', 'diff', '--name-only', base, os.environ['GITHUB_SHA']], capture_output=True, text=True)
+              files = diff.stdout.split() if diff.returncode == 0 else None
+          if files is not None:
+              print('\n'.join(files))
+          def touched(*prefixes):
+              return any(path.startswith(prefixes) for path in files)
+          # A manual run, the full-ci label, an unknown baseline or a change to this workflow selects everything.
+          if files is None or '.github/workflows/extended.yml' in files:
+              selected = dict.fromkeys(['python', 'ui', 'desktop', 'official'], True)
+          else:
+              # Pull requests already run Linux and Windows; the other interpreters and macOS differ only in these sources.
+              push = event != 'pull_request'
+              selected = {
+                  'python': push and touched('tools/', 'tests/python/', 'scripts/', 'pyproject.toml', 'uv.lock', '.python-version', '.github/workflows/checks.yml'),
+                  'ui': push and touched('ui/', '.node-version', '.github/workflows/checks.yml'),
+                  'desktop': touched('ui/', 'src-tauri/', 'tests/desktop/', '.github/workflows/desktop.yml')
+                      or push and touched('core/', 'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', '.node-version', '.github/actions/'),
+                  'official': touched('core/src/definitions.rs', 'core/src/definitions/', 'core/src/schema.rs', 'core/src/rules.rs',
+                      'core/src/rules/', 'core/resources/official.json', 'core/resources/requirements/', 'core/tests/official/',
+                      'tools/python/src/autosar_tooling/official.py', 'tools/python/src/autosar_tooling/requirements.py',
+                      'docs/standards/', '.github/workflows/acceptance.yml'),
+              }
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              for name, value in selected.items():
+                  print(name + '=' + str(value).lower())
+                  output.write(name + '=' + str(value).lower() + '\n')
+  python:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-latest]
+        python: ['3.12', '3.13', '3.14']
+        # checks.yml runs these on every pull request and push.
+        exclude:
+          - os: ubuntu-24.04
+            python: '3.12'
+          - os: ubuntu-24.04
+            python: '3.14'
+          - os: windows-latest
+            python: '3.14'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      UV_PYTHON: ${{ matrix.python }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run --locked ruff check tools tests/python scripts
+      - run: uv run --locked python -B -m unittest discover -s tests/python
+      - run: uv build --out-dir build/python
+  ui:
+    needs: changes
+    if: needs.changes.outputs.ui == 'true'
+    # checks.yml runs Linux and Windows on every pull request and push.
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm ci --prefix ui
+      - run: npm run lint --prefix ui
+      - run: npm run test --prefix ui
+      - run: npm run build --prefix ui
+  desktop:
+    needs: changes
+    if: needs.changes.outputs.desktop == 'true'
+    uses: ./.github/workflows/desktop.yml
+  official:
+    needs: changes
+    if: needs.changes.outputs.official == 'true'
+    uses: ./.github/workflows/acceptance.yml
+  result:
+    name: Extended checks result
+    needs: [changes, python, ui, desktop, official]
+    if: ${{ always() && needs.changes.result != 'skipped' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require every selected check
+        shell: python
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          import json, os, sys
+          results = {name: need['result'] for name, need in json.loads(os.environ['RESULTS']).items()}
+          print(results)
+          # Skipped means the changed paths did not select the check.
+          failed = {name: result for name, result in results.items() if result not in ('success', 'skipped') or name == 'changes' and result != 'success'}
+          sys.exit('Extended checks did not pass: ' + str(failed) if failed else 0)
