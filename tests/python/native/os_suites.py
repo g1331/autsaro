@@ -131,10 +131,11 @@ def run_native(
     if result.status != "exited" or result.exit_code is None or (
         check and result.exit_code != 0
     ):
+        # The logs go with the workspace, so the message carries what the process wrote.
         raise OwnershipError(
             f"{stage}: argv={args!r} deadline_ns={spec.deadline_ns} "
-            f"status={result.status} exit_code={result.exit_code} "
-            f"stdout={result.stdout} stderr={result.stderr}"
+            f"status={result.status} exit_code={result.exit_code}\n"
+            f"stdout:\n{stdout}\nstderr:\n{stderr}"
         )
     return subprocess.CompletedProcess(args, result.exit_code, stdout, stderr)
 
