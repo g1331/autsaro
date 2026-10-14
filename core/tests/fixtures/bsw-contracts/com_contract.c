@@ -1,5 +1,6 @@
 /** Independent R24-11 Rx group/DM consumer; no lower-module stubs.
- * Verifies: SWS_Com_00432、00130、00194、00198、00197、91001、91002、91004、91003、00123、00001、00124
+ * Verifies:
+ * SWS_Com_00432、00130、00194、00198、00197、91001、91002、91004、91003、00123、00001、00124
  * Verifies: SWS_Com_00609、00819、00820、00822、00865、00664、00128
  * Verifies: SWS_Com_00444、00098、00114、00222、00684、00685、00129、00631
  * Verifies: SWS_Com_00772、00224、00716、00486、00225、00290、00500、00715、00889、00333
@@ -13,7 +14,8 @@
 
 static unsigned acknowledgments[3];
 static unsigned timeouts[3];
-static unsigned handle_index(CbkHandleIdType handle) {
+static unsigned handle_index(CbkHandleIdType handle)
+{
     unsigned index = 3u;
     if (handle == 17u) {
         index = 0u;
@@ -30,13 +32,15 @@ static void timeout(CbkHandleIdType handle) { ++timeouts[handle_index(handle)]; 
 static const Com_PduConfigType pdus[] = {
     {0u, 10u, TRUE, 7u, 30u, 17u}, {1u, 11u, TRUE, 9u, 50u, 43u}, {2u, 12u, TRUE, 1u, 0u, 59u}};
 static const Com_ConfigType configuration = {pdus, 3u, 0u, receive, timeout, NULL_PTR};
-static void periods(unsigned count) {
+static void periods(unsigned count)
+{
     unsigned index;
     for (index = 0u; index < count; ++index) {
         Ecu_ComMainFunctionRx();
     }
 }
-int main(void) {
+int main(void)
+{
     void (*initialize)(const Com_ConfigType *) = Com_Init;
     void (*deinitialize)(void) = Com_DeInit;
     Com_StatusType (*status)(void) = Com_GetStatus;

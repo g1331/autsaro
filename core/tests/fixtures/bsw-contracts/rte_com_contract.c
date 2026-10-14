@@ -18,7 +18,8 @@ static Com_SignalIdType last_signal = 0xffffu;
 uint8 __real_Com_ReceiveSignal(Com_SignalIdType signal, void *data);
 uint8 __wrap_Com_ReceiveSignal(Com_SignalIdType signal, void *data);
 
-uint8 __wrap_Com_ReceiveSignal(Com_SignalIdType signal, void *data) {
+uint8 __wrap_Com_ReceiveSignal(Com_SignalIdType signal, void *data)
+{
     ++receive_calls;
     last_signal = signal;
     return __real_Com_ReceiveSignal(signal, data);
@@ -26,26 +27,32 @@ uint8 __wrap_Com_ReceiveSignal(Com_SignalIdType signal, void *data) {
 
 int Ecu_TargetIsOwner(void) { return test_owner; }
 
-Std_ReturnType Ecu_TargetCheckLifecycleContext(boolean starting) {
+Std_ReturnType Ecu_TargetCheckLifecycleContext(boolean starting)
+{
     (void)starting;
     return (lifecycle_allowed == TRUE) ? E_OK : E_NOT_OK;
 }
 
-#define FIRST_HANDLE  43u
-#define SECOND_HANDLE 61u
+#define FIRST_HANDLE   43u
+#define SECOND_HANDLE  61u
 #define UNKNOWN_HANDLE 59u
 
-static Std_ReturnType read_first(uint32 *value) {
+static Std_ReturnType read_first(uint32 *value)
+{
     return Rte_Application_Pipeline_IngressInstance_Read_RxValue_Value(value);
 }
 
-static Std_ReturnType read_second(uint32 *value) {
+static Std_ReturnType read_second(uint32 *value)
+{
     return Rte_Application_Pipeline_IngressInstance_Read_RxSecond_Value(value);
 }
 
 /* 读取两个接收者并核对各自的状态与值。 */
-static void expect(Std_ReturnType first_status, uint32 first_value, Std_ReturnType second_status,
-                   uint32 second_value) {
+static void expect(Std_ReturnType first_status,
+                   uint32 first_value,
+                   Std_ReturnType second_status,
+                   uint32 second_value)
+{
     uint32 value = 99u;
     Std_ReturnType status = read_first(&value);
     assert(status == first_status);
@@ -56,14 +63,16 @@ static void expect(Std_ReturnType first_status, uint32 first_value, Std_ReturnTy
     assert(value == second_value);
 }
 
-static void tick(uint8 count) {
+static void tick(uint8 count)
+{
     uint8 index;
     for (index = 0u; index < count; ++index) {
         Ecu_ComMainFunctionRx();
     }
 }
 
-int main(void) {
+int main(void)
+{
     /* R24-11 handle-bearing DRAFT 接缝；预期不读取 ABI 清单。 */
     void (*const receive)(CbkHandleIdType handle) = &Rte_COMCbk;
     void (*const timeout)(CbkHandleIdType handle) = &Rte_COMCbkRxTOut;
