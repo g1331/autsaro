@@ -415,12 +415,20 @@ def check(project: Path, target_id: str, output: Path) -> int:
         summary["diagnostics"] = []
         seen = {}
         all_passed = True
+        jobs = []
         for program, entry in programs.items():
             units = [name for name in sources if entry is None or name not in entries.values() or name == entry]
             directory = output if len(programs) == 1 else output / program
             directory.mkdir(exist_ok=True, mode=0o700)
             commands = [row for row in database if Path(row["file"]).resolve() in {(root / name).resolve() for name in units}]
-            code, passed, diagnostics, command = analyze_program(executable, addons, root, units, commands, scope, target_id, directory)
+            jobs.append((program, entry, units, commands, directory))
+        # Each program keeps its own CTU, build directory and receipts, so the
+        # single-threaded analyzer runs concurrently; results merge in declared order.
+        with ThreadPoolExecutor(max_workers=len(jobs)) as executor:
+            results = [executor.submit(analyze_program, executable, addons, root, units, commands, scope, target_id, directory)
+                       for _, _, units, commands, directory in jobs]
+        for (program, entry, units, _, _), result in zip(jobs, results):
+            code, passed, diagnostics, command = result.result()
             summary["programs"].append({"name": program, "entry": entry, "translationUnits": units,
                                         "exitCode": code, "passed": passed, "command": command})
             all_passed = all_passed and passed

@@ -202,7 +202,9 @@ class NativeSuiteTests(unittest.TestCase):
             os_suites.run_suite(suite, Path(retained) / suite if retained else None)
 
 
-for _suite in os_suites.SUITES:
+# AUTOSAR_OS_SHARD="k/n" keeps every n-th suite from k, so CI can split the suites over runners.
+_shard, _shards = map(int, os.environ.get("AUTOSAR_OS_SHARD", "0/1").split("/"))
+for _suite in os_suites.SUITES[_shard::_shards]:
     setattr(
         NativeSuiteTests,
         "test_" + _suite.replace("-", "_"),
