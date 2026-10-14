@@ -5,6 +5,7 @@
 #include "PduR_Dcm.h"
 #include "PduR_CanIf.h"
 #include "PduR_CanTp.h"
+#include "Det.h"
 #define PDUR_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "PduR_MemMap.h"
 static const PduR_PBConfigType *configuration PDUR_VAR_CLEARED;
@@ -36,12 +37,17 @@ static PDUR_CODE boolean PduR_Valid(const PduR_PBConfigType *config)
         for (i = 0u; i < config->transmit_count; ++i) {
             uint16 j;
             const PduR_TxRouteType *route = &config->transmit[i];
+            /* CanTp confirms through the transport routes; IF routes confirm here. */
             if (((route->module != PDUR_UP_COM) && (route->module != PDUR_UP_DCM)) ||
-                ((route->confirmation == NULL_PTR) || (route->transmit == NULL_PTR))) {
+                ((route->lower_module != PDUR_LO_LSDUR) &&
+                 (route->lower_module != PDUR_LO_CANTP)) ||
+                ((route->lower_module == PDUR_LO_LSDUR) && (route->confirmation == NULL_PTR)) ||
+                (route->transmit == NULL_PTR)) {
                 valid = FALSE;
             }
             for (j = 0u; j < i; ++j) {
-                if ((route->lower == config->transmit[j].lower) ||
+                if (((route->lower_module == config->transmit[j].lower_module) &&
+                     (route->lower == config->transmit[j].lower)) ||
                     ((route->module == config->transmit[j].module) &&
                      (route->upper == config->transmit[j].upper))) {
                     valid = FALSE;
@@ -68,13 +74,24 @@ static PDUR_CODE boolean PduR_Valid(const PduR_PBConfigType *config)
     }
     return valid;
 }
+/* The area guards only the published pointer (ADR 0018). The configuration it points to is
+ * immutable and stays published, so routing reads it and calls other modules outside. */
+static PDUR_CODE const PduR_PBConfigType *PduR_Configuration(void)
+{
+    const PduR_PBConfigType *config;
+    SchM_Enter_PduR_PDUR_STATE();
+    config = configuration;
+    SchM_Exit_PduR_PDUR_STATE();
+    return config;
+}
 static PDUR_CODE const PduR_TpRouteType *PduR_Transport(PduIdType id, boolean receive)
 {
+    const PduR_PBConfigType *config = PduR_Configuration();
     const PduR_TpRouteType *result = NULL_PTR;
-    if (configuration != NULL_PTR) {
+    if (config != NULL_PTR) {
         uint16 i;
-        for (i = 0u; i < configuration->transport_count; ++i) {
-            const PduR_TpRouteType *route = &configuration->transport[i];
+        for (i = 0u; i < config->transport_count; ++i) {
+            const PduR_TpRouteType *route = &config->transport[i];
             if (((receive == TRUE) && (route->lower_rx == id)) ||
                 ((receive == FALSE) && (route->lower_tx == id))) {
                 result = route;
@@ -123,27 +140,40 @@ PDUR_CODE void PduR_CanTpTxConfirmation(PduIdType id, Std_ReturnType result)
         route->confirmation(route->upper_tx, result);
     }
 }
+/* Only PDUR_UNINIT accepts a configuration: there is no PDUR_ONLINE -> PDUR_ONLINE
+ * transition (SWS_PduR_00100), so routes in flight never see another configuration. */
 PDUR_CODE void PduR_Init(const PduR_PBConfigType *ConfigPtr)
 {
+    const boolean valid = PduR_Valid(ConfigPtr);
     SchM_Enter_PduR_PDUR_STATE();
-    if (PduR_Valid(ConfigPtr) == TRUE) {
+    if ((valid == TRUE) && (configuration == NULL_PTR)) {
         configuration = ConfigPtr;
     }
     SchM_Exit_PduR_PDUR_STATE();
 }
 PDUR_CODE PduR_PBConfigIdType PduR_GetConfigurationId(void)
 {
-    return (configuration == NULL_PTR) ? 0u : configuration->id;
+    const PduR_PBConfigType *config = PduR_Configuration();
+    return (config == NULL_PTR) ? 0u : config->id;
+}
+/* The selected configuration has no PduRRoutingPathGroup: every id is unknown and the
+ * call returns with no action (SWS_PduR_00647). */
+PDUR_CODE void PduR_EnableRouting(PduR_RoutingPathGroupIdType id) { (void)id; }
+PDUR_CODE void PduR_DisableRouting(PduR_RoutingPathGroupIdType id, boolean initialize)
+{
+    (void)id;
+    (void)initialize;
 }
 static PDUR_CODE Std_ReturnType PduR_Transmit(PduR_UpperType module,
                                               PduIdType id,
                                               const PduInfoType *info)
 {
+    const PduR_PBConfigType *config = PduR_Configuration();
     Std_ReturnType result = E_NOT_OK;
-    if ((configuration != NULL_PTR) && (info != NULL_PTR)) {
+    if ((config != NULL_PTR) && (info != NULL_PTR)) {
         uint16 i;
-        for (i = 0u; i < configuration->transmit_count; ++i) {
-            const PduR_TxRouteType *route = &configuration->transmit[i];
+        for (i = 0u; i < config->transmit_count; ++i) {
+            const PduR_TxRouteType *route = &config->transmit[i];
             if ((route->module == module) && (route->upper == id)) {
                 result = route->transmit(route->lower, info);
                 break;
@@ -162,10 +192,11 @@ PDUR_CODE Std_ReturnType PduR_DcmTransmit(PduIdType TxPduId, const PduInfoType *
 }
 PDUR_CODE void PduR_CanIfRxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr)
 {
-    if ((configuration != NULL_PTR) && (PduInfoPtr != NULL_PTR)) {
+    const PduR_PBConfigType *config = PduR_Configuration();
+    if ((config != NULL_PTR) && (PduInfoPtr != NULL_PTR)) {
         uint16 i;
-        for (i = 0u; i < configuration->receive_count; ++i) {
-            const PduR_RxRouteType *route = &configuration->receive[i];
+        for (i = 0u; i < config->receive_count; ++i) {
+            const PduR_RxRouteType *route = &config->receive[i];
             if (route->lower == RxPduId) {
                 route->indication(route->upper, PduInfoPtr);
                 break;
@@ -175,11 +206,12 @@ PDUR_CODE void PduR_CanIfRxIndication(PduIdType RxPduId, const PduInfoType *PduI
 }
 PDUR_CODE void PduR_CanIfTxConfirmation(PduIdType TxPduId, Std_ReturnType result)
 {
-    if (configuration != NULL_PTR) {
+    const PduR_PBConfigType *config = PduR_Configuration();
+    if (config != NULL_PTR) {
         uint16 i;
-        for (i = 0u; i < configuration->transmit_count; ++i) {
-            const PduR_TxRouteType *route = &configuration->transmit[i];
-            if (route->lower == TxPduId) {
+        for (i = 0u; i < config->transmit_count; ++i) {
+            const PduR_TxRouteType *route = &config->transmit[i];
+            if ((route->lower_module == PDUR_LO_LSDUR) && (route->lower == TxPduId)) {
                 route->confirmation(route->upper, result);
                 break;
             }
@@ -188,12 +220,14 @@ PDUR_CODE void PduR_CanIfTxConfirmation(PduIdType TxPduId, Std_ReturnType result
 }
 PDUR_CODE Std_ReturnType PduR_CanIfTriggerTransmit(PduIdType TxPduId, PduInfoType *PduInfoPtr)
 {
+    const PduR_PBConfigType *config = PduR_Configuration();
     Std_ReturnType result = E_NOT_OK;
-    if ((configuration != NULL_PTR) && (PduInfoPtr != NULL_PTR)) {
+    if ((config != NULL_PTR) && (PduInfoPtr != NULL_PTR)) {
         uint16 i;
-        for (i = 0u; i < configuration->transmit_count; ++i) {
-            const PduR_TxRouteType *route = &configuration->transmit[i];
-            if ((route->lower == TxPduId) && (route->trigger != NULL_PTR)) {
+        for (i = 0u; i < config->transmit_count; ++i) {
+            const PduR_TxRouteType *route = &config->transmit[i];
+            if ((route->lower_module == PDUR_LO_LSDUR) && (route->lower == TxPduId) &&
+                (route->trigger != NULL_PTR)) {
                 result = route->trigger(route->upper, PduInfoPtr);
                 break;
             }

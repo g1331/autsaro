@@ -368,7 +368,7 @@ pub(super) fn files(
                 "LSDUR_UP_PDUR, {}u, {}u, PduR_CanIfTxConfirmation, PduR_CanIfTriggerTransmit",
                 route.destination_handle, signal.can_if_handle
             )));
-            pd_tx.push(row(&format!("PDUR_UP_COM, {}u, {}u, LSduR_PduRTransmit, Com_TxConfirmation, Com_TriggerTransmit", route.source_handle, route.destination_handle)));
+            pd_tx.push(row(&format!("PDUR_UP_COM, {}u, PDUR_LO_LSDUR, {}u, LSduR_PduRTransmit, Com_TxConfirmation, Com_TriggerTransmit", route.source_handle, route.destination_handle)));
         }
     }
     config_data(
@@ -417,7 +417,8 @@ pub(super) fn files(
             tp.transmit_npdu, tp.response_can_if_handle
         )));
         pd_tx.push(row(&format!(
-            "PDUR_UP_DCM, {}u, {}u, CanTp_Transmit, Dcm_TpTxConfirmation, NULL_PTR",
+            // CanTp confirms through tp_routes, under its own N-SDU namespace.
+            "PDUR_UP_DCM, {}u, PDUR_LO_CANTP, {}u, CanTp_Transmit, NULL_PTR, NULL_PTR",
             tx_route.source_handle, tp.transmit_nsdu
         )));
         config_data(

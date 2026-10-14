@@ -1457,7 +1457,7 @@
     },
     {
       "path": "runtime/bsw/include/PduR.h",
-      "sha256": "2a7e1839e808ee5dc388c183ccacaf935b18fe59843c92643994974d106ac237",
+      "sha256": "334de2207dfdc60d6fbb2f0a152cda736e68ad6b96e1994c69d6b7ced65dfa9e",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1639,7 +1639,7 @@
     },
     {
       "path": "runtime/bsw/src/Com.c",
-      "sha256": "b9d5ec0f4dd8e98e123a4080aae7e085e06d3b45ad9ee618ea15003884cda428",
+      "sha256": "03967be1af00e80d1872058d604e008287453d626225b1d2c7fc305ca2a6a2c6",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1723,7 +1723,7 @@
     },
     {
       "path": "runtime/bsw/src/LSduR.c",
-      "sha256": "c17591a6e1e60c26497919cfa30ad3fd5dd09660e7e9cf60cda470e448625aa7",
+      "sha256": "1fd209cedfd392cd3071b3acf395089018de50a03630716a9461b53d1f62bf0e",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1737,7 +1737,7 @@
     },
     {
       "path": "runtime/bsw/src/PduR.c",
-      "sha256": "ab7659dbb2310405a925edf643b9e60c633f46c5120dda0e9004293818a22e97",
+      "sha256": "e3e6900d076216dd7dc7bf4e50e45800e7bcca4205953e54b2a6690bf57dfc31",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1751,7 +1751,7 @@
     },
     {
       "path": "runtime/host/src/SchM_CanIf_Host.c",
-      "sha256": "1fe8d8b5c64c8962cf477c32536fc6c16b760cb55d147d598de92f5d21c30384",
+      "sha256": "b3aced120431dbfe1a463c6efdd67bc5329ee3ab0bba86a933f47488110463e3",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1961,7 +1961,7 @@
     },
     {
       "path": "runtime/host/src/Can_HostLock.h",
-      "sha256": "c5b79afb0e31e10225984ddd82fb84930a485b7f13db000980e669aa947884d1",
+      "sha256": "c63d9a94bdca62f0b2e1c90f0938b909541347ab414d7e3ba9294f2b1fabced1",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

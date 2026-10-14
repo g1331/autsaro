@@ -5,6 +5,7 @@
 #include "LSduR_CanTp.h"
 #include "LSduR_CanIf.h"
 #include "CanIf.h"
+#include "Det.h"
 #define LSDUR_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "LSduR_MemMap.h"
 static const LSduR_PBConfigType *configuration LSDUR_VAR_CLEARED;
@@ -49,27 +50,42 @@ static LSDUR_CODE boolean LSduR_Valid(const LSduR_PBConfigType *config)
     }
     return valid;
 }
+/* The area guards only the published pointer (ADR 0018). The configuration it points to is
+ * immutable and stays published, so routing reads it and calls other modules outside. */
+static LSDUR_CODE const LSduR_PBConfigType *LSduR_Configuration(void)
+{
+    const LSduR_PBConfigType *config;
+    SchM_Enter_LSduR_LSDUR_STATE();
+    config = configuration;
+    SchM_Exit_LSduR_LSDUR_STATE();
+    return config;
+}
+/* Only LSDUR_UNINIT accepts a configuration: the state machine has no LSDUR_ONLINE ->
+ * LSDUR_ONLINE transition, so routes in flight never see another configuration. */
 LSDUR_CODE void LSduR_Init(const LSduR_PBConfigType *ConfigPtr)
 {
+    const boolean valid = LSduR_Valid(ConfigPtr);
     SchM_Enter_LSduR_LSDUR_STATE();
-    if (LSduR_Valid(ConfigPtr) == TRUE) {
+    if ((valid == TRUE) && (configuration == NULL_PTR)) {
         configuration = ConfigPtr;
     }
     SchM_Exit_LSduR_LSDUR_STATE();
 }
 LSDUR_CODE LSduR_PBConfigIdType LSduR_GetConfigurationId(void)
 {
-    return (configuration == NULL_PTR) ? 0u : configuration->id;
+    const LSduR_PBConfigType *config = LSduR_Configuration();
+    return (config == NULL_PTR) ? 0u : config->id;
 }
 static LSDUR_CODE Std_ReturnType LSduR_Transmit(LSduR_UpperType module,
                                                 PduIdType id,
                                                 const PduInfoType *info)
 {
+    const LSduR_PBConfigType *config = LSduR_Configuration();
     Std_ReturnType result = E_NOT_OK;
-    if ((configuration != NULL_PTR) && (info != NULL_PTR)) {
+    if ((config != NULL_PTR) && (info != NULL_PTR)) {
         uint16 i;
-        for (i = 0u; i < configuration->transmit_count; ++i) {
-            const LSduR_TxRouteType *route = &configuration->transmit[i];
+        for (i = 0u; i < config->transmit_count; ++i) {
+            const LSduR_TxRouteType *route = &config->transmit[i];
             if ((route->module == module) && (route->upper == id)) {
                 result = CanIf_Transmit(route->lower, info);
                 break;
@@ -86,46 +102,42 @@ LSDUR_CODE Std_ReturnType LSduR_CanTpTransmit(PduIdType TxPduId, const PduInfoTy
 {
     return LSduR_Transmit(LSDUR_UP_CANTP, TxPduId, PduInfoPtr);
 }
-/* Transitional (ADR 0018): PduR and Com still rely on their caller holding the shared
- * legacy area, which CanIf no longer does; LSduR holds it around their callbacks until
- * #41 and #42 migrate them. */
 LSDUR_CODE void LSduR_CanIfRxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr)
 {
-    SchM_Enter_LSduR_LSDUR_STATE();
-    if ((configuration != NULL_PTR) && (PduInfoPtr != NULL_PTR)) {
+    const LSduR_PBConfigType *config = LSduR_Configuration();
+    if ((config != NULL_PTR) && (PduInfoPtr != NULL_PTR)) {
         uint16 i;
-        for (i = 0u; i < configuration->receive_count; ++i) {
-            const LSduR_RxRouteType *route = &configuration->receive[i];
+        for (i = 0u; i < config->receive_count; ++i) {
+            const LSduR_RxRouteType *route = &config->receive[i];
             if (route->lower == RxPduId) {
                 route->indication(route->upper, PduInfoPtr);
                 break;
             }
         }
     }
-    SchM_Exit_LSduR_LSDUR_STATE();
 }
 LSDUR_CODE void LSduR_CanIfTxConfirmation(PduIdType TxPduId, Std_ReturnType result)
 {
-    SchM_Enter_LSduR_LSDUR_STATE();
-    if (configuration != NULL_PTR) {
+    const LSduR_PBConfigType *config = LSduR_Configuration();
+    if (config != NULL_PTR) {
         uint16 i;
-        for (i = 0u; i < configuration->transmit_count; ++i) {
-            const LSduR_TxRouteType *route = &configuration->transmit[i];
+        for (i = 0u; i < config->transmit_count; ++i) {
+            const LSduR_TxRouteType *route = &config->transmit[i];
             if (route->lower == TxPduId) {
                 route->confirmation(route->upper, result);
                 break;
             }
         }
     }
-    SchM_Exit_LSduR_LSDUR_STATE();
 }
 LSDUR_CODE Std_ReturnType LSduR_CanIfTriggerTransmit(PduIdType TxPduId, PduInfoType *PduInfoPtr)
 {
+    const LSduR_PBConfigType *config = LSduR_Configuration();
     Std_ReturnType result = E_NOT_OK;
-    if ((configuration != NULL_PTR) && (PduInfoPtr != NULL_PTR)) {
+    if ((config != NULL_PTR) && (PduInfoPtr != NULL_PTR)) {
         uint16 i;
-        for (i = 0u; i < configuration->transmit_count; ++i) {
-            const LSduR_TxRouteType *route = &configuration->transmit[i];
+        for (i = 0u; i < config->transmit_count; ++i) {
+            const LSduR_TxRouteType *route = &config->transmit[i];
             if ((route->lower == TxPduId) && (route->trigger != NULL_PTR)) {
                 result = route->trigger(route->upper, PduInfoPtr);
                 break;

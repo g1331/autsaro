@@ -67,7 +67,7 @@ static const LSduR_TxRouteType ls_tx[] = {
 static const LSduR_PBConfigType ls = {29u, ls_rx, 1u, ls_tx, 1u};
 static const PduR_RxRouteType pdur_rx[] = {{31u, 17u, indication}};
 static const PduR_TxRouteType pdur_tx[] = {
-    {PDUR_UP_COM, 18u, 41u, LSduR_PduRTransmit, confirmation, NULL_PTR}};
+    {PDUR_UP_COM, 18u, PDUR_LO_LSDUR, 41u, LSduR_PduRTransmit, confirmation, NULL_PTR}};
 static const PduR_PBConfigType pdur = {23u, pdur_rx, 1u, pdur_tx, 1u, NULL_PTR, 0u};
 static unsigned lost;
 static Std_ReturnType report_loss(uint16_t module, uint8_t instance, uint8_t api, uint8_t error) {

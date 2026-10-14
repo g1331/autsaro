@@ -3,8 +3,11 @@
 #define PDUR_H
 #include "ComStack_Types.h"
 typedef uint16 PduR_PBConfigIdType;
+typedef uint16 PduR_RoutingPathGroupIdType;
 typedef enum { PDUR_UNINIT = 0, PDUR_ONLINE = 1 } PduR_StateType;
 typedef enum { PDUR_UP_COM = 0, PDUR_UP_DCM = 1 } PduR_UpperType;
+/* Lower module of a transmit route: each owns a separate handle namespace. */
+typedef enum { PDUR_LO_LSDUR = 0, PDUR_LO_CANTP = 1 } PduR_LowerType;
 typedef Std_ReturnType (*PduR_TransmitType)(PduIdType id, const PduInfoType *info);
 typedef void (*PduR_ReceiveType)(PduIdType id, const PduInfoType *info);
 typedef void (*PduR_ConfirmationType)(PduIdType id, Std_ReturnType result);
@@ -39,6 +42,7 @@ typedef struct {
 typedef struct {
     PduR_UpperType module;
     PduIdType upper;
+    PduR_LowerType lower_module;
     PduIdType lower;
     PduR_TransmitType transmit;
     PduR_ConfirmationType confirmation;
@@ -55,4 +59,6 @@ typedef struct {
 } PduR_PBConfigType;
 void PduR_Init(const PduR_PBConfigType *ConfigPtr);
 PduR_PBConfigIdType PduR_GetConfigurationId(void);
+void PduR_EnableRouting(PduR_RoutingPathGroupIdType id);
+void PduR_DisableRouting(PduR_RoutingPathGroupIdType id, boolean initialize);
 #endif
