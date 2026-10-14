@@ -4,7 +4,7 @@
 
 <!-- impeccable:product-schema 1 -->
 
-本文件记录供设计工作使用的稳定产品事实。产品方向、近期顺序与长期候选见[路线图](docs/roadmap/README.md)，架构约束见 [docs/architecture.md](docs/architecture.md)，任务状态用 GitHub Issues 与 Milestones 跟踪；本文件不建立另一份路线、实施规格或完成台账。产品方向与平台归类已在本次初始化中由维护者确认。
+本文件记录供设计工作使用的稳定产品事实。产品方向、近期顺序与长期候选见[路线图](docs/roadmap/README.md)，架构约束见 [docs/architecture/](docs/architecture/README.md)，任务状态用 GitHub Issues 与 Milestones 跟踪；本文件不建立另一份路线、实施规格或完成台账。产品方向与平台归类已在本次初始化中由维护者确认。
 
 ## Platform
 
@@ -57,7 +57,7 @@ Vector MICROSAR Classic＋DaVinci Configurator、EB tresos AutoCore＋Studio 是
 
 ### 已确认方向与待决边界
 
-- 统一 Configurator 采用内置规则，范围见[架构](docs/architecture.md)与[交互规格](docs/design/ux-baseline/EXPERIENCE/README.md)。单核多组件应用——由真实 OS 调度多个 SWC、逐组件保护用户源码、在工作区编辑并独立交接——在[架构](docs/architecture.md)所述范围内支持。推进顺序见[路线图](docs/roadmap/README.md)，任务状态见 GitHub Milestones，本文不重复。
+- 统一 Configurator 采用内置规则，范围见[架构](docs/architecture/README.md)与[交互规格](docs/design/ux-baseline/EXPERIENCE/README.md)。单核多组件应用——由真实 OS 调度多个 SWC、逐组件保护用户源码、在工作区编辑并独立交接——在[架构](docs/architecture/README.md)所述范围内支持。推进顺序见[路线图](docs/roadmap/README.md)，任务状态见 GitHub Milestones，本文不重复。
 - 第一条完整参考产品链是通用 CAN＋诊断 ECU。完整交付须包含所声明配置需要的应用接口、OS、生命周期／网络管理与故障恢复；常开 CAN 的中间增量不能替代完整参考 ECU。
 - 长期逐阶段扩大所选 Classic 版次的有效模块与目标覆盖，不要求每个 ECU 启用全部模块，不用历史 story 数量计算未经定义的完成率。
 - 首个 MCU 板卡、驱动及许可、工具链、具体诊断／网络管理剖面、输入覆盖与迁移规则仍按对应产品规划决定。当前没有真实 MCU 验证，不预先宣布硬件支持。
@@ -77,7 +77,7 @@ Vector MICROSAR Classic＋DaVinci Configurator、EB tresos AutoCore＋Studio 是
 ## Evidence on Hand
 
 - [路线图](docs/roadmap/README.md)：近期顺序、长期候选路线、待决问题与后期学习层边界。
-- [架构](docs/architecture.md)、[ADR](docs/adr/)与[标准基线](docs/standards/README.md)：输入／生成责任、已记录决定与固定规范版次。
+- [架构](docs/architecture/README.md)、[ADR](docs/adr/)与[标准基线](docs/standards/README.md)：输入／生成责任、已记录决定与固定规范版次。
 - [README](README.md)、[运行时说明](runtime/README.md)及已合并 PR：现有工作流、受限能力、目标依赖和已记录验证范围。旧段落涉及历史状态时，以较新的已合并 PR 和当前源码核对，不从一句总述推定全部能力。
 - `ui/src/`、`src-tauri/`、`core/src/` 与 `runtime/`：现有 React 界面、桌面后端、配置／生成核心与 C99 运行时；`core/tests/` 承载集成测试及其 fixtures。
 - `ui/public/logo-app.png` 与 `src-tauri/icons/`：现有产品图标资产。

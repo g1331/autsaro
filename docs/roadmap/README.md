@@ -1,6 +1,6 @@
 # 路线图
 
-本文记录产品方向、近期顺序、依赖与仍然有效的需求约束。具体任务与状态在 GitHub Issues 和 Milestones 中跟踪；架构约束见 [architecture.md](../architecture.md)，重要决定见 [adr/](../adr/)。R-ID 与 Epic 编号只是规划标识，不进入代码、测试或产品文件名。
+本文记录产品方向、近期顺序、依赖与仍然有效的需求约束。具体任务与状态在 GitHub Issues 和 Milestones 中跟踪；架构约束见 [architecture/](../architecture/README.md)，重要决定见 [adr/](../adr/)。R-ID 与 Epic 编号只是规划标识，不进入代码、测试或产品文件名。
 
 ## 产品目的
 

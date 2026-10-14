@@ -6,7 +6,7 @@
 
 ## 决策
 
-1. 当前架构与不变量写在 `docs/architecture.md`，一份随代码维护的文档，只描述当前状态和明确标注的实施中方向。
+1. 当前架构与不变量写在 `docs/architecture/`，随代码维护，只描述当前状态和明确标注的实施中方向。
 2. 重大决定按 Nygard 格式写入 `docs/adr/NNNN-*.md`，一个决定一个文件；被取代时新增 ADR 并更新旧 ADR 的状态，不改写历史正文。
 3. AUTOSAR／MISRA 基线、官方资料位置与模块义务索引写在 `docs/standards/`。
 4. 待办、缺陷、实施计划与验收讨论使用 GitHub Issues 和 PR；修复证据放在 PR，不另建报告或台账。
@@ -15,7 +15,7 @@
 
 ## 后果
 
-- 接手者从 README、CONTRIBUTING、`docs/architecture.md`、ADR 和 Issues 即可理解与推进项目，无需安装代理工具。
+- 接手者从 README、CONTRIBUTING、`docs/architecture/`、ADR 和 Issues 即可理解与推进项目，无需安装代理工具。
 - 历史完成证据、验收数字和复盘仍可通过归档标签追溯，但不再作为当前状态；当前状态以代码、CI 与 Issues 为准。
 - 只有一个状态来源：Issues、Milestones 与已合并 PR。
 - 原规划中的约束只有迁入 `docs/` 或 ADR 的才继续有效；未迁移内容及理由记录在迁移 PR 的描述中。

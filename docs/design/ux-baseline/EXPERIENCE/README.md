@@ -5,7 +5,7 @@ updated: 2026-10-03
 sources:
   - ../../../../PRODUCT.md
   - ../../../roadmap/README.md
-  - ../../../architecture.md
+  - ../../../architecture/README.md
 ---
 
 # 产品界面与交互基线

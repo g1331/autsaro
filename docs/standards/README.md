@@ -1,6 +1,6 @@
 # 标准与规范基线
 
-本目录记录项目固定的标准版次、官方资料在本地的位置、测试预期如何从标准独立定义，以及各模块的义务索引与条款处置。它是查找依据的入口，不是符合性报告：列出的条款表示已定位并用于设计或验收，**不表示所有适用条款已逐条核完**，也不表示实现已经符合。架构与所有权约束见 [architecture.md](../architecture.md)，决定理由见 [ADR 0002](../adr/0002-fixed-standard-baseline-r24-11.md)、[ADR 0008](../adr/0008-misra-baseline-and-no-deviation.md)。
+本目录记录项目固定的标准版次、官方资料在本地的位置、测试预期如何从标准独立定义，以及各模块的义务索引与条款处置。它是查找依据的入口，不是符合性报告：列出的条款表示已定位并用于设计或验收，**不表示所有适用条款已逐条核完**，也不表示实现已经符合。架构与所有权约束见 [architecture/](../architecture/README.md)，决定理由见 [ADR 0002](../adr/0002-fixed-standard-baseline-r24-11.md)、[ADR 0008](../adr/0008-misra-baseline-and-no-deviation.md)。
 
 ## 1. 固定基线
 

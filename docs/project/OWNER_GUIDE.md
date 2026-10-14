@@ -7,7 +7,7 @@
 | 内容 | 位置 |
 | --- | --- |
 | 方向、近期顺序、长期候选与待决问题 | [路线图](../roadmap/README.md) |
-| 当前架构、所有权与状态不变量 | [架构](../architecture.md) |
+| 当前架构、所有权与状态不变量 | [架构](../architecture/README.md) |
 | 重要决定及其理由 | [ADR](../adr/) |
 | 标准版次、官方资料位置与模块义务索引 | [标准基线](../standards/README.md) |
 | 已承诺的阶段 | GitHub Milestones |

@@ -9,7 +9,7 @@
 //! - CanTp and Dcm handle received frames in their 1 ms main functions. A
 //!   HostBatch batch at a new epoch is injected before that epoch's tick; a
 //!   batch at an epoch that already ticked (including StartOS epoch 0) does
-//!   not rerun periodic work (docs/architecture.md, batch protocol). Every
+//!   not rerun periodic work (docs/architecture/runtime.md, batch protocol). Every
 //!   diagnostic input therefore gets its own tick.
 //! - `Ingress_Periodic` commits the received value on `E_OK` and on the
 //!   overlaid `RTE_E_MAX_AGE_EXCEEDED` (SWS_Rte_02703; `ComRxDataTimeoutAction`

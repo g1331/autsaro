@@ -136,7 +136,7 @@ npm run tauri --prefix ui -- build
 | [主机运行时](runtime/README.md) | 运行接口、通信与诊断范围 |
 | [受控 OS 目标](runtime/os/README.md) | 内核、补丁、工具链与平台范围 |
 | [规范资料入口](docs/official/README.md) | 本地规范档案的位置与分发限制 |
-| [架构](docs/architecture.md)与 [ADR](docs/adr/) | 当前架构、所有权不变量与重要决定 |
+| [架构](docs/architecture/README.md)与 [ADR](docs/adr/) | 当前架构、所有权不变量与重要决定 |
 | [标准基线](docs/standards/README.md) | 固定版次与模块义务索引 |
 | [路线图](docs/roadmap/README.md) | 方向、近期顺序与长期候选；任务见 GitHub Issues |
 | [界面设计](DESIGN.zh-CN.md) | 视觉与组件规范 |
