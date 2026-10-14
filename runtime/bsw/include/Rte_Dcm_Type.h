@@ -1,3 +1,4 @@
+/** @file Selected Dcm service types and fixed mode declarations of the host RTE. */
 /** Selected Dcm service types and fixed mode declarations. */
 #ifndef RTE_DCM_TYPE_H
 #define RTE_DCM_TYPE_H

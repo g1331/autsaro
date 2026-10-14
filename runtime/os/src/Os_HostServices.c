@@ -1,3 +1,4 @@
+/** @file Host primitives (atomics, threads, events, exit) over Win32 or the Linux shim. */
 #include "Os_Host.h"
 #include <stdio.h>
 #if defined(_WIN32)

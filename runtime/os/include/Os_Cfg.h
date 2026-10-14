@@ -1,3 +1,4 @@
+/** @file Compile-time OS status and error-access switches, validated here. */
 #ifndef AUTOSAR_OS_CFG_H
 #define AUTOSAR_OS_CFG_H
 /* Both status modes retain defensive host checks and nonzero ErrorHook

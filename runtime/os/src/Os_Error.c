@@ -1,3 +1,4 @@
+/** @file Hook invocation and ErrorHook context kept separately for each actor. */
 #include "Os_Backend.h"
 
 /* The fixed GCC/Win64 target uses the same native PE TLS ABI as Os_Stack.c.

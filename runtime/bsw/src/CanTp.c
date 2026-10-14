@@ -1,3 +1,4 @@
+/** @file CanTp for one physical, half-duplex, padded Classical CAN connection. */
 #include "CanTp.h"
 #include "PduR_CanTp.h"
 #include "LSduR_CanTp.h"

@@ -1,3 +1,4 @@
+/** @file Host probe executable that runs 20 ticks and confirms every output. */
 #include "Ecu_Target.h"
 #include "Ecu_TargetConfig.h"
 #include "Os_Host.h"

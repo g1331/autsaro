@@ -1,3 +1,4 @@
+/** @file Native stack registration, guard checks and fault capture for the Win64 target. */
 #define _WIN32_WINNT 0x0602
 #include "Os_Backend.h"
 #include "Os_Stack.h"

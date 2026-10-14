@@ -1,3 +1,4 @@
+/** @file ControlIdle modes and wakeup of a waiting Task by an ISR from the idle loop. */
 #include "Os_Target.h"
 #include "Os_Backend.h"
 #include <stdbool.h>

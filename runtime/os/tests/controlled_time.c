@@ -1,3 +1,4 @@
+/** @file Counters, alarms and schedule tables under controlled ticks and injected faults. */
 #include "Os_Backend.h"
 #include <stdbool.h>
 #include <stdio.h>

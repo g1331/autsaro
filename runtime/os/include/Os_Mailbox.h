@@ -1,3 +1,4 @@
+/** @file Single-producer native input mailbox between the host bridge and an owner Task. */
 #ifndef AUTOSAR_OS_MAILBOX_H
 #define AUTOSAR_OS_MAILBOX_H
 #include "Os.h"

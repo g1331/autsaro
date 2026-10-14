@@ -1,3 +1,4 @@
+/** @file Task activation: queued requests, FIFO order, limits and close-time races. */
 /* Standard Task bodies plus a private, independent kernel observer/injector. */
 #include "Os_Target.h"
 #include "FreeRTOS.h"

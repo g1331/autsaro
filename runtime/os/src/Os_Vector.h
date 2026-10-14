@@ -1,3 +1,4 @@
+/** @file Private interrupt vector table of the native port, incl. yield and tick slots. */
 #ifndef AUTOSAR_OS_VECTOR_H
 #define AUTOSAR_OS_VECTOR_H
 #include <stdint.h>

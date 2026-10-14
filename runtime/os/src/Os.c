@@ -1,3 +1,4 @@
+/** @file OS startup, shutdown and target validation; Task, resource and event service entries. */
 #include "Os_Target.h"
 #include "Os_Backend.h"
 const Os_TargetConfig *Os_Config;

@@ -1,3 +1,4 @@
+/** @file Counter, alarm and schedule-table configuration plus controlled-tick target services. */
 #ifndef AUTOSAR_OS_TIME_H
 #define AUTOSAR_OS_TIME_H
 #include "Os.h"

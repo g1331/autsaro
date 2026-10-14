@@ -247,6 +247,22 @@ fn production_preflight_and_binary_exclude_private_test_code() {
     let failed = prepared.native_preflight(&missing, &owner);
     assert_eq!(failed.status, PreflightStatus::Failed, "{failed:?}");
     assert_eq!(failed.fingerprint, prepared.fingerprint());
+    // A failed preflight keeps its source and logs for diagnosis; the test removes its copy.
+    let capture = failed
+        .logs
+        .iter()
+        .find_map(|log| match log {
+            autosar_config_core::LocalizedText::Message(message)
+                if message.key == "backend.prepared.preflight_capture_directory" =>
+            {
+                message.params["path"]
+                    .as_str()
+                    .map(std::path::PathBuf::from)
+            }
+            _ => None,
+        })
+        .expect("a failed preflight reports its capture directory");
+    std::fs::remove_dir_all(&capture).unwrap();
     assert_eq!(
         std::fs::read(scratch.0.join("Ingress.c")).unwrap(),
         application

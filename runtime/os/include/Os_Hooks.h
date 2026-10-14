@@ -1,3 +1,4 @@
+/** @file OS hook configuration, service identifiers and ErrorHook parameter snapshots. */
 #ifndef AUTOSAR_OS_HOOKS_H
 #define AUTOSAR_OS_HOOKS_H
 #include "Os_Types.h"

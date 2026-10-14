@@ -1,3 +1,4 @@
+/** @file Private backend operations shared across the OS sources. */
 #ifndef AUTOSAR_OS_BACKEND_H
 #define AUTOSAR_OS_BACKEND_H
 #include "Os_Target.h"

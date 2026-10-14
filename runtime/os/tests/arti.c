@@ -1,3 +1,4 @@
+/** @file ARTI trace of task transitions, hook events and event-buffer bounds. */
 #include <limits.h>
 #include "Os_Arti.h"
 #define PreTaskHook  OriginalPreTaskHook

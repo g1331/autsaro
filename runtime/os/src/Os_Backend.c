@@ -1,3 +1,4 @@
+/** @file FreeRTOS-backed Task activation, resource, event and shutdown core of the OS. */
 #include "Os_Backend.h"
 #include "Os_IntegrationHooks.h"
 #include <errno.h>

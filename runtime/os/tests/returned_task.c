@@ -1,3 +1,4 @@
+/** @file A Task returning without TerminateTask raises E_OS_MISSINGEND and is cleaned up. */
 #include "Os_Target.h"
 #include "Os_Backend.h"
 #include <stdbool.h>

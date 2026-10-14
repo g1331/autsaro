@@ -1,3 +1,4 @@
+/** @file Linux host layer emulating the Win32 threads, events and signals the OS backend uses. */
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif

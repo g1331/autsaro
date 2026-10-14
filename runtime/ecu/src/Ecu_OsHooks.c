@@ -1,3 +1,4 @@
+/** @file Bounded OS error, pre-task and post-task hooks that only record trace events. */
 #include "Os_Target.h"
 
 /* Standard configured callbacks are bounded and do not perform host I/O.
