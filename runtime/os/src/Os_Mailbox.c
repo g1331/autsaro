@@ -113,7 +113,7 @@ static StatusType input_context(void)
 {
     int owner;
     Os_BackendGuardService();
-    if ((Os_TargetReady() == 0) || (Os_Config->input_event == 0u)) {
+    if ((Os_BackendReady() == 0) || (Os_Config->input_event == 0u)) {
         return E_OS_STATE;
     }
     owner = Os_BackendInputOwner();

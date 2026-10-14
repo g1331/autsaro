@@ -12,6 +12,7 @@ static volatile LONG owner_entered;
 static volatile LONG tick_mask_observed;
 static volatile LONG tick_mask_kernel;
 static volatile LONG dispatch_release_stage;
+static volatile LONG service_closed;
 static unsigned work_count;
 static unsigned app_count;
 static unsigned completed_count;
@@ -38,13 +39,21 @@ typedef struct {
 static HardwareRecord hardware[20];
 static unsigned hardware_count;
 static TickType hardware_previous;
-static void check(bool condition)
+static void check_line(bool condition, unsigned line)
 {
     if (!condition) {
+        char location[8];
+        int i;
+        /* The source line after the marker names an intermittent failure (#162). */
         Os_TargetTrace('!');
+        (void)snprintf(location, sizeof(location), "%u", line);
+        for (i = 0; location[i] != '\0'; ++i) {
+            Os_TargetTrace(location[i]);
+        }
         ShutdownOS(E_OS_STATE);
     }
 }
+#define check(condition) check_line((condition), __LINE__)
 static void native_check(bool condition)
 {
     if (!condition) {
@@ -271,6 +280,15 @@ static void manual_alarms(void)
     Os_TargetTrace('X');
     ShutdownOS(E_OS_STATE);
 }
+void Os_TimeTestBeforeReady(void)
+{
+    /* Shutdown lands after the owner's next service passed its entry guard (#162). */
+    if ((strcmp(scenario, "close-in-service") == 0) &&
+        (InterlockedCompareExchange(&owner_entered, 0, 0) != 0) &&
+        (InterlockedExchange(&service_closed, 1) == 0)) {
+        Os_BackendRequestShutdown(E_OS_STATE);
+    }
+}
 void Os_TimeTestBeforePending(void)
 {
     if (strcmp(scenario, "close-before-pending") == 0) {
@@ -283,6 +301,10 @@ static DWORD WINAPI requester(void *argument)
     unsigned i;
     DWORD started_at;
     (void)argument;
+    if (strcmp(scenario, "close-in-service") == 0) {
+        Sleep(INFINITE);
+        return 99u;
+    }
     started_at = GetTickCount();
     while ((Os_TargetReady() == 0) || (InterlockedCompareExchange(&owner_entered, 0, 0) == 0)) {
         native_check((GetTickCount() - started_at) < 4000u);

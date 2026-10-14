@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- 主机 OS 在关闭与运行中的任务竞争时不再挂起或误报错误。请求关闭的任务可能在发布关闭状态之后、唤醒关闭控制线程之前被任务切换停住，控制线程因此不再运行，进程一直挂到期限；现在先唤醒控制线程。另一上下文请求关闭时已开始的 `WaitEvent` 等服务会返回 `E_OS_CALLEVEL`；现在它与请求之后调用的服务一样停住调用它的任务或 ISR。测试套件中原生 OS 命令失败时报告测试程序的 stdout 与 stderr，不再只给随工作区删除的日志路径。公开接口与生成配置不变。
 - **契约变化：**PduR 与 LSduR 改用各自的独占区（`SchM_Enter_PduR_PDUR_STATE`、`SchM_Enter_LSduR_LSDUR_STATE`），区内只读写已发布的配置指针，调用 CanIf、CanTp、Com 与 Dcm 都在区外（ADR 0018）。LSduR 转发 CanIf 回调时不再持有过渡区；`Com_RxIndication` 自己进入 `COM_STATE`，该区在 #42 之前仍映射到共享的旧区。`PduR_Init` 与 `LSduR_Init` 只在未初始化状态接受有效配置，再次调用不替换已发布的配置（没有 `ONLINE` 到 `ONLINE` 的转换）。
 - **契约变化：**`PduR_TxRouteType` 在 `upper` 与 `lower` 之间新增 `lower_module`（`PduR_LowerType`：`PDUR_LO_LSDUR`、`PDUR_LO_CANTP`）。LSduR 句柄与 CanTp N-SDU 编号分属不同命名空间：PduR 按命名空间检查唯一性，`PduR_CanIfTxConfirmation`／`PduR_CanIfTriggerTransmit` 只匹配 LSduR 路由，CanTp N-SDU 编号与 LSduR 句柄相同时不再收到 IF 确认。生成的 Dcm 发送路由不再写 `Dcm_TpTxConfirmation`，CanTp 经传输路由确认。PduR 新增 `PduR_RoutingPathGroupIdType`、`PduR_EnableRouting` 与 `PduR_DisableRouting`（SWS_PduR_00615／00617）；主线没有路由组，任何编号都直接返回。`PduR.h` 与 `LSduR.h` 直接包含 `Std_Types.h`。两个路由控制函数带有已批准的 MISRA Rule 8.7 偏离，记录见 `docs/standards/pdur.md`。
 - **不兼容：**主线 ECUC 配置必须包含 `PduRGeneral`（`PduRDevErrorDetect`、`PduRMetaDataSupport`、`PduRVersionInfoApi`、`PduRZeroCostOperation` 均为 `false`）和 `PduRRoutingPaths/PduRConfigurationId`，`PduR_GetConfigurationId` 现在返回该值。`PduRGeneral` 的其他取值、`PduRBswModules`、Dem 事件引用、路由组、缓冲、队列深度与策略、TP 阈值、默认值、数据提供方式、路由容量、一对多、多对一与网关路由都在来源对象上被拒绝。`standard-ecu` 模板与测试夹具已补齐新值。

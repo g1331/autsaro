@@ -131,10 +131,11 @@ def run_native(
     if result.status != "exited" or result.exit_code is None or (
         check and result.exit_code != 0
     ):
+        # The logs go with the workspace, so the message carries what the process wrote.
         raise OwnershipError(
             f"{stage}: argv={args!r} deadline_ns={spec.deadline_ns} "
-            f"status={result.status} exit_code={result.exit_code} "
-            f"stdout={result.stdout} stderr={result.stderr}"
+            f"status={result.status} exit_code={result.exit_code}\n"
+            f"stdout:\n{stdout}\nstderr:\n{stderr}"
         )
     return subprocess.CompletedProcess(args, result.exit_code, stdout, stderr)
 
@@ -550,6 +551,11 @@ def check_time(binary: Path) -> list[dict]:
     require(result["exit"] == 7 and "trace=ISREZ " in result["stdout"], result)
     require("time ticks=0 work=0 app=0 rejects=1 error=7" in result["stdout"], result)
     require("time_signal_failed=0" in result["stdout"], result)
+    records.append(result)
+    # The owner's WaitEvent passed its entry guard; the OS stops it, not an error.
+    result = execute(binary, "close-in-service")
+    require(result["exit"] == 7 and "trace=ISREZ " in result["stdout"], result)
+    require("time ticks=0 work=0 app=0 rejects=0 error=7" in result["stdout"], result)
     records.append(result)
     result = execute(binary, "thousand", failure=1)
     require(result["exit"] == 7 and "trace=IZ " in result["stdout"], result)

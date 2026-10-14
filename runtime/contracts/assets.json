@@ -611,7 +611,7 @@
     },
     {
       "path": "runtime/os/src/Os_Backend.c",
-      "sha256": "5fb68f3cc03c14a9a1cdac86bc1d012f26bf15e13f3ae75fb14b02fb4baae169",
+      "sha256": "ba94ff9dda8007e6580399652654d90d69b1812b1f3765c587c97877c7434151",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -625,7 +625,7 @@
     },
     {
       "path": "runtime/os/src/Os_Backend.h",
-      "sha256": "e9ca867feb752c69e53a157a0c6e774a38308041daf74e8c06f1731f14e3aef9",
+      "sha256": "dc647d671cd8634e528f872d3fd3fd4d96193c17f83efd19245df9e5d864e990",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -681,7 +681,7 @@
     },
     {
       "path": "runtime/os/src/Os_Mailbox.c",
-      "sha256": "fa00f117f4a4018d4dd4428c158b23c538511050ec54e61149a88b42b7f06008",
+      "sha256": "3020e8b243a20185d85ea3460ba769db53eadce275ef634baeac20d2a2d2941e",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -736,7 +736,7 @@
     },
     {
       "path": "runtime/os/src/Os_Time.c",
-      "sha256": "7af580910c61613b6e18a4601f7be83851fa1fa8b7e4d9ca62b427ba10176a7e",
+      "sha256": "e69caa637e6090573fc361553ab7078bcc4bc9dda9d667bde9013d0fdff4c2ce",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

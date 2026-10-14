@@ -658,7 +658,7 @@ static StatusType time_owner(void)
     int owner;
     Os_StackCheck();
     Os_BackendGuardService();
-    if ((Os_TargetReady() == 0) || (Os_Config->time == NULL) ||
+    if ((Os_BackendReady() == 0) || (Os_Config->time == NULL) ||
         (Os_Config->time->wake_event == 0u)) {
         return E_OS_STATE;
     }

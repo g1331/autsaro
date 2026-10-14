@@ -245,7 +245,7 @@ int Os_BackendServiceContext(void)
     if (Os_HookQueryContext() != 0) {
         return 1;
     }
-    return (Os_TargetReady() != 0) &&
+    return (Os_BackendReady() != 0) &&
            ((stack->role == 'T') ||
             ((stack->role == 'S') &&
              ((current_interrupt >= 32u) ||
@@ -283,10 +283,25 @@ AppModeType Os_BackendApplicationMode(void) { return startup_mode; }
 void Os_BackendGuardService(void)
 {
     const Os_NativeStack *stack = Os_StackCurrent();
-    if ((InterlockedCompareExchange(&Os_Closing, 0, 0) != 0) && (stack != NULL) &&
+    /* Every shutdown path sets the admission close bit before readiness ends. */
+    if (((InterlockedCompareExchange(&activation_admission, 0, 0) & 2) != 0) && (stack != NULL) &&
         ((stack->role == 'T') || (stack->role == 'S'))) {
         Os_BackendShutdown(E_OS_STATE);
     }
+}
+int Os_BackendReady(void)
+{
+    int serving;
+#ifdef OS_TIME_TESTS
+    Os_TimeTestBeforeReady();
+#endif
+    serving = Os_TargetReady();
+    if (serving == 0) {
+        /* A service that passed its entry guard before shutdown stops here instead of
+         * reporting the closing OS as a calling-context or state error (#162). */
+        Os_BackendGuardService();
+    }
+    return serving;
 }
 /* Normalize only live metadata order stamps. This never chooses a runnable task;
  * the existing kernel ready-list policy remains the only selector. */
@@ -675,6 +690,8 @@ static DWORD WINAPI control(void *argument)
     if (waited != WAIT_OBJECT_0) {
         ExitProcess(E_OS_STATE);
     }
+    /* The requester may be stopped between its wake-up and its own publication. */
+    (void)InterlockedExchange(&Os_Closing, 1);
 #if defined(__linux__) && defined(OS_STACK_TESTS)
     if (index == 1u && InterlockedExchange(&backup_fault_requested, 0) != 0) {
         void Os_StackTestBackupFault(void);
@@ -722,7 +739,6 @@ void Os_BackendStackFault(char failed_role)
     Os_TimeClose();
     Os_MailboxClose();
     InterlockedOr(&activation_admission, 2);
-    InterlockedExchange(&Os_Closing, 1);
     InterlockedExchange(&ready, 0);
     shutdown_reason = E_OS_STACKFAULT;
     if (failed_role == 'C') {
@@ -736,6 +752,7 @@ void Os_BackendStackFault(char failed_role)
     if (!Os_HostSetEvent((controller_healthy[0] != 0) ? close_event : backup_event)) {
         ExitProcess(E_OS_STACKFAULT);
     }
+    InterlockedExchange(&Os_Closing, 1);
     Sleep(INFINITE);
     ExitProcess(E_OS_STACKFAULT);
 }
@@ -743,7 +760,6 @@ void Os_BackendStackFault(char failed_role)
 void Os_BackendSignalStackFault(char failed_role)
 {
     (void)InterlockedOr(&activation_admission, 2);
-    (void)InterlockedExchange(&Os_Closing, 1);
     (void)InterlockedExchange(&ready, 0);
     shutdown_reason = E_OS_STACKFAULT;
     if (failed_role == 'C') {
@@ -757,6 +773,7 @@ void Os_BackendSignalStackFault(char failed_role)
     if (!Os_HostSetEvent(controller_healthy[0] != 0 ? close_event : backup_event)) {
         ExitProcess(E_OS_STACKFAULT);
     }
+    (void)InterlockedExchange(&Os_Closing, 1);
 }
 #endif
 void Os_BackendShutdown(StatusType error)
@@ -776,15 +793,17 @@ void Os_BackendRequestShutdown(StatusType error)
     Os_TimeClose();
     Os_MailboxClose();
     if ((InterlockedOr(&activation_admission, 2) & 2) == 0) {
-        InterlockedExchange(&Os_Closing, 1);
         shutdown_reason = error;
         InterlockedExchange(&ready, 0);
         if (controller_healthy[0] == 0 && controller_healthy[1] == 0) {
             report_and_exit();
         }
+        /* Wake control before publishing Os_Closing: a dispatch that stops this Task
+         * after the publication never resumes it, so the wake-up would be lost (#154). */
         if (!Os_HostSetEvent((controller_healthy[0] != 0) ? close_event : backup_event)) {
             ExitProcess(E_OS_STATE);
         }
+        InterlockedExchange(&Os_Closing, 1);
     }
 }
 void Os_BackendAssert(const char *file, int line)
@@ -1140,7 +1159,7 @@ StatusType Os_BackendActivate(TaskType id)
 #endif
     taskENTER_CRITICAL();
     Os_BackendGuardService();
-    if (!Os_TargetReady()) {
+    if (!Os_BackendReady()) {
         taskEXIT_CRITICAL();
         return E_OS_STATE;
     }
@@ -1185,7 +1204,7 @@ static size_t current_task_index(void)
 {
     const Os_NativeStack *stack = Os_StackCurrent();
     size_t index;
-    if ((stack == NULL) || (stack->role != 'T') || (Os_TargetReady() == 0)) {
+    if ((stack == NULL) || (stack->role != 'T') || (Os_BackendReady() == 0)) {
         return OS_MAX_TASKS;
     }
     for (index = 0u; index < Os_Config->task_count; ++index) {
@@ -1203,7 +1222,7 @@ static StatusType complete_activation(TaskType id, int chain, int returned)
     ActivationQueue *queue;
     size_t target = OS_MAX_TASKS;
     Os_BackendGuardService();
-    if ((Os_TargetReady() == 0) || (stack == NULL) || (stack->role != 'T')) {
+    if ((Os_BackendReady() == 0) || (stack == NULL) || (stack->role != 'T')) {
         return E_OS_CALLEVEL;
     }
     current = xTaskGetCurrentTaskHandle();
@@ -1320,7 +1339,7 @@ StatusType Os_BackendResource(ResourceType id, int acquire)
     Os_BackendGuardService();
     task = current_task_index();
     if (task == OS_MAX_TASKS) {
-        if ((Os_TargetReady() == 0) || (stack == NULL) || (stack->role != 'S') ||
+        if ((Os_BackendReady() == 0) || (stack == NULL) || (stack->role != 'S') ||
             (current_interrupt == OS_KERNEL_YIELD_INTERRUPT) || (current_interrupt >= 32u) ||
             ((Os_Config->category1_isrs & ((uint32_t)1u << current_interrupt)) != 0u)) {
             return E_OS_CALLEVEL;

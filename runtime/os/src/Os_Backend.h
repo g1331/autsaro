@@ -55,6 +55,7 @@ void Os_TimeTestSeed(uint64_t epoch, uint32_t kernel_tick, TickType value);
 void Os_TimeTestCloseEvent(void);
 void Os_TimeTestBeforePending(void);
 void Os_TimeTestMasked(void);
+void Os_TimeTestBeforeReady(void);
 #endif
 void Os_TimeOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate);
 void Os_MailboxInstall(void);
@@ -74,6 +75,7 @@ void Os_BackendSignalStackFault(char role);
 void Os_BackendSetDispatcher(void);
 #endif
 void Os_BackendGuardService(void);
+int Os_BackendReady(void);
 Os_HookPhase Os_HookContext(void);
 int Os_HookServiceAllowed(OSServiceIdType service);
 StatusType Os_ServiceAccessStatus(OSServiceIdType service);
