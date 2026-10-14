@@ -1,3 +1,4 @@
+/** @file Counter services through the Rte_Call_OsService ports, with ErrorHook parameters. */
 #include "Rte_Os.h"
 #include "Os_Target.h"
 #include "Os_Backend.h"

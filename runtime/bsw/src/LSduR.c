@@ -1,3 +1,4 @@
+/** @file R24-11 LSduR routing PDUs one-to-one over immutable configured routes. */
 #include "LSduR.h"
 #include "SchM_LSduR.h"
 #include "LSduR_PduR.h"

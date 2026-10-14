@@ -1,3 +1,4 @@
+/** @file Standard CanIf for one Classical CAN controller and immutable routes. */
 #include "CanIf.h"
 #include "standard/Can.h"
 #include "Det.h"

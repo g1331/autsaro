@@ -1,3 +1,4 @@
+/** @file Private native stack and fault records; Linux adds signal-stack fields. */
 #ifndef AUTOSAR_OS_STACK_H
 #define AUTOSAR_OS_STACK_H
 #include "Os_Host.h"

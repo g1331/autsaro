@@ -1,3 +1,4 @@
+/** @file Dcm exclusive area, main function and diagnostic session mode switch. */
 /** Selected Dcm scheduler and actual diagnostic-session mode producer. */
 #ifndef SCHM_DCM_H
 #define SCHM_DCM_H

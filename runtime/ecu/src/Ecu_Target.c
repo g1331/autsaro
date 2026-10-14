@@ -1,3 +1,4 @@
+/** @file Single-owner ECU target: lifecycle, input mailbox and output tickets on native hosts. */
 #include "Ecu_Target.h"
 #include "Ecu_TargetConfig.h"
 #include "Ecu_Execution.h"

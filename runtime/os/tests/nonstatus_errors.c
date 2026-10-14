@@ -1,3 +1,4 @@
+/** @file Status-less services leave ErrorHook state untouched and work in every context. */
 #include "Os_Target.h"
 #include "Os_Backend.h"
 #include <stdbool.h>

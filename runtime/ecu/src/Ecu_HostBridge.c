@@ -1,3 +1,4 @@
+/** @file HostBatchV1 execution: admits a batch, drives ticks and writes the receipt. */
 #include "Ecu_HostBridge.h"
 #include "Ecu_TargetConfig.h"
 #include "Ecu_Config.h"

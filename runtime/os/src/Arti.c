@@ -1,3 +1,4 @@
+/** @file ARTI event buffer with lock-free slot reservation; read only after shutdown. */
 #include "Arti.h"
 #include "Os_Host.h"
 

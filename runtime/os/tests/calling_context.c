@@ -1,3 +1,4 @@
+/** @file Service results and mask state when called from hooks, ISRs and invalid contexts. */
 #include "Os_Target.h"
 #include "Os_Backend.h"
 #include <stdbool.h>

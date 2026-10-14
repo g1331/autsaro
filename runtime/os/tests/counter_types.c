@@ -1,3 +1,4 @@
+/** @file Counter IDs beyond 8 and 16 bits are never truncated into other counters. */
 #include "Rte_Os_Type.h"
 #include "Os_Target.h"
 #include "Os_Backend.h"

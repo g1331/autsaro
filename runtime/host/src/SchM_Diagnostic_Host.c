@@ -1,3 +1,4 @@
+/** @file Host SchM areas of Dcm and CanTp, mapped to the shared legacy state lock. */
 /** Diagnostic modules are not yet migrated (ADR 0018): their areas map to the shared
  * legacy resource. */
 #include "ComStack_Cfg.h"

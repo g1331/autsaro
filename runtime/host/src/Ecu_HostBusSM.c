@@ -1,3 +1,4 @@
+/** @file Explicit CDD bus state manager for one controlled-host CAN channel. */
 #include "Ecu_HostBusSM.h"
 #include "Can_HostLock.h"
 #define ECU_HOSTBUSSM_START_SEC_VAR_CLEARED_UNSPECIFIED

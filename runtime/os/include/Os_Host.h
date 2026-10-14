@@ -1,14 +1,13 @@
-#ifndef AUTOSAR_OS_HOST_H
-#define AUTOSAR_OS_HOST_H
-
-#include <stdint.h>
-/** @file Os_Host.h
- * @brief Native-only synchronization, actor, time and fault primitives.
+/** @file Native-only synchronization, actor, time and fault primitives.
  *
  * This host boundary does not advance the automotive logical clock. Windows
  * and Linux implementations preserve the same bounded OS service contract;
  * an unsupported host must fail compilation rather than select a fallback.
  */
+#ifndef AUTOSAR_OS_HOST_H
+#define AUTOSAR_OS_HOST_H
+
+#include <stdint.h>
 #if defined(_WIN32)
 #include "Os_Windows.h"
 #elif defined(__linux__)

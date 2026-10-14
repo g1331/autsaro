@@ -1,3 +1,4 @@
+/** @file Host lock, per-module strict areas and legacy shared state area (ADR 0018). */
 #ifndef CAN_HOSTLOCK_H
 #define CAN_HOSTLOCK_H
 

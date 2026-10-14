@@ -1,3 +1,4 @@
+/** @file Host batch ECU executable speaking HostBatchV1 over standard streams. */
 #include "Ecu_HostBridge.h"
 #include "Os_Host.h"
 #include <stdio.h>

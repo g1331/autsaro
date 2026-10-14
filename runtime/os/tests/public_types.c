@@ -1,3 +1,4 @@
+/** @file Os.h public types and access macros meet the independent R24-11 constraints. */
 #ifdef OS_PUBLIC_TYPES_HOST_BEFORE
 #include "Os_Host.h"
 #endif

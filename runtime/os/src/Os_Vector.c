@@ -1,3 +1,4 @@
+/** @file Interrupt vector table of the native port, placed in its own data section. */
 #include "Os_Vector.h"
 /* The fixed GCC target emits writable storage in its own PE section. The
  * native port installs handlers before delivery; this is its actual table,

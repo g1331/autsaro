@@ -1,3 +1,4 @@
+/** @file FreeRTOS kernel configuration: static allocation, 1 kHz tick, 32 priorities. */
 #ifndef AUTOSAR_FREERTOS_CONFIG_H
 #define AUTOSAR_FREERTOS_CONFIG_H
 #define configUSE_PREEMPTION                    1

@@ -1,3 +1,4 @@
+/** @file BswM with one IMMEDIATE ComM mode input and a single action, run in caller context. */
 #include "BswM.h"
 #include "BswM_ComM.h"
 #include "SchM_BswM.h"

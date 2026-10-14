@@ -1,3 +1,4 @@
+/** @file ARTI trace context and event emission for OS tasks, ISRs, hooks and services. */
 #include "Os_Arti.h"
 #include <assert.h>
 

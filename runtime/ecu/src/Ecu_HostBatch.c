@@ -1,3 +1,4 @@
+/** @file HostBatchV1 line parser and bounded staging, with no automotive state access. */
 #include "Ecu_HostBatch.h"
 #include <string.h>
 
