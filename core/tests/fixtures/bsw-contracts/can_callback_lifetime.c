@@ -1,8 +1,7 @@
 /** Deterministic window oracle (ADR 0018); real driver, CanIf, routing and SchM.
- * The dispatcher stops where the driver has left its area and not yet entered CanIf
- * (or, for CanIf-to-driver calls, where the driver returns inside the legacy CanIf
- * area). A contender then either completes without touching any held lock, or, for
- * modules still on the shared legacy area, is shown to wait on that area only. */
+ * The dispatcher stops between two modules: after the driver left its area and before
+ * CanIf, after the driver returned to CanIf, or around CanIf's Can_Write. A contender
+ * then completes without touching any held lock, and every request keeps one result. */
 #include "standard/Can.h"
 #include "Can_Host.h"
 #include "CanIf.h"
@@ -49,7 +48,6 @@ static int dispatch_thread(void) { return pthread_equal(pthread_self(), dispatch
 static int contend_thread(void) { return pthread_equal(pthread_self(), contender); }
 #endif
 static unsigned paused;
-static unsigned attempted;
 static unsigned blocked;
 static unsigned finished;
 static unsigned released;
@@ -57,10 +55,12 @@ static unsigned armed;
 static unsigned operation;
 static unsigned cancellation;
 static unsigned results;
+static Std_ReturnType transmitted;
 static unsigned confirmed;
 static unsigned reenter;
 static Can_ControllerStateType last_mode;
 static const uint8 bytes[8] = {42u};
+static const PduInfoType frame = {(uint8 *)bytes, NULL_PTR, 1u};
 const EcuPolicyConfig Ecu_Policy = {.tx_confirmation = ECU_TX_SYNCHRONOUS};
 /* Observe actual native contention, so release cannot race a merely scheduled waiter. */
 #if defined(_WIN32)
@@ -105,7 +105,7 @@ int __wrap_pthread_mutex_lock(pthread_mutex_t *mutex) {
     return __real_pthread_mutex_lock(mutex);
 }
 #endif
-void __real_SchM_Enter_CanIf_CANIF_STATE(void);
+Std_ReturnType __real_Can_Write(Can_HwHandleType hth, const Can_PduType *pdu);
 void __real_SchM_Exit_Can_CAN_STATE(void);
 void __real_CanIf_ControllerModeIndication(uint8 ControllerId, Can_ControllerStateType mode);
 void __real_CanIf_ControllerBusOff(uint8 ControllerId);
@@ -144,20 +144,22 @@ void __wrap_CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType *Pdu
         pause_dispatch();
     __real_CanIf_RxIndication(Mailbox, PduInfoPtr);
 }
-/* CanIf-to-driver operations stop after the driver exit, still inside CanIf. */
+/* CanIf-to-driver operations stop after the driver exit, back in CanIf. */
 void __wrap_SchM_Exit_Can_CAN_STATE(void) {
     __real_SchM_Exit_Can_CAN_STATE();
-    if (operation >= 5u)
+    if ((operation >= 5u) && (operation <= 10u))
         pause_dispatch();
 }
-void __wrap_SchM_Enter_CanIf_CANIF_STATE(void) {
-    lock();
-    if (paused && contend_thread()) {
-        attempted = 1u;
-        wake();
-    }
-    unlock();
-    __real_SchM_Enter_CanIf_CANIF_STATE();
+/* CanIf Tx stops after its reservation (11) or after the driver accepted the frame and
+ * before CanIf settles the request (12, 13). */
+Std_ReturnType __wrap_Can_Write(Can_HwHandleType hth, const Can_PduType *pdu) {
+    Std_ReturnType result;
+    if (operation == 11u)
+        pause_dispatch();
+    result = __real_Can_Write(hth, pdu);
+    if (operation > 11u)
+        pause_dispatch();
+    return result;
 }
 static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8]) {
     assert(id == 0x321u && length == 1u && data[0] == 42u);
@@ -247,9 +249,11 @@ static void dispatch(void) {
         /* The delivery result belongs to the driver lifetime that admitted it. */
         assert(Can_Inject(0x320u, 1u, bytes, 0u) == (cancellation ? ECU_ERR_CONTROLLER : ECU_OK));
 #endif
-    } else {
+    } else if (operation <= 10u) {
         Can_ControllerStateType actual;
         assert(CanIf_GetControllerMode(0u, &actual) == E_OK);
+    } else {
+        transmitted = CanIf_Transmit(51u, &frame);
     }
 }
 static void cancel(void) {
@@ -263,7 +267,7 @@ static void cancel(void) {
         assert(Ecu_HostBusSM_RequestComMode(0u, COMM_NO_COMMUNICATION) == E_OK);
     } else if (operation == 10u) {
         Det_Init(NULL_PTR);
-    } else if (operation >= 6u) {
+    } else if ((operation >= 6u) && (operation <= 9u)) {
         if (operation == 6u)
             SchM_Enter_Dcm_DCM_STATE();
         else if (operation == 7u)
@@ -281,6 +285,12 @@ static void cancel(void) {
             SchM_Exit_ComM_COMM_STATE();
         else
             SchM_Exit_BswM_BSWM_STATE();
+    } else if (operation == 13u) {
+        /* The frame leaves and is confirmed before CanIf settles its request. */
+        assert(Can_HostFlush() == ECU_OK);
+        Can_MainFunction_Write();
+        if (cancellation)
+            Can_SetMode(CAN_STOPPED);
     } else {
         Can_SetMode(CAN_STOPPED);
         if (cancellation) {
@@ -328,15 +338,13 @@ int main(void) {
     InitializeConditionVariable(&changed);
 #endif
     Det_Init(NULL_PTR);
-    for (operation = 0u; operation < 11u; ++operation) {
+    for (operation = 0u; operation < 14u; ++operation) {
         for (cancellation = 0u; cancellation < 2u; ++cancellation) {
 #if defined(_WIN32)
             HANDLE first, second;
 #else
             pthread_t first, second;
 #endif
-            /* Driver and Det no longer share the area the waiter holds. */
-            const unsigned proceeds = (operation < 5u) || (operation == 10u);
             initialize();
             results = confirmed = 0u;
             if (operation == 1u) {
@@ -356,7 +364,7 @@ int main(void) {
                 assert(Can_Inject(0x320u, 1u, bytes, 0u) == ECU_OK);
 #endif
             }
-            paused = attempted = blocked = finished = released = 0u;
+            paused = blocked = finished = released = 0u;
             armed = 1u;
 #if defined(_WIN32)
             first = CreateThread(NULL, 0u, run_dispatch, NULL, 0u, NULL);
@@ -375,16 +383,11 @@ int main(void) {
             assert(pthread_create(&second, NULL_PTR, run_cancel, NULL_PTR) == 0);
 #endif
             lock();
-            if (proceeds) {
-                /* The paused dispatcher holds no lock the contender needs. */
-                while (!finished && !blocked)
-                    wait();
-                assert(finished && !blocked);
-            } else {
-                while (!attempted || !blocked)
-                    wait();
-            }
-            /* Neither the dispatcher nor its waiter owns the driver area. */
+            /* The paused dispatcher holds no lock the contender needs. */
+            while (!finished && !blocked)
+                wait();
+            assert(finished && !blocked);
+            /* Neither the dispatcher nor the contender owns the driver area. */
             assert(Can_TryLock() == 1);
             Can_Unlock();
             released = 1u;
@@ -409,6 +412,22 @@ int main(void) {
                     assert(Can_HostFlush() == ECU_OK);
                     Can_MainFunction_Write();
                     assert(results == ((operation == 3u) ? 2u : 1u) && confirmed == 1u);
+                }
+            } else if (operation >= 11u) {
+                /* Release a frame the driver holds for a request that ended silently. */
+                assert(Can_HostFlush() == ECU_OK);
+                Can_MainFunction_Write();
+                if (operation == 11u) {
+                    /* Stopped before Can_Write: refused without a result. After a
+                     * reinitialization the old request ends silently. */
+                    assert(transmitted == (cancellation ? E_OK : E_NOT_OK) && results == 0u);
+                } else if (operation == 12u) {
+                    /* Accepted, then cancelled: E_NOT_OK once (SWS_CANIF_00739). */
+                    assert(transmitted == E_OK && confirmed == 0u);
+                    assert(results == (cancellation ? 0u : 1u));
+                } else {
+                    /* Confirmed before settlement: E_OK once, a later stop adds none. */
+                    assert(transmitted == E_OK && results == 1u && confirmed == 1u);
                 }
             }
             Can_SetMode(CAN_STOPPED);

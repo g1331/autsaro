@@ -5,13 +5,19 @@ void Can_Lock(void);
 /* 1: acquired; 0: busy; -1: synchronization setup/operation failed. */
 int Can_TryLock(void);
 void Can_Unlock(void);
-/* Det exclusive area: protects the configuration snapshot only (ADR 0018). */
-void Can_HostDetLock(void);
-void Can_HostDetUnlock(void);
-/* Legacy shared state area behind SchM_CanIf; it may enclose the strict driver and Det
- * areas but never the reverse. Removed when its last user is migrated (ADR 0018). */
+/* Strict SchM areas (ADR 0018), one per migrated module; the driver uses Can_Lock. Each
+ * protects its module's data only: a thread holding one that enters any area aborts. */
+typedef enum {
+    CAN_HOST_AREA_DET = 0,
+    CAN_HOST_AREA_CANIF,
+    CAN_HOST_AREA_SCHM_MODE,
+    CAN_HOST_AREA_COUNT
+} Can_HostAreaType;
+void Can_HostAreaEnter(Can_HostAreaType area);
+void Can_HostAreaExit(Can_HostAreaType area);
+/* Legacy shared state area of the modules not yet migrated; it may enclose strict areas
+ * but never the reverse. Removed when its last user is migrated (ADR 0018). */
 void Can_HostStateLock(void);
 void Can_HostStateUnlock(void);
-/* Strict areas (driver, Det) must not nest or call out; a violation aborts the process. */
 
 #endif

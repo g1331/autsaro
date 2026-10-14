@@ -107,8 +107,8 @@ int main(int argc, char **argv) {
         Can_HostStateLock();
         Can_Lock();
         Can_Unlock();
-        Can_HostDetLock();
-        Can_HostDetUnlock();
+        Can_HostAreaEnter(CAN_HOST_AREA_DET);
+        Can_HostAreaExit(CAN_HOST_AREA_DET);
         Can_HostStateUnlock();
         Can_HostStateUnlock();
         return 0;
@@ -116,12 +116,12 @@ int main(int argc, char **argv) {
     /* A strict area (driver, Det) admits no other area, including itself. */
     if (strcmp(argv[1], "nest-strict") == 0) {
         Can_Lock();
-        Can_HostDetLock();
+        Can_HostAreaEnter(CAN_HOST_AREA_DET);
         return 6;
     }
     if (strcmp(argv[1], "nest-same") == 0) {
-        Can_HostDetLock();
-        Can_HostDetLock();
+        Can_HostAreaEnter(CAN_HOST_AREA_DET);
+        Can_HostAreaEnter(CAN_HOST_AREA_DET);
         return 6;
     }
     if (strcmp(argv[1], "nest-legacy") == 0) {

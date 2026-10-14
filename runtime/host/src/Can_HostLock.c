@@ -34,7 +34,7 @@ static void Can_NoteExit(int strict) {
 static INIT_ONCE can_lock_once = INIT_ONCE_STATIC_INIT;
 static CRITICAL_SECTION can_lock;
 static CRITICAL_SECTION state_lock;
-static CRITICAL_SECTION det_lock;
+static CRITICAL_SECTION area_locks[CAN_HOST_AREA_COUNT];
 static BOOL CALLBACK Can_InitLock(PINIT_ONCE once, PVOID parameter, PVOID *context) {
     (void)once;
     (void)parameter;
@@ -47,11 +47,16 @@ static BOOL CALLBACK Can_InitStateLock(PINIT_ONCE once, PVOID parameter, PVOID *
     (void)context;
     return InitializeCriticalSectionEx(&state_lock, 0u, 0u);
 }
-static BOOL CALLBACK Can_InitDetLock(PINIT_ONCE once, PVOID parameter, PVOID *context) {
+static BOOL CALLBACK Can_InitAreas(PINIT_ONCE once, PVOID parameter, PVOID *context) {
+    BOOL initialized = TRUE;
+    size_t area;
     (void)once;
     (void)parameter;
     (void)context;
-    return InitializeCriticalSectionEx(&det_lock, 0u, 0u);
+    for (area = 0u; (area < (size_t)CAN_HOST_AREA_COUNT) && (initialized != FALSE); ++area) {
+        initialized = InitializeCriticalSectionEx(&area_locks[area], 0u, 0u);
+    }
+    return initialized;
 }
 static void Can_EnterRecursive(PINIT_ONCE once, PINIT_ONCE_FN init, LPCRITICAL_SECTION lock) {
     if (InitOnceExecuteOnce(once, init, NULL, NULL) == 0) {
@@ -78,13 +83,19 @@ void Can_Unlock(void) {
     LeaveCriticalSection(&can_lock);
     Can_NoteExit(1);
 }
-void Can_HostDetLock(void) {
-    static INIT_ONCE det_lock_once = INIT_ONCE_STATIC_INIT;
+void Can_HostAreaEnter(Can_HostAreaType area) {
+    static INIT_ONCE area_once = INIT_ONCE_STATIC_INIT;
+    if (area >= CAN_HOST_AREA_COUNT) {
+        Can_Fatal();
+    }
     Can_NoteEnter(1);
-    Can_EnterRecursive(&det_lock_once, Can_InitDetLock, &det_lock);
+    Can_EnterRecursive(&area_once, Can_InitAreas, &area_locks[area]);
 }
-void Can_HostDetUnlock(void) {
-    LeaveCriticalSection(&det_lock);
+void Can_HostAreaExit(Can_HostAreaType area) {
+    if (area >= CAN_HOST_AREA_COUNT) {
+        Can_Fatal();
+    }
+    LeaveCriticalSection(&area_locks[area]);
     Can_NoteExit(1);
 }
 void Can_HostStateLock(void) {
@@ -101,7 +112,7 @@ typedef struct {
 static pthread_once_t can_lock_once = PTHREAD_ONCE_INIT;
 static Can_RecursiveLock can_lock;
 static Can_RecursiveLock state_lock;
-static Can_RecursiveLock det_lock;
+static Can_RecursiveLock area_locks[CAN_HOST_AREA_COUNT];
 static void Can_InitRecursive(Can_RecursiveLock *lock) {
     pthread_mutexattr_t attributes;
     int initialized = 0;
@@ -126,7 +137,12 @@ static void Can_InitRecursive(Can_RecursiveLock *lock) {
 }
 static void Can_InitLock(void) { Can_InitRecursive(&can_lock); }
 static void Can_InitStateLock(void) { Can_InitRecursive(&state_lock); }
-static void Can_InitDetLock(void) { Can_InitRecursive(&det_lock); }
+static void Can_InitAreas(void) {
+    size_t area;
+    for (area = 0u; area < (size_t)CAN_HOST_AREA_COUNT; ++area) {
+        Can_InitRecursive(&area_locks[area]);
+    }
+}
 static void Can_EnterRecursive(pthread_once_t *once, void (*init)(void), Can_RecursiveLock *lock) {
     if ((pthread_once(once, init) != 0) || (lock->ready == 0) ||
         (pthread_mutex_lock(&lock->mutex) != 0)) {
@@ -165,13 +181,19 @@ void Can_Unlock(void) {
     Can_LeaveRecursive(&can_lock);
     Can_NoteExit(1);
 }
-void Can_HostDetLock(void) {
-    static pthread_once_t det_lock_once = PTHREAD_ONCE_INIT;
+void Can_HostAreaEnter(Can_HostAreaType area) {
+    static pthread_once_t area_once = PTHREAD_ONCE_INIT;
+    if (area >= CAN_HOST_AREA_COUNT) {
+        Can_Fatal();
+    }
     Can_NoteEnter(1);
-    Can_EnterRecursive(&det_lock_once, Can_InitDetLock, &det_lock);
+    Can_EnterRecursive(&area_once, Can_InitAreas, &area_locks[area]);
 }
-void Can_HostDetUnlock(void) {
-    Can_LeaveRecursive(&det_lock);
+void Can_HostAreaExit(Can_HostAreaType area) {
+    if (area >= CAN_HOST_AREA_COUNT) {
+        Can_Fatal();
+    }
+    Can_LeaveRecursive(&area_locks[area]);
     Can_NoteExit(1);
 }
 void Can_HostStateLock(void) {
