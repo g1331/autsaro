@@ -13,7 +13,7 @@ Autsaro 交付自有 AUTOSAR Classic 基础软件栈，以及配置、校验和�
 - **配置工作台（原 R5，已完成）：** 内置版本化校验规则和自有模块定义；新建／模板／导入、对象导航、定义驱动编辑、引用、批量修改、安全保存与重开、源码预览与用户代码保护。正常配置不需要官方 XSD／MOD、编译器或源码 checkout。
 - **多组件应用与调度（原 R6 首批，已完成）：** SWC 类型／实例、显式 S/R 与同步 C/S 连接、runnable／事件与任务映射，生成一致的 RTE／SchM、应用接口与 OS 配置，按组件保护用户源码并独立交接。
 - **OS 路线（已定，不再重选）：** 固定 FreeRTOS 内核＋自有 AUTOSAR OS 语义＋有限单核策略扩展，目标单核 SC1；受控 Win64 主机已有 SC1 行为与独立交接的复验记录。Trampoline／ATK2 仅作参考和备选。
-- **通信与诊断：** 11 位 Classical CAN 信号链、有界物理 DoCAN、Dcm 会话与 DID，部分目标可配置写入、例程、DTC 与主机文件 NvM。
+- **通信与诊断：** 11 位 Classical CAN 信号链、有界物理 DoCAN、Dcm 会话（0x10）、TesterPresent（0x3E）与 DID 读取（0x22）。DTC、写 DID、安全访问、例程与持久存储随旧链路删除，主线以 NRC 0x11 拒绝，由 R7 在主线上重新实现。
 
 明确不支持或未验证：
 
@@ -47,7 +47,7 @@ Autsaro 交付自有 AUTOSAR Classic 基础软件栈，以及配置、校验和�
 
 **新基线达成条件：** `quality` 强制 Epic／Story 编号检查为零；旧链路代码已删，打开旧工程明确拒绝；必需 CI 覆盖主线全部不依赖官方档案的原生行为；交付包按所有权分目录且 CMake 与 `ecu-tool` 同清单构建通过；Linux、Windows 各至少一次 acceptance；ABI、第三方身份和资源摘要变化经审阅。
 
-**之后：** 主线上逐模块标准整改（ECU 批次执行、CanIf、LSduR／PduR、COM、CanTp、Dcm、ComM／BswM、Det、NvM、Dem、Security、OS／SchM、RTE／共享类型）→ 主线交付与离线工具验证 → 开发反馈、CI 效率 → 严格生成 C 源码检查成为必需门禁 → 非实现者独立出口复验。已知遗留：Windows 并行 `E_OS_STATE`（若根因在共用 `runtime/os`，迁移时复现并归入 ECU 执行或 OS 整改）；CAN 整改遗留的 MISRA 人工评估与 c-check 清零由各模块承担。
+**之后：** 主线上逐模块标准整改（ECU 批次执行、CanIf、LSduR／PduR、COM、CanTp、Dcm、ComM／BswM、Det、OS／SchM、RTE／共享类型；Dem、NvM、Security 已随旧链路删除，不在本 Epic 整改，由 R7 重新实现）→ 主线交付与离线工具验证 → 开发反馈、CI 效率 → 严格生成 C 源码检查成为必需门禁 → 非实现者独立出口复验。已知遗留：Windows 并行 `E_OS_STATE`（若根因在共用 `runtime/os`，迁移时复现并归入 ECU 执行或 OS 整改）；CAN 整改遗留的 MISRA 人工评估与 c-check 清零由各模块承担。
 
 Epic 9 出口前，R11 只允许需求与规范研究，消费者实施须等待出口。
 
@@ -57,7 +57,7 @@ Epic 9 出口前，R11 只允许需求与规范研究，消费者实施须等待
 
 ### 3. R7：可配置 CAN 诊断与故障工程
 
-DID／RID、服务／会话／访问、事件／DTC／监测源及持久策略，贯通 CanTp／PduR／Dcm、Dem／NvM。承接历史 Epic 2／Story 2.1 及旧 Epic 5 的诊断与持久部分。
+DID／RID、服务／会话／访问、事件／DTC／监测源及持久策略，贯通 CanTp／PduR／Dcm、Dem／NvM。承接历史 Epic 2／Story 2.1 及旧 Epic 5 的诊断与持久部分。Dem、NvM 与安全访问在主线上重新实现，承接已关闭的 #47／#48／#49 及 #33 移交的 Dem 生命周期、NvM 持久独立预期。
 
 ### 4. R8：系统生命周期与 CAN 网络管理
 
@@ -85,7 +85,7 @@ R-ID 是路线标识，不是 Issue 或 Milestone 编号；正式开工时为其
 | --- | --- | --- | --- |
 | R5 | 统一配置工作台 | — | 已完成 |
 | R6 | 多组件应用与调度集成；首批已完成，未选扩展（同类型多实例、嵌套组合／delegation、跨任务应用共享、队列、隐式通信、模式、异步与跨 ECU C/S、transformer、不同周期／offset、本地 `handleNeverReceived=true` 按 SWS_Rte_07381–07383）由消费者立项时按 R24-11 扩展并独立验收 | R5、OS 路线 | 通信语义、组合与映射剖面、增量生成 |
-| R7 | 可配置 CAN 诊断与故障工程 | 现有 DoCAN／Dcm／Dem／NvM、R5 编辑路径 | SWS／ECUC 语义、SID／子功能、事件—DTC 映射、容量、访问与存储策略 |
+| R7 | 可配置 CAN 诊断与故障工程 | 现有 DoCAN／Dcm、R5 编辑路径 | SWS／ECUC 语义、SID／子功能、事件—DTC 映射、容量、访问与存储策略 |
 | R8 | 生命周期与 CAN 网络管理闭环 | 现有 OS／通信、R7 持久状态契约 | NM 变体、模式规则、计时、通信组、关机与唤醒 |
 | R9 | I/O 与应用控制工程 | R6、R8 所需生命周期 | 首个控制场景、虚拟模型、MCAL／目标责任 |
 | R10 | 首个真实 MCU 参考工程 | 主机 CAN／诊断／NM／持久链、Epic 10；声明 I/O 时依赖 R9 | 板卡、驱动版次与权利、OS 端口、工具链、真实对端 |
