@@ -11,12 +11,12 @@ jobs:
   probe:
     strategy:
       fail-fast: false
+      max-parallel: 14
       matrix:
-        variant: [baseline, fix]
-        slot: [1, 2, 3, 4, 5, 6]
-    name: probe (${{ matrix.variant }}, ${{ matrix.slot }})
+        slot: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+    name: probe (${{ matrix.slot }})
     runs-on: windows-latest
-    timeout-minutes: 90
+    timeout-minutes: 100
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: astral-sh/setup-uv@v10.2.0
@@ -48,73 +48,80 @@ jobs:
               for variable, name in tools.items():
                   output.write(variable + '=' + str(Path(shutil.which(name)).absolute()) + '\n')
               output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
-      - name: Remove the idle fix (baseline)
-        if: matrix.variant == 'baseline'
+      - name: Hardware and handoff costs
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Get-CimInstance Win32_Processor | Format-List Name, Manufacturer, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed
+          Get-CimInstance Win32_ComputerSystem | Format-List Manufacturer, Model, HypervisorPresent
+          gcc -O2 -std=c99 .github/timing-probe/bench.c -o bench.exe
+          ./bench.exe
+      # Both variants on the same runner: the failure follows the machine type.
+      - name: Build fix and baseline test binaries
         shell: python
         run: |
-          import re, subprocess
+          import re, shutil, subprocess
           from pathlib import Path
+          deps = Path('target/debug/deps')
+          def build(name):
+              subprocess.run(['cargo', 'test', '--locked', '-p', 'autosar-config-core', '--features', 'native-tests', '--test', 'native', '--no-run'], check=True)
+              built = max((p for p in deps.glob('native-*.exe') if re.fullmatch(r'native-[0-9a-f]{16}\.exe', p.name)), key=lambda p: p.stat().st_mtime)
+              shutil.copy2(built, deps / f'native-{name}.exe')
+          build('fix')
           path = Path('runtime/os/src/Os_Backend.c')
-          text = path.read_bytes()
-          patched, count = re.subn(rb'\n    /\* Give the host CPU back:.*?Sleep\(1u\);', b'', text, flags=re.S)
+          patched, count = re.subn(rb'\n    /\* Give the host CPU back:.*?Sleep\(1u\);', b'', path.read_bytes(), flags=re.S)
           assert count == 1, count
           path.write_bytes(patched)
           subprocess.run(['uv', 'run', '--locked', 'python', '-m', 'autosar_tooling', 'assets', 'update'], check=True)
-      - name: Build native tests
-        run: cargo test --locked -p autosar-config-core --features native-tests --test native --no-run
+          build('baseline')
       - name: Stress
         shell: python
+        env:
+          SLOT: ${{ matrix.slot }}
         run: |
-          import os, subprocess, sys, tempfile, time
+          import os, subprocess, time
           from pathlib import Path
-          binary = max(Path('target/debug/deps').glob('native-*.exe'), key=lambda p: p.stat().st_mtime)
+          deps = Path('target/debug/deps')
           out = Path('probe-logs'); out.mkdir()
-          test = 'integration::protocol::single_component_meets_independent_protocol_and_timing_vectors'
-          # The whole native binary in its default parallelism, as the unsharded required job ran it.
-          command = [str(binary)]
-          print('CPUs', os.cpu_count(), flush=True)
-          failed = 0
-          failed_runs = []
+          order = ['baseline', 'fix'] if int(os.environ['SLOT']) % 2 else ['fix', 'baseline']
+          results = {name: [] for name in order}
           runs = 0
           started = time.monotonic()
-          while time.monotonic() - started < 40 * 60:
-              env = dict(os.environ, AUTOSAR_TIMING_PROBE=str((out / f'run{runs}.log').absolute()))
-              with open(out / f'run{runs}.out', 'w') as log:
-                  code = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, env=env).returncode
-              if code != 0:
-                  failed += 1
-                  failed_runs.append(f'run{runs}')
-              print(f'run{runs}: exit {code} at {time.monotonic() - started:.0f}s', flush=True)
+          while time.monotonic() - started < 42 * 60:
+              variant = order[runs % 2]
+              name = f'run{runs}-{variant}'
+              env = dict(os.environ, AUTOSAR_TIMING_PROBE=str((out / f'{name}.log').absolute()))
+              began = time.monotonic()
+              with open(out / f'{name}.out', 'w') as log:
+                  code = subprocess.run([str(deps / f'native-{variant}.exe')], stdout=log, stderr=subprocess.STDOUT, env=env).returncode
+              text = (out / f'{name}.out').read_text(errors='replace')
+              failures = [l.split()[1] for l in text.splitlines() if l.endswith('... FAILED')]
+              results[variant].append((name, code, time.monotonic() - began, failures))
+              print(f'{name}: exit {code} in {time.monotonic() - began:.0f}s failed={failures}', flush=True)
               runs += 1
-          load = 'full native'
-          spans, aborts = [], []
-          for f in out.glob('run*.log'):
-              for line in f.read_text(errors='replace').splitlines():
-                  v = dict(kv.split('=', 1) for kv in line.split() if '=' in kv)
-                  if line.startswith('abort'):
-                      if f.stem in failed_runs:
-                          aborts.append(f.name + ': ' + line)
-                  elif int(v.get('span', 0)) >= 100:
-                      spans.append((int(v['elapsed']) / int(v['span']), line))
-          spans.sort()
-          q = lambda p: spans[min(len(spans) - 1, int(p * len(spans)))][0]
-          print(f'== {load}: runs={runs} failed={failed} batches(span>=100)={len(spans)}')
-          if spans:
-              print('   ms/tick p50=%.2f p90=%.2f p99=%.2f max=%.2f' % (q(.5), q(.9), q(.99), spans[-1][0]))
-              print('   slowest batches:')
-              for _, line in spans[-5:]:
-                  print('    ', line)
-          print('   aborts in failed runs (fault tests abort deliberately):')
-          for a in aborts:
-              print('    ', a)
-          for f in sorted(out.glob('run*.out')):
-              text = f.read_text(errors='replace')
-              if 'FAILED' in text:
-                  print('----', f.name)
-                  print('\n'.join(l for l in text.splitlines() if 'FAILED' in l or 'panicked' in l or 'state=Failed' in l or 'cases' in l))
+          for variant in order:
+              spans, aborts = [], []
+              for name, code, _, _ in results[variant]:
+                  for line in (out / f'{name}.log').read_text(errors='replace').splitlines():
+                      v = dict(kv.split('=', 1) for kv in line.split() if '=' in kv)
+                      if line.startswith('abort') and code != 0 and 'site=watchdog' in line and ' at=10 ' not in line:
+                          aborts.append(name + ': ' + line)
+                      elif not line.startswith('abort') and int(v.get('span', 0)) >= 100:
+                          spans.append((int(v['elapsed']) / int(v['span']), line))
+              spans.sort()
+              q = lambda p: spans[min(len(spans) - 1, int(p * len(spans)))][0]
+              runs_done = results[variant]
+              print(f"== {variant}: runs={len(runs_done)} failed={sum(1 for r in runs_done if r[1] != 0)} "
+                    f"durations={[round(r[2]) for r in runs_done]} failures={[r[3] for r in runs_done if r[3]]}")
+              if spans:
+                  print('   ms/tick p50=%.2f p90=%.2f p99=%.2f max=%.2f' % (q(.5), q(.9), q(.99), spans[-1][0]))
+                  for _, line in spans[-3:]:
+                      print('    ', line[:400])
+              for a in aborts[:6]:
+                  print('    ', a[:900])
       - uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
-          name: probe-${{ matrix.variant }}-${{ matrix.slot }}
+          name: probe-${{ matrix.slot }}
           path: probe-logs
           retention-days: 7
