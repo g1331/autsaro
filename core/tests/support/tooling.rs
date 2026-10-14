@@ -21,6 +21,29 @@ pub(crate) fn execution_owner() -> autosar_config_core::execution::ProcessOwner 
         .expect("configured owner interpreter")
 }
 
+/// The tail of a child's log for a failure message: the log lives in the scratch
+/// directory, which is gone by the time anyone reads the bare path.
+pub(crate) fn log_tail(path: &Path) -> String {
+    const LIMIT: usize = 8 * 1024;
+    let bytes = fs::read(path).unwrap_or_default();
+    String::from_utf8_lossy(&bytes[bytes.len().saturating_sub(LIMIT)..]).into_owned()
+}
+
+/// Waits for an owned child and fails with its output, not only its log paths.
+pub(crate) fn wait_success(
+    mut process: autosar_config_core::execution::OwnedProcess,
+    context: &str,
+) -> autosar_config_core::execution::ProcessResult {
+    let result = process.wait().unwrap();
+    assert!(
+        result.success(),
+        "{context}: {result:?}\nstdout:\n{}\nstderr:\n{}",
+        log_tail(&result.stdout),
+        log_tail(&result.stderr)
+    );
+    result
+}
+
 pub(crate) fn native_target() -> autosar_config_core::target::BuildTarget {
     use autosar_config_core::target::BuildTarget;
     if cfg!(target_os = "linux") {

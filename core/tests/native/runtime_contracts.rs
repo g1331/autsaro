@@ -312,8 +312,7 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
     executable
 }
 
-/// Runs a threaded consumer under the owned-process limits; a failure shows its stderr,
-/// which the scratch directory would otherwise discard with the assertion text.
+/// Runs a threaded consumer under the owned-process limits.
 fn run_owned(
     executable: PathBuf,
     scratch: &Path,
@@ -327,19 +326,10 @@ fn run_owned(
         logs,
     )
     .unwrap();
-    tooling::execution_owner()
-        .run(spec)
-        .unwrap_or_else(|error| {
-            let stderr = match &error {
-                autosar_config_core::LocalizedText::Message(message) => message
-                    .params
-                    .get("stderr")
-                    .and_then(|path| path.as_str())
-                    .and_then(|path| std::fs::read_to_string(path).ok()),
-                _ => None,
-            };
-            panic!("{error:?}\nstderr: {}", stderr.unwrap_or_default())
-        })
+    tooling::wait_success(
+        tooling::execution_owner().spawn(spec, None).unwrap(),
+        "consumer",
+    )
 }
 
 #[test]

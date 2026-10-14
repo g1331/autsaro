@@ -772,8 +772,7 @@ pub(crate) fn verify_production_owner(
             .unwrap();
     }
     process.close_stdin();
-    let result = process.wait().unwrap();
-    assert!(result.success(), "{result:?}");
+    let result = tooling::wait_success(process, "consumer");
     let text = std::fs::read_to_string(&result.stdout).unwrap();
     let records: Vec<_> = text
         .lines()

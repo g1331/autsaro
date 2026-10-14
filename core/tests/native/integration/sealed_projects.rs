@@ -255,17 +255,9 @@ fn sealed_owner_preserves_network_init_and_deadline_phase() {
             logs,
         )
         .unwrap();
-        let result = tooling::execution_owner()
-            .spawn(spec, None)
-            .unwrap()
-            .wait()
-            .unwrap();
+        let result =
+            tooling::wait_success(tooling::execution_owner().spawn(spec, None).unwrap(), phase);
         let text = std::fs::read_to_string(&result.stdout).unwrap();
-        assert!(
-            result.success(),
-            "{phase}: {result:?}\n{text}\n{}",
-            std::fs::read_to_string(&result.stderr).unwrap()
-        );
         let observations: Vec<_> = text
             .lines()
             .filter_map(|line| {
@@ -441,13 +433,8 @@ fn sealed_optional_did_and_network_only_routes_use_real_producers() {
         let mut child = owner.spawn(spec, None).unwrap();
         let input_result = child.write_stdin(b"BEGIN 0\nRX 800 4 2A000000\nRX 1792 8 0322F18600000000\nCOMMIT\nBEGIN 1\nCOMMIT\nBEGIN 1\nRX 1792 8 0322123400000000\nCOMMIT\nBEGIN 2\nCOMMIT\nBEGIN 10\nCOMMIT\n");
         child.close_stdin();
-        let result = child.wait().unwrap();
+        let result = tooling::wait_success(child, &format!("{diagnostic}: input={input_result:?}"));
         let text = std::fs::read_to_string(&result.stdout).unwrap();
-        assert!(
-            result.success(),
-            "{diagnostic}: {result:?} input={input_result:?}\n{text}\n{}",
-            std::fs::read_to_string(&result.stderr).unwrap()
-        );
         let records: Vec<_> = text
             .lines()
             .filter(|line| line.starts_with("OUT "))
@@ -600,17 +587,11 @@ fn verify_received_owner(project: &Path, consumer: &Path) {
         logs,
     )
     .unwrap();
-    let result = tooling::execution_owner()
-        .spawn(spec, None)
-        .unwrap()
-        .wait()
-        .unwrap();
-    let text = std::fs::read_to_string(&result.stdout).unwrap();
-    assert!(
-        result.success(),
-        "{result:?}\n{text}\n{}",
-        std::fs::read_to_string(&result.stderr).unwrap()
+    let result = tooling::wait_success(
+        tooling::execution_owner().spawn(spec, None).unwrap(),
+        "consumer",
     );
+    let text = std::fs::read_to_string(&result.stdout).unwrap();
     let observations = text
         .lines()
         .filter_map(|line| {
