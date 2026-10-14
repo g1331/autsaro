@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- **契约变化：**`Can_Write` 只在发送槽确实被占用时返回 `CAN_BUSY`（SWS_Can_00213／00214）。此前它以 try-lock 进入驱动区，任何其他上下文短暂持有该区都会让它返回 `CAN_BUSY`；CanIf 不再串行化并发发送后（ADR 0018），不同 L-PDU 的并发发送可能全部因此被拒。驱动区按 ADR 0018 只保护数据，进入是有界的，`Can_Write` 仍为非阻塞（SWS_Can_00275）。主机锁接口删除不再使用的 `Can_TryLock`。ABI 审阅结论：标准 API 签名不变，组件契约头与第三方身份不变，应用无需重新编译。
 - Linux 主机 OS 目标在暂停任务的信号处理函数结束时恢复 `errno`，被任务切换打断的代码不再读到主机 futex 调用留下的值。OS 后端以任务自己的控制块作为启动参数，不再传入去掉配置 `const` 的指针。公开接口与生成配置不变。
 - 生成的 C 与交付的运行时源码遵循仓库 `.clang-format`：函数的 `{` 单独成行，参数或实参放不下一行时每项一行，连续的宏对齐，`case` 相对 `switch` 缩进。生成的配置表每行一项。变化只涉及空白、换行和初始化列表的尾随逗号，声明、符号与行为不变。
 - **契约变化：**CanIf 改用自己的独占区，持区期间不再调用 Can 驱动、Det、LSduR 或上层回调（ADR 0018）。发送改为“区内预留→区外 `Can_Write`→区内结算”：每个请求恰有一个结果；`Can_Write` 期间控制器被停止的请求报告一次 `E_NOT_OK`，在结算前已收到的确认算作该请求的结果，CanIf 重新初始化后旧请求不再有结果；同一 L-PDU 仍有待送达的取消结果时，新的 `CanIf_Transmit` 返回 `E_NOT_OK`。`CanIf_SetPduMode`／`CanIf_SetControllerMode` 在驱动调用期间若有更新的模式决定，按实际控制器状态重新判断或让更新的决定生效。Com、PduR、LSduR 改用各自名下的区 `COM_STATE`、`PDUR_STATE`、`LSDUR_STATE`（新增生成头 `SchM_PduR.h`、`SchM_LSduR.h`，`SchM_Com.h` 增加区声明，BSW 描述随之声明），在主机上仍映射到共享旧锁；LSduR 在转发 CanIf 回调时持有该区，直到 PduR 与 Com 完成迁移。生成的 `src/SchM.c` 用独立的区保护 Dcm 模式数据。主机锁接口改为按区索引的 `Can_HostAreaEnter`／`Can_HostAreaExit`（取代上一版的 `Can_HostDetLock`／`Can_HostDetUnlock`）。ABI 审阅结论：标准 API 签名不变；新增的只有上述 SchM 符号与主机锁函数，组件契约头与第三方身份不变，应用无需重新编译。
