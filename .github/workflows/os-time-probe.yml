@@ -1,5 +1,5 @@
-# Temporary #162 evidence; removed before merge. Repeats close-before-pending with
-# more concurrent harnesses than CPUs and reports every trace that is not ISREZ.
+# Temporary #162/#154 evidence; removed before merge. Repeats the two shutdown races
+# with more concurrent harnesses than CPUs and reports every unexpected outcome.
 name: OS time probe
 on:
   push:
@@ -24,7 +24,7 @@ jobs:
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - run: uv sync --locked
       - uses: ./.github/actions/native-analysis-compiler
-      - name: Repeat close-before-pending
+      - name: Repeat shutdown race scenarios
         shell: pwsh
         run: |
           (Get-CimInstance Win32_Processor).Name
@@ -34,23 +34,24 @@ jobs:
           from pathlib import Path
           sys.path.insert(0, str(Path('tests/python/native').resolve()))
           import os_suites
-          work = Path(tempfile.mkdtemp())
-          with os_suites.host_target(), os_suites.native_session(work, 'probe'):
-              binary, _ = os_suites.build(work, 'controlled_time.c')
+          cases = [('controlled_time.c', 'close-before-pending', 7, 'trace=ISREZ '),
+                   ('source_repetition.c', 'isr-enable-false', 0, 'trace=PpD reason=0')]
           jobs = 3 * os.cpu_count()
-          def once(_):
-              began = time.monotonic()
-              try:
-                  r = subprocess.run([str(binary), 'close-before-pending'], capture_output=True, text=True, timeout=30)
-                  return time.monotonic() - began, r.returncode, r.stdout.strip(), r.stderr.strip()
-              except subprocess.TimeoutExpired:
-                  return time.monotonic() - began, 'timeout', '', ''
-          for scenario_load in range(2):
+          for harness, scenario, exit_code, marker in cases:
+              work = Path(tempfile.mkdtemp())
+              with os_suites.host_target(), os_suites.native_session(work, 'probe'):
+                  binary, _ = os_suites.build(work, harness)
+              def once(_):
+                  began = time.monotonic()
+                  try:
+                      r = subprocess.run([str(binary), scenario], capture_output=True, text=True, timeout=30)
+                      return time.monotonic() - began, r.returncode, r.stdout.strip(), r.stderr.strip()
+                  except subprocess.TimeoutExpired:
+                      return time.monotonic() - began, 'timeout', '', ''
               with ThreadPoolExecutor(jobs) as pool:
-                  results = list(pool.map(once, range(3000)))
-              traces = collections.Counter((code, (re.search(r'trace=(\S+)', out) or [None, out[-80:]])[1]) for _, code, out, _ in results)
-              print(f'round={scenario_load} jobs={jobs} max={max(t for t, *_ in results):.2f}s', dict(traces), flush=True)
-              for elapsed, code, out, err in results:
-                  if code != 7 or 'trace=ISREZ ' not in out:
-                      print(f'ODD {elapsed:.2f}s exit={code}\n{out}\n{err}', flush=True)
+                  results = list(pool.map(once, range(6000)))
+              odd = [r for r in results if r[1] != exit_code or marker not in r[2]]
+              print(f'{scenario} runs=6000 jobs={jobs} max={max(t for t, *_ in results):.2f}s odd={len(odd)}', flush=True)
+              for elapsed, code, out, err in odd:
+                  print(f'ODD {elapsed:.2f}s exit={code}\n{out}\n{err}', flush=True)
           '@ | uv run --locked python -
