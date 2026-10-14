@@ -12,6 +12,10 @@ typedef struct {
 } Ecu_HostWatch;
 
 /* Timing probe for #61 (temporary, enabled by AUTOSAR_TIMING_PROBE). */
+void Os_ProbeTime(uint64_t state[3]);
+void Os_ProbeMailbox(uint64_t state[2]);
+void Ecu_ProbeTarget(FILE *file);
+void Os_ProbeTasks(FILE *file);
 enum { PROBE_NONE, PROBE_ADVANCE, PROBE_SINK, PROBE_CONFIRM, PROBE_WAIT, PROBE_POST, PROBE_DONE, PROBE_COUNT };
 static const char *const probe_names[PROBE_COUNT] = {"none", "advance", "sink", "confirm", "wait", "post", "done"};
 static uint64_t probe_started;
@@ -63,6 +67,21 @@ static void probe(const char *event, uint64_t value)
                               probe_names[index],
                               (unsigned long long)probe_total[index],
                               (unsigned long long)probe_max[index]);
+            }
+            if (event[0] == 'a') {
+                uint64_t time_state[3];
+                uint64_t mailbox_state[2];
+                Os_ProbeTime(time_state);
+                Os_ProbeMailbox(mailbox_state);
+                (void)fprintf(file,
+                              " tick_state=%llu requested=%llu confirmed=%llu published=%llu admission=%llu",
+                              (unsigned long long)time_state[0],
+                              (unsigned long long)time_state[1],
+                              (unsigned long long)time_state[2],
+                              (unsigned long long)mailbox_state[0],
+                              (unsigned long long)mailbox_state[1]);
+                Ecu_ProbeTarget(file);
+                Os_ProbeTasks(file);
             }
             (void)fprintf(file, "\n");
             (void)fclose(file);

@@ -621,3 +621,32 @@ void Ecu_TargetTask(void)
         }
     }
 }
+
+/* Timing probe for #61 (temporary): lock-free snapshot for a stalled batch. */
+void Ecu_ProbeTarget(FILE *file);
+void Ecu_ProbeTarget(FILE *file)
+{
+    unsigned index;
+    (void)fprintf(file,
+                  " lifecycle=%d epoch=%llu processed_tick=%llu processed_epoch=%llu pending=%u "
+                  "deferred=%u write=%u read=%u confirm=%u retire=%u batch_state=%d "
+                  "batch_epoch=%llu needs_tick=%u slots=",
+                  (int)load(&lifecycle),
+                  (unsigned long long)epoch,
+                  (unsigned long long)processed_tick,
+                  (unsigned long long)processed_epoch,
+                  output_pending,
+                  output_deferred,
+                  output_write,
+                  output_read,
+                  output_confirm,
+                  output_retire,
+                  (int)load(&batch_state),
+                  (unsigned long long)batch_epoch,
+                  (unsigned)batch_needs_tick);
+    for (index = 0u; index < 8u; ++index) {
+        (void)fprintf(file,
+                      "%d",
+                      (int)load(&outputs[(output_retire + index) % ECU_TARGET_OUTPUT_CAPACITY].state));
+    }
+}
