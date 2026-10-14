@@ -12,7 +12,8 @@ static unsigned hook_entries;
 HANDLE Os_StackTestBackupThread(void);
 HANDLE Os_StackTestTaskThread(unsigned index);
 void Os_StackTestFailOperation(unsigned operation);
-__attribute__((noinline)) static void consume_stack(unsigned depth) {
+__attribute__((noinline)) static void consume_stack(unsigned depth)
+{
     volatile unsigned char buffer[4096];
     unsigned i;
     for (i = 0u; i < sizeof(buffer); ++i) {
@@ -23,31 +24,36 @@ __attribute__((noinline)) static void consume_stack(unsigned depth) {
     }
     checksum += buffer[depth % sizeof(buffer)];
 }
-static uint32_t stack_isr(void) {
+static uint32_t stack_isr(void)
+{
     Os_TargetTrace('J');
     consume_stack(0u);
     Os_TargetTrace('X');
     return 0u;
 }
 #ifdef _WIN32
-static VOID CALLBACK backup_fault(ULONG_PTR argument) {
+static VOID CALLBACK backup_fault(ULONG_PTR argument)
+{
     (void)argument;
     consume_stack(0u);
     Os_TargetTrace('X');
 }
 #else
-void Os_StackTestBackupFault(void) {
+void Os_StackTestBackupFault(void)
+{
     consume_stack(0u);
     Os_TargetTrace('X');
 }
 #endif
-void Os_StackTestIdle(void) {
+void Os_StackTestIdle(void)
+{
     if (strcmp(scenario, "idle") == 0) {
         consume_stack(0u);
         Os_TargetTrace('X');
     }
 }
-void Os_StackTestBeforeClose(void) {
+void Os_StackTestBeforeClose(void)
+{
     unsigned wait;
     if (strcmp(scenario, "concurrent") != 0) {
         return;
@@ -59,7 +65,8 @@ void Os_StackTestBeforeClose(void) {
         ExitProcess(E_OS_STATE);
     }
 }
-void StartupHook(void) {
+void StartupHook(void)
+{
     Os_TargetTrace('S');
     if (strcmp(scenario, "startup") == 0) {
         consume_stack(0u);
@@ -67,7 +74,8 @@ void StartupHook(void) {
     }
     vPortSetInterruptHandler(31u, stack_isr);
 }
-void ShutdownHook(StatusType Error) {
+void ShutdownHook(StatusType Error)
+{
     const Os_NativeStack *current = Os_StackCurrent();
     ++hook_entries;
     if (strcmp(scenario, "double-control-output") == 0 && Error == E_OK) {
@@ -88,7 +96,8 @@ void ShutdownHook(StatusType Error) {
     }
     Os_TargetTrace('D');
 }
-static void entry(void) {
+static void entry(void)
+{
     Os_TargetTrace('A');
     if (strcmp(scenario, "task") == 0) {
         consume_stack(0u);
@@ -157,7 +166,8 @@ static void entry(void) {
     Os_TargetTrace('X');
     ShutdownOS(E_OS_STATE);
 }
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     Os_TaskConfig tasks[2] = {
         {0u, "FaultTask", entry, 2u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
         {1u, "Inactive", entry, 3u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};

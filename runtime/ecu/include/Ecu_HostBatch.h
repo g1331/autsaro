@@ -9,8 +9,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define ECU_BATCH_CAPACITY 256u
-#define ECU_BATCH_MAX_SPAN UINT64_C(1000)
+#define ECU_BATCH_CAPACITY      256u
+#define ECU_BATCH_MAX_SPAN      UINT64_C(1000)
 #define ECU_BATCH_LINE_CAPACITY 128u
 
 typedef struct {
@@ -55,7 +55,9 @@ void Ecu_HostBatchInitialize(Ecu_HostBatch *batch);
  * @return E_OK or E_OS_VALUE/LIMIT/STATE/ILLEGAL_ADDRESS. Any malformed
  * active batch stays rejected until COMMIT discards it; no prefix executes.
  */
-StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch, const char *line, size_t length,
+StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
+                              const char *line,
+                              size_t length,
                               Ecu_BatchCommand *command);
 /** Publish successful execution after a real complete/quiescent boundary.
  * @param batch Executing single-producer staging.

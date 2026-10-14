@@ -8,7 +8,8 @@ typedef struct {
     uint64_t started;
 } Ecu_HostWatch;
 
-static Os_HostThreadResult watch(void *argument) {
+static Os_HostThreadResult watch(void *argument)
+{
     const Ecu_HostWatch *control = (const Ecu_HostWatch *)argument;
     uint64_t elapsed = Os_HostMonotonicMs() - control->started;
     if (elapsed >= ECU_BATCH_WATCHDOG_MS) {
@@ -20,19 +21,24 @@ static Os_HostThreadResult watch(void *argument) {
     return 0u;
 }
 
-static void require(int accepted) {
+static void require(int accepted)
+{
     if (accepted == 0) {
         Ecu_TargetAbortNative(E_OS_STATE);
     }
 }
 
-static void sequence(Ecu_HostBatch *batch) {
+static void sequence(Ecu_HostBatch *batch)
+{
     require(batch->sequence != UINT64_MAX);
     ++batch->sequence;
 }
 
-static void pump(Ecu_HostBatch *batch, Ecu_HostSink sink, void *context,
-                 const Ecu_HostWatch *control) {
+static void pump(Ecu_HostBatch *batch,
+                 Ecu_HostSink sink,
+                 void *context,
+                 const Ecu_HostWatch *control)
+{
     Ecu_OutputRecord output;
     Ecu_ProtocolRecord failure;
     StatusType status;
@@ -60,8 +66,12 @@ static void pump(Ecu_HostBatch *batch, Ecu_HostSink sink, void *context,
     }
 }
 
-static void tick(Ecu_HostBatch *batch, uint64_t at, Ecu_HostSink sink, void *context,
-                 const Ecu_HostWatch *control) {
+static void tick(Ecu_HostBatch *batch,
+                 uint64_t at,
+                 Ecu_HostSink sink,
+                 void *context,
+                 const Ecu_HostWatch *control)
+{
     uint64_t ticket;
     Os_TickCompletion result;
     require(Os_TargetAdvanceOneTick(at, &ticket) == E_OK);
@@ -80,7 +90,8 @@ static void tick(Ecu_HostBatch *batch, uint64_t at, Ecu_HostSink sink, void *con
 }
 
 /* Every check that must pass before any automotive state changes. */
-static StatusType admit_batch(const Ecu_HostBatch *batch) {
+static StatusType admit_batch(const Ecu_HostBatch *batch)
+{
     StatusType status;
     if ((batch->epoch < batch->completed_epoch) ||
         ((batch->epoch - batch->completed_epoch) > ECU_BATCH_MAX_SPAN) ||
@@ -117,7 +128,8 @@ static StatusType admit_batch(const Ecu_HostBatch *batch) {
     return status;
 }
 
-StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *context) {
+StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *context)
+{
     Ecu_HostWatch control;
     Os_HostHandle monitor;
     Os_TickCompletion previous;

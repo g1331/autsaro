@@ -12,7 +12,8 @@ static __thread InterruptState states[33u * ((unsigned)OS_HOOK_ALARM + 1u)];
 static volatile Os_Atomic32 all_owners;
 static volatile Os_Atomic32 os_owners;
 
-static InterruptState *owner_state(void) {
+static InterruptState *owner_state(void)
+{
     const Os_NativeStack *stack = Os_StackCurrent();
     const unsigned interrupt = Os_BackendCurrentInterrupt();
     const Os_HookPhase phase = Os_HookContext();
@@ -24,11 +25,13 @@ static InterruptState *owner_state(void) {
     }
     return &states[index];
 }
-int Os_InterruptDisabled(void) {
+int Os_InterruptDisabled(void)
+{
     const InterruptState *state = owner_state();
     return state->disabled != 0u || state->all_depth != 0u || state->os_depth != 0u;
 }
-int Os_InterruptAllows(unsigned interrupt) {
+int Os_InterruptAllows(unsigned interrupt)
+{
     int allowed = 0;
     if ((interrupt < 32u) && (InterlockedCompareExchange(&all_owners, 0, 0) == 0)) {
         allowed = (InterlockedCompareExchange(&os_owners, 0, 0) == 0) ||
@@ -37,7 +40,8 @@ int Os_InterruptAllows(unsigned interrupt) {
     }
     return allowed;
 }
-static int permitted(unsigned operation) {
+static int permitted(unsigned operation)
+{
     const Os_HookPhase phase = Os_HookContext();
     const Os_NativeStack *stack = Os_StackCurrent();
     const unsigned group = operation / 2u;
@@ -56,7 +60,8 @@ static int permitted(unsigned operation) {
     }
     return allowed;
 }
-static void change(unsigned operation, OSServiceIdType service) {
+static void change(unsigned operation, OSServiceIdType service)
+{
     InterruptState *state = owner_state();
     StatusType status = E_OK;
     const Os_ErrorParameters arguments = {.service_TerminateTask = {0u}};
@@ -71,57 +76,57 @@ static void change(unsigned operation, OSServiceIdType service) {
             taskENTER_CRITICAL();
         }
         switch (operation) {
-        case 0u:
-            if (state->disabled != 0u) {
-                state->disabled = 0u;
-                InterlockedDecrement(&all_owners);
-            }
-            break;
-        case 1u:
-            if (state->disabled == 0u) {
-                state->disabled = 1u;
-                InterlockedIncrement(&all_owners);
-            }
-            break;
-        case 2u:
-            if (state->all_depth != 0u) {
-                --state->all_depth;
-                if (state->all_depth == 0u) {
+            case 0u:
+                if (state->disabled != 0u) {
+                    state->disabled = 0u;
                     InterlockedDecrement(&all_owners);
                 }
-            }
-            break;
-        case 3u:
-            if (state->all_depth == UINT32_MAX) {
-                status = E_OS_LIMIT;
-            } else {
-                if (state->all_depth == 0u) {
+                break;
+            case 1u:
+                if (state->disabled == 0u) {
+                    state->disabled = 1u;
                     InterlockedIncrement(&all_owners);
                 }
-                ++state->all_depth;
-            }
-            break;
-        case 4u:
-            if (state->os_depth != 0u) {
-                --state->os_depth;
-                if (state->os_depth == 0u) {
-                    InterlockedDecrement(&os_owners);
+                break;
+            case 2u:
+                if (state->all_depth != 0u) {
+                    --state->all_depth;
+                    if (state->all_depth == 0u) {
+                        InterlockedDecrement(&all_owners);
+                    }
                 }
-            }
-            break;
-        case 5u:
-            if (state->os_depth == UINT32_MAX) {
-                status = E_OS_LIMIT;
-            } else {
-                if (state->os_depth == 0u) {
-                    InterlockedIncrement(&os_owners);
+                break;
+            case 3u:
+                if (state->all_depth == UINT32_MAX) {
+                    status = E_OS_LIMIT;
+                } else {
+                    if (state->all_depth == 0u) {
+                        InterlockedIncrement(&all_owners);
+                    }
+                    ++state->all_depth;
                 }
-                ++state->os_depth;
-            }
-            break;
-        default:
-            status = E_OS_ID;
-            break;
+                break;
+            case 4u:
+                if (state->os_depth != 0u) {
+                    --state->os_depth;
+                    if (state->os_depth == 0u) {
+                        InterlockedDecrement(&os_owners);
+                    }
+                }
+                break;
+            case 5u:
+                if (state->os_depth == UINT32_MAX) {
+                    status = E_OS_LIMIT;
+                } else {
+                    if (state->os_depth == 0u) {
+                        InterlockedIncrement(&os_owners);
+                    }
+                    ++state->os_depth;
+                }
+                break;
+            default:
+                status = E_OS_ID;
+                break;
         }
         if (running != 0) {
             taskEXIT_CRITICAL();
@@ -137,7 +142,8 @@ void Os_Implementation_ResumeAllInterrupts(void) { change(2u, OSServiceId_Resume
 void Os_Implementation_SuspendAllInterrupts(void) { change(3u, OSServiceId_SuspendAllInterrupts); }
 void Os_Implementation_ResumeOSInterrupts(void) { change(4u, OSServiceId_ResumeOSInterrupts); }
 void Os_Implementation_SuspendOSInterrupts(void) { change(5u, OSServiceId_SuspendOSInterrupts); }
-void Os_InterruptRestoreOwner(void) {
+void Os_InterruptRestoreOwner(void)
+{
     InterruptState *state = owner_state();
     /* Internal exit cleanup is called under the real OS completion critical
      * section, so no ISR can observe partial restoration. */
@@ -154,7 +160,8 @@ void Os_InterruptRestoreOwner(void) {
     state->all_depth = 0u;
     state->os_depth = 0u;
 }
-static StatusType source_control(ISRType interrupt, unsigned operation, boolean clear) {
+static StatusType source_control(ISRType interrupt, unsigned operation, boolean clear)
+{
     StatusType result = E_OK;
     const Os_NativeStack *stack = Os_StackCurrent();
     const unsigned current = Os_BackendCurrentInterrupt();
@@ -184,21 +191,24 @@ static StatusType source_control(ISRType interrupt, unsigned operation, boolean 
     }
     return result;
 }
-StatusType Os_Implementation_DisableInterruptSource(ISRType ISRID) {
+StatusType Os_Implementation_DisableInterruptSource(ISRType ISRID)
+{
     const Os_ErrorParameters arguments = {.service_DisableInterruptSource = {ISRID}};
     const StatusType status = source_control(ISRID, 0u, FALSE);
     return (Os_HookContext() == OS_HOOK_ERROR)
                ? status
                : Os_ErrorResult(OSServiceId_DisableInterruptSource, status, &arguments);
 }
-StatusType Os_Implementation_EnableInterruptSource(ISRType ISRID, boolean ClearPending) {
+StatusType Os_Implementation_EnableInterruptSource(ISRType ISRID, boolean ClearPending)
+{
     const Os_ErrorParameters arguments = {.service_EnableInterruptSource = {ISRID, ClearPending}};
     const StatusType status = source_control(ISRID, 1u, ClearPending);
     return (Os_HookContext() == OS_HOOK_ERROR)
                ? status
                : Os_ErrorResult(OSServiceId_EnableInterruptSource, status, &arguments);
 }
-StatusType Os_Implementation_ClearPendingInterrupt(ISRType ISRID) {
+StatusType Os_Implementation_ClearPendingInterrupt(ISRType ISRID)
+{
     const Os_ErrorParameters arguments = {.service_ClearPendingInterrupt = {ISRID}};
     const StatusType status = source_control(ISRID, 2u, FALSE);
     return (Os_HookContext() == OS_HOOK_ERROR)

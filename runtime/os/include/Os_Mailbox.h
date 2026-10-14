@@ -1,8 +1,8 @@
 #ifndef AUTOSAR_OS_MAILBOX_H
 #define AUTOSAR_OS_MAILBOX_H
 #include "Os.h"
-#define OS_INPUT_CAPACITY 256u
-#define OS_INPUT_PAYLOAD 32u
+#define OS_INPUT_CAPACITY  256u
+#define OS_INPUT_PAYLOAD   32u
 #define OS_INPUT_INTERRUPT 30u
 typedef struct {
     uint64_t ticket;

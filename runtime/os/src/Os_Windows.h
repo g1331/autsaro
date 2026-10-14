@@ -10,7 +10,7 @@
 /* Windows COM declares an unrelated ApplicationType enum. Keep it inside the
  * host adapter namespace while preserving the standard Os.h public name. */
 #define ApplicationType Os_Win32ApplicationType
-#define boolean Os_Win32Boolean
+#define boolean         Os_Win32Boolean
 #include <windows.h>
 #undef boolean
 #undef ApplicationType

@@ -10,12 +10,14 @@ static unsigned errors;
 static StatusType statuses[29];
 static StatusType error_status[64];
 static OSServiceIdType error_service[64];
-static void check(bool condition) {
+static void check(bool condition)
+{
     if (!condition) {
         Os_BackendShutdown(E_OS_STATE);
     }
 }
-static void mask_pairs(void) {
+static void mask_pairs(void)
+{
     TaskType unchanged = 42u;
     DisableAllInterrupts();
     check(Os_InterruptDisabled() != 0 && Os_InterruptAllows(4u) == 0 &&
@@ -36,7 +38,8 @@ static void mask_pairs(void) {
     ResumeOSInterrupts();
     check(Os_InterruptDisabled() == 0 && Os_InterruptAllows(5u) != 0);
 }
-static void probe_calls(void) {
+static void probe_calls(void)
+{
     TaskType task = 42u;
     TaskStateType state = 42u;
     EventMaskType event = 42u;
@@ -94,7 +97,8 @@ static void probe_calls(void) {
         ShutdownOS(8u);
     }
 }
-void ErrorHook(StatusType error) {
+void ErrorHook(StatusType error)
+{
     const OSServiceIdType service = OSErrorGetServiceId();
     check(errors < 64u && GetActiveApplicationMode() == 1u && GetISRID() == INVALID_ISR &&
           isOsStarted() == TRUE);
@@ -108,24 +112,28 @@ void ErrorHook(StatusType error) {
         ShutdownOS(8u);
     }
 }
-static void pre(void) {
+static void pre(void)
+{
     if (!probed && strcmp(scenario, "pre") == 0) {
         probe_calls();
     }
 }
-static void post(void) {
+static void post(void)
+{
     if (!probed && strcmp(scenario, "post") == 0) {
         probe_calls();
     }
 }
-static uint32_t outside_isr(void) {
+static uint32_t outside_isr(void)
+{
     /* Boundary fault injection on a real ISR stack, without a logical ISR. */
     Os_BackendInterruptLeave();
     probe_calls();
     Os_BackendInterruptEnter(5u);
     return 0u;
 }
-void StartupHook(void) {
+void StartupHook(void)
+{
     vPortSetInterruptHandler(5u, &outside_isr);
     if (strncmp(scenario, "startup", 7u) == 0) {
         probe_calls();
@@ -134,7 +142,8 @@ void StartupHook(void) {
         }
     }
 }
-void ShutdownHook(StatusType error) {
+void ShutdownHook(StatusType error)
+{
     if (!probed && strcmp(scenario, "shutdown") == 0) {
         probe_calls();
     }
@@ -148,7 +157,8 @@ void ShutdownHook(StatusType error) {
         printf("matrix_error status=%u service=%u\n", error_status[i], error_service[i]);
     }
 }
-static void owner(void) {
+static void owner(void)
+{
     if (strncmp(scenario, "error", 5u) == 0) {
         check(ActivateTask(99u) == E_OS_ID);
     } else if (strcmp(scenario, "outside-isr") == 0) {
@@ -162,7 +172,8 @@ static void owner(void) {
     ShutdownOS(E_OK);
 }
 static void monitor(void) { ShutdownOS(E_OK); }
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     check(argc == 2);
     scenario = argv[1];
     const Os_TaskConfig tasks[2] = {
@@ -171,8 +182,8 @@ int main(int argc, char **argv) {
     };
     const Os_HookConfig hooks = {&ErrorHook, &pre, &post};
     const Os_CounterConfig counter = {0u, 1000u, 1u, 1u, 1u};
-    const Os_AlarmConfig alarm = {0u, 0u, OS_ALARM_CALLBACK, 0u, 0u, &probe_calls, 1u, 0u, 1u,
-                                  0u, 0u};
+    const Os_AlarmConfig alarm = {
+        0u, 0u, OS_ALARM_CALLBACK, 0u, 0u, &probe_calls, 1u, 0u, 1u, 0u, 0u};
     const Os_TimeConfig time = {&counter, 1u, &alarm, 1u, 0u, INVALID_TASK, 0u, NULL, NULL, 0u};
     const Os_TargetConfig target = {tasks,
                                     2u,

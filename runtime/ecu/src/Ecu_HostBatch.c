@@ -6,7 +6,8 @@ typedef struct {
     size_t length;
 } Ecu_BatchToken;
 
-static int equals(Ecu_BatchToken token, const char *word, size_t length) {
+static int equals(Ecu_BatchToken token, const char *word, size_t length)
+{
     int result = 0;
     if ((token.length == length) && (strncmp(token.data, word, length) == 0)) {
         result = 1;
@@ -14,7 +15,8 @@ static int equals(Ecu_BatchToken token, const char *word, size_t length) {
     return result;
 }
 
-static int digit(char value) {
+static int digit(char value)
+{
     int result = -1;
     if ((value >= '0') && (value <= '9')) {
         result = (int)value - (int)'0';
@@ -28,7 +30,8 @@ static int digit(char value) {
     return result;
 }
 
-static int number(Ecu_BatchToken token, unsigned base, uint64_t maximum, uint64_t *value) {
+static int number(Ecu_BatchToken token, unsigned base, uint64_t maximum, uint64_t *value)
+{
     uint64_t result = UINT64_C(0);
     size_t index = 0u;
     if ((base == 16u) && (token.length > 2u) && (token.data[0] == '0') &&
@@ -50,21 +53,26 @@ static int number(Ecu_BatchToken token, unsigned base, uint64_t maximum, uint64_
     return 1;
 }
 
-static StatusType reject(Ecu_HostBatch *batch, StatusType status) {
+static StatusType reject(Ecu_HostBatch *batch, StatusType status)
+{
     if (batch->open != 0u) {
         batch->rejected = 1u;
     }
     return status;
 }
 
-void Ecu_HostBatchInitialize(Ecu_HostBatch *batch) {
+void Ecu_HostBatchInitialize(Ecu_HostBatch *batch)
+{
     if (batch != NULL) {
         (void)memset(batch, 0, sizeof(*batch));
     }
 }
 
-StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch, const char *line, size_t length,
-                              Ecu_BatchCommand *command) {
+StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
+                              const char *line,
+                              size_t length,
+                              Ecu_BatchCommand *command)
+{
     Ecu_BatchToken tokens[4];
     unsigned count = 0u;
     size_t index = 0u;
@@ -183,7 +191,8 @@ StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch, const char *line, size_t len
     return reject(batch, E_OS_VALUE);
 }
 
-StatusType Ecu_HostBatchComplete(Ecu_HostBatch *batch) {
+StatusType Ecu_HostBatchComplete(Ecu_HostBatch *batch)
+{
     if (batch == NULL) {
         return E_OS_ILLEGAL_ADDRESS;
     }

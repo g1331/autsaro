@@ -11,7 +11,8 @@ static const LSduR_PBConfigType *configuration LSDUR_VAR_CLEARED;
 #include "LSduR_MemMap.h"
 #define LSDUR_START_SEC_CODE
 #include "LSduR_MemMap.h"
-static LSDUR_CODE boolean LSduR_Valid(const LSduR_PBConfigType *config) {
+static LSDUR_CODE boolean LSduR_Valid(const LSduR_PBConfigType *config)
+{
     boolean valid = FALSE;
     uint16 i;
     if ((config != NULL_PTR) && (config->receive_count <= 32u) && (config->transmit_count <= 32u) &&
@@ -47,18 +48,22 @@ static LSDUR_CODE boolean LSduR_Valid(const LSduR_PBConfigType *config) {
     }
     return valid;
 }
-LSDUR_CODE void LSduR_Init(const LSduR_PBConfigType *ConfigPtr) {
+LSDUR_CODE void LSduR_Init(const LSduR_PBConfigType *ConfigPtr)
+{
     SchM_Enter_LSduR_LSDUR_STATE();
     if (LSduR_Valid(ConfigPtr) == TRUE) {
         configuration = ConfigPtr;
     }
     SchM_Exit_LSduR_LSDUR_STATE();
 }
-LSDUR_CODE LSduR_PBConfigIdType LSduR_GetConfigurationId(void) {
+LSDUR_CODE LSduR_PBConfigIdType LSduR_GetConfigurationId(void)
+{
     return (configuration == NULL_PTR) ? 0u : configuration->id;
 }
-static LSDUR_CODE Std_ReturnType LSduR_Transmit(LSduR_UpperType module, PduIdType id,
-                                                const PduInfoType *info) {
+static LSDUR_CODE Std_ReturnType LSduR_Transmit(LSduR_UpperType module,
+                                                PduIdType id,
+                                                const PduInfoType *info)
+{
     Std_ReturnType result = E_NOT_OK;
     if ((configuration != NULL_PTR) && (info != NULL_PTR)) {
         uint16 i;
@@ -72,16 +77,19 @@ static LSDUR_CODE Std_ReturnType LSduR_Transmit(LSduR_UpperType module, PduIdTyp
     }
     return result;
 }
-LSDUR_CODE Std_ReturnType LSduR_PduRTransmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr) {
+LSDUR_CODE Std_ReturnType LSduR_PduRTransmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr)
+{
     return LSduR_Transmit(LSDUR_UP_PDUR, TxPduId, PduInfoPtr);
 }
-LSDUR_CODE Std_ReturnType LSduR_CanTpTransmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr) {
+LSDUR_CODE Std_ReturnType LSduR_CanTpTransmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr)
+{
     return LSduR_Transmit(LSDUR_UP_CANTP, TxPduId, PduInfoPtr);
 }
 /* Transitional (ADR 0018): PduR and Com still rely on their caller holding the shared
  * legacy area, which CanIf no longer does; LSduR holds it around their callbacks until
  * #41 and #42 migrate them. */
-LSDUR_CODE void LSduR_CanIfRxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr) {
+LSDUR_CODE void LSduR_CanIfRxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr)
+{
     SchM_Enter_LSduR_LSDUR_STATE();
     if ((configuration != NULL_PTR) && (PduInfoPtr != NULL_PTR)) {
         uint16 i;
@@ -95,7 +103,8 @@ LSDUR_CODE void LSduR_CanIfRxIndication(PduIdType RxPduId, const PduInfoType *Pd
     }
     SchM_Exit_LSduR_LSDUR_STATE();
 }
-LSDUR_CODE void LSduR_CanIfTxConfirmation(PduIdType TxPduId, Std_ReturnType result) {
+LSDUR_CODE void LSduR_CanIfTxConfirmation(PduIdType TxPduId, Std_ReturnType result)
+{
     SchM_Enter_LSduR_LSDUR_STATE();
     if (configuration != NULL_PTR) {
         uint16 i;
@@ -109,7 +118,8 @@ LSDUR_CODE void LSduR_CanIfTxConfirmation(PduIdType TxPduId, Std_ReturnType resu
     }
     SchM_Exit_LSduR_LSDUR_STATE();
 }
-LSDUR_CODE Std_ReturnType LSduR_CanIfTriggerTransmit(PduIdType TxPduId, PduInfoType *PduInfoPtr) {
+LSDUR_CODE Std_ReturnType LSduR_CanIfTriggerTransmit(PduIdType TxPduId, PduInfoType *PduInfoPtr)
+{
     Std_ReturnType result = E_NOT_OK;
     if ((configuration != NULL_PTR) && (PduInfoPtr != NULL_PTR)) {
         uint16 i;

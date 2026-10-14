@@ -1,6 +1,7 @@
 #include "Os_Backend.h"
 
-ISRType GetISRID(void) {
+ISRType GetISRID(void)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_GetISRID, (uint32_t)0u, 0);
@@ -10,14 +11,15 @@ ISRType GetISRID(void) {
         Arti_CaptureServiceStatus((uint32_t)Os_ArtiAccessStatus());
     }
     if (trace != 0) {
-        Os_ArtiService(OSServiceId_GetISRID, Os_ArtiAccessValid() ? (uint32_t)result : UINT32_MAX,
-                       1);
+        Os_ArtiService(
+            OSServiceId_GetISRID, Os_ArtiAccessValid() ? (uint32_t)result : UINT32_MAX, 1);
     }
     Os_ArtiServiceLeave();
     return result;
 }
 
-StatusType ControlIdle(CoreIdType CoreID, IdleModeType IdleMode) {
+StatusType ControlIdle(CoreIdType CoreID, IdleModeType IdleMode)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_ControlIdle, (uint32_t)IdleMode, 0);
@@ -33,7 +35,8 @@ StatusType ControlIdle(CoreIdType CoreID, IdleModeType IdleMode) {
     return result;
 }
 
-boolean isOsStarted(void) {
+boolean isOsStarted(void)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_isOsStarted, (uint32_t)0u, 0);
@@ -43,14 +46,15 @@ boolean isOsStarted(void) {
         Arti_CaptureServiceStatus((uint32_t)Os_ArtiAccessStatus());
     }
     if (trace != 0) {
-        Os_ArtiService(OSServiceId_isOsStarted,
-                       Os_ArtiAccessValid() ? (uint32_t)result : UINT32_MAX, 1);
+        Os_ArtiService(
+            OSServiceId_isOsStarted, Os_ArtiAccessValid() ? (uint32_t)result : UINT32_MAX, 1);
     }
     Os_ArtiServiceLeave();
     return result;
 }
 
-StatusType GetTaskID(TaskRefType TaskID) {
+StatusType GetTaskID(TaskRefType TaskID)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_GetTaskID, (uint32_t)0u, 0);
@@ -66,7 +70,8 @@ StatusType GetTaskID(TaskRefType TaskID) {
     return result;
 }
 
-StatusType GetTaskState(TaskType TaskID, TaskStateRefType State) {
+StatusType GetTaskState(TaskType TaskID, TaskStateRefType State)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_GetTaskState, (uint32_t)TaskID, 0);
@@ -76,14 +81,15 @@ StatusType GetTaskState(TaskType TaskID, TaskStateRefType State) {
         Arti_CaptureServiceStatus((uint32_t)result);
     }
     if (trace != 0) {
-        Os_ArtiService(OSServiceId_GetTaskState, (result == E_OK) ? (uint32_t)*State : UINT32_MAX,
-                       1);
+        Os_ArtiService(
+            OSServiceId_GetTaskState, (result == E_OK) ? (uint32_t)*State : UINT32_MAX, 1);
     }
     Os_ArtiServiceLeave();
     return result;
 }
 
-StatusType ActivateTask(TaskType TaskID) {
+StatusType ActivateTask(TaskType TaskID)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_ActivateTask, (uint32_t)TaskID, 0);
@@ -99,7 +105,8 @@ StatusType ActivateTask(TaskType TaskID) {
     return result;
 }
 
-StatusType TerminateTask(void) {
+StatusType TerminateTask(void)
+{
     const int trace = Os_ArtiServiceEnter();
     const Os_NativeStack *stack = Os_StackCurrent();
     const uint32_t current =
@@ -118,7 +125,8 @@ StatusType TerminateTask(void) {
     return result;
 }
 
-StatusType ChainTask(TaskType TaskID) {
+StatusType ChainTask(TaskType TaskID)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_ChainTask, (uint32_t)TaskID, 0);
@@ -134,7 +142,8 @@ StatusType ChainTask(TaskType TaskID) {
     return result;
 }
 
-StatusType GetResource(ResourceType ResID) {
+StatusType GetResource(ResourceType ResID)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_GetResource, (uint32_t)ResID, 0);
@@ -150,7 +159,8 @@ StatusType GetResource(ResourceType ResID) {
     return result;
 }
 
-StatusType ReleaseResource(ResourceType ResID) {
+StatusType ReleaseResource(ResourceType ResID)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_ReleaseResource, (uint32_t)ResID, 0);
@@ -166,7 +176,8 @@ StatusType ReleaseResource(ResourceType ResID) {
     return result;
 }
 
-StatusType Schedule(void) {
+StatusType Schedule(void)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_Schedule, (uint32_t)0u, 0);
@@ -182,7 +193,8 @@ StatusType Schedule(void) {
     return result;
 }
 
-StatusType WaitEvent(EventMaskType Mask) {
+StatusType WaitEvent(EventMaskType Mask)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_WaitEvent, (uint32_t)Mask, 0);
@@ -198,7 +210,8 @@ StatusType WaitEvent(EventMaskType Mask) {
     return result;
 }
 
-StatusType ClearEvent(EventMaskType Mask) {
+StatusType ClearEvent(EventMaskType Mask)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_ClearEvent, (uint32_t)Mask, 0);
@@ -214,7 +227,8 @@ StatusType ClearEvent(EventMaskType Mask) {
     return result;
 }
 
-StatusType SetEvent(TaskType TaskID, EventMaskType Mask) {
+StatusType SetEvent(TaskType TaskID, EventMaskType Mask)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_SetEvent, (uint32_t)TaskID, 0);
@@ -230,7 +244,8 @@ StatusType SetEvent(TaskType TaskID, EventMaskType Mask) {
     return result;
 }
 
-StatusType GetEvent(TaskType TaskID, EventMaskRefType Event) {
+StatusType GetEvent(TaskType TaskID, EventMaskRefType Event)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_GetEvent, (uint32_t)TaskID, 0);
@@ -246,7 +261,8 @@ StatusType GetEvent(TaskType TaskID, EventMaskRefType Event) {
     return result;
 }
 
-void ShutdownOS(StatusType Error) {
+void ShutdownOS(StatusType Error)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_ShutdownOS, (uint32_t)Error, 0);
@@ -255,7 +271,8 @@ void ShutdownOS(StatusType Error) {
     Os_ArtiServiceLeave();
 }
 
-void StartOS(AppModeType Mode) {
+void StartOS(AppModeType Mode)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_StartOS, (uint32_t)Mode, 0);
@@ -264,7 +281,8 @@ void StartOS(AppModeType Mode) {
     Os_ArtiServiceLeave();
 }
 
-AppModeType GetActiveApplicationMode(void) {
+AppModeType GetActiveApplicationMode(void)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_GetActiveApplicationMode, (uint32_t)0u, 0);
@@ -275,13 +293,15 @@ AppModeType GetActiveApplicationMode(void) {
     }
     if (trace != 0) {
         Os_ArtiService(OSServiceId_GetActiveApplicationMode,
-                       Os_ArtiAccessValid() ? (uint32_t)result : UINT32_MAX, 1);
+                       Os_ArtiAccessValid() ? (uint32_t)result : UINT32_MAX,
+                       1);
     }
     Os_ArtiServiceLeave();
     return result;
 }
 
-StatusType IncrementCounter(CounterType CounterID) {
+StatusType IncrementCounter(CounterType CounterID)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_IncrementCounter, (uint32_t)CounterID, 0);
@@ -297,7 +317,8 @@ StatusType IncrementCounter(CounterType CounterID) {
     return result;
 }
 
-StatusType GetCounterValue(CounterType CounterID, TickRefType Value) {
+StatusType GetCounterValue(CounterType CounterID, TickRefType Value)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_GetCounterValue, (uint32_t)CounterID, 0);
@@ -307,14 +328,15 @@ StatusType GetCounterValue(CounterType CounterID, TickRefType Value) {
         Arti_CaptureServiceStatus((uint32_t)result);
     }
     if (trace != 0) {
-        Os_ArtiService(OSServiceId_GetCounterValue,
-                       (result == E_OK) ? (uint32_t)*Value : UINT32_MAX, 1);
+        Os_ArtiService(
+            OSServiceId_GetCounterValue, (result == E_OK) ? (uint32_t)*Value : UINT32_MAX, 1);
     }
     Os_ArtiServiceLeave();
     return result;
 }
 
-StatusType GetElapsedValue(CounterType CounterID, TickRefType Value, TickRefType ElapsedValue) {
+StatusType GetElapsedValue(CounterType CounterID, TickRefType Value, TickRefType ElapsedValue)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_GetElapsedValue, (uint32_t)CounterID, 0);
@@ -325,13 +347,15 @@ StatusType GetElapsedValue(CounterType CounterID, TickRefType Value, TickRefType
     }
     if (trace != 0) {
         Os_ArtiService(OSServiceId_GetElapsedValue,
-                       (result == E_OK) ? (uint32_t)*ElapsedValue : UINT32_MAX, 1);
+                       (result == E_OK) ? (uint32_t)*ElapsedValue : UINT32_MAX,
+                       1);
     }
     Os_ArtiServiceLeave();
     return result;
 }
 
-StatusType GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info) {
+StatusType GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_GetAlarmBase, (uint32_t)AlarmID, 0);
@@ -351,7 +375,8 @@ StatusType GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info) {
     return result;
 }
 
-StatusType GetAlarm(AlarmType AlarmID, TickRefType Tick) {
+StatusType GetAlarm(AlarmType AlarmID, TickRefType Tick)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_GetAlarm, (uint32_t)AlarmID, 0);
@@ -367,7 +392,8 @@ StatusType GetAlarm(AlarmType AlarmID, TickRefType Tick) {
     return result;
 }
 
-StatusType SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle) {
+StatusType SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_SetRelAlarm, (uint32_t)AlarmID, 0);
@@ -383,7 +409,8 @@ StatusType SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle) {
     return result;
 }
 
-StatusType SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle) {
+StatusType SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_SetAbsAlarm, (uint32_t)AlarmID, 0);
@@ -399,7 +426,8 @@ StatusType SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle) {
     return result;
 }
 
-StatusType CancelAlarm(AlarmType AlarmID) {
+StatusType CancelAlarm(AlarmType AlarmID)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_CancelAlarm, (uint32_t)AlarmID, 0);
@@ -415,7 +443,8 @@ StatusType CancelAlarm(AlarmType AlarmID) {
     return result;
 }
 
-StatusType StartScheduleTableRel(ScheduleTableType ScheduleTableID, TickType Offset) {
+StatusType StartScheduleTableRel(ScheduleTableType ScheduleTableID, TickType Offset)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_StartScheduleTableRel, (uint32_t)ScheduleTableID, 0);
@@ -431,7 +460,8 @@ StatusType StartScheduleTableRel(ScheduleTableType ScheduleTableID, TickType Off
     return result;
 }
 
-StatusType StartScheduleTableAbs(ScheduleTableType ScheduleTableID, TickType Start) {
+StatusType StartScheduleTableAbs(ScheduleTableType ScheduleTableID, TickType Start)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_StartScheduleTableAbs, (uint32_t)ScheduleTableID, 0);
@@ -447,7 +477,8 @@ StatusType StartScheduleTableAbs(ScheduleTableType ScheduleTableID, TickType Sta
     return result;
 }
 
-StatusType StopScheduleTable(ScheduleTableType ScheduleTableID) {
+StatusType StopScheduleTable(ScheduleTableType ScheduleTableID)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_StopScheduleTable, (uint32_t)ScheduleTableID, 0);
@@ -464,7 +495,8 @@ StatusType StopScheduleTable(ScheduleTableType ScheduleTableID) {
 }
 
 StatusType NextScheduleTable(ScheduleTableType ScheduleTableID_From,
-                             ScheduleTableType ScheduleTableID_To) {
+                             ScheduleTableType ScheduleTableID_To)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_NextScheduleTable, (uint32_t)ScheduleTableID_To, 0);
@@ -482,7 +514,8 @@ StatusType NextScheduleTable(ScheduleTableType ScheduleTableID_From,
 }
 
 StatusType GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
-                                  ScheduleTableStatusRefType ScheduleStatus) {
+                                  ScheduleTableStatusRefType ScheduleStatus)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_GetScheduleTableStatus, (uint32_t)ScheduleTableID, 0);
@@ -494,13 +527,15 @@ StatusType GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
     }
     if (trace != 0) {
         Os_ArtiService(OSServiceId_GetScheduleTableStatus,
-                       (result == E_OK) ? (uint32_t)*ScheduleStatus : UINT32_MAX, 1);
+                       (result == E_OK) ? (uint32_t)*ScheduleStatus : UINT32_MAX,
+                       1);
     }
     Os_ArtiServiceLeave();
     return result;
 }
 
-StatusType DisableInterruptSource(ISRType ISRID) {
+StatusType DisableInterruptSource(ISRType ISRID)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_DisableInterruptSource, (uint32_t)ISRID, 0);
@@ -516,7 +551,8 @@ StatusType DisableInterruptSource(ISRType ISRID) {
     return result;
 }
 
-StatusType EnableInterruptSource(ISRType ISRID, boolean ClearPending) {
+StatusType EnableInterruptSource(ISRType ISRID, boolean ClearPending)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_EnableInterruptSource, (uint32_t)ISRID, 0);
@@ -532,7 +568,8 @@ StatusType EnableInterruptSource(ISRType ISRID, boolean ClearPending) {
     return result;
 }
 
-StatusType ClearPendingInterrupt(ISRType ISRID) {
+StatusType ClearPendingInterrupt(ISRType ISRID)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_ClearPendingInterrupt, (uint32_t)ISRID, 0);
@@ -548,7 +585,8 @@ StatusType ClearPendingInterrupt(ISRType ISRID) {
     return result;
 }
 
-void EnableAllInterrupts(void) {
+void EnableAllInterrupts(void)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_EnableAllInterrupts, (uint32_t)0u, 0);
@@ -560,7 +598,8 @@ void EnableAllInterrupts(void) {
     Os_ArtiServiceLeave();
 }
 
-void DisableAllInterrupts(void) {
+void DisableAllInterrupts(void)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_DisableAllInterrupts, (uint32_t)0u, 0);
@@ -572,7 +611,8 @@ void DisableAllInterrupts(void) {
     Os_ArtiServiceLeave();
 }
 
-void ResumeAllInterrupts(void) {
+void ResumeAllInterrupts(void)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_ResumeAllInterrupts, (uint32_t)0u, 0);
@@ -584,7 +624,8 @@ void ResumeAllInterrupts(void) {
     Os_ArtiServiceLeave();
 }
 
-void SuspendAllInterrupts(void) {
+void SuspendAllInterrupts(void)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_SuspendAllInterrupts, (uint32_t)0u, 0);
@@ -596,7 +637,8 @@ void SuspendAllInterrupts(void) {
     Os_ArtiServiceLeave();
 }
 
-void ResumeOSInterrupts(void) {
+void ResumeOSInterrupts(void)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_ResumeOSInterrupts, (uint32_t)0u, 0);
@@ -608,7 +650,8 @@ void ResumeOSInterrupts(void) {
     Os_ArtiServiceLeave();
 }
 
-void SuspendOSInterrupts(void) {
+void SuspendOSInterrupts(void)
+{
     const int trace = Os_ArtiServiceEnter();
     if (trace != 0) {
         Os_ArtiService(OSServiceId_SuspendOSInterrupts, (uint32_t)0u, 0);

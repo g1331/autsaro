@@ -13,7 +13,8 @@ static boolean initialized DET_VAR_CLEARED;
 
 #define DET_START_SEC_CODE
 #include "Det_MemMap.h"
-static DET_CODE boolean Det_ValidHooks(const Det_ErrorHookType *hooks, uint16_t count) {
+static DET_CODE boolean Det_ValidHooks(const Det_ErrorHookType *hooks, uint16_t count)
+{
     boolean valid = TRUE;
     uint16_t index;
     if ((count != 0u) && (hooks == NULL)) {
@@ -28,7 +29,8 @@ static DET_CODE boolean Det_ValidHooks(const Det_ErrorHookType *hooks, uint16_t 
     return valid;
 }
 
-DET_CODE void Det_Init(const Det_ConfigType *ConfigPtr) {
+DET_CODE void Det_Init(const Det_ConfigType *ConfigPtr)
+{
     SchM_Enter_Det_DET_STATE();
     initialized = FALSE;
     configuration = NULL;
@@ -46,12 +48,16 @@ DET_CODE void Det_Init(const Det_ConfigType *ConfigPtr) {
     SchM_Exit_Det_DET_STATE();
 }
 
-DET_CODE void Det_Start(void) {
+DET_CODE void Det_Start(void)
+{
     /* SWS_Det_00025 permits no action when startup storage is not selected. */
 }
 
-DET_CODE Std_ReturnType Det_ReportRuntimeError(uint16_t ModuleId, uint8_t InstanceId, uint8_t ApiId,
-                                               uint8_t ErrorId) {
+DET_CODE Std_ReturnType Det_ReportRuntimeError(uint16_t ModuleId,
+                                               uint8_t InstanceId,
+                                               uint8_t ApiId,
+                                               uint8_t ErrorId)
+{
     const Det_ConfigType *config = NULL;
     SchM_Enter_Det_DET_STATE();
     if (initialized == TRUE) {
@@ -68,8 +74,11 @@ DET_CODE Std_ReturnType Det_ReportRuntimeError(uint16_t ModuleId, uint8_t Instan
     return E_OK;
 }
 
-DET_CODE Std_ReturnType Det_ReportError(uint16_t ModuleId, uint8_t InstanceId, uint8_t ApiId,
-                                        uint8_t ErrorId) {
+DET_CODE Std_ReturnType Det_ReportError(uint16_t ModuleId,
+                                        uint8_t InstanceId,
+                                        uint8_t ApiId,
+                                        uint8_t ErrorId)
+{
     const Det_ConfigType *config = NULL;
     SchM_Enter_Det_DET_STATE();
     if (initialized == TRUE) {

@@ -42,9 +42,9 @@ extern Arti_Event Arti_Events[ARTI_EVENT_CAPACITY];
 extern volatile ArtiAtomic32 Arti_EventCount;
 extern volatile ArtiAtomic32 Arti_EventsDropped;
 extern volatile ArtiAtomic32 Arti_DevelopmentError;
-#define ARTI_E_INIT_FAILED 0x01u
-#define ARTI_E_PARAM_POINTER 0x02u
-#define ARTI_STOPWATCH_FLAT 0x00u
+#define ARTI_E_INIT_FAILED    0x01u
+#define ARTI_E_PARAM_POINTER  0x02u
+#define ARTI_STOPWATCH_FLAT   0x00u
 #define ARTI_STOPWATCH_NESTED 0x01u
 
 /** @brief Initialize before OS actors start; resets only the tool buffer. */
@@ -62,8 +62,12 @@ void Arti_GetVersionInfo(Std_VersionInfoType *versioninfo);
  * @param instance_parameter Hardware core index.
  * @param event_parameter Captured event payload.
  */
-void Arti_Record(const char *context, const char *class_name, const char *instance,
-                 const char *event, uint32_t instance_parameter, uint32_t event_parameter);
+void Arti_Record(const char *context,
+                 const char *class_name,
+                 const char *instance,
+                 const char *event,
+                 uint32_t instance_parameter,
+                 uint32_t event_parameter);
 
 /* The standard contract requires literal tokens here. Stringification retains
  * those identities without expanding a caller's unrelated macro definitions.

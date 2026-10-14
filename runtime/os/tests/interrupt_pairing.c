@@ -23,19 +23,22 @@ static TickType output_value = UINT64_MAX;
 static TickType output_elapsed = UINT64_MAX;
 static AlarmBaseType output_base = {61u, 62u, 63u};
 static ScheduleTableStatusType output_table = 42u;
-static void check(bool condition) {
+static void check(bool condition)
+{
     if (!condition) {
         /* A failing harness assertion must still stop while public shutdown
          * is correctly ignored inside an application-disabled region. */
         Os_BackendShutdown(E_OS_STATE);
     }
 }
-static void record(char marker) {
+static void record(char marker)
+{
     check(length + 1u < sizeof(trace));
     trace[length++] = marker;
     trace[length] = '\0';
 }
-void ErrorHook(StatusType error) {
+void ErrorHook(StatusType error)
+{
     TaskType caller = INVALID_TASK;
     TaskStateType state = 42u;
     const OSServiceIdType service = OSErrorGetServiceId();
@@ -89,7 +92,8 @@ void ErrorHook(StatusType error) {
     ResumeAllInterrupts();
     check(OSErrorGetServiceId() == service);
 }
-static uint32_t cat1(void) {
+static uint32_t cat1(void)
+{
     check(GetISRID() == INVALID_ISR);
     if (strcmp(scenario, "isr-balanced") == 0) {
         SuspendAllInterrupts();
@@ -101,7 +105,8 @@ static uint32_t cat1(void) {
     record('C');
     return 0u;
 }
-static uint32_t cat2(void) {
+static uint32_t cat2(void)
+{
     check(GetISRID() == 5u);
     ++category2;
     check(GetTaskID(&isr_task) == E_OK);
@@ -153,18 +158,21 @@ static uint32_t cat2(void) {
     }
     return 0u;
 }
-static uint32_t source_isr(void) {
+static uint32_t source_isr(void)
+{
     const ISRType id = GetISRID();
     check(strcmp(scenario, "source-isr") == 0 ? id == 8u : (id == 6u || id == 7u));
     ++source_deliveries;
     record(strcmp(scenario, "source-isr") == 0 ? 'Q' : (id == 6u ? 'D' : 'E'));
     return 0u;
 }
-static void pend(void) {
+static void pend(void)
+{
     vPortGenerateSimulatedInterrupt(4u);
     vPortGenerateSimulatedInterrupt(5u);
 }
-void StartupHook(void) {
+void StartupHook(void)
+{
     if (strcmp(scenario, "hook-allowed") == 0) {
         DisableAllInterrupts();
         EnableAllInterrupts();
@@ -189,7 +197,8 @@ void StartupHook(void) {
     }
     startup = 1u;
 }
-void ShutdownHook(StatusType error) {
+void ShutdownHook(StatusType error)
+{
     /* These four remain usable after close without a port-mutex dependency. */
     DisableAllInterrupts();
     SuspendAllInterrupts();
@@ -198,12 +207,20 @@ void ShutdownHook(StatusType error) {
     check(Os_InterruptDisabled() == 0);
     printf("pairing scenario=%s startup=%u cat1=%u cat2=%u isr_task=%u errors=%u trace=%s "
            "reason=%u\n",
-           scenario, startup, category1, category2, isr_task, errors, trace, error);
+           scenario,
+           startup,
+           category1,
+           category2,
+           isr_task,
+           errors,
+           trace,
+           error);
     for (unsigned i = 0u; i < errors; ++i) {
         printf("mask_error status=%u service=%u actor=%c\n", statuses[i], services[i], actors[i]);
     }
 }
-static void begin_mask(void) {
+static void begin_mask(void)
+{
     if (strcmp(scenario, "services-disable") == 0 || strcmp(scenario, "missing-disable") == 0) {
         DisableAllInterrupts();
     } else if (strcmp(scenario, "services-all") == 0 || strcmp(scenario, "missing-all") == 0) {
@@ -214,7 +231,8 @@ static void begin_mask(void) {
         SuspendOSInterrupts();
     }
 }
-static void end_mask(void) {
+static void end_mask(void)
+{
     if (strcmp(scenario, "services-disable") == 0) {
         EnableAllInterrupts();
     } else if (strcmp(scenario, "services-all") == 0) {
@@ -225,7 +243,8 @@ static void end_mask(void) {
         ResumeOSInterrupts();
     }
 }
-static void refused_services(void) {
+static void refused_services(void)
+{
     check(GetTaskID(&output_task) == 9u);
     check(GetTaskState(99u, &output_state) == 9u);
     check(ActivateTask(99u) == 9u);
@@ -262,7 +281,8 @@ static void refused_services(void) {
     check(output_base.maxallowedvalue == 61u && output_base.ticksperbase == 62u &&
           output_base.mincycle == 63u);
 }
-static void owner(void) {
+static void owner(void)
+{
     if (strncmp(scenario, "source-", 7u) == 0) {
         if (strcmp(scenario, "source-isr") == 0 || strcmp(scenario, "source-outside-isr") == 0) {
             vPortGenerateSimulatedInterrupt(5u);
@@ -369,7 +389,8 @@ static void owner(void) {
     check(Os_InterruptAllows(4u) != 0 && Os_InterruptAllows(5u) != 0);
     ShutdownOS(E_OK);
 }
-static void monitor(void) {
+static void monitor(void)
+{
     TaskType id = INVALID_TASK;
     TaskStateType state = 42u;
     check(strncmp(scenario, "missing-", 8u) == 0 && errors == 1u);
@@ -381,7 +402,8 @@ static void monitor(void) {
     record('M');
     ShutdownOS(E_OK);
 }
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     check(argc == 2);
     scenario = argv[1];
     const Os_TaskConfig tasks[2] = {
@@ -389,8 +411,8 @@ int main(int argc, char **argv) {
         {1u, "monitor", monitor, 5u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
     };
     const Os_HookConfig hooks = {&ErrorHook, NULL, NULL};
-    const Os_TargetConfig target = {tasks, 2u, 262144u, NULL,  0u, NULL, 0u, UINT32_C(1) << 4u,
-                                    0u,    0u, NULL,    &hooks, NULL};
+    const Os_TargetConfig target = {
+        tasks, 2u, 262144u, NULL, 0u, NULL, 0u, UINT32_C(1) << 4u, 0u, 0u, NULL, &hooks, NULL};
     check(Os_TargetPrepare(&target) == E_OK);
     /* All four services operate before startup, including unmatched restores. */
     DisableAllInterrupts();

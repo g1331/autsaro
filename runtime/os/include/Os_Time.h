@@ -2,16 +2,16 @@
 #define AUTOSAR_OS_TIME_H
 #include "Os.h"
 #include <stddef.h>
-#define OS_MAX_COUNTERS 8u
-#define OS_MAX_ALARMS 16u
-#define OS_ALARM_ACTIVATE 0u
-#define OS_ALARM_EVENT 1u
-#define OS_ALARM_CALLBACK 2u
+#define OS_MAX_COUNTERS            8u
+#define OS_MAX_ALARMS              16u
+#define OS_ALARM_ACTIVATE          0u
+#define OS_ALARM_EVENT             1u
+#define OS_ALARM_CALLBACK          2u
 #define OS_ALARM_INCREMENT_COUNTER 3u
-#define OS_MAX_SCHEDULE_TABLES 8u
-#define OS_MAX_EXPIRY_POINTS 32u
-#define OS_MAX_EXPIRY_ACTIONS 16u
-#define OS_SCHEDULE_SYNC_NONE 0u
+#define OS_MAX_SCHEDULE_TABLES     8u
+#define OS_MAX_EXPIRY_POINTS       32u
+#define OS_MAX_EXPIRY_ACTIONS      16u
+#define OS_SCHEDULE_SYNC_NONE      0u
 typedef struct {
     CounterType id;
     TickType maximum;

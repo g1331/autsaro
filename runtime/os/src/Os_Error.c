@@ -11,7 +11,8 @@ static __thread int error_active;
 static const Os_ErrorParameters empty_parameters = {.service_TerminateTask = {0u}};
 int Os_HookBlocksCategory2(void) { return hook_depth != 0u; }
 
-void Os_ErrorContextSave(Os_ErrorContext *context) {
+void Os_ErrorContextSave(Os_ErrorContext *context)
+{
     context->phase = phase;
     context->service = service_id;
     context->parameters = parameters;
@@ -20,7 +21,8 @@ void Os_ErrorContextSave(Os_ErrorContext *context) {
     service_id = OSServiceId_Unknown;
     parameters = empty_parameters;
 }
-void Os_ErrorContextRestore(const Os_ErrorContext *context) {
+void Os_ErrorContextRestore(const Os_ErrorContext *context)
+{
     phase = context->phase;
     service_id = context->service;
     parameters = context->parameters;
@@ -28,10 +30,12 @@ void Os_ErrorContextRestore(const Os_ErrorContext *context) {
 }
 
 Os_HookPhase Os_HookContext(void) { return phase; }
-int Os_HookQueryContext(void) {
+int Os_HookQueryContext(void)
+{
     return (phase == OS_HOOK_ERROR) || (phase == OS_HOOK_PRE) || (phase == OS_HOOK_POST);
 }
-int Os_HookServiceAllowed(OSServiceIdType service) {
+int Os_HookServiceAllowed(OSServiceIdType service)
+{
     if (phase == OS_HOOK_NONE) {
         return 1;
     }
@@ -52,10 +56,12 @@ int Os_HookServiceAllowed(OSServiceIdType service) {
     }
     return 0;
 }
-int Os_ErrorHookConfigured(void) {
+int Os_ErrorHookConfigured(void)
+{
     return (Os_Config != NULL) && (Os_Config->hooks != NULL) && (Os_Config->hooks->error != NULL);
 }
-StatusType Os_ServiceAccessStatus(OSServiceIdType service) {
+StatusType Os_ServiceAccessStatus(OSServiceIdType service)
+{
     StatusType result = E_OK;
     const Os_NativeStack *stack = Os_StackCurrent();
     const unsigned interrupt = Os_BackendCurrentInterrupt();
@@ -75,14 +81,18 @@ StatusType Os_ServiceAccessStatus(OSServiceIdType service) {
     Os_ArtiAccessResult(result);
     return result;
 }
-const Os_ErrorParameters *Os_ErrorParametersCurrent(void) {
+const Os_ErrorParameters *Os_ErrorParametersCurrent(void)
+{
     return (phase == OS_HOOK_ERROR) ? &parameters : &empty_parameters;
 }
-OSServiceIdType Os_ErrorServiceId(void) {
+OSServiceIdType Os_ErrorServiceId(void)
+{
     return (phase == OS_HOOK_ERROR) ? service_id : OSServiceId_Unknown;
 }
-StatusType Os_ErrorResult(OSServiceIdType service, StatusType status,
-                          const Os_ErrorParameters *arguments) {
+StatusType Os_ErrorResult(OSServiceIdType service,
+                          StatusType status,
+                          const Os_ErrorParameters *arguments)
+{
     if ((status != E_OK) && (error_active == 0) && (Os_ErrorHookConfigured() != 0) &&
         (Os_StackCurrent() != NULL) && (InterlockedCompareExchange(&Os_Closing, 0, 0) == 0)) {
         const Os_HookPhase previous = phase;
@@ -119,7 +129,8 @@ StatusType Os_ErrorResult(OSServiceIdType service, StatusType status,
     }
     return status;
 }
-void Os_HookInvoke(void (*hook)(void), Os_HookPhase selected) {
+void Os_HookInvoke(void (*hook)(void), Os_HookPhase selected)
+{
     if (hook != NULL) {
         const Os_HookPhase previous = phase;
         taskENTER_CRITICAL();
@@ -137,7 +148,8 @@ void Os_HookInvoke(void (*hook)(void), Os_HookPhase selected) {
         Os_BackendGuardService();
     }
 }
-void Os_ShutdownHookInvoke(StatusType error) {
+void Os_ShutdownHookInvoke(StatusType error)
+{
     const Os_HookPhase previous = phase;
     /* Closing runs on the established healthy controller. Never acquire the
      * ordinary port mutex: a suspended or damaged automotive actor may own it. */

@@ -26,7 +26,8 @@ static Std_ReturnType bus_result COMM_VAR_CLEARED;
 #include "ComM_MemMap.h"
 #define COMM_START_SEC_CODE
 #include "ComM_MemMap.h"
-static COMM_CODE boolean ComM_Valid(const ComM_ConfigType *config) {
+static COMM_CODE boolean ComM_Valid(const ComM_ConfigType *config)
+{
     boolean valid = FALSE;
     uint16 i;
     if ((config != NULL_PTR) && (config->users != NULL_PTR) && (config->user_count > 0u) &&
@@ -47,7 +48,8 @@ static COMM_CODE boolean ComM_Valid(const ComM_ConfigType *config) {
     }
     return valid;
 }
-static COMM_CODE uint16 ComM_User(ComM_UserHandleType User) {
+static COMM_CODE uint16 ComM_User(ComM_UserHandleType User)
+{
     uint16 index = 32u;
     if (configuration != NULL_PTR) {
         uint16 i;
@@ -60,7 +62,8 @@ static COMM_CODE uint16 ComM_User(ComM_UserHandleType User) {
     }
     return index;
 }
-static COMM_CODE boolean ComM_Demand(void) {
+static COMM_CODE boolean ComM_Demand(void)
+{
     boolean demand = (diagnostic == TRUE) || (wakeup_pending == TRUE);
     uint16 i;
     for (i = 0u; i < configuration->user_count; ++i) {
@@ -70,7 +73,8 @@ static COMM_CODE boolean ComM_Demand(void) {
     }
     return demand;
 }
-static COMM_CODE void ComM_Evaluate(void) {
+static COMM_CODE void ComM_Evaluate(void)
+{
     const boolean demand = ComM_Demand();
     if ((channel_state == COMM_NO_COM_NO_PENDING_REQUEST) && (demand == TRUE)) {
         channel_state = COMM_NO_COM_REQUEST_PENDING;
@@ -97,7 +101,8 @@ static COMM_CODE void ComM_Evaluate(void) {
         /* CDD/NM NONE has no automatic READY_SLEEP -> NO transition. */
     }
 }
-static COMM_CODE void ComM_RequestBus(void) {
+static COMM_CODE void ComM_RequestBus(void)
+{
     ComM_ModeType target = COMM_NO_COMMUNICATION;
     if ((channel_state == COMM_FULL_COM_NETWORK_REQUESTED) ||
         (channel_state == COMM_FULL_COM_READY_SLEEP)) {
@@ -114,7 +119,8 @@ static COMM_CODE void ComM_RequestBus(void) {
         bus_result = configuration->request(configuration->channel, target);
     }
 }
-COMM_CODE void ComM_Init(const ComM_ConfigType *ConfigPtr) {
+COMM_CODE void ComM_Init(const ComM_ConfigType *ConfigPtr)
+{
     SchM_Enter_ComM_COMM_STATE();
     if (ComM_Valid(ConfigPtr) == TRUE) {
         uint16 i;
@@ -138,7 +144,8 @@ COMM_CODE void ComM_Init(const ComM_ConfigType *ConfigPtr) {
     }
     SchM_Exit_ComM_COMM_STATE();
 }
-COMM_CODE void ComM_DeInit(void) {
+COMM_CODE void ComM_DeInit(void)
+{
     ComM_ModeType actual = COMM_FULL_COMMUNICATION;
     SchM_Enter_ComM_COMM_STATE();
     if ((configuration != NULL_PTR) && (channel_state == COMM_NO_COM_NO_PENDING_REQUEST)) {
@@ -153,7 +160,8 @@ COMM_CODE void ComM_DeInit(void) {
     }
     SchM_Exit_ComM_COMM_STATE();
 }
-COMM_CODE Std_ReturnType ComM_GetStatus(ComM_InitStatusType *Status) {
+COMM_CODE Std_ReturnType ComM_GetStatus(ComM_InitStatusType *Status)
+{
     Std_ReturnType result = E_NOT_OK;
     SchM_Enter_ComM_COMM_STATE();
     if (Status != NULL_PTR) {
@@ -164,7 +172,8 @@ COMM_CODE Std_ReturnType ComM_GetStatus(ComM_InitStatusType *Status) {
     return result;
 }
 COMM_CODE Std_ReturnType ComM_GetInhibitionStatus(NetworkHandleType Channel,
-                                                  ComM_InhibitionStatusType *Status) {
+                                                  ComM_InhibitionStatusType *Status)
+{
     Std_ReturnType result = E_NOT_OK;
     SchM_Enter_ComM_COMM_STATE();
     if ((configuration != NULL_PTR) && (Channel == configuration->channel) &&
@@ -178,7 +187,8 @@ COMM_CODE Std_ReturnType ComM_GetInhibitionStatus(NetworkHandleType Channel,
     SchM_Exit_ComM_COMM_STATE();
     return result;
 }
-COMM_CODE Std_ReturnType ComM_SetECUGroupClassification(ComM_InhibitionStatusType Status) {
+COMM_CODE Std_ReturnType ComM_SetECUGroupClassification(ComM_InhibitionStatusType Status)
+{
     Std_ReturnType result = E_NOT_OK;
     SchM_Enter_ComM_COMM_STATE();
     if (configuration != NULL_PTR) {
@@ -188,7 +198,8 @@ COMM_CODE Std_ReturnType ComM_SetECUGroupClassification(ComM_InhibitionStatusTyp
     SchM_Exit_ComM_COMM_STATE();
     return result;
 }
-COMM_CODE Std_ReturnType ComM_RequestComMode(ComM_UserHandleType User, ComM_ModeType ComMode) {
+COMM_CODE Std_ReturnType ComM_RequestComMode(ComM_UserHandleType User, ComM_ModeType ComMode)
+{
     Std_ReturnType result = E_NOT_OK;
     uint16 index;
     SchM_Enter_ComM_COMM_STATE();
@@ -203,8 +214,8 @@ COMM_CODE Std_ReturnType ComM_RequestComMode(ComM_UserHandleType User, ComM_Mode
     SchM_Exit_ComM_COMM_STATE();
     return result;
 }
-COMM_CODE Std_ReturnType ComM_GetRequestedComMode(ComM_UserHandleType User,
-                                                  ComM_ModeType *ComMode) {
+COMM_CODE Std_ReturnType ComM_GetRequestedComMode(ComM_UserHandleType User, ComM_ModeType *ComMode)
+{
     Std_ReturnType result = E_NOT_OK;
     uint16 index;
     SchM_Enter_ComM_COMM_STATE();
@@ -216,7 +227,8 @@ COMM_CODE Std_ReturnType ComM_GetRequestedComMode(ComM_UserHandleType User,
     SchM_Exit_ComM_COMM_STATE();
     return result;
 }
-COMM_CODE Std_ReturnType ComM_GetCurrentComMode(ComM_UserHandleType User, ComM_ModeType *ComMode) {
+COMM_CODE Std_ReturnType ComM_GetCurrentComMode(ComM_UserHandleType User, ComM_ModeType *ComMode)
+{
     Std_ReturnType result = E_NOT_OK;
     SchM_Enter_ComM_COMM_STATE();
     if ((ComM_User(User) < 32u) && (ComMode != NULL_PTR)) {
@@ -225,8 +237,8 @@ COMM_CODE Std_ReturnType ComM_GetCurrentComMode(ComM_UserHandleType User, ComM_M
     SchM_Exit_ComM_COMM_STATE();
     return result;
 }
-COMM_CODE Std_ReturnType ComM_GetCurrentPNCComMode(ComM_UserHandleType User,
-                                                   ComM_ModeType *ComMode) {
+COMM_CODE Std_ReturnType ComM_GetCurrentPNCComMode(ComM_UserHandleType User, ComM_ModeType *ComMode)
+{
     Std_ReturnType result = E_NOT_OK;
     SchM_Enter_ComM_COMM_STATE();
     if ((ComM_User(User) < 32u) && (ComMode != NULL_PTR)) {
@@ -239,7 +251,8 @@ COMM_CODE Std_ReturnType ComM_GetCurrentPNCComMode(ComM_UserHandleType User,
     SchM_Exit_ComM_COMM_STATE();
     return result;
 }
-COMM_CODE Std_ReturnType ComM_GetMaxComMode(ComM_UserHandleType User, ComM_ModeType *ComMode) {
+COMM_CODE Std_ReturnType ComM_GetMaxComMode(ComM_UserHandleType User, ComM_ModeType *ComMode)
+{
     Std_ReturnType result = E_NOT_OK;
     SchM_Enter_ComM_COMM_STATE();
     if ((ComM_User(User) < 32u) && (ComMode != NULL_PTR)) {
@@ -250,7 +263,8 @@ COMM_CODE Std_ReturnType ComM_GetMaxComMode(ComM_UserHandleType User, ComM_ModeT
     SchM_Exit_ComM_COMM_STATE();
     return result;
 }
-COMM_CODE void ComM_CommunicationAllowed(NetworkHandleType Channel, boolean Allowed) {
+COMM_CODE void ComM_CommunicationAllowed(NetworkHandleType Channel, boolean Allowed)
+{
     SchM_Enter_ComM_COMM_STATE();
     if ((configuration != NULL_PTR) && (Channel == configuration->channel)) {
         allowed = Allowed;
@@ -259,7 +273,8 @@ COMM_CODE void ComM_CommunicationAllowed(NetworkHandleType Channel, boolean Allo
     }
     SchM_Exit_ComM_COMM_STATE();
 }
-COMM_CODE void ComM_EcuM_WakeUpIndication(NetworkHandleType Channel) {
+COMM_CODE void ComM_EcuM_WakeUpIndication(NetworkHandleType Channel)
+{
     SchM_Enter_ComM_COMM_STATE();
     if ((configuration != NULL_PTR) && (Channel == configuration->channel) &&
         (channel_state == COMM_NO_COM_NO_PENDING_REQUEST)) {
@@ -274,7 +289,8 @@ COMM_CODE void ComM_EcuM_WakeUpIndication(NetworkHandleType Channel) {
     }
     SchM_Exit_ComM_COMM_STATE();
 }
-COMM_CODE void ComM_DCM_ActiveDiagnostic(NetworkHandleType Channel) {
+COMM_CODE void ComM_DCM_ActiveDiagnostic(NetworkHandleType Channel)
+{
     SchM_Enter_ComM_COMM_STATE();
     if ((configuration != NULL_PTR) && (Channel == configuration->channel)) {
         diagnostic = TRUE;
@@ -283,7 +299,8 @@ COMM_CODE void ComM_DCM_ActiveDiagnostic(NetworkHandleType Channel) {
     }
     SchM_Exit_ComM_COMM_STATE();
 }
-COMM_CODE void ComM_DCM_InactiveDiagnostic(NetworkHandleType Channel) {
+COMM_CODE void ComM_DCM_InactiveDiagnostic(NetworkHandleType Channel)
+{
     SchM_Enter_ComM_COMM_STATE();
     if ((configuration != NULL_PTR) && (Channel == configuration->channel)) {
         diagnostic = FALSE;
@@ -291,7 +308,8 @@ COMM_CODE void ComM_DCM_InactiveDiagnostic(NetworkHandleType Channel) {
     }
     SchM_Exit_ComM_COMM_STATE();
 }
-COMM_CODE void ComM_BusSM_ModeIndication(NetworkHandleType Channel, ComM_ModeType ComMode) {
+COMM_CODE void ComM_BusSM_ModeIndication(NetworkHandleType Channel, ComM_ModeType ComMode)
+{
     SchM_Enter_ComM_COMM_STATE();
     if ((configuration != NULL_PTR) && (Channel == configuration->channel) &&
         (ComMode <= COMM_FULL_COMMUNICATION) && (ComMode != current_mode)) {
@@ -309,7 +327,8 @@ COMM_CODE void ComM_BusSM_ModeIndication(NetworkHandleType Channel, ComM_ModeTyp
     }
     SchM_Exit_ComM_COMM_STATE();
 }
-COMM_CODE ComM_StateType ComM_RunChannel(void) {
+COMM_CODE ComM_StateType ComM_RunChannel(void)
+{
     ComM_StateType result;
     SchM_Enter_ComM_COMM_STATE();
     if (configuration != NULL_PTR) {

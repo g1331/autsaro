@@ -57,7 +57,8 @@ static const unsigned errors[] = {E_OK,
                                   E_OS_PROTECTION_TIME,
                                   E_OS_PROTECTION_ARRIVAL};
 
-int main(void) {
+int main(void)
+{
     unsigned evaluations = 0u;
 #ifndef OS_PUBLIC_COMPAT_BASELINE
     DeclareTask(++evaluations);

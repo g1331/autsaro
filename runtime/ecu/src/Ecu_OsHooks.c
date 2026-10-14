@@ -4,7 +4,8 @@
  * Standard ARTI events and object/state binding are supplied by the OS tool binding. */
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-void ErrorHook(StatusType Error) {
+void ErrorHook(StatusType Error)
+{
     (void)Error;
     Os_TargetTrace('e');
 }

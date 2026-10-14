@@ -22,7 +22,8 @@ typedef char AreaRange[(sizeof(AreaIdType) >= 2u) ? 1 : -1];
 typedef char CounterRange[(sizeof(CounterType) == 4u) ? 1 : -1];
 typedef char MicrosecondsRange[(sizeof(TimeInMicrosecondsType) == 8u) ? 1 : -1];
 
-int main(void) {
+int main(void)
+{
     ApplicationType application = UINT32_C(4294967294);
     ApplicationStateType state = APPLICATION_ACCESSIBLE;
     ApplicationStateRefType state_ref = &state;

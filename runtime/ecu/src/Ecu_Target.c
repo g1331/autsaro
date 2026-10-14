@@ -69,14 +69,16 @@ static unsigned protocol_read;
 /* Highest generated bootstrap stage that began; retirement undoes only those. */
 static uint8 bootstrap_reached;
 
-static void fail(void) {
+static void fail(void)
+{
     (void)Os_HostAtomicExchange(&lifecycle, (Os_Atomic32)ECU_TARGET_FAILED);
     ShutdownOS(E_OS_STATE);
 }
 static Os_Atomic32 load(volatile Os_Atomic32 *value) { return Os_HostAtomicLoad(value); }
 
 /* Owner-only writer; a full queue closes the target instead of dropping a record. */
-static void record_protocol_failure(EcuStatus status) {
+static void record_protocol_failure(EcuStatus status)
+{
     Ecu_ProtocolSlot *slot = &protocol_failures[protocol_write];
     if (load(&slot->state) != 0) {
         fail();
@@ -86,43 +88,50 @@ static void record_protocol_failure(EcuStatus status) {
     protocol_write = (protocol_write + 1u) % ECU_TARGET_OUTPUT_CAPACITY;
     (void)Os_HostAtomicExchange(&slot->state, 1);
 }
-void Ecu_TargetReportTransportTimeout(void) {
+void Ecu_TargetReportTransportTimeout(void)
+{
     if (Ecu_TargetIsOwner() == 0) {
         fail();
     } else {
         record_protocol_failure(ECU_ERR_TP_TIMEOUT);
     }
 }
-uint8_t Ecu_TargetState(void) {
+uint8_t Ecu_TargetState(void)
+{
     Os_Atomic32 state = load(&lifecycle);
     if ((state == (Os_Atomic32)ECU_TARGET_READY) && (Os_TargetReady() == 0)) {
         return ECU_TARGET_INITIALIZING;
     }
     return (uint8_t)state;
 }
-int Ecu_TargetIsOwner(void) {
+int Ecu_TargetIsOwner(void)
+{
     if (load(&lifecycle) == (Os_Atomic32)ECU_TARGET_INITIALIZING) {
         return (initialization_thread != 0u) && (Os_HostThreadIdentity() == initialization_thread);
     }
     return (Ecu_TargetState() == ECU_TARGET_READY) && (Os_BackendTaskOwner(ECU_TARGET_TASK) == 1);
 }
-void Ecu_TargetAssertOwner(void) {
+void Ecu_TargetAssertOwner(void)
+{
     if (Ecu_TargetIsOwner() == 0) {
         fail();
     }
 }
-Std_ReturnType Ecu_TargetCheckLifecycleContext(boolean starting) {
+Std_ReturnType Ecu_TargetCheckLifecycleContext(boolean starting)
+{
     const Os_HookPhase phase = Os_HookContext();
     return (((starting == TRUE) && (phase == OS_HOOK_STARTUP)) ||
             ((starting == FALSE) && (phase == OS_HOOK_SHUTDOWN)))
                ? E_OK
                : E_NOT_OK;
 }
-uint64_t Ecu_TargetNow(void) {
+uint64_t Ecu_TargetNow(void)
+{
     Ecu_TargetAssertOwner();
     return epoch;
 }
-static StatusType native_context(void) {
+static StatusType native_context(void)
+{
     Os_Atomic32 owner;
     if (Ecu_TargetState() != ECU_TARGET_READY) {
         return E_OS_STATE;
@@ -139,7 +148,8 @@ static StatusType native_context(void) {
     return ((owner == 2) && (native_thread == Os_HostThreadIdentity())) ? E_OK : E_OS_ACCESS;
 }
 
-StatusType Ecu_TargetTakeProtocolFailure(Ecu_ProtocolRecord *record) {
+StatusType Ecu_TargetTakeProtocolFailure(Ecu_ProtocolRecord *record)
+{
     StatusType status;
     Ecu_ProtocolSlot *slot = &protocol_failures[protocol_read];
     if (record == NULL) {
@@ -157,7 +167,8 @@ StatusType Ecu_TargetTakeProtocolFailure(Ecu_ProtocolRecord *record) {
     }
     return status;
 }
-StatusType Ecu_TargetPrepare(void) {
+StatusType Ecu_TargetPrepare(void)
+{
     StatusType status;
     if (Os_HostAtomicCompareExchange(&lifecycle, (Os_Atomic32)ECU_TARGET_INITIALIZING, 0) != 0) {
         return E_OS_STATE;
@@ -169,7 +180,8 @@ StatusType Ecu_TargetPrepare(void) {
     return status;
 }
 #if defined(ECU_TARGET_TESTS)
-static void stage(unsigned number) {
+static void stage(unsigned number)
+{
     if (Ecu_TargetTestFailStage(number) != 0) {
         fail();
     }
@@ -177,7 +189,8 @@ static void stage(unsigned number) {
 #endif
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-void StartupHook(void) {
+void StartupHook(void)
+{
     initialization_thread = Os_HostThreadIdentity();
     if (Ecu_StackBootstrap(&bootstrap_reached) != E_OK) {
         fail();
@@ -189,7 +202,8 @@ void StartupHook(void) {
 #include "Os_MemMap.h"
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-void ShutdownHook(StatusType Error) {
+void ShutdownHook(StatusType Error)
+{
     Os_Atomic32 state =
         (Error == E_OK) ? (Os_Atomic32)ECU_TARGET_CLOSED : (Os_Atomic32)ECU_TARGET_FAILED;
     Ecu_StackRetire(bootstrap_reached);
@@ -200,8 +214,9 @@ void ShutdownHook(StatusType Error) {
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
-StatusType Ecu_TargetPostFrame(uint64_t at, uint32_t id, uint8_t dlc, const uint8_t data[8],
-                               uint64_t *ticket) {
+StatusType Ecu_TargetPostFrame(
+    uint64_t at, uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t *ticket)
+{
     Ecu_Input input = {0};
     StatusType status;
     if ((data == NULL) || (ticket == NULL)) {
@@ -236,7 +251,8 @@ StatusType Ecu_TargetPostFrame(uint64_t at, uint32_t id, uint8_t dlc, const uint
     }
     return status;
 }
-static StatusType batch_time(uint64_t at, Os_TickCompletion *completed) {
+static StatusType batch_time(uint64_t at, Os_TickCompletion *completed)
+{
     StatusType status;
     if (at < native_input_epoch) {
         return E_OS_VALUE;
@@ -247,10 +263,12 @@ static StatusType batch_time(uint64_t at, Os_TickCompletion *completed) {
     }
     return (status == E_OS_ID) ? E_OS_VALUE : ((status == E_OS_NOFUNC) ? E_OS_STATE : status);
 }
-static int frame_shape(const Ecu_BatchFrame *frame) {
+static int frame_shape(const Ecu_BatchFrame *frame)
+{
     return Ecu_StackFrameShape(frame->id, frame->dlc);
 }
-StatusType Ecu_TargetValidateFrames(const Ecu_BatchFrame *frames, uint16_t count) {
+StatusType Ecu_TargetValidateFrames(const Ecu_BatchFrame *frames, uint16_t count)
+{
     uint16_t index;
     if ((frames == NULL) && (count != 0u)) {
         return E_OS_ILLEGAL_ADDRESS;
@@ -265,7 +283,8 @@ StatusType Ecu_TargetValidateFrames(const Ecu_BatchFrame *frames, uint16_t count
     }
     return E_OK;
 }
-void Ecu_TargetAbortNative(StatusType reason) {
+void Ecu_TargetAbortNative(StatusType reason)
+{
     StatusType failure = (reason == E_OK) ? E_OS_STATE : reason;
     (void)Os_HostAtomicExchange(&lifecycle, (Os_Atomic32)ECU_TARGET_FAILED);
     Os_BackendRequestShutdown(failure);
@@ -274,8 +293,11 @@ void Ecu_TargetAbortNative(StatusType reason) {
     Os_HostSleepMs(600u);
     Os_HostExit((uint32_t)failure);
 }
-StatusType Ecu_TargetPostBatch(uint64_t at, const Ecu_BatchFrame *frames, uint16_t count,
-                               uint64_t *ticket) {
+StatusType Ecu_TargetPostBatch(uint64_t at,
+                               const Ecu_BatchFrame *frames,
+                               uint16_t count,
+                               uint64_t *ticket)
+{
     Os_TickCompletion completed;
     Ecu_Input input = {0};
     uint64_t mailbox_ticket;
@@ -325,7 +347,8 @@ StatusType Ecu_TargetPostBatch(uint64_t at, const Ecu_BatchFrame *frames, uint16
     }
     return status;
 }
-StatusType Ecu_TargetBatchCompletion(uint64_t ticket, Ecu_BatchCompletion *result) {
+StatusType Ecu_TargetBatchCompletion(uint64_t ticket, Ecu_BatchCompletion *result)
+{
     StatusType status;
     if (result == NULL) {
         return E_OS_ILLEGAL_ADDRESS;
@@ -344,24 +367,22 @@ StatusType Ecu_TargetBatchCompletion(uint64_t ticket, Ecu_BatchCompletion *resul
     (void)Os_HostAtomicExchange(&batch_state, 0);
     return E_OK;
 }
-int Os_IntegrationTimingAuthorized(void) {
-    return Ecu_SchMTimingActive() == TRUE;
-}
-void Os_IntegrationOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate) {
+int Os_IntegrationTimingAuthorized(void) { return Ecu_SchMTimingActive() == TRUE; }
+void Os_IntegrationOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate)
+{
     if ((id == ECU_TARGET_TASK) && (pending == 0u) && ((predicate & ECU_TARGET_EVENT_IO) != 0u) &&
         (Os_MailboxQuiescent() != 0) && (output_pending == 0u) && (load(&batch_state) == 4) &&
         ((batch_needs_tick == 0u) || (processed_tick == batch_epoch))) {
         (void)Os_HostAtomicCompareExchange(&batch_state, 5, 4);
     }
 }
-EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc,
-                                    const uint8_t data[8]) {
+EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc, const uint8_t data[8])
+{
     Ecu_OutputSlot *slot = &outputs[output_write];
     if (Ecu_TargetIsOwner() == 0) {
         return ECU_ERR_IO;
     }
-    if (
-        (dlc > 8u) || (data == NULL) || (id > 0x7ffu) || (next_output_ticket == UINT64_MAX) ||
+    if ((dlc > 8u) || (data == NULL) || (id > 0x7ffu) || (next_output_ticket == UINT64_MAX) ||
         (load(&slot->state) != 0)) {
         fail();
         return ECU_ERR_IO;
@@ -387,7 +408,8 @@ EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc,
     (void)Os_TargetNotifyNative();
     return ECU_OK;
 }
-StatusType Ecu_TargetTakeOutput(Ecu_OutputRecord *record) {
+StatusType Ecu_TargetTakeOutput(Ecu_OutputRecord *record)
+{
     StatusType status;
     Ecu_OutputSlot *slot = &outputs[output_read];
     if (record == NULL) {
@@ -404,7 +426,8 @@ StatusType Ecu_TargetTakeOutput(Ecu_OutputRecord *record) {
     }
     return status;
 }
-StatusType Ecu_TargetConfirmOutput(uint64_t ticket, PduIdType pdu) {
+StatusType Ecu_TargetConfirmOutput(uint64_t ticket, PduIdType pdu)
+{
     Ecu_OutputSlot *slot = &outputs[output_confirm];
     Ecu_Input input = {0};
     uint64_t mailbox_ticket;
@@ -432,7 +455,8 @@ StatusType Ecu_TargetConfirmOutput(uint64_t ticket, PduIdType pdu) {
     return status;
 }
 /* Completes the oldest confirmed output; its ticket and PDU are already proven. */
-static void retire_output(void) {
+static void retire_output(void)
+{
     Ecu_OutputSlot *slot = &outputs[output_retire];
     const uint64_t driver_token = slot->driver_token;
     const PduIdType pdu = slot->record.pdu;
@@ -446,7 +470,8 @@ static void retire_output(void) {
     }
     Can_MainFunction_Write();
 }
-static void consume(const Ecu_Input *input) {
+static void consume(const Ecu_Input *input)
+{
     if (input->kind == 1u) {
         if ((input->epoch < epoch) || ((input->epoch - epoch) > UINT64_C(1))) {
             fail();
@@ -486,8 +511,8 @@ static void consume(const Ecu_Input *input) {
         (void)Os_HostAtomicExchange(&batch_state, 3);
         epoch = batch_epoch;
         for (index = 0u; index < batch_count; ++index) {
-            EcuStatus status = Can_Inject(batch_frames[index].id, batch_frames[index].dlc,
-                                          batch_frames[index].data, epoch);
+            EcuStatus status = Can_Inject(
+                batch_frames[index].id, batch_frames[index].dlc, batch_frames[index].data, epoch);
             Ecu_ComReceptionBeforeMain(batch_epoch > processed_epoch);
             Can_MainFunction_Read();
 #ifdef ECU_TARGET_TESTS
@@ -508,7 +533,8 @@ static void consume(const Ecu_Input *input) {
         fail();
     }
 }
-void Ecu_TargetTask(void) {
+void Ecu_TargetTask(void)
+{
     const EventMaskType mask = ECU_TARGET_EVENT_WORK | ECU_TARGET_EVENT_APP | ECU_TARGET_EVENT_IO;
     for (;;) {
         EventMaskType events;

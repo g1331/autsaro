@@ -6,7 +6,7 @@
 #include "Std_Types.h"
 
 /* Software identity follows core/Cargo.toml; assigned vendor identity is absent. */
-#define CAN_MODULE_ID 80u
+#define CAN_MODULE_ID        80u
 #define CAN_SW_MAJOR_VERSION 0u
 #define CAN_SW_MINOR_VERSION 1u
 #define CAN_SW_PATCH_VERSION 0u

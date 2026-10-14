@@ -7,7 +7,8 @@ static volatile Os_Atomic32 published;
 /* Acceptance bit0 and permanent-close bit1; close never waits for the producer. */
 static volatile Os_Atomic32 admission;
 
-static uint32_t input_interrupt(void) {
+static uint32_t input_interrupt(void)
+{
     if (Os_TargetReady() != 0) {
         Os_ArtiInternalEnter();
         const StatusType status = SetEvent(Os_Config->input_task, Os_Config->input_event);
@@ -21,12 +22,14 @@ static uint32_t input_interrupt(void) {
     }
     return 0u;
 }
-void Os_MailboxInstall(void) {
+void Os_MailboxInstall(void)
+{
     if (Os_Config->input_event != 0u) {
         vPortSetInterruptHandler(OS_INPUT_INTERRUPT, input_interrupt);
     }
 }
-int Os_MailboxHandlerAllowed(uint32_t interrupt, uint32_t (*handler)(void)) {
+int Os_MailboxHandlerAllowed(uint32_t interrupt, uint32_t (*handler)(void))
+{
     return Os_BackendHandlerAllowed(interrupt, handler) &&
            ((Os_Config == NULL) || (Os_Config->input_event == 0u) ||
             (interrupt != OS_INPUT_INTERRUPT) || (handler == input_interrupt));
@@ -35,7 +38,8 @@ void Os_MailboxClose(void) { InterlockedOr(&admission, 2); }
 #ifdef OS_EVENT_TESTS
 void Os_TestInputLastTicket(uint64_t ticket) { last_ticket = ticket; }
 #endif
-StatusType Os_TargetPostInput(const uint8_t *data, uint8_t length, uint64_t *ticket) {
+StatusType Os_TargetPostInput(const uint8_t *data, uint8_t length, uint64_t *ticket)
+{
     static unsigned write_index;
     StatusType context;
     Os_InputRecord *record;
@@ -78,7 +82,8 @@ StatusType Os_TargetPostInput(const uint8_t *data, uint8_t length, uint64_t *tic
     }
     return E_OK;
 }
-int Os_BridgeActorAllowed(void) {
+int Os_BridgeActorAllowed(void)
+{
     const Os_NativeStack *actor = Os_StackCurrent();
 #ifdef __linux__
     return actor == NULL || actor->role == 'H';
@@ -86,7 +91,8 @@ int Os_BridgeActorAllowed(void) {
     return actor == NULL;
 #endif
 }
-StatusType Os_BridgeContext(void) {
+StatusType Os_BridgeContext(void)
+{
     static volatile Os_Atomic32 producer;
     LONG thread;
     LONG owner;
@@ -97,11 +103,13 @@ StatusType Os_BridgeContext(void) {
     owner = InterlockedCompareExchange(&producer, thread, 0);
     return ((owner == 0) || (owner == thread)) ? E_OK : E_OS_ACCESS;
 }
-int Os_MailboxQuiescent(void) {
+int Os_MailboxQuiescent(void)
+{
     return ((InterlockedCompareExchange(&admission, 0, 0) & 1) == 0) &&
            (InterlockedCompareExchange(&published, 0, 0) == 0);
 }
-static StatusType input_context(void) {
+static StatusType input_context(void)
+{
     int owner;
     Os_BackendGuardService();
     if ((Os_TargetReady() == 0) || (Os_Config->input_event == 0u)) {
@@ -110,7 +118,8 @@ static StatusType input_context(void) {
     owner = Os_BackendInputOwner();
     return (owner == 0) ? E_OS_CALLEVEL : ((owner < 0) ? E_OS_ACCESS : E_OK);
 }
-StatusType Os_TargetTakeInput(Os_InputRecord *record) {
+StatusType Os_TargetTakeInput(Os_InputRecord *record)
+{
     static unsigned read_index;
     StatusType status;
     if (record == NULL) {
@@ -128,7 +137,8 @@ StatusType Os_TargetTakeInput(Os_InputRecord *record) {
     InterlockedDecrement(&published);
     return E_OK;
 }
-StatusType Os_TargetInputCount(unsigned *count) {
+StatusType Os_TargetInputCount(unsigned *count)
+{
     StatusType status;
     if (count == NULL) {
         return E_OS_ILLEGAL_ADDRESS;

@@ -17,7 +17,8 @@ static void Can_Fatal(void) { abort(); }
  * not enter another area from within it. The legacy shared state area may still
  * enclose strict areas (not the reverse) until its last user is migrated. */
 static __thread unsigned strict_held;
-static void Can_NoteEnter(int strict) {
+static void Can_NoteEnter(int strict)
+{
     if (strict_held != 0u) {
         Can_Fatal();
     }
@@ -25,7 +26,8 @@ static void Can_NoteEnter(int strict) {
         ++strict_held;
     }
 }
-static void Can_NoteExit(int strict) {
+static void Can_NoteExit(int strict)
+{
     if ((strict != 0) && (strict_held != 0u)) {
         --strict_held;
     }
@@ -35,19 +37,22 @@ static INIT_ONCE can_lock_once = INIT_ONCE_STATIC_INIT;
 static CRITICAL_SECTION can_lock;
 static CRITICAL_SECTION state_lock;
 static CRITICAL_SECTION area_locks[CAN_HOST_AREA_COUNT];
-static BOOL CALLBACK Can_InitLock(PINIT_ONCE once, PVOID parameter, PVOID *context) {
+static BOOL CALLBACK Can_InitLock(PINIT_ONCE once, PVOID parameter, PVOID *context)
+{
     (void)once;
     (void)parameter;
     (void)context;
     return InitializeCriticalSectionEx(&can_lock, 0u, 0u);
 }
-static BOOL CALLBACK Can_InitStateLock(PINIT_ONCE once, PVOID parameter, PVOID *context) {
+static BOOL CALLBACK Can_InitStateLock(PINIT_ONCE once, PVOID parameter, PVOID *context)
+{
     (void)once;
     (void)parameter;
     (void)context;
     return InitializeCriticalSectionEx(&state_lock, 0u, 0u);
 }
-static BOOL CALLBACK Can_InitAreas(PINIT_ONCE once, PVOID parameter, PVOID *context) {
+static BOOL CALLBACK Can_InitAreas(PINIT_ONCE once, PVOID parameter, PVOID *context)
+{
     BOOL initialized = TRUE;
     size_t area;
     (void)once;
@@ -58,17 +63,20 @@ static BOOL CALLBACK Can_InitAreas(PINIT_ONCE once, PVOID parameter, PVOID *cont
     }
     return initialized;
 }
-static void Can_EnterRecursive(PINIT_ONCE once, PINIT_ONCE_FN init, LPCRITICAL_SECTION lock) {
+static void Can_EnterRecursive(PINIT_ONCE once, PINIT_ONCE_FN init, LPCRITICAL_SECTION lock)
+{
     if (InitOnceExecuteOnce(once, init, NULL, NULL) == 0) {
         Can_Fatal();
     }
     EnterCriticalSection(lock);
 }
-void Can_Lock(void) {
+void Can_Lock(void)
+{
     Can_NoteEnter(1);
     Can_EnterRecursive(&can_lock_once, Can_InitLock, &can_lock);
 }
-int Can_TryLock(void) {
+int Can_TryLock(void)
+{
     int result = -1;
     Can_NoteEnter(1);
     if (InitOnceExecuteOnce(&can_lock_once, Can_InitLock, NULL, NULL) != 0) {
@@ -79,11 +87,13 @@ int Can_TryLock(void) {
     }
     return result;
 }
-void Can_Unlock(void) {
+void Can_Unlock(void)
+{
     LeaveCriticalSection(&can_lock);
     Can_NoteExit(1);
 }
-void Can_HostAreaEnter(Can_HostAreaType area) {
+void Can_HostAreaEnter(Can_HostAreaType area)
+{
     static INIT_ONCE area_once = INIT_ONCE_STATIC_INIT;
     if (area >= CAN_HOST_AREA_COUNT) {
         Can_Fatal();
@@ -91,14 +101,16 @@ void Can_HostAreaEnter(Can_HostAreaType area) {
     Can_NoteEnter(1);
     Can_EnterRecursive(&area_once, Can_InitAreas, &area_locks[area]);
 }
-void Can_HostAreaExit(Can_HostAreaType area) {
+void Can_HostAreaExit(Can_HostAreaType area)
+{
     if (area >= CAN_HOST_AREA_COUNT) {
         Can_Fatal();
     }
     LeaveCriticalSection(&area_locks[area]);
     Can_NoteExit(1);
 }
-void Can_HostStateLock(void) {
+void Can_HostStateLock(void)
+{
     static INIT_ONCE state_lock_once = INIT_ONCE_STATIC_INIT;
     Can_NoteEnter(0);
     Can_EnterRecursive(&state_lock_once, Can_InitStateLock, &state_lock);
@@ -113,7 +125,8 @@ static pthread_once_t can_lock_once = PTHREAD_ONCE_INIT;
 static Can_RecursiveLock can_lock;
 static Can_RecursiveLock state_lock;
 static Can_RecursiveLock area_locks[CAN_HOST_AREA_COUNT];
-static void Can_InitRecursive(Can_RecursiveLock *lock) {
+static void Can_InitRecursive(Can_RecursiveLock *lock)
+{
     pthread_mutexattr_t attributes;
     int initialized = 0;
     int result = pthread_mutexattr_init(&attributes);
@@ -137,29 +150,34 @@ static void Can_InitRecursive(Can_RecursiveLock *lock) {
 }
 static void Can_InitLock(void) { Can_InitRecursive(&can_lock); }
 static void Can_InitStateLock(void) { Can_InitRecursive(&state_lock); }
-static void Can_InitAreas(void) {
+static void Can_InitAreas(void)
+{
     size_t area;
     for (area = 0u; area < (size_t)CAN_HOST_AREA_COUNT; ++area) {
         Can_InitRecursive(&area_locks[area]);
     }
 }
-static void Can_EnterRecursive(pthread_once_t *once, void (*init)(void), Can_RecursiveLock *lock) {
+static void Can_EnterRecursive(pthread_once_t *once, void (*init)(void), Can_RecursiveLock *lock)
+{
     if ((pthread_once(once, init) != 0) || (lock->ready == 0) ||
         (pthread_mutex_lock(&lock->mutex) != 0)) {
         Can_Fatal();
     }
 }
-static void Can_LeaveRecursive(Can_RecursiveLock *lock) {
+static void Can_LeaveRecursive(Can_RecursiveLock *lock)
+{
     if (pthread_mutex_unlock(&lock->mutex) != 0) {
         /* The lock ownership state is no longer reliable. */
         Can_Fatal();
     }
 }
-void Can_Lock(void) {
+void Can_Lock(void)
+{
     Can_NoteEnter(1);
     Can_EnterRecursive(&can_lock_once, Can_InitLock, &can_lock);
 }
-int Can_TryLock(void) {
+int Can_TryLock(void)
+{
     int result = -1;
     Can_NoteEnter(1);
     if ((pthread_once(&can_lock_once, Can_InitLock) == 0) && (can_lock.ready != 0)) {
@@ -177,11 +195,13 @@ int Can_TryLock(void) {
     }
     return result;
 }
-void Can_Unlock(void) {
+void Can_Unlock(void)
+{
     Can_LeaveRecursive(&can_lock);
     Can_NoteExit(1);
 }
-void Can_HostAreaEnter(Can_HostAreaType area) {
+void Can_HostAreaEnter(Can_HostAreaType area)
+{
     static pthread_once_t area_once = PTHREAD_ONCE_INIT;
     if (area >= CAN_HOST_AREA_COUNT) {
         Can_Fatal();
@@ -189,14 +209,16 @@ void Can_HostAreaEnter(Can_HostAreaType area) {
     Can_NoteEnter(1);
     Can_EnterRecursive(&area_once, Can_InitAreas, &area_locks[area]);
 }
-void Can_HostAreaExit(Can_HostAreaType area) {
+void Can_HostAreaExit(Can_HostAreaType area)
+{
     if (area >= CAN_HOST_AREA_COUNT) {
         Can_Fatal();
     }
     Can_LeaveRecursive(&area_locks[area]);
     Can_NoteExit(1);
 }
-void Can_HostStateLock(void) {
+void Can_HostStateLock(void)
+{
     static pthread_once_t state_lock_once = PTHREAD_ONCE_INIT;
     Can_NoteEnter(0);
     Can_EnterRecursive(&state_lock_once, Can_InitStateLock, &state_lock);

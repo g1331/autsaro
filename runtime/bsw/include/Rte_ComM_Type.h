@@ -7,9 +7,9 @@
 typedef uint8 ComM_ModeType;
 typedef uint8 ComM_InhibitionStatusType;
 typedef uint16 ComM_UserHandleType;
-#define COMM_NO_COMMUNICATION 0u
-#define COMM_SILENT_COMMUNICATION 1u
-#define COMM_FULL_COMMUNICATION 2u
+#define COMM_NO_COMMUNICATION                       0u
+#define COMM_SILENT_COMMUNICATION                   1u
+#define COMM_FULL_COMMUNICATION                     2u
 #define COMM_FULL_COMMUNICATION_WITH_WAKEUP_REQUEST 3u
-#define COMM_NOT_USED_USER_ID 65535u
+#define COMM_NOT_USED_USER_ID                       65535u
 #endif

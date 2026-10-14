@@ -16,23 +16,27 @@ static volatile LONG notified;
 static volatile LONG waiting_seen;
 static volatile LONG bridge_rejected;
 static bool mailbox;
-static void check(bool condition) {
+static void check(bool condition)
+{
     ++checks;
     if (!condition) {
         Os_TargetTrace('!');
         ShutdownOS(E_OS_STATE);
     }
 }
-static void refuse(StatusType status, StatusType expected) {
+static void refuse(StatusType status, StatusType expected)
+{
     check(status == expected);
     ++rejects;
 }
-static EventMaskType bits(TaskType id) {
+static EventMaskType bits(TaskType id)
+{
     EventMaskType value = UINT32_MAX;
     check(GetEvent(id, &value) == E_OK);
     return value;
 }
-void Os_TestObserve(void) {
+void Os_TestObserve(void)
+{
     unsigned i;
     for (i = 0u; i < 4u; ++i) {
         Os_ActivationInfo value;
@@ -55,14 +59,16 @@ void Os_TestObserve(void) {
     }
 }
 void Os_TestInputNotified(void) { InterlockedIncrement(&notified); }
-static void wait_flag(volatile LONG *flag, LONG expected) {
+static void wait_flag(volatile LONG *flag, LONG expected)
+{
     DWORD started_at = GetTickCount();
     while (InterlockedCompareExchange(flag, 0, 0) < expected) {
         check((GetTickCount() - started_at) < 4000u);
         Sleep(1u);
     }
 }
-static DWORD WINAPI other_producer(void *argument) {
+static DWORD WINAPI other_producer(void *argument)
+{
     uint8_t data = 99u;
     uint64_t ticket = UINT64_C(777);
     (void)argument;
@@ -70,7 +76,8 @@ static DWORD WINAPI other_producer(void *argument) {
                ? 0u
                : 99u;
 }
-static DWORD WINAPI producer_thread(void *argument) {
+static DWORD WINAPI producer_thread(void *argument)
+{
     unsigned total = 0u;
     (void)argument;
     for (;;) {
@@ -134,7 +141,8 @@ static DWORD WINAPI producer_thread(void *argument) {
         InterlockedExchange(&completed, (LONG)total);
     }
 }
-static void publish(unsigned count) {
+static void publish(unsigned count)
+{
     LONG before = InterlockedCompareExchange(&completed, 0, 0);
     LONG signals = InterlockedCompareExchange(&notified, 0, 0);
     InterlockedExchange(&request, (LONG)count);
@@ -143,7 +151,8 @@ static void publish(unsigned count) {
      * than assuming that each record becomes an independent event edge. */
     wait_flag(&notified, (signals + 1));
 }
-static void drain(void) {
+static void drain(void)
+{
     Os_InputRecord value;
     StatusType status = Os_TargetTakeInput(&value);
     while (status == E_OK) {
@@ -159,12 +168,14 @@ static void drain(void) {
     }
     check(status == E_OS_NOFUNC);
 }
-static void finish(void) {
+static void finish(void)
+{
     (void)TerminateTask();
     Os_TargetTrace('X');
     ShutdownOS(E_OS_STATE);
 }
-static uint32_t interrupt(void) {
+static uint32_t interrupt(void)
+{
     EventMaskType output = UINT32_C(123);
     TaskStateType state = 99u;
     if ((strcmp(scenario, "category1") == 0) || (strcmp(scenario, "category1-ceiling") == 0)) {
@@ -190,7 +201,8 @@ static uint32_t interrupt(void) {
     Os_TargetTrace('J');
     return 0u;
 }
-static void owner(void) {
+static void owner(void)
+{
     EventMaskType output = 123u;
     unsigned count;
     ++entries;
@@ -314,7 +326,8 @@ static void owner(void) {
     }
     finish();
 }
-static void peer(void) {
+static void peer(void)
+{
     Os_TargetTrace('P');
     if (strcmp(scenario, "mailbox-api") == 0) {
         Os_InputRecord record = {0};
@@ -342,7 +355,8 @@ static void peer(void) {
     Os_TargetTrace('p');
     finish();
 }
-static void monitor(void) {
+static void monitor(void)
+{
     if (strcmp(scenario, "mailbox-wait") == 0) {
         TaskStateType state = WAITING;
         DWORD started_at = GetTickCount();
@@ -358,7 +372,8 @@ static void monitor(void) {
     ShutdownOS(E_OK);
 }
 static void inactive(void) { ShutdownOS(E_OS_STATE); }
-void StartupHook(void) {
+void StartupHook(void)
+{
     unsigned i;
     for (i = 0u; i < 4u; ++i) {
         observed[i] = xTaskGetHandle(Os_Config->tasks[i].name);
@@ -380,24 +395,31 @@ void StartupHook(void) {
         ShutdownOS(E_OS_STATE);
     }
 }
-void ShutdownHook(StatusType Error) {
+void ShutdownHook(StatusType Error)
+{
     Os_TargetTrace('Z');
     if (printf("event checks=%u rejected=%u records=%u ticket=%llu entries=%u error=%u "
                "bridge_rejected=%d\n",
-               checks, rejects, consumed, (unsigned long long)consumed_ticket, entries, Error,
+               checks,
+               rejects,
+               consumed,
+               (unsigned long long)consumed_ticket,
+               entries,
+               Error,
                (int)InterlockedCompareExchange(&bridge_rejected, 0, 0)) < 0) {
         ExitProcess(99u);
     }
 }
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     Os_TaskConfig tasks[] = {
         {0u, "E", owner, 3u, 3u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
         {1u, "P", peer, 2u, 0u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
         {2u, "M", monitor, 1u, 3u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
         {3u, "N", inactive, 2u, 0u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
     Os_ResourceConfig resource = {0u, 31u, 1u, UINT32_C(1) << 29u};
-    Os_TargetConfig config = {tasks, 4u, 262144u, &resource, 1u,  NULL, 0u, UINT32_C(1) << 31u,
-                              0u,    0u, NULL,    NULL,      NULL};
+    Os_TargetConfig config = {
+        tasks, 4u, 262144u, &resource, 1u, NULL, 0u, UINT32_C(1) << 31u, 0u, 0u, NULL, NULL, NULL};
     scenario = (argc == 2) ? argv[1] : "already";
     mailbox = strncmp(scenario, "mailbox-", 8u) == 0;
     if (strcmp(scenario, "oracle-wait") == 0) {

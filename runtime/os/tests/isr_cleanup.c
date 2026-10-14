@@ -11,17 +11,20 @@ static unsigned helpers;
 static StatusType statuses[3];
 static char trace[32];
 static unsigned length;
-static void check(bool condition) {
+static void check(bool condition)
+{
     if (!condition) {
         Os_BackendShutdown(E_OS_STATE);
     }
 }
-static void record(char marker) {
+static void record(char marker)
+{
     check(length + 1u < sizeof(trace));
     trace[length++] = marker;
     trace[length] = '\0';
 }
-void ErrorHook(StatusType error) {
+void ErrorHook(StatusType error)
+{
     TaskType task = INVALID_TASK;
     TaskStateType state = SUSPENDED;
     check(errors < 3u && OSErrorGetServiceId() == 252u && GetISRID() == 5u);
@@ -39,7 +42,8 @@ void ErrorHook(StatusType error) {
     }
     statuses[errors++] = error;
 }
-static void acquire_release(void) {
+static void acquire_release(void)
+{
     const unsigned count = strcmp(scenario, "maximum") == 0 ? 7u : 2u;
     for (unsigned resource = 0u; resource < count; ++resource) {
         check(GetResource((ResourceType)resource) == E_OK);
@@ -48,14 +52,16 @@ static void acquire_release(void) {
         check(ReleaseResource((ResourceType)(resource - 1u)) == E_OK);
     }
 }
-static uint32_t probe(void) {
+static uint32_t probe(void)
+{
     check(GetISRID() == 6u);
     acquire_release();
     ++probes;
     record('P');
     return 0u;
 }
-static uint32_t leaking_isr(void) {
+static uint32_t leaking_isr(void)
+{
     check(GetISRID() == 5u);
     record('I');
     check(GetResource(0u) == E_OK);
@@ -86,17 +92,26 @@ static uint32_t leaking_isr(void) {
     }
     return 0u;
 }
-void StartupHook(void) {
+void StartupHook(void)
+{
     vPortSetInterruptHandler(5u, &leaking_isr);
     vPortSetInterruptHandler(6u, &probe);
 }
-void ShutdownHook(StatusType error) {
+void ShutdownHook(StatusType error)
+{
     printf("isr_cleanup scenario=%s probes=%u helpers=%u errors=%u first=%u last=%u trace=%s "
            "reason=%u\n",
-           scenario, probes, helpers, errors, errors != 0u ? statuses[0] : 0u,
-           errors != 0u ? statuses[errors - 1u] : 0u, trace, error);
+           scenario,
+           probes,
+           helpers,
+           errors,
+           errors != 0u ? statuses[0] : 0u,
+           errors != 0u ? statuses[errors - 1u] : 0u,
+           trace,
+           error);
 }
-static void helper(void) {
+static void helper(void)
+{
     check(GetISRID() == INVALID_ISR && Os_InterruptDisabled() == 0 && probes == 1u);
     acquire_release();
     ++helpers;
@@ -104,7 +119,8 @@ static void helper(void) {
     (void)TerminateTask();
     Os_BackendShutdown(E_OS_STATE);
 }
-static void owner(void) {
+static void owner(void)
+{
     record('A');
     vPortGenerateSimulatedInterrupt(5u);
     check(GetISRID() == INVALID_ISR && probes == 1u && helpers == 1u);
@@ -112,7 +128,8 @@ static void owner(void) {
     record('B');
     ShutdownOS(E_OK);
 }
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     check(argc == 2);
     scenario = argv[1];
     const Os_TaskConfig tasks[2] = {

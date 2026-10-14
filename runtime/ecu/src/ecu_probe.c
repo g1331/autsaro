@@ -4,7 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static void require(int condition) {
+static void require(int condition)
+{
     if (condition == 0) {
         ShutdownOS(E_OS_STATE);
     }
@@ -12,19 +13,24 @@ static void require(int condition) {
 #ifdef ECU_TARGET_TESTS
 static unsigned failure_stage;
 int Ecu_TargetTestFailStage(unsigned stage) { return stage == failure_stage; }
-void Ecu_TargetTestRetire(unsigned stage) {
+void Ecu_TargetTestRetire(unsigned stage)
+{
     if (printf("ecu_retire stage=%u\n", stage) < 0) {
         Os_HostExit(93u);
     }
 }
-void Ecu_TargetTestShutdown(StatusType reason) {
-    if (printf("ecu_shutdown reason=%u state=%u fail_stage=%u\n", reason, Ecu_TargetState(),
+void Ecu_TargetTestShutdown(StatusType reason)
+{
+    if (printf("ecu_shutdown reason=%u state=%u fail_stage=%u\n",
+               reason,
+               Ecu_TargetState(),
                failure_stage) < 0) {
         Os_HostExit(93u);
     }
 }
 #endif
-static Os_HostThreadResult control(void *argument) {
+static Os_HostThreadResult control(void *argument)
+{
     uint64_t step;
     uint64_t started = Os_HostMonotonicMs();
     (void)argument;
@@ -42,8 +48,11 @@ static Os_HostThreadResult control(void *argument) {
             StatusType status = Ecu_TargetTakeOutput(&output);
             if (status == E_OK) {
                 require(printf("ecu_output epoch=%llu ticket=%llu pdu=%u id=%u dlc=%u\n",
-                               (unsigned long long)output.epoch, (unsigned long long)output.ticket,
-                               output.pdu, output.can_id, output.dlc) >= 0);
+                               (unsigned long long)output.epoch,
+                               (unsigned long long)output.ticket,
+                               output.pdu,
+                               output.can_id,
+                               output.dlc) >= 0);
                 require(Ecu_TargetConfirmOutput(output.ticket, output.pdu) == E_OK);
             } else {
                 require(status == E_OS_NOFUNC);
@@ -61,7 +70,8 @@ static Os_HostThreadResult control(void *argument) {
     ShutdownOS(E_OK);
     return 0u;
 }
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     Os_HostHandle thread;
 #ifdef ECU_TARGET_TESTS
     if (argc == 2) {

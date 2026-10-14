@@ -3,13 +3,15 @@
 #include "nested_interrupts.c"
 #undef main
 
-static void arti_check(int accepted) {
+static void arti_check(int accepted)
+{
     if (accepted == 0) {
         fprintf(stderr, "ARTI consumer assertion failed after actor shutdown\n");
         ExitProcess(7u);
     }
 }
-void Os_ArtiTestShutdownObserved(void) {
+void Os_ArtiTestShutdownObserved(void)
+{
     ISRType stack[32];
     unsigned used = 0u, starts = 0u, returns = 0u;
     unsigned service_queries = 0u, hook_errors = 0u;
@@ -49,7 +51,10 @@ void Os_ArtiTestShutdownObserved(void) {
     if (is("maximum")) {
         arti_check(starts == 30u);
     }
-    printf("arti_nested scenario=%s balanced=%u queries=%u errors=%u dropped=0\n", scenario, starts,
-           service_queries, hook_errors);
+    printf("arti_nested scenario=%s balanced=%u queries=%u errors=%u dropped=0\n",
+           scenario,
+           starts,
+           service_queries,
+           hook_errors);
 }
 int main(int argc, char **argv) { return nested_main(argc, argv); }

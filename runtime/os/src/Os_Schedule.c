@@ -4,7 +4,8 @@ typedef Os_ArtiScheduleState ScheduleState;
 static ScheduleState tables[OS_MAX_SCHEDULE_TABLES];
 const Os_ArtiScheduleState *const Os_ArtiScheduleTables = tables;
 
-static size_t table_index(ScheduleTableType id) {
+static size_t table_index(ScheduleTableType id)
+{
     const Os_TimeConfig *time = Os_Config->time;
     if (time != NULL) {
         for (size_t i = 0u; i < time->schedule_table_count; ++i) {
@@ -15,7 +16,8 @@ static size_t table_index(ScheduleTableType id) {
     }
     return OS_MAX_SCHEDULE_TABLES;
 }
-static const Os_CounterConfig *counter_config(const Os_TimeConfig *time, CounterType id) {
+static const Os_CounterConfig *counter_config(const Os_TimeConfig *time, CounterType id)
+{
     const Os_CounterConfig *result = NULL;
     for (size_t i = 0u; i < time->counter_count; ++i) {
         if (time->counters[i].id == id) {
@@ -25,7 +27,8 @@ static const Os_CounterConfig *counter_config(const Os_TimeConfig *time, Counter
     }
     return result;
 }
-static int valid_action(const Os_TargetConfig *target, const Os_ExpiryAction *action) {
+static int valid_action(const Os_TargetConfig *target, const Os_ExpiryAction *action)
+{
     for (size_t i = 0u; i < target->task_count; ++i) {
         const Os_TaskConfig *task = &target->tasks[i];
         if (task->id == action->task) {
@@ -36,7 +39,8 @@ static int valid_action(const Os_TargetConfig *target, const Os_ExpiryAction *ac
     }
     return 0;
 }
-StatusType Os_ScheduleValidate(const Os_TargetConfig *target) {
+StatusType Os_ScheduleValidate(const Os_TargetConfig *target)
+{
     const Os_TimeConfig *time = target->time;
     if ((time->schedule_table_count > OS_MAX_SCHEDULE_TABLES) ||
         ((time->schedule_table_count != 0u) && (time->schedule_tables == NULL))) {
@@ -97,7 +101,8 @@ StatusType Os_ScheduleValidate(const Os_TargetConfig *target) {
     }
     return E_OK;
 }
-static void start(size_t index, TickType delay) {
+static void start(size_t index, TickType delay)
+{
     const Os_ScheduleTableConfig *table = &Os_Config->time->schedule_tables[index];
     tables[index].status = SCHEDULETABLE_RUNNING;
     tables[index].point = 0u;
@@ -105,13 +110,15 @@ static void start(size_t index, TickType delay) {
     tables[index].next = OS_MAX_SCHEDULE_TABLES;
     tables[index].previous = OS_MAX_SCHEDULE_TABLES;
 }
-static TickType absolute_delay(const Os_ScheduleTableConfig *table, TickType value) {
+static TickType absolute_delay(const Os_ScheduleTableConfig *table, TickType value)
+{
     const Os_CounterConfig *counter = counter_config(Os_Config->time, table->counter);
     TickType current = Os_TimeCounterValue(table->counter);
     return (value > current) ? (value - current)
                              : (counter->maximum - (current - value) + UINT64_C(1));
 }
-void Os_ScheduleAutostart(AppModeType mode) {
+void Os_ScheduleAutostart(AppModeType mode)
+{
     const Os_TimeConfig *time = Os_Config->time;
     if (time != NULL) {
         for (size_t i = 0u; i < time->schedule_table_count; ++i) {
@@ -126,7 +133,8 @@ void Os_ScheduleAutostart(AppModeType mode) {
         }
     }
 }
-static void expiry(const Os_ExpiryPoint *point) {
+static void expiry(const Os_ExpiryPoint *point)
+{
     Os_ArtiInternalEnter();
     /* All activations precede all event settings; declaration order is not
      * permitted to set an event on a still-suspended destination Task. */
@@ -143,7 +151,8 @@ static void expiry(const Os_ExpiryPoint *point) {
     }
     Os_ArtiInternalLeave();
 }
-static void process(size_t initial) {
+static void process(size_t initial)
+{
     size_t index = initial;
     unsigned transitions = 0u;
     while ((tables[index].status == SCHEDULETABLE_RUNNING) && (tables[index].remaining == 0u)) {
@@ -175,7 +184,8 @@ static void process(size_t initial) {
         }
     }
 }
-void Os_ScheduleIncrement(CounterType counter) {
+void Os_ScheduleIncrement(CounterType counter)
+{
     const Os_TimeConfig *time = Os_Config->time;
     uint8_t running[OS_MAX_SCHEDULE_TABLES] = {0};
     for (size_t i = 0u; i < time->schedule_table_count; ++i) {
@@ -192,12 +202,14 @@ void Os_ScheduleIncrement(CounterType counter) {
         }
     }
 }
-static StatusType context(void) {
+static StatusType context(void)
+{
     Os_StackCheck();
     Os_BackendGuardService();
     return (Os_BackendServiceContext() != 0) ? E_OK : E_OS_CALLEVEL;
 }
-static StatusType start_table(ScheduleTableType id, TickType value, int absolute) {
+static StatusType start_table(ScheduleTableType id, TickType value, int absolute)
+{
     size_t index;
     const Os_ScheduleTableConfig *table;
     const Os_CounterConfig *counter;
@@ -228,14 +240,17 @@ static StatusType start_table(ScheduleTableType id, TickType value, int absolute
     return status;
 }
 static StatusType implementation_StartScheduleTableRel(ScheduleTableType ScheduleTableID,
-                                                       TickType Offset) {
+                                                       TickType Offset)
+{
     return start_table(ScheduleTableID, Offset, 0);
 }
 static StatusType implementation_StartScheduleTableAbs(ScheduleTableType ScheduleTableID,
-                                                       TickType Start) {
+                                                       TickType Start)
+{
     return start_table(ScheduleTableID, Start, 1);
 }
-static StatusType implementation_StopScheduleTable(ScheduleTableType ScheduleTableID) {
+static StatusType implementation_StopScheduleTable(ScheduleTableType ScheduleTableID)
+{
     size_t index;
     StatusType status = context();
     if (status != E_OK) {
@@ -266,7 +281,8 @@ static StatusType implementation_StopScheduleTable(ScheduleTableType ScheduleTab
     return status;
 }
 static StatusType implementation_NextScheduleTable(ScheduleTableType ScheduleTableID_From,
-                                                   ScheduleTableType ScheduleTableID_To) {
+                                                   ScheduleTableType ScheduleTableID_To)
+{
     size_t from;
     size_t to;
     StatusType status = context();
@@ -300,7 +316,8 @@ static StatusType implementation_NextScheduleTable(ScheduleTableType ScheduleTab
     return status;
 }
 static StatusType implementation_GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
-                                                        ScheduleTableStatusRefType ScheduleStatus) {
+                                                        ScheduleTableStatusRefType ScheduleStatus)
+{
     size_t index;
     StatusType status;
     if (ScheduleStatus == NULL) {
@@ -323,7 +340,8 @@ static StatusType implementation_GetScheduleTableStatus(ScheduleTableType Schedu
 }
 
 StatusType Os_Implementation_StartScheduleTableRel(ScheduleTableType ScheduleTableID,
-                                                   TickType Offset) {
+                                                   TickType Offset)
+{
     const Os_ErrorParameters arguments = {
         .service_StartScheduleTableRel = {ScheduleTableID, Offset}};
     StatusType status;
@@ -340,7 +358,8 @@ StatusType Os_Implementation_StartScheduleTableRel(ScheduleTableType ScheduleTab
 }
 
 StatusType Os_Implementation_StartScheduleTableAbs(ScheduleTableType ScheduleTableID,
-                                                   TickType Start) {
+                                                   TickType Start)
+{
     const Os_ErrorParameters arguments = {
         .service_StartScheduleTableAbs = {ScheduleTableID, Start}};
     StatusType status;
@@ -356,7 +375,8 @@ StatusType Os_Implementation_StartScheduleTableAbs(ScheduleTableType ScheduleTab
     return Os_ErrorResult(OSServiceId_StartScheduleTableAbs, status, &arguments);
 }
 
-StatusType Os_Implementation_StopScheduleTable(ScheduleTableType ScheduleTableID) {
+StatusType Os_Implementation_StopScheduleTable(ScheduleTableType ScheduleTableID)
+{
     const Os_ErrorParameters arguments = {.service_StopScheduleTable = {ScheduleTableID}};
     StatusType status;
     Os_StackCheck();
@@ -372,7 +392,8 @@ StatusType Os_Implementation_StopScheduleTable(ScheduleTableType ScheduleTableID
 }
 
 StatusType Os_Implementation_NextScheduleTable(ScheduleTableType ScheduleTableID_From,
-                             ScheduleTableType ScheduleTableID_To) {
+                                               ScheduleTableType ScheduleTableID_To)
+{
     const Os_ErrorParameters arguments = {
         .service_NextScheduleTable = {ScheduleTableID_From, ScheduleTableID_To}};
     StatusType status;
@@ -389,7 +410,8 @@ StatusType Os_Implementation_NextScheduleTable(ScheduleTableType ScheduleTableID
 }
 
 StatusType Os_Implementation_GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
-                                  ScheduleTableStatusRefType ScheduleStatus) {
+                                                    ScheduleTableStatusRefType ScheduleStatus)
+{
     const Os_ErrorParameters arguments = {
         .service_GetScheduleTableStatus = {ScheduleTableID, ScheduleStatus}};
     StatusType status;

@@ -37,42 +37,49 @@ typedef struct {
 static HardwareRecord hardware[20];
 static unsigned hardware_count;
 static TickType hardware_previous;
-static void check(bool condition) {
+static void check(bool condition)
+{
     if (!condition) {
         Os_TargetTrace('!');
         ShutdownOS(E_OS_STATE);
     }
 }
-static void native_check(bool condition) {
+static void native_check(bool condition)
+{
     if (!condition) {
         ExitProcess(99u);
     }
 }
-static void native_refuse(StatusType status, StatusType expected) {
+static void native_refuse(StatusType status, StatusType expected)
+{
     native_check(status == expected);
     ++native_rejects;
 }
-void Os_TimeTestMasked(void) {
+void Os_TimeTestMasked(void)
+{
     if (strncmp(scenario, "tick-mask-", 10u) == 0 || strncmp(scenario, "tick-owner-", 11u) == 0) {
         InterlockedExchange(&tick_mask_kernel, (LONG)xTaskGetTickCountFromISR());
         InterlockedExchange(&tick_mask_observed, 1);
     }
 }
-void Os_TimeTestDispatchFinishing(void) {
+void Os_TimeTestDispatchFinishing(void)
+{
     if (strncmp(scenario, "tick-owner-", 11u) == 0 &&
         InterlockedCompareExchange(&tick_mask_observed, 0, 0) != 0 &&
         xTaskGetTickCountFromISR() == 1u) {
         (void)InterlockedCompareExchange(&dispatch_release_stage, 1, 0);
     }
 }
-void Os_TimeTestDispatchUnlocked(void) {
+void Os_TimeTestDispatchUnlocked(void)
+{
     DWORD started_at = GetTickCount();
     while (InterlockedCompareExchange(&dispatch_release_stage, 0, 0) == 1) {
         native_check((GetTickCount() - started_at) < 4000u);
         Sleep(1u);
     }
 }
-void Os_TimeTestOnWaiting(void) {
+void Os_TimeTestOnWaiting(void)
+{
     if (InterlockedCompareExchange(&dispatch_release_stage, 0, 0) == 1) {
         /* The ISR actor is deliberately paused after releasing its mutex.
          * This Task owns the next waiting commit: the old ISR flag must be off. */
@@ -80,25 +87,30 @@ void Os_TimeTestOnWaiting(void) {
         InterlockedExchange(&dispatch_release_stage, 2);
     }
 }
-static void refuse(StatusType status, StatusType expected) {
+static void refuse(StatusType status, StatusType expected)
+{
     check(status == expected);
     ++standard_rejects;
 }
-static void alarm_callback(void) {
+static void alarm_callback(void)
+{
     ++callbacks;
     Os_TargetTrace('B');
 }
-static void alarm_error(StatusType error) {
+static void alarm_error(StatusType error)
+{
     ++error_hooks;
     last_error = error;
 }
-static void inc(unsigned count) {
+static void inc(unsigned count)
+{
     unsigned i;
     for (i = 0u; i < count; ++i) {
         check(IncrementCounter(0u) == E_OK);
     }
 }
-static uint32_t service_interrupt(void) {
+static uint32_t service_interrupt(void)
+{
     TickType value = UINT64_C(777);
     TickType previous = 0u;
     TickType elapsed = UINT64_C(777);
@@ -132,7 +144,8 @@ static uint32_t service_interrupt(void) {
     Os_TargetTrace('J');
     return 0u;
 }
-static void manual_alarms(void) {
+static void manual_alarms(void)
+{
     AlarmBaseType base;
     TickType remaining = UINT64_C(777);
     EventMaskType events;
@@ -257,12 +270,14 @@ static void manual_alarms(void) {
     Os_TargetTrace('X');
     ShutdownOS(E_OS_STATE);
 }
-void Os_TimeTestBeforePending(void) {
+void Os_TimeTestBeforePending(void)
+{
     if (strcmp(scenario, "close-before-pending") == 0) {
         Os_TimeClose();
     }
 }
-static DWORD WINAPI requester(void *argument) {
+static DWORD WINAPI requester(void *argument)
+{
     uint64_t ticket = UINT64_C(777);
     unsigned i;
     DWORD started_at;
@@ -372,7 +387,8 @@ static DWORD WINAPI requester(void *argument) {
     Sleep(INFINITE);
     return 99u;
 }
-static void owner(void) {
+static void owner(void)
+{
     Os_TargetTrace('E');
     if (strcmp(scenario, "replace-tick-running") == 0) {
         vPortSetInterruptHandler(1u, service_interrupt);
@@ -465,7 +481,8 @@ static void owner(void) {
         /* The next real Wait publishes completion after suspended membership. */
     }
 }
-static void monitor(void) {
+static void monitor(void)
+{
     DWORD started_at = GetTickCount();
     if (strcmp(scenario, "tick-mask-all") == 0 || strcmp(scenario, "tick-mask-os") == 0) {
         /* The real owner is already WAITING when this lower-priority Task
@@ -501,14 +518,16 @@ static void monitor(void) {
     Os_TargetTrace('M');
     ShutdownOS(E_OK);
 }
-static void alarm_task(void) {
+static void alarm_task(void)
+{
     ++alarm_entries;
     Os_TargetTrace('H');
     (void)TerminateTask();
     Os_TargetTrace('X');
     ShutdownOS(E_OS_STATE);
 }
-void StartupHook(void) {
+void StartupHook(void)
+{
     owner_handle = xTaskGetHandle("E");
     vPortSetInterruptHandler(31u, service_interrupt);
     if (strcmp(scenario, "absolute-wide") == 0) {
@@ -529,7 +548,8 @@ void StartupHook(void) {
         ShutdownOS(E_OS_STATE);
     }
 }
-void ShutdownHook(StatusType Error) {
+void ShutdownHook(StatusType Error)
+{
     unsigned i;
     if (strncmp(scenario, "tick-owner-", 11u) == 0) {
         printf("dispatch_release phase=0 waiting_commit=%ld\n",
@@ -537,16 +557,26 @@ void ShutdownHook(StatusType Error) {
     }
     for (i = 0u; i < hardware_count; ++i) {
         printf("hardware epoch=%llu kernel=%u value=%llu elapsed=%llu\n",
-               (unsigned long long)hardware[i].epoch, (unsigned)hardware[i].kernel,
-               (unsigned long long)hardware[i].value, (unsigned long long)hardware[i].elapsed);
+               (unsigned long long)hardware[i].epoch,
+               (unsigned)hardware[i].kernel,
+               (unsigned long long)hardware[i].value,
+               (unsigned long long)hardware[i].elapsed);
     }
     Os_TargetTrace('Z');
-    if (printf("time ticks=%u work=%u app=%u rejects=%u error=%u\n", completed_count, work_count,
-               app_count, native_rejects, Error) < 0) {
+    if (printf("time ticks=%u work=%u app=%u rejects=%u error=%u\n",
+               completed_count,
+               work_count,
+               app_count,
+               native_rejects,
+               Error) < 0) {
         ExitProcess(99u);
     }
     if (printf("alarm entries=%u callbacks=%u errors=%u last=%u rejected=%u counter=%llu\n",
-               alarm_entries, callbacks, error_hooks, last_error, standard_rejects,
+               alarm_entries,
+               callbacks,
+               error_hooks,
+               last_error,
+               standard_rejects,
                (unsigned long long)final_counter) < 0) {
         ExitProcess(99u);
     }
@@ -555,14 +585,16 @@ void ShutdownHook(StatusType Error) {
     }
     for (i = 0u; (i < steps) && (i < 3u); ++i) {
         if (printf("TICK epoch=%llu kernel=%u counter=%llu actions=%llu\n",
-                   (unsigned long long)boundary[i].epoch, boundary[i].kernel_tick,
+                   (unsigned long long)boundary[i].epoch,
+                   boundary[i].kernel_tick,
                    (unsigned long long)boundary[i].counter,
                    (unsigned long long)boundary[i].alarm_actions) < 0) {
             ExitProcess(99u);
         }
     }
 }
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     Os_TaskConfig tasks[] = {
         {0u, "E", owner, 2u, 1u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
         {1u, "M", monitor, 1u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
@@ -571,8 +603,8 @@ int main(int argc, char **argv) {
     Os_AlarmConfig alarms[] = {{0u, 0u, OS_ALARM_EVENT, 0u, 1u, NULL, 1u, 0u, 1u, 1u, 0u},
                                {1u, 0u, OS_ALARM_EVENT, 0u, 2u, NULL, 1u, 0u, 10u, 10u, 0u}};
     Os_TimeConfig time = {counters, 1u, alarms, 2u, 0u, 0u, 4u, NULL, NULL, 0u};
-    Os_TargetConfig config = {tasks, 3u, 262144u, NULL,  0u,   NULL, 0u,
-                              0u,    0u, 0u,      &time, NULL, NULL};
+    Os_TargetConfig config = {
+        tasks, 3u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, &time, NULL, NULL};
     scenario = (argc == 2) ? argv[1] : "thousand";
     steps = (strcmp(scenario, "thousand") == 0) ? 1000u : 1u;
     if (strncmp(scenario, "hardware-", 9u) == 0) {

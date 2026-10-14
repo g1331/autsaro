@@ -35,12 +35,17 @@ Std_ReturnType Dcm_GetSecurityLevel(Dcm_SecLevelType *SecLevel);
 Std_ReturnType Dcm_GetSesCtrlType(Dcm_SesCtrlType *SesCtrlType);
 Std_ReturnType Dcm_ResetToDefaultSession(void);
 Std_ReturnType Dcm_SetActiveDiagnostic(boolean active);
-BufReq_ReturnType Dcm_StartOfReception(PduIdType id, const PduInfoType *info,
-                                       PduLengthType TpSduLength, PduLengthType *bufferSizePtr);
-BufReq_ReturnType Dcm_CopyRxData(PduIdType id, const PduInfoType *info,
+BufReq_ReturnType Dcm_StartOfReception(PduIdType id,
+                                       const PduInfoType *info,
+                                       PduLengthType TpSduLength,
+                                       PduLengthType *bufferSizePtr);
+BufReq_ReturnType Dcm_CopyRxData(PduIdType id,
+                                 const PduInfoType *info,
                                  PduLengthType *bufferSizePtr);
 void Dcm_TpRxIndication(PduIdType id, Std_ReturnType result);
-BufReq_ReturnType Dcm_CopyTxData(PduIdType id, const PduInfoType *info, const RetryInfoType *retry,
+BufReq_ReturnType Dcm_CopyTxData(PduIdType id,
+                                 const PduInfoType *info,
+                                 const RetryInfoType *retry,
                                  PduLengthType *availableDataPtr);
 void Dcm_TpTxConfirmation(PduIdType id, Std_ReturnType result);
 #endif
