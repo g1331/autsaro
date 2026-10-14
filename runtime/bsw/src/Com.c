@@ -25,6 +25,9 @@ static uint32 receptions_owed[COM_MAX_PDUS] COM_VAR_CLEARED;
 static boolean timeout_owed[COM_MAX_PDUS] COM_VAR_CLEARED;
 static boolean timeout_last[COM_MAX_PDUS] COM_VAR_CLEARED;
 static boolean receive_started COM_VAR_CLEARED;
+/* Tx mode FALSE selects the absent ComTxModeFalse, i.e. NONE (ECUC_Com_00496); Init
+ * evaluates the TMS of the filterless PDUs to TRUE again (SWS_Com_00677, 00877). */
+static boolean tx_mode_false[COM_MAX_PDUS] COM_VAR_CLEARED;
 /* Reception DM of the Rx group; independent of start and stop (SWS_Com_00772). */
 static boolean monitoring COM_VAR_CLEARED;
 static boolean reception_before_main COM_VAR_CLEARED;
@@ -87,6 +90,7 @@ static COM_CODE void Com_Reset(void)
         receptions_owed[index] = 0u;
         timeout_owed[index] = FALSE;
         timeout_last[index] = FALSE;
+        tx_mode_false[index] = FALSE;
     }
 }
 /* Takes the next owed notification; FALSE when nothing is owed. */
@@ -293,6 +297,18 @@ COM_CODE void Com_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr)
     SchM_Exit_Com_COM_STATE();
     Com_Publish();
 }
+COM_CODE void Com_SwitchIpduTxMode(PduIdType PduId, boolean Mode)
+{
+    SchM_Enter_Com_COM_STATE();
+    if (configuration != NULL_PTR) {
+        const uint16 index = Com_FindPdu(PduId);
+        if ((index < configuration->pdu_count) && (configuration->pdus[index].receive == FALSE)) {
+            /* PERIODIC at the Tx main period: the next call after a switch to TRUE sends. */
+            tx_mode_false[index] = (Mode == TRUE) ? FALSE : TRUE;
+        }
+    }
+    SchM_Exit_Com_COM_STATE();
+}
 COM_CODE Std_ReturnType Com_TriggerTransmit(PduIdType TxPduId, PduInfoType *PduInfoPtr)
 {
     Std_ReturnType result = E_NOT_OK;
@@ -372,7 +388,8 @@ COM_CODE void Ecu_ComMainFunctionTx(void)
         Com_TransmitType transmit = NULL_PTR;
         SchM_Enter_Com_COM_STATE();
         more = ((configuration != NULL_PTR) && (index < configuration->pdu_count)) ? TRUE : FALSE;
-        if ((more == TRUE) && (configuration->pdus[index].receive == FALSE)) {
+        if ((more == TRUE) && (configuration->pdus[index].receive == FALSE) &&
+            (tx_mode_false[index] == FALSE)) {
             id = configuration->pdus[index].pdu;
             transmit = configuration->transmit;
             Com_Pack(index, bytes);

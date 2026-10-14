@@ -290,6 +290,7 @@ fn service_argument_names_cannot_shadow_selected_runtime_and_component_producers
         "COM_H",
         "ECU_TARGET_H",
         "COM_SERVICE_NOT_AVAILABLE",
+        "COM_BUSY",
         "STD_ON",
         "COMSTACK_TYPES_H",
         "ECU_TARGET_READY",

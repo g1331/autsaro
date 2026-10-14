@@ -21,8 +21,8 @@
 static unsigned frames;
 static unsigned successes;
 static unsigned failures;
-static uint32 emitted[8];
-static uint64_t emitted_tokens[8];
+static uint32 emitted[12];
+static uint64_t emitted_tokens[12];
 static unsigned acknowledgments;
 static unsigned timeouts;
 static unsigned errors;
@@ -36,7 +36,7 @@ static unsigned bus_offs;
  */
 const EcuPolicyConfig Ecu_Policy = {.tx_confirmation = ECU_TX_QUEUED};
 static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8]) {
-    assert(id == 0x456u && length == 4u && frames < 8u);
+    assert(id == 0x456u && length == 4u && frames < 12u);
     emitted_tokens[frames] = Can_HostTransmitToken();
     assert(emitted_tokens[frames] != UINT64_C(0));
     emitted[frames++] = (uint32)data[0] | ((uint32)data[1] << 8u) | ((uint32)data[2] << 16u) |
@@ -292,5 +292,33 @@ int main(void) {
     assert(Can_HostCompleteTransmit(51u, emitted_tokens[7]) == E_OK);
     Can_MainFunction_Write();
     assert(successes == 5u && failures == 2u);
+    /* FALSE selects the absent ComTxModeFalse, i.e. NONE: no periodic request while a
+     * manual trigger still sends; TRUE resumes at the next main call, Init restores TRUE.
+     * (Verifies: SWS_Com_00784, 00135) */
+    {
+        void (*switch_mode)(PduIdType, boolean) = Com_SwitchIpduTxMode;
+        switch_mode(2u, FALSE);
+        switch_mode(1u, TRUE); /* Rx PDUs have no transmission mode. */
+        switch_mode(99u, TRUE);
+        Ecu_ComMainFunctionTx();
+        assert(Can_HostFlush() == ECU_OK && frames == 8u);
+        switch_mode(2u, FALSE); /* Already active: no effect. */
+        assert(Com_TriggerIPDUSend(2u) == E_OK);
+        assert(Can_HostFlush() == ECU_OK && frames == 9u);
+        assert(Can_HostCompleteTransmit(51u, emitted_tokens[8]) == E_OK);
+        Can_MainFunction_Write();
+        Ecu_ComMainFunctionTx();
+        assert(Can_HostFlush() == ECU_OK && frames == 9u && successes == 6u);
+        switch_mode(2u, TRUE);
+        Ecu_ComMainFunctionTx();
+        assert(Can_HostFlush() == ECU_OK && frames == 10u);
+        assert(Can_HostCompleteTransmit(51u, emitted_tokens[9]) == E_OK);
+        Can_MainFunction_Write();
+        switch_mode(2u, FALSE);
+        Com_DeInit();
+        Com_Init(&com_config);
+        Ecu_ComMainFunctionTx();
+        assert(Can_HostFlush() == ECU_OK && frames == 11u && successes == 7u);
+    }
     return 0;
 }

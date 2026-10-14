@@ -50,6 +50,10 @@ void Com_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr);
  * MDT and no retry, so a lower rejection is not reported here.
  */
 Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId);
+/** Mode FALSE selects NONE, the default of the absent ComTxModeFalse; Com_TriggerIPDUSend
+ * still sends. Only Tx PDUs have a transmission mode.
+ */
+void Com_SwitchIpduTxMode(PduIdType PduId, boolean Mode);
 Std_ReturnType Com_TriggerTransmit(PduIdType TxPduId, PduInfoType *PduInfoPtr);
 void Com_TxConfirmation(PduIdType TxPduId, Std_ReturnType result);
 #endif
