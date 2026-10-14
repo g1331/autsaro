@@ -41,7 +41,12 @@ Clippy 以默认规则集加 `-D warnings` 检查两个 crate，本地 `verify` 
 
 ## CI
 
-`Development checks` 中的 `CI required` 是分支规则唯一要求的检查，阻塞合并的任务清单写在该任务的 `needs` 中，增删检查只改工作流。PR 只改根目录指南、`docs/`、代理说明或 PR 模板时，构建与测试任务整体跳过，`quality` 照常运行；其余 PR、推送到主干及手动运行都执行完整检查。分支无须先与主干同步即可合并，合并后主干推送会再完整运行一次。
+CI 分两层：
+
+- **PR 层**：`Development checks`（`checks.yml`）中的 `CI required` 是分支规则唯一要求的检查，阻塞合并的任务清单写在该任务的 `needs` 中，增删检查只改工作流。原生、OS、检测器、交付与生成 C 分析在 Windows 和 Linux 上完整运行；Python 只跑 Linux 3.12／3.14 与 Windows 3.14，UI 只跑 Linux 与 Windows。PR 只改根目录指南、`docs/`、代理说明或 PR 模板时，构建与测试任务整体跳过，`quality` 照常运行。分支无须先与主干同步即可合并，合并后主干推送会再运行一次。
+- **扩展层**：`Extended checks`（`extended.yml`）不属于必需检查，不设定时任务，按改动路径选择：其余 Python 版本与 macOS 上的 Python／UI（改动 Python 或 UI 源码时）、[桌面场景](desktop.md)和[官方对照](official.md)。master 每次推送都运行它；PR 只在改动界面、桌面后端或场景时运行桌面场景，改动官方对照相关路径时运行官方对照。PR 加 `full-ci` 标签后运行扩展层全部检查；手动运行也是全部。汇总任务 `Extended checks result` 给出结果，未被选中的检查记为跳过。
+
+开新 PR 或合并前先看 master 最近一次 `Extended checks` 的结果；失败时先修复，不稳定的套件明确暂停并开 Issue 跟踪根因。
 
 ## 离线 ECU 包
 

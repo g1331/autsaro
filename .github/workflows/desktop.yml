@@ -1,22 +1,21 @@
 name: Desktop acceptance
 # Real GUI/IPC scenarios through tauri-driver on disposable GitHub-hosted
 # runners: Linux runs on a private Xvfb display, Windows in the runner's own
-# session. Not part of the required checks.
+# session. Not part of the required checks; extended.yml calls it for pull
+# requests and master pushes that change the application.
 on:
+  workflow_call:
+    inputs:
+      scenarios:
+        description: Scenario files or globs, separated by spaces
+        type: string
+        default: tests/desktop/*.test.mjs
   workflow_dispatch:
-  pull_request:
-    paths:
-      - core/**
-      - src-tauri/**
-      - Cargo.toml
-      - Cargo.lock
-      - ui/**
-      - tests/desktop/**
-      - .github/actions/**
-      - .github/workflows/desktop.yml
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    inputs:
+      scenarios:
+        description: Scenario files or globs, separated by spaces
+        type: string
+        default: tests/desktop/*.test.mjs
 permissions:
   contents: read
 jobs:
@@ -85,7 +84,11 @@ jobs:
                   output.write(variable + '=' + str(Path(shutil.which(name)).absolute()) + '\n')
               output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
       - name: Desktop scenarios
-        run: node --test --test-concurrency=1 "tests/desktop/*.test.mjs"
+        shell: bash
+        env:
+          SCENARIOS: ${{ inputs.scenarios }}
+        # node expands the globs itself.
+        run: set -f; node --test --test-concurrency=1 $SCENARIOS
       - uses: actions/upload-artifact@v7.0.1
         if: always()
         with:

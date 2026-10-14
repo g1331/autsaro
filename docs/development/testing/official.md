@@ -11,8 +11,9 @@ uv run --locked python -m autosar_tooling fetch-official
 CI 中的 `Official archive comparison`（`acceptance.yml`）在 GitHub 托管的 `ubuntu-24.04` 与 `windows-latest` runner 上运行 `fetch-official`、`cargo test --locked -p autosar-config-core --features official-oracles --test official --no-fail-fast` 和条款处置核算（见[标准基线 §5](../../standards/README.md#5-条款处置与核算)）：`core/resources/requirements/` 中已提交清单的文档从档案做完整检查，并核对清单与档案一致；其余被引用的文档只检查失效引用，列表在工作流的 `Requirement dispositions` 步骤中。档案按 `official.json` 的哈希存入本仓库的 Actions 缓存，不作为 artifact 上传，日志只记录路径和哈希。触发方式：
 
 - 手动运行（workflow_dispatch）；
-- 每天对 master 定时运行一次，该提交已有成功运行时跳过；
-- 修改 `core/src/definitions*`、`core/src/schema.rs`、`core/src/rules*`、`core/resources/official.json`、`core/resources/requirements/`、`core/tests/official/`、`docs/standards/`、下载或核算入口或该工作流的 PR。未登记文档的测试编号引用变化由每日运行发现，模块整改 PR 应在本地运行核算。
+- 由 [`Extended checks`](README.md#ci) 调用：修改 `core/src/definitions*`、`core/src/schema.rs`、`core/src/rules*`、`core/resources/official.json`、`core/resources/requirements/`、`core/tests/official/`、`docs/standards/`、下载或核算入口或该工作流的 PR 与 master 推送，以及带 `full-ci` 标签的 PR。
+
+档案按哈希固定，不会自行变化，因此不设定时运行。未登记文档的测试编号引用变化只在上述路径改动时检查，模块整改 PR 应在本地运行核算。
 
 它不属于 `CI required`：外部站点不可用不阻塞合并，PR 上的失败需要自行查看。已整改模块的处置由必需检查保护：`quality` 任务运行 `uv run --locked python -m autosar_tooling requirements`，按提交的清单完整核算，不需要档案，只改 `docs/standards/` 的 PR 也会运行；`verify --scope all` 包含同一检查。清单过期由本工作流发现。下载、证书或哈希失败时，`Download and verify official archives` 步骤失败并标注 `Official archives unavailable`，测试不会运行；测试失败标注 `Official comparison failed`，核算失败标注 `Requirement dispositions failed`。
 

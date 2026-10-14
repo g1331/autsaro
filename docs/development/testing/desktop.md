@@ -20,4 +20,4 @@ node --test --test-concurrency=1 "tests/desktop/*.test.mjs"
 
 关闭会话后，测试断言应用进程树已全部退出，残留时列出 pid、名称和命令行；按 Ctrl-C 或取消 CI 也会结束私有 display 与 driver 进程组。
 
-`desktop.yml` 在 GitHub 托管的 `ubuntu-24.04` 与 `windows-latest` 上构建验证版并运行全部场景；改动应用、界面或场景的 PR 及手动触发都会运行，结果目录作为工件保留 14 天。它目前不在必需检查中。这些场景验证开发构建的界面与 IPC，不提供安装包、无源码 checkout 或断网环境的验收证据。
+`desktop.yml` 在 GitHub 托管的 `ubuntu-24.04` 与 `windows-latest` 上构建验证版并运行全部场景，结果目录作为工件保留 14 天。它由 [`Extended checks`](README.md#ci) 调用：改动 `ui/`、`src-tauri/` 或 `tests/desktop/` 的 PR，以及改动这些目录、`core/` 或 Cargo 依赖的 master 推送；PR 加 `full-ci` 标签时也运行。手动运行 `desktop.yml` 可在 `scenarios` 中填写以空格分隔的场景文件或 glob，只运行受影响的场景，默认全部。它目前不在必需检查中。这些场景验证开发构建的界面与 IPC，不提供安装包、无源码 checkout 或断网环境的验收证据。
