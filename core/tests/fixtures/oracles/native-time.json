@@ -264,6 +264,12 @@
     "stderr": ""
   },
   {
+    "scenario": "close-in-service",
+    "exit": 7,
+    "stdout": "time ticks=0 work=0 app=0 rejects=0 error=7\nalarm entries=0 callbacks=0 errors=0 last=0 rejected=0 counter=0\ncontext rejected=7\nTICK epoch=0 kernel=0 counter=0 actions=0\nlifecycle=Closed state=Failed reason=7 trace=ISREZ threads=7 events=22 mutexes=1 resource_calls=30 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
     "scenario": "thousand",
     "exit": 7,
     "stdout": "time ticks=0 work=0 app=0 rejects=0 error=7\nalarm entries=0 callbacks=0 errors=0 last=0 rejected=0 counter=0\ncontext rejected=0\nTICK epoch=0 kernel=0 counter=0 actions=0\nTICK epoch=0 kernel=0 counter=0 actions=0\nTICK epoch=0 kernel=0 counter=0 actions=0\nlifecycle=Closed state=Failed reason=7 trace=IZ threads=0 events=0 mutexes=0 resource_calls=1 hidden=2 controllers=2 heap=windows static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",

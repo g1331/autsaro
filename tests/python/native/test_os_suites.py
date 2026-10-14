@@ -173,6 +173,7 @@ class DependencyTests(unittest.TestCase):
             ("tick-mask-os", "observed=1 kernel=0 pending=1", "observed=1 kernel=0 pending=0"),
             ("tick-owner-all", "phase=0 waiting_commit=1", "phase=1 waiting_commit=1"),
             ("tick-owner-os", "phase=0 waiting_commit=1", "phase=0 waiting_commit=0"),
+            ("close-in-service", "trace=ISREZ ", "trace=ISRE!467Z "),
         ]:
             records = copy.deepcopy(original)
             record = next(row for row in records if row["scenario"] == scenario)
