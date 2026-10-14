@@ -312,6 +312,36 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
     executable
 }
 
+/// Runs a threaded consumer under the owned-process limits; a failure shows its stderr,
+/// which the scratch directory would otherwise discard with the assertion text.
+fn run_owned(
+    executable: PathBuf,
+    scratch: &Path,
+    logs: PathBuf,
+) -> autosar_config_core::execution::ProcessResult {
+    let spec = autosar_config_core::execution::ProcessSpec::for_duration(
+        vec![executable.into_os_string()],
+        scratch.to_path_buf(),
+        vec![],
+        std::time::Duration::from_secs(30),
+        logs,
+    )
+    .unwrap();
+    tooling::execution_owner()
+        .run(spec)
+        .unwrap_or_else(|error| {
+            let stderr = match &error {
+                autosar_config_core::LocalizedText::Message(message) => message
+                    .params
+                    .get("stderr")
+                    .and_then(|path| path.as_str())
+                    .and_then(|path| std::fs::read_to_string(path).ok()),
+                _ => None,
+            };
+            panic!("{error:?}\nstderr: {}", stderr.unwrap_or_default())
+        })
+}
+
 #[test]
 fn com_periodic_transmission_executes_real_lower_modules_and_can_busy() {
     let scratch = Scratch::new();
@@ -345,15 +375,7 @@ fn canif_different_pdus_and_actual_confirmation_stop_interleave_safely() {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&logs, std::fs::Permissions::from_mode(0o700)).unwrap();
     }
-    let spec = autosar_config_core::execution::ProcessSpec::for_duration(
-        vec![executable.into_os_string()],
-        scratch.0.clone(),
-        vec![],
-        std::time::Duration::from_secs(30),
-        logs,
-    )
-    .unwrap();
-    let result = tooling::execution_owner().run(spec).unwrap();
+    let result = run_owned(executable, &scratch.0, logs);
     assert!(result.success(), "{result:?}");
     assert!(
         std::fs::read(&result.stdout).unwrap().is_empty(),
@@ -435,20 +457,8 @@ fn can_callbacks_leave_driver_area_and_late_events_converge() {
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&logs, std::fs::Permissions::from_mode(0o700)).unwrap();
         }
-        let spec = autosar_config_core::execution::ProcessSpec::for_duration(
-            vec![executable.into_os_string()],
-            scratch.0.clone(),
-            vec![],
-            std::time::Duration::from_secs(30),
-            logs,
-        )
-        .unwrap();
-        let result = tooling::execution_owner().run(spec).unwrap();
-        assert!(
-            result.success(),
-            "{result:?}: {}",
-            std::fs::read_to_string(&result.stderr).unwrap()
-        );
+        let result = run_owned(executable, &scratch.0, logs);
+        assert!(result.success(), "{result:?}");
     }
 }
 
