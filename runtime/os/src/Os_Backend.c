@@ -931,8 +931,9 @@ void vApplicationIdleHook(void)
 }
 static void task_entry(void *argument)
 {
-    /* The argument is the task's own control block, so the configuration stays const. */
-    const size_t index = task_slot(argument);
+    /* The argument is the task's own control block, so the configuration stays const.
+     * The index stays live across setjmp, so it is volatile (C99 7.13.2.1). */
+    const volatile size_t index = task_slot(argument);
     configASSERT(index < Os_Config->task_count);
     const Os_TaskConfig *task = &Os_Config->tasks[index];
     /* The private backend trampoline discards completed application frames.
