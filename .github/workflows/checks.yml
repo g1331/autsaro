@@ -69,7 +69,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
           cache: npm
@@ -110,7 +110,7 @@ jobs:
       - run: uv run --locked ruff check tools tests/python scripts
       - run: uv run --locked python -B -m unittest discover -s tests/python
       - run: uv build --out-dir build/python
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: python-${{ matrix.os }}-${{ matrix.python }}
@@ -143,7 +143,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
           cache: npm
@@ -266,7 +266,7 @@ jobs:
           AUTOSAR_OS_OUTPUT_DIRECTORY: ${{ runner.temp }}/os-suites
           AUTOSAR_OS_SHARD: ${{ matrix.shard }}
         run: uv run --locked python -B -m unittest discover -v -s tests/python/native -p test_os_suites.py
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: os-suites-${{ matrix.os }}-${{ strategy.job-index }}
@@ -339,7 +339,7 @@ jobs:
         env:
           AUTOSAR_OS_OUTPUT_DIRECTORY: ${{ runner.temp }}/os-suites
         run: setarch x86_64 -R uv run --locked python -B -m unittest discover -v -s tests/python/native -p test_os_suites.py
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: os-suites-sanitizer-${{ strategy.job-index }}
@@ -355,7 +355,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
       - run: uv sync --locked
@@ -494,7 +494,7 @@ jobs:
           expected = {'standard-ecu', 'user-application', 'component-pipeline', 'no-diagnostic'}
           if {p.name for p in Path(os.environ['AUTOSAR_C_ANALYSIS_SAMPLES']).iterdir()} != expected:
               raise RuntimeError('Generated sample inventory is incomplete')
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: c-analysis-inputs-${{ matrix.target }}
           overwrite: true
@@ -679,7 +679,7 @@ jobs:
           summaries = list(Path('build/c-analysis-results').glob('*/summary.json'))
           passed = len(summaries) == len(os.environ['ANALYSIS_SAMPLES'].split(',')) and all(json.loads(p.read_text(encoding='utf-8'))['passed'] for p in summaries)
           sys.exit(0 if passed else 1)
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: c-analysis-summaries-${{ matrix.target }}-${{ matrix.group }}
@@ -687,7 +687,7 @@ jobs:
           path: build/c-analysis-results/*/summary.json
           if-no-files-found: error
           retention-days: 14
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: c-analysis-${{ matrix.target }}-${{ matrix.group }}
