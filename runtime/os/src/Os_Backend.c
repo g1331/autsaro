@@ -929,6 +929,10 @@ void vApplicationIdleHook(void)
     void Os_StackTestIdle(void);
     Os_StackTestIdle();
 #endif
+    /* Give the host CPU back: the interrupt thread suspends this thread to switch
+     * Tasks, so nothing waits on the idle loop. Spinning would occupy a host CPU
+     * per ECU process and delay the tick handoff threads under parallel load. */
+    Sleep(1u);
 }
 static void task_entry(void *argument)
 {
