@@ -2256,6 +2256,20 @@ fn com_features_outside_the_selection_are_refused_at_their_source() {
             "FLOAT:0.05",
             ("TIMEOUT_CONFLICT", "TIMEOUT_CONFLICT"),
         ),
+        // Rejects: ECUC_Com_00165
+        (
+            "RxValue",
+            "ComHandleId",
+            "INTEGER:0",
+            ("TARGET_PARAMETER_UNSUPPORTED", "TARGET_PARAMETER_UNSUPPORTED"),
+        ),
+        // Rejects: ECUC_Com_00175
+        (
+            "RxValuePdu",
+            "ComIPduHandleId",
+            "INTEGER:0",
+            ("TARGET_PARAMETER_UNSUPPORTED", "TARGET_PARAMETER_UNSUPPORTED"),
+        ),
         // Rejects: ECUC_Com_10027
         ("Callbacks", "ComUserSignalGroup", "", unknown),
     ] {

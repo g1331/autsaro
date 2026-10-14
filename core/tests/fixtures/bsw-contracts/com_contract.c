@@ -1,4 +1,11 @@
-/** Independent R24-11 Rx group/DM consumer; no lower-module stubs. */
+/** Independent R24-11 Rx group/DM consumer; no lower-module stubs.
+ * Verifies: SWS_Com_00432、00130、00194、00198、00197、91001、91002、91004、91003、00123、00001、00124
+ * Verifies: SWS_Com_00609、00819、00820、00822、00865、00664、00128
+ * Verifies: SWS_Com_00444、00098、00114、00222、00684、00685、00129、00631
+ * Verifies: SWS_Com_00772、00224、00716、00486、00225、00290、00500、00715、00889、00333
+ * Verifies: SWS_Com_00574、00396、00883、00300
+ * Verifies[Com]: SWS_BSW_00037、00071、00186
+ */
 #include "Com.h"
 #include "Com_Internal.h"
 #include <assert.h>

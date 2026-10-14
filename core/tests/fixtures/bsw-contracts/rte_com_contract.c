@@ -1,5 +1,6 @@
 /** 独立通知消费者：仅 owner/lifecycle 为测试适配，COM 与生成 RTE 均为真实 producer。
- * 同一配置同时含两个网络接收者（handle 43 与 61，均不是模板的 17），逐项核对状态互相独立。 */
+ * 同一配置同时含两个网络接收者（handle 43 与 61，均不是模板的 17），逐项核对状态互相独立。
+ * Verifies: SWS_Com_91019、91020 */
 #define RTE_CORE
 #include "Rte_Com.h"
 #include "Rte_Main.h"

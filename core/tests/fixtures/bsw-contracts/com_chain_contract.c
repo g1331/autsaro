@@ -1,5 +1,6 @@
 /** Independently authored R24-11 COM/PduR/LSduR/CanIf/Can consumer.
  * Actual delivery modules and driver; only host output/error/mode observers.
+ * Verifies: SWS_Com_00138、00669、00759、00624、00840、00861、00348、00647、00869、00478、00032
  */
 #include "Com.h"
 #include "Com_Internal.h"
@@ -294,7 +295,7 @@ int main(void) {
     assert(successes == 5u && failures == 2u);
     /* FALSE selects the absent ComTxModeFalse, i.e. NONE: no periodic request while a
      * manual trigger still sends; TRUE resumes at the next main call, Init restores TRUE.
-     * (Verifies: SWS_Com_00784, 00135) */
+     * (Verifies: SWS_Com_00784, 00135, 00799, 00239, 00244, 00877, 00203, 00643) */
     {
         void (*switch_mode)(PduIdType, boolean) = Com_SwitchIpduTxMode;
         switch_mode(2u, FALSE);
