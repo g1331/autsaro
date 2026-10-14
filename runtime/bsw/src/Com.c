@@ -93,27 +93,24 @@ static COM_CODE void Com_Reset(void)
         tx_mode_false[index] = FALSE;
     }
 }
-/* Takes the next owed notification; FALSE when nothing is owed. */
-static COM_CODE boolean Com_TakeOwed(Com_NotificationType *notify, CbkHandleIdType *handle)
+/* Takes the next owed notification: its Rx PDU index, or pdu_count when nothing is owed. */
+static COM_CODE uint16 Com_TakeOwed(boolean *timeout)
 {
-    boolean taken = FALSE;
     uint16 index = 0u;
-    while ((taken == FALSE) && (index < configuration->pdu_count)) {
+    uint16 taken = configuration->pdu_count;
+    while ((taken == configuration->pdu_count) && (index < configuration->pdu_count)) {
         if ((timeout_owed[index] == TRUE) &&
             ((timeout_last[index] == FALSE) || (receptions_owed[index] == 0u))) {
             timeout_owed[index] = FALSE;
-            *notify = configuration->timeout_notification;
-            taken = TRUE;
+            *timeout = TRUE;
+            taken = index;
         } else if (receptions_owed[index] != 0u) {
             --receptions_owed[index];
-            *notify = configuration->receive_notification;
-            taken = TRUE;
+            *timeout = FALSE;
+            taken = index;
         } else {
             ++index;
         }
-    }
-    if (taken == TRUE) {
-        *handle = configuration->pdus[index].callback_handle;
     }
     return taken;
 }
@@ -128,8 +125,15 @@ static COM_CODE void Com_Publish(void)
         more = FALSE;
         SchM_Enter_Com_COM_STATE();
         if ((publishing == FALSE) && (configuration != NULL_PTR)) {
-            more = Com_TakeOwed(&notify, &handle);
-            publishing = more;
+            boolean timeout = FALSE;
+            const uint16 index = Com_TakeOwed(&timeout);
+            if (index < configuration->pdu_count) {
+                notify = (timeout == TRUE) ? configuration->timeout_notification
+                                           : configuration->receive_notification;
+                handle = configuration->pdus[index].callback_handle;
+                more = TRUE;
+                publishing = TRUE;
+            }
         }
         SchM_Exit_Com_COM_STATE();
         if (more == TRUE) {
@@ -228,6 +232,8 @@ COM_CODE uint8 Com_ReceiveSignal(Com_SignalIdType SignalId, void *SignalDataPtr)
     return result;
 }
 /* No ComSignalDataInvalidValue is configurable: no signal can be invalidated (SWS_Com_00643). */
+/* MR12 RULE 8.7 VIOLATION: standard API with external linkage (SWS_Com_00203) that no
+ * module of the selected program calls; see the Com deviation record. */
 COM_CODE uint8 Com_InvalidateSignal(Com_SignalIdType SignalId)
 {
     (void)SignalId;
@@ -303,6 +309,8 @@ COM_CODE void Com_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr)
     SchM_Exit_Com_COM_STATE();
     Com_Publish();
 }
+/* MR12 RULE 8.7 VIOLATION: standard API with external linkage (SWS_Com_00784) that no
+ * module of the selected program calls; see the Com deviation record. */
 COM_CODE void Com_SwitchIpduTxMode(PduIdType PduId, boolean Mode)
 {
     SchM_Enter_Com_COM_STATE();

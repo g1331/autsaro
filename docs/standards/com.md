@@ -76,6 +76,13 @@ Com 只在自己的 `COM_STATE` 区内读写信号值、计时器与待送通知
 | 发送前通知 | 不适用（配置：ECUC_Com_10020）：ECUC_Com_10020 |
 | Com 中的用户模块与信号组用户 | 不适用（配置：ECUC_Com_10031、ECUC_Com_10027）：ECUC_Com_10031、10029、10027、10026 |
 
+## MISRA 偏离
+
+| 规则 | 范围 | 依据与风险控制 | 批准 |
+| --- | --- | --- | --- |
+| MISRA C:2012 Rule 8.7（advisory） | `runtime/bsw/src/Com.c` 中 `Com_InvalidateSignal` 与 `Com_SwitchIpduTxMode` 的定义 | `SWS_Com_00203／00784` 规定这两个 API 经 `Com.h` 以外部链接提供；所选程序没有模块调用它们，Cppcheck 因此报告只在一个翻译单元中引用。偏离只影响符号可见性：两个函数只在 `COM_STATE` 区内读写本模块数据，不调用其他模块，行为由 `com_chain_contract.c` 验证；原始诊断保留，不加 suppression | 维护者 Umaru，2026-10-14（#42） |
+| MISRA C:2012 Rule 2.5（advisory） | `runtime/bsw/include/Com.h` 中的 `COM_BUSY` | `SWS_Com_00865` 规定该返回码；只有大型或 TP I-PDU 的缓冲被锁定时才返回，所选配置没有这类 I-PDU，因此没有代码引用它。它只是公开常量，已列入应用符号的保留名，不影响行为；原始诊断保留，不加 suppression | 维护者 Umaru，2026-10-14（#42） |
+
 ## 已知差距
 
 - 头文件不含软件与规范版本号（#59）。

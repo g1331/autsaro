@@ -8,7 +8,8 @@ typedef enum { COM_UNINIT = 0, COM_INIT = 1 } Com_StatusType;
 typedef uint16 Com_SignalIdType;
 typedef uint16 Com_IpduGroupIdType;
 #define COM_SERVICE_NOT_AVAILABLE 0x80u
-/* SWS_Com_00865; never returned: the selected profile has no large or TP I-PDUs. */
+/* MR12 RULE 2.5 VIOLATION: standard return code (SWS_Com_00865) that is never returned,
+ * because the selected profile has no large or TP I-PDUs; see the Com deviation record. */
 #define COM_BUSY 0x81u
 
 /** One four-byte little-endian signal per PDU, no update bits or metadata.
