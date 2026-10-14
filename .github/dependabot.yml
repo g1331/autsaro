@@ -1,38 +1,66 @@
 version: 2
 # Monthly version updates, one grouped pull request per ecosystem; security updates are separate.
 # A release must be a week old before it is proposed, so a hijacked release has time to be pulled.
+# Every push to an update branch re-runs the full required CI, so Dependabot does not rebase on
+# its own; comment "@dependabot rebase" just before merging.
+# Version updates propose minor and patch releases only; major upgrades are done by hand (#153).
+# Alerts still report vulnerabilities, and cargo-deny and osv-scanner fail the required checks.
 updates:
   - package-ecosystem: github-actions
     directories: ["/", "/.github/actions/*"]
     schedule:
       interval: monthly
+      time: "03:00"
+      timezone: Asia/Shanghai
+    rebase-strategy: disabled
     cooldown:
       default-days: 7
     groups:
       github-actions:
         patterns: ["*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: cargo
     directory: /
     schedule:
       interval: monthly
+      time: "03:00"
+      timezone: Asia/Shanghai
+    rebase-strategy: disabled
     cooldown:
       default-days: 7
     groups:
       cargo:
         patterns: ["*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      # Dependabot reads 0.10 -> 0.11 as a minor update; sha2 0.11 changes the digest type.
+      - dependency-name: sha2
+        versions: [">= 0.11"]
   - package-ecosystem: npm
     directory: /ui
     schedule:
       interval: monthly
+      time: "03:00"
+      timezone: Asia/Shanghai
+    rebase-strategy: disabled
     cooldown:
       default-days: 7
     groups:
       npm:
         patterns: ["*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: uv
     directory: /
     schedule:
       interval: monthly
+      time: "03:00"
+      timezone: Asia/Shanghai
+    rebase-strategy: disabled
     cooldown:
       default-days: 7
     groups:
@@ -42,10 +70,6 @@ updates:
         patterns: ["clang-format", "clang-tidy"]
       uv:
         patterns: ["*"]
-    # A new LLVM major can change the layout the emitter reproduces (ADR 0014) and needs both
-    # tools released; it is upgraded by hand.
     ignore:
-      - dependency-name: clang-format
-        update-types: ["version-update:semver-major"]
-      - dependency-name: clang-tidy
+      - dependency-name: "*"
         update-types: ["version-update:semver-major"]

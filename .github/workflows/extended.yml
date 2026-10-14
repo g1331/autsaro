@@ -37,7 +37,9 @@ jobs:
       - id: select
         shell: python
         env:
-          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          # A pull request compares its merge commit with the first parent, the base it merges onto;
+          # pull_request.base.sha can predate newer master commits that the merge ref already holds.
+          BASE: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event.before }}
           FULL: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'full-ci') }}
         run: |
           import os, subprocess
