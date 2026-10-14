@@ -92,6 +92,27 @@ class QualityTests(unittest.TestCase):
             ],
         )
 
+    def test_oversized_documents_fail_outside_exempt_records(self):
+        limit = quality.DOCUMENT_LIMIT
+        files = {
+            "docs/large.md": b"x" * (limit + 1),
+            "docs/limit.md": b"x" * limit,
+            # CRLF line ends of a Windows checkout do not count.
+            "docs/crlf.md": b"x\r\n" * (limit // 2),
+            "docs/adr/0001-record.md": b"x" * (limit + 1),
+            "CHANGELOG.md": b"x" * (limit + 1),
+            "docs/large.txt": b"x" * (limit + 1),
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name, content in files.items():
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / name).write_bytes(content)
+            with patch.object(quality, "ROOT", root):
+                errors = quality.document_size_errors([Path(name) for name in files])
+        self.assertEqual(len(errors), 1)
+        self.assertTrue(errors[0].startswith(f"docs/large.md: {limit + 1} bytes exceeds"), errors)
+
     def test_diff_hunk_counts_added_lines(self):
         diff = "@@ -2,0 +3,2 @@\n+a\n+b\n@@ -8 +10,0 @@\n-old\n"
         lines = set()

@@ -127,7 +127,7 @@ R-ID 是路线标识，不是 Issue 或 Milestone 编号；正式开工时为其
 
 ### 版次与规范基线
 
-- AUTOSAR：CP／FO R24-11 是唯一产品基线；规范 PDF 只存本机，引用文件名、条款号、版次和适用性判断，不复制原文。其他版次独立验证，不静默混版。资料入口见 [docs/official](official/README.md)，规范核对方法见 [docs/standards.md](standards.md)。
+- AUTOSAR：CP／FO R24-11 是唯一产品基线；规范 PDF 只存本机，引用文件名、条款号、版次和适用性判断，不复制原文。其他版次独立验证，不静默混版。资料入口见 [docs/official](official/README.md)，规范核对方法见 [标准基线](standards/README.md)。
 - MISRA：C:2012 Third Edition＋AMD1–AMD4＋TC1–TC2，C99；适用项包含工具未覆盖的规则与指令。缺合法规范或工具证据时保持未核查并阻塞对应符合性结论。
 - OS：完整参考 ECU 必须实际实现并验证所声明的 AUTOSAR OS 可扩展性等级；仅有原生 FreeRTOS 调度证据时只能称为有界 BSW-on-RTOS 剖面。
 

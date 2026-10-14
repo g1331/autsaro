@@ -3,10 +3,10 @@
 The official items are the TRACE and TRACEABLE-TABLE elements of the document in
 AUTOSAR_CP_MOD_SpecificationsARXML.zip. An item is disposed of only by IDs that follow
 a disposition marker (ADR 0017): Verifies: in the test trees; 已核对, 不适用 or 差距 in
-docs/standards.md. A configuration-conditional 不适用 holds only while a Rejects: test
-proves that the product refuses each named ECUC parameter. Every mention, marked or not,
-is checked for stale IDs. The result is computed on each run and never written to the
-repository.
+the documents under docs/standards/. A configuration-conditional 不适用 holds only while
+a Rejects: test proves that the product refuses each named ECUC parameter. Every mention,
+marked or not, is checked for stale IDs. The result is computed on each run and never
+written to the repository.
 
 SWS_BSWGeneral obligates every BSW module, so its items are accounted per module: a marker
 disposes of them only with a module qualifier before its colon, Verifies[CanIf]: for one
@@ -36,7 +36,8 @@ from xml.etree import ElementTree
 from autosar_tooling.config import ROOT, archive_path
 
 ARCHIVE_VARIABLE = "AUTOSAR_SPECIFICATIONS_ARCHIVE"
-STANDARDS = "docs/standards.md"
+# The standards baseline: an index and one document per module (ADR 0017).
+STANDARDS = "docs/standards"
 CATALOGS = "core/resources/requirements"
 SOURCES = (STANDARDS, "core/tests", "tests")
 NAMESPACE = "{http://autosar.org/schema/r4.0}"
@@ -50,7 +51,7 @@ QUALIFIER = rf"(?:\[(?P<module>{MODULE.pattern}|\*)\])?"
 # line break) or the range "SWS_CANIF_00907–00910".
 CONTINUATION = re.compile(r"(?:\s*[,，、／/]\s*(?:(?://|\*|#)\s*)?|\s*([–-])\s*)(\d+)(?!\d)")
 # Only the IDs right after a marker are disposed of; the group names are the categories.
-# Tests prove behaviour and the standards document records review, inapplicability and
+# Tests prove behaviour and the standards documents record review, inapplicability and
 # gaps, so each marker counts only in its own kind of source.
 TEST_MARKER = re.compile(rf"(?P<verified>Verifies){QUALIFIER}:[ \t]*`?")
 DOCUMENT_MARKER = re.compile(
@@ -176,8 +177,9 @@ def scan(text: str, path: str, prefixes: Iterable[str]) -> Scan:
     def line(position: int) -> int:
         return text.count("\n", 0, position) + 1
 
+    document = path.startswith(f"{STANDARDS}/")
     categories, conditions, rejected = {}, [], set()
-    for marker in (DOCUMENT_MARKER if path == STANDARDS else TEST_MARKER).finditer(text):
+    for marker in (DOCUMENT_MARKER if document else TEST_MARKER).finditer(text):
         category = next(name for name in CATEGORIES if marker.groupdict().get(name))
         position, listed = marker.end(), []
         while position in groups:
@@ -189,7 +191,7 @@ def scan(text: str, path: str, prefixes: Iterable[str]) -> Scan:
         if category == "configuration" and listed:
             parameters = tuple(item.upper() for item in PARAMETER.findall(marker.group("governing")))
             conditions.append(Condition(path, line(marker.start()), parameters))
-    if path != STANDARDS:
+    if not document:
         for marker in REJECTS.finditer(text):
             position = marker.end()
             while parameter := PARAMETER.match(text, position):

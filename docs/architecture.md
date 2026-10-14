@@ -6,7 +6,7 @@
 
 - 运行时与主机执行边界：[runtime/README.md](../runtime/README.md)、[runtime/os/README.md](../runtime/os/README.md)
 - 标准输入计划的实现说明：[core/src/integration/README.md](../core/src/integration/README.md)
-- 标准基线、官方资料位置与模块义务索引：[standards.md](standards.md)
+- 标准基线、官方资料位置与模块义务索引：[standards/](standards/README.md)
 - 测试入口与前置条件：[development/testing.md](development/testing.md)；环境：[development/environment.md](development/environment.md)
 - 资产摘要、许可与发布：[maintainers/](maintainers/)
 
@@ -147,7 +147,7 @@ flowchart LR
 
 以已删除的帧／信号 host（`host-can-v1`）、单组件（`epic4-win64-sr-cs-v1`）或主线旧名 `singlecore-multi-swc-v1` 记录的工作台工程与交付包在打开时拒绝（见第 7.2、7.3 节）。
 
-主线剖面的首批支持范围（平坦组合、每类型一个实例、共同周期且 offset=0、`IMMEDIATE` 信号处理、唯一 EcucPartition ID0／CoreId0、11 位 Classical CAN 单通道、诊断路由全选或全不选）与拒绝边界见 [standards.md](standards.md#6-多组件剖面的已核定义务)。未支持的生成语义在生成前拒绝，无关有效内容原样保留。
+主线剖面的首批支持范围（平坦组合、每类型一个实例、共同周期且 offset=0、`IMMEDIATE` 信号处理、唯一 EcucPartition ID0／CoreId0、11 位 Classical CAN 单通道、诊断路由全选或全不选）与拒绝边界见 [多组件剖面的已核定义务](standards/multi-component-profile.md)。未支持的生成语义在生成前拒绝，无关有效内容原样保留。
 
 **网络管理边界：**多组件剖面选定 NM NONE，经 host CDD BusSM（`COMM_BUS_TYPE_CDD`／`Ecu_HostBusSM`）连接真实 Can／CanIf 模式；当前没有完整 Nm、CanNm、CanSM，有界 mode 路径不能替代 NM PDU、睡眠状态机或 CanSM 协调。未来选择 `COMM_BUS_TYPE_CAN` 时须实现真正 CanSM。
 
@@ -274,7 +274,7 @@ tools/python/src/  tests/python/  tests/desktop/
 ## 8. 已知差距与未验证范围
 
 - 生成 C 的自动分析完整，但源码结果 `passed=false`；221 项 MISRA 人工评估未完成（[ADR 0008](adr/0008-misra-baseline-and-no-deviation.md)）。
-- 各模块对 R24-11 SWS／ECUC／BSW General 的逐条全文审计未完成；已核定条款见 [standards.md](standards.md)。
+- 各模块对 R24-11 SWS／ECUC／BSW General 的逐条全文审计未完成；已核定条款见[标准基线](standards/README.md)。
 - 完整 Nm／CanNm／CanSM、同类型多实例、嵌套组合／delegation、不同周期／offset、队列／mode／异步 C/S、29 位／FD／多通道 CAN 未支持，输入在生成前拒绝。
 - MCU、硬实时、真实 ISR／段放置、安装包、功能安全与认证均未验证，不由主机结果推定。
 - 工作台内运行生成 ECU 的入口在主线收敛后重建（见 7.3）。
@@ -299,5 +299,5 @@ tools/python/src/  tests/python/  tests/desktop/
 | [0014](adr/0014-emitter-rules.md) | Emitter 规则 | 已接受，实施中 |
 | [0015](adr/0015-repository-code-organization.md) | 仓库代码组织 | 已接受，实施中 |
 | [0016](adr/0016-generated-project-layout-by-ownership.md) | 生成工程按所有权布局并提供 CMake | 已接受，已实施 |
-| [0017](adr/0017-requirement-disposition-in-tests-and-standards.md) | 条款处置写在测试与 standards.md，核算结果现算 | 已接受，已实施 |
+| [0017](adr/0017-requirement-disposition-in-tests-and-standards.md) | 条款处置写在测试与标准基线文档，核算结果现算 | 已接受，已实施 |
 | [0018](adr/0018-per-module-exclusive-areas-without-cross-module-locking.md) | 独占区按模块划分，持区期间不调用其他模块 | 已接受，实施中 |

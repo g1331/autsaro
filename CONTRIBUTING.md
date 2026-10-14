@@ -56,7 +56,7 @@ Reader-facing root documents use English as the default, with Chinese versions n
 
 ## Documentation layout
 
-Each document covers one topic. When a document grows beyond about 20 KB, or contains several topics that can be read independently, split it into a directory of the same name with a `README.md` index that gives each sub-document a one-line purpose; keep a link to the index at the original location. Version-appended changelogs, single-decision ADRs, and archives kept only for traceability are exempt. Put new content into the existing document or directory that fits instead of starting a parallel file.
+Each document covers one topic. When a document grows beyond about 20 KB, or contains several topics that can be read independently, split it into a directory of the same name with a `README.md` index that gives each sub-document a one-line purpose; keep a link to the index at the original location. Version-appended changelogs, single-decision ADRs, and archives kept only for traceability are exempt; `quality` checks the other Markdown files against 20 KiB (counting LF line ends). Put new content into the existing document or directory that fits instead of starting a parallel file.
 
 ## Licensing and security reports
 

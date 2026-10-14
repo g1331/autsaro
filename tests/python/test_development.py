@@ -141,8 +141,8 @@ class RequirementTests(unittest.TestCase):
         (root / "core/resources/official.json").write_text(
             json.dumps([{"environment": requirements.ARCHIVE_VARIABLE, "path": "official/spec.zip", "sha256": digest}])
         )
-        (root / "docs").mkdir()
-        (root / "docs/standards.md").write_text(standards, encoding="utf-8")
+        (root / "docs/standards").mkdir(parents=True)
+        (root / "docs/standards/demo.md").write_text(standards, encoding="utf-8")
         (root / "core/tests").mkdir()
         (root / "core/tests/demo.c").write_text(test, encoding="utf-8")
 
@@ -153,6 +153,7 @@ class RequirementTests(unittest.TestCase):
             return requirements.check("SWS_Demo", root, stale_only), output.getvalue()
 
     PREFIXES = frozenset({"SWS_DEMO_", "SWS_DEMO_CONSTR_", "ECUC_DEMO_"})
+    STANDARDS = f"{requirements.STANDARDS}/demo.md"
 
     def cited(self, text: str, path: str) -> list[tuple[str, str | None]]:
         return [(item.identifier, item.category) for item in requirements.scan(text, path, self.PREFIXES).citations]
@@ -193,7 +194,7 @@ class RequirementTests(unittest.TestCase):
             " 不适用（归属：集成方）：SWS_DEMO_00016 | Verifies: SWS_DEMO_00017 |"
         )
         self.assertEqual(
-            self.cited(standards, requirements.STANDARDS),
+            self.cited(standards, self.STANDARDS),
             [
                 ("ECUC_DEMO_00010", None), ("SWS_DEMO_00007", "configuration"), ("SWS_DEMO_00011", "configuration"),
                 ("SWS_DEMO_00009", "gap"), ("SWS_DEMO_00013", None), ("SWS_DEMO_CONSTR_00001", "inspected"),
@@ -201,14 +202,14 @@ class RequirementTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            requirements.scan(standards, requirements.STANDARDS, self.PREFIXES).conditions,
-            [requirements.Condition(requirements.STANDARDS, 1, ("ECUC_DEMO_00010",))],
+            requirements.scan(standards, self.STANDARDS, self.PREFIXES).conditions,
+            [requirements.Condition(self.STANDARDS, 1, ("ECUC_DEMO_00010",))],
         )
 
     def test_rejects_counts_only_in_tests(self):
         text = "// Rejects: ECUC_Can_00316, `ECUC_Demo_00010`\n// ECUC_Can_00326 is accepted\n"
         self.assertEqual(requirements.scan(text, "core/tests/x.rs", self.PREFIXES).rejected, {"ECUC_CAN_00316", "ECUC_DEMO_00010"})
-        self.assertEqual(requirements.scan(text, requirements.STANDARDS, self.PREFIXES).rejected, set())
+        self.assertEqual(requirements.scan(text, self.STANDARDS, self.PREFIXES).rejected, set())
 
     def test_reports_undisposed_items_and_stale_citations(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -231,8 +232,8 @@ class RequirementTests(unittest.TestCase):
                 undisposed,
                 ["ECUC_Demo_00010", "SWS_DEMO_00001", "SWS_DEMO_00002", "SWS_DEMO_00003", "SWS_DEMO_00009", "(draft)", "SWS_DEMO_CONSTR_00001"],
             )
-            self.assertIn("docs/standards.md:1: SWS_DEMO_00004", output)
-            (root / "docs/standards.md").write_text("`SWS_DEMO_00001`\n", encoding="utf-8")
+            self.assertIn("docs/standards/demo.md:1: SWS_DEMO_00004", output)
+            (root / "docs/standards/demo.md").write_text("`SWS_DEMO_00001`\n", encoding="utf-8")
             status, output = self.run_check(root, stale_only=True)
             self.assertEqual(status, 0)
             self.assertNotIn("Undisposed items", output)
@@ -251,11 +252,11 @@ class RequirementTests(unittest.TestCase):
             (root / "core/tests/demo.c").write_text("// Verifies: SWS_DEMO_00005, 00007\n", encoding="utf-8")
             status, output = self.run_check(root)
             self.assertEqual(status, 1)
-            self.assertIn("docs/standards.md:1: ECUC_DEMO_00010", output.split("without a Rejects: test:")[1])
-            (root / "docs/standards.md").write_text(standards.replace("ECUC_Demo_00010=false", "未启用"), encoding="utf-8")
+            self.assertIn("docs/standards/demo.md:1: ECUC_DEMO_00010", output.split("without a Rejects: test:")[1])
+            (root / "docs/standards/demo.md").write_text(standards.replace("ECUC_Demo_00010=false", "未启用"), encoding="utf-8")
             status, output = self.run_check(root)
             self.assertEqual(status, 1)
-            self.assertIn("docs/standards.md:1: names no ECUC parameter", output)
+            self.assertIn("docs/standards/demo.md:1: names no ECUC parameter", output)
 
     def test_committed_catalog_is_checked_offline_and_against_the_archive(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -366,7 +367,7 @@ class DiagnosticTests(unittest.TestCase):
 
 class QualityScopeTests(unittest.TestCase):
     def test_scoped_formatting_does_not_request_unrelated_tools(self):
-        with patch.object(quality, "scoped_paths", return_value=[]), patch.object(quality, "source_paths", return_value=[]), patch.object(quality, "c_syntax_errors", side_effect=AssertionError("UI requested C")), patch.object(quality, "plan_number_errors", return_value=[]), redirect_stdout(io.StringIO()):
+        with patch.object(quality, "scoped_paths", return_value=[]), patch.object(quality, "source_paths", return_value=[]), patch.object(quality, "c_syntax_errors", side_effect=AssertionError("UI requested C")), patch.object(quality, "plan_number_errors", return_value=[]), patch.object(quality, "document_size_errors", return_value=[]), redirect_stdout(io.StringIO()):
             self.assertEqual(quality.check("HEAD", scope="ui"), [])
 
 

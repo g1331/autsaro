@@ -1,4 +1,4 @@
-"""Check source hygiene, changed-line formatting, host C99 syntax, and plan numbers."""
+"""Check source hygiene, changed-line formatting, host C99 syntax, plan numbers, and document sizes."""
 
 from __future__ import annotations
 
@@ -26,6 +26,20 @@ RETIRED_IDENTITIES = ("epic4-win64-sr-cs-v1", "epic4-single-application-v1")
 # Decision records cite archived planning paths, the roadmap names planning phases like their
 # Milestones, and vendored upstream content keeps its original bytes.
 PLAN_NUMBER_EXEMPT = ("docs/adr/", "docs/roadmap.md", "third_party/", ".agents/skills/impeccable/")
+# CONTRIBUTING "Documentation layout": a document beyond about 20 KB is split into a directory
+# with a README.md index. Changelogs, single-decision ADRs and traceability archives are
+# exempt, AGENTS.md stays one file by merging entries, and vendored content keeps its bytes.
+DOCUMENT_LIMIT = 20 * 1024
+DOCUMENT_SIZE_EXEMPT = (
+    "CHANGELOG.md", "CHANGELOG.zh-CN.md", "AGENTS.md", "docs/adr/", "docs/project/archive/",
+    "third_party/", ".agents/skills/impeccable/",
+)
+# shortcut: documents that #130 has not split yet; remove each one when it is split or archived.
+DOCUMENT_SIZE_PENDING = (
+    "docs/architecture.md", "docs/roadmap.md", "docs/design/ux-baseline/EXPERIENCE.md",
+    "docs/research/autosar-platform/cp-r25-11-inventory.md",
+    "docs/research/autosar-platform/r24-11-runtime-coverage-inventory.md",
+)
 
 
 def _capture(
@@ -125,6 +139,27 @@ def plan_number_errors(paths: list[Path] | None = None) -> list[str]:
                 line = line.replace(identity, "")
             if match := PLAN_NUMBER.search(line):
                 errors.append(f"{name}:{number}: development plan number {match.group(0)!r}")
+    return errors
+
+
+def document_size_errors(paths: list[Path] | None = None) -> list[str]:
+    errors = []
+    for path in repository_paths() if paths is None else paths:
+        name = path.as_posix()
+        if (
+            path.suffix != ".md"
+            or name.startswith(DOCUMENT_SIZE_EXEMPT)
+            or name in DOCUMENT_SIZE_PENDING
+            or not (ROOT / path).is_file()
+        ):
+            continue
+        # A Windows checkout with CRLF line ends measures the same as the repository.
+        size = len((ROOT / path).read_bytes().replace(b"\r\n", b"\n"))
+        if size > DOCUMENT_LIMIT:
+            errors.append(
+                f"{name}: {size} bytes exceeds the {DOCUMENT_LIMIT}-byte document limit; "
+                "split it into a same-name directory with a README.md index"
+            )
     return errors
 
 
@@ -350,8 +385,10 @@ def check(base: str, *, all_format: bool = False, scope: str = "all") -> list[st
         errors.extend(c_syntax_errors())
     numbers = plan_number_errors()
     errors.extend(numbers)
+    oversized = document_size_errors()
+    errors.extend(oversized)
     print(
-        f"Quality scope={scope} baseline={base}; formatted files checked={checked}; C syntax={'checked' if changed_c or scope == 'runtime' or all_format else 'not requested'}; plan numbers={len(numbers)}"
+        f"Quality scope={scope} baseline={base}; formatted files checked={checked}; C syntax={'checked' if changed_c or scope == 'runtime' or all_format else 'not requested'}; plan numbers={len(numbers)}; oversized documents={len(oversized)}"
     )
     return errors
 
