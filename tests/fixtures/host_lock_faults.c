@@ -97,14 +97,37 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "normal") == 0) {
         Can_Init(&config);
         Can_Lock();
-        Can_Lock();
-        Can_Unlock();
         Can_Unlock();
         if (Can_TryLock() != 1) {
             return 2;
         }
         Can_Unlock();
+        /* The legacy shared area may recurse and enclose strict areas until it is retired. */
+        Can_HostStateLock();
+        Can_HostStateLock();
+        Can_Lock();
+        Can_Unlock();
+        Can_HostDetLock();
+        Can_HostDetUnlock();
+        Can_HostStateUnlock();
+        Can_HostStateUnlock();
         return 0;
+    }
+    /* A strict area (driver, Det) admits no other area, including itself. */
+    if (strcmp(argv[1], "nest-strict") == 0) {
+        Can_Lock();
+        Can_HostDetLock();
+        return 6;
+    }
+    if (strcmp(argv[1], "nest-same") == 0) {
+        Can_HostDetLock();
+        Can_HostDetLock();
+        return 6;
+    }
+    if (strcmp(argv[1], "nest-legacy") == 0) {
+        Can_Lock();
+        Can_HostStateLock();
+        return 6;
     }
     if (strcmp(argv[1], "busy") == 0 || strcmp(argv[1], "try-error") == 0 ||
         strcmp(argv[1], "lock") == 0 || strcmp(argv[1], "unlock") == 0) {

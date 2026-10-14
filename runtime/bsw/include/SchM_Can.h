@@ -24,4 +24,8 @@ CAN_CODE void Can_MainFunction_Mode(void);
 
 #define CAN_STOP_SEC_CODE
 #include "Can_MemMap.h"
+
+/** @brief Enter/leave the driver's exclusive area (module data only, never nested). */
+void SchM_Enter_Can_CAN_STATE(void);
+void SchM_Exit_Can_CAN_STATE(void);
 #endif

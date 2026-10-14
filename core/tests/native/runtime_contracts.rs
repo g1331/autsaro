@@ -203,6 +203,7 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
         "SchM_CanIf.h",
         "SchM_ComM.h",
         "SchM_CanTp.h",
+        "SchM_Det.h",
     ] {
         std::fs::copy(
             root.join("core/tests/fixtures/bsw-contracts").join(name),
@@ -239,8 +240,12 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
             "-Wl,--wrap=pthread_mutex_lock"
         });
         command.args([
-            "-Wl,--wrap=Can_Unlock",
+            "-Wl,--wrap=SchM_Exit_Can_CAN_STATE",
             "-Wl,--wrap=SchM_Enter_CanIf_CANIF_STATE",
+            "-Wl,--wrap=CanIf_ControllerModeIndication",
+            "-Wl,--wrap=CanIf_ControllerBusOff",
+            "-Wl,--wrap=CanIf_TxConfirmation",
+            "-Wl,--wrap=CanIf_RxIndication",
         ]);
     }
     if fixture == "mode_contract.c" {
@@ -410,7 +415,7 @@ fn queued_diagnostic_cancelled_token_cannot_release_reused_transport_buffer() {
 }
 
 #[test]
-fn can_callbacks_and_direct_dependency_lifetimes_are_serialized() {
+fn can_callbacks_leave_driver_area_and_late_events_converge() {
     for polling in ["0", "1"] {
         let scratch = Scratch::new();
         let flags = [

@@ -1,4 +1,8 @@
-/** Deterministic admission-window oracle; real driver, CanIf, routing and SchM. */
+/** Deterministic window oracle (ADR 0018); real driver, CanIf, routing and SchM.
+ * The dispatcher stops where the driver has left its area and not yet entered CanIf
+ * (or, for CanIf-to-driver calls, where the driver returns inside the legacy CanIf
+ * area). A contender then either completes without touching any held lock, or, for
+ * modules still on the shared legacy area, is shown to wait on that area only. */
 #include "standard/Can.h"
 #include "Can_Host.h"
 #include "CanIf.h"
@@ -47,13 +51,13 @@ static int contend_thread(void) { return pthread_equal(pthread_self(), contender
 static unsigned paused;
 static unsigned attempted;
 static unsigned blocked;
+static unsigned finished;
 static unsigned released;
 static unsigned armed;
-static unsigned skip_unlocks;
 static unsigned operation;
 static unsigned cancellation;
-static unsigned generation;
-static unsigned callbacks[2];
+static unsigned results;
+static unsigned confirmed;
 static unsigned reenter;
 static Can_ControllerStateType last_mode;
 static const uint8 bytes[8] = {42u};
@@ -101,15 +105,16 @@ int __wrap_pthread_mutex_lock(pthread_mutex_t *mutex) {
     return __real_pthread_mutex_lock(mutex);
 }
 #endif
-void __real_Can_Unlock(void);
 void __real_SchM_Enter_CanIf_CANIF_STATE(void);
-/* Stop after the driver unlock, before the actual CanIf call, with no sleeps. */
-void __wrap_Can_Unlock(void) {
-    __real_Can_Unlock();
+void __real_SchM_Exit_Can_CAN_STATE(void);
+void __real_CanIf_ControllerModeIndication(uint8 ControllerId, Can_ControllerStateType mode);
+void __real_CanIf_ControllerBusOff(uint8 ControllerId);
+void __real_CanIf_TxConfirmation(PduIdType CanTxPduId);
+void __real_CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType *PduInfoPtr);
+/* Stop the dispatcher once per run, with no sleeps. */
+static void pause_dispatch(void) {
     lock();
-    if (armed && dispatch_thread() && skip_unlocks) {
-        --skip_unlocks;
-    } else if (armed && dispatch_thread()) {
+    if (armed && dispatch_thread()) {
         armed = 0u;
         paused = 1u;
         wake();
@@ -117,6 +122,33 @@ void __wrap_Can_Unlock(void) {
             wait();
     }
     unlock();
+}
+/* Driver-to-CanIf operations stop after the driver exit, before the consumer. */
+void __wrap_CanIf_ControllerModeIndication(uint8 ControllerId, Can_ControllerStateType mode) {
+    if (operation < 5u)
+        pause_dispatch();
+    __real_CanIf_ControllerModeIndication(ControllerId, mode);
+}
+void __wrap_CanIf_ControllerBusOff(uint8 ControllerId) {
+    if (operation < 5u)
+        pause_dispatch();
+    __real_CanIf_ControllerBusOff(ControllerId);
+}
+void __wrap_CanIf_TxConfirmation(PduIdType CanTxPduId) {
+    if (operation < 5u)
+        pause_dispatch();
+    __real_CanIf_TxConfirmation(CanTxPduId);
+}
+void __wrap_CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType *PduInfoPtr) {
+    if (operation < 5u)
+        pause_dispatch();
+    __real_CanIf_RxIndication(Mailbox, PduInfoPtr);
+}
+/* CanIf-to-driver operations stop after the driver exit, still inside CanIf. */
+void __wrap_SchM_Exit_Can_CAN_STATE(void) {
+    __real_SchM_Exit_Can_CAN_STATE();
+    if (operation >= 5u)
+        pause_dispatch();
 }
 void __wrap_SchM_Enter_CanIf_CANIF_STATE(void) {
     lock();
@@ -133,8 +165,6 @@ static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8]) {
 }
 static const Can_ConfigType can = {sink};
 static void observed(void) {
-    /* Another thread proves the DRIVER mutex is free at the dispatch window. */
-    ++callbacks[generation];
     if (reenter) {
         reenter = 0u;
         Can_SetMode(CAN_STOPPED);
@@ -143,13 +173,16 @@ static void observed(void) {
         Can_SetMode(CAN_STARTED);
     }
 }
+/* The real bus state manager re-derives its mode from late events. */
 static void mode(uint8 id, Can_ControllerStateType value) {
     assert(id == 0u);
     last_mode = value;
+    Ecu_HostBusSM_ControllerModeIndication(id, value);
     observed();
 }
 static void busoff(uint8 id) {
     assert(id == 0u);
+    Ecu_HostBusSM_ControllerBusOff(id);
     observed();
 }
 static void rx(PduIdType id, const PduInfoType *info) {
@@ -158,8 +191,11 @@ static void rx(PduIdType id, const PduInfoType *info) {
 }
 static void tx(PduIdType id, Std_ReturnType status) {
     assert(id == 18u);
-    if (status == E_OK)
+    ++results;
+    if (status == E_OK) {
+        ++confirmed;
         observed();
+    }
 }
 static const CanIf_RxPduConfigType receives[] = {{0x320u, 21u, 1u}};
 static const CanIf_TxPduConfigType transmits[] = {{0x321u, 51u, 1u}};
@@ -180,7 +216,7 @@ static void initialize(void) {
     PduR_Init(&pdur);
     Ecu_HostBusSM_Init(&bussm);
     Can_SetMode(CAN_STARTED);
-    assert(CanIf_SetPduMode(0u, CANIF_ONLINE) == E_OK);
+    assert(Ecu_HostBusSM_RequestComMode(0u, COMM_FULL_COMMUNICATION) == E_OK);
 }
 static void dispatch(void) {
 #if defined(_WIN32)
@@ -208,7 +244,8 @@ static void dispatch(void) {
 #if CAN_RX_POLLING == 1
         Can_MainFunction_Read();
 #else
-        assert(Can_Inject(0x320u, 1u, bytes, 0u) == ECU_OK);
+        /* The delivery result belongs to the driver lifetime that admitted it. */
+        assert(Can_Inject(0x320u, 1u, bytes, 0u) == (cancellation ? ECU_ERR_CONTROLLER : ECU_OK));
 #endif
     } else {
         Can_ControllerStateType actual;
@@ -249,7 +286,6 @@ static void cancel(void) {
         if (cancellation) {
             Can_DeInit();
             CanIf_DeInit();
-            generation = 1u;
             initialize();
         }
     }
@@ -263,6 +299,10 @@ static DWORD WINAPI run_dispatch(LPVOID arg) {
 static DWORD WINAPI run_cancel(LPVOID arg) {
     (void)arg;
     cancel();
+    lock();
+    finished = 1u;
+    wake();
+    unlock();
     return 0u;
 }
 #else
@@ -274,12 +314,15 @@ static void *run_dispatch(void *arg) {
 static void *run_cancel(void *arg) {
     (void)arg;
     cancel();
+    lock();
+    finished = 1u;
+    wake();
+    unlock();
     return NULL_PTR;
 }
 #endif
 int main(void) {
     const PduInfoType info = {(uint8 *)bytes, NULL_PTR, 1u};
-    unsigned before;
 #if defined(_WIN32)
     InitializeCriticalSection(&handshake);
     InitializeConditionVariable(&changed);
@@ -292,8 +335,10 @@ int main(void) {
 #else
             pthread_t first, second;
 #endif
-            generation = 0u;
+            /* Driver and Det no longer share the area the waiter holds. */
+            const unsigned proceeds = (operation < 5u) || (operation == 10u);
             initialize();
+            results = confirmed = 0u;
             if (operation == 1u) {
                 Can_SetMode(CAN_STOPPED);
                 assert(Can_SetControllerMode(0u, CAN_CS_STARTED) == E_OK);
@@ -311,13 +356,7 @@ int main(void) {
                 assert(Can_Inject(0x320u, 1u, bytes, 0u) == ECU_OK);
 #endif
             }
-            before = callbacks[1];
-            paused = attempted = blocked = released = 0u;
-            skip_unlocks = 0u;
-#if CAN_TX_POLLING == 0
-            if (operation == 3u)
-                skip_unlocks = 2u;
-#endif
+            paused = attempted = blocked = finished = released = 0u;
             armed = 1u;
 #if defined(_WIN32)
             first = CreateThread(NULL, 0u, run_dispatch, NULL, 0u, NULL);
@@ -336,11 +375,18 @@ int main(void) {
             assert(pthread_create(&second, NULL_PTR, run_cancel, NULL_PTR) == 0);
 #endif
             lock();
-            while (!attempted || !blocked)
-                wait();
-            /* Neither the dispatcher nor its dependency waiter owns DRIVER. */
+            if (proceeds) {
+                /* The paused dispatcher holds no lock the contender needs. */
+                while (!finished && !blocked)
+                    wait();
+                assert(finished && !blocked);
+            } else {
+                while (!attempted || !blocked)
+                    wait();
+            }
+            /* Neither the dispatcher nor its waiter owns the driver area. */
             assert(Can_TryLock() == 1);
-            __real_Can_Unlock();
+            Can_Unlock();
             released = 1u;
             wake();
             unlock();
@@ -353,14 +399,17 @@ int main(void) {
             assert(pthread_join(second, NULL_PTR) == 0);
 #endif
             if (operation < 5u) {
+                /* A direct indication recorded during a polled one waits for the next poll. */
+                Can_MainFunction_Mode();
+                /* Late events converge to the actual state; a request has one result. */
+                assert(last_mode == (cancellation ? CAN_CS_STARTED : CAN_CS_STOPPED));
+                assert(results == ((operation == 3u) ? 1u : 0u) && confirmed == 0u);
                 if (cancellation) {
-                    assert(last_mode == CAN_CS_STARTED && callbacks[1] == before + 1u);
                     assert(CanIf_Transmit(51u, &info) == E_OK);
                     assert(Can_HostFlush() == ECU_OK);
                     Can_MainFunction_Write();
-                    assert(callbacks[1] == before + 2u);
-                } else
-                    assert(last_mode == CAN_CS_STOPPED);
+                    assert(results == ((operation == 3u) ? 2u : 1u) && confirmed == 1u);
+                }
             }
             Can_SetMode(CAN_STOPPED);
             Can_DeInit();

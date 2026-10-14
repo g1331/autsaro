@@ -150,6 +150,13 @@ ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_ControllerBusOff(uint8 ControllerId) {
         if ((result == E_OK) && (actual == CAN_CS_STOPPED)) {
             transition_pending = FALSE;
             Ecu_HostBusSM_Publish(COMM_NO_COMMUNICATION);
+        } else if ((result == E_OK) && (actual == CAN_CS_STARTED)) {
+            /* Delivered after a restart (ADR 0018): CanIf already went TX_OFFLINE, so
+             * restore the requested mode as a bus-off recovery would. A pending
+             * transition applies the same mode again on its completion. */
+            (void)Ecu_HostBusSM_ApplyMode(configuration->channel, requested_mode);
+        } else {
+            /* No controller state to restore. */
         }
     }
     SchM_Exit_CanIf_CANIF_STATE();

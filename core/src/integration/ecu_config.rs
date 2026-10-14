@@ -120,7 +120,12 @@ pub(super) fn files(
         ),
     )?;
     outputs.emit(ECU, "src/Ecu_Execution.c", "#include \"Ecu_Execution.h\"\n#include \"Ecu_Target.h\"\nEcuStatus Ecu_ExecutionTransmit(CanTxSink sink, PduIdType handle, uint32_t id, uint8_t dlc, const uint8_t data[8]) {\n    (void)sink;\n    return Ecu_TargetEnqueueTransmit(handle, id, dlc, data);\n}\nuint64_t Ecu_ExecutionNow(void) { return Ecu_TargetNow(); }\n")?;
-    for (module, area) in [("CanIf", "CANIF"), ("ComM", "COMM"), ("CanTp", "CANTP")] {
+    for (module, area) in [
+        ("CanIf", "CANIF"),
+        ("ComM", "COMM"),
+        ("CanTp", "CANTP"),
+        ("Det", "DET"),
+    ] {
         let main = match module {
             "CanTp" => "\nvoid CanTp_MainFunction(void);".to_owned(),
             "ComM" => format!("\nvoid {}(void);", mode.main_symbol),
