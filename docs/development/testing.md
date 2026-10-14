@@ -74,7 +74,7 @@ CI 每个平台先验证检查器、生成四类完整样本并发布本轮工�
 
 `Development checks` 中的 `CI required` 是分支规则唯一要求的检查，阻塞合并的任务清单写在该任务的 `needs` 中，增删检查只改工作流。PR 只改根目录指南、`docs/`、代理说明或 PR 模板时，构建与测试任务整体跳过，`quality` 照常运行；其余 PR、推送到主干及手动运行都执行完整检查。分支无须先与主干同步即可合并，合并后主干推送会再完整运行一次。
 
-`native` 任务在 Windows 与 Linux 上以 `--features native-tests --lib --test native --no-fail-fast` 运行全部原生 Rust 套件，工具路径取自已安装的受控 GCC、binutils、Git 及项目 uv 环境；`native-os` 任务在两个平台运行 26 个 OS suites 和主机锁错误边界测试。准备任务在生成样本后运行封存工程构建模式，再把 `standard-ecu` 样本移到新目录，用 uv 管理的 Python 3.11–3.14 接收者解释器（`AUTOSAR_RECEIVER_PYTHON`）逐个直接运行包内工具完成构建与验证，不向接收者解释器安装开发工具；这只证明解释器兼容性，不代表网络隔离下的安装验收。`official` 二进制由不属于必需检查的 `acceptance.yml` 运行（见[官方对照](#官方对照)），桌面场景由不属于必需检查的 `desktop.yml` 运行（见[桌面场景](#桌面场景)）；PR 检查通过不代表这些检查通过。
+`native` 任务在 Windows 与 Linux 上以 `--features native-tests --lib --test native --no-fail-fast` 运行全部原生 Rust 套件（Windows 按测试名把最慢的几个模块分到第二个 runner，同一名单在另一半用 `--skip` 排除，每个测试只运行一次），工具路径取自已安装的受控 GCC、binutils、Git 及项目 uv 环境；`native-os` 任务在两个平台运行 26 个 OS suites 和主机锁错误边界测试。`native-delivery` 任务下载准备任务发布的样本，与样本分析并行运行封存工程构建模式和 CMake 构建，再把 `standard-ecu` 样本移到新目录，用 uv 管理的 Python 3.11–3.14 接收者解释器（`AUTOSAR_RECEIVER_PYTHON`）逐个直接运行包内工具完成构建与验证，不向接收者解释器安装开发工具；这只证明解释器兼容性，不代表网络隔离下的安装验收。`official` 二进制由不属于必需检查的 `acceptance.yml` 运行（见[官方对照](#官方对照)），桌面场景由不属于必需检查的 `desktop.yml` 运行（见[桌面场景](#桌面场景)）；PR 检查通过不代表这些检查通过。
 
 ## 进程、资源和原生行为
 

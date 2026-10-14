@@ -158,7 +158,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest]
+        # Windows runs the slowest suites on a second runner; Linux keeps one job.
+        include:
+          - os: ubuntu-24.04
+            shard: all
+          - os: windows-latest
+            shard: slow
+          - os: windows-latest
+            shard: rest
+    name: native (${{ matrix.os }}, ${{ matrix.shard }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
@@ -193,8 +201,18 @@ jobs:
               for variable, name in tools.items():
                   output.write(variable + '=' + str(Path(shutil.which(name)).absolute()) + '\n')
               output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
+      # One name list selects the slow shard and is skipped by the rest, so every test runs
+      # exactly once; a renamed module only moves its tests to "rest".
       - name: Native library and contract suites
-        run: cargo test --locked -p autosar-config-core --features native-tests --lib --test native --no-fail-fast
+        shell: python
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          import os, subprocess, sys
+          slow = ['integration::sealed_projects', 'integration::single_component', 'integration::protocol']
+          filters = {'all': [], 'slow': slow, 'rest': [arg for name in slow for arg in ('--skip', name)]}[os.environ['SHARD']]
+          sys.exit(subprocess.run(['cargo', 'test', '--locked', '-p', 'autosar-config-core', '--features', 'native-tests',
+              '--lib', '--test', 'native', '--no-fail-fast', '--', *filters]).returncode)
   native-os:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -342,6 +360,50 @@ jobs:
           key: c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-v1
       - name: Analyzer behavior tests
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
+      - name: Generate complete analysis samples
+        run: cargo test --locked -p autosar-config-core --test it -- 'c_analysis::'
+      - name: Validate generated sample inventory
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          expected = {'standard-ecu', 'user-application', 'component-pipeline', 'no-diagnostic'}
+          if {p.name for p in Path(os.environ['AUTOSAR_C_ANALYSIS_SAMPLES']).iterdir()} != expected:
+              raise RuntimeError('Generated sample inventory is incomplete')
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: c-analysis-inputs-${{ matrix.target }}
+          overwrite: true
+          path: |
+            build/c-analysis-tools
+            build/c-analysis-samples
+          if-no-files-found: error
+          retention-days: 14
+
+  native-delivery:
+    # Builds and receives the prepared samples; runs beside their analysis rather than before it.
+    needs: c-analysis-prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: linux-x64-controlled-v1
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: uv sync --locked
+      - uses: ./.github/actions/native-analysis-compiler
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: c-analysis-inputs-${{ matrix.target }}
+          path: build
       # The sealed build and receiver checks resolve the same absolute tools.
       - name: Select native contract tools
         shell: python
@@ -356,8 +418,6 @@ jobs:
               for variable, name in tools.items():
                   output.write(variable + '=' + str(Path(shutil.which(name)).absolute()) + '\n')
               output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
-      - name: Generate complete analysis samples
-        run: cargo test --locked -p autosar-config-core --test it -- 'c_analysis::'
       - name: Sealed ECU build mode fault isolation
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_ecu_build_modes.py
       # The generated CMake build (uv-locked CMake and Ninja) compiles the target.json closure.
@@ -380,23 +440,6 @@ jobs:
                   print(f'::error title=Receiver Python {version}::The moved package did not verify with {receiver}', flush=True)
                   failed.append(version)
           sys.exit('Receiver Python failed: ' + ', '.join(failed) if failed else 0)
-      - name: Validate generated sample inventory
-        shell: python
-        run: |
-          import os
-          from pathlib import Path
-          expected = {'standard-ecu', 'user-application', 'component-pipeline', 'no-diagnostic'}
-          if {p.name for p in Path(os.environ['AUTOSAR_C_ANALYSIS_SAMPLES']).iterdir()} != expected:
-              raise RuntimeError('Generated sample inventory is incomplete')
-      - uses: actions/upload-artifact@v7.0.1
-        with:
-          name: c-analysis-inputs-${{ matrix.target }}
-          overwrite: true
-          path: |
-            build/c-analysis-tools
-            build/c-analysis-samples
-          if-no-files-found: error
-          retention-days: 14
 
   c-analysis-samples:
     needs: c-analysis-prepare
@@ -553,7 +596,7 @@ jobs:
   required:
     # The only status check branch rules require; the list of blocking jobs lives here.
     name: CI required
-    needs: [changes, ui, python, core, desktop, process, native, native-os, quality, c-analysis]
+    needs: [changes, ui, python, core, desktop, process, native, native-os, native-delivery, quality, c-analysis]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
