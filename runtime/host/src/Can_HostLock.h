@@ -2,8 +2,6 @@
 #define CAN_HOSTLOCK_H
 
 void Can_Lock(void);
-/* 1: acquired; 0: busy; -1: synchronization setup/operation failed. */
-int Can_TryLock(void);
 void Can_Unlock(void);
 /* Strict SchM areas (ADR 0018), one per migrated module; the driver uses Can_Lock. Each
  * protects its module's data only: a thread holding one that enters any area aborts. */

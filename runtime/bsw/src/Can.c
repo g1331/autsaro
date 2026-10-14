@@ -1,6 +1,5 @@
 #include "Can_Internal.h"
 #include "Det.h"
-#include "Can_HostLock.h"
 #include "CanIf.h"
 #include "SchM_Can.h"
 #include "Ecu_Execution.h"
@@ -277,39 +276,35 @@ static CAN_CODE EcuStatus Can_WriteHost(Can_HwHandleType hth, const Can_PduType 
         result = ECU_ERR_FRAME_DLC;
 #endif
     } else {
-        int locked = Can_TryLock();
-        if (locked < 0) {
+        /* The area guards data only (ADR 0018), so entering it is bounded and keeps
+         * Can_Write non-blocking (SWS_Can_00275); CAN_BUSY means an occupied slot. */
+        SchM_Enter_Can_CAN_STATE();
+        if (can_initialized == 0u) {
+            /* Can_Init has not installed a host output callback. */
+        } else if (can_controller_mode != CAN_STARTED) {
             result = ECU_ERR_CONTROLLER;
-        } else if (locked == 0) {
+        } else if ((tx_pending != 0u) || (tx_in_flight != 0u) || (tx_confirmation_pending != 0u) ||
+                   (tx_confirming != 0u)) {
             result = ECU_ERR_CAN_BUSY;
+#if CAN_HOST_QUEUED_COMPLETION == 1
+        } else if (host_tx_sequence == UINT64_MAX) {
+            result = ECU_ERR_CAN_BUSY;
+#endif
         } else {
-            if (can_initialized == 0u) {
-                /* Can_Init has not installed a host output callback. */
-            } else if (can_controller_mode != CAN_STARTED) {
-                result = ECU_ERR_CONTROLLER;
-            } else if ((tx_pending != 0u) || (tx_in_flight != 0u) ||
-                       (tx_confirmation_pending != 0u) || (tx_confirming != 0u)) {
-                result = ECU_ERR_CAN_BUSY;
+            size_t i;
 #if CAN_HOST_QUEUED_COMPLETION == 1
-            } else if (host_tx_sequence == UINT64_MAX) {
-                result = ECU_ERR_CAN_BUSY;
+            ++host_tx_sequence;
 #endif
-            } else {
-                size_t i;
-#if CAN_HOST_QUEUED_COMPLETION == 1
-                ++host_tx_sequence;
-#endif
-                tx_id = pdu->id;
-                tx_handle = pdu->swPduHandle;
-                tx_length = pdu->length;
-                for (i = 0u; i < (size_t)pdu->length; ++i) {
-                    tx_payload[i] = pdu->sdu[i];
-                }
-                tx_pending = 1u;
-                result = ECU_OK;
+            tx_id = pdu->id;
+            tx_handle = pdu->swPduHandle;
+            tx_length = pdu->length;
+            for (i = 0u; i < (size_t)pdu->length; ++i) {
+                tx_payload[i] = pdu->sdu[i];
             }
-            SchM_Exit_Can_CAN_STATE();
+            tx_pending = 1u;
+            result = ECU_OK;
         }
+        SchM_Exit_Can_CAN_STATE();
     }
     return result;
 }

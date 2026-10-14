@@ -62,11 +62,9 @@ class HostBoundaryTests(unittest.TestCase):
     def execute(cls, argv, stage):
         return OwnedProcess(ProcessSpec.seconds(argv, cls.directory, 60, cls.directory, stage)).wait()
 
-    def test_legacy_area_nesting_and_busy_are_normal_states(self):
-        for case in ("normal", "busy"):
-            with self.subTest(case=case):
-                result = self.execute([str(self.lock), case], case)
-                self.assertTrue(result.success, result.stdout.read_text())
+    def test_legacy_area_may_nest_and_enclose_strict_areas(self):
+        result = self.execute([str(self.lock), "normal"], "normal")
+        self.assertTrue(result.success, result.stdout.read_text())
 
     def test_entering_any_area_inside_a_strict_area_is_fatal(self):
         for case in ("nest-strict", "nest-same", "nest-legacy"):
@@ -75,13 +73,6 @@ class HostBoundaryTests(unittest.TestCase):
                 output = result.stdout.read_text()
                 self.assertEqual(result.exit_code, 91, output)
                 self.assertIn("LOCK_FATAL", output)
-
-    def test_try_lock_errors_reach_can_error_return(self):
-        cases = ["once", "mutex-init"] if os.name == "nt" else ["once", "attr-init", "attr-type", "mutex-init", "attr-close", "try-error"]
-        for case in cases:
-            with self.subTest(case=case):
-                result = self.execute([str(self.lock), case], case)
-                self.assertTrue(result.success, result.stdout.read_text())
 
     def test_void_lock_failures_select_fatal_policy_and_never_return(self):
         cases = ["once", "mutex-init"] if os.name == "nt" else ["once", "attr-init", "attr-type", "mutex-init", "attr-close", "lock", "unlock"]

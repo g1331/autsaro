@@ -387,9 +387,12 @@ int main(void) {
             while (!finished && !blocked)
                 wait();
             assert(finished && !blocked);
-            /* Neither the dispatcher nor the contender owns the driver area. */
-            assert(Can_TryLock() == 1);
+            unlock();
+            /* Neither the dispatcher nor the contender owns the driver area; if one did,
+             * this entry would never return and the bounded run would fail. */
+            Can_Lock();
             Can_Unlock();
+            lock();
             released = 1u;
             wake();
             unlock();

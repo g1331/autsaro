@@ -7,7 +7,6 @@
 #if defined(_WIN32)
 #include <windows.h>
 #else
-#include <errno.h>
 #include <pthread.h>
 #endif
 /* Every unrecoverable lock state stops here: a void caller must not continue. */
@@ -33,7 +32,6 @@ static void Can_NoteExit(int strict)
     }
 }
 #if defined(_WIN32)
-static INIT_ONCE can_lock_once = INIT_ONCE_STATIC_INIT;
 static CRITICAL_SECTION can_lock;
 static CRITICAL_SECTION state_lock;
 static CRITICAL_SECTION area_locks[CAN_HOST_AREA_COUNT];
@@ -72,20 +70,9 @@ static void Can_EnterRecursive(PINIT_ONCE once, PINIT_ONCE_FN init, LPCRITICAL_S
 }
 void Can_Lock(void)
 {
+    static INIT_ONCE can_lock_once = INIT_ONCE_STATIC_INIT;
     Can_NoteEnter(1);
     Can_EnterRecursive(&can_lock_once, Can_InitLock, &can_lock);
-}
-int Can_TryLock(void)
-{
-    int result = -1;
-    Can_NoteEnter(1);
-    if (InitOnceExecuteOnce(&can_lock_once, Can_InitLock, NULL, NULL) != 0) {
-        result = TryEnterCriticalSection(&can_lock) != 0 ? 1 : 0;
-    }
-    if (result != 1) {
-        Can_NoteExit(1);
-    }
-    return result;
 }
 void Can_Unlock(void)
 {
@@ -121,7 +108,6 @@ typedef struct {
     pthread_mutex_t mutex;
     int ready;
 } Can_RecursiveLock;
-static pthread_once_t can_lock_once = PTHREAD_ONCE_INIT;
 static Can_RecursiveLock can_lock;
 static Can_RecursiveLock state_lock;
 static Can_RecursiveLock area_locks[CAN_HOST_AREA_COUNT];
@@ -173,27 +159,9 @@ static void Can_LeaveRecursive(Can_RecursiveLock *lock)
 }
 void Can_Lock(void)
 {
+    static pthread_once_t can_lock_once = PTHREAD_ONCE_INIT;
     Can_NoteEnter(1);
     Can_EnterRecursive(&can_lock_once, Can_InitLock, &can_lock);
-}
-int Can_TryLock(void)
-{
-    int result = -1;
-    Can_NoteEnter(1);
-    if ((pthread_once(&can_lock_once, Can_InitLock) == 0) && (can_lock.ready != 0)) {
-        int locked = pthread_mutex_trylock(&can_lock.mutex);
-        if (locked == 0) {
-            result = 1;
-        } else if (locked == EBUSY) {
-            result = 0;
-        } else {
-            /* Preserve synchronization errors separately from normal contention. */
-        }
-    }
-    if (result != 1) {
-        Can_NoteExit(1);
-    }
-    return result;
 }
 void Can_Unlock(void)
 {
