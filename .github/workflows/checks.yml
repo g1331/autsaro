@@ -379,6 +379,13 @@ jobs:
           # Online audits check that pinned commits belong to the referenced action.
           GH_TOKEN: ${{ github.token }}
         run: uv run --locked --group workflows zizmor .github
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
+        with:
+          tool: cargo-deny@0.20.2,osv-scanner@2.7.0
+      - name: Rust advisories, licenses and sources (cargo-deny)
+        run: cargo deny --locked check
+      - name: npm and Python lockfile advisories (osv-scanner)
+        run: osv-scanner scan source --lockfile uv.lock --lockfile ui/package-lock.json
 
   c-analysis-prepare:
     needs: changes

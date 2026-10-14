@@ -125,6 +125,12 @@ def commands(scope: str, base: str | None) -> list[tuple[str, list[str], int]]:
             ("python:lint", ["ruff", "check", "tools", "tests/python", "scripts"], 120),
             ("workflows:actionlint", ["uv", "run", "--locked", "--group", "workflows", "actionlint"], 300),
             ("workflows:zizmor", ["uv", "run", "--locked", "--group", "workflows", "zizmor", ".github"], 300),
+            ("dependencies:cargo-deny", ["cargo", "deny", "--locked", "check"], 600),
+            (
+                "dependencies:lockfiles",
+                ["osv-scanner", "scan", "source", "--lockfile", "uv.lock", "--lockfile", "ui/package-lock.json"],
+                300,
+            ),
             *ui,
             *core,
             *desktop,

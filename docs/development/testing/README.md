@@ -39,6 +39,19 @@ Tauri 后端单测覆盖 Session、设置与请求归属，需先准备[桌面�
 
 Clippy 以默认规则集加 `-D warnings` 检查两个 crate，本地 `verify` 与 PR 使用相同参数。生成与集成模块（`core/src/generator.rs`、`core/src/integration/mod.rs`、`core/src/prepared.rs` 及其子模块）在模块属性中另外拒绝 `unwrap`、`expect`、`panic!` 以及 `core/clippy.toml` 列出的文本修补与文件嵌入：计划无法保证的前提返回 `PlanDiagnostic`，每个输出只渲染一次，受信模板经 `outputs::render` 编辑。确有理由的例外使用带 `reason` 的局部 `#[allow]`。启用门禁时其余模块遗留的告警以 `#[expect(.., reason = "clippy baseline #37: ...")]` 标记，`git grep -n "clippy baseline"` 列出剩余基线；修好告警后该 `#[expect]` 本身会报 `unfulfilled_lint_expectations`，须一并删除标记。CI 只在 Linux 运行 Clippy，Windows 专属的 `cfg` 代码不在门禁内。
 
+## 依赖与 workflow 检查
+
+```powershell
+cargo deny --locked check
+osv-scanner scan source --lockfile uv.lock --lockfile ui/package-lock.json
+uv run --locked --group workflows actionlint
+uv run --locked --group workflows zizmor .github
+```
+
+`cargo-deny` 按 `deny.toml` 检查 RustSec 漏洞与撤回版本、许可证白名单和依赖来源。未维护公告只对直接依赖失败：传递依赖中的这类 crate 来自 Tauri 的 GTK 3 与 URL pattern 依赖链，没有可迁移的版本。重复版本只告警，它们来自 Tauri 与 Windows crate 自身的版本分布。`osv-scanner` 按 OSV 数据库检查 npm 与 Python 锁文件。这两个工具需单独安装固定版本：`cargo install cargo-deny --version 0.20.2 --locked`，osv-scanner 2.7.0 从[官方发行页](https://github.com/google/osv-scanner/releases/tag/v2.7.0)下载；CI 用 `taiki-e/install-action` 按校验和安装同一版本。actionlint 与 zizmor 的版本固定在 uv 的 `workflows` 依赖组中；设置 `GH_TOKEN` 后，zizmor 还会在线核对固定的提交确实属于所引用的 action。
+
+加入新许可证前先确认它与 Apache-2.0 兼容。确实无法修复的发现在出现处写明依据后再忽略（如 `# zizmor: ignore[github-env]`）。第三方 Actions 按提交 SHA 引用，行尾注释写对应版本。Dependabot（`.github/dependabot.yml`）每月为 Actions、Cargo、npm、uv 各提一个分组更新 PR，只提议发布满 7 天的版本。`verify --scope all` 与必需 CI 的 `quality` 任务都运行这四项检查。
+
 ## CI
 
 CI 分两层：
