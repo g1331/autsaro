@@ -10,6 +10,21 @@ from autosar_tooling import quality
 
 
 class QualityTests(unittest.TestCase):
+    def test_clang_format_and_clang_tidy_must_share_one_version(self):
+        def lock(**versions):
+            body = "".join(f'[[package]]\nname = "{name}"\nversion = "{version}"\n\n' for name, version in versions.items())
+            path = Path(temporary) / "uv.lock"
+            path.write_text("version = 1\n\n" + body, encoding="utf-8")
+            return path
+        with tempfile.TemporaryDirectory() as temporary:
+            self.assertEqual(quality.paired_tool_errors(lock(**{"clang-format": "22.1.8", "clang-tidy": "22.1.8", "ruff": "0.16.9"})), [])
+            self.assertEqual(
+                quality.paired_tool_errors(lock(**{"clang-format": "22.1.9", "clang-tidy": "22.1.8"})),
+                ["uv.lock: clang-format 22.1.9, clang-tidy 22.1.8; upgrade clang-format and clang-tidy together to the same LLVM release"],
+            )
+            self.assertEqual(len(quality.paired_tool_errors(lock(**{"clang-format": "22.1.8"}))), 1)
+        self.assertEqual(quality.paired_tool_errors(), [])
+
     def test_first_commit_baseline_checks_every_added_line(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
