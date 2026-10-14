@@ -70,23 +70,11 @@ static unsigned protocol_read;
 /* Highest generated bootstrap stage that began; retirement undoes only those. */
 static uint8 bootstrap_reached;
 
-#include <stdio.h>
-#include <stdlib.h>
-/* Timing probe for #61 (temporary, enabled by AUTOSAR_TIMING_PROBE). */
-static void fail_at(unsigned line)
+static void fail(void)
 {
-    const char *path = getenv("AUTOSAR_TIMING_PROBE");
-    if (path != NULL) {
-        FILE *file = fopen(path, "a");
-        if (file != NULL) {
-            (void)fprintf(file, "abort site=owner line=%u\n", line);
-            (void)fclose(file);
-        }
-    }
     (void)Os_HostAtomicExchange(&lifecycle, (Os_Atomic32)ECU_TARGET_FAILED);
     ShutdownOS(E_OS_STATE);
 }
-#define fail() fail_at(__LINE__)
 static Os_Atomic32 load(volatile Os_Atomic32 *value) { return Os_HostAtomicLoad(value); }
 
 /* Owner-only writer; a full queue closes the target instead of dropping a record. */
@@ -619,34 +607,5 @@ void Ecu_TargetTask(void)
                 fail();
             }
         }
-    }
-}
-
-/* Timing probe for #61 (temporary): lock-free snapshot for a stalled batch. */
-void Ecu_ProbeTarget(FILE *file);
-void Ecu_ProbeTarget(FILE *file)
-{
-    unsigned index;
-    (void)fprintf(file,
-                  " lifecycle=%d epoch=%llu processed_tick=%llu processed_epoch=%llu pending=%u "
-                  "deferred=%u write=%u read=%u confirm=%u retire=%u batch_state=%d "
-                  "batch_epoch=%llu needs_tick=%u slots=",
-                  (int)load(&lifecycle),
-                  (unsigned long long)epoch,
-                  (unsigned long long)processed_tick,
-                  (unsigned long long)processed_epoch,
-                  output_pending,
-                  output_deferred,
-                  output_write,
-                  output_read,
-                  output_confirm,
-                  output_retire,
-                  (int)load(&batch_state),
-                  (unsigned long long)batch_epoch,
-                  (unsigned)batch_needs_tick);
-    for (index = 0u; index < 8u; ++index) {
-        (void)fprintf(file,
-                      "%d",
-                      (int)load(&outputs[(output_retire + index) % ECU_TARGET_OUTPUT_CAPACITY].state));
     }
 }

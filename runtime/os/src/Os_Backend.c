@@ -1549,29 +1549,3 @@ StatusType Os_BackendInspect(TaskType id, Os_ActivationInfo *info)
     Os_BackendGuardService();
     return E_OK;
 }
-
-/* Timing probe for #61 (temporary): lock-free snapshot for a stalled batch. */
-void Os_ProbeTasks(FILE *file);
-void Os_ProbeTasks(FILE *file)
-{
-    extern volatile BaseType_t xInsideInterrupt;
-    const TaskHandle_t current = xTaskGetCurrentTaskHandle();
-    size_t i;
-    (void)fprintf(file,
-                  " current_task=%s inside_interrupt=%d current_isr=%u isr_depth=%u closing=%d",
-                  (current != NULL) ? pcTaskGetName(current) : "-",
-                  (int)xInsideInterrupt,
-                  current_interrupt,
-                  interrupt_depth,
-                  (int)InterlockedCompareExchange(&Os_Closing, 0, 0));
-    for (i = 0u; i < Os_Config->task_count; ++i) {
-        (void)fprintf(file,
-                      " task%u=%s:events=%llx:wait=%llx:waiting=%u:act=%u",
-                      (unsigned)i,
-                      Os_Config->tasks[i].name,
-                      (unsigned long long)task_events[i],
-                      (unsigned long long)wait_masks[i],
-                      (unsigned)task_waiting[i],
-                      (unsigned)activations[i].count);
-    }
-}

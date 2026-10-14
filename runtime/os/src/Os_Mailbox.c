@@ -150,11 +150,3 @@ StatusType Os_TargetInputCount(unsigned *count)
     }
     return status;
 }
-
-/* Timing probe for #61 (temporary): lock-free snapshot for a stalled batch. */
-void Os_ProbeMailbox(uint64_t state[2]);
-void Os_ProbeMailbox(uint64_t state[2])
-{
-    state[0] = (uint64_t)InterlockedCompareExchange(&published, 0, 0);
-    state[1] = (uint64_t)InterlockedCompareExchange(&admission, 0, 0);
-}

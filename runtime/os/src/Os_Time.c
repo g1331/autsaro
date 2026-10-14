@@ -909,12 +909,3 @@ StatusType Os_Implementation_CancelAlarm(AlarmType AlarmID)
     }
     return Os_ErrorResult(OSServiceId_CancelAlarm, status, &arguments);
 }
-
-/* Timing probe for #61 (temporary): lock-free snapshot for a stalled batch. */
-void Os_ProbeTime(uint64_t state[3]);
-void Os_ProbeTime(uint64_t state[3])
-{
-    state[0] = (uint64_t)InterlockedCompareExchange(&tick_state, 0, 0);
-    state[1] = requested_epoch;
-    state[2] = confirmed_epoch;
-}
