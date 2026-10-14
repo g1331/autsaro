@@ -534,12 +534,19 @@ pub(super) fn files(
         "const LSduR_PBConfigType LSduR_Config",
         &values(&format!("0u, ls_rx, {rx_count}u, ls_tx, {tx_count}u")),
     );
+    let configuration_id = "/AUTOSAR/EcucDefs/PduR/PduRRoutingPaths/PduRConfigurationId";
+    let configuration_id = description
+        .configuration
+        .iter()
+        .find_map(|record| record.parameters.get(configuration_id))
+        .and_then(|values| values.first())
+        .ok_or_else(|| PlanDiagnostic::plan_premise(configuration_id))?;
     config_data(
         &mut pd_configuration,
         "PduR",
         "const PduR_PBConfigType PduR_Config",
         &values(&format!(
-            "0u, pd_rx, {}u, pd_tx, {tx_count}u, {}, {}u",
+            "{configuration_id}u, pd_rx, {}u, pd_tx, {tx_count}u, {}, {}u",
             rx_signals,
             if transport.is_some() {
                 "tp_routes"

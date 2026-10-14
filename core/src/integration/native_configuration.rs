@@ -25,7 +25,8 @@ CanTpEnableSecurityEventReporting CanTpReadParameterApi CanTpVersionInfoApi
 ComEnableSecurityEventReporting ComEnableSignalGroupArrayApi ComVersionInfoApi
 DcmDspEnableObdMirror DcmDevErrorDetect DcmVersionInfoApi
 DcmEnableSecurityEventReporting DcmRespondAllRequest DcmPagedBufferEnabled
-DcmDslDiagRespOnSecondDeclinedRequest";
+DcmDslDiagRespOnSecondDeclinedRequest PduRDevErrorDetect PduRMetaDataSupport PduRVersionInfoApi
+PduRZeroCostOperation";
 
 pub(super) fn descriptor_only(
     graph: &Graph,

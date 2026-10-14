@@ -1121,8 +1121,17 @@ fn operating_system(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedT
     )?;
     a.default(sync, "OsScheduleTblSyncStrategy", "NONE");
 
+    let general = "PduR/PduRGeneral";
+    a.container(general, 1, Some(1))?;
+    a.booleans(
+        general,
+        "PduRDevErrorDetect PduRVersionInfoApi PduRZeroCostOperation",
+        1,
+    )?;
+    a.booleans(general, "PduRMetaDataSupport", 0)?;
     let routes = "PduR/PduRRoutingPaths";
     a.container(routes, 1, Some(1))?;
+    a.integers(routes, "PduRConfigurationId", "0", U16, 1)?;
     let source = "PduR/PduRRoutingPaths/PduRSrcPdu";
     let destination = "PduR/PduRRoutingPaths/PduRDestPdu";
     let route = "PduR/PduRRoutingPaths/PduRRoutingPath";
@@ -1473,6 +1482,11 @@ fn defaults(a: &mut Author<'_>) {
             "Can/CanConfigSet/CanController/CanControllerBaudrateConfig",
             "0",
             "CanControllerBaudRateConfigID",
+        ),
+        (
+            "PduR/PduRGeneral",
+            "false",
+            "PduRDevErrorDetect PduRMetaDataSupport PduRVersionInfoApi",
         ),
         (
             "Can/CanConfigSet/CanHardwareObject",
