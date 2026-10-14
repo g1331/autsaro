@@ -4,6 +4,9 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#ifdef __linux__
+#include <time.h>
+#endif
 
 static const char *scenario;
 static volatile LONG requested;
@@ -13,6 +16,9 @@ static unsigned errors;
 static StatusType error_status[5];
 static OSServiceIdType error_service[5];
 static IdleModeType rejected_mode;
+static uint64_t idle_started_ms;
+static uint64_t idle_cpu_ms;
+static uint64_t idle_window_ms;
 static void check(bool condition)
 {
     if (!condition) {
@@ -32,11 +38,39 @@ void ErrorHook(StatusType error)
     error_status[errors] = error;
     error_service[errors++] = service;
 }
+/* Host CPU time consumed by the calling thread. */
+static uint64_t thread_cpu_ms(void)
+{
+#ifdef _WIN32
+    FILETIME created, exited, kernel, user;
+    check(GetThreadTimes(GetCurrentThread(), &created, &exited, &kernel, &user) != 0);
+    return ((((uint64_t)kernel.dwHighDateTime << 32) | kernel.dwLowDateTime) +
+            (((uint64_t)user.dwHighDateTime << 32) | user.dwLowDateTime)) /
+           10000u;
+#else
+    struct timespec now;
+    check(clock_gettime(CLOCK_THREAD_CPUTIME_ID, &now) == 0);
+    return ((uint64_t)now.tv_sec * 1000u) + ((uint64_t)now.tv_nsec / 1000000u);
+#endif
+}
 void Os_TestIdleObserved(void)
 {
-    if (InterlockedCompareExchange(&requested, 0, 0) != 0 &&
-        InterlockedCompareExchange(&observed, 1, 0) == 0) {
+    const bool yield = strcmp(scenario, "host-yield") == 0;
+    if (InterlockedCompareExchange(&requested, 0, 0) == 0) {
+        return;
+    }
+    if (InterlockedCompareExchange(&observed, 1, 0) == 0) {
         check(Os_StackCurrent()->role == 'I' && isOsStarted() == TRUE);
+        if (!yield) {
+            Os_PortPostInterrupt(5u);
+        } else {
+            idle_started_ms = GetTickCount64();
+            idle_cpu_ms = thread_cpu_ms();
+        }
+    } else if (yield && idle_window_ms == 0u && (GetTickCount64() - idle_started_ms) >= 400u) {
+        /* The Task waits throughout, so the window measures the idle loop alone. */
+        idle_window_ms = GetTickCount64() - idle_started_ms;
+        idle_cpu_ms = thread_cpu_ms() - idle_cpu_ms;
         Os_PortPostInterrupt(5u);
     }
 }
@@ -73,6 +107,11 @@ void ShutdownHook(StatusType error)
            error);
     for (unsigned i = 0u; i < errors; ++i) {
         printf("idle_error status=%u service=%u\n", error_status[i], error_service[i]);
+    }
+    if (strcmp(scenario, "host-yield") == 0) {
+        printf("idle_thread cpu_ms=%llu window_ms=%llu\n",
+               (unsigned long long)idle_cpu_ms,
+               (unsigned long long)idle_window_ms);
     }
 }
 static void owner(void)
