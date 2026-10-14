@@ -3,6 +3,20 @@ use super::component::c_name;
 use super::{ContractArgument, PlanDescription, PlanDiagnostic};
 use std::collections::{BTreeMap, BTreeSet};
 
+/// The one exclusive area a module declares and enters (ADR 0018). A module is added
+/// here when its code stops using another module's area.
+fn exclusive_area(module: &str) -> Option<&'static str> {
+    match module {
+        "Can" => Some("CAN_STATE"),
+        "CanIf" => Some("CANIF_STATE"),
+        "CanTp" => Some("CANTP_STATE"),
+        "ComM" => Some("COMM_STATE"),
+        "Dcm" => Some("DCM_STATE"),
+        "Det" => Some("DET_STATE"),
+        _ => None,
+    }
+}
+
 #[allow(
     clippy::disallowed_methods,
     reason = "DOMAIN writes path separators as dots; no rendered text is patched"
@@ -870,13 +884,7 @@ pub(super) fn files(
                 module_entries.push_str(&entry_xml);
             }
             refs.push_str(&format!(r#"<BSW-MODULE-ENTRY-REF-CONDITIONAL><BSW-MODULE-ENTRY-REF DEST="BSW-MODULE-ENTRY">{entry_path}</BSW-MODULE-ENTRY-REF></BSW-MODULE-ENTRY-REF-CONDITIONAL>"#));
-            let area = match module {
-                "CanIf" => Some("CANIF_STATE"),
-                "CanTp" => Some("CANTP_STATE"),
-                "ComM" => Some("COMM_STATE"),
-                "Dcm" => Some("DCM_STATE"),
-                _ => None,
-            };
+            let area = exclusive_area(module);
             let can_enter = area.map(|area| format!("<CAN-ENTERS><EXCLUSIVE-AREA-REF-CONDITIONAL><EXCLUSIVE-AREA-REF DEST=\"EXCLUSIVE-AREA\">/{package}/{module}/HostBehavior/{area}</EXCLUSIVE-AREA-REF></EXCLUSIVE-AREA-REF-CONDITIONAL></CAN-ENTERS>")).unwrap_or_default();
             let mode_group = |group: &str| {
                 format!(
@@ -1030,13 +1038,7 @@ pub(super) fn files(
                 format!("<BSW-MODULE-DEPENDENCYS>{dependencies}</BSW-MODULE-DEPENDENCYS>");
         }
 
-        let area = match module {
-            "CanIf" => Some("CANIF_STATE"),
-            "CanTp" => Some("CANTP_STATE"),
-            "ComM" => Some("COMM_STATE"),
-            "Dcm" => Some("DCM_STATE"),
-            _ => None,
-        };
+        let area = exclusive_area(module);
         let areas = area.map(|area| format!("<EXCLUSIVE-AREAS><EXCLUSIVE-AREA><SHORT-NAME>{area}</SHORT-NAME></EXCLUSIVE-AREA></EXCLUSIVE-AREAS>")).unwrap_or_default();
         let module_id = super::catalog::module_id(module)
             .map(|id| format!("<MODULE-ID>{id}</MODULE-ID>"))

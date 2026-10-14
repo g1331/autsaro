@@ -64,11 +64,9 @@ fn generated_can_object_sections_and_clear(project: &Path) {
     fs::write(&source, format!(r#"#include "{}"
 #include <assert.h>
 const EcuPolicyConfig Ecu_Policy = {{0}};
-void Can_Lock(void) {{}}
-void Can_Unlock(void) {{}}
 int Can_TryLock(void) {{ return 1; }}
-void SchM_Enter_CanIf_CANIF_STATE(void) {{}}
-void SchM_Exit_CanIf_CANIF_STATE(void) {{}}
+void SchM_Enter_Can_CAN_STATE(void) {{}}
+void SchM_Exit_Can_CAN_STATE(void) {{}}
 void CanIf_TxConfirmation(PduIdType id) {{ (void)id; }}
 void CanIf_ControllerModeIndication(uint8_t id, Can_ControllerStateType mode) {{ (void)id; (void)mode; }}
 void CanIf_ControllerBusOff(uint8_t id) {{ (void)id; }}
@@ -85,7 +83,8 @@ int main(void) {{
     assert(driver_lifetime == 0u && tx_pending == 0u && tx_in_flight == 0u && tx_cancelled == 0u);
     assert(tx_id == 0u && tx_length == 0u && tx_handle == 0u);
     assert(tx_confirmation_pending == 0u && tx_confirmation_handle == 0u && tx_confirming == 0u);
-    assert(interrupt_disable_count == 0u && mode_notification_pending == 0u && mode_notification_processing == 0u);
+    assert(interrupt_disable_count == 0u && mode_notification_pending == 0u &&
+           indication_processing[0] == 0u && indication_processing[1] == 0u);
     assert(pending_controller_mode == 0 && busoff_notification_pending == 0u);
     assert(rx_pending == 0u && rx_processing == 0u && rx_id == 0u && rx_length == 0u);
     assert(rx_overrun_pending == 0u);
