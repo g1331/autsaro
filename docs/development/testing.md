@@ -62,6 +62,8 @@ ECU 的 HostBatch 与 probe 是两个独立可执行程序，跨翻译单元检�
 
 主机锁错误边界测试使用 `uv run --locked python -B -m unittest discover -s tests/python/native -p test_host_boundaries.py`，通过测试构建替换平台调用，验证锁忙／锁错误及必要终止点，不向交付源码增加故障 hook。OS 资源获取和栈保证故障注入仅编译到显式测试构建（`OS_HOST_FAILURE_TESTS`）；生产 HostBatch／probe 不读取 `AUTOSAR_OS_FAIL_RESOURCE` 或 `AUTOSAR_OS_BAD_GUARANTEE`。
 
+生成的 C 与运行时源码使用同一 `.clang-format`：emitter 直接写出该排版（规则在 `core/src/integration/c_layout.rs`），生成时不调用格式化工具（ADR 0014）。生成样本后，`uv run --locked python -B -m unittest discover -s tests/python/native -p test_generated_format.py` 用 uv 固定的 clang-format 检查样本中除 `kernel/`（FreeRTOS）和 `app/`（用户源码）外的 C 与头文件，必需 CI 在两个平台的 `c-analysis-prepare` 中运行。过长函数头的断行由 clang-format 按惩罚值择优，emitter 只复现常见选择，超长的用户名称可能排版不同。
+
 生成上述样本后，`uv run --locked python -B -m unittest discover -s tests/python/native -p test_ecu_build_modes.py` 通过封存工程的离线 CLI 实际构建 HostBatch、probe 和 test 三种模式，分别运行正常、非法资源参数、首次资源失败及栈保证失败场景。构建输出位于临时 Git 仓库内，覆盖内核选择补丁不能受外层仓库路径影响的回归。正式构建应完成正常协议，test 模式应拒绝故障；需要目标 GCC、objdump、git，可用 `AUTOSAR_CC`／`AUTOSAR_OBJDUMP`／`AUTOSAR_GIT` 指定，未指定时使用 PATH。
 
 `uv run --locked python -B -m unittest discover -s tests/python/native -p test_cmake_build.py` 用交付工程生成的 `CMakeLists.txt` 以 Ninja 构建 `user-application` 样本，核对每个编译单元、编译选项和 include 顺序与 `target.json` 一致，检查两个程序的受检段，并与 `ecu-tool` 构建的程序比较运行输出；构建后封存清单不变。CMake 与 Ninja 来自 uv 的 `build` 依赖组，也可用 `CMAKE`／`NINJA` 指定。
