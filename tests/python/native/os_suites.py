@@ -1150,6 +1150,7 @@ def check_idle_state(binary: Path) -> list[dict]:
         "masked": [(2,29),(9,29)],
         "isr": [(2,29)],
         "unconfigured": [],
+        "host-yield": [(2,29)],
     }
     for scenario, expected in cases.items():
         result = execute(binary, scenario)
@@ -1159,8 +1160,14 @@ def check_idle_state(binary: Path) -> list[dict]:
         require(result["exit"] == 0 and not result["stderr"], result)
         require(summary in result["stdout"] and actual == expected, result)
         require("lifecycle=Closed state=Ready reason=0" in result["stdout"], result)
+        if scenario == "host-yield":
+            # A spinning idle loop holds a whole host CPU and starves parallel ECU handoffs (#61).
+            usage = re.search(r"idle_thread cpu_ms=(\d+) window_ms=(\d+)", result["stdout"])
+            require(usage is not None and int(usage[2]) >= 400 and int(usage[1]) * 2 < int(usage[2]), result)
         result["independent_expected_errors"] = expected
         result["scope"] = "single-core ignores CoreID65535; existing virtual-core no-halt idle loop runs on actual I stack then actual ISR wakes waiting automotive Task; started query remains DRAFT"
+        if scenario == "host-yield":
+            result["scope"] += "; idle loop yields its host CPU while the Task waits"
         observations.append(result)
     return observations
 
