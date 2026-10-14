@@ -367,7 +367,7 @@ class DiagnosticTests(unittest.TestCase):
 
 class QualityScopeTests(unittest.TestCase):
     def test_scoped_formatting_does_not_request_unrelated_tools(self):
-        with patch.object(quality, "scoped_paths", return_value=[]), patch.object(quality, "source_paths", return_value=[]), patch.object(quality, "c_syntax_errors", side_effect=AssertionError("UI requested C")), patch.object(quality, "plan_number_errors", return_value=[]), redirect_stdout(io.StringIO()):
+        with patch.object(quality, "scoped_paths", return_value=[]), patch.object(quality, "source_paths", return_value=[]), patch.object(quality, "c_syntax_errors", side_effect=AssertionError("UI requested C")), patch.object(quality, "plan_number_errors", return_value=[]), patch.object(quality, "document_size_errors", return_value=[]), redirect_stdout(io.StringIO()):
             self.assertEqual(quality.check("HEAD", scope="ui"), [])
 
 
