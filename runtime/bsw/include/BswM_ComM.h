@@ -1,3 +1,4 @@
+/** @file ComM mode indication entry of BswM for the single configured channel. */
 #ifndef BSWM_COMM_H
 #define BSWM_COMM_H
 #include "BswM.h"

@@ -1,3 +1,4 @@
+/** @file Host-facing Can_Host entry points forwarding to the private driver operations. */
 #include "Can_Internal.h"
 #define CAN_START_SEC_CODE
 #include "Can_MemMap.h"

@@ -1,3 +1,4 @@
+/** @file Private Linux host declarations: Win32-style types, atomics and thread/event calls. */
 #ifndef AUTOSAR_OS_HOST_LINUX_H
 #define AUTOSAR_OS_HOST_LINUX_H
 

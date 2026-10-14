@@ -1,3 +1,4 @@
+/** @file Public AUTOSAR OS scalar types and constants for the single-core target. */
 #ifndef AUTOSAR_OS_TYPES_H
 #define AUTOSAR_OS_TYPES_H
 #include <stddef.h>

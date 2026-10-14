@@ -1,3 +1,4 @@
+/** @file Traced public OS service wrappers around the implementation entry points. */
 #include "Os_Backend.h"
 
 ISRType GetISRID(void)

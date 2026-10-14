@@ -1,3 +1,4 @@
+/** @file ErrorHook invocation and service-ID and parameter access for failing services. */
 #include "Os_Target.h"
 #include "Os_Backend.h"
 #include <stdbool.h>

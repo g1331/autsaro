@@ -1,3 +1,4 @@
+/** @file Native stack overflow detection in Tasks, ISRs, idle and backup stacks. */
 #include "Os_Target.h"
 #include "Os_Backend.h"
 #include <string.h>

@@ -1,3 +1,4 @@
+/** @file Public AUTOSAR OS API for the single-core target, with OSEK compatibility macros. */
 #ifndef AUTOSAR_OS_H
 #define AUTOSAR_OS_H
 #include "Os_Types.h"

@@ -1,3 +1,4 @@
+/** @file Native input mailbox: single-producer admission and owner-Task notification. */
 #include "Os_Backend.h"
 #include <string.h>
 

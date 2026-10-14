@@ -1,3 +1,4 @@
+/** @file Win32 header import that keeps the OS SetEvent and ApplicationType names intact. */
 #ifndef AUTOSAR_OS_WINDOWS_H
 #define AUTOSAR_OS_WINDOWS_H
 /* The standard OS service and Win32 API share the spelling SetEvent. Import

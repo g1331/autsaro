@@ -1,3 +1,4 @@
+/** @file Linux native stack registration, alternate signal stacks and fault reporting. */
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif

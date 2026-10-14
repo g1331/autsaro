@@ -1,3 +1,4 @@
+/** @file Category 2 ISR return reports and releases leaked resources and interrupt masks. */
 #include "Os_Target.h"
 #include "Os_Backend.h"
 #include <stdbool.h>

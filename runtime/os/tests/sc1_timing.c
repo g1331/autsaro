@@ -1,3 +1,4 @@
+/** @file Schedule tables, alarms and counters: linking, limits, autostart and rejected calls. */
 #include "Os_Backend.h"
 #include <stdbool.h>
 #include <stdio.h>

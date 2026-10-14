@@ -1,3 +1,4 @@
+/** @file Public Os.h declarations, DeclareX macros and StatusType codes stay compatible. */
 #ifdef OS_PUBLIC_TYPES_HOST_BEFORE
 #include "Os_Host.h"
 #endif

@@ -1,3 +1,4 @@
+/** @file Host driver lock and strict SchM exclusive areas with nesting detection (ADR 0018). */
 #if !defined(_WIN32)
 #define _XOPEN_SOURCE 700
 #endif

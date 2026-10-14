@@ -34,7 +34,7 @@ uv run --locked python -m autosar_tooling quality --base <baseline-commit>
 
 Default Cargo tests do not require official resources or controlled native tools. See the [testing guide](docs/development/testing/README.md) for real-process tests, official comparisons, and desktop acceptance. Check formatting on changed lines rather than reformatting historical code wholesale. Runtime C already follows `.clang-format`; run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once so `git blame` skips the bulk reformat. Emitters write generated C in the same layout, and a required check verifies the generated samples.
 
-Changes to parsing, generation, or runtime behavior should have independently defined expectations and cover key rejection paths. Generation code renders each output once and reports premises the plan cannot guarantee as diagnostics; Clippy rejects panics and text patching there, see the testing guide. Follow the repository's MISRA guidance when modifying C or C-generation templates. Document input, output, and error contracts for public C interfaces.
+Changes to parsing, generation, or runtime behavior should have independently defined expectations and cover key rejection paths. Generation code renders each output once and reports premises the plan cannot guarantee as diagnostics; Clippy rejects panics and text patching there, see the testing guide. Follow the [C coding standard](docs/development/c-coding-standard.md) (Chinese) and the repository's MISRA guidance when modifying C or C-generation templates. Document input, output, and error contracts for public C interfaces.
 
 ## Assets and submissions
 

@@ -1,3 +1,4 @@
+/** @file StartOS and ShutdownOS lifecycle: configuration rejection, autostart and hooks. */
 #include "Os_Target.h"
 #include <stdio.h>
 #include <stdlib.h>

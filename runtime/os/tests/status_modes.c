@@ -1,3 +1,4 @@
+/** @file Error reporting and ErrorHook parameters in STANDARD and EXTENDED status modes. */
 #include "Os_Target.h"
 #include "Os_Backend.h"
 #include <stdbool.h>

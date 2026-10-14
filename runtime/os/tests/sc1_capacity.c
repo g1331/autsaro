@@ -1,3 +1,4 @@
+/** @file BCC and ECC conformance classes at their capacity and configuration limits. */
 #include "Os_Target.h"
 #include <stdbool.h>
 #include <stdio.h>

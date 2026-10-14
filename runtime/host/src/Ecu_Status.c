@@ -1,3 +1,4 @@
+/** @file Printable names for host EcuStatus values. */
 #include "Ecu_Status.h"
 
 const char *Ecu_StatusName(EcuStatus status)

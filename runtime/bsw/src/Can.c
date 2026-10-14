@@ -1,3 +1,4 @@
+/** @file Standard Can driver for one Classical CAN controller on the controlled host. */
 #include "Can_Internal.h"
 #include "Det.h"
 #include "CanIf.h"

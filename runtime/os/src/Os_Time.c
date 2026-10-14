@@ -1,3 +1,4 @@
+/** @file Counters, alarms and the controlled tick with its completion handshake. */
 #include "Os_Backend.h"
 #include "Os_IntegrationHooks.h"
 

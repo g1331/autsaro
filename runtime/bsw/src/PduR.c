@@ -1,3 +1,4 @@
+/** @file Standard PduR with immutable one-to-one routes between Com, Dcm and lower layers. */
 #include "PduR.h"
 #include "SchM_PduR.h"
 #include "PduR_Com.h"

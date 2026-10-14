@@ -1,3 +1,4 @@
+/** @file Single-channel ComM with CDD bus state manager, without PNC or inhibition. */
 #include "ComM.h"
 #include "ComM_BswM.h"
 #include "ComM_Dcm.h"

@@ -1,3 +1,4 @@
+/** @file Schedule table validation, start/stop/chain services and expiry-point processing. */
 #include "Os_Backend.h"
 
 typedef Os_ArtiScheduleState ScheduleState;

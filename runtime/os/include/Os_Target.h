@@ -1,3 +1,4 @@
+/** @file Static target configuration and host-process preparation for the OS. */
 #ifndef AUTOSAR_OS_TARGET_H
 #define AUTOSAR_OS_TARGET_H
 #include "Os.h"
