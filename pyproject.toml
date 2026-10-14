@@ -22,7 +22,7 @@ ecu_tools = ["*.json"]
 [dependency-groups]
 build = ["cmake==4.4.4", "ninja==1.13.2"]
 quality = [
-    "clang-format==23.1.1",
+    "clang-format==22.1.8",
     "ruff==0.16.9",
     "lxml==6.1.3",
     "clang-tidy==22.1.8",

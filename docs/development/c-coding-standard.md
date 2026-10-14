@@ -120,4 +120,4 @@ uv run --locked python -m autosar_tooling quality --scope runtime --c-samples bu
 
 结果按“检查＋文件＋源码行文本”与基线 `tools/python/src/autosar_tooling/clang_tidy_baseline.txt` 比较，同一行文本出现多次时按次数计。代码移动不影响比较；新出现的结果和已经修好、但仍留在基线中的条目都会失败。修好后删除对应条目；新增条目须在 PR 中说明理由并经审阅。基线只覆盖 Linux 样本，必需 CI 在 Linux 的 `c-analysis-prepare` 中运行；Windows 样本会被拒绝。
 
-工具版本由 uv 固定：clang-tidy **22.1.8**（PyPI `clang-tidy` 包的最新版本），clang-format **23.1.1**。两者分属不同 LLVM 主版本：clang-tidy 只做分析，不修改格式，自带修复（`--fix`）可能产生与 clang-format 23 不一致的排版，应用修复后需再用 clang-format 检查。升级 clang-tidy 时重新生成样本并核对基线变化，分析器结论会随版本改变。
+clang-tidy 与 clang-format 由 uv 固定为同一版本 **22.1.8**（`pyproject.toml` 的 `quality` 组），两者一起升级：`--fix` 产生的排版与格式检查一致。PyPI 的 `clang-tidy` 包还没有更新的主版本前不单独升级 clang-format。升级后对运行时源码和生成样本重做格式检查，重新生成样本并核对基线变化：分析器结论会随版本改变。
