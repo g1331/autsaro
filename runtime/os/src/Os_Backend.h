@@ -74,6 +74,7 @@ void Os_BackendSignalStackFault(char role);
 void Os_BackendSetDispatcher(void);
 #endif
 void Os_BackendGuardService(void);
+int Os_BackendReady(void);
 Os_HookPhase Os_HookContext(void);
 int Os_HookServiceAllowed(OSServiceIdType service);
 StatusType Os_ServiceAccessStatus(OSServiceIdType service);
