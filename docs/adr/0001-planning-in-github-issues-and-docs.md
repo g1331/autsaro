@@ -11,7 +11,7 @@
 3. AUTOSAR／MISRA 基线、官方资料位置与模块义务索引写在 `docs/standards/`。
 4. 待办、缺陷、实施计划与验收讨论使用 GitHub Issues 和 PR；修复证据放在 PR，不另建报告或台账。
 5. `_bmad-output/` 下的原工件以 Git 标签 `planning-archive-2026-10` 保存后从主线移除；新文档以 `planning-archive-2026-10:_bmad-output/<path>` 引用原文，不复制实施流水。
-6. BMad 工具本身（`_bmad/` 与 `.agents/skills/bmad-*`）一并移除；`AGENTS.md` 与 `docs/project/OWNER_GUIDE.md` 改为以 Issues、Milestones 和上述文档为准。长期方向与候选写在 `docs/roadmap.md`，只为已承诺的阶段建立 Milestone。
+6. BMad 工具本身（`_bmad/` 与 `.agents/skills/bmad-*`）一并移除；`AGENTS.md` 与 `docs/project/OWNER_GUIDE.md` 改为以 Issues、Milestones 和上述文档为准。长期方向与候选写在 `docs/roadmap/`，只为已承诺的阶段建立 Milestone。
 
 ## 后果
 

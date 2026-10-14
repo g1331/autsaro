@@ -12,7 +12,7 @@
 
 修改 C、头文件或生成 C 的 Rust 模板前读取 [misra-c2012](.agents/skills/misra-c2012/SKILL.md)。相关改动按[测试说明](docs/development/testing.md)对实际生成的受影响 profile 运行 `c-check`；区分分析完整性、源码诊断与人工规范评估，不能用 CI 链路通过替代源码合规结论。本机缺少固定版本 Cppcheck 时按测试说明从官方标签构建后在本地运行，不把 `c-check` 留给 CI；现存诊断清零前，按“规则＋文件＋源码行”与基线的同一检查对比受影响样本，新代码不增加诊断。申请偏离前核对适用的 amendment／TC 与实际调用路径；不能把旧 checker 的规则编号直接当作当前规范依据。交付摘要使用 `python -m autosar_tooling assets check|update`；明确审阅 ABI 与第三方身份，不用摘要更新吸收契约变化。更新交付资源摘要前，核对 `.gitattributes` 要求的固定换行字节；避免把本机编辑器产生、重新检出后会变化的字节写进受信摘要。
 
-任务与状态用 GitHub Issues 和 Milestones 跟踪；方向与长期候选见 [docs/roadmap.md](docs/roadmap.md)，架构约束见 [docs/architecture.md](docs/architecture.md)，重要决定写成 [ADR](docs/adr/)。实现结果和验证证据写入 Issue 与 PR，不额外生成报告、矩阵或台账。AUTOSAR 条款的处置按 [ADR 0017](docs/adr/0017-requirement-disposition-in-tests-and-standards.md) 用显式标记记录：验证它的测试注释写 `Verifies:`，`docs/standards/` 的模块篇写 `已核对（方式）：`、`不适用（配置：<ECUC 参数>）：`（每个参数须有 `Rejects:` 拒绝测试）、`不适用（归属：<承担者>）：`、`差距 #N：`，未加标记的编号不计入处置；`SWS_BSWGeneral` 的标记在冒号前带模块限定（`Verifies[CanIf]:`，覆盖全部已交付模块的检查写 `[*]`），按模块用 `requirements SWS_BSWGeneral --module <Mip>` 核算，其他模块的证据不替本模块处置。由 `python -m autosar_tooling requirements <文档>` 现算未处置条目与失效引用；这不是台账，核算结果不提交。已整改模块用 `requirements --update <文档>` 提交只含编号与生命周期状态的清单（`core/resources/requirements/`），必需 CI 按清单离线完整核算，`acceptance.yml` 核对清单与档案一致。普通项目启动和开发不依赖代理。
+任务与状态用 GitHub Issues 和 Milestones 跟踪；方向与长期候选见 [docs/roadmap/](docs/roadmap/README.md)，架构约束见 [docs/architecture.md](docs/architecture.md)，重要决定写成 [ADR](docs/adr/)。实现结果和验证证据写入 Issue 与 PR，不额外生成报告、矩阵或台账。AUTOSAR 条款的处置按 [ADR 0017](docs/adr/0017-requirement-disposition-in-tests-and-standards.md) 用显式标记记录：验证它的测试注释写 `Verifies:`，`docs/standards/` 的模块篇写 `已核对（方式）：`、`不适用（配置：<ECUC 参数>）：`（每个参数须有 `Rejects:` 拒绝测试）、`不适用（归属：<承担者>）：`、`差距 #N：`，未加标记的编号不计入处置；`SWS_BSWGeneral` 的标记在冒号前带模块限定（`Verifies[CanIf]:`，覆盖全部已交付模块的检查写 `[*]`），按模块用 `requirements SWS_BSWGeneral --module <Mip>` 核算，其他模块的证据不替本模块处置。由 `python -m autosar_tooling requirements <文档>` 现算未处置条目与失效引用；这不是台账，核算结果不提交。已整改模块用 `requirements --update <文档>` 提交只含编号与生命周期状态的清单（`core/resources/requirements/`），必需 CI 按清单离线完整核算，`acceptance.yml` 核对清单与档案一致。普通项目启动和开发不依赖代理。
 
 按 Issue 推进时：开工前读该 Issue 的范围、依赖、进入条件与验收标准，并核对所属 Milestone 总览（`tracking` 标签）中的共同规则；进入条件未满足时先完成调查，把结论和确定的方案写回 Issue 评论再实现。PR 用 `Closes #N` 关联，完成后勾选总览清单中的对应项。超出本次范围的差距按依据、影响与退出条件新建 Issue（`known-gap`／`tech-debt`／`question`），归入承接阶段的 Milestone 或留在未排期；只为已承诺的阶段建 Milestone，长期候选只写在路线图。改变路线顺序、产品契约或支持边界时先写 ADR 并更新路线图与架构文档，被取代的 ADR 只改状态。状态查询只读。2026-10 之前的规划原文在标签 `planning-archive-2026-10` 的 `_bmad-output/` 下，只作追溯，不作当前依据。
 
@@ -55,9 +55,9 @@
 
 ## 界面与用户文档
 
-- 修改工作台界面前读 [DESIGN.md](DESIGN.md) 及其[交互规格](docs/design/ux-baseline/EXPERIENCE.md)，保持菜单、设置、侧栏、底栏与主题的一致体系，不拼接零散 demo 控件。以对象名称和主要任务为信息中心；窗口控制优先用有悬停提示和无障碍名称的图标，业务操作保留必要的简短文字。
+- 修改工作台界面前读 [DESIGN.md](DESIGN.md) 及其[交互规格](docs/design/ux-baseline/EXPERIENCE/README.md)，保持菜单、设置、侧栏、底栏与主题的一致体系，不拼接零散 demo 控件。以对象名称和主要任务为信息中心；窗口控制优先用有悬停提示和无障碍名称的图标，业务操作保留必要的简短文字。
 - 软件帮助直接提供用户可读的操作说明，不用仓库路径或开发文档文件名代替帮助内容。界面检查覆盖真实数据、长名称、窄窗口和相关主题，不能只看理想截图。
-- README 面向首次访问的用户与贡献者，呈现实际能力、使用／开发入口、必要限制和有价值的真实产品截图；不放 Epic／Story 进度、代理工作叙述、设计解释或普通缺陷的修复与验收流水。修复证据放 PR，阶段结论回到对应 Issue／Milestone，路线变化更新 docs/roadmap.md；只有改变用户使用方式或支持边界时才更新对应指南。修改后通读相关文档整体，检查同类冗余、信息层级和双语一致性，不机械照搬用户随口举的排版例子。
+- README 面向首次访问的用户与贡献者，呈现实际能力、使用／开发入口、必要限制和有价值的真实产品截图；不放 Epic／Story 进度、代理工作叙述、设计解释或普通缺陷的修复与验收流水。修复证据放 PR，阶段结论回到对应 Issue／Milestone，路线变化更新 docs/roadmap/；只有改变用户使用方式或支持边界时才更新对应指南。修改后通读相关文档整体，检查同类冗余、信息层级和双语一致性，不机械照搬用户随口举的排版例子。
 - 项目文档按 [CONTRIBUTING](CONTRIBUTING.zh-CN.md#文档组织) 控制篇幅：单篇约 20 KB 以内、一篇一个主题，超出时拆为同名目录并以 `README.md` 索引组织，不让单一文件持续膨胀。`AGENTS.md` 自身须保持单文件，靠合并替换旧条目控制长度。
 
 ## 主动维护经验教训

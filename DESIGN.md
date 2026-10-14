@@ -163,7 +163,7 @@ On 2026-10-03, the user confirmed that this iteration of the interface and the t
 - Semantic colors distinguish object categories, selection, and results without filling the workspace.
 - Native system fonts support Chinese-language tasks and engineering identifiers.
 
-Visual values come from the theme variables and reusable components of the [completed prototype](docs/design/ux-baseline/mockups/index.html), not from the existing production UI's styling. Interaction, state, and task contracts are documented in [EXPERIENCE](docs/design/ux-baseline/EXPERIENCE.md); this document does not repeat the functional specifications.
+Visual values come from the theme variables and reusable components of the [completed prototype](docs/design/ux-baseline/mockups/index.html), not from the existing production UI's styling. Interaction, state, and task contracts are documented in [EXPERIENCE](docs/design/ux-baseline/EXPERIENCE/README.md); this document does not repeat the functional specifications.
 
 ## Colors
 

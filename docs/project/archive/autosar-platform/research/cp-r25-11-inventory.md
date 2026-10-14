@@ -1,5 +1,7 @@
 # AUTOSAR Classic Platform R25-11 官方发布清单
 
+> 归档：迁移前研究阶段的一次性发布清单快照，只作追溯，不作当前依据；当前基线与模块义务见[标准基线](../../../../standards/README.md)。
+
 ## 范围与来源
 
 - 官方 [Classic Platform 页面](https://www.autosar.org/standards/classic-platform)将当前版本标为 R25-11；[CP Release Overview](https://www.autosar.org/fileadmin/standards/R25-11/CP/AUTOSAR_CP_TR_ReleaseOverview.pdf)给出版本映射：发布号 `R25-11`、内部号 `R4.11.0`、模式版本 `AUTOSAR_00054`，属 minor release。

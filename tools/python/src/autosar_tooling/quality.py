@@ -25,7 +25,7 @@ PLAN_NUMBER = re.compile(r"(?<![a-z0-9])(?:epic|story)[ _.-]?\d", re.IGNORECASE)
 RETIRED_IDENTITIES = ("epic4-win64-sr-cs-v1", "epic4-single-application-v1")
 # Decision records cite archived planning paths, the roadmap names planning phases like their
 # Milestones, and vendored upstream content keeps its original bytes.
-PLAN_NUMBER_EXEMPT = ("docs/adr/", "docs/roadmap.md", "third_party/", ".agents/skills/impeccable/")
+PLAN_NUMBER_EXEMPT = ("docs/adr/", "docs/roadmap/", "third_party/", ".agents/skills/impeccable/")
 # CONTRIBUTING "Documentation layout": a document beyond about 20 KB is split into a directory
 # with a README.md index. Changelogs, single-decision ADRs and traceability archives are
 # exempt, AGENTS.md stays one file by merging entries, and vendored content keeps its bytes.
@@ -35,11 +35,7 @@ DOCUMENT_SIZE_EXEMPT = (
     "third_party/", ".agents/skills/impeccable/",
 )
 # shortcut: documents that #130 has not split yet; remove each one when it is split or archived.
-DOCUMENT_SIZE_PENDING = (
-    "docs/architecture.md", "docs/roadmap.md", "docs/design/ux-baseline/EXPERIENCE.md",
-    "docs/research/autosar-platform/cp-r25-11-inventory.md",
-    "docs/research/autosar-platform/r24-11-runtime-coverage-inventory.md",
-)
+DOCUMENT_SIZE_PENDING = ("docs/architecture.md",)
 
 
 def _capture(
