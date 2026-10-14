@@ -65,6 +65,10 @@ def main() -> int:
     mode.add_argument(
         "--update", action="store_true", help="Write the document's catalog from the archive, registering it for the required check"
     )
+    requirement.add_argument(
+        "--module",
+        help="Module abbreviation, such as CanIf, to account SWS_BSWGeneral for; with --update, register the module for the required check",
+    )
     args = parser.parse_args()
     if args.command == "c-check":
         from autosar_tooling.c_check import check
@@ -79,9 +83,9 @@ def main() -> int:
         from autosar_tooling import requirements
 
         if args.document:
-            return requirements.check(args.document, stale_only=args.stale_only, update=args.update)
-        if args.stale_only or args.update:
-            parser.error("--stale-only and --update require a document")
+            return requirements.check(args.document, stale_only=args.stale_only, update=args.update, module=args.module)
+        if args.stale_only or args.update or args.module:
+            parser.error("--stale-only, --update and --module require a document")
         return requirements.check_catalogs()
     if args.command == "doctor":
         if args.role == "native":

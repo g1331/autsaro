@@ -290,6 +290,49 @@ class RequirementTests(unittest.TestCase):
                 self.assertEqual(requirements.check_catalogs(root), 1)
                 self.assertIn("comes from archive", errors.getvalue())
 
+    def test_general_items_are_disposed_per_module(self):
+        """Another module's or an unqualified disposition of a general item does not dispose of it for this module."""
+        standards = (
+            "已核对（头文件比对）[CanIf]：SWS_DEMO_00001；"
+            "不适用（归属：集成方）[*]：SWS_DEMO_00002–00003、SWS_DEMO_00009、SWS_DEMO_CONSTR_00001、ECUC_Demo_00010\n"
+        )
+        test = "// Verifies[Com]: SWS_DEMO_00005, 00007\n// Verifies: SWS_DEMO_00007\n// Verifies[CanIf]: SWS_DEMO_00005\n"
+        with tempfile.TemporaryDirectory() as directory, patch.object(requirements, "GENERAL", frozenset({"SWS_Demo"})):
+            root = Path(directory)
+            self.repository(root, standards, test)
+            output, errors = io.StringIO(), io.StringIO()
+            with patch.object(requirements.sys, "stderr", errors), patch.dict(os.environ), redirect_stdout(output):
+                os.environ.pop(requirements.ARCHIVE_VARIABLE, None)
+                self.assertEqual(requirements.check("SWS_Demo", root, module="CanIf"), 1)
+                self.assertIn("SWS_Demo for CanIf: 8 official items; verified 1, inspected 1, not applicable (configuration) 0, not applicable (owner) 5,", output.getvalue())
+                self.assertEqual(output.getvalue().split("Undisposed items:")[1].split(), ["SWS_DEMO_00007"])
+                output.seek(0)
+                output.truncate()
+                self.assertEqual(requirements.check("SWS_Demo", root, module="Com"), 1)
+                self.assertEqual(output.getvalue().split("Undisposed items:")[1].split(), ["SWS_DEMO_00001"])
+                # Without a module or a registered one, a general document is not accounted.
+                self.assertEqual(requirements.check("SWS_Demo", root), 1)
+                self.assertEqual(requirements.check("SWS_Demo", root, update=True), 1)
+                self.assertIn("accounted per module", errors.getvalue())
+                self.assertEqual(requirements.check("SWS_Demo", root, stale_only=True), 0)
+
+                (root / "core/tests/demo.c").write_text(test + "// Verifies[CanIf]: SWS_DEMO_00007\n", encoding="utf-8")
+                self.assertEqual(requirements.check("SWS_Demo", root, update=True, module="CanIf"), 0)
+                catalog = root / requirements.CATALOGS / "SWS_Demo.json"
+                self.assertEqual(json.loads(catalog.read_text(encoding="utf-8"))["modules"], ["CanIf"])
+                output.seek(0)
+                output.truncate()
+                self.assertEqual(requirements.check("SWS_Demo", root), 0, output.getvalue())
+                self.assertIn("SWS_Demo for CanIf:", output.getvalue())
+                self.assertEqual(requirements.check_catalogs(root), 0)
+                (root / "core/tests/demo.c").write_text(test, encoding="utf-8")
+                self.assertEqual(requirements.check_catalogs(root), 1)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.repository(root, "", "")
+            with patch.object(requirements.sys, "stderr", io.StringIO()), redirect_stdout(io.StringIO()):
+                self.assertEqual(requirements.check("SWS_Demo", root, module="CanIf"), 1)
+
     def test_unknown_document_and_missing_archive_fail(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -8,11 +8,17 @@ proves that the product refuses each named ECUC parameter. Every mention, marked
 is checked for stale IDs. The result is computed on each run and never written to the
 repository.
 
+SWS_BSWGeneral obligates every BSW module, so its items are accounted per module: a marker
+disposes of them only with a module qualifier before its colon, Verifies[CanIf]: for one
+module or Verifies[*]: for a check that covers every delivered module. Another module's
+qualified disposition, or an unqualified one, disposes of nothing for the module accounted.
+
 A completed module commits its document's catalog to core/resources/requirements: the
 item IDs and life-cycle states, the IDs other documents define with the same prefixes,
 and the archive's SHA-256, never specification text. The required checks account every
 committed catalog without the archive; the acceptance run confirms each catalog still
-matches the archive.
+matches the archive. A general document's catalog also lists the modules whose accounting is
+complete; the required checks account each of them.
 """
 
 from __future__ import annotations
@@ -34,6 +40,11 @@ STANDARDS = "docs/standards.md"
 CATALOGS = "core/resources/requirements"
 SOURCES = (STANDARDS, "core/tests", "tests")
 NAMESPACE = "{http://autosar.org/schema/r4.0}"
+# Documents whose items apply to each BSW module; their markers carry a module qualifier.
+GENERAL = frozenset({"SWS_BSWGeneral"})
+EVERY_MODULE = "*"
+MODULE = re.compile(r"[A-Za-z][A-Za-z0-9_]*")
+QUALIFIER = rf"(?:\[(?P<module>{MODULE.pattern}|\*)\])?"
 # A cited ID may continue with further numbers of the same width, e.g.
 # "SWS_CANIF_00001／00003", "SWS_CANIF_00001, 00005" (also across a comment
 # line break) or the range "SWS_CANIF_00907–00910".
@@ -41,10 +52,10 @@ CONTINUATION = re.compile(r"(?:\s*[,，、／/]\s*(?:(?://|\*|#)\s*)?|\s*([–-]
 # Only the IDs right after a marker are disposed of; the group names are the categories.
 # Tests prove behaviour and the standards document records review, inapplicability and
 # gaps, so each marker counts only in its own kind of source.
-TEST_MARKER = re.compile(r"(?P<verified>Verifies:)[ \t]*`?")
+TEST_MARKER = re.compile(rf"(?P<verified>Verifies){QUALIFIER}:[ \t]*`?")
 DOCUMENT_MARKER = re.compile(
     r"(?:(?P<inspected>已核对（[^）\n]+）)|(?P<configuration>不适用（配置[：:][ \t]*(?P<governing>[^）\n]+)）)"
-    r"|(?P<owner>不适用（归属[：:][ \t]*[^）\n]+）)|(?P<gap>差距[ \t]*#\d+))[：:][ \t]*`?"
+    rf"|(?P<owner>不适用（归属[：:][ \t]*[^）\n]+）)|(?P<gap>差距[ \t]*#\d+)){QUALIFIER}[：:][ \t]*`?"
 )
 # A Rejects: test proves that the product refuses a configuration before generation.
 REJECTS = re.compile(r"Rejects:[ \t]*`?")
@@ -74,6 +85,8 @@ class Citation:
     interior: bool = False
     # One of CATEGORIES when the citation follows a disposition marker.
     category: str | None = None
+    # The marker's module qualifier, EVERY_MODULE for a check that covers all modules.
+    module: str | None = None
 
 
 @dataclass(frozen=True)
@@ -172,7 +185,7 @@ def scan(text: str, path: str, prefixes: Iterable[str]) -> Scan:
             if not (separator := SEPARATOR.match(text, groups[position][0])):
                 break
             position = separator.end()
-        categories.update(dict.fromkeys(listed, category))
+        categories.update(dict.fromkeys(listed, (category, marker.group("module"))))
         if category == "configuration" and listed:
             parameters = tuple(item.upper() for item in PARAMETER.findall(marker.group("governing")))
             conditions.append(Condition(path, line(marker.start()), parameters))
@@ -185,7 +198,7 @@ def scan(text: str, path: str, prefixes: Iterable[str]) -> Scan:
                     break
                 position = separator.end()
     citations = [
-        Citation(identifier, path, line(start), interior, categories.get(start))
+        Citation(identifier, path, line(start), interior, *categories.get(start, (None, None)))
         for start, (_, identifiers, interiors) in groups.items()
         for identifier, interior in zip(identifiers, interiors, strict=True)
     ]
@@ -206,15 +219,23 @@ def collect(root: Path, prefixes: set[str]) -> Scan:
     return found
 
 
-def account(specification: Specification, found: Scan) -> tuple[dict[str, int], list[str], list[Citation], list[tuple[Condition, str]]]:
+def account(
+    specification: Specification, found: Scan, module: str | None = None
+) -> tuple[dict[str, int], list[str], list[Citation], list[tuple[Condition, str]]]:
     """Return the items per category, the undisposed items in ID order, the citations of IDs
-    that exist nowhere, and each configuration condition without a rejection test."""
+    that exist nowhere, and each configuration condition without a rejection test. For a
+    general document, only the dispositions qualified with the module or EVERY_MODULE count."""
     cited = found.citations
+    disposals = [
+        citation
+        for citation in cited
+        if citation.category and (module is None or citation.module in (module, EVERY_MODULE))
+    ]
     counts = {
-        category: len({item.identifier for item in cited if item.category == category} & specification.items.keys())
+        category: len({item.identifier for item in disposals if item.category == category} & specification.items.keys())
         for category in CATEGORIES
     }
-    disposed = {citation.identifier for citation in cited if citation.category}
+    disposed = {citation.identifier for citation in disposals}
     undisposed = [specification.items[key][0] for key in sorted(specification.items.keys() - disposed)]
     stale = [
         citation
@@ -232,23 +253,24 @@ def account(specification: Specification, found: Scan) -> tuple[dict[str, int], 
     return counts, undisposed, stale, unproven
 
 
-def serialize(specification: Specification, digest: str) -> str:
-    """The committed catalog: IDs and life-cycle states only, never specification text."""
-    return json.dumps(
-        {
-            "archive": digest,
-            "items": dict(item for _, item in sorted(specification.items.items())),
-            "elsewhere": sorted(specification.elsewhere),
-        },
-        indent=2,
-    ) + "\n"
+def serialize(specification: Specification, digest: str, modules: Iterable[str] = ()) -> str:
+    """The committed catalog: IDs and life-cycle states only, never specification text, and
+    for a general document the modules whose accounting is complete."""
+    data = {
+        "archive": digest,
+        "items": dict(item for _, item in sorted(specification.items.items())),
+        "elsewhere": sorted(specification.elsewhere),
+    }
+    if modules := sorted(modules):
+        data["modules"] = modules
+    return json.dumps(data, indent=2) + "\n"
 
 
-def parse(text: str) -> tuple[Specification, str]:
-    """The specification and archive SHA-256 recorded in a committed catalog."""
+def parse(text: str) -> tuple[Specification, str, list[str]]:
+    """The specification, archive SHA-256 and registered modules of a committed catalog."""
     data = json.loads(text)
     items = {identifier.upper(): (identifier, state) for identifier, state in data["items"].items()}
-    return Specification(items, frozenset(item.upper() for item in data["elsewhere"])), data["archive"]
+    return Specification(items, frozenset(item.upper() for item in data["elsewhere"])), data["archive"], list(data.get("modules", []))
 
 
 def pinned(root: Path) -> dict:
@@ -256,10 +278,12 @@ def pinned(root: Path) -> dict:
     return next(item for item in records if item["environment"] == ARCHIVE_VARIABLE)
 
 
-def report(document: str, specification: Specification, root: Path, stale_only: bool) -> int:
-    counts, undisposed, stale, unproven = account(specification, collect(root, {prefix(key) for key in specification.items}))
+def report(document: str, specification: Specification, root: Path, stale_only: bool, module: str | None = None) -> int:
+    found = collect(root, {prefix(key) for key in specification.items})
+    counts, undisposed, stale, unproven = account(specification, found, module)
+    scope = "" if module is None else " for every module" if module == EVERY_MODULE else f" for {module}"
     print(
-        f"{document}: {len(specification.items)} official items; "
+        f"{document}{scope}: {len(specification.items)} official items; "
         + ", ".join(f"{CATEGORIES[category]} {count}" for category, count in counts.items())
         + f", undisposed {len(undisposed)}; {len(stale)} stale citations"
     )
@@ -279,11 +303,17 @@ def report(document: str, specification: Specification, root: Path, stale_only: 
     return 1 if stale or ((undisposed or unproven) and not stale_only) else 0
 
 
-def check(document: str, root: Path = ROOT, stale_only: bool = False, update: bool = False) -> int:
+def check(document: str, root: Path = ROOT, stale_only: bool = False, update: bool = False, module: str | None = None) -> int:
     """Account a document from the archive. With update, write its catalog; otherwise an
-    existing catalog must match the archive."""
+    existing catalog must match the archive. A general document is accounted for the module,
+    or for each module its catalog registers; update registers the module."""
+    general = document_name(document) in GENERAL
     archive = archive_path(ARCHIVE_VARIABLE, pinned(root)["path"], root)
     try:
+        if module is not None and (not general or not MODULE.fullmatch(module)):
+            raise RequirementError(f"--module takes a module abbreviation such as CanIf and applies only to {', '.join(sorted(GENERAL))}")
+        if general and update and module is None:
+            raise RequirementError(f"{document} is accounted per module; register one with --update --module <Mip>")
         if not archive.is_file():
             raise RequirementError(f"{archive} is missing; run `python -m autosar_tooling fetch-official` or set {ARCHIVE_VARIABLE}")
         specification = load(archive, document)
@@ -291,10 +321,11 @@ def check(document: str, root: Path = ROOT, stale_only: bool = False, update: bo
         print(f"error: {error}", file=sys.stderr)
         return 1
     catalog = root / CATALOGS / f"{document_name(document)}.json"
+    registered = parse(catalog.read_text(encoding="utf-8"))[2] if general and catalog.is_file() else []
     status = 0
     if update or catalog.is_file():
         with archive.open("rb") as source:
-            expected = serialize(specification, hashlib.file_digest(source, "sha256").hexdigest())
+            expected = serialize(specification, hashlib.file_digest(source, "sha256").hexdigest(), {*registered, *([module] if update and module else [])})
         if update:
             catalog.parent.mkdir(parents=True, exist_ok=True)
             catalog.write_text(expected, encoding="utf-8", newline="\n")
@@ -302,7 +333,15 @@ def check(document: str, root: Path = ROOT, stale_only: bool = False, update: bo
         elif catalog.read_text(encoding="utf-8") != expected:
             print(f"error: {CATALOGS}/{catalog.name} differs from {archive.name}; run `python -m autosar_tooling requirements --update {document_name(document)}`", file=sys.stderr)
             status = 1
-    return report(document, specification, root, stale_only) | status
+    if not general:
+        return report(document, specification, root, stale_only) | status
+    modules = [module] if module else registered
+    if not modules and not stale_only:
+        print(f"error: {document} is accounted per module; name one with --module <Mip>", file=sys.stderr)
+        return 1
+    for item in modules or [EVERY_MODULE]:
+        status |= report(document, specification, root, stale_only, item)
+    return status
 
 
 def check_catalogs(root: Path = ROOT) -> int:
@@ -314,7 +353,7 @@ def check_catalogs(root: Path = ROOT) -> int:
     status = 0
     for path in catalogs:
         try:
-            specification, source = parse(path.read_text(encoding="utf-8"))
+            specification, source, modules = parse(path.read_text(encoding="utf-8"))
         except (ValueError, KeyError, TypeError, AttributeError) as error:
             print(f"error: {CATALOGS}/{path.name} is not a requirement catalog: {error!r}", file=sys.stderr)
             status = 1
@@ -322,5 +361,12 @@ def check_catalogs(root: Path = ROOT) -> int:
         if source != digest:
             print(f"error: {CATALOGS}/{path.name} comes from archive {source}, but official.json pins {digest}; run `python -m autosar_tooling requirements --update {path.stem}`", file=sys.stderr)
             status = 1
-        status |= report(path.stem, specification, root, stale_only=False)
+        if path.stem not in GENERAL:
+            status |= report(path.stem, specification, root, stale_only=False)
+            continue
+        if not modules:
+            print(f"error: {CATALOGS}/{path.name} registers no module", file=sys.stderr)
+            status = 1
+        for module in modules:
+            status |= report(path.stem, specification, root, stale_only=False, module=module)
     return status
