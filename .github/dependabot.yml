@@ -36,5 +36,16 @@ updates:
     cooldown:
       default-days: 7
     groups:
+      # Both come from the same LLVM release; review them together, since PyPI can publish
+      # one before the other.
+      clang-tools:
+        patterns: ["clang-format", "clang-tidy"]
       uv:
         patterns: ["*"]
+    # A new LLVM major can change the layout the emitter reproduces (ADR 0014) and needs both
+    # tools released; it is upgraded by hand.
+    ignore:
+      - dependency-name: clang-format
+        update-types: ["version-update:semver-major"]
+      - dependency-name: clang-tidy
+        update-types: ["version-update:semver-major"]
