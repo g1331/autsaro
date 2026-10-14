@@ -1,6 +1,5 @@
-# Temporary #162/#154 evidence; removed before merge. Only AMD EPYC 9V45 runners, where
-# #162 reproduced, continue: each pairs the unfixed f673246 with this commit and repeats
-# the two shutdown races with more concurrent harnesses than CPUs.
+# Temporary #162/#154 evidence; removed before merge. Prints the Windows output of the
+# close-in-service regression and repeats the shutdown races above the CPU count.
 name: OS time probe
 on:
   push:
@@ -11,71 +10,47 @@ env:
   PYTHONUTF8: '1'
 jobs:
   probe:
-    strategy:
-      fail-fast: false
-      matrix:
-        slot: [1, 2, 3, 4, 5, 6]
-    name: probe (${{ matrix.slot }})
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 40
     steps:
-      - name: Select runner type
-        id: runner
-        shell: pwsh
-        run: |
-          $cpu = (Get-CimInstance Win32_Processor).Name.Trim()
-          Write-Output "CPU: $cpu"
-          "match=$($cpu -match '9V45')" >> $env:GITHUB_OUTPUT
-      - if: steps.runner.outputs.match == 'True'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0
-      - if: steps.runner.outputs.match == 'True'
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-      - if: steps.runner.outputs.match == 'True'
-        run: uv sync --locked
-      - if: steps.runner.outputs.match == 'True'
-        uses: ./.github/actions/native-analysis-compiler
-      - name: Pair unfixed and fixed shutdown races
-        if: steps.runner.outputs.match == 'True'
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - run: uv sync --locked
+      - uses: ./.github/actions/native-analysis-compiler
+      - name: Repeat shutdown races
         shell: pwsh
         run: |
-          git worktree add ../unfixed f673246
+          (Get-CimInstance Win32_Processor).Name
           @'
-          import os, subprocess, sys, tempfile, time
+          import json, os, subprocess, sys, tempfile, time
           from concurrent.futures import ThreadPoolExecutor
           from pathlib import Path
-          cases = [('controlled_time.c', 'close-before-pending', 7, 'trace=ISREZ '),
+          sys.path.insert(0, str(Path('tests/python/native').resolve()))
+          import os_suites
+          cases = [('controlled_time.c', 'close-in-service', 7, 'trace=ISREZ '),
+                   ('controlled_time.c', 'close-before-pending', 7, 'trace=ISREZ '),
                    ('source_repetition.c', 'isr-enable-false', 0, 'trace=PpD reason=0')]
-          variants = {'unfixed': Path('../unfixed').resolve(), 'fixed': Path('.').resolve()}
-          builder = ('import sys; from pathlib import Path; sys.path.insert(0, "tests/python/native"); import os_suites\n'
-                     'with os_suites.host_target(), os_suites.native_session(Path(sys.argv[1]), "probe"):\n'
-                     '    print(os_suites.build(Path(sys.argv[1]), sys.argv[2])[0])')
           binaries = {}
-          for name, root in variants.items():
-              for harness, *_ in cases:
-                  work = tempfile.mkdtemp()
-                  binaries[name, harness] = subprocess.run([sys.executable, '-c', builder, work, harness], cwd=root,
-                      check=True, capture_output=True, text=True).stdout.strip().splitlines()[-1]
+          for harness in {case[0] for case in cases}:
+              work = Path(tempfile.mkdtemp())
+              with os_suites.host_target(), os_suites.native_session(work, 'probe'):
+                  binaries[harness] = str(os_suites.build(work, harness)[0])
+          with os_suites.host_target(), os_suites.native_session(Path(tempfile.mkdtemp()), 'probe'):
+              print(json.dumps(os_suites.execute(Path(binaries['controlled_time.c']), 'close-in-service'), indent=2), flush=True)
           jobs = 3 * os.cpu_count()
           def once(binary, scenario):
-              began = time.monotonic()
               try:
                   r = subprocess.run([binary, scenario], capture_output=True, text=True, timeout=30)
-                  return time.monotonic() - began, r.returncode, r.stdout.strip()
+                  return r.returncode, r.stdout.strip()
               except subprocess.TimeoutExpired:
-                  return time.monotonic() - began, 'timeout', ''
-          totals = {}
-          for round_ in range(4):
-              for harness, scenario, code, marker in cases:
-                  for name in variants:
-                      with ThreadPoolExecutor(jobs) as pool:
-                          results = list(pool.map(lambda _: once(binaries[name, harness], scenario), range(2000)))
-                      odd = [r for r in results if r[1] != code or marker not in r[2]]
-                      totals[name, scenario] = totals.get((name, scenario), 0) + len(odd)
-                      for elapsed, status, out in odd:
-                          print(f'ODD {name} {scenario} {elapsed:.2f}s exit={status} {out.splitlines()[-1] if out else ""}', flush=True)
-          for (name, scenario), count in totals.items():
-              print(f'{name} {scenario} runs=8000 jobs={jobs} odd={count}', flush=True)
+                  return 'timeout', ''
+          for harness, scenario, code, marker in cases:
+              with ThreadPoolExecutor(jobs) as pool:
+                  results = list(pool.map(lambda _: once(binaries[harness], scenario), range(6000)))
+              odd = [r for r in results if r[0] != code or marker not in r[1]]
+              print(f'{scenario} runs=6000 jobs={jobs} odd={len(odd)}', flush=True)
+              for status, out in odd:
+                  print(f'ODD exit={status} {out.splitlines()[-1] if out else ""}', flush=True)
           '@ | uv run --locked python -
