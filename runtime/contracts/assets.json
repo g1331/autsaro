@@ -1205,7 +1205,7 @@
     },
     {
       "path": "runtime/bsw/include/Com.h",
-      "sha256": "7a627e66d5865f30705a4ec5d7fd647521526a912aabbecf857a8e0285a678e2",
+      "sha256": "a9e48d1edc4d70a0fc39d9d675c9bfa68f914e417282c9ad65f87e507c0e0eeb",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

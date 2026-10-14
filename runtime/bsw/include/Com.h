@@ -1,6 +1,7 @@
 /** @file Selected R24-11 immediate UINT32 COM interface and immutable configuration. */
 #ifndef COM_H
 #define COM_H
+#include "Std_Types.h"
 #include "ComStack_Types.h"
 
 typedef enum { COM_UNINIT = 0, COM_INIT = 1 } Com_StatusType;
