@@ -40,6 +40,7 @@ def main() -> int:
         choices=("ui", "tooling", "core", "desktop", "runtime", "all"),
         default="all",
     )
+    quality.add_argument("--c-samples", type=Path)
     c_check = commands.add_parser("c-check", help="Run pinned free C/MISRA analysis on sealed sources")
     c_check.add_argument("--target", choices=("windows-x64-controlled-v1", "linux-x64-controlled-v1"), required=True)
     c_check.add_argument("--project", type=Path, required=True)
@@ -105,5 +106,7 @@ def main() -> int:
         options = (["--base", args.base] if args.base else []) + (
             ["--all-format"] if args.all_format else []
         )
+        if args.c_samples:
+            options += ["--c-samples", str(args.c_samples)]
         return check_quality([*options, "--scope", args.scope])
     return 1

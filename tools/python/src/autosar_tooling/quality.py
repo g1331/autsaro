@@ -1,16 +1,19 @@
-"""Check source hygiene, changed-line formatting, host C99 syntax, plan numbers, and document sizes."""
+"""Check source hygiene, changed-line formatting, C headers and clang-tidy, plan numbers, and document sizes."""
 
 from __future__ import annotations
 
 import argparse
 import ast
+import collections
 import difflib
+import json
 import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from autosar_tooling.config import ROOT
@@ -273,34 +276,39 @@ def changed_format_errors(
     return errors
 
 
-# The CAN headers include ComStack_Cfg.h, which a generated project provides; the
-# independent bsw-contracts fixture stands in. The CAN sources also need the generated
-# Ecu_Config.h/Ecu_Execution.h, so they are compiled with generated projects (c-check, native).
+# Public headers include ComStack_Cfg.h and SchM_<Mip>.h, which a generated project provides;
+# the independent bsw-contracts fixture stands in. Os_Host.h selects the private host header of
+# the checking platform. The sources also need generated configuration headers, so they are
+# compiled with generated projects (c-check, native, clang-tidy below).
 CONFIGURATION = ROOT / "core" / "tests" / "fixtures" / "bsw-contracts"
-MAINLINE_CAN = ROOT / "runtime" / "bsw" / "include"
-HOST_ADAPTERS = ROOT / "runtime" / "host" / "include"
-MAINLINE_CAN_HEADERS = [MAINLINE_CAN / name for name in ("Can_CfgTypes.h", "Can_GeneralTypes.h",
-                                                         "Can_MemMap.h", "SchM_Can.h", "standard/Can.h")]
-MAINLINE_CAN_HEADERS += [HOST_ADAPTERS / name for name in ("Can_Host.h", "Ecu_Status.h")]
+PUBLIC_INCLUDES = [ROOT / "runtime" / name / "include" for name in ("bsw", "host", "ecu", "os")]
+OS_PRIVATE = [ROOT / "runtime" / "os" / "src", ROOT / "runtime" / "os" / "src" / "host" / "linux"]
+
+
+def public_headers() -> list[Path]:
+    return sorted(header for directory in PUBLIC_INCLUDES for header in directory.rglob("*.h"))
+
+
+def header_unit(header: Path) -> tuple[str, list[str]]:
+    """Return a translation unit that uses the header the way its users do."""
+    if header.name.endswith("_MemMap.h"):
+        # A section protocol is a repeated-include TU, not a standalone empty header.
+        prefix = header.name.removesuffix("_MemMap.h").upper()
+        source = (
+            f'#define {prefix}_START_SEC_CODE\n#include "{header.name}"\n'
+            f"{prefix}_CODE void quality_section(void) {{}}\n"
+            f'#define {prefix}_STOP_SEC_CODE\n#include "{header.name}"\n'
+        )
+        return source, []
+    # A header of macros only would otherwise leave an empty, non-ISO translation unit.
+    return "typedef int quality_unit;\n", ["-include", str(header)]
 
 
 def c_syntax_errors() -> list[str]:
     compiler = os.environ.get("AUTOSAR_CC", "gcc")
-    for header in sorted(MAINLINE_CAN_HEADERS):
-        # A section protocol is a repeated-include TU, not a standalone empty header.
-        if header.name == "Can_MemMap.h":
-            source = (
-                '#define CAN_START_SEC_CODE\n#include "Can_MemMap.h"\n'
-                'CAN_CODE void quality_can_section(void) {}\n'
-                '#define CAN_STOP_SEC_CODE\n#include "Can_MemMap.h"\n'
-                '#define CAN_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include "Can_MemMap.h"\n'
-                'int quality_can_zero CAN_VAR_CLEARED;\n'
-                '#define CAN_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include "Can_MemMap.h"\n'
-            )
-            forced_header = []
-        else:
-            source = ""
-            forced_header = ["-include", str(header)]
+    errors = []
+    for header in public_headers():
+        source, forced_header = header_unit(header)
         result = run(
             [
                 compiler,
@@ -310,12 +318,9 @@ def c_syntax_errors() -> list[str]:
                 "-Werror",
                 "-pedantic",
                 "-fsyntax-only",
+                *(f"-I{directory}" for directory in (*PUBLIC_INCLUDES, *OS_PRIVATE, CONFIGURATION)),
                 "-I",
-                str(MAINLINE_CAN),
-                "-I",
-                str(HOST_ADAPTERS),
-                "-I",
-                str(CONFIGURATION),
+                str(header.parent),
                 *forced_header,
                 "-x",
                 "c",
@@ -324,10 +329,150 @@ def c_syntax_errors() -> list[str]:
             input_text=source,
         )
         if result.returncode:
-            return [
-                f"Host C99 header {header.name} is not self-contained:\n{result.stderr.strip()}"
-            ]
-    return []
+            name = header.relative_to(ROOT).as_posix()
+            errors.append(f"{name}: public header is not self-contained:\n{result.stderr.strip()}")
+    return errors
+
+
+def file_header_errors(path: Path) -> list[str]:
+    """Runtime C files open with the file description of the C coding standard."""
+    with (ROOT / path).open("rb") as source:
+        first = source.readline()
+    # Either the one-line form or a block whose next line is the @brief.
+    if first.startswith(b"/** @file ") or first.rstrip(b"\r\n") == b"/** @file":
+        return []
+    return [f"{path.as_posix()}:1: runtime C file must start with a /** @file <responsibility> comment"]
+
+
+# clang-tidy analyzes generated samples: runtime sources need the generated configuration
+# headers. Findings are keyed by check, file and source line text, so moving code does not
+# churn the baseline; the FreeRTOS kernel and the user application keep their own style.
+CLANG_TIDY_CONFIG = ROOT / ".clang-tidy"
+CLANG_TIDY_BASELINE = ROOT / "tools" / "python" / "src" / "autosar_tooling" / "clang_tidy_baseline.txt"
+CLANG_TIDY_FOREIGN = ("kernel/", "app/")
+# Generated names come from the RTE/BSW patterns and configured short names, not from authors.
+CLANG_TIDY_RUNTIME_ONLY = {"readability-identifier-naming"}
+CLANG_TIDY_LINE = re.compile(r"^(.+?):(\d+):(\d+): (warning|error): (.*?) \[([\w.,-]+)\]$")
+
+ClangTidyKey = tuple[str, str, str]
+
+
+def clang_tidy_project(project: Path, tidy: str) -> collections.Counter[ClangTidyKey]:
+    from ecu_tools.build import kernel_patch_environment
+
+    # git apply and clang-tidy run in other directories than the caller's.
+    project = project.resolve()
+    target = json.loads((project / "target.json").read_text(encoding="utf-8"))
+    if not str(target.get("target", "")).startswith("linux-"):
+        raise RuntimeError(f"{project.name}: the clang-tidy baseline covers Linux samples only")
+    integration = json.loads((project / "meta" / "integration.json").read_text(encoding="utf-8"))
+    origins = {copy: source for source, copy in integration["originalBswSources"].items()}
+    findings: collections.Counter[ClangTidyKey] = collections.Counter()
+    seen = set()
+    with tempfile.TemporaryDirectory() as temporary:
+        scratch = Path(temporary)
+        # The build applies the pinned kernel patches first; its headers declare port hooks.
+        kernel = scratch / "kernel"
+        shutil.copytree(project / "kernel", kernel)
+        for patch in target["kernelPatches"]:
+            applied = subprocess.run(
+                [
+                    "git", "apply", "--ignore-space-change",
+                    *("--include=" + name for name in patch["includes"]),
+                    str(project / patch["path"].removeprefix("runtime/")),
+                ],
+                cwd=kernel, env=kernel_patch_environment(kernel),
+                capture_output=True, text=True, check=False,
+            )
+            if applied.returncode:
+                raise RuntimeError(f"{project.name}: kernel patch failed: {applied.stderr.strip()}")
+        includes = []
+        for name in target["includePaths"]:
+            root = kernel / name.removeprefix("kernel/") if name.startswith("kernel/") else project / name
+            includes.append(f"-I{root}")
+        units = [
+            name for name in (*target["sources"], *target["entries"].values())
+            if not name.startswith(CLANG_TIDY_FOREIGN)
+        ]
+        database = [
+            {
+                "directory": str(project),
+                "file": str(project / name),
+                "arguments": ["clang", *target["compilerFlags"], *includes, "-c", str(project / name)],
+            }
+            for name in units
+        ]
+        (scratch / "compile_commands.json").write_text(json.dumps(database), encoding="utf-8")
+
+        def analyze(name: str) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                [tidy, "--quiet", f"--config-file={CLANG_TIDY_CONFIG}", "-p", str(scratch), str(project / name)],
+                capture_output=True, text=True, timeout=600, check=False,
+            )
+
+        with ThreadPoolExecutor(max_workers=os.cpu_count() or 2) as pool:
+            results = list(pool.map(analyze, units))
+        for name, result in zip(units, results):
+            matches = [CLANG_TIDY_LINE.match(line) for line in result.stdout.splitlines()]
+            if result.returncode or any(match and match[4] == "error" for match in matches):
+                raise RuntimeError(f"{project.name}: clang-tidy could not analyze {name}:\n{result.stdout}{result.stderr}")
+            for match in filter(None, matches):
+                try:
+                    relative = Path(match[1]).resolve().relative_to(project).as_posix()
+                except ValueError:
+                    continue
+                if relative.startswith(CLANG_TIDY_FOREIGN):
+                    continue
+                origin = origins.get(relative)
+                for check in match[6].split(","):
+                    if check in CLANG_TIDY_RUNTIME_ONLY and origin is None:
+                        continue
+                    # A header diagnostic repeats for every translation unit including it.
+                    if (relative, match[2], match[3], check) in seen:
+                        continue
+                    seen.add((relative, match[2], match[3], check))
+                    line = (project / relative).read_text(encoding="utf-8").splitlines()[int(match[2]) - 1]
+                    findings[(check, origin or relative, line.strip())] += 1
+    return findings
+
+
+def read_clang_tidy_baseline(path: Path = CLANG_TIDY_BASELINE) -> collections.Counter[ClangTidyKey]:
+    entries: collections.Counter[ClangTidyKey] = collections.Counter()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line and not line.startswith("#"):
+            check, name, text = line.split(" ", 2)
+            entries[(check, name, text)] += 1
+    return entries
+
+
+def clang_tidy_errors(samples: Path) -> list[str]:
+    tidy = shutil.which("clang-tidy")
+    if tidy is None:
+        raise RuntimeError("clang-tidy is missing; run uv sync --locked")
+    projects = sorted(path for path in samples.iterdir() if (path / "target.json").is_file())
+    if not projects:
+        raise RuntimeError(f"No generated samples in {samples}")
+    current: collections.Counter[ClangTidyKey] = collections.Counter()
+    for project in projects:
+        # Samples share the runtime sources; a finding counts once however many include it.
+        current |= clang_tidy_project(project, tidy)
+    return clang_tidy_comparison(current, read_clang_tidy_baseline())
+
+
+def clang_tidy_comparison(
+    current: collections.Counter[ClangTidyKey], baseline: collections.Counter[ClangTidyKey]
+) -> list[str]:
+    errors = [
+        f"{name}: new clang-tidy finding [{check}]: {text}"
+        for (check, name, text), count in sorted((current - baseline).items())
+        for _ in range(count)
+    ]
+    errors += [
+        f"{CLANG_TIDY_BASELINE.relative_to(ROOT).as_posix()}: fixed finding, remove: {check} {name} {text}"
+        for (check, name, text), count in sorted((baseline - current).items())
+        for _ in range(count)
+    ]
+    return errors
 
 
 def scoped_paths(scope: str) -> list[Path]:
@@ -342,7 +487,9 @@ def scoped_paths(scope: str) -> list[Path]:
     return [path for path in source_paths() if path.as_posix().startswith(prefixes)]
 
 
-def check(base: str, *, all_format: bool = False, scope: str = "all") -> list[str]:
+def check(
+    base: str, *, all_format: bool = False, scope: str = "all", c_samples: Path | None = None
+) -> list[str]:
     errors = []
     untracked = set(source_paths(untracked_only=True))
     renamed = {} if all_format else renamed_sources(base)
@@ -351,6 +498,8 @@ def check(base: str, *, all_format: bool = False, scope: str = "all") -> list[st
     for path in scoped_paths(scope):
         path_errors = hygiene_errors(path)
         errors.extend(path_errors)
+        if path.suffix in {".c", ".h"} and path.as_posix().startswith("runtime/"):
+            errors.extend(file_header_errors(path))
         if any("invalid UTF-8" in error for error in path_errors):
             continue
         changed = (
@@ -376,12 +525,14 @@ def check(base: str, *, all_format: bool = False, scope: str = "all") -> list[st
         errors.extend(changed_format_errors(path, source, formatted, changed))
     if changed_c or scope == "runtime" or all_format:
         errors.extend(c_syntax_errors())
+    tidy = clang_tidy_errors(c_samples) if c_samples is not None else []
+    errors.extend(tidy)
     numbers = plan_number_errors()
     errors.extend(numbers)
     oversized = document_size_errors()
     errors.extend(oversized)
     print(
-        f"Quality scope={scope} baseline={base}; formatted files checked={checked}; C syntax={'checked' if changed_c or scope == 'runtime' or all_format else 'not requested'}; plan numbers={len(numbers)}; oversized documents={len(oversized)}"
+        f"Quality scope={scope} baseline={base}; formatted files checked={checked}; C syntax={'checked' if changed_c or scope == 'runtime' or all_format else 'not requested'}; clang-tidy={f'{len(tidy)} new or fixed' if c_samples is not None else 'not requested'}; plan numbers={len(numbers)}; oversized documents={len(oversized)}"
     )
     return errors
 
@@ -402,6 +553,11 @@ def main(argv: list[str] | None = None) -> int:
         choices=("ui", "tooling", "core", "desktop", "runtime", "all"),
         default="all",
     )
+    parser.add_argument(
+        "--c-samples",
+        type=Path,
+        help="Also run clang-tidy over these generated Linux samples against the committed baseline",
+    )
     arguments = parser.parse_args(argv)
     base = arguments.base or "HEAD"
     revision = run(["git", "rev-parse", "--verify", f"{base}^{{tree}}"])
@@ -412,7 +568,12 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     try:
-        errors = check(base, all_format=arguments.all_format, scope=arguments.scope)
+        errors = check(
+            base,
+            all_format=arguments.all_format,
+            scope=arguments.scope,
+            c_samples=arguments.c_samples,
+        )
     except (OSError, RuntimeError) as error:
         print(f"Quality check could not run: {error}", file=sys.stderr)
         return 2

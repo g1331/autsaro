@@ -113,6 +113,41 @@ class QualityTests(unittest.TestCase):
         self.assertEqual(len(errors), 1)
         self.assertTrue(errors[0].startswith(f"docs/large.md: {limit + 1} bytes exceeds"), errors)
 
+    def test_runtime_c_files_open_with_the_file_description(self):
+        files = {
+            "runtime/one_line.c": b"/** @file Owns the state. */\nint x;\n",
+            "runtime/block.h": b"/** @file\r\n * @brief Declares it.\r\n */\r\n",
+            "runtime/missing.c": b"#include <stdint.h>\n/** @file Too late. */\n",
+            "runtime/named.c": b"/** @filed */\n",
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name, content in files.items():
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / name).write_bytes(content)
+            with patch.object(quality, "ROOT", root):
+                failing = [name for name in files if quality.file_header_errors(Path(name))]
+        self.assertEqual(failing, ["runtime/missing.c", "runtime/named.c"])
+
+    def test_clang_tidy_comparison_counts_each_finding_against_the_baseline(self):
+        from collections import Counter
+
+        clone = ("bugprone-x", "runtime/a.c", "} else {")
+        size = ("readability-function-size", "runtime/a.c", "void f(void)")
+        fixed = ("bugprone-y", "runtime/b.c", "x = y;")
+        # A second identical line is a new finding even though the text is already listed.
+        errors = quality.clang_tidy_comparison(
+            Counter({clone: 2, size: 1}), Counter({clone: 1, size: 1, fixed: 1})
+        )
+        self.assertEqual(len(errors), 2, errors)
+        self.assertIn("runtime/a.c: new clang-tidy finding [bugprone-x]: } else {", errors)
+        self.assertTrue(errors[1].endswith("fixed finding, remove: bugprone-y runtime/b.c x = y;"))
+
+    def test_committed_clang_tidy_baseline_parses(self):
+        baseline = quality.read_clang_tidy_baseline()
+        self.assertTrue(baseline)
+        self.assertTrue(all(name.startswith(("runtime/", "generated/")) for _, name, _ in baseline))
+
     def test_diff_hunk_counts_added_lines(self):
         diff = "@@ -2,0 +3,2 @@\n+a\n+b\n@@ -8 +10,0 @@\n-old\n"
         lines = set()
