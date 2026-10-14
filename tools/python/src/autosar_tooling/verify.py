@@ -123,6 +123,8 @@ def commands(scope: str, base: str | None) -> list[tuple[str, list[str], int]]:
             ),
             ("source:requirements", [sys.executable, "-B", "-m", "autosar_tooling", "requirements"], 120),
             ("python:lint", ["ruff", "check", "tools", "tests/python", "scripts"], 120),
+            ("workflows:actionlint", ["uv", "run", "--locked", "--group", "workflows", "actionlint"], 300),
+            ("workflows:zizmor", ["uv", "run", "--locked", "--group", "workflows", "zizmor", ".github"], 300),
             *ui,
             *core,
             *desktop,

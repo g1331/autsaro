@@ -3,7 +3,7 @@ description: Install and validate the controlled native GCC used by C analysis
 runs:
   using: composite
   steps:
-    - uses: msys2/setup-msys2@v2
+    - uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
       id: msys2
       if: runner.os == 'Windows'
       with:
@@ -47,4 +47,5 @@ runs:
       shell: pwsh
       env:
         MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
-      run: (Join-Path $env:MSYS2_LOCATION 'mingw64/bin') >> $env:GITHUB_PATH
+      # The setup action's own install location; no workflow runs on untrusted triggers.
+      run: (Join-Path $env:MSYS2_LOCATION 'mingw64/bin') >> $env:GITHUB_PATH # zizmor: ignore[github-env]
