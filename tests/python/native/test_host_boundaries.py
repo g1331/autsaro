@@ -76,7 +76,7 @@ class HostBoundaryTests(unittest.TestCase):
                 self.assertEqual(result.exit_code, 91, output)
                 self.assertIn("LOCK_FATAL", output)
 
-    def test_try_lock_errors_reach_can_error_return(self):
+    def test_try_lock_errors_stay_with_the_probe(self):
         cases = ["once", "mutex-init"] if os.name == "nt" else ["once", "attr-init", "attr-type", "mutex-init", "attr-close", "try-error"]
         for case in cases:
             with self.subTest(case=case):

@@ -64,7 +64,6 @@ fn generated_can_object_sections_and_clear(project: &Path) {
     fs::write(&source, format!(r#"#include "{}"
 #include <assert.h>
 const EcuPolicyConfig Ecu_Policy = {{0}};
-int Can_TryLock(void) {{ return 1; }}
 void SchM_Enter_Can_CAN_STATE(void) {{}}
 void SchM_Exit_Can_CAN_STATE(void) {{}}
 void CanIf_TxConfirmation(PduIdType id) {{ (void)id; }}

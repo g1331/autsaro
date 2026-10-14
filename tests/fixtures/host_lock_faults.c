@@ -146,13 +146,14 @@ int main(int argc, char **argv) {
         }
         return 3; /* No fatal lock path may return to its caller. */
     }
+    /* Can_Write enters its area normally (lock failures are fatal like every area entry)
+     * and reports CAN_BUSY only for an occupied slot, never for a contended lock. */
     if (strcmp(failure, "busy") == 0) {
-        if (Can_TryLock() != 0 || Can_Write(0u, &pdu) != CAN_BUSY ||
-            Can_TransmitPdu(0u, 1u, 1u, bytes) != ECU_ERR_CAN_BUSY) {
+        if ((Can_TryLock() != 0) || (Can_Write(0u, &pdu) != E_OK) ||
+            (Can_Write(0u, &pdu) != CAN_BUSY)) {
             return 4;
         }
-    } else if (Can_TryLock() != -1 || Can_Write(0u, &pdu) != E_NOT_OK ||
-               Can_TransmitPdu(0u, 1u, 1u, bytes) != ECU_ERR_CONTROLLER) {
+    } else if (Can_TryLock() != -1) {
         return 5;
     }
     return 0;
