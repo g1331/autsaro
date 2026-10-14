@@ -23,9 +23,12 @@ jobs:
     timeout-minutes: 5
     outputs:
       code: ${{ steps.detect.outputs.code }}
+      native: ${{ steps.detect.outputs.native }}
     steps:
       # Pull requests touching only reader documentation and design records
       # skip build and test jobs; pushes and manual runs always check everything.
+      # Pull requests that otherwise change only ui/ also skip the native, C analysis and
+      # process jobs: none of their inputs is under ui/ (tests/python/test_ci_selection.py).
       - id: detect
         shell: python
         env:
@@ -39,17 +42,19 @@ jobs:
                   return True
               # Root guides only; nested Markdown such as runtime/README.md ships with generated projects.
               return '/' not in path and path.endswith('.md')
-          code = True
+          code = native = True
           if os.environ['PULL_REQUEST']:
               listing = subprocess.run(['gh', 'api', '--paginate', '--jq', '.[].filename',
                   f"repos/{os.environ['GITHUB_REPOSITORY']}/pulls/{os.environ['PULL_REQUEST']}/files"],
                   check=True, capture_output=True, text=True).stdout.split()
               # The files API stops at 3000 entries; treat a truncated listing as code.
               code = not listing or len(listing) >= 3000 or not all(map(is_documentation, listing))
+              native = code and not all(is_documentation(path) or path.startswith('ui/') for path in listing)
               print('\n'.join(listing))
-          print('code=' + str(code).lower())
+          print('code=' + str(code).lower(), 'native=' + str(native).lower())
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
               output.write('code=' + str(code).lower() + '\n')
+              output.write('native=' + str(native).lower() + '\n')
   ui:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -113,7 +118,7 @@ jobs:
           if-no-files-found: ignore
   core:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.native == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -154,7 +159,7 @@ jobs:
         run: cargo clippy --locked -p autosar-config-desktop --all-targets -- -D warnings
   process:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.native == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -171,7 +176,7 @@ jobs:
   native:
     # Native suites that need GCC but no licensed archive; the rest stay in acceptance.yml.
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.native == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -234,7 +239,7 @@ jobs:
               '--lib', '--test', 'native', '--no-fail-fast', '--', *filters]).returncode)
   native-os:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.native == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -274,7 +279,7 @@ jobs:
   native-sanitizers:
     # GCC sanitizers over the directly compiled native programs and the OS suites (#129).
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.native == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -389,7 +394,7 @@ jobs:
 
   c-analysis-prepare:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.native == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -694,7 +699,7 @@ jobs:
   c-analysis:
     # A skipped/cancelled producer or shard must never make the gate green.
     needs: [changes, c-analysis-prepare, c-analysis-samples]
-    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
+    if: ${{ !cancelled() && needs.changes.outputs.native == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
@@ -740,10 +745,15 @@ jobs:
         run: |
           import json, os, sys
           needs = json.loads(os.environ['RESULTS'])
-          code = needs['changes']['outputs'].get('code') == 'true'
-          # Skips are accepted only for documentation-only pull requests.
-          accepted = {'success'} if code or needs['changes']['result'] != 'success' else {'success', 'skipped'}
-          failed = {name: need['result'] for name, need in needs.items()
-                    if need['result'] not in (accepted if name != 'changes' else {'success'})}
-          print('code=' + str(code).lower(), {name: need['result'] for name, need in needs.items()})
+          outputs = needs['changes']['outputs'] if needs['changes']['result'] == 'success' else {}
+          code, native = outputs.get('code') != 'false', outputs.get('native') != 'false'
+          # The jobs gated on the native output; tests/python/test_ci_selection.py keeps both lists equal.
+          UI_INDEPENDENT = {'core', 'process', 'native', 'native-os', 'native-sanitizers', 'native-delivery', 'c-analysis'}
+          # Skips are accepted only where the change detection selected them.
+          def accepted(name):
+              if name == 'changes':
+                  return {'success'}
+              return {'success', 'skipped'} if not code or not native and name in UI_INDEPENDENT else {'success'}
+          failed = {name: need['result'] for name, need in needs.items() if need['result'] not in accepted(name)}
+          print('code=' + str(code).lower(), 'native=' + str(native).lower(), {name: need['result'] for name, need in needs.items()})
           sys.exit('Blocking jobs did not pass: ' + str(failed) if failed else 0)
