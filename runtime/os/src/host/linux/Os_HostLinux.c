@@ -104,23 +104,23 @@ static void capture_context(HANDLE thread, const ucontext_t *source)
 
 static void park_signal(int signal_number, siginfo_t *info, void *native_context)
 {
+    /* The futex calls set errno; the interrupted code must see its own value. */
+    const int interrupted_errno = errno;
     HANDLE thread = current_thread;
-    int32_t generation;
     (void)signal_number;
     (void)info;
-    if (thread == NULL || thread->kind != OS_HOST_THREAD) {
-        return;
+    if ((thread != NULL) && (thread->kind == OS_HOST_THREAD)) {
+        const int32_t generation = __atomic_load_n(&thread->requested, __ATOMIC_ACQUIRE);
+        if (generation > __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE)) {
+            capture_context(thread, (const ucontext_t *)native_context);
+            __atomic_store_n(&thread->acknowledged, generation, __ATOMIC_RELEASE);
+            futex_wake(&thread->acknowledged);
+            while (__atomic_load_n(&thread->resumed, __ATOMIC_ACQUIRE) < generation) {
+                (void)futex_wait(&thread->resumed, generation - 1);
+            }
+        }
     }
-    generation = __atomic_load_n(&thread->requested, __ATOMIC_ACQUIRE);
-    if (generation <= __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE)) {
-        return;
-    }
-    capture_context(thread, (const ucontext_t *)native_context);
-    __atomic_store_n(&thread->acknowledged, generation, __ATOMIC_RELEASE);
-    futex_wake(&thread->acknowledged);
-    while (__atomic_load_n(&thread->resumed, __ATOMIC_ACQUIRE) < generation) {
-        (void)futex_wait(&thread->resumed, generation - 1);
-    }
+    errno = interrupted_errno;
 }
 
 static void fault_stop_signal(int signal_number, siginfo_t *info, void *native_context)

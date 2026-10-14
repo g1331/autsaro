@@ -611,7 +611,7 @@
     },
     {
       "path": "runtime/os/src/Os_Backend.c",
-      "sha256": "61bc1979788f7e23d2cf3e44a89815558d349571d5bc61b691c2aed98e294486",
+      "sha256": "b7eb79931e45a0a8ec06f960ede798680e7cfe4e66f745a3776898445a1876c7",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -791,7 +791,7 @@
     },
     {
       "path": "runtime/os/src/host/linux/Os_HostLinux.c",
-      "sha256": "132736418975338b51f490af0073ed312c98f84ecc1e982615a69b1bbe1ce9f2",
+      "sha256": "5dcdef26899b64c829f979ed115b07382d9ecfe5f47e06da6c17cd60a56137d7",
       "license": "Apache-2.0",
       "targets": [
         "linux-x64-controlled-v1"

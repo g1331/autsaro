@@ -10,7 +10,7 @@
 | 工具链清单 | `runtime/os/toolchain.json`、`runtime/os/toolchain-linux.json` |
 | 内核 | FreeRTOS V11.3.1，commit `054e14f3397023aa83813a65aa065fc4597d481b`，MIT；`third_party/freertos/*source-manifest.json` |
 | 工作台 | Rust 由 `rust-toolchain.toml` 固定；npm／Cargo／uv 锁文件 |
-| C 分析 | Cppcheck 2.21.0＋固定 MISRA addon 摘要，见 [testing.md](../development/testing.md) |
+| C 分析 | Cppcheck 2.21.0＋固定 MISRA addon 摘要，见 [测试说明](../development/testing/generated-c.md) |
 
 - 目标、工具链、内核、补丁和许可逐项固定版本与摘要，不在构建时取浮动版本。错误宿主或工具身份不符明确失败，不降级到其他编译器。
 - **证据按层取得，不互相借用：**浏览器／mock、原生 Tauri／IPC、安装包、离线接收者、主机 ECU 行为、MCU 实时性／ISR／内存段各自取证；未运行记为未执行，失败记为失败。Windows 结果不代替 Linux，主机结果不代替 MCU。

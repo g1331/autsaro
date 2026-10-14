@@ -99,7 +99,7 @@ cargo test --locked -p autosar-config-core
 
 这些命令直接运行对应工具，失败会保留其诊断与退出状态。Python 工具先执行 `uv sync --locked`。增量格式检查使用 `autosar_tooling quality --base <基准提交>`，本地未指定基准时检查相对 HEAD 的待提交改动。`quality` 同时拒绝仓库路径和文本中的开发计划编号，决定记录、路线图和上游原样内容除外。
 
-基础测试、官方对照、原生运行及 GUI/安装包验收分别执行，见 [测试指南](docs/development/testing.md)。完整资源与原生检查使用 `uv run --locked python -m autosar_tooling verify --scope all --base <基准提交>`；缺失或未运行的层不显示为通过。
+基础测试、官方对照、原生运行及 GUI/安装包验收分别执行，见 [测试指南](docs/development/testing/README.md)。完整资源与原生检查使用 `uv run --locked python -m autosar_tooling verify --scope all --base <基准提交>`；缺失或未运行的层不显示为通过。
 
 ## 构建与分发
 
@@ -132,7 +132,7 @@ npm run tauri --prefix ui -- build
 | --- | --- |
 | [贡献指南](CONTRIBUTING.zh-CN.md) | 开发与提交流程 |
 | [环境配置](docs/development/environment.md) | 按任务安装依赖及排查环境 |
-| [测试指南](docs/development/testing.md) | 本地检查、测试分层及 CI |
+| [测试指南](docs/development/testing/README.md) | 本地检查、测试分层及 CI |
 | [主机运行时](runtime/README.md) | 运行接口、通信与诊断范围 |
 | [受控 OS 目标](runtime/os/README.md) | 内核、补丁、工具链与平台范围 |
 | [规范资料入口](docs/official/README.md) | 本地规范档案的位置与分发限制 |

@@ -7,7 +7,7 @@
 - 运行时与主机执行边界：[runtime/README.md](../../runtime/README.md)、[runtime/os/README.md](../../runtime/os/README.md)
 - 标准输入计划的实现说明：[core/src/integration/README.md](../../core/src/integration/README.md)
 - 标准基线、官方资料位置与模块义务索引：[standards/](../standards/README.md)
-- 测试入口与前置条件：[development/testing.md](../development/testing.md)；环境：[development/environment.md](../development/environment.md)
+- 测试入口与前置条件：[development/testing/](../development/testing/README.md)；环境：[development/environment.md](../development/environment.md)
 - 资产摘要、许可与发布：[maintainers/](../maintainers/)
 
 

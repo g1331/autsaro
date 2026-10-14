@@ -216,6 +216,14 @@ int Os_BackendInterruptEnabled(unsigned interrupt)
 #endif
     return allowed;
 }
+static size_t task_slot(const StaticTask_t *memory)
+{
+    size_t i = 0u;
+    while ((i < Os_Config->task_count) && (&task_memory[i] != memory)) {
+        ++i;
+    }
+    return i;
+}
 static size_t task_index(TaskType id)
 {
     size_t i;
@@ -923,9 +931,11 @@ void vApplicationIdleHook(void)
 }
 static void task_entry(void *argument)
 {
-    const Os_TaskConfig *task = argument;
-    const size_t index = task_index(task->id);
+    /* The argument is the task's own control block, so the configuration stays const.
+     * The index stays live across setjmp, so it is volatile (C99 7.13.2.1). */
+    const volatile size_t index = task_slot(argument);
     configASSERT(index < Os_Config->task_count);
+    const Os_TaskConfig *task = &Os_Config->tasks[index];
     /* The private backend trampoline discards completed application frames.
      * No application or generated Runnable uses setjmp/longjmp. */
     (void)setjmp(restart_frames[index]);
@@ -1034,7 +1044,7 @@ void Os_BackendStart(AppModeType mode)
         handles[i] = xTaskCreateStatic(task_entry,
                                        Os_Config->tasks[i].name,
                                        512,
-                                       (void *)&Os_Config->tasks[i],
+                                       &task_memory[i],
                                        Os_Config->tasks[i].priority,
                                        task_buffers[i],
                                        &task_memory[i]);

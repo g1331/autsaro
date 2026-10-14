@@ -80,4 +80,4 @@ tools/python/src/  tests/python/  tests/desktop/
 
 ## CI 与源码门禁（目标）
 
-两平台完整主线样本与每个实际 main 的分析闭包每轮重新生成和分析；缓存只复用可信依赖／构建中间物，按 runner／target／toolchain／source 身份隔离，不缓存扫描结果。严格门禁要求完整选集、`error=null`、`passed=true`、上游全部 success，接入每次 PR 的必需聚合与分支保护，并用故意违规、缺样本、工具失败、skip／cancel 的真实 PR 验证阻断。当前严格源码门禁仍只在手动运行，见 [testing.md](../development/testing.md)。
+两平台完整主线样本与每个实际 main 的分析闭包每轮重新生成和分析；缓存只复用可信依赖／构建中间物，按 runner／target／toolchain／source 身份隔离，不缓存扫描结果。严格门禁要求完整选集、`error=null`、`passed=true`、上游全部 success，接入每次 PR 的必需聚合与分支保护，并用故意违规、缺样本、工具失败、skip／cancel 的真实 PR 验证阻断。当前严格源码门禁仍只在手动运行，见 [测试说明](../development/testing/generated-c.md)。

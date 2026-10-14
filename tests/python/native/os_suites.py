@@ -222,6 +222,12 @@ def verify_vector_section(binary: Path, tool: Path) -> None:
                 or int(tables[0][2], 16) != 0):
             raise ValueError("PE interrupt vector table is not in its dedicated section")
 
+def sanitizer_flags() -> list[str]:
+    """GCC sanitizers named by AUTOSAR_SANITIZE (`thread`, or `address,undefined`); each report fails."""
+    kinds = os.environ.get("AUTOSAR_SANITIZE")
+    return [f"-fsanitize={kinds}", "-fno-sanitize-recover=all", "-fno-omit-frame-pointer", "-g"] if kinds else []
+
+
 def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...] = (),
           target: Path | None = None,
           extra_sources: tuple[Path, ...] = (),
@@ -311,6 +317,7 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
         "-o", str(binary),
     ]
     command[1:1] = ["-D" + value for value in defines]
+    command[1:1] = sanitizer_flags()
     if host_failure_injection:
         command.insert(1, "-DOS_HOST_FAILURE_TESTS")
     command[1:1] = [str(source) for source in extra_sources]

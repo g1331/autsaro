@@ -11,8 +11,7 @@ fn host_batch_codec_keeps_boundaries_numeric_sequence_and_recovery() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let scratch = Scratch::new();
     let binary = scratch.0.join("host-batch-codec.exe");
-    let compiler = std::env::var_os("AUTOSAR_CC").unwrap_or_else(|| "gcc".into());
-    let output = Command::new(compiler)
+    let output = tooling::c_compiler()
         .args(["-std=c99", "-O1", "-Wall", "-Wextra", "-Werror"])
         .arg("-I")
         .arg(root.join("runtime/ecu/include"))
