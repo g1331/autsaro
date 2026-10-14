@@ -25,7 +25,7 @@ PLAN_NUMBER = re.compile(r"(?<![a-z0-9])(?:epic|story)[ _.-]?\d", re.IGNORECASE)
 RETIRED_IDENTITIES = ("epic4-win64-sr-cs-v1", "epic4-single-application-v1")
 # Decision records cite archived planning paths, the roadmap names planning phases like their
 # Milestones, and vendored upstream content keeps its original bytes.
-PLAN_NUMBER_EXEMPT = ("docs/adr/", "docs/roadmap.md", "third_party/", ".agents/skills/impeccable/")
+PLAN_NUMBER_EXEMPT = ("docs/adr/", "docs/roadmap/", "third_party/", ".agents/skills/impeccable/")
 # CONTRIBUTING "Documentation layout": a document beyond about 20 KB is split into a directory
 # with a README.md index. Changelogs, single-decision ADRs and traceability archives are
 # exempt, AGENTS.md stays one file by merging entries, and vendored content keeps its bytes.

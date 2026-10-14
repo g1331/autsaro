@@ -142,7 +142,7 @@ The installed application does not require Rust, Node, npm, or uv. Windows requi
 | [Specification resources](docs/official/README.md) | Local archive locations and distribution restrictions |
 | [Architecture](docs/architecture.md) and [ADRs](docs/adr/) | Current architecture, ownership invariants, and key decisions (Chinese) |
 | [Standards baseline](docs/standards/README.md) | Fixed releases and module obligation index (Chinese) |
-| [Roadmap](docs/roadmap.md) | Direction, near-term order, and long-term candidates (Chinese); tasks live in GitHub Issues |
+| [Roadmap](docs/roadmap/README.md) | Direction, near-term order, and long-term candidates (Chinese); tasks live in GitHub Issues |
 | [Interface design](DESIGN.md) | Visual and component standards |
 
 ## License

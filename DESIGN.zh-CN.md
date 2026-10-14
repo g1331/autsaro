@@ -163,7 +163,7 @@ components:
 - 语义色区分对象类别、选择与结果，不铺满工作区。
 - 原生系统字体服务中文任务与工程标识符。
 
-视觉取值来自 [完成原型](docs/design/ux-baseline/mockups/index.html) 的主题变量与复用组件，不采纳现有生产 UI 的样式；交互、状态与任务契约见 [EXPERIENCE](docs/design/ux-baseline/EXPERIENCE.md)，本文不重复功能规格。
+视觉取值来自 [完成原型](docs/design/ux-baseline/mockups/index.html) 的主题变量与复用组件，不采纳现有生产 UI 的样式；交互、状态与任务契约见 [EXPERIENCE](docs/design/ux-baseline/EXPERIENCE/README.md)，本文不重复功能规格。
 
 ## Colors
 
