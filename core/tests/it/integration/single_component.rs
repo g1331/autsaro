@@ -1735,6 +1735,7 @@ fn lsdur_module_configuration_is_refused_at_the_module() {
 /// are refused where they are configured.
 #[test]
 fn pdur_features_outside_the_selection_are_refused_at_their_source() {
+    // Unselected switches (Verifies: ECUC_PduR_00302／00347／00316／00317).
     for definition in [
         // Rejects: ECUC_PduR_00302
         "PduRDevErrorDetect",
@@ -1922,7 +1923,8 @@ fn pdur_mandatory_general_and_configuration_id_are_required_and_generated() {
         "ecuc.arxml",
         "/Configuration/PduR/Routes",
     );
-    // PduR_GetConfigurationId returns the configured identifier (SWS_PduR_00280).
+    // The configuration is identified by PduRConfigurationId and lives in PduR_PBcfg.c
+    // (Verifies: SWS_PduR_00281, 00241).
     let mut sources = single_component_sources();
     parameter(&mut sources, "Routes", "PduRConfigurationId", "7");
     let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
@@ -1939,7 +1941,7 @@ fn pdur_mandatory_general_and_configuration_id_are_required_and_generated() {
 }
 
 #[test]
-fn pdur_fan_out_and_gateway_routes_are_refused_at_their_source() {
+fn pdur_fan_out_fan_in_and_gateway_routes_are_refused_at_their_source() {
     // Rejects: ECUC_PduR_00354
     let mut sources = single_component_sources();
     xml_edit(
@@ -1964,6 +1966,31 @@ fn pdur_fan_out_and_gateway_routes_are_refused_at_their_source() {
         "PDU_ROUTE_NOT_UNIQUE",
         "ecuc.arxml",
         "/Configuration/PduR/Routes/TxValueSource",
+    );
+    // Two routing paths into one destination (n:1).
+    let mut sources = single_component_sources();
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| {
+            named(node, "ECUC-CONTAINER-VALUE", "RxValue")
+                && node.children().any(|child| {
+                    child.text() == Some("/AUTOSAR/EcucDefs/PduR/PduRRoutingPaths/PduRRoutingPath")
+                })
+        },
+        |text| {
+            text.replacen(
+                "/Routes/RxValueDestination<",
+                "/Routes/TxValueDestination<",
+                1,
+            )
+        },
+    );
+    rejected_at(
+        &sources,
+        "PDU_ROUTE_NOT_UNIQUE",
+        "ecuc.arxml",
+        "/Configuration/PduR/Routes/RxValueSource",
     );
     // Rejects: ECUC_PduR_00291
     let mut sources = single_component_sources();

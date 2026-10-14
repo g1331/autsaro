@@ -1,7 +1,8 @@
 /** Deterministic window oracle for the routers (ADR 0018); actual PduR, LSduR and SchM.
  * A dispatcher stops right after PduR or LSduR left its area and before it calls the next
  * module. The contender (main) then completes Init and routing through the same areas, and
- * every request still has exactly one result. CanIf_Transmit is wrapped.
+ * every request still has exactly one result. CanIf_Transmit is wrapped. The areas guard
+ * only module data (Verifies[PduR]: SWS_BSW_00134; Verifies[LSduR]: SWS_BSW_00134).
  */
 #include "PduR.h"
 #include "PduR_Com.h"

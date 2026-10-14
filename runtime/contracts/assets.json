@@ -1387,7 +1387,7 @@
     },
     {
       "path": "runtime/bsw/include/LSduR.h",
-      "sha256": "68b3a3446a2cecd237dd55c7b403cd45fe3a40e0fc2ae9e0a7667327f71dc092",
+      "sha256": "26c81db93cde97b997dc0bbc029e52341f688f6d13776fc363491c8fc1a79547",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1457,7 +1457,7 @@
     },
     {
       "path": "runtime/bsw/include/PduR.h",
-      "sha256": "334de2207dfdc60d6fbb2f0a152cda736e68ad6b96e1994c69d6b7ced65dfa9e",
+      "sha256": "fb625196f9dd15a1dcf4fdd5127f8022e375a9e329573a62538a4117a6caa084",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

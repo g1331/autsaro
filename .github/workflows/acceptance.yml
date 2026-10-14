@@ -64,8 +64,8 @@ jobs:
           # SWS_DefaultErrorTracer is added after #46 corrects its stale citation in docs/standards/det.md.
           STALE_ONLY: >-
             TR_Methodology TPS_SystemTemplate TPS_SoftwareComponentTemplate TPS_BSWModuleDescriptionTemplate
-            TPS_ECUConfiguration SWS_BSWGeneral SWS_StandardTypes SWS_PlatformTypes SWS_CommunicationStackTypes
-            SWS_MemoryMapping SWS_RTE SWS_OS SWS_COM SWS_PDURouter SWS_LSduRouter SWS_CANDriver
+            TPS_ECUConfiguration SWS_StandardTypes SWS_PlatformTypes SWS_CommunicationStackTypes
+            SWS_MemoryMapping SWS_RTE SWS_OS SWS_COM SWS_CANDriver
             SWS_CANTransportLayer SWS_DiagnosticCommunicationManager SWS_COMManager SWS_CANStateManager
             SWS_BSWModeManager
         run: |

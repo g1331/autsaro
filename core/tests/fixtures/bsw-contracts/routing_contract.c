@@ -15,6 +15,41 @@
 #include "Ecu_Config.h"
 #include <assert.h>
 
+/* Standard signatures over the imported ComStack types, in order (Verifies: SWS_PduR_00334,
+ * 00341, 00615, 00617, 00406, 00362, 00365, 00369, 00507, 00512, 00375, 00518, 00381;
+ * Verifies: CP_SWS_LSduR_91006, 91008, 91009, 91011, 91013, 91014). Input pointers are
+ * const (Verifies[PduR]: SWS_BSW_00186; Verifies[LSduR]: SWS_BSW_00186). */
+static void (*const pdur_init)(const PduR_PBConfigType *) = PduR_Init;
+static PduR_PBConfigIdType (*const pdur_id)(void) = PduR_GetConfigurationId;
+static void (*const pdur_enable)(PduR_RoutingPathGroupIdType) = PduR_EnableRouting;
+static void (*const pdur_disable)(PduR_RoutingPathGroupIdType, boolean) = PduR_DisableRouting;
+static Std_ReturnType (*const pdur_com)(PduIdType, const PduInfoType *) = PduR_ComTransmit;
+static Std_ReturnType (*const pdur_dcm)(PduIdType, const PduInfoType *) = PduR_DcmTransmit;
+static void (*const pdur_indication)(PduIdType, const PduInfoType *) = PduR_CanIfRxIndication;
+static void (*const pdur_conf)(PduIdType, Std_ReturnType) = PduR_CanIfTxConfirmation;
+static Std_ReturnType (*const pdur_trigger)(PduIdType, PduInfoType *) = PduR_CanIfTriggerTransmit;
+static BufReq_ReturnType (*const pdur_start)(PduIdType, const PduInfoType *, PduLengthType,
+                                             PduLengthType *) = PduR_CanTpStartOfReception;
+static BufReq_ReturnType (*const pdur_copy_rx)(PduIdType, const PduInfoType *,
+                                               PduLengthType *) = PduR_CanTpCopyRxData;
+static void (*const pdur_tp_rx)(PduIdType, Std_ReturnType) = PduR_CanTpRxIndication;
+static BufReq_ReturnType (*const pdur_copy_tx)(PduIdType, const PduInfoType *, const RetryInfoType *,
+                                               PduLengthType *) = PduR_CanTpCopyTxData;
+static void (*const pdur_tp_conf)(PduIdType, Std_ReturnType) = PduR_CanTpTxConfirmation;
+static void (*const lsdur_init)(const LSduR_PBConfigType *) = LSduR_Init;
+static LSduR_PBConfigIdType (*const lsdur_id)(void) = LSduR_GetConfigurationId;
+static Std_ReturnType (*const lsdur_pdur)(PduIdType, const PduInfoType *) = LSduR_PduRTransmit;
+static Std_ReturnType (*const lsdur_cantp)(PduIdType, const PduInfoType *) = LSduR_CanTpTransmit;
+static void (*const lsdur_rx)(PduIdType, const PduInfoType *) = LSduR_CanIfRxIndication;
+static void (*const lsdur_conf)(PduIdType, Std_ReturnType) = LSduR_CanIfTxConfirmation;
+static Std_ReturnType (*const lsdur_trigger)(PduIdType, PduInfoType *) = LSduR_CanIfTriggerTransmit;
+/* Verifies: SWS_PduR_00771, 00654; Verifies: CP_SWS_LSduR_91004: identifiers derived from uint16. */
+typedef char configuration_ids[(sizeof(PduR_PBConfigIdType) == sizeof(uint16) &&
+                                sizeof(PduR_RoutingPathGroupIdType) == sizeof(uint16) &&
+                                sizeof(LSduR_PBConfigIdType) == sizeof(uint16))
+                                   ? 1
+                                   : -1];
+
 const EcuPolicyConfig Ecu_Policy = {.tx_confirmation = ECU_TX_SYNCHRONOUS};
 
 enum { CANIF_TX, CANTP_TX, COM_RX, COM_CONF, COM_TRIGGER, CANTP_CONF, START, COPY_RX, TP_RX,
@@ -94,6 +129,8 @@ static BufReq_ReturnType copy_tx(PduIdType id, const PduInfoType *pdu, const Ret
 }
 static void tp_conf(PduIdType id, Std_ReturnType result) { record(TP_CONF, id, NULL_PTR, result); }
 
+/* Post-build structures with implementation-specific content
+ * (Verifies: SWS_PduR_00743; Verifies: CP_SWS_LSduR_91003). */
 static const LSduR_RxRouteType ls_rx[] = {{5u, 25u, PduR_CanIfRxIndication}};
 static const LSduR_TxRouteType ls_tx[] = {
     {LSDUR_UP_PDUR, 35u, 5u, PduR_CanIfTxConfirmation, PduR_CanIfTriggerTransmit},
@@ -123,37 +160,44 @@ static const LSduR_TxRouteType ls_clash_tx[] = {
     {LSDUR_UP_PDUR, 1u, 5u, cantp_conf, NULL_PTR}, {LSDUR_UP_CANTP, 2u, 5u, cantp_conf, NULL_PTR}};
 static const LSduR_PBConfigType ls_clash = {31u, NULL_PTR, 0u, ls_clash_tx, 2u};
 
+/* Every interface through its standard signature; nothing is routed before Init. */
 static void uninitialized(void) {
     PduInfoType pdu = info;
-    assert(PduR_GetConfigurationId() == 0u && LSduR_GetConfigurationId() == 0u);
-    assert(PduR_ComTransmit(5u, &info) == E_NOT_OK && PduR_DcmTransmit(5u, &info) == E_NOT_OK);
-    assert(LSduR_PduRTransmit(35u, &info) == E_NOT_OK && LSduR_CanTpTransmit(5u, &info) == E_NOT_OK);
-    LSduR_CanIfRxIndication(5u, &info);
-    LSduR_CanIfTxConfirmation(5u, E_OK);
-    assert(LSduR_CanIfTriggerTransmit(5u, &pdu) == E_NOT_OK);
-    PduR_CanIfRxIndication(25u, &info);
-    PduR_CanIfTxConfirmation(35u, E_OK);
-    assert(PduR_CanIfTriggerTransmit(35u, &pdu) == E_NOT_OK);
-    assert(PduR_CanTpStartOfReception(35u, &info, 8u, &available) == BUFREQ_E_NOT_OK);
-    assert(PduR_CanTpCopyRxData(35u, &info, &available) == BUFREQ_E_NOT_OK);
-    PduR_CanTpRxIndication(35u, E_OK);
-    assert(PduR_CanTpCopyTxData(35u, &info, &retry, &available) == BUFREQ_E_NOT_OK);
-    PduR_CanTpTxConfirmation(35u, E_OK);
+    assert(pdur_id() == 0u && lsdur_id() == 0u);
+    assert(pdur_com(5u, &info) == E_NOT_OK && pdur_dcm(5u, &info) == E_NOT_OK);
+    assert(lsdur_pdur(35u, &info) == E_NOT_OK && lsdur_cantp(5u, &info) == E_NOT_OK);
+    lsdur_rx(5u, &info);
+    lsdur_conf(5u, E_OK);
+    assert(lsdur_trigger(5u, &pdu) == E_NOT_OK);
+    pdur_indication(25u, &info);
+    pdur_conf(35u, E_OK);
+    assert(pdur_trigger(35u, &pdu) == E_NOT_OK);
+    assert(pdur_start(35u, &info, 8u, &available) == BUFREQ_E_NOT_OK);
+    assert(pdur_copy_rx(35u, &info, &available) == BUFREQ_E_NOT_OK);
+    pdur_tp_rx(35u, E_OK);
+    assert(pdur_copy_tx(35u, &info, &retry, &available) == BUFREQ_E_NOT_OK);
+    pdur_tp_conf(35u, E_OK);
+    pdur_enable(0u);
+    pdur_disable(0u, FALSE);
     none();
 }
 
 int main(void) {
     PduInfoType pdu = info;
-    /* Verifies: SWS_PduR_00325／00330, CP_SWS_LSduR_00027／00031: no routing before Init. */
+    /* UNINIT after power up and while every Init was invalid: no routing
+     * (Verifies: SWS_PduR_00325, 00330; Verifies: CP_SWS_LSduR_00027, 00028, 00031). */
     uninitialized();
-    PduR_Init(NULL_PTR);
-    PduR_Init(&clash);
-    PduR_Init(&silent);
-    LSduR_Init(NULL_PTR);
-    LSduR_Init(&ls_clash);
+    pdur_init(NULL_PTR);
+    pdur_init(&clash);
+    pdur_init(&silent);
+    lsdur_init(NULL_PTR);
+    lsdur_init(&ls_clash);
     uninitialized();
-    LSduR_Init(&ls);
-    PduR_Init(&pdur);
+    /* A valid Init makes the router ONLINE and identifies its configuration
+     * (Verifies: SWS_PduR_00326, 00280; Verifies: CP_SWS_LSduR_00029, 00036;
+     * Verifies[PduR]: SWS_BSW_00071; Verifies[LSduR]: SWS_BSW_00071). */
+    lsdur_init(&ls);
+    pdur_init(&pdur);
     assert(PduR_GetConfigurationId() == 23u && LSduR_GetConfigurationId() == 29u);
     /* No ONLINE -> ONLINE transition: a second Init keeps the published configuration. */
     PduR_Init(&other);
@@ -161,7 +205,9 @@ int main(void) {
     assert(PduR_GetConfigurationId() == 23u && LSduR_GetConfigurationId() == 29u);
 
     /* Upper transmit: module identity selects the route, the lower ID is translated and
-     * the info pointer and lower result pass through unchanged. */
+     * the info pointer and lower result pass through unchanged, unbuffered and unchecked
+     * (Verifies: SWS_PduR_00328, 00160, 00161, 00766, 00629, 00745, 00625, 00626, 00634,
+     * 00432; Verifies: CP_SWS_LSduR_00030, 00005, 00006, 00007, 00015, 00017, 00018, 00019). */
     assert(PduR_ComTransmit(5u, &info) == E_OK);
     once(CANIF_TX, 5u);
     assert(last_info == &info);
@@ -176,8 +222,17 @@ int main(void) {
     assert(PduR_DcmTransmit(5u, &info) == E_NOT_OK);
     once(CANTP_TX, 35u);
     lower_result = E_OK;
+    /* An unknown length (0) reaches CanTp unchanged (Verifies: SWS_PduR_00822). */
+    {
+        const PduInfoType unknown = {bytes, NULL_PTR, 0u};
+        assert(PduR_DcmTransmit(5u, &unknown) == E_OK);
+        once(CANTP_TX, 35u);
+        assert(last_info == &unknown);
+    }
 
-    /* Lower callbacks: CanIf IDs reach the upper module of their own route only. */
+    /* Lower callbacks: CanIf IDs reach the upper module of their own route only, with
+     * results passed through (Verifies: SWS_PduR_00621, 00744, 00627, 00430, 00661;
+     * Verifies: CP_SWS_LSduR_00011, 00012, 00016, 00022, 00023). */
     LSduR_CanIfRxIndication(5u, &info);
     once(COM_RX, 5u);
     assert(last_info == &info);
@@ -202,11 +257,16 @@ int main(void) {
     assert(PduR_CanIfTriggerTransmit(35u, &pdu) == E_OK);
     once(COM_TRIGGER, 5u);
 
-    /* Transport: CanTp's PduR IDs reach Dcm with Dcm's IDs and buffer results unchanged. */
+    /* Transport: CanTp's PduR IDs reach Dcm with Dcm's IDs and buffer results unchanged
+     * (Verifies: SWS_PduR_00673, 00549, 00623, 00428, 00429, 00207, 00299, 00676, 00301). */
     available = 0u;
     assert(PduR_CanTpStartOfReception(35u, &info, 12u, &available) == BUFREQ_OK);
     once(START, 45u);
     assert(available == 12u && last_info == &info);
+    /* An unknown total length (0) is forwarded as 0 (Verifies: SWS_PduR_00821). */
+    assert(PduR_CanTpStartOfReception(35u, &info, 0u, &available) == BUFREQ_OK);
+    once(START, 45u);
+    assert(available == 0u);
     assert(PduR_CanTpCopyRxData(35u, &info, &available) == BUFREQ_E_BUSY);
     once(COPY_RX, 45u);
     assert(available == 7u);
@@ -221,7 +281,8 @@ int main(void) {
     PduR_CanIfTxConfirmation(35u, E_NOT_OK);
     once(COM_CONF, 5u);
 
-    /* Wrong routes and null data: no call and no partial success. */
+    /* Only configured routes are used; wrong routes and null data cause no call and no
+     * partial success (Verifies: SWS_PduR_00162; Verifies: CP_SWS_LSduR_00008). */
     assert(PduR_ComTransmit(6u, &info) == E_NOT_OK && PduR_ComTransmit(5u, NULL_PTR) == E_NOT_OK);
     assert(PduR_DcmTransmit(6u, &info) == E_NOT_OK && PduR_DcmTransmit(5u, NULL_PTR) == E_NOT_OK);
     assert(LSduR_PduRTransmit(5u, &info) == E_NOT_OK && LSduR_PduRTransmit(35u, NULL_PTR) == E_NOT_OK);
@@ -240,7 +301,9 @@ int main(void) {
     assert(PduR_CanTpCopyTxData(55u, &info, &retry, &available) == BUFREQ_E_NOT_OK);
     PduR_CanTpTxConfirmation(45u, E_OK);
     none();
-    /* Routing path groups do not exist in the selected configuration: no action. */
+    /* Routing path groups do not exist in the selected configuration: an unknown group
+     * causes no action and paths without a group stay enabled (Verifies: SWS_PduR_00647,
+     * 00716, 00891). */
     PduR_EnableRouting(0u);
     PduR_DisableRouting(0u, TRUE);
     PduR_DisableRouting(65535u, FALSE);

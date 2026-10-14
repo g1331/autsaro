@@ -1,6 +1,7 @@
 /** @file Selected standard PDU routing, immutable one-to-one routes. */
 #ifndef PDUR_H
 #define PDUR_H
+#include "Std_Types.h"
 #include "ComStack_Types.h"
 typedef uint16 PduR_PBConfigIdType;
 typedef uint16 PduR_RoutingPathGroupIdType;
