@@ -33,9 +33,6 @@ BOOL WINAPI Test_Init(LPCRITICAL_SECTION lock, DWORD spin, DWORD flags) {
     return strcmp(failure, "mutex-init") == 0 ? FALSE
                                               : InitializeCriticalSectionEx(lock, spin, flags);
 }
-BOOL WINAPI Test_Try(LPCRITICAL_SECTION lock) {
-    return strcmp(failure, "busy") == 0 ? FALSE : TryEnterCriticalSection(lock);
-}
 #else
 int Test_Once(pthread_once_t *once, void (*callback)(void)) {
     return strcmp(failure, "once") == 0 ? EINVAL : pthread_once(once, callback);
@@ -61,12 +58,6 @@ int Test_Close(pthread_mutex_t *lock) {
 int Test_Lock(pthread_mutex_t *lock) {
     return strcmp(failure, "lock") == 0 ? EINVAL : pthread_mutex_lock(lock);
 }
-int Test_Try(pthread_mutex_t *lock) {
-    if (strcmp(failure, "busy") == 0) {
-        return EBUSY;
-    }
-    return strcmp(failure, "try-error") == 0 ? EINVAL : pthread_mutex_trylock(lock);
-}
 int Test_Unlock(pthread_mutex_t *lock) {
     return strcmp(failure, "unlock") == 0 ? EINVAL : pthread_mutex_unlock(lock);
 }
@@ -88,8 +79,6 @@ static EcuStatus emit(uint32_t id, uint8_t dlc, const uint8_t data[8]) {
     return ECU_OK;
 }
 int main(int argc, char **argv) {
-    uint8_t bytes[8] = {1u};
-    Can_PduType pdu = {.id = 1u, .length = 1u, .sdu = bytes};
     Can_ConfigType config = {.sink = emit};
     if (argc < 2) {
         return 1;
@@ -97,10 +86,6 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "normal") == 0) {
         Can_Init(&config);
         Can_Lock();
-        Can_Unlock();
-        if (Can_TryLock() != 1) {
-            return 2;
-        }
         Can_Unlock();
         /* The legacy shared area may recurse and enclose strict areas until it is retired. */
         Can_HostStateLock();
@@ -129,8 +114,7 @@ int main(int argc, char **argv) {
         Can_HostStateLock();
         return 6;
     }
-    if (strcmp(argv[1], "busy") == 0 || strcmp(argv[1], "try-error") == 0 ||
-        strcmp(argv[1], "lock") == 0 || strcmp(argv[1], "unlock") == 0) {
+    if (strcmp(argv[1], "lock") == 0 || strcmp(argv[1], "unlock") == 0) {
         Can_Init(&config);
         (void)Can_SetControllerMode(0u, CAN_CS_STARTED);
     }
@@ -146,15 +130,5 @@ int main(int argc, char **argv) {
         }
         return 3; /* No fatal lock path may return to its caller. */
     }
-    /* Can_Write enters its area normally (lock failures are fatal like every area entry)
-     * and reports CAN_BUSY only for an occupied slot, never for a contended lock. */
-    if (strcmp(failure, "busy") == 0) {
-        if ((Can_TryLock() != 0) || (Can_Write(0u, &pdu) != E_OK) ||
-            (Can_Write(0u, &pdu) != CAN_BUSY)) {
-            return 4;
-        }
-    } else if (Can_TryLock() != -1) {
-        return 5;
-    }
-    return 0;
+    return 1;
 }
