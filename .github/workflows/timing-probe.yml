@@ -1,4 +1,5 @@
-# Temporary #61 experiment; removed before merge.
+# Temporary #61 evidence; removed before merge. Only the runner type that failed
+# (AMD EPYC 9V45) runs the suite; every other runner ends after reading its CPU.
 name: Timing probe
 on:
   push:
@@ -11,25 +12,39 @@ jobs:
   probe:
     strategy:
       fail-fast: false
-      max-parallel: 14
+      max-parallel: 4
       matrix:
-        slot: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+        slot: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
     name: probe (${{ matrix.slot }})
     runs-on: windows-latest
-    timeout-minutes: 100
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: astral-sh/setup-uv@v10.2.0
-      - run: uv sync --locked
-      - uses: ./.github/actions/core-build-dependencies
-      - uses: ./.github/actions/native-analysis-compiler
+      - name: Select runner type
+        id: runner
+        shell: pwsh
+        run: |
+          $cpu = (Get-CimInstance Win32_Processor).Name.Trim()
+          Write-Output "CPU: $cpu"
+          "match=$($cpu -match '9V45')" >> $env:GITHUB_OUTPUT
+      - if: steps.runner.outputs.match == 'True'
+        uses: actions/checkout@v7.0.1
+      - if: steps.runner.outputs.match == 'True'
+        uses: astral-sh/setup-uv@v10.2.0
+      - if: steps.runner.outputs.match == 'True'
+        run: uv sync --locked
+      - if: steps.runner.outputs.match == 'True'
+        uses: ./.github/actions/core-build-dependencies
+      - if: steps.runner.outputs.match == 'True'
+        uses: ./.github/actions/native-analysis-compiler
       - name: Identify native build cache inputs
+        if: steps.runner.outputs.match == 'True'
         shell: python
         run: |
           import os
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
               output.write('CACHE_IMAGE=' + os.environ['ImageOS'] + '-' + os.environ['ImageVersion'] + '\n')
-      - uses: actions/cache/restore@v6.1.0
+      - if: steps.runner.outputs.match == 'True'
+        uses: actions/cache/restore@v6.1.0
         with:
           path: |
             ~/.cargo/registry
@@ -37,6 +52,7 @@ jobs:
             target
           key: native-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-v1
       - name: Select native contract tools
+        if: steps.runner.outputs.match == 'True'
         shell: python
         run: |
           import os, shutil, subprocess
@@ -48,80 +64,15 @@ jobs:
               for variable, name in tools.items():
                   output.write(variable + '=' + str(Path(shutil.which(name)).absolute()) + '\n')
               output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
-      - name: Hardware and handoff costs
-        continue-on-error: true
-        shell: pwsh
-        run: |
-          Get-CimInstance Win32_Processor | Format-List Name, Manufacturer, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed
-          Get-CimInstance Win32_ComputerSystem | Format-List Manufacturer, Model, HypervisorPresent
-          gcc -O2 -std=c99 .github/timing-probe/bench.c -o bench.exe
-          ./bench.exe
-      # Both variants on the same runner: the failure follows the machine type.
-      - name: Build fix and baseline test binaries
+      - name: Full native suite, default parallelism, three times
+        if: steps.runner.outputs.match == 'True'
         shell: python
         run: |
-          import re, shutil, subprocess
-          from pathlib import Path
-          deps = Path('target/debug/deps')
-          def build(name):
-              subprocess.run(['cargo', 'test', '--locked', '-p', 'autosar-config-core', '--features', 'native-tests', '--test', 'native', '--no-run'], check=True)
-              built = max((p for p in deps.glob('native-*.exe') if re.fullmatch(r'native-[0-9a-f]{16}\.exe', p.name)), key=lambda p: p.stat().st_mtime)
-              shutil.copy2(built, deps / f'native-{name}.exe')
-          build('fix')
-          path = Path('runtime/os/src/Os_Backend.c')
-          patched, count = re.subn(rb'\n    /\* Give the host CPU back:.*?Sleep\(1u\);', b'', path.read_bytes(), flags=re.S)
-          assert count == 1, count
-          path.write_bytes(patched)
-          subprocess.run(['uv', 'run', '--locked', 'python', '-m', 'autosar_tooling', 'assets', 'update'], check=True)
-          build('baseline')
-      - name: Stress
-        shell: python
-        env:
-          SLOT: ${{ matrix.slot }}
-        run: |
-          import os, subprocess, time
-          from pathlib import Path
-          deps = Path('target/debug/deps')
-          out = Path('probe-logs'); out.mkdir()
-          order = ['baseline', 'fix'] if int(os.environ['SLOT']) % 2 else ['fix', 'baseline']
-          results = {name: [] for name in order}
-          runs = 0
-          started = time.monotonic()
-          while time.monotonic() - started < 42 * 60:
-              variant = order[runs % 2]
-              name = f'run{runs}-{variant}'
-              env = dict(os.environ, AUTOSAR_TIMING_PROBE=str((out / f'{name}.log').absolute()))
+          import subprocess, sys, time
+          codes = []
+          for run in range(3):
               began = time.monotonic()
-              with open(out / f'{name}.out', 'w') as log:
-                  code = subprocess.run([str(deps / f'native-{variant}.exe')], stdout=log, stderr=subprocess.STDOUT, env=env).returncode
-              text = (out / f'{name}.out').read_text(errors='replace')
-              failures = [l.split()[1] for l in text.splitlines() if l.endswith('... FAILED')]
-              results[variant].append((name, code, time.monotonic() - began, failures))
-              print(f'{name}: exit {code} in {time.monotonic() - began:.0f}s failed={failures}', flush=True)
-              runs += 1
-          for variant in order:
-              spans, aborts = [], []
-              for name, code, _, _ in results[variant]:
-                  for line in (out / f'{name}.log').read_text(errors='replace').splitlines():
-                      v = dict(kv.split('=', 1) for kv in line.split() if '=' in kv)
-                      if line.startswith('abort') and code != 0 and 'site=watchdog' in line and ' at=10 ' not in line:
-                          aborts.append(name + ': ' + line)
-                      elif not line.startswith('abort') and int(v.get('span', 0)) >= 100:
-                          spans.append((int(v['elapsed']) / int(v['span']), line))
-              spans.sort()
-              q = lambda p: spans[min(len(spans) - 1, int(p * len(spans)))][0]
-              runs_done = results[variant]
-              print(f"== {variant}: runs={len(runs_done)} failed={sum(1 for r in runs_done if r[1] != 0)} "
-                    f"durations={[round(r[2]) for r in runs_done]} failures={[r[3] for r in runs_done if r[3]]}")
-              if spans:
-                  print('   ms/tick p50=%.2f p90=%.2f p99=%.2f max=%.2f' % (q(.5), q(.9), q(.99), spans[-1][0]))
-                  for _, line in spans[-3:]:
-                      print('    ', line[:400])
-              for a in aborts[:6]:
-                  print('    ', a[:900])
-      - uses: actions/upload-artifact@v7.0.1
-        if: always()
-        with:
-          name: probe-${{ matrix.slot }}
-          path: probe-logs
-          retention-days: 7
+              codes.append(subprocess.run(['cargo', 'test', '--locked', '-p', 'autosar-config-core', '--features', 'native-tests',
+                                           '--lib', '--test', 'native', '--no-fail-fast']).returncode)
+              print(f'run{run}: exit {codes[-1]} in {time.monotonic() - began:.0f}s', flush=True)
+          sys.exit(1 if any(codes) else 0)
