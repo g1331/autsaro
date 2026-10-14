@@ -43,6 +43,8 @@ class ConfigurationTests(unittest.TestCase):
                 self.assertEqual(
                     result["AUTOSAR_PYTHON"], str(Path(sys.executable).absolute())
                 )
+                # Native suites run at the default test parallelism unless chosen locally.
+                self.assertNotIn("RUST_TEST_THREADS", result)
 
     def test_unknown_settings_fail_instead_of_changing_arbitrary_environment(self):
         with tempfile.TemporaryDirectory() as directory:

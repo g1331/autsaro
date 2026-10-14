@@ -55,7 +55,6 @@ def environment(root: Path = ROOT) -> dict[str, str]:
                 value = str(selected if selected.is_absolute() else root / selected)
             env.setdefault(name, value)
     env.setdefault("AUTOSAR_PYTHON", str(Path(sys.executable).absolute()))
-    env.setdefault("RUST_TEST_THREADS", "2")
     env.setdefault("PYTHONUTF8", "1")
     return env
 
