@@ -506,7 +506,7 @@ jobs:
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_clang_build.py
       - name: Generated C adds no clang-tidy findings to the baseline
         if: runner.os == 'Linux'
-        run: uv run --locked python -m autosar_tooling quality --scope runtime --c-samples "${{ env.AUTOSAR_C_ANALYSIS_SAMPLES }}"
+        run: uv run --locked python -m autosar_tooling quality --scope runtime --c-samples "$AUTOSAR_C_ANALYSIS_SAMPLES"
 
   native-delivery:
     # Builds and receives the prepared samples; runs beside their analysis rather than before it.
