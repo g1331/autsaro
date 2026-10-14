@@ -39,6 +39,10 @@ updates:
       # Dependabot reads 0.10 -> 0.11 as a minor update; sha2 0.11 changes the digest type.
       - dependency-name: sha2
         versions: [">= 0.11"]
+      # tauri build requires the Rust crates and the @tauri-apps npm packages on the same
+      # minor release; upgrade both sides by hand in one pull request.
+      - dependency-name: "tauri*"
+        update-types: ["version-update:semver-minor"]
   - package-ecosystem: npm
     directory: /ui
     schedule:
@@ -54,6 +58,9 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # Kept on the same minor release as the tauri crates; see the cargo entry.
+      - dependency-name: "@tauri-apps/*"
+        update-types: ["version-update:semver-minor"]
   - package-ecosystem: uv
     directory: /
     schedule:
