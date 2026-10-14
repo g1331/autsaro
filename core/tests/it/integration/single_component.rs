@@ -1689,11 +1689,13 @@ fn second_canif_hardware_object_is_refused() {
 /// link-time or post-build variant is refused (link-time CanIf: SWS_CANIF_00378).
 #[test]
 fn link_time_and_post_build_variants_are_refused_at_the_module() {
-    // Rejects: ECUC_CanIf_00244, ECUC_PduR_00293
+    // Rejects: ECUC_CanIf_00244, ECUC_PduR_00293, ECUC_Com_00540
     for (module, variant) in [
         ("CanIf", "VARIANT-LINK-TIME"),
         ("CanIf", "VARIANT-POST-BUILD"),
         ("PduR", "VARIANT-POST-BUILD"),
+        ("Com", "VARIANT-LINK-TIME"),
+        ("Com", "VARIANT-POST-BUILD"),
     ] {
         let mut sources = single_component_sources();
         xml_edit(
@@ -1879,6 +1881,462 @@ fn pdur_features_outside_the_selection_are_refused_at_their_source() {
             "ecuc.arxml",
             &object,
         );
+    }
+}
+
+/// Com values outside the selected immediate UINT32 profile are refused at the Com
+/// container that holds them.
+#[test]
+fn com_parameters_outside_the_selection_are_refused_at_their_source() {
+    let general = "/Configuration/Com/General";
+    let rx = "/Configuration/Com/Config/RxValue";
+    let tx = "/Configuration/Com/Config/TxValue";
+    let rx_pdu = "/Configuration/Com/Config/RxValuePdu";
+    let transmit = "/Configuration/Com/Config/TxValuePdu/Transmit";
+    let mode = "/Configuration/Com/Config/TxValuePdu/Transmit/ModeTrue/Periodic";
+    let callbacks = "/Configuration/Rte/ComUser/Callbacks";
+    for (owner, definition, value, code, object) in [
+        // Rejects: ECUC_Com_10042
+        (
+            "General",
+            "ComEnableSecurityEventReporting",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            general,
+        ),
+        // Rejects: ECUC_Com_10002
+        (
+            "General",
+            "ComEnableSignalGroupArrayApi",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            general,
+        ),
+        // Rejects: ECUC_Com_00438
+        (
+            "General",
+            "ComVersionInfoApi",
+            "true",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            general,
+        ),
+        // Rejects: ECUC_Com_00127
+        ("RxValue", "ComSignalType", "UINT8_DYN", "TYPE_CONFLICT", rx),
+        ("RxValue", "ComSignalType", "UINT8_N", "TYPE_CONFLICT", rx),
+        ("RxValue", "ComSignalType", "SINT32", "TYPE_CONFLICT", rx),
+        ("RxValue", "ComSignalType", "FLOAT32", "TYPE_CONFLICT", rx),
+        // Rejects: ECUC_Com_00157
+        (
+            "RxValue",
+            "ComSignalEndianness",
+            "BIG_ENDIAN",
+            "TYPE_CONFLICT",
+            rx,
+        ),
+        (
+            "RxValue",
+            "ComSignalEndianness",
+            "OPAQUE",
+            "TYPE_CONFLICT",
+            rx,
+        ),
+        // Rejects: ECUC_Com_00158
+        ("RxValue", "ComBitSize", "0", "TYPE_CONFLICT", rx),
+        // Rejects: ECUC_Com_00560
+        (
+            "TxValue",
+            "ComTransferProperty",
+            "TRIGGERED",
+            "TYPE_CONFLICT",
+            tx,
+        ),
+        (
+            "TxValue",
+            "ComTransferProperty",
+            "TRIGGERED_ON_CHANGE",
+            "TYPE_CONFLICT",
+            tx,
+        ),
+        // Rejects: ECUC_Com_00412
+        (
+            "RxValue",
+            "ComRxDataTimeoutAction",
+            "REPLACE",
+            "TIMEOUT_CONFLICT",
+            rx,
+        ),
+        (
+            "RxValue",
+            "ComRxDataTimeoutAction",
+            "SUBSTITUTE",
+            "TIMEOUT_CONFLICT",
+            rx,
+        ),
+        // Rejects: ECUC_Com_00263
+        ("RxValue", "ComTimeout", "0.031", "TIMEOUT_CONFLICT", rx),
+        // Rejects: ECUC_Com_00183
+        ("RxValue", "ComFirstTimeout", "0.05", "TIMEOUT_CONFLICT", rx),
+        // Rejects: ECUC_Com_00119
+        (
+            "RxValuePdu",
+            "ComIPduSignalProcessing",
+            "DEFERRED",
+            "COM_FEATURE_UNSUPPORTED",
+            rx_pdu,
+        ),
+        // Rejects: ECUC_Com_00761
+        (
+            "RxValuePdu",
+            "ComIPduType",
+            "TP",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            rx_pdu,
+        ),
+        // Rejects: ECUC_Com_00181
+        (
+            "Transmit",
+            "ComMinimumDelayTime",
+            "0.02",
+            "COM_FEATURE_UNSUPPORTED",
+            transmit,
+        ),
+        // Rejects: ECUC_Com_00137
+        (
+            "Periodic",
+            "ComTxModeMode",
+            "DIRECT",
+            "PERIOD_ALARM_CONFLICT",
+            mode,
+        ),
+        (
+            "Periodic",
+            "ComTxModeMode",
+            "MIXED",
+            "PERIOD_ALARM_CONFLICT",
+            mode,
+        ),
+        (
+            "Periodic",
+            "ComTxModeMode",
+            "NONE",
+            "PERIOD_ALARM_CONFLICT",
+            mode,
+        ),
+        // Rejects: ECUC_Com_10034
+        (
+            "Reception",
+            "ComUserCallbackType",
+            "COM_TX_ACK",
+            "COM_CALLBACK",
+            callbacks,
+        ),
+        (
+            "Reception",
+            "ComUserCallbackType",
+            "COM_TX_ERR",
+            "COM_CALLBACK",
+            callbacks,
+        ),
+        (
+            "Reception",
+            "ComUserCallbackType",
+            "COM_TX_TOUT",
+            "COM_CALLBACK",
+            callbacks,
+        ),
+        (
+            "Reception",
+            "ComUserCallbackType",
+            "COM_INV",
+            "COM_CALLBACK",
+            callbacks,
+        ),
+    ] {
+        let mut sources = single_component_sources();
+        parameter(&mut sources, owner, definition, value);
+        rejected_at(&sources, code, "ecuc.arxml", object);
+    }
+}
+
+/// Containers and parameters of unselected Com features have no definition in the
+/// selected catalog, or are refused where the selected profile cannot honour them.
+#[test]
+fn com_features_outside_the_selection_are_refused_at_their_source() {
+    let com = "/AUTOSAR/EcucDefs/Com";
+    let owners = [
+        (
+            "General",
+            format!("{com}/ComGeneral"),
+            "/Configuration/Com/General",
+        ),
+        (
+            "Config",
+            format!("{com}/ComConfig"),
+            "/Configuration/Com/Config",
+        ),
+        (
+            "Tx",
+            format!("{com}/ComConfig/ComMainFunctionTx"),
+            "/Configuration/Com/Config/Tx",
+        ),
+        (
+            "RxValuePdu",
+            format!("{com}/ComConfig/ComIPdu"),
+            "/Configuration/Com/Config/RxValuePdu",
+        ),
+        (
+            "Transmit",
+            format!("{com}/ComConfig/ComIPdu/ComTxIPdu"),
+            "/Configuration/Com/Config/TxValuePdu/Transmit",
+        ),
+        (
+            "Periodic",
+            format!("{com}/ComConfig/ComIPdu/ComTxIPdu/ComTxModeTrue/ComTxMode"),
+            "/Configuration/Com/Config/TxValuePdu/Transmit/ModeTrue/Periodic",
+        ),
+        (
+            "RxValue",
+            format!("{com}/ComConfig/ComSignal"),
+            "/Configuration/Com/Config/RxValue",
+        ),
+        (
+            "TxValue",
+            format!("{com}/ComConfig/ComSignal"),
+            "/Configuration/Com/Config/TxValue",
+        ),
+        (
+            "Callbacks",
+            "/AUTOSAR/EcucDefs/Rte/RteComUser/ComUserModuleCnf".to_owned(),
+            "/Configuration/Rte/ComUser/Callbacks",
+        ),
+    ];
+    let unknown = ("REFERENCE_UNRESOLVED", "DEFINITION_UNKNOWN");
+    // (owner, definition below the owner's, "" for a container or "KIND:value", codes)
+    for (owner, name, value, codes) in [
+        // Rejects: ECUC_Com_10000
+        (
+            "General",
+            "ComCancellationSupport",
+            "BOOLEAN:false",
+            unknown,
+        ),
+        // Rejects: ECUC_Com_00141
+        (
+            "General",
+            "ComConfigurationUseDet",
+            "BOOLEAN:false",
+            unknown,
+        ),
+        // Rejects: ECUC_Com_00788
+        (
+            "General",
+            "ComEnableMDTForCyclicTransmission",
+            "BOOLEAN:false",
+            unknown,
+        ),
+        // Rejects: ECUC_Com_10004
+        ("General", "ComMetaDataSupport", "BOOLEAN:false", unknown),
+        // Rejects: ECUC_Com_00780
+        (
+            "General",
+            "ComRetryFailedTransmitRequests",
+            "BOOLEAN:false",
+            unknown,
+        ),
+        // Rejects: ECUC_Com_10001
+        ("General", "ComUserCbkHeaderFile", "STRING:User.h", unknown),
+        // Rejects: ECUC_Com_10041
+        ("General", "ComSecurityEventRefs", "", unknown),
+        // Rejects: ECUC_Com_00783
+        ("Config", "ComDataMemSize", "INTEGER:64", unknown),
+        // Rejects: ECUC_Com_00782
+        ("Config", "ComMaxIPduCnt", "INTEGER:2", unknown),
+        // Rejects: ECUC_Com_10013
+        ("Config", "ComMainFunctionRouteSignals", "", unknown),
+        // Rejects: ECUC_Com_00345
+        ("Config", "ComSignalGroup", "", unknown),
+        // Rejects: ECUC_Com_00544
+        ("Config", "ComGwMapping", "", unknown),
+        // Rejects: ECUC_Com_10031
+        ("Config", "ComUserModule", "", unknown),
+        // Rejects: ECUC_Com_10020
+        (
+            "Tx",
+            "ComPreparationNotification",
+            "FUNCTION-NAME:Prepare",
+            unknown,
+        ),
+        // Rejects: ECUC_Com_00709
+        (
+            "RxValuePdu",
+            "ComIPduCancellationSupport",
+            "BOOLEAN:false",
+            unknown,
+        ),
+        // Rejects: ECUC_Com_00765
+        (
+            "RxValuePdu",
+            "ComIPduTriggerTransmitCallout",
+            "FUNCTION-NAME:Callout",
+            unknown,
+        ),
+        // Rejects: ECUC_Com_00387
+        (
+            "RxValuePdu",
+            "ComIPduCallout",
+            "FUNCTION-NAME:Callout",
+            ("COM_FEATURE_UNSUPPORTED", "COM_FEATURE_UNSUPPORTED"),
+        ),
+        // Rejects: ECUC_Com_00576
+        (
+            "Transmit",
+            "ComTxIPduClearUpdateBit",
+            "ENUMERATION:TRANSMIT",
+            unknown,
+        ),
+        // Rejects: ECUC_Com_10022
+        ("Transmit", "ComMetaDataDefaultItem", "", unknown),
+        // Rejects: ECUC_Com_00454
+        (
+            "Transmit",
+            "ComTxModeFalse",
+            "",
+            ("PERIOD_ALARM_CONFLICT", "PERIOD_ALARM_CONFLICT"),
+        ),
+        // Rejects: ECUC_Com_00281
+        (
+            "Periodic",
+            "ComTxModeNumberOfRepetitions",
+            "INTEGER:1",
+            unknown,
+        ),
+        // Rejects: ECUC_Com_00282
+        (
+            "Periodic",
+            "ComTxModeRepetitionPeriod",
+            "FLOAT:0.01",
+            unknown,
+        ),
+        // Rejects: ECUC_Com_00180
+        ("Periodic", "ComTxModeTimeOffset", "FLOAT:0.01", unknown),
+        // Rejects: ECUC_Com_00339
+        ("RxValue", "ComFilter", "", unknown),
+        // Rejects: ECUC_Com_00314
+        (
+            "RxValue",
+            "ComDataInvalidAction",
+            "ENUMERATION:NOTIFY",
+            unknown,
+        ),
+        // Rejects: ECUC_Com_00811
+        ("RxValue", "ComInitialValueOnly", "BOOLEAN:false", unknown),
+        // Rejects: ECUC_Com_00391
+        ("RxValue", "ComSignalDataInvalidValue", "STRING:0", unknown),
+        // Rejects: ECUC_Com_00437
+        ("RxValue", "ComSignalLength", "INTEGER:4", unknown),
+        // Rejects: ECUC_Com_10006
+        (
+            "RxValue",
+            "ComTimeoutSubstitutionValue",
+            "STRING:0",
+            unknown,
+        ),
+        // Rejects: ECUC_Com_00257
+        ("RxValue", "ComUpdateBitPosition", "INTEGER:32", unknown),
+        // Rejects: ECUC_Com_00263, ECUC_Com_00183
+        (
+            "TxValue",
+            "ComTimeout",
+            "FLOAT:0.05",
+            ("TIMEOUT_CONFLICT", "TIMEOUT_CONFLICT"),
+        ),
+        (
+            "TxValue",
+            "ComFirstTimeout",
+            "FLOAT:0.05",
+            ("TIMEOUT_CONFLICT", "TIMEOUT_CONFLICT"),
+        ),
+        // Rejects: ECUC_Com_10027
+        ("Callbacks", "ComUserSignalGroup", "", unknown),
+    ] {
+        let (_, path, object) = owners.iter().find(|row| row.0 == owner).unwrap();
+        let definition = format!("{path}/{name}");
+        let mut sources = single_component_sources();
+        xml_edit(
+            &mut sources,
+            "ecuc.arxml",
+            // Short names such as RxValue recur in CanIf and PduR; match the definition too.
+            |node| {
+                named(node, "ECUC-CONTAINER-VALUE", owner)
+                    && node.children().any(|child| {
+                        child.has_tag_name("DEFINITION-REF") && child.text() == Some(path.as_str())
+                    })
+            },
+            |text| {
+                let close = "</ECUC-CONTAINER-VALUE>";
+                let body = text.trim_end().strip_suffix(close).unwrap();
+                match value.split_once(':') {
+                    Some((kind, value)) => {
+                        let element = match kind {
+                            "INTEGER" | "FLOAT" | "BOOLEAN" => "NUMERICAL",
+                            _ => "TEXTUAL",
+                        };
+                        let dest = match kind {
+                            "FUNCTION-NAME" => "ECUC-FUNCTION-NAME-DEF".to_owned(),
+                            _ => format!("ECUC-{kind}-PARAM-DEF"),
+                        };
+                        let parameter = format!(
+                            "<ECUC-{element}-PARAM-VALUE><DEFINITION-REF DEST=\"{dest}\">{definition}</DEFINITION-REF><VALUE>{value}</VALUE></ECUC-{element}-PARAM-VALUE>"
+                        );
+                        // The owner's own parameters precede its sub-containers.
+                        let at =
+                            text.find("</DEFINITION-REF>").unwrap() + "</DEFINITION-REF>".len();
+                        if text[at..].trim_start().starts_with("<PARAMETER-VALUES>") {
+                            text.replacen(
+                                "<PARAMETER-VALUES>",
+                                &format!("<PARAMETER-VALUES>{parameter}"),
+                                1,
+                            )
+                        } else {
+                            format!(
+                                "{}<PARAMETER-VALUES>{parameter}</PARAMETER-VALUES>{}",
+                                &text[..at],
+                                &text[at..]
+                            )
+                        }
+                    }
+                    None => {
+                        // ComTxModeFalse is complete with the mode the runtime assumes when absent.
+                        let content = if name == "ComTxModeFalse" {
+                            format!(
+                                "<SUB-CONTAINERS><ECUC-CONTAINER-VALUE><SHORT-NAME>None</SHORT-NAME><DEFINITION-REF DEST=\"ECUC-PARAM-CONF-CONTAINER-DEF\">{definition}/ComTxMode</DEFINITION-REF><PARAMETER-VALUES><ECUC-TEXTUAL-PARAM-VALUE><DEFINITION-REF DEST=\"ECUC-ENUMERATION-PARAM-DEF\">{definition}/ComTxMode/ComTxModeMode</DEFINITION-REF><VALUE>NONE</VALUE></ECUC-TEXTUAL-PARAM-VALUE></PARAMETER-VALUES></ECUC-CONTAINER-VALUE></SUB-CONTAINERS>"
+                            )
+                        } else {
+                            String::new()
+                        };
+                        let container = format!(
+                            "<ECUC-CONTAINER-VALUE><SHORT-NAME>{name}</SHORT-NAME><DEFINITION-REF DEST=\"ECUC-PARAM-CONF-CONTAINER-DEF\">{definition}</DEFINITION-REF>{content}</ECUC-CONTAINER-VALUE>"
+                        );
+                        // The owner's own sub-containers close last.
+                        match body.trim_end().strip_suffix("</SUB-CONTAINERS>") {
+                            Some(inner) => format!("{inner}{container}</SUB-CONTAINERS>{close}"),
+                            None => {
+                                format!("{body}<SUB-CONTAINERS>{container}</SUB-CONTAINERS>{close}")
+                            }
+                        }
+                    }
+                }
+            },
+        );
+        let object = if name == "ComTxModeFalse" {
+            // A second transmission mode is refused at the I-PDU that selects between them.
+            "/Configuration/Com/Config/TxValuePdu".to_owned()
+        } else if value.is_empty() {
+            format!("{object}/{name}")
+        } else {
+            (*object).to_owned()
+        };
+        rejected_with(&sources, codes, "ecuc.arxml", &object);
     }
 }
 
