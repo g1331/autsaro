@@ -13,8 +13,8 @@ jobs:
       fail-fast: false
       matrix:
         variant: [baseline, fix]
-        load: [ci-slow, disk, cpu]
-    name: probe (${{ matrix.variant }}, ${{ matrix.load }})
+        slot: [1, 2, 3, 4, 5, 6]
+    name: probe (${{ matrix.variant }}, ${{ matrix.slot }})
     runs-on: windows-latest
     timeout-minutes: 90
     steps:
@@ -64,48 +64,33 @@ jobs:
         run: cargo test --locked -p autosar-config-core --features native-tests --test native --no-run
       - name: Stress
         shell: python
-        env:
-          LOAD: ${{ matrix.load }}
         run: |
           import os, subprocess, sys, tempfile, time
           from pathlib import Path
           binary = max(Path('target/debug/deps').glob('native-*.exe'), key=lambda p: p.stat().st_mtime)
           out = Path('probe-logs'); out.mkdir()
           test = 'integration::protocol::single_component_meets_independent_protocol_and_timing_vectors'
-          load = os.environ['LOAD']
-          print('CPUs', os.cpu_count(), 'load', load, 'temp', tempfile.gettempdir(), flush=True)
-          hogs = []
-          if load == 'cpu':
-              hogs = [subprocess.Popen([sys.executable, '-c', 'while True: pass']) for _ in range(8)]
-          elif load == 'disk':
-              writer = ('import os, tempfile\n'
-                        'path = os.path.join(tempfile.gettempdir(), "probe-disk-%d" % os.getpid())\n'
-                        'block = os.urandom(1 << 20)\n'
-                        'while True:\n'
-                        '    with open(path, "wb") as f:\n'
-                        '        for _ in range(256):\n'
-                        '            f.write(block); f.flush(); os.fsync(f.fileno())\n'
-                        '    os.remove(path)\n')
-              hogs = [subprocess.Popen([sys.executable, '-c', writer]) for _ in range(4)]
+          # Two slow shards at once: the required job's load, doubled.
+          command = [str(binary), 'integration::sealed_projects', 'integration::single_component', 'integration::protocol']
+          print('CPUs', os.cpu_count(), flush=True)
           failed = 0
           failed_runs = []
           runs = 0
           started = time.monotonic()
-          while time.monotonic() - started < 40 * 60:
-              env = dict(os.environ, AUTOSAR_TIMING_PROBE=str((out / f'run{runs}.log').absolute()))
-              if load == 'ci-slow':
-                  command = [str(binary), 'integration::sealed_projects', 'integration::single_component', 'integration::protocol']
-              else:
-                  command = [str(binary), test, '--exact']
-              with open(out / f'run{runs}.out', 'w') as log:
-                  code = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, env=env).returncode
-              failed += code != 0
-              if code != 0:
-                  failed_runs.append(f'run{runs}')
-              print(f'run {runs}: exit {code} at {time.monotonic() - started:.0f}s', flush=True)
-              runs += 1
-          for hog in hogs:
-              hog.kill()
+          while time.monotonic() - started < 35 * 60:
+              procs = []
+              for _ in range(2):
+                  env = dict(os.environ, AUTOSAR_TIMING_PROBE=str((out / f'run{runs}.log').absolute()))
+                  log = open(out / f'run{runs}.out', 'w')
+                  procs.append((f'run{runs}', subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, env=env), log))
+                  runs += 1
+              for name, proc, log in procs:
+                  code = proc.wait(); log.close()
+                  if code != 0:
+                      failed += 1
+                      failed_runs.append(name)
+                  print(f'{name}: exit {code} at {time.monotonic() - started:.0f}s', flush=True)
+          load = 'two slow shards'
           spans, aborts = [], []
           for f in out.glob('run*.log'):
               for line in f.read_text(errors='replace').splitlines():
@@ -134,6 +119,6 @@ jobs:
       - uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
-          name: probe-${{ matrix.variant }}
+          name: probe-${{ matrix.variant }}-${{ matrix.slot }}
           path: probe-logs
           retention-days: 7
