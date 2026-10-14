@@ -291,16 +291,17 @@ void Os_BackendGuardService(void)
 }
 int Os_BackendReady(void)
 {
+    int serving;
 #ifdef OS_TIME_TESTS
     Os_TimeTestBeforeReady();
 #endif
-    if (Os_TargetReady() != 0) {
-        return 1;
+    serving = Os_TargetReady();
+    if (serving == 0) {
+        /* A service that passed its entry guard before shutdown stops here instead of
+         * reporting the closing OS as a calling-context or state error (#162). */
+        Os_BackendGuardService();
     }
-    /* A service that passed its entry guard before shutdown stops here instead of
-     * reporting the closing OS as a calling-context or state error (#162). */
-    Os_BackendGuardService();
-    return 0;
+    return serving;
 }
 /* Normalize only live metadata order stamps. This never chooses a runnable task;
  * the existing kernel ready-list policy remains the only selector. */
