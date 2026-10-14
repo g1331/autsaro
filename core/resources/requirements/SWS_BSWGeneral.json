@@ -154,6 +154,7 @@
   },
   "elsewhere": [],
   "modules": [
+    "Com",
     "LSduR",
     "PduR"
   ]

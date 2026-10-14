@@ -590,6 +590,20 @@ pub(super) fn inspect_ports(
             }
             port.alive_timeout_ms
         } else {
+            // The selected Tx PDUs have no transmission deadline monitoring (SWS_Com_00333).
+            if ["ComTimeout", "ComFirstTimeout"].into_iter().any(|name| {
+                value(graph, com_signal, name, false)
+                    .is_some_and(|text| !super::composition::zero_seconds(text))
+            }) {
+                return Err(reject(
+                    graph,
+                    com_signal,
+                    "TIMEOUT_CONFLICT",
+                    crate::product_message!(
+                        "backend.integration.communication.tx_deadline_monitoring_unsupported"
+                    ),
+                ));
+            }
             None
         };
         let transmit_period = if port.read {

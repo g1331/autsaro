@@ -6,7 +6,7 @@
 
 | 约束 | 依据 | 要点 |
 | --- | --- | --- |
-| MISRA C:2012 修订基线 | [ADR 0008](../adr/0008-misra-baseline-and-no-deviation.md)、[misra-c2012 指导](../../.agents/skills/misra-c2012/SKILL.md) | C99；已批准的偏离记录在对应模块篇（目前只有 [PduR](../standards/pdur.md#misra-偏离) 的 Rule 8.7）；`c-check` 的用法见[生成 C 的静态检查](testing/generated-c.md) |
+| MISRA C:2012 修订基线 | [ADR 0008](../adr/0008-misra-baseline-and-no-deviation.md)、[misra-c2012 指导](../../.agents/skills/misra-c2012/SKILL.md) | C99；已批准的偏离记录在对应模块篇（目前有 [PduR](../standards/pdur.md#misra-偏离) 的 Rule 8.7，[Com](../standards/com.md#misra-偏离) 的 Rule 8.7 与 2.5）；`c-check` 的用法见[生成 C 的静态检查](testing/generated-c.md) |
 | BSW 命名 | SWS BSWGeneral R24-11 | API `<Mip>_<Sn>`（`SRS_BSW_00310`）；主函数 `<Mip>_MainFunction[<Sd>]`（`SWS_BSW_00153`）；类型 `<Ma>_<Tn>Type`，平台基本类型除外（`SWS_BSW_00146`）；宏、枚举字面值与状态值 `<MIP>_<SN>`，全大写，`E_OK`／`E_NOT_OK` 除外（`SWS_BSW_00124`）；错误值 `<MIP>_E_<EN>`（`SWS_BSW_00125`）；全局变量 `<Mip>_<Vn>`（`SWS_BSW_00130`），只读的加 `const`（`SWS_BSW_00131`） |
 | BSW 文件 | SWS BSWGeneral R24-11 | 文件名 `<Mip>[_<Ie>]*.*`（`SWS_BSW_00103`）；区分大小写，且不能只靠大小写区分（`SWS_BSW_00170`／`00171`）；实现源包含 `<Mip>_MemMap.h`（`SWS_BSW_00006`）；只引入需要的头、只导出其他模块需要的内容（`SWS_BSW_00104`／`00105`）；全局变量定义在实现源中（`SWS_BSW_00129`） |
 | 编译开关 | `SWS_BSW_00123` | 与定义值比较（`#if (X == STD_ON)`），不用 `#ifdef` 判断开关 |
@@ -100,7 +100,7 @@
 
 - 偏离记录写明规则、适用范围、依据、风险控制和批准人，位于对应模块的标准篇（`docs/standards/`）或 ADR；只能由维护者批准（ADR 0008）。
 - 记录获批后才在源码中加注释，注释中的规则编号与记录一致；Cppcheck 的原始诊断照常保留，注释不是 suppression。
-- 已批准的偏离：[PduR](../standards/pdur.md#misra-偏离) 的 Rule 8.7。其余模块随 #42–#45 改写时补齐所需记录与注释。
+- 已批准的偏离：[PduR](../standards/pdur.md#misra-偏离) 的 Rule 8.7，[Com](../standards/com.md#misra-偏离) 的 Rule 8.7 与 2.5。其余模块随 #43–#45 改写时补齐所需记录与注释。
 
 ## 自动检查
 

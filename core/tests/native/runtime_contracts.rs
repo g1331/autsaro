@@ -95,13 +95,17 @@ fn det_reports_concurrently_without_changing_callout_results() {
     );
 }
 
-#[test]
-fn com_standard_consumer_executes_group_and_reception_monitoring() {
-    let scratch = Scratch::new();
+/// Builds a Com consumer with the delivered host areas; `flags` add linker wraps.
+fn com_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let executable = tooling::native_binary(&scratch.0, "com-consumer");
-    let output = tooling::c_compiler()
+    let executable = tooling::native_binary(scratch, "com-consumer");
+    let mut command = tooling::c_compiler();
+    if cfg!(target_os = "linux") {
+        command.arg("-pthread");
+    }
+    let output = command
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
+        .args(flags)
         .arg("-I")
         .arg(root.join("runtime/bsw/include"))
         .arg("-I")
@@ -112,11 +116,10 @@ fn com_standard_consumer_executes_group_and_reception_monitoring() {
         .arg(root.join("runtime/host/src"))
         .arg("-I")
         .arg(root.join("core/tests/fixtures/bsw-contracts"))
-        .arg("-pthread")
         .arg(root.join("runtime/host/src/SchM_CanIf_Host.c"))
         .arg(root.join("runtime/host/src/Can_HostLock.c"))
         .arg(root.join("runtime/bsw/src/Com.c"))
-        .arg(root.join("core/tests/fixtures/bsw-contracts/com_contract.c"))
+        .arg(root.join("core/tests/fixtures/bsw-contracts").join(fixture))
         .arg("-o")
         .arg(&executable)
         .output()
@@ -126,6 +129,13 @@ fn com_standard_consumer_executes_group_and_reception_monitoring() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
+    executable
+}
+
+#[test]
+fn com_standard_consumer_executes_group_and_reception_monitoring() {
+    let scratch = Scratch::new();
+    let executable = com_consumer(&scratch.0, "com_contract.c", &[]);
     let output = Command::new(executable).output().unwrap();
     assert!(output.status.success(), "{:?}", output);
     assert!(
@@ -133,6 +143,26 @@ fn com_standard_consumer_executes_group_and_reception_monitoring() {
         "{:?}",
         output
     );
+}
+
+/// Com leaves COM_STATE before PduR and its users, and publishes in order (ADR 0018).
+#[test]
+fn com_notifications_and_transmissions_complete_once_while_another_waits_outside_the_area() {
+    let scratch = Scratch::new();
+    let executable = com_consumer(
+        &scratch.0,
+        "com_parallel.c",
+        &["-Wl,--wrap=SchM_Exit_Com_COM_STATE"],
+    );
+    let logs = scratch.0.join("execution");
+    std::fs::create_dir(&logs).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&logs, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let result = run_owned(executable, &scratch.0, logs);
+    assert!(result.success(), "{result:?}");
 }
 
 /// Headers a delivered mainline ECU generates for its BSW (`Ecu_Config.h`,

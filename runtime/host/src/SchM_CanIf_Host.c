@@ -1,7 +1,6 @@
 /** @file Host exclusive areas of the communication stack (ADR 0018). The driver, CanIf,
- * Det, PduR and LSduR areas are strict: separate resources that nest with nothing. Com is
- * not yet migrated and maps to the shared legacy resource. The selected target lock
- * provider implements them.
+ * Det, PduR, LSduR and Com areas are strict: separate resources that nest with nothing.
+ * The selected target lock provider implements them.
  */
 #include "SchM_CanIf.h"
 #include "SchM_Can.h"
@@ -16,8 +15,8 @@ void SchM_Enter_CanIf_CANIF_STATE(void) { Can_HostAreaEnter(CAN_HOST_AREA_CANIF)
 void SchM_Exit_CanIf_CANIF_STATE(void) { Can_HostAreaExit(CAN_HOST_AREA_CANIF); }
 void SchM_Enter_Det_DET_STATE(void) { Can_HostAreaEnter(CAN_HOST_AREA_DET); }
 void SchM_Exit_Det_DET_STATE(void) { Can_HostAreaExit(CAN_HOST_AREA_DET); }
-void SchM_Enter_Com_COM_STATE(void) { Can_HostStateLock(); }
-void SchM_Exit_Com_COM_STATE(void) { Can_HostStateUnlock(); }
+void SchM_Enter_Com_COM_STATE(void) { Can_HostAreaEnter(CAN_HOST_AREA_COM); }
+void SchM_Exit_Com_COM_STATE(void) { Can_HostAreaExit(CAN_HOST_AREA_COM); }
 void SchM_Enter_PduR_PDUR_STATE(void) { Can_HostAreaEnter(CAN_HOST_AREA_PDUR); }
 void SchM_Exit_PduR_PDUR_STATE(void) { Can_HostAreaExit(CAN_HOST_AREA_PDUR); }
 void SchM_Enter_LSduR_LSDUR_STATE(void) { Can_HostAreaEnter(CAN_HOST_AREA_LSDUR); }

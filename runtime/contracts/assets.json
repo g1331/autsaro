@@ -1205,7 +1205,7 @@
     },
     {
       "path": "runtime/bsw/include/Com.h",
-      "sha256": "95b7fd9068318c799912285a6df432ae2b3f45ae6b36162cf220a855a13cb989",
+      "sha256": "d7f7566c97f995c8a36d7a598db057f0f789f10525040b250b985cdf5abfd59e",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1639,7 +1639,7 @@
     },
     {
       "path": "runtime/bsw/src/Com.c",
-      "sha256": "03967be1af00e80d1872058d604e008287453d626225b1d2c7fc305ca2a6a2c6",
+      "sha256": "bfcea248beee28315acac7d591aa543a8a6cbb8dcfc1169ac598b6b9b269adba",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1751,7 +1751,7 @@
     },
     {
       "path": "runtime/host/src/SchM_CanIf_Host.c",
-      "sha256": "b3aced120431dbfe1a463c6efdd67bc5329ee3ab0bba86a933f47488110463e3",
+      "sha256": "5b1bf9a17bd24a7f056199a04bd71d5c7d6aa75a92eda11d4be0dd42c3c64cad",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1961,7 +1961,7 @@
     },
     {
       "path": "runtime/host/src/Can_HostLock.h",
-      "sha256": "c63d9a94bdca62f0b2e1c90f0938b909541347ab414d7e3ba9294f2b1fabced1",
+      "sha256": "b20460550ddf91bbab80c0ccbcc8751a05e2528311fb3b9f65bdb11f49eea85d",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
