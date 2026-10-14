@@ -141,6 +141,7 @@ int main(void) {
     assert(CanIf_SetPduMode(0u, CANIF_ONLINE) == E_OK);
     assert(CanIf_GetPduMode(1u, &channel) == E_NOT_OK && channel == CANIF_OFFLINE);
     Com_IpduGroupStart(0u, TRUE);
+    Com_EnableReceptionDM(0u);
     /* The driver accepts both frames; CanIf rejects the short one with Det 61 and
      * filters the unconfigured one without an indication or error. */
     assert(Can_Inject(0x123u, 3u, bytes, 0u) == ECU_OK);
@@ -241,14 +242,15 @@ int main(void) {
     Can_MainFunction_Wakeup();
     assert(Com_TriggerIPDUSend(1u) == E_NOT_OK); /* Rx is not a Tx request. */
     assert(Com_TriggerIPDUSend(99u) == E_NOT_OK);
-    assert(Com_TriggerIPDUSend(2u) == E_NOT_OK); /* Actual lower remains offline. */
+    /* Started I-PDU: triggered although the offline lower rejects it, never retried. */
+    assert(Com_TriggerIPDUSend(2u) == E_OK);
     assert(CanIf_SetPduMode(0u, CANIF_ONLINE) == E_OK);
     assert(Can_HostFlush() == ECU_OK && frames == 5u); /* No deferred manual trigger. */
     Com_IpduGroupStop(0u); /* Selected group contains Rx only; ungrouped Tx stays started. */
     assert(Com_TriggerIPDUSend(2u) == E_OK);
     value = 44u;
     assert(Com_SendSignal(11u, &value) == E_OK);
-    assert(Com_TriggerIPDUSend(2u) == E_NOT_OK); /* Actual lower BUSY, no queue. */
+    assert(Com_TriggerIPDUSend(2u) == E_OK); /* Actual lower BUSY, no queue. */
     assert(Can_HostFlush() == ECU_OK && frames == 6u && emitted[5] == 43u);
     /* Old STOP/bus-off outputs cannot consume the recovered same-ID request. */
     assert(Can_HostCompleteTransmit(51u, emitted_tokens[3]) == E_NOT_OK);

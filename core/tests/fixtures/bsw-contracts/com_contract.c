@@ -46,7 +46,8 @@ int main(void) {
     uint8 payload[] = {0x78u, 0x56u, 0x34u, 0x12u};
     PduInfoType info = {payload, NULL_PTR, 4u};
     PduInfoType short_info = {payload, NULL_PTR, 3u};
-    assert(COM_UNINIT == 0 && COM_SERVICE_NOT_AVAILABLE == 0x80u);
+    unsigned acknowledged;
+    assert(COM_UNINIT == 0 && COM_SERVICE_NOT_AVAILABLE == 0x80u && COM_BUSY == 0x81u);
     assert(sizeof(Com_SignalIdType) == 2u && sizeof(Com_IpduGroupIdType) == 2u);
     assert(sizeof(PduIdType) == 1u && sizeof(PduLengthType) == 2u);
     assert(sizeof(CbkHandleIdType) == 2u);
@@ -84,6 +85,11 @@ int main(void) {
     assert(write(10u, &value) == E_NOT_OK);
     assert(pull(0u, &info) == E_NOT_OK);
     confirm(0u, E_OK);
+    /* Started without enabled DM: the group's I-PDUs are not monitored (SWS_Com_00772). */
+    periods(100u);
+    assert(timeouts[0] == 0u && timeouts[1] == 0u);
+    enable(0u);
+    rx(0u, &info);
     periods(29u);
     assert(timeouts[0] == 0u);
     enable(0u); /* Already enabled: do not reset the running timer. */
@@ -102,9 +108,17 @@ int main(void) {
     assert(timeouts[0] == 3u && timeouts[1] == 0u);
     periods(20u);
     assert(timeouts[1] == 1u && timeouts[2] == 0u);
+    /* A short PDU resets I-PDU DM first but notifies no incomplete signal (00396, 00574). */
+    acknowledged = acknowledgments[0];
+    rx(0u, &short_info);
+    periods(29u);
+    assert(timeouts[0] == 3u && acknowledgments[0] == acknowledged);
+    assert(read(10u, &value) == E_OK && value == 0x12345678u);
+    periods(1u);
+    assert(timeouts[0] == 4u && timeouts[1] == 1u);
     disable(0u);
     periods(100u);
-    assert(timeouts[0] == 3u && timeouts[1] == 1u);
+    assert(timeouts[0] == 4u && timeouts[1] == 1u);
     payload[0] = 42u;
     payload[1] = 0u;
     payload[2] = 0u;
@@ -113,15 +127,15 @@ int main(void) {
     assert(read(10u, &value) == E_OK && value == 42u);
     enable(0u);
     periods(100u); /* first timeout zero: enabling alone does not restart regular DM. */
-    assert(timeouts[0] == 3u && timeouts[1] == 1u);
+    assert(timeouts[0] == 4u && timeouts[1] == 1u);
     rx(0u, &info);
     periods(30u);
-    assert(timeouts[0] == 4u);
+    assert(timeouts[0] == 5u);
     stop(0u);
     payload[0] = 43u;
     rx(0u, &info);
     periods(100u);
-    assert(timeouts[0] == 4u);
+    assert(timeouts[0] == 5u);
     assert(read(10u, &value) == COM_SERVICE_NOT_AVAILABLE && value == 42u);
     start(0u, FALSE);
     assert(read(10u, &value) == E_OK && value == 42u);

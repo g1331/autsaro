@@ -135,7 +135,8 @@ int Ecu_TargetTestFailStage(unsigned stage) {
             require(Rte_Application_Pipeline_IngressInstance_Read_RxValue_Value(&value) == E_OK);
             require(value == 45u);
             require(Rte_Application_Pipeline_IngressInstance_Write_TxValue_Value(77u) == E_OK);
-            require(Com_TriggerIPDUSend(1u) == E_NOT_OK);
+            /* Started I-PDU: triggered; the stopped controller rejects it below COM. */
+            require(Com_TriggerIPDUSend(1u) == E_OK);
             require(Rte_Application_Pipeline_IngressInstance_Write_Value_Value(99u) == E_OK);
             require(Rte_Application_Pipeline_ProcessInstance_Read_Value_Value(&value) == E_OK);
             require(value == 99u);
