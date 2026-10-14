@@ -28,12 +28,17 @@ static Std_ReturnType (*const pdur_dcm)(PduIdType, const PduInfoType *) = PduR_D
 static void (*const pdur_indication)(PduIdType, const PduInfoType *) = PduR_CanIfRxIndication;
 static void (*const pdur_conf)(PduIdType, Std_ReturnType) = PduR_CanIfTxConfirmation;
 static Std_ReturnType (*const pdur_trigger)(PduIdType, PduInfoType *) = PduR_CanIfTriggerTransmit;
-static BufReq_ReturnType (*const pdur_start)(PduIdType, const PduInfoType *, PduLengthType,
+static BufReq_ReturnType (*const pdur_start)(PduIdType,
+                                             const PduInfoType *,
+                                             PduLengthType,
                                              PduLengthType *) = PduR_CanTpStartOfReception;
-static BufReq_ReturnType (*const pdur_copy_rx)(PduIdType, const PduInfoType *,
+static BufReq_ReturnType (*const pdur_copy_rx)(PduIdType,
+                                               const PduInfoType *,
                                                PduLengthType *) = PduR_CanTpCopyRxData;
 static void (*const pdur_tp_rx)(PduIdType, Std_ReturnType) = PduR_CanTpRxIndication;
-static BufReq_ReturnType (*const pdur_copy_tx)(PduIdType, const PduInfoType *, const RetryInfoType *,
+static BufReq_ReturnType (*const pdur_copy_tx)(PduIdType,
+                                               const PduInfoType *,
+                                               const RetryInfoType *,
                                                PduLengthType *) = PduR_CanTpCopyTxData;
 static void (*const pdur_tp_conf)(PduIdType, Std_ReturnType) = PduR_CanTpTxConfirmation;
 static void (*const lsdur_init)(const LSduR_PBConfigType *) = LSduR_Init;
@@ -43,7 +48,8 @@ static Std_ReturnType (*const lsdur_cantp)(PduIdType, const PduInfoType *) = LSd
 static void (*const lsdur_rx)(PduIdType, const PduInfoType *) = LSduR_CanIfRxIndication;
 static void (*const lsdur_conf)(PduIdType, Std_ReturnType) = LSduR_CanIfTxConfirmation;
 static Std_ReturnType (*const lsdur_trigger)(PduIdType, PduInfoType *) = LSduR_CanIfTriggerTransmit;
-/* Verifies: SWS_PduR_00771, 00654; Verifies: CP_SWS_LSduR_91004: identifiers derived from uint16. */
+/* Verifies: SWS_PduR_00771, 00654; Verifies: CP_SWS_LSduR_91004: identifiers derived from uint16.
+ */
 typedef char configuration_ids[(sizeof(PduR_PBConfigIdType) == sizeof(uint16) &&
                                 sizeof(PduR_RoutingPathGroupIdType) == sizeof(uint16) &&
                                 sizeof(LSduR_PBConfigIdType) == sizeof(uint16))
@@ -52,8 +58,20 @@ typedef char configuration_ids[(sizeof(PduR_PBConfigIdType) == sizeof(uint16) &&
 
 const EcuPolicyConfig Ecu_Policy = {.tx_confirmation = ECU_TX_SYNCHRONOUS};
 
-enum { CANIF_TX, CANTP_TX, COM_RX, COM_CONF, COM_TRIGGER, CANTP_CONF, START, COPY_RX, TP_RX,
-       COPY_TX, TP_CONF, CALLS };
+enum {
+    CANIF_TX,
+    CANTP_TX,
+    COM_RX,
+    COM_CONF,
+    COM_TRIGGER,
+    CANTP_CONF,
+    START,
+    COPY_RX,
+    TP_RX,
+    COPY_TX,
+    TP_CONF,
+    CALLS
+};
 static unsigned calls[CALLS];
 static PduIdType last_id;
 static const PduInfoType *last_info;
@@ -64,13 +82,15 @@ static PduInfoType info = {bytes, NULL_PTR, 64u};
 static PduLengthType available;
 static const RetryInfoType retry = {TP_DATACONF, 0u};
 
-static void record(unsigned which, PduIdType id, const PduInfoType *pdu, Std_ReturnType result) {
+static void record(unsigned which, PduIdType id, const PduInfoType *pdu, Std_ReturnType result)
+{
     ++calls[which];
     last_id = id;
     last_info = pdu;
     last_result = result;
 }
-static unsigned total(void) {
+static unsigned total(void)
+{
     unsigned which;
     unsigned sum = 0u;
     for (which = 0u; which < CALLS; ++which) {
@@ -79,7 +99,8 @@ static unsigned total(void) {
     return sum;
 }
 /* Asserts that exactly one call happened since the last check, and on which interface. */
-static void once(unsigned which, PduIdType id) {
+static void once(unsigned which, PduIdType id)
+{
     unsigned other;
     for (other = 0u; other < CALLS; ++other) {
         assert(calls[other] == ((other == which) ? 1u : 0u));
@@ -89,39 +110,51 @@ static void once(unsigned which, PduIdType id) {
 }
 static void none(void) { assert(total() == 0u); }
 
-Std_ReturnType __wrap_CanIf_Transmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr) {
+Std_ReturnType __wrap_CanIf_Transmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr)
+{
     record(CANIF_TX, TxPduId, PduInfoPtr, E_OK);
     return lower_result;
 }
-static Std_ReturnType cantp_transmit(PduIdType id, const PduInfoType *pdu) {
+static Std_ReturnType cantp_transmit(PduIdType id, const PduInfoType *pdu)
+{
     record(CANTP_TX, id, pdu, E_OK);
     return lower_result;
 }
 static void com_rx(PduIdType id, const PduInfoType *pdu) { record(COM_RX, id, pdu, E_OK); }
-static void com_conf(PduIdType id, Std_ReturnType result) {
+static void com_conf(PduIdType id, Std_ReturnType result)
+{
     record(COM_CONF, id, NULL_PTR, result);
 }
-static Std_ReturnType com_trigger(PduIdType id, PduInfoType *pdu) {
+static Std_ReturnType com_trigger(PduIdType id, PduInfoType *pdu)
+{
     record(COM_TRIGGER, id, pdu, E_OK);
     return lower_result;
 }
-static void cantp_conf(PduIdType id, Std_ReturnType result) {
+static void cantp_conf(PduIdType id, Std_ReturnType result)
+{
     record(CANTP_CONF, id, NULL_PTR, result);
 }
-static BufReq_ReturnType start(PduIdType id, const PduInfoType *pdu, PduLengthType length,
-                               PduLengthType *size) {
+static BufReq_ReturnType start(PduIdType id,
+                               const PduInfoType *pdu,
+                               PduLengthType length,
+                               PduLengthType *size)
+{
     record(START, id, pdu, E_OK);
     *size = length;
     return BUFREQ_OK;
 }
-static BufReq_ReturnType copy_rx(PduIdType id, const PduInfoType *pdu, PduLengthType *size) {
+static BufReq_ReturnType copy_rx(PduIdType id, const PduInfoType *pdu, PduLengthType *size)
+{
     record(COPY_RX, id, pdu, E_OK);
     *size = 7u;
     return BUFREQ_E_BUSY;
 }
 static void tp_rx(PduIdType id, Std_ReturnType result) { record(TP_RX, id, NULL_PTR, result); }
-static BufReq_ReturnType copy_tx(PduIdType id, const PduInfoType *pdu, const RetryInfoType *again,
-                                 PduLengthType *size) {
+static BufReq_ReturnType copy_tx(PduIdType id,
+                                 const PduInfoType *pdu,
+                                 const RetryInfoType *again,
+                                 PduLengthType *size)
+{
     assert(again == &retry);
     record(COPY_TX, id, pdu, E_OK);
     *size = 3u;
@@ -156,12 +189,13 @@ static const PduR_PBConfigType clash = {25u, NULL_PTR, 0u, clash_tx, 2u, NULL_PT
 static const PduR_TxRouteType silent_tx[] = {
     {PDUR_UP_COM, 1u, PDUR_LO_LSDUR, 35u, LSduR_PduRTransmit, NULL_PTR, NULL_PTR}};
 static const PduR_PBConfigType silent = {26u, NULL_PTR, 0u, silent_tx, 1u, NULL_PTR, 0u};
-static const LSduR_TxRouteType ls_clash_tx[] = {
-    {LSDUR_UP_PDUR, 1u, 5u, cantp_conf, NULL_PTR}, {LSDUR_UP_CANTP, 2u, 5u, cantp_conf, NULL_PTR}};
+static const LSduR_TxRouteType ls_clash_tx[] = {{LSDUR_UP_PDUR, 1u, 5u, cantp_conf, NULL_PTR},
+                                                {LSDUR_UP_CANTP, 2u, 5u, cantp_conf, NULL_PTR}};
 static const LSduR_PBConfigType ls_clash = {31u, NULL_PTR, 0u, ls_clash_tx, 2u};
 
 /* Every interface through its standard signature; nothing is routed before Init. */
-static void uninitialized(void) {
+static void uninitialized(void)
+{
     PduInfoType pdu = info;
     assert(pdur_id() == 0u && lsdur_id() == 0u);
     assert(pdur_com(5u, &info) == E_NOT_OK && pdur_dcm(5u, &info) == E_NOT_OK);
@@ -182,7 +216,8 @@ static void uninitialized(void) {
     none();
 }
 
-int main(void) {
+int main(void)
+{
     PduInfoType pdu = info;
     /* UNINIT after power up and while every Init was invalid: no routing
      * (Verifies: SWS_PduR_00325, 00330; Verifies: CP_SWS_LSduR_00027, 00028, 00031). */
@@ -285,7 +320,8 @@ int main(void) {
      * partial success (Verifies: SWS_PduR_00162; Verifies: CP_SWS_LSduR_00008). */
     assert(PduR_ComTransmit(6u, &info) == E_NOT_OK && PduR_ComTransmit(5u, NULL_PTR) == E_NOT_OK);
     assert(PduR_DcmTransmit(6u, &info) == E_NOT_OK && PduR_DcmTransmit(5u, NULL_PTR) == E_NOT_OK);
-    assert(LSduR_PduRTransmit(5u, &info) == E_NOT_OK && LSduR_PduRTransmit(35u, NULL_PTR) == E_NOT_OK);
+    assert(LSduR_PduRTransmit(5u, &info) == E_NOT_OK &&
+           LSduR_PduRTransmit(35u, NULL_PTR) == E_NOT_OK);
     assert(LSduR_CanTpTransmit(35u, &info) == E_NOT_OK);
     LSduR_CanIfRxIndication(6u, &info);
     LSduR_CanIfRxIndication(5u, NULL_PTR);

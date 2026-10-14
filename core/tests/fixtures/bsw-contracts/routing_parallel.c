@@ -58,25 +58,29 @@ static uint8 second_bytes[8];
 static const PduInfoType first = {first_bytes, NULL_PTR, 8u};
 static const PduInfoType second = {second_bytes, NULL_PTR, 8u};
 
-Std_ReturnType __wrap_CanIf_Transmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr) {
+Std_ReturnType __wrap_CanIf_Transmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr)
+{
     ++transmits;
     last_id = TxPduId;
     last_info = PduInfoPtr;
     return E_OK;
 }
-static void com_rx(PduIdType id, const PduInfoType *pdu) {
+static void com_rx(PduIdType id, const PduInfoType *pdu)
+{
     ++receptions;
     last_id = id;
     last_info = pdu;
 }
-static void com_conf(PduIdType id, Std_ReturnType result) {
+static void com_conf(PduIdType id, Std_ReturnType result)
+{
     ++confirmations;
     last_id = id;
     last_result = result;
 }
 
 /* Stop the dispatcher once per window, after the router's real exit, with no sleeps. */
-static void pause_at(unsigned area) {
+static void pause_at(unsigned area)
+{
     lock();
     if ((armed == area) && dispatch_thread()) {
         armed = NOWHERE;
@@ -90,16 +94,19 @@ static void pause_at(unsigned area) {
 }
 void __real_SchM_Exit_PduR_PDUR_STATE(void);
 void __real_SchM_Exit_LSduR_LSDUR_STATE(void);
-void __wrap_SchM_Exit_PduR_PDUR_STATE(void) {
+void __wrap_SchM_Exit_PduR_PDUR_STATE(void)
+{
     __real_SchM_Exit_PduR_PDUR_STATE();
     pause_at(AFTER_PDUR);
 }
-void __wrap_SchM_Exit_LSduR_LSDUR_STATE(void) {
+void __wrap_SchM_Exit_LSduR_LSDUR_STATE(void)
+{
     __real_SchM_Exit_LSduR_LSDUR_STATE();
     pause_at(AFTER_LSDUR);
 }
 
-static void dispatch(void) {
+static void dispatch(void)
+{
     if (operation == TRANSMIT) {
         outcome = PduR_ComTransmit(5u, &first);
     } else if (operation == RECEIVE) {
@@ -109,13 +116,15 @@ static void dispatch(void) {
     }
 }
 #if defined(_WIN32)
-static DWORD WINAPI run(LPVOID argument) {
+static DWORD WINAPI run(LPVOID argument)
+{
     (void)argument;
     dispatch();
     return 0u;
 }
 #else
-static void *run(void *argument) {
+static void *run(void *argument)
+{
     (void)argument;
     dispatch();
     return NULL_PTR;
@@ -134,7 +143,8 @@ static const PduR_PBConfigType other = {24u, NULL_PTR, 0u, NULL_PTR, 0u, NULL_PT
 static const LSduR_PBConfigType ls_other = {30u, NULL_PTR, 0u, NULL_PTR, 0u};
 
 /* Runs one dispatcher request stopped at `area`; `contend` must complete meanwhile. */
-static void window(unsigned area, unsigned request, void (*contend)(void)) {
+static void window(unsigned area, unsigned request, void (*contend)(void))
+{
 #if defined(_WIN32)
     HANDLE thread;
 #else
@@ -172,30 +182,35 @@ static void window(unsigned area, unsigned request, void (*contend)(void)) {
 }
 
 /* The dispatcher read UNINIT; Init and a full request complete inside its window. */
-static void initialize(void) {
+static void initialize(void)
+{
     LSduR_Init(&ls);
     PduR_Init(&pdur);
     assert(PduR_ComTransmit(5u, &second) == E_OK);
     assert(transmits == 1u && last_id == 5u && last_info == &second);
 }
-static void receive(void) {
+static void receive(void)
+{
     LSduR_CanIfRxIndication(5u, &second);
     assert(receptions == 1u && last_id == 5u && last_info == &second);
     LSduR_Init(&ls_other);
     PduR_Init(&other);
 }
-static void confirm(void) {
+static void confirm(void)
+{
     PduR_CanIfTxConfirmation(35u, E_NOT_OK);
     assert(confirmations == 1u && last_id == 5u && last_result == E_NOT_OK);
     LSduR_Init(&ls_other);
     PduR_Init(&other);
 }
-static void transmit(void) {
+static void transmit(void)
+{
     assert(PduR_ComTransmit(5u, &second) == E_OK);
     assert(transmits == 1u && last_info == &second);
 }
 
-int main(void) {
+int main(void)
+{
 #if defined(_WIN32)
     InitializeCriticalSection(&handshake);
     InitializeConditionVariable(&changed);
