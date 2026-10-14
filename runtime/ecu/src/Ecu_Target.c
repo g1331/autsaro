@@ -70,11 +70,23 @@ static unsigned protocol_read;
 /* Highest generated bootstrap stage that began; retirement undoes only those. */
 static uint8 bootstrap_reached;
 
-static void fail(void)
+#include <stdio.h>
+#include <stdlib.h>
+/* Timing probe for #61 (temporary, enabled by AUTOSAR_TIMING_PROBE). */
+static void fail_at(unsigned line)
 {
+    const char *path = getenv("AUTOSAR_TIMING_PROBE");
+    if (path != NULL) {
+        FILE *file = fopen(path, "a");
+        if (file != NULL) {
+            (void)fprintf(file, "abort site=owner line=%u\n", line);
+            (void)fclose(file);
+        }
+    }
     (void)Os_HostAtomicExchange(&lifecycle, (Os_Atomic32)ECU_TARGET_FAILED);
     ShutdownOS(E_OS_STATE);
 }
+#define fail() fail_at(__LINE__)
 static Os_Atomic32 load(volatile Os_Atomic32 *value) { return Os_HostAtomicLoad(value); }
 
 /* Owner-only writer; a full queue closes the target instead of dropping a record. */

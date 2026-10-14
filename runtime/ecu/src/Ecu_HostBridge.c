@@ -3,31 +3,61 @@
 #include "Ecu_TargetConfig.h"
 #include "Ecu_Config.h"
 #include "Os_Host.h"
+#include <stdio.h>
+#include <stdlib.h>
 
 typedef struct {
     Os_HostHandle cancel;
     uint64_t started;
 } Ecu_HostWatch;
 
+/* Timing probe for #61 (temporary, enabled by AUTOSAR_TIMING_PROBE). */
+static uint64_t probe_started;
+static uint64_t probe_at;
+static uint64_t probe_tick_started;
+static uint64_t probe_max_tick;
+static uint64_t probe_span;
+static void probe(const char *event, uint64_t value)
+{
+    const char *path = getenv("AUTOSAR_TIMING_PROBE");
+    if (path != NULL) {
+        FILE *file = fopen(path, "a");
+        if (file != NULL) {
+            (void)fprintf(file,
+                          "%s=%llu elapsed=%llu at=%llu max_tick=%llu\n",
+                          event,
+                          (unsigned long long)value,
+                          (unsigned long long)(Os_HostMonotonicMs() - probe_started),
+                          (unsigned long long)probe_at,
+                          (unsigned long long)probe_max_tick);
+            (void)fclose(file);
+        }
+    }
+}
+
 static Os_HostThreadResult watch(void *argument)
 {
     const Ecu_HostWatch *control = (const Ecu_HostWatch *)argument;
     uint64_t elapsed = Os_HostMonotonicMs() - control->started;
     if (elapsed >= ECU_BATCH_WATCHDOG_MS) {
+        probe("abort site=watchdog-start line", __LINE__);
         Ecu_TargetAbortNative(E_OS_STATE);
     }
     if (Os_HostWait(control->cancel, ECU_BATCH_WATCHDOG_MS - (uint32_t)elapsed) == 0) {
+        probe("abort site=watchdog line", __LINE__);
         Ecu_TargetAbortNative(E_OS_STATE);
     }
     return 0u;
 }
 
-static void require(int accepted)
+static void require_at(int accepted, unsigned line)
 {
     if (accepted == 0) {
+        probe("abort site=require line", line);
         Ecu_TargetAbortNative(E_OS_STATE);
     }
 }
+#define require(accepted) require_at((accepted), __LINE__)
 
 static void sequence(Ecu_HostBatch *batch)
 {
@@ -75,6 +105,8 @@ static void tick(Ecu_HostBatch *batch,
 {
     uint64_t ticket;
     Os_TickCompletion result;
+    probe_at = at;
+    probe_tick_started = Os_HostMonotonicMs();
     require(Os_TargetAdvanceOneTick(at, &ticket) == E_OK);
     for (;;) {
         StatusType status;
@@ -84,6 +116,9 @@ static void tick(Ecu_HostBatch *batch,
             require(result.epoch == at);
             pump(batch, sink, context, control);
             sequence(batch);
+            if ((Os_HostMonotonicMs() - probe_tick_started) > probe_max_tick) {
+                probe_max_tick = Os_HostMonotonicMs() - probe_tick_started;
+            }
             return;
         }
         require(status == E_OS_NOFUNC);
@@ -162,6 +197,10 @@ StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *c
         Ecu_TargetAbortNative(E_OS_STATE);
     }
     control.started = Os_HostMonotonicMs();
+    probe_started = control.started;
+    probe_max_tick = 0u;
+    probe_at = batch->completed_epoch;
+    probe_span = batch->epoch - batch->completed_epoch;
     monitor = Os_HostSpawnObserverThread(watch, &control);
     if (monitor == NULL) {
         Ecu_TargetAbortNative(E_OS_STATE);
@@ -194,6 +233,7 @@ StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *c
     status = ((completed.input_status == ECU_OK) && (batch->transport_status == ECU_OK))
                  ? E_OK
                  : E_OS_VALUE;
+    probe("batch span", probe_span);
     require(Ecu_HostBatchComplete(batch) == E_OK);
     require((Os_HostMonotonicMs() - control.started) < ECU_BATCH_WATCHDOG_MS);
     require(sink(NULL, batch, status, context) != 0);

@@ -77,7 +77,7 @@
     },
     {
       "path": "runtime/ecu/src/Ecu_HostBridge.c",
-      "sha256": "0355cc3fe4f12f6c3b17ce0c5d00deb22e67a40e41fbe211d99ed237baa391dc",
+      "sha256": "6e9679dc98de88275cb5878fc470a7a92fd557a7db258081e926f96935271851",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -105,7 +105,7 @@
     },
     {
       "path": "runtime/ecu/src/Ecu_Target.c",
-      "sha256": "1edcf536d3f6c5ccfbb5c5b5c377f4d539efb4fd19c50929a7e01e7f52d73ad0",
+      "sha256": "48d4b114344aa956c4adf744c056c9634a2f5b3837c424a679ecb68652efbcab",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

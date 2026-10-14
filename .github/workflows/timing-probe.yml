@@ -1,0 +1,119 @@
+# Temporary #61 experiment; removed before merge.
+name: Timing probe
+on:
+  push:
+    branches: [fix/windows-protocol-timing]
+permissions:
+  contents: read
+env:
+  PYTHONUTF8: '1'
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, fix]
+    name: probe (${{ matrix.variant }})
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: uv sync --locked
+      - uses: ./.github/actions/core-build-dependencies
+      - uses: ./.github/actions/native-analysis-compiler
+      - name: Identify native build cache inputs
+        shell: python
+        run: |
+          import os
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              output.write('CACHE_IMAGE=' + os.environ['ImageOS'] + '-' + os.environ['ImageVersion'] + '\n')
+      - uses: actions/cache/restore@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: native-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-v1
+      - name: Select native contract tools
+        shell: python
+        run: |
+          import os, shutil, subprocess
+          from pathlib import Path
+          tools = {'AUTOSAR_CC': 'gcc', 'AUTOSAR_OBJDUMP': 'objdump', 'AUTOSAR_NM': 'nm', 'AUTOSAR_GIT': 'git'}
+          python = subprocess.run(['uv', 'run', '--locked', 'python', '-c', 'import sys; print(sys.executable)'],
+              check=True, capture_output=True, text=True).stdout.strip()
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              for variable, name in tools.items():
+                  output.write(variable + '=' + str(Path(shutil.which(name)).absolute()) + '\n')
+              output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
+      - name: Remove the idle fix (baseline)
+        if: matrix.variant == 'baseline'
+        shell: python
+        run: |
+          import re, subprocess
+          from pathlib import Path
+          path = Path('runtime/os/src/Os_Backend.c')
+          text = path.read_bytes()
+          patched, count = re.subn(rb'\n    /\* Give the host CPU back:.*?Sleep\(1u\);', b'', text, flags=re.S)
+          assert count == 1, count
+          path.write_bytes(patched)
+          subprocess.run(['uv', 'run', '--locked', 'python', '-m', 'autosar_tooling', 'assets', 'update'], check=True)
+      - name: Build native tests
+        run: cargo test --locked -p autosar-config-core --features native-tests --test native --no-run
+      - name: Stress
+        shell: python
+        run: |
+          import os, subprocess, sys, time
+          from pathlib import Path
+          binary = max(Path('target/debug/deps').glob('native-*.exe'), key=lambda p: p.stat().st_mtime)
+          out = Path('probe-logs'); out.mkdir()
+          test = 'integration::protocol::single_component_meets_independent_protocol_and_timing_vectors'
+          print('CPUs', os.cpu_count(), 'binary', binary, flush=True)
+          def summarize(label, pattern, runs, failed):
+              spans, aborts = [], []
+              for f in out.glob(pattern):
+                  for line in f.read_text(errors='replace').splitlines():
+                      v = dict(kv.split('=', 1) for kv in line.split() if '=' in kv)
+                      if line.startswith('abort'):
+                          aborts.append(line)
+                      elif int(v.get('span', 0)) >= 100:
+                          spans.append((int(v['elapsed']) / int(v['span']), int(v['elapsed']), int(v['max_tick'])))
+              spans.sort()
+              q = lambda p: spans[min(len(spans) - 1, int(p * len(spans)))][0]
+              print(f'== {label}: runs={runs} failed={failed} batches(span>=100)={len(spans)}')
+              if spans:
+                  print('   ms/tick p50=%.2f p90=%.2f p99=%.2f max=%.2f; batch ms max=%d; max single tick ms=%d' % (
+                      q(.5), q(.9), q(.99), spans[-1][0], max(s[1] for s in spans), max(s[2] for s in spans)))
+              for a in aborts:
+                  print('   ', a)
+              sys.stdout.flush()
+          # A: one test alone, for the unloaded per-tick cost.
+          env = dict(os.environ, AUTOSAR_TIMING_PROBE=str((out / 'alone.log').absolute()))
+          code = subprocess.run([str(binary), test, '--exact'], env=env).returncode
+          summarize('alone', 'alone.log', 1, int(code != 0))
+          # B: 8 concurrent copies (more than the 4 CPUs), 3 rounds.
+          failed = 0
+          for r in range(3):
+              procs = []
+              for c in range(8):
+                  env = dict(os.environ, AUTOSAR_TIMING_PROBE=str((out / f'copies-r{r}-c{c}.log').absolute()))
+                  log = open(out / f'copies-r{r}-c{c}.out', 'w')
+                  procs.append((subprocess.Popen([str(binary), test, '--exact'], stdout=log, stderr=subprocess.STDOUT, env=env), log))
+              for p, log in procs:
+                  p.wait(); log.close(); failed += p.returncode != 0
+          summarize('8 copies x 3', 'copies-*.log', 24, failed)
+          # C: the whole native binary in its default parallelism, as in the required job.
+          failed = 0
+          for r in range(2):
+              env = dict(os.environ, AUTOSAR_TIMING_PROBE=str((out / f'full-r{r}.log').absolute()))
+              with open(out / f'full-r{r}.out', 'w') as log:
+                  failed += subprocess.run([str(binary)], stdout=log, stderr=subprocess.STDOUT, env=env).returncode != 0
+              print(subprocess.run(['powershell', '-Command', f"Select-String -Path probe-logs/full-r{r}.out -Pattern 'FAILED|test result'"], capture_output=True, text=True).stdout)
+          summarize('full native x 2', 'full-*.log', 2, failed)
+      - uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: probe-${{ matrix.variant }}
+          path: probe-logs
+          retention-days: 7
