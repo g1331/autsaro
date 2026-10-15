@@ -44,7 +44,8 @@
 
 ```c
 /** <What the call does; cite the SWS item where it helps>.
- * @param <Name> <Accepted range; who owns a pointed-to object>.
+ * @param[in] <Name> <Accepted range; who owns a pointed-to object>.
+ * @param[out] <Name> <What is written, and when>.
  * @return <Meaning of each result>.
  * Preconditions: <State that must hold; result when it does not>.
  * Context: <Task, callback or interrupt; whether callable inside an exclusive area>.
@@ -53,6 +54,7 @@
  */
 ```
 
+- 参数方向：`@param[in]`、`@param[out]`、`@param[in,out]` 按 SWS 接口表的 Parameters (in)／(out)／(inout) 标注，非标准接口按实际读写标注；无参数时省略 `@param`。
 - 前置条件：调用前必须成立的状态，以及不成立时的结果。
 - 调用上下文：任务、回调、中断，以及是否允许在独占区内调用。
 - 可重入性：同一实例与不同实例能否并发调用。
